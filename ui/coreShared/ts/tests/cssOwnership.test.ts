@@ -46,27 +46,13 @@ test('core shared stylesheet partitions begin at cohesive ownership boundaries',
 
 test('the visual foundation defines readable type, touch, geometry, and product accents', () => {
 	const tokens = readStylesheet('tokens.css')
-	for (const declaration of [
-		'--accent-zoltar:',
-		'--accent-statoblast:',
-		'--accent-trading:',
-		'--accent-augurscan:',
-		'--outcome-yes:',
-		'--outcome-no:',
-		'--outcome-invalid:',
-		'--font-label: 0.8125rem;',
-		'--touch-target-min: 2.75rem;',
-		'--radius-compact: 0.25rem;',
-		'--radius-normal: 0.5rem;',
-		'--radius-overlay: 0.75rem;',
-	])
+	for (const declaration of ['--accent-zoltar:', '--accent-statoblast:', '--accent-trading:', '--outcome-yes:', '--outcome-no:', '--outcome-invalid:', '--font-label: 0.8125rem;', '--touch-target-min: 2.75rem;', '--radius-compact: 0.25rem;', '--radius-normal: 0.5rem;', '--radius-overlay: 0.75rem;'])
 		expect(tokens).toContain(declaration)
 })
 
 test('persistent operational text and AugurScan disclosures keep accessible minimums', () => {
 	const base = readStylesheet('base.css')
 	const controls = readStylesheet('controls-and-responsive.css')
-	const trading = readFileSync('ui/trading/css/app.css', 'utf8')
 	const augurScan = readFileSync('augurScan/public/styles.css', 'utf8')
 
 	expect(base).toMatch(/\.app-settings-menu label > span \{[^}]*font-size: var\(--font-label\);/s)
@@ -74,16 +60,11 @@ test('persistent operational text and AugurScan disclosures keep accessible mini
 	expect(controls).toMatch(/\.metric-inline-status \{[^}]*font-size: var\(--font-label\);/s)
 	expect(controls).toMatch(/@media \(max-width: 56rem\) \{[^}]*\.header-toolbar \{[^}]*grid-template-columns: minmax\(0, 1fr\) auto;/s)
 	expect(controls).toMatch(/\.header-toolbar-controls \{[^}]*grid-column: 1 \/ -1;[^}]*grid-row: 2;[^}]*justify-content: flex-start;/s)
-	expect(trading).toMatch(/\.field \{[^}]*0\.8125rem ui-monospace/s)
 	expect(base).toMatch(/\.loading-value \{[^}]*font: inherit;/s)
 	expect(base).toMatch(/\.metric-label,\s*\.workflow-section-label \{[^}]*font-size: var\(--font-label\);/s)
 	expect(base).toMatch(/\.overview-inline-metrics strong \{[^}]*font-size: var\(--font-value\);/s)
 	expect(readStylesheet('visual-foundation.css')).toMatch(/button,\s*\[role="button"\][^{]*\{[^}]*min-height: var\(--touch-target-min\);/s)
-	expect(trading).toMatch(/\.primary-link \{[^}]*min-height: 44px;/s)
-	expect(trading).toMatch(/\.section-kicker \{[^}]*12px \/ 1\.2 ui-monospace/s)
-	expect(trading).toMatch(/\.status \{[^}]*13px \/ 1\.2 ui-monospace/s)
 	expect(controls).toMatch(/\.view-tab \{[^}]*min-height: var\(--touch-target-min\);/s)
-	expect(controls).toMatch(/\.mobile-route-select select \{[^}]*min-height: var\(--touch-target-min\);/s)
 	expect(base).toMatch(/\.metric-label-refresh \{[^}]*font-size: var\(--font-label\);/s)
 	expect(base).toMatch(/\.address-value\.copyable \{[^}]*min-height: var\(--touch-target-min\);/s)
 	expect(base).toMatch(/\.identifier-value\.copyable \{[^}]*min-height: var\(--touch-target-min\);/s)

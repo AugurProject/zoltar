@@ -69,6 +69,9 @@ describe('universe selector', () => {
 		if (skipButton === undefined) throw new Error('Shared application skip control is unavailable')
 		await act(() => skipButton.click())
 		expect(document.activeElement).toBe(rendered.container.querySelector('main'))
+		// The landmark holds the route content only, so skipping lands past the header and tab navigation.
+		expect(document.activeElement?.querySelector('.tab-nav')).toBeNull()
+		expect(document.activeElement?.textContent).toContain('Page not found')
 		expect(document.title).toBe(appCopy.documentTitle(appCopy.notFound))
 		expect(document.title).toBe('Not found · Statoblast trading')
 	})
@@ -186,16 +189,16 @@ describe('universe selector', () => {
 		expect(rendered.container.querySelector('.header-toolbar-settings')).not.toBeNull()
 	})
 
-	test('uses shared overview and navigation with an accessible mobile route selector', async () => {
+	test('uses shared overview and navigation with linked route tabs and no duplicate route selector', async () => {
 		const rendered = await renderIntoDocument(<App />)
 		cleanupRendered = rendered.cleanup
 		expect(rendered.container.querySelector('.top-shell-content .header-toolbar .application-brand')?.textContent).toBe('Statoblast trading')
 		expect(rendered.container.querySelector('.app-nav-stack .tab-nav')).not.toBeNull()
-		const select = rendered.container.querySelector<HTMLSelectElement>('.mobile-route-select select')
-		if (select === null) throw new Error('Shared mobile navigation is missing')
+		expect(rendered.container.querySelector('.app-nav-stack select')).toBeNull()
+		const helpLink = Array.from(rendered.container.querySelectorAll<HTMLAnchorElement>('.tab-nav a')).find(anchor => anchor.textContent === 'Help')
+		if (helpLink === undefined) throw new Error('Shared route navigation is missing')
 		await act(() => {
-			select.value = 'help'
-			select.dispatchEvent(new Event('change', { bubbles: true }))
+			helpLink.click()
 		})
 		expect(tradingRouting.resolve(window.location.hash)).toBe('help')
 	})

@@ -7,6 +7,7 @@ import { FormInput } from '@zoltar/ui-core-shared/components/FormInput.js'
 import { PaginationControls } from '@zoltar/ui-core-shared/components/PaginationControls.js'
 import { ReadOnlyDetailAccordion } from '@zoltar/ui-core-shared/components/ReadOnlyDetailAccordion.js'
 import { SectionBlock } from '@zoltar/ui-core-shared/components/SectionBlock.js'
+import { EmptyState } from '@zoltar/ui-core-shared/components/EmptyState.js'
 import { StateHint } from '@zoltar/ui-core-shared/components/StateHint.js'
 import { TransactionActionButton } from '@zoltar/ui-core-shared/components/TransactionActionButton.js'
 import { TransactionObjectContext } from '@zoltar/ui-core-shared/components/TransactionObjectContext.js'
@@ -263,14 +264,14 @@ export function OpenOracleSection({
 										presentation={{
 											key: 'load_failed',
 											badgeLabel: commonCopy.failed,
-											badgeTone: 'error',
+											badgeTone: 'danger',
 											detail: browseLoadError,
 										}}
 									/>
 								)
 							if (currentBrowsePage === undefined) return undefined
-							if (currentBrowsePage.reports.length === 0 && (currentBrowsePage.unavailableReports?.length ?? 0) === 0) return <StateHint announcement='polite' presentation={{ key: 'empty', badgeLabel: commonCopy.none, badgeTone: 'muted', detail: openOracleCopy.oracleGamesEmpty }} />
-							if (filteredBrowseReports.length === 0 && (currentBrowsePage.unavailableReports?.length ?? 0) === 0) return <StateHint announcement='polite' presentation={{ key: 'empty', badgeLabel: commonCopy.noMatches, badgeTone: 'muted', detail: openOracleCopy.reportFiltersEmpty }} />
+							if (currentBrowsePage.reports.length === 0 && (currentBrowsePage.unavailableReports?.length ?? 0) === 0) return <EmptyState live title={commonCopy.none} detail={openOracleCopy.oracleGamesEmpty} />
+							if (filteredBrowseReports.length === 0 && (currentBrowsePage.unavailableReports?.length ?? 0) === 0) return <EmptyState live title={commonCopy.noMatches} detail={openOracleCopy.reportFiltersEmpty} />
 
 							return (
 								<div className='comparison-record-list'>

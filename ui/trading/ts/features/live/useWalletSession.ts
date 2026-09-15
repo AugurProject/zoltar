@@ -5,6 +5,7 @@ import type { Address, WalletClient } from '@zoltar/core-shared/evm/ethereum'
 import type { createLatestRequestGuard } from '@zoltar/ui-core-shared/lib/requestGuard.js'
 import { useCallback, useEffect, useRef, useState } from 'preact/hooks'
 import type { WalletSummaryState } from '../../lib/walletSummaryState.js'
+import { formatNetworkRequiredReason } from '../../copy/availability.js'
 import type { DeploymentConfiguration } from '../../protocol/config.js'
 import { getInjectedEthereum, subscribeToWalletContextChanges, type InjectedEthereum, type WalletContextChangeEvent } from '../../protocol/injected.js'
 import { publicErrorMessage, type LiveMarket } from '../../protocol/live.js'
@@ -13,12 +14,20 @@ import type { LiveTradingControllerServices } from './liveTradingTypes.js'
 import type { usePortfolioQueries } from './usePortfolioQueries.js'
 import type { useTransactionWorkflow } from './useTransactionWorkflow.js'
 
+/** The reason a wallet on another chain cannot transact, or undefined when the wallet chain is unknown or matches the deployment. */
+export function walletNetworkMismatchReason(walletChainId: number | undefined, configuration: Pick<DeploymentConfiguration, 'chainId' | 'chainName'> | undefined) {
+	if (walletChainId === undefined || configuration === undefined || walletChainId === configuration.chainId) return undefined
+	return formatNetworkRequiredReason(configuration.chainName)
+}
+
 export function useWalletSession() {
 	const [account, setAccount] = useState<Address>()
 	const accountRef = useRef(account)
 	accountRef.current = account
 	const [walletClient, setWalletClient] = useState<WalletClient>()
 	const [walletProvider, setWalletProvider] = useState<InjectedEthereum>()
+	// Last chain the injected wallet reported; kept even when the session refuses the account so the UI can ask for a network switch.
+	const [walletChainId, setWalletChainId] = useState<number>()
 	const [walletContextInvalidated, setWalletContextInvalidated] = useState(false)
 	const [walletSummaryStatus, setWalletSummaryStatus] = useState<WalletSummaryState['status']>('disconnected')
 	const [walletEthAttoEth, setWalletEthAttoEth] = useState<bigint>()
@@ -37,6 +46,8 @@ export function useWalletSession() {
 		setWalletClient,
 		walletProvider,
 		setWalletProvider,
+		walletChainId,
+		setWalletChainId,
 		walletContextInvalidated,
 		setWalletContextInvalidated,
 		walletSummaryStatus,
@@ -105,6 +116,22 @@ export function useWalletSessionController({
 			walletContextRevision.current++
 			subscriptionCleanup.current?.()
 			subscriptionCleanup.current = undefined
+			// Keep watching the wallet chain so a later switch back clears the network reason without a reconnect,
+			// including when the connect attempt itself rejected the chain before a session provider was recorded.
+			const observedProvider = session.walletProvider ?? getInjectedEthereum()
+			if (observedProvider !== undefined) {
+				subscriptionCleanup.current = subscribeToWalletContextChanges(observedProvider, changedEvent => {
+					if (changedEvent !== 'chainChanged') return
+					services
+						.walletChainId(observedProvider)
+						.then(chainId => {
+							if (mounted.current) session.setWalletChainId(chainId)
+						})
+						.catch(() => {
+							if (mounted.current) session.setWalletChainId(undefined)
+						})
+				})
+			}
 			connectionRequests.invalidate()
 			balanceRequests.invalidate()
 			portfolioBalanceRequests.invalidate()
@@ -130,7 +157,7 @@ export function useWalletSessionController({
 			session.setWalletConnectionFeedback({ route, detail })
 			transaction.dispatchWorkflow(transaction.positionWorkflowLockedRef.current ? { type: 'context-invalidated', message: detail } : { type: 'failed', message: detail })
 		},
-		[balanceRequests, connectionRequests, onWalletSummaryChange, portfolioBalanceRequests, route, selectedUniverseId, simulationRequests, walletSummaryRequests],
+		[balanceRequests, connectionRequests, onWalletSummaryChange, portfolioBalanceRequests, route, selectedUniverseId, services, session.walletProvider, simulationRequests, walletSummaryRequests],
 	)
 
 	const executeWithCurrentWalletContext = useCallback(
@@ -139,6 +166,7 @@ export function useWalletSessionController({
 			const provider = getInjectedEthereum()
 			if (provider === undefined || provider !== session.walletProvider) {
 				const detail = provider === undefined ? 'No injected wallet was found; reconnect before continuing' : 'Wallet provider changed; reconnect before continuing'
+				if (provider === undefined) session.setWalletChainId(undefined)
 				invalidateIdentity(detail)
 				throw new Error(detail)
 			}
@@ -157,6 +185,7 @@ export function useWalletSessionController({
 				throw new Error(networkFailure, { cause: error })
 			}
 			requireCurrent()
+			session.setWalletChainId(chainId)
 			if (configuration === undefined || chainId !== configuration.chainId) {
 				invalidateIdentity(networkFailure)
 				throw new Error(networkFailure)
@@ -224,6 +253,7 @@ export function useWalletSessionController({
 			chainId = await services.walletChainId(provider)
 		}
 		if (!requireCurrent()) return
+		session.setWalletChainId(chainId)
 		if (chainId !== configuration.chainId) throw new Error(`Wallet must use ${configuration.chainName}`)
 		const connected = await (restoreExisting ? requireInjectedAccount(provider) : services.connectWallet(provider))
 		if (!requireCurrent()) return
@@ -275,7 +305,10 @@ export function useWalletSessionController({
 		const expectedContext = renderContextKey
 		try {
 			const provider = getInjectedEthereum()
-			if (provider === undefined) throw new Error('No injected wallet was found')
+			if (provider === undefined) {
+				session.setWalletChainId(undefined)
+				throw new Error('No injected wallet was found')
+			}
 			await establish(provider, expectedContext, () => connectionRequests.isCurrent(request))
 		} catch (error) {
 			if (!connectionRequests.isCurrent(request) || renderContextKeyRef.current !== expectedContext) return
@@ -363,9 +396,19 @@ export function useWalletSummaryEffects({
 	services: LiveTradingControllerServices
 	requests: RequestGuard
 }) {
+	const networkMismatchReason = walletNetworkMismatchReason(session.walletChainId, configuration)
 	useEffect(() => {
-		onWalletSummaryChange({ account: session.account, ethAttoEth: session.walletEthAttoEth, repAttoRep: session.walletRepAttoRep, status: session.walletSummaryStatus, error: session.walletSummaryError, errorLabel: session.walletSummaryErrorLabel, universeId: session.walletSummaryUniverseId })
-	}, [session.account, onWalletSummaryChange, session.walletEthAttoEth, session.walletRepAttoRep, session.walletSummaryError, session.walletSummaryErrorLabel, session.walletSummaryStatus, session.walletSummaryUniverseId])
+		onWalletSummaryChange({
+			account: session.account,
+			ethAttoEth: session.walletEthAttoEth,
+			repAttoRep: session.walletRepAttoRep,
+			status: session.walletSummaryStatus,
+			error: session.walletSummaryError,
+			errorLabel: session.walletSummaryErrorLabel,
+			universeId: session.walletSummaryUniverseId,
+			...(networkMismatchReason === undefined ? {} : { networkMismatchReason }),
+		})
+	}, [session.account, networkMismatchReason, onWalletSummaryChange, session.walletEthAttoEth, session.walletRepAttoRep, session.walletSummaryError, session.walletSummaryErrorLabel, session.walletSummaryStatus, session.walletSummaryUniverseId])
 
 	useEffect(() => {
 		const request = requests.begin()

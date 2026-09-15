@@ -5,6 +5,7 @@ import { createMarketDetails } from '@zoltar/ui-core-shared/tests/testUtils/mark
 import { type Address, getAddress, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
 import { fireEvent, waitFor, within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
+import { getTransactionButtonState } from '@zoltar/ui-core-shared/tests/testUtils/transactionActionButton.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import { installTestRouting } from '@zoltar/ui-core-shared/tests/testUtils/testRouting.js'
 import type { EscalationDeposit, ForkAuctionDetails, ListedSecurityPool, ReadClient, ReportingDetails } from '@zoltar/ui-core-shared/types/contracts.js'
@@ -583,7 +584,7 @@ describe('ForkAuctionSection', () => {
 		const button = documentQueries.getByRole('button', { name: 'Clear unresolved parent escalation-deposit accounting for Yes' })
 		if (!(button instanceof HTMLButtonElement)) throw new Error('Expected unresolved migration action button')
 		expect(button.disabled).toBe(true)
-		expect(button.getAttribute('title')).toBe('Migration window has closed for this parent pool.')
+		expect(getTransactionButtonState(document.body, 'Clear unresolved parent escalation-deposit accounting for Yes').reason).toBe('Migration window has closed for this parent pool.')
 	})
 
 	test('renders unresolved parent escalation-deposit accounting loading with the shared accessible spinner', async () => {
@@ -779,7 +780,7 @@ describe('ForkAuctionSection', () => {
 		const button = documentQueries.getByRole('button', { name: 'Migrate vault to Yes' })
 		if (!(button instanceof HTMLButtonElement)) throw new Error('Expected vault migration action button')
 		expect(button.disabled).toBe(true)
-		expect(button.getAttribute('title')).toBe('Migration window has closed for this parent pool.')
+		expect(getTransactionButtonState(document.body, 'Migrate vault to Yes').reason).toBe('Migration window has closed for this parent pool.')
 	})
 
 	test('keeps fork-carried settlement disabled until the child pool question finalizes', async () => {
@@ -823,7 +824,7 @@ describe('ForkAuctionSection', () => {
 		const button = documentQueries.getByRole('button', { name: 'Settle selected Yes fork-carried deposits' })
 		if (!(button instanceof HTMLButtonElement)) throw new Error('Expected fork-carried settlement action button')
 		expect(button.disabled).toBe(true)
-		expect(button.getAttribute('title')).toBe('Winning fork-carried escalation deposits can be settled after this child pool finalizes.')
+		expect(getTransactionButtonState(document.body, 'Settle selected Yes fork-carried deposits').reason).toBe('Winning fork-carried escalation deposits can be settled after this child pool finalizes.')
 	})
 
 	test('keeps fork-carried settlement disabled when the child outcome is known before the pool becomes operational', async () => {
@@ -868,7 +869,7 @@ describe('ForkAuctionSection', () => {
 		const button = documentQueries.getByRole('button', { name: 'Settle selected Yes fork-carried deposits' })
 		if (!(button instanceof HTMLButtonElement)) throw new Error('Expected fork-carried settlement action button')
 		expect(button.disabled).toBe(true)
-		expect(button.getAttribute('title')).toBe('Winning fork-carried escalation deposits can be settled after this child pool finalizes.')
+		expect(getTransactionButtonState(document.body, 'Settle selected Yes fork-carried deposits').reason).toBe('Winning fork-carried escalation deposits can be settled after this child pool finalizes.')
 	})
 
 	test('does not show the empty child-pools notice when a selected child pool is already known', async () => {
@@ -1149,7 +1150,7 @@ describe('ForkAuctionSection', () => {
 		await waitFor(() => {
 			const zeroButton = within(document.body).getByRole('button', { name: 'Withdraw refund' })
 			expect(zeroButton.hasAttribute('disabled')).toBe(true)
-			expect(zeroButton.getAttribute('title')).toBe('No credited refund is available to withdraw.')
+			expect(getTransactionButtonState(document.body, 'Withdraw refund').reason).toBe('No credited refund is available to withdraw.')
 		})
 		cleanupRenderedComponent = zeroRendered.cleanup
 	})
@@ -1461,7 +1462,7 @@ describe('ForkAuctionSection', () => {
 		expect(youPayRow.textContent).not.toContain('REP')
 		expect(resultingEthBalanceRow.textContent).toContain('ETH')
 		expect(resultingEthBalanceRow.textContent).not.toContain('REP')
-		expect(submitBidButton.getAttribute('title')).toBe('Bid price is outside the supported auction range.')
+		expect(getTransactionButtonState(document.body, 'Submit bid').reason).toBe('Bid price is outside the supported auction range.')
 		expect(submitBidButton.disabled).toBe(true)
 	})
 
@@ -1523,7 +1524,7 @@ describe('ForkAuctionSection', () => {
 		const submitBidButton = documentQueries.getByRole('button', { name: 'Submit bid' })
 		if (!(submitBidButton instanceof HTMLButtonElement)) throw new Error('Expected Submit bid button to be a button element')
 		expect(submitBidButton.disabled).toBe(true)
-		expect(submitBidButton.title).toBe('Switch to Sepolia.')
+		expect(getTransactionButtonState(document.body, 'Submit bid').reason).toBe('Switch to Sepolia.')
 		expect(document.body.textContent?.includes('Switch to Sepolia')).toBe(true)
 	})
 
@@ -1585,7 +1586,7 @@ describe('ForkAuctionSection', () => {
 		const submitBidButton = documentQueries.getByRole('button', { name: 'Submit bid' })
 		if (!(submitBidButton instanceof HTMLButtonElement)) throw new Error('Expected Submit bid button to be a button element')
 		expect(submitBidButton.disabled).toBe(true)
-		expect(submitBidButton.title).toBe('Switch to Sepolia.')
+		expect(getTransactionButtonState(document.body, 'Submit bid').reason).toBe('Switch to Sepolia.')
 	})
 
 	test('shows a missing-universe notice without a creation button', async () => {

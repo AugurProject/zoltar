@@ -11,7 +11,8 @@ export const disconnectedGuidance = 'Connect a wallet to load the positions for 
 export const loadingPoolBalances = 'Loading balances separately for each SecurityPool…'
 export const portfolioBalancesUnavailable = 'Portfolio balances could not be loaded.'
 export const noPortfolioBalances = 'No YES, NO, INVALID, or LP balance was found in the discovered SecurityPools.'
-export const securityPoolPosition = 'SecurityPool position'
+export const lpClaims = 'LP claims'
+export const insuredExits = 'Insured exits'
 export const balanceUnavailable = 'Balance unavailable'
 export const securityPool = 'Security pool'
 

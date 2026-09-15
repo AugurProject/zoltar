@@ -15,9 +15,15 @@ body {
 	font-size: var(--font-body);
 }
 
-main {
+:where(main, .app-shell) {
 	width: min(var(--content-max), 100%);
 	padding-inline: var(--gutter-desktop);
+}
+
+/* An application shell already carries the page inset, so its main landmark spans the shell. */
+.app-shell > main {
+	width: 100%;
+	padding-inline: 0;
 }
 
 h1,
@@ -52,6 +58,16 @@ a.secondary-action,
 	outline: 2px solid var(--accent);
 	outline-offset: 2px;
 	box-shadow: var(--focus-ring);
+}
+
+/* Tab strips scroll horizontally, so the focus indicator is drawn inside the tab instead of around it. */
+.view-tab:focus-visible,
+.view-tabs.route .view-tab.active:focus-visible,
+.view-tabs[data-orientation] .view-tab.active:focus-visible,
+.route-subtab-nav.view-tabs.subroute .view-tab.active:focus-visible {
+	outline: none;
+	outline-offset: 0;
+	box-shadow: inset 0 0 0 2px var(--accent);
 }
 
 :where(address, code, pre, .address, .hash, .transaction-hash, .identifier-value) {
@@ -89,13 +105,13 @@ a.secondary-action,
 }
 
 @media (max-width: 64rem) {
-	main {
+	:where(main, .app-shell) {
 		padding-inline: var(--gutter-tablet);
 	}
 }
 
 @media (max-width: 48rem) {
-	main {
+	:where(main, .app-shell) {
 		padding-inline: var(--gutter-mobile);
 	}
 }

@@ -35,13 +35,14 @@ describe('StateHint', () => {
 		expect(document.body.querySelector('.state-hint .badge')).toBeNull()
 	})
 
-	test('adds a spinner when loading copy is supplied without loading metadata', async () => {
+	test('adds a spinner only when the presentation marks its detail as loading', async () => {
 		const renderedComponent = await renderIntoDocument(
 			<StateHint
 				presentation={{
-					badgeLabel: 'Pending',
-					badgeTone: 'pending',
+					badgeLabel: 'Loading',
+					badgeTone: 'loading',
 					detail: 'Loading truth auction status…',
+					detailIsLoading: true,
 					key: 'loading',
 				}}
 			/>,

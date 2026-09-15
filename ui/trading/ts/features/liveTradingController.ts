@@ -10,10 +10,11 @@ import { useQuestionClock } from './live/useLiveTradingState.js'
 import { useMarketDiscovery } from './live/useMarketDiscovery.js'
 import { usePortfolioQueries, usePortfolioRefreshEffects } from './live/usePortfolioQueries.js'
 import { useTransactionWorkflow } from './live/useTransactionWorkflow.js'
-import { useWalletSession, useWalletSessionController, useWalletSummaryEffects } from './live/useWalletSession.js'
+import { useWalletSession, useWalletSessionController, useWalletSummaryEffects, walletNetworkMismatchReason } from './live/useWalletSession.js'
 import { createPositionTransactionController } from './live/positionTransactionController.js'
 import { useMarketDiscoveryController } from './live/useMarketDiscoveryController.js'
 import { filterMarketsByUniverse, livePairInitialized, liveTradingControllerServices, securityPoolAddressFromRoute } from './liveTradingControllerHelpers.js'
+import { tradingListRouteFor } from '../lib/routing.js'
 
 export function useLiveTradingController({
 	route,
@@ -45,7 +46,7 @@ export function useLiveTradingController({
 	const marketDiscovery = useMarketDiscovery()
 	const { markets, discoveryState, discoveryError, marketPage } = marketDiscovery
 	const walletSession = useWalletSession()
-	const { account, accountRef, walletClient, walletContextInvalidated, walletConnectionFeedback } = walletSession
+	const { account, accountRef, walletClient, walletChainId, walletEthAttoEth, walletContextInvalidated, walletConnectionFeedback } = walletSession
 	const portfolioQueries = usePortfolioQueries()
 	const { balances, setBalances, balanceState, setBalanceState, balanceError, setBalanceError, portfolioEntries, portfolioBalanceState, portfolioBalanceError, setPortfolioRefreshNonce } = portfolioQueries
 	const transactionWorkflow = useTransactionWorkflow(onWorkflowLockChange, defaultSlippage, defaultValidityMinutes)
@@ -62,10 +63,10 @@ export function useLiveTradingController({
 	const routePool = securityPoolAddressFromRoute(route)
 	const visibleMarkets = routePool === undefined ? filterMarketsByUniverse(markets, selectedUniverseId) : markets.filter(market => market.pool.toLowerCase() === routePool.toLowerCase())
 	const visiblePortfolioEntries = portfolioEntries.filter(entry => entry.market.universeId.toString() === selectedUniverseId)
-	// Only addressed routes work on a market; browse routes list candidates and lookup routes wait for an address.
+	// Only addressed routes work on a market; list routes show candidates until an address is opened.
 	const selected = routePool === undefined ? undefined : visibleMarkets.find(market => market.pool.toLowerCase() === routePool.toLowerCase())
 	const nowSeconds = useQuestionClock(undefined, configuration, services)
-	const listedMarkets = visibleMarkets.filter(market => (route === 'security-pools' ? market.pair === undefined && market.loadError === undefined && marketAcceptsNewRisk(market, nowSeconds) : market.pair !== undefined || market.loadError !== undefined))
+	const listedMarkets = visibleMarkets.filter(market => (tradingListRouteFor(route) === 'security-pools' ? market.pair === undefined && market.loadError === undefined && marketAcceptsNewRisk(market, nowSeconds) : market.pair !== undefined || market.loadError !== undefined))
 	const walletUniverseId = routePool === undefined ? selectedUniverseId : selected?.universeId.toString()
 	const selectedBalances = balanceState === 'ready' ? liveBalancesForMarket(balances, selected) : undefined
 	let selectedBalanceState = balanceState
@@ -177,6 +178,8 @@ export function useLiveTradingController({
 		wallet: {
 			account,
 			walletClient,
+			walletEthAttoEth,
+			networkMismatchReason: walletNetworkMismatchReason(walletChainId, configuration),
 			connect,
 			connectionMessage: walletConnectionFeedback?.route === route ? walletConnectionFeedback.detail : undefined,
 			refreshWalletSummaryAfterReceipt,

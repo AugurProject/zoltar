@@ -1,8 +1,7 @@
 import * as appCopy from '@zoltar/ui-core-shared/copy/app.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as statoblastAppCopy from '@zoltar/ui-statoblast-shared/copy/app.js'
-import type { ComponentChildren } from 'preact'
-import { RouteSubNavigation } from '@zoltar/ui-core-shared/app/components/RouteSubNavigation.js'
+import { createSecondaryNavigation, resolveSecondaryNavigation, withDeploymentTab } from '@zoltar/ui-core-shared/navigation/appNavigation.js'
 import { buildRouteHref, getRouteHashSearch } from '@zoltar/ui-core-shared/navigation/routing.js'
 import { writeOpenOracleViewQueryParam } from '@zoltar/ui-core-shared/navigation/openOracleUrlParams.js'
 import { writeSecurityPoolsViewQueryParam } from '@zoltar/ui-core-shared/navigation/urlParams.js'
@@ -23,15 +22,19 @@ export function getShowDeployTab({ applicationDeploymentMissing, deploymentStatu
 	return deploymentStatusError !== undefined || applicationDeploymentMissing || (hasLoadedDeploymentStatuses && deploymentStatuses.some(step => !step.deployed))
 }
 
-export function getStatoblastRouteTabs(showDeployTab: boolean): RouteTabDefinition[] {
-	return [
-		...(showDeployTab ? [{ hash: statoblastRouting.getHash('deploy'), label: commonCopy.deploy, route: 'deploy' as const }] : []),
-		{ hash: statoblastRouting.getHash('security-pools'), label: commonCopy.securityPools, route: 'security-pools' },
-		{ hash: statoblastRouting.getHash('open-oracle'), label: statoblastAppCopy.oracleReports, route: 'open-oracle' },
-	]
+export function getStatoblastRouteTabs({ route, showDeployTab }: { route: string; showDeployTab: boolean }): RouteTabDefinition[] {
+	return withDeploymentTab({
+		deploymentTab: { hash: statoblastRouting.getHash('deploy'), label: commonCopy.deploy, route: 'deploy' },
+		deploymentIncomplete: showDeployTab,
+		route,
+		tabs: [
+			{ hash: statoblastRouting.getHash('security-pools'), label: commonCopy.securityPools, route: 'security-pools' },
+			{ hash: statoblastRouting.getHash('open-oracle'), label: statoblastAppCopy.oracleReports, route: 'open-oracle' },
+		],
+	})
 }
 
-export function getRouteSubNavigation({
+export function getRouteSecondaryNavigation({
 	activeOpenOracleView,
 	activeSecurityPoolsView,
 	route,
@@ -43,26 +46,21 @@ export function getRouteSubNavigation({
 	route: string
 	setOpenOracleView: (view: OpenOracleView) => void
 	setSecurityPoolsView: (view: SecurityPoolsView) => void
-}): ComponentChildren {
-	if (route === 'deploy' || route === 'security-pools') {
-		return (
-			<RouteSubNavigation
-				ariaLabel={appCopy.securityPoolsViews}
-				value={activeSecurityPoolsView}
-				onChange={view => setSecurityPoolsView(view)}
-				options={[
-					{ href: buildRouteHref(statoblastRouting.getHash('security-pools'), writeSecurityPoolsViewQueryParam(getRouteHashSearch(), 'browse')), label: commonCopy.browsePools, value: 'browse' },
-					{ href: buildRouteHref(statoblastRouting.getHash('security-pools'), writeSecurityPoolsViewQueryParam(getRouteHashSearch(), 'create')), label: commonCopy.createPool, value: 'create' },
-					{ href: buildRouteHref(statoblastRouting.getHash('security-pools'), writeSecurityPoolsViewQueryParam(getRouteHashSearch(), 'operate')), label: commonCopy.managePool, value: 'operate' },
-					{ href: buildRouteHref(statoblastRouting.getHash('security-pools'), writeSecurityPoolsViewQueryParam(getRouteHashSearch(), 'universes')), label: commonCopy.universe, value: 'universes' },
-				]}
-			/>
-		)
-	}
-	if (route === 'open-oracle') {
-		return <RouteSubNavigation ariaLabel={statoblastAppCopy.oracleReportViews} value={activeOpenOracleView} onChange={view => setOpenOracleView(view)} options={getOpenOracleViewOptions(statoblastRouting.getHash('open-oracle'), getRouteHashSearch())} />
-	}
-	return undefined
+}) {
+	const securityPoolsHash = statoblastRouting.getHash('security-pools')
+	const securityPoolViews = createSecondaryNavigation<SecurityPoolsView>({
+		ariaLabel: appCopy.securityPoolsViews,
+		value: activeSecurityPoolsView,
+		onChange: setSecurityPoolsView,
+		options: [
+			{ href: buildRouteHref(securityPoolsHash, writeSecurityPoolsViewQueryParam(getRouteHashSearch(), 'browse')), label: commonCopy.browsePools, value: 'browse' },
+			{ href: buildRouteHref(securityPoolsHash, writeSecurityPoolsViewQueryParam(getRouteHashSearch(), 'create')), label: commonCopy.createPool, value: 'create' },
+			{ href: buildRouteHref(securityPoolsHash, writeSecurityPoolsViewQueryParam(getRouteHashSearch(), 'operate')), label: commonCopy.managePool, value: 'operate' },
+			{ href: buildRouteHref(securityPoolsHash, writeSecurityPoolsViewQueryParam(getRouteHashSearch(), 'universes')), label: commonCopy.universe, value: 'universes' },
+		],
+	})
+	const openOracleViews = createSecondaryNavigation<OpenOracleView>({ ariaLabel: statoblastAppCopy.oracleReportViews, value: activeOpenOracleView, onChange: setOpenOracleView, options: getOpenOracleViewOptions(statoblastRouting.getHash('open-oracle'), getRouteHashSearch()) })
+	return resolveSecondaryNavigation({ route, secondaryByRoute: { 'open-oracle': openOracleViews, 'security-pools': securityPoolViews } })
 }
 
 export function getTransactionRouteKey({ activeOpenOracleView, activeSecurityPoolsView, route }: { activeOpenOracleView: OpenOracleView; activeSecurityPoolsView: SecurityPoolsView; route: string }) {

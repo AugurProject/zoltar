@@ -1270,7 +1270,7 @@ describe('SecurityVaultSection', () => {
 		const depositLauncher = documentQueries.getByRole('button', { name: 'Deposit REP' })
 		if (!(depositLauncher instanceof HTMLButtonElement)) throw new Error('Expected a deposit launcher button')
 		expect(depositLauncher.disabled).toBe(true)
-		expect(depositLauncher.title).toBe('Connect a wallet before depositing REP.')
+		expect(getTransactionButtonState(document.body, 'Deposit REP').reason).toBe('Connect a wallet before depositing REP.')
 	})
 
 	test('keeps modal-first vault launchers disabled off Sepolia with recovery guidance', async () => {
@@ -1288,7 +1288,7 @@ describe('SecurityVaultSection', () => {
 		const depositLauncher = documentQueries.getByRole('button', { name: 'Deposit REP' })
 		if (!(depositLauncher instanceof HTMLButtonElement)) throw new Error('Expected a deposit launcher button')
 		expect(depositLauncher.disabled).toBe(true)
-		expect(depositLauncher.title).toBe('Switch to Sepolia.')
+		expect(getTransactionButtonState(document.body, 'Deposit REP').reason).toBe('Switch to Sepolia.')
 	})
 
 	test('prioritizes wrong-network recovery for modal-first vault launchers owned by another account', async () => {
@@ -1316,7 +1316,7 @@ describe('SecurityVaultSection', () => {
 		const depositLauncher = documentQueries.getByRole('button', { name: 'Deposit REP' })
 		if (!(depositLauncher instanceof HTMLButtonElement)) throw new Error('Expected a deposit launcher button')
 		expect(depositLauncher.disabled).toBe(true)
-		expect(depositLauncher.title).toBe('Switch to Sepolia.')
+		expect(getTransactionButtonState(document.body, 'Deposit REP').reason).toBe('Switch to Sepolia.')
 	})
 
 	test('prioritizes wrong-network recovery before selected vault details load', async () => {
@@ -1344,6 +1344,6 @@ describe('SecurityVaultSection', () => {
 		const depositLauncher = documentQueries.getByRole('button', { name: 'Deposit REP' })
 		if (!(depositLauncher instanceof HTMLButtonElement)) throw new Error('Expected a deposit launcher button')
 		expect(depositLauncher.disabled).toBe(true)
-		expect(depositLauncher.title).toBe('Switch to Sepolia.')
+		expect(getTransactionButtonState(document.body, 'Deposit REP').reason).toBe('Switch to Sepolia.')
 	})
 })

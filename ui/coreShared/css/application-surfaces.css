@@ -11,8 +11,8 @@
 	gap: var(--space-1);
 	padding-bottom: var(--space-2);
 	border-color: var(--divider-strong);
-	background: rgba(8, 17, 29, 0.9);
-	box-shadow: 0 10px 24px var(--shadow-color-soft);
+	background: color-mix(in srgb, var(--bg) 90%, transparent);
+	box-shadow: var(--shadow-raised);
 }
 
 .route-header {
@@ -22,7 +22,7 @@
 	border: 1px solid var(--divider-strong);
 	border-radius: var(--radius-section);
 	background: var(--surface-section);
-	box-shadow: 0 8px 20px rgba(0, 0, 0, 0.06);
+	box-shadow: var(--shadow-raised);
 }
 
 .route-header-main,
@@ -117,7 +117,7 @@
 
 .section-block.tone-critical {
 	border-color: var(--danger-border);
-	background: linear-gradient(180deg, rgba(59, 14, 24, 0.76) 0%, rgba(41, 10, 18, 0.82) 100%);
+	background: var(--surface-critical);
 }
 
 .section-block.embedded.tone-critical {
@@ -214,7 +214,7 @@
 	gap: 0.35rem;
 	padding: 0.95rem 1rem;
 	border: 1px solid var(--divider-subtle);
-	border-radius: 0.95rem;
+	border-radius: var(--radius-overlay);
 	background: var(--surface-row);
 	box-shadow: none;
 	min-width: 0;
@@ -243,7 +243,7 @@
 	display: block;
 	font-family: var(--font-family-mono);
 	font-size: clamp(1.05rem, 1.4vw, 1.4rem);
-	line-height: 1.05;
+	line-height: var(--line-height-display);
 	font-variant-numeric: tabular-nums;
 	color: var(--value);
 	overflow-wrap: anywhere;
@@ -251,7 +251,7 @@
 
 .metric-tile-detail {
 	font-size: var(--font-caption);
-	line-height: 1.45;
+	line-height: var(--line-height-body);
 	color: var(--text-secondary);
 }
 
@@ -310,8 +310,8 @@
 	gap: 0.45rem;
 	padding: 0.85rem 1rem;
 	border: 1px solid var(--border-default);
-	border-radius: 0.95rem;
-	background: rgba(10, 20, 36, 0.46);
+	border-radius: var(--radius-overlay);
+	background: var(--surface-row);
 	min-width: 0;
 }
 
@@ -342,8 +342,8 @@
 .ranked-bar-item-track {
 	position: relative;
 	height: 0.6rem;
-	border-radius: 999px;
-	background: rgba(255, 255, 255, 0.06);
+	border-radius: var(--radius-pill);
+	background: var(--color-white-08);
 	overflow: hidden;
 }
 
@@ -377,8 +377,8 @@
 	gap: 0.38rem;
 	padding: 0.8rem 0.9rem;
 	border: 1px solid var(--border-default);
-	border-radius: 0.95rem;
-	background: rgba(8, 16, 28, 0.52);
+	border-radius: var(--radius-overlay);
+	background: var(--surface-inset);
 }
 
 .ranked-bar-item-detail,
@@ -400,8 +400,8 @@
 	align-items: start;
 	padding: 0.75rem 0.8rem;
 	border: 1px solid var(--border-default);
-	border-radius: 0.9rem;
-	background: rgba(8, 16, 28, 0.46);
+	border-radius: var(--radius-overlay);
+	background: var(--surface-row);
 	cursor: help;
 }
 
@@ -409,14 +409,14 @@
 	width: 0.72rem;
 	height: 0.72rem;
 	margin-top: 0.15rem;
-	border-radius: 999px;
-	background: rgba(255, 255, 255, 0.18);
-	box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.03);
+	border-radius: var(--radius-pill);
+	background: var(--color-white-16);
+	box-shadow: 0 0 0 4px var(--color-white-04);
 }
 
 .stage-timeline-item.is-complete .stage-timeline-marker {
 	background: var(--success);
-	box-shadow: 0 0 0 4px rgba(66, 232, 194, 0.12);
+	box-shadow: 0 0 0 4px var(--success-soft);
 }
 
 .stage-timeline-item.is-active .stage-timeline-marker {
@@ -451,9 +451,9 @@
 	min-height: 1.9rem;
 	padding: 0.2rem 0.65rem;
 	border: 1px solid var(--border-default);
-	border-radius: 999px;
+	border-radius: var(--radius-pill);
 	background: var(--accent-faint);
-	font-size: var(--font-chip);
+	font-size: var(--font-label);
 	color: var(--text-secondary);
 }
 
@@ -471,8 +471,6 @@
 .vault-detail-hero,
 .vault-detail-hero-secondary,
 .vault-detail-health,
-.selected-pool-context-summary-hero .selected-pool-context-overview,
-.selected-pool-hero-story,
 .trading-holdings-layout,
 .trading-share-callouts {
 	display: grid;
@@ -505,7 +503,7 @@
 .trading-holdings-hero strong,
 .trading-share-callouts strong {
 	font-size: clamp(1.15rem, 2vw, 1.75rem);
-	line-height: 1.05;
+	line-height: var(--line-height-display);
 }
 
 .security-pool-strip-stats > div,
@@ -621,13 +619,13 @@
 	justify-self: start;
 	align-items: center;
 	border: 1px solid var(--border-default);
-	border-radius: 999px;
+	border-radius: var(--radius-pill);
 	padding: 0.38rem 0.7rem;
 	font-size: var(--font-caption);
-	line-height: 1.2;
+	line-height: var(--line-height-tight);
 	text-transform: capitalize;
 	color: var(--text-secondary);
-	background: rgba(9, 18, 31, 0.45);
+	background: var(--surface-row);
 }
 
 .question-draft-preview-chip.ok {
@@ -664,7 +662,7 @@
 
 .question-draft-preview-meta-item strong {
 	font-size: var(--font-body);
-	line-height: 1.35;
+	line-height: var(--line-height-snug);
 	color: var(--text);
 }
 
@@ -826,49 +824,6 @@
 	gap: 1rem;
 }
 
-.selected-pool-context-summary-hero {
-	padding: 0.55rem 0;
-	border: 0;
-	border-radius: 0;
-	background: transparent;
-}
-
-.selected-pool-context-summary-hero-compact {
-	padding: 0.35rem 0.8rem;
-}
-
-.selected-pool-context-summary-hero-compact .selected-pool-context-overview {
-	gap: 0.62rem;
-}
-
-.selected-pool-context-summary-hero-compact .selected-pool-hero-story {
-	gap: 0.32rem;
-}
-
-.selected-pool-context-summary-hero-compact .selected-pool-hero-story-title-row {
-	gap: 0.35rem;
-	align-items: center;
-}
-
-.selected-pool-context-summary-hero .selected-pool-context-overview {
-	grid-template-columns: minmax(0, 1fr);
-	align-items: start;
-}
-
-.selected-pool-hero-story-title-row {
-	display: flex;
-	align-items: flex-start;
-	gap: 0.45rem;
-}
-
-.selected-pool-hero-story .selected-pool-hero-question {
-	min-width: 0;
-}
-
-.selected-pool-hero-story {
-	align-content: start;
-}
-
 .selected-pool-hero-question .question-preview-meta {
 	display: none;
 }
@@ -905,9 +860,9 @@
 
 .security-pool-ribbon-stat-value {
 	display: block;
-	font-size: var(--font-h4);
-	line-height: 1.2;
-	color: var(--text-primary);
+	font-size: var(--font-body);
+	line-height: var(--line-height-tight);
+	color: var(--text);
 }
 
 .security-pool-ribbon-stat-value .currency-value-wrap,
@@ -928,18 +883,6 @@
 
 .security-pool-hero-oracle-value {
 	font-size: clamp(1.4rem, 2vw, 2rem);
-}
-
-.security-pool-hero-metrics.selected-pool-context-grid {
-	grid-template-columns: minmax(0, 1fr);
-	gap: 1rem;
-}
-
-.security-pool-hero-metrics.selected-pool-context-grid > div {
-	padding: 0;
-	border: 0;
-	border-radius: 0;
-	background: transparent;
 }
 
 .security-pool-secondary-facts {
@@ -1050,8 +993,8 @@
 
 .vault-position-strip-title,
 .vault-position-strip-meta {
-	line-height: 1.2;
-	font-size: var(--font-small);
+	line-height: var(--line-height-tight);
+	font-size: var(--font-label);
 }
 
 .vault-position-strip-actions {
@@ -1093,8 +1036,8 @@
 .security-pool-secondary-facts .metric-field {
 	padding: 0.8rem 0.9rem;
 	border: 1px solid var(--color-white-08);
-	border-radius: 0.95rem;
-	background: linear-gradient(180deg, rgba(255, 255, 255, 0.025), rgba(255, 255, 255, 0.01));
+	border-radius: var(--radius-overlay);
+	background: linear-gradient(180deg, var(--color-white-04), transparent);
 }
 
 .trading-holdings-stage {
@@ -1138,7 +1081,7 @@
 	gap: 1rem;
 	margin-top: 0;
 	padding-top: 0.5rem;
-	border-top: 1px dashed rgba(255, 255, 255, 0.1);
+	border-top: 1px dashed var(--color-white-08);
 }
 
 .trading-share-distribution .ranked-bar-item-value,
@@ -1167,7 +1110,6 @@
 	}
 
 	.security-pool-strip,
-	.selected-pool-context-summary-hero .selected-pool-context-overview,
 	.trading-holdings-layout,
 	.vault-detail-health {
 		grid-template-columns: minmax(0, 1fr);

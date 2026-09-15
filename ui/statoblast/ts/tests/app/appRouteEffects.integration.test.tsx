@@ -16,7 +16,6 @@ type RouteEffectsProps = Parameters<typeof useAppRouteEffects>[0]
 function createDefaultProps(overrides: Partial<RouteEffectsProps> = {}): RouteEffectsProps {
 	return {
 		accountAddress: undefined,
-		activeZoltarView: 'questions',
 		activeEnvironmentNonce: 0,
 		applicationDeploymentMissing: false,
 		environmentReady: true,

@@ -52,25 +52,8 @@ describe('TabNavigation', () => {
 		expect(documentQueries.getByRole('link', { name: 'Zoltar' }).getAttribute('aria-current')).toBe('page')
 		expect(documentQueries.getByRole('link', { name: 'Security Pools' }).getAttribute('href')).toBe('#/security-pools?universe=7&simulate=1')
 		expect(documentQueries.getByRole('link', { name: 'Open Oracle' }).getAttribute('href')).toBe('#/open-oracle?universe=7&simulate=1')
-		expect(documentQueries.getByRole('combobox', { name: 'Current application section' })).not.toBeNull()
+		expect(documentQueries.queryByRole('combobox')).toBeNull()
 		expect(documentQueries.getByRole('link', { name: 'Protocol Guide' }).getAttribute('href')).toBe('https://augurproject.github.io/zoltar/docs/documentation.html')
-	})
-
-	test('changes routes from the compact route selector', async () => {
-		const routeChanges: string[] = []
-		const rendered = await renderIntoDocument(
-			h(
-				TabNavigation,
-				createProps({
-					onRouteChange: route => routeChanges.push(route),
-				}),
-			),
-		)
-		cleanupRenderedComponent = rendered.cleanup
-
-		fireEvent.change(within(document.body).getByRole('combobox', { name: 'Current application section' }), { target: { value: 'security-pools' } })
-
-		expect(routeChanges).toEqual(['security-pools'])
 	})
 
 	test('omits route controls when only one application section is available', async () => {
@@ -86,7 +69,6 @@ describe('TabNavigation', () => {
 
 		const documentQueries = within(document.body)
 		expect(documentQueries.queryByRole('link', { name: 'Questions' })).toBeNull()
-		expect(documentQueries.queryByRole('combobox', { name: 'Current application section' })).toBeNull()
 		expect(documentQueries.getByRole('link', { name: 'Protocol Guide' })).not.toBeNull()
 	})
 
@@ -104,14 +86,11 @@ describe('TabNavigation', () => {
 		expect(within(document.body).queryByRole('navigation', { name: 'Application sections' })).toBeNull()
 	})
 
-	test('keeps the first tab as the current compact route when the route is unknown', async () => {
+	test('keeps the first tab current when the route is unknown', async () => {
 		const rendered = await renderIntoDocument(h(TabNavigation, createProps({ route: 'not-found' })))
 		cleanupRenderedComponent = rendered.cleanup
 
-		const routeSelector = within(document.body).getByRole('combobox', { name: 'Current application section' })
-		if (!(routeSelector instanceof window.HTMLSelectElement)) throw new Error('Expected compact route selector')
-		expect(routeSelector.value).toBe('deploy')
-		expect(routeSelector.selectedOptions[0]?.textContent).toBe('Deploy')
+		expect(within(document.body).getByRole('link', { name: 'Deploy' }).getAttribute('aria-current')).toBe('page')
 	})
 
 	test('uses the disabled reason copy for disabled application sections', async () => {
@@ -137,12 +116,22 @@ describe('TabNavigation', () => {
 		expect(zoltarTab.tabIndex).toBe(0)
 		expect(zoltarTab.title).toBe(disabledReason)
 		expect(zoltarTab.getAttribute('aria-description')).toBe(disabledReason)
-		expect(documentQueries.getByText(disabledReason, { selector: '.mobile-route-select .disabled-reason' })).toBeDefined()
+		expect(documentQueries.getByText(disabledReason, { selector: '.tab-nav-unavailable .disabled-reason' })).toBeDefined()
 
 		zoltarTab.focus()
 		expect(document.activeElement).toBe(zoltarTab)
 		fireEvent.click(zoltarTab)
 		expect(routeChanges).toEqual([])
+	})
+
+	test('explains a shared lock once instead of repeating it per tab', async () => {
+		const disabledReason = 'Transaction in progress.'
+		const rendered = await renderIntoDocument(h(TabNavigation, createProps({ tabs: DEFAULT_TABS.map(tab => ({ ...tab, disabled: true, disabledReason })) })))
+		cleanupRenderedComponent = rendered.cleanup
+
+		const reasons = document.body.querySelectorAll('.tab-nav-unavailable .disabled-reason')
+		expect(reasons.length).toBe(1)
+		expect(reasons[0]?.textContent).toBe(disabledReason)
 	})
 
 	test('keeps shared and destination-owned query state in top-level tab hrefs', async () => {

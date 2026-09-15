@@ -91,7 +91,6 @@ describe('useQuestionCreation', () => {
 				{
 					accountAddress,
 					activeUniverseId: options.activeUniverseId ?? 1n,
-					activeZoltarView: 'questions',
 					autoLoadInitialData: false,
 					deploymentStatuses: options.deploymentStatuses ?? [DEPLOYED_QUESTION_DATA],
 					environmentRefreshKey,
@@ -402,7 +401,6 @@ describe('useQuestionCreation', () => {
 			hookState = useQuestionCreation({
 				accountAddress,
 				activeUniverseId,
-				activeZoltarView: 'questions',
 				autoLoadInitialData: false,
 				deploymentStatuses: [DEPLOYED_QUESTION_DATA],
 				environmentRefreshKey: 0,

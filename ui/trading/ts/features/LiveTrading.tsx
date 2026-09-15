@@ -1,13 +1,19 @@
+import type { RefObject } from 'preact'
 import { useEffect, useRef, useState } from 'preact/hooks'
 import { formatUnits, shortAddress } from '../lib/format.js'
-import { Status } from '../components/Status.js'
-import { SecurityPoolAddressLink, TradingAddressValue } from '../components/TradingAddress.js'
+import { SecurityPoolLink } from '../components/SecurityPoolLink.js'
 import type { DeploymentConfiguration } from '../protocol/config.js'
-import { marketAcceptsNewRisk } from '../protocol/live.js'
-import { getActiveSimulationController } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
+import { marketAcceptsNewRisk, type LiveMarket } from '../protocol/live.js'
 import * as appCopy from '../copy/app.js'
-import { getTradingRouteHref, isTradingBrowseRoute, isTradingLookupRoute, tradingWorkflowRoute, type TradingRoute } from '../lib/routing.js'
+import { getTradingRouteHref, isTradingBrowseRoute, isTradingLookupRoute, tradingWorkflowRoute, type TradingLookupRoute, type TradingRoute } from '../lib/routing.js'
+import { Badge } from '@zoltar/ui-core-shared/components/Badge.js'
+import { EmptyState } from '@zoltar/ui-core-shared/components/EmptyState.js'
+import { ErrorNotice } from '@zoltar/ui-core-shared/components/ErrorNotice.js'
+import { ReadOnlyAddressValue } from '@zoltar/ui-core-shared/components/AddressValue.js'
 import { RouteHeader } from '@zoltar/ui-core-shared/components/RouteHeader.js'
+import { SectionBlock } from '@zoltar/ui-core-shared/components/SectionBlock.js'
+import { StickyObjectContext } from '@zoltar/ui-core-shared/components/StickyObjectContext.js'
+import { ViewTabs } from '@zoltar/ui-core-shared/components/ViewTabs.js'
 import { useLiveTradingController } from './liveTradingController.js'
 import { liveTradingControllerServices } from './liveTradingControllerHelpers.js'
 import type { LiveTradingControllerServices } from './live/liveTradingTypes.js'
@@ -17,13 +23,48 @@ import { LiveLiquidityControls, liveLiquidityServices, type LiveLiquidityService
 import { LiveSettlementControls, liveSettlementServices, type LiveSettlementServices } from './LiveSettlementControls.js'
 import { DEFAULT_SLIPPAGE_PERCENT, DEFAULT_TRANSACTION_VALIDITY_MINUTES, formatTimestamp } from './LiveTradingTransactionUi.js'
 import type { WalletSummaryState } from '../lib/walletSummaryState.js'
-import { liveWorkflowRoutePresentation, portfolioRouteSubtitle } from './live/routePresentation.js'
+import { liveWorkflowRoutePresentation } from './live/routePresentation.js'
 import { LiveSecurityPoolDetails, PairInitializationAction, SecurityPoolRouteEmptyState } from './LiveSecurityPoolDetails.js'
-import { LiveMarketBrowser, marketStatusLabel } from './LiveMarketBrowser.js'
-import { LiveMarketLookup } from './LiveMarketLookup.js'
+import { LiveMarketBrowser, marketStatusLabel, marketStatusTone } from './LiveMarketBrowser.js'
 import { liveCopy } from '../copy/live.js'
+import * as availabilityCopy from '../copy/availability.js'
+import { useFocusOnKeyChange } from './live/useFocusOnKeyChange.js'
 
 const ignoreWalletSummaryChange = () => undefined
+
+type MarketWorkspaceView = 'trade' | 'liquidity' | 'settlement'
+
+const MARKET_WORKSPACE_PANEL_ID = 'market-workspace-panel'
+
+/** The browse aliases (`#/markets`, `#/security-pools`) render the same list-first landing as their lookup route. */
+function lookupRouteForList(route: TradingRoute): TradingLookupRoute | undefined {
+	if (isTradingLookupRoute(route)) return route
+	if (isTradingBrowseRoute(route)) return route === 'security-pools' ? 'create-market' : 'market'
+	return undefined
+}
+
+function MarketFacts({ market, nowSeconds, workflowLocked, headingRef }: { market: LiveMarket; nowSeconds: bigint; workflowLocked: boolean; headingRef: RefObject<HTMLDivElement> }) {
+	return (
+		<div class='market-object-header' ref={headingRef} tabIndex={-1}>
+			<StickyObjectContext
+				variant='embedded-context-strip'
+				sticky={false}
+				title={market.title}
+				badge={<Badge tone={marketStatusTone(market, nowSeconds)}>{marketStatusLabel(market, nowSeconds)}</Badge>}
+				items={[
+					{ label: liveCopy.securityPoolLabel, value: <SecurityPoolLink value={market.pool} disabled={workflowLocked} /> },
+					...(market.loadError === undefined
+						? [
+								{ label: liveCopy.questionEnd, value: formatTimestamp(market.endTime) },
+								{ label: liveCopy.ammFee, value: `${formatUnits(market.feeBps, 2, 2)}%` },
+								{ label: liveCopy.pair, value: market.pair === undefined ? liveCopy.notDeployed : <ReadOnlyAddressValue address={market.pair} responsiveAbbreviation /> },
+							]
+						: []),
+				]}
+			/>
+		</div>
+	)
+}
 
 export function LiveTrading({
 	route,
@@ -68,7 +109,7 @@ export function LiveTrading({
 		refreshIntervalMilliseconds,
 		services: controllerServices,
 	})
-	const { account, walletClient, connect, connectionMessage, refreshWalletSummaryAfterReceipt, executeWithCurrentWalletContext, createGuardedWalletWrite } = wallet
+	const { account, walletClient, walletEthAttoEth, networkMismatchReason, connect, connectionMessage, refreshWalletSummaryAfterReceipt, executeWithCurrentWalletContext, createGuardedWalletWrite } = wallet
 	const { balanceError, portfolioBalanceState, portfolioBalanceError, visiblePortfolioEntries, selectedBalances, selectedBalanceState, retryBalances, retryPortfolioBalances } = balances
 	const { visibleMarkets, listedMarkets, selected, selectedPairInitialized, routePool, discoveryState, discoveryError, marketPage, nowSeconds, refresh, refreshFromControl, loadMarketPage } = discovery
 	const { parsedAmount, mode, setMode, side, setSide, amount, setAmount, slippage, setSlippage, transactionValidityMinutes, setTransactionValidityMinutes, quote, state, positionHash, message, positionReceiptWarning, simulate, submit } = position
@@ -77,6 +118,11 @@ export function LiveTrading({
 	const creatingMarket = workflowRoute === 'create-market'
 	const [createdMarketTitle, setCreatedMarketTitle] = useState<string>()
 	useEffect(() => setCreatedMarketTitle(undefined), [route])
+	// Trade and settlement share the `#/market/<address>` hash, so the chosen one is local state; liquidity is its own hash.
+	const [closedMarketView, setClosedMarketView] = useState<'trade' | 'settlement'>('settlement')
+	useEffect(() => setClosedMarketView('settlement'), [routePool])
+	// Moving between addressed markets keeps the same page title, so focus the new market heading here instead of relying on the app heading.
+	const marketHeadingRef = useFocusOnKeyChange<HTMLDivElement>(selected?.pool, false)
 	const previousWalletConnectRequestNonce = useRef(walletConnectRequestNonce)
 	useEffect(() => {
 		if (walletConnectRequestNonce === undefined) return
@@ -88,180 +134,134 @@ export function LiveTrading({
 	// error surface, so this route only ever renders while the deployment is still resolving.
 	if (configuration === undefined)
 		return (
-			<main class='route' id='main-content'>
-				<RouteHeader eyebrow={appCopy.standaloneLiveClient} title={<span role='status'>{appCopy.loadingContracts}</span>} />
-			</main>
+			<div class='route'>
+				<RouteHeader title={<span role='status'>{appCopy.loadingContracts}</span>} />
+			</div>
 		)
+	// Connecting re-requests the deployment chain first, so the same action switches a wallet that is on another network.
+	let walletActionLabel = account === undefined ? appCopy.connectWallet : shortAddress(account)
+	if (account === undefined && networkMismatchReason !== undefined) walletActionLabel = availabilityCopy.formatSwitchNetworkAction(configuration.chainName)
 	const walletAction =
 		walletConnectRequestNonce === undefined ? (
-			<button class='wallet-button' disabled={workflowLocked} onClick={connect}>
-				{account === undefined ? appCopy.connectWallet : shortAddress(account)}
+			<button class='secondary wallet-button' type='button' disabled={workflowLocked} onClick={connect}>
+				{walletActionLabel}
 			</button>
 		) : undefined
-	if (isTradingBrowseRoute(route))
+	const lookupRoute = lookupRouteForList(route)
+	if (lookupRoute !== undefined) {
+		const routePresentation = liveWorkflowRoutePresentation(lookupRoute)
 		return (
-			<LiveMarketBrowser
-				route={route}
-				markets={listedMarkets}
-				pageMarketCount={visibleMarkets.length}
-				discoveryState={discoveryState}
-				discoveryError={discoveryError}
-				marketPage={marketPage}
-				workflowLocked={workflowLocked}
-				nowSeconds={nowSeconds}
-				connectionMessage={connectionMessage}
-				retry={refreshFromControl}
-				loadMarketPage={loadMarketPage}
-			/>
+			<div class='route'>
+				<RouteHeader title={routePresentation.title} description={routePresentation.description} actions={walletAction} />
+				<ErrorNotice message={connectionMessage} />
+				<LiveMarketBrowser
+					lookupRoute={lookupRoute}
+					markets={listedMarkets}
+					pageMarketCount={visibleMarkets.length}
+					discoveryState={discoveryState}
+					discoveryError={discoveryError}
+					marketPage={marketPage}
+					workflowLocked={workflowLocked}
+					nowSeconds={nowSeconds}
+					retry={refreshFromControl}
+					loadMarketPage={loadMarketPage}
+				/>
+			</div>
 		)
+	}
 	if (routePool !== undefined && route.startsWith('security-pool/')) {
 		if (selected !== undefined)
 			return (
 				<LiveSecurityPoolDetails market={selected} refreshError={discoveryState === 'error' ? (discoveryError ?? liveCopy.unknownDiscovery) : undefined} refreshing={discoveryState === 'loading'} retry={refreshFromControl} workflowLocked={workflowLocked} nowSeconds={nowSeconds} connectionMessage={connectionMessage} />
 			)
 		return (
-			<main class='route' id='main-content'>
-				<RouteHeader eyebrow={<a href={getTradingRouteHref('#/market')}>{liveCopy.backToMarket}</a>} title={appCopy.securityPool} />
-				{connectionMessage === undefined ? null : (
-					<p class='error' role='alert'>
-						{connectionMessage}
-					</p>
-				)}
-				<section class='section' aria-busy={discoveryState === 'loading'}>
-					<SecurityPoolRouteEmptyState discoveryState={discoveryState} discoveryError={discoveryError} workflowLocked={workflowLocked} retry={refreshFromControl} />
-				</section>
-			</main>
+			<div class='route'>
+				<RouteHeader title={appCopy.securityPool} description={appCopy.securityPoolRouteDescription} />
+				<ErrorNotice message={connectionMessage} />
+				<SectionBlock variant='plain'>
+					<div aria-busy={discoveryState === 'loading'}>
+						<SecurityPoolRouteEmptyState discoveryState={discoveryState} discoveryError={discoveryError} workflowLocked={workflowLocked} retry={refreshFromControl} />
+					</div>
+				</SectionBlock>
+			</div>
 		)
 	}
 	if (route === 'portfolio') {
-		const subtitle = portfolioRouteSubtitle(configuration.chainName, getActiveSimulationController() !== undefined)
+		// Balances cannot be judged empty until discovery has produced the pools they belong to.
+		const discovering = discoveryState === 'loading' && visibleMarkets.length === 0
 		return (
-			<main class='route' id='main-content'>
-				<RouteHeader eyebrow={appCopy.positionsByPool} title={appCopy.portfolio} description={subtitle} actions={walletAction} />
-				{message === undefined ? null : (
-					<p class='error' role='alert'>
-						{message}
-					</p>
-				)}
-				<section class='portfolio-section' aria-busy={discoveryState === 'loading'}>
-					<div class='section-heading'>
-						<h2>{liveCopy.positions}</h2>
+			<div class='route'>
+				<RouteHeader title={appCopy.portfolio} description={appCopy.portfolioRouteDescription} actions={walletAction} />
+				<ErrorNotice message={connectionMessage} />
+				<SectionBlock variant='plain' title={liveCopy.positions}>
+					<div class='portfolio-section' aria-busy={discoveryState === 'loading'}>
+						{discovering ? <EmptyState live title={liveCopy.discoveringSecurityPools} /> : null}
+						<ErrorNotice message={discoveryState === 'error' ? liveCopy.securityPoolFactoryDiscoveryFailed(discoveryError) : undefined} />
+						{discoveryState === 'ready' && visibleMarkets.length === 0 ? <p class='detail'>{liveCopy.noSecurityPoolsInUniverse}</p> : null}
+						{discoveryState === 'error' || discovering ? null : <LivePortfolio entries={visiblePortfolioEntries} balanceState={portfolioBalanceState} balanceError={portfolioBalanceError} retryBalances={retryPortfolioBalances} />}
 					</div>
-					{discoveryState === 'loading' && visibleMarkets.length === 0 ? <p role='status'>{liveCopy.discoveringSecurityPools}</p> : null}
-					{discoveryState === 'error' ? (
-						<p class='error' role='alert'>
-							{liveCopy.securityPoolFactoryDiscoveryFailed(discoveryError)}
-						</p>
-					) : null}
-					{discoveryState === 'ready' && visibleMarkets.length === 0 ? <p>{liveCopy.noSecurityPoolsInUniverse}</p> : null}
-					{discoveryState === 'error' ? null : <LivePortfolio entries={visiblePortfolioEntries} balanceState={portfolioBalanceState} balanceError={portfolioBalanceError} retryBalances={retryPortfolioBalances} />}
-				</section>
-			</main>
+				</SectionBlock>
+			</div>
 		)
 	}
-	const routePresentation = liveWorkflowRoutePresentation(workflowRoute, configuration.chainName, getActiveSimulationController() !== undefined)
-	// The position controls surface workflow messages beside their action; other addressed views keep them at the top.
-	const positionControlsVisible = workflowRoute === 'market' && selected !== undefined && selected.loadError === undefined && selectedPairInitialized
-	const routeMessage = connectionMessage ?? (positionControlsVisible ? undefined : message) ?? parsedAmount.error
-	if (isTradingLookupRoute(route))
-		return (
-			<main class='route' id='main-content'>
-				<RouteHeader title={routePresentation.title} description={routePresentation.description} actions={walletAction} />
-				{connectionMessage === undefined ? null : (
-					<p class='error' role='alert'>
-						{connectionMessage}
-					</p>
-				)}
-				<LiveMarketLookup route={route} disabled={workflowLocked} />
-			</main>
-		)
+	const routePresentation = liveWorkflowRoutePresentation(workflowRoute)
+	const marketOpen = selected !== undefined && marketAcceptsNewRisk(selected, nowSeconds)
+	let activeView: MarketWorkspaceView = marketOpen ? 'trade' : closedMarketView
+	if (workflowRoute === 'liquidity') activeView = 'liquidity'
+	const viewTabId = (view: MarketWorkspaceView) => `market-workspace-${view}-tab`
+	const openView = (view: MarketWorkspaceView) => {
+		if (selected === undefined || workflowLocked) return
+		if (view !== 'liquidity') setClosedMarketView(view === 'settlement' ? 'settlement' : 'trade')
+		window.location.hash = getTradingRouteHref(`#/${view === 'liquidity' ? 'liquidity' : 'market'}/${selected.pool}`)
+	}
+	const viewOptions = [
+		{ value: 'trade' as const, id: viewTabId('trade'), panelId: MARKET_WORKSPACE_PANEL_ID, label: appCopy.trade, disabled: workflowLocked },
+		{ value: 'liquidity' as const, id: viewTabId('liquidity'), panelId: MARKET_WORKSPACE_PANEL_ID, label: appCopy.liquidity, disabled: workflowLocked },
+		...(marketOpen ? [] : [{ value: 'settlement' as const, id: viewTabId('settlement'), panelId: MARKET_WORKSPACE_PANEL_ID, label: appCopy.settlement, disabled: workflowLocked }]),
+	]
+	// The route header names the workflow; the object header below carries the market question, status, and facts, so
+	// neither repeats the other. Focus lands on the object header when the addressed market changes.
 	return (
-		<main class='route' id='main-content'>
-			<RouteHeader title={routePresentation.title} description={routePresentation.description} actions={walletAction} />
-			{routeMessage === undefined ? null : (
-				<p class='error' role='alert'>
-					{routeMessage}
-				</p>
-			)}
+		<div class='route'>
+			<RouteHeader title={routePresentation.title} description={selected === undefined ? routePresentation.description : undefined} actions={walletAction} />
+			<ErrorNotice message={connectionMessage} />
 			{createdMarketTitle === undefined ? null : (
-				<p role='status'>
+				<p class='detail' role='status'>
 					{liveCopy.marketCreated(createdMarketTitle)} <a href={getTradingRouteHref(routePool === undefined ? '#/liquidity' : `#/liquidity/${routePool}`)}>{appCopy.liquidity}</a>
 				</p>
 			)}
-			{selected !== undefined && discoveryState === 'error' ? (
-				<p class='error' role='alert'>
-					{liveCopy.securityPoolRefreshFailed(discoveryError ?? liveCopy.unknownDiscovery)}
-				</p>
-			) : null}
+			<ErrorNotice message={selected !== undefined && discoveryState === 'error' ? liveCopy.securityPoolRefreshFailed(discoveryError ?? liveCopy.unknownDiscovery) : undefined} />
 			<div class='market-stack'>
 				{selected === undefined ? (
-					<section class='section' aria-busy={discoveryState === 'loading'}>
-						<SecurityPoolRouteEmptyState discoveryState={discoveryState} discoveryError={discoveryError} workflowLocked={workflowLocked} retry={refreshFromControl} />
-					</section>
+					<SectionBlock variant='plain'>
+						<div aria-busy={discoveryState === 'loading'}>
+							<SecurityPoolRouteEmptyState discoveryState={discoveryState} discoveryError={discoveryError} workflowLocked={workflowLocked} retry={refreshFromControl} />
+						</div>
+					</SectionBlock>
 				) : null}
 				{(() => {
 					if (selected === undefined) return null
 					if (creatingMarket && selected.pair !== undefined)
 						return (
-							<p>
-								{liveCopy.poolAlreadyExists} <a href={getTradingRouteHref(`#/liquidity/${selected.pool}`)}>{appCopy.liquidity}</a>
-							</p>
+							<SectionBlock variant='plain'>
+								<MarketFacts market={selected} nowSeconds={nowSeconds} workflowLocked={workflowLocked} headingRef={marketHeadingRef} />
+								<p class='detail'>
+									{liveCopy.poolAlreadyExists} <a href={getTradingRouteHref(`#/liquidity/${selected.pool}`)}>{appCopy.liquidity}</a>
+								</p>
+							</SectionBlock>
 						)
 					if (selected.loadError !== undefined)
 						return (
-							<section class='section' key={selected.pool}>
-								<div class='section-heading'>
-									<div>
-										<span class='section-kicker'>{creatingMarket ? liveCopy.securityPool : appCopy.market}</span>
-										<h2>{selected.title}</h2>
-									</div>
-									<Status tone='warn'>{liveCopy.marketDataUnavailable}</Status>
-								</div>
-								<p class='error' role='alert'>
-									{liveCopy.securityPoolCouldNotLoad(selected.loadError)}
-								</p>
-								<dl class='fact-list'>
-									<div>
-										<dt>{liveCopy.securityPoolLabel}</dt>
-										<dd>
-											<SecurityPoolAddressLink value={selected.pool} disabled={workflowLocked} />
-										</dd>
-									</div>
-								</dl>
-							</section>
+							<SectionBlock key={selected.pool} variant='plain'>
+								<MarketFacts market={selected} nowSeconds={nowSeconds} workflowLocked={workflowLocked} headingRef={marketHeadingRef} />
+								<ErrorNotice message={liveCopy.securityPoolCouldNotLoad(selected.loadError)} />
+							</SectionBlock>
 						)
-					return (
-						<section class='section' key={selected.pool}>
-							<div class='section-heading'>
-								<div>
-									<span class='section-kicker'>{creatingMarket ? liveCopy.securityPool : appCopy.market}</span>
-									<h2>{selected.title}</h2>
-								</div>
-								{creatingMarket ? null : <Status tone={marketAcceptsNewRisk(selected, nowSeconds) ? 'good' : 'warn'}>{marketStatusLabel(selected, nowSeconds)}</Status>}
-							</div>
-							{workflowRoute !== 'liquidity' && !creatingMarket && !selectedPairInitialized ? <PairInitializationAction market={selected} nowSeconds={nowSeconds} /> : null}
-							<dl class='fact-list'>
-								<div>
-									<dt>{liveCopy.securityPoolLabel}</dt>
-									<dd>
-										<SecurityPoolAddressLink value={selected.pool} disabled={workflowLocked} />
-									</dd>
-								</div>
-								<div>
-									<dt>{liveCopy.pair}</dt>
-									<dd>{selected.pair === undefined ? liveCopy.notDeployed : <TradingAddressValue value={selected.pair} />}</dd>
-								</div>
-								<div>
-									<dt>{liveCopy.questionEnd}</dt>
-									<dd>{formatTimestamp(selected.endTime)}</dd>
-								</div>
-								<div>
-									<dt>{liveCopy.ammFee}</dt>
-									<dd>{formatUnits(selected.feeBps, 2, 2)}%</dd>
-								</div>
-							</dl>
-							{workflowRoute === 'liquidity' || creatingMarket || marketAcceptsNewRisk(selected, nowSeconds) ? null : (
-								<LiveSettlementControls
+					if (creatingMarket)
+						return (
+							<SectionBlock key={selected.pool} title={appCopy.liquidity}>
+								<MarketFacts market={selected} nowSeconds={nowSeconds} workflowLocked={workflowLocked} headingRef={marketHeadingRef} />
+								<LiveLiquidityControls
 									configuration={configuration}
 									market={selected}
 									balances={selectedBalances}
@@ -269,29 +269,13 @@ export function LiveTrading({
 									balanceError={balanceError}
 									account={account}
 									walletClient={walletClient}
-									externallyLocked={workflowLocked}
-									refresh={() => refresh(configuration, marketPage.start, 'liquidity')}
-									onKnownReceipt={refreshWalletSummaryAfterReceipt}
-									executeWithCurrentWalletContext={executeWithCurrentWalletContext}
-									createGuardedWalletWrite={createGuardedWalletWrite}
-									retryBalances={retryBalances}
-									onWorkflowLockChange={updateLiquidityWorkflowLock}
-									services={settlementServices}
-								/>
-							)}
-							{workflowRoute === 'liquidity' || creatingMarket ? (
-								<LiveLiquidityControls
-									configuration={configuration}
-									market={selected}
-									balanceState={selectedBalanceState}
-									balanceError={balanceError}
-									account={account}
-									walletClient={walletClient}
+									networkMismatchReason={networkMismatchReason}
+									walletEthAttoEth={walletEthAttoEth}
 									externallyLocked={workflowLocked}
 									nowSeconds={nowSeconds}
 									refresh={async () => {
 										await refresh(configuration, marketPage.start, 'liquidity')
-										if (creatingMarket) setCreatedMarketTitle(selected.title)
+										setCreatedMarketTitle(selected.title)
 									}}
 									onKnownReceipt={refreshWalletSummaryAfterReceipt}
 									executeWithCurrentWalletContext={executeWithCurrentWalletContext}
@@ -300,39 +284,93 @@ export function LiveTrading({
 									onWorkflowLockChange={updateLiquidityWorkflowLock}
 									services={liquidityServices}
 								/>
-							) : null}
-							{workflowRoute !== 'liquidity' && !creatingMarket && selectedPairInitialized ? (
-								<LivePositionControls
-									market={selected}
-									balances={selectedBalances}
-									balanceState={selectedBalanceState}
-									balanceError={balanceError}
-									mode={mode}
-									side={side}
-									amount={amount}
-									slippage={slippage}
-									transactionValidityMinutes={transactionValidityMinutes}
-									quote={quote}
-									state={state}
-									message={message}
-									receiptWarning={positionReceiptWarning}
-									transactionHash={positionHash}
-									externallyLocked={workflowLocked}
-									nowSeconds={nowSeconds}
-									setMode={setMode}
-									setSide={setSide}
-									setAmount={setAmount}
-									setSlippage={setSlippage}
-									setTransactionValidityMinutes={setTransactionValidityMinutes}
-									simulate={simulate}
-									submit={submit}
-									retryBalances={retryBalances}
-								/>
-							) : null}
-						</section>
+							</SectionBlock>
+						)
+					return (
+						<SectionBlock key={selected.pool} className='market-workspace'>
+							<MarketFacts market={selected} nowSeconds={nowSeconds} workflowLocked={workflowLocked} headingRef={marketHeadingRef} />
+							<ViewTabs ariaLabel={appCopy.marketWorkspaceViews} semantics='tabs' size='compact' value={activeView} onChange={openView} options={viewOptions} />
+							<div class='market-workspace-panel' role='tabpanel' id={MARKET_WORKSPACE_PANEL_ID} aria-labelledby={viewTabId(activeView)}>
+								{activeView === 'settlement' ? (
+									<LiveSettlementControls
+										configuration={configuration}
+										market={selected}
+										balances={selectedBalances}
+										balanceState={selectedBalanceState}
+										balanceError={balanceError}
+										account={account}
+										walletClient={walletClient}
+										networkMismatchReason={networkMismatchReason}
+										externallyLocked={workflowLocked}
+										refresh={() => refresh(configuration, marketPage.start, 'liquidity')}
+										onKnownReceipt={refreshWalletSummaryAfterReceipt}
+										executeWithCurrentWalletContext={executeWithCurrentWalletContext}
+										createGuardedWalletWrite={createGuardedWalletWrite}
+										retryBalances={retryBalances}
+										onWorkflowLockChange={updateLiquidityWorkflowLock}
+										services={settlementServices}
+									/>
+								) : null}
+								{activeView === 'liquidity' ? (
+									<LiveLiquidityControls
+										configuration={configuration}
+										market={selected}
+										balances={selectedBalances}
+										balanceState={selectedBalanceState}
+										balanceError={balanceError}
+										account={account}
+										walletClient={walletClient}
+										networkMismatchReason={networkMismatchReason}
+										walletEthAttoEth={walletEthAttoEth}
+										externallyLocked={workflowLocked}
+										nowSeconds={nowSeconds}
+										refresh={() => refresh(configuration, marketPage.start, 'liquidity')}
+										onKnownReceipt={refreshWalletSummaryAfterReceipt}
+										executeWithCurrentWalletContext={executeWithCurrentWalletContext}
+										createGuardedWalletWrite={createGuardedWalletWrite}
+										retryBalances={retryBalances}
+										onWorkflowLockChange={updateLiquidityWorkflowLock}
+										services={liquidityServices}
+									/>
+								) : null}
+								{activeView === 'trade' && !selectedPairInitialized ? <PairInitializationAction market={selected} nowSeconds={nowSeconds} /> : null}
+								{activeView === 'trade' && selectedPairInitialized ? (
+									<LivePositionControls
+										market={selected}
+										balances={selectedBalances}
+										balanceState={selectedBalanceState}
+										balanceError={balanceError}
+										walletConnected={account !== undefined && walletClient !== undefined}
+										networkMismatchReason={networkMismatchReason}
+										walletEthAttoEth={walletEthAttoEth}
+										mode={mode}
+										side={side}
+										amount={amount}
+										amountError={parsedAmount.error}
+										slippage={slippage}
+										transactionValidityMinutes={transactionValidityMinutes}
+										quote={quote}
+										state={state}
+										message={message}
+										receiptWarning={positionReceiptWarning}
+										transactionHash={positionHash}
+										externallyLocked={workflowLocked}
+										nowSeconds={nowSeconds}
+										setMode={setMode}
+										setSide={setSide}
+										setAmount={setAmount}
+										setSlippage={setSlippage}
+										setTransactionValidityMinutes={setTransactionValidityMinutes}
+										simulate={simulate}
+										submit={submit}
+										retryBalances={retryBalances}
+									/>
+								) : null}
+							</div>
+						</SectionBlock>
 					)
 				})()}
 			</div>
-		</main>
+		</div>
 	)
 }

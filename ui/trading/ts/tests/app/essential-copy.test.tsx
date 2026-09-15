@@ -24,7 +24,8 @@ describe('essential trading copy', () => {
 		const rendered = await renderIntoDocument(<App />)
 		cleanupRendered = rendered.cleanup
 		expect(rendered.container.querySelector('nav')?.textContent).not.toContain('Developer')
-		expect(rendered.container.querySelector('nav')?.textContent).toContain('Deploy')
+		// The deployment tab waits for the deployment check to fail instead of appearing on every boot.
+		expect(rendered.container.querySelector('nav')?.textContent).not.toContain('Deploy')
 		expect(rendered.container.querySelector('.demo-banner')).toBeNull()
 		for (const phrase of forbiddenCopy) expect(rendered.container.textContent?.toLowerCase()).not.toContain(phrase.toLowerCase())
 	})
@@ -55,10 +56,11 @@ describe('essential trading copy', () => {
 		const rendered = await renderIntoDocument(<ExecutionProtectionFields slippage='5.01' validityMinutes='0' disabled={false} onSlippageInput={() => undefined} onValidityInput={() => undefined} />)
 		cleanupRendered = rendered.cleanup
 		const inputs = rendered.container.querySelectorAll<HTMLInputElement>('input')
-		const alerts = rendered.container.querySelectorAll<HTMLElement>('[role="alert"]')
-		expect(alerts).toHaveLength(2)
-		expect(inputs[0]?.getAttribute('aria-describedby')).toBe(alerts[0]?.id)
-		expect(inputs[1]?.getAttribute('aria-describedby')).toBe(alerts[1]?.id)
+		const errors = rendered.container.querySelectorAll<HTMLElement>('.field-error')
+		expect(errors).toHaveLength(2)
+		expect(inputs[0]?.getAttribute('aria-invalid')).toBe('true')
+		expect(inputs[0]?.getAttribute('aria-describedby')?.split(' ')).toContain(errors[0]?.id)
+		expect(inputs[1]?.getAttribute('aria-describedby')?.split(' ')).toContain(errors[1]?.id)
 	})
 
 	test('maps the removed developer route to the markets browse route and defaults to the market lookup', () => {

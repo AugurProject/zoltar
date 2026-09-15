@@ -87,6 +87,69 @@ describe('AppHeaderShell', () => {
 		}
 	})
 
+	test('renders secondary views only while the current route is a primary tab', async () => {
+		installTestRouting()
+		const domEnvironment = installDomEnvironment('http://localhost/#/zoltar')
+		const tabs = [
+			{ hash: '#/deploy', label: 'Deploy', route: 'deploy' },
+			{ hash: '#/zoltar', label: 'Zoltar', route: 'zoltar' },
+		]
+		const secondaryNavigation = { ariaLabel: 'Zoltar views', onChange: () => undefined, options: [{ href: '#/zoltar?zoltarView=questions', label: 'Browse Questions', value: 'questions' }], value: 'questions' }
+		for (const [route, expectSecondary] of [
+			['zoltar', true],
+			['deploy', true],
+			['not-found', false],
+		] as const) {
+			const rendered = await renderIntoDocument(<AppHeaderShell overview={<div>Overview</div>} secondaryNavigation={secondaryNavigation} simulationController={undefined} tabNavigation={{ onRouteChange: () => undefined, route, tabs }} onRefresh={async () => undefined} />)
+			try {
+				expect(within(rendered.container).queryByRole('navigation', { name: 'Zoltar views' }) !== null).toBe(expectSecondary)
+			} finally {
+				await rendered.cleanup()
+			}
+		}
+		domEnvironment.cleanup()
+	})
+
+	test('omits the navigation stack and moves the guide link after the tiers', async () => {
+		installTestRouting()
+		const domEnvironment = installDomEnvironment('http://localhost/#/zoltar')
+		const singleTab = await renderIntoDocument(
+			<AppHeaderShell overview={<div>Overview</div>} simulationController={undefined} tabNavigation={{ onRouteChange: () => undefined, route: 'zoltar', showProtocolGuide: false, tabs: [{ hash: '#/zoltar', label: 'Zoltar', route: 'zoltar' }] }} onRefresh={async () => undefined} />,
+		)
+		try {
+			expect(singleTab.container.querySelector('.app-nav-stack')).toBeNull()
+		} finally {
+			await singleTab.cleanup()
+		}
+		const secondaryNavigation = { ariaLabel: 'Security Pools views', onChange: () => undefined, options: [{ href: '#/security-pools', label: 'Browse Pools', value: 'browse' }], value: 'browse' }
+		const withGuide = await renderIntoDocument(
+			<AppHeaderShell
+				overview={<div>Overview</div>}
+				secondaryNavigation={secondaryNavigation}
+				simulationController={undefined}
+				tabNavigation={{
+					onRouteChange: () => undefined,
+					route: 'security-pools',
+					tabs: [
+						{ hash: '#/security-pools', label: 'Security Pools', route: 'security-pools' },
+						{ hash: '#/open-oracle', label: 'Open Oracle', route: 'open-oracle' },
+					],
+				}}
+				onRefresh={async () => undefined}
+			/>,
+		)
+		try {
+			const stack = withGuide.container.querySelector('.app-nav-stack')
+			if (stack === null) throw new Error('Navigation stack is missing')
+			const children = Array.from(stack.children).map(child => child.className.split(' ')[0])
+			expect(children).toEqual(['tab-nav', 'route-subnav-region', 'protocol-guide-link'])
+			expect(stack.querySelector('.tab-nav .protocol-guide-link')).toBeNull()
+		} finally {
+			await withGuide.cleanup()
+			domEnvironment.cleanup()
+		}
+	})
+
 	test('supports an injected application header and custom main-content target', async () => {
 		const domEnvironment = installDomEnvironment('http://localhost/#/markets')
 		const appContent = document.createElement('main')

@@ -9,7 +9,6 @@ import { createActiveEnvironmentGuard } from '@zoltar/ui-core-shared/lib/activeE
 type UseZoltarOperationsParameters = TransactionLifecycleParameters &
 	WriteOperationContext & {
 		activeUniverseId: bigint
-		activeZoltarView: 'create' | 'fork' | 'migrate' | 'questions'
 		autoLoadInitialData: boolean
 		deploymentStatuses: DeploymentStatus[]
 		environmentRefreshKey: number
@@ -18,7 +17,6 @@ type UseZoltarOperationsParameters = TransactionLifecycleParameters &
 export function useZoltarOperations({
 	accountAddress,
 	activeUniverseId,
-	activeZoltarView,
 	autoLoadInitialData,
 	deploymentStatuses,
 	environmentRefreshKey,
@@ -59,7 +57,7 @@ export function useZoltarOperations({
 		refreshZoltarUniverse,
 		// The overview header always displays the connected wallet's REP balance.
 		// Keep fork access loaded whenever the app has enough context to do so.
-		shouldAutoLoadForkAccess: autoLoadInitialData || activeZoltarView === 'fork' || activeZoltarView === 'migrate',
+		shouldAutoLoadForkAccess: autoLoadInitialData,
 		zoltarUniverse: universe.zoltarUniverse,
 	})
 	const refreshZoltarForkAccess = useCallback(

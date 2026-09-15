@@ -11,7 +11,7 @@ html {
 	background-color: var(--bg);
 	color: var(--text);
 	overflow-x: clip;
-	scrollbar-color: rgba(96, 165, 250, 0.18) transparent;
+	scrollbar-color: var(--scrollbar-thumb) transparent;
 	scrollbar-width: thin;
 }
 
@@ -25,12 +25,12 @@ html {
 }
 
 *::-webkit-scrollbar-thumb {
-	background: rgba(96, 165, 250, 0.18);
-	border-radius: 3px;
+	background: var(--scrollbar-thumb);
+	border-radius: var(--radius-control);
 }
 
 *::-webkit-scrollbar-thumb:hover {
-	background: rgba(96, 165, 250, 0.32);
+	background: var(--scrollbar-thumb-hover);
 }
 
 body {
@@ -39,7 +39,7 @@ body {
 	margin: 0;
 	min-height: 100vh;
 	overflow-x: clip;
-	line-height: 1.55;
+	line-height: var(--line-height-body);
 	background: var(--bg-deep);
 }
 
@@ -47,9 +47,10 @@ body::before {
 	content: "";
 	position: fixed;
 	inset: 0;
-	z-index: -1;
+	z-index: var(--z-below);
 	pointer-events: none;
-	background: radial-gradient(circle at 16% 0%, color-mix(in srgb, var(--accent) 9%, transparent), transparent 25%), radial-gradient(circle at 86% 0%, color-mix(in srgb, var(--accent-strong) 8%, transparent), transparent 24%), linear-gradient(180deg, rgba(10, 21, 36, 1) 0%, rgba(7, 16, 27, 1) 45%, var(--bg-deep) 100%);
+	background:
+		radial-gradient(circle at 16% 0%, color-mix(in srgb, var(--accent) 9%, transparent), transparent 25%), radial-gradient(circle at 86% 0%, color-mix(in srgb, var(--accent-strong) 8%, transparent), transparent 24%), linear-gradient(180deg, var(--surface-section-opaque) 0%, var(--bg) 45%, var(--bg-deep) 100%);
 }
 
 main {
@@ -81,11 +82,11 @@ main {
 
 .app-settings {
 	position: relative;
-	z-index: 30;
+	z-index: var(--z-dropdown);
 }
 
 .app-settings-trigger {
-	min-height: var(--touch-target-min, 2.75rem);
+	min-height: var(--touch-target-min);
 	padding: 0.45rem 0.8rem;
 }
 
@@ -96,9 +97,9 @@ main {
 	width: min(22rem, calc(100vw - 3rem));
 	padding: 1rem;
 	border: 1px solid var(--border-strong);
-	border-radius: var(--radius-control, 0.6rem);
+	border-radius: var(--radius-control);
 	background: var(--surface-modal-opaque);
-	box-shadow: 0 1rem 2.5rem var(--shadow-color-strong, rgba(0, 0, 0, 0.35));
+	box-shadow: var(--shadow-overlay);
 }
 
 .app-settings-menu label {
@@ -110,22 +111,22 @@ main {
 .app-settings-menu label > span {
 	font-family: var(--font-family-mono);
 	font-size: var(--font-label);
-	color: var(--text-muted);
+	color: var(--muted);
 }
 
 .app-settings-menu input,
 .app-settings-menu select {
 	width: 100%;
-	min-height: var(--touch-target-min, 2.75rem);
+	min-height: var(--touch-target-min);
 	padding: 0.55rem 0.65rem;
 	border: 1px solid var(--border-strong);
-	border-radius: var(--radius-control, 0.6rem);
+	border-radius: var(--radius-control);
 	background: var(--surface-raised);
 	color: var(--text);
 }
 
 .app-settings-menu input[aria-invalid="true"] {
-	border-color: var(--danger-border, #ef4444);
+	border-color: var(--danger-border);
 }
 
 .app-settings-price-oracle {
@@ -135,7 +136,7 @@ main {
 }
 
 .app-settings-price-oracle small {
-	color: var(--text-muted);
+	color: var(--muted);
 }
 
 .page-notices {
@@ -145,15 +146,15 @@ main {
 
 .top-shell {
 	position: relative;
-	z-index: 2;
+	z-index: var(--z-content-raised);
 	display: grid;
 	gap: 0;
 	overflow: visible;
 	isolation: isolate;
 	border: 1px solid var(--divider-strong);
 	border-radius: var(--radius-shell);
-	background: linear-gradient(180deg, rgba(11, 23, 39, 0.9) 0%, rgba(8, 16, 28, 0.88) 100%);
-	box-shadow: 0 16px 36px rgba(0, 0, 0, 0.16);
+	background: linear-gradient(180deg, var(--surface-raised) 0%, var(--surface-page) 100%);
+	box-shadow: var(--shadow-raised);
 }
 
 .top-shell-content {
@@ -167,9 +168,26 @@ main {
 
 .app-nav-stack {
 	display: grid;
-	gap: 0.2rem;
+	grid-template-columns: minmax(0, 1fr) auto;
+	align-items: center;
+	gap: 0.2rem var(--space-3);
 	padding: 0.65rem 0.8rem 0.6rem;
-	border-top: 1px solid rgba(255, 255, 255, 0.04);
+	border-top: 1px solid var(--color-white-04);
+}
+
+.app-nav-stack > .tab-nav {
+	grid-column: 1;
+	min-width: 0;
+}
+
+.app-nav-stack > .protocol-guide-link {
+	grid-column: 2;
+	grid-row: 1;
+	justify-self: end;
+}
+
+.app-nav-stack > .route-subnav-region {
+	grid-column: 1 / -1;
 }
 
 .route-subnav-shell {
@@ -183,16 +201,19 @@ main {
 	min-width: 0;
 }
 
-.route-subnav-unavailable {
+.route-subnav-unavailable,
+.tab-nav-unavailable {
 	padding: 0 0.75rem 0.25rem;
 }
 
-.route-subnav-unavailable .detail {
+.route-subnav-unavailable .detail,
+.tab-nav-unavailable .detail {
 	margin: 0;
 	font-size: var(--font-label);
 }
 
-.route-subnav-unavailable strong {
+.route-subnav-unavailable strong,
+.tab-nav-unavailable strong {
 	color: var(--text);
 }
 
@@ -200,15 +221,11 @@ main {
 	display: none;
 }
 
-.route-subnav-mobile-select {
-	display: none;
-}
-
 h1 {
 	margin: 0;
 	font-family: var(--font-family-serif);
 	font-size: var(--font-h1);
-	line-height: 0.92;
+	line-height: var(--line-height-display);
 	letter-spacing: -0.055em;
 	overflow-wrap: anywhere;
 }
@@ -217,7 +234,7 @@ h2 {
 	margin: 0;
 	font-family: var(--font-family-serif);
 	font-size: var(--font-h2);
-	line-height: 1.06;
+	line-height: var(--line-height-display);
 	letter-spacing: -0.04em;
 	overflow-wrap: anywhere;
 }
@@ -231,7 +248,7 @@ p {
 h4 {
 	margin: 0;
 	font-size: var(--font-body);
-	line-height: 1.2;
+	line-height: var(--line-height-tight);
 	overflow-wrap: anywhere;
 }
 
@@ -246,13 +263,13 @@ button {
 	border-radius: var(--radius-control);
 	padding: 0.78rem 1rem;
 	font: inherit;
-	font-size: var(--font-button);
-	background: rgba(10, 20, 36, 0.38);
+	font-size: var(--font-body);
+	background: var(--surface-row);
 	color: var(--text);
 	cursor: pointer;
 	text-align: center;
 	white-space: normal;
-	line-height: 1.2;
+	line-height: var(--line-height-tight);
 	transition:
 		background var(--transition-fast),
 		border-color var(--transition-fast),
@@ -283,7 +300,7 @@ button.primary {
 	font-weight: 600;
 	box-shadow:
 		0 0 0 1px var(--primary-button-shadow) inset,
-		0 5px 12px rgba(3, 15, 22, 0.18);
+		var(--shadow-control);
 }
 
 button.primary:hover:not(:disabled) {
@@ -309,18 +326,22 @@ button.quiet:hover:not(:disabled) {
 	position: absolute;
 	top: 0.75rem;
 	left: 0.75rem;
-	z-index: 100;
+	z-index: var(--z-skip-link);
 	padding: 0.65rem 0.9rem;
 	border: 1px solid var(--interactive-border-hover);
 	border-radius: var(--radius-control);
 	background: var(--surface-dropdown);
 	color: var(--text);
 	text-decoration: none;
+	opacity: 0;
 	transform: translateY(-150%);
-	transition: transform 120ms ease;
+	transition:
+		transform var(--transition-fast),
+		opacity var(--transition-fast);
 }
 
 .skip-link:focus-visible {
+	opacity: 1;
 	transform: translateY(0);
 	outline: 3px solid var(--focus);
 	outline-offset: 2px;
@@ -332,17 +353,17 @@ button.quiet:hover:not(:disabled) {
 	justify-content: center;
 	max-width: 100%;
 	border: 1px solid var(--interactive-border);
-	border-radius: 3px;
+	border-radius: var(--radius-control);
 	padding: 0.78rem 1.1rem;
 	font: inherit;
-	font-size: var(--font-button);
+	font-size: var(--font-body);
 	background: transparent;
 	color: var(--text);
 	cursor: pointer;
 	text-align: center;
 	text-decoration: none;
 	white-space: normal;
-	line-height: 1.2;
+	line-height: var(--line-height-tight);
 	transition:
 		background var(--transition-fast),
 		border-color var(--transition-fast),
@@ -384,8 +405,8 @@ button.quiet:hover:not(:disabled) {
 }
 
 .not-found-mark h1 {
-	font-size: var(--font-404);
-	line-height: 0.86;
+	font-size: clamp(4rem, 9vw, 7.8rem);
+	line-height: var(--line-height-display);
 	letter-spacing: -0.09em;
 	background: linear-gradient(135deg, var(--accent) 0%, var(--accent-strong) 50%, var(--text) 100%);
 	-webkit-background-clip: text;
@@ -412,17 +433,17 @@ button.destructive {
 
 button.destructive:hover:not(:disabled) {
 	background: var(--danger-soft);
-	border-color: rgba(255, 112, 143, 0.42);
+	border-color: var(--danger-border-strong);
 }
 
 button.destructive-subtle {
 	color: var(--danger);
-	border-color: rgba(255, 112, 143, 0.22);
+	border-color: var(--danger-border);
 }
 
 button.destructive-subtle:hover:not(:disabled) {
 	background: var(--danger-soft);
-	border-color: rgba(255, 112, 143, 0.42);
+	border-color: var(--danger-border-strong);
 }
 
 button:disabled {
@@ -465,10 +486,10 @@ button.quiet:disabled {
 	display: inline-flex;
 	align-items: center;
 	gap: 0.4rem;
-	border-radius: 3px;
+	border-radius: var(--radius-control);
 	padding: 0.46rem 0.74rem;
 	font-family: var(--font-family-mono);
-	font-size: var(--font-chip);
+	font-size: var(--font-label);
 	letter-spacing: 0.07em;
 	text-transform: uppercase;
 	border: 1px solid var(--border-default);
@@ -506,7 +527,7 @@ button.quiet:disabled {
 	min-height: var(--touch-target-min);
 	padding: 0.35rem;
 	font-size: var(--font-label);
-	line-height: 1;
+	line-height: var(--line-height-none);
 }
 
 .environment-badge-row {
@@ -521,7 +542,7 @@ button.quiet:disabled {
 }
 
 .account-menu[open] {
-	z-index: 30;
+	z-index: var(--z-dropdown);
 }
 
 .account-menu > summary {
@@ -545,7 +566,7 @@ button.quiet:disabled {
 .account-menu > summary:focus-visible {
 	outline: 2px solid var(--focus);
 	outline-offset: 2px;
-	border-radius: 999px;
+	border-radius: var(--radius-pill);
 }
 
 /* The popover is the only place the full account is shown, so it grows to fit one line of address. */
@@ -557,7 +578,7 @@ button.quiet:disabled {
 .account-menu-popover .address-value,
 .account-menu-popover .address-value.copyable {
 	font-family: var(--font-family-mono);
-	font-size: var(--font-address);
+	font-size: var(--font-caption);
 	white-space: nowrap;
 }
 
@@ -582,10 +603,10 @@ button.quiet:disabled {
 	max-width: 100%;
 	padding: 0 0.7rem 0 0.65rem;
 	border: 1px solid var(--control-border);
-	border-radius: 999px;
+	border-radius: var(--radius-pill);
 	background: var(--surface-row);
 	font-family: var(--font-family-mono);
-	font-size: var(--font-address);
+	font-size: var(--font-caption);
 	color: var(--text);
 }
 
@@ -599,7 +620,7 @@ button.quiet:disabled {
 	flex-shrink: 0;
 	width: 0.5rem;
 	height: 0.5rem;
-	border-radius: 50%;
+	border-radius: var(--radius-circle);
 	background: var(--success);
 	box-shadow: 0 0 0 3px color-mix(in srgb, var(--success) 22%, transparent);
 }
@@ -659,7 +680,7 @@ button.quiet:disabled {
 
 .account-menu-popover {
 	position: absolute;
-	z-index: 20;
+	z-index: var(--z-dropdown);
 	top: calc(100% + 0.5rem);
 	right: 0;
 	display: grid;
@@ -667,9 +688,9 @@ button.quiet:disabled {
 	min-width: 15rem;
 	padding: 0.75rem;
 	border: 1px solid var(--border-strong);
-	border-radius: 0.75rem;
+	border-radius: var(--radius-overlay);
 	background: var(--bg);
-	box-shadow: 0 16px 36px rgba(0, 0, 0, 0.32);
+	box-shadow: var(--shadow-overlay);
 }
 
 .account-menu-popover > button {
@@ -688,7 +709,7 @@ button.quiet:disabled {
 }
 
 .detail {
-	line-height: 1.6;
+	line-height: var(--line-height-body);
 	color: var(--text-secondary);
 }
 
@@ -750,10 +771,10 @@ button.quiet:disabled {
 	margin-top: 0;
 	padding: 0.9rem 1rem;
 	border-radius: var(--radius-control);
-	line-height: 1.5;
+	line-height: var(--line-height-body);
 	overflow-wrap: anywhere;
 	border: 1px solid var(--border-default);
-	background: rgba(9, 18, 31, 0.36);
+	background: var(--surface-row);
 }
 
 .notice.error {
@@ -765,8 +786,8 @@ button.quiet:disabled {
 	color: var(--danger-text);
 	font-weight: 600;
 	box-shadow:
-		0 0 0 1px rgba(255, 112, 143, 0.14) inset,
-		0 10px 30px rgba(255, 112, 143, 0.08);
+		0 0 0 1px var(--danger-soft) inset,
+		0 10px 30px var(--danger-soft);
 }
 
 .entity-card-body > .notice.error,
@@ -792,7 +813,7 @@ button.quiet:disabled {
 }
 
 .notice span {
-	font-family: "Courier New", monospace;
+	font-family: var(--font-family-mono);
 	overflow-wrap: anywhere;
 	word-break: normal;
 }
@@ -809,10 +830,10 @@ button.quiet:disabled {
 	min-width: var(--touch-target-min);
 	padding: 0;
 	border: 1px solid color-mix(in srgb, var(--danger-border-strong) 78%, var(--color-white) 22%);
-	border-radius: 999px;
-	background: rgba(82, 16, 31, 0.18);
+	border-radius: var(--radius-pill);
+	background: var(--danger-soft);
 	color: inherit;
-	line-height: 1;
+	line-height: var(--line-height-none);
 	opacity: 0.82;
 	transition:
 		opacity var(--transition-fast),
@@ -836,7 +857,7 @@ button.quiet:disabled {
 	left: 50%;
 	width: 0.9rem;
 	height: 2px;
-	border-radius: 999px;
+	border-radius: var(--radius-pill);
 	background: currentColor;
 	transform-origin: center;
 }
@@ -850,7 +871,7 @@ button.quiet:disabled {
 }
 
 .notice-dismiss:hover:not(:disabled) {
-	background: rgba(82, 16, 31, 0.28);
+	background: var(--danger-medium);
 	border-color: var(--danger-border-strong);
 	color: inherit;
 	opacity: 1;
@@ -867,7 +888,7 @@ button.quiet:disabled {
 	margin: 0;
 	color: var(--danger);
 	font-size: var(--font-caption);
-	line-height: 1.45;
+	line-height: var(--line-height-body);
 }
 
 .spinner {
@@ -877,7 +898,7 @@ button.quiet:disabled {
 	margin-right: 0.5rem;
 	border: 2px solid var(--control-border);
 	border-top-color: currentColor;
-	border-radius: 50%;
+	border-radius: var(--radius-circle);
 	animation: spin 0.9s linear infinite;
 	vertical-align: -0.1rem;
 }
@@ -891,7 +912,7 @@ button.quiet:disabled {
 	width: min(100%, 32rem);
 	height: 0.5rem;
 	overflow: hidden;
-	border-radius: 999px;
+	border-radius: var(--radius-pill);
 	background: color-mix(in srgb, var(--warning-border) 34%, var(--color-white) 66%);
 }
 
@@ -899,7 +920,7 @@ button.quiet:disabled {
 	height: 100%;
 	border-radius: inherit;
 	background: linear-gradient(90deg, color-mix(in srgb, var(--warning) 74%, var(--color-white) 26%), color-mix(in srgb, var(--warning-border-strong) 84%, var(--color-white) 16%));
-	transition: width 180ms ease-out;
+	transition: width var(--transition-standard);
 }
 
 .simulation-progress-track {
@@ -950,9 +971,8 @@ button .loading-value {
 	display: block;
 	max-width: 100%;
 	min-width: 0;
-	overflow: hidden;
-	text-overflow: ellipsis;
-	white-space: nowrap;
+	overflow-wrap: anywhere;
+	white-space: normal;
 }
 
 .copy-feedback {
@@ -982,7 +1002,7 @@ button .loading-value {
 	font-family: var(--font-family-sans);
 	font-size: var(--font-caption);
 	font-weight: 700;
-	line-height: 1.35;
+	line-height: var(--line-height-snug);
 	list-style: none;
 }
 
@@ -1023,7 +1043,7 @@ button .loading-value {
 	font-family: var(--font-family-sans);
 	font-size: var(--font-caption);
 	font-weight: 600;
-	line-height: 1.35;
+	line-height: var(--line-height-snug);
 	overflow-wrap: anywhere;
 }
 
@@ -1038,12 +1058,11 @@ button .loading-value {
 	display: inline-block;
 	max-width: 100%;
 	min-width: 0;
-	overflow: hidden;
 	font: inherit;
 	color: inherit;
-	text-overflow: ellipsis;
+	overflow-wrap: anywhere;
 	vertical-align: bottom;
-	white-space: nowrap;
+	white-space: normal;
 }
 
 button.currency-value.copyable {
@@ -1054,20 +1073,19 @@ button.currency-value.copyable {
 	max-width: 100%;
 	box-sizing: border-box;
 	border: 0;
-	border-radius: 0.35rem;
+	border-radius: var(--radius-control);
 	margin: -0.2rem 0;
 	padding: 0.2rem 0.25rem;
 	background: transparent;
 	cursor: copy;
 	text-align: inherit;
 	touch-action: manipulation;
-	overflow: hidden;
-	text-overflow: ellipsis;
-	white-space: nowrap;
+	overflow-wrap: anywhere;
+	white-space: normal;
 }
 
 button.currency-value.copyable:hover:not(:disabled) {
-	background: rgba(255, 255, 255, 0.06);
+	background: var(--color-white-08);
 }
 
 .currency-value.loading {
@@ -1135,7 +1153,7 @@ button.currency-value.copyable:hover:not(:disabled) {
 	max-width: 100%;
 	box-sizing: border-box;
 	border: 0;
-	border-radius: 0.35rem;
+	border-radius: var(--radius-control);
 	margin: -0.2rem 0;
 	padding: 0.2rem 0.25rem;
 	background: transparent;
@@ -1147,7 +1165,7 @@ button.currency-value.copyable:hover:not(:disabled) {
 }
 
 .address-value.copyable:hover:not(:disabled) {
-	background: rgba(255, 255, 255, 0.06);
+	background: var(--color-white-08);
 }
 
 .address-value.copyable:focus-visible {
@@ -1198,10 +1216,10 @@ button.wallet-asset-action:hover:not(:disabled) {
 	width: 1.1rem;
 	height: 1.1rem;
 	border: 1px solid currentColor;
-	border-radius: 50%;
+	border-radius: var(--radius-circle);
 	font-size: 0.8rem;
 	font-weight: 700;
-	line-height: 1;
+	line-height: var(--line-height-none);
 }
 
 button.wallet-asset-action-accepted:disabled {
@@ -1224,7 +1242,7 @@ button.wallet-asset-action-pending:disabled {
 	font-family: var(--font-family-sans);
 	font-size: var(--font-caption);
 	font-weight: 400;
-	line-height: 1.4;
+	line-height: var(--line-height-snug);
 }
 
 .wallet-asset-prerequisite {
@@ -1232,7 +1250,7 @@ button.wallet-asset-action-pending:disabled {
 	color: var(--text-secondary);
 	font-family: var(--font-family-sans);
 	font-size: var(--font-caption);
-	line-height: 1.4;
+	line-height: var(--line-height-snug);
 }
 
 .route-shell {
@@ -1306,12 +1324,12 @@ button.wallet-asset-action-pending:disabled {
 }
 
 .panel-copy h2 {
-	font-size: var(--font-h2-panel);
-	line-height: 1.06;
+	font-size: var(--font-title);
+	line-height: var(--line-height-display);
 }
 
 .overview-wallet-header .panel-copy h2 {
-	font-size: var(--font-h2-wallet);
+	font-size: var(--font-body);
 	letter-spacing: -0.02em;
 }
 
@@ -1333,8 +1351,8 @@ button.wallet-asset-action-pending:disabled {
 
 .overview-app-title {
 	font-family: var(--font-family-mono);
-	font-size: var(--font-app-title);
-	line-height: 1.15;
+	font-size: var(--font-caption);
+	line-height: var(--line-height-tight);
 	letter-spacing: 0.1em;
 	text-transform: uppercase;
 }
@@ -1396,7 +1414,7 @@ button.wallet-asset-action-pending:disabled {
 	letter-spacing: 0.1em;
 	text-transform: uppercase;
 	white-space: nowrap;
-	color: var(--text-muted);
+	color: var(--muted);
 }
 
 .overview-metric-group-items {
@@ -1435,7 +1453,7 @@ button.wallet-asset-action-pending:disabled {
 	font-size: var(--font-value);
 	font-weight: 600;
 	font-variant-numeric: tabular-nums;
-	line-height: 1.2;
+	line-height: var(--line-height-tight);
 	color: var(--value);
 	overflow-wrap: anywhere;
 }
@@ -1486,7 +1504,7 @@ button.wallet-asset-action-pending:disabled {
 	min-width: 0;
 	min-height: var(--touch-target-min);
 	border: 0;
-	border-radius: 0.35rem;
+	border-radius: var(--radius-control);
 	margin: 0;
 	padding: 0.2rem 0.25rem;
 	background: transparent;
@@ -1500,7 +1518,7 @@ button.wallet-asset-action-pending:disabled {
 }
 
 .identifier-value.copyable:hover:not(:disabled) {
-	background: rgba(255, 255, 255, 0.06);
+	background: var(--color-white-08);
 }
 
 .identifier-value.copyable:focus-visible {
@@ -1540,13 +1558,13 @@ button.wallet-asset-action-pending:disabled {
 
 .simulation-banner {
 	padding: 0.65rem 0.75rem;
-	border: 1px solid rgba(245, 200, 106, 0.38);
-	background: rgba(67, 48, 11, 0.9);
-	box-shadow: 0 8px 20px rgba(28, 19, 2, 0.16);
+	border: 1px solid var(--simulation-border);
+	background: var(--simulation-surface);
+	box-shadow: var(--shadow-raised);
 }
 
 .simulation-banner-header {
-	border-image: linear-gradient(90deg, rgba(255, 221, 122, 0.48), rgba(245, 200, 106, 0.2) 50%, rgba(255, 221, 122, 0.48)) 1;
+	border-image: linear-gradient(90deg, var(--simulation-border-hover), var(--simulation-border-subtle) 50%, var(--simulation-border-hover)) 1;
 }
 
 .simulation-banner-header .detail,
@@ -1556,17 +1574,17 @@ button.wallet-asset-action-pending:disabled {
 
 .simulation-banner-warning {
 	margin-top: 0.75rem;
-	border: 1px solid rgba(255, 227, 145, 0.44);
-	border-radius: 0.85rem;
+	border: 1px solid var(--simulation-border);
+	border-radius: var(--radius-overlay);
 	padding: 0.7rem 0.8rem;
-	background: rgba(255, 220, 120, 0.16);
-	color: rgba(255, 242, 207, 1);
+	background: color-mix(in srgb, var(--simulation-accent) 16%, transparent);
+	color: var(--simulation-text);
 	font-size: var(--font-caption);
-	line-height: 1.45;
+	line-height: var(--line-height-body);
 }
 
 .simulation-banner-warning strong {
-	color: rgba(255, 247, 223, 1);
+	color: var(--simulation-text);
 }
 
 .simulation-banner-list {
@@ -1600,7 +1618,7 @@ button.wallet-asset-action-pending:disabled {
 }
 
 .simulation-banner-compact-heading h2 {
-	font-size: var(--font-h2-panel);
+	font-size: var(--font-title);
 }
 
 .simulation-banner-compact-state {
@@ -1621,7 +1639,7 @@ button.wallet-asset-action-pending:disabled {
 }
 
 .simulation-banner-row {
-	border-top-color: rgba(255, 221, 122, 0.18);
+	border-top-color: var(--simulation-border-subtle);
 	padding: 0.5rem 0;
 }
 
@@ -1636,13 +1654,13 @@ button.wallet-asset-action-pending:disabled {
 	gap: 0.2rem;
 	padding: 0.5rem 0;
 	border: 0;
-	border-top: 1px solid rgba(255, 227, 145, 0.28);
+	border-top: 1px solid var(--simulation-border-subtle);
 	border-radius: 0;
 	background: transparent;
 }
 
 .simulation-stat-card strong {
-	color: rgba(255, 248, 229, 1);
+	color: var(--simulation-text);
 	font-size: var(--font-value);
 }
 
@@ -1656,7 +1674,7 @@ button.wallet-asset-action-pending:disabled {
 	font-size: var(--font-label);
 	letter-spacing: 0.08em;
 	text-transform: uppercase;
-	color: rgba(255, 248, 229, 0.9);
+	color: var(--simulation-text-secondary);
 }
 
 .simulation-advanced-controls {
@@ -1667,10 +1685,10 @@ button.wallet-asset-action-pending:disabled {
 .simulation-advanced-controls > summary {
 	width: fit-content;
 	cursor: pointer;
-	border: 1px solid rgba(255, 227, 145, 0.36);
+	border: 1px solid var(--simulation-border);
 	border-radius: var(--radius-control);
 	padding: 0.5rem 0.7rem;
-	background: rgba(56, 40, 7, 0.42);
+	background: var(--simulation-control-bg);
 	color: var(--simulation-text);
 	font-weight: 700;
 }
@@ -1678,9 +1696,9 @@ button.wallet-asset-action-pending:disabled {
 .simulation-advanced-controls > summary:hover,
 .simulation-advanced-controls > summary:focus-visible {
 	border-color: var(--simulation-border-hover);
-	background: rgba(110, 77, 12, 0.42);
+	background: var(--simulation-control-bg-hover);
 	outline: none;
-	box-shadow: 0 0 0 3px rgba(255, 214, 102, 0.14);
+	box-shadow: var(--simulation-focus-ring);
 }
 
 .simulation-advanced-controls[open] > summary {
@@ -1694,7 +1712,7 @@ button.wallet-asset-action-pending:disabled {
 	align-items: start;
 	padding: 1rem 0 0;
 	border: 0;
-	border-top: 1px solid rgba(255, 227, 145, 0.42);
+	border-top: 1px solid var(--simulation-border);
 	border-radius: 0;
 	background: transparent;
 }
@@ -1721,7 +1739,7 @@ button.wallet-asset-action-pending:disabled {
 	gap: 0.45rem;
 	padding: 0.85rem 0 0;
 	border: 0;
-	border-top: 1px solid rgba(255, 227, 145, 0.24);
+	border-top: 1px solid var(--simulation-border-subtle);
 	border-radius: 0;
 	background: transparent;
 }
@@ -1731,7 +1749,7 @@ button.wallet-asset-action-pending:disabled {
 	font-size: var(--font-label);
 	letter-spacing: 0.08em;
 	text-transform: uppercase;
-	color: rgba(255, 248, 229, 0.9);
+	color: var(--simulation-text-secondary);
 }
 
 .simulation-button-row {
@@ -1751,7 +1769,7 @@ button.wallet-asset-action-pending:disabled {
 	min-height: var(--touch-target-min);
 	padding: 0.52rem 0.62rem;
 	font-size: var(--font-caption);
-	line-height: 1.15;
+	line-height: var(--line-height-tight);
 }
 
 .simulation-delay-field {
@@ -1764,11 +1782,11 @@ button.wallet-asset-action-pending:disabled {
 	width: 100%;
 	max-width: 100%;
 	min-height: var(--touch-target-min);
-	border: 1px solid rgba(255, 227, 145, 0.44);
+	border: 1px solid var(--simulation-border);
 	border-radius: var(--radius-control);
 	padding: 0.65rem 0.8rem;
 	font: inherit;
-	background: rgba(56, 40, 7, 0.58);
+	background: var(--simulation-control-bg);
 	color: var(--simulation-text);
 	text-overflow: ellipsis;
 }
@@ -1790,7 +1808,7 @@ button.wallet-asset-action-pending:disabled {
 
 .simulation-control-select option,
 .simulation-control-select optgroup {
-	background: rgba(95, 67, 10, 1);
+	background: var(--simulation-control-bg-opaque);
 	color: var(--simulation-text);
 }
 
@@ -1799,28 +1817,28 @@ button.wallet-asset-action-pending:disabled {
 .simulation-control-select:hover:not(:disabled),
 .simulation-control-select:focus-visible {
 	border-color: var(--simulation-border-hover);
-	background-color: rgba(110, 77, 12, 0.52);
+	background-color: var(--simulation-control-bg-hover);
 	outline: none;
-	box-shadow: 0 0 0 3px rgba(255, 214, 102, 0.14);
+	box-shadow: var(--simulation-focus-ring);
 }
 
 .simulation-banner button.secondary,
 .simulation-banner select {
-	border-color: rgba(255, 227, 145, 0.36);
-	background: rgba(56, 40, 7, 0.42);
+	border-color: var(--simulation-border);
+	background: var(--simulation-control-bg);
 	color: var(--simulation-text);
 }
 
 .simulation-banner button.secondary:hover:not(:disabled),
 .simulation-banner select:hover:not(:disabled) {
 	border-color: var(--simulation-border-hover);
-	background: rgba(110, 77, 12, 0.42);
+	background: var(--simulation-control-bg-hover);
 }
 
 .simulation-banner .badge.ok {
-	color: rgba(255, 249, 232, 1);
-	border-color: rgba(255, 232, 164, 0.58);
-	background: rgba(29, 111, 85, 0.82);
+	color: var(--simulation-text);
+	border-color: var(--simulation-border-hover);
+	background: var(--simulation-success-bg);
 }
 
 .simulation-banner > .contract-panel-header:first-child {
@@ -1831,7 +1849,7 @@ button.wallet-asset-action-pending:disabled {
 .tab-nav {
 	position: relative;
 	top: auto;
-	z-index: 20;
+	z-index: var(--z-nav);
 	display: flex;
 	flex-wrap: nowrap;
 	justify-content: flex-start;
@@ -1843,10 +1861,7 @@ button.wallet-asset-action-pending:disabled {
 	background: transparent;
 	backdrop-filter: none;
 	overflow: visible;
-}
-
-.mobile-route-select {
-	display: none;
+	scroll-padding-inline: var(--space-3);
 }
 
 .protocol-guide-link {
@@ -1859,7 +1874,7 @@ button.wallet-asset-action-pending:disabled {
 	border: 1px solid var(--interactive-border);
 	border-radius: var(--radius-control);
 	color: var(--accent);
-	font-size: var(--font-tab);
+	font-size: var(--font-caption);
 	font-weight: 700;
 	letter-spacing: 0.05em;
 	text-decoration: none;
@@ -1929,8 +1944,8 @@ button.wallet-asset-action-pending:disabled {
 }
 
 .contract-topline h3 {
-	font-size: var(--font-base);
-	line-height: 1.1;
+	font-size: var(--font-body);
+	line-height: var(--line-height-tight);
 }
 
 .status-list {
@@ -2058,7 +2073,7 @@ button.wallet-asset-action-pending:disabled {
 	margin-top: 0.25rem;
 	color: var(--text-secondary);
 	font-size: var(--font-caption);
-	line-height: 1.35;
+	line-height: var(--line-height-snug);
 }
 
 .migration-outcome-metric {
@@ -2109,7 +2124,8 @@ button.wallet-asset-action-pending:disabled {
 .badge {
 	display: inline-flex;
 	align-items: center;
-	border-radius: 3px;
+	white-space: nowrap;
+	border-radius: var(--radius-control);
 	padding: 0.32rem 0.68rem;
 	font-family: var(--font-family-mono);
 	font-size: var(--font-label);
@@ -2126,15 +2142,27 @@ button.wallet-asset-action-pending:disabled {
 	background: var(--success-soft);
 }
 
-.badge.pending,
 .badge.warning {
 	color: var(--warning);
 	border-color: var(--warning-border);
 	background: var(--warning-soft);
 }
 
+.badge.pending {
+	color: var(--status-pending);
+	border-color: var(--status-pending-border);
+	background: var(--status-pending-soft);
+}
+
+.badge.loading {
+	color: var(--status-loading);
+	border-color: var(--status-loading-border);
+	background: var(--status-loading-soft);
+}
+
 .badge.blocked,
-.badge.danger {
+.badge.danger,
+.badge.error {
 	color: var(--danger);
 	border-color: var(--danger-border);
 	background: var(--danger-soft);
@@ -2296,7 +2324,7 @@ button.wallet-asset-action-pending:disabled {
 	font-size: var(--font-value);
 	font-weight: 600;
 	font-variant-numeric: tabular-nums;
-	line-height: 1.15;
+	line-height: var(--line-height-tight);
 	color: var(--value);
 }
 
@@ -2344,14 +2372,14 @@ button.wallet-asset-action-pending:disabled {
 
 .question-summary-heading strong {
 	display: block;
-	font-size: var(--font-base);
-	line-height: 1.1;
+	font-size: var(--font-body);
+	line-height: var(--line-height-tight);
 	letter-spacing: -0.02em;
 	overflow-wrap: anywhere;
 }
 
 .question-summary-heading .detail {
-	line-height: 1.45;
+	line-height: var(--line-height-body);
 }
 
 .question-summary-header {
@@ -2427,7 +2455,7 @@ button.wallet-asset-action-pending:disabled {
 }
 
 .workflow-vault-topline h4 {
-	line-height: 1.15;
+	line-height: var(--line-height-tight);
 	letter-spacing: -0.01em;
 }
 
@@ -2500,7 +2528,7 @@ button.wallet-asset-action-pending:disabled {
 .comparison-record-identity h3 {
 	margin: 0;
 	font-size: var(--font-h3-section);
-	line-height: 1.25;
+	line-height: var(--line-height-tight);
 	overflow-wrap: anywhere;
 }
 
@@ -2544,7 +2572,7 @@ button.wallet-asset-action-pending:disabled {
 	font-size: var(--font-body);
 	font-weight: 650;
 	font-variant-numeric: tabular-nums;
-	line-height: 1.3;
+	line-height: var(--line-height-snug);
 	overflow-wrap: anywhere;
 }
 
@@ -2602,7 +2630,7 @@ button.wallet-asset-action-pending:disabled {
 }
 
 .market-overview-subsection .detail {
-	line-height: 1.45;
+	line-height: var(--line-height-body);
 }
 
 .market-scalar-deploy {
@@ -2611,7 +2639,7 @@ button.wallet-asset-action-pending:disabled {
 	padding: 1.15rem 1.2rem 1.2rem;
 	border: 1px solid var(--divider-subtle);
 	border-radius: var(--radius-section);
-	background: rgba(10, 20, 36, 0.46);
+	background: var(--surface-row);
 	box-shadow: none;
 }
 
@@ -2662,8 +2690,12 @@ button.wallet-asset-action-pending:disabled {
 	width: 1rem;
 	height: 1rem;
 	margin: 0;
-	accent-color: var(--accent);
+	accent-color: var(--outcome-invalid);
 	cursor: pointer;
+}
+
+.scalar-invalid-toggle > input[type="checkbox"]:checked + span {
+	color: var(--outcome-invalid);
 }
 
 .scalar-invalid-toggle > input[type="checkbox"]:disabled {
@@ -2687,9 +2719,7 @@ button.wallet-asset-action-pending:disabled {
 	padding: 0.55rem 0.85rem;
 	border: 1px solid var(--border-default);
 	background: var(--surface-inset);
-	box-shadow:
-		var(--glow-inset-subtle),
-		0 6px 18px var(--shadow-color-soft);
+	box-shadow: var(--glow-inset-subtle), var(--shadow-control);
 }
 
 .scalar-slider-rail.is-disabled {
@@ -2727,7 +2757,7 @@ button.wallet-asset-action-pending:disabled {
 
 .scalar-slider-field input[type="range"] {
 	position: relative;
-	z-index: 1;
+	z-index: var(--z-content);
 	width: 100%;
 	height: 2.1rem;
 	margin: 0;
@@ -2760,11 +2790,11 @@ button.wallet-asset-action-pending:disabled {
 	height: 1rem;
 	margin-top: -0.3rem;
 	border: 1px solid var(--slider-thumb-border);
-	border-radius: 50%;
+	border-radius: var(--radius-circle);
 	background: linear-gradient(180deg, var(--text) 0%, color-mix(in srgb, var(--accent) 80%, transparent) 100%);
 	box-shadow:
 		0 0 0 4px color-mix(in srgb, var(--accent) 10%, transparent),
-		0 10px 20px var(--shadow-color-strong);
+		var(--shadow-raised);
 	appearance: none;
 	-webkit-appearance: none;
 }
@@ -2773,11 +2803,11 @@ button.wallet-asset-action-pending:disabled {
 	width: 1rem;
 	height: 1rem;
 	border: 1px solid var(--slider-thumb-border);
-	border-radius: 50%;
+	border-radius: var(--radius-circle);
 	background: linear-gradient(180deg, var(--text) 0%, color-mix(in srgb, var(--accent) 80%, transparent) 100%);
 	box-shadow:
 		0 0 0 4px color-mix(in srgb, var(--accent) 10%, transparent),
-		0 10px 20px var(--shadow-color-strong);
+		var(--shadow-raised);
 }
 
 .scalar-slider-stats {
@@ -2818,7 +2848,7 @@ button.wallet-asset-action-pending:disabled {
 	border-radius: var(--radius-control);
 	padding: 0.8rem 0.95rem;
 	font: inherit;
-	background-color: rgba(6, 12, 20, 0.88);
+	background-color: var(--surface-overlay);
 	color: var(--text);
 }
 
@@ -2838,7 +2868,7 @@ button.wallet-asset-action-pending:disabled {
 }
 
 .entity-card-subsection-header h4 {
-	line-height: 1.15;
+	line-height: var(--line-height-tight);
 	letter-spacing: -0.02em;
 }
 
@@ -2873,7 +2903,7 @@ button.wallet-asset-action-pending:disabled {
 .market-linked-pools-header > span,
 .market-linked-pool-summary > span {
 	color: var(--muted);
-	font-size: var(--font-detail);
+	font-size: var(--font-caption);
 }
 
 .market-linked-pool-list {
@@ -2916,8 +2946,8 @@ button.wallet-asset-action-pending:disabled {
 	display: grid;
 	gap: 0.2rem;
 	color: var(--muted);
-	font-size: var(--font-detail);
-	line-height: 1.45;
+	font-size: var(--font-caption);
+	line-height: var(--line-height-body);
 }
 
 .market-linked-pool-participation strong {
@@ -2972,7 +3002,7 @@ button.wallet-asset-action-pending:disabled {
 
 .question-preview-header h3 {
 	margin-top: 0.2rem;
-	font-size: var(--font-h3-preview);
+	font-size: var(--font-h2);
 }
 
 .question-preview-body {

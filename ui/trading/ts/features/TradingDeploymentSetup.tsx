@@ -3,15 +3,20 @@ import { getActiveBackend, getActiveNetworkProfile } from '@zoltar/ui-core-share
 import type { ChainBackend } from '@zoltar/ui-core-shared/wallet/chainBackend.js'
 import { resolveConfiguredRpcUrl } from '@zoltar/ui-core-shared/wallet/rpcConfig.js'
 import { useEffect, useRef, useState } from 'preact/hooks'
-import { Status } from '../components/Status.js'
-import { TradingAddressValue } from '../components/TradingAddress.js'
+import { Badge } from '@zoltar/ui-core-shared/components/Badge.js'
+import { DataGrid } from '@zoltar/ui-core-shared/components/DataGrid.js'
+import { MetricField } from '@zoltar/ui-core-shared/components/MetricField.js'
+import { ReadOnlyAddressValue } from '@zoltar/ui-core-shared/components/AddressValue.js'
+import { SectionBlock } from '@zoltar/ui-core-shared/components/SectionBlock.js'
 import { parseDeploymentSetupInput, type DeploymentConfiguration } from '../protocol/config.js'
 import { loadCoreDeployments } from '../protocol/coreDeployments.js'
 import { deployTradingStep, deploymentConfigurationForPlan, getTradingDeploymentPlan, isTradingDeploymentComplete, loadTradingDeploymentStatus, nextTradingDeploymentStep, type CoreDeployment, type TradingDeploymentPlan, type TradingDeploymentStep } from '../protocol/deployment.js'
 import { createWalletContextSubscription, getInjectedEthereum, type InjectedEthereum } from '../protocol/injected.js'
 import { connectedWalletAccount, connectWallet, createTradingWalletClient, publicErrorMessage, switchWalletChain, validateRpcChainId, waitForActiveEnvironmentReady, walletChainId } from '../protocol/live.js'
 import { RouteHeader } from '@zoltar/ui-core-shared/components/RouteHeader.js'
+import { ErrorNotice } from '@zoltar/ui-core-shared/components/ErrorNotice.js'
 import * as appCopy from '../copy/app.js'
+import * as deploymentCopy from '../copy/deployment.js'
 
 export type TradingDeploymentSetupServices = Readonly<{
 	createPublicClient(rpcUrl: string): PublicClient
@@ -31,27 +36,27 @@ const defaultServices: TradingDeploymentSetupServices = {
 	createPublicClient: createDeploymentReadClient,
 	connectWallet: async () => {
 		const provider = getInjectedEthereum()
-		if (provider === undefined) throw new Error('No injected wallet was found')
+		if (provider === undefined) throw new Error(deploymentCopy.noInjectedWallet)
 		const account = await connectWallet(provider)
 		return { account, chainId: await walletChainId(provider), provider }
 	},
 	getWalletProvider: getInjectedEthereum,
 	deployStep: async (publicClient, plan, step, onSubmitted) => {
 		const provider = getInjectedEthereum()
-		if (provider === undefined) throw new Error('No injected wallet was found')
+		if (provider === undefined) throw new Error(deploymentCopy.noInjectedWallet)
 		let currentChainId = await walletChainId(provider)
 		if (currentChainId !== plan.core.chainId) {
 			await switchWalletChain(provider, plan.core.chainId)
 			currentChainId = await walletChainId(provider)
 		}
-		if (currentChainId !== plan.core.chainId) throw new Error(`Wallet must use ${plan.core.chainName}`)
+		if (currentChainId !== plan.core.chainId) throw new Error(deploymentCopy.walletMustUseNetwork(plan.core.chainName))
 		const account = await connectWallet(provider)
 		const walletClient = createTradingWalletClient(provider, account)
 		await deployTradingStep(walletClient, publicClient, plan, step, onSubmitted, async () => {
 			validateRpcChainId(await publicClient.getChainId(), plan.core.chainId)
-			if (getInjectedEthereum() !== provider || (await walletChainId(provider)) !== plan.core.chainId || (await connectWallet(provider)) !== account) throw new Error('Wallet context changed before deployment; no transaction was submitted')
+			if (getInjectedEthereum() !== provider || (await walletChainId(provider)) !== plan.core.chainId || (await connectWallet(provider)) !== account) throw new Error(deploymentCopy.walletContextChangedBeforeDeployment)
 		})
-		if (getInjectedEthereum() !== provider || (await walletChainId(provider)) !== plan.core.chainId || (await connectWallet(provider)) !== account) throw new Error('Wallet context changed during deployment; verify the transaction before continuing')
+		if (getInjectedEthereum() !== provider || (await walletChainId(provider)) !== plan.core.chainId || (await connectWallet(provider)) !== account) throw new Error(deploymentCopy.walletContextChangedDuringDeployment)
 	},
 	loadCoreDeployments,
 }
@@ -59,36 +64,36 @@ const defaultServices: TradingDeploymentSetupServices = {
 type DeploymentStatus = Readonly<{ factory: boolean; router: boolean }>
 
 function deploymentProgress(status: DeploymentStatus | undefined, total = 3) {
-	if (status === undefined) return '—'
+	if (status === undefined) return deploymentCopy.progressUnavailable
 	return `${Number(status.factory) + Number(status.router)} / ${total.toString()}`
 }
 
 function inspectionPresentation(state: 'blocked' | 'idle' | 'loading' | 'ready' | 'error', { busy, deploymentComplete, inputError, plan, registryError, registryLoading }: Readonly<{ busy: boolean; deploymentComplete: boolean; inputError: boolean; plan: boolean; registryError: boolean; registryLoading: boolean }>) {
-	if (registryLoading) return { label: 'Loading networks', tone: 'neutral' as const }
-	if (registryError) return { label: 'Networks unavailable', tone: 'warn' as const }
-	if (inputError) return { label: appCopy.invalidDeploymentSettings, tone: 'warn' as const }
-	if (busy) return { label: 'Deployment in progress', tone: 'neutral' as const }
-	if (deploymentComplete) return { label: 'Deployment complete', tone: 'good' as const }
-	if (state === 'loading') return { label: 'Checking network', tone: 'neutral' as const }
+	if (registryLoading) return { label: deploymentCopy.loadingNetworks, tone: 'muted' as const }
+	if (registryError) return { label: deploymentCopy.networksUnavailable, tone: 'warning' as const }
+	if (inputError) return { label: appCopy.invalidDeploymentSettings, tone: 'warning' as const }
+	if (busy) return { label: deploymentCopy.deploymentInProgress, tone: 'muted' as const }
+	if (deploymentComplete) return { label: appCopy.deploymentComplete, tone: 'ok' as const }
+	if (state === 'loading') return { label: deploymentCopy.checkingNetwork, tone: 'muted' as const }
 	if (state === 'ready') return undefined
-	if (state === 'blocked') return { label: appCopy.securityPoolFactoryNotDeployed, tone: 'warn' as const }
-	if (state === 'error') return { label: 'Configuration unavailable', tone: 'warn' as const }
-	if (plan) return { label: 'Checking network', tone: 'neutral' as const }
-	return { label: appCopy.completeDeploymentSettings, tone: 'neutral' as const }
+	if (state === 'blocked') return { label: appCopy.securityPoolFactoryNotDeployed, tone: 'warning' as const }
+	if (state === 'error') return { label: deploymentCopy.configurationUnavailable, tone: 'warning' as const }
+	if (plan) return { label: deploymentCopy.checkingNetwork, tone: 'muted' as const }
+	return { label: appCopy.completeDeploymentSettings, tone: 'muted' as const }
 }
 
 function deploymentActionLabel(busy: boolean, nextStep: ReturnType<typeof nextTradingDeploymentStep>, plan: TradingDeploymentPlan | undefined, status: DeploymentStatus | undefined) {
-	if (busy) return `Deploying ${nextStep?.label ?? 'contract'}…`
+	if (busy) return deploymentCopy.deployingContract(nextStep?.label ?? deploymentCopy.contractFallbackLabel)
 	if (plan !== undefined && status !== undefined && isTradingDeploymentComplete(plan, status)) return appCopy.deploymentComplete
-	if (nextStep === undefined) return 'Deploy trading contracts'
-	return `Deploy ${nextStep.label}`
+	if (nextStep === undefined) return deploymentCopy.deployTradingContracts
+	return deploymentCopy.deployContract(nextStep.label)
 }
 
 function contractStatusPresentation(deployed: boolean | undefined, isNext: boolean) {
-	if (deployed === undefined) return { label: appCopy.checkingContract, tone: 'neutral' as const }
-	if (deployed) return { label: 'Deployed', tone: 'good' as const }
-	if (isNext) return { label: 'Next to deploy', tone: 'neutral' as const }
-	return { label: 'Not deployed', tone: 'warn' as const }
+	if (deployed === undefined) return { label: appCopy.checkingContract, tone: 'muted' as const }
+	if (deployed) return { label: deploymentCopy.deployed, tone: 'ok' as const }
+	if (isNext) return { label: deploymentCopy.nextToDeploy, tone: 'muted' as const }
+	return { label: deploymentCopy.notDeployed, tone: 'warning' as const }
 }
 
 export function TradingDeploymentSetup({
@@ -142,7 +147,7 @@ export function TradingDeploymentSetup({
 			walletConnectionRevision.current += 1
 			setWalletAccount(undefined)
 			setWalletChain(undefined)
-			setWalletConnectionMessage('Wallet context changed. Reconnect before deploying.')
+			setWalletConnectionMessage(deploymentCopy.walletContextChanged)
 		})
 	useEffect(() => {
 		if (busy || currentConfiguration === undefined) return
@@ -183,7 +188,7 @@ export function TradingDeploymentSetup({
 		try {
 			parseDeploymentSetupInput({ chainId, feeBps, rpcUrl })
 		} catch (error) {
-			inputError = publicErrorMessage(error, 'Deployment settings are invalid')
+			inputError = publicErrorMessage(error, deploymentCopy.deploymentSettingsInvalid)
 		}
 	}
 
@@ -199,7 +204,7 @@ export function TradingDeploymentSetup({
 				setCoreDeployments(deployments)
 			} catch (error) {
 				if (!active) return
-				setRegistryError(publicErrorMessage(error, 'Unable to load canonical core deployments'))
+				setRegistryError(publicErrorMessage(error, deploymentCopy.coreDeploymentsUnavailable))
 			} finally {
 				if (active) setRegistryLoading(false)
 			}
@@ -257,7 +262,7 @@ export function TradingDeploymentSetup({
 			} catch (error) {
 				if (!active) return
 				setInspectionState('error')
-				setInspectionError(publicErrorMessage(error, 'Unable to inspect the selected deployment'))
+				setInspectionError(publicErrorMessage(error, deploymentCopy.inspectionFailed))
 			}
 		})()
 		return () => {
@@ -288,17 +293,17 @@ export function TradingDeploymentSetup({
 		try {
 			const initialProvider = services.getWalletProvider?.()
 			bindWalletProvider(initialProvider)
-			if (initialProvider === undefined && services.connectWallet === undefined) throw new Error('No injected wallet was found')
+			if (initialProvider === undefined && services.connectWallet === undefined) throw new Error(deploymentCopy.noInjectedWallet)
 			if (initialProvider !== undefined && selectedCore !== undefined) {
 				const currentChain = await walletChainId(initialProvider)
 				if (currentChain !== selectedCore.chainId) {
 					await switchWalletChain(initialProvider, selectedCore.chainId)
 					const switchedChain = await walletChainId(initialProvider)
-					if (switchedChain !== selectedCore.chainId) throw new Error(`Wallet must use ${selectedCore.chainName}`)
+					if (switchedChain !== selectedCore.chainId) throw new Error(deploymentCopy.walletMustUseNetwork(selectedCore.chainName))
 				}
 			}
 			const connectService = services.connectWallet
-			if (connectService === undefined) throw new Error('Wallet connection service is unavailable')
+			if (connectService === undefined) throw new Error(deploymentCopy.walletConnectionServiceUnavailable)
 			const connected = await connectService()
 			if (!mounted.current || walletConnectionRevision.current !== revision) return
 			const provider = initialProvider ?? connected.provider
@@ -306,9 +311,9 @@ export function TradingDeploymentSetup({
 			const contextRevision = walletContextEventRevision.current
 			const account = provider === undefined ? connected.account : await connectedWalletAccount(provider)
 			const connectedChain = provider === undefined ? connected.chainId : await walletChainId(provider)
-			if (walletContextEventRevision.current !== contextRevision) throw new Error('Wallet context changed during connection')
+			if (walletContextEventRevision.current !== contextRevision) throw new Error(deploymentCopy.walletContextChangedDuringConnection)
 			const currentProvider = services.getWalletProvider?.()
-			if (provider !== undefined && currentProvider !== undefined && currentProvider !== provider) throw new Error('Wallet provider changed during connection')
+			if (provider !== undefined && currentProvider !== undefined && currentProvider !== provider) throw new Error(deploymentCopy.walletProviderChangedDuringConnection)
 			if (!mounted.current || walletConnectionRevision.current !== revision) return
 			setWalletAccount(account)
 			setWalletChain(connectedChain)
@@ -316,7 +321,7 @@ export function TradingDeploymentSetup({
 			if (!mounted.current || walletConnectionRevision.current !== revision) return
 			setWalletAccount(undefined)
 			setWalletChain(undefined)
-			setWalletConnectionMessage(publicErrorMessage(error, 'Wallet connection failed'))
+			setWalletConnectionMessage(publicErrorMessage(error, deploymentCopy.walletConnectionFailed))
 		} finally {
 			if (mounted.current && walletConnectionRevision.current === revision) {
 				walletConnectionPending.current = false
@@ -364,19 +369,19 @@ export function TradingDeploymentSetup({
 	let standaloneWalletButton
 	if (walletControlRequestNonce === undefined)
 		standaloneWalletButton = walletConnected ? (
-			<button class='wallet-button' type='button' disabled={busy} aria-label={`Disconnect wallet ${walletAccount}`} title='Disconnect wallet' onClick={disconnectDeploymentWallet}>
-				<TradingAddressValue value={walletAccount} />
+			<button class='secondary wallet-button' type='button' disabled={busy} aria-label={appCopy.disconnectWalletLabel(walletAccount)} title={appCopy.disconnectWallet} onClick={disconnectDeploymentWallet}>
+				<ReadOnlyAddressValue address={walletAccount} responsiveAbbreviation />
 			</button>
 		) : (
-			<button class='wallet-button' type='button' disabled={busy || walletConnecting || registryLoading || coreDeployments.length === 0} aria-busy={walletConnecting} onClick={() => void connectDeploymentWallet()}>
-				{walletConnecting ? 'Connecting wallet…' : 'Connect wallet'}
+			<button class='secondary wallet-button' type='button' disabled={busy || walletConnecting || registryLoading || coreDeployments.length === 0} aria-busy={walletConnecting} onClick={() => void connectDeploymentWallet()}>
+				{walletConnecting ? appCopy.connectingWallet : appCopy.connectWallet}
 			</button>
 		)
 	let retryAction
 	if (retryChecks)
 		retryAction = (
 			<button
-				class='secondary-action'
+				class='secondary'
 				type='button'
 				disabled={busy || registryLoading || inspectionState === 'loading'}
 				onClick={() => {
@@ -385,7 +390,7 @@ export function TradingDeploymentSetup({
 					setRetryNonce(current => current + 1)
 				}}
 			>
-				Retry checks
+				{deploymentCopy.retryChecks}
 			</button>
 		)
 	async function deployNext() {
@@ -397,7 +402,7 @@ export function TradingDeploymentSetup({
 		let broadcastHash: Hash | undefined
 		try {
 			const deployStep = services.deployStep ?? defaultServices.deployStep
-			if (deployStep === undefined) throw new Error('Trading deployment service is unavailable')
+			if (deployStep === undefined) throw new Error(deploymentCopy.deploymentServiceUnavailable)
 			await deployStep(publicClient, plan, nextStep, hash => {
 				broadcastHash = hash
 			})
@@ -409,10 +414,10 @@ export function TradingDeploymentSetup({
 				onComplete(configuration)
 				return
 			}
-			setActionMessage(`${nextStep.label} deployed. Continue with ${nextTradingDeploymentStep(plan, status)?.label ?? 'the next contract'}.`)
+			setActionMessage(deploymentCopy.contractDeployedContinue(nextStep.label, nextTradingDeploymentStep(plan, status)?.label ?? deploymentCopy.nextContractFallbackLabel))
 		} catch (error) {
 			setActionError(true)
-			let detail = publicErrorMessage(error, `Failed to deploy ${nextStep.label}`)
+			let detail = publicErrorMessage(error, deploymentCopy.deployFailed(nextStep.label))
 			try {
 				const status = await loadTradingDeploymentStatus(publicClient, plan)
 				setDeploymentStatus(status)
@@ -424,94 +429,66 @@ export function TradingDeploymentSetup({
 						return
 					}
 					setActionError(false)
-					setActionMessage(`${nextStep.label} is already installed. Continue with ${nextTradingDeploymentStep(plan, status)?.label ?? 'the next contract'}.`)
+					setActionMessage(deploymentCopy.contractAlreadyInstalledContinue(nextStep.label, nextTradingDeploymentStep(plan, status)?.label ?? deploymentCopy.nextContractFallbackLabel))
 					return
 				}
 			} catch (recoveryError) {
-				detail = `${detail} Unable to verify deployment status: ${publicErrorMessage(recoveryError, 'Unknown recovery error')}`
+				detail = deploymentCopy.deploymentStatusUnverified(detail, publicErrorMessage(recoveryError, deploymentCopy.unknownRecoveryFallback))
 			}
-			setActionMessage(broadcastHash === undefined ? detail : `Transaction ${broadcastHash} was broadcast but setup did not finish. Verify it in your wallet before retrying. ${detail}`)
+			setActionMessage(broadcastHash === undefined ? detail : deploymentCopy.broadcastWithoutCompletion(broadcastHash, detail))
 		} finally {
 			setBusy(false)
 			onWorkflowLockChange(false)
 		}
 	}
 	return (
-		<main class='route' id='main-content'>
-			<RouteHeader eyebrow={appCopy.standaloneLiveClient} title={appCopy.deploy} actions={standaloneWalletButton} />
-			<section class='section deployment-setup'>
-				{registryError === undefined ? null : (
-					<p class='error' role='alert'>
-						{registryError}
-					</p>
-				)}
-				{inputError === undefined ? null : (
-					<p class='error' role='alert'>
-						{inputError}
-					</p>
-				)}
+		<div class='route'>
+			<RouteHeader title={appCopy.deploy} description={appCopy.deployRouteDescription} actions={standaloneWalletButton} />
+			<SectionBlock className='deployment-setup' title={deploymentCopy.tradingContracts}>
+				<ErrorNotice message={registryError} />
+				<ErrorNotice message={inputError} />
 				{selectedCore === undefined ? null : (
-					<dl class='fact-list deployment-setup__contracts'>
-						<div>
-							<dt>SecurityPoolFactory</dt>
-							<dd>
-								<TradingAddressValue value={selectedCore.securityPoolFactory} />
-							</dd>
-						</div>
-					</dl>
+					<DataGrid dense>
+						<MetricField label={deploymentCopy.securityPoolFactory}>
+							<ReadOnlyAddressValue address={selectedCore.securityPoolFactory} responsiveAbbreviation />
+						</MetricField>
+					</DataGrid>
 				)}
 				{plan === undefined ? null : (
-					<div class='deployment-setup__steps'>
-						<h2>Trading contracts</h2>
-						<ul>
-							{deploymentSteps.map(({ step, presentation }) => (
-								<li class='deployment-step' key={step.id}>
-									<Status tone={presentation.tone}>{presentation.label}</Status>
-									<div class='deployment-step__details'>
-										<strong>{step.label}</strong>
-										<TradingAddressValue value={step.address} />
-									</div>
-								</li>
-							))}
-						</ul>
-					</div>
+					<ul class='deployment-setup__steps'>
+						{deploymentSteps.map(({ step, presentation }) => (
+							<li class='deployment-step' key={step.id}>
+								<Badge tone={presentation.tone}>{presentation.label}</Badge>
+								<div class='deployment-step__details'>
+									<strong>{step.label}</strong>
+									<ReadOnlyAddressValue address={step.address} responsiveAbbreviation />
+								</div>
+							</li>
+						))}
+					</ul>
 				)}
 				<div class='deployment-setup__status' role='status' aria-live='polite'>
-					<div>
-						<span>Deployment progress</span>
-						<strong>{deploymentProgress(deploymentStatus, 2)}</strong>
-					</div>
-					{inspection === undefined ? null : <Status tone={inspection.tone}>{inspection.label}</Status>}
+					<MetricField label={deploymentCopy.deploymentProgress}>{deploymentProgress(deploymentStatus, 2)}</MetricField>
+					{inspection === undefined ? null : <Badge tone={inspection.tone}>{inspection.label}</Badge>}
 				</div>
-				{walletConnected && !walletReady && selectedCore !== undefined ? (
-					<p class='error' role='alert'>
-						{`The connected wallet must use ${selectedCore.chainName}. Reconnect to switch networks.`}
-					</p>
-				) : null}
-				{walletConnectionMessage === undefined ? null : (
-					<p class='error' role='alert'>
-						{walletConnectionMessage}
-					</p>
-				)}
-				{inspectionError === undefined ? null : (
-					<p class='error' role='alert'>
-						{inspectionError}
-					</p>
-				)}
-				{actionMessage === undefined ? null : (
-					<p class={actionError ? 'error' : undefined} role={actionError ? 'alert' : 'status'}>
+				<ErrorNotice message={walletConnected && !walletReady && selectedCore !== undefined ? deploymentCopy.connectedWalletMustUseNetwork(selectedCore.chainName) : undefined} />
+				<ErrorNotice message={walletConnectionMessage} />
+				<ErrorNotice message={inspectionError} />
+				{actionMessage === undefined || actionError ? null : (
+					<p class='detail' role='status'>
 						{actionMessage}
 					</p>
 				)}
-				<div class='deployment-setup__actions'>
+				<ErrorNotice message={actionError ? actionMessage : undefined} />
+				<div class='actions'>
 					{deploymentComplete ? null : (
-						<button class='primary-action' type='button' disabled={busy || registryLoading || registryError !== undefined || !inspectionIsCurrent || inspectionState !== 'ready' || nextStep === undefined || !walletReady} aria-busy={busy} onClick={() => void deployNext()}>
+						<button class='primary' type='button' disabled={busy || registryLoading || registryError !== undefined || !inspectionIsCurrent || inspectionState !== 'ready' || nextStep === undefined || !walletReady} aria-busy={busy} onClick={() => void deployNext()}>
 							{deploymentActionLabel(busy, nextStep, plan, deploymentStatus)}
 						</button>
 					)}
 					{retryAction}
 				</div>
-			</section>
-		</main>
+			</SectionBlock>
+		</div>
 	)
 }

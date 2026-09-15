@@ -689,7 +689,7 @@ describe('SecurityPoolsOverviewSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		expect(documentQueries.getByRole('heading', { name: 'No security pools' })).not.toBeNull()
+		expect(documentQueries.getByText('No security pools', { selector: '.empty-state-title' })).not.toBeNull()
 		expect(documentQueries.getByRole('button', { name: 'Create security pool' })).not.toBeNull()
 		expect(documentQueries.queryByText('Refreshing pools.')).toBeNull()
 	})
@@ -728,7 +728,7 @@ describe('SecurityPoolsOverviewSection', () => {
 
 		const documentQueries = within(document.body)
 		expect(documentQueries.queryByText('Refreshing pools.')).not.toBeNull()
-		expect(documentQueries.queryByRole('heading', { name: 'No security pools' })).toBeNull()
+		expect(documentQueries.queryByText('No security pools', { selector: '.empty-state-title' })).toBeNull()
 		expect(documentQueries.queryByRole('button', { name: 'Create security pool' })).toBeNull()
 	})
 

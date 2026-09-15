@@ -1,10 +1,10 @@
 /* Zoltar and Statoblast remain separate operational products on one foundation. */
 :root[data-product="zoltar"] body::before {
-	background: radial-gradient(circle at 14% 0%, color-mix(in srgb, var(--accent-zoltar) 10%, transparent), transparent 28%), linear-gradient(180deg, #091521 0%, var(--bg-deep) 58%);
+	background: radial-gradient(circle at 14% 0%, color-mix(in srgb, var(--accent-zoltar) 10%, transparent), transparent 28%), linear-gradient(180deg, var(--bg) 0%, var(--bg-deep) 58%);
 }
 
 :root[data-product="statoblast"] body::before {
-	background: radial-gradient(circle at 14% 0%, color-mix(in srgb, var(--accent-statoblast) 11%, transparent), transparent 28%), linear-gradient(180deg, #111124 0%, var(--bg-deep) 58%);
+	background: radial-gradient(circle at 14% 0%, color-mix(in srgb, var(--accent-statoblast) 11%, transparent), transparent 28%), linear-gradient(180deg, color-mix(in srgb, var(--bg-deep) 90%, var(--accent-statoblast)) 0%, var(--bg-deep) 58%);
 }
 
 :root[data-product="zoltar"] .top-shell,
@@ -15,8 +15,8 @@
 
 :root[data-product="zoltar"] .route-header h1,
 :root[data-product="statoblast"] .route-header h1 {
-	font-size: clamp(1.625rem, 3vw, 2.5rem);
-	line-height: 1.08;
+	font-size: var(--font-h1);
+	line-height: var(--line-height-display);
 	letter-spacing: -0.025em;
 }
 
@@ -32,16 +32,6 @@
 	:root[data-product="statoblast"] .top-shell {
 		border-inline: 0;
 		border-radius: 0;
-	}
-
-	:root[data-product="zoltar"] .route-subnav-mobile-select,
-	:root[data-product="statoblast"] .route-subnav-mobile-select {
-		display: grid;
-	}
-
-	:root[data-product="zoltar"] .route-subnav-shell .view-tabs,
-	:root[data-product="statoblast"] .route-subnav-shell .view-tabs {
-		display: none;
 	}
 }
 
@@ -69,4 +59,19 @@
 .pool-question-source input {
 	width: auto;
 	margin: 0;
+}
+
+/* Trading: list rows and pool details open workflows through links, so a link can carry the primary button treatment. */
+:root[data-product="trading"] a.button-link.primary {
+	background: var(--primary-button-bg);
+	color: var(--primary-button-text);
+	border-color: var(--primary-button-border);
+	font-weight: 600;
+	text-decoration: none;
+}
+
+:root[data-product="trading"] a.button-link.primary:hover {
+	background: var(--primary-button-bg-hover);
+	border-color: var(--primary-button-border-hover);
+	color: var(--primary-button-text);
 }

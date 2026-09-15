@@ -4,10 +4,11 @@ import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import { assertNever } from './assert.js'
 import { getWrongNetworkReason } from '../wallet/network.js'
 import type { LoadableValueState } from './loadState.js'
+import type { StatusTone } from '../types/components.js'
 
 export type UserMessageKey = 'not_checked' | 'loading' | 'not_found' | 'empty' | 'action_needed' | 'wrong_network' | 'wallet_disconnected' | 'unavailable' | 'load_failed'
 
-type UserMessageTone = 'muted' | 'pending' | 'blocked' | 'error' | 'ok'
+type UserMessageTone = StatusTone
 
 export type UserMessagePresentation = {
 	actionHint?: string
@@ -30,7 +31,7 @@ export function getMetricPlaceholderPresentation(value: unknown, options?: { loa
 	if (options?.loading === true)
 		return createPresentation('loading', {
 			badgeLabel: commonCopy.loading,
-			badgeTone: 'pending',
+			badgeTone: 'loading',
 			placeholder: commonCopy.loadingWithEllipsis,
 		})
 	return createPresentation('unavailable', {
@@ -56,7 +57,7 @@ export function getPoolRegistryPresentation(
 		if (input.isLoading)
 			return createPresentation('loading', {
 				badgeLabel: commonCopy.loading,
-				badgeTone: 'pending',
+				badgeTone: 'loading',
 				detail: userMessagesCopy.refreshingPoolRegistryDetail,
 				detailIsLoading: true,
 			})
@@ -78,7 +79,7 @@ export function getPoolRegistryPresentation(
 		case 'loading':
 			return createPresentation('loading', {
 				badgeLabel: commonCopy.loading,
-				badgeTone: 'pending',
+				badgeTone: 'loading',
 				detail: commonCopy.loadingWithEllipsis,
 				detailIsLoading: true,
 			})
@@ -104,7 +105,7 @@ export function getUniversePresentation(state: LoadableValueState) {
 		case 'loading':
 			return createPresentation('loading', {
 				badgeLabel: commonCopy.loading,
-				badgeTone: 'pending',
+				badgeTone: 'loading',
 				detail: commonCopy.loadingUniverseDetails,
 			})
 		case 'unknown':

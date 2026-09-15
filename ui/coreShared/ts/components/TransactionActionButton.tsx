@@ -22,7 +22,7 @@ export function TransactionActionButtonLockProvider({ children, locked }: { chil
 	return <TransactionActionButtonLockContext.Provider value={locked}>{children}</TransactionActionButtonLockContext.Provider>
 }
 
-export function TransactionActionGroup({ children, id, message }: { children: ComponentChildren; id?: string | undefined; message: string | undefined }) {
+export function TransactionActionGroup({ children, id, loading = false, message }: { children: ComponentChildren; id?: string | undefined; loading?: boolean; message: string | undefined }) {
 	const generatedId = useId()
 	const noticeId = id ?? generatedId
 	const notice = message
@@ -30,7 +30,7 @@ export function TransactionActionGroup({ children, id, message }: { children: Co
 		<TransactionActionGroupContext.Provider value={{ noticeId, hasNotice: notice !== undefined }}>
 			<div className='tx-action-group'>
 				<div className='tx-action-feedback' aria-live='polite' aria-atomic='true'>
-					{notice === undefined ? undefined : <InlineHint id={noticeId} message={notice} />}
+					{notice === undefined ? undefined : <InlineHint id={noticeId} loading={loading} message={notice} />}
 				</div>
 				<div className='actions'>{children}</div>
 			</div>
@@ -49,10 +49,12 @@ export function TransactionActionButton({ ariaLabel, availability, className = '
 	const shouldShowDisabledReason = showDisabledReason && isDisabled && disabledReason !== undefined
 	const resolvedInlineHint = shouldShowDisabledReason ? disabledReason : inlineHint
 	const resolvedInlineHintAriaLabel = getInlineHintAriaLabel(ariaLabel, inlineHintAriaLabel, idleLabel)
-	let describedBy: string | undefined
-	if (group !== undefined) describedBy = group.hasNotice ? group.noticeId : undefined
-	else if (resolvedInlineHint !== undefined) describedBy = disabledReasonId
-	else if (isDisabled && disabledReason !== undefined) describedBy = disabledReasonElementId
+	const externalReasonId = isDisabled ? disabledReasonElementId : undefined
+	const describedBy = (() => {
+		if (group !== undefined) return group.hasNotice ? group.noticeId : undefined
+		const ids = [externalReasonId, resolvedInlineHint === undefined ? undefined : disabledReasonId].filter(id => id !== undefined)
+		return ids.length === 0 ? undefined : ids.join(' ')
+	})()
 	const handleClick = () => {
 		if (isDisabled) return
 		onClick()
@@ -60,7 +62,7 @@ export function TransactionActionButton({ ariaLabel, availability, className = '
 	return (
 		<div className={`tx-action ${className}`.trim()}>
 			<div className='tx-action-row'>
-				<button aria-label={ariaLabel} aria-busy={pending} className={`tx-action-button ${tone}`} type={type} onClick={handleClick} disabled={isDisabled} title={disabledReason} aria-describedby={describedBy}>
+				<button aria-label={ariaLabel} aria-busy={pending} className={`tx-action-button ${tone}`} type={type} onClick={handleClick} disabled={isDisabled} aria-describedby={describedBy}>
 					<span className='tx-action-button-labels'>
 						<span aria-hidden='true' className='tx-action-label-placeholder' data-label={typeof idleLabel === 'string' ? idleLabel : undefined} />
 						<span aria-hidden='true' className='tx-action-label-placeholder' data-label={typeof pendingLabel === 'string' ? pendingLabel : undefined} />
@@ -69,7 +71,9 @@ export function TransactionActionButton({ ariaLabel, availability, className = '
 				</button>
 			</div>
 			{group === undefined && (showDisabledReason || resolvedInlineHint !== undefined) ? (
-				<div className='tx-action-feedback'>{resolvedInlineHint === undefined ? undefined : <InlineHint {...(resolvedInlineHintAriaLabel === undefined ? {} : { ariaLabel: resolvedInlineHintAriaLabel })} id={disabledReasonId} message={resolvedInlineHint} />}</div>
+				<div className='tx-action-feedback'>
+					{resolvedInlineHint === undefined ? undefined : <InlineHint {...(resolvedInlineHintAriaLabel === undefined ? {} : { ariaLabel: resolvedInlineHintAriaLabel })} id={disabledReasonId} loading={shouldShowDisabledReason && availability?.loading === true} message={resolvedInlineHint} />}
+				</div>
 			) : undefined}
 		</div>
 	)

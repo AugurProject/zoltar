@@ -224,7 +224,7 @@ describe('live portfolio scope', () => {
 		const rendered = await renderIntoDocument(<LiveSecurityPoolDetails market={market} refreshing retry={() => undefined} workflowLocked={false} />)
 		cleanupRendered = rendered.cleanup
 		expect(rendered.container.querySelector('[role="status"]')?.textContent).toContain('Refreshing security pool; showing the last successful result.')
-		expect(rendered.container.querySelector('section')?.getAttribute('aria-busy')).toBe('true')
+		expect(rendered.container.querySelector('[aria-busy="true"]')).not.toBeNull()
 		expect(rendered.container.textContent).toContain('System stateOperational')
 		expect(rendered.container.querySelector('button')).toBeNull()
 	})
@@ -243,6 +243,6 @@ describe('live portfolio scope', () => {
 	test('announces when a routed live pool is unavailable in the selected universe', async () => {
 		const rendered = await renderIntoDocument(<SecurityPoolRouteEmptyState discoveryState='ready' discoveryError={undefined} workflowLocked={false} retry={() => undefined} />)
 		cleanupRendered = rendered.cleanup
-		expect(rendered.container.querySelector('[role="alert"]')?.textContent).toContain('This security pool is not available in the selected universe.')
+		expect(rendered.container.querySelector('.empty-state')?.textContent).toContain('This security pool is not available in the selected universe.')
 	})
 })

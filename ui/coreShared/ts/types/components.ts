@@ -3,12 +3,17 @@ import type { Hash } from '@zoltar/core-shared/evm/ethereum'
 
 export type ActionAvailability = {
 	disabled: boolean
+	/** Marks the reason as an in-progress state so it renders with loading feedback. */
+	loading?: boolean
 	reason: string | undefined
 }
 
-type NoticeTone = 'blocking' | 'warning' | 'pending' | 'success'
+/** Shared status vocabulary for badges and user-message presentations. */
+export type StatusTone = 'blocked' | 'danger' | 'loading' | 'muted' | 'ok' | 'pending' | 'warning'
 
-export type BadgeTone = 'blocked' | 'danger' | 'muted' | 'ok' | 'pending' | 'warning'
+export type BadgeTone = StatusTone
+
+type NoticeTone = 'blocking' | 'warning' | 'pending' | 'success'
 
 export type NoticeItem = {
 	detail: ComponentChildren
@@ -189,7 +194,7 @@ export type ViewTabsProps<TValue extends string> = {
 	semantics?: 'navigation' | 'switcher' | 'tabs'
 	size?: 'compact' | 'default'
 	value: TValue
-	variant?: 'route' | 'subroute'
+	variant?: 'route' | 'segmented' | 'subroute'
 }
 
 export type TransactionActionButtonProps = {

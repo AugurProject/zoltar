@@ -1,8 +1,6 @@
 export const invalid = 'INVALID'
 export const yes = 'YES'
 export const no = 'NO'
-export const sectionKicker = 'Authoritative protocol actions'
-export const sectionTitle = 'Settlement and fork migration'
 export const operationLabel = 'Settlement operation'
 export const completeSetAction = 'Complete set'
 export const forkMigrationAction = 'Fork migration'
@@ -24,4 +22,18 @@ export function redeemOutcomeAction(outcome: 'INVALID' | 'YES' | 'NO') {
 
 export function winningRedemptionGuidance(outcome: 'INVALID' | 'YES' | 'NO', balance: string) {
 	return `Redeem the wallet’s entire ${outcome} balance (${balance}) through this exact security pool.`
+}
+export const settlementTransaction = 'Settlement transaction'
+export const loadingForkDetailsReason = 'Loading the universe fork question and child branches.'
+export const forkDetailsUnavailableReason = 'Fork question details are unavailable.'
+export const forkDetailsLoadFailed = 'Fork question details failed to load'
+export const slippageRangeReason = 'Enter a slippage tolerance from 0% to 5%.'
+export const validityRangeReason = 'Enter a transaction validity from 1 to 1440 whole minutes.'
+
+export function redemptionSimulationSummary(blockNumber: bigint, expectedEth: string, minimumEth: string, slippagePercent: string, deadline: string) {
+	return `Authoritative redemption simulation at block ${blockNumber.toString()}: ${expectedEth} ETH expected, ${minimumEth} ETH minimum at ${slippagePercent}% slippage; valid until ${deadline}`
+}
+
+export function settlementSimulationSummary(blockNumber: bigint) {
+	return `Authoritative settlement simulation ready at block ${blockNumber.toString()}`
 }

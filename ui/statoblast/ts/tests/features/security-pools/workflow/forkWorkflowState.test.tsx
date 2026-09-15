@@ -163,7 +163,7 @@ describe('SecurityPoolWorkflowSection: fork workflow state', () => {
 
 			const documentQueries = within(document.body)
 			await act(() => {
-				fireEvent.click(documentQueries.getByRole('button', { name: 'Fork & Migration' }))
+				fireEvent.click(documentQueries.getByRole('tab', { name: 'Fork & Migration' }))
 			})
 
 			expect(selectedViews).toEqual(['fork-workflow'])
@@ -588,7 +588,7 @@ describe('SecurityPoolWorkflowSection: fork workflow state', () => {
 
 			const documentQueries = within(document.body)
 			expect(documentQueries.queryByRole('button', { name: 'Trigger universe fork' })).toBeNull()
-			expect(documentQueries.getByRole('button', { name: 'Fork & Migration' })).not.toBeNull()
+			expect(documentQueries.getByRole('tab', { name: 'Fork & Migration' })).not.toBeNull()
 		})
 
 		test('prefers fresh fork-auction activity over stale pool-list state on the fork tab', async () => {
@@ -626,7 +626,7 @@ describe('SecurityPoolWorkflowSection: fork workflow state', () => {
 			setCleanup(renderedComponent.cleanup)
 
 			const documentQueries = within(document.body)
-			const selectedPoolSummary = document.body.querySelector('.selected-pool-context-summary')
+			const selectedPoolSummary = document.body.querySelector('.sticky-object-context')
 			if (!(selectedPoolSummary instanceof HTMLElement)) throw new Error('Expected selected pool summary to render')
 			const selectedPoolSummaryQueries = within(selectedPoolSummary)
 			expect(reportingLoadCalls).toBe(0)
@@ -670,7 +670,7 @@ describe('SecurityPoolWorkflowSection: fork workflow state', () => {
 			setCleanup(renderedComponent.cleanup)
 
 			const documentQueries = within(document.body)
-			const selectedPoolSummary = document.body.querySelector('.selected-pool-context-summary')
+			const selectedPoolSummary = document.body.querySelector('.sticky-object-context')
 			if (!(selectedPoolSummary instanceof HTMLElement)) throw new Error('Expected selected pool summary to render')
 			const settlementStageTab = documentQueries.getByRole('tab', { name: 'Settlement' })
 			expect(forkAuctionLoadCalls).toBe(1)

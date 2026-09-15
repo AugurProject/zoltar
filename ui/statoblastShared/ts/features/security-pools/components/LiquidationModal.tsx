@@ -20,7 +20,6 @@ import { TransactionStatusCard } from '@zoltar/ui-core-shared/components/Transac
 import { assertNever } from '@zoltar/ui-core-shared/lib/assert.js'
 import { sameAddress } from '@zoltar/ui-core-shared/lib/address.js'
 import { tryParseAddressInput } from '@zoltar/ui-core-shared/forms/inputs.js'
-import { pickFirstReason } from '@zoltar/ui-core-shared/transactions/actionAvailability.js'
 import { useChainTimestamp } from '@zoltar/ui-core-shared/wallet/chainTimestamp.js'
 import { formatCurrencyInputBalance, formatDuration } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { TimestampValue } from '@zoltar/ui-core-shared/components/TimestampValue.js'
@@ -376,31 +375,30 @@ export function LiquidationModal({
 				})()
 	const liquidationEnabled = poolState?.actions.queueLiquidation.enabled ?? true
 	const canUseLiquidationAction = accountAddress !== undefined && isOnActiveAppChain
-	const liquidationActionReason = pickFirstReason(
-		liquidationExecutionMode === 'refreshing' ? liquidationCopy.refreshingPriceValidity : undefined,
-		liquidationManagerAddress === undefined || liquidationSecurityPoolAddress === undefined ? liquidationCopy.liquidationPoolReloadRequired : undefined,
-		trimmedLiquidationTargetVault === '' ? liquidationCopy.targetVaultRequired : undefined,
-		trimmedLiquidationReceiverVault === '' ? liquidationCopy.receiverVaultRequired : undefined,
-		delegatedApprovalReason,
-		delegatedReceiver && loadingLiquidationReceiverVaultSummary ? liquidationCopy.loadingReceiverVault : undefined,
-		delegatedReceiver ? liquidationReceiverVaultSummaryError : undefined,
-		delegatedReceiver && !liquidationReceiverVaultSummaryResolved ? liquidationCopy.receiverVaultRequiredBeforeSubmission : undefined,
-		sameVaultWarning,
-		liquidationDebtEthAmount.trim() === '' ? liquidationCopy.liquidationAmountRequired : undefined,
-		liquidationExecutionMode === 'queue' && liquidationTimeoutSeconds === undefined ? liquidationCopy.liquidationTimeoutMinimumReason : undefined,
-		liquidationExecutionMode === 'queue' && loadingLiquidationFundingPreview ? liquidationCopy.loadingQueueFunding : undefined,
-		liquidationExecutionMode === 'queue' && liquidationFundingPreviewError !== undefined ? liquidationFundingPreviewError : undefined,
-		liquidationExecutionMode === 'queue' && liquidationFundingPreview === undefined ? liquidationCopy.loadingQueueFunding : undefined,
-		deterministicLiquidationReason,
-		directLiquidationReason,
-		queueLiquidationEthGuardMessage,
-	)
-	const liquidationButtonDisabledReason = (() => {
-		if (!isOnActiveAppChain) return getWrongNetworkReason()
-		if (accountAddress === undefined) return commonCopy.walletConnectionRequired
-		if (!liquidationEnabled) return undefined
-		return liquidationActionReason
-	})()
+	const liquidationBlockers: Array<{ loading?: boolean; reason: string | undefined }> = [
+		{ loading: true, reason: liquidationExecutionMode === 'refreshing' ? liquidationCopy.refreshingPriceValidity : undefined },
+		{ loading: true, reason: liquidationManagerAddress === undefined || liquidationSecurityPoolAddress === undefined ? liquidationCopy.liquidationPoolReloadRequired : undefined },
+		{ reason: trimmedLiquidationTargetVault === '' ? liquidationCopy.targetVaultRequired : undefined },
+		{ reason: trimmedLiquidationReceiverVault === '' ? liquidationCopy.receiverVaultRequired : undefined },
+		{ loading: delegatedReceiver && loadingLiquidationApproval, reason: delegatedApprovalReason },
+		{ loading: true, reason: delegatedReceiver && loadingLiquidationReceiverVaultSummary ? liquidationCopy.loadingReceiverVault : undefined },
+		{ reason: delegatedReceiver ? liquidationReceiverVaultSummaryError : undefined },
+		{ reason: delegatedReceiver && !liquidationReceiverVaultSummaryResolved ? liquidationCopy.receiverVaultRequiredBeforeSubmission : undefined },
+		{ reason: sameVaultWarning },
+		{ reason: liquidationDebtEthAmount.trim() === '' ? liquidationCopy.liquidationAmountRequired : undefined },
+		{ reason: liquidationExecutionMode === 'queue' && liquidationTimeoutSeconds === undefined ? liquidationCopy.liquidationTimeoutMinimumReason : undefined },
+		{ loading: true, reason: liquidationExecutionMode === 'queue' && loadingLiquidationFundingPreview ? liquidationCopy.loadingQueueFunding : undefined },
+		{ reason: liquidationExecutionMode === 'queue' && liquidationFundingPreviewError !== undefined ? liquidationFundingPreviewError : undefined },
+		{ loading: true, reason: liquidationExecutionMode === 'queue' && liquidationFundingPreview === undefined ? liquidationCopy.loadingQueueFunding : undefined },
+		{ reason: deterministicLiquidationReason },
+		{ reason: directLiquidationReason },
+		{ reason: queueLiquidationEthGuardMessage },
+	]
+	const liquidationBlocker = liquidationBlockers.find(blocker => blocker.reason !== undefined)
+	const liquidationActionReason = liquidationBlocker?.reason
+	let liquidationButtonDisabledReason = liquidationEnabled ? liquidationActionReason : undefined
+	if (accountAddress === undefined) liquidationButtonDisabledReason = commonCopy.walletConnectionRequired
+	if (!isOnActiveAppChain) liquidationButtonDisabledReason = getWrongNetworkReason()
 	const queuedLiquidationOperation = (() => {
 		if (securityPoolOverviewResult?.action !== 'queueLiquidation') return undefined
 		if (currentPoolOracleManagerDetails?.pendingOperation?.operation === 'liquidation' && currentPoolOracleManagerDetails.pendingOperation.targetVault === liquidationTargetVault) {
@@ -690,6 +688,7 @@ export function LiquidationModal({
 						pending={securityPoolOverviewActiveAction === 'queueLiquidation'}
 						availability={{
 							disabled: !liquidationEnabled || !canUseLiquidationAction || liquidationActionReason !== undefined,
+							loading: canUseLiquidationAction && liquidationEnabled && liquidationBlocker?.loading === true,
 							reason: liquidationButtonDisabledReason,
 						}}
 						showDisabledReason={!(delegatedReceiver && loadingLiquidationReceiverVaultSummary)}

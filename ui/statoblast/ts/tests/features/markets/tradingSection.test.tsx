@@ -5,6 +5,7 @@ import { zeroAddress, zeroHash } from '@zoltar/core-shared/evm/ethereum'
 import { GlobalTransactionPresentationProvider } from '@zoltar/ui-core-shared/components/GlobalTransactionPresentationContext.js'
 import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
 import { fireEvent, within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
+import { getTransactionButtonState } from '@zoltar/ui-core-shared/tests/testUtils/transactionActionButton.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import type { GlobalTransactionPresentation } from '@zoltar/ui-core-shared/types/components.js'
 import type { ListedSecurityPool, TradingActionResult, TradingDetails, TradingShareBalances, ZoltarUniverseSummary } from '@zoltar/ui-core-shared/types/contracts.js'
@@ -450,7 +451,7 @@ void describe('TradingSection', () => {
 		const documentQueries = within(document.body)
 		const mintButton = documentQueries.getByRole('button', { name: 'Mint complete sets' }) as HTMLButtonElement
 		expect(mintButton.disabled).toBe(true)
-		expect(mintButton.title).toBe(NO_MINT_CAPACITY_NO_ACTIVE_CAPACITY_OWNERSHIP_MESSAGE)
+		expect(getTransactionButtonState(document.body, 'Mint complete sets').reason).toBe(NO_MINT_CAPACITY_NO_ACTIVE_CAPACITY_OWNERSHIP_MESSAGE)
 	})
 
 	void test('shows wallet ETH and the amount currently available to mint', async () => {
@@ -573,7 +574,7 @@ void describe('TradingSection', () => {
 		mintSubmitButton = modalQueries.getByRole('button', { name: 'Mint complete sets' })
 		if (!(mintSubmitButton instanceof HTMLButtonElement)) throw new Error('Expected Mint complete sets transaction button after network switch')
 		expect(mintSubmitButton.disabled).toBe(true)
-		expect(mintSubmitButton.title).toBe('Switch to Sepolia.')
+		expect(getTransactionButtonState(documentQueries.getByRole('dialog', { name: 'Mint Complete Sets' }), 'Mint complete sets').reason).toBe('Switch to Sepolia.')
 		expect(document.body.textContent?.includes('Switch to Sepolia')).toBe(true)
 	})
 
@@ -638,7 +639,7 @@ void describe('TradingSection', () => {
 		const documentQueries = within(document.body)
 		const mintButton = documentQueries.getByRole('button', { name: 'Mint complete sets' }) as HTMLButtonElement
 		expect(mintButton.disabled).toBe(true)
-		expect(mintButton.title).toBe(UNDEFINED_COMPLETE_SET_EXCHANGE_RATE_MESSAGE)
+		expect(getTransactionButtonState(document.body, 'Mint complete sets').reason).toBe(UNDEFINED_COMPLETE_SET_EXCHANGE_RATE_MESSAGE)
 	})
 
 	void test('shows the complete-set redemption disabled reason on the launcher when the wallet lacks matching shares', async () => {
@@ -663,7 +664,7 @@ void describe('TradingSection', () => {
 		const documentQueries = within(document.body)
 		const redeemButton = documentQueries.getByRole('button', { name: 'Redeem complete sets' }) as HTMLButtonElement
 		expect(redeemButton.disabled).toBe(true)
-		expect(redeemButton.title).toBe(NEED_MATCHING_COMPLETE_SET_SHARES_MESSAGE)
+		expect(getTransactionButtonState(document.body, 'Redeem complete sets').reason).toBe(NEED_MATCHING_COMPLETE_SET_SHARES_MESSAGE)
 	})
 
 	void test('shows the share migration disabled reason before the universe forks', async () => {
@@ -679,7 +680,7 @@ void describe('TradingSection', () => {
 		const documentQueries = within(document.body)
 		const migrateButton = documentQueries.getByRole('button', { name: 'Migrate forked shares' }) as HTMLButtonElement
 		expect(migrateButton.disabled).toBe(true)
-		expect(migrateButton.title).toBe('Refresh the fork target universes.')
+		expect(getTransactionButtonState(document.body, 'Migrate forked shares').reason).toBe('Refresh the fork target universes.')
 	})
 
 	void test('opens the migration modal with the shared outcome selector and target picker when migration is available', async () => {
@@ -717,7 +718,7 @@ void describe('TradingSection', () => {
 		const documentQueries = within(document.body)
 		const redeemSharesButton = documentQueries.getByRole('button', { name: 'Redeem resolved shares' }) as HTMLButtonElement
 		expect(redeemSharesButton.disabled).toBe(true)
-		expect(redeemSharesButton.title).toBe('Wait for the selected pool to resolve before redeeming shares.')
+		expect(getTransactionButtonState(document.body, 'Redeem resolved shares').reason).toBe('Wait for the selected pool to resolve before redeeming shares.')
 	})
 
 	void test('uses a title-case resolved-share dialog title and a sentence-case action label', async () => {
@@ -751,7 +752,7 @@ void describe('TradingSection', () => {
 		const documentQueries = within(document.body)
 		const mintButton = documentQueries.getByRole('button', { name: 'Mint complete sets' }) as HTMLButtonElement
 		expect(mintButton.disabled).toBe(true)
-		expect(mintButton.title).toBe('This market has already finalized.')
+		expect(getTransactionButtonState(document.body, 'Mint complete sets').reason).toBe('This market has already finalized.')
 	})
 
 	void test('shows mint write failures through the shared error notice', async () => {
@@ -788,7 +789,7 @@ void describe('TradingSection', () => {
 		const documentQueries = within(document.body)
 		const redeemButton = documentQueries.getByRole('button', { name: 'Redeem complete sets' }) as HTMLButtonElement
 		expect(redeemButton.disabled).toBe(true)
-		expect(redeemButton.title).toBe('Loading wallet share balances.')
+		expect(getTransactionButtonState(document.body, 'Redeem complete sets').reason).toBe('Loading wallet share balances.')
 	})
 
 	void test('keeps scalar share migration interactive through the shared target list and picker', async () => {

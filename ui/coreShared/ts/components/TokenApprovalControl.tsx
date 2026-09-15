@@ -58,6 +58,7 @@ function resolveApprovalButtonLabel({
 export function TokenApprovalControl({ renderActions, guardMessageElementId, actionLabel, allowanceError, allowanceLoading, approvedAmount, disabled = false, guardMessage, onApprove, pending, pendingLabel, requiredAmount, resetKey, tokenSymbol, tokenUnits }: TokenApprovalControlProps) {
 	const [draftAmount, setDraftAmount] = useState('')
 	const amountValidationMessageId = useId()
+	const allowanceMessageId = useId()
 	const requirement = useMemo(() => deriveTokenApprovalRequirement(requiredAmount, approvedAmount), [approvedAmount, requiredAmount])
 	useEffect(() => {
 		setDraftAmount('')
@@ -116,6 +117,11 @@ export function TokenApprovalControl({ renderActions, guardMessageElementId, act
 		tokenSymbol,
 		tokenUnits,
 	})
+	const disabledReasonElementId = (() => {
+		if (allowanceMessage !== undefined) return renderActions === undefined ? allowanceMessageId : amountValidationMessageId
+		if (amountValidationMessage !== undefined) return amountValidationMessageId
+		return guardMessageElementId
+	})()
 	const approvalButton = (
 		<TransactionActionButton
 			idleLabel={buttonLabel}
@@ -125,7 +131,7 @@ export function TokenApprovalControl({ renderActions, guardMessageElementId, act
 			pending={pending}
 			tone='secondary'
 			availability={{ disabled: !canApprove, reason: allowanceMessage ?? visibleStatusMessage ?? guardMessage }}
-			disabledReasonElementId={allowanceMessage === undefined && amountValidationMessage !== undefined ? amountValidationMessageId : guardMessageElementId}
+			disabledReasonElementId={disabledReasonElementId}
 			showDisabledReason={allowanceMessage === undefined && amountValidationMessage === undefined && (guardMessage === undefined || guardMessageElementId === undefined)}
 		/>
 	)
@@ -165,7 +171,7 @@ export function TokenApprovalControl({ renderActions, guardMessageElementId, act
 
 			{renderActions === undefined ? <div className='actions'>{approvalButton}</div> : renderActions({ button: approvalButton, notice: allowanceMessage ?? amountValidationMessage ?? visibleStatusMessage ?? guardMessage, noticeId: amountValidationMessageId })}
 
-			{renderActions !== undefined || allowanceMessage === undefined ? undefined : <ErrorNotice message={allowanceMessage} />}
+			{renderActions !== undefined || allowanceMessage === undefined ? undefined : <ErrorNotice id={allowanceMessageId} message={allowanceMessage} />}
 		</div>
 	)
 }
