@@ -150,7 +150,7 @@ function state(
 	}
 }
 
-async function dashboard(initialConfiguration = mainnetConfiguration(), initialState = state('rpc secret at /api/internal'), initialStateRequestFailure = false, initialConfigurationRequestFailure = false) {
+async function dashboard(initialConfiguration = mainnetConfiguration(), initialState = state('rpc secret at /api/internal'), initialStateRequestFailure = false, initialConfigurationRequestFailure = false, poolCatalog = false) {
 	const server = startDashboardServer(0, {
 		getConfiguration: () => ({}),
 		getState: () => ({}),
@@ -172,7 +172,7 @@ async function dashboard(initialConfiguration = mainnetConfiguration(), initialS
 	browsers.push(browser)
 	const page = browser.newPage()
 	page.url = server.url.href
-	page.content = (await (await fetch(server.url)).text()).replace('<script type="module" src="/dashboard.js"></script>', '')
+	page.content = (await (await fetch(new URL(poolCatalog ? '/pools' : '/', server.url))).text()).replace('<script type="module" src="/dashboard.js"></script>', '')
 	const window = page.mainFrame.window
 	Reflect.set(window, 'Boolean', Boolean)
 	Reflect.set(window, 'Date', Date)
@@ -195,6 +195,9 @@ async function dashboard(initialConfiguration = mainnetConfiguration(), initialS
 		window.clearTimeout(timeout)
 		return timeout
 	}
+	let catalogFailure = false
+	let selectionFailure = false
+	const catalogRequests: string[] = []
 	let snapshot = initialState
 	let currentConfiguration = initialConfiguration
 	let pendingProfileConfiguration: DashboardConfiguration | undefined
@@ -219,6 +222,30 @@ async function dashboard(initialConfiguration = mainnetConfiguration(), initialS
 		const inputUrl = typeof input === 'string' || input instanceof window.URL ? input.toString() : Reflect.get(input, 'url')
 		if (typeof inputUrl !== 'string') throw new Error('Unexpected request URL')
 		const url = new URL(inputUrl, server.url)
+		if (url.pathname === '/api/pool-catalog') {
+			catalogRequests.push(url.searchParams.get('page') ?? '0')
+			return new window.Response(
+				JSON.stringify(
+					catalogFailure
+						? { error: 'RPC failed' }
+						: {
+								chainId: currentConfiguration.network?.chainId,
+								page: Number(url.searchParams.get('page')),
+								pageCount: '2',
+								total: '13',
+								block: '42',
+								pools: [{ address: '0x2222222222222222222222222222222222222222', parent: '0x0000000000000000000000000000000000000000', questionId: '42', universeId: '7', multiplierBps: '12500' }],
+							},
+				),
+				{ status: catalogFailure ? 503 : 200 },
+			)
+		}
+		if (url.pathname === '/api/supported-pool') {
+			if (selectionFailure) return new window.Response('{}', { status: 400 })
+			const value = JSON.parse(String(init?.body))
+			currentConfiguration = { ...currentConfiguration, selectedPools: value.supported ? [...currentConfiguration.selectedPools, value.address] : currentConfiguration.selectedPools.filter(address => address !== value.address) }
+			return new window.Response(JSON.stringify(currentConfiguration))
+		}
 		if (url.pathname === '/api/configuration') {
 			if (hangNextConfigurationRequest) {
 				hangNextConfigurationRequest = false
@@ -322,6 +349,13 @@ async function dashboard(initialConfiguration = mainnetConfiguration(), initialS
 	const blockTick = refreshCallbacks[1]
 	if (blockTick === undefined) throw new Error('Dashboard did not register its block-age interval')
 	return {
+		catalogRequests,
+		setCatalogFailure: (failed: boolean) => {
+			catalogFailure = failed
+		},
+		setSelectionFailure: (failed: boolean) => {
+			selectionFailure = failed
+		},
 		blockTick,
 		refresh: async () => {
 			await refresh()
@@ -1022,4 +1056,50 @@ test('keeps a large universe registry compact and finds collapsed descendants wi
 	await page.waitUntilComplete()
 	await Bun.sleep(1)
 	expect(page.approvedUniverseRequests.at(-1)).toEqual(['0', '1', '6000'])
+})
+
+test('all-pools browser automatically discovers, paginates, persists support, and recovers from errors', async () => {
+	const page = await dashboard(mainnetConfiguration(), state(), false, false, true)
+	const root = page.window.document.querySelector('#pool-browser')
+	if (root === null) throw new Error('Missing all-pools browser')
+	const button = (text: string) => {
+		const result = [...root.querySelectorAll('button')].find(candidate => candidate.textContent === text)
+		if (result === undefined) throw new Error(`Missing button ${text}`)
+		return result
+	}
+	expect(page.catalogRequests).toEqual(['0'])
+	expect(root.textContent).toContain('Universe approval required')
+	button('Add to supported').click()
+	await page.waitUntilComplete()
+	expect(button('Remove from supported').disabled).toBe(false)
+	await page.refresh()
+	expect(button('Remove from supported').disabled).toBe(false)
+	page.setSelectionFailure(true)
+	button('Remove from supported').click()
+	await page.waitUntilComplete()
+	expect(root.textContent).toContain('Could not save pool selection')
+	page.setSelectionFailure(false)
+	button('Remove from supported').click()
+	await page.waitUntilComplete()
+	expect(button('Add to supported').disabled).toBe(false)
+	page.setCatalogFailure(true)
+	button('Next').click()
+	await page.waitUntilComplete()
+	expect(root.textContent).toContain('Pool discovery failed')
+	page.setCatalogFailure(false)
+	button('Retry').click()
+	await page.waitUntilComplete()
+	expect(root.textContent).toContain('Page 2 of 2')
+	expect(button('Next').disabled).toBe(true)
+})
+
+test('discovers pools when navigating from Overview without a page reload', async () => {
+	const page = await dashboard(mainnetConfiguration(), state())
+	expect(page.catalogRequests).toEqual([])
+	const link = page.window.document.querySelector('.section-nav a[href="/pools"]')
+	if (!(link instanceof page.window.HTMLAnchorElement)) throw new Error('Missing pools navigation')
+	link.click()
+	await page.waitUntilComplete()
+	expect(page.catalogRequests).toEqual(['0'])
+	expect(page.window.document.querySelector('#pool-browser')?.textContent).toContain('Question 42')
 })

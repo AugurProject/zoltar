@@ -1,3 +1,5 @@
+import { cell, stacked, poolStatusText, botVaultState, publicFailure } from './pool-presentation.ts'
+import { createPoolBrowser } from './pool-browser.ts'
 import { createUniverseExplorer } from '@zoltar/bot-shared/dashboard/universe-explorer'
 import { readinessGuidance } from './readiness-status.js'
 import { blockStatusText, scanStatusText } from './block-status.js'
@@ -224,12 +226,37 @@ let stateConnected = false
 let configurationConnected = false
 let pauseRequestPending: boolean | undefined
 
+const poolBrowser = createPoolBrowser(element('pool-browser', HTMLElement), async (address, supported, chainId) => {
+	if (pendingPoolMutations > 0 || pendingNetworkProfile !== undefined) throw new Error('A pool or network change is pending')
+	pendingPoolMutations += 1
+	setMutationControlsEnabled(stateConnected)
+	try {
+		const configuration: Configuration = await put('/api/supported-pool', { address, supported, chainId })
+		populateConfiguration(configuration)
+	} finally {
+		pendingPoolMutations -= 1
+		setMutationControlsEnabled(stateConnected)
+		if (currentSnapshot !== undefined) renderPools(currentSnapshot)
+	}
+})
+new MutationObserver(updatePoolBrowser).observe(document.body, { attributes: true, attributeFilter: ['data-page'] })
+
+function updatePoolBrowser() {
+	poolBrowser?.update({
+		chainId: pendingNetworkProfile === undefined && currentConfiguration?.networkConfigured === true ? currentConfiguration.network?.chainId : undefined,
+		enabled: document.body.dataset['page'] === 'pools' && stateConnected && configurationConnected && pendingNetworkProfile === undefined && currentConfiguration?.networkConfigured === true && pendingPoolMutations === 0,
+		selected: selectedPools,
+		approved: approvedUniverses,
+	})
+}
+
 function renderBlockStatus(snapshot = currentSnapshot) {
 	blockStatus.textContent = blockStatusText(snapshot)
 	element('header-block-status', HTMLParagraphElement).textContent = blockStatus.textContent
 }
 
 function setMutationControlsEnabled(enabled: boolean) {
+	updatePoolBrowser()
 	const configurationAvailable = enabled && currentConfiguration !== undefined
 	const chainSettingsAvailable = configurationAvailable && pendingNetworkProfile === undefined && currentConfiguration?.networkConfigured === true
 	const resumeAvailable = configurationAvailable && pendingNetworkProfile === undefined && configurationConnected && currentConfiguration?.networkConfigured === true
@@ -300,13 +327,6 @@ function pauseButtonAction(snapshot: Snapshot) {
 function consensusStatusText(consensus: { reasons: readonly string[]; reliable: boolean } | undefined, reliableLabel: string) {
 	if (consensus === undefined) return undefined
 	return consensus.reliable ? reliableLabel : consensus.reasons.join(' · ')
-}
-
-function poolStatusText(pool: { approvedUniverse: boolean; centralizedPriceAllowed: boolean; selected: boolean; systemState: string }) {
-	if (!pool.approvedUniverse) return 'Universe not approved'
-	if (pool.systemState !== '0') return 'Pool inactive'
-	if (!pool.centralizedPriceAllowed) return 'Market consensus guard'
-	return pool.selected ? 'Eligible' : ''
 }
 
 function activityBadgeClass(status: string) {
@@ -581,43 +601,9 @@ function renderUniverses(snapshot: Snapshot, disabled?: boolean) {
 	})
 }
 
-function cell(...children: (Node | string)[]) {
-	const value = document.createElement('td')
-	for (const child of children) {
-		value.append(typeof child === 'string' ? document.createTextNode(child) : child)
-	}
-	return value
-}
-
-function stacked(primary: string, secondary: string) {
-	const fragment = document.createDocumentFragment()
-	const strong = document.createElement('strong')
-	strong.textContent = primary
-	const small = document.createElement('small')
-	small.textContent = secondary
-	fragment.append(strong, small)
-	return fragment
-}
-
 function actionStatus(element: HTMLElement, message: string, failed = false) {
 	if (element.textContent !== message) element.textContent = message
 	if (element.classList.contains('error') !== failed) element.classList.toggle('error', failed)
-}
-
-function publicFailure(error: unknown, message: string, includeDetail = false) {
-	if (includeDetail && error instanceof Error) {
-		const detail = error.message.trim()
-		if (detail !== '' && detail !== message && !/^Request failed with HTTP \d+$/.test(detail) && !/(?:https?:\/\/[^\s/:]+:[^@\s]+@|authorization|bearer|password|secret|token\s*[=:])/i.test(detail)) return detail
-	}
-	return message
-}
-
-function botVaultState(vault: Vault) {
-	const health = vault.healthBps === undefined ? undefined : BigInt(vault.healthBps)
-	if (vault.vaultRepBacking === '0' && vault.openInterestDisplay === '0') return 'Inactive'
-	if (health === undefined) return 'No open interest'
-	if (health < 10_000n) return `Top-up required · ${health.toString()} bps`
-	return `Healthy · ${health.toString()} bps`
 }
 
 function renderPools(snapshot: Snapshot) {
@@ -633,7 +619,7 @@ function renderPools(snapshot: Snapshot) {
 	const visible = snapshot.pools.filter(pool => filter === '' || pool.address.toLowerCase().includes(filter) || pool.questionId.toLowerCase().includes(filter))
 	if (visible.length === 0) {
 		const row = document.createElement('tr')
-		const empty = cell(snapshot.pools.length === 0 ? 'No configured pools are available.' : 'No pools match this filter.')
+		const empty = cell(snapshot.pools.length === 0 ? 'No supported pools yet. Choose a pool from All pools below.' : 'No pools match this filter.')
 		empty.colSpan = 7
 		empty.className = 'empty'
 		row.append(empty)
@@ -648,7 +634,7 @@ function renderPools(snapshot: Snapshot) {
 			checkbox.dataset['recordKey'] = `pool:${pool.address.toLowerCase()}`
 			checkbox.checked = selectedPools.has(pool.address.toLowerCase())
 			checkbox.setAttribute('aria-label', `Select pool ${pool.address}`)
-			checkbox.disabled = pendingNetworkProfile !== undefined || currentConfiguration?.networkConfigured !== true || !stateConnected
+			checkbox.disabled = pendingPoolMutations > 0 || pendingNetworkProfile !== undefined || currentConfiguration?.networkConfigured !== true || !stateConnected
 			const toggle = document.createElement('label')
 			toggle.className = 'pool-toggle'
 			const toggleText = document.createElement('span')
@@ -670,6 +656,7 @@ function renderPools(snapshot: Snapshot) {
 					return
 				}
 				pendingPoolMutations += 1
+				updatePoolBrowser()
 				for (const control of poolRows.querySelectorAll<HTMLInputElement>('input')) control.disabled = true
 				poolActionStates.set(pool.address.toLowerCase(), { failed: false, message: 'Saving…' })
 				actionStatus(poolStatus, 'Saving…')
@@ -688,6 +675,7 @@ function renderPools(snapshot: Snapshot) {
 					actionStatus(poolStatus, message, true)
 				} finally {
 					pendingPoolMutations -= 1
+					updatePoolBrowser()
 					if (currentSnapshot !== undefined) renderPools(currentSnapshot)
 				}
 			})
@@ -718,7 +706,7 @@ function renderPools(snapshot: Snapshot) {
 				cell(stacked(botVaultState(pool.botVault), `${pool.botVault.vaultRepBacking} REP backing · ${pool.botVault.capacityOwnershipRep} REP capacity ownership · ${pool.botVault.openInterestDisplay} ETH open interest · ${pool.botVault.claimableFeesEth} ETH fees`)),
 				cell(stacked(pool.candidateCount.toString(), pool.bestCandidateBonusValueEth === undefined ? 'No executable target' : `${pool.bestCandidateBonusValueEth} ETH best bonus`)),
 			]
-			const labels = ['Selected', 'Pool', 'Question', 'Oracle', 'Pool totals', 'Bot vault', 'Targets']
+			const labels = ['Supported', 'Pool', 'Question', 'Oracle', 'Pool totals', 'Bot vault', 'Targets']
 			const headings = ['pool-selected-heading', 'pool-address-heading', 'pool-question-heading', 'pool-oracle-heading', 'pool-totals-heading', 'pool-vault-heading', 'pool-targets-heading']
 			for (const [index, value] of cells.entries()) {
 				value.dataset['label'] = labels[index]

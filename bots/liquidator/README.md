@@ -158,9 +158,14 @@ The universe browser walks Zoltar's deployed child-universe tree from universe
 zero, including deployed universes that do not have a security pool yet. The
 pool table is bounded to the chain profile's `selectedPools`, the direct child
 deployments of those pools, and deployed pools resolved from `desiredPools`; the
-bot does not enumerate unrelated factory deployments. To monitor an existing pool
-by address, add it to `selectedPools` in the paused chain profile. For an existing
-or undeployed origin pool, you can instead add its universe, question, multiplier,
+monitor does not scan unrelated pools for vaults or liquidation candidates. On the
+**Pool work** page, **All pools** automatically browses the active chain's factory
+registry in pages of 12, including pools you have not selected. Cards show the
+question, universe, security multiplier, current pool-held REP, and vault count.
+Use **Add to supported** to save a pool to the chain profile's `selectedPools`, or
+**Remove from supported** to remove it. This does not approve its universe or
+change execution mode. A pool with unavailable metrics remains visible. Use
+**Retry** if discovery fails. For an existing or undeployed origin pool, you can instead add its universe, question, multiplier,
 and priority-fee tuple to `desiredPools` in **Market and pool configuration**. The
 bot resolves the canonical factory address and selects it when present; when
 `allowAutomaticPoolCreation` is enabled, it deploys a missing desired pool before

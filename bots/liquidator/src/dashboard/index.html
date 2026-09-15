@@ -41,7 +41,8 @@
 				<div class="section-heading">
 					<div>
 						<p class="eyebrow">Current work</p>
-						<h2 id="pools-title">Security pools</h2>
+						<h2 id="pools-title">Monitored pools</h2>
+						<a href="#pool-browser">Browse all pools</a>
 					</div>
 					<label class="search">
 						<span>Filter pools</span>
@@ -53,7 +54,7 @@
 					<table>
 						<thead>
 							<tr>
-								<th id="pool-selected-heading" scope="col">Selected</th>
+								<th id="pool-selected-heading" scope="col">Supported</th>
 								<th id="pool-address-heading" scope="col">Pool</th>
 								<th id="pool-question-heading" scope="col">Question</th>
 								<th id="pool-oracle-heading" scope="col">Oracle</th>
@@ -70,6 +71,8 @@
 					</table>
 				</div>
 			</section>
+
+			<section id="pool-browser" data-page-content="pools" aria-label="All pools"></section>
 
 			<section id="markets" data-page-content="markets" aria-labelledby="centralized-markets-title">
 				<div class="section-heading">

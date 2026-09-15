@@ -646,3 +646,48 @@ describe('liquidator dashboard server', () => {
 		expect((await fetch(`http://127.0.0.1:${server.port}`)).status).toBe(200)
 	})
 })
+
+test('bounds factory browsing, gates network setup, sanitizes failures, and protects support mutations', async () => {
+	let configured = false
+	let fail = false
+	const pages: number[] = []
+	const selections: unknown[] = []
+	const server = startDashboardServer(0, {
+		getConfiguration: () => ({}),
+		getState: () => ({}),
+		hostname: '127.0.0.1',
+		isNetworkConfigured: () => configured,
+		getPoolCatalog: async page => {
+			pages.push(page)
+			if (fail) throw new Error('RPC secret at /protected/path')
+			return { chainId: 1, page, pageCount: '0', total: '0', block: '42', pools: [] }
+		},
+		setSupportedPool: value => {
+			selections.push(value)
+			return {}
+		},
+		setApprovedUniverses: () => ({}),
+		setPaused: () => ({}),
+		setSelectedPools: () => ({}),
+		setSigner: () => ({}),
+		setStrategy: () => ({}),
+	})
+	servers.push(server)
+	const catalog = new URL('/api/pool-catalog', server.url)
+	expect((await fetch(catalog)).status).toBe(400)
+	expect(pages).toEqual([])
+	configured = true
+	expect((await fetch(new URL('/api/pool-catalog?page=-1', server.url))).status).toBe(400)
+	expect((await fetch(new URL('/api/pool-catalog?page=9007199254740992', server.url))).status).toBe(400)
+	expect(await (await fetch(catalog)).json()).toMatchObject({ total: '0', pools: [] })
+	fail = true
+	const failed = await fetch(catalog)
+	expect(failed.status).toBe(503)
+	expect(await failed.text()).not.toContain('secret')
+	const request = { address: '0x1111111111111111111111111111111111111111', chainId: 1, supported: true }
+	const mutation = new URL('/api/supported-pool', server.url)
+	expect((await fetch(mutation, { method: 'PUT', body: JSON.stringify(request), headers: { origin: 'https://foreign.example', 'content-type': 'application/json' } })).status).toBe(403)
+	expect(selections).toEqual([])
+	expect((await fetch(mutation, { method: 'PUT', body: JSON.stringify(request), headers: { origin: server.url.origin, 'content-type': 'application/json' } })).status).toBe(200)
+	expect(selections).toEqual([request])
+})
