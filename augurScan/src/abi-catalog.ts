@@ -39,6 +39,7 @@ const kindToContractName: Readonly<Record<string, string>> = {
 }
 
 const externalAbis: Readonly<Record<string, Abi>> = {
+	delegationManager: parseAbi(['function redeemDelegations(bytes[] _permissionContexts,bytes32[] _modes,bytes[] _executionCallDatas)']),
 	uniswapV2Factory: parseAbi(['event PairCreated(address indexed token0,address indexed token1,address pair,uint256 pairIndex)']),
 	uniswapV2Pair: parseAbi(['event Sync(uint112 reserve0,uint112 reserve1)']),
 	uniswapV3Factory: parseAbi(['event PoolCreated(address indexed token0,address indexed token1,uint24 indexed fee,int24 tickSpacing,address pool)']),

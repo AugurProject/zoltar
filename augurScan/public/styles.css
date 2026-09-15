@@ -1805,6 +1805,7 @@ dialog::backdrop {
 }
 .arguments {
 	width: 100%;
+	table-layout: fixed;
 	border-collapse: collapse;
 	font:
 		0.8125rem / 1.4 ui-monospace,
@@ -1823,10 +1824,14 @@ dialog::backdrop {
 	font-size: 0.8125rem;
 	text-transform: uppercase;
 }
+.arguments th:first-child,
+.arguments th:nth-child(2) {
+	width: 24%;
+}
 .arguments td:first-child {
 	min-width: 6rem;
 	color: var(--cyan);
-	overflow-wrap: normal;
+	overflow-wrap: anywhere;
 	word-break: normal;
 }
 .decoded-value {
