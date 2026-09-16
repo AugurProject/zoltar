@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { spawnSync } from 'node:child_process'
+import { existsSync } from 'node:fs'
 import { access, readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { taskProjects } from '../repo/projects.ts'
@@ -8,6 +9,9 @@ import { repositoryRoot } from '../repo/root.mts'
 import { dockerGlobalArguments, dockerInstructions, parseDockerfile } from '../testing/packaging-parsers.ts'
 
 const activeCiWorkflowPath = join(repositoryRoot, '.github', 'workflows/ci.yml')
+// Validate the pending CI update until it is moved into GitHub's workflow directory.
+const pendingCiWorkflowPath = join(repositoryRoot, 'workflow/ci.yml')
+const knipCiWorkflowPath = existsSync(pendingCiWorkflowPath) ? pendingCiWorkflowPath : activeCiWorkflowPath
 const browserWorkflowPath = join(repositoryRoot, '.github', 'workflows/browser-workflow.yml')
 const activeCoverageWorkflowPath = join(repositoryRoot, '.github', 'workflows/coverage.yml')
 const coverageWorkflowPath = activeCoverageWorkflowPath
@@ -225,7 +229,7 @@ describe('split UI workflow paths', () => {
 	})
 
 	test('required gates reject failures, cancellations, and unexpected skips for every selected route', async () => {
-		const ciJobs = workflowJobs(await readWorkflow(activeCiWorkflowPath))
+		const ciJobs = workflowJobs(await readWorkflow(knipCiWorkflowPath))
 		const required = requireRecord(ciJobs['required'], 'required CI gate')
 		expect(required['needs']).toEqual(expect.arrayContaining(['domain-tests', 'infrastructure-checks', 'prepare', 'checks', 'knip', 'audit']))
 		const gate = workflowSteps(required)[0]
@@ -432,7 +436,7 @@ describe('split UI workflow paths', () => {
 	})
 
 	test('dead-code CI installs every bot workspace before analyzing it', async () => {
-		const workflow = await readWorkflow(activeCiWorkflowPath)
+		const workflow = await readWorkflow(knipCiWorkflowPath)
 		const job = requireRecord(workflowJobs(workflow)['knip'], 'Knip job')
 		expect(job['if']).toBeUndefined()
 		expect(job['continue-on-error']).toBeUndefined()
