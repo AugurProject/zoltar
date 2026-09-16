@@ -1,3 +1,4 @@
+import { decodeSnapshot } from '../../src/dashboard/api-validation.ts'
 import { afterEach, describe, expect, test } from 'bun:test'
 import { startDashboardServer } from '../../src/dashboard/dashboard-server.ts'
 import { EndpointCheckFailure } from '@zoltar/bot-shared/monitoring/connectivity'
@@ -28,6 +29,8 @@ describe('liquidator dashboard server', () => {
 				],
 				alerts: [{ internalPath: protectedPath, message: 'Execution is paused', severity: 'warning' }],
 				execute: true,
+				network: 'mainnet',
+				operatorCapable: false,
 				deploymentMissingName: 'Zoltar',
 				deploymentCheckedBlock: '12345679',
 				deploymentCheckedTimestamp: '1786924812',
@@ -136,6 +139,7 @@ describe('liquidator dashboard server', () => {
 		const snapshot: unknown = JSON.parse(body)
 		if (typeof snapshot !== 'object' || snapshot === null || Array.isArray(snapshot)) throw new Error('Expected public dashboard snapshot')
 		expect(response.status).toBe(200)
+		expect(() => decodeSnapshot(snapshot)).not.toThrow()
 		expect(body).not.toContain(calldataMarker)
 		expect(body).not.toContain(protectedPath)
 		expect(body).not.toContain(rpcSecret)
@@ -179,6 +183,7 @@ describe('liquidator dashboard server', () => {
 				systemState: '0',
 				totalCapacityOwnershipRep: '12',
 				totalPoolHeldRep: '13',
+				universeId: '14',
 			},
 		])
 	})

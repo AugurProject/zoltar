@@ -1,4 +1,5 @@
 {
+	"extends": "../shared/tsconfig.strict.json",
 	"compilerOptions": {
 		"target": "ESNext",
 		"module": "ES2022",
@@ -8,17 +9,6 @@
 		"declaration": true,
 		"declarationMap": true,
 		"skipLibCheck": true,
-		"strict": true,
-		"allowUnusedLabels": false,
-		"allowUnreachableCode": false,
-		"exactOptionalPropertyTypes": true,
-		"noFallthroughCasesInSwitch": true,
-		"noImplicitOverride": true,
-		"noImplicitReturns": true,
-		"noPropertyAccessFromIndexSignature": true,
-		"noUncheckedIndexedAccess": true,
-		"noUnusedLocals": true,
-		"noUnusedParameters": true,
 		"jsx": "react-jsx",
 		"jsxImportSource": "preact",
 		"lib": ["ESNext", "DOM"],
