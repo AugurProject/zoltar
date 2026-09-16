@@ -870,7 +870,8 @@ body[data-page="pools"] #network-badge::before {
 	min-width: 0;
 }
 
-.catalog-pagination[hidden] {
+.catalog-pagination[hidden],
+.catalog-snapshot[hidden] {
 	display: none;
 }
 

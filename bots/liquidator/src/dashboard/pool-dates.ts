@@ -1,7 +1,7 @@
 import { h, render } from 'preact'
 import { TimestampValue } from '@zoltar/ui-core-shared/components/TimestampValue.js'
 
-/** @internal Exported for timestamp validation tests. */
+/** Parse timestamps supported by the shared date component. */
 export function poolDateTimestamp(timestamp: string | undefined) {
 	if (timestamp === undefined || !/^\d+$/.test(timestamp)) return undefined
 	const seconds = BigInt(timestamp)
@@ -9,7 +9,7 @@ export function poolDateTimestamp(timestamp: string | undefined) {
 }
 
 export function renderPoolDate(root: HTMLElement, timestamp: string | undefined, currentTimestamp: bigint) {
-	render(h(TimestampValue, { timestamp: poolDateTimestamp(timestamp), currentTimestamp, undefinedText: 'Unavailable' }), root)
+	render(h(TimestampValue, { timestamp: poolDateTimestamp(timestamp), currentTimestamp, undefinedText: '—' }), root)
 }
 
 export function clearPoolDate(root: HTMLElement) {

@@ -1,4 +1,4 @@
-import { clearPoolDate, renderPoolDate } from './pool-dates.ts'
+import { clearPoolDate, poolDateTimestamp, renderPoolDate } from './pool-dates.ts'
 import { botVaultState, poolStatusText, publicFailure, type MonitoredPool } from './pool-presentation.ts'
 import { getAddress } from '@zoltar/bot-shared/ethereum'
 import { requestWithTimeout } from '@zoltar/bot-shared/dashboard/polling'
@@ -113,7 +113,9 @@ export function createPoolBrowser(root: HTMLElement, save: (address: string, sup
 	function render() {
 		const key = JSON.stringify([context.chainId, context.enabled, [...context.selected], [...context.approved], data, scope, context.monitored, page, loading, saving, error, search.value, searchError])
 		const currentTimestamp = BigInt(Math.floor(Date.now() / 1000))
-		renderPoolDate(snapshotDate, data?.snapshotTimestamp, currentTimestamp)
+		snapshot.hidden = poolDateTimestamp(data?.snapshotTimestamp) === undefined
+		if (snapshot.hidden) clearPoolDate(snapshotDate)
+		else renderPoolDate(snapshotDate, data?.snapshotTimestamp, currentTimestamp)
 		if (key === renderedKey) {
 			for (const field of dateFields) renderPoolDate(field.root, field.timestamp, currentTimestamp)
 			return
@@ -194,7 +196,7 @@ export function createPoolBrowser(root: HTMLElement, save: (address: string, sup
 				const badges = node('div', '', 'catalog-badges')
 				badges.append(node('span', supported ? 'Supported' : 'Not supported', `badge ${supported ? 'ok' : ''}`))
 				const operationalStatus = currentMetrics?.systemState === '0' ? 'Operational' : 'Inactive'
-				badges.append(node('span', currentMetrics === undefined ? 'Metrics unavailable' : operationalStatus, 'badge'))
+				if (currentMetrics !== undefined) badges.append(node('span', operationalStatus, 'badge'))
 				badges.append(node('span', context.approved.has(pool.universeId) ? 'Universe approved' : 'Universe approval required', `badge ${context.approved.has(pool.universeId) ? 'ok' : 'warning'}`))
 				const metrics = node('dl', '', 'catalog-metrics')
 				const multiplier = BigInt(pool.multiplierBps)
@@ -223,7 +225,17 @@ export function createPoolBrowser(root: HTMLElement, save: (address: string, sup
 					dates.append(field)
 				}
 				const address = node('code', pool.address, 'catalog-address')
-				card.append(header, badges, dates, metrics, address)
+				card.append(header, badges)
+				const unavailable = []
+				if (poolDateTimestamp(pool.deploymentDate) === undefined) unavailable.push('deployment date')
+				if (poolDateTimestamp(pool.questionDates?.startTime) === undefined || poolDateTimestamp(pool.questionDates?.endTime) === undefined) unavailable.push('question dates')
+				if (currentMetrics === undefined) unavailable.push('metrics')
+				if (data !== undefined && unavailable.length > 0) {
+					const warning = node('p', `Some pool data is unavailable: ${unavailable.join(', ')}.`, 'notice warning')
+					warning.setAttribute('role', 'status')
+					card.append(warning)
+				}
+				card.append(dates, metrics, address)
 				if (pool.parent !== undefined && BigInt(pool.parent) !== 0n) card.append(node('p', `Parent ${pool.parent}`, 'catalog-address muted'))
 				if (monitored !== undefined) {
 					const details = node('details', '', 'catalog-monitoring')
@@ -282,7 +294,7 @@ export function createPoolBrowser(root: HTMLElement, save: (address: string, sup
 			data = result
 		} catch (cause) {
 			if (requestEpoch === epoch) {
-				error = publicFailure(cause, 'Pool discovery failed. Check RPC connectivity and retry.')
+				error = publicFailure(cause, data === undefined ? 'Pool discovery failed. Catalog snapshot unavailable. Check RPC connectivity and retry.' : 'Pool discovery failed. Check RPC connectivity and retry.')
 			}
 		} finally {
 			if (requestEpoch === epoch) {
