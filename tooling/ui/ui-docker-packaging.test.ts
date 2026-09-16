@@ -15,6 +15,26 @@ const rootPackage = join(repositoryRoot, 'package.json')
 const staticServer = join(repositoryRoot, 'tooling', 'ui', 'dockerServe.mts')
 
 describe('UI Docker packaging', () => {
+	test('copies feature stylesheets before each dependent production build', async () => {
+		const copiesByStage = new Map<string, string[]>()
+		for (const stage of parseDockerfile(await readFile(dockerfile, 'utf8'))) {
+			const copies = [...(copiesByStage.get(stage.base) ?? [])]
+			if (stage.name !== undefined) copiesByStage.set(stage.name, copies)
+			for (const instruction of stage.instructions) {
+				if (instruction.keyword === 'COPY') copies.push(instruction.value)
+				if (instruction.keyword !== 'RUN') continue
+				const app = /production\.mts (zoltar|statoblast|trading)/u.exec(instruction.value)?.[1]
+				if (app === undefined) continue
+				const packages = app === 'trading' ? ['trading'] : ['zoltarShared']
+				if (app === 'statoblast') packages.push('statoblastShared')
+				for (const sharedPackage of packages) {
+					expect(copies).toContain(`./ui/${sharedPackage}/css/ /source/ui/${sharedPackage}/css/`)
+					expect(await Bun.file(join(repositoryRoot, 'ui', sharedPackage, 'css', app === 'trading' ? 'app.css' : 'index.css')).exists()).toBe(true)
+				}
+			}
+		}
+	})
+
 	test('copies inherited shared TypeScript configuration before every shared build', async () => {
 		const stageFiles = new Map<string, Map<string, string>>()
 		for (const stage of parseDockerfile(await readFile(dockerfile, 'utf8'))) {

@@ -62,6 +62,7 @@ RUN cd /source/ui/coreShared && bun x tsc --project tsconfig.json
 
 # Build reusable shared libraries before any dependency-leaf application.
 COPY ./ui/zoltarShared/tsconfig.json /source/ui/zoltarShared/tsconfig.json
+COPY ./ui/zoltarShared/css/ /source/ui/zoltarShared/css/
 COPY ./ui/zoltarShared/ts/ /source/ui/zoltarShared/ts/
 RUN cd /source/ui/zoltarShared && bun run build
 # Build Zoltar from only its inward dependencies.
@@ -97,6 +98,7 @@ COPY ./shared/statoblast/ts/ /source/shared/statoblast/ts/
 COPY ./solidity/contracts/statoblast/ /source/solidity/contracts/statoblast/
 RUN bun ./tooling/repo/build-shared.mts statoblast && bun ./tooling/contracts/build-app-contracts.mts statoblast
 COPY ./ui/statoblastShared/tsconfig.json /source/ui/statoblastShared/tsconfig.json
+COPY ./ui/statoblastShared/css/ /source/ui/statoblastShared/css/
 COPY ./ui/statoblastShared/ts/ /source/ui/statoblastShared/ts/
 RUN cd /source/ui/statoblastShared && bun run build
 
