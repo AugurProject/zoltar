@@ -1,3 +1,5 @@
+import { isSnapshot } from './snapshot-validation.ts'
+import { decodeSettings, decodeSubmission, decodeDeployment, decodeConnectivity, decodePrediction, decodeExecutorDeployment, isStrategySettings, isSubmissionSettings, isDeploymentSettings, isStringArray, type DashboardDeployment } from './api-validation.ts'
 import { createUniverseExplorer } from '@zoltar/bot-shared/dashboard/universe-explorer'
 let approvedUniverseIds = new Set<string>()
 let universeSavePending = false
@@ -35,7 +37,6 @@ import {
 	venueLabel,
 } from './dashboard-format.js'
 import type { SubmissionSettings } from '#execution/transaction-submission'
-import type { DeploymentSettings } from '#config/deployment-settings'
 
 const SVG_NAMESPACE = 'http://www.w3.org/2000/svg'
 let latestSnapshot: PublicOperatorSnapshot | undefined
@@ -60,10 +61,12 @@ let signerFeedback: { error: boolean; message: string } | undefined
 let signerRequestPending = false
 let pauseRequestPending: 'pause' | 'resume' | undefined
 
-function element<T extends HTMLElement>(id: string) {
+function element(id: string): HTMLElement
+function element<T extends HTMLElement>(id: string, constructor: { new (): T }): T
+function element(id: string, constructor: { new (): HTMLElement } = HTMLElement) {
 	const found = document.getElementById(id)
-	if (!(found instanceof HTMLElement)) throw new Error(`Missing dashboard element: ${id}`)
-	return found as T
+	if (!(found instanceof constructor)) throw new Error(`Missing dashboard element: ${id}`)
+	return found
 }
 
 function setText(id: string, value: string) {
@@ -88,12 +91,12 @@ function setControlsEnabled(enabled: boolean) {
 		paused: latestSnapshot?.paused === true,
 		snapshotAvailable: latestSnapshot !== undefined,
 	})
-	const pauseButton = element<HTMLButtonElement>('pause-button')
+	const pauseButton = element('pause-button', HTMLButtonElement)
 	pauseButton.disabled = pauseRequestPending !== undefined || pauseControls.pauseDisabled
 	pauseButton.textContent = pauseButtonLabel(pauseRequestPending === 'pause', latestSnapshot?.paused === true)
 	if (pauseRequestPending === 'pause') pauseButton.setAttribute('aria-busy', 'true')
 	else pauseButton.removeAttribute('aria-busy')
-	const confirmResume = element<HTMLButtonElement>('confirm-resume')
+	const confirmResume = element('confirm-resume', HTMLButtonElement)
 	confirmResume.disabled = pauseRequestPending !== undefined || pauseControls.confirmDisabled
 	confirmResume.textContent = pauseRequestPending === 'resume' ? 'Resuming…' : 'Resume bot'
 	if (pauseRequestPending === 'resume') confirmResume.setAttribute('aria-busy', 'true')
@@ -113,7 +116,7 @@ function setControlsEnabled(enabled: boolean) {
 		else if (id === 'tokens-fieldset') fieldset.disabled = !focusedSettingsEnabled || !tokensLoaded || universeSavePending
 		else fieldset.disabled = !focusedSettingsEnabled
 	}
-	element<HTMLSelectElement>('network-name').disabled = !enabled || pendingNetworkProfile !== undefined || persistedNetwork === undefined
+	element('network-name', HTMLSelectElement).disabled = !enabled || pendingNetworkProfile !== undefined || persistedNetwork === undefined
 	updateConfigurationControls()
 }
 
@@ -121,8 +124,8 @@ function updateConfigurationControls() {
 	const fieldset = element('configuration-fieldset')
 	if (!(fieldset instanceof HTMLFieldSetElement)) throw new Error('Missing configuration fieldset')
 	fieldset.disabled = !connected || pendingNetworkProfile !== undefined || !configurationLoaded || latestSnapshot?.networkConfigured !== true || configurationLoading
-	element<HTMLButtonElement>('reload-configuration-button').disabled = !connected || (pendingNetworkProfile !== undefined && !profileSwitchTimedOut) || configurationLoading
-	const profileRetry = element<HTMLButtonElement>('profile-switch-retry-button')
+	element('reload-configuration-button', HTMLButtonElement).disabled = !connected || (pendingNetworkProfile !== undefined && !profileSwitchTimedOut) || configurationLoading
+	const profileRetry = element('profile-switch-retry-button', HTMLButtonElement)
 	profileRetry.hidden = !profileSwitchTimedOut
 	profileRetry.disabled = !connected || configurationLoading
 	element('profile-switch-retry-actions').hidden = !profileSwitchTimedOut
@@ -130,7 +133,7 @@ function updateConfigurationControls() {
 
 function updateSettingsLoadState() {
 	const container = element('settings-load-state')
-	const retry = element<HTMLButtonElement>('retry-settings-button')
+	const retry = element('retry-settings-button', HTMLButtonElement)
 	if (configurationLoading) {
 		container.hidden = false
 		setText('settings-load-status', 'Loading operator configuration…')
@@ -167,23 +170,23 @@ function synchronizePersistedConnectivity(configuration: unknown) {
 	if (selectedNetwork !== 'mainnet' && selectedNetwork !== 'sepolia') throw new Error('Bot returned an invalid active chain profile')
 	const rpcQuorum = typeof configuration === 'object' && configuration !== null && !Array.isArray(configuration) ? Reflect.get(configuration, 'rpcQuorum') : undefined
 	if (rpcQuorum !== 1 && rpcQuorum !== 2) throw new Error('Bot returned an invalid RPC quorum setting')
-	element<HTMLSelectElement>('rpc-quorum').value = rpcQuorum.toString()
+	element('rpc-quorum', HTMLSelectElement).value = rpcQuorum.toString()
 	const focused = persistedConnectivity(configuration)
 	if (focused === undefined) {
-		element<HTMLInputElement>('read-rpc-url').value = ''
-		element<HTMLTextAreaElement>('public-rpc-urls').value = ''
+		element('read-rpc-url', HTMLInputElement).value = ''
+		element('public-rpc-urls', HTMLTextAreaElement).value = ''
 		persistedNetwork = selectedNetwork
-		element<HTMLSelectElement>('network-name').value = selectedNetwork
+		element('network-name', HTMLSelectElement).value = selectedNetwork
 		const networkLabel = selectedNetwork === 'mainnet' ? 'Ethereum mainnet' : 'Sepolia'
 		setText('settings-chain-scope', `Editing the ${networkLabel} profile. Every setting and durable journal is retained only for this chain; selecting another chain loads its separate profile.`)
-		element<HTMLSelectElement>('network-name').disabled = false
+		element('network-name', HTMLSelectElement).disabled = false
 		connectivityLoaded = true
 		updateNetworkTargetStatus()
 		return
 	}
 	loadConnectivity(focused.connectivity)
-	element<HTMLSelectElement>('network-name').value = focused.network
-	element<HTMLSelectElement>('network-name').disabled = false
+	element('network-name', HTMLSelectElement).value = focused.network
+	element('network-name', HTMLSelectElement).disabled = false
 	persistedNetwork = focused.network
 	const networkLabel = focused.network === 'mainnet' ? 'Ethereum mainnet' : 'Sepolia'
 	setText('settings-chain-scope', `Editing the ${networkLabel} profile. Every setting and durable journal is retained only for this chain; selecting another chain loads its separate profile.`)
@@ -196,25 +199,25 @@ function shorten(value: string, leading = 8, trailing = 6) {
 }
 
 function optionalInput(id: string) {
-	const value = element<HTMLInputElement>(id).value.trim()
+	const value = element(id, HTMLInputElement).value.trim()
 	return value === '' ? undefined : value
 }
 
 function lines(id: string) {
-	return urlLines(element<HTMLTextAreaElement>(id).value)
+	return urlLines(element(id, HTMLTextAreaElement).value)
 }
 
-function loadDeployment(deployment: Omit<DeploymentSettings, 'openOracle' | 'rep' | 'weth'>) {
-	element<HTMLInputElement>('deployment-executor').value = deployment.executor ?? ''
-	element<HTMLInputElement>('deployment-v3-factory').value = deployment.uniswapFactory
-	element<HTMLInputElement>('deployment-v3-quoter').value = deployment.uniswapQuoter
-	element<HTMLInputElement>('deployment-v3-router').value = deployment.uniswapRouter ?? ''
-	element<HTMLInputElement>('deployment-v2-router').value = deployment.uniswapV2Router ?? ''
-	element<HTMLInputElement>('deployment-v4-pool-manager').value = deployment.uniswapV4PoolManager ?? ''
-	element<HTMLInputElement>('deployment-v4-quoter').value = deployment.uniswapV4Quoter ?? ''
-	element<HTMLTextAreaElement>('deployment-coordinators').value = deployment.coordinatorAddresses.join('\n')
-	element<HTMLTextAreaElement>('deployment-quorum-rpcs').value = deployment.quorumRpcUrls.join('\n')
-	element<HTMLTextAreaElement>('deployment-manifest').value = deployment.deploymentManifest === undefined ? '' : JSON.stringify(deployment.deploymentManifest, undefined, 2)
+function loadDeployment(deployment: DashboardDeployment) {
+	element('deployment-executor', HTMLInputElement).value = deployment.executor ?? ''
+	element('deployment-v3-factory', HTMLInputElement).value = deployment.uniswapFactory
+	element('deployment-v3-quoter', HTMLInputElement).value = deployment.uniswapQuoter
+	element('deployment-v3-router', HTMLInputElement).value = deployment.uniswapRouter ?? ''
+	element('deployment-v2-router', HTMLInputElement).value = deployment.uniswapV2Router ?? ''
+	element('deployment-v4-pool-manager', HTMLInputElement).value = deployment.uniswapV4PoolManager ?? ''
+	element('deployment-v4-quoter', HTMLInputElement).value = deployment.uniswapV4Quoter ?? ''
+	element('deployment-coordinators', HTMLTextAreaElement).value = deployment.coordinatorAddresses.join('\n')
+	element('deployment-quorum-rpcs', HTMLTextAreaElement).value = deployment.quorumRpcUrls.join('\n')
+	element('deployment-manifest', HTMLTextAreaElement).value = deployment.deploymentManifest === undefined ? '' : JSON.stringify(deployment.deploymentManifest, undefined, 2)
 }
 
 function amount(value: string | undefined, symbol: string) {
@@ -222,10 +225,6 @@ function amount(value: string | undefined, symbol: string) {
 	const numeric = Number(value)
 	if (!Number.isFinite(numeric)) return `${value} ${symbol}`
 	return `${new Intl.NumberFormat('en-US', { maximumFractionDigits: 6 }).format(numeric)} ${symbol}`
-}
-
-function isSnapshot(value: unknown): value is PublicOperatorSnapshot {
-	return typeof value === 'object' && value !== null && 'status' in value && 'submission' in value && 'opportunities' in value && 'executionHistory' in value && 'positions' in value && 'transactionActivity' in value
 }
 
 function isConfigurationEnvelope(value: unknown): value is { configuration: unknown; revision: string } {
@@ -259,12 +258,12 @@ async function loadCompleteConfiguration() {
 	setControlsEnabled(connected)
 	setText('configuration-status', 'Loading complete configuration…')
 	try {
-		const envelope = await requestWithTimeout(signal => api<unknown>('/api/configuration', { signal }), CONFIGURATION_REQUEST_TIMEOUT_MS, 'Configuration request timed out.')
+		const envelope = await requestWithTimeout(signal => api('/api/configuration', { signal }), CONFIGURATION_REQUEST_TIMEOUT_MS, 'Configuration request timed out.')
 		if (requestEpoch !== profileRequestEpoch) return
 		if (!isConfigurationEnvelope(envelope)) throw new Error('Bot returned an invalid configuration document')
 		const network = configurationNetwork(envelope.configuration)
 		if (pendingNetworkProfile !== undefined && network !== pendingNetworkProfile) return
-		element<HTMLTextAreaElement>('configuration-json').value = prettyJson(envelope.configuration)
+		element('configuration-json', HTMLTextAreaElement).value = prettyJson(envelope.configuration)
 		synchronizeFocusedConfiguration(envelope.configuration)
 		configurationRevision = envelope.revision
 		configurationLoaded = true
@@ -305,14 +304,14 @@ async function waitForNetworkProfile(network: 'mainnet' | 'sepolia') {
 	updateConfigurationControls()
 }
 
-async function api<T>(path: string, init?: RequestInit) {
+async function api(path: string, init?: RequestInit) {
 	const response = await fetch(path, init)
 	const value: unknown = await response.json()
 	if (!response.ok) {
 		if (typeof value === 'object' && value !== null && 'error' in value && typeof value.error === 'string') throw new Error(value.error)
 		throw new Error(`Request failed with status ${response.status.toString()}`)
 	}
-	return value as T
+	return value
 }
 
 function row(cells: readonly (HTMLElement | string)[], labels?: readonly string[]) {
@@ -389,7 +388,7 @@ function renderBalances(snapshot: PublicOperatorSnapshot) {
 }
 
 function renderOpportunities(opportunities: readonly OpportunitySnapshot[]) {
-	const body = element<HTMLTableSectionElement>('opportunities-body')
+	const body = element('opportunities-body', HTMLTableSectionElement)
 	body.replaceChildren()
 	for (const opportunity of opportunities) {
 		body.append(
@@ -417,7 +416,7 @@ function renderOpportunities(opportunities: readonly OpportunitySnapshot[]) {
 }
 
 function renderHistory(history: readonly PublicExecutionRecord[], recordCount: number) {
-	const body = element<HTMLTableSectionElement>('history-body')
+	const body = element('history-body', HTMLTableSectionElement)
 	body.replaceChildren()
 	for (const record of history) {
 		body.append(
@@ -441,7 +440,7 @@ function renderHistory(history: readonly PublicExecutionRecord[], recordCount: n
 }
 
 function renderPositions(positions: readonly PublicPositionRecord[], recordCount: number) {
-	const body = element<HTMLTableSectionElement>('positions-body')
+	const body = element('positions-body', HTMLTableSectionElement)
 	body.replaceChildren()
 	for (const position of positions) {
 		const manuallyReconciled = position.manuallyReconciled
@@ -553,50 +552,15 @@ function loadSettings(settings: StrategySettings) {
 }
 
 function loadSubmission(submission: SubmissionSettings) {
-	const mode = element<HTMLSelectElement>('submission-mode')
+	const mode = element('submission-mode', HTMLSelectElement)
 	mode.value = submission.mode
-	element<HTMLTextAreaElement>('relay-urls').value = submission.relayUrls.join('\n')
-	element<HTMLInputElement>('minimum-bundle-relay-successes').value = submission.minimumBundleRelaySuccesses.toString()
+	element('relay-urls', HTMLTextAreaElement).value = submission.relayUrls.join('\n')
+	element('minimum-bundle-relay-successes', HTMLInputElement).value = submission.minimumBundleRelaySuccesses.toString()
 }
 
 function loadConnectivity(connectivity: ConnectivitySettings) {
-	element<HTMLInputElement>('read-rpc-url').value = connectivity.readRpcUrl
-	element<HTMLTextAreaElement>('public-rpc-urls').value = connectivity.publicRpcUrls.join('\n')
-}
-
-function isStringArray(value: unknown): value is string[] {
-	return Array.isArray(value) && value.every(item => typeof item === 'string')
-}
-
-function isStrategySettings(value: unknown): value is StrategySettings {
-	if (typeof value !== 'object' || value === null || Array.isArray(value)) return false
-	return (
-		typeof Reflect.get(value, 'maxSpotTwapTicks') === 'string' &&
-		typeof Reflect.get(value, 'minimumProfitBps') === 'string' &&
-		typeof Reflect.get(value, 'minimumProfitWeth') === 'string' &&
-		typeof Reflect.get(value, 'minimumRemainingBlocks') === 'string' &&
-		typeof Reflect.get(value, 'minimumRemainingSeconds') === 'string' &&
-		typeof Reflect.get(value, 'pollMilliseconds') === 'number' &&
-		typeof Reflect.get(value, 'twapSeconds') === 'number'
-	)
-}
-
-function isSubmissionSettings(value: unknown): value is SubmissionSettings {
-	if (typeof value !== 'object' || value === null || Array.isArray(value)) return false
-	const mode = Reflect.get(value, 'mode')
-	return (mode === 'private' || mode === 'public') && typeof Reflect.get(value, 'minimumBundleRelaySuccesses') === 'number' && isStringArray(Reflect.get(value, 'relayUrls'))
-}
-
-function isDeploymentSettings(value: unknown): value is Omit<DeploymentSettings, 'openOracle' | 'rep' | 'weth'> {
-	if (typeof value !== 'object' || value === null || Array.isArray(value)) return false
-	for (const key of ['uniswapFactory', 'uniswapQuoter']) {
-		if (typeof Reflect.get(value, key) !== 'string') return false
-	}
-	for (const key of ['executor', 'uniswapRouter', 'uniswapV2Router', 'uniswapV4PoolManager', 'uniswapV4Quoter']) {
-		const candidate = Reflect.get(value, key)
-		if (candidate !== undefined && candidate !== null && typeof candidate !== 'string') return false
-	}
-	return isStringArray(Reflect.get(value, 'coordinatorAddresses')) && isStringArray(Reflect.get(value, 'quorumRpcUrls'))
+	element('read-rpc-url', HTMLInputElement).value = connectivity.readRpcUrl
+	element('public-rpc-urls', HTMLTextAreaElement).value = connectivity.publicRpcUrls.join('\n')
 }
 
 function synchronizeFocusedConfiguration(configuration: unknown) {
@@ -645,7 +609,7 @@ function renderEndpointChecks(snapshot: PublicOperatorSnapshot) {
 
 function renderOperations(operations: readonly PublicOperationEntry[]) {
 	const visibleOperations = operations.filter(operation => operation.category !== 'scan')
-	const body = element<HTMLTableSectionElement>('operations-body')
+	const body = element('operations-body', HTMLTableSectionElement)
 	body.replaceChildren()
 	for (const operation of visibleOperations) {
 		const level = document.createElement('span')
@@ -666,9 +630,9 @@ function renderTokenMarkets(snapshot: PublicOperatorSnapshot) {
 		},
 		savedMessage: '',
 	})
-	universeExplorer.update({ universes: snapshot.universes ?? [], approved: approvedUniverseIds, network: snapshot.network, disabled: element<HTMLFieldSetElement>('tokens-fieldset').disabled })
+	universeExplorer.update({ universes: snapshot.universes ?? [], approved: approvedUniverseIds, network: snapshot.network, disabled: element('tokens-fieldset', HTMLFieldSetElement).disabled })
 
-	const body = element<HTMLTableSectionElement>('token-markets-body')
+	const body = element('token-markets-body', HTMLTableSectionElement)
 	body.replaceChildren()
 	const executableTokens = new Set(snapshot.tokenAddresses.map(address => address.toLowerCase()))
 	for (const token of snapshot.tokenMarkets) {
@@ -703,7 +667,7 @@ function renderTokenMarkets(snapshot: PublicOperatorSnapshot) {
 }
 
 function renderCentralizedMarket(snapshot: PublicOperatorSnapshot) {
-	const body = element<HTMLTableSectionElement>('centralized-market-body')
+	const body = element('centralized-market-body', HTMLTableSectionElement)
 	body.replaceChildren()
 	const market = snapshot.centralizedMarket
 	const consensus = snapshot.marketConsensus
@@ -783,7 +747,7 @@ function chartPrice(value: number) {
 }
 
 function renderMarketPriceChart(snapshot: PublicOperatorSnapshot) {
-	const selector = element<HTMLSelectElement>('price-token')
+	const selector = element('price-token', HTMLSelectElement)
 	const selected = selector.value
 	const tokens = [...new Map(snapshot.priceHistory.map(point => [point.token.toLowerCase(), { address: point.token, symbol: point.symbol }])).values()]
 	selector.replaceChildren(...tokens.map(token => new Option(`${token.symbol} · ${shorten(token.address)}`, token.address)))
@@ -910,8 +874,8 @@ function renderMarketPriceChart(snapshot: PublicOperatorSnapshot) {
 }
 
 function renderSignerStatus(snapshot: PublicOperatorSnapshot) {
-	const privateKeyInput = element<HTMLInputElement>('private-key')
-	const rememberSignerInput = element<HTMLInputElement>('remember-signer')
+	const privateKeyInput = element('private-key', HTMLInputElement)
+	const rememberSignerInput = element('remember-signer', HTMLInputElement)
 	const signerStatus = element('signer-status')
 	if (signerFeedback !== undefined) {
 		signerStatus.textContent = signerFeedback.message
@@ -937,9 +901,9 @@ function renderSignerStatus(snapshot: PublicOperatorSnapshot) {
 	})
 	privateKeyInput.disabled = controls.inputDisabled
 	rememberSignerInput.disabled = controls.inputDisabled
-	element<HTMLButtonElement>('clear-signer-button').disabled = controls.clearDisabled
-	element<HTMLButtonElement>('forget-signer-button').disabled = signerRequestPending || snapshot.savedWallet === undefined
-	element<HTMLButtonElement>('set-signer-button').disabled = controls.setDisabled
+	element('clear-signer-button', HTMLButtonElement).disabled = controls.clearDisabled
+	element('forget-signer-button', HTMLButtonElement).disabled = signerRequestPending || snapshot.savedWallet === undefined
+	element('set-signer-button', HTMLButtonElement).disabled = controls.setDisabled
 }
 
 function renderBlockStatus(snapshot = latestSnapshot) {
@@ -948,7 +912,7 @@ function renderBlockStatus(snapshot = latestSnapshot) {
 }
 
 function renderTransactions(transactions: readonly PublicTransactionActivity[]) {
-	const body = element<HTMLTableSectionElement>('transactions-body')
+	const body = element('transactions-body', HTMLTableSectionElement)
 	body.replaceChildren()
 	for (const transaction of transactions) {
 		const accepted = transaction.acceptedTargets.map(target => `accepted: ${target}`)
@@ -1031,7 +995,7 @@ function render(snapshot: PublicOperatorSnapshot) {
 	const networkSetupCount = snapshot.networkConfigured ? 0 : 1
 	const detailedAttentionCount = networkSetupCount + recoveryCount + uncertainTransactionCount + (snapshot.lastError === undefined ? 0 : 1)
 	const attentionCount = Math.max(snapshot.operatorCapable ? 0 : 1, detailedAttentionCount)
-	const attentionBadge = element<HTMLAnchorElement>('attention-badge')
+	const attentionBadge = element('attention-badge', HTMLAnchorElement)
 	setAttentionBadge(attentionBadge, attentionCount, attentionTarget(networkSetupCount, recoveryCount, uncertainTransactionCount))
 	setText('status-value', statusLabels.status)
 	setText('last-poll-value', snapshot.lastPollAt === undefined ? 'No poll completed' : `Updated ${new Date(snapshot.lastPollAt).toLocaleTimeString()}`)
@@ -1119,7 +1083,7 @@ function clearPollRetry() {
 const refresh = singleFlight(async () => {
 	const requestEpoch = profileRequestEpoch
 	try {
-		const value: unknown = await requestWithTimeout(signal => api<unknown>('/api/state', { signal }), STATE_REQUEST_TIMEOUT_MS)
+		const value: unknown = await requestWithTimeout(signal => api('/api/state', { signal }), STATE_REQUEST_TIMEOUT_MS)
 		if (requestEpoch !== profileRequestEpoch) return
 		if (!isSnapshot(value)) throw new Error('Bot returned an invalid state snapshot')
 		if (pendingNetworkProfile !== undefined && value.network !== pendingNetworkProfile) return
@@ -1139,7 +1103,7 @@ const refresh = singleFlight(async () => {
 		const runStatusBadge = element('run-status-badge')
 		runStatusBadge.dataset['status'] = 'disconnected'
 		renderDisconnectedHeader({
-			attentionBadge: element<HTMLAnchorElement>('attention-badge'),
+			attentionBadge: element('attention-badge', HTMLAnchorElement),
 			attentionTarget: '/overview#notice',
 			capabilityBadge: element('capability-badge'),
 			capabilityBadgeClassName: 'badge badge-warning',
@@ -1166,7 +1130,7 @@ const refresh = singleFlight(async () => {
 })
 
 element('reload-configuration-button').addEventListener('click', () => void loadCompleteConfiguration())
-element<HTMLButtonElement>('profile-switch-retry-button').addEventListener('click', async event => {
+element('profile-switch-retry-button', HTMLButtonElement).addEventListener('click', async event => {
 	const button = event.currentTarget
 	if (!(button instanceof HTMLButtonElement) || pendingNetworkProfile === undefined || !profileSwitchTimedOut || button.disabled) return
 	button.disabled = true
@@ -1182,7 +1146,7 @@ element<HTMLButtonElement>('profile-switch-retry-button').addEventListener('clic
 	}
 })
 
-element<HTMLSelectElement>('network-name').addEventListener('change', async event => {
+element('network-name', HTMLSelectElement).addEventListener('change', async event => {
 	const select = event.currentTarget
 	if (!(select instanceof HTMLSelectElement) || pendingNetworkProfile !== undefined || (select.value !== 'mainnet' && select.value !== 'sepolia') || select.value === persistedNetwork) return
 	const previousNetwork = persistedNetwork
@@ -1217,22 +1181,22 @@ element<HTMLSelectElement>('network-name').addEventListener('change', async even
 	}
 })
 element('retry-settings-button').addEventListener('click', () => void loadCompleteConfiguration())
-element<HTMLFormElement>('configuration-form').addEventListener('submit', async event => {
+element('configuration-form', HTMLFormElement).addEventListener('submit', async event => {
 	event.preventDefault()
-	const button = element<HTMLFormElement>('configuration-form').querySelector('button[type="submit"]')
+	const button = element('configuration-form', HTMLFormElement).querySelector('button[type="submit"]')
 	if (!(button instanceof HTMLButtonElement)) return
 	button.disabled = true
 	setText('configuration-status', 'Validating complete configuration…')
 	try {
-		const value: unknown = JSON.parse(element<HTMLTextAreaElement>('configuration-json').value)
+		const value: unknown = JSON.parse(element('configuration-json', HTMLTextAreaElement).value)
 		if (configurationRevision === undefined) throw new Error('Reload the configuration before saving')
-		const response = await api<unknown>('/api/configuration', {
+		const response = await api('/api/configuration', {
 			body: prettyJson({ configuration: value, revision: configurationRevision }),
 			headers: { 'content-type': 'application/json' },
 			method: 'PUT',
 		})
 		if (!isConfigurationEnvelope(response)) throw new Error('Bot returned an invalid configuration document')
-		element<HTMLTextAreaElement>('configuration-json').value = prettyJson(response.configuration)
+		element('configuration-json', HTMLTextAreaElement).value = prettyJson(response.configuration)
 		synchronizeFocusedConfiguration(response.configuration)
 		configurationRevision = response.revision
 		setText('configuration-status', 'Complete configuration saved. Changes apply at the next scan boundary.')
@@ -1242,7 +1206,7 @@ element<HTMLFormElement>('configuration-form').addEventListener('submit', async 
 		button.disabled = !connected
 	}
 })
-element<HTMLSelectElement>('price-token').addEventListener('change', () => {
+element('price-token', HTMLSelectElement).addEventListener('change', () => {
 	if (latestSnapshot !== undefined) renderMarketPriceChart(latestSnapshot)
 })
 element('tokens-form').addEventListener('submit', async event => {
@@ -1250,7 +1214,7 @@ element('tokens-form').addEventListener('submit', async event => {
 	const requestEpoch = profileRequestEpoch
 	universeSavePending = true
 	setControlsEnabled(connected)
-	const button = element<HTMLFormElement>('tokens-form').querySelector<HTMLButtonElement>('button[type="submit"]')
+	const button = element('tokens-form', HTMLFormElement).querySelector<HTMLButtonElement>('button[type="submit"]')
 	if (button === null) throw new Error('Universe approval submit button is missing')
 	button.disabled = true
 	setText('tokens-status', 'Saving universe approvals…')
@@ -1333,9 +1297,9 @@ element('confirm-resume').addEventListener('click', () => {
 const dashboardPaths = new Set(['/overview', '/operations', '/games', '/markets', '/settings'])
 const { scrollToSection, syncSectionNavigation } = createSectionNavigation(link => dashboardPaths.has(new URL(link.href).pathname))
 
-element<HTMLFormElement>('strategy-form').addEventListener('submit', async event => {
+element('strategy-form', HTMLFormElement).addEventListener('submit', async event => {
 	event.preventDefault()
-	const button = element<HTMLFormElement>('strategy-form').querySelector('button[type="submit"]')
+	const button = element('strategy-form', HTMLFormElement).querySelector('button[type="submit"]')
 	if (!(button instanceof HTMLButtonElement)) return
 	button.disabled = true
 	setText('form-status', 'Applying strategy…')
@@ -1349,11 +1313,13 @@ element<HTMLFormElement>('strategy-form').addEventListener('submit', async event
 			pollMilliseconds: Number(input('pollMilliseconds').value),
 			twapSeconds: Number(input('twapSeconds').value),
 		} satisfies StrategySettings
-		const response = await api<{ settings: StrategySettings }>('/api/settings', {
-			body: JSON.stringify(settings),
-			headers: { 'content-type': 'application/json' },
-			method: 'PUT',
-		})
+		const response = decodeSettings(
+			await api('/api/settings', {
+				body: JSON.stringify(settings),
+				headers: { 'content-type': 'application/json' },
+				method: 'PUT',
+			}),
+		)
 		loadSettings(response.settings)
 		setText('form-status', 'Strategy saved. Applies to the next scan.')
 		await refresh()
@@ -1365,23 +1331,25 @@ element<HTMLFormElement>('strategy-form').addEventListener('submit', async event
 	}
 })
 
-element<HTMLFormElement>('submission-form').addEventListener('submit', async event => {
+element('submission-form', HTMLFormElement).addEventListener('submit', async event => {
 	event.preventDefault()
-	const button = element<HTMLFormElement>('submission-form').querySelector('button[type="submit"]')
+	const button = element('submission-form', HTMLFormElement).querySelector('button[type="submit"]')
 	if (!(button instanceof HTMLButtonElement)) return
 	button.disabled = true
 	setText('submission-status', 'Applying submission settings…')
 	try {
 		const submission = {
-			minimumBundleRelaySuccesses: Number(element<HTMLInputElement>('minimum-bundle-relay-successes').value),
-			mode: element<HTMLSelectElement>('submission-mode').value,
-			relayUrls: urlLines(element<HTMLTextAreaElement>('relay-urls').value),
+			minimumBundleRelaySuccesses: Number(element('minimum-bundle-relay-successes', HTMLInputElement).value),
+			mode: element('submission-mode', HTMLSelectElement).value,
+			relayUrls: urlLines(element('relay-urls', HTMLTextAreaElement).value),
 		}
-		const response = await api<{ submission: SubmissionSettings }>('/api/submission', {
-			body: JSON.stringify(submission),
-			headers: { 'content-type': 'application/json' },
-			method: 'PUT',
-		})
+		const response = decodeSubmission(
+			await api('/api/submission', {
+				body: JSON.stringify(submission),
+				headers: { 'content-type': 'application/json' },
+				method: 'PUT',
+			}),
+		)
 		loadSubmission(response.submission)
 		setText('submission-status', 'Submission settings saved. Applies to the next scan.')
 		await refresh()
@@ -1393,11 +1361,11 @@ element<HTMLFormElement>('submission-form').addEventListener('submit', async eve
 	}
 })
 
-element<HTMLFormElement>('connectivity-form').addEventListener('submit', async event => {
+element('connectivity-form', HTMLFormElement).addEventListener('submit', async event => {
 	event.preventDefault()
 	if (connectivityRequestPending) return
-	const fieldset = element<HTMLFieldSetElement>('connectivity-fieldset')
-	const networkSelect = element<HTMLSelectElement>('network-name')
+	const fieldset = element('connectivity-fieldset', HTMLFieldSetElement)
+	const networkSelect = element('network-name', HTMLSelectElement)
 	const selectedNetwork = networkSelect.value
 	const selectedNetworkLabel = networkSelect.selectedOptions.item(0)?.textContent?.trim() ?? 'the selected chain'
 	connectivityRequestPending = true
@@ -1405,22 +1373,24 @@ element<HTMLFormElement>('connectivity-form').addEventListener('submit', async e
 	setText('connectivity-status', `Checking every endpoint for ${selectedNetworkLabel}…`)
 	try {
 		const connectivity = {
-			publicRpcUrls: urlLines(element<HTMLTextAreaElement>('public-rpc-urls').value),
-			readRpcUrl: element<HTMLInputElement>('read-rpc-url').value.trim(),
+			publicRpcUrls: urlLines(element('public-rpc-urls', HTMLTextAreaElement).value),
+			readRpcUrl: element('read-rpc-url', HTMLInputElement).value.trim(),
 		}
-		const rpcQuorum = Number(element<HTMLSelectElement>('rpc-quorum').value)
-		const response = await api<{ connectivity: ConnectivitySettings; network: 'mainnet' | 'sepolia'; rpcQuorum: 1 | 2 }>('/api/connectivity', {
-			body: JSON.stringify({ connectivity, network: selectedNetwork, rpcQuorum }),
-			headers: { 'content-type': 'application/json' },
-			method: 'PUT',
-		})
+		const rpcQuorum = Number(element('rpc-quorum', HTMLSelectElement).value)
+		const response = decodeConnectivity(
+			await api('/api/connectivity', {
+				body: JSON.stringify({ connectivity, network: selectedNetwork, rpcQuorum }),
+				headers: { 'content-type': 'application/json' },
+				method: 'PUT',
+			}),
+		)
 		loadConnectivity(response.connectivity)
-		element<HTMLSelectElement>('network-name').value = response.network
-		element<HTMLSelectElement>('network-name').disabled = false
+		element('network-name', HTMLSelectElement).value = response.network
+		element('network-name', HTMLSelectElement).disabled = false
 		persistedNetwork = response.network
 		const networkLabel = response.network === 'mainnet' ? 'Ethereum mainnet' : 'Sepolia'
 		setText('settings-chain-scope', `Editing the ${networkLabel} profile. Every setting and durable journal is retained only for this chain; selecting another chain loads its separate profile.`)
-		element<HTMLSelectElement>('rpc-quorum').value = response.rpcQuorum.toString()
+		element('rpc-quorum', HTMLSelectElement).value = response.rpcQuorum.toString()
 		updateNetworkTargetStatus()
 		setText('connectivity-status', 'Chain and RPCs passed validation, were saved, and apply to the next scan.')
 		await refresh()
@@ -1433,31 +1403,33 @@ element<HTMLFormElement>('connectivity-form').addEventListener('submit', async e
 	}
 })
 
-element<HTMLFormElement>('deployment-form').addEventListener('submit', async event => {
+element('deployment-form', HTMLFormElement).addEventListener('submit', async event => {
 	event.preventDefault()
-	const button = element<HTMLFormElement>('deployment-form').querySelector('button[type="submit"]')
+	const button = element('deployment-form', HTMLFormElement).querySelector('button[type="submit"]')
 	if (!(button instanceof HTMLButtonElement)) return
 	button.disabled = true
 	setText('deployment-status', 'Validating deployment configuration…')
 	try {
-		const manifestText = element<HTMLTextAreaElement>('deployment-manifest').value.trim()
+		const manifestText = element('deployment-manifest', HTMLTextAreaElement).value.trim()
 		const deployment = {
 			coordinatorAddresses: lines('deployment-coordinators'),
 			deploymentManifest: manifestText === '' ? undefined : JSON.parse(manifestText),
 			executor: optionalInput('deployment-executor'),
 			quorumRpcUrls: lines('deployment-quorum-rpcs'),
-			uniswapFactory: element<HTMLInputElement>('deployment-v3-factory').value.trim(),
-			uniswapQuoter: element<HTMLInputElement>('deployment-v3-quoter').value.trim(),
+			uniswapFactory: element('deployment-v3-factory', HTMLInputElement).value.trim(),
+			uniswapQuoter: element('deployment-v3-quoter', HTMLInputElement).value.trim(),
 			uniswapRouter: optionalInput('deployment-v3-router'),
 			uniswapV2Router: optionalInput('deployment-v2-router'),
 			uniswapV4PoolManager: optionalInput('deployment-v4-pool-manager'),
 			uniswapV4Quoter: optionalInput('deployment-v4-quoter'),
 		}
-		const response = await api<{ deployment: DeploymentSettings }>('/api/deployment', {
-			body: JSON.stringify(deployment),
-			headers: { 'content-type': 'application/json' },
-			method: 'PUT',
-		})
+		const response = decodeDeployment(
+			await api('/api/deployment', {
+				body: JSON.stringify(deployment),
+				headers: { 'content-type': 'application/json' },
+				method: 'PUT',
+			}),
+		)
 		loadDeployment(response.deployment)
 		setText('deployment-status', 'Deployment configuration saved. Protocol identities and quorum RPCs apply at the next scan boundary.')
 	} catch (error) {
@@ -1467,30 +1439,34 @@ element<HTMLFormElement>('deployment-form').addEventListener('submit', async eve
 	}
 })
 
-element<HTMLFormElement>('create2-form').addEventListener('submit', async event => {
+element('create2-form', HTMLFormElement).addEventListener('submit', async event => {
 	event.preventDefault()
-	const button = element<HTMLButtonElement>('deploy-executor-button')
-	const salt = element<HTMLInputElement>('create2-salt').value.trim()
+	const button = element('deploy-executor-button', HTMLButtonElement)
+	const salt = element('create2-salt', HTMLInputElement).value.trim()
 	button.disabled = true
 	setText('create2-status', 'Calculating the CREATE2 address…')
 	try {
-		const prediction = await api<{ address: string }>('/api/executor-prediction', {
-			body: JSON.stringify({ salt }),
-			headers: { 'content-type': 'application/json' },
-			method: 'POST',
-		})
+		const prediction = decodePrediction(
+			await api('/api/executor-prediction', {
+				body: JSON.stringify({ salt }),
+				headers: { 'content-type': 'application/json' },
+				method: 'POST',
+			}),
+		)
 		if (!window.confirm(`Deploy the executor at predictable address ${prediction.address} with the active local signer?`)) {
 			setText('create2-status', `Deployment cancelled. Predicted executor address: ${prediction.address}.`)
 			return
 		}
 		setText('create2-status', `Checking the canonical CREATE2 proxy before deploying ${prediction.address}…`)
-		const result = await api<{ address: string; alreadyDeployed: boolean; transactionHash: string | undefined }>('/api/executor-deployment', {
-			body: JSON.stringify({ salt }),
-			headers: { 'content-type': 'application/json' },
-			method: 'POST',
-		})
-		element<HTMLInputElement>('deployment-executor').value = result.address
-		element<HTMLTextAreaElement>('deployment-manifest').value = ''
+		const result = decodeExecutorDeployment(
+			await api('/api/executor-deployment', {
+				body: JSON.stringify({ salt }),
+				headers: { 'content-type': 'application/json' },
+				method: 'POST',
+			}),
+		)
+		element('deployment-executor', HTMLInputElement).value = result.address
+		element('deployment-manifest', HTMLTextAreaElement).value = ''
 		setText('create2-status', result.alreadyDeployed ? `Verified existing executor at ${result.address}; replace the cleared execution manifest.` : `Deployed ${result.address} in transaction ${result.transactionHash ?? 'unknown'}; replace the cleared execution manifest.`)
 		await refresh()
 	} catch (error) {
@@ -1502,18 +1478,18 @@ element<HTMLFormElement>('create2-form').addEventListener('submit', async event 
 
 async function updateSigner(privateKey: string | undefined, rememberSigner: boolean) {
 	if (signerRequestPending) return
-	const input = element<HTMLInputElement>('private-key')
+	const input = element('private-key', HTMLInputElement)
 	signerRequestPending = true
 	signerFeedback = { error: false, message: privateKey === undefined ? 'Clearing signer…' : 'Validating signer…' }
 	if (latestSnapshot !== undefined) renderSignerStatus(latestSnapshot)
 	try {
-		await api<{ wallet: string | undefined }>('/api/signer', {
+		await api('/api/signer', {
 			body: JSON.stringify({ privateKey: privateKey ?? null, rememberSigner }),
 			headers: { 'content-type': 'application/json' },
 			method: 'PUT',
 		})
 		input.value = ''
-		element<HTMLInputElement>('remember-signer').checked = false
+		element('remember-signer', HTMLInputElement).checked = false
 		signerFeedback = undefined
 	} catch (error) {
 		input.value = ''
@@ -1524,11 +1500,11 @@ async function updateSigner(privateKey: string | undefined, rememberSigner: bool
 	}
 }
 
-element<HTMLFormElement>('signer-form').addEventListener('submit', event => {
+element('signer-form', HTMLFormElement).addEventListener('submit', event => {
 	event.preventDefault()
 	try {
-		const privateKey = requiredSignerPrivateKey(element<HTMLInputElement>('private-key').value)
-		void updateSigner(privateKey, element<HTMLInputElement>('remember-signer').checked)
+		const privateKey = requiredSignerPrivateKey(element('private-key', HTMLInputElement).value)
+		void updateSigner(privateKey, element('remember-signer', HTMLInputElement).checked)
 	} catch (error) {
 		signerFeedback = { error: true, message: error instanceof Error ? error.message : String(error) }
 		if (latestSnapshot !== undefined) renderSignerStatus(latestSnapshot)
@@ -1541,7 +1517,7 @@ element('forget-signer-button').addEventListener('click', async () => {
 	signerFeedback = { error: false, message: 'Removing the saved key…' }
 	if (latestSnapshot !== undefined) renderSignerStatus(latestSnapshot)
 	try {
-		await api<{ wallet: string | undefined }>('/api/signer', {
+		await api('/api/signer', {
 			body: JSON.stringify({ forgetSavedSigner: true }),
 			headers: { 'content-type': 'application/json' },
 			method: 'PUT',
@@ -1554,7 +1530,7 @@ element('forget-signer-button').addEventListener('click', async () => {
 		await refresh()
 	}
 })
-element<HTMLInputElement>('private-key').addEventListener('input', () => {
+element('private-key', HTMLInputElement).addEventListener('input', () => {
 	if (signerRequestPending) return
 	signerFeedback = undefined
 	if (latestSnapshot !== undefined) renderSignerStatus(latestSnapshot)

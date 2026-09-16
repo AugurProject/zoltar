@@ -191,6 +191,7 @@ const server = startDashboardServer(4183, {
 		return currentConfiguration()
 	},
 	getState: () => ({
+		operatorCapable: false,
 		activities,
 		alerts: [
 			{ message: '1 transaction intent requires recovery before execution can continue', severity: 'error' },
