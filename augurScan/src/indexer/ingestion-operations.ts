@@ -1,3 +1,4 @@
+import { dependencyDiscoveryKinds } from '../contract-discovery.ts'
 import type { IndexedBlock, RichListBalance, StoredTransaction } from '../database.ts'
 import { readRichListBalance } from '../direct-observations.ts'
 import { type Address, getAddress, type Hash, type Log, type BlockTransaction, type TransactionReceipt, zeroAddress } from '../ethereum.ts'
@@ -96,7 +97,7 @@ export async function indexBlock(
 			if (!contracts.has(registry.toLowerCase())) {
 				const metadata: ContractMetadata = {
 					address: registry,
-					kind: 'liquidationApprovalRegistry',
+					kind: dependencyDiscoveryKinds.liquidationApprovalRegistry,
 					label: 'Liquidation Approval Registry',
 					provenance: `${coordinator.label}.liquidationApprovalRegistry`,
 					discoveryBlock: number,
@@ -115,6 +116,7 @@ export async function indexBlock(
 	}
 
 	const labels = labelsFrom(contracts)
+	const contractKinds = new Map([...contracts].map(([address, contract]) => [address, contract.kind] as const))
 	const tokenMetadata = new Map(currentTokenMetadata)
 	const tokenCandidates = new Set<Address>()
 	for (const metadata of tokenMetadata.values()) if (metadata.decimals === undefined) tokenCandidates.add(metadata.address)
@@ -133,9 +135,8 @@ export async function indexBlock(
 		const pair = transactionByHash.get(hash)
 		if (pair?.transaction.to === null || pair?.transaction.to === undefined) continue
 		const contract = contracts.get(pair.transaction.to.toLowerCase())
-		if (contract === undefined) continue
-		const decoded = decodeAction(contract, pair.transaction.input, labels)
-		for (const candidate of tokenAddressesFrom(contract.kind, decoded, contract.address)) tokenCandidates.add(candidate)
+		const decoded = decodeAction(contract, pair.transaction.input, labels, tokenMetadata, contractKinds)
+		for (const candidate of tokenAddressesFrom(contract?.kind, decoded, pair.transaction.to, contractKinds)) tokenCandidates.add(candidate)
 	}
 	const readTokenMetadata = await mapLimit(
 		[...tokenCandidates].filter(candidate => tokenMetadataNeedsRead(tokenMetadata.get(candidate.toLowerCase()), number, this.stateStartBlock)),
@@ -145,7 +146,6 @@ export async function indexBlock(
 	if (readTokenMetadata.some(metadata => metadata.readError === prunedTokenMetadataError)) await this.discoverStateStartBlock(observedHead, number, true)
 	for (const metadata of readTokenMetadata) tokenMetadata.set(metadata.address.toLowerCase(), metadata)
 	const displayLabels = new Map(labels)
-	const contractKinds = new Map([...contracts].map(([address, contract]) => [address, contract.kind] as const))
 	const displayContext = { nativeSymbol: this.network.nativeSymbol }
 	for (const metadata of tokenMetadata.values()) {
 		const label = metadata.name ?? metadata.symbol
