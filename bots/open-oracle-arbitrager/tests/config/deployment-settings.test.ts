@@ -1,10 +1,10 @@
 import mainnet from '../../../../docs/mainnet-deployment-addresses.json'
 import sepolia from '../../../../docs/sepolia-deployment-addresses.json'
-import { canonicalCoreDeployment } from '@zoltar/bot-shared/config/canonical-deployment'
+import { canonicalCoreDeployment, canonicalUniswapDeployment } from '@zoltar/bot-shared/config/canonical-deployment'
 import example from '../../config/operator.example.json'
 import { expect, test } from 'bun:test'
 import { assertFocusedDeploymentCompatible, prepareDeploymentTokenTransition, validateDeploymentSettings } from '#config/deployment-settings'
-import { getAddress, type Address } from '@zoltar/bot-shared/ethereum'
+import { type Address } from '@zoltar/bot-shared/ethereum'
 
 const address = (digit: string) => `0x${digit.repeat(40)}` as Address
 
@@ -71,35 +71,63 @@ for (const network of ['mainnet', 'sepolia'] as const) {
 	})
 }
 
-test('selects Sepolia Uniswap deployments when loading the mainnet example', () => {
-	const parsed = validateDeploymentSettings(example.deployment, 'sepolia')
-	expect(parsed.uniswapFactory).toBe('0xEf09Be426F8d6D2786cADEA7D3A8b0D09cEB79B4')
-	expect(parsed.uniswapQuoter).toBe('0x6Aa53e5023fFDa81f7EEE31bdA5D35437A5DD841')
-	expect(parsed.uniswapRouter).toBe('0xC0a0e58Ae39603398D474BFd49d2904dE1464C99')
-	expect(parsed.uniswapV2Router).toBeUndefined()
+for (const network of ['mainnet', 'sepolia'] as const) {
+	test(`derives every ${network} Uniswap address regardless of supplied address values`, () => {
+		const defaults = canonicalUniswapDeployment(network === 'mainnet' ? 1 : 11155111)
+		for (const supplied of [undefined, '', 'invalid', address('3'), '0x0227628f3F023bb0B980b67D528571c95c6DaC1c']) {
+			const settings = validateDeploymentSettings(
+				{
+					coordinatorAddresses: [],
+					quorumRpcUrls: [],
+					uniswapV2Enabled: true,
+					uniswapV3Enabled: true,
+					uniswapV4Enabled: true,
+					uniswapFactory: supplied,
+					uniswapQuoter: supplied,
+					uniswapRouter: supplied,
+					uniswapV2Router: supplied,
+					uniswapV4PoolManager: supplied,
+					uniswapV4Quoter: supplied,
+				},
+				network,
+			)
+			expect(settings).toMatchObject({ uniswapFactory: defaults.factory, uniswapQuoter: defaults.quoter, uniswapRouter: defaults.router, uniswapV2Router: defaults.v2Router })
+			expect(settings.uniswapV4PoolManager).toBeDefined()
+			expect(settings.uniswapV4Quoter).toBeDefined()
+		}
+	})
+}
+
+test('restores all enabled venues through a serialized network round trip', () => {
+	const mainnet = validateDeploymentSettings({ coordinatorAddresses: [], quorumRpcUrls: [], uniswapV2Enabled: true, uniswapV3Enabled: true, uniswapV4Enabled: true }, 'mainnet')
+	const sepolia = validateDeploymentSettings(JSON.parse(JSON.stringify(mainnet)), 'sepolia')
+	expect(sepolia.uniswapV2Router).toBeUndefined()
+	expect(sepolia).toMatchObject({ uniswapV2Enabled: true, uniswapV3Enabled: true, uniswapV4Enabled: true })
+	expect(validateDeploymentSettings(JSON.parse(JSON.stringify(sepolia)), 'mainnet')).toEqual(mainnet)
 })
 
-test('preserves custom Uniswap deployments on either chain', () => {
-	for (const network of ['mainnet', 'sepolia'] as const) {
-		const overrides = { uniswapFactory: address('3'), uniswapQuoter: address('4'), uniswapRouter: address('5'), uniswapV2Router: address('6') }
-		expect(validateDeploymentSettings({ ...example.deployment, ...overrides }, network)).toMatchObject(overrides)
+test('keeps disabled optional venues disabled across networks', () => {
+	const original = { coordinatorAddresses: [], quorumRpcUrls: [], uniswapV2Enabled: false, uniswapV3Enabled: true, uniswapV4Enabled: false }
+	const mainnet = validateDeploymentSettings(original, 'mainnet')
+	const sepolia = validateDeploymentSettings(JSON.parse(JSON.stringify(mainnet)), 'sepolia')
+	const restored = validateDeploymentSettings(JSON.parse(JSON.stringify(sepolia)), 'mainnet')
+	for (const settings of [mainnet, sepolia, restored]) {
+		expect(settings.uniswapV2Router).toBeUndefined()
+		expect(settings.uniswapV4PoolManager).toBeUndefined()
+		expect(settings.uniswapV4Quoter).toBeUndefined()
+	}
+	expect(restored).toEqual(mainnet)
+})
+
+test('rejects invalid venue switches', () => {
+	for (const field of ['uniswapV2Enabled', 'uniswapV4Enabled']) {
+		for (const value of ['true', 1, null]) expect(() => validateDeploymentSettings({ ...example.deployment, [field]: value })).toThrow('boolean')
 	}
 })
-test('restores mainnet defaults when loading a Sepolia profile and supports omitted defaults', () => {
-	const sepolia = validateDeploymentSettings(example.deployment, 'sepolia')
-	const mainnet = validateDeploymentSettings(sepolia, 'mainnet')
-	expect(mainnet.uniswapFactory).toBe(getAddress(example.deployment.uniswapFactory))
-	expect(mainnet.uniswapQuoter).toBe(getAddress(example.deployment.uniswapQuoter))
-	expect(mainnet.uniswapRouter).toBe(getAddress(example.deployment.uniswapRouter))
-	const minimal = validateDeploymentSettings({ coordinatorAddresses: [], quorumRpcUrls: [] }, 'sepolia')
-	expect(minimal.uniswapFactory).toBe(sepolia.uniswapFactory)
-	expect(minimal.uniswapQuoter).toBe(sepolia.uniswapQuoter)
-	expect(minimal.uniswapRouter).toBeUndefined()
-	expect(minimal.uniswapV2Router).toBeUndefined()
-})
 
-test('replaces the previous upstream Sepolia defaults with the testnet deployment', () => {
-	const settings = validateDeploymentSettings({ ...example.deployment, uniswapFactory: '0x0227628f3F023bb0B980b67D528571c95c6DaC1c', uniswapQuoter: '0xEd1f6473345F45b75F8179591dd5bA1888cf2FB3' }, 'sepolia')
-	expect(settings.uniswapFactory).toBe('0xEf09Be426F8d6D2786cADEA7D3A8b0D09cEB79B4')
-	expect(settings.uniswapQuoter).toBe('0x6Aa53e5023fFDa81f7EEE31bdA5D35437A5DD841')
+test('can disable V3 independently while keeping V4 enabled', () => {
+	const settings = validateDeploymentSettings({ coordinatorAddresses: [], quorumRpcUrls: [], uniswapV2Enabled: false, uniswapV3Enabled: false, uniswapV4Enabled: true }, 'sepolia')
+	expect(settings.uniswapRouter).toBeUndefined()
+	expect(settings.uniswapV4PoolManager).toBeDefined()
+	expect(validateDeploymentSettings(JSON.parse(JSON.stringify(settings)), 'mainnet').uniswapRouter).toBeUndefined()
 })

@@ -1,18 +1,13 @@
 import type { StrategySettings } from '#state/operator-state'
 import type { SubmissionSettings } from '#execution/transaction-submission'
 import type { ConnectivitySettings } from '#monitoring/connectivity'
-import { array, booleanValue, decode, numberValue, object, oneOf, optional, stringValue } from '@zoltar/bot-shared/dashboard/response-validation'
+import { array, booleanValue, decode, numberValue, object, oneOf, optional, stringValue, unknownValue } from '@zoltar/bot-shared/dashboard/response-validation'
 
 export type DashboardDeployment = {
-	coordinatorAddresses: readonly string[]
 	quorumRpcUrls: readonly string[]
-	uniswapFactory: string
-	uniswapQuoter: string
-	executor?: string | null | undefined
-	uniswapRouter?: string | null | undefined
-	uniswapV2Router?: string | null | undefined
-	uniswapV4PoolManager?: string | null | undefined
-	uniswapV4Quoter?: string | null | undefined
+	uniswapV2Enabled: boolean
+	uniswapV3Enabled: boolean
+	uniswapV4Enabled: boolean
 	deploymentManifest?: unknown
 }
 
@@ -39,17 +34,13 @@ export function isSubmissionSettings(value: unknown): value is SubmissionSetting
 	return (mode === 'private' || mode === 'public') && numberValue(Reflect.get(value, 'minimumBundleRelaySuccesses')) && isStringArray(Reflect.get(value, 'relayUrls'))
 }
 
-export function isDeploymentSettings(value: unknown): value is DashboardDeployment {
-	if (typeof value !== 'object' || value === null || Array.isArray(value)) return false
-	for (const key of ['uniswapFactory', 'uniswapQuoter']) {
-		if (typeof Reflect.get(value, key) !== 'string') return false
-	}
-	for (const key of ['executor', 'uniswapRouter', 'uniswapV2Router', 'uniswapV4PoolManager', 'uniswapV4Quoter']) {
-		const candidate = Reflect.get(value, key)
-		if (candidate !== undefined && candidate !== null && typeof candidate !== 'string') return false
-	}
-	return isStringArray(Reflect.get(value, 'coordinatorAddresses')) && isStringArray(Reflect.get(value, 'quorumRpcUrls'))
-}
+export const isDeploymentSettings = object<DashboardDeployment>({
+	quorumRpcUrls: array(stringValue),
+	uniswapV2Enabled: booleanValue,
+	uniswapV3Enabled: booleanValue,
+	uniswapV4Enabled: booleanValue,
+	deploymentManifest: unknownValue,
+})
 
 const isConnectivity = object<ConnectivitySettings>({ publicRpcUrls: array(stringValue), readRpcUrl: stringValue })
 export const decodeSettings = (value: unknown) => decode(value, object<{ settings: StrategySettings }>({ settings: isStrategySettings }), 'strategy response')

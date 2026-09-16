@@ -10,7 +10,7 @@ describe('operator networks', () => {
 		['sepolia', sepolia],
 	] as const) {
 		test(`uses canonical ${name} REP and WETH without overrides`, () => {
-			const network = networkConfiguration(name, {})
+			const network = networkConfiguration(name)
 			expect(network.chain.id).toBe(manifest.network.chainId)
 			expect(network.rep).toBe(getAddress(manifest.network.genesisRepTokenAddress))
 			expect(network.weth).toBe(getAddress(manifest.network.wethAddress))
@@ -26,7 +26,7 @@ describe('operator networks', () => {
 })
 
 test('uses the deploy:testnet factory and quoter for Sepolia CLI defaults', () => {
-	const network = networkConfiguration('sepolia', {})
+	const network = networkConfiguration('sepolia')
 	expect(network.factory).toBe('0xEf09Be426F8d6D2786cADEA7D3A8b0D09cEB79B4')
 	expect(network.quoter).toBe('0x6Aa53e5023fFDa81f7EEE31bdA5D35437A5DD841')
 })

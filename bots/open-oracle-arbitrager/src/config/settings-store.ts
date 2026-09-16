@@ -1,4 +1,4 @@
-import { validateDeploymentSettings, type DeploymentSettings } from '#config/deployment-settings'
+import { validateDeploymentSettings, type DeploymentSettings, type StoredDeploymentSettings } from '#config/deployment-settings'
 import { networkDeployment } from '#config/network'
 import type { RiskLimits } from '#core/safety-controls'
 import { executorDeploymentIntentPath } from '#execution/executor-deployment-store'
@@ -109,7 +109,7 @@ export type StoredOperatorSettings = {
 	approvedUniverses: readonly string[]
 	centralizedMarkets: Omit<ReturnType<typeof serializeCentralizedMarketSettings>, 'assetAddress' | 'assetChainId'>
 	connectivity?: ConnectivitySettings | undefined
-	deployment: Omit<DeploymentSettings, 'openOracle' | 'rep' | 'weth'>
+	deployment: StoredDeploymentSettings
 	network?: NetworkName | undefined
 	networkConfigured?: boolean | undefined
 	paused: boolean
@@ -258,7 +258,8 @@ export function parseOperatorSettings(value: unknown, preservedPrivateKey?: Hex)
 }
 
 export function serializeOperatorSettings(settings: PersistedOperatorSettings, redactPrivateKey = false): StoredOperatorSettings {
-	const { openOracle: _openOracle, rep: _rep, weth: _weth, ...deployment } = settings.deployment
+	const { deploymentManifest, quorumRpcUrls, uniswapV2Enabled, uniswapV3Enabled, uniswapV4Enabled } = settings.deployment
+	const deployment = { deploymentManifest, quorumRpcUrls, uniswapV2Enabled, uniswapV3Enabled, uniswapV4Enabled }
 	const { assetAddress: _assetAddress, assetChainId: _assetChainId, ...centralizedMarkets } = serializeCentralizedMarketSettings(settings.centralizedMarkets)
 	return {
 		centralizedMarkets,

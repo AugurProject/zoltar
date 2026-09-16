@@ -25,9 +25,9 @@ test('rejects malformed chain and deployment responses before changing local con
 		{ connectivity: { ...connectivity, publicRpcUrls: [3] }, network: 'mainnet', rpcQuorum: 1 },
 	])
 		expect(() => decodeConnectivity(value)).toThrow('invalid connectivity response')
-	const deployment = { uniswapFactory: address, uniswapQuoter: address, coordinatorAddresses: [], quorumRpcUrls: [] }
+	const deployment = { uniswapV2Enabled: false, uniswapV3Enabled: true, uniswapV4Enabled: false, quorumRpcUrls: [] }
 	expect(decodeDeployment({ deployment }).deployment).toEqual(deployment)
-	expect(() => decodeDeployment({ deployment: { ...deployment, coordinatorAddresses: [false] } })).toThrow('invalid deployment response')
+	expect(() => decodeDeployment({ deployment: { ...deployment, uniswapV2Enabled: 'false' } })).toThrow('invalid deployment response')
 })
 
 test('validates executor responses before confirmation or showing deployment success', () => {

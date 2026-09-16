@@ -4,7 +4,7 @@ import { networkConfiguration } from '#config/network'
 import { createOperatorHeadWatcher, createScanWakeGate, startCentralizedMarketSampler } from '../../src/runtime/background-observers.ts'
 import type { OperatorState } from '#state/operator-state'
 
-const network = networkConfiguration('sepolia', {})
+const network = networkConfiguration('sepolia')
 
 function operatorState(): OperatorState {
 	return {

@@ -66,7 +66,9 @@ export async function inspectReport(
 	let best: { hedgeFee: (typeof FEES)[number]; hedgePool: Address; pool: Pool; quote: ArbitrageQuote; replacementAmount2: bigint | undefined; replacementQuoteFailure: string | undefined; venue: Venue } | undefined
 	const dexObservations: MarketConsensusObservation[] = []
 	const marketBlock = { hash: blockHash, number: blockNumber, observedAt: bigintToSafeNumber(blockTimestamp * 1_000n, 'Report block timestamp') }
-	const evaluations = await Promise.all(pools.filter(pool => pool.token.toLowerCase() === game.token2.toLowerCase() && spotTwapDeviationWithinLimit(pool.spotTick, pool.twapTick, config.maxSpotTwapTicks)).map(async pool => ({ evaluation: await evaluate(client, config, report, pool, gasPrice, marketBlock), pool })))
+	const evaluations = await Promise.all(
+		pools.filter(pool => pool.token.toLowerCase() === game.token2.toLowerCase() && (pool.venue !== 'uniswap-v3' || spotTwapDeviationWithinLimit(pool.spotTick, pool.twapTick, config.maxSpotTwapTicks))).map(async pool => ({ evaluation: await evaluate(client, config, report, pool, gasPrice, marketBlock), pool })),
+	)
 	for (const { evaluation, pool } of evaluations) {
 		dexObservations.push(...evaluation.observations)
 		if (evaluation.candidate === undefined) continue
@@ -74,7 +76,7 @@ export async function inspectReport(
 	}
 	if (best === undefined) {
 		console.log(`report=${report.helper.reportId.toString()} skipped=no-trusted-liquid-pool`)
-		recordDecision('Skipped report', 'No active pool passed quote and spot/TWAP checks')
+		recordDecision('Skipped report', 'No enabled venue passed its price and quote checks')
 		return
 	}
 	const newAmount1 = calculateNextAmount1(game)

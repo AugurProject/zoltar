@@ -31,10 +31,7 @@ export async function updateOperatorConnectivity(parameters: {
 	const networkName = parseNetworkName(value.network)
 	const initializesNetwork = parameters.activeNetwork === undefined
 	if (parameters.activeNetwork !== undefined && networkName !== parameters.activeNetwork) throw new Error('Select the chain profile before saving its RPC settings')
-	const selectedNetwork = networkConfiguration(networkName, {
-		factory: parameters.deployment.uniswapFactory,
-		quoter: parameters.deployment.uniswapQuoter,
-	})
+	const selectedNetwork = networkConfiguration(networkName)
 	const connectivity = validateConnectivitySettingsForQuorum(value.connectivity, parameters.deployment.quorumRpcUrls)
 	if (parameters.execute && parameters.deployment.quorumRpcUrls.length < configuredQuorumRpcUrlMinimum(rpcQuorum)) throw new Error('Live execution requires at least two independent quorum RPCs (three read endpoints total)')
 	const runCheck = () => (parameters.check ?? checkConnectivity)(connectivity, selectedNetwork.chain.id)

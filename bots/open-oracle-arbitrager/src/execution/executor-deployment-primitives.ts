@@ -6,7 +6,8 @@ import { type ExecutorDeploymentIntent } from '#execution/executor-deployment-st
 import { submitSignedTransaction, validateSubmissionSettings } from '#execution/transaction-submission'
 import { type Address, type Hash, type Hex, keccak256, parseTransaction, recoverTransactionAddress } from '@zoltar/bot-shared/ethereum'
 
-export const deterministicDeploymentProxy = '0x4e59b44847b379578588920cA78FbF26c0B4956C' as Address
+import { deterministicDeploymentProxy } from '#execution/executor-identity'
+export { deterministicDeploymentProxy } from '#execution/executor-identity'
 
 const deterministicDeploymentProxyCode = '0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffe03601600081602082378035828234f58015156039578182fd5b8082525050506014600cf3' as Hex
 

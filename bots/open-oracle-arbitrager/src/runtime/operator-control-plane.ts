@@ -1,3 +1,4 @@
+import { canonicalExecutorSalt } from '#execution/executor-identity'
 import { parseApprovedUniverses, validateApprovedUniverseSelection } from '@zoltar/bot-shared/monitoring/universe-policy'
 import { resolve } from 'node:path'
 import { privateKeyToAccount, type Address, type Hex } from '@zoltar/bot-shared/ethereum'
@@ -226,10 +227,7 @@ export function startOperatorControlPlane(parameters: {
 					pending.lookbackBlocks = next.runtime.lookbackBlocks
 					pending.maxHedgeSlippageBps = next.runtime.maxHedgeSlippageBps
 					if (!config.networkConfigured && next.networkConfigured) {
-						pending.network = networkConfiguration(next.network, {
-							factory: next.deployment.uniswapFactory,
-							quoter: next.deployment.uniswapQuoter,
-						})
+						pending.network = networkConfiguration(next.network)
 					}
 					pending.operatorSettings = normalizedNext
 					pending.paused = next.paused
@@ -305,10 +303,7 @@ export function startOperatorControlPlane(parameters: {
 					value,
 				})
 				if (!config.networkConfigured) {
-					pending.network = networkConfiguration(next.network, {
-						factory: latest.settings.deployment.uniswapFactory,
-						quoter: latest.settings.deployment.uniswapQuoter,
-					})
+					pending.network = networkConfiguration(next.network)
 				}
 				pending.centralizedMarkets = next.centralizedMarkets
 				pending.rpcQuorum = next.rpcQuorum
@@ -370,17 +365,17 @@ export function startOperatorControlPlane(parameters: {
 			})
 		},
 		predictExecutor: value => {
-			if (typeof value !== 'object' || value === null || Array.isArray(value) || Object.keys(value).length !== 1 || !('salt' in value)) throw new Error('Executor prediction requires only a CREATE2 salt')
-			const plan = executorDeploymentPlan(value['salt'])
+			if (typeof value !== 'object' || value === null || Array.isArray(value) || Object.keys(value).length !== 0) throw new Error('Executor prediction takes no address or salt overrides')
+			const plan = executorDeploymentPlan(canonicalExecutorSalt)
 			return { address: plan.address, salt: plan.salt }
 		},
 		deployExecutor: async value => {
 			if (parameters.isStopping?.()) throw new Error('Operator stopping before executor deployment')
-			if (typeof value !== 'object' || value === null || Array.isArray(value) || Object.keys(value).length !== 1 || !('salt' in value)) throw new Error('Executor deployment requires only a CREATE2 salt')
+			if (typeof value !== 'object' || value === null || Array.isArray(value) || Object.keys(value).length !== 0) throw new Error('Executor deployment takes no address or salt overrides')
 			requirePausedExecutorDeployment(config.execute, state.paused)
 			if (config.privateKey === undefined) throw new Error('Set an execution signer before deploying the executor')
 			const privateKey = config.privateKey
-			const plan = executorDeploymentPlan(value['salt'])
+			const plan = executorDeploymentPlan(canonicalExecutorSalt)
 			return await queueSettingsUpdate(async () => {
 				const intentPath = executorDeploymentIntentPath(config.settingsFile, config.network.name)
 				const intentLock = await acquireExecutorDeploymentIntentLock(intentPath)
@@ -398,7 +393,6 @@ export function startOperatorControlPlane(parameters: {
 					signerOperationAcquired = true
 					const plannedDeployment = {
 						...latest.settings.deployment,
-						deploymentManifest: undefined,
 						executor: plan.address,
 					}
 					requireSafeDeploymentTransition(state, pending.deployment ?? fixedState.deployment, plannedDeployment)

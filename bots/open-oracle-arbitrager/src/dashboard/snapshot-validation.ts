@@ -18,7 +18,7 @@ export const isSnapshot = object<PublicOperatorSnapshot>({
 				),
 			}),
 			object({
-				kind: oneOf('no-v3-liquidity'),
+				kind: oneOf('no-execution-pools'),
 				chainId: numberValue,
 			}),
 		),
@@ -140,6 +140,7 @@ export const isSnapshot = object<PublicOperatorSnapshot>({
 	),
 	execute: booleanValue,
 	executor: optional(hexValue),
+	coordinatorAddresses: array(hexValue),
 	executionHistory: array(
 		object({
 			actualGasCostEth: stringValue,
