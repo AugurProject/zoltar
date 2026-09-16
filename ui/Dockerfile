@@ -159,24 +159,8 @@ COPY --from=zoltar-builder /source/ui/zoltar/dist/ /source/ui/zoltar/dist/
 COPY --from=statoblast-builder /source/ui/statoblast/dist/ /source/ui/statoblast/dist/
 COPY --from=trading-builder /source/ui/trading/dist/ /source/ui/trading/dist/
 
-# -------------------------------------------------
-# Publisher: Upload the production UI to host IPFS
-# -------------------------------------------------
-
-# Keep the publisher last for compatibility with the release workflow, which
-# builds the Dockerfile's default target.
-FROM ipfs/kubo:v0.25.0@sha256:0c17b91cab8ada485f253e204236b712d0965f3d463cb5b60639ddd2291e7c52 AS ipfs-kubo
-
-FROM debian:12.6-slim@sha256:39868a6f452462b70cf720a8daff250c63e7342970e749059c105bf7c1e8eeaf AS publisher
-
-# Add curl to the base image (7.88.1-10+deb12u6)
-# Add jq to the base image (1.6-2.1)
-RUN sed -i 's/URIs/# URIs/g' /etc/apt/sources.list.d/debian.sources && \
-	sed -i 's/# http/URIs: http/g' /etc/apt/sources.list.d/debian.sources && \
-	apt-get update -o Acquire::Check-Valid-Until=false && apt-get install -y curl=7.88.1-10+deb12u6 jq=1.6-2.1
-
-# Install kubo and initialize ipfs
-COPY --from=ipfs-kubo /usr/local/bin/ipfs /usr/local/bin/ipfs
+# Shared export tree for the release and local publishers.
+FROM scratch AS ipfs-export
 
 # Copy only the deployable UI artifacts (excluding node_modules, source files, build tools)
 COPY --from=builder /source/ui/zoltar/dist/index.html /export/zoltar/index.html
@@ -192,6 +176,34 @@ COPY --from=builder /source/ui/trading/dist/favicon.svg /export/trading/favicon.
 COPY --from=builder /source/ui/trading/dist/core-deployments.json /export/trading/core-deployments.json
 COPY --from=builder /source/ui/trading/dist/assets/ /export/trading/assets/
 COPY --from=builder /source/ui/trading/dist/css/ /export/trading/css/
+
+# -------------------------------------------------
+# Publisher: Upload the production UI to host IPFS
+# -------------------------------------------------
+
+# Keep the publisher last for compatibility with the release workflow, which
+# builds the Dockerfile's default target.
+FROM ipfs/kubo:v0.25.0@sha256:0c17b91cab8ada485f253e204236b712d0965f3d463cb5b60639ddd2291e7c52 AS ipfs-kubo
+
+# The Windows launcher publishes to an existing host node using this Kubo client.
+FROM ipfs-kubo AS local-publisher
+COPY --from=ipfs-export /export/ /export/
+COPY --chmod=755 ./tooling/ui/docker-local-publisher-entrypoint.sh /publish.sh
+HEALTHCHECK NONE
+ENTRYPOINT [ "/bin/sh", "/publish.sh" ]
+
+FROM debian:12.6-slim@sha256:39868a6f452462b70cf720a8daff250c63e7342970e749059c105bf7c1e8eeaf AS publisher
+
+# Add curl to the base image (7.88.1-10+deb12u6)
+# Add jq to the base image (1.6-2.1)
+RUN sed -i 's/URIs/# URIs/g' /etc/apt/sources.list.d/debian.sources && \
+	sed -i 's/# http/URIs: http/g' /etc/apt/sources.list.d/debian.sources && \
+	apt-get update -o Acquire::Check-Valid-Until=false && apt-get install -y curl=7.88.1-10+deb12u6 jq=1.6-2.1
+
+# Install kubo and initialize ipfs
+COPY --from=ipfs-kubo /usr/local/bin/ipfs /usr/local/bin/ipfs
+
+COPY --from=ipfs-export /export/ /export/
 
 RUN ipfs init
 

@@ -226,4 +226,34 @@ describe('UI Docker packaging', () => {
 		const stages = dockerSource.split('\n').filter(line => line.startsWith('FROM '))
 		expect(stages.at(-1)).toContain(' AS publisher')
 	})
+
+	test('local and release publishers use the same complete export tree', async () => {
+		const stages = parseDockerfile(await readFile(dockerfile, 'utf8'))
+		const exports = dockerInstructions(requireDockerStage(stages, 'ipfs-export'), 'COPY')
+		for (const app of ['zoltar', 'statoblast', 'trading']) {
+			expect(exports).toContain(`--from=builder /source/ui/${app}/dist/index.html /export/${app}/index.html`)
+		}
+		for (const name of ['publisher', 'local-publisher']) {
+			expect(dockerInstructions(requireDockerStage(stages, name), 'COPY')).toContain('--from=ipfs-export /export/ /export/')
+		}
+		const local = requireDockerStage(stages, 'local-publisher')
+		expect(local.base).toBe('ipfs-kubo')
+		expect(dockerInstructions(local, 'HEALTHCHECK')).toEqual(['NONE'])
+		expect(dockerInstructions(local, 'ENTRYPOINT')).toEqual(['[ "/bin/sh", "/publish.sh" ]'])
+		expect(dockerInstructions(local, 'COPY')).toContain('--chmod=755 ./tooling/ui/docker-local-publisher-entrypoint.sh /publish.sh')
+	})
+
+	test('Windows publishing checks the existing host node before building and only runs clients', async () => {
+		const source = (await readFile(join(repositoryRoot, 'publish.bat'), 'utf8')).replaceAll('\r\n', '\n')
+		const kubo = requireDockerStage(parseDockerfile(await readFile(dockerfile, 'utf8')), 'ipfs-kubo')
+		const commands = source
+			.split('\n')
+			.map(line => line.trim())
+			.filter(line => line.startsWith('docker '))
+		expect(commands).toEqual(['docker info >nul 2>&1', `docker run --rm --entrypoint ipfs ${kubo.base} --api "%IPFS_API%" --timeout=10s id >nul`, 'docker build --target local-publisher -f ui/Dockerfile . -t zoltar-local-ipfs-publisher', 'docker run --rm -e IPFS_API zoltar-local-ipfs-publisher'])
+		for (const command of commands) expect(source).toContain(`${command}\nif errorlevel 1`)
+		expect(source).toContain('if not defined IPFS_API set "IPFS_API=/dns4/host.docker.internal/tcp/5001"')
+		expect(source).toContain('pushd "%~dp0" || exit /b 1')
+		expect(source).toContain('exit /b 1')
+	})
 })
