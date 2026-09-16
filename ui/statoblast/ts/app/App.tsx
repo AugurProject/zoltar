@@ -26,7 +26,7 @@ import { getStatoblastDeploymentSections } from '@zoltar/ui-statoblast-shared/fe
 import { getInvalidStatoblastRouteState } from './lib/routeValidation.js'
 import { readUiPriceOracle, UiPriceOracleSettings } from './UiPriceOracleSettings.js'
 import { renderRepPriceSourceLabel } from '@zoltar/ui-statoblast-shared/features/security-pools/lib/repPriceSource.js'
-import { getRouteSubNavigation, getShowDeployTab, getStatoblastRouteTabs, getTransactionRouteKey } from './lib/appNavigation.js'
+import { getRouteSecondaryNavigation, getShowDeployTab, getStatoblastRouteTabs, getTransactionRouteKey } from './lib/appNavigation.js'
 import { useOpenOracleRoute } from './hooks/useOpenOracleRoute.js'
 import { useSecurityPoolsRoute } from './hooks/useSecurityPoolsRoute.js'
 
@@ -106,7 +106,6 @@ export function App() {
 	const marketCreation = useMarketCreation({
 		...walletScopedHookConfig,
 		activeUniverseId,
-		activeZoltarView: 'questions',
 		autoLoadInitialData: walletBootstrapComplete && canReadOnchainData,
 		deploymentStatuses,
 		environmentRefreshKey: activeEnvironmentNonce,
@@ -231,7 +230,7 @@ export function App() {
 	const showDeployTab = getShowDeployTab({ applicationDeploymentMissing, deploymentStatusError, deploymentStatuses, hasLoadedDeploymentStatuses })
 	const tabNavigationProps = {
 		route,
-		tabs: getStatoblastRouteTabs(showDeployTab),
+		tabs: getStatoblastRouteTabs({ route, showDeployTab }),
 		onRouteChange: navigate,
 	}
 	const pageTitle = getAppPageTitle({ activeOpenOracleView, activeSecurityPoolsView, route: activeRoute })
@@ -272,7 +271,7 @@ export function App() {
 		deploymentCompleteHref: buildRouteHref(statoblastRouting.getHash('security-pools'), writeSecurityPoolsViewQueryParam(getRouteHashSearch(), 'browse')),
 		onRetryDeploymentStatus: () => void refreshState({ loadChainClock: false, loadWalletState: false }),
 	})
-	const routeSubNavigation = getRouteSubNavigation({ activeOpenOracleView, activeSecurityPoolsView, route, setOpenOracleView, setSecurityPoolsView })
+	const secondaryNavigation = getRouteSecondaryNavigation({ activeOpenOracleView, activeSecurityPoolsView, route: activeRoute, setOpenOracleView, setSecurityPoolsView })
 	const transactionRouteKey = getTransactionRouteKey({ activeOpenOracleView, activeSecurityPoolsView, route })
 
 	return (
@@ -284,7 +283,7 @@ export function App() {
 				<AppHeaderShell
 					renderOverview={settingsMenu => <OverviewPanels {...overviewProps} applicationTitle={applicationTitle} settingsMenu={settingsMenu} />}
 					simulationController={simulationController}
-					subNavigation={routeSubNavigation}
+					secondaryNavigation={secondaryNavigation}
 					tabNavigation={tabNavigationProps}
 					onEnvironmentChanged={refreshActiveEnvironment}
 					onRefresh={refreshSimulationView}

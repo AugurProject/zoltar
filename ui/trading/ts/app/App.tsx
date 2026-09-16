@@ -18,6 +18,8 @@ import { createTradingPublicClient, publicErrorMessage, validateRpcChainId, wait
 import { getActiveNetworkProfile, getActiveSimulationController } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { withTimeout } from '@zoltar/ui-core-shared/lib/promise.js'
 import * as appCopy from '../copy/app.js'
+import * as availabilityCopy from '../copy/availability.js'
+import * as sharedAppCopy from '@zoltar/ui-core-shared/copy/app.js'
 import { Badge } from '@zoltar/ui-core-shared/components/Badge.js'
 import { AppHeaderShell } from '@zoltar/ui-core-shared/app/components/AppHeaderShell.js'
 import { AppPageHeading } from '@zoltar/ui-core-shared/app/components/AppPageHeading.js'
@@ -27,15 +29,9 @@ import { ToolbarField } from '@zoltar/ui-core-shared/components/ToolbarField.js'
 import { hasTradingWalletControls, TradingWalletControls } from '../components/TradingWalletControls.js'
 import { initializeTradingActiveEnvironment } from './activeEnvironment.js'
 import { getTradingEnvironmentLocationKey, getTradingRouteHref, tradingRouting, tradingWorkflowRoute, type TradingRoute } from '../lib/routing.js'
+import { withDeploymentTab } from '@zoltar/ui-core-shared/navigation/appNavigation.js'
 
 type ResolvedTradingRoute = TradingRoute | 'not-found'
-
-/** Browse routes highlight the workflow tab they feed: markets serve trading, SecurityPools serve market creation. */
-function tradingNavigationRoute(workflowRoute: ReturnType<typeof tradingWorkflowRoute<ResolvedTradingRoute>>) {
-	if (workflowRoute === 'markets') return 'market'
-	if (workflowRoute === 'security-pools') return 'create-market'
-	return workflowRoute
-}
 
 function currentRoute(): ResolvedTradingRoute {
 	return tradingRouting.resolve(window.location.hash)
@@ -46,8 +42,6 @@ function tradingDocumentTitle(route: ResolvedTradingRoute) {
 	if (route === 'not-found') label = appCopy.notFound
 	if (route === 'create-market' || route.startsWith('create-market/')) label = appCopy.createMarket
 	if (route === 'market' || route.startsWith('market/')) label = appCopy.market
-	if (route === 'markets') label = appCopy.browseMarkets
-	if (route === 'security-pools') label = appCopy.browseSecurityPools
 	if (route.startsWith('liquidity/')) label = appCopy.liquidity
 	if (route.startsWith('security-pool/')) label = appCopy.securityPool
 	return appCopy.documentTitle(label)
@@ -59,12 +53,14 @@ function tradingPageTitle(route: ResolvedTradingRoute) {
 
 function renderNotFoundRoute() {
 	return (
-		<main class='route' id='main-content'>
+		<div class='route-view-flow'>
 			<RouteHeader title={appCopy.pageNotFound} />
-			<a class='primary-link' href={getTradingRouteHref('#/market')}>
-				{appCopy.returnToMarket}
-			</a>
-		</main>
+			<div class='actions'>
+				<a class='button-link' href={getTradingRouteHref('#/market')}>
+					{appCopy.returnToMarket}
+				</a>
+			</div>
+		</div>
 	)
 }
 
@@ -138,6 +134,8 @@ export function App({
 		})
 	}, [])
 	const showUniverseSelector = route !== 'deploy' && route !== 'help' && liveDeploymentStatus !== 'unavailable'
+	// A single universe is a fact, not a choice, so it renders as a plain toolbar value like the other applications.
+	const singleUniverse = liveUniverseOptions.length === 1 ? liveUniverseOptions[0] : undefined
 	const walletSummary = walletSummaryForUniverse(liveWalletSummary, selectedUniverseId)
 	const retryWalletSummary = () => {
 		setLiveWalletSummary(current => ({ account: current.account, ethAttoEth: undefined, repAttoRep: undefined, status: current.account === undefined ? 'disconnected' : 'loading', error: undefined, errorLabel: undefined, universeId: selectedUniverseId }))
@@ -152,8 +150,7 @@ export function App({
 	const deploymentSetupActive = route !== 'not-found' && route !== 'help' && (route === 'deploy' || liveDeploymentStatus === 'unavailable')
 	const addressedPool = securityPoolAddressFromRoute(route)
 	const workflowRoute = tradingWorkflowRoute(route)
-	const navigationRoute = tradingNavigationRoute(workflowRoute)
-	const displayedRoute = deploymentSetupActive ? 'deploy' : navigationRoute
+	const displayedRoute = deploymentSetupActive ? 'deploy' : workflowRoute
 	const refreshActiveEnvironment = useCallback(async () => {
 		const previousLocationKey = activeEnvironmentLocationRef.current
 		const nextLocationKey = getTradingEnvironmentLocationKey()
@@ -251,14 +248,18 @@ export function App({
 				tabNavigation={{
 					route: displayedRoute,
 					showProtocolGuide: false,
-					tabs: [
-						...(liveDeploymentStatus !== 'verified' ? [{ route: 'deploy', hash: '#/deploy', label: appCopy.deploy }] : []),
-						{ route: 'market', hash: addressedPool === undefined ? '#/market' : `#/market/${addressedPool}`, label: appCopy.market },
-						{ route: 'liquidity', hash: addressedPool === undefined ? '#/liquidity' : `#/liquidity/${addressedPool}`, label: appCopy.liquidity },
-						{ route: 'portfolio', hash: '#/portfolio', label: appCopy.portfolio },
-						{ route: 'create-market', hash: '#/create-market', label: appCopy.createMarket },
-						{ route: 'help', hash: '#/help', label: appCopy.help },
-					].map(tab => ({ ...tab, disabled: workflowLocked })),
+					tabs: withDeploymentTab({
+						deploymentTab: { route: 'deploy', hash: '#/deploy', label: appCopy.deploy },
+						deploymentIncomplete: liveDeploymentStatus === 'unavailable',
+						route: displayedRoute,
+						tabs: [
+							{ route: 'market', hash: addressedPool === undefined ? '#/market' : `#/market/${addressedPool}`, label: appCopy.market },
+							{ route: 'liquidity', hash: addressedPool === undefined ? '#/liquidity' : `#/liquidity/${addressedPool}`, label: appCopy.liquidity },
+							{ route: 'portfolio', hash: '#/portfolio', label: appCopy.portfolio },
+							{ route: 'create-market', hash: '#/create-market', label: appCopy.createMarket },
+							{ route: 'help', hash: '#/help', label: appCopy.help },
+						],
+					}).map(tab => (workflowLocked ? { ...tab, disabled: true, disabledReason: availabilityCopy.transactionInProgressReason } : tab)),
 					onRouteChange: nextRoute => {
 						if (workflowLocked) return
 						const hash = (nextRoute === 'liquidity' || nextRoute === 'market') && addressedPool !== undefined ? `#/${nextRoute}/${addressedPool}` : `#/${nextRoute}`
@@ -275,7 +276,7 @@ export function App({
 										{appCopy.appName}
 									</>
 								}
-								badges={<Badge tone={liveDeploymentStatus === 'unavailable' ? 'warning' : 'muted'}>{tradingNetworkLabel(liveDeploymentStatus, liveConfiguration, deploymentWalletState)}</Badge>}
+								badges={simulationController === undefined ? <Badge tone={liveDeploymentStatus === 'unavailable' ? 'warning' : 'muted'}>{tradingNetworkLabel(liveDeploymentStatus, liveConfiguration, deploymentWalletState)}</Badge> : <Badge tone='warning'>{sharedAppCopy.simulation}</Badge>}
 								controls={
 									!showWalletControls && !showUniverseSelector ? undefined : (
 										<>
@@ -288,11 +289,18 @@ export function App({
 													onWalletConnectRequest={() => setWalletConnectRequestNonce(current => current + 1)}
 													simulation={simulationController !== undefined}
 													workflowLocked={workflowLocked}
+													requiredNetworkName={walletSummary.networkMismatchReason === undefined ? undefined : liveConfiguration?.chainName}
+													walletChainId={walletSummary.networkMismatchReason === undefined ? undefined : walletSummary.walletChainId}
+													onSwitchNetwork={() => setWalletConnectRequestNonce(current => current + 1)}
 												/>
 											) : null}
 											{showUniverseSelector ? (
 												<ToolbarField label={appCopy.universe}>
-													<UniverseSelector options={liveUniverseOptions} selectedId={selectedUniverseId} disabled={workflowLocked} loading={liveDeploymentStatus === 'loading'} onChange={setSelectedUniverseId} />
+													{singleUniverse === undefined ? (
+														<UniverseSelector options={liveUniverseOptions} selectedId={selectedUniverseId} disabled={workflowLocked} loading={liveDeploymentStatus === 'loading'} onChange={setSelectedUniverseId} />
+													) : (
+														<span title={singleUniverse.accessibleLabel ?? singleUniverse.label}>{singleUniverse.label}</span>
+													)}
 												</ToolbarField>
 											) : null}
 										</>
@@ -306,7 +314,9 @@ export function App({
 					</section>
 				)}
 			/>
-			{content}
+			<main id='main-content' tabIndex={-1}>
+				{content}
+			</main>
 		</div>
 	)
 }

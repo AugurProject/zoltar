@@ -3,12 +3,17 @@ import type { Hash } from '@zoltar/core-shared/evm/ethereum'
 
 export type ActionAvailability = {
 	disabled: boolean
+	/** Marks the reason as an in-progress state so it renders with loading feedback. */
+	loading?: boolean
 	reason: string | undefined
 }
 
-type NoticeTone = 'blocking' | 'warning' | 'pending' | 'success'
+/** Shared status vocabulary for badges and user-message presentations. */
+export type StatusTone = 'blocked' | 'danger' | 'loading' | 'muted' | 'ok' | 'pending' | 'warning'
 
-export type BadgeTone = 'blocked' | 'danger' | 'muted' | 'ok' | 'pending' | 'warning'
+export type BadgeTone = StatusTone
+
+type NoticeTone = 'blocking' | 'warning' | 'pending' | 'success'
 
 export type NoticeItem = {
 	detail: ComponentChildren
@@ -104,6 +109,8 @@ export type RouteHeaderProps = {
 export type SectionBlockProps = {
 	actions?: ComponentChildren
 	badge?: ComponentChildren
+	/** Marks the whole section as loading through `aria-busy`, so callers do not need a wrapper element for the state. */
+	busy?: boolean
 	children: ComponentChildren
 	className?: string
 	description?: ComponentChildren
@@ -189,7 +196,7 @@ export type ViewTabsProps<TValue extends string> = {
 	semantics?: 'navigation' | 'switcher' | 'tabs'
 	size?: 'compact' | 'default'
 	value: TValue
-	variant?: 'route' | 'subroute'
+	variant?: 'route' | 'segmented' | 'subroute'
 }
 
 export type TransactionActionButtonProps = {

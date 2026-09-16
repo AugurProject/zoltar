@@ -69,6 +69,8 @@ function createSimulationController(): SimulationController {
 		transactionCountSinceReset: 0n,
 		transactionDelayMilliseconds: 0,
 		setTransactionDelayMilliseconds: async () => undefined,
+		setWalletMode: async () => undefined,
+		walletMode: 'connected',
 		waitUntilReady: async () => undefined,
 	}
 }

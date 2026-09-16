@@ -1,0 +1,373 @@
+/* Browser simulation banner. Shared by every app that mounts the simulation harness; imported from index.css after base.css so it keeps its original cascade position. */
+
+.simulation-progress-track {
+	margin-top: 0.6rem;
+}
+
+.simulation-progress-fill {
+	background: linear-gradient(90deg, color-mix(in srgb, var(--success) 70%, var(--color-white) 30%), color-mix(in srgb, var(--focus) 68%, var(--color-white) 32%));
+}
+
+.simulation-banner {
+	padding: 0.65rem 0.75rem;
+	border: 1px solid var(--simulation-border);
+	background: var(--simulation-surface);
+	box-shadow: var(--shadow-raised);
+}
+
+.simulation-banner-header {
+	border-image: linear-gradient(90deg, var(--simulation-border-hover), var(--simulation-border-subtle) 50%, var(--simulation-border-hover)) 1;
+}
+
+.simulation-banner-header .detail,
+.simulation-banner .detail {
+	color: var(--simulation-text-secondary);
+}
+
+.simulation-banner-warning {
+	margin-top: 0.75rem;
+	border: 1px solid var(--simulation-border);
+	border-radius: var(--radius-overlay);
+	padding: 0.7rem 0.8rem;
+	background: color-mix(in srgb, var(--simulation-accent) 16%, transparent);
+	color: var(--simulation-text);
+	font-size: var(--font-caption);
+	line-height: var(--line-height-body);
+}
+
+.simulation-banner-warning strong {
+	color: var(--simulation-text);
+}
+
+.simulation-banner-list {
+	gap: 0.5rem;
+	margin-top: 0.65rem;
+}
+
+.simulation-banner-details > summary {
+	display: block;
+	cursor: pointer;
+	padding: 0.25rem 0.15rem;
+	color: var(--simulation-text);
+}
+
+.simulation-banner-compact-summary,
+.simulation-banner-compact-heading,
+.simulation-banner-compact-state {
+	align-items: center;
+	gap: 0.5rem;
+}
+
+.simulation-banner-compact-summary {
+	display: flex;
+	justify-content: space-between;
+}
+
+.simulation-banner-compact-heading {
+	display: flex;
+	min-width: 0;
+	flex-wrap: wrap;
+}
+
+.simulation-banner-compact-heading h2 {
+	font-size: var(--font-title);
+}
+
+.simulation-banner-compact-state {
+	display: flex;
+	min-width: 0;
+	flex-wrap: wrap;
+}
+
+.simulation-banner-compact-account {
+	white-space: nowrap;
+}
+
+.simulation-banner-compact-action {
+	color: var(--simulation-text-secondary);
+	font-size: var(--font-caption);
+	font-weight: 700;
+	white-space: nowrap;
+}
+
+.simulation-banner-row {
+	border-top-color: var(--simulation-border-subtle);
+	padding: 0.5rem 0;
+}
+
+.simulation-banner-stats {
+	display: grid;
+	grid-template-columns: repeat(3, minmax(0, 1fr));
+	gap: 0.45rem;
+}
+
+.simulation-stat-card {
+	display: grid;
+	gap: 0.2rem;
+	padding: 0.5rem 0;
+	border: 0;
+	border-top: 1px solid var(--simulation-border-subtle);
+	border-radius: 0;
+	background: transparent;
+}
+
+.simulation-stat-card strong {
+	color: var(--simulation-text);
+	font-size: var(--font-value);
+}
+
+.simulation-stat-card-wide {
+	min-width: 0;
+}
+
+.simulation-stat-label,
+.simulation-delay-label {
+	font-family: var(--font-family-mono);
+	font-size: var(--font-label);
+	letter-spacing: 0.08em;
+	text-transform: uppercase;
+	color: var(--simulation-text-secondary);
+}
+
+.simulation-advanced-controls {
+	display: grid;
+	gap: 0.6rem;
+}
+
+.simulation-advanced-controls > summary {
+	width: fit-content;
+	cursor: pointer;
+	border: 1px solid var(--simulation-border);
+	border-radius: var(--radius-control);
+	padding: 0.5rem 0.7rem;
+	background: var(--simulation-control-bg);
+	color: var(--simulation-text);
+	font-weight: 700;
+}
+
+.simulation-advanced-controls > summary:hover,
+.simulation-advanced-controls > summary:focus-visible {
+	border-color: var(--simulation-border-hover);
+	background: var(--simulation-control-bg-hover);
+	outline: none;
+	box-shadow: var(--simulation-focus-ring);
+}
+
+.simulation-advanced-controls[open] > summary {
+	margin-bottom: 0.8rem;
+}
+
+.simulation-banner-controls {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) minmax(16rem, 22rem);
+	gap: 1rem;
+	align-items: start;
+	padding: 1rem 0 0;
+	border: 0;
+	border-top: 1px solid var(--simulation-border);
+	border-radius: 0;
+	background: transparent;
+}
+
+.simulation-delay-grid {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: 0.75rem;
+	margin-top: 0.9rem;
+}
+
+.simulation-banner-controls .button-row {
+	justify-content: stretch;
+}
+
+.simulation-control-groups {
+	display: grid;
+	gap: 0.85rem;
+	justify-items: stretch;
+}
+
+.simulation-control-group {
+	display: grid;
+	gap: 0.45rem;
+	padding: 0.85rem 0 0;
+	border: 0;
+	border-top: 1px solid var(--simulation-border-subtle);
+	border-radius: 0;
+	background: transparent;
+}
+
+.simulation-control-group-label {
+	font-family: var(--font-family-mono);
+	font-size: var(--font-label);
+	letter-spacing: 0.08em;
+	text-transform: uppercase;
+	color: var(--simulation-text-secondary);
+}
+
+.simulation-button-row {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: 0.5rem;
+	width: 100%;
+	justify-content: stretch;
+}
+
+.simulation-time-travel-row {
+	grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.simulation-button-row > button {
+	width: 100%;
+	min-height: var(--touch-target-min);
+	padding: 0.52rem 0.62rem;
+	font-size: var(--font-caption);
+	line-height: var(--line-height-tight);
+}
+
+.simulation-delay-field {
+	display: grid;
+	gap: 0.45rem;
+}
+
+.simulation-control-input,
+.simulation-control-select {
+	width: 100%;
+	max-width: 100%;
+	min-height: var(--touch-target-min);
+	border: 1px solid var(--simulation-border);
+	border-radius: var(--radius-control);
+	padding: 0.65rem 0.8rem;
+	font: inherit;
+	background: var(--simulation-control-bg);
+	color: var(--simulation-text);
+	text-overflow: ellipsis;
+}
+
+.simulation-control-select {
+	appearance: none;
+	-webkit-appearance: none;
+	forced-color-adjust: none;
+	background-image: linear-gradient(45deg, transparent 50%, var(--simulation-text-secondary) 50%), linear-gradient(135deg, var(--simulation-text-secondary) 50%, transparent 50%);
+	background-position:
+		calc(100% - 1rem) calc(50% - 0.15rem),
+		calc(100% - 0.7rem) calc(50% - 0.15rem);
+	background-size:
+		0.35rem 0.35rem,
+		0.35rem 0.35rem;
+	background-repeat: no-repeat;
+	padding-right: 2.1rem;
+}
+
+.simulation-control-select option,
+.simulation-control-select optgroup {
+	background: var(--simulation-control-bg-opaque);
+	color: var(--simulation-text);
+}
+
+.simulation-control-input:hover:not(:disabled),
+.simulation-control-input:focus-visible,
+.simulation-control-select:hover:not(:disabled),
+.simulation-control-select:focus-visible {
+	border-color: var(--simulation-border-hover);
+	background-color: var(--simulation-control-bg-hover);
+	outline: none;
+	box-shadow: var(--simulation-focus-ring);
+}
+
+.simulation-banner button.secondary,
+.simulation-banner select {
+	border-color: var(--simulation-border);
+	background: var(--simulation-control-bg);
+	color: var(--simulation-text);
+}
+
+.simulation-banner button.secondary:hover:not(:disabled),
+.simulation-banner select:hover:not(:disabled) {
+	border-color: var(--simulation-border-hover);
+	background: var(--simulation-control-bg-hover);
+}
+
+.simulation-banner .badge.ok {
+	color: var(--simulation-text);
+	border-color: var(--simulation-border-hover);
+	background: var(--simulation-success-bg);
+}
+
+.simulation-banner > .contract-panel-header:first-child {
+	margin: -0.8rem -0.8rem 0;
+	padding: 0.75rem 0.8rem 0;
+}
+
+@media (max-width: 50rem) {
+	.simulation-banner-stats,
+	.simulation-delay-grid {
+		grid-template-columns: 1fr;
+	}
+
+	.simulation-banner {
+		padding: 0.55rem;
+	}
+
+	.simulation-banner > .contract-panel-header:first-child {
+		margin: -0.55rem -0.55rem 0;
+		padding: 0.55rem 0.55rem 0;
+	}
+
+	.simulation-banner-details > summary {
+		display: block;
+		cursor: pointer;
+		padding: 0.6rem 0.15rem 0.1rem;
+		color: var(--simulation-text);
+	}
+
+	.simulation-banner-details > summary:focus-visible {
+		border-radius: var(--radius-control);
+		outline: 2px solid var(--focus);
+		outline-offset: 3px;
+	}
+
+	.simulation-banner-details:not([open]) > .simulation-banner-list {
+		display: none;
+	}
+
+	.simulation-banner-details[open] > summary {
+		margin-bottom: 0.35rem;
+	}
+
+	.simulation-banner-row {
+		gap: 0.35rem;
+		padding: 0.35rem 0;
+	}
+
+	.simulation-banner-stats {
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+		gap: 0.35rem;
+	}
+
+	.simulation-stat-card {
+		padding: 0.45rem 0.55rem;
+	}
+
+	.simulation-stat-card-wide {
+		grid-column: 1 / -1;
+	}
+
+	.simulation-control-groups,
+	.simulation-banner-controls .button-row,
+	.simulation-button-row {
+		justify-items: stretch;
+		justify-content: stretch;
+	}
+
+	.simulation-button-row > button {
+		width: 100%;
+	}
+
+	.simulation-time-travel-row {
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+	}
+
+	.simulation-advanced-controls > summary {
+		width: 100%;
+	}
+}

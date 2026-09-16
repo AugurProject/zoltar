@@ -20,7 +20,6 @@ import { useZoltarOperations } from '@zoltar/ui-zoltar-shared/features/universes
 type UseMarketCreationParameters = TransactionLifecycleParameters &
 	WriteOperationContext & {
 		activeUniverseId: bigint
-		activeZoltarView: 'create' | 'fork' | 'migrate' | 'questions'
 		autoLoadInitialData: boolean
 		deploymentStatuses: DeploymentStatus[]
 		environmentRefreshKey: number
@@ -120,10 +119,10 @@ function getValueForStorageKey<T>(keyedValue: KeyedValue<T> | undefined, storage
 }
 
 export function useMarketCreation(
-	{ accountAddress, activeUniverseId, activeZoltarView, autoLoadInitialData, deploymentStatuses, environmentRefreshKey, onTransactionFailed, onTransactionFinished, onTransactionPresented, onTransactionPrepared, onTransactionRequested, onTransactionSubmitted, refreshState }: UseMarketCreationParameters,
+	{ accountAddress, activeUniverseId, autoLoadInitialData, deploymentStatuses, environmentRefreshKey, onTransactionFailed, onTransactionFinished, onTransactionPresented, onTransactionPrepared, onTransactionRequested, onTransactionSubmitted, refreshState }: UseMarketCreationParameters,
 	dependencies: UseMarketCreationDependencies = defaultUseMarketCreationDependencies,
 ) {
-	const zoltar = useZoltarOperations({ accountAddress, activeUniverseId, activeZoltarView, autoLoadInitialData, deploymentStatuses, environmentRefreshKey, onTransactionFailed, onTransactionFinished, onTransactionPresented, onTransactionPrepared, onTransactionRequested, onTransactionSubmitted, refreshState })
+	const zoltar = useZoltarOperations({ accountAddress, activeUniverseId, autoLoadInitialData, deploymentStatuses, environmentRefreshKey, onTransactionFailed, onTransactionFinished, onTransactionPresented, onTransactionPrepared, onTransactionRequested, onTransactionSubmitted, refreshState })
 	const questionDraftStorageKey = getQuestionDraftStorageKey(accountAddress, activeUniverseId)
 	const marketActionScopeKey = `${questionDraftStorageKey}:${environmentRefreshKey}`
 	const currentMarketActionScopeKeyRef = useRef(marketActionScopeKey)

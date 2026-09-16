@@ -6,12 +6,12 @@ function getSectionBlockHeadingTag(headingLevel: SectionBlockProps['headingLevel
 	return 'h3'
 }
 
-export function SectionBlock({ actions, badge, children, className = '', description, density = 'balanced', headingLevel = 3, title, tone = 'default', variant = 'default' }: SectionBlockProps) {
+export function SectionBlock({ actions, badge, busy, children, className = '', description, density = 'balanced', headingLevel = 3, title, tone = 'default', variant = 'default' }: SectionBlockProps) {
 	const HeadingTag = getSectionBlockHeadingTag(headingLevel)
 	const classes = ['section-block', `tone-${tone}`, `density-${density}`, variant, className].filter(Boolean).join(' ')
 
 	return (
-		<section className={classes}>
+		<section className={classes} aria-busy={busy}>
 			{title === undefined && badge === undefined && actions === undefined && description === undefined ? undefined : (
 				<div className='section-block-header'>
 					<div className='section-block-copy'>

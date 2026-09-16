@@ -16,7 +16,7 @@ describe('NoticeStack', () => {
 		},
 	})
 
-	test('renders warning items inside the shared warning surface', async () => {
+	test('renders warning items as toned notices like every other tone', async () => {
 		const renderedComponent = await renderIntoDocument(
 			<NoticeStack
 				items={[
@@ -32,7 +32,11 @@ describe('NoticeStack', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		expect(within(document.body).getByText('Needs attention')).not.toBeNull()
-		expect(document.body.querySelector('.warning-surface.notice-stack-item')).not.toBeNull()
+		const notice = document.body.querySelector('.notice.notice-stack-item.warning')
+		expect(notice).not.toBeNull()
+		expect(notice?.getAttribute('role')).toBe('status')
+		expect(notice?.getAttribute('aria-live')).toBe('polite')
+		expect(document.body.querySelector('.warning-surface')).toBeNull()
 	})
 
 	test('renders nothing when there are no notices to show', async () => {
@@ -71,8 +75,10 @@ describe('NoticeStack', () => {
 
 		const notices = document.body.querySelectorAll('.notice-stack-item')
 		expect(notices.length).toBe(3)
+		expect(Array.from(notices).map(notice => notice.tagName)).toEqual(['DIV', 'DIV', 'DIV'])
+		expect(Array.from(notices).every(notice => notice.classList.contains('notice'))).toBe(true)
 		expect(notices[0]?.className).toContain('blocking')
-		expect(notices[1]?.className).toContain('notice-stack-item')
+		expect(notices[1]?.className).toContain('pending')
 		expect(notices[2]?.className).toContain('success')
 		expect(notices[0]?.getAttribute('role')).toBe('alert')
 		expect(notices[0]?.getAttribute('aria-live')).toBe('assertive')

@@ -5,6 +5,7 @@ import { installActiveEnvironmentForTesting, resetActiveEnvironmentForTesting } 
 import { createDeferred } from '@zoltar/ui-core-shared/tests/testUtils/deferred.js'
 import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
 import { createFakeBackend } from '@zoltar/ui-core-shared/tests/testUtils/fakeBackend.js'
+import { installModuleMocks } from '@zoltar/ui-core-shared/tests/testUtils/moduleMocks.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import type { DeploymentStatus, MarketCreationResult } from '@zoltar/ui-core-shared/types/contracts.js'
 import type { CreateWriteClientCallbacks, TransactionRequestPreview } from '@zoltar/ui-core-shared/wallet/chainBackend.js'
@@ -41,6 +42,7 @@ function requireHookState(state: UseQuestionCreationState | undefined) {
 
 describe('useQuestionCreation', () => {
 	let cleanupRenderedComponent: (() => Promise<void>) | undefined
+	const moduleMocks = installModuleMocks(specifier => import.meta.resolve(specifier))
 	let resetEnvironment: (() => void) | undefined
 
 	installDomTestLifecycle({
@@ -72,7 +74,7 @@ describe('useQuestionCreation', () => {
 	) {
 		const loadZoltarQuestions = mock(options.loadZoltarQuestions ?? (async () => undefined))
 		const setZoltarForkQuestionId = mock(() => undefined)
-		mock.module('@zoltar/ui-zoltar-shared/features/universes/hooks/useZoltarOperations.js', () => ({
+		await moduleMocks.mockModule('@zoltar/ui-zoltar-shared/features/universes/hooks/useZoltarOperations.js', () => ({
 			useZoltarOperations: () => ({ loadZoltarQuestions, setZoltarForkQuestionId }),
 		}))
 		const { useQuestionCreation } = await import(`@zoltar/ui-zoltar-shared/features/questions/hooks/useQuestionCreation.js?case=${crypto.randomUUID()}`)
@@ -91,7 +93,6 @@ describe('useQuestionCreation', () => {
 				{
 					accountAddress,
 					activeUniverseId: options.activeUniverseId ?? 1n,
-					activeZoltarView: 'questions',
 					autoLoadInitialData: false,
 					deploymentStatuses: options.deploymentStatuses ?? [DEPLOYED_QUESTION_DATA],
 					environmentRefreshKey,
@@ -393,7 +394,7 @@ describe('useQuestionCreation', () => {
 	})
 
 	test('keeps global question drafts across universe changes and isolates them by account', async () => {
-		mock.module('@zoltar/ui-zoltar-shared/features/universes/hooks/useZoltarOperations.js', () => ({
+		await moduleMocks.mockModule('@zoltar/ui-zoltar-shared/features/universes/hooks/useZoltarOperations.js', () => ({
 			useZoltarOperations: () => ({ loadZoltarQuestions: async () => undefined, setZoltarForkQuestionId: () => undefined }),
 		}))
 		const { useQuestionCreation } = await import(`@zoltar/ui-zoltar-shared/features/questions/hooks/useQuestionCreation.js?case=${crypto.randomUUID()}`)
@@ -402,7 +403,6 @@ describe('useQuestionCreation', () => {
 			hookState = useQuestionCreation({
 				accountAddress,
 				activeUniverseId,
-				activeZoltarView: 'questions',
 				autoLoadInitialData: false,
 				deploymentStatuses: [DEPLOYED_QUESTION_DATA],
 				environmentRefreshKey: 0,

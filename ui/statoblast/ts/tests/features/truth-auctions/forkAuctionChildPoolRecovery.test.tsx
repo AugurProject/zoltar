@@ -4,6 +4,7 @@ import { createMarketDetails } from '@zoltar/ui-core-shared/tests/testUtils/mark
 
 import { getAddress, zeroAddress, type Address } from '@zoltar/core-shared/evm/ethereum'
 import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
+import { installModuleMocks } from '@zoltar/ui-core-shared/tests/testUtils/moduleMocks.js'
 import { fireEvent, waitFor, within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import { installTestRouting } from '@zoltar/ui-core-shared/tests/testUtils/testRouting.js'
@@ -15,9 +16,7 @@ import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test'
 import { h, render } from 'preact'
 import { act } from 'preact/test-utils'
 
-const actualSecurityPools = await import('@zoltar/ui-statoblast-shared/protocol/securityPools.js')
-const actualForks = await import('@zoltar/ui-statoblast-shared/protocol/forks.js')
-const actualClients = await import('@zoltar/ui-core-shared/wallet/clients.js')
+const moduleMocks = installModuleMocks(specifier => import.meta.resolve(specifier))
 
 const PARENT_POOL_ADDRESS: Address = '0x00000000000000000000000000000000000000f0'
 const YES_CHILD_POOL_ADDRESS: Address = '0x00000000000000000000000000000000000000f1'
@@ -37,21 +36,18 @@ const loadAllSecurityPoolsMock = mock(async (_client: unknown, parent: Address, 
 	return recoveredPoolsFactory()
 })
 
-mock.module('@zoltar/ui-statoblast-shared/protocol/securityPools.js', () => ({
-	...actualSecurityPools,
+await moduleMocks.mockModule('@zoltar/ui-statoblast-shared/protocol/securityPools.js', () => ({
 	loadSecurityPoolChildren: loadAllSecurityPoolsMock,
 }))
 
-mock.module('@zoltar/ui-statoblast-shared/protocol/forks.js', () => ({
-	...actualForks,
+await moduleMocks.mockModule('@zoltar/ui-statoblast-shared/protocol/forks.js', () => ({
 	loadForkAuctionDetails: mock(async (_client: unknown, securityPoolAddress: Address) => {
 		loadForkAuctionDetailsCalls += 1
 		return childAuctionDetailsFactory(securityPoolAddress)
 	}),
 }))
 
-mock.module('@zoltar/ui-core-shared/wallet/clients.js', () => ({
-	...actualClients,
+await moduleMocks.mockModule('@zoltar/ui-core-shared/wallet/clients.js', () => ({
 	createConnectedReadClient: mock(() => ({
 		readContract: mock(async () => {
 			throw new Error('Unexpected readContract call in child-pool recovery test')

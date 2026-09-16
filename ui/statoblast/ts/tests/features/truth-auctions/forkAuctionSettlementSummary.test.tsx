@@ -4,6 +4,7 @@ import { createMarketDetails } from '@zoltar/ui-core-shared/tests/testUtils/mark
 import { getAddress, zeroAddress, type Address } from '@zoltar/core-shared/evm/ethereum'
 import { TRUTH_AUCTION_PRICE_PRECISION } from '@zoltar/statoblast-shared/statoblast/truthAuctionTickMath'
 import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
+import { installModuleMocks } from '@zoltar/ui-core-shared/tests/testUtils/moduleMocks.js'
 import { fireEvent, within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import { installTestRouting } from '@zoltar/ui-core-shared/tests/testUtils/testRouting.js'
@@ -16,14 +17,10 @@ import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test'
 import { h } from 'preact'
 import { act } from 'preact/test-utils'
 
-const actualSecurityPools = await import('@zoltar/ui-statoblast-shared/protocol/securityPools.js')
-const actualForks = await import('@zoltar/ui-statoblast-shared/protocol/forks.js')
-const actualClients = await import('@zoltar/ui-core-shared/wallet/clients.js')
-const actualTruthAuctionBookHook = await import('@zoltar/ui-statoblast-shared/features/truth-auctions/hooks/useTruthAuctionBookData.js')
-const actualTruthAuctionSettlementHook = await import('@zoltar/ui-statoblast-shared/features/truth-auctions/hooks/useTruthAuctionSettlementActionState.js')
+const moduleMocks = installModuleMocks(specifier => import.meta.resolve(specifier))
 
-type TruthAuctionBookHookState = ReturnType<typeof actualTruthAuctionBookHook.useTruthAuctionBookData>
-type TruthAuctionSettlementHookState = ReturnType<typeof actualTruthAuctionSettlementHook.useTruthAuctionSettlementActionState>
+type TruthAuctionBookHookState = ReturnType<typeof import('@zoltar/ui-statoblast-shared/features/truth-auctions/hooks/useTruthAuctionBookData.js')['useTruthAuctionBookData']>
+type TruthAuctionSettlementHookState = ReturnType<typeof import('@zoltar/ui-statoblast-shared/features/truth-auctions/hooks/useTruthAuctionSettlementActionState.js')['useTruthAuctionSettlementActionState']>
 
 const ONE_UNIT = 10n ** 18n
 const HALF_UNIT = 5n * 10n ** 17n
@@ -37,18 +34,15 @@ let mockedSecurityPools: ListedSecurityPool[] = []
 let mockedTruthAuctionBookState: TruthAuctionBookHookState
 let mockedTruthAuctionSettlementState: TruthAuctionSettlementHookState
 
-mock.module('@zoltar/ui-statoblast-shared/protocol/securityPools.js', () => ({
-	...actualSecurityPools,
+await moduleMocks.mockModule('@zoltar/ui-statoblast-shared/protocol/securityPools.js', () => ({
 	loadSecurityPoolChildren: mock(async () => mockedSecurityPools),
 }))
 
-mock.module('@zoltar/ui-statoblast-shared/protocol/forks.js', () => ({
-	...actualForks,
+await moduleMocks.mockModule('@zoltar/ui-statoblast-shared/protocol/forks.js', () => ({
 	loadForkAuctionDetails: mock(async () => mockedForkAuctionDetails),
 }))
 
-mock.module('@zoltar/ui-core-shared/wallet/clients.js', () => ({
-	...actualClients,
+await moduleMocks.mockModule('@zoltar/ui-core-shared/wallet/clients.js', () => ({
 	createConnectedReadClient: mock(() => ({
 		readContract: mock(async () => {
 			throw new Error('Unexpected readContract call in fork auction settlement summary test')
@@ -56,13 +50,11 @@ mock.module('@zoltar/ui-core-shared/wallet/clients.js', () => ({
 	})),
 }))
 
-mock.module('@zoltar/ui-statoblast-shared/features/truth-auctions/hooks/useTruthAuctionBookData.js', () => ({
-	...actualTruthAuctionBookHook,
+await moduleMocks.mockModule('@zoltar/ui-statoblast-shared/features/truth-auctions/hooks/useTruthAuctionBookData.js', () => ({
 	useTruthAuctionBookData: mock(() => mockedTruthAuctionBookState),
 }))
 
-mock.module('@zoltar/ui-statoblast-shared/features/truth-auctions/hooks/useTruthAuctionSettlementActionState.js', () => ({
-	...actualTruthAuctionSettlementHook,
+await moduleMocks.mockModule('@zoltar/ui-statoblast-shared/features/truth-auctions/hooks/useTruthAuctionSettlementActionState.js', () => ({
 	useTruthAuctionSettlementActionState: mock(() => mockedTruthAuctionSettlementState),
 }))
 

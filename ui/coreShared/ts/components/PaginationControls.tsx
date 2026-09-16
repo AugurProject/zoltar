@@ -18,6 +18,9 @@ export function PaginationControls({ hasNextPage = false, hasPreviousPage = fals
 	const hasPageNavigation = onPreviousPage !== undefined || onNextPage !== undefined
 	const hasLoadMore = onLoadMore !== undefined
 	if (!hasPageNavigation && !hasLoadMore && summary === undefined) return undefined
+	// A single page has nothing to navigate, so the controls stay out of the way until more pages exist.
+	// While a page is loading the page count is unknown, so the controls stay in place instead of disappearing mid-reload.
+	if (!hasLoadMore && !hasNextPage && !hasPreviousPage && !loading) return undefined
 
 	return (
 		<div className='actions'>

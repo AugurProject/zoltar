@@ -50,7 +50,7 @@ void describe('user copy helpers', () => {
 		expect(getMetricPlaceholderPresentation(undefined, { loading: true })?.key).toBe('loading')
 		expect(getMetricPlaceholderPresentation(undefined, { loading: true })).toEqual({
 			badgeLabel: 'Loading',
-			badgeTone: 'pending',
+			badgeTone: 'loading',
 			key: 'loading',
 			placeholder: 'Loading…',
 		})

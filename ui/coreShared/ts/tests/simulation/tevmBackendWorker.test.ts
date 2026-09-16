@@ -3,6 +3,7 @@
 import { describe, expect, mock, spyOn, test } from 'bun:test'
 import { normalizeAccount } from '../../wallet/chainBackend.js'
 import { createSimulationBackend } from '../../simulation/tevmBackend.js'
+import { SIMULATION_WRONG_CHAIN_ID_HEX } from '../../simulation/simulationWallet.js'
 import type { SimulationWorkerEvent, SimulationWorkerMessage, SimulationWorkerState } from '../../simulation/tevmWorkerProtocol.js'
 
 function createWorkerHarness() {
@@ -85,6 +86,37 @@ describe('simulation worker lifecycle', () => {
 
 		await expect(accountsPromise).resolves.toEqual([backend.accounts[0]])
 		expect(worker.postMessage).toHaveBeenCalledTimes(1)
+	})
+
+	test('honours the QA wallet mode for wallet discovery, network switching, and change listeners', async () => {
+		const worker = createWorkerHarness()
+		const backendPromise = createSimulationBackend({ walletMode: 'wrong-chain' }, { createWorkerConnection: () => worker.connection })
+		worker.emitMessage({ state: createReadyState(), type: 'ready' })
+		const backend = await backendPromise
+		const chainChanged = mock(() => undefined)
+		const accountsChanged = mock(() => undefined)
+		backend.subscribeChainChanged(chainChanged)
+		backend.subscribeAccountsChanged(accountsChanged)
+
+		expect(backend.walletMode).toBe('wrong-chain')
+		await expect(backend.getChainId()).resolves.toBe(SIMULATION_WRONG_CHAIN_ID_HEX)
+		await expect(backend.createReadClient().getChainId()).resolves.toBe(backend.profile.chain.id)
+		if (backend.switchNetwork === undefined) throw new Error('Expected the simulation backend to support switching networks')
+		await backend.switchNetwork()
+		expect(backend.walletMode).toBe('connected')
+		await expect(backend.getChainId()).resolves.toBe(backend.profile.chainIdHex)
+		expect(chainChanged).toHaveBeenCalledTimes(1)
+		expect(accountsChanged).not.toHaveBeenCalled()
+
+		await backend.setWalletMode('disconnected')
+		expect(accountsChanged).toHaveBeenCalledTimes(1)
+		await expect(backend.getAccounts()).resolves.toEqual([])
+		const requestedAccounts = backend.requestAccounts()
+		worker.emitMessage({ id: 1, type: 'result', value: [backend.accounts[0]] })
+		await expect(requestedAccounts).resolves.toEqual([backend.accounts[0]])
+		expect(backend.walletMode).toBe('connected')
+		expect(accountsChanged).toHaveBeenCalledTimes(2)
+		expect(chainChanged).toHaveBeenCalledTimes(1)
 	})
 
 	test('terminates a worker that fails before readiness', async () => {

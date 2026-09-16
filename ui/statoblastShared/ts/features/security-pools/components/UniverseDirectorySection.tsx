@@ -37,7 +37,7 @@ function getUniversePoolMetrics(universeId: bigint, securityPools: ListedSecurit
 }
 
 export function UniverseDirectorySection({ activeUniverseId, loadingSecurityPools = false, onRetry, securityPoolError, securityPools, zoltarUniverse }: UniverseDirectorySectionProps) {
-	if (zoltarUniverse === undefined) return <StateHint presentation={{ key: 'loading', badgeLabel: commonCopy.loading, badgeTone: 'pending', detail: commonCopy.loadingUniverseDetails }} />
+	if (zoltarUniverse === undefined) return <StateHint presentation={{ key: 'loading', badgeLabel: commonCopy.loading, badgeTone: 'loading', detail: commonCopy.loadingUniverseDetails }} />
 	if (securityPoolError !== undefined && securityPools === undefined)
 		return (
 			<StateHint
@@ -51,7 +51,7 @@ export function UniverseDirectorySection({ activeUniverseId, loadingSecurityPool
 				presentation={{ key: 'load_failed', badgeLabel: commonCopy.error, badgeTone: 'blocked', detail: securityPoolError }}
 			/>
 		)
-	if (loadingSecurityPools || securityPools === undefined) return <StateHint presentation={{ key: 'loading', badgeLabel: commonCopy.loading, badgeTone: 'pending', detail: securityPoolCopy.loadingSecurityPools }} />
+	if (loadingSecurityPools || securityPools === undefined) return <StateHint presentation={{ key: 'loading', badgeLabel: commonCopy.loading, badgeTone: 'loading', detail: securityPoolCopy.loadingSecurityPools }} />
 
 	const getUniverseBadge = (universeId: bigint, exists: boolean) => {
 		if (universeId === activeUniverseId) return { label: commonCopy.selected, tone: 'warning' as const }

@@ -7,6 +7,13 @@ import { appSharedPackages, sharedPackageClosure } from '../repo/sharedPackages.
 
 import { parseUiAppId, type UiAppId } from './appIds.mts'
 export { isUiAppId, parseUiAppId, UI_APP_IDS, type UiAppId } from './appIds.mts'
+// Feature stylesheets are linked after the shared sheet in the order the app pages load them; the production dist keeps the same file names under css/.
+export const featureStylesheets: Record<UiAppId, readonly string[]> = {
+	zoltar: ['zoltar-shared.css'],
+	statoblast: ['zoltar-shared.css', 'statoblast-shared.css'],
+	trading: ['app.css'],
+}
+
 export type UiPackageId = 'coreShared' | 'zoltarShared' | 'statoblastShared' | UiAppId
 
 const UI_PROJECT_ID_BY_PACKAGE_ID: Readonly<Record<UiPackageId, string>> = {

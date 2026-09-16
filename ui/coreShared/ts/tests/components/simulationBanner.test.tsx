@@ -79,6 +79,8 @@ function createSimulationController(overrides: Partial<SimulationController> = {
 		setRepPerEthPrice: async () => undefined,
 		setRepPerUsdcPrice: async () => undefined,
 		setTransactionDelayMilliseconds: async () => undefined,
+		setWalletMode: async () => undefined,
+		walletMode: 'connected',
 		subscribe: () => () => undefined,
 		transactionCountSinceReset: 0n,
 		transactionDelayMilliseconds: 0,
@@ -218,6 +220,39 @@ describe('SimulationBanner', () => {
 			expect(accountOption.textContent).toBe('QA account 1')
 			expect(accountOption.textContent).not.toContain(controller.selectedAccount)
 			expect(documentQueries.getByText(controller.selectedAccount)).toBeTruthy()
+		} finally {
+			await renderedComponent.cleanup()
+			domEnvironment.cleanup()
+		}
+	})
+
+	test('switches the simulated wallet mode and reflects a disconnected wallet in the account label', async () => {
+		const domEnvironment = installDomEnvironment()
+		const onRefresh = mock(async () => undefined)
+		const setWalletMode = mock(async () => undefined)
+		let controller = createSimulationController({ setWalletMode })
+		const renderedComponent = await renderIntoDocument(<SimulationBanner controller={controller} onRefresh={onRefresh} />)
+
+		try {
+			const documentQueries = within(renderedComponent.container)
+			const walletSelect = documentQueries.getByLabelText('Simulation QA wallet')
+			expect(Array.from(walletSelect.querySelectorAll('option')).map(option => option.textContent)).toEqual(['Connected', 'Disconnected', 'Wrong network'])
+			expect(getElementValue(walletSelect)).toBe('connected')
+			expect(documentQueries.getByText('QA wallet')).toBeTruthy()
+			expect(documentQueries.queryByText('Wallet disconnected')).toBeNull()
+
+			await act(async () => {
+				fireEvent.change(walletSelect, { target: { value: 'wrong-chain' } })
+			})
+			await waitFor(() => expect(setWalletMode).toHaveBeenCalledTimes(1))
+			expect(setWalletMode).toHaveBeenCalledWith('wrong-chain')
+			await waitFor(() => expect(onRefresh).toHaveBeenCalledTimes(1))
+
+			controller = createSimulationController({ setWalletMode, walletMode: 'disconnected' })
+			await act(() => render(<SimulationBanner controller={controller} onRefresh={onRefresh} />, renderedComponent.container))
+			expect(getElementValue(documentQueries.getByLabelText('Simulation QA wallet'))).toBe('disconnected')
+			expect(documentQueries.getAllByText('Wallet disconnected').length).toBeGreaterThan(0)
+			expect(documentQueries.queryByText('QA account 1', { selector: '.simulation-banner-compact-account' })).toBeNull()
 		} finally {
 			await renderedComponent.cleanup()
 			domEnvironment.cleanup()

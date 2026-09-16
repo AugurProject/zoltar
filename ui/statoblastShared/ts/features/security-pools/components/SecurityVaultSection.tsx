@@ -1,11 +1,9 @@
 import { ErrorNotice } from '@zoltar/ui-core-shared/components/ErrorNotice.js'
 import { VaultOperationTimeoutField } from './VaultOperationTimeoutField.js'
-import type { ComponentChildren } from 'preact'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as securityPoolCopy from '../../../copy/securityPool.js'
 import { useEffect, useId, useRef, useState } from 'preact/hooks'
 import { AddressValue } from '@zoltar/ui-core-shared/components/AddressValue.js'
-import { ActionLauncherCard } from '@zoltar/ui-core-shared/components/ActionLauncherCard.js'
 import { CurrencyValue } from '@zoltar/ui-core-shared/components/CurrencyValue.js'
 import { FormInput } from '@zoltar/ui-core-shared/components/FormInput.js'
 import { LookupFieldRow } from '@zoltar/ui-core-shared/components/LookupFieldRow.js'
@@ -17,20 +15,31 @@ import { RouteWorkflowPanel } from '@zoltar/ui-core-shared/components/RouteWorkf
 import { SectionBlock } from '@zoltar/ui-core-shared/components/SectionBlock.js'
 import { StateHint } from '@zoltar/ui-core-shared/components/StateHint.js'
 import { TimestampValue } from '@zoltar/ui-core-shared/components/TimestampValue.js'
-import { TokenApprovalControl } from '@zoltar/ui-core-shared/components/TokenApprovalControl.js'
-import { TransactionActionButton, TransactionActionGroup } from '@zoltar/ui-core-shared/components/TransactionActionButton.js'
+import { TransactionActionButton } from '@zoltar/ui-core-shared/components/TransactionActionButton.js'
 import { normalizeAddress, sameAddress } from '@zoltar/ui-core-shared/lib/address.js'
-import { formatCurrencyBalance, formatCurrencyInputBalance } from '@zoltar/ui-core-shared/lib/formatters.js'
+import { formatCurrencyInputBalance } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { balanceShortage } from '@zoltar/ui-core-shared/forms/inputs.js'
 import { tryParseBigIntInput } from '@zoltar/ui-core-shared/forms/integerInput.js'
 import { tryParseRepAmountInput } from '@zoltar/ui-core-shared/forms/formInputs.js'
 import { isActiveAppChain } from '@zoltar/ui-core-shared/wallet/network.js'
 import { getOracleRequestEthGuardMessage, resolveOracleOperationEthFunding } from '../../open-oracle/lib/oracleRequestEth.js'
-import { getWalletActiveAppChainGuardState } from '@zoltar/ui-core-shared/transactions/actionGuards.js'
 import { getSecurityPoolVaultReadinessActions } from '../lib/securityPoolReadiness.js'
-import { getVaultLauncherVaultOwnerReason, getVaultLauncherWalletReason } from '../lib/securityPoolLabels.js'
 import { isVaultHealthyAtFactor } from '../lib/liquidation.js'
 import { getTargetHealthFactorGuardMessage, getVaultDepositGuardMessage, getVaultRedeemRepGuardMessage, getVaultWithdrawGuardMessage } from '../lib/securityVaultGuards.js'
+import {
+	buildVaultReadinessActions,
+	getMaximumWithdrawableAttoRep,
+	getVaultActionDisabledReasonId,
+	getVaultActionsLoadBlocker,
+	getVaultDepositAmountNotice,
+	getVaultLauncherBlocker,
+	getVaultLifecycleBlocker,
+	getVaultLookupActionLabel,
+	getVaultRepExitActionLabel,
+	getVaultRepExitAmountLabel,
+	type VaultActionModal,
+	type VaultLauncherBlockerContext,
+} from '../lib/securityVaultAvailability.js'
 import { deriveTokenApprovalRequirement } from '@zoltar/ui-core-shared/transactions/tokenApproval.js'
 import { useChainTimestamp } from '@zoltar/ui-core-shared/wallet/chainTimestamp.js'
 import {
@@ -44,12 +53,11 @@ import {
 	isSelectedVaultOwnedByAccount as isSelectedVaultOwnedByAccountHelper,
 	MIN_SECURITY_VAULT_REP_DEPOSIT_ATTO_REP,
 } from '../lib/securityVault.js'
-import type { ReadinessAction, SecurityVaultSectionProps } from '../../types.js'
+import type { SecurityVaultSectionProps } from '../../types.js'
 import { DepositBackingFactorField, VaultBackingFactorForm, VaultBackingFactorModal } from './VaultBackingFactorForm.js'
 import { SelectedVaultSummarySection } from './SelectedVaultSummarySection.js'
 import { VaultQueuedOperationStatusCards } from './VaultQueuedOperationStatusCard.js'
-
-type VaultActionModal = 'claim-fees' | 'deposit-rep' | 'withdraw-rep' | 'adjust-backing' | undefined
+import { VaultActionLaunchers, VaultDepositAmountField, VaultDepositApprovalControl, VaultRepExitActionButton, VaultRepWithdrawAmountField } from './SecurityVaultActionFields.js'
 
 export function SecurityVaultSection({
 	accountState,
@@ -93,7 +101,8 @@ export function SecurityVaultSection({
 	poolState,
 }: SecurityVaultSectionProps) {
 	const currentTimestamp = useChainTimestamp()
-	const [vaultActionModal, setVaultActionModal] = useState<VaultActionModal>(undefined)
+	const [vaultActionModal, setVaultActionModal] = useState<VaultActionModal | undefined>(undefined)
+	const closeVaultActionModal = () => setVaultActionModal(undefined)
 	const refreshVaultActionsDescriptionId = useId()
 	const vaultLifecycleBlockerId = useId()
 	const isOnActiveAppChain = isActiveAppChain(accountState?.chainId)
@@ -153,11 +162,12 @@ export function SecurityVaultSection({
 		totalPoolHeldAttoRep: selectedPoolTotalPoolHeldAttoRep,
 		totalCapacityOwnershipAttoRep: selectedPoolTotalCapacityOwnershipAttoRep,
 	})
-	const maximumWithdrawableAttoRep = (() => {
-		if (currentSelectedVaultDetails !== undefined && currentSelectedVaultDetails.disputeStakedAttoRep > 0n) return 0n
-		if (repPerEthPrice !== undefined) return withdrawableRepAmountAttoRep
-		return currentSelectedVaultDetails?.vaultAttoRepBacking
-	})()
+	const maximumWithdrawableAttoRep = getMaximumWithdrawableAttoRep({
+		disputeStakedAttoRep: currentSelectedVaultDetails?.disputeStakedAttoRep,
+		repPerEthPrice,
+		vaultAttoRepBacking: currentSelectedVaultDetails?.vaultAttoRepBacking,
+		withdrawableRepAmountAttoRep,
+	})
 	const minimumVaultRepDepositAttoRep = currentSelectedVaultDetails?.minimumVaultRepDepositAttoRep ?? MIN_SECURITY_VAULT_REP_DEPOSIT_ATTO_REP
 	const isDepositBelowMinimum = isSecurityVaultDepositBelowMinimum(currentSelectedVaultDetails?.vaultAttoRepBacking, depositAmount, minimumVaultRepDepositAttoRep)
 	const hasClaimableFees = currentSelectedVaultDetails !== undefined && currentSelectedVaultDetails.claimableFeesAttoEth > 0n
@@ -172,21 +182,11 @@ export function SecurityVaultSection({
 	const redeemRepFromVaultEnabled = poolState?.actions.redeemRepFromVault.enabled === true
 	const approveRepEnabled = poolState?.actions.approveRep.enabled ?? true
 	const claimFeesEnabled = poolState?.actions.redeemFees.enabled ?? true
-	const vaultLifecycleBlocker = (() => {
-		if (poolState?.lifecycleState === 'ended') return securityPoolCopy.vaultActionsEndedDetail
-		if (poolState?.lifecycleState === 'poolForked' || poolState?.lifecycleState === 'forkMigration') return securityPoolCopy.vaultActionsForkMigrationDetail
-		if (poolState?.lifecycleState === 'forkTruthAuction') return securityPoolCopy.vaultActionsTruthAuctionDetail
-		if (poolState?.vaultAdmissionClosed) return securityPoolCopy.vaultDepositAdmissionClosedDetail
-		return undefined
-	})()
+	const vaultLifecycleBlocker = getVaultLifecycleBlocker(poolState)
 	const effectiveRepExitMode = redeemRepFromVaultEnabled ? 'redeem' : 'withdraw'
 	const repExitEnabled = effectiveRepExitMode === 'redeem' ? redeemRepFromVaultEnabled : queueWithdrawRepEnabled
-	const repExitActionLabel = effectiveRepExitMode === 'redeem' ? securityPoolCopy.formatRedeemRepFromVault(repTokenSymbol) : securityPoolCopy.formatWithdrawRep(repTokenSymbol)
-	const repExitAmountLabel = (() => {
-		if (effectiveRepExitMode === 'redeem') return securityPoolCopy.redeemableAttoRep
-		if (hasValidOraclePrice) return securityPoolCopy.withdrawableAttoRep
-		return securityPoolCopy.repAvailableToQueue
-	})()
+	const repExitActionLabel = getVaultRepExitActionLabel(effectiveRepExitMode, repTokenSymbol)
+	const repExitAmountLabel = getVaultRepExitAmountLabel(effectiveRepExitMode, hasValidOraclePrice)
 	const depositGuardMessage = getVaultDepositGuardMessage({
 		approvalSatisfied: hasSufficientDepositAllowance,
 		depositAmount,
@@ -198,29 +198,7 @@ export function SecurityVaultSection({
 	})
 	const targetHealthFactorGuardMessage = hasPositiveDepositAmount ? getTargetHealthFactorGuardMessage(depositTargetHealthFactor, selectedPoolStatoblastSecurityMultiplierBps) : undefined
 	const depositActionGuardMessage = targetHealthFactorGuardMessage === undefined ? (depositGuardMessage ?? (!hasPositiveDepositAmount ? commonCopy.positiveAmountRequired : undefined)) : undefined
-
-	const depositAmountNotice = (() => {
-		if (walletRepShortfallAttoRep !== undefined && walletRepShortfallAttoRep > 0n) return securityPoolCopy.formatInsufficientRepBalanceDetail(formatCurrencyBalance(walletRepShortfallAttoRep))
-		if (isDepositBelowMinimum) return getVaultDepositGuardMessage({ approvalSatisfied: true, depositAmount, isDepositBelowMinimum, minimumVaultRepDepositAttoRep, walletRepShortfallAttoRep: undefined })
-		return undefined
-	})()
-	const renderDepositActions = (approvalButton: ComponentChildren, approvalNotice: string | undefined, noticeId: string, showCancel = false) => (
-		<TransactionActionGroup id={noticeId} message={approvalNotice ?? (canUseLoadedVaultActions ? depositActionGuardMessage : undefined)}>
-			{approvalButton}
-			<TransactionActionButton
-				idleLabel={depositRepActionLabel}
-				pendingLabel={securityPoolCopy.formatDepositingRep(repTokenSymbol)}
-				onClick={onDepositRepToVault}
-				pending={securityVaultActiveAction === 'depositRepToVault'}
-				availability={{ disabled: !depositRepToVaultEnabled || !canUseLoadedVaultActions || !hasPositiveDepositAmount || depositGuardMessage !== undefined, reason: canUseLoadedVaultActions ? depositActionGuardMessage : undefined }}
-			/>
-			{showCancel ? (
-				<button className='secondary' type='button' onClick={() => setVaultActionModal(undefined)}>
-					{commonCopy.cancel}
-				</button>
-			) : undefined}
-		</TransactionActionGroup>
-	)
+	const depositAmountNotice = getVaultDepositAmountNotice({ depositAmount, isDepositBelowMinimum, minimumVaultRepDepositAttoRep, walletRepShortfallAttoRep })
 	const withdrawRepFunding = resolveOracleOperationEthFunding({
 		managerDetails: oracleManagerDetails,
 		priceUsable: hasValidOraclePrice,
@@ -261,40 +239,28 @@ export function SecurityVaultSection({
 		if (securityVaultMissing) return <StateHint presentation={{ key: 'not_found', badgeLabel: commonCopy.notFound, badgeTone: 'blocked', detail: securityPoolCopy.invalidVaultAddressHint }} />
 		return undefined
 	})()
-	const vaultLookupActionLabel = securityVaultError === undefined ? commonCopy.refresh : commonCopy.retry
+	const vaultLookupActionLabel = getVaultLookupActionLabel(securityVaultError)
 	const loadedVaultMissingBlocker = currentSelectedVaultDetails !== undefined && !vaultExistsOnchain ? securityPoolCopy.missingVaultDetail : undefined
-	const vaultActionsLoadBlocker = (() => {
-		if (hasLoadedSelectedVaultDetails || loadingSecurityVault) return undefined
-		if (autoLoadVault && securityVaultError === undefined) return undefined
-		return securityVaultError === undefined ? securityPoolCopy.refreshVaultActionsDetail : securityPoolCopy.retryVaultActionsDetail
-	})()
-	const getVaultLauncherBlocker = (action: 'claim-fees' | 'deposit-rep' | 'rep-exit') => {
-		const walletGuardState = getWalletActiveAppChainGuardState({
-			accountAddress: accountState.address,
-			isOnActiveAppChain,
-			walletRequiredReason: getVaultLauncherWalletReason(action, effectiveRepExitMode),
-		})
-		if (walletGuardState.blocked) return walletGuardState.reason
-		if (!selectedVaultIsOwnedByAccount) return getVaultLauncherVaultOwnerReason(action, effectiveRepExitMode)
-		if (!hasLoadedSelectedVaultDetails) return vaultActionsLoadBlocker
-		if (action === 'deposit-rep') {
-			if (!vaultExistsOnchain && walletRepBalanceAttoRep !== undefined && walletRepBalanceAttoRep <= 0n) return securityPoolCopy.missingVaultRepBalanceReason
-			return undefined
-		}
-		return loadedVaultMissingBlocker
+	const vaultActionsLoadBlocker = getVaultActionsLoadBlocker({ autoLoadVault, hasLoadedSelectedVaultDetails, loadingSecurityVault, securityVaultError })
+	const launcherBlockerContext: VaultLauncherBlockerContext = {
+		accountAddress: accountState.address,
+		hasLoadedSelectedVaultDetails,
+		isOnActiveAppChain,
+		loadedVaultMissingBlocker,
+		repExitMode: effectiveRepExitMode,
+		selectedVaultIsOwnedByAccount,
+		vaultActionsLoadBlocker,
+		vaultExistsOnchain,
+		walletRepBalanceAttoRep,
 	}
-	const depositLauncherBlocker = getVaultLauncherBlocker('deposit-rep')
-	const repExitLauncherBlocker = getVaultLauncherBlocker('rep-exit')
-	const claimFeesLauncherBlocker = getVaultLauncherBlocker('claim-fees')
+	const depositLauncherBlocker = getVaultLauncherBlocker('deposit-rep', launcherBlockerContext)
+	const repExitLauncherBlocker = getVaultLauncherBlocker('rep-exit', launcherBlockerContext)
+	const claimFeesLauncherBlocker = getVaultLauncherBlocker('claim-fees', launcherBlockerContext)
 	const showSharedRefreshVaultBlocker = vaultActionsLoadBlocker !== undefined && hasConnectedWallet && selectedVaultIsOwnedByAccount && isOnActiveAppChain
-	const getVaultActionDisabledReasonId = (lifecycleActionEnabled: boolean) => {
-		if (vaultLifecycleBlocker !== undefined && !lifecycleActionEnabled) return vaultLifecycleBlockerId
-		if (showSharedRefreshVaultBlocker) return refreshVaultActionsDescriptionId
-		return undefined
-	}
-	const depositDisabledReasonId = getVaultActionDisabledReasonId(depositRepToVaultEnabled)
-	const repExitDisabledReasonId = getVaultActionDisabledReasonId(repExitEnabled)
-	const claimFeesDisabledReasonId = getVaultActionDisabledReasonId(claimFeesEnabled)
+	const disabledReasonIdContext = { refreshVaultActionsDescriptionId, showSharedRefreshVaultBlocker, vaultLifecycleBlocker, vaultLifecycleBlockerId }
+	const depositDisabledReasonId = getVaultActionDisabledReasonId({ ...disabledReasonIdContext, lifecycleActionEnabled: depositRepToVaultEnabled })
+	const repExitDisabledReasonId = getVaultActionDisabledReasonId({ ...disabledReasonIdContext, lifecycleActionEnabled: repExitEnabled })
+	const claimFeesDisabledReasonId = getVaultActionDisabledReasonId({ ...disabledReasonIdContext, lifecycleActionEnabled: claimFeesEnabled })
 	const visibleDepositLauncherBlocker = showSharedRefreshVaultBlocker ? undefined : depositLauncherBlocker
 	const visibleRepExitLauncherBlocker = showSharedRefreshVaultBlocker ? undefined : repExitLauncherBlocker
 	const visibleClaimFeesLauncherBlocker = showSharedRefreshVaultBlocker ? undefined : claimFeesLauncherBlocker
@@ -323,146 +289,105 @@ export function SecurityVaultSection({
 		/>
 	)
 	const vaultReadinessActions = getSecurityPoolVaultReadinessActions([
-		{
-			actionLabel: depositRepActionLabel,
-			description: securityPoolCopy.depositRepToVaultDescription,
-			key: 'deposit-rep',
-			...(depositRepToVaultEnabled && canUseLoadedVaultActions ? { onAction: () => setVaultActionModal('deposit-rep') } : {}),
-			readiness: depositRepToVaultEnabled && canUseLoadedVaultActions ? 'ready' : 'blocked',
-			...(depositDisabledReasonId === undefined ? {} : { disabledReasonId: depositDisabledReasonId }),
-			...(visibleDepositLauncherBlocker === undefined || !depositRepToVaultEnabled ? {} : { blocker: visibleDepositLauncherBlocker }),
-			title: depositRepActionLabel,
-		},
-		{
-			actionLabel: repExitActionLabel,
-			description: effectiveRepExitMode === 'redeem' ? securityPoolCopy.repRedemptionDescription : securityPoolCopy.repWithdrawalDescription,
-			key: 'rep-exit',
-			...(repExitEnabled && vaultExistsOnchain && canUseLoadedVaultActions ? { onAction: () => setVaultActionModal('withdraw-rep') } : {}),
-			readiness: repExitEnabled && vaultExistsOnchain && canUseLoadedVaultActions ? 'ready' : 'blocked',
-			...(repExitDisabledReasonId === undefined ? {} : { disabledReasonId: repExitDisabledReasonId }),
-			...(visibleRepExitLauncherBlocker === undefined || !repExitEnabled ? {} : { blocker: visibleRepExitLauncherBlocker }),
-			title: repExitActionLabel,
-		},
-		{
-			actionLabel: securityPoolCopy.claimFees,
-			description: securityPoolCopy.claimFeesDescription,
-			key: 'claim-fees',
-			...(claimFeesEnabled && hasClaimableFees && claimFeesLauncherBlocker === undefined && vaultExistsOnchain && canUseLoadedVaultActions ? { onAction: () => setVaultActionModal('claim-fees') } : {}),
-			readiness: claimFeesEnabled && hasClaimableFees && claimFeesLauncherBlocker === undefined && vaultExistsOnchain && canUseLoadedVaultActions ? 'ready' : 'blocked',
-			...(claimFeesDisabledReasonId === undefined ? {} : { disabledReasonId: claimFeesDisabledReasonId }),
-			...(claimFeesAvailabilityBlocker === undefined ? {} : { blocker: claimFeesAvailabilityBlocker }),
-			title: securityPoolCopy.claimFeesTitle,
-		},
-		{
-			actionLabel: securityPoolCopy.adjustVaultBackingFactor,
-			description: securityPoolCopy.adjustVaultBackingFactorDescription,
-			key: 'adjust-backing',
-			...(adjustmentBlocker === undefined && canUseLoadedVaultActions ? { onAction: () => setVaultActionModal('adjust-backing') } : {}),
-			readiness: adjustmentBlocker === undefined && canUseLoadedVaultActions ? 'ready' : 'blocked',
-			...(depositDisabledReasonId === undefined ? {} : { disabledReasonId: depositDisabledReasonId }),
-			...(showSharedRefreshVaultBlocker || adjustmentBlocker === undefined ? {} : { blocker: adjustmentBlocker }),
-			title: securityPoolCopy.adjustVaultBackingFactor,
-		},
+		...buildVaultReadinessActions({
+			adjustmentBlocker,
+			canUseLoadedVaultActions,
+			claimFeesAvailabilityBlocker,
+			claimFeesDisabledReasonId,
+			claimFeesEnabled,
+			claimFeesLauncherBlocker,
+			depositDisabledReasonId,
+			depositRepActionLabel,
+			depositRepToVaultEnabled,
+			hasClaimableFees,
+			onOpenModal: setVaultActionModal,
+			repExitActionLabel,
+			repExitDisabledReasonId,
+			repExitEnabled,
+			repExitMode: effectiveRepExitMode,
+			showSharedRefreshVaultBlocker,
+			vaultExistsOnchain,
+			visibleDepositLauncherBlocker,
+			visibleRepExitLauncherBlocker,
+		}),
 		...extraReadinessActions,
-	] satisfies ReadinessAction[])
+	])
+	const depositAmountField = <VaultDepositAmountField disabled={!depositRepToVaultEnabled} onChange={depositAmount => onSecurityVaultFormChange({ depositAmount })} value={normalizedSecurityVaultForm.depositAmount} walletRepBalanceAttoRep={walletRepBalanceAttoRep} />
+	const depositBackingFactorField = (
+		<DepositBackingFactorField minimumBps={minimumBps} saved={!!currentSelectedVaultDetails?.targetBackingFactorBps} value={depositTargetHealthFactor} error={targetHealthFactorGuardMessage} disabled={!depositRepToVaultEnabled} onChange={targetHealthFactor => onSecurityVaultFormChange({ targetHealthFactor })} />
+	)
+	const depositApprovalControlProps = {
+		approveRepEnabled,
+		canUseLoadedVaultActions,
+		currentSelectedVaultDetails,
+		depositActionGuardMessage,
+		depositAmount,
+		depositAmountNotice,
+		depositGuardMessage,
+		depositRepActionLabel,
+		depositRepToVaultEnabled,
+		hasPositiveDepositAmount,
+		onApproveRep,
+		onDepositRepToVault,
+		repTokenSymbol,
+		securityVaultActiveAction,
+		securityVaultRepApproval,
+	}
+	const repWithdrawAmountField =
+		effectiveRepExitMode === 'redeem' ? null : <VaultRepWithdrawAmountField disabled={!queueWithdrawRepEnabled} maximumWithdrawableAttoRep={maximumWithdrawableAttoRep} onChange={repWithdrawAmount => onSecurityVaultFormChange({ repWithdrawAmount })} value={normalizedSecurityVaultForm.repWithdrawAmount} />
+	const repExitActionButton = (
+		<VaultRepExitActionButton
+			canUseLoadedVaultActions={canUseLoadedVaultActions}
+			hasPositiveWithdrawAmount={hasPositiveWithdrawAmount}
+			hasWithdrawableRep={hasWithdrawableRep}
+			onRedeemRepFromVault={onRedeemRepFromVault}
+			onWithdrawRep={onWithdrawRep}
+			repExitActionLabel={repExitActionLabel}
+			repExitEnabled={repExitEnabled}
+			repExitGuardMessage={repExitGuardMessage}
+			repExitMode={effectiveRepExitMode}
+			securityVaultActiveAction={securityVaultActiveAction}
+		/>
+	)
+	const selectedVaultSummaryProps = { repPerEthPrice, repPerEthSource, repPerEthSourceUrl, currentVaultIsHealthy, selectedPoolStatoblastSecurityMultiplierBps, selectedVaultIsOwnedByAccount }
 	const actionSections = modalFirst ? (
 		<>
-			<SectionBlock title={securityPoolCopy.vaultActions} variant='plain'>
-				{showMissingVaultNotice ? <StateHint presentation={{ key: 'not_found', badgeLabel: securityPoolCopy.vaultMissing, badgeTone: 'muted', detail: securityPoolCopy.missingVaultDepositDetail }} /> : undefined}
-				{vaultLifecycleBlocker === undefined ? undefined : (
-					<p className='notice warning' id={vaultLifecycleBlockerId}>
-						{vaultLifecycleBlocker}
-					</p>
-				)}
-				{showSharedRefreshVaultBlocker ? (
-					<p className='detail' id={refreshVaultActionsDescriptionId}>
-						{vaultActionsLoadBlocker}
-					</p>
-				) : undefined}
-				<div className='vault-action-launcher-grid'>
-					{vaultReadinessActions.map(action => (
-						<ActionLauncherCard key={action.key} action={action} />
-					))}
-				</div>
-			</SectionBlock>
-			<ErrorNotice message={securityVaultError} />
-			<ErrorNotice message={vaultActionModal === 'deposit-rep' ? undefined : walletRepBalanceError} />
-			<OperationModal closeOnSuccessKey={securityVaultResult?.action === 'depositRepToVault' ? securityVaultResult.hash : undefined} context={vaultTransactionContext} isOpen={vaultActionModal === 'deposit-rep'} onClose={() => setVaultActionModal(undefined)} title={depositRepActionLabel}>
+			<VaultActionLaunchers
+				refreshVaultActionsDescriptionId={refreshVaultActionsDescriptionId}
+				securityVaultError={securityVaultError}
+				showMissingVaultNotice={showMissingVaultNotice}
+				showSharedRefreshVaultBlocker={showSharedRefreshVaultBlocker}
+				vaultActionsLoadBlocker={vaultActionsLoadBlocker}
+				vaultLifecycleBlocker={vaultLifecycleBlocker}
+				vaultLifecycleBlockerId={vaultLifecycleBlockerId}
+				vaultReadinessActions={vaultReadinessActions}
+				walletRepBalanceError={vaultActionModal === 'deposit-rep' ? undefined : walletRepBalanceError}
+			/>
+			<OperationModal closeOnSuccessKey={securityVaultResult?.action === 'depositRepToVault' ? securityVaultResult.hash : undefined} context={vaultTransactionContext} isOpen={vaultActionModal === 'deposit-rep'} onClose={closeVaultActionModal} title={depositRepActionLabel}>
 				{currentSelectedVaultDetails === undefined ? <p className='detail'>{securityPoolCopy.selectedVaultDetailsUnavailable}</p> : null}
 				{currentSelectedVaultDetails === undefined ? null : (
 					<>
 						{vaultExistsOnchain ? (
-							<SelectedVaultSummarySection
-								repPerEthPrice={repPerEthPrice}
-								repPerEthSource={repPerEthSource}
-								repPerEthSourceUrl={repPerEthSourceUrl}
-								capacityOwnershipAttoRep={currentSelectedVaultDetails.capacityOwnershipAttoRep}
-								currentVaultIsHealthy={currentVaultIsHealthy}
-								securityVaultDetails={currentSelectedVaultDetails}
-								selectedPoolStatoblastSecurityMultiplierBps={selectedPoolStatoblastSecurityMultiplierBps}
-								selectedVaultIsOwnedByAccount={selectedVaultIsOwnedByAccount}
-								variant='embedded'
-							/>
+							<SelectedVaultSummarySection {...selectedVaultSummaryProps} capacityOwnershipAttoRep={currentSelectedVaultDetails.capacityOwnershipAttoRep} securityVaultDetails={currentSelectedVaultDetails} variant='embedded' />
 						) : (
 							<StateHint presentation={{ key: 'not_found', badgeLabel: securityPoolCopy.vaultMissing, badgeTone: 'muted', detail: securityPoolCopy.missingVaultDepositDetail }} />
 						)}
-						<label className='field'>
-							<span>{securityPoolCopy.repBackingLabel}</span>
-							<div className='field-inline'>
-								<FormInput className='field-inline-input' value={normalizedSecurityVaultForm.depositAmount} onInput={event => onSecurityVaultFormChange({ depositAmount: event.currentTarget.value })} disabled={!depositRepToVaultEnabled} />
-								<button
-									className='quiet field-inline-action'
-									type='button'
-									onClick={() => {
-										if (walletRepBalanceAttoRep === undefined) return
-										onSecurityVaultFormChange({ depositAmount: formatCurrencyInputBalance(walletRepBalanceAttoRep) })
-									}}
-									disabled={walletRepBalanceAttoRep === undefined || !depositRepToVaultEnabled}
-								>
-									{commonCopy.max}
-								</button>
-							</div>
-						</label>
-						<DepositBackingFactorField minimumBps={minimumBps} saved={!!currentSelectedVaultDetails?.targetBackingFactorBps} value={depositTargetHealthFactor} error={targetHealthFactorGuardMessage} disabled={!depositRepToVaultEnabled} onChange={targetHealthFactor => onSecurityVaultFormChange({ targetHealthFactor })} />
+						{depositAmountField}
+						{depositBackingFactorField}
 						<MetricGrid>
 							<MetricField label={securityPoolCopy.walletRep}>{walletRepBalanceLoading ? <LoadingText>{commonCopy.loading}</LoadingText> : <CurrencyValue value={walletRepBalanceAttoRep} suffix={repTokenSymbol} />}</MetricField>
 						</MetricGrid>
 						<ErrorNotice message={walletRepBalanceError} />
-						<TokenApprovalControl
-							renderActions={({ button, notice, noticeId }) => renderDepositActions(button, notice, noticeId, true)}
-							actionLabel={depositRepActionLabel}
-							allowanceError={securityVaultRepApproval.error}
-							allowanceLoading={securityVaultRepApproval.loading}
-							approvedAmount={securityVaultRepApproval.value}
-							guardMessage={depositAmountNotice}
-							onApprove={amount => onApproveRep(amount)}
-							pending={securityVaultActiveAction === 'approveRep'}
-							pendingLabel={commonCopy.formatApprovingToken(repTokenSymbol)}
-							requiredAmount={depositAmount}
-							resetKey={`${currentSelectedVaultDetails.repToken}:${currentSelectedVaultDetails.securityPoolAddress}:${depositAmount?.toString() ?? ''}`}
-							tokenSymbol={repTokenSymbol}
-							tokenUnits={18}
-							disabled={!approveRepEnabled || !canUseLoadedVaultActions || !depositRepToVaultEnabled}
-						/>
+						<VaultDepositApprovalControl {...depositApprovalControlProps} onCancel={closeVaultActionModal} />
 					</>
 				)}
 			</OperationModal>
-			<OperationModal context={vaultTransactionContext} isOpen={vaultActionModal === 'withdraw-rep'} onClose={() => setVaultActionModal(undefined)} title={repExitActionLabel}>
+			<OperationModal context={vaultTransactionContext} isOpen={vaultActionModal === 'withdraw-rep'} onClose={closeVaultActionModal} title={repExitActionLabel}>
 				{currentSelectedVaultDetails === undefined ? <p className='detail'>{securityPoolCopy.selectedVaultDetailsUnavailable}</p> : null}
 				{currentSelectedVaultDetails === undefined ? null : (
 					<>
 						{effectiveRepExitMode === 'redeem' ? null : <VaultQueuedOperationStatusCards {...operationStatusProps} operation='withdrawRep' />}
-						<SelectedVaultSummarySection
-							repPerEthPrice={repPerEthPrice}
-							repPerEthSource={repPerEthSource}
-							repPerEthSourceUrl={repPerEthSourceUrl}
-							capacityOwnershipAttoRep={currentSelectedVaultDetails.capacityOwnershipAttoRep}
-							currentVaultIsHealthy={currentVaultIsHealthy}
-							securityVaultDetails={currentSelectedVaultDetails}
-							selectedPoolStatoblastSecurityMultiplierBps={selectedPoolStatoblastSecurityMultiplierBps}
-							selectedVaultIsOwnedByAccount={selectedVaultIsOwnedByAccount}
-							variant='embedded'
-						/>
+						<SelectedVaultSummarySection {...selectedVaultSummaryProps} capacityOwnershipAttoRep={currentSelectedVaultDetails.capacityOwnershipAttoRep} securityVaultDetails={currentSelectedVaultDetails} variant='embedded' />
 						<MetricGrid>
 							<MetricField label={repExitAmountLabel}>
 								{(() => {
@@ -484,55 +409,27 @@ export function SecurityVaultSection({
 								<MetricField label={securityPoolCopy.priceValidUntil}>{oraclePriceValidUntilTimestamp === undefined ? commonCopy.unavailable : <TimestampValue timestamp={oraclePriceValidUntilTimestamp} />}</MetricField>
 							)}
 						</MetricGrid>
-						{effectiveRepExitMode === 'redeem' ? null : (
-							<label className='field'>
-								<span>{securityPoolCopy.repWithdrawAmount}</span>
-								<div className='field-inline'>
-									<FormInput className='field-inline-input' value={normalizedSecurityVaultForm.repWithdrawAmount} onInput={event => onSecurityVaultFormChange({ repWithdrawAmount: event.currentTarget.value })} disabled={!queueWithdrawRepEnabled} />
-									<button
-										className='quiet field-inline-action'
-										type='button'
-										onClick={() => {
-											if (maximumWithdrawableAttoRep === undefined) return
-											onSecurityVaultFormChange({ repWithdrawAmount: formatCurrencyInputBalance(maximumWithdrawableAttoRep) })
-										}}
-										disabled={maximumWithdrawableAttoRep === undefined || !queueWithdrawRepEnabled}
-									>
-										{commonCopy.max}
-									</button>
-								</div>
-							</label>
-						)}
+						{repWithdrawAmountField}
 						{effectiveRepExitMode === 'redeem' ? null : stagedOperationTimeoutField}
 						<div className='actions'>
-							<button className='secondary' type='button' onClick={() => setVaultActionModal(undefined)}>
+							<button className='secondary' type='button' onClick={closeVaultActionModal}>
 								{commonCopy.cancel}
 							</button>
-							<TransactionActionButton
-								idleLabel={repExitActionLabel}
-								pendingLabel={effectiveRepExitMode === 'redeem' ? securityPoolCopy.redeemingRep : securityPoolCopy.withdrawingRep}
-								onClick={effectiveRepExitMode === 'redeem' ? onRedeemRepFromVault : onWithdrawRep}
-								pending={effectiveRepExitMode === 'redeem' ? securityVaultActiveAction === 'redeemRepFromVault' : securityVaultActiveAction === 'queueWithdrawRep'}
-								tone='secondary'
-								availability={{
-									disabled: !repExitEnabled || !canUseLoadedVaultActions || (effectiveRepExitMode === 'withdraw' && (!hasPositiveWithdrawAmount || !hasWithdrawableRep)) || repExitGuardMessage !== undefined,
-									reason: canUseLoadedVaultActions ? repExitGuardMessage : undefined,
-								}}
-							/>
+							{repExitActionButton}
 						</div>
 					</>
 				)}
 			</OperationModal>
-			<VaultBackingFactorModal context={vaultTransactionContext} isOpen={vaultActionModal === 'adjust-backing'} onClose={() => setVaultActionModal(undefined)} result={securityVaultResult} error={securityVaultError}>
+			<VaultBackingFactorModal context={vaultTransactionContext} isOpen={vaultActionModal === 'adjust-backing'} onClose={closeVaultActionModal} result={securityVaultResult} error={securityVaultError}>
 				{adjustmentForm}
 			</VaultBackingFactorModal>
-			<OperationModal context={vaultTransactionContext} isOpen={vaultActionModal === 'claim-fees'} onClose={() => setVaultActionModal(undefined)} title={securityPoolCopy.claimFeesTitle}>
+			<OperationModal context={vaultTransactionContext} isOpen={vaultActionModal === 'claim-fees'} onClose={closeVaultActionModal} title={securityPoolCopy.claimFeesTitle}>
 				<MetricGrid>
 					<MetricField label={securityPoolCopy.claimableFees}>{currentSelectedVaultDetails === undefined ? commonCopy.metricUnavailablePlaceholder : <CurrencyValue exactWhenRoundedToZero value={currentSelectedVaultDetails.claimableFeesAttoEth} suffix={commonCopy.eth} />}</MetricField>
 					<MetricField label={securityPoolCopy.vault}>{selectedVaultOwner === undefined ? commonCopy.noneSelected : <AddressValue address={selectedVaultOwner} />}</MetricField>
 				</MetricGrid>
 				<div className='actions'>
-					<button className='secondary' type='button' onClick={() => setVaultActionModal(undefined)}>
+					<button className='secondary' type='button' onClick={closeVaultActionModal}>
 						{commonCopy.cancel}
 					</button>
 					<TransactionActionButton
@@ -566,40 +463,9 @@ export function SecurityVaultSection({
 			</SectionBlock>
 
 			<SectionBlock title={depositRepActionLabel} variant='embedded'>
-				<label className='field'>
-					<span>{securityPoolCopy.repBackingLabel}</span>
-					<div className='field-inline'>
-						<FormInput className='field-inline-input' value={normalizedSecurityVaultForm.depositAmount} onInput={event => onSecurityVaultFormChange({ depositAmount: event.currentTarget.value })} disabled={!depositRepToVaultEnabled} />
-						<button
-							className='quiet field-inline-action'
-							type='button'
-							onClick={() => {
-								if (walletRepBalanceAttoRep === undefined) return
-								onSecurityVaultFormChange({ depositAmount: formatCurrencyInputBalance(walletRepBalanceAttoRep) })
-							}}
-							disabled={walletRepBalanceAttoRep === undefined || !depositRepToVaultEnabled}
-						>
-							{commonCopy.max}
-						</button>
-					</div>
-				</label>
-				<DepositBackingFactorField minimumBps={minimumBps} saved={!!currentSelectedVaultDetails?.targetBackingFactorBps} value={depositTargetHealthFactor} error={targetHealthFactorGuardMessage} disabled={!depositRepToVaultEnabled} onChange={targetHealthFactor => onSecurityVaultFormChange({ targetHealthFactor })} />
-				<TokenApprovalControl
-					renderActions={({ button, notice, noticeId }) => renderDepositActions(button, notice, noticeId)}
-					actionLabel={depositRepActionLabel}
-					allowanceError={securityVaultRepApproval.error}
-					allowanceLoading={securityVaultRepApproval.loading}
-					approvedAmount={securityVaultRepApproval.value}
-					guardMessage={depositAmountNotice}
-					onApprove={amount => onApproveRep(amount)}
-					pending={securityVaultActiveAction === 'approveRep'}
-					pendingLabel={commonCopy.formatApprovingToken(repTokenSymbol)}
-					requiredAmount={depositAmount}
-					resetKey={`${currentSelectedVaultDetails?.repToken ?? ''}:${currentSelectedVaultDetails?.securityPoolAddress ?? ''}:${depositAmount?.toString() ?? ''}`}
-					tokenSymbol={repTokenSymbol}
-					tokenUnits={18}
-					disabled={!approveRepEnabled || !canUseLoadedVaultActions || !depositRepToVaultEnabled}
-				/>
+				{depositAmountField}
+				{depositBackingFactorField}
+				<VaultDepositApprovalControl {...depositApprovalControlProps} />
 			</SectionBlock>
 
 			<SectionBlock title={repExitActionLabel} variant='embedded'>
@@ -627,39 +493,9 @@ export function SecurityVaultSection({
 						})()}
 					</div>
 				)}
-				{effectiveRepExitMode === 'redeem' ? null : (
-					<label className='field'>
-						<span>{securityPoolCopy.repWithdrawAmount}</span>
-						<div className='field-inline'>
-							<FormInput className='field-inline-input' value={normalizedSecurityVaultForm.repWithdrawAmount} onInput={event => onSecurityVaultFormChange({ repWithdrawAmount: event.currentTarget.value })} disabled={!queueWithdrawRepEnabled} />
-							<button
-								className='quiet field-inline-action'
-								type='button'
-								onClick={() => {
-									if (maximumWithdrawableAttoRep === undefined) return
-									onSecurityVaultFormChange({ repWithdrawAmount: formatCurrencyInputBalance(maximumWithdrawableAttoRep) })
-								}}
-								disabled={maximumWithdrawableAttoRep === undefined || !queueWithdrawRepEnabled}
-							>
-								{commonCopy.max}
-							</button>
-						</div>
-					</label>
-				)}
+				{repWithdrawAmountField}
 				{effectiveRepExitMode === 'redeem' ? null : stagedOperationTimeoutField}
-				<div className='actions'>
-					<TransactionActionButton
-						idleLabel={repExitActionLabel}
-						pendingLabel={effectiveRepExitMode === 'redeem' ? securityPoolCopy.redeemingRep : securityPoolCopy.withdrawingRep}
-						onClick={effectiveRepExitMode === 'redeem' ? onRedeemRepFromVault : onWithdrawRep}
-						pending={effectiveRepExitMode === 'redeem' ? securityVaultActiveAction === 'redeemRepFromVault' : securityVaultActiveAction === 'queueWithdrawRep'}
-						tone='secondary'
-						availability={{
-							disabled: !repExitEnabled || !canUseLoadedVaultActions || (effectiveRepExitMode === 'withdraw' && (!hasPositiveWithdrawAmount || !hasWithdrawableRep)) || repExitGuardMessage !== undefined,
-							reason: canUseLoadedVaultActions ? repExitGuardMessage : undefined,
-						}}
-					/>
-				</div>
+				<div className='actions'>{repExitActionButton}</div>
 				{effectiveRepExitMode === 'redeem' && currentSelectedVaultDetails?.disputeStakedAttoRep !== undefined && currentSelectedVaultDetails.disputeStakedAttoRep > 0n ? <p className='detail'>{securityPoolCopy.escalationWithdrawalRequiredDetail}</p> : undefined}
 			</SectionBlock>
 
@@ -692,18 +528,7 @@ export function SecurityVaultSection({
 				</SectionBlock>
 			) : undefined}
 
-			{showSummarySection && currentSelectedVaultDetails !== undefined && vaultExistsOnchain ? (
-				<SelectedVaultSummarySection
-					repPerEthPrice={repPerEthPrice}
-					repPerEthSource={repPerEthSource}
-					repPerEthSourceUrl={repPerEthSourceUrl}
-					capacityOwnershipAttoRep={capacityOwnershipAttoRep}
-					currentVaultIsHealthy={currentVaultIsHealthy}
-					securityVaultDetails={currentSelectedVaultDetails}
-					selectedPoolStatoblastSecurityMultiplierBps={selectedPoolStatoblastSecurityMultiplierBps}
-					selectedVaultIsOwnedByAccount={selectedVaultIsOwnedByAccount}
-				/>
-			) : undefined}
+			{showSummarySection && currentSelectedVaultDetails !== undefined && vaultExistsOnchain ? <SelectedVaultSummarySection {...selectedVaultSummaryProps} capacityOwnershipAttoRep={capacityOwnershipAttoRep} securityVaultDetails={currentSelectedVaultDetails} /> : undefined}
 
 			<VaultQueuedOperationStatusCards {...operationStatusProps} operation='adjustVaultBackingFactor' />
 

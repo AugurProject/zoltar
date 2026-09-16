@@ -64,7 +64,7 @@ export type OverviewPanelsProps = {
 	repPerEthSourceLabel?: ComponentChildren
 } & RepPerEthPriceProps
 
-export type ZoltarView = 'create' | 'fork' | 'migrate' | 'questions' | 'universes'
+export type ZoltarView = 'create' | 'questions' | 'universes'
 
 export type DeploymentRouteContentProps = {
 	accountAddress: Address | undefined
