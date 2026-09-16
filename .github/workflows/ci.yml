@@ -229,6 +229,7 @@ jobs:
   knip:
     name: Dead code analysis
     needs: changes
+    if: needs.changes.outputs.core == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
