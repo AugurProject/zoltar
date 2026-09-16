@@ -6,7 +6,6 @@
 	"license": "Unlicense",
 	"type": "module",
 	"devDependencies": {
-		"better-typescript-lib": "2.11.0",
 		"bun-types": "1.4.2",
 		"typescript": "5.8.2",
 		"@zoltar/zoltar-shared": "workspace:1.0.0"

@@ -35,7 +35,6 @@ ui/*/ts/deploymentsArtifacts.ts
 
 # Build scanner metadata from pinned inputs inside the image.
 augurScan/config/abis.json
-augurScan/config/dependency-abis.json
 augurScan/config/system-contracts.generated.ts
 augurScan/config/manifests
 augurScan/qa

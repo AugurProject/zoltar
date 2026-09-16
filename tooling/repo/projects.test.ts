@@ -1,7 +1,13 @@
 import { expect, test } from 'bun:test'
-import { affectedProjects, componentProjects, projectDependencyClosure, projects, projectsInTaskGroup, projectTaskNames, taskProjects, topologicallySortedProjects, validateProjectRegistry, type Project } from './projects.ts'
+import { affectedProjects, componentProjects, projectDependencyClosure, projects, projectsInTaskGroup, projectTaskNames, taskInputMatches, taskProjects, topologicallySortedProjects, validateProjectRegistry, type Project } from './projects.ts'
 
 const project = (id: string, dependencies: readonly string[] = []): Project => ({ id, path: id, type: 'library', dependencies, tasks: {}, generatedDirectories: [] })
+
+test('Knip configuration selects analysis, validation, and typechecking tasks', () => {
+	const root = projects.find(project => project.id === 'repository')
+	if (root === undefined) throw new Error('Repository project is missing')
+	for (const task of ['test', 'check', 'lint', 'typecheck', 'knip'] as const) expect(taskInputMatches(task, 'knip.ts', root)).toBe(true)
+})
 
 test('orders dependencies before their consumers', () => {
 	expect(topologicallySortedProjects([project('app', ['domain']), project('domain', ['shared']), project('shared')]).map(entry => entry.id)).toEqual(['shared', 'domain', 'app'])

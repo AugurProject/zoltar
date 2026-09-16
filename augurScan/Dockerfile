@@ -38,6 +38,7 @@ COPY solidity/contracts ./solidity/contracts
 COPY solidity/ts/compile.ts ./solidity/ts/compile.ts
 COPY solidity/ts/contractProjects.ts ./solidity/ts/contractProjects.ts
 COPY augurScan/scripts ./augurScan/scripts
+COPY augurScan/config/dependency-abis.json ./augurScan/config/dependency-abis.json
 COPY augurScan/config/dependency-abi-sources.json ./augurScan/config/dependency-abi-sources.json
 COPY docs/mainnet-deployment-addresses.json ./docs/mainnet-deployment-addresses.json
 COPY docs/sepolia-deployment-addresses.json ./docs/sepolia-deployment-addresses.json

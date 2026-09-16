@@ -2,7 +2,7 @@ import { expect, test } from 'bun:test'
 import dependencyAbis from '../../config/dependency-abis.json'
 import catalog from '../../config/abis.json'
 import { generatedSystemInterfaces } from '../../config/system-contracts.generated.ts'
-import { fetchDependencyAbis, verifyDependencyAbis } from '../../scripts/dependency-abis.ts'
+import { verifyDependencyAbis } from '../../scripts/dependency-abis.ts'
 import { serializeSystemContracts, systemContractMappings } from '../../scripts/project-system-contracts.ts'
 import { abiForKind } from '../../src/abi-catalog.ts'
 import { encodeFunctionData, getAddress, parseAbi } from '../../src/ethereum.ts'
@@ -27,11 +27,6 @@ test('rejects missing or ambiguous deployment ABI matches', () => {
 	expect(() => systemContractMappings(['Thing', 'thing'], ['thing'])).toThrow('kind')
 	expect(() => systemContractMappings(['THING', 'Thing'], ['thing'])).toThrow('Ambiguous')
 	expect(() => systemContractMappings(['DelegationManager'], [])).toThrow('conflicts')
-})
-
-test('rejects changed upstream bytes before accepting a dependency refresh', async () => {
-	await expect(fetchDependencyAbis(async () => new Response('{"abi":[]}'))).rejects.toThrow('artifact checksum mismatch')
-	await expect(fetchDependencyAbis(async () => new Response('', { status: 503 }))).rejects.toThrow('HTTP 503')
 })
 
 test('verifies dependency ABI pins and rejects edited or missing artifacts', () => {

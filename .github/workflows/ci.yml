@@ -365,7 +365,8 @@ jobs:
           require_result "${DOMAIN_TESTS_SELECTED}" "${DOMAIN_TESTS_RESULT}" domain-tests
           require_result "${PACKAGES_SELECTED}" "${PACKAGES_RESULT}" packages
           require_result "${INTEGRATION_SELECTED}" "${INTEGRATION_RESULT}" augurScan-integration
-          for result in PREPARE_RESULT APPLICATION_TESTS_RESULT BROWSER_SMOKE_RESULT CHECKS_RESULT KNIP_RESULT AUDIT_RESULT; do
+          require_result "${CORE_SELECTED}" "${KNIP_RESULT}" knip
+          for result in PREPARE_RESULT APPLICATION_TESTS_RESULT BROWSER_SMOKE_RESULT CHECKS_RESULT AUDIT_RESULT; do
             require_result "${CORE_SELECTED}" "${!result}" "${result}"
           done
           if [[ "${FORCED_FULL}" == "true" && "${ALL_SCOPES_SELECTED}" != "true" ]]; then

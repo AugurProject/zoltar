@@ -124,10 +124,10 @@ without Solidity artifacts (local `typecheck` and `test` scripts still ensure th
 `cd bots/shared && bun run check:generated` enforces its freshness.
 AugurScan ABI catalogs, contract routes, and network manifests are ignored build outputs.
 `cd augurScan && bun run metadata:build` generates them from Solidity sources, deployment metadata,
-and reviewed dependency source pins. Build, typecheck, and test entry points prepare these outputs
+and vendored dependency ABIs. Build, typecheck, and test entry points prepare these outputs
 automatically; Docker generates them in a build stage and copies them into the runtime image.
-The first build fetches pinned dependency artifacts and verifies their checksums; later builds reuse
-verified local copies. `bun run metadata:check` checks the generated results without changing them.
+Dependency ABIs are tracked in `augurScan/config/dependency-abis.json`; builds verify their
+checksums against the tracked source pins and never download replacements. `bun run metadata:check` checks the generated results without changing them.
 
 | Output | Source or command |
 | --- | --- |
@@ -154,7 +154,7 @@ verified local copies. `bun run metadata:check` checks the generated results wit
 | `bots/open-oracle-arbitrager/src/contracts/executor-abi.generated.ts` | `cd bots/open-oracle-arbitrager && bun run generate:abi`; validate with `bun run check:generated` |
 | `scripts/artifacts/uniswap-deployment.json` | Pinned bytecode from the upstream package versions recorded in the artifact; validate with `bun run check:uniswap-deployment-artifact` |
 | `augurScan/config/abis.json`, `augurScan/config/manifests/*.json`, and `augurScan/config/system-contracts.generated.ts` | `cd augurScan && bun run metadata:build`; validate with `bun run metadata:check` in that package |
-| `augurScan/config/dependency-abis.json` | `cd augurScan && bun run metadata:build` (or `metadata:dependencies` for an explicit refresh), using reviewed URLs and SHA-256 pins in `config/dependency-abi-sources.json`; validate with `bun run metadata:check` in that package |
+| `augurScan/config/dependency-abis.json` | Vendored dependency ABIs, updated manually with reviewed source URLs and SHA-256 pins in `config/dependency-abi-sources.json`; validate with `cd augurScan && bun run metadata:check`. Builds must not rewrite or download this file. |
 
 Do not regenerate or commit these outputs unless the task requires them or a required check reports a missing expected artifact. A deployment workflow that adds another tracked generated artifact must update this policy and add a dirty-diff freshness check in the same change.
 
