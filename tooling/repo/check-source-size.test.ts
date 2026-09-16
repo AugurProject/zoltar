@@ -53,3 +53,8 @@ test('requires valid production paths, ceilings, and nonblank reasons for allowa
 	])
 	expect(findings.every(finding => finding.detail === undefined || finding.detail.trim() !== '')).toBe(true)
 })
+
+test('requires ceilings to ratchet down when an oversized module shrinks', () => {
+	const findings = inspectSourceSizes(new Map([['shared/core/ts/legacy.ts', source(650)]]), new Map([['shared/core/ts/legacy.ts', { maxLines: 700, reason: 'Extract remaining responsibilities.' }]]))
+	expect(findings).toEqual([{ file: 'shared/core/ts/legacy.ts', kind: 'stale-allowance', limit: 700, lines: 650 }])
+})

@@ -1,3 +1,4 @@
+import { decodeSnapshot } from '../../src/dashboard/api-validation.ts'
 import { afterEach, describe, expect, spyOn, test } from 'bun:test'
 import { Browser } from 'happy-dom'
 import type { PoolCatalogPage } from '../../src/monitoring/pool-catalog.ts'
@@ -203,6 +204,7 @@ async function dashboard(initialConfiguration = mainnetConfiguration(), initialS
 	const catalogRequests: string[] = []
 	const catalogSearches: (string | null)[] = []
 	let snapshot = initialState
+	let stateResponseOverride: unknown
 	let currentConfiguration = initialConfiguration
 	let pendingProfileConfiguration: DashboardConfiguration | undefined
 	let staleProfilePolls = 0
@@ -305,7 +307,7 @@ async function dashboard(initialConfiguration = mainnetConfiguration(), initialS
 		}
 		if (url.pathname === '/api/state') {
 			stateRequestCount += 1
-			const capturedSnapshot = snapshot
+			const capturedSnapshot = stateResponseOverride ?? snapshot
 			if (hangNextStateRequest) {
 				hangNextStateRequest = false
 				return await new Promise<InstanceType<typeof window.Response>>((_resolve, reject) => {
@@ -418,6 +420,9 @@ async function dashboard(initialConfiguration = mainnetConfiguration(), initialS
 		},
 		rejectPause: (reject: boolean) => {
 			rejectPause = reject
+		},
+		setStateResponse: (value: unknown) => {
+			stateResponseOverride = value
 		},
 		setSnapshot: (next: ReturnType<typeof state>) => {
 			snapshot = next
@@ -1543,4 +1548,28 @@ test('waits for an address typing pause or blur before reporting validation erro
 	search.dispatchEvent(new page.window.InputEvent('input', { inputType: 'insertFromPaste' }))
 	expect(search.getAttribute('aria-invalid')).toBe('true')
 	expect(page.catalogSearches).toEqual([null, address, null])
+})
+
+test('rejects malformed successful state responses before rendering and recovers on a valid response', async () => {
+	const page = await dashboard(mainnetConfiguration(), state())
+	page.setStateResponse({ ...state(), execute: 'false' })
+	await page.refresh()
+	expect(page.window.document.querySelector('#run-status-badge')?.textContent).toContain('Disconnected')
+	expect(page.window.document.querySelector('#strategy-fields')?.hasAttribute('disabled')).toBe(true)
+	page.setStateResponse(undefined)
+	await page.refresh()
+	expect(page.window.document.querySelector('#run-status-badge')?.textContent).not.toContain('Disconnected')
+})
+
+test('rejects malformed numeric pool fields before they reach monitored pool rendering', () => {
+	const valid = state()
+	const pool = valid.pools[0]
+	if (pool === undefined) throw new Error('Missing pool fixture')
+	for (const badPool of [
+		{ ...pool, multiplierBps: 'invalid' },
+		{ ...pool, parent: 'invalid' },
+		{ ...pool, botVault: { ...pool.botVault, healthBps: 'invalid' } },
+	]) {
+		expect(() => decodeSnapshot({ ...valid, pools: [badPool] })).toThrow('invalid state snapshot')
+	}
 })

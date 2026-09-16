@@ -1,4 +1,5 @@
-import { cell, publicFailure, type MonitoredPool } from './pool-presentation.ts'
+import { decodeConfiguration, decodeSnapshot, decodeMarketProbe, decodeSigner, type Configuration, type Snapshot, type MarketSourceRow, type Activity, type Universe } from './api-validation.ts'
+import { cell, publicFailure } from './pool-presentation.ts'
 import { createPoolBrowser } from './pool-browser.ts'
 import { createUniverseExplorer } from '@zoltar/bot-shared/dashboard/universe-explorer'
 import { readinessGuidance } from './readiness-status.js'
@@ -8,111 +9,6 @@ import { CONFIGURATION_REQUEST_TIMEOUT_MS, PROFILE_SWITCH_REQUEST_TIMEOUT_MESSAG
 import { closeResumePreflight, openResumePreflight } from '@zoltar/bot-shared/dashboard/resume-preflight'
 import { createSectionNavigation } from '@zoltar/bot-shared/dashboard/section-navigation'
 import { urlLines } from '@zoltar/bot-shared/dashboard/forms'
-type Activity = {
-	at: string
-	details?: string
-	message: string
-	status: string
-}
-
-type Universe = {
-	repToken?: string
-
-	forkedPoolCount: number
-	forkQuestionId: string
-	id: string
-	migratableVaultCount: number
-	operationalPoolCount: number
-	outcomeIndex?: string
-	parentId?: string
-	poolCount: number
-	selectedPoolCount: number
-}
-
-type CentralizedMarket = {
-	askDepthEth: string
-	bidDepthEth: string
-	observations: {
-		askDepthEth: string
-		bidDepthEth: string
-		exchangeId: string
-		observedAt: string
-		priceRepPerEth: string
-		repMarket: string
-	}[]
-	priceRepPerEth: string
-	reasons: string[]
-	reliable: boolean
-}
-
-type MarketConsensus = {
-	cex: { askDepthEth: string; bidDepthEth: string; priceRepPerEth: string; reliable: boolean; sourceCount: number }
-	dex: { askDepthEth: string; bidDepthEth: string; priceRepPerEth: string; reliable: boolean; sourceCount: number }
-	priceRepPerEth?: string
-	reasons: string[]
-	reliable: boolean
-}
-
-type MarketSourceRow = {
-	assetId: string
-	id: string
-	kind: 'cex' | 'dex'
-	market: string
-	reason?: string
-	status: 'admitted' | 'excluded' | 'failed' | 'observed'
-}
-
-type Snapshot = {
-	activities: Activity[]
-	alerts: { message: string; severity: 'error' | 'warning' }[]
-	centralizedMarket?: CentralizedMarket
-	marketConsensus?: MarketConsensus
-	error?: string
-	execute: boolean
-	deploymentMissingName?: string
-	deploymentCheckedBlock?: string
-	deploymentCheckedTimestamp?: string
-	lastScanAt?: string
-	lastScannedBlock?: string
-	lastScannedTimestamp?: string
-	metrics: {
-		approvedUniverseCount: number
-		assumedOpenInterestEth: string
-		candidateCount: number
-		deployedRep: string
-		eligiblePoolCount: number
-		poolCount: number
-		selectedPoolCount: number
-		walletEth: string
-		walletRep: string
-	}
-	network: 'mainnet' | 'sepolia'
-	paused: boolean
-	rpcEndpointHealth?: { consecutiveFailures: number; error?: string; latencyMilliseconds?: number; nextRetryAt?: string; status: string; target: string }[]
-	pendingStagedOperations: { candidateBlock?: string; coordinator: string; historicalRecoveryComplete: boolean; latestRecoveryBlock?: string; nextHistoricalBlock?: string; operationId: string; queuedBlock: string; target: string }[]
-	pendingTransactions: { hash: string; kind: string; label: string; maxBlockNumber: string; mode: 'private' | 'public'; nonce: string; requiresMarketEvidence: boolean; submissionBlock: string }[]
-	operatorCapable: boolean
-	pools: MonitoredPool[]
-	scanning: boolean
-	status: 'connectivity-degraded' | 'dry-run' | 'error' | 'paused' | 'running' | 'starting'
-	marketSources: MarketSourceRow[]
-	universes: Universe[]
-	wallet?: string
-}
-
-type Configuration = {
-	approvedUniverses: string[]
-	childMarketConfigurations: unknown[]
-	centralizedMarkets: unknown
-	connectivity?: { publicRpcUrls: string[]; quorumRpcUrls: string[]; readRpcUrl: string; rpcQuorum: 1 | 2 } | undefined
-	desiredPools: unknown[]
-	network?: { chainId: number; explorerUrl: string; name: 'mainnet' | 'sepolia' } | undefined
-	networkConfigured?: boolean | undefined
-	runtime: { historicalLogRecovery: boolean; logLookbackBlocks: number }
-	selectedPools: string[]
-	strategy: Record<string, string | number | boolean>
-}
-
 function element<T extends Element>(id: string, constructor: { new (): T }) {
 	const value = document.getElementById(id)
 	if (!(value instanceof constructor)) throw new Error(`Missing dashboard element #${id}`)
@@ -201,7 +97,7 @@ async function saveSupportedPool(address: string, supported: boolean, chainId: n
 	pendingPoolMutations += 1
 	setMutationControlsEnabled(stateConnected)
 	try {
-		const configuration: Configuration = await put('/api/supported-pool', { address, supported, chainId })
+		const configuration = decodeConfiguration(await put('/api/supported-pool', { address, supported, chainId }))
 		populateConfiguration(configuration)
 	} finally {
 		pendingPoolMutations -= 1
@@ -256,7 +152,7 @@ function setMutationControlsEnabled(enabled: boolean) {
 	if (currentSnapshot !== undefined) renderUniverses(currentSnapshot, !chainSettingsAvailable)
 }
 
-async function api<T>(path: string, options?: RequestInit, timeoutMilliseconds?: number): Promise<T> {
+async function api(path: string, options?: RequestInit, timeoutMilliseconds?: number): Promise<unknown> {
 	const response = await (timeoutMilliseconds === undefined ? fetch(path, options) : requestWithTimeout(signal => fetch(path, { ...options, signal }), timeoutMilliseconds))
 	const value: unknown = await response.json()
 	if (!response.ok) {
@@ -264,15 +160,15 @@ async function api<T>(path: string, options?: RequestInit, timeoutMilliseconds?:
 		const message = typeof error === 'string' ? error : `Request failed with HTTP ${response.status.toString()}`
 		throw new Error(message)
 	}
-	return value as T
+	return value
 }
 
-function put<T = unknown>(path: string, value: unknown, timeoutMilliseconds?: number, timeoutMessage?: string) {
+function put(path: string, value: unknown, timeoutMilliseconds?: number, timeoutMessage?: string) {
 	const body = JSON.stringify(value)
 	if (body === undefined) throw new Error('Request body is not JSON serializable')
 	const options = { body, headers: { 'content-type': 'application/json' }, method: 'PUT' }
-	if (timeoutMilliseconds === undefined) return api<T>(path, options)
-	return requestWithTimeout(signal => api<T>(path, { ...options, signal }), timeoutMilliseconds, timeoutMessage)
+	if (timeoutMilliseconds === undefined) return api(path, options)
+	return requestWithTimeout(signal => api(path, { ...options, signal }), timeoutMilliseconds, timeoutMessage)
 }
 
 const MARKET_SOURCE_STATUS_PRESENTATION: Record<MarketSourceRow['status'], { badgeClass: string; defaultReason: string; label: string }> = {
@@ -554,7 +450,7 @@ function renderUniverses(snapshot: Snapshot, disabled?: boolean) {
 	universeExplorer.update({
 		universes: snapshot.universes.map(universe => ({ ...universe, summary: `${universe.poolCount} pools · ${universeState(universe)} · ${universe.selectedPoolCount} selected · ${universe.migratableVaultCount} migratable vaults` })),
 		approved: approvedUniverses,
-		network: snapshot.network,
+		network: snapshot.network ?? '',
 		disabled: disabled ?? (pendingNetworkProfile !== undefined || currentConfiguration?.networkConfigured !== true || !stateConnected),
 	})
 }
@@ -746,7 +642,7 @@ networkName.addEventListener('change', async () => {
 	setMutationControlsEnabled(stateConnected)
 	actionStatus(networkStatus, `Switching to the ${requestedNetwork === 'mainnet' ? 'Ethereum mainnet' : 'Sepolia'} profile…`)
 	try {
-		await put<Configuration>('/api/network-profile', { network: requestedNetwork }, PROFILE_SWITCH_REQUEST_TIMEOUT_MS, PROFILE_SWITCH_REQUEST_TIMEOUT_MESSAGE)
+		await put('/api/network-profile', { network: requestedNetwork }, PROFILE_SWITCH_REQUEST_TIMEOUT_MS, PROFILE_SWITCH_REQUEST_TIMEOUT_MESSAGE)
 		networkFields.disabled = true
 		actionStatus(networkStatus, 'Profile saved. The bot is switching chains in place; settings will reload automatically.')
 		await waitForNetworkProfile(requestedNetwork)
@@ -784,10 +680,12 @@ networkForm.addEventListener('submit', async event => {
 	networkFields.disabled = true
 	actionStatus(networkStatus, 'Checking every RPC against the selected chain…')
 	try {
-		const configuration = await put<Configuration>('/api/network-connectivity', {
-			connectivity: { publicRpcUrls: urlLines(publicRpcUrls.value), quorumRpcUrls: urlLines(quorumRpcUrls.value), readRpcUrl: readRpcUrl.value.trim(), rpcQuorum: Number(rpcQuorum.value) },
-			network: networkName.value,
-		})
+		const configuration = decodeConfiguration(
+			await put('/api/network-connectivity', {
+				connectivity: { publicRpcUrls: urlLines(publicRpcUrls.value), quorumRpcUrls: urlLines(quorumRpcUrls.value), readRpcUrl: readRpcUrl.value.trim(), rpcQuorum: Number(rpcQuorum.value) },
+				network: networkName.value,
+			}),
+		)
 		populateConfiguration(configuration)
 		actionStatus(networkStatus, 'Chain and RPCs passed validation, were saved, and apply to the next scan.')
 	} catch (error) {
@@ -803,7 +701,7 @@ marketConfigurationForm.addEventListener('submit', async event => {
 	actionStatus(marketConfigurationSaveStatus, 'Validating…')
 	try {
 		const value: unknown = JSON.parse(marketConfigurationJson.value)
-		const configuration = await put<Configuration>('/api/market-configuration', value)
+		const configuration = decodeConfiguration(await put('/api/market-configuration', value))
 		marketSourceProbeRows = undefined
 		marketSourceCaption.textContent = 'Configured source admission'
 		showActiveAdmissionButton.classList.add('hidden')
@@ -822,7 +720,7 @@ testMarketSourcesButton.addEventListener('click', async () => {
 	testMarketSourcesButton.disabled = true
 	actionStatus(marketSourceTestStatus, 'Testing saved CEX and DEX sources…')
 	try {
-		const result = await put<{ assets: { assetId: string; sources: { id: string; kind: 'cex' | 'dex'; market: string; reason?: string; status: 'failed' | 'observed' }[] }[]; blockNumber: string }>('/api/test-market-sources', {})
+		const result = decodeMarketProbe(await put('/api/test-market-sources', {}))
 		if (requestEpoch !== profileRequestEpoch) return
 		marketSourceProbeRows = result.assets.flatMap(asset =>
 			asset.sources.map(source => ({
@@ -1037,7 +935,7 @@ strategyForm.addEventListener('submit', async event => {
 	next['logLookbackBlocks'] = logLookbackBlocks
 	next['historicalLogRecovery'] = historicalLogRecovery instanceof HTMLInputElement && historicalLogRecovery.checked
 	try {
-		const configuration = await put<Configuration>('/api/strategy', next)
+		const configuration = decodeConfiguration(await put('/api/strategy', next))
 		populateConfiguration(configuration)
 		actionStatus(strategyStatus, 'Saved')
 	} catch (error) {
@@ -1056,10 +954,12 @@ signerForm.addEventListener('submit', async event => {
 	}
 	actionStatus(signerStatus, 'Updating…')
 	try {
-		const result = await put<{ wallet?: string }>('/api/signer', {
-			privateKey: privateKeyField.value,
-			rememberSigner: rememberField.checked,
-		})
+		const result = decodeSigner(
+			await put('/api/signer', {
+				privateKey: privateKeyField.value,
+				rememberSigner: rememberField.checked,
+			}),
+		)
 		privateKeyField.value = ''
 		updateSignerButton.disabled = true
 		actionStatus(signerStatus, result.wallet === undefined ? 'Signer cleared' : `Signer active: ${shortAddress(result.wallet)}`)
@@ -1078,10 +978,12 @@ clearSignerButton.addEventListener('click', async () => {
 	clearSignerButton.disabled = true
 	actionStatus(signerStatus, 'Clearing…')
 	try {
-		const result = await put<{ wallet?: string }>('/api/signer', {
-			privateKey: '',
-			rememberSigner: true,
-		})
+		const result = decodeSigner(
+			await put('/api/signer', {
+				privateKey: '',
+				rememberSigner: true,
+			}),
+		)
 		actionStatus(signerStatus, result.wallet === undefined ? 'Signer cleared' : 'Signer was not cleared', result.wallet !== undefined)
 		await refresh()
 	} catch (error) {
@@ -1096,7 +998,7 @@ const refresh = singleFlight(performRefresh)
 async function performRefresh() {
 	const requestEpoch = profileRequestEpoch
 	try {
-		const snapshot = await api<Snapshot>('/api/state', undefined, STATE_REQUEST_TIMEOUT_MS)
+		const snapshot = decodeSnapshot(await api('/api/state', undefined, STATE_REQUEST_TIMEOUT_MS))
 		if (requestEpoch !== profileRequestEpoch) return
 		if (pendingNetworkProfile !== undefined && snapshot.network !== pendingNetworkProfile) return
 		render(snapshot)
@@ -1118,7 +1020,7 @@ async function loadConfiguration() {
 		configurationStatus.textContent = 'Loading pool selection and strategy…'
 	}
 	try {
-		const configuration = await api<Configuration>('/api/configuration', undefined, CONFIGURATION_REQUEST_TIMEOUT_MS)
+		const configuration = decodeConfiguration(await api('/api/configuration', undefined, CONFIGURATION_REQUEST_TIMEOUT_MS))
 		if (profileRequestEpoch !== requestEpoch || pendingNetworkProfile !== expectedNetwork) return false
 		if (expectedNetwork !== undefined && configuration.network?.name !== expectedNetwork) {
 			networkName.value = expectedNetwork
