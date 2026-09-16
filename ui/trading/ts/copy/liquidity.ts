@@ -31,3 +31,7 @@ export function balancesUnavailable(reason: string) {
 }
 
 export const simulationBlockLabel = 'Simulation block'
+
+export const youProvide = 'You provide'
+export const youReceive = 'Expected to receive'
+export const previewDetails = 'Liquidity breakdown'

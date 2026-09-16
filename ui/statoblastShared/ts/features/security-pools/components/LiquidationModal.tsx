@@ -35,7 +35,7 @@ import type { SecurityPoolStateModel } from '../lib/securityPoolState.js'
 import type { LiquidationApprovalDetails, LiquidationFundingPreview, ListedSecurityPool, OracleManagerDetails, SecurityPoolOverviewActionResult, SecurityPoolVaultSummary } from '@zoltar/ui-core-shared/types/contracts.js'
 import { getWrongNetworkReason } from '@zoltar/ui-core-shared/wallet/network.js'
 import type { UiPriceOracle } from '../lib/uiPriceOracle.js'
-import { LiquidationApprovalDetailsGrid, LiquidationSummaryGrid, LiquidationTransactionReview, QueuedLiquidationStatusCard } from './LiquidationModalSections.js'
+import { LiquidationApprovalSummary, LiquidationContextSummary, LiquidationTransactionReview, QueuedLiquidationStatusCard } from './LiquidationModalSections.js'
 type LiquidationModalProps = {
 	accountAddress: Address | undefined
 	closeLiquidationModal: () => void
@@ -311,7 +311,7 @@ export function LiquidationModal({
 					</div>
 				)}
 				<ErrorNotice message={securityPoolLiquidationError} />
-				<LiquidationSummaryGrid
+				<LiquidationContextSummary
 					accountAddress={accountAddress}
 					currentPoolOracleManagerDetails={currentPoolOracleManagerDetails}
 					currentTimestamp={currentTimestamp}
@@ -406,7 +406,7 @@ export function LiquidationModal({
 				</div>
 				{delegatedReceiver ? <ErrorNotice message={liquidationReceiverVaultSummaryError} /> : null}
 				{delegatedReceiver ? <ErrorNotice message={liquidationApprovalError} /> : null}
-				{!delegatedReceiver || liquidationApprovalDetails === undefined ? null : <LiquidationApprovalDetailsGrid approvalNonceInvalidated={approvalNonceInvalidated} currentTimestamp={currentTimestamp} liquidationApprovalDetails={liquidationApprovalDetails} />}
+				{!delegatedReceiver || liquidationApprovalDetails === undefined ? null : <LiquidationApprovalSummary approvalNonceInvalidated={approvalNonceInvalidated} currentTimestamp={currentTimestamp} liquidationApprovalDetails={liquidationApprovalDetails} />}
 				{liquidationExecutionMode === 'execute' ? null : <p className='detail'>{liquidationTimeoutHelpText}</p>}
 				{liquidationExecutionMode !== 'queue' || liquidationFundingPreviewError === undefined ? null : (
 					<div className='actions'>

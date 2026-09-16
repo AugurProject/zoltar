@@ -441,7 +441,6 @@ describe('SecurityPoolWorkflowSection: reporting and oracle', () => {
 		expect(documentQueries.getByText('Withdraw REP')).not.toBeNull()
 		expect(documentQueries.getByText('Auto-exec pending')).not.toBeNull()
 		expect(documentQueries.getByText('Operation ID')).not.toBeNull()
-		expect(documentQueries.getByText('REP withdrawal')).not.toBeNull()
 		expect(documentQueries.getByText('5 REP')).not.toBeNull()
 		expect(documentQueries.getByText('Staged Operation ID')).not.toBeNull()
 		expect(documentQueries.getByText('7')).not.toBeNull()

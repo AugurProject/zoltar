@@ -105,3 +105,6 @@ export const retryQueueFunding = 'Retry funding preview'
 export const retryPriceStatus = 'Retry price status'
 export const queuedFundingSequenceRisk = 'Oracle request funding may require multiple wallet transactions: wrap ETH to WETH, approve REP and WETH, lock the initial report, then queue the liquidation.'
 export const fundingDetails = 'Funding Details'
+
+export const vaultContextDetails = 'Vault and pricing details'
+export const approvalUsageDetails = 'Approval usage'

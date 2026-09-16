@@ -364,3 +364,14 @@
 .portfolio-record .entity-card-body > .badge {
 	justify-self: start;
 }
+
+.trade-holdings {
+	align-items: baseline;
+}
+.trade-holdings li {
+	opacity: 0.8;
+}
+.trade-holdings .selected-holding {
+	font-size: 1.5rem;
+	opacity: 1;
+}

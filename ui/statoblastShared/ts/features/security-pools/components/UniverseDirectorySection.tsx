@@ -2,9 +2,10 @@ import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as marketCopy from '@zoltar/ui-zoltar-shared/copy/market.js'
 import * as securityPoolCopy from '../../../copy/securityPool.js'
 import { Badge } from '@zoltar/ui-core-shared/components/Badge.js'
-import { TimestampValue } from '@zoltar/ui-core-shared/components/TimestampValue.js'
+import { UniverseContextSummary } from '@zoltar/ui-zoltar-shared/features/universes/components/UniverseContextSummary.js'
+import { ReadOnlyDetailAccordion } from '@zoltar/ui-core-shared/components/ReadOnlyDetailAccordion.js'
+import * as universeCopy from '@zoltar/ui-zoltar-shared/copy/zoltar.js'
 import { CurrencyValue } from '@zoltar/ui-core-shared/components/CurrencyValue.js'
-import { DataGrid } from '@zoltar/ui-core-shared/components/DataGrid.js'
 import { EntityCard } from '@zoltar/ui-core-shared/components/EntityCard.js'
 import { MetricField } from '@zoltar/ui-core-shared/components/MetricField.js'
 import { SectionBlock } from '@zoltar/ui-core-shared/components/SectionBlock.js'
@@ -63,41 +64,30 @@ export function UniverseDirectorySection({ activeUniverseId, loadingSecurityPool
 	return (
 		<div className='route-view-flow'>
 			<SectionBlock variant='plain'>
-				<DataGrid>
-					<MetricField label={commonCopy.universe}>{formatUniverseLabel(zoltarUniverse.universeId)}</MetricField>
-					<MetricField label={commonCopy.status}>
-						{zoltarUniverse.hasForked ? commonCopy.forked : commonCopy.operational}
-						{zoltarUniverse.hasForked && zoltarUniverse.forkTime > 0n ? (
-							<>
-								{' '}
-								<TimestampValue timestamp={zoltarUniverse.forkTime} />
-							</>
-						) : undefined}
-					</MetricField>
-					<MetricField label={marketCopy.parentUniverse}>{zoltarUniverse.universeId === 0n ? commonCopy.none : <UniverseLink universeId={zoltarUniverse.parentUniverseId} />}</MetricField>
-					<MetricField label={zoltarUniverse.reputationTokenName ?? commonCopy.rep}>
-						<CurrencyValue value={zoltarUniverse.totalTheoreticalSupplyAttoRep} suffix={zoltarUniverse.reputationTokenSymbol ?? commonCopy.rep} />
-					</MetricField>
-					<MetricField label={commonCopy.securityPools}>{activeUniversePoolMetrics.poolCount.toString()}</MetricField>
-					<MetricField label={securityPoolCopy.vaultCount}>{activeUniversePoolMetrics.vaultCount.toString()}</MetricField>
-					<MetricField label={securityPoolCopy.totalPoolHeldAttoRep}>
+				<UniverseContextSummary universe={zoltarUniverse}>
+					<p className='decision-amount'>
 						<CurrencyValue value={activeUniversePoolMetrics.totalPoolHeldAttoRep} suffix={commonCopy.rep} />
-					</MetricField>
-				</DataGrid>
+					</p>
+					<p className='detail'>{securityPoolCopy.totalPoolHeldAttoRep}</p>
+					<p className='inline-facts'>
+						<span>{securityPoolCopy.universePoolCount(activeUniversePoolMetrics.poolCount)}</span>
+						<span>{securityPoolCopy.universeVaultCount(activeUniversePoolMetrics.vaultCount)}</span>
+					</p>
+				</UniverseContextSummary>
 			</SectionBlock>
 
 			<SectionBlock title={securityPoolCopy.childUniversesTitle} variant='plain'>
 				{zoltarUniverse.childUniverses.length === 0 ? (
 					<StateHint presentation={{ key: 'empty', badgeLabel: commonCopy.universe, badgeTone: 'muted', detail: securityPoolCopy.childUniversesEmptyDetail }} />
 				) : (
-					<div className='entity-card-list'>
+					<div className='entity-card-list decision-card-list'>
 						{zoltarUniverse.childUniverses.map(childUniverse => {
 							const badge = getUniverseBadge(childUniverse.universeId, childUniverse.exists)
 							const childUniversePoolMetrics = getUniversePoolMetrics(childUniverse.universeId, securityPools)
 							return (
 								<EntityCard
 									key={childUniverse.universeId.toString()}
-									actions={
+									headerActions={
 										childUniverse.universeId === activeUniverseId || !childUniverse.exists ? undefined : (
 											<UniverseLink className='button-link secondary-link' universeId={childUniverse.universeId}>
 												{commonCopy.select}
@@ -108,18 +98,23 @@ export function UniverseDirectorySection({ activeUniverseId, loadingSecurityPool
 									title={childUniverse.outcomeLabel}
 									variant='record'
 								>
-									<DataGrid dense>
-										{childUniverse.reputationTokenSymbol === undefined ? undefined : <MetricField label={commonCopy.reputationToken}>{childUniverse.reputationTokenSymbol}</MetricField>}
-										<MetricField label={commonCopy.universe}>{formatUniverseLabel(childUniverse.universeId)}</MetricField>
-										<MetricField label={marketCopy.parentUniverse}>
-											<UniverseLink universeId={childUniverse.parentUniverseId} />
-										</MetricField>
-										<MetricField label={commonCopy.securityPools}>{childUniversePoolMetrics.poolCount.toString()}</MetricField>
-										<MetricField label={securityPoolCopy.vaultCount}>{childUniversePoolMetrics.vaultCount.toString()}</MetricField>
-										<MetricField label={securityPoolCopy.totalPoolHeldAttoRep}>
+									<div className='decision-summary'>
+										<p className='decision-amount'>
 											<CurrencyValue value={childUniversePoolMetrics.totalPoolHeldAttoRep} suffix={commonCopy.rep} />
-										</MetricField>
-									</DataGrid>
+										</p>
+										<p className='detail'>{securityPoolCopy.totalPoolHeldAttoRep}</p>
+										<p className='inline-facts'>
+											<span>{securityPoolCopy.universePoolCount(childUniversePoolMetrics.poolCount)}</span>
+											<span>{securityPoolCopy.universeVaultCount(childUniversePoolMetrics.vaultCount)}</span>
+										</p>
+										<ReadOnlyDetailAccordion title={universeCopy.universeDetails}>
+											{childUniverse.reputationTokenSymbol === undefined ? undefined : <MetricField label={commonCopy.reputationToken}>{childUniverse.reputationTokenSymbol}</MetricField>}
+											<MetricField label={commonCopy.universe}>{formatUniverseLabel(childUniverse.universeId)}</MetricField>
+											<MetricField label={marketCopy.parentUniverse}>
+												<UniverseLink universeId={childUniverse.parentUniverseId} />
+											</MetricField>
+										</ReadOnlyDetailAccordion>
+									</div>
 								</EntityCard>
 							)
 						})}

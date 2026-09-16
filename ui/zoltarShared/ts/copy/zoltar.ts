@@ -49,3 +49,6 @@ export const migrationBalancesReadFailed = 'Could not read migration balances. R
 export const balanceDetails = 'Balance details'
 export const chooseDestinations = 'Choose destinations'
 export const reviewMigration = 'Review migration'
+
+export const universeDetails = 'Universe details'
+export const repSupply = 'REP supply'

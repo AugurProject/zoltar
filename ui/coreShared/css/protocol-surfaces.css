@@ -1670,3 +1670,89 @@ main.global-transaction-tray-open :is(a, button, input, select, summary, textare
 		grid-row: auto;
 	}
 }
+
+.decision-summary {
+	display: grid;
+	gap: var(--space-3);
+	min-width: 0;
+}
+.decision-summary > p {
+	margin: 0;
+}
+.decision-summary .metric-label {
+	display: block;
+	margin-bottom: var(--space-1);
+}
+.decision-summary .metric-field-value {
+	display: block;
+}
+.decision-heading {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: var(--space-3);
+}
+.decision-heading h3 {
+	margin: 0;
+	overflow-wrap: anywhere;
+}
+.decision-amount {
+	font-size: clamp(1.4rem, 3vw, 2rem);
+	font-weight: 600;
+	line-height: var(--line-height-snug);
+	overflow-wrap: anywhere;
+}
+.inline-facts {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--space-2) var(--space-4);
+	color: var(--muted);
+}
+.decision-card-list {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(min(100%, 28rem), 1fr));
+	align-items: start;
+	gap: var(--space-4);
+}
+.decision-card-list > * {
+	min-width: 0;
+}
+.decision-card-list .entity-card-header {
+	display: flex;
+	flex-direction: row;
+	flex-wrap: wrap;
+}
+.decision-card-list .entity-card-copy {
+	flex: 1 1 12rem;
+}
+.exchange-preview {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: var(--space-5);
+	min-width: 0;
+}
+.exchange-preview > div {
+	flex: 1 1 12rem;
+	min-width: 0;
+}
+.exchange-preview .detail {
+	margin: 0 0 var(--space-2);
+}
+.exchange-arrow {
+	color: var(--muted);
+	font-size: 1.5rem;
+}
+@media (max-width: 42rem) {
+	.exchange-preview {
+		flex-direction: column;
+		align-items: stretch;
+	}
+	.exchange-preview > div {
+		flex-basis: auto;
+	}
+	.exchange-arrow {
+		transform: rotate(90deg);
+		align-self: center;
+	}
+}

@@ -84,6 +84,10 @@
 			"bun": "./ts/features/universes/components/MigrationOutcomeUniversesSection.tsx",
 			"default": "./js/features/universes/components/MigrationOutcomeUniversesSection.js"
 		},
+		"./features/universes/components/UniverseContextSummary.js": {
+			"bun": "./ts/features/universes/components/UniverseContextSummary.tsx",
+			"default": "./js/features/universes/components/UniverseContextSummary.js"
+		},
 		"./features/universes/components/UniverseDirectorySection.js": {
 			"bun": "./ts/features/universes/components/UniverseDirectorySection.tsx",
 			"default": "./js/features/universes/components/UniverseDirectorySection.js"

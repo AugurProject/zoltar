@@ -244,3 +244,14 @@ export const queuedVaultOperationSupersededDetail = 'A newer target change repla
 
 export const queuedVaultOperationManualRefreshDetail = 'If this operation is still pending, execute it manually after a valid oracle price is available.'
 export const queuedVaultOperationAutomaticRefreshDetail = 'This request was submitted for automatic execution. Check its current status in staged operations.'
+
+export const operationDetails = 'Operation details'
+export const selectOperation = 'Select operation'
+export const openOperationById = 'Open operation by ID'
+
+export function universePoolCount(count: bigint) {
+	return `${count} ${count === 1n ? 'pool' : 'pools'}`
+}
+export function universeVaultCount(count: bigint) {
+	return `${count} known ${count === 1n ? 'vault' : 'vaults'}`
+}

@@ -2839,3 +2839,13 @@
 		font-size: 1.125rem;
 	}
 }
+
+.liquidation-constraints {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--space-4);
+}
+.liquidation-constraints > * {
+	flex: 1 1 14rem;
+	min-width: 0;
+}

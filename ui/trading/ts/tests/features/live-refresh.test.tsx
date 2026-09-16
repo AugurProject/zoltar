@@ -69,9 +69,8 @@ function actionFeedback() {
 	return document.querySelector('[role="tabpanel"] .tx-action-feedback')?.textContent ?? ''
 }
 
-function walletMetric(label: string) {
-	const term = Array.from(document.querySelectorAll('.metric-label')).find(candidate => candidate.textContent === label)
-	return term?.nextElementSibling?.textContent ?? undefined
+function walletHolding(label: string) {
+	return document.querySelector(`.trade-holdings [aria-label="${label}"] .holding-quantity`)?.textContent ?? ''
 }
 
 describe('live market refresh', () => {
@@ -148,7 +147,7 @@ describe('live market refresh', () => {
 		const rendered = await renderIntoDocument(<LiveTrading route={`market/${pool}`} configuration={configuration} configurationError={undefined} selectedUniverseId='1' refreshIntervalMilliseconds={40} onWorkflowLockChange={() => undefined} controllerServices={services} />)
 		cleanupRendered = rendered.cleanup
 		await act(async () => button('Connect wallet').click())
-		await waitForDom(() => walletMetric('Wallet YES') === '3 YES', 'wallet balances shown as collateral value')
+		await waitForDom(() => walletHolding('Wallet YES') === '3 YES', 'wallet balances shown as collateral value')
 		// The lookup instruction belongs to the landing list, not to an opened market.
 		expect(document.body.textContent).not.toContain('Open a market by security pool address')
 		expect(document.body.textContent).toContain('3 INVALID')
@@ -163,7 +162,7 @@ describe('live market refresh', () => {
 		discoveredMarket = { ...market, yesReserve: 25n * 10n ** 36n, noReserve: 75n * 10n ** 36n }
 		const observedBalanceLabels = new Set<string | undefined>()
 		await waitForDom(() => {
-			observedBalanceLabels.add(walletMetric('Wallet YES'))
+			observedBalanceLabels.add(walletHolding('Wallet YES'))
 			return document.body.textContent?.includes('YES 75.0%') === true && balanceLoads > balanceLoadsBeforeBackgroundRefresh
 		}, 'background market refresh')
 		expect(discoveries).toBeGreaterThan(discoveriesBeforeBackgroundRefresh)
@@ -228,7 +227,7 @@ describe('live market refresh', () => {
 		expect(Array.from(document.querySelectorAll('[role="alert"]')).filter(candidate => candidate.textContent?.includes('receiver rejected tokens') === true)).toHaveLength(1)
 		expect(document.body.textContent).not.toContain('Transaction workflow needs attention')
 		yesBalance = 4n * 10n ** 36n
-		await waitForDom(() => walletMetric('Wallet YES') === '4 YES', 'refreshed balance after failure')
+		await waitForDom(() => walletHolding('Wallet YES') === '4 YES', 'refreshed balance after failure')
 	})
 
 	test('lets a balance read slower than the refresh interval finish instead of restarting it every cycle', async () => {
@@ -256,13 +255,13 @@ describe('live market refresh', () => {
 		const rendered = await renderIntoDocument(<LiveTrading route={`market/${pool}`} configuration={configuration} configurationError={undefined} selectedUniverseId='1' refreshIntervalMilliseconds={30} onWorkflowLockChange={() => undefined} controllerServices={services} />)
 		cleanupRendered = rendered.cleanup
 		await act(async () => button('Connect wallet').click())
-		await waitForDom(() => walletMetric('Wallet YES') === 'Loading balances…' && balanceLoads > 0, 'first balance read in flight')
+		await waitForDom(() => walletHolding('Wallet YES') === 'Loading balances…' && balanceLoads > 0, 'first balance read in flight')
 		await settle(150)
 		expect(balanceLoads).toBe(1)
 		releaseBalances()
-		await waitForDom(() => walletMetric('Wallet YES') === '2 YES', 'slow balance read completes')
+		await waitForDom(() => walletHolding('Wallet YES') === '2 YES', 'slow balance read completes')
 		await waitForDom(() => balanceLoads > 1, 'revalidation resumes after the read completes')
-		expect(walletMetric('Wallet YES')).toBe('2 YES')
+		expect(walletHolding('Wallet YES')).toBe('2 YES')
 	})
 
 	test('lets a background discovery slower than the refresh interval finish instead of starting another each tick', async () => {
