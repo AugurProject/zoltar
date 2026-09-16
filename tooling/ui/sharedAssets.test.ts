@@ -443,12 +443,15 @@ test('vendor build clears generated output before rebuilding assets', async () =
 		vendorDependencies: async () => {
 			completedSteps.push('vendorDependencies')
 		},
+		vendorFonts: async () => {
+			completedSteps.push('vendorFonts')
+		},
 		copyProjectArtifacts: async () => {
 			completedSteps.push('copyProjectArtifacts')
 		},
 	})
 
-	expect(completedSteps).toEqual(['clearVendorOutput', 'bundleTevm', 'vendorDependencies', 'copyProjectArtifacts'])
+	expect(completedSteps).toEqual(['clearVendorOutput', 'bundleTevm', 'vendorDependencies', 'vendorFonts', 'copyProjectArtifacts'])
 })
 
 test('vendor build failures cannot be silently ignored', () => {

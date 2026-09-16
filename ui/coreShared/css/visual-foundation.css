@@ -1,4 +1,21 @@
 /* Shared visual behavior. Applications retain their own shells and composition. */
+/* One vendored mono face keeps addresses and numbers identical across platforms; the files are copied to ../vendor/fonts by the vendor build. */
+@font-face {
+	font-family: "IBM Plex Mono";
+	font-style: normal;
+	font-weight: 400;
+	font-display: swap;
+	src: url("../vendor/fonts/ibm-plex-mono-latin-400-normal.woff2") format("woff2");
+}
+
+@font-face {
+	font-family: "IBM Plex Mono";
+	font-style: normal;
+	font-weight: 600;
+	font-display: swap;
+	src: url("../vendor/fonts/ibm-plex-mono-latin-600-normal.woff2") format("woff2");
+}
+
 html {
 	font-size: 16px;
 }
@@ -15,9 +32,15 @@ body {
 	font-size: var(--font-body);
 }
 
-main {
+:where(main, .app-shell) {
 	width: min(var(--content-max), 100%);
 	padding-inline: var(--gutter-desktop);
+}
+
+/* An application shell already carries the page inset, so its main landmark spans the shell. */
+.app-shell > main {
+	width: 100%;
+	padding-inline: 0;
 }
 
 h1,
@@ -52,6 +75,16 @@ a.secondary-action,
 	outline: 2px solid var(--accent);
 	outline-offset: 2px;
 	box-shadow: var(--focus-ring);
+}
+
+/* Tab strips scroll horizontally, so the focus indicator is drawn inside the tab instead of around it. */
+.view-tab:focus-visible,
+.view-tabs.route .view-tab.active:focus-visible,
+.view-tabs[data-orientation] .view-tab.active:focus-visible,
+.route-subtab-nav.view-tabs.subroute .view-tab.active:focus-visible {
+	outline: none;
+	outline-offset: 0;
+	box-shadow: inset 0 0 0 2px var(--accent);
 }
 
 :where(address, code, pre, .address, .hash, .transaction-hash, .identifier-value) {
@@ -89,13 +122,13 @@ a.secondary-action,
 }
 
 @media (max-width: 64rem) {
-	main {
+	:where(main, .app-shell) {
 		padding-inline: var(--gutter-tablet);
 	}
 }
 
 @media (max-width: 48rem) {
-	main {
+	:where(main, .app-shell) {
 		padding-inline: var(--gutter-mobile);
 	}
 }

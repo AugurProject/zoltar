@@ -98,13 +98,11 @@ export function OverviewPanels({
 	const isRepPricingUnavailable = activeNetworkProfile.repPricingMode === 'unavailable'
 	const repPricingUnavailableLabel = appCopy.formatRepPricingUnavailable(activeNetworkProfile.displayName)
 	const walletOnActiveNetwork = isActiveAppChain(accountState.chainId)
-	const hasWrongWalletNetwork = accountState.address !== undefined && !walletOnActiveNetwork && !isBrowserSimulationReadBackend
+	const hasWrongWalletNetwork = accountState.address !== undefined && !walletOnActiveNetwork
 	const showAccountBalances = walletBootstrapComplete && accountState.address !== undefined && !hasWrongWalletNetwork
-	const environmentBadge = (() => {
-		if (isBrowserSimulationReadBackend) return <Badge tone='warning'>{appCopy.simulation}</Badge>
-		if (hasWrongWalletNetwork) return <Badge tone='danger'>{appCopy.formatWrongNetworkBadgeLabel(getChainDisplayLabel(accountState.chainId) ?? appCopy.unknownNetwork)}</Badge>
-		return undefined
-	})()
+	const switchNetworkLabel = appCopy.formatSwitchToNetwork(getNetworkSwitchTarget(activeNetworkProfile))
+	const wrongNetworkBadge = hasWrongWalletNetwork ? <Badge tone='danger'>{appCopy.formatWrongNetworkBadgeLabel(getChainDisplayLabel(accountState.chainId) ?? appCopy.unknownNetwork)}</Badge> : undefined
+	const environmentBadge = isBrowserSimulationReadBackend ? <Badge tone='warning'>{appCopy.simulation}</Badge> : undefined
 	const activeNetworkBadge = activeNetworkProfile.id === 'simulation' ? undefined : <Badge>{activeNetworkProfile.displayName}</Badge>
 	const walletNetworkLabel = (() => {
 		if (!walletOnActiveNetwork) return getWalletNetworkLabel(accountState.chainId)
@@ -118,7 +116,17 @@ export function OverviewPanels({
 					{isConnectingWallet ? <LoadingText>{appCopy.connecting}</LoadingText> : commonCopy.connectWallet}
 				</button>
 			)
-		if (isBrowserSimulationReadBackend) return <WalletChip address={accountState.address} />
+		if (isBrowserSimulationReadBackend) {
+			if (!hasWrongWalletNetwork) return <WalletChip address={accountState.address} />
+			return (
+				<>
+					<WalletChip address={accountState.address} tone='danger' />
+					<button className='secondary wallet-button' type='button' onClick={onSwitchNetwork} disabled={isManagingWallet}>
+						{switchNetworkLabel}
+					</button>
+				</>
+			)
+		}
 		return (
 			<details className='account-menu'>
 				<summary aria-label={appCopy.formatAccountMenuLabel(abbreviateAddress(accountState.address))}>
@@ -135,7 +143,7 @@ export function OverviewPanels({
 					</button>
 					{hasWrongWalletNetwork ? (
 						<button className='primary' type='button' onClick={onSwitchNetwork} disabled={isManagingWallet}>
-							{appCopy.formatSwitchToNetwork(getNetworkSwitchTarget(getActiveNetworkProfile()))}
+							{switchNetworkLabel}
 						</button>
 					) : undefined}
 					<button className='quiet' type='button' onClick={onDisconnectWallet} disabled={isManagingWallet}>
@@ -156,10 +164,11 @@ export function OverviewPanels({
 						</>
 					}
 					badges={
-						activeNetworkBadge === undefined && environmentBadge === undefined ? undefined : (
+						activeNetworkBadge === undefined && environmentBadge === undefined && wrongNetworkBadge === undefined ? undefined : (
 							<>
 								{activeNetworkBadge}
 								{environmentBadge}
+								{wrongNetworkBadge}
 							</>
 						)
 					}

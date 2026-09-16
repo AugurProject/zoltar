@@ -1,6 +1,7 @@
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import type { SimulationScenario } from './scenarios.js'
 import type { SimulationSource } from './savedStates.js'
+import type { SimulationWalletMode } from './simulationWallet.js'
 
 export type SimulationController = {
 	accounts: readonly Address[]
@@ -28,9 +29,11 @@ export type SimulationController = {
 	setRepPerEthPrice(value: bigint): Promise<void>
 	setRepPerUsdcPrice(value: bigint): Promise<void>
 	setQueryDelayMilliseconds(value: number): Promise<void>
+	setWalletMode(mode: SimulationWalletMode): Promise<void>
 	subscribe(handler: () => void): () => void
 	transactionCountSinceReset: bigint
 	transactionDelayMilliseconds: number
+	walletMode: SimulationWalletMode
 	setTransactionDelayMilliseconds(value: number): Promise<void>
 	waitUntilReady(): Promise<void>
 }

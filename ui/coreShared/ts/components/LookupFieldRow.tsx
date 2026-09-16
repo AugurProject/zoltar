@@ -5,6 +5,8 @@ import { FormInput } from './FormInput.js'
 type LookupFieldRowProps = {
 	action?: ComponentChildren
 	disabled?: boolean
+	error?: string | undefined
+	hint?: string | undefined
 	inputClassName?: string
 	inputMode?: JSX.HTMLAttributes<HTMLInputElement>['inputMode']
 	invalid?: boolean
@@ -16,7 +18,7 @@ type LookupFieldRowProps = {
 	value: string
 }
 
-export function LookupFieldRow({ action, disabled = false, inputClassName = '', inputMode, invalid = false, label, onInput, placeholder, resolvedValue, resolvedValueLabel, value }: LookupFieldRowProps) {
+export function LookupFieldRow({ action, disabled = false, error, hint, inputClassName = '', inputMode, invalid = false, label, onInput, placeholder, resolvedValue, resolvedValueLabel, value }: LookupFieldRowProps) {
 	const inputId = useId()
 	return (
 		<div className='field lookup-field-row'>
@@ -24,7 +26,7 @@ export function LookupFieldRow({ action, disabled = false, inputClassName = '', 
 				{label}
 			</label>
 			<div className={`lookup-field-controls ${action === undefined ? '' : 'has-action'}`.trim()}>
-				<FormInput id={inputId} className={inputClassName} value={value} inputMode={inputMode} invalid={invalid} disabled={disabled} onInput={event => onInput(event.currentTarget.value)} placeholder={placeholder} />
+				<FormInput id={inputId} className={inputClassName} value={value} inputMode={inputMode} invalid={invalid} error={error} hint={hint} disabled={disabled} onInput={event => onInput(event.currentTarget.value)} placeholder={placeholder} />
 				{action === undefined ? undefined : <div className='actions'>{action}</div>}
 			</div>
 			{resolvedValue === undefined ? undefined : (

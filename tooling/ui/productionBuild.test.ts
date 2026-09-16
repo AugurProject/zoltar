@@ -4,7 +4,7 @@ import * as os from 'node:os'
 import * as path from 'node:path'
 import * as process from 'node:process'
 import { createDeferred } from '../../ui/coreShared/ts/tests/testUtils/deferred.js'
-import { UI_APP_IDS, getUiAppPaths, getUiCoreSharedPaths, isUiAppId, type UiAppId } from './appPaths.mts'
+import { UI_APP_IDS, featureStylesheets, getUiAppPaths, getUiCoreSharedPaths, isUiAppId, type UiAppId } from './appPaths.mts'
 import { waitForChromiumDevToolsPort } from './chromiumDevTools.mts'
 import { getChromiumPath, withChromiumTestLock } from './chromiumPath.js'
 
@@ -96,7 +96,11 @@ for (const appId of UI_APP_IDS) {
 			productionIndexPath,
 			productionCssPath,
 			productionTokensCssPath,
-			...['base.css', 'protocol-surfaces.css', 'reporting-visualizations.css', 'application-surfaces.css', 'controls-and-responsive.css', 'visual-foundation.css', 'protocol-apps.css'].map(stylesheet => path.join(distRootPath, 'css', stylesheet)),
+			...['base.css', 'simulation-banner.css', 'protocol-surfaces.css', 'application-surfaces.css', 'controls-and-responsive.css', 'visual-foundation.css', 'protocol-apps.css'].map(stylesheet => path.join(distRootPath, 'css', stylesheet)),
+			...(appId === 'zoltar' ? [path.join(distRootPath, 'css', 'zoltar-shared.css')] : []),
+			...(appId === 'statoblast' ? [path.join(distRootPath, 'css', 'zoltar-shared.css'), path.join(distRootPath, 'css', 'statoblast-shared.css')] : []),
+			path.join(distRootPath, 'vendor', 'fonts', 'ibm-plex-mono-latin-400-normal.woff2'),
+			path.join(distRootPath, 'vendor', 'fonts', 'ibm-plex-mono-latin-600-normal.woff2'),
 			appBundlePath,
 			appSourceMapPath,
 			workerBundlePath,
@@ -119,6 +123,10 @@ for (const appId of UI_APP_IDS) {
 		expect(html).not.toContain('./vendor/')
 		expect(html).toContain(`<title>${expectedTitle}</title>`)
 		expect(html).toContain(`<html lang="en" data-product="${appId}">`)
+		const stylesheetLinks = ['index.css', ...featureStylesheets[appId]].map(stylesheet => `<link rel="stylesheet" href="./css/${stylesheet}" />`)
+		const stylesheetLinkOffsets = stylesheetLinks.map(link => html.indexOf(link))
+		expect(stylesheetLinkOffsets.every(offset => offset >= 0)).toBe(true)
+		expect([...stylesheetLinkOffsets].sort((left, right) => left - right)).toEqual(stylesheetLinkOffsets)
 		for (const otherTitle of otherTitles) expect(html).not.toContain(`<title>${otherTitle}</title>`)
 	})
 
@@ -182,17 +190,39 @@ for (const appId of UI_APP_IDS) {
 		expect(distRootPath).not.toBe(otherPaths.appDistRoot)
 	})
 
-	productionRebuildInvariantTest(`${appId} production output is independent of the invoking working directory`, async () => {
+	productionRebuildInvariantTest(`${appId} production output is independent of the invoking working directory and development fonts`, async () => {
 		const rootBuild = await fs.readFile(appBundlePath)
-		const result = Bun.spawnSync([process.execPath, appPaths.productionBuildScript, appId], {
-			cwd: appPaths.appRoot,
-			stderr: 'pipe',
-			stdout: 'pipe',
-		})
-		if (result.exitCode !== 0) {
-			throw new Error(`production build from ${appPaths.appRoot} failed\n${new TextDecoder().decode(result.stdout)}${new TextDecoder().decode(result.stderr)}`)
+		// CI restores production artifacts without the shared development font directory.
+		const fontDirectory = path.join(appPaths.coreSharedRoot, 'vendor', 'fonts')
+		const backupDirectory = await fs.mkdtemp(path.join(appPaths.coreSharedRoot, 'production-fonts-'))
+		const backupPath = path.join(backupDirectory, 'fonts')
+		const hadFonts = await fs.stat(fontDirectory).then(
+			() => true,
+			error => {
+				if (error instanceof Error && 'code' in error && error.code === 'ENOENT') return false
+				throw error
+			},
+		)
+		if (hadFonts) await fs.rename(fontDirectory, backupPath)
+		try {
+			const result = Bun.spawnSync([process.execPath, appPaths.productionBuildScript, appId], {
+				cwd: appPaths.appRoot,
+				stderr: 'pipe',
+				stdout: 'pipe',
+			})
+			if (result.exitCode !== 0) {
+				throw new Error(`production build from ${appPaths.appRoot} failed\n${new TextDecoder().decode(result.stdout)}${new TextDecoder().decode(result.stderr)}`)
+			}
+			expect(await fs.readFile(appBundlePath)).toEqual(rootBuild)
+			for (const weight of [400, 600]) {
+				const fileName = `ibm-plex-mono-latin-${weight}-normal.woff2`
+				const source = await fs.readFile(new URL(import.meta.resolve(`@fontsource/ibm-plex-mono/files/${fileName}`)))
+				expect(await fs.readFile(path.join(distRootPath, 'vendor', 'fonts', fileName))).toEqual(source)
+			}
+		} finally {
+			if (hadFonts) await fs.rename(backupPath, fontDirectory)
+			await fs.rm(backupDirectory, { recursive: true, force: true })
 		}
-		expect(await fs.readFile(appBundlePath)).toEqual(rootBuild)
 	})
 }
 

@@ -251,7 +251,7 @@ describe('live workflow safety boundary', () => {
 		const liquidityRoute = `liquidity/${pool}` as const
 		// Manual refresh controls are gone; leaving and re-entering the addressed route runs an explicit refresh.
 		const rerouteForRefresh = async (route: 'market' | 'portfolio' | typeof marketRoute | typeof liquidityRoute, selectedUniverse = '1') => {
-			await act(() => render(<LiveTrading route='security-pools' configuration={configuration} configurationError={undefined} selectedUniverseId={selectedUniverse} onWorkflowLockChange={locked => workflowLocks.push(locked)} onWalletSummaryChange={recordWalletSummary} />, rendered.container))
+			await act(() => render(<LiveTrading route='create-market' configuration={configuration} configurationError={undefined} selectedUniverseId={selectedUniverse} onWorkflowLockChange={locked => workflowLocks.push(locked)} onWalletSummaryChange={recordWalletSummary} />, rendered.container))
 			await flush()
 			await act(() => render(<LiveTrading route={route} configuration={configuration} configurationError={undefined} selectedUniverseId={selectedUniverse} onWorkflowLockChange={locked => workflowLocks.push(locked)} onWalletSummaryChange={recordWalletSummary} />, rendered.container))
 			await flush()
@@ -303,10 +303,10 @@ describe('live workflow safety boundary', () => {
 		await flush()
 		await act(() => render(<LiveTrading route={poolRoute} configuration={configuration} configurationError={undefined} selectedUniverseId='1' onWorkflowLockChange={locked => workflowLocks.push(locked)} walletConnectRequestNonce={1} />, rendered.container))
 		await walletChainReadStarted.promise
-		await act(() => render(<LiveTrading route='markets' configuration={configuration} configurationError={undefined} selectedUniverseId='1' onWorkflowLockChange={locked => workflowLocks.push(locked)} walletConnectRequestNonce={1} />, rendered.container))
-		await waitForDom(() => document.querySelectorAll('.market-row').length === 2, 'browse rows')
-		expect(document.querySelector(`.market-row a[href="#/market/${pool}"]`)).not.toBeNull()
-		expect(document.querySelector(`.market-row a[href="#/liquidity/${pool}"]`)).not.toBeNull()
+		await act(() => render(<LiveTrading route='market' configuration={configuration} configurationError={undefined} selectedUniverseId='1' onWorkflowLockChange={locked => workflowLocks.push(locked)} walletConnectRequestNonce={1} />, rendered.container))
+		await waitForDom(() => document.querySelectorAll('.market-record').length === 2, 'browse rows')
+		expect(document.querySelector(`.market-record a[href="#/market/${pool}"]`)).not.toBeNull()
+		expect(document.querySelector(`.market-record a[href="#/liquidity/${pool}"]`)).not.toBeNull()
 		deferredWalletChainRead.reject(new Error('Wallet request rejected after navigation'))
 		await settleAsyncWorkflow()
 		expect(document.body.textContent).not.toContain('Wallet request rejected after navigation')
@@ -318,8 +318,9 @@ describe('live workflow safety boundary', () => {
 		await act(() => render(<LiveTrading route='market' configuration={configuration} configurationError={undefined} selectedUniverseId='1' onWorkflowLockChange={locked => workflowLocks.push(locked)} onWalletSummaryChange={recordWalletSummary} />, rendered.container))
 		await settleAsyncWorkflow()
 		await flush()
-		expect(document.querySelector('.market-lookup')).not.toBeNull()
-		expect(document.querySelector('.market-lookup a[href="#/markets"]')).not.toBeNull()
+		// The lookup route is list-first: the address form sits above the same rows the browse alias shows.
+		expect(document.querySelector('.open-pool-form')).not.toBeNull()
+		await waitForDom(() => document.querySelectorAll('.market-record').length === 2, 'lookup route rows')
 		deferredWalletChainRead = deferred<number>()
 		walletChainReadStarted = deferred<undefined>()
 		const discoveriesBeforeMidConnectUniverseChange = discoveredUniverseIds.length
@@ -396,7 +397,7 @@ describe('live workflow safety boundary', () => {
 		await flush()
 		rejectDiscovery = true
 		await rerouteForRefresh('portfolio')
-		expect(Array.from(document.querySelectorAll('[role="alert"]')).filter(candidate => candidate.textContent?.includes('SecurityPool discovery failed') === true)).toHaveLength(1)
+		expect(Array.from(document.querySelectorAll('[role="alert"]')).filter(candidate => candidate.textContent?.includes('Security pool discovery failed') === true)).toHaveLength(1)
 		expect(hasButton('Refresh')).toBeFalse()
 		expect(document.body.textContent).not.toContain('Retry balances')
 		rejectDiscovery = false
@@ -447,6 +448,8 @@ describe('live workflow safety boundary', () => {
 		positionReceipt.resolve({ status: 'success' })
 		await settleAsyncWorkflow()
 		expect(document.body.textContent).toContain('Enter YES confirmed on-chain')
+		// Confirmation moves focus to the outcome block so the result is announced and reachable.
+		expect(document.activeElement?.classList.contains('transaction-outcome')).toBe(true)
 		// The post-receipt refresh revalidates balances without hiding the ones already on screen.
 		expect(document.body.textContent).not.toContain('Loading balances')
 		expect(document.body.textContent).toContain('1 YES')
@@ -454,7 +457,7 @@ describe('live workflow safety boundary', () => {
 		deferPositionBroadcast = false
 		waitForPositionReceipt = false
 		repricePositionReceipt = false
-		const protectionInputs = document.querySelectorAll<HTMLInputElement>('.operation-block .execution-settings input')
+		const protectionInputs = document.querySelectorAll<HTMLInputElement>('.execution-protection input')
 		if (protectionInputs.length !== 2) throw new Error('Missing position transaction protection fields')
 		await act(() => {
 			const slippageInput = protectionInputs[0]
@@ -468,8 +471,8 @@ describe('live workflow safety boundary', () => {
 		expect(document.querySelector('.transaction-hash')).toBeNull()
 
 		await act(async () => button('Exit').click())
-		expect(document.querySelector('.operation-block .tx-action-button')).not.toBeNull()
-		expect(document.querySelector('.operation-block .pool-mechanics')).toBeNull()
+		expect(document.querySelector('[role="tabpanel"] .tx-action-button')).not.toBeNull()
+		expect(document.querySelector('[role="tabpanel"] .pool-mechanics')).toBeNull()
 		expect(document.body.textContent).not.toContain('Factory discovery')
 		expect(document.querySelector('.market-list')).toBeNull()
 		expect(document.querySelector('.market-stack')).not.toBeNull()

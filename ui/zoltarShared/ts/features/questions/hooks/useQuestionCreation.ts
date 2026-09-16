@@ -20,7 +20,6 @@ import { useZoltarOperations } from '../../universes/hooks/useZoltarOperations.j
 type UseQuestionCreationParameters = TransactionLifecycleParameters &
 	WriteOperationContext & {
 		activeUniverseId: bigint
-		activeZoltarView: 'create' | 'fork' | 'migrate' | 'questions'
 		autoLoadInitialData: boolean
 		deploymentStatuses: DeploymentStatus[]
 		environmentRefreshKey: number
@@ -120,10 +119,10 @@ function getValueForStorageKey<T>(keyedValue: KeyedValue<T> | undefined, storage
 }
 
 export function useQuestionCreation(
-	{ accountAddress, activeUniverseId, activeZoltarView, autoLoadInitialData, deploymentStatuses, environmentRefreshKey, onTransactionFailed, onTransactionFinished, onTransactionPresented, onTransactionPrepared, onTransactionRequested, onTransactionSubmitted, refreshState }: UseQuestionCreationParameters,
+	{ accountAddress, activeUniverseId, autoLoadInitialData, deploymentStatuses, environmentRefreshKey, onTransactionFailed, onTransactionFinished, onTransactionPresented, onTransactionPrepared, onTransactionRequested, onTransactionSubmitted, refreshState }: UseQuestionCreationParameters,
 	dependencies: UseQuestionCreationDependencies = defaultUseQuestionCreationDependencies,
 ) {
-	const zoltar = useZoltarOperations({ accountAddress, activeUniverseId, activeZoltarView, autoLoadInitialData, deploymentStatuses, environmentRefreshKey, onTransactionFailed, onTransactionFinished, onTransactionPresented, onTransactionPrepared, onTransactionRequested, onTransactionSubmitted, refreshState })
+	const zoltar = useZoltarOperations({ accountAddress, activeUniverseId, autoLoadInitialData, deploymentStatuses, environmentRefreshKey, onTransactionFailed, onTransactionFinished, onTransactionPresented, onTransactionPrepared, onTransactionRequested, onTransactionSubmitted, refreshState })
 	const questionDraftStorageKey = getQuestionDraftStorageKey(accountAddress)
 	const questionActionScopeKey = `${questionDraftStorageKey}:${environmentRefreshKey}`
 	const currentQuestionActionScopeKeyRef = useRef(questionActionScopeKey)

@@ -8,6 +8,7 @@ import { predictSimulationTokenAddresses } from './bootstrap.js'
 import type { SimulationScenario } from './scenarios.js'
 import type { SavedSimulationStateEnvelopeV1, SimulationInitialization } from './savedStates.js'
 import { createSimulationProvider, type SimulationProviderRequest } from './simulationProvider.js'
+import { DEFAULT_SIMULATION_WALLET_MODE, SIMULATION_WRONG_CHAIN_ID_HEX, type SimulationWalletMode } from './simulationWallet.js'
 import type { SimulationWorkerCallMap, SimulationWorkerCallMessage, SimulationWorkerCallMethod, SimulationWorkerEvent, SimulationWorkerMessage, SimulationWorkerResultValue, SimulationWorkerRpcMessage, SimulationWorkerState } from './tevmWorkerProtocol.js'
 
 const QA_ACCOUNTS = [normalizeAccount('0x00000000000000000000000000000000000000a1'), normalizeAccount('0x00000000000000000000000000000000000000b2'), normalizeAccount('0x00000000000000000000000000000000000000c3')].filter((account): account is Address => account !== undefined)
@@ -81,7 +82,14 @@ function createWorkerConnection(workerPath: URL): SimulationWorkerConnection {
 }
 
 export async function createSimulationBackend(
-	{ appId = 'zoltar', initialBootstrapError, savedState, savedStateId, scenario }: { appId?: 'zoltar' | 'statoblast' | 'trading'; initialBootstrapError?: string; savedState?: SavedSimulationStateEnvelopeV1; savedStateId?: string; scenario?: SimulationScenario },
+	{
+		appId = 'zoltar',
+		initialBootstrapError,
+		savedState,
+		savedStateId,
+		scenario,
+		walletMode = DEFAULT_SIMULATION_WALLET_MODE,
+	}: { appId?: 'zoltar' | 'statoblast' | 'trading'; initialBootstrapError?: string; savedState?: SavedSimulationStateEnvelopeV1; savedStateId?: string; scenario?: SimulationScenario; walletMode?: SimulationWalletMode },
 	dependencies: CreateSimulationBackendDependencies = {},
 ): Promise<SimulationBackend> {
 	const primaryAccount = QA_ACCOUNTS[0]
@@ -265,7 +273,21 @@ export async function createSimulationBackend(
 		return currentState
 	}
 
+	// The wallet-facing provider honours the QA wallet mode (wrong chain or no accounts) so the app's wrong-network and
+	// connect states render in simulation. Reads keep using a provider pinned to the simulation chain, mirroring a real
+	// deployment whose configured read RPC stays on the app chain regardless of the wallet.
 	const provider = createSimulationProvider({
+		getChainId: () => profile.chainIdHex,
+		getSelectedAccount: () => requireState().selectedAccount,
+		initialWalletMode: walletMode,
+		onWalletModeChange: (mode, previousMode) => {
+			if ((mode === 'wrong-chain') !== (previousMode === 'wrong-chain')) emitListeners(listeners, 'chainChanged')
+			if ((mode === 'disconnected') !== (previousMode === 'disconnected')) emitListeners(listeners, 'accountsChanged')
+			emitListeners(listeners, 'state')
+		},
+		requestRpc,
+	})
+	const readProvider = createSimulationProvider({
 		getChainId: () => profile.chainIdHex,
 		getSelectedAccount: () => requireState().selectedAccount,
 		requestRpc,
@@ -306,7 +328,7 @@ export async function createSimulationBackend(
 		createReadClient: () =>
 			createPublicClient({
 				chain: profile.chain,
-				transport: custom(provider),
+				transport: custom(readProvider),
 			}),
 		createWriteClient: (accountAddress, callbacks = {}) => {
 			const baseClient = createBaseWriteClient(accountAddress)
@@ -370,8 +392,8 @@ export async function createSimulationBackend(
 		get isBootstrapping() {
 			return requireState().isBootstrapping
 		},
-		getAccounts: async () => await callWorker('getAccounts', undefined),
-		getChainId: async () => profile.chainIdHex,
+		getAccounts: async () => (provider.getWalletMode() === 'disconnected' ? [] : await callWorker('getAccounts', undefined)),
+		getChainId: async () => (provider.getWalletMode() === 'wrong-chain' ? SIMULATION_WRONG_CHAIN_ID_HEX : profile.chainIdHex),
 		getProvider: () => provider,
 		getReadBackendStatus: () => ({
 			blockNumber: requireState().blockCountSinceReset,
@@ -399,7 +421,10 @@ export async function createSimulationBackend(
 		get repPerUsdcPrice() {
 			return requireState().repPerUsdcPrice
 		},
-		requestAccounts: async () => await callWorker('getAccounts', undefined),
+		requestAccounts: async () => {
+			if (provider.getWalletMode() === 'disconnected') provider.setWalletMode('connected')
+			return await callWorker('getAccounts', undefined)
+		},
 		reset: async () => {
 			await callWorker('reset', undefined)
 		},
@@ -416,6 +441,9 @@ export async function createSimulationBackend(
 		setRepPerUsdcPrice: async value => await callWorker('setRepPerUsdcPrice', { value }),
 		setQueryDelayMilliseconds: async value => await callWorker('setQueryDelayMilliseconds', { value }),
 		setTransactionDelayMilliseconds: async value => await callWorker('setTransactionDelayMilliseconds', { value }),
+		setWalletMode: async mode => {
+			provider.setWalletMode(mode)
+		},
 		subscribe: handler => {
 			listeners.state.add(handler)
 			return () => {
@@ -437,8 +465,14 @@ export async function createSimulationBackend(
 		get transactionCountSinceReset() {
 			return requireState().transactionCountSinceReset
 		},
+		switchNetwork: async () => {
+			await provider.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: profile.chainIdHex }] })
+		},
 		get transactionDelayMilliseconds() {
 			return requireState().transactionDelayMilliseconds
+		},
+		get walletMode() {
+			return provider.getWalletMode()
 		},
 		waitUntilReady: async () => {
 			await callWorker('waitUntilReady', undefined)

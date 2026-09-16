@@ -64,7 +64,7 @@ function ScalarTargets({ context, selectedTargets, disabled, onChange }: { conte
 		<div class='scalar-fork-picker'>
 			<ScalarOutcomePicker
 				action={
-					<button type='button' class='secondary-action' disabled={disabled || candidate === undefined} onClick={() => candidate === undefined || onChange(toggleTarget(selectedTargets, candidate))}>
+					<button type='button' class='secondary' disabled={disabled || candidate === undefined} onClick={() => candidate === undefined || onChange(toggleTarget(selectedTargets, candidate))}>
 						{candidateSelected ? forkCopy.removeScalarTarget : forkCopy.addScalarTarget}
 					</button>
 				}
@@ -83,7 +83,7 @@ function ScalarTargets({ context, selectedTargets, disabled, onChange }: { conte
 				<div class='fork-deployed-targets'>
 					<span>{forkCopy.deployedScalarChildren}</span>
 					{context.availableTargets.map(target => (
-						<button key={target.outcomeIndex.toString()} type='button' class='quiet-action' aria-pressed={selectedTargets.some(selected => sameTarget(selected, target))} disabled={disabled} onClick={() => onChange(toggleTarget(selectedTargets, target))}>
+						<button key={target.outcomeIndex.toString()} type='button' class='quiet fork-deployed-target' aria-pressed={selectedTargets.some(selected => sameTarget(selected, target))} disabled={disabled} onClick={() => onChange(toggleTarget(selectedTargets, target))}>
 							{target.label}
 						</button>
 					))}

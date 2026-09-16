@@ -192,7 +192,7 @@ export function ForkAuctionMigrationStage({
 						{hasUnresolvedMigrationState ? (
 							<SectionBlock density='compact' headingLevel={4} title={forkAuctionCopy.clearUnresolvedParentEscalationDepositAccounting} variant='embedded'>
 								<p className='detail'>
-									<LoadingAwareText>{getUnresolvedMigrationDetail({ activeReportingDetails, hasStoredEscalationMigrationEntitlement, hasUnresolvedMigrationDeposits, isMigrationExpired, loadingReportingDetails })}</LoadingAwareText>
+									<LoadingAwareText loading={!isMigrationExpired && loadingReportingDetails}>{getUnresolvedMigrationDetail({ activeReportingDetails, hasStoredEscalationMigrationEntitlement, hasUnresolvedMigrationDeposits, isMigrationExpired, loadingReportingDetails })}</LoadingAwareText>
 								</p>
 								{activeReportingDetails === undefined || hasStoredEscalationMigrationEntitlement
 									? undefined

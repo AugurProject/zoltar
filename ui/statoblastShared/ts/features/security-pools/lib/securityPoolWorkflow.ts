@@ -12,8 +12,8 @@ const FORK_WORKFLOW_SELECTION_STAGES = ['fork-triggered', 'migration', 'auction'
 export type ForkWorkflowSelectionStage = (typeof FORK_WORKFLOW_SELECTION_STAGES)[number]
 export type SelectedPoolView = 'vaults' | 'trading' | 'reporting' | 'fork-workflow' | 'staged-operations' | 'price-oracle'
 
-export const SELECTED_POOL_PRIMARY_VIEWS: readonly SelectedPoolView[] = ['vaults', 'trading', 'reporting', 'fork-workflow']
-export const SELECTED_POOL_SECONDARY_VIEWS: readonly SelectedPoolView[] = ['staged-operations', 'price-oracle']
+const SELECTED_POOL_PRIMARY_VIEWS: readonly SelectedPoolView[] = ['vaults', 'trading', 'reporting', 'fork-workflow']
+const SELECTED_POOL_SECONDARY_VIEWS: readonly SelectedPoolView[] = ['staged-operations', 'price-oracle']
 export const SELECTED_POOL_VIEWS: readonly SelectedPoolView[] = [...SELECTED_POOL_PRIMARY_VIEWS, ...SELECTED_POOL_SECONDARY_VIEWS]
 const LEGACY_SELECTED_POOL_VIEWS = ['resolution', 'withdraw-escalation-deposits', 'oracle', 'fork-migration', 'fork-auction', 'fork-settlement'] as const
 
@@ -282,13 +282,6 @@ export function applySelectedPoolWorkflowState(
 		...(questionOutcome === undefined ? {} : { questionOutcome }),
 		...(systemState === undefined ? {} : { systemState }),
 	}
-}
-export function getSelectedPoolWorkflowGuardMessage({ hasSelectedPoolAddress, selectedPoolLookupState, selectedPoolUniverseMismatch }: { hasSelectedPoolAddress: boolean; selectedPoolLookupState: LoadableValueState; selectedPoolUniverseMismatch: boolean }) {
-	if (selectedPoolUniverseMismatch) return undefined
-	if (selectedPoolLookupState === 'loading') return securityPoolCopy.waitForPoolLoadingReason
-	if (selectedPoolLookupState === 'missing') return securityPoolCopy.loadValidPoolReason
-	if (!hasSelectedPoolAddress || selectedPoolLookupState === 'unknown') return securityPoolCopy.loadPoolReason
-	return undefined
 }
 export function getSelectedPoolWorkflowLockedPresentation({ hasSelectedPoolAddress, selectedPoolLookupState, selectedPoolUniverseMismatch }: { hasSelectedPoolAddress: boolean; selectedPoolLookupState: LoadableValueState; selectedPoolUniverseMismatch: boolean }): UserMessagePresentation {
 	if (selectedPoolUniverseMismatch)

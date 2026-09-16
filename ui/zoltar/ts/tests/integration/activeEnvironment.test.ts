@@ -195,7 +195,7 @@ void describe('active environment', () => {
 		)
 
 		expect(isSupportedAppChain('0x539')).toBe(true)
-		expect(getWrongNetworkReason()).toBe('Switch to Ethereum mainnet.')
+		expect(getWrongNetworkReason()).toBe('Switch to Browser Simulation.')
 		resetEnvironment()
 	})
 

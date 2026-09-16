@@ -4,9 +4,7 @@ import { act } from 'preact/test-utils'
 import { DEPLOYED_TRADING_SIMULATION_SCENARIO, FUNDED_TRADING_SIMULATION_SCENARIO, registerTradingSimulationScenario, withDefaultTradingSimulationScenario } from '../../simulation/index.js'
 import { getRegisteredSimulationScenarios, getSimulationScenarioDescription, getSimulationScenarioLabel } from '@zoltar/ui-core-shared/simulation/scenarios.js'
 import * as appCopy from '../../copy/app.js'
-import { Status } from '../../components/Status.js'
-import { TradingAddressValue } from '../../components/TradingAddress.js'
-import { ReadOnlyAddressValue } from '@zoltar/ui-core-shared/components/AddressValue.js'
+import { SecurityPoolLink } from '../../components/SecurityPoolLink.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import { fireEvent, waitFor, within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
@@ -35,13 +33,13 @@ test('Trading registers its shared TEVM scenarios and selects its own worker', (
 
 test('Trading defaults bare simulation launches to the funded scenario', () => {
 	expect(withDefaultTradingSimulationScenario('http://localhost/?simulate=1')?.href).toBe(`http://localhost/?simulate=1&simScenario=${FUNDED_TRADING_SIMULATION_SCENARIO}`)
-	expect(withDefaultTradingSimulationScenario('http://localhost/?simulate=1#/markets')?.href).toBe(`http://localhost/?simulate=1&simScenario=${FUNDED_TRADING_SIMULATION_SCENARIO}#/markets`)
-	expect(withDefaultTradingSimulationScenario('http://localhost/#/markets?simulate=1')?.href).toBe(`http://localhost/#/markets?simulate=1&simScenario=${FUNDED_TRADING_SIMULATION_SCENARIO}`)
+	expect(withDefaultTradingSimulationScenario('http://localhost/?simulate=1#/market')?.href).toBe(`http://localhost/?simulate=1&simScenario=${FUNDED_TRADING_SIMULATION_SCENARIO}#/market`)
+	expect(withDefaultTradingSimulationScenario('http://localhost/#/market?simulate=1')?.href).toBe(`http://localhost/#/market?simulate=1&simScenario=${FUNDED_TRADING_SIMULATION_SCENARIO}`)
 	expect(withDefaultTradingSimulationScenario('http://localhost/')).toBeUndefined()
-	expect(withDefaultTradingSimulationScenario('http://localhost/#/markets')).toBeUndefined()
+	expect(withDefaultTradingSimulationScenario('http://localhost/#/market')).toBeUndefined()
 	expect(withDefaultTradingSimulationScenario('http://localhost/?simulate=1&simScenario=baseline')).toBeUndefined()
-	expect(withDefaultTradingSimulationScenario('http://localhost/?simulate=1#/markets?simScenario=deployed')).toBeUndefined()
-	expect(withDefaultTradingSimulationScenario('http://localhost/?simulate=1#/markets?simState=abc')).toBeUndefined()
+	expect(withDefaultTradingSimulationScenario('http://localhost/?simulate=1#/market?simScenario=deployed')).toBeUndefined()
+	expect(withDefaultTradingSimulationScenario('http://localhost/?simulate=1#/market?simState=abc')).toBeUndefined()
 })
 
 test('Trading installs shared routing for simulation scenario navigation', () => {
@@ -51,7 +49,7 @@ test('Trading installs shared routing for simulation scenario navigation', () =>
 		expect(getCurrentRouteHash()).toBe('#/liquidity')
 		expect(getRouteHashSearch()).toBe('?simulate=1&simScenario=deployed')
 		expect(tradingRouting.resolve(window.location.hash)).toBe('liquidity')
-		expect(getTradingRouteHref('#/markets')).toBe('#/markets?simulate=1&simScenario=deployed')
+		expect(getTradingRouteHref('#/market')).toBe('#/market?simulate=1&simScenario=deployed')
 	} finally {
 		resetRoutingForTesting()
 		dom.cleanup()
@@ -59,7 +57,7 @@ test('Trading installs shared routing for simulation scenario navigation', () =>
 })
 
 test('Trading production links preserve the active simulation route query', async () => {
-	const productionSources = ['app/App.tsx', 'components/TradingAddress.tsx', 'features/LiveTrading.tsx']
+	const productionSources = ['app/App.tsx', 'components/SecurityPoolLink.tsx', 'features/LiveMarketBrowser.tsx', 'features/LiveSecurityPoolDetails.tsx', 'features/LiveTrading.tsx']
 	for (const source of productionSources) {
 		const contents = await readFile(join(import.meta.dir, '../..', source), 'utf8')
 		expect(contents).not.toMatch(/href=['"]#\//)
@@ -67,7 +65,7 @@ test('Trading production links preserve the active simulation route query', asyn
 })
 
 test('Trading refreshes the active environment when history changes the simulation scenario', async () => {
-	const dom = installDomEnvironment('http://localhost/#/markets?simulate=1&simScenario=deployed')
+	const dom = installDomEnvironment('http://localhost/#/market?simulate=1&simScenario=deployed')
 	installTradingRouting()
 	let environmentInitializations = 0
 	const configuration: DeploymentConfiguration = {
@@ -88,7 +86,7 @@ test('Trading refreshes the active environment when history changes the simulati
 		/>,
 	)
 	try {
-		window.history.pushState({}, '', '#/markets?simulate=1&simScenario=baseline')
+		window.history.pushState({}, '', '#/market?simulate=1&simScenario=baseline')
 		window.dispatchEvent(new Event('popstate'))
 		await new Promise(resolve => setTimeout(resolve, 10))
 		expect(environmentInitializations).toBe(1)
@@ -104,7 +102,7 @@ test('Trading refreshes the active environment when history changes the simulati
 
 test('Trading force-refreshes the active environment after saving the active network RPC', async () => {
 	resetActiveEnvironmentForTesting()
-	const dom = installDomEnvironment('http://localhost/#/markets')
+	const dom = installDomEnvironment('http://localhost/#/market')
 	const originalStorageDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'localStorage')
 	Object.defineProperty(globalThis, 'localStorage', { configurable: true, value: window.localStorage })
 	let environmentInitializations = 0
@@ -155,7 +153,7 @@ test('Trading force-refreshes the active environment after saving the active net
 })
 
 test('Trading renders its shell while the environment is still bootstrapping', async () => {
-	const dom = installDomEnvironment('http://localhost/#/markets')
+	const dom = installDomEnvironment('http://localhost/#/market')
 	installTradingRouting()
 	// A pending waitUntilReady stands in for an unfinished simulation bootstrap. The shell must render
 	// anyway; only the deployment lookup waits for it.
@@ -210,7 +208,7 @@ test('Trading issues no chain reads while the environment is bootstrapping', asy
 })
 
 test('Trading reports a failed environment on the deployment route', async () => {
-	const dom = installDomEnvironment('http://localhost/#/markets')
+	const dom = installDomEnvironment('http://localhost/#/market')
 	installTradingRouting()
 	const restoreEnvironment = installActiveEnvironmentForTesting({
 		...createFakeBackend({ profile: createFakeSimulationProfile() }),
@@ -231,22 +229,20 @@ test('Trading reports a failed environment on the deployment route', async () =>
 	}
 })
 
-test('Trading status and address presentation use coreShared primitives', async () => {
+test('Trading address links use the coreShared address value', async () => {
 	const dom = installDomEnvironment()
 	const address = '0x00000000000000000000000000000000000000a1'
-	const rendered = await renderIntoDocument(<Status tone='good'>Trading open</Status>)
-	expect(rendered.container.querySelector('.badge.status')?.textContent).toContain('Trading open')
-	expect(TradingAddressValue({ value: address }).type).toBe(ReadOnlyAddressValue)
+	const rendered = await renderIntoDocument(<SecurityPoolLink value={address} />)
+	expect(rendered.container.querySelector('a.security-pool-link .address-value')?.getAttribute('title')).toBe(address)
+	expect(rendered.container.querySelector('a.security-pool-link')?.getAttribute('href')).toBe(`#/security-pool/${address}`)
 	await rendered.cleanup()
 	dom.cleanup()
 })
 
-test('Trading preserves its route headers and does not restyle shared disclosures', async () => {
+test('Trading keeps the shared shell, route header, section, field, and button styles', async () => {
 	const css = await readFile(join(import.meta.dir, '..', '..', '..', 'css', 'app.css'), 'utf8')
-	expect(css).toContain('.route-header {')
-	expect(css).toContain('padding: 0;')
-	expect(css).toContain('background: transparent;')
-	expect(css).toContain('details:not(.simulation-banner-details) > summary::after')
+	for (const selector of ['.route-header', '.section {', '.section-heading', '.primary-action', '.secondary-action', '.wallet-button', '.metrics', '.fact-list', '.amount-input', '.segmented', '.side-picker', '.market-row', '.explanation-flow', ':root[data-product="trading"]', 'summary::after'])
+		expect(css).not.toContain(selector)
 })
 
 test('Trading keeps the initial loading fallback visible until the environment settles', async () => {
@@ -257,7 +253,7 @@ test('Trading keeps the initial loading fallback visible until the environment s
 })
 
 test('the removed demo query cannot select a parallel simulated-data application', async () => {
-	const dom = installDomEnvironment('http://localhost/?demo=1&scenario=baseline#/markets')
+	const dom = installDomEnvironment('http://localhost/?demo=1&scenario=baseline#/market')
 	const configuration: DeploymentConfiguration = {
 		chainId: 31_337,
 		chainName: 'Browser Simulation',
@@ -272,7 +268,7 @@ test('the removed demo query cannot select a parallel simulated-data application
 	expect(rendered.container.querySelector('.demo-banner')).toBeNull()
 	expect(rendered.container.textContent).not.toContain('SIMULATED DATA')
 	expect(rendered.container.textContent).not.toContain('Demo mode')
-	expect(rendered.container.textContent).toContain('Browse markets')
+	expect(rendered.container.querySelector('.market-browser h3')?.textContent).toBe('Markets')
 	await rendered.cleanup()
 	dom.cleanup()
 })
@@ -301,12 +297,7 @@ test('shared header navigation preserves hash settings once and keeps addressed 
 			window.dispatchEvent(new Event('hashchange'))
 		})
 		expect(tradingRouting.resolve(window.location.hash)).toBe(`liquidity/${pool}`)
-		const select = rendered.container.querySelector<HTMLSelectElement>('.mobile-route-select select')
-		if (select === null) throw new Error('Mobile route selector is unavailable')
-		await act(() => {
-			select.value = 'liquidity'
-			select.dispatchEvent(new Event('change', { bubbles: true }))
-		})
+		expect(rendered.container.querySelector('.app-nav-stack select')).toBeNull()
 		expect(window.location.hash).toBe(`#/liquidity/${pool}?${search}`)
 		const parameters = new URLSearchParams(window.location.hash.split('?')[1])
 		for (const [key, value] of new URLSearchParams(search)) expect(parameters.getAll(key)).toEqual([value])

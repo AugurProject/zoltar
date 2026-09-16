@@ -4,6 +4,7 @@ import { zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import { formatRelativeTimestamp, formatTimestamp } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
 import { fireEvent, within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
+import { getTransactionButtonState } from '@zoltar/ui-core-shared/tests/testUtils/transactionActionButton.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import type { MarketDetails, ZoltarUniverseSummary } from '@zoltar/ui-core-shared/types/contracts.js'
 import { ChainTimestampContext } from '@zoltar/ui-core-shared/wallet/chainTimestamp.js'
@@ -365,7 +366,7 @@ describe('ForkZoltarSection', () => {
 		const documentQueries = within(document.body)
 		const forkButton = documentQueries.getByRole('button', { name: 'Fork Universe' })
 		expect(forkButton.hasAttribute('disabled')).toBe(true)
-		expect(forkButton.getAttribute('title')).toContain('The selected question must end before the universe can fork.')
+		expect(getTransactionButtonState(document.body, 'Fork Universe').reason).toContain('The selected question must end before the universe can fork.')
 		fireEvent.click(forkButton)
 		expect(onForkZoltar).not.toHaveBeenCalled()
 	})
@@ -401,7 +402,7 @@ describe('ForkZoltarSection', () => {
 		const documentQueries = within(document.body)
 		let forkButton = documentQueries.getByRole('button', { name: 'Fork Universe' })
 		expect((forkButton as HTMLButtonElement).disabled).toBe(true)
-		expect(forkButton.getAttribute('title')).toBe('Loading current chain time before checking whether the selected question has ended.')
+		expect(getTransactionButtonState(document.body, 'Fork Universe').reason).toBe('Loading current chain time before checking whether the selected question has ended.')
 
 		render(
 			<ChainTimestampContext.Provider value={1n}>
@@ -412,7 +413,7 @@ describe('ForkZoltarSection', () => {
 		forkButton = documentQueries.getByRole('button', { name: 'Fork Universe' })
 		const expectedActiveReason = `The selected question must end before the universe can fork. It ends ${formatTimestamp(2n)} (${formatRelativeTimestamp(2n, 1n)}).`
 		expect((forkButton as HTMLButtonElement).disabled).toBe(true)
-		expect(forkButton.getAttribute('title')).toBe(expectedActiveReason)
+		expect(getTransactionButtonState(document.body, 'Fork Universe').reason).toBe(expectedActiveReason)
 
 		render(
 			<ChainTimestampContext.Provider value={2n}>

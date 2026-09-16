@@ -7,7 +7,7 @@ import { OpenPoolForm } from '../../features/OpenPoolForm.js'
 import { tradingRouting } from '../../lib/routing.js'
 
 test('opens an addressed workflow and preserves simulation settings; rejects invalid addresses and locked navigation', async () => {
-	const dom = installDomEnvironment('http://localhost/#/markets?simulate=1&simScenario=trading-funded')
+	const dom = installDomEnvironment('http://localhost/#/market?simulate=1&simScenario=trading-funded')
 	const rendered = await renderIntoDocument(<OpenPoolForm disabled={false} />)
 	try {
 		const input = rendered.container.querySelector('input')

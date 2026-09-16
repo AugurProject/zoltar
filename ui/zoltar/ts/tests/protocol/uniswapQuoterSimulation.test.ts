@@ -86,6 +86,8 @@ describe('simulation Uniswap quotes', () => {
 			transactionCountSinceReset: 0n,
 			transactionDelayMilliseconds: 0,
 			setTransactionDelayMilliseconds: async () => undefined,
+			setWalletMode: async () => undefined,
+			walletMode: 'connected',
 			waitUntilReady: async () => undefined,
 		})
 		const client = createStubReadClient()

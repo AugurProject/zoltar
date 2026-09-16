@@ -6,11 +6,24 @@ export type WalletSummaryState = Readonly<{
 	error: string | undefined
 	errorLabel: string | undefined
 	universeId: string | undefined
+	/** Present when the injected wallet reports a chain other than the deployment chain. */
+	networkMismatchReason?: string | undefined
+	/** The chain the injected wallet reported when it mismatched the deployment chain. */
+	walletChainId?: number | undefined
 }>
 
 export function walletSummaryForUniverse(summary: WalletSummaryState, selectedUniverseId: string | undefined): WalletSummaryState {
 	if (summary.universeId === selectedUniverseId) return summary
-	return { account: summary.account, ethAttoEth: undefined, repAttoRep: undefined, status: summary.account === undefined ? 'disconnected' : 'loading', error: undefined, errorLabel: undefined, universeId: selectedUniverseId }
+	return {
+		account: summary.account,
+		ethAttoEth: undefined,
+		repAttoRep: undefined,
+		status: summary.account === undefined ? 'disconnected' : 'loading',
+		error: undefined,
+		errorLabel: undefined,
+		universeId: selectedUniverseId,
+		...(summary.networkMismatchReason === undefined ? {} : { networkMismatchReason: summary.networkMismatchReason, walletChainId: summary.walletChainId }),
+	}
 }
 
 export function routeOwnsLiveWallet(route: string) {

@@ -55,9 +55,9 @@ export function walletSummaryDiscoveryRetryStart(discoveryState: 'loading' | 're
 export function walletSummaryAvailability(configurationAvailable: boolean, configurationError: string | undefined, discoveryState: 'loading' | 'ready' | 'error', discoveryError: string | undefined, selectedPoolAvailable: boolean) {
 	if (!configurationAvailable) return configurationError === undefined ? { status: 'loading' as const, error: undefined, errorLabel: undefined } : { status: 'error' as const, error: configurationError, errorLabel: 'Deployment unavailable' }
 	if (discoveryState === 'loading') return { status: 'loading' as const, error: undefined, errorLabel: undefined }
-	if (discoveryState === 'error') return { status: 'error' as const, error: `SecurityPool discovery failed: ${discoveryError ?? 'unknown discovery error'}`, errorLabel: 'SecurityPool discovery failed' }
+	if (discoveryState === 'error') return { status: 'error' as const, error: `Security pool discovery failed: ${discoveryError ?? 'unknown discovery error'}`, errorLabel: 'Security pool discovery failed' }
 	if (selectedPoolAvailable) return undefined
-	return { status: 'error' as const, error: 'No SecurityPool is available in the selected universe', errorLabel: 'No SecurityPool in this universe' }
+	return { status: 'error' as const, error: 'No security pool is available in the selected universe', errorLabel: 'No security pool in this universe' }
 }
 
 export function parseSlippageBps(value: string) {

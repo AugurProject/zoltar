@@ -7,10 +7,6 @@ type LoadingTextProps = {
 	className?: string
 }
 
-function isLoadingText(value: ComponentChildren): value is string {
-	return typeof value === 'string' && /^\s*loading\b/i.test(value)
-}
-
 export function LoadingText({ announce = true, children = commonCopy.loadingWithEllipsis, className = '' }: LoadingTextProps) {
 	return (
 		<span {...(announce ? { 'aria-live': 'polite' as const, role: 'status' as const } : {})} className={`loading-value ${className}`}>
@@ -20,6 +16,6 @@ export function LoadingText({ announce = true, children = commonCopy.loadingWith
 	)
 }
 
-export function LoadingAwareText({ children }: { children: ComponentChildren }) {
-	return isLoadingText(children) ? <LoadingText>{children}</LoadingText> : <>{children}</>
+export function LoadingAwareText({ children, loading = false }: { children: ComponentChildren; loading?: boolean }) {
+	return loading ? <LoadingText>{children}</LoadingText> : <>{children}</>
 }

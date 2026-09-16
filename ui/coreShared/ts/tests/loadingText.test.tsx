@@ -43,19 +43,29 @@ describe('LoadingText', () => {
 		expect(document.body.querySelector('.loading-value')?.textContent).toContain('Working')
 	})
 
-	test('recognizes and decorates user-facing loading messages', async () => {
-		const renderedComponent = await renderIntoDocument(<LoadingAwareText>Loading truth auction status…</LoadingAwareText>)
+	test('decorates messages explicitly marked as loading', async () => {
+		const renderedComponent = await renderIntoDocument(<LoadingAwareText loading>Loading truth auction status…</LoadingAwareText>)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		expect(within(document.body).getByRole('status').textContent).toContain('Loading truth auction status…')
 		expect(document.body.querySelector('.loading-value .spinner')).not.toBeNull()
 	})
 
-	test('leaves non-loading messages unchanged', async () => {
-		const renderedComponent = await renderIntoDocument(<LoadingAwareText>Connect a wallet before submitting.</LoadingAwareText>)
+	test('leaves messages unchanged unless loading is set, regardless of their wording', async () => {
+		const renderedComponent = await renderIntoDocument(
+			<>
+				<span>
+					<LoadingAwareText>Connect a wallet before submitting.</LoadingAwareText>
+				</span>
+				<span>
+					<LoadingAwareText>Loading truth auction status…</LoadingAwareText>
+				</span>
+			</>,
+		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		expect(within(document.body).getByText('Connect a wallet before submitting.')).not.toBeNull()
+		expect(within(document.body).getByText('Loading truth auction status…')).not.toBeNull()
 		expect(document.body.querySelector('.spinner')).toBeNull()
 		expect(within(document.body).queryByRole('status')).toBeNull()
 	})

@@ -22,6 +22,8 @@ type SecurityPoolSummaryMetricsProps = {
 	className?: string
 	currentTimestamp?: bigint | undefined
 	metricVariant?: MetricGridVariant
+	/** Skip the vault count, security multiplier, and open interest cells when a headline strip already shows them. */
+	omitHeadlineMetrics?: boolean
 	pool: ListedSecurityPool
 	showPoolAddress?: boolean
 	showTotalBacking?: boolean
@@ -34,7 +36,19 @@ function formatRepPerCapacityBps(value: bigint) {
 	return `${whole.toString()}${fraction === '' ? '' : `.${fraction}`}×`
 }
 
-export function SecurityPoolSummaryMetrics({ calculationPriceConfigured = false, calculationRepPerEthPrice, children, className = '', currentTimestamp, metricVariant = 'default', pool, showPoolAddress = false, showTotalBacking = false, variant = 'embedded' }: SecurityPoolSummaryMetricsProps) {
+export function SecurityPoolSummaryMetrics({
+	calculationPriceConfigured = false,
+	calculationRepPerEthPrice,
+	children,
+	className = '',
+	currentTimestamp,
+	metricVariant = 'default',
+	omitHeadlineMetrics = false,
+	pool,
+	showPoolAddress = false,
+	showTotalBacking = false,
+	variant = 'embedded',
+}: SecurityPoolSummaryMetricsProps) {
 	const mintingCapacityAttoEth = calculateMintingCapacityAttoEth(pool.totalCapacityOwnershipAttoRep, calculationPriceConfigured ? calculationRepPerEthPrice : pool.lastOraclePrice, pool.statoblastSecurityMultiplierBps)
 	const resolvedPoolHeldRepPerCapacityBps = pool.totalCapacityOwnershipAttoRep === 0n ? undefined : (pool.totalPoolHeldAttoRep * 10_000n) / pool.totalCapacityOwnershipAttoRep
 	if (variant === 'embedded')
@@ -45,8 +59,8 @@ export function SecurityPoolSummaryMetrics({ calculationPriceConfigured = false,
 						<AddressValue address={pool.securityPoolAddress} />
 					</MetricField>
 				) : undefined}
-				<MetricField label={securityPoolCopy.vaultCount}>{pool.vaultCount.toString()}</MetricField>
-				<MetricField label={statoblastAppCopy.statoblastSecurityMultiplierBps}>{formatStatoblastSecurityMultiplier(pool.statoblastSecurityMultiplierBps)}x</MetricField>
+				{omitHeadlineMetrics ? undefined : <MetricField label={securityPoolCopy.vaultCount}>{pool.vaultCount.toString()}</MetricField>}
+				{omitHeadlineMetrics ? undefined : <MetricField label={statoblastAppCopy.statoblastSecurityMultiplierBps}>{formatStatoblastSecurityMultiplier(pool.statoblastSecurityMultiplierBps)}x</MetricField>}
 				<MetricField label={commonCopy.initialReportPriorityFee}>{formatCurrencyBalanceWithUnit(pool.initialReportPriorityFeeAttoEthPerGas, commonCopy.eth, 18)}</MetricField>
 				<MetricField label={securityPoolCopy.openInterestFeeYear}>
 					<CurrencyValue value={openInterestFeePerYearBigint(pool.currentRetentionRate)} suffix={commonCopy.percent} />
@@ -57,9 +71,11 @@ export function SecurityPoolSummaryMetrics({ calculationPriceConfigured = false,
 					</MetricField>
 				) : undefined}
 				{resolvedPoolHeldRepPerCapacityBps === undefined ? undefined : <MetricField label={securityPoolCopy.poolHeldRepPerCapacity}>{formatRepPerCapacityBps(resolvedPoolHeldRepPerCapacityBps)}</MetricField>}
-				<MetricField label={securityPoolCopy.openInterestMintedMax}>
-					<CurrencyValue exactWhenRoundedToZero value={pool.settlementCollateralAttoEth} suffix={commonCopy.eth} /> / {mintingCapacityAttoEth === undefined ? commonCopy.unavailable : <CurrencyValue exactWhenRoundedToZero value={mintingCapacityAttoEth} suffix={commonCopy.eth} />}
-				</MetricField>
+				{omitHeadlineMetrics ? undefined : (
+					<MetricField label={securityPoolCopy.openInterestMintedMax}>
+						<CurrencyValue exactWhenRoundedToZero value={pool.settlementCollateralAttoEth} suffix={commonCopy.eth} /> / {mintingCapacityAttoEth === undefined ? commonCopy.unavailable : <CurrencyValue exactWhenRoundedToZero value={mintingCapacityAttoEth} suffix={commonCopy.eth} />}
+					</MetricField>
+				)}
 				{children}
 			</MetricGrid>
 		)

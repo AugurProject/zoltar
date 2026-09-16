@@ -6,6 +6,7 @@ import type { SimulationController } from '../simulation/controller.js'
 import { getSavedSimulationStateEnvelope } from '../simulation/savedStates.js'
 import { createSimulationBackend } from '../simulation/tevmBackend.js'
 import { getRegisteredSimulationScenarios, type SimulationScenario } from '../simulation/scenarios.js'
+import { SIMULATION_WALLET_QUERY_PARAM, parseSimulationWalletMode } from '../simulation/simulationWallet.js'
 
 type LocationLike = {
 	hash?: string
@@ -64,6 +65,10 @@ function getSimulationScenario(location: LocationLike): SimulationScenario {
 	const raw = readLocationParams(location).get('simScenario') ?? undefined
 	if (raw === undefined) return 'baseline'
 	return getRegisteredSimulationScenarios().includes(raw) ? raw : 'baseline'
+}
+
+function getSimulationWalletMode(location: LocationLike) {
+	return parseSimulationWalletMode(readLocationParams(location).get(SIMULATION_WALLET_QUERY_PARAM))
 }
 
 function getSimulationStateId(location: LocationLike) {
@@ -125,17 +130,20 @@ export async function initializeActiveEnvironment(location: LocationLike = windo
 	}
 	const createSimulationBackendImpl = dependencies.createSimulationBackend ?? createSimulationBackend
 	const simulationAppId = dependencies.appId ?? 'zoltar'
+	const walletMode = getSimulationWalletMode(location)
 	const simulationBackend =
 		savedStateId !== undefined && savedState !== undefined
 			? await createSimulationBackendImpl({
 					appId: simulationAppId,
 					savedState,
 					savedStateId,
+					walletMode,
 				})
 			: await createSimulationBackendImpl({
 					appId: simulationAppId,
 					...(initialBootstrapError === undefined ? {} : { initialBootstrapError }),
 					scenario: savedStateId === undefined ? getSimulationScenario(location) : 'baseline',
+					walletMode,
 				})
 	if (requestGeneration !== initializeActiveEnvironmentGeneration) {
 		try {
