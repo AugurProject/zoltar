@@ -28,7 +28,7 @@ const packageEntries = new Map<CiScope, PackageMatrixEntry>(
 	}),
 )
 const instructionFiles = new Set(['LICENSE', '.vscode/settings.json', '.vscode/tasks.json'])
-const rootGlobalFiles = new Set(['.coverage-policy.json', '.dockerignore', '.editorconfig', '.gitattributes', '.gitignore', '.npmrc', '.prettierignore', '.prettierrc.json', 'biome.json', 'bun.lock', 'bunfig.toml', 'knip.json', 'package.json', 'tsconfig.json', 'tsconfig.scripts.json'])
+const rootGlobalFiles = new Set(['.coverage-policy.json', '.dockerignore', '.editorconfig', '.gitattributes', '.gitignore', '.npmrc', '.prettierignore', '.prettierrc.json', 'biome.json', 'bun.lock', 'bunfig.toml', 'knip.ts', 'package.json', 'tsconfig.json', 'tsconfig.scripts.json'])
 const ordered = (scopes: ReadonlySet<CiScope>): CiScope[] => ciScopes.filter(scope => scopes.has(scope))
 
 function directScopeForPath(filePath: string): CiScope | 'full' {

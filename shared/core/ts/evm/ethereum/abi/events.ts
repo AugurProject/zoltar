@@ -142,7 +142,6 @@ export function decodeEventLog(parameters: { abi: Abi; data: Hex; topics: readon
 	throw firstDecodeError ?? createDecodeError('DecodeLogDataMismatch', 'Failed to decode event log')
 }
 
-/** @internal Production filters logs through getLogs; tests build topic fixtures with this encoder. */
 export function encodeEventTopics<const TArgs extends readonly unknown[] | Record<string, unknown> | undefined = undefined>(parameters: { abi: Abi; args?: TArgs; eventName: string }): readonly (EncodedEventTopic<TArgs> | null)[]
 
 export function encodeEventTopics(parameters: { abi: Abi; args?: readonly unknown[] | Record<string, unknown> | undefined; eventName: string }): readonly (Hex | readonly Hex[] | null)[] {

@@ -4,5 +4,4 @@ export { parseAbiParameters, parseAbi, parseAbiItem } from './abi/parser.js'
 
 /** @internal Test-only raw codec entry points. */
 export { decodeFunctionResult } from './abi/codec.js'
-/** @internal Test-only log construction. */
 export { encodeEventTopics } from './abi/events.js'
