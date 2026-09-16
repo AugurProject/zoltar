@@ -65,3 +65,5 @@ export const categoricalOutcomesGuidance = 'List the mutually exclusive outcomes
 export const scalarQuestionDescription = 'Ask for a measurable number with a unit, range, and increment that users can understand.'
 export const loadingQuestions = 'Loading questions…'
 export const untitledQuestion = 'Untitled question'
+
+export const questionDetails = 'Question details'

@@ -11,6 +11,7 @@ import { LookupFieldRow } from '@zoltar/ui-core-shared/components/LookupFieldRow
 import { LoadingAwareText, LoadingText } from '@zoltar/ui-core-shared/components/LoadingText.js'
 import { MetricField } from '@zoltar/ui-core-shared/components/MetricField.js'
 import { RouteWorkflowPanel } from '@zoltar/ui-core-shared/components/RouteWorkflowPanel.js'
+import { ReadOnlyDetailAccordion } from '@zoltar/ui-core-shared/components/ReadOnlyDetailAccordion.js'
 import { SectionBlock } from '@zoltar/ui-core-shared/components/SectionBlock.js'
 import { TransactionActionButton } from '@zoltar/ui-core-shared/components/TransactionActionButton.js'
 import { TimestampValue } from '@zoltar/ui-core-shared/components/TimestampValue.js'
@@ -368,13 +369,17 @@ export function ReportingSection({
 							<CurrencyValue precision='exact' value={effectiveReportingDetails?.nonDecisionThresholdAttoRep} suffix={commonCopy.rep} />
 						</MetricField>
 						<MetricField label={reportingCopy.timeLeft}>{activeReportingDetails === undefined ? commonCopy.metricUnavailablePlaceholder : formatDuration(getEscalationTimeRemaining(activeReportingDetails))}</MetricField>
-						<MetricField label={reportingCopy.escalationStarted}>
-							<TimestampValue {...(effectiveCurrentTimestamp === undefined ? {} : { currentTimestamp: effectiveCurrentTimestamp })} timestamp={escalationGameStartTimestamp} />
-						</MetricField>
-						<MetricField label={reportingCopy.startBondAttoRep}>
-							<CurrencyValue precision='exact' value={effectiveReportingDetails?.startBondAttoRep} suffix={commonCopy.rep} />
-						</MetricField>
 					</div>
+					<ReadOnlyDetailAccordion title={reportingCopy.reportingParameters}>
+						<div className='escalation-metrics'>
+							<MetricField label={reportingCopy.escalationStarted}>
+								<TimestampValue {...(effectiveCurrentTimestamp === undefined ? {} : { currentTimestamp: effectiveCurrentTimestamp })} timestamp={escalationGameStartTimestamp} />
+							</MetricField>
+							<MetricField label={reportingCopy.startBondAttoRep}>
+								<CurrencyValue precision='exact' value={effectiveReportingDetails?.startBondAttoRep} suffix={commonCopy.rep} />
+							</MetricField>
+						</div>
+					</ReadOnlyDetailAccordion>
 				</SectionBlock>
 			) : undefined}
 

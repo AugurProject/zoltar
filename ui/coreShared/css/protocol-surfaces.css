@@ -1626,3 +1626,47 @@ main.global-transaction-tray-open :is(a, button, input, select, summary, textare
 	min-height: 9rem;
 	resize: vertical;
 }
+
+/* Browse records share a compact, flat layout; details remain in the reading order. */
+.entity-card.directory-record {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) auto;
+	column-gap: var(--space-4);
+	row-gap: var(--space-2);
+	align-items: start;
+}
+.directory-record > .entity-card-header,
+.directory-record > .entity-card-body {
+	grid-column: 1;
+	min-width: 0;
+}
+.directory-record > .entity-card-actions {
+	grid-column: 2;
+	grid-row: 1 / 3;
+	align-self: center;
+}
+.directory-record .entity-card-copy h3 {
+	font-size: 1rem;
+	overflow-wrap: anywhere;
+}
+.directory-record .entity-card-body > .detail {
+	margin: 0;
+}
+.read-only-detail-accordion,
+.read-only-detail-accordion-content {
+	min-width: 0;
+	overflow-wrap: anywhere;
+}
+.read-only-detail-accordion summary:focus-visible {
+	outline: 2px solid var(--accent);
+	outline-offset: 2px;
+}
+@media (max-width: 640px) {
+	.entity-card.directory-record {
+		grid-template-columns: minmax(0, 1fr);
+	}
+	.directory-record > .entity-card-actions {
+		grid-column: 1;
+		grid-row: auto;
+	}
+}

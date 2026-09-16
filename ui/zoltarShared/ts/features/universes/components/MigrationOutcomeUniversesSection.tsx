@@ -74,7 +74,7 @@ export function MigrationOutcomeUniversesSection({
 				) : undefined
 			}
 			className='migration-outcome-section'
-			title={zoltarCopy.outcomeUniverses}
+			title={zoltarCopy.chooseDestinations}
 		>
 			{deploymentReason === undefined ? undefined : <p className='detail'>{deploymentReason}</p>}
 			{childUniverses.length === 0 ? (

@@ -36,7 +36,6 @@ const retryDiscovery = 'Retry discovery'
 const securityPoolUnavailableInUniverse = 'This security pool is not available in the selected universe.'
 const discoveringSecurityPoolsFromFactory = 'Discovering security pools from the configured factory…'
 const noSecurityPoolsInUniverse = 'No security pools are deployed in the selected universe.'
-const positions = 'Positions'
 const discoveringSecurityPools = 'Discovering security pools…'
 const securityPoolPages = 'Security pool pages'
 const previousPools = 'Previous pools'
@@ -99,6 +98,7 @@ function poolPageRange(first: bigint, last: bigint, total: bigint) {
 }
 
 export const liveCopy = {
+	openByAddress: 'Open by address',
 	poolAlreadyExists: 'This pool already has a trading market.',
 	openPoolAddress: 'Security pool address',
 	poolAddressPlaceholder: '0x…',
@@ -141,7 +141,6 @@ export const liveCopy = {
 	securityPoolUnavailableInUniverse,
 	discoveringSecurityPoolsFromFactory,
 	noSecurityPoolsInUniverse,
-	positions,
 	discoveringSecurityPools,
 	marketCreated: (title: string) => `Market created: ${title}`,
 	noEligiblePools: 'No security pools on this page are available for a new market.',
