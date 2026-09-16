@@ -14,7 +14,7 @@ export type SelectedPoolView = 'vaults' | 'trading' | 'reporting' | 'fork-workfl
 
 const SELECTED_POOL_PRIMARY_VIEWS: readonly SelectedPoolView[] = ['vaults', 'trading', 'reporting', 'fork-workflow']
 const SELECTED_POOL_SECONDARY_VIEWS: readonly SelectedPoolView[] = ['staged-operations', 'price-oracle']
-export const SELECTED_POOL_VIEWS: readonly SelectedPoolView[] = [...SELECTED_POOL_PRIMARY_VIEWS, ...SELECTED_POOL_SECONDARY_VIEWS]
+const SELECTED_POOL_VIEWS: readonly SelectedPoolView[] = [...SELECTED_POOL_PRIMARY_VIEWS, ...SELECTED_POOL_SECONDARY_VIEWS]
 const LEGACY_SELECTED_POOL_VIEWS = ['resolution', 'withdraw-escalation-deposits', 'oracle', 'fork-migration', 'fork-auction', 'fork-settlement'] as const
 
 export function getSelectedPoolViewLabel(view: SelectedPoolView) {

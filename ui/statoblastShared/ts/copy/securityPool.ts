@@ -1,7 +1,6 @@
 import type { CopyTemplateValue } from '@zoltar/ui-core-shared/copy/types.js'
 
 export const annualFee = 'Annual Fee'
-export const browsePoolsDescription = 'Find a pool, review its lifecycle and backing, then open it for operations.'
 export const createPoolDescription = undefined
 export const createQuestionForPoolDetail = undefined
 export const createQuestionForPoolTitle = 'Create a pool question'
@@ -18,7 +17,6 @@ export const childUniversesTitle = 'Child universes'
 export const childUniversesEmptyDetail = 'No child universes are deployed for this universe.'
 export const createPoolFromQuestion = 'Create pool from question'
 export const formatCreatePoolFromQuestionLabel = (questionTitle: string, questionId: string) => `Create pool from question: ${questionTitle} (${questionId})`
-export const managePoolDescription = 'Review the selected pool’s current stage and use the available position, pricing, reporting, or settlement actions.'
 export const badDebt = 'Bad Debt'
 export const formatDepositRepToVault = (tokenSymbol: CopyTemplateValue) => `Deposit ${tokenSymbol}`
 export const formatDepositingRep = (tokenSymbol: CopyTemplateValue) => `Depositing ${tokenSymbol}…`
@@ -126,7 +124,6 @@ export const missingPoolDetail = 'Pool actions are locked until the app uses the
 export const switchToPoolUniverse = 'Switch to pool universe'
 export const returnToCurrentUniverse = 'Return to current universe'
 export const vaultDirectory = 'Vault Directory'
-export const vaultOperations = 'Vault Operations'
 export const refreshVaultActionsDetail = 'Refresh the vault to use these actions.'
 export const retryVaultActionsDetail = 'Retry loading the vault to use these actions.'
 export const invalidVaultAddressHint = 'Try another vault owner address.'
@@ -199,7 +196,6 @@ export const vaultHealthNearMinimum = 'Near minimum'
 export const vaultHealthUnderwater = 'Underwater'
 export const requestedLiquidationDebt = 'Requested liquidation debt'
 export const securityVault = 'Security Vault'
-export const selectedVault = 'Selected Vault'
 export const immediateWithdrawalSuccessDetail = 'A valid oracle price was already available, so the withdrawal executed immediately and no staged operation was created.'
 export const vault = 'Vault'
 export const noClaimableFeesReason = 'No fees are available to claim.'

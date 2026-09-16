@@ -15,10 +15,10 @@ function shouldRefreshSelectedPoolDataOnViewOpen({ currentSecurityPoolAddress, n
 }
 
 function getSecurityPoolsRouteHeader(view: SecurityPoolsView) {
-	if (view === 'browse') return { description: securityPoolCopy.browsePoolsDescription, title: commonCopy.browsePools }
+	if (view === 'browse') return { description: undefined, title: commonCopy.browsePools }
 	if (view === 'create') return { description: securityPoolCopy.createPoolDescription, title: commonCopy.createPool }
 	if (view === 'universes') return { description: securityPoolCopy.universesDescription, title: commonCopy.universe }
-	return { description: securityPoolCopy.managePoolDescription, title: commonCopy.managePool }
+	return { description: undefined, title: commonCopy.managePool }
 }
 
 export function SecurityPoolsSection({ activeView, createPool, loadingUniverseDirectoryPools, onActiveUniverseChange, onActiveViewChange, onLoadUniverseDirectoryPools, overview, securityPoolUniverseDirectoryError, universeDirectoryPools, workflow, zoltarUniverse }: SecurityPoolsSectionProps) {

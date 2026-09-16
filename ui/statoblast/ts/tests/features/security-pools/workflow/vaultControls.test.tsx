@@ -31,6 +31,7 @@ describe('SecurityPoolWorkflowSection: vault controls', () => {
 			</ChainTimestampContext.Provider>,
 		)
 		setCleanup(renderedComponent.cleanup)
+		await act(() => fireEvent.click(within(document.body).getByRole('button', { name: /^(My vault|Vault details)$/ })))
 
 		expectTransactionButtonDisabled(document.body, 'Deposit REP')
 		const depositButton = within(document.body).getByRole('button', { name: 'Deposit REP' })
@@ -56,6 +57,7 @@ describe('SecurityPoolWorkflowSection: vault controls', () => {
 			</ChainTimestampContext.Provider>,
 		)
 		setCleanup(renderedComponent.cleanup)
+		await act(() => fireEvent.click(within(document.body).getByRole('button', { name: /^(My vault|Vault details)$/ })))
 
 		expectTransactionButtonDisabled(document.body, 'Deposit REP')
 		expect(within(document.body).getByText('New vault REP backing is unavailable after this question ends. Fork-continuation child pools remain fundable.')).toBeTruthy()

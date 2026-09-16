@@ -359,7 +359,7 @@ describe('SecurityVaultSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		const selectedVaultHeading = documentQueries.getByRole('heading', { name: 'Selected Vault' })
+		const selectedVaultHeading = documentQueries.getByRole('heading', { name: 'My vault' })
 		const selectedVaultCard = selectedVaultHeading.closest('.entity-card')
 		if (!(selectedVaultCard instanceof HTMLElement)) throw new Error('Expected a selected vault summary card')
 		const selectedVaultQueries = within(selectedVaultCard)

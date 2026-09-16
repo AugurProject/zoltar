@@ -1,3 +1,4 @@
+import * as workspaceCopy from '../../../copy/poolWorkspace.js'
 import { VaultExposureValue } from './VaultExposureValue.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as securityPoolCopy from '../../../copy/securityPool.js'
@@ -101,6 +102,7 @@ export function VaultMetricGrid({
 
 	return (
 		<div className={['vault-detail-stage', className].filter(Boolean).join(' ')}>
+			<p className={`vault-health ${associatedRepToneClass ?? ''}`}>{associatedRepStatusLabel ?? workspaceCopy.healthUnknown}</p>
 			<div className='vault-detail-hero'>
 				<div className='vault-detail-hero-primary'>
 					<span>{securityPoolCopy.exposureSupported}</span>
@@ -112,38 +114,50 @@ export function VaultMetricGrid({
 					<VaultPrimaryMetric label={commonCopy.poolHeldVaultRepBackingAttoRep} value={vaultAttoRepBacking} suffix={commonCopy.rep} />
 				</div>
 			</div>
-			<details>
-				<summary>{commonCopy.technicalDetails}</summary>
-				<MetricField label={commonCopy.capacityOwnershipAttoRep}>
-					<CurrencyValue value={capacityOwnershipAttoRep} suffix={securityPoolCopy.capacityUnits} />
-				</MetricField>
-			</details>
-			<div className='vault-detail-meta'>
-				{targetBackingFactorBps === undefined || targetBackingFactorBps === 0n ? undefined : <MetricField label={securityPoolCopy.vaultBackingFactor}>{formatRepPerCapacityBps(targetBackingFactorBps)}</MetricField>}
-				{associatedRepPerCapacityBps === undefined ? undefined : (
-					<MetricField label={securityPoolCopy.associatedRepPerCapacity} valueClassName={associatedRepToneClass}>
-						<span className='metric-inline-value'>
-							<span>{formatRepPerCapacityBps(associatedRepPerCapacityBps)}</span>
-							{associatedRepStatusLabel === undefined ? undefined : <span className='metric-inline-status'>{associatedRepStatusLabel}</span>}
-						</span>
-					</MetricField>
-				)}
-				{badDebtAttoEth === undefined ? undefined : (
-					<MetricField label={securityPoolCopy.badDebt}>
+			<div className='vault-risk-summary'>
+				{badDebtAttoEth !== undefined && badDebtAttoEth > 0n ? (
+					<MetricField label={securityPoolCopy.badDebt} valueClassName='metric-value-danger'>
 						<CurrencyValue exactWhenRoundedToZero value={badDebtAttoEth} suffix={commonCopy.eth} />
 					</MetricField>
-				)}
-				{disputeStakedAttoRep === undefined ? undefined : (
+				) : undefined}
+				{disputeStakedAttoRep !== undefined && disputeStakedAttoRep > 0n ? (
 					<MetricField label={commonCopy.disputeStakedAttoRep}>
 						<CurrencyValue exactWhenRoundedToZero value={disputeStakedAttoRep} suffix={commonCopy.rep} />
 					</MetricField>
-				)}
-				{priceValidUntilTimestamp === undefined ? undefined : (
-					<MetricField label={securityPoolCopy.priceValidUntil}>
-						<TimestampValue timestamp={priceValidUntilTimestamp} />
-					</MetricField>
-				)}
+				) : undefined}
 			</div>
+			<details className='vault-backing-details'>
+				<summary>{workspaceCopy.backingDetails}</summary>
+				<MetricField label={commonCopy.capacityOwnershipAttoRep}>
+					<CurrencyValue value={capacityOwnershipAttoRep} suffix={securityPoolCopy.capacityUnits} />
+				</MetricField>
+				<div className='vault-detail-meta'>
+					{targetBackingFactorBps === undefined || targetBackingFactorBps === 0n ? undefined : <MetricField label={securityPoolCopy.vaultBackingFactor}>{formatRepPerCapacityBps(targetBackingFactorBps)}</MetricField>}
+					{associatedRepPerCapacityBps === undefined ? undefined : (
+						<MetricField label={securityPoolCopy.associatedRepPerCapacity} valueClassName={associatedRepToneClass}>
+							<span className='metric-inline-value'>
+								<span>{formatRepPerCapacityBps(associatedRepPerCapacityBps)}</span>
+								{associatedRepStatusLabel === undefined ? undefined : <span className='metric-inline-status'>{associatedRepStatusLabel}</span>}
+							</span>
+						</MetricField>
+					)}
+					{badDebtAttoEth === undefined || badDebtAttoEth > 0n ? undefined : (
+						<MetricField label={securityPoolCopy.badDebt}>
+							<CurrencyValue exactWhenRoundedToZero value={badDebtAttoEth} suffix={commonCopy.eth} />
+						</MetricField>
+					)}
+					{disputeStakedAttoRep === undefined || disputeStakedAttoRep > 0n ? undefined : (
+						<MetricField label={commonCopy.disputeStakedAttoRep}>
+							<CurrencyValue exactWhenRoundedToZero value={disputeStakedAttoRep} suffix={commonCopy.rep} />
+						</MetricField>
+					)}
+					{priceValidUntilTimestamp === undefined ? undefined : (
+						<MetricField label={securityPoolCopy.priceValidUntil}>
+							<TimestampValue timestamp={priceValidUntilTimestamp} />
+						</MetricField>
+					)}
+				</div>
+			</details>
 		</div>
 	)
 }

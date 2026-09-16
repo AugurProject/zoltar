@@ -1,7 +1,8 @@
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as securityPoolCopy from '../../../copy/securityPool.js'
 import type { ComponentChildren } from 'preact'
-import { ActionLauncherCard } from '@zoltar/ui-core-shared/components/ActionLauncherCard.js'
+import { ActionLauncherButton } from '@zoltar/ui-core-shared/components/ActionLauncherButton.js'
+import * as workspaceCopy from '../../../copy/poolWorkspace.js'
 import { ErrorNotice } from '@zoltar/ui-core-shared/components/ErrorNotice.js'
 import { FormInput } from '@zoltar/ui-core-shared/components/FormInput.js'
 import { SectionBlock } from '@zoltar/ui-core-shared/components/SectionBlock.js'
@@ -189,6 +190,21 @@ export function VaultActionLaunchers({
 	vaultReadinessActions: ReadinessAction[]
 	walletRepBalanceError: string | undefined
 }) {
+	const renderAction = (action: ReadinessAction) => {
+		if (action.onAction === undefined && action.blocker === undefined && action.readiness !== 'blocked') return undefined
+		return (
+			<ActionLauncherButton
+				key={action.key}
+				describedBy={action.disabledReasonId}
+				idleLabel={action.actionLabel}
+				pendingLabel={commonCopy.opening}
+				onClick={() => action.onAction?.()}
+				tone={action.key === 'deposit-rep' ? 'primary' : 'secondary'}
+				availability={{ disabled: action.readiness === 'blocked' || action.onAction === undefined || action.blocker !== undefined, reason: action.blocker }}
+			/>
+		)
+	}
+	const isAdvanced = (action: ReadinessAction) => action.key === 'adjust-backing' || action.key === 'liquidate-vault'
 	return (
 		<>
 			<SectionBlock title={securityPoolCopy.vaultActions} variant='plain'>
@@ -203,11 +219,11 @@ export function VaultActionLaunchers({
 						{vaultActionsLoadBlocker}
 					</p>
 				) : undefined}
-				<div className='vault-action-launcher-grid'>
-					{vaultReadinessActions.map(action => (
-						<ActionLauncherCard key={action.key} action={action} />
-					))}
-				</div>
+				<div className='vault-primary-actions'>{vaultReadinessActions.filter(action => !isAdvanced(action)).map(renderAction)}</div>
+				<details className='vault-more-actions'>
+					<summary>{workspaceCopy.moreActions}</summary>
+					<div className='vault-primary-actions'>{vaultReadinessActions.filter(isAdvanced).map(renderAction)}</div>
+				</details>
 			</SectionBlock>
 			<ErrorNotice message={securityVaultError} />
 			<ErrorNotice message={walletRepBalanceError} />
