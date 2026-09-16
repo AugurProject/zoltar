@@ -6,7 +6,7 @@ import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/
 import { fireEvent, within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import { installTestRouting } from '@zoltar/ui-core-shared/tests/testUtils/testRouting.js'
-import { expectTransactionButtonDisabled, expectTransactionButtonEnabled } from '@zoltar/ui-core-shared/tests/testUtils/transactionActionButton.js'
+import { expectTransactionButtonDisabled, expectTransactionButtonEnabled, getTransactionButtonState } from '@zoltar/ui-core-shared/tests/testUtils/transactionActionButton.js'
 import { SecurityPoolSection } from '@zoltar/ui-statoblast-shared/features/security-pools/components/SecurityPoolSection.js'
 import { formatOpenInterestFeePerYearPercent, ORIGIN_POOL_INITIAL_RETENTION_RATE } from '@zoltar/ui-statoblast-shared/features/security-pools/lib/retentionRate.js'
 import type { SecurityPoolSectionProps } from '@zoltar/ui-zoltar-shared/features/types.js'
@@ -267,7 +267,7 @@ describe('SecurityPoolSection', () => {
 
 		const button = getButtonByText('Create question and pool')
 		expect(button.disabled).toBe(true)
-		expect(button.title).toBe('Missing required fields: Title, End Time')
+		expect(getTransactionButtonState(document.body, 'Create question and pool').reason).toBe('Missing required fields: Title, End Time')
 	})
 
 	test('enables combined question-and-pool creation when both forms are ready', async () => {
@@ -324,7 +324,7 @@ describe('SecurityPoolSection', () => {
 
 		const button = getButtonByText('Create question and pool')
 		expect(button.disabled).toBe(true)
-		expect(button.title).toBe('Security pools can only be created for exact binary Yes / No questions. Enter an eligible question to proceed.')
+		expect(getTransactionButtonState(document.body, 'Create question and pool').reason).toBe('Security pools can only be created for exact binary Yes / No questions. Enter an eligible question to proceed.')
 		fireEvent.click(button)
 		expect(onCreateQuestionAndSecurityPool).toHaveBeenCalledTimes(0)
 		const marketTypeTrigger = within(document.body).getByRole('button', { name: /Question Type/ })

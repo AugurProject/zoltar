@@ -1,12 +1,20 @@
 /// <reference types="bun-types" />
 
 import { afterEach, describe, expect, mock, test } from 'bun:test'
+import { installModuleMocks } from '@zoltar/ui-core-shared/tests/testUtils/moduleMocks.js'
 import { MAINNET_NETWORK_PROFILE, MAINNET_WETH_ADDRESS, type NetworkProfile } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
 import { bootstrapSimulationChain, mintSimulationGenesisRep, predictSimulationTokenAddresses, type BootstrapScenarioApplyParameters } from '@zoltar/ui-core-shared/simulation/bootstrap.js'
 import { installStatoblastScenarioProtocolForTesting } from '@zoltar/ui-statoblast-shared/simulation/statoblastScenarioProtocol.js'
 import { applyStatoblastScenario } from '@zoltar/ui-statoblast-shared/simulation/statoblastScenarios.js'
 import type { DeploymentStep } from '@zoltar/ui-core-shared/types/contracts.js'
 import { type Address, getAddress, getCreateAddress, toHex, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
+
+const moduleMocks = installModuleMocks(specifier => import.meta.resolve(specifier))
+await moduleMocks.mockModule('@zoltar/ui-core-shared/simulation/clock.js', () => ({
+	advanceSimulationTime: async () => undefined,
+	getSimulationChainTimestamp: async () => 1_000n,
+	initializeSimulationClock: async () => 1_000n,
+}))
 
 const MOCK_PRIMARY_ACCOUNT = getAddress('0x00000000000000000000000000000000000000a1')
 const MOCK_SECONDARY_ACCOUNT = getAddress('0x00000000000000000000000000000000000000a2')
@@ -582,12 +590,6 @@ function createMockedBootstrapDependencies({ accounts, scenario, profile }: { ac
 		}),
 	}
 	installStatoblastScenarioProtocolForTesting(protocolModule as never)
-
-	mock.module('@zoltar/ui-core-shared/simulation/clock.js', () => ({
-		advanceSimulationTime: async () => undefined,
-		getSimulationChainTimestamp: async () => 1_000n,
-		initializeSimulationClock: async () => 1_000n,
-	}))
 
 	const memoryClient = {
 		getBlock: async () => ({ timestamp: 1_000n }),

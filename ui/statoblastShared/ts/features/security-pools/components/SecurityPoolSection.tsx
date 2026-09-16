@@ -70,9 +70,8 @@ export function SecurityPoolSection({
 	const statoblastSecurityMultiplierValidationMessage = getStatoblastSecurityMultiplierValidationMessage(securityPoolForm.statoblastSecurityMultiplierBps)
 	const initialReportPriorityFeeValidationMessage = getInitialReportPriorityFeeValidationMessage(securityPoolForm.initialReportPriorityFeeEth)
 	const questionFormValidation = validateMarketForm(marketForm)
-	const guardedCreateDisabledReason = getSecurityPoolCreateDisabledReason({
+	const createGuardInputs = {
 		accountAddress: accountState.address,
-		checkingDuplicateOriginPool,
 		duplicateOriginPoolExists,
 		initialReportPriorityFeeEth: securityPoolForm.initialReportPriorityFeeEth,
 		isOnActiveAppChain,
@@ -80,8 +79,10 @@ export function SecurityPoolSection({
 		securityPoolCreating,
 		statoblastSecurityMultiplier: securityPoolForm.statoblastSecurityMultiplierBps,
 		zoltarUniverseHasForked,
-	})
-	const createDisabledReason = guardedCreateDisabledReason
+	}
+	const createDisabledReason = getSecurityPoolCreateDisabledReason({ ...createGuardInputs, checkingDuplicateOriginPool })
+	// The reason is the in-progress duplicate check exactly when clearing that flag would change it.
+	const createDisabledReasonLoading = checkingDuplicateOriginPool && createDisabledReason !== getSecurityPoolCreateDisabledReason({ ...createGuardInputs, checkingDuplicateOriginPool: false })
 	const isCreateDisabled = !isOnActiveAppChain || createDisabledReason !== undefined
 	const createQuestionAndPoolDisabledReason = (() => {
 		if (questionAndPoolCreating || marketCreating || securityPoolCreating) return undefined
@@ -278,7 +279,7 @@ export function SecurityPoolSection({
 										pendingLabel={securityPoolCopy.creatingPool}
 										onClick={() => onCreateSecurityPool()}
 										pending={securityPoolCreating}
-										availability={{ disabled: isCreateDisabled, reason: createDisabledReason }}
+										availability={{ disabled: isCreateDisabled, loading: createDisabledReasonLoading, reason: createDisabledReason }}
 										disabledReasonElementId={visibleFieldErrorId}
 										showDisabledReason={visibleFieldErrorId === undefined}
 									/>
@@ -341,6 +342,7 @@ export function SecurityPoolSection({
 										pending={questionAndPoolCreating || securityPoolCreating}
 										availability={{
 											disabled: questionAndPoolCreating || securityPoolCreating || createDisabledReason !== undefined,
+											loading: questionAndPoolCreating || securityPoolCreating,
 											reason: questionAndPoolCreating || securityPoolCreating ? securityPoolCopy.poolCreationInProgress : createDisabledReason,
 										}}
 									/>

@@ -5,6 +5,7 @@ import { installActiveEnvironmentForTesting, resetActiveEnvironmentForTesting } 
 import { createDeferred } from '@zoltar/ui-core-shared/tests/testUtils/deferred.js'
 import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
 import { createFakeBackend } from '@zoltar/ui-core-shared/tests/testUtils/fakeBackend.js'
+import { installModuleMocks } from '@zoltar/ui-core-shared/tests/testUtils/moduleMocks.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import type { ZoltarUniverseSummary } from '@zoltar/ui-core-shared/types/contracts.js'
 import { describe, expect, mock, test } from 'bun:test'
@@ -40,6 +41,7 @@ function requireHookState(state: UseZoltarMigrationState | undefined) {
 
 describe('useZoltarMigration', () => {
 	let cleanupRenderedComponent: (() => Promise<void>) | undefined
+	const moduleMocks = installModuleMocks(specifier => import.meta.resolve(specifier))
 	let resetEnvironment: (() => void) | undefined
 
 	installDomTestLifecycle({
@@ -75,12 +77,12 @@ describe('useZoltarMigration', () => {
 			transactionFailures.push(message)
 		}
 
-		mock.module('@zoltar/ui-core-shared/wallet/clients.js', () => ({
+		await moduleMocks.mockModule('@zoltar/ui-core-shared/wallet/clients.js', () => ({
 			createWalletWriteClient: mock(() => ({
 				kind: 'write-client',
 			})),
 		}))
-		mock.module('@zoltar/ui-zoltar-shared/protocol/zoltarForks.js', () => ({
+		await moduleMocks.mockModule('@zoltar/ui-zoltar-shared/protocol/zoltarForks.js', () => ({
 			migrateInternalRepInZoltar,
 		}))
 
@@ -205,10 +207,10 @@ describe('useZoltarMigration', () => {
 			}
 		})
 
-		mock.module('@zoltar/ui-zoltar-shared/protocol/zoltarForks.js', () => ({
+		await moduleMocks.mockModule('@zoltar/ui-zoltar-shared/protocol/zoltarForks.js', () => ({
 			migrateInternalRepInZoltar,
 		}))
-		mock.module('@zoltar/ui-core-shared/wallet/clients.js', () => ({
+		await moduleMocks.mockModule('@zoltar/ui-core-shared/wallet/clients.js', () => ({
 			createWalletWriteClient: mock(() => ({ kind: 'write-client' })),
 		}))
 

@@ -8,6 +8,7 @@ type VendorBuildSteps = {
 	readonly clearVendorOutput: () => Promise<void>
 	readonly bundleTevm: () => Promise<void>
 	readonly vendorDependencies: () => Promise<void>
+	readonly vendorFonts: () => Promise<void>
 	readonly copyProjectArtifacts: () => Promise<void>
 }
 
@@ -77,6 +78,25 @@ async function vendorDependencies(vendorOutputPath = getVendorOutputPath()) {
 	}
 }
 
+// The shared stylesheet references its fonts relative to ui/coreShared/css, so the woff2 files are vendored next to it
+// (ui/coreShared/vendor/fonts) rather than into the app vendor directory; the production build copies the same
+// font files beside its css output so the relative URL resolves in both layouts.
+const vendoredFontFiles: readonly { readonly specifier: string; readonly fileName: string }[] = [
+	{ specifier: '@fontsource/ibm-plex-mono/files/ibm-plex-mono-latin-400-normal.woff2', fileName: 'ibm-plex-mono-latin-400-normal.woff2' },
+	{ specifier: '@fontsource/ibm-plex-mono/files/ibm-plex-mono-latin-600-normal.woff2', fileName: 'ibm-plex-mono-latin-600-normal.woff2' },
+]
+
+function getVendoredFontsPath(appId = parseUiAppIdFromProcess('vendor build')) {
+	return path.join(getUiAppPaths(appId).coreSharedRoot, 'vendor', 'fonts')
+}
+
+export async function vendorFonts(fontsOutputPath = getVendoredFontsPath()) {
+	await fs.mkdir(fontsOutputPath, { recursive: true })
+	for (const { specifier, fileName } of vendoredFontFiles) {
+		await fs.copyFile(resolveBundlerSpecifierPath(specifier), path.join(fontsOutputPath, fileName))
+	}
+}
+
 // rewrite the source paths in sourcemap files so they show up in the debugger in a reasonable location and if two source maps refer to the same (relative) path, we end up with them distinguished in the browser debugger
 async function rewriteSourceMapSourcePath(packageName: string, sourcePath: string, destinationPath: string) {
 	const fileExtension = path.extname(sourcePath)
@@ -130,6 +150,7 @@ function createDefaultVendorBuildSteps(): VendorBuildSteps {
 		clearVendorOutput,
 		bundleTevm,
 		vendorDependencies,
+		vendorFonts,
 		copyProjectArtifacts: async () => {
 			const app = parseUiAppIdFromProcess('vendor build')
 			const { repositoryRoot } = getUiAppPaths(app)
@@ -144,6 +165,7 @@ export async function vendor(steps: VendorBuildSteps = createDefaultVendorBuildS
 	await steps.clearVendorOutput()
 	await steps.bundleTevm()
 	await steps.vendorDependencies()
+	await steps.vendorFonts()
 	await steps.copyProjectArtifacts()
 }
 

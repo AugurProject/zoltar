@@ -1,5 +1,5 @@
 import type { ComponentChildren } from 'preact'
-import { LoadingAwareText, LoadingText } from './LoadingText.js'
+import { LoadingAwareText } from './LoadingText.js'
 import type { UserMessagePresentation } from '../lib/userCopy.js'
 
 type StateHintProps = {
@@ -22,12 +22,12 @@ export function StateHint({ actions, announcement, className = '', id, presentat
 		<div id={id} aria-atomic={announcement === undefined ? undefined : 'true'} aria-live={announcement} className={`state-hint ${className}`.trim()} role={announcementRole}>
 			{title === undefined ? undefined : <h3>{title}</h3>}
 			{fallbackTitle === undefined ? undefined : <h3>{fallbackTitle}</h3>}
-			{presentation.detail === undefined ? undefined : <p className='detail'>{presentation.detailIsLoading ? <LoadingText>{presentation.detail}</LoadingText> : <LoadingAwareText>{presentation.detail}</LoadingAwareText>}</p>}
-			{presentation.actionHint === undefined ? undefined : (
+			{presentation.detail === undefined ? undefined : (
 				<p className='detail'>
-					<LoadingAwareText>{presentation.actionHint}</LoadingAwareText>
+					<LoadingAwareText loading={presentation.detailIsLoading === true}>{presentation.detail}</LoadingAwareText>
 				</p>
 			)}
+			{presentation.actionHint === undefined ? undefined : <p className='detail'>{presentation.actionHint}</p>}
 			{actions === undefined ? undefined : <div className='actions state-hint-actions'>{actions}</div>}
 		</div>
 	)

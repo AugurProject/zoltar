@@ -171,6 +171,8 @@ describe('QuestionsView', () => {
 			render(view(1, 0, 1n, [question]), renderedComponent.container)
 		})
 		expect(documentQueries.getByText(question.title)).not.toBeNull()
-		expect(documentQueries.getByText('Page 1 of 1')).not.toBeNull()
+		// Pagination stays hidden while only one page exists.
+		expect(documentQueries.queryByText('Page 1 of 1')).toBeNull()
+		expect(documentQueries.queryByRole('button', { name: 'Next page' })).toBeNull()
 	})
 })

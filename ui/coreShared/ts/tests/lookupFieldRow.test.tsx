@@ -56,6 +56,18 @@ describe('LookupFieldRow', () => {
 		expect(nextValue).toBe('0xabc')
 	})
 
+	test('passes validation errors and hints through to the shared input', async () => {
+		const renderedComponent = await renderIntoDocument(<LookupFieldRow error='Enter a valid address.' hint='Paste a pool address.' label='Pool Address' onInput={() => undefined} value='0x' />)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		const input = documentQueries.getByLabelText('Pool Address')
+		const error = documentQueries.getByText('Enter a valid address.', { selector: 'p.field-error' })
+		const hint = documentQueries.getByText('Paste a pool address.', { selector: 'p.field-hint' })
+		expect(input.getAttribute('aria-invalid')).toBe('true')
+		expect(input.getAttribute('aria-describedby')?.split(' ')).toEqual([error.id, hint.id])
+	})
+
 	test('shows a copyable resolved address separately from the editable lookup value', async () => {
 		const address = '0x00000000000000000000000000000000000000A1'
 		const renderedComponent = await renderIntoDocument(<LookupFieldRow label='Pool Address' onInput={() => undefined} resolvedValue={<AddressValue address={address} />} resolvedValueLabel='Selected Pool' value={address} />)

@@ -2,6 +2,7 @@ import * as commonCopy from '../copy/common.js'
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import { getActiveNetworkProfile } from '../lib/activeEnvironment.js'
 import { parseChainId, sameChainId } from './chainId.js'
+import { getNetworkSwitchTarget } from './networkProfile.js'
 
 const COMMON_CHAIN_NAMES = new Map<bigint, string>([
 	[1n, 'Ethereum'],
@@ -59,13 +60,6 @@ export function getWalletScopedAccountAddress(accountAddress: Address | undefine
 	return isSupportedAppChain(chainId) ? accountAddress : undefined
 }
 
-function getWrongNetworkMessage() {
-	const profile = getActiveNetworkProfile()
-	if (profile.id === 'simulation') return undefined
-	if (profile.id === 'mainnet') return commonCopy.mainnetRequiredReason
-	return commonCopy.formatNetworkRequiredReason(profile.displayName)
-}
-
 export function getWrongNetworkReason() {
-	return getWrongNetworkMessage() ?? commonCopy.mainnetRequiredReason
+	return commonCopy.formatNetworkRequiredReason(getNetworkSwitchTarget(getActiveNetworkProfile()))
 }

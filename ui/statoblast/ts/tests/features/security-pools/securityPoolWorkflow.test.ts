@@ -13,7 +13,6 @@ import {
 	getCurrentPoolOracleManagerDetails,
 	getForkWorkflowStageSelection,
 	getSelectedPoolOracleMetricValues,
-	getSelectedPoolWorkflowGuardMessage,
 	getSelectedPoolWorkflowLockedPresentation,
 	isForkWorkflowDisabled,
 	isSupportedSelectedPoolView,
@@ -365,40 +364,6 @@ void describe('selected pool workflow visibility', () => {
 		expect(isForkWorkflowDisabled('poolForked')).toBe(false)
 		expect(isForkWorkflowDisabled('forkMigration')).toBe(false)
 		expect(isForkWorkflowDisabled('forkTruthAuction')).toBe(false)
-	})
-
-	void test('uses state-specific reasons before unlocking pool actions', () => {
-		expect(
-			getSelectedPoolWorkflowGuardMessage({
-				hasSelectedPoolAddress: false,
-				selectedPoolLookupState: 'unknown',
-				selectedPoolUniverseMismatch: false,
-			}),
-		).toBe('Select a pool before using pool actions.')
-
-		expect(
-			getSelectedPoolWorkflowGuardMessage({
-				hasSelectedPoolAddress: true,
-				selectedPoolLookupState: 'loading',
-				selectedPoolUniverseMismatch: false,
-			}),
-		).toBe('Loading pool…')
-
-		expect(
-			getSelectedPoolWorkflowGuardMessage({
-				hasSelectedPoolAddress: true,
-				selectedPoolLookupState: 'missing',
-				selectedPoolUniverseMismatch: false,
-			}),
-		).toBe('Select a valid pool before using pool actions.')
-
-		expect(
-			getSelectedPoolWorkflowGuardMessage({
-				hasSelectedPoolAddress: true,
-				selectedPoolLookupState: 'ready',
-				selectedPoolUniverseMismatch: true,
-			}),
-		).toBeUndefined()
 	})
 
 	void test('keeps a stable locked-workflow presentation before a pool resolves', () => {

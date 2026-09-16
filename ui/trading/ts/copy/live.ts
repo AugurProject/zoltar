@@ -34,14 +34,14 @@ const unknownDiscovery = 'unknown discovery error'
 const loadingSecurityPoolDetails = 'Loading security pool details…'
 const retryDiscovery = 'Retry discovery'
 const securityPoolUnavailableInUniverse = 'This security pool is not available in the selected universe.'
-const discoveringSecurityPoolsFromFactory = 'Discovering SecurityPools from the configured factory…'
-const noSecurityPoolsInUniverse = 'No SecurityPools are deployed in the selected universe.'
+const discoveringSecurityPoolsFromFactory = 'Discovering security pools from the configured factory…'
+const noSecurityPoolsInUniverse = 'No security pools are deployed in the selected universe.'
 const positions = 'Positions'
-const discoveringSecurityPools = 'Discovering SecurityPools…'
-const securityPoolPages = 'SecurityPool pages'
+const discoveringSecurityPools = 'Discovering security pools…'
+const securityPoolPages = 'Security pool pages'
 const previousPools = 'Previous pools'
 const nextPools = 'Next pools'
-const securityPool = 'SecurityPool'
+const securityPool = appCopy.securityPool
 const securityPoolLabel = 'Security pool'
 const pair = 'Pair'
 const ammFee = 'AMM fee'
@@ -59,7 +59,7 @@ function pairInitializationUnavailable(blocker: string) {
 }
 
 function undeployedPairDescription(feePercent: string) {
-	return `This SecurityPool is available to browse, but it does not have a trading pool yet. Deployment is combined with the initial liquidity transaction. Trading fee: ${feePercent}%.`
+	return `This security pool is available to browse, but it does not have a trading pool yet. Deployment is combined with the initial liquidity transaction. Trading fee: ${feePercent}%.`
 }
 
 function uninitializedPairDescription(feePercent: string) {
@@ -71,7 +71,7 @@ function securityPoolDetailsUnavailable(loadError: string, refreshError?: string
 }
 
 function securityPoolRefreshFailed(refreshError: string) {
-	return `SecurityPool refresh failed; showing the last successful result: ${refreshError}`
+	return `Security pool refresh failed; showing the last successful result: ${refreshError}`
 }
 
 function forkedAt(timestamp: string) {
@@ -87,11 +87,11 @@ function securityPoolDiscoveryFailed(error: string) {
 }
 
 function securityPoolFactoryDiscoveryFailed(error?: string) {
-	return `SecurityPool discovery failed: ${error ?? ''}`
+	return `Security pool discovery failed: ${error ?? ''}`
 }
 
 function securityPoolCouldNotLoad(error: string) {
-	return `This SecurityPool could not be loaded. No trading, liquidity, or settlement action is available until its authoritative reads succeed: ${error}`
+	return `This security pool could not be loaded. No trading, liquidity, or settlement action is available until its authoritative reads succeed: ${error}`
 }
 
 function poolPageRange(first: bigint, last: bigint, total: bigint) {
@@ -100,9 +100,9 @@ function poolPageRange(first: bigint, last: bigint, total: bigint) {
 
 export const liveCopy = {
 	poolAlreadyExists: 'This pool already has a trading market.',
-	openPoolAddress: 'SecurityPool address',
+	openPoolAddress: 'Security pool address',
 	poolAddressPlaceholder: '0x…',
-	invalidPoolAddress: 'Enter a valid, nonzero SecurityPool address.',
+	invalidPoolAddress: 'Enter a valid, nonzero security pool address.',
 	openPool: 'Open pool',
 	tradePool: 'Trade this pool',
 	marketDataUnavailable,
@@ -144,19 +144,20 @@ export const liveCopy = {
 	positions,
 	discoveringSecurityPools,
 	marketCreated: (title: string) => `Market created: ${title}`,
-	noEligiblePools: 'No SecurityPools on this page are available for a new market.',
+	noEligiblePools: 'No security pools on this page are available for a new market.',
 	noMarketsOnPage: 'No trading markets on this page.',
-	browseMarkets: appCopy.browseMarkets,
-	browseSecurityPools: appCopy.browseSecurityPools,
-	browseSecurityPoolsDescription: 'SecurityPools in the selected universe without a trading market.',
+	marketList: 'Markets',
+	securityPoolList: appCopy.securityPools,
+	securityPoolListDescription: 'Security pools in the selected universe without a trading market.',
 	trade: 'Trade',
 	manageLiquidity: 'Liquidity',
 	createMarketAction: 'Create market',
 	poolDetails: 'Details',
-	backToMarket: '← Market',
-	backToCreateMarket: '← Create new market',
-	backToBrowseMarkets: '← Browse markets',
-	backToBrowseSecurityPools: '← Browse SecurityPools',
+	noPoolSelected: 'No security pool selected',
+	noPoolSelectedDetail: 'Open a security pool address to load its market.',
+	marketFacts: 'Pool facts',
+	lifecycle: 'Lifecycle',
+	capacity: 'Capacity',
 	notDeployed: 'Not deployed',
 	securityPoolPages,
 	previousPools,

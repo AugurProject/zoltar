@@ -156,13 +156,13 @@ describe('live portfolio scope', () => {
 		expect(rendered.container.textContent).toContain('available to browse')
 		expect(rendered.container.textContent).toContain('Trading fee: 0.47%')
 		expect(rendered.container.textContent).not.toContain('Checkpointed collateral')
-		expect(rendered.container.querySelector('.route-header a[href="#/security-pools"]')).not.toBeNull()
+		expect(rendered.container.querySelector('.route-header a[href="#/create-market"]')).not.toBeNull()
 	})
 
-	test('returns from a pool with a trading pair to the markets browse route', async () => {
+	test('returns from a pool with a trading pair to the market lookup landing', async () => {
 		const rendered = await renderIntoDocument(<LiveSecurityPoolDetails market={{ ...market, pair: `0x${'90'.repeat(20)}` }} retry={() => undefined} workflowLocked={false} nowSeconds={market.endTime - 1n} />)
 		cleanupRendered = rendered.cleanup
-		expect(rendered.container.querySelector('.route-header a[href="#/markets"]')).not.toBeNull()
+		expect(rendered.container.querySelector('.route-header a[href="#/market"]')).not.toBeNull()
 		expect(rendered.container.querySelector(`a[href="#/market/${pool}"]`)?.textContent).toContain('Trade this pool')
 	})
 
@@ -212,7 +212,7 @@ describe('live portfolio scope', () => {
 		let retries = 0
 		const rendered = await renderIntoDocument(<LiveSecurityPoolDetails market={market} refreshError='factory RPC failed' retry={() => retries++} workflowLocked={false} />)
 		cleanupRendered = rendered.cleanup
-		expect(rendered.container.querySelector('[role="alert"]')?.textContent).toContain('SecurityPool refresh failed; showing the last successful result: factory RPC failed')
+		expect(rendered.container.querySelector('[role="alert"]')?.textContent).toContain('Security pool refresh failed; showing the last successful result: factory RPC failed')
 		expect(rendered.container.textContent).toContain('System stateOperational')
 		const retry = rendered.container.querySelector('button')
 		if (!(retry instanceof HTMLButtonElement)) throw new Error('Retry refresh button is unavailable')
@@ -224,7 +224,7 @@ describe('live portfolio scope', () => {
 		const rendered = await renderIntoDocument(<LiveSecurityPoolDetails market={market} refreshing retry={() => undefined} workflowLocked={false} />)
 		cleanupRendered = rendered.cleanup
 		expect(rendered.container.querySelector('[role="status"]')?.textContent).toContain('Refreshing security pool; showing the last successful result.')
-		expect(rendered.container.querySelector('section')?.getAttribute('aria-busy')).toBe('true')
+		expect(rendered.container.querySelector('[aria-busy="true"]')).not.toBeNull()
 		expect(rendered.container.textContent).toContain('System stateOperational')
 		expect(rendered.container.querySelector('button')).toBeNull()
 	})
@@ -243,6 +243,6 @@ describe('live portfolio scope', () => {
 	test('announces when a routed live pool is unavailable in the selected universe', async () => {
 		const rendered = await renderIntoDocument(<SecurityPoolRouteEmptyState discoveryState='ready' discoveryError={undefined} workflowLocked={false} retry={() => undefined} />)
 		cleanupRendered = rendered.cleanup
-		expect(rendered.container.querySelector('[role="alert"]')?.textContent).toContain('This security pool is not available in the selected universe.')
+		expect(rendered.container.querySelector('.empty-state')?.textContent).toContain('This security pool is not available in the selected universe.')
 	})
 })

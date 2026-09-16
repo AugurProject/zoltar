@@ -90,7 +90,7 @@ describe('trading deployment setup', () => {
 			await cleanupRendered?.()
 			cleanupRendered = undefined
 		},
-		url: 'http://localhost/#/markets',
+		url: 'http://localhost/#/market',
 	})
 
 	test('automatically verifies selected network settings and exposes the first deployment step', async () => {
@@ -203,7 +203,7 @@ describe('trading deployment setup', () => {
 		})
 		const rendered = await renderIntoDocument(<TradingDeploymentSetup onComplete={() => undefined} services={{ createPublicClient: () => client, loadCoreDeployments: async () => [core] }} />)
 		cleanupRendered = rendered.cleanup
-		await waitForText('SecurityPoolFactory is not deployed')
+		await waitForText('Security pool factory is not deployed')
 		expect(rendered.container.textContent).not.toContain('Unable to inspect the selected deployment')
 		expect(rendered.container.textContent).toContain(plan.factory.address)
 		expect(rendered.container.textContent).toContain(plan.router.address)
@@ -403,11 +403,11 @@ describe('trading deployment setup', () => {
 	})
 
 	test('keeps the trading route selected while deployment verification is pending', async () => {
-		window.location.hash = '#/markets'
+		window.location.hash = '#/market'
 		const rendered = await renderIntoDocument(<App loadLiveDeployment={async () => await new Promise<never>(() => undefined)} />)
 		cleanupRendered = rendered.cleanup
 		expect(rendered.container.querySelector('nav a[aria-current="page"]')?.textContent?.trim()).toBe('Market')
-		expect(document.title).toBe('Browse markets · Statoblast trading')
+		expect(document.title).toBe('Market · Statoblast trading')
 		expect(rendered.container.querySelector('.site-header--deployment')).toBeNull()
 		expect(rendered.container.querySelector('.deployment-setup')).toBeNull()
 	})
@@ -469,9 +469,9 @@ describe('trading deployment setup', () => {
 		if (rejectInitial === undefined) throw new Error('Initial registry rejection is unavailable')
 		rejectInitial(new Error('Registry unavailable'))
 		await waitForText('Registry unavailable')
-		const failedStatus = Array.from(rendered.container.querySelectorAll('.deployment-setup__status .status')).find(element => element.textContent?.includes('Networks unavailable') === true)
+		const failedStatus = Array.from(rendered.container.querySelectorAll('.deployment-setup__status .badge')).find(element => element.textContent?.includes('Networks unavailable') === true)
 		expect(failedStatus).toBeDefined()
-		expect(failedStatus?.classList.contains('status--warn')).toBe(true)
+		expect(failedStatus?.classList.contains('warning')).toBe(true)
 		const retry = Array.from(rendered.container.querySelectorAll('button')).find(button => button.textContent?.trim() === 'Retry checks')
 		if (!(retry instanceof HTMLButtonElement)) throw new Error('Retry checks button is unavailable')
 		await act(async () => {
@@ -526,7 +526,7 @@ describe('trading deployment setup', () => {
 		})
 		await waitForText('RPC unavailable')
 		expect(rendered.container.textContent).toContain('RPC unavailable')
-		expect(Array.from(rendered.container.querySelectorAll('.deployment-step .status')).map(status => status.textContent?.trim())).toEqual(['Checking', 'Checking'])
+		expect(Array.from(rendered.container.querySelectorAll('.deployment-step .badge')).map(status => status.textContent?.trim())).toEqual(['Checking', 'Checking'])
 		const retry = Array.from(rendered.container.querySelectorAll('button')).find(button => button.textContent?.trim() === 'Retry checks')
 		if (!(retry instanceof HTMLButtonElement)) throw new Error('Retry checks button is unavailable')
 		rpcAvailable = true
@@ -610,9 +610,9 @@ describe('trading deployment setup', () => {
 			await Bun.sleep(0)
 		})
 		expect(deployCount).toBe(1)
-		const pendingStatus = Array.from(rendered.container.querySelectorAll('.deployment-setup__status .status')).find(element => element.textContent?.includes('Deployment in progress') === true)
+		const pendingStatus = Array.from(rendered.container.querySelectorAll('.deployment-setup__status .badge')).find(element => element.textContent?.includes('Deployment in progress') === true)
 		if (pendingStatus === undefined) throw new Error('Deployment in progress status is unavailable')
-		expect(pendingStatus.classList.contains('status--neutral')).toBe(true)
+		expect(pendingStatus.classList.contains('muted')).toBe(true)
 		if (resolveConfiguration === undefined) throw new Error('Configuration resolver is unavailable')
 		resolveConfiguration(loadedConfiguration)
 		await act(async () => await Bun.sleep(20))
@@ -681,7 +681,8 @@ describe('trading deployment setup', () => {
 		expect(rendered.container.textContent).not.toContain('Use default RPC')
 		expect(rendered.container.textContent).toContain('2 / 2')
 		expect(rendered.container.textContent).not.toContain('Ready to deploy')
-		expect(rendered.container.querySelector('nav')?.textContent).not.toContain('Deploy')
+		// The deployment tab stays listed while the deployment route is open so the tab strip keeps the current location.
+		expect(rendered.container.querySelector('nav a[aria-current="page"]')?.textContent).toBe('Deploy')
 		expect(Array.from(rendered.container.querySelectorAll('button')).some(button => button.textContent?.trim() === 'Deployment complete')).toBe(false)
 	})
 })

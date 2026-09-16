@@ -84,6 +84,8 @@ export function DeploymentSection({ title, completedGroup = false, steps, allSte
 							})
 						: { disabled: true, reason: deploymentCopy.deploymentStatusUnavailableReason }
 					const statusDetailId = stepStatus.detail === undefined ? undefined : `deployment-${step.id}-status-detail`
+					// Without a wallet the status detail already carries the wallet reason unless a prerequisite occupies it; with a wallet the detail explains a prerequisite.
+					const showInlineDisabledReason = deploymentStateReady && (prerequisiteLabel === undefined ? accountAddress !== undefined : accountAddress === undefined)
 
 					return (
 						<div className='contract-row' key={step.id}>
@@ -108,7 +110,7 @@ export function DeploymentSection({ title, completedGroup = false, steps, allSte
 									pending={isBusy}
 									availability={availability}
 									disabledReasonElementId={deploymentStateReady ? statusDetailId : deploymentStatusReasonElementId}
-									showDisabledReason={deploymentStateReady && accountAddress !== undefined && prerequisiteLabel === undefined}
+									showDisabledReason={showInlineDisabledReason}
 								/>
 							)}
 						</div>

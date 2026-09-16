@@ -37,11 +37,31 @@ describe('SectionBlock', () => {
 		expect(sections.map(section => section.className)).toEqual(['section-block tone-default density-balanced surface', 'section-block tone-default density-balanced plain', 'section-block tone-default density-balanced embedded', 'section-block tone-default density-balanced default'])
 	})
 
+	test('marks the section root busy only when asked', async () => {
+		const renderedComponent = await renderIntoDocument(
+			<div>
+				<SectionBlock title='Loading' busy>
+					<p>Loading rows</p>
+				</SectionBlock>
+				<SectionBlock title='Ready' busy={false}>
+					<p>Rows</p>
+				</SectionBlock>
+				<SectionBlock title='Static'>
+					<p>Never loads</p>
+				</SectionBlock>
+			</div>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const sections = Array.from(document.body.querySelectorAll('.section-block'))
+		expect(sections.map(section => section.getAttribute('aria-busy'))).toEqual(['true', 'false', null])
+	})
+
 	test('keeps embedded spacing overrides after compact and mobile section padding rules', () => {
 		const cssSource = readCoreSharedCssSource()
 		const compactRuleIndex = cssSource.indexOf('.section-block.density-compact {')
 		const compactEmbeddedRuleIndex = cssSource.indexOf('.section-block.embedded.density-compact {')
-		const mobileSectionRuleIndex = cssSource.indexOf('.route-header,\n\t.section-block,\n\t.overview-panel {')
+		const mobileSectionRuleIndex = cssSource.indexOf('\t.section-block,\n\t.overview-panel {')
 		const mobileEmbeddedRuleIndex = cssSource.indexOf('.section-block.embedded {', mobileSectionRuleIndex)
 
 		expect(compactRuleIndex).toBeGreaterThanOrEqual(0)
