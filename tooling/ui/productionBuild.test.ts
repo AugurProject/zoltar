@@ -917,6 +917,17 @@ productionWorkflowTest('production bundle executes deployment, reporting, fork m
 	const baseUrl = server.url.toString().replace(/\/$/, '')
 	const state = JSON.parse(
 		await loadProductionDocumentInChromium(`${baseUrl}/statoblast/#/deploy?simulate=1&simScenario=baseline`, { height: 900, width: 1440 }, async driver => {
+			const selectPoolTool = async (label: 'Price Oracle' | 'Fork & Migration') => {
+				let selected = false
+				for (let attempt = 0; attempt < 600 && !selected; attempt += 1) {
+					selected =
+						(await driver.evaluate(
+							`(() => { const disclosure = document.querySelector('.pool-tools-disclosure'); if (!(disclosure instanceof HTMLDetailsElement)) return false; if (!disclosure.open) disclosure.querySelector('summary')?.click(); const button = [...disclosure.querySelectorAll('button')].find(candidate => candidate.textContent?.trim() === ${JSON.stringify(label)}); if (!(button instanceof HTMLButtonElement) || button.disabled) return false; button.click(); return true })()`,
+						)) === true
+					if (!selected) await Bun.sleep(50)
+				}
+				if (!selected) throw new Error(`Unable to select pool tool ${label}: ${String(await driver.evaluate('document.body.innerText'))}`)
+			}
 			await driver.evaluate('document.body.focus()')
 			await driver.pressTab()
 			expect(await driver.evaluate('document.activeElement?.textContent?.trim()')).toBe('Skip to main content')
@@ -929,7 +940,7 @@ productionWorkflowTest('production bundle executes deployment, reporting, fork m
 			await driver.resize({ height: 844, width: 390 })
 			await driver.navigate(`${baseUrl}/statoblast/?workflow=pool#/security-pools?simulate=1&simScenario=security-pool`)
 			await driver.waitForBodyText('Will this resolve?')
-			const poolOpened = await driver.evaluate(`(() => { const link = document.querySelector('article.comparison-record h3 a[aria-label^="Open pool:"]'); if (!(link instanceof HTMLAnchorElement)) return false; link.click(); return true })()`)
+			const poolOpened = await driver.evaluate(`(() => { const link = document.querySelector('a[aria-label^="Open pool:"]'); if (!(link instanceof HTMLAnchorElement)) return false; link.click(); return true })()`)
 			expect(poolOpened).toBe(true)
 			await driver.waitForBodyWithoutText('Loading vault details…')
 			await driver.waitForButtonEnabled('Deposit REP')
@@ -962,7 +973,7 @@ productionWorkflowTest('production bundle executes deployment, reporting, fork m
 			await driver.navigate(`${baseUrl}/statoblast/?workflow=reporting#/security-pools?simulate=1&simScenario=securitypoolx2`)
 			await driver.waitForBodyText('Will this resolve?')
 			const reportingPoolOpened = await driver.evaluate(
-				`(() => { const record = [...document.querySelectorAll('article.comparison-record')].find(candidate => candidate.textContent?.includes('Will this resolve? (securitypoolx2 #1)')); const link = record?.querySelector('h3 a[aria-label^="Open pool:"]'); if (!(link instanceof HTMLAnchorElement)) return false; link.click(); return true })()`,
+				`(() => { const record = [...document.querySelectorAll('article')].find(candidate => candidate.textContent?.includes('Will this resolve? (securitypoolx2 #1)')); const link = record?.querySelector('a[aria-label^="Open pool:"]'); if (!(link instanceof HTMLAnchorElement)) return false; link.click(); return true })()`,
 			)
 			expect(reportingPoolOpened).toBe(true)
 			await driver.waitForBodyWithoutText('Loading vault details…')
@@ -982,7 +993,7 @@ productionWorkflowTest('production bundle executes deployment, reporting, fork m
 			await driver.clickButton('Deposit REP', 1)
 			await driver.waitForTransactionStatus('Confirmed', 'Deposit REP')
 			await driver.clickButton('+1 year')
-			await driver.clickButton('Price Oracle')
+			await selectPoolTool('Price Oracle')
 			await driver.waitForButtonEnabled('Request new price')
 			await driver.clickButton('Request new price')
 			const priceReviewBody = await driver.waitForBodyText('Confirm price request')
@@ -1002,8 +1013,7 @@ productionWorkflowTest('production bundle executes deployment, reporting, fork m
 			await driver.waitForTransactionStatus('Confirmed', 'Report Settled')
 			const reportingPoolsOpened = await driver.evaluate(`(() => { const target = [...document.querySelectorAll('a, button')].find(candidate => candidate.textContent?.trim() === 'Security Pools'); if (!(target instanceof HTMLElement)) return false; target.click(); return true })()`)
 			expect(reportingPoolsOpened).toBe(true)
-			await driver.waitForButtonEnabled('Price Oracle')
-			await driver.clickButton('Price Oracle')
+			await selectPoolTool('Price Oracle')
 			await driver.waitForButtonEnabled('Reporting')
 			await driver.clickButton('Reporting')
 			await driver.waitForBodyText('Report Outcome')
@@ -1118,19 +1128,16 @@ productionWorkflowTest('production bundle executes deployment, reporting, fork m
 			await driver.waitForBodyText('Will this resolve?')
 			await driver.clickButton('+1 month')
 			const auctionPoolOpened = await driver.evaluate(
-				`(() => { const record = [...document.querySelectorAll('article.comparison-record')].find(candidate => candidate.textContent?.toLowerCase().includes('truth auction')); const link = record?.querySelector('h3 a[aria-label^="Open pool:"]'); if (!(link instanceof HTMLAnchorElement)) return false; link.click(); return true })()`,
+				`(() => { const record = [...document.querySelectorAll('article')].find(candidate => candidate.textContent?.toLowerCase().includes('truth auction')); const link = record?.querySelector('a[aria-label^="Open pool:"]'); if (!(link instanceof HTMLAnchorElement)) return false; link.click(); return true })()`,
 			)
 			expect(auctionPoolOpened).toBe(true)
-			const auctionPoolBody = await driver.waitForBodyText('Fork & Migration')
+			const auctionPoolBody = await driver.waitForBodyText('Manage Pool')
 			if (auctionPoolBody.includes('Universe Mismatch')) {
 				const childUniverseOpened = await driver.evaluate(`(() => { const link = document.querySelector('section.tone-critical a.universe-link'); if (!(link instanceof HTMLAnchorElement)) return false; link.click(); return true })()`)
 				expect(childUniverseOpened).toBe(true)
 			}
 			await driver.waitForBodyWithoutText('Universe Mismatch')
-			const forkViewOpened = await driver.evaluate(
-				`(() => { const [route, search = ''] = window.location.hash.split('?'); const params = new URLSearchParams(search); params.set('selectedPoolView', 'fork-workflow'); params.set('securityPoolsView', 'operate'); window.history.pushState({}, '', route + '?' + params.toString()); window.dispatchEvent(new PopStateEvent('popstate')); return true })()`,
-			)
-			expect(forkViewOpened).toBe(true)
+			await selectPoolTool('Fork & Migration')
 			await driver.waitForButtonEnabled('Finalize truth auction')
 			await driver.clickButton('Finalize truth auction')
 			const finalizedBody = await driver.waitForTransactionStatus('Confirmed', 'Finalize Truth Auction')
