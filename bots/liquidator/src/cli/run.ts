@@ -1,4 +1,7 @@
 #!/usr/bin/env bun
+import { createPoolDeploymentDateCache } from '../monitoring/pool-deployment-date.ts'
+import { parsePoolSelection, updateSupportedPool } from '#config/pool-selection'
+import { loadPoolCatalog } from '#monitoring/pool-catalog'
 import { errorMessage } from '@zoltar/bot-shared/infrastructure/error-message'
 import { exchanges } from 'ccxt'
 import { createCentralizedExchangeFactory } from '@zoltar/bot-shared/monitoring/centralized-exchange-factory'
@@ -168,9 +171,11 @@ async function runOperator(loaded: Awaited<ReturnType<typeof loadSettings>>, pro
 		observeConstantProductMarkets(configuration, getAddress(configuration.assetAddress), settings.deployment.weth, async pair => readConfiguredDexPair(getAddress(pair), block))
 	const requireCurrentDexEvidence = async (configuration: ReturnType<typeof marketConfigurations>[number], estimate: Parameters<typeof requireCurrentConstantProductMarketEvidence>[3]) =>
 		requireCurrentConstantProductMarketEvidence(configuration, getAddress(configuration.assetAddress), settings.deployment.weth, estimate, readConfiguredDexPair)
+	const poolDeploymentDates = createPoolDeploymentDateCache()
 	const dashboard = settings.runtime.ui
 		? startDashboardServer(settings.runtime.uiPort, {
 				getConfiguration: () => serializedSettings(settings, true),
+				getPoolCatalog: (page, address, scope) => loadPoolCatalog(client, settings.deployment.securityPoolFactory, settings.network.chainId, page, address, scope === 'monitored' ? state.pools.map(pool => pool.address) : undefined, poolDeploymentDates),
 				getState: () => {
 					state.rpcEndpointHealth = readPool.snapshot()
 					return { ...operatorSnapshot(state, settings.runtime.execute, marketConfigurations(settings)), network: settings.network.name }
@@ -375,20 +380,15 @@ async function runOperator(loaded: Awaited<ReturnType<typeof loadSettings>>, pro
 						recordActivity(state, { details: `chain=${next.network.chainId.toString()} readRpc=${endpointLabel(next.connectivity.readRpcUrl)}`, kind: 'configuration', message: 'Chain and RPC configuration saved', status: 'info' })
 						return serializedSettings(next, true)
 					}),
+				setSupportedPool: value =>
+					configurationMutationGate.run(async () => {
+						await persistSettings(current => updateSupportedPool(current, value))
+						recordActivity(state, { kind: 'configuration', message: 'Supported pools updated', status: 'info' })
+						return serializedSettings(settings, true)
+					}),
 				setSelectedPools: value =>
 					configurationMutationGate.run(async () => {
-						if (!Array.isArray(value) || value.some(address => typeof address !== 'string')) {
-							throw new Error('Selected pools must be an array of addresses')
-						}
-						const selectedPools = [
-							...new Map(
-								value.map(raw => {
-									if (typeof raw !== 'string') throw new Error('Selected pools must contain addresses')
-									const address = getAddress(raw)
-									return [address.toLowerCase(), address] as const
-								}),
-							).values(),
-						]
+						const selectedPools = parsePoolSelection(value)
 						await persistSettings(current => ({ ...current, selectedPools }))
 						recordActivity(state, {
 							details: selectedPools.join(', '),

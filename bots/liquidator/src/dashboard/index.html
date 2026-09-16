@@ -37,38 +37,9 @@
 				<div id="wallet-metrics" class="metric-grid operator-metrics"></div>
 			</section>
 
-			<section id="pools" data-page-content="pools" aria-labelledby="pools-title">
-				<div class="section-heading">
-					<div>
-						<p class="eyebrow">Current work</p>
-						<h2 id="pools-title">Security pools</h2>
-					</div>
-					<label class="search">
-						<span>Filter pools</span>
-						<input id="pool-filter" type="search" placeholder="Address or question" />
-					</label>
-				</div>
+			<section id="pools" data-page-content="pools" aria-label="Pools">
 				<div id="configuration-status" class="notice hidden" role="status"></div>
-				<div class="table-shell">
-					<table>
-						<thead>
-							<tr>
-								<th id="pool-selected-heading" scope="col">Selected</th>
-								<th id="pool-address-heading" scope="col">Pool</th>
-								<th id="pool-question-heading" scope="col">Question</th>
-								<th id="pool-oracle-heading" scope="col">Oracle</th>
-								<th id="pool-totals-heading" scope="col">Pool totals</th>
-								<th id="pool-vault-heading" scope="col">Bot vault</th>
-								<th id="pool-targets-heading" scope="col">Targets</th>
-							</tr>
-						</thead>
-						<tbody id="pool-rows">
-							<tr>
-								<td colspan="7" class="empty">Scanning configured pools…</td>
-							</tr>
-						</tbody>
-					</table>
-				</div>
+				<div id="pool-browser"></div>
 			</section>
 
 			<section id="markets" data-page-content="markets" aria-labelledby="centralized-markets-title">

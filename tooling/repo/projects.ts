@@ -306,7 +306,7 @@ export const projects: readonly Project[] = [
 		id: 'liquidator',
 		path: 'bots/liquidator',
 		type: 'bot',
-		dependencies: ['shared-core', 'bot-shared', 'contracts'],
+		dependencies: ['shared-core', 'bot-shared', 'contracts', 'ui-core'],
 		tasks: {
 			setup: packageInstallTask('bots/liquidator'),
 			test: packageTask('bots/liquidator', 'test'),
