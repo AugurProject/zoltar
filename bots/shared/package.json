@@ -16,6 +16,7 @@
 		"./dashboard/forms": "./src/dashboard/forms.ts",
 		"./dashboard/header": "./src/dashboard/header.ts",
 		"./dashboard/polling": "./src/dashboard/polling.ts",
+		"./dashboard/response-validation": "./src/dashboard/response-validation.ts",
 		"./dashboard/resume-preflight": "./src/dashboard/resume-preflight.ts",
 		"./dashboard/section-navigation": "./src/dashboard/section-navigation.ts",
 		"./dashboard/security": "./src/dashboard/security.ts",

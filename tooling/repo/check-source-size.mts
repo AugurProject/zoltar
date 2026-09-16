@@ -51,7 +51,7 @@ export function inspectSourceSizes(files: ReadonlyMap<string, string>, allowance
 		const allowance = validAllowances.get(file)
 		if (allowance === undefined && lines > limit) findings.push({ file, lines, limit, kind: 'oversized' })
 		else if (allowance !== undefined && lines > allowance.maxLines) findings.push({ file, lines, limit: allowance.maxLines, kind: 'allowance-exceeded' })
-		else if (allowance !== undefined && lines <= limit) findings.push({ file, lines, limit, kind: 'stale-allowance' })
+		else if (allowance !== undefined && lines < allowance.maxLines) findings.push({ file, lines, limit: lines <= limit ? limit : allowance.maxLines, kind: 'stale-allowance' })
 	}
 	for (const [file, allowance] of validAllowances) if (!files.has(file)) findings.push({ file, lines: 0, limit: allowance.maxLines, kind: 'missing-file' })
 	return findings.sort((left, right) => left.file.localeCompare(right.file))
