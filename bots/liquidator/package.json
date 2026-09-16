@@ -28,6 +28,8 @@
 	"dependencies": {
 		"@zoltar/core-shared": "workspace:1.0.0",
 		"@zoltar/bot-shared": "workspace:1.0.0",
+		"@zoltar/ui-core-shared": "workspace:1.0.0",
+		"preact": "10.26.4",
 		"ccxt": "4.5.70"
 	},
 	"devDependencies": {

@@ -1,0 +1,187 @@
+import { mainnet } from '@zoltar/core-shared/evm/ethereum'
+import { expect, test } from 'bun:test'
+import { createPublicClient, getAddress, zeroAddress } from '@zoltar/bot-shared/ethereum'
+import { custom } from '@zoltar/bot-shared/ethereum/rpc-transport'
+import { loadPoolCatalog } from '#monitoring/pool-catalog'
+
+const address = getAddress('0x1111111111111111111111111111111111111111')
+
+function fixture(total: bigint, options: { stallDeploymentBlock?: boolean; stallDeployment?: boolean; unknownPool?: boolean; wrongCanonical?: boolean; failSearch?: boolean; failMetrics?: boolean; failDates?: boolean; failDeployment?: boolean; missingQuestion?: boolean; reorg?: boolean } = {}) {
+	const reads: { functionName: string; args: readonly unknown[]; blockNumber: bigint }[] = []
+	let blockReads = 0
+	const client = new Proxy(
+		createPublicClient({
+			chain: mainnet,
+			transport: custom({
+				request: async () => {
+					throw new Error('Unexpected RPC')
+				},
+			}),
+		}),
+		{
+			get(target, property) {
+				if (property === 'getBlock')
+					return async (parameters?: { blockNumber?: bigint }) => {
+						if (parameters?.blockNumber === 20n && options.stallDeploymentBlock) return await new Promise(() => {})
+						if (parameters?.blockNumber === 20n) return { number: 20n, hash: '0x33', timestamp: 1789560000n }
+						return { number: 42n, timestamp: 1789560060n, hash: options.reorg && blockReads++ > 0 ? '0x22' : '0x11' }
+					}
+				if (property === 'getLogs')
+					return async () => {
+						if (options.stallDeployment) return await new Promise(() => {})
+						return options.failDeployment ? [] : [{ blockNumber: 20n, blockHash: '0x33' }]
+					}
+				if (property === 'readContract')
+					return async (parameters: { functionName: string; args: readonly unknown[]; blockNumber: bigint }) => {
+						reads.push(parameters)
+						switch (parameters.functionName) {
+							case 'getSecurityPoolOriginId':
+								if (options.failSearch) throw new Error('RPC unavailable')
+								return options.unknownPool ? `0x${'0'.repeat(64)}` : `0x${'1'.repeat(64)}`
+							case 'getSecurityPool':
+								return options.wrongCanonical ? zeroAddress : address
+							case 'universeId':
+								return 7n
+							case 'questionId':
+								return 42n
+							case 'parent':
+								return zeroAddress
+							case 'statoblastSecurityMultiplierBps':
+								return 12500n
+							case 'securityPoolDeploymentCount':
+								return total
+							case 'securityPoolDeploymentsRange':
+								return [{ securityPool: address, parent: zeroAddress, universeId: 7n, questionId: 42n, statoblastSecurityMultiplierBps: 12500n }]
+							case 'systemState':
+								if (options.failMetrics) throw new Error('Pool unavailable')
+								return 0n
+							case 'getTotalPoolHeldAttoRep':
+								return 2n * 10n ** 18n
+							case 'questionData':
+								if (options.failDates) throw new Error('Question unavailable')
+								return address
+							case 'questionCreatedTimestamp':
+								return options.missingQuestion ? 0n : 1789387200n
+							case 'questions':
+								return ['Question', '', 1789473600n, 1792065600n, 0n, 0n, 0n, '']
+							case 'getVaultCount':
+								return 3n
+							default:
+								throw new Error(`Unexpected read ${parameters.functionName}`)
+						}
+					}
+				return Reflect.get(target, property)
+			},
+		},
+	)
+	return { client, reads }
+}
+
+test('browses unselected factory deployments with bounded ranges at a canonical block', async () => {
+	const { client, reads } = fixture(25n)
+	const result = await loadPoolCatalog(client, address, 1, 2)
+	expect(result).toMatchObject({ total: '25', pageCount: '3', page: 2, pools: [{ address, universeId: '7', questionId: '42', deploymentDate: '1789560000', questionDates: { startTime: '1789473600', endTime: '1792065600' }, metrics: { systemState: '0', totalPoolHeldRep: '2', vaultCount: '3' } }] })
+	expect(reads.find(read => read.functionName === 'securityPoolDeploymentsRange')?.args).toEqual([24n, 1n])
+	expect(reads.every(read => read.blockNumber === 42n)).toBe(true)
+	expect(result).not.toHaveProperty('block')
+	expect(reads.filter(read => read.functionName === 'questions').map(read => read.args)).toEqual([[42n]])
+})
+
+test('handles empty and out-of-range pages without reading pool details', async () => {
+	for (const [total, page] of [
+		[0n, 0],
+		[1n, 1],
+	] as const) {
+		const { client, reads } = fixture(total)
+		expect((await loadPoolCatalog(client, address, 1, page)).pools).toEqual([])
+		expect(reads.map(read => read.functionName)).toEqual(['securityPoolDeploymentCount'])
+	}
+})
+
+test('retains a registered pool when its current metrics are unavailable', async () => {
+	const { client } = fixture(1n, { failMetrics: true })
+	const result = await loadPoolCatalog(client, address, 1, 0)
+	expect(result.pools[0]?.address).toBe(address)
+	expect(result.pools[0]?.metrics).toBeUndefined()
+	expect(result.pools[0]?.deploymentDate).toBe('1789560000')
+	expect(result.pools[0]?.questionDates?.endTime).toBe('1792065600')
+})
+
+test('rejects invalid pagination and reorganized snapshots', async () => {
+	const { client } = fixture(1n, { reorg: true })
+	await expect(loadPoolCatalog(client, address, 1, -1)).rejects.toThrow('non-negative')
+	await expect(loadPoolCatalog(client, address, 1, 0)).rejects.toThrow('changed during discovery')
+})
+
+test('keeps deployment and question dates independent when either source is unavailable', async () => {
+	const noQuestion = await loadPoolCatalog(fixture(1n, { failDates: true }).client, address, 1, 0)
+	expect(noQuestion.pools[0]?.questionDates).toBeUndefined()
+	expect(noQuestion.pools[0]?.deploymentDate).toBe('1789560000')
+	expect(noQuestion.pools[0]?.metrics?.vaultCount).toBe('3')
+	const noDeployment = await loadPoolCatalog(fixture(1n, { failDeployment: true }).client, address, 1, 0)
+	expect(noDeployment.pools[0]?.deploymentDate).toBeUndefined()
+	expect(noDeployment.pools[0]?.questionDates?.startTime).toBe('1789473600')
+	const missingQuestion = await loadPoolCatalog(fixture(1n, { missingQuestion: true }).client, address, 1, 0)
+	expect(missingQuestion.pools[0]?.questionDates).toBeUndefined()
+})
+
+test('finds an exact registered address without scanning catalog pages', async () => {
+	const { client, reads } = fixture(1000000n)
+	const result = await loadPoolCatalog(client, address, 1, 0, address)
+	expect(result).toMatchObject({ page: 0, total: '1', pageCount: '1', pools: [{ address, universeId: '7', questionId: '42', multiplierBps: '12500' }] })
+	expect(reads.some(read => read.functionName.startsWith('securityPoolDeployment'))).toBe(false)
+	expect(reads.find(read => read.functionName === 'getSecurityPool')?.args).toEqual([`0x${'1'.repeat(64)}`, 7n])
+	expect(reads.every(read => read.blockNumber === 42n)).toBe(true)
+})
+
+test('returns no match for unknown addresses or a mismatched factory registration', async () => {
+	for (const options of [{ unknownPool: true }, { wrongCanonical: true }]) {
+		const { client, reads } = fixture(1n, options)
+		expect(await loadPoolCatalog(client, address, 1, 0, address)).toMatchObject({ total: '0', pageCount: '0', pools: [] })
+		expect(reads.some(read => read.functionName === 'getTotalPoolHeldAttoRep')).toBe(false)
+	}
+})
+
+test('does not report RPC failure or reorganization as a missing search result', async () => {
+	await expect(loadPoolCatalog(fixture(1n, { failSearch: true }).client, address, 1, 0, address)).rejects.toThrow('RPC unavailable')
+	await expect(loadPoolCatalog(fixture(1n, { reorg: true }).client, address, 1, 0, address)).rejects.toThrow('changed during discovery')
+})
+
+test('paginates monitored addresses globally and excludes unmonitored search results', async () => {
+	const { client, reads } = fixture(1000000n)
+	const monitored = [...Array.from({ length: 12 }, (_, index) => getAddress(`0x${(index + 1).toString(16).padStart(40, '0')}`)), address]
+	const result = await loadPoolCatalog(client, address, 1, 1, undefined, monitored)
+	expect(result).toMatchObject({ total: '13', pageCount: '2', page: 1, pools: [{ address }] })
+	expect(reads.filter(read => read.functionName === 'getSecurityPoolOriginId').map(read => read.args)).toEqual([[address]])
+	expect(reads.some(read => read.functionName.startsWith('securityPoolDeployment'))).toBe(false)
+	const empty = fixture(1000000n)
+	expect(await loadPoolCatalog(empty.client, address, 1, 0, address, [])).toMatchObject({ total: '0', pools: [] })
+	expect(empty.reads).toEqual([])
+	const duplicated = fixture(1000000n)
+	expect(await loadPoolCatalog(duplicated.client, address, 1, 0, undefined, [address, address])).toMatchObject({ total: '1', pools: [{ address }] })
+})
+
+test('returns pools within a bounded deadline when deployment date discovery stalls', async () => {
+	const { client } = fixture(1n, { stallDeployment: true })
+	const result = await Promise.race([
+		loadPoolCatalog(client, address, 1, 0),
+		Bun.sleep(2500).then(() => {
+			throw new Error('Optional deployment date blocked catalog')
+		}),
+	])
+	expect(result.pools[0]?.address).toBe(address)
+	expect(result.pools[0]?.metrics?.vaultCount).toBe('3')
+	expect(result.pools[0]?.deploymentDate).toBeUndefined()
+})
+
+test('returns usable pools when deployment timestamp metadata stalls after log discovery', async () => {
+	const result = await Promise.race([
+		loadPoolCatalog(fixture(1n, { stallDeploymentBlock: true }).client, address, 1, 0),
+		Bun.sleep(2500).then(() => {
+			throw new Error('Deployment timestamp blocked discovery')
+		}),
+	])
+	expect(result.pools[0]?.metrics?.vaultCount).toBe('3')
+	expect(result.pools[0]?.questionDates?.startTime).toBe('1789473600')
+	expect(result.pools[0]?.deploymentDate).toBeUndefined()
+})
