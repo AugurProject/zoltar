@@ -35,7 +35,7 @@ import {
 	venueLabel,
 } from './dashboard-format.js'
 import type { SubmissionSettings } from '#execution/transaction-submission'
-import type { DeploymentSettings } from '#config/deployment-settings'
+import type { DeploymentSettings, StoredDeploymentSettings } from '#config/deployment-settings'
 
 const SVG_NAMESPACE = 'http://www.w3.org/2000/svg'
 let latestSnapshot: PublicOperatorSnapshot | undefined
@@ -195,24 +195,14 @@ function shorten(value: string, leading = 8, trailing = 6) {
 	return value.length <= leading + trailing + 1 ? value : `${value.slice(0, leading)}…${value.slice(-trailing)}`
 }
 
-function optionalInput(id: string) {
-	const value = element<HTMLInputElement>(id).value.trim()
-	return value === '' ? undefined : value
-}
-
 function lines(id: string) {
 	return urlLines(element<HTMLTextAreaElement>(id).value)
 }
 
-function loadDeployment(deployment: Omit<DeploymentSettings, 'openOracle' | 'rep' | 'weth'>) {
-	element<HTMLInputElement>('deployment-executor').value = deployment.executor ?? ''
-	element<HTMLInputElement>('deployment-v3-factory').value = deployment.uniswapFactory
-	element<HTMLInputElement>('deployment-v3-quoter').value = deployment.uniswapQuoter
-	element<HTMLInputElement>('deployment-v3-router').value = deployment.uniswapRouter ?? ''
-	element<HTMLInputElement>('deployment-v2-router').value = deployment.uniswapV2Router ?? ''
-	element<HTMLInputElement>('deployment-v4-pool-manager').value = deployment.uniswapV4PoolManager ?? ''
-	element<HTMLInputElement>('deployment-v4-quoter').value = deployment.uniswapV4Quoter ?? ''
-	element<HTMLTextAreaElement>('deployment-coordinators').value = deployment.coordinatorAddresses.join('\n')
+function loadDeployment(deployment: StoredDeploymentSettings) {
+	element<HTMLInputElement>('deployment-v2-enabled').checked = deployment.uniswapV2Enabled
+	element<HTMLInputElement>('deployment-v3-enabled').checked = deployment.uniswapV3Enabled
+	element<HTMLInputElement>('deployment-v4-enabled').checked = deployment.uniswapV4Enabled
 	element<HTMLTextAreaElement>('deployment-quorum-rpcs').value = deployment.quorumRpcUrls.join('\n')
 	element<HTMLTextAreaElement>('deployment-manifest').value = deployment.deploymentManifest === undefined ? '' : JSON.stringify(deployment.deploymentManifest, undefined, 2)
 }
@@ -587,16 +577,16 @@ function isSubmissionSettings(value: unknown): value is SubmissionSettings {
 	return (mode === 'private' || mode === 'public') && typeof Reflect.get(value, 'minimumBundleRelaySuccesses') === 'number' && isStringArray(Reflect.get(value, 'relayUrls'))
 }
 
-function isDeploymentSettings(value: unknown): value is Omit<DeploymentSettings, 'openOracle' | 'rep' | 'weth'> {
+function isDeploymentSettings(value: unknown): value is StoredDeploymentSettings {
 	if (typeof value !== 'object' || value === null || Array.isArray(value)) return false
-	for (const key of ['uniswapFactory', 'uniswapQuoter']) {
-		if (typeof Reflect.get(value, key) !== 'string') return false
+	for (const key of ['uniswapV2Enabled', 'uniswapV3Enabled', 'uniswapV4Enabled']) {
+		if (typeof Reflect.get(value, key) !== 'boolean') return false
 	}
-	for (const key of ['executor', 'uniswapRouter', 'uniswapV2Router', 'uniswapV4PoolManager', 'uniswapV4Quoter']) {
+	for (const key of ['executor']) {
 		const candidate = Reflect.get(value, key)
 		if (candidate !== undefined && candidate !== null && typeof candidate !== 'string') return false
 	}
-	return isStringArray(Reflect.get(value, 'coordinatorAddresses')) && isStringArray(Reflect.get(value, 'quorumRpcUrls'))
+	return isStringArray(Reflect.get(value, 'quorumRpcUrls'))
 }
 
 function synchronizeFocusedConfiguration(configuration: unknown) {
@@ -1007,6 +997,8 @@ function render(snapshot: PublicOperatorSnapshot) {
 	const focusKey = activeElement instanceof HTMLElement ? activeElement.dataset['focusKey'] : undefined
 	const scrollPosition = { left: window.scrollX, top: window.scrollY }
 	latestSnapshot = snapshot
+	setText('deployment-executor', snapshot.executor ?? 'Unavailable')
+	setText('deployment-coordinators', snapshot.coordinatorAddresses.length === 0 ? 'No pools discovered in approved universes.' : snapshot.coordinatorAddresses.join('\n'))
 	setControlsEnabled(true)
 	const modeBadge = element('mode-badge')
 	const statusLabels = botStatusLabels(snapshot)
@@ -1442,16 +1434,11 @@ element<HTMLFormElement>('deployment-form').addEventListener('submit', async eve
 	try {
 		const manifestText = element<HTMLTextAreaElement>('deployment-manifest').value.trim()
 		const deployment = {
-			coordinatorAddresses: lines('deployment-coordinators'),
 			deploymentManifest: manifestText === '' ? undefined : JSON.parse(manifestText),
-			executor: optionalInput('deployment-executor'),
 			quorumRpcUrls: lines('deployment-quorum-rpcs'),
-			uniswapFactory: element<HTMLInputElement>('deployment-v3-factory').value.trim(),
-			uniswapQuoter: element<HTMLInputElement>('deployment-v3-quoter').value.trim(),
-			uniswapRouter: optionalInput('deployment-v3-router'),
-			uniswapV2Router: optionalInput('deployment-v2-router'),
-			uniswapV4PoolManager: optionalInput('deployment-v4-pool-manager'),
-			uniswapV4Quoter: optionalInput('deployment-v4-quoter'),
+			uniswapV2Enabled: element<HTMLInputElement>('deployment-v2-enabled').checked,
+			uniswapV3Enabled: element<HTMLInputElement>('deployment-v3-enabled').checked,
+			uniswapV4Enabled: element<HTMLInputElement>('deployment-v4-enabled').checked,
 		}
 		const response = await api<{ deployment: DeploymentSettings }>('/api/deployment', {
 			body: JSON.stringify(deployment),
@@ -1470,12 +1457,11 @@ element<HTMLFormElement>('deployment-form').addEventListener('submit', async eve
 element<HTMLFormElement>('create2-form').addEventListener('submit', async event => {
 	event.preventDefault()
 	const button = element<HTMLButtonElement>('deploy-executor-button')
-	const salt = element<HTMLInputElement>('create2-salt').value.trim()
 	button.disabled = true
 	setText('create2-status', 'Calculating the CREATE2 address…')
 	try {
 		const prediction = await api<{ address: string }>('/api/executor-prediction', {
-			body: JSON.stringify({ salt }),
+			body: JSON.stringify({}),
 			headers: { 'content-type': 'application/json' },
 			method: 'POST',
 		})
@@ -1485,13 +1471,12 @@ element<HTMLFormElement>('create2-form').addEventListener('submit', async event 
 		}
 		setText('create2-status', `Checking the canonical CREATE2 proxy before deploying ${prediction.address}…`)
 		const result = await api<{ address: string; alreadyDeployed: boolean; transactionHash: string | undefined }>('/api/executor-deployment', {
-			body: JSON.stringify({ salt }),
+			body: JSON.stringify({}),
 			headers: { 'content-type': 'application/json' },
 			method: 'POST',
 		})
-		element<HTMLInputElement>('deployment-executor').value = result.address
-		element<HTMLTextAreaElement>('deployment-manifest').value = ''
-		setText('create2-status', result.alreadyDeployed ? `Verified existing executor at ${result.address}; replace the cleared execution manifest.` : `Deployed ${result.address} in transaction ${result.transactionHash ?? 'unknown'}; replace the cleared execution manifest.`)
+		setText('deployment-executor', result.address)
+		setText('create2-status', result.alreadyDeployed ? `Verified existing executor at ${result.address}.` : `Deployed ${result.address} in transaction ${result.transactionHash ?? 'unknown'}.`)
 		await refresh()
 	} catch (error) {
 		setText('create2-status', error instanceof Error ? error.message : String(error))

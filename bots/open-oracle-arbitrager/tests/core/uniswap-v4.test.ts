@@ -1,11 +1,11 @@
 import { describe, expect, test } from 'bun:test'
 import { getAddress, zeroAddress } from '@zoltar/bot-shared/ethereum'
-import { standardV4QuotePlans, v4QuotePlan } from '#core/uniswap-v4'
+import { STANDARD_UNISWAP_FEES, v4QuotePlan } from '#core/uniswap-v4'
 
 describe('Uniswap V4 execution configuration', () => {
 	test('maps every supported fee to the canonical hookless tick spacing', () => {
 		const token = getAddress('0x221657776846890989a759BA2973e427DfF5C9bB')
-		expect(standardV4QuotePlans(token, 1n, 1n).map(plan => ({ fee: plan.fee, tickSpacing: plan.sell.poolKey.tickSpacing }))).toEqual([
+		expect(STANDARD_UNISWAP_FEES.map(fee => v4QuotePlan(token, fee, 1n, 1n)).map(plan => ({ fee: plan.fee, tickSpacing: plan.sell.poolKey.tickSpacing }))).toEqual([
 			{ fee: 100, tickSpacing: 1 },
 			{ fee: 500, tickSpacing: 10 },
 			{ fee: 3_000, tickSpacing: 60 },
@@ -35,7 +35,7 @@ describe('Uniswap V4 execution configuration', () => {
 
 	test('builds independent buy and sell quotes for every supported standard pool', () => {
 		const token = getAddress('0x221657776846890989a759BA2973e427DfF5C9bB')
-		const plans = standardV4QuotePlans(token, 11n, 13n)
+		const plans = STANDARD_UNISWAP_FEES.map(fee => v4QuotePlan(token, fee, 11n, 13n))
 		expect(plans.map(plan => plan.fee)).toEqual([100, 500, 3_000, 10_000])
 		expect(plans.map(plan => plan.sell.exactAmount)).toEqual([11n, 11n, 11n, 11n])
 		expect(plans.map(plan => plan.buy.exactAmount)).toEqual([13n, 13n, 13n, 13n])

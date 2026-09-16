@@ -5,7 +5,7 @@ import { mkdir, open, readFile } from 'node:fs/promises'
 import { dirname } from 'node:path'
 import { bigintToSafeNumber, type Address, type Hex } from '@zoltar/bot-shared/ethereum'
 import type { OpenOracleGame } from '@zoltar/open-oracle-shared/openOracle/openOracle'
-import type { DeploymentSettings } from '#config/deployment-settings'
+import { validateDeploymentSettings, type DeploymentSettings } from '#config/deployment-settings'
 import type { ConnectivitySettings, EndpointCheck, NetworkName } from '#monitoring/connectivity'
 import type { SubmissionSettings, SubmissionTargetResult } from '#execution/transaction-submission'
 import type { Venue } from '#core/venue-strategy'
@@ -157,7 +157,7 @@ export type PublicOperationEntry = Omit<OperationEntry, 'details' | 'reason'> & 
 	reason?: string | undefined
 }
 
-export type MarketAvailabilityNotice = ({ kind: 'missing-deployment' } & MissingContractDeployment) | { kind: 'no-v3-liquidity'; chainId: number }
+export type MarketAvailabilityNotice = ({ kind: 'missing-deployment' } & MissingContractDeployment) | { kind: 'no-execution-pools'; chainId: number }
 
 type PollStatus = {
 	marketAvailability?: MarketAvailabilityNotice | undefined
@@ -262,6 +262,7 @@ export type PublicOperatorSnapshot = PollStatus &
 		marketConsensus?: ReturnType<typeof serializeMarketConsensusEstimate>
 		execute: boolean
 		executor: Address | undefined
+		coordinatorAddresses: readonly Address[]
 		executionHistory: readonly PublicExecutionRecord[]
 		executionHistoryRecordCount: number
 		positionRecordCount: number
@@ -394,6 +395,7 @@ export function publicOperatorSnapshot(snapshot: OperatorSnapshot): PublicOperat
 		marketConsensus: snapshot.marketConsensus,
 		execute: snapshot.execute,
 		executor: snapshot.executor,
+		coordinatorAddresses: snapshot.deployment.coordinatorAddresses,
 		executionHistory: snapshot.executionHistory.map(record => ({
 			actualGasCostEth: record.actualGasCostEth,
 			direction: record.direction,
@@ -944,23 +946,7 @@ export function operatorSnapshot(
 			},
 		},
 		connectivity,
-		deployment:
-			fixed.deployment ??
-			({
-				coordinatorAddresses: [],
-				deploymentManifest: undefined,
-				executor: fixed.executor,
-				openOracle: fixed.openOracle,
-				quorumRpcUrls: [],
-				rep: fixed.openOracle,
-				uniswapFactory: fixed.openOracle,
-				uniswapQuoter: fixed.openOracle,
-				uniswapRouter: undefined,
-				uniswapV2Router: undefined,
-				uniswapV4PoolManager: undefined,
-				uniswapV4Quoter: undefined,
-				weth: fixed.openOracle,
-			} satisfies DeploymentSettings),
+		deployment: fixed.deployment ?? validateDeploymentSettings({ coordinatorAddresses: [], executor: fixed.executor, quorumRpcUrls: [], uniswapV2Enabled: false, uniswapV3Enabled: false, uniswapV4Enabled: false }, fixed.network),
 		totalActualGasCostEth: sumDecimalWeth(state.executionHistory, 'actualGasCostEth'),
 		totalEstimatedNetProfitEth: sumDecimalWeth(state.executionHistory, 'estimatedNetProfitWeth'),
 		totalEstimatedNetProfitWeth: sumDecimalWeth(state.executionHistory, 'estimatedNetProfitWeth'),

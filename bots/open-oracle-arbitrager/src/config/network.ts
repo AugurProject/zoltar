@@ -1,7 +1,7 @@
 import mainnet from '../../../../docs/mainnet-deployment-addresses.json'
 import sepolia from '../../../../docs/sepolia-deployment-addresses.json'
 import { canonicalCoreDeployment, canonicalNetworkDeployment, canonicalUniswapDeployment } from '@zoltar/bot-shared/config/canonical-deployment'
-import { defineChain, getAddress, type Address, type Chain } from '@zoltar/bot-shared/ethereum'
+import { defineChain, type Address, type Chain } from '@zoltar/bot-shared/ethereum'
 import type { NetworkName } from '#monitoring/connectivity'
 
 export type NetworkConfiguration = {
@@ -38,13 +38,7 @@ export function defaultRpcUrl(network: NetworkName) {
 	return NETWORK_DEFAULTS[network].rpcUrl
 }
 
-export function networkConfiguration(
-	name: NetworkName,
-	overrides: {
-		factory?: string | undefined
-		quoter?: string | undefined
-	},
-): NetworkConfiguration {
+export function networkConfiguration(name: NetworkName): NetworkConfiguration {
 	const defaults = NETWORK_DEFAULTS[name]
 	const deployment = networkDeployment(name)
 	const uniswap = canonicalUniswapDeployment(deployment.chainId)
@@ -57,10 +51,10 @@ export function networkConfiguration(
 	return {
 		chain,
 		explorerUrl: defaults.explorerUrl,
-		factory: getAddress(overrides.factory ?? uniswap.factory),
+		factory: uniswap.factory,
 		multicall3: canonicalCoreDeployment(name === 'mainnet' ? mainnet : sepolia).multicall3,
 		name,
-		quoter: getAddress(overrides.quoter ?? uniswap.quoter),
+		quoter: uniswap.quoter,
 		rep: deployment.rep,
 		weth: deployment.weth,
 	}
@@ -72,4 +66,8 @@ export function networkDeployment(name: NetworkName) {
 
 export function canonicalZoltar(name: NetworkName) {
 	return canonicalCoreDeployment(name === 'mainnet' ? mainnet : sepolia).zoltar
+}
+
+export function canonicalSecurityPoolFactory(name: NetworkName) {
+	return canonicalCoreDeployment(name === 'mainnet' ? mainnet : sepolia).securityPoolFactory
 }

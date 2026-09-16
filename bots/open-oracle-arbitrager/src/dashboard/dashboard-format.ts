@@ -154,7 +154,7 @@ export function botStatusLabels(state: Pick<PublicOperatorSnapshot, 'mode' | 'pa
 		syncing: 'Syncing',
 	}
 	if (state.status === 'error' && state.marketAvailability?.kind === 'missing-deployment') return { mode: state.mode, status: 'Not deployed' }
-	if (state.status === 'running' && state.marketAvailability?.kind === 'no-v3-liquidity') return { mode: state.mode, status: 'No V3 liquidity' }
+	if (state.status === 'running' && state.marketAvailability?.kind === 'no-execution-pools') return { mode: state.mode, status: 'No execution pools' }
 	return { mode: state.mode, status: statuses[state.status] }
 }
 
@@ -211,7 +211,7 @@ export function sumSignedDecimals(values: readonly string[]) {
 
 export function marketAvailabilityPresentation(notice: PublicOperatorSnapshot['marketAvailability']) {
 	if (notice === undefined) return undefined
-	if (notice.kind === 'no-v3-liquidity') return { title: 'No V3 liquidity', detail: 'No liquid REP/WETH V3 pools were found. Market checks continue automatically.' }
+	if (notice.kind === 'no-execution-pools') return { title: 'No execution pools', detail: 'No pool candidates were found for the enabled Uniswap versions. Market checks continue automatically.' }
 	const names = [...new Set(notice.contracts.map(contract => contract.name))].join(', ')
 	return { title: 'Deployment unavailable', detail: `${names}: no contract at the configured ${notice.contracts.length === 1 ? 'address' : 'addresses'} on chain ${notice.chainId.toString()}. Availability is checked automatically.` }
 }
