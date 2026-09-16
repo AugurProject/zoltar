@@ -80,13 +80,13 @@ async function vendorDependencies(vendorOutputPath = getVendorOutputPath()) {
 
 // The shared stylesheet references its fonts relative to ui/coreShared/css, so the woff2 files are vendored next to it
 // (ui/coreShared/vendor/fonts) rather than into the app vendor directory; the production build copies the same
-// directory beside its css output so the relative URL resolves in both layouts.
-export const vendoredFontFiles: readonly { readonly specifier: string; readonly fileName: string }[] = [
+// font files beside its css output so the relative URL resolves in both layouts.
+const vendoredFontFiles: readonly { readonly specifier: string; readonly fileName: string }[] = [
 	{ specifier: '@fontsource/ibm-plex-mono/files/ibm-plex-mono-latin-400-normal.woff2', fileName: 'ibm-plex-mono-latin-400-normal.woff2' },
 	{ specifier: '@fontsource/ibm-plex-mono/files/ibm-plex-mono-latin-600-normal.woff2', fileName: 'ibm-plex-mono-latin-600-normal.woff2' },
 ]
 
-export function getVendoredFontsPath(appId = parseUiAppIdFromProcess('vendor build')) {
+function getVendoredFontsPath(appId = parseUiAppIdFromProcess('vendor build')) {
 	return path.join(getUiAppPaths(appId).coreSharedRoot, 'vendor', 'fonts')
 }
 

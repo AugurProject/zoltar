@@ -4,7 +4,7 @@ import * as process from 'node:process'
 import { normalizeBundlerPath, resolveBundlerSpecifierPath } from './bundlerPaths.mts'
 import { featureStylesheets, parseUiAppIdFromProcess, getUiAppPaths, type UiAppPaths } from './appPaths.mts'
 import { createTevmBufferImportPlugin } from './tevmBufferImport.mts'
-import { getVendoredFontsPath, vendoredFontFiles } from './vendor.mts'
+import { vendorFonts } from './vendor.mts'
 
 const appId = parseUiAppIdFromProcess('the production build')
 const paths = getUiAppPaths(appId)
@@ -133,8 +133,8 @@ export async function buildProductionBundle() {
 			if (resolveSource === undefined) throw new Error(`No source recorded for feature stylesheet ${stylesheet}`)
 			return copyStaticAsset(resolveSource(paths), path.join(paths.appDistRoot, 'css', stylesheet))
 		}),
-		// The shared stylesheet resolves its fonts at ../vendor/fonts, so the vendored files sit beside css/ in the dist output too.
-		...vendoredFontFiles.map(({ fileName }) => copyStaticAsset(path.join(getVendoredFontsPath(appId), fileName), path.join(paths.appDistRoot, 'vendor', 'fonts', fileName))),
+		// Resolve pinned font inputs directly so rebuilds do not depend on the development vendor directory.
+		vendorFonts(path.join(paths.appDistRoot, 'vendor', 'fonts')),
 		copyStaticAsset(paths.faviconSvg, path.join(paths.appDistRoot, 'favicon.svg')),
 		...(appId === 'trading'
 			? [

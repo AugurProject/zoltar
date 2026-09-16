@@ -190,17 +190,39 @@ for (const appId of UI_APP_IDS) {
 		expect(distRootPath).not.toBe(otherPaths.appDistRoot)
 	})
 
-	productionRebuildInvariantTest(`${appId} production output is independent of the invoking working directory`, async () => {
+	productionRebuildInvariantTest(`${appId} production output is independent of the invoking working directory and development fonts`, async () => {
 		const rootBuild = await fs.readFile(appBundlePath)
-		const result = Bun.spawnSync([process.execPath, appPaths.productionBuildScript, appId], {
-			cwd: appPaths.appRoot,
-			stderr: 'pipe',
-			stdout: 'pipe',
-		})
-		if (result.exitCode !== 0) {
-			throw new Error(`production build from ${appPaths.appRoot} failed\n${new TextDecoder().decode(result.stdout)}${new TextDecoder().decode(result.stderr)}`)
+		// CI restores production artifacts without the shared development font directory.
+		const fontDirectory = path.join(appPaths.coreSharedRoot, 'vendor', 'fonts')
+		const backupDirectory = await fs.mkdtemp(path.join(appPaths.coreSharedRoot, 'production-fonts-'))
+		const backupPath = path.join(backupDirectory, 'fonts')
+		const hadFonts = await fs.stat(fontDirectory).then(
+			() => true,
+			error => {
+				if (error instanceof Error && 'code' in error && error.code === 'ENOENT') return false
+				throw error
+			},
+		)
+		if (hadFonts) await fs.rename(fontDirectory, backupPath)
+		try {
+			const result = Bun.spawnSync([process.execPath, appPaths.productionBuildScript, appId], {
+				cwd: appPaths.appRoot,
+				stderr: 'pipe',
+				stdout: 'pipe',
+			})
+			if (result.exitCode !== 0) {
+				throw new Error(`production build from ${appPaths.appRoot} failed\n${new TextDecoder().decode(result.stdout)}${new TextDecoder().decode(result.stderr)}`)
+			}
+			expect(await fs.readFile(appBundlePath)).toEqual(rootBuild)
+			for (const weight of [400, 600]) {
+				const fileName = `ibm-plex-mono-latin-${weight}-normal.woff2`
+				const source = await fs.readFile(new URL(import.meta.resolve(`@fontsource/ibm-plex-mono/files/${fileName}`)))
+				expect(await fs.readFile(path.join(distRootPath, 'vendor', 'fonts', fileName))).toEqual(source)
+			}
+		} finally {
+			if (hadFonts) await fs.rename(backupPath, fontDirectory)
+			await fs.rm(backupDirectory, { recursive: true, force: true })
 		}
-		expect(await fs.readFile(appBundlePath)).toEqual(rootBuild)
 	})
 }
 
