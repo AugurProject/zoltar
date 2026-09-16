@@ -23,6 +23,7 @@ export function createPoolBrowser(root: HTMLElement, save: (address: string, sup
 	let saving = false
 	let error: string | undefined
 	let searchError: string | undefined
+	let validationTimer: number | undefined
 	let renderedKey: string | undefined
 	let renderedChain: number | undefined
 	const expanded = new Set<string>()
@@ -99,6 +100,7 @@ export function createPoolBrowser(root: HTMLElement, save: (address: string, sup
 	function statusMessage() {
 		if (context.chainId === undefined) return 'Configure the chain and RPC endpoints in Settings to browse pools.'
 		if (searchError !== undefined) return searchError
+		if (validationTimer !== undefined) return ''
 		if (error !== undefined) return error
 		if (saving) return 'Saving pool selection…'
 		if (loading) return search.value.trim() === '' ? 'Discovering pools…' : 'Searching pools…'
@@ -147,7 +149,7 @@ export function createPoolBrowser(root: HTMLElement, save: (address: string, sup
 		search.setAttribute('aria-invalid', String(searchError !== undefined))
 		navigation.hidden = search.value.trim() !== ''
 		const visible = listing()
-		refreshButton.disabled = loading || saving || !context.enabled || searchError !== undefined
+		refreshButton.disabled = loading || saving || !context.enabled || searchError !== undefined || validationTimer !== undefined
 		previous.disabled = loading || saving || !context.enabled || page === 0
 		next.disabled = loading || saving || !context.enabled || visible === undefined || BigInt(page + 1) >= BigInt(visible.pageCount)
 		summary.textContent = visible === undefined ? '' : `${visible.total} pools · Page ${page + 1} of ${visible.pageCount === '0' ? '1' : visible.pageCount}`
@@ -268,7 +270,7 @@ export function createPoolBrowser(root: HTMLElement, save: (address: string, sup
 	}
 
 	async function refresh() {
-		if (!context.enabled || saving || searchError !== undefined) return
+		if (!context.enabled || saving || searchError !== undefined || validationTimer !== undefined) return
 		const requestEpoch = ++epoch
 		loading = true
 		error = undefined
@@ -314,7 +316,24 @@ export function createPoolBrowser(root: HTMLElement, save: (address: string, sup
 		render()
 		void refresh()
 	}
-	search.addEventListener('input', () => {
+	function clearValidationTimer() {
+		window.clearTimeout(validationTimer)
+		validationTimer = undefined
+	}
+	function finishValidation() {
+		clearValidationTimer()
+		try {
+			if (search.value.trim() !== '') getAddress(search.value.trim())
+		} catch (cause) {
+			searchError = publicFailure(cause, 'Enter a complete pool address to search.')
+		}
+		render()
+	}
+	search.addEventListener('blur', () => {
+		if (validationTimer !== undefined) finishValidation()
+	})
+	search.addEventListener('input', event => {
+		clearValidationTimer()
 		epoch += 1
 		page = 0
 		data = undefined
@@ -325,7 +344,8 @@ export function createPoolBrowser(root: HTMLElement, save: (address: string, sup
 			try {
 				getAddress(search.value.trim())
 			} catch (cause) {
-				searchError = publicFailure(cause, 'Enter a complete pool address to search.')
+				if (event instanceof InputEvent && event.inputType === 'insertFromPaste') searchError = publicFailure(cause, 'Enter a complete pool address to search.')
+				else validationTimer = window.setTimeout(finishValidation, 500)
 			}
 		}
 		render()
@@ -352,6 +372,7 @@ export function createPoolBrowser(root: HTMLElement, save: (address: string, sup
 			context = nextContext
 			if (scope === 'monitored' && changedMonitored) page = 0
 			if (changedChain) {
+				clearValidationTimer()
 				search.value = ''
 				searchError = undefined
 				epoch += 1

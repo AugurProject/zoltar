@@ -1442,6 +1442,7 @@ test('presents pool errors as shared error notices and restores neutral status o
 	if (!(search instanceof page.window.HTMLInputElement)) throw new Error('Missing search')
 	search.value = '0x123'
 	search.dispatchEvent(new page.window.Event('input'))
+	search.dispatchEvent(new page.window.Event('blur'))
 	expect(status?.classList.contains('notice')).toBe(true)
 	expect(status?.classList.contains('error')).toBe(true)
 	expect(status?.textContent).toContain('Enter a complete pool address')
@@ -1506,4 +1507,40 @@ test('groups unavailable optional pool data in a warning without blocking suppor
 	await page.waitUntilComplete()
 	expect(page.window.document.querySelector('.catalog-record .notice.warning')).toBeNull()
 	expect(page.window.document.querySelectorAll('.catalog-dates time')).toHaveLength(3)
+})
+
+test('waits for an address typing pause or blur before reporting validation errors', async () => {
+	const page = await dashboard(mainnetConfiguration(), state(), false, false, true)
+	const root = page.window.document.querySelector('#pool-browser')
+	const search = root?.querySelector('input[type=search]')
+	if (!(search instanceof page.window.HTMLInputElement)) throw new Error('Missing pool search')
+	const enter = (value: string) => {
+		search.value = value
+		search.dispatchEvent(new page.window.Event('input'))
+	}
+	enter('0x1')
+	expect(search.getAttribute('aria-invalid')).toBe('false')
+	expect(root?.querySelector('.notice.error')).toBeNull()
+	expect(page.catalogSearches).toEqual([null])
+	await page.waitUntilComplete()
+	expect(search.getAttribute('aria-invalid')).toBe('true')
+	enter('0x12')
+	expect(search.getAttribute('aria-invalid')).toBe('false')
+	search.dispatchEvent(new page.window.Event('blur'))
+	expect(search.getAttribute('aria-invalid')).toBe('true')
+	enter('0x123')
+	const address = `0x${'a'.repeat(40)}`
+	enter(address)
+	await page.waitUntilComplete()
+	expect(search.getAttribute('aria-invalid')).toBe('false')
+	expect(page.catalogSearches).toEqual([null, address])
+	enter('0x1')
+	enter('')
+	await page.waitUntilComplete()
+	expect(search.getAttribute('aria-invalid')).toBe('false')
+	expect(page.catalogSearches).toEqual([null, address, null])
+	search.value = 'bad pasted address'
+	search.dispatchEvent(new page.window.InputEvent('input', { inputType: 'insertFromPaste' }))
+	expect(search.getAttribute('aria-invalid')).toBe('true')
+	expect(page.catalogSearches).toEqual([null, address, null])
 })
