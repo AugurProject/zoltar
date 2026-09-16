@@ -5,8 +5,8 @@ import type { BadgeTone } from '@zoltar/ui-core-shared/types/components.js'
 import { getReportingOutcomeLabel } from '../../reporting/lib/reporting.js'
 import type { ReportingOutcomeKey } from '@zoltar/ui-core-shared/types/contracts.js'
 
-type VaultLauncherAction = 'claim-fees' | 'deposit-rep' | 'rep-exit'
-type RepExitMode = 'redeem' | 'withdraw'
+export type VaultLauncherAction = 'claim-fees' | 'deposit-rep' | 'rep-exit'
+export type VaultRepExitMode = 'redeem' | 'withdraw'
 
 export function formatSecurityPoolPageSummary(matchingPoolCount: number, loadedPoolCount: number) {
 	const poolLabel = loadedPoolCount === 1 ? securityPoolCopy.poolCountSingular : securityPoolCopy.poolCountPlural
@@ -14,14 +14,14 @@ export function formatSecurityPoolPageSummary(matchingPoolCount: number, loadedP
 	return securityPoolCopy.formatPoolPageSummary(matchingPoolCount, loadedPoolCount, poolLabel, matchVerb)
 }
 
-export function getVaultLauncherWalletReason(action: VaultLauncherAction, repExitMode: RepExitMode) {
+export function getVaultLauncherWalletReason(action: VaultLauncherAction, repExitMode: VaultRepExitMode) {
 	if (action === 'claim-fees') return securityPoolCopy.connectWalletBeforeClaimingFees
 	if (action === 'deposit-rep') return securityPoolCopy.connectWalletBeforeDepositingRep
 	if (action === 'rep-exit') return repExitMode === 'redeem' ? securityPoolCopy.connectWalletBeforeRedeemingRep : securityPoolCopy.connectWalletBeforeWithdrawingRep
 	return assertNever(action)
 }
 
-export function getVaultLauncherVaultOwnerReason(action: VaultLauncherAction, repExitMode: RepExitMode) {
+export function getVaultLauncherVaultOwnerReason(action: VaultLauncherAction, repExitMode: VaultRepExitMode) {
 	if (action === 'claim-fees') return securityPoolCopy.selectOwnVaultToClaimFees
 	if (action === 'deposit-rep') return securityPoolCopy.selectOwnVaultToDepositRep
 	if (action === 'rep-exit') return repExitMode === 'redeem' ? securityPoolCopy.selectOwnVaultToRedeemRep : securityPoolCopy.selectOwnVaultToWithdrawRep

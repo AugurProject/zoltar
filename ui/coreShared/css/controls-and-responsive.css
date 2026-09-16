@@ -280,7 +280,7 @@
 .route-view-flow,
 .market-route-flow {
 	display: grid;
-	gap: var(--space-3);
+	gap: var(--space-2);
 }
 
 .section-mode-switch,
@@ -321,300 +321,7 @@
 	box-shadow: inset 0 0 0 1px var(--accent-faint);
 }
 
-.selected-pool-workspace {
-	display: grid;
-	gap: var(--space-3);
-}
-
-/* Horizontal pool workspace tabs: scroll instead of wrapping on narrow screens */
-.selected-pool-workspace-tabs.view-tabs[data-orientation="horizontal"] {
-	flex-wrap: nowrap;
-	overflow-x: auto;
-	max-width: 100%;
-	min-width: 0;
-	padding-bottom: var(--space-1);
-	scroll-snap-type: x proximity;
-}
-
-.selected-pool-workspace-tabs .view-tab {
-	flex: 0 0 auto;
-	white-space: nowrap;
-	scroll-snap-align: center;
-}
-
-.selected-pool-workspace-tabs + .selected-pool-workflow-content {
-	padding-top: var(--space-1);
-}
-
-/* Object header: four headline items in one row on desktop, two columns on narrow screens */
-.selected-pool-object-header .sticky-object-context.context-strip .sticky-object-context-summary {
-	grid-template-columns: minmax(12rem, 0.8fr) minmax(0, 1.4fr);
-}
-
-.selected-pool-object-header .sticky-object-context.context-strip .sticky-object-context-items {
-	grid-template-columns: repeat(4, minmax(0, 1fr));
-}
-
-.selected-pool-object-header .sticky-object-context-body {
-	display: grid;
-	gap: var(--space-3);
-}
-
 /* Narrow screens stack the pool header title above two columns of headline items. */
-@media (max-width: 50rem) {
-	.selected-pool-object-header .sticky-object-context.context-strip .sticky-object-context-summary {
-		grid-template-columns: minmax(0, 1fr);
-	}
-
-	.selected-pool-object-header .sticky-object-context.context-strip .sticky-object-context-items {
-		grid-template-columns: repeat(2, minmax(0, 1fr));
-	}
-}
-
-.fork-workflow-stage-nav-shell {
-	display: flex;
-	justify-content: center;
-}
-
-.fork-workflow-stage-nav {
-	display: flex;
-	align-items: center;
-	justify-content: center;
-	flex-wrap: wrap;
-	gap: var(--space-2);
-	width: fit-content;
-	max-width: 100%;
-	margin: 0 auto;
-}
-
-.fork-workflow-stage {
-	display: inline-flex;
-	align-items: center;
-	gap: var(--space-2);
-	min-width: 11rem;
-	padding: 0.8rem 1rem;
-	border: 1px solid var(--divider-subtle);
-	border-radius: var(--radius-panel);
-	background: var(--surface-row);
-	color: var(--text);
-	text-align: left;
-	transition:
-		background-color var(--transition-standard),
-		border-color var(--transition-standard),
-		box-shadow var(--transition-standard),
-		color var(--transition-standard),
-		opacity var(--transition-standard);
-}
-
-.fork-workflow-stage-icon {
-	position: relative;
-	display: inline-flex;
-	align-items: center;
-	justify-content: center;
-	width: 1.9rem;
-	height: 1.9rem;
-	flex: 0 0 1.9rem;
-	border-radius: var(--radius-pill);
-	background: var(--color-white-08);
-	color: currentColor;
-}
-
-.fork-workflow-stage-icon::before,
-.fork-workflow-stage-icon::after {
-	content: "";
-	position: absolute;
-}
-
-.fork-workflow-stage-copy {
-	display: flex;
-	flex-direction: column;
-	align-items: flex-start;
-	gap: 0.25rem;
-}
-
-.fork-workflow-stage-indicator {
-	display: inline-flex;
-	align-items: center;
-	padding: 0.12rem 0.45rem;
-	border: 1px solid color-mix(in srgb, var(--accent) 28%, transparent);
-	border-radius: var(--radius-pill);
-	background: var(--accent-soft);
-	color: color-mix(in srgb, var(--accent) 45%, var(--text));
-	font-size: var(--font-label);
-	font-weight: 600;
-	letter-spacing: 0.03em;
-	text-transform: uppercase;
-}
-
-.fork-workflow-stage-icon-triggered::before {
-	inset: 0.44rem;
-	border-radius: var(--radius-pill);
-	background: currentColor;
-}
-
-.fork-workflow-stage-icon-triggered::after {
-	inset: 0.22rem;
-	border: 1px solid currentColor;
-	border-radius: var(--radius-pill);
-	opacity: 0.45;
-}
-
-.fork-workflow-stage-icon-migration::before {
-	width: 0.8rem;
-	height: 0.18rem;
-	border-radius: var(--radius-pill);
-	background: currentColor;
-	transform: translate(-0.06rem, 0.14rem) rotate(-35deg);
-}
-
-.fork-workflow-stage-icon-migration::after {
-	width: 0.48rem;
-	height: 0.48rem;
-	border-top: 0.16rem solid currentColor;
-	border-right: 0.16rem solid currentColor;
-	transform: translate(0.38rem, -0.18rem) rotate(10deg);
-}
-
-.fork-workflow-stage-icon-auction::before {
-	width: 0.76rem;
-	height: 0.76rem;
-	border: 0.16rem solid currentColor;
-	border-radius: var(--radius-compact);
-	transform: rotate(45deg);
-}
-
-.fork-workflow-stage-icon-auction::after {
-	width: 0.16rem;
-	height: 0.96rem;
-	border-radius: var(--radius-pill);
-	background: currentColor;
-	transform: rotate(45deg);
-}
-
-.fork-workflow-stage-icon-settlement::before {
-	width: 0.5rem;
-	height: 0.9rem;
-	border-right: 0.18rem solid currentColor;
-	border-bottom: 0.18rem solid currentColor;
-	transform: translateY(-0.08rem) rotate(40deg);
-}
-
-.fork-workflow-stage-icon-pools::before,
-.fork-workflow-stage-icon-pools::after {
-	width: 0.5rem;
-	height: 0.5rem;
-	border: 0.16rem solid currentColor;
-	border-radius: var(--radius-compact);
-}
-
-.fork-workflow-stage-icon-pools::before {
-	transform: translate(-0.22rem, -0.12rem);
-}
-
-.fork-workflow-stage-icon-pools::after {
-	transform: translate(0.22rem, 0.12rem);
-}
-
-.fork-workflow-stage.is-current {
-	border-color: color-mix(in srgb, var(--accent) 50%, transparent);
-	background: linear-gradient(135deg, var(--accent-emphasis-soft), var(--accent-faint)), var(--surface-row);
-	box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 24%, transparent);
-}
-
-.fork-workflow-stage.is-selected {
-	border-color: color-mix(in srgb, var(--accent) 34%, transparent);
-	background: linear-gradient(135deg, var(--accent-medium), color-mix(in srgb, var(--accent) 6%, transparent)), var(--surface-row);
-	box-shadow: 0 0 0 1px var(--accent-soft);
-	color: var(--text);
-}
-
-.fork-workflow-stage.is-current .fork-workflow-stage-icon,
-.fork-workflow-stage.is-selected .fork-workflow-stage-icon {
-	background: var(--accent-emphasis-soft);
-}
-
-.fork-workflow-stage.is-selected .fork-workflow-stage-icon {
-	box-shadow: inset 0 0 0 1px var(--accent-emphasis-soft);
-}
-
-.fork-workflow-stage.is-selected .fork-workflow-stage-copy strong {
-	color: var(--color-white);
-}
-
-.fork-workflow-stage.is-complete:not(.is-current) {
-	border-color: color-mix(in srgb, var(--accent) 22%, transparent);
-	background: linear-gradient(135deg, var(--accent-soft), color-mix(in srgb, var(--accent) 4%, transparent)), var(--surface-row);
-	box-shadow: inset 0 0 0 1px var(--accent-faint);
-	opacity: 0.98;
-}
-
-.fork-workflow-stage.is-upcoming:not(.is-selected) {
-	opacity: 0.68;
-}
-
-.fork-workflow-stage-separator {
-	color: var(--text-secondary);
-	font-size: 1rem;
-	transition:
-		color var(--transition-standard),
-		opacity var(--transition-standard),
-		text-shadow var(--transition-standard);
-}
-
-.fork-workflow-stage-separator.is-complete {
-	color: var(--accent);
-	opacity: 0.95;
-	text-shadow: 0 0 0.7rem color-mix(in srgb, var(--accent) 20%, transparent);
-}
-
-.fork-workflow-stage-separator.is-upcoming {
-	opacity: 0.52;
-}
-
-.fork-workflow-child-pool-list {
-	display: grid;
-	gap: var(--space-2);
-}
-
-.fork-workflow-child-pool-card {
-	display: grid;
-	gap: var(--space-2);
-	padding: 0.9rem 0;
-	border: 0;
-	border-bottom: 1px solid var(--divider-subtle);
-	border-radius: 0;
-	background: transparent;
-}
-
-.fork-workflow-child-pool-card-copy,
-.fork-workflow-child-pool-card-meta {
-	display: flex;
-	align-items: center;
-	justify-content: space-between;
-	gap: var(--space-2);
-	flex-wrap: wrap;
-}
-
-.fork-workflow-child-pool-card-copy > span,
-.fork-workflow-child-pool-card-meta > span {
-	color: var(--text-secondary);
-}
-
-.selected-pool-workflow-content {
-	display: grid;
-	gap: var(--space-3);
-	min-width: 0;
-}
-
-.selected-pool-change-control {
-	display: grid;
-	width: 100%;
-	max-width: 100%;
-}
-
-.mobile-workflow-context {
-	display: none;
-}
 
 .selected-pool-context-grid {
 	display: grid;
@@ -724,53 +431,6 @@
 	max-width: 52rem;
 }
 
-.vault-workspace {
-	gap: var(--space-3);
-}
-
-.vault-workspace-header {
-	display: flex;
-	align-items: center;
-	justify-content: space-between;
-	gap: var(--space-3);
-	flex-wrap: wrap;
-	padding-bottom: var(--space-2);
-	border-bottom: 1px solid var(--divider-subtle);
-}
-
-.vault-workspace-header h3 {
-	margin: 0;
-	font-size: var(--font-lg);
-	line-height: var(--line-height-tight);
-}
-
-.vault-content-switch {
-	display: inline-flex;
-	flex-wrap: nowrap;
-	gap: var(--space-1);
-	padding: 0.18rem;
-	border: 1px solid var(--divider-subtle);
-	border-radius: calc(var(--radius-control) + 0.2rem);
-	background: var(--surface-row);
-	box-shadow: inset 0 1px 0 var(--color-white-04);
-}
-
-.vault-content-switch .view-tab {
-	padding: 0.42rem 0.68rem;
-	border-color: transparent;
-	background: transparent;
-	font-size: var(--font-caption);
-	font-weight: 700;
-	letter-spacing: 0.02em;
-	white-space: nowrap;
-}
-
-.vault-content-switch .view-tab.active {
-	background: color-mix(in srgb, var(--accent) 10%, transparent);
-	border-color: var(--accent-emphasis-soft);
-	box-shadow: none;
-}
-
 .record-card,
 .entity-card {
 	background: var(--surface-record);
@@ -825,7 +485,7 @@
 .market-subtab-nav .view-tab {
 	flex: 0 0 auto;
 	justify-content: center;
-	scroll-snap-align: center;
+	scroll-snap-align: start;
 }
 
 .route-subtab-nav.view-tabs.subroute .view-tab {
@@ -912,82 +572,13 @@
 		left: 0;
 	}
 
-	.simulation-banner-stats,
-	.simulation-delay-grid {
-		grid-template-columns: 1fr;
-	}
-
-	.simulation-banner {
-		padding: 0.55rem;
-	}
-
-	.simulation-banner > .contract-panel-header:first-child {
-		margin: -0.55rem -0.55rem 0;
-		padding: 0.55rem 0.55rem 0;
-	}
-
-	.simulation-banner-details > summary {
-		display: block;
-		cursor: pointer;
-		padding: 0.6rem 0.15rem 0.1rem;
-		color: var(--simulation-text);
-	}
-
-	.simulation-banner-details > summary:focus-visible {
-		border-radius: var(--radius-control);
-		outline: 2px solid var(--focus);
-		outline-offset: 3px;
-	}
-
-	.simulation-banner-details:not([open]) > .simulation-banner-list {
-		display: none;
-	}
-
-	.simulation-banner-details[open] > summary {
-		margin-bottom: 0.35rem;
-	}
-
-	.simulation-banner-row {
-		gap: 0.35rem;
-		padding: 0.35rem 0;
-	}
-
-	.simulation-banner-stats {
-		grid-template-columns: repeat(2, minmax(0, 1fr));
-		gap: 0.35rem;
-	}
-
-	.simulation-stat-card {
-		padding: 0.45rem 0.55rem;
-	}
-
-	.simulation-stat-card-wide {
-		grid-column: 1 / -1;
-	}
-
-	.simulation-control-groups,
-	.simulation-banner-controls .button-row,
-	.simulation-button-row {
-		justify-items: stretch;
-		justify-content: stretch;
-	}
-
-	.simulation-button-row > button {
-		width: 100%;
-	}
-
-	.simulation-time-travel-row {
-		grid-template-columns: repeat(2, minmax(0, 1fr));
-	}
-
-	.simulation-advanced-controls > summary {
-		width: 100%;
-	}
-
-	.route-header,
 	.section-block,
 	.overview-panel {
 		padding: var(--space-4);
+	}
+
+	.route-header {
+		padding: var(--space-2) 0 var(--space-1);
 	}
 
 	.section-block.plain {
@@ -1144,77 +735,11 @@
 	.universe-link {
 		align-items: center;
 	}
-
-	.fork-workflow-stage-nav {
-		gap: var(--space-1);
-	}
-
-	.fork-workflow-stage {
-		flex: 1 1 9rem;
-		min-width: 0;
-	}
-
-	.fork-workflow-stage-separator {
-		display: none;
-	}
-
-	.vault-workspace-header {
-		align-items: flex-start;
-	}
-
-	.vault-content-switch {
-		max-width: 100%;
-		overflow-x: auto;
-	}
 }
 
 @media (max-width: 40rem) {
 	main {
 		padding: 0.75rem 0.65rem 2.5rem;
-	}
-
-	.mobile-workflow-context {
-		position: sticky;
-		top: var(--space-2);
-		z-index: var(--z-sticky);
-		display: grid;
-		padding: var(--space-2) var(--space-3);
-		border-color: var(--interactive-border);
-		background: var(--surface-section-opaque);
-		box-shadow: var(--shadow-raised);
-	}
-
-	.mobile-workflow-context > strong {
-		font-size: var(--font-label);
-	}
-
-	.mobile-workflow-context dl {
-		grid-template-columns: repeat(3, minmax(0, 1fr));
-	}
-
-	.mobile-workflow-context dl > div {
-		padding-top: var(--space-1);
-		border-top: 0;
-	}
-
-	.mobile-workflow-context dd {
-		min-width: 0;
-		overflow-wrap: anywhere;
-		white-space: normal;
-	}
-
-	.comparison-record {
-		padding: var(--space-3);
-	}
-
-	.comparison-record-header {
-		flex-direction: column;
-		align-items: stretch;
-	}
-
-	.comparison-record-action .primary,
-	.comparison-record-action .secondary {
-		width: 100%;
 	}
 
 	.app-nav-stack {
@@ -1277,77 +802,13 @@
 		padding: var(--space-2) var(--space-3);
 	}
 
-	.route-header,
 	.section-block,
 	.overview-panel {
 		padding: var(--space-3);
 	}
 
-	.deployment-route-header {
-		grid-template-columns: minmax(0, 1fr);
-		align-items: start;
-	}
-
-	.deployment-route-header .route-header-main {
-		display: contents;
-	}
-
-	.deployment-route-header .route-header-copy {
-		grid-column: 1 / -1;
-	}
-
-	.deployment-route-header .route-description {
-		display: none;
-	}
-
-	.deployment-route-header .route-header-actions {
-		grid-column: 1;
-		justify-self: start;
-	}
-
-	.deployment-route-header .route-summary-strip {
-		grid-column: 1;
-		padding: var(--space-3) 0 0;
-		border-top: 1px solid var(--divider-subtle);
-		border-left: 0;
-	}
-
-	.deployment-route-header .route-summary-strip .data-grid {
-		grid-template-columns: minmax(0, 1fr);
-		gap: var(--space-2);
-	}
-
-	.deployment-route-header .route-summary-strip .data-grid > div {
-		padding-top: var(--space-1);
-	}
-
-	.security-pool-detail-rail,
-	.security-pool-browse-vault-row-top,
-	.security-pool-browse-vault-row-top-compact {
-		grid-template-columns: minmax(0, 1fr);
-	}
-
-	.security-pool-browse-vault-row-title,
-	.security-pool-browse-vault-row-id,
-	.security-pool-browse-vault-row-kpi,
-	.security-pool-browse-vault-row-id strong,
-	.security-pool-browse-vault-row-kpi strong {
-		min-width: 0;
-	}
-
-	.security-pool-browse-vault-row-title {
-		align-items: flex-start;
-		flex-direction: column;
-		gap: 0.65rem;
-	}
-
-	.security-pool-browse-vault-row-title .security-pool-browse-vault-row-id {
-		align-self: stretch;
-		width: 100%;
-	}
-
-	.security-pool-browse-vault-row-id .address-value.copyable {
-		max-width: 100%;
+	.route-header {
+		padding: var(--space-2) 0 var(--space-1);
 	}
 
 	.route-subnav-shell {
@@ -1442,8 +903,9 @@
 }
 
 @media (max-width: 42rem) {
+	/* The brand keeps one line beside the settings control; it steps down a size instead of wrapping and only wraps on the narrowest phones. */
 	.header-toolbar .application-brand {
-		white-space: normal;
+		font-size: 1.125rem;
 	}
 
 	/* Wallet chip and universe share one toolbar row when they fit, with the universe caption stacked over its value; otherwise the field takes its own row. */
@@ -1469,6 +931,10 @@
 }
 
 @media (max-width: 22.4375rem) {
+	.header-toolbar .application-brand {
+		white-space: normal;
+	}
+
 	.overview-metric-group-items,
 	.overview-metric-group.is-secondary .overview-metric-group-items {
 		grid-template-columns: minmax(0, 1fr);

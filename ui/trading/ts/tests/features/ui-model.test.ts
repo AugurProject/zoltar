@@ -6,14 +6,14 @@ import { forkMigrationBatchBlocker, forkMigrationBatchWarning, insuredExitLimitM
 import { createSecurityPoolDeploymentIndex, liveBalancesForMarket, marketAcceptsNewRisk, publicErrorMessage, marketNewRiskBlocker, mapWithConcurrency, refreshSecurityPoolDeploymentIndex, registryBlockAnchorIsCanonical, settlementAvailability, shareBalanceScope, type LiveMarket } from '../../protocol/live.js'
 import { maximumAfterSlippage, minimumAfterSlippage, requireTransactionSlippageBps, requireTransactionValidityMinutes, retainApprovedMaximum, retainApprovedMinimum } from '../../protocol/tradeQuote.js'
 import { broadcastUncertainMessage, discoveryCommitAllowed, failedSubmissionTransition, livePairInitialized, parseSlippageBps, parseTransactionValidityMinutes, positionControlsWorkflowLocked, securityPoolAddressFromRoute } from '../../features/liveTradingControllerHelpers.js'
-import { isTradingBrowseRoute, isTradingLookupRoute, tradingBrowseRouteFor, tradingRouting } from '../../lib/routing.js'
+import { isTradingLookupRoute, tradingListKindFor, tradingRouting } from '../../lib/routing.js'
 import { liveWorkflowRoutePresentation } from '../../features/live/routePresentation.js'
 import { liquidityOperationAvailable } from '../../features/live/useLiquidityWorkflowController.js'
 
 describe('standalone trading UI model', () => {
 	test('keeps the header badge as the only network disclosure on route headers', () => {
-		expect(liveWorkflowRoutePresentation('markets').description).not.toContain('Browser Simulation')
-		expect(liveWorkflowRoutePresentation('markets').description).not.toContain('Ethereum Mainnet')
+		expect(liveWorkflowRoutePresentation('market').description).not.toContain('Browser Simulation')
+		expect(liveWorkflowRoutePresentation('market').description).not.toContain('Ethereum Mainnet')
 	})
 
 	test('presents liquidity as its own workflow instead of repeating the market header', () => {
@@ -31,18 +31,19 @@ describe('standalone trading UI model', () => {
 		expect(liquidityOperationAvailable('remove', market, 2_001n)).toBe(true)
 	})
 
-	test('defaults to the address lookup and pairs each lookup workflow with its own browse route', () => {
+	test('defaults to the address lookup and keys each lookup workflow to its own candidate list', () => {
 		expect(tradingRouting.resolve('#/')).toBe('market')
 		expect(tradingRouting.resolve('')).toBe('market')
-		expect(tradingRouting.resolve('#/markets')).toBe('markets')
-		expect(tradingRouting.resolve('#/security-pools')).toBe('security-pools')
+		expect(tradingRouting.resolve('#/markets')).toBe('market')
+		expect(tradingRouting.resolve('#/security-pools')).toBe('create-market')
 		expect(isTradingLookupRoute('market')).toBeTrue()
 		expect(isTradingLookupRoute('markets')).toBeFalse()
-		expect(isTradingBrowseRoute('security-pools')).toBeTrue()
-		expect(isTradingBrowseRoute('security-pool/0x1111111111111111111111111111111111111111')).toBeFalse()
-		expect(tradingBrowseRouteFor('market')).toBe('markets')
-		expect(tradingBrowseRouteFor('liquidity')).toBe('markets')
-		expect(tradingBrowseRouteFor('create-market')).toBe('security-pools')
+		expect(isTradingLookupRoute('security-pool/0x1111111111111111111111111111111111111111')).toBeFalse()
+		expect(tradingListKindFor('market')).toBe('markets')
+		expect(tradingListKindFor('liquidity')).toBe('markets')
+		expect(tradingListKindFor('create-market')).toBe('security-pools')
+		expect(tradingListKindFor('portfolio')).toBeUndefined()
+		expect(tradingListKindFor('market/0x1111111111111111111111111111111111111111')).toBeUndefined()
 	})
 
 	test('validates a registry anchor at the current tip without requesting historical blocks', async () => {

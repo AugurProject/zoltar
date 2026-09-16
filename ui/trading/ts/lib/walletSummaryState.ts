@@ -8,6 +8,8 @@ export type WalletSummaryState = Readonly<{
 	universeId: string | undefined
 	/** Present when the injected wallet reports a chain other than the deployment chain. */
 	networkMismatchReason?: string | undefined
+	/** The chain the injected wallet reported when it mismatched the deployment chain. */
+	walletChainId?: number | undefined
 }>
 
 export function walletSummaryForUniverse(summary: WalletSummaryState, selectedUniverseId: string | undefined): WalletSummaryState {
@@ -20,7 +22,7 @@ export function walletSummaryForUniverse(summary: WalletSummaryState, selectedUn
 		error: undefined,
 		errorLabel: undefined,
 		universeId: selectedUniverseId,
-		...(summary.networkMismatchReason === undefined ? {} : { networkMismatchReason: summary.networkMismatchReason }),
+		...(summary.networkMismatchReason === undefined ? {} : { networkMismatchReason: summary.networkMismatchReason, walletChainId: summary.walletChainId }),
 	}
 }
 

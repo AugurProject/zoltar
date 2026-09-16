@@ -5,6 +5,13 @@ const accountMenu = 'Account Menu'
 export const formatAccountMenuLabel = (account: string) => `${accountMenu} ${account}`
 export const currentNetwork = 'Current Network'
 export const formatSwitchToNetwork = (networkName: string) => `Switch to ${networkName}`
+export const qaWallet = 'QA wallet'
+export const simulationQaWallet = 'Simulation QA wallet'
+export const qaWalletConnected = 'Connected'
+export const qaWalletDisconnected = 'Disconnected'
+export const qaWalletWrongNetwork = 'Wrong network'
+export const qaAccountDisconnected = 'Wallet disconnected'
+export const qaWalletDisconnectedDetail = 'No account is exposed until the app connects the wallet.'
 export const ethereumMainnet = 'Ethereum Mainnet'
 export const managingWallet = 'Updating wallet…'
 export const unknownNetwork = 'Unknown network'

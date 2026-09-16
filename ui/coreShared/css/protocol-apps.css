@@ -35,32 +35,6 @@
 	}
 }
 
-.pool-question-source {
-	display: flex;
-	flex-wrap: wrap;
-	gap: 1rem;
-	border: 0;
-	padding: 0;
-	margin: 0;
-}
-
-.pool-question-source legend {
-	margin-bottom: 0.75rem;
-}
-
-.pool-question-source label {
-	display: flex;
-	align-items: center;
-	gap: 0.5rem;
-	min-height: 2.75rem;
-	margin: 0;
-}
-
-.pool-question-source input {
-	width: auto;
-	margin: 0;
-}
-
 /* Trading: list rows and pool details open workflows through links, so a link can carry the primary button treatment. */
 :root[data-product="trading"] a.button-link.primary {
 	background: var(--primary-button-bg);

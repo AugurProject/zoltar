@@ -1,4 +1,7 @@
+import { Badge } from '@zoltar/ui-core-shared/components/Badge.js'
 import { LoadingText } from '@zoltar/ui-core-shared/components/LoadingText.js'
+import * as coreAppCopy from '@zoltar/ui-core-shared/copy/app.js'
+import { getChainDisplayLabel } from '@zoltar/ui-core-shared/wallet/network.js'
 import { WalletChip, WalletChipPlaceholder } from '@zoltar/ui-core-shared/components/WalletChip.js'
 import { ReadOnlyAddressValue } from '@zoltar/ui-core-shared/components/AddressValue.js'
 import * as appCopy from '../copy/app.js'
@@ -17,6 +20,8 @@ export type TradingWalletControlsProps = Readonly<{
 	/** Present when the injected wallet reports another chain; the switch action re-requests the deployment chain. */
 	onSwitchNetwork?(): void
 	requiredNetworkName?: string | undefined
+	/** The chain the wallet reported while it mismatched the deployment chain; named in the wrong-network badge. */
+	walletChainId?: number | undefined
 	routeOwnsLiveWallet: boolean
 	simulation: boolean
 	workflowLocked: boolean
@@ -36,7 +41,7 @@ export function hasTradingWalletControls({ deploymentSetupActive, liveDeployment
 }
 
 /** Toolbar wallet slot: the deployment wallet button, a reserved slot while the deployment is checked, or the live account chip and its actions. */
-export function TradingWalletControls({ account, deploymentSetupActive, deploymentWalletState, liveDeploymentStatus, onDeploymentWalletRequest, onSwitchNetwork, onWalletConnectRequest, requiredNetworkName, routeOwnsLiveWallet, simulation, workflowLocked }: TradingWalletControlsProps) {
+export function TradingWalletControls({ account, deploymentSetupActive, deploymentWalletState, liveDeploymentStatus, onDeploymentWalletRequest, onSwitchNetwork, onWalletConnectRequest, requiredNetworkName, routeOwnsLiveWallet, simulation, walletChainId, workflowLocked }: TradingWalletControlsProps) {
 	const liveWalletVisible = liveDeploymentStatus === 'verified' && routeOwnsLiveWallet
 	const reservesSlot = liveDeploymentStatus === 'loading' && routeOwnsLiveWallet
 	const showsSwitchNetworkAction = liveWalletVisible && account === undefined && requiredNetworkName !== undefined && onSwitchNetwork !== undefined
@@ -64,9 +69,12 @@ export function TradingWalletControls({ account, deploymentSetupActive, deployme
 			) : null}
 			{liveWalletVisible && account !== undefined ? <WalletChip address={account} /> : null}
 			{showsSwitchNetworkAction ? (
-				<button class='secondary wallet-button' type='button' disabled={workflowLocked} onClick={onSwitchNetwork}>
-					{formatSwitchNetworkAction(requiredNetworkName)}
-				</button>
+				<>
+					<Badge tone='danger'>{coreAppCopy.formatWrongNetworkBadgeLabel(getChainDisplayLabel(walletChainId?.toString()) ?? coreAppCopy.unknownNetwork)}</Badge>
+					<button class='secondary wallet-button' type='button' disabled={workflowLocked} onClick={onSwitchNetwork}>
+						{formatSwitchNetworkAction(requiredNetworkName)}
+					</button>
+				</>
 			) : null}
 			{showsConnectAction ? (
 				<button class={account === undefined ? 'secondary wallet-button' : 'quiet wallet-button'} type='button' disabled={workflowLocked} onClick={onWalletConnectRequest}>

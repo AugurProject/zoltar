@@ -52,6 +52,10 @@ Inspect shared `ui/coreShared/ts/components`, the relevant `ui/<app>/ts/features
 - `EntityCard` is for entity records and concrete result summaries, not generic page layout.
 - `WorkflowSubsection` structures content inside a larger workflow and should not create a competing chrome system.
 - Metric grids, headers, section blocks, fields, badges, and tabs should converge on shared patterns.
+- Route navigation goes through `ui/coreShared/ts/navigation/appNavigation.ts`: build secondary views with `createSecondaryNavigation`, resolve them per route with `resolveSecondaryNavigation`, and list the deployment tab with `withDeploymentTab`. `AppHeaderShell` renders secondary tabs only while the current route is a primary tab.
+- Use `EmptyState` for "nothing here yet" states with at most one primary action, `StateHint` for loading, blocked, and error presentations from `userCopy`, and `PaginationControls` for paging (it hides itself on a single resolved page).
+- Give a disabled transaction action an `availability` reason; the shared button renders it as the accessible description. `ActionLauncherButton` is the same control for dialog and workflow launchers.
+- Use `FormInput` `error`, `hint`, and `adornment` props instead of ad-hoc validation paragraphs or unit wrappers, and `ViewTabs` `variant='segmented'` for in-form switchers so they do not read as a navigation tier.
 
 Keep cleanup bounded to the edited component, route, and directly shared primitive. Do not refactor unrelated routes solely to make a narrow change conform.
 

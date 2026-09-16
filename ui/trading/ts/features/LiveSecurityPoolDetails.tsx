@@ -79,10 +79,10 @@ export function LiveSecurityPoolDetails({
 	let errorMessage: string | undefined
 	if (market.loadError !== undefined) errorMessage = liveCopy.securityPoolDetailsUnavailable(market.loadError, refreshError)
 	else if (refreshError !== undefined) errorMessage = liveCopy.securityPoolRefreshFailed(refreshError)
-	// Return to the list that includes this pool: markets once a pair exists, otherwise SecurityPools awaiting one.
-	const browseBack = market.pair === undefined ? { href: '#/security-pools', label: liveCopy.browseSecurityPools } : { href: '#/markets', label: liveCopy.browseMarkets }
+	// Return to the landing whose list includes this pool: markets once a pair exists, otherwise market creation.
+	const browseBack = market.pair === undefined ? { href: '#/create-market', label: appCopy.createMarket } : { href: '#/market', label: liveCopy.marketList }
 	return (
-		<div class='route'>
+		<div class='route-view-flow'>
 			<RouteHeader
 				eyebrow={appCopy.securityPool}
 				title={market.title}

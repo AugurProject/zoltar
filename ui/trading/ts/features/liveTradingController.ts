@@ -14,7 +14,7 @@ import { useWalletSession, useWalletSessionController, useWalletSummaryEffects, 
 import { createPositionTransactionController } from './live/positionTransactionController.js'
 import { useMarketDiscoveryController } from './live/useMarketDiscoveryController.js'
 import { filterMarketsByUniverse, livePairInitialized, liveTradingControllerServices, securityPoolAddressFromRoute } from './liveTradingControllerHelpers.js'
-import { tradingListRouteFor } from '../lib/routing.js'
+import { tradingListKindFor } from '../lib/routing.js'
 
 export function useLiveTradingController({
 	route,
@@ -66,7 +66,7 @@ export function useLiveTradingController({
 	// Only addressed routes work on a market; list routes show candidates until an address is opened.
 	const selected = routePool === undefined ? undefined : visibleMarkets.find(market => market.pool.toLowerCase() === routePool.toLowerCase())
 	const nowSeconds = useQuestionClock(undefined, configuration, services)
-	const listedMarkets = visibleMarkets.filter(market => (tradingListRouteFor(route) === 'security-pools' ? market.pair === undefined && market.loadError === undefined && marketAcceptsNewRisk(market, nowSeconds) : market.pair !== undefined || market.loadError !== undefined))
+	const listedMarkets = visibleMarkets.filter(market => (tradingListKindFor(route) === 'security-pools' ? market.pair === undefined && market.loadError === undefined && marketAcceptsNewRisk(market, nowSeconds) : market.pair !== undefined || market.loadError !== undefined))
 	const walletUniverseId = routePool === undefined ? selectedUniverseId : selected?.universeId.toString()
 	const selectedBalances = balanceState === 'ready' ? liveBalancesForMarket(balances, selected) : undefined
 	let selectedBalanceState = balanceState

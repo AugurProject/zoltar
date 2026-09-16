@@ -33,16 +33,6 @@ import { withDeploymentTab } from '@zoltar/ui-core-shared/navigation/appNavigati
 
 type ResolvedTradingRoute = TradingRoute | 'not-found'
 
-/**
- * Browse hashes are aliases of the list-first workflow landings: `#/markets` renders the same content as `#/market`
- * and `#/security-pools` the same as `#/create-market`, so the navigation highlights the workflow tab they belong to.
- */
-function tradingNavigationRoute(workflowRoute: ReturnType<typeof tradingWorkflowRoute<ResolvedTradingRoute>>) {
-	if (workflowRoute === 'markets') return 'market'
-	if (workflowRoute === 'security-pools') return 'create-market'
-	return workflowRoute
-}
-
 function currentRoute(): ResolvedTradingRoute {
 	return tradingRouting.resolve(window.location.hash)
 }
@@ -52,8 +42,6 @@ function tradingDocumentTitle(route: ResolvedTradingRoute) {
 	if (route === 'not-found') label = appCopy.notFound
 	if (route === 'create-market' || route.startsWith('create-market/')) label = appCopy.createMarket
 	if (route === 'market' || route.startsWith('market/')) label = appCopy.market
-	if (route === 'markets') label = appCopy.browseMarkets
-	if (route === 'security-pools') label = appCopy.browseSecurityPools
 	if (route.startsWith('liquidity/')) label = appCopy.liquidity
 	if (route.startsWith('security-pool/')) label = appCopy.securityPool
 	return appCopy.documentTitle(label)
@@ -65,7 +53,7 @@ function tradingPageTitle(route: ResolvedTradingRoute) {
 
 function renderNotFoundRoute() {
 	return (
-		<div class='route'>
+		<div class='route-view-flow'>
 			<RouteHeader title={appCopy.pageNotFound} />
 			<div class='actions'>
 				<a class='button-link' href={getTradingRouteHref('#/market')}>
@@ -162,8 +150,7 @@ export function App({
 	const deploymentSetupActive = route !== 'not-found' && route !== 'help' && (route === 'deploy' || liveDeploymentStatus === 'unavailable')
 	const addressedPool = securityPoolAddressFromRoute(route)
 	const workflowRoute = tradingWorkflowRoute(route)
-	const navigationRoute = tradingNavigationRoute(workflowRoute)
-	const displayedRoute = deploymentSetupActive ? 'deploy' : navigationRoute
+	const displayedRoute = deploymentSetupActive ? 'deploy' : workflowRoute
 	const refreshActiveEnvironment = useCallback(async () => {
 		const previousLocationKey = activeEnvironmentLocationRef.current
 		const nextLocationKey = getTradingEnvironmentLocationKey()
@@ -303,6 +290,7 @@ export function App({
 													simulation={simulationController !== undefined}
 													workflowLocked={workflowLocked}
 													requiredNetworkName={walletSummary.networkMismatchReason === undefined ? undefined : liveConfiguration?.chainName}
+													walletChainId={walletSummary.networkMismatchReason === undefined ? undefined : walletSummary.walletChainId}
 													onSwitchNetwork={() => setWalletConnectRequestNonce(current => current + 1)}
 												/>
 											) : null}

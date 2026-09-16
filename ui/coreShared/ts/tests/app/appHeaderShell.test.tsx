@@ -38,6 +38,8 @@ function createSimulationController(): SimulationController {
 		setRepPerEthPrice: async () => undefined,
 		setRepPerUsdcPrice: async () => undefined,
 		setTransactionDelayMilliseconds: async () => undefined,
+		setWalletMode: async () => undefined,
+		walletMode: 'connected',
 		simulationSource: {
 			kind: 'scenario',
 			scenario: 'baseline',

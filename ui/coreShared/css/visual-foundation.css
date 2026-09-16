@@ -1,4 +1,21 @@
 /* Shared visual behavior. Applications retain their own shells and composition. */
+/* One vendored mono face keeps addresses and numbers identical across platforms; the files are copied to ../vendor/fonts by the vendor build. */
+@font-face {
+	font-family: "IBM Plex Mono";
+	font-style: normal;
+	font-weight: 400;
+	font-display: swap;
+	src: url("../vendor/fonts/ibm-plex-mono-latin-400-normal.woff2") format("woff2");
+}
+
+@font-face {
+	font-family: "IBM Plex Mono";
+	font-style: normal;
+	font-weight: 600;
+	font-display: swap;
+	src: url("../vendor/fonts/ibm-plex-mono-latin-600-normal.woff2") format("woff2");
+}
+
 html {
 	font-size: 16px;
 }

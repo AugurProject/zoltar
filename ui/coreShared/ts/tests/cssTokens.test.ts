@@ -3,7 +3,9 @@ import { readFileSync, readdirSync, statSync } from 'node:fs'
 import * as path from 'node:path'
 
 const tokensPath = 'ui/coreShared/css/tokens.css'
-const stylesheetRoots = ['ui/coreShared/css', 'ui/trading/css']
+const stylesheetRoots = ['ui/coreShared/css', 'ui/statoblastShared/css', 'ui/zoltarShared/css', 'ui/trading/css']
+const sharedStylesheetRoots = ['ui/coreShared/css/', 'ui/statoblastShared/css/', 'ui/zoltarShared/css/']
+const isSharedStylesheet = (file: string) => sharedStylesheetRoots.some(root => file.startsWith(root))
 const typescriptRoots = ['ui']
 
 // Tokens that are declared for a consumer outside this scan or pinned by another test.
@@ -69,7 +71,7 @@ test('raw colour literals only appear in tokens.css', () => {
 	const { stylesheets } = readSources()
 	const offenders: string[] = []
 	for (const [file, source] of stylesheets) {
-		if (file === tokensPath || !file.startsWith('ui/coreShared/css/')) continue
+		if (file === tokensPath || !isSharedStylesheet(file)) continue
 		source.split('\n').forEach((line, index) => {
 			if (!rawColourPattern.test(line)) return
 			const entry = `${file}:${index + 1}: ${line.trim()}`
@@ -92,7 +94,9 @@ test('shared stylesheets resolve elevation, stacking, line height, and motion th
 	const offenders: string[] = []
 	for (const [file, source] of stylesheets) {
 		if (file === tokensPath) continue
-		source.split('\n').forEach((line, index) => {
+		// @font-face declares the vendored family name itself; every other font-family must go through a token.
+		const sourceWithoutFontFaces = source.replace(/@font-face \{[^}]*\}/g, block => block.replace(/[^\n]/g, ''))
+		sourceWithoutFontFaces.split('\n').forEach((line, index) => {
 			const isRawDeclaration = /^\s*z-index:\s*-?\d/.test(line) || /^\s*line-height:\s*\d/.test(line) || /^\s*border-radius:\s*\d*\.?\d+(?:rem|px|%)/.test(line) || /\b\d+m?s ease/.test(line) || /^\s*font-family:.*(?:"|'|(?<![-\w])(?:monospace|sans-serif|serif)\b)/.test(line)
 			if (isRawDeclaration) offenders.push(`${file}:${index + 1}: ${line.trim()}`)
 		})

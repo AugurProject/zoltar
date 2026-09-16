@@ -17,6 +17,7 @@
 			],
 			"project": ["docs/runtime/**/*.ts!", "docs/charts/**/*.ts!", "tooling/**/*.{ts,mts}", "bun-test-setup*.ts"],
 			"ignoreDependencies": [
+				"@fontsource/ibm-plex-mono",
 				"@preact/signals",
 				"@tevm/memory-client",
 				"@tevm/common",

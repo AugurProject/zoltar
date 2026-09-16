@@ -2,8 +2,9 @@ import { promises as fs } from 'fs'
 import * as path from 'path'
 import * as process from 'node:process'
 import { normalizeBundlerPath, resolveBundlerSpecifierPath } from './bundlerPaths.mts'
-import { parseUiAppIdFromProcess, getUiAppPaths, type UiAppPaths } from './appPaths.mts'
+import { featureStylesheets, parseUiAppIdFromProcess, getUiAppPaths, type UiAppPaths } from './appPaths.mts'
 import { createTevmBufferImportPlugin } from './tevmBufferImport.mts'
+import { getVendoredFontsPath, vendoredFontFiles } from './vendor.mts'
 
 const appId = parseUiAppIdFromProcess('the production build')
 const paths = getUiAppPaths(appId)
@@ -54,6 +55,14 @@ function createBrowserVendorAliasPlugin() {
 	}
 }
 
+export const coreSharedStylesheets = ['index.css', 'tokens.css', 'base.css', 'simulation-banner.css', 'protocol-surfaces.css', 'application-surfaces.css', 'controls-and-responsive.css', 'visual-foundation.css', 'protocol-apps.css'] as const
+
+const featureStylesheetSources: Record<string, (paths: UiAppPaths) => string> = {
+	'zoltar-shared.css': paths => path.join(paths.uiRoot, 'zoltarShared', 'css', 'index.css'),
+	'statoblast-shared.css': paths => path.join(paths.uiRoot, 'statoblastShared', 'css', 'index.css'),
+	'app.css': paths => path.join(paths.appRoot, 'css', 'app.css'),
+}
+
 async function copyStaticAsset(sourcePath: string, destinationPath: string) {
 	await fs.mkdir(path.dirname(destinationPath), { recursive: true })
 	const sourceFile = Bun.file(sourcePath)
@@ -76,7 +85,8 @@ async function writeProductionIndexHtml(paths: UiAppPaths) {
 	if (appTitle === undefined) throw new Error(`No production title recorded for ${appId}`)
 	html = html.replace('<html lang="en">', `<html lang="en" data-product="${appId}">`)
 	html = html.replace('Zoltar + Augur Statoblast', appTitle)
-	if (appId === 'trading') html = html.replace('<link rel="stylesheet" href="./css/index.css" />', '<link rel="stylesheet" href="./css/index.css" />\n\t\t<link rel="stylesheet" href="./css/app.css" />')
+	const featureStylesheetLinks = featureStylesheets[appId].map(stylesheet => `\n\t\t<link rel="stylesheet" href="./css/${stylesheet}" />`).join('')
+	html = html.replace('<link rel="stylesheet" href="./css/index.css" />', `<link rel="stylesheet" href="./css/index.css" />${featureStylesheetLinks}`)
 	await fs.mkdir(paths.appDistRoot, { recursive: true })
 	await fs.writeFile(path.join(paths.appDistRoot, 'index.html'), html)
 }
@@ -117,13 +127,17 @@ export async function buildProductionBundle() {
 		buildProductionApp(paths),
 		buildProductionWorker(paths),
 		writeProductionIndexHtml(paths),
-		copyStaticAsset(path.join(paths.coreSharedCssRoot, 'index.css'), path.join(paths.appDistRoot, 'css', 'index.css')),
-		copyStaticAsset(path.join(paths.coreSharedCssRoot, 'tokens.css'), path.join(paths.appDistRoot, 'css', 'tokens.css')),
-		...['base.css', 'protocol-surfaces.css', 'reporting-visualizations.css', 'application-surfaces.css', 'controls-and-responsive.css', 'visual-foundation.css', 'protocol-apps.css'].map(stylesheet => copyStaticAsset(path.join(paths.coreSharedCssRoot, stylesheet), path.join(paths.appDistRoot, 'css', stylesheet))),
+		...coreSharedStylesheets.map(stylesheet => copyStaticAsset(path.join(paths.coreSharedCssRoot, stylesheet), path.join(paths.appDistRoot, 'css', stylesheet))),
+		...featureStylesheets[appId].map(stylesheet => {
+			const resolveSource = featureStylesheetSources[stylesheet]
+			if (resolveSource === undefined) throw new Error(`No source recorded for feature stylesheet ${stylesheet}`)
+			return copyStaticAsset(resolveSource(paths), path.join(paths.appDistRoot, 'css', stylesheet))
+		}),
+		// The shared stylesheet resolves its fonts at ../vendor/fonts, so the vendored files sit beside css/ in the dist output too.
+		...vendoredFontFiles.map(({ fileName }) => copyStaticAsset(path.join(getVendoredFontsPath(appId), fileName), path.join(paths.appDistRoot, 'vendor', 'fonts', fileName))),
 		copyStaticAsset(paths.faviconSvg, path.join(paths.appDistRoot, 'favicon.svg')),
 		...(appId === 'trading'
 			? [
-					copyStaticAsset(path.join(paths.appRoot, 'css', 'app.css'), path.join(paths.appDistRoot, 'css', 'app.css')),
 					import(path.join(paths.appRoot, 'build', 'core-deployments.mts')).then(async module => {
 						const writer = module['writeCoreDeploymentRegistry']
 						if (typeof writer !== 'function') throw new Error('Trading core deployment registry writer is missing')

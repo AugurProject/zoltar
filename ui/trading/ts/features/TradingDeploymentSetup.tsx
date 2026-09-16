@@ -442,7 +442,7 @@ export function TradingDeploymentSetup({
 		}
 	}
 	return (
-		<div class='route'>
+		<div class='route-view-flow'>
 			<RouteHeader title={appCopy.deploy} description={appCopy.deployRouteDescription} actions={standaloneWalletButton} />
 			<SectionBlock className='deployment-setup' title={deploymentCopy.tradingContracts}>
 				<ErrorNotice message={registryError} />

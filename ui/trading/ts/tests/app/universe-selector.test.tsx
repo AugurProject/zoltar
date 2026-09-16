@@ -24,7 +24,7 @@ describe('universe selector', () => {
 			await cleanupRendered?.()
 			cleanupRendered = undefined
 		},
-		url: 'http://localhost/#/markets',
+		url: 'http://localhost/#/market',
 	})
 
 	test('selects one universe from the top-level control', async () => {
@@ -87,8 +87,8 @@ describe('universe selector', () => {
 	})
 
 	test('preserves slashless top-level route bookmarks', () => {
-		window.history.replaceState(undefined, '', '/#markets')
-		expect(tradingRouting.resolve(window.location.hash)).toBe('markets')
+		window.history.replaceState(undefined, '', '/#market')
+		expect(tradingRouting.resolve(window.location.hash)).toBe('market')
 	})
 
 	test('uses Statoblast branding without the removed footer disclaimers', async () => {
@@ -101,7 +101,7 @@ describe('universe selector', () => {
 	})
 
 	test('connects wallets from the persistent top-right header action', async () => {
-		window.history.replaceState(undefined, '', '/#/markets')
+		window.history.replaceState(undefined, '', '/#/market')
 		const configuration: DeploymentConfiguration = {
 			chainId: 31_337,
 			chainName: 'Local',
@@ -128,7 +128,7 @@ describe('universe selector', () => {
 	})
 
 	test('reserves the toolbar wallet slot while the deployment is checked', async () => {
-		window.history.replaceState(undefined, '', '/#/markets')
+		window.history.replaceState(undefined, '', '/#/market')
 		let resolveDeployment: ((configuration: DeploymentConfiguration) => void) | undefined
 		const deployment = new Promise<DeploymentConfiguration>(resolve => {
 			resolveDeployment = resolve
@@ -166,6 +166,16 @@ describe('universe selector', () => {
 		expect(simulated.container.querySelector('.wallet-chip .address-value-abbreviated')?.textContent).toBe('0x8ba1f1…4DBA72')
 		expect(simulated.container.querySelector('.wallet-button')).toBeNull()
 		await simulated.cleanup()
+
+		let switchRequests = 0
+		const wrongChain = await renderIntoDocument(<TradingWalletControls {...baseProps} account={undefined} simulation requiredNetworkName='Local' walletChainId={1} onSwitchNetwork={() => switchRequests++} />)
+		cleanupRendered = wrongChain.cleanup
+		expect(wrongChain.container.querySelector('.badge')?.textContent).toBe('Wrong Network (Ethereum)')
+		const switchButton = wrongChain.container.querySelector<HTMLButtonElement>('.wallet-button')
+		expect(switchButton?.textContent).toBe('Switch to Local')
+		await act(() => switchButton?.click())
+		expect(switchRequests).toBe(1)
+		await wrongChain.cleanup()
 
 		expect(hasTradingWalletControls({ deploymentSetupActive: false, liveDeploymentStatus: 'unavailable', routeOwnsLiveWallet: true })).toBe(false)
 		expect(hasTradingWalletControls({ deploymentSetupActive: false, liveDeploymentStatus: 'verified', routeOwnsLiveWallet: false })).toBe(false)
@@ -227,7 +237,7 @@ describe('universe selector', () => {
 		})
 		expect(rendered.container.querySelector('main [role="alert"]')?.textContent).toContain('No injected wallet was found')
 		await act(async () => {
-			window.history.replaceState(undefined, '', '/#/markets')
+			window.history.replaceState(undefined, '', '/#/market')
 			window.dispatchEvent(new Event('hashchange'))
 			await Bun.sleep(10)
 		})
@@ -296,7 +306,7 @@ describe('universe selector', () => {
 		const rendered = await renderIntoDocument(<WalletSummary summary={{ account: '0x8ba1f109551bD432803012645Ac136ddd64DBA72', ethAttoEth: undefined, repAttoRep: undefined, status: availability.status, error: availability.error, errorLabel: availability.errorLabel, universeId: '1' }} />)
 		cleanupRendered = rendered.cleanup
 		expect(rendered.container.querySelector('.trading-wallet-summary')?.getAttribute('aria-busy')).toBe('false')
-		expect(rendered.container.querySelector('[role="alert"]')?.getAttribute('aria-label')).toContain('SecurityPool discovery failed: RPC request failed')
+		expect(rendered.container.querySelector('[role="alert"]')?.getAttribute('aria-label')).toContain('Security pool discovery failed: RPC request failed')
 	})
 
 	test('discloses simulation balances through the shared overview control', async () => {
@@ -328,12 +338,12 @@ describe('universe selector', () => {
 
 	test('drops wallet identity whenever live route ownership unmounts or remounts', () => {
 		const previous = { account: '0x8ba1f109551bD432803012645Ac136ddd64DBA72' as const, ethAttoEth: 64n * 10n ** 18n, repAttoRep: 12_500n * 10n ** 18n, status: 'ready' as const, error: undefined, errorLabel: undefined, universeId: '1' }
-		const detached = walletSummaryAfterRouteChange(previous, 'markets', 'help', '1')
+		const detached = walletSummaryAfterRouteChange(previous, 'market', 'help', '1')
 		expect(detached.account).toBeUndefined()
-		expect(walletSummaryAfterRouteChange(previous, 'markets', 'not-found', '1').account).toBeUndefined()
+		expect(walletSummaryAfterRouteChange(previous, 'market', 'not-found', '1').account).toBeUndefined()
 		expect(routeOwnsLiveWallet('not-found')).toBeFalse()
-		expect(walletSummaryAfterRouteChange(detached, 'help', 'markets', '1')).toEqual(detached)
-		expect(walletSummaryAfterRouteChange(previous, 'markets', 'portfolio', '1')).toBe(previous)
+		expect(walletSummaryAfterRouteChange(detached, 'help', 'market', '1')).toEqual(detached)
+		expect(walletSummaryAfterRouteChange(previous, 'market', 'portfolio', '1')).toBe(previous)
 	})
 
 	test('clears header quantities for a known transaction receipt before reloading', () => {
@@ -347,7 +357,7 @@ describe('universe selector', () => {
 	})
 
 	test('falls back to canonical setup without exposing stored configuration errors', async () => {
-		window.history.replaceState(undefined, '', '/#/markets')
+		window.history.replaceState(undefined, '', '/#/market')
 		let attempts = 0
 		const rendered = await renderIntoDocument(
 			<App

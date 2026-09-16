@@ -1,4 +1,4 @@
-import type { ComponentChildren } from 'preact'
+import type { ComponentChildren, RefObject } from 'preact'
 import type { StickyContextItem } from '../types/components.js'
 
 type StickyObjectContextProps = {
@@ -8,10 +8,12 @@ type StickyObjectContextProps = {
 	items: StickyContextItem[]
 	sticky?: boolean
 	title: string
+	/** When provided, the title heading becomes a programmatic focus target (`tabIndex={-1}`) so callers can move focus to a changed object. */
+	titleRef?: RefObject<HTMLHeadingElement>
 	variant?: 'context-strip' | 'default' | 'embedded-context-strip'
 }
 
-export function StickyObjectContext({ badge, children, eyebrow, items, sticky = true, title, variant = 'default' }: StickyObjectContextProps) {
+export function StickyObjectContext({ badge, children, eyebrow, items, sticky = true, title, titleRef, variant = 'default' }: StickyObjectContextProps) {
 	const classes = ['sticky-object-context', sticky ? '' : 'static', variant === 'context-strip' || variant === 'embedded-context-strip' ? 'context-strip' : '', variant === 'embedded-context-strip' ? 'embedded-context-strip' : ''].filter(Boolean).join(' ')
 
 	return (
@@ -20,7 +22,13 @@ export function StickyObjectContext({ badge, children, eyebrow, items, sticky = 
 				<div className='sticky-object-context-header'>
 					<div className='sticky-object-context-copy'>
 						{eyebrow === undefined ? undefined : <p className='panel-label'>{eyebrow}</p>}
-						<h3>{title}</h3>
+						{titleRef === undefined ? (
+							<h3>{title}</h3>
+						) : (
+							<h3 ref={titleRef} tabIndex={-1}>
+								{title}
+							</h3>
+						)}
 					</div>
 					{badge === undefined ? undefined : <div className='sticky-object-context-badge'>{badge}</div>}
 				</div>

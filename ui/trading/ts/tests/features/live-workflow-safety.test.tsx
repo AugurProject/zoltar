@@ -251,7 +251,7 @@ describe('live workflow safety boundary', () => {
 		const liquidityRoute = `liquidity/${pool}` as const
 		// Manual refresh controls are gone; leaving and re-entering the addressed route runs an explicit refresh.
 		const rerouteForRefresh = async (route: 'market' | 'portfolio' | typeof marketRoute | typeof liquidityRoute, selectedUniverse = '1') => {
-			await act(() => render(<LiveTrading route='security-pools' configuration={configuration} configurationError={undefined} selectedUniverseId={selectedUniverse} onWorkflowLockChange={locked => workflowLocks.push(locked)} onWalletSummaryChange={recordWalletSummary} />, rendered.container))
+			await act(() => render(<LiveTrading route='create-market' configuration={configuration} configurationError={undefined} selectedUniverseId={selectedUniverse} onWorkflowLockChange={locked => workflowLocks.push(locked)} onWalletSummaryChange={recordWalletSummary} />, rendered.container))
 			await flush()
 			await act(() => render(<LiveTrading route={route} configuration={configuration} configurationError={undefined} selectedUniverseId={selectedUniverse} onWorkflowLockChange={locked => workflowLocks.push(locked)} onWalletSummaryChange={recordWalletSummary} />, rendered.container))
 			await flush()
@@ -303,7 +303,7 @@ describe('live workflow safety boundary', () => {
 		await flush()
 		await act(() => render(<LiveTrading route={poolRoute} configuration={configuration} configurationError={undefined} selectedUniverseId='1' onWorkflowLockChange={locked => workflowLocks.push(locked)} walletConnectRequestNonce={1} />, rendered.container))
 		await walletChainReadStarted.promise
-		await act(() => render(<LiveTrading route='markets' configuration={configuration} configurationError={undefined} selectedUniverseId='1' onWorkflowLockChange={locked => workflowLocks.push(locked)} walletConnectRequestNonce={1} />, rendered.container))
+		await act(() => render(<LiveTrading route='market' configuration={configuration} configurationError={undefined} selectedUniverseId='1' onWorkflowLockChange={locked => workflowLocks.push(locked)} walletConnectRequestNonce={1} />, rendered.container))
 		await waitForDom(() => document.querySelectorAll('.market-record').length === 2, 'browse rows')
 		expect(document.querySelector(`.market-record a[href="#/market/${pool}"]`)).not.toBeNull()
 		expect(document.querySelector(`.market-record a[href="#/liquidity/${pool}"]`)).not.toBeNull()
@@ -397,7 +397,7 @@ describe('live workflow safety boundary', () => {
 		await flush()
 		rejectDiscovery = true
 		await rerouteForRefresh('portfolio')
-		expect(Array.from(document.querySelectorAll('[role="alert"]')).filter(candidate => candidate.textContent?.includes('SecurityPool discovery failed') === true)).toHaveLength(1)
+		expect(Array.from(document.querySelectorAll('[role="alert"]')).filter(candidate => candidate.textContent?.includes('Security pool discovery failed') === true)).toHaveLength(1)
 		expect(hasButton('Refresh')).toBeFalse()
 		expect(document.body.textContent).not.toContain('Retry balances')
 		rejectDiscovery = false

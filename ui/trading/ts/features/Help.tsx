@@ -5,7 +5,7 @@ import * as appCopy from '../copy/app.js'
 
 export function Help() {
 	return (
-		<div class='route'>
+		<div class='route-view-flow'>
 			<RouteHeader title={appCopy.marketGuide} description={appCopy.marketGuideDescription} />
 			<SectionBlock title={appCopy.marketGuideStepsTitle}>
 				<ol class='guide-steps'>

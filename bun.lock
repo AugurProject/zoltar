@@ -5,6 +5,7 @@
     "": {
       "name": "zoltar",
       "dependencies": {
+        "@fontsource/ibm-plex-mono": "5.3.0",
         "@preact/signals": "2.0.1",
         "@tevm/common": "1.0.0-rc.151",
         "@tevm/memory-client": "1.0.0-rc.151",
@@ -61,10 +62,10 @@
       "version": "1.0.0",
       "dependencies": {
         "@zoltar/bot-shared": "workspace:1.0.0",
+        "@zoltar/core-shared": "workspace:1.0.0",
       },
       "devDependencies": {
         "@biomejs/biome": "2.3.11",
-        "@zoltar/core-shared": "workspace:1.0.0",
         "bun-types": "1.4.2",
         "micro-eth-signer": "0.18.1",
         "solc": "0.8.17",
@@ -76,11 +77,11 @@
       "version": "1.0.0",
       "dependencies": {
         "@zoltar/bot-shared": "workspace:1.0.0",
+        "@zoltar/core-shared": "workspace:1.0.0",
         "ccxt": "4.5.70",
       },
       "devDependencies": {
         "@biomejs/biome": "2.3.11",
-        "@zoltar/core-shared": "workspace:1.0.0",
         "bun-types": "1.4.2",
         "happy-dom": "20.12.0",
         "typescript": "5.8.2",
@@ -91,13 +92,13 @@
       "version": "1.0.0",
       "dependencies": {
         "@zoltar/bot-shared": "workspace:1.0.0",
+        "@zoltar/core-shared": "workspace:1.0.0",
         "@zoltar/open-oracle-shared": "workspace:1.0.0",
         "@zoltar/statoblast-shared": "workspace:1.0.0",
         "ccxt": "4.5.70",
       },
       "devDependencies": {
         "@biomejs/biome": "2.3.11",
-        "@zoltar/core-shared": "workspace:1.0.0",
         "bun-types": "1.4.2",
         "happy-dom": "20.12.0",
         "micro-eth-signer": "0.18.1",
@@ -438,6 +439,8 @@
     "@evmts/zevm-linux-arm64-gnu": ["@evmts/zevm-linux-arm64-gnu@0.0.0", "", { "os": "linux", "cpu": "arm64" }, "sha512-cXOB4bDR0sesJzoiPaNIXJ7vF9DsaDnBqqW4Hn7sszCY/pV4uL+CAkoZpMS6q/LEw43LJFuA65kLVABtz+e46g=="],
 
     "@evmts/zevm-linux-x64-gnu": ["@evmts/zevm-linux-x64-gnu@0.0.0", "", { "os": "linux", "cpu": "x64" }, "sha512-a6tpXNchDZzI5mElMZ9XFgt6QRZMlBK2sntxe4cABfNTW7h4/Nwn8rJarfXxi7/jF6QqUuOj5wtWUtwiwThGYQ=="],
+
+    "@fontsource/ibm-plex-mono": ["@fontsource/ibm-plex-mono@5.3.0", "", {}, "sha512-eTgnZjZEGk1QtD3ZstF+Vclo2HLAni8YMy34/DxllwZvyz1lR/1RF/xTiAquOBO7MvqBx8D2Ig2WCPMVfdZu7Q=="],
 
     "@foundry-rs/anvil": ["@foundry-rs/anvil@1.5.1", "", { "optionalDependencies": { "@foundry-rs/anvil-darwin-amd64": "1.5.1", "@foundry-rs/anvil-darwin-arm64": "1.5.1", "@foundry-rs/anvil-linux-amd64": "1.5.1", "@foundry-rs/anvil-linux-arm64": "1.5.1", "@foundry-rs/anvil-win32-amd64": "1.5.1" }, "bin": { "anvil": "bin.mjs" } }, "sha512-M72VCkqb4S2uShBJUcemD7kjfd3YId7LNYNDqr9RLmgbaEtgZm6XkztefYJX2mouaJtjpL8YGuKczhAIaI79Bw=="],
 

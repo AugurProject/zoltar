@@ -1,3 +1,4 @@
+import * as appCopy from '../copy/app.js'
 import * as commonCopy from '../copy/common.js'
 import * as simulationCopy from '../copy/simulation.js'
 import { useSignal } from '@preact/signals'
@@ -12,9 +13,9 @@ import { getBrowserStorage } from '../lib/browserStorage.js'
 import { getRegisteredSimulationScenarios, getSimulationScenarioDescription, getSimulationScenarioLabel } from '../simulation/scenarios.js'
 import { deleteSavedSimulationState, getSavedSimulationStateStorageSummary, persistSavedSimulationState, removeCorruptedSavedSimulationStates, type SavedSimulationStateRecord, type SavedSimulationStateStorageSummary } from '../simulation/savedStates.js'
 import { OperationModal } from './OperationModal.js'
-import { AddressValue } from './AddressValue.js'
 import { TimestampValue } from './TimestampValue.js'
 import { Badge } from './Badge.js'
+import { getSimulationAccountOptionLabel, SimulationAccountControls, SimulationWalletControls } from './SimulationWalletControls.js'
 import { ErrorNotice } from './ErrorNotice.js'
 import { CopyErrorMessage } from './CopyErrorMessage.js'
 import type { BadgeTone } from '../types/components.js'
@@ -35,10 +36,6 @@ type SimulationBannerProps = {
 
 type SimulationModal = 'cleanup' | 'delete' | 'export' | 'import' | 'save' | undefined
 type NavigationOperation = 'cleanup' | 'delete' | 'import' | 'navigation' | 'save'
-
-function getSimulationAccountOptionLabel(accountIndex: number) {
-	return simulationCopy.formatQaAccountNumber((accountIndex + 1).toString())
-}
 
 function getScenarioStatus(parameters: { bootstrapError: string | undefined; isBootstrapped: boolean }): { badgeTone: BadgeTone; label: string } {
 	if (parameters.bootstrapError !== undefined) {
@@ -89,6 +86,7 @@ export function SimulationBanner({ controller, onEnvironmentChanged = async () =
 	const bootstrapLabel = useSignal(controller.bootstrapLabel)
 	const bootstrapProgress = useSignal(controller.bootstrapProgress)
 	const transactionCountSinceReset = useSignal(controller.transactionCountSinceReset)
+	const walletMode = useSignal(controller.walletMode)
 	const transactionDelayMilliseconds = useSignal(controller.transactionDelayMilliseconds.toString())
 	const previousController = useRef(controller)
 	const currentController = useRef(controller)
@@ -152,6 +150,7 @@ export function SimulationBanner({ controller, onEnvironmentChanged = async () =
 		selectedAccount.value = controller.selectedAccount
 		transactionCountSinceReset.value = controller.transactionCountSinceReset
 		transactionDelayMilliseconds.value = controller.transactionDelayMilliseconds.toString()
+		walletMode.value = controller.walletMode
 	}
 	const startOperation = () => {
 		operationRequestGeneration.current += 1
@@ -287,7 +286,7 @@ export function SimulationBanner({ controller, onEnvironmentChanged = async () =
 		isBootstrapped: isBootstrapped.value,
 	})
 	const selectedAccountIndex = controller.accounts.findIndex(account => account === selectedAccount.value)
-	const selectedAccountLabel = getSimulationAccountOptionLabel(selectedAccountIndex < 0 ? 0 : selectedAccountIndex)
+	const selectedAccountLabel = walletMode.value === 'disconnected' ? appCopy.qaAccountDisconnected : getSimulationAccountOptionLabel(selectedAccountIndex < 0 ? 0 : selectedAccountIndex)
 
 	return (
 		<section className='panel contract-panel simulation-banner'>
@@ -365,34 +364,25 @@ export function SimulationBanner({ controller, onEnvironmentChanged = async () =
 							)}
 						</select>
 					</div>
-					<div className='contract-row simulation-banner-row'>
-						<div className='contract-copy'>
-							<div className='contract-topline'>
-								<Badge tone='ok'>{commonCopy.active}</Badge>
-								<h3>{simulationCopy.qaAccount}</h3>
-							</div>
-							<AddressValue address={selectedAccount.value} />
-						</div>
-						<select
-							className='simulation-control-select'
-							aria-label={simulationCopy.simulationQaAccount}
-							value={selectedAccount.value}
-							disabled={busy.value || !isBootstrapped.value}
-							onChange={event => {
-								const nextAccount = controller.accounts.find(account => account === event.currentTarget.value)
-								if (nextAccount === undefined) return
-								void runControl(async () => {
-									await controller.selectAccount(nextAccount)
-								})
-							}}
-						>
-							{controller.accounts.map((account, accountIndex) => (
-								<option key={account} value={account}>
-									{getSimulationAccountOptionLabel(accountIndex)}
-								</option>
-							))}
-						</select>
-					</div>
+					<SimulationAccountControls
+						accounts={controller.accounts}
+						disabled={busy.value || !isBootstrapped.value}
+						selectedAccount={selectedAccount.value}
+						onAccountChange={nextAccount => {
+							void runControl(async () => {
+								await controller.selectAccount(nextAccount)
+							})
+						}}
+					/>
+					<SimulationWalletControls
+						disabled={busy.value || !isBootstrapped.value}
+						mode={walletMode.value}
+						onModeChange={nextMode => {
+							void runControl(async () => {
+								await controller.setWalletMode(nextMode)
+							})
+						}}
+					/>
 					<div className='simulation-banner-stats'>
 						<div className='simulation-stat-card'>
 							<span className='simulation-stat-label'>{simulationCopy.blocks}</span>

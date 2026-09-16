@@ -101,7 +101,7 @@ export function LiveLiquidityControls({
 	return (
 		<div class='liquidity-controls'>
 			{balanceState === 'disconnected' ? <p class='detail'>{liquidityCopy.disconnectedGuidance}</p> : null}
-			{balanceState === 'error' ? <BalanceLoadError message={liquidityCopy.balancesUnavailable(balanceError ?? liquidityCopy.balanceRefreshFallback)} retry={retryBalances} disabled={workflowLocked} /> : null}
+			{balanceState === 'error' && networkMismatchReason === undefined ? <BalanceLoadError message={liquidityCopy.balancesUnavailable(balanceError ?? liquidityCopy.balanceRefreshFallback)} retry={retryBalances} disabled={workflowLocked} /> : null}
 			<ViewTabs
 				ariaLabel={liquidityCopy.operationLabel}
 				semantics='switcher'

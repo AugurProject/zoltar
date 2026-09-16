@@ -90,7 +90,7 @@ describe('trading deployment setup', () => {
 			await cleanupRendered?.()
 			cleanupRendered = undefined
 		},
-		url: 'http://localhost/#/markets',
+		url: 'http://localhost/#/market',
 	})
 
 	test('automatically verifies selected network settings and exposes the first deployment step', async () => {
@@ -203,7 +203,7 @@ describe('trading deployment setup', () => {
 		})
 		const rendered = await renderIntoDocument(<TradingDeploymentSetup onComplete={() => undefined} services={{ createPublicClient: () => client, loadCoreDeployments: async () => [core] }} />)
 		cleanupRendered = rendered.cleanup
-		await waitForText('SecurityPoolFactory is not deployed')
+		await waitForText('Security pool factory is not deployed')
 		expect(rendered.container.textContent).not.toContain('Unable to inspect the selected deployment')
 		expect(rendered.container.textContent).toContain(plan.factory.address)
 		expect(rendered.container.textContent).toContain(plan.router.address)
@@ -403,11 +403,11 @@ describe('trading deployment setup', () => {
 	})
 
 	test('keeps the trading route selected while deployment verification is pending', async () => {
-		window.location.hash = '#/markets'
+		window.location.hash = '#/market'
 		const rendered = await renderIntoDocument(<App loadLiveDeployment={async () => await new Promise<never>(() => undefined)} />)
 		cleanupRendered = rendered.cleanup
 		expect(rendered.container.querySelector('nav a[aria-current="page"]')?.textContent?.trim()).toBe('Market')
-		expect(document.title).toBe('Browse markets · Statoblast trading')
+		expect(document.title).toBe('Market · Statoblast trading')
 		expect(rendered.container.querySelector('.site-header--deployment')).toBeNull()
 		expect(rendered.container.querySelector('.deployment-setup')).toBeNull()
 	})

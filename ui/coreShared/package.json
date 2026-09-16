@@ -843,6 +843,18 @@
 		"./tests/emptyState.test.js": {
 			"bun": "./ts/tests/emptyState.test.tsx",
 			"default": "./js/tests/emptyState.test.js"
+		},
+		"./components/SimulationWalletControls.js": {
+			"bun": "./ts/components/SimulationWalletControls.tsx",
+			"default": "./js/components/SimulationWalletControls.js"
+		},
+		"./tests/components/stickyObjectContext.test.js": {
+			"bun": "./ts/tests/components/stickyObjectContext.test.tsx",
+			"default": "./js/tests/components/stickyObjectContext.test.js"
+		},
+		"./tests/components/entityCard.test.js": {
+			"bun": "./ts/tests/components/entityCard.test.tsx",
+			"default": "./js/tests/components/entityCard.test.js"
 		}
 	},
 	"version": "1.0.0"

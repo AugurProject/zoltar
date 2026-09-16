@@ -6,7 +6,7 @@ import type { DeploymentConfiguration } from '../../protocol/config.js'
 import { marketAcceptsNewRisk, publicErrorMessage, type LiveMarket } from '../../protocol/live.js'
 import { discoveryCommitAllowed, quoteBasisChanged, securityPoolAddressFromRoute, walletSummaryDiscoveryRetryStart, type WorkflowOwner } from '../liveTradingControllerHelpers.js'
 import { parsedUniverseId } from './useLiveTradingState.js'
-import { tradingListRouteFor } from '../../lib/routing.js'
+import { tradingListKindFor } from '../../lib/routing.js'
 import type { useMarketDiscovery } from './useMarketDiscovery.js'
 import type { usePortfolioQueries } from './usePortfolioQueries.js'
 import type { useTransactionWorkflow } from './useTransactionWorkflow.js'
@@ -19,7 +19,7 @@ type RequestGuard = ReturnType<typeof createLatestRequestGuard>
 const LIVE_REFRESH_INTERVAL_MILLISECONDS = 15_000
 
 function discoveryScope(route: string) {
-	return securityPoolAddressFromRoute(route) ?? tradingListRouteFor(route) ?? route
+	return securityPoolAddressFromRoute(route) ?? tradingListKindFor(route) ?? route
 }
 
 export function useMarketDiscoveryController({
@@ -75,8 +75,8 @@ export function useMarketDiscoveryController({
 		const requestedUniverseId = parsedUniverseId(selectedUniverseId)
 		if (routePool !== undefined) return await services.discoverAddressedMarket(client, nextConfiguration, routePool)
 		if (route === 'portfolio') return await services.discoverAllLiveMarketsInUniverse(client, nextConfiguration, requestedUniverseId, 25n, market.deploymentIndex)
-		// Lookup routes are list-first, so they page through the same candidates as their browse alias.
-		const listRoute = tradingListRouteFor(route)
+		// Lookup routes are list-first, so they page through the candidates of their workflow.
+		const listRoute = tradingListKindFor(route)
 		if (listRoute === 'security-pools') return await services.discoverLiveUniverseMarketPage(client, nextConfiguration, requestedUniverseId, requestedStart, 25n, market.deploymentIndex)
 		if (listRoute === 'markets') return await services.discoverTradingMarketPage(client, nextConfiguration, requestedUniverseId, requestedStart, 25n, market.pairIndex, isCurrent)
 		return await services.discoverUniverses(client, nextConfiguration, requestedUniverseId, isCurrent)
@@ -136,13 +136,13 @@ export function useMarketDiscoveryController({
 				market.setDiscoveryState('ready')
 				return
 			}
-			const detail = publicErrorMessage(error, 'SecurityPool discovery failed')
+			const detail = publicErrorMessage(error, 'Security pool discovery failed')
 			market.setDiscoveryError(detail)
 			market.setDiscoveryState('error')
 			if (background) return
 			if (route === 'portfolio') {
 				portfolio.setPortfolioBalanceState('error')
-				portfolio.setPortfolioBalanceError(`SecurityPool discovery failed: ${detail}`)
+				portfolio.setPortfolioBalanceError(`Security pool discovery failed: ${detail}`)
 			}
 			if (wallet.accountRef.current !== undefined) {
 				portfolio.setBalanceState('error')
@@ -194,7 +194,7 @@ export function useMarketDiscoveryController({
 		if (!transaction.positionWorkflowLockedRef.current && !transaction.liquidityWorkflowLockedRef.current) transaction.dispatchWorkflow({ type: 'reset' })
 	}, [nowSeconds, selected])
 
-	const periodicRefreshActive = configuration !== undefined && (routePool !== undefined || route === 'portfolio' || tradingListRouteFor(route) !== undefined)
+	const periodicRefreshActive = configuration !== undefined && (routePool !== undefined || route === 'portfolio' || tradingListKindFor(route) !== undefined)
 	useEffect(() => {
 		if (!periodicRefreshActive) return
 		const timer = setInterval(() => {

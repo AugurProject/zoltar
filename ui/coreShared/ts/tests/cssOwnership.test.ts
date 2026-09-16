@@ -2,9 +2,14 @@ import { expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 
 const cssRoot = 'ui/coreShared/css'
+const featureStylesheets = { statoblast: 'ui/statoblastShared/css/index.css', zoltar: 'ui/zoltarShared/css/index.css' } as const
 
 function readStylesheet(name: string) {
 	return readFileSync(`${cssRoot}/${name}`, 'utf8')
+}
+
+function readFeatureStylesheet(owner: keyof typeof featureStylesheets) {
+	return readFileSync(featureStylesheets[owner], 'utf8')
 }
 
 function findSubminimumFontRules(stylesheet: string) {
@@ -34,14 +39,54 @@ function findSubminimumFontRules(stylesheet: string) {
 
 test('core shared stylesheet partitions begin at cohesive ownership boundaries', () => {
 	expect(readStylesheet('index.css')).toBe(
-		['@import url("./base.css");', '@import url("./protocol-surfaces.css");', '@import url("./reporting-visualizations.css");', '@import url("./application-surfaces.css");', '@import url("./controls-and-responsive.css");', '@import url("./visual-foundation.css");', '@import url("./protocol-apps.css");', ''].join('\n'),
+		['@import url("./base.css");', '@import url("./simulation-banner.css");', '@import url("./protocol-surfaces.css");', '@import url("./application-surfaces.css");', '@import url("./controls-and-responsive.css");', '@import url("./visual-foundation.css");', '@import url("./protocol-apps.css");', ''].join('\n'),
 	)
+	expect(readStylesheet('simulation-banner.css')).toStartWith('/* Browser simulation banner.')
 	expect(readStylesheet('protocol-surfaces.css')).toStartWith('.entity-card {')
-	expect(readStylesheet('reporting-visualizations.css')).toStartWith('.escalation-metrics {')
 	expect(readStylesheet('application-surfaces.css')).toStartWith('.route-shell {')
 	expect(readStylesheet('controls-and-responsive.css')).toStartWith('.view-tabs {')
 	expect(readStylesheet('visual-foundation.css')).toStartWith('/* Shared visual behavior.')
 	expect(readStylesheet('protocol-apps.css')).toStartWith('/* Zoltar and Statoblast remain separate operational products')
+})
+
+test('feature stylesheets own their product rules and load after the shared sheet on the pages that render them', () => {
+	const statoblast = readFeatureStylesheet('statoblast')
+	const zoltar = readFeatureStylesheet('zoltar')
+	expect(statoblast).toStartWith('/* Statoblast feature styles:')
+	expect(zoltar).toStartWith('/* Zoltar feature styles:')
+	for (const selector of ['.truth-auction-panel', '.escalation-sides', '.security-pool-strip', '.vault-workspace', '.liquidation-modal-actions', '.oracle-actions', '.fork-workflow-stage']) expect(statoblast).toContain(`${selector} {`)
+	for (const selector of ['.question-create-editor', '.question-preview', '.question-draft-preview', '.deployment-contract-details', '.categorical-outcomes']) expect(zoltar).toContain(`${selector} {`)
+	const shared = ['base.css', 'simulation-banner.css', 'protocol-surfaces.css', 'application-surfaces.css', 'controls-and-responsive.css', 'visual-foundation.css', 'protocol-apps.css'].map(readStylesheet).join('\n')
+	for (const selector of ['.truth-auction-', '.escalation-side', '.security-pool-strip', '.vault-workspace', '.question-draft-preview', '.deployment-contract-details']) expect(shared).not.toContain(`\n${selector}`)
+	// Narrow-viewport overrides for feature grids must follow their base rules, so they live in the owning sheet rather than the earlier-loaded shared sheet.
+	for (const selector of ['.security-pool-hero-ribbon', '.security-pool-strip-stats', '.vault-preview-side-metrics', '.vault-detail-hero', '.trading-share-callouts', '.escalation-metrics', '.fork-summary-grid', '.categorical-outcome-row', '.question-preview-meta', '.question-draft-preview-meta'])
+		expect(shared).not.toMatch(new RegExp(`\\n\\t?${selector.replaceAll('.', '\\.')}[,\\s{]`))
+	for (const selector of ['.escalation-metrics', '.security-pool-hero-ribbon', '.vault-detail-hero']) expect(statoblast.lastIndexOf(`\t${selector},`)).toBeGreaterThan(statoblast.indexOf(`${selector} {`))
+	for (const selector of ['.categorical-outcome-row', '.question-preview-meta']) expect(zoltar.lastIndexOf(`\t${selector}`)).toBeGreaterThan(zoltar.indexOf(`${selector} {`))
+	expect(readStylesheet('simulation-banner.css')).toContain('.simulation-banner {')
+	expect(shared.split('\n.simulation-banner {')).toHaveLength(2)
+
+	const sharedLink = '<link rel="stylesheet" href="/ui/coreShared/css/index.css" />'
+	const zoltarLink = '<link rel="stylesheet" href="/ui/zoltarShared/css/index.css" />'
+	const statoblastLink = '<link rel="stylesheet" href="/ui/statoblastShared/css/index.css" />'
+	const zoltarPage = readFileSync('ui/zoltar/index.html', 'utf8')
+	const statoblastPage = readFileSync('ui/statoblast/index.html', 'utf8')
+	const tradingPage = readFileSync('ui/trading/index.html', 'utf8')
+	expect(zoltarPage.indexOf(sharedLink)).toBeLessThan(zoltarPage.indexOf(zoltarLink))
+	expect(zoltarPage).not.toContain(statoblastLink)
+	expect(statoblastPage.indexOf(sharedLink)).toBeLessThan(statoblastPage.indexOf(zoltarLink))
+	expect(statoblastPage.indexOf(zoltarLink)).toBeLessThan(statoblastPage.indexOf(statoblastLink))
+	expect(tradingPage).toContain(sharedLink)
+	expect(tradingPage).not.toContain(zoltarLink)
+	expect(tradingPage).not.toContain(statoblastLink)
+})
+
+test('the vendored mono face is declared once and leads the mono stack', () => {
+	const foundation = readStylesheet('visual-foundation.css')
+	expect(foundation.match(/@font-face \{/g)).toHaveLength(2)
+	expect(foundation).toMatch(/@font-face \{[^}]*font-weight: 400;[^}]*font-display: swap;[^}]*url\("\.\.\/vendor\/fonts\/ibm-plex-mono-latin-400-normal\.woff2"\)/s)
+	expect(foundation).toMatch(/@font-face \{[^}]*font-weight: 600;[^}]*font-display: swap;[^}]*url\("\.\.\/vendor\/fonts\/ibm-plex-mono-latin-600-normal\.woff2"\)/s)
+	expect(readStylesheet('tokens.css')).toContain('--font-family-mono: "IBM Plex Mono", ui-monospace,')
 })
 
 test('the visual foundation defines readable type, touch, geometry, and product accents', () => {
@@ -80,17 +125,15 @@ test('persistent operational text and AugurScan disclosures keep accessible mini
 })
 
 test('production styles reserve sub-13px type for nonessential eyebrows and decorative glyphs', () => {
-	for (const stylesheet of [readStylesheet('base.css'), readStylesheet('protocol-surfaces.css'), readFileSync('ui/trading/css/app.css', 'utf8'), readFileSync('augurScan/public/styles.css', 'utf8')]) {
+	for (const stylesheet of [readStylesheet('base.css'), readStylesheet('simulation-banner.css'), readStylesheet('protocol-surfaces.css'), readFeatureStylesheet('statoblast'), readFeatureStylesheet('zoltar'), readFileSync('ui/trading/css/app.css', 'utf8'), readFileSync('augurScan/public/styles.css', 'utf8')]) {
 		expect(findSubminimumFontRules(stylesheet)).toEqual([])
 	}
 })
 
 test('product accent hues are only defined in tokens so Statoblast never inherits Zoltar cyan', () => {
 	const productHueLiteral = /rgba?\(\s*(?:56,\s*213,\s*255|124,\s*108,\s*255|160,\s*124,\s*255|183,\s*238,\s*81|85,\s*200,\s*228|42,\s*181,\s*216|22,\s*148,\s*184|19,\s*127,\s*159)\b|#(?:38d5ff|7c6cff|a07cff|b7ee51|55c8e4|2ab5d8|1694b8|137f9f)\b/i
-	for (const name of ['base.css', 'protocol-surfaces.css', 'reporting-visualizations.css', 'application-surfaces.css', 'controls-and-responsive.css', 'visual-foundation.css', 'protocol-apps.css']) {
-		const offendingLines = readStylesheet(name)
-			.split('\n')
-			.filter(line => productHueLiteral.test(line))
+	for (const name of ['base.css', 'simulation-banner.css', 'protocol-surfaces.css', 'application-surfaces.css', 'controls-and-responsive.css', 'visual-foundation.css', 'protocol-apps.css', featureStylesheets.statoblast, featureStylesheets.zoltar]) {
+		const offendingLines = (name.includes('/') ? readFileSync(name, 'utf8') : readStylesheet(name)).split('\n').filter(line => productHueLiteral.test(line))
 		expect({ name, offendingLines }).toEqual({ name, offendingLines: [] })
 	}
 	const tokens = readStylesheet('tokens.css')

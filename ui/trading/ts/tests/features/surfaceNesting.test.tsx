@@ -116,7 +116,7 @@ describe('trading surface nesting', () => {
 		const portfolio = await renderIntoDocument(<LiveTrading route='portfolio' configuration={configuration} configurationError={undefined} selectedUniverseId='1' onWorkflowLockChange={() => undefined} controllerServices={services} />)
 		cleanupRendered = portfolio.cleanup
 		await act(async () => button('Connect wallet').click())
-		await waitForDom(() => document.querySelector('[data-portfolio-pool] .entity-card') !== null && document.body.textContent?.includes('1 YES') === true, 'portfolio positions')
+		await waitForDom(() => document.querySelector('.entity-card[data-portfolio-pool]') !== null && document.body.textContent?.includes('1 YES') === true, 'portfolio positions')
 		expect(nestedCardSurfaces(document.body)).toEqual([])
 		await portfolio.cleanup()
 		cleanupRendered = undefined

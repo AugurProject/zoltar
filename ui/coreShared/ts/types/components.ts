@@ -109,6 +109,8 @@ export type RouteHeaderProps = {
 export type SectionBlockProps = {
 	actions?: ComponentChildren
 	badge?: ComponentChildren
+	/** Marks the whole section as loading through `aria-busy`, so callers do not need a wrapper element for the state. */
+	busy?: boolean
 	children: ComponentChildren
 	className?: string
 	description?: ComponentChildren

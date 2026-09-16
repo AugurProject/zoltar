@@ -149,7 +149,7 @@ export function LivePositionControls({
 					{walletBalanceLabel(balances?.invalid, 'INVALID')}
 				</MetricField>
 			</DataGrid>
-			{balanceState === 'error' ? <BalanceLoadError message={workflowCopy.walletBalancesUnavailable(balanceError ?? workflowCopy.balanceRefreshFailed)} retry={retryBalances} disabled={workflowLocked} /> : null}
+			{balanceState === 'error' && networkMismatchReason === undefined ? <BalanceLoadError message={workflowCopy.walletBalancesUnavailable(balanceError ?? workflowCopy.balanceRefreshFailed)} retry={retryBalances} disabled={workflowLocked} /> : null}
 			<ViewTabs
 				ariaLabel={workflowCopy.livePositionOperation}
 				semantics='switcher'

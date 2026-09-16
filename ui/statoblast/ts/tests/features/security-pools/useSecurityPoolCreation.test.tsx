@@ -6,6 +6,7 @@ import { zeroAddress, type Address, type Hash } from '@zoltar/core-shared/evm/et
 import { installActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
 import { createFakeBackend } from '@zoltar/ui-core-shared/tests/testUtils/fakeBackend.js'
+import { installModuleMocks } from '@zoltar/ui-core-shared/tests/testUtils/moduleMocks.js'
 import { waitFor } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import { installTestRouting } from '@zoltar/ui-core-shared/tests/testUtils/testRouting.js'
@@ -42,12 +43,14 @@ function createStatus(id: DeploymentStatus['id'], deployed: boolean, dependencie
 	}
 }
 
-function setupContractMocks({ loadMarketDetails, createSecurityPool, originSecurityPoolExists }: Partial<MockContractDeps>) {
-	mock.module('@zoltar/ui-zoltar-shared/protocol/zoltar.js', () => ({
+const moduleMocks = installModuleMocks(specifier => import.meta.resolve(specifier))
+
+async function setupContractMocks({ loadMarketDetails, createSecurityPool, originSecurityPoolExists }: Partial<MockContractDeps>) {
+	await moduleMocks.mockModule('@zoltar/ui-zoltar-shared/protocol/zoltar.js', () => ({
 		loadMarketDetails: loadMarketDetails ?? mock(async () => createMarketDetails()),
 	}))
 
-	mock.module('@zoltar/ui-statoblast-shared/protocol/securityPools.js', () => ({
+	await moduleMocks.mockModule('@zoltar/ui-statoblast-shared/protocol/securityPools.js', () => ({
 		createSecurityPool:
 			createSecurityPool ??
 			mock(
@@ -64,7 +67,7 @@ function setupContractMocks({ loadMarketDetails, createSecurityPool, originSecur
 		originSecurityPoolExists: originSecurityPoolExists ?? mock(async () => false),
 	}))
 
-	mock.module('@zoltar/ui-core-shared/wallet/clients.js', () => ({
+	await moduleMocks.mockModule('@zoltar/ui-core-shared/wallet/clients.js', () => ({
 		createConnectedReadClient: mock(() => ({ kind: 'read-client' })),
 		createWalletWriteClient: mock((walletAddress: Address, options: { onTransactionSubmitted: (hash: Hash) => void }) => ({
 			walletAddress,
@@ -110,7 +113,7 @@ describe('useSecurityPoolCreation', () => {
 	})
 
 	test('loadMarketById blocks before ZoltarQuestionData is deployed', async () => {
-		setupContractMocks({
+		await setupContractMocks({
 			loadMarketDetails: mock(async () => createMarketDetails()),
 		})
 
@@ -145,7 +148,7 @@ describe('useSecurityPoolCreation', () => {
 	})
 
 	test('loadMarketById maps successful and failed market lookups', async () => {
-		setupContractMocks({
+		await setupContractMocks({
 			loadMarketDetails: mock(async () => createMarketDetails({ exists: false, questionId: '0x00' })),
 		})
 		let state: UseSecurityPoolCreationState | undefined
@@ -177,7 +180,7 @@ describe('useSecurityPoolCreation', () => {
 		renderedNotFound.cleanup()
 		cleanupRenderedComponent = undefined
 
-		setupContractMocks({
+		await setupContractMocks({
 			loadMarketDetails: mock(async () => {
 				throw new Error('backend offline')
 			}),
@@ -216,7 +219,7 @@ describe('useSecurityPoolCreation', () => {
 			if (questionId === 12n) return await secondLookup.promise
 			throw new Error(`Unexpected question ID: ${questionId.toString()}`)
 		})
-		setupContractMocks({
+		await setupContractMocks({
 			loadMarketDetails,
 			originSecurityPoolExists: mock(async () => false),
 		})
@@ -267,7 +270,7 @@ describe('useSecurityPoolCreation', () => {
 
 	test('loads duplicate checks for valid input and skips malformed question IDs', async () => {
 		const originSecurityPoolExists = mock(async () => true)
-		setupContractMocks({
+		await setupContractMocks({
 			loadMarketDetails: mock(async () => createMarketDetails()),
 			originSecurityPoolExists,
 		})
@@ -316,7 +319,7 @@ describe('useSecurityPoolCreation', () => {
 			if (questionId === 12n) return await secondDuplicateCheck.promise
 			throw new Error(`Unexpected question ID: ${questionId.toString()}`)
 		})
-		setupContractMocks({
+		await setupContractMocks({
 			loadMarketDetails: mock(async () => createMarketDetails()),
 			originSecurityPoolExists,
 		})
@@ -375,7 +378,7 @@ describe('useSecurityPoolCreation', () => {
 			loadedQuestionIds.push(questionId)
 			return loadedDetails
 		})
-		setupContractMocks({
+		await setupContractMocks({
 			loadMarketDetails,
 			originSecurityPoolExists: mock(async () => false),
 		})
@@ -414,7 +417,7 @@ describe('useSecurityPoolCreation', () => {
 	})
 
 	test('createPool blocks when required deployment step is missing', async () => {
-		setupContractMocks({
+		await setupContractMocks({
 			loadMarketDetails: mock(async () => createMarketDetails()),
 			originSecurityPoolExists: mock(async () => false),
 			createSecurityPool: mock(async () => {
@@ -477,7 +480,7 @@ describe('useSecurityPoolCreation', () => {
 				universeId: 0n,
 			} as SecurityPoolCreationResult
 		})
-		setupContractMocks({
+		await setupContractMocks({
 			loadMarketDetails: mock(async () => createMarketDetails({ questionId: '0x0b' })),
 			originSecurityPoolExists: mock(async () => false),
 			createSecurityPool,
@@ -536,7 +539,7 @@ describe('useSecurityPoolCreation', () => {
 
 	test('createPool preserves the current market details when a stale duplicate-pool error resolves for an older market', async () => {
 		const staleDuplicateCheck = createDeferred<boolean>()
-		setupContractMocks({
+		await setupContractMocks({
 			loadMarketDetails: mock(async (_client: unknown, questionId: bigint) => {
 				if (questionId === 11n) return createMarketDetails({ questionId: '0x0b', title: 'Question A' })
 				if (questionId === 12n) return createMarketDetails({ questionId: '0x0c', title: 'Question B' })
@@ -604,7 +607,7 @@ describe('useSecurityPoolCreation', () => {
 
 	test('createPool preserves the current market details when a stale non-binary error resolves for an older market', async () => {
 		const staleSubmittedMarket = createDeferred<MarketIdLoadResult>()
-		setupContractMocks({
+		await setupContractMocks({
 			loadMarketDetails: mock(async (_client: unknown, questionId: bigint) => {
 				if (questionId === 11n) return await staleSubmittedMarket.promise
 				if (questionId === 12n) return createMarketDetails({ questionId: '0x0c', title: 'Question B' })
@@ -673,7 +676,7 @@ describe('useSecurityPoolCreation', () => {
 			pendingCreate = deferred
 			return deferred.promise
 		})
-		setupContractMocks({
+		await setupContractMocks({
 			loadMarketDetails: mock(async () => createMarketDetails({ questionId: '0x0b' })),
 			originSecurityPoolExists: mock(async () => false),
 			createSecurityPool,
@@ -748,7 +751,7 @@ describe('useSecurityPoolCreation', () => {
 			return await pendingCreate.promise
 		})
 		const onTransactionRequested = mock(() => undefined)
-		setupContractMocks({
+		await setupContractMocks({
 			loadMarketDetails: mock(async () => createMarketDetails({ questionId: '0x0b' })),
 			originSecurityPoolExists: mock(async () => false),
 			createSecurityPool,
@@ -823,7 +826,7 @@ describe('useSecurityPoolCreation', () => {
 			client.onTransactionSubmitted?.('0xabc')
 			return await createPoolDeferred.promise
 		})
-		setupContractMocks({
+		await setupContractMocks({
 			loadMarketDetails: mock(async (_client: unknown, questionId: bigint) => {
 				if (questionId === 11n) return createMarketDetails({ questionId: '0x0b', title: 'Question A' })
 				if (questionId === 12n) return createMarketDetails({ questionId: '0x0c', title: 'Question B' })
@@ -902,7 +905,7 @@ describe('useSecurityPoolCreation', () => {
 		const createSecurityPool = mock(async () => {
 			throw new Error('createSecurityPool should not run before the wallet preflight passes')
 		})
-		setupContractMocks({
+		await setupContractMocks({
 			loadMarketDetails: mock(async () => createMarketDetails({ questionId: '0x0b' })),
 			originSecurityPoolExists: mock(async () => false),
 			createSecurityPool,
@@ -956,7 +959,7 @@ describe('useSecurityPoolCreation', () => {
 		restoreActiveEnvironment?.()
 		restoreActiveEnvironment = installActiveEnvironmentForTesting(createFakeBackend({ accountAddress: zeroAddress }))
 
-		setupContractMocks({
+		await setupContractMocks({
 			loadMarketDetails: mock(async () => createMarketDetails({ questionId: '0x0b' })),
 			originSecurityPoolExists: mock(async () => false),
 			createSecurityPool: mock(async () => ({
@@ -988,7 +991,7 @@ describe('useSecurityPoolCreation', () => {
 			statoblastSecurityMultiplierBps: parameters.statoblastSecurityMultiplierBps,
 			universeId: 0n,
 		}))
-		setupContractMocks({
+		await setupContractMocks({
 			loadMarketDetails: mock(async (_client: unknown, questionId: bigint) => createMarketDetails({ questionId: `0x${questionId.toString(16)}` })),
 			originSecurityPoolExists: mock(async () => false),
 			createSecurityPool,

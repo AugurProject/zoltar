@@ -493,6 +493,14 @@
 		"./features/universes/components/ShareMigrationTargetsSection.js": {
 			"bun": "./ts/features/universes/components/ShareMigrationTargetsSection.tsx",
 			"default": "./js/features/universes/components/ShareMigrationTargetsSection.js"
+		},
+		"./features/security-pools/lib/securityVaultAvailability.js": {
+			"bun": "./ts/features/security-pools/lib/securityVaultAvailability.ts",
+			"default": "./js/features/security-pools/lib/securityVaultAvailability.js"
+		},
+		"./features/security-pools/lib/liquidationModalGuards.js": {
+			"bun": "./ts/features/security-pools/lib/liquidationModalGuards.ts",
+			"default": "./js/features/security-pools/lib/liquidationModalGuards.js"
 		}
 	},
 	"version": "1.0.0"

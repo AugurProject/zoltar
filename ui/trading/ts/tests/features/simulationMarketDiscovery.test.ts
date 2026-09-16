@@ -138,7 +138,7 @@ for (const scenario of [DEPLOYED_TRADING_SIMULATION_SCENARIO, FUNDED_TRADING_SIM
 				expect([...attemptedPools]).toEqual(pairIndex.deployments.slice(25, 50).map(deployment => deployment.securityPool))
 				expect(page.previousStart).toBe(0n)
 				expect(page.nextStart).toBe(50n)
-				for (const route of ['markets', 'security-pools', 'market', 'liquidity', 'create-market', 'portfolio'] as const) {
+				for (const route of ['market', 'liquidity', 'create-market', 'portfolio'] as const) {
 					let summary: WalletSummaryState | undefined
 					const rendered = await renderIntoDocument(
 						h(LiveTrading, {
@@ -157,8 +157,8 @@ for (const scenario of [DEPLOYED_TRADING_SIMULATION_SCENARIO, FUNDED_TRADING_SIM
 						await waitFor(() => expect(summary?.status).toBe('ready'), { timeout: 10_000 })
 						expect(rendered.container.textContent).not.toContain('Connect a wallet to load')
 						if (route !== 'portfolio') {
-							// Lookup routes are list-first: they show the same candidates as their browse alias above the address lookup.
-							const listsSecurityPools = route === 'security-pools' || route === 'create-market'
+							// Lookup routes are list-first: they show their workflow's candidates above the address lookup.
+							const listsSecurityPools = route === 'create-market'
 							const expectedMarkets = listsSecurityPools === (scenario === DEPLOYED_TRADING_SIMULATION_SCENARIO) ? 1 : 0
 							expect(rendered.container.querySelector('.open-pool-form')).not.toBeNull()
 							expect(rendered.container.querySelectorAll('.market-record')).toHaveLength(expectedMarkets)

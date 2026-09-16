@@ -150,7 +150,7 @@ describe('live market refresh', () => {
 		await act(async () => button('Connect wallet').click())
 		await waitForDom(() => walletMetric('Wallet YES') === '3 YES', 'wallet balances shown as collateral value')
 		// The lookup instruction belongs to the landing list, not to an opened market.
-		expect(document.body.textContent).not.toContain('Open a market by SecurityPool address')
+		expect(document.body.textContent).not.toContain('Open a market by security pool address')
 		expect(document.body.textContent).toContain('3 INVALID')
 		expect(document.body.textContent).toContain('Conditional YES 50.0%')
 		expect(document.body.textContent).not.toContain('Current spot price')
@@ -286,8 +286,8 @@ describe('live market refresh', () => {
 		const rendered = await renderIntoDocument(<LiveTrading route='portfolio' configuration={configuration} configurationError={undefined} selectedUniverseId='1' refreshIntervalMilliseconds={30} onWorkflowLockChange={() => undefined} controllerServices={services} />)
 		cleanupRendered = rendered.cleanup
 		// While discovery is still running the route shows one live loading state and no terminal empty state.
-		await waitForDom(() => document.body.textContent?.includes('Discovering SecurityPools…') === true, 'portfolio discovery status')
-		expect(document.body.querySelector('.empty-state[role="status"]')?.textContent).toContain('Discovering SecurityPools…')
+		await waitForDom(() => document.body.textContent?.includes('Discovering security pools…') === true, 'portfolio discovery status')
+		expect(document.body.querySelector('.empty-state[role="status"]')?.textContent).toContain('Discovering security pools…')
 		expect(document.body.textContent).not.toContain('No YES, NO, INVALID, or LP balance was found')
 		gate = undefined
 		releaseDiscovery()

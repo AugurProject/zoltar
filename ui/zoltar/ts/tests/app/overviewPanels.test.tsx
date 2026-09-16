@@ -3,7 +3,7 @@
 import { installActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { getUniversePresentation } from '@zoltar/ui-core-shared/lib/userCopy.js'
 import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
-import { createFakeBackend } from '@zoltar/ui-core-shared/tests/testUtils/fakeBackend.js'
+import { createFakeBackend, createFakeSimulationProfile } from '@zoltar/ui-core-shared/tests/testUtils/fakeBackend.js'
 import { fireEvent, waitFor, within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import { installTestRouting } from '@zoltar/ui-core-shared/tests/testUtils/testRouting.js'
@@ -442,6 +442,65 @@ describe('OverviewPanels', () => {
 		expect(documentQueries.queryByText('Read Source')).toBeNull()
 		expect(documentQueries.queryByText('Browser simulation')).toBeNull()
 		expect(documentQueries.queryByText('browser simulation · provider via default @ 12')).toBeNull()
+	})
+
+	test('offers a wrong-network badge and switch action for a simulated wallet on another chain', async () => {
+		const resetEnvironment = installActiveEnvironmentForTesting(createFakeBackend({ profile: createFakeSimulationProfile() }))
+		const onSwitchNetwork = mock(() => undefined)
+		try {
+			const documentQueries = await renderOverviewPanels({
+				accountState: {
+					address: '0x1234567890123456789012345678901234567890',
+					chainId: '0x7a69',
+					ethBalanceAttoEth: 5n * 10n ** 18n,
+					wethBalanceAttoEth: undefined,
+				},
+				onSwitchNetwork,
+				readBackendStatus: {
+					blockNumber: 12n,
+					blockTimestamp: undefined,
+					rpcSource: 'default',
+					rpcUrl: 'browser-simulation',
+					transportMode: 'provider',
+				},
+			})
+
+			expect(documentQueries.getByText('Simulation')).not.toBeNull()
+			expect(documentQueries.getByText('Wrong Network (31337)')).not.toBeNull()
+			expect(document.body.querySelector('.overview-wallet-panel .wallet-chip.is-danger')).not.toBeNull()
+			expect(document.body.querySelector('.account-menu')).toBeNull()
+			fireEvent.click(documentQueries.getByRole('button', { name: 'Switch to Browser Simulation' }))
+			expect(onSwitchNetwork).toHaveBeenCalledTimes(1)
+		} finally {
+			resetEnvironment()
+		}
+	})
+
+	test('keeps the plain simulated account chip while the wallet is on the simulation chain', async () => {
+		const resetEnvironment = installActiveEnvironmentForTesting(createFakeBackend({ profile: createFakeSimulationProfile() }))
+		try {
+			const documentQueries = await renderOverviewPanels({
+				accountState: {
+					address: '0x1234567890123456789012345678901234567890',
+					chainId: '0x539',
+					ethBalanceAttoEth: undefined,
+					wethBalanceAttoEth: undefined,
+				},
+				readBackendStatus: {
+					blockNumber: 12n,
+					blockTimestamp: undefined,
+					rpcSource: 'default',
+					rpcUrl: 'browser-simulation',
+					transportMode: 'provider',
+				},
+			})
+
+			expect(documentQueries.queryByText(/Wrong Network/)).toBeNull()
+			expect(document.body.querySelector('.overview-wallet-panel .wallet-chip.is-danger')).toBeNull()
+			expect(documentQueries.queryByRole('button', { name: 'Switch to Browser Simulation' })).toBeNull()
+		} finally {
+			resetEnvironment()
+		}
 	})
 
 	test('does not repeat a parent universe outside the header', async () => {

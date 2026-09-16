@@ -30,8 +30,8 @@ export const forkDetailsLoadFailed = 'Fork question details failed to load'
 export const slippageRangeReason = 'Enter a slippage tolerance from 0% to 5%.'
 export const validityRangeReason = 'Enter a transaction validity from 1 to 1440 whole minutes.'
 
-export function redemptionSimulationSummary(blockNumber: bigint, expectedEth: string, minimumEth: string, slippagePercent: string, deadline: string) {
-	return `Authoritative redemption simulation at block ${blockNumber.toString()}: ${expectedEth} ETH expected, ${minimumEth} ETH minimum at ${slippagePercent}% slippage; valid until ${deadline}`
+export function redemptionSimulationSummary(blockNumber: bigint, expectedEthDisplay: string, minimumEthDisplay: string, slippagePercent: string, deadline: string) {
+	return `Authoritative redemption simulation at block ${blockNumber.toString()}: ${expectedEthDisplay} ETH expected, ${minimumEthDisplay} ETH minimum at ${slippagePercent}% slippage; valid until ${deadline}`
 }
 
 export function settlementSimulationSummary(blockNumber: bigint) {

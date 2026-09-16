@@ -81,17 +81,15 @@ export function LivePortfolio({ entries, balanceState, balanceError, retryBalanc
 			{visibleEntries.length === 0 ? null : (
 				<div class='entity-card-list'>
 					{visibleEntries.map(entry => (
-						<div data-portfolio-pool={entry.market.pool} key={entry.market.pool}>
-							<EntityCard title={entry.market.title} badge={entry.error === undefined ? undefined : <Badge tone='warning'>{portfolioCopy.balanceUnavailable}</Badge>}>
-								<DataGrid dense>
-									<MetricField label={portfolioCopy.securityPool}>
-										<SecurityPoolLink value={entry.market.pool} />
-									</MetricField>
-								</DataGrid>
-								{entry.error === undefined ? null : <BalanceLoadError message={portfolioCopy.poolBalancesUnavailable(entry.error)} retry={retryBalances} />}
-								{entry.balances === undefined ? null : <LivePortfolioBalanceMetrics market={entry.market} balances={entry.balances} />}
-							</EntityCard>
-						</div>
+						<EntityCard key={entry.market.pool} dataAttributes={{ 'data-portfolio-pool': entry.market.pool }} title={entry.market.title} badge={entry.error === undefined ? undefined : <Badge tone='warning'>{portfolioCopy.balanceUnavailable}</Badge>}>
+							<DataGrid dense>
+								<MetricField label={portfolioCopy.securityPool}>
+									<SecurityPoolLink value={entry.market.pool} />
+								</MetricField>
+							</DataGrid>
+							{entry.error === undefined ? null : <BalanceLoadError message={portfolioCopy.poolBalancesUnavailable(entry.error)} retry={retryBalances} />}
+							{entry.balances === undefined ? null : <LivePortfolioBalanceMetrics market={entry.market} balances={entry.balances} />}
+						</EntityCard>
 					))}
 				</div>
 			)}

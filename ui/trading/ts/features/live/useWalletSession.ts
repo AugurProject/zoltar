@@ -406,9 +406,9 @@ export function useWalletSummaryEffects({
 			error: session.walletSummaryError,
 			errorLabel: session.walletSummaryErrorLabel,
 			universeId: session.walletSummaryUniverseId,
-			...(networkMismatchReason === undefined ? {} : { networkMismatchReason }),
+			...(networkMismatchReason === undefined ? {} : { networkMismatchReason, walletChainId: session.walletChainId }),
 		})
-	}, [session.account, networkMismatchReason, onWalletSummaryChange, session.walletEthAttoEth, session.walletRepAttoRep, session.walletSummaryError, session.walletSummaryErrorLabel, session.walletSummaryStatus, session.walletSummaryUniverseId])
+	}, [session.account, networkMismatchReason, session.walletChainId, onWalletSummaryChange, session.walletEthAttoEth, session.walletRepAttoRep, session.walletSummaryError, session.walletSummaryErrorLabel, session.walletSummaryStatus, session.walletSummaryUniverseId])
 
 	useEffect(() => {
 		const request = requests.begin()
@@ -431,8 +431,8 @@ export function useWalletSummaryEffects({
 		if (configuration === undefined) throw new Error('Wallet summary availability was resolved without a deployment configuration')
 		if (selected?.loadError !== undefined) {
 			session.setWalletSummaryStatus('error')
-			session.setWalletSummaryError(`Wallet balances could not be loaded because the selected SecurityPool is unavailable: ${selected.loadError}`)
-			session.setWalletSummaryErrorLabel('SecurityPool unavailable')
+			session.setWalletSummaryError(`Wallet balances could not be loaded because the selected security pool is unavailable: ${selected.loadError}`)
+			session.setWalletSummaryErrorLabel('Security pool unavailable')
 			return
 		}
 		const walletMarket = selected ?? { zoltar: configuration.zoltar, universeId: BigInt(selectedUniverseId ?? '0') }

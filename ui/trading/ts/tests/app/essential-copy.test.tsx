@@ -63,12 +63,14 @@ describe('essential trading copy', () => {
 		expect(inputs[1]?.getAttribute('aria-describedby')?.split(' ')).toContain(errors[1]?.id)
 	})
 
-	test('maps the removed developer route to the markets browse route and defaults to the market lookup', () => {
+	test('resolves the retired browse hashes to their lookup landings and defaults to the market lookup', () => {
 		window.history.replaceState(undefined, '', '/?demo=1#/developer?simulate=1')
-		expect(tradingRouting.resolve(window.location.hash)).toBe('markets')
+		expect(tradingRouting.resolve(window.location.hash)).toBe('market')
+		window.history.replaceState(undefined, '', '/?demo=1#/markets')
+		expect(tradingRouting.resolve(window.location.hash)).toBe('market')
 		window.history.replaceState(undefined, '', '/?demo=1#/')
 		expect(tradingRouting.resolve(window.location.hash)).toBe('market')
 		window.history.replaceState(undefined, '', '/?demo=1#/security-pools')
-		expect(tradingRouting.resolve(window.location.hash)).toBe('security-pools')
+		expect(tradingRouting.resolve(window.location.hash)).toBe('create-market')
 	})
 })

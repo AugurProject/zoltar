@@ -130,7 +130,6 @@ export const formatActionDetailLabel = (actionLabel: CopyTemplateValue) => `${ac
 export const noneSelected = 'None selected'
 export const notDeployed = 'Not deployed'
 export const formatSelectedTickLabel = (selectedTick: string, totalTicks: string) => `${selectedTick} / ${totalTicks}`
-export const mainnetRequiredReason = 'Switch to Ethereum mainnet.'
 export const formatNetworkRequiredReason = (networkName: CopyTemplateValue) => `Switch to ${networkName}.`
 export const walletAssetAutomaticImportUnavailable = 'Automatic import unavailable. Copy the token address to import it manually.'
 export const walletAssetRequestAccepted = 'Request accepted'

@@ -293,7 +293,7 @@ export function LiveSettlementControls({
 					}}
 				/>
 			) : null}
-			{balanceState === 'error' ? <BalanceLoadError message={balanceError ?? settlementCopy.walletBalancesUnavailable} retry={retryBalances} disabled={workflowLocked} /> : null}
+			{balanceState === 'error' && networkMismatchReason === undefined ? <BalanceLoadError message={balanceError ?? settlementCopy.walletBalancesUnavailable} retry={retryBalances} disabled={workflowLocked} /> : null}
 			<div class='transaction-outcome' ref={outcomeRef} tabIndex={-1}>
 				{transactionHash === undefined ? null : <TradingTransactionHash hash={transactionHash} />}
 				<ErrorNotice message={receiptWarning} />

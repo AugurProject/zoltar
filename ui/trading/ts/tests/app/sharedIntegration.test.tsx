@@ -33,13 +33,13 @@ test('Trading registers its shared TEVM scenarios and selects its own worker', (
 
 test('Trading defaults bare simulation launches to the funded scenario', () => {
 	expect(withDefaultTradingSimulationScenario('http://localhost/?simulate=1')?.href).toBe(`http://localhost/?simulate=1&simScenario=${FUNDED_TRADING_SIMULATION_SCENARIO}`)
-	expect(withDefaultTradingSimulationScenario('http://localhost/?simulate=1#/markets')?.href).toBe(`http://localhost/?simulate=1&simScenario=${FUNDED_TRADING_SIMULATION_SCENARIO}#/markets`)
-	expect(withDefaultTradingSimulationScenario('http://localhost/#/markets?simulate=1')?.href).toBe(`http://localhost/#/markets?simulate=1&simScenario=${FUNDED_TRADING_SIMULATION_SCENARIO}`)
+	expect(withDefaultTradingSimulationScenario('http://localhost/?simulate=1#/market')?.href).toBe(`http://localhost/?simulate=1&simScenario=${FUNDED_TRADING_SIMULATION_SCENARIO}#/market`)
+	expect(withDefaultTradingSimulationScenario('http://localhost/#/market?simulate=1')?.href).toBe(`http://localhost/#/market?simulate=1&simScenario=${FUNDED_TRADING_SIMULATION_SCENARIO}`)
 	expect(withDefaultTradingSimulationScenario('http://localhost/')).toBeUndefined()
-	expect(withDefaultTradingSimulationScenario('http://localhost/#/markets')).toBeUndefined()
+	expect(withDefaultTradingSimulationScenario('http://localhost/#/market')).toBeUndefined()
 	expect(withDefaultTradingSimulationScenario('http://localhost/?simulate=1&simScenario=baseline')).toBeUndefined()
-	expect(withDefaultTradingSimulationScenario('http://localhost/?simulate=1#/markets?simScenario=deployed')).toBeUndefined()
-	expect(withDefaultTradingSimulationScenario('http://localhost/?simulate=1#/markets?simState=abc')).toBeUndefined()
+	expect(withDefaultTradingSimulationScenario('http://localhost/?simulate=1#/market?simScenario=deployed')).toBeUndefined()
+	expect(withDefaultTradingSimulationScenario('http://localhost/?simulate=1#/market?simState=abc')).toBeUndefined()
 })
 
 test('Trading installs shared routing for simulation scenario navigation', () => {
@@ -49,7 +49,7 @@ test('Trading installs shared routing for simulation scenario navigation', () =>
 		expect(getCurrentRouteHash()).toBe('#/liquidity')
 		expect(getRouteHashSearch()).toBe('?simulate=1&simScenario=deployed')
 		expect(tradingRouting.resolve(window.location.hash)).toBe('liquidity')
-		expect(getTradingRouteHref('#/markets')).toBe('#/markets?simulate=1&simScenario=deployed')
+		expect(getTradingRouteHref('#/market')).toBe('#/market?simulate=1&simScenario=deployed')
 	} finally {
 		resetRoutingForTesting()
 		dom.cleanup()
@@ -65,7 +65,7 @@ test('Trading production links preserve the active simulation route query', asyn
 })
 
 test('Trading refreshes the active environment when history changes the simulation scenario', async () => {
-	const dom = installDomEnvironment('http://localhost/#/markets?simulate=1&simScenario=deployed')
+	const dom = installDomEnvironment('http://localhost/#/market?simulate=1&simScenario=deployed')
 	installTradingRouting()
 	let environmentInitializations = 0
 	const configuration: DeploymentConfiguration = {
@@ -86,7 +86,7 @@ test('Trading refreshes the active environment when history changes the simulati
 		/>,
 	)
 	try {
-		window.history.pushState({}, '', '#/markets?simulate=1&simScenario=baseline')
+		window.history.pushState({}, '', '#/market?simulate=1&simScenario=baseline')
 		window.dispatchEvent(new Event('popstate'))
 		await new Promise(resolve => setTimeout(resolve, 10))
 		expect(environmentInitializations).toBe(1)
@@ -102,7 +102,7 @@ test('Trading refreshes the active environment when history changes the simulati
 
 test('Trading force-refreshes the active environment after saving the active network RPC', async () => {
 	resetActiveEnvironmentForTesting()
-	const dom = installDomEnvironment('http://localhost/#/markets')
+	const dom = installDomEnvironment('http://localhost/#/market')
 	const originalStorageDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'localStorage')
 	Object.defineProperty(globalThis, 'localStorage', { configurable: true, value: window.localStorage })
 	let environmentInitializations = 0
@@ -153,7 +153,7 @@ test('Trading force-refreshes the active environment after saving the active net
 })
 
 test('Trading renders its shell while the environment is still bootstrapping', async () => {
-	const dom = installDomEnvironment('http://localhost/#/markets')
+	const dom = installDomEnvironment('http://localhost/#/market')
 	installTradingRouting()
 	// A pending waitUntilReady stands in for an unfinished simulation bootstrap. The shell must render
 	// anyway; only the deployment lookup waits for it.
@@ -208,7 +208,7 @@ test('Trading issues no chain reads while the environment is bootstrapping', asy
 })
 
 test('Trading reports a failed environment on the deployment route', async () => {
-	const dom = installDomEnvironment('http://localhost/#/markets')
+	const dom = installDomEnvironment('http://localhost/#/market')
 	installTradingRouting()
 	const restoreEnvironment = installActiveEnvironmentForTesting({
 		...createFakeBackend({ profile: createFakeSimulationProfile() }),
@@ -253,7 +253,7 @@ test('Trading keeps the initial loading fallback visible until the environment s
 })
 
 test('the removed demo query cannot select a parallel simulated-data application', async () => {
-	const dom = installDomEnvironment('http://localhost/?demo=1&scenario=baseline#/markets')
+	const dom = installDomEnvironment('http://localhost/?demo=1&scenario=baseline#/market')
 	const configuration: DeploymentConfiguration = {
 		chainId: 31_337,
 		chainName: 'Browser Simulation',
@@ -268,7 +268,7 @@ test('the removed demo query cannot select a parallel simulated-data application
 	expect(rendered.container.querySelector('.demo-banner')).toBeNull()
 	expect(rendered.container.textContent).not.toContain('SIMULATED DATA')
 	expect(rendered.container.textContent).not.toContain('Demo mode')
-	expect(rendered.container.textContent).toContain('Browse markets')
+	expect(rendered.container.querySelector('.market-browser h3')?.textContent).toBe('Markets')
 	await rendered.cleanup()
 	dom.cleanup()
 })
