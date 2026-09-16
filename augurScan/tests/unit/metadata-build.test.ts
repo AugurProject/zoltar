@@ -1,32 +1,30 @@
-import { expect, test } from 'bun:test'
+import { expect, spyOn, test } from 'bun:test'
 import { cp, mkdir, mkdtemp, rm, symlink } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import dependencyAbis from '../../config/dependency-abis.json'
-import { ensureDependencyAbis } from '../../scripts/dependency-abis.ts'
+import { verifyDependencyAbiFile } from '../../scripts/dependency-abis.ts'
 
-test('reuses verified ABI caches offline and rejects unverified replacements for stale caches', async () => {
-	const directory = await mkdtemp(path.join(tmpdir(), 'augurscan-abi-cache-'))
+test('uses only vendored dependency ABIs and rejects missing or modified files without downloading', async () => {
+	const directory = await mkdtemp(path.join(tmpdir(), 'augurscan-vendored-abis-'))
 	const output = path.join(directory, 'dependency-abis.json')
-	let requests = 0
-	const fetchArtifact = async () => {
-		requests++
-		return new Response('{"abi":[]}')
-	}
+	const fetchArtifact = spyOn(globalThis, 'fetch').mockRejectedValue(new Error('Unexpected network access'))
 	try {
 		await Bun.write(output, JSON.stringify(dependencyAbis))
-		await ensureDependencyAbis(output, fetchArtifact)
-		expect(requests).toBe(0)
+		await verifyDependencyAbiFile(output)
 		await Bun.write(output, '{}')
-		await expect(ensureDependencyAbis(output, fetchArtifact)).rejects.toThrow('artifact checksum mismatch')
-		expect(requests).toBe(1)
+		await expect(verifyDependencyAbiFile(output)).rejects.toThrow('kinds')
 		expect(await Bun.file(output).text()).toBe('{}')
+		await rm(output)
+		await expect(verifyDependencyAbiFile(output)).rejects.toThrow('ENOENT')
+		expect(fetchArtifact).not.toHaveBeenCalled()
 	} finally {
+		fetchArtifact.mockRestore()
 		await rm(directory, { recursive: true, force: true })
 	}
 })
 
-test('builds scanner metadata from source with verified compiler and dependency caches', async () => {
+test('builds scanner metadata from source with verified compiler caches and vendored dependency ABIs', async () => {
 	const repositoryRoot = path.resolve(import.meta.dir, '../../..')
 	const workspace = await mkdtemp(path.join(tmpdir(), 'augurscan-source-build-'))
 	try {

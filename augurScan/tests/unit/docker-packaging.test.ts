@@ -28,9 +28,9 @@ describe('Docker packaging', () => {
 				await mkdir(dirname(join(buildWorkspace, destination)), { recursive: true })
 				await cp(join(repositoryRoot, source), join(buildWorkspace, destination), { recursive: true })
 			}
-			// Reuse verified compiler/dependency caches, as CI does. Scanner routes
+			// Reuse verified compiler caches, as CI does. Scanner routes
 			// and manifests must be produced by the actual image build command.
-			for (const source of ['augurScan/package.json', 'solidity/.contract-hash.json', 'solidity/artifacts/Contracts.json', 'augurScan/config/dependency-abis.json']) {
+			for (const source of ['augurScan/package.json', 'solidity/.contract-hash.json', 'solidity/artifacts/Contracts.json']) {
 				await mkdir(dirname(join(buildWorkspace, source)), { recursive: true })
 				await cp(join(repositoryRoot, source), join(buildWorkspace, source))
 			}

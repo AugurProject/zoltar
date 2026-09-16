@@ -64,7 +64,7 @@ const botAudit = ['bun', 'audit'] as const
 /**
  * Canonical project ownership and build graph. All packages share the root workspace lockfile.
  */
-export const augurScanMetadataOutputs = ['augurScan/config/abis.json', 'augurScan/config/dependency-abis.json', 'augurScan/config/system-contracts.generated.ts', 'augurScan/config/manifests/mainnet.json', 'augurScan/config/manifests/sepolia.json']
+export const augurScanMetadataOutputs = ['augurScan/config/abis.json', 'augurScan/config/system-contracts.generated.ts', 'augurScan/config/manifests/mainnet.json', 'augurScan/config/manifests/sepolia.json']
 
 export const projects: readonly Project[] = [
 	{
@@ -325,7 +325,11 @@ export const projects: readonly Project[] = [
 		dependencies: ['shared-core', 'contracts'],
 		tasks: {
 			setup: packageInstallTask('augurScan'),
-			build: packageTask('augurScan', 'build', { outputs: [...augurScanMetadataOutputs, 'augurScan/public/app.js'], groups: ['generated'], cacheInputs: [...packageInputs('augurScan'), 'augurScan/scripts/**', 'augurScan/config/dependency-abi-sources.json', 'augurScan/browser/**', 'docs/*-deployment-addresses.json'] }),
+			build: packageTask('augurScan', 'build', {
+				outputs: [...augurScanMetadataOutputs, 'augurScan/public/app.js'],
+				groups: ['generated'],
+				cacheInputs: [...packageInputs('augurScan'), 'augurScan/scripts/**', 'augurScan/config/dependency-abi-sources.json', 'augurScan/config/dependency-abis.json', 'augurScan/browser/**', 'docs/*-deployment-addresses.json'],
+			}),
 			test: packageTask('augurScan', 'test:ci', { groups: ['complete-validation'] }),
 			check: packageTask('augurScan', 'check', { covers: ['lint'] }),
 			lint: packageTask('augurScan', 'check'),
