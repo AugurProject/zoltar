@@ -12,12 +12,15 @@ import {
 	dashboardJson as json,
 	validateDashboardAuthentication,
 } from '@zoltar/bot-shared/dashboard/security'
+import { getAddress, type Address } from '@zoltar/bot-shared/ethereum'
 import { errorMessage } from '@zoltar/bot-shared/infrastructure/error-message'
 import { optionalRecord as record } from '@zoltar/bot-shared/infrastructure/json-validation'
 import { join } from 'node:path'
+import type { PoolCatalogPage } from '../monitoring/pool-catalog.ts'
 import { operatorHeader } from './header.ts'
 
 export type DashboardController = {
+	getPoolCatalog?: (page: number, address?: Address, scope?: 'all' | 'monitored') => Promise<PoolCatalogPage>
 	getConfiguration: () => unknown | Promise<unknown>
 	getState: () => unknown | Promise<unknown>
 	hostname: '0.0.0.0' | '127.0.0.1'
@@ -31,6 +34,7 @@ export type DashboardController = {
 	setPaused: (value: unknown) => unknown | Promise<unknown>
 	reconcileTransaction?: (value: unknown) => unknown | Promise<unknown>
 	testMarketSources?: (value: unknown) => unknown | Promise<unknown>
+	setSupportedPool?: (value: unknown) => unknown | Promise<unknown>
 	setSelectedPools: (value: unknown) => unknown | Promise<unknown>
 	setSigner: (value: unknown) => unknown | Promise<unknown>
 	setStrategy: (value: unknown) => unknown | Promise<unknown>
@@ -252,6 +256,27 @@ export function startDashboardServer(port: number, controller: DashboardControll
 					return publicError(error, 503, 'state-read', publicOperatorFailure(errorMessage(error), 'Dashboard state is unavailable. Automatic retry remains active; check protected bot logs for details.'))
 				}
 			}
+			if (request.method === 'GET' && url.pathname === '/api/pool-catalog' && controller.getPoolCatalog !== undefined) {
+				const page = Number(url.searchParams.get('page') ?? '0')
+				if (!Number.isSafeInteger(page) || page < 0) return json({ error: 'Invalid pool page' }, 400)
+				const scope = url.searchParams.get('scope') ?? 'all'
+				if (scope !== 'all' && scope !== 'monitored') return json({ error: 'Invalid pool scope' }, 400)
+				let address: Address | undefined
+				const rawAddress = url.searchParams.get('address')
+				if (rawAddress !== null) {
+					try {
+						address = getAddress(rawAddress.trim())
+					} catch (error) {
+						return publicError(error, 400, 'pool-search', 'Enter a valid pool address.')
+					}
+				}
+				if (!(await controller.isNetworkConfigured())) return json({ error: 'Configure the chain and RPC endpoints in Settings to browse pools.' }, 400)
+				try {
+					return json(await controller.getPoolCatalog(page, address, scope))
+				} catch (error) {
+					return publicError(error, 503, 'pool-catalog', 'Pool discovery failed. Check RPC connectivity and retry.')
+				}
+			}
 			if (request.method === 'GET' && url.pathname === '/api/configuration') {
 				try {
 					return json(await controller.getConfiguration())
@@ -269,6 +294,7 @@ export function startDashboardServer(port: number, controller: DashboardControll
 				['/api/signer', controller.setSigner],
 				['/api/strategy', controller.setStrategy],
 			])
+			if (controller.setSupportedPool !== undefined) handlers.set('/api/supported-pool', controller.setSupportedPool)
 			if (controller.setMarketConfiguration !== undefined) handlers.set('/api/market-configuration', controller.setMarketConfiguration)
 			if (controller.setNetworkConnectivity !== undefined) handlers.set('/api/network-connectivity', controller.setNetworkConnectivity)
 			if (controller.switchNetworkProfile !== undefined) handlers.set('/api/network-profile', controller.switchNetworkProfile)

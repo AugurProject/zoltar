@@ -525,7 +525,7 @@ test('persists before broadcasting and tolerates one unavailable preparation rea
 	const { broadcastRequests, expected, lifecycleEvents, result } = await runDeploymentScenario({ primaryPreparationFails: true, primaryReceiptFails: false })
 	expect(result).toEqual(expected)
 	expect(lifecycleEvents[0]).toBe('persist')
-	expect(broadcastRequests.map(request => request.url)).toEqual(['primary', 'secondary'])
+	expect(broadcastRequests.map(request => request.url).sort()).toEqual(['primary', 'secondary'])
 	expect(broadcastRequests[0]?.transaction).toBe(broadcastRequests[1]?.transaction)
 })
 

@@ -64,6 +64,8 @@ const botAudit = ['bun', 'audit'] as const
 /**
  * Canonical project ownership and build graph. All packages share the root workspace lockfile.
  */
+export const augurScanMetadataOutputs = ['augurScan/config/abis.json', 'augurScan/config/dependency-abis.json', 'augurScan/config/system-contracts.generated.ts', 'augurScan/config/manifests/mainnet.json', 'augurScan/config/manifests/sepolia.json']
+
 export const projects: readonly Project[] = [
 	{
 		id: 'repository',
@@ -304,7 +306,7 @@ export const projects: readonly Project[] = [
 		id: 'liquidator',
 		path: 'bots/liquidator',
 		type: 'bot',
-		dependencies: ['shared-core', 'bot-shared', 'contracts'],
+		dependencies: ['shared-core', 'bot-shared', 'contracts', 'ui-core'],
 		tasks: {
 			setup: packageInstallTask('bots/liquidator'),
 			test: packageTask('bots/liquidator', 'test'),
@@ -320,10 +322,10 @@ export const projects: readonly Project[] = [
 		id: 'augur-scan',
 		path: 'augurScan',
 		type: 'service',
-		dependencies: ['shared-core'],
+		dependencies: ['shared-core', 'contracts'],
 		tasks: {
 			setup: packageInstallTask('augurScan'),
-			build: packageTask('augurScan', 'build', { outputs: ['augurScan/dist'] }),
+			build: packageTask('augurScan', 'build', { outputs: [...augurScanMetadataOutputs, 'augurScan/public/app.js'], groups: ['generated'], cacheInputs: [...packageInputs('augurScan'), 'augurScan/scripts/**', 'augurScan/config/dependency-abi-sources.json', 'augurScan/browser/**', 'docs/*-deployment-addresses.json'] }),
 			test: packageTask('augurScan', 'test:ci', { groups: ['complete-validation'] }),
 			check: packageTask('augurScan', 'check', { covers: ['lint'] }),
 			lint: packageTask('augurScan', 'check'),
@@ -331,8 +333,9 @@ export const projects: readonly Project[] = [
 			audit: packageAuditTask('augurScan'),
 			integration: { ...packageTask('augurScan', 'test:integration'), inputs: ['shared/**', 'augurScan/schema.sql', 'augurScan/migrations/**', 'augurScan/config/**', 'augurScan/src/**', 'augurScan/tests/**', 'augurScan/scripts/**', 'augurScan/package.json', 'bun.lock', 'augurScan/tsconfig.json'] },
 		},
-		generatedDirectories: ['augurScan/dist'],
-		ci: { scope: 'augur-scan', componentName: 'augur-scan' },
+		generatedDirectories: [],
+		generatedFiles: [...augurScanMetadataOutputs, 'augurScan/public/app.js'],
+		ci: { scope: 'augur-scan', componentName: 'augur-scan', requiresContractArtifacts: true },
 	},
 	{
 		id: 'docs',

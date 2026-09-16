@@ -1,5 +1,6 @@
 import { readFile } from 'node:fs/promises'
 import path from 'node:path'
+import { systemContractMappings } from './project-system-contracts.ts'
 
 type DeploymentFile = {
 	readonly network: {
@@ -40,25 +41,6 @@ const deploymentFile = (value: unknown, source: string): DeploymentFile => {
 	}
 }
 
-const deploymentKind: Readonly<Record<string, string>> = {
-	deploymentStatusOracle: 'deploymentStatusOracle',
-	escalationGameClaimDelegate: 'escalationGameClaimDelegate',
-	escalationGameProofVerifier: 'escalationProofVerifier',
-	escalationGameFactory: 'escalationGameFactory',
-	multicall3: 'multicall3',
-	openOracle: 'openOracle',
-	priceOracleManagerAndOperatorQueuerFactory: 'priceCoordinatorFactory',
-	proxyDeployer: 'proxyDeployer',
-	securityPoolFactory: 'securityPoolFactory',
-	securityPoolForker: 'securityPoolForker',
-	securityPoolOperationsDelegate: 'securityPoolOperationsDelegate',
-	securityPoolUtils: 'securityPoolUtils',
-	shareTokenFactory: 'shareTokenFactory',
-	uniformPriceDualCapBatchAuctionFactory: 'truthAuctionFactory',
-	zoltar: 'zoltar',
-	zoltarQuestionData: 'zoltarQuestionData',
-}
-
 const usdcAddress = {
 	mainnet: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48',
 	sepolia: '0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238',
@@ -70,20 +52,37 @@ const serializeManifest = (contracts: readonly (readonly [string, string, string
 }
 const manifestEntry = (address: string, label: string, kind: string): [string, string, string] => [address, label, kind]
 
-async function projectManifest(projectRoot: string, networkId: keyof typeof usdcAddress): Promise<string> {
+async function projectManifest(projectRoot: string, networkId: keyof typeof usdcAddress, deploymentKinds: Readonly<Record<string, string>>): Promise<string> {
 	const deploymentPath = path.join(projectRoot, 'docs', `${networkId}-deployment-addresses.json`)
 	const deployment = deploymentFile(JSON.parse(await readFile(deploymentPath, 'utf8')), deploymentPath)
 	if (deployment.network.id !== networkId) throw new Error(`${deploymentPath} describes ${deployment.network.id}, expected ${networkId}`)
-	const configured = [...deployment.deploymentSteps, ...deployment.derivedContracts].flatMap(({ id, label, address }) => {
-		const kind = deploymentKind[id]
-		return kind === undefined ? [] : [manifestEntry(address, label, kind)]
+	const configured = [...deployment.deploymentSteps, ...deployment.derivedContracts].map(({ id, label, address }) => {
+		const kind = deploymentKinds[id]
+		if (kind === undefined) throw new Error(`${deploymentPath}: unmapped deployment ID ${id}`)
+		return manifestEntry(address, label, kind)
 	})
 	configured.push(manifestEntry(deployment.network.genesisRepTokenAddress, 'Genesis REP', 'reputationToken'), manifestEntry(deployment.network.wethAddress, 'Wrapped Ether', 'weth'), manifestEntry(usdcAddress[networkId], 'USD Coin', 'usdc'))
 	const current = [...new Map(configured.map(entry => [entry[0].toLowerCase(), entry])).values()]
 	return serializeManifest(current)
 }
 
-export async function projectManifests(projectRoot: string): Promise<Readonly<Record<keyof typeof usdcAddress, string>>> {
-	const [mainnet, sepolia] = await Promise.all([projectManifest(projectRoot, 'mainnet'), projectManifest(projectRoot, 'sepolia')])
+export async function projectManifests(projectRoot: string, deploymentKinds?: Readonly<Record<string, string>>): Promise<Readonly<Record<keyof typeof usdcAddress, string>>> {
+	let kinds = deploymentKinds
+	if (kinds === undefined) {
+		const catalog: unknown = await Bun.file(new URL('../config/abis.json', import.meta.url)).json()
+		if (!isRecord(catalog) || !isRecord(catalog['contracts'])) throw new Error('ABI catalog has no contracts')
+		kinds = systemContractMappings(Object.keys(catalog['contracts']), await projectDeploymentIds(projectRoot)).deploymentKinds
+	}
+	const [mainnet, sepolia] = await Promise.all([projectManifest(projectRoot, 'mainnet', kinds), projectManifest(projectRoot, 'sepolia', kinds)])
 	return { mainnet, sepolia }
+}
+
+export async function projectDeploymentIds(projectRoot: string): Promise<readonly string[]> {
+	const ids: string[] = []
+	for (const network of Object.keys(usdcAddress)) {
+		const source = path.join(projectRoot, 'docs', `${network}-deployment-addresses.json`)
+		const deployment = deploymentFile(JSON.parse(await readFile(source, 'utf8')), source)
+		ids.push(...[...deployment.deploymentSteps, ...deployment.derivedContracts].map(({ id }) => id))
+	}
+	return [...new Set(ids)].sort()
 }

@@ -136,6 +136,22 @@ test('discovers and authenticates fixed-fee REP/WETH pools for every canonical u
 	})
 })
 
+test('discovers Sepolia pools using the network default when no factory override is supplied', async () => {
+	const uniswapFactory = getAddress('0xEf09Be426F8d6D2786cADEA7D3A8b0D09cEB79B4')
+	const rep = address(10)
+	const pool = address(41)
+	const fake = fakeClient(10n, hash(10), { chainId: 11155111, uniswapFactory, uniswapPoolsByRep: { [rep.toLowerCase()]: { initialized: true, liquidity: 7n, pool } } })
+	const snapshot = await discoverEcosystemSnapshot({
+		anchorBlockNumber: 10n,
+		client: fake.client,
+		deployments: { openOracle: address(6), questionData: address(3), securityPoolFactory: address(4), securityPoolForker: address(5), tradingFactory: address(8), tradingRouter: address(9), weth: address(7), zoltar: address(2) },
+		discoverGenesisDeployment: true,
+		limits: { maxPools: 10, maxQuestions: 10, maxStagedOperationsPerPool: 10, maxUniverses: 10, maxVaultsPerPool: 10 },
+		wallet: address(1),
+	})
+	expect(snapshot.genesisUniswap).toMatchObject({ factory: true, pool, initialized: true, liquidity: '7' })
+})
+
 test('bounds concurrent per-universe Uniswap pool-state fan-out below the RPC queue limit', async () => {
 	const uniswapFactory = address(40)
 	const childOutcomes = Array.from({ length: 10 }, (_, index) => BigInt(index + 1))
@@ -172,6 +188,7 @@ function topologyIdentity(): ImmutableTopologyIdentity {
 }
 
 interface GraphOverrides {
+	chainId?: number
 	missingContract?: Address
 	missingContracts?: readonly Address[]
 	baseFeePerGas?: bigint | null
@@ -216,7 +233,7 @@ function fakeClient(anchorBlockNumber: bigint, blockHash = hash(99), graph: Grap
 			return { baseFeePerGas: graph.baseFeePerGas === undefined ? 1n : graph.baseFeePerGas, hash: graph.historicalBlockHashes?.[number.toString()] ?? (number === anchorBlockNumber ? blockHash : hash(Number(number))), number, timestamp: 1_000n }
 		},
 		async getChainId() {
-			return 31337
+			return graph.chainId ?? 31337
 		},
 		async getCode(parameters: { address: Address; blockNumber?: bigint }) {
 			pinnedReads.push(parameters.blockNumber)

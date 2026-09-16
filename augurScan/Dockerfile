@@ -30,7 +30,18 @@ WORKDIR /workspace/augurScan
 COPY augurScan/browser ./browser
 COPY augurScan/scripts/build-browser.ts ./scripts/build-browser.ts
 COPY augurScan/public ./public
-RUN bun run build
+RUN bun run build:browser
+
+FROM workspace AS metadata-build
+RUN bun install --frozen-lockfile --filter augur-scan --filter @zoltar/contracts
+COPY solidity/contracts ./solidity/contracts
+COPY solidity/ts/compile.ts ./solidity/ts/compile.ts
+COPY solidity/ts/contractProjects.ts ./solidity/ts/contractProjects.ts
+COPY augurScan/scripts ./augurScan/scripts
+COPY augurScan/config/dependency-abi-sources.json ./augurScan/config/dependency-abi-sources.json
+COPY docs/mainnet-deployment-addresses.json ./docs/mainnet-deployment-addresses.json
+COPY docs/sepolia-deployment-addresses.json ./docs/sepolia-deployment-addresses.json
+RUN bun run --cwd augurScan metadata:build
 
 FROM oven/bun:${BUN_VERSION}-alpine AS runtime
 WORKDIR /workspace
@@ -42,11 +53,13 @@ COPY shared/core/package.json ./shared/core/
 COPY --from=dependencies /workspace/augurScan/node_modules ./augurScan/node_modules
 COPY --from=dependencies /workspace/shared/core/node_modules ./shared/core/node_modules
 COPY augurScan/config ./augurScan/config
+COPY --from=metadata-build /workspace/augurScan/config ./augurScan/config
 COPY augurScan/schema.sql ./augurScan/schema.sql
 COPY augurScan/migrations ./augurScan/migrations
 COPY --from=browser-build /workspace/augurScan/public ./augurScan/public
 COPY augurScan/scripts/verify-compose-source.ts ./augurScan/scripts/verify-compose-source.ts
 COPY augurScan/scripts/verify-export-page.ts ./augurScan/scripts/verify-export-page.ts
+COPY augurScan/scripts/report-abi-coverage.ts ./augurScan/scripts/report-abi-coverage.ts
 COPY augurScan/src ./augurScan/src
 COPY shared/core/ts/evm/ ./shared/core/ts/evm/
 COPY shared/core/ts/errors/ ./shared/core/ts/errors/

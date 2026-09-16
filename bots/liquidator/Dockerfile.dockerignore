@@ -18,6 +18,7 @@
 !bots/liquidator/scripts/check-process-lock-runtime.mts
 !bots/shared/scripts/docker-entrypoint.sh
 !bots/liquidator/src/**
+!bots/liquidator/tsconfig.json
 !docs/
 !docs/mainnet-deployment-addresses.json
 !docs/sepolia-deployment-addresses.json
@@ -56,6 +57,8 @@ shared/*/ts/**/*.d.ts.map
 !ui/coreShared/
 !ui/
 !ui/coreShared/package.json
+!ui/coreShared/ts/
+!ui/coreShared/ts/**
 !ui/statoblast/
 !ui/statoblast/package.json
 !ui/statoblastShared/

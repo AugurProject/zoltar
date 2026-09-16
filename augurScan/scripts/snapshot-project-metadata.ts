@@ -1,6 +1,9 @@
 import { mkdir, readFile } from 'node:fs/promises'
 import path from 'node:path'
-import { projectManifests } from './project-manifests.ts'
+import { projectDeploymentIds, projectManifests } from './project-manifests.ts'
+import dependencyAbis from '../config/dependency-abis.json'
+import { verifyDependencyAbis } from './dependency-abis.ts'
+import { serializeSystemContracts, systemContractMappings } from './project-system-contracts.ts'
 import { contractSourceHash, contractSources } from './project-metadata-source.ts'
 
 const projectRoot = path.resolve(import.meta.dir, '../..')
@@ -77,9 +80,11 @@ const payload = {
 	contracts,
 }
 
+verifyDependencyAbis(dependencyAbis)
+const mappings = systemContractMappings(Object.keys(contracts), await projectDeploymentIds(projectRoot))
+const manifests = await projectManifests(projectRoot, mappings.deploymentKinds)
 await Bun.write(outputPath, `${JSON.stringify(payload, undefined, 2)}\n`)
-
-const manifests = await projectManifests(projectRoot)
+await Bun.write(path.join(configOutputRoot, 'system-contracts.generated.ts'), serializeSystemContracts(mappings))
 await Promise.all((['mainnet', 'sepolia'] as const).map(async networkId => await Bun.write(path.join(manifestsRoot, `${networkId}.json`), manifests[networkId])))
 
 console.log(`Wrote ${Object.keys(contracts).length} ABIs and refreshed mainnet/Sepolia manifests`)

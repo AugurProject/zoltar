@@ -27,12 +27,10 @@
 		}
 	},
 	"deployment": {
-		"coordinatorAddresses": [],
 		"quorumRpcUrls": [],
-		"uniswapFactory": "0x1F98431c8aD98523631AE4a59f267346ea31F984",
-		"uniswapQuoter": "0x61fFE014bA17989E743c5F6cB21bF9697530B21e",
-		"uniswapRouter": "0xE592427A0AEce92De3Edee1F18E0157C05861564",
-		"uniswapV2Router": "0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D"
+		"uniswapV2Enabled": true,
+		"uniswapV3Enabled": true,
+		"uniswapV4Enabled": false
 	},
 	"paused": true,
 	"rpcQuorum": 1,

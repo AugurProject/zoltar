@@ -4,6 +4,7 @@ import * as path from 'node:path'
 import * as process from 'node:process'
 import * as url from 'node:url'
 import { repositoryRoot as defaultRepositoryRoot } from '../repo/root.mts'
+import { augurScanMetadataOutputs } from '../repo/projects.ts'
 import { sharedPackages } from '../repo/sharedPackages.ts'
 
 type GitResult = {
@@ -21,6 +22,7 @@ export type GeneratedArtifactCheckOptions = {
 }
 
 const explicitlyRequiredGeneratedOutputs = [
+	...augurScanMetadataOutputs,
 	'shared/.freshness-hash',
 	'solidity/artifacts/Contracts.json',
 	'solidity/artifacts/.freshness-hash',
@@ -33,6 +35,7 @@ const explicitlyRequiredGeneratedOutputs = [
 ]
 
 const generatedReviewPaths = [
+	...augurScanMetadataOutputs,
 	...sharedPackages.map(entry => `${entry.path}/js`),
 	'solidity/artifacts',
 	'solidity/.contract-hash.json',

@@ -4,7 +4,7 @@
 	"chainId": 11155111,
 	"contracts": [
 		{
-			"role": "executor",
+			"role": "security-pool-factory",
 			"address": "0x0000000000000000000000000000000000000001",
 			"runtimeCodeHash": "0x0000000000000000000000000000000000000000000000000000000000000000"
 		}

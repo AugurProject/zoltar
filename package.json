@@ -75,7 +75,7 @@
 		"setup": "bun run projects:setup && bun run generate && bun run ui:build:apps && bun run ui:build:tests",
 		"compile-contracts": "cd solidity && bun run compile-contracts",
 		"compile-contracts:current": "cd solidity && bun run compile-contracts:current",
-		"generate": "bun run compile-contracts && bun run ui:vendor",
+		"generate": "bun run compile-contracts && bun run ui:vendor && bun run --cwd augurScan build",
 		"check:mainnet-deployment:generated": "bun run generate && bun ./tooling/contracts/check-mainnet-deployment.mts",
 		"check:mainnet-deployment:current": "bun ./tooling/contracts/check-mainnet-deployment.mts",
 		"tsc:app": "bun ./tooling/ui/vendor.mts trading && bun ./tooling/ui/run-app-typescript.mts",

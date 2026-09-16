@@ -1,3 +1,6 @@
+import { canonicalExecutorIdentity } from '#execution/executor-identity'
+import { canonicalSecurityPoolFactory } from '#config/network'
+import { keccak256 } from '@zoltar/bot-shared/ethereum'
 import { rpcFailureWithContext, type Address, type TransactionLog } from '@zoltar/bot-shared/ethereum'
 import { OPEN_ORACLE_FLAG_STORE_ALL, OPEN_ORACLE_FLAG_TIME_TYPE, OPEN_ORACLE_FLAG_TRACK_DISPUTES, OPEN_ORACLE_REPORT_SETTLED_TOPIC } from '@zoltar/open-oracle-shared/openOracle/openOracle'
 import { openOraclePriceCoordinatorAbi } from '#contracts/abi'
@@ -13,22 +16,22 @@ import { endpointLabel } from '#monitoring/connectivity'
 const MAX_UNTRUSTED_DRY_RUN_REPORTS = 256
 const REORG_OVERLAP_BLOCKS = 12n
 
-export async function loadCoordinatorPolicies(client: ReadClient, config: Pick<Configuration, 'coordinatorAddresses' | 'network' | 'openOracle'>) {
+export async function loadCoordinatorPolicies(client: ReadClient, config: Pick<Configuration, 'coordinatorAddresses' | 'network' | 'openOracle'>, blockNumber?: bigint) {
 	return Promise.all(
 		config.coordinatorAddresses.map(async coordinator => {
 			const [openOracle, token2, token1, settlementTime, disputeDelay, protocolFee, feePercentage, multiplier, timeType, trackDisputes, protocolFeeRecipient, callbackGasLimit] = await Promise.all([
-				client.readContract({ address: coordinator, abi: openOraclePriceCoordinatorAbi, functionName: 'openOracle' }),
-				client.readContract({ address: coordinator, abi: openOraclePriceCoordinatorAbi, functionName: 'reputationToken' }),
-				client.readContract({ address: coordinator, abi: openOraclePriceCoordinatorAbi, functionName: 'weth' }),
-				client.readContract({ address: coordinator, abi: openOraclePriceCoordinatorAbi, functionName: 'settlementTime' }),
-				client.readContract({ address: coordinator, abi: openOraclePriceCoordinatorAbi, functionName: 'disputeDelay' }),
-				client.readContract({ address: coordinator, abi: openOraclePriceCoordinatorAbi, functionName: 'protocolFee' }),
-				client.readContract({ address: coordinator, abi: openOraclePriceCoordinatorAbi, functionName: 'feePercentage' }),
-				client.readContract({ address: coordinator, abi: openOraclePriceCoordinatorAbi, functionName: 'multiplier' }),
-				client.readContract({ address: coordinator, abi: openOraclePriceCoordinatorAbi, functionName: 'timeType' }),
-				client.readContract({ address: coordinator, abi: openOraclePriceCoordinatorAbi, functionName: 'trackDisputes' }),
-				client.readContract({ address: coordinator, abi: openOraclePriceCoordinatorAbi, functionName: 'protocolFeeRecipient' }),
-				client.readContract({ address: coordinator, abi: openOraclePriceCoordinatorAbi, functionName: 'getSettlementCallbackGasLimit' }),
+				client.readContract({ address: coordinator, abi: openOraclePriceCoordinatorAbi, blockNumber, functionName: 'openOracle' }),
+				client.readContract({ address: coordinator, abi: openOraclePriceCoordinatorAbi, blockNumber, functionName: 'reputationToken' }),
+				client.readContract({ address: coordinator, abi: openOraclePriceCoordinatorAbi, blockNumber, functionName: 'weth' }),
+				client.readContract({ address: coordinator, abi: openOraclePriceCoordinatorAbi, blockNumber, functionName: 'settlementTime' }),
+				client.readContract({ address: coordinator, abi: openOraclePriceCoordinatorAbi, blockNumber, functionName: 'disputeDelay' }),
+				client.readContract({ address: coordinator, abi: openOraclePriceCoordinatorAbi, blockNumber, functionName: 'protocolFee' }),
+				client.readContract({ address: coordinator, abi: openOraclePriceCoordinatorAbi, blockNumber, functionName: 'feePercentage' }),
+				client.readContract({ address: coordinator, abi: openOraclePriceCoordinatorAbi, blockNumber, functionName: 'multiplier' }),
+				client.readContract({ address: coordinator, abi: openOraclePriceCoordinatorAbi, blockNumber, functionName: 'timeType' }),
+				client.readContract({ address: coordinator, abi: openOraclePriceCoordinatorAbi, blockNumber, functionName: 'trackDisputes' }),
+				client.readContract({ address: coordinator, abi: openOraclePriceCoordinatorAbi, blockNumber, functionName: 'protocolFeeRecipient' }),
+				client.readContract({ address: coordinator, abi: openOraclePriceCoordinatorAbi, blockNumber, functionName: 'getSettlementCallbackGasLimit' }),
 			])
 			if (openOracle.toLowerCase() !== config.openOracle.toLowerCase()) throw new Error(`Configured coordinator ${coordinator} uses OpenOracle ${openOracle}, not ${config.openOracle}`)
 			if (token1.toLowerCase() !== config.network.weth.toLowerCase()) throw new Error(`Configured coordinator ${coordinator} uses WETH ${token1}, not ${config.network.weth}`)
@@ -54,24 +57,13 @@ export async function loadCoordinatorPolicies(client: ReadClient, config: Pick<C
 	)
 }
 
-export async function loadCoordinatorPoliciesWithQuorum(clients: readonly ReadClient[], endpoints: readonly string[], config: Pick<Configuration, 'coordinatorAddresses' | 'network' | 'openOracle'>) {
-	if (clients.length !== endpoints.length) throw new Error('Coordinator policy readers and endpoints differ')
-	return settledQuorumValue(
-		'coordinator policies',
-		clients.map(async (client, index) => ({ endpoint: endpoints[index] ?? '', value: await loadCoordinatorPolicies(client, config) })),
-	)
-}
-
 function requiredDeploymentIdentities(config: Configuration) {
 	const identities: { address: Address; role: DeploymentRole }[] = [
 		{ address: config.openOracle, role: 'open-oracle' },
 		{ address: config.network.weth, role: 'weth' },
-		{ address: config.network.factory, role: 'uniswap-factory' },
-		{ address: config.network.quoter, role: 'uniswap-quoter' },
-		...config.coordinatorAddresses.map(address => ({ address, role: 'coordinator' as const })),
+		{ address: canonicalSecurityPoolFactory(config.network.name), role: 'security-pool-factory' },
 	]
-	if (config.executor !== undefined) identities.push({ address: config.executor, role: 'executor' })
-	if (config.router !== undefined) identities.push({ address: config.router, role: 'uniswap-router' })
+	if (config.router !== undefined) identities.push({ address: config.network.factory, role: 'uniswap-factory' }, { address: config.network.quoter, role: 'uniswap-quoter' }, { address: config.router, role: 'uniswap-router' })
 	if (config.v2Router !== undefined) identities.push({ address: config.v2Router, role: 'uniswap-v2-router' })
 	if (config.v4PoolManager !== undefined) identities.push({ address: config.v4PoolManager, role: 'uniswap-v4-pool-manager' })
 	if (config.v4Quoter !== undefined) identities.push({ address: config.v4Quoter, role: 'uniswap-v4-quoter' })
@@ -85,6 +77,8 @@ export function authenticatedExecutionToken(config: Configuration, token: Addres
 
 export async function authenticateConfiguredDeployments(clients: readonly ReadClient[], config: Configuration) {
 	if (!config.execute) return
+	const executor = canonicalExecutorIdentity()
+	if (config.executor?.toLowerCase() !== executor.address.toLowerCase()) throw new Error('Executor must use the canonical derived address')
 	const manifest = config.deploymentManifest
 	if (manifest === undefined) throw new Error('Execution requires an authenticated deployment manifest')
 	const required = [...requiredDeploymentIdentities(config), ...manifest.contracts.map(contract => ({ address: contract.address, role: contract.role }))]
@@ -95,6 +89,8 @@ export async function authenticateConfiguredDeployments(clients: readonly ReadCl
 		clients.map(async (client, index) => {
 			const endpoint = endpointLabel(endpoints[index] ?? '')
 			try {
+				const executorCode = await client.getCode({ address: executor.address })
+				if (executorCode === undefined || keccak256(executorCode) !== executor.runtimeCodeHash) throw new Error('Canonical executor is missing or has unexpected bytecode; deploy the bundled executor')
 				await authenticateDeploymentManifest(manifest, {
 					chainId: config.network.chain.id,
 					network: config.network.name,
