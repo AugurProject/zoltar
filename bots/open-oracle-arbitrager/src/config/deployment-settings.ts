@@ -1,3 +1,4 @@
+import { canonicalExecutorIdentity } from '#execution/executor-identity'
 import { parseDeploymentManifest, type DeploymentManifest } from '#config/deployment-auth'
 import { validateReadRpcUrls, type NetworkName } from '#monitoring/connectivity'
 import { canonicalCoreDeployment, canonicalNetworkDeployment, canonicalUniswapDeployment } from '@zoltar/bot-shared/config/canonical-deployment'
@@ -25,7 +26,7 @@ export type DeploymentSettings = {
 	weth: Address
 }
 
-export type StoredDeploymentSettings = Pick<DeploymentSettings, 'coordinatorAddresses' | 'deploymentManifest' | 'executor' | 'quorumRpcUrls' | 'uniswapV2Enabled' | 'uniswapV3Enabled' | 'uniswapV4Enabled'>
+export type StoredDeploymentSettings = Pick<DeploymentSettings, 'deploymentManifest' | 'quorumRpcUrls' | 'uniswapV2Enabled' | 'uniswapV3Enabled' | 'uniswapV4Enabled'>
 
 function record(value: unknown) {
 	return validateRecord(value, 'Deployment settings', 'Deployment settings must be a JSON object')
@@ -43,11 +44,6 @@ function venueEnabled(value: unknown, name: string, fallback: () => boolean) {
 	return value
 }
 
-function addressArray(value: unknown, name: string) {
-	if (!Array.isArray(value) || value.some(item => typeof item !== 'string')) throw new Error(`${name} must be an array of addresses`)
-	return [...new Map(value.map(item => getAddress(String(item))).map(address => [address.toLowerCase(), address])).values()]
-}
-
 function urlArray(value: unknown) {
 	if (!Array.isArray(value) || value.length > 8 || value.some(item => typeof item !== 'string')) throw new Error('Quorum RPC URLs must contain no more than 8 URLs')
 	return validateReadRpcUrls(value.map(item => String(item)))
@@ -56,7 +52,7 @@ function urlArray(value: unknown) {
 export function validateDeploymentSettings(value: unknown, network: NetworkName = 'mainnet'): DeploymentSettings {
 	const settings = record(value)
 	const keys = ['coordinatorAddresses', 'deploymentManifest', 'executor', 'openOracle', 'quorumRpcUrls', 'rep', 'uniswapV2Enabled', 'uniswapV3Enabled', 'uniswapV4Enabled', 'uniswapFactory', 'uniswapQuoter', 'uniswapRouter', 'uniswapV2Router', 'uniswapV4PoolManager', 'uniswapV4Quoter', 'weth']
-	const requiredKeys = ['coordinatorAddresses', 'quorumRpcUrls']
+	const requiredKeys = ['quorumRpcUrls']
 	if (Object.keys(settings).some(key => !keys.includes(key)) || requiredKeys.some(key => !(key in settings))) throw new Error('Deployment settings require the supported core deployment fields')
 	const manifest = network === 'mainnet' ? mainnet : sepolia
 	const identity = canonicalNetworkDeployment(manifest)
@@ -71,9 +67,9 @@ export function validateDeploymentSettings(value: unknown, network: NetworkName 
 		return poolManager !== undefined
 	})
 	return {
-		coordinatorAddresses: addressArray(settings['coordinatorAddresses'], 'Coordinator addresses'),
+		coordinatorAddresses: [],
 		deploymentManifest: settings['deploymentManifest'] === undefined || settings['deploymentManifest'] === null ? undefined : parseDeploymentManifest(settings['deploymentManifest']),
-		executor: optionalAddress(settings['executor'], 'Executor'),
+		executor: canonicalExecutorIdentity().address,
 		openOracle: canonicalCoreDeployment(manifest).openOracle,
 		quorumRpcUrls: urlArray(settings['quorumRpcUrls']),
 		rep: identity.rep,

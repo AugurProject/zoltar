@@ -1,3 +1,4 @@
+import { canonicalExecutorIdentity } from '#execution/executor-identity'
 import mainnet from '../../../../docs/mainnet-deployment-addresses.json'
 import sepolia from '../../../../docs/sepolia-deployment-addresses.json'
 import { canonicalCoreDeployment, canonicalNetworkDeployment, canonicalUniswapDeployment } from '@zoltar/bot-shared/config/canonical-deployment'
@@ -41,9 +42,9 @@ function settings(privateKeyValue: Hex | undefined) {
 			readRpcUrl: 'https://read.example/',
 		},
 		deployment: {
-			coordinatorAddresses: ['0x0000000000000000000000000000000000000002' as const],
+			coordinatorAddresses: [],
 			deploymentManifest: undefined,
-			executor: '0x0000000000000000000000000000000000000003' as const,
+			executor: canonicalExecutorIdentity().address,
 			openOracle: canonicalCoreDeployment(mainnet).openOracle,
 			quorumRpcUrls: ['https://quorum.example/'],
 			rep: canonicalNetworkDeployment(mainnet).rep,
@@ -510,6 +511,6 @@ test('preserves default router intent through serialized network changes', () =>
 test('stores only venue switches and derives addresses again on load', () => {
 	const parsed = parseOperatorSettings({ ...example, deployment: { ...example.deployment, uniswapV2Enabled: false, uniswapV3Enabled: true, uniswapV4Enabled: true } })
 	const stored = serializeOperatorSettings(parsed)
-	expect(stored.deployment).toEqual({ coordinatorAddresses: [], deploymentManifest: undefined, executor: undefined, quorumRpcUrls: [], uniswapV2Enabled: false, uniswapV3Enabled: true, uniswapV4Enabled: true })
+	expect(stored.deployment).toEqual({ deploymentManifest: undefined, quorumRpcUrls: [], uniswapV2Enabled: false, uniswapV3Enabled: true, uniswapV4Enabled: true })
 	expect(parseOperatorSettings(JSON.parse(JSON.stringify(stored))).deployment).toEqual(parsed.deployment)
 })

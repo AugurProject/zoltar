@@ -1,7 +1,8 @@
+import { discoverCoordinatorPolicies } from '#monitoring/coordinator-discovery'
 import type { Configuration } from '#config/configuration'
 import type { DeploymentSettings } from '#config/deployment-settings'
 import type { NetworkConfiguration } from '#config/network'
-import { authenticateConfiguredDeployments, authenticatedExecutionToken, loadCoordinatorPolicies, loadCoordinatorPoliciesWithQuorum, retainReportsAndLogs } from '#config/runtime-deployment'
+import { authenticateConfiguredDeployments, authenticatedExecutionToken, loadCoordinatorPolicies, retainReportsAndLogs } from '#config/runtime-deployment'
 import { constantProductPairAbi } from '#contracts/abi'
 import type { ExecutionCandidate } from '#core/operator-types'
 import { positionConsumesRisk } from '#core/safety-controls'
@@ -452,13 +453,7 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 							if (value !== config.network.chain.id) throw new Error(`Read RPC chain mismatch: expected ${config.network.chain.id.toString()}, received ${value.toString()}`)
 						})
 						await requireDeployedContractsOnce(client, [{ name: 'Multicall3', address: config.network.multicall3 }])
-						coordinatorPolicies = config.execute ? await loadCoordinatorPoliciesWithQuorum(readClients, [config.connectivity.readRpcUrl, ...config.quorumRpcUrls].map(endpointLabel), config) : await loadCoordinatorPolicies(client, config)
 						await authenticateConfiguredDeployments(readClients, config)
-						if (config.execute && config.executor !== undefined) {
-							const executor = config.executor
-							const executorCode = await contextualRpcRead('eth_getCode', requestClient => requestClient.getCode({ address: executor }))
-							if (executorCode === undefined || executorCode === '0x') throw new Error(`Configured executor ${executor} has no contract code on ${config.network.name}`)
-						}
 						state.endpointChecks = [...(config.execute ? [] : await checkConnectivity(config.connectivity, config.network.chain.id)), ...(await checkSubmissionEndpoints(config.submission, config.network.chain.id))]
 						startupValidated = true
 						if (executionActivationPending) {
@@ -631,6 +626,9 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 						state.lastPollAt = new Date().toISOString()
 						return completeSuccessfulPoll(state, nextError, config.once)
 					}
+					coordinatorPolicies = await discoverCoordinatorPolicies(config.execute ? readClients : [client], config, blockNumber, blockHash)
+					config.coordinatorAddresses = coordinatorPolicies.map(policy => policy.coordinator)
+					fixedState.deployment = { ...fixedState.deployment, coordinatorAddresses: config.coordinatorAddresses }
 					const executionReady = positions.every(position => position.historyOutbox === undefined) && nextError === undefined
 					const discoversReportsFromCoordinators = config.coordinatorAddresses.length !== 0
 					cursor ??=

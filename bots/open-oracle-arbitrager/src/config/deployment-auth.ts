@@ -1,7 +1,7 @@
 import { getAddress, isAddress, keccak256, type Address, type Hex } from '@zoltar/bot-shared/ethereum'
 import { record } from '@zoltar/bot-shared/infrastructure/json-validation'
 
-export type DeploymentRole = 'coordinator' | 'executor' | 'open-oracle' | 'token' | 'uniswap-factory' | 'uniswap-quoter' | 'uniswap-router' | 'uniswap-v2-router' | 'uniswap-v4-pool-manager' | 'uniswap-v4-quoter' | 'weth'
+export type DeploymentRole = 'security-pool-factory' | 'coordinator' | 'executor' | 'open-oracle' | 'token' | 'uniswap-factory' | 'uniswap-quoter' | 'uniswap-router' | 'uniswap-v2-router' | 'uniswap-v4-pool-manager' | 'uniswap-v4-quoter' | 'weth'
 
 export type DeploymentManifest = {
 	chainId: number
@@ -14,7 +14,7 @@ export type DeploymentManifest = {
 	version: 1
 }
 
-const roles = new Set<DeploymentRole>(['coordinator', 'executor', 'open-oracle', 'token', 'uniswap-factory', 'uniswap-quoter', 'uniswap-router', 'uniswap-v2-router', 'uniswap-v4-pool-manager', 'uniswap-v4-quoter', 'weth'])
+const roles = new Set<DeploymentRole>(['security-pool-factory', 'coordinator', 'executor', 'open-oracle', 'token', 'uniswap-factory', 'uniswap-quoter', 'uniswap-router', 'uniswap-v2-router', 'uniswap-v4-pool-manager', 'uniswap-v4-quoter', 'weth'])
 const networkChainIds = {
 	mainnet: 1,
 	sepolia: 11_155_111,

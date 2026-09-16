@@ -519,9 +519,9 @@ describe('file-only startup configuration', () => {
 		const executionAddress = '0x0000000000000000000000000000000000000001'
 		Reflect.set(executableRuntime, 'execute', true)
 		Reflect.set(executableMainnetProfile, 'privateKey', `0x${'11'.repeat(32)}`)
-		Reflect.set(executableDeployment, 'executor', executionAddress)
-		Reflect.set(executableDeployment, 'uniswapRouter', executionAddress)
-		Reflect.set(executableDeployment, 'coordinatorAddresses', [executionAddress])
+		Reflect.set(executableDeployment, 'uniswapV2Enabled', false)
+		Reflect.set(executableDeployment, 'uniswapV3Enabled', true)
+		Reflect.set(executableDeployment, 'uniswapV4Enabled', false)
 		Reflect.set(executableDeployment, 'deploymentManifest', {
 			chainId: 1,
 			contracts: [{ address: executionAddress, role: 'open-oracle', runtimeCodeHash: `0x${'00'.repeat(32)}` }],
@@ -529,9 +529,7 @@ describe('file-only startup configuration', () => {
 			version: 1,
 		})
 		for (const [field, missingValue] of [
-			['executor', undefined],
-			['uniswapRouter', undefined],
-			['coordinatorAddresses', []],
+			['uniswapV3Enabled', false],
 			['deploymentManifest', undefined],
 		] as const) {
 			const invalidProfile = structuredClone(executableMainnetProfile)
@@ -743,7 +741,7 @@ describe('file-only startup configuration', () => {
 		expect(saveResponse.status, await saveResponse.clone().text()).toBe(200)
 		expect((await loadOperatorSettings(path))?.rpcQuorum).toBe(2)
 		const deploymentResponse = await fetch(`${origin}/api/executor-deployment`, {
-			body: JSON.stringify({ salt: `0x${'00'.repeat(32)}` }),
+			body: JSON.stringify({}),
 			headers: { 'content-type': 'application/json', origin },
 			method: 'POST',
 		})

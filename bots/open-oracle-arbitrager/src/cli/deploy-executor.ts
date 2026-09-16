@@ -1,4 +1,5 @@
 #!/usr/bin/env bun
+import { canonicalExecutorSalt } from '#execution/executor-identity'
 
 import { privateKeyToAccount, type Hex } from '@zoltar/bot-shared/ethereum'
 import { defaultConfigurationFile } from '#config/configuration'
@@ -29,7 +30,6 @@ PRIVATE_KEY=0x... bun run deploy-executor -- [options]
   --network=mainnet|sepolia
   --rpc-url=https://...
   --quorum-rpc-url=https://... Optional; saved quorum 2 requires two
-  --salt=0x...                  32-byte CREATE2 salt; defaults to zero
 
 The saved RPC agreement requirement defaults to one reader, so the primary RPC is
 sufficient. Select quorum 2 in the dashboard to require two additional independent
@@ -54,7 +54,8 @@ const rpcQuorum = selectedSettings?.rpcQuorum ?? 1
 process.env['ZOLTAR_BOT_RPC_QUORUM'] = rpcQuorum.toString()
 if (quorumRpcUrls.length < configuredQuorumRpcUrlMinimum(rpcQuorum)) throw new Error('Executor deployment does not satisfy the saved RPC agreement requirement')
 const account = privateKeyToAccount(privateKeyValue as Hex)
-const salt = option('salt') ?? `0x${'00'.repeat(32)}`
+if (option('salt') !== undefined) throw new Error('Executor uses a fixed canonical salt; omit --salt')
+const salt = canonicalExecutorSalt
 const plan = executorDeploymentPlan(salt)
 const intentPath = executorDeploymentIntentPath(settingsFile, networkName)
 console.log(`predicted=${plan.address} network=${networkName} deployer=${account.address}`)

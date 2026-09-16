@@ -262,6 +262,7 @@ export type PublicOperatorSnapshot = PollStatus &
 		marketConsensus?: ReturnType<typeof serializeMarketConsensusEstimate>
 		execute: boolean
 		executor: Address | undefined
+		coordinatorAddresses: readonly Address[]
 		executionHistory: readonly PublicExecutionRecord[]
 		executionHistoryRecordCount: number
 		positionRecordCount: number
@@ -394,6 +395,7 @@ export function publicOperatorSnapshot(snapshot: OperatorSnapshot): PublicOperat
 		marketConsensus: snapshot.marketConsensus,
 		execute: snapshot.execute,
 		executor: snapshot.executor,
+		coordinatorAddresses: snapshot.deployment.coordinatorAddresses,
 		executionHistory: snapshot.executionHistory.map(record => ({
 			actualGasCostEth: record.actualGasCostEth,
 			direction: record.direction,

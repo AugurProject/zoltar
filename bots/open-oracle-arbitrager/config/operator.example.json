@@ -27,7 +27,6 @@
 		}
 	},
 	"deployment": {
-		"coordinatorAddresses": [],
 		"quorumRpcUrls": [],
 		"uniswapV2Enabled": true,
 		"uniswapV3Enabled": true,

@@ -57,9 +57,7 @@ export function runnableOperatorSettings(settingsFile: string, saved: PersistedO
 	const network = networkConfiguration(saved.network)
 	const quorumRpcUrls = [...validateIndependentReadRpcUrls(saved.connectivity.readRpcUrl, deployment.quorumRpcUrls)]
 	if (saved.runtime.execute && quorumRpcUrls.length < configuredQuorumRpcUrlMinimum(saved.rpcQuorum)) throw new Error('Execution is enabled, but live operation requires at least two independent quorum RPCs (three read endpoints total)')
-	if (saved.runtime.execute && deployment.executor === undefined) throw new Error('Execution is enabled, but deployment.executor is not configured')
 	if (saved.runtime.execute && deployment.uniswapRouter === undefined && deployment.uniswapV2Router === undefined && deployment.uniswapV4PoolManager === undefined) throw new Error('Execution requires at least one enabled Uniswap venue available on this network')
-	if (saved.runtime.execute && deployment.coordinatorAddresses.length === 0) throw new Error('Execution is enabled, but deployment.coordinatorAddresses is empty')
 	if (saved.runtime.execute && deployment.deploymentManifest === undefined) throw new Error('Execution is enabled, but deployment.deploymentManifest is not configured')
 	assertDistinctPersistentPaths(settingsFile, saved.runtime)
 	return { deployment, network, quorumRpcUrls }

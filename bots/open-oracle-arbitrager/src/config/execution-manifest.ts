@@ -21,14 +21,15 @@ function usage() {
 
 bun run manifest -- generate \\
   --network=sepolia --rpc-url=https://... \\
-  --contract=executor:0x... --contract=open-oracle:0x... \\
+  --contract=security-pool-factory:0x... --contract=open-oracle:0x... \\
   --output=/secure/operator/sepolia-execution-manifest.json
 
 bun run manifest -- verify \\
   --rpc-url=https://... --manifest=/secure/operator/sepolia-execution-manifest.json
 
-Repeat --contract for every coordinator, token, router, factory, quoter, WETH,
-OpenOracle, and executor trusted for execution.`)
+Repeat --contract for the canonical security-pool-factory, executable tokens,
+Uniswap contracts, WETH, and OpenOracle. Pool coordinators inherit factory
+authentication; the derived executor is checked against bundled bytecode.`)
 }
 
 function parseContract(value: string) {

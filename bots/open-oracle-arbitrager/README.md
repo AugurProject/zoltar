@@ -84,11 +84,14 @@ for the report lifecycle assumptions and economics used by the arbitrager.
   instead of starting an unbounded recovery scan. Coordinator-free diagnostic mode
   reads only the configured latest-block window.
 - OpenOracle deployed at the address in the selected network manifest.
-- At least one reviewed Zoltar `OpenOraclePriceCoordinator` address for every
-  coordinator whose games this wallet may dispute.
+- Approve the Zoltar universes whose pool reports this wallet may dispute. Each
+  scan discovers their pools through the canonical security-pool factory registry
+  and verifies the immutable pool-to-coordinator link at the selected block.
+  Coordinator addresses are not configurable.
 - A deployed `OpenOracleArbitrageExecutor`. Deploy the stateless executor at a
-  predictable CREATE2 address from the dashboard or with `bun run deploy-executor --`,
-  then authenticate that address in the execution manifest.
+  fixed CREATE2 address from the dashboard or with `bun run deploy-executor --`.
+  The bot derives the address and verifies the runtime against its bundled bytecode;
+  no executor address or manifest pin is required.
 - At least one enabled Uniswap version available on the selected network.
 - `deployment.uniswapV3Enabled` (new-profile default `true`) enables V3 with its spot/TWAP check.
 - Optionally, `deployment.uniswapV2Enabled` (new-profile default `true`) adds authenticated
@@ -102,7 +105,9 @@ for the report lifecycle assumptions and economics used by the arbitrager.
   router enables V2 or V3, and a saved PoolManager/Quoter pair enables V4. Saving
   records those choices as switches; all addresses still derive from the network.
 - A reviewed deployment manifest that pins chain, role, address, and runtime
-  bytecode hash for every contract and executable token. The primary read RPC
+  bytecode hash for the canonical `security-pool-factory`, OpenOracle, WETH,
+  enabled Uniswap contracts, and executable tokens. Registered pool coordinators
+  inherit factory authentication; their policy settings are checked separately. The primary read RPC
   authenticates every manifest entry by default. With the saved `rpcQuorum` setting at `2`,
   at least two available readers must authenticate every entry before the bot can
   sign. A contradictory authentication result fails closed.
@@ -208,7 +213,7 @@ apply automatically at the next scan boundary.
 In **Chain and RPC connectivity**, select the chain, enter its read and public RPC URLs, and
 save so every endpoint is checked against that chain. Reload the dashboard, open
 Settings, then open [**Complete bot configuration**](http://127.0.0.1:4173/settings#complete-configuration).
-Add the reviewed coordinator, executor, and venue settings, choose chain-specific
+Approve universes, deploy the derived executor, select venues, and choose chain-specific
 history, price, and position paths, and save. OpenOracle, genesis REP, and WETH
 come from `docs/mainnet-deployment-addresses.json` or
 `docs/sepolia-deployment-addresses.json`. The root market asset and chain are
@@ -255,7 +260,7 @@ round trips regardless of how many tokens, pools, or reports are evaluated.
 Centralized-exchange sampling runs on its own timer; after the first sample it no
 longer sits in the block-scan path.
 
-With approved coordinators configured, startup discovers reports by reading each
+For pools in approved universes, each scan discovers reports by reading each
 coordinator's `pendingReportId` at one fixed block and then reads the corresponding
 stored OpenOracle state. It repeats those current-state reads at each new head and
 does not query historical OpenOracle logs. Execution mode requires a quorum to agree
@@ -298,7 +303,7 @@ browser reconnects automatically.
 The first switch creates a clean Sepolia profile from the reviewed defaults. Its
 settings, signer, deployment addresses, tokens, strategy, submission policy, and
 history, price, and position journals are independent from mainnet. Configure its
-Sepolia RPCs and reviewed coordinator, executor, and venue addresses. OpenOracle,
+Sepolia RPCs, universe approvals, deployment manifest, and venue switches. OpenOracle,
 genesis REP, WETH, and the root market identity are selected automatically from
 the Sepolia manifest.
 Switching back to Mainnet restores the saved mainnet profile and journals, but the
@@ -314,19 +319,19 @@ any pending executor-deployment recovery before switching chains.
 
 ## Execute disputes
 
-Deploy the stateless executor from the same selected network. The default zero salt
-is deterministic; use the same 32-byte `--salt` to obtain the same address on every
-chain where the canonical CREATE2 proxy and executor init code are identical:
+Deploy the stateless executor on the selected network. Its fixed zero salt and
+bundled init code determine the address through the canonical CREATE2 proxy.
+The dashboard and CLI use the same address; custom salts are not accepted:
 
 ```bash
-PRIVATE_KEY=0xYourDeploymentPrivateKey ETH_RPC_URL=https://rpc-a.example bun run deploy-executor -- --network=mainnet --quorum-rpc-url=https://rpc-b.example --quorum-rpc-url=https://rpc-c.example --salt=0x0000000000000000000000000000000000000000000000000000000000000000
+PRIVATE_KEY=0xYourDeploymentPrivateKey ETH_RPC_URL=https://rpc-a.example bun run deploy-executor -- --network=mainnet --quorum-rpc-url=https://rpc-b.example --quorum-rpc-url=https://rpc-c.example
 ```
 
 The saved default policy permits the primary Anvil RPC without independent quorum
 URLs:
 
 ```bash
-PRIVATE_KEY=0xYourLocalDevelopmentKey ETH_RPC_URL=http://localhost:8545 bun run deploy-executor -- --network=sepolia --salt=0x0000000000000000000000000000000000000000000000000000000000000000
+PRIVATE_KEY=0xYourLocalDevelopmentKey ETH_RPC_URL=http://localhost:8545 bun run deploy-executor -- --network=sepolia
 ```
 
 When the saved `rpcQuorum` setting is `2`, the three read RPCs must use independent origins. Before broadcasting, the command
@@ -405,11 +410,13 @@ deployed runtime bytecode:
 }
 ```
 
-Allowed roles are `open-oracle`, `weth`, `uniswap-factory`,
+Allowed roles are `security-pool-factory`, `open-oracle`, `weth`, `uniswap-factory`,
 `uniswap-quoter`, `uniswap-router`, `uniswap-v2-router`,
 `uniswap-v4-pool-manager`, `uniswap-v4-quoter`, `executor`, `coordinator`,
 and `token`.
-Include every address in use. Do not construct this trust root from the same RPC
+Individual `executor` and `coordinator` entries are optional additional pins. The
+executor is always verified against bundled code, and registered coordinators
+inherit the authenticated factory trust. Do not construct this trust root from the same RPC
 that the bot will authenticate; independently review the deployment, compiler
 settings, and runtime code.
 
@@ -421,7 +428,7 @@ The parser and schema bind `mainnet` to chain ID `1` and `sepolia` to chain ID
 can verify the file.
 
 ```bash
-bun run manifest -- generate --network=sepolia --rpc-url=https://first-provider.example --contract=executor:0x... --contract=open-oracle:0x... --output=/secure/operator/sepolia-deployments.json
+bun run manifest -- generate --network=sepolia --rpc-url=https://first-provider.example --contract=security-pool-factory:0x... --contract=open-oracle:0x... --output=/secure/operator/sepolia-deployments.json
 
 bun run manifest -- verify --rpc-url=https://independent-provider.example --manifest=/secure/operator/sepolia-deployments.json
 ```
@@ -470,7 +477,7 @@ Before each dispute, the bot:
    timing, fee, multiplier, and flag template. Independent hard bounds reject
    callback gas above 10,000,000, timestamp settlement windows above seven days,
    block settlement windows above 50,400 blocks, and multipliers above 2x even when
-   a configured coordinator exposes them.
+   a discovered coordinator exposes them.
 2. Checks that the game is WETH plus a usable token and inside its dispute window.
    In execute mode, token 2 must be the REP of an explicitly approved Zoltar universe
    and authenticated in the execution manifest. Other observed tokens are monitor-only.
@@ -629,7 +636,7 @@ The dashboard shows:
 - A local signer control, connected address, and its ETH/WETH/REP balances.
 - ETH, WETH, REP, executable REP value, and estimated portfolio value.
 - Native ETH stakes, WETH stakes, and ETH settler rewards locked in reports currently
-  pending on configured coordinators. The combined figure treats 1 WETH as 1 ETH.
+  pending on discovered coordinators. The combined figure treats 1 WETH as 1 ETH.
 - Current opportunities, token-metadata-normalized inventory requirements, deadline
   window, token-specific direction, pool, and decision.
 - Durable positions with actual hedge execution, entry and lifecycle gas, exact
@@ -657,7 +664,7 @@ The dashboard shows:
   explicitly labeled instead of disappearing.
 - In coordinator-free diagnostic mode, the submitted/disputed/settled events
   observed for each OpenOracle report, including blocks, reporters, raw locked
-  amounts, and transaction links. Configured-coordinator mode shows current report
+  amounts, and transaction links. Discovered-coordinator mode shows current report
   state without reconstructing these historical paths. See
   [data freshness and retention](#data-freshness-and-retention) for lookback limits.
 - A per-asset current-head price-history chart with one series per supported pool,
@@ -742,21 +749,27 @@ Deployment identities are execution trust roots. REP, WETH, OpenOracle, and all
 Uniswap addresses come from the selected network. Mainnet uses upstream Uniswap;
 Sepolia uses the contracts installed by `deploy:testnet`. The saved configuration
 contains V2/V3/V4 enable switches, not Uniswap addresses. The dashboard validates
-executor, coordinator, manifest, and independent RPC settings before saving them
-for the next scan boundary. The scan authenticates contract bytecode against the
-reviewed manifest before execution.
+venue switches, manifest, and independent RPC settings before saving them
+for the next scan boundary. Executor and coordinator overrides are ignored and
+removed on save. The executor is derived from bundled code and a fixed salt;
+coordinators come from pools in approved universes. The scan authenticates the
+factory against the reviewed manifest and verifies each pool-to-coordinator link.
+Discovery is bounded to 10,000 registry entries and fails closed if that limit is exceeded.
+When upgrading an execution profile, add the reviewed canonical factory under the
+`security-pool-factory` manifest role; per-coordinator and executor pins are no
+longer required.
 
 For dashboard deployment, configure a public submission RPC on the selected chain
 and set an active signer. If execution is armed, pause the bot first; pause blocks
 new entries but not lifecycle recovery, settlement, or withdrawal, so wait until
-there are no pending or in-flight signer operations before deploying. Enter the
-bytes32 salt and confirm the predicted address. The deploy action checks the RPC
+there are no pending or in-flight signer operations before deploying. Confirm the
+fixed derived executor address shown by the dashboard. The deploy action checks the RPC
 chain and canonical CREATE2 proxy. A fresh deployment verifies its successful
 receipt and runtime bytecode; if the predicted address is already deployed, the
 action verifies matching runtime bytecode without sending a transaction. It then
-saves the executor and clears the old manifest. Paste a reviewed manifest
-containing the new executor and save it. The next scan authenticates every
-configured identity and the manifest through the read quorum before execution begins.
+queues the verified executor for the next scan and preserves the reviewed
+manifest. Before execution begins, the read quorum verifies the executor against
+bundled code and authenticates the manifest, including the canonical pool factory.
 
 Pause blocks new position entry. It deliberately does not block settlement,
 replacement recovery, or withdrawal for a position that already has capital at

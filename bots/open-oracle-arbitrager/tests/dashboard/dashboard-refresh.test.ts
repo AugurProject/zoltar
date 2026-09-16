@@ -1,3 +1,4 @@
+import { canonicalExecutorIdentity } from '#execution/executor-identity'
 import { afterEach, expect, test } from 'bun:test'
 import { Browser, type BrowserWindow, type Element } from 'happy-dom'
 import { join } from 'node:path'
@@ -389,11 +390,6 @@ test('deployment form saves venue switches without configurable Uniswap addresse
 	await page.waitUntilComplete()
 	for (let attempt = 0; attempt < 100 && !element(window, 'deployment-v2-enabled', window.HTMLInputElement).checked; attempt++) await Bun.sleep(10)
 	const form = element(window, 'deployment-form', window.HTMLFormElement)
-	const edit = (id: string, value: string) => {
-		const input = element(window, id, window.HTMLInputElement)
-		input.value = value
-		input.dispatchEvent(new window.Event('input', { bubbles: true }))
-	}
 	const save = async () => {
 		form.dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }))
 		await page.waitUntilComplete()
@@ -402,10 +398,12 @@ test('deployment form saves venue switches without configurable Uniswap addresse
 	}
 	expect(form.checkValidity()).toBe(true)
 	for (const id of ['deployment-v3-factory', 'deployment-v3-quoter', 'deployment-v3-router', 'deployment-v2-router', 'deployment-v4-pool-manager', 'deployment-v4-quoter']) expect(window.document.getElementById(id)).toBeNull()
-	edit('deployment-executor', address)
+	expect(window.document.getElementById('deployment-executor')?.tagName).toBe('P')
+	expect(window.document.getElementById('deployment-coordinators')?.tagName).toBe('P')
+	expect(window.document.getElementById('create2-salt')).toBeNull()
 	await save()
 	const restored = () => parseOperatorSettings({ ...JSON.parse(JSON.stringify(serializeOperatorSettings(settings))), network: 'mainnet' }).deployment
-	expect(settings.deployment.executor).toBe(address)
+	expect(settings.deployment.executor).toBe(canonicalExecutorIdentity().address)
 	expect(settings.deployment.uniswapV2Router).toBeUndefined()
 	expect(restored().uniswapV2Router).toBe(getAddress('0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D'))
 	element(window, 'deployment-v2-enabled', window.HTMLInputElement).checked = false
@@ -416,7 +414,7 @@ test('deployment form saves venue switches without configurable Uniswap addresse
 	expect(settings.deployment.uniswapV4Quoter).toBeDefined()
 	expect(restored().uniswapV2Router).toBeUndefined()
 	expect(restored().uniswapRouter).toBeUndefined()
-	expect(serializeOperatorSettings(settings).deployment).toEqual({ coordinatorAddresses: [], deploymentManifest: undefined, executor: address, quorumRpcUrls: [], uniswapV2Enabled: false, uniswapV3Enabled: false, uniswapV4Enabled: true })
+	expect(serializeOperatorSettings(settings).deployment).toEqual({ deploymentManifest: undefined, quorumRpcUrls: [], uniswapV2Enabled: false, uniswapV3Enabled: false, uniswapV4Enabled: true })
 	element(window, 'deployment-v2-enabled', window.HTMLInputElement).checked = true
 	await save()
 	expect(settings.deployment.uniswapV2Router).toBeUndefined()

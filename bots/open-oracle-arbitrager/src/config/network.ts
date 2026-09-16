@@ -67,3 +67,7 @@ export function networkDeployment(name: NetworkName) {
 export function canonicalZoltar(name: NetworkName) {
 	return canonicalCoreDeployment(name === 'mainnet' ? mainnet : sepolia).zoltar
 }
+
+export function canonicalSecurityPoolFactory(name: NetworkName) {
+	return canonicalCoreDeployment(name === 'mainnet' ? mainnet : sepolia).securityPoolFactory
+}

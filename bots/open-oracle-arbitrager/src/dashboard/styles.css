@@ -991,3 +991,22 @@ a {
 		scroll-behavior: auto !important;
 	}
 }
+
+.derived-contract {
+	min-width: 0;
+}
+
+.derived-contract > span {
+	color: var(--muted);
+	font-size: 0.73rem;
+	font-weight: 650;
+}
+
+.derived-contract > p {
+	max-height: 10rem;
+	overflow: auto;
+	margin-top: 7px;
+	font-size: 0.8rem;
+	overflow-wrap: anywhere;
+	white-space: pre-wrap;
+}

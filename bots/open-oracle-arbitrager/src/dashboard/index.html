@@ -385,16 +385,16 @@
 						<form id="deployment-form">
 							<fieldset id="deployment-fieldset" disabled>
 								<div class="deployment-grid">
-									<label><span>Executor</span><input id="deployment-executor" class="mono" spellcheck="false" placeholder="Deploy below or enter an address" /></label><label class="venue-switch"><input id="deployment-v2-enabled" type="checkbox" /><span>Enable Uniswap V2 · mainnet only</span></label><label class="venue-switch"><input id="deployment-v3-enabled" type="checkbox" /><span>Enable Uniswap V3</span></label><label class="venue-switch"><input id="deployment-v4-enabled" type="checkbox" /><span>Enable Uniswap V4</span></label><label><span>Approved coordinators · one per line</span><textarea id="deployment-coordinators" rows="3" spellcheck="false"></textarea></label><label><span>Independent quorum RPCs · optional; quorum 2 requires two</span><textarea id="deployment-quorum-rpcs" rows="3" spellcheck="false"></textarea></label><label class="deployment-manifest-field"><span>Execution manifest JSON</span><textarea id="deployment-manifest" rows="8" spellcheck="false" placeholder="Required before execution" aria-describedby="deployment-manifest-help"></textarea></label>
+									<div class="derived-contract"><span>Derived executor</span><p id="deployment-executor" class="mono">Loading deployment…</p></div><label class="venue-switch"><input id="deployment-v2-enabled" type="checkbox" /><span>Enable Uniswap V2 · mainnet only</span></label><label class="venue-switch"><input id="deployment-v3-enabled" type="checkbox" /><span>Enable Uniswap V3</span></label><label class="venue-switch"><input id="deployment-v4-enabled" type="checkbox" /><span>Enable Uniswap V4</span></label><div class="derived-contract"><span>Pool coordinators</span><p id="deployment-coordinators" class="mono" tabindex="0" aria-label="Discovered pool coordinators">Discovered from approved universes.</p></div><label><span>Independent quorum RPCs · optional; quorum 2 requires two</span><textarea id="deployment-quorum-rpcs" rows="3" spellcheck="false"></textarea></label><label class="deployment-manifest-field"><span>Execution manifest JSON</span><textarea id="deployment-manifest" rows="8" spellcheck="false" placeholder="Required before execution" aria-describedby="deployment-manifest-help"></textarea></label>
 								</div>
 								<p class="section-note">Uniswap addresses follow the selected network. Each enabled version supplies its own prices. The TWAP check applies to V3.</p>
 								<p id="deployment-manifest-help" class="section-note">The read quorum authenticates contract bytecode before the configuration becomes active.</p>
-								<div class="form-actions"><span id="deployment-status" class="muted" aria-live="polite">Executor, venue, manifest, and quorum changes apply at the next scan boundary.</span><button class="button" type="submit">Save deployment configuration</button></div>
+								<div class="form-actions"><span id="deployment-status" class="muted" aria-live="polite">Venue, manifest, and quorum changes apply at the next scan boundary.</span><button class="button" type="submit">Save deployment configuration</button></div>
 							</fieldset>
 						</form>
 						<form id="create2-form" class="create2-form">
 							<fieldset id="create2-fieldset" disabled>
-								<label><span>CREATE2 salt · 32-byte hex</span><input id="create2-salt" class="mono" value="0x0000000000000000000000000000000000000000000000000000000000000000" pattern="0x[0-9a-fA-F]{64}" spellcheck="false" required /></label>
+
 								<div class="form-actions"><span id="create2-status" class="muted" aria-live="polite">Deployment uses the canonical deterministic deployment proxy and the active local signer.</span><button id="deploy-executor-button" class="button" type="submit">Deploy predictable executor</button></div>
 							</fieldset>
 						</form>

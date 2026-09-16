@@ -1,3 +1,6 @@
+import { canonicalExecutorIdentity } from '#execution/executor-identity'
+import { executorArtifact } from '#contracts/artifacts.generated'
+import { canonicalSecurityPoolFactory } from '#config/network'
 import { afterEach, expect, test } from 'bun:test'
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -18,7 +21,7 @@ const temporaryDirectories: string[] = []
 const network = networkConfiguration('mainnet')
 const uniswap = canonicalUniswapDeployment(1)
 const openOracle = canonicalCoreDeployment(mainnet).openOracle
-const executor = getAddress('0x0000000000000000000000000000000000000001')
+const executor = canonicalExecutorIdentity().address
 const coordinator = getAddress('0x0000000000000000000000000000000000000002')
 
 afterEach(async () => {
@@ -40,7 +43,7 @@ for (const [name, v3, v4] of [
 			[
 				{ address: openOracle, role: 'open-oracle' },
 				{ address: network.weth, role: 'weth' },
-				{ address: executor, role: 'executor' },
+				{ address: canonicalSecurityPoolFactory('mainnet'), role: 'security-pool-factory' },
 				{ address: coordinator, role: 'coordinator' },
 				{ address: uniswap.factory, role: 'uniswap-factory' },
 				{ address: uniswap.quoter, role: 'uniswap-quoter' },
@@ -82,6 +85,7 @@ for (const [name, v3, v4] of [
 			chain: network.chain,
 			transport: custom({
 				request: async ({ method, params }) => {
+					if (method === 'eth_getCode' && Array.isArray(params) && typeof params[0] === 'string' && params[0].toLowerCase() === executor.toLowerCase()) return `0x${executorArtifact.evm.deployedBytecode.object}`
 					if (method !== 'eth_getCode' || !Array.isArray(params) || typeof params[0] !== 'string' || !allowed.has(params[0].toLowerCase())) throw new Error('Unexpected deployment authentication')
 					return '0x01'
 				},
@@ -95,7 +99,7 @@ for (const [name, v3, v4] of [
 		expect(config.v4PoolManager).toBe(v4 ? uniswap.v4PoolManager : undefined)
 		await saveOperatorSettings(path, config.operatorSettings)
 		const stored = JSON.parse(await readFile(path, 'utf8'))
-		expect(stored.deployment).toEqual({ coordinatorAddresses: [coordinator], executor, deploymentManifest, quorumRpcUrls: config.quorumRpcUrls, uniswapV2Enabled: false, uniswapV3Enabled: v3, uniswapV4Enabled: v4 })
+		expect(stored.deployment).toEqual({ deploymentManifest, quorumRpcUrls: config.quorumRpcUrls, uniswapV2Enabled: false, uniswapV3Enabled: v3, uniswapV4Enabled: v4 })
 		expect((await loadOperatorSettings(path))?.deployment).toEqual(config.operatorSettings.deployment)
 		await authenticateConfiguredDeployments([client], await loadConfiguration(path))
 		// A new network profile gets template defaults; returning to the migrated profile restores its choices.
