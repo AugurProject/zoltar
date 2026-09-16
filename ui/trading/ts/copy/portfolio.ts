@@ -1,7 +1,6 @@
 export const yes = 'YES'
 export const no = 'NO'
 export const invalid = 'INVALID'
-export const lpTokens = 'LP tokens'
 export const lpYesClaim = 'LP YES claim'
 export const lpNoClaim = 'LP NO claim'
 export const claimCoveredByInvalid = 'Claim covered by separate INVALID'

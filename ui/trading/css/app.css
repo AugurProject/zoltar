@@ -311,6 +311,56 @@
 }
 
 .portfolio-record .entity-card-copy h3 {
-	font-size: 1rem;
+	font-size: 1.25rem;
 	overflow-wrap: anywhere;
+}
+.portfolio-record .entity-card-body {
+	gap: var(--space-5);
+}
+.portfolio-position-summary {
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-5);
+	min-width: 0;
+}
+.portfolio-position-value {
+	display: flex;
+	flex-direction: column;
+	align-items: flex-start;
+	gap: var(--space-1);
+	overflow-wrap: anywhere;
+}
+.portfolio-position-value strong {
+	font-size: clamp(1.5rem, 4vw, 2.25rem);
+	font-weight: 600;
+	line-height: var(--line-height-snug);
+}
+.portfolio-holdings {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--space-4) var(--space-5);
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+.portfolio-holdings li {
+	min-width: 0;
+	max-width: 100%;
+	font-size: 1.125rem;
+	font-weight: 600;
+	overflow-wrap: anywhere;
+}
+.portfolio-holding-yes {
+	color: var(--outcome-yes);
+}
+.portfolio-holding-no {
+	color: var(--outcome-no);
+}
+.portfolio-positions > .entity-card-list {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(min(100%, 30rem), 1fr));
+	align-items: start;
+}
+.portfolio-record .entity-card-body > .badge {
+	justify-self: start;
 }
