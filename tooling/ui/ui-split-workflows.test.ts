@@ -242,12 +242,13 @@ describe('split UI workflow paths', () => {
 			for (const infrastructure of [false, true]) {
 				const env = Object.fromEntries(Object.keys(gateEnv).map(key => [key, key.endsWith('_RESULT') ? 'skipped' : 'false']))
 				Object.assign(env, { CHANGES_RESULT: 'success', CORE_SELECTED: String(core), DOCS_SELECTED: String(core), INFRA_SELECTED: String(infrastructure), DOMAIN_TESTS_SELECTED: String(core || infrastructure), INFRA_CHECKS_SELECTED: String(infrastructure && !core) })
-				const selected = ['CHANGES_RESULT', 'KNIP_RESULT']
-				if (core) selected.push('PREPARE_RESULT', 'APPLICATION_TESTS_RESULT', 'DOCS_RESULT', 'BROWSER_SMOKE_RESULT', 'CHECKS_RESULT', 'AUDIT_RESULT')
+				const selected = ['CHANGES_RESULT']
+				if (core) selected.push('PREPARE_RESULT', 'APPLICATION_TESTS_RESULT', 'DOCS_RESULT', 'BROWSER_SMOKE_RESULT', 'CHECKS_RESULT', 'KNIP_RESULT', 'AUDIT_RESULT')
 				if (core || infrastructure) selected.push('DOMAIN_TESTS_RESULT')
 				if (infrastructure && !core) selected.push('INFRA_RESULT')
 				for (const key of selected) env[key] = 'success'
 				expect(spawnSync('bash', ['-e', '-c', command], { env }).status).toBe(0)
+				if (!core) for (const result of ['success', 'failure', 'cancelled']) expect(spawnSync('bash', ['-e', '-c', command], { env: { ...env, KNIP_RESULT: result } }).status).not.toBe(0)
 				for (const key of selected) for (const result of ['failure', 'cancelled', 'skipped']) expect(spawnSync('bash', ['-e', '-c', command], { env: { ...env, [key]: result } }).status).not.toBe(0)
 			}
 		const domainJobs = workflowJobs(await readWorkflow(testDomainsWorkflowPath))
@@ -438,7 +439,7 @@ describe('split UI workflow paths', () => {
 	test('dead-code CI installs every bot workspace before analyzing it', async () => {
 		const workflow = await readWorkflow(knipCiWorkflowPath)
 		const job = requireRecord(workflowJobs(workflow)['knip'], 'Knip job')
-		expect(job['if']).toBeUndefined()
+		expect(job['if']).toBe("needs.changes.outputs.core == 'true'")
 		expect(job['continue-on-error']).toBeUndefined()
 		const steps = workflowSteps(workflowJobs(workflow)['knip'])
 		expect(steps.find(step => step['run'] === 'bun run knip')?.['continue-on-error']).toBeUndefined()
