@@ -17,6 +17,7 @@ type QuestionProps = {
 	loading?: boolean
 	question: MarketDetails | undefined
 	showTitle?: boolean
+	showEndTime?: boolean
 	variant?: 'full' | 'preview'
 }
 
@@ -57,14 +58,15 @@ function getDisplayRange(question: MarketDetails) {
 	return question.answerUnit === '' ? displayRange : `${displayRange}\u00a0${question.answerUnit}`
 }
 
-function getQuestionSummaryFields(question: MarketDetails): QuestionSummaryField[] {
+function getQuestionSummaryFields(question: MarketDetails, showEndTime: boolean): QuestionSummaryField[] {
 	const fields: QuestionSummaryField[] = [
 		{ kind: 'text', label: commonCopy.questionType, value: getMarketTypeLabel(question.marketType) },
 		{ kind: 'identifier', label: commonCopy.questionId, value: question.questionId },
 		{ kind: 'timestamp', label: commonCopy.created, value: question.createdAt },
-		{ kind: 'timestamp', label: commonCopy.endTime, value: question.endTime },
-		{ kind: 'text', label: commonCopy.outcomes, value: getDisplayedOutcomes(question).join(', ') },
 	]
+
+	if (showEndTime) fields.push({ kind: 'timestamp', label: commonCopy.endTime, value: question.endTime })
+	fields.push({ kind: 'text', label: commonCopy.outcomes, value: getDisplayedOutcomes(question).join(', ') })
 
 	if (question.marketType === 'scalar')
 		fields.push({ kind: 'text', label: commonCopy.ticks, value: question.numTicks.toString() }, { kind: 'text', label: commonCopy.displayRange, value: getDisplayRange(question) }, { kind: 'text', label: commonCopy.answerUnit, value: question.answerUnit === '' ? commonCopy.none : question.answerUnit })
@@ -93,7 +95,7 @@ function renderQuestionSummaryField(field: QuestionSummaryField) {
 	)
 }
 
-export function Question({ className = '', loading = false, question, showTitle = true, variant = 'full' }: QuestionProps) {
+export function Question({ className = '', loading = false, question, showTitle = true, showEndTime = true, variant = 'full' }: QuestionProps) {
 	if (loading || question === undefined)
 		return (
 			<div className={`question-summary ${className}`}>
@@ -107,7 +109,7 @@ export function Question({ className = '', loading = false, question, showTitle 
 	const description = getQuestionDescription(question)
 	const showHeading = showTitle || description !== ''
 	const descriptionNode = description === '' ? undefined : <p className='detail'>{description}</p>
-	const summaryFields = getQuestionSummaryFields(question)
+	const summaryFields = getQuestionSummaryFields(question, showEndTime)
 	const outcomeItems = getDisplayedOutcomes(question).map(outcome => ({
 		key: outcome,
 		label: outcome,
@@ -144,12 +146,14 @@ export function Question({ className = '', loading = false, question, showTitle 
 							<TimestampValue timestamp={question.createdAt} />
 						</strong>
 					</div>
-					<div className='question-preview-timeline-item' role='listitem'>
-						<span className='question-preview-timeline-label'>{commonCopy.endTime}</span>
-						<strong className='question-preview-timeline-value'>
-							<TimestampValue timestamp={question.endTime} />
-						</strong>
-					</div>
+					{showEndTime ? (
+						<div className='question-preview-timeline-item' role='listitem'>
+							<span className='question-preview-timeline-label'>{commonCopy.endTime}</span>
+							<strong className='question-preview-timeline-value'>
+								<TimestampValue timestamp={question.endTime} />
+							</strong>
+						</div>
+					) : undefined}
 				</div>
 				<div className='question-preview-meta'>
 					<div className='question-preview-meta-item question-preview-meta-item-primary-id'>

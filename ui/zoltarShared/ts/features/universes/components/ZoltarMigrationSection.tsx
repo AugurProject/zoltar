@@ -9,6 +9,7 @@ import { DataGrid } from '@zoltar/ui-core-shared/components/DataGrid.js'
 import { ErrorNotice } from '@zoltar/ui-core-shared/components/ErrorNotice.js'
 import { FormInput } from '@zoltar/ui-core-shared/components/FormInput.js'
 import { MetricField } from '@zoltar/ui-core-shared/components/MetricField.js'
+import { ReadOnlyDetailAccordion } from '@zoltar/ui-core-shared/components/ReadOnlyDetailAccordion.js'
 import { SectionBlock } from '@zoltar/ui-core-shared/components/SectionBlock.js'
 import { StateHint } from '@zoltar/ui-core-shared/components/StateHint.js'
 import { TokenApprovalControl } from '@zoltar/ui-core-shared/components/TokenApprovalControl.js'
@@ -224,14 +225,35 @@ export function ZoltarMigrationSection({
 					<MetricField label={zoltarCopy.migrationAvailableRep}>
 						<CurrencyValue value={loadingZoltarForkAccess ? undefined : migrationAmountSource} suffix={commonCopy.rep} />
 					</MetricField>
-					<MetricField label={zoltarCopy.walletRepBalance}>
-						<CurrencyValue loading={loadingZoltarForkAccess && zoltarForkRepBalanceAttoRep === undefined} value={zoltarForkRepBalanceAttoRep} suffix={commonCopy.rep} />
-					</MetricField>
-					<MetricField label={zoltarCopy.migrationRepBalance}>
-						<CurrencyValue loading={loadingZoltarForkAccess && zoltarMigrationPreparedRepBalanceAttoRep === undefined} value={zoltarMigrationPreparedRepBalanceAttoRep} suffix={commonCopy.rep} />
-					</MetricField>
 				</DataGrid>
+				<ReadOnlyDetailAccordion title={zoltarCopy.balanceDetails}>
+					<DataGrid>
+						<MetricField label={zoltarCopy.walletRepBalance}>
+							<CurrencyValue loading={loadingZoltarForkAccess && zoltarForkRepBalanceAttoRep === undefined} value={zoltarForkRepBalanceAttoRep} suffix={commonCopy.rep} />
+						</MetricField>
+						<MetricField label={zoltarCopy.migrationRepBalance}>
+							<CurrencyValue loading={loadingZoltarForkAccess && zoltarMigrationPreparedRepBalanceAttoRep === undefined} value={zoltarMigrationPreparedRepBalanceAttoRep} suffix={commonCopy.rep} />
+						</MetricField>
+					</DataGrid>
+				</ReadOnlyDetailAccordion>
 				<div className='form-grid'>
+					{rootUniverse === undefined ? undefined : (
+						<MigrationOutcomeUniversesSection
+							onDeployChildUniverse={onDeployChildUniverse}
+							pendingOutcomeIndex={pendingChildUniverseOutcomeIndex}
+							deploymentDisabledReason={deploymentDisabledReason}
+							childUniverseRepBalances={zoltarMigrationChildRepBalancesAttoRep}
+							childUniverseSplitAmounts={zoltarMigrationChildSplitAmountsAttoRep}
+							childUniverses={rootUniverse.childUniverses}
+							loadingBalances={loadingZoltarForkAccess}
+							disabled={zoltarMigrationPending}
+							isScalarFork={rootUniverse.forkQuestionDetails?.marketType === 'scalar'}
+							migrationBalance={zoltarMigrationPreparedRepBalanceAttoRep}
+							onAddNextOutcome={addNextOutcome}
+							onToggleOutcomeIndex={toggleOutcomeIndex}
+							selectedOutcomeIndexSet={selectedOutcomeIndexSet}
+						/>
+					)}
 					<div className='field'>
 						<label htmlFor='zoltar-migration-amount'>{zoltarCopy.migrationAmount}</label>
 						<div className='field-inline'>
@@ -253,37 +275,21 @@ export function ZoltarMigrationSection({
 						<p className='detail migration-amount-hint'>{migrationAmountHintMessage}</p>
 					</div>
 
-					{rootUniverse === undefined ? undefined : (
-						<MigrationOutcomeUniversesSection
-							onDeployChildUniverse={onDeployChildUniverse}
-							pendingOutcomeIndex={pendingChildUniverseOutcomeIndex}
-							deploymentDisabledReason={deploymentDisabledReason}
-							childUniverseRepBalances={zoltarMigrationChildRepBalancesAttoRep}
-							childUniverseSplitAmounts={zoltarMigrationChildSplitAmountsAttoRep}
-							childUniverses={rootUniverse.childUniverses}
-							loadingBalances={loadingZoltarForkAccess}
-							disabled={zoltarMigrationPending}
-							isScalarFork={rootUniverse.forkQuestionDetails?.marketType === 'scalar'}
-							migrationBalance={zoltarMigrationPreparedRepBalanceAttoRep}
-							onAddNextOutcome={addNextOutcome}
-							onToggleOutcomeIndex={toggleOutcomeIndex}
-							selectedOutcomeIndexSet={selectedOutcomeIndexSet}
-						/>
-					)}
-
-					<DataGrid dense>
-						<MetricField label={commonCopy.question}>{rootUniverse?.forkQuestionDetails?.title ?? commonCopy.unavailable}</MetricField>
-						<MetricField label={zoltarCopy.selectedDestinations}>{selectedDestinationsContent}</MetricField>
-						<MetricField label={zoltarCopy.migrationAmount}>
-							<CurrencyValue value={migrationAmount} suffix={commonCopy.rep} />
-						</MetricField>
-						<MetricField label={zoltarCopy.walletRepUsed}>
-							<CurrencyValue value={hasUnavailableRequiredBalance ? undefined : missingPreparationAmount} suffix={commonCopy.rep} />
-						</MetricField>
-						<MetricField label={zoltarCopy.childUniverseRepReceived}>
-							<CurrencyValue value={splitRepReceivedAttoRep} suffix={commonCopy.rep} />
-						</MetricField>
-					</DataGrid>
+					<WorkflowSubsection title={zoltarCopy.reviewMigration}>
+						<DataGrid dense>
+							<MetricField label={commonCopy.question}>{rootUniverse?.forkQuestionDetails?.title ?? commonCopy.unavailable}</MetricField>
+							<MetricField label={zoltarCopy.selectedDestinations}>{selectedDestinationsContent}</MetricField>
+							<MetricField label={zoltarCopy.migrationAmount}>
+								<CurrencyValue value={migrationAmount} suffix={commonCopy.rep} />
+							</MetricField>
+							<MetricField label={zoltarCopy.walletRepUsed}>
+								<CurrencyValue value={hasUnavailableRequiredBalance ? undefined : missingPreparationAmount} suffix={commonCopy.rep} />
+							</MetricField>
+							<MetricField label={zoltarCopy.childUniverseRepReceived}>
+								<CurrencyValue value={splitRepReceivedAttoRep} suffix={commonCopy.rep} />
+							</MetricField>
+						</DataGrid>
+					</WorkflowSubsection>
 
 					{requiresApproval ? (
 						<TokenApprovalControl
@@ -307,7 +313,7 @@ export function ZoltarMigrationSection({
 					)}
 
 					{heldChildUniverses.length === 0 ? undefined : (
-						<WorkflowSubsection title={zoltarCopy.walletRepTokens}>
+						<ReadOnlyDetailAccordion title={zoltarCopy.walletRepTokens}>
 							<DataGrid dense>
 								{heldChildUniverses.map(child => (
 									<MetricField key={child.universeId.toString()} label={child.outcomeLabel}>
@@ -315,7 +321,7 @@ export function ZoltarMigrationSection({
 									</MetricField>
 								))}
 							</DataGrid>
-						</WorkflowSubsection>
+						</ReadOnlyDetailAccordion>
 					)}
 				</div>
 			</SectionBlock>

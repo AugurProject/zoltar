@@ -1,3 +1,4 @@
+import { LoadingText } from '@zoltar/ui-core-shared/components/LoadingText.js'
 import { BackingDetails } from './BackingDetails.js'
 import type { Hash } from '@zoltar/core-shared/evm/ethereum'
 import { bigintToSafeNumber, formatRoundedUnits, formatUnits, parseUnitsOrUndefined } from '../lib/format.js'
@@ -138,17 +139,21 @@ export function LivePositionControls({
 		<div class='position-controls' aria-busy={balanceState === 'loading' || revalidatingAfterReceipt}>
 			<ProbabilityBar yesPercent={yesPercent} />
 			<BackingDetails market={market} />
-			<DataGrid className='wallet-balance-grid' columns={3} dense>
-				<MetricField label={workflowCopy.walletYes} loading={balanceState === 'loading'}>
-					{walletBalanceLabel(balances?.yes, workflowCopy.yes)}
-				</MetricField>
-				<MetricField label={workflowCopy.walletNo} loading={balanceState === 'loading'}>
-					{walletBalanceLabel(balances?.no, workflowCopy.no)}
-				</MetricField>
-				<MetricField label={workflowCopy.walletInvalid} loading={balanceState === 'loading'}>
-					{walletBalanceLabel(balances?.invalid, 'INVALID')}
-				</MetricField>
-			</DataGrid>
+			<ul class='portfolio-holdings trade-holdings' aria-busy={balanceState === 'loading'}>
+				<li class={`portfolio-holding-yes ${side === 'YES' ? 'selected-holding' : ''}`} data-outcome='yes'>
+					<span class='holding-quantity'>{walletBalanceLabel(balances?.yes, workflowCopy.yes)}</span>
+					{balances === undefined ? <small class='payout-caption'>{workflowCopy.walletYes}</small> : undefined}
+				</li>
+				<li class={`portfolio-holding-no ${side === 'NO' ? 'selected-holding' : ''}`} data-outcome='no'>
+					<span class='holding-quantity'>{walletBalanceLabel(balances?.no, workflowCopy.no)}</span>
+					{balances === undefined ? <small class='payout-caption'>{workflowCopy.walletNo}</small> : undefined}
+				</li>
+				<li data-outcome='invalid'>
+					<span class='holding-quantity'>{walletBalanceLabel(balances?.invalid, 'INVALID')}</span>
+					{balances === undefined ? <small class='payout-caption'>{workflowCopy.walletInvalid}</small> : undefined}
+				</li>
+			</ul>
+			{balanceState === 'loading' && balances !== undefined ? <LoadingText>{appCopy.loadingBalances}</LoadingText> : undefined}
 			{balanceState === 'error' && networkMismatchReason === undefined ? <BalanceLoadError message={workflowCopy.walletBalancesUnavailable(balanceError ?? workflowCopy.balanceRefreshFailed)} retry={retryBalances} disabled={workflowLocked} /> : null}
 			<ViewTabs
 				ariaLabel={workflowCopy.livePositionOperation}

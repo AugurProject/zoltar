@@ -231,7 +231,7 @@ type SecurityVaultRouteContentProps = {
 
 export type SecurityVaultSectionProps = SecurityVaultRouteContentProps & {
 	compactLayout?: boolean
-	extraReadinessActions?: ReadinessAction[]
+	extraReadinessActions?: Omit<ReadinessAction, 'title'>[]
 	modalFirst?: boolean
 	onViewStagedOperations?: () => void
 	oracleManagerDetails?: OracleManagerDetails | undefined

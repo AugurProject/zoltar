@@ -169,9 +169,9 @@ export function LiveTrading({
 		const discovering = discoveryState === 'loading' && visibleMarkets.length === 0
 		return (
 			<div class='route-view-flow'>
-				<RouteHeader title={appCopy.portfolio} description={appCopy.portfolioRouteDescription} actions={walletAction} />
+				<RouteHeader title={appCopy.portfolio} actions={walletAction} />
 				<ErrorNotice message={connectionMessage} />
-				<SectionBlock variant='plain' title={liveCopy.positions} busy={discoveryState === 'loading'}>
+				<SectionBlock variant='plain' busy={discoveryState === 'loading'}>
 					{discovering ? <EmptyState live title={liveCopy.discoveringSecurityPools} /> : null}
 					<ErrorNotice message={discoveryState === 'error' ? liveCopy.securityPoolFactoryDiscoveryFailed(discoveryError) : undefined} />
 					{discoveryState === 'ready' && visibleMarkets.length === 0 ? <p class='detail'>{liveCopy.noSecurityPoolsInUniverse}</p> : null}
