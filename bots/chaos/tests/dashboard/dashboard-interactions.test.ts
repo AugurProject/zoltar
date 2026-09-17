@@ -1,4 +1,4 @@
-import { startChromiumSession } from './chromium-session.ts'
+import { CHROMIUM_STARTUP_BUDGET_MILLISECONDS, startChromiumSession } from './chromium-session.ts'
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { expect, test } from 'bun:test'
@@ -1732,7 +1732,7 @@ browserTest(
 			}
 		}
 	},
-	60_000,
+	CHROMIUM_STARTUP_BUDGET_MILLISECONDS + 60_000,
 )
 
 browserTest(
@@ -1824,7 +1824,7 @@ browserTest(
 			}
 		}
 	},
-	30_000,
+	CHROMIUM_STARTUP_BUDGET_MILLISECONDS + 30_000,
 )
 
 test('recovery dashboard source has no generic manual-load fallback', async () => {
@@ -1984,7 +1984,7 @@ browserTest(
 			await dashboard.stop(true)
 		}
 	},
-	60_000,
+	CHROMIUM_STARTUP_BUDGET_MILLISECONDS + 60_000,
 )
 
 browserTest(
@@ -2052,7 +2052,7 @@ browserTest(
 			await dashboard.stop(true)
 		}
 	},
-	60_000,
+	CHROMIUM_STARTUP_BUDGET_MILLISECONDS + 60_000,
 )
 
 browserTest(
@@ -2138,5 +2138,5 @@ browserTest(
 			await dashboard.stop(true)
 		}
 	},
-	60_000,
+	CHROMIUM_STARTUP_BUDGET_MILLISECONDS + 60_000,
 )

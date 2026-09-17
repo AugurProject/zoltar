@@ -1,7 +1,7 @@
 import { expect, test } from 'bun:test'
 import { existsSync } from 'node:fs'
 import { startDashboardServer } from '../../src/dashboard/dashboard-server.ts'
-import { startChromiumSession } from './chromium-session.ts'
+import { CHROMIUM_STARTUP_BUDGET_MILLISECONDS, startChromiumSession } from './chromium-session.ts'
 
 const chromium = process.env['CHROMIUM_PATH'] ?? Bun.which('chromium') ?? '/usr/bin/chromium'
 const browserTest = existsSync(chromium) ? test : test.skip
@@ -114,5 +114,5 @@ browserTest(
 			await dashboard.stop(true)
 		}
 	},
-	60_000,
+	CHROMIUM_STARTUP_BUDGET_MILLISECONDS + 60_000,
 )
