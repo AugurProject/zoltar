@@ -1,3 +1,4 @@
+import { reconcileIncludedTransactions } from '../execution/inclusion-journal.ts'
 import { createWalletClient, privateKeyToAccount, type Address } from '@zoltar/bot-shared/ethereum'
 import { botDashboardLifecycle, type BotProcessLocks, type BotShutdownController } from '@zoltar/bot-shared/execution/bot-process-locks'
 import { createSignerOperationGate } from '@zoltar/bot-shared/execution/signer-operation-gate'
@@ -28,7 +29,7 @@ import { createManualOperationController } from './manual-operations.ts'
 import { beginLifecycleObligation, blockNovelEvaluations, completeLifecycleObligation, failLifecycleObligation, lifecyclePresenceBlockerMessage, obligationForPlan, synchronizeLifecycleObligations, waitForCanonicalLifecycleConfirmation } from './obligations.ts'
 import { retirementPlanAllowed } from './retirement-operation-policy.ts'
 import { enforceRetirementContinuation, processRetirementCycle, retirementPositionsForScan, updateRetirementAssessment } from './retirement-runner.ts'
-import { executeScheduledOperation, recordDryRun, scheduleAfterRecoveredTransaction, schedulerFor } from './scheduled-operation.ts'
+import { interruptedSchedulerRunNeedsClosure, executeScheduledOperation, recordDryRun, scheduleAfterRecoveredTransaction, schedulerFor } from './scheduled-operation.ts'
 import { genesisInitializationDefinitionId, genesisInitializationPlan, randomOperationPlans } from './selection.ts'
 import { assertSubmissionPreflightFresh, preflightTransactionSubmissionNetwork, recordEndpointPreflightChecks, submissionPreflightConfigurationIdentity, submissionPreflightIsDue } from './submission-preflight.ts'
 import { runtimeTopologySummary } from './topology-summary.ts'
@@ -70,24 +71,6 @@ function currentStatus(settings: OperatorSettings) {
 
 async function persistState(configuration: ConfigurationState, state: RuntimeState) {
 	await saveDurableState(configuration.settings.runtime.stateFile, state)
-}
-
-function workflowStartedAfterLastScheduledRun(state: RuntimeState) {
-	const operationId = state.scheduler.selectedOperationId
-	if (operationId === undefined) return false
-	const lastRunAt = state.scheduler.lastRunAt === undefined ? undefined : Date.parse(state.scheduler.lastRunAt)
-	return state.workflows.some(workflow => {
-		if (workflow.classification !== 'selectable' || workflow.operationId !== operationId) return false
-		if (workflow.status !== 'abandoned' && workflow.status !== 'completed' && workflow.status !== 'failed') return false
-		const startedAt = Date.parse(workflow.startedAt ?? workflow.createdAt)
-		return lastRunAt === undefined || startedAt > lastRunAt
-	})
-}
-
-function interruptedSchedulerRunNeedsClosure(state: RuntimeState) {
-	if (state.pendingTransactions.length !== 0 || state.workflows.some(workflowNeedsContinuation)) return false
-	if (state.scheduler.status === 'running') return true
-	return state.scheduler.status === 'paused' && workflowStartedAfterLastScheduledRun(state)
 }
 
 async function preflightRpcSet(rpcUrls: readonly string[], expectedChainId: number, kind: 'public-rpc' | 'read-rpc', requiredHealthy: number) {
@@ -292,6 +275,8 @@ async function executeRandomContinuation(configuration: ConfigurationState, stat
 }
 
 async function reconcilePendingWork(configuration: ConfigurationState, state: RuntimeState, resources: RuntimeResources, executionCancelled: () => boolean) {
+	const included = state.includedTransactions[0]
+	if (included !== undefined || state.rollbackQueue.length !== 0) await reconcileIncludedTransactions(executionEnvironment(configuration.settings, state, resources, included?.intent.sender ?? state.rollbackQueue[0]?.intent.sender, undefined, executionCancelled))
 	if (state.pendingTransactions.length === 0) return false
 	const settings = configuration.settings
 	const wallet = configuredWallet(settings)
@@ -635,7 +620,7 @@ export async function runChaosOperator(loaded: LoadedConfiguration, locks: BotPr
 				}
 				await ensureReadPreflight(resources, settings)
 				state.rpcEndpointHealth = resourceHealth(resources)
-				if (state.pendingTransactions.length !== 0) {
+				if (state.pendingTransactions.length !== 0 || state.includedTransactions.length !== 0 || state.rollbackQueue.length !== 0) {
 					if (!acquireCycleGate()) return 'deferred'
 					if (!configurationIsCurrent()) return 'deferred'
 					if (await reconcilePendingWork(configuration, state, resources, shutdown.isRequested)) {
@@ -652,7 +637,7 @@ export async function runChaosOperator(loaded: LoadedConfiguration, locks: BotPr
 					return settings.runtime.once
 				}
 				const discoveryWallet = state.wallet
-				if (topologyCacheStateFile !== settings.runtime.stateFile || topologyCacheProfileId !== expectedProfileId) topologyCache = undefined
+				if (state.protocolIndex === undefined || topologyCacheStateFile !== settings.runtime.stateFile || topologyCacheProfileId !== expectedProfileId) topologyCache = undefined
 				const scan = await performCanonicalScan(settings, resources.pool, discoveryWallet, randomInteger(0, 0x1_0000_0000), state.protocolIndex, topologyCache)
 				if (!acquireCycleGate()) return 'deferred'
 				if (!configurationIsCurrent()) return 'deferred'

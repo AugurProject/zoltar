@@ -9,6 +9,8 @@ export function isPristineBootstrapState(state: DurableState) {
 		state.obligationTombstones.length === 0 &&
 		state.obligations.length === 0 &&
 		state.pendingTransactions.length === 0 &&
+		state.rollbackQueue.length === 0 &&
+		state.includedTransactions.length === 0 &&
 		state.protocolIndex === undefined &&
 		state.retirement.status === 'inactive' &&
 		state.retirement.positions.length === 0 &&

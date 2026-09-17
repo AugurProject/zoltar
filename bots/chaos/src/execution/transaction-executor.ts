@@ -1,7 +1,8 @@
+import { assertIncludedTransactionsCanonical } from './inclusion-journal.ts'
+import { commitReceiptDisposition } from './receipt-disposition.ts'
 import { createPublicClient, parseAbiItem, type Account, type Address, type Chain, type Hex, type TransactionReceipt, type Transport, type WalletClient, toHex, zeroAddress } from '@zoltar/bot-shared/ethereum'
 import { requestTransport } from '@zoltar/bot-shared/ethereum/rpc-transport'
-import { isHash32 } from '@zoltar/bot-shared/infrastructure/json-validation'
-import { confirmCanonicalReceiptFinality, type CanonicalReceiptFinalityPolicy } from '@zoltar/bot-shared/execution/canonical-finality'
+import { confirmCanonicalReceiptFinality } from '@zoltar/bot-shared/execution/canonical-finality'
 import { assertSubmissionWindowOpen, prepareSignedTransaction, submitSignedTransaction } from '@zoltar/bot-shared/execution/transaction-submission'
 import { endpointLabel, sendRawTransactionToRpc } from '@zoltar/bot-shared/monitoring/connectivity'
 import { availableSettledValues, quorumValue, settledQuorumValue, sharedQuorumBlockNumber } from '@zoltar/bot-shared/monitoring/read-quorum'
@@ -56,7 +57,7 @@ export type ExecutionEnvironment = {
 	chain: Chain
 	clock?: (() => number) | undefined
 	executionCancelled?: (() => boolean) | undefined
-	/** Local-chain test override; live execution uses the consensus `finalized` checkpoint. */
+	/** Local-chain test override; live execution proceeds at canonical inclusion. */
 	finalityBlocks?: bigint | undefined
 	pool: RpcPool
 	persistState?: ((state: RuntimeState) => Promise<void>) | undefined
@@ -119,15 +120,6 @@ export function executionReadClients(environment: ExecutionEnvironment) {
 			transport,
 		}
 	})
-}
-
-function finalizedBlockResponse(value: unknown, endpoint: string) {
-	if (typeof value !== 'object' || value === null || Array.isArray(value)) throw new Error(`RPC ${endpoint} returned a malformed finalized block`)
-	const hash = 'hash' in value ? value.hash : undefined
-	const number = 'number' in value ? value.number : undefined
-	if (!isHash32(hash)) throw new Error(`RPC ${endpoint} finalized block is missing its canonical hash`)
-	if (typeof number !== 'string' || !/^0x(?:0|[1-9a-fA-F][0-9a-fA-F]*)$/.test(number)) throw new Error(`RPC ${endpoint} finalized block has a malformed number`)
-	return { hash, number: BigInt(number) }
 }
 
 function requiredExecutionWallet(environment: ExecutionEnvironment) {
@@ -781,10 +773,10 @@ function missingReceipt(error: unknown) {
 	return error instanceof Error && (error.name === 'TransactionReceiptNotFoundError' || error.message.toLowerCase().includes('could not be found'))
 }
 
-export async function finalizedReceiptWithQuorum(environment: ExecutionEnvironment, hash: Hex) {
+export async function includedReceiptWithQuorum(environment: ExecutionEnvironment, hash: Hex) {
 	const connectivity = requiredConnectivity(environment.settings)
-	const finalityAnchor = await agreedLatestBlock(environment, `receipt ${hash} finality anchor`)
-	const readers = canonicalAttestingReaders(environment, `receipt ${hash} finality`, finalityAnchor.attestingRpcUrls)
+	const inclusionAnchor = await agreedLatestBlock(environment, `receipt ${hash} inclusion anchor`)
+	const readers = canonicalAttestingReaders(environment, `receipt ${hash} inclusion`, inclusionAnchor.attestingRpcUrls)
 	type ReceiptEvidence = {
 		blockHash: Hex
 		blockNumber: bigint
@@ -858,70 +850,29 @@ export async function finalizedReceiptWithQuorum(environment: ExecutionEnvironme
 	}
 	const receipt = receiptObservations.find(candidate => candidate.value.blockHash.toLowerCase() === evidence.blockHash.toLowerCase() && candidate.value.blockNumber === evidence.blockNumber && candidate.value.hash.toLowerCase() === evidence.hash.toLowerCase())?.receipt
 	if (receipt === undefined) throw new Error(`Receipt ${hash} quorum evidence is missing its source receipt`)
-	const finalityPolicy: CanonicalReceiptFinalityPolicy | bigint = environment.finalityBlocks === undefined ? { blockTag: 'finalized' } : environment.finalityBlocks
-	const finalityReaders = capableObservations.map(observation => ({
-		getBlock: observation.reader.client.getBlock,
-		getBlockNumber: observation.reader.client.getBlockNumber,
-		getFinalizedBlock: async () =>
-			finalizedBlockResponse(
-				await requestTransport<unknown>(observation.reader.transport, {
-					method: 'eth_getBlockByNumber',
-					params: ['finalized', false],
-				}),
-				observation.reader.endpoint,
-			),
-	}))
-	const finalized = await confirmCanonicalReceiptFinality(
-		finalityReaders,
-		capableObservations.map(observation => observation.reader.endpoint),
-		`transaction ${hash}`,
-		receipt,
-		finalityPolicy,
-		undefined,
+	const canonicalHash = await settledQuorumValue(
+		`receipt ${hash} inclusion ancestry`,
+		capableObservations.map(async observation => {
+			const before = await observation.reader.client.getBlock({ blockNumber: receipt.blockNumber })
+			const after = await observation.reader.client.getBlock({ blockNumber: receipt.blockNumber })
+			if (before.number !== receipt.blockNumber || after.number !== receipt.blockNumber || before.hash === undefined || after.hash?.toLowerCase() !== before.hash.toLowerCase()) throw new Error(`Receipt ${hash} block changed during inclusion verification`)
+			return { endpoint: observation.reader.endpoint, value: before.hash.toLowerCase() }
+		}),
 		connectivity.rpcQuorum,
 	)
-	return { head, includedBlock: receipt.blockNumber, observed: true as const, receipt: finalized ? receipt : undefined }
-}
-
-function receiptDispositionJournal(environment: ExecutionEnvironment, workflow: ReturnType<typeof recoverableWorkflowForIntent>) {
-	if (!environment.state.workflows.some(candidate => candidate.id === workflow.id)) {
-		throw new Error(`Workflow ${workflow.id} is unavailable for receipt disposition`)
-	}
-	return {
-		activities: structuredClone(environment.state.activities),
-		pendingTransactions: structuredClone(environment.state.pendingTransactions),
-		workflows: structuredClone(environment.state.workflows),
-	}
-}
-
-function restoreReceiptDispositionJournal(environment: ExecutionEnvironment, journal: ReturnType<typeof receiptDispositionJournal>) {
-	environment.state.activities = journal.activities
-	environment.state.pendingTransactions = journal.pendingTransactions
-	environment.state.workflows = journal.workflows
-}
-
-async function commitReceiptDisposition(environment: ExecutionEnvironment, intent: PendingTransactionIntent, workflow: ReturnType<typeof recoverableWorkflowForIntent>, apply: () => void) {
-	const journal = receiptDispositionJournal(environment, workflow)
-	try {
-		apply()
-	} catch (error) {
-		restoreReceiptDispositionJournal(environment, journal)
-		throw error
-	}
-	try {
-		await persist(environment)
-	} catch (error) {
-		restoreReceiptDispositionJournal(environment, journal)
-		let restorationError: unknown
-		try {
-			await persist(environment)
-		} catch (restoreError) {
-			restorationError = restoreError
-		}
-		const dispositionFailure = error instanceof Error ? error.message : String(error)
-		const restorationFailure = restorationError === undefined ? '' : `; restoring the submitted journal also failed: ${restorationError instanceof Error ? restorationError.message : String(restorationError)}`
-		throw new TransactionAwaitingRecovery(intent.label, intent.hash, `receipt disposition was not durably committed: ${dispositionFailure}${restorationFailure}`)
-	}
+	if (canonicalHash !== receipt.blockHash.toLowerCase()) throw new Error(`Receipt ${hash} is no longer canonical`)
+	const accepted =
+		environment.finalityBlocks === undefined ||
+		(await confirmCanonicalReceiptFinality(
+			capableObservations.map(observation => observation.reader.client),
+			capableObservations.map(observation => observation.reader.endpoint),
+			`transaction ${hash}`,
+			receipt,
+			environment.finalityBlocks,
+			undefined,
+			connectivity.rpcQuorum,
+		))
+	return { head, includedBlock: receipt.blockNumber, observed: true as const, receipt: accepted ? receipt : undefined }
 }
 
 async function assertSignedIntentBroadcastReadiness(environment: ExecutionEnvironment, intent: PendingTransactionIntent, signingAnchor: CanonicalExecutionAnchor) {
@@ -976,6 +927,7 @@ function createIntent(
 }
 
 async function executeStep(environment: ExecutionEnvironment, plan: OperationPlan, workflowId: string, step: OperationStep) {
+	await assertIncludedTransactionsCanonical(environment)
 	assertExecutionActive(environment)
 	const wallet = requiredExecutionWallet(environment)
 	const account = wallet.account
@@ -1128,19 +1080,19 @@ async function executeStep(environment: ExecutionEnvironment, plan: OperationPla
 		type: 'transaction',
 	})
 	await persist(environment)
-	const finalized = await finalizedReceiptWithQuorum(environment, intent.hash)
-	if (finalized.receipt === undefined) {
+	const included = await includedReceiptWithQuorum(environment, intent.hash)
+	if (included.receipt === undefined) {
 		intent.status = 'confirmation-unknown'
 		// Mempool visibility is only checked by recovery, so an absent receipt is left for that pass to explain.
-		if (finalized.observed) observePendingTransaction(intent, { head: finalized.head, includedBlock: finalized.includedBlock, kind: 'awaiting-finality' })
+		if (included.observed) observePendingTransaction(intent, { head: included.head, includedBlock: included.includedBlock, kind: 'awaiting-finality' })
 		await persist(environment)
-		throw new TransactionAwaitingRecovery(step.label, intent.hash, ...receiptVisibilityDisposition(finalized.observed, intent.submittedAt))
+		throw new TransactionAwaitingRecovery(step.label, intent.hash, ...receiptVisibilityDisposition(included.observed, intent.submittedAt))
 	}
 	let receipt
 	try {
-		receipt = requireSuccessfulReceipt(step.label, finalized.receipt)
+		receipt = requireSuccessfulReceipt(step.label, included.receipt)
 	} catch (error) {
-		await commitReceiptDisposition(environment, intent, workflow, () => {
+		await commitReceiptDisposition(environment, intent, workflow, included.receipt, () => {
 			environment.state.pendingTransactions = environment.state.pendingTransactions.filter(candidate => candidate.id !== intent.id)
 			markWorkflowFailed(workflow, step.id, error, 'receipt-reverted')
 			recordActivity(environment.state, {
@@ -1160,7 +1112,7 @@ async function executeStep(environment: ExecutionEnvironment, plan: OperationPla
 		afterBalances = await captureBalanceEvidence(environment, step.evidence, receipt.blockNumber)
 		afterStorage = await captureStorageEvidence(environment, step.evidence, receipt.blockNumber)
 	} catch (error) {
-		throw await retainUnreadableReceiptEvidence(environment, intent, finalized.head, receipt.blockNumber, error)
+		throw await retainUnreadableReceiptEvidence(environment, intent, included.head, receipt.blockNumber, error)
 	}
 	let evidenceDisposition: ReceiptEvidenceDisposition
 	try {
@@ -1169,7 +1121,7 @@ async function executeStep(environment: ExecutionEnvironment, plan: OperationPla
 			storage: storageObservations(step.evidence, beforeStorage, afterStorage),
 		})
 	} catch (error) {
-		await commitReceiptDisposition(environment, intent, workflow, () => {
+		await commitReceiptDisposition(environment, intent, workflow, included.receipt, () => {
 			environment.state.pendingTransactions = environment.state.pendingTransactions.filter(candidate => candidate.id !== intent.id)
 			markWorkflowFailed(workflow, step.id, error, 'semantic-failure')
 			recordActivity(environment.state, {
@@ -1183,7 +1135,7 @@ async function executeStep(environment: ExecutionEnvironment, plan: OperationPla
 		})
 		throw error
 	}
-	await commitReceiptDisposition(environment, intent, workflow, () => {
+	await commitReceiptDisposition(environment, intent, workflow, included.receipt, () => {
 		environment.state.pendingTransactions = environment.state.pendingTransactions.filter(candidate => candidate.id !== intent.id)
 		if (evidenceDisposition === 'waiting-canonical') markWorkflowStepWaitingCanonical(workflow, step.id, receipt.transactionHash)
 		else markWorkflowStepConfirmed(workflow, step.id, receipt.transactionHash)
@@ -1222,6 +1174,7 @@ async function assertRemainingWorkflowEthFunding(environment: ExecutionEnvironme
 }
 
 export async function executeOperationPlan(environment: ExecutionEnvironment, plan: OperationPlan) {
+	await assertIncludedTransactionsCanonical(environment)
 	assertTerminalSubmissionBoundary(plan)
 	if (plan.terminalSubmission !== undefined && environment.settings.submission.mode !== 'private') {
 		throw new Error(`${plan.id} requires private submission before its terminal next-block constraint can be executed`)

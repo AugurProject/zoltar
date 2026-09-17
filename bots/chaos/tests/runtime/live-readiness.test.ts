@@ -48,8 +48,8 @@ describe('continuous live inventory readiness', () => {
 	test('requires reserves, maximum operation principals, and one maximum gas budget', () => {
 		const exactRepBalance = { balance: '31', symbol: 'REP', token: repToken, universeId: 'root' }
 		const exactRep = [exactRepBalance]
-		expect(liveInventoryReadinessBlockers({ eth: '15', rep: exactRep }, universes, strategy).join(' ')).toContain('one strategy.maximumEthPerOperation principal')
-		expect(liveInventoryReadinessBlockers({ eth: '22', rep: [{ ...exactRepBalance, balance: '20' }] }, universes, strategy).join(' ')).toContain('one strategy.maximumRepPerOperation principal')
+		expect(liveInventoryReadinessBlockers({ eth: '15', rep: exactRep }, universes, strategy).join(' ')).toContain('required 0.000000000000000022 ETH; available 0.000000000000000015 ETH')
+		expect(liveInventoryReadinessBlockers({ eth: '22', rep: [{ ...exactRepBalance, balance: '20' }] }, universes, strategy).join(' ')).toContain('required 0.000000000000000031 REP; largest available balance 0.00000000000000002 REP')
 		expect(liveInventoryReadinessBlockers({ eth: '22', rep: exactRep }, universes, strategy)).toEqual([])
 	})
 })

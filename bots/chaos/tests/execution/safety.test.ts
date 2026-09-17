@@ -1,3 +1,4 @@
+import { publicFailureReason } from '../../src/execution/preflight-failure.ts'
 import { describe, expect, test } from 'bun:test'
 import { maximumFeePerGas } from '@zoltar/bot-shared/execution/transaction-submission'
 import { assertOperationEthFunding, assertOperationPlanFresh, assertOperationPrincipalCaps, assertStepSafety, operationStepSubmissionLastValidBlock, unsignedQuantity } from '../../src/execution/safety.ts'
@@ -94,7 +95,29 @@ describe('chaos execution safety gates', () => {
 				step,
 				strategy,
 			}),
-		).toThrow('breach the wallet ETH reserve')
+		).toThrow('reserve 0.0000000000000001 ETH, transaction value 0.00000000000000001 ETH')
+	})
+
+	test.each([
+		{ limit: 20_000_000_000_000_000n, displayed: '0.02' },
+		{ limit: 24_020_000_492_409_999n, displayed: '0.024020000492409999' },
+	])('reports the estimated gas ceiling and configured maximum in ETH ($displayed)', ({ limit, displayed }) => {
+		const run = () =>
+			assertStepSafety({
+				baseFeePerGas: 0n,
+				ethBalanceAttoEth: 10n ** 18n,
+				gasEstimate: 10_000_000n,
+				step: { ...step, label: 'Create REP/WETH pool', value: '0', gasLimit: '20000000' },
+				strategy: { ...strategy, maximumGasCostAttoEth: limit },
+			})
+		const amounts = `estimated maximum 0.02402000049241 ETH; configured maximum ${displayed} ETH`
+		expect(run).toThrow(amounts)
+		try {
+			run()
+		} catch (error) {
+			expect(publicFailureReason(error)).toContain(amounts)
+			expect(publicFailureReason(error)).toContain('includes gas and fee safety margins')
+		}
 	})
 
 	test('reserves every remaining step maximum gas cost before a workflow starts', () => {
@@ -108,7 +131,7 @@ describe('chaos execution safety gates', () => {
 		}
 		const fundingStrategy = { maximumGasCostAttoEth: 50n, minimumEthReserveAttoEth: 100n }
 		expect(assertOperationEthFunding(plan, 210n, fundingStrategy)).toEqual({ maximumGasCost: 100n, requiredBalance: 210n, transactionValue: 10n })
-		expect(() => assertOperationEthFunding(plan, 209n, fundingStrategy)).toThrow('cannot fund all remaining workflow steps')
+		expect(() => assertOperationEthFunding(plan, 209n, fundingStrategy)).toThrow('required 0.00000000000000021 ETH; available 0.000000000000000209 ETH')
 	})
 
 	test('adds worst-case post-failure cleanup transactions to the workflow gas reserve', () => {
@@ -128,8 +151,8 @@ describe('chaos execution safety gates', () => {
 	})
 
 	test('rejects unsafe plan caps and malformed quantities', () => {
-		expect(() => assertStepSafety({ baseFeePerGas: 1n, ethBalanceAttoEth: 10n ** 18n, gasEstimate: 100_000n, step: { ...step, gasLimit: '129999' }, strategy })).toThrow('gas estimate')
-		expect(() => assertStepSafety({ baseFeePerGas: 1n, ethBalanceAttoEth: 10n ** 18n, gasEstimate: 100_000n, step: { ...step, value: '21' }, strategy })).toThrow('maximumEthPerOperation')
+		expect(() => assertStepSafety({ baseFeePerGas: 1n, ethBalanceAttoEth: 10n ** 18n, gasEstimate: 100_000n, step: { ...step, gasLimit: '129999' }, strategy })).toThrow('estimated 130000 gas units; planned limit 129999 gas units')
+		expect(() => assertStepSafety({ baseFeePerGas: 1n, ethBalanceAttoEth: 10n ** 18n, gasEstimate: 100_000n, step: { ...step, value: '21' }, strategy })).toThrow('transaction value 0.000000000000000021 ETH; configured maximum 0.00000000000000002 ETH')
 		expect(() => unsignedQuantity('-1', 'value')).toThrow('unsigned integer')
 	})
 

@@ -1,12 +1,14 @@
 #!/usr/bin/env bun
 
+import { formatDecimalAmount } from '@zoltar/bot-shared/infrastructure/json-validation'
 import { migrateEmptyBootstrapState } from '../state/bootstrap-migration.ts'
 import { requireDeployedContracts } from '@zoltar/bot-shared/monitoring/deployed-contracts'
 import { access, lstat } from 'node:fs/promises'
 import { constants } from 'node:fs'
 import { dirname } from 'node:path'
 import { privateKeyToAccount, zeroAddress, type Address } from '@zoltar/bot-shared/ethereum'
-import { fetchLogsWithAdaptiveRanges } from '@zoltar/bot-shared/monitoring/block-sync'
+import { findEarliestAvailableLogBlock, permanentHistoricalLogError } from '@zoltar/bot-shared/monitoring/log-availability'
+import { fetchLogsWithAdaptiveRanges, LogScanError } from '@zoltar/bot-shared/monitoring/block-sync'
 import { assertSettingsProfileIsolation, CHAOS_ECOSYSTEMS, loadSettings, type OperatorSettings } from '../config/settings.ts'
 import { acquireBotProcessLocks, BotProcessLockAcquisitionError, type BotProcessLocks } from '@zoltar/bot-shared/execution/bot-process-locks'
 import { CHAOS_PROCESS_LOCK_OPTIONS } from '../core/process-lock-options.ts'
@@ -31,6 +33,7 @@ type DoctorReaderResult = {
 	logCount: number
 	logFromBlock: string
 	logToBlock: string
+	prunedBeforeBlock?: string | undefined
 }
 
 type DeploymentRoot = { address: Address; name: string }
@@ -221,6 +224,24 @@ export async function boundedAdaptiveLogRange(client: Pick<ChaosReadClient, 'get
 	return { chunkCount, logCount: logs.length }
 }
 
+export async function probeDoctorLogRange(client: Pick<ChaosReadClient, 'getLogs'>, addresses: readonly Address[], startBlock: bigint, anchorBlock: bigint, spanBlocks: bigint) {
+	if (startBlock < 0n || anchorBlock < startBlock || spanBlocks < 1n) throw new Error('Doctor log probe requires a valid block range and positive span')
+	const scan = async (fromBlock: bigint) => {
+		const spanEnd = fromBlock + spanBlocks - 1n
+		const toBlock = spanEnd < anchorBlock ? spanEnd : anchorBlock
+		const logs = await boundedAdaptiveLogRange(client, addresses, fromBlock, toBlock)
+		return { ...logs, fromBlock, toBlock, prunedBeforeBlock: fromBlock > startBlock ? fromBlock.toString() : undefined }
+	}
+	try {
+		return await scan(startBlock)
+	} catch (error) {
+		if (!(error instanceof LogScanError) || !permanentHistoricalLogError(error)) throw error
+		const availableStart = await findEarliestAvailableLogBlock(error.logRange.fromBlock, anchorBlock, blockNumber => client.getLogs({ address: addresses, fromBlock: blockNumber, toBlock: blockNumber }))
+		if (availableStart <= error.logRange.fromBlock) throw error
+		return await scan(availableStart)
+	}
+}
+
 export async function probeChaosDoctor(settings: OperatorSettings, wallet: `0x${string}`): Promise<ChaosDoctorProbeResult> {
 	const pool = createChaosReadPool(settings)
 	const anchor = await canonicalAnchor(settings, pool)
@@ -234,7 +255,6 @@ export async function probeChaosDoctor(settings: OperatorSettings, wallet: `0x${
 		{ address: settings.deployment.zoltar, name: 'zoltar' },
 	]
 	const deploymentAddresses = [...deploymentRoots.map(root => root.address), settings.deployment.tradingFactory, settings.deployment.tradingRouter]
-	const logToBlock = anchor.blockNumber < settings.runtime.protocolStartBlock + BigInt(settings.runtime.protocolLogBlockSpan) - 1n ? anchor.blockNumber : settings.runtime.protocolStartBlock + BigInt(settings.runtime.protocolLogBlockSpan) - 1n
 	const readerUrls = chaosReadEndpoints(settings)
 	const readers = chaosReadClients(settings, pool)
 	const probedReaders = await Promise.all(
@@ -244,7 +264,7 @@ export async function probeChaosDoctor(settings: OperatorSettings, wallet: `0x${
 			await requireDeployedContracts(client, deploymentRoots, anchor.blockNumber).catch(error => {
 				throw new Error(`RPC ${endpoint}: ${error instanceof Error ? error.message : String(error)}`)
 			})
-			const [finalized, logs] = await Promise.all([finalizedBlockIdentity(readerUrl), boundedAdaptiveLogRange(client, deploymentAddresses, settings.runtime.protocolStartBlock, logToBlock)])
+			const [finalized, logs] = await Promise.all([finalizedBlockIdentity(readerUrl), probeDoctorLogRange(client, deploymentAddresses, settings.runtime.protocolStartBlock, anchor.blockNumber, BigInt(settings.runtime.protocolLogBlockSpan))])
 			const codeRoots = deploymentRoots.length
 			return {
 				client,
@@ -255,8 +275,9 @@ export async function probeChaosDoctor(settings: OperatorSettings, wallet: `0x${
 					finalizedBlock: finalized.number.toString(),
 					logChunkCount: logs.chunkCount,
 					logCount: logs.logCount,
-					logFromBlock: settings.runtime.protocolStartBlock.toString(),
-					logToBlock: logToBlock.toString(),
+					logFromBlock: logs.fromBlock.toString(),
+					logToBlock: logs.toBlock.toString(),
+					prunedBeforeBlock: logs.prunedBeforeBlock,
 				},
 			}
 		}),
@@ -366,10 +387,19 @@ function liveFundingBlockers(settings: OperatorSettings, snapshot: ChaosDoctorPr
 	}
 	const required = requiredLiveInventory(settings.strategy)
 	const eth = BigInt(snapshot.wallet.ethBalanceAttoEth)
-	if (eth < required.ethAttoEth) blockers.push(`signer ETH ${eth.toString()} is below the reserve plus one maximum ETH principal and one gas budget ${required.ethAttoEth.toString()}`)
+	if (eth < required.ethAttoEth)
+		blockers.push(
+			`signer ETH ${formatDecimalAmount(eth)} ETH is below the required ${formatDecimalAmount(required.ethAttoEth)} ETH (reserve ${formatDecimalAmount(settings.strategy.minimumEthReserveAttoEth)} ETH, maximum principal ${formatDecimalAmount(settings.strategy.maximumEthPerOperationAttoEth)} ETH, gas budget ${formatDecimalAmount(settings.strategy.maximumGasCostAttoEth)} ETH)`,
+		)
 	const repTokens = new Set(snapshot.universes.map(universe => universe.repToken.toLowerCase()))
-	const fundedRep = snapshot.wallet.tokens.some(token => repTokens.has(token.address.toLowerCase()) && BigInt(token.balance) >= required.repAttoRep)
-	if (!fundedRep) blockers.push(`no canonical REP balance meets reserve plus one maximum operation principal ${required.repAttoRep.toString()}`)
+	let largestRepBalance = 0n
+	const fundedRep = snapshot.wallet.tokens.some(token => {
+		if (!repTokens.has(token.address.toLowerCase())) return false
+		const balance = BigInt(token.balance)
+		if (balance > largestRepBalance) largestRepBalance = balance
+		return balance >= required.repAttoRep
+	})
+	if (!fundedRep) blockers.push(`no canonical REP balance meets reserve plus one maximum operation principal ${formatDecimalAmount(required.repAttoRep)} REP; largest available balance ${formatDecimalAmount(largestRepBalance)} REP`)
 	return blockers
 }
 
@@ -455,7 +485,7 @@ async function runChaosDoctorWithLoaded(loaded: LoadedDoctorSettings, dependenci
 				finalizedTag: 'passed',
 				processExclusivity: 'passed',
 				profileIsolation: 'passed',
-				protocolLogSpan: 'passed',
+				protocolLogSpan: result.readerResults.some(reader => reader.prunedBeforeBlock !== undefined) ? 'available-history-only' : 'passed',
 				submission: 'passed',
 				stateParentAccess: 'passed',
 			},
@@ -502,6 +532,7 @@ export async function runChaosLaunchGate(dependencies: ChaosDoctorDependencies =
 export function launchGateSummary(report: Awaited<ReturnType<typeof runChaosLaunchGate>>) {
 	if ('reason' in report) return `Launch preflight skipped: ${report.reason}. The operator starts without submitting transactions.`
 	if ('deploymentNotice' in report) return `Launch preflight passed with the deployment still pending. ${report.deploymentNotice}`
+	if (report.readers.some(reader => reader.prunedBeforeBlock !== undefined)) return 'Launch preflight passed with pruned historical logs. Available logs were checked; the operator will track missing history and restrict operations that require it. Run `bun run doctor` for the available block ranges.'
 	return `Launch preflight passed all ${Object.keys(report.checks).length.toString()} readiness checks at canonical block ${report.anchor.blockNumber}. Run \`bun run doctor\` for the detailed readiness report.`
 }
 

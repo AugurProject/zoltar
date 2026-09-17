@@ -1,3 +1,5 @@
+import { workflowProgress } from './workflow-progress.js'
+import { fullIdentifier } from './dom.js'
 import { isRecord } from '@zoltar/bot-shared/infrastructure/json-validation'
 import { displayOperationInput, serializeOperationInput } from './operation-input-format.js'
 
@@ -104,6 +106,8 @@ export function createOperationDialog(options: { request: (value: unknown) => Pr
 	status.setAttribute('aria-live', 'polite')
 	const transactions = element('div')
 	transactions.className = 'operation-transactions'
+	const receipts = element('div')
+	receipts.className = 'operation-receipts'
 	const preview = element('button', 'Preview operation')
 	preview.type = 'submit'
 	preview.className = 'secondary'
@@ -116,11 +120,15 @@ export function createOperationDialog(options: { request: (value: unknown) => Pr
 	const actions = element('div')
 	actions.className = 'operation-actions'
 	actions.append(preview, execute, retry)
-	const workflowLink = element('a', 'View workflow and activity')
-	workflowLink.href = '/overview#current-workflow'
+	const workflowLink = element('a', 'View workflows')
+	workflowLink.href = '/workflows'
+	const recoveryLink = element('a', 'Open Recovery')
+	recoveryLink.href = '/recovery'
+	recoveryLink.className = 'text-link'
+	recoveryLink.hidden = true
 	workflowLink.className = 'text-link'
 	workflowLink.hidden = true
-	form.append(fields, coverage, mode, transactions, status, actions, workflowLink)
+	form.append(fields, coverage, mode, transactions, status, receipts, actions, workflowLink, recoveryLink)
 	dialog.append(heading, description, form)
 	document.body.append(dialog)
 	let selected: Operation | undefined
@@ -132,6 +140,7 @@ export function createOperationDialog(options: { request: (value: unknown) => Pr
 	let busy = false
 	let executionReference: string | undefined
 	const retainedExecutions = new Map<string, string>()
+	let renderedTransactions = ''
 
 	function invalidate() {
 		previewId = undefined
@@ -164,7 +173,18 @@ export function createOperationDialog(options: { request: (value: unknown) => Pr
 		input.value = inputs[key]?.source === 'custom' ? inputs[key].value : value
 		source.value = inputs[key]?.source ?? 'chaosbot'
 		input.disabled = source.value === 'chaosbot'
+		const selectedIdentifier = element('div')
+		selectedIdentifier.className = 'operation-selected-identifier'
+		selectedIdentifier.id = `operation-selected-${key}`
+		const showSelectedIdentifier = () => {
+			selectedIdentifier.hidden = !(input instanceof HTMLSelectElement) || !/^0x[0-9a-f]+$/i.test(input.value)
+			selectedIdentifier.replaceChildren(...(selectedIdentifier.hidden ? [] : [fullIdentifier(input.value, labelText)]))
+			if (selectedIdentifier.hidden) input.removeAttribute('aria-describedby')
+			else input.setAttribute('aria-describedby', selectedIdentifier.id)
+		}
+		showSelectedIdentifier()
 		const update = () => {
+			showSelectedIdentifier()
 			input.disabled = source.value === 'chaosbot'
 			inputs[key] = source.value === 'chaosbot' ? { source: 'chaosbot' } : { source: 'custom', value: input.value }
 			if (key === 'candidate') candidate = source.value === 'custom' ? input.value : undefined
@@ -178,11 +198,12 @@ export function createOperationDialog(options: { request: (value: unknown) => Pr
 		input.addEventListener('input', update)
 		if (input instanceof HTMLSelectElement && key !== 'candidate') input.addEventListener('change', () => void load('inspect'))
 		if (input instanceof HTMLTextAreaElement) input.rows = kind === 'list' ? 4 : 2
-		wrapper.append(label, source, input)
+		wrapper.append(label, source, input, selectedIdentifier)
 		return wrapper
 	}
 
 	function show(value: Result) {
+		transactions.hidden = false
 		fieldDefinitions = value.fields
 		coverage.replaceChildren(element('summary', 'Automatically derived arguments'))
 		const derived = value.coverage.filter(field => field.source === 'derived')
@@ -248,6 +269,7 @@ export function createOperationDialog(options: { request: (value: unknown) => Pr
 
 	async function load(action: 'inspect' | 'preview') {
 		if (selected === undefined || busy) return
+		generation += 1
 		const requestGeneration = generation
 		const focusedId = document.activeElement instanceof HTMLElement && fields.contains(document.activeElement) ? document.activeElement.id : undefined
 		busy = true
@@ -256,6 +278,9 @@ export function createOperationDialog(options: { request: (value: unknown) => Pr
 		execute.disabled = true
 		retry.hidden = true
 		previewId = undefined
+		receipts.replaceChildren()
+		renderedTransactions = ''
+		recoveryLink.hidden = true
 		status.textContent = 'Preparing operation…'
 		try {
 			const submitted = Object.fromEntries(
@@ -303,14 +328,28 @@ export function createOperationDialog(options: { request: (value: unknown) => Pr
 				return
 			}
 			const execution = record(response['execution'])
-			status.textContent = string(execution['message'])
-			if (execution['status'] === 'pending') window.setTimeout(() => void poll(reference, requestGeneration), 1500)
-			else {
+			status.textContent = [string(execution['message']), string(execution['reason'])].filter(Boolean).join(' ')
+			recoveryLink.hidden = !['recovery', 'failed', 'confirming'].includes(string(execution['outcome'])) && !(execution['status'] !== 'pending' && execution['outcome'] === 'submitted')
+			const transactionSteps = Array.isArray(execution['transactions']) ? execution['transactions'] : []
+			const steps = Array.isArray(execution['steps']) ? execution['steps'] : transactionSteps
+			const active = execution['status'] === 'pending' || ['submitted', 'confirming', 'executing'].includes(string(execution['outcome']))
+			const transactionSignature = JSON.stringify([steps, active])
+			if (transactionSignature !== renderedTransactions) {
+				renderedTransactions = transactionSignature
+				receipts.replaceChildren(workflowProgress(steps, active))
+				receipts.setAttribute('aria-busy', String(active))
+				transactions.hidden = steps.length !== 0
+			}
+			const backgroundWorkflow = ['submitted', 'confirming', 'recovery'].includes(string(execution['outcome']))
+			if (execution['status'] === 'pending' || backgroundWorkflow) window.setTimeout(() => void poll(reference, requestGeneration), 1500)
+			if (execution['status'] !== 'pending') {
 				busy = false
 				fields.disabled = false
 				preview.disabled = false
-				if (selected?.id !== undefined) retainedExecutions.delete(selected.id)
-				executionReference = undefined
+				if (!backgroundWorkflow) {
+					if (selected?.id !== undefined) retainedExecutions.delete(selected.id)
+					executionReference = undefined
+				}
 			}
 		} catch (error) {
 			if (requestGeneration !== generation) return
@@ -373,6 +412,9 @@ export function createOperationDialog(options: { request: (value: unknown) => Pr
 			fields.replaceChildren()
 			coverage.hidden = true
 			transactions.replaceChildren()
+			receipts.replaceChildren()
+			renderedTransactions = ''
+			recoveryLink.hidden = true
 			mode.textContent = ''
 			workflowLink.hidden = true
 			status.textContent = operation.blockers.join('. ')

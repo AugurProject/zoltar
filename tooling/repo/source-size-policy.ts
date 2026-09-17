@@ -14,17 +14,17 @@ const allowances = (reason: string, entries: readonly (readonly [path: string, m
  */
 export const sourceSizeAllowances = new Map<string, SourceSizeAllowance>([
 	...allowances('Chaos: extract dashboard features, operation handlers, and persistence responsibilities into focused modules.', [
-		['bots/chaos/src/dashboard/dashboard.ts', 2290],
+		['bots/chaos/src/dashboard/dashboard.ts', 2275],
 		['bots/chaos/src/monitoring/discovery.ts', 1021],
 		['bots/chaos/src/operations/trading.ts', 1726],
-		['bots/chaos/src/state/operator-state.ts', 1199],
-		['bots/chaos/src/execution/transaction-executor.ts', 1263],
-		['bots/chaos/src/runtime/operator.ts', 915],
+		['bots/chaos/src/state/operator-state.ts', 1162],
+		['bots/chaos/src/execution/transaction-executor.ts', 1216],
+		['bots/chaos/src/runtime/operator.ts', 900],
 		['bots/chaos/src/monitoring/topology-cache.ts', 1043],
-		['bots/chaos/src/dashboard/dashboard-server.ts', 1020],
+		['bots/chaos/src/dashboard/dashboard-server.ts', 1001],
 		['bots/chaos/src/state/protocol-index-store.ts', 1000],
 		['bots/chaos/src/operations/open-oracle.ts', 1024],
-		['bots/chaos/src/execution/recovery.ts', 702],
+		['bots/chaos/src/execution/recovery.ts', 660],
 		['bots/chaos/src/monitoring/protocol-index.ts', 699],
 		['bots/chaos/src/operations/zoltar.ts', 618],
 	]),

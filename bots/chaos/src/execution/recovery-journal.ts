@@ -17,7 +17,7 @@ export async function observeIntent(environment: ExecutionEnvironment, intent: P
 	await persist(environment)
 }
 
-/** A finalized receipt whose confirmation evidence cannot be read yet stays pending; the journal records the inclusion so the wait is explained. */
+/** An included receipt whose confirmation evidence cannot be read yet stays pending; the journal records the inclusion so the wait is explained. */
 export async function retainUnreadableReceiptEvidence(environment: ExecutionEnvironment, intent: PendingTransactionIntent, head: bigint, includedBlock: bigint, error: unknown) {
 	intent.status = 'confirmation-unknown'
 	delete intent.recoveryBlocker

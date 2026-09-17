@@ -1,3 +1,5 @@
+import { assertStepSafety } from '../../src/execution/safety.ts'
+import { publicFailureReason } from '../../src/execution/preflight-failure.ts'
 import { getChromiumPath } from '../../../../tooling/ui/chromiumPath.js'
 import { expect, test } from 'bun:test'
 import { mkdir } from 'node:fs/promises'
@@ -8,14 +10,42 @@ import { serializedSettings } from '../../src/config/settings.ts'
 import { manualOperationFixture } from '../runtime/manual-operation-fixture.ts'
 import { CHROMIUM_STARTUP_BUDGET_MILLISECONDS, startChromiumSession } from './chromium-session.ts'
 
+function seedStepStatus(index: number, included: number) {
+	if (index < included) return 'confirmed'
+	return index === included ? 'submitted' : 'planned'
+}
+
+function gasLimitFailureReason() {
+	try {
+		assertStepSafety({
+			baseFeePerGas: 0n,
+			ethBalanceAttoEth: 10n ** 18n,
+			gasEstimate: 10_000_000n,
+			step: { data: '0x', evidence: [], gasLimit: '20000000', id: 'wrap', label: 'Wrap WETH', preflightCalls: [], to: '0x0000000000000000000000000000000000000001', value: '0', walletAssetDebits: [] },
+			strategy: { maximumEthPerOperationAttoEth: 10n ** 18n, maximumGasCostAttoEth: 20_000_000_000_000_000n, minimumEthReserveAttoEth: 0n },
+		})
+	} catch (error) {
+		return publicFailureReason(error)
+	}
+	throw new Error('Expected the gas-limit fixture to be blocked')
+}
+
 test(
 	'catalog groups and manual operation dialog at desktop and mobile widths',
 	async () => {
 		const fixture = manualOperationFixture()
 		fixture.configuration.settings.strategy.selectableOperationAllowlist = ['open-oracle.weth.wrap', 'zoltar.question.create-binary', 'open-oracle.deposit']
 		fixture.state.evaluations = evaluateOperationCatalog(fixture.scan.snapshot, planningOptions(fixture.configuration.settings, 7))
+		let historyFixture = false
+		let historyCompleted = false
+		let seedWorkflow = false
+		let seedIncluded = 0
+		const seedLabels = ['Approve genesis token0', 'Approve genesis token1', 'Seed REP/WETH liquidity']
 		let holdExecution = false
 		let executionStatus = 'pending'
+		let executionOutcome = ''
+		let skipReason = 'Wrap WETH canonical signing anchor or its attester set changed during pre-signing checks.'
+		const transactionHash = `0x${'ab'.repeat(32)}`
 		let executeCalls = 0
 		let failInspect = false
 		let stateReads = 0
@@ -28,6 +58,22 @@ test(
 					failNextStateRead = false
 					throw new Error('Intentional automatic-refresh recovery fixture')
 				}
+				if (historyFixture)
+					return {
+						...fixture.state,
+						workflows: [
+							{
+								id: 'seed-current',
+								label: 'Seed genesis REP/WETH pool',
+								status: historyCompleted ? 'completed' : 'waiting-transaction',
+								createdAt: '2026-09-17T16:34:44Z',
+								updatedAt: '2026-09-17T16:35:44Z',
+								steps: seedLabels.map((label, index) => ({ label, status: seedStepStatus(index, historyCompleted ? 3 : 1), ...(historyCompleted || index < 2 ? { transactionHash: `0x${String(index + 1).repeat(64)}` } : {}) })),
+							},
+							{ id: 'done', label: 'Create REP/WETH pool', status: 'completed', createdAt: '2026-09-17T16:30:00Z', updatedAt: '2026-09-17T16:31:00Z', steps: [{ label: 'Create REP/WETH pool', status: 'confirmed', transactionHash }] },
+							{ id: 'failed', label: 'Initialize REP/WETH pool', status: 'failed', createdAt: '2026-09-17T16:29:00Z', updatedAt: '2026-09-17T16:29:10Z', steps: [{ label: 'Initialize REP/WETH pool', status: 'failed' }] },
+						],
+					}
 				return fixture.state
 			},
 			getConfiguration: () => ({ hasSigner: true, revision: fixture.configuration.revision, settings: serializedSettings(fixture.configuration.settings, true), wallet: fixture.state.wallet }),
@@ -40,9 +86,43 @@ test(
 					error.name = 'ManualOperationInputError'
 					throw error
 				}
+				if (seedWorkflow) {
+					if (action === 'inspect' || action === 'preview') return { previewId: 'seed-preview', mode: 'live', fields: [], steps: seedLabels.map(label => ({ label })), blockers: [] }
+					const steps = seedLabels.map((label, index) => ({
+						label,
+						status: seedStepStatus(index, seedIncluded),
+						...(index <= seedIncluded ? { hash: `0x${String(index + 1).repeat(64)}`, explorerUrl: `https://sepolia.etherscan.io/tx/0x${String(index + 1).repeat(64)}` } : {}),
+					}))
+					return { execution: { status: seedIncluded === 3 ? 'completed' : 'failed', outcome: seedIncluded === 3 ? 'confirmed' : 'submitted', message: seedIncluded === 3 ? 'Operation confirmed.' : 'Waiting for block inclusion. Remaining steps continue automatically.', steps } }
+				}
 				if (action === 'execute') executeCalls += 1
-				if (holdExecution && (action === 'execute' || action === 'status')) return { execution: { status: executionStatus, message: executionStatus === 'pending' ? 'Executing operation…' : 'Dry run completed. No transaction signed.' } }
-				return fixture.controller.handle(value)
+				if (holdExecution && (action === 'execute' || action === 'status')) {
+					const outcome = executionOutcome || (executionStatus === 'pending' ? 'submitted' : 'confirmed')
+					const messages: Record<string, string> = {
+						submitted: executionStatus === 'pending' ? 'Transaction submitted. Waiting for confirmation.' : 'Transaction submitted. Waiting for confirmation. Chaos checks confirmation automatically. See Recovery for progress.',
+						confirmed: 'Operation confirmed.',
+						skipped: 'Operation skipped. No transaction signed. Preview again to use current chain state.',
+						'dry-run': 'Dry run completed. No transaction signed.',
+						recovery: 'Operation stopped after partial execution. Recovery is required.',
+					}
+					return {
+						execution: {
+							status: executionStatus,
+							outcome,
+							message: messages[outcome],
+							reason: outcome === 'skipped' ? skipReason : undefined,
+							transactions: ['skipped', 'dry-run'].includes(outcome)
+								? []
+								: [
+										{ label: 'Wrap WETH', hash: transactionHash, status: outcome === 'submitted' ? 'submitted' : 'confirmed', explorerUrl: `https://sepolia.etherscan.io/tx/${transactionHash}` },
+										...(outcome === 'recovery' ? [{ label: 'A second transaction with a long descriptive operation label', hash: `0x${'cd'.repeat(32)}`, status: 'failed' }] : []),
+									],
+						},
+					}
+				}
+				const response = await fixture.controller.handle(value)
+				if (holdExecution && action === 'preview' && typeof response === 'object' && response !== null) return { ...response, mode: executionOutcome === 'dry-run' ? 'dry-run' : 'live' }
+				return response
 			},
 			setCancellation: () => undefined,
 			setCandidate: () => undefined,
@@ -71,6 +151,17 @@ test(
 				await Bun.sleep(100)
 			}
 			throw new Error(`Browser condition timed out: ${expression}`)
+		}
+		async function expectFullTokenAddress() {
+			expect(
+				await evaluate(`(() => {
+				const input = document.querySelector('#operation-input-token')
+				const text = input.parentElement.querySelector('.identifier-value')
+				if (!text || text.textContent !== input.value) return false
+				const bounds = text.getBoundingClientRect()
+				return bounds.width > 0 && bounds.right <= document.documentElement.clientWidth && text.scrollWidth <= text.clientWidth && getComputedStyle(text).userSelect === 'text'
+			})()`),
+			).toBe(true)
 		}
 		const screenshotDirectory = process.env['CHAOS_QA_SCREENSHOTS']
 		async function capture(name: string) {
@@ -117,6 +208,7 @@ test(
 				await waitFor("document.querySelector('#operation-input-seed') !== null && document.querySelector('#operation-dialog fieldset').disabled === false")
 				expect(await evaluate("document.querySelector('#operation-input-seed').disabled")).toBe(true)
 				await capture(`${viewport.label}-inputs`)
+				holdExecution = true
 				await evaluate(`(() => {
 				const source = document.querySelector('[aria-label="Maximum ETH spend (attoETH) source"]')
 				source.value = 'custom'; source.dispatchEvent(new Event('change'))
@@ -140,15 +232,54 @@ test(
 				executionStatus = 'pending'
 				const before = executeCalls
 				await evaluate("document.querySelector('#operation-dialog .operation-actions button:nth-child(2)').click(); document.querySelector('#operation-dialog .operation-actions button:nth-child(2)').click()")
-				await waitFor("document.querySelector('#operation-dialog [role=status]').textContent === 'Executing operation…'")
+				await waitFor("document.querySelector('#operation-dialog [role=status]').textContent === 'Transaction submitted. Waiting for confirmation.'")
 				expect(executeCalls).toBe(before + 1)
+				expect(await evaluate("document.querySelector('.operation-receipts a').href")).toBe(`https://sepolia.etherscan.io/tx/${transactionHash}`)
+				expect(await evaluate("document.querySelector('.operation-receipts').textContent.includes('Submitted')")).toBe(true)
+				await evaluate("document.querySelector('.operation-receipts').scrollIntoView({ block: 'center' })")
 				await capture(`${viewport.label}-pending`)
 				await evaluate("document.querySelector('#operation-dialog').close()")
 				await evaluate("[...document.querySelectorAll('.operation-open')].find(button => button.getAttribute('aria-label') === 'Open wrap WETH').click()")
-				await waitFor("document.querySelector('#operation-dialog [role=status]').textContent === 'Executing operation…'")
+				await waitFor("document.querySelector('#operation-dialog [role=status]').textContent === 'Transaction submitted. Waiting for confirmation.'")
+				executionStatus = 'failed'
+				executionOutcome = 'submitted'
+				await waitFor('document.querySelector(\'#operation-dialog a[href="/recovery"]\').hidden === false')
+				await capture(`${viewport.label}-background-pending`)
 				executionStatus = 'completed'
-				await waitFor("document.querySelector('#operation-dialog [role=status]').textContent.includes('Dry run completed')")
+				executionOutcome = 'confirmed'
+				await waitFor("document.querySelector('#operation-dialog [role=status]').textContent === 'Operation confirmed.'")
+				expect(await evaluate("document.querySelector('.operation-receipts').textContent.includes('Included')")).toBe(true)
+				expect(await evaluate("document.querySelector('#operation-dialog').scrollWidth <= document.querySelector('#operation-dialog').clientWidth")).toBe(true)
 				await capture(`${viewport.label}-completed`)
+				for (const [outcome, expectedMessage] of Object.entries({ skipped: 'canonical signing anchor', 'dry-run': 'Dry run completed', recovery: 'partial execution' })) {
+					executionOutcome = outcome
+					await evaluate("document.querySelector('#operation-dialog form').requestSubmit()")
+					await waitFor("document.querySelector('#operation-dialog .operation-actions button:nth-child(2)').disabled === false")
+					await evaluate("document.querySelector('#operation-dialog .operation-actions button:nth-child(2)').click()")
+					await waitFor(`document.querySelector('#operation-dialog [role=status]').textContent.includes(${JSON.stringify(expectedMessage)})`)
+					if (outcome === 'recovery') {
+						expect(await evaluate("document.querySelectorAll('.operation-receipts .full-identifier').length")).toBe(2)
+						expect(await evaluate("document.querySelectorAll('.operation-receipts a').length")).toBe(1)
+						expect(await evaluate("document.querySelectorAll('.operation-receipts button').length")).toBe(0)
+						expect(await evaluate("document.querySelector('.operation-receipts .identifier-value').textContent")).toBe(transactionHash)
+					} else expect(await evaluate("document.querySelectorAll('.operation-receipts a').length")).toBe(0)
+					await evaluate("document.querySelector('#operation-dialog').scrollTop = document.querySelector('#operation-dialog').scrollHeight")
+					expect(await evaluate("document.querySelector('#operation-dialog').scrollWidth <= document.querySelector('#operation-dialog').clientWidth")).toBe(true)
+					await capture(`${viewport.label}-result-${outcome}`)
+				}
+				executionOutcome = 'skipped'
+				skipReason = gasLimitFailureReason()
+				await evaluate("document.querySelector('#operation-dialog form').requestSubmit()")
+				await waitFor("document.querySelector('#operation-dialog .operation-actions button:nth-child(2)').disabled === false")
+				await evaluate("document.querySelector('#operation-dialog .operation-actions button:nth-child(2)').click()")
+				await waitFor("document.querySelector('#operation-dialog [role=status]').textContent.includes('estimated maximum 0.02402000049241 ETH; configured maximum 0.02 ETH')")
+				expect(await evaluate("document.querySelector('#operation-dialog [role=status]').textContent.includes('24020000492410000')")).toBe(false)
+				expect(await evaluate("document.querySelector('#operation-dialog').scrollWidth <= document.querySelector('#operation-dialog').clientWidth")).toBe(true)
+				await evaluate("document.querySelector('#operation-dialog [role=status]').scrollIntoView({ block: 'center' })")
+				await capture(`${viewport.label}-gas-limit`)
+				skipReason = 'Wrap WETH canonical signing anchor or its attester set changed during pre-signing checks.'
+				executionOutcome = ''
+
 				await evaluate("document.querySelector('#operation-dialog').close()")
 				holdExecution = false
 				failInspect = true
@@ -189,6 +320,7 @@ test(
 				await evaluate("document.querySelector('#operation-dialog').close()")
 				await evaluate("[...document.querySelectorAll('.operation-open')].find(button => button.getAttribute('aria-label') === 'Open Deposit OpenOracle credit').click()")
 				await waitFor("document.querySelector('#operation-input-token') !== null && document.querySelector('#operation-dialog fieldset').disabled === false")
+				await expectFullTokenAddress()
 				await evaluate(`(() => {
 				const input = document.querySelector('#operation-input-token')
 				const source = input.parentElement.querySelector('select')
@@ -199,6 +331,11 @@ test(
 			})()`)
 				await waitFor("document.querySelector('#operation-dialog fieldset').disabled === false")
 				await evaluate("document.querySelector('.operation-coverage').open = true")
+				await expectFullTokenAddress()
+				const tokenStateReads = stateReads
+				for (let attempt = 0; attempt < 150 && stateReads === tokenStateReads; attempt += 1) await Bun.sleep(100)
+				expect(stateReads).toBeGreaterThan(tokenStateReads)
+				await expectFullTokenAddress()
 				await capture(`${viewport.label}-token-inputs`)
 				expect(await evaluate("document.querySelector('#operation-input-token').disabled")).toBe(false)
 				expect(await evaluate('document.activeElement.id')).toBe('operation-input-token')
@@ -210,6 +347,46 @@ test(
 				expect(await evaluate("document.querySelector('#operation-dialog .operation-actions button:nth-child(2)').disabled")).toBe(true)
 				await capture(`${viewport.label}-prerequisite-inputs`)
 				await evaluate("document.querySelector('#operation-dialog').close()")
+				seedWorkflow = true
+				seedIncluded = 0
+				await evaluate("[...document.querySelectorAll('.operation-open')].find(button => button.closest('tr')?.dataset.operationId === 'trading.genesis-uniswap.seed-pool').click()")
+				await waitFor("document.querySelector('#operation-dialog .operation-actions button:nth-child(2)').disabled === false")
+				await evaluate("document.querySelector('#operation-dialog .operation-actions button:nth-child(2)').click()")
+				await waitFor("document.querySelector('.operation-receipts li:last-child')?.textContent.includes('Queued') === true")
+				expect(await evaluate("document.querySelectorAll('.operation-receipts li').length")).toBe(3)
+				expect(await evaluate("document.querySelector('.operation-receipts').getAttribute('aria-busy')")).toBe('true')
+				await capture(`${viewport.label}-seed-first-approval`)
+				seedIncluded = 1
+				await waitFor("document.querySelector('.operation-receipts h3').textContent.includes('1 of 3')")
+				expect(await evaluate("document.querySelectorAll('.operation-receipts .identifier-value').length")).toBe(2)
+				await capture(`${viewport.label}-seed-second-approval`)
+				seedIncluded = 2
+				await waitFor("document.querySelector('.operation-receipts h3').textContent.includes('2 of 3')")
+				await capture(`${viewport.label}-seed-liquidity`)
+				seedIncluded = 3
+				await waitFor("document.querySelector('.operation-receipts h3').textContent.includes('3 of 3')")
+				expect(await evaluate("document.querySelector('.operation-receipts').getAttribute('aria-busy')")).toBe('false')
+				expect(await evaluate("document.querySelector('.workflow-spinner') === null")).toBe(true)
+				expect(await evaluate("document.querySelector('#operation-dialog').scrollWidth <= document.querySelector('#operation-dialog').clientWidth")).toBe(true)
+				await capture(`${viewport.label}-seed-completed`)
+				await evaluate("document.querySelector('#operation-dialog').close()")
+				seedWorkflow = false
+				await session.send('Page.navigate', { url: new URL('/workflows', dashboard.url).href })
+				await waitFor("document.querySelector('#workflow-history').textContent.includes('No workflows recorded yet.')")
+				await capture(`${viewport.label}-workflows-empty`)
+				historyFixture = true
+				historyCompleted = false
+				await evaluate("window.dispatchEvent(new Event('focus'))")
+				await waitFor("document.querySelectorAll('#workflow-history details').length === 3")
+				await evaluate("document.querySelector('#workflow-history details').open = true")
+				await capture(`${viewport.label}-workflows-active`)
+				historyCompleted = true
+				await evaluate("window.dispatchEvent(new Event('focus'))")
+				await waitFor("document.querySelector('#workflow-history details h3').textContent.includes('3 of 3')")
+				expect(await evaluate("document.querySelector('#workflow-history details').open")).toBe(true)
+				expect(await evaluate('document.body.scrollWidth <= document.documentElement.clientWidth')).toBe(true)
+				await capture(`${viewport.label}-workflows-completed`)
+				historyFixture = false
 				for (const route of ['overview', 'ecosystem', 'recovery', 'settings']) {
 					await session.send('Page.navigate', { url: new URL(`/${route}`, dashboard.url).href })
 					await waitFor(`document.querySelector('#last-block')?.textContent === 'Block ${fixture.state.lastScannedBlock}'`)

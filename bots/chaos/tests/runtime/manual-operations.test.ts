@@ -1,3 +1,4 @@
+import { retainWorkflow, markWorkflowForRediscovery } from '../../src/runtime/workflows.ts'
 import { acquireBotProcessLocks, createBotShutdownController } from '@zoltar/bot-shared/execution/bot-process-locks'
 import { CHAOS_PROCESS_LOCK_OPTIONS } from '../../src/core/process-lock-options.ts'
 import { saveDurableState } from '../../src/state/operator-state.ts'
@@ -7,7 +8,8 @@ import { join } from 'node:path'
 import { executeScheduledOperation } from '../../src/runtime/scheduled-operation.ts'
 import { planningOptions } from '../../src/runtime/canonical-scan.ts'
 import { evaluateSelectableOperationDefinition } from '../../src/operations/catalog.ts'
-import { expect, test } from 'bun:test'
+import { expect, spyOn, test } from 'bun:test'
+import { TransactionAwaitingRecovery } from '../../src/execution/receipt-validation.ts'
 import { createManualOperationController } from '../../src/runtime/manual-operations.ts'
 import { manualOperationFixture as fixture } from './manual-operation-fixture.ts'
 
@@ -115,15 +117,15 @@ test('incomplete scans and paused live mode block manual execution', async () =>
 	expect(paused['previewId']).toBeUndefined()
 })
 
-test('production operator starts a manual operation before the random timer is due', async () => {
+test.each(['idle', 'scheduled'] as const)('production operator starts a manual operation while the timer is %s', async initialStatus => {
 	const { configuration, state, scan } = fixture()
 	const directory = await mkdtemp(join(tmpdir(), 'chaos-manual-schedule-'))
 	try {
 		configuration.settings.runtime.stateFile = join(directory, 'state.json')
 		configuration.settings.paused = false
 		state.paused = false
-		state.scheduler.status = 'scheduled'
-		state.scheduler.nextRunAt = new Date(Date.now() + 3_600_000).toISOString()
+		state.scheduler.status = initialStatus
+		state.scheduler.nextRunAt = initialStatus === 'idle' ? undefined : new Date(Date.now() + 3_600_000).toISOString()
 		const plan = evaluateSelectableOperationDefinition('open-oracle.weth.wrap', scan.snapshot, planningOptions(configuration.settings, 7)).plan
 		if (plan === undefined) throw new Error('Expected a WETH plan')
 		const execute = async () => {
@@ -136,6 +138,8 @@ test('production operator starts a manual operation before the random timer is d
 		expect(state.scheduler.status).toBe('scheduled')
 		expect(state.scheduler.selectedOperationId).toBe(plan.definitionId)
 		configuration.settings.runtime.execute = true
+		state.scheduler.status = initialStatus
+		state.scheduler.nextRunAt = initialStatus === 'idle' ? undefined : new Date(Date.now() + 3_600_000).toISOString()
 		let submissions = 0
 		await executeScheduledOperation(
 			configuration,
@@ -273,3 +277,118 @@ test('exact input above the policy cap is blocked rather than silently clamped',
 	expect(response['previewId']).toBeUndefined()
 	expect(response['blockers']).not.toEqual([])
 })
+
+test('manual live results expose the skip reason and transaction progress for the exact execution', async () => {
+	const { configuration, state, scan, gate } = fixture()
+	configuration.settings.runtime.execute = true
+	configuration.settings.paused = false
+	state.paused = false
+	scan.inventory.rep = scan.snapshot.universes.map(universe => ({ universeId: universe.id, token: universe.repToken, symbol: 'REP', balance: '1000000000000000000000000' }))
+	let skip = true
+	const submitted = Promise.withResolvers<void>()
+	const release = Promise.withResolvers<void>()
+	const hash = `0x${'ab'.repeat(32)}`
+	const controller = createManualOperationController({
+		configuration,
+		state,
+		gate,
+		scan: async () => scan,
+		execute: async plan => {
+			const workflow = retainWorkflow(state, plan)
+			if (skip) {
+				markWorkflowForRediscovery(workflow, new Error('Canonical signing anchor changed during pre-signing checks'))
+				return
+			}
+			const step = workflow.steps[0]
+			if (step === undefined) throw new Error('Missing step')
+			step.transactionHash = `0x${'ab'.repeat(32)}`
+			step.status = 'submitted'
+			workflow.status = 'waiting-transaction'
+			submitted.resolve()
+			await release.promise
+			step.status = 'confirmed'
+			workflow.status = 'completed'
+		},
+	})
+	try {
+		const first = object(await controller.handle({ ...wrap, action: 'preview' }))
+		expect(first['blockers']).toEqual([])
+		await controller.handle({ action: 'execute', previewId: first['previewId'] })
+		const skipped = await finished(controller, first['previewId'])
+		expect(skipped['outcome']).toBe('skipped')
+		expect(skipped['message']).toContain('No transaction signed')
+		expect(JSON.stringify(skipped)).toContain('Canonical signing anchor changed')
+		skip = false
+		const second = object(await controller.handle({ ...wrap, action: 'preview' }))
+		await controller.handle({ action: 'execute', previewId: second['previewId'] })
+		await submitted.promise
+		const pending = object(object(await controller.handle({ action: 'status', previewId: second['previewId'] }))['execution'])
+		expect(pending['outcome']).toBe('submitted')
+		expect(pending['transactions']).toEqual([expect.objectContaining({ hash, status: 'submitted', explorerUrl: `https://sepolia.etherscan.io/tx/${hash}` })])
+		release.resolve()
+		const confirmed = await finished(controller, second['previewId'])
+		expect(confirmed['outcome']).toBe('confirmed')
+		expect(confirmed['message']).toBe('Operation confirmed.')
+		expect(object(object(await controller.handle({ action: 'status', previewId: first['previewId'] }))['execution'])['outcome']).toBe('skipped')
+	} finally {
+		release.resolve()
+		await controller[Symbol.asyncDispose]()
+	}
+})
+
+for (const severity of ['pending', 'alarming'] as const) {
+	test(`manual transaction recovery logs ${severity} at the appropriate level and retains its hash`, async () => {
+		const { configuration, state, scan, gate } = fixture()
+		configuration.settings.runtime.execute = true
+		configuration.settings.paused = false
+		state.paused = false
+		scan.inventory.rep = scan.snapshot.universes.map(universe => ({ universeId: universe.id, token: universe.repToken, symbol: 'REP', balance: '1000000000000000000000000' }))
+		const hash = `0x${'ab'.repeat(32)}` as const
+		const error = new TransactionAwaitingRecovery('Wrap WETH', hash, 'not yet visible to the RPC quorum', severity)
+		const info = spyOn(console, 'log').mockImplementation(() => {})
+		const errors = spyOn(console, 'error').mockImplementation(() => {})
+		const controller = createManualOperationController({
+			configuration,
+			state,
+			gate,
+			scan: async () => scan,
+			execute: async plan => {
+				const workflow = retainWorkflow(state, plan)
+				const step = workflow.steps[0]
+				if (step === undefined) throw new Error('Missing step')
+				step.transactionHash = hash
+				step.status = 'submitted'
+				workflow.status = 'waiting-transaction'
+				throw error
+			},
+		})
+		try {
+			const preview = object(await controller.handle({ ...wrap, action: 'preview' }))
+			await controller.handle({ action: 'execute', previewId: preview['previewId'] })
+			const result = await finished(controller, preview['previewId'])
+			expect(result['outcome']).toBe('submitted')
+			expect(result['transactions']).toEqual([expect.objectContaining({ hash, status: 'submitted', explorerUrl: `https://sepolia.etherscan.io/tx/${hash}` })])
+			if (severity === 'pending') {
+				expect(errors).not.toHaveBeenCalled()
+				expect(info).toHaveBeenCalledWith(`chaosManualOperation pending: ${error.message}`)
+			} else {
+				expect(errors).toHaveBeenCalledWith('chaosManualOperation failed', error)
+				expect(info).not.toHaveBeenCalled()
+			}
+			expect(gate.acquire('scan')).toBe(true)
+			gate.release('scan')
+			const workflow = state.workflows[0]
+			const step = workflow?.steps[0]
+			if (workflow === undefined || step === undefined) throw new Error('Missing retained workflow')
+			step.status = 'confirmed'
+			workflow.status = 'completed'
+			const recovered = object(object(await controller.handle({ action: 'status', previewId: preview['previewId'] }))['execution'])
+			expect(recovered['outcome']).toBe('confirmed')
+			expect(recovered['status']).toBe('completed')
+		} finally {
+			await controller[Symbol.asyncDispose]()
+			info.mockRestore()
+			errors.mockRestore()
+		}
+	})
+}

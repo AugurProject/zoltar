@@ -132,7 +132,7 @@ function preparedApprovalState(snapshot: EcosystemSnapshot, context: OperationCo
 		const previous = exactPreviousApproval(context.previousPlan, snapshot, requirement)
 		if (context.previousPlan.steps.some(step => step.id === requirement.id) && previous === undefined) return false
 		if (previous !== undefined && context.confirmedStepIds.includes(requirement.id)) {
-			if (allowance(tokenInventory(snapshot, requirement.token), requirement.spender) !== requirement.required) return false
+			if (allowance(tokenInventory(snapshot, requirement.token), requirement.spender) < requirement.required) return false
 		} else if (previous === undefined && allowance(tokenInventory(snapshot, requirement.token), requirement.spender) < requirement.required) {
 			return false
 		}
@@ -143,7 +143,7 @@ function preparedApprovalState(snapshot: EcosystemSnapshot, context: OperationCo
 function remainingApprovalSteps(snapshot: EcosystemSnapshot, context: OperationContinuationContext, requirements: readonly OpenOracleApprovalRequirement[]) {
 	return requirements.flatMap(requirement => {
 		const previous = exactPreviousApproval(context.previousPlan, snapshot, requirement)
-		if (previous === undefined || context.confirmedStepIds.includes(requirement.id)) return []
+		if (previous === undefined || context.confirmedStepIds.includes(requirement.id) || allowance(tokenInventory(snapshot, requirement.token), requirement.spender) >= requirement.required) return []
 		return [openOracleApprovalStep(snapshot, requirement.token, requirement.spender, requirement.required, requirement.id)]
 	})
 }

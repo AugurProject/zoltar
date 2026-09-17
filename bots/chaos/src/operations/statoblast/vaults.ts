@@ -21,7 +21,7 @@ import {
 	walletVault,
 } from './planning.ts'
 
-import { ONE_TOKEN, amount, choose, eligible, encodeStep, erc20WalletDebit, eventEvidence, mixSeed, optionAmount, planBase, tokenInventory } from '../planning.ts'
+import { ONE_TOKEN, allowance, amount, choose, eligible, encodeStep, erc20WalletDebit, eventEvidence, mixSeed, optionAmount, planBase, tokenInventory } from '../planning.ts'
 
 import { securityPoolAbi, securityPoolFactoryAbi } from '@zoltar/bot-shared/contracts/abi'
 
@@ -194,7 +194,7 @@ export const depositVault: OperationDefinition = {
 			poolApprovalPrepared(snapshot, context, repToken, poolAddress, spend)
 		if (!safe) return cleanup()
 		const previousApproval = exactPreviousPoolApproval(snapshot, context, repToken, poolAddress, spend)
-		const steps = previousApproval !== undefined && !context.confirmedStepIds.includes(previousApproval.id) ? [poolApprovalStep(snapshot, repToken, poolAddress, spend)] : []
+		const steps = previousApproval !== undefined && !context.confirmedStepIds.includes(previousApproval.id) && allowance(tokenInventory(snapshot, repToken), poolAddress) < spend ? [poolApprovalStep(snapshot, repToken, poolAddress, spend)] : []
 		steps.push(
 			encodeStep({
 				abi: securityPoolAbi,

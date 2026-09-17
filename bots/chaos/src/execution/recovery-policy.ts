@@ -1,3 +1,4 @@
+import { formatDecimalAmount } from '@zoltar/bot-shared/infrastructure/json-validation'
 import { EXECUTOR_FINALITY_BLOCKS } from '../operations/timing.ts'
 import type { PendingTransactionIntent } from '../state/operator-state.ts'
 
@@ -36,6 +37,16 @@ export function transactionIsStrictNonceCancellation(
 	intent: Pick<PendingTransactionIntent, 'nonce' | 'sender'>,
 ) {
 	return transaction.type === BOT_COMPATIBLE_RECOVERY_TRANSACTION_TYPE && transaction.from.toLowerCase() === intent.sender.toLowerCase() && transaction.nonce === intent.nonce && transaction.to?.toLowerCase() === intent.sender.toLowerCase() && transaction.input.toLowerCase() === '0x' && transaction.value === 0n
+}
+
+export function recoveryGasCostBlocker(label: string, signedMaximumFeePerGas: bigint, baseFeePerGas: bigint, signedMaximumGasCost: bigint, maximumGasCost: bigint) {
+	if (signedMaximumFeePerGas < baseFeePerGas) {
+		return `${label} signed maximum fee is below the current canonical base fee: signed maximum ${formatDecimalAmount(signedMaximumFeePerGas)} ETH/gas; current base fee ${formatDecimalAmount(baseFeePerGas)} ETH/gas`
+	}
+	if (signedMaximumGasCost > maximumGasCost) {
+		return `${label} signed gas ceiling exceeds the current strategy.maximumGasCostEth: signed maximum ${formatDecimalAmount(signedMaximumGasCost)} ETH; configured maximum ${formatDecimalAmount(maximumGasCost)} ETH`
+	}
+	return undefined
 }
 
 export function assertRecoverySubmissionMode(intentMode: PendingTransactionIntent['mode'], configuredMode: PendingTransactionIntent['mode']) {

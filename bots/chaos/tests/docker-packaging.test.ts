@@ -35,14 +35,19 @@ async function runEntrypoint(directory: string) {
 describe('chaos Docker packaging', () => {
 	test('provides a location-independent Windows launcher', async () => {
 		const commands = batchCommands(await readFile(windowsLauncher, 'utf8'))
-		expect(commands.at(0)).toBe('pushd "%~dp0" || exit /b 1')
+		expect(commands).toContain('pushd "%~dp0" || goto failed')
 		expect(commands).toContain('if /I "%~1"=="doctor" goto doctor')
-		for (const command of ['docker compose run --rm --no-deps chaos bun src/cli/doctor.ts --if-live-capable', 'docker compose run --rm --no-deps chaos bun run doctor', 'docker compose up --build --force-recreate -d']) expect(commands).toContain(`${command} || exit /b 1`)
-		expect(commands.indexOf('docker compose run --rm --no-deps chaos bun src/cli/doctor.ts --if-live-capable || exit /b 1')).toBeLessThan(commands.indexOf('docker compose up --build --force-recreate -d || exit /b 1'))
+		for (const command of ['docker compose run --rm --no-deps chaos bun src/cli/doctor.ts --if-live-capable', 'docker compose run --rm --no-deps chaos bun run doctor', 'docker compose up --build --force-recreate -d']) expect(commands).toContain(`${command} || goto failed`)
+		expect(commands.indexOf('docker compose run --rm --no-deps chaos bun src/cli/doctor.ts --if-live-capable || goto failed')).toBeLessThan(commands.indexOf('docker compose up --build --force-recreate -d || goto failed'))
 		expect(commands.some(command => command.includes('dashboard-password'))).toBe(false)
 		expect(commands.some(command => command.includes('started with its persisted configuration'))).toBe(true)
 		expect(commands.some(command => command.includes('started in paused dry-run mode'))).toBe(false)
-		expect(commands.some(command => command.includes('exit /b 1'))).toBe(true)
+		expect(commands.filter(command => command.includes('exit /b'))).toEqual(['exit /b %chaos_exit_code%'])
+		expect(commands).toContain('if "%chaos_pushed%"=="1" popd')
+		expect(commands.indexOf(':failed')).toBeLessThan(commands.indexOf('set "chaos_exit_code=%errorlevel%"'))
+		expect(commands.indexOf('set "chaos_exit_code=%errorlevel%"')).toBeLessThan(commands.indexOf(':finish'))
+		expect(commands.indexOf(':finish')).toBeLessThan(commands.indexOf('pause'))
+		expect(commands.at(-1)).toBe('exit /b %chaos_exit_code%')
 	})
 
 	test('builds shared packages and runs as the non-root Bun user', async () => {

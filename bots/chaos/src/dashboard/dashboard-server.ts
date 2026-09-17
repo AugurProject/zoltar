@@ -1,3 +1,4 @@
+import { publicActivity } from './public-activity.ts'
 import { join } from 'node:path'
 import { dashboardHealthResponse, sharedDashboardAssetResponse } from '@zoltar/bot-shared/dashboard/assets'
 import { publicConnectivityError } from '@zoltar/bot-shared/dashboard/connectivity-error'
@@ -8,7 +9,7 @@ import { requiredLiveInventory } from '../runtime/live-readiness.ts'
 import { pendingTransactionObservationKind } from '../state/pending-transaction-observation.ts'
 import { browserScript } from './browser-assets.ts'
 import { operatorHeader } from './header.ts'
-import { booleanField, compact, isoTimestampField, record, safeIntegerField, safeString, scalar, stringField } from './public-fields.ts'
+import { booleanField, compact, isoTimestampField, record, publicExplorerUrl, safeIntegerField, safeString, scalar, stringField } from './public-fields.ts'
 import { publicAlert, publicRetirement } from './public-retirement.ts'
 
 export type ChaosDashboardController = {
@@ -31,7 +32,7 @@ export type ChaosDashboardController = {
 	setWorkflow: (value: unknown) => unknown | Promise<unknown>
 }
 
-const dashboardPages = new Set(['overview', 'catalog', 'ecosystem', 'recovery', 'settings'])
+const dashboardPages = new Set(['overview', 'catalog', 'ecosystem', 'workflows', 'recovery', 'settings'])
 
 function publicStrings(value: unknown) {
 	return Array.isArray(value)
@@ -44,15 +45,6 @@ function publicStrings(value: unknown) {
 
 function configuredRpcUrls(value: unknown) {
 	return Array.isArray(value) ? value.filter((entry): entry is string => typeof entry === 'string' && entry.length <= 2_048).slice(0, 8) : []
-}
-
-/** Publishes the operator-configured block explorer only as a plain http(s) base that `/tx/<hash>` can be appended to. */
-function publicExplorerUrl(value: unknown) {
-	// A bare `?` or `#` parses as an empty query or fragment, so reject the delimiters themselves.
-	if (typeof value !== 'string' || value.length > 2_048 || value.includes('?') || value.includes('#') || !URL.canParse(value)) return undefined
-	const url = new URL(value)
-	if ((url.protocol !== 'https:' && url.protocol !== 'http:') || url.username !== '' || url.password !== '') return undefined
-	return value
 }
 
 function nullablePublicStrings(value: unknown) {
@@ -537,21 +529,6 @@ function publicObligation(value: unknown) {
 	})
 }
 
-function publicActivity(value: unknown) {
-	const source = record(value)
-	if (source === undefined) return undefined
-	return compact({
-		at: stringField(source, 'at'),
-		details: stringField(source, 'details'),
-		ecosystem: stringField(source, 'ecosystem'),
-		label: stringField(source, 'label') ?? stringField(source, 'message'),
-		operationId: stringField(source, 'operationId'),
-		status: stringField(source, 'status'),
-		summary: stringField(source, 'summary'),
-		txHash: stringField(source, 'txHash') ?? stringField(source, 'hash'),
-	})
-}
-
 export function publicChaosState(value: unknown, configurationValue?: unknown, nowMilliseconds = Date.now()) {
 	const source = record(value)
 	if (source === undefined) return {}
@@ -578,6 +555,10 @@ export function publicChaosState(value: unknown, configurationValue?: unknown, n
 			: [],
 		chainId: scalar(source, 'chainId') ?? rpcHealthPolicy.expectedChainId,
 		currentWorkflow,
+		workflows: workflows.flatMap(value => {
+			const workflow = publicWorkflow(value)
+			return workflow === undefined ? [] : [workflow]
+		}),
 		execute: booleanField(source, 'execute'),
 		inventory: publicInventory(source['inventory']),
 		inventoryAvailable: booleanField(source, 'inventoryAvailable') === true && stringField(source, 'wallet') !== undefined,

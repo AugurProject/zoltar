@@ -1,5 +1,6 @@
 import { CHROMIUM_STARTUP_BUDGET_MILLISECONDS, startChromiumSession } from './chromium-session.ts'
 import { existsSync } from 'node:fs'
+import { mkdir } from 'node:fs/promises'
 import { join } from 'node:path'
 import { expect, test } from 'bun:test'
 import { startDashboardServer } from '../../src/dashboard/dashboard-server.ts'
@@ -377,27 +378,19 @@ browserTest(
 				}
 				throw new Error(message)
 			}
-			const expectVisibleIdentifiers = async (expected: { explorerUrl?: string; type: string; value: string }[], minimumButtonHeight: number, selector = '.compact-identifier') => {
+			const expectVisibleIdentifiers = async (expected: { explorerUrl?: string; type: string; value: string }[], minimumButtonHeight: number, selector = '.full-identifier') => {
 				const identifiers = await cdp.evaluate(`[...document.querySelectorAll(${JSON.stringify(selector)})].flatMap(wrapper => {
 					const bounds = wrapper.getBoundingClientRect()
 					if (bounds.width === 0 || bounds.height === 0) return []
-					const button = wrapper.querySelector('.identifier-copy')
-					const buttonBounds = button?.getBoundingClientRect()
-					const disclosure = wrapper.querySelector('.identifier-disclosure')
-					const disclosureBounds = disclosure?.getBoundingClientRect()
-					const full = wrapper.querySelector('.identifier-full')
+					const display = wrapper.querySelector('.identifier-value')
+					const displayBounds = display?.getBoundingClientRect()
 					const explorer = wrapper.querySelector('.identifier-explorer')
 					const explorerBounds = explorer?.getBoundingClientRect()
 					return [{
-						accessibleName: button?.getAttribute('aria-label'),
-						buttonHeight: buttonBounds?.height,
-						buttonVisible: (buttonBounds?.width ?? 0) > 0 && (buttonBounds?.height ?? 0) > 0,
-						disclosureExpanded: disclosure?.getAttribute('aria-expanded'),
-						disclosureHeight: disclosureBounds?.height,
-						disclosureName: disclosure?.getAttribute('aria-label'),
-						disclosureTabIndex: disclosure?.tabIndex,
-						disclosureVisible: (disclosureBounds?.width ?? 0) > 0 && (disclosureBounds?.height ?? 0) > 0,
-						display: wrapper.querySelector('.identifier-value')?.textContent,
+						display: display?.textContent,
+						visible: (displayBounds?.width ?? 0) > 0 && (displayBounds?.height ?? 0) > 0,
+						unclipped: display !== null && display.scrollWidth <= display.clientWidth,
+						buttonCount: wrapper.querySelectorAll('button').length,
 						explorerHeight: explorerBounds?.height,
 						explorerHref: explorer?.getAttribute('href') ?? null,
 						explorerName: explorer?.getAttribute('aria-label') ?? null,
@@ -406,11 +399,7 @@ browserTest(
 						explorerText: explorer?.textContent ?? null,
 						explorerTitle: explorer?.getAttribute('title') ?? null,
 						explorerVisible: (explorerBounds?.width ?? 0) > 0 && (explorerBounds?.height ?? 0) > 0,
-						feedback: wrapper.querySelector('.identifier-feedback')?.textContent,
-						fullHidden: full?.hidden,
-						fullValue: full?.value,
 						right: bounds.right,
-						tabIndex: button?.tabIndex,
 						type: wrapper.getAttribute('data-identifier-type'),
 					}]
 				})`)
@@ -418,20 +407,13 @@ browserTest(
 				const viewportRight = await cdp.evaluate('document.documentElement.clientWidth + 1')
 				if (typeof viewportRight !== 'number') throw new Error('Missing dashboard viewport width')
 				for (const identifier of expected) {
-					const rendered = Array.isArray(identifiers) ? identifiers.find(candidate => Reflect.get(candidate, 'accessibleName') === `Copy ${identifier.type}: ${identifier.value}`) : undefined
+					const rendered = Array.isArray(identifiers) ? identifiers.find(candidate => Reflect.get(candidate, 'type') === identifier.type && Reflect.get(candidate, 'display') === identifier.value) : undefined
 					if (rendered === undefined) throw new Error(`Missing visible ${identifier.type}`)
 					expect(Reflect.get(rendered, 'type')).toBe(identifier.type)
-					expect(Reflect.get(rendered, 'display')).toBe(`${identifier.value.slice(0, 8)}…${identifier.value.slice(-6)}`)
-					expect(Reflect.get(rendered, 'buttonVisible')).toBe(true)
-					expect(Reflect.get(rendered, 'buttonHeight')).toBeGreaterThanOrEqual(minimumButtonHeight)
-					expect(Reflect.get(rendered, 'tabIndex')).toBe(0)
-					expect(Reflect.get(rendered, 'disclosureName')).toBe(`Show full ${identifier.type}: ${identifier.value}`)
-					expect(Reflect.get(rendered, 'disclosureVisible')).toBe(true)
-					expect(Reflect.get(rendered, 'disclosureHeight')).toBeGreaterThanOrEqual(minimumButtonHeight)
-					expect(Reflect.get(rendered, 'disclosureTabIndex')).toBe(0)
-					expect(Reflect.get(rendered, 'disclosureExpanded')).toBe('false')
-					expect(Reflect.get(rendered, 'fullHidden')).toBe(true)
-					expect(Reflect.get(rendered, 'fullValue')).toBe(identifier.value)
+					expect(Reflect.get(rendered, 'display')).toBe(identifier.value)
+					expect(Reflect.get(rendered, 'visible')).toBe(true)
+					expect(Reflect.get(rendered, 'unclipped')).toBe(true)
+					expect(Reflect.get(rendered, 'buttonCount')).toBe(0)
 					if (identifier.explorerUrl === undefined) {
 						expect(Reflect.get(rendered, 'explorerHref')).toBeNull()
 					} else {
@@ -449,24 +431,20 @@ browserTest(
 					expect(right).toBeLessThanOrEqual(viewportRight)
 				}
 				expect(await cdp.evaluate('document.body.scrollWidth === document.documentElement.clientWidth')).toBe(true)
+				const screenshots = process.env['CHAOS_QA_SCREENSHOTS']
+				if (screenshots !== undefined) {
+					await mkdir(screenshots, { recursive: true })
+					const targets = selector === '.full-identifier' ? ['[data-identifier-type="wallet address"]', '#current-workflow', '#activity-list'] : [selector]
+					for (const [index, target] of targets.entries()) {
+						await cdp.evaluate(`document.querySelector(${JSON.stringify(target)})?.scrollIntoView({ block: 'center' })`)
+						const name = await cdp.evaluate(`location.pathname.slice(1) + '-' + innerWidth + '-' + ${JSON.stringify(selector.replace(/[^a-z0-9]/gi, '-'))}`)
+						const capture = await cdp.command('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false })
+						const data = typeof capture === 'object' && capture !== null ? Reflect.get(capture, 'data') : undefined
+						if (typeof data !== 'string') throw new Error('Identifier screenshot unavailable')
+						await Bun.write(`${screenshots}/${String(name)}-${index.toString()}.png`, Buffer.from(data, 'base64'))
+					}
+				}
 				return identifiers
-			}
-			const touchControl = async (selector: string) => {
-				const center = await cdp.evaluate(`new Promise(resolve => {
-					const control = document.querySelector(${JSON.stringify(selector)})
-					control?.scrollIntoView({ block: 'center' })
-					requestAnimationFrame(() => requestAnimationFrame(() => {
-						const bounds = control?.getBoundingClientRect()
-						resolve({ x: bounds === undefined ? undefined : bounds.left + bounds.width / 2, y: bounds === undefined ? undefined : bounds.top + bounds.height / 2 })
-					}))
-				})`)
-				const x = typeof center === 'object' && center !== null ? Reflect.get(center, 'x') : undefined
-				const y = typeof center === 'object' && center !== null ? Reflect.get(center, 'y') : undefined
-				if (typeof x !== 'number' || typeof y !== 'number') throw new Error(`Missing touch target for ${selector}`)
-				await cdp.command('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 1 })
-				await cdp.command('Input.dispatchTouchEvent', { touchPoints: [{ x, y }], type: 'touchStart' })
-				await cdp.command('Input.dispatchTouchEvent', { touchPoints: [], type: 'touchEnd' })
-				await cdp.command('Emulation.setTouchEmulationEnabled', { enabled: false })
 			}
 
 			for (const scenario of scenarios) {
@@ -711,12 +689,12 @@ browserTest(
 					const status = row.querySelector('[data-step-status]')
 					const hash = row.querySelector('[data-step-hash]')
 					const hashDisplay = hash?.querySelector('.identifier-value')
+					const label = row.querySelector('.step-label')
 					const statusBounds = status?.getBoundingClientRect()
 					return {
-						copyName: hash?.querySelector('.identifier-copy')?.getAttribute('aria-label') ?? null,
-						fullHash: hash?.querySelector('.identifier-full')?.value ?? null,
 						hash: hashDisplay?.textContent ?? null,
-						label: row.querySelector('.step-label')?.textContent,
+						label: label?.textContent,
+						labelFits: label !== null && label.scrollWidth <= label.clientWidth,
 						markerHidden: row.querySelector('.step-dot')?.getAttribute('aria-hidden'),
 						status: status?.textContent,
 						statusCode: status?.getAttribute('data-step-status'),
@@ -729,18 +707,15 @@ browserTest(
 					if (expected === undefined) throw new Error('Rendered an unexpected workflow step')
 					const expectedStatus = expected.status === undefined ? 'Waiting' : `${expected.status.slice(0, 1).toUpperCase()}${expected.status.slice(1)}`
 					expect(Reflect.get(rendered, 'label')).toBe(expected.label)
+					expect(Reflect.get(rendered, 'labelFits')).toBe(true)
 					expect(Reflect.get(rendered, 'status')).toBe(expectedStatus)
 					expect(Reflect.get(rendered, 'statusCode')).toBe(expected.status ?? 'waiting')
 					expect(Reflect.get(rendered, 'statusVisible')).toBe(true)
 					expect(Reflect.get(rendered, 'markerHidden')).toBe('true')
 					if (expected.transactionHash === undefined) {
 						expect(Reflect.get(rendered, 'hash')).toBeNull()
-						expect(Reflect.get(rendered, 'fullHash')).toBeNull()
-						expect(Reflect.get(rendered, 'copyName')).toBeNull()
 					} else {
-						expect(Reflect.get(rendered, 'hash')).toBe(`${expected.transactionHash.slice(0, 8)}…${expected.transactionHash.slice(-6)}`)
-						expect(Reflect.get(rendered, 'fullHash')).toBe(expected.transactionHash)
-						expect(Reflect.get(rendered, 'copyName')).toBe(`Copy workflow transaction hash: ${expected.transactionHash}`)
+						expect(Reflect.get(rendered, 'hash')).toBe(expected.transactionHash)
 					}
 				}
 				expect(await cdp.evaluate(`({ scheduler: document.querySelector('#scheduler-state')?.textContent, workflow: document.querySelector('#current-workflow .workflow-heading .badge')?.textContent })`)).toEqual({ scheduler: 'Transaction recovery pending', workflow: 'Waiting transaction' })
@@ -750,7 +725,7 @@ browserTest(
 					return { className: note?.className, detail: note?.querySelector('small')?.textContent, headline: note?.querySelector('strong')?.textContent, visible: (bounds?.width ?? 0) > 0 && (bounds?.height ?? 0) > 0 }
 				})()`)
 				// The fixture queues a replacement, which recovery verifies before anything else, so that takes precedence over the observation.
-				expect(waitNote).toEqual({ className: 'transaction-wait info', detail: 'Waiting for its finalized receipt before the original intent is closed.', headline: 'Verifying the queued replacement', visible: true })
+				expect(waitNote).toEqual({ className: 'transaction-wait info', detail: 'Waiting for its canonically included receipt before the original intent is closed.', headline: 'Verifying the queued replacement', visible: true })
 				await expectVisibleIdentifiers(
 					[
 						{ type: 'wallet address', value: walletAddress },
@@ -773,58 +748,15 @@ browserTest(
 
 				expect(
 					await cdp.evaluate(`(() => {
-						const wrapper = document.querySelector('[data-identifier-type="wallet address"]')
-						const disclosure = wrapper?.querySelector('.identifier-disclosure')
-						const full = wrapper?.querySelector('.identifier-full')
-						disclosure?.focus()
-						disclosure?.click()
-						return {
-							active: document.activeElement === disclosure,
-							expanded: disclosure?.getAttribute('aria-expanded'),
-							hidden: full?.hidden,
-							value: full?.value,
-						}
-					})()`),
-				).toEqual({ active: true, expanded: 'true', hidden: false, value: walletAddress })
-				await cdp.evaluate(`document.querySelector('[data-identifier-type="wallet address"] .identifier-disclosure')?.click()`)
-				expect(await cdp.evaluate(`document.querySelector('[data-identifier-type="wallet address"] .identifier-full')?.hidden`)).toBe(true)
-
-				await cdp.evaluate(`Object.defineProperty(navigator, 'clipboard', {
-					configurable: true,
-					value: { writeText: value => { window.__identifierCopies = [...(window.__identifierCopies ?? []), value]; return Promise.resolve() } },
-				})`)
-				expect(await cdp.evaluate(`(() => { const button = document.querySelector('[data-identifier-type="wallet address"] .identifier-copy'); button?.focus(); return { active: document.activeElement === button, name: button?.getAttribute('aria-label') } })()`)).toEqual({
-					active: true,
-					name: `Copy wallet address: ${walletAddress}`,
-				})
-				await cdp.evaluate(`document.querySelector('[data-identifier-type="wallet address"] .identifier-copy')?.click()`)
-				await waitFor(`document.querySelector('[data-identifier-type="wallet address"] .identifier-feedback')?.textContent === 'Copied'`, `${viewport.label} keyboard copy did not report success`)
-				expect(await cdp.evaluate('window.__identifierCopies')).toEqual([walletAddress])
-				await cdp.evaluate(`Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: () => Promise.reject(new Error('denied')) } }); document.querySelector('[data-identifier-type="wallet address"] .identifier-copy')?.click()`)
-				await waitFor(`document.querySelector('[data-identifier-type="wallet address"] .identifier-feedback')?.textContent === 'Copy failed; full value shown'`, `${viewport.label} rejected copy did not report failure`)
-				expect(await cdp.evaluate(`document.querySelector('[data-identifier-type="wallet address"] .identifier-value')?.textContent`)).toBe(`${walletAddress.slice(0, 8)}…${walletAddress.slice(-6)}`)
-				expect(
-					await cdp.evaluate(`(() => {
-						const wrapper = document.querySelector('[data-identifier-type="wallet address"]')
-						const disclosure = wrapper?.querySelector('.identifier-disclosure')
-						const full = wrapper?.querySelector('.identifier-full')
-						full?.focus()
-						full?.select()
-						return {
-							expanded: disclosure?.getAttribute('aria-expanded'),
-							focused: document.activeElement === full,
-							hidden: full?.hidden,
-							selected: full?.value.slice(full.selectionStart, full.selectionEnd),
-							value: full?.value,
-						}
-					})()`),
-				).toEqual({ expanded: 'true', focused: true, hidden: false, selected: walletAddress, value: walletAddress })
-				expect(await cdp.evaluate('document.body.scrollWidth === document.documentElement.clientWidth')).toBe(true)
-				await cdp.evaluate(
-					`Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: value => { window.__identifierCopies = [...(window.__identifierCopies ?? []), value]; return Promise.resolve() } } }); document.querySelector('[data-identifier-type="wallet address"] .identifier-copy')?.click()`,
-				)
-				await waitFor(`document.querySelector('[data-identifier-type="wallet address"] .identifier-feedback')?.textContent === 'Copied'`, `${viewport.label} copy retry did not succeed`)
-				expect(await cdp.evaluate('window.__identifierCopies')).toEqual([walletAddress, walletAddress])
+					const value = document.querySelector('[data-identifier-type="wallet address"] .identifier-value')
+					const range = document.createRange()
+					range.selectNodeContents(value)
+					const selection = window.getSelection()
+					selection.removeAllRanges()
+					selection.addRange(range)
+					return selection.toString()
+				})()`),
+				).toBe(walletAddress)
 
 				await cdp.command('Page.navigate', { url: new URL('/catalog', dashboard.url).href })
 				await waitFor("document.querySelector('header #last-block')?.textContent === 'Block 12345678'", 'Shared block header did not render on the catalog route')
@@ -991,7 +923,7 @@ browserTest(
 					if (typeof height !== 'number') throw new Error('Missing topology summary bounds')
 					expect(height).toBeGreaterThanOrEqual(44)
 				}
-				await expectVisibleIdentifiers(topologyIdentifiers, viewport.width === 390 ? 44 : 32, '.topology-panel .compact-identifier')
+				await expectVisibleIdentifiers(topologyIdentifiers, viewport.width === 390 ? 44 : 32, '.topology-panel .full-identifier')
 				const ecosystemCards = await cdp.evaluate(`[...document.querySelectorAll('#ecosystem-grid .ecosystem-card')].map(card => ({
 					blockers: [...card.querySelectorAll('.blocker-list li')].map(item => item.textContent),
 					ecosystem: card.getAttribute('data-ecosystem'),
@@ -1002,52 +934,10 @@ browserTest(
 				const tradingCard = Array.isArray(ecosystemCards) ? ecosystemCards.find(card => Reflect.get(card, 'ecosystem') === 'trading') : undefined
 				expect(openOracleCard).toEqual({ blockers: [], ecosystem: 'open-oracle', readiness: 'Ready' })
 				expect(tradingCard).toEqual({ blockers: ['Router enter: No safe route exists'], ecosystem: 'trading', readiness: 'Blocked', summary: 'Router enter: No safe route exists' })
-				await cdp.evaluate(`Object.defineProperty(navigator, 'clipboard', {
-					configurable: true,
-					value: { writeText: value => { window.__topologyCopies = [...(window.__topologyCopies ?? []), value]; return Promise.resolve() } },
-				}); window.__topologyCopies = []`)
-				if (viewport.label === 'desktop') {
-					expect(
-						await cdp.evaluate(`(() => {
-							const disclosure = document.querySelector('[data-identifier-type="universe REP token"] .identifier-disclosure')
-							disclosure?.focus()
-							return { focused: document.activeElement === disclosure, tag: disclosure?.tagName }
-						})()`),
-					).toEqual({ focused: true, tag: 'BUTTON' })
-					await cdp.command('Input.dispatchKeyEvent', { code: 'Space', key: ' ', nativeVirtualKeyCode: 32, type: 'rawKeyDown', windowsVirtualKeyCode: 32 })
-					await cdp.command('Input.dispatchKeyEvent', { code: 'Space', key: ' ', nativeVirtualKeyCode: 32, type: 'keyUp', windowsVirtualKeyCode: 32 })
-					expect(
-						await cdp.evaluate(`({
-							expanded: document.querySelector('[data-identifier-type="universe REP token"] .identifier-disclosure')?.getAttribute('aria-expanded'),
-							hidden: document.querySelector('[data-identifier-type="universe REP token"] .identifier-full')?.hidden,
-							value: document.querySelector('[data-identifier-type="universe REP token"] .identifier-full')?.value,
-						})`),
-					).toEqual({ expanded: 'true', hidden: false, value: topologyValues.repToken })
-					expect(await cdp.evaluate(`(() => { const copy = document.querySelector('[data-identifier-type="security pool address"] .identifier-copy'); copy?.focus(); return { focused: document.activeElement === copy, tag: copy?.tagName } })()`)).toEqual({ focused: true, tag: 'BUTTON' })
-					await cdp.evaluate("window.dispatchEvent(new Event('focus'))")
-					await waitFor("document.querySelector('#rpc-health-retry-button')?.disabled === false", 'Automatic refresh did not settle before keyboard copy')
-					expect(await cdp.evaluate("document.activeElement?.getAttribute('aria-label')")).toBe(`Copy security pool address: ${topologyValues.poolAddress}`)
-					await cdp.command('Input.dispatchKeyEvent', { code: 'Space', key: ' ', nativeVirtualKeyCode: 32, type: 'rawKeyDown', windowsVirtualKeyCode: 32 })
-					await cdp.command('Input.dispatchKeyEvent', { code: 'Space', key: ' ', nativeVirtualKeyCode: 32, type: 'keyUp', windowsVirtualKeyCode: 32 })
-					await waitFor(`document.querySelector('[data-identifier-type="security pool address"] .identifier-feedback')?.textContent === 'Copied'`, 'Keyboard topology copy did not report success')
-					expect(await cdp.evaluate('window.__topologyCopies')).toEqual([topologyValues.poolAddress])
-				} else {
-					await touchControl('[data-identifier-type="report token 1"] .identifier-disclosure')
-					expect(
-						await cdp.evaluate(`({
-							expanded: document.querySelector('[data-identifier-type="report token 1"] .identifier-disclosure')?.getAttribute('aria-expanded'),
-							hidden: document.querySelector('[data-identifier-type="report token 1"] .identifier-full')?.hidden,
-							value: document.querySelector('[data-identifier-type="report token 1"] .identifier-full')?.value,
-						})`),
-					).toEqual({ expanded: 'true', hidden: false, value: topologyValues.reportToken1 })
-					await touchControl('[data-identifier-type="report token 2"] .identifier-copy')
-					await waitFor(`document.querySelector('[data-identifier-type="report token 2"] .identifier-feedback')?.textContent === 'Copied'`, 'Touch topology copy did not report success')
-					expect(await cdp.evaluate('window.__topologyCopies')).toEqual([topologyValues.reportToken2])
-				}
 				expect(await cdp.evaluate('document.body.scrollWidth === document.documentElement.clientWidth')).toBe(true)
 
 				await cdp.command('Page.navigate', { url: new URL('/recovery', dashboard.url).href })
-				await waitFor("document.querySelector('#pending-transactions .identifier-copy') !== null", `${viewport.label} recovery identifiers did not render`)
+				await waitFor("document.querySelector('#pending-transactions .identifier-value') !== null", `${viewport.label} recovery identifiers did not render`)
 				expect(await cdp.evaluate("document.querySelector('#pending-transactions .transaction-wait strong')?.textContent")).toBe('Verifying the queued replacement')
 				expect(
 					await cdp.evaluate(`(() => {
@@ -1086,7 +976,7 @@ browserTest(
 						const row = [...document.querySelectorAll('#obligations .stack-row')].find(candidate => candidate.textContent?.includes('Deferred obligation'))
 						return { detail: row?.querySelector('small')?.textContent, status: row?.querySelector('.badge')?.textContent, tone: row?.querySelector('.badge')?.className }
 					})()`),
-				).toEqual({ detail: 'Open Oracle · 1 of 3 finalized attempts failed · next attempt Aug 24, 2026, 12:03:00 AM', status: 'Retry waiting', tone: 'badge warning' })
+				).toEqual({ detail: 'Open Oracle · 1 of 3 included attempts failed · next attempt Aug 24, 2026, 12:03:00 AM', status: 'Retry waiting', tone: 'badge warning' })
 				const recoveryTextarea = await cdp.evaluate(`(() => {
 					const fields = document.querySelector('#candidate-fields')
 					const input = document.querySelector('#candidate-confirmation')
@@ -1143,7 +1033,7 @@ browserTest(
 				recoveredDashboardState = previousRecoveredState
 
 				await cdp.command('Page.navigate', { url: new URL('/overview', dashboard.url).href })
-				await waitFor("document.querySelector('#activity-list .identifier-copy') !== null", `${viewport.label} overview activity did not render`)
+				await waitFor("document.querySelector('#activity-list .identifier-value') !== null", `${viewport.label} overview activity did not render`)
 				expect(
 					await cdp.evaluate(`({
 						activity: document.querySelector('#activity-list .badge')?.textContent,
@@ -1152,7 +1042,7 @@ browserTest(
 				).toEqual({ activity: 'Dry run', expandHidden: true })
 
 				await cdp.command('Page.navigate', { url: new URL('/settings', dashboard.url).href })
-				await waitFor("document.querySelector('#signer-summary .identifier-copy') !== null", `${viewport.label} signer identifier did not render`)
+				await waitFor("document.querySelector('#signer-summary .identifier-value') !== null", `${viewport.label} signer identifier did not render`)
 				await expectVisibleIdentifiers([{ type: 'transaction signer address', value: walletAddress }], viewport.width === 390 ? 44 : 32)
 				expect(
 					await cdp.evaluate(`({
@@ -1627,7 +1517,7 @@ browserTest(
 				await cdp.command('Input.dispatchKeyEvent', { code: 'Tab', key: 'Tab', nativeVirtualKeyCode: 9, type: 'rawKeyDown', windowsVirtualKeyCode: 9 })
 				await cdp.command('Input.dispatchKeyEvent', { code: 'Tab', key: 'Tab', nativeVirtualKeyCode: 9, type: 'keyUp', windowsVirtualKeyCode: 9 })
 				expect(await cdp.evaluate('document.activeElement?.id')).toBe('confirm-resume')
-				await expectVisibleIdentifiers([{ type: 'recovery signer address', value: walletAddress }], viewport.width === 390 ? 44 : 32, '#resume-dialog .compact-identifier')
+				await expectVisibleIdentifiers([{ type: 'recovery signer address', value: walletAddress }], viewport.width === 390 ? 44 : 32, '#resume-dialog .full-identifier')
 				await cdp.evaluate("document.querySelector('#cancel-resume')?.click()")
 				initialDashboardState = workflowRenderingState
 				recoveredDashboardState = workflowRenderingState
@@ -1714,7 +1604,7 @@ browserTest(
 					expect(Reflect.get(navigationBeforeRefresh, 'centerDelta')).toBeLessThanOrEqual(1)
 				} else expect(Math.abs(navigationScrollLeft - maximumScrollLeft)).toBeLessThanOrEqual(1)
 				const linkHeights = Reflect.get(navigationBeforeRefresh, 'linkHeights')
-				expect(linkHeights).toHaveLength(5)
+				expect(linkHeights).toHaveLength(6)
 				for (const height of Array.isArray(linkHeights) ? linkHeights : []) expect(height).toBeGreaterThanOrEqual(44)
 				const requestsBeforeRefresh = stateRequests
 				await cdp.evaluate("window.dispatchEvent(new Event('focus'))")
@@ -1782,7 +1672,7 @@ browserTest(
 				throw new Error(message)
 			}
 			await cdp.command('Page.navigate', { url: new URL('/settings', dashboard.url).href })
-			await waitFor("document.querySelector('#signer-summary .identifier-copy') !== null && document.querySelector('#signer-fields')?.disabled === false", 'Signer controls did not load before the indeterminate mutation')
+			await waitFor("document.querySelector('#signer-summary .identifier-value') !== null && document.querySelector('#signer-fields')?.disabled === false", 'Signer controls did not load before the indeterminate mutation')
 			await cdp.evaluate(`(() => {
 				const input = document.querySelector('#private-key')
 				const form = document.querySelector('#signer-form')
@@ -2077,8 +1967,12 @@ browserTest(
 		const failureActivity = failureState.activities[0]
 		if (failureActivity === undefined) throw new Error('Expected the failure to be recorded')
 		activities[1] = failureActivity
+		for (const [offset, label] of ['Waiting for RPC visibility: Initialize REP/WETH pool', 'Submitted: Initialize REP/WETH pool', 'Signed intent persisted: Initialize REP/WETH pool'].entries()) {
+			activities[offset + 2] = { at: '2026-09-17T13:34:44.000Z', label, status: 'pending', txHash: activityHash }
+		}
+		activities[5] = { at: '2026-09-17T13:35:00.000Z', label: 'Confirmed: Initialize REP/WETH pool', status: 'confirmed', txHash: activityHash }
 		const dashboard = startDashboardServer(0, {
-			getConfiguration: () => ({}),
+			getConfiguration: () => ({ network: { explorerUrl } }),
 			getState: () => state({ activities }),
 			hostname: '127.0.0.1',
 			setCancellation: () => {},
@@ -2130,6 +2024,30 @@ browserTest(
 			await cdp.evaluate("document.querySelector('#activity-expand').click()")
 			await waitFor("document.querySelectorAll('#activity-list .timeline-item').length === 10")
 			expect(await cdp.evaluate('document.querySelector(\'[data-page-content="recovery"] #activity-list\')')).toBeNull()
+			for (const viewport of [
+				{ width: 1440, height: 900 },
+				{ width: 390, height: 844 },
+			]) {
+				await cdp.command('Emulation.setDeviceMetricsOverride', { ...viewport, deviceScaleFactor: 1, mobile: viewport.width === 390 })
+				await cdp.evaluate("document.querySelectorAll('#activity-list .timeline-item')[2].scrollIntoView({ block: 'start' }); window.scrollBy(0, -240)")
+				expect(await cdp.evaluate('document.body.scrollWidth === document.documentElement.clientWidth')).toBe(true)
+				const screenshots = process.env['CHAOS_QA_SCREENSHOTS']
+				if (screenshots !== undefined) {
+					await mkdir(screenshots, { recursive: true })
+					const capture = await cdp.command('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false })
+					const data = typeof capture === 'object' && capture !== null ? Reflect.get(capture, 'data') : undefined
+					if (typeof data !== 'string') throw new Error('Activity screenshot unavailable')
+					await Bun.write(`${screenshots}/activity-${viewport.width.toString()}.png`, Buffer.from(data, 'base64'))
+				}
+			}
+			expect(
+				await cdp.evaluate(`Array.from(document.querySelectorAll('#activity-list .timeline-item')).slice(2, 5).map(item => ({
+				badge: item.querySelector('.badge')?.textContent ?? null,
+				hash: item.querySelector('.identifier-value')?.textContent,
+				explorer: item.querySelector('.activity-identifier a')?.href,
+			}))`),
+			).toEqual(Array.from({ length: 3 }, () => ({ badge: null, hash: activityHash, explorer: explorerTransaction(activityHash) })))
+			expect(await cdp.evaluate("document.querySelectorAll('#activity-list .timeline-item')[5].querySelector('.badge')?.textContent")).toBe('Confirmed')
 			// A poll must not close an opened disclosure or rebuild unchanged items.
 			await cdp.evaluate(`(() => {
 				document.querySelector('#activity-list .activity-details').open = true

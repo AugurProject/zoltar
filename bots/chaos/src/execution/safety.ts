@@ -1,3 +1,4 @@
+import { formatDecimalAmount } from '@zoltar/bot-shared/infrastructure/json-validation'
 import { maximumFeePerGas, paddedTransactionGas } from '@zoltar/bot-shared/execution/transaction-submission'
 import type { StrategySettings } from '../config/settings.ts'
 import { assertWorkflowPrerequisiteLimit, requiredTimestampSubmissionSafetySeconds } from '../operations/timing.ts'
@@ -74,10 +75,10 @@ export function assertOperationPrincipalCaps(plan: Pick<OperationPlan, 'id' | 's
 		}
 	}
 	if (nativeDebit > strategy.maximumEthPerOperationAttoEth) {
-		throw new Error(`${plan.id} exceeds strategy.maximumEthPerOperation across its ETH and WETH principal`)
+		throw new Error(`${plan.id} exceeds strategy.maximumEthPerOperation across its ETH and WETH principal: planned ${formatDecimalAmount(nativeDebit)} ETH; configured maximum ${formatDecimalAmount(strategy.maximumEthPerOperationAttoEth)} ETH`)
 	}
 	if (repDebit > strategy.maximumRepPerOperationAttoRep) {
-		throw new Error(`${plan.id} exceeds strategy.maximumRepPerOperation across its workflow`)
+		throw new Error(`${plan.id} exceeds strategy.maximumRepPerOperation across its workflow: planned ${formatDecimalAmount(repDebit)} REP; configured maximum ${formatDecimalAmount(strategy.maximumRepPerOperationAttoRep)} REP`)
 	}
 	return { nativeDebit, repDebit }
 }
@@ -96,7 +97,11 @@ export function assertOperationEthFunding(plan: Pick<OperationPlan, 'id' | 'maxi
 	const maximumGasCost = strategy.maximumGasCostAttoEth * BigInt(plan.steps.length + cleanupTransactionCount(plan))
 	const requiredBalance = strategy.minimumEthReserveAttoEth + transactionValue + maximumGasCost
 	if (ethBalanceAttoEth < requiredBalance) {
-		throw new Error(`${plan.id} cannot fund all remaining workflow steps while retaining the wallet ETH reserve`)
+		const error = new Error(
+			`${plan.id} cannot fund all remaining workflow steps while retaining the wallet ETH reserve: required ${formatDecimalAmount(requiredBalance)} ETH; available ${formatDecimalAmount(ethBalanceAttoEth)} ETH (reserve ${formatDecimalAmount(strategy.minimumEthReserveAttoEth)} ETH, transaction values ${formatDecimalAmount(transactionValue)} ETH, maximum gas budget ${formatDecimalAmount(maximumGasCost)} ETH)`,
+		)
+		error.name = 'OperationEthFundingError'
+		throw error
 	}
 	return { maximumGasCost, requiredBalance, transactionValue }
 }
@@ -104,20 +109,22 @@ export function assertOperationEthFunding(plan: Pick<OperationPlan, 'id' | 'maxi
 export function assertStepSafety(parameters: { baseFeePerGas: bigint; ethBalanceAttoEth: bigint; gasEstimate: bigint; step: OperationStep; strategy: Pick<StrategySettings, 'maximumEthPerOperationAttoEth' | 'maximumGasCostAttoEth' | 'minimumEthReserveAttoEth'> }) {
 	const value = unsignedQuantity(parameters.step.value, `${parameters.step.label} value`)
 	if (value > parameters.strategy.maximumEthPerOperationAttoEth) {
-		throw new Error(`${parameters.step.label} value exceeds strategy.maximumEthPerOperation`)
+		throw new Error(`${parameters.step.label} value exceeds strategy.maximumEthPerOperation: transaction value ${formatDecimalAmount(value)} ETH; configured maximum ${formatDecimalAmount(parameters.strategy.maximumEthPerOperationAttoEth)} ETH`)
 	}
 	const paddedGas = paddedTransactionGas(parameters.gasEstimate)
 	const declaredGasLimit = unsignedQuantity(parameters.step.gasLimit, `${parameters.step.label} gas limit`, paddedGas)
 	if (paddedGas > declaredGasLimit) {
-		throw new Error(`${parameters.step.label} padded gas estimate exceeds its planned gas limit`)
+		throw new Error(`${parameters.step.label} padded gas estimate exceeds its planned gas limit: estimated ${paddedGas.toString()} gas units; planned limit ${declaredGasLimit.toString()} gas units`)
 	}
 	const maximumGasCost = transactionGasCeiling(parameters.gasEstimate, parameters.baseFeePerGas)
 	if (maximumGasCost > parameters.strategy.maximumGasCostAttoEth) {
-		throw new Error(`${parameters.step.label} estimated gas ceiling exceeds strategy.maximumGasCostEth`)
+		throw new Error(`${parameters.step.label} estimated gas ceiling exceeds strategy.maximumGasCostEth: estimated maximum ${formatDecimalAmount(maximumGasCost)} ETH; configured maximum ${formatDecimalAmount(parameters.strategy.maximumGasCostAttoEth)} ETH. Estimate includes gas and fee safety margins.`)
 	}
 	const requiredBalance = parameters.strategy.minimumEthReserveAttoEth + value + maximumGasCost
 	if (parameters.ethBalanceAttoEth < requiredBalance) {
-		throw new Error(`${parameters.step.label} would breach the wallet ETH reserve`)
+		throw new Error(
+			`${parameters.step.label} would breach the wallet ETH reserve: required ${formatDecimalAmount(requiredBalance)} ETH; available ${formatDecimalAmount(parameters.ethBalanceAttoEth)} ETH (reserve ${formatDecimalAmount(parameters.strategy.minimumEthReserveAttoEth)} ETH, transaction value ${formatDecimalAmount(value)} ETH, estimated maximum gas cost ${formatDecimalAmount(maximumGasCost)} ETH)`,
+		)
 	}
 	return { maximumGasCost, paddedGas, value }
 }
@@ -135,7 +142,7 @@ export function operationStepSubmissionLastValidBlock(parameters: { baseFeePerGa
 	const persistedMaximumFeePerGas = unsignedQuantity(terminalSubmission.maximumFeePerGas, `${parameters.plan.id} terminal maximum fee per gas`)
 	const signingFeePerGas = maximumFeePerGas(parameters.baseFeePerGas)
 	if (signingFeePerGas > persistedMaximumFeePerGas) {
-		throw new Error(`${parameters.plan.id} terminal signing fee per gas exceeds its persisted maximum fee ceiling`)
+		throw new Error(`${parameters.plan.id} terminal signing fee per gas exceeds its persisted maximum fee ceiling: signing maximum ${formatDecimalAmount(signingFeePerGas)} ETH/gas; persisted maximum ${formatDecimalAmount(persistedMaximumFeePerGas)} ETH/gas`)
 	}
 	const nextBlockOnly = parameters.currentBlock + 1n
 	return planHorizon === undefined || nextBlockOnly < planHorizon ? nextBlockOnly : planHorizon

@@ -5,11 +5,6 @@ export function node<Tag extends keyof HTMLElementTagNameMap>(tag: Tag, classNam
 	return value
 }
 
-export function shortHex(value: string | undefined) {
-	if (value === undefined || value.length < 14) return value ?? '—'
-	return `${value.slice(0, 8)}…${value.slice(-6)}`
-}
-
 export function setBadge(target: HTMLElement, label: string, tone: 'error' | 'info' | 'neutral' | 'success' | 'warning') {
 	target.textContent = label
 	target.className = `badge ${tone}`
@@ -58,67 +53,12 @@ function explorerLink(url: string, type: string, value: string) {
 	return link
 }
 
-let identifierSequence = 0
-
-export function compactIdentifier(value: string, type: string, options: { explorerUrl?: string | undefined } = {}) {
-	const wrapper = node('span', 'compact-identifier')
+export function fullIdentifier(value: string, type: string, options: { explorerUrl?: string | undefined } = {}) {
+	const wrapper = node('span', 'full-identifier')
 	wrapper.dataset['identifierType'] = type
-	const display = node('span', 'identifier-value mono', shortHex(value))
+	const display = node('span', 'identifier-value mono', value)
 	const explorer = options.explorerUrl === undefined ? undefined : explorerLink(options.explorerUrl, type, value)
-	const copy = document.createElement('button')
-	copy.className = 'identifier-copy'
-	copy.textContent = 'Copy'
-	copy.type = 'button'
-	copy.setAttribute('aria-label', `Copy ${type}: ${value}`)
-	identifierSequence += 1
-	const full = document.createElement('textarea')
-	full.className = 'identifier-full mono'
-	full.hidden = true
-	full.id = `identifier-full-${identifierSequence.toString()}`
-	full.readOnly = true
-	full.rows = 2
-	full.spellcheck = false
-	full.value = value
-	full.wrap = 'soft'
-	full.setAttribute('aria-label', `Full ${type}`)
-	const disclosure = document.createElement('button')
-	disclosure.className = 'identifier-disclosure'
-	disclosure.textContent = 'Show full'
-	disclosure.type = 'button'
-	disclosure.setAttribute('aria-controls', full.id)
-	disclosure.setAttribute('aria-expanded', 'false')
-	disclosure.setAttribute('aria-label', `Show full ${type}: ${value}`)
-	const feedback = node('span', 'identifier-feedback')
-	feedback.setAttribute('aria-live', 'polite')
-	feedback.setAttribute('role', 'status')
-	const setExpanded = (expanded: boolean) => {
-		full.hidden = !expanded
-		disclosure.textContent = expanded ? 'Hide full' : 'Show full'
-		disclosure.setAttribute('aria-expanded', expanded ? 'true' : 'false')
-		disclosure.setAttribute('aria-label', `${expanded ? 'Hide' : 'Show'} full ${type}: ${value}`)
-	}
-	disclosure.addEventListener('click', () => setExpanded(full.hidden))
-	copy.addEventListener('click', () => {
-		copy.disabled = true
-		feedback.className = 'identifier-feedback'
-		feedback.textContent = 'Copying…'
-		const clipboard = navigator.clipboard
-		const write = clipboard === undefined ? Promise.reject(new Error('Clipboard API unavailable')) : Promise.resolve().then(() => clipboard.writeText(value))
-		void write.then(
-			() => {
-				copy.disabled = false
-				feedback.className = 'identifier-feedback success'
-				feedback.textContent = 'Copied'
-			},
-			() => {
-				copy.disabled = false
-				feedback.className = 'identifier-feedback error'
-				feedback.textContent = 'Copy failed; full value shown'
-				setExpanded(true)
-			},
-		)
-	})
-	wrapper.append(display, ...(explorer === undefined ? [] : [explorer]), copy, disclosure, feedback, full)
+	wrapper.append(display, ...(explorer === undefined ? [] : [explorer]))
 	return wrapper
 }
 

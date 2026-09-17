@@ -19,6 +19,8 @@ function emptySchedulerState(paused = true): SchedulerState {
 export function initialDurableState(chainId: number, paused = true, profileId = 'profile:unconfigured', signerAddress?: Address | undefined): DurableState {
 	if (!Number.isSafeInteger(chainId) || chainId < 1) throw new Error('State chain ID must be a positive integer')
 	return {
+		includedTransactions: [],
+		rollbackQueue: [],
 		activities: [],
 		chainId,
 		lifecyclePresenceBlocker: undefined,

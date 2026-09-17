@@ -1,3 +1,6 @@
+import { markRetryableLifecycleWorkflowForRediscovery, retainWorkflow } from '../../src/runtime/workflows.ts'
+import { reconcileIncludedTransactions } from '../../src/execution/inclusion-journal.ts'
+import { recoverPendingTransactions } from '../../src/execution/recovery.ts'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { join } from 'node:path'
 import { afterEach, describe, expect, test } from 'bun:test'
@@ -6,7 +9,7 @@ import { mainnet } from '@zoltar/core-shared/evm/ethereum'
 import { ConnectivityDegradedError } from '@zoltar/bot-shared/monitoring/resilience'
 import { securityPoolAbi } from '@zoltar/bot-shared/contracts/abi'
 import type { OperatorSettings } from '../../src/config/settings.ts'
-import { OperationRediscoveryRequired, TransactionAwaitingRecovery, assertFreshWalletAssetDebits, assertRequestedTransactionHash, assertStepPreflightCalls, executeOperationPlan, finalizedReceiptWithQuorum, sameCanonicalExecutionAnchor, type ExecutionEnvironment } from '../../src/execution/transaction-executor.ts'
+import { OperationRediscoveryRequired, TransactionAwaitingRecovery, assertFreshWalletAssetDebits, assertRequestedTransactionHash, assertStepPreflightCalls, executeOperationPlan, includedReceiptWithQuorum, sameCanonicalExecutionAnchor, type ExecutionEnvironment } from '../../src/execution/transaction-executor.ts'
 import { operationStepSubmissionLastValidBlock } from '../../src/execution/safety.ts'
 import type { OperationPlan, OperationStep } from '../../src/operations/types.ts'
 import { loadDurableState, saveDurableState } from '../../src/state/operator-state.ts'
@@ -340,7 +343,7 @@ describe('transaction receipt quorum', () => {
 		const second = receiptRpcServer(112n, true)
 		const lagging = receiptRpcServer(99n, false)
 
-		const result = await finalizedReceiptWithQuorum(environment(first.url, second.url, lagging.url), receiptTransactionHash)
+		const result = await includedReceiptWithQuorum(environment(first.url, second.url, lagging.url), receiptTransactionHash)
 
 		expect(result.observed).toBe(true)
 		expect(result.receipt?.transactionHash).toBe(receiptTransactionHash)
@@ -354,31 +357,24 @@ describe('transaction receipt quorum', () => {
 		const first = receiptRpcServer(99n, true, receiptTransactionHash, receiptClockTimestamp, 99n, 100n)
 		const second = receiptRpcServer(99n, true, receiptTransactionHash, receiptClockTimestamp, 99n, 100n)
 
-		const result = await finalizedReceiptWithQuorum(environment(first.url, second.url), receiptTransactionHash)
+		const result = await includedReceiptWithQuorum(environment(first.url, second.url), receiptTransactionHash)
 
-		expect(result).toEqual({ head: 100n, includedBlock: 100n, observed: true, receipt: undefined })
+		expect(result).toMatchObject({ head: 100n, includedBlock: 100n, observed: true, receipt: { transactionHash: receiptTransactionHash } })
 	})
 
-	test('retains an observed receipt until the finalized checkpoint reaches its canonical block', async () => {
+	test('accepts canonical inclusion without waiting for the finalized checkpoint', async () => {
 		const first = receiptRpcServer(112n, true, receiptTransactionHash, receiptClockTimestamp, 99n)
 		const second = receiptRpcServer(112n, true, receiptTransactionHash, receiptClockTimestamp, 99n)
-
-		const result = await finalizedReceiptWithQuorum(environment(first.url, second.url), receiptTransactionHash)
-
-		expect(result).toEqual({ head: 112n, includedBlock: 100n, observed: true, receipt: undefined })
-		for (const rpc of [first, second]) {
-			expect(rpc.requestedBlockTags.filter(tag => tag === toHex(112n))).toHaveLength(1)
-			expect(rpc.requestedBlockTags.filter(tag => tag === 'finalized')).toHaveLength(2)
-			expect(rpc.requestedBlockTags.filter(tag => tag === toHex(99n))).toHaveLength(3)
-			expect(rpc.requestedBlockTags).not.toContain(toHex(100n))
-		}
+		const result = await includedReceiptWithQuorum(environment(first.url, second.url), receiptTransactionHash)
+		expect(result).toMatchObject({ head: 112n, includedBlock: 100n, observed: true, receipt: { transactionHash: receiptTransactionHash } })
+		for (const rpc of [first, second]) expect(rpc.requestedBlockTags).not.toContain('finalized')
 	})
 
 	test('rejects a receipt quorum whose agreeing latest blocks have old timestamps', async () => {
 		const first = receiptRpcServer(112n, true, receiptTransactionHash, 1n)
 		const second = receiptRpcServer(112n, true, receiptTransactionHash, 1n)
 
-		await expect(finalizedReceiptWithQuorum(environment(first.url, second.url), receiptTransactionHash)).rejects.toThrow('seconds old')
+		await expect(includedReceiptWithQuorum(environment(first.url, second.url), receiptTransactionHash)).rejects.toThrow('seconds old')
 		for (const rpc of [first, second]) {
 			expect(rpc.requestedMethods).toContain('eth_getBlockByNumber')
 			expect(rpc.requestedMethods).not.toContain('eth_getTransactionReceipt')
@@ -390,7 +386,7 @@ describe('transaction receipt quorum', () => {
 		const second = receiptRpcServer(112n, true)
 		const capableMissing = receiptRpcServer(112n, false)
 
-		await expect(finalizedReceiptWithQuorum(environment(first.url, second.url, capableMissing.url), receiptTransactionHash)).rejects.toThrow('RPC disagreement for receipt')
+		await expect(includedReceiptWithQuorum(environment(first.url, second.url, capableMissing.url), receiptTransactionHash)).rejects.toThrow('RPC disagreement for receipt')
 	})
 
 	test('classifies a lone receipt without quorum as degraded connectivity', async () => {
@@ -398,7 +394,7 @@ describe('transaction receipt quorum', () => {
 		const firstLagging = receiptRpcServer(99n, false)
 		const secondLagging = receiptRpcServer(99n, false)
 
-		await expect(finalizedReceiptWithQuorum(environment(onlyReceipt.url, firstLagging.url, secondLagging.url), receiptTransactionHash)).rejects.toBeInstanceOf(ConnectivityDegradedError)
+		await expect(includedReceiptWithQuorum(environment(onlyReceipt.url, firstLagging.url, secondLagging.url), receiptTransactionHash)).rejects.toBeInstanceOf(ConnectivityDegradedError)
 	})
 
 	test('rejects receipt objects that are not bound to the requested transaction hash', async () => {
@@ -406,7 +402,7 @@ describe('transaction receipt quorum', () => {
 		const first = receiptRpcServer(112n, true, wrongHash)
 		const second = receiptRpcServer(112n, true, wrongHash)
 
-		await expect(finalizedReceiptWithQuorum(environment(first.url, second.url), receiptTransactionHash)).rejects.toThrow(`RPC returned transaction receipt with a different hash: expected "${receiptTransactionHash}", received "${wrongHash}"`)
+		await expect(includedReceiptWithQuorum(environment(first.url, second.url), receiptTransactionHash)).rejects.toThrow(`RPC returned transaction receipt with a different hash: expected "${receiptTransactionHash}", received "${wrongHash}"`)
 	})
 })
 
@@ -923,6 +919,9 @@ describe('workflow-wide ETH funding', () => {
 })
 
 type FinalizedExecutionReceiptState = {
+	nonce?: bigint
+	canonicalReceiptHash?: `0x${string}`
+	transactionHashes?: `0x${string}`[]
 	finalizedBlock?: bigint | undefined
 	head: bigint
 	receiptVisible?: boolean | undefined
@@ -946,7 +945,7 @@ function finalizedExecutionRpcServer(state: FinalizedExecutionReceiptState) {
 				case 'eth_getBalance':
 					return Response.json({ id, jsonrpc: '2.0', result: toHex(10n ** 20n) })
 				case 'eth_getTransactionCount':
-					return Response.json({ id, jsonrpc: '2.0', result: toHex(3n) })
+					return Response.json({ id, jsonrpc: '2.0', result: toHex(state.nonce ?? 3n) })
 				case 'eth_call':
 					return Response.json({ id, jsonrpc: '2.0', result: '0x' })
 				case 'eth_estimateGas':
@@ -956,18 +955,25 @@ function finalizedExecutionRpcServer(state: FinalizedExecutionReceiptState) {
 					const serializedTransaction = Array.isArray(params) ? params[0] : undefined
 					if (typeof serializedTransaction !== 'string' || !isHex(serializedTransaction)) return new Response('Expected a serialized transaction', { status: 400 })
 					state.transactionHash = keccak256(serializedTransaction)
+					state.transactionHashes ??= []
+					if (!state.transactionHashes.includes(state.transactionHash)) {
+						state.transactionHashes.push(state.transactionHash)
+						state.nonce = (state.nonce ?? 3n) + 1n
+					}
 					state.head = 112n
 					return Response.json({ id, jsonrpc: '2.0', result: state.transactionHash })
 				}
-				case 'eth_getTransactionReceipt':
+				case 'eth_getTransactionReceipt': {
+					const parameters = 'params' in body && Array.isArray(body.params) ? body.params : []
+					const requestedHash = state.transactionHashes?.find(hash => hash === parameters[0])
 					return Response.json({
 						id,
 						jsonrpc: '2.0',
 						result:
-							state.transactionHash === undefined || state.receiptVisible === false
+							requestedHash === undefined || state.receiptVisible === false
 								? null
 								: {
-										blockHash: receiptBlockHash,
+										blockHash: state.canonicalReceiptHash ?? receiptBlockHash,
 										blockNumber: toHex(100n),
 										contractAddress: null,
 										cumulativeGasUsed: '0x5208',
@@ -976,21 +982,22 @@ function finalizedExecutionRpcServer(state: FinalizedExecutionReceiptState) {
 										gasUsed: '0x5208',
 										logs: state.logs.map((log, index) => ({
 											...log,
-											blockHash: receiptBlockHash,
+											blockHash: state.canonicalReceiptHash ?? receiptBlockHash,
 											blockNumber: toHex(100n),
 											logIndex: toHex(index),
 											removed: false,
-											transactionHash: state.transactionHash,
+											transactionHash: requestedHash,
 											transactionIndex: '0x0',
 										})),
 										logsBloom: `0x${'00'.repeat(256)}`,
 										status: state.status ?? '0x1',
 										to: target,
-										transactionHash: state.transactionHash,
+										transactionHash: requestedHash,
 										transactionIndex: '0x0',
 										type: '0x2',
 									},
 					})
+				}
 				case 'eth_getBlockByNumber': {
 					if (!('params' in body) || !Array.isArray(body.params) || typeof body.params[0] !== 'string') return new Response('Expected a numeric block request', { status: 400 })
 					const blockNumber = body.params[0] === 'finalized' ? (state.finalizedBlock ?? 112n) : BigInt(body.params[0])
@@ -1003,7 +1010,7 @@ function finalizedExecutionRpcServer(state: FinalizedExecutionReceiptState) {
 							extraData: '0x',
 							gasLimit: '0x1c9c380',
 							gasUsed: '0x5208',
-							hash: blockNumber === 100n ? receiptBlockHash : finalityBlockHash,
+							hash: blockNumber === 100n ? (state.canonicalReceiptHash ?? receiptBlockHash) : finalityBlockHash,
 							logsBloom: `0x${'00'.repeat(256)}`,
 							miner: zeroAddress,
 							mixHash: `0x${'00'.repeat(32)}`,
@@ -1056,6 +1063,7 @@ async function finalizedExecutionFixture(logs: FinalizedExecutionReceiptState['l
 		} satisfies ExecutionEnvironment,
 		state,
 		stateFile: configured.runtime.stateFile,
+		receiptState,
 	}
 }
 
@@ -1093,16 +1101,15 @@ function failFinalReceiptPersistence(environment: ExecutionEnvironment) {
 }
 
 describe('post-broadcast receipt observation', () => {
-	test('journals an included but unfinalized receipt as awaiting finality before handing off to recovery', async () => {
+	test('completes an included transaction while retaining a durable rollback record before finality', async () => {
 		const { environment, state, stateFile } = await finalizedExecutionFixture([], '0x1', 99n)
-
-		await expect(executeOperationPlan(environment, executablePlan())).rejects.toMatchObject({ name: 'TransactionAwaitingRecovery', severity: 'pending' })
-
-		const intent = state.pendingTransactions[0]
-		expect(intent?.status).toBe('confirmation-unknown')
-		expect(intent?.observation).toMatchObject({ head: 112n, includedBlock: 100n, kind: 'awaiting-finality' })
-		expect(state.workflows[0]?.status).toBe('waiting-transaction')
-		expect((await loadDurableState(stateFile, 1)).pendingTransactions[0]?.observation).toEqual(intent?.observation)
+		await executeOperationPlan(environment, executablePlan())
+		expect(state.pendingTransactions).toHaveLength(0)
+		expect(state.workflows[0]?.status).toBe('completed')
+		const durable = await loadDurableState(stateFile, 1)
+		expect(durable.workflows[0]?.status).toBe('completed')
+		expect(durable.includedTransactions).toHaveLength(1)
+		expect(durable.includedTransactions[0]?.intent.serializedTransaction).toBe(state.includedTransactions[0]?.intent.serializedTransaction)
 	})
 
 	test('leaves an absent receipt unjournaled because mempool visibility is only checked by recovery', async () => {
@@ -1123,6 +1130,7 @@ describe('atomic receipt disposition persistence', () => {
 		await expect(executeOperationPlan(environment, executablePlan())).rejects.toBeInstanceOf(TransactionAwaitingRecovery)
 
 		expect(failure.persistenceCalls()).toBe(6)
+		expect(state.includedTransactions).toHaveLength(0)
 		expect({ activities: state.activities, pendingTransactions: state.pendingTransactions, workflows: state.workflows }).toEqual(failure.submittedJournal())
 		const durable = await loadDurableState(stateFile, 1)
 		expect({ activities: durable.activities, pendingTransactions: durable.pendingTransactions, workflows: durable.workflows }).toEqual(failure.submittedJournal())
@@ -1415,5 +1423,160 @@ describe('transaction signing-anchor re-attestation', () => {
 		expect(state.pendingTransactions[0]?.status).toBe('signed')
 		expect(state.workflows[0]?.status).toBe('waiting-transaction')
 		for (const methods of [first.requestedMethods, second.requestedMethods]) expect(methods).not.toContain('eth_sendRawTransaction')
+	})
+})
+
+describe('included transaction rollback', () => {
+	test('rolls back a disappeared receipt and dependent transaction after restart, then reconciles both without signing again', async () => {
+		const fixture = await finalizedExecutionFixture([], '0x1', 99n)
+		const plan = executablePlan()
+		await executeOperationPlan(fixture.environment, plan)
+		await executeOperationPlan(fixture.environment, { ...plan, id: `${plan.id}:dependent` })
+		expect(fixture.state.includedTransactions).toHaveLength(2)
+		const hashes = fixture.state.includedTransactions.map(record => record.intent.hash)
+		const durable = await loadDurableState(fixture.stateFile, 1)
+		const state = initialRuntimeState(false, fixture.state.wallet, 1, durable)
+		const environment = { ...fixture.environment, state }
+		fixture.receiptState.canonicalReceiptHash = `0x${'99'.repeat(32)}`
+		fixture.receiptState.receiptVisible = false
+		expect(await reconcileIncludedTransactions(environment)).toBe(true)
+		expect([...state.pendingTransactions, ...state.rollbackQueue.map(record => record.intent)].map(intent => intent.hash)).toEqual(hashes)
+		expect([...state.pendingTransactions, ...state.rollbackQueue.map(record => record.intent)].map(intent => intent.nonce)).toEqual([3n, 4n])
+		expect(state.workflows.map(workflow => workflow.status)).toEqual(['waiting-transaction', 'blocked'])
+		expect(state.includedTransactions).toHaveLength(0)
+		const rolledBack = await loadDurableState(fixture.stateFile, 1)
+		expect([...rolledBack.pendingTransactions, ...rolledBack.rollbackQueue.map(record => record.intent)].map(intent => intent.hash)).toEqual(hashes)
+		await expect(executeOperationPlan(environment, { ...plan, id: `${plan.id}:new` })).rejects.toThrow('Pending transaction recovery must complete')
+		fixture.receiptState.receiptVisible = true
+		await recoverPendingTransactions(environment)
+		await recoverPendingTransactions(environment)
+		expect(state.pendingTransactions).toHaveLength(0)
+		expect(state.workflows.every(workflow => workflow.status === 'completed')).toBe(true)
+		expect(fixture.receiptState.transactionHashes).toEqual(hashes)
+		expect(state.includedTransactions.every(record => record.blockHash === fixture.receiptState.canonicalReceiptHash)).toBe(true)
+	})
+
+	for (const pendingSecond of [false, true]) {
+		test(`rolls back both steps of one workflow with dependent step pending=${pendingSecond.toString()}`, async () => {
+			const fixture = await finalizedExecutionFixture([], '0x1', 99n)
+			const plan = executablePlan()
+			const first = plan.steps[0]
+			if (first === undefined) throw new Error('Expected fixture step')
+			const second = { ...first, id: `${first.id}:dependent`, label: 'Dependent step' }
+			const environment: ExecutionEnvironment = fixture.environment
+			if (pendingSecond)
+				environment.beforeBroadcast = async () => {
+					if ((fixture.receiptState.nonce ?? 3n) === 4n) fixture.receiptState.receiptVisible = false
+				}
+			const execute = executeOperationPlan(environment, { ...plan, steps: [first, second] })
+			if (pendingSecond) await expect(execute).rejects.toBeInstanceOf(TransactionAwaitingRecovery)
+			else await execute
+			const hashes = [...fixture.state.includedTransactions.map(record => record.intent.hash), ...fixture.state.pendingTransactions.map(intent => intent.hash)]
+			expect(hashes).toHaveLength(2)
+			fixture.receiptState.canonicalReceiptHash = `0x${'99'.repeat(32)}`
+			expect(await reconcileIncludedTransactions(environment)).toBe(true)
+			expect([...fixture.state.pendingTransactions, ...fixture.state.rollbackQueue.map(record => record.intent)].map(intent => intent.hash)).toEqual(hashes)
+			expect(fixture.state.workflows[0]?.steps.map(step => step.status)).toEqual(['submitted', 'planned'])
+			const durable = await loadDurableState(fixture.stateFile, 1)
+			expect(durable.pendingTransactions).toHaveLength(1)
+			expect(durable.rollbackQueue).toHaveLength(1)
+			fixture.receiptState.receiptVisible = true
+			await recoverPendingTransactions(environment)
+			await recoverPendingTransactions(environment)
+			expect(fixture.state.workflows[0]?.status).toBe('completed')
+			expect(fixture.receiptState.transactionHashes).toEqual(hashes)
+		})
+	}
+
+	test('reconciles multiple attempts of the same lifecycle step in nonce order', async () => {
+		const fixture = await finalizedExecutionFixture([], '0x0', 99n)
+		const plan: OperationPlan = { ...executablePlan(), classification: 'lifecycle-obligation', obligation: true }
+		const initialWorkflow = retainWorkflow(fixture.state, plan)
+		fixture.state.obligations.push({
+			id: 'obligation:retry',
+			workflowId: initialWorkflow.id,
+			operationId: plan.definitionId,
+			ecosystem: plan.ecosystem,
+			label: plan.label,
+			metadata: plan.metadata,
+			automaticRetryCount: 0,
+			attemptCount: 1,
+			blockers: [],
+			status: 'pending',
+			createdAt: initialWorkflow.createdAt,
+			updatedAt: initialWorkflow.updatedAt,
+		})
+		await expect(executeOperationPlan(fixture.environment, plan)).rejects.toThrow('reverted')
+		const workflow = fixture.state.workflows[0]
+		if (workflow === undefined) throw new Error('Expected failed workflow')
+		const obligation = fixture.state.obligations[0]
+		if (obligation === undefined) throw new Error('Expected retry obligation')
+		obligation.automaticRetryCount = 1
+		markRetryableLifecycleWorkflowForRediscovery(workflow, 'Retry included failure')
+		workflow.status = 'planned'
+		fixture.receiptState.status = '0x1'
+		await executeOperationPlan(fixture.environment, plan)
+		expect(fixture.state.includedTransactions).toHaveLength(2)
+		fixture.receiptState.canonicalReceiptHash = `0x${'99'.repeat(32)}`
+		expect(await reconcileIncludedTransactions(fixture.environment)).toBe(true)
+		expect(fixture.state.obligations[0]?.automaticRetryCount).toBe(1)
+		await loadDurableState(fixture.stateFile, 1)
+		await recoverPendingTransactions(fixture.environment)
+		const restarted = initialRuntimeState(false, fixture.state.wallet, 1, await loadDurableState(fixture.stateFile, 1))
+		const environment: ExecutionEnvironment = { ...fixture.environment, state: restarted }
+		const before = structuredClone(restarted)
+		let failed = false
+		environment.persistState = async state => {
+			if (!failed) {
+				failed = true
+				throw new Error('queue activation disk failure')
+			}
+			await saveDurableState(fixture.stateFile, state)
+		}
+		await expect(recoverPendingTransactions(environment)).rejects.toThrow('queue activation disk failure')
+		expect(restarted).toEqual(before)
+		delete environment.persistState
+		await recoverPendingTransactions(environment)
+		expect(restarted.pendingTransactions).toHaveLength(0)
+		expect(restarted.rollbackQueue).toHaveLength(0)
+		expect(restarted.workflows[0]?.status).toBe('completed')
+		expect(fixture.receiptState.transactionHashes).toHaveLength(2)
+	})
+
+	test('rejects a forged rollback workflow without overwriting the durable journal', async () => {
+		const fixture = await finalizedExecutionFixture([], '0x1', 99n)
+		await executeOperationPlan(fixture.environment, executablePlan())
+		const before = await Bun.file(fixture.stateFile).text()
+		const record = fixture.state.includedTransactions[0]
+		if (record === undefined) throw new Error('Expected retained inclusion')
+		record.workflow.id = 'unrelated-workflow'
+		await expect(saveDurableState(fixture.stateFile, fixture.state)).rejects.toThrow('rollback journal does not match its signed intent')
+		expect(await Bun.file(fixture.stateFile).text()).toBe(before)
+	})
+
+	test('releases rollback records only after finality and restores the journal when rollback persistence fails', async () => {
+		const fixture = await finalizedExecutionFixture([], '0x1', 99n)
+		await executeOperationPlan(fixture.environment, executablePlan())
+		expect(await reconcileIncludedTransactions(fixture.environment)).toBe(false)
+		expect(fixture.state.includedTransactions).toHaveLength(1)
+		fixture.receiptState.canonicalReceiptHash = `0x${'99'.repeat(32)}`
+		const before = structuredClone(fixture.state)
+		const environment: ExecutionEnvironment = fixture.environment
+		let failed = false
+		environment.persistState = async state => {
+			if (!failed) {
+				failed = true
+				throw new Error('rollback disk failure')
+			}
+			await saveDurableState(fixture.stateFile, state)
+		}
+		await expect(reconcileIncludedTransactions(fixture.environment)).rejects.toThrow('rollback disk failure')
+		expect(fixture.state).toEqual(before)
+		delete environment.persistState
+		fixture.receiptState.canonicalReceiptHash = receiptBlockHash
+		fixture.receiptState.finalizedBlock = 112n
+		expect(await reconcileIncludedTransactions(fixture.environment)).toBe(false)
+		expect(fixture.state.includedTransactions).toHaveLength(0)
+		expect((await loadDurableState(fixture.stateFile, 1)).includedTransactions).toHaveLength(0)
 	})
 })

@@ -46,6 +46,31 @@ describe('durable chaos scheduler', () => {
 		expect(persisted).toHaveLength(4)
 	})
 
+	test('persists a manual start from idle and schedules the next run after completion', async () => {
+		const path = await statePath()
+		const state = initialDurableState(1, false)
+		const now = Date.parse('2026-08-24T00:00:00.000Z')
+		const scheduler = createChaosScheduler({
+			clock: () => now,
+			persist: candidate => saveDurableState(path, { ...state, scheduler: candidate }),
+			random: minimum => minimum,
+			settings,
+			state: state.scheduler,
+		})
+		await scheduler.begin('open-oracle.dust', 'manual')
+		expect((await loadDurableState(path, 1)).scheduler).toMatchObject({
+			nextRunAt: '2026-08-24T00:00:00.000Z',
+			selectedOperationId: 'open-oracle.dust',
+			status: 'running',
+		})
+		expect(scheduler.isDue()).toBe(false)
+		await scheduler.complete()
+		expect((await loadDurableState(path, 1)).scheduler).toMatchObject({
+			nextRunAt: '2026-08-24T00:01:00.000Z',
+			status: 'scheduled',
+		})
+	})
+
 	test('restores nextRunAt without resetting the countdown after restart', async () => {
 		const path = await statePath()
 		const state = initialDurableState(1, false)

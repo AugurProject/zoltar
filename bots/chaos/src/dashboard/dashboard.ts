@@ -1,9 +1,10 @@
+import { createWorkflowHistory, type Workflow, type WorkflowStep } from './workflow-history.js'
 import { requestWithTimeout } from '@zoltar/bot-shared/dashboard/polling'
 import { optionalRecord as record } from '@zoltar/bot-shared/infrastructure/json-validation'
 import { createExecutionPolicyDraft } from './execution-policy-draft.js'
 import { createActivityTimeline } from './activity-timeline.js'
 import { createCatalogGroups } from './catalog-groups.js'
-import { compactIdentifier, formatDate, node, setBadge, shortHex, statusLabel, statusTone, transactionExplorerUrl } from './dom.js'
+import { fullIdentifier, formatDate, node, setBadge, statusLabel, statusTone, transactionExplorerUrl } from './dom.js'
 import { createRetirementDashboard, parsePublicRetirement } from './retirement-dashboard.js'
 import { createOperationDialog } from './operation-dialog.js'
 import { renderOperatorAlerts } from './operator-alerts.js'
@@ -42,26 +43,6 @@ type Topology = {
 	totalCounts: { auctions: number; pairs: number; pools: number; reports: number; universes: number }
 	truncated?: boolean | undefined
 	universes: Array<{ forkQuestionId?: string | undefined; forkTime?: string | number | undefined; id?: string | undefined; knownChildOutcomeCount?: number | undefined; parentUniverseId?: string | undefined; repToken?: string | undefined }>
-}
-
-type WorkflowStep = {
-	confirmedAt?: string | undefined
-	label?: string | undefined
-	status?: string | undefined
-	txHash?: string | undefined
-}
-
-type Workflow = {
-	classification?: string | undefined
-	completedAt?: string | undefined
-	ecosystem?: string | undefined
-	id?: string | undefined
-	label?: string | undefined
-	operationId?: string | undefined
-	startedAt?: string | undefined
-	status?: string | undefined
-	updatedAt?: string | undefined
-	steps: WorkflowStep[]
 }
 
 type PendingTransaction = {
@@ -132,6 +113,7 @@ type Snapshot = {
 	alerts: { message?: string | undefined; severity?: string | undefined }[]
 	chainId?: string | number | undefined
 	currentWorkflow?: Workflow | undefined
+	workflows: Workflow[]
 	execute?: boolean | undefined
 	inventory: { eth?: string | number | undefined; rep: RepBalance[]; weth?: string | number | undefined }
 	inventoryAvailable?: boolean | undefined
@@ -247,6 +229,7 @@ const submissionFreshness = element('submission-freshness', HTMLElement)
 const submissionSignerProof = element('submission-signer-proof', HTMLElement)
 const submissionLastCheck = element('submission-last-check', HTMLElement)
 const currentWorkflow = element('current-workflow', HTMLDivElement)
+const renderWorkflowHistory = createWorkflowHistory(element('workflow-history', HTMLDivElement))
 const coverageSummary = element('coverage-summary', HTMLDivElement)
 const catalogFilter = element('catalog-filter', HTMLSelectElement)
 const catalogClassificationFilter = element('catalog-classification-filter', HTMLSelectElement)
@@ -617,6 +600,7 @@ function parseSnapshot(value: unknown): Snapshot {
 		alerts: list(source['alerts'], entry => ({ message: stringValue(entry['message']), severity: stringValue(entry['severity']) })),
 		chainId: scalarValue(source['chainId']),
 		currentWorkflow: parseWorkflow(source['currentWorkflow']),
+		workflows: list(source['workflows'], parseWorkflow).filter(value => value !== undefined),
 		execute: booleanValue(source['execute']),
 		inventory: {
 			eth: scalarValue(inventory['eth']),
@@ -792,7 +776,7 @@ async function requestJson(path: string, timeoutMilliseconds: number, init?: Req
 }
 
 function transactionIdentifier(hash: string, type: string) {
-	return compactIdentifier(hash, type, { explorerUrl: transactionExplorerUrl(configuration?.explorerUrl, hash) })
+	return fullIdentifier(hash, type, { explorerUrl: transactionExplorerUrl(configuration?.explorerUrl, hash) })
 }
 
 function transactionLine(prefix: string, hash: string | undefined, type: string) {
@@ -867,7 +851,7 @@ function formatRelative(value: string | undefined) {
 
 function obligationDetail(obligation: Obligation) {
 	if (obligation.status === 'deferred' && obligation.notBefore !== undefined && obligation.automaticRetryCount !== undefined && obligation.automaticRetryLimit !== undefined) {
-		return `${ecosystemLabel(obligation.ecosystem)} · ${obligation.automaticRetryCount.toString()} of ${obligation.automaticRetryLimit.toString()} finalized attempts failed · next attempt ${formatDate(obligation.notBefore)}`
+		return `${ecosystemLabel(obligation.ecosystem)} · ${obligation.automaticRetryCount.toString()} of ${obligation.automaticRetryLimit.toString()} included attempts failed · next attempt ${formatDate(obligation.notBefore)}`
 	}
 	if (obligation.status === 'deferred') return `${ecosystemLabel(obligation.ecosystem)} · tracked, not currently actionable`
 	return `${ecosystemLabel(obligation.ecosystem)} · due ${formatDate(obligation.dueAt)}`
@@ -965,7 +949,7 @@ function renderOverview(value: Snapshot) {
 	eligibleCount.textContent = `${eligible.length.toString()} of ${executable.length.toString()}`
 	const selected = value.operationEvaluations.find(operation => operation.id === value.scheduler.selectedOperationId)
 	selectedOperation.textContent = selected?.label ?? value.scheduler.selectedOperationId ?? 'None'
-	walletShort.replaceChildren(value.wallet === undefined ? document.createTextNode('No execution account configured') : compactIdentifier(value.wallet, 'wallet address'))
+	walletShort.replaceChildren(value.wallet === undefined ? document.createTextNode('No execution account configured') : fullIdentifier(value.wallet, 'wallet address'))
 	walletShort.removeAttribute('title')
 	if (value.wallet !== undefined && value.inventoryAvailable === true) {
 		balanceEth.textContent = formatAtomic18(value.inventory.eth)
@@ -982,6 +966,7 @@ function renderOverview(value: Snapshot) {
 	renderRpcHealth(value)
 	renderSubmissionHealth(value.submissionHealth)
 	renderWorkflow(value.currentWorkflow, value.pendingTransactions)
+	renderWorkflowHistory(value.workflows, configuration?.explorerUrl, value.paused === true)
 	renderCoverage(value.operationEvaluations)
 	retirementDashboard.render(value)
 }
@@ -1067,7 +1052,7 @@ function renderRepBalances(values: RepBalance[]) {
 		const row = node('div', 'token-row')
 		const identity = node('div')
 		identity.append(node('strong', undefined, value.symbol ?? 'REP'))
-		identity.append(node('small', 'mono', value.universeId === undefined ? shortHex(value.token) : `Universe ${value.universeId}`))
+		identity.append(node('small', 'mono', value.universeId === undefined ? (value.token ?? '—') : `Universe ${value.universeId}`))
 		row.append(identity, node('strong', 'mono', formatAtomic18(value.balance)))
 		return row
 	})
@@ -1298,7 +1283,7 @@ function renderEcosystems(values: OperationEvaluation[]) {
 }
 
 function topologyIdentifier(value: string | undefined, fallback: string, type: string) {
-	return value === undefined ? node('span', 'mono muted', fallback) : compactIdentifier(value, type)
+	return value === undefined ? node('span', 'mono muted', fallback) : fullIdentifier(value, type)
 }
 
 function topologyIdentifierFact(label: string, value: string | undefined, type: string) {
@@ -1535,7 +1520,7 @@ function renderConfiguration(value: Configuration, force = false) {
 	signerSummary.replaceChildren()
 	if (value.hasSigner === true) {
 		if (wallet === undefined) signerSummary.append(node('span', undefined, 'Signer configured'))
-		else signerSummary.append(compactIdentifier(wallet, 'transaction signer address'))
+		else signerSummary.append(fullIdentifier(wallet, 'transaction signer address'))
 		signerSummary.append(node('span', 'signer-persistence', ` · ${value.rememberSigner === true ? 'remembered locally' : 'memory only'}`))
 	} else signerSummary.textContent = 'No signer configured'
 	rememberSignerInput.checked = value.rememberSigner === true
@@ -1715,7 +1700,7 @@ function openResumeDialog() {
 	if (value === undefined) return
 	const executable = value.operationEvaluations.filter(operationIsIndependentlyExecutable)
 	const eligible = executable.filter(operation => operation.enabled !== false && operation.eligible === true).length
-	const signerDetail = value.signerReady === true && value.wallet !== undefined ? compactIdentifier(value.wallet, 'recovery signer address') : 'Missing'
+	const signerDetail = value.signerReady === true && value.wallet !== undefined ? fullIdentifier(value.wallet, 'recovery signer address') : 'Missing'
 	const selectionPolicy = configuration?.selectableOperationAllowlist
 	let randomScope: HTMLElement | string = 'Unavailable — keep paused'
 	if (selectionPolicy === null) randomScope = 'ALL selectable operations'
@@ -2012,7 +1997,7 @@ workflowForm.addEventListener('submit', event => {
 
 function renderObligationConfirmationHelp() {
 	const confirmation = obligationActionInput.value === 'abandon' ? 'ABANDON OBLIGATION' : 'RETRY VERIFIED SAFE FAILURE'
-	obligationConfirmationHelp.textContent = `Type ${confirmation}. ${obligationActionInput.value === 'abandon' ? 'This creates a permanent tombstone and transfers responsibility to the operator.' : 'Retry is limited to unsigned failures, finalized reverts, and verified nonce cancellations; semantic uncertainty still requires manual reconciliation.'}`
+	obligationConfirmationHelp.textContent = `Type ${confirmation}. ${obligationActionInput.value === 'abandon' ? 'This creates a permanent tombstone and transfers responsibility to the operator.' : 'Retry is limited to unsigned failures, canonically included reverts, and verified nonce cancellations; semantic uncertainty still requires manual reconciliation.'}`
 }
 
 obligationActionInput.addEventListener('change', renderObligationConfirmationHelp)

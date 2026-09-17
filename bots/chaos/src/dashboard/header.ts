@@ -14,6 +14,7 @@ export const operatorHeader = renderOperatorHeader({
 			<ul id="operator-alerts" class="operator-alerts hidden" aria-live="assertive" role="alert"></ul>`,
 	navigation: `<a href="/overview">Overview</a>
 				<a href="/catalog">Operation catalog</a>
+				<a href="/workflows">Workflows</a>
 				<a href="/ecosystem">Ecosystem state</a>
 				<a href="/recovery">Recovery</a>
 				<a href="/settings">Settings</a>`,

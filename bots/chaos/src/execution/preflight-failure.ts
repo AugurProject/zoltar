@@ -9,7 +9,7 @@ function bounded(value: string) {
 	return value.length <= MAXIMUM_PUBLIC_FIELD_LENGTH ? value : `${value.slice(0, MAXIMUM_PUBLIC_FIELD_LENGTH - truncation.length)}${truncation}`
 }
 
-function publicReason(error: unknown) {
+export function publicFailureReason(error: unknown) {
 	const message = error instanceof Error ? error.message : String(error)
 	// Check the full message before truncating so a sensitive suffix cannot escape filtering.
 	return safeString(message) === undefined ? withheld : bounded(message.trim() || 'No error message was provided.')
@@ -17,7 +17,7 @@ function publicReason(error: unknown) {
 
 /** Preserve the reason and nested RPC/revert causes without publishing raw sensitive errors. */
 function preflightFailureActivity(error: unknown) {
-	const summary = publicReason(error)
+	const summary = publicFailureReason(error)
 	const causes: string[] = []
 	const seen = new Set<unknown>([error])
 	let current = error
@@ -25,7 +25,7 @@ function preflightFailureActivity(error: unknown) {
 		current = current.cause
 		if (seen.has(current)) break
 		seen.add(current)
-		causes.push(publicReason(current))
+		causes.push(publicFailureReason(current))
 	}
 	return { summary, ...(causes.length === 0 ? {} : { details: bounded(causes.join('\nCaused by: ')) }) }
 }

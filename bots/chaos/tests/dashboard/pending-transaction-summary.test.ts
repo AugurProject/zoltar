@@ -70,12 +70,12 @@ describe('pendingTransactionSummary', () => {
 	test('describes a queued replacement or cancellation instead of the observation that preceded it', () => {
 		const stale = { checkedAt: '2026-09-11T07:00:00.000Z', head: '99', kind: 'manual-reconciliation' }
 		expect(pendingTransactionSummary({ observation: stale, recoveryBlocker: 'Signer nonce 3 was consumed', replacementHash: `0x${'34'.repeat(32)}` }, now)).toEqual({
-			detail: 'Waiting for its finalized receipt before the original intent is closed.',
+			detail: 'Waiting for its canonically included receipt before the original intent is closed.',
 			headline: 'Verifying the queued replacement',
 			tone: 'info',
 		})
 		expect(pendingTransactionSummary({ cancellationHash: `0x${'56'.repeat(32)}`, observation: stale }, now)).toEqual({
-			detail: 'Waiting for its finalized receipt before the original intent is closed.',
+			detail: 'Waiting for its canonically included receipt before the original intent is closed.',
 			headline: 'Verifying the queued cancellation',
 			tone: 'info',
 		})
