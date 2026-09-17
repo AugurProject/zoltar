@@ -258,11 +258,11 @@ describe('live workflow safety boundary', () => {
 		}
 		let rendered = await renderIntoDocument(<LiveTrading route={marketRoute} configuration={configuration} configurationError={undefined} selectedUniverseId='1' onWorkflowLockChange={locked => workflowLocks.push(locked)} onWalletSummaryChange={recordWalletSummary} />)
 		cleanupRendered = rendered.cleanup
-		await waitForDom(() => document.body.textContent?.includes('Unsupported on-chain timestamp') === true, 'initial market details')
+		await waitForDom(() => document.body.textContent?.includes('Invalid timestamp') === true, 'initial market details')
 		for (const phrase of forbiddenLiveCopy) expect(document.body.textContent?.toLowerCase()).not.toContain(phrase.toLowerCase())
 		expect(document.body.textContent).not.toContain('2 nETH / gas')
-		expect(document.body.textContent).toContain('Unsupported on-chain timestamp')
-		expect(document.body.textContent).not.toContain('Unsupported on-chain timestamp UTC')
+		expect(document.body.textContent).toContain('Invalid timestamp')
+		expect(document.body.textContent).not.toContain('Invalid timestamp UTC')
 		expect(document.body.textContent).not.toContain('Refresh')
 		expect(document.body.textContent).not.toContain('Ready to simulate')
 		expect(document.body.textContent).not.toContain('Pool and reserve details')
@@ -277,7 +277,7 @@ describe('live workflow safety boundary', () => {
 		expect(document.body.textContent).not.toContain('INVALID 256 · YES 257 · NO 258')
 		discoveredLoadError = undefined
 		await rerouteForRefresh(marketRoute)
-		await waitForDom(() => document.body.textContent?.includes('Unsupported on-chain timestamp') === true, 'recovered market details')
+		await waitForDom(() => document.body.textContent?.includes('Invalid timestamp') === true, 'recovered market details')
 		discoveredEndTime = now + 2n
 
 		deferredWalletChainRead = deferred<number>()

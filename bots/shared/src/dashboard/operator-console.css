@@ -981,3 +981,24 @@ body .button:disabled {
 		font-size: 0.75rem;
 	}
 }
+
+.rep-market-consensus {
+	display: grid;
+	gap: 1rem;
+	min-width: 0;
+	margin-bottom: 1rem;
+}
+
+.rep-market-consensus > [role="status"],
+.rep-market-consensus > [role="alert"] {
+	margin: 0;
+}
+
+.rep-market-consensus td.empty {
+	grid-template-columns: minmax(0, 1fr);
+	text-align: left;
+}
+
+.rep-market-consensus td.empty::before {
+	display: none;
+}

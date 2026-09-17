@@ -1,8 +1,9 @@
+import { TimestampValue } from '@zoltar/ui-core-shared/components/TimestampValue.js'
 import { Badge } from '@zoltar/ui-core-shared/components/Badge.js'
 import { DataGrid } from '@zoltar/ui-core-shared/components/DataGrid.js'
 import { EmptyState } from '@zoltar/ui-core-shared/components/EmptyState.js'
 import { EntityCard } from '@zoltar/ui-core-shared/components/EntityCard.js'
-import { ErrorNotice } from '@zoltar/ui-core-shared/components/ErrorNotice.js'
+import { RetryAction, RetryableNotice } from '@zoltar/ui-core-shared/components/RetryableNotice.js'
 import { MetricField } from '@zoltar/ui-core-shared/components/MetricField.js'
 import { PaginationControls } from '@zoltar/ui-core-shared/components/PaginationControls.js'
 import { SectionBlock } from '@zoltar/ui-core-shared/components/SectionBlock.js'
@@ -12,7 +13,6 @@ import { formatUnits } from '../lib/format.js'
 import { getTradingRouteHref, tradingListKindFor, type TradingListKind, type TradingLookupRoute } from '../lib/routing.js'
 import { marketAcceptsNewRisk, marketNewRiskBlocker, type LiveMarket } from '../protocol/live.js'
 import { livePairInitialized } from './liveTradingControllerHelpers.js'
-import { formatTimestamp } from './LiveTradingTransactionUi.js'
 import { OpenPoolForm } from './OpenPoolForm.js'
 
 export function marketStatusLabel(market: LiveMarket, nowSeconds: bigint) {
@@ -68,7 +68,11 @@ function MarketRow({ listKind, lookupRoute, market, nowSeconds }: { listKind: Tr
 				<MetricField label={liveCopy.securityPoolLabel}>
 					<ReadOnlyAddressValue address={market.pool} responsiveAbbreviation />
 				</MetricField>
-				{market.loadError === undefined ? <MetricField label={liveCopy.questionEnd}>{formatTimestamp(market.endTime)}</MetricField> : undefined}
+				{market.loadError === undefined ? (
+					<MetricField label={liveCopy.questionEnd}>
+						<TimestampValue timestamp={market.endTime} relative={false} />
+					</MetricField>
+				) : undefined}
 				{market.loadError === undefined && listKind === 'markets' ? <MetricField label={liveCopy.ammFee}>{formatUnits(market.feeBps, 2, 2)}%</MetricField> : undefined}
 			</DataGrid>
 		</EntityCard>
@@ -102,23 +106,14 @@ export function LiveMarketBrowser({
 	const listKind = tradingListKindFor(lookupRoute) ?? 'markets'
 	const presentation = listPresentation(listKind)
 	const initialLoad = discoveryState === 'loading' && pageMarketCount === 0
-	const retryAction = (
-		<button class='secondary' type='button' disabled={workflowLocked} onClick={retry}>
-			{liveCopy.retryDiscovery}
-		</button>
-	)
+	const retryAction = <RetryAction label={liveCopy.retryDiscovery} disabled={workflowLocked} onRetry={retry} />
 	let content
 	if (initialLoad) content = <EmptyState live title={liveCopy.discoveringSecurityPoolsFromFactory} />
 	else if (discoveryState === 'error' && pageMarketCount === 0) content = <EmptyState title={liveCopy.securityPoolFactoryDiscoveryFailed(discoveryError)} actions={retryAction} />
 	else
 		content = (
 			<>
-				{discoveryState === 'error' ? (
-					<>
-						<ErrorNotice message={liveCopy.securityPoolRefreshFailed(discoveryError ?? liveCopy.unknownDiscovery)} />
-						<div class='actions'>{retryAction}</div>
-					</>
-				) : undefined}
+				{discoveryState === 'error' ? <RetryableNotice message={liveCopy.securityPoolRefreshFailed(discoveryError ?? liveCopy.unknownDiscovery)} retryLabel={liveCopy.retryDiscovery} disabled={workflowLocked} onRetry={retry} /> : undefined}
 				{markets.length === 0 ? (
 					<EmptyState title={presentation.empty} />
 				) : (

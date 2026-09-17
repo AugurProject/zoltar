@@ -33,7 +33,7 @@ export const sourceSizeAllowances = new Map<string, SourceSizeAllowance>([
 		['bots/open-oracle-arbitrager/src/runtime/operator.ts', 1047],
 		['bots/open-oracle-arbitrager/src/state/operator-state.ts', 962],
 		['bots/open-oracle-arbitrager/src/state/position-store.ts', 631],
-		['bots/liquidator/src/dashboard/dashboard.ts', 1066],
+		['bots/liquidator/src/dashboard/dashboard.ts', 1039],
 		['bots/liquidator/src/cli/run.ts', 776],
 		['bots/liquidator/src/state/operator-state.ts', 713],
 	]),

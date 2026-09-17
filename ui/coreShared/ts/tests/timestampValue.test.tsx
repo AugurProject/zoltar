@@ -48,6 +48,13 @@ describe('TimestampValue', () => {
 		expect(document.body.querySelector('.timestamp-value-relative')?.textContent).toContain('ago')
 	})
 
+	test('absolute-only timestamps retain semantic time and omit relative text', async () => {
+		const renderedComponent = await renderIntoDocument(<TimestampValue timestamp={1_060n} relative={false} />)
+		cleanupRenderedComponent = renderedComponent.cleanup
+		expect(document.querySelector('time')?.getAttribute('datetime')).toBe('1970-01-01T00:17:40.000Z')
+		expect(document.querySelector('.timestamp-value-relative')).toBeNull()
+	})
+
 	test('renders loading timestamps with an accessible spinner', async () => {
 		const renderedComponent = await renderIntoDocument(<TimestampValue loading timestamp={undefined} />)
 		cleanupRenderedComponent = renderedComponent.cleanup

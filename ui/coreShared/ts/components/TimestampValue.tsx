@@ -8,12 +8,13 @@ type TimestampValueProps = {
 	className?: string
 	currentTimestamp?: bigint
 	loading?: boolean
+	relative?: boolean
 	timestamp: bigint | undefined
 	undefinedText?: ComponentChildren
 	zeroText?: ComponentChildren
 }
 
-export function TimestampValue({ className = '', currentTimestamp, loading = false, timestamp, undefinedText = getMetricPlaceholderPresentation(undefined)?.placeholder, zeroText }: TimestampValueProps) {
+export function TimestampValue({ className = '', currentTimestamp, loading = false, relative = true, timestamp, undefinedText = getMetricPlaceholderPresentation(undefined)?.placeholder, zeroText }: TimestampValueProps) {
 	const chainCurrentTimestamp = useChainTimestamp()
 	const resolvedCurrentTimestamp = currentTimestamp ?? chainCurrentTimestamp ?? getWallClockTimestamp()
 
@@ -41,7 +42,13 @@ export function TimestampValue({ className = '', currentTimestamp, loading = fal
 
 	return (
 		<time className={`timestamp-value ${className}`} dateTime={dateTime} title={absoluteTimestamp}>
-			{absoluteTimestamp} <span className='timestamp-value-relative'>({relativeTimestamp})</span>
+			{absoluteTimestamp}
+			{relative ? (
+				<>
+					{' '}
+					<span className='timestamp-value-relative'>({relativeTimestamp})</span>
+				</>
+			) : undefined}
 		</time>
 	)
 }

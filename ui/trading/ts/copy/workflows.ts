@@ -17,10 +17,6 @@ export const submitSettlement = 'Submit settlement transaction'
 export const submittingSettlement = 'Submitting settlement transaction…'
 export const previewTrade = 'Preview trade'
 export const submittingTrade = 'Submitting trade…'
-export const unsupportedOnchainTimestamp = 'Unsupported on-chain timestamp'
-export const timestamp = 'Timestamp'
-export const utc = 'UTC'
-export const timestampFormattingFailed = 'Timestamp formatting failed'
 export const defaultTransactionAction = 'Transaction'
 export const simulatingRouterCall = 'Simulating router call…'
 export const authoritativeSimulationReady = 'Fresh authoritative simulation ready'
@@ -110,10 +106,6 @@ export function minimumOutcomeReceived(outcome: 'YES' | 'NO') {
 
 export function maximumOutcomeRequired(outcome: 'YES' | 'NO') {
 	return `Maximum ${outcome} required`
-}
-
-export function timestampFormattingFailedDetail(message: string) {
-	return `${timestampFormattingFailed}: ${message}`
 }
 
 export function preparingAction(action: string) {

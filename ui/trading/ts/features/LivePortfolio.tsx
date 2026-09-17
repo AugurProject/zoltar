@@ -1,3 +1,4 @@
+import { TimestampValue } from '@zoltar/ui-core-shared/components/TimestampValue.js'
 import { OutcomeHolding } from './OutcomeHolding.js'
 import { settlementAvailability } from '../protocol/settlement.js'
 import * as payoutCopy from '../copy/payout.js'
@@ -15,7 +16,7 @@ import type { LiveBalances, LiveMarket } from '../protocol/live.js'
 import { maximumInsuredExit } from '@zoltar/trading-shared/trading/positions'
 import type { BalanceState, PortfolioBalanceEntry } from './live/liveTradingTypes.js'
 import { liveCopy } from '../copy/live.js'
-import { BalanceLoadError, formatTimestamp } from './LiveTradingTransactionUi.js'
+import { BalanceLoadError } from './LiveTradingTransactionUi.js'
 import * as portfolioCopy from '../copy/portfolio.js'
 
 function LivePortfolioBalanceMetrics({ market, balances }: { market: LiveMarket; balances: LiveBalances }) {
@@ -121,7 +122,7 @@ export function LivePortfolio({ entries, balanceState, balanceError, retryBalanc
 							{renderPortfolioStatus(entry)}
 							{entry.market.loadError === undefined ? (
 								<p class='detail'>
-									{liveCopy.questionEnd}: {formatTimestamp(entry.market.endTime)}
+									{liveCopy.questionEnd}: <TimestampValue timestamp={entry.market.endTime} relative={false} />
 								</p>
 							) : undefined}
 							{entry.balances === undefined ? <SecurityPoolLink value={entry.market.pool} /> : undefined}

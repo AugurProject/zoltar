@@ -1,3 +1,5 @@
+import { formatTimestamp } from '@zoltar/ui-core-shared/lib/formatters.js'
+import { FormField } from '@zoltar/ui-core-shared/components/FormField.js'
 import { useEffect, useId, useMemo, useState } from 'preact/hooks'
 import type { Address, PublicClient, WalletClient } from '@zoltar/core-shared/evm/ethereum'
 import { formatUnits, parseUnitsOrUndefined } from '../lib/format.js'
@@ -15,7 +17,7 @@ import { TransactionActionButton, TransactionActionGroup } from '@zoltar/ui-core
 import { ViewTabs } from '@zoltar/ui-core-shared/components/ViewTabs.js'
 import { parseSlippageBps, parseTransactionValidityMinutes, type GuardedWalletWrite } from './liveTradingControllerHelpers.js'
 import type { BalanceState } from './live/liveTradingTypes.js'
-import { BalanceLoadError, DEFAULT_SLIPPAGE_PERCENT, DEFAULT_TRANSACTION_VALIDITY_MINUTES, ExecutionProtectionFields, formatTimestamp, stateLabel, TradingField, TradingTransactionHash } from './LiveTradingTransactionUi.js'
+import { BalanceLoadError, DEFAULT_SLIPPAGE_PERCENT, DEFAULT_TRANSACTION_VALIDITY_MINUTES, ExecutionProtectionFields, stateLabel, TradingTransactionHash } from './LiveTradingTransactionUi.js'
 import { forkMigrationBatchBlocker, forkMigrationBatchWarning, migrationSimulationSummary, settlementBalanceLabel, settlementInputBlocker } from './LiveSettlementModel.js'
 import { useSettlementWorkflowController } from './live/useSettlementWorkflowController.js'
 import { resolveSettlementSimulateAvailability, resolveSettlementSubmitAvailability, resolveActionGroupMessage } from './live/actionAvailability.js'
@@ -218,7 +220,7 @@ export function LiveSettlementControls({
 							<p class='detail'>
 								{settlementCopy.completeSetRedemptionPrefix} {settlementBalanceLabel(balanceState, availability.completeSets, market)}.
 							</p>
-							<TradingField id={amountId} label={settlementCopy.completeSetValueToRedeem}>
+							<FormField id={amountId} label={settlementCopy.completeSetValueToRedeem}>
 								<FormInput
 									id={amountId}
 									name='amount'
@@ -231,7 +233,7 @@ export function LiveSettlementControls({
 										setAmount(event.currentTarget.value)
 									}}
 								/>
-							</TradingField>
+							</FormField>
 						</>
 					)
 				if (operation === 'redeem-winning-shares') return <p class='detail'>{winningOutcome === undefined ? settlementCopy.winningRedemptionUnavailable : settlementCopy.winningRedemptionGuidance(winningOutcome, settlementBalanceLabel(balanceState, availability.winningBalance, market, winningOutcome))}</p>
