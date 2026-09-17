@@ -2,6 +2,7 @@ import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as forkAuctionCopy from '../../../copy/forkAuction.js'
 import type { ComponentChildren } from 'preact'
 import { CurrencyValue } from '@zoltar/ui-core-shared/components/CurrencyValue.js'
+import { ReadOnlyDetailAccordion } from '@zoltar/ui-core-shared/components/ReadOnlyDetailAccordion.js'
 import { MetricField } from '@zoltar/ui-core-shared/components/MetricField.js'
 import { SectionBlock } from '@zoltar/ui-core-shared/components/SectionBlock.js'
 import { AUCTIONED_CAPACITY_OWNERSHIP_ATTO_REP_LABEL } from '../lib/forkAuction.js'
@@ -69,13 +70,17 @@ export function TruthAuctionSummaryCard({
 				<div className='fork-workflow-summary-metrics'>
 					<MetricField label={commonCopy.starts}>{startedDisplay}</MetricField>
 					<MetricField label={forkAuctionCopy.clearingPrice}>{clearingPriceDisplay}</MetricField>
-					{auctionedCapacityOwnershipAttoRepDisplay === undefined ? undefined : <MetricField label={AUCTIONED_CAPACITY_OWNERSHIP_ATTO_REP_LABEL}>{auctionedCapacityOwnershipAttoRepDisplay}</MetricField>}
 					<MetricField label={forkAuctionCopy.pendingRefund}>{pendingRefundDisplay}</MetricField>
 					<MetricField label={forkAuctionCopy.minBid}>{<CurrencyValue value={minBidSizeAttoEth} suffix={commonCopy.eth} />}</MetricField>
 					<MetricField label={commonCopy.ends}>{endsDisplay}</MetricField>
 					{winningThresholdPriceDisplay === undefined ? undefined : <MetricField label={forkAuctionCopy.winningThreshold}>{winningThresholdPriceDisplay}</MetricField>}
 				</div>
 			</div>
+			{auctionedCapacityOwnershipAttoRepDisplay === undefined ? undefined : (
+				<ReadOnlyDetailAccordion title={forkAuctionCopy.auctionDetails}>
+					<MetricField label={AUCTIONED_CAPACITY_OWNERSHIP_ATTO_REP_LABEL}>{auctionedCapacityOwnershipAttoRepDisplay}</MetricField>
+				</ReadOnlyDetailAccordion>
+			)}
 		</SectionBlock>
 	)
 }

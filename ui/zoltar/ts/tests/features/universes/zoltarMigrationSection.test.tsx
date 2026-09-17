@@ -300,8 +300,10 @@ describe('ZoltarMigrationSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const outcomes = document.body.querySelector('.migration-outcome-section')
-		expect(outcomes?.nextElementSibling?.textContent).toContain('Selected Destinations')
-		expect(outcomes?.nextElementSibling?.nextElementSibling?.textContent).toContain('Approval Amount')
+		expect(outcomes?.nextElementSibling?.textContent).toContain('Migration Amount')
+		expect(outcomes?.nextElementSibling?.nextElementSibling?.textContent).toContain('Selected Destinations')
+		expect(outcomes?.nextElementSibling?.nextElementSibling?.closest('details')).toBeNull()
+		expect(outcomes?.nextElementSibling?.nextElementSibling?.nextElementSibling?.textContent).toContain('Approval Amount')
 		expect(document.body.textContent?.includes('Ready to split.')).toBe(false)
 	})
 
@@ -432,9 +434,9 @@ describe('ZoltarMigrationSection', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		const walletTokensHeading = within(document.body).getByRole('heading', { name: 'Wallet REP Tokens' })
-		const walletTokensSection = walletTokensHeading.closest('section')
-		if (walletTokensSection === null) throw new Error('Expected wallet REP tokens section')
+		const walletTokensSection = Array.from(document.querySelectorAll('details')).find(details => details.querySelector('summary')?.textContent === 'Wallet REP Tokens')
+		expect(walletTokensSection?.open).toBe(false)
+		if (walletTokensSection === undefined) throw new Error('Expected wallet REP tokens section')
 		expect(walletTokensSection.textContent).toContain('Yes')
 		expect(walletTokensSection.textContent).toContain(CHILD_REP_ADDRESS)
 
@@ -451,6 +453,6 @@ describe('ZoltarMigrationSection', () => {
 			),
 		)
 		cleanupRenderedComponent = withoutHeldTokens.cleanup
-		expect(within(document.body).queryByRole('heading', { name: 'Wallet REP Tokens' })).toBeNull()
+		expect(Array.from(document.querySelectorAll('summary')).some(summary => summary.textContent === 'Wallet REP Tokens')).toBe(false)
 	})
 })

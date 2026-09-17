@@ -1,8 +1,10 @@
+import { ErrorNotice } from '@zoltar/ui-core-shared/components/ErrorNotice.js'
+import * as workspaceCopy from '../../../copy/poolWorkspace.js'
+import { useEffect, useState } from 'preact/hooks'
 import type { ComponentChildren, ComponentProps } from 'preact'
 import { Badge } from '@zoltar/ui-core-shared/components/Badge.js'
 import { LookupFieldRow } from '@zoltar/ui-core-shared/components/LookupFieldRow.js'
 import { LoadingText } from '@zoltar/ui-core-shared/components/LoadingText.js'
-import { SectionBlock } from '@zoltar/ui-core-shared/components/SectionBlock.js'
 import { ViewTabs } from '@zoltar/ui-core-shared/components/ViewTabs.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import { getWrongNetworkReason } from '@zoltar/ui-core-shared/wallet/network.js'
@@ -63,36 +65,73 @@ export function SecurityPoolVaultWorkspace({
 	vaultView: SelectedVaultView
 	walletAddress: string | undefined
 }) {
-	const vaultLookupActionLabel = securityVault.securityVaultError === undefined ? commonCopy.refresh : commonCopy.retry
+	const [lookupOwner, setLookupOwner] = useState(selectedVaultOwnerInput)
+	useEffect(() => setLookupOwner(selectedVaultOwnerInput), [selectedVaultOwnerInput])
 
+	const showVaultDetails = vaultView === 'selected-vault' || (vaultView === 'vault-by-address' && selectedVaultOwner !== '' && sameCaseInsensitiveText(lookupOwner.trim(), selectedVaultOwner))
 	return (
 		<div className='workflow-stack vault-workspace'>
-			<SectionBlock
-				density='compact'
-				title={securityPoolCopy.vaultOperations}
-				variant='plain'
-				actions={
-					<div className='actions'>
-						<ViewTabs ariaLabel={securityPoolCopy.selectedPoolVaultViews} className='vault-content-switch' semantics='switcher' size='compact' value={vaultView} onChange={setVaultView} options={selectedVaultViewOptions} />
-					</div>
-				}
-			>
-				{selectedVaultLoadNotice}
-				<LookupFieldRow
-					label={securityPoolCopy.selectedVaultOwner}
-					value={selectedVaultOwnerInput}
-					onInput={nextOwner => securityVault.onSecurityVaultFormChange({ selectedVaultOwner: nextOwner })}
-					placeholder={commonCopy.hexValuePlaceholder}
-					action={
-						<button className='secondary' onClick={() => securityVault.onLoadSecurityVault()} disabled={securityVault.loadingSecurityVault}>
-							{securityVault.loadingSecurityVault ? <LoadingText announce={false}>{securityPoolCopy.refreshing}</LoadingText> : vaultLookupActionLabel}
-						</button>
-					}
+			{selectedVaultLoadNotice}
+			{securityVault.securityVaultError === undefined ? undefined : (
+				<>
+					{!showVaultDetails ? <ErrorNotice message={securityVault.securityVaultError} /> : undefined}
+					<button
+						type='button'
+						className='secondary'
+						disabled={securityVault.loadingSecurityVault}
+						onClick={() => {
+							void securityVault.onLoadSecurityVault()
+						}}
+					>
+						{commonCopy.retry}
+					</button>
+				</>
+			)}
+
+			<div className='vault-workspace-toolbar'>
+				<ViewTabs
+					ariaLabel={securityPoolCopy.selectedPoolVaultViews}
+					className='vault-content-switch'
+					semantics='switcher'
+					variant='segmented'
+					size='compact'
+					value={vaultView}
+					onChange={nextView => {
+						if (nextView === 'selected-vault' && walletAddress !== undefined && !sameCaseInsensitiveText(selectedVaultOwner, walletAddress)) {
+							securityVault.onSecurityVaultFormChange({ selectedVaultOwner: walletAddress })
+							void securityVault.onLoadSecurityVault(walletAddress)
+						}
+						setVaultView(nextView)
+					}}
+					options={selectedVaultViewOptions}
 				/>
-			</SectionBlock>
+			</div>
+			{vaultView === 'vault-by-address' ? (
+				<div className='vault-address-lookup'>
+					<LookupFieldRow
+						label={securityPoolCopy.selectedVaultOwner}
+						value={lookupOwner}
+						onInput={setLookupOwner}
+						placeholder={commonCopy.hexValuePlaceholder}
+						action={
+							<button
+								className='secondary'
+								onClick={() => {
+									securityVault.onSecurityVaultFormChange({ selectedVaultOwner: lookupOwner.trim() })
+									setVaultView('vault-by-address')
+									void securityVault.onLoadSecurityVault(lookupOwner.trim())
+								}}
+								disabled={securityVault.loadingSecurityVault || lookupOwner.trim() === ''}
+							>
+								{securityVault.loadingSecurityVault ? <LoadingText announce={false}>{securityPoolCopy.refreshing}</LoadingText> : workspaceCopy.openVault}
+							</button>
+						}
+					/>
+				</div>
+			) : undefined}
 
 			{vaultView === 'browse-vaults' ? (
-				<SectionBlock title={securityPoolCopy.vaultDirectory} variant='embedded'>
+				<div>
 					<SecurityPoolVaultDirectory
 						emptyState={browseEmptyState}
 						pool={selectedPool}
@@ -103,20 +142,23 @@ export function SecurityPoolVaultWorkspace({
 										className='secondary'
 										onClick={() => {
 											securityVault.onSecurityVaultFormChange({ selectedVaultOwner: vault.vaultAddress.toString() })
-											setVaultView('selected-vault')
+											setVaultView(walletAddress !== undefined && sameCaseInsensitiveText(walletAddress, vault.vaultAddress) ? 'selected-vault' : 'vault-by-address')
 											void securityVault.onLoadSecurityVault(vault.vaultAddress.toString())
 										}}
 									>
 										{securityPoolCopy.selectVault}
 									</button>
-									<button
-										className='secondary'
-										onClick={() => onOpenLiquidationModal(selectedPool.managerAddress, selectedPool.securityPoolAddress, vault.vaultAddress, vault.capacityOwnershipAttoRep)}
-										disabled={walletAddress === undefined || !isOnActiveAppChain || !liquidationEnabled}
-										title={!isOnActiveAppChain && walletAddress !== undefined ? getWrongNetworkReason() : securityPoolCopy.reviewLiquidation}
-									>
-										{securityPoolCopy.reviewLiquidation}
-									</button>
+									<details className='vault-more-actions'>
+										<summary>{workspaceCopy.moreActions}</summary>
+										<button
+											className='secondary'
+											onClick={() => onOpenLiquidationModal(selectedPool.managerAddress, selectedPool.securityPoolAddress, vault.vaultAddress, vault.capacityOwnershipAttoRep)}
+											disabled={walletAddress === undefined || !isOnActiveAppChain || !liquidationEnabled}
+											title={!isOnActiveAppChain && walletAddress !== undefined ? getWrongNetworkReason() : securityPoolCopy.reviewLiquidation}
+										>
+											{securityPoolCopy.reviewLiquidation}
+										</button>
+									</details>
 								</div>
 							)
 						}
@@ -125,8 +167,9 @@ export function SecurityPoolVaultWorkspace({
 						repPerEthSource={repPerEthSource}
 						repPerEthSourceUrl={repPerEthSourceUrl}
 					/>
-				</SectionBlock>
-			) : (
+				</div>
+			) : undefined}
+			{showVaultDetails ? (
 				<SecurityVaultSection
 					{...securityVault}
 					compactLayout
@@ -140,7 +183,6 @@ export function SecurityPoolVaultWorkspace({
 								description: securityPoolCopy.liquidationWorkflowDescription,
 								key: 'liquidate-vault',
 								readiness: blocker === undefined && liquidationEnabled && canUseActions ? 'ready' : 'blocked',
-								title: securityPoolCopy.reviewLiquidationTitle,
 								...(selectedPool === undefined || selectedVaultDetails === undefined || selectedVaultOwner === '' || !liquidationEnabled || !selectedVaultExistsOnchain || !canUseActions
 									? {}
 									: { onAction: () => onOpenLiquidationModal(selectedPool.managerAddress, selectedPool.securityPoolAddress, selectedVaultDetails.vaultAddress, selectedVaultDetails.capacityOwnershipAttoRep) }),
@@ -159,7 +201,7 @@ export function SecurityPoolVaultWorkspace({
 					showLookupSection={false}
 					showSecurityPoolAddressInput={false}
 				/>
-			)}
+			) : undefined}
 		</div>
 	)
 }

@@ -1,32 +1,20 @@
+import { formatSecurityPoolPageSummary } from '../lib/securityPoolLabels.js'
+import { PoolDirectoryRow } from './PoolDirectoryRow.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
-import * as statoblastAppCopy from '../../../copy/app.js'
 import * as securityPoolCopy from '../../../copy/securityPool.js'
 import { useEffect, useRef, useState } from 'preact/hooks'
 import { zeroAddress } from '@zoltar/core-shared/evm/ethereum'
-import { AddressValue } from '@zoltar/ui-core-shared/components/AddressValue.js'
-import { IdentifierValue } from '@zoltar/ui-core-shared/components/IdentifierValue.js'
-import { Badge } from '@zoltar/ui-core-shared/components/Badge.js'
-import { CurrencyValue } from '@zoltar/ui-core-shared/components/CurrencyValue.js'
-import { ComparisonRecord } from '@zoltar/ui-core-shared/components/ComparisonRecord.js'
 import { ErrorNotice } from '@zoltar/ui-core-shared/components/ErrorNotice.js'
 import { FormInput } from '@zoltar/ui-core-shared/components/FormInput.js'
 import { LoadingText } from '@zoltar/ui-core-shared/components/LoadingText.js'
-import { MetricField } from '@zoltar/ui-core-shared/components/MetricField.js'
-import { OpenOraclePriceValue } from '../../open-oracle/components/OpenOraclePriceValue.js'
 import { PaginationControls } from '@zoltar/ui-core-shared/components/PaginationControls.js'
-import { ReadOnlyDetailAccordion } from '@zoltar/ui-core-shared/components/ReadOnlyDetailAccordion.js'
-import { Question, getQuestionTitle } from '@zoltar/ui-core-shared/components/Question.js'
 import { SectionBlock } from '@zoltar/ui-core-shared/components/SectionBlock.js'
 import { EmptyState } from '@zoltar/ui-core-shared/components/EmptyState.js'
 import { StateHint } from '@zoltar/ui-core-shared/components/StateHint.js'
-import { formatUniverseIdHex } from '@zoltar/ui-zoltar-shared/features/universes/lib/universe.js'
-import { buildRouteHref, getRouteHashSearch } from '@zoltar/ui-core-shared/navigation/routing.js'
 import { getWalletScopedAccountAddress } from '@zoltar/ui-core-shared/wallet/network.js'
 import { formatPaginationSummary, getHasNextPaginationPage, getPaginationPageCount, resolvePaginationPageIndex, SECURITY_POOL_PAGE_SIZE } from '@zoltar/ui-core-shared/lib/pagination.js'
-import { openInterestFeePerYearBigint } from '../lib/retentionRate.js'
-import { formatSecurityPoolPageSummary, getSecurityPoolStatusBadgeLabel, getSecurityPoolStatusBadgeTone } from '../lib/securityPoolLabels.js'
 import { deriveSecurityPoolLifecycleState, evaluateSecurityPoolState, type SecurityPoolLifecycleState } from '../lib/securityPoolState.js'
-import { calculateMintingCapacityAttoEth, formatStatoblastSecurityMultiplier } from '../../markets/lib/trading.js'
+import { calculateMintingCapacityAttoEth } from '../../markets/lib/trading.js'
 import { getPoolRegistryPresentation } from '@zoltar/ui-core-shared/lib/userCopy.js'
 import type { SecurityPoolsOverviewSectionProps } from '../../types.js'
 import { resolveUiRepPerEthPrice } from '../lib/uiPriceOracle.js'
@@ -76,7 +64,6 @@ export function SecurityPoolsOverviewSection({
 	})
 	const securityPoolsWithState = pagedSecurityPools.map(pool => ({
 		pool,
-		hasKnownForkActivity: pool.hasForkActivity,
 		poolState: evaluateSecurityPoolState({
 			lifecycleState: deriveSecurityPoolLifecycleState({
 				hasForkActivity: pool.hasForkActivity,
@@ -134,7 +121,6 @@ export function SecurityPoolsOverviewSection({
 	return (
 		<SectionBlock
 			density='compact'
-			title={securityPoolCopy.directory}
 			variant='plain'
 			actions={
 				<PaginationControls
@@ -199,91 +185,10 @@ export function SecurityPoolsOverviewSection({
 
 				return (
 					<div className='comparison-record-list'>
-						{filteredSecurityPools.map(({ hasKnownForkActivity, pool, poolState }) => {
-							const displayState = poolState.lifecycleState
-							const statusBadgeLabel = getSecurityPoolStatusBadgeLabel({
-								hasForkActivity: hasKnownForkActivity,
-								questionOutcome: pool.questionOutcome,
-								lifecycleState: displayState,
-							})
+						{filteredSecurityPools.map(({ pool, poolState }) => {
 							const calculationPrice = resolveUiRepPerEthPrice({ currentTimestamp, openOraclePrice: pool.lastOraclePrice, openOracleSettlementTimestamp: pool.lastOracleSettlementTimestamp, priceOracle: uiPriceOracle, uniswapPrice: repPerEthPrice })
-							const mintingCapacityAttoEth = calculateMintingCapacityAttoEth(pool.totalCapacityOwnershipAttoRep, calculationPrice, pool.statoblastSecurityMultiplierBps)
-							const badgeTone = getSecurityPoolStatusBadgeTone(displayState)
-							return (
-								<div className='security-pool-overview-record' key={pool.securityPoolAddress}>
-									<ComparisonRecord
-										title={
-											onSelectSecurityPool === undefined ? (
-												getQuestionTitle(pool.marketDetails)
-											) : (
-												<a
-													href={(() => {
-														const params = new URLSearchParams(getRouteHashSearch())
-														params.set('securityPool', pool.securityPoolAddress)
-														params.set('universe', formatUniverseIdHex(pool.universeId))
-														params.set('securityPoolsView', 'operate')
-														return buildRouteHref('#/security-pools', `?${params.toString()}`)
-													})()}
-													aria-label={securityPoolCopy.formatOpenPoolLabel(getQuestionTitle(pool.marketDetails), pool.securityPoolAddress)}
-													onClick={event => {
-														if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
-														event.preventDefault()
-														onSelectSecurityPool(pool.securityPoolAddress, pool.universeId)
-													}}
-												>
-													{getQuestionTitle(pool.marketDetails)}
-												</a>
-											)
-										}
-										badge={
-											<Badge ariaLabel={statusBadgeLabel} tone={badgeTone}>
-												{statusBadgeLabel}
-											</Badge>
-										}
-										metrics={[
-											{ label: securityPoolCopy.vaultCount, value: pool.vaultCount.toString() },
-											{ label: statoblastAppCopy.statoblastSecurityMultiplierBps, value: `${formatStatoblastSecurityMultiplier(pool.statoblastSecurityMultiplierBps)}x` },
-											{
-												label: statoblastAppCopy.openOraclePrice,
-												value: <OpenOraclePriceValue currentTimestamp={undefined} lastPrice={pool.lastOraclePrice} lastSettlementTimestamp={pool.lastOracleSettlementTimestamp} priceValidUntilTimestamp={undefined} />,
-											},
-											{
-												label: securityPoolCopy.openInterestMinted,
-												value: (
-													<span className='comparison-record-value-stack'>
-														<CurrencyValue exactWhenRoundedToZero value={pool.settlementCollateralAttoEth} suffix={commonCopy.eth} copyable={false} />
-														<span className='detail'>
-															{securityPoolCopy.maxLead}
-															{mintingCapacityAttoEth === undefined ? commonCopy.unavailable : <CurrencyValue exactWhenRoundedToZero value={mintingCapacityAttoEth} suffix={commonCopy.eth} copyable={false} />}
-														</span>
-													</span>
-												),
-											},
-										]}
-									>
-										{pool.universeId === activeUniverseId ? undefined : <p className='detail'>{securityPoolCopy.formatBrowsePoolUniverseMismatch(formatUniverseIdHex(pool.universeId))}</p>}
-										<ReadOnlyDetailAccordion title={commonCopy.technicalDetails}>
-											<div className='comparison-record-expanded'>
-												<Question question={pool.marketDetails} showTitle={false} variant='preview' />
-												<div className='security-pool-detail-rail security-pool-card-inline-details'>
-													<MetricField label={securityPoolCopy.annualFee}>
-														<CurrencyValue value={openInterestFeePerYearBigint(pool.currentRetentionRate)} suffix={commonCopy.percent} />
-													</MetricField>
-													<MetricField label={securityPoolCopy.poolAddress}>
-														<AddressValue address={pool.securityPoolAddress} />
-													</MetricField>
-													<MetricField label={securityPoolCopy.managerAddress}>
-														<AddressValue address={pool.managerAddress} />
-													</MetricField>
-													<MetricField label={commonCopy.questionId}>
-														<IdentifierValue value={pool.questionId} />
-													</MetricField>
-												</div>
-											</div>
-										</ReadOnlyDetailAccordion>
-									</ComparisonRecord>
-								</div>
-							)
+							const capacity = calculateMintingCapacityAttoEth(pool.totalCapacityOwnershipAttoRep, calculationPrice, pool.statoblastSecurityMultiplierBps)
+							return <PoolDirectoryRow key={pool.securityPoolAddress} pool={pool} activeUniverseId={activeUniverseId} lifecycleState={poolState.lifecycleState} capacity={capacity} currentTimestamp={currentTimestamp} onSelect={onSelectSecurityPool} />
 						})}
 					</div>
 				)

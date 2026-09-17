@@ -48,7 +48,9 @@ function MarketRow({ listKind, lookupRoute, market, nowSeconds }: { listKind: Tr
 	const secondaryLabel = actions.secondary.label
 	return (
 		<EntityCard
-			className='market-record'
+			className='market-record directory-record'
+			surface='flat'
+			variant='compact'
 			title={<a href={getTradingRouteHref(primaryHref)}>{market.title}</a>}
 			badge={listKind === 'markets' ? <Badge tone={marketStatusTone(market, nowSeconds)}>{marketStatusLabel(market, nowSeconds)}</Badge> : undefined}
 			actions={
@@ -131,7 +133,7 @@ export function LiveMarketBrowser({
 	return (
 		<SectionBlock
 			className='market-browser'
-			title={presentation.title}
+			title={listKind === 'security-pools' ? presentation.title : undefined}
 			description={presentation.description}
 			variant='plain'
 			busy={discoveryState === 'loading'}
@@ -146,7 +148,13 @@ export function LiveMarketBrowser({
 				/>
 			}
 		>
-			<OpenPoolForm disabled={workflowLocked} target={lookupRoute} />
+			{/* This disclosure contains an interactive lookup form, rather than read-only reference data. */}
+			<details class='read-only-detail-accordion'>
+				<summary>{liveCopy.openByAddress}</summary>
+				<div class='read-only-detail-accordion-content'>
+					<OpenPoolForm disabled={workflowLocked} target={lookupRoute} />
+				</div>
+			</details>
 			{content}
 		</SectionBlock>
 	)

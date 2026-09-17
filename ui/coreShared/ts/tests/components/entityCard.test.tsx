@@ -40,4 +40,18 @@ describe('EntityCard', () => {
 		expect(card).not.toBeNull()
 		expect(Array.from(card?.attributes ?? []).map(attribute => attribute.name)).toEqual(['class'])
 	})
+	test('places a context action before detail controls in keyboard reading order', async () => {
+		const rendered = await renderIntoDocument(
+			<EntityCard title='Position' headerActions={<a href='#position'>Open position</a>}>
+				<details>
+					<summary>Position details</summary>
+					<p>Reference data</p>
+				</details>
+			</EntityCard>,
+		)
+		cleanupRendered = rendered.cleanup
+		const controls = Array.from(rendered.container.querySelectorAll('a, summary'))
+		expect(controls.map(control => control.textContent)).toEqual(['Open position', 'Position details'])
+		expect(controls[0]?.closest('.entity-card-header')).not.toBeNull()
+	})
 })

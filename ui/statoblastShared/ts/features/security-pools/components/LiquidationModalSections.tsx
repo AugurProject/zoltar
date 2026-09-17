@@ -1,3 +1,4 @@
+import { ReadOnlyDetailAccordion } from '@zoltar/ui-core-shared/components/ReadOnlyDetailAccordion.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as statoblastAppCopy from '../../../copy/app.js'
 import * as liquidationCopy from '../../../copy/liquidation.js'
@@ -72,7 +73,7 @@ export function QueuedLiquidationStatusCard({
 	return <TransactionStatusCard surface='flat' title={liquidationCopy.refreshingLiquidationStateTitle} badge={<Badge tone='muted'>{commonCopy.refreshingWithoutEllipsis}</Badge>} detail={liquidationCopy.refreshingLiquidationState} />
 }
 
-export function LiquidationSummaryGrid({
+export function LiquidationContextSummary({
 	accountAddress,
 	currentPoolOracleManagerDetails,
 	currentTimestamp,
@@ -105,83 +106,106 @@ export function LiquidationSummaryGrid({
 }) {
 	const repPriceSourceCopy = getRepPriceSourceCopy(repPerEthSource)
 	return (
-		<DataGrid className='modal-summary-grid' columns={2}>
-			<AddressInfo address={liquidationSecurityPoolAddress} label={liquidationCopy.securityPool} />
-			<MetricField label={statoblastAppCopy.statoblastSecurityMultiplierBps}>{selectedPool?.statoblastSecurityMultiplierBps === undefined ? commonCopy.unavailable : `${formatStatoblastSecurityMultiplier(selectedPool.statoblastSecurityMultiplierBps)}${liquidationCopy.multiplierSuffix}`}</MetricField>
-			<MetricField label={liquidationCopy.operator}>{accountAddress === undefined ? commonCopy.connectWallet : <AddressValue address={accountAddress} />}</MetricField>
-			<MetricField label={liquidationCopy.receiverVault}>{trimmedLiquidationReceiverVault === '' ? commonCopy.noneSelected : <AddressValue address={trimmedLiquidationReceiverVault} />}</MetricField>
-			<MetricField label={commonCopy.targetVault}>{trimmedLiquidationTargetVault === '' ? commonCopy.noneSelected : <AddressValue address={trimmedLiquidationTargetVault} />}</MetricField>
+		<div className='decision-summary'>
+			<div className='exchange-preview'>
+				<div className='liquidation-party'>
+					<p className='detail'>{commonCopy.targetVault}</p>
+					<div className='decision-heading'>{trimmedLiquidationTargetVault === '' ? commonCopy.noneSelected : <AddressValue address={trimmedLiquidationTargetVault} />}</div>
+				</div>
+				<span className='exchange-arrow' aria-hidden='true'>
+					→
+				</span>
+				<div className='liquidation-party'>
+					<p className='detail'>{liquidationCopy.receiverVault}</p>
+					<div className='decision-heading'>{trimmedLiquidationReceiverVault === '' ? commonCopy.noneSelected : <AddressValue address={trimmedLiquidationReceiverVault} />}</div>
+				</div>
+			</div>
 			<MetricField label={statoblastAppCopy.openOraclePrice} valueTagName='span'>
 				<OpenOraclePriceValue currentTimestamp={currentTimestamp} lastPrice={poolOraclePrice} lastSettlementTimestamp={poolOracleSettlementTimestamp} priceValidUntilTimestamp={currentPoolOracleManagerDetails?.priceValidUntilTimestamp} />
 			</MetricField>
-			<MetricField label={liquidationCopy.targetCapacityOwnershipAttoRep}>
-				<CurrencyValue value={targetVaultSummary?.capacityOwnershipAttoRep} suffix={commonCopy.rep} />
-			</MetricField>
-			<MetricField label={liquidationCopy.targetVaultRepBackingAttoRep}>
-				<CurrencyValue value={targetVaultSummary?.vaultAttoRepBacking} suffix={commonCopy.rep} />
-			</MetricField>
-			<MetricField label={liquidationCopy.targetDisputeStakedAttoRep}>
-				<CurrencyValue value={targetVaultSummary?.disputeStakedAttoRep} suffix={commonCopy.rep} />
-			</MetricField>
-			<MetricField
-				label={
-					<span>
-						{repPriceSourceCopy.quotedRepPerEthLabel} {renderRepPriceSourceLabel(repPerEthSource, repPerEthSourceUrl)}
-					</span>
-				}
-			>
-				{repPerEthPrice === undefined ? commonCopy.unavailable : <CurrencyValue value={repPerEthPrice} suffix={commonCopy.repPerEth} copyable={false} />}
-			</MetricField>
-			<MetricField label={liquidationCopy.callerCapacityOwnershipAttoRep}>
-				<CurrencyValue value={receiverVaultSummary?.capacityOwnershipAttoRep} suffix={commonCopy.rep} />
-			</MetricField>
-			<MetricField label={liquidationCopy.callerVaultRepBackingAttoRep}>
-				<CurrencyValue value={receiverVaultSummary?.vaultAttoRepBacking} suffix={commonCopy.rep} />
-			</MetricField>
-			<MetricField label={liquidationCopy.callerDisputeStakedAttoRep}>
-				<CurrencyValue value={receiverVaultSummary?.disputeStakedAttoRep} suffix={commonCopy.rep} />
-			</MetricField>
-		</DataGrid>
+			<ReadOnlyDetailAccordion title={liquidationCopy.vaultContextDetails}>
+				<DataGrid>
+					<AddressInfo address={liquidationSecurityPoolAddress} label={liquidationCopy.securityPool} />
+					<MetricField label={statoblastAppCopy.statoblastSecurityMultiplierBps}>{selectedPool?.statoblastSecurityMultiplierBps === undefined ? commonCopy.unavailable : `${formatStatoblastSecurityMultiplier(selectedPool.statoblastSecurityMultiplierBps)}${liquidationCopy.multiplierSuffix}`}</MetricField>
+					<MetricField label={liquidationCopy.operator}>{accountAddress === undefined ? commonCopy.connectWallet : <AddressValue address={accountAddress} />}</MetricField>
+
+					<MetricField label={liquidationCopy.targetCapacityOwnershipAttoRep}>
+						<CurrencyValue value={targetVaultSummary?.capacityOwnershipAttoRep} suffix={commonCopy.rep} />
+					</MetricField>
+					<MetricField label={liquidationCopy.targetVaultRepBackingAttoRep}>
+						<CurrencyValue value={targetVaultSummary?.vaultAttoRepBacking} suffix={commonCopy.rep} />
+					</MetricField>
+					<MetricField label={liquidationCopy.targetDisputeStakedAttoRep}>
+						<CurrencyValue value={targetVaultSummary?.disputeStakedAttoRep} suffix={commonCopy.rep} />
+					</MetricField>
+					<MetricField
+						label={
+							<span>
+								{repPriceSourceCopy.quotedRepPerEthLabel} {renderRepPriceSourceLabel(repPerEthSource, repPerEthSourceUrl)}
+							</span>
+						}
+					>
+						{repPerEthPrice === undefined ? commonCopy.unavailable : <CurrencyValue value={repPerEthPrice} suffix={commonCopy.repPerEth} copyable={false} />}
+					</MetricField>
+					<MetricField label={liquidationCopy.callerCapacityOwnershipAttoRep}>
+						<CurrencyValue value={receiverVaultSummary?.capacityOwnershipAttoRep} suffix={commonCopy.rep} />
+					</MetricField>
+					<MetricField label={liquidationCopy.callerVaultRepBackingAttoRep}>
+						<CurrencyValue value={receiverVaultSummary?.vaultAttoRepBacking} suffix={commonCopy.rep} />
+					</MetricField>
+					<MetricField label={liquidationCopy.callerDisputeStakedAttoRep}>
+						<CurrencyValue value={receiverVaultSummary?.disputeStakedAttoRep} suffix={commonCopy.rep} />
+					</MetricField>
+				</DataGrid>
+			</ReadOnlyDetailAccordion>
+		</div>
 	)
 }
 
-export function LiquidationApprovalDetailsGrid({ approvalNonceInvalidated, currentTimestamp, liquidationApprovalDetails }: { approvalNonceInvalidated: boolean; currentTimestamp: bigint | undefined; liquidationApprovalDetails: LiquidationApprovalDetails }) {
+export function LiquidationApprovalSummary({ approvalNonceInvalidated, currentTimestamp, liquidationApprovalDetails }: { approvalNonceInvalidated: boolean; currentTimestamp: bigint | undefined; liquidationApprovalDetails: LiquidationApprovalDetails }) {
 	return (
-		<DataGrid className='modal-summary-grid' columns={2}>
-			<MetricField label={liquidationCopy.availableApproval}>
+		<div className='decision-summary'>
+			<p className='detail'>{liquidationCopy.availableApproval}</p>
+			<p className='decision-amount'>
 				<CurrencyValue exactWhenRoundedToZero value={liquidationApprovalDetails.availableDebtAttoEth} suffix={commonCopy.eth} />
-			</MetricField>
-			<MetricField label={liquidationCopy.reservedApproval}>
-				<CurrencyValue exactWhenRoundedToZero value={liquidationApprovalDetails.reservedDebtAttoEth} suffix={commonCopy.eth} />
-			</MetricField>
-			<MetricField label={liquidationCopy.consumedApproval}>
-				<CurrencyValue exactWhenRoundedToZero value={liquidationApprovalDetails.consumedDebtAttoEth} suffix={commonCopy.eth} />
-			</MetricField>
-			<MetricField label={liquidationCopy.perLiquidationLimit}>
-				<CurrencyValue exactWhenRoundedToZero value={liquidationApprovalDetails.params.maxDebtPerLiquidationAttoEth} suffix={commonCopy.eth} />
-			</MetricField>
-			<MetricField label={liquidationCopy.totalApprovalLimit}>
-				<CurrencyValue exactWhenRoundedToZero value={liquidationApprovalDetails.params.maxCumulativeDebtAttoEth} suffix={commonCopy.eth} />
-			</MetricField>
-			<MetricField label={liquidationCopy.approvalValidAfter}>
-				<TimestampValue timestamp={liquidationApprovalDetails.params.validAfter} />
-			</MetricField>
-			<MetricField label={liquidationCopy.approvalExpiration}>
-				<TimestampValue timestamp={liquidationApprovalDetails.params.validUntil} />
-			</MetricField>
-			<MetricField label={liquidationCopy.minimumPostLiquidationHealth}>{formatHealthFactorBps(liquidationApprovalDetails.params.minPostLiquidationHealthFactorBps)}</MetricField>
-			<MetricField label={liquidationCopy.approvalStatus}>{getApprovalStatus(liquidationApprovalDetails.revoked, approvalNonceInvalidated, liquidationApprovalDetails.params.validAfter, liquidationApprovalDetails.params.validUntil, currentTimestamp)}</MetricField>
-		</DataGrid>
+			</p>
+			<div className='liquidation-constraints'>
+				<MetricField label={liquidationCopy.perLiquidationLimit}>
+					<CurrencyValue exactWhenRoundedToZero value={liquidationApprovalDetails.params.maxDebtPerLiquidationAttoEth} suffix={commonCopy.eth} />
+				</MetricField>
+				<MetricField label={liquidationCopy.totalApprovalLimit}>
+					<CurrencyValue exactWhenRoundedToZero value={liquidationApprovalDetails.params.maxCumulativeDebtAttoEth} suffix={commonCopy.eth} />
+				</MetricField>
+				<MetricField label={liquidationCopy.approvalValidAfter}>
+					<TimestampValue timestamp={liquidationApprovalDetails.params.validAfter} />
+				</MetricField>
+				<MetricField label={liquidationCopy.approvalExpiration}>
+					<TimestampValue timestamp={liquidationApprovalDetails.params.validUntil} />
+				</MetricField>
+				<MetricField label={liquidationCopy.minimumPostLiquidationHealth}>{formatHealthFactorBps(liquidationApprovalDetails.params.minPostLiquidationHealthFactorBps)}</MetricField>
+				<MetricField label={liquidationCopy.approvalStatus}>{getApprovalStatus(liquidationApprovalDetails.revoked, approvalNonceInvalidated, liquidationApprovalDetails.params.validAfter, liquidationApprovalDetails.params.validUntil, currentTimestamp)}</MetricField>
+			</div>
+			<ReadOnlyDetailAccordion title={liquidationCopy.approvalUsageDetails}>
+				<MetricField label={liquidationCopy.reservedApproval}>
+					<CurrencyValue exactWhenRoundedToZero value={liquidationApprovalDetails.reservedDebtAttoEth} suffix={commonCopy.eth} />
+				</MetricField>
+				<MetricField label={liquidationCopy.consumedApproval}>
+					<CurrencyValue exactWhenRoundedToZero value={liquidationApprovalDetails.consumedDebtAttoEth} suffix={commonCopy.eth} />
+				</MetricField>
+			</ReadOnlyDetailAccordion>
+		</div>
 	)
 }
 
 export function LiquidationTransactionReview({
+	receiverHealthy,
 	liquidationExecutionMode,
 	liquidationFundingPreview,
 	liquidationSimulation,
 	selectedPool,
 	walletBalanceAttoEth,
 }: {
+	receiverHealthy: boolean | undefined
 	liquidationExecutionMode: LiquidationExecutionMode
 	liquidationFundingPreview: LiquidationFundingPreview | undefined
 	liquidationSimulation: ReturnType<typeof simulateLiquidation> | undefined
@@ -191,21 +215,28 @@ export function LiquidationTransactionReview({
 	return (
 		<TransactionReview
 			context={[{ label: commonCopy.question, value: selectedPool?.marketDetails.title ?? commonCopy.unavailable }]}
+			className='liquidation-outcome-review'
 			primary={[
 				{ label: liquidationCopy.securityBondDebtMoved, value: <CurrencyValue exactWhenRoundedToZero value={liquidationSimulation?.debtMovedAttoEth} suffix={commonCopy.eth} /> },
-				{ label: liquidationCopy.capacityOwnershipMoved, value: <CurrencyValue value={liquidationSimulation?.capacityOwnershipMovedAttoRep} suffix={commonCopy.rep} /> },
-				{ label: liquidationCopy.residualBadDebt, value: <CurrencyValue exactWhenRoundedToZero value={liquidationSimulation?.badDebtAttoEth} suffix={commonCopy.eth} /> },
-				{ label: liquidationCopy.grossRepAwardAttoRep, value: <CurrencyValue compactWhenOverflow value={liquidationSimulation?.grossRepAwardAttoRep} suffix={commonCopy.rep} /> },
 				{ label: liquidationCopy.repMoved, value: <CurrencyValue compactWhenOverflow value={liquidationSimulation?.vaultAttoRepBackingToTransfer} suffix={commonCopy.rep} /> },
-				{ label: liquidationCopy.targetAccruedFeesRetained, value: <CurrencyValue compactWhenOverflow exactWhenRoundedToZero value={liquidationSimulation?.targetAccruedFeesRetained} suffix={commonCopy.eth} /> },
-				...(liquidationExecutionMode === 'queue' ? [{ label: liquidationCopy.totalWalletEthRequiredAttoEth, value: <CurrencyValue exactWhenRoundedToZero value={liquidationFundingPreview?.totalWalletEthRequiredAttoEth} suffix={commonCopy.eth} /> }] : []),
+				{ label: liquidationCopy.estimatedReceiverHealth, value: receiverHealthy === undefined ? commonCopy.unavailable : <Badge tone={receiverHealthy ? 'ok' : 'blocked'}>{receiverHealthy ? liquidationCopy.meetsRequiredHealth : liquidationCopy.belowRequiredHealth}</Badge> },
 			]}
 			details={[
-				{ label: liquidationCopy.resultingCallerRep, value: <CurrencyValue value={liquidationSimulation?.callerAfter.vaultAttoRepBacking} suffix={commonCopy.rep} /> },
-				{ label: liquidationCopy.resultingReceiverCapacityOwnership, value: <CurrencyValue value={liquidationSimulation?.callerAfter.capacityOwnershipAttoRep} suffix={commonCopy.rep} /> },
+				...(liquidationSimulation !== undefined && liquidationSimulation.badDebtAttoEth > 0n ? [{ label: liquidationCopy.residualBadDebt, value: <CurrencyValue exactWhenRoundedToZero value={liquidationSimulation.badDebtAttoEth} suffix={commonCopy.eth} /> }] : []),
+				...(liquidationExecutionMode === 'queue' ? [{ label: liquidationCopy.totalWalletEthRequiredAttoEth, value: <CurrencyValue exactWhenRoundedToZero value={liquidationFundingPreview?.totalWalletEthRequiredAttoEth} suffix={commonCopy.eth} /> }] : []),
 			]}
-			disclosures={
-				liquidationExecutionMode === 'queue'
+			disclosures={[
+				{
+					title: liquidationCopy.accountingDetails,
+					rows: [
+						{ label: liquidationCopy.capacityOwnershipMoved, value: <CurrencyValue value={liquidationSimulation?.capacityOwnershipMovedAttoRep} suffix={commonCopy.rep} /> },
+						{ label: liquidationCopy.grossRepAwardAttoRep, value: <CurrencyValue compactWhenOverflow value={liquidationSimulation?.grossRepAwardAttoRep} suffix={commonCopy.rep} /> },
+						{ label: liquidationCopy.targetAccruedFeesRetained, value: <CurrencyValue compactWhenOverflow exactWhenRoundedToZero value={liquidationSimulation?.targetAccruedFeesRetained} suffix={commonCopy.eth} /> },
+						{ label: liquidationCopy.resultingCallerRep, value: <CurrencyValue value={liquidationSimulation?.callerAfter.vaultAttoRepBacking} suffix={commonCopy.rep} /> },
+						{ label: liquidationCopy.resultingReceiverCapacityOwnership, value: <CurrencyValue value={liquidationSimulation?.callerAfter.capacityOwnershipAttoRep} suffix={commonCopy.rep} /> },
+					],
+				},
+				...(liquidationExecutionMode === 'queue'
 					? [
 							{
 								title: liquidationCopy.fundingDetails,
@@ -248,8 +279,8 @@ export function LiquidationTransactionReview({
 								],
 							},
 						]
-					: []
-			}
+					: []),
+			]}
 			risks={[liquidationCopy.liquidationStateRisk, ...(liquidationExecutionMode === 'queue' ? [liquidationCopy.queuedLiquidationRisk, liquidationCopy.queuedFundingSequenceRisk] : [])]}
 		/>
 	)

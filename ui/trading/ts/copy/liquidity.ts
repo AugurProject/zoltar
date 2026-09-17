@@ -15,13 +15,8 @@ export const removalGuidance = 'Removal returns raw YES and NO. It never consume
 export const additionGuidance = 'All INVALID and unused directional shares return to the wallet; LP tokens do not include wallet INVALID.'
 export const slippageTolerance = 'Slippage tolerance'
 export const deadline = 'Deadline'
-export const rawYesReturned = 'Raw YES returned'
-export const rawNoReturned = 'Raw NO returned'
 export const completeSetSharesCreated = 'Complete sets created'
 export const sharesDeposited = 'YES / NO deposited'
-export const unusedSharesReturned = 'Unused YES / NO returned'
-export const invalidRetained = 'INVALID retained'
-export const lpTokensExpected = 'LP tokens expected'
 export const yes = 'YES'
 export const no = 'NO'
 export const invalid = 'INVALID'
@@ -31,3 +26,7 @@ export function balancesUnavailable(reason: string) {
 }
 
 export const simulationBlockLabel = 'Simulation block'
+
+export const youProvide = 'You provide'
+export const youReceive = 'Expected to receive'
+export const previewDetails = 'Liquidity breakdown'

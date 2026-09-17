@@ -1,3 +1,5 @@
+import { useState } from 'preact/hooks'
+import { SecurityPoolStagedOperationsSection } from '@zoltar/ui-statoblast-shared/features/security-pools/components/SecurityPoolOracleSections.js'
 import { describe, expect, test } from 'bun:test'
 import { ChainTimestampContext } from '@zoltar/ui-core-shared/wallet/chainTimestamp.js'
 import { createStagedOperationsFixture, useSecurityPoolWorkflowSectionTestDom } from './fixture'
@@ -12,6 +14,58 @@ describe('SecurityPoolWorkflowSection: staged operations', () => {
 	const fixture = createStagedOperationsFixture()
 
 	const { fireEvent, within, act, zeroAddress, SecurityPoolWorkflowSection, renderIntoDocument, createAccountState, createReportingProps, createSecurityVaultProps, createSecurityVaultDetails, createOracleManagerDetails, createMarketDetails, createSelectedPool, createSecurityPoolWorkflowProps } = fixture
+
+	test('selects a listed operation before executing its exact ID and retains execution guards', async () => {
+		const executed: bigint[] = []
+		function Operations() {
+			const [selected, setSelected] = useState('1')
+			return (
+				<SecurityPoolStagedOperationsSection
+					activeOperationCount={2n}
+					canExecute={true}
+					executeGuardMessage={selected === '1' ? 'Wait for a valid price' : undefined}
+					executionPending={false}
+					loadingManager={false}
+					managerAddress={zeroAddress}
+					managerDetails={createOracleManagerDetails()}
+					managerError={undefined}
+					manualOperationId={selected}
+					onExecute={(_manager, id) => executed.push(id)}
+					onLoadManager={() => undefined}
+					onManualOperationIdChange={setSelected}
+					pendingSettlementOperationIds={[]}
+					resolvedOperationId={BigInt(selected)}
+					securityPoolAddress={zeroAddress}
+					stagedOperations={[
+						{ operationId: 1n, operation: 'withdrawRep', amount: 1n, operator: zeroAddress, targetVault: zeroAddress },
+						{ operationId: 2n, operation: 'withdrawRep', amount: 2n, operator: zeroAddress, targetVault: zeroAddress },
+					]}
+					suggestedOperationId={1n}
+					universeId={0n}
+				/>
+			)
+		}
+		const rendered = await renderIntoDocument(<Operations />)
+		setCleanup(rendered.cleanup)
+		const queries = within(document.body)
+		const blocked = queries.getByRole('button', { name: 'Execute staged operation' })
+		expect(blocked.hasAttribute('disabled')).toBe(true)
+		expect(blocked.closest('details')).toBeNull()
+		const selection = queries.getByRole('button', { name: 'Select operation' })
+		if (!(selection instanceof HTMLButtonElement)) throw new Error('Expected operation selection button')
+		selection.focus()
+		await act(async () => {
+			fireEvent.click(selection)
+		})
+		expect(document.activeElement).toBe(selection)
+		expect(selection.getAttribute('aria-pressed')).toBe('true')
+		const execute = queries.getByRole('button', { name: 'Execute staged operation' })
+		expect(execute.hasAttribute('disabled')).toBe(false)
+		await act(async () => {
+			fireEvent.click(execute)
+		})
+		expect(executed).toEqual([2n])
+	})
 
 	describe('queueing and execution feedback', () => {
 		test('does not loop the automatic oracle-manager read after an error', async () => {

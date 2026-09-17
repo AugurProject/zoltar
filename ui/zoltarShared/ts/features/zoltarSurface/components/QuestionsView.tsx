@@ -5,6 +5,8 @@ import { StateHint } from '@zoltar/ui-core-shared/components/StateHint.js'
 import { RouteHeader } from '@zoltar/ui-core-shared/components/RouteHeader.js'
 import { Badge } from '@zoltar/ui-core-shared/components/Badge.js'
 import { EmptyState } from '@zoltar/ui-core-shared/components/EmptyState.js'
+import { ReadOnlyDetailAccordion } from '@zoltar/ui-core-shared/components/ReadOnlyDetailAccordion.js'
+import { TimestampValue } from '@zoltar/ui-core-shared/components/TimestampValue.js'
 import { EntityCard } from '@zoltar/ui-core-shared/components/EntityCard.js'
 import { ErrorNotice } from '@zoltar/ui-core-shared/components/ErrorNotice.js'
 import { FormInput } from '@zoltar/ui-core-shared/components/FormInput.js'
@@ -90,6 +92,8 @@ export function QuestionsView({ canFork, hasForked, loadingZoltarQuestions, onAc
 				<div className='entity-card-list'>
 					{questions.map(question => (
 						<EntityCard
+							surface='flat'
+							className='directory-record'
 							actions={
 								canFork ? (
 									<button
@@ -107,9 +111,14 @@ export function QuestionsView({ canFork, hasForked, loadingZoltarQuestions, onAc
 							badge={<Badge tone='muted'>{getMarketTypeLabel(question.marketType)}</Badge>}
 							key={question.questionId}
 							title={getQuestionTitle(question)}
-							variant='record'
+							variant='compact'
 						>
-							<Question question={question} showTitle={false} variant='preview' />
+							<p className='detail'>
+								{commonCopy.endTime} <TimestampValue timestamp={question.endTime} />
+							</p>
+							<ReadOnlyDetailAccordion title={marketCopy.questionDetails}>
+								<Question question={question} showTitle={false} showEndTime={false} variant='preview' />
+							</ReadOnlyDetailAccordion>
 						</EntityCard>
 					))}
 				</div>

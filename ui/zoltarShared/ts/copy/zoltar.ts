@@ -19,7 +19,6 @@ export const forkRepApprovalPending = 'Approving REP threshold…'
 export const forkQuestionId = 'Fork Question ID'
 export const forkSubmissionPending = 'Forking universe…'
 export const addAnotherUniverse = 'Add another universe'
-export const outcomeUniverses = 'Outcome Universes'
 export const openUniverse = 'Open universe'
 export const outcomeUniversesEmpty = 'No outcome universes available.'
 export const walletBalanceLabel = 'Your balance:'
@@ -46,3 +45,10 @@ export const migrationMaxIncludesPrepared = 'Max includes wallet REP and unused 
 export const migrationForkRequired = 'This universe must fork before REP can be split.'
 export const walletRepUsed = 'Wallet REP Used'
 export const migrationBalancesReadFailed = 'Could not read migration balances. Retry to continue.'
+
+export const balanceDetails = 'Balance details'
+export const chooseDestinations = 'Choose destinations'
+export const reviewMigration = 'Review migration'
+
+export const universeDetails = 'Universe details'
+export const repSupply = 'REP supply'

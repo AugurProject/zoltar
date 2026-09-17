@@ -1,3 +1,4 @@
+import { ReadOnlyDetailAccordion } from '@zoltar/ui-core-shared/components/ReadOnlyDetailAccordion.js'
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import { AddressValue } from '@zoltar/ui-core-shared/components/AddressValue.js'
 import { CurrencyValue } from '@zoltar/ui-core-shared/components/CurrencyValue.js'
@@ -11,7 +12,6 @@ import { SectionBlock } from '@zoltar/ui-core-shared/components/SectionBlock.js'
 import { StateHint } from '@zoltar/ui-core-shared/components/StateHint.js'
 import { TransactionActionButton } from '@zoltar/ui-core-shared/components/TransactionActionButton.js'
 import { TransactionReview } from '@zoltar/ui-core-shared/components/TransactionReview.js'
-import { WarningSurface } from '@zoltar/ui-core-shared/components/WarningSurface.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as statoblastAppCopy from '../../../copy/app.js'
 import * as transactionReviewCopy from '@zoltar/ui-core-shared/copy/transactionReview.js'
@@ -111,57 +111,78 @@ export function SecurityPoolStagedOperationsSection({
 	suggestedOperationId: bigint
 	universeId: bigint
 }) {
+	const selectedOperationListed = stagedOperations.some(operation => operation.operationId === resolvedOperationId)
+	const executionAction =
+		managerDetails === undefined ? undefined : (
+			<TransactionActionButton
+				idleLabel={securityPoolCopy.executeStagedOperation}
+				pendingLabel={securityPoolCopy.executingStagedOperationLabel}
+				onClick={() => {
+					if (resolvedOperationId !== undefined) onExecute(managerAddress, resolvedOperationId, securityPoolAddress, universeId)
+				}}
+				pending={executionPending}
+				tone='primary'
+				availability={{ disabled: !canExecute || executeGuardMessage !== undefined, reason: canExecute ? executeGuardMessage : undefined }}
+			/>
+		)
 	return (
 		<SectionBlock density='compact' title={securityPoolCopy.stagedOperations} variant='plain'>
 			<ErrorNotice message={managerError} />
 			<SectionBlock density='compact' variant='embedded'>
-				{stagedOperations.map(operation => (
-					<WarningSurface key={operation.operationId.toString()} as='article' className='warning-entity-card' surface='flat' variant='compact'>
-						<div className='entity-card-header'>
-							<div className='entity-card-copy'>
-								<h3>{getPendingOperationLabel(operation.operation)}</h3>
-								<p className='detail'>{getStagedOperationExecutionModeLabel(operation.operationId, pendingSettlementOperationIds)}</p>
-							</div>
-						</div>
-						<MetricGrid className='entity-card-body'>
-							<MetricField label={securityPoolCopy.operationId}>{operation.operationId.toString()}</MetricField>
-							<MetricField label={securityPoolCopy.initiator}>
-								<AddressValue address={operation.operator} />
-							</MetricField>
-							<MetricField label={commonCopy.targetVault}>
-								<AddressValue address={operation.targetVault} />
-							</MetricField>
-							<MetricField label={getPendingOperationAmountPresentation(operation.operation).label}>
-								<CurrencyValue precision='exact' value={operation.amount} decimals={getPendingOperationAmountPresentation(operation.operation).decimals} suffix={getPendingOperationAmountPresentation(operation.operation).suffix} />
-							</MetricField>
-						</MetricGrid>
-					</WarningSurface>
-				))}
+				<div className='decision-card-list'>
+					{stagedOperations.map(operation => {
+						const amount = getPendingOperationAmountPresentation(operation.operation)
+						const selected = operation.operationId === resolvedOperationId
+						return (
+							<article key={operation.operationId.toString()} className={'staged-operation-card' + (selected ? ' selected' : '')}>
+								<div className='entity-card-header'>
+									<div className='entity-card-copy'>
+										<h3>{getPendingOperationLabel(operation.operation)}</h3>
+										<p className='detail'>{getStagedOperationExecutionModeLabel(operation.operationId, pendingSettlementOperationIds)}</p>
+									</div>
+								</div>
+								<div className='decision-summary'>
+									<p className='decision-amount'>
+										<CurrencyValue precision='exact' value={operation.amount} decimals={amount.decimals} suffix={amount.suffix} />
+									</p>
+									{amount.summaryLabel === undefined ? undefined : <p className='detail'>{amount.summaryLabel}</p>}
+									<div className='inline-facts'>
+										<span>{commonCopy.targetVault}</span>
+										<AddressValue address={operation.targetVault} />
+									</div>
+									<div className='actions'>
+										<button type='button' className='secondary' aria-pressed={selected} disabled={executionPending} onClick={() => onManualOperationIdChange(operation.operationId.toString())}>
+											{selected ? commonCopy.selected : securityPoolCopy.selectOperation}
+										</button>
+										{selected ? executionAction : undefined}
+									</div>
+									<ReadOnlyDetailAccordion title={securityPoolCopy.operationDetails}>
+										<MetricField label={securityPoolCopy.operationId}>{operation.operationId.toString()}</MetricField>
+										<MetricField label={securityPoolCopy.initiator}>
+											<AddressValue address={operation.operator} />
+										</MetricField>
+									</ReadOnlyDetailAccordion>
+								</div>
+							</article>
+						)
+					})}
+				</div>
 				{activeOperationCount > BigInt(stagedOperations.length) ? <p className='detail'>{securityPoolCopy.formatShowingActiveStagedOperationsLabel(stagedOperations.length.toString(), activeOperationCount.toString())}</p> : null}
 				{managerDetails === undefined || stagedOperations.length > 0 ? null : <StateHint presentation={{ key: 'empty', badgeLabel: securityPoolCopy.noneQueued, badgeTone: 'muted', detail: securityPoolCopy.stagedOperationsEmpty }} />}
 			</SectionBlock>
 			{managerDetails === undefined ? undefined : (
-				<label className='field'>
-					<span>{securityPoolCopy.stagedOperationId}</span>
-					<FormInput value={manualOperationId} onInput={event => onManualOperationIdChange(event.currentTarget.value)} placeholder={suggestedOperationId > 0n ? suggestedOperationId.toString() : securityPoolCopy.zeroPlaceholder} />
-				</label>
+				<ReadOnlyDetailAccordion title={securityPoolCopy.openOperationById}>
+					<label className='field'>
+						<span>{securityPoolCopy.stagedOperationId}</span>
+						<FormInput value={manualOperationId} onInput={event => onManualOperationIdChange(event.currentTarget.value)} placeholder={suggestedOperationId > 0n ? suggestedOperationId.toString() : securityPoolCopy.zeroPlaceholder} />
+					</label>
+				</ReadOnlyDetailAccordion>
 			)}
 			<div className='actions oracle-actions'>
 				<button className='secondary' onClick={() => onLoadManager(managerAddress)} disabled={loadingManager || (managerDetails === undefined && managerError === undefined)}>
 					{getStagedOperationsRefreshLabel({ loadingManager, managerError, managerLoaded: managerDetails !== undefined })}
 				</button>
-				{managerDetails === undefined ? undefined : (
-					<TransactionActionButton
-						idleLabel={securityPoolCopy.executeStagedOperation}
-						pendingLabel={securityPoolCopy.executingStagedOperationLabel}
-						onClick={() => {
-							if (resolvedOperationId !== undefined) onExecute(managerAddress, resolvedOperationId, securityPoolAddress, universeId)
-						}}
-						pending={executionPending}
-						tone='secondary'
-						availability={{ disabled: !canExecute || executeGuardMessage !== undefined, reason: canExecute ? executeGuardMessage : undefined }}
-					/>
-				)}
+				{selectedOperationListed ? undefined : executionAction}
 			</div>
 		</SectionBlock>
 	)

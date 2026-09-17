@@ -8,11 +8,14 @@ import { EmptyState } from '@zoltar/ui-core-shared/components/EmptyState.js'
 import { EntityCard } from '@zoltar/ui-core-shared/components/EntityCard.js'
 import { MetricField } from '@zoltar/ui-core-shared/components/MetricField.js'
 import { WorkflowSubsection } from '@zoltar/ui-core-shared/components/WorkflowSubsection.js'
+import { ReadOnlyDetailAccordion } from '@zoltar/ui-core-shared/components/ReadOnlyDetailAccordion.js'
+import { getTradingRouteHref } from '../lib/routing.js'
 import { SecurityPoolLink } from '../components/SecurityPoolLink.js'
 import type { LiveBalances, LiveMarket } from '../protocol/live.js'
 import { maximumInsuredExit } from '@zoltar/trading-shared/trading/positions'
 import type { BalanceState, PortfolioBalanceEntry } from './live/liveTradingTypes.js'
-import { BalanceLoadError } from './LiveTradingTransactionUi.js'
+import { liveCopy } from '../copy/live.js'
+import { BalanceLoadError, formatTimestamp } from './LiveTradingTransactionUi.js'
 import * as portfolioCopy from '../copy/portfolio.js'
 
 function LivePortfolioBalanceMetrics({ market, balances }: { market: LiveMarket; balances: LiveBalances }) {
@@ -26,37 +29,51 @@ function LivePortfolioBalanceMetrics({ market, balances }: { market: LiveMarket;
 	const maximumNoExit = maximumInsuredExit({ longOutcome: 'NO', longBalance: balances.no, invalidBalance: balances.invalid, yesReserve: market.yesReserve, noReserve: market.noReserve, feeBps: market.feeBps })
 	return (
 		<>
-			<DataGrid columns={3} dense>
-				<MetricField label={portfolioCopy.yes}>
-					<OutcomeHolding amount={balances.yes} outcome={portfolioCopy.yes} market={market} />
-				</MetricField>
-				<MetricField label={portfolioCopy.no}>
-					<OutcomeHolding amount={balances.no} outcome={portfolioCopy.no} market={market} />
-				</MetricField>
-				<MetricField label={portfolioCopy.invalid}>
-					<OutcomeHolding amount={balances.invalid} outcome={portfolioCopy.invalid} market={market} />
-				</MetricField>
-			</DataGrid>
-			<WorkflowSubsection title={portfolioCopy.lpClaims}>
-				<DataGrid dense>
-					<MetricField label={portfolioCopy.lpTokens}>{formatLpQuantity(balances.lp, 4, 'down')}</MetricField>
-					<MetricField label={portfolioCopy.lpYesClaim}>{formatOutcomeQuantity(yesClaim, portfolioCopy.yes)}</MetricField>
-					<MetricField label={portfolioCopy.lpNoClaim}>{formatOutcomeQuantity(noClaim, portfolioCopy.no)}</MetricField>
-					<MetricField label={portfolioCopy.claimCoveredByInvalid}>{formatCompleteSetQuantity(coveredSets)}</MetricField>
-				</DataGrid>
-			</WorkflowSubsection>
-			<WorkflowSubsection title={portfolioCopy.insuredExits}>
-				<DataGrid dense>
-					<MetricField label={portfolioCopy.maximumInsuredYesExit}>{formatCollateralEth(maximumYesExit, market, 'down')}</MetricField>
-					<MetricField label={portfolioCopy.maximumInsuredNoExit}>{formatCollateralEth(maximumNoExit, market, 'down')}</MetricField>
-					{availability.completeSets === 0n ? undefined : (
-						<MetricField label={availability.canRedeemCompleteSets ? payoutCopy.redemptionValue : payoutCopy.backingValue}>
-							{market.loadError === undefined ? formatCollateralEth(availability.completeSets, market) : payoutCopy.unavailable}
-							<small class='payout-caption'>{formatCompleteSetQuantity(availability.completeSets)}</small>
-						</MetricField>
+			<div class='portfolio-position-summary'>
+				{availability.completeSets === 0n ? undefined : (
+					<div class='portfolio-position-value'>
+						<span class='metric-label'>{availability.canRedeemCompleteSets ? payoutCopy.redemptionValue : payoutCopy.backingValue}</span>
+						<strong>{market.loadError === undefined ? formatCollateralEth(availability.completeSets, market) : payoutCopy.unavailable}</strong>
+						<small class='payout-caption'>{formatCompleteSetQuantity(availability.completeSets)}</small>
+					</div>
+				)}
+				<ul class='portfolio-holdings'>
+					{balances.yes === 0n ? undefined : (
+						<li class='portfolio-holding-yes'>
+							<OutcomeHolding amount={balances.yes} outcome={portfolioCopy.yes} market={market} />
+						</li>
 					)}
-				</DataGrid>
-			</WorkflowSubsection>
+					{balances.no === 0n ? undefined : (
+						<li class='portfolio-holding-no'>
+							<OutcomeHolding amount={balances.no} outcome={portfolioCopy.no} market={market} />
+						</li>
+					)}
+					{balances.invalid === 0n ? undefined : (
+						<li>
+							<OutcomeHolding amount={balances.invalid} outcome={portfolioCopy.invalid} market={market} />
+						</li>
+					)}
+					{balances.lp === 0n ? undefined : <li>{formatLpQuantity(balances.lp, 4, 'down')}</li>}
+				</ul>
+			</div>
+			<ReadOnlyDetailAccordion title={portfolioCopy.positionDetails}>
+				<SecurityPoolLink value={market.pool} />
+				{balances.lp === 0n ? undefined : (
+					<WorkflowSubsection title={portfolioCopy.lpClaims}>
+						<DataGrid dense>
+							<MetricField label={portfolioCopy.lpYesClaim}>{formatOutcomeQuantity(yesClaim, portfolioCopy.yes)}</MetricField>
+							<MetricField label={portfolioCopy.lpNoClaim}>{formatOutcomeQuantity(noClaim, portfolioCopy.no)}</MetricField>
+							<MetricField label={portfolioCopy.claimCoveredByInvalid}>{formatCompleteSetQuantity(coveredSets)}</MetricField>
+						</DataGrid>
+					</WorkflowSubsection>
+				)}
+				<WorkflowSubsection title={portfolioCopy.insuredExits}>
+					<DataGrid dense>
+						<MetricField label={portfolioCopy.maximumInsuredYesExit}>{formatCollateralEth(maximumYesExit, market, 'down')}</MetricField>
+						<MetricField label={portfolioCopy.maximumInsuredNoExit}>{formatCollateralEth(maximumNoExit, market, 'down')}</MetricField>
+					</DataGrid>
+				</WorkflowSubsection>
+			</ReadOnlyDetailAccordion>
 			{market.questionOutcome === 3 && market.loadError === undefined ? (
 				<p class='detail payout-note'>
 					{payoutCopy.conditionalNote} {payoutCopy.holdingFeeNote}
@@ -64,6 +81,14 @@ function LivePortfolioBalanceMetrics({ market, balances }: { market: LiveMarket;
 			) : null}
 		</>
 	)
+}
+
+function renderPortfolioStatus(entry: PortfolioBalanceEntry) {
+	if (entry.error !== undefined) return <Badge tone='warning'>{portfolioCopy.balanceUnavailable}</Badge>
+	if (entry.market.loadError !== undefined) return <Badge tone='warning'>{portfolioCopy.marketUnavailable}</Badge>
+	if (entry.market.universeForkTime !== 0n || entry.market.systemState !== 0) return <Badge tone='warning'>{portfolioCopy.settlementRequired}</Badge>
+	if (entry.market.questionOutcome !== 3) return <Badge tone='muted'>{portfolioCopy.resolved}</Badge>
+	return undefined
 }
 
 function hasPortfolioBalance(balances: LiveBalances) {
@@ -81,12 +106,25 @@ export function LivePortfolio({ entries, balanceState, balanceError, retryBalanc
 			{visibleEntries.length === 0 ? null : (
 				<div class='entity-card-list'>
 					{visibleEntries.map(entry => (
-						<EntityCard key={entry.market.pool} dataAttributes={{ 'data-portfolio-pool': entry.market.pool }} title={entry.market.title} badge={entry.error === undefined ? undefined : <Badge tone='warning'>{portfolioCopy.balanceUnavailable}</Badge>}>
-							<DataGrid dense>
-								<MetricField label={portfolioCopy.securityPool}>
-									<SecurityPoolLink value={entry.market.pool} />
-								</MetricField>
-							</DataGrid>
+						<EntityCard
+							surface='card'
+							className='portfolio-record'
+							headerActions={
+								<a class='button-link primary' href={getTradingRouteHref(`#/market/${entry.market.pool}`)}>
+									{portfolioCopy.openPosition}
+								</a>
+							}
+							key={entry.market.pool}
+							dataAttributes={{ 'data-portfolio-pool': entry.market.pool }}
+							title={entry.market.title}
+						>
+							{renderPortfolioStatus(entry)}
+							{entry.market.loadError === undefined ? (
+								<p class='detail'>
+									{liveCopy.questionEnd}: {formatTimestamp(entry.market.endTime)}
+								</p>
+							) : undefined}
+							{entry.balances === undefined ? <SecurityPoolLink value={entry.market.pool} /> : undefined}
 							{entry.error === undefined ? null : <BalanceLoadError message={portfolioCopy.poolBalancesUnavailable(entry.error)} retry={retryBalances} />}
 							{entry.balances === undefined ? null : <LivePortfolioBalanceMetrics market={entry.market} balances={entry.balances} />}
 						</EntityCard>

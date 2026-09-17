@@ -39,11 +39,12 @@ export function getPendingOperationLabel(operation: OracleQueueOperation) {
 export function getPendingOperationAmountPresentation(operation: OracleQueueOperation) {
 	switch (operation) {
 		case 'liquidation':
-			return { label: securityPoolCopy.requestedLiquidationDebt, suffix: commonCopy.eth, decimals: 18 }
+			return { summaryLabel: securityPoolCopy.requestedLiquidationDebt, suffix: commonCopy.eth, decimals: 18 }
 		case 'withdrawRep':
-			return { label: securityPoolCopy.repWithdrawal, suffix: commonCopy.rep, decimals: 18 }
+			// The action heading and REP amount already identify a withdrawal.
+			return { summaryLabel: undefined, suffix: commonCopy.rep, decimals: 18 }
 		case 'adjustVaultBackingFactor':
-			return { label: securityPoolCopy.vaultBackingFactor, suffix: '×', decimals: 4 }
+			return { summaryLabel: securityPoolCopy.vaultBackingFactor, suffix: '×', decimals: 4 }
 		default:
 			return assertNever(operation)
 	}
