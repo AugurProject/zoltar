@@ -2810,6 +2810,22 @@
 	background: none;
 }
 
+.vault-lookup-disclosure {
+	width: min(100%, 48rem);
+	min-width: 0;
+}
+
+@media (max-width: 40rem) {
+	.vault-lookup-disclosure .lookup-field-controls.has-action {
+		grid-template-columns: minmax(0, 1fr);
+	}
+
+	.vault-lookup-disclosure .lookup-field-controls.has-action > .actions {
+		grid-column: 1;
+		grid-row: auto;
+	}
+}
+
 .vault-workspace-toolbar {
 	display: flex;
 	justify-content: flex-start;

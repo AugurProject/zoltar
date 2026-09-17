@@ -89,29 +89,29 @@ export function SecurityPoolVaultWorkspace({
 
 			<div className='vault-workspace-toolbar'>
 				<ViewTabs ariaLabel={securityPoolCopy.selectedPoolVaultViews} className='vault-content-switch' semantics='switcher' variant='segmented' size='compact' value={vaultView} onChange={setVaultView} options={selectedVaultViewOptions} />
-				<details className='vault-lookup-disclosure'>
-					<summary>{workspaceCopy.inspectVault}</summary>
-					<LookupFieldRow
-						label={securityPoolCopy.selectedVaultOwner}
-						value={lookupOwner}
-						onInput={setLookupOwner}
-						placeholder={commonCopy.hexValuePlaceholder}
-						action={
-							<button
-								className='secondary'
-								onClick={() => {
-									securityVault.onSecurityVaultFormChange({ selectedVaultOwner: lookupOwner.trim() })
-									setVaultView('selected-vault')
-									void securityVault.onLoadSecurityVault(lookupOwner.trim())
-								}}
-								disabled={securityVault.loadingSecurityVault || lookupOwner.trim() === ''}
-							>
-								{securityVault.loadingSecurityVault ? <LoadingText announce={false}>{securityPoolCopy.refreshing}</LoadingText> : workspaceCopy.openVault}
-							</button>
-						}
-					/>
-				</details>
 			</div>
+			<details className='vault-lookup-disclosure'>
+				<summary>{workspaceCopy.inspectVault}</summary>
+				<LookupFieldRow
+					label={securityPoolCopy.selectedVaultOwner}
+					value={lookupOwner}
+					onInput={setLookupOwner}
+					placeholder={commonCopy.hexValuePlaceholder}
+					action={
+						<button
+							className='secondary'
+							onClick={() => {
+								securityVault.onSecurityVaultFormChange({ selectedVaultOwner: lookupOwner.trim() })
+								setVaultView('selected-vault')
+								void securityVault.onLoadSecurityVault(lookupOwner.trim())
+							}}
+							disabled={securityVault.loadingSecurityVault || lookupOwner.trim() === ''}
+						>
+							{securityVault.loadingSecurityVault ? <LoadingText announce={false}>{securityPoolCopy.refreshing}</LoadingText> : workspaceCopy.openVault}
+						</button>
+					}
+				/>
+			</details>
 
 			{vaultView === 'browse-vaults' ? (
 				<div>
