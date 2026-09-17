@@ -21,15 +21,15 @@ const OSAKA_CAPABILITY_PROBE = '0x5f1e60005260206000f3'
 const OSAKA_CAPABILITY_RESULT = '0x0000000000000000000000000000000000000000000000000000000000000100'
 const ZERO_HASH = '0x0000000000000000000000000000000000000000000000000000000000000000' satisfies Hash
 const MAX_SIGNABLE_TRANSACTION_GAS = 16_777_216n
-// These per-step ceilings are based on fresh Osaka Anvil deployments, increased
-// by roughly 50%, rounded upward, and capped only where the signer itself caps a
-// transaction at the Osaka 2^24 gas limit. Canonical deployer entries cover
-// their optional atomic funding transaction; its fixed raw-transaction cost is
-// added separately.
+// Fresh Osaka Anvil gas usage plus roughly 50%, rounded up and capped at the
+// signer's Osaka 2^24 limit. Canonical deployer ceilings cover optional atomic
+// funding; their fixed raw-transaction costs are added separately.
 export const CONSERVATIVE_DEPLOYMENT_GAS: Readonly<Record<string, bigint>> = {
 	arachnidCreate2Deployer: 500_000n,
 	permit2: 3_250_000n,
 	proxyDeployer: 500_000n,
+	tradingFactory: 7_000_000n,
+	tradingRouter: 6_250_000n,
 	uniswapV3Factory: 8_500_000n,
 	uniswapV3Quoter: 3_000_000n,
 	uniswapV3SwapRouter: 4_250_000n,
