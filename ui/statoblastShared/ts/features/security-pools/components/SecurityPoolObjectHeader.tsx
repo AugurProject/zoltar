@@ -8,7 +8,7 @@ import { OpenOraclePriceValue } from '../../open-oracle/components/OpenOraclePri
 import { getQuestionTitle, Question } from '@zoltar/ui-core-shared/components/Question.js'
 import { SecurityPoolSummaryMetrics } from './SecurityPoolSummaryMetrics.js'
 import { SecurityPoolLink } from './SecurityPoolLink.js'
-import { StickyObjectContext } from '@zoltar/ui-core-shared/components/StickyObjectContext.js'
+import type { ComponentChildren } from 'preact'
 import { ReadOnlyDetailAccordion } from '@zoltar/ui-core-shared/components/ReadOnlyDetailAccordion.js'
 import { TimestampValue } from '@zoltar/ui-core-shared/components/TimestampValue.js'
 import { AddressValue } from '@zoltar/ui-core-shared/components/AddressValue.js'
@@ -47,29 +47,27 @@ function getSummaryCalculationPrice(props: SecurityPoolObjectHeaderProps) {
 	return props.currentTimestamp !== undefined && validUntil !== undefined && props.currentTimestamp < validUntil ? (props.currentPoolOraclePrice ?? pool.lastOraclePrice) : undefined
 }
 
-export function SecurityPoolObjectHeader(props: SecurityPoolObjectHeaderProps) {
+export function SecurityPoolObjectHeader(props: SecurityPoolObjectHeaderProps & { actions?: ComponentChildren }) {
 	const { currentTimestamp, marketDetails, selectedPoolHasActualForkActivity, selectedPoolLifecycleState, selectedPoolQuestionOutcome } = props
 	const summaryPool = getSummaryPool(props)
 	const capacity = calculateMintingCapacityAttoEth(summaryPool.totalCapacityOwnershipAttoRep, getSummaryCalculationPrice(props), summaryPool.statoblastSecurityMultiplierBps)
 	const statusBadgeLabel = getSecurityPoolStatusBadgeLabel({ hasForkActivity: selectedPoolHasActualForkActivity, lifecycleState: selectedPoolLifecycleState, ...(selectedPoolQuestionOutcome === undefined ? {} : { questionOutcome: selectedPoolQuestionOutcome }) })
 	return (
 		<div className='selected-pool-object-header pool-overview-header'>
-			<StickyObjectContext
-				title={getQuestionTitle(marketDetails)}
-				items={[]}
-				sticky={false}
-				variant='embedded-context-strip'
-				badge={
+			<div className='pool-object-identity'>
+				<h2>{getQuestionTitle(marketDetails)}</h2>
+				<div className='pool-object-meta'>
 					<Badge ariaLabel={statusBadgeLabel} tone={getSecurityPoolStatusBadgeTone(selectedPoolLifecycleState)}>
 						{statusBadgeLabel}
 					</Badge>
-				}
-			>
-				<p className='pool-deadline'>
-					<span>{currentTimestamp !== undefined && currentTimestamp >= marketDetails.endTime ? securityPoolCopy.ended : commonCopy.ends}</span> <TimestampValue timestamp={marketDetails.endTime} {...(currentTimestamp === undefined ? {} : { currentTimestamp })} />
-				</p>
-			</StickyObjectContext>
-			<PoolCapacitySummary capacity={capacity} minted={summaryPool.settlementCollateralAttoEth} />
+					<p className='pool-deadline'>
+						<span>{currentTimestamp !== undefined && currentTimestamp >= marketDetails.endTime ? securityPoolCopy.ended : commonCopy.ends}</span> <TimestampValue timestamp={marketDetails.endTime} {...(currentTimestamp === undefined ? {} : { currentTimestamp })} />
+					</p>
+				</div>
+			</div>
+			{props.actions}
+
+			<PoolCapacitySummary showUnavailableReason={false} capacity={capacity} minted={summaryPool.settlementCollateralAttoEth} />
 		</div>
 	)
 }

@@ -49,10 +49,10 @@ test('preserves a user-selected directory and another vault across form rerender
 	const dom = installDomEnvironment()
 	const rendered = await renderIntoDocument(<VaultSelectionHarness />)
 	try {
-		await act(() => fireEvent.click(within(document.body).getByRole('button', { name: 'Directory' })))
-		expect(within(document.body).getByRole('button', { name: 'Directory' }).getAttribute('aria-pressed')).toBe('true')
+		await act(() => fireEvent.click(within(document.body).getByRole('button', { name: 'All vaults' })))
+		expect(within(document.body).getByRole('button', { name: 'All vaults' }).getAttribute('aria-pressed')).toBe('true')
 		await act(() => fireEvent.click(within(document.body).getByRole('button', { name: 'Inspect another vault' })))
-		expect(within(document.body).getByRole('button', { name: 'Directory' }).getAttribute('aria-pressed')).toBe('true')
+		expect(within(document.body).getByRole('button', { name: 'All vaults' }).getAttribute('aria-pressed')).toBe('true')
 	} finally {
 		await rendered.cleanup()
 		dom.cleanup()
@@ -64,7 +64,7 @@ for (const connected of [true, false]) {
 		const dom = installDomEnvironment()
 		const rendered = await renderIntoDocument(<VaultSelectionHarness exists={false} connected={connected} />)
 		try {
-			expect(within(document.body).getByRole('button', { name: 'Directory' }).getAttribute('aria-pressed')).toBe('true')
+			expect(within(document.body).getByRole('button', { name: 'All vaults' }).getAttribute('aria-pressed')).toBe('true')
 		} finally {
 			await rendered.cleanup()
 			dom.cleanup()
@@ -76,9 +76,9 @@ test('does not switch away from a user-selected directory when the vault read fi
 	const dom = installDomEnvironment()
 	const rendered = await renderIntoDocument(<VaultSelectionHarness loaded={false} />)
 	try {
-		await act(() => fireEvent.click(within(document.body).getByRole('button', { name: 'Directory' })))
+		await act(() => fireEvent.click(within(document.body).getByRole('button', { name: 'All vaults' })))
 		await act(() => render(<VaultSelectionHarness loaded />, rendered.container))
-		expect(within(document.body).getByRole('button', { name: 'Directory' }).getAttribute('aria-pressed')).toBe('true')
+		expect(within(document.body).getByRole('button', { name: 'All vaults' }).getAttribute('aria-pressed')).toBe('true')
 	} finally {
 		await rendered.cleanup()
 		dom.cleanup()
@@ -103,14 +103,14 @@ test('opening another directory vault loads and renders that owner’s data', as
 	const loads: string[] = []
 	const rendered = await renderIntoDocument(<VaultSelectionHarness onLoad={owner => loads.push(owner)} />)
 	try {
-		await act(() => fireEvent.click(within(document.body).getByRole('button', { name: 'Directory' })))
+		await act(() => fireEvent.click(within(document.body).getByRole('button', { name: 'All vaults' })))
 		const address = within(document.body).getByRole('button', { name: 'Copy address ' + otherOwner })
 		const row = address.closest('.vault-position-strip')
 		if (!(row instanceof HTMLElement)) throw new Error('Expected vault record')
 		await act(() => fireEvent.click(within(row).getByRole('button', { name: 'Select vault' })))
 		expect(loads).toContain(otherOwner)
 		expect(within(document.body).getByRole('button', { name: 'Vault details' }).getAttribute('aria-pressed')).toBe('true')
-		expect(within(document.body).queryByRole('heading', { name: 'Vault Directory' })).toBeNull()
+		expect(within(document.body).getByRole('button', { name: 'All vaults' }).getAttribute('aria-pressed')).toBe('false')
 		expect(within(document.body).getByRole('button', { name: 'Copy address ' + otherOwner })).not.toBeNull()
 		const backing = document.querySelector('.vault-detail-hero')
 		expect(backing?.textContent).toContain('17.00')
@@ -125,11 +125,11 @@ test('shows the vault read error and retries without leaving Directory', async (
 	const loads: string[] = []
 	const rendered = await renderIntoDocument(<VaultSelectionHarness error='Vault read failed' onLoad={owner => loads.push(owner)} />)
 	try {
-		await act(() => fireEvent.click(within(document.body).getByRole('button', { name: 'Directory' })))
+		await act(() => fireEvent.click(within(document.body).getByRole('button', { name: 'All vaults' })))
 		expect(within(document.body).getByText('Vault read failed')).not.toBeNull()
 		await act(() => fireEvent.click(within(document.body).getByRole('button', { name: 'Retry' })))
 		expect(loads).toContain(zeroAddress)
-		expect(within(document.body).getByRole('button', { name: 'Directory' }).getAttribute('aria-pressed')).toBe('true')
+		expect(within(document.body).getByRole('button', { name: 'All vaults' }).getAttribute('aria-pressed')).toBe('true')
 	} finally {
 		await rendered.cleanup()
 		dom.cleanup()

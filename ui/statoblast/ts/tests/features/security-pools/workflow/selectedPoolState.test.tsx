@@ -52,12 +52,12 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 		expect(routeSurface.classList.contains('default')).toBe(false)
 		expect(document.body.querySelector('.selected-pool-context-details')).toBeNull()
 		expect(document.body.querySelector('.selected-pool-workspace-grid')).toBeNull()
-		const objectHeader = document.body.querySelector('.sticky-object-context')
+		const objectHeader = document.body.querySelector('.selected-pool-object-header')
 		if (!(objectHeader instanceof HTMLElement)) throw new Error('Expected the selected-pool object header')
-		expect(objectHeader.classList.contains('embedded-context-strip')).toBe(true)
-		expect(objectHeader.classList.contains('static')).toBe(true)
+		expect(within(objectHeader).getByRole('button', { name: 'Change pool' })).not.toBeNull()
+		expect(within(objectHeader).getByRole('button', { name: 'Refresh pool' })).not.toBeNull()
 		expect(within(objectHeader).getByRole('heading', { name: 'Will this resolve?' })).not.toBeNull()
-		expect(objectHeader.querySelector('.sticky-object-context-badge .badge')?.textContent).toBe('Operational')
+		expect(objectHeader.querySelector('.pool-object-meta .badge')?.textContent).toBe('Operational')
 		expect(within(objectHeader).queryByText('Known Vaults')).toBeNull()
 		expect(within(objectHeader).queryByText('Statoblast Security Multiplier')).toBeNull()
 		expect(within(objectHeader).queryByText('Initial Report Priority Fee')).toBeNull()
@@ -84,9 +84,9 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 		expectSectionVariant('Vault Actions', 'plain')
 
 		await act(() => {
-			fireEvent.click(within(document.body).getByRole('button', { name: 'Directory' }))
+			fireEvent.click(within(document.body).getByRole('button', { name: 'All vaults' }))
 		})
-		expectSectionVariant('Vault Directory', 'embedded')
+		expect(within(document.body).queryByRole('heading', { name: 'Vault Directory' })).toBeNull()
 		expect(document.body.querySelector('.vault-position-strip .entity-card')).toBeNull()
 	})
 
@@ -193,7 +193,7 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 		for (const label of ['Vaults', 'Shares', 'Reporting']) {
 			expect(documentQueries.queryByText(label)).toBeNull()
 		}
-		expect(document.body.querySelector('.sticky-object-context')).toBeNull()
+		expect(document.body.querySelector('.selected-pool-object-header')).toBeNull()
 		expect(document.body.querySelector('.selected-pool-workspace')).toBeNull()
 		expect(documentQueries.getByRole('textbox', { name: 'Security Pool Address' })).not.toBeNull()
 
@@ -284,7 +284,7 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 		expect(documentQueries.getByRole('button', { name: 'Switch to pool universe' })).not.toBeNull()
 		expect(documentQueries.getByRole('button', { name: 'Return to current universe' })).not.toBeNull()
 		expect(documentQueries.queryByRole('tablist')).toBeNull()
-		expect(document.body.querySelector('.sticky-object-context')).not.toBeNull()
+		expect(document.body.querySelector('.selected-pool-object-header')).not.toBeNull()
 		expect(document.body.querySelector('.selected-pool-workflow-content')).toBeNull()
 		expect(documentQueries.queryByText('Switch to the same universe before using vault, share, reporting, and fork actions.')).toBeNull()
 		expect(documentQueries.queryByText('Switch to the same universe before using this pool.')).toBeNull()
@@ -328,7 +328,7 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 		expect(documentQueries.getByText('Open Oracle Price')).not.toBeNull()
 		expect(documentQueries.queryByText('Current Oracle Price')).toBeNull()
 		expect(documentQueries.queryByText('Oracle Expires In')).toBeNull()
-		expect(document.body.querySelectorAll('.sticky-object-context')).toHaveLength(1)
+		expect(document.body.querySelectorAll('.selected-pool-object-header')).toHaveLength(1)
 		expect(documentQueries.getByRole('button', { name: 'Change pool' })).not.toBeNull()
 		expect(documentQueries.queryByRole('textbox', { name: 'Security Pool Address' })).toBeNull()
 		await act(() => fireEvent.click(documentQueries.getByRole('button', { name: 'Change pool' })))
@@ -353,14 +353,14 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 		expect(documentQueries.queryByText('After market end')).toBeNull()
 		expect(documentQueries.queryByText('Manager')).toBeNull()
 		expect(documentQueries.getByText('Statoblast Security Multiplier')).not.toBeNull()
-		const directoryButton = documentQueries.getByRole('button', { name: 'Directory' })
+		const directoryButton = documentQueries.getByRole('button', { name: 'All vaults' })
 		expect(documentQueries.getByRole('button', { name: 'My vault' })).not.toBeNull()
 
 		await act(() => {
 			fireEvent.click(directoryButton)
 		})
 
-		expect(documentQueries.getByRole('heading', { name: 'Vault Directory' })).not.toBeNull()
+		expect(documentQueries.queryByRole('heading', { name: 'Vault Directory' })).toBeNull()
 		expect(documentQueries.getAllByText('Dispute-staked REP').length).toBeGreaterThan(0)
 	})
 
@@ -370,7 +370,7 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 		})
 
 		await act(() => {
-			fireEvent.click(within(document.body).getByRole('button', { name: 'Directory' }))
+			fireEvent.click(within(document.body).getByRole('button', { name: 'All vaults' }))
 		})
 
 		expect(within(document.body).getByText('No current positions among 2 known vaults.')).not.toBeNull()
@@ -383,7 +383,7 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 		})
 
 		await act(() => {
-			fireEvent.click(within(document.body).getByRole('button', { name: 'Directory' }))
+			fireEvent.click(within(document.body).getByRole('button', { name: 'All vaults' }))
 		})
 
 		expect(within(document.body).getByText('Registry scan limit reached. Some current positions may not be shown.')).not.toBeNull()
@@ -450,7 +450,7 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 
 		const documentQueries = within(document.body)
 		await act(() => {
-			fireEvent.click(documentQueries.getByRole('button', { name: 'Directory' }))
+			fireEvent.click(documentQueries.getByRole('button', { name: 'All vaults' }))
 		})
 		const reviewLiquidationButton = documentQueries.getByRole('button', { name: 'Review liquidation' })
 		if (!(reviewLiquidationButton instanceof HTMLButtonElement)) throw new Error('Expected Review liquidation button')
@@ -928,8 +928,8 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 		)
 		setCleanup(renderedComponent.cleanup)
 
-		expect(document.body.querySelectorAll('.sticky-object-context')).toHaveLength(1)
-		expect(document.body.querySelector('.sticky-object-context-badge .badge')?.textContent).toBe('Fork Migration')
+		expect(document.body.querySelectorAll('.selected-pool-object-header')).toHaveLength(1)
+		expect(document.body.querySelector('.pool-object-meta .badge')?.textContent).toBe('Fork Migration')
 	})
 
 	test('disables minting in trading when the workflow state shows the selected pool has ended', async () => {
@@ -1005,7 +1005,7 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 
 		const documentQueries = within(document.body)
 		await act(() => {
-			fireEvent.click(documentQueries.getByRole('button', { name: 'Directory' }))
+			fireEvent.click(documentQueries.getByRole('button', { name: 'All vaults' }))
 		})
 		await act(() => {
 			fireEvent.click(documentQueries.getByRole('button', { name: 'Select vault' }))

@@ -20,6 +20,10 @@ test('commits a new pool address only when the user opens it', async () => {
 	selected.length = 0
 	loaded.length = 0
 	const page = within(document.body)
+	expect(page.queryByRole('button', { name: 'Browse pools' })).toBeNull()
+	await act(() => fireEvent.click(page.getByRole('button', { name: 'Refresh pool' })))
+	expect(loaded).toEqual([undefined])
+	loaded.length = 0
 	expect(page.queryByRole('textbox', { name: 'Security Pool Address' })).toBeNull()
 	await act(() => fireEvent.click(page.getByRole('button', { name: 'Change pool' })))
 	await act(() => fireEvent.input(page.getByRole('textbox', { name: 'Security Pool Address' }), { target: { value: ' 0x456 ' } }))
@@ -64,7 +68,7 @@ test('shows unknown capacity without a progress gauge or implied zero capacity',
 	await renderLoadedPool({ uiPriceOracle: 'uniswap', repPerEthPrice: undefined })
 	const header = document.body.querySelector('.pool-overview-header')
 	expect(header?.textContent).toContain('/ Unavailable')
-	expect(header?.textContent).toContain('Capacity needs a current price.')
+	expect(header?.textContent).toContain('/ Unavailable')
 	expect(header?.querySelector('.progress-meter-track')).toBeNull()
 })
 

@@ -238,7 +238,7 @@ export function SecurityPoolWorkflowSection(props: SecurityPoolWorkflowSectionPr
 	const selectedVaultOwner = getSelectedVaultOwner(selectedVaultOwnerInput, accountState.address) ?? ''
 	const selectedVaultIsOwnedByAccount = isSelectedVaultOwnedByAccountHelper(selectedVaultOwnerInput, accountState.address)
 	const selectedVaultViewOptions: ViewTabOption<SelectedVaultView>[] = [
-		{ label: securityPoolCopy.directory, value: 'browse-vaults' },
+		{ label: workspaceCopy.allVaults, value: 'browse-vaults' },
 		{ label: selectedVaultIsOwnedByAccount ? workspaceCopy.myVault : workspaceCopy.vaultDetails, value: 'selected-vault' },
 	]
 	const selectedVaultSecurityPoolAddress = securityVault.securityVaultForm.securityPoolAddress.trim()
@@ -406,21 +406,25 @@ export function SecurityPoolWorkflowSection(props: SecurityPoolWorkflowSectionPr
 					selectedPoolSummaryPool,
 					selectedPoolView,
 				}
+	const poolControls = <PoolSelectionControl address={securityPoolAddress} hasPool={selectedPool !== undefined} loading={loadingSecurityPools} onAddressChange={onSecurityPoolAddressChange} onLoad={onRefreshSelectedPoolData} />
 	return (
-		<RouteWorkflowPanel showHeader={showHeader} title={securityPoolCopy.selectedPool}>
-			<PoolSelectionControl address={securityPoolAddress} hasPool={selectedPool !== undefined} loading={loadingSecurityPools} onAddressChange={onSecurityPoolAddressChange} onBrowse={onBrowsePools} onLoad={onRefreshSelectedPoolData} />
-			<ErrorNotice message={securityPoolOverviewError} />
-			{objectHeaderProps === undefined ? undefined : <SecurityPoolObjectHeader {...objectHeaderProps} />}
-			{selectedPool !== undefined ? (
-				<PoolAttention
-					oracleUnavailable={showSelectedPoolWorkflowDetails && (currentPoolOraclePriceUsable === false || currentPoolOracleManagerError !== undefined)}
-					pendingReportId={currentPoolOracleManagerDetails?.pendingReportId}
-					stagedOperationCount={showSelectedPoolWorkflowDetails ? activeStagedOperationCount : 0n}
-					forkAvailable={showSelectedPoolWorkflowDetails && selectedPoolHasForkActivity}
-					onViewReport={onViewPendingReport}
-					onChange={onSelectedPoolViewChange}
-				/>
-			) : undefined}
+		<RouteWorkflowPanel showHeader={showHeader && objectHeaderProps === undefined} title={securityPoolCopy.selectedPool}>
+			<div className='pool-context'>
+				{objectHeaderProps === undefined ? poolControls : <SecurityPoolObjectHeader {...objectHeaderProps} actions={poolControls} />}
+				<ErrorNotice message={securityPoolOverviewError} />
+				{selectedPool !== undefined ? (
+					<PoolAttention
+						oracleUnavailable={showSelectedPoolWorkflowDetails && (currentPoolOraclePriceUsable === false || currentPoolOracleManagerError !== undefined)}
+						pendingReportId={currentPoolOracleManagerDetails?.pendingReportId}
+						stagedOperationCount={showSelectedPoolWorkflowDetails ? activeStagedOperationCount : 0n}
+						forkAvailable={showSelectedPoolWorkflowDetails && selectedPoolHasForkActivity}
+						onViewReport={onViewPendingReport}
+						onChange={onSelectedPoolViewChange}
+					/>
+				) : undefined}
+
+				{objectHeaderProps === undefined ? undefined : <SecurityPoolReferenceDetails {...objectHeaderProps} />}
+			</div>
 
 			{selectedPool === undefined || !selectedPoolUniverseMismatch ? undefined : <SecurityPoolUniverseMismatchNotice activeUniverseId={activeUniverseId} onReturnToCurrentUniverse={onReturnToCurrentUniverse} onSwitchToPoolUniverse={onSwitchToPoolUniverse} selectedPool={selectedPool} />}
 
@@ -543,7 +547,6 @@ export function SecurityPoolWorkflowSection(props: SecurityPoolWorkflowSectionPr
 					</div>
 				</section>
 			)}
-			{objectHeaderProps === undefined ? undefined : <SecurityPoolReferenceDetails {...objectHeaderProps} />}
 			<SecurityPoolRequestPriceModal
 				canRequest={selectedPoolStateModel.actions.requestPrice.enabled && canUseOracleActions}
 				closeOnSuccessKey={poolPriceOracleResult?.action === 'requestPrice' ? poolPriceOracleResult.hash : undefined}

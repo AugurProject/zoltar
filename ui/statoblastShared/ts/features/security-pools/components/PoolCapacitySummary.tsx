@@ -3,7 +3,7 @@ import { CurrencyValue } from '@zoltar/ui-core-shared/components/CurrencyValue.j
 import { ProgressMeter } from '@zoltar/ui-core-shared/components/ProgressMeter.js'
 import * as copy from '../../../copy/poolWorkspace.js'
 
-export function PoolCapacitySummary({ capacity, minted }: { capacity: bigint | undefined; minted: bigint }) {
+export function PoolCapacitySummary({ capacity, minted, showUnavailableReason = true }: { capacity: bigint | undefined; minted: bigint; showUnavailableReason?: boolean }) {
 	const value = (
 		<>
 			<CurrencyValue value={minted} suffix={commonCopy.eth} copyable={false} exactWhenRoundedToZero /> <span className='pool-capacity-limit'>/ {capacity === undefined ? commonCopy.unavailable : <CurrencyValue value={capacity} suffix={commonCopy.eth} copyable={false} exactWhenRoundedToZero />}</span>
@@ -17,7 +17,7 @@ export function PoolCapacitySummary({ capacity, minted }: { capacity: bigint | u
 				<div className='pool-capacity-unavailable'>
 					<span className='metric-label'>{copy.capacityLabel}</span>
 					<strong>{value}</strong>
-					{capacity === undefined ? <p className='detail'>{copy.capacityUnavailable}</p> : undefined}
+					{capacity === undefined && showUnavailableReason ? <p className='detail'>{copy.capacityUnavailable}</p> : undefined}
 				</div>
 			)}
 		</div>

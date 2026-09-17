@@ -5,7 +5,7 @@ import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as securityPoolCopy from '../../../copy/securityPool.js'
 import * as copy from '../../../copy/poolWorkspace.js'
 
-export function PoolSelectionControl({ address, hasPool, loading, onAddressChange, onBrowse, onLoad }: { address: string; hasPool: boolean; loading: boolean; onAddressChange: (address: string) => void; onBrowse: (() => void) | undefined; onLoad: (address?: string) => void }) {
+export function PoolSelectionControl({ address, hasPool, loading, onAddressChange, onLoad }: { address: string; hasPool: boolean; loading: boolean; onAddressChange: (address: string) => void; onLoad: (address?: string) => void }) {
 	const [editing, setEditing] = useState(false)
 	const [draft, setDraft] = useState(address)
 	useEffect(() => {
@@ -16,13 +16,6 @@ export function PoolSelectionControl({ address, hasPool, loading, onAddressChang
 		<div className='pool-selection-control'>
 			{hasPool ? (
 				<div className='pool-selection-toolbar'>
-					{onBrowse === undefined ? (
-						<span />
-					) : (
-						<button type='button' className='link' onClick={onBrowse}>
-							{commonCopy.browsePoolsAction}
-						</button>
-					)}
 					<div className='actions'>
 						<button className='quiet' type='button' aria-expanded={editing} onClick={() => setEditing(value => !value)}>
 							{copy.changePool}

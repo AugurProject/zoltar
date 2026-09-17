@@ -5,7 +5,6 @@ import type { ComponentChildren, ComponentProps } from 'preact'
 import { Badge } from '@zoltar/ui-core-shared/components/Badge.js'
 import { LookupFieldRow } from '@zoltar/ui-core-shared/components/LookupFieldRow.js'
 import { LoadingText } from '@zoltar/ui-core-shared/components/LoadingText.js'
-import { SectionBlock } from '@zoltar/ui-core-shared/components/SectionBlock.js'
 import { ViewTabs } from '@zoltar/ui-core-shared/components/ViewTabs.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import { getWrongNetworkReason } from '@zoltar/ui-core-shared/wallet/network.js'
@@ -115,7 +114,7 @@ export function SecurityPoolVaultWorkspace({
 			</div>
 
 			{vaultView === 'browse-vaults' ? (
-				<SectionBlock title={securityPoolCopy.vaultDirectory} variant='embedded'>
+				<div>
 					<SecurityPoolVaultDirectory
 						emptyState={browseEmptyState}
 						pool={selectedPool}
@@ -151,7 +150,7 @@ export function SecurityPoolVaultWorkspace({
 						repPerEthSource={repPerEthSource}
 						repPerEthSourceUrl={repPerEthSourceUrl}
 					/>
-				</SectionBlock>
+				</div>
 			) : (
 				<SecurityVaultSection
 					{...securityVault}

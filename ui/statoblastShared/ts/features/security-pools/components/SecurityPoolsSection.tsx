@@ -24,6 +24,7 @@ function getSecurityPoolsRouteHeader(view: SecurityPoolsView) {
 export function SecurityPoolsSection({ activeView, createPool, loadingUniverseDirectoryPools, onActiveUniverseChange, onActiveViewChange, onLoadUniverseDirectoryPools, overview, securityPoolUniverseDirectoryError, universeDirectoryPools, workflow, zoltarUniverse }: SecurityPoolsSectionProps) {
 	const view = activeView
 	const routeHeader = getSecurityPoolsRouteHeader(view)
+	const hasSelectedPool = workflow.securityPools.some(pool => sameCaseInsensitiveText(pool.securityPoolAddress, workflow.securityPoolAddress))
 
 	const openView = (nextView: SecurityPoolsView, nextSecurityPoolAddress?: string) => {
 		onActiveViewChange(nextView)
@@ -36,7 +37,7 @@ export function SecurityPoolsSection({ activeView, createPool, loadingUniverseDi
 
 	return (
 		<div className='route-view-flow'>
-			<RouteHeader description={routeHeader.description} eyebrow={commonCopy.securityPools} title={routeHeader.title} />
+			{view === 'operate' && hasSelectedPool ? undefined : <RouteHeader description={routeHeader.description} eyebrow={commonCopy.securityPools} title={routeHeader.title} />}
 			{view === 'browse' ? (
 				<SecurityPoolsOverviewSection
 					{...overview}

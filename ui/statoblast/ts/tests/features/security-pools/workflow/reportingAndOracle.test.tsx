@@ -92,7 +92,7 @@ describe('SecurityPoolWorkflowSection: reporting and oracle', () => {
 		)
 		setCleanup(renderedComponent.cleanup)
 
-		const selectedPoolSummary = document.body.querySelector('.sticky-object-context')
+		const selectedPoolSummary = document.body.querySelector('.selected-pool-object-header')
 		if (!(selectedPoolSummary instanceof HTMLElement)) throw new Error('Expected selected pool summary')
 		const summaryLabels = Array.from(selectedPoolSummary.querySelectorAll('.metric-label')).map(element => element.textContent?.trim() ?? '')
 		expect(summaryLabels).not.toContain('Truth Auction')
@@ -792,7 +792,7 @@ describe('SecurityPoolWorkflowSection: reporting and oracle', () => {
 
 		const documentQueries = within(document.body)
 		expect(documentQueries.queryByRole('heading', { name: 'Question' })).toBeNull()
-		const objectHeader = document.body.querySelector('.sticky-object-context')
+		const objectHeader = document.body.querySelector('.selected-pool-object-header')
 		if (!(objectHeader instanceof HTMLElement)) throw new Error('Expected the selected-pool object header')
 		expect(within(objectHeader).getByRole('heading', { name: 'Will this resolve?' })).not.toBeNull()
 		expect(documentQueries.getAllByText('Question description')).toHaveLength(1)
