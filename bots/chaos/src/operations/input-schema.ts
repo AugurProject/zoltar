@@ -125,25 +125,23 @@ export function operationInputSchema(id: string): readonly InputField[] {
 	return schemas[id] ?? []
 }
 
-const shortIdentity = (value: string) => (value.length > 18 ? `${value.slice(0, 8)}…${value.slice(-6)}` : value)
-
 export function inputChoices(field: InputField, snapshot: EcosystemSnapshot) {
 	if (field.options !== undefined) return field.options
 	switch (field.choices) {
 		case 'tokens':
 			return snapshot.wallet.tokens
 				.filter(token => token.address.toLowerCase() === snapshot.deployments.weth.toLowerCase() || snapshot.universes.some(universe => universe.repToken.toLowerCase() === token.address.toLowerCase()))
-				.map(token => ({ value: token.address, label: `${token.symbol ?? 'Token'} · ${shortIdentity(token.address)}` }))
+				.map(token => ({ value: token.address, label: `${token.symbol ?? 'Token'} · ${token.address}` }))
 		case 'pools':
-			return snapshot.pools.map(pool => ({ value: pool.address, label: `Universe ${shortIdentity(pool.universeId)} · ${shortIdentity(pool.address)}` }))
+			return snapshot.pools.map(pool => ({ value: pool.address, label: `Universe ${pool.universeId} · ${pool.address}` }))
 		case 'pairs':
-			return snapshot.pairs.map(pair => ({ value: pair.address, label: shortIdentity(pair.address) }))
+			return snapshot.pairs.map(pair => ({ value: pair.address, label: pair.address }))
 		case 'universes':
-			return snapshot.universes.map(universe => ({ value: universe.id, label: `Universe ${shortIdentity(universe.id)}` }))
+			return snapshot.universes.map(universe => ({ value: universe.id, label: `Universe ${universe.id}` }))
 		case 'questions':
-			return snapshot.questions.map(question => ({ value: question.id, label: `Question ${shortIdentity(question.id)}` }))
+			return snapshot.questions.map(question => ({ value: question.id, label: `Question ${question.id}` }))
 		case 'auctions':
-			return snapshot.auctions.map(auction => ({ value: auction.address, label: shortIdentity(auction.address) }))
+			return snapshot.auctions.map(auction => ({ value: auction.address, label: auction.address }))
 		default:
 			return undefined
 	}

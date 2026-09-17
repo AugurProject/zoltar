@@ -1,4 +1,4 @@
-import { compactIdentifier } from './dom.js'
+import { fullIdentifier } from './dom.js'
 import { isRecord } from '@zoltar/bot-shared/infrastructure/json-validation'
 import { displayOperationInput, serializeOperationInput } from './operation-input-format.js'
 
@@ -172,7 +172,18 @@ export function createOperationDialog(options: { request: (value: unknown) => Pr
 		input.value = inputs[key]?.source === 'custom' ? inputs[key].value : value
 		source.value = inputs[key]?.source ?? 'chaosbot'
 		input.disabled = source.value === 'chaosbot'
+		const selectedIdentifier = element('div')
+		selectedIdentifier.className = 'operation-selected-identifier'
+		selectedIdentifier.id = `operation-selected-${key}`
+		const showSelectedIdentifier = () => {
+			selectedIdentifier.hidden = !(input instanceof HTMLSelectElement) || !/^0x[0-9a-f]+$/i.test(input.value)
+			selectedIdentifier.replaceChildren(...(selectedIdentifier.hidden ? [] : [fullIdentifier(input.value, labelText)]))
+			if (selectedIdentifier.hidden) input.removeAttribute('aria-describedby')
+			else input.setAttribute('aria-describedby', selectedIdentifier.id)
+		}
+		showSelectedIdentifier()
 		const update = () => {
+			showSelectedIdentifier()
 			input.disabled = source.value === 'chaosbot'
 			inputs[key] = source.value === 'chaosbot' ? { source: 'chaosbot' } : { source: 'custom', value: input.value }
 			if (key === 'candidate') candidate = source.value === 'custom' ? input.value : undefined
@@ -186,7 +197,7 @@ export function createOperationDialog(options: { request: (value: unknown) => Pr
 		input.addEventListener('input', update)
 		if (input instanceof HTMLSelectElement && key !== 'candidate') input.addEventListener('change', () => void load('inspect'))
 		if (input instanceof HTMLTextAreaElement) input.rows = kind === 'list' ? 4 : 2
-		wrapper.append(label, source, input)
+		wrapper.append(label, source, input, selectedIdentifier)
 		return wrapper
 	}
 
@@ -333,7 +344,7 @@ export function createOperationDialog(options: { request: (value: unknown) => Pr
 						const url = string(transaction['explorerUrl'])
 						const parsed = URL.canParse(url) ? new URL(url) : undefined
 						const explorerUrl = parsed !== undefined && ['http:', 'https:'].includes(parsed.protocol) && !parsed.username && !parsed.password ? parsed.href : undefined
-						row.append(compactIdentifier(hash, 'transaction hash', { explorerUrl }))
+						row.append(fullIdentifier(hash, 'transaction hash', { explorerUrl }))
 						receipts.append(row)
 					}
 				}

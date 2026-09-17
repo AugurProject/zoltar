@@ -19,19 +19,14 @@ export function schedulerFor(configuration: ConfigurationState, state: RuntimeSt
 	})
 }
 
-const SHORT_ADDRESS_TAIL = 4
 const TRUNCATION_NOTICE = '… (truncated)'
-
-function shortAddress(value: string) {
-	return value.length <= 12 ? value : `${value.slice(0, 8)}…${value.slice(-SHORT_ADDRESS_TAIL)}`
-}
 
 function functionSelector(data: string) {
 	return data.length >= 10 ? data.slice(0, 10) : data
 }
 
 function describeStep(step: OperationPlan['steps'][number], index: number) {
-	const parts = [`to ${shortAddress(step.to)}`, `selector ${functionSelector(step.data)}`, `gas ${step.gasLimit}`]
+	const parts = [`to ${step.to}`, `selector ${functionSelector(step.data)}`, `gas ${step.gasLimit}`]
 	if (step.value !== undefined && step.value !== '0') parts.push(`value ${step.value} attoETH`)
 	return `${(index + 1).toString()}. ${step.label} (${parts.join(', ')})`
 }

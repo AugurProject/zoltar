@@ -116,15 +116,15 @@ test('incomplete scans and paused live mode block manual execution', async () =>
 	expect(paused['previewId']).toBeUndefined()
 })
 
-test('production operator starts a manual operation before the random timer is due', async () => {
+test.each(['idle', 'scheduled'] as const)('production operator starts a manual operation while the timer is %s', async initialStatus => {
 	const { configuration, state, scan } = fixture()
 	const directory = await mkdtemp(join(tmpdir(), 'chaos-manual-schedule-'))
 	try {
 		configuration.settings.runtime.stateFile = join(directory, 'state.json')
 		configuration.settings.paused = false
 		state.paused = false
-		state.scheduler.status = 'scheduled'
-		state.scheduler.nextRunAt = new Date(Date.now() + 3_600_000).toISOString()
+		state.scheduler.status = initialStatus
+		state.scheduler.nextRunAt = initialStatus === 'idle' ? undefined : new Date(Date.now() + 3_600_000).toISOString()
 		const plan = evaluateSelectableOperationDefinition('open-oracle.weth.wrap', scan.snapshot, planningOptions(configuration.settings, 7)).plan
 		if (plan === undefined) throw new Error('Expected a WETH plan')
 		const execute = async () => {
@@ -137,6 +137,8 @@ test('production operator starts a manual operation before the random timer is d
 		expect(state.scheduler.status).toBe('scheduled')
 		expect(state.scheduler.selectedOperationId).toBe(plan.definitionId)
 		configuration.settings.runtime.execute = true
+		state.scheduler.status = initialStatus
+		state.scheduler.nextRunAt = initialStatus === 'idle' ? undefined : new Date(Date.now() + 3_600_000).toISOString()
 		let submissions = 0
 		await executeScheduledOperation(
 			configuration,

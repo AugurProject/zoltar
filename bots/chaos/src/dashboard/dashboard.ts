@@ -3,7 +3,7 @@ import { optionalRecord as record } from '@zoltar/bot-shared/infrastructure/json
 import { createExecutionPolicyDraft } from './execution-policy-draft.js'
 import { createActivityTimeline } from './activity-timeline.js'
 import { createCatalogGroups } from './catalog-groups.js'
-import { compactIdentifier, formatDate, node, setBadge, shortHex, statusLabel, statusTone, transactionExplorerUrl } from './dom.js'
+import { fullIdentifier, formatDate, node, setBadge, statusLabel, statusTone, transactionExplorerUrl } from './dom.js'
 import { createRetirementDashboard, parsePublicRetirement } from './retirement-dashboard.js'
 import { createOperationDialog } from './operation-dialog.js'
 import { renderOperatorAlerts } from './operator-alerts.js'
@@ -792,7 +792,7 @@ async function requestJson(path: string, timeoutMilliseconds: number, init?: Req
 }
 
 function transactionIdentifier(hash: string, type: string) {
-	return compactIdentifier(hash, type, { explorerUrl: transactionExplorerUrl(configuration?.explorerUrl, hash) })
+	return fullIdentifier(hash, type, { explorerUrl: transactionExplorerUrl(configuration?.explorerUrl, hash) })
 }
 
 function transactionLine(prefix: string, hash: string | undefined, type: string) {
@@ -965,7 +965,7 @@ function renderOverview(value: Snapshot) {
 	eligibleCount.textContent = `${eligible.length.toString()} of ${executable.length.toString()}`
 	const selected = value.operationEvaluations.find(operation => operation.id === value.scheduler.selectedOperationId)
 	selectedOperation.textContent = selected?.label ?? value.scheduler.selectedOperationId ?? 'None'
-	walletShort.replaceChildren(value.wallet === undefined ? document.createTextNode('No execution account configured') : compactIdentifier(value.wallet, 'wallet address'))
+	walletShort.replaceChildren(value.wallet === undefined ? document.createTextNode('No execution account configured') : fullIdentifier(value.wallet, 'wallet address'))
 	walletShort.removeAttribute('title')
 	if (value.wallet !== undefined && value.inventoryAvailable === true) {
 		balanceEth.textContent = formatAtomic18(value.inventory.eth)
@@ -1067,7 +1067,7 @@ function renderRepBalances(values: RepBalance[]) {
 		const row = node('div', 'token-row')
 		const identity = node('div')
 		identity.append(node('strong', undefined, value.symbol ?? 'REP'))
-		identity.append(node('small', 'mono', value.universeId === undefined ? shortHex(value.token) : `Universe ${value.universeId}`))
+		identity.append(node('small', 'mono', value.universeId === undefined ? (value.token ?? '—') : `Universe ${value.universeId}`))
 		row.append(identity, node('strong', 'mono', formatAtomic18(value.balance)))
 		return row
 	})
@@ -1298,7 +1298,7 @@ function renderEcosystems(values: OperationEvaluation[]) {
 }
 
 function topologyIdentifier(value: string | undefined, fallback: string, type: string) {
-	return value === undefined ? node('span', 'mono muted', fallback) : compactIdentifier(value, type)
+	return value === undefined ? node('span', 'mono muted', fallback) : fullIdentifier(value, type)
 }
 
 function topologyIdentifierFact(label: string, value: string | undefined, type: string) {
@@ -1535,7 +1535,7 @@ function renderConfiguration(value: Configuration, force = false) {
 	signerSummary.replaceChildren()
 	if (value.hasSigner === true) {
 		if (wallet === undefined) signerSummary.append(node('span', undefined, 'Signer configured'))
-		else signerSummary.append(compactIdentifier(wallet, 'transaction signer address'))
+		else signerSummary.append(fullIdentifier(wallet, 'transaction signer address'))
 		signerSummary.append(node('span', 'signer-persistence', ` · ${value.rememberSigner === true ? 'remembered locally' : 'memory only'}`))
 	} else signerSummary.textContent = 'No signer configured'
 	rememberSignerInput.checked = value.rememberSigner === true
@@ -1715,7 +1715,7 @@ function openResumeDialog() {
 	if (value === undefined) return
 	const executable = value.operationEvaluations.filter(operationIsIndependentlyExecutable)
 	const eligible = executable.filter(operation => operation.enabled !== false && operation.eligible === true).length
-	const signerDetail = value.signerReady === true && value.wallet !== undefined ? compactIdentifier(value.wallet, 'recovery signer address') : 'Missing'
+	const signerDetail = value.signerReady === true && value.wallet !== undefined ? fullIdentifier(value.wallet, 'recovery signer address') : 'Missing'
 	const selectionPolicy = configuration?.selectableOperationAllowlist
 	let randomScope: HTMLElement | string = 'Unavailable — keep paused'
 	if (selectionPolicy === null) randomScope = 'ALL selectable operations'

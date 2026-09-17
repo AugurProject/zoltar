@@ -1,4 +1,4 @@
-import { compactIdentifier, formatDate, node, replaceWhenChanged, setBadge, statusLabel, statusTone, transactionExplorerUrl } from './dom.js'
+import { fullIdentifier, formatDate, node, replaceWhenChanged, setBadge, statusLabel, statusTone, transactionExplorerUrl } from './dom.js'
 
 export type TimelineActivity = {
 	at?: string | undefined
@@ -25,7 +25,7 @@ function timelineItem(activity: TimelineActivity, explorerUrl: string | undefine
 	}
 	if (activity.txHash !== undefined) {
 		const identifier = node('div', 'activity-identifier')
-		identifier.append(compactIdentifier(activity.txHash, 'activity transaction hash', { explorerUrl: transactionExplorerUrl(explorerUrl, activity.txHash) }))
+		identifier.append(fullIdentifier(activity.txHash, 'activity transaction hash', { explorerUrl: transactionExplorerUrl(explorerUrl, activity.txHash) }))
 		main.append(identifier)
 	}
 	const status = node('span')
@@ -44,7 +44,7 @@ export function createActivityTimeline() {
 	if (!(list instanceof HTMLOListElement) || !(expand instanceof HTMLButtonElement)) throw new Error('Activity timeline elements are missing')
 	let expanded = false
 	let rendered: readonly TimelineActivity[] = []
-	// Reusing an unchanged item keeps its open disclosure and copy feedback alive across polls.
+	// Reusing an unchanged item keeps its expanded details and explorer focus across polls.
 	let cache = new Map<string, HTMLLIElement[]>()
 	const empty = node('li', 'empty-state', 'No activity recorded.')
 	let renderedExplorerUrl: string | undefined

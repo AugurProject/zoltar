@@ -99,6 +99,17 @@ test(
 			}
 			throw new Error(`Browser condition timed out: ${expression}`)
 		}
+		async function expectFullTokenAddress() {
+			expect(
+				await evaluate(`(() => {
+				const input = document.querySelector('#operation-input-token')
+				const text = input.parentElement.querySelector('.identifier-value')
+				if (!text || text.textContent !== input.value) return false
+				const bounds = text.getBoundingClientRect()
+				return bounds.width > 0 && bounds.right <= document.documentElement.clientWidth && text.scrollWidth <= text.clientWidth && getComputedStyle(text).userSelect === 'text'
+			})()`),
+			).toBe(true)
+		}
 		const screenshotDirectory = process.env['CHAOS_QA_SCREENSHOTS']
 		async function capture(name: string) {
 			if (screenshotDirectory === undefined) return
@@ -172,6 +183,7 @@ test(
 				expect(executeCalls).toBe(before + 1)
 				expect(await evaluate("document.querySelector('.operation-receipts a').href")).toBe(`https://sepolia.etherscan.io/tx/${transactionHash}`)
 				expect(await evaluate("document.querySelector('.operation-receipts').textContent.includes('Submitted')")).toBe(true)
+				await evaluate("document.querySelector('.operation-receipts').scrollIntoView({ block: 'center' })")
 				await capture(`${viewport.label}-pending`)
 				await evaluate("document.querySelector('#operation-dialog').close()")
 				await evaluate("[...document.querySelectorAll('.operation-open')].find(button => button.getAttribute('aria-label') === 'Open wrap WETH').click()")
@@ -188,10 +200,10 @@ test(
 					await evaluate("document.querySelector('#operation-dialog .operation-actions button:nth-child(2)').click()")
 					await waitFor(`document.querySelector('#operation-dialog [role=status]').textContent.includes(${JSON.stringify(expectedMessage)})`)
 					if (outcome === 'recovery') {
-						expect(await evaluate("document.querySelectorAll('.operation-receipts .compact-identifier').length")).toBe(2)
+						expect(await evaluate("document.querySelectorAll('.operation-receipts .full-identifier').length")).toBe(2)
 						expect(await evaluate("document.querySelectorAll('.operation-receipts a').length")).toBe(1)
-						await evaluate("document.querySelector('.operation-receipts .identifier-disclosure').click()")
-						expect(await evaluate("document.querySelector('.operation-receipts textarea').value")).toBe(transactionHash)
+						expect(await evaluate("document.querySelectorAll('.operation-receipts button').length")).toBe(0)
+						expect(await evaluate("document.querySelector('.operation-receipts .identifier-value').textContent")).toBe(transactionHash)
 					} else expect(await evaluate("document.querySelectorAll('.operation-receipts a').length")).toBe(0)
 					await evaluate("document.querySelector('#operation-dialog').scrollTop = document.querySelector('#operation-dialog').scrollHeight")
 					expect(await evaluate("document.querySelector('#operation-dialog').scrollWidth <= document.querySelector('#operation-dialog').clientWidth")).toBe(true)
@@ -239,6 +251,7 @@ test(
 				await evaluate("document.querySelector('#operation-dialog').close()")
 				await evaluate("[...document.querySelectorAll('.operation-open')].find(button => button.getAttribute('aria-label') === 'Open Deposit OpenOracle credit').click()")
 				await waitFor("document.querySelector('#operation-input-token') !== null && document.querySelector('#operation-dialog fieldset').disabled === false")
+				await expectFullTokenAddress()
 				await evaluate(`(() => {
 				const input = document.querySelector('#operation-input-token')
 				const source = input.parentElement.querySelector('select')
@@ -249,6 +262,11 @@ test(
 			})()`)
 				await waitFor("document.querySelector('#operation-dialog fieldset').disabled === false")
 				await evaluate("document.querySelector('.operation-coverage').open = true")
+				await expectFullTokenAddress()
+				const tokenStateReads = stateReads
+				for (let attempt = 0; attempt < 150 && stateReads === tokenStateReads; attempt += 1) await Bun.sleep(100)
+				expect(stateReads).toBeGreaterThan(tokenStateReads)
+				await expectFullTokenAddress()
 				await capture(`${viewport.label}-token-inputs`)
 				expect(await evaluate("document.querySelector('#operation-input-token').disabled")).toBe(false)
 				expect(await evaluate('document.activeElement.id')).toBe('operation-input-token')
