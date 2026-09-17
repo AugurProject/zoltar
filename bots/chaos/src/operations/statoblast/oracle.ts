@@ -34,15 +34,15 @@ function oracleRequestMetadata(snapshot: EcosystemSnapshot, pool: PoolSnapshot, 
 	}
 }
 
-function oracleRequestSteps(snapshot: EcosystemSnapshot, coordinator: `0x${string}`, weth: `0x${string}`, repToken: `0x${string}`, prepared: PreparedOracleRequest, forceExactApprovals: boolean) {
+function oracleRequestSteps(snapshot: EcosystemSnapshot, coordinator: `0x${string}`, weth: `0x${string}`, repToken: `0x${string}`, prepared: PreparedOracleRequest) {
 	const initialWethAttoEth = amount(prepared.envelope.maximumInitialAttoWeth)
 	const initialRepAttoRep = amount(prepared.envelope.maximumInitialAttoRep)
 	const requestCostAttoEth = amount(prepared.envelope.maximumRequestPriceCostAttoEth)
 	const steps = []
-	if (forceExactApprovals || allowance(tokenInventory(snapshot, weth), coordinator) !== initialWethAttoEth) {
+	if (allowance(tokenInventory(snapshot, weth), coordinator) < initialWethAttoEth) {
 		steps.push(approveCoordinatorToken(snapshot, coordinator, weth, initialWethAttoEth, 'approve-oracle-weth', 'Approve exact WETH oracle funding'))
 	}
-	if (forceExactApprovals || allowance(tokenInventory(snapshot, repToken), coordinator) !== initialRepAttoRep) {
+	if (allowance(tokenInventory(snapshot, repToken), coordinator) < initialRepAttoRep) {
 		steps.push(approveCoordinatorToken(snapshot, coordinator, repToken, initialRepAttoRep, 'approve-oracle-rep', 'Approve exact REP oracle funding'))
 	}
 	steps.push(
@@ -53,8 +53,8 @@ function oracleRequestSteps(snapshot: EcosystemSnapshot, coordinator: `0x${strin
 				eventEvidence(coordinator, 'PriceRequested(uint256,uint256)'),
 				exactTokenTransferToCoordinatorEvidence(snapshot, weth, coordinator, initialWethAttoEth),
 				exactTokenTransferToCoordinatorEvidence(snapshot, repToken, coordinator, initialRepAttoRep),
-				erc20AllowanceEvidence(weth, snapshot.wallet.address, coordinator, 0n),
-				erc20AllowanceEvidence(repToken, snapshot.wallet.address, coordinator, 0n),
+				...(allowance(tokenInventory(snapshot, weth), coordinator) <= initialWethAttoEth ? [erc20AllowanceEvidence(weth, snapshot.wallet.address, coordinator, 0n)] : []),
+				...(allowance(tokenInventory(snapshot, repToken), coordinator) <= initialRepAttoRep ? [erc20AllowanceEvidence(repToken, snapshot.wallet.address, coordinator, 0n)] : []),
 			],
 			functionName: 'requestPrice',
 			id: 'request-price',
@@ -67,8 +67,8 @@ function oracleRequestSteps(snapshot: EcosystemSnapshot, coordinator: `0x${strin
 	return steps
 }
 
-function buildPreparedOracleRequestPlan(snapshot: EcosystemSnapshot, pool: PoolSnapshot, prepared: PreparedOracleRequest, metadata: OperationPlan['metadata'], forceExactApprovals: boolean, confirmedCleanupCount = 0) {
-	const steps = oracleRequestSteps(snapshot, pool.coordinator, snapshot.deployments.weth, pool.repToken, prepared, forceExactApprovals)
+function buildPreparedOracleRequestPlan(snapshot: EcosystemSnapshot, pool: PoolSnapshot, prepared: PreparedOracleRequest, metadata: OperationPlan['metadata'], confirmedCleanupCount = 0) {
+	const steps = oracleRequestSteps(snapshot, pool.coordinator, snapshot.deployments.weth, pool.repToken, prepared)
 	const plannedApprovalCount = steps.filter(step => step.id === 'approve-oracle-weth' || step.id === 'approve-oracle-rep').length
 	const maximumCleanupTransactionCount = confirmedCleanupCount + plannedApprovalCount
 	return planBase({
@@ -77,7 +77,7 @@ function buildPreparedOracleRequestPlan(snapshot: EcosystemSnapshot, pool: PoolS
 		label: 'Request oracle price',
 		maximumCleanupTransactionCount: maximumCleanupTransactionCount === 0 ? undefined : maximumCleanupTransactionCount,
 		metadata,
-		postconditions: ['Coordinator pendingReportId becomes nonzero, both exact token allowances are consumed, and the report becomes a settlement obligation'],
+		postconditions: ['Coordinator pendingReportId becomes nonzero, the bounded WETH and REP amounts are transferred, and the report becomes a settlement obligation'],
 		risk: 'medium',
 		snapshot,
 		steps,
@@ -175,13 +175,13 @@ function oracleRequestContinuationIsSafe(snapshot: EcosystemSnapshot, pool: Pool
 			const previous = exactPreviousOracleApproval(snapshot, context.previousPlan, requirement.id, persisted.coordinator, requirement.token, requirement.required)
 			if (context.previousPlan.steps.some(step => step.id === requirement.id) && previous === undefined) return false
 			if (context.confirmedStepIds.includes(requirement.id)) {
-				if (previous === undefined || allowance(tokenInventory(snapshot, requirement.token), persisted.coordinator) !== requirement.required) return false
+				if (previous === undefined || allowance(tokenInventory(snapshot, requirement.token), persisted.coordinator) < requirement.required) return false
 			}
 		}
-		const wethAllowancePrepared = allowance(tokenInventory(snapshot, persisted.weth), persisted.coordinator) === amount(persisted.envelope.maximumInitialAttoWeth)
-		const repAllowancePrepared = allowance(tokenInventory(snapshot, persisted.repToken), persisted.coordinator) === amount(persisted.envelope.maximumInitialAttoRep)
+		const wethAllowancePrepared = allowance(tokenInventory(snapshot, persisted.weth), persisted.coordinator) >= amount(persisted.envelope.maximumInitialAttoWeth)
+		const repAllowancePrepared = allowance(tokenInventory(snapshot, persisted.repToken), persisted.coordinator) >= amount(persisted.envelope.maximumInitialAttoRep)
 		const remainingApprovalCount = Number(!wethAllowancePrepared) + Number(!repAllowancePrepared)
-		return oracleRequestInventoryIsFunded(snapshot, pool, options, persisted.prepared, remainingApprovalCount + 3)
+		return oracleRequestInventoryIsFunded(snapshot, pool, options, persisted.prepared, 1 + 2 * remainingApprovalCount + confirmedOracleApprovalRequirements(snapshot, context, persisted).length)
 	} catch (error) {
 		if (!isOracleRequestFundingError(error)) throw error
 		return false
@@ -215,7 +215,7 @@ export const requestOraclePrice: OperationDefinition = {
 			mixSeed(options.seed, requestOraclePrice.id),
 		)
 		if (candidate === undefined) return undefined
-		return buildPreparedOracleRequestPlan(snapshot, candidate.pool, candidate.prepared, oracleRequestMetadata(snapshot, candidate.pool, candidate.prepared), true)
+		return buildPreparedOracleRequestPlan(snapshot, candidate.pool, candidate.prepared, oracleRequestMetadata(snapshot, candidate.pool, candidate.prepared))
 	},
 	buildContinuationPlan(snapshot, options, context) {
 		const persisted = persistedOracleRequest(context.previousPlan)
@@ -226,7 +226,7 @@ export const requestOraclePrice: OperationDefinition = {
 		if (pool === undefined || !oracleRequestContinuationIsSafe(snapshot, pool, options, context, persisted)) {
 			return buildOracleRequestCleanupPlan(snapshot, context, persisted)
 		}
-		return buildPreparedOracleRequestPlan(snapshot, pool, persisted.prepared, context.previousPlan.metadata, false, confirmedOracleApprovalRequirements(snapshot, context, persisted).length)
+		return buildPreparedOracleRequestPlan(snapshot, pool, persisted.prepared, context.previousPlan.metadata, confirmedOracleApprovalRequirements(snapshot, context, persisted).length)
 	},
 	classification: 'selectable',
 	contract: 'OpenOraclePriceCoordinator',

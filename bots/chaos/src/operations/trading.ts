@@ -265,9 +265,9 @@ const seedGenesisUniswapPool: OperationDefinition = {
 		const liquidity = (maximum0 < maximum1 ? maximum0 : maximum1) / 2n
 		if (liquidity === 0n) return undefined
 		const steps = []
-		if (allowance(tokenInventory(snapshot, token0), seeder) !== maximum0)
+		if (allowance(tokenInventory(snapshot, token0), seeder) < maximum0)
 			steps.push(encodeStep({ abi: erc20Abi, args: [seeder, maximum0], evidence: [erc20AllowanceEvidence(token0, snapshot.wallet.address, seeder, maximum0)], functionName: 'approve', id: 'approve-genesis-token0', label: 'Approve genesis token0', to: token0, walletAssetDebits: [] }))
-		if (allowance(tokenInventory(snapshot, token1), seeder) !== maximum1)
+		if (allowance(tokenInventory(snapshot, token1), seeder) < maximum1)
 			steps.push(encodeStep({ abi: erc20Abi, args: [seeder, maximum1], evidence: [erc20AllowanceEvidence(token1, snapshot.wallet.address, seeder, maximum1)], functionName: 'approve', id: 'approve-genesis-token1', label: 'Approve genesis token1', to: token1, walletAssetDebits: [] }))
 		steps.push(
 			encodeStep({
@@ -287,7 +287,7 @@ const seedGenesisUniswapPool: OperationDefinition = {
 			label: seedGenesisUniswapPool.label,
 			maximumCleanupTransactionCount: 2,
 			metadata: { liquidity: liquidity.toString(), maximum0: maximum0.toString(), maximum1: maximum1.toString(), pool, seeder, token0, token1 },
-			postconditions: ['The authenticated genesis REP/WETH pool has nonzero active liquidity and exact approvals are consumed'],
+			postconditions: ['The authenticated genesis REP/WETH pool has nonzero active liquidity using bounded token transfers'],
 			risk: 'medium',
 			snapshot,
 			steps,
@@ -337,7 +337,7 @@ const seedGenesisUniswapPool: OperationDefinition = {
 	classification: 'selectable',
 	contract: 'GenesisUniswapV3Seeder',
 	description: 'Seeds a bounded full-range REP/WETH position owned by the operator wallet.',
-	discoveryInputs: ['authenticated pool liquidity, wallet REP/WETH balances and exact helper allowances'],
+	discoveryInputs: ['authenticated pool liquidity, wallet REP/WETH balances and helper allowances'],
 	ecosystem: 'trading',
 	evaluate: snapshot => {
 		const rep = genesisRep(snapshot)
@@ -468,9 +468,9 @@ const seedUniverseUniswapPool: OperationDefinition = {
 		const liquidity = (maximum0 < maximum1 ? maximum0 : maximum1) / 2n
 		if (liquidity === 0n) return undefined
 		const steps = []
-		if (allowance(tokenInventory(snapshot, token0), seeder) !== maximum0)
+		if (allowance(tokenInventory(snapshot, token0), seeder) < maximum0)
 			steps.push(encodeStep({ abi: erc20Abi, args: [seeder, maximum0], evidence: [erc20AllowanceEvidence(token0, snapshot.wallet.address, seeder, maximum0)], functionName: 'approve', id: 'approve-universe-token0', label: 'Approve universe token0', to: token0, walletAssetDebits: [] }))
-		if (allowance(tokenInventory(snapshot, token1), seeder) !== maximum1)
+		if (allowance(tokenInventory(snapshot, token1), seeder) < maximum1)
 			steps.push(encodeStep({ abi: erc20Abi, args: [seeder, maximum1], evidence: [erc20AllowanceEvidence(token1, snapshot.wallet.address, seeder, maximum1)], functionName: 'approve', id: 'approve-universe-token1', label: 'Approve universe token1', to: token1, walletAssetDebits: [] }))
 		steps.push(
 			encodeStep({
@@ -490,7 +490,7 @@ const seedUniverseUniswapPool: OperationDefinition = {
 			label: seedUniverseUniswapPool.label,
 			maximumCleanupTransactionCount: 2,
 			metadata: { liquidity: liquidity.toString(), maximum0: maximum0.toString(), maximum1: maximum1.toString(), pool: target.pool, rep: target.repToken, seeder, token0, token1, universeId: target.universeId },
-			postconditions: ['The authenticated child-universe REP/WETH pool has nonzero active liquidity and exact approvals are consumed'],
+			postconditions: ['The authenticated child-universe REP/WETH pool has nonzero active liquidity using bounded token transfers'],
 			risk: 'medium',
 			snapshot,
 			steps,
@@ -544,7 +544,7 @@ const seedUniverseUniswapPool: OperationDefinition = {
 	classification: 'selectable',
 	contract: 'GenesisUniswapV3Seeder',
 	description: 'Seeds a bounded full-range REP/WETH position for an authenticated child universe, owned by the operator wallet.',
-	discoveryInputs: ['authenticated per-universe pool liquidity, wallet REP/WETH balances and exact helper allowances'],
+	discoveryInputs: ['authenticated per-universe pool liquidity, wallet REP/WETH balances and helper allowances'],
 	ecosystem: 'trading',
 	evaluate: (snapshot, options) =>
 		eligible(

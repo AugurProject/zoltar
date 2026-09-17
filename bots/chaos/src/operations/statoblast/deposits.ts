@@ -161,8 +161,9 @@ export const directEscalationDeposit: OperationDefinition = {
 		const expectedAction = directEscalationDepositStep(snapshot, repToken, game, outcome, maximum, accepted, resultingCumulative)
 		const actionMatches = previousAction !== undefined && JSON.stringify(previousAction) === JSON.stringify(expectedAction)
 		const approvalConfirmed = previousApproval !== undefined && context.confirmedStepIds.includes(previousApproval.id)
-		const simulationRequired = previousApproval === undefined || approvalConfirmed
-		const approvalStateMatches = inventory !== undefined && (previousApproval === undefined ? allowance(inventory, game) >= accepted : !approvalConfirmed || allowance(inventory, game) === accepted)
+		const sufficientAllowance = inventory !== undefined && allowance(inventory, game) >= accepted
+		const simulationRequired = previousApproval === undefined || approvalConfirmed || sufficientAllowance
+		const approvalStateMatches = inventory !== undefined && (previousApproval === undefined ? allowance(inventory, game) >= accepted : !approvalConfirmed || allowance(inventory, game) >= accepted)
 		const safe =
 			options.allowHighRisk === true &&
 			!hasUnexpectedApproval &&
@@ -187,7 +188,7 @@ export const directEscalationDeposit: OperationDefinition = {
 			amount(inventory.balance) >= accepted + optionAmount(options, 'minimumRepReserveAttoRep', ONE_TOKEN) &&
 			approvalStateMatches
 		if (!safe) return cleanup()
-		const steps = previousApproval !== undefined && !approvalConfirmed ? [directEscalationApprovalStep(snapshot, repToken, game, accepted)] : []
+		const steps = previousApproval !== undefined && !approvalConfirmed && !sufficientAllowance ? [directEscalationApprovalStep(snapshot, repToken, game, accepted)] : []
 		steps.push(expectedAction)
 		return planBase({
 			definitionId: directEscalationDeposit.id,

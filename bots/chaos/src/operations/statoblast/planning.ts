@@ -237,7 +237,7 @@ export function exactPreviousPoolApproval(snapshot: EcosystemSnapshot, context: 
 export function poolApprovalPrepared(snapshot: EcosystemSnapshot, context: OperationContinuationContext, token: `0x${string}`, pool: `0x${string}`, required: bigint) {
 	const previous = exactPreviousPoolApproval(snapshot, context, token, pool, required)
 	if (context.previousPlan.steps.some(step => step.id === 'approve-rep') && previous === undefined) return false
-	if (previous !== undefined && context.confirmedStepIds.includes(previous.id)) return allowance(tokenInventory(snapshot, token), pool) === required
+	if (previous !== undefined && context.confirmedStepIds.includes(previous.id)) return allowance(tokenInventory(snapshot, token), pool) >= required
 	if (previous === undefined) return allowance(tokenInventory(snapshot, token), pool) >= required
 	return true
 }

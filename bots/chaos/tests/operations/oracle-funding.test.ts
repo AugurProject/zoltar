@@ -130,7 +130,7 @@ describe('oracle request funding bounds', () => {
 		).toThrow('initialReportPriorityFeeAttoEthPerGas exceeds OpenOracle limits')
 	})
 
-	test('replaces stale oversized allowances and declares the full inclusion debit bound', () => {
+	test('reuses oversized allowances while preserving the full inclusion debit bound', () => {
 		const snapshot = snapshotFixture()
 		const pool = snapshot.pools[0]
 		if (pool === undefined) throw new Error('Pool fixture missing')
@@ -145,15 +145,9 @@ describe('oracle request funding bounds', () => {
 
 		const plan = eligibleOperationPlans(snapshot, options).find(candidate => candidate.definitionId === 'statoblast.oracle.request-price')
 		if (plan === undefined) throw new Error('Request-price plan missing')
-		expect(plan.steps).toHaveLength(3)
-
-		for (const approval of plan.steps.slice(0, 2)) {
-			const decoded = decodeFunctionData({ abi: genesisReputationTokenAbi, data: approval.data })
-			expect(decoded.functionName).toBe('approve')
-			expect(decoded.args).toEqual([pool.coordinator, 90_909_090_909_082n])
-		}
-
-		const request = plan.steps[2]
+		expect(plan.steps).toHaveLength(1)
+		expect(plan.maximumCleanupTransactionCount).toBeUndefined()
+		const request = plan.steps[0]
 		if (request === undefined) throw new Error('Request-price step missing')
 		const decoded = decodeFunctionData({ abi: openOraclePriceCoordinatorAbi, data: request.data })
 		expect(decoded.functionName).toBe('requestPrice')
@@ -180,10 +174,9 @@ describe('oracle request funding bounds', () => {
 			expect.arrayContaining([
 				expect.objectContaining({ emitter: snapshot.deployments.weth, equals: '90909090909082', field: 'value', indexed: { from: snapshot.wallet.address, to: pool.coordinator }, kind: 'decoded-event-field' }),
 				expect.objectContaining({ emitter: pool.repToken, equals: '90909090909082', field: 'value', indexed: { from: snapshot.wallet.address, to: pool.coordinator }, kind: 'decoded-event-field' }),
-				expect.objectContaining({ contract: snapshot.deployments.weth, expected: '0', functionName: 'allowance', kind: 'storage-postcondition' }),
-				expect.objectContaining({ contract: pool.repToken, expected: '0', functionName: 'allowance', kind: 'storage-postcondition' }),
 			]),
 		)
+		expect(request.evidence.some(item => item.kind === 'storage-postcondition' && item.functionName === 'allowance')).toBe(false)
 	})
 
 	test('makes an invalid funding candidate ineligible without aborting catalog evaluation', () => {

@@ -69,14 +69,14 @@ function exactPreviousRepApproval(snapshot: EcosystemSnapshot, context: Operatio
 function zoltarApprovalPrepared(snapshot: EcosystemSnapshot, context: OperationContinuationContext, token: `0x${string}`, spender: `0x${string}`, required: bigint) {
 	const previous = exactPreviousRepApproval(snapshot, context, token, spender, required)
 	if (context.previousPlan.steps.some(step => step.id === 'approve-rep') && previous === undefined) return false
-	if (previous !== undefined && context.confirmedStepIds.includes(previous.id)) return allowance(tokenInventory(snapshot, token), spender) === required
+	if (previous !== undefined && context.confirmedStepIds.includes(previous.id)) return allowance(tokenInventory(snapshot, token), spender) >= required
 	if (previous === undefined) return allowance(tokenInventory(snapshot, token), spender) >= required
 	return true
 }
 
 function zoltarRemainingApproval(snapshot: EcosystemSnapshot, context: OperationContinuationContext, token: `0x${string}`, spender: `0x${string}`, required: bigint) {
 	const previous = exactPreviousRepApproval(snapshot, context, token, spender, required)
-	return previous !== undefined && !context.confirmedStepIds.includes(previous.id) ? [zoltarApprovalStep(snapshot, token, spender, required)] : []
+	return previous !== undefined && !context.confirmedStepIds.includes(previous.id) && allowance(tokenInventory(snapshot, token), spender) < required ? [zoltarApprovalStep(snapshot, token, spender, required)] : []
 }
 
 function zoltarCleanupPlan(snapshot: EcosystemSnapshot, context: OperationContinuationContext, token: `0x${string}`, spender: `0x${string}`, required: bigint, label: string) {
