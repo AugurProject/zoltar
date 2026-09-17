@@ -1,3 +1,4 @@
+import { workflowProgress } from './workflow-progress.js'
 import { fullIdentifier } from './dom.js'
 import { isRecord } from '@zoltar/bot-shared/infrastructure/json-validation'
 import { displayOperationInput, serializeOperationInput } from './operation-input-format.js'
@@ -119,8 +120,8 @@ export function createOperationDialog(options: { request: (value: unknown) => Pr
 	const actions = element('div')
 	actions.className = 'operation-actions'
 	actions.append(preview, execute, retry)
-	const workflowLink = element('a', 'View recent activity')
-	workflowLink.href = '/overview#activity-list'
+	const workflowLink = element('a', 'View workflows')
+	workflowLink.href = '/workflows'
 	const recoveryLink = element('a', 'Open Recovery')
 	recoveryLink.href = '/recovery'
 	recoveryLink.className = 'text-link'
@@ -202,6 +203,7 @@ export function createOperationDialog(options: { request: (value: unknown) => Pr
 	}
 
 	function show(value: Result) {
+		transactions.hidden = false
 		fieldDefinitions = value.fields
 		coverage.replaceChildren(element('summary', 'Automatically derived arguments'))
 		const derived = value.coverage.filter(field => field.source === 'derived')
@@ -267,6 +269,7 @@ export function createOperationDialog(options: { request: (value: unknown) => Pr
 
 	async function load(action: 'inspect' | 'preview') {
 		if (selected === undefined || busy) return
+		generation += 1
 		const requestGeneration = generation
 		const focusedId = document.activeElement instanceof HTMLElement && fields.contains(document.activeElement) ? document.activeElement.id : undefined
 		busy = true
@@ -327,35 +330,26 @@ export function createOperationDialog(options: { request: (value: unknown) => Pr
 			const execution = record(response['execution'])
 			status.textContent = [string(execution['message']), string(execution['reason'])].filter(Boolean).join(' ')
 			recoveryLink.hidden = !['recovery', 'failed', 'confirming'].includes(string(execution['outcome'])) && !(execution['status'] !== 'pending' && execution['outcome'] === 'submitted')
-			const transactionSignature = JSON.stringify(execution['transactions'] ?? [])
+			const transactionSteps = Array.isArray(execution['transactions']) ? execution['transactions'] : []
+			const steps = Array.isArray(execution['steps']) ? execution['steps'] : transactionSteps
+			const active = execution['status'] === 'pending' || ['submitted', 'confirming', 'executing'].includes(string(execution['outcome']))
+			const transactionSignature = JSON.stringify([steps, active])
 			if (transactionSignature !== renderedTransactions) {
 				renderedTransactions = transactionSignature
-				receipts.replaceChildren()
-				if (Array.isArray(execution['transactions']) && execution['transactions'].length !== 0) {
-					receipts.append(element('h3', 'Transactions'))
-					for (const value of execution['transactions']) {
-						const transaction = record(value)
-						const hash = string(transaction['hash'])
-						if (!/^0x[0-9a-f]{64}$/i.test(hash)) continue
-						const row = element('div')
-						const transactionStatus = string(transaction['status'])
-						const labels: Record<string, string> = { signed: 'Signed · submission unconfirmed', submitted: 'Submitted · awaiting confirmation', confirmed: 'Confirmed', failed: 'Failed', blocked: 'Recovery required' }
-						row.append(element('p', `${string(transaction['label'])} · ${labels[transactionStatus] ?? transactionStatus}`))
-						const url = string(transaction['explorerUrl'])
-						const parsed = URL.canParse(url) ? new URL(url) : undefined
-						const explorerUrl = parsed !== undefined && ['http:', 'https:'].includes(parsed.protocol) && !parsed.username && !parsed.password ? parsed.href : undefined
-						row.append(fullIdentifier(hash, 'transaction hash', { explorerUrl }))
-						receipts.append(row)
-					}
-				}
+				receipts.replaceChildren(workflowProgress(steps, active))
+				receipts.setAttribute('aria-busy', String(active))
+				transactions.hidden = steps.length !== 0
 			}
-			if (execution['status'] === 'pending') window.setTimeout(() => void poll(reference, requestGeneration), 1500)
-			else {
+			const backgroundWorkflow = ['submitted', 'confirming', 'recovery'].includes(string(execution['outcome']))
+			if (execution['status'] === 'pending' || backgroundWorkflow) window.setTimeout(() => void poll(reference, requestGeneration), 1500)
+			if (execution['status'] !== 'pending') {
 				busy = false
 				fields.disabled = false
 				preview.disabled = false
-				if (selected?.id !== undefined) retainedExecutions.delete(selected.id)
-				executionReference = undefined
+				if (!backgroundWorkflow) {
+					if (selected?.id !== undefined) retainedExecutions.delete(selected.id)
+					executionReference = undefined
+				}
 			}
 		} catch (error) {
 			if (requestGeneration !== generation) return

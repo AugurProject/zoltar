@@ -1,3 +1,4 @@
+import { createWorkflowHistory, type Workflow, type WorkflowStep } from './workflow-history.js'
 import { requestWithTimeout } from '@zoltar/bot-shared/dashboard/polling'
 import { optionalRecord as record } from '@zoltar/bot-shared/infrastructure/json-validation'
 import { createExecutionPolicyDraft } from './execution-policy-draft.js'
@@ -42,26 +43,6 @@ type Topology = {
 	totalCounts: { auctions: number; pairs: number; pools: number; reports: number; universes: number }
 	truncated?: boolean | undefined
 	universes: Array<{ forkQuestionId?: string | undefined; forkTime?: string | number | undefined; id?: string | undefined; knownChildOutcomeCount?: number | undefined; parentUniverseId?: string | undefined; repToken?: string | undefined }>
-}
-
-type WorkflowStep = {
-	confirmedAt?: string | undefined
-	label?: string | undefined
-	status?: string | undefined
-	txHash?: string | undefined
-}
-
-type Workflow = {
-	classification?: string | undefined
-	completedAt?: string | undefined
-	ecosystem?: string | undefined
-	id?: string | undefined
-	label?: string | undefined
-	operationId?: string | undefined
-	startedAt?: string | undefined
-	status?: string | undefined
-	updatedAt?: string | undefined
-	steps: WorkflowStep[]
 }
 
 type PendingTransaction = {
@@ -132,6 +113,7 @@ type Snapshot = {
 	alerts: { message?: string | undefined; severity?: string | undefined }[]
 	chainId?: string | number | undefined
 	currentWorkflow?: Workflow | undefined
+	workflows: Workflow[]
 	execute?: boolean | undefined
 	inventory: { eth?: string | number | undefined; rep: RepBalance[]; weth?: string | number | undefined }
 	inventoryAvailable?: boolean | undefined
@@ -247,6 +229,7 @@ const submissionFreshness = element('submission-freshness', HTMLElement)
 const submissionSignerProof = element('submission-signer-proof', HTMLElement)
 const submissionLastCheck = element('submission-last-check', HTMLElement)
 const currentWorkflow = element('current-workflow', HTMLDivElement)
+const renderWorkflowHistory = createWorkflowHistory(element('workflow-history', HTMLDivElement))
 const coverageSummary = element('coverage-summary', HTMLDivElement)
 const catalogFilter = element('catalog-filter', HTMLSelectElement)
 const catalogClassificationFilter = element('catalog-classification-filter', HTMLSelectElement)
@@ -617,6 +600,7 @@ function parseSnapshot(value: unknown): Snapshot {
 		alerts: list(source['alerts'], entry => ({ message: stringValue(entry['message']), severity: stringValue(entry['severity']) })),
 		chainId: scalarValue(source['chainId']),
 		currentWorkflow: parseWorkflow(source['currentWorkflow']),
+		workflows: list(source['workflows'], parseWorkflow).filter(value => value !== undefined),
 		execute: booleanValue(source['execute']),
 		inventory: {
 			eth: scalarValue(inventory['eth']),
@@ -867,7 +851,7 @@ function formatRelative(value: string | undefined) {
 
 function obligationDetail(obligation: Obligation) {
 	if (obligation.status === 'deferred' && obligation.notBefore !== undefined && obligation.automaticRetryCount !== undefined && obligation.automaticRetryLimit !== undefined) {
-		return `${ecosystemLabel(obligation.ecosystem)} · ${obligation.automaticRetryCount.toString()} of ${obligation.automaticRetryLimit.toString()} finalized attempts failed · next attempt ${formatDate(obligation.notBefore)}`
+		return `${ecosystemLabel(obligation.ecosystem)} · ${obligation.automaticRetryCount.toString()} of ${obligation.automaticRetryLimit.toString()} included attempts failed · next attempt ${formatDate(obligation.notBefore)}`
 	}
 	if (obligation.status === 'deferred') return `${ecosystemLabel(obligation.ecosystem)} · tracked, not currently actionable`
 	return `${ecosystemLabel(obligation.ecosystem)} · due ${formatDate(obligation.dueAt)}`
@@ -982,6 +966,7 @@ function renderOverview(value: Snapshot) {
 	renderRpcHealth(value)
 	renderSubmissionHealth(value.submissionHealth)
 	renderWorkflow(value.currentWorkflow, value.pendingTransactions)
+	renderWorkflowHistory(value.workflows, configuration?.explorerUrl, value.paused === true)
 	renderCoverage(value.operationEvaluations)
 	retirementDashboard.render(value)
 }
@@ -2012,7 +1997,7 @@ workflowForm.addEventListener('submit', event => {
 
 function renderObligationConfirmationHelp() {
 	const confirmation = obligationActionInput.value === 'abandon' ? 'ABANDON OBLIGATION' : 'RETRY VERIFIED SAFE FAILURE'
-	obligationConfirmationHelp.textContent = `Type ${confirmation}. ${obligationActionInput.value === 'abandon' ? 'This creates a permanent tombstone and transfers responsibility to the operator.' : 'Retry is limited to unsigned failures, finalized reverts, and verified nonce cancellations; semantic uncertainty still requires manual reconciliation.'}`
+	obligationConfirmationHelp.textContent = `Type ${confirmation}. ${obligationActionInput.value === 'abandon' ? 'This creates a permanent tombstone and transfers responsibility to the operator.' : 'Retry is limited to unsigned failures, canonically included reverts, and verified nonce cancellations; semantic uncertainty still requires manual reconciliation.'}`
 }
 
 obligationActionInput.addEventListener('change', renderObligationConfirmationHelp)

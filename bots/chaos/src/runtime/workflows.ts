@@ -380,7 +380,7 @@ function retryableFinalizedFailureStep(workflow: DurableWorkflow) {
 
 export function markRetryableWorkflowForRediscovery(workflow: DurableWorkflow, reason: string) {
 	const step = retryableFinalizedFailureStep(workflow)
-	if (step === undefined) throw new Error(`Workflow ${workflow.id} has no retryable finalized failure`)
+	if (step === undefined) throw new Error(`Workflow ${workflow.id} has no retryable included failure`)
 	if (workflow.classification !== 'selectable') throw new Error(`Workflow ${workflow.id} cannot use selectable cleanup recovery`)
 	if (!workflow.steps.some(candidate => candidate.status === 'confirmed')) throw new Error(`Workflow ${workflow.id} has no confirmed preparation to clean up`)
 	step.failure ??= reason
@@ -393,7 +393,7 @@ export function markRetryableWorkflowForRediscovery(workflow: DurableWorkflow, r
 
 export function markRetryableLifecycleWorkflowForRediscovery(workflow: DurableWorkflow, reason: string) {
 	const step = retryableFinalizedFailureStep(workflow)
-	if (step === undefined) throw new Error(`Workflow ${workflow.id} has no retryable finalized failure`)
+	if (step === undefined) throw new Error(`Workflow ${workflow.id} has no retryable included failure`)
 	if (workflow.classification !== 'lifecycle-obligation') {
 		throw new Error(`Workflow ${workflow.id} cannot use lifecycle obligation retry recovery`)
 	}

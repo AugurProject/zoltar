@@ -46,7 +46,7 @@ describe('chaos dashboard server', () => {
 		expect(metrics.status).toBe(200)
 		expect(await metrics.text()).toContain('zoltar_chaos_ready 0')
 
-		for (const route of ['overview', 'catalog', 'ecosystem', 'recovery', 'settings']) {
+		for (const route of ['overview', 'catalog', 'workflows', 'ecosystem', 'recovery', 'settings']) {
 			const response = await dashboardFetch(new URL(`/${route}`, server.url))
 			expect(response.status).toBe(200)
 			expect(response.headers.get('cache-control')).toBe('no-store')
@@ -1443,4 +1443,16 @@ describe('chaos dashboard server', () => {
 	test('projects the internal all-selection sentinel as an explicit public null', () => {
 		expect(Reflect.get(publicChaosConfiguration({ settings: { strategy: { selectableOperationAllowlist: undefined } } }), 'selectableOperationAllowlist')).toBeNull()
 	})
+})
+
+test('workflow log exposes retained terminal and active workflows without signed payloads', () => {
+	const state = publicChaosState({
+		workflows: [
+			{ id: 'done', label: 'Seed pool', status: 'completed', signedTransaction: 'secret', steps: [{ label: 'Approve', status: 'confirmed', transactionHash: `0x${'ab'.repeat(32)}`, data: 'secret' }] },
+			{ id: 'waiting', status: 'waiting-transaction', steps: [] },
+		],
+	})
+	expect(state['workflows']).toHaveLength(2)
+	expect(JSON.stringify(state['workflows'])).toContain('completed')
+	expect(JSON.stringify(state['workflows'])).not.toContain('secret')
 })

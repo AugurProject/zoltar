@@ -1,3 +1,5 @@
+import { advanceRollbackQueue } from './inclusion-journal.ts'
+import { commitReceiptDisposition as commitRecoveryDisposition } from './receipt-disposition.ts'
 import { formatDecimalAmount } from '@zoltar/bot-shared/infrastructure/json-validation'
 import { keccak256, parseTransaction, toHex, type Hex } from '@zoltar/bot-shared/ethereum'
 import { submitSignedTransaction } from '@zoltar/bot-shared/execution/transaction-submission'
@@ -34,7 +36,7 @@ import {
 	CHAOS_FINALITY_BLOCKS,
 	exactAttestedEthBalance,
 	executionReadClients,
-	finalizedReceiptWithQuorum,
+	includedReceiptWithQuorum,
 	requiredConnectivity,
 	sameCanonicalExecutionAnchor,
 	storageObservations,
@@ -56,50 +58,6 @@ function storageBaselineMap(intent: PendingTransactionIntent) {
 
 function removeIntent(environment: ExecutionEnvironment, id: string) {
 	environment.state.pendingTransactions = environment.state.pendingTransactions.filter(intent => intent.id !== id)
-}
-
-function recoveryDispositionJournal(environment: ExecutionEnvironment, intent: PendingTransactionIntent, workflow: ReturnType<typeof recoverableWorkflowForIntent>) {
-	if (!environment.state.pendingTransactions.some(candidate => candidate.id === intent.id)) {
-		throw new Error(`Pending transaction ${intent.hash} is unavailable for recovery disposition`)
-	}
-	if (!environment.state.workflows.some(candidate => candidate.id === workflow.id)) {
-		throw new Error(`Workflow ${workflow.id} is unavailable for recovery disposition`)
-	}
-	return {
-		activities: structuredClone(environment.state.activities),
-		pendingTransactions: structuredClone(environment.state.pendingTransactions),
-		workflows: structuredClone(environment.state.workflows),
-	}
-}
-
-function restoreRecoveryDispositionJournal(environment: ExecutionEnvironment, journal: ReturnType<typeof recoveryDispositionJournal>) {
-	environment.state.activities = journal.activities
-	environment.state.pendingTransactions = journal.pendingTransactions
-	environment.state.workflows = journal.workflows
-}
-
-async function commitRecoveryDisposition(environment: ExecutionEnvironment, intent: PendingTransactionIntent, workflow: ReturnType<typeof recoverableWorkflowForIntent>, apply: () => void) {
-	const journal = recoveryDispositionJournal(environment, intent, workflow)
-	try {
-		apply()
-	} catch (error) {
-		restoreRecoveryDispositionJournal(environment, journal)
-		throw error
-	}
-	try {
-		await persist(environment)
-	} catch (error) {
-		restoreRecoveryDispositionJournal(environment, journal)
-		let restorationError: unknown
-		try {
-			await persist(environment)
-		} catch (restoreError) {
-			restorationError = restoreError
-		}
-		const dispositionFailure = error instanceof Error ? error.message : String(error)
-		const restorationFailure = restorationError === undefined ? '' : `; restoring the submitted journal also failed: ${restorationError instanceof Error ? restorationError.message : String(restorationError)}`
-		throw new TransactionAwaitingRecovery(intent.label, intent.hash, `recovery disposition was not durably committed: ${dispositionFailure}${restorationFailure}`)
-	}
 }
 
 async function recoveredReceiptObservations(environment: ExecutionEnvironment, intent: PendingTransactionIntent, receipt: ReturnType<typeof requireSuccessfulReceipt>) {
@@ -195,14 +153,14 @@ async function exactIntentIsVisible(environment: ExecutionEnvironment, intent: P
 }
 
 async function resolveReceipt(environment: ExecutionEnvironment, intent: PendingTransactionIntent) {
-	const result = await finalizedReceiptWithQuorum(environment, intent.hash)
+	const result = await includedReceiptWithQuorum(environment, intent.hash)
 	if (result.receipt === undefined) return result
 	const workflow = recoverableWorkflowForIntent(environment.state, intent.workflowId)
 	let receipt: ReturnType<typeof requireSuccessfulReceipt>
 	try {
 		receipt = requireSuccessfulReceipt(intent.label, result.receipt)
 	} catch (error) {
-		await commitRecoveryDisposition(environment, intent, workflow, () => {
+		await commitRecoveryDisposition(environment, intent, workflow, result.receipt, () => {
 			removeIntent(environment, intent.id)
 			markWorkflowFailed(workflow, intent.stepId, error, 'receipt-reverted')
 			recordActivity(environment.state, {
@@ -225,7 +183,7 @@ async function resolveReceipt(environment: ExecutionEnvironment, intent: Pending
 	try {
 		evidenceDisposition = stepReceiptEvidenceDisposition({ evidence: intent.semanticExpectation.evidence, label: intent.label }, receipt, observations)
 	} catch (error) {
-		await commitRecoveryDisposition(environment, intent, workflow, () => {
+		await commitRecoveryDisposition(environment, intent, workflow, result.receipt, () => {
 			removeIntent(environment, intent.id)
 			markWorkflowFailed(workflow, intent.stepId, error, 'semantic-failure')
 			recordActivity(environment.state, {
@@ -238,7 +196,7 @@ async function resolveReceipt(environment: ExecutionEnvironment, intent: Pending
 		})
 		throw error
 	}
-	await commitRecoveryDisposition(environment, intent, workflow, () => {
+	await commitRecoveryDisposition(environment, intent, workflow, result.receipt, () => {
 		removeIntent(environment, intent.id)
 		if (evidenceDisposition === 'waiting-canonical') markWorkflowStepWaitingCanonical(workflow, intent.stepId, receipt.transactionHash)
 		else markWorkflowStepConfirmed(workflow, intent.stepId, receipt.transactionHash)
@@ -487,8 +445,10 @@ async function resolveQueuedReplacement(environment: ExecutionEnvironment, inten
 		verified = await verifyRecoveredReplacement(environment, intent, replacementHash)
 	} catch (error) {
 		if (!(error instanceof ReplacementTransactionFailed)) throw error
+		const failed = await includedReceiptWithQuorum(environment, replacementHash)
+		if (failed.receipt === undefined) throw error
 		const workflow = recoverableWorkflowForIntent(environment.state, intent.workflowId)
-		await commitRecoveryDisposition(environment, intent, workflow, () => {
+		await commitRecoveryDisposition(environment, intent, workflow, failed.receipt, () => {
 			removeIntent(environment, intent.id)
 			markWorkflowFailed(workflow, intent.stepId, error, 'receipt-reverted')
 			recordActivity(environment.state, {
@@ -502,7 +462,7 @@ async function resolveQueuedReplacement(environment: ExecutionEnvironment, inten
 		throw error
 	}
 	const workflow = recoverableWorkflowForIntent(environment.state, intent.workflowId)
-	await commitRecoveryDisposition(environment, intent, workflow, () => {
+	await commitRecoveryDisposition(environment, intent, workflow, verified.receipt, () => {
 		removeIntent(environment, intent.id)
 		if (verified.evidenceDisposition === 'waiting-canonical') markWorkflowStepWaitingCanonical(workflow, intent.stepId, verified.receipt.transactionHash)
 		else markWorkflowStepConfirmed(workflow, intent.stepId, verified.receipt.transactionHash)
@@ -544,9 +504,9 @@ async function verifyRecoveredCancellation(environment: ExecutionEnvironment, in
 	if (!transactionIsStrictNonceCancellation(transaction, intent)) {
 		throw new Error('Nonce cancellation must be a zero-value, empty-calldata self-transfer from the recovery signer at the exact pending nonce')
 	}
-	const receiptResult = await finalizedReceiptWithQuorum(environment, cancellationHash)
+	const receiptResult = await includedReceiptWithQuorum(environment, cancellationHash)
 	if (receiptResult.receipt === undefined) {
-		throw new TransactionAwaitingRecovery(intent.label, cancellationHash, 'nonce cancellation is awaiting a canonical finalized receipt')
+		throw new TransactionAwaitingRecovery(intent.label, cancellationHash, 'nonce cancellation is awaiting a canonical included receipt')
 	}
 	const receipt = requireSuccessfulReceipt(`Nonce cancellation for ${intent.label}`, receiptResult.receipt)
 	await assertCancellationSignerHasNoCode(environment, intent, receipt)
@@ -574,7 +534,7 @@ async function assertCancellationSignerHasNoCode(environment: ExecutionEnvironme
 		}),
 		connectivity.rpcQuorum,
 	)
-	if (code !== '0x') throw new Error('Nonce cancellation signer has code at its finalized receipt block')
+	if (code !== '0x') throw new Error('Nonce cancellation signer has code at its receipt block')
 }
 
 async function resolveQueuedCancellation(environment: ExecutionEnvironment, intent: PendingTransactionIntent) {
@@ -582,12 +542,12 @@ async function resolveQueuedCancellation(environment: ExecutionEnvironment, inte
 	if (cancellationHash === undefined) return false
 	const receipt = await verifyRecoveredCancellation(environment, intent, cancellationHash)
 	const workflow = recoverableWorkflowForIntent(environment.state, intent.workflowId)
-	await commitRecoveryDisposition(environment, intent, workflow, () => {
+	await commitRecoveryDisposition(environment, intent, workflow, receipt, () => {
 		removeIntent(environment, intent.id)
 		markWorkflowFailed(workflow, intent.stepId, new Error(`Original transaction was superseded by verified nonce cancellation ${receipt.transactionHash}`), 'nonce-cancelled')
 		recordActivity(environment.state, {
 			hash: receipt.transactionHash,
-			message: `Verified nonce cancellation finalized; original workflow closed: ${intent.label}`,
+			message: `Verified nonce cancellation included; original workflow closed: ${intent.label}`,
 			operationId: intent.operationId,
 			status: 'skipped',
 			type: 'recovery',
@@ -597,10 +557,9 @@ async function resolveQueuedCancellation(environment: ExecutionEnvironment, inte
 }
 
 export async function recoverPendingTransactions(environment: ExecutionEnvironment, options: RecoveryOptions = {}) {
+	await advanceRollbackQueue(environment)
 	if (environment.state.pendingTransactions.length === 0) return false
-	if (environment.state.pendingTransactions.length !== 1) {
-		throw new Error('Multiple pending transaction intents require manual reconciliation')
-	}
+	if (environment.state.pendingTransactions.length !== 1) throw new Error('Multiple pending transaction intents require manual reconciliation')
 	const intent = environment.state.pendingTransactions[0]
 	if (intent === undefined) throw new Error('Pending transaction journal changed during recovery')
 	assertIntentIdentity(environment, intent)
@@ -675,9 +634,9 @@ async function verifyRecoveredReplacement(environment: ExecutionEnvironment, int
 	if (!transactionMatchesIntent(transaction, intent)) {
 		throw new Error('Replacement transaction does not match the persisted intent semantics')
 	}
-	const receiptResult = await finalizedReceiptWithQuorum(environment, replacementHash)
+	const receiptResult = await includedReceiptWithQuorum(environment, replacementHash)
 	if (receiptResult.receipt === undefined) {
-		throw new TransactionAwaitingRecovery(intent.label, replacementHash, 'replacement is awaiting a canonical finalized receipt')
+		throw new TransactionAwaitingRecovery(intent.label, replacementHash, 'replacement is awaiting a canonical included receipt')
 	}
 	let successful: ReturnType<typeof requireSuccessfulReceipt>
 	try {

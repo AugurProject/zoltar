@@ -1,3 +1,6 @@
+import { compactDurableState, MAXIMUM_ACTIVITY_COUNT, MAXIMUM_OBLIGATION_TOMBSTONE_COUNT } from './durable-compaction.ts'
+export { MAXIMUM_OBLIGATION_TOMBSTONE_COUNT } from './durable-compaction.ts'
+import { parseRollbackQueue, serializedRollbackQueue, type RollbackQueuedTransaction, parseIncludedTransactions, serializedIncludedTransactions, serializedTransactionIntent, type IncludedTransaction } from './included-transactions.ts'
 import { storedInputSources, storedInputValues } from '../operations/input-values.ts'
 import type { RuntimeState } from './runtime-state.ts'
 export type { RuntimeState, RuntimeTopologySummary, WalletBalanceState } from './runtime-state.ts'
@@ -10,16 +13,12 @@ import type { ChaosProtocolIndex } from '#monitoring/protocol-index'
 import type { ChaosEcosystem, OperationContinuationDisposition, OperationEvidence, OperationPreflightCall, OperationRisk, OperationTerminalSubmission, OperationWalletAssetDebit } from '#operations/types'
 import { DURABLE_STATE_VERSION, initialDurableState, initialRuntimeState } from './initial-state.ts'
 import { assertSafeRetirementRecipient, initialRetirementState, parseRetirementState, type DurableRetirementState } from './retirement.ts'
-import { parsePendingTransactionObservation, serializedPendingTransactionObservation, type PendingTransactionObservation } from './pending-transaction-observation.ts'
+import { parsePendingTransactionObservation, type PendingTransactionObservation } from './pending-transaction-observation.ts'
 import { serializedScheduler } from './state-serialization.ts'
 import { assertExactKeys, dataHex, hash, identifier, nonemptyString, optionalString, optionalTimestamp, positiveIntegerString, requiredRecord, timestamp, uint256String, unsignedIntegerString } from './validators.ts'
 import { loadPersistedProtocolIndex, parseProtocolIndexReference, persistProtocolIndexGeneration, pruneProtocolIndexGenerations, snapshotProtocolIndex, type ProtocolIndexFileHandle, type ProtocolIndexFilesystem, type ProtocolIndexReference } from './protocol-index-store.ts'
 
-const MAXIMUM_ACTIVITY_COUNT = 500
 export const MAXIMUM_LIFECYCLE_PRESENCE_BLOCKER_COUNT = 1_000_000
-const MAXIMUM_TERMINAL_OBLIGATION_COUNT = 500
-export const MAXIMUM_OBLIGATION_TOMBSTONE_COUNT = 10_000
-const MAXIMUM_TERMINAL_WORKFLOW_COUNT = 500
 const MAXIMUM_STATE_BYTES = 5 * 1024 * 1024
 
 export type Activity = {
@@ -109,7 +108,7 @@ export type DurableWorkflow = {
 }
 
 export type DurableObligation = {
-	/** Distinct canonically finalized retryable failures that consumed the bounded automatic retry budget. */
+	/** Distinct canonically included retryable failures that consumed the bounded automatic retry budget. */
 	automaticRetryCount: number
 	attemptCount: number
 	blockers: string[]
@@ -185,6 +184,8 @@ export type PendingTransactionIntent = {
 }
 
 export type DurableState = {
+	includedTransactions: IncludedTransaction[]
+	rollbackQueue: RollbackQueuedTransaction[]
 	activities: Activity[]
 	chainId: number
 	lifecyclePresenceBlocker: DurableLifecyclePresenceBlocker | undefined
@@ -952,7 +953,12 @@ async function loadDurableStateFile(path: string, expectedChainId: number, files
 	const state = requiredRecord(value, 'chaos-bot state')
 	const storedVersion = state['version']
 	if (storedVersion !== 3 && storedVersion !== DURABLE_STATE_VERSION) throw new Error('Chaos-bot state version is unsupported')
-	assertExactKeys(state, ['activities', 'chainId', 'lifecyclePresenceBlocker', 'obligationTombstones', 'obligations', 'pendingTransactions', 'profileId', 'protocolIndex', ...(storedVersion === 3 ? [] : ['retirement']), 'safetyPaused', 'scheduler', 'signerAddress', 'version', 'workflows'], [], 'chaos-bot state')
+	assertExactKeys(
+		state,
+		['activities', 'chainId', 'lifecyclePresenceBlocker', 'obligationTombstones', 'obligations', 'pendingTransactions', 'profileId', 'protocolIndex', ...(storedVersion === 3 ? [] : ['retirement']), 'safetyPaused', 'scheduler', 'signerAddress', 'version', 'workflows'],
+		['includedTransactions', 'rollbackQueue'],
+		'chaos-bot state',
+	)
 	if (state['chainId'] !== expectedChainId) throw new Error(`Chaos-bot state belongs to chain ${String(state['chainId'])}, expected chain ${expectedChainId.toString()}`)
 	if (typeof state['safetyPaused'] !== 'boolean') {
 		throw new Error('chaos-bot state.safetyPaused must be a boolean')
@@ -983,6 +989,12 @@ async function loadDurableStateFile(path: string, expectedChainId: number, files
 	}
 	const pendingTransactions = await Promise.all(state['pendingTransactions'].map((intent, index) => parsePendingTransaction(intent, index, expectedChainId)))
 	const signerAddress = state['signerAddress'] === null ? undefined : getAddress(nonemptyString(state['signerAddress'], 'chaos-bot state.signerAddress'))
+	const includedTransactions = await parseIncludedTransactions(state['includedTransactions'], signerAddress, { intent: (value, index) => parsePendingTransaction(value, index, expectedChainId), workflow: parseWorkflow, obligation: parseObligation })
+	const rollbackQueue = await parseRollbackQueue(state['rollbackQueue'], signerAddress, { intent: (value, index) => parsePendingTransaction(value, index, expectedChainId), workflow: parseWorkflow, obligation: parseObligation })
+	if (rollbackQueue.some(record => pendingTransactions.some(intent => record.intent.nonce < intent.nonce))) throw new Error('Rollback queue precedes the active pending nonce')
+	const retainedNonces = [...includedTransactions, ...rollbackQueue].map(record => record.intent.nonce.toString())
+	if (new Set([...retainedNonces, ...pendingTransactions.map(intent => intent.nonce.toString())]).size !== retainedNonces.length + pendingTransactions.length || rollbackQueue.some(record => !workflowById.has(record.workflow.id))) throw new Error('Rollback queue conflicts with retained nonces or workflows')
+	if (includedTransactions.some(record => !workflowById.has(record.workflow.id) || pendingTransactions.some(intent => intent.nonce === record.intent.nonce))) throw new Error('Included transaction journal conflicts with current workflows or pending nonces')
 	if (new Set(pendingTransactions.map(intent => intent.id)).size !== pendingTransactions.length) throw new Error('Chaos-bot state contains duplicate transaction intent IDs')
 	if (new Set(pendingTransactions.map(intent => intent.nonce.toString())).size !== pendingTransactions.length) throw new Error('Chaos-bot state contains duplicate pending transaction nonces')
 	for (const intent of pendingTransactions) {
@@ -1019,6 +1031,8 @@ async function loadDurableStateFile(path: string, expectedChainId: number, files
 		throw new Error('Protocol index wallet does not match the durable signer scope')
 	}
 	return {
+		includedTransactions,
+		rollbackQueue,
 		activities: state['activities'].map(parseActivity),
 		chainId: expectedChainId,
 		lifecyclePresenceBlocker,
@@ -1041,7 +1055,7 @@ export async function loadDurableState(path: string, expectedChainId: number, fi
 }
 
 function serializedDurableState(
-	state: Pick<DurableState, 'activities' | 'chainId' | 'lifecyclePresenceBlocker' | 'obligationTombstones' | 'obligations' | 'pendingTransactions' | 'profileId' | 'protocolIndex' | 'retirement' | 'safetyPaused' | 'scheduler' | 'signerAddress' | 'workflows'>,
+	state: Pick<DurableState, 'rollbackQueue' | 'includedTransactions' | 'activities' | 'chainId' | 'lifecyclePresenceBlocker' | 'obligationTombstones' | 'obligations' | 'pendingTransactions' | 'profileId' | 'protocolIndex' | 'retirement' | 'safetyPaused' | 'scheduler' | 'signerAddress' | 'workflows'>,
 	persistedProtocolIndex: ChaosProtocolIndex | ProtocolIndexReference | null = state.protocolIndex ?? null,
 ) {
 	return {
@@ -1050,14 +1064,9 @@ function serializedDurableState(
 		lifecyclePresenceBlocker: state.lifecyclePresenceBlocker ?? null,
 		obligationTombstones: state.obligationTombstones,
 		obligations: state.obligations,
-		pendingTransactions: state.pendingTransactions.map(intent => ({
-			...intent,
-			maxBlockNumber: intent.maxBlockNumber.toString(),
-			nonce: intent.nonce.toString(),
-			observation: intent.observation === undefined ? undefined : serializedPendingTransactionObservation(intent.observation),
-			submissionBlock: intent.submissionBlock?.toString(),
-			value: intent.value.toString(),
-		})),
+		includedTransactions: serializedIncludedTransactions(state.includedTransactions),
+		rollbackQueue: serializedRollbackQueue(state.rollbackQueue),
+		pendingTransactions: state.pendingTransactions.map(serializedTransactionIntent),
 		profileId: state.profileId,
 		protocolIndex: persistedProtocolIndex,
 		retirement: state.retirement,
@@ -1069,64 +1078,18 @@ function serializedDurableState(
 	}
 }
 
-function newestIds<T extends { id: string; updatedAt: string }>(values: readonly T[], limit: number) {
-	return new Set(
-		[...values]
-			.sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))
-			.slice(0, limit)
-			.map(value => value.id),
-	)
-}
-
-function replaceArrayContents<T>(target: T[], retained: readonly T[]) {
-	target.splice(0, target.length, ...retained)
-}
-
-function compactDurableState(state: Pick<DurableState, 'activities' | 'obligationTombstones' | 'obligations' | 'pendingTransactions' | 'workflows'>) {
-	if (state.activities.length > MAXIMUM_ACTIVITY_COUNT) state.activities.splice(MAXIMUM_ACTIVITY_COUNT)
-	const tombstones = new Map(state.obligationTombstones.map(tombstone => [tombstone.id, tombstone]))
-	for (const obligation of state.obligations) {
-		if (obligation.status !== 'completed' && obligation.status !== 'abandoned') continue
-		if (tombstones.has(obligation.id)) continue
-		const workflow = state.workflows.find(candidate => candidate.id === obligation.workflowId)
-		tombstones.set(obligation.id, {
-			id: obligation.id,
-			resolution: obligation.status,
-			resolvedAt: obligation.status === 'completed' ? (obligation.completedAt ?? obligation.updatedAt) : (obligation.resolvedAt ?? obligation.updatedAt),
-			resolvedAtBlock: workflow?.createdAtBlock ?? '0',
-			...(obligation.status === 'abandoned'
-				? {
-						resolutionReason: obligation.resolutionReason ?? 'Manually abandoned by the operator',
-					}
-				: {}),
-		})
-	}
-	if (tombstones.size > MAXIMUM_OBLIGATION_TOMBSTONE_COUNT) {
-		throw new Error(`Chaos-bot state contains more than ${MAXIMUM_OBLIGATION_TOMBSTONE_COUNT.toString()} obligation tombstones`)
-	}
-	replaceArrayContents(state.obligationTombstones, [...tombstones.values()])
-	const terminalObligations = state.obligations.filter(obligation => obligation.status === 'abandoned' || obligation.status === 'completed' || obligation.status === 'failed')
-	const retainedTerminalObligationIds = newestIds(terminalObligations, MAXIMUM_TERMINAL_OBLIGATION_COUNT)
-	const retainedObligations = state.obligations.filter(obligation => (obligation.status !== 'abandoned' && obligation.status !== 'completed' && obligation.status !== 'failed' ? true : retainedTerminalObligationIds.has(obligation.id)))
-	replaceArrayContents(state.obligations, retainedObligations)
-	const protectedWorkflowIds = new Set([...state.pendingTransactions.map(intent => intent.workflowId), ...state.obligations.map(obligation => obligation.workflowId)])
-	const terminalWorkflows = state.workflows.filter(workflow => workflow.status === 'abandoned' || workflow.status === 'completed' || workflow.status === 'failed')
-	const retainedTerminalWorkflowIds = newestIds(terminalWorkflows, MAXIMUM_TERMINAL_WORKFLOW_COUNT)
-	const retainedWorkflows = state.workflows.filter(workflow => {
-		if (workflow.status !== 'abandoned' && workflow.status !== 'completed' && workflow.status !== 'failed') return true
-		return protectedWorkflowIds.has(workflow.id) || retainedTerminalWorkflowIds.has(workflow.id)
-	})
-	replaceArrayContents(state.workflows, retainedWorkflows)
-	return state
-}
-
-type PersistableDurableState = Pick<DurableState, 'activities' | 'chainId' | 'lifecyclePresenceBlocker' | 'obligationTombstones' | 'obligations' | 'pendingTransactions' | 'profileId' | 'protocolIndex' | 'retirement' | 'safetyPaused' | 'scheduler' | 'signerAddress' | 'workflows'>
+type PersistableDurableState = Pick<
+	DurableState,
+	'rollbackQueue' | 'includedTransactions' | 'activities' | 'chainId' | 'lifecyclePresenceBlocker' | 'obligationTombstones' | 'obligations' | 'pendingTransactions' | 'profileId' | 'protocolIndex' | 'retirement' | 'safetyPaused' | 'scheduler' | 'signerAddress' | 'workflows'
+>
 
 function snapshotDurableState(state: PersistableDurableState) {
 	compactDurableState(state)
 	const protocolIndex = state.protocolIndex === undefined ? undefined : snapshotProtocolIndex(state.protocolIndex, state.chainId)
 	state.protocolIndex = protocolIndex
 	const snapshot: PersistableDurableState = {
+		includedTransactions: structuredClone(state.includedTransactions),
+		rollbackQueue: structuredClone(state.rollbackQueue),
 		activities: [...state.activities],
 		chainId: state.chainId,
 		lifecyclePresenceBlocker: state.lifecyclePresenceBlocker === undefined ? undefined : { ...state.lifecyclePresenceBlocker },

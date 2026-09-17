@@ -752,7 +752,7 @@ describe('pending chaos transaction recovery decisions', () => {
 		})
 	})
 
-	test('journals an included receipt as awaiting finality until the finalized checkpoint passes it', async () => {
+	test('recovers canonical inclusion immediately while retaining rollback evidence', async () => {
 		const fixture = await finalizedRecoveryEnvironment('original', 'success', { finalizedBlock: 99n })
 		const staleIntent = fixture.environment.state.pendingTransactions[0]
 		if (staleIntent === undefined) throw new Error('Expected a pending intent fixture')
@@ -760,12 +760,10 @@ describe('pending chaos transaction recovery decisions', () => {
 
 		await expect(recoverPendingTransactions(fixture.environment, { resubmit: true })).resolves.toBeTrue()
 
-		const intent = fixture.environment.state.pendingTransactions[0]
-		expect(intent?.status).toBe('confirmation-unknown')
-		expect(intent?.recoveryBlocker).toBeUndefined()
-		expect(intent?.observation).toMatchObject({ head: 112n, includedBlock: 100n, kind: 'awaiting-finality' })
-		expect(Date.parse(intent?.observation?.checkedAt ?? '')).toBeGreaterThan(Date.now() - 60_000)
-		expect((await loadRuntimeState(fixture.stateFile, false, fixture.environment.state.wallet, 1)).pendingTransactions[0]?.observation).toEqual(intent?.observation)
+		expect(fixture.environment.state.pendingTransactions).toHaveLength(0)
+		expect(fixture.environment.state.includedTransactions).toHaveLength(1)
+		const restored = await loadRuntimeState(fixture.stateFile, false, fixture.environment.state.wallet, 1)
+		expect(restored.includedTransactions).toEqual(fixture.environment.state.includedTransactions)
 		for (const methods of fixture.requestedMethods) expect(methods).not.toContain('eth_getTransactionByHash')
 	})
 
@@ -827,7 +825,7 @@ describe('pending chaos transaction recovery decisions', () => {
 		const fixture = await finalizedRecoveryEnvironment('cancellation', 'success', { signerCode: `0xef0100${'22'.repeat(20)}` })
 		const before = recoveryDispositionCollections(fixture.state)
 
-		await expect(recoverPendingTransactions(fixture.environment, { resubmit: false })).rejects.toThrow('Nonce cancellation signer has code at its finalized receipt block')
+		await expect(recoverPendingTransactions(fixture.environment, { resubmit: false })).rejects.toThrow('Nonce cancellation signer has code at its receipt block')
 
 		expect(recoveryDispositionCollections(fixture.state)).toEqual(before)
 		expect(recoveryDispositionCollections(await loadDurableState(fixture.stateFile, 1))).toEqual(before)

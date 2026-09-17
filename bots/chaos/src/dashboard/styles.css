@@ -33,6 +33,7 @@ body {
 }
 
 body[data-page="overview"] [data-page-content]:not([data-page-content="overview"]):not([data-page-content="all"]),
+body[data-page="workflows"] [data-page-content]:not([data-page-content="workflows"]):not([data-page-content="all"]),
 body[data-page="catalog"] [data-page-content]:not([data-page-content="catalog"]):not([data-page-content="all"]),
 body[data-page="ecosystem"] [data-page-content]:not([data-page-content="ecosystem"]):not([data-page-content="all"]),
 body[data-page="recovery"] [data-page-content]:not([data-page-content="recovery"]):not([data-page-content="all"]),
@@ -1718,4 +1719,73 @@ tbody tr:last-child td {
 
 .operation-dialog .text-link + .text-link {
 	margin-left: 1rem;
+}
+
+.operation-receipts ol {
+	padding-left: 1.4rem;
+}
+.operation-receipts li {
+	margin-bottom: 1rem;
+}
+.workflow-spinner {
+	display: inline-block;
+	width: 0.85em;
+	height: 0.85em;
+	margin-right: 0.5rem;
+	border: 2px solid currentColor;
+	border-right-color: transparent;
+	border-radius: 50%;
+	animation: workflow-spin 1s linear infinite;
+}
+@keyframes workflow-spin {
+	to {
+		transform: rotate(360deg);
+	}
+}
+@media (prefers-reduced-motion: reduce) {
+	.workflow-spinner {
+		animation: none;
+	}
+}
+
+.workflow-history-entry {
+	margin-bottom: 1rem;
+}
+.workflow-history-entry > summary {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 1rem;
+	cursor: pointer;
+	list-style: none;
+}
+.workflow-history-entry > summary::before {
+	content: "+";
+}
+.workflow-history-entry[open] > summary::before {
+	content: "−";
+}
+.workflow-history-entry > summary > span:first-of-type {
+	flex: 1;
+	min-width: 0;
+}
+.workflow-history-entry > summary strong,
+.workflow-history-entry > summary .muted {
+	display: block;
+	overflow-wrap: anywhere;
+}
+.workflow-history-entry > summary .muted {
+	margin-top: 0.25rem;
+	font-size: 0.8rem;
+}
+@media (max-width: 640px) {
+	.workflow-history-entry > summary {
+		display: grid;
+		grid-template-columns: auto minmax(0, 1fr);
+		gap: 0.5rem 0.75rem;
+	}
+	.workflow-history-entry > summary > .badge {
+		grid-column: 2;
+		justify-self: start;
+	}
 }

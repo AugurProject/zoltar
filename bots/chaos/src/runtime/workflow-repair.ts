@@ -24,7 +24,7 @@ function repairRetryableSelectableWorkflow(state: RuntimeState, workflow: Durabl
 		return false
 	}
 	if (workflow.steps.some(step => step.status === 'confirmed') && operationHasCanonicalContinuationBuilder(workflow.operationId)) {
-		markRetryableWorkflowForRediscovery(workflow, 'A finalized on-chain failure left confirmed preparation on chain; canonical cleanup is required')
+		markRetryableWorkflowForRediscovery(workflow, 'A canonically included on-chain failure left confirmed preparation on chain; canonical cleanup is required')
 		recordActivity(state, {
 			ecosystem: workflow.ecosystem,
 			message: `Finalized selectable transaction failure retained for canonical cleanup: ${workflow.label}`,

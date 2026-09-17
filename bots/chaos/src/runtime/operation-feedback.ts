@@ -9,6 +9,7 @@ export type ManualExecution = {
 	message: string
 	live: boolean
 	explorerUrl: string | undefined
+	plannedSteps?: { id: string; label: string }[]
 	planId?: string
 	workflow?: DurableWorkflow | undefined
 	previousTerminalWorkflowIds: Set<string>
@@ -23,19 +24,17 @@ export function manualExecutionFeedback(execution: ManualExecution, state: Runti
 	}
 	const workflow = execution.workflow
 	const explorer = publicExplorerUrl(execution.explorerUrl)
-	const transactions =
-		workflow?.steps.flatMap(step =>
-			step.transactionHash === undefined
-				? []
-				: [
-						{
-							label: safeString(step.label) ?? 'Transaction',
-							hash: step.transactionHash,
-							status: step.status,
-							explorerUrl: explorer === undefined ? undefined : `${explorer.replace(/\/+$/, '')}/tx/${step.transactionHash}`,
-						},
-					],
-		) ?? []
+	const steps =
+		workflow === undefined
+			? (execution.plannedSteps ?? []).map(step => ({ id: step.id, label: safeString(step.label) ?? 'Transaction', status: 'planned', hash: undefined, explorerUrl: undefined }))
+			: workflow.steps.map(step => ({
+					id: step.id,
+					label: safeString(step.label) ?? 'Transaction',
+					status: step.status,
+					hash: step.transactionHash,
+					explorerUrl: explorer === undefined || step.transactionHash === undefined ? undefined : `${explorer.replace(/\/+$/, '')}/tx/${step.transactionHash}`,
+				}))
+	const transactions = steps.flatMap(step => (step.hash === undefined ? [] : [{ label: step.label, hash: step.hash, status: step.status, explorerUrl: step.explorerUrl }]))
 	const failure = workflow?.steps.findLast(step => step.failure !== undefined)?.failure
 	const reason = failure === undefined ? undefined : publicFailureReason(failure)
 	let status = execution.status
@@ -65,12 +64,15 @@ export function manualExecutionFeedback(execution: ManualExecution, state: Runti
 		} else if (transactions.length !== 0) {
 			outcome = 'submitted'
 			message = transactions.some(transaction => transaction.status === 'signed') ? 'Transaction signed. Submission is not yet confirmed.' : 'Transaction submitted. Waiting for confirmation.'
-			if (execution.status !== 'pending') message += ' Recovery is required to resolve confirmation.'
+			if (execution.status !== 'pending') {
+				message += ' Chaos checks confirmation automatically. See Recovery for progress.'
+				if (workflow.steps.some(step => step.status === 'planned' || step.status === 'blocked')) message += ' Remaining steps resume when live execution is enabled and their checks pass.'
+			}
 		}
 		if (outcome === 'failed' && status !== 'pending') status = 'failed'
 	} else if (execution.status !== 'pending' && execution.live) {
 		outcome = execution.status === 'failed' ? 'failed' : 'unconfirmed'
 		if (execution.status === 'completed') message = 'No transaction confirmation recorded. Check recent activity before retrying.'
 	}
-	return { previewId: execution.previewId, definitionId: execution.definitionId, status, outcome, message, reason, transactions }
+	return { previewId: execution.previewId, definitionId: execution.definitionId, status, outcome, message, reason, transactions, steps }
 }

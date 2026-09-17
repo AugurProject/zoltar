@@ -88,8 +88,8 @@ function includedKind(kind: string | undefined) {
  */
 export function pendingTransactionSummary(transaction: PendingTransactionView, now = Date.now()): PendingTransactionSummary {
 	// Recovery verifies a queued candidate before anything else, so an earlier observation no longer describes the pass.
-	if (transaction.replacementHash !== undefined) return { detail: 'Waiting for its finalized receipt before the original intent is closed.', headline: 'Verifying the queued replacement', tone: 'info' }
-	if (transaction.cancellationHash !== undefined) return { detail: 'Waiting for its finalized receipt before the original intent is closed.', headline: 'Verifying the queued cancellation', tone: 'info' }
+	if (transaction.replacementHash !== undefined) return { detail: 'Waiting for its canonically included receipt before the original intent is closed.', headline: 'Verifying the queued replacement', tone: 'info' }
+	if (transaction.cancellationHash !== undefined) return { detail: 'Waiting for its canonically included receipt before the original intent is closed.', headline: 'Verifying the queued cancellation', tone: 'info' }
 	const observation = transaction.observation
 	if (observation === undefined) {
 		if (transaction.recoveryBlocker !== undefined) return { detail: '', headline: transaction.recoveryBlocker, tone: 'warning' }

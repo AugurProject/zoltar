@@ -10,6 +10,11 @@ import { serializedSettings } from '../../src/config/settings.ts'
 import { manualOperationFixture } from '../runtime/manual-operation-fixture.ts'
 import { CHROMIUM_STARTUP_BUDGET_MILLISECONDS, startChromiumSession } from './chromium-session.ts'
 
+function seedStepStatus(index: number, included: number) {
+	if (index < included) return 'confirmed'
+	return index === included ? 'submitted' : 'planned'
+}
+
 function gasLimitFailureReason() {
 	try {
 		assertStepSafety({
@@ -31,6 +36,11 @@ test(
 		const fixture = manualOperationFixture()
 		fixture.configuration.settings.strategy.selectableOperationAllowlist = ['open-oracle.weth.wrap', 'zoltar.question.create-binary', 'open-oracle.deposit']
 		fixture.state.evaluations = evaluateOperationCatalog(fixture.scan.snapshot, planningOptions(fixture.configuration.settings, 7))
+		let historyFixture = false
+		let historyCompleted = false
+		let seedWorkflow = false
+		let seedIncluded = 0
+		const seedLabels = ['Approve genesis token0', 'Approve genesis token1', 'Seed REP/WETH liquidity']
 		let holdExecution = false
 		let executionStatus = 'pending'
 		let executionOutcome = ''
@@ -48,6 +58,22 @@ test(
 					failNextStateRead = false
 					throw new Error('Intentional automatic-refresh recovery fixture')
 				}
+				if (historyFixture)
+					return {
+						...fixture.state,
+						workflows: [
+							{
+								id: 'seed-current',
+								label: 'Seed genesis REP/WETH pool',
+								status: historyCompleted ? 'completed' : 'waiting-transaction',
+								createdAt: '2026-09-17T16:34:44Z',
+								updatedAt: '2026-09-17T16:35:44Z',
+								steps: seedLabels.map((label, index) => ({ label, status: seedStepStatus(index, historyCompleted ? 3 : 1), ...(historyCompleted || index < 2 ? { transactionHash: `0x${String(index + 1).repeat(64)}` } : {}) })),
+							},
+							{ id: 'done', label: 'Create REP/WETH pool', status: 'completed', createdAt: '2026-09-17T16:30:00Z', updatedAt: '2026-09-17T16:31:00Z', steps: [{ label: 'Create REP/WETH pool', status: 'confirmed', transactionHash }] },
+							{ id: 'failed', label: 'Initialize REP/WETH pool', status: 'failed', createdAt: '2026-09-17T16:29:00Z', updatedAt: '2026-09-17T16:29:10Z', steps: [{ label: 'Initialize REP/WETH pool', status: 'failed' }] },
+						],
+					}
 				return fixture.state
 			},
 			getConfiguration: () => ({ hasSigner: true, revision: fixture.configuration.revision, settings: serializedSettings(fixture.configuration.settings, true), wallet: fixture.state.wallet }),
@@ -60,11 +86,20 @@ test(
 					error.name = 'ManualOperationInputError'
 					throw error
 				}
+				if (seedWorkflow) {
+					if (action === 'inspect' || action === 'preview') return { previewId: 'seed-preview', mode: 'live', fields: [], steps: seedLabels.map(label => ({ label })), blockers: [] }
+					const steps = seedLabels.map((label, index) => ({
+						label,
+						status: seedStepStatus(index, seedIncluded),
+						...(index <= seedIncluded ? { hash: `0x${String(index + 1).repeat(64)}`, explorerUrl: `https://sepolia.etherscan.io/tx/0x${String(index + 1).repeat(64)}` } : {}),
+					}))
+					return { execution: { status: seedIncluded === 3 ? 'completed' : 'failed', outcome: seedIncluded === 3 ? 'confirmed' : 'submitted', message: seedIncluded === 3 ? 'Operation confirmed.' : 'Waiting for block inclusion. Remaining steps continue automatically.', steps } }
+				}
 				if (action === 'execute') executeCalls += 1
 				if (holdExecution && (action === 'execute' || action === 'status')) {
 					const outcome = executionOutcome || (executionStatus === 'pending' ? 'submitted' : 'confirmed')
 					const messages: Record<string, string> = {
-						submitted: 'Transaction submitted. Waiting for confirmation.',
+						submitted: executionStatus === 'pending' ? 'Transaction submitted. Waiting for confirmation.' : 'Transaction submitted. Waiting for confirmation. Chaos checks confirmation automatically. See Recovery for progress.',
 						confirmed: 'Operation confirmed.',
 						skipped: 'Operation skipped. No transaction signed. Preview again to use current chain state.',
 						'dry-run': 'Dry run completed. No transaction signed.',
@@ -79,7 +114,7 @@ test(
 							transactions: ['skipped', 'dry-run'].includes(outcome)
 								? []
 								: [
-										{ label: 'Wrap WETH', hash: transactionHash, status: executionStatus === 'pending' ? 'submitted' : 'confirmed', explorerUrl: `https://sepolia.etherscan.io/tx/${transactionHash}` },
+										{ label: 'Wrap WETH', hash: transactionHash, status: outcome === 'submitted' ? 'submitted' : 'confirmed', explorerUrl: `https://sepolia.etherscan.io/tx/${transactionHash}` },
 										...(outcome === 'recovery' ? [{ label: 'A second transaction with a long descriptive operation label', hash: `0x${'cd'.repeat(32)}`, status: 'failed' }] : []),
 									],
 						},
@@ -206,9 +241,14 @@ test(
 				await evaluate("document.querySelector('#operation-dialog').close()")
 				await evaluate("[...document.querySelectorAll('.operation-open')].find(button => button.getAttribute('aria-label') === 'Open wrap WETH').click()")
 				await waitFor("document.querySelector('#operation-dialog [role=status]').textContent === 'Transaction submitted. Waiting for confirmation.'")
+				executionStatus = 'failed'
+				executionOutcome = 'submitted'
+				await waitFor('document.querySelector(\'#operation-dialog a[href="/recovery"]\').hidden === false')
+				await capture(`${viewport.label}-background-pending`)
 				executionStatus = 'completed'
+				executionOutcome = 'confirmed'
 				await waitFor("document.querySelector('#operation-dialog [role=status]').textContent === 'Operation confirmed.'")
-				expect(await evaluate("document.querySelector('.operation-receipts').textContent.includes('Confirmed')")).toBe(true)
+				expect(await evaluate("document.querySelector('.operation-receipts').textContent.includes('Included')")).toBe(true)
 				expect(await evaluate("document.querySelector('#operation-dialog').scrollWidth <= document.querySelector('#operation-dialog').clientWidth")).toBe(true)
 				await capture(`${viewport.label}-completed`)
 				for (const [outcome, expectedMessage] of Object.entries({ skipped: 'canonical signing anchor', 'dry-run': 'Dry run completed', recovery: 'partial execution' })) {
@@ -307,6 +347,46 @@ test(
 				expect(await evaluate("document.querySelector('#operation-dialog .operation-actions button:nth-child(2)').disabled")).toBe(true)
 				await capture(`${viewport.label}-prerequisite-inputs`)
 				await evaluate("document.querySelector('#operation-dialog').close()")
+				seedWorkflow = true
+				seedIncluded = 0
+				await evaluate("[...document.querySelectorAll('.operation-open')].find(button => button.closest('tr')?.dataset.operationId === 'trading.genesis-uniswap.seed-pool').click()")
+				await waitFor("document.querySelector('#operation-dialog .operation-actions button:nth-child(2)').disabled === false")
+				await evaluate("document.querySelector('#operation-dialog .operation-actions button:nth-child(2)').click()")
+				await waitFor("document.querySelector('.operation-receipts li:last-child')?.textContent.includes('Queued') === true")
+				expect(await evaluate("document.querySelectorAll('.operation-receipts li').length")).toBe(3)
+				expect(await evaluate("document.querySelector('.operation-receipts').getAttribute('aria-busy')")).toBe('true')
+				await capture(`${viewport.label}-seed-first-approval`)
+				seedIncluded = 1
+				await waitFor("document.querySelector('.operation-receipts h3').textContent.includes('1 of 3')")
+				expect(await evaluate("document.querySelectorAll('.operation-receipts .identifier-value').length")).toBe(2)
+				await capture(`${viewport.label}-seed-second-approval`)
+				seedIncluded = 2
+				await waitFor("document.querySelector('.operation-receipts h3').textContent.includes('2 of 3')")
+				await capture(`${viewport.label}-seed-liquidity`)
+				seedIncluded = 3
+				await waitFor("document.querySelector('.operation-receipts h3').textContent.includes('3 of 3')")
+				expect(await evaluate("document.querySelector('.operation-receipts').getAttribute('aria-busy')")).toBe('false')
+				expect(await evaluate("document.querySelector('.workflow-spinner') === null")).toBe(true)
+				expect(await evaluate("document.querySelector('#operation-dialog').scrollWidth <= document.querySelector('#operation-dialog').clientWidth")).toBe(true)
+				await capture(`${viewport.label}-seed-completed`)
+				await evaluate("document.querySelector('#operation-dialog').close()")
+				seedWorkflow = false
+				await session.send('Page.navigate', { url: new URL('/workflows', dashboard.url).href })
+				await waitFor("document.querySelector('#workflow-history').textContent.includes('No workflows recorded yet.')")
+				await capture(`${viewport.label}-workflows-empty`)
+				historyFixture = true
+				historyCompleted = false
+				await evaluate("window.dispatchEvent(new Event('focus'))")
+				await waitFor("document.querySelectorAll('#workflow-history details').length === 3")
+				await evaluate("document.querySelector('#workflow-history details').open = true")
+				await capture(`${viewport.label}-workflows-active`)
+				historyCompleted = true
+				await evaluate("window.dispatchEvent(new Event('focus'))")
+				await waitFor("document.querySelector('#workflow-history details h3').textContent.includes('3 of 3')")
+				expect(await evaluate("document.querySelector('#workflow-history details').open")).toBe(true)
+				expect(await evaluate('document.body.scrollWidth <= document.documentElement.clientWidth')).toBe(true)
+				await capture(`${viewport.label}-workflows-completed`)
+				historyFixture = false
 				for (const route of ['overview', 'ecosystem', 'recovery', 'settings']) {
 					await session.send('Page.navigate', { url: new URL(`/${route}`, dashboard.url).href })
 					await waitFor(`document.querySelector('#last-block')?.textContent === 'Block ${fixture.state.lastScannedBlock}'`)

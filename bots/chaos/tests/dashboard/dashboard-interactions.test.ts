@@ -725,7 +725,7 @@ browserTest(
 					return { className: note?.className, detail: note?.querySelector('small')?.textContent, headline: note?.querySelector('strong')?.textContent, visible: (bounds?.width ?? 0) > 0 && (bounds?.height ?? 0) > 0 }
 				})()`)
 				// The fixture queues a replacement, which recovery verifies before anything else, so that takes precedence over the observation.
-				expect(waitNote).toEqual({ className: 'transaction-wait info', detail: 'Waiting for its finalized receipt before the original intent is closed.', headline: 'Verifying the queued replacement', visible: true })
+				expect(waitNote).toEqual({ className: 'transaction-wait info', detail: 'Waiting for its canonically included receipt before the original intent is closed.', headline: 'Verifying the queued replacement', visible: true })
 				await expectVisibleIdentifiers(
 					[
 						{ type: 'wallet address', value: walletAddress },
@@ -976,7 +976,7 @@ browserTest(
 						const row = [...document.querySelectorAll('#obligations .stack-row')].find(candidate => candidate.textContent?.includes('Deferred obligation'))
 						return { detail: row?.querySelector('small')?.textContent, status: row?.querySelector('.badge')?.textContent, tone: row?.querySelector('.badge')?.className }
 					})()`),
-				).toEqual({ detail: 'Open Oracle · 1 of 3 finalized attempts failed · next attempt Aug 24, 2026, 12:03:00 AM', status: 'Retry waiting', tone: 'badge warning' })
+				).toEqual({ detail: 'Open Oracle · 1 of 3 included attempts failed · next attempt Aug 24, 2026, 12:03:00 AM', status: 'Retry waiting', tone: 'badge warning' })
 				const recoveryTextarea = await cdp.evaluate(`(() => {
 					const fields = document.querySelector('#candidate-fields')
 					const input = document.querySelector('#candidate-confirmation')
@@ -1604,7 +1604,7 @@ browserTest(
 					expect(Reflect.get(navigationBeforeRefresh, 'centerDelta')).toBeLessThanOrEqual(1)
 				} else expect(Math.abs(navigationScrollLeft - maximumScrollLeft)).toBeLessThanOrEqual(1)
 				const linkHeights = Reflect.get(navigationBeforeRefresh, 'linkHeights')
-				expect(linkHeights).toHaveLength(5)
+				expect(linkHeights).toHaveLength(6)
 				for (const height of Array.isArray(linkHeights) ? linkHeights : []) expect(height).toBeGreaterThanOrEqual(44)
 				const requestsBeforeRefresh = stateRequests
 				await cdp.evaluate("window.dispatchEvent(new Event('focus'))")

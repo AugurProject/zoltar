@@ -565,7 +565,7 @@ describe('durable lifecycle obligations', () => {
 		expect(obligation).toMatchObject({ lastError: 'on-chain failure', status: 'pending' })
 		expect(workflow).toMatchObject({ status: 'blocked' })
 		expect(step).toMatchObject({
-			failure: 'Explicit operator retry requested after a finalized revert or verified nonce cancellation',
+			failure: 'Explicit operator retry requested after a canonically included revert or verified nonce cancellation',
 			status: 'blocked',
 		})
 		expect(step.failureKind).toBeUndefined()

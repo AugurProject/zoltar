@@ -167,6 +167,7 @@ export function createManualOperationController(options: Options) {
 				explorerUrl: options.configuration.settings.network.explorerUrl,
 				previousTerminalWorkflowIds: new Set(options.state.workflows.filter(workflow => ['abandoned', 'completed', 'failed', 'blocked'].includes(workflow.status)).map(workflow => workflow.id)),
 				definitionId: current.definitionId,
+				plannedSteps: current.plan.steps.map(step => ({ id: step.id, label: step.label })),
 				message: 'Checking current state…',
 				previewId: id,
 				status: 'pending',

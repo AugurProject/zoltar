@@ -1,3 +1,4 @@
+import { publicActivity } from './public-activity.ts'
 import { join } from 'node:path'
 import { dashboardHealthResponse, sharedDashboardAssetResponse } from '@zoltar/bot-shared/dashboard/assets'
 import { publicConnectivityError } from '@zoltar/bot-shared/dashboard/connectivity-error'
@@ -31,7 +32,7 @@ export type ChaosDashboardController = {
 	setWorkflow: (value: unknown) => unknown | Promise<unknown>
 }
 
-const dashboardPages = new Set(['overview', 'catalog', 'ecosystem', 'recovery', 'settings'])
+const dashboardPages = new Set(['overview', 'catalog', 'ecosystem', 'workflows', 'recovery', 'settings'])
 
 function publicStrings(value: unknown) {
 	return Array.isArray(value)
@@ -528,21 +529,6 @@ function publicObligation(value: unknown) {
 	})
 }
 
-function publicActivity(value: unknown) {
-	const source = record(value)
-	if (source === undefined) return undefined
-	return compact({
-		at: stringField(source, 'at'),
-		details: stringField(source, 'details'),
-		ecosystem: stringField(source, 'ecosystem'),
-		label: stringField(source, 'label') ?? stringField(source, 'message'),
-		operationId: stringField(source, 'operationId'),
-		status: stringField(source, 'status'),
-		summary: stringField(source, 'summary'),
-		txHash: stringField(source, 'txHash') ?? stringField(source, 'hash'),
-	})
-}
-
 export function publicChaosState(value: unknown, configurationValue?: unknown, nowMilliseconds = Date.now()) {
 	const source = record(value)
 	if (source === undefined) return {}
@@ -569,6 +555,10 @@ export function publicChaosState(value: unknown, configurationValue?: unknown, n
 			: [],
 		chainId: scalar(source, 'chainId') ?? rpcHealthPolicy.expectedChainId,
 		currentWorkflow,
+		workflows: workflows.flatMap(value => {
+			const workflow = publicWorkflow(value)
+			return workflow === undefined ? [] : [workflow]
+		}),
 		execute: booleanField(source, 'execute'),
 		inventory: publicInventory(source['inventory']),
 		inventoryAvailable: booleanField(source, 'inventoryAvailable') === true && stringField(source, 'wallet') !== undefined,

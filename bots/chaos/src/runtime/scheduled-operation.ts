@@ -1,3 +1,4 @@
+import { workflowNeedsContinuation } from './workflows.ts'
 import { createChaosScheduler } from '../core/scheduler.ts'
 import { MAXIMUM_PUBLIC_FIELD_LENGTH, safeString } from '../dashboard/public-fields.ts'
 import { isoTimestampFromSeconds } from '../core/units.ts'
@@ -88,4 +89,22 @@ export async function scheduleAfterRecoveredTransaction(configuration: Configura
 	await scheduler.complete(operationId)
 	if (configuration.settings.paused || state.paused) await scheduler.pause()
 	return true
+}
+
+function workflowStartedAfterLastScheduledRun(state: RuntimeState) {
+	const operationId = state.scheduler.selectedOperationId
+	if (operationId === undefined) return false
+	const lastRunAt = state.scheduler.lastRunAt === undefined ? undefined : Date.parse(state.scheduler.lastRunAt)
+	return state.workflows.some(workflow => {
+		if (workflow.classification !== 'selectable' || workflow.operationId !== operationId) return false
+		if (workflow.status !== 'abandoned' && workflow.status !== 'completed' && workflow.status !== 'failed') return false
+		const startedAt = Date.parse(workflow.startedAt ?? workflow.createdAt)
+		return lastRunAt === undefined || startedAt > lastRunAt
+	})
+}
+
+export function interruptedSchedulerRunNeedsClosure(state: RuntimeState) {
+	if (state.pendingTransactions.length !== 0 || state.workflows.some(workflowNeedsContinuation)) return false
+	if (state.scheduler.status === 'running') return true
+	return state.scheduler.status === 'paused' && workflowStartedAfterLastScheduledRun(state)
 }

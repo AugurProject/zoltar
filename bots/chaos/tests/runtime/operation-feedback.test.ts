@@ -76,3 +76,24 @@ test('receipt rollback replaces cached workflow state and subsequent recovery re
 	state.workflows = []
 	expect(manualExecutionFeedback(execution, state).transactions[0]?.hash).toBe(step.transactionHash)
 })
+
+test('feedback includes queued workflow steps before and during transaction submission', () => {
+	const { state, execution, workflow, step } = fixture()
+	execution.status = 'pending'
+	execution.plannedSteps = [
+		{ id: 'approval', label: 'Approve token' },
+		{ id: 'seed', label: 'Seed liquidity' },
+	]
+	delete execution.planId
+	expect(manualExecutionFeedback(execution, state).steps).toEqual(execution.plannedSteps.map(item => ({ ...item, status: 'planned', hash: undefined, explorerUrl: undefined })))
+	execution.planId = workflow.planId
+	workflow.status = 'waiting-transaction'
+	step.status = 'submitted'
+	step.transactionHash = `0x${'ab'.repeat(32)}`
+	workflow.steps.push({ ...step, id: 'seed', label: 'Seed liquidity', status: 'planned', transactionHash: undefined })
+	const feedback = manualExecutionFeedback(execution, state)
+	expect(feedback.steps.map(item => item.status)).toEqual(['submitted', 'planned'])
+	expect(feedback.steps[0]?.hash).toBe(step.transactionHash)
+	expect(feedback.steps[1]?.hash).toBeUndefined()
+	expect(feedback.transactions).toHaveLength(1)
+})

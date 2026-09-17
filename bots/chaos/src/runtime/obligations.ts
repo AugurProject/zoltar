@@ -81,7 +81,7 @@ export function lifecyclePresenceBlockerMessage(blocker: DurableLifecyclePresenc
 }
 
 function automaticLifecycleRetryDelaySeconds(automaticRetryCount: number) {
-	if (!Number.isSafeInteger(automaticRetryCount) || automaticRetryCount < 1) throw new Error('Automatic lifecycle retry requires a positive finalized-failure count')
+	if (!Number.isSafeInteger(automaticRetryCount) || automaticRetryCount < 1) throw new Error('Automatic lifecycle retry requires a positive included-failure count')
 	const exponent = Math.min(automaticRetryCount - 1, 20)
 	const delay = AUTOMATIC_LIFECYCLE_RETRY_BASE_SECONDS * 2n ** BigInt(exponent)
 	return delay < AUTOMATIC_LIFECYCLE_RETRY_MAX_SECONDS ? delay : AUTOMATIC_LIFECYCLE_RETRY_MAX_SECONDS
@@ -120,7 +120,7 @@ function retainAutomaticLifecycleRetry(obligation: DurableObligation, retryAt: s
 
 function retainExhaustedLifecycleRetry(obligation: DurableObligation) {
 	delete obligation.notBefore
-	obligation.blockers = [`The automatic retry limit of ${MAXIMUM_AUTOMATIC_LIFECYCLE_ATTEMPTS.toString()} canonically finalized lifecycle failures is exhausted; explicit operator reconciliation is required`]
+	obligation.blockers = [`The automatic retry limit of ${MAXIMUM_AUTOMATIC_LIFECYCLE_ATTEMPTS.toString()} canonically included lifecycle failures is exhausted; explicit operator reconciliation is required`]
 	obligation.status = 'failed'
 	obligation.updatedAt = now()
 }
@@ -293,10 +293,10 @@ export function synchronizeLifecycleObligations(
 			}
 			if (retryAt === undefined) throw new Error(`Lifecycle obligation ${id} is missing its automatic retry deadline`)
 			if (currentTimestamp < retryTimestampSeconds(retryAt)) {
-				retainAutomaticLifecycleRetry(obligation, retryAt, 'A canonically finalized lifecycle attempt reverted or was nonce-cancelled')
+				retainAutomaticLifecycleRetry(obligation, retryAt, 'A canonically included lifecycle attempt reverted or was nonce-cancelled')
 				continue
 			}
-			markRetryableLifecycleWorkflowForRediscovery(workflow, 'Automatic retry after a canonically finalized revert or verified nonce cancellation')
+			markRetryableLifecycleWorkflowForRediscovery(workflow, 'Automatic retry after a canonically included revert or verified nonce cancellation')
 			refreshPlannedWorkflow(workflow, plan)
 			delete obligation.notBefore
 			obligation.blockers = []
@@ -433,7 +433,7 @@ export function beginLifecycleObligation(obligation: DurableObligation) {
 
 export function waitForCanonicalLifecycleConfirmation(obligation: DurableObligation) {
 	const timestamp = now()
-	obligation.blockers = ['A finalized transaction is waiting for complete canonical lifecycle confirmation']
+	obligation.blockers = ['An included transaction is waiting for complete canonical lifecycle confirmation']
 	delete obligation.lastError
 	obligation.status = 'pending'
 	obligation.updatedAt = timestamp
@@ -483,7 +483,7 @@ export function retryLifecycleObligation(state: Pick<RuntimeState, 'obligations'
 		throw new Error('Lifecycle retry is unavailable after a semantically uncertain on-chain transaction; abandon only after manual reconciliation')
 	}
 	if (retryableOnChainFailure) {
-		markRetryableLifecycleWorkflowForRediscovery(workflow, 'Explicit operator retry requested after a finalized revert or verified nonce cancellation')
+		markRetryableLifecycleWorkflowForRediscovery(workflow, 'Explicit operator retry requested after a canonically included revert or verified nonce cancellation')
 	} else {
 		markWorkflowForRediscovery(workflow, 'Explicit operator retry requested after an unsigned failure')
 	}
