@@ -911,6 +911,7 @@ describe('workflow-wide ETH funding', () => {
 		}
 
 		await expect(executeOperationPlan(currentEnvironment, plan)).rejects.toThrow('cannot fund all remaining workflow steps')
+		expect(state.activities.find(activity => activity.message === `Operation preflight stopped: ${plan.label}`)?.summary).toContain('cannot fund all remaining workflow steps')
 
 		expect(firstStepAttempts).toBe(0)
 		for (const methods of [first.requestedMethods, second.requestedMethods]) {
@@ -1340,6 +1341,7 @@ describe('transaction signing-anchor re-attestation', () => {
 		}
 
 		await expect(executeOperationPlan(environment, executablePlan())).rejects.toThrow('attester set changed during pre-signing checks')
+		expect(state.activities.find(activity => activity.message.startsWith('Operation preflight stopped:'))?.summary).toContain('attester set changed during pre-signing checks')
 
 		expect(signingAttempts).toBe(0)
 		expect(state.pendingTransactions).toHaveLength(0)

@@ -15,6 +15,7 @@ import type { OperationEvidence, OperationPlan, OperationPreflightCall, Operatio
 import { recordActivity, type PendingTransactionIntent, type RuntimeState } from '../state/operator-state.ts'
 import { observePendingTransaction } from '../state/pending-transaction-observation.ts'
 import { persist, retainUnreadableReceiptEvidence } from './recovery-journal.ts'
+import { recordPreflightFailure } from './preflight-failure.ts'
 import {
 	captureWorkflowIntentSubmissionJournal,
 	recoverableWorkflowForIntent,
@@ -1254,13 +1255,7 @@ export async function executeOperationPlan(environment: ExecutionEnvironment, pl
 		}
 		if (workflow.status !== 'failed') {
 			markWorkflowForRediscovery(workflow, error)
-			recordActivity(environment.state, {
-				ecosystem: plan.ecosystem,
-				message: `Operation preflight stopped: ${plan.label}`,
-				operationId: plan.definitionId,
-				status: 'skipped',
-				type: 'operation',
-			})
+			recordPreflightFailure(environment.state, plan, error, `Operation preflight stopped: ${plan.label}`)
 			await persist(environment)
 		}
 		throw error

@@ -4,6 +4,8 @@ import { join } from 'node:path'
 import { expect, test } from 'bun:test'
 import { startDashboardServer } from '../../src/dashboard/dashboard-server.ts'
 import { CONFIGURATION_COMMIT_INDETERMINATE } from '../../src/runtime/configuration-commit.ts'
+import { recordPreflightFailure } from '../../src/execution/preflight-failure.ts'
+import type { RuntimeState } from '../../src/state/operator-state.ts'
 
 type RecoveryScenario = {
 	fieldsId: string
@@ -2065,6 +2067,16 @@ browserTest(
 			status: 'dry-run',
 			summary: '2 steps across 2 contracts; low risk; random priority; no transaction signed',
 		}))
+		const failureState: Pick<RuntimeState, 'activities'> = { activities: [] }
+		recordPreflightFailure(
+			failureState,
+			{ definitionId: 'trading.genesis-uniswap.create-pool', ecosystem: 'trading' },
+			new Error('Create pool no longer succeeds at the canonical pre-signing block', { cause: new Error('execution reverted: pool already exists') }),
+			'Operation preflight stopped: Create genesis REP/WETH pool',
+		)
+		const failureActivity = failureState.activities[0]
+		if (failureActivity === undefined) throw new Error('Expected the failure to be recorded')
+		activities[1] = failureActivity
 		const dashboard = startDashboardServer(0, {
 			getConfiguration: () => ({}),
 			getState: () => state({ activities }),
@@ -2099,6 +2111,14 @@ browserTest(
 					newest: document.querySelector('#activity-list .timeline-item strong')?.textContent,
 				})`),
 			).toEqual({ disclosure: 'What was planned', expandExpanded: 'false', expandHidden: false, expandText: 'Show all 14 actions', newest: 'Action 0' })
+			expect(
+				await cdp.evaluate(`(() => {
+					const item = document.querySelectorAll('#activity-list .timeline-item')[1]
+					const details = item.querySelector('details')
+					details.querySelector('summary').click()
+					return { reason: item.querySelector('.timeline-detail').textContent, disclosure: details.querySelector('summary').textContent, cause: details.querySelector('p').textContent, open: details.open }
+				})()`),
+			).toEqual({ reason: 'Create pool no longer succeeds at the canonical pre-signing block', disclosure: 'Details', cause: 'execution reverted: pool already exists', open: true })
 			await cdp.evaluate("document.querySelector('#activity-expand').click()")
 			await waitFor("document.querySelectorAll('#activity-list .timeline-item').length === 14")
 			expect(
