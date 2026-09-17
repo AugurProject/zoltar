@@ -11,6 +11,7 @@
 	--warning: #f0c36b;
 	--danger: #ff8b8b;
 	--info: #88b8ff;
+	--operator-info: #73b7ff;
 	--mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 	--sans: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 	--operator-accent: var(--accent);
@@ -244,6 +245,12 @@ textarea:disabled {
 	font-size: 0.72rem;
 	font-weight: 700;
 	text-transform: uppercase;
+}
+
+.badge[data-mode="dry-run"] {
+	border-color: rgb(115 183 255 / 42%);
+	background: rgb(115 183 255 / 10%);
+	color: var(--operator-info);
 }
 
 .badge[data-mode="execute"] {
@@ -711,6 +718,14 @@ td {
 	font-weight: 750;
 }
 
+.decision[data-decision="dry-run-opportunity"] {
+	background: rgb(115 183 255 / 10%);
+	color: var(--operator-info);
+}
+
+.decision[data-decision="submitted"],
+.decision[data-decision="risk-limit"],
+.decision[data-decision="market-risk"],
 .decision[data-decision="unprofitable"],
 .decision[data-decision="insufficient-inventory"],
 .decision[data-decision="history-unavailable"],

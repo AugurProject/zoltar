@@ -1749,3 +1749,25 @@ tbody tr:last-child td {
 	width: 1.25rem;
 	height: 1.25rem;
 }
+
+.policy-actions {
+	flex-wrap: wrap;
+	margin-top: 0;
+	margin-bottom: 1rem;
+}
+
+.policy-actions [hidden] {
+	display: none;
+}
+
+.policy-actions .action-status:not(:empty) {
+	flex-basis: 100%;
+}
+
+#execution-current-mode {
+	color: var(--operator-text);
+}
+
+#execution-draft-mode {
+	color: var(--operator-warning);
+}

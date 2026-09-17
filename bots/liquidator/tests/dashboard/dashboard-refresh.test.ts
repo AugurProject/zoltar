@@ -1573,3 +1573,27 @@ test('rejects malformed numeric pool fields before they reach monitored pool ren
 		expect(() => decodeSnapshot({ ...valid, pools: [badPool] })).toThrow('invalid state snapshot')
 	}
 })
+
+test('uses informational dry run, warning live and pending, and error failure badges', async () => {
+	const page = await dashboard(mainnetConfiguration(), state())
+	expect(page.window.document.getElementById('mode-badge')?.className).toBe('badge info')
+	page.setStateResponse({
+		...state('Execution failed', [], { execute: true }),
+		activities: [
+			{ at: '2026-09-17T00:00:00.000Z', message: 'Planned', status: 'dry-run' },
+			{ at: '2026-09-17T00:00:00.000Z', message: 'Submitted', status: 'pending' },
+			{ at: '2026-09-17T00:00:00.000Z', message: 'Rejected', status: 'failed' },
+		],
+	})
+	await page.refresh()
+	expect(page.window.document.getElementById('mode-badge')?.className).toBe('badge warning')
+	expect(page.window.document.getElementById('run-status-badge')?.className).toBe('badge error')
+	for (const [status, tone] of [
+		['dry-run', 'info'],
+		['pending', 'warning'],
+		['failed', 'error'],
+	]) {
+		const badge = [...page.window.document.querySelectorAll('.badge')].find(element => element.textContent === status)
+		expect(badge?.className).toBe(`badge ${tone}`)
+	}
+})
