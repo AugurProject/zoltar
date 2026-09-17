@@ -318,9 +318,8 @@ export function applyExecutionPolicy(evaluations: readonly EvaluatedOperation[],
 			try {
 				assertOperationEthFunding(evaluation.plan, ethBalanceAttoEth, settings.strategy)
 			} catch (error) {
-				const message = error instanceof Error ? error.message : String(error)
-				if (message !== `${evaluation.plan.id} cannot fund all remaining workflow steps while retaining the wallet ETH reserve`) throw error
-				blockers.push(message)
+				if (!(error instanceof Error) || error.name !== 'OperationEthFundingError') throw error
+				blockers.push(error.message)
 			}
 		}
 		if (blockers.length === evaluation.eligibility.blockers.length) return evaluation

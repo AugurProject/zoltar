@@ -97,9 +97,11 @@ export function assertOperationEthFunding(plan: Pick<OperationPlan, 'id' | 'maxi
 	const maximumGasCost = strategy.maximumGasCostAttoEth * BigInt(plan.steps.length + cleanupTransactionCount(plan))
 	const requiredBalance = strategy.minimumEthReserveAttoEth + transactionValue + maximumGasCost
 	if (ethBalanceAttoEth < requiredBalance) {
-		throw new Error(
+		const error = new Error(
 			`${plan.id} cannot fund all remaining workflow steps while retaining the wallet ETH reserve: required ${formatDecimalAmount(requiredBalance)} ETH; available ${formatDecimalAmount(ethBalanceAttoEth)} ETH (reserve ${formatDecimalAmount(strategy.minimumEthReserveAttoEth)} ETH, transaction values ${formatDecimalAmount(transactionValue)} ETH, maximum gas budget ${formatDecimalAmount(maximumGasCost)} ETH)`,
 		)
+		error.name = 'OperationEthFundingError'
+		throw error
 	}
 	return { maximumGasCost, requiredBalance, transactionValue }
 }

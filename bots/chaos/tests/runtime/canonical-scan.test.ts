@@ -469,6 +469,10 @@ describe('canonical scan policy', () => {
 		expect(result[0]?.eligibility.eligible).toBeFalse()
 		expect(result[0]?.plan).toBeUndefined()
 		expect(result[0]?.eligibility.blockers.join(' ')).toContain('cannot fund all remaining workflow steps')
+		expect(result[0]?.eligibility.blockers.join(' ')).toContain('required 0.11 ETH; available 0.1 ETH')
+		if (executable.plan === undefined) throw new Error('Expected executable test plan')
+		const malformed = { ...executable, plan: { ...executable.plan, maximumCleanupTransactionCount: -1 } }
+		expect(() => applyExecutionPolicy([malformed], settings(), true, '10', '10', anchoredBalance)).toThrow('cleanup transaction count must be a non-negative safe integer')
 	})
 
 	test('maps every configured risk and reserve limit into planning', () => {
