@@ -50,15 +50,9 @@ Important:
 After completing [Setup](#setup), start a local chain and launch the app:
 
 1. Start the repository-pinned local chain with `bun run anvil`
-1. Run `bun run app:serve:zoltar` for Zoltar (http://localhost:4153), `bun run app:serve:statoblast` for Statoblast (http://localhost:12347), or `bun run app:serve:trading` for Trading (http://localhost:4163)
+1. Choose your app's serve command from [Common Commands](#common-commands).
 
-If you are iterating on the app and want rebuilds, use:
-
-```bash
-bun run app:watch:zoltar
-bun run app:watch:statoblast
-bun run app:watch:trading
-```
+For rebuilds while iterating, use the corresponding watch command in that table.
 
 ## RPC Configuration
 
@@ -200,7 +194,7 @@ those features are used.
 The UI also supports a walletless browser-local simulation mode for manual QA.
 After completing [Setup](#setup):
 
-1. Run `bun run app:serve:zoltar` (Zoltar on port 4153), `bun run app:serve:statoblast` (Statoblast on port 12347), or `bun run app:serve:trading` (Trading on port 4163)
+1. Start your app with its serve command from [Common Commands](#common-commands).
 1. Open `http://localhost:4153/?simulate=1`, `http://localhost:12347/?simulate=1`, or `http://localhost:4163/?simulate=1`
 
 While a dev server is running, `UI_DEV_SERVER_URL=http://localhost:4153 bun run ui:browser-smoke:zoltar`, `UI_DEV_SERVER_URL=http://localhost:12347 bun run ui:browser-smoke:statoblast`, or `UI_DEV_SERVER_URL=http://localhost:4163 bun run ui:browser-smoke:trading` opens the app in headless Chromium and fails if it does not mount cleanly.
@@ -217,21 +211,13 @@ Simulation mode details:
 
 ## Common Commands
 
-Run each interface in development mode. Each command first builds the complete dependency-ordered UI workspace, then serves the selected app:
+Each serve command first builds the selected app and its dependencies, then serves the app. Watch commands also rebuild the selected app and its dependencies as you edit.
 
-```bash
-bun run app:serve:zoltar      # Zoltar on http://localhost:4153
-bun run app:serve:statoblast  # Statoblast on http://localhost:12347
-bun run app:serve:trading     # Trading on http://localhost:4163
-```
-
-Watch the selected app and its dependencies after the complete workspace build:
-
-```bash
-bun run app:watch:zoltar
-bun run app:watch:statoblast
-bun run app:watch:trading
-```
+| Application | Serve command | Watch command | Local URL |
+| --- | --- | --- | --- |
+| Zoltar | `bun run app:serve:zoltar` | `bun run app:watch:zoltar` | http://localhost:4153 |
+| Statoblast | `bun run app:serve:statoblast` | `bun run app:watch:statoblast` | http://localhost:12347 |
+| Trading | `bun run app:serve:trading` | `bun run app:watch:trading` | http://localhost:4163 |
 
 Build all UI apps:
 
