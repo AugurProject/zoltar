@@ -38,13 +38,13 @@ async function withDeploymentNode<T>(chainId: number, testBody: (node: AnvilNode
 }
 
 test(
-	'Sepolia deployment repairs the missing Zoltar oracle, verifies both apps, and skips installed contracts',
+	'Sepolia deployment repairs missing Trading roots and Zoltar oracle, verifies runtime code, and skips installed contracts',
 	async () => {
 		await withDeploymentNode(11_155_111, async node => {
 			const client = createPreparedDeploymentClient({ chain: SEPOLIA_NETWORK_PROFILE.chain, maxFeePerGas: MAX_FEE_PER_GAS, maxTotalCost: MAX_TOTAL_COST, privateKey: ANVIL_PRIVATE_KEY, rpcUrl: node.rpcUrl, log: () => {} })
 			const plan = createCompleteDeploymentPlan(SEPOLIA_NETWORK_PROFILE, await getUniswapDeployment(SEPOLIA_NETWORK_PROFILE.wethAddress))
 			const existing = await runDeploymentPlan(
-				plan.filter(step => step.id !== 'zoltarDeploymentStatusOracle'),
+				plan.filter(step => !['zoltarDeploymentStatusOracle', 'tradingFactory', 'tradingRouter'].includes(step.id)),
 				client,
 				() => {},
 			)
@@ -58,7 +58,7 @@ test(
 				rpcUrl: node.rpcUrl,
 				writeGitHubSummary: false,
 			})
-			expect(deployment.results.filter(result => result.status === 'deployed').map(result => result.id)).toEqual(['zoltarDeploymentStatusOracle'])
+			expect(deployment.results.filter(result => result.status === 'deployed').map(result => result.id)).toEqual(['zoltarDeploymentStatusOracle', 'tradingFactory', 'tradingRouter'])
 			expect(deployment.results.filter(result => result.status === 'skipped')).toHaveLength(existing.length)
 			const previousProfile = getRuntimeNetworkProfile()
 			setRuntimeNetworkProfile(SEPOLIA_NETWORK_PROFILE)
@@ -70,6 +70,15 @@ test(
 			}
 			const repeated = await deployTestnet({ chainId: 11_155_111, log: () => {}, maxFeePerGas: MAX_FEE_PER_GAS, maxTotalCost: MAX_TOTAL_COST, privateKey: ANVIL_PRIVATE_KEY, rpcUrl: node.rpcUrl, writeGitHubSummary: false })
 			expect(repeated.results.every(result => result.status === 'skipped')).toBe(true)
+			for (const id of ['tradingFactory', 'tradingRouter']) {
+				const step = plan.find(candidate => candidate.id === id)
+				if (step === undefined) throw new Error(`Missing deployment step ${id}`)
+				const originalCode = await client.getCode({ address: step.address })
+				if (originalCode === undefined) throw new Error(`Missing runtime code for ${id}`)
+				await node.anvilWindowEthereum.addStateOverrides({ [step.address]: { code: hexToBytes('0x00') } })
+				await expect(deployTestnet({ chainId: 11_155_111, log: () => {}, maxFeePerGas: MAX_FEE_PER_GAS, maxTotalCost: MAX_TOTAL_COST, privateKey: ANVIL_PRIVATE_KEY, rpcUrl: node.rpcUrl, writeGitHubSummary: false })).rejects.toThrow(`Unexpected runtime code for ${id}`)
+				await node.anvilWindowEthereum.addStateOverrides({ [step.address]: { code: hexToBytes(originalCode) } })
+			}
 		})
 	},
 	TEST_TIMEOUT_MS,

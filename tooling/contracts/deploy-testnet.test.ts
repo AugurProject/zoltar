@@ -29,6 +29,8 @@ import {
 } from './deploy-testnet.mts'
 import { createCompleteDeploymentPlan } from './deployment-plan.mts'
 import { getUniswapDeployment } from './uniswap-deployment.mts'
+import { getTradingDeploymentPlan } from '../../ui/trading/ts/protocol/deployment.ts'
+import { PROXY_DEPLOYER_ADDRESS } from '../../ui/zoltarShared/ts/protocol/zoltarDeploymentHelpers.ts'
 
 const FIRST_ADDRESS = getAddress('0x0000000000000000000000000000000000000001')
 const SECOND_ADDRESS = getAddress('0x0000000000000000000000000000000000000002')
@@ -547,6 +549,7 @@ describe('testnet deployment plan', () => {
 		const addressSet = new Set(plan.map(step => step.address))
 		const infrastructure = getInfraContractAddresses(SEPOLIA_NETWORK_PROFILE)
 		const bootstrapDescendants = getBootstrapDescendantAddresses(SEPOLIA_NETWORK_PROFILE)
+		const trading = getTradingDeploymentPlan({ chainId: 11_155_111, chainName: 'Sepolia', defaultRpcUrl: '', id: 'sepolia', proxyDeployer: PROXY_DEPLOYER_ADDRESS, securityPoolFactory: infrastructure.securityPoolFactory, zoltar: infrastructure.zoltar }, 30)
 		const directInfrastructure = [
 			infrastructure.escalationGameClaimDelegate,
 			infrastructure.escalationGameFactory,
@@ -565,6 +568,8 @@ describe('testnet deployment plan', () => {
 		const requiredAddresses = [
 			...getZoltarDeploymentSteps(SEPOLIA_NETWORK_PROFILE).map(step => step.address),
 			...directInfrastructure,
+			trading.factory.address,
+			trading.router.address,
 			SEPOLIA_NETWORK_PROFILE.wethAddress,
 			SEPOLIA_NETWORK_PROFILE.genesisRepTokenAddress,
 			uniswap.addresses.arachnidCreate2DeployerAddress,
@@ -590,7 +595,7 @@ describe('testnet deployment plan', () => {
 		expect(bootstrapDescendants.securityPoolCreationCodeFirstChunk).toBe(getCreateAddress({ from: bootstrapDescendants.securityPoolDeploymentWorker, nonce: 1n }))
 		expect(bootstrapDescendants.securityPoolCreationCodeSecondChunk).toBe(getCreateAddress({ from: bootstrapDescendants.securityPoolDeploymentWorker, nonce: 2n }))
 		expect(plan.some(step => step.id === 'escalationGameFactory')).toBe(true)
-		expect(plan).toHaveLength(25)
+		expect(plan).toHaveLength(27)
 		expect(new Set(plan.map(step => step.id)).size).toBe(plan.length)
 		expect(new Set(plan.map(step => step.address)).size).toBe(plan.length)
 		expect(Object.keys(CONSERVATIVE_DEPLOYMENT_GAS).sort()).toEqual(plan.map(step => step.id).sort())
@@ -600,6 +605,8 @@ describe('testnet deployment plan', () => {
 			for (const dependency of step.dependencies) expect(indexById.get(dependency)).toBeLessThan(index)
 		}
 		expect(plan.find(step => step.id === 'openOracle')?.dependencies).toContain('permit2')
+		expect(plan.find(step => step.id === 'tradingFactory')?.dependencies).toEqual(['proxyDeployer', 'securityPoolFactory'])
+		expect(plan.find(step => step.id === 'tradingRouter')?.dependencies).toEqual(['proxyDeployer', 'tradingFactory'])
 	})
 
 	test('skips existing code and deploys missing dependent steps in order', async () => {
