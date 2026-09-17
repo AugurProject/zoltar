@@ -64,7 +64,7 @@ describe('usePriceOracleManager', () => {
 		},
 	})
 
-	test('re-reads manager validity immediately before requesting a price', async () => {
+	test.each([undefined, 1_250_000_000_000_000_000n])('re-reads manager validity and forwards the selected initial price (%s)', async proposedPrice => {
 		let managerLoadCount = 0
 		const loadOracleManagerDetails = mock(async () => {
 			managerLoadCount += 1
@@ -89,17 +89,20 @@ describe('usePriceOracleManager', () => {
 			executeOracleManagerStagedOperation: async () => {
 				throw new Error('executeOracleManagerStagedOperation should not be called in this test')
 			},
-			loadCoordinatorInitialReportFundingRequirement: async () => ({
-				currentRepBalanceAttoRep: 10n,
-				currentWethBalanceAttoEth: 10n,
-				initialReportAmount2: 1n,
-				maximumInitialAttoWeth: 1n,
-				minimumToken1ReportAttoEth: 1n,
-				proposedRepPerEthPrice: 1n,
-				reputationTokenAddress: zeroAddress,
-				requestedInitialAttoWeth: 0n,
-				wethShortfallAttoEth: 0n,
-			}),
+			loadCoordinatorInitialReportFundingRequirement: async (_client, _manager, _wallet, price) => {
+				expect(price).toBe(proposedPrice)
+				return {
+					currentRepBalanceAttoRep: 10n,
+					currentWethBalanceAttoEth: 10n,
+					initialReportAmount2: 1n,
+					maximumInitialAttoWeth: 1n,
+					minimumToken1ReportAttoEth: 1n,
+					proposedRepPerEthPrice: proposedPrice ?? 1n,
+					reputationTokenAddress: zeroAddress,
+					requestedInitialAttoWeth: 0n,
+					wethShortfallAttoEth: 0n,
+				}
+			},
 			loadOracleManagerDetails,
 			requestOraclePrice,
 		}
@@ -127,10 +130,11 @@ describe('usePriceOracleManager', () => {
 		expect(requireHookState(hookState).poolOracleManagerDetails?.isPriceValid).toBe(true)
 
 		await act(async () => {
-			await requireHookState(hookState).requestPoolPrice(MANAGER_ADDRESS, POOL_ADDRESS, 1n)
+			await requireHookState(hookState).requestPoolPrice(MANAGER_ADDRESS, POOL_ADDRESS, 1n, 0n, proposedPrice)
 		})
 
 		expect(requestOraclePrice).toHaveBeenCalledTimes(1)
+		expect(requestOraclePrice).toHaveBeenCalledWith(expect.anything(), MANAGER_ADDRESS, proposedPrice ?? 1n, 0n, 1n)
 		expect(loadOracleManagerDetails).toHaveBeenCalledTimes(3)
 		expect(requireHookState(hookState).poolPriceOracleResult?.action).toBe('requestPrice')
 	})

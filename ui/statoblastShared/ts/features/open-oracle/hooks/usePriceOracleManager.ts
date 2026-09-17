@@ -25,7 +25,7 @@ export type UsePriceOracleManagerDependencies<TWriteClient = PriceOracleProducti
 	createConnectedReadClient: () => PriceOracleReadClient
 	createWalletWriteClient: (accountAddress: Address, callbacks?: Parameters<typeof createWalletWriteClient>[1]) => TWriteClient
 	executeOracleManagerStagedOperation: (client: TWriteClient, managerAddress: Address, operationId: bigint) => Promise<OpenOracleActionResult>
-	loadCoordinatorInitialReportFundingRequirement: (client: TWriteClient, managerAddress: Address, walletAddress: Address) => Promise<CoordinatorInitialReportFunding>
+	loadCoordinatorInitialReportFundingRequirement: (client: TWriteClient, managerAddress: Address, walletAddress: Address, proposedRepPerEthPrice?: bigint) => Promise<CoordinatorInitialReportFunding>
 	loadOracleManagerDetails: (managerAddress: Address) => Promise<OracleManagerDetails>
 	requestOraclePrice: (client: TWriteClient, managerAddress: Address, proposedRepPerEthPrice: bigint, requestedInitialAttoWeth: bigint, reviewedRequestValueAttoEth: bigint) => Promise<OpenOracleActionResult>
 }
@@ -34,7 +34,7 @@ const defaultUsePriceOracleManagerDependencies: UsePriceOracleManagerDependencie
 	createConnectedReadClient,
 	createWalletWriteClient,
 	executeOracleManagerStagedOperation: async (client, managerAddress, operationId) => await executeOracleManagerStagedOperation(client, managerAddress, operationId),
-	loadCoordinatorInitialReportFundingRequirement: async (client, managerAddress, walletAddress) => await loadCoordinatorInitialReportFundingRequirement(client, managerAddress, walletAddress),
+	loadCoordinatorInitialReportFundingRequirement: async (client, managerAddress, walletAddress, proposedRepPerEthPrice) => await loadCoordinatorInitialReportFundingRequirement(client, managerAddress, walletAddress, proposedRepPerEthPrice),
 	loadOracleManagerDetails: async managerAddress => await loadOracleManagerDetails(createConnectedReadClient(), managerAddress),
 	requestOraclePrice: async (client, managerAddress, proposedRepPerEthPrice, requestedInitialAttoWeth, reviewedRequestValueAttoEth) => await requestOraclePrice(client, managerAddress, proposedRepPerEthPrice, requestedInitialAttoWeth, reviewedRequestValueAttoEth),
 }
@@ -83,7 +83,7 @@ function usePriceOracleManagerWithDependencies<TWriteClient>(
 		})
 	}
 
-	const requestPoolPrice = async (managerAddress: Address, securityPoolAddress: Address, reviewedRequestValueAttoEth: bigint, universeId?: bigint) => {
+	const requestPoolPrice = async (managerAddress: Address, securityPoolAddress: Address, reviewedRequestValueAttoEth: bigint, universeId?: bigint, proposedRepPerEthPrice?: bigint) => {
 		const transactionContext = { managerAddress, securityPoolAddress, universeId }
 		poolPriceOracleResult.value = undefined
 		try {
@@ -120,7 +120,7 @@ function usePriceOracleManagerWithDependencies<TWriteClient>(
 					if (refreshedManagerDetails?.isPriceValid) throw new Error('A fresh oracle price is already available')
 					if ((refreshedManagerDetails?.pendingReportId ?? 0n) > 0n) throw new Error('Oracle price request is already pending')
 					const writeClient = dependencies.createWalletWriteClient(walletAddress, { onTransactionPrepared, onTransactionSubmitted })
-					const initialReportFunding = await dependencies.loadCoordinatorInitialReportFundingRequirement(writeClient, managerAddress, walletAddress)
+					const initialReportFunding = await dependencies.loadCoordinatorInitialReportFundingRequirement(writeClient, managerAddress, walletAddress, proposedRepPerEthPrice)
 					if (initialReportFunding.currentRepBalanceAttoRep < initialReportFunding.initialReportAmount2) {
 						throw new Error(`Need ${formatAdditionalCurrencyBalance(initialReportFunding.initialReportAmount2 - initialReportFunding.currentRepBalanceAttoRep, 'REP')} in this wallet to fund the initial report.`)
 					}

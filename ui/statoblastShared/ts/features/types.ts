@@ -163,7 +163,7 @@ export type SecurityPoolWorkflowRouteContentProps = LiquidationModalStateProps &
 	onSwitchToPoolUniverse?: (universeId: bigint, securityPoolAddress: string) => void
 	onExecutePendingPoolOperation: (managerAddress: Address, operationId: bigint, securityPoolAddress: Address, universeId: bigint) => void
 	onRefreshSelectedPoolData: (securityPoolAddress?: string) => void
-	onRequestPoolPrice: (managerAddress: Address, securityPoolAddress: Address, reviewedRequestValueAttoEth: bigint, universeId: bigint) => void
+	onRequestPoolPrice: (managerAddress: Address, securityPoolAddress: Address, reviewedRequestValueAttoEth: bigint, universeId: bigint, proposedRepPerEthPrice?: bigint) => void
 	onSelectedPoolViewChange: (view: string | undefined) => void
 	onViewPendingReport: (reportId: bigint) => void
 	selectedPoolRefreshNonce: number

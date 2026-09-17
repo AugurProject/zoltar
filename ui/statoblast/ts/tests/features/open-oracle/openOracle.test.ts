@@ -1102,6 +1102,10 @@ describe('Open Oracle helpers', () => {
 			throw new Error(`Unexpected read ${functionName} for ${address}`)
 		}
 
+		mockClient.simulateContract = async () => {
+			throw new Error('Manual initial price must bypass Uniswap')
+		}
+
 		const funding = await loadCoordinatorInitialReportFundingRequirement(withInitializedV4Pool(mockClient), managerAddress, uiWriteClient.account.address, proposedRepPerEthPrice, requestedInitialAttoWeth)
 
 		expect(funding.minimumToken1ReportAttoEth).toBe(minimumToken1ReportAttoEth)

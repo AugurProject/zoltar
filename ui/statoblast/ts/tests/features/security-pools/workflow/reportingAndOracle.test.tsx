@@ -625,7 +625,6 @@ describe('SecurityPoolWorkflowSection: reporting and oracle', () => {
 		const documentQueries = within(document.body)
 		fireEvent.click(documentQueries.getByRole('button', { name: 'Request new price' }))
 		const dialog = documentQueries.getByRole('dialog', { name: 'Request New Price' })
-		expect(within(dialog).getByText('Transaction Review')).not.toBeNull()
 		expect(within(dialog).getByText('You Pay')).not.toBeNull()
 		expect(within(dialog).getByText('2.4 ETH')).not.toBeNull()
 		expect(within(dialog).queryByText(/≈/)).toBeNull()
@@ -641,6 +640,42 @@ describe('SecurityPoolWorkflowSection: reporting and oracle', () => {
 
 		fireEvent.click(within(dialog).getByRole('button', { name: 'Confirm price request' }))
 		expect(requests).toEqual([{ managerAddress: pool.managerAddress, reviewedRequestValueAttoEth: 2_400_000_000_000_000_000n, securityPoolAddress: pool.securityPoolAddress, universeId: pool.universeId }])
+	})
+
+	test('accepts a manual REP per ETH price without requiring a Uniswap quote', async () => {
+		const requests: Array<bigint | undefined> = []
+		const pool = createSelectedPool()
+		const renderedComponent = await renderIntoDocument(
+			<SecurityPoolWorkflowSection
+				{...createSecurityPoolWorkflowProps({
+					accountState: createAccountState({ ethBalanceAttoEth: 100n * 10n ** 18n }),
+					checkedSecurityPoolAddress: pool.securityPoolAddress,
+					onRequestPoolPrice: (_manager, _pool, _value, _universe, price) => requests.push(price),
+					poolOracleManagerDetails: createOracleManagerDetails({ isPriceValid: false, pendingReportId: 0n }),
+					securityPoolAddress: pool.securityPoolAddress,
+					securityPools: [pool],
+					selectedPoolView: 'price-oracle',
+				})}
+				showHeader={false}
+			/>,
+		)
+		setCleanup(renderedComponent.cleanup)
+		const queries = within(document.body)
+		fireEvent.click(queries.getByRole('button', { name: 'Request new price' }))
+		fireEvent.click(queries.getByRole('button', { name: 'Manual price' }))
+		const confirm = queries.getByRole('button', { name: 'Confirm price request' })
+		expect(getTransactionButtonState(document.body, 'Confirm price request').disabled).toBe(true)
+		const input = queries.getByRole('textbox', { name: 'REP per ETH' })
+		for (const value of ['0', '-1', 'abc', '0.0000000000000000001', (2n ** 256n).toString()]) {
+			fireEvent.input(input, { target: { value } })
+			expect(getTransactionButtonState(document.body, 'Confirm price request').disabled).toBe(true)
+			expect(queries.getAllByText('Enter a positive REP per ETH price with up to 18 decimal places.')).toHaveLength(1)
+			expect(getTransactionButtonState(document.body, 'Confirm price request').reason).toContain('Enter a positive REP per ETH price')
+		}
+		fireEvent.input(input, { target: { value: '1.25' } })
+		expect(getTransactionButtonState(document.body, 'Confirm price request').disabled).toBe(false)
+		fireEvent.click(confirm)
+		expect(requests).toEqual([1_250_000_000_000_000_000n])
 	})
 
 	test('retains the reviewed pool universe when selection changes before confirming a price request', async () => {

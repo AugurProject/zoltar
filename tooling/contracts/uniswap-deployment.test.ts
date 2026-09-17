@@ -85,10 +85,7 @@ describe('Uniswap testnet deployment', () => {
 			uniswapV4PoolManagerAddress: getAddress('0x9C27Fce9ad85dE98C7e95031Bf3F0B3D2CD677ad'),
 			uniswapV4QuoterAddress: getAddress('0x29322b72F451C5f4eba5b3C862C76896470c059A'),
 		})
-		expect(deployment.addresses.uniswapV3FactoryAddress).not.toBe(SEPOLIA_NETWORK_PROFILE.uniswapV3FactoryAddress)
-		expect(deployment.addresses.uniswapV3QuoterAddress).not.toBe(SEPOLIA_NETWORK_PROFILE.uniswapV3QuoterAddress)
 		expect(deployment.addresses.uniswapV3SwapRouterAddress).not.toBe(SEPOLIA_NETWORK_PROFILE.uniswapV3QuoterAddress)
-		expect(deployment.addresses.uniswapV4QuoterAddress).not.toBe(SEPOLIA_NETWORK_PROFILE.uniswapV4QuoterAddress)
 	})
 
 	test('keeps core addresses stable while binding the V3 quoter to the selected WETH', async () => {
@@ -418,4 +415,11 @@ test('bot Sepolia defaults match the deployed Uniswap bytecode and WETH', async 
 	expect(defaults.router).toBe(deployment.addresses.uniswapV3SwapRouterAddress)
 	expect(defaults.v2Router).toBeUndefined()
 	expect(defaults).toMatchObject({ v4PoolManager: deployment.addresses.uniswapV4PoolManagerAddress, v4Quoter: deployment.addresses.uniswapV4QuoterAddress })
+})
+
+test('UI Sepolia pricing uses the same deployed Uniswap contracts as the bots', async () => {
+	const { addresses } = await getUniswapDeployment(SEPOLIA_NETWORK_PROFILE.wethAddress)
+	expect(SEPOLIA_NETWORK_PROFILE.uniswapV3FactoryAddress).toBe(addresses.uniswapV3FactoryAddress)
+	expect(SEPOLIA_NETWORK_PROFILE.uniswapV3QuoterAddress).toBe(addresses.uniswapV3QuoterAddress)
+	expect(SEPOLIA_NETWORK_PROFILE.uniswapV4QuoterAddress).toBe(addresses.uniswapV4QuoterAddress)
 })

@@ -94,8 +94,8 @@ export const requestNewPriceTitle = 'Request New Price'
 export const requestingNewPrice = 'Requesting new price…'
 export const confirmPriceRequest = 'Confirm price request'
 export const loadOracleBeforePriceReview = 'Loading price oracle details…'
-export const requestPricePendingReportRisk = 'This creates a pending Open Oracle report for the selected pool. Another request cannot start until that report completes.'
-export const requestPriceFundingRisk = 'You Pay includes the 20% request buffer transferred with this transaction. Wallet gas and any additional initial-report REP or WETH funding are checked and submitted separately.'
+export const requestPricePendingReportRisk = 'Another price request must wait for this report to settle.'
+export const requestPriceFundingRisk = 'Includes a 20% request buffer. Gas and initial-report REP/WETH funding are additional.'
 export const liquidationWorkflowDescription = 'Review the quote and execution timing.'
 export const selectedPool = 'Selected Pool'
 export const selectedPoolVaultViews = 'Selected pool vault views'
@@ -252,3 +252,10 @@ export function universePoolCount(count: bigint) {
 export function universeVaultCount(count: bigint) {
 	return `${count} known ${count === 1n ? 'vault' : 'vaults'}`
 }
+
+export const initialPriceSource = 'Initial price source'
+export const automaticUniswapPrice = 'Uniswap quote'
+export const manualInitialPrice = 'Manual price'
+export const manualRepPerEth = 'REP per ETH'
+export const manualInitialPriceHint = 'Initial report price; subject to Open Oracle disputes and settlement.'
+export const manualInitialPriceError = 'Enter a positive REP per ETH price with up to 18 decimal places.'

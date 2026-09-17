@@ -1,3 +1,6 @@
+import { useEffect, useId, useState } from 'preact/hooks'
+import { ViewTabs } from '@zoltar/ui-core-shared/components/ViewTabs.js'
+import { tryParseDecimalInput } from '@zoltar/ui-core-shared/forms/decimal.js'
 import { ReadOnlyDetailAccordion } from '@zoltar/ui-core-shared/components/ReadOnlyDetailAccordion.js'
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import { AddressValue } from '@zoltar/ui-core-shared/components/AddressValue.js'
@@ -21,6 +24,7 @@ import * as securityPoolCopy from '../../../copy/securityPool.js'
 import { getPendingOperationAmountPresentation, getPendingOperationLabel, getStagedOperationExecutionModeLabel } from './SecurityPoolWorkflowPresentation.js'
 
 export type RequestPriceReview = {
+	proposedRepPerEthPrice?: bigint | undefined
 	requestValueAttoEth: bigint
 	managerAddress: Address
 	securityPoolAddress: Address
@@ -51,21 +55,49 @@ export function SecurityPoolRequestPriceModal({
 	pending: boolean
 	review: RequestPriceReview | undefined
 }) {
+	const manualPriceFieldId = useId()
+	const [priceSource, setPriceSource] = useState<'automatic' | 'manual'>('automatic')
+	const [manualPrice, setManualPrice] = useState('')
+	useEffect(() => {
+		setPriceSource('automatic')
+		setManualPrice('')
+	}, [review])
+	const parsedPrice = tryParseDecimalInput(manualPrice)
+	const proposedRepPerEthPrice = priceSource === 'manual' ? parsedPrice : undefined
+	const manualPriceError = priceSource === 'manual' && (parsedPrice === undefined || parsedPrice <= 0n || parsedPrice >= 2n ** 256n) ? securityPoolCopy.manualInitialPriceError : undefined
 	return (
 		<OperationModal closeOnSuccessKey={closeOnSuccessKey} isOpen={review !== undefined} onClose={onClose} title={securityPoolCopy.requestNewPriceTitle}>
-			<TransactionReview primary={[{ label: transactionReviewCopy.youPay, value: <CurrencyValue precision='exact' value={review?.requestValueAttoEth} suffix={commonCopy.eth} /> }]} risks={[securityPoolCopy.requestPricePendingReportRisk, securityPoolCopy.requestPriceFundingRisk]} />
+			<ViewTabs
+				ariaLabel={securityPoolCopy.initialPriceSource}
+				variant='segmented'
+				value={priceSource}
+				onChange={setPriceSource}
+				options={[
+					{ value: 'automatic', label: securityPoolCopy.automaticUniswapPrice, disabled: pending },
+					{ value: 'manual', label: securityPoolCopy.manualInitialPrice, disabled: pending },
+				]}
+			/>
+			{priceSource === 'manual' ? (
+				<label className='field' id={manualPriceFieldId}>
+					<span>{securityPoolCopy.manualRepPerEth}</span>
+					<FormInput aria-label={securityPoolCopy.manualRepPerEth} value={manualPrice} inputMode='decimal' disabled={pending} onInput={event => setManualPrice(event.currentTarget.value)} error={manualPriceError} hint={securityPoolCopy.manualInitialPriceHint} />
+				</label>
+			) : undefined}
+			<TransactionReview variant='inline' primary={[{ label: transactionReviewCopy.youPay, value: <CurrencyValue precision='exact' value={review?.requestValueAttoEth} suffix={commonCopy.eth} /> }]} risks={[securityPoolCopy.requestPricePendingReportRisk, securityPoolCopy.requestPriceFundingRisk]} />
 			<div className='actions oracle-actions'>
 				<button className='secondary' type='button' onClick={onClose} disabled={pending}>
 					{commonCopy.cancel}
 				</button>
 				<TransactionActionButton
+					disabledReasonElementId={manualPriceError === undefined ? undefined : manualPriceFieldId}
+					showDisabledReason={confirmationGuardMessage !== undefined || manualPriceError === undefined}
 					idleLabel={securityPoolCopy.confirmPriceRequest}
 					pendingLabel={securityPoolCopy.requestingNewPrice}
 					onClick={() => {
-						if (review !== undefined) onConfirm(review)
+						if (review !== undefined && manualPriceError === undefined && !pending && canRequest && confirmationGuardMessage === undefined) onConfirm({ ...review, proposedRepPerEthPrice })
 					}}
 					pending={pending}
-					availability={{ disabled: review === undefined || !canRequest || confirmationGuardMessage !== undefined, reason: canRequest ? confirmationGuardMessage : undefined }}
+					availability={{ disabled: review === undefined || !canRequest || confirmationGuardMessage !== undefined || manualPriceError !== undefined, reason: canRequest ? (confirmationGuardMessage ?? manualPriceError) : undefined }}
 				/>
 			</div>
 		</OperationModal>
