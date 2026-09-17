@@ -7,7 +7,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, test } from 'bun:test'
 import { getAddress } from '@zoltar/bot-shared/ethereum'
-import { parseSettings, parseStrategy, serializedSettings } from '../../src/config/settings.ts'
+import { parseDesiredPools, parseSettings, parseStrategy, serializedSettings } from '../../src/config/settings.ts'
 import { assertSettingsProfileIsolation, loadSettings, saveSettings, switchSettingsNetworkProfile, type SettingsFilesystem } from '../../src/config/settings-store.ts'
 
 // Preset profiles live beside the active configuration under this suffix.
@@ -466,5 +466,24 @@ for (const failure of ['rename', 'directory sync']) {
 		await expect(saveSettings('/state/operator.json', parseSettings(settings), undefined, filesystem)).rejects.toBe(problem)
 		expect(events.includes('r:close')).toBe(failure === 'directory sync')
 		expect(events.at(-1)).toBe('rm')
+	})
+}
+
+for (const [field, bits] of [
+	['universeId', 248],
+	['questionId', 256],
+	['initialReportPriorityFeeAttoEthPerGas', 256],
+	['statoblastSecurityMultiplierBps', 256],
+] as const) {
+	test(`desired pool ${field} preserves unsigned syntax, bounds, and errors`, () => {
+		const pool = { initialReportPriorityFeeAttoEthPerGas: '0', questionId: '0', statoblastSecurityMultiplierBps: '12500', universeId: '0' }
+		const parse = (value: unknown) => parseDesiredPools([{ ...pool, [field]: value }])
+		const maximum = 2n ** BigInt(bits) - 1n
+		expect(parse(maximum.toString())[0]?.[field]).toBe(maximum)
+		if (field !== 'statoblastSecurityMultiplierBps') expect(parse('0')[0]?.[field]).toBe(0n)
+		expect(() => parse((maximum + 1n).toString())).toThrow(`desiredPools[0].${field} must fit in uint${bits}`)
+		for (const value of [-1, 0, undefined, '', '-1', '+1', '01', ' 1', '1 ', '1.0', '1e2', '0x10']) {
+			expect(() => parse(value)).toThrow(`desiredPools[0].${field} must be a non-negative integer string`)
+		}
 	})
 }
