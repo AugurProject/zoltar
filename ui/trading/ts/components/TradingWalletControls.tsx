@@ -1,4 +1,4 @@
-import { Badge } from '@zoltar/ui-core-shared/components/Badge.js'
+import { WalletConnectionControl, WalletNetworkControl } from '@zoltar/ui-core-shared/components/WalletConnectionControl.js'
 import { LoadingText } from '@zoltar/ui-core-shared/components/LoadingText.js'
 import * as coreAppCopy from '@zoltar/ui-core-shared/copy/app.js'
 import { getChainDisplayLabel } from '@zoltar/ui-core-shared/wallet/network.js'
@@ -50,17 +50,15 @@ export function TradingWalletControls({ account, deploymentSetupActive, deployme
 	return (
 		<div class='trading-wallet-actions'>
 			{deploymentSetupActive ? (
-				<button
-					class='secondary wallet-button'
-					type='button'
-					disabled={workflowLocked || deploymentWalletState.connecting || !deploymentWalletState.ready}
-					aria-busy={deploymentWalletState.connecting}
-					aria-label={deploymentWalletState.account === undefined ? undefined : appCopy.disconnectWalletLabel(deploymentWalletState.account)}
+				<WalletConnectionControl
+					label={deploymentWalletLabel(deploymentWalletState)}
+					pendingLabel={appCopy.connectingWallet}
+					pending={deploymentWalletState.connecting}
+					disabled={workflowLocked || !deploymentWalletState.ready}
+					ariaLabel={deploymentWalletState.account === undefined ? undefined : appCopy.disconnectWalletLabel(deploymentWalletState.account)}
 					title={deploymentWalletState.account === undefined ? undefined : appCopy.disconnectWallet}
 					onClick={onDeploymentWalletRequest}
-				>
-					{deploymentWalletLabel(deploymentWalletState)}
-				</button>
+				/>
 			) : null}
 			{reservesSlot ? (
 				<WalletChipPlaceholder>
@@ -68,19 +66,8 @@ export function TradingWalletControls({ account, deploymentSetupActive, deployme
 				</WalletChipPlaceholder>
 			) : null}
 			{liveWalletVisible && account !== undefined ? <WalletChip address={account} /> : null}
-			{showsSwitchNetworkAction ? (
-				<>
-					<Badge tone='danger'>{coreAppCopy.formatWrongNetworkBadgeLabel(getChainDisplayLabel(walletChainId?.toString()) ?? coreAppCopy.unknownNetwork)}</Badge>
-					<button class='secondary wallet-button' type='button' disabled={workflowLocked} onClick={onSwitchNetwork}>
-						{formatSwitchNetworkAction(requiredNetworkName)}
-					</button>
-				</>
-			) : null}
-			{showsConnectAction ? (
-				<button class={account === undefined ? 'secondary wallet-button' : 'quiet wallet-button'} type='button' disabled={workflowLocked} onClick={onWalletConnectRequest}>
-					{account === undefined ? appCopy.connectWallet : appCopy.changeWallet}
-				</button>
-			) : null}
+			{showsSwitchNetworkAction ? <WalletNetworkControl badge={coreAppCopy.formatWrongNetworkBadgeLabel(getChainDisplayLabel(walletChainId?.toString()) ?? coreAppCopy.unknownNetwork)} label={formatSwitchNetworkAction(requiredNetworkName)} disabled={workflowLocked} onClick={onSwitchNetwork} /> : null}
+			{showsConnectAction ? <WalletConnectionControl className={account === undefined ? 'secondary wallet-button' : 'quiet wallet-button'} disabled={workflowLocked} onClick={onWalletConnectRequest} label={account === undefined ? appCopy.connectWallet : appCopy.changeWallet} /> : null}
 		</div>
 	)
 }

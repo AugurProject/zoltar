@@ -149,7 +149,7 @@ describe('MarketCreateQuestionSection', () => {
 		})
 
 		expect(documentQueries.getByText('Title is required')).not.toBeNull()
-		expect(titleInput.getAttribute('aria-describedby')).toBe('market-create-title-error')
+		expect(document.getElementById(titleInput.getAttribute('aria-describedby') ?? '')?.textContent).toBe('Title is required')
 	})
 
 	test('associates chronology errors with both time fields and explains the disabled action', async () => {
@@ -406,8 +406,8 @@ describe('MarketCreateQuestionSection', () => {
 		})
 
 		expect(documentQueries.getByText('Outcome 1 is required')).not.toBeNull()
-		expect(outcome1.getAttribute('aria-describedby')).toBe('market-create-categoricalOutcomes-error')
-		expect(outcome2.getAttribute('aria-describedby')).toBe('market-create-categoricalOutcomes-error')
+		expect(document.getElementById(outcome1.getAttribute('aria-describedby') ?? '')?.textContent).toBe('Outcome 1 is required')
+		expect(document.getElementById(outcome2.getAttribute('aria-describedby') ?? '')?.textContent).toBe('Outcome 1 is required')
 	})
 
 	test('uses canonical categorical outcome ordering in the draft preview', async () => {
@@ -604,7 +604,7 @@ describe('MarketCreateQuestionSection', () => {
 		const scalarMax = documentQueries.getByLabelText('Scalar Max') as HTMLInputElement
 		for (const input of [scalarMin, scalarIncrement, scalarMax]) {
 			expect(input.required).toBe(true)
-			expect(input.closest('label')?.querySelector('.required-field-indicator')).not.toBeNull()
+			expect(document.querySelector(`label[for="${input.id}"] .required-field-indicator`)).not.toBeNull()
 		}
 
 		await act(() => {
@@ -616,9 +616,9 @@ describe('MarketCreateQuestionSection', () => {
 		expect(documentQueries.getByText('Scalar Min is required')).not.toBeNull()
 		expect(documentQueries.getByText('Scalar Increment is required')).not.toBeNull()
 		expect(documentQueries.getByText('Scalar Max is required')).not.toBeNull()
-		expect(scalarMin.getAttribute('aria-describedby')).toBe('market-create-scalarMin-error')
-		expect(scalarIncrement.getAttribute('aria-describedby')).toBe('market-create-scalarIncrement-error')
-		expect(scalarMax.getAttribute('aria-describedby')).toBe('market-create-scalarMax-error')
+		expect(document.getElementById(scalarMin.getAttribute('aria-describedby') ?? '')?.textContent).toBe('Scalar Min is required')
+		expect(document.getElementById(scalarIncrement.getAttribute('aria-describedby') ?? '')?.textContent).toBe('Scalar Increment is required')
+		expect(document.getElementById(scalarMax.getAttribute('aria-describedby') ?? '')?.textContent).toBe('Scalar Max is required')
 	})
 
 	test('calls create market handler when validation passes', async () => {

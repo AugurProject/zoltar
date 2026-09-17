@@ -180,7 +180,8 @@ h2 {
 }
 
 .eyebrow,
-.metric-label {
+.metric-label,
+.rep-market-consensus dt {
 	margin-bottom: 7px;
 	color: var(--accent);
 	font-family: var(--mono);
@@ -379,7 +380,8 @@ section,
 	display: block;
 }
 
-.metric strong {
+.metric strong,
+.rep-market-consensus dd {
 	overflow-wrap: anywhere;
 	margin: 4px 0 7px;
 	font-family: var(--mono);
@@ -1024,4 +1026,8 @@ a {
 	font-size: 0.8rem;
 	overflow-wrap: anywhere;
 	white-space: pre-wrap;
+}
+
+.rep-market-consensus dl {
+	margin: 0;
 }

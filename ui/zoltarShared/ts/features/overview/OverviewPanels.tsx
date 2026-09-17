@@ -1,3 +1,4 @@
+import { WalletConnectionControl, WalletNetworkControl } from '@zoltar/ui-core-shared/components/WalletConnectionControl.js'
 import { MainnetDisabledNotice } from '@zoltar/ui-core-shared/app/components/MainnetDisabledNotice.js'
 import * as appCopy from '@zoltar/ui-core-shared/copy/app.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
@@ -8,7 +9,6 @@ import { Badge } from '@zoltar/ui-core-shared/components/Badge.js'
 import { CurrencyValue } from '@zoltar/ui-core-shared/components/CurrencyValue.js'
 import { HeaderMetricGroup, HeaderMetricStrip } from '@zoltar/ui-core-shared/components/HeaderMetricStrip.js'
 import { MetricField } from '@zoltar/ui-core-shared/components/MetricField.js'
-import { LoadingText } from '@zoltar/ui-core-shared/components/LoadingText.js'
 import { StateHint } from '@zoltar/ui-core-shared/components/StateHint.js'
 import { ToolbarField } from '@zoltar/ui-core-shared/components/ToolbarField.js'
 import { WalletChip, WalletChipLabel } from '@zoltar/ui-core-shared/components/WalletChip.js'
@@ -110,20 +110,13 @@ export function OverviewPanels({
 		return appCopy.ethereumMainnet
 	})()
 	const walletControl = (() => {
-		if (accountState.address === undefined)
-			return (
-				<button className='secondary wallet-button' type='button' onClick={onConnect} disabled={isConnectingWallet}>
-					{isConnectingWallet ? <LoadingText>{appCopy.connecting}</LoadingText> : commonCopy.connectWallet}
-				</button>
-			)
+		if (accountState.address === undefined) return <WalletConnectionControl onClick={onConnect} pending={isConnectingWallet} pendingLabel={appCopy.connecting} label={commonCopy.connectWallet} />
 		if (isBrowserSimulationReadBackend) {
 			if (!hasWrongWalletNetwork) return <WalletChip address={accountState.address} />
 			return (
 				<>
 					<WalletChip address={accountState.address} tone='danger' />
-					<button className='secondary wallet-button' type='button' onClick={onSwitchNetwork} disabled={isManagingWallet}>
-						{switchNetworkLabel}
-					</button>
+					<WalletNetworkControl className='secondary wallet-button' onClick={onSwitchNetwork} disabled={isManagingWallet} label={switchNetworkLabel} />
 				</>
 			)
 		}
@@ -138,17 +131,9 @@ export function OverviewPanels({
 						<span>{appCopy.currentNetwork}</span>
 						<strong>{walletNetworkLabel}</strong>
 					</p>
-					<button className='secondary' type='button' onClick={onChangeWallet} disabled={isManagingWallet}>
-						{appCopy.changeWallet}
-					</button>
-					{hasWrongWalletNetwork ? (
-						<button className='primary' type='button' onClick={onSwitchNetwork} disabled={isManagingWallet}>
-							{switchNetworkLabel}
-						</button>
-					) : undefined}
-					<button className='quiet' type='button' onClick={onDisconnectWallet} disabled={isManagingWallet}>
-						{isManagingWallet ? appCopy.managingWallet : appCopy.disconnectWallet}
-					</button>
+					<WalletConnectionControl className='secondary' onClick={onChangeWallet} disabled={isManagingWallet} label={appCopy.changeWallet} />
+					{hasWrongWalletNetwork ? <WalletNetworkControl className='primary' onClick={onSwitchNetwork} disabled={isManagingWallet} label={switchNetworkLabel} /> : undefined}
+					<WalletConnectionControl className='quiet' onClick={onDisconnectWallet} disabled={isManagingWallet} label={isManagingWallet ? appCopy.managingWallet : appCopy.disconnectWallet} />
 				</div>
 			</details>
 		)

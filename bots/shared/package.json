@@ -11,6 +11,8 @@
 		"./contracts/abi": "./src/contracts/abi.generated.ts",
 		"./config/signer": "./src/config/signer.ts",
 		"./dashboard/assets": "./src/dashboard/assets.ts",
+		"./dashboard/rep-market-consensus": "./src/dashboard/rep-market-consensus.ts",
+		"./dashboard/rpc-connectivity": "./src/dashboard/rpc-connectivity.ts",
 		"./dashboard/components": "./src/dashboard/components.ts",
 		"./dashboard/connectivity-error": "./src/dashboard/connectivity-error.ts",
 		"./dashboard/forms": "./src/dashboard/forms.ts",

@@ -1,3 +1,4 @@
+import { TimestampValue } from '@zoltar/ui-core-shared/components/TimestampValue.js'
 import { BackingDetails } from './BackingDetails.js'
 import { formatBpsMultiplier, formatCapacityOwnership, formatMintingCapacity, formatUnits } from '../lib/format.js'
 import { Badge } from '@zoltar/ui-core-shared/components/Badge.js'
@@ -11,7 +12,6 @@ import { marketNewRiskBlocker, type LiveMarket } from '../protocol/live.js'
 import * as appCopy from '../copy/app.js'
 import { getTradingRouteHref } from '../lib/routing.js'
 import { RouteHeader } from '@zoltar/ui-core-shared/components/RouteHeader.js'
-import { formatTimestamp } from './LiveTradingTransactionUi.js'
 import { SecurityPoolIdentityFields } from './LiveMarketIdentity.js'
 import { liveCopy } from '../copy/live.js'
 
@@ -120,9 +120,19 @@ export function LiveSecurityPoolDetails({
 						<>
 							<div>
 								<DataGrid dense>
-									<MetricField label={liveCopy.questionEnd}>{formatTimestamp(market.endTime)}</MetricField>
+									<MetricField label={liveCopy.questionEnd}>
+										<TimestampValue timestamp={market.endTime} relative={false} />
+									</MetricField>
 									<MetricField label={liveCopy.systemState}>{systemStateLabel(market.systemState)}</MetricField>
-									<MetricField label={liveCopy.universeFork}>{market.universeForkTime === 0n ? liveCopy.notForked : liveCopy.forkedAt(formatTimestamp(market.universeForkTime))}</MetricField>
+									<MetricField label={liveCopy.universeFork}>
+										{market.universeForkTime === 0n ? (
+											liveCopy.notForked
+										) : (
+											<>
+												{liveCopy.forkedAt} <TimestampValue timestamp={market.universeForkTime} relative={false} />
+											</>
+										)}
+									</MetricField>
 									{market.questionOutcome === 3 ? undefined : <MetricField label={liveCopy.outcome}>{questionOutcomeLabel(market.questionOutcome)}</MetricField>}
 									<MetricField label={liveCopy.mintingCapacity}>{formatMintingCapacity(market.settlementCollateralAttoEth, market.mintingCapacityCeilingAttoEth)}</MetricField>
 								</DataGrid>

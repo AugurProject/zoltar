@@ -387,6 +387,22 @@
 			"bun": "./ts/components/ErrorNotice.tsx",
 			"default": "./js/components/ErrorNotice.js"
 		},
+		"./components/FormField.js": {
+			"bun": "./ts/components/FormField.tsx",
+			"default": "./js/components/FormField.js"
+		},
+		"./components/RetryableNotice.js": {
+			"bun": "./ts/components/RetryableNotice.tsx",
+			"default": "./js/components/RetryableNotice.js"
+		},
+		"./components/WalletConnectionControl.js": {
+			"bun": "./ts/components/WalletConnectionControl.tsx",
+			"default": "./js/components/WalletConnectionControl.js"
+		},
+		"./tests/sharedControls.test.js": {
+			"bun": "./ts/tests/sharedControls.test.tsx",
+			"default": "./js/tests/sharedControls.test.js"
+		},
 		"./components/FormInput.js": {
 			"bun": "./ts/components/FormInput.tsx",
 			"default": "./js/components/FormInput.js"

@@ -1,7 +1,7 @@
+import { TimestampValue } from '@zoltar/ui-core-shared/components/TimestampValue.js'
 import { formatCollateralEth } from '../lib/shareValue.js'
 import { formatUnits } from '../lib/format.js'
 import type { LiveMarket } from '../protocol/live.js'
-import { formatTimestamp } from './LiveTradingTransactionUi.js'
 import * as payoutCopy from '../copy/payout.js'
 import { DataGrid } from '@zoltar/ui-core-shared/components/DataGrid.js'
 import { MetricField } from '@zoltar/ui-core-shared/components/MetricField.js'
@@ -17,8 +17,10 @@ export function BackingDetails({ market }: { market: LiveMarket }) {
 				<MetricField label={payoutCopy.backingPerSet}>{formatCollateralEth(10n ** 36n, market)}</MetricField>
 				{valuation === undefined ? undefined : (
 					<>
-						<MetricField label={payoutCopy.valuationTime}>{formatTimestamp(valuation.timestamp)}</MetricField>
-						<MetricField label={payoutCopy.feeEnd}>{valuation.feeEndTime === (1n << 256n) - 1n ? payoutCopy.feeEndUnknown : formatTimestamp(valuation.feeEndTime)}</MetricField>
+						<MetricField label={payoutCopy.valuationTime}>
+							<TimestampValue timestamp={valuation.timestamp} relative={false} />
+						</MetricField>
+						<MetricField label={payoutCopy.feeEnd}>{valuation.feeEndTime === (1n << 256n) - 1n ? payoutCopy.feeEndUnknown : <TimestampValue timestamp={valuation.feeEndTime} relative={false} />}</MetricField>
 						{feeReduction === undefined ? undefined : <MetricField label={valuation.timestamp >= valuation.feeEndTime ? payoutCopy.feeEnded : payoutCopy.feeProjection}>{formatUnits(feeReduction, 4, 4)}%</MetricField>}
 					</>
 				)}

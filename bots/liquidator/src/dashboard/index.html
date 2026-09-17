@@ -48,64 +48,8 @@
 						<p class="eyebrow">Independent market reference</p>
 						<h2 id="centralized-markets-title">REP market consensus</h2>
 					</div>
-					<p id="centralized-market-status" class="muted" role="status" aria-live="polite">No exchange sources configured</p>
 				</div>
-				<div id="centralized-market-summary" class="metric-grid">
-					<dl class="metric">
-						<dt>CEX median REP / ETH</dt>
-						<dd id="centralized-market-price">—</dd>
-					</dl>
-					<dl class="metric">
-						<dt>DEX consensus REP / ETH</dt>
-						<dd id="dex-market-price">—</dd>
-					</dl>
-					<dl class="metric">
-						<dt>Guarded reference REP / ETH</dt>
-						<dd id="guarded-market-price">—</dd>
-					</dl>
-					<dl class="metric">
-						<dt>DEX bid depth</dt>
-						<dd id="dex-market-bid-depth">—</dd>
-					</dl>
-					<dl class="metric">
-						<dt>DEX ask depth</dt>
-						<dd id="dex-market-ask-depth">—</dd>
-					</dl>
-					<dl class="metric">
-						<dt>CEX bid depth</dt>
-						<dd id="centralized-market-bid-depth">—</dd>
-					</dl>
-					<dl class="metric">
-						<dt>CEX ask depth</dt>
-						<dd id="centralized-market-ask-depth">—</dd>
-					</dl>
-					<dl class="metric">
-						<dt>Consensus sources</dt>
-						<dd id="centralized-market-source-count">0 CEX</dd>
-					</dl>
-				</div>
-				<div class="table-shell">
-					<table>
-						<caption>
-							CEX observations
-						</caption>
-						<thead>
-							<tr>
-								<th id="market-exchange-heading" scope="col">Exchange</th>
-								<th id="market-pair-heading" scope="col">Market</th>
-								<th id="market-price-heading" scope="col">REP / ETH</th>
-								<th id="market-bid-heading" scope="col">Bid depth</th>
-								<th id="market-ask-heading" scope="col">Ask depth</th>
-								<th id="market-observed-heading" scope="col">Observed</th>
-							</tr>
-						</thead>
-						<tbody id="centralized-market-rows">
-							<tr>
-								<td colspan="6" class="empty">Add public exchange sources in settings.</td>
-							</tr>
-						</tbody>
-					</table>
-				</div>
+				<!-- rep-market-consensus -->
 				<div class="table-shell source-shell">
 					<table>
 						<caption id="market-source-caption">
@@ -175,26 +119,7 @@
 					<div class="settings-body">
 						<form id="network-form">
 							<fieldset id="network-fields" disabled>
-								<div class="form-grid">
-									<label
-										><span>Chain</span
-										><select id="network-name" required>
-											<option value="mainnet">Ethereum mainnet · chain 1</option>
-											<option value="sepolia">Sepolia · chain 11155111</option>
-										</select></label
-									>
-									<label><span>Read RPC URL</span><input id="read-rpc-url" type="url" spellcheck="false" required /></label>
-									<label><span>Public submission RPC URLs · one per line</span><textarea id="public-rpc-urls" rows="3" spellcheck="false" required></textarea></label>
-									<label
-										><span>RPC agreement requirement</span
-										><select id="rpc-quorum">
-											<option value="1">1 · primary RPC only</option>
-											<option value="2">2 · require two agreeing independent RPCs</option>
-										</select></label
-									>
-									<label><span>Independent quorum RPC URLs · required when agreement is 2</span><textarea id="quorum-rpc-urls" rows="3" spellcheck="false"></textarea></label>
-								</div>
-								<div class="form-actions"><span id="network-status" class="action-status" role="status" aria-live="polite">Every endpoint is checked against the selected chain before it is accepted.</span><button type="submit">Check &amp; apply network</button></div>
+								<!-- rpc-connectivity-fields -->
 							</fieldset>
 						</form>
 						<div id="rpc-endpoint-health" class="rpc-health-grid" aria-label="RPC endpoint health"></div>

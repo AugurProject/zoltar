@@ -1,3 +1,4 @@
+import { TimestampValue } from '@zoltar/ui-core-shared/components/TimestampValue.js'
 import type { RefObject } from 'preact'
 import { useEffect, useRef, useState } from 'preact/hooks'
 import { formatUnits, shortAddress } from '../lib/format.js'
@@ -21,7 +22,7 @@ import { LivePortfolio } from './LivePortfolio.js'
 import { LivePositionControls } from './LivePositionControls.js'
 import { LiveLiquidityControls, liveLiquidityServices, type LiveLiquidityServices } from './LiveLiquidityControls.js'
 import { LiveSettlementControls, liveSettlementServices, type LiveSettlementServices } from './LiveSettlementControls.js'
-import { DEFAULT_SLIPPAGE_PERCENT, DEFAULT_TRANSACTION_VALIDITY_MINUTES, formatTimestamp } from './LiveTradingTransactionUi.js'
+import { DEFAULT_SLIPPAGE_PERCENT, DEFAULT_TRANSACTION_VALIDITY_MINUTES } from './LiveTradingTransactionUi.js'
 import type { WalletSummaryState } from '../lib/walletSummaryState.js'
 import { liveWorkflowRoutePresentation } from './live/routePresentation.js'
 import { LiveSecurityPoolDetails, PairInitializationAction, SecurityPoolRouteEmptyState } from './LiveSecurityPoolDetails.js'
@@ -48,7 +49,7 @@ function MarketFacts({ market, nowSeconds, workflowLocked, headingRef }: { marke
 				{ label: liveCopy.securityPoolLabel, value: <SecurityPoolLink value={market.pool} disabled={workflowLocked} /> },
 				...(market.loadError === undefined
 					? [
-							{ label: liveCopy.questionEnd, value: formatTimestamp(market.endTime) },
+							{ label: liveCopy.questionEnd, value: <TimestampValue timestamp={market.endTime} relative={false} /> },
 							{ label: liveCopy.ammFee, value: `${formatUnits(market.feeBps, 2, 2)}%` },
 							{ label: liveCopy.pair, value: market.pair === undefined ? liveCopy.notDeployed : <ReadOnlyAddressValue address={market.pair} responsiveAbbreviation /> },
 						]
