@@ -131,7 +131,7 @@ export function buildVaultReadinessActions({
 	vaultExistsOnchain,
 	visibleDepositLauncherBlocker,
 	visibleRepExitLauncherBlocker,
-}: VaultReadinessActionInput): ReadinessAction[] {
+}: VaultReadinessActionInput): Omit<ReadinessAction, 'title'>[] {
 	const depositReady = depositRepToVaultEnabled && canUseLoadedVaultActions
 	const repExitReady = repExitEnabled && vaultExistsOnchain && canUseLoadedVaultActions
 	const claimFeesReady = claimFeesEnabled && hasClaimableFees && claimFeesLauncherBlocker === undefined && vaultExistsOnchain && canUseLoadedVaultActions
@@ -145,7 +145,6 @@ export function buildVaultReadinessActions({
 			readiness: depositReady ? 'ready' : 'blocked',
 			...(depositDisabledReasonId === undefined ? {} : { disabledReasonId: depositDisabledReasonId }),
 			...(visibleDepositLauncherBlocker === undefined || !depositRepToVaultEnabled ? {} : { blocker: visibleDepositLauncherBlocker }),
-			title: depositRepActionLabel,
 		},
 		{
 			actionLabel: repExitActionLabel,
@@ -155,7 +154,6 @@ export function buildVaultReadinessActions({
 			readiness: repExitReady ? 'ready' : 'blocked',
 			...(repExitDisabledReasonId === undefined ? {} : { disabledReasonId: repExitDisabledReasonId }),
 			...(visibleRepExitLauncherBlocker === undefined || !repExitEnabled ? {} : { blocker: visibleRepExitLauncherBlocker }),
-			title: repExitActionLabel,
 		},
 		{
 			actionLabel: securityPoolCopy.claimFees,
@@ -165,7 +163,6 @@ export function buildVaultReadinessActions({
 			readiness: claimFeesReady ? 'ready' : 'blocked',
 			...(claimFeesDisabledReasonId === undefined ? {} : { disabledReasonId: claimFeesDisabledReasonId }),
 			...(claimFeesAvailabilityBlocker === undefined ? {} : { blocker: claimFeesAvailabilityBlocker }),
-			title: securityPoolCopy.claimFeesTitle,
 		},
 		{
 			actionLabel: securityPoolCopy.adjustVaultBackingFactor,
@@ -175,7 +172,6 @@ export function buildVaultReadinessActions({
 			readiness: adjustmentReady ? 'ready' : 'blocked',
 			...(depositDisabledReasonId === undefined ? {} : { disabledReasonId: depositDisabledReasonId }),
 			...(showSharedRefreshVaultBlocker || adjustmentBlocker === undefined ? {} : { blocker: adjustmentBlocker }),
-			title: securityPoolCopy.adjustVaultBackingFactor,
 		},
 	]
 }

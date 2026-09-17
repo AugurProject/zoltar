@@ -1,3 +1,4 @@
+import { ChainTimestampContext } from '@zoltar/ui-core-shared/wallet/chainTimestamp.js'
 import { expect, test } from 'bun:test'
 import { useState } from 'preact/hooks'
 import { act } from 'preact/test-utils'
@@ -63,6 +64,45 @@ test('shows unknown capacity without a progress gauge or implied zero capacity',
 	await renderLoadedPool({ uiPriceOracle: 'uniswap', repPerEthPrice: undefined })
 	const header = document.body.querySelector('.pool-overview-header')
 	expect(header?.textContent).toContain('/ Unavailable')
-	expect(header?.textContent).toContain('A current price is needed to estimate capacity.')
+	expect(header?.textContent).toContain('Capacity needs a current price.')
 	expect(header?.querySelector('.progress-meter-track')).toBeNull()
+})
+
+for (const timestamp of [undefined, 100000n]) {
+	test('keeps reference capacity consistent when chain time is ' + String(timestamp), async () => {
+		const pool = createSelectedPool({ lastOraclePrice: 10n ** 18n, lastOracleSettlementTimestamp: 1n })
+		setCleanup(
+			(
+				await renderIntoDocument(
+					<ChainTimestampContext.Provider value={timestamp}>
+						<SecurityPoolWorkflowSection {...createSecurityPoolWorkflowProps({ securityPoolAddress: pool.securityPoolAddress, securityPools: [pool] })} />
+					</ChainTimestampContext.Provider>,
+				)
+			).cleanup,
+		)
+		expect(document.querySelector('.pool-overview-header')?.textContent).toContain('/ Unavailable')
+		expect(document.querySelector('.pool-reference-details')?.textContent).toContain('/ Unavailable')
+	})
+}
+test('keeps the pending report reachable while the pool universe differs', async () => {
+	const reports: bigint[] = []
+	await renderLoadedPool({ activeUniverseId: 2n, poolOracleManagerDetails: createOracleManagerDetails({ pendingReportId: 7n }), onViewPendingReport: id => reports.push(id) })
+	await act(() => fireEvent.click(within(document.body).getByRole('button', { name: 'View report' })))
+	expect(reports).toEqual([7n])
+	expect(within(document.body).queryByRole('button', { name: 'Review oracle' })).toBeNull()
+})
+
+test('uses the refreshed manager price for both capacity summaries', async () => {
+	const pool = createSelectedPool({ lastOraclePrice: 10n ** 18n, lastOracleSettlementTimestamp: 1n })
+	setCleanup(
+		(
+			await renderIntoDocument(
+				<ChainTimestampContext.Provider value={2n}>
+					<SecurityPoolWorkflowSection {...createSecurityPoolWorkflowProps({ securityPoolAddress: pool.securityPoolAddress, securityPools: [pool], poolOracleManagerDetails: createOracleManagerDetails({ lastPrice: 2n * 10n ** 18n, lastSettlementTimestamp: 1n }) })} />
+				</ChainTimestampContext.Provider>,
+			)
+		).cleanup,
+	)
+	expect(document.querySelector('.pool-overview-header .pool-capacity-limit')?.textContent).toContain('1.25 ETH')
+	expect(document.querySelector('.pool-reference-details')?.textContent).toContain('/ ≈ 1.25 ETH')
 })

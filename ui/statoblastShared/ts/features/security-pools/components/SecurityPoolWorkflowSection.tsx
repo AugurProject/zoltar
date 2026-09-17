@@ -411,12 +411,12 @@ export function SecurityPoolWorkflowSection(props: SecurityPoolWorkflowSectionPr
 			<PoolSelectionControl address={securityPoolAddress} hasPool={selectedPool !== undefined} loading={loadingSecurityPools} onAddressChange={onSecurityPoolAddressChange} onBrowse={onBrowsePools} onLoad={onRefreshSelectedPoolData} />
 			<ErrorNotice message={securityPoolOverviewError} />
 			{objectHeaderProps === undefined ? undefined : <SecurityPoolObjectHeader {...objectHeaderProps} />}
-			{showSelectedPoolWorkflowDetails ? (
+			{selectedPool !== undefined ? (
 				<PoolAttention
-					oracleUnavailable={currentPoolOraclePriceUsable === false || currentPoolOracleManagerError !== undefined}
+					oracleUnavailable={showSelectedPoolWorkflowDetails && (currentPoolOraclePriceUsable === false || currentPoolOracleManagerError !== undefined)}
 					pendingReportId={currentPoolOracleManagerDetails?.pendingReportId}
-					stagedOperationCount={activeStagedOperationCount}
-					forkAvailable={selectedPoolHasForkActivity}
+					stagedOperationCount={showSelectedPoolWorkflowDetails ? activeStagedOperationCount : 0n}
+					forkAvailable={showSelectedPoolWorkflowDetails && selectedPoolHasForkActivity}
 					onViewReport={onViewPendingReport}
 					onChange={onSelectedPoolViewChange}
 				/>

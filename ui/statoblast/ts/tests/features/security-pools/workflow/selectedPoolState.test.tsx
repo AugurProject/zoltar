@@ -1,3 +1,4 @@
+import { ChainTimestampContext } from '@zoltar/ui-core-shared/wallet/chainTimestamp.js'
 import { describe, expect, test } from 'bun:test'
 import { createSelectedPoolStateFixture, useSecurityPoolWorkflowSectionTestDom } from './fixture'
 import { getTransactionButtonState } from '@zoltar/ui-core-shared/tests/testUtils/transactionActionButton.js'
@@ -103,16 +104,21 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 	})
 
 	test('derives displayed minting headroom from the pool oracle rather than the market quote', async () => {
-		await renderLoadedPool({
-			repPerEthPrice: 1n * 10n ** 18n,
-			securityPools: [
-				createSelectedPool({
-					lastOraclePrice: 5n * 10n ** 18n,
-					statoblastSecurityMultiplierBps: 20_000n,
-					totalCapacityOwnershipAttoRep: 100n * 10n ** 18n,
-				}),
-			],
-		})
+		setCleanup(
+			(
+				await renderIntoDocument(
+					<ChainTimestampContext.Provider value={2n}>
+						<SecurityPoolWorkflowSection
+							{...createSecurityPoolWorkflowProps({
+								securityPoolAddress: zeroAddress,
+								repPerEthPrice: 10n ** 18n,
+								securityPools: [createSelectedPool({ lastOraclePrice: 5n * 10n ** 18n, lastOracleSettlementTimestamp: 1n, statoblastSecurityMultiplierBps: 20000n, totalCapacityOwnershipAttoRep: 100n * 10n ** 18n })],
+							})}
+						/>
+					</ChainTimestampContext.Provider>,
+				)
+			).cleanup,
+		)
 
 		const pageText = (document.body.textContent ?? '').replace(/\s+/g, ' ')
 		expect(pageText).toContain('≈ 10.00 ETH')

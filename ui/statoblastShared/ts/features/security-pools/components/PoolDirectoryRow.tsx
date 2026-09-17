@@ -1,5 +1,13 @@
+import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
+import * as appCopy from '../../../copy/app.js'
+import { AddressValue } from '@zoltar/ui-core-shared/components/AddressValue.js'
+import { ReadOnlyDetailAccordion } from '@zoltar/ui-core-shared/components/ReadOnlyDetailAccordion.js'
+import { MetricField } from '@zoltar/ui-core-shared/components/MetricField.js'
+import { CurrencyValue } from '@zoltar/ui-core-shared/components/CurrencyValue.js'
+import { openInterestFeePerYearBigint } from '../lib/retentionRate.js'
+import { formatStatoblastSecurityMultiplier } from '../../markets/lib/trading.js'
 import { Badge } from '@zoltar/ui-core-shared/components/Badge.js'
-import { getQuestionTitle } from '@zoltar/ui-core-shared/components/Question.js'
+import { getQuestionTitle, Question } from '@zoltar/ui-core-shared/components/Question.js'
 import { TimestampValue } from '@zoltar/ui-core-shared/components/TimestampValue.js'
 import { buildRouteHref, getRouteHashSearch } from '@zoltar/ui-core-shared/navigation/routing.js'
 import { formatUniverseIdHex } from '@zoltar/ui-zoltar-shared/features/universes/lib/universe.js'
@@ -13,11 +21,13 @@ import * as securityPoolCopy from '../../../copy/securityPool.js'
 
 export function PoolDirectoryRow({
 	pool,
+	activeUniverseId,
 	lifecycleState,
 	capacity,
 	currentTimestamp,
 	onSelect,
 }: {
+	activeUniverseId: bigint
 	pool: ListedSecurityPool
 	lifecycleState: SecurityPoolLifecycleState | undefined
 	capacity: bigint | undefined
@@ -43,11 +53,18 @@ export function PoolDirectoryRow({
 				</Badge>
 				<h3>{title}</h3>
 				<div className='pool-directory-meta'>
+					<AddressValue address={pool.securityPoolAddress} responsiveAbbreviation />
 					<span>
-						{currentTimestamp !== undefined && currentTimestamp >= pool.marketDetails.endTime ? copy.ended : copy.ends} <TimestampValue timestamp={pool.marketDetails.endTime} {...(currentTimestamp === undefined ? {} : { currentTimestamp })} />
+						{appCopy.statoblastSecurityMultiplierBps}: {formatStatoblastSecurityMultiplier(pool.statoblastSecurityMultiplierBps)}×
+					</span>
+				</div>
+				<div className='pool-directory-meta'>
+					<span>
+						{currentTimestamp !== undefined && currentTimestamp >= pool.marketDetails.endTime ? securityPoolCopy.ended : commonCopy.ends} <TimestampValue timestamp={pool.marketDetails.endTime} {...(currentTimestamp === undefined ? {} : { currentTimestamp })} />
 					</span>
 					<span>{copy.vaults(pool.vaultCount)}</span>
 				</div>
+				{pool.universeId === activeUniverseId ? undefined : <p className='detail'>{securityPoolCopy.formatBrowsePoolUniverseMismatch(formatUniverseIdHex(pool.universeId))}</p>}
 				{oracleExpired || oracleMissing ? <span className='pool-oracle-warning'>{oracleExpired ? copy.poolPriceExpired : copy.poolPriceUnavailable}</span> : undefined}
 			</div>
 			<PoolCapacitySummary capacity={capacity} minted={pool.settlementCollateralAttoEth} />
@@ -61,8 +78,19 @@ export function PoolDirectoryRow({
 					onSelect(pool.securityPoolAddress, pool.universeId)
 				}}
 			>
-				{copy.openPool}
+				{securityPoolCopy.openPool}
 			</a>
+			<div className='pool-directory-details decision-summary'>
+				<ReadOnlyDetailAccordion title={copy.poolDetails}>
+					<MetricField label={commonCopy.initialReportPriorityFee}>
+						<CurrencyValue value={pool.initialReportPriorityFeeAttoEthPerGas} suffix={commonCopy.eth} precision='exact' />
+					</MetricField>
+					<MetricField label={securityPoolCopy.openInterestFeeYear}>
+						<CurrencyValue value={openInterestFeePerYearBigint(pool.currentRetentionRate)} suffix={commonCopy.percent} />
+					</MetricField>
+					<Question question={pool.marketDetails} variant='preview' showTitle={false} />
+				</ReadOnlyDetailAccordion>
+			</div>
 		</article>
 	)
 }

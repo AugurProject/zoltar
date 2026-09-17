@@ -21,7 +21,7 @@ export function EntityCard({ actions, headerActions, badge, children, className 
 					<h3>{title}</h3>
 				</div>
 				{badge === undefined ? undefined : <div className='entity-card-badge'>{badge}</div>}
-				{headerActions === undefined ? undefined : <div className='entity-card-actions'>{headerActions}</div>}
+				{headerActions === undefined ? undefined : <div className='entity-card-header-actions'>{headerActions}</div>}
 			</div>
 			<div className='entity-card-body'>{children}</div>
 			{actions === undefined ? undefined : <div className='entity-card-actions'>{actions}</div>}

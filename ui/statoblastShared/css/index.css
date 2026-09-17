@@ -2594,16 +2594,13 @@
 
 .pool-directory-meta,
 .pool-deadline {
+	margin: 0;
 	display: flex;
 	flex-wrap: wrap;
 	align-items: baseline;
 	gap: var(--space-2) var(--space-4);
 	color: var(--muted);
 	font-size: 0.8125rem;
-}
-
-.pool-deadline {
-	margin: 0;
 }
 
 .pool-oracle-warning,
@@ -2848,4 +2845,75 @@
 .liquidation-constraints > * {
 	flex: 1 1 14rem;
 	min-width: 0;
+}
+
+.pool-directory-details {
+	grid-column: 1 / -1;
+}
+.vault-action-launcher {
+	display: grid;
+	gap: var(--space-2);
+}
+.vault-action-launcher > .detail {
+	margin: 0;
+	font-size: 0.8125rem;
+}
+.staged-operation-card {
+	display: grid;
+	gap: var(--space-3);
+	min-width: 0;
+	padding: var(--space-4);
+	border: 1px solid var(--border-default);
+	border-radius: var(--radius-record);
+}
+.staged-operation-card.selected {
+	border-color: var(--accent);
+	background: var(--accent-soft);
+}
+.liquidation-outcome-review .transaction-review-row {
+	background: transparent;
+	border: 0;
+	padding: var(--space-2) 0;
+}
+.liquidation-outcome-review .transaction-review-primary {
+	grid-template-columns: repeat(auto-fit, minmax(min(100%, 12rem), 1fr));
+	gap: var(--space-4);
+}
+.liquidation-modal-content {
+	display: contents;
+}
+@media (max-width: 640px) {
+	.liquidation-modal-panel {
+		height: 90dvh;
+		max-height: 90dvh;
+		grid-template-rows: auto minmax(0, 1fr) auto;
+		gap: 0;
+		padding: 0;
+		overflow: hidden;
+	}
+	.liquidation-modal-panel > .modal-header {
+		margin: 0;
+	}
+	.liquidation-modal-panel > .modal-header::before {
+		display: none;
+	}
+	.liquidation-modal-content {
+		display: grid;
+		align-content: start;
+		gap: var(--space-4);
+		min-height: 0;
+		overflow-y: auto;
+		padding: var(--space-4);
+		scroll-padding-block: var(--space-4);
+	}
+	.liquidation-modal-actions {
+		display: grid;
+		grid-template-columns: auto minmax(0, 1fr);
+		margin: 0;
+		padding: var(--space-3);
+		border-top: 1px solid var(--border-default);
+		background: var(--surface-modal-opaque);
+		max-height: 35dvh;
+		overflow-y: auto;
+	}
 }

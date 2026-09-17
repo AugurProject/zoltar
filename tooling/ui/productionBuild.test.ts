@@ -1120,7 +1120,7 @@ productionWorkflowTest('production bundle executes deployment, reporting, fork m
 			expect(universeDirectoryOpened).toBe(true)
 			await driver.waitForBodyText('Child universes')
 			const yesUniverseSelected = await driver.evaluate(
-				`(() => { const record = [...document.querySelectorAll('article.entity-card')].find(candidate => candidate.querySelector('h3')?.textContent?.trim() === 'Yes'); const link = record?.querySelector('.entity-card-actions a.universe-link'); if (!(link instanceof HTMLAnchorElement)) return false; link.click(); return true })()`,
+				`(() => { const record = [...document.querySelectorAll('article.entity-card')].find(candidate => candidate.querySelector('h3')?.textContent?.trim() === 'Yes'); const link = record?.querySelector('a.universe-link'); if (!(link instanceof HTMLAnchorElement)) return false; link.click(); return true })()`,
 			)
 			expect(yesUniverseSelected).toBe(true)
 			const childPoolBrowserOpened = await driver.evaluate(`(() => { const link = [...document.querySelectorAll('a')].find(candidate => candidate.textContent?.trim() === 'Browse Pools'); if (!(link instanceof HTMLAnchorElement)) return false; link.click(); return true })()`)

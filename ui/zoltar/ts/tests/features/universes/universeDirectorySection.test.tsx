@@ -42,6 +42,13 @@ describe('UniverseDirectorySection', () => {
 		},
 	})
 
+	test('identifies the actual child reputation token in supply details', async () => {
+		cleanupRenderedComponent = (await renderIntoDocument(<UniverseDirectorySection zoltarUniverse={createUniverse({ reputationTokenName: 'Fork YES Reputation', reputationTokenSymbol: 'YESREP', totalTheoreticalSupplyAttoRep: 10n ** 18n })} />)).cleanup
+		const field = within(document.body).getByText('Fork YES Reputation').parentElement
+		expect(field?.textContent).toContain('YESREP')
+		expect(field?.closest('details')?.open).toBe(false)
+	})
+
 	test('shows current universe details without duplicating child universes', async () => {
 		const renderedComponent = await renderIntoDocument(h(UniverseDirectorySection, { zoltarUniverse: createUniverse() }))
 		cleanupRenderedComponent = renderedComponent.cleanup

@@ -1,3 +1,4 @@
+import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as statoblastAppCopy from '../../../copy/app.js'
 import * as securityPoolCopy from '../../../copy/securityPool.js'
 import { zeroAddress } from '@zoltar/core-shared/evm/ethereum'
@@ -39,12 +40,17 @@ function getSummaryPool(props: SecurityPoolObjectHeaderProps) {
 	return { ...props.selectedPoolSummaryPool, lastOracleSettlementTimestamp: props.currentPoolOracleSettlementTimestamp ?? props.selectedPoolSummaryPool.lastOracleSettlementTimestamp }
 }
 
+function getSummaryCalculationPrice(props: SecurityPoolObjectHeaderProps) {
+	if (props.calculationPriceConfigured) return props.repPerEthPrice
+	const pool = getSummaryPool(props)
+	const validUntil = getOracleManagerPriceValidUntilTimestamp(pool.lastOracleSettlementTimestamp)
+	return props.currentTimestamp !== undefined && validUntil !== undefined && props.currentTimestamp < validUntil ? (props.currentPoolOraclePrice ?? pool.lastOraclePrice) : undefined
+}
+
 export function SecurityPoolObjectHeader(props: SecurityPoolObjectHeaderProps) {
-	const { calculationPriceConfigured, currentTimestamp, marketDetails, repPerEthPrice, selectedPoolHasActualForkActivity, selectedPoolLifecycleState, selectedPoolQuestionOutcome } = props
+	const { currentTimestamp, marketDetails, selectedPoolHasActualForkActivity, selectedPoolLifecycleState, selectedPoolQuestionOutcome } = props
 	const summaryPool = getSummaryPool(props)
-	const validUntil = getOracleManagerPriceValidUntilTimestamp(summaryPool.lastOracleSettlementTimestamp)
-	const oraclePrice = currentTimestamp !== undefined && validUntil !== undefined && currentTimestamp < validUntil ? (props.currentPoolOraclePrice ?? summaryPool.lastOraclePrice) : undefined
-	const capacity = calculateMintingCapacityAttoEth(summaryPool.totalCapacityOwnershipAttoRep, calculationPriceConfigured ? repPerEthPrice : oraclePrice, summaryPool.statoblastSecurityMultiplierBps)
+	const capacity = calculateMintingCapacityAttoEth(summaryPool.totalCapacityOwnershipAttoRep, getSummaryCalculationPrice(props), summaryPool.statoblastSecurityMultiplierBps)
 	const statusBadgeLabel = getSecurityPoolStatusBadgeLabel({ hasForkActivity: selectedPoolHasActualForkActivity, lifecycleState: selectedPoolLifecycleState, ...(selectedPoolQuestionOutcome === undefined ? {} : { questionOutcome: selectedPoolQuestionOutcome }) })
 	return (
 		<div className='selected-pool-object-header pool-overview-header'>
@@ -60,7 +66,7 @@ export function SecurityPoolObjectHeader(props: SecurityPoolObjectHeaderProps) {
 				}
 			>
 				<p className='pool-deadline'>
-					<span>{currentTimestamp !== undefined && currentTimestamp >= marketDetails.endTime ? copy.ended : copy.ends}</span> <TimestampValue timestamp={marketDetails.endTime} {...(currentTimestamp === undefined ? {} : { currentTimestamp })} />
+					<span>{currentTimestamp !== undefined && currentTimestamp >= marketDetails.endTime ? securityPoolCopy.ended : commonCopy.ends}</span> <TimestampValue timestamp={marketDetails.endTime} {...(currentTimestamp === undefined ? {} : { currentTimestamp })} />
 				</p>
 			</StickyObjectContext>
 			<PoolCapacitySummary capacity={capacity} minted={summaryPool.settlementCollateralAttoEth} />
@@ -69,13 +75,13 @@ export function SecurityPoolObjectHeader(props: SecurityPoolObjectHeaderProps) {
 }
 
 export function SecurityPoolReferenceDetails(props: SecurityPoolObjectHeaderProps) {
-	const { calculationPriceConfigured, currentPoolOracleManagerDetails, currentPoolOraclePrice, currentPoolOracleSettlementTimestamp, currentTimestamp, marketDetails, repPerEthPrice, selectedPoolParentPool, selectedPoolView } = props
+	const { currentPoolOracleManagerDetails, currentPoolOraclePrice, currentPoolOracleSettlementTimestamp, currentTimestamp, marketDetails, selectedPoolParentPool, selectedPoolView } = props
 	const summaryPool = getSummaryPool(props)
 	return (
 		<div className='pool-reference-details'>
 			<ReadOnlyDetailAccordion title={copy.poolDetails}>
 				<Question question={marketDetails} variant='preview' showTitle={false} />
-				<SecurityPoolSummaryMetrics calculationPriceConfigured={calculationPriceConfigured} calculationRepPerEthPrice={repPerEthPrice} metricVariant='context' pool={summaryPool} showPoolAddress showTotalBacking>
+				<SecurityPoolSummaryMetrics calculationPriceConfigured calculationRepPerEthPrice={getSummaryCalculationPrice(props)} metricVariant='context' pool={summaryPool} showPoolAddress showTotalBacking>
 					<MetricField label={securityPoolCopy.managerAddress}>
 						<AddressValue address={summaryPool.managerAddress} />
 					</MetricField>

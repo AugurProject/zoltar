@@ -10,7 +10,7 @@ import { sameAddress } from '@zoltar/ui-core-shared/lib/address.js'
 import { tryParseAddressInput } from '@zoltar/ui-core-shared/forms/inputs.js'
 import { useChainTimestamp } from '@zoltar/ui-core-shared/wallet/chainTimestamp.js'
 import { formatCurrencyInputBalance, formatDuration } from '@zoltar/ui-core-shared/lib/formatters.js'
-import { getDeterministicLiquidationFailureReason, getLiquidationFailureReason, getMaxLiquidationAmount, simulateLiquidation } from '../lib/liquidation.js'
+import { getDeterministicLiquidationFailureReason, getLiquidationFailureReason, isVaultHealthyAtFactor, getMaxLiquidationAmount, simulateLiquidation } from '../lib/liquidation.js'
 import { tryParseBigIntInput } from '@zoltar/ui-core-shared/forms/integerInput.js'
 import { tryParseEthAmountInput } from '@zoltar/ui-core-shared/forms/formInputs.js'
 import { getOracleRequestEthGuardMessage } from '../../open-oracle/lib/oracleRequestEth.js'
@@ -211,6 +211,20 @@ export function LiquidationModal({
 					statoblastSecurityMultiplierBps: selectedPool.statoblastSecurityMultiplierBps,
 					targetVaultSummary,
 				})
+	const receiverOpenInterest = receiverVaultSummary?.openInterestAttoEth ?? (receiverVaultSummary === undefined && liquidationReceiverVaultSummaryResolved ? 0n : undefined)
+	const minimumReceiverHealth = delegatedReceiver ? liquidationApprovalDetails?.params.minPostLiquidationHealthFactorBps : 10000n
+	const receiverHealthy =
+		minimumReceiverHealth === undefined || !hasUsableOraclePrice || liquidationSimulation === undefined || receiverOpenInterest === undefined || uiCalculationPrice === undefined || selectedPool === undefined
+			? undefined
+			: isVaultHealthyAtFactor({
+					disputeStakedAttoRep: liquidationSimulation.callerAfter.disputeStakedAttoRep,
+					healthFactorBps: minimumReceiverHealth,
+					openInterestAttoEth: receiverOpenInterest + liquidationSimulation.debtMovedAttoEth,
+					poolHeldVaultRepBackingAttoRep: liquidationSimulation.callerAfter.vaultAttoRepBacking,
+					poolSecurityMultiplierBps: selectedPool.statoblastSecurityMultiplierBps,
+					repPerEthPrice: uiCalculationPrice,
+				})
+
 	const computedLiquidationMaxAmount = getMaxLiquidationAmount({
 		repPerEthPrice: uiCalculationPrice,
 		statoblastSecurityMultiplierBps: selectedPool?.statoblastSecurityMultiplierBps,
@@ -292,7 +306,7 @@ export function LiquidationModal({
 	const queuedLiquidationStatus = getQueuedLiquidationStatus({ currentPoolOracleManagerDetails, currentTimestamp, loadingPoolOracleManager, queuedLiquidationOperation, securityPoolOverviewResult })
 	return (
 		<div className='modal-backdrop' role='presentation' onClick={closeLiquidationModal}>
-			<section ref={dialogRef} className='modal-panel' role='dialog' aria-modal='true' aria-labelledby={titleId} onClick={event => event.stopPropagation()}>
+			<section ref={dialogRef} className='modal-panel liquidation-modal-panel' role='dialog' aria-modal='true' aria-labelledby={titleId} onClick={event => event.stopPropagation()}>
 				<div className='modal-header'>
 					<div className='modal-header-title'>
 						<h3 id={titleId}>{getLiquidationModalTitle(currentPoolOracleManagerDetails, currentTimestamp)}</h3>
@@ -301,121 +315,123 @@ export function LiquidationModal({
 						×
 					</button>
 				</div>
-				<QueuedLiquidationStatusCard onViewInStagedOperations={() => onSelectedPoolViewChange('staged-operations')} queuedLiquidationOperation={queuedLiquidationOperation} queuedLiquidationStatus={queuedLiquidationStatus} securityPoolOverviewResult={securityPoolOverviewResult} />
-				<ErrorNotice message={poolOracleManagerError} />
-				{poolOracleManagerError === undefined || liquidationManagerAddress === undefined ? undefined : (
-					<div className='actions'>
-						<button className='secondary' disabled={loadingPoolOracleManager} onClick={() => onLoadPoolOracleManager(liquidationManagerAddress)} type='button'>
-							{liquidationCopy.retryPriceStatus}
-						</button>
-					</div>
-				)}
-				<ErrorNotice message={securityPoolLiquidationError} />
-				<LiquidationContextSummary
-					accountAddress={accountAddress}
-					currentPoolOracleManagerDetails={currentPoolOracleManagerDetails}
-					currentTimestamp={currentTimestamp}
-					liquidationSecurityPoolAddress={liquidationSecurityPoolAddress}
-					poolOraclePrice={poolOraclePrice}
-					poolOracleSettlementTimestamp={poolOracleSettlementTimestamp}
-					receiverVaultSummary={receiverVaultSummary}
-					repPerEthPrice={repPerEthPrice}
-					repPerEthSource={repPerEthSource}
-					repPerEthSourceUrl={repPerEthSourceUrl}
-					selectedPool={selectedPool}
-					targetVaultSummary={targetVaultSummary}
-					trimmedLiquidationReceiverVault={trimmedLiquidationReceiverVault}
-					trimmedLiquidationTargetVault={trimmedLiquidationTargetVault}
-				/>
-				{sameVaultWarning === undefined ? null : (
-					<WarningSurface as='section' surface='flat' variant='compact'>
-						<div className='entity-card-header'>
-							<div>
-								<h4>{liquidationCopy.invalidLiquidationPair}</h4>
-							</div>
-						</div>
-						<p className='detail'>{sameVaultWarning}</p>
-					</WarningSurface>
-				)}
-				{delegatedReceiver ? (
-					<WarningSurface as='section' surface='flat' variant='compact'>
-						<div className='entity-card-header'>
-							<div>
-								<h4>{liquidationCopy.receiverLiabilityTitle}</h4>
-							</div>
-						</div>
-						<p className='detail'>{liquidationCopy.receiverLiabilityDetail}</p>
-					</WarningSurface>
-				) : null}
-				<div className='form-grid'>
-					<label className='field'>
-						<span>{liquidationCopy.receiverVault}</span>
-						<FormInput value={liquidationReceiverVault} onInput={event => onLiquidationReceiverVaultChange(event.currentTarget.value)} />
-					</label>
-					{delegatedReceiver && loadingLiquidationReceiverVaultSummary ? (
-						<p className='detail' id='liquidation-receiver-loading-status' role='status'>
-							{liquidationCopy.loadingReceiverVault}
-						</p>
-					) : null}
-					{delegatedReceiver && liquidationReceiverVaultSummaryError !== undefined ? (
+				<div className='liquidation-modal-content'>
+					<QueuedLiquidationStatusCard onViewInStagedOperations={() => onSelectedPoolViewChange('staged-operations')} queuedLiquidationOperation={queuedLiquidationOperation} queuedLiquidationStatus={queuedLiquidationStatus} securityPoolOverviewResult={securityPoolOverviewResult} />
+					<ErrorNotice message={poolOracleManagerError} />
+					{poolOracleManagerError === undefined || liquidationManagerAddress === undefined ? undefined : (
 						<div className='actions'>
-							<button className='secondary' type='button' onClick={onLoadLiquidationReceiverVaultSummary} disabled={loadingLiquidationReceiverVaultSummary || !hasValidReceiverVault}>
-								{liquidationCopy.retryReceiverVault}
+							<button className='secondary' disabled={loadingPoolOracleManager} onClick={() => onLoadPoolOracleManager(liquidationManagerAddress)} type='button'>
+								{liquidationCopy.retryPriceStatus}
 							</button>
 						</div>
-					) : null}
-					{delegatedReceiver ? (
-						<>
-							<label className='field'>
-								<span>{liquidationCopy.boundedApprovalId}</span>
-								<FormInput value={liquidationApprovalId} onInput={event => onLiquidationApprovalIdChange(event.currentTarget.value)} />
-								<small className='field-help'>{liquidationCopy.receiverOperatorEconomics}</small>
-							</label>
-							{loadingLiquidationApproval ? (
-								<p className='detail' role='status'>
-									{liquidationCopy.loadingBoundedApproval}
-								</p>
-							) : null}
-							{liquidationApprovalError === undefined ? null : (
-								<div className='actions'>
-									<button className='secondary' type='button' onClick={onLoadLiquidationApproval} disabled={!hasValidApprovalId}>
-										{liquidationCopy.retryBoundedApproval}
-									</button>
+					)}
+					<ErrorNotice message={securityPoolLiquidationError} />
+					<LiquidationContextSummary
+						accountAddress={accountAddress}
+						currentPoolOracleManagerDetails={currentPoolOracleManagerDetails}
+						currentTimestamp={currentTimestamp}
+						liquidationSecurityPoolAddress={liquidationSecurityPoolAddress}
+						poolOraclePrice={poolOraclePrice}
+						poolOracleSettlementTimestamp={poolOracleSettlementTimestamp}
+						receiverVaultSummary={receiverVaultSummary}
+						repPerEthPrice={repPerEthPrice}
+						repPerEthSource={repPerEthSource}
+						repPerEthSourceUrl={repPerEthSourceUrl}
+						selectedPool={selectedPool}
+						targetVaultSummary={targetVaultSummary}
+						trimmedLiquidationReceiverVault={trimmedLiquidationReceiverVault}
+						trimmedLiquidationTargetVault={trimmedLiquidationTargetVault}
+					/>
+					{sameVaultWarning === undefined ? null : (
+						<WarningSurface as='section' surface='flat' variant='compact'>
+							<div className='entity-card-header'>
+								<div>
+									<h4>{liquidationCopy.invalidLiquidationPair}</h4>
 								</div>
-							)}
-						</>
+							</div>
+							<p className='detail'>{sameVaultWarning}</p>
+						</WarningSurface>
+					)}
+					{delegatedReceiver ? (
+						<WarningSurface as='section' surface='flat' variant='compact'>
+							<div className='entity-card-header'>
+								<div>
+									<h4>{liquidationCopy.receiverLiabilityTitle}</h4>
+								</div>
+							</div>
+							<p className='detail'>{liquidationCopy.receiverLiabilityDetail}</p>
+						</WarningSurface>
 					) : null}
-					<label className='field'>
-						<span>{liquidationCopy.requestedLiquidationDebtEth}</span>
-						<div className='field-inline'>
-							<FormInput className='field-inline-input' value={liquidationDebtEthAmount} onInput={event => onLiquidationAmountChange(event.currentTarget.value)} placeholder={commonCopy.zeroDecimalPlaceholder} />
-							<button className='quiet field-inline-action' type='button' onClick={() => onLiquidationAmountChange(liquidationMaxActionAmount === undefined ? '' : formatCurrencyInputBalance(liquidationMaxActionAmount))} disabled={liquidationMaxActionAmount === undefined || liquidationMaxActionAmount <= 0n}>
-								{commonCopy.max}
-							</button>
-						</div>
-					</label>
-					{liquidationExecutionMode === 'execute' ? null : (
+					<div className='form-grid'>
 						<label className='field'>
-							<span>{commonCopy.manualExecutionTimeout}</span>
+							<span>{liquidationCopy.receiverVault}</span>
+							<FormInput value={liquidationReceiverVault} onInput={event => onLiquidationReceiverVaultChange(event.currentTarget.value)} />
+						</label>
+						{delegatedReceiver && loadingLiquidationReceiverVaultSummary ? (
+							<p className='detail' id='liquidation-receiver-loading-status' role='status'>
+								{liquidationCopy.loadingReceiverVault}
+							</p>
+						) : null}
+						{delegatedReceiver && liquidationReceiverVaultSummaryError !== undefined ? (
+							<div className='actions'>
+								<button className='secondary' type='button' onClick={onLoadLiquidationReceiverVaultSummary} disabled={loadingLiquidationReceiverVaultSummary || !hasValidReceiverVault}>
+									{liquidationCopy.retryReceiverVault}
+								</button>
+							</div>
+						) : null}
+						{delegatedReceiver ? (
+							<>
+								<label className='field'>
+									<span>{liquidationCopy.boundedApprovalId}</span>
+									<FormInput value={liquidationApprovalId} onInput={event => onLiquidationApprovalIdChange(event.currentTarget.value)} />
+									<small className='field-help'>{liquidationCopy.receiverOperatorEconomics}</small>
+								</label>
+								{loadingLiquidationApproval ? (
+									<p className='detail' role='status'>
+										{liquidationCopy.loadingBoundedApproval}
+									</p>
+								) : null}
+								{liquidationApprovalError === undefined ? null : (
+									<div className='actions'>
+										<button className='secondary' type='button' onClick={onLoadLiquidationApproval} disabled={!hasValidApprovalId}>
+											{liquidationCopy.retryBoundedApproval}
+										</button>
+									</div>
+								)}
+							</>
+						) : null}
+						<label className='field'>
+							<span>{liquidationCopy.requestedLiquidationDebtEth}</span>
 							<div className='field-inline'>
-								<FormInput className='field-inline-input' inputMode='numeric' min='1' pattern='[0-9]*' step='1' value={liquidationTimeoutDisplayValue} onInput={event => onLiquidationTimeoutMinutesChange(event.currentTarget.value)} />
-								<span className='field-inline-action'>{commonCopy.minutes}</span>
+								<FormInput className='field-inline-input' value={liquidationDebtEthAmount} onInput={event => onLiquidationAmountChange(event.currentTarget.value)} placeholder={commonCopy.zeroDecimalPlaceholder} />
+								<button className='quiet field-inline-action' type='button' onClick={() => onLiquidationAmountChange(liquidationMaxActionAmount === undefined ? '' : formatCurrencyInputBalance(liquidationMaxActionAmount))} disabled={liquidationMaxActionAmount === undefined || liquidationMaxActionAmount <= 0n}>
+									{commonCopy.max}
+								</button>
 							</div>
 						</label>
-					)}
-				</div>
-				{delegatedReceiver ? <ErrorNotice message={liquidationReceiverVaultSummaryError} /> : null}
-				{delegatedReceiver ? <ErrorNotice message={liquidationApprovalError} /> : null}
-				{!delegatedReceiver || liquidationApprovalDetails === undefined ? null : <LiquidationApprovalSummary approvalNonceInvalidated={approvalNonceInvalidated} currentTimestamp={currentTimestamp} liquidationApprovalDetails={liquidationApprovalDetails} />}
-				{liquidationExecutionMode === 'execute' ? null : <p className='detail'>{liquidationTimeoutHelpText}</p>}
-				{liquidationExecutionMode !== 'queue' || liquidationFundingPreviewError === undefined ? null : (
-					<div className='actions'>
-						<button className='secondary' type='button' onClick={() => (liquidationManagerAddress === undefined ? undefined : onLoadLiquidationFundingPreview(liquidationManagerAddress))} disabled={loadingLiquidationFundingPreview}>
-							{liquidationCopy.retryQueueFunding}
-						</button>
+						{liquidationExecutionMode === 'execute' ? null : (
+							<label className='field'>
+								<span>{commonCopy.manualExecutionTimeout}</span>
+								<div className='field-inline'>
+									<FormInput className='field-inline-input' inputMode='numeric' min='1' pattern='[0-9]*' step='1' value={liquidationTimeoutDisplayValue} onInput={event => onLiquidationTimeoutMinutesChange(event.currentTarget.value)} />
+									<span className='field-inline-action'>{commonCopy.minutes}</span>
+								</div>
+							</label>
+						)}
 					</div>
-				)}
-				<LiquidationTransactionReview liquidationExecutionMode={liquidationExecutionMode} liquidationFundingPreview={liquidationFundingPreview} liquidationSimulation={liquidationSimulation} selectedPool={selectedPool} walletBalanceAttoEth={walletBalanceAttoEth} />
+					{delegatedReceiver ? <ErrorNotice message={liquidationReceiverVaultSummaryError} /> : null}
+					{delegatedReceiver ? <ErrorNotice message={liquidationApprovalError} /> : null}
+					{!delegatedReceiver || liquidationApprovalDetails === undefined ? null : <LiquidationApprovalSummary approvalNonceInvalidated={approvalNonceInvalidated} currentTimestamp={currentTimestamp} liquidationApprovalDetails={liquidationApprovalDetails} />}
+					{liquidationExecutionMode === 'execute' ? null : <p className='detail'>{liquidationTimeoutHelpText}</p>}
+					{liquidationExecutionMode !== 'queue' || liquidationFundingPreviewError === undefined ? null : (
+						<div className='actions'>
+							<button className='secondary' type='button' onClick={() => (liquidationManagerAddress === undefined ? undefined : onLoadLiquidationFundingPreview(liquidationManagerAddress))} disabled={loadingLiquidationFundingPreview}>
+								{liquidationCopy.retryQueueFunding}
+							</button>
+						</div>
+					)}
+					<LiquidationTransactionReview receiverHealthy={receiverHealthy} liquidationExecutionMode={liquidationExecutionMode} liquidationFundingPreview={liquidationFundingPreview} liquidationSimulation={liquidationSimulation} selectedPool={selectedPool} walletBalanceAttoEth={walletBalanceAttoEth} />
+				</div>
 				<div className='actions liquidation-modal-actions'>
 					<button className='secondary' onClick={closeLiquidationModal}>
 						{commonCopy.cancel}

@@ -29,7 +29,7 @@ export function UniverseContextSummary({ universe, children }: { universe: Zolta
 					<UniverseLink universeId={universe.universeId} />
 				</MetricField>
 				<MetricField label={marketCopy.parentUniverse}>{universe.universeId === 0n ? commonCopy.none : <UniverseLink universeId={universe.parentUniverseId} />}</MetricField>
-				<MetricField label={copy.repSupply}>
+				<MetricField label={universe.reputationTokenName ?? copy.repSupply}>
 					<CurrencyValue value={universe.totalTheoreticalSupplyAttoRep} suffix={universe.reputationTokenSymbol ?? commonCopy.rep} />
 				</MetricField>
 			</ReadOnlyDetailAccordion>

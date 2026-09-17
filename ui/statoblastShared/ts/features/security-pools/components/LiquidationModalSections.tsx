@@ -198,12 +198,14 @@ export function LiquidationApprovalSummary({ approvalNonceInvalidated, currentTi
 }
 
 export function LiquidationTransactionReview({
+	receiverHealthy,
 	liquidationExecutionMode,
 	liquidationFundingPreview,
 	liquidationSimulation,
 	selectedPool,
 	walletBalanceAttoEth,
 }: {
+	receiverHealthy: boolean | undefined
 	liquidationExecutionMode: LiquidationExecutionMode
 	liquidationFundingPreview: LiquidationFundingPreview | undefined
 	liquidationSimulation: ReturnType<typeof simulateLiquidation> | undefined
@@ -213,21 +215,28 @@ export function LiquidationTransactionReview({
 	return (
 		<TransactionReview
 			context={[{ label: commonCopy.question, value: selectedPool?.marketDetails.title ?? commonCopy.unavailable }]}
+			className='liquidation-outcome-review'
 			primary={[
 				{ label: liquidationCopy.securityBondDebtMoved, value: <CurrencyValue exactWhenRoundedToZero value={liquidationSimulation?.debtMovedAttoEth} suffix={commonCopy.eth} /> },
-				{ label: liquidationCopy.capacityOwnershipMoved, value: <CurrencyValue value={liquidationSimulation?.capacityOwnershipMovedAttoRep} suffix={commonCopy.rep} /> },
-				{ label: liquidationCopy.residualBadDebt, value: <CurrencyValue exactWhenRoundedToZero value={liquidationSimulation?.badDebtAttoEth} suffix={commonCopy.eth} /> },
-				{ label: liquidationCopy.grossRepAwardAttoRep, value: <CurrencyValue compactWhenOverflow value={liquidationSimulation?.grossRepAwardAttoRep} suffix={commonCopy.rep} /> },
 				{ label: liquidationCopy.repMoved, value: <CurrencyValue compactWhenOverflow value={liquidationSimulation?.vaultAttoRepBackingToTransfer} suffix={commonCopy.rep} /> },
-				{ label: liquidationCopy.targetAccruedFeesRetained, value: <CurrencyValue compactWhenOverflow exactWhenRoundedToZero value={liquidationSimulation?.targetAccruedFeesRetained} suffix={commonCopy.eth} /> },
-				...(liquidationExecutionMode === 'queue' ? [{ label: liquidationCopy.totalWalletEthRequiredAttoEth, value: <CurrencyValue exactWhenRoundedToZero value={liquidationFundingPreview?.totalWalletEthRequiredAttoEth} suffix={commonCopy.eth} /> }] : []),
+				{ label: liquidationCopy.estimatedReceiverHealth, value: receiverHealthy === undefined ? commonCopy.unavailable : <Badge tone={receiverHealthy ? 'ok' : 'blocked'}>{receiverHealthy ? liquidationCopy.meetsRequiredHealth : liquidationCopy.belowRequiredHealth}</Badge> },
 			]}
 			details={[
-				{ label: liquidationCopy.resultingCallerRep, value: <CurrencyValue value={liquidationSimulation?.callerAfter.vaultAttoRepBacking} suffix={commonCopy.rep} /> },
-				{ label: liquidationCopy.resultingReceiverCapacityOwnership, value: <CurrencyValue value={liquidationSimulation?.callerAfter.capacityOwnershipAttoRep} suffix={commonCopy.rep} /> },
+				...(liquidationSimulation !== undefined && liquidationSimulation.badDebtAttoEth > 0n ? [{ label: liquidationCopy.residualBadDebt, value: <CurrencyValue exactWhenRoundedToZero value={liquidationSimulation.badDebtAttoEth} suffix={commonCopy.eth} /> }] : []),
+				...(liquidationExecutionMode === 'queue' ? [{ label: liquidationCopy.totalWalletEthRequiredAttoEth, value: <CurrencyValue exactWhenRoundedToZero value={liquidationFundingPreview?.totalWalletEthRequiredAttoEth} suffix={commonCopy.eth} /> }] : []),
 			]}
-			disclosures={
-				liquidationExecutionMode === 'queue'
+			disclosures={[
+				{
+					title: liquidationCopy.accountingDetails,
+					rows: [
+						{ label: liquidationCopy.capacityOwnershipMoved, value: <CurrencyValue value={liquidationSimulation?.capacityOwnershipMovedAttoRep} suffix={commonCopy.rep} /> },
+						{ label: liquidationCopy.grossRepAwardAttoRep, value: <CurrencyValue compactWhenOverflow value={liquidationSimulation?.grossRepAwardAttoRep} suffix={commonCopy.rep} /> },
+						{ label: liquidationCopy.targetAccruedFeesRetained, value: <CurrencyValue compactWhenOverflow exactWhenRoundedToZero value={liquidationSimulation?.targetAccruedFeesRetained} suffix={commonCopy.eth} /> },
+						{ label: liquidationCopy.resultingCallerRep, value: <CurrencyValue value={liquidationSimulation?.callerAfter.vaultAttoRepBacking} suffix={commonCopy.rep} /> },
+						{ label: liquidationCopy.resultingReceiverCapacityOwnership, value: <CurrencyValue value={liquidationSimulation?.callerAfter.capacityOwnershipAttoRep} suffix={commonCopy.rep} /> },
+					],
+				},
+				...(liquidationExecutionMode === 'queue'
 					? [
 							{
 								title: liquidationCopy.fundingDetails,
@@ -270,8 +279,8 @@ export function LiquidationTransactionReview({
 								],
 							},
 						]
-					: []
-			}
+					: []),
+			]}
 			risks={[liquidationCopy.liquidationStateRisk, ...(liquidationExecutionMode === 'queue' ? [liquidationCopy.queuedLiquidationRisk, liquidationCopy.queuedFundingSequenceRisk] : [])]}
 		/>
 	)

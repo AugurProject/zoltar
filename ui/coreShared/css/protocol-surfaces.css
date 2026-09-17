@@ -105,6 +105,7 @@ strong.metric-value-danger {
 	color: var(--danger);
 }
 
+.entity-card-header-actions,
 .entity-card-actions {
 	display: flex;
 	flex-wrap: wrap;

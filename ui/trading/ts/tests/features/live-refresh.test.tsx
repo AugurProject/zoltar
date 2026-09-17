@@ -70,7 +70,7 @@ function actionFeedback() {
 }
 
 function walletHolding(label: string) {
-	return document.querySelector(`.trade-holdings [aria-label="${label}"] .holding-quantity`)?.textContent ?? ''
+	return document.querySelector(`.trade-holdings [data-outcome="${label.replace('Wallet ', '').toLowerCase()}"] .holding-quantity`)?.textContent ?? ''
 }
 
 describe('live market refresh', () => {

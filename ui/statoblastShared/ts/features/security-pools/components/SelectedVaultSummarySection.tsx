@@ -87,6 +87,7 @@ export function SelectedVaultSummarySection({ repPerEthPrice, repPerEthSource, r
 		)
 	return (
 		<EntityCard badge={<Badge tone={selectedVaultIsOwnedByAccount ? 'ok' : 'muted'}>{selectedVaultIsOwnedByAccount ? securityPoolCopy.owned : securityPoolCopy.readOnlyBadgeLabel}</Badge>} surface='flat' title={selectedVaultIsOwnedByAccount ? workspaceCopy.myVault : workspaceCopy.vaultDetails} variant='record'>
+			<AddressValue address={securityVaultDetails.vaultAddress} responsiveAbbreviation />
 			{gridContent}
 		</EntityCard>
 	)

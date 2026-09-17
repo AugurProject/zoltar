@@ -148,6 +148,7 @@ export function LiveMarketBrowser({
 				/>
 			}
 		>
+			{/* This disclosure contains an interactive lookup form, rather than read-only reference data. */}
 			<details class='read-only-detail-accordion'>
 				<summary>{liveCopy.openByAddress}</summary>
 				<div class='read-only-detail-accordion-content'>

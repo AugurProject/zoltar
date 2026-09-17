@@ -13,7 +13,6 @@ import { FormInput } from '@zoltar/ui-core-shared/components/FormInput.js'
 import { MetricField } from '@zoltar/ui-core-shared/components/MetricField.js'
 import { TransactionActionButton, TransactionActionGroup } from '@zoltar/ui-core-shared/components/TransactionActionButton.js'
 import { ViewTabs } from '@zoltar/ui-core-shared/components/ViewTabs.js'
-import { WorkflowSubsection } from '@zoltar/ui-core-shared/components/WorkflowSubsection.js'
 import type { GuardedWalletWrite } from './liveTradingControllerHelpers.js'
 import type { BalanceState } from './live/liveTradingTypes.js'
 import { BalanceLoadError, ExecutionProtectionFields, formatTimestamp, stateLabel, TradingField, TradingTransactionHash } from './LiveTradingTransactionUi.js'
@@ -164,31 +163,17 @@ export function LiveLiquidityControls({
 						</span>
 					</p>
 					<ReadOnlyDetailAccordion title={liquidityCopy.previewDetails}>
-						<WorkflowSubsection title={workflowCopy.quoteShares}>
-							<DataGrid dense>
-								{quote.operation === 'remove' ? (
-									<>
-										<MetricField label={liquidityCopy.rawYesReturned}>{formatOutcomeQuantity(quote.expectedYes, liquidityCopy.yes)}</MetricField>
-										<MetricField label={liquidityCopy.rawNoReturned}>{formatOutcomeQuantity(quote.expectedNo, liquidityCopy.no)}</MetricField>
-									</>
-								) : (
-									<>
-										<MetricField label={liquidityCopy.completeSetSharesCreated}>{formatCompleteSetQuantity(quote.result.completeSetShares)}</MetricField>
-										<MetricField label={liquidityCopy.sharesDeposited}>
-											{formatOutcomeQuantity(quote.result.yesUsed, liquidityCopy.yes)} / {formatOutcomeQuantity(quote.result.noUsed, liquidityCopy.no)}
-										</MetricField>
-										<MetricField label={liquidityCopy.unusedSharesReturned}>
-											{formatOutcomeQuantity(quote.result.yesReturned, liquidityCopy.yes)} / {formatOutcomeQuantity(quote.result.noReturned, liquidityCopy.no)}
-										</MetricField>
-										<MetricField label={liquidityCopy.invalidRetained}>{formatOutcomeQuantity(quote.result.invalidInsurance, liquidityCopy.invalid)}</MetricField>
-										<MetricField label={liquidityCopy.lpTokensExpected}>{formatLpQuantity(quote.expectedLiquidity)}</MetricField>
-									</>
-								)}
-							</DataGrid>
-						</WorkflowSubsection>
-						<MetricField className='decision-summary' label={liquidityCopy.simulationBlockLabel}>
-							{quote.blockNumber.toString()}
-						</MetricField>
+						<DataGrid dense>
+							{quote.operation === 'remove' ? undefined : (
+								<>
+									<MetricField label={liquidityCopy.completeSetSharesCreated}>{formatCompleteSetQuantity(quote.result.completeSetShares)}</MetricField>
+									<MetricField label={liquidityCopy.sharesDeposited}>
+										{formatOutcomeQuantity(quote.result.yesUsed, liquidityCopy.yes)} / {formatOutcomeQuantity(quote.result.noUsed, liquidityCopy.no)}
+									</MetricField>
+								</>
+							)}
+							<MetricField label={liquidityCopy.simulationBlockLabel}>{quote.blockNumber.toString()}</MetricField>
+						</DataGrid>
 					</ReadOnlyDetailAccordion>
 				</>
 			)}

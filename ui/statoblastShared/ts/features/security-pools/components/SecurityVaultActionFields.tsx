@@ -187,24 +187,26 @@ export function VaultActionLaunchers({
 	vaultActionsLoadBlocker: string | undefined
 	vaultLifecycleBlocker: string | undefined
 	vaultLifecycleBlockerId: string
-	vaultReadinessActions: ReadinessAction[]
+	vaultReadinessActions: Omit<ReadinessAction, 'title'>[]
 	walletRepBalanceError: string | undefined
 }) {
-	const renderAction = (action: ReadinessAction) => {
+	const renderAction = (action: Omit<ReadinessAction, 'title'>) => {
 		if (action.onAction === undefined && action.blocker === undefined && action.readiness !== 'blocked') return undefined
 		return (
-			<ActionLauncherButton
-				key={action.key}
-				describedBy={action.disabledReasonId}
-				idleLabel={action.actionLabel}
-				pendingLabel={commonCopy.opening}
-				onClick={() => action.onAction?.()}
-				tone={action.key === 'deposit-rep' ? 'primary' : 'secondary'}
-				availability={{ disabled: action.readiness === 'blocked' || action.onAction === undefined || action.blocker !== undefined, reason: action.blocker }}
-			/>
+			<div key={action.key} className='vault-action-launcher'>
+				<ActionLauncherButton
+					describedBy={action.disabledReasonId}
+					idleLabel={action.actionLabel}
+					pendingLabel={commonCopy.opening}
+					onClick={() => action.onAction?.()}
+					tone={action.key === 'deposit-rep' ? 'primary' : 'secondary'}
+					availability={{ disabled: action.readiness === 'blocked' || action.onAction === undefined || action.blocker !== undefined, reason: action.blocker }}
+				/>
+				{action.description === undefined ? undefined : <p className='detail'>{action.description}</p>}
+			</div>
 		)
 	}
-	const isAdvanced = (action: ReadinessAction) => action.key === 'adjust-backing' || action.key === 'liquidate-vault'
+	const isAdvanced = (action: Omit<ReadinessAction, 'title'>) => action.key === 'adjust-backing' || action.key === 'liquidate-vault'
 	return (
 		<>
 			<SectionBlock title={securityPoolCopy.vaultActions} variant='plain'>

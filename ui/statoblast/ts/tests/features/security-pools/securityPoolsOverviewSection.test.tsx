@@ -2,7 +2,7 @@ import { createDeferred } from '@zoltar/ui-core-shared/tests/testUtils/deferred.
 import { createMarketDetails } from '@zoltar/ui-core-shared/tests/testUtils/marketFixtures.js'
 /// <reference types="bun-types" />
 
-import { zeroAddress } from '@zoltar/core-shared/evm/ethereum'
+import { getAddress, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
 import { fireEvent, waitFor, within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
@@ -126,6 +126,26 @@ describe('SecurityPoolsOverviewSection', () => {
 		},
 	})
 
+	test('distinguishes same-title pools and opens the selected address', async () => {
+		const first = createSecurityPool()
+		const second = createSecurityPool({ securityPoolAddress: getAddress('0x0000000000000000000000000000000000000002'), statoblastSecurityMultiplierBps: 30000n })
+		const selected: string[] = []
+		cleanupRenderedComponent = (await renderIntoDocument(<SecurityPoolsOverviewSection {...createProps({ securityPools: [first, second], onSelectSecurityPool: address => selected.push(address) })} />)).cleanup
+		const rows = [...document.querySelectorAll('.pool-directory-row')]
+		expect(rows).toHaveLength(2)
+		for (const [index, pool] of [first, second].entries()) {
+			const row = rows[index]
+			if (!(row instanceof HTMLElement)) throw new Error('Expected pool row')
+			expect(within(row).getByRole('button', { name: 'Copy address ' + pool.securityPoolAddress })).not.toBeNull()
+			expect(row.textContent).toContain(index === 0 ? '2×' : '3×')
+			expect(row.querySelector('details')?.textContent).toContain('Initial Report Priority Fee')
+			const link = within(row).getByRole('link', { name: new RegExp(pool.securityPoolAddress) })
+			expect(link.getAttribute('href')).toContain(pool.securityPoolAddress)
+			fireEvent.click(link)
+		}
+		expect(selected).toEqual([first.securityPoolAddress, second.securityPoolAddress])
+	})
+
 	function getSecurityPoolCard(headingText: string): HTMLElement {
 		const normalizedHeadingText = headingText.trim().replace(/\s+/g, ' ')
 		const titleHeading = within(document.body)
@@ -144,13 +164,16 @@ describe('SecurityPoolsOverviewSection', () => {
 		return poolCard
 	}
 
-	test('keeps reference identifiers out of browse rows while linking to the pool', async () => {
+	test('keeps question identifiers in a closed disclosure while linking to the pool', async () => {
 		const questionId = '0x0000000000000000000000000000000000000000000000000000000000000001'
 		const pool = createSecurityPool({ marketDetails: createMarketDetails({ questionId }), questionId })
 		const renderedComponent = await renderIntoDocument(<SecurityPoolsOverviewSection {...createProps({ securityPools: [pool] })} />)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		expect(within(document.body).queryByRole('button', { name: `Copy identifier ${questionId}` })).toBeNull()
+		const identifier = within(document.body).getByRole('button', { name: `Copy identifier ${questionId}` })
+		const disclosure = identifier.closest('details')
+		expect(disclosure !== null).toBe(true)
+		expect(disclosure?.open).toBe(false)
 		expect(
 			within(document.body)
 				.getByRole('link', { name: /Open pool/ })

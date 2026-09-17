@@ -84,7 +84,7 @@ export function PoolAttention({
 			) : undefined}
 			{stagedOperationCount > 0n ? (
 				<p className='pool-attention-item'>
-					<span>{copy.stagedOperations(stagedOperationCount)}</span>
+					<span>{copy.stagedOperationCount(stagedOperationCount)}</span>
 					<button type='button' className='link' onClick={() => onChange('staged-operations')}>
 						{copy.reviewOperations}
 					</button>

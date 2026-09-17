@@ -1,3 +1,4 @@
+import { ErrorNotice } from '@zoltar/ui-core-shared/components/ErrorNotice.js'
 import * as workspaceCopy from '../../../copy/poolWorkspace.js'
 import { useEffect, useState } from 'preact/hooks'
 import type { ComponentChildren, ComponentProps } from 'preact'
@@ -72,17 +73,19 @@ export function SecurityPoolVaultWorkspace({
 		<div className='workflow-stack vault-workspace'>
 			{selectedVaultLoadNotice}
 			{securityVault.securityVaultError === undefined ? undefined : (
-				<button
-					type='button'
-					className='secondary'
-					disabled={securityVault.loadingSecurityVault}
-					onClick={() => {
-						setVaultView('selected-vault')
-						void securityVault.onLoadSecurityVault()
-					}}
-				>
-					{commonCopy.retry}
-				</button>
+				<>
+					{vaultView === 'browse-vaults' ? <ErrorNotice message={securityVault.securityVaultError} /> : undefined}
+					<button
+						type='button'
+						className='secondary'
+						disabled={securityVault.loadingSecurityVault}
+						onClick={() => {
+							void securityVault.onLoadSecurityVault()
+						}}
+					>
+						{commonCopy.retry}
+					</button>
+				</>
 			)}
 
 			<div className='vault-workspace-toolbar'>
@@ -163,7 +166,6 @@ export function SecurityPoolVaultWorkspace({
 								description: securityPoolCopy.liquidationWorkflowDescription,
 								key: 'liquidate-vault',
 								readiness: blocker === undefined && liquidationEnabled && canUseActions ? 'ready' : 'blocked',
-								title: securityPoolCopy.reviewLiquidationTitle,
 								...(selectedPool === undefined || selectedVaultDetails === undefined || selectedVaultOwner === '' || !liquidationEnabled || !selectedVaultExistsOnchain || !canUseActions
 									? {}
 									: { onAction: () => onOpenLiquidationModal(selectedPool.managerAddress, selectedPool.securityPoolAddress, selectedVaultDetails.vaultAddress, selectedVaultDetails.capacityOwnershipAttoRep) }),

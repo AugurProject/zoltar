@@ -20,7 +20,7 @@ export function PoolSelectionControl({ address, hasPool, loading, onAddressChang
 						<span />
 					) : (
 						<button type='button' className='link' onClick={onBrowse}>
-							{copy.backToPools}
+							{commonCopy.browsePoolsAction}
 						</button>
 					)}
 					<div className='actions'>
@@ -50,7 +50,7 @@ export function PoolSelectionControl({ address, hasPool, loading, onAddressChang
 								setEditing(false)
 							}}
 						>
-							{loading ? <LoadingText>{securityPoolCopy.refreshingPool}</LoadingText> : copy.openPool}
+							{loading ? <LoadingText>{securityPoolCopy.refreshingPool}</LoadingText> : securityPoolCopy.openPool}
 						</button>
 					}
 				/>
