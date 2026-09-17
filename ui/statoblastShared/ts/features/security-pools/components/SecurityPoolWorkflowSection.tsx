@@ -553,7 +553,7 @@ export function SecurityPoolWorkflowSection(props: SecurityPoolWorkflowSectionPr
 				closeOnSuccessKey={poolPriceOracleResult?.action === 'requestPrice' ? poolPriceOracleResult.hash : undefined}
 				confirmationGuardMessage={requestPriceConfirmationGuardMessage}
 				onClose={() => setRequestPriceReview(undefined)}
-				onConfirm={review => onRequestPoolPrice(review.managerAddress, review.securityPoolAddress, review.requestValueAttoEth, review.universeId)}
+				onConfirm={review => onRequestPoolPrice(review.managerAddress, review.securityPoolAddress, review.requestValueAttoEth, review.universeId, review.proposedRepPerEthPrice)}
 				pending={poolOracleActiveAction === 'requestPrice'}
 				review={requestPriceReview}
 			/>
