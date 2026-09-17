@@ -1,3 +1,4 @@
+import { formatDecimalAmount } from '@zoltar/bot-shared/infrastructure/json-validation'
 import type { StrategySettings } from '../config/settings.ts'
 import type { EvaluatedOperation } from '../operations/types.ts'
 import type { RuntimeTopologySummary, WalletBalanceState } from '../state/operator-state.ts'
@@ -25,16 +26,24 @@ export function requiredLiveInventory(strategy: LiveInventoryStrategy) {
 export function liveInventoryReadinessBlockers(inventory: Pick<WalletBalanceState, 'eth' | 'rep'>, universes: readonly CanonicalUniverse[], strategy: LiveInventoryStrategy) {
 	const blockers: string[] = []
 	const required = requiredLiveInventory(strategy)
-	if (inventoryAmount(inventory.eth, 'ETH') < required.ethAttoEth) {
-		blockers.push('Live execution requires scanned ETH inventory to cover strategy.minimumEthReserve plus one strategy.maximumEthPerOperation principal and one strategy.maximumGasCostEth budget')
+	const ethBalanceAttoEth = inventoryAmount(inventory.eth, 'ETH')
+	if (ethBalanceAttoEth < required.ethAttoEth) {
+		blockers.push(
+			`Live execution requires scanned ETH inventory to cover strategy.minimumEthReserve plus one strategy.maximumEthPerOperation principal and one strategy.maximumGasCostEth budget: required ${formatDecimalAmount(required.ethAttoEth)} ETH; available ${formatDecimalAmount(ethBalanceAttoEth)} ETH (reserve ${formatDecimalAmount(strategy.minimumEthReserveAttoEth)} ETH, principal ${formatDecimalAmount(strategy.maximumEthPerOperationAttoEth)} ETH, gas budget ${formatDecimalAmount(strategy.maximumGasCostAttoEth)} ETH)`,
+		)
 	}
 	const canonicalRepTokens = new Set(universes.map(universe => `${universe.id}:${universe.repToken.toLowerCase()}`))
+	let largestRepBalance = 0n
 	const fundedRep = inventory.rep.some(candidate => {
 		if (!canonicalRepTokens.has(`${candidate.universeId}:${candidate.token.toLowerCase()}`)) return false
-		return inventoryAmount(candidate.balance, `${candidate.symbol} REP`) >= required.repAttoRep
+		const balance = inventoryAmount(candidate.balance, `${candidate.symbol} REP`)
+		if (balance > largestRepBalance) largestRepBalance = balance
+		return balance >= required.repAttoRep
 	})
 	if (!fundedRep) {
-		blockers.push('Live execution requires at least one canonical REP inventory balance that covers strategy.minimumRepReserve plus one strategy.maximumRepPerOperation principal')
+		blockers.push(
+			`Live execution requires at least one canonical REP inventory balance that covers strategy.minimumRepReserve plus one strategy.maximumRepPerOperation principal: required ${formatDecimalAmount(required.repAttoRep)} REP; largest available balance ${formatDecimalAmount(largestRepBalance)} REP (reserve ${formatDecimalAmount(strategy.minimumRepReserveAttoRep)} REP, principal ${formatDecimalAmount(strategy.maximumRepPerOperationAttoRep)} REP)`,
+		)
 	}
 	return blockers
 }

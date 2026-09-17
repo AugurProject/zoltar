@@ -1,3 +1,5 @@
+import { assertStepSafety } from '../../src/execution/safety.ts'
+import { publicFailureReason } from '../../src/execution/preflight-failure.ts'
 import { getChromiumPath } from '../../../../tooling/ui/chromiumPath.js'
 import { expect, test } from 'bun:test'
 import { mkdir } from 'node:fs/promises'
@@ -8,6 +10,21 @@ import { serializedSettings } from '../../src/config/settings.ts'
 import { manualOperationFixture } from '../runtime/manual-operation-fixture.ts'
 import { CHROMIUM_STARTUP_BUDGET_MILLISECONDS, startChromiumSession } from './chromium-session.ts'
 
+function gasLimitFailureReason() {
+	try {
+		assertStepSafety({
+			baseFeePerGas: 0n,
+			ethBalanceAttoEth: 10n ** 18n,
+			gasEstimate: 10_000_000n,
+			step: { data: '0x', evidence: [], gasLimit: '20000000', id: 'wrap', label: 'Wrap WETH', preflightCalls: [], to: '0x0000000000000000000000000000000000000001', value: '0', walletAssetDebits: [] },
+			strategy: { maximumEthPerOperationAttoEth: 10n ** 18n, maximumGasCostAttoEth: 20_000_000_000_000_000n, minimumEthReserveAttoEth: 0n },
+		})
+	} catch (error) {
+		return publicFailureReason(error)
+	}
+	throw new Error('Expected the gas-limit fixture to be blocked')
+}
+
 test(
 	'catalog groups and manual operation dialog at desktop and mobile widths',
 	async () => {
@@ -17,6 +34,7 @@ test(
 		let holdExecution = false
 		let executionStatus = 'pending'
 		let executionOutcome = ''
+		let skipReason = 'Wrap WETH canonical signing anchor or its attester set changed during pre-signing checks.'
 		const transactionHash = `0x${'ab'.repeat(32)}`
 		let executeCalls = 0
 		let failInspect = false
@@ -57,7 +75,7 @@ test(
 							status: executionStatus,
 							outcome,
 							message: messages[outcome],
-							reason: outcome === 'skipped' ? 'Wrap WETH canonical signing anchor or its attester set changed during pre-signing checks.' : undefined,
+							reason: outcome === 'skipped' ? skipReason : undefined,
 							transactions: ['skipped', 'dry-run'].includes(outcome)
 								? []
 								: [
@@ -209,6 +227,17 @@ test(
 					expect(await evaluate("document.querySelector('#operation-dialog').scrollWidth <= document.querySelector('#operation-dialog').clientWidth")).toBe(true)
 					await capture(`${viewport.label}-result-${outcome}`)
 				}
+				executionOutcome = 'skipped'
+				skipReason = gasLimitFailureReason()
+				await evaluate("document.querySelector('#operation-dialog form').requestSubmit()")
+				await waitFor("document.querySelector('#operation-dialog .operation-actions button:nth-child(2)').disabled === false")
+				await evaluate("document.querySelector('#operation-dialog .operation-actions button:nth-child(2)').click()")
+				await waitFor("document.querySelector('#operation-dialog [role=status]').textContent.includes('estimated maximum 0.02402000049241 ETH; configured maximum 0.02 ETH')")
+				expect(await evaluate("document.querySelector('#operation-dialog [role=status]').textContent.includes('24020000492410000')")).toBe(false)
+				expect(await evaluate("document.querySelector('#operation-dialog').scrollWidth <= document.querySelector('#operation-dialog').clientWidth")).toBe(true)
+				await evaluate("document.querySelector('#operation-dialog [role=status]').scrollIntoView({ block: 'center' })")
+				await capture(`${viewport.label}-gas-limit`)
+				skipReason = 'Wrap WETH canonical signing anchor or its attester set changed during pre-signing checks.'
 				executionOutcome = ''
 
 				await evaluate("document.querySelector('#operation-dialog').close()")

@@ -1,3 +1,4 @@
+import { formatDecimalAmount } from '@zoltar/bot-shared/infrastructure/json-validation'
 import { keccak256, parseTransaction, toHex, type Hex } from '@zoltar/bot-shared/ethereum'
 import { submitSignedTransaction } from '@zoltar/bot-shared/execution/transaction-submission'
 import { sendRawTransactionToRpc } from '@zoltar/bot-shared/monitoring/connectivity'
@@ -42,7 +43,7 @@ import {
 	type CanonicalExecutionAnchor,
 	type ExecutionEnvironment,
 } from './transaction-executor.ts'
-import { assertRecoverySubmissionMode, BOT_COMPATIBLE_RECOVERY_TRANSACTION_TYPE, pendingIntentRecoveryAction, transactionIsStrictNonceCancellation, transactionMatchesIntent } from './recovery-policy.ts'
+import { assertRecoverySubmissionMode, BOT_COMPATIBLE_RECOVERY_TRANSACTION_TYPE, pendingIntentRecoveryAction, recoveryGasCostBlocker, transactionIsStrictNonceCancellation, transactionMatchesIntent } from './recovery-policy.ts'
 import { assertOperationPrincipalCaps } from './safety.ts'
 
 function baselineMap(intent: PendingTransactionIntent) {
@@ -280,17 +281,15 @@ async function assertRecoveryPolicy(environment: ExecutionEnvironment, intent: P
 	if ((parsed.value ?? 0n) !== intent.value) {
 		throw new Error(`Pending transaction ${intent.hash} value does not match its durable intent`)
 	}
-	if (parsed.maxFeePerGas < anchor.baseFeePerGas) {
-		throw new RecoveryPolicyBlocked(`${intent.label} signed maximum fee is below the current canonical base fee`)
-	}
 	const maximumGasCost = parsed.gas * parsed.maxFeePerGas
-	if (maximumGasCost > environment.settings.strategy.maximumGasCostAttoEth) {
-		throw new RecoveryPolicyBlocked(`${intent.label} signed gas ceiling exceeds the current strategy.maximumGasCostEth`)
-	}
+	const gasBlocker = recoveryGasCostBlocker(intent.label, parsed.maxFeePerGas, anchor.baseFeePerGas, maximumGasCost, environment.settings.strategy.maximumGasCostAttoEth)
+	if (gasBlocker !== undefined) throw new RecoveryPolicyBlocked(gasBlocker)
 	const balance = await exactAttestedEthBalance(environment, intent.sender, anchor)
 	const requiredBalance = environment.settings.strategy.minimumEthReserveAttoEth + intent.value + maximumGasCost
 	if (balance < requiredBalance) {
-		throw new RecoveryPolicyBlocked(`${intent.label} signed value and gas ceiling would breach the current wallet ETH reserve`)
+		throw new RecoveryPolicyBlocked(
+			`${intent.label} signed value and gas ceiling would breach the current wallet ETH reserve: required ${formatDecimalAmount(requiredBalance)} ETH; available ${formatDecimalAmount(balance)} ETH (reserve ${formatDecimalAmount(environment.settings.strategy.minimumEthReserveAttoEth)} ETH, transaction value ${formatDecimalAmount(intent.value)} ETH, signed maximum gas cost ${formatDecimalAmount(maximumGasCost)} ETH)`,
+		)
 	}
 	return {
 		gas: parsed.gas,

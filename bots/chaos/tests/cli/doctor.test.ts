@@ -334,7 +334,7 @@ describe('chaos launch doctor', () => {
 			probe: async () => probeResult,
 		})
 
-		await expect(runChaosDoctor(dependencies)).rejects.toThrow('signer ETH')
+		await expect(runChaosDoctor(dependencies)).rejects.toThrow('signer ETH 0.000000000000000123 ETH is below the required 0.12 ETH')
 	})
 
 	test('fails before durable-state or network reads when another operator owns a required lock', async () => {

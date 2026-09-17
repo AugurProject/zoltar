@@ -899,7 +899,7 @@ describe('pending chaos transaction recovery decisions', () => {
 	test('retains identical bytes when the current gas-cost cap is below the signed ceiling', async () => {
 		const fixture = await forkedRecoveryEnvironment({ maximumGasCostAttoEth: 199_999n })
 
-		await expect(recoverPendingTransactions(fixture.environment, { resubmit: true })).rejects.toThrow('signed gas ceiling exceeds')
+		await expect(recoverPendingTransactions(fixture.environment, { resubmit: true })).rejects.toThrow('signed maximum 0.0000000000002 ETH; configured maximum 0.000000000000199999 ETH')
 
 		for (const methods of fixture.requestedMethods) expect(methods).not.toContain('eth_sendRawTransaction')
 		expect(fixture.environment.state.pendingTransactions[0]?.status).toBe('signed')
@@ -912,7 +912,7 @@ describe('pending chaos transaction recovery decisions', () => {
 			return Promise.resolve()
 		}
 
-		await expect(recoverPendingTransactions(fixture.environment, { resubmit: true })).rejects.toThrow('signed gas ceiling exceeds')
+		await expect(recoverPendingTransactions(fixture.environment, { resubmit: true })).rejects.toThrow('signed maximum 0.0000000000002 ETH; configured maximum 0.000000000000199999 ETH')
 
 		for (const methods of fixture.requestedMethods) expect(methods).not.toContain('eth_sendRawTransaction')
 		expect(fixture.environment.state.pendingTransactions[0]?.status).toBe('signed')

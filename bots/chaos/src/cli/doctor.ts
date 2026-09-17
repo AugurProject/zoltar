@@ -1,5 +1,6 @@
 #!/usr/bin/env bun
 
+import { formatDecimalAmount } from '@zoltar/bot-shared/infrastructure/json-validation'
 import { migrateEmptyBootstrapState } from '../state/bootstrap-migration.ts'
 import { requireDeployedContracts } from '@zoltar/bot-shared/monitoring/deployed-contracts'
 import { access, lstat } from 'node:fs/promises'
@@ -386,10 +387,19 @@ function liveFundingBlockers(settings: OperatorSettings, snapshot: ChaosDoctorPr
 	}
 	const required = requiredLiveInventory(settings.strategy)
 	const eth = BigInt(snapshot.wallet.ethBalanceAttoEth)
-	if (eth < required.ethAttoEth) blockers.push(`signer ETH ${eth.toString()} is below the reserve plus one maximum ETH principal and one gas budget ${required.ethAttoEth.toString()}`)
+	if (eth < required.ethAttoEth)
+		blockers.push(
+			`signer ETH ${formatDecimalAmount(eth)} ETH is below the required ${formatDecimalAmount(required.ethAttoEth)} ETH (reserve ${formatDecimalAmount(settings.strategy.minimumEthReserveAttoEth)} ETH, maximum principal ${formatDecimalAmount(settings.strategy.maximumEthPerOperationAttoEth)} ETH, gas budget ${formatDecimalAmount(settings.strategy.maximumGasCostAttoEth)} ETH)`,
+		)
 	const repTokens = new Set(snapshot.universes.map(universe => universe.repToken.toLowerCase()))
-	const fundedRep = snapshot.wallet.tokens.some(token => repTokens.has(token.address.toLowerCase()) && BigInt(token.balance) >= required.repAttoRep)
-	if (!fundedRep) blockers.push(`no canonical REP balance meets reserve plus one maximum operation principal ${required.repAttoRep.toString()}`)
+	let largestRepBalance = 0n
+	const fundedRep = snapshot.wallet.tokens.some(token => {
+		if (!repTokens.has(token.address.toLowerCase())) return false
+		const balance = BigInt(token.balance)
+		if (balance > largestRepBalance) largestRepBalance = balance
+		return balance >= required.repAttoRep
+	})
+	if (!fundedRep) blockers.push(`no canonical REP balance meets reserve plus one maximum operation principal ${formatDecimalAmount(required.repAttoRep)} REP; largest available balance ${formatDecimalAmount(largestRepBalance)} REP`)
 	return blockers
 }
 

@@ -24,7 +24,7 @@ export const sourceSizeAllowances = new Map<string, SourceSizeAllowance>([
 		['bots/chaos/src/dashboard/dashboard-server.ts', 1011],
 		['bots/chaos/src/state/protocol-index-store.ts', 1000],
 		['bots/chaos/src/operations/open-oracle.ts', 1024],
-		['bots/chaos/src/execution/recovery.ts', 702],
+		['bots/chaos/src/execution/recovery.ts', 701],
 		['bots/chaos/src/monitoring/protocol-index.ts', 699],
 		['bots/chaos/src/operations/zoltar.ts', 618],
 	]),
