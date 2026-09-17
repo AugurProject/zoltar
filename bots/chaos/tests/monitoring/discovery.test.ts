@@ -355,6 +355,7 @@ function fakeClient(anchorBlockNumber: bigint, blockHash = hash(99), graph: Grap
 interface RefundBackfillOverrides {
 	auctionFinalized?: boolean
 	badDebtGeneration?: bigint
+	baseFeePerGas?: bigint
 	computedClearing?: readonly [boolean, bigint, bigint, bigint]
 	storedClearingTick?: bigint
 	underfunded?: boolean
@@ -370,7 +371,9 @@ function refundBackfillClient(pendingRefundAttoEth: bigint, walletVaultRegistere
 	const truthAuction = address(23)
 	const vaults = overrides.vaults ?? (walletVaultRegistered ? [address(1)] : [])
 	const contractReads: string[] = []
+	const baseFeePerGas = overrides.baseFeePerGas ?? 1n
 	const base = fakeClient(10n, hash(10), {
+		baseFeePerGas,
 		poolDeployments: [
 			{
 				parent: address(0),
@@ -385,8 +388,10 @@ function refundBackfillClient(pendingRefundAttoEth: bigint, walletVaultRegistere
 		questionIds: [101n],
 	})
 	const implementation = {
-		async readContract(parameters: { abi: Abi; address: Address; args?: readonly AbiValue[]; blockNumber?: bigint; functionName: string }) {
+		async readContract(parameters: { abi: Abi; address: Address; args?: readonly AbiValue[]; blockNumber?: bigint; functionName: string; gasPrice?: bigint }) {
 			contractReads.push(parameters.functionName)
+			// Geth evaluates BASEFEE as zero for eth_call without a nonzero fee.
+			const callBaseFee = (parameters.gasPrice ?? 0n) === 0n ? 0n : baseFeePerGas
 			switch (parameters.functionName) {
 				case 'getVaultCount':
 					return BigInt(vaults.length)
@@ -443,13 +448,13 @@ function refundBackfillClient(pendingRefundAttoEth: bigint, walletVaultRegistere
 				case 'isPriceValid':
 					return true
 				case 'getRequestPriceCostAttoEth':
-					return 109n
+					return 8n * callBaseFee + 101n
 				case 'settlementTime':
 					return 100n
 				case 'lastPrice':
 					return 10n ** 18n
 				case 'minimumToken1ReportAttoEth':
-					return 20_002n
+					return 10_001n * (1n + callBaseFee)
 				case 'gasConsumedOpenOracleReportPrice':
 				case 'getSettlementCallbackGasLimit':
 				case 'gasUnitsForOneDispute':
@@ -558,6 +563,16 @@ function poolBindingClient(pool: Address, coordinator: Address, overrides: PoolB
 }
 
 describe('anchored ecosystem discovery', () => {
+	test.each([0n, 1n, 1_111_894_317n])('preserves the anchored base fee %s in oracle funding reads', async baseFeePerGas => {
+		const fake = refundBackfillClient(0n, false, { baseFeePerGas })
+		const snapshot = await discoverEcosystemSnapshot({ anchorBlockNumber: 10n, client: fake.client, deployments: snapshotFixture().deployments, wallet: undefined })
+		expect(snapshot.pools).toHaveLength(1)
+		expect(snapshot.pools[0]).toMatchObject({
+			minimumToken1ReportAttoEth: (10_001n * (1n + baseFeePerGas)).toString(),
+			requestPriceCostAttoEth: (8n * baseFeePerGas + 101n).toString(),
+		})
+	})
+
 	test('ignores unassigned bad debt from an expired accounting generation', async () => {
 		const deployments = { openOracle: address(6), questionData: address(3), securityPoolFactory: address(4), securityPoolForker: address(5), tradingFactory: address(8), tradingRouter: address(9), weth: address(7), zoltar: address(2) }
 		const graph = refundBackfillClient(0n, false, { badDebtGeneration: 7n, unassignedPosition: [0n, 0n, 50n, 6n, 0n] })
