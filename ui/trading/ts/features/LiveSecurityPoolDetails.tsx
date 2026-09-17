@@ -6,7 +6,7 @@ import { EmptyState } from '@zoltar/ui-core-shared/components/EmptyState.js'
 import { ErrorNotice } from '@zoltar/ui-core-shared/components/ErrorNotice.js'
 import { MetricField } from '@zoltar/ui-core-shared/components/MetricField.js'
 import { SectionBlock } from '@zoltar/ui-core-shared/components/SectionBlock.js'
-import { WorkflowSubsection } from '@zoltar/ui-core-shared/components/WorkflowSubsection.js'
+import { ReadOnlyDetailAccordion } from '@zoltar/ui-core-shared/components/ReadOnlyDetailAccordion.js'
 import { marketNewRiskBlocker, type LiveMarket } from '../protocol/live.js'
 import * as appCopy from '../copy/app.js'
 import { getTradingRouteHref } from '../lib/routing.js'
@@ -86,7 +86,6 @@ export function LiveSecurityPoolDetails({
 			<RouteHeader
 				eyebrow={appCopy.securityPool}
 				title={market.title}
-				description={appCopy.securityPoolRouteDescription}
 				badge={market.loadError === undefined ? undefined : <Badge tone='warning'>{appCopy.poolDataUnavailable}</Badge>}
 				actions={
 					<a class='button-link' href={getTradingRouteHref(browseBack.href)}>
@@ -110,30 +109,24 @@ export function LiveSecurityPoolDetails({
 							</button>
 						</div>
 					) : null}
-					<DataGrid dense>
-						<SecurityPoolIdentityFields market={market} />
-					</DataGrid>
-					{market.loadError === undefined ? (
+
+					{market.loadError !== undefined ? (
+						<ReadOnlyDetailAccordion title={liveCopy.poolDetails}>
+							<DataGrid dense>
+								<SecurityPoolIdentityFields market={market} />
+							</DataGrid>
+						</ReadOnlyDetailAccordion>
+					) : (
 						<>
-							<WorkflowSubsection title={liveCopy.lifecycle}>
+							<div>
 								<DataGrid dense>
 									<MetricField label={liveCopy.questionEnd}>{formatTimestamp(market.endTime)}</MetricField>
 									<MetricField label={liveCopy.systemState}>{systemStateLabel(market.systemState)}</MetricField>
 									<MetricField label={liveCopy.universeFork}>{market.universeForkTime === 0n ? liveCopy.notForked : liveCopy.forkedAt(formatTimestamp(market.universeForkTime))}</MetricField>
 									{market.questionOutcome === 3 ? undefined : <MetricField label={liveCopy.outcome}>{questionOutcomeLabel(market.questionOutcome)}</MetricField>}
-								</DataGrid>
-							</WorkflowSubsection>
-							<WorkflowSubsection title={liveCopy.capacity}>
-								<DataGrid dense>
-									<MetricField label={liveCopy.securityMultiplier}>{formatBpsMultiplier(market.statoblastSecurityMultiplierBps)}</MetricField>
-									<MetricField label={liveCopy.initialReportPriorityFee}>{liveCopy.priorityFeePerGas(formatUnits(market.initialReportPriorityFeeAttoEthPerGas, 9))}</MetricField>
-									<MetricField label={liveCopy.registeredVaults}>{market.vaultCount.toString()}</MetricField>
-									<MetricField label={liveCopy.perSecondRetentionMultiplier}>{formatUnits(market.currentRetentionRate, 18, 12)}×</MetricField>
-									<MetricField label={liveCopy.totalAndFeeEligibleCapacityOwnership}>{formatCapacityOwnership(market.totalCapacityOwnershipAttoRep, market.feeEligibleCapacityOwnershipAttoRep)}</MetricField>
 									<MetricField label={liveCopy.mintingCapacity}>{formatMintingCapacity(market.settlementCollateralAttoEth, market.mintingCapacityCeilingAttoEth)}</MetricField>
 								</DataGrid>
-							</WorkflowSubsection>
-							<BackingDetails market={market} />
+							</div>
 							{market.pair === undefined ? (
 								<PairInitializationAction market={market} nowSeconds={nowSeconds} />
 							) : (
@@ -143,8 +136,23 @@ export function LiveSecurityPoolDetails({
 									</a>
 								</div>
 							)}
+							<ReadOnlyDetailAccordion title={liveCopy.poolDetails}>
+								<DataGrid dense>
+									<SecurityPoolIdentityFields market={market} />
+								</DataGrid>
+							</ReadOnlyDetailAccordion>
+							<ReadOnlyDetailAccordion title={liveCopy.capacity}>
+								<DataGrid dense>
+									<MetricField label={liveCopy.securityMultiplier}>{formatBpsMultiplier(market.statoblastSecurityMultiplierBps)}</MetricField>
+									<MetricField label={liveCopy.initialReportPriorityFee}>{liveCopy.priorityFeePerGas(formatUnits(market.initialReportPriorityFeeAttoEthPerGas, 9))}</MetricField>
+									<MetricField label={liveCopy.registeredVaults}>{market.vaultCount.toString()}</MetricField>
+									<MetricField label={liveCopy.perSecondRetentionMultiplier}>{formatUnits(market.currentRetentionRate, 18, 12)}×</MetricField>
+									<MetricField label={liveCopy.totalAndFeeEligibleCapacityOwnership}>{formatCapacityOwnership(market.totalCapacityOwnershipAttoRep, market.feeEligibleCapacityOwnershipAttoRep)}</MetricField>
+								</DataGrid>
+							</ReadOnlyDetailAccordion>
+							<BackingDetails market={market} />
 						</>
-					) : null}
+					)}
 				</div>
 			</SectionBlock>
 		</div>

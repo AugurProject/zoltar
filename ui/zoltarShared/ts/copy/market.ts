@@ -6,7 +6,6 @@ export const deployUniverse = 'Deploy universe'
 export const noQuestions = 'No questions'
 export const noQuestionsDetail = 'Create the first reusable question for this registry.'
 export const retryQuestions = 'Retry questions'
-export const unforked = 'Unforked'
 export const answerUnit = 'Answer Unit'
 export const alreadyForked = 'Already forked'
 export const formatAlreadyForkedLabel = (questionTitle: string, questionId: string) => `Already forked: ${questionTitle} (${questionId})`
@@ -65,3 +64,5 @@ export const categoricalOutcomesGuidance = 'List the mutually exclusive outcomes
 export const scalarQuestionDescription = 'Ask for a measurable number with a unit, range, and increment that users can understand.'
 export const loadingQuestions = 'Loading questions…'
 export const untitledQuestion = 'Untitled question'
+
+export const questionDetails = 'Question details'

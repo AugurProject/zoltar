@@ -2,7 +2,7 @@ import { createDeferred } from '@zoltar/ui-core-shared/tests/testUtils/deferred.
 import { createMarketDetails } from '@zoltar/ui-core-shared/tests/testUtils/marketFixtures.js'
 /// <reference types="bun-types" />
 
-import { zeroAddress } from '@zoltar/core-shared/evm/ethereum'
+import { getAddress, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
 import { fireEvent, waitFor, within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
@@ -126,6 +126,26 @@ describe('SecurityPoolsOverviewSection', () => {
 		},
 	})
 
+	test('distinguishes same-title pools and opens the selected address', async () => {
+		const first = createSecurityPool()
+		const second = createSecurityPool({ securityPoolAddress: getAddress('0x0000000000000000000000000000000000000002'), statoblastSecurityMultiplierBps: 30000n })
+		const selected: string[] = []
+		cleanupRenderedComponent = (await renderIntoDocument(<SecurityPoolsOverviewSection {...createProps({ securityPools: [first, second], onSelectSecurityPool: address => selected.push(address) })} />)).cleanup
+		const rows = [...document.querySelectorAll('.pool-directory-row')]
+		expect(rows).toHaveLength(2)
+		for (const [index, pool] of [first, second].entries()) {
+			const row = rows[index]
+			if (!(row instanceof HTMLElement)) throw new Error('Expected pool row')
+			expect(within(row).getByRole('button', { name: 'Copy address ' + pool.securityPoolAddress })).not.toBeNull()
+			expect(row.textContent).toContain(index === 0 ? '2×' : '3×')
+			expect(row.querySelector('details')?.textContent).toContain('Initial Report Priority Fee')
+			const link = within(row).getByRole('link', { name: new RegExp(pool.securityPoolAddress) })
+			expect(link.getAttribute('href')).toContain(pool.securityPoolAddress)
+			fireEvent.click(link)
+		}
+		expect(selected).toEqual([first.securityPoolAddress, second.securityPoolAddress])
+	})
+
 	function getSecurityPoolCard(headingText: string): HTMLElement {
 		const normalizedHeadingText = headingText.trim().replace(/\s+/g, ' ')
 		const titleHeading = within(document.body)
@@ -137,21 +157,28 @@ describe('SecurityPoolsOverviewSection', () => {
 		if (titleHeading === undefined) {
 			throw new Error(`Expected security pool card heading for "${headingText}"`)
 		}
-		const poolCard = titleHeading.closest('.comparison-record')
+		const poolCard = titleHeading.closest('.pool-directory-row')
 		if (!(poolCard instanceof HTMLElement)) {
 			throw new Error(`Expected security pool card for "${headingText}"`)
 		}
 		return poolCard
 	}
 
-	test('renders the complete question identifier in pool cards', async () => {
+	test('keeps question identifiers in a closed disclosure while linking to the pool', async () => {
 		const questionId = '0x0000000000000000000000000000000000000000000000000000000000000001'
 		const pool = createSecurityPool({ marketDetails: createMarketDetails({ questionId }), questionId })
 		const renderedComponent = await renderIntoDocument(<SecurityPoolsOverviewSection {...createProps({ securityPools: [pool] })} />)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const identifier = within(document.body).getByRole('button', { name: `Copy identifier ${questionId}` })
-		expect(identifier.textContent).toBe(questionId)
+		const disclosure = identifier.closest('details')
+		expect(disclosure !== null).toBe(true)
+		expect(disclosure?.open).toBe(false)
+		expect(
+			within(document.body)
+				.getByRole('link', { name: /Open pool/ })
+				.getAttribute('href'),
+		).toContain(pool.securityPoolAddress)
 	})
 
 	test('shows only pools in the active universe without a universe selector', async () => {
@@ -182,8 +209,8 @@ describe('SecurityPoolsOverviewSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const card = getSecurityPoolCard('Will this resolve?')
-		expect((card.textContent ?? '').replace(/\s+/g, ' ')).toContain('Max ≈ 13.33 ETH')
-		expect((card.textContent ?? '').replace(/\s+/g, ' ')).not.toContain('Max ≈ 80.00 ETH')
+		expect((card.textContent ?? '').replace(/\s+/g, ' ')).toContain('/ ≈ 13.33 ETH')
+		expect((card.textContent ?? '').replace(/\s+/g, ' ')).not.toContain('/ ≈ 80.00 ETH')
 	})
 
 	test('does not price capacity from a never-reported Open Oracle value', async () => {
@@ -192,8 +219,8 @@ describe('SecurityPoolsOverviewSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const card = getSecurityPoolCard('Will this resolve?')
-		expect((card.textContent ?? '').replace(/\s+/g, ' ')).toContain('Open Oracle PriceUnavailable')
-		expect((card.textContent ?? '').replace(/\s+/g, ' ')).toContain('Max Unavailable')
+		expect((card.textContent ?? '').replace(/\s+/g, ' ')).toContain('Oracle price unavailable')
+		expect((card.textContent ?? '').replace(/\s+/g, ' ')).toContain('/ Unavailable')
 	})
 
 	test('shows exact small ETH values in browse cards instead of approximate zero', async () => {
@@ -494,7 +521,7 @@ describe('SecurityPoolsOverviewSection', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		const badgeTexts = Array.from(document.body.querySelectorAll('.comparison-record .badge')).map(element => element.textContent?.trim() ?? '')
+		const badgeTexts = Array.from(document.body.querySelectorAll('.pool-directory-row .badge')).map(element => element.textContent?.trim() ?? '')
 		expect(badgeTexts).toContain('Finalized as Yes')
 	})
 
@@ -544,7 +571,7 @@ describe('SecurityPoolsOverviewSection', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		const badgeTexts = Array.from(document.body.querySelectorAll('.comparison-record .badge')).map(element => element.textContent?.trim() ?? '')
+		const badgeTexts = Array.from(document.body.querySelectorAll('.pool-directory-row .badge')).map(element => element.textContent?.trim() ?? '')
 		expect(badgeTexts).toContain('Fork Migration')
 	})
 
@@ -603,7 +630,7 @@ describe('SecurityPoolsOverviewSection', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		const badgeTexts = Array.from(document.body.querySelectorAll('.comparison-record .badge')).map(element => element.textContent?.trim() ?? '')
+		const badgeTexts = Array.from(document.body.querySelectorAll('.pool-directory-row .badge')).map(element => element.textContent?.trim() ?? '')
 		expect(badgeTexts).toContain('Fork Finalized')
 		const childPoolCard = getSecurityPoolCard(childPoolTitle)
 		const childPoolCardQueries = within(childPoolCard)
@@ -961,8 +988,7 @@ describe('SecurityPoolsOverviewSection', () => {
 		expect(poolCardQueries.queryByText('2 vaults are registered. Open the pool to load individual vault details.')).toBeNull()
 		expect(poolCardQueries.queryByText('Vault preview unavailable.')).toBeNull()
 		expect(poolCardQueries.queryByText('No known vaults in this pool.')).toBeNull()
-		const vaultMetric = Array.from(poolCard.querySelectorAll('.comparison-record-metrics > div')).find(element => element.querySelector('dt')?.textContent === 'Known Vaults')
-		expect(vaultMetric?.querySelector('dd')?.textContent).toBe('2')
+		expect(poolCardQueries.getByText('2 vaults')).not.toBeNull()
 		expect(documentQueries.queryByText('Known Vault Registry')).toBeNull()
 		expect(documentQueries.queryByRole('option', { name: 'Has known vaults' })).toBeNull()
 		expect(documentQueries.queryByRole('option', { name: 'No known vaults' })).toBeNull()

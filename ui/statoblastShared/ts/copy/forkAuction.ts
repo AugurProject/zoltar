@@ -237,3 +237,5 @@ export const priceLadder = 'Price Ladder'
 export const priceLevel = 'Price level'
 export const formatSubmissionsLabel = (count: string) => `${count} submissions`
 export const visibleDepth = 'Visible Depth'
+
+export const auctionDetails = 'Auction details'

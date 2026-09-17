@@ -83,3 +83,5 @@ export const availablePoolHeldVaultRepBackingForReporting = 'Pool-held vault REP
 export const availableWalletRepForReporting = 'Wallet REP available for reporting:'
 export const walletUnsettledDepositsEmpty = 'Connected wallet has no unsettled escalation deposits.'
 export const forkCarriedSettlementRedirectDetail = 'This pool also has fork-carried escalation positions. Settle those in Fork & Migration.'
+
+export const reportingParameters = 'Reporting parameters'

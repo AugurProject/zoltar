@@ -522,12 +522,13 @@ void describe('SecurityPoolsSection', () => {
 		expect(documentQueries.queryByText('Selected pool')).toBeNull()
 		expect(documentQueries.queryByText('Pool status')).toBeNull()
 		expect(documentQueries.queryByText('Next step')).toBeNull()
-		expect(documentQueries.getByRole('textbox', { name: 'Security Pool Address' })).not.toBeNull()
+		expect(documentQueries.getByRole('button', { name: 'Change pool' })).not.toBeNull()
 		expect(document.body.querySelector('.selected-pool-context-details')).toBeNull()
-		const objectHeader = document.body.querySelector('.sticky-object-context')
+		const objectHeader = document.body.querySelector('.selected-pool-object-header')
 		if (!(objectHeader instanceof HTMLElement)) throw new Error('Expected the selected-pool object header')
 		expect(within(objectHeader).getByRole('heading', { name: 'Will this resolve?' })).not.toBeNull()
-		expect(within(objectHeader).getByText('Pool-held REP')).not.toBeNull()
+		expect(within(objectHeader).queryByText('Pool-held REP')).toBeNull()
+		expect(document.body.querySelector('.pool-reference-details')?.textContent).toContain('Pool-held REP')
 	})
 
 	void test('keeps the route summary hidden in operate mode until the selected pool resolves', async () => {

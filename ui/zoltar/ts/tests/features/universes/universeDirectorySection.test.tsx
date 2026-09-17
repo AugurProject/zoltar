@@ -42,6 +42,13 @@ describe('UniverseDirectorySection', () => {
 		},
 	})
 
+	test('identifies the actual child reputation token in supply details', async () => {
+		cleanupRenderedComponent = (await renderIntoDocument(<UniverseDirectorySection zoltarUniverse={createUniverse({ reputationTokenName: 'Fork YES Reputation', reputationTokenSymbol: 'YESREP', totalTheoreticalSupplyAttoRep: 10n ** 18n })} />)).cleanup
+		const field = within(document.body).getByText('Fork YES Reputation').parentElement
+		expect(field?.textContent).toContain('YESREP')
+		expect(field?.closest('details')?.open).toBe(false)
+	})
+
 	test('shows current universe details without duplicating child universes', async () => {
 		const renderedComponent = await renderIntoDocument(h(UniverseDirectorySection, { zoltarUniverse: createUniverse() }))
 		cleanupRenderedComponent = renderedComponent.cleanup
@@ -117,7 +124,7 @@ describe('UniverseDirectorySection', () => {
 				expect(queries.queryByRole('button', { name: 'Prepare REP' })).toBeNull()
 				expect(document.querySelectorAll('.migration-outcome-list')).toHaveLength(1)
 				expect(queries.queryByRole('heading', { name: 'Child Universes' })).toBeNull()
-				expect(queries.getByRole('heading', { name: 'Outcome Universes' })).toBeTruthy()
+				expect(queries.getByRole('heading', { name: 'Choose destinations' })).toBeTruthy()
 				expect(queries.getByRole('button', { name: 'Deploy universe' })).toBeTruthy()
 				expect(queries.getByRole('button', { name: 'Split REP' })).toBeTruthy()
 				expect(queries.queryByRole('button', { name: 'Fork Universe' })).toBeNull()

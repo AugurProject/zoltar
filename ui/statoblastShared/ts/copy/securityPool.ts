@@ -1,7 +1,6 @@
 import type { CopyTemplateValue } from '@zoltar/ui-core-shared/copy/types.js'
 
 export const annualFee = 'Annual Fee'
-export const browsePoolsDescription = 'Find a pool, review its lifecycle and backing, then open it for operations.'
 export const createPoolDescription = undefined
 export const createQuestionForPoolDetail = undefined
 export const createQuestionForPoolTitle = 'Create a pool question'
@@ -18,11 +17,10 @@ export const childUniversesTitle = 'Child universes'
 export const childUniversesEmptyDetail = 'No child universes are deployed for this universe.'
 export const createPoolFromQuestion = 'Create pool from question'
 export const formatCreatePoolFromQuestionLabel = (questionTitle: string, questionId: string) => `Create pool from question: ${questionTitle} (${questionId})`
-export const managePoolDescription = 'Review the selected pool’s current stage and use the available position, pricing, reporting, or settlement actions.'
 export const badDebt = 'Bad Debt'
 export const formatDepositRepToVault = (tokenSymbol: CopyTemplateValue) => `Deposit ${tokenSymbol}`
 export const formatDepositingRep = (tokenSymbol: CopyTemplateValue) => `Depositing ${tokenSymbol}…`
-export const depositRepToVaultDescription = 'Increase this vault’s REP backing and collateralization.'
+export const depositRepToVaultDescription = 'Increase the vault’s collateral.'
 export const loadingVault = 'Loading vault details…'
 export const maxLead = 'Max '
 export const openInterestMinted = 'Open Interest Minted'
@@ -32,7 +30,6 @@ export const poolAddress = 'Pool Address'
 export const priceValidUntil = 'Price Valid Until'
 export const refreshing = 'Refreshing…'
 export const reviewLiquidation = 'Review liquidation'
-export const reviewLiquidationTitle = 'Review Liquidation'
 export const selectedVaultOwner = 'Vault owner address'
 export const missingVaultDetail = 'This vault does not exist.'
 export const missingVaultRepBalanceReason = 'No REP is available in the active universe. Obtain or migrate REP into this universe before creating a vault.'
@@ -40,7 +37,7 @@ export const withdrawRep = 'Withdraw REP'
 export const formatWithdrawRep = (tokenSymbol: CopyTemplateValue) => `Withdraw ${tokenSymbol}`
 export const claimFees = 'Claim fees'
 export const claimFeesTitle = 'Claim Fees'
-export const claimFeesDescription = 'Transfer this vault’s accrued fees to its owner.'
+export const claimFeesDescription = 'Paid to the vault owner.'
 export const walletRep = 'Wallet REP'
 export const escalationWithdrawalRequiredDetail = 'Withdraw escalation deposits before redeeming REP.'
 export const openInterestFeeYear = 'Open Interest Fee / Year'
@@ -73,7 +70,6 @@ export const vaultRegistryScanEmpty = 'No current positions found within the sca
 export const formatNoCurrentVaultPositions = (knownVaultCount: bigint) => `No current positions among ${knownVaultCount.toString()} known ${knownVaultCount === 1n ? 'vault' : 'vaults'}.`
 export const poolVaultsEmpty = 'No known vaults in this pool.'
 export const autoExecPending = 'Auto-exec pending'
-export const directory = 'Directory'
 export const executeStagedOperation = 'Execute staged operation'
 export const executingStagedOperationLabel = 'Executing staged operation…'
 export const operationalForkReadOnlyDetail = 'This pool is currently operational, so fork and truth auction actions are read only.'
@@ -100,7 +96,7 @@ export const confirmPriceRequest = 'Confirm price request'
 export const loadOracleBeforePriceReview = 'Loading price oracle details…'
 export const requestPricePendingReportRisk = 'This creates a pending Open Oracle report for the selected pool. Another request cannot start until that report completes.'
 export const requestPriceFundingRisk = 'You Pay includes the 20% request buffer transferred with this transaction. Wallet gas and any additional initial-report REP or WETH funding are checked and submitted separately.'
-export const liquidationWorkflowDescription = 'Inspect the liquidation quote, timeout, and execution path before queueing liquidation.'
+export const liquidationWorkflowDescription = 'Review the quote and execution timing.'
 export const selectedPool = 'Selected Pool'
 export const selectedPoolVaultViews = 'Selected pool vault views'
 export const selectedPoolViews = 'Selected pool views'
@@ -125,8 +121,6 @@ export const activeUniverseSeparator = 'but the app is currently set to'
 export const missingPoolDetail = 'Pool actions are locked until the app uses the same universe.'
 export const switchToPoolUniverse = 'Switch to pool universe'
 export const returnToCurrentUniverse = 'Return to current universe'
-export const vaultDirectory = 'Vault Directory'
-export const vaultOperations = 'Vault Operations'
 export const refreshVaultActionsDetail = 'Refresh the vault to use these actions.'
 export const retryVaultActionsDetail = 'Retry loading the vault to use these actions.'
 export const invalidVaultAddressHint = 'Try another vault owner address.'
@@ -185,10 +179,10 @@ export const repWithdrawalSubmitted = 'REP Withdrawal Submitted'
 export const formatRedeemRepFromVault = (tokenSymbol: CopyTemplateValue) => `Redeem ${tokenSymbol}`
 export const redeemingRep = 'Redeeming REP…'
 export const redeemableAttoRep = 'Redeemable REP'
-export const repRedemptionDescription = 'Redeem the remaining REP backing from this ended pool after escalation deposits are settled.'
+export const repRedemptionDescription = 'Recover remaining REP after escalation deposits settle.'
 export const repWithdrawAmount = 'REP Withdraw Amount'
 export const repWithdrawal = 'REP withdrawal'
-export const repWithdrawalDescription = 'Queue a REP withdrawal now, or let it execute immediately when a valid oracle price is already available.'
+export const repWithdrawalDescription = 'Executes immediately with a valid oracle price; otherwise queued.'
 export const selectedVaultDetailsUnavailable = 'Selected vault details are unavailable.'
 export const targetHealthFactor = 'Target backing ratio'
 export const targetHealthFactorHelp = 'Sets the backing ratio for this vault and future deposits.'
@@ -199,7 +193,6 @@ export const vaultHealthNearMinimum = 'Near minimum'
 export const vaultHealthUnderwater = 'Underwater'
 export const requestedLiquidationDebt = 'Requested liquidation debt'
 export const securityVault = 'Security Vault'
-export const selectedVault = 'Selected Vault'
 export const immediateWithdrawalSuccessDetail = 'A valid oracle price was already available, so the withdrawal executed immediately and no staged operation was created.'
 export const vault = 'Vault'
 export const noClaimableFeesReason = 'No fees are available to claim.'
@@ -220,7 +213,7 @@ export const minimumBackingRatio = 'Minimum backing ratio'
 export const vaultBackingFactor = 'Target backing ratio'
 export const vaultBackingFactorHelp = 'REP backing relative to exposure at full capacity. Higher targets support less exposure.'
 export const queueTargetChangeFundingAction = 'queue this target change'
-export const adjustVaultBackingFactorDescription = 'Change the saved vault target without depositing or withdrawing REP.'
+export const adjustVaultBackingFactorDescription = 'Change the target without moving REP.'
 export const currentCapacity = 'Current capacity'
 export const resultingCapacity = 'Capacity after adjustment'
 export const capacityUnits = 'capacity units'
@@ -248,3 +241,14 @@ export const queuedVaultOperationSupersededDetail = 'A newer target change repla
 
 export const queuedVaultOperationManualRefreshDetail = 'If this operation is still pending, execute it manually after a valid oracle price is available.'
 export const queuedVaultOperationAutomaticRefreshDetail = 'This request was submitted for automatic execution. Check its current status in staged operations.'
+
+export const operationDetails = 'Operation details'
+export const selectOperation = 'Select operation'
+export const openOperationById = 'Open operation by ID'
+
+export function universePoolCount(count: bigint) {
+	return `${count} ${count === 1n ? 'pool' : 'pools'}`
+}
+export function universeVaultCount(count: bigint) {
+	return `${count} known ${count === 1n ? 'vault' : 'vaults'}`
+}

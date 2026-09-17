@@ -97,7 +97,7 @@ function createSelectedPool(overrides: Partial<ListedSecurityPool> = {}): Listed
 }
 
 function getTransactionReviewValue(label: string) {
-	const labelElement = Array.from(document.body.querySelectorAll('.transaction-review-row > span')).find(element => element.textContent === label)
+	const labelElement = Array.from(document.body.querySelectorAll('.transaction-review-row > span, .transaction-review-detail-row > span')).find(element => element.textContent === label)
 	if (!(labelElement instanceof HTMLElement)) throw new Error(`Expected ${label} label`)
 	const valueElement = labelElement.nextElementSibling
 	if (!(valueElement instanceof HTMLElement)) throw new Error(`Expected ${label} value`)
@@ -235,7 +235,7 @@ describe('LiquidationModal', () => {
 		})
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		expect(document.body.textContent?.includes('This queued staged operation will expire 5m after the oracle settlement window completes.')).toBe(true)
+		expect(document.body.textContent?.includes('Expires 5m after oracle settlement.')).toBe(true)
 	})
 
 	test('reviews the complete queued liquidation funding sequence and resulting balances', async () => {
@@ -1354,7 +1354,7 @@ describe('LiquidationModal', () => {
 		if (!(maxButton instanceof HTMLButtonElement)) throw new Error('Expected liquidation Max button')
 		expect(maxButton.disabled).toBe(true)
 
-		const repMovedLabel = Array.from(document.body.querySelectorAll('.transaction-review-row > span')).find(element => element.textContent === 'REP backing transferred')
+		const repMovedLabel = Array.from(document.body.querySelectorAll('.transaction-review-row > span, .transaction-review-detail-row > span')).find(element => element.textContent === 'REP backing transferred')
 		if (!(repMovedLabel instanceof HTMLElement)) throw new Error('Expected REP backing transferred label')
 		const repMovedValue = repMovedLabel.nextElementSibling
 		if (!(repMovedValue instanceof HTMLElement)) throw new Error('Expected Rep Moved value')
@@ -1938,6 +1938,8 @@ describe('LiquidationModal', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		expectTransactionButtonDisabled(document.body, 'Execute vault liquidation', 'The receiver vault would fall below the approved minimum post-liquidation health factor.')
+		expect(getTransactionReviewValue('Estimated receiver health')).toBe('Below required health')
+		expect(document.querySelector('.liquidation-outcome-review .transaction-review-primary')?.children).toHaveLength(3)
 	})
 
 	test('shows an invalidated approval nonce as unavailable and disables delegated submission', async () => {
@@ -2022,7 +2024,7 @@ describe('LiquidationModal', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const status = within(document.body).getByRole('status')
-		expect(status.textContent).toBe('Loading the receiver vault’s live balances and obligations…')
+		expect(status.textContent).toBe('Loading receiver vault…')
 		expect(within(document.body).getByRole('button', { name: 'Queue liquidation' }).getAttribute('aria-describedby')).toBe(status.id)
 		expectTransactionButtonDisabled(document.body, 'Queue liquidation')
 	})
@@ -2039,7 +2041,7 @@ describe('LiquidationModal', () => {
 
 		const documentQueries = within(document.body)
 		const status = documentQueries.getByRole('status')
-		expect(documentQueries.getAllByText('Loading the receiver vault’s live balances and obligations…')).toHaveLength(1)
+		expect(documentQueries.getAllByText('Loading receiver vault…')).toHaveLength(1)
 		expect(documentQueries.getByRole('button', { name: 'Execute vault liquidation' }).getAttribute('aria-describedby')).toBe(status.id)
 	})
 
@@ -2104,7 +2106,7 @@ describe('LiquidationModal', () => {
 		})
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		const repMovedLabel = Array.from(document.body.querySelectorAll('.transaction-review-row > span')).find(element => element.textContent === 'REP backing transferred')
+		const repMovedLabel = Array.from(document.body.querySelectorAll('.transaction-review-row > span, .transaction-review-detail-row > span')).find(element => element.textContent === 'REP backing transferred')
 		if (!(repMovedLabel instanceof HTMLElement)) throw new Error('Expected REP backing transferred label')
 		const repMovedValue = repMovedLabel.nextElementSibling
 		if (!(repMovedValue instanceof HTMLElement)) throw new Error('Expected Rep Moved value')
@@ -2112,6 +2114,10 @@ describe('LiquidationModal', () => {
 		expect(repMovedValue.textContent).toBe('≈ 2.00 REP')
 		expect(getTransactionReviewValue('Gross REP Award (Includes 5%)')).toBe('≈ 2.00 REP')
 		expect(getTransactionReviewValue('Residual Bad Debt Recorded')).toBe('≈ 1.81 ETH')
+		const debtLabel = within(document.body).getByText('Residual Bad Debt Recorded')
+		expect(debtLabel.closest('details') === null).toBe(true)
+		const accounting = within(document.body).getByText('Accounting breakdown').closest('details')
+		expect(accounting?.open).toBe(false)
 		expect(getTransactionReviewValue('Target Accrued Fees Retained')).toBe('≈ 0.25 ETH')
 	})
 
@@ -2173,7 +2179,7 @@ describe('LiquidationModal', () => {
 		const executeButton = within(document.body).getByRole('button', { name: 'Execute vault liquidation' }) as HTMLButtonElement
 		expect(executeButton.disabled).toBe(false)
 		expect(document.body.textContent?.includes('The target vault would fall below the minimum capacity ownership after liquidation.')).toBe(false)
-		const capacityOwnershipAssumedLabel = Array.from(document.body.querySelectorAll('.transaction-review-row > span')).find(element => element.textContent === 'Security-bond debt moved')
+		const capacityOwnershipAssumedLabel = Array.from(document.body.querySelectorAll('.transaction-review-row > span, .transaction-review-detail-row > span')).find(element => element.textContent === 'Security-bond debt moved')
 		if (!(capacityOwnershipAssumedLabel instanceof HTMLElement)) throw new Error('Expected security-bond debt moved label')
 		expect(capacityOwnershipAssumedLabel.nextElementSibling?.textContent).toBe('≈ 8.57 ETH')
 	})
@@ -2244,12 +2250,12 @@ describe('LiquidationModal', () => {
 		const executeButton = documentQueries.getByRole('button', { name: 'Execute vault liquidation' }) as HTMLButtonElement
 		expect(executeButton.disabled).toBe(false)
 		expect(documentQueries.getByText(/Simulation REP \/ ETH/)).not.toBeNull()
-		const repMovedLabel = Array.from(document.body.querySelectorAll('.transaction-review-row > span')).find(element => element.textContent === 'REP backing transferred')
+		const repMovedLabel = Array.from(document.body.querySelectorAll('.transaction-review-row > span, .transaction-review-detail-row > span')).find(element => element.textContent === 'REP backing transferred')
 		if (!(repMovedLabel instanceof HTMLElement)) throw new Error('Expected REP backing transferred label')
 		const repMovedValueBefore = repMovedLabel.nextElementSibling
 		if (!(repMovedValueBefore instanceof HTMLElement)) throw new Error('Expected Rep Moved value')
 		const clampedPreviewText = repMovedValueBefore.textContent
-		const capacityOwnershipAssumedLabel = Array.from(document.body.querySelectorAll('.transaction-review-row > span')).find(element => element.textContent === 'Security-bond debt moved')
+		const capacityOwnershipAssumedLabel = Array.from(document.body.querySelectorAll('.transaction-review-row > span, .transaction-review-detail-row > span')).find(element => element.textContent === 'Security-bond debt moved')
 		if (!(capacityOwnershipAssumedLabel instanceof HTMLElement)) throw new Error('Expected security-bond debt moved label')
 		const capacityOwnershipAssumedValue = capacityOwnershipAssumedLabel.nextElementSibling
 		if (!(capacityOwnershipAssumedValue instanceof HTMLElement)) throw new Error('Expected Capacity ownership assumed value')

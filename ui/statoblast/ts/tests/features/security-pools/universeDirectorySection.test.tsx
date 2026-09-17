@@ -137,9 +137,9 @@ describe('UniverseDirectorySection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		expect(documentQueries.getByText('Security Pools')).not.toBeNull()
+		expect(documentQueries.getByText('1 pool')).not.toBeNull()
 		expect(document.body.textContent).toContain('Pool-held REP')
-		expect(document.body.textContent).toContain('Known Vaults')
+		expect(document.body.textContent).toContain('known vaults')
 		expect(document.body.textContent).toContain('3.00 REP')
 		expect(document.body.textContent).toContain('5.00 REP')
 	})

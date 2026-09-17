@@ -3,11 +3,9 @@ import * as securityPoolCopy from '../../../copy/securityPool.js'
 import { useState } from 'preact/hooks'
 import { zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import { ErrorNotice } from '@zoltar/ui-core-shared/components/ErrorNotice.js'
-import { LookupFieldRow } from '@zoltar/ui-core-shared/components/LookupFieldRow.js'
 import { LoadingText } from '@zoltar/ui-core-shared/components/LoadingText.js'
 import { RouteWorkflowPanel } from '@zoltar/ui-core-shared/components/RouteWorkflowPanel.js'
 import { StateHint } from '@zoltar/ui-core-shared/components/StateHint.js'
-import { ViewTabs } from '@zoltar/ui-core-shared/components/ViewTabs.js'
 import { tryParseBigIntInput } from '@zoltar/ui-core-shared/forms/integerInput.js'
 import { normalizeAddress, sameAddress } from '@zoltar/ui-core-shared/lib/address.js'
 import { useChainTimestamp } from '@zoltar/ui-core-shared/wallet/chainTimestamp.js'
@@ -21,13 +19,11 @@ import {
 	hasCurrentSelectedPoolForkActivity,
 	getSelectedPoolOracleMetricValues,
 	getSelectedPoolViewForForkWorkflowSelectionStage,
-	getSelectedPoolViewLabel,
 	getSelectedPoolWorkflowLockedPresentation,
 	isSelectedPoolForkWorkflowView,
 	isForkWorkflowDisabled,
 	resolveForkWorkflowSelectionStage,
 	resolveSelectedPoolView,
-	SELECTED_POOL_VIEWS,
 	shouldShowSelectedPoolWorkflowDetails,
 } from '../lib/securityPoolWorkflow.js'
 import { sameCaseInsensitiveText } from '@zoltar/ui-core-shared/lib/caseInsensitive.js'
@@ -45,7 +41,10 @@ import { useSelectedPoolRefreshEffects } from '../hooks/useSelectedPoolRefreshEf
 import { useSelectedVaultWorkflowState, type SelectedVaultView } from '../hooks/useSelectedVaultWorkflowState.js'
 import type { SecurityPoolWorkflowRouteContentProps, ViewTabOption } from '../../types.js'
 import { buildSelectedPoolSummaryPool } from './SecurityPoolWorkflowPresentation.js'
-import { SecurityPoolObjectHeader } from './SecurityPoolObjectHeader.js'
+import { SecurityPoolObjectHeader, SecurityPoolReferenceDetails } from './SecurityPoolObjectHeader.js'
+import { PoolSelectionControl } from './PoolSelectionControl.js'
+import { PoolAttention, PoolWorkspaceNavigation } from './PoolWorkspaceNavigation.js'
+import * as workspaceCopy from '../../../copy/poolWorkspace.js'
 import { SecurityPoolRequestPriceModal, type RequestPriceReview } from './SecurityPoolOracleSections.js'
 import { SecurityPoolUniverseMismatchNotice, SecurityPoolWorkflowEmptyState } from './SecurityPoolWorkflowEmptyState.js'
 import { SelectedPoolForkWorkflowPanel, SelectedPoolPriceOraclePanel, SelectedPoolReportingPanel, SelectedPoolStagedOperationsPanel, SelectedPoolTradingPanel } from './SecurityPoolWorkflowTabPanels.js'
@@ -228,10 +227,6 @@ export function SecurityPoolWorkflowSection(props: SecurityPoolWorkflowSectionPr
 	const shouldRefreshSelectedPoolReporting =
 		showSelectedPoolWorkflowDetails && (sameAddress(reporting.reportingDetails?.securityPoolAddress, selectedPool?.securityPoolAddress) || (view === 'reporting' && normalizedSelectedPoolAddress !== undefined && normalizedReportingFormPoolAddress === normalizedSelectedPoolAddress))
 	const selectedPoolWorkflowLockedPresentation = showSelectedPoolWorkflowDetails || securityPoolOverviewError !== undefined ? undefined : getSelectedPoolWorkflowLockedPresentation({ hasSelectedPoolAddress, selectedPoolLookupState, selectedPoolUniverseMismatch })
-	const selectedVaultViewOptions: ViewTabOption<SelectedVaultView>[] = [
-		{ label: securityPoolCopy.directory, value: 'browse-vaults' },
-		{ label: commonCopy.selected, value: 'selected-vault' },
-	]
 	const selectedPoolManagerAddress = selectedPool?.managerAddress
 	const currentPoolOracleManagerError = selectedPoolManagerAddress !== undefined && sameAddress(poolOracleManagerErrorAddress, selectedPoolManagerAddress) ? poolOracleManagerError : undefined
 	const liquidationPoolOracleManagerError = liquidationManagerAddress !== undefined && sameAddress(poolOracleManagerErrorAddress, liquidationManagerAddress) ? poolOracleManagerError : undefined
@@ -242,6 +237,11 @@ export function SecurityPoolWorkflowSection(props: SecurityPoolWorkflowSectionPr
 	const selectedVaultOwnerInput = securityVault.securityVaultForm.selectedVaultOwner ?? ''
 	const selectedVaultOwner = getSelectedVaultOwner(selectedVaultOwnerInput, accountState.address) ?? ''
 	const selectedVaultIsOwnedByAccount = isSelectedVaultOwnedByAccountHelper(selectedVaultOwnerInput, accountState.address)
+	const selectedVaultViewOptions: ViewTabOption<SelectedVaultView>[] = [
+		{ label: workspaceCopy.allVaults, value: 'browse-vaults' },
+		{ label: workspaceCopy.myVault, value: 'selected-vault', disabled: accountState.address === undefined },
+		{ label: workspaceCopy.byAddress, value: 'vault-by-address' },
+	]
 	const selectedVaultSecurityPoolAddress = securityVault.securityVaultForm.securityPoolAddress.trim()
 	const selectedVaultDetails = doesLoadedSecurityVaultMatchSelection({
 		accountAddress: accountState.address,
@@ -254,6 +254,7 @@ export function SecurityPoolWorkflowSection(props: SecurityPoolWorkflowSectionPr
 	const selectedVaultExistsOnchain = doesSecurityVaultExistOnchain(selectedVaultDetails)
 	const hasLoadedCurrentVault = selectedVaultDetails !== undefined && sameAddress(selectedVaultDetails.vaultAddress, selectedVaultOwner) && sameAddress(selectedVaultDetails.securityPoolAddress, selectedPool?.securityPoolAddress)
 	const { setVaultView, vaultView } = useSelectedVaultWorkflowState({
+		selectedVaultExistsOnchain,
 		accountAddress: accountState.address,
 		hasLoadedCurrentVault,
 		initialVaultView,
@@ -378,12 +379,6 @@ export function SecurityPoolWorkflowSection(props: SecurityPoolWorkflowSectionPr
 		stagedOperations,
 		view,
 	})
-	const selectedPoolViewOptions = SELECTED_POOL_VIEWS.map(selectedPoolUiView => ({
-		id: `selected-pool-view-${selectedPoolUiView}`,
-		label: getSelectedPoolViewLabel(selectedPoolUiView),
-		panelId: SELECTED_POOL_WORKFLOW_PANEL_ID,
-		value: selectedPoolUiView,
-	}))
 	const vaultBrowseEmptyState = (() => {
 		if (selectedPool === undefined) return selectedPoolBrowsePresentation === undefined ? undefined : <StateHint presentation={selectedPoolBrowsePresentation} />
 		let detail = securityPoolCopy.formatNoCurrentVaultPositions(selectedPool.vaultCount)
@@ -394,40 +389,43 @@ export function SecurityPoolWorkflowSection(props: SecurityPoolWorkflowSectionPr
 	let emptyWorkflowTitle: string | undefined
 	if (selectedPoolLookupState === 'missing') emptyWorkflowTitle = securityPoolCopy.poolNotFound
 	else if (showHeader) emptyWorkflowTitle = commonCopy.managePool
+	const objectHeaderProps =
+		selectedPoolSummaryPool === undefined || marketDetails === undefined
+			? undefined
+			: {
+					calculationPriceConfigured: uiPriceOracle !== undefined,
+					currentPoolOracleManagerDetails,
+					currentPoolOraclePrice,
+					currentPoolOracleSettlementTimestamp,
+					currentTimestamp,
+					marketDetails,
+					repPerEthPrice,
+					selectedPoolHasActualForkActivity,
+					selectedPoolLifecycleState,
+					selectedPoolParentPool,
+					selectedPoolQuestionOutcome,
+					selectedPoolSummaryPool,
+					selectedPoolView,
+				}
+	const poolControls = <PoolSelectionControl address={securityPoolAddress} hasPool={selectedPool !== undefined} loading={loadingSecurityPools} onAddressChange={onSecurityPoolAddressChange} onLoad={onRefreshSelectedPoolData} />
 	return (
-		<RouteWorkflowPanel showHeader={showHeader} title={securityPoolCopy.selectedPool}>
-			<div className='selected-pool-change-control'>
-				<LookupFieldRow
-					label={commonCopy.securityPoolAddress}
-					value={securityPoolAddress}
-					onInput={onSecurityPoolAddressChange}
-					placeholder={commonCopy.hexValuePlaceholder}
-					action={
-						<button className='secondary' onClick={() => onRefreshSelectedPoolData()} disabled={!hasSelectedPoolAddress || loadingSecurityPools}>
-							{loadingSecurityPools ? <LoadingText>{securityPoolCopy.refreshingPool}</LoadingText> : securityPoolCopy.refreshPool}
-						</button>
-					}
-				/>
+		<RouteWorkflowPanel showHeader={showHeader && objectHeaderProps === undefined} title={securityPoolCopy.selectedPool}>
+			<div className='pool-context'>
+				{objectHeaderProps === undefined ? poolControls : <SecurityPoolObjectHeader {...objectHeaderProps} actions={poolControls} />}
+				<ErrorNotice message={securityPoolOverviewError} />
+				{selectedPool !== undefined ? (
+					<PoolAttention
+						oracleUnavailable={showSelectedPoolWorkflowDetails && (currentPoolOraclePriceUsable === false || currentPoolOracleManagerError !== undefined)}
+						pendingReportId={currentPoolOracleManagerDetails?.pendingReportId}
+						stagedOperationCount={showSelectedPoolWorkflowDetails ? activeStagedOperationCount : 0n}
+						forkAvailable={showSelectedPoolWorkflowDetails && selectedPoolHasForkActivity}
+						onViewReport={onViewPendingReport}
+						onChange={onSelectedPoolViewChange}
+					/>
+				) : undefined}
+
+				{objectHeaderProps === undefined ? undefined : <SecurityPoolReferenceDetails {...objectHeaderProps} />}
 			</div>
-			<ErrorNotice message={securityPoolOverviewError} />
-			{selectedPoolSummaryPool === undefined || marketDetails === undefined ? undefined : (
-				<SecurityPoolObjectHeader
-					calculationPriceConfigured={uiPriceOracle !== undefined}
-					currentPoolOracleManagerDetails={currentPoolOracleManagerDetails}
-					currentPoolOraclePrice={currentPoolOraclePrice}
-					currentPoolOracleSettlementTimestamp={currentPoolOracleSettlementTimestamp}
-					currentTimestamp={currentTimestamp}
-					marketDetails={marketDetails}
-					onViewPendingReport={onViewPendingReport}
-					repPerEthPrice={repPerEthPrice}
-					selectedPoolHasActualForkActivity={selectedPoolHasActualForkActivity}
-					selectedPoolLifecycleState={selectedPoolLifecycleState}
-					selectedPoolParentPool={selectedPoolParentPool}
-					selectedPoolQuestionOutcome={selectedPoolQuestionOutcome}
-					selectedPoolSummaryPool={selectedPoolSummaryPool}
-					selectedPoolView={selectedPoolView}
-				/>
-			)}
 
 			{selectedPool === undefined || !selectedPoolUniverseMismatch ? undefined : <SecurityPoolUniverseMismatchNotice activeUniverseId={activeUniverseId} onReturnToCurrentUniverse={onReturnToCurrentUniverse} onSwitchToPoolUniverse={onSwitchToPoolUniverse} selectedPool={selectedPool} />}
 
@@ -442,7 +440,7 @@ export function SecurityPoolWorkflowSection(props: SecurityPoolWorkflowSectionPr
 				/>
 			) : (
 				<section className='selected-pool-workspace'>
-					<ViewTabs ariaLabel={securityPoolCopy.selectedPoolViews} className='selected-pool-workspace-tabs' orientation='horizontal' semantics='tabs' size='compact' value={view} onChange={onSelectedPoolViewChange} options={selectedPoolViewOptions} />
+					<PoolWorkspaceNavigation view={view} onChange={onSelectedPoolViewChange} panelId={SELECTED_POOL_WORKFLOW_PANEL_ID} />
 					<div aria-labelledby={`selected-pool-view-${view}`} className='selected-pool-workflow-content' id={SELECTED_POOL_WORKFLOW_PANEL_ID} role='tabpanel'>
 						{view === 'vaults' ? (
 							<SecurityPoolVaultWorkspace
