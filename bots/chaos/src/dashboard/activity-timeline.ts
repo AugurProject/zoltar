@@ -20,7 +20,7 @@ function timelineItem(activity: TimelineActivity, explorerUrl: string | undefine
 	if (activity.summary !== undefined) main.append(node('span', 'timeline-detail', activity.summary))
 	if (activity.details !== undefined) {
 		const disclosure = node('details', 'activity-details')
-		disclosure.append(node('summary', undefined, 'What was planned'), node('p', 'timeline-detail', activity.details))
+		disclosure.append(node('summary', undefined, activity.status === 'dry-run' ? 'What was planned' : 'Details'), node('p', 'timeline-detail', activity.details))
 		main.append(disclosure)
 	}
 	if (activity.txHash !== undefined) {

@@ -10,6 +10,7 @@ import { randomInteger } from '../core/random.ts'
 import { backfillWaitMilliseconds, operatorWaitMilliseconds } from '../core/scheduler.ts'
 import { startDashboardServer } from '../dashboard/dashboard-server.ts'
 import { recoverPendingTransactions } from '../execution/recovery.ts'
+import { recordPreflightFailure } from '../execution/preflight-failure.ts'
 import { executeOperationPlan, TransactionAwaitingRecovery, type ExecutionEnvironment } from '../execution/transaction-executor.ts'
 import { ChaosProtocolIndexReorgError } from '../monitoring/protocol-index-context.ts'
 import type { CanonicalImmutableTopologyCache } from '../monitoring/topology-cache.ts'
@@ -194,13 +195,7 @@ async function executeLifecyclePlan(configuration: ConfigurationState, state: Ru
 		}
 		if (rediscoverableExecutionFailure(state, plan, error)) {
 			failLifecycleObligation(obligation, error, true)
-			recordActivity(state, {
-				ecosystem: plan.ecosystem,
-				message: `Lifecycle preflight changed before signing: ${plan.label}`,
-				operationId: plan.definitionId,
-				status: 'skipped',
-				type: 'operation',
-			})
+			recordPreflightFailure(state, plan, error, `Lifecycle preflight changed before signing: ${plan.label}`)
 			await persistState(configuration, state)
 			return
 		}
@@ -251,13 +246,7 @@ async function executeRandomPlan(configuration: ConfigurationState, state: Runti
 		},
 		error => {
 			if (rediscoverableExecutionFailure(state, plan, error)) {
-				recordActivity(state, {
-					ecosystem: plan.ecosystem,
-					message: `Anchored preflight changed before signing: ${plan.label}`,
-					operationId: plan.definitionId,
-					status: 'skipped',
-					type: 'operation',
-				})
+				recordPreflightFailure(state, plan, error, `Operation requires fresh preflight: ${plan.label}`)
 				return true
 			}
 			if (abandonRetryableSelectableFailure(state, plan)) {
@@ -290,13 +279,7 @@ async function executeRandomContinuation(configuration: ConfigurationState, stat
 	} catch (error) {
 		if (error instanceof TransactionAwaitingRecovery) throw error
 		if (rediscoverableExecutionFailure(state, plan, error)) {
-			recordActivity(state, {
-				ecosystem: plan.ecosystem,
-				message: `Continuation requires fresh canonical discovery: ${plan.label}`,
-				operationId: plan.definitionId,
-				status: 'skipped',
-				type: 'recovery',
-			})
+			recordPreflightFailure(state, plan, error, `Continuation requires fresh canonical discovery: ${plan.label}`, 'recovery')
 			await persistState(configuration, state)
 			return
 		}
