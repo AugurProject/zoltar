@@ -2434,8 +2434,13 @@
 	}
 
 	.vault-content-switch.view-tabs.segmented {
+		gap: 0;
 		max-width: 100%;
 		overflow-x: auto;
+	}
+
+	.vault-content-switch.view-tabs.segmented .view-tab {
+		padding-inline: var(--space-2);
 	}
 }
 
@@ -2711,7 +2716,6 @@
 
 .pool-tools-disclosure summary,
 .vault-more-actions summary,
-.vault-lookup-disclosure summary,
 .vault-backing-details summary {
 	cursor: pointer;
 	padding: var(--space-3) 0;
@@ -2810,20 +2814,25 @@
 	background: none;
 }
 
-.vault-lookup-disclosure {
+.vault-address-lookup {
 	width: min(100%, 48rem);
 	min-width: 0;
 }
 
 @media (max-width: 40rem) {
-	.vault-lookup-disclosure .lookup-field-controls.has-action {
+	.vault-address-lookup .lookup-field-controls.has-action {
 		grid-template-columns: minmax(0, 1fr);
 	}
 
-	.vault-lookup-disclosure .lookup-field-controls.has-action > .actions {
+	.vault-address-lookup .lookup-field-controls.has-action > .actions {
 		grid-column: 1;
 		grid-row: auto;
 	}
+}
+
+.vault-workspace {
+	grid-template-columns: minmax(0, 1fr);
+	min-width: 0;
 }
 
 .vault-workspace-toolbar {

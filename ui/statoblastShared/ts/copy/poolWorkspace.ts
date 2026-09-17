@@ -15,7 +15,7 @@ export const reviewOperations = 'Review operations'
 export const vaults = (count: bigint) => `${count.toString()} ${count === 1n ? 'vault' : 'vaults'}`
 export const myVault = 'My vault'
 export const vaultDetails = 'Vault details'
-export const inspectVault = 'Open vault by address'
+export const byAddress = 'By address'
 export const backingDetails = 'Backing details'
 export const healthUnknown = 'Health unavailable'
 export const poolPriceUnavailable = 'Oracle price unavailable'

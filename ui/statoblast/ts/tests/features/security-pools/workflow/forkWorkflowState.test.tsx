@@ -626,7 +626,7 @@ describe('SecurityPoolWorkflowSection: fork workflow state', () => {
 			setCleanup(renderedComponent.cleanup)
 
 			const documentQueries = within(document.body)
-			const selectedPoolSummary = document.body.querySelector('.sticky-object-context')
+			const selectedPoolSummary = document.body.querySelector('.selected-pool-object-header')
 			if (!(selectedPoolSummary instanceof HTMLElement)) throw new Error('Expected selected pool summary to render')
 			const selectedPoolSummaryQueries = within(selectedPoolSummary)
 			expect(reportingLoadCalls).toBe(0)
@@ -670,7 +670,7 @@ describe('SecurityPoolWorkflowSection: fork workflow state', () => {
 			setCleanup(renderedComponent.cleanup)
 
 			const documentQueries = within(document.body)
-			const selectedPoolSummary = document.body.querySelector('.sticky-object-context')
+			const selectedPoolSummary = document.body.querySelector('.selected-pool-object-header')
 			if (!(selectedPoolSummary instanceof HTMLElement)) throw new Error('Expected selected pool summary to render')
 			const settlementStageTab = documentQueries.getByRole('tab', { name: 'Settlement' })
 			expect(forkAuctionLoadCalls).toBe(1)

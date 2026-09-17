@@ -338,7 +338,7 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 		expect(documentQueries.queryByRole('heading', { name: 'Vault Lookup' })).toBeNull()
 		const vaultSummaryHeading = documentQueries.getByRole('heading', { name: 'My vault' })
 		expect(vaultSummaryHeading).not.toBeNull()
-		expect(documentQueries.getByText('Vault owner address')).not.toBeNull()
+		expect(documentQueries.queryByRole('textbox', { name: 'Vault owner address' })).toBeNull()
 		expect(documentQueries.getByRole('heading', { name: 'Vault Actions' })).not.toBeNull()
 		expect(documentQueries.getByRole('button', { name: 'Staged Operations' })).not.toBeNull()
 		expect(documentQueries.getByRole('button', { name: 'Price Oracle' })).not.toBeNull()
@@ -818,7 +818,7 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 		setCleanup(renderedComponent.cleanup)
 
 		const documentQueries = within(document.body)
-		await act(() => fireEvent.click(documentQueries.getByRole('button', { name: /^(My vault|Vault details)$/ })))
+		await act(() => fireEvent.click(documentQueries.getByRole('button', { name: 'By address' })))
 		const reviewLiquidationButton = documentQueries.getByRole('button', { name: 'Review liquidation' }) as HTMLButtonElement
 		expect(reviewLiquidationButton.disabled).toBe(true)
 		expect(getTransactionButtonState(document.body, 'Review liquidation').reason).toBeUndefined()

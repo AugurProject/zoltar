@@ -68,12 +68,13 @@ export function SecurityPoolVaultWorkspace({
 	const [lookupOwner, setLookupOwner] = useState(selectedVaultOwnerInput)
 	useEffect(() => setLookupOwner(selectedVaultOwnerInput), [selectedVaultOwnerInput])
 
+	const showVaultDetails = vaultView === 'selected-vault' || (vaultView === 'vault-by-address' && selectedVaultOwner !== '' && sameCaseInsensitiveText(lookupOwner.trim(), selectedVaultOwner))
 	return (
 		<div className='workflow-stack vault-workspace'>
 			{selectedVaultLoadNotice}
 			{securityVault.securityVaultError === undefined ? undefined : (
 				<>
-					{vaultView === 'browse-vaults' ? <ErrorNotice message={securityVault.securityVaultError} /> : undefined}
+					{!showVaultDetails ? <ErrorNotice message={securityVault.securityVaultError} /> : undefined}
 					<button
 						type='button'
 						className='secondary'
@@ -88,30 +89,46 @@ export function SecurityPoolVaultWorkspace({
 			)}
 
 			<div className='vault-workspace-toolbar'>
-				<ViewTabs ariaLabel={securityPoolCopy.selectedPoolVaultViews} className='vault-content-switch' semantics='switcher' variant='segmented' size='compact' value={vaultView} onChange={setVaultView} options={selectedVaultViewOptions} />
-			</div>
-			<details className='vault-lookup-disclosure'>
-				<summary>{workspaceCopy.inspectVault}</summary>
-				<LookupFieldRow
-					label={securityPoolCopy.selectedVaultOwner}
-					value={lookupOwner}
-					onInput={setLookupOwner}
-					placeholder={commonCopy.hexValuePlaceholder}
-					action={
-						<button
-							className='secondary'
-							onClick={() => {
-								securityVault.onSecurityVaultFormChange({ selectedVaultOwner: lookupOwner.trim() })
-								setVaultView('selected-vault')
-								void securityVault.onLoadSecurityVault(lookupOwner.trim())
-							}}
-							disabled={securityVault.loadingSecurityVault || lookupOwner.trim() === ''}
-						>
-							{securityVault.loadingSecurityVault ? <LoadingText announce={false}>{securityPoolCopy.refreshing}</LoadingText> : workspaceCopy.openVault}
-						</button>
-					}
+				<ViewTabs
+					ariaLabel={securityPoolCopy.selectedPoolVaultViews}
+					className='vault-content-switch'
+					semantics='switcher'
+					variant='segmented'
+					size='compact'
+					value={vaultView}
+					onChange={nextView => {
+						if (nextView === 'selected-vault' && walletAddress !== undefined && !sameCaseInsensitiveText(selectedVaultOwner, walletAddress)) {
+							securityVault.onSecurityVaultFormChange({ selectedVaultOwner: walletAddress })
+							void securityVault.onLoadSecurityVault(walletAddress)
+						}
+						setVaultView(nextView)
+					}}
+					options={selectedVaultViewOptions}
 				/>
-			</details>
+			</div>
+			{vaultView === 'vault-by-address' ? (
+				<div className='vault-address-lookup'>
+					<LookupFieldRow
+						label={securityPoolCopy.selectedVaultOwner}
+						value={lookupOwner}
+						onInput={setLookupOwner}
+						placeholder={commonCopy.hexValuePlaceholder}
+						action={
+							<button
+								className='secondary'
+								onClick={() => {
+									securityVault.onSecurityVaultFormChange({ selectedVaultOwner: lookupOwner.trim() })
+									setVaultView('vault-by-address')
+									void securityVault.onLoadSecurityVault(lookupOwner.trim())
+								}}
+								disabled={securityVault.loadingSecurityVault || lookupOwner.trim() === ''}
+							>
+								{securityVault.loadingSecurityVault ? <LoadingText announce={false}>{securityPoolCopy.refreshing}</LoadingText> : workspaceCopy.openVault}
+							</button>
+						}
+					/>
+				</div>
+			) : undefined}
 
 			{vaultView === 'browse-vaults' ? (
 				<div>
@@ -125,7 +142,7 @@ export function SecurityPoolVaultWorkspace({
 										className='secondary'
 										onClick={() => {
 											securityVault.onSecurityVaultFormChange({ selectedVaultOwner: vault.vaultAddress.toString() })
-											setVaultView('selected-vault')
+											setVaultView(walletAddress !== undefined && sameCaseInsensitiveText(walletAddress, vault.vaultAddress) ? 'selected-vault' : 'vault-by-address')
 											void securityVault.onLoadSecurityVault(vault.vaultAddress.toString())
 										}}
 									>
@@ -151,7 +168,8 @@ export function SecurityPoolVaultWorkspace({
 						repPerEthSourceUrl={repPerEthSourceUrl}
 					/>
 				</div>
-			) : (
+			) : undefined}
+			{showVaultDetails ? (
 				<SecurityVaultSection
 					{...securityVault}
 					compactLayout
@@ -183,7 +201,7 @@ export function SecurityPoolVaultWorkspace({
 					showLookupSection={false}
 					showSecurityPoolAddressInput={false}
 				/>
-			)}
+			) : undefined}
 		</div>
 	)
 }

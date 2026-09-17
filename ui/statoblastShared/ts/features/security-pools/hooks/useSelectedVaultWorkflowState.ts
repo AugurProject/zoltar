@@ -3,7 +3,7 @@ import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import { normalizeAddress, sameAddress } from '@zoltar/ui-core-shared/lib/address.js'
 import { isSelectedVaultOwnedByAccount as isSelectedVaultOwnedByAccountHelper } from '../lib/securityVault.js'
 
-export type SelectedVaultView = 'browse-vaults' | 'selected-vault'
+export type SelectedVaultView = 'browse-vaults' | 'selected-vault' | 'vault-by-address'
 
 type UseSelectedVaultWorkflowStateParams = {
 	accountAddress: Address | undefined
@@ -61,11 +61,15 @@ export function useSelectedVaultWorkflowState({
 				return
 			}
 		}
+		if (vaultView === 'selected-vault' && selectedVaultOwnerInput !== undefined && selectedVaultOwnerInput !== '' && !sameAddress(selectedVaultOwnerInput, accountAddress)) {
+			updateVaultView('vault-by-address')
+			return
+		}
 		if (userSelectedView.current || defaultResolved.current) return
 		if (!hasLoadedCurrentVault) return
 		defaultResolved.current = true
 		updateVaultView(accountAddress !== undefined && isSelectedVaultOwnedByAccountHelper(selectedVaultOwnerInput, accountAddress) && selectedVaultExistsOnchain ? 'selected-vault' : 'browse-vaults')
-	}, [accountAddress, hasLoadedCurrentVault, initialVaultView, onSecurityVaultFormChange, selectedPoolAddress, selectedVaultExistsOnchain, selectedVaultOwnerInput, selectedPoolVaultDefaultKey])
+	}, [accountAddress, hasLoadedCurrentVault, initialVaultView, onSecurityVaultFormChange, selectedPoolAddress, selectedVaultExistsOnchain, selectedVaultOwnerInput, selectedPoolVaultDefaultKey, vaultView])
 
 	useEffect(() => {
 		if (!showSelectedPoolWorkflowDetails || view !== 'vaults') return

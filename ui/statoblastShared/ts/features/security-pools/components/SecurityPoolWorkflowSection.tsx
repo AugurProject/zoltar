@@ -239,7 +239,8 @@ export function SecurityPoolWorkflowSection(props: SecurityPoolWorkflowSectionPr
 	const selectedVaultIsOwnedByAccount = isSelectedVaultOwnedByAccountHelper(selectedVaultOwnerInput, accountState.address)
 	const selectedVaultViewOptions: ViewTabOption<SelectedVaultView>[] = [
 		{ label: workspaceCopy.allVaults, value: 'browse-vaults' },
-		{ label: selectedVaultIsOwnedByAccount ? workspaceCopy.myVault : workspaceCopy.vaultDetails, value: 'selected-vault' },
+		{ label: workspaceCopy.myVault, value: 'selected-vault', disabled: accountState.address === undefined },
+		{ label: workspaceCopy.byAddress, value: 'vault-by-address' },
 	]
 	const selectedVaultSecurityPoolAddress = securityVault.securityVaultForm.securityPoolAddress.trim()
 	const selectedVaultDetails = doesLoadedSecurityVaultMatchSelection({

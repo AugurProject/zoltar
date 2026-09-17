@@ -109,7 +109,7 @@ test('opening another directory vault loads and renders that owner’s data', as
 		if (!(row instanceof HTMLElement)) throw new Error('Expected vault record')
 		await act(() => fireEvent.click(within(row).getByRole('button', { name: 'Select vault' })))
 		expect(loads).toContain(otherOwner)
-		expect(within(document.body).getByRole('button', { name: 'Vault details' }).getAttribute('aria-pressed')).toBe('true')
+		expect(within(document.body).getByRole('button', { name: 'By address' }).getAttribute('aria-pressed')).toBe('true')
 		expect(within(document.body).getByRole('button', { name: 'All vaults' }).getAttribute('aria-pressed')).toBe('false')
 		expect(within(document.body).getByRole('button', { name: 'Copy address ' + otherOwner })).not.toBeNull()
 		const backing = document.querySelector('.vault-detail-hero')
@@ -130,6 +130,36 @@ test('shows the vault read error and retries without leaving Directory', async (
 		await act(() => fireEvent.click(within(document.body).getByRole('button', { name: 'Retry' })))
 		expect(loads).toContain(zeroAddress)
 		expect(within(document.body).getByRole('button', { name: 'All vaults' }).getAttribute('aria-pressed')).toBe('true')
+	} finally {
+		await rendered.cleanup()
+		dom.cleanup()
+	}
+})
+
+test('opens an exact owner in By address and returns to the wallet vault', async () => {
+	const dom = installDomEnvironment()
+	const loads: string[] = []
+	const rendered = await renderIntoDocument(<VaultSelectionHarness onLoad={owner => loads.push(owner)} />)
+	try {
+		const page = within(document.body)
+		await act(() => fireEvent.click(page.getByRole('button', { name: 'By address' })))
+		expect(page.getByRole('button', { name: 'By address' }).getAttribute('aria-pressed')).toBe('true')
+		const input = page.getByRole('textbox', { name: 'Vault owner address' })
+		expect(input.closest('details')).toBeNull()
+		loads.length = 0
+		await act(() => fireEvent.input(input, { target: { value: otherOwner } }))
+		expect(loads).toEqual([])
+		expect(document.querySelector('.vault-detail-hero')).toBeNull()
+		await act(() => fireEvent.click(page.getByRole('button', { name: 'Open vault' })))
+		expect(loads).toContain(otherOwner)
+		expect(page.getByRole('button', { name: 'By address' }).getAttribute('aria-pressed')).toBe('true')
+		expect(page.getByRole('button', { name: 'Copy address ' + otherOwner })).not.toBeNull()
+		expect(document.querySelector('.vault-detail-hero')?.textContent).toContain('17.00')
+		await act(() => fireEvent.click(page.getByRole('button', { name: 'My vault' })))
+		expect(loads).toContain(zeroAddress)
+		expect(page.getByRole('button', { name: 'My vault' }).getAttribute('aria-pressed')).toBe('true')
+		expect(document.querySelector('.vault-detail-hero')?.textContent).toContain('5.00')
+		expect(page.queryByRole('textbox', { name: 'Vault owner address' })).toBeNull()
 	} finally {
 		await rendered.cleanup()
 		dom.cleanup()
