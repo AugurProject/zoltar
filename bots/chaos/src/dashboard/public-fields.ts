@@ -45,3 +45,12 @@ export function compact<T extends Record<string, unknown>>(value: T) {
 }
 
 export { optionalRecord as record } from '@zoltar/bot-shared/infrastructure/json-validation'
+
+/** Publishes the operator-configured block explorer only as a plain http(s) base that `/tx/<hash>` can be appended to. */
+export function publicExplorerUrl(value: unknown) {
+	// A bare `?` or `#` parses as an empty query or fragment, so reject the delimiters themselves.
+	if (typeof value !== 'string' || value.length > 2_048 || value.includes('?') || value.includes('#') || !URL.canParse(value)) return undefined
+	const url = new URL(value)
+	if ((url.protocol !== 'https:' && url.protocol !== 'http:') || url.username !== '' || url.password !== '') return undefined
+	return value
+}

@@ -1,3 +1,4 @@
+import { retainWorkflow, markWorkflowForRediscovery } from '../../src/runtime/workflows.ts'
 import { acquireBotProcessLocks, createBotShutdownController } from '@zoltar/bot-shared/execution/bot-process-locks'
 import { CHAOS_PROCESS_LOCK_OPTIONS } from '../../src/core/process-lock-options.ts'
 import { saveDurableState } from '../../src/state/operator-state.ts'
@@ -272,4 +273,62 @@ test('exact input above the policy cap is blocked rather than silently clamped',
 	const response = object(await controller.handle({ action: 'preview', definitionId: 'open-oracle.weth.wrap', inputs: { amount: { source: 'custom', value: '101' }, maxEthSpendAttoEth: { source: 'custom', value: '100' } } }))
 	expect(response['previewId']).toBeUndefined()
 	expect(response['blockers']).not.toEqual([])
+})
+
+test('manual live results expose the skip reason and transaction progress for the exact execution', async () => {
+	const { configuration, state, scan, gate } = fixture()
+	configuration.settings.runtime.execute = true
+	configuration.settings.paused = false
+	state.paused = false
+	scan.inventory.rep = scan.snapshot.universes.map(universe => ({ universeId: universe.id, token: universe.repToken, symbol: 'REP', balance: '1000000000000000000000000' }))
+	let skip = true
+	const submitted = Promise.withResolvers<void>()
+	const release = Promise.withResolvers<void>()
+	const hash = `0x${'ab'.repeat(32)}`
+	const controller = createManualOperationController({
+		configuration,
+		state,
+		gate,
+		scan: async () => scan,
+		execute: async plan => {
+			const workflow = retainWorkflow(state, plan)
+			if (skip) {
+				markWorkflowForRediscovery(workflow, new Error('Canonical signing anchor changed during pre-signing checks'))
+				return
+			}
+			const step = workflow.steps[0]
+			if (step === undefined) throw new Error('Missing step')
+			step.transactionHash = `0x${'ab'.repeat(32)}`
+			step.status = 'submitted'
+			workflow.status = 'waiting-transaction'
+			submitted.resolve()
+			await release.promise
+			step.status = 'confirmed'
+			workflow.status = 'completed'
+		},
+	})
+	try {
+		const first = object(await controller.handle({ ...wrap, action: 'preview' }))
+		expect(first['blockers']).toEqual([])
+		await controller.handle({ action: 'execute', previewId: first['previewId'] })
+		const skipped = await finished(controller, first['previewId'])
+		expect(skipped['outcome']).toBe('skipped')
+		expect(skipped['message']).toContain('No transaction signed')
+		expect(JSON.stringify(skipped)).toContain('Canonical signing anchor changed')
+		skip = false
+		const second = object(await controller.handle({ ...wrap, action: 'preview' }))
+		await controller.handle({ action: 'execute', previewId: second['previewId'] })
+		await submitted.promise
+		const pending = object(object(await controller.handle({ action: 'status', previewId: second['previewId'] }))['execution'])
+		expect(pending['outcome']).toBe('submitted')
+		expect(pending['transactions']).toEqual([expect.objectContaining({ hash, status: 'submitted', explorerUrl: `https://sepolia.etherscan.io/tx/${hash}` })])
+		release.resolve()
+		const confirmed = await finished(controller, second['previewId'])
+		expect(confirmed['outcome']).toBe('confirmed')
+		expect(confirmed['message']).toBe('Operation confirmed.')
+		expect(object(object(await controller.handle({ action: 'status', previewId: first['previewId'] }))['execution'])['outcome']).toBe('skipped')
+	} finally {
+		release.resolve()
+		await controller[Symbol.asyncDispose]()
+	}
 })

@@ -8,7 +8,7 @@ import { requiredLiveInventory } from '../runtime/live-readiness.ts'
 import { pendingTransactionObservationKind } from '../state/pending-transaction-observation.ts'
 import { browserScript } from './browser-assets.ts'
 import { operatorHeader } from './header.ts'
-import { booleanField, compact, isoTimestampField, record, safeIntegerField, safeString, scalar, stringField } from './public-fields.ts'
+import { booleanField, compact, isoTimestampField, record, publicExplorerUrl, safeIntegerField, safeString, scalar, stringField } from './public-fields.ts'
 import { publicAlert, publicRetirement } from './public-retirement.ts'
 
 export type ChaosDashboardController = {
@@ -44,15 +44,6 @@ function publicStrings(value: unknown) {
 
 function configuredRpcUrls(value: unknown) {
 	return Array.isArray(value) ? value.filter((entry): entry is string => typeof entry === 'string' && entry.length <= 2_048).slice(0, 8) : []
-}
-
-/** Publishes the operator-configured block explorer only as a plain http(s) base that `/tx/<hash>` can be appended to. */
-function publicExplorerUrl(value: unknown) {
-	// A bare `?` or `#` parses as an empty query or fragment, so reject the delimiters themselves.
-	if (typeof value !== 'string' || value.length > 2_048 || value.includes('?') || value.includes('#') || !URL.canParse(value)) return undefined
-	const url = new URL(value)
-	if ((url.protocol !== 'https:' && url.protocol !== 'http:') || url.username !== '' || url.password !== '') return undefined
-	return value
 }
 
 function nullablePublicStrings(value: unknown) {

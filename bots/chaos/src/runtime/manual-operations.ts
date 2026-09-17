@@ -1,3 +1,5 @@
+import { publicFailureReason } from '../execution/preflight-failure.ts'
+import { manualExecutionFeedback, type ManualExecution } from './operation-feedback.ts'
 import { operationInputCoverage } from '../operations/input-coverage.ts'
 import { inputChoices, inputFieldValue, operationInputSchema, resolveOperationInputs } from '../operations/input-schema.ts'
 import { readableTransaction } from '../operations/transaction-description.ts'
@@ -33,8 +35,6 @@ type Preview = {
 	expiresAt: number
 	plan: OperationPlan
 }
-
-type Execution = { previewId: string; definitionId: string; status: 'pending' | 'completed' | 'failed'; message: string }
 
 function failure(message: string): never {
 	const error = new Error(message)
@@ -75,7 +75,7 @@ export function createManualOperationController(options: Options) {
 		return work
 	}
 	let preview: Preview | undefined
-	const executions = new Map<string, Execution>()
+	const executions = new Map<string, ManualExecution>()
 	let seed = Math.floor(Math.random() * 0x1_0000_0000)
 
 	function runtimeBlockers() {
@@ -149,18 +149,27 @@ export function createManualOperationController(options: Options) {
 		if (body['action'] === 'status') {
 			const id = body['previewId']
 			if (typeof id !== 'string') failure('Missing execution reference')
-			return { execution: executions.get(id) ?? null }
+			const execution = executions.get(id)
+			return { execution: execution === undefined ? null : manualExecutionFeedback(execution, options.state) }
 		}
 		if (body['action'] === 'execute') {
 			const id = body['previewId']
 			if (typeof id !== 'string') failure('Preview the operation first')
 			const existing = executions.get(id)
-			if (existing !== undefined) return { execution: existing }
+			if (existing !== undefined) return { execution: manualExecutionFeedback(existing, options.state) }
 			const current = preview
 			if (current === undefined || current.id !== id || current.expiresAt < Date.now() || current.revision !== options.configuration.revision) failure('This preview expired or configuration changed. Preview the operation again')
 			if (!options.gate.acquire('scan')) failure('The bot is completing another operation. Retry shortly')
 			preview = undefined
-			const execution: Execution = { definitionId: current.definitionId, message: 'Checking current state…', previewId: id, status: 'pending' }
+			const execution: ManualExecution = {
+				live: options.configuration.settings.runtime.execute,
+				explorerUrl: options.configuration.settings.network.explorerUrl,
+				previousTerminalWorkflowIds: new Set(options.state.workflows.filter(workflow => ['abandoned', 'completed', 'failed', 'blocked'].includes(workflow.status)).map(workflow => workflow.id)),
+				definitionId: current.definitionId,
+				message: 'Checking current state…',
+				previewId: id,
+				status: 'pending',
+			}
 			executions.set(id, execution)
 			if (executions.size > 32) {
 				const oldest = executions.keys().next().value
@@ -179,19 +188,21 @@ export function createManualOperationController(options: Options) {
 						if (plan === undefined) failure('Operation inputs or prerequisites changed. Preview the operation again')
 						execution.message = options.configuration.settings.runtime.execute ? 'Executing operation…' : 'Running dry run…'
 						if (current.plan.inputSources !== undefined) plan.inputSources = { ...current.plan.inputSources }
+						execution.planId = plan.id
 						await options.execute(plan)
 						execution.status = 'completed'
-						execution.message = options.configuration.settings.runtime.execute ? 'Operation processed. Check its workflow for confirmation and recovery status.' : 'Dry run completed. No transaction signed.'
+						execution.message = execution.live ? 'Checking transaction confirmation…' : 'Dry run completed. No transaction signed.'
 					} catch (error) {
 						execution.status = 'failed'
-						execution.message = error instanceof Error && error.name === 'ManualOperationInputError' ? error.message : 'Operation stopped. Review its workflow and activity for recovery details.'
+						execution.message = error instanceof Error && error.name === 'ManualOperationInputError' ? error.message : `Operation stopped: ${publicFailureReason(error)}`
 						console.error('chaosManualOperation failed', error)
 					} finally {
+						manualExecutionFeedback(execution, options.state)
 						options.gate.release('scan')
 					}
 				})(),
 			)
-			return { execution }
+			return { execution: manualExecutionFeedback(execution, options.state) }
 		}
 		if (body['action'] !== 'preview' && body['action'] !== 'inspect') failure('Unknown operation action')
 		const id = body['definitionId']

@@ -1,3 +1,4 @@
+import { compactIdentifier } from './dom.js'
 import { isRecord } from '@zoltar/bot-shared/infrastructure/json-validation'
 import { displayOperationInput, serializeOperationInput } from './operation-input-format.js'
 
@@ -104,6 +105,8 @@ export function createOperationDialog(options: { request: (value: unknown) => Pr
 	status.setAttribute('aria-live', 'polite')
 	const transactions = element('div')
 	transactions.className = 'operation-transactions'
+	const receipts = element('div')
+	receipts.className = 'operation-receipts'
 	const preview = element('button', 'Preview operation')
 	preview.type = 'submit'
 	preview.className = 'secondary'
@@ -116,11 +119,15 @@ export function createOperationDialog(options: { request: (value: unknown) => Pr
 	const actions = element('div')
 	actions.className = 'operation-actions'
 	actions.append(preview, execute, retry)
-	const workflowLink = element('a', 'View workflow and activity')
-	workflowLink.href = '/overview#current-workflow'
+	const workflowLink = element('a', 'View recent activity')
+	workflowLink.href = '/overview#activity-list'
+	const recoveryLink = element('a', 'Open Recovery')
+	recoveryLink.href = '/recovery'
+	recoveryLink.className = 'text-link'
+	recoveryLink.hidden = true
 	workflowLink.className = 'text-link'
 	workflowLink.hidden = true
-	form.append(fields, coverage, mode, transactions, status, actions, workflowLink)
+	form.append(fields, coverage, mode, transactions, status, receipts, actions, workflowLink, recoveryLink)
 	dialog.append(heading, description, form)
 	document.body.append(dialog)
 	let selected: Operation | undefined
@@ -132,6 +139,7 @@ export function createOperationDialog(options: { request: (value: unknown) => Pr
 	let busy = false
 	let executionReference: string | undefined
 	const retainedExecutions = new Map<string, string>()
+	let renderedTransactions = ''
 
 	function invalidate() {
 		previewId = undefined
@@ -256,6 +264,9 @@ export function createOperationDialog(options: { request: (value: unknown) => Pr
 		execute.disabled = true
 		retry.hidden = true
 		previewId = undefined
+		receipts.replaceChildren()
+		renderedTransactions = ''
+		recoveryLink.hidden = true
 		status.textContent = 'Preparing operation…'
 		try {
 			const submitted = Object.fromEntries(
@@ -303,7 +314,30 @@ export function createOperationDialog(options: { request: (value: unknown) => Pr
 				return
 			}
 			const execution = record(response['execution'])
-			status.textContent = string(execution['message'])
+			status.textContent = [string(execution['message']), string(execution['reason'])].filter(Boolean).join(' ')
+			recoveryLink.hidden = !['recovery', 'failed', 'confirming'].includes(string(execution['outcome'])) && !(execution['status'] !== 'pending' && execution['outcome'] === 'submitted')
+			const transactionSignature = JSON.stringify(execution['transactions'] ?? [])
+			if (transactionSignature !== renderedTransactions) {
+				renderedTransactions = transactionSignature
+				receipts.replaceChildren()
+				if (Array.isArray(execution['transactions']) && execution['transactions'].length !== 0) {
+					receipts.append(element('h3', 'Transactions'))
+					for (const value of execution['transactions']) {
+						const transaction = record(value)
+						const hash = string(transaction['hash'])
+						if (!/^0x[0-9a-f]{64}$/i.test(hash)) continue
+						const row = element('div')
+						const transactionStatus = string(transaction['status'])
+						const labels: Record<string, string> = { signed: 'Signed · submission unconfirmed', submitted: 'Submitted · awaiting confirmation', confirmed: 'Confirmed', failed: 'Failed', blocked: 'Recovery required' }
+						row.append(element('p', `${string(transaction['label'])} · ${labels[transactionStatus] ?? transactionStatus}`))
+						const url = string(transaction['explorerUrl'])
+						const parsed = URL.canParse(url) ? new URL(url) : undefined
+						const explorerUrl = parsed !== undefined && ['http:', 'https:'].includes(parsed.protocol) && !parsed.username && !parsed.password ? parsed.href : undefined
+						row.append(compactIdentifier(hash, 'transaction hash', { explorerUrl }))
+						receipts.append(row)
+					}
+				}
+			}
 			if (execution['status'] === 'pending') window.setTimeout(() => void poll(reference, requestGeneration), 1500)
 			else {
 				busy = false
@@ -373,6 +407,9 @@ export function createOperationDialog(options: { request: (value: unknown) => Pr
 			fields.replaceChildren()
 			coverage.hidden = true
 			transactions.replaceChildren()
+			receipts.replaceChildren()
+			renderedTransactions = ''
+			recoveryLink.hidden = true
 			mode.textContent = ''
 			workflowLink.hidden = true
 			status.textContent = operation.blockers.join('. ')

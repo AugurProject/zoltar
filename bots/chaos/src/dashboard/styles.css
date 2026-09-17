@@ -1702,6 +1702,8 @@ tbody tr:last-child td {
 }
 
 .operation-coverage p,
+.operation-receipts p,
+.operation-dialog [role="status"],
 .operation-transactions p,
 .operation-transactions pre {
 	white-space: pre-wrap;
@@ -1770,4 +1772,12 @@ tbody tr:last-child td {
 
 #execution-draft-mode {
 	color: var(--operator-warning);
+}
+
+.operation-receipts {
+	margin-bottom: 1rem;
+}
+
+.operation-dialog .text-link + .text-link {
+	margin-left: 1rem;
 }

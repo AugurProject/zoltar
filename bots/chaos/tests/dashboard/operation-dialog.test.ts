@@ -16,6 +16,8 @@ test(
 		fixture.state.evaluations = evaluateOperationCatalog(fixture.scan.snapshot, planningOptions(fixture.configuration.settings, 7))
 		let holdExecution = false
 		let executionStatus = 'pending'
+		let executionOutcome = ''
+		const transactionHash = `0x${'ab'.repeat(32)}`
 		let executeCalls = 0
 		let failInspect = false
 		let stateReads = 0
@@ -41,8 +43,33 @@ test(
 					throw error
 				}
 				if (action === 'execute') executeCalls += 1
-				if (holdExecution && (action === 'execute' || action === 'status')) return { execution: { status: executionStatus, message: executionStatus === 'pending' ? 'Executing operation…' : 'Dry run completed. No transaction signed.' } }
-				return fixture.controller.handle(value)
+				if (holdExecution && (action === 'execute' || action === 'status')) {
+					const outcome = executionOutcome || (executionStatus === 'pending' ? 'submitted' : 'confirmed')
+					const messages: Record<string, string> = {
+						submitted: 'Transaction submitted. Waiting for confirmation.',
+						confirmed: 'Operation confirmed.',
+						skipped: 'Operation skipped. No transaction signed. Preview again to use current chain state.',
+						'dry-run': 'Dry run completed. No transaction signed.',
+						recovery: 'Operation stopped after partial execution. Recovery is required.',
+					}
+					return {
+						execution: {
+							status: executionStatus,
+							outcome,
+							message: messages[outcome],
+							reason: outcome === 'skipped' ? 'Wrap WETH canonical signing anchor or its attester set changed during pre-signing checks.' : undefined,
+							transactions: ['skipped', 'dry-run'].includes(outcome)
+								? []
+								: [
+										{ label: 'Wrap WETH', hash: transactionHash, status: executionStatus === 'pending' ? 'submitted' : 'confirmed', explorerUrl: `https://sepolia.etherscan.io/tx/${transactionHash}` },
+										...(outcome === 'recovery' ? [{ label: 'A second transaction with a long descriptive operation label', hash: `0x${'cd'.repeat(32)}`, status: 'failed' }] : []),
+									],
+						},
+					}
+				}
+				const response = await fixture.controller.handle(value)
+				if (holdExecution && action === 'preview' && typeof response === 'object' && response !== null) return { ...response, mode: executionOutcome === 'dry-run' ? 'dry-run' : 'live' }
+				return response
 			},
 			setCancellation: () => undefined,
 			setCandidate: () => undefined,
@@ -117,6 +144,7 @@ test(
 				await waitFor("document.querySelector('#operation-input-seed') !== null && document.querySelector('#operation-dialog fieldset').disabled === false")
 				expect(await evaluate("document.querySelector('#operation-input-seed').disabled")).toBe(true)
 				await capture(`${viewport.label}-inputs`)
+				holdExecution = true
 				await evaluate(`(() => {
 				const source = document.querySelector('[aria-label="Maximum ETH spend (attoETH) source"]')
 				source.value = 'custom'; source.dispatchEvent(new Event('change'))
@@ -140,15 +168,37 @@ test(
 				executionStatus = 'pending'
 				const before = executeCalls
 				await evaluate("document.querySelector('#operation-dialog .operation-actions button:nth-child(2)').click(); document.querySelector('#operation-dialog .operation-actions button:nth-child(2)').click()")
-				await waitFor("document.querySelector('#operation-dialog [role=status]').textContent === 'Executing operation…'")
+				await waitFor("document.querySelector('#operation-dialog [role=status]').textContent === 'Transaction submitted. Waiting for confirmation.'")
 				expect(executeCalls).toBe(before + 1)
+				expect(await evaluate("document.querySelector('.operation-receipts a').href")).toBe(`https://sepolia.etherscan.io/tx/${transactionHash}`)
+				expect(await evaluate("document.querySelector('.operation-receipts').textContent.includes('Submitted')")).toBe(true)
 				await capture(`${viewport.label}-pending`)
 				await evaluate("document.querySelector('#operation-dialog').close()")
 				await evaluate("[...document.querySelectorAll('.operation-open')].find(button => button.getAttribute('aria-label') === 'Open wrap WETH').click()")
-				await waitFor("document.querySelector('#operation-dialog [role=status]').textContent === 'Executing operation…'")
+				await waitFor("document.querySelector('#operation-dialog [role=status]').textContent === 'Transaction submitted. Waiting for confirmation.'")
 				executionStatus = 'completed'
-				await waitFor("document.querySelector('#operation-dialog [role=status]').textContent.includes('Dry run completed')")
+				await waitFor("document.querySelector('#operation-dialog [role=status]').textContent === 'Operation confirmed.'")
+				expect(await evaluate("document.querySelector('.operation-receipts').textContent.includes('Confirmed')")).toBe(true)
+				expect(await evaluate("document.querySelector('#operation-dialog').scrollWidth <= document.querySelector('#operation-dialog').clientWidth")).toBe(true)
 				await capture(`${viewport.label}-completed`)
+				for (const [outcome, expectedMessage] of Object.entries({ skipped: 'canonical signing anchor', 'dry-run': 'Dry run completed', recovery: 'partial execution' })) {
+					executionOutcome = outcome
+					await evaluate("document.querySelector('#operation-dialog form').requestSubmit()")
+					await waitFor("document.querySelector('#operation-dialog .operation-actions button:nth-child(2)').disabled === false")
+					await evaluate("document.querySelector('#operation-dialog .operation-actions button:nth-child(2)').click()")
+					await waitFor(`document.querySelector('#operation-dialog [role=status]').textContent.includes(${JSON.stringify(expectedMessage)})`)
+					if (outcome === 'recovery') {
+						expect(await evaluate("document.querySelectorAll('.operation-receipts .compact-identifier').length")).toBe(2)
+						expect(await evaluate("document.querySelectorAll('.operation-receipts a').length")).toBe(1)
+						await evaluate("document.querySelector('.operation-receipts .identifier-disclosure').click()")
+						expect(await evaluate("document.querySelector('.operation-receipts textarea').value")).toBe(transactionHash)
+					} else expect(await evaluate("document.querySelectorAll('.operation-receipts a').length")).toBe(0)
+					await evaluate("document.querySelector('#operation-dialog').scrollTop = document.querySelector('#operation-dialog').scrollHeight")
+					expect(await evaluate("document.querySelector('#operation-dialog').scrollWidth <= document.querySelector('#operation-dialog').clientWidth")).toBe(true)
+					await capture(`${viewport.label}-result-${outcome}`)
+				}
+				executionOutcome = ''
+
 				await evaluate("document.querySelector('#operation-dialog').close()")
 				holdExecution = false
 				failInspect = true
