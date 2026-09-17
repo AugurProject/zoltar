@@ -38,3 +38,24 @@ test('fails after the second startup timeout and never retries other errors', as
 		logged.mockRestore()
 	}
 })
+
+test('allows a slow healthy browser to initialize without restarting it at ten seconds', async () => {
+	const logged = spyOn(console, 'warn').mockImplementation(() => {})
+	let attempts = 0
+	const session = { close: async () => {}, getLastNetworkActivity: () => 0, hasWorkerStarted: () => false, issues: [], send: async () => undefined, pageUrl: 'about:blank' }
+	try {
+		const result = await startChromiumSession('chromium', async (_path, _url, _viewport, options) => {
+			attempts += 1
+			// Model a CI browser that becomes ready after 15 seconds. The shared launcher
+			// defaults to 60 seconds; a shorter override kills this healthy startup.
+			const startupBudget = options?.initializationTimeoutMilliseconds ?? 60_000
+			if (startupBudget < 15_000) throw new Error('Chromium initialization timed out while waiting for the DevTools port')
+			return session
+		})
+		expect(result).toBe(session)
+		expect(attempts).toBe(1)
+		expect(logged).not.toHaveBeenCalled()
+	} finally {
+		logged.mockRestore()
+	}
+})

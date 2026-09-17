@@ -9,6 +9,7 @@
 	--accent-ink: #062117;
 	--warning: #f2c66d;
 	--error: #ff8e8e;
+	--info: #73b7ff;
 	--operator-accent: var(--accent);
 	--operator-background: var(--bg);
 	--operator-border: var(--line);
@@ -244,6 +245,17 @@ section,
 	font-size: 0.75rem;
 	font-weight: 700;
 	white-space: nowrap;
+}
+
+.badge.info {
+	border-color: rgb(115 183 255 / 42%);
+	background: rgb(115 183 255 / 10%);
+	color: var(--info);
+}
+
+.badge.error {
+	color: var(--error);
+	border-color: color-mix(in srgb, var(--error), transparent 50%);
 }
 
 .badge.ok {

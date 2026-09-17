@@ -1,5 +1,6 @@
 import { requestWithTimeout } from '@zoltar/bot-shared/dashboard/polling'
 import { optionalRecord as record } from '@zoltar/bot-shared/infrastructure/json-validation'
+import { createExecutionPolicyDraft } from './execution-policy-draft.js'
 import { createActivityTimeline } from './activity-timeline.js'
 import { createCatalogGroups } from './catalog-groups.js'
 import { compactIdentifier, formatDate, node, setBadge, shortHex, statusLabel, statusTone, transactionExplorerUrl } from './dom.js'
@@ -346,8 +347,18 @@ let snapshot: Snapshot | undefined
 let configuration: Configuration | undefined
 type RefreshResult = { configurationAvailable: boolean; stateAvailable: boolean }
 let refreshPromise: Promise<RefreshResult> | undefined
-let settingsDirty = false
-let settingsConflict = false
+const settingsDraft = createExecutionPolicyDraft({
+	fields: settingsFields,
+	selectAll: allSelectableOperationsInput,
+	allowlist: selectableOperationAllowlistInput,
+	execute: executeInput,
+	discard: discardSettingsButton,
+	status: settingsSaveStatus,
+	currentMode: () => configuration?.execute,
+	reload: () => {
+		if (configuration !== undefined) renderConfiguration(configuration, true)
+	},
+})
 let settingsRevision: string | number | undefined
 let connectivityDraftDirty = false
 let connectivityDraftConflict = false
@@ -927,7 +938,7 @@ function renderHeader(value: Snapshot) {
 	lastScan.textContent = value.lastDeploymentCheckedBlock === undefined ? formatRelative(value.lastScanAt) : formatRelative(value.lastDeploymentCheckAt).replace('Scanned', 'Deployments checked')
 	if (value.safetyPaused === true) setBadge(modeBadge, 'Safety paused', 'error')
 	else if (value.paused === true) setBadge(modeBadge, 'Paused', 'warning')
-	else if (value.execute === true) setBadge(modeBadge, 'Live execution', 'error')
+	else if (value.execute === true) setBadge(modeBadge, 'Live execution', 'warning')
 	else setBadge(modeBadge, 'Dry run', 'info')
 	const networkName = value.network ?? configuration?.network ?? 'Network unknown'
 	const chainId = value.chainId ?? configuration?.chainId
@@ -1528,9 +1539,10 @@ function renderConfiguration(value: Configuration, force = false) {
 		signerSummary.append(node('span', 'signer-persistence', ` · ${value.rememberSigner === true ? 'remembered locally' : 'memory only'}`))
 	} else signerSummary.textContent = 'No signer configured'
 	rememberSignerInput.checked = value.rememberSigner === true
-	if (settingsDirty && !force) {
+	if (settingsDraft.dirty && !force) {
+		settingsDraft.render()
 		if (value.revision !== settingsRevision) {
-			settingsConflict = true
+			settingsDraft.conflict = true
 			saveSettingsButton.disabled = true
 			discardSettingsButton.disabled = false
 			settingsSaveStatus.textContent = 'Configuration changed elsewhere. Discard these edits and reload before saving.'
@@ -1538,7 +1550,7 @@ function renderConfiguration(value: Configuration, force = false) {
 		return
 	}
 	settingsRevision = value.revision
-	settingsConflict = false
+	settingsDraft.conflict = false
 	saveSettingsButton.disabled = false
 	discardSettingsButton.disabled = true
 	executeInput.checked = value.execute === true
@@ -1561,6 +1573,7 @@ function renderConfiguration(value: Configuration, force = false) {
 		if (!(toggle instanceof HTMLInputElement)) continue
 		toggle.checked = value.enabledEcosystems.includes(toggle.dataset['ecosystemToggle'] ?? '')
 	}
+	settingsDraft.render()
 	applyMutationControlLatches()
 }
 
@@ -2129,19 +2142,6 @@ connectivityForm.addEventListener('submit', event => {
 	})()
 })
 
-settingsFields.addEventListener('input', () => {
-	settingsDirty = true
-	discardSettingsButton.disabled = false
-})
-allSelectableOperationsInput.addEventListener('input', () => {
-	selectableOperationAllowlistInput.disabled = allSelectableOperationsInput.checked
-})
-discardSettingsButton.addEventListener('click', () => {
-	settingsDirty = false
-	settingsConflict = false
-	settingsSaveStatus.textContent = 'Local edits discarded. Current configuration loaded.'
-	if (configuration !== undefined) renderConfiguration(configuration, true)
-})
 settingsForm.addEventListener('submit', event => {
 	event.preventDefault()
 	void (async () => {
@@ -2150,7 +2150,7 @@ settingsForm.addEventListener('submit', event => {
 			settingsFields.disabled = true
 			return
 		}
-		if (settingsConflict) {
+		if (settingsDraft.conflict) {
 			settingsSaveStatus.textContent = 'Discard these edits and review the current configuration before saving.'
 			return
 		}
@@ -2207,14 +2207,14 @@ settingsForm.addEventListener('submit', event => {
 					},
 				},
 			})
-			settingsDirty = false
-			settingsConflict = false
+			settingsDraft.dirty = false
+			settingsDraft.conflict = false
 			settingsSaveStatus.textContent = 'Execution policy saved.'
 			await refresh()
 			if (configuration !== undefined) renderConfiguration(configuration, true)
 		} catch (error) {
 			if (error instanceof Error && error.name === 'ConfigurationRevisionConflict') {
-				settingsConflict = true
+				settingsDraft.conflict = true
 				saveSettingsButton.disabled = true
 				discardSettingsButton.disabled = false
 				await refresh()
@@ -2222,7 +2222,7 @@ settingsForm.addEventListener('submit', event => {
 			const reconciliation = await reconcileUnknownMutation(error, settingsSaveStatus, 'configuration and state', 'settings')
 			mutationReconciled = !reconciliation.handled || reconciliation.reconciled
 			if (reconciliation.handled) {
-				settingsConflict = true
+				settingsDraft.conflict = true
 				saveSettingsButton.disabled = true
 				discardSettingsButton.disabled = false
 			} else settingsSaveStatus.textContent = error instanceof Error ? error.message : 'Settings could not be saved.'

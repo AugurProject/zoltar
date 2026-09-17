@@ -1,4 +1,5 @@
 import { decodeConfiguration, decodeSnapshot, decodeMarketProbe, decodeSigner, type Configuration, type Snapshot, type MarketSourceRow, type Activity, type Universe } from './api-validation.ts'
+import { activityBadgeClass } from './status-badges.js'
 import { cell, publicFailure } from './pool-presentation.ts'
 import { createPoolBrowser } from './pool-browser.ts'
 import { createUniverseExplorer } from '@zoltar/bot-shared/dashboard/universe-explorer'
@@ -196,11 +197,6 @@ function pauseButtonAction(snapshot: Snapshot) {
 function consensusStatusText(consensus: { reasons: readonly string[]; reliable: boolean } | undefined, reliableLabel: string) {
 	if (consensus === undefined) return undefined
 	return consensus.reliable ? reliableLabel : consensus.reasons.join(' · ')
-}
-
-function activityBadgeClass(status: string) {
-	if (status === 'failed') return 'warning'
-	return status === 'confirmed' ? 'ok' : ''
 }
 
 function runStatusLabel(snapshot: Snapshot) {
@@ -513,9 +509,10 @@ function render(snapshot: Snapshot) {
 	setMutationControlsEnabled(true)
 	renderNetworkBadge()
 	modeBadge.textContent = snapshot.execute ? 'Live' : 'Dry run'
-	modeBadge.className = `badge ${snapshot.execute ? 'warning' : 'ok'}`
+	modeBadge.className = `badge ${snapshot.execute ? 'warning' : 'info'}`
 	runStatusBadge.textContent = runStatusLabel(snapshot)
-	runStatusBadge.className = `badge ${snapshot.paused || snapshot.error !== undefined ? 'warning' : 'ok'}`
+	if (snapshot.error !== undefined || snapshot.status === 'error') runStatusBadge.className = 'badge error'
+	else runStatusBadge.className = `badge ${snapshot.paused || snapshot.status === 'connectivity-degraded' ? 'warning' : 'ok'}`
 	capabilityBadge.hidden = snapshot.operatorCapable
 	capabilityBadge.textContent = snapshot.operatorCapable ? '' : 'Operator blocked'
 	capabilityBadge.className = `badge ${snapshot.operatorCapable ? 'ok' : 'warning'}`

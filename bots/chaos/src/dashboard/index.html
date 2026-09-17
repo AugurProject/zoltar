@@ -256,6 +256,7 @@
 					</div>
 				</div>
 				<p id="catalog-caption" class="muted">Waiting for operation discovery.</p>
+				<p class="muted">Random selection changes save automatically.</p>
 				<p id="catalog-selection-note" class="muted">Pause the bot to change random selection.</p>
 				<p id="catalog-selection-status" role="status"></p>
 				<div id="catalog-rows"></div>
@@ -436,14 +437,22 @@
 
 					<details class="panel settings-group" open>
 						<summary>
-							<span class="settings-summary-copy"><strong>Execution policy</strong><small>Timing, reserves, and irreversible operation gate</small></span>
+							<span class="settings-summary-copy"><strong>Execution policy</strong><small>Changes apply after saving</small></span>
 						</summary>
 						<div class="settings-body">
 							<form id="settings-form">
 								<fieldset id="settings-fields" disabled>
+									<div class="form-actions policy-actions">
+										<button id="save-settings" type="submit">Save execution policy</button>
+										<button id="discard-settings" class="secondary" type="button" disabled>Discard changes</button>
+										<span id="settings-draft-status" class="badge warning" role="status" hidden>Unsaved changes</span>
+										<span id="settings-save-status" class="action-status" role="alert"></span>
+									</div>
 									<div class="switch-row danger-switch">
 										<div>
 											<label for="execute">Submit live transactions</label>
+											<p id="execution-current-mode" role="status">Current mode: Loading…</p>
+											<p id="execution-draft-mode" role="status" hidden></p>
 											<p id="execute-help">Off is dry-run mode. Live mode can spend gas and protocol assets. It requires positive reserves and retains an ETH safety floor at least as large as one maximum gas-cost budget.</p>
 										</div>
 										<input id="execute" name="execute" type="checkbox" aria-describedby="execute-help" />
@@ -506,7 +515,6 @@
 										<label class="checkbox-row"><input data-ecosystem-toggle="open-oracle" type="checkbox" /><span>Open Oracle</span></label>
 										<label class="checkbox-row"><input data-ecosystem-toggle="trading" type="checkbox" /><span>Trading</span></label>
 									</fieldset>
-									<div class="form-actions"><button id="save-settings" type="submit">Save execution policy</button><button id="discard-settings" class="secondary" type="button" disabled>Discard edits and reload</button><span id="settings-save-status" class="action-status" role="alert"></span></div>
 								</fieldset>
 							</form>
 						</div>
