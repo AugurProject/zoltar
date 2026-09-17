@@ -28,9 +28,13 @@ function timelineItem(activity: TimelineActivity, explorerUrl: string | undefine
 		identifier.append(fullIdentifier(activity.txHash, 'activity transaction hash', { explorerUrl: transactionExplorerUrl(explorerUrl, activity.txHash) }))
 		main.append(identifier)
 	}
-	const status = node('span')
-	setBadge(status, statusLabel(activity.status ?? 'info'), statusTone(activity.status))
-	row.append(main, status)
+	row.append(main)
+	// Activity records describe past events; an immutable pending badge would imply a live transaction status.
+	if (activity.status !== 'pending') {
+		const status = node('span')
+		setBadge(status, statusLabel(activity.status ?? 'info'), statusTone(activity.status))
+		row.append(status)
+	}
 	return row
 }
 

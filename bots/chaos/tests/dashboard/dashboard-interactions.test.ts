@@ -1967,8 +1967,12 @@ browserTest(
 		const failureActivity = failureState.activities[0]
 		if (failureActivity === undefined) throw new Error('Expected the failure to be recorded')
 		activities[1] = failureActivity
+		for (const [offset, label] of ['Waiting for RPC visibility: Initialize REP/WETH pool', 'Submitted: Initialize REP/WETH pool', 'Signed intent persisted: Initialize REP/WETH pool'].entries()) {
+			activities[offset + 2] = { at: '2026-09-17T13:34:44.000Z', label, status: 'pending', txHash: activityHash }
+		}
+		activities[5] = { at: '2026-09-17T13:35:00.000Z', label: 'Confirmed: Initialize REP/WETH pool', status: 'confirmed', txHash: activityHash }
 		const dashboard = startDashboardServer(0, {
-			getConfiguration: () => ({}),
+			getConfiguration: () => ({ network: { explorerUrl } }),
 			getState: () => state({ activities }),
 			hostname: '127.0.0.1',
 			setCancellation: () => {},
@@ -2020,6 +2024,30 @@ browserTest(
 			await cdp.evaluate("document.querySelector('#activity-expand').click()")
 			await waitFor("document.querySelectorAll('#activity-list .timeline-item').length === 10")
 			expect(await cdp.evaluate('document.querySelector(\'[data-page-content="recovery"] #activity-list\')')).toBeNull()
+			for (const viewport of [
+				{ width: 1440, height: 900 },
+				{ width: 390, height: 844 },
+			]) {
+				await cdp.command('Emulation.setDeviceMetricsOverride', { ...viewport, deviceScaleFactor: 1, mobile: viewport.width === 390 })
+				await cdp.evaluate("document.querySelectorAll('#activity-list .timeline-item')[2].scrollIntoView({ block: 'start' }); window.scrollBy(0, -240)")
+				expect(await cdp.evaluate('document.body.scrollWidth === document.documentElement.clientWidth')).toBe(true)
+				const screenshots = process.env['CHAOS_QA_SCREENSHOTS']
+				if (screenshots !== undefined) {
+					await mkdir(screenshots, { recursive: true })
+					const capture = await cdp.command('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false })
+					const data = typeof capture === 'object' && capture !== null ? Reflect.get(capture, 'data') : undefined
+					if (typeof data !== 'string') throw new Error('Activity screenshot unavailable')
+					await Bun.write(`${screenshots}/activity-${viewport.width.toString()}.png`, Buffer.from(data, 'base64'))
+				}
+			}
+			expect(
+				await cdp.evaluate(`Array.from(document.querySelectorAll('#activity-list .timeline-item')).slice(2, 5).map(item => ({
+				badge: item.querySelector('.badge')?.textContent ?? null,
+				hash: item.querySelector('.identifier-value')?.textContent,
+				explorer: item.querySelector('.activity-identifier a')?.href,
+			}))`),
+			).toEqual(Array.from({ length: 3 }, () => ({ badge: null, hash: activityHash, explorer: explorerTransaction(activityHash) })))
+			expect(await cdp.evaluate("document.querySelectorAll('#activity-list .timeline-item')[5].querySelector('.badge')?.textContent")).toBe('Confirmed')
 			// A poll must not close an opened disclosure or rebuild unchanged items.
 			await cdp.evaluate(`(() => {
 				document.querySelector('#activity-list .activity-details').open = true
