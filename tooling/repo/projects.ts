@@ -64,7 +64,7 @@ const botAudit = ['bun', 'audit'] as const
 /**
  * Canonical project ownership and build graph. All packages share the root workspace lockfile.
  */
-export const augurScanMetadataOutputs = ['augurScan/config/abis.json', 'augurScan/config/dependency-abis.json', 'augurScan/config/system-contracts.generated.ts', 'augurScan/config/manifests/mainnet.json', 'augurScan/config/manifests/sepolia.json']
+export const augurScanMetadataOutputs = ['augurScan/config/abis.json', 'augurScan/config/system-contracts.generated.ts', 'augurScan/config/manifests/mainnet.json', 'augurScan/config/manifests/sepolia.json']
 
 export const projects: readonly Project[] = [
 	{
@@ -74,20 +74,20 @@ export const projects: readonly Project[] = [
 		dependencies: ['shared-core', 'shared-zoltar', 'shared-open-oracle', 'shared-statoblast', 'shared-trading', 'contracts', 'ui-core', 'ui-zoltar-shared', 'ui-statoblast-shared', 'ui-zoltar', 'ui-statoblast', 'ui-trading'],
 		tasks: {
 			setup: { command: ['bun', './tooling/repo/install-frozen.mts'], cwd: '.', inputs: ['package.json', 'bun.lock'], cacheInputs: ['package.json', 'bun.lock'] },
-			test: rootTask(['bun', 'run', 'test'], ['package.json', 'bun.lock', 'bun-test-setup*.ts', 'tooling/testing/**', 'shared/*/ts/**', 'solidity/ts/**', 'ui/*/ts/**'], ['complete-validation']),
+			test: rootTask(['bun', 'run', 'test'], ['package.json', 'bun.lock', 'knip.ts', 'bun-test-setup*.ts', 'tooling/testing/**', 'shared/*/ts/**', 'solidity/ts/**', 'ui/*/ts/**'], ['complete-validation']),
 			check: {
 				...rootTask(
 					['bun', 'run', 'check:complete'],
-					['package.json', 'bun.lock', 'biome.json', 'knip.json', '.prettierrc.json', '.coverage-policy.json', '.vscode/**', 'tsconfig.json', 'tsconfig.scripts.json', 'bun-test-setup*.ts', 'scripts/**', 'tooling/**', 'docs/**', 'shared/*/ts/**', 'solidity/**', 'ui/**', 'bots/**', 'augurScan/**'],
+					['package.json', 'bun.lock', 'biome.json', 'knip.ts', '.prettierrc.json', '.coverage-policy.json', '.vscode/**', 'tsconfig.json', 'tsconfig.scripts.json', 'bun-test-setup*.ts', 'scripts/**', 'tooling/**', 'docs/**', 'shared/*/ts/**', 'solidity/**', 'ui/**', 'bots/**', 'augurScan/**'],
 				),
 				covers: ['lint'],
 			},
 			lint: rootTask(
 				['bun', 'run', 'check:static'],
-				['package.json', 'biome.json', 'knip.json', '.prettierrc.json', '.coverage-policy.json', '.vscode/**', 'tsconfig.json', 'tsconfig.scripts.json', 'bun-test-setup*.ts', 'scripts/**', 'docs/**', 'tooling/**', 'shared/*/ts/**', 'solidity/ts/**', 'ui/**', 'bots/**', 'augurScan/**'],
+				['package.json', 'biome.json', 'knip.ts', '.prettierrc.json', '.coverage-policy.json', '.vscode/**', 'tsconfig.json', 'tsconfig.scripts.json', 'bun-test-setup*.ts', 'scripts/**', 'docs/**', 'tooling/**', 'shared/*/ts/**', 'solidity/ts/**', 'ui/**', 'bots/**', 'augurScan/**'],
 			),
-			typecheck: rootTask(['bun', 'run', 'tsc:root'], ['package.json', 'shared/tsconfig*.json', 'tsconfig.scripts.json', 'docs/tsconfig.json', 'tooling/**']),
-			knip: rootTask(['bun', 'run', 'knip'], ['package.json', 'knip.json', 'tooling/**', 'shared/*/ts/**', 'solidity/ts/**', 'ui/**', 'bots/**', 'augurScan/**']),
+			typecheck: rootTask(['bun', 'run', 'tsc:root'], ['package.json', 'knip.ts', 'shared/tsconfig*.json', 'tsconfig.scripts.json', 'docs/tsconfig.json', 'tooling/**']),
+			knip: rootTask(['bun', 'run', 'knip'], ['package.json', 'knip.ts', 'tooling/**', 'shared/*/ts/**', 'solidity/ts/**', 'ui/**', 'bots/**', 'augurScan/**']),
 			audit: rootTask(['bun', 'audit'], ['package.json', 'bun.lock'], ['core-audit']),
 		},
 		generatedDirectories: [],
@@ -247,7 +247,7 @@ export const projects: readonly Project[] = [
 			'test-build': { ...packageTask('ui/trading', 'build:tests'), outputs: ['ui/trading/js/tests'] },
 			workers: packageTask('ui/trading', 'build:workers'),
 			typecheck: { ...packageTask('ui/trading', 'build'), command: ['bun', 'x', 'tsc', '--project', 'tsconfig.json', '--noEmit'] },
-			knip: rootTask(['bun', 'x', 'knip', '--production', '--workspace', 'ui/trading', '--include', 'files'], ['knip.json', 'ui/trading/**']),
+			knip: rootTask(['bun', 'x', 'knip', '--production', '--workspace', 'ui/trading', '--include', 'files'], ['knip.ts', 'ui/trading/**']),
 			audit: packageAuditTask('ui/trading', ['core-audit']),
 		},
 		generatedDirectories: ['ui/trading/js', 'ui/trading/dist', 'ui/trading/vendor'],
@@ -325,7 +325,11 @@ export const projects: readonly Project[] = [
 		dependencies: ['shared-core', 'contracts'],
 		tasks: {
 			setup: packageInstallTask('augurScan'),
-			build: packageTask('augurScan', 'build', { outputs: [...augurScanMetadataOutputs, 'augurScan/public/app.js'], groups: ['generated'], cacheInputs: [...packageInputs('augurScan'), 'augurScan/scripts/**', 'augurScan/config/dependency-abi-sources.json', 'augurScan/browser/**', 'docs/*-deployment-addresses.json'] }),
+			build: packageTask('augurScan', 'build', {
+				outputs: [...augurScanMetadataOutputs, 'augurScan/public/app.js'],
+				groups: ['generated'],
+				cacheInputs: [...packageInputs('augurScan'), 'augurScan/scripts/**', 'augurScan/config/dependency-abi-sources.json', 'augurScan/config/dependency-abis.json', 'augurScan/browser/**', 'docs/*-deployment-addresses.json'],
+			}),
 			test: packageTask('augurScan', 'test:ci', { groups: ['complete-validation'] }),
 			check: packageTask('augurScan', 'check', { covers: ['lint'] }),
 			lint: packageTask('augurScan', 'check'),

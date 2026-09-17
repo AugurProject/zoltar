@@ -78,7 +78,7 @@ POSTGRES_TEST_URL=postgres://augurscan:augurscan@localhost:55432/augurscan_test 
 docker stop augurscan-test-postgres
 ```
 
-ABI catalogs, contract routes, dependency ABI copies, and network manifests are ignored build outputs. The Solidity sources, deployment metadata, and reviewed dependency source pins remain tracked. The first build downloads pinned dependency artifacts and verifies their checksums; later builds reuse verified local copies.
+ABI catalogs, contract routes, and network manifests are ignored build outputs. The Solidity sources, deployment metadata, dependency ABIs in `config/dependency-abis.json`, and their source pins remain tracked. Builds verify the vendored ABI checksums and never download replacements. Missing or modified ABI files fail validation.
 
 To generate only metadata or verify existing outputs:
 
@@ -87,6 +87,6 @@ bun run metadata:build
 bun run metadata:check
 ```
 
-After reviewing an upstream dependency upgrade in `config/dependency-abi-sources.json`, rebuild to refresh its ABI copies automatically. `bun run metadata:dependencies` also provides an explicit refresh. Do not edit the generated files.
+For a dependency upgrade, review and copy its ABI into `config/dependency-abis.json`, update the source URL, version, and checksums in `config/dependency-abi-sources.json`, and run `bun run metadata:check`. Commit the ABI and pins together. Source URLs record provenance; builds do not fetch them. Do not edit the generated scanner metadata.
 
 Generated scanner metadata lives under `augurScan/config`. The production image uses those outputs and the repository's shared Ethereum adapter; it does not require Solidity or deployment sources at runtime.

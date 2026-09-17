@@ -11,7 +11,6 @@
 		"start:indexer": "bun run metadata:build && bun src/indexer-process.ts",
 		"schema:init": "bun src/schema.ts",
 		"metadata:build": "bun scripts/build-metadata.ts",
-		"metadata:dependencies": "bun scripts/snapshot-dependency-abis.ts",
 		"metadata:snapshot": "bun scripts/snapshot-project-metadata.ts",
 		"metadata:check": "bun scripts/check-project-metadata.ts",
 		"metadata:unknown-calls": "bun scripts/report-abi-coverage.ts",

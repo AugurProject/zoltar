@@ -43,7 +43,7 @@ const routingCases: readonly (readonly [readonly string[], readonly CiScope[]])[
 ]
 for (const [paths, expected] of routingCases) test(`routes ${paths.join(', ')}`, () => expect(scopes(paths)).toEqual(expected))
 
-test.each(['.github/workflows/ci.yml', 'package.json', 'tooling/ci/classify-ci-change.mts', 'future-component/file.ts', '.agents/skills/example/scripts/run.ts', '.claude/skills/example/scripts/run.sh', '.claude/settings.json'])('uses full CI for %s', path => {
+test.each(['.github/workflows/ci.yml', 'package.json', 'knip.ts', 'tooling/ci/classify-ci-change.mts', 'future-component/file.ts', '.agents/skills/example/scripts/run.ts', '.claude/skills/example/scripts/run.sh', '.claude/settings.json'])('uses full CI for %s', path => {
 	expect(scopes([path])).toEqual(ciScopes)
 	expect(classifyCiChange([path]).forcedFull).toBe(true)
 })
