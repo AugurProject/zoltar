@@ -96,18 +96,19 @@ function parseCandidatePriority(value: unknown): CandidatePriority {
 	throw new Error('strategy.candidatePriority is invalid')
 }
 
-function universeId(value: unknown, label: string) {
+function unsignedInteger(value: unknown, label: string, bits: 248 | 256) {
 	if (typeof value !== 'string' || !/^(?:0|[1-9]\d*)$/.test(value)) throw new Error(`${label} must be a non-negative integer string`)
 	const parsed = BigInt(value)
-	if (parsed >= 2n ** 248n) throw new Error(`${label} must fit in uint248`)
+	if (parsed >= 2n ** BigInt(bits)) throw new Error(`${label} must fit in uint${bits}`)
 	return parsed
 }
 
+function universeId(value: unknown, label: string) {
+	return unsignedInteger(value, label, 248)
+}
+
 function uint256(value: unknown, label: string) {
-	if (typeof value !== 'string' || !/^(?:0|[1-9]\d*)$/.test(value)) throw new Error(`${label} must be a non-negative integer string`)
-	const parsed = BigInt(value)
-	if (parsed >= 2n ** 256n) throw new Error(`${label} must fit in uint256`)
-	return parsed
+	return unsignedInteger(value, label, 256)
 }
 
 export function parseDesiredPools(value: unknown): DesiredPoolSettings[] {
