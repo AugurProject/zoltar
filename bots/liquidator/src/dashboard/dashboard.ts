@@ -1,3 +1,4 @@
+import { renderRepMarketConsensusError, renderRepMarketConsensusPanel } from '@zoltar/bot-shared/dashboard/rep-market-consensus'
 import { decodeConfiguration, decodeSnapshot, decodeMarketProbe, decodeSigner, type Configuration, type Snapshot, type MarketSourceRow, type Activity, type Universe } from './api-validation.ts'
 import { activityBadgeClass } from './status-badges.js'
 import { cell, publicFailure } from './pool-presentation.ts'
@@ -26,16 +27,6 @@ const quorumRpcUrls = element('quorum-rpc-urls', HTMLTextAreaElement)
 const rpcQuorum = element('rpc-quorum', HTMLSelectElement)
 const networkStatus = element('network-status', HTMLSpanElement)
 const networkScopeSummary = element('network-scope-summary', HTMLElement)
-const centralizedMarketRows = element('centralized-market-rows', HTMLTableSectionElement)
-const centralizedMarketStatus = element('centralized-market-status', HTMLParagraphElement)
-const centralizedMarketPrice = element('centralized-market-price', HTMLElement)
-const centralizedMarketBidDepth = element('centralized-market-bid-depth', HTMLElement)
-const centralizedMarketAskDepth = element('centralized-market-ask-depth', HTMLElement)
-const centralizedMarketSourceCount = element('centralized-market-source-count', HTMLElement)
-const dexMarketPrice = element('dex-market-price', HTMLElement)
-const guardedMarketPrice = element('guarded-market-price', HTMLElement)
-const dexMarketBidDepth = element('dex-market-bid-depth', HTMLElement)
-const dexMarketAskDepth = element('dex-market-ask-depth', HTMLElement)
 const marketConfigurationForm = element('market-configuration-form', HTMLFormElement)
 const marketConfigurationFields = element('market-configuration-fields', HTMLFieldSetElement)
 const marketConfigurationJson = element('market-configuration-json', HTMLTextAreaElement)
@@ -220,10 +211,6 @@ function shortAddress(address: string) {
 	return address.length <= 18 ? address : `${address.slice(0, 10)}…${address.slice(-6)}`
 }
 
-function updateText(target: Element, value: string) {
-	if (target.textContent !== value) target.textContent = value
-}
-
 function renderMetrics(snapshot: Snapshot) {
 	metrics.replaceChildren(
 		createMetric('Pools', snapshot.metrics.poolCount.toString()),
@@ -384,43 +371,28 @@ function renderRecovery(snapshot: Snapshot) {
 function renderCentralizedMarket(snapshot: Snapshot) {
 	const market = snapshot.centralizedMarket
 	const consensus = snapshot.marketConsensus
-	updateText(dexMarketPrice, consensus?.dex.reliable === true ? consensus.dex.priceRepPerEth : '—')
-	updateText(guardedMarketPrice, consensus?.reliable === true ? (consensus.priceRepPerEth ?? '—') : '—')
-	updateText(dexMarketBidDepth, consensus === undefined ? '—' : `${consensus.dex.bidDepthEth} ETH`)
-	updateText(dexMarketAskDepth, consensus === undefined ? '—' : `${consensus.dex.askDepthEth} ETH`)
-	if (market === undefined) {
-		updateText(centralizedMarketStatus, consensusStatusText(consensus, 'Reliable DEX consensus') ?? 'No market sources configured')
-		updateText(centralizedMarketPrice, '—')
-		updateText(centralizedMarketBidDepth, '—')
-		updateText(centralizedMarketAskDepth, '—')
-		updateText(centralizedMarketSourceCount, consensus === undefined ? '0 CEX' : `${consensus.cex.sourceCount.toString()} CEX · ${consensus.dex.sourceCount.toString()} DEX`)
-		const row = document.createElement('tr')
-		const empty = cell('Add public exchange sources in the operator configuration.')
-		empty.colSpan = 6
-		empty.className = 'empty'
-		row.append(empty)
-		centralizedMarketRows.replaceChildren(row)
-		return
-	}
-	updateText(centralizedMarketStatus, consensusStatusText(consensus, 'Reliable independent CEX + DEX consensus') ?? (market.reliable ? 'Reliable CEX estimate' : market.reasons.join(' · ')))
-	updateText(centralizedMarketPrice, market.priceRepPerEth)
-	updateText(centralizedMarketBidDepth, `${market.bidDepthEth} ETH`)
-	updateText(centralizedMarketAskDepth, `${market.askDepthEth} ETH`)
-	updateText(centralizedMarketSourceCount, consensus === undefined ? `${market.observations.length.toString()} CEX` : `${consensus.cex.sourceCount.toString()} CEX · ${consensus.dex.sourceCount.toString()} DEX`)
-	centralizedMarketRows.replaceChildren(
-		...market.observations.map(observation => {
-			const row = document.createElement('tr')
-			const cells = [cell(observation.exchangeId), cell(observation.repMarket), cell(observation.priceRepPerEth), cell(`${observation.bidDepthEth} ETH`), cell(`${observation.askDepthEth} ETH`), cell(new Date(observation.observedAt).toLocaleTimeString())]
-			const labels = ['Exchange', 'Market', 'REP / ETH', 'Bid depth', 'Ask depth', 'Observed']
-			const headings = ['market-exchange-heading', 'market-pair-heading', 'market-price-heading', 'market-bid-heading', 'market-ask-heading', 'market-observed-heading']
-			for (const [index, value] of cells.entries()) {
-				value.dataset['label'] = labels[index]
-				value.headers = headings[index] ?? ''
-			}
-			row.append(...cells)
-			return row
-		}),
-	)
+	renderRepMarketConsensusPanel(document, {
+		status: market === undefined ? (consensusStatusText(consensus, 'Reliable DEX consensus') ?? 'No market sources configured') : (consensusStatusText(consensus, 'Reliable independent CEX + DEX consensus') ?? (market.reliable ? 'Reliable CEX estimate' : market.reasons.join(' · '))),
+		emptyText: 'Add public exchange sources in the operator configuration.',
+		values: {
+			cexPrice: market?.priceRepPerEth ?? '—',
+			dexPrice: consensus?.dex.reliable === true ? consensus.dex.priceRepPerEth : '—',
+			guardedPrice: consensus?.reliable === true ? (consensus.priceRepPerEth ?? '—') : '—',
+			dexBidDepth: consensus === undefined ? '—' : `${consensus.dex.bidDepthEth} ETH`,
+			dexAskDepth: consensus === undefined ? '—' : `${consensus.dex.askDepthEth} ETH`,
+			cexBidDepth: market === undefined ? '—' : `${market.bidDepthEth} ETH`,
+			cexAskDepth: market === undefined ? '—' : `${market.askDepthEth} ETH`,
+			sources: consensus === undefined ? `${market?.observations.length ?? 0} CEX` : `${consensus.cex.sourceCount.toString()} CEX · ${consensus.dex.sourceCount.toString()} DEX`,
+		},
+		observations: (market?.observations ?? []).map(observation => ({
+			exchange: observation.exchangeId,
+			market: observation.repMarket,
+			price: observation.priceRepPerEth,
+			bidDepth: `${observation.bidDepthEth} ETH`,
+			askDepth: `${observation.askDepthEth} ETH`,
+			observed: new Date(observation.observedAt).toLocaleTimeString(),
+		})),
+	})
 }
 
 function universeState(universe: Universe) {
@@ -827,6 +799,7 @@ function renderConnectionFailure(error: unknown) {
 	renderNetworkBadge()
 	let lastKnownModeLabel: string | undefined
 	if (snapshot !== undefined) lastKnownModeLabel = snapshot.execute ? 'Live' : 'Dry run'
+	renderRepMarketConsensusError(document)
 	renderDisconnectedHeader({
 		attentionBadge,
 		attentionTarget: '/overview#global-error',

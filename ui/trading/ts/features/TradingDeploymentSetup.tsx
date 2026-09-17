@@ -1,3 +1,4 @@
+import { WalletConnectionControl } from '@zoltar/ui-core-shared/components/WalletConnectionControl.js'
 import { createPublicClient, http, type Hash, type PublicClient } from '@zoltar/core-shared/evm/ethereum'
 import { getActiveBackend, getActiveNetworkProfile } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import type { ChainBackend } from '@zoltar/ui-core-shared/wallet/chainBackend.js'
@@ -369,13 +370,9 @@ export function TradingDeploymentSetup({
 	let standaloneWalletButton
 	if (walletControlRequestNonce === undefined)
 		standaloneWalletButton = walletConnected ? (
-			<button class='secondary wallet-button' type='button' disabled={busy} aria-label={appCopy.disconnectWalletLabel(walletAccount)} title={appCopy.disconnectWallet} onClick={disconnectDeploymentWallet}>
-				<ReadOnlyAddressValue address={walletAccount} responsiveAbbreviation />
-			</button>
+			<WalletConnectionControl disabled={busy} ariaLabel={appCopy.disconnectWalletLabel(walletAccount)} title={appCopy.disconnectWallet} onClick={disconnectDeploymentWallet} label={<ReadOnlyAddressValue address={walletAccount} responsiveAbbreviation />} />
 		) : (
-			<button class='secondary wallet-button' type='button' disabled={busy || walletConnecting || registryLoading || coreDeployments.length === 0} aria-busy={walletConnecting} onClick={() => void connectDeploymentWallet()}>
-				{walletConnecting ? appCopy.connectingWallet : appCopy.connectWallet}
-			</button>
+			<WalletConnectionControl disabled={busy || registryLoading || coreDeployments.length === 0} pending={walletConnecting} onClick={() => void connectDeploymentWallet()} pendingLabel={appCopy.connectingWallet} label={appCopy.connectWallet} />
 		)
 	let retryAction
 	if (retryChecks)

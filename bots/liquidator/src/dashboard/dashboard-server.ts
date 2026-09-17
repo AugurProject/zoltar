@@ -1,3 +1,5 @@
+import { repMarketConsensusPanel } from '@zoltar/bot-shared/dashboard/rep-market-consensus'
+import { rpcConnectivityFields } from '@zoltar/bot-shared/dashboard/rpc-connectivity'
 import { buildDashboardScript, dashboardHealthResponse, sharedDashboardAssetResponse } from '@zoltar/bot-shared/dashboard/assets'
 import { publicConnectivityError } from '@zoltar/bot-shared/dashboard/connectivity-error'
 import {
@@ -216,7 +218,11 @@ export function startDashboardServer(port: number, controller: DashboardControll
 		const page = pathname === '/' ? 'overview' : pathname.slice(1)
 		if (!dashboardPages.has(page)) return undefined
 		const source = await Bun.file(join(directory, 'index.html')).text()
-		return source.replace('<!-- operator-header -->', operatorHeader).replace('<body>', `<body data-page="${page}">`)
+		return source
+			.replace('<!-- rep-market-consensus -->', repMarketConsensusPanel())
+			.replace('<!-- rpc-connectivity-fields -->', rpcConnectivityFields({ independentQuorum: true, statusId: 'network-status' }))
+			.replace('<!-- operator-header -->', operatorHeader)
+			.replace('<body>', `<body data-page="${page}">`)
 	}
 	let acceptedAuthorities: ReadonlySet<string> = new Set()
 	const server = Bun.serve({

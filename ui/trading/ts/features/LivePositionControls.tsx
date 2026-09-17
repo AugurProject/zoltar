@@ -1,3 +1,5 @@
+import { TimestampValue } from '@zoltar/ui-core-shared/components/TimestampValue.js'
+import { FormField } from '@zoltar/ui-core-shared/components/FormField.js'
 import { LoadingText } from '@zoltar/ui-core-shared/components/LoadingText.js'
 import { BackingDetails } from './BackingDetails.js'
 import type { Hash } from '@zoltar/core-shared/evm/ethereum'
@@ -18,7 +20,7 @@ import { ViewTabs } from '@zoltar/ui-core-shared/components/ViewTabs.js'
 import { WorkflowSubsection } from '@zoltar/ui-core-shared/components/WorkflowSubsection.js'
 import { parseSlippageBps, parseTransactionValidityMinutes, positionControlsWorkflowLocked } from './liveTradingControllerHelpers.js'
 import type { BalanceState, Quote, TransactionState } from './live/liveTradingTypes.js'
-import { BalanceLoadError, ExecutionProtectionFields, formatTimestamp, renderLiveTradeSummary, stateLabel, TradingField, TradingTransactionHash } from './LiveTradingTransactionUi.js'
+import { BalanceLoadError, ExecutionProtectionFields, renderLiveTradeSummary, stateLabel, TradingTransactionHash } from './LiveTradingTransactionUi.js'
 import { insuredExitLimitMessage } from './LiveSettlementModel.js'
 import { resolvePositionSimulateAvailability, resolvePositionSubmitAvailability, resolveActionGroupMessage } from './live/actionAvailability.js'
 import { useFocusOnKeyChange } from './live/useFocusOnKeyChange.js'
@@ -180,7 +182,7 @@ export function LivePositionControls({
 					{ value: 'NO', label: workflowCopy.no, disabled: controlsDisabled },
 				]}
 			/>
-			<TradingField id={amountId} label={mode === 'entry' ? workflowCopy.ethAmount : workflowCopy.completeSetValueToRedeem}>
+			<FormField id={amountId} label={mode === 'entry' ? workflowCopy.ethAmount : workflowCopy.completeSetValueToRedeem}>
 				<FormInput
 					id={amountId}
 					name='amount'
@@ -192,7 +194,7 @@ export function LivePositionControls({
 					hint={mode === 'exit' && maximumExit !== undefined ? workflowCopy.maximumInsuredExit(side, formatCollateralEth(maximumExit, market, 'down')) : undefined}
 					onInput={event => setAmount(event.currentTarget.value)}
 				/>
-			</TradingField>
+			</FormField>
 			<ExecutionProtectionFields slippage={slippage} validityMinutes={transactionValidityMinutes} disabled={controlsDisabled} onSlippageInput={setSlippage} onValidityInput={setTransactionValidityMinutes} />
 			{quote === undefined ? null : renderLiveTradeSummary(quote, side)}
 			<div class='transaction-outcome' ref={outcomeRef} tabIndex={-1}>
@@ -241,7 +243,9 @@ export function LivePositionControls({
 					<WorkflowSubsection title={workflowCopy.quoteTiming}>
 						<DataGrid dense>
 							<MetricField label={workflowCopy.simulationBlock}>{quote.value.blockNumber.toString()}</MetricField>
-							<MetricField label={workflowCopy.deadline}>{formatTimestamp(quote.value.deadline)}</MetricField>
+							<MetricField label={workflowCopy.deadline}>
+								<TimestampValue timestamp={quote.value.deadline} relative={false} />
+							</MetricField>
 							<MetricField label={workflowCopy.slippageTolerance}>{formatUnits(quote.value.slippageBps, 2, 2)}%</MetricField>
 						</DataGrid>
 					</WorkflowSubsection>

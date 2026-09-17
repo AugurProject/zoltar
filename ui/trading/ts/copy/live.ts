@@ -73,9 +73,7 @@ function securityPoolRefreshFailed(refreshError: string) {
 	return `Security pool refresh failed; showing the last successful result: ${refreshError}`
 }
 
-function forkedAt(timestamp: string) {
-	return `Forked ${timestamp}`
-}
+const forkedAt = 'Forked'
 
 function priorityFeePerGas(amount: string) {
 	return `${amount} nETH / gas`

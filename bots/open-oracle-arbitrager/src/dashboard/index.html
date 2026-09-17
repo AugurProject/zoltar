@@ -199,37 +199,8 @@
 						<p class="eyebrow">Independent reference</p>
 						<h3>REP market consensus</h3>
 					</div>
-					<span id="centralized-market-status" class="muted" role="status" aria-live="polite">No exchange sources configured</span>
 				</div>
-				<div id="centralized-market-summary" class="metric-grid">
-					<div class="metric"><span class="metric-label">CEX median REP / ETH</span><strong id="centralized-market-price">—</strong></div>
-					<div class="metric"><span class="metric-label">DEX consensus REP / ETH</span><strong id="dex-market-price">—</strong></div>
-					<div class="metric"><span class="metric-label">Guarded reference REP / ETH</span><strong id="guarded-market-price">—</strong></div>
-					<div class="metric"><span class="metric-label">DEX bid depth</span><strong id="dex-market-bid-depth">—</strong></div>
-					<div class="metric"><span class="metric-label">DEX ask depth</span><strong id="dex-market-ask-depth">—</strong></div>
-					<div class="metric"><span class="metric-label">CEX bid depth</span><strong id="centralized-market-bid-depth">—</strong></div>
-					<div class="metric"><span class="metric-label">CEX ask depth</span><strong id="centralized-market-ask-depth">—</strong></div>
-					<div class="metric"><span class="metric-label">Consensus sources</span><strong id="centralized-market-source-count">0 CEX</strong></div>
-				</div>
-				<div class="table-scroll mobile-record-scroll" tabindex="0" aria-label="Centralized market observations">
-					<table class="mobile-record-table">
-						<caption>
-							CEX observations
-						</caption>
-						<thead>
-							<tr>
-								<th>Exchange</th>
-								<th>Market</th>
-								<th>REP / ETH</th>
-								<th>Bid depth</th>
-								<th>Ask depth</th>
-								<th>Observed</th>
-							</tr>
-						</thead>
-						<tbody id="centralized-market-body"></tbody>
-					</table>
-				</div>
-				<p id="centralized-market-empty" class="empty-state">Add public exchange sources in Complete bot configuration.</p>
+				<!-- rep-market-consensus -->
 				<div class="section-heading token-market-heading">
 					<div>
 						<p class="eyebrow">Pool inventory</p>
@@ -321,22 +292,7 @@
 						<p class="muted">Changing Chain saves the current profile, safely pauses the bot, and loads that chain's separate settings and journals without restarting the process.</p>
 						<form id="connectivity-form">
 							<fieldset id="connectivity-fieldset" disabled>
-								<div class="connectivity-grid">
-									<label
-										><span>Chain</span
-										><select id="network-name" required>
-											<option value="mainnet">Ethereum mainnet · chain 1</option>
-											<option value="sepolia">Sepolia · chain 11155111</option>
-										</select></label
-									><label
-										><span>RPC agreement requirement</span
-										><select id="rpc-quorum" required>
-											<option value="1">1 reader · primary only</option>
-											<option value="2">2 agreeing readers · independent quorum</option>
-										</select></label
-									><label><span>Read RPC URL</span><input id="read-rpc-url" type="url" spellcheck="false" required /></label><label><span>Public submission RPC URLs · one per line, up to 8</span><textarea id="public-rpc-urls" rows="3" spellcheck="false" required></textarea></label>
-								</div>
-								<div class="form-actions"><span id="connectivity-status" class="muted" aria-live="polite">Every endpoint is checked against the selected chain.</span><button class="button" type="submit">Check &amp; apply network</button></div>
+								<!-- rpc-connectivity-fields -->
 							</fieldset>
 							<div id="profile-switch-retry-actions" class="form-actions" hidden><button id="profile-switch-retry-button" class="button button-secondary" type="button" hidden>Retry profile load</button></div>
 						</form>

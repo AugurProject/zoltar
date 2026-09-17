@@ -1,3 +1,5 @@
+import { TimestampValue } from '@zoltar/ui-core-shared/components/TimestampValue.js'
+import { FormField } from '@zoltar/ui-core-shared/components/FormField.js'
 import { ReadOnlyDetailAccordion } from '@zoltar/ui-core-shared/components/ReadOnlyDetailAccordion.js'
 import type { Address, WalletClient } from '@zoltar/core-shared/evm/ethereum'
 import { formatUnits } from '../lib/format.js'
@@ -15,7 +17,7 @@ import { TransactionActionButton, TransactionActionGroup } from '@zoltar/ui-core
 import { ViewTabs } from '@zoltar/ui-core-shared/components/ViewTabs.js'
 import type { GuardedWalletWrite } from './liveTradingControllerHelpers.js'
 import type { BalanceState } from './live/liveTradingTypes.js'
-import { BalanceLoadError, ExecutionProtectionFields, formatTimestamp, stateLabel, TradingField, TradingTransactionHash } from './LiveTradingTransactionUi.js'
+import { BalanceLoadError, ExecutionProtectionFields, stateLabel, TradingTransactionHash } from './LiveTradingTransactionUi.js'
 import { liquidityOperationAvailable, useLiquidityWorkflowController } from './live/useLiquidityWorkflowController.js'
 import { resolveLiquiditySimulateAvailability, resolveLiquiditySubmitAvailability, resolveActionGroupMessage } from './live/actionAvailability.js'
 import { useFocusOnKeyChange } from './live/useFocusOnKeyChange.js'
@@ -115,13 +117,13 @@ export function LiveLiquidityControls({
 					{ value: 'remove', label: liquidityCopy.removeAction, disabled: market.lpTotalSupply === 0n || workflowLocked },
 				]}
 			/>
-			<TradingField id={amountId} label={operation === 'remove' ? liquidityCopy.lpTokenAmount : liquidityCopy.ethAmount}>
+			<FormField id={amountId} label={operation === 'remove' ? liquidityCopy.lpTokenAmount : liquidityCopy.ethAmount}>
 				<FormInput id={amountId} name='amount' value={amount} disabled={workflowLocked} inputMode='decimal' adornment={operation === 'remove' ? liquidityCopy.lp : liquidityCopy.eth} onInput={event => updateAmount(event.currentTarget.value)} />
-			</TradingField>
+			</FormField>
 			{operation === 'initialize' ? (
-				<TradingField id={probabilityId} label={liquidityCopy.conditionalYesPrice}>
+				<FormField id={probabilityId} label={liquidityCopy.conditionalYesPrice}>
 					<FormInput id={probabilityId} name='probability' value={probability} disabled={workflowLocked} inputMode='numeric' adornment={liquidityCopy.percent} error={probabilityInvalid ? liquidityCopy.conditionalYesPriceValidation : undefined} onInput={event => updateProbability(event.currentTarget.value)} />
-				</TradingField>
+				</FormField>
 			) : null}
 			<ExecutionProtectionFields slippage={slippage} validityMinutes={transactionValidityMinutes} disabled={workflowLocked} onSlippageInput={updateSlippage} onValidityInput={updateValidity} />
 			<p class='detail'>{operation === 'remove' ? liquidityCopy.removalGuidance : liquidityCopy.additionGuidance}</p>
@@ -159,7 +161,7 @@ export function LiveLiquidityControls({
 							{liquidityCopy.slippageTolerance}: {formatUnits(quote.slippageBps, 2, 2)}%
 						</span>
 						<span>
-							{liquidityCopy.deadline}: {formatTimestamp(quote.deadline)}
+							{liquidityCopy.deadline}: <TimestampValue timestamp={quote.deadline} relative={false} />
 						</span>
 					</p>
 					<ReadOnlyDetailAccordion title={liquidityCopy.previewDetails}>

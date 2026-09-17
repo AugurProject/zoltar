@@ -1,3 +1,4 @@
+import { RetryableNotice } from '@zoltar/ui-core-shared/components/RetryableNotice.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as marketCopy from '@zoltar/ui-zoltar-shared/copy/market.js'
 import * as securityPoolCopy from '../../../copy/securityPool.js'
@@ -39,19 +40,7 @@ function getUniversePoolMetrics(universeId: bigint, securityPools: ListedSecurit
 
 export function UniverseDirectorySection({ activeUniverseId, loadingSecurityPools = false, onRetry, securityPoolError, securityPools, zoltarUniverse }: UniverseDirectorySectionProps) {
 	if (zoltarUniverse === undefined) return <StateHint presentation={{ key: 'loading', badgeLabel: commonCopy.loading, badgeTone: 'loading', detail: commonCopy.loadingUniverseDetails }} />
-	if (securityPoolError !== undefined && securityPools === undefined)
-		return (
-			<StateHint
-				actions={
-					onRetry === undefined ? undefined : (
-						<button className='secondary' type='button' onClick={onRetry}>
-							{securityPoolCopy.retryLoadingPools}
-						</button>
-					)
-				}
-				presentation={{ key: 'load_failed', badgeLabel: commonCopy.error, badgeTone: 'blocked', detail: securityPoolError }}
-			/>
-		)
+	if (securityPoolError !== undefined && securityPools === undefined) return <RetryableNotice onRetry={onRetry} retryLabel={securityPoolCopy.retryLoadingPools} disabled={loadingSecurityPools} presentation={{ key: 'load_failed', badgeLabel: commonCopy.error, badgeTone: 'blocked', detail: securityPoolError }} />
 	if (loadingSecurityPools || securityPools === undefined) return <StateHint presentation={{ key: 'loading', badgeLabel: commonCopy.loading, badgeTone: 'loading', detail: securityPoolCopy.loadingSecurityPools }} />
 
 	const getUniverseBadge = (universeId: bigint, exists: boolean) => {
