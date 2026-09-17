@@ -243,6 +243,20 @@ describe('chaos launch doctor', () => {
 		expect(Object.keys(report.operationFamilies).sort()).toEqual(['open-oracle', 'statoblast', 'trading', 'zoltar'])
 	})
 
+	test('reports pruned log history without claiming complete historical coverage', async () => {
+		const settings = await settingsFixture('operator.configured-placeholder.json')
+		const report = await runChaosDoctor(
+			passiveDoctorDependencies(settings, {
+				probe: async () => ({ ...probeResult, readerResults: probeResult.readerResults.map(reader => ({ ...reader, logFromBlock: '42', prunedBeforeBlock: '42' })) }),
+			}),
+		)
+		expect(report).toMatchObject({ checks: { protocolLogSpan: 'available-history-only', finalizedTag: 'passed', deploymentCodeAndGraph: 'passed' } })
+		expect(report.readers?.[0]?.logFromBlock).toBe('42')
+		expect(report.readers?.[0]?.prunedBeforeBlock).toBe('42')
+		expect(launchGateSummary(report)).toContain('passed with pruned historical logs')
+		expect(launchGateSummary(report)).toContain('restrict operations that require it')
+	})
+
 	test('fails the doctor before discovery when a public RPC cannot dispatch transactions', async () => {
 		const baseline = await settingsFixture('operator.configured-placeholder.json')
 		if (baseline.connectivity === undefined) throw new Error('Configured doctor fixture requires connectivity')
@@ -583,10 +597,10 @@ describe('chaos launch doctor', () => {
 	})
 })
 
-test.each(['zoltar', 'tradingFactory', 'tradingRouter'] as const)('doctor requires core roots but reaches discovery without optional %s', async missingRoot => {
+test.each(['zoltar', 'tradingFactory', 'tradingRouter', 'pruned-history'] as const)('doctor deployment and log probe: %s', async missingRoot => {
 	const baseline = await settingsFixture('operator.configured-placeholder.json')
 	const methods: string[] = []
-	const missing = baseline.deployment[missingRoot]
+	const missing = missingRoot === 'pruned-history' ? undefined : baseline.deployment[missingRoot]
 	const server = Bun.serve({
 		port: 0,
 		fetch: async request => {
@@ -601,8 +615,12 @@ test.each(['zoltar', 'tradingFactory', 'tradingRouter'] as const)('doctor requir
 			else if (method === 'eth_blockNumber') result = '0x64'
 			else if (method === 'eth_getBlockByNumber') result = { number: '0x64', hash: `0x${'11'.repeat(32)}`, timestamp: `0x${Math.floor(Date.now() / 1000).toString(16)}`, baseFeePerGas: '0x1', transactions: [], uncles: [], gasLimit: '0x100000', gasUsed: '0x0' }
 			else if (method === 'eth_getCode') result = Array.isArray(params) && params[0] === missing ? '0x' : '0x01'
-			else if (method === 'eth_getLogs') result = []
-			else return Response.json({ id: Reflect.get(body, 'id'), jsonrpc: '2.0', error: { code: -32601, message: 'Unexpected discovery request' } })
+			else if (method === 'eth_getLogs') {
+				if (missingRoot === 'pruned-history' && Array.isArray(params) && typeof params[0] === 'object' && params[0] !== null && BigInt(String(Reflect.get(params[0], 'fromBlock'))) < 42n) {
+					return Response.json({ id: Reflect.get(body, 'id'), jsonrpc: '2.0', error: { code: 4444, message: 'pruned history unavailable' } })
+				}
+				result = []
+			} else return Response.json({ id: Reflect.get(body, 'id'), jsonrpc: '2.0', error: { code: -32601, message: 'Unexpected discovery request' } })
 			return Response.json({ id: Reflect.get(body, 'id'), jsonrpc: '2.0', result })
 		},
 	})
