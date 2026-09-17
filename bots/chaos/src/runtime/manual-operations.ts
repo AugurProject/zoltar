@@ -1,3 +1,4 @@
+import { TransactionAwaitingRecovery } from '../execution/receipt-validation.ts'
 import { publicFailureReason } from '../execution/preflight-failure.ts'
 import { manualExecutionFeedback, type ManualExecution } from './operation-feedback.ts'
 import { operationInputCoverage } from '../operations/input-coverage.ts'
@@ -195,7 +196,8 @@ export function createManualOperationController(options: Options) {
 					} catch (error) {
 						execution.status = 'failed'
 						execution.message = error instanceof Error && error.name === 'ManualOperationInputError' ? error.message : `Operation stopped: ${publicFailureReason(error)}`
-						console.error('chaosManualOperation failed', error)
+						if (error instanceof TransactionAwaitingRecovery && error.severity === 'pending') console.log(`chaosManualOperation pending: ${publicFailureReason(error)}`)
+						else console.error('chaosManualOperation failed', error)
 					} finally {
 						manualExecutionFeedback(execution, options.state)
 						options.gate.release('scan')

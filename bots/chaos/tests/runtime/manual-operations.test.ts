@@ -8,7 +8,8 @@ import { join } from 'node:path'
 import { executeScheduledOperation } from '../../src/runtime/scheduled-operation.ts'
 import { planningOptions } from '../../src/runtime/canonical-scan.ts'
 import { evaluateSelectableOperationDefinition } from '../../src/operations/catalog.ts'
-import { expect, test } from 'bun:test'
+import { expect, spyOn, test } from 'bun:test'
+import { TransactionAwaitingRecovery } from '../../src/execution/receipt-validation.ts'
 import { createManualOperationController } from '../../src/runtime/manual-operations.ts'
 import { manualOperationFixture as fixture } from './manual-operation-fixture.ts'
 
@@ -334,3 +335,60 @@ test('manual live results expose the skip reason and transaction progress for th
 		await controller[Symbol.asyncDispose]()
 	}
 })
+
+for (const severity of ['pending', 'alarming'] as const) {
+	test(`manual transaction recovery logs ${severity} at the appropriate level and retains its hash`, async () => {
+		const { configuration, state, scan, gate } = fixture()
+		configuration.settings.runtime.execute = true
+		configuration.settings.paused = false
+		state.paused = false
+		scan.inventory.rep = scan.snapshot.universes.map(universe => ({ universeId: universe.id, token: universe.repToken, symbol: 'REP', balance: '1000000000000000000000000' }))
+		const hash = `0x${'ab'.repeat(32)}` as const
+		const error = new TransactionAwaitingRecovery('Wrap WETH', hash, 'not yet visible to the RPC quorum', severity)
+		const info = spyOn(console, 'log').mockImplementation(() => {})
+		const errors = spyOn(console, 'error').mockImplementation(() => {})
+		const controller = createManualOperationController({
+			configuration,
+			state,
+			gate,
+			scan: async () => scan,
+			execute: async plan => {
+				const workflow = retainWorkflow(state, plan)
+				const step = workflow.steps[0]
+				if (step === undefined) throw new Error('Missing step')
+				step.transactionHash = hash
+				step.status = 'submitted'
+				workflow.status = 'waiting-transaction'
+				throw error
+			},
+		})
+		try {
+			const preview = object(await controller.handle({ ...wrap, action: 'preview' }))
+			await controller.handle({ action: 'execute', previewId: preview['previewId'] })
+			const result = await finished(controller, preview['previewId'])
+			expect(result['outcome']).toBe('submitted')
+			expect(result['transactions']).toEqual([expect.objectContaining({ hash, status: 'submitted', explorerUrl: `https://sepolia.etherscan.io/tx/${hash}` })])
+			if (severity === 'pending') {
+				expect(errors).not.toHaveBeenCalled()
+				expect(info).toHaveBeenCalledWith(`chaosManualOperation pending: ${error.message}`)
+			} else {
+				expect(errors).toHaveBeenCalledWith('chaosManualOperation failed', error)
+				expect(info).not.toHaveBeenCalled()
+			}
+			expect(gate.acquire('scan')).toBe(true)
+			gate.release('scan')
+			const workflow = state.workflows[0]
+			const step = workflow?.steps[0]
+			if (workflow === undefined || step === undefined) throw new Error('Missing retained workflow')
+			step.status = 'confirmed'
+			workflow.status = 'completed'
+			const recovered = object(object(await controller.handle({ action: 'status', previewId: preview['previewId'] }))['execution'])
+			expect(recovered['outcome']).toBe('confirmed')
+			expect(recovered['status']).toBe('completed')
+		} finally {
+			await controller[Symbol.asyncDispose]()
+			info.mockRestore()
+			errors.mockRestore()
+		}
+	})
+}
