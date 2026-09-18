@@ -419,12 +419,6 @@ async function fundCoordinatorInitialReport(client: WriteClient, managerAddress:
 	if ((await client.getBalance({ address: client.account.address })) < requiredEth) throw new Error('Insufficient ETH for initial report funding and the oracle fee. Gas is additional.')
 	const estimatedBounty = await readOracleRequestCost(client, managerAddress)
 	if (estimatedBounty > (finalStep.value ?? 0n)) throw new Error('The oracle fee increased. Review the price request again before funding it.')
-	const [repAllowance, wethAllowance] = await Promise.all([
-		client.readContract({ address: fundingRequirement.reputationTokenAddress, abi: ABIS.mainnet.erc20, functionName: 'allowance', args: [client.account.address, managerAddress] }),
-		client.readContract({ address: getWethAddress(), abi: ABIS.mainnet.erc20, functionName: 'allowance', args: [client.account.address, managerAddress] }),
-	])
-	const needsRepApproval = repAllowance < expectedRep
-	const needsWethApproval = wethAllowance < expectedWeth
 	const actions: FundingTransaction[] = []
 	if (fundingRequirement.wethShortfallAttoEth > 0n)
 		actions.push({
@@ -433,15 +427,14 @@ async function fundCoordinatorInitialReport(client: WriteClient, managerAddress:
 			execute: async () => await wrapWeth(client, fundingRequirement.wethShortfallAttoEth),
 		})
 	for (const funding of [
-		{ needed: needsRepApproval, token: fundingRequirement.reputationTokenAddress, required: expectedRep, limit: fundingRequirement.initialReportAmount2 },
-		{ needed: needsWethApproval, token: getWethAddress(), required: expectedWeth, limit: fundingRequirement.maximumInitialAttoWeth },
+		{ token: fundingRequirement.reputationTokenAddress, required: expectedRep, limit: fundingRequirement.initialReportAmount2 },
+		{ token: getWethAddress(), required: expectedWeth, limit: fundingRequirement.maximumInitialAttoWeth },
 	]) {
-		if (funding.needed)
-			actions.push({
-				step: { functionName: 'approve', contractAddress: funding.token, args: [managerAddress, funding.limit] },
-				isRequired: async () => (await client.readContract({ address: funding.token, abi: ABIS.mainnet.erc20, functionName: 'allowance', args: [client.account.address, managerAddress] })) < funding.required,
-				execute: async () => await writeContractAndWait(client, () => ({ address: funding.token, abi: ABIS.mainnet.erc20, functionName: 'approve', args: [managerAddress, funding.limit] })),
-			})
+		actions.push({
+			step: { functionName: 'approve', contractAddress: funding.token, args: [managerAddress, funding.limit] },
+			isRequired: async () => (await client.readContract({ address: funding.token, abi: ABIS.mainnet.erc20, functionName: 'allowance', args: [client.account.address, managerAddress] })) < funding.required,
+			execute: async () => await writeContractAndWait(client, () => ({ address: funding.token, abi: ABIS.mainnet.erc20, functionName: 'approve', args: [managerAddress, funding.limit] })),
+		})
 	}
 	await runFundingTransactions(client, actions, {
 		...finalStep,
