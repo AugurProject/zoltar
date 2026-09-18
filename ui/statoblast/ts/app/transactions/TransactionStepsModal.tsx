@@ -5,11 +5,15 @@ import { useEffect } from 'preact/hooks'
 import { OperationModal } from '@zoltar/ui-core-shared/components/OperationModal.js'
 import { CurrencyValue } from '@zoltar/ui-core-shared/components/CurrencyValue.js'
 import { AddressValue } from '@zoltar/ui-core-shared/components/AddressValue.js'
-import { TransactionReview } from '@zoltar/ui-core-shared/components/TransactionReview.js'
 import { TransactionHashLink } from '@zoltar/ui-core-shared/components/TransactionHashLink.js'
 import { LoadingText } from '@zoltar/ui-core-shared/components/LoadingText.js'
 import { ErrorNotice } from '@zoltar/ui-core-shared/components/ErrorNotice.js'
 import { transactionSteps } from './transactionSteps.js'
+
+function EthAmount({ value }: { value: bigint | undefined }) {
+	const useGwei = value !== undefined && value > 0n && value < 10n ** 15n
+	return <CurrencyValue precision='exact' copyable={false} value={value} units={useGwei ? 9 : 18} suffix={useGwei ? copy.gwei : commonCopy.eth} />
+}
 
 export function TransactionStepsModal({ contextKey }: { contextKey: string }) {
 	useEffect(() => () => transactionSteps.peek()?.cancel(), [contextKey])
@@ -28,53 +32,91 @@ export function TransactionStepsModal({ contextKey }: { contextKey: string }) {
 		<GlobalTransactionPresentationProvider transaction={undefined}>
 			<OperationModal isOpen closeDisabled={pending} title={copy.title} description={workflow.steps.every(step => step.phase === 'confirmed' || step.phase === 'skipped') ? copy.completed : copy.sequenceDetail} onClose={workflow.cancel}>
 				<div className='transaction-step-content'>
-					{funding.length === 0 ? undefined : (
-						<>
-							<TransactionReview
-								variant='inline'
-								primary={[]}
-								details={[
-									...funding.map(token => ({ label: copy.depositAndReturn, value: token.amount })),
-									{ label: copy.totalEth, value: <CurrencyValue precision='exact' value={totalEth} suffix={commonCopy.eth} /> },
-									...(outcome === undefined
-										? []
-										: [
-												{ label: copy.settlementBounty, value: <CurrencyValue precision='exact' value={outcome.settlerRewardAttoEth} suffix={commonCopy.eth} /> },
-												{ label: copy.ethRefund, value: <CurrencyValue precision='exact' value={outcome.ethRefundAttoEth} suffix={commonCopy.eth} /> },
-											]),
-								]}
-							/>
-							<p className='detail'>{copy.fundingDetail}</p>
-							{outcome === undefined ? undefined : (
-								<>
-									<p className='detail'>{outcome.returnToWallet ? copy.coordinatorReturnDetail : copy.standaloneReturnDetail}</p>
-									<p className='detail'>{copy.settlementCostDetail}</p>
-								</>
-							)}
-						</>
-					)}
-					<ol aria-live='polite'>
-						{workflow.steps.map((step, index) => (
-							<li key={index} aria-current={index === workflow.activeIndex ? 'step' : undefined}>
-								<strong>{step.title}</strong>
-								{' — '}
-								{{ skipped: copy.skipped, upcoming: step.optional ? copy.ifNeeded : copy.upcoming, review: copy.ready, pending: copy.pending, confirmed: copy.confirmed, failed: copy.notCompleted }[step.phase]}
-								<p className='detail'>{step.description}</p>
-								{step.amount === undefined ? undefined : <div>{step.amount}</div>}
-								{(step.ethValueAttoEth ?? 0n) === 0n ? undefined : <CurrencyValue precision='exact' value={step.ethValueAttoEth} suffix={commonCopy.eth} />}
-								{step.hash === undefined ? undefined : (
+					<div className='transaction-plan-grid'>
+						{funding.length === 0 ? undefined : (
+							<section className='transaction-funding' aria-label={copy.depositAndReturn}>
+								<h4>{copy.depositAndReturn}</h4>
+								<div className='transaction-deposits'>
+									{funding.map(token => (
+										<strong key={token.amount}>{token.amount}</strong>
+									))}
+								</div>
+								{outcome === undefined ? undefined : <p className='detail'>{outcome.returnToWallet ? copy.coordinatorReturnDetail : copy.standaloneReturnDetail}</p>}
+								<dl className='transaction-costs'>
 									<div>
-										<TransactionHashLink hash={step.hash} />
+										<dt>{copy.totalEth}</dt>
+										<dd>
+											<EthAmount value={totalEth} />
+										</dd>
 									</div>
-								)}
-							</li>
+									{outcome === undefined ? undefined : (
+										<>
+											<div>
+												<dt>{copy.settlementBounty}</dt>
+												<dd>
+													<EthAmount value={outcome.settlerRewardAttoEth} />
+												</dd>
+											</div>
+											<div>
+												<dt>{copy.ethRefund}</dt>
+												<dd>
+													<EthAmount value={outcome.ethRefundAttoEth} />
+												</dd>
+											</div>
+										</>
+									)}
+								</dl>
+								{outcome === undefined ? undefined : <p className='detail'>{copy.settlementCostDetail}</p>}
+							</section>
+						)}
+						<ol className='transaction-plan-list' aria-live='polite'>
+							{workflow.steps.map((step, index) => (
+								<li key={index} aria-current={index === workflow.activeIndex ? 'step' : undefined}>
+									<div className='transaction-step-heading'>
+										<strong>{step.title}</strong>
+										<span className='detail'>{{ skipped: copy.skipped, upcoming: step.optional ? copy.ifNeeded : copy.upcoming, review: copy.ready, pending: copy.pending, confirmed: copy.confirmed, failed: copy.notCompleted }[step.phase]}</span>
+									</div>
+									{step.amount === undefined ? undefined : <div className='transaction-step-amount'>{step.amount}</div>}
+									{(step.ethValueAttoEth ?? 0n) === 0n ? undefined : <EthAmount value={step.ethValueAttoEth} />}
+									{step.spender === undefined ? <p className='detail'>{step.description}</p> : undefined}
+								</li>
+							))}
+						</ol>
+					</div>
+					{funding.length === 0 ? undefined : <p className='detail transaction-funding-note'>{copy.fundingDetail}</p>}
+					<details className='transaction-technical-details'>
+						<summary>{copy.technicalDetails}</summary>
+						{workflow.steps.map((step, index) => (
+							<p key={index} className='detail'>
+								<strong>{step.title}: </strong>
+								{step.description}
+							</p>
 						))}
-					</ol>
-					<TransactionReview
-						variant='inline'
-						primary={[]}
-						details={[{ label: copy.recipient, value: <AddressValue address={current.contractAddress} responsiveAbbreviation /> }, ...(current.spender === undefined ? [] : [{ label: copy.spender, value: <AddressValue address={current.spender} responsiveAbbreviation /> }])]}
-					/>
+						<dl className='transaction-costs'>
+							<div>
+								<dt>{copy.recipient}</dt>
+								<dd>
+									<AddressValue address={current.contractAddress} responsiveAbbreviation />
+								</dd>
+							</div>
+							{current.spender === undefined ? undefined : (
+								<div>
+									<dt>{copy.spender}</dt>
+									<dd>
+										<AddressValue address={current.spender} responsiveAbbreviation />
+									</dd>
+								</div>
+							)}
+						</dl>
+						{workflow.steps
+							.filter(step => step.hash !== undefined)
+							.map((step, index) => (
+								<div key={index}>
+									<strong>{step.title}</strong>
+									{step.hash === undefined ? undefined : <TransactionHashLink hash={step.hash} />}
+								</div>
+							))}
+					</details>
 					{current.error === undefined ? undefined : <ErrorNotice message={current.error} />}
 				</div>
 				<div className='actions transaction-step-actions'>
