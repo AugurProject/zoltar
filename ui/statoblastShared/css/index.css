@@ -3037,7 +3037,7 @@
 .transaction-funding .detail,
 .transaction-funding-note {
 	font-size: 0.8125rem;
-	line-height: 1.4;
+	line-height: var(--line-height-body);
 }
 
 .transaction-approval-editor .form-grid {
@@ -3075,7 +3075,7 @@
 .transaction-action-detail {
 	display: block;
 	font-size: 0.8125rem;
-	line-height: 1.4;
+	line-height: var(--line-height-body);
 	font-weight: normal;
 }
 
