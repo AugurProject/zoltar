@@ -5,15 +5,10 @@ import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import { GlobalTransactionPresentationProvider, useGlobalTransactionPresentation } from '@zoltar/ui-core-shared/components/GlobalTransactionPresentationContext.js'
 import { useEffect } from 'preact/hooks'
 import { OperationModal } from '@zoltar/ui-core-shared/components/OperationModal.js'
-import { CurrencyValue } from '@zoltar/ui-core-shared/components/CurrencyValue.js'
+import { EthAmount, TransactionFundingSummary } from './TransactionFundingSummary.js'
 import { ErrorNotice } from '@zoltar/ui-core-shared/components/ErrorNotice.js'
 import { signal } from '@preact/signals'
 import { transactionSteps } from './transactionSteps.js'
-
-function EthAmount({ value }: { value: bigint | undefined }) {
-	const useNanoEth = value !== undefined && value > 0n && value < 10n ** 15n
-	return <CurrencyValue precision='exact' copyable={false} value={value} units={useNanoEth ? 9 : 18} suffix={useNanoEth ? copy.nanoEth : commonCopy.eth} />
-}
 
 export const embeddedTransactionSteps = signal<AbortSignal | undefined>(undefined)
 
@@ -110,46 +105,7 @@ export function TransactionStepsContent({ contextKey, inline = false, onClose }:
 	const content = (
 		<>
 			<div className='transaction-step-content'>
-				{funding.length === 0 ? undefined : (
-					<section className='transaction-funding' aria-label={copy.depositAndReturn}>
-						<div className='transaction-funding-summary'>
-							<h4>{copy.depositAndReturn}</h4>
-							<div className='transaction-deposits'>
-								{funding.map(token => (
-									<strong key={token.amount}>{token.amount}</strong>
-								))}
-							</div>
-							{outcome === undefined ? undefined : <p className='detail'>{outcome.returnToWallet ? copy.coordinatorReturnDetail : copy.standaloneReturnDetail}</p>}
-						</div>
-						<div className='transaction-funding-summary'>
-							<dl className='transaction-costs'>
-								<div>
-									<dt>{copy.totalEth}</dt>
-									<dd>
-										<EthAmount value={totalEth} />
-									</dd>
-								</div>
-								{outcome === undefined ? undefined : (
-									<>
-										<div>
-											<dt>{copy.settlementBounty}</dt>
-											<dd>
-												<EthAmount value={outcome.settlerRewardAttoEth} />
-											</dd>
-										</div>
-										<div>
-											<dt>{copy.ethRefund}</dt>
-											<dd>
-												<EthAmount value={outcome.ethRefundAttoEth} />
-											</dd>
-										</div>
-									</>
-								)}
-							</dl>
-							{outcome === undefined ? undefined : <p className='detail'>{copy.settlementCostDetail}</p>}
-						</div>
-					</section>
-				)}
+				{funding.length === 0 ? undefined : <TransactionFundingSummary funding={funding} totalEth={totalEth} outcome={outcome} />}
 
 				{funding.length === 0 || completed ? undefined : <p className='detail transaction-funding-note'>{copy.fundingDetail}</p>}
 				{error === undefined ? undefined : <ErrorNotice message={error} />}

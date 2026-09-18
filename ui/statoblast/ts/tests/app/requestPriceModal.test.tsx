@@ -38,7 +38,15 @@ test('prepares approval and request actions alongside editable price controls in
 		const controller = createTransactionStepController(signal)
 		controller.setPlan([
 			{ ...step, title: 'Approve REP spending', approval: { requiredAmount: 3n, approvedAmount: 0n, tokenSymbol: 'REP', tokenUnits: 0 } },
-			{ ...step, title: 'Request price', proposedRepPerEthPrice: request.proposedRepPerEthPrice ?? 2n * 10n ** 18n },
+			{
+				...step,
+				title: 'Request price',
+				proposedRepPerEthPrice: request.proposedRepPerEthPrice ?? 2n * 10n ** 18n,
+				tokenFunding: [
+					{ amount: '2 REP', limit: undefined },
+					{ amount: '1 WETH', limit: undefined },
+				],
+			},
 		])
 		try {
 			await controller.review()
@@ -63,11 +71,13 @@ test('prepares approval and request actions alongside editable price controls in
 		expect(queries.queryByRole('button', { name: 'Review funding and steps' })).toBeNull()
 		expect(submitted).toBe(0)
 		await act(() => fireEvent.input(queries.getByRole('textbox', { name: 'REP per ETH' }), { target: { value: '' } }))
-		expect(queries.queryByRole('button', { name: /Approve REP/ }) === null).toBe(true)
+		expect(queries.getByRole('button', { name: /Approve REP/ }).hasAttribute('disabled')).toBe(true)
+		expect(document.querySelector('.transaction-funding')?.textContent).toContain('— REP')
+		expect(document.querySelector('.transaction-funding')?.textContent).not.toContain('2 REP')
 		for (const value of ['0', '-1', 'abc', '0.0000000000000000001', (2n ** 256n).toString()]) {
 			await act(() => fireEvent.input(queries.getByRole('textbox', { name: 'REP per ETH' }), { target: { value } }))
 			expect(queries.getByText('Enter a positive REP per ETH price with up to 18 decimal places.')).not.toBeNull()
-			expect(queries.queryByRole('button', { name: /Request price/ })).toBeNull()
+			expect(queries.getByRole('button', { name: /Request price/ }).hasAttribute('disabled')).toBe(true)
 		}
 		const priceInput = queries.getByRole('textbox', { name: 'REP per ETH' })
 		priceInput.focus()
@@ -369,6 +379,37 @@ test('ignores a quote completed after the dialog closes and reopens', async () =
 		await settle()
 		expect(inputValue(queries.getByRole('textbox', { name: 'REP per ETH' }))).toBe('')
 		expect(prices).toEqual([])
+	} finally {
+		await rendered.cleanup()
+		dom.cleanup()
+	}
+})
+
+test('keeps the funding and action layout visible with unknown values until an estimate is entered', async () => {
+	const dom = installDomEnvironment()
+	let preparations = 0
+	const rendered = await renderIntoDocument(
+		<RequestPriceModal
+			{...props}
+			onConfirm={async () => {
+				preparations += 1
+			}}
+		/>,
+	)
+	try {
+		await settle()
+		const queries = within(document.body)
+		expect(queries.getByText('Enter an estimated REP per ETH price, or fetch it from Uniswap.')).not.toBeNull()
+		expect(document.querySelector('.transaction-funding')?.textContent).toContain('— REP')
+		expect(queries.getByText('Settler bounty (est.)')).not.toBeNull()
+		expect(queries.getByText('Request refund (est.)')).not.toBeNull()
+		for (const name of [/Approve REP/, /Approve WETH/, /^Request price/]) {
+			const button = queries.getByRole('button', { name })
+			expect(button.hasAttribute('disabled')).toBe(true)
+			const reasonId = button.getAttribute('aria-describedby')
+			expect(reasonId === null ? undefined : document.getElementById(reasonId)?.textContent).toContain('Enter an estimated REP per ETH price')
+		}
+		expect(preparations).toBe(0)
 	} finally {
 		await rendered.cleanup()
 		dom.cleanup()

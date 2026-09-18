@@ -12,9 +12,9 @@ import { TransactionActionButtonLockProvider } from '@zoltar/ui-core-shared/comp
 import { tryParseDecimalInput } from '@zoltar/ui-core-shared/forms/decimal.js'
 import type { RequestPriceModalProps } from '@zoltar/ui-statoblast-shared/features/security-pools/components/SecurityPoolOracleSections.js'
 import * as poolCopy from '@zoltar/ui-statoblast-shared/copy/securityPool.js'
-import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as copy from '../../copy/transactionSteps.js'
 import { embeddedTransactionSteps, TransactionStepsContent } from './TransactionStepsModal.js'
+import { PriceRequestPreview } from './PriceRequestPreview.js'
 import { transactionSteps } from './transactionSteps.js'
 
 async function fetchUniswapPrice(review: NonNullable<RequestPriceModalProps['review']>) {
@@ -46,6 +46,8 @@ export function RequestPriceModal({ review, onConfirm, onClose, canRequest, conf
 	const current = valid && run.current?.key === key && run.current?.signal.aborted === false
 	const showSteps = current && ownsWorkflow && workflow !== undefined
 	const error = attempted === key && !running && presentation?.tone === 'error' ? presentation.detail : undefined
+	const estimatePrompt = validPrice ? copy.preparingPriceRequest : copy.enterPriceEstimate
+	const previewPrompt = fetching ? copy.fetchingUniswapPrice : estimatePrompt
 
 	useLayoutEffect(() => {
 		quoteAttempt.current += 1
@@ -151,24 +153,15 @@ export function RequestPriceModal({ review, onConfirm, onClose, canRequest, conf
 							<TransactionStepsContent contextKey={key ?? ''} inline onClose={close} />
 						</GlobalTransactionPresentationProvider>
 					) : (
-						<>
-							<ErrorNotice message={confirmationGuardMessage ?? (typeof error === 'string' ? error : undefined)} />
-							{valid && (running || attempted !== key) ? (
-								<p role='status'>
-									<LoadingText>{copy.preparingPriceRequest}</LoadingText>
-								</p>
-							) : undefined}
-							<div className='actions'>
-								<button className='secondary' type='button' onClick={close}>
-									{commonCopy.cancel}
-								</button>
-								{error === undefined ? undefined : (
-									<button className='secondary' type='button' onClick={() => setRetry(value => value + 1)}>
-										{commonCopy.retry}
-									</button>
-								)}
-							</div>
-						</>
+						<PriceRequestPreview
+							requestValue={review?.requestValueAttoEth}
+							reason={confirmationGuardMessage ?? priceError ?? (typeof error === 'string' ? error : undefined) ?? previewPrompt}
+							error={confirmationGuardMessage ?? (typeof error === 'string' ? error : undefined)}
+							preparing={valid && (running || attempted !== key)}
+							hideReason={priceError !== undefined || error !== undefined || confirmationGuardMessage !== undefined}
+							onClose={close}
+							onRetry={error === undefined ? undefined : () => setRetry(value => value + 1)}
+						/>
 					)}
 				</OperationModal>
 			</TransactionActionButtonLockProvider>
