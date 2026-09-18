@@ -48,7 +48,7 @@ export function TransactionStepsContent({ contextKey, inline = false, onClose }:
 				const detail = [step.phase === 'upcoming' || step.approval !== undefined ? undefined : step.amount, status].filter(value => value !== undefined).join(' · ')
 				return (
 					<div key={index} className={`transaction-plan-action${step.approval === undefined || final ? ' transaction-plan-action-wide' : ''}${final ? ' transaction-plan-action-final' : ''}`}>
-						{step.approval !== undefined && (step.phase === 'review' || step.phase === 'pending' || step.phase === 'upcoming') ? (
+						{step.approval !== undefined ? (
 							<TokenApprovalControl
 								compact
 								showRequirementNotice={false}

@@ -82,6 +82,7 @@ for (const choice of ['custom', 'max'] as const) {
 		try {
 			const queries = within(rendered.container)
 			const funding = rendered.container.querySelector('.transaction-funding')
+			const approvalInput = queries.getByRole('textbox')
 			if (funding === null) throw new Error('Missing funding summary')
 			expect(funding.textContent).toContain('3 REP')
 			expect(funding.textContent).toContain('1 WETH')
@@ -101,6 +102,10 @@ for (const choice of ['custom', 'max'] as const) {
 				controller.submitted(hash)
 				controller.receipt(hash, 'success')
 			})
+			expect(queries.getByRole('textbox')).toBe(approvalInput)
+			expect(approvalInput.hasAttribute('disabled')).toBe(true)
+			expect(queries.getByText('Approved REP')).not.toBeNull()
+			expect(rendered.container.querySelectorAll('.approval-amount-field')).toHaveLength(1)
 			const nextReview = controller.review()
 			await act(() => undefined)
 			expect(rendered.container.querySelector('.transaction-funding')).toBe(funding)
@@ -213,3 +218,36 @@ test('shows requirement-read failures from the enclosing operation after an appr
 		dom.cleanup()
 	}
 })
+
+for (const phase of ['skipped', 'failed'] as const) {
+	test(`keeps approval fields visible when approval is ${phase}`, async () => {
+		const dom = installDomEnvironment()
+		const controller = createTransactionStepController()
+		const common = { description: 'Authorize spending.', contractAddress: undefined, spender: undefined, amount: undefined, ethValueAttoEth: 0n }
+		controller.setPlan([
+			{ ...common, title: 'Approve REP', approval: { requiredAmount: 3n, approvedAmount: phase === 'skipped' ? 3n : 0n, tokenSymbol: 'REP', tokenUnits: 0 } },
+			{ ...common, title: 'Request price' },
+		])
+		if (phase === 'skipped') await controller.chooseFunding([])
+		else {
+			const review = controller.review()
+			transactionSteps.value?.confirm()
+			await review
+			controller.failed('Approval rejected.')
+		}
+		const nextReview = phase === 'skipped' ? controller.review(1) : undefined
+		const rendered = await renderIntoDocument(<TransactionStepsModal contextKey={phase} />)
+		try {
+			const queries = within(rendered.container)
+			expect(queries.getByRole('textbox').hasAttribute('disabled')).toBe(true)
+			expect(queries.getByText('Required REP')).not.toBeNull()
+			expect(queries.getByText('Approved REP')).not.toBeNull()
+			expect(queries.getByRole('button', { name: 'Approve REP' }).hasAttribute('disabled')).toBe(true)
+			await act(() => transactionSteps.value?.confirm())
+			await nextReview
+		} finally {
+			await rendered.cleanup()
+			dom.cleanup()
+		}
+	})
+}
