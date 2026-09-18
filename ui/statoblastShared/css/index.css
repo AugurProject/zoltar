@@ -3040,14 +3040,6 @@
 	line-height: 1.4;
 }
 
-.transaction-technical-details summary {
-	font-size: 0.875rem;
-}
-
-.transaction-technical-details[open] > :not(summary) {
-	margin-top: 0.5rem;
-}
-
 .transaction-approval-editor .form-grid {
 	gap: 0.5rem;
 }

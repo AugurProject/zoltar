@@ -35,7 +35,8 @@ test('shows every step, token deposit, expected return and ETH cost before the f
 	try {
 		const queries = within(rendered.container)
 		expect(queries.getByText('6 REP')).not.toBeNull()
-		expect(queries.getByText('2 WETH')).not.toBeNull()
+		expect(rendered.container.querySelector('details')).toBeNull()
+		expect(queries.getByRole('button', { name: /Approve WETH spending/ })).not.toBeNull()
 		expect(queries.getByText('3 REP')).not.toBeNull()
 		expect(queries.getByText('1 WETH')).not.toBeNull()
 		expect(queries.getByText('Settler bounty (est.)')).not.toBeNull()

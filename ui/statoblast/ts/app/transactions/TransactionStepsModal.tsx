@@ -6,8 +6,6 @@ import { GlobalTransactionPresentationProvider, useGlobalTransactionPresentation
 import { useEffect } from 'preact/hooks'
 import { OperationModal } from '@zoltar/ui-core-shared/components/OperationModal.js'
 import { CurrencyValue } from '@zoltar/ui-core-shared/components/CurrencyValue.js'
-import { AddressValue } from '@zoltar/ui-core-shared/components/AddressValue.js'
-import { TransactionHashLink } from '@zoltar/ui-core-shared/components/TransactionHashLink.js'
 import { ErrorNotice } from '@zoltar/ui-core-shared/components/ErrorNotice.js'
 import { transactionSteps } from './transactionSteps.js'
 
@@ -145,40 +143,6 @@ export function TransactionStepsModal({ contextKey }: { contextKey: string }) {
 						)}
 
 						{funding.length === 0 || completed ? undefined : <p className='detail transaction-funding-note'>{copy.fundingDetail}</p>}
-						<details className='transaction-technical-details'>
-							<summary>{copy.technicalDetails}</summary>
-							{workflow.steps.map((step, index) => (
-								<p key={index} className='detail'>
-									<strong>{step.title}: </strong>
-									{step.description}
-									{step.amount === undefined ? undefined : <span className='transaction-action-detail'>{step.amount}</span>}
-								</p>
-							))}
-							<dl className='transaction-costs'>
-								<div>
-									<dt>{copy.recipient}</dt>
-									<dd>
-										<AddressValue address={current.contractAddress} responsiveAbbreviation />
-									</dd>
-								</div>
-								{current.spender === undefined ? undefined : (
-									<div>
-										<dt>{copy.spender}</dt>
-										<dd>
-											<AddressValue address={current.spender} responsiveAbbreviation />
-										</dd>
-									</div>
-								)}
-							</dl>
-							{workflow.steps
-								.filter(step => step.hash !== undefined)
-								.map((step, index) => (
-									<div key={index}>
-										<strong>{step.title}</strong>
-										{step.hash === undefined ? undefined : <TransactionHashLink hash={step.hash} />}
-									</div>
-								))}
-						</details>
 						{error === undefined ? undefined : <ErrorNotice message={error} />}
 					</div>
 					<div className='transaction-step-actions transaction-approval-editor'>{renderTransactionActions()}</div>
