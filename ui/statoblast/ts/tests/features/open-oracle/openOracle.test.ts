@@ -1,5 +1,7 @@
 /// <reference types="bun-types" />
 
+import { ABIS } from '@zoltar/ui-core-shared/abis.js'
+
 import { afterEach, beforeAll, beforeEach, describe, expect, test } from 'bun:test'
 import { getAddress, maxUint256, zeroAddress, type Address, type Hash } from '@zoltar/core-shared/evm/ethereum'
 import { createOpenOracleReportInstance, loadOpenOracleWithdrawableBalances, loadOpenOracleReportDetails, loadOpenOracleReportSummaries, settleOracleReport, withdrawOpenOracleBalance, wrapWeth as wrapUiWeth } from '@zoltar/ui-statoblast-shared/protocol/openOracle.js'
@@ -277,65 +279,73 @@ describe('Open Oracle helpers', () => {
 		})
 	})
 
-	test('createOpenOracleReportInstance creates a browsable report and browse ordering is newest-first', async () => {
-		let plannedFunctions: string[] = []
-		const preparedFunctions: string[] = []
-		const createResult1 = await createOpenOracleReportInstance(
-			{
-				...uiWriteClient,
-				onTransactionPlan: steps => {
-					expect(preparedFunctions).toHaveLength(0)
-					plannedFunctions = steps.map(step => step.functionName)
+	for (const preapproved of [false, true])
+		test(`createOpenOracleReportInstance creates browsable reports with preapproved=${preapproved}`, async () => {
+			if (preapproved)
+				for (const address of [REP_ADDRESS, getAddress(WETH_ADDRESS)]) {
+					const hash = await uiWriteClient.writeContract({ address, abi: ABIS.mainnet.erc20, functionName: 'approve', args: [getOpenOracleAddress(), maxUint256] })
+					await uiWriteClient.waitForTransactionReceipt({ hash })
+				}
+
+			let plannedFunctions: string[] = []
+			const preparedFunctions: string[] = []
+			const createResult1 = await createOpenOracleReportInstance(
+				{
+					...uiWriteClient,
+					onTransactionPlan: steps => {
+						expect(preparedFunctions).toHaveLength(0)
+						plannedFunctions = steps.map(step => step.functionName)
+					},
+					onTransactionPrepared: preview => preparedFunctions.push(preview.functionName),
 				},
-				onTransactionPrepared: preview => preparedFunctions.push(preview.functionName),
-			},
-			{
+				{
+					disputeDelay: 10,
+					escalationHalt: 0n,
+					exactToken1Report: 1n,
+					initialToken2Amount: 1n,
+					ethValueAttoEth: 1_000n,
+					feePercentage: 100,
+					multiplier: 100,
+					protocolFee: 100,
+					settlementTime: 60,
+					settlerRewardAttoEth: 1_000n,
+					token1Address: addressString(GENESIS_REPUTATION_TOKEN),
+					token2Address: WETH_ADDRESS,
+				},
+			)
+			expect(createResult1.action).toBe('createReportInstance')
+			expect(plannedFunctions).toEqual(preparedFunctions)
+			if (preapproved) expect(plannedFunctions).not.toContain('approve')
+			else expect(plannedFunctions.slice(-3)).toEqual(['approve', 'approve', 'report'])
+
+			const createResult2 = await createOpenOracleReportInstance(uiWriteClient, {
 				disputeDelay: 10,
 				escalationHalt: 0n,
-				exactToken1Report: 1n,
-				initialToken2Amount: 1n,
-				ethValueAttoEth: 1_000n,
+				exactToken1Report: 2n,
+				initialToken2Amount: 2n,
+				ethValueAttoEth: 1_100n,
 				feePercentage: 100,
 				multiplier: 100,
 				protocolFee: 100,
 				settlementTime: 60,
-				settlerRewardAttoEth: 1_000n,
+				settlerRewardAttoEth: 1_100n,
 				token1Address: addressString(GENESIS_REPUTATION_TOKEN),
 				token2Address: WETH_ADDRESS,
-			},
-		)
-		expect(createResult1.action).toBe('createReportInstance')
-		expect(plannedFunctions).toEqual(preparedFunctions)
-		expect(plannedFunctions.slice(-3)).toEqual(['approve', 'approve', 'report'])
+			})
+			expect(createResult2.action).toBe('createReportInstance')
 
-		const createResult2 = await createOpenOracleReportInstance(uiWriteClient, {
-			disputeDelay: 10,
-			escalationHalt: 0n,
-			exactToken1Report: 2n,
-			initialToken2Amount: 2n,
-			ethValueAttoEth: 1_100n,
-			feePercentage: 100,
-			multiplier: 100,
-			protocolFee: 100,
-			settlementTime: 60,
-			settlerRewardAttoEth: 1_100n,
-			token1Address: addressString(GENESIS_REPUTATION_TOKEN),
-			token2Address: WETH_ADDRESS,
+			const page = await loadOpenOracleReportSummaries(uiReadClient, 0, 1)
+			expect(page.reportCount).toBe(2n)
+			expect(page.reports).toHaveLength(1)
+			const newestReport = page.reports[0]
+			if (newestReport === undefined) throw new Error('Expected a newest report summary')
+			expect(newestReport.reportId).toBe(2n)
+			expect(getOpenOracleReportStatus(newestReport)).toBe('Pending')
+
+			const firstPage = await loadOpenOracleReportSummaries(uiReadClient, 0, 10)
+			expect(firstPage.reports.map(report => report.reportId)).toEqual([2n, 1n])
+			expect(firstPage.reports.map(report => report.price)).toEqual([10n ** 30n, 10n ** 30n])
 		})
-		expect(createResult2.action).toBe('createReportInstance')
-
-		const page = await loadOpenOracleReportSummaries(uiReadClient, 0, 1)
-		expect(page.reportCount).toBe(2n)
-		expect(page.reports).toHaveLength(1)
-		const newestReport = page.reports[0]
-		if (newestReport === undefined) throw new Error('Expected a newest report summary')
-		expect(newestReport.reportId).toBe(2n)
-		expect(getOpenOracleReportStatus(newestReport)).toBe('Pending')
-
-		const firstPage = await loadOpenOracleReportSummaries(uiReadClient, 0, 10)
-		expect(firstPage.reports.map(report => report.reportId)).toEqual([2n, 1n])
-		expect(firstPage.reports.map(report => report.price)).toEqual([10n ** 30n, 10n ** 30n])
-	})
 
 	test('settlement stays successful while reporter liquidity and a third-party settler reward remain independently withdrawable', async () => {
 		const reporter = uiWriteClient.account.address
@@ -944,6 +954,30 @@ describe('Open Oracle helpers', () => {
 		expect(details.requestPriceCostAttoEth).toBeGreaterThan(101n)
 	})
 
+	test('requestOraclePrice keeps sufficient existing approvals out of the transaction plan', async () => {
+		for (const address of [REP_ADDRESS, getAddress(WETH_ADDRESS)]) {
+			const hash = await uiWriteClient.writeContract({ address, abi: ABIS.mainnet.erc20, functionName: 'approve', args: [managerAddress, maxUint256] })
+			await uiWriteClient.waitForTransactionReceipt({ hash })
+		}
+		let plannedFunctions: string[] = []
+		const preparedFunctions: string[] = []
+		await requestOraclePrice(
+			{
+				...uiWriteClient,
+				onTransactionPlan: steps => {
+					plannedFunctions = steps.map(step => step.functionName)
+				},
+				onTransactionPrepared: preview => preparedFunctions.push(preview.functionName),
+			},
+			managerAddress,
+			10n ** 18n,
+		)
+		expect(plannedFunctions).toEqual(preparedFunctions)
+		expect(plannedFunctions).not.toContain('approve')
+		expect(plannedFunctions.at(-1)).toBe('requestPrice')
+		expect((await loadOracleManagerDetails(uiReadClient, managerAddress)).pendingReportId).toBeGreaterThan(0n)
+	})
+
 	test('requestOraclePrice creates a pending report visible via loadOpenOracleReportDetails', async () => {
 		const minimumToken1ReportAttoEth = await client.readContract({
 			address: managerAddress,
@@ -1114,6 +1148,7 @@ describe('Open Oracle helpers', () => {
 		const funding = await loadCoordinatorInitialReportFundingRequirement(withInitializedV4Pool(mockClient), managerAddress, uiWriteClient.account.address)
 
 		expect(funding.initialReportAmount2).toBe(quotedAmount2 * 2n)
+		expect(funding.requiredRepAttoRep).toBe(quotedAmount2)
 		expect(funding.proposedRepPerEthPrice).toBe((quotedAmount2 * 10n ** 18n) / minimumToken1ReportAttoEth)
 		expect(funding.minimumToken1ReportAttoEth).toBe(minimumToken1ReportAttoEth)
 		expect(funding.maximumInitialAttoWeth).toBe(minimumToken1ReportAttoEth * 2n)
@@ -1222,7 +1257,7 @@ describe('Open Oracle helpers', () => {
 			args: [uiWriteClient.account.address],
 		})
 		if (typeof currentRepBalanceAttoRep !== 'bigint') throw new Error('expected bigint REP balance')
-		const repToKeep = minimumToken1ReportAttoEth - 1n
+		const repToKeep = 0n
 		const repToTransfer = currentRepBalanceAttoRep - repToKeep
 		const startWethBalanceAttoEth = await loadErc20Balance(uiReadClient, WETH_ADDRESS, uiWriteClient.account.address)
 		const transferHash = await client.writeContract({
@@ -1290,7 +1325,8 @@ describe('Open Oracle helpers', () => {
 				if (parameters.functionName === 'isPriceValid') return false as never
 				if (parameters.functionName === 'minimumToken1ReportAttoEth') return minimumToken1ReportAttoEth as never
 				if (parameters.functionName === 'reputationToken') return reputationTokenAddress as never
-				if (parameters.functionName === 'balanceOf') return 1_000n as never
+				if (parameters.functionName === 'balanceOf') return (parameters.address === reputationTokenAddress ? 100n : 1_000n) as never
+				if (parameters.functionName === 'allowance') return 0n as never
 				if (parameters.functionName === 'getPool') return zeroAddress as never
 				throw new Error(`Unexpected read ${parameters.functionName} for ${parameters.address}`)
 			}

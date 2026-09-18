@@ -2979,9 +2979,25 @@
 
 .transaction-plan-grid {
 	display: grid;
-	grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+	grid-template-columns: minmax(0, 1fr);
 	gap: 1.5rem;
 	align-items: start;
+}
+
+.transaction-plan-grid:has(.transaction-funding) {
+	grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+}
+
+.transaction-approval-editor .form-grid {
+	gap: 0.75rem;
+}
+
+.transaction-approval-editor .workflow-metric-grid {
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.transaction-approval-editor .field {
+	margin: 0;
 }
 
 .transaction-funding h4,
@@ -3077,7 +3093,8 @@
 		gap: 0.75rem;
 	}
 
-	.transaction-plan-grid {
+	.transaction-plan-grid,
+	.transaction-plan-grid:has(.transaction-funding) {
 		grid-template-columns: minmax(0, 1fr);
 		gap: 0.75rem;
 	}

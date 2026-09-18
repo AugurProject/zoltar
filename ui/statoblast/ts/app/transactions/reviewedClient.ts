@@ -1,4 +1,4 @@
-import { formatUnits, getAddress } from '@zoltar/core-shared/evm/ethereum'
+import { formatUnits, getAddress, encodeFunctionData, maxUint256 } from '@zoltar/core-shared/evm/ethereum'
 import type { TransactionPlanStep, TransactionRequestPreview, WriteClient } from '@zoltar/ui-core-shared/wallet/chainBackend.js'
 import { createActiveEnvironmentGuard } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { getErrorMessage } from '@zoltar/ui-core-shared/lib/errors.js'
@@ -16,7 +16,7 @@ const actionDescriptions: Record<string, { title: string; description: string }>
 	requestPriceIfNeededAndStageOperation: { title: 'Queue vault operation', description: 'Queue the vault change and fund a price report if needed. Settlement may execute the queued change.' },
 }
 
-async function describeTransaction(client: WriteClient, preview: TransactionRequestPreview & Pick<TransactionPlanStep, 'optional' | 'tokenFunding' | 'oracleOutcome'>): Promise<TransactionStepDetails> {
+async function describeTransaction(client: WriteClient, preview: TransactionRequestPreview & Pick<TransactionPlanStep, 'optional' | 'tokenFunding' | 'oracleOutcome'>, requiredApprovalAmount?: bigint): Promise<TransactionStepDetails> {
 	const action = actionDescriptions[preview.functionName]
 	const details: TransactionStepDetails = {
 		optional: preview.optional ?? false,
@@ -54,6 +54,11 @@ async function describeTransaction(client: WriteClient, preview: TransactionRequ
 		const [symbol, decimals] = await Promise.all([client.readContract({ address: preview.contractAddress, abi: ABIS.mainnet.erc20, functionName: 'symbol' }), client.readContract({ address: preview.contractAddress, abi: ABIS.mainnet.erc20, functionName: 'decimals' })])
 		details.title = `Approve ${symbol} spending`
 		details.amount = `${formatUnits(amount, Number(decimals))} ${symbol}`
+		if (requiredApprovalAmount !== undefined) {
+			const approvedAmount = await client.readContract({ address: preview.contractAddress, abi: ABIS.mainnet.erc20, functionName: 'allowance', args: [client.account.address, details.spender] })
+			details.approval = { requiredAmount: requiredApprovalAmount, approvedAmount, tokenSymbol: symbol, tokenUnits: Number(decimals) }
+			details.amount = `${formatUnits(requiredApprovalAmount, Number(decimals))} ${symbol}`
+		}
 	} catch (error) {
 		throw new Error('Could not read token details for approval. Retry before sending any transactions.', { cause: error })
 	}
@@ -66,26 +71,46 @@ export function createReviewedClient(client: WriteClient, validate: () => Promis
 	let preview: TransactionRequestPreview | undefined
 	let plan: readonly TransactionPlanStep[] | undefined
 	let stepIndex = 0
-	const send = async (fallback: TransactionRequestPreview, execute: () => Promise<`0x${string}`>) => {
-		const transaction = preview ?? fallback
+	let partialApproval = false
+	const send = async (fallback: TransactionRequestPreview, execute: (approvalArgs?: readonly [ReturnType<typeof getAddress>, bigint]) => Promise<`0x${string}`>) => {
+		let transaction = preview ?? fallback
 		preview = undefined
 		try {
 			if (!environment.isCurrent()) throw new Error('The network changed. Review the action again.')
 			await validate()
 			if (stepIndex === 0) {
 				plan ??= [transaction]
-				controller.setPlan(await Promise.all(plan.map(step => describeTransaction(client, { account: client.account, args: undefined, chainName: client.chain.name, value: undefined, ...step }))))
+				controller.setPlan(
+					await Promise.all(
+						plan.map(step =>
+							describeTransaction(
+								client,
+								{ account: client.account, args: undefined, chainName: client.chain.name, value: undefined, ...step },
+								plan?.find(candidate => candidate.tokenFunding !== undefined && candidate.contractAddress === step.args?.[0])?.tokenFunding?.find(funding => funding.tokenAddress === step.contractAddress)?.amount,
+							),
+						),
+					),
+				)
 			}
 			const expected = plan?.[stepIndex]
 			if (expected === undefined || expected.functionName !== transaction.functionName || (expected.value ?? 0n) !== (transaction.value ?? 0n) || (expected.contractAddress ?? expected.to) !== (transaction.contractAddress ?? transaction.to))
 				throw new Error('The transaction plan changed. No further transactions were sent. Review the action again.')
 			if (transaction.functionName === 'approve' && (expected.args?.[0] !== transaction.args?.[0] || expected.args?.[1] !== transaction.args?.[1])) throw new Error('The approval amount changed. Review the action again.')
-			await controller.review()
+			const selectedAmount = await controller.review()
+			let approvalArgs: readonly [ReturnType<typeof getAddress>, bigint] | undefined
+			if (selectedAmount !== undefined) {
+				const [spender] = transaction.args ?? []
+				if (transaction.functionName !== 'approve' || typeof spender !== 'string' || selectedAmount < 0n || selectedAmount > maxUint256) throw new Error('Invalid token approval selection.')
+				approvalArgs = [getAddress(spender), selectedAmount]
+				const requiredAmount = plan?.flatMap(step => step.tokenFunding ?? []).find(funding => funding.tokenAddress === transaction.contractAddress)?.amount
+				partialApproval = requiredAmount !== undefined && selectedAmount < requiredAmount
+				transaction = { ...transaction, args: approvalArgs, data: encodeFunctionData({ abi: ABIS.mainnet.erc20, functionName: 'approve', args: approvalArgs }) }
+			}
 			stepIndex += 1
 			await validate()
 			if (!environment.isCurrent()) throw new Error('The network changed. Review the action again.')
 			client.onTransactionPrepared?.(transaction)
-			const hash = await execute()
+			const hash = await execute(approvalArgs)
 			controller.submitted(hash)
 			return hash
 		} catch (error) {
@@ -103,10 +128,17 @@ export function createReviewedClient(client: WriteClient, validate: () => Promis
 			preview = next
 		},
 		sendTransaction: async parameters =>
-			await send({ account: client.account, args: undefined, chainName: client.chain.name, functionName: parameters.data === undefined ? 'Transfer ETH' : 'Contract transaction', to: parameters.to ?? undefined, value: parameters.value }, async () => await client.sendTransaction(parameters)),
+			await send(
+				{ account: client.account, args: undefined, chainName: client.chain.name, functionName: parameters.data === undefined ? 'Transfer ETH' : 'Contract transaction', to: parameters.to ?? undefined, value: parameters.value },
+				async approvalArgs => await client.sendTransaction(approvalArgs === undefined ? parameters : { ...parameters, data: encodeFunctionData({ abi: ABIS.mainnet.erc20, functionName: 'approve', args: approvalArgs }) }),
+			),
 		sendRawTransaction: async parameters => await send({ account: undefined, args: undefined, chainName: client.chain.name, functionName: 'Deploy contract', value: undefined }, async () => await client.sendRawTransaction(parameters)),
-		writeContract: async parameters => await send({ account: client.account, args: parameters.args, chainName: client.chain.name, functionName: parameters.functionName, contractAddress: parameters.address, value: parameters.value }, async () => await client.writeContract(parameters)),
+		writeContract: async parameters =>
+			await send({ account: client.account, args: parameters.args, chainName: client.chain.name, functionName: parameters.functionName, contractAddress: parameters.address, value: parameters.value }, async approvalArgs =>
+				approvalArgs === undefined ? await client.writeContract(parameters) : await client.writeContract({ ...parameters, abi: ABIS.mainnet.erc20, functionName: 'approve', args: approvalArgs }),
+			),
 		waitForTransactionReceipt: async parameters => {
+			let confirmedPartialApproval = false
 			try {
 				let replaced = false
 				let confirmedHash = parameters.hash
@@ -121,9 +153,15 @@ export function createReviewedClient(client: WriteClient, validate: () => Promis
 				})
 				controller.receipt(confirmedHash, replaced ? 'reverted' : receipt.status)
 				if (replaced) throw new Error('Transaction canceled or replaced. Remaining steps were not sent.')
+				if (partialApproval && receipt.status === 'success') {
+					confirmedPartialApproval = true
+					const message = 'Approval confirmed, but it is below the report requirement. Review funding again to approve the required total before continuing.'
+					controller.failed(message)
+					throw new Error(message)
+				}
 				return receipt
 			} catch (error) {
-				controller.failed(getErrorMessage(error, 'Could not confirm the transaction. Check its status before retrying.'))
+				if (!confirmedPartialApproval) controller.failed(getErrorMessage(error, 'Could not confirm the transaction. Check its status before retrying.'))
 				throw error
 			}
 		},

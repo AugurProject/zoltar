@@ -1,8 +1,10 @@
+import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import type { TransactionPlanStep } from '@zoltar/ui-core-shared/wallet/chainBackend.js'
 import { signal } from '@preact/signals'
-import type { Address, Hash } from '@zoltar/core-shared/evm/ethereum'
+import { formatUnits, maxUint256, type Address, type Hash } from '@zoltar/core-shared/evm/ethereum'
 
 export type TransactionStepDetails = {
+	approval?: { requiredAmount: bigint; approvedAmount: bigint; tokenSymbol: string; tokenUnits: number }
 	oracleOutcome?: TransactionPlanStep['oracleOutcome']
 	tokenFunding?: readonly { amount: string; limit: string | undefined }[]
 	optional?: boolean
@@ -24,7 +26,7 @@ type TransactionSteps = {
 	steps: TransactionStep[]
 	activeIndex: number
 	finish: () => void
-	confirm: () => void
+	confirm: (amount?: bigint) => void
 	cancel: () => void
 }
 
@@ -41,7 +43,7 @@ export function createTransactionStepController() {
 		rejectReview = undefined
 		if (transactionSteps.peek()?.cancel === cancel) transactionSteps.value = undefined
 	}
-	const publish = (confirm: () => void = () => undefined) => {
+	const publish = (confirm: (amount?: bigint) => void = () => undefined) => {
 		transactionSteps.value = {
 			steps: [...steps],
 			activeIndex,
@@ -69,14 +71,15 @@ export function createTransactionStepController() {
 			const step = steps[activeIndex]
 			if (step === undefined) throw new Error('An unexpected transaction was blocked. Review the action again.')
 			step.phase = 'review'
-			await new Promise<void>((resolve, reject) => {
+			return await new Promise<bigint | undefined>((resolve, reject) => {
 				rejectReview = reject
-				publish(() => {
+				publish(amount => {
 					if (step.phase !== 'review' || canceled) return
+					if (amount !== undefined && step.approval !== undefined) step.amount = `${amount === maxUint256 ? commonCopy.max : formatUnits(amount, step.approval.tokenUnits)} ${step.approval.tokenSymbol}`
 					step.phase = 'pending'
 					rejectReview = undefined
 					publish()
-					resolve()
+					resolve(amount)
 				})
 			})
 		},
@@ -95,8 +98,8 @@ export function createTransactionStepController() {
 		},
 		failed(message: string) {
 			const step = steps[activeIndex]
-			if (step === undefined || step.phase === 'confirmed') return
-			step.phase = 'failed'
+			if (step === undefined) return
+			if (step.phase !== 'confirmed') step.phase = 'failed'
 			step.error = message
 			if (!canceled) publish()
 		},

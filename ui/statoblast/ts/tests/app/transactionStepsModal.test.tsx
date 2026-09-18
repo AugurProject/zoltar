@@ -1,3 +1,4 @@
+import { TransactionActionButtonLockProvider } from '@zoltar/ui-core-shared/components/TransactionActionButton.js'
 import { expect, test } from 'bun:test'
 import { act } from 'preact/test-utils'
 import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
@@ -49,3 +50,34 @@ test('shows every step, token deposit, expected return and ETH cost before the f
 		dom.cleanup()
 	}
 })
+
+for (const choice of ['custom', 'max'] as const) {
+	test(`reuses the approval amount control for ${choice} without sending the next step`, async () => {
+		const dom = installDomEnvironment()
+		const controller = createTransactionStepController()
+		controller.setPlan([
+			{ title: 'Approve REP spending', description: 'Allow REP spending.', contractAddress: undefined, spender: undefined, amount: '3 REP', ethValueAttoEth: 0n, approval: { requiredAmount: 3n, approvedAmount: 1n, tokenSymbol: 'REP', tokenUnits: 0 } },
+			{ title: 'Request price', description: 'Fund the report.', contractAddress: undefined, spender: undefined, amount: undefined, ethValueAttoEth: 0n },
+		])
+		const review = controller.review()
+		const rendered = await renderIntoDocument(
+			<TransactionActionButtonLockProvider locked>
+				<TransactionStepsModal contextKey='approval' />
+			</TransactionActionButtonLockProvider>,
+		)
+		try {
+			const queries = within(rendered.container)
+			await act(() => fireEvent.click(queries.getByRole('button', { name: 'Approve REP spending' })))
+			if (choice === 'custom') await act(() => fireEvent.input(queries.getByRole('textbox'), { target: { value: '9' } }))
+			else await act(() => fireEvent.click(queries.getByText('Max')))
+			expect(transactionSteps.value?.steps[0]?.phase).toBe('review')
+			expect(queries.getByRole('button', { name: choice === 'custom' ? /Approve 9/ : /Approve Max/ }).hasAttribute('disabled')).toBe(false)
+			await act(() => fireEvent.click(queries.getByRole('button', { name: choice === 'custom' ? /Approve 9/ : /Approve Max/ })))
+			expect(await review).toBe(choice === 'custom' ? 9n : 2n ** 256n - 1n)
+			expect(transactionSteps.value?.steps[1]?.phase).toBe('upcoming')
+		} finally {
+			await rendered.cleanup()
+			dom.cleanup()
+		}
+	})
+}

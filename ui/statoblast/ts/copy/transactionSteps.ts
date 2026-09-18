@@ -22,3 +22,6 @@ export const standaloneReturnDetail = 'If undisputed, withdraw both deposits aft
 export const settlementCostDetail = 'Bounty goes to whoever settles, including you. Gas is extra and not refunded.'
 export const technicalDetails = 'Transaction details'
 export const gwei = 'gwei'
+export const fundReport = 'funding the report'
+export const backToPlan = 'Back to plan'
+export const requiredApproval = 'Required:'

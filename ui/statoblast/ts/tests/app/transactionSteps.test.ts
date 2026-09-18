@@ -1,5 +1,7 @@
+import { ABIS } from '@zoltar/ui-core-shared/abis.js'
+import { createReadContractStub } from '@zoltar/ui-core-shared/tests/testUtils/protocolTestSupport.js'
 import { afterEach, expect, mock, test } from 'bun:test'
-import { createWalletClient, custom, publicActions, type Hash, type TransactionReceipt, type ReplacementReason } from '@zoltar/core-shared/evm/ethereum'
+import { createWalletClient, custom, publicActions, encodeFunctionData, decodeFunctionData, maxUint256, type Hash, type TransactionReceipt, type ReplacementReason } from '@zoltar/core-shared/evm/ethereum'
 import { MAINNET_NETWORK_PROFILE } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
 import { createDeferred } from '@zoltar/ui-core-shared/tests/testUtils/deferred.js'
 import { resetActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
@@ -30,7 +32,7 @@ function setup(replacementReason?: ReplacementReason) {
 		parameters.onReplaced?.({ reason: replacementReason, replacedTransaction: { hash }, transaction: { hash: replacementHash }, transactionReceipt: receipt })
 		return receipt
 	}
-	return { sendTransaction, onTransactionPrepared, replacementHash, reviewed: createReviewedClient({ ...client, sendTransaction, onTransactionPrepared, ...(replacementReason === undefined ? {} : { waitForTransactionReceipt }) }) }
+	return { client, receipt, sendTransaction, onTransactionPrepared, replacementHash, reviewed: createReviewedClient({ ...client, sendTransaction, onTransactionPrepared, ...(replacementReason === undefined ? {} : { waitForTransactionReceipt }) }) }
 }
 
 async function waitForReview() {
@@ -177,3 +179,48 @@ for (const reason of ['repriced', 'cancelled', 'replaced'] as const) {
 		expect(transactionSteps.value?.steps[0]?.phase).toBe(reason === 'repriced' ? 'confirmed' : 'failed')
 	})
 }
+
+for (const method of ['sendTransaction', 'writeContract'] as const)
+	for (const chosen of [1n, 3n, 9n, maxUint256]) {
+		test(`uses the user's selected approval amount ${chosen} through ${method}`, async () => {
+			const { client, receipt } = setup()
+			let sentData: `0x${string}` | undefined
+			const reviewed = createReviewedClient({
+				...client,
+				waitForTransactionReceipt: async () => receipt,
+				writeContract: async parameters => {
+					sentData = encodeFunctionData(parameters)
+					return hash
+				},
+				readContract: createReadContractStub(request => {
+					if (request.functionName === 'symbol') return 'REP'
+					if (request.functionName === 'decimals') return 0
+					return 0n
+				}),
+				sendTransaction: async parameters => {
+					sentData = parameters.data
+					return hash
+				},
+			})
+			reviewed.onTransactionPlan?.([
+				{ functionName: 'approve', contractAddress: account, args: [account, 6n] },
+				{ functionName: 'report', contractAddress: account, tokenFunding: [{ tokenAddress: account, amount: 3n }] },
+			])
+			const data = encodeFunctionData({ abi: ABIS.mainnet.erc20, functionName: 'approve', args: [account, 6n] })
+			reviewed.onTransactionPrepared?.({ functionName: 'approve', contractAddress: account, account, args: [account, 6n], chainName: client.chain.name, value: undefined, data })
+			const sending = method === 'sendTransaction' ? reviewed.sendTransaction({ to: account, data }) : reviewed.writeContract({ address: account, abi: ABIS.mainnet.erc20, functionName: 'approve', args: [account, 6n] })
+			await waitForReview()
+			expect(sentData).toBeUndefined()
+			expect(transactionSteps.value?.steps[0]?.approval?.requiredAmount).toBe(3n)
+			transactionSteps.value?.confirm(chosen)
+			await sending
+			if (sentData === undefined) throw new Error('Expected approval calldata')
+			expect(decodeFunctionData({ abi: ABIS.mainnet.erc20, data: sentData }).args).toEqual([account, chosen])
+			if (chosen < 3n) {
+				await expect(reviewed.waitForTransactionReceipt({ hash })).rejects.toThrow('below the report requirement')
+				expect(transactionSteps.value?.steps[0]?.phase).toBe('confirmed')
+				expect(transactionSteps.value?.steps[0]?.error).toContain('below the report requirement')
+				expect(transactionSteps.value?.steps[1]?.phase).toBe('upcoming')
+			}
+		})
+	}

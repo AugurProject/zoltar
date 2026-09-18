@@ -194,8 +194,8 @@ function useSecurityVaultOperationsWithDependencies<TWriteClient>(
 
 	const assertFreshRequestFunding = async (writeClient: TWriteClient, managerAddress: Address, vaultAddress: Address, requiredCostAttoEth: bigint, actionLabel: string, walletBalanceAttoEth: bigint | undefined) => {
 		const fundingRequirement = await dependencies.loadCoordinatorInitialReportFundingRequirement(writeClient, managerAddress, vaultAddress)
-		if (fundingRequirement.currentRepBalanceAttoRep < fundingRequirement.initialReportAmount2) {
-			throw new Error(`Need ${formatAdditionalCurrencyBalance(fundingRequirement.initialReportAmount2 - fundingRequirement.currentRepBalanceAttoRep, 'REP')} in this wallet to fund the initial report.`)
+		if (fundingRequirement.currentRepBalanceAttoRep < fundingRequirement.requiredRepAttoRep) {
+			throw new Error(`Need ${formatAdditionalCurrencyBalance(fundingRequirement.requiredRepAttoRep - fundingRequirement.currentRepBalanceAttoRep, 'REP')} in this wallet to fund the initial report.`)
 		}
 		const requiredEthWithWrap = addOpenOracleBountyBuffer(requiredCostAttoEth) + fundingRequirement.wethShortfallAttoEth
 		if (walletBalanceAttoEth !== undefined && walletBalanceAttoEth < requiredEthWithWrap) {
