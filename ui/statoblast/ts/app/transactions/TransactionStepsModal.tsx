@@ -3,7 +3,7 @@ import { TokenApprovalControl } from '@zoltar/ui-core-shared/components/TokenApp
 import * as copy from '../../copy/transactionSteps.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import { GlobalTransactionPresentationProvider, useGlobalTransactionPresentation } from '@zoltar/ui-core-shared/components/GlobalTransactionPresentationContext.js'
-import { useEffect, useState } from 'preact/hooks'
+import { useEffect } from 'preact/hooks'
 import { OperationModal } from '@zoltar/ui-core-shared/components/OperationModal.js'
 import { CurrencyValue } from '@zoltar/ui-core-shared/components/CurrencyValue.js'
 import { AddressValue } from '@zoltar/ui-core-shared/components/AddressValue.js'
@@ -23,9 +23,7 @@ export function TransactionStepsModal({ contextKey }: { contextKey: string }) {
 	useEffect(() => {
 		if (presentation?.tone === 'success') transactionSteps.value?.finish()
 	}, [presentation?.tone, presentation?.hash])
-	const [editingApproval, setEditingApproval] = useState(false)
 	const workflow = transactionSteps.value
-	useEffect(() => setEditingApproval(false), [contextKey, workflow?.activeIndex])
 	const current = workflow?.steps[workflow.activeIndex]
 	if (workflow === undefined || current === undefined) return undefined
 	const pending = current.phase === 'pending'
@@ -39,7 +37,7 @@ export function TransactionStepsModal({ contextKey }: { contextKey: string }) {
 				<OperationModal isOpen closeDisabled={pending} title={copy.title} description={completed ? copy.completed : copy.sequenceDetail} onClose={workflow.cancel}>
 					<div className='transaction-step-content'>
 						<div className='transaction-plan-grid'>
-							{funding.length === 0 || editingApproval ? undefined : (
+							{funding.length === 0 ? undefined : (
 								<section className='transaction-funding' aria-label={copy.depositAndReturn}>
 									<h4>{copy.depositAndReturn}</h4>
 									<div className='transaction-deposits'>
@@ -82,19 +80,14 @@ export function TransactionStepsModal({ contextKey }: { contextKey: string }) {
 											<strong>{step.title}</strong>
 											<span className='detail'>{{ skipped: copy.skipped, upcoming: step.optional ? copy.ifNeeded : copy.upcoming, review: copy.ready, pending: copy.pending, confirmed: copy.confirmed, failed: copy.notCompleted }[step.phase]}</span>
 										</div>
-										{step.amount === undefined ? undefined : (
-											<div className='transaction-step-amount'>
-												{step.approval !== undefined && (step.phase === 'review' || step.phase === 'upcoming') ? <>{copy.requiredApproval} </> : undefined}
-												{step.amount}
-											</div>
-										)}
+										{step.amount === undefined || (step.approval !== undefined && (step.phase === 'review' || step.phase === 'upcoming')) ? undefined : <div className='transaction-step-amount'>{step.amount}</div>}
 										{(step.ethValueAttoEth ?? 0n) === 0n ? undefined : <EthAmount value={step.ethValueAttoEth} />}
-										{step.spender === undefined ? <p className='detail'>{step.description}</p> : undefined}
+										{step.spender === undefined && step.tokenFunding === undefined ? <p className='detail'>{step.description}</p> : undefined}
 									</li>
 								))}
 							</ol>
 						</div>
-						{funding.length === 0 || editingApproval || completed ? undefined : <p className='detail transaction-funding-note'>{copy.fundingDetail}</p>}
+						{funding.length === 0 || completed ? undefined : <p className='detail transaction-funding-note'>{copy.fundingDetail}</p>}
 						<details className='transaction-technical-details'>
 							<summary>{copy.technicalDetails}</summary>
 							{workflow.steps.map((step, index) => (
@@ -130,9 +123,10 @@ export function TransactionStepsModal({ contextKey }: { contextKey: string }) {
 						</details>
 						{current.error === undefined ? undefined : <ErrorNotice message={current.error} />}
 					</div>
-					{editingApproval && current.approval !== undefined && (current.phase === 'review' || pending) ? (
+					{current.approval !== undefined && (current.phase === 'review' || pending) ? (
 						<div className='transaction-step-actions transaction-approval-editor'>
 							<TokenApprovalControl
+								showRequirementNotice={false}
 								actionLabel={copy.fundReport}
 								allowanceError={undefined}
 								allowanceLoading={false}
@@ -147,8 +141,8 @@ export function TransactionStepsModal({ contextKey }: { contextKey: string }) {
 								tokenUnits={current.approval.tokenUnits}
 								renderActions={({ button, notice, noticeId }) => (
 									<TransactionActionGroup id={noticeId} message={notice}>
-										<button className='secondary' type='button' onClick={() => setEditingApproval(false)} disabled={pending}>
-											{copy.backToPlan}
+										<button className='secondary' type='button' onClick={workflow.cancel} disabled={pending}>
+											{copy.cancelRemaining}
 										</button>
 										{button}
 									</TransactionActionGroup>
@@ -161,7 +155,7 @@ export function TransactionStepsModal({ contextKey }: { contextKey: string }) {
 								{current.phase === 'review' ? copy.cancelRemaining : commonCopy.close}
 							</button>
 							{current.phase === 'review' || pending ? (
-								<button type='button' onClick={() => (current.approval === undefined ? workflow.confirm() : setEditingApproval(true))} disabled={pending} aria-busy={pending}>
+								<button type='button' onClick={() => workflow.confirm()} disabled={pending} aria-busy={pending}>
 									{pending ? <LoadingText>{copy.waiting}</LoadingText> : current.title}
 								</button>
 							) : undefined}

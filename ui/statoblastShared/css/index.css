@@ -2989,11 +2989,30 @@
 }
 
 .transaction-approval-editor .form-grid {
-	gap: 0.75rem;
+	gap: 0.5rem;
 }
 
 .transaction-approval-editor .workflow-metric-grid {
 	grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.transaction-approval-editor .workflow-metric-grid > div {
+	padding-top: 0;
+	border-top: 0;
+}
+
+.transaction-approval-editor .workflow-metric-grid strong.metric-field-value {
+	padding-bottom: 0;
+}
+
+.transaction-approval-editor .tx-action-group > .actions {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) minmax(0, 2.5fr);
+	gap: 0.5rem;
+}
+
+.transaction-approval-editor .tx-action-group > .actions > * {
+	width: 100%;
 }
 
 .transaction-approval-editor .field {
@@ -3093,6 +3112,11 @@
 		gap: 0.75rem;
 	}
 
+	.modal-panel:has(.transaction-step-actions) > .modal-header {
+		padding-top: 0.5rem;
+		padding-bottom: 0.5rem;
+	}
+
 	.transaction-plan-grid,
 	.transaction-plan-grid:has(.transaction-funding) {
 		grid-template-columns: minmax(0, 1fr);
@@ -3103,10 +3127,39 @@
 		gap: 0.5rem;
 	}
 
+	.transaction-funding,
+	.transaction-deposits,
+	.transaction-costs {
+		gap: 0.25rem;
+	}
+
+	.transaction-deposits {
+		font-size: 0.875rem;
+	}
+
+	.transaction-approval-editor .workflow-metric-grid > div {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: baseline;
+		gap: 0.25rem;
+	}
+
+	.transaction-approval-editor .workflow-metric-grid .metric-label {
+		font-size: 0.6875rem;
+	}
+
+	.transaction-approval-editor .workflow-metric-grid strong.metric-field-value {
+		font-size: 0.8125rem;
+	}
+
 	.transaction-step-actions {
 		flex-wrap: nowrap;
 		gap: 0.5rem;
 		padding-top: 0.75rem;
+	}
+
+	.transaction-step-actions.transaction-approval-editor button {
+		padding-inline: 0.4rem;
 	}
 
 	.transaction-step-actions button {
@@ -3114,4 +3167,17 @@
 		font-size: 0.8125rem;
 		padding-inline: 0.65rem;
 	}
+}
+
+.transaction-approval-editor .tx-action-button-labels {
+	min-width: 0;
+	overflow-wrap: anywhere;
+}
+
+.transaction-approval-editor .tx-action-feedback:empty {
+	min-block-size: 0;
+}
+
+.transaction-approval-editor .tx-action-group:has(.tx-action-feedback:empty) {
+	gap: 0;
 }

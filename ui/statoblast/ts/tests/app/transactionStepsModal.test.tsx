@@ -57,7 +57,19 @@ for (const choice of ['custom', 'max'] as const) {
 		const controller = createTransactionStepController()
 		controller.setPlan([
 			{ title: 'Approve REP spending', description: 'Allow REP spending.', contractAddress: undefined, spender: undefined, amount: '3 REP', ethValueAttoEth: 0n, approval: { requiredAmount: 3n, approvedAmount: 1n, tokenSymbol: 'REP', tokenUnits: 0 } },
-			{ title: 'Request price', description: 'Fund the report.', contractAddress: undefined, spender: undefined, amount: undefined, ethValueAttoEth: 0n },
+			{
+				title: 'Request price',
+				description: 'Fund the report.',
+				contractAddress: undefined,
+				spender: undefined,
+				amount: undefined,
+				ethValueAttoEth: 12n,
+				tokenFunding: [
+					{ amount: '3 REP', limit: '6 REP' },
+					{ amount: '1 WETH', limit: '2 WETH' },
+				],
+				oracleOutcome: { settlerRewardAttoEth: 10n, ethRefundAttoEth: 2n, returnToWallet: true },
+			},
 		])
 		const review = controller.review()
 		const rendered = await renderIntoDocument(
@@ -67,7 +79,10 @@ for (const choice of ['custom', 'max'] as const) {
 		)
 		try {
 			const queries = within(rendered.container)
-			await act(() => fireEvent.click(queries.getByRole('button', { name: 'Approve REP spending' })))
+			const funding = rendered.container.querySelector('.transaction-funding')
+			if (funding === null) throw new Error('Missing funding summary')
+			expect(funding.textContent).toContain('3 REP')
+			expect(funding.textContent).toContain('1 WETH')
 			if (choice === 'custom') await act(() => fireEvent.input(queries.getByRole('textbox'), { target: { value: '9' } }))
 			else await act(() => fireEvent.click(queries.getByText('Max')))
 			expect(transactionSteps.value?.steps[0]?.phase).toBe('review')
@@ -75,6 +90,20 @@ for (const choice of ['custom', 'max'] as const) {
 			await act(() => fireEvent.click(queries.getByRole('button', { name: choice === 'custom' ? /Approve 9/ : /Approve Max/ })))
 			expect(await review).toBe(choice === 'custom' ? 9n : 2n ** 256n - 1n)
 			expect(transactionSteps.value?.steps[1]?.phase).toBe('upcoming')
+			expect(rendered.container.querySelector('.transaction-funding')).toBe(funding)
+			expect(funding.textContent).toContain('Settler bounty (est.)')
+			expect(funding.textContent).toContain('Request refund (est.)')
+			const hash = '0x1111111111111111111111111111111111111111111111111111111111111111'
+			await act(() => {
+				controller.submitted(hash)
+				controller.receipt(hash, 'success')
+			})
+			const nextReview = controller.review()
+			await act(() => undefined)
+			expect(rendered.container.querySelector('.transaction-funding')).toBe(funding)
+			await act(() => fireEvent.click(queries.getByRole('button', { name: 'Request price' })))
+			await nextReview
+			expect(rendered.container.querySelector('.transaction-funding')).toBe(funding)
 		} finally {
 			await rendered.cleanup()
 			dom.cleanup()
