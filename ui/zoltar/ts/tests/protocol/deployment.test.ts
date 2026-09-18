@@ -34,7 +34,18 @@ type MockWriteClient = Pick<WriteClient, 'getCode' | 'sendTransaction' | 'waitFo
 	Partial<
 		Pick<
 			WriteClient,
-			'assertCanonicalRawTransactionCost' | 'getBalance' | 'getBlock' | 'getTransactionCount' | 'sendRawTransaction' | 'installSimulationProxyDeployer' | 'onTransactionPrepared' | 'onTransactionSubmitted' | 'patchSimulationGenesisRepToken' | 'recordCanonicalRawTransaction' | 'requiresWalletConfirmation'
+			| 'assertCanonicalRawTransactionCost'
+			| 'getBalance'
+			| 'getBlock'
+			| 'getTransactionCount'
+			| 'sendRawTransaction'
+			| 'installSimulationProxyDeployer'
+			| 'onTransactionPlan'
+			| 'onTransactionPrepared'
+			| 'onTransactionSubmitted'
+			| 'patchSimulationGenesisRepToken'
+			| 'recordCanonicalRawTransaction'
+			| 'requiresWalletConfirmation'
 		>
 	>
 
@@ -535,7 +546,7 @@ describe('contract deployment internals', () => {
 		expect(funded).toBe(false)
 	})
 
-	test('proxy deployer step funds signer and submits raw transaction when simulation helper is unavailable', async () => {
+	test.each([false, true])('proxy deployer funds signer and submits raw transaction with upfront review: %s', async reviewed => {
 		const steps = createDeploymentSteps()
 		const proxyStep = steps.find(step => step.id === 'proxyDeployer')
 		if (proxyStep === undefined) throw new Error('Expected proxyDeployer step')
@@ -546,7 +557,14 @@ describe('contract deployment internals', () => {
 		let proxyInstalled = false
 		let rawBroadcastCount = 0
 
+		let plannedFunctions: string[] = []
 		const client = asWriteClient({
+			onTransactionPlan: reviewed
+				? steps => {
+						expect(preparedPreviews).toHaveLength(0)
+						plannedFunctions = steps.map(step => step.functionName)
+					}
+				: undefined,
 			getBalance: async () => 0n,
 			getCode: async () => (proxyInstalled ? PROXY_DEPLOYER_RUNTIME_CODE : undefined),
 			onTransactionPrepared: preview => {
@@ -569,12 +587,15 @@ describe('contract deployment internals', () => {
 		const hash = await proxyStep.deploy(client)
 
 		expect(hash).toBe(deployHash)
-		expect(seen).toEqual([
+		const expectedSeen = [
 			'0xf87e8085174876e800830186a08080ad601f80600e600039806000f350fe60003681823780368234f58015156014578182fd5b80825250506014600cf31ba02222222222222222222222222222222222222222222222222222222222222222a02222222222222222222222222222222222222222222222222222222222222222',
 			'none',
 			'0xf87e8085174876e800830186a08080ad601f80600e600039806000f350fe60003681823780368234f58015156014578182fd5b80825250506014600cf31ba02222222222222222222222222222222222222222222222222222222222222222a02222222222222222222222222222222222222222222222222222222222222222',
-		])
-		expect(preparedPreviews.map(preview => preview.functionName)).toEqual(['Broadcast deterministic proxy deployer transaction', 'Fund deterministic proxy deployer signer without surplus', 'Broadcast deterministic proxy deployer transaction'])
+		]
+		expect(seen).toEqual(expectedSeen)
+		const expectedFunctions = ['Broadcast deterministic proxy deployer transaction', 'Fund deterministic proxy deployer signer without surplus', 'Broadcast deterministic proxy deployer transaction']
+		expect(preparedPreviews.map(preview => preview.functionName)).toEqual(expectedFunctions)
+		if (reviewed) expect(plannedFunctions).toEqual(expectedFunctions)
 		expect(preparedPreviews[1]?.value).toBe(10_000_000_000_000_000n)
 		const rawBroadcastPreview = preparedPreviews[2]
 		if (rawBroadcastPreview === undefined) throw new Error('Expected raw broadcast preview')

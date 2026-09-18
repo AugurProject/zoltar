@@ -1,3 +1,4 @@
+import type { TransactionPlanStep } from '@zoltar/ui-core-shared/wallet/chainBackend.js'
 import { decodeEventLog, parseAbiItem, getAddress, zeroAddress, type Address, type Hex, type TransactionReceipt } from '@zoltar/core-shared/evm/ethereum'
 import { ABIS } from '@zoltar/ui-core-shared/abis.js'
 import { sameAddress } from '@zoltar/ui-core-shared/lib/address.js'
@@ -405,9 +406,28 @@ async function assertCoordinatorRequestPriceAllowed(client: Pick<WriteClient, 'r
 	if (pendingReportId > 0n) throw new Error('Oracle price request is already pending')
 }
 
-async function fundCoordinatorInitialReport(client: WriteClient, managerAddress: Address, proposedRepPerEthPrice: bigint, requestedInitialAttoWeth = 0n) {
+async function fundCoordinatorInitialReport(client: WriteClient, managerAddress: Address, proposedRepPerEthPrice: bigint, requestedInitialAttoWeth: bigint, finalStep: TransactionPlanStep) {
 	const fundingRequirement = await loadCoordinatorInitialReportFundingRequirement(client, managerAddress, client.account.address, proposedRepPerEthPrice, requestedInitialAttoWeth)
 	if (fundingRequirement.currentRepBalanceAttoRep < fundingRequirement.initialReportAmount2) throw new Error('Insufficient REP balance for coordinator initial report')
+	const requiredEth = fundingRequirement.wethShortfallAttoEth + (finalStep.value ?? 0n)
+	if ((await client.getBalance({ address: client.account.address })) < requiredEth) throw new Error('Insufficient ETH for initial report funding and the oracle fee. Gas is additional.')
+	const estimatedBounty = await readOracleRequestCost(client, managerAddress)
+	if (estimatedBounty > (finalStep.value ?? 0n)) throw new Error('The oracle fee increased. Review the price request again before funding it.')
+	const expectedWeth = requestedInitialAttoWeth > fundingRequirement.minimumToken1ReportAttoEth ? requestedInitialAttoWeth : fundingRequirement.minimumToken1ReportAttoEth
+	const expectedRep = (expectedWeth * proposedRepPerEthPrice + COORDINATOR_PRICE_PRECISION - 1n) / COORDINATOR_PRICE_PRECISION
+	client.onTransactionPlan?.([
+		...(fundingRequirement.wethShortfallAttoEth > 0n ? [{ functionName: 'deposit', contractAddress: getWethAddress(), value: fundingRequirement.wethShortfallAttoEth }] : []),
+		{ functionName: 'approve', contractAddress: fundingRequirement.reputationTokenAddress, args: [managerAddress, fundingRequirement.initialReportAmount2] },
+		{ functionName: 'approve', contractAddress: getWethAddress(), args: [managerAddress, fundingRequirement.maximumInitialAttoWeth] },
+		{
+			...finalStep,
+			oracleOutcome: { settlerRewardAttoEth: estimatedBounty, ethRefundAttoEth: (finalStep.value ?? 0n) - estimatedBounty, returnToWallet: true },
+			tokenFunding: [
+				{ tokenAddress: fundingRequirement.reputationTokenAddress, amount: expectedRep, limit: fundingRequirement.initialReportAmount2 },
+				{ tokenAddress: getWethAddress(), amount: expectedWeth, limit: fundingRequirement.maximumInitialAttoWeth },
+			],
+		},
+	])
 	if (fundingRequirement.wethShortfallAttoEth > 0n) {
 		await wrapWeth(client, fundingRequirement.wethShortfallAttoEth)
 	}
@@ -429,13 +449,14 @@ async function fundCoordinatorInitialReport(client: WriteClient, managerAddress:
 export async function requestOraclePrice(client: WriteClient, managerAddress: Address, proposedRepPerEthPrice?: bigint, requestedInitialAttoWeth = 0n, reviewedRequestValueAttoEth?: bigint) {
 	await assertCoordinatorRequestPriceAllowed(client, managerAddress)
 	const resolvedInitialReportPrice = proposedRepPerEthPrice ?? (await getCoordinatorInitialReportPrice(client, managerAddress, requestedInitialAttoWeth))
-	await fundCoordinatorInitialReport(client, managerAddress, resolvedInitialReportPrice, requestedInitialAttoWeth)
+	const requestValue = reviewedRequestValueAttoEth ?? (await loadBufferedOracleRequestEthCost(client, managerAddress))
+	await fundCoordinatorInitialReport(client, managerAddress, resolvedInitialReportPrice, requestedInitialAttoWeth, { functionName: 'requestPrice', contractAddress: managerAddress, value: requestValue })
 	const callParams = {
 		address: managerAddress,
 		abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
 		functionName: 'requestPrice',
 		args: [resolvedInitialReportPrice, requestedInitialAttoWeth],
-		value: reviewedRequestValueAttoEth ?? (await loadBufferedOracleRequestEthCost(client, managerAddress)),
+		value: requestValue,
 	}
 	const hash = await writeContractAndWait(client, () => callParams)
 	return {
@@ -462,7 +483,7 @@ export async function queueSecurityPoolLiquidation(client: WriteClient, managerA
 	const queueOperationValueAttoEth = await loadOracleManagerQueueOperationEthValue(client, managerAddress)
 	const proposedRepPerEthPrice = queueOperationValueAttoEth > 0n ? await getCoordinatorInitialReportPrice(client, managerAddress, requestedInitialAttoWeth) : 0n
 	if (queueOperationValueAttoEth > 0n) {
-		await fundCoordinatorInitialReport(client, managerAddress, proposedRepPerEthPrice, requestedInitialAttoWeth)
+		await fundCoordinatorInitialReport(client, managerAddress, proposedRepPerEthPrice, requestedInitialAttoWeth, { functionName: 'requestPriceIfNeededAndStageLiquidation', contractAddress: managerAddress, value: queueOperationValueAttoEth })
 	}
 	const callParams = {
 		address: managerAddress,
@@ -484,7 +505,7 @@ export async function queueOracleManagerOperation(client: WriteClient, managerAd
 	const queueOperationValueAttoEth = await loadOracleManagerQueueOperationEthValue(client, managerAddress)
 	const resolvedInitialReportPrice = queueOperationValueAttoEth > 0n ? (proposedRepPerEthPrice ?? (await getCoordinatorInitialReportPrice(client, managerAddress, requestedInitialAttoWeth))) : (proposedRepPerEthPrice ?? 0n)
 	if (queueOperationValueAttoEth > 0n) {
-		await fundCoordinatorInitialReport(client, managerAddress, resolvedInitialReportPrice, requestedInitialAttoWeth)
+		await fundCoordinatorInitialReport(client, managerAddress, resolvedInitialReportPrice, requestedInitialAttoWeth, { functionName: 'requestPriceIfNeededAndStageOperation', contractAddress: managerAddress, args: [encodeOracleQueueOperation(operation)], value: queueOperationValueAttoEth })
 	}
 	const callParams = {
 		address: managerAddress,

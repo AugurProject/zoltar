@@ -1,3 +1,4 @@
+import { TransactionStepsModal } from './transactions/TransactionStepsModal.js'
 import { useState } from 'preact/hooks'
 import { AppHeaderShell } from '@zoltar/ui-core-shared/app/components/AppHeaderShell.js'
 import { AppPageHeading } from '@zoltar/ui-core-shared/app/components/AppPageHeading.js'
@@ -297,6 +298,7 @@ export function App() {
 			transactionState={transactionState.value}
 		>
 			<AppRouteContent deploy={deployRouteContentProps} openOracle={openOracleRouteContentProps} readBackendMessage={readBackendMessage} route={activeRoute} securityPools={securityPoolsRouteContentProps} />
+			<TransactionStepsModal contextKey={`${activeEnvironmentNonce}:${walletScopedAccountAddress ?? ''}`} />
 		</ProtocolAppFrame>
 	)
 }

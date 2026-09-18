@@ -278,21 +278,35 @@ describe('Open Oracle helpers', () => {
 	})
 
 	test('createOpenOracleReportInstance creates a browsable report and browse ordering is newest-first', async () => {
-		const createResult1 = await createOpenOracleReportInstance(uiWriteClient, {
-			disputeDelay: 10,
-			escalationHalt: 0n,
-			exactToken1Report: 1n,
-			initialToken2Amount: 1n,
-			ethValueAttoEth: 1_000n,
-			feePercentage: 100,
-			multiplier: 100,
-			protocolFee: 100,
-			settlementTime: 60,
-			settlerRewardAttoEth: 1_000n,
-			token1Address: addressString(GENESIS_REPUTATION_TOKEN),
-			token2Address: WETH_ADDRESS,
-		})
+		let plannedFunctions: string[] = []
+		const preparedFunctions: string[] = []
+		const createResult1 = await createOpenOracleReportInstance(
+			{
+				...uiWriteClient,
+				onTransactionPlan: steps => {
+					expect(preparedFunctions).toHaveLength(0)
+					plannedFunctions = steps.map(step => step.functionName)
+				},
+				onTransactionPrepared: preview => preparedFunctions.push(preview.functionName),
+			},
+			{
+				disputeDelay: 10,
+				escalationHalt: 0n,
+				exactToken1Report: 1n,
+				initialToken2Amount: 1n,
+				ethValueAttoEth: 1_000n,
+				feePercentage: 100,
+				multiplier: 100,
+				protocolFee: 100,
+				settlementTime: 60,
+				settlerRewardAttoEth: 1_000n,
+				token1Address: addressString(GENESIS_REPUTATION_TOKEN),
+				token2Address: WETH_ADDRESS,
+			},
+		)
 		expect(createResult1.action).toBe('createReportInstance')
+		expect(plannedFunctions).toEqual(preparedFunctions)
+		expect(plannedFunctions.slice(-3)).toEqual(['approve', 'approve', 'report'])
 
 		const createResult2 = await createOpenOracleReportInstance(uiWriteClient, {
 			disputeDelay: 10,
@@ -946,7 +960,27 @@ describe('Open Oracle helpers', () => {
 			args: [],
 		})
 		if (typeof minimumToken1ReportAttoEth !== 'bigint') throw new Error('expected bigint minimumToken1ReportAttoEth')
-		await requestOraclePrice(uiWriteClient, managerAddress, minimumToken1ReportAttoEth)
+		let plannedFunctions: string[] = []
+		const preparedFunctions: string[] = []
+		await requestOraclePrice(
+			{
+				...uiWriteClient,
+				onTransactionPlan: steps => {
+					expect(preparedFunctions).toHaveLength(0)
+					plannedFunctions = steps.map(step => step.functionName)
+					const finalStep = steps.at(-1)
+					expect(finalStep?.tokenFunding?.map(token => token.tokenAddress)).toEqual([getAddress(addressString(GENESIS_REPUTATION_TOKEN)), getAddress(WETH_ADDRESS)])
+					expect(finalStep?.tokenFunding?.[1]?.amount).toBe(minimumToken1ReportAttoEth)
+					expect(finalStep?.tokenFunding?.[0]?.amount).toBe((minimumToken1ReportAttoEth * minimumToken1ReportAttoEth + 10n ** 18n - 1n) / 10n ** 18n)
+					expect(finalStep?.value).toBe((finalStep?.oracleOutcome?.settlerRewardAttoEth ?? 0n) + (finalStep?.oracleOutcome?.ethRefundAttoEth ?? 0n))
+				},
+				onTransactionPrepared: preview => preparedFunctions.push(preview.functionName),
+			},
+			managerAddress,
+			minimumToken1ReportAttoEth,
+		)
+		expect(plannedFunctions).toEqual(preparedFunctions)
+		expect(plannedFunctions.slice(-3)).toEqual(['approve', 'approve', 'requestPrice'])
 
 		const details = await loadOracleManagerDetails(uiReadClient, managerAddress)
 		const reportId = details.pendingReportId
@@ -1238,8 +1272,11 @@ describe('Open Oracle helpers', () => {
 		const transactionHash = `0x${'3'.repeat(64)}` as Hash
 		const runOperation = async (operation: 'request' | 'liquidation-helper' | 'generic') => {
 			const quotedExactAmounts: bigint[] = []
+			let plannedFunctions: string[] = []
+			const preparedFunctions: string[] = []
 			const preparedQueueArguments: Array<readonly unknown[]> = []
 			const onTransactionPrepared: NonNullable<typeof uiWriteClient.onTransactionPrepared> = preview => {
+				preparedFunctions.push(preview.functionName)
 				if ((preview.functionName === 'requestPrice' || preview.functionName === 'requestPriceIfNeededAndStageOperation' || preview.functionName === 'requestPriceIfNeededAndStageLiquidation') && preview.args !== undefined) preparedQueueArguments.push(preview.args)
 			}
 			const readContract: typeof uiWriteClient.readContract = async parameters => {
@@ -1270,16 +1307,21 @@ describe('Open Oracle helpers', () => {
 				if (parameters.address === UNISWAP_V4_QUOTER_ADDRESS) return { result: [50n, 0n], request: {} as never } as never
 				return { result: [100n, 0n, 0, 0n], request: {} as never } as never
 			}
+			const onTransactionPlan: NonNullable<typeof uiWriteClient.onTransactionPlan> = steps => {
+				expect(preparedFunctions).toHaveLength(0)
+				plannedFunctions = steps.map(step => step.functionName)
+			}
 			const mockClient = {
 				...uiWriteClient,
 				onTransactionPrepared,
+				onTransactionPlan,
 				readContract,
 				simulateContract,
 				sendTransaction: async () => transactionHash,
 				waitForTransactionReceipt: async () => createSuccessfulReceipt(transactionHash, managerAddress),
 			}
 
-			if (operation === 'request') await requestOraclePrice(withInitializedV4Pool(mockClient), managerAddress, undefined, requestedInitialAttoWeth, 12n)
+			if (operation === 'request') await requestOraclePrice(withInitializedV4Pool(mockClient), managerAddress, undefined, requestedInitialAttoWeth, undefined)
 			else if (operation === 'liquidation-helper') await queueSecurityPoolLiquidation(withInitializedV4Pool(mockClient), managerAddress, client.account.address, 1n, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, requestedInitialAttoWeth)
 			else await queueOracleManagerOperation(withInitializedV4Pool(mockClient), managerAddress, 'liquidation', client.account.address, 1n, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, undefined, requestedInitialAttoWeth)
 
@@ -1289,6 +1331,9 @@ describe('Open Oracle helpers', () => {
 			else if (operation === 'liquidation-helper') expectedArguments = [client.account.address, client.account.address, 1n, `0x${'00'.repeat(32)}`, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, 400_000_000_000_000_000n, requestedInitialAttoWeth]
 			else expectedArguments = [expect.anything(), client.account.address, 1n, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, 400_000_000_000_000_000n, requestedInitialAttoWeth]
 			expect(preparedQueueArguments).toEqual([expectedArguments])
+			expect(plannedFunctions).toEqual(preparedFunctions)
+			expect(plannedFunctions).toHaveLength(3)
+			expect(plannedFunctions).not.toContain('deposit')
 		}
 
 		await runOperation('request')
@@ -1373,8 +1418,12 @@ describe('Open Oracle helpers', () => {
 		expect(reportDetails.settlementTimestamp).toBe(0n)
 		expect(getOpenOracleReportStatus(reportDetails)).toBe('Pending')
 
+		const repBeforeSettlement = await loadErc20Balance(uiReadClient, addressString(GENESIS_REPUTATION_TOKEN), uiWriteClient.account.address)
+		const wethBeforeSettlement = await loadErc20Balance(uiReadClient, WETH_ADDRESS, uiWriteClient.account.address)
 		await mockWindow.advanceTime(DAY)
 		await settleOracleReport(uiWriteClient, openOracleAddress, reportId)
+		expect(await loadErc20Balance(uiReadClient, addressString(GENESIS_REPUTATION_TOKEN), uiWriteClient.account.address)).toBe(repBeforeSettlement + expectedAmount2)
+		expect(await loadErc20Balance(uiReadClient, WETH_ADDRESS, uiWriteClient.account.address)).toBe(wethBeforeSettlement + amount1)
 
 		reportDetails = await loadOpenOracleReportDetails(uiReadClient, openOracleAddress, reportId)
 		expect(reportDetails.settlementTimestamp).toBeGreaterThan(0n)

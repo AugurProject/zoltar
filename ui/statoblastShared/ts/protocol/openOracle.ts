@@ -305,6 +305,7 @@ export async function createOpenOracleReportInstance(
 	let wethFundingAmountAttoEth = 0n
 	if (sameAddress(parameters.token1Address, getWethAddress())) wethFundingAmountAttoEth = parameters.exactToken1Report
 	else if (sameAddress(parameters.token2Address, getWethAddress())) wethFundingAmountAttoEth = parameters.initialToken2Amount
+	let wethShortfallAttoEth = 0n
 	if (wethFundingAmountAttoEth > 0n) {
 		const wethBalanceAttoEth = await client.readContract({
 			address: getWethAddress(),
@@ -312,8 +313,32 @@ export async function createOpenOracleReportInstance(
 			functionName: 'balanceOf',
 			args: [client.account.address],
 		})
-		if (wethBalanceAttoEth < wethFundingAmountAttoEth) await wrapWeth(client, wethFundingAmountAttoEth - wethBalanceAttoEth)
+		if (wethBalanceAttoEth < wethFundingAmountAttoEth) wethShortfallAttoEth = wethFundingAmountAttoEth - wethBalanceAttoEth
 	}
+	const [token1Balance, token2Balance, ethBalanceAttoEth] = await Promise.all([
+		client.readContract({ address: parameters.token1Address, abi: ABIS.mainnet.erc20, functionName: 'balanceOf', args: [client.account.address] }),
+		client.readContract({ address: parameters.token2Address, abi: ABIS.mainnet.erc20, functionName: 'balanceOf', args: [client.account.address] }),
+		client.getBalance({ address: client.account.address }),
+	])
+	if (token1Balance + (sameAddress(parameters.token1Address, getWethAddress()) ? wethShortfallAttoEth : 0n) < parameters.exactToken1Report) throw new Error('Insufficient token 1 balance to fund the report.')
+	if (token2Balance + (sameAddress(parameters.token2Address, getWethAddress()) ? wethShortfallAttoEth : 0n) < parameters.initialToken2Amount) throw new Error('Insufficient token 2 balance to fund the report.')
+	if (ethBalanceAttoEth < parameters.ethValueAttoEth + wethShortfallAttoEth) throw new Error('Insufficient ETH for report funding and the oracle fee. Gas is additional.')
+	client.onTransactionPlan?.([
+		...(wethShortfallAttoEth > 0n ? [{ functionName: 'deposit', contractAddress: getWethAddress(), value: wethShortfallAttoEth }] : []),
+		{ functionName: 'approve', contractAddress: parameters.token1Address, args: [getOpenOracleAddress(), parameters.exactToken1Report] },
+		{ functionName: 'approve', contractAddress: parameters.token2Address, args: [getOpenOracleAddress(), parameters.initialToken2Amount] },
+		{
+			functionName: 'report',
+			oracleOutcome: { settlerRewardAttoEth: parameters.settlerRewardAttoEth, ethRefundAttoEth: 0n, returnToWallet: false },
+			contractAddress: getOpenOracleAddress(),
+			value: parameters.ethValueAttoEth,
+			tokenFunding: [
+				{ tokenAddress: parameters.token1Address, amount: parameters.exactToken1Report },
+				{ tokenAddress: parameters.token2Address, amount: parameters.initialToken2Amount },
+			],
+		},
+	])
+	if (wethShortfallAttoEth > 0n) await wrapWeth(client, wethShortfallAttoEth)
 	await writeContractAndWait(client, () => ({
 		address: parameters.token1Address,
 		abi: ABIS.mainnet.erc20,

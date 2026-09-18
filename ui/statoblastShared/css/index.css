@@ -2950,3 +2950,25 @@
 .pool-reference-details .read-only-detail-accordion {
 	border: 0;
 }
+
+.modal-panel:has(.transaction-step-actions) {
+	overflow: hidden;
+	grid-template-rows: auto auto minmax(0, 1fr);
+}
+
+.operation-modal-body:has(> .transaction-step-actions) {
+	min-height: 0;
+	grid-template-rows: minmax(0, 1fr) auto;
+}
+
+.transaction-step-content {
+	min-height: 0;
+	overflow: auto;
+	display: grid;
+	gap: 1rem;
+}
+
+.transaction-step-actions {
+	padding-top: 1rem;
+	border-top: 1px solid var(--border-default);
+}
