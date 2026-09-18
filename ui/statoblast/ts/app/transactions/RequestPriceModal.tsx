@@ -1,8 +1,10 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks'
+import { formatUnits } from '@zoltar/core-shared/evm/ethereum'
+import { createConnectedReadClient } from '@zoltar/ui-core-shared/wallet/clients.js'
+import { getErrorMessage } from '@zoltar/ui-core-shared/lib/errors.js'
+import { getCoordinatorInitialReportPrice } from '@zoltar/ui-statoblast-shared/protocol/oracleCoordinator.js'
 import { OperationModal } from '@zoltar/ui-core-shared/components/OperationModal.js'
-import { CurrencyValue } from '@zoltar/ui-core-shared/components/CurrencyValue.js'
-import { FormInput } from '@zoltar/ui-core-shared/components/FormInput.js'
-import { ViewTabs } from '@zoltar/ui-core-shared/components/ViewTabs.js'
+import { LookupFieldRow } from '@zoltar/ui-core-shared/components/LookupFieldRow.js'
 import { ErrorNotice } from '@zoltar/ui-core-shared/components/ErrorNotice.js'
 import { LoadingText } from '@zoltar/ui-core-shared/components/LoadingText.js'
 import { GlobalTransactionPresentationProvider, useGlobalTransactionPresentation } from '@zoltar/ui-core-shared/components/GlobalTransactionPresentationContext.js'
@@ -15,8 +17,14 @@ import * as copy from '../../copy/transactionSteps.js'
 import { embeddedTransactionSteps, TransactionStepsContent } from './TransactionStepsModal.js'
 import { transactionSteps } from './transactionSteps.js'
 
-export function RequestPriceModal({ review, onConfirm, onClose, canRequest, confirmationGuardMessage, closeOnSuccessKey }: RequestPriceModalProps) {
-	const [source, setSource] = useState<'automatic' | 'manual'>('automatic')
+async function fetchUniswapPrice(review: NonNullable<RequestPriceModalProps['review']>) {
+	return await getCoordinatorInitialReportPrice(createConnectedReadClient(), review.managerAddress)
+}
+
+export function RequestPriceModal({ review, onConfirm, onClose, canRequest, confirmationGuardMessage, closeOnSuccessKey, fetchPrice = fetchUniswapPrice }: RequestPriceModalProps & { fetchPrice?: typeof fetchUniswapPrice }) {
+	const [fetching, setFetching] = useState(false)
+	const [quoteError, setQuoteError] = useState<string>()
+	const quoteAttempt = useRef(0)
 	const [price, setPrice] = useState('')
 	const [retry, setRetry] = useState(0)
 	const [running, setRunning] = useState(false)
@@ -28,10 +36,11 @@ export function RequestPriceModal({ review, onConfirm, onClose, canRequest, conf
 	const presentation = useGlobalTransactionPresentation()
 	const workflow = transactionSteps.value
 	const parsed = tryParseDecimalInput(price)
-	const priceError = source === 'manual' && (parsed === undefined || parsed <= 0n || parsed >= 2n ** 256n) ? poolCopy.manualInitialPriceError : undefined
-	const proposedPrice = source === 'manual' ? parsed : undefined
-	const key = review === undefined ? undefined : `${review.managerAddress}:${review.securityPoolAddress}:${review.universeId}:${review.requestValueAttoEth}:${source}:${price}:${retry}`
-	const valid = review !== undefined && canRequest && confirmationGuardMessage === undefined && priceError === undefined
+	const validPrice = parsed !== undefined && parsed > 0n && parsed < 2n ** 256n
+	const priceError = price !== '' && !validPrice ? poolCopy.manualInitialPriceError : undefined
+	const proposedPrice = parsed
+	const key = review === undefined ? undefined : `${review.managerAddress}:${review.securityPoolAddress}:${review.universeId}:${review.requestValueAttoEth}:${price}:${retry}`
+	const valid = review !== undefined && canRequest && confirmationGuardMessage === undefined && validPrice && !fetching
 	const ownsWorkflow = run.current !== undefined && workflow?.reviewSignal === run.current.signal
 	const sending = ownsWorkflow && (workflow?.steps.some(step => step.phase === 'pending') ?? false)
 	const current = valid && run.current?.key === key && run.current?.signal.aborted === false
@@ -39,7 +48,9 @@ export function RequestPriceModal({ review, onConfirm, onClose, canRequest, conf
 	const error = attempted === key && !running && presentation?.tone === 'error' ? presentation.detail : undefined
 
 	useLayoutEffect(() => {
-		setSource('automatic')
+		quoteAttempt.current += 1
+		setFetching(false)
+		setQuoteError(undefined)
 		setPrice('')
 		setAttempted(undefined)
 	}, [review])
@@ -49,39 +60,39 @@ export function RequestPriceModal({ review, onConfirm, onClose, canRequest, conf
 	useEffect(
 		() => () => {
 			mounted.current = false
+			quoteAttempt.current += 1
 			run.current?.cancel()
 		},
 		[],
 	)
 	useEffect(() => {
 		if (!valid || review === undefined || key === undefined || running || attempted === key) return
-		const timer = setTimeout(
-			() => {
-				const cancellation = new AbortController()
-				embeddedTransactionSteps.value = cancellation.signal
-				const cancel = () => {
-					cancellation.abort()
-					if (mounted.current) setAttempted(undefined)
-					const release = () => {
-						if (embeddedTransactionSteps.value === cancellation.signal) embeddedTransactionSteps.value = undefined
-					}
-					if (mounted.current) release()
-					else queueMicrotask(release)
+		const timer = setTimeout(() => {
+			const cancellation = new AbortController()
+			embeddedTransactionSteps.value = cancellation.signal
+			const cancel = () => {
+				cancellation.abort()
+				if (mounted.current) setAttempted(undefined)
+				const release = () => {
+					if (embeddedTransactionSteps.value === cancellation.signal) embeddedTransactionSteps.value = undefined
 				}
-				run.current = { key, signal: cancellation.signal, cancel }
-				setAttempted(key)
-				setRunning(true)
-				void Promise.resolve(confirm.current({ ...review, proposedRepPerEthPrice: proposedPrice }, cancellation.signal)).finally(() => {
-					if (mounted.current) setRunning(false)
-					if (cancellation.signal.aborted && embeddedTransactionSteps.value === cancellation.signal) embeddedTransactionSteps.value = undefined
-				})
-			},
-			source === 'manual' ? 300 : 0,
-		)
+				if (mounted.current) release()
+				else queueMicrotask(release)
+			}
+			run.current = { key, signal: cancellation.signal, cancel }
+			setAttempted(key)
+			setRunning(true)
+			void Promise.resolve(confirm.current({ ...review, proposedRepPerEthPrice: proposedPrice }, cancellation.signal)).finally(() => {
+				if (mounted.current) setRunning(false)
+				if (cancellation.signal.aborted && embeddedTransactionSteps.value === cancellation.signal) embeddedTransactionSteps.value = undefined
+			})
+		}, 300)
 		return () => clearTimeout(timer)
-	}, [valid, review, key, running, attempted, proposedPrice, source])
+	}, [valid, review, key, running, attempted, proposedPrice])
 	const close = () => {
 		if (sending) return
+		quoteAttempt.current += 1
+		setFetching(false)
 		run.current?.cancel()
 		onClose()
 	}
@@ -89,31 +100,44 @@ export function RequestPriceModal({ review, onConfirm, onClose, canRequest, conf
 		if (closeOnSuccessKey !== undefined && presentation?.tone === 'success') close()
 	}, [closeOnSuccessKey, presentation?.tone])
 
+	const fetchQuote = async () => {
+		if (review === undefined || sending || fetching) return
+		const attempt = ++quoteAttempt.current
+		setFetching(true)
+		setQuoteError(undefined)
+		run.current?.cancel()
+		try {
+			const value = await fetchPrice(review)
+			if (attempt !== quoteAttempt.current || !mounted.current) return
+			setPrice(formatUnits(value, 18))
+		} catch (error) {
+			if (attempt === quoteAttempt.current && mounted.current) setQuoteError(getErrorMessage(error, copy.uniswapPriceFailed))
+		} finally {
+			if (attempt === quoteAttempt.current && mounted.current) setFetching(false)
+		}
+	}
 	const priceControls = (
 		<div className='request-price-fields'>
-			<div>
-				<ViewTabs
-					ariaLabel={poolCopy.initialPriceSource}
-					variant='segmented'
-					value={source}
-					onChange={setSource}
-					options={[
-						{ value: 'automatic', label: poolCopy.automaticUniswapPrice, disabled: sending },
-						{ value: 'manual', label: poolCopy.manualInitialPrice, disabled: sending },
-					]}
-				/>
-			</div>
-			{source === 'manual' ? (
-				<label className='field'>
-					<span>{poolCopy.manualRepPerEth}</span>
-					<FormInput aria-label={poolCopy.manualRepPerEth} value={price} inputMode='decimal' disabled={sending} onInput={event => setPrice(event.currentTarget.value)} error={priceError} />
-				</label>
-			) : undefined}
-			{showSteps && source === 'automatic' ? (
-				<p className='detail'>
-					{poolCopy.manualRepPerEth}: <CurrencyValue precision='exact' value={workflow.steps.at(-1)?.proposedRepPerEthPrice} />
-				</p>
-			) : undefined}
+			<LookupFieldRow
+				label={poolCopy.manualRepPerEth}
+				value={price}
+				inputMode='decimal'
+				disabled={sending}
+				onInput={value => {
+					quoteAttempt.current += 1
+					setFetching(false)
+					setQuoteError(undefined)
+					setPrice(value)
+				}}
+				error={priceError}
+				action={
+					<button className='secondary request-price-fetch' type='button' disabled={sending || fetching} onClick={() => void fetchQuote()}>
+						{fetching ? <LoadingText>{copy.fetchingUniswapPrice}</LoadingText> : copy.fetchUniswapPrice}
+					</button>
+				}
+			/>
+
+			<ErrorNotice message={quoteError} />
 		</div>
 	)
 

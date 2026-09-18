@@ -2974,6 +2974,15 @@
 	gap: 1rem;
 }
 
+.request-price-fields .lookup-field-controls.has-action {
+	grid-template-columns: minmax(0, 1fr) auto;
+	gap: 0.75rem;
+}
+
+.request-price-fetch {
+	min-width: 12rem;
+}
+
 .transaction-step-content {
 	min-height: 0;
 	overflow: auto;

@@ -321,7 +321,7 @@ export async function loadOracleManagerQueueOperationEthValue(client: Pick<Write
 	return funding.includeBuffer ? addOpenOracleBountyBuffer(funding.costAttoEth) : funding.costAttoEth
 }
 
-async function getCoordinatorInitialReportPrice(client: CoordinatorInitialReportClient, managerAddress: Address, requestedInitialAttoWeth = 0n) {
+export async function getCoordinatorInitialReportPrice(client: CoordinatorInitialReportClient, managerAddress: Address, requestedInitialAttoWeth = 0n) {
 	const [minimumToken1ReportAttoEth, rawReputationTokenAddress] = await Promise.all([
 		client.readContract({
 			address: managerAddress,
