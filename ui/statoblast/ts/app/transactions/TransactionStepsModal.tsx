@@ -105,7 +105,7 @@ export function TransactionStepsContent({ contextKey, inline = false, onClose }:
 	const content = (
 		<>
 			<div className='transaction-step-content'>
-				{funding.length === 0 ? undefined : <TransactionFundingSummary funding={funding} totalEth={totalEth} outcome={outcome} />}
+				{funding.length === 0 ? undefined : <TransactionFundingSummary funding={funding} totalAttoEth={totalEth} outcome={outcome} />}
 
 				{funding.length === 0 || completed ? undefined : <p className='detail transaction-funding-note'>{copy.fundingDetail}</p>}
 				{error === undefined ? undefined : <ErrorNotice message={error} />}

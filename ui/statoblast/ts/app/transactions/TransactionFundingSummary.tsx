@@ -7,7 +7,7 @@ export function EthAmount({ value }: { value: bigint | undefined }) {
 	return <CurrencyValue precision='exact' copyable={false} value={value} units={useNanoEth ? 9 : 18} suffix={useNanoEth ? copy.nanoEth : commonCopy.eth} />
 }
 
-export function TransactionFundingSummary({ funding, totalEth, outcome }: { funding: readonly { amount: string }[]; totalEth: bigint | undefined; outcome?: { returnToWallet: boolean; settlerRewardAttoEth: bigint | undefined; ethRefundAttoEth: bigint | undefined } | undefined }) {
+export function TransactionFundingSummary({ funding, totalAttoEth, outcome }: { funding: readonly { amount: string }[]; totalAttoEth: bigint | undefined; outcome?: { returnToWallet: boolean; settlerRewardAttoEth: bigint | undefined; ethRefundAttoEth: bigint | undefined } | undefined }) {
 	return (
 		<section className='transaction-funding' aria-label={copy.depositAndReturn}>
 			<div className='transaction-funding-summary'>
@@ -24,7 +24,7 @@ export function TransactionFundingSummary({ funding, totalEth, outcome }: { fund
 					<div>
 						<dt>{copy.totalEth}</dt>
 						<dd>
-							<EthAmount value={totalEth} />
+							<EthAmount value={totalAttoEth} />
 						</dd>
 					</div>
 					{outcome === undefined ? undefined : (
