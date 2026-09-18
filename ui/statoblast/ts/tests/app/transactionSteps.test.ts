@@ -328,7 +328,12 @@ for (const change of ['minimum', 'fee', 'lower-minimum', 'sufficient-allowance']
 		const reviewed = createReviewedClient({ ...client, ...reads, getBalance: async () => 1000n, sendTransaction, waitForTransactionReceipt: async () => receipt })
 		const action = requestOraclePrice(reviewed, account, 10n ** 18n, 0n, 122n).catch(error => error)
 		await waitForReview()
-		expect(transactionSteps.value?.steps).toHaveLength(1)
+		expect(transactionSteps.value?.steps).toHaveLength(3)
+		for (const step of transactionSteps.value?.steps.slice(0, 2) ?? []) {
+			expect(step.phase).toBe('skipped')
+			expect(step.approval?.requiredAmount).toBe(3n)
+			expect(step.approval?.approvedAmount).toBe(3n)
+		}
 		if (change === 'minimum') minimum = 4n
 		if (change === 'fee') baseFeePerGas = 2n
 		if (change === 'lower-minimum') {
@@ -346,7 +351,7 @@ for (const change of ['minimum', 'fee', 'lower-minimum', 'sufficient-allowance']
 		} else {
 			expect(await action).toBeInstanceOf(Error)
 			expect(sendTransaction).not.toHaveBeenCalled()
-			expect(transactionSteps.value?.steps[0]?.phase).toBe('failed')
+			expect(transactionSteps.value?.steps.at(-1)?.phase).toBe('failed')
 		}
 	})
 

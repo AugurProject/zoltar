@@ -954,7 +954,7 @@ describe('Open Oracle helpers', () => {
 		expect(details.requestPriceCostAttoEth).toBeGreaterThan(101n)
 	})
 
-	test('requestOraclePrice keeps sufficient existing approvals out of the transaction plan', async () => {
+	test('requestOraclePrice retains sufficient approvals in the plan without sending them', async () => {
 		for (const address of [REP_ADDRESS, getAddress(WETH_ADDRESS)]) {
 			const hash = await uiWriteClient.writeContract({ address, abi: ABIS.mainnet.erc20, functionName: 'approve', args: [managerAddress, maxUint256] })
 			await uiWriteClient.waitForTransactionReceipt({ hash })
@@ -972,9 +972,8 @@ describe('Open Oracle helpers', () => {
 			managerAddress,
 			10n ** 18n,
 		)
-		expect(plannedFunctions).toEqual(preparedFunctions)
-		expect(plannedFunctions).not.toContain('approve')
-		expect(plannedFunctions.at(-1)).toBe('requestPrice')
+		expect(plannedFunctions).toEqual(['deposit', 'approve', 'approve', 'requestPrice'])
+		expect(preparedFunctions).toEqual(['deposit', 'requestPrice'])
 		expect((await loadOracleManagerDetails(uiReadClient, managerAddress)).pendingReportId).toBeGreaterThan(0n)
 	})
 
