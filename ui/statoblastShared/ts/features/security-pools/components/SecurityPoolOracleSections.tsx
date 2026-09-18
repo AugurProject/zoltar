@@ -38,23 +38,17 @@ function getStagedOperationsRefreshLabel({ loadingManager, managerError, manager
 	return securityPoolCopy.refreshStagedOperations
 }
 
-export function SecurityPoolRequestPriceModal({
-	canRequest,
-	closeOnSuccessKey,
-	confirmationGuardMessage,
-	onClose,
-	onConfirm,
-	pending,
-	review,
-}: {
+export type RequestPriceModalProps = {
 	canRequest: boolean
 	closeOnSuccessKey: string | undefined
 	confirmationGuardMessage: string | undefined
 	onClose: () => void
-	onConfirm: (review: RequestPriceReview) => void
+	onConfirm: (review: RequestPriceReview, signal?: AbortSignal) => void | Promise<void>
 	pending: boolean
 	review: RequestPriceReview | undefined
-}) {
+}
+
+export function SecurityPoolRequestPriceModal({ canRequest, closeOnSuccessKey, confirmationGuardMessage, onClose, onConfirm, pending, review }: RequestPriceModalProps) {
 	const manualPriceFieldId = useId()
 	const [priceSource, setPriceSource] = useState<'automatic' | 'manual'>('automatic')
 	const [manualPrice, setManualPrice] = useState('')
@@ -94,7 +88,7 @@ export function SecurityPoolRequestPriceModal({
 					idleLabel={securityPoolCopy.confirmPriceRequest}
 					pendingLabel={securityPoolCopy.requestingNewPrice}
 					onClick={() => {
-						if (review !== undefined && manualPriceError === undefined && !pending && canRequest && confirmationGuardMessage === undefined) onConfirm({ ...review, proposedRepPerEthPrice })
+						if (review !== undefined && manualPriceError === undefined && !pending && canRequest && confirmationGuardMessage === undefined) void onConfirm({ ...review, proposedRepPerEthPrice })
 					}}
 					pending={pending}
 					availability={{ disabled: review === undefined || !canRequest || confirmationGuardMessage !== undefined || manualPriceError !== undefined, reason: canRequest ? (confirmationGuardMessage ?? manualPriceError) : undefined }}

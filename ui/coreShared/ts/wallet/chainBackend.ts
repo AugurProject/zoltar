@@ -22,6 +22,8 @@ export type WriteClient = WalletClient<Transport, NetworkProfile['chain'], Accou
 	}
 
 export type CreateWriteClientCallbacks = {
+	// Cancels the UI review, not transactions already submitted to the chain.
+	reviewSignal?: AbortSignal | undefined
 	onTransactionPrepared?: ((preview: TransactionRequestPreview) => void) | undefined
 	onTransactionSubmitted?: (hash: Hash) => void
 }

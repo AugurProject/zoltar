@@ -7,6 +7,7 @@ import { useEffect } from 'preact/hooks'
 import { OperationModal } from '@zoltar/ui-core-shared/components/OperationModal.js'
 import { CurrencyValue } from '@zoltar/ui-core-shared/components/CurrencyValue.js'
 import { ErrorNotice } from '@zoltar/ui-core-shared/components/ErrorNotice.js'
+import { signal } from '@preact/signals'
 import { transactionSteps } from './transactionSteps.js'
 
 function EthAmount({ value }: { value: bigint | undefined }) {
@@ -14,12 +15,21 @@ function EthAmount({ value }: { value: bigint | undefined }) {
 	return <CurrencyValue precision='exact' copyable={false} value={value} units={useNanoEth ? 9 : 18} suffix={useNanoEth ? copy.nanoEth : commonCopy.eth} />
 }
 
+export const embeddedTransactionSteps = signal<AbortSignal | undefined>(undefined)
+
 export function TransactionStepsModal({ contextKey }: { contextKey: string }) {
 	useEffect(() => () => transactionSteps.peek()?.cancel(), [contextKey])
 	const presentation = useGlobalTransactionPresentation()
 	useEffect(() => {
 		if (presentation?.tone === 'success') transactionSteps.value?.finish()
 	}, [presentation?.tone, presentation?.hash])
+	if (transactionSteps.value?.reviewSignal?.aborted) return undefined
+	if (embeddedTransactionSteps.value !== undefined && transactionSteps.value?.reviewSignal === embeddedTransactionSteps.value) return undefined
+	return <TransactionStepsContent contextKey={contextKey} />
+}
+
+export function TransactionStepsContent({ contextKey, inline = false, onClose }: { contextKey: string; inline?: boolean; onClose?: () => void }) {
+	const presentation = useGlobalTransactionPresentation()
 	const workflow = transactionSteps.value
 	const current = workflow?.steps[workflow.activeIndex]
 	if (workflow === undefined || current === undefined) return undefined
@@ -87,7 +97,7 @@ export function TransactionStepsModal({ contextKey }: { contextKey: string }) {
 						)}
 						{final ? (
 							<div className='actions transaction-step-close'>
-								<button className='secondary' type='button' onClick={workflow.cancel} disabled={pending}>
+								<button className='secondary' type='button' onClick={onClose ?? workflow.cancel} disabled={pending}>
 									{completed || error !== undefined ? commonCopy.close : commonCopy.cancel}
 								</button>
 							</div>
@@ -97,57 +107,66 @@ export function TransactionStepsModal({ contextKey }: { contextKey: string }) {
 			})}
 		</TransactionActionGroup>
 	)
+	const content = (
+		<>
+			<div className='transaction-step-content'>
+				{funding.length === 0 ? undefined : (
+					<section className='transaction-funding' aria-label={copy.depositAndReturn}>
+						<div className='transaction-funding-summary'>
+							<h4>{copy.depositAndReturn}</h4>
+							<div className='transaction-deposits'>
+								{funding.map(token => (
+									<strong key={token.amount}>{token.amount}</strong>
+								))}
+							</div>
+							{outcome === undefined ? undefined : <p className='detail'>{outcome.returnToWallet ? copy.coordinatorReturnDetail : copy.standaloneReturnDetail}</p>}
+						</div>
+						<div className='transaction-funding-summary'>
+							<dl className='transaction-costs'>
+								<div>
+									<dt>{copy.totalEth}</dt>
+									<dd>
+										<EthAmount value={totalEth} />
+									</dd>
+								</div>
+								{outcome === undefined ? undefined : (
+									<>
+										<div>
+											<dt>{copy.settlementBounty}</dt>
+											<dd>
+												<EthAmount value={outcome.settlerRewardAttoEth} />
+											</dd>
+										</div>
+										<div>
+											<dt>{copy.ethRefund}</dt>
+											<dd>
+												<EthAmount value={outcome.ethRefundAttoEth} />
+											</dd>
+										</div>
+									</>
+								)}
+							</dl>
+							{outcome === undefined ? undefined : <p className='detail'>{copy.settlementCostDetail}</p>}
+						</div>
+					</section>
+				)}
+
+				{funding.length === 0 || completed ? undefined : <p className='detail transaction-funding-note'>{copy.fundingDetail}</p>}
+				{error === undefined ? undefined : <ErrorNotice message={error} />}
+			</div>
+			<div className='transaction-step-actions transaction-approval-editor'>{renderTransactionActions()}</div>
+		</>
+	)
 	return (
 		<GlobalTransactionPresentationProvider transaction={undefined}>
 			<TransactionActionButtonLockProvider locked={false}>
-				<OperationModal isOpen closeDisabled={pending} title={workflow.steps.at(-1)?.title ?? current.title} onClose={workflow.cancel}>
-					<div className='transaction-step-content'>
-						{funding.length === 0 ? undefined : (
-							<section className='transaction-funding' aria-label={copy.depositAndReturn}>
-								<div className='transaction-funding-summary'>
-									<h4>{copy.depositAndReturn}</h4>
-									<div className='transaction-deposits'>
-										{funding.map(token => (
-											<strong key={token.amount}>{token.amount}</strong>
-										))}
-									</div>
-									{outcome === undefined ? undefined : <p className='detail'>{outcome.returnToWallet ? copy.coordinatorReturnDetail : copy.standaloneReturnDetail}</p>}
-								</div>
-								<div className='transaction-funding-summary'>
-									<dl className='transaction-costs'>
-										<div>
-											<dt>{copy.totalEth}</dt>
-											<dd>
-												<EthAmount value={totalEth} />
-											</dd>
-										</div>
-										{outcome === undefined ? undefined : (
-											<>
-												<div>
-													<dt>{copy.settlementBounty}</dt>
-													<dd>
-														<EthAmount value={outcome.settlerRewardAttoEth} />
-													</dd>
-												</div>
-												<div>
-													<dt>{copy.ethRefund}</dt>
-													<dd>
-														<EthAmount value={outcome.ethRefundAttoEth} />
-													</dd>
-												</div>
-											</>
-										)}
-									</dl>
-									{outcome === undefined ? undefined : <p className='detail'>{copy.settlementCostDetail}</p>}
-								</div>
-							</section>
-						)}
-
-						{funding.length === 0 || completed ? undefined : <p className='detail transaction-funding-note'>{copy.fundingDetail}</p>}
-						{error === undefined ? undefined : <ErrorNotice message={error} />}
-					</div>
-					<div className='transaction-step-actions transaction-approval-editor'>{renderTransactionActions()}</div>
-				</OperationModal>
+				{inline ? (
+					content
+				) : (
+					<OperationModal isOpen closeDisabled={pending} title={workflow.steps.at(-1)?.title ?? current.title} onClose={onClose ?? workflow.cancel}>
+						{content}
+					</OperationModal>
+				)}
 			</TransactionActionButtonLockProvider>
 		</GlobalTransactionPresentationProvider>
 	)

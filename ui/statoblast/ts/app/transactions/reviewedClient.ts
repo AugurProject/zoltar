@@ -19,6 +19,7 @@ const actionDescriptions: Record<string, { title: string; description: string }>
 async function describeTransaction(client: WriteClient, preview: TransactionRequestPreview & Pick<TransactionPlanStep, 'optional' | 'tokenFunding' | 'oracleOutcome'>, requiredApprovalAmount?: bigint): Promise<TransactionStepDetails> {
 	const action = actionDescriptions[preview.functionName]
 	const details: TransactionStepDetails = {
+		proposedRepPerEthPrice: preview.functionName === 'requestPrice' && typeof preview.args?.[0] === 'bigint' ? preview.args[0] : undefined,
 		optional: preview.optional ?? false,
 		oracleOutcome: preview.oracleOutcome,
 		tokenFunding: await Promise.all(
@@ -65,8 +66,8 @@ async function describeTransaction(client: WriteClient, preview: TransactionRequ
 	return details
 }
 
-export function createReviewedClient(client: WriteClient, validate: () => Promise<void> = async () => undefined): WriteClient {
-	const controller = createTransactionStepController()
+export function createReviewedClient(client: WriteClient, validate: () => Promise<void> = async () => undefined, signal?: AbortSignal): WriteClient {
+	const controller = createTransactionStepController(signal)
 	const environment = createActiveEnvironmentGuard()
 	let preview: TransactionRequestPreview | undefined
 	let plan: readonly TransactionPlanStep[] | undefined
@@ -97,6 +98,7 @@ export function createReviewedClient(client: WriteClient, validate: () => Promis
 		preview = undefined
 		try {
 			if (!environment.isCurrent()) throw new Error('The network changed. Review the action again.')
+			signal?.throwIfAborted()
 			await validate()
 			plan ??= [transaction]
 			await initialize()
@@ -116,6 +118,7 @@ export function createReviewedClient(client: WriteClient, validate: () => Promis
 				transaction = { ...transaction, args: approvalArgs, data: encodeFunctionData({ abi: ABIS.mainnet.erc20, functionName: 'approve', args: approvalArgs }) }
 			}
 			stepIndex += 1
+			signal?.throwIfAborted()
 			await validate()
 			if (!environment.isCurrent()) throw new Error('The network changed. Review the action again.')
 			const currentFunding = await expected.refreshFundingRequirements?.()
@@ -130,6 +133,7 @@ export function createReviewedClient(client: WriteClient, validate: () => Promis
 			}
 			if (expected.tokenFunding !== undefined) await validate()
 			if (!environment.isCurrent()) throw new Error('The network changed. Review the action again.')
+			signal?.throwIfAborted()
 			client.onTransactionPrepared?.(transaction)
 			const hash = await execute(approvalArgs)
 			controller.submitted(hash)
@@ -148,6 +152,7 @@ export function createReviewedClient(client: WriteClient, validate: () => Promis
 		runFundingTransaction: async (requiredIndices, execute) => {
 			try {
 				if (!environment.isCurrent()) throw new Error('The network changed. Review the action again.')
+				signal?.throwIfAborted()
 				await validate()
 				await initialize()
 				selectedFunding = await controller.chooseFunding(requiredIndices)

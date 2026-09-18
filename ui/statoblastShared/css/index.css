@@ -2965,6 +2965,15 @@
 	grid-template-rows: minmax(0, 1fr) auto;
 }
 
+.operation-modal-body:has(> .request-price-fields):has(> .transaction-step-actions) {
+	grid-template-rows: auto minmax(0, 1fr) auto;
+}
+
+.request-price-fields {
+	display: grid;
+	gap: 1rem;
+}
+
 .transaction-step-content {
 	min-height: 0;
 	overflow: auto;
@@ -3124,8 +3133,8 @@
 	}
 
 	.modal-panel:has(.transaction-step-actions) > .modal-header {
-		padding-top: 0.5rem;
-		padding-bottom: 0.5rem;
+		margin: -0.75rem -0.75rem 0;
+		padding: 0.5rem 0.75rem;
 	}
 
 	.transaction-funding {

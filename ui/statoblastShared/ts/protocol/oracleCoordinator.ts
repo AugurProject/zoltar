@@ -474,7 +474,7 @@ export async function requestOraclePrice(client: WriteClient, managerAddress: Ad
 	await assertCoordinatorRequestPriceAllowed(client, managerAddress)
 	const resolvedInitialReportPrice = proposedRepPerEthPrice ?? (await getCoordinatorInitialReportPrice(client, managerAddress, requestedInitialAttoWeth))
 	const requestValue = reviewedRequestValueAttoEth ?? (await loadBufferedOracleRequestEthCost(client, managerAddress))
-	await fundCoordinatorInitialReport(client, managerAddress, resolvedInitialReportPrice, requestedInitialAttoWeth, { functionName: 'requestPrice', contractAddress: managerAddress, value: requestValue })
+	await fundCoordinatorInitialReport(client, managerAddress, resolvedInitialReportPrice, requestedInitialAttoWeth, { functionName: 'requestPrice', contractAddress: managerAddress, value: requestValue, args: [resolvedInitialReportPrice, requestedInitialAttoWeth] })
 	const callParams = {
 		address: managerAddress,
 		abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
