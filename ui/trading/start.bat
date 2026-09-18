@@ -1,7 +1,10 @@
 @echo off
 pushd "%~dp0" || exit /b 1
 docker network inspect zoltar >nul 2>&1 || docker network create zoltar || exit /b 1
-docker compose up --build --force-recreate
+docker compose stop || goto finish
+docker compose build || goto finish
+docker compose up --no-build --force-recreate
+:finish
 set "exit_code=%errorlevel%"
 popd
 pause

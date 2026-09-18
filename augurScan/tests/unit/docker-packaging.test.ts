@@ -71,7 +71,7 @@ describe('Docker packaging', () => {
 	test('provides a location-independent Windows launcher', async () => {
 		const source = (await readFile(windowsLauncher, 'utf8')).replaceAll('\r\n', '\n')
 		expect(source).toContain('pushd "%~dp0"')
-		expect(source).toContain('docker compose up --build --force-recreate\nset "exit_code=%errorlevel%"\npopd\npause\nexit /b %exit_code%')
+		expect(source).toContain('docker compose stop || goto finish\ndocker compose build || goto finish\ndocker compose up --no-build --force-recreate\n:finish\nset "exit_code=%errorlevel%"\npopd\npause\nexit /b %exit_code%')
 	})
 
 	test('excludes local environment secrets from the repository build context', async () => {

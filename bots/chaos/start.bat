@@ -6,9 +6,10 @@ pushd "%~dp0" || goto failed
 set "chaos_pushed=1"
 docker network inspect zoltar >nul 2>&1 || docker network create zoltar || goto failed
 if /I "%~1"=="doctor" goto doctor
+docker compose stop || goto failed
 docker compose build || goto failed
 docker compose run --rm --no-deps chaos bun src/cli/doctor.ts --if-live-capable || goto failed
-docker compose up --build --force-recreate -d || goto failed
+docker compose up --no-build --force-recreate -d || goto failed
 echo.
 echo Chaos bot started with its persisted configuration.
 echo A first-ever volume uses the paused dry-run template; an existing volume may resume due live work immediately.

@@ -35,7 +35,7 @@ describe('Docker packaging', () => {
 	test('provides a location-independent Windows launcher', async () => {
 		const commands = batchCommands(await readFile(windowsLauncher, 'utf8'))
 		expect(commands.at(0)).toBe('pushd "%~dp0" || exit /b 1')
-		expect(commands.slice(-5)).toEqual(['docker compose up --build --force-recreate', 'set "exit_code=%errorlevel%"', 'popd', 'pause', 'exit /b %exit_code%'])
+		expect(commands.slice(-8)).toEqual(['docker compose stop || goto finish', 'docker compose build || goto finish', 'docker compose up --no-build --force-recreate', ':finish', 'set "exit_code=%errorlevel%"', 'popd', 'pause', 'exit /b %exit_code%'])
 	})
 
 	test('builds and installs both shared packages where bot sources can resolve them', async () => {

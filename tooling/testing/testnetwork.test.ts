@@ -44,7 +44,18 @@ describe('local test network packaging', () => {
 	})
 
 	test('provides a location-independent Windows launcher', async () => {
-		expect(batchCommands(await readFile(windowsLauncher, 'utf8'))).toEqual(['pushd "%~dp0" || exit /b 1', 'docker network inspect zoltar >nul 2>&1 || docker network create zoltar || exit /b 1', 'docker compose up --build --force-recreate', 'set "exit_code=%errorlevel%"', 'popd', 'pause', 'exit /b %exit_code%'])
+		expect(batchCommands(await readFile(windowsLauncher, 'utf8'))).toEqual([
+			'pushd "%~dp0" || exit /b 1',
+			'docker network inspect zoltar >nul 2>&1 || docker network create zoltar || exit /b 1',
+			'docker compose stop || goto finish',
+			'docker compose build || goto finish',
+			'docker compose up --no-build --force-recreate',
+			':finish',
+			'set "exit_code=%errorlevel%"',
+			'popd',
+			'pause',
+			'exit /b %exit_code%',
+		])
 	})
 
 	test('accepts only known local node services as non-loopback HTTP RPCs', () => {
