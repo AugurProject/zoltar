@@ -349,3 +349,67 @@ for (const change of ['minimum', 'fee', 'lower-minimum', 'sufficient-allowance']
 			expect(transactionSteps.value?.steps[0]?.phase).toBe('failed')
 		}
 	})
+
+test('an aborted preparation cannot replace or cancel an independent review', async () => {
+	const { client, sendTransaction } = setup()
+	const delayed = createDeferred<void>()
+	const cancellation = new AbortController()
+	const obsolete = createReviewedClient({ ...client, sendTransaction }, async () => await delayed.promise, cancellation.signal)
+	const result = obsolete.sendTransaction({ to: account, value: 1n }).then(
+		() => 'sent',
+		() => 'canceled',
+	)
+	await Promise.resolve()
+	cancellation.abort()
+	const independent = setup()
+	const sending = independent.reviewed.sendTransaction({ to: account, value: 2n })
+	await waitForReview()
+	delayed.resolve()
+	expect(await result).toBe('canceled')
+	expect(transactionSteps.value?.steps[0]?.ethValueAttoEth).toBe(2n)
+	confirm()
+	await sending
+	expect(sendTransaction).not.toHaveBeenCalled()
+	expect(independent.sendTransaction).toHaveBeenCalledTimes(1)
+})
+
+test('aborting a review during post-confirmation validation prevents submission', async () => {
+	const { client, sendTransaction } = setup()
+	const delayed = createDeferred<void>()
+	const validating = createDeferred<void>()
+	const cancellation = new AbortController()
+	let checks = 0
+	const reviewed = createReviewedClient(
+		{ ...client, sendTransaction },
+		async () => {
+			checks += 1
+			if (checks === 2) {
+				validating.resolve()
+				await delayed.promise
+			}
+		},
+		cancellation.signal,
+	)
+	const result = reviewed.sendTransaction({ to: account, value: 1n }).then(
+		() => 'sent',
+		() => 'canceled',
+	)
+	await waitForReview()
+	confirm()
+	await validating.promise
+	cancellation.abort()
+	delayed.resolve()
+	expect(await result).toBe('canceled')
+	expect(sendTransaction).not.toHaveBeenCalled()
+	expect(transactionSteps.value).toBeUndefined()
+})
+
+test('the reviewed backend forwards review cancellation to its client', async () => {
+	const cancellation = new AbortController()
+	const { client: baseClient, sendTransaction } = setup()
+	const backend = withTransactionReviews({ ...createFakeBackend({ accountAddress: account }), createWriteClient: () => ({ ...baseClient, sendTransaction }) })
+	const client = backend.createWriteClient(account, { reviewSignal: cancellation.signal })
+	cancellation.abort()
+	await expect(client.sendTransaction({ to: account, value: 1n })).rejects.toThrow()
+	expect(transactionSteps.value).toBeUndefined()
+})

@@ -65,10 +65,14 @@ describe('usePriceOracleManager', () => {
 	})
 
 	test.each([
-		{ proposedPrice: undefined, balance: 1n },
-		{ proposedPrice: 1_250_000_000_000_000_000n, balance: 1n },
-		{ proposedPrice: undefined, balance: 0n },
-	])('checks actual REP funding and forwards the selected initial price (%s)', async ({ proposedPrice, balance }) => {
+		{ proposedPrice: undefined, balance: 1n, cancelDuringFunding: false },
+		{ proposedPrice: 1_250_000_000_000_000_000n, balance: 1n, cancelDuringFunding: false },
+		{ proposedPrice: undefined, balance: 0n, cancelDuringFunding: false },
+		{ proposedPrice: undefined, balance: 1n, cancelDuringFunding: true },
+	])('checks actual REP funding and forwards the selected initial price (%s)', async ({ proposedPrice, balance, cancelDuringFunding }) => {
+		const cancellation = new AbortController()
+		const onTransactionCanceled = mock(() => undefined)
+		const onTransactionFailed = mock(() => undefined)
 		let managerLoadCount = 0
 		const loadOracleManagerDetails = mock(async () => {
 			managerLoadCount += 1
@@ -95,6 +99,10 @@ describe('usePriceOracleManager', () => {
 			},
 			loadCoordinatorInitialReportFundingRequirement: async (_client, _manager, _wallet, price) => {
 				expect(price).toBe(proposedPrice)
+				if (cancelDuringFunding) {
+					cancellation.abort()
+					throw new Error('Canceled price preparation')
+				}
 				return {
 					currentRepBalanceAttoRep: balance,
 					currentWethBalanceAttoEth: 10n,
@@ -116,6 +124,8 @@ describe('usePriceOracleManager', () => {
 			hookState = usePriceOracleManager(
 				{
 					accountAddress: WALLET_ADDRESS,
+					onTransactionCanceled,
+					onTransactionFailed,
 					onTransactionFinished: () => undefined,
 					onTransactionPresented: () => undefined,
 					onTransactionRequested: () => undefined,
@@ -135,9 +145,16 @@ describe('usePriceOracleManager', () => {
 		expect(requireHookState(hookState).poolOracleManagerDetails?.isPriceValid).toBe(true)
 
 		await act(async () => {
-			await requireHookState(hookState).requestPoolPrice(MANAGER_ADDRESS, POOL_ADDRESS, 1n, 0n, proposedPrice)
+			await requireHookState(hookState).requestPoolPrice(MANAGER_ADDRESS, POOL_ADDRESS, 1n, 0n, proposedPrice, cancellation.signal)
 		})
 
+		if (cancelDuringFunding) {
+			expect(onTransactionCanceled).toHaveBeenCalledTimes(1)
+			expect(onTransactionFailed).not.toHaveBeenCalled()
+			expect(requestOraclePrice).not.toHaveBeenCalled()
+			expect(requireHookState(hookState).poolOracleFeedback).toBeUndefined()
+			return
+		}
 		if (balance === 0n) {
 			expect(requestOraclePrice).not.toHaveBeenCalled()
 			return

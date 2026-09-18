@@ -1,3 +1,4 @@
+import type { TransactionCancellationParameters } from '@zoltar/ui-core-shared/types/app.js'
 import { useSignal } from '@preact/signals'
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import { executeOracleManagerStagedOperation, loadCoordinatorInitialReportFundingRequirement, loadOracleManagerDetails, requestOraclePrice } from '../../../protocol/oracleCoordinator.js'
@@ -15,7 +16,7 @@ import { refreshWalletStateOnly } from '@zoltar/ui-core-shared/lib/refreshState.
 import type { TransactionLifecycleParameters, WriteOperationContext } from '@zoltar/ui-zoltar-shared/types/app.js'
 import type { OpenOracleActionResult, OracleManagerDetails } from '@zoltar/ui-core-shared/types/contracts.js'
 
-type UsePriceOracleManagerParameters = TransactionLifecycleParameters & WriteOperationContext
+type UsePriceOracleManagerParameters = TransactionLifecycleParameters & TransactionCancellationParameters & WriteOperationContext
 
 type PriceOracleReadClient = Pick<ReturnType<typeof createConnectedReadClient>, 'getBalance'>
 type PriceOracleProductionWriteClient = ReturnType<typeof createWalletWriteClient>
@@ -40,7 +41,7 @@ const defaultUsePriceOracleManagerDependencies: UsePriceOracleManagerDependencie
 }
 
 function usePriceOracleManagerWithDependencies<TWriteClient>(
-	{ accountAddress, onTransactionFailed, onTransactionFinished, onTransactionPresented, onTransactionPrepared, onTransactionRequested, onTransactionSubmitted, refreshState }: UsePriceOracleManagerParameters,
+	{ accountAddress, onTransactionCanceled, onTransactionFailed, onTransactionFinished, onTransactionPresented, onTransactionPrepared, onTransactionRequested, onTransactionSubmitted, refreshState }: UsePriceOracleManagerParameters,
 	dependencies: UsePriceOracleManagerDependencies<TWriteClient>,
 ) {
 	const poolOracleManagerLoad = useLoadController()
@@ -83,7 +84,7 @@ function usePriceOracleManagerWithDependencies<TWriteClient>(
 		})
 	}
 
-	const requestPoolPrice = async (managerAddress: Address, securityPoolAddress: Address, reviewedRequestValueAttoEth: bigint, universeId?: bigint, proposedRepPerEthPrice?: bigint) => {
+	const requestPoolPrice = async (managerAddress: Address, securityPoolAddress: Address, reviewedRequestValueAttoEth: bigint, universeId?: bigint, proposedRepPerEthPrice?: bigint, signal?: AbortSignal) => {
 		const transactionContext = { managerAddress, securityPoolAddress, universeId }
 		poolPriceOracleResult.value = undefined
 		try {
@@ -93,6 +94,10 @@ function usePriceOracleManagerWithDependencies<TWriteClient>(
 				{
 					accountAddress,
 					missingWalletMessage: 'Connect a wallet before requesting a price',
+					onTransactionCanceled,
+					onWriteCanceled: () => {
+						poolOracleFeedback.value = undefined
+					},
 					onRefreshError: (message, hash) => {
 						poolOracleFeedback.value = createWarningActionFeedback('requestPrice', getSuccessTitle('requestPrice'), message, hash)
 						const result = poolPriceOracleResult.value
@@ -115,27 +120,35 @@ function usePriceOracleManagerWithDependencies<TWriteClient>(
 					},
 				},
 				async walletAddress => {
-					const refreshedManagerDetails = await dependencies.loadOracleManagerDetails(managerAddress)
-					poolOracleManagerDetails.value = refreshedManagerDetails
-					if (refreshedManagerDetails?.isPriceValid) throw new Error('A fresh oracle price is already available')
-					if ((refreshedManagerDetails?.pendingReportId ?? 0n) > 0n) throw new Error('Oracle price request is already pending')
-					const writeClient = dependencies.createWalletWriteClient(walletAddress, { onTransactionPrepared, onTransactionSubmitted })
-					const initialReportFunding = await dependencies.loadCoordinatorInitialReportFundingRequirement(writeClient, managerAddress, walletAddress, proposedRepPerEthPrice)
-					if (initialReportFunding.currentRepBalanceAttoRep < initialReportFunding.requiredRepAttoRep) {
-						throw new Error(`Need ${formatAdditionalCurrencyBalance(initialReportFunding.requiredRepAttoRep - initialReportFunding.currentRepBalanceAttoRep, 'REP')} in this wallet to fund the initial report.`)
+					try {
+						signal?.throwIfAborted()
+						const refreshedManagerDetails = await dependencies.loadOracleManagerDetails(managerAddress)
+						signal?.throwIfAborted()
+						poolOracleManagerDetails.value = refreshedManagerDetails
+						if (refreshedManagerDetails?.isPriceValid) throw new Error('A fresh oracle price is already available')
+						if ((refreshedManagerDetails?.pendingReportId ?? 0n) > 0n) throw new Error('Oracle price request is already pending')
+						const writeClient = dependencies.createWalletWriteClient(walletAddress, { onTransactionPrepared, onTransactionSubmitted, reviewSignal: signal })
+						const initialReportFunding = await dependencies.loadCoordinatorInitialReportFundingRequirement(writeClient, managerAddress, walletAddress, proposedRepPerEthPrice)
+						if (initialReportFunding.currentRepBalanceAttoRep < initialReportFunding.requiredRepAttoRep) {
+							throw new Error(`Need ${formatAdditionalCurrencyBalance(initialReportFunding.requiredRepAttoRep - initialReportFunding.currentRepBalanceAttoRep, 'REP')} in this wallet to fund the initial report.`)
+						}
+						const walletBalanceAttoEth = await dependencies.createConnectedReadClient().getBalance({ address: walletAddress })
+						const totalRequiredEth = reviewedRequestValueAttoEth + initialReportFunding.wethShortfallAttoEth
+						if (walletBalanceAttoEth < totalRequiredEth) {
+							throw new Error(`Need ${formatAdditionalCurrencyBalance(totalRequiredEth - walletBalanceAttoEth, 'ETH')} in this wallet to fund the initial report and request a new price.`)
+						}
+						const requestPriceGuardMessage = getOracleRequestEthGuardMessage({
+							actionLabel: 'request a new price',
+							requiredCostAttoEth: reviewedRequestValueAttoEth,
+							walletBalanceAttoEth,
+						})
+						if (requestPriceGuardMessage !== undefined) throw new Error(requestPriceGuardMessage)
+						signal?.throwIfAborted()
+						return await dependencies.requestOraclePrice(writeClient, managerAddress, initialReportFunding.proposedRepPerEthPrice, 0n, reviewedRequestValueAttoEth)
+					} catch (error) {
+						if (signal?.aborted) return undefined
+						throw error
 					}
-					const walletBalanceAttoEth = await dependencies.createConnectedReadClient().getBalance({ address: walletAddress })
-					const totalRequiredEth = reviewedRequestValueAttoEth + initialReportFunding.wethShortfallAttoEth
-					if (walletBalanceAttoEth < totalRequiredEth) {
-						throw new Error(`Need ${formatAdditionalCurrencyBalance(totalRequiredEth - walletBalanceAttoEth, 'ETH')} in this wallet to fund the initial report and request a new price.`)
-					}
-					const requestPriceGuardMessage = getOracleRequestEthGuardMessage({
-						actionLabel: 'request a new price',
-						requiredCostAttoEth: reviewedRequestValueAttoEth,
-						walletBalanceAttoEth,
-					})
-					if (requestPriceGuardMessage !== undefined) throw new Error(requestPriceGuardMessage)
-					return await dependencies.requestOraclePrice(writeClient, managerAddress, initialReportFunding.proposedRepPerEthPrice, 0n, reviewedRequestValueAttoEth)
 				},
 				'Failed to request price',
 				result => {

@@ -796,7 +796,7 @@ async function loadProductionDocumentInChromiumUnlocked(pageUrl: string, viewpor
 			resize,
 			setInputByLabel: async (label, value) => {
 				const updated = await evaluate(
-					`(() => { const label = [...document.querySelectorAll('label')].find(candidate => [...candidate.querySelectorAll('span')].some(span => span.textContent?.trim() === ${JSON.stringify(label)})); const input = label?.querySelector('input'); if (!(input instanceof HTMLInputElement)) return false; const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set; setter?.call(input, ${JSON.stringify(value)}); input.dispatchEvent(new Event('input', { bubbles: true })); return true })()`,
+					`(() => { const label = [...document.querySelectorAll('label')].find(candidate => candidate.textContent?.trim() === ${JSON.stringify(label)} || [...candidate.querySelectorAll('span')].some(span => span.textContent?.trim() === ${JSON.stringify(label)})); const input = label?.control; if (!(input instanceof HTMLInputElement)) return false; const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set; setter?.call(input, ${JSON.stringify(value)}); input.dispatchEvent(new Event('input', { bubbles: true })); return true })()`,
 				)
 				if (updated !== true) throw new Error(`Unable to update browser input ${label}`)
 			},
@@ -917,10 +917,10 @@ productionWorkflowTest('production bundle executes deployment, reporting, fork m
 	const baseUrl = server.url.toString().replace(/\/$/, '')
 	const state = JSON.parse(
 		await loadProductionDocumentInChromium(`${baseUrl}/statoblast/#/deploy?simulate=1&simScenario=baseline`, { height: 900, width: 1440 }, async driver => {
-			const completeTransactionReview = async () => {
+			const completeTransactionReview = async (autoCloseSuccessTitle?: string) => {
 				for (let attempt = 0; attempt < 2400; attempt += 1) {
 					const result = await driver.evaluate(
-						`(() => { const actions = document.querySelector('.transaction-step-actions'); if (!actions) return 'waiting'; const close = actions.querySelector('.transaction-step-close button'); if (close instanceof HTMLButtonElement && close.textContent?.trim() === 'Close' && !close.disabled) { close.click(); return 'complete' } const button = [...actions.querySelectorAll('.transaction-plan-action .tx-action-button')].find(candidate => candidate instanceof HTMLButtonElement && !candidate.disabled); if (button instanceof HTMLButtonElement) button.click(); return 'waiting' })()`,
+						`(() => { const notice = document.querySelector('.global-transaction-notice'); if (${JSON.stringify(autoCloseSuccessTitle ?? '')} && !document.querySelector('[role="dialog"]') && notice?.querySelector('.badge')?.textContent?.trim() === 'Confirmed' && notice?.querySelector('strong')?.textContent?.trim() === ${JSON.stringify(autoCloseSuccessTitle ?? '')}) return 'complete'; const actions = document.querySelector('.transaction-step-actions'); if (!actions) return 'waiting'; const close = actions.querySelector('.transaction-step-close button'); if (close instanceof HTMLButtonElement && close.textContent?.trim() === 'Close' && !close.disabled) { close.click(); return 'complete' } const button = [...actions.querySelectorAll('.transaction-plan-action .tx-action-button')].find(candidate => candidate instanceof HTMLButtonElement && !candidate.disabled); if (button instanceof HTMLButtonElement) button.click(); return 'waiting' })()`,
 					)
 					if (result === 'complete') return
 					await Bun.sleep(50)
@@ -1011,15 +1011,19 @@ productionWorkflowTest('production bundle executes deployment, reporting, fork m
 			await selectPoolTool('Price Oracle')
 			await driver.waitForButtonEnabled('Request new price')
 			await driver.clickButton('Request new price')
-			const priceReviewBody = await driver.waitForBodyText('Review funding and steps')
-			expect(priceReviewBody).toContain('20% request buffer')
-			await driver.clickButton('Manual price')
-			await driver.waitForBodyText('REP PER ETH')
+			await driver.waitForButtonEnabled('Fetch from Uniswap')
+			expect(await driver.evaluate("document.querySelector('.request-price-fields input')?.value")).toBe('')
+			await driver.clickButton('Fetch from Uniswap')
+			await driver.waitForBodyText('Deposit / undisputed return')
+			expect(await driver.evaluate("document.querySelector('.request-price-fields input')?.value")).toBe('3')
+			expect(await driver.evaluate('document.querySelectorAll(\'[role="dialog"]\').length')).toBe(1)
+			await driver.setInputByLabel('REP per ETH', '2')
+			await driver.waitForBodyText('Deposit / undisputed return')
 			await driver.setInputByLabel('REP per ETH', '3')
-			await driver.waitForButtonEnabled('Review funding and steps')
-			await driver.clickButton('Review funding and steps')
-			await completeTransactionReview()
-			await driver.waitForBodyText('Price Requested')
+			await driver.waitForBodyText('Deposit / undisputed return')
+			await completeTransactionReview('Price Requested')
+			await driver.waitForTransactionStatus('Confirmed', 'Price Requested')
+			expect(await driver.evaluate('document.querySelector(\'[role="dialog"]\') === null')).toBe(true)
 			await driver.clickButton('+1 day')
 			await driver.waitForButtonEnabled('Refresh oracle')
 			await driver.clickButton('Refresh oracle')

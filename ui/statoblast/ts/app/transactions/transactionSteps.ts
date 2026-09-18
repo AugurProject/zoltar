@@ -4,6 +4,7 @@ import { signal } from '@preact/signals'
 import { formatUnits, maxUint256, type Address, type Hash } from '@zoltar/core-shared/evm/ethereum'
 
 export type TransactionStepDetails = {
+	proposedRepPerEthPrice?: bigint | undefined
 	approval?: { requiredAmount: bigint; approvedAmount: bigint; tokenSymbol: string; tokenUnits: number }
 	oracleOutcome?: TransactionPlanStep['oracleOutcome']
 	tokenFunding?: readonly { amount: string; limit: string | undefined }[]
@@ -24,6 +25,7 @@ type TransactionStep = TransactionStepDetails & {
 }
 
 type TransactionSteps = {
+	reviewSignal: AbortSignal | undefined
 	steps: TransactionStep[]
 	activeIndex: number
 	finish: () => void
@@ -34,19 +36,34 @@ type TransactionSteps = {
 
 export const transactionSteps = signal<TransactionSteps | undefined>(undefined)
 
-export function createTransactionStepController() {
+export function createTransactionStepController(signal?: AbortSignal) {
 	let canceled = false
 	let rejectReview: ((reason: Error) => void) | undefined
 	const steps: TransactionStep[] = []
 	let activeIndex = -1
-	const cancel = () => {
+	const stop = () => {
 		canceled = true
 		rejectReview?.(new Error('Remaining transactions canceled. Transactions already sent are unchanged.'))
 		rejectReview = undefined
+	}
+	const clear = () => {
 		if (transactionSteps.peek()?.cancel === cancel) transactionSteps.value = undefined
 	}
+	const cancel = () => {
+		stop()
+		clear()
+	}
+	const abort = () => {
+		stop()
+		// Abort can run during component teardown; release the presentation after subscribers detach.
+		queueMicrotask(clear)
+	}
+	if (signal?.aborted) abort()
+	else signal?.addEventListener('abort', abort, { once: true })
 	const publish = (confirmStep: (index: number, amount?: bigint) => void = () => undefined) => {
+		if (canceled) return
 		transactionSteps.value = {
+			reviewSignal: signal,
 			steps: [...steps],
 			activeIndex,
 			confirm: amount => confirmStep(activeIndex, amount),
@@ -99,6 +116,7 @@ export function createTransactionStepController() {
 			return (await reviewChoices([index])).amount
 		},
 		async chooseFunding(indices: readonly number[]) {
+			if (canceled) throw new Error('Transaction sequence canceled. Review the action again.')
 			for (let index = 0; index < steps.length - 1; index += 1) {
 				const step = steps[index]
 				if (step !== undefined && !indices.includes(index) && step.phase !== 'confirmed') step.phase = 'skipped'

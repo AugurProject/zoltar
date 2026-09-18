@@ -1,3 +1,4 @@
+import { RequestPriceModal } from '../transactions/RequestPriceModal.js'
 import { useEffect, useRef, useState } from 'preact/hooks'
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import { useForkAuctionOperations } from '@zoltar/ui-statoblast-shared/features/truth-auctions/hooks/useForkAuctionOperations.js'
@@ -418,7 +419,9 @@ export function useSecurityPoolsRoute({
 			loadingLiquidationFundingPreview,
 			loadingSecurityPools,
 			onLoadPoolOracleManager: (managerAddress: Address) => void loadPoolOracleManager(managerAddress),
-			onRequestPoolPrice: (managerAddress: Address, securityPoolAddress: Address, reviewedRequestValueAttoEth: bigint, universeId: bigint, proposedRepPerEthPrice?: bigint) => void requestPoolPrice(managerAddress, securityPoolAddress, reviewedRequestValueAttoEth, universeId, proposedRepPerEthPrice),
+			RequestPriceModal,
+			onRequestPoolPrice: (managerAddress: Address, securityPoolAddress: Address, reviewedRequestValueAttoEth: bigint, universeId: bigint, proposedRepPerEthPrice?: bigint, signal?: AbortSignal) =>
+				requestPoolPrice(managerAddress, securityPoolAddress, reviewedRequestValueAttoEth, universeId, proposedRepPerEthPrice, signal),
 			onRefreshSelectedPoolData: refreshSelectedPoolData,
 			onSelectedPoolViewChange: setSelectedPoolView,
 			onViewPendingReport,

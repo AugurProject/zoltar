@@ -17,3 +17,9 @@ export const transactionPending = 'Wait for the pending transaction to confirm.'
 export const prerequisitesRequired = 'Complete the required setup transactions first.'
 export const formatPendingAction = (title: string) => `${title}…`
 export const requirementsFailed = 'Could not refresh transaction requirements. Close and review the action again.'
+
+export const preparingPriceRequest = 'Preparing funding and approvals…'
+
+export const fetchUniswapPrice = 'Fetch from Uniswap'
+export const fetchingUniswapPrice = 'Fetching…'
+export const uniswapPriceFailed = 'Could not fetch the Uniswap price. Try again or enter a price.'

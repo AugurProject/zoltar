@@ -1,3 +1,5 @@
+import type { ComponentType } from 'preact'
+import type { RequestPriceModalProps } from './security-pools/components/SecurityPoolOracleSections.js'
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import type { AccountState, ForkAuctionFormState, MarketFormState, SecurityPoolFormState, SecurityVaultFormState, TradingFormState } from '../types/app.js'
 import type { ReportingFormState } from '@zoltar/ui-zoltar-shared/types/app.js'
@@ -151,6 +153,7 @@ type SecurityPoolsOverviewRouteContentProps = {
 export type SecurityPoolsOverviewSectionProps = SecurityPoolsOverviewRouteContentProps
 
 export type SecurityPoolWorkflowRouteContentProps = LiquidationModalStateProps & {
+	RequestPriceModal?: ComponentType<RequestPriceModalProps>
 	accountState: AccountState
 	activeUniverseId: bigint
 	checkedSecurityPoolAddress: string | undefined
@@ -163,7 +166,7 @@ export type SecurityPoolWorkflowRouteContentProps = LiquidationModalStateProps &
 	onSwitchToPoolUniverse?: (universeId: bigint, securityPoolAddress: string) => void
 	onExecutePendingPoolOperation: (managerAddress: Address, operationId: bigint, securityPoolAddress: Address, universeId: bigint) => void
 	onRefreshSelectedPoolData: (securityPoolAddress?: string) => void
-	onRequestPoolPrice: (managerAddress: Address, securityPoolAddress: Address, reviewedRequestValueAttoEth: bigint, universeId: bigint, proposedRepPerEthPrice?: bigint) => void
+	onRequestPoolPrice: (managerAddress: Address, securityPoolAddress: Address, reviewedRequestValueAttoEth: bigint, universeId: bigint, proposedRepPerEthPrice?: bigint, signal?: AbortSignal) => void | Promise<void>
 	onSelectedPoolViewChange: (view: string | undefined) => void
 	onViewPendingReport: (reportId: bigint) => void
 	selectedPoolRefreshNonce: number

@@ -60,6 +60,7 @@ type SecurityPoolWorkflowSectionProps = SecurityPoolWorkflowRouteContentProps & 
 
 export function SecurityPoolWorkflowSection(props: SecurityPoolWorkflowSectionProps) {
 	const {
+		RequestPriceModal = SecurityPoolRequestPriceModal,
 		accountState,
 		activeUniverseId,
 		checkedSecurityPoolAddress,
@@ -548,12 +549,12 @@ export function SecurityPoolWorkflowSection(props: SecurityPoolWorkflowSectionPr
 					</div>
 				</section>
 			)}
-			<SecurityPoolRequestPriceModal
+			<RequestPriceModal
 				canRequest={selectedPoolStateModel.actions.requestPrice.enabled && canUseOracleActions}
 				closeOnSuccessKey={poolPriceOracleResult?.action === 'requestPrice' ? poolPriceOracleResult.hash : undefined}
 				confirmationGuardMessage={requestPriceConfirmationGuardMessage}
 				onClose={() => setRequestPriceReview(undefined)}
-				onConfirm={review => onRequestPoolPrice(review.managerAddress, review.securityPoolAddress, review.requestValueAttoEth, review.universeId, review.proposedRepPerEthPrice)}
+				onConfirm={(review, signal) => onRequestPoolPrice(review.managerAddress, review.securityPoolAddress, review.requestValueAttoEth, review.universeId, review.proposedRepPerEthPrice, signal)}
 				pending={poolOracleActiveAction === 'requestPrice'}
 				review={requestPriceReview}
 			/>
