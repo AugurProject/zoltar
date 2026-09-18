@@ -101,7 +101,7 @@ export function TransactionStepsModal({ contextKey }: { contextKey: string }) {
 	return (
 		<GlobalTransactionPresentationProvider transaction={undefined}>
 			<TransactionActionButtonLockProvider locked={false}>
-				<OperationModal isOpen closeDisabled={pending} title={copy.title} description={completed ? copy.completed : copy.sequenceDetail} onClose={workflow.cancel}>
+				<OperationModal isOpen closeDisabled={pending} title={workflow.steps.at(-1)?.title ?? current.title} onClose={workflow.cancel}>
 					<div className='transaction-step-content'>
 						{funding.length === 0 ? undefined : (
 							<section className='transaction-funding' aria-label={copy.depositAndReturn}>
