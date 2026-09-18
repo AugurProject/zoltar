@@ -20,12 +20,14 @@ type TransactionStep = TransactionStepDetails & {
 	phase: 'skipped' | 'upcoming' | 'review' | 'pending' | 'confirmed' | 'failed'
 	hash?: Hash
 	error?: string
+	approvalAmount?: bigint | undefined
 }
 
 type TransactionSteps = {
 	steps: TransactionStep[]
 	activeIndex: number
 	finish: () => void
+	confirmStep: (index: number, amount?: bigint) => void
 	confirm: (amount?: bigint) => void
 	cancel: () => void
 }
@@ -43,11 +45,12 @@ export function createTransactionStepController() {
 		rejectReview = undefined
 		if (transactionSteps.peek()?.cancel === cancel) transactionSteps.value = undefined
 	}
-	const publish = (confirm: (amount?: bigint) => void = () => undefined) => {
+	const publish = (confirmStep: (index: number, amount?: bigint) => void = () => undefined) => {
 		transactionSteps.value = {
 			steps: [...steps],
 			activeIndex,
-			confirm,
+			confirm: amount => confirmStep(activeIndex, amount),
+			confirmStep,
 			cancel,
 			finish: () => {
 				for (const step of steps) if (step.phase === 'upcoming') step.phase = 'skipped'
@@ -55,33 +58,61 @@ export function createTransactionStepController() {
 			},
 		}
 	}
+	const reviewChoices = async (indices: readonly number[]) => {
+		if (canceled) throw new Error('Transaction sequence canceled. Review the action again.')
+		const current = transactionSteps.peek()
+		if (current !== undefined && current.cancel !== cancel) {
+			if (current.steps.some(step => step.phase === 'review' || step.phase === 'pending')) throw new Error('Finish or cancel the current transaction first.')
+			current.cancel()
+		}
+		const first = indices[0]
+		if (first === undefined || indices.some(index => steps[index] === undefined)) throw new Error('An unexpected transaction was blocked. Review the action again.')
+		activeIndex = first
+		for (const index of indices) {
+			const step = steps[index]
+			if (step !== undefined) step.phase = 'review'
+		}
+		return await new Promise<{ index: number; amount: bigint | undefined }>((resolve, reject) => {
+			rejectReview = reject
+			let selected = false
+			publish((index, amount) => {
+				const step = steps[index]
+				if (selected || canceled || !indices.includes(index) || step?.phase !== 'review') return
+				selected = true
+				activeIndex = index
+				for (const other of steps) if (other.phase === 'review') other.phase = 'upcoming'
+				if (amount !== undefined && step.approval !== undefined) step.amount = `${amount === maxUint256 ? commonCopy.max : formatUnits(amount, step.approval.tokenUnits)} ${step.approval.tokenSymbol}`
+				step.approvalAmount = amount ?? step.approval?.requiredAmount
+				step.phase = 'pending'
+				rejectReview = undefined
+				publish()
+				resolve({ index, amount })
+			})
+		})
+	}
 	return {
 		setPlan(details: TransactionStepDetails[]) {
 			if (steps.length > 0) throw new Error('The transaction plan has already started.')
 			steps.push(...details.map(step => ({ ...step, phase: 'upcoming' as const })))
 		},
-		async review() {
-			if (canceled) throw new Error('Transaction sequence canceled. Review the action again.')
-			const current = transactionSteps.peek()
-			if (current !== undefined && current.cancel !== cancel) {
-				if (current.steps.some(step => step.phase === 'review' || step.phase === 'pending')) throw new Error('Finish or cancel the current transaction first.')
-				current.cancel()
+		async review(index = activeIndex + 1) {
+			return (await reviewChoices([index])).amount
+		},
+		async chooseFunding(indices: readonly number[]) {
+			for (let index = 0; index < steps.length - 1; index += 1) {
+				const step = steps[index]
+				if (step !== undefined && !indices.includes(index) && step.phase !== 'confirmed') step.phase = 'skipped'
 			}
-			activeIndex += 1
+			if (indices.length === 0) {
+				publish()
+				return undefined
+			}
+			return await reviewChoices(indices)
+		},
+		skipped() {
 			const step = steps[activeIndex]
-			if (step === undefined) throw new Error('An unexpected transaction was blocked. Review the action again.')
-			step.phase = 'review'
-			return await new Promise<bigint | undefined>((resolve, reject) => {
-				rejectReview = reject
-				publish(amount => {
-					if (step.phase !== 'review' || canceled) return
-					if (amount !== undefined && step.approval !== undefined) step.amount = `${amount === maxUint256 ? commonCopy.max : formatUnits(amount, step.approval.tokenUnits)} ${step.approval.tokenSymbol}`
-					step.phase = 'pending'
-					rejectReview = undefined
-					publish()
-					resolve(amount)
-				})
-			})
+			if (step !== undefined) step.phase = 'skipped'
+			if (!canceled) publish()
 		},
 		submitted(hash: Hash) {
 			const step = steps[activeIndex]
@@ -93,6 +124,7 @@ export function createTransactionStepController() {
 			const step = steps.find(candidate => candidate.hash === hash)
 			if (step === undefined) return
 			step.phase = status === 'success' ? 'confirmed' : 'failed'
+			if (status === 'success' && step.approval !== undefined && step.approvalAmount !== undefined) step.approval = { ...step.approval, approvedAmount: step.approvalAmount }
 			if (status !== 'success') step.error = 'Transaction reverted. Remaining steps were not sent.'
 			if (!canceled) publish()
 		},

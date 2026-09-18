@@ -72,31 +72,40 @@ export function createReviewedClient(client: WriteClient, validate: () => Promis
 	let plan: readonly TransactionPlanStep[] | undefined
 	let stepIndex = 0
 	let partialApproval = false
+	let initialized = false
+	let selectedFunding: { index: number; amount: bigint | undefined } | undefined
+	const initialize = async () => {
+		if (!initialized) {
+			if (plan === undefined) throw new Error('Missing transaction plan.')
+			controller.setPlan(
+				await Promise.all(
+					plan.map(step =>
+						describeTransaction(
+							client,
+							{ account: client.account, args: undefined, chainName: client.chain.name, value: undefined, ...step },
+							plan?.find(candidate => candidate.tokenFunding !== undefined && candidate.contractAddress === step.args?.[0])?.tokenFunding?.find(funding => funding.tokenAddress === step.contractAddress)?.amount,
+						),
+					),
+				),
+			)
+			initialized = true
+		}
+	}
+
 	const send = async (fallback: TransactionRequestPreview, execute: (approvalArgs?: readonly [ReturnType<typeof getAddress>, bigint]) => Promise<`0x${string}`>) => {
 		let transaction = preview ?? fallback
 		preview = undefined
 		try {
 			if (!environment.isCurrent()) throw new Error('The network changed. Review the action again.')
 			await validate()
-			if (stepIndex === 0) {
-				plan ??= [transaction]
-				controller.setPlan(
-					await Promise.all(
-						plan.map(step =>
-							describeTransaction(
-								client,
-								{ account: client.account, args: undefined, chainName: client.chain.name, value: undefined, ...step },
-								plan?.find(candidate => candidate.tokenFunding !== undefined && candidate.contractAddress === step.args?.[0])?.tokenFunding?.find(funding => funding.tokenAddress === step.contractAddress)?.amount,
-							),
-						),
-					),
-				)
-			}
+			plan ??= [transaction]
+			await initialize()
 			const expected = plan?.[stepIndex]
 			if (expected === undefined || expected.functionName !== transaction.functionName || (expected.value ?? 0n) !== (transaction.value ?? 0n) || (expected.contractAddress ?? expected.to) !== (transaction.contractAddress ?? transaction.to))
 				throw new Error('The transaction plan changed. No further transactions were sent. Review the action again.')
 			if (transaction.functionName === 'approve' && (expected.args?.[0] !== transaction.args?.[0] || expected.args?.[1] !== transaction.args?.[1])) throw new Error('The approval amount changed. Review the action again.')
-			const selectedAmount = await controller.review()
+			const selectedAmount = selectedFunding === undefined ? await controller.review(stepIndex) : selectedFunding.amount
+			selectedFunding = undefined
 			let approvalArgs: readonly [ReturnType<typeof getAddress>, bigint] | undefined
 			if (selectedAmount !== undefined) {
 				const [spender] = transaction.args ?? []
@@ -108,6 +117,18 @@ export function createReviewedClient(client: WriteClient, validate: () => Promis
 			}
 			stepIndex += 1
 			await validate()
+			if (!environment.isCurrent()) throw new Error('The network changed. Review the action again.')
+			const currentFunding = await expected.refreshFundingRequirements?.()
+			for (const funding of currentFunding ?? expected.tokenFunding ?? []) {
+				const spender = expected.contractAddress
+				if (spender === undefined) throw new Error('Missing funding recipient.')
+				const [balance, allowance] = await Promise.all([
+					client.readContract({ address: funding.tokenAddress, abi: ABIS.mainnet.erc20, functionName: 'balanceOf', args: [client.account.address] }),
+					client.readContract({ address: funding.tokenAddress, abi: ABIS.mainnet.erc20, functionName: 'allowance', args: [client.account.address, spender] }),
+				])
+				if (balance < funding.amount || allowance < funding.amount) throw new Error('Funding requirements changed. Review balances and approvals again before sending.')
+			}
+			if (expected.tokenFunding !== undefined) await validate()
 			if (!environment.isCurrent()) throw new Error('The network changed. Review the action again.')
 			client.onTransactionPrepared?.(transaction)
 			const hash = await execute(approvalArgs)
@@ -121,8 +142,27 @@ export function createReviewedClient(client: WriteClient, validate: () => Promis
 	return {
 		...client,
 		onTransactionPlan: steps => {
-			if (stepIndex > 0) throw new Error('Cannot change a transaction plan after it has started.')
+			if (initialized) throw new Error('Cannot change a transaction plan after it has started.')
 			plan = steps
+		},
+		runFundingTransaction: async (requiredIndices, execute) => {
+			try {
+				if (!environment.isCurrent()) throw new Error('The network changed. Review the action again.')
+				await validate()
+				await initialize()
+				selectedFunding = await controller.chooseFunding(requiredIndices)
+				stepIndex = selectedFunding?.index ?? (plan?.length ?? 1) - 1
+				if (selectedFunding === undefined) return false
+				await execute(selectedFunding.index)
+				if (selectedFunding !== undefined) {
+					selectedFunding = undefined
+					controller.skipped()
+				}
+				return true
+			} catch (error) {
+				controller.failed(getErrorMessage(error, 'Funding failed. Remaining transactions were not sent.'))
+				throw error
+			}
 		},
 		onTransactionPrepared: next => {
 			preview = next

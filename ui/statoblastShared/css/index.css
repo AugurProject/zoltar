@@ -2973,55 +2973,28 @@
 }
 
 .transaction-step-actions {
+	display: grid;
+	gap: 0.75rem;
 	padding-top: 1rem;
 	border-top: 1px solid var(--border-default);
 }
 
-.transaction-plan-grid {
+.transaction-funding {
 	display: grid;
-	grid-template-columns: minmax(0, 1fr);
+	grid-template-columns: repeat(2, minmax(0, 1fr));
 	gap: 1.5rem;
 	align-items: start;
 }
 
-.transaction-plan-grid:has(.transaction-funding) {
-	grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-}
-
-.transaction-approval-editor .form-grid {
-	gap: 0.5rem;
-}
-
-.transaction-approval-editor .workflow-metric-grid {
-	grid-template-columns: repeat(2, minmax(0, 1fr));
-}
-
-.transaction-approval-editor .workflow-metric-grid > div {
-	padding-top: 0;
-	border-top: 0;
-}
-
-.transaction-approval-editor .workflow-metric-grid strong.metric-field-value {
-	padding-bottom: 0;
-}
-
-.transaction-approval-editor .tx-action-group > .actions {
+.transaction-funding-summary,
+.transaction-deposits {
 	display: grid;
-	grid-template-columns: minmax(0, 1fr) minmax(0, 2.5fr);
 	gap: 0.5rem;
-}
-
-.transaction-approval-editor .tx-action-group > .actions > * {
-	width: 100%;
-}
-
-.transaction-approval-editor .field {
-	margin: 0;
+	min-width: 0;
 }
 
 .transaction-funding h4,
 .transaction-funding p,
-.transaction-plan-list p,
 .transaction-funding-note {
 	margin: 0;
 }
@@ -3031,15 +3004,8 @@
 	color: var(--muted);
 }
 
-.transaction-funding,
-.transaction-deposits {
-	display: grid;
-	gap: 0.5rem;
-	min-width: 0;
-}
-
 .transaction-deposits,
-.transaction-step-amount {
+.transaction-action-detail {
 	font-variant-numeric: tabular-nums;
 	overflow-wrap: anywhere;
 }
@@ -3068,30 +3034,6 @@
 	overflow-wrap: anywhere;
 }
 
-.transaction-plan-list {
-	margin: 0;
-	padding-left: 1.25rem;
-	display: grid;
-	gap: 0.75rem;
-}
-
-.transaction-plan-list li {
-	padding-left: 0.2rem;
-	font-size: 0.875rem;
-}
-
-.transaction-step-heading {
-	display: flex;
-	justify-content: space-between;
-	gap: 0.5rem;
-	align-items: baseline;
-}
-
-.transaction-step-heading > span {
-	flex-shrink: 0;
-}
-
-.transaction-plan-list .detail,
 .transaction-funding .detail,
 .transaction-funding-note {
 	font-size: 0.8125rem;
@@ -3106,10 +3048,80 @@
 	margin-top: 0.5rem;
 }
 
+.transaction-approval-editor .form-grid {
+	gap: 0.5rem;
+}
+
+.transaction-approval-editor .workflow-metric-grid {
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.transaction-approval-editor .workflow-metric-grid > div {
+	padding-top: 0;
+	border-top: 0;
+}
+
+.transaction-approval-editor .workflow-metric-grid strong.metric-field-value {
+	padding-bottom: 0;
+}
+
+.transaction-approval-editor .field {
+	margin: 0;
+}
+
+.transaction-step-actions .tx-action-group > .actions {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	align-items: end;
+	gap: 0.5rem;
+}
+
+.transaction-plan-action .tx-action-button {
+	width: 100%;
+}
+
+.transaction-action-detail {
+	display: block;
+	font-size: 0.75rem;
+	line-height: 1.4;
+	font-weight: normal;
+}
+
+.transaction-step-close {
+	justify-content: flex-end;
+}
+
+.transaction-step-actions .tx-action-button-labels {
+	min-width: 0;
+	overflow-wrap: anywhere;
+}
+
+.transaction-step-actions .tx-action-feedback:empty {
+	min-block-size: 0;
+}
+
+.transaction-step-actions .tx-action-group:has(.tx-action-feedback:empty) {
+	gap: 0;
+}
+
+.transaction-plan-action-wide {
+	grid-column: 1 / -1;
+}
+
+.transaction-plan-action {
+	min-width: 0;
+}
+
+.transaction-plan-action .field-inline-input {
+	min-width: 0;
+	width: 100%;
+}
+
 @media (max-width: 600px) {
 	.modal-panel:has(.transaction-step-actions) {
 		max-height: calc(100dvh - 2rem);
 		gap: 0.75rem;
+		padding: 0.75rem;
 	}
 
 	.modal-panel:has(.transaction-step-actions) > .modal-header {
@@ -3117,17 +3129,16 @@
 		padding-bottom: 0.5rem;
 	}
 
-	.transaction-plan-grid,
-	.transaction-plan-grid:has(.transaction-funding) {
+	.transaction-funding {
 		grid-template-columns: minmax(0, 1fr);
-		gap: 0.75rem;
+		gap: 0.5rem;
 	}
 
 	.transaction-step-content {
 		gap: 0.5rem;
 	}
 
-	.transaction-funding,
+	.transaction-funding-summary,
 	.transaction-deposits,
 	.transaction-costs {
 		gap: 0.25rem;
@@ -3137,29 +3148,17 @@
 		font-size: 0.875rem;
 	}
 
-	.transaction-approval-editor .workflow-metric-grid > div {
-		display: flex;
-		flex-wrap: wrap;
-		align-items: baseline;
-		gap: 0.25rem;
-	}
-
 	.transaction-approval-editor .workflow-metric-grid .metric-label {
 		font-size: 0.6875rem;
 	}
 
 	.transaction-approval-editor .workflow-metric-grid strong.metric-field-value {
-		font-size: 0.8125rem;
+		font-size: 0.75rem;
 	}
 
 	.transaction-step-actions {
-		flex-wrap: nowrap;
 		gap: 0.5rem;
 		padding-top: 0.75rem;
-	}
-
-	.transaction-step-actions.transaction-approval-editor button {
-		padding-inline: 0.4rem;
 	}
 
 	.transaction-step-actions button {
@@ -3167,17 +3166,41 @@
 		font-size: 0.8125rem;
 		padding-inline: 0.65rem;
 	}
-}
 
-.transaction-approval-editor .tx-action-button-labels {
-	min-width: 0;
-	overflow-wrap: anywhere;
-}
+	.transaction-approval-editor .workflow-metric-grid {
+		grid-template-columns: minmax(0, 1fr);
+		gap: 0.25rem;
+	}
 
-.transaction-approval-editor .tx-action-feedback:empty {
-	min-block-size: 0;
-}
+	.transaction-approval-editor .approval-amount-label {
+		font-size: 0.75rem;
+	}
 
-.transaction-approval-editor .tx-action-group:has(.tx-action-feedback:empty) {
-	gap: 0;
+	.transaction-approval-editor .field-inline {
+		gap: 0.25rem;
+	}
+
+	.transaction-approval-editor .workflow-metric-grid > div {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: baseline;
+		justify-content: space-between;
+		gap: 0.125rem;
+	}
+
+	.transaction-approval-editor .workflow-metric-grid .metric-label,
+	.transaction-approval-editor .approval-amount-label {
+		font-size: 0.625rem;
+		letter-spacing: 0.02em;
+	}
+
+	.transaction-approval-editor .workflow-metric-grid .metric-label,
+	.transaction-approval-editor .workflow-metric-grid .metric-field-value {
+		width: auto;
+		flex: none;
+	}
+
+	.transaction-plan-action:has(.approval-amount-field) .tx-action-button {
+		min-height: 3rem;
+	}
 }

@@ -1,3 +1,4 @@
+import { runFundingTransactions, type FundingTransaction } from './fundingTransactions.js'
 import type { TransactionPlanStep } from '@zoltar/ui-core-shared/wallet/chainBackend.js'
 import { decodeEventLog, parseAbiItem, getAddress, zeroAddress, type Address, type Hex, type TransactionReceipt } from '@zoltar/core-shared/evm/ethereum'
 import { ABIS } from '@zoltar/ui-core-shared/abis.js'
@@ -424,36 +425,48 @@ async function fundCoordinatorInitialReport(client: WriteClient, managerAddress:
 	])
 	const needsRepApproval = repAllowance < expectedRep
 	const needsWethApproval = wethAllowance < expectedWeth
-	client.onTransactionPlan?.([
-		...(fundingRequirement.wethShortfallAttoEth > 0n ? [{ functionName: 'deposit', contractAddress: getWethAddress(), value: fundingRequirement.wethShortfallAttoEth }] : []),
-		...(needsRepApproval ? [{ functionName: 'approve', contractAddress: fundingRequirement.reputationTokenAddress, args: [managerAddress, fundingRequirement.initialReportAmount2] }] : []),
-		...(needsWethApproval ? [{ functionName: 'approve', contractAddress: getWethAddress(), args: [managerAddress, fundingRequirement.maximumInitialAttoWeth] }] : []),
-		{
-			...finalStep,
-			oracleOutcome: { settlerRewardAttoEth: estimatedBounty, ethRefundAttoEth: (finalStep.value ?? 0n) - estimatedBounty, returnToWallet: true },
-			tokenFunding: [
-				{ tokenAddress: fundingRequirement.reputationTokenAddress, amount: expectedRep, limit: fundingRequirement.initialReportAmount2 },
-				{ tokenAddress: getWethAddress(), amount: expectedWeth, limit: fundingRequirement.maximumInitialAttoWeth },
-			],
-		},
-	])
-	if (fundingRequirement.wethShortfallAttoEth > 0n) {
-		await wrapWeth(client, fundingRequirement.wethShortfallAttoEth)
+	const actions: FundingTransaction[] = []
+	if (fundingRequirement.wethShortfallAttoEth > 0n)
+		actions.push({
+			step: { functionName: 'deposit', contractAddress: getWethAddress(), value: fundingRequirement.wethShortfallAttoEth },
+			isRequired: async () => (await client.readContract({ address: getWethAddress(), abi: ABIS.mainnet.erc20, functionName: 'balanceOf', args: [client.account.address] })) < expectedWeth,
+			execute: async () => await wrapWeth(client, fundingRequirement.wethShortfallAttoEth),
+		})
+	for (const funding of [
+		{ needed: needsRepApproval, token: fundingRequirement.reputationTokenAddress, required: expectedRep, limit: fundingRequirement.initialReportAmount2 },
+		{ needed: needsWethApproval, token: getWethAddress(), required: expectedWeth, limit: fundingRequirement.maximumInitialAttoWeth },
+	]) {
+		if (funding.needed)
+			actions.push({
+				step: { functionName: 'approve', contractAddress: funding.token, args: [managerAddress, funding.limit] },
+				isRequired: async () => (await client.readContract({ address: funding.token, abi: ABIS.mainnet.erc20, functionName: 'allowance', args: [client.account.address, managerAddress] })) < funding.required,
+				execute: async () => await writeContractAndWait(client, () => ({ address: funding.token, abi: ABIS.mainnet.erc20, functionName: 'approve', args: [managerAddress, funding.limit] })),
+			})
 	}
-	if (needsRepApproval)
-		await writeContractAndWait(client, () => ({
-			address: fundingRequirement.reputationTokenAddress,
-			abi: ABIS.mainnet.erc20,
-			functionName: 'approve',
-			args: [managerAddress, fundingRequirement.initialReportAmount2],
-		}))
-	if (needsWethApproval)
-		await writeContractAndWait(client, () => ({
-			address: getWethAddress(),
-			abi: ABIS.mainnet.erc20,
-			functionName: 'approve',
-			args: [managerAddress, fundingRequirement.maximumInitialAttoWeth],
-		}))
+	await runFundingTransactions(client, actions, {
+		...finalStep,
+		refreshFundingRequirements: async () => {
+			const [currentFunding, currentCost, currentEth] = await Promise.all([
+				loadCoordinatorInitialReportFundingRequirement(client, managerAddress, client.account.address, proposedRepPerEthPrice, requestedInitialAttoWeth),
+				readOracleRequestCost(client, managerAddress),
+				client.getBalance({ address: client.account.address }),
+			])
+			const currentWeth = requestedInitialAttoWeth > currentFunding.minimumToken1ReportAttoEth ? requestedInitialAttoWeth : currentFunding.minimumToken1ReportAttoEth
+			if (currentWeth > fundingRequirement.maximumInitialAttoWeth || currentFunding.requiredRepAttoRep > fundingRequirement.initialReportAmount2 || currentFunding.reputationTokenAddress !== fundingRequirement.reputationTokenAddress)
+				throw new Error('Oracle deposit requirements changed. Review funding again before sending the request.')
+			if (currentCost > (finalStep.value ?? 0n)) throw new Error('The oracle fee increased. Review the request again before sending.')
+			if (currentEth < (finalStep.value ?? 0n)) throw new Error('Insufficient ETH for the oracle fee. Gas is additional.')
+			return [
+				{ tokenAddress: currentFunding.reputationTokenAddress, amount: currentFunding.requiredRepAttoRep },
+				{ tokenAddress: getWethAddress(), amount: currentWeth },
+			]
+		},
+		oracleOutcome: { settlerRewardAttoEth: estimatedBounty, ethRefundAttoEth: (finalStep.value ?? 0n) - estimatedBounty, returnToWallet: true },
+		tokenFunding: [
+			{ tokenAddress: fundingRequirement.reputationTokenAddress, amount: expectedRep, limit: fundingRequirement.initialReportAmount2 },
+			{ tokenAddress: getWethAddress(), amount: expectedWeth, limit: fundingRequirement.maximumInitialAttoWeth },
+		],
+	})
 	return fundingRequirement
 }
 

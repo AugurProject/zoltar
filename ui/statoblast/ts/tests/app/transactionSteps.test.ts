@@ -1,5 +1,6 @@
+import { requestOraclePrice } from '@zoltar/ui-statoblast-shared/protocol/oracleCoordinator.js'
 import { ABIS } from '@zoltar/ui-core-shared/abis.js'
-import { createReadContractStub } from '@zoltar/ui-core-shared/tests/testUtils/protocolTestSupport.js'
+import { createMockLoaderClient, createReadContractStub } from '@zoltar/ui-core-shared/tests/testUtils/protocolTestSupport.js'
 import { afterEach, expect, mock, test } from 'bun:test'
 import { createWalletClient, custom, publicActions, encodeFunctionData, decodeFunctionData, maxUint256, type Hash, type TransactionReceipt, type ReplacementReason } from '@zoltar/core-shared/evm/ethereum'
 import { MAINNET_NETWORK_PROFILE } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
@@ -224,3 +225,127 @@ for (const method of ['sendTransaction', 'writeContract'] as const)
 			}
 		})
 	}
+
+test('funding approvals can be chosen independently and satisfied requirements are skipped', async () => {
+	const { reviewed, sendTransaction } = setup()
+	reviewed.onTransactionPlan?.([1n, 2n, 3n].map(value => ({ functionName: 'Transfer ETH', to: account, value })))
+	if (reviewed.runFundingTransaction === undefined) throw new Error('Funding selection is unavailable')
+	const selecting = reviewed.runFundingTransaction([0, 1], async index => {
+		expect(index).toBe(1)
+		await reviewed.sendTransaction({ to: account, value: 2n })
+	})
+	await waitForReview()
+	expect(transactionSteps.value?.steps.slice(0, 2).map(step => step.phase)).toEqual(['review', 'review'])
+	expect(() => reviewed.onTransactionPlan?.([])).toThrow('Cannot change a transaction plan')
+	transactionSteps.value?.confirmStep(1)
+	expect(await selecting).toBe(true)
+	expect(sendTransaction).toHaveBeenCalledTimes(1)
+	await reviewed.runFundingTransaction([], async () => {
+		throw new Error('Nothing to send')
+	})
+	expect(transactionSteps.value?.steps[0]?.phase).toBe('skipped')
+	const final = reviewed.sendTransaction({ to: account, value: 3n })
+	await waitForReview()
+	expect(sendTransaction).toHaveBeenCalledTimes(1)
+	confirm()
+	await final
+	expect(sendTransaction).toHaveBeenCalledTimes(2)
+})
+
+test('a funding preparation failure unlocks cancellation and sends no transaction', async () => {
+	const { reviewed, sendTransaction } = setup()
+	reviewed.onTransactionPlan?.([1n, 2n].map(value => ({ functionName: 'Transfer ETH', to: account, value })))
+	const running = reviewed.runFundingTransaction?.([0], async () => {
+		throw new Error('Insufficient balance')
+	})
+	const rejected = running?.catch(error => error)
+	await waitForReview()
+	confirm()
+	expect(await rejected).toBeInstanceOf(Error)
+	expect(transactionSteps.value?.steps[0]?.phase).toBe('failed')
+	expect(sendTransaction).not.toHaveBeenCalled()
+})
+
+for (const missing of ['balanceOf', 'allowance'] as const)
+	test(`rechecks ${missing} after the final click before sending the report`, async () => {
+		const { client, sendTransaction } = setup()
+		const reviewed = createReviewedClient({
+			...client,
+			sendTransaction,
+			readContract: createReadContractStub(request => {
+				if (request.functionName === 'symbol') return 'REP'
+				if (request.functionName === 'decimals') return 18
+				return request.functionName === missing ? 0n : 10n
+			}),
+		})
+		reviewed.onTransactionPlan?.([{ functionName: 'Transfer ETH', to: account, contractAddress: account, value: 0n, tokenFunding: [{ tokenAddress: account, amount: 3n }] }])
+		const sending = reviewed.sendTransaction({ to: account, value: 0n }).catch(error => error)
+		await waitForReview()
+		confirm()
+		expect(await sending).toBeInstanceOf(Error)
+		expect(sendTransaction).not.toHaveBeenCalled()
+		expect(transactionSteps.value?.steps[0]?.error).toContain('Funding requirements changed')
+	})
+
+for (const change of ['minimum', 'fee', 'lower-minimum', 'sufficient-allowance'] as const)
+	test(`refreshes coordinator ${change} after review before opening the wallet`, async () => {
+		const { client, sendTransaction, receipt } = setup()
+		let minimum = 3n
+		let allowance = 3n
+		let baseFeePerGas = 0n
+		const reads = createMockLoaderClient({
+			getBlock: async () => ({ timestamp: 0n, number: 1n, baseFeePerGas }),
+			multicall: async () => {
+				throw new Error('Unexpected multicall')
+			},
+			readContract: async request => {
+				switch (request.functionName) {
+					case 'isPriceValid':
+						return false
+					case 'pendingReportId':
+						return 0n
+					case 'reputationToken':
+						return account
+					case 'minimumToken1ReportAttoEth':
+						return minimum
+					case 'balanceOf':
+						return 1000n
+					case 'allowance':
+						return allowance
+					case 'symbol':
+						return 'REP'
+					case 'decimals':
+						return 18
+					case 'getSettlementCallbackGasLimit':
+						return 10
+					case 'gasConsumedOpenOracleReportPrice':
+						return 20n
+					default:
+						throw new Error(`Unexpected read: ${request.functionName}`)
+				}
+			},
+		})
+		const reviewed = createReviewedClient({ ...client, ...reads, getBalance: async () => 1000n, sendTransaction, waitForTransactionReceipt: async () => receipt })
+		const action = requestOraclePrice(reviewed, account, 10n ** 18n, 0n, 122n).catch(error => error)
+		await waitForReview()
+		expect(transactionSteps.value?.steps).toHaveLength(1)
+		if (change === 'minimum') minimum = 4n
+		if (change === 'fee') baseFeePerGas = 2n
+		if (change === 'lower-minimum') {
+			minimum = 2n
+			allowance = 2n
+		}
+		if (change === 'sufficient-allowance') {
+			minimum = 4n
+			allowance = 4n
+		}
+		confirm()
+		if (change === 'lower-minimum' || change === 'sufficient-allowance') {
+			expect(await action).toEqual({ action: 'requestPrice', hash })
+			expect(sendTransaction).toHaveBeenCalledTimes(1)
+		} else {
+			expect(await action).toBeInstanceOf(Error)
+			expect(sendTransaction).not.toHaveBeenCalled()
+			expect(transactionSteps.value?.steps[0]?.phase).toBe('failed')
+		}
+	})

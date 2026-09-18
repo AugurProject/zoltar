@@ -499,6 +499,10 @@
 		"./features/security-pools/lib/liquidationModalGuards.js": {
 			"bun": "./ts/features/security-pools/lib/liquidationModalGuards.ts",
 			"default": "./js/features/security-pools/lib/liquidationModalGuards.js"
+		},
+		"./protocol/fundingTransactions.js": {
+			"bun": "./ts/protocol/fundingTransactions.ts",
+			"default": "./js/protocol/fundingTransactions.js"
 		}
 	},
 	"version": "1.0.0"
