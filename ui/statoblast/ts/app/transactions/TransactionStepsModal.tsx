@@ -12,8 +12,8 @@ import { ErrorNotice } from '@zoltar/ui-core-shared/components/ErrorNotice.js'
 import { transactionSteps } from './transactionSteps.js'
 
 function EthAmount({ value }: { value: bigint | undefined }) {
-	const useGwei = value !== undefined && value > 0n && value < 10n ** 15n
-	return <CurrencyValue precision='exact' copyable={false} value={value} units={useGwei ? 9 : 18} suffix={useGwei ? copy.gwei : commonCopy.eth} />
+	const useNanoEth = value !== undefined && value > 0n && value < 10n ** 15n
+	return <CurrencyValue precision='exact' copyable={false} value={value} units={useNanoEth ? 9 : 18} suffix={useNanoEth ? copy.nanoEth : commonCopy.eth} />
 }
 
 export function TransactionStepsModal({ contextKey }: { contextKey: string }) {
