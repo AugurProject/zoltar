@@ -12,7 +12,7 @@ import { ARACHNID_CREATE2_DEPLOYER_ADDRESS, ARACHNID_CREATE2_DEPLOYER_RUNTIME_CO
 import { createCompleteDeploymentPlan } from './deployment-plan.mts'
 
 const DEFAULT_CHAIN_ID = 11_155_111
-export const DEFAULT_MAX_FEE_PER_GAS_GWEI = '100'
+export const DEFAULT_MAX_FEE_PER_GAS_NANO_ETH = '100'
 export const DEFAULT_MAX_TOTAL_COST_ETH = '20'
 export const DEPLOYMENT_RECEIPT_TIMEOUT_MILLISECONDS = 60 * 60 * 1_000
 const CANCUN_CAPABILITY_PROBE = '0x6000600060005e600160005d60005c60005260206000f3'
@@ -193,7 +193,7 @@ function parsePositiveUnits(value: string | undefined, fallback: string, decimal
 }
 
 export function parseMaxFeePerGas(value: string | undefined) {
-	return parsePositiveUnits(value, DEFAULT_MAX_FEE_PER_GAS_GWEI, 9, 'MAX_FEE_PER_GAS_GWEI')
+	return parsePositiveUnits(value, DEFAULT_MAX_FEE_PER_GAS_NANO_ETH, 9, 'MAX_FEE_PER_GAS_NANO_ETH')
 }
 
 export function parseMaxTotalCost(value: string | undefined) {
@@ -203,7 +203,7 @@ export function parseMaxTotalCost(value: string | undefined) {
 export function parseDeploymentCommandLine(argv = process.argv.slice(2), environment: Readonly<Record<string, string | undefined>> = process.env) {
 	return {
 		chainId: parseChainId(commandLineValue('chain-id', 'CHAIN_ID', argv) ?? environment['CHAIN_ID']),
-		maxFeePerGas: parseMaxFeePerGas(commandLineValue('max-fee-per-gas-gwei', 'MAX_FEE_PER_GAS_GWEI', argv) ?? environment['MAX_FEE_PER_GAS_GWEI']),
+		maxFeePerGas: parseMaxFeePerGas(commandLineValue('max-fee-per-gas-nanoeth', 'MAX_FEE_PER_GAS_NANO_ETH', argv) ?? environment['MAX_FEE_PER_GAS_NANO_ETH']),
 		maxTotalCost: parseMaxTotalCost(commandLineValue('max-total-cost-eth', 'MAX_TOTAL_COST_ETH', argv) ?? environment['MAX_TOTAL_COST_ETH']),
 		privateKey: parsePrivateKey(option('private-key', [...argv]) ?? environment['PRIVATE_KEY']),
 		rpcUrl: parseRpcUrl(commandLineValue('rpc-url', 'RPC_URL', argv) ?? environment['RPC_URL']),
@@ -304,9 +304,9 @@ export function createBudgetedTransactionSender(wallet: BudgetedWallet, account:
 		log(
 			formatDeploymentLogBranch('Estimate transaction', [
 				['Nonce', nonce.toString()],
-				['Base fee', `${formatEther(baseFeePerGas * 1_000_000_000n)} gwei`],
-				['Priority fee', `${formatEther(maxPriorityFeePerGas * 1_000_000_000n)} gwei`],
-				['Maximum fee', `${formatEther(maxFeePerGas * 1_000_000_000n)} gwei`],
+				['Base fee', `${formatEther(baseFeePerGas * 1_000_000_000n)} nanoETH`],
+				['Priority fee', `${formatEther(maxPriorityFeePerGas * 1_000_000_000n)} nanoETH`],
+				['Maximum fee', `${formatEther(maxFeePerGas * 1_000_000_000n)} nanoETH`],
 			]),
 		)
 		const estimationRequest = {
@@ -635,7 +635,7 @@ export async function deployTestnet(parameters: { chainId: number; maxFeePerGas?
 	const canonicalCreate2Installed = await resolveCanonicalCreate2DeployerForPreflight(client)
 	const proxyInstalled = await resolveCanonicalProxyDeployerForPreflight(client)
 	if (authorizedMaxFeePerGas < CANONICAL_DEPLOYER_RAW_GAS_PRICE && (!canonicalCreate2Installed || !proxyInstalled)) {
-		throw new Error(`MAX_FEE_PER_GAS_GWEI authorizes ${authorizedMaxFeePerGas.toString()} attoETH per gas, but missing canonical deployers require fixed ${CANONICAL_DEPLOYER_RAW_GAS_PRICE.toString()} attoETH per gas raw transactions`)
+		throw new Error(`MAX_FEE_PER_GAS_NANO_ETH authorizes ${authorizedMaxFeePerGas.toString()} attoETH per gas, but missing canonical deployers require fixed ${CANONICAL_DEPLOYER_RAW_GAS_PRICE.toString()} attoETH per gas raw transactions`)
 	}
 	const plan = createCompleteDeploymentPlan(profile, uniswap)
 	const knownInstalledAddresses = new Set<Address>()
@@ -647,7 +647,7 @@ export async function deployTestnet(parameters: { chainId: number; maxFeePerGas?
 			['Missing contracts', estimate.missingStepIds.length.toString()],
 			['Estimated maximum cost', `${formatEther(estimate.estimatedCostAttoEth)} ETH`],
 			['Authorized total', `${formatEther(authorizedMaxTotalCost)} ETH`],
-			['Fee ceiling', `${formatEther(authorizedMaxFeePerGas * 1_000_000_000n)} gwei`],
+			['Fee ceiling', `${formatEther(authorizedMaxFeePerGas * 1_000_000_000n)} nanoETH`],
 		]),
 	)
 	if (!proxyInstalled) {
@@ -683,12 +683,12 @@ export function getDeploymentHelp() {
 Load PRIVATE_KEY into the environment from a secret manager or hidden prompt,
 or pass --private-key=0x... if shell history exposure is acceptable.
 Pass RPC and cost limits as uppercase assignments after --, for example:
-  bun run deploy:testnet -- RPC_URL=https://... MAX_FEE_PER_GAS_GWEI=100 MAX_TOTAL_COST_ETH=20
+  bun run deploy:testnet -- RPC_URL=https://... MAX_FEE_PER_GAS_NANO_ETH=100 MAX_TOTAL_COST_ETH=20
 
   --private-key=0x...    Required unless PRIVATE_KEY is set
   --rpc-url=https://...   Required unless RPC_URL is set
   --chain-id=11155111     Defaults to Sepolia chain ID 11155111
-  --max-fee-per-gas-gwei=100  Rejects higher RPC fee suggestions
+  --max-fee-per-gas-nanoeth=100  Rejects higher RPC fee suggestions
   --max-total-cost-eth=20     Caps the preflight estimate and transaction costs
 
 Custom testnets receive the same deterministic WETH and genesis REP deployment

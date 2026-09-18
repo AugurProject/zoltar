@@ -64,14 +64,14 @@ const numberFormatter = new Intl.NumberFormat('en-US')
 const ethFormatter = new Intl.NumberFormat('en-US', { minimumFractionDigits: 6, maximumFractionDigits: 6 })
 const usdFormatter = new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 const ethPriceUsd = Number.parseFloat(process.env['ETH_PRICE_USD'] ?? '2170.63')
-const priorityFeeGwei = Number.parseFloat(process.env['PRIORITY_FEE_GWEI'] ?? '1')
-const baseFeeGwei = Number.parseFloat(process.env['BASE_FEE_GWEI'] ?? '0.035')
-const totalGasPriceGwei = baseFeeGwei + priorityFeeGwei
+const priorityFeeNanoEth = Number.parseFloat(process.env['PRIORITY_FEE_NANO_ETH'] ?? '1')
+const baseFeeNanoEth = Number.parseFloat(process.env['BASE_FEE_NANO_ETH'] ?? '0.035')
+const totalGasPriceNanoEth = baseFeeNanoEth + priorityFeeNanoEth
 
 if (!Number.isFinite(ethPriceUsd) || ethPriceUsd <= 0) throw new Error('ETH_PRICE_USD must be a positive number')
-if (!Number.isFinite(priorityFeeGwei) || priorityFeeGwei < 0) throw new Error('PRIORITY_FEE_GWEI must be a non-negative number')
-if (!Number.isFinite(baseFeeGwei) || baseFeeGwei < 0) throw new Error('BASE_FEE_GWEI must be a non-negative number')
-if (totalGasPriceGwei <= 0) throw new Error('BASE_FEE_GWEI + PRIORITY_FEE_GWEI must be greater than zero')
+if (!Number.isFinite(priorityFeeNanoEth) || priorityFeeNanoEth < 0) throw new Error('PRIORITY_FEE_NANO_ETH must be a non-negative number')
+if (!Number.isFinite(baseFeeNanoEth) || baseFeeNanoEth < 0) throw new Error('BASE_FEE_NANO_ETH must be a non-negative number')
+if (totalGasPriceNanoEth <= 0) throw new Error('BASE_FEE_NANO_ETH + PRIORITY_FEE_NANO_ETH must be greater than zero')
 
 const anvilNode = await createAnvilNodeForConnectionMode(getGasCostsAnvilConnectionMode(), { context: 'gas-costs', startTimestamp: 1n })
 const anvil = anvilNode.anvilWindowEthereum
@@ -699,14 +699,14 @@ try {
 	}
 
 	const labelWidth = results.reduce((max, result) => (result.label.length > max ? result.label.length : max), 0)
-	const gasCostInEth = (gas: bigint) => (bigintToSafeNumber(gas, 'Gas usage') * totalGasPriceGwei) / 1_000_000_000
+	const gasCostInEth = (gas: bigint) => (bigintToSafeNumber(gas, 'Gas usage') * totalGasPriceNanoEth) / 1_000_000_000
 	const gasCostInUsd = (gas: bigint) => gasCostInEth(gas) * ethPriceUsd
 
 	console.log(`# Pricing Assumptions`)
 	console.log(`ETH price: $${usdFormatter.format(ethPriceUsd)}`)
-	console.log(`Base fee: ${baseFeeGwei} gwei`)
-	console.log(`Priority fee: ${priorityFeeGwei} gwei`)
-	console.log(`Total gas price: ${totalGasPriceGwei} gwei`)
+	console.log(`Base fee: ${baseFeeNanoEth} nanoETH`)
+	console.log(`Priority fee: ${priorityFeeNanoEth} nanoETH`)
+	console.log(`Total gas price: ${totalGasPriceNanoEth} nanoETH`)
 	console.log('')
 
 	let currentSection = ''

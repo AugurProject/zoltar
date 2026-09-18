@@ -1,3 +1,5 @@
+import { runFundingTransactions, type FundingTransaction } from './fundingTransactions.js'
+import type { TransactionPlanStep } from '@zoltar/ui-core-shared/wallet/chainBackend.js'
 import { decodeEventLog, parseAbiItem, getAddress, zeroAddress, type Address, type Hex, type TransactionReceipt } from '@zoltar/core-shared/evm/ethereum'
 import { ABIS } from '@zoltar/ui-core-shared/abis.js'
 import { sameAddress } from '@zoltar/ui-core-shared/lib/address.js'
@@ -372,10 +374,13 @@ export async function loadCoordinatorInitialReportFundingRequirement(client: Coo
 	})
 	const bufferedMinimumToken1Report = addOpenOracleInitialReportFundingBuffer(minimumToken1ReportAttoEth)
 	const maximumInitialAttoWeth = requestedInitialAttoWeth > bufferedMinimumToken1Report ? requestedInitialAttoWeth : bufferedMinimumToken1Report
+	const requiredWethAttoEth = requestedInitialAttoWeth > minimumToken1ReportAttoEth ? requestedInitialAttoWeth : minimumToken1ReportAttoEth
+	const requiredRepAttoRep = (requiredWethAttoEth * resolvedInitialReportPrice + COORDINATOR_PRICE_PRECISION - 1n) / COORDINATOR_PRICE_PRECISION
 	const initialReportAmount2 = (maximumInitialAttoWeth * resolvedInitialReportPrice + COORDINATOR_PRICE_PRECISION - 1n) / COORDINATOR_PRICE_PRECISION
 	return {
 		currentRepBalanceAttoRep,
 		currentWethBalanceAttoEth,
+		requiredRepAttoRep,
 		initialReportAmount2,
 		maximumInitialAttoWeth,
 		minimumToken1ReportAttoEth,
@@ -405,37 +410,77 @@ async function assertCoordinatorRequestPriceAllowed(client: Pick<WriteClient, 'r
 	if (pendingReportId > 0n) throw new Error('Oracle price request is already pending')
 }
 
-async function fundCoordinatorInitialReport(client: WriteClient, managerAddress: Address, proposedRepPerEthPrice: bigint, requestedInitialAttoWeth = 0n) {
+async function fundCoordinatorInitialReport(client: WriteClient, managerAddress: Address, proposedRepPerEthPrice: bigint, requestedInitialAttoWeth: bigint, finalStep: TransactionPlanStep) {
 	const fundingRequirement = await loadCoordinatorInitialReportFundingRequirement(client, managerAddress, client.account.address, proposedRepPerEthPrice, requestedInitialAttoWeth)
-	if (fundingRequirement.currentRepBalanceAttoRep < fundingRequirement.initialReportAmount2) throw new Error('Insufficient REP balance for coordinator initial report')
-	if (fundingRequirement.wethShortfallAttoEth > 0n) {
-		await wrapWeth(client, fundingRequirement.wethShortfallAttoEth)
+	const expectedWeth = requestedInitialAttoWeth > fundingRequirement.minimumToken1ReportAttoEth ? requestedInitialAttoWeth : fundingRequirement.minimumToken1ReportAttoEth
+	const expectedRep = fundingRequirement.requiredRepAttoRep
+	if (fundingRequirement.currentRepBalanceAttoRep < expectedRep) throw new Error('Insufficient REP balance for coordinator initial report')
+	const requiredEth = fundingRequirement.wethShortfallAttoEth + (finalStep.value ?? 0n)
+	if ((await client.getBalance({ address: client.account.address })) < requiredEth) throw new Error('Insufficient ETH for initial report funding and the oracle fee. Gas is additional.')
+	const estimatedBounty = await readOracleRequestCost(client, managerAddress)
+	if (estimatedBounty > (finalStep.value ?? 0n)) throw new Error('The oracle fee increased. Review the price request again before funding it.')
+	const [repAllowance, wethAllowance] = await Promise.all([
+		client.readContract({ address: fundingRequirement.reputationTokenAddress, abi: ABIS.mainnet.erc20, functionName: 'allowance', args: [client.account.address, managerAddress] }),
+		client.readContract({ address: getWethAddress(), abi: ABIS.mainnet.erc20, functionName: 'allowance', args: [client.account.address, managerAddress] }),
+	])
+	const needsRepApproval = repAllowance < expectedRep
+	const needsWethApproval = wethAllowance < expectedWeth
+	const actions: FundingTransaction[] = []
+	if (fundingRequirement.wethShortfallAttoEth > 0n)
+		actions.push({
+			step: { functionName: 'deposit', contractAddress: getWethAddress(), value: fundingRequirement.wethShortfallAttoEth },
+			isRequired: async () => (await client.readContract({ address: getWethAddress(), abi: ABIS.mainnet.erc20, functionName: 'balanceOf', args: [client.account.address] })) < expectedWeth,
+			execute: async () => await wrapWeth(client, fundingRequirement.wethShortfallAttoEth),
+		})
+	for (const funding of [
+		{ needed: needsRepApproval, token: fundingRequirement.reputationTokenAddress, required: expectedRep, limit: fundingRequirement.initialReportAmount2 },
+		{ needed: needsWethApproval, token: getWethAddress(), required: expectedWeth, limit: fundingRequirement.maximumInitialAttoWeth },
+	]) {
+		if (funding.needed)
+			actions.push({
+				step: { functionName: 'approve', contractAddress: funding.token, args: [managerAddress, funding.limit] },
+				isRequired: async () => (await client.readContract({ address: funding.token, abi: ABIS.mainnet.erc20, functionName: 'allowance', args: [client.account.address, managerAddress] })) < funding.required,
+				execute: async () => await writeContractAndWait(client, () => ({ address: funding.token, abi: ABIS.mainnet.erc20, functionName: 'approve', args: [managerAddress, funding.limit] })),
+			})
 	}
-	await writeContractAndWait(client, () => ({
-		address: fundingRequirement.reputationTokenAddress,
-		abi: ABIS.mainnet.erc20,
-		functionName: 'approve',
-		args: [managerAddress, fundingRequirement.initialReportAmount2],
-	}))
-	await writeContractAndWait(client, () => ({
-		address: getWethAddress(),
-		abi: ABIS.mainnet.erc20,
-		functionName: 'approve',
-		args: [managerAddress, fundingRequirement.maximumInitialAttoWeth],
-	}))
+	await runFundingTransactions(client, actions, {
+		...finalStep,
+		refreshFundingRequirements: async () => {
+			const [currentFunding, currentCost, currentEth] = await Promise.all([
+				loadCoordinatorInitialReportFundingRequirement(client, managerAddress, client.account.address, proposedRepPerEthPrice, requestedInitialAttoWeth),
+				readOracleRequestCost(client, managerAddress),
+				client.getBalance({ address: client.account.address }),
+			])
+			const currentWeth = requestedInitialAttoWeth > currentFunding.minimumToken1ReportAttoEth ? requestedInitialAttoWeth : currentFunding.minimumToken1ReportAttoEth
+			if (currentWeth > fundingRequirement.maximumInitialAttoWeth || currentFunding.requiredRepAttoRep > fundingRequirement.initialReportAmount2 || currentFunding.reputationTokenAddress !== fundingRequirement.reputationTokenAddress)
+				throw new Error('Oracle deposit requirements changed. Review funding again before sending the request.')
+			if (currentCost > (finalStep.value ?? 0n)) throw new Error('The oracle fee increased. Review the request again before sending.')
+			if (currentEth < (finalStep.value ?? 0n)) throw new Error('Insufficient ETH for the oracle fee. Gas is additional.')
+			return [
+				{ tokenAddress: currentFunding.reputationTokenAddress, amount: currentFunding.requiredRepAttoRep },
+				{ tokenAddress: getWethAddress(), amount: currentWeth },
+			]
+		},
+		oracleOutcome: { settlerRewardAttoEth: estimatedBounty, ethRefundAttoEth: (finalStep.value ?? 0n) - estimatedBounty, returnToWallet: true },
+		tokenFunding: [
+			{ tokenAddress: fundingRequirement.reputationTokenAddress, amount: expectedRep, limit: fundingRequirement.initialReportAmount2 },
+			{ tokenAddress: getWethAddress(), amount: expectedWeth, limit: fundingRequirement.maximumInitialAttoWeth },
+		],
+	})
 	return fundingRequirement
 }
 
 export async function requestOraclePrice(client: WriteClient, managerAddress: Address, proposedRepPerEthPrice?: bigint, requestedInitialAttoWeth = 0n, reviewedRequestValueAttoEth?: bigint) {
 	await assertCoordinatorRequestPriceAllowed(client, managerAddress)
 	const resolvedInitialReportPrice = proposedRepPerEthPrice ?? (await getCoordinatorInitialReportPrice(client, managerAddress, requestedInitialAttoWeth))
-	await fundCoordinatorInitialReport(client, managerAddress, resolvedInitialReportPrice, requestedInitialAttoWeth)
+	const requestValue = reviewedRequestValueAttoEth ?? (await loadBufferedOracleRequestEthCost(client, managerAddress))
+	await fundCoordinatorInitialReport(client, managerAddress, resolvedInitialReportPrice, requestedInitialAttoWeth, { functionName: 'requestPrice', contractAddress: managerAddress, value: requestValue })
 	const callParams = {
 		address: managerAddress,
 		abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
 		functionName: 'requestPrice',
 		args: [resolvedInitialReportPrice, requestedInitialAttoWeth],
-		value: reviewedRequestValueAttoEth ?? (await loadBufferedOracleRequestEthCost(client, managerAddress)),
+		value: requestValue,
 	}
 	const hash = await writeContractAndWait(client, () => callParams)
 	return {
@@ -462,7 +507,7 @@ export async function queueSecurityPoolLiquidation(client: WriteClient, managerA
 	const queueOperationValueAttoEth = await loadOracleManagerQueueOperationEthValue(client, managerAddress)
 	const proposedRepPerEthPrice = queueOperationValueAttoEth > 0n ? await getCoordinatorInitialReportPrice(client, managerAddress, requestedInitialAttoWeth) : 0n
 	if (queueOperationValueAttoEth > 0n) {
-		await fundCoordinatorInitialReport(client, managerAddress, proposedRepPerEthPrice, requestedInitialAttoWeth)
+		await fundCoordinatorInitialReport(client, managerAddress, proposedRepPerEthPrice, requestedInitialAttoWeth, { functionName: 'requestPriceIfNeededAndStageLiquidation', contractAddress: managerAddress, value: queueOperationValueAttoEth })
 	}
 	const callParams = {
 		address: managerAddress,
@@ -484,7 +529,7 @@ export async function queueOracleManagerOperation(client: WriteClient, managerAd
 	const queueOperationValueAttoEth = await loadOracleManagerQueueOperationEthValue(client, managerAddress)
 	const resolvedInitialReportPrice = queueOperationValueAttoEth > 0n ? (proposedRepPerEthPrice ?? (await getCoordinatorInitialReportPrice(client, managerAddress, requestedInitialAttoWeth))) : (proposedRepPerEthPrice ?? 0n)
 	if (queueOperationValueAttoEth > 0n) {
-		await fundCoordinatorInitialReport(client, managerAddress, resolvedInitialReportPrice, requestedInitialAttoWeth)
+		await fundCoordinatorInitialReport(client, managerAddress, resolvedInitialReportPrice, requestedInitialAttoWeth, { functionName: 'requestPriceIfNeededAndStageOperation', contractAddress: managerAddress, args: [encodeOracleQueueOperation(operation)], value: queueOperationValueAttoEth })
 	}
 	const callParams = {
 		address: managerAddress,

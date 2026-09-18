@@ -64,7 +64,11 @@ describe('usePriceOracleManager', () => {
 		},
 	})
 
-	test.each([undefined, 1_250_000_000_000_000_000n])('re-reads manager validity and forwards the selected initial price (%s)', async proposedPrice => {
+	test.each([
+		{ proposedPrice: undefined, balance: 1n },
+		{ proposedPrice: 1_250_000_000_000_000_000n, balance: 1n },
+		{ proposedPrice: undefined, balance: 0n },
+	])('checks actual REP funding and forwards the selected initial price (%s)', async ({ proposedPrice, balance }) => {
 		let managerLoadCount = 0
 		const loadOracleManagerDetails = mock(async () => {
 			managerLoadCount += 1
@@ -92,9 +96,10 @@ describe('usePriceOracleManager', () => {
 			loadCoordinatorInitialReportFundingRequirement: async (_client, _manager, _wallet, price) => {
 				expect(price).toBe(proposedPrice)
 				return {
-					currentRepBalanceAttoRep: 10n,
+					currentRepBalanceAttoRep: balance,
 					currentWethBalanceAttoEth: 10n,
-					initialReportAmount2: 1n,
+					requiredRepAttoRep: 1n,
+					initialReportAmount2: 2n,
 					maximumInitialAttoWeth: 1n,
 					minimumToken1ReportAttoEth: 1n,
 					proposedRepPerEthPrice: proposedPrice ?? 1n,
@@ -133,6 +138,10 @@ describe('usePriceOracleManager', () => {
 			await requireHookState(hookState).requestPoolPrice(MANAGER_ADDRESS, POOL_ADDRESS, 1n, 0n, proposedPrice)
 		})
 
+		if (balance === 0n) {
+			expect(requestOraclePrice).not.toHaveBeenCalled()
+			return
+		}
 		expect(requestOraclePrice).toHaveBeenCalledTimes(1)
 		expect(requestOraclePrice).toHaveBeenCalledWith(expect.anything(), MANAGER_ADDRESS, proposedPrice ?? 1n, 0n, 1n)
 		expect(loadOracleManagerDetails).toHaveBeenCalledTimes(3)

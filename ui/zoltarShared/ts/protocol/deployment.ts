@@ -313,6 +313,16 @@ async function ensureProxyDeployerDeployed(client: WriteClient, wait?: RpcStateR
 	if (await proxyDeployerIsInstalled(client)) return undefined
 	if (activity.confirmedNonce !== 0n) return await resolveConfirmedProxyDeployer(client, wait)
 	await assertCanonicalRawTransactionFeeCompatible(client, 'Deterministic proxy deployer')
+	const reviewedFundingShortfall = client.onTransactionPlan === undefined ? undefined : await getProxyDeployerFundingShortfall(client)
+	client.onTransactionPlan?.([
+		{ functionName: 'Broadcast deterministic proxy deployer transaction' },
+		...((reviewedFundingShortfall ?? 0n) > 0n
+			? [
+					{ functionName: 'Fund deterministic proxy deployer signer without surplus', value: FUND_PROXY_DEPLOYER_SIGNER_AMOUNT, optional: true },
+					{ functionName: 'Broadcast deterministic proxy deployer transaction', optional: true },
+				]
+			: []),
+	])
 	const preFundingDeploymentHash = await broadcastCanonicalProxyDeployer(client, true, wait)
 	if (preFundingDeploymentHash !== undefined) return preFundingDeploymentHash
 

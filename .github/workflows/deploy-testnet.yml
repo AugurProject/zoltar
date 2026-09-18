@@ -12,9 +12,9 @@ on:
         description: Decimal chain ID for an EIP-1559, Cancun, and Osaka-compatible testnet
         required: true
         type: string
-      max_fee_per_gas_gwei:
+      max_fee_per_gas_nanoeth:
         default: "100"
-        description: Maximum authorized fee per gas in gwei
+        description: Maximum authorized fee per gas in nanoETH
         required: true
         type: string
       max_total_cost_eth:
@@ -65,7 +65,7 @@ jobs:
         env:
           CHAIN_ID: ${{ inputs.chain_id }}
           ETHERSCAN_API_KEY: ${{ secrets.ETHERSCAN_API_KEY }}
-          MAX_FEE_PER_GAS_GWEI: ${{ inputs.max_fee_per_gas_gwei }}
+          MAX_FEE_PER_GAS_NANO_ETH: ${{ inputs.max_fee_per_gas_nanoeth }}
           MAX_TOTAL_COST_ETH: ${{ inputs.max_total_cost_eth }}
           PRIVATE_KEY: ${{ secrets.TESTNET_DEPLOYER_PRIVATE_KEY }}
           RPC_URL: ${{ inputs.rpc_url }}

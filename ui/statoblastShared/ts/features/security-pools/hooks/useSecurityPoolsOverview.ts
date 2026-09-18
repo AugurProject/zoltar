@@ -243,7 +243,7 @@ function useSecurityPoolsOverviewWithDependencies<TWriteClient>(
 		return {
 			currentRepBalanceAttoRep: fundingRequirement.currentRepBalanceAttoRep,
 			currentWethBalanceAttoEth: fundingRequirement.currentWethBalanceAttoEth,
-			initialReportRepRequiredAttoRep: fundingRequirement.initialReportAmount2,
+			initialReportRepRequiredAttoRep: fundingRequirement.requiredRepAttoRep,
 			initialReportWethRequiredAttoEth: fundingRequirement.maximumInitialAttoWeth,
 			queueOperationValueAttoEth,
 			totalWalletEthRequiredAttoEth: queueOperationValueAttoEth + fundingRequirement.wethShortfallAttoEth,

@@ -19,9 +19,10 @@ describe('TokenApprovalControl', () => {
 		},
 	})
 
-	test('keeps invalid approval input in the single shared notice above both actions', async () => {
+	test.each([true, false])('preserves partial and invalid notices with showRequirementNotice=%s', async showRequirementNotice => {
 		const rendered = await renderIntoDocument(
 			<TokenApprovalControl
+				showRequirementNotice={showRequirementNotice}
 				actionLabel='splitting REP'
 				allowanceError={undefined}
 				allowanceLoading={false}
@@ -30,7 +31,7 @@ describe('TokenApprovalControl', () => {
 				onApprove={() => undefined}
 				pending={false}
 				pendingLabel='Approving REP…'
-				requiredAmount={1n}
+				requiredAmount={10n ** 18n}
 				resetKey='grouped'
 				tokenSymbol='REP'
 				tokenUnits={18}
@@ -44,6 +45,9 @@ describe('TokenApprovalControl', () => {
 		)
 		cleanupRenderedComponent = rendered.cleanup
 		const input = within(rendered.container).getByRole('textbox')
+		expect(rendered.container.querySelectorAll('.tx-action-notice').length).toBe(showRequirementNotice ? 1 : 0)
+		await act(() => fireEvent.input(input, { target: { value: '0.5' } }))
+		expect(rendered.container.querySelector('.tx-action-notice')?.textContent).toContain('will still leave')
 		await act(() => fireEvent.input(input, { target: { value: 'invalid' } }))
 		const notices = rendered.container.querySelectorAll('.tx-action-notice')
 		expect(notices.length).toBe(1)
@@ -84,13 +88,14 @@ describe('TokenApprovalControl', () => {
 		expect(documentQueries.queryByText(/must be greater than the current approved/i)).toBeNull()
 	})
 
-	test('shows a guard message and keeps approval disabled when approval is guarded', async () => {
+	test.each([true, false])('preserves guard messages with showRequirementNotice=%s', async showRequirementNotice => {
 		const renderedComponent = await renderIntoDocument(
 			<TokenApprovalControl
 				actionLabel='submitting the initial report'
 				allowanceError={undefined}
 				allowanceLoading={false}
 				approvedAmount={0n}
+				showRequirementNotice={showRequirementNotice}
 				guardMessage='Connect a wallet before approving.'
 				onApprove={() => undefined}
 				pending={false}
@@ -110,10 +115,11 @@ describe('TokenApprovalControl', () => {
 		expectTransactionButtonDisabled(document.body, 'Approve WETH', 'Connect a wallet before approving.')
 	})
 
-	test('does not duplicate allowance errors as both disabled reason and error notice', async () => {
+	test.each([true, false])('preserves a single allowance error with showRequirementNotice=%s', async showRequirementNotice => {
 		const renderedComponent = await renderIntoDocument(
 			<TokenApprovalControl
 				actionLabel='submitting the initial report'
+				showRequirementNotice={showRequirementNotice}
 				allowanceError='Unable to read current WETH allowance.'
 				allowanceLoading={false}
 				approvedAmount={0n}

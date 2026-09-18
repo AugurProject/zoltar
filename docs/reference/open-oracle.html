@@ -230,7 +230,7 @@
 						</tr>
 						<tr>
 							<td><code>initialReportPriorityFeeAttoEthPerGas</code></td>
-							<td>Origin-pool parameter; the UI defaults to <code>10 gwei</code></td>
+							<td>Origin-pool parameter; the UI defaults to <code>10 nanoETH</code></td>
 							<td>Immutable lineage configuration inherited by child pools</td>
 						</tr>
 						<tr>
@@ -283,7 +283,7 @@
 
 				<p>Moving the target error toward the fee floor increases the required WETH sharply. Increasing the Open Oracle Security multiplier increases the required WETH linearly. A larger target error reduces the required position, but permits a wider error before the modeled correction incentive applies.</p>
 				<div class="callout">The immutable priority fee is an operator-selected transaction-inclusion assumption, not a tip observed from the request block. Setting it too low weakens the modeled incentive for a disputer when prevailing priority fees are higher. Setting it too high raises the sponsor's initial WETH and REP requirements and the initial-report-derived escalation halt, and can make requests impractical. Child pools inherit the origin's value.</div>
-				<p>At a <code>30 gwei</code> base fee and a configured <code>10 gwei</code> priority fee, the modeled gas cost is <code>0.012 ETH</code>. After applying the <code>10x</code> Open Oracle Security multiplier and the worst-direction five-percent correction fraction after fees, the minimum report with <code>100 WETH</code> of open interest is <code>3.230769230769230770 WETH</code>. With the configured <code>10x</code> halt multiplier, the initial-report-derived escalation halt is <code>32.307692307692307700 WETH</code>.</p>
+				<p>At a <code>30 nanoETH</code> base fee and a configured <code>10 nanoETH</code> priority fee, the modeled gas cost is <code>0.012 ETH</code>. After applying the <code>10x</code> Open Oracle Security multiplier and the worst-direction five-percent correction fraction after fees, the minimum report with <code>100 WETH</code> of open interest is <code>3.230769230769230770 WETH</code>. With the configured <code>10x</code> halt multiplier, the initial-report-derived escalation halt is <code>32.307692307692307700 WETH</code>.</p>
 				<details class="interactive-example" id="initial-report-estimator-example" open="">
 					<summary>Dynamic WETH report estimator</summary>
 					<p>This calculator mirrors the onchain formula. The deployment parameters and caller-selected amount are shown as adjustable inputs to make their effect explicit. For a deployed coordinator, the base fee and pool open interest can change from one request block to another.</p>
@@ -298,13 +298,13 @@
 								<div class="example-grid">
 									<label>
 										Block base fee
-										<input data-example-input="blockBaseFeeGwei" max="200" min="0" step="1" type="number" inputmode="decimal" value="30" />
-										<span class="example-value" data-example-value="blockBaseFeeGwei">30 gwei</span>
+										<input data-example-input="blockBaseFeeNanoEth" max="200" min="0" step="1" type="number" inputmode="decimal" value="30" />
+										<span class="example-value" data-example-value="blockBaseFeeNanoEth">30 nanoETH</span>
 									</label>
 									<label>
 										Initial-report priority fee
-										<input data-example-input="initialReportPriorityFeeGwei" max="100" min="1" step="1" type="number" inputmode="decimal" value="10" />
-										<span class="example-value" data-example-value="initialReportPriorityFeeGwei">10 gwei</span>
+										<input data-example-input="initialReportPriorityFeeNanoEth" max="100" min="1" step="1" type="number" inputmode="decimal" value="10" />
+										<span class="example-value" data-example-value="initialReportPriorityFeeNanoEth">10 nanoETH</span>
 									</label>
 									<label>
 										Gas units for one dispute
@@ -661,7 +661,7 @@
 						</tr>
 						<tr>
 							<td><code>initialReportPriorityFeeAttoEthPerGas</code></td>
-							<td>Configured per origin pool; UI default <code>10 gwei</code></td>
+							<td>Configured per origin pool; UI default <code>10 nanoETH</code></td>
 							<td>Provides an immutable inclusion-fee component that every child pool inherits.</td>
 						</tr>
 						<tr>

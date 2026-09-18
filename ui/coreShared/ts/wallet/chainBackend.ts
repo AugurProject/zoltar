@@ -9,6 +9,8 @@ import { resolveConfiguredRpcConfig, type ConfiguredRpcSource, type RejectedRpcO
 export type ReadClient = ReturnType<typeof createPublicClient>
 export type WriteClient = WalletClient<Transport, NetworkProfile['chain'], Account> &
 	PublicActions<Transport, NetworkProfile['chain']> & {
+		onTransactionPlan?: (steps: readonly TransactionPlanStep[]) => void
+		runFundingTransaction?: (requiredIndices: readonly number[], execute: (index: number) => Promise<void>) => Promise<boolean>
 		assertCanonicalRawTransactionCost?: (signer: Address, costAttoEth: bigint) => void
 		installSimulationProxyDeployer?: (parameters: { address: Address; runtimeCode: Hex }) => Promise<void>
 		onTransactionPrepared?: ((preview: TransactionRequestPreview) => void) | undefined
@@ -23,6 +25,14 @@ export type CreateWriteClientCallbacks = {
 	onTransactionPrepared?: ((preview: TransactionRequestPreview) => void) | undefined
 	onTransactionSubmitted?: (hash: Hash) => void
 }
+
+export type TransactionPlanStep = Pick<TransactionRequestPreview, 'functionName'> &
+	Partial<TransactionRequestPreview> & {
+		refreshFundingRequirements?: () => Promise<TransactionPlanStep['tokenFunding']>
+		optional?: boolean
+		oracleOutcome?: { settlerRewardAttoEth: bigint; ethRefundAttoEth: bigint; returnToWallet: boolean }
+		tokenFunding?: readonly { tokenAddress: Address; amount: bigint; limit?: bigint }[]
+	}
 
 export type TransactionRequestPreview = {
 	account: Account | Address | undefined

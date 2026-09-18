@@ -638,7 +638,7 @@ describe('SecurityPoolWorkflowSection: reporting and oracle', () => {
 		expect(within(dialog).getByText('2.4 ETH')).not.toBeNull()
 		expect(within(dialog).queryByText('3.6 ETH')).toBeNull()
 
-		fireEvent.click(within(dialog).getByRole('button', { name: 'Confirm price request' }))
+		fireEvent.click(within(dialog).getByRole('button', { name: 'Review funding and steps' }))
 		expect(requests).toEqual([{ managerAddress: pool.managerAddress, reviewedRequestValueAttoEth: 2_400_000_000_000_000_000n, securityPoolAddress: pool.securityPoolAddress, universeId: pool.universeId }])
 	})
 
@@ -663,17 +663,17 @@ describe('SecurityPoolWorkflowSection: reporting and oracle', () => {
 		const queries = within(document.body)
 		fireEvent.click(queries.getByRole('button', { name: 'Request new price' }))
 		fireEvent.click(queries.getByRole('button', { name: 'Manual price' }))
-		const confirm = queries.getByRole('button', { name: 'Confirm price request' })
-		expect(getTransactionButtonState(document.body, 'Confirm price request').disabled).toBe(true)
+		const confirm = queries.getByRole('button', { name: 'Review funding and steps' })
+		expect(getTransactionButtonState(document.body, 'Review funding and steps').disabled).toBe(true)
 		const input = queries.getByRole('textbox', { name: 'REP per ETH' })
 		for (const value of ['0', '-1', 'abc', '0.0000000000000000001', (2n ** 256n).toString()]) {
 			fireEvent.input(input, { target: { value } })
-			expect(getTransactionButtonState(document.body, 'Confirm price request').disabled).toBe(true)
+			expect(getTransactionButtonState(document.body, 'Review funding and steps').disabled).toBe(true)
 			expect(queries.getAllByText('Enter a positive REP per ETH price with up to 18 decimal places.')).toHaveLength(1)
-			expect(getTransactionButtonState(document.body, 'Confirm price request').reason).toContain('Enter a positive REP per ETH price')
+			expect(getTransactionButtonState(document.body, 'Review funding and steps').reason).toContain('Enter a positive REP per ETH price')
 		}
 		fireEvent.input(input, { target: { value: '1.25' } })
-		expect(getTransactionButtonState(document.body, 'Confirm price request').disabled).toBe(false)
+		expect(getTransactionButtonState(document.body, 'Review funding and steps').disabled).toBe(false)
 		fireEvent.click(confirm)
 		expect(requests).toEqual([1_250_000_000_000_000_000n])
 	})
@@ -707,7 +707,7 @@ describe('SecurityPoolWorkflowSection: reporting and oracle', () => {
 			render(<SecurityPoolWorkflowSection {...baseProps} activeUniverseId={newlySelectedPool.universeId} checkedSecurityPoolAddress={newlySelectedPool.securityPoolAddress} securityPoolAddress={newlySelectedPool.securityPoolAddress} securityPools={[newlySelectedPool]} showHeader={false} />, renderedComponent.container)
 		})
 
-		fireEvent.click(within(dialog).getByRole('button', { name: 'Confirm price request' }))
+		fireEvent.click(within(dialog).getByRole('button', { name: 'Review funding and steps' }))
 		expect(requests).toEqual([{ securityPoolAddress: reviewedPool.securityPoolAddress, universeId: reviewedPool.universeId }])
 	})
 

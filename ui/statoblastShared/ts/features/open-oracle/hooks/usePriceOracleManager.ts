@@ -121,8 +121,8 @@ function usePriceOracleManagerWithDependencies<TWriteClient>(
 					if ((refreshedManagerDetails?.pendingReportId ?? 0n) > 0n) throw new Error('Oracle price request is already pending')
 					const writeClient = dependencies.createWalletWriteClient(walletAddress, { onTransactionPrepared, onTransactionSubmitted })
 					const initialReportFunding = await dependencies.loadCoordinatorInitialReportFundingRequirement(writeClient, managerAddress, walletAddress, proposedRepPerEthPrice)
-					if (initialReportFunding.currentRepBalanceAttoRep < initialReportFunding.initialReportAmount2) {
-						throw new Error(`Need ${formatAdditionalCurrencyBalance(initialReportFunding.initialReportAmount2 - initialReportFunding.currentRepBalanceAttoRep, 'REP')} in this wallet to fund the initial report.`)
+					if (initialReportFunding.currentRepBalanceAttoRep < initialReportFunding.requiredRepAttoRep) {
+						throw new Error(`Need ${formatAdditionalCurrencyBalance(initialReportFunding.requiredRepAttoRep - initialReportFunding.currentRepBalanceAttoRep, 'REP')} in this wallet to fund the initial report.`)
 					}
 					const walletBalanceAttoEth = await dependencies.createConnectedReadClient().getBalance({ address: walletAddress })
 					const totalRequiredEth = reviewedRequestValueAttoEth + initialReportFunding.wethShortfallAttoEth

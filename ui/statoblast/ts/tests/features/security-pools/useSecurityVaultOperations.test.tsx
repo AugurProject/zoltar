@@ -80,6 +80,7 @@ function createSecurityVaultOperationsDependencies(overrides: Partial<UseSecurit
 		loadCoordinatorInitialReportFundingRequirement: mock(async () => ({
 			currentRepBalanceAttoRep: 1n,
 			currentWethBalanceAttoEth: 1n,
+			requiredRepAttoRep: 1n,
 			initialReportAmount2: 1n,
 			maximumInitialAttoWeth: 1n,
 			minimumToken1ReportAttoEth: 1n,
@@ -544,7 +545,8 @@ describe('useSecurityVaultOperations', () => {
 			loadCoordinatorInitialReportFundingRequirement: mock(async () => ({
 				currentRepBalanceAttoRep: 10n,
 				currentWethBalanceAttoEth: 10n,
-				initialReportAmount2: 10n,
+				requiredRepAttoRep: 10n,
+				initialReportAmount2: 20n,
 				maximumInitialAttoWeth: 10n,
 				minimumToken1ReportAttoEth: 10n,
 				proposedRepPerEthPrice: 1n,
@@ -602,8 +604,9 @@ describe('useSecurityVaultOperations', () => {
 				getBalance: async () => 10n ** 18n,
 			})),
 			loadCoordinatorInitialReportFundingRequirement: mock(async () => ({
-				currentRepBalanceAttoRep: 0n,
+				currentRepBalanceAttoRep: 4n,
 				currentWethBalanceAttoEth: 0n,
+				requiredRepAttoRep: 5n,
 				initialReportAmount2: 5n,
 				maximumInitialAttoWeth: 5n,
 				minimumToken1ReportAttoEth: 5n,

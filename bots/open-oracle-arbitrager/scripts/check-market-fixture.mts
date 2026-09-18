@@ -76,8 +76,8 @@ function verifyRecordedEconomics() {
 	assert.equal(fixture.sellRep.callData.slice(feeWordStart, feeWordStart + 64), encodedPoolFee)
 	assert.equal(fixture.buyRep.callData.slice(feeWordStart, feeWordStart + 64), encodedPoolFee)
 
-	for (const [baseFeeGwei, expectedMinimumWeth] of gasStressExpectations) {
-		assert.equal(minimumReport(baseFeeGwei * 10n ** 9n), expectedMinimumWeth)
+	for (const [baseFeeNanoEth, expectedMinimumWeth] of gasStressExpectations) {
+		assert.equal(minimumReport(baseFeeNanoEth * 10n ** 9n), expectedMinimumWeth)
 	}
 
 	const commonGame = {

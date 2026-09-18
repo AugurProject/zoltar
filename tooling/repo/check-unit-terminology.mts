@@ -7,8 +7,7 @@ const protectedVendorPath = 'solidity/contracts/statoblast/openOracle/OpenOracle
 const terminologyCheckPath = 'tooling/repo/check-unit-terminology.mts'
 const serializedAtomicStringAllowlist = new Set(['bots/liquidator/scripts/serve-dashboard-fixture.mts', 'bots/liquidator/tests/config/settings.test.ts', 'docs/mainnet-deployment-addresses.json', 'docs/sepolia-deployment-addresses.json', 'tooling/contracts/check-mainnet-deployment.mts', 'solidity/ts/types/index.d.ts'])
 const textFilePattern = /\.(?:css|html|json|md|mts|sol|ts|tsx)$/
-const legacyTerminology =
-	/pool[ -]?ownership|poolOwnership|unpaidEthFees|feesOwedToVaults|completeSetCollateral|cashToShares|sharesToCash|nanoEth|nanoETH|pool-level REP|selectedVaultAddress|ChildPoolRepSwept|poolRepAtForkAttoRep|poolRepAmountAttoRep|resultingChildPoolRepBalanceAttoRep|\bwei\b|seiz(?:e|ed|ing)[^\n]{0,24}REP/i
+const legacyTerminology = /pool[ -]?ownership|poolOwnership|unpaidEthFees|feesOwedToVaults|completeSetCollateral|cashToShares|sharesToCash|pool-level REP|selectedVaultAddress|ChildPoolRepSwept|poolRepAtForkAttoRep|poolRepAmountAttoRep|resultingChildPoolRepBalanceAttoRep|\b(?:wei|gwei)\b|seiz(?:e|ed|ing)[^\n]{0,24}REP/i
 const missingAtomicSuffixIdentifiers =
 	/\b(?:ethBalance|wethBalance|requestPriceEthCost|getRequestPriceEthCost|getQueuedOperationEthCost|ethCost|queuedOperationEthCost|totalAccruedFees|requiredEthCost|walletEthBalance|liquidationMaxAmount|netProfitWeth|winningEth|candidateWinningEth|activeCumulativeEth|provisionalEthRaised|acceptedEth|profitBeforeGasWeth|wethRefund|expectedEth|initialWeth|pendingReportMaxSettlementBaseFee|calculateOracleMinimumWethReport|snapshotDenominator|snapshotPoolHeldRepBalanceAttoRep|snapshotPoolHeldRepBalanceBackingUnits)\b/
 const formattedAtomicStringField = /\b[A-Za-z_$][A-Za-z0-9_$]*(?:AttoEth|AttoRep|AttoShares)[A-Za-z0-9_$]*\??:\s*string\b/
@@ -79,6 +78,9 @@ if (!docsDirectRepTruthAuctionClaimAlias.test('participants claim their bought l
 if (!invalidSecurityPoolInterfaceCapacityUnits.test('function assignFinalizedAuctionFees(address vault, uint256 amountAttoEth, uint256 feeIndex)')) throw new Error('Unit terminology checker negative fixture did not detect attoETH capacity ownership in ISecurityPool')
 if (!capacityOwnershipIdentifierWithAttoEthUnits.test('const capacityOwnershipTransferAttoEth = 1n')) throw new Error('Unit terminology checker negative fixture did not detect an attoETH capacity-ownership identifier')
 if (!legacyLiquidatorCoverageModel.test('totalCoverageCommitmentAttoEth')) throw new Error('Unit terminology checker negative fixture did not detect the legacy liquidator coverage model')
+
+if (!legacyTerminology.test('1 wei') || !legacyTerminology.test('1 gwei')) throw new Error('Unit terminology checker accepted non-SI ETH units')
+if (legacyTerminology.test('1 ETH 1 nanoETH 1 nano ETH 1 REP 1 nanoREP 1 nano REP')) throw new Error('Unit terminology checker rejected SI token units')
 
 const failures: string[] = []
 for (const path of new TextDecoder().decode(sourceFilesResult.stdout).trim().split('\n')) {

@@ -26,7 +26,7 @@ const router = `0x${'66'.repeat(20)}` as Address
 const securityPoolFactory = `0x${'77'.repeat(20)}` as Address
 const transactionHash = `0x${'88'.repeat(32)}` as Hash
 const replacementTransactionHash = `0x${'89'.repeat(32)}` as Hash
-const forbiddenLiveCopy = ['Binary shares for', 'INVALID is insurance', 'Canonical SecurityPools', 'In a live transaction', 'illustrative', 'Market signal', 'Exact identity', 'Preview ready', 'Gwei']
+const forbiddenLiveCopy = ['Binary shares for', 'INVALID is insurance', 'Canonical SecurityPools', 'In a live transaction', 'illustrative', 'Market signal', 'Exact identity', 'Preview ready']
 
 function deferred<T>() {
 	let resolvePromise: (value: T) => void = () => undefined

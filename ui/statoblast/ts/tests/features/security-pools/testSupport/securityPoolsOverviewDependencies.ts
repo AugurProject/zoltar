@@ -45,6 +45,7 @@ export function createSecurityPoolsOverviewDependencies(overrides: Partial<UseSe
 		loadCoordinatorInitialReportFundingRequirement: mock(async () => ({
 			currentRepBalanceAttoRep: 1n,
 			currentWethBalanceAttoEth: 1n,
+			requiredRepAttoRep: 1n,
 			initialReportAmount2: 1n,
 			maximumInitialAttoWeth: 1n,
 			minimumToken1ReportAttoEth: 1n,
