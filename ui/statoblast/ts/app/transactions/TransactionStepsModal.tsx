@@ -34,67 +34,68 @@ export function TransactionStepsModal({ contextKey }: { contextKey: string }) {
 	const blockedReason = pending ? copy.transactionPending : fundingReason
 	const totalEth = workflow.steps.reduce((sum, step) => sum + (step.phase === 'skipped' ? 0n : (step.ethValueAttoEth ?? 0n)), 0n)
 	const renderTransactionActions = () => (
-		<>
-			<TransactionActionGroup message={undefined}>
-				{workflow.steps.map((step, index) => {
-					const active = index === workflow.activeIndex
-					const ready = step.phase === 'review' && !pending && error === undefined
-					const status = { skipped: copy.skipped, upcoming: step.optional ? copy.ifNeeded : undefined, review: undefined, pending: undefined, confirmed: copy.confirmed, failed: copy.notCompleted }[step.phase]
-					const detail = [step.phase === 'upcoming' || step.approval !== undefined ? undefined : step.amount, status].filter(value => value !== undefined).join(' · ')
-					return (
-						<div key={index} className={`transaction-plan-action${step.approval === undefined ? ' transaction-plan-action-wide' : ''}`}>
-							{step.approval !== undefined && (step.phase === 'review' || step.phase === 'pending' || step.phase === 'upcoming') ? (
-								<TokenApprovalControl
-									compact
-									showRequirementNotice={false}
-									actionLabel={copy.fundReport}
-									allowanceError={undefined}
-									allowanceLoading={false}
-									approvedAmount={step.approval.approvedAmount}
-									guardMessage={undefined}
-									disabled={!ready}
-									onApprove={amount => workflow.confirmStep(index, amount)}
-									pending={step.phase === 'pending'}
-									pendingLabel={commonCopy.formatApprovingToken(step.approval.tokenSymbol)}
-									requiredAmount={step.approval.requiredAmount}
-									resetKey={`${contextKey}:${index}`}
-									tokenSymbol={step.approval.tokenSymbol}
-									tokenUnits={step.approval.tokenUnits}
-								/>
-							) : (
-								<TransactionActionButton
-									idleLabel={
-										<>
-											{step.title}
-											{(step.ethValueAttoEth ?? 0n) === 0n ? undefined : (
-												<>
-													{' '}
-													· <EthAmount value={step.ethValueAttoEth} />
-												</>
-											)}
-											{detail === '' ? undefined : <span className='transaction-action-detail'>{detail}</span>}
-										</>
-									}
-									pendingLabel={copy.formatPendingAction(step.title)}
-									pending={active && pending}
-									onClick={() => {
-										if (ready) workflow.confirmStep(index)
-									}}
-									availability={{ disabled: !ready, reason: step.phase === 'upcoming' ? blockedReason : status }}
-									showDisabledReason={false}
-									tone={step.approval === undefined ? 'primary' : 'secondary'}
-								/>
-							)}
-						</div>
-					)
-				})}
-			</TransactionActionGroup>
-			<div className='actions transaction-step-close'>
-				<button className='secondary' type='button' onClick={workflow.cancel} disabled={pending}>
-					{completed || error !== undefined ? commonCopy.close : copy.cancelRemaining}
-				</button>
-			</div>
-		</>
+		<TransactionActionGroup message={undefined}>
+			{workflow.steps.map((step, index) => {
+				const active = index === workflow.activeIndex
+				const final = index === workflow.steps.length - 1
+				const ready = step.phase === 'review' && !pending && error === undefined
+				const status = { skipped: copy.skipped, upcoming: step.optional ? copy.ifNeeded : undefined, review: undefined, pending: undefined, confirmed: copy.confirmed, failed: copy.notCompleted }[step.phase]
+				const detail = [step.phase === 'upcoming' || step.approval !== undefined ? undefined : step.amount, status].filter(value => value !== undefined).join(' · ')
+				return (
+					<div key={index} className={`transaction-plan-action${step.approval === undefined || final ? ' transaction-plan-action-wide' : ''}${final ? ' transaction-plan-action-final' : ''}`}>
+						{step.approval !== undefined && (step.phase === 'review' || step.phase === 'pending' || step.phase === 'upcoming') ? (
+							<TokenApprovalControl
+								compact
+								showRequirementNotice={false}
+								actionLabel={copy.fundReport}
+								allowanceError={undefined}
+								allowanceLoading={false}
+								approvedAmount={step.approval.approvedAmount}
+								guardMessage={undefined}
+								disabled={!ready}
+								onApprove={amount => workflow.confirmStep(index, amount)}
+								pending={step.phase === 'pending'}
+								pendingLabel={commonCopy.formatApprovingToken(step.approval.tokenSymbol)}
+								requiredAmount={step.approval.requiredAmount}
+								resetKey={`${contextKey}:${index}`}
+								tokenSymbol={step.approval.tokenSymbol}
+								tokenUnits={step.approval.tokenUnits}
+							/>
+						) : (
+							<TransactionActionButton
+								idleLabel={
+									<>
+										{step.title}
+										{(step.ethValueAttoEth ?? 0n) === 0n ? undefined : (
+											<>
+												{' '}
+												· <EthAmount value={step.ethValueAttoEth} />
+											</>
+										)}
+										{detail === '' ? undefined : <span className='transaction-action-detail'>{detail}</span>}
+									</>
+								}
+								pendingLabel={copy.formatPendingAction(step.title)}
+								pending={active && pending}
+								onClick={() => {
+									if (ready) workflow.confirmStep(index)
+								}}
+								availability={{ disabled: !ready, reason: step.phase === 'upcoming' ? blockedReason : status }}
+								showDisabledReason={false}
+								tone={step.approval === undefined ? 'primary' : 'secondary'}
+							/>
+						)}
+						{final ? (
+							<div className='actions transaction-step-close'>
+								<button className='secondary' type='button' onClick={workflow.cancel} disabled={pending}>
+									{completed || error !== undefined ? commonCopy.close : commonCopy.cancel}
+								</button>
+							</div>
+						) : undefined}
+					</div>
+				)
+			})}
+		</TransactionActionGroup>
 	)
 	return (
 		<GlobalTransactionPresentationProvider transaction={undefined}>

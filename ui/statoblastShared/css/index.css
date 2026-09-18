@@ -3079,6 +3079,13 @@
 	font-weight: normal;
 }
 
+.transaction-plan-action-final {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) auto;
+	align-items: end;
+	gap: 0.5rem;
+}
+
 .transaction-step-close {
 	justify-content: flex-end;
 }

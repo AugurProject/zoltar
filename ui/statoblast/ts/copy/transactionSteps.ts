@@ -1,6 +1,5 @@
 export const confirmed = 'Confirmed'
 export const notCompleted = 'Not completed'
-export const cancelRemaining = 'Cancel remaining'
 export const skipped = 'Not needed'
 export const ifNeeded = 'If needed'
 export const totalEth = 'Total ETH sent'
