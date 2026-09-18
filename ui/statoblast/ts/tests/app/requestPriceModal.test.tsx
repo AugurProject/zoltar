@@ -1,3 +1,4 @@
+import { createDeferred } from '@zoltar/ui-core-shared/tests/testUtils/deferred.js'
 import { GlobalTransactionPresentationProvider } from '@zoltar/ui-core-shared/components/GlobalTransactionPresentationContext.js'
 import { afterEach, expect, test } from 'bun:test'
 import { act } from 'preact/test-utils'
@@ -411,6 +412,40 @@ test('keeps the funding and action layout visible with unknown values until an e
 		}
 		expect(preparations).toBe(0)
 	} finally {
+		await rendered.cleanup()
+		dom.cleanup()
+	}
+})
+
+test('keeps the preview while satisfied approvals are skipped before the final review is ready', async () => {
+	const dom = installDomEnvironment()
+	const ready = createDeferred<void>()
+	const onConfirm = async (_request: RequestPriceReview, signal?: AbortSignal) => {
+		const controller = createTransactionStepController(signal)
+		controller.setPlan([...['REP', 'WETH'].map(tokenSymbol => ({ ...step, title: `Approve ${tokenSymbol}`, approval: { requiredAmount: 3n, approvedAmount: 3n, tokenSymbol, tokenUnits: 0 } })), { ...step, title: 'Request price' }])
+		await controller.chooseFunding([])
+		await ready.promise
+		try {
+			await controller.review(2)
+		} catch (error) {
+			if (!(error instanceof Error) || !error.message.includes('canceled')) throw error
+		}
+	}
+	const rendered = await renderIntoDocument(<RequestPriceModal {...props} onConfirm={onConfirm} />)
+	try {
+		const queries = within(rendered.container)
+		await act(() => fireEvent.input(queries.getByRole('textbox', { name: 'REP per ETH' }), { target: { value: '1.25' } }))
+		await settle()
+		expect(transactionSteps.value?.activeIndex).toBe(-1)
+		expect(rendered.container.querySelectorAll('.approval-amount-field')).toHaveLength(2)
+		expect(queries.getByRole('button', { name: /Request price/ }).hasAttribute('disabled')).toBe(true)
+		expect(queries.getByText('Preparing funding and approvals…')).not.toBeNull()
+		ready.resolve()
+		await settle()
+		expect(rendered.container.querySelectorAll('.approval-amount-field')).toHaveLength(2)
+		expect(queries.getByRole('button', { name: /Request price/ }).hasAttribute('disabled')).toBe(false)
+	} finally {
+		ready.resolve()
 		await rendered.cleanup()
 		dom.cleanup()
 	}

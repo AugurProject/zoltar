@@ -44,7 +44,7 @@ export function RequestPriceModal({ review, onConfirm, onClose, canRequest, conf
 	const ownsWorkflow = run.current !== undefined && workflow?.reviewSignal === run.current.signal
 	const sending = ownsWorkflow && (workflow?.steps.some(step => step.phase === 'pending') ?? false)
 	const current = valid && run.current?.key === key && run.current?.signal.aborted === false
-	const showSteps = current && ownsWorkflow && workflow !== undefined
+	const showSteps = current && ownsWorkflow && workflow?.steps[workflow.activeIndex] !== undefined
 	const error = attempted === key && !running && presentation?.tone === 'error' ? presentation.detail : undefined
 	const estimatePrompt = validPrice ? copy.preparingPriceRequest : copy.enterPriceEstimate
 	const previewPrompt = fetching ? copy.fetchingUniswapPrice : estimatePrompt

@@ -2969,6 +2969,25 @@
 	grid-template-rows: auto minmax(0, 1fr) auto;
 }
 
+/* Keep the price editor and transaction actions anchored as quotes and allowances load. */
+.modal-panel:has(.request-price-fields) {
+	block-size: min(46rem, calc(100dvh - 2rem));
+	max-block-size: calc(100dvh - 2rem);
+}
+
+.operation-modal-body:has(> .request-price-fields) .transaction-step-content {
+	align-content: start;
+}
+
+.operation-modal-body:has(> .request-price-fields) .transaction-step-actions .tx-action-group,
+.operation-modal-body:has(> .request-price-fields) .transaction-step-actions .tx-action-group:has(.tx-action-feedback:empty) {
+	gap: var(--space-2);
+}
+
+.operation-modal-body:has(> .request-price-fields) .transaction-step-actions .tx-action-group > .tx-action-feedback {
+	min-block-size: 2.9em;
+}
+
 .request-price-fields {
 	display: grid;
 	gap: 1rem;
@@ -2980,7 +2999,8 @@
 }
 
 .request-price-fetch {
-	min-width: 12rem;
+	inline-size: 12.5rem;
+	min-inline-size: 12.5rem;
 }
 
 .transaction-step-content {
@@ -3219,5 +3239,40 @@
 
 	.transaction-plan-action:has(.approval-amount-field) .tx-action-button {
 		min-height: 3rem;
+	}
+}
+
+@media (max-width: 600px) {
+	.modal-panel:has(.request-price-fields) {
+		block-size: calc(100dvh - 2rem);
+	}
+
+	.operation-modal-body:has(> .request-price-fields) .workflow-metric-grid > div {
+		display: grid;
+		justify-content: start;
+	}
+
+	.operation-modal-body:has(> .request-price-fields) .transaction-plan-action:has(.approval-amount-field) .tx-action-button {
+		min-block-size: 3.625rem;
+	}
+
+	.operation-modal-body:has(> .request-price-fields) .transaction-costs > div {
+		column-gap: 0.25rem;
+	}
+}
+
+@media (max-height: 650px) {
+	.operation-modal-body:has(> .request-price-fields) {
+		display: flex;
+		flex-direction: column;
+		overflow: auto;
+	}
+
+	.operation-modal-body:has(> .request-price-fields) > * {
+		flex-shrink: 0;
+	}
+
+	.operation-modal-body:has(> .request-price-fields) .transaction-step-content {
+		overflow: visible;
 	}
 }

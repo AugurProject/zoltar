@@ -18,8 +18,10 @@ export function PriceRequestPreview({ requestValue, reason, error, preparing, hi
 			</div>
 			<div className='transaction-step-actions transaction-approval-editor'>
 				<div className='tx-action-group'>
-					<div className={hideReason ? 'visually-hidden' : 'tx-action-feedback'} aria-live='polite'>
-						<InlineHint id={reasonId} message={reason} loading={preparing} />
+					<div className='tx-action-feedback' aria-live='polite'>
+						<div className={hideReason ? 'visually-hidden' : undefined}>
+							<InlineHint id={reasonId} message={reason} loading={preparing} />
+						</div>
 					</div>
 					<div className='actions'>
 						{[commonCopy.rep, commonCopy.weth].map(symbol => (
