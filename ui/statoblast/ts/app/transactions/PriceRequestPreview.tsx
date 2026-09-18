@@ -1,27 +1,33 @@
 import { TokenApprovalControl } from '@zoltar/ui-core-shared/components/TokenApprovalControl.js'
-import { useId } from 'preact/hooks'
+import { useId, useEffect, useRef } from 'preact/hooks'
 import { InlineHint } from '@zoltar/ui-core-shared/components/InlineHint.js'
 import { TransactionActionButton } from '@zoltar/ui-core-shared/components/TransactionActionButton.js'
-import { ErrorNotice } from '@zoltar/ui-core-shared/components/ErrorNotice.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as copy from '../../copy/transactionSteps.js'
 import { EthAmount, TransactionFundingSummary } from './TransactionFundingSummary.js'
 
 export function PriceRequestPreview({ requestValue, reason, error, preparing, hideReason, onClose, onRetry }: { requestValue: bigint | undefined; reason: string; error: string | undefined; preparing: boolean; hideReason: boolean; onClose: () => void; onRetry: (() => void) | undefined }) {
 	const reasonId = useId()
+	const errorRef = useRef<HTMLDivElement>(null)
+	useEffect(() => {
+		if (error !== undefined) errorRef.current?.scrollIntoView?.({ block: 'nearest' })
+	}, [error])
 	return (
 		<>
 			<div className='transaction-step-content'>
 				<TransactionFundingSummary funding={[commonCopy.rep, commonCopy.weth].map(symbol => ({ amount: `${commonCopy.metricUnavailablePlaceholder} ${symbol}` }))} totalAttoEth={undefined} outcome={{ returnToWallet: true, settlerRewardAttoEth: undefined, ethRefundAttoEth: undefined }} />
 				<p className='detail transaction-funding-note'>{copy.fundingDetail}</p>
-				<ErrorNotice message={error} />
 			</div>
 			<div className='transaction-step-actions transaction-approval-editor'>
 				<div className='tx-action-group'>
-					<div className='tx-action-feedback' aria-live='polite'>
-						<div className={hideReason ? 'visually-hidden' : undefined}>
-							<InlineHint id={reasonId} message={reason} loading={preparing} />
-						</div>
+					<div className='tx-action-feedback' ref={errorRef} aria-live='polite'>
+						{error === undefined ? (
+							<div className={hideReason ? 'visually-hidden' : undefined}>
+								<InlineHint id={reasonId} message={reason} loading={preparing} />
+							</div>
+						) : (
+							<InlineHint id={reasonId} message={error} role='alert' />
+						)}
 					</div>
 					<div className='actions'>
 						{[commonCopy.rep, commonCopy.weth].map(symbol => (
@@ -44,6 +50,7 @@ export function PriceRequestPreview({ requestValue, reason, error, preparing, hi
 									tokenSymbol={symbol}
 									tokenUnits={18}
 								/>
+								<div className='transaction-step-hash' />
 							</div>
 						))}
 						<div className='transaction-plan-action transaction-plan-action-wide transaction-plan-action-final'>
@@ -62,15 +69,11 @@ export function PriceRequestPreview({ requestValue, reason, error, preparing, hi
 								tone='primary'
 							/>
 							<div className='actions transaction-step-close'>
-								{onRetry === undefined ? undefined : (
-									<button className='secondary' type='button' onClick={onRetry}>
-										{commonCopy.retry}
-									</button>
-								)}
-								<button className='secondary' type='button' onClick={onClose}>
-									{commonCopy.cancel}
+								<button className='secondary' type='button' onClick={onRetry ?? onClose}>
+									{onRetry === undefined ? commonCopy.cancel : commonCopy.retry}
 								</button>
 							</div>
+							<div className='transaction-step-hash' />
 						</div>
 					</div>
 				</div>

@@ -2971,7 +2971,7 @@
 
 /* Keep the price editor and transaction actions anchored as quotes and allowances load. */
 .modal-panel:has(.request-price-fields) {
-	block-size: min(46rem, calc(100dvh - 2rem));
+	block-size: min(52rem, calc(100dvh - 2rem));
 	max-block-size: calc(100dvh - 2rem);
 }
 
@@ -2985,7 +2985,7 @@
 }
 
 .operation-modal-body:has(> .request-price-fields) .transaction-step-actions .tx-action-group > .tx-action-feedback {
-	min-block-size: 2.9em;
+	min-block-size: 4.5em;
 }
 
 .request-price-fields {
@@ -2995,7 +2995,9 @@
 
 .request-price-fields .lookup-field-controls.has-action {
 	grid-template-columns: minmax(0, 1fr) auto;
-	gap: 0.75rem;
+	grid-template-rows: auto minmax(3rem, auto);
+	column-gap: 0.75rem;
+	row-gap: 0.25rem;
 }
 
 .request-price-fetch {
@@ -3040,6 +3042,31 @@
 .transaction-funding h4 {
 	font-size: 0.875rem;
 	color: var(--muted);
+}
+
+.transaction-plan-action .tx-action > .tx-action-feedback:empty {
+	display: none;
+}
+
+.transaction-step-hash {
+	min-width: 0;
+	min-block-size: 1.5em;
+	font-size: var(--font-caption);
+}
+
+.transaction-step-hash .transaction-hash-link {
+	display: block;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.operation-modal-body:has(> .request-price-fields) .transaction-plan-action-final .tx-action-button {
+	min-block-size: 4rem;
+}
+
+.transaction-plan-action-final > .transaction-step-hash {
+	grid-column: 1 / -1;
 }
 
 .transaction-deposits,
@@ -3122,6 +3149,10 @@
 	grid-template-columns: minmax(0, 1fr) auto;
 	align-items: end;
 	gap: 0.5rem;
+}
+
+.operation-modal-body:has(> .request-price-fields) .transaction-step-close > button {
+	inline-size: 5rem;
 }
 
 .transaction-step-close {
@@ -3254,6 +3285,10 @@
 
 	.operation-modal-body:has(> .request-price-fields) .transaction-plan-action:has(.approval-amount-field) .tx-action-button {
 		min-block-size: 3.625rem;
+	}
+
+	.operation-modal-body:has(> .request-price-fields) .transaction-plan-action-final .tx-action-button {
+		min-block-size: 4.875rem;
 	}
 
 	.operation-modal-body:has(> .request-price-fields) .transaction-costs > div {

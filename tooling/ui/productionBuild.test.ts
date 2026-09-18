@@ -781,7 +781,7 @@ async function loadProductionDocumentInChromiumUnlocked(pageUrl: string, viewpor
 			},
 			clickButton: async (label, occurrence = 0) => {
 				const clicked = await evaluate(
-					`(() => { const buttons = [...document.querySelectorAll('button')].filter(button => button.textContent?.trim() === ${JSON.stringify(label)} && !button.disabled); const button = buttons[${occurrence.toString()}]; if (!(button instanceof HTMLButtonElement)) return false; button.focus(); button.click(); return true })()`,
+					`(() => { const buttons = [...document.querySelectorAll('button')].filter(button => (button.getAttribute('aria-label') ?? button.textContent?.trim()) === ${JSON.stringify(label)} && !button.disabled); const button = buttons[${occurrence.toString()}]; if (!(button instanceof HTMLButtonElement)) return false; button.focus(); button.click(); return true })()`,
 				)
 				if (clicked !== true) throw new Error(`Unable to click enabled browser button ${label} at occurrence ${occurrence.toString()}`)
 			},
@@ -802,7 +802,7 @@ async function loadProductionDocumentInChromiumUnlocked(pageUrl: string, viewpor
 			},
 			waitForButtonEnabled: async (label, occurrence = 0) => {
 				for (let attempt = 0; attempt < 600; attempt += 1) {
-					const enabled = await evaluate(`[...document.querySelectorAll('button')].filter(button => button.textContent?.trim() === ${JSON.stringify(label)} && !button.disabled)[${occurrence.toString()}] instanceof HTMLButtonElement`)
+					const enabled = await evaluate(`[...document.querySelectorAll('button')].filter(button => (button.getAttribute('aria-label') ?? button.textContent?.trim()) === ${JSON.stringify(label)} && !button.disabled)[${occurrence.toString()}] instanceof HTMLButtonElement`)
 					if (enabled === true) return
 					await Bun.sleep(50)
 				}
@@ -1029,7 +1029,12 @@ productionWorkflowTest('production bundle executes deployment, reporting, fork m
 				await driver.resize(viewport)
 				await driver.setInputByLabel('REP per ETH', '')
 				await driver.waitForBodyText('Enter an estimated REP per ETH price')
+				expect(await driver.evaluate("document.querySelector('.transaction-deposits')?.getBoundingClientRect().height > 0")).toBe(true)
 				const emptyGeometry = await priceDialogGeometry()
+				await driver.setInputByLabel('REP per ETH', 'a')
+				await driver.waitForBodyText('Enter a positive REP per ETH price')
+				expect(await priceDialogGeometry()).toEqual(emptyGeometry)
+				await driver.setInputByLabel('REP per ETH', '')
 				await driver.clickButton('Fetch from Uniswap')
 				expect(await priceDialogGeometry()).toEqual(emptyGeometry)
 				await driver.waitForButtonEnabled('Fetch from Uniswap')

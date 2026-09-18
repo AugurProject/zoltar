@@ -102,6 +102,7 @@ for (const choice of ['custom', 'max'] as const) {
 				controller.submitted(hash)
 				controller.receipt(hash, 'success')
 			})
+			expect(queries.getByRole('link', { name: hash }).closest('.transaction-step-actions')).not.toBeNull()
 			expect(queries.getByRole('textbox')).toBe(approvalInput)
 			expect(approvalInput.hasAttribute('disabled')).toBe(true)
 			expect(queries.getByText('Approved REP')).not.toBeNull()
@@ -211,6 +212,8 @@ test('shows requirement-read failures from the enclosing operation after an appr
 	try {
 		const queries = within(rendered.container)
 		expect(queries.getByRole('alert').textContent).toContain('Could not refresh funding requirements.')
+		expect(queries.getByRole('alert').closest('.transaction-step-content')).toBeNull()
+		expect(queries.getByRole('alert').closest('.transaction-step-actions')).not.toBeNull()
 		expect(queries.getByRole('button', { name: 'Request price' }).hasAttribute('disabled')).toBe(true)
 		expect(queries.getByRole('button', { name: 'Close' }).hasAttribute('disabled')).toBe(false)
 	} finally {
@@ -245,6 +248,39 @@ for (const phase of ['skipped', 'failed'] as const) {
 			expect(queries.getByRole('button', { name: 'Approve REP' }).hasAttribute('disabled')).toBe(true)
 			await act(() => transactionSteps.value?.confirm())
 			await nextReview
+		} finally {
+			await rendered.cleanup()
+			dom.cleanup()
+		}
+	})
+}
+
+for (const result of ['pending', 'reverted'] as const) {
+	test(`keeps the final query hash accessible beside its action when ${result}`, async () => {
+		const dom = installDomEnvironment()
+		const controller = createTransactionStepController()
+		controller.setPlan([{ title: 'Request price', description: 'Fund the report.', contractAddress: undefined, spender: undefined, amount: undefined, ethValueAttoEth: 0n }])
+		const review = controller.review()
+		transactionSteps.value?.confirm()
+		await review
+		const hash = '0x1111111111111111111111111111111111111111111111111111111111111111'
+		controller.submitted(hash)
+		if (result === 'reverted') {
+			controller.receipt(hash, 'reverted')
+			controller.failed('Transaction failed after using its full gas limit. Open the transaction details before retrying.')
+		}
+		const rendered = await renderIntoDocument(
+			<GlobalTransactionPresentationProvider transaction={result === 'reverted' ? { tone: 'error', title: 'Request failed', detail: 'Transaction reverted' } : undefined}>
+				<TransactionStepsModal contextKey='query-hash' />
+			</GlobalTransactionPresentationProvider>,
+		)
+		try {
+			const queries = within(rendered.container)
+			expect(queries.getByRole('link', { name: hash }).closest('.transaction-step-actions') !== null).toBe(true)
+			if (result === 'reverted') {
+				expect(queries.getByRole('alert').textContent).toContain('full gas limit')
+				expect(queries.getByRole('alert').closest('.transaction-step-content') === null).toBe(true)
+			}
 		} finally {
 			await rendered.cleanup()
 			dom.cleanup()

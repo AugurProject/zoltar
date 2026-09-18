@@ -56,7 +56,6 @@ export function TransactionPresentationNotice({ className = '', compact = false,
 					</dl>
 				</ReadOnlyDetailAccordion>
 			)}
-			{transactionHash === undefined ? undefined : <TransactionHashLink hash={transactionHash} />}
 		</>
 	)
 
@@ -74,6 +73,7 @@ export function TransactionPresentationNotice({ className = '', compact = false,
 					{transaction.tone === 'awaiting-wallet' ? <span className='spinner global-transaction-spinner' aria-hidden='true' /> : undefined}
 					<strong>{transaction.title}</strong>
 				</div>
+				{transactionHash === undefined ? undefined : <TransactionHashLink hash={transactionHash} />}
 				{compact ? (
 					<details className='global-transaction-compact-details'>
 						<summary>{transactionCopy.viewTransactionDetails}</summary>
