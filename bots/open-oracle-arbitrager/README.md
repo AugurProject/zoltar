@@ -592,7 +592,7 @@ locked through later dispute rounds.
 
 “Modeled net profit” is the direction-specific hedge P&amp;L before gas minus:
 
-- The entry reserve: initially `1,200,000 × (2 × base fee + 2 gwei)`. Public
+- The entry reserve: initially `1,200,000 × (2 × base fee + 2 nanoETH)`. Public
   delivery retains that fixed reserve. Private delivery replaces it with the
   largest gas usage returned by the successful relay simulations at the same gas
   price.

@@ -67,18 +67,18 @@ function calculateMinimumWethEstimate(parameters) {
     const targetError = parameters.targetPriceErrorForDispute / 100;
     const feeFraction = (parameters.openOracleProtocolFee + parameters.openOracleReporterFee) / 100;
     const correctionProfitFraction = (targetError - feeFraction) / (1 + targetError);
-    const disputeGasCostEth = parameters.gasUnitsForOneDispute * (parameters.blockBaseFeeGwei + parameters.initialReportPriorityFeeGwei) * 1e-9;
+    const disputeGasCostEth = parameters.gasUnitsForOneDispute * (parameters.blockBaseFeeNanoEth + parameters.initialReportPriorityFeeNanoEth) * 1e-9;
     const bufferedGasCostEth = disputeGasCostEth * parameters.openOracleSecurityMultiplier;
     const correctionProfitUnits = targetErrorUnits - feeUnits;
     let minimumWethReportAttoEth;
     if (correctionProfitUnits > 0n) {
         const denominator = 10000n * correctionProfitUnits;
-        const calculateGasPriceReport = (gasPriceGwei) => {
-            const numerator = BigInt(Math.round(gasPriceGwei * 1e9)) * BigInt(Math.round(parameters.gasUnitsForOneDispute)) * BigInt(Math.round(parameters.openOracleSecurityMultiplier * 10_000)) * (percentagePrecision + targetErrorUnits);
+        const calculateGasPriceReport = (gasPriceNanoEth) => {
+            const numerator = BigInt(Math.round(gasPriceNanoEth * 1e9)) * BigInt(Math.round(parameters.gasUnitsForOneDispute)) * BigInt(Math.round(parameters.openOracleSecurityMultiplier * 10_000)) * (percentagePrecision + targetErrorUnits);
             return (numerator + denominator - 1n) / denominator;
         };
-        const priorityFeeReportAttoEth = calculateGasPriceReport(parameters.initialReportPriorityFeeGwei);
-        const baseFeeReportAttoEth = calculateGasPriceReport(parameters.blockBaseFeeGwei);
+        const priorityFeeReportAttoEth = calculateGasPriceReport(parameters.initialReportPriorityFeeNanoEth);
+        const baseFeeReportAttoEth = calculateGasPriceReport(parameters.blockBaseFeeNanoEth);
         const openInterestAttoWeth = BigInt(Math.round(parameters.openInterestWeth)) * 10n ** 18n;
         const openInterestReportAttoEth = (openInterestAttoWeth + 99n) / 100n;
         minimumWethReportAttoEth = priorityFeeReportAttoEth + (baseFeeReportAttoEth > openInterestReportAttoEth ? baseFeeReportAttoEth : openInterestReportAttoEth);
@@ -129,10 +129,10 @@ function setMeter(context, name, value, maximum) {
 }
 bindExample('#initial-report-estimator-example', context => {
     const parameters = {
-        blockBaseFeeGwei: context.read('blockBaseFeeGwei'),
+        blockBaseFeeNanoEth: context.read('blockBaseFeeNanoEth'),
         escalationHaltMultiplier: context.read('escalationHaltMultiplier'),
         gasUnitsForOneDispute: context.read('gasUnitsForOneDispute'),
-        initialReportPriorityFeeGwei: context.read('initialReportPriorityFeeGwei'),
+        initialReportPriorityFeeNanoEth: context.read('initialReportPriorityFeeNanoEth'),
         openInterestWeth: context.read('openInterestWeth'),
         openOracleProtocolFee: context.read('openOracleProtocolFee'),
         openOracleReporterFee: context.read('openOracleReporterFee'),
@@ -141,8 +141,8 @@ bindExample('#initial-report-estimator-example', context => {
         targetPriceErrorForDispute: context.read('targetPriceErrorForDispute'),
     };
     const estimate = calculateMinimumWethEstimate(parameters);
-    context.writeValue('blockBaseFeeGwei', `${parameters.blockBaseFeeGwei.toFixed(0)} gwei`);
-    context.writeValue('initialReportPriorityFeeGwei', `${parameters.initialReportPriorityFeeGwei.toFixed(0)} gwei`);
+    context.writeValue('blockBaseFeeNanoEth', `${parameters.blockBaseFeeNanoEth.toFixed(0)} nanoETH`);
+    context.writeValue('initialReportPriorityFeeNanoEth', `${parameters.initialReportPriorityFeeNanoEth.toFixed(0)} nanoETH`);
     context.writeValue('openInterestWeth', `${parameters.openInterestWeth.toFixed(0)} WETH`);
     context.writeValue('gasUnitsForOneDispute', `${parameters.gasUnitsForOneDispute.toLocaleString()} gas`);
     context.writeValue('openOracleSecurityMultiplier', `${parameters.openOracleSecurityMultiplier.toFixed(1)}x`);

@@ -3074,7 +3074,7 @@
 
 .transaction-action-detail {
 	display: block;
-	font-size: 0.75rem;
+	font-size: 0.8125rem;
 	line-height: 1.4;
 	font-weight: normal;
 }
@@ -3141,11 +3141,11 @@
 	}
 
 	.transaction-approval-editor .workflow-metric-grid .metric-label {
-		font-size: 0.6875rem;
+		font-size: 0.8125rem;
 	}
 
 	.transaction-approval-editor .workflow-metric-grid strong.metric-field-value {
-		font-size: 0.75rem;
+		font-size: 0.8125rem;
 	}
 
 	.transaction-step-actions {
@@ -3165,7 +3165,7 @@
 	}
 
 	.transaction-approval-editor .approval-amount-label {
-		font-size: 0.75rem;
+		font-size: 0.8125rem;
 	}
 
 	.transaction-approval-editor .field-inline {
@@ -3182,7 +3182,7 @@
 
 	.transaction-approval-editor .workflow-metric-grid .metric-label,
 	.transaction-approval-editor .approval-amount-label {
-		font-size: 0.625rem;
+		font-size: 0.8125rem;
 		letter-spacing: 0.02em;
 	}
 

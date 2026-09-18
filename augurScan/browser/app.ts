@@ -4418,7 +4418,7 @@ export async function startScanner(demoFactory?: DemoFactory) {
 			staticField('Augur AMM fee', history.market === undefined || history.market === null ? '—' : `${Number(history.market.fee_bps) / 100}%`),
 			staticAddressField('Truth auction', poolItem.truth_auction_address, poolItem.chain_id),
 			staticField('Security multiplier', `${Number(poolItem.security_multiplier_bps) / 100}%`),
-			staticField('Initial priority fee', exactUnit(poolItem.initial_priority_fee_atto_eth_per_gas, 9, 'gwei', 2)),
+			staticField('Initial priority fee', exactUnit(poolItem.initial_priority_fee_atto_eth_per_gas, 9, 'nanoETH', 2)),
 			staticField('Child pools', number(poolItem.child_count)),
 		)
 		staticCard.append(grid)

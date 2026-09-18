@@ -1,4 +1,4 @@
-import { useEffect, useId, useState } from 'preact/hooks'
+import { useLayoutEffect, useId, useState } from 'preact/hooks'
 import { ViewTabs } from '@zoltar/ui-core-shared/components/ViewTabs.js'
 import { tryParseDecimalInput } from '@zoltar/ui-core-shared/forms/decimal.js'
 import { ReadOnlyDetailAccordion } from '@zoltar/ui-core-shared/components/ReadOnlyDetailAccordion.js'
@@ -58,7 +58,7 @@ export function SecurityPoolRequestPriceModal({
 	const manualPriceFieldId = useId()
 	const [priceSource, setPriceSource] = useState<'automatic' | 'manual'>('automatic')
 	const [manualPrice, setManualPrice] = useState('')
-	useEffect(() => {
+	useLayoutEffect(() => {
 		setPriceSource('automatic')
 		setManualPrice('')
 	}, [review])

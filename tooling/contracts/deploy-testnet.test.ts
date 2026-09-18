@@ -118,7 +118,7 @@ describe('testnet deployment inputs', () => {
 		expect(parseMaxTotalCost(undefined)).toBe(20_000_000_000_000_000_000n)
 		expect(parseMaxTotalCost('0.25')).toBe(250_000_000_000_000_000n)
 		for (const value of ['', '0', '-1', 'not-a-number']) {
-			expect(() => parseMaxFeePerGas(value)).toThrow('MAX_FEE_PER_GAS_GWEI')
+			expect(() => parseMaxFeePerGas(value)).toThrow('MAX_FEE_PER_GAS_NANO_ETH')
 			expect(() => parseMaxTotalCost(value)).toThrow('MAX_TOTAL_COST_ETH')
 		}
 	})
@@ -126,7 +126,7 @@ describe('testnet deployment inputs', () => {
 	test('accepts RPC and cost limits as uppercase command-line assignments', () => {
 		const privateKey = '0x1212121212121212121212121212121212121212121212121212121212121212'
 		expect(
-			parseDeploymentCommandLine(['RPC_URL=https://rpc.example.test', 'MAX_FEE_PER_GAS_GWEI=42', '--MAX_TOTAL_COST_ETH=7.5'], {
+			parseDeploymentCommandLine(['RPC_URL=https://rpc.example.test', 'MAX_FEE_PER_GAS_NANO_ETH=42', '--MAX_TOTAL_COST_ETH=7.5'], {
 				PRIVATE_KEY: privateKey,
 			}),
 		).toEqual({
@@ -148,7 +148,7 @@ describe('testnet deployment inputs', () => {
 		const workflow = await Bun.file(new URL('../../.github/workflows/deploy-testnet.yml', import.meta.url)).text()
 		expect(workflow).toContain('group: testnet-contract-deployment-${{ inputs.chain_id }}')
 		expect(workflow).toContain('CHAIN_ID: ${{ inputs.chain_id }}')
-		expect(workflow).toContain('MAX_FEE_PER_GAS_GWEI: ${{ inputs.max_fee_per_gas_gwei }}')
+		expect(workflow).toContain('MAX_FEE_PER_GAS_NANO_ETH: ${{ inputs.max_fee_per_gas_nanoeth }}')
 		expect(workflow).toContain('MAX_TOTAL_COST_ETH: ${{ inputs.max_total_cost_eth }}')
 		const setupBun = await Bun.file(new URL('../../.github/actions/setup-bun/action.yml', import.meta.url)).text()
 		expect(workflow).toContain('uses: ./.github/actions/setup-bun')
@@ -296,7 +296,7 @@ describe('testnet deployment transaction authorization', () => {
 		expect(submitted).toMatchObject({ gas: 130_000n, gasPrice: undefined, maxFeePerGas: 30n, maxPriorityFeePerGas: 10n, nonce: 7n, to: FIRST_ADDRESS, value: 1n })
 		expect(logs).toEqual([
 			`  ├─ Prepare transaction\n  │  └─ Account: ${account.address}`,
-			'  ├─ Estimate transaction\n  │  ├─ Nonce: 7\n  │  ├─ Base fee: 0.00000001 gwei\n  │  ├─ Priority fee: 0.00000001 gwei\n  │  └─ Maximum fee: 0.00000003 gwei',
+			'  ├─ Estimate transaction\n  │  ├─ Nonce: 7\n  │  ├─ Base fee: 0.00000001 nanoETH\n  │  ├─ Priority fee: 0.00000001 nanoETH\n  │  └─ Maximum fee: 0.00000003 nanoETH',
 			`  ├─ Submit transaction\n  │  ├─ Nonce: 7\n  │  ├─ To: ${FIRST_ADDRESS}\n  │  ├─ Gas limit: 130000\n  │  ├─ Value: 0.000000000000000001 ETH\n  │  └─ Maximum cost: 0.000000000003900001 ETH`,
 			`  ├─ Transaction submitted\n  │  ├─ Nonce: 7\n  │  └─ Transaction: ${FIRST_HASH}`,
 		])

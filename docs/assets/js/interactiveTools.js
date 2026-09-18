@@ -37,7 +37,7 @@ const presetDefinitions = {
     'initial-report-estimator-example': [
         {
             label: 'High gas cost',
-            values: { blockBaseFeeGwei: '200', gasUnitsForOneDispute: '1000000', initialReportPriorityFeeGwei: '100', openOracleSecurityMultiplier: '20' },
+            values: { blockBaseFeeNanoEth: '200', gasUnitsForOneDispute: '1000000', initialReportPriorityFeeNanoEth: '100', openOracleSecurityMultiplier: '20' },
         },
         {
             label: 'Caller raises report',

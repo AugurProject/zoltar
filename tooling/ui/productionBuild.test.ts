@@ -917,6 +917,16 @@ productionWorkflowTest('production bundle executes deployment, reporting, fork m
 	const baseUrl = server.url.toString().replace(/\/$/, '')
 	const state = JSON.parse(
 		await loadProductionDocumentInChromium(`${baseUrl}/statoblast/#/deploy?simulate=1&simScenario=baseline`, { height: 900, width: 1440 }, async driver => {
+			const completeTransactionReview = async () => {
+				for (let attempt = 0; attempt < 2400; attempt += 1) {
+					const result = await driver.evaluate(
+						`(() => { const actions = document.querySelector('.transaction-step-actions'); if (!actions) return 'waiting'; const close = actions.querySelector('.transaction-step-close button'); if (close instanceof HTMLButtonElement && close.textContent?.trim() === 'Close' && !close.disabled) { close.click(); return 'complete' } const button = [...actions.querySelectorAll('.transaction-plan-action .tx-action-button')].find(candidate => candidate instanceof HTMLButtonElement && !candidate.disabled); if (button instanceof HTMLButtonElement) button.click(); return 'waiting' })()`,
+					)
+					if (result === 'complete') return
+					await Bun.sleep(50)
+				}
+				throw new Error(`Transaction review did not finish: ${String(await driver.evaluate('document.body.innerText'))}`)
+			}
 			const selectPoolTool = async (label: 'Price Oracle' | 'Fork & Migration') => {
 				let selected = false
 				for (let attempt = 0; attempt < 600 && !selected; attempt += 1) {
@@ -950,8 +960,9 @@ productionWorkflowTest('production bundle executes deployment, reporting, fork m
 			let depositReady = false
 			for (let attempt = 0; attempt < 600 && !depositReady; attempt += 1) {
 				const readiness = await driver.evaluate(
-					`(() => { const dialog = document.querySelector('[role="dialog"]'); const buttons = [...(dialog?.querySelectorAll('button') ?? [])]; const deposit = buttons.find(candidate => candidate.textContent?.trim() === 'Deposit REP'); const approval = buttons.find(candidate => candidate.textContent?.trim().startsWith('Approve ') && !candidate.disabled); if (approval instanceof HTMLButtonElement) approval.click(); return deposit instanceof HTMLButtonElement && !deposit.disabled })()`,
+					`(() => { const dialog = document.querySelector('[role="dialog"]'); const buttons = [...(dialog?.querySelectorAll('button') ?? [])]; const deposit = buttons.find(candidate => candidate.textContent?.trim() === 'Deposit REP'); const approval = buttons.find(candidate => candidate.textContent?.trim().startsWith('Approve ') && !candidate.disabled); if (approval instanceof HTMLButtonElement) { approval.click(); return 'approval' } return deposit instanceof HTMLButtonElement && !deposit.disabled })()`,
 				)
+				if (readiness === 'approval') await completeTransactionReview()
 				depositReady = readiness === true
 				if (!depositReady) await Bun.sleep(50)
 			}
@@ -961,11 +972,13 @@ productionWorkflowTest('production bundle executes deployment, reporting, fork m
 			)
 			expect(failureInjected).toBe(true)
 			await driver.clickButton('Deposit REP', 1)
+			await completeTransactionReview()
 			const failedBody = await driver.waitForBodyText('Injected production workflow failure')
 			expect(failedBody).toContain('FAILED')
 			expect(failedBody).toContain('Deposit REP')
 			await driver.waitForButtonEnabled('Deposit REP', 1)
 			await driver.clickButton('Deposit REP', 1)
+			await completeTransactionReview()
 			const poolBody = await driver.waitForTransactionStatus('Confirmed', 'Deposit REP')
 			expect(poolBody).toContain('Manage Pool')
 
@@ -984,21 +997,28 @@ productionWorkflowTest('production bundle executes deployment, reporting, fork m
 			let reportingDepositReady = false
 			for (let attempt = 0; attempt < 600 && !reportingDepositReady; attempt += 1) {
 				const readiness = await driver.evaluate(
-					`(() => { const dialog = document.querySelector('[role="dialog"]'); const buttons = [...(dialog?.querySelectorAll('button') ?? [])]; const deposit = buttons.find(candidate => candidate.textContent?.trim() === 'Deposit REP'); const approval = buttons.find(candidate => candidate.textContent?.trim().startsWith('Approve ') && !candidate.disabled); if (approval instanceof HTMLButtonElement) approval.click(); return deposit instanceof HTMLButtonElement && !deposit.disabled })()`,
+					`(() => { const dialog = document.querySelector('[role="dialog"]'); const buttons = [...(dialog?.querySelectorAll('button') ?? [])]; const deposit = buttons.find(candidate => candidate.textContent?.trim() === 'Deposit REP'); const approval = buttons.find(candidate => candidate.textContent?.trim().startsWith('Approve ') && !candidate.disabled); if (approval instanceof HTMLButtonElement) { approval.click(); return 'approval' } return deposit instanceof HTMLButtonElement && !deposit.disabled })()`,
 				)
+				if (readiness === 'approval') await completeTransactionReview()
 				reportingDepositReady = readiness === true
 				if (!reportingDepositReady) await Bun.sleep(50)
 			}
 			expect(reportingDepositReady).toBe(true)
 			await driver.clickButton('Deposit REP', 1)
+			await completeTransactionReview()
 			await driver.waitForTransactionStatus('Confirmed', 'Deposit REP')
 			await driver.clickButton('+1 year')
 			await selectPoolTool('Price Oracle')
 			await driver.waitForButtonEnabled('Request new price')
 			await driver.clickButton('Request new price')
-			const priceReviewBody = await driver.waitForBodyText('Confirm price request')
+			const priceReviewBody = await driver.waitForBodyText('Review funding and steps')
 			expect(priceReviewBody).toContain('20% request buffer')
-			await driver.clickButton('Confirm price request')
+			await driver.clickButton('Manual price')
+			await driver.waitForBodyText('REP PER ETH')
+			await driver.setInputByLabel('REP per ETH', '3')
+			await driver.waitForButtonEnabled('Review funding and steps')
+			await driver.clickButton('Review funding and steps')
+			await completeTransactionReview()
 			await driver.waitForBodyText('Price Requested')
 			await driver.clickButton('+1 day')
 			await driver.waitForButtonEnabled('Refresh oracle')
@@ -1010,6 +1030,7 @@ productionWorkflowTest('production bundle executes deployment, reporting, fork m
 			await driver.clickButton('Settle report')
 			await driver.waitForButtonEnabled('Settle report', 1)
 			await driver.clickButton('Settle report', 1)
+			await completeTransactionReview()
 			await driver.waitForTransactionStatus('Confirmed', 'Report Settled')
 			const reportingPoolsOpened = await driver.evaluate(`(() => { const target = [...document.querySelectorAll('a, button')].find(candidate => candidate.textContent?.trim() === 'Security Pools'); if (!(target instanceof HTMLElement)) return false; target.click(); return true })()`)
 			expect(reportingPoolsOpened).toBe(true)
@@ -1051,6 +1072,7 @@ productionWorkflowTest('production bundle executes deployment, reporting, fork m
 						await driver.resize({ height: 900, width: 1440 })
 					}
 					await driver.clickButton('Approve REP')
+					await completeTransactionReview()
 					await driver.waitForTransactionStatus('Confirmed', 'Approve Reporting REP')
 					await driver.waitForBodyText('REP approved')
 					const approvedDesktopScreenshotPath = process.env['UI_ORDINARY_REPORTING_APPROVED_DESKTOP_SCREENSHOT']
@@ -1070,6 +1092,7 @@ productionWorkflowTest('production bundle executes deployment, reporting, fork m
 				}
 				await driver.waitForButtonEnabled(`Report ${outcome}`)
 				await driver.clickButton(`Report ${outcome}`)
+				await completeTransactionReview()
 			}
 
 			await selectReportingOutcome('Yes')
@@ -1099,6 +1122,7 @@ productionWorkflowTest('production bundle executes deployment, reporting, fork m
 			await selectReportingOutcome('No')
 			await driver.waitForButtonEnabled('Trigger universe fork')
 			await driver.clickButton('Trigger universe fork')
+			await completeTransactionReview()
 			await driver.waitForButtonEnabled('Open fork & migration')
 			await driver.clickButton('Open fork & migration')
 			await driver.waitForBodyText('Fork & Migration')
@@ -1106,9 +1130,11 @@ productionWorkflowTest('production bundle executes deployment, reporting, fork m
 			// The fork workflow view now owns the full migration flow; drive it directly.
 			await driver.waitForButtonEnabled('Migrate pool to Yes universe')
 			await driver.clickButton('Migrate pool to Yes universe')
+			await completeTransactionReview()
 			await driver.waitForBodyText('Pool-held REP was migrated into the selected child universe.')
 			await driver.waitForButtonEnabled('Migrate vault to Yes')
 			await driver.clickButton('Migrate vault to Yes')
+			await completeTransactionReview()
 			await driver.waitForBodyText('Vault REP backing and capacity ownership were migrated into the selected child universe.')
 
 			await driver.resize({ height: 900, width: 1440 })
@@ -1140,6 +1166,7 @@ productionWorkflowTest('production bundle executes deployment, reporting, fork m
 			await selectPoolTool('Fork & Migration')
 			await driver.waitForButtonEnabled('Finalize truth auction')
 			await driver.clickButton('Finalize truth auction')
+			await completeTransactionReview()
 			const finalizedBody = await driver.waitForTransactionStatus('Confirmed', 'Finalize Truth Auction')
 			expect(finalizedBody).toContain('Truth Auction')
 		}),

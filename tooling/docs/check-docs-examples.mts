@@ -755,16 +755,16 @@ async function checkDynamicWethReportExample(): Promise<void> {
 		assertEqual(example.output('correctionProfitFraction'), '3.7143%', 'dynamic report default correction profit fraction')
 		assertEqual(example.output('estimatorSafetyState'), 'fees below target error', 'dynamic report default safety state')
 
-		example.setInput('initialReportPriorityFeeGwei', 1)
+		example.setInput('initialReportPriorityFeeNanoEth', 1)
 		assertEqual(example.output('estimatedMinimumWethReport'), '2.503846153846153847 WETH', 'lower priority assumption should reduce only the additive priority report')
 		assertEqual(example.output('selectedEscalationHalt'), '25.038461538461538470 WETH', 'lower priority assumption should reduce the initial-derived escalation halt')
 
-		example.setInput('initialReportPriorityFeeGwei', 100)
+		example.setInput('initialReportPriorityFeeNanoEth', 100)
 		assertEqual(example.output('estimatedMinimumWethReport'), '10.500000000000000001 WETH', 'higher priority assumption should increase the additive priority report')
 		assertEqual(example.output('selectedEscalationHalt'), '105.000000000000000010 WETH', 'higher priority assumption should increase the initial-derived escalation halt')
 
-		example.setInput('initialReportPriorityFeeGwei', 10)
-		example.setInput('blockBaseFeeGwei', 60)
+		example.setInput('initialReportPriorityFeeNanoEth', 10)
+		example.setInput('blockBaseFeeNanoEth', 60)
 		assertEqual(example.output('estimatedMinimumWethReport'), '5.653846153846153847 WETH', 'dynamic report minimum should add priority security to the base-fee report')
 
 		example.setInput('requestedInitialWeth', 6)
@@ -772,12 +772,12 @@ async function checkDynamicWethReportExample(): Promise<void> {
 		assertEqual(example.output('selectedInitialWethReport'), '6 WETH', 'caller-selected WETH headline stays compact')
 		assertEqual(example.output('selectedEscalationHalt'), '60.000000000000000000 WETH', 'escalation halt should scale from selected initial WETH')
 
-		example.setInput('blockBaseFeeGwei', 0)
+		example.setInput('blockBaseFeeNanoEth', 0)
 		example.setInput('openInterestWeth', 0)
 		example.setInput('requestedInitialWeth', 0)
 		assertEqual(example.output('estimatedMinimumWethReport'), '0.807692307692307693 WETH', 'zero base fee should retain the configured priority security')
 
-		example.setInput('blockBaseFeeGwei', 30)
+		example.setInput('blockBaseFeeNanoEth', 30)
 		example.setInput('openInterestWeth', 10000)
 		assertEqual(example.output('openInterestEscalationHalt'), '100.000000000000000000 WETH', 'one percent of open interest should set the open-interest halt floor')
 		assertEqual(example.output('estimatedMinimumWethReport'), '100.807692307692307693 WETH', 'initial report should add priority security to the larger open-interest component')
