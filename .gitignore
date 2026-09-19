@@ -51,3 +51,6 @@ ui/*/ts/**/*.d.ts.map
 
 # Retired aggregate output from earlier checkouts
 /shared/js/
+
+# Runtime state written by bot tests run from the repository root
+/.state/
