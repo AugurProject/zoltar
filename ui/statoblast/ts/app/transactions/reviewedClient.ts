@@ -1,7 +1,7 @@
 import { formatUnits, getAddress, encodeFunctionData, maxUint256 } from '@zoltar/core-shared/evm/ethereum'
 import type { TransactionPlanStep, TransactionRequestPreview, WriteClient } from '@zoltar/ui-core-shared/wallet/chainBackend.js'
 import { createActiveEnvironmentGuard } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
-import { getErrorMessage } from '@zoltar/ui-core-shared/lib/errors.js'
+import { getErrorMessage, isRecoverableContractReadError, transactionErrorMessages } from '@zoltar/ui-core-shared/lib/errors.js'
 import { ABIS } from '@zoltar/ui-core-shared/abis.js'
 import { createTransactionStepController, type TransactionStepDetails } from './transactionSteps.js'
 
@@ -134,12 +134,19 @@ export function createReviewedClient(client: WriteClient, validate: () => Promis
 			if (expected.tokenFunding !== undefined) await validate()
 			if (!environment.isCurrent()) throw new Error('The network changed. Review the action again.')
 			signal?.throwIfAborted()
+			if (transaction.functionName === 'requestPrice') {
+				await client.estimateGas({ account: client.account, to: transaction.contractAddress, data: transaction.data, value: transaction.value })
+				// This validates the direct call; the wallet must estimate any delegation wrapper itself.
+				await validate()
+				if (!environment.isCurrent()) throw new Error('The network changed. Review the action again.')
+				signal?.throwIfAborted()
+			}
 			client.onTransactionPrepared?.(transaction)
 			const hash = await execute(approvalArgs)
 			controller.submitted(hash)
 			return hash
 		} catch (error) {
-			controller.failed(getErrorMessage(error, 'Transaction failed. Remaining steps were not sent.'))
+			controller.failed(getErrorMessage(error, 'Transaction failed.'))
 			throw error
 		}
 	}
@@ -179,11 +186,20 @@ export function createReviewedClient(client: WriteClient, validate: () => Promis
 			),
 		sendRawTransaction: async parameters => await send({ account: undefined, args: undefined, chainName: client.chain.name, functionName: 'Deploy contract', value: undefined }, async () => await client.sendRawTransaction(parameters)),
 		writeContract: async parameters =>
-			await send({ account: client.account, args: parameters.args, chainName: client.chain.name, functionName: parameters.functionName, contractAddress: parameters.address, value: parameters.value }, async approvalArgs =>
-				approvalArgs === undefined ? await client.writeContract(parameters) : await client.writeContract({ ...parameters, abi: ABIS.mainnet.erc20, functionName: 'approve', args: approvalArgs }),
+			await send(
+				{
+					account: client.account,
+					args: parameters.args,
+					chainName: client.chain.name,
+					functionName: parameters.functionName,
+					contractAddress: parameters.address,
+					value: parameters.value,
+					data: encodeFunctionData({ abi: parameters.abi, functionName: parameters.functionName, ...(parameters.args === undefined ? {} : { args: parameters.args }) }),
+				},
+				async approvalArgs => (approvalArgs === undefined ? await client.writeContract(parameters) : await client.writeContract({ ...parameters, abi: ABIS.mainnet.erc20, functionName: 'approve', args: approvalArgs })),
 			),
 		waitForTransactionReceipt: async parameters => {
-			let confirmedPartialApproval = false
+			let diagnosedReceiptFailure = false
 			try {
 				let replaced = false
 				let confirmedHash = parameters.hash
@@ -197,16 +213,32 @@ export function createReviewedClient(client: WriteClient, validate: () => Promis
 					},
 				})
 				controller.receipt(confirmedHash, replaced ? 'reverted' : receipt.status)
-				if (replaced) throw new Error('Transaction canceled or replaced. Remaining steps were not sent.')
+				if (replaced) throw new Error(transactionErrorMessages.canceledOrReplaced)
+				if (receipt.status === 'reverted') {
+					let exhaustedGas = false
+					try {
+						const submitted = await client.getTransaction({ hash: confirmedHash })
+						exhaustedGas = receipt.gasUsed >= submitted.gas
+					} catch (error) {
+						if (!isRecoverableContractReadError(error)) throw error
+						// Keep the receipt failure and hash if the diagnostic read is unavailable.
+					}
+					if (exhaustedGas) {
+						diagnosedReceiptFailure = true
+						const message = transactionErrorMessages.fullGasLimit
+						controller.failed(message)
+						throw new Error(message)
+					}
+				}
 				if (partialApproval && receipt.status === 'success') {
-					confirmedPartialApproval = true
-					const message = 'Approval confirmed, but it is below the report requirement. Review funding again to approve the required total before continuing.'
+					diagnosedReceiptFailure = true
+					const message = transactionErrorMessages.insufficientApproval
 					controller.failed(message)
 					throw new Error(message)
 				}
 				return receipt
 			} catch (error) {
-				if (!confirmedPartialApproval) controller.failed(getErrorMessage(error, 'Could not confirm the transaction. Check its status before retrying.'))
+				if (!diagnosedReceiptFailure) controller.failed(getErrorMessage(error, transactionErrorMessages.confirmationUnavailable))
 				throw error
 			}
 		},

@@ -5,7 +5,6 @@ import { getErrorMessage } from '@zoltar/ui-core-shared/lib/errors.js'
 import { getCoordinatorInitialReportPrice } from '@zoltar/ui-statoblast-shared/protocol/oracleCoordinator.js'
 import { OperationModal } from '@zoltar/ui-core-shared/components/OperationModal.js'
 import { LookupFieldRow } from '@zoltar/ui-core-shared/components/LookupFieldRow.js'
-import { ErrorNotice } from '@zoltar/ui-core-shared/components/ErrorNotice.js'
 import { LoadingText } from '@zoltar/ui-core-shared/components/LoadingText.js'
 import { GlobalTransactionPresentationProvider, useGlobalTransactionPresentation } from '@zoltar/ui-core-shared/components/GlobalTransactionPresentationContext.js'
 import { TransactionActionButtonLockProvider } from '@zoltar/ui-core-shared/components/TransactionActionButton.js'
@@ -44,7 +43,7 @@ export function RequestPriceModal({ review, onConfirm, onClose, canRequest, conf
 	const ownsWorkflow = run.current !== undefined && workflow?.reviewSignal === run.current.signal
 	const sending = ownsWorkflow && (workflow?.steps.some(step => step.phase === 'pending') ?? false)
 	const current = valid && run.current?.key === key && run.current?.signal.aborted === false
-	const showSteps = current && ownsWorkflow && workflow !== undefined
+	const showSteps = current && ownsWorkflow && workflow?.steps[workflow.activeIndex] !== undefined
 	const error = attempted === key && !running && presentation?.tone === 'error' ? presentation.detail : undefined
 	const estimatePrompt = validPrice ? copy.preparingPriceRequest : copy.enterPriceEstimate
 	const previewPrompt = fetching ? copy.fetchingUniswapPrice : estimatePrompt
@@ -120,6 +119,11 @@ export function RequestPriceModal({ review, onConfirm, onClose, canRequest, conf
 	}
 	const priceControls = (
 		<div className='request-price-fields'>
+			{quoteError === undefined ? undefined : (
+				<span className='visually-hidden' role='alert'>
+					{quoteError}
+				</span>
+			)}
 			<LookupFieldRow
 				label={poolCopy.manualRepPerEth}
 				value={price}
@@ -131,15 +135,13 @@ export function RequestPriceModal({ review, onConfirm, onClose, canRequest, conf
 					setQuoteError(undefined)
 					setPrice(value)
 				}}
-				error={priceError}
+				error={priceError ?? quoteError}
 				action={
 					<button className='secondary request-price-fetch' type='button' disabled={sending || fetching} onClick={() => void fetchQuote()}>
 						{fetching ? <LoadingText>{copy.fetchingUniswapPrice}</LoadingText> : copy.fetchUniswapPrice}
 					</button>
 				}
 			/>
-
-			<ErrorNotice message={quoteError} />
 		</div>
 	)
 

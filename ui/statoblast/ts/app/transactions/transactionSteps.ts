@@ -143,7 +143,7 @@ export function createTransactionStepController(signal?: AbortSignal) {
 			if (step === undefined) return
 			step.phase = status === 'success' ? 'confirmed' : 'failed'
 			if (status === 'success' && step.approval !== undefined && step.approvalAmount !== undefined) step.approval = { ...step.approval, approvedAmount: step.approvalAmount }
-			if (status !== 'success') step.error = 'Transaction reverted. Remaining steps were not sent.'
+			if (status !== 'success') step.error = 'Transaction reverted.'
 			if (!canceled) publish()
 		},
 		failed(message: string) {

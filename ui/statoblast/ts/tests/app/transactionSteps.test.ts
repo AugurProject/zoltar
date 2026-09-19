@@ -9,7 +9,7 @@ import { resetActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/act
 import { createFakeBackend } from '@zoltar/ui-core-shared/tests/testUtils/fakeBackend.js'
 import { createReviewedClient } from '../../app/transactions/reviewedClient.js'
 import { withTransactionReviews } from '../../app/transactions/reviewedBackend.js'
-import { transactionSteps } from '../../app/transactions/transactionSteps.js'
+import { createTransactionStepController, transactionSteps } from '../../app/transactions/transactionSteps.js'
 
 const account = '0x0000000000000000000000000000000000000001'
 const hash: Hash = `0x${'1'.repeat(64)}`
@@ -175,7 +175,7 @@ for (const reason of ['repriced', 'cancelled', 'replaced'] as const) {
 		await sending
 		const receipt = reviewed.waitForTransactionReceipt({ hash })
 		if (reason === 'repriced') await receipt
-		else await expect(receipt).rejects.toThrow('Remaining steps were not sent')
+		else await expect(receipt).rejects.toThrow('Transaction canceled or replaced.')
 		expect(transactionSteps.value?.steps[0]?.hash).toBe(replacementHash)
 		expect(transactionSteps.value?.steps[0]?.phase).toBe(reason === 'repriced' ? 'confirmed' : 'failed')
 	})
@@ -325,7 +325,7 @@ for (const change of ['minimum', 'fee', 'lower-minimum', 'sufficient-allowance']
 				}
 			},
 		})
-		const reviewed = createReviewedClient({ ...client, ...reads, getBalance: async () => 1000n, sendTransaction, waitForTransactionReceipt: async () => receipt })
+		const reviewed = createReviewedClient({ ...client, ...reads, estimateGas: async () => 100000n, getBalance: async () => 1000n, sendTransaction, waitForTransactionReceipt: async () => receipt })
 		const action = requestOraclePrice(reviewed, account, 10n ** 18n, 0n, 122n).catch(error => error)
 		await waitForReview()
 		expect(transactionSteps.value?.steps).toHaveLength(3)
@@ -417,4 +417,93 @@ test('the reviewed backend forwards review cancellation to its client', async ()
 	cancellation.abort()
 	await expect(client.sendTransaction({ to: account, value: 1n })).rejects.toThrow()
 	expect(transactionSteps.value).toBeUndefined()
+})
+
+for (const outcome of ['success', 'reverted'] as const) {
+	test(`simulates the final price request from the connected wallet before submission: ${outcome}`, async () => {
+		const { client, sendTransaction } = setup()
+		const estimateGas = mock(async () => {
+			if (outcome === 'reverted') throw new Error('Oracle price request is already pending')
+			return 100001n
+		})
+		const reviewed = createReviewedClient({ ...client, sendTransaction, estimateGas })
+		reviewed.onTransactionPrepared?.({ account, chainName: client.chain.name, functionName: 'requestPrice', contractAddress: account, args: [1n, 0n], data: '0x1234', value: 2n })
+		const result = reviewed.sendTransaction({ to: account, data: '0x1234', value: 2n }).catch(error => error)
+		await waitForReview()
+		expect(estimateGas).not.toHaveBeenCalled()
+		confirm()
+		const value = await result
+		expect(estimateGas).toHaveBeenCalledWith({ account: client.account, to: account, data: '0x1234', value: 2n })
+		if (outcome === 'reverted') {
+			expect(value).toBeInstanceOf(Error)
+			expect(sendTransaction).not.toHaveBeenCalled()
+			expect(transactionSteps.value?.steps[0]?.error).toContain('already pending')
+		} else {
+			expect(value).toBe(hash)
+			expect(sendTransaction).toHaveBeenCalledWith({ to: account, data: '0x1234', value: 2n })
+			expect(sendTransaction).toHaveBeenCalledTimes(1)
+		}
+	})
+}
+
+test('a reverted final transaction does not claim there are remaining steps', async () => {
+	const controller = createTransactionStepController()
+	controller.setPlan([{ title: 'Request price', description: '', contractAddress: account, spender: undefined, amount: undefined, ethValueAttoEth: 0n }])
+	const review = controller.review()
+	confirm()
+	await review
+	controller.submitted(hash)
+	controller.receipt(hash, 'reverted')
+	expect(transactionSteps.value?.steps[0]?.error).toBe('Transaction reverted.')
+})
+
+for (const diagnostic of ['out-of-gas', 'unavailable'] as const) {
+	test(`retains the failed transaction hash with ${diagnostic} receipt diagnostics`, async () => {
+		const { client, sendTransaction, receipt } = setup()
+		const reviewed = createReviewedClient({
+			...client,
+			sendTransaction,
+			waitForTransactionReceipt: async () => ({ ...receipt, status: 'reverted' }),
+			getTransaction: async () => {
+				if (diagnostic === 'unavailable') throw new Error('RPC unavailable')
+				return { hash, from: account, to: account, gas: receipt.gasUsed, input: '0x', nonce: 0n, value: 0n }
+			},
+		})
+		const sending = reviewed.sendTransaction({ to: account, value: 1n })
+		await waitForReview()
+		confirm()
+		await sending
+		if (diagnostic === 'out-of-gas') await expect(reviewed.waitForTransactionReceipt({ hash })).rejects.toThrow('full gas limit')
+		else await reviewed.waitForTransactionReceipt({ hash })
+		expect(transactionSteps.value?.steps[0]?.hash).toBe(hash)
+		expect(transactionSteps.value?.steps[0]?.error).toBe(diagnostic === 'out-of-gas' ? 'Transaction failed after using its full gas limit. Open the transaction details before retrying.' : 'Transaction reverted.')
+	})
+}
+
+test('canceling while the price request gas estimate is pending prevents submission', async () => {
+	const { client, sendTransaction } = setup()
+	const estimated = createDeferred<bigint>()
+	const estimating = createDeferred<void>()
+	const cancellation = new AbortController()
+	const reviewed = createReviewedClient(
+		{
+			...client,
+			sendTransaction,
+			estimateGas: async () => {
+				estimating.resolve()
+				return await estimated.promise
+			},
+		},
+		undefined,
+		cancellation.signal,
+	)
+	reviewed.onTransactionPrepared?.({ account, chainName: client.chain.name, functionName: 'requestPrice', contractAddress: account, args: [1n, 0n], data: '0x1234', value: 2n })
+	const result = reviewed.sendTransaction({ to: account, data: '0x1234', value: 2n }).catch(error => error)
+	await waitForReview()
+	confirm()
+	await estimating.promise
+	cancellation.abort()
+	estimated.resolve(100000n)
+	expect(await result).toBeInstanceOf(Error)
+	expect(sendTransaction).not.toHaveBeenCalled()
 })

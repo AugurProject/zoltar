@@ -38,6 +38,20 @@ void describe('error helpers', () => {
 		expect(getErrorMessage({ cause: { shortMessage: 'RPC unavailable' }, message: 'execution reverted' }, 'Failed to refresh wallet state')).toBe('Failed to refresh wallet state. Reason: RPC unavailable')
 	})
 
+	void test('preserves diagnosed transaction failures across dialog and notification formatters', () => {
+		for (const message of [
+			'Transaction failed after using its full gas limit. Open the transaction details before retrying.',
+			'Transaction canceled or replaced.',
+			'Could not confirm the transaction. Check its status before retrying.',
+			'Approval confirmed, but it is below the report requirement. Review funding again to approve the required total before continuing.',
+		]) {
+			for (const error of [new Error(message), new Error('Provider failed', { cause: new Error(message) })]) {
+				expect(getErrorMessage(error, 'Transaction failed.')).toBe(message)
+				expect(formatWriteErrorMessage(error, 'Failed to request price')).toBe(message)
+			}
+		}
+	})
+
 	void test('formats write failures with transaction-oriented wording', () => {
 		expect(formatWriteErrorMessage(new Error('execution reverted: insufficient funds for gas * price + value'), 'Failed to report on outcome')).toBe('Transaction failed while attempting to report on outcome. Reason: insufficient funds for gas * price + value')
 		expect(formatWriteErrorMessage(new Error('No market found for that ID'), 'Failed to create security pool')).toBe('No market found for that ID')
