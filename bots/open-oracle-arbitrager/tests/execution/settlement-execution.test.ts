@@ -14,7 +14,7 @@ import { validateSubmissionSettings } from '#execution/transaction-submission'
 import type { CoordinatorGamePolicy } from '#core/game-policy'
 import type { ActiveReport } from '#monitoring/oracle-log-state'
 import type { OperationEntry, TransactionActivity } from '#state/operator-state'
-import { settlementMaxFeePerGas } from '#core/settlement-strategy'
+import { settlementEconomics, settlementMaxFeePerGas, signedSettlementGasLimit } from '#core/settlement-strategy'
 import { emptySettlementSnapshot, loadSettlementJournal, settlementAttemptHoldsFlow, settlementAttemptIsUnresolved, settlementGasSpentAttoEthOnUtcDay, settlementJournalPath, type MutableSettlement, type SettlementRecord } from '#state/settlement-store'
 import { createSettlementJournal, recoverPendingSettlements, runSettlementStage, type SettlementStageConfiguration } from '../../src/runtime/settlement-stage.ts'
 import { createAnvilNodeForConnectionMode, getAnvilConnectionMode, type AnvilNode } from '../../../../solidity/ts/testSupport/simulator/anvilNode.ts'
@@ -247,7 +247,7 @@ describe('third-party settlement execution against OpenOracle', () => {
 			port: 0,
 			async fetch(request) {
 				const body: unknown = await request.json()
-				if (typeof body === 'object' && body !== null && Reflect.get(body, 'method') === 'eth_sendRawTransaction') return Response.json({ id: Reflect.get(body, 'id'), jsonrpc: '2.0', error: { code: -32000, message: 'rejected' } })
+				if (typeof body === 'object' && body !== null && Reflect.get(body, 'method') === 'eth_sendRawTransaction') return Response.json({ id: Reflect.get(body, 'id'), jsonrpc: '2.0', error: { code: -32000, message: 'insufficient funds for gas * price + value' } })
 				return fetch(node.rpcUrl, { body: JSON.stringify(body), headers: { 'content-type': 'application/json' }, method: 'POST' })
 			},
 		})
@@ -422,8 +422,11 @@ describe('third-party settlement execution against OpenOracle', () => {
 			const record = records[recordCount]
 			if (record === undefined) throw new Error('attempt was not journaled as pending')
 			expect(record.status).toBe('pending')
-			// 20 gwei compounds past 380 gwei over the signed horizon; the cap holds the signature at 50 gwei.
-			expect((await client.getTransaction({ hash: record.transactionHash })).maxFeePerGas).toBe(50n * GWEI)
+			// 20 gwei compounds past 380 gwei over the signed horizon; the cap holds the signature at 50 gwei, and the journaled
+			// exposure covers everything the signature can spend: its padded gas limit at that ceiling.
+			const signed = await client.getTransaction({ hash: record.transactionHash })
+			expect(signed.maxFeePerGas).toBe(50n * GWEI)
+			expect(parseDecimalWeth(record.projectedGasCostEth)).toBeGreaterThanOrEqual(signed.gas * 50n * GWEI)
 			return { execution, record }
 		}
 		await node.anvilWindowEthereum.request({ method: 'evm_setAutomine', params: [false] })
@@ -433,7 +436,10 @@ describe('third-party settlement execution against OpenOracle', () => {
 			expect(base.baseFeePerGas).toBe(20n * GWEI)
 			expect(base.maxFeePerGas).toBe(50n * GWEI)
 			// Inclusion two blocks later at a doubled base fee pays the base fee plus the tip, well under the cap.
-			const settle = await submitted(executeSettlement(base, { coordinator: report.helper.creator, gas: 250_000n, projectedGasCostAttoEth: 310_000n * 50n * GWEI, report, rewardAttoEth: REWARD, token: token2, tokenSymbol: 'TK2' }), 0)
+			// The plan comes from the queue's economics so the assertion ties the reserved exposure to the actual signature.
+			const economics = settlementEconomics({ callbackGasLimit: report.game.callbackGasLimit, gasPrice: 42n * GWEI, maxFeePerGas: base.maxFeePerGas, rewardAttoEth: REWARD, settings: settlement })
+			const settle = await submitted(executeSettlement(base, { coordinator: report.helper.creator, gas: economics.gas, projectedGasCostAttoEth: economics.projectedGasCostAttoEth, report, rewardAttoEth: REWARD, token: token2, tokenSymbol: 'TK2' }), 0)
+			expect((await client.getTransaction({ hash: settle.record.transactionHash })).gas).toBe(signedSettlementGasLimit(economics.gas))
 			await mine(40n)
 			expect((await settle.execution).status).toBe('confirmed')
 			const receipt = await client.getTransactionReceipt({ hash: settle.record.transactionHash })

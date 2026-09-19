@@ -1132,8 +1132,8 @@ report that is past its settlement deadline and still unsettled appears in the
 dashboard's **Settlement queue** with the settler reward the coordinator escrowed,
 the projected gas for `settle` (the callback gas limit plus the 1/63 slack
 OpenOracle requires after the callback, plus a fixed base and an amortised reward
-withdrawal), and the projected net. Settlement is off until `settlement` is set in
-the complete configuration:
+withdrawal, each padded the way the signer pads its gas limit), and the projected
+net. Settlement is off until `settlement` is set in the complete configuration:
 
 | Setting | Default | JSON field | Effect |
 | --- | ---: | --- | --- |
@@ -1178,9 +1178,10 @@ consuming transaction with the same intent (an operator rebroadcast) is adopted
 under its own hash; any other retires the attempt as `expired`. An attempt becomes
 `dropped` when it provably has no mempool to land from: a private attempt whose
 signed horizon has finalized without a receipt (the relay stops including it at
-`maxBlockNumber`), or a public attempt that every RPC refused outright or that a
-pause stopped between the journal write and the send; a timeout or HTTP failure may
-have followed an ingestion, so those attempts stay pending. Dropping releases the
+`maxBlockNumber`), or a public attempt that every RPC refused with an explicit
+transaction-pool message (or an invalid-params error) or that a pause stopped
+between the journal write and the send; a timeout, HTTP failure, or unrecognised
+error may have followed an ingestion, so those attempts stay pending. Dropping releases the
 budget at once and the report once the attempt's own signed horizon has finalized,
 so a refusal that repeats re-signs at that cadence rather than on every scan. A
 dropped private attempt keeps being rechecked so a late receipt or a consumed nonce

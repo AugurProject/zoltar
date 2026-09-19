@@ -70,7 +70,7 @@ describe('settlement queue', () => {
 			}),
 		)
 		expect(queue.map(candidate => candidate.reportId)).toEqual(['11'])
-		expect(queue[0]).toMatchObject({ callbackGasLimit: '4000000', coordinator, decision: 'eligible', elapsed: '20', projectedGasCostEth: '0.008746984', projectedNetEth: '0.008296326270400101', rewardEth: '0.017043310270400101', token: rep, tokenSymbol: 'REP', windowUnit: 'seconds' })
+		expect(queue[0]).toMatchObject({ callbackGasLimit: '4000000', coordinator, decision: 'eligible', elapsed: '20', projectedGasCostEth: '0.01053638', projectedNetEth: '0.006506930270400101', rewardEth: '0.017043310270400101', token: rep, tokenSymbol: 'REP', windowUnit: 'seconds' })
 		expect(plans.get('11')?.gas).toBe(4_313_492n)
 	})
 
@@ -117,8 +117,8 @@ describe('settlement queue', () => {
 	test('prices profitability and the budget at the signed fee ceiling, not the projected inclusion price', () => {
 		// 2 gwei is worth sending, but the signature may pay up to 4 gwei per gas; the plan and the budget carry the 4 gwei cost.
 		const { plans, queue } = settlementQueue(input({ gasPrice: 2n * GWEI, maxFeePerGas: 4n * GWEI, reports: [report(11n, { settlerRewardAttoEth: 3n * 10n ** 16n })] }))
-		expect(queue[0]).toMatchObject({ decision: 'eligible', projectedGasCostEth: '0.017493968', projectedNetEth: '0.012506032' })
-		expect(plans.get('11')?.projectedGasCostAttoEth).toBe((4_313_492n + 60_000n) * 4n * GWEI)
+		expect(queue[0]).toMatchObject({ decision: 'eligible', projectedGasCostEth: '0.02107276', projectedNetEth: '0.00892724' })
+		expect(plans.get('11')?.projectedGasCostAttoEth).toBe((5_186_190n + 82_000n) * 4n * GWEI)
 		// The default reward clears 2 gwei but not the 4 gwei the signature could pay.
 		expect(settlementQueue(input({ gasPrice: 2n * GWEI, maxFeePerGas: 2n * GWEI, reports: [report(11n)] })).queue[0]?.decision).toBe('eligible')
 		expect(settlementQueue(input({ gasPrice: 2n * GWEI, maxFeePerGas: 4n * GWEI, reports: [report(11n)] })).queue[0]?.decision).toBe('unprofitable')

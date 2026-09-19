@@ -1,7 +1,7 @@
 import type { Configuration } from '#config/configuration'
 import { openOracleAbi } from '#contracts/abi'
 import type { ReadClient, WriteClient } from '#core/operator-types'
-import { rewardWithdrawalGasPlan } from '#core/settlement-strategy'
+import { rewardWithdrawalGasPlan, signedSettlementGasLimit } from '#core/settlement-strategy'
 import { ATTEMPT_FINALITY_BLOCKS, attemptHasFinality, isExecutionPausedError, receiptGasExpendituresWithQuorum, transactionHashBySenderNonceWithQuorum, transactionReceiptsOrMissingWithQuorum, transactionReceiptsWithQuorum } from '#execution/execution-orchestration'
 import { confirmedNonceWithQuorum, durableTransactionIntent, pendingNonceWithQuorum, recoveredTransactionIntentMismatchWithQuorum } from '#execution/recovery-support'
 import { DEFAULT_TRANSACTION_VALIDITY_BLOCKS, prepareSignedTransaction, submissionRejectedEverywhere } from '#execution/transaction-submission'
@@ -81,6 +81,7 @@ async function signAndSubmit(context: SettlementExecutionContext, call: { data: 
 		to: context.config.openOracle,
 	})
 	if (signed.transaction.maxFeePerGas !== context.maxFeePerGas) throw new Error(`Settlement signed a fee ceiling of ${signed.transaction.maxFeePerGas?.toString() ?? 'none'} but was evaluated at ${context.maxFeePerGas.toString()}`)
+	if (signed.transaction.gas !== signedSettlementGasLimit(call.gas)) throw new Error(`Settlement signed a gas limit of ${signed.transaction.gas.toString()} but was evaluated at ${signedSettlementGasLimit(call.gas).toString()}`)
 	const record = pending({ hash: signed.hash, lastValidBlockNumber: signed.maxBlockNumber.toString(), nonce: nonce.toString(), submissionBlockNumber: context.blockNumber.toString(), submissionMode: context.config.submission.mode, transactionIntent: durableTransactionIntent(signed.transaction) })
 	let journaled = false
 	let submission
@@ -167,7 +168,7 @@ export async function executeRewardWithdrawal(context: SettlementExecutionContex
 	if (amountAttoEth <= 0n) throw new Error('Settlement reward withdrawal amount must be positive')
 	const account = context.wallet.account
 	const gas = rewardWithdrawalGasPlan()
-	const projectedGasCostAttoEth = gas * context.maxFeePerGas
+	const projectedGasCostAttoEth = signedSettlementGasLimit(gas) * context.maxFeePerGas
 	return signAndSubmit(context, { data: encodeFunctionData({ abi: openOracleAbi, functionName: 'withdraw', args: [ETH_SENTINEL, amountAttoEth] }), gas, kind: 'withdraw-reward', reportId: undefined, token: undefined, tokenSymbol: undefined }, attempt => ({
 		account: account.address,
 		actualGasCostEth: undefined,

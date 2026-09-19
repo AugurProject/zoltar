@@ -1,5 +1,6 @@
 import { keccak256, type Address, type BlockTransaction, type Hex, type JsonValue } from '../ethereum.ts'
-import { endpointLabel, isEndpointRejection } from '../monitoring/connectivity.ts'
+import { endpointLabel } from '../monitoring/connectivity.ts'
+import { isEndpointRejection } from './transaction-rejection.ts'
 import { boundedJsonResponse, RELAY_RESPONSE_BYTES } from '../infrastructure/bounded-json.ts'
 import { authenticatedRelayHeaders, type RelayAuthentication } from './relay-authentication.ts'
 
@@ -13,7 +14,7 @@ export type SubmissionSettings = {
 
 export type SubmissionTargetResult = {
 	error: string | undefined
-	/** True when the target refused the transaction at its pool, so it is known not to hold it; false or absent when the outcome is unknown (transport failure, internal error, unexpected hash). */
+	/** True when the target refused the transaction at its pool, so it is known not to hold it; false or absent when the outcome is unknown (transport failure, internal or unrecognised error, unexpected hash). */
 	rejected?: boolean | undefined
 	target: string
 }

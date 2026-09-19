@@ -1,5 +1,5 @@
 import type { Address } from '@zoltar/bot-shared/ethereum'
-import { cappedMaximumFeePerGas } from '@zoltar/bot-shared/execution/transaction-submission'
+import { cappedMaximumFeePerGas, paddedTransactionGas } from '@zoltar/bot-shared/execution/transaction-submission'
 import { OPEN_ORACLE_FLAG_TIME_TYPE, type OpenOracleGame } from '@zoltar/open-oracle-shared/openOracle/openOracle'
 import type { MutableSettlement, RewardWithdrawalDecision, SettlementDecision } from '#state/settlement-store'
 
@@ -53,13 +53,19 @@ export type SettlementEconomics = {
 	withinGasPriceCap: boolean
 }
 
+/** The gas limit a signature carries for a planned call: the signer pads every estimate, and the budget reserves that padded limit. */
+export function signedSettlementGasLimit(gasEstimate: bigint) {
+	return paddedTransactionGas(gasEstimate)
+}
+
 /**
- * Reward minus the settle transaction and its amortised reward withdrawal at the signed fee ceiling, so the net the queue
- * shows is the worst case the signature can pay; the projected inclusion price gates the attempt against the cap.
+ * Reward minus the settle transaction and its amortised reward withdrawal at the signed fee ceiling and the padded gas
+ * limits the signatures carry, so the net the queue shows is the worst case the signatures can pay; the projected
+ * inclusion price gates the attempt against the cap.
  */
 export function settlementEconomics(parameters: { callbackGasLimit: bigint; gasPrice: bigint; maxFeePerGas: bigint; rewardAttoEth: bigint; settings: Pick<MutableSettlement, 'maxGasPriceAttoEthPerGas' | 'minimumProfitAttoWeth'> }): SettlementEconomics {
 	const gas = settlementGasPlan(parameters.callbackGasLimit)
-	const projectedGasCostAttoEth = parameters.maxFeePerGas * (gas + REWARD_WITHDRAWAL_GAS)
+	const projectedGasCostAttoEth = parameters.maxFeePerGas * (signedSettlementGasLimit(gas) + signedSettlementGasLimit(REWARD_WITHDRAWAL_GAS))
 	const netAttoEth = parameters.rewardAttoEth - projectedGasCostAttoEth
 	return {
 		gas,
@@ -104,7 +110,7 @@ export function rewardWithdrawalDecision(parameters: {
 	if (parameters.unclaimedRewardAttoEth === undefined) return 'unavailable'
 	if (parameters.unclaimedRewardAttoEth < parameters.settings.rewardWithdrawThresholdAttoEth) return 'below-threshold'
 	if (parameters.gasPrice > parameters.settings.maxGasPriceAttoEthPerGas) return 'gas-price-cap'
-	if (parameters.dailyGas.spentAttoWeth + REWARD_WITHDRAWAL_GAS * parameters.maxFeePerGas > parameters.dailyGas.limitAttoWeth) return 'risk-limit'
+	if (parameters.dailyGas.spentAttoWeth + signedSettlementGasLimit(REWARD_WITHDRAWAL_GAS) * parameters.maxFeePerGas > parameters.dailyGas.limitAttoWeth) return 'risk-limit'
 	if (!parameters.enabled) return 'disabled'
 	if (!parameters.execute) return 'dry-run'
 	if (!parameters.signerReady) return 'signer-unavailable'
