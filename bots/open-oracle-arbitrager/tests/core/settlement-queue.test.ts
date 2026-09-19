@@ -106,6 +106,8 @@ describe('settlement queue', () => {
 		// A public transaction has no deadline: the report stays in flight however many blocks pass, until the nonce is consumed by another transaction.
 		expect(settlementQueue(input({ blockNumber: 49n + 10_000n, records: [pending], reports: [report(11n)] })).queue[0]?.decision).toBe('in-flight')
 		expect(settlementQueue(input({ blockNumber: 50n, records: [{ ...pending, status: 'expired' }], reports: [report(11n)] })).queue[0]?.decision).toBe('eligible')
+		// A live attempt against a previous OpenOracle (before a contract change) does not hold this contract's report of the same id.
+		expect(settlementQueue(input({ records: [{ ...pending, transactionIntent: { ...pending.transactionIntent, to: coordinator } }], reports: [report(11n)] })).queue[0]?.decision).toBe('eligible')
 		// A dropped attempt holds the report until its own horizon has finalized, then the report is free while recovery keeps rechecking it.
 		expect(settlementQueue(input({ blockNumber: 74n + 11n, records: [{ ...pending, status: 'dropped' }], reports: [report(11n)] })).queue[0]?.decision).toBe('in-flight')
 		expect(settlementQueue(input({ blockNumber: 74n + 12n, records: [{ ...pending, status: 'dropped', submissionMode: 'private' }], reports: [report(11n)] })).queue[0]?.decision).toBe('eligible')

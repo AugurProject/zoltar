@@ -1156,7 +1156,11 @@ block and shares the daily gas budget with positions in both directions: it bloc
 further settlements and dispute entries once the budget is spent, and an attempt that
 is still pending charges its signed exposure to whichever day is being judged until
 its outcome is known. A report or reward withdrawal with an attempt that may still be
-mined is never re-sent. Pausing blocks new settlements and withdrawals.
+mined is never re-sent; that hold is scoped to the OpenOracle the attempt was sent to
+(and, for withdrawals, to the signing wallet), so an attempt journaled before a
+contract or signer change keeps its recovery and gas accounting without blocking the
+new contract's report of the same id or the new wallet's withdrawals. Pausing blocks
+new settlements and withdrawals.
 
 Because the signature is capped, a base fee that climbs above the cap after
 submission delays inclusion rather than raising the price. Under private submission

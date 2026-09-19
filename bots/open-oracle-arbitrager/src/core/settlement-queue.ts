@@ -5,7 +5,7 @@ import { settlementDecision, settlementEconomics, settlementEligibilityMismatch,
 import type { SettlementPlan } from '#execution/settlement-execution'
 import type { ActiveReport } from '#monitoring/oracle-log-state'
 import { decimalSignedEth, decimalWeth } from '#state/operator-state'
-import { settlementAttemptHoldsFlow, type SettlementCandidateSnapshot, type SettlementRecord } from '#state/settlement-store'
+import { inFlightSettlementReportIds, type SettlementCandidateSnapshot, type SettlementRecord } from '#state/settlement-store'
 
 export type SettlementQueueInput = {
 	account: Address | undefined
@@ -31,7 +31,7 @@ export type SettlementQueue = { plans: Map<string, SettlementPlan>; queue: Settl
 export function settlementQueue(input: SettlementQueueInput): SettlementQueue {
 	const queue: SettlementCandidateSnapshot[] = []
 	const plans = new Map<string, SettlementPlan>()
-	const inFlightReports = new Set(input.records.filter(record => record.reportId !== undefined && settlementAttemptHoldsFlow(record, input.blockNumber)).map(record => record.reportId))
+	const inFlightReports = inFlightSettlementReportIds(input.records, input.blockNumber, input.config.openOracle)
 	for (const report of input.reports) {
 		const { game, helper } = report.latest
 		if (report.settled || gamePolicyMismatch(report.latest, input.coordinatorPolicies, input.config.openOracle) !== undefined) continue

@@ -52,8 +52,25 @@ function settlementAttemptMayStillLand(record: Pick<SettlementRecord, 'status'>)
  * until its own horizon has finalized, so a refusal that repeats every scan re-signs at the horizon cadence rather than
  * on every poll.
  */
-export function settlementAttemptHoldsFlow(record: Pick<SettlementRecord, 'lastValidBlockNumber' | 'status'>, blockNumber: bigint) {
+function settlementAttemptHoldsFlow(record: Pick<SettlementRecord, 'lastValidBlockNumber' | 'status'>, blockNumber: bigint) {
 	return settlementAttemptMayStillLand(record) || (record.status === 'dropped' && !settlementAttemptHorizonFinalized(record, blockNumber))
+}
+
+/**
+ * Report ids with a live settlement attempt against the given OpenOracle. The journal keeps every historical attempt for
+ * recovery and gas accounting, but an attempt sent to another OpenOracle (before a contract change) says nothing about
+ * that contract's report of the same id, so it must not hold it.
+ */
+export function inFlightSettlementReportIds(records: readonly SettlementRecord[], blockNumber: bigint, openOracle: Address) {
+	return new Set(records.filter(record => record.kind === 'settlement' && record.reportId !== undefined && record.transactionIntent.to.toLowerCase() === openOracle.toLowerCase() && settlementAttemptHoldsFlow(record, blockNumber)).map(record => record.reportId))
+}
+
+/**
+ * Whether a reward withdrawal by the given wallet from the given OpenOracle is still live. Withdrawals draw the wallet's
+ * own balance inside that contract, so an attempt by a previous signer or against a previous contract does not compete.
+ */
+export function rewardWithdrawalInFlight(records: readonly SettlementRecord[], blockNumber: bigint, scope: { account: Address; openOracle: Address }) {
+	return records.some(record => record.kind === 'reward-withdrawal' && record.account.toLowerCase() === scope.account.toLowerCase() && record.transactionIntent.to.toLowerCase() === scope.openOracle.toLowerCase() && settlementAttemptHoldsFlow(record, blockNumber))
 }
 
 /**

@@ -17,7 +17,7 @@ import type { OperationEntry, TransactionActivity } from '#state/operator-state'
 import { settlementEconomics, settlementMaxFeePerGas, signedSettlementGasLimit } from '#core/settlement-strategy'
 import { dateFromBlockTimestamp } from '#execution/recovery-support'
 import { sendRawTransactionToRpc } from '#monitoring/connectivity'
-import { appendSettlementRecord, emptySettlementSnapshot, loadSettlementJournal, settlementAttemptHoldsFlow, settlementAttemptIsUnresolved, settlementGasSpentAttoEthOnUtcDay, settlementJournalPath, type MutableSettlement, type SettlementRecord } from '#state/settlement-store'
+import { appendSettlementRecord, emptySettlementSnapshot, inFlightSettlementReportIds, loadSettlementJournal, settlementAttemptIsUnresolved, settlementGasSpentAttoEthOnUtcDay, settlementJournalPath, type MutableSettlement, type SettlementRecord } from '#state/settlement-store'
 import { createSettlementJournal, recoverPendingSettlements, runSettlementStage, type SettlementStageConfiguration } from '../../src/runtime/settlement-stage.ts'
 import { createAnvilNodeForConnectionMode, getAnvilConnectionMode, type AnvilNode } from '../../../../solidity/ts/testSupport/simulator/anvilNode.ts'
 import { statoblast_openOracle_OpenOracle_OpenOracle as openOracleArtifact } from '../../../../solidity/ts/types/contractArtifact'
@@ -306,8 +306,8 @@ describe('third-party settlement execution against OpenOracle', () => {
 			const [first] = dropped
 			if (first === undefined) throw new Error('dropped record missing')
 			const horizonFinalized = BigInt(first.lastValidBlockNumber) + ATTEMPT_FINALITY_BLOCKS
-			expect(dropped.map(record => settlementAttemptHoldsFlow(record, horizonFinalized - 1n))).toEqual([true, true])
-			expect(dropped.map(record => settlementAttemptHoldsFlow(record, horizonFinalized))).toEqual([false, false])
+			expect(dropped.map(record => inFlightSettlementReportIds([record], horizonFinalized - 1n, openOracle).has(report.helper.reportId.toString()))).toEqual([true, true])
+			expect(dropped.map(record => inFlightSettlementReportIds([record], horizonFinalized, openOracle).has(report.helper.reportId.toString()))).toEqual([false, false])
 			expect(dropped.map(record => settlementAttemptIsUnresolved(record, horizonFinalized))).toEqual([false, false])
 			// Through the stage, a refusal that repeats leaves the report in flight instead of re-signing on the next scan.
 			const journalDirectory = await mkdtemp(join(tmpdir(), 'zoltar-settlement-refusal-'))
@@ -464,7 +464,7 @@ describe('third-party settlement execution against OpenOracle', () => {
 		const [reverted] = await reconcilePendingSettlements([client], config, [confirmed], await client.getBlockNumber())
 		expect(reverted).toMatchObject({ actualGasCostEth: undefined, minedAt: undefined, receiptBlock: undefined, status: 'pending', transactionHash: confirmed.transactionHash })
 		if (reverted === undefined) throw new Error('reverted record missing')
-		expect(settlementAttemptHoldsFlow(reverted, await client.getBlockNumber())).toBeTrue()
+		expect(inFlightSettlementReportIds([reverted], await client.getBlockNumber(), openOracle).has(report.helper.reportId.toString())).toBeTrue()
 		expect(settlementGasSpentAttoEthOnUtcDay([reverted], new Date())).toBe(10n ** 15n)
 		// The transaction is not in the pool any more and its nonce is free, so it stays pending until something consumes it.
 		expect(await reconcilePendingSettlements([client], config, [reverted], await client.getBlockNumber())).toEqual([])

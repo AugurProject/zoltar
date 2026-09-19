@@ -4,7 +4,20 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { getAddress, type Hex } from '@zoltar/bot-shared/ethereum'
 import { ATTEMPT_FINALITY_BLOCKS } from '#execution/execution-orchestration'
-import { appendSettlementRecord, loadSettlementJournal, mergeSettlementRecord, parseSettlementSettings, settlementAttemptHoldsFlow, settlementAttemptIsUnresolved, settlementGasSpentAttoEthOnUtcDay, settlementJournalPath, settlementSettings, settlementSnapshot, type SettlementRecord } from '#state/settlement-store'
+import {
+	appendSettlementRecord,
+	loadSettlementJournal,
+	mergeSettlementRecord,
+	parseSettlementSettings,
+	inFlightSettlementReportIds,
+	rewardWithdrawalInFlight,
+	settlementAttemptIsUnresolved,
+	settlementGasSpentAttoEthOnUtcDay,
+	settlementJournalPath,
+	settlementSettings,
+	settlementSnapshot,
+	type SettlementRecord,
+} from '#state/settlement-store'
 
 const account = getAddress('0x00000000000000000000000000000000000000aa')
 const coordinator = getAddress('0x00000000000000000000000000000000000000cc')
@@ -122,10 +135,11 @@ describe('settlement journal', () => {
 		// A dropped attempt holds its report until its own horizon has finalized, so a repeating refusal re-signs at that cadence.
 		const dropped = { ...pending, status: 'dropped' as const }
 		const horizonFinalized = BigInt(dropped.lastValidBlockNumber) + ATTEMPT_FINALITY_BLOCKS
-		expect(settlementAttemptHoldsFlow(pending, 10_000n)).toBeTrue()
-		expect(settlementAttemptHoldsFlow(dropped, horizonFinalized - 1n)).toBeTrue()
-		expect(settlementAttemptHoldsFlow(dropped, horizonFinalized)).toBeFalse()
-		expect(settlementAttemptHoldsFlow({ ...pending, status: 'expired' }, 0n)).toBeFalse()
+		const holds = (record: SettlementRecord, blockNumber: bigint) => inFlightSettlementReportIds([record], blockNumber, coordinator).has('1')
+		expect(holds(pending, 10_000n)).toBeTrue()
+		expect(holds(dropped, horizonFinalized - 1n)).toBeTrue()
+		expect(holds(dropped, horizonFinalized)).toBeFalse()
+		expect(holds({ ...pending, status: 'expired' }, 0n)).toBeFalse()
 		// Recovery keeps checking a dropped private attempt indefinitely; a dropped public one only until its horizon finalizes.
 		expect(settlementAttemptIsUnresolved({ ...dropped, submissionMode: 'private' }, 10_000n)).toBeTrue()
 		expect(settlementAttemptIsUnresolved(dropped, horizonFinalized - 1n)).toBeTrue()
@@ -147,6 +161,25 @@ describe('settlement journal', () => {
 		// An expired attempt can never be mined and a dropped one is past its relay horizon: neither charges anything.
 		expect(settlementGasSpentAttoEthOnUtcDay([{ ...pending, status: 'expired' }], day)).toBe(0n)
 		expect(settlementGasSpentAttoEthOnUtcDay([{ ...pending, status: 'dropped' }], day)).toBe(0n)
+	})
+
+	test('holds a report or a withdrawal only for live attempts against the same OpenOracle, and withdrawals only for the same wallet', () => {
+		const otherOpenOracle = getAddress('0x00000000000000000000000000000000000000ee')
+		const otherAccount = getAddress('0x00000000000000000000000000000000000000bb')
+		const pending = record(7, { actualGasCostEth: undefined, finalized: false, minedAt: undefined, receiptBlock: undefined, status: 'pending' })
+		// A live attempt sent to a previous OpenOracle says nothing about the new contract's report of the same id.
+		expect(inFlightSettlementReportIds([pending], 0n, coordinator).has('7')).toBeTrue()
+		expect(inFlightSettlementReportIds([pending], 0n, otherOpenOracle).has('7')).toBeFalse()
+		expect(inFlightSettlementReportIds([{ ...pending, transactionIntent: { ...pending.transactionIntent, to: otherOpenOracle } }], 0n, coordinator).has('7')).toBeFalse()
+		const withdrawal = { ...pending, coordinator: undefined, kind: 'reward-withdrawal' as const, reportId: undefined }
+		expect(inFlightSettlementReportIds([withdrawal], 0n, coordinator).size).toBe(0)
+		expect(rewardWithdrawalInFlight([withdrawal], 0n, { account, openOracle: coordinator })).toBeTrue()
+		// A previous signer's withdrawal, or one from a previous contract, does not compete with the current wallet's.
+		expect(rewardWithdrawalInFlight([withdrawal], 0n, { account: otherAccount, openOracle: coordinator })).toBeFalse()
+		expect(rewardWithdrawalInFlight([withdrawal], 0n, { account, openOracle: otherOpenOracle })).toBeFalse()
+		expect(rewardWithdrawalInFlight([{ ...withdrawal, finalized: true, status: 'confirmed' }], 0n, { account, openOracle: coordinator })).toBeFalse()
+		// The historical attempt is still recovered and accounted; only the scoping changed.
+		expect(settlementGasSpentAttoEthOnUtcDay([pending], new Date())).toBe(5n * 10n ** 15n)
 	})
 
 	test('bounds the dashboard history and formats the snapshot figures', () => {

@@ -7,7 +7,7 @@ import { executeRewardWithdrawal, executeSettlement, reconcilePendingSettlements
 import type { TrackTransaction } from '#execution/transaction-tracker'
 import type { ActiveReport } from '#monitoring/oracle-log-state'
 import { recordOperation, type OperatorState } from '#state/operator-state'
-import { appendSettlementRecord, loadSettlementJournal, mergeSettlementRecord, settlementAttemptHoldsFlow, settlementGasSpentAttoEthOnUtcDay, settlementJournalPath, settlementSnapshot, type RewardWithdrawalDecision, type SettlementCandidateSnapshot, type SettlementRecord } from '#state/settlement-store'
+import { appendSettlementRecord, loadSettlementJournal, mergeSettlementRecord, rewardWithdrawalInFlight, settlementGasSpentAttoEthOnUtcDay, settlementJournalPath, settlementSnapshot, type RewardWithdrawalDecision, type SettlementCandidateSnapshot, type SettlementRecord } from '#state/settlement-store'
 import { isExecutionPausedError } from '#execution/execution-orchestration'
 import { dateFromBlockTimestamp } from '#execution/recovery-support'
 import type { Address } from '@zoltar/bot-shared/ethereum'
@@ -136,7 +136,7 @@ export async function runSettlementStage(parameters: SettlementStageParameters) 
 		enabled: config.settlement.enabled,
 		execute: config.execute,
 		gasPrice: parameters.gasPrice,
-		inFlight: journal.records.some(record => record.kind === 'reward-withdrawal' && settlementAttemptHoldsFlow(record, block.number)),
+		inFlight: account !== undefined && rewardWithdrawalInFlight(journal.records, block.number, { account, openOracle: config.openOracle }),
 		maxFeePerGas,
 		paused: state.paused,
 		settings: config.settlement,
