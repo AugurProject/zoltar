@@ -26,7 +26,26 @@ export type EndpointCheck = {
 }
 
 class EndpointTransportError extends Error {}
-class EndpointSafetyError extends Error {}
+class EndpointSafetyError extends Error {
+	readonly rpcErrorCode: number | undefined
+
+	constructor(message: string, options?: { cause?: unknown; rpcErrorCode?: number | undefined }) {
+		super(message, options?.cause === undefined ? undefined : { cause: options.cause })
+		this.rpcErrorCode = options?.rpcErrorCode
+	}
+}
+
+/**
+ * JSON-RPC codes a node uses to refuse a transaction at its pool (generic server error carrying pool messages such as
+ * nonce too low, underpriced, or insufficient funds; invalid params; transaction rejected). Internal errors and provider
+ * limits are excluded because a gateway can return them after forwarding the transaction upstream.
+ */
+const TRANSACTION_REJECTION_CODES = new Set([-32000, -32003, -32010, -32602])
+
+/** True when the endpoint refused the transaction at its pool, so it is known not to hold it; a transport failure or an internal error leaves that unknown. */
+export function isEndpointRejection(error: unknown) {
+	return error instanceof EndpointSafetyError && error.rpcErrorCode !== undefined && TRANSACTION_REJECTION_CODES.has(error.rpcErrorCode)
+}
 
 function endpointFailureDisposition(error: unknown): 'connectivity-degraded' | 'safety-paused' {
 	if (error instanceof EndpointSafetyError) return 'safety-paused'
@@ -46,7 +65,7 @@ function endpointMethodFailure(error: unknown, url: string, method: string) {
 	const normalizedDetail = detail.startsWith(targetPrefix) ? detail.slice(targetPrefix.length) : detail
 	const message = normalizedDetail.includes(method) ? `RPC ${target} ${normalizedDetail}` : `RPC ${target} failed while calling ${method}: ${normalizedDetail}`
 	if (error instanceof EndpointTransportError) return new EndpointTransportError(message, { cause: error })
-	if (error instanceof EndpointSafetyError) return new EndpointSafetyError(message, { cause: error })
+	if (error instanceof EndpointSafetyError) return new EndpointSafetyError(message, { cause: error, rpcErrorCode: error.rpcErrorCode })
 	return new Error(message, { cause: error })
 }
 
@@ -140,7 +159,7 @@ async function rawRpcRequest(url: string, method: string, params: readonly unkno
 		if (error instanceof SyntaxError) throw new Error(`RPC returned non-JSON HTTP ${response.status.toString()}`)
 		throw error
 	}
-	if (value.error !== undefined) throw new EndpointSafetyError(`RPC ${value.error.code?.toString() ?? 'error'}: ${value.error.message ?? 'Unknown error'}`)
+	if (value.error !== undefined) throw new EndpointSafetyError(`RPC ${value.error.code?.toString() ?? 'error'}: ${value.error.message ?? 'Unknown error'}`, { rpcErrorCode: typeof value.error.code === 'number' ? value.error.code : undefined })
 	return value.result
 }
 

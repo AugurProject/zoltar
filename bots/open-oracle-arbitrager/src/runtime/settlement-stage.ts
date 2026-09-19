@@ -1,13 +1,13 @@
 import type { Configuration } from '#config/configuration'
 import type { CoordinatorGamePolicy } from '#core/game-policy'
 import type { ReadClient, WriteClient } from '#core/operator-types'
-import { rewardWithdrawalDecision } from '#core/settlement-strategy'
+import { rewardWithdrawalDecision, settlementMaxFeePerGas } from '#core/settlement-strategy'
 import { selectSettlementPlan, settlementQueue } from '#core/settlement-queue'
 import { executeRewardWithdrawal, executeSettlement, reconcilePendingSettlements, unclaimedSettlementReward, type SettlementExecutionContext } from '#execution/settlement-execution'
 import type { TrackTransaction } from '#execution/transaction-tracker'
 import type { ActiveReport } from '#monitoring/oracle-log-state'
 import { recordOperation, type OperatorState } from '#state/operator-state'
-import { appendSettlementRecord, loadSettlementJournal, mergeSettlementRecord, settlementAttemptMayStillLand, settlementGasSpentAttoEthOnUtcDay, settlementJournalPath, settlementSnapshot, type RewardWithdrawalDecision, type SettlementCandidateSnapshot, type SettlementRecord } from '#state/settlement-store'
+import { appendSettlementRecord, loadSettlementJournal, mergeSettlementRecord, settlementAttemptHoldsFlow, settlementGasSpentAttoEthOnUtcDay, settlementJournalPath, settlementSnapshot, type RewardWithdrawalDecision, type SettlementCandidateSnapshot, type SettlementRecord } from '#state/settlement-store'
 import { isExecutionPausedError } from '#execution/execution-orchestration'
 import { dateFromBlockTimestamp } from '#execution/recovery-support'
 import type { Address } from '@zoltar/bot-shared/ethereum'
@@ -81,16 +81,45 @@ type SettlementStageParameters = {
 }
 
 /**
- * Runs once per successful scan at the pinned head: recovers interrupted attempts, publishes the queue, then spends at
- * most one transaction on the best eligible settlement or, when none is due, on withdrawing accrued rewards.
+ * Resolves attempts left `pending` by an interrupted process from their receipts or their consumed nonces. The operator
+ * runs this before any candidate is judged against the daily gas budget, so a settlement mined during a crash or receipt
+ * timeout charges its actual gas before a dispute in the same scan can spend the remainder.
+ */
+export async function recoverPendingSettlements(parameters: Pick<SettlementStageParameters, 'config' | 'journal' | 'readClients' | 'state'> & { blockNumber: bigint }) {
+	const { config, journal, readClients, state } = parameters
+	const resolved = await reconcilePendingSettlements(readClients, config, journal.records, parameters.blockNumber)
+	for (const record of resolved) {
+		await journal.persist(record)
+		// A retired hash whose nonce was consumed by an intent-matching attempt is a success under the other hash, not a loss.
+		const sameNonceOutcome = (other: SettlementRecord) =>
+			other.status !== 'expired' &&
+			other.status !== 'dropped' &&
+			other.nonce === record.nonce &&
+			other.account.toLowerCase() === record.account.toLowerCase() &&
+			other.transactionHash.toLowerCase() !== record.transactionHash.toLowerCase() &&
+			other.transactionIntent.to.toLowerCase() === record.transactionIntent.to.toLowerCase() &&
+			other.transactionIntent.data.toLowerCase() === record.transactionIntent.data.toLowerCase() &&
+			other.transactionIntent.value === record.transactionIntent.value
+		const adoptedAs = record.status === 'expired' ? (resolved.find(sameNonceOutcome) ?? journal.records.find(sameNonceOutcome))?.transactionHash : undefined
+		recordOperation(state, {
+			category: 'transaction',
+			details: adoptedAs === undefined ? `status=${record.status}` : `status=${record.status} adoptedAs=${adoptedAs}`,
+			level: record.status === 'confirmed' || adoptedAs !== undefined ? 'info' : 'warning',
+			message: 'Settlement attempt recovered',
+			reason: `Transaction ${record.transactionHash}`,
+			reportId: record.reportId,
+		})
+	}
+}
+
+/**
+ * Runs once per successful scan at the pinned head, after `recoverPendingSettlements`: publishes the queue, then spends
+ * at most one transaction on the best eligible settlement or, when none is due, on withdrawing accrued rewards.
  */
 export async function runSettlementStage(parameters: SettlementStageParameters) {
 	const { block, client, config, journal, readClients, state, wallet } = parameters
 	const account = wallet?.account.address
-	for (const resolved of await reconcilePendingSettlements(readClients, config, journal.records, block.number)) {
-		await journal.persist(resolved)
-		recordOperation(state, { category: 'transaction', details: `status=${resolved.status}`, level: resolved.status === 'confirmed' ? 'info' : 'warning', message: 'Settlement attempt recovered', reason: `Transaction ${resolved.transactionHash}`, reportId: resolved.reportId })
-	}
+	const maxFeePerGas = settlementMaxFeePerGas(block.baseFeePerGas, config.settlement)
 	const dailyGas = { limitAttoWeth: config.riskLimits.maxDailyGasSpendAttoWeth, spentAttoWeth: parameters.dailyPositionGasSpentAttoWeth + settlementGasSpentAttoEthOnUtcDay(journal.records, dateFromBlockTimestamp(block.timestamp)) }
 	const unclaimedRewardAttoEth = account === undefined ? undefined : await unclaimedSettlementReward(readClients, config, account, block.number)
 	const signerReady = config.execute && wallet !== undefined
@@ -99,7 +128,8 @@ export async function runSettlementStage(parameters: SettlementStageParameters) 
 		enabled: config.settlement.enabled,
 		execute: config.execute,
 		gasPrice: parameters.gasPrice,
-		inFlight: journal.records.some(record => record.kind === 'reward-withdrawal' && settlementAttemptMayStillLand(record, block.number)),
+		inFlight: journal.records.some(record => record.kind === 'reward-withdrawal' && settlementAttemptHoldsFlow(record, block.number)),
+		maxFeePerGas,
 		paused: state.paused,
 		settings: config.settlement,
 		signerReady,
@@ -114,6 +144,7 @@ export async function runSettlementStage(parameters: SettlementStageParameters) 
 		coordinatorPolicies: parameters.coordinatorPolicies,
 		dailyGas,
 		gasPrice: parameters.gasPrice,
+		maxFeePerGas,
 		paused: state.paused,
 		records: journal.records,
 		reports: parameters.reports,
@@ -122,7 +153,7 @@ export async function runSettlementStage(parameters: SettlementStageParameters) 
 	})
 	journal.publish(queue)
 	if (!signerReady || wallet === undefined || !config.settlement.enabled || state.paused || !parameters.transactionSlotFree) return
-	const context: SettlementExecutionContext = { baseFeePerGas: block.baseFeePerGas, blockNumber: block.number, client, config, gasPrice: parameters.gasPrice, isPaused: parameters.isPaused, persist: journal.persist, readClients, track: parameters.track, wallet }
+	const context: SettlementExecutionContext = { baseFeePerGas: block.baseFeePerGas, blockNumber: block.number, client, config, isPaused: parameters.isPaused, maxFeePerGas, persist: journal.persist, readClients, track: parameters.track, wallet }
 	const plan = selectSettlementPlan(plans)
 	const candidate = plan === undefined ? undefined : queue.find(entry => entry.reportId === plan.report.helper.reportId.toString())
 	if (plan !== undefined && candidate !== undefined) {

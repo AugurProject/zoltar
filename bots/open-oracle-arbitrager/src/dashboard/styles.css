@@ -771,6 +771,7 @@ td {
 .decision[data-decision="skipped"],
 .decision[data-decision="disabled"],
 .decision[data-decision="in-flight"],
+.decision[data-decision="dropped"],
 .decision[data-decision="expired"] {
 	background: rgb(148 163 184 / 12%);
 	color: var(--muted);

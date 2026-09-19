@@ -2,7 +2,9 @@ import { mkdir, open, readFile } from 'node:fs/promises'
 import { dirname } from 'node:path'
 import type { Address, Hex } from '@zoltar/bot-shared/ethereum'
 import { record as validateRecord } from '@zoltar/bot-shared/infrastructure/json-validation'
+import { attemptHasFinality } from '#execution/execution-orchestration'
 import { decimalSignedEth, decimalWeth, parseDecimalWeth } from '#state/operator-state'
+import type { DurableTransactionIntent } from '#state/position-store'
 
 const DECIMAL = /^(?:0|[1-9]\d*)(?:\.\d{1,18})?$/
 const INTEGER = /^(?:0|[1-9]\d*)$/
@@ -32,12 +34,37 @@ export type SettlementDecision = 'disabled' | 'dry-run-settlement' | 'eligible' 
 /** Why accrued rewards were or were not withdrawn in the latest scan. */
 export type RewardWithdrawalDecision = 'below-threshold' | 'disabled' | 'dry-run' | 'due' | 'gas-price-cap' | 'in-flight' | 'paused' | 'risk-limit' | 'signer-unavailable' | 'unavailable'
 
-/** Expired attempts keep being checked for a late inclusion this long, so their gas and outcome are never lost. */
-const SETTLEMENT_EXPIRED_RECHECK_BLOCKS = 256n
+/** The signed horizon plus the reorg overlap has passed, so the attempt's own submission window is closed for good. */
+function settlementAttemptHorizonFinalized(record: Pick<SettlementRecord, 'lastValidBlockNumber'>, blockNumber: bigint) {
+	return attemptHasFinality(blockNumber, BigInt(record.lastValidBlockNumber))
+}
 
-/** A pending attempt, or an expired one still inside its recheck window, may still be mined; nothing that depends on it may be re-sent. */
-export function settlementAttemptMayStillLand(record: Pick<SettlementRecord, 'status' | 'submissionBlockNumber'>, blockNumber: bigint) {
-	return record.status === 'pending' || (record.status === 'expired' && blockNumber <= BigInt(record.submissionBlockNumber) + SETTLEMENT_EXPIRED_RECHECK_BLOCKS)
+/**
+ * A public transaction has no on-chain deadline, so a pending attempt may be mined however long ago it was signed; nothing
+ * that depends on it may be re-sent until its receipt appears or another transaction consumes its nonce.
+ */
+function settlementAttemptMayStillLand(record: Pick<SettlementRecord, 'status'>) {
+	return record.status === 'pending'
+}
+
+/**
+ * Whether an attempt keeps its report or withdrawal out of the queue: while it may still land, and for a dropped attempt
+ * until its own horizon has finalized, so a refusal that repeats every scan re-signs at the horizon cadence rather than
+ * on every poll.
+ */
+export function settlementAttemptHoldsFlow(record: Pick<SettlementRecord, 'lastValidBlockNumber' | 'status'>, blockNumber: bigint) {
+	return settlementAttemptMayStillLand(record) || (record.status === 'dropped' && !settlementAttemptHorizonFinalized(record, blockNumber))
+}
+
+/**
+ * Attempts whose outcome recovery still has to check: pending ones, dropped private ones (the relay may have shared the
+ * transaction before its horizon), and dropped public ones inside their horizon. A public attempt that no node accepted is
+ * final once its horizon has finalized; a dropped private one is rechecked until its nonce is consumed.
+ */
+export function settlementAttemptIsUnresolved(record: Pick<SettlementRecord, 'lastValidBlockNumber' | 'status' | 'submissionMode'>, blockNumber: bigint) {
+	if (record.status === 'pending') return true
+	if (record.status !== 'dropped') return false
+	return record.submissionMode === 'private' || !settlementAttemptHorizonFinalized(record, blockNumber)
 }
 
 /** One report awaiting third-party settlement, evaluated at the latest scan head. */
@@ -55,26 +82,41 @@ export type SettlementCandidateSnapshot = {
 	windowUnit: 'blocks' | 'seconds'
 }
 
-/** Durable record of one settlement or reward-withdrawal transaction signed by this operator. */
+/**
+ * Durable record of one settlement or reward-withdrawal transaction signed by this operator. The nonce and intent let
+ * recovery tell a late inclusion from a replacement: `expired` means another transaction consumed the nonce, so the
+ * signed hash can never be mined. A `pending` record stays tracked until that or a receipt is observed; a private
+ * attempt whose relay horizon has finalized without inclusion becomes `dropped`, which frees the report and the budget
+ * while recovery keeps rechecking it, because a public attempt has no deadline but a relay stops at `maxBlockNumber`.
+ */
 export type SettlementRecord = {
 	account: Address
 	actualGasCostEth: string | undefined
 	coordinator: Address | undefined
 	kind: 'reward-withdrawal' | 'settlement'
+	/** The signed validity horizon; a private relay does not include the transaction past it. */
+	lastValidBlockNumber: string
 	/** Receipt block timestamp; charges gas to the UTC day the chain mined it, like position expenditures. */
 	minedAt: string | undefined
+	nonce: string
+	/** Gas at the signed fee ceiling; the exposure a pending attempt charges to the daily budget until its outcome is known. */
 	projectedGasCostEth: string
 	reportId: string | undefined
 	rewardEth: string
-	status: 'confirmed' | 'expired' | 'pending' | 'reverted'
+	status: 'confirmed' | 'dropped' | 'expired' | 'pending' | 'reverted'
 	submissionBlockNumber: string
+	submissionMode: 'private' | 'public'
 	submittedAt: string
 	transactionHash: Hex
+	transactionIntent: DurableTransactionIntent
 	updatedAt: string
 }
 
+/** The journal record without its signing material; the dashboard needs the outcome and gas, not the calldata. */
+export type PublicSettlementRecord = Omit<SettlementRecord, 'nonce' | 'transactionIntent'>
+
 export type SettlementSnapshot = {
-	history: readonly SettlementRecord[]
+	history: readonly PublicSettlementRecord[]
 	queue: readonly SettlementCandidateSnapshot[]
 	realizedIncomeEth: string
 	settings: SettlementSettings
@@ -147,15 +189,20 @@ function parseSettlementRecord(value: unknown): SettlementRecord | undefined {
 		!optionalString('actualGasCostEth', DECIMAL) ||
 		!optionalString('coordinator', ADDRESS) ||
 		(record['kind'] !== 'reward-withdrawal' && record['kind'] !== 'settlement') ||
+		typeof record['lastValidBlockNumber'] !== 'string' ||
+		!INTEGER.test(record['lastValidBlockNumber']) ||
 		(record['minedAt'] !== undefined && (typeof record['minedAt'] !== 'string' || !Number.isFinite(Date.parse(record['minedAt'])))) ||
+		typeof record['nonce'] !== 'string' ||
+		!INTEGER.test(record['nonce']) ||
 		typeof record['projectedGasCostEth'] !== 'string' ||
 		!DECIMAL.test(record['projectedGasCostEth']) ||
 		!optionalString('reportId', INTEGER) ||
 		typeof record['rewardEth'] !== 'string' ||
 		!DECIMAL.test(record['rewardEth']) ||
-		(record['status'] !== 'confirmed' && record['status'] !== 'expired' && record['status'] !== 'pending' && record['status'] !== 'reverted') ||
+		(record['status'] !== 'confirmed' && record['status'] !== 'dropped' && record['status'] !== 'expired' && record['status'] !== 'pending' && record['status'] !== 'reverted') ||
 		typeof record['submissionBlockNumber'] !== 'string' ||
 		!INTEGER.test(record['submissionBlockNumber']) ||
+		(record['submissionMode'] !== 'private' && record['submissionMode'] !== 'public') ||
 		typeof record['submittedAt'] !== 'string' ||
 		!Number.isFinite(Date.parse(record['submittedAt'])) ||
 		typeof record['transactionHash'] !== 'string' ||
@@ -165,21 +212,34 @@ function parseSettlementRecord(value: unknown): SettlementRecord | undefined {
 	)
 		return undefined
 	if (record['kind'] === 'settlement' && (record['coordinator'] === undefined || record['reportId'] === undefined)) return undefined
+	const transactionIntent = parseTransactionIntent(record['transactionIntent'])
+	if (transactionIntent === undefined) return undefined
 	return {
 		account: record['account'] as Address,
 		actualGasCostEth: typeof record['actualGasCostEth'] === 'string' ? record['actualGasCostEth'] : undefined,
 		coordinator: typeof record['coordinator'] === 'string' ? (record['coordinator'] as Address) : undefined,
 		kind: record['kind'],
+		lastValidBlockNumber: record['lastValidBlockNumber'],
 		minedAt: typeof record['minedAt'] === 'string' ? record['minedAt'] : undefined,
+		nonce: record['nonce'],
 		projectedGasCostEth: record['projectedGasCostEth'],
 		reportId: typeof record['reportId'] === 'string' ? record['reportId'] : undefined,
 		rewardEth: record['rewardEth'],
 		status: record['status'],
 		submissionBlockNumber: record['submissionBlockNumber'],
+		submissionMode: record['submissionMode'],
 		submittedAt: record['submittedAt'],
 		transactionHash: record['transactionHash'] as Hex,
+		transactionIntent,
 		updatedAt: record['updatedAt'],
 	}
+}
+
+function parseTransactionIntent(value: unknown): DurableTransactionIntent | undefined {
+	if (typeof value !== 'object' || value === null || Array.isArray(value)) return undefined
+	const intent = value as Record<string, unknown>
+	if (typeof intent['data'] !== 'string' || !/^0x(?:[0-9a-fA-F]{2})*$/.test(intent['data']) || typeof intent['to'] !== 'string' || !ADDRESS.test(intent['to']) || typeof intent['value'] !== 'string' || !INTEGER.test(intent['value'])) return undefined
+	return { data: intent['data'] as Hex, to: intent['to'] as Address, value: intent['value'] }
 }
 
 type SettlementJournalFileHandle = {
@@ -260,10 +320,19 @@ function realizedSettlementIncomeAttoEth(records: readonly SettlementRecord[]) {
 	return total
 }
 
-/** Gas the settler paid on the given UTC day (by mined block time), so settlements share the operator's daily gas budget with positions. */
+/**
+ * Gas the settler paid on the given UTC day (by mined block time) plus the signed exposure of every attempt that may still
+ * land, whichever day it was signed on, so settlements share the operator's daily gas budget with positions even before
+ * their receipts: a pending attempt is a liability against whatever day is being judged until its outcome is known. A
+ * dropped attempt charges nothing until a late receipt shows what it actually paid.
+ */
 export function settlementGasSpentAttoEthOnUtcDay(records: readonly SettlementRecord[], now: Date) {
 	const day = now.toISOString().slice(0, 10)
-	return records.reduce((total, record) => total + (record.actualGasCostEth !== undefined && (record.minedAt ?? record.updatedAt).slice(0, 10) === day ? parseDecimalWeth(record.actualGasCostEth) : 0n), 0n)
+	return records.reduce((total, record) => {
+		if (record.actualGasCostEth !== undefined) return (record.minedAt ?? record.updatedAt).slice(0, 10) === day ? total + parseDecimalWeth(record.actualGasCostEth) : total
+		if (settlementAttemptMayStillLand(record)) return total + parseDecimalWeth(record.projectedGasCostEth)
+		return total
+	}, 0n)
 }
 
 export function emptySettlementSnapshot(settings: MutableSettlement = defaultSettlementSettings()): SettlementSnapshot {
@@ -272,7 +341,7 @@ export function emptySettlementSnapshot(settings: MutableSettlement = defaultSet
 
 export function settlementSnapshot(parameters: { now: Date; queue: readonly SettlementCandidateSnapshot[]; records: readonly SettlementRecord[]; settings: MutableSettlement; unclaimedRewardAttoEth: bigint | undefined; withdrawalDecision: RewardWithdrawalDecision }): SettlementSnapshot {
 	return {
-		history: parameters.records.slice(0, SETTLEMENT_HISTORY_LIMIT),
+		history: parameters.records.slice(0, SETTLEMENT_HISTORY_LIMIT).map(({ nonce: _nonce, transactionIntent: _transactionIntent, ...record }) => record),
 		queue: parameters.queue,
 		realizedIncomeEth: decimalSignedEth(realizedSettlementIncomeAttoEth(parameters.records)),
 		settings: settlementSettings(parameters.settings),

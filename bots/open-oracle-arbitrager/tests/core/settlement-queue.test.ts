@@ -51,6 +51,7 @@ function input(overrides: Partial<SettlementQueueInput> = {}): SettlementQueueIn
 		coordinatorPolicies: [policy],
 		dailyGas: { limitAttoWeth: 5n * 10n ** 16n, spentAttoWeth: 0n },
 		gasPrice: 2n * GWEI,
+		maxFeePerGas: 2n * GWEI,
 		paused: false,
 		records: [],
 		reports: [],
@@ -79,14 +80,18 @@ describe('settlement queue', () => {
 			actualGasCostEth: undefined,
 			coordinator,
 			kind: 'settlement',
+			lastValidBlockNumber: '74',
 			minedAt: undefined,
+			nonce: '3',
 			projectedGasCostEth: '0.008',
 			reportId: '11',
 			rewardEth: '0.017',
 			status: 'pending',
 			submissionBlockNumber: '49',
+			submissionMode: 'public',
 			submittedAt: '2026-09-19T10:00:00.000Z',
 			transactionHash: `0x${'1'.repeat(64)}` as Hex,
+			transactionIntent: { data: '0x', to: openOracle, value: '0' },
 			updatedAt: '2026-09-19T10:00:00.000Z',
 		}
 		const inFlight = settlementQueue(input({ records: [pending], reports: [report(11n), report(12n, { settlerRewardAttoEth: 1n })] }))
@@ -95,15 +100,29 @@ describe('settlement queue', () => {
 			['11', 'in-flight'],
 		])
 		expect(inFlight.plans.size).toBe(0)
-		// An expired attempt inside its recheck window may still be mined, so its report stays in flight; after the window it does not.
-		expect(settlementQueue(input({ blockNumber: 49n + 256n, records: [{ ...pending, status: 'expired' }], reports: [report(11n)] })).queue[0]?.decision).toBe('in-flight')
-		expect(settlementQueue(input({ blockNumber: 49n + 257n, records: [{ ...pending, status: 'expired' }], reports: [report(11n)] })).queue[0]?.decision).toBe('eligible')
+		// A public transaction has no deadline: the report stays in flight however many blocks pass, until the nonce is consumed by another transaction.
+		expect(settlementQueue(input({ blockNumber: 49n + 10_000n, records: [pending], reports: [report(11n)] })).queue[0]?.decision).toBe('in-flight')
+		expect(settlementQueue(input({ blockNumber: 50n, records: [{ ...pending, status: 'expired' }], reports: [report(11n)] })).queue[0]?.decision).toBe('eligible')
+		// A dropped attempt holds the report until its own horizon has finalized, then the report is free while recovery keeps rechecking it.
+		expect(settlementQueue(input({ blockNumber: 74n + 11n, records: [{ ...pending, status: 'dropped' }], reports: [report(11n)] })).queue[0]?.decision).toBe('in-flight')
+		expect(settlementQueue(input({ blockNumber: 74n + 12n, records: [{ ...pending, status: 'dropped', submissionMode: 'private' }], reports: [report(11n)] })).queue[0]?.decision).toBe('eligible')
 		expect(settlementQueue(input({ config: { execute: false, openOracle, settlement: { ...parseSettlementSettings(undefined), enabled: true } }, reports: [report(11n)] })).queue[0]?.decision).toBe('dry-run-settlement')
 		expect(settlementQueue(input({ reports: [report(11n)], config: { execute: true, openOracle, settlement: parseSettlementSettings(undefined) } })).queue[0]?.decision).toBe('disabled')
 		expect(settlementQueue(input({ paused: true, reports: [report(11n)] })).queue[0]?.decision).toBe('paused')
 		expect(settlementQueue(input({ gasPrice: 51n * GWEI, reports: [report(11n, { settlerRewardAttoEth: 10n ** 18n })] })).queue[0]?.decision).toBe('gas-price-cap')
 		expect(settlementQueue(input({ signerReady: false, reports: [report(11n)] })).queue[0]?.decision).toBe('signer-unavailable')
 		expect(settlementQueue(input({ dailyGas: { limitAttoWeth: 5n * 10n ** 16n, spentAttoWeth: 45n * 10n ** 15n }, reports: [report(11n)] })).queue[0]?.decision).toBe('risk-limit')
+	})
+
+	test('prices profitability and the budget at the signed fee ceiling, not the projected inclusion price', () => {
+		// 2 gwei is worth sending, but the signature may pay up to 4 gwei per gas; the plan and the budget carry the 4 gwei cost.
+		const { plans, queue } = settlementQueue(input({ gasPrice: 2n * GWEI, maxFeePerGas: 4n * GWEI, reports: [report(11n, { settlerRewardAttoEth: 3n * 10n ** 16n })] }))
+		expect(queue[0]).toMatchObject({ decision: 'eligible', projectedGasCostEth: '0.017493968', projectedNetEth: '0.012506032' })
+		expect(plans.get('11')?.projectedGasCostAttoEth).toBe((4_313_492n + 60_000n) * 4n * GWEI)
+		// The default reward clears 2 gwei but not the 4 gwei the signature could pay.
+		expect(settlementQueue(input({ gasPrice: 2n * GWEI, maxFeePerGas: 2n * GWEI, reports: [report(11n)] })).queue[0]?.decision).toBe('eligible')
+		expect(settlementQueue(input({ gasPrice: 2n * GWEI, maxFeePerGas: 4n * GWEI, reports: [report(11n)] })).queue[0]?.decision).toBe('unprofitable')
+		expect(settlementQueue(input({ dailyGas: { limitAttoWeth: 2n * 10n ** 16n, spentAttoWeth: 3n * 10n ** 15n }, gasPrice: 2n * GWEI, maxFeePerGas: 4n * GWEI, reports: [report(11n, { settlerRewardAttoEth: 3n * 10n ** 16n })] })).queue[0]?.decision).toBe('risk-limit')
 	})
 
 	test('selects the plan with the highest projected net', () => {

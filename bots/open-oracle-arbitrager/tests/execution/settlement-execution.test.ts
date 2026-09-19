@@ -4,16 +4,19 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { createPublicClient, createWalletClient, encodeDeployData, http, keccak256, privateKeyToAccount, zeroAddress, type Address, type Hex } from '@zoltar/bot-shared/ethereum'
 import { decodeOpenOracleStatePreimage, type OpenOracleStatePreimage } from '@zoltar/open-oracle-shared/openOracle/openOracle'
+import { parseDecimalWeth } from '#state/operator-state'
 import { networkConfiguration } from '#config/network'
 import { openOracleAbi } from '#contracts/abi'
 import type { ReadClient, WriteClient } from '#core/operator-types'
 import { executeRewardWithdrawal, executeSettlement, reconcilePendingSettlements, unclaimedSettlementReward, type SettlementExecutionContext } from '#execution/settlement-execution'
+import { ATTEMPT_FINALITY_BLOCKS } from '#execution/execution-orchestration'
 import { validateSubmissionSettings } from '#execution/transaction-submission'
 import type { CoordinatorGamePolicy } from '#core/game-policy'
 import type { ActiveReport } from '#monitoring/oracle-log-state'
 import type { OperationEntry, TransactionActivity } from '#state/operator-state'
-import { emptySettlementSnapshot, loadSettlementJournal, settlementJournalPath, type SettlementRecord } from '#state/settlement-store'
-import { createSettlementJournal, runSettlementStage, type SettlementStageConfiguration } from '../../src/runtime/settlement-stage.ts'
+import { settlementMaxFeePerGas } from '#core/settlement-strategy'
+import { emptySettlementSnapshot, loadSettlementJournal, settlementAttemptHoldsFlow, settlementAttemptIsUnresolved, settlementGasSpentAttoEthOnUtcDay, settlementJournalPath, type MutableSettlement, type SettlementRecord } from '#state/settlement-store'
+import { createSettlementJournal, recoverPendingSettlements, runSettlementStage, type SettlementStageConfiguration } from '../../src/runtime/settlement-stage.ts'
 import { createAnvilNodeForConnectionMode, getAnvilConnectionMode, type AnvilNode } from '../../../../solidity/ts/testSupport/simulator/anvilNode.ts'
 import { statoblast_openOracle_OpenOracle_OpenOracle as openOracleArtifact } from '../../../../solidity/ts/types/contractArtifact'
 import { tokenArtifact } from '../contracts/harness-artifacts.generated.ts'
@@ -22,7 +25,9 @@ const SIGNER_KEY = '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4
 const REPORTER_KEY = '0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d' as const
 const REWARD = 17_043_310_270_400_101n
 const SETTLEMENT_SECONDS = 100n
+const GWEI = 10n ** 9n
 const network = networkConfiguration('mainnet')
+const settlement: MutableSettlement = { enabled: true, maxGasPriceAttoEthPerGas: 50n * GWEI, minimumProfitAttoWeth: 10n ** 15n, rewardWithdrawThresholdAttoEth: 10n ** 16n }
 
 describe('third-party settlement execution against OpenOracle', () => {
 	let node: AnvilNode
@@ -125,8 +130,8 @@ describe('third-party settlement execution against OpenOracle', () => {
 			baseFeePerGas: block.baseFeePerGas ?? 0n,
 			blockNumber: block.number,
 			client,
-			gasPrice: (block.baseFeePerGas ?? 0n) * 2n + 2n * 10n ** 9n,
-			config: { connectivity: { publicRpcUrls: [node.rpcUrl], readRpcUrl: node.rpcUrl }, network, openOracle, pollMilliseconds: 1_000, quorumRpcUrls: [], submission: validateSubmissionSettings({ mode: 'public', relayUrls: [] }) },
+			maxFeePerGas: settlementMaxFeePerGas(block.baseFeePerGas ?? 0n, settlement),
+			config: { connectivity: { publicRpcUrls: [node.rpcUrl], readRpcUrl: node.rpcUrl }, network, openOracle, pollMilliseconds: 1_000, quorumRpcUrls: [], settlement, submission: validateSubmissionSettings({ mode: 'public', relayUrls: [] }) },
 			isPaused: () => false,
 			persist: async record => {
 				records.push(record)
@@ -151,6 +156,12 @@ describe('third-party settlement execution against OpenOracle', () => {
 		const record = await executeSettlement(settlementContext, plan)
 		expect(record).toMatchObject({ account: account.address, coordinator: report.helper.creator, kind: 'settlement', reportId: report.helper.reportId.toString(), rewardEth: '0.017043310270400101', status: 'confirmed' })
 		expect(record.actualGasCostEth).toBeDefined()
+		// The durable nonce and intent are what recovery needs to tell a late inclusion from a replacement after a restart.
+		const mined = await client.getTransaction({ hash: record.transactionHash })
+		expect(record.nonce).toBe(mined.nonce.toString())
+		expect(record.transactionIntent).toEqual({ data: mined.input, to: openOracle, value: '0' })
+		expect(record.submissionMode).toBe('public')
+		expect(BigInt(record.lastValidBlockNumber)).toBe(BigInt(record.submissionBlockNumber) + 25n)
 		expect(Number.isFinite(Date.parse(record.minedAt ?? ''))).toBeTrue()
 		expect(records.map(entry => entry.status)).toEqual(['pending', 'confirmed'])
 		expect(activity.map(entry => `${entry.kind}:${entry.status}`)).toEqual(['settle:submitting', 'settle:pending', 'settle:confirmed'])
@@ -164,7 +175,7 @@ describe('third-party settlement execution against OpenOracle', () => {
 		const withdrawal = await executeRewardWithdrawal(await context(records, activity), REWARD)
 		expect(withdrawal).toMatchObject({ coordinator: undefined, kind: 'reward-withdrawal', reportId: undefined, rewardEth: '0.017043310270400101', status: 'confirmed' })
 		expect(activity.at(-1)?.kind).toBe('withdraw-reward')
-		const gasPaid = BigInt(withdrawal.actualGasCostEth?.replace('.', '').padEnd(19, '0').replace(/^0+/, '') || '0')
+		const gasPaid = parseDecimalWeth(withdrawal.actualGasCostEth ?? '0')
 		expect((await client.getBalance({ address: account.address })) - balanceBefore).toBe(REWARD - gasPaid)
 		expect(await unclaimedSettlementReward([client], { connectivity: { publicRpcUrls: [node.rpcUrl], readRpcUrl: node.rpcUrl }, openOracle, quorumRpcUrls: [] }, account.address, await client.getBlockNumber())).toBe(0n)
 	})
@@ -227,24 +238,220 @@ describe('third-party settlement execution against OpenOracle', () => {
 		}
 	})
 
-	test('recovers interrupted attempts from receipts and expires attempts that never landed', async () => {
+	test('drops a journaled public attempt that no node accepted so it neither holds the report nor charges the budget', async () => {
+		const report = await submitReport(reporter, reporter.account.address)
+		await pastSettlementWindow()
+		const plan = { coordinator: report.helper.creator, gas: 250_000n, projectedGasCostAttoEth: 10n ** 15n, report, rewardAttoEth: REWARD, token: token2, tokenSymbol: 'TK2' }
+		// Every public RPC rejects the raw transaction, so the signed settle never reaches a mempool.
+		const rejectingRpc = Bun.serve({
+			port: 0,
+			async fetch(request) {
+				const body: unknown = await request.json()
+				if (typeof body === 'object' && body !== null && Reflect.get(body, 'method') === 'eth_sendRawTransaction') return Response.json({ id: Reflect.get(body, 'id'), jsonrpc: '2.0', error: { code: -32000, message: 'rejected' } })
+				return fetch(node.rpcUrl, { body: JSON.stringify(body), headers: { 'content-type': 'application/json' }, method: 'POST' })
+			},
+		})
+		try {
+			const rejected: SettlementRecord[] = []
+			const base = await context(rejected, [])
+			await expect(executeSettlement({ ...base, config: { ...base.config, connectivity: { ...base.config.connectivity, publicRpcUrls: [rejectingRpc.url.href] } } }, plan)).rejects.toThrow('Every public RPC rejected the transaction')
+			expect(rejected.map(record => record.status)).toEqual(['pending', 'dropped'])
+			// A pause that fires between the journal write and the send leaves nothing in flight either.
+			const paused: SettlementRecord[] = []
+			let pauseChecks = 0
+			const pausing = await context(paused, [])
+			await expect(executeSettlement({ ...pausing, isPaused: () => pauseChecks++ >= 2 }, plan)).rejects.toThrow()
+			expect(paused.map(record => record.status)).toEqual(['pending', 'dropped'])
+			expect(
+				settlementGasSpentAttoEthOnUtcDay(
+					[...rejected, ...paused].filter(record => record.status === 'dropped'),
+					new Date(),
+				),
+			).toBe(0n)
+			expect(await client.readContract({ abi: openOracleAbi, address: openOracle, functionName: 'storedGame', args: [report.helper.reportId] }).then(game => game[4])).toBe(0n)
+			// The dropped attempts hold the report until their horizon finalizes (no re-sign on every scan), then release it and, as
+			// public attempts that no node accepted, leave the recheck set for good.
+			const dropped = [...rejected, ...paused].filter(record => record.status === 'dropped')
+			const [first] = dropped
+			if (first === undefined) throw new Error('dropped record missing')
+			const horizonFinalized = BigInt(first.lastValidBlockNumber) + ATTEMPT_FINALITY_BLOCKS
+			expect(dropped.map(record => settlementAttemptHoldsFlow(record, horizonFinalized - 1n))).toEqual([true, true])
+			expect(dropped.map(record => settlementAttemptHoldsFlow(record, horizonFinalized))).toEqual([false, false])
+			expect(dropped.map(record => settlementAttemptIsUnresolved(record, horizonFinalized))).toEqual([false, false])
+			// Through the stage, a refusal that repeats leaves the report in flight instead of re-signing on the next scan.
+			const journalDirectory = await mkdtemp(join(tmpdir(), 'zoltar-settlement-refusal-'))
+			try {
+				const block = await client.getBlock()
+				if (block.number === null || block.number === undefined) throw new Error('head block number missing')
+				const stageConfig: SettlementStageConfiguration & { positionFile: string } = {
+					connectivity: { publicRpcUrls: [rejectingRpc.url.href], readRpcUrl: node.rpcUrl },
+					execute: true,
+					network,
+					openOracle,
+					pollMilliseconds: 1_000,
+					positionFile: join(journalDirectory, 'positions.json'),
+					quorumRpcUrls: [],
+					riskLimits: { lifecycleGasReserveAttoWeth: 0n, maxConcurrentPositions: 1, maxDailyGasSpendAttoWeth: 10n ** 18n, maxPositionNotionalAttoWeth: 10n ** 18n, maxTotalLockedAttoWeth: 10n ** 18n },
+					settlement: { ...settlement, rewardWithdrawThresholdAttoEth: 100n * 10n ** 18n },
+					submission: validateSubmissionSettings({ mode: 'public', relayUrls: [] }),
+				}
+				const state = { blockTimestamp: block.timestamp.toString(), operationLog: [] as OperationEntry[], paused: false, settlements: emptySettlementSnapshot() }
+				const journal = await createSettlementJournal(stageConfig, state)
+				const policy: CoordinatorGamePolicy = { ...report.game, coordinator: reporter.account.address, openOracle }
+				const stage = () =>
+					runSettlementStage({
+						block: { baseFeePerGas: block.baseFeePerGas ?? 0n, number: block.number ?? 0n, timestamp: block.timestamp },
+						client,
+						config: stageConfig,
+						coordinatorPolicies: [policy],
+						dailyPositionGasSpentAttoWeth: 0n,
+						gasPrice: 2n * GWEI,
+						isPaused: () => false,
+						journal,
+						readClients: [client],
+						reports: [{ latest: report, settled: false, steps: [] }],
+						state,
+						tokenSymbol: () => 'TK2',
+						track: () => {},
+						transactionSlotFree: true,
+						wallet,
+					})
+				await stage()
+				expect(state.settlements.queue[0]?.decision).toBe('execution-failed')
+				expect(journal.records.map(record => record.status)).toEqual(['dropped'])
+				await stage()
+				expect(state.settlements.queue[0]?.decision).toBe('in-flight')
+				expect(journal.records.map(record => record.status)).toEqual(['dropped'])
+			} finally {
+				await rm(journalDirectory, { force: true, recursive: true })
+			}
+			// Until then they are still rechecked; their nonces were never consumed, so nothing changes.
+			expect(
+				await reconcilePendingSettlements(
+					[client],
+					base.config,
+					[...rejected, ...paused].filter(record => record.status === 'dropped'),
+					await client.getBlockNumber(),
+				),
+			).toEqual([])
+		} finally {
+			rejectingRpc.stop(true)
+		}
+	})
+
+	test('keeps a public attempt pending when the RPC failed after it may have ingested the transaction', async () => {
+		const report = await submitReport()
+		await pastSettlementWindow()
+		// The node ingests and mines the raw transaction, but the operator only sees an HTTP failure for the send.
+		const lossyRpc = Bun.serve({
+			port: 0,
+			async fetch(request) {
+				const body: unknown = await request.json()
+				const forwarded = await fetch(node.rpcUrl, { body: JSON.stringify(body), headers: { 'content-type': 'application/json' }, method: 'POST' })
+				if (typeof body === 'object' && body !== null && Reflect.get(body, 'method') === 'eth_sendRawTransaction') return new Response('unavailable', { status: 503 })
+				return forwarded
+			},
+		})
+		try {
+			const records: SettlementRecord[] = []
+			const base = await context(records, [])
+			const plan = { coordinator: report.helper.creator, gas: 250_000n, projectedGasCostAttoEth: 10n ** 15n, report, rewardAttoEth: REWARD, token: token2, tokenSymbol: 'TK2' }
+			await expect(executeSettlement({ ...base, config: { ...base.config, connectivity: { ...base.config.connectivity, publicRpcUrls: [lossyRpc.url.href] } } }, plan)).rejects.toThrow('Every public RPC rejected the transaction')
+			// Not a refusal everywhere, so the attempt stays live: it still holds the report and charges its exposure.
+			expect(records.map(record => record.status)).toEqual(['pending'])
+			expect(settlementGasSpentAttoEthOnUtcDay(records, new Date())).toBe(10n ** 15n)
+			const [attempt] = records
+			if (attempt === undefined) throw new Error('pending record missing')
+			expect((await reconcilePendingSettlements([client], base.config, [attempt], await client.getBlockNumber())).map(record => record.status)).toEqual(['confirmed'])
+			expect(await client.readContract({ abi: openOracleAbi, address: openOracle, functionName: 'storedGame', args: [report.helper.reportId] }).then(game => game[4])).not.toBe(0n)
+		} finally {
+			lossyRpc.stop(true)
+		}
+	})
+
+	test('recovers interrupted attempts from receipts, adopts an intent-matching rebroadcast, and retires only nonces taken by other transactions', async () => {
 		const report = await submitReport()
 		await pastSettlementWindow()
 		const records: SettlementRecord[] = []
 		const confirmed = await executeSettlement(await context(records, []), { coordinator: report.helper.creator, gas: 250_000n, projectedGasCostAttoEth: 10n ** 15n, report, rewardAttoEth: REWARD, token: token2, tokenSymbol: 'TK2' })
-		const pending = (transactionHash: Hex, submissionBlockNumber: string): SettlementRecord => ({ ...confirmed, actualGasCostEth: undefined, status: 'pending', submissionBlockNumber, transactionHash })
+		const pending = (transactionHash: Hex, overrides: Partial<SettlementRecord> = {}): SettlementRecord => ({ ...confirmed, actualGasCostEth: undefined, minedAt: undefined, status: 'pending', transactionHash, ...overrides })
+		// The settle consumed its nonce more than a reorg window ago, so nonce-based recovery may judge it.
 		await node.anvilWindowEthereum.request({ method: 'anvil_mine', params: ['0x28'] })
 		const head = await client.getBlockNumber()
 		const config = { connectivity: { publicRpcUrls: [node.rpcUrl], readRpcUrl: node.rpcUrl }, quorumRpcUrls: [] }
-		const resolved = await reconcilePendingSettlements([client], config, [confirmed, pending(confirmed.transactionHash, confirmed.submissionBlockNumber), pending(`0x${'ab'.repeat(32)}`, '0'), pending(`0x${'cd'.repeat(32)}`, head.toString())], head)
+		const unrelatedIntent = { data: '0x' as Hex, to: account.address, value: '1' }
+		const futureNonce = (await client.getTransactionCount({ address: account.address, blockTag: 'pending' })).toString()
+		const resolved = await reconcilePendingSettlements([client], config, [confirmed, pending(confirmed.transactionHash), pending(`0x${'ab'.repeat(32)}`, { submissionBlockNumber: '0', transactionIntent: unrelatedIntent }), pending(`0x${'ef'.repeat(32)}`, { nonce: futureNonce, submissionBlockNumber: '0' })], head)
 		expect(resolved.map(entry => `${entry.transactionHash.slice(0, 6)}:${entry.status}`)).toEqual([`${confirmed.transactionHash.slice(0, 6)}:confirmed`, '0xabab:expired'])
 		expect(resolved[0]?.actualGasCostEth).toBe(confirmed.actualGasCostEth)
 		expect(resolved[0]?.minedAt).toBe(confirmed.minedAt)
+		// A rebroadcast under a hash the journal does not know keeps the original's identity but carries the mined hash and gas.
+		const adopted = await reconcilePendingSettlements([client], config, [pending(`0x${'cd'.repeat(32)}`)], head)
+		expect(adopted.map(entry => `${entry.transactionHash.slice(0, 6)}:${entry.status}`)).toEqual(['0xcdcd:expired', `${confirmed.transactionHash.slice(0, 6)}:confirmed`])
+		expect(adopted[1]).toMatchObject({ actualGasCostEth: confirmed.actualGasCostEth, minedAt: confirmed.minedAt, nonce: confirmed.nonce, reportId: confirmed.reportId })
+		// When the consumer is the bot's own re-send the journal already holds its record, so only the old hash is retired.
+		expect((await reconcilePendingSettlements([client], config, [confirmed, pending(`0x${'cd'.repeat(32)}`)], head)).map(entry => `${entry.transactionHash.slice(0, 6)}:${entry.status}`)).toEqual(['0xcdcd:expired'])
 		expect(await reconcilePendingSettlements([client], config, [confirmed], head)).toEqual([])
-		// An attempt expired by the horizon is upgraded when its receipt shows up within the recheck window, but not after it.
-		const lateInclusion = { ...pending(confirmed.transactionHash, confirmed.submissionBlockNumber), status: 'expired' as const }
-		expect((await reconcilePendingSettlements([client], config, [lateInclusion], head)).map(entry => entry.status)).toEqual(['confirmed'])
-		expect(await reconcilePendingSettlements([client], config, [{ ...lateInclusion, submissionBlockNumber: '0' }], head + 300n)).toEqual([])
+		// A public transaction never expires by block count: an unconsumed nonce stays pending however far the head moves.
+		await node.anvilWindowEthereum.request({ method: 'anvil_mine', params: ['0x12c'] })
+		expect(await reconcilePendingSettlements([client], config, [pending(`0x${'ef'.repeat(32)}`, { nonce: futureNonce, submissionBlockNumber: '0' })], await client.getBlockNumber())).toEqual([])
+		// A retired attempt is final: its nonce is gone, so nothing rechecks it.
+		expect(await reconcilePendingSettlements([client], config, [{ ...pending(confirmed.transactionHash), status: 'expired' }], head)).toEqual([])
+		// A private relay stops at the signed horizon: once that horizon has finalized without a receipt the attempt is dropped,
+		// which frees the report and the budget, but a late receipt or a consumed nonce still resolves it afterwards.
+		const latestHead = await client.getBlockNumber()
+		const privateAttempt = pending(`0x${'ef'.repeat(32)}`, { lastValidBlockNumber: (latestHead - 12n).toString(), nonce: futureNonce, submissionBlockNumber: '0', submissionMode: 'private' })
+		expect((await reconcilePendingSettlements([client], config, [privateAttempt], latestHead)).map(entry => entry.status)).toEqual(['dropped'])
+		expect(await reconcilePendingSettlements([client], config, [{ ...privateAttempt, lastValidBlockNumber: (latestHead - 11n).toString() }], latestHead)).toEqual([])
+		expect((await reconcilePendingSettlements([client], config, [{ ...privateAttempt, status: 'dropped', transactionHash: confirmed.transactionHash }], latestHead)).map(entry => entry.status)).toEqual(['confirmed'])
+		expect((await reconcilePendingSettlements([client], config, [{ ...privateAttempt, nonce: confirmed.nonce, status: 'dropped', transactionIntent: unrelatedIntent }], latestHead)).map(entry => entry.status)).toEqual(['expired'])
+	})
+
+	test('signs settlements and withdrawals at the gas price cap so a rising base fee can delay inclusion but never price it above the cap', async () => {
+		const report = await submitReport()
+		await pastSettlementWindow()
+		const mine = async (baseFeeGwei: bigint, blocks = 1) => {
+			for (let block = 0; block < blocks; block++) {
+				await node.anvilWindowEthereum.request({ method: 'anvil_setNextBlockBaseFeePerGas', params: [`0x${(baseFeeGwei * GWEI).toString(16)}`] })
+				await node.anvilWindowEthereum.request({ method: 'evm_mine', params: [] })
+			}
+		}
+		const records: SettlementRecord[] = []
+		const submitted = async (execution: Promise<SettlementRecord>, recordCount: number) => {
+			for (let waited = 0; records.length === recordCount && waited < 500; waited++) await Bun.sleep(10)
+			const record = records[recordCount]
+			if (record === undefined) throw new Error('attempt was not journaled as pending')
+			expect(record.status).toBe('pending')
+			// 20 gwei compounds past 380 gwei over the signed horizon; the cap holds the signature at 50 gwei.
+			expect((await client.getTransaction({ hash: record.transactionHash })).maxFeePerGas).toBe(50n * GWEI)
+			return { execution, record }
+		}
+		await node.anvilWindowEthereum.request({ method: 'evm_setAutomine', params: [false] })
+		try {
+			await mine(20n)
+			const base = await context(records, [])
+			expect(base.baseFeePerGas).toBe(20n * GWEI)
+			expect(base.maxFeePerGas).toBe(50n * GWEI)
+			// Inclusion two blocks later at a doubled base fee pays the base fee plus the tip, well under the cap.
+			const settle = await submitted(executeSettlement(base, { coordinator: report.helper.creator, gas: 250_000n, projectedGasCostAttoEth: 310_000n * 50n * GWEI, report, rewardAttoEth: REWARD, token: token2, tokenSymbol: 'TK2' }), 0)
+			await mine(40n)
+			expect((await settle.execution).status).toBe('confirmed')
+			const receipt = await client.getTransactionReceipt({ hash: settle.record.transactionHash })
+			expect(receipt.effectiveGasPrice).toBe(42n * GWEI)
+			expect(parseDecimalWeth(records[1]?.actualGasCostEth ?? '0')).toBe(receipt.gasUsed * 42n * GWEI)
+			// A base fee above the cap for the whole signed horizon never includes the withdrawal: the attempt stays pending
+			// with its nonce unconsumed and no gas paid, instead of landing at a price the queue never approved.
+			await mine(20n)
+			const withdrawal = await submitted(executeRewardWithdrawal(await context(records, []), REWARD), 2)
+			await mine(60n, 26)
+			await expect(withdrawal.execution).rejects.toThrow('was not confirmed in its parent-bound target block')
+			await expect(client.getTransactionReceipt({ hash: withdrawal.record.transactionHash })).rejects.toThrow()
+			expect(records.map(record => `${record.kind}:${record.status}`)).toEqual(['settlement:pending', 'settlement:confirmed', 'reward-withdrawal:pending'])
+			expect(await reconcilePendingSettlements([client], base.config, [withdrawal.record], await client.getBlockNumber())).toEqual([])
+		} finally {
+			await node.anvilWindowEthereum.request({ method: 'evm_setAutomine', params: [true] })
+			await node.anvilWindowEthereum.setNextBlockBaseFeePerGasToZero()
+		}
 	})
 
 	test('runs the settlement stage end to end: recovers, publishes, settles the best plan once, then withdraws when due', async () => {
@@ -265,7 +472,7 @@ describe('third-party settlement execution against OpenOracle', () => {
 				positionFile: join(journalDirectory, 'positions.json'),
 				quorumRpcUrls: [],
 				riskLimits: { lifecycleGasReserveAttoWeth: 0n, maxConcurrentPositions: 1, maxDailyGasSpendAttoWeth: 10n ** 18n, maxPositionNotionalAttoWeth: 10n ** 18n, maxTotalLockedAttoWeth: 10n ** 18n },
-				settlement: { enabled: true, maxGasPriceAttoEthPerGas: 10n ** 11n, minimumProfitAttoWeth: 10n ** 15n, rewardWithdrawThresholdAttoEth: alreadyUnclaimed + REWARD },
+				settlement: { ...settlement, rewardWithdrawThresholdAttoEth: alreadyUnclaimed + REWARD },
 				submission: validateSubmissionSettings({ mode: 'public', relayUrls: [] }),
 			}
 			const state = { blockTimestamp: block.timestamp.toString(), operationLog: [] as OperationEntry[], paused: false, settlements: emptySettlementSnapshot() }
@@ -330,33 +537,50 @@ describe('third-party settlement execution against OpenOracle', () => {
 			expect(state.settlements.unclaimedRewardEth).toBe('0')
 			expect(Number(state.settlements.realizedIncomeEth)).toBeGreaterThan(0.016)
 			expect(Number(state.settlements.realizedIncomeEth)).toBeLessThan(0.017044)
-			// A pending record left behind by an interrupted process is recovered from its receipt on the next scan.
-			const [withdrawal] = journal.records
-			if (withdrawal === undefined) throw new Error('withdrawal record missing')
+			// A restart mid-withdrawal: the mined attempt is still journaled as pending, so it charges its signed exposure to
+			// the budget until the pre-evaluation recovery replaces that with the actual cost from its receipt.
+			const [withdrawal, settled] = journal.records
+			if (withdrawal === undefined || settled === undefined || withdrawal.actualGasCostEth === undefined || settled.actualGasCostEth === undefined) throw new Error('confirmed records missing')
 			await journal.persist({ ...withdrawal, actualGasCostEth: undefined, minedAt: undefined, status: 'pending' })
 			expect(journal.records.some(record => record.kind === 'reward-withdrawal' && record.status === 'pending')).toBeTrue()
+			expect(parseDecimalWeth(state.settlements.utcDayGasSpentEth)).toBe(parseDecimalWeth(settled.actualGasCostEth) + parseDecimalWeth(withdrawal.projectedGasCostEth))
 			const withdrawnHead = await client.getBlock()
 			if (withdrawnHead.number === null || withdrawnHead.number === undefined) throw new Error('head block number missing')
+			await recoverPendingSettlements({ blockNumber: withdrawnHead.number, config: stageConfig, journal, readClients: [client], state })
+			expect(journal.records.map(record => `${record.kind}:${record.status}`)).toEqual(['reward-withdrawal:confirmed', 'settlement:confirmed'])
+			expect(state.operationLog.map(entry => entry.message)).toContain('Settlement attempt recovered')
+			const recoveredGasAttoEth = parseDecimalWeth(settled.actualGasCostEth) + parseDecimalWeth(withdrawal.actualGasCostEth)
+			expect(parseDecimalWeth(state.settlements.utcDayGasSpentEth)).toBe(recoveredGasAttoEth)
+			// The recovered gas exhausts a budget set just below it, so the next candidate is refused instead of signed.
 			await runSettlementStage({
 				block: { baseFeePerGas: 0n, number: withdrawnHead.number, timestamp: withdrawnHead.timestamp },
 				client,
-				config: { ...stageConfig, settlement: { ...stageConfig.settlement, maxGasPriceAttoEthPerGas: 1n } },
+				config: { ...stageConfig, riskLimits: { ...stageConfig.riskLimits, maxDailyGasSpendAttoWeth: recoveredGasAttoEth - 1n } },
 				coordinatorPolicies: [policy],
 				dailyPositionGasSpentAttoWeth: 0n,
 				gasPrice: 2n * 10n ** 9n,
 				isPaused: () => false,
 				journal,
 				readClients: [client],
-				reports: settledReports(),
+				reports: reports(),
 				state,
 				tokenSymbol: () => 'TK2',
 				track: () => {},
 				transactionSlotFree: true,
 				wallet,
 			})
-			expect(journal.records.map(record => `${record.kind}:${record.status}`)).toEqual(['reward-withdrawal:confirmed', 'settlement:confirmed'])
-			expect(state.operationLog.map(entry => entry.message)).toContain('Settlement attempt recovered')
+			expect(state.settlements.queue.map(candidate => candidate.decision)).toEqual(['risk-limit'])
 			expect(state.settlements.withdrawalDecision).toBe('below-threshold')
+			expect(journal.records.map(record => `${record.kind}:${record.status}`)).toEqual(['reward-withdrawal:confirmed', 'settlement:confirmed'])
+			// An attempt whose nonce was consumed by the journaled settle with the same intent is retired, and the retirement is
+			// logged as the success it is rather than as a lost attempt.
+			const rebroadcastHash = `0x${'cd'.repeat(32)}` as const
+			await journal.persist({ ...settled, actualGasCostEth: undefined, minedAt: undefined, status: 'pending', transactionHash: rebroadcastHash })
+			await node.anvilWindowEthereum.request({ method: 'anvil_mine', params: ['0xd'] })
+			state.operationLog.length = 0
+			await recoverPendingSettlements({ blockNumber: await client.getBlockNumber(), config: stageConfig, journal, readClients: [client], state })
+			expect(journal.records.map(record => `${record.transactionHash === rebroadcastHash ? 'rebroadcast' : record.kind}:${record.status}`)).toEqual(['rebroadcast:expired', 'reward-withdrawal:confirmed', 'settlement:confirmed'])
+			expect(state.operationLog.map(entry => [entry.level, entry.details])).toEqual([['info', `status=expired adoptedAs=${settled.transactionHash}`]])
 		} finally {
 			await rm(journalDirectory, { force: true, recursive: true })
 		}

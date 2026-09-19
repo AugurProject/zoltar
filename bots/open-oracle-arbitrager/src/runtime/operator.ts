@@ -52,7 +52,7 @@ import { createOperatorHeadWatcher, createScanWakeGate, startCentralizedMarketSa
 import { deploymentUpdateMustWait } from './deployment-transition.ts'
 import { startOperatorControlPlane } from './operator-control-plane.ts'
 import { applyQueuedExecutionSettings, applyQueuedSigner, recordScanDecision, resetReportScanState } from './operator-execution-state.ts'
-import { createSettlementJournal, runSettlementStage } from './settlement-stage.ts'
+import { createSettlementJournal, recoverPendingSettlements, runSettlementStage } from './settlement-stage.ts'
 import { createConfiguredDexPairReader } from './configured-dex-pair.ts'
 import { emptySettlementSnapshot, settlementGasSpentAttoEthOnUtcDay } from '#state/settlement-store'
 import { completeSuccessfulPoll, completeUnconfiguredPoll } from './poll-completion.ts'
@@ -779,6 +779,8 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 						await appendPriceHistory(config.priceHistoryFile, samples, config.network.chain.id)
 						state.priceHistory = [...state.priceHistory, ...samples]
 						state.marketObservations = mergeMarketObservations(state.marketObservations ?? [], [...centralizedMarketConsensusObservations(state.centralizedMarket), ...configuredDexMarkets.observations], config.centralizedMarkets.maximumObservationAgeMilliseconds)
+						// Settlements mined during a crash or receipt timeout must charge their gas before any candidate is judged against today's budget.
+						await recoverPendingSettlements({ blockNumber, config, journal: settlementJournal, readClients, state })
 						for (const { evaluated, report } of evaluatedReports) {
 							if (stopHead()) return
 							try {

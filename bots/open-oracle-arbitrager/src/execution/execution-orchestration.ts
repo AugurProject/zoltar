@@ -89,8 +89,11 @@ function privateBundleReceiptStatus(receipt: Pick<TransactionReceipt, 'blockNumb
 	return receipt.status === 'success' ? ('confirmed' as const) : ('reverted' as const)
 }
 
+/** Blocks after a target block at which an attempt's inclusion window is treated as settled against reorgs. */
+export const ATTEMPT_FINALITY_BLOCKS = 12n
+
 export function attemptHasFinality(currentBlockNumber: bigint, targetBlockNumber: bigint) {
-	return currentBlockNumber >= targetBlockNumber + 12n
+	return currentBlockNumber >= targetBlockNumber + ATTEMPT_FINALITY_BLOCKS
 }
 
 export function privateEntryRecoveryIsConfirmed(position: Pick<PositionRecord, 'status'>) {

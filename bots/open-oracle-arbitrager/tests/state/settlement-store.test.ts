@@ -3,7 +3,8 @@ import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { getAddress, type Hex } from '@zoltar/bot-shared/ethereum'
-import { appendSettlementRecord, loadSettlementJournal, mergeSettlementRecord, parseSettlementSettings, settlementJournalPath, settlementSettings, settlementSnapshot, type SettlementRecord } from '#state/settlement-store'
+import { ATTEMPT_FINALITY_BLOCKS } from '#execution/execution-orchestration'
+import { appendSettlementRecord, loadSettlementJournal, mergeSettlementRecord, parseSettlementSettings, settlementAttemptHoldsFlow, settlementAttemptIsUnresolved, settlementGasSpentAttoEthOnUtcDay, settlementJournalPath, settlementSettings, settlementSnapshot, type SettlementRecord } from '#state/settlement-store'
 
 const account = getAddress('0x00000000000000000000000000000000000000aa')
 const coordinator = getAddress('0x00000000000000000000000000000000000000cc')
@@ -20,14 +21,18 @@ function record(index: number, overrides: Partial<SettlementRecord> = {}): Settl
 		actualGasCostEth: '0.004',
 		coordinator,
 		kind: 'settlement',
+		lastValidBlockNumber: '125',
 		minedAt: '2026-09-19T10:00:30.000Z',
+		nonce: index.toString(),
 		projectedGasCostEth: '0.005',
 		reportId: index.toString(),
 		rewardEth: '0.017',
 		status: 'confirmed',
 		submissionBlockNumber: '100',
+		submissionMode: 'public',
 		submittedAt: '2026-09-19T10:00:00.000Z',
 		transactionHash: hash(index),
+		transactionIntent: { data: '0x1234', to: coordinator, value: '0' },
 		updatedAt: '2026-09-19T10:01:00.000Z',
 		...overrides,
 	}
@@ -64,7 +69,18 @@ describe('settlement journal', () => {
 		const withdrawal = record(2, { coordinator: undefined, kind: 'reward-withdrawal', reportId: undefined })
 		expect(await load(record(1))).toEqual([record(1)])
 		expect(await load(withdrawal)).toEqual([withdrawal])
-		for (const invalid of [record(3, { coordinator: undefined }), record(4, { rewardEth: '-1' }), { ...record(5), status: 'lost' }, null]) await expect(load(invalid)).rejects.toThrow('Invalid settlement journal record at line 1')
+		for (const invalid of [
+			record(3, { coordinator: undefined }),
+			record(4, { rewardEth: '-1' }),
+			{ ...record(5), status: 'lost' },
+			{ ...record(6), nonce: '-1' },
+			{ ...record(7), transactionIntent: undefined },
+			{ ...record(8), transactionIntent: { data: '0x12', to: 'coordinator', value: '0' } },
+			{ ...record(9), submissionMode: 'relay' },
+			{ ...record(10), lastValidBlockNumber: undefined },
+			null,
+		])
+			await expect(load(invalid)).rejects.toThrow('Invalid settlement journal record at line 1')
 	})
 
 	test('appends chain-scoped lines and reads back the latest record per transaction newest first', async () => {
@@ -93,6 +109,31 @@ describe('settlement journal', () => {
 		expect(snapshot.realizedIncomeEth).toBe('0.0109')
 		expect(snapshot.utcDayGasSpentEth).toBe('0.0061')
 		expect(settlementSnapshot({ now: new Date('2026-09-20T00:00:00.000Z'), queue: [], records, settings: parseSettlementSettings(undefined), unclaimedRewardAttoEth: undefined, withdrawalDecision: 'unavailable' }).utcDayGasSpentEth).toBe('0')
+	})
+
+	test('charges a pending attempt its signed exposure on every day until its outcome replaces it', () => {
+		const pending = record(1, { actualGasCostEth: undefined, minedAt: undefined, status: 'pending' })
+		// A dropped attempt holds its report until its own horizon has finalized, so a repeating refusal re-signs at that cadence.
+		const dropped = { ...pending, status: 'dropped' as const }
+		const horizonFinalized = BigInt(dropped.lastValidBlockNumber) + ATTEMPT_FINALITY_BLOCKS
+		expect(settlementAttemptHoldsFlow(pending, 10_000n)).toBeTrue()
+		expect(settlementAttemptHoldsFlow(dropped, horizonFinalized - 1n)).toBeTrue()
+		expect(settlementAttemptHoldsFlow(dropped, horizonFinalized)).toBeFalse()
+		expect(settlementAttemptHoldsFlow({ ...pending, status: 'expired' }, 0n)).toBeFalse()
+		// Recovery keeps checking a dropped private attempt indefinitely; a dropped public one only until its horizon finalizes.
+		expect(settlementAttemptIsUnresolved({ ...dropped, submissionMode: 'private' }, 10_000n)).toBeTrue()
+		expect(settlementAttemptIsUnresolved(dropped, horizonFinalized - 1n)).toBeTrue()
+		expect(settlementAttemptIsUnresolved(dropped, horizonFinalized)).toBeFalse()
+		expect(settlementAttemptIsUnresolved({ ...pending, status: 'expired' }, 0n)).toBeFalse()
+		const day = new Date('2026-09-19T23:59:59.000Z')
+		expect(settlementGasSpentAttoEthOnUtcDay([pending], day)).toBe(5n * 10n ** 15n)
+		// The liability follows the attempt across midnight; only a mined cost is pinned to its block's day.
+		expect(settlementGasSpentAttoEthOnUtcDay([pending], new Date('2026-09-20T00:00:00.000Z'))).toBe(5n * 10n ** 15n)
+		expect(settlementGasSpentAttoEthOnUtcDay([record(1)], day)).toBe(4n * 10n ** 15n)
+		expect(settlementGasSpentAttoEthOnUtcDay([record(1)], new Date('2026-09-20T00:00:00.000Z'))).toBe(0n)
+		// An expired attempt can never be mined and a dropped one is past its relay horizon: neither charges anything.
+		expect(settlementGasSpentAttoEthOnUtcDay([{ ...pending, status: 'expired' }], day)).toBe(0n)
+		expect(settlementGasSpentAttoEthOnUtcDay([{ ...pending, status: 'dropped' }], day)).toBe(0n)
 	})
 
 	test('bounds the dashboard history and formats the snapshot figures', () => {

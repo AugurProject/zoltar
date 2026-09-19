@@ -2,29 +2,27 @@ import type { Configuration } from '#config/configuration'
 import { openOracleAbi } from '#contracts/abi'
 import type { ReadClient, WriteClient } from '#core/operator-types'
 import { rewardWithdrawalGasPlan } from '#core/settlement-strategy'
-import { receiptGasExpendituresWithQuorum, transactionReceiptsOrMissingWithQuorum, transactionReceiptsWithQuorum } from '#execution/execution-orchestration'
-import { durableTransactionIntent, pendingNonceWithQuorum, recoveredTransactionIntentMismatchWithQuorum } from '#execution/recovery-support'
-import { DEFAULT_TRANSACTION_VALIDITY_BLOCKS, prepareSignedTransaction } from '#execution/transaction-submission'
+import { ATTEMPT_FINALITY_BLOCKS, attemptHasFinality, isExecutionPausedError, receiptGasExpendituresWithQuorum, transactionHashBySenderNonceWithQuorum, transactionReceiptsOrMissingWithQuorum, transactionReceiptsWithQuorum } from '#execution/execution-orchestration'
+import { confirmedNonceWithQuorum, durableTransactionIntent, pendingNonceWithQuorum, recoveredTransactionIntentMismatchWithQuorum } from '#execution/recovery-support'
+import { DEFAULT_TRANSACTION_VALIDITY_BLOCKS, prepareSignedTransaction, submissionRejectedEverywhere } from '#execution/transaction-submission'
 import { submitContractTransaction, waitForTrackedTransaction, type TrackTransaction } from '#execution/transaction-tracker'
 import { decimalWeth } from '#state/operator-state'
-import { settlementAttemptMayStillLand, type SettlementRecord } from '#state/settlement-store'
+import { settlementAttemptIsUnresolved, type SettlementRecord } from '#state/settlement-store'
 import { encodeFunctionData, zeroAddress, type Address, type Hex } from '@zoltar/bot-shared/ethereum'
 import { endpointLabel } from '#monitoring/connectivity'
 import { settledQuorumValue } from '@zoltar/bot-shared/monitoring/read-quorum'
 import { getOpenOracleGameTuple, getOpenOracleHelperTuple, type OpenOracleStatePreimage } from '@zoltar/open-oracle-shared/openOracle/openOracle'
 
-/** Blocks past the signed validity horizon after which a still-missing settlement receipt is treated as dropped. */
-const EXPIRY_GRACE_BLOCKS = 12n
 const ETH_SENTINEL: Address = zeroAddress
 
-type SettlementExecutionConfiguration = Pick<Configuration, 'connectivity' | 'openOracle' | 'pollMilliseconds' | 'quorumRpcUrls' | 'submission'> & { network: Pick<Configuration['network'], 'chain'> }
+type SettlementExecutionConfiguration = Pick<Configuration, 'connectivity' | 'openOracle' | 'pollMilliseconds' | 'quorumRpcUrls' | 'settlement' | 'submission'> & { network: Pick<Configuration['network'], 'chain'> }
 
 export type SettlementExecutionContext = {
 	blockNumber: bigint
 	baseFeePerGas: bigint
 	client: ReadClient
-	/** The scan's projected gas price, shared with the queue so withdrawals are priced the same way. */
-	gasPrice: bigint
+	/** The fee ceiling every attempt is signed with, shared with the queue so projected costs match the signed exposure. */
+	maxFeePerGas: bigint
 	config: SettlementExecutionConfiguration
 	isPaused: () => boolean
 	persist: (record: SettlementRecord) => Promise<void>
@@ -60,12 +58,15 @@ function settleCalldata(report: OpenOracleStatePreimage) {
 	return encodeFunctionData({ abi: openOracleAbi, functionName: 'settle', args: [report.helper.reportId, getOpenOracleGameTuple(report.game), getOpenOracleHelperTuple(report.helper)] })
 }
 
-async function signAndSubmit(context: SettlementExecutionContext, call: { data: Hex; gas: bigint; kind: 'settle' | 'withdraw-reward'; reportId: string | undefined; token: Address | undefined; tokenSymbol: string | undefined }, pending: (hash: Hex, submissionBlockNumber: bigint) => SettlementRecord) {
+type SignedAttempt = Pick<SettlementRecord, 'lastValidBlockNumber' | 'nonce' | 'submissionBlockNumber' | 'submissionMode' | 'transactionIntent'> & { hash: Hex }
+
+async function signAndSubmit(context: SettlementExecutionContext, call: { data: Hex; gas: bigint; kind: 'settle' | 'withdraw-reward'; reportId: string | undefined; token: Address | undefined; tokenSymbol: string | undefined }, pending: (attempt: SignedAttempt) => SettlementRecord) {
 	const account = context.wallet.account
 	const signTransaction = account.signTransaction
 	if (signTransaction === undefined) throw new Error('Settlement requires a local transaction signer')
 	const nonce = await pendingNonceWithQuorum(context.readClients, context.config, account.address)
 	// The signed horizon bounds the receipt wait; an attempt that never lands is left pending for journal reconciliation.
+	// The fee cap keeps a delayed inclusion from paying more per gas than the queue judged the attempt at.
 	const signed = await prepareSignedTransaction({
 		baseFeePerGas: context.baseFeePerGas,
 		blockNumber: context.blockNumber,
@@ -74,15 +75,32 @@ async function signAndSubmit(context: SettlementExecutionContext, call: { data: 
 		from: account.address,
 		gasEstimate: call.gas,
 		lastValidBlockNumber: context.blockNumber + DEFAULT_TRANSACTION_VALIDITY_BLOCKS,
+		maxFeePerGasCap: context.config.settlement.maxGasPriceAttoEthPerGas,
 		nonce,
 		signTransaction,
 		to: context.config.openOracle,
 	})
-	const record = pending(signed.hash, context.blockNumber)
-	const submission = await submitContractTransaction(context.client, context.wallet, context.config, signed, { estimatedNetProfitEth: undefined, kind: call.kind, reportId: call.reportId, token: call.token, tokenSymbol: call.tokenSymbol }, context.isPaused, context.track, {
-		beforeSubmit: () => {},
-		persistPending: () => context.persist(record),
-	})
+	if (signed.transaction.maxFeePerGas !== context.maxFeePerGas) throw new Error(`Settlement signed a fee ceiling of ${signed.transaction.maxFeePerGas?.toString() ?? 'none'} but was evaluated at ${context.maxFeePerGas.toString()}`)
+	const record = pending({ hash: signed.hash, lastValidBlockNumber: signed.maxBlockNumber.toString(), nonce: nonce.toString(), submissionBlockNumber: context.blockNumber.toString(), submissionMode: context.config.submission.mode, transactionIntent: durableTransactionIntent(signed.transaction) })
+	let journaled = false
+	let submission
+	try {
+		submission = await submitContractTransaction(context.client, context.wallet, context.config, signed, { estimatedNetProfitEth: undefined, kind: call.kind, reportId: call.reportId, token: call.token, tokenSymbol: call.tokenSymbol }, context.isPaused, context.track, {
+			beforeSubmit: () => {},
+			persistPending: async () => {
+				await context.persist(record)
+				journaled = true
+			},
+		})
+	} catch (error) {
+		// A journaled public attempt that no node holds (paused between the journal write and the send, or every RPC
+		// refused it outright) has no mempool to land from; a public pending record never expires, so it is dropped here
+		// instead of holding the report and the budget until an unrelated transaction consumes the nonce. A timeout or
+		// HTTP failure may have followed an ingestion, so those stay pending for nonce recovery. Private attempts are
+		// dropped by recovery once the relay horizon finalizes.
+		if (journaled && context.config.submission.mode === 'public' && (isExecutionPausedError(error) || submissionRejectedEverywhere(error))) await context.persist({ ...record, status: 'dropped', updatedAt: new Date().toISOString() })
+		throw error
+	}
 	const { receipt: observed } = await waitForTrackedTransaction(context.client, context.wallet, context.config, submission, context.track, () => {}, context.isPaused)
 	if (observed.transactionHash.toLowerCase() !== signed.hash.toLowerCase()) {
 		// A replacement at the same nonce only counts when it carries the signed call; either way the signed hash can no longer land.
@@ -124,19 +142,23 @@ export async function executeSettlement(context: SettlementExecutionContext, pla
 		gas: plan.gas,
 	})
 	const reportId = plan.report.helper.reportId.toString()
-	return signAndSubmit(context, { data: settleCalldata(plan.report), gas: plan.gas, kind: 'settle', reportId, token: plan.token, tokenSymbol: plan.tokenSymbol }, (hash, submissionBlockNumber) => ({
+	return signAndSubmit(context, { data: settleCalldata(plan.report), gas: plan.gas, kind: 'settle', reportId, token: plan.token, tokenSymbol: plan.tokenSymbol }, attempt => ({
 		account: account.address,
 		actualGasCostEth: undefined,
 		coordinator: plan.coordinator,
 		kind: 'settlement',
+		lastValidBlockNumber: attempt.lastValidBlockNumber,
 		minedAt: undefined,
+		nonce: attempt.nonce,
 		projectedGasCostEth: decimalWeth(plan.projectedGasCostAttoEth),
 		reportId,
 		rewardEth: decimalWeth(plan.rewardAttoEth),
 		status: 'pending',
-		submissionBlockNumber: submissionBlockNumber.toString(),
+		submissionBlockNumber: attempt.submissionBlockNumber,
+		submissionMode: attempt.submissionMode,
 		submittedAt: new Date().toISOString(),
-		transactionHash: hash,
+		transactionHash: attempt.hash,
+		transactionIntent: attempt.transactionIntent,
 		updatedAt: new Date().toISOString(),
 	}))
 }
@@ -145,38 +167,51 @@ export async function executeRewardWithdrawal(context: SettlementExecutionContex
 	if (amountAttoEth <= 0n) throw new Error('Settlement reward withdrawal amount must be positive')
 	const account = context.wallet.account
 	const gas = rewardWithdrawalGasPlan()
-	const projectedGasCostAttoEth = gas * context.gasPrice
-	return signAndSubmit(context, { data: encodeFunctionData({ abi: openOracleAbi, functionName: 'withdraw', args: [ETH_SENTINEL, amountAttoEth] }), gas, kind: 'withdraw-reward', reportId: undefined, token: undefined, tokenSymbol: undefined }, (hash, submissionBlockNumber) => ({
+	const projectedGasCostAttoEth = gas * context.maxFeePerGas
+	return signAndSubmit(context, { data: encodeFunctionData({ abi: openOracleAbi, functionName: 'withdraw', args: [ETH_SENTINEL, amountAttoEth] }), gas, kind: 'withdraw-reward', reportId: undefined, token: undefined, tokenSymbol: undefined }, attempt => ({
 		account: account.address,
 		actualGasCostEth: undefined,
 		coordinator: undefined,
 		kind: 'reward-withdrawal',
+		lastValidBlockNumber: attempt.lastValidBlockNumber,
 		minedAt: undefined,
+		nonce: attempt.nonce,
 		projectedGasCostEth: decimalWeth(projectedGasCostAttoEth),
 		reportId: undefined,
 		rewardEth: decimalWeth(amountAttoEth),
 		status: 'pending',
-		submissionBlockNumber: submissionBlockNumber.toString(),
+		submissionBlockNumber: attempt.submissionBlockNumber,
+		submissionMode: attempt.submissionMode,
 		submittedAt: new Date().toISOString(),
-		transactionHash: hash,
+		transactionHash: attempt.hash,
+		transactionIntent: attempt.transactionIntent,
 		updatedAt: new Date().toISOString(),
 	}))
 }
 
 /**
- * Resolves records left `pending` by an interrupted process from their receipts, expires them once their validity horizon
- * has passed, and keeps checking expired attempts for a bounded window in case the mempool included them late.
+ * Resolves records left `pending` by an interrupted process. A public transaction has no on-chain deadline, so an attempt
+ * without a receipt stays pending until another transaction consumes its nonce at a reorg-safe depth; when the consuming
+ * transaction carries the same intent (an operator rebroadcast) its receipt is adopted under the new hash, otherwise the
+ * attempt is `expired` and can never be mined. A private relay stops including at the signed horizon, so a private
+ * attempt whose horizon has finalized without a receipt is `dropped`: it releases the report and the budget but keeps
+ * being rechecked here, while a dropped public attempt (never accepted anywhere) leaves the recheck set once its own
+ * horizon has finalized. Every outcome keeps its gas accounted, so nothing is re-sent on top of a live attempt.
  */
 export async function reconcilePendingSettlements(readClients: readonly ReadClient[], config: Pick<Configuration, 'connectivity' | 'quorumRpcUrls'>, records: readonly SettlementRecord[], blockNumber: bigint) {
-	const unresolved = records.filter(record => settlementAttemptMayStillLand(record, blockNumber))
+	const unresolved = records.filter(record => settlementAttemptIsUnresolved(record, blockNumber))
 	if (unresolved.length === 0) return []
+	const endpoints = [config.connectivity.readRpcUrl, ...config.quorumRpcUrls]
 	const receipts = await transactionReceiptsOrMissingWithQuorum(
 		readClients,
-		[config.connectivity.readRpcUrl, ...config.quorumRpcUrls],
+		endpoints,
 		'settlement journal recovery',
 		unresolved.map(record => record.transactionHash),
 	)
 	const resolved: SettlementRecord[] = []
+	// Nonce consumption is judged this far behind the head so a reorg cannot retire an attempt that is still able to land.
+	const finalityBlockNumber = blockNumber > ATTEMPT_FINALITY_BLOCKS ? blockNumber - ATTEMPT_FINALITY_BLOCKS : 0n
+	const confirmedNonces = new Map<string, bigint>()
 	for (const [index, record] of unresolved.entries()) {
 		const receipt = receipts[index]
 		const updatedAt = new Date().toISOString()
@@ -184,7 +219,30 @@ export async function reconcilePendingSettlements(readClients: readonly ReadClie
 			resolved.push({ ...record, ...(await receiptExpenditure(readClients, config, receipt)), updatedAt })
 			continue
 		}
-		if (record.status === 'pending' && blockNumber > BigInt(record.submissionBlockNumber) + DEFAULT_TRANSACTION_VALIDITY_BLOCKS + EXPIRY_GRACE_BLOCKS) resolved.push({ ...record, status: 'expired', updatedAt })
+		const accountKey = record.account.toLowerCase()
+		let confirmedNonce = confirmedNonces.get(accountKey)
+		if (confirmedNonce === undefined) {
+			confirmedNonce = await confirmedNonceWithQuorum(readClients, config, record.account, finalityBlockNumber)
+			confirmedNonces.set(accountKey, confirmedNonce)
+		}
+		const nonce = BigInt(record.nonce)
+		if (nonce >= confirmedNonce) {
+			if (record.status === 'pending' && record.submissionMode === 'private' && attemptHasFinality(blockNumber, BigInt(record.lastValidBlockNumber))) resolved.push({ ...record, status: 'dropped', updatedAt })
+			continue
+		}
+		const submissionBlockNumber = BigInt(record.submissionBlockNumber)
+		const consumingHash = await transactionHashBySenderNonceWithQuorum(readClients, endpoints, `settlement journal recovery ${record.transactionHash}`, {
+			account: record.account,
+			fromBlockNumber: submissionBlockNumber < finalityBlockNumber ? submissionBlockNumber : finalityBlockNumber,
+			nonce,
+			toBlockNumber: finalityBlockNumber,
+		})
+		resolved.push({ ...record, status: 'expired', updatedAt })
+		// A consumer the journal already knows (the bot's own re-send at the same nonce) keeps its own record.
+		if (consumingHash === undefined || records.some(existing => existing.transactionHash.toLowerCase() === consumingHash.toLowerCase())) continue
+		const mismatch = await recoveredTransactionIntentMismatchWithQuorum(readClients, config, `settlement journal recovery ${record.transactionHash}`, consumingHash, record.account, record.nonce, record.transactionIntent)
+		if (mismatch !== undefined) continue
+		resolved.push({ ...record, ...(await receiptOutcome(readClients, config, consumingHash)), transactionHash: consumingHash, updatedAt })
 	}
 	return resolved
 }

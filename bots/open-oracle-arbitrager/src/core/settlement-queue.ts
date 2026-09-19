@@ -5,7 +5,7 @@ import { settlementDecision, settlementEconomics, settlementEligibilityMismatch,
 import type { SettlementPlan } from '#execution/settlement-execution'
 import type { ActiveReport } from '#monitoring/oracle-log-state'
 import { decimalSignedEth, decimalWeth } from '#state/operator-state'
-import { settlementAttemptMayStillLand, type SettlementCandidateSnapshot, type SettlementRecord } from '#state/settlement-store'
+import { settlementAttemptHoldsFlow, type SettlementCandidateSnapshot, type SettlementRecord } from '#state/settlement-store'
 
 export type SettlementQueueInput = {
 	account: Address | undefined
@@ -16,6 +16,8 @@ export type SettlementQueueInput = {
 	/** Gas already spent on the current UTC day by positions and settlements, and the configured daily ceiling. */
 	dailyGas: { limitAttoWeth: bigint; spentAttoWeth: bigint }
 	gasPrice: bigint
+	/** The fee ceiling attempts are signed with; profitability and the daily budget are judged against it. */
+	maxFeePerGas: bigint
 	paused: boolean
 	records: readonly SettlementRecord[]
 	reports: Iterable<ActiveReport>
@@ -29,13 +31,13 @@ export type SettlementQueue = { plans: Map<string, SettlementPlan>; queue: Settl
 export function settlementQueue(input: SettlementQueueInput): SettlementQueue {
 	const queue: SettlementCandidateSnapshot[] = []
 	const plans = new Map<string, SettlementPlan>()
-	const inFlightReports = new Set(input.records.filter(record => record.reportId !== undefined && settlementAttemptMayStillLand(record, input.blockNumber)).map(record => record.reportId))
+	const inFlightReports = new Set(input.records.filter(record => record.reportId !== undefined && settlementAttemptHoldsFlow(record, input.blockNumber)).map(record => record.reportId))
 	for (const report of input.reports) {
 		const { game, helper } = report.latest
 		if (report.settled || gamePolicyMismatch(report.latest, input.coordinatorPolicies, input.config.openOracle) !== undefined) continue
 		if (settlementEligibilityMismatch(game, input.blockNumber, input.blockTimestamp, input.account) !== undefined) continue
 		const reportId = helper.reportId.toString()
-		const economics = settlementEconomics({ callbackGasLimit: game.callbackGasLimit, gasPrice: input.gasPrice, rewardAttoEth: game.settlerRewardAttoEth, settings: input.config.settlement })
+		const economics = settlementEconomics({ callbackGasLimit: game.callbackGasLimit, gasPrice: input.gasPrice, maxFeePerGas: input.maxFeePerGas, rewardAttoEth: game.settlerRewardAttoEth, settings: input.config.settlement })
 		const withinDailyGasBudget = input.dailyGas.spentAttoWeth + economics.projectedGasCostAttoEth <= input.dailyGas.limitAttoWeth
 		const decision = settlementDecision({ economics, enabled: input.config.settlement.enabled, execute: input.config.execute, inFlight: inFlightReports.has(reportId), paused: input.paused, signerReady: input.signerReady, withinDailyGasBudget })
 		const timing = settlementTiming(game, input.blockNumber, input.blockTimestamp)

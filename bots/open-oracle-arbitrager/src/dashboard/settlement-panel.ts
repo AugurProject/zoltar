@@ -1,4 +1,4 @@
-import type { SettlementCandidateSnapshot, SettlementRecord, SettlementSnapshot } from '#state/settlement-store'
+import type { PublicSettlementRecord, SettlementCandidateSnapshot, SettlementSnapshot } from '#state/settlement-store'
 import { countLabel, exactAmount, rewardWithdrawalLabel, settlementDecisionReason, settlementQueueCountLabel } from './dashboard-format.js'
 import { decisionBadge, element, row, setText } from './dom.js'
 
@@ -24,7 +24,7 @@ function queueRow(candidate: SettlementCandidateSnapshot, link: Link) {
 	)
 }
 
-function historyRow(record: SettlementRecord, link: Link) {
+function historyRow(record: PublicSettlementRecord, link: Link) {
 	return row(
 		[
 			new Date(record.submittedAt).toLocaleString(),

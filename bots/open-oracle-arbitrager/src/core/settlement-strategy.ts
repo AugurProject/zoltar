@@ -1,4 +1,5 @@
 import type { Address } from '@zoltar/bot-shared/ethereum'
+import { cappedMaximumFeePerGas } from '@zoltar/bot-shared/execution/transaction-submission'
 import { OPEN_ORACLE_FLAG_TIME_TYPE, type OpenOracleGame } from '@zoltar/open-oracle-shared/openOracle/openOracle'
 import type { MutableSettlement, RewardWithdrawalDecision, SettlementDecision } from '#state/settlement-store'
 
@@ -14,6 +15,15 @@ function settlementGasPlan(callbackGasLimit: bigint) {
 
 export function rewardWithdrawalGasPlan() {
 	return REWARD_WITHDRAWAL_GAS
+}
+
+/**
+ * The fee ceiling every settlement and reward withdrawal is signed with, and therefore the price its profitability and
+ * daily budget are judged at: the signed-horizon maximum, bounded by the operator's gas price cap. The projected inclusion
+ * price only decides whether an attempt is worth sending; this value bounds what a delayed inclusion can actually cost.
+ */
+export function settlementMaxFeePerGas(baseFeePerGas: bigint, settings: Pick<MutableSettlement, 'maxGasPriceAttoEthPerGas'>) {
+	return cappedMaximumFeePerGas(baseFeePerGas, settings.maxGasPriceAttoEthPerGas)
 }
 
 export type SettlementTiming = { elapsed: bigint; windowUnit: 'blocks' | 'seconds' }
@@ -43,10 +53,13 @@ export type SettlementEconomics = {
 	withinGasPriceCap: boolean
 }
 
-/** Reward minus the settle transaction and its amortised reward withdrawal at the projected gas price. */
-export function settlementEconomics(parameters: { callbackGasLimit: bigint; gasPrice: bigint; rewardAttoEth: bigint; settings: Pick<MutableSettlement, 'maxGasPriceAttoEthPerGas' | 'minimumProfitAttoWeth'> }): SettlementEconomics {
+/**
+ * Reward minus the settle transaction and its amortised reward withdrawal at the signed fee ceiling, so the net the queue
+ * shows is the worst case the signature can pay; the projected inclusion price gates the attempt against the cap.
+ */
+export function settlementEconomics(parameters: { callbackGasLimit: bigint; gasPrice: bigint; maxFeePerGas: bigint; rewardAttoEth: bigint; settings: Pick<MutableSettlement, 'maxGasPriceAttoEthPerGas' | 'minimumProfitAttoWeth'> }): SettlementEconomics {
 	const gas = settlementGasPlan(parameters.callbackGasLimit)
-	const projectedGasCostAttoEth = parameters.gasPrice * (gas + REWARD_WITHDRAWAL_GAS)
+	const projectedGasCostAttoEth = parameters.maxFeePerGas * (gas + REWARD_WITHDRAWAL_GAS)
 	const netAttoEth = parameters.rewardAttoEth - projectedGasCostAttoEth
 	return {
 		gas,
@@ -81,6 +94,8 @@ export function rewardWithdrawalDecision(parameters: {
 	execute: boolean
 	gasPrice: bigint
 	inFlight: boolean
+	/** The signed fee ceiling; the budget is charged with it because that is what a delayed inclusion can pay. */
+	maxFeePerGas: bigint
 	paused: boolean
 	settings: Pick<MutableSettlement, 'maxGasPriceAttoEthPerGas' | 'rewardWithdrawThresholdAttoEth'>
 	signerReady: boolean
@@ -89,7 +104,7 @@ export function rewardWithdrawalDecision(parameters: {
 	if (parameters.unclaimedRewardAttoEth === undefined) return 'unavailable'
 	if (parameters.unclaimedRewardAttoEth < parameters.settings.rewardWithdrawThresholdAttoEth) return 'below-threshold'
 	if (parameters.gasPrice > parameters.settings.maxGasPriceAttoEthPerGas) return 'gas-price-cap'
-	if (parameters.dailyGas.spentAttoWeth + REWARD_WITHDRAWAL_GAS * parameters.gasPrice > parameters.dailyGas.limitAttoWeth) return 'risk-limit'
+	if (parameters.dailyGas.spentAttoWeth + REWARD_WITHDRAWAL_GAS * parameters.maxFeePerGas > parameters.dailyGas.limitAttoWeth) return 'risk-limit'
 	if (!parameters.enabled) return 'disabled'
 	if (!parameters.execute) return 'dry-run'
 	if (!parameters.signerReady) return 'signer-unavailable'
