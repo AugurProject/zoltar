@@ -1,6 +1,6 @@
 import { bigintToSafeNumber, rpcFailureWithContext, type Address, type BlockTransaction, type Hex, type TransactionReceipt, type TransactionReplacement } from '@zoltar/bot-shared/ethereum'
 import { endpointLabel } from '#monitoring/connectivity'
-import type { OpportunitySnapshot } from '#state/operator-state'
+import type { OpportunityDecision } from '#state/opportunity-snapshot'
 import type { DurableTransactionIntent, ExecutionIntent, PositionRecord } from '#state/position-store'
 import { settledQuorumValue } from '@zoltar/bot-shared/monitoring/read-quorum'
 import { isSelfReport } from '#core/strategy'
@@ -147,11 +147,11 @@ export function isExecutionPausedError(error: unknown) {
 	return error instanceof Error && error.name === 'ExecutionPausedError'
 }
 
-export function executionFailureDecision(error: unknown): OpportunitySnapshot['decision'] {
+export function executionFailureDecision(error: unknown): OpportunityDecision {
 	return isExecutionPausedError(error) ? 'paused' : 'execution-failed'
 }
 
-export function opportunityDecision(parameters: { account: Address | undefined; currentReporter: Address; execute: boolean; executionReady: boolean; hasRequiredInventory: boolean | undefined; paused?: boolean | undefined; profitable: boolean }): OpportunitySnapshot['decision'] {
+export function opportunityDecision(parameters: { account: Address | undefined; currentReporter: Address; execute: boolean; executionReady: boolean; hasRequiredInventory: boolean | undefined; paused?: boolean | undefined; profitable: boolean }): OpportunityDecision {
 	if (!parameters.profitable) return 'unprofitable'
 	if (parameters.execute && parameters.account === undefined) return 'signer-unavailable'
 	if (isSelfReport(parameters.account, parameters.currentReporter)) return 'self-report'

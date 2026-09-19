@@ -1,7 +1,8 @@
 import { applyStrategy, type Configuration } from '#config/configuration'
 import type { Address } from '@zoltar/bot-shared/ethereum'
 import type { ExecutionLockManager } from '#execution/execution-locks'
-import { clearWalletDerivedState, type OperatorSnapshotFixedState, type OperatorState } from '#state/operator-state'
+import { clearWalletDerivedState, recordOperation, type OperatorSnapshotFixedState, type OperatorState } from '#state/operator-state'
+import type { OpportunitySnapshot } from '#state/opportunity-snapshot'
 import type { ExclusiveProcessLock } from '#state/position-store'
 import type { PendingOperatorUpdates } from './operator-control-plane.ts'
 
@@ -19,6 +20,19 @@ function applyLookbackBlockSetting(config: { lookbackBlocks: bigint }, nextLookb
 	const changed = config.lookbackBlocks !== nextLookbackBlocks
 	config.lookbackBlocks = nextLookbackBlocks
 	return changed
+}
+
+/** A skipped report already logged its gate during inspection; only priced reports add a profit-and-inventory decision entry. */
+export function recordScanDecision(state: OperatorState, opportunity: OpportunitySnapshot) {
+	if (opportunity.decision === 'skipped') return
+	recordOperation(state, {
+		category: 'decision',
+		details: `direction=${opportunity.direction} estimatedProfitEth=${opportunity.estimatedNetProfitEth}`,
+		level: opportunity.decision === 'execution-failed' ? 'error' : 'info',
+		message: `Decision: ${opportunity.decision}`,
+		reason: `Profit and inventory gates evaluated for report ${opportunity.reportId}`,
+		reportId: opportunity.reportId,
+	})
 }
 
 export function resetReportScanState<TLog>(

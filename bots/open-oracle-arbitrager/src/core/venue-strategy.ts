@@ -3,6 +3,14 @@ const UNISWAP_V2_FEE_FACTOR = 997n
 
 export type Venue = 'uniswap-v2' | 'uniswap-v3' | 'uniswap-v4'
 
+/** Operator-facing venue name shared by the dashboard and scan reasons so one venue never reads as two. */
+export function venueLabel(venue: Venue | undefined) {
+	if (venue === 'uniswap-v2') return 'Uniswap V2'
+	if (venue === 'uniswap-v3') return 'Uniswap V3'
+	if (venue === 'uniswap-v4') return 'Uniswap V4'
+	return 'Unknown'
+}
+
 export function constantProductExactInput(amountIn: bigint, reserveIn: bigint, reserveOut: bigint) {
 	if (amountIn <= 0n || reserveIn <= 0n || reserveOut <= 0n) throw new Error('Constant-product exact-input quote requires positive amounts and reserves')
 	const amountInWithFee = amountIn * UNISWAP_V2_FEE_FACTOR

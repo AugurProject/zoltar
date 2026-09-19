@@ -638,7 +638,12 @@ The dashboard shows:
 - Native ETH stakes, WETH stakes, and ETH settler rewards locked in reports currently
   pending on discovered coordinators. The combined figure treats 1 WETH as 1 ETH.
 - Current opportunities, token-metadata-normalized inventory requirements, deadline
-  window, token-specific direction, pool, and decision.
+  window, token-specific direction, pool, and decision. WETH/token reports still
+  inside their settlement window that the scan declined before any venue priced
+  them stay listed as `skipped` with the concrete gate (missing pool, execution
+  allowlist, dispute delay, remaining window, spot/TWAP limit, or the venue quote
+  failure) so they are not visible only in the operation log. Reports past their
+  deadline, off their coordinator template, or not quoted in WETH are logged only.
 - Durable positions with actual hedge execution, entry and lifecycle gas, exact
   settler reward, withdrawals, state, and realized net P&amp;L. A staged entry shows **Awaiting entry
   evidence** and is excluded from actual P&amp;L totals until receipt and executor-event

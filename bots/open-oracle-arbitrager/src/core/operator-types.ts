@@ -3,7 +3,7 @@ import type { Configuration } from '#config/configuration'
 import { STANDARD_UNISWAP_FEES } from '#core/uniswap-v4'
 import type { ArbitrageQuote } from '#core/strategy'
 import type { Venue } from '#core/venue-strategy'
-import type { OpportunitySnapshot } from '#state/operator-state'
+import type { EvaluatedOpportunitySnapshot, SkippedOpportunitySnapshot } from '#state/opportunity-snapshot'
 import type { MarketConsensusEstimate, MarketConsensusObservation } from '@zoltar/bot-shared/monitoring/market-consensus'
 import type { OpenOracleStatePreimage } from '@zoltar/open-oracle-shared/openOracle/openOracle'
 
@@ -25,7 +25,7 @@ export type ExecutionCandidate = {
 	hedgeFee: (typeof STANDARD_UNISWAP_FEES)[number]
 	hedgePool: Address
 	hedgeVenue: Venue
-	opportunity: OpportunitySnapshot
+	opportunity: EvaluatedOpportunitySnapshot
 	pool: Pool
 	projectedGasCostAttoWeth: bigint
 	quote: ArbitrageQuote
@@ -33,11 +33,20 @@ export type ExecutionCandidate = {
 	marketConsensus?: MarketConsensusEstimate | undefined
 }
 
-export type EvaluatedOpportunity = {
+type EvaluatedOpportunity = {
 	candidate: ExecutionCandidate | undefined
 	dexObservations: readonly MarketConsensusObservation[]
-	opportunity: OpportunitySnapshot
+	opportunity: EvaluatedOpportunitySnapshot
 }
+
+/** A report inside its settlement window that inspection declined before pricing; `candidate: undefined` discriminates it from an evaluated report. */
+export type SkippedReport = {
+	candidate: undefined
+	dexObservations: readonly MarketConsensusObservation[]
+	opportunity: SkippedOpportunitySnapshot
+}
+
+export type ReportInspection = EvaluatedOpportunity | SkippedReport
 
 export type ReadClient = PublicClient<Transport, Chain>
 export type WriteClient = WalletClient<Transport, Chain, Account>

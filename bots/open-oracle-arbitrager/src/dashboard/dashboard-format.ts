@@ -1,4 +1,5 @@
-import type { OpportunitySnapshot, PublicOperatorSnapshot, PublicTransactionActivity } from '#state/operator-state'
+import type { PublicOperatorSnapshot, PublicTransactionActivity } from '#state/operator-state'
+import { countOpportunities, type EvaluatedOpportunitySnapshot, type OpportunityDecision, type OpportunitySnapshot, type SkippedOpportunitySnapshot } from '#state/opportunity-snapshot'
 import type { MarketPricePoint } from '#monitoring/market-monitor'
 
 const DECIMAL_SCALE = 18
@@ -53,15 +54,30 @@ export function exactAmount(value: string | undefined, symbol: string) {
 	return value === undefined ? 'Unavailable' : `${value} ${symbol}`
 }
 
+export function amount(value: string | undefined, symbol: string) {
+	if (value === undefined) return 'Unavailable'
+	const numeric = Number(value)
+	if (!Number.isFinite(numeric)) return `${value} ${symbol}`
+	return `${new Intl.NumberFormat('en-US', { maximumFractionDigits: 6 }).format(numeric)} ${symbol}`
+}
+
+export function isConfigurationEnvelope(value: unknown): value is { configuration: unknown; revision: string } {
+	return typeof value === 'object' && value !== null && 'configuration' in value && 'revision' in value && typeof value.revision === 'string'
+}
+
+export function configurationNetwork(configuration: unknown) {
+	const network = typeof configuration === 'object' && configuration !== null && !Array.isArray(configuration) ? Reflect.get(configuration, 'network') : undefined
+	return network === 'mainnet' || network === 'sepolia' ? network : undefined
+}
+
 export function countLabel(count: number, singular: string, plural = `${singular}s`) {
 	return `${count.toString()} ${count === 1 ? singular : plural}`
 }
 
-export function venueLabel(venue: OpportunitySnapshot['venue']) {
-	if (venue === 'uniswap-v2') return 'Uniswap V2'
-	if (venue === 'uniswap-v3') return 'Uniswap V3'
-	if (venue === 'uniswap-v4') return 'Uniswap V4'
-	return 'Unknown'
+export function opportunityCountLabel(opportunities: readonly Pick<OpportunitySnapshot, 'decision'>[]) {
+	const counts = countOpportunities(opportunities)
+	const evaluated = `${counts.evaluated.toString()} evaluated`
+	return counts.skipped === 0 ? evaluated : `${evaluated} · ${counts.skipped.toString()} skipped`
 }
 
 export function marketPoolStrategyUse(tokenExecutable: boolean, venue: string) {
@@ -158,8 +174,10 @@ export function botStatusLabels(state: Pick<PublicOperatorSnapshot, 'mode' | 'pa
 	return { mode: state.mode, status: statuses[state.status] }
 }
 
-export function opportunityDecisionReason(opportunity: Pick<OpportunitySnapshot, 'decision' | 'tokenSymbol'>) {
-	const reasons: Record<OpportunitySnapshot['decision'], string> = {
+/** Skipped reports carry the concrete gate that declined them; evaluated decisions map to a fixed explanation. */
+export function opportunityDecisionReason(opportunity: Pick<EvaluatedOpportunitySnapshot, 'decision' | 'tokenSymbol'> | Pick<SkippedOpportunitySnapshot, 'decision' | 'reason'>) {
+	if (opportunity.decision === 'skipped') return opportunity.reason
+	const reasons: Record<OpportunityDecision, string> = {
 		'dry-run-opportunity': 'All economic guards pass; execution mode is disabled',
 		eligible: 'Profit, timing, state, and inventory guards pass',
 		'execution-failed': 'Execution raised an error after selection',

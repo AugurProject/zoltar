@@ -22,6 +22,7 @@ import {
 	type MutableStrategy,
 	type OperatorState,
 } from '#state/operator-state'
+import { isSnapshot } from '#dashboard/snapshot-validation'
 import { publicPollFailure } from '#state/public-failures'
 import type { PositionRecord } from '#state/position-store'
 
@@ -54,6 +55,34 @@ function capabilityState(): OperatorState {
 		transactionActivity: [],
 	}
 }
+
+test('publishes skipped reports beside evaluated opportunities with only their scan reason', () => {
+	const state = capabilityState()
+	state.opportunities = [
+		{ decision: 'skipped', reason: 'Venue quotes failed: uniswap-v3 0x1: Venue quote must be positive', reportId: '11', token: address, tokenSymbol: 'REP', timeRemaining: '240', windowUnit: 'seconds' },
+		{
+			centralizedPriceDeviationBps: undefined,
+			decision: 'unprofitable',
+			direction: 'sell-rep',
+			estimatedNetProfitEth: '-1',
+			estimatedNetProfitWeth: '-1',
+			executablePriceRepPerEth: '10',
+			hasRequiredInventory: undefined,
+			pool: address,
+			poolFee: 3_000,
+			reportId: '12',
+			requiredToken: '1',
+			requiredWeth: '1',
+			token: address,
+			tokenSymbol: 'REP',
+			timeRemaining: '10',
+			windowUnit: 'blocks',
+		},
+	]
+	const snapshot = publicOperatorSnapshot(operatorSnapshot(state, strategy(), submission, connectivity, fixed))
+	expect(snapshot.opportunities).toEqual(state.opportunities)
+	expect(isSnapshot(JSON.parse(JSON.stringify(snapshot)))).toBe(true)
+})
 
 test('reports operator capability only after a complete current scan and signer readiness', () => {
 	const state = capabilityState()
