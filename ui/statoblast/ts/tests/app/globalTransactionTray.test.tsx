@@ -461,6 +461,7 @@ describe('GlobalTransactionTray', () => {
 
 		const compactNotice = document.body.querySelector('.global-transaction-notice-compact')
 		expect(compactNotice).not.toBeNull()
+		expect(within(document.body).getByRole('link', { name: transaction.hash }).closest('details')).toBeNull()
 		expect(within(document.body).getByText('Question Created')).not.toBeNull()
 		expect(within(document.body).getByText('View transaction details', { selector: 'summary' })).not.toBeNull()
 		expect(within(document.body).getByText('Question ID')).not.toBeNull()

@@ -249,6 +249,9 @@ export function SecurityPoolPriceOracleSection({
 			<MetricGrid>
 				<MetricField label={statoblastAppCopy.openOraclePrice} valueTagName='span'>
 					<OpenOraclePriceValue currentTimestamp={currentTimestamp} lastPrice={priceValues?.lastPrice} lastSettlementTimestamp={priceValues?.lastSettlementTimestamp ?? 0n} priceValidUntilTimestamp={managerDetails?.priceValidUntilTimestamp} />
+					<button className='quiet metric-label-refresh' type='button' onClick={() => onLoadManager(managerAddress)} disabled={loadingManager} aria-label={securityPoolCopy.refreshOracle} aria-busy={loadingManager} title={securityPoolCopy.refreshOracle}>
+						{loadingManager ? <span className='spinner' aria-hidden='true' /> : <span aria-hidden='true'>↻</span>}
+					</button>
 				</MetricField>
 				{managerDetails === undefined ? undefined : (
 					<MetricField label={securityPoolCopy.requestCost}>
@@ -265,15 +268,12 @@ export function SecurityPoolPriceOracleSection({
 			</MetricGrid>
 			<ErrorNotice message={managerError} />
 			<div className='actions oracle-actions'>
-				<button className='secondary' onClick={() => onLoadManager(managerAddress)} disabled={loadingManager}>
-					{loadingManager ? <LoadingText>{securityPoolCopy.refreshingOracle}</LoadingText> : securityPoolCopy.refreshOracle}
-				</button>
 				<TransactionActionButton
 					idleLabel={securityPoolCopy.requestNewPrice}
 					pendingLabel={securityPoolCopy.requestingNewPrice}
 					onClick={onOpenRequestReview}
 					pending={requestPending}
-					tone='secondary'
+					tone='primary'
 					availability={{ disabled: !canRequest || requestValueAttoEth === undefined || requestGuardMessage !== undefined, reason: canRequest ? requestGuardMessage : undefined }}
 				/>
 			</div>

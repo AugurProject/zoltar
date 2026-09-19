@@ -781,7 +781,7 @@ async function loadProductionDocumentInChromiumUnlocked(pageUrl: string, viewpor
 			},
 			clickButton: async (label, occurrence = 0) => {
 				const clicked = await evaluate(
-					`(() => { const buttons = [...document.querySelectorAll('button')].filter(button => button.textContent?.trim() === ${JSON.stringify(label)} && !button.disabled); const button = buttons[${occurrence.toString()}]; if (!(button instanceof HTMLButtonElement)) return false; button.focus(); button.click(); return true })()`,
+					`(() => { const buttons = [...document.querySelectorAll('button')].filter(button => (button.getAttribute('aria-label') ?? button.textContent?.trim()) === ${JSON.stringify(label)} && !button.disabled); const button = buttons[${occurrence.toString()}]; if (!(button instanceof HTMLButtonElement)) return false; button.focus(); button.click(); return true })()`,
 				)
 				if (clicked !== true) throw new Error(`Unable to click enabled browser button ${label} at occurrence ${occurrence.toString()}`)
 			},
@@ -802,7 +802,7 @@ async function loadProductionDocumentInChromiumUnlocked(pageUrl: string, viewpor
 			},
 			waitForButtonEnabled: async (label, occurrence = 0) => {
 				for (let attempt = 0; attempt < 600; attempt += 1) {
-					const enabled = await evaluate(`[...document.querySelectorAll('button')].filter(button => button.textContent?.trim() === ${JSON.stringify(label)} && !button.disabled)[${occurrence.toString()}] instanceof HTMLButtonElement`)
+					const enabled = await evaluate(`[...document.querySelectorAll('button')].filter(button => (button.getAttribute('aria-label') ?? button.textContent?.trim()) === ${JSON.stringify(label)} && !button.disabled)[${occurrence.toString()}] instanceof HTMLButtonElement`)
 					if (enabled === true) return
 					await Bun.sleep(50)
 				}
@@ -1015,14 +1015,45 @@ productionWorkflowTest('production bundle executes deployment, reporting, fork m
 			expect(await driver.evaluate("document.querySelector('.request-price-fields input')?.value")).toBe('')
 			expect(await driver.evaluate("document.querySelector('.transaction-funding')?.textContent")).toContain('— REP')
 			expect(await driver.evaluate("[...document.querySelectorAll('.transaction-step-actions .tx-action-button')].every(button => button.disabled)")).toBe(true)
-			await driver.clickButton('Fetch from Uniswap')
-			await driver.waitForButtonEnabled('Fetch from Uniswap')
-			expect(await driver.evaluate("document.querySelector('.request-price-fields input')?.value")).toBe('3')
+			const priceDialogGeometry = () =>
+				driver.evaluate(`['[role="dialog"]', '.request-price-fields input', '.transaction-funding', '.transaction-step-actions', '.approval-amount-field input', '.transaction-plan-action-final button'].map(selector => {
+					const element = document.querySelector(selector)
+					if (element === null) throw new Error('Missing price dialog element: ' + selector)
+					const rect = element.getBoundingClientRect()
+					return [rect.top, rect.width, rect.height].map(value => Math.round(value))
+				})`)
+			for (const viewport of [
+				{ width: 1440, height: 900 },
+				{ width: 390, height: 844 },
+			]) {
+				await driver.resize(viewport)
+				await driver.setInputByLabel('REP per ETH', '')
+				await driver.waitForBodyText('Enter an estimated REP per ETH price')
+				expect(await driver.evaluate("document.querySelector('.transaction-deposits')?.getBoundingClientRect().height > 0")).toBe(true)
+				const emptyGeometry = await priceDialogGeometry()
+				await driver.setInputByLabel('REP per ETH', 'a')
+				await driver.waitForBodyText('Enter a positive REP per ETH price')
+				expect(await priceDialogGeometry()).toEqual(emptyGeometry)
+				await driver.setInputByLabel('REP per ETH', '')
+				await driver.clickButton('Fetch from Uniswap')
+				expect(await priceDialogGeometry()).toEqual(emptyGeometry)
+				await driver.waitForButtonEnabled('Fetch from Uniswap')
+				await driver.waitForBodyWithoutText('Preparing funding and approvals…')
+				expect(await driver.evaluate("document.querySelector('.request-price-fields input')?.value")).toBe('3')
+				expect(await priceDialogGeometry()).toEqual(emptyGeometry)
+				await driver.setInputByLabel('REP per ETH', '2')
+				await driver.waitForBodyText('Preparing funding and approvals…')
+				await driver.waitForBodyWithoutText('Preparing funding and approvals…')
+				expect(await priceDialogGeometry()).toEqual(emptyGeometry)
+				await driver.setInputByLabel('REP per ETH', '')
+				await driver.waitForBodyText('Enter an estimated REP per ETH price')
+				expect(await priceDialogGeometry()).toEqual(emptyGeometry)
+			}
+			await driver.resize({ width: 1440, height: 900 })
 			expect(await driver.evaluate('document.querySelectorAll(\'[role="dialog"]\').length')).toBe(1)
-			await driver.setInputByLabel('REP per ETH', '2')
-			await driver.waitForBodyText('Deposit / undisputed return')
 			await driver.setInputByLabel('REP per ETH', '3')
-			await driver.waitForBodyText('Deposit / undisputed return')
+			await driver.waitForBodyText('Preparing funding and approvals…')
+			await driver.waitForBodyWithoutText('Preparing funding and approvals…')
 			await completeTransactionReview('Price Requested')
 			await driver.waitForTransactionStatus('Confirmed', 'Price Requested')
 			expect(await driver.evaluate('document.querySelector(\'[role="dialog"]\') === null')).toBe(true)

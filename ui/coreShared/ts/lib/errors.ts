@@ -1,3 +1,14 @@
+export const transactionErrorMessages = {
+	fullGasLimit: 'Transaction failed after using its full gas limit. Open the transaction details before retrying.',
+	canceledOrReplaced: 'Transaction canceled or replaced.',
+	confirmationUnavailable: 'Could not confirm the transaction. Check its status before retrying.',
+	insufficientApproval: 'Approval confirmed, but it is below the report requirement. Review funding again to approve the required total before continuing.',
+}
+
+function isTransactionErrorMessage(message: string | undefined) {
+	return message !== undefined && Object.values(transactionErrorMessages).includes(message)
+}
+
 const closeableErrorPatterns = ['user rejected the request', 'user rejected request', 'user denied transaction signature', 'user denied message signature', 'user denied account authorization', 'action canceled in wallet']
 const technicalWriteErrorPatterns = ['allowance', 'balance', 'call reverted', 'connector', 'erc20', 'estimategas', 'execution reverted', 'fee', 'gas', 'insufficient funds', 'internal json-rpc', 'json-rpc', 'network', 'nonce', 'replacement transaction', 'reverted', 'rpc', 'transaction', 'transfer', 'underpriced']
 
@@ -138,6 +149,10 @@ function isGenericErrorDetail(value: string) {
 
 function getKnownTransactionErrorDetail(details: string[]) {
 	for (const detail of details) {
+		const message = Object.values(transactionErrorMessages).find(candidate => normalizeComparableMessage(candidate) === normalizeComparableMessage(detail))
+		if (message !== undefined) return message
+	}
+	for (const detail of details) {
 		if (detail.toLowerCase().includes('stale price')) return "The pool's oracle price expired. Request a new price in Price Oracle, then retry."
 	}
 	return undefined
@@ -221,7 +236,7 @@ export function formatWriteErrorMessage(error: unknown, fallbackMessage: string)
 	if (isWalletRejection(error)) return 'Action canceled in wallet.'
 
 	const detail = getErrorDetail(error, fallbackMessage)
-	if (detail !== undefined && shouldUseStandaloneWriteMessage(detail)) return detail
+	if (detail !== undefined && (isTransactionErrorMessage(detail) || shouldUseStandaloneWriteMessage(detail))) return detail
 	const rewrittenFallback = rewriteWriteFallbackMessage(fallbackMessage)
 	return detail === undefined ? ensureSentence(rewrittenFallback) : appendReason(rewrittenFallback, detail)
 }
@@ -233,7 +248,9 @@ export function formatRefreshErrorMessage(error: unknown, fallbackMessage: strin
 
 export function getErrorMessage(error: unknown, fallbackMessage: string) {
 	if (isWalletRejection(error)) return 'Action canceled in wallet.'
-	return appendReason(fallbackMessage, getErrorDetail(error, fallbackMessage))
+	const detail = getErrorDetail(error, fallbackMessage)
+	if (detail !== undefined && isTransactionErrorMessage(detail)) return detail
+	return appendReason(fallbackMessage, detail)
 }
 
 export function isCloseableErrorMessage(message: string | undefined) {
