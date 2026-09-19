@@ -93,7 +93,10 @@ export async function recoverPendingSettlements(parameters: Pick<SettlementStage
 	const { config, journal, readClients, state } = parameters
 	const resolved = await reconcilePendingSettlements(readClients, config, journal.records, parameters.blockNumber)
 	for (const record of resolved) {
+		// Finality verification rewrites a record without changing its status; only a changed status is worth an operator line.
+		const previousStatus = journal.records.find(existing => existing.transactionHash.toLowerCase() === record.transactionHash.toLowerCase())?.status
 		await journal.persist(record)
+		if (previousStatus === record.status) continue
 		// A retired hash whose nonce was consumed by an intent-matching attempt is a success under the other hash, not a loss.
 		const sameNonceOutcome = (other: SettlementRecord) =>
 			other.status !== 'expired' &&

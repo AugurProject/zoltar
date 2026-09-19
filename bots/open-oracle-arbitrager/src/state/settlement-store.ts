@@ -58,15 +58,15 @@ export function settlementAttemptHoldsFlow(record: Pick<SettlementRecord, 'lastV
 
 /**
  * Attempts whose outcome recovery still has to check: pending ones; dropped private ones (the relay may have shared the
- * transaction before its horizon) and dropped public ones inside their horizon; and mined ones whose receipt block has
- * not reached finality, because a short reorg can orphan the receipt after it was journaled. A public attempt that no
- * node accepted is final once its horizon has finalized; a dropped private one is rechecked until its nonce is consumed.
+ * transaction before its horizon) and dropped public ones inside their horizon; and mined or expired ones recovery has
+ * not yet verified at finality depth, because a short reorg can orphan a receipt or a replacement after it was journaled.
+ * A public attempt that no node accepted is final once its horizon has finalized; a dropped private one is rechecked
+ * until its nonce is consumed.
  */
-export function settlementAttemptIsUnresolved(record: Pick<SettlementRecord, 'lastValidBlockNumber' | 'receiptBlock' | 'status' | 'submissionMode'>, blockNumber: bigint) {
+export function settlementAttemptIsUnresolved(record: Pick<SettlementRecord, 'finalized' | 'lastValidBlockNumber' | 'status' | 'submissionMode'>, blockNumber: bigint) {
 	if (record.status === 'pending') return true
 	if (record.status === 'dropped') return record.submissionMode === 'private' || !settlementAttemptHorizonFinalized(record, blockNumber)
-	if (record.status === 'confirmed' || record.status === 'reverted') return record.receiptBlock !== undefined && !attemptHasFinality(blockNumber, BigInt(record.receiptBlock.number))
-	return false
+	return !record.finalized
 }
 
 /** One report awaiting third-party settlement, evaluated at the latest scan head. */
@@ -98,11 +98,19 @@ export type SettlementRecord = {
 	kind: 'reward-withdrawal' | 'settlement'
 	/** The signed validity horizon; a private relay does not include the transaction past it. */
 	lastValidBlockNumber: string
+	/**
+	 * Whether recovery has verified the outcome at finality depth: a receipt still canonical, or a replacement still canonical
+	 * (or the nonce still consumed), twelve blocks on. Age alone never finalizes an outcome, because the bot may have been
+	 * down while a reorg orphaned it.
+	 */
+	finalized: boolean
 	/** Receipt block timestamp; charges gas to the UTC day the chain mined it, like position expenditures. */
 	minedAt: string | undefined
 	nonce: string
 	/** The block that carried the receipt; a mined outcome is rechecked against it until that block has finality. */
 	receiptBlock: { hash: Hex; number: string } | undefined
+	/** For an expired attempt, the transaction that consumed its nonce, rechecked until it has finality. */
+	replacedBy: Hex | undefined
 	/** Gas at the signed fee ceiling; the exposure a pending attempt charges to the daily budget until its outcome is known. */
 	projectedGasCostEth: string
 	reportId: string | undefined
@@ -192,6 +200,8 @@ function parseSettlementRecord(value: unknown): SettlementRecord | undefined {
 		!ADDRESS.test(record['account']) ||
 		!optionalString('actualGasCostEth', DECIMAL) ||
 		!optionalString('coordinator', ADDRESS) ||
+		typeof record['finalized'] !== 'boolean' ||
+		!optionalString('replacedBy', HASH) ||
 		(record['kind'] !== 'reward-withdrawal' && record['kind'] !== 'settlement') ||
 		typeof record['lastValidBlockNumber'] !== 'string' ||
 		!INTEGER.test(record['lastValidBlockNumber']) ||
@@ -224,12 +234,14 @@ function parseSettlementRecord(value: unknown): SettlementRecord | undefined {
 		account: record['account'] as Address,
 		actualGasCostEth: typeof record['actualGasCostEth'] === 'string' ? record['actualGasCostEth'] : undefined,
 		coordinator: typeof record['coordinator'] === 'string' ? (record['coordinator'] as Address) : undefined,
+		finalized: record['finalized'],
 		kind: record['kind'],
 		lastValidBlockNumber: record['lastValidBlockNumber'],
 		minedAt: typeof record['minedAt'] === 'string' ? record['minedAt'] : undefined,
 		nonce: record['nonce'],
 		projectedGasCostEth: record['projectedGasCostEth'],
 		receiptBlock,
+		replacedBy: typeof record['replacedBy'] === 'string' ? (record['replacedBy'] as Hex) : undefined,
 		reportId: typeof record['reportId'] === 'string' ? record['reportId'] : undefined,
 		rewardEth: record['rewardEth'],
 		status: record['status'],

@@ -20,12 +20,14 @@ function record(index: number, overrides: Partial<SettlementRecord> = {}): Settl
 		account,
 		actualGasCostEth: '0.004',
 		coordinator,
+		finalized: true,
 		kind: 'settlement',
 		lastValidBlockNumber: '125',
 		minedAt: '2026-09-19T10:00:30.000Z',
 		nonce: index.toString(),
 		projectedGasCostEth: '0.005',
 		receiptBlock: { hash: hash(1_000 + index), number: '101' },
+		replacedBy: undefined,
 		reportId: index.toString(),
 		rewardEth: '0.017',
 		status: 'confirmed',
@@ -80,6 +82,8 @@ describe('settlement journal', () => {
 			{ ...record(9), submissionMode: 'relay' },
 			{ ...record(10), lastValidBlockNumber: undefined },
 			{ ...record(11), receiptBlock: { hash: 'block', number: '1' } },
+			{ ...record(12), finalized: undefined },
+			{ ...record(13), replacedBy: 'replacement' },
 			null,
 		])
 			await expect(load(invalid)).rejects.toThrow('Invalid settlement journal record at line 1')
@@ -114,7 +118,7 @@ describe('settlement journal', () => {
 	})
 
 	test('charges a pending attempt its signed exposure on every day until its outcome replaces it', () => {
-		const pending = record(1, { actualGasCostEth: undefined, minedAt: undefined, receiptBlock: undefined, status: 'pending' })
+		const pending = record(1, { actualGasCostEth: undefined, finalized: false, minedAt: undefined, receiptBlock: undefined, status: 'pending' })
 		// A dropped attempt holds its report until its own horizon has finalized, so a repeating refusal re-signs at that cadence.
 		const dropped = { ...pending, status: 'dropped' as const }
 		const horizonFinalized = BigInt(dropped.lastValidBlockNumber) + ATTEMPT_FINALITY_BLOCKS
@@ -126,11 +130,14 @@ describe('settlement journal', () => {
 		expect(settlementAttemptIsUnresolved({ ...dropped, submissionMode: 'private' }, 10_000n)).toBeTrue()
 		expect(settlementAttemptIsUnresolved(dropped, horizonFinalized - 1n)).toBeTrue()
 		expect(settlementAttemptIsUnresolved(dropped, horizonFinalized)).toBeFalse()
-		expect(settlementAttemptIsUnresolved({ ...pending, status: 'expired' }, 0n)).toBeFalse()
-		// A mined outcome is rechecked until its receipt block has finality, because a short reorg can orphan the receipt.
-		expect(settlementAttemptIsUnresolved(record(1), 101n + ATTEMPT_FINALITY_BLOCKS - 1n)).toBeTrue()
-		expect(settlementAttemptIsUnresolved(record(1), 101n + ATTEMPT_FINALITY_BLOCKS)).toBeFalse()
-		expect(settlementAttemptIsUnresolved(record(1, { status: 'reverted' }), 101n)).toBeTrue()
+		expect(settlementAttemptIsUnresolved({ ...pending, finalized: true, status: 'expired' }, 0n)).toBeFalse()
+		// A mined or expired outcome is rechecked until recovery has verified it at finality depth; age alone finalizes nothing,
+		// because the bot may have been down while a reorg orphaned the receipt or the replacement.
+		expect(settlementAttemptIsUnresolved(record(1, { finalized: false }), 10_000n)).toBeTrue()
+		expect(settlementAttemptIsUnresolved(record(1, { finalized: true }), 101n)).toBeFalse()
+		expect(settlementAttemptIsUnresolved(record(1, { finalized: false, status: 'reverted' }), 10_000n)).toBeTrue()
+		expect(settlementAttemptIsUnresolved({ ...pending, status: 'expired' }, 10_000n)).toBeTrue()
+		expect(settlementAttemptIsUnresolved({ ...pending, finalized: true, status: 'expired' }, 0n)).toBeFalse()
 		const day = new Date('2026-09-19T23:59:59.000Z')
 		expect(settlementGasSpentAttoEthOnUtcDay([pending], day)).toBe(5n * 10n ** 15n)
 		// The liability follows the attempt across midnight; only a mined cost is pinned to its block's day.

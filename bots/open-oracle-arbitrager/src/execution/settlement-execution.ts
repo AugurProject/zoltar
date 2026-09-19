@@ -103,20 +103,22 @@ async function signAndSubmit(context: SettlementExecutionContext, call: { data: 
 		throw error
 	}
 	const { receipt: observed } = await waitForTrackedTransaction(context.client, context.wallet, context.config, submission, context.track, () => {}, context.isPaused)
+	// A replacement seen at the head is not final: the retired original stays recoverable until the replacement has finality.
+	const retired = (): SettlementRecord => ({ ...record, finalized: false, replacedBy: observed.transactionHash, status: 'expired', updatedAt: new Date().toISOString() })
 	if (observed.transactionHash.toLowerCase() !== signed.hash.toLowerCase()) {
 		// A replacement at the same nonce only counts when it carries the signed call; either way the signed hash can no longer land.
 		const mismatch = await recoveredTransactionIntentMismatchWithQuorum(context.readClients, context.config, 'settlement replacement', observed.transactionHash, account.address, nonce.toString(), durableTransactionIntent(signed.transaction))
 		if (mismatch !== undefined) {
-			await context.persist({ ...record, status: 'expired', updatedAt: new Date().toISOString() })
+			await context.persist(retired())
 			throw new Error(`Settlement transaction ${signed.hash} was replaced by ${observed.transactionHash}: ${mismatch}`)
 		}
 	}
 	const outcome = await receiptOutcome(context.readClients, context.config, observed.transactionHash)
-	const final: SettlementRecord = { ...record, ...outcome, transactionHash: observed.transactionHash, updatedAt: new Date().toISOString() }
+	const final: SettlementRecord = { ...record, ...outcome, finalized: false, transactionHash: observed.transactionHash, updatedAt: new Date().toISOString() }
 	// The mined outcome is journaled before the replaced hash is retired, so an interruption between the two writes leaves
 	// a pending original that recovery retires against the already journaled replacement, never an unaccounted receipt.
 	await context.persist(final)
-	if (final.transactionHash.toLowerCase() !== record.transactionHash.toLowerCase()) await context.persist({ ...record, status: 'expired', updatedAt: new Date().toISOString() })
+	if (final.transactionHash.toLowerCase() !== record.transactionHash.toLowerCase()) await context.persist(retired())
 	return final
 }
 
@@ -152,12 +154,14 @@ export async function executeSettlement(context: SettlementExecutionContext, pla
 		account: account.address,
 		actualGasCostEth: undefined,
 		coordinator: plan.coordinator,
+		finalized: false,
 		kind: 'settlement',
 		lastValidBlockNumber: attempt.lastValidBlockNumber,
 		minedAt: undefined,
 		nonce: attempt.nonce,
 		projectedGasCostEth: decimalWeth(plan.projectedGasCostAttoEth),
 		receiptBlock: undefined,
+		replacedBy: undefined,
 		reportId,
 		rewardEth: decimalWeth(plan.rewardAttoEth),
 		status: 'pending',
@@ -179,12 +183,14 @@ export async function executeRewardWithdrawal(context: SettlementExecutionContex
 		account: account.address,
 		actualGasCostEth: undefined,
 		coordinator: undefined,
+		finalized: false,
 		kind: 'reward-withdrawal',
 		lastValidBlockNumber: attempt.lastValidBlockNumber,
 		minedAt: undefined,
 		nonce: attempt.nonce,
 		projectedGasCostEth: decimalWeth(projectedGasCostAttoEth),
 		receiptBlock: undefined,
+		replacedBy: undefined,
 		reportId: undefined,
 		rewardEth: decimalWeth(amountAttoEth),
 		status: 'pending',
@@ -198,16 +204,18 @@ export async function executeRewardWithdrawal(context: SettlementExecutionContex
 }
 
 /**
- * Resolves records left `pending` by an interrupted process. A public transaction has no on-chain deadline, so an attempt
- * without a receipt stays pending until another transaction consumes its nonce at a reorg-safe depth; when the consuming
- * transaction carries the same intent (an operator rebroadcast) its receipt is adopted under the new hash, otherwise the
- * attempt is `expired` and can never be mined. A private relay stops including at the signed horizon, so a private
- * attempt whose horizon has finalized without a receipt is `dropped`: it releases the report and the budget but keeps
- * being rechecked here, while a dropped public attempt (never accepted anywhere) leaves the recheck set once its own
- * horizon has finalized. A mined outcome is rechecked until its receipt block has finality: a receipt that moved to
- * another block is re-read, and one a reorg orphaned returns the attempt to `pending`. Every outcome keeps its gas
- * accounted, so nothing is re-sent on top of a live attempt. Adopted outcomes precede the hash they retire so a partial
- * write never loses the receipt.
+ * Resolves records left `pending` by an interrupted process and verifies every other outcome at finality depth. A public
+ * transaction has no on-chain deadline, so an attempt without a receipt stays pending until another transaction consumes
+ * its nonce at a reorg-safe depth; when the consuming transaction carries the same intent (an operator rebroadcast) its
+ * receipt is adopted under the new hash, otherwise the attempt is `expired`. A private relay stops including at the
+ * signed horizon, so a private attempt whose horizon has finalized without a receipt is `dropped`: it releases the report
+ * and the budget but keeps being rechecked here, while a dropped public attempt (never accepted anywhere) leaves the
+ * recheck set once its own horizon has finalized. A mined outcome is rechecked until its receipt is verified canonical
+ * twelve blocks deep; a receipt that moved to another block is re-read and one a reorg orphaned returns the attempt to
+ * `pending`. An expired attempt is rechecked the same way against the transaction that replaced it: if that replacement
+ * is orphaned the original is live again, or mined after all. Age alone never finalizes anything, because the bot may
+ * have been down while the reorg happened. Adopted outcomes precede the hash they retire so a partial write never loses
+ * the receipt.
  */
 export async function reconcilePendingSettlements(readClients: readonly ReadClient[], config: Pick<Configuration, 'connectivity' | 'quorumRpcUrls'>, records: readonly SettlementRecord[], blockNumber: bigint) {
 	const unresolved = records.filter(record => settlementAttemptIsUnresolved(record, blockNumber))
@@ -220,30 +228,47 @@ export async function reconcilePendingSettlements(readClients: readonly ReadClie
 		unresolved.map(record => record.transactionHash),
 	)
 	const resolved: SettlementRecord[] = []
-	// Nonce consumption is judged this far behind the head so a reorg cannot retire an attempt that is still able to land.
 	const finalityBlockNumber = blockNumber > ATTEMPT_FINALITY_BLOCKS ? blockNumber - ATTEMPT_FINALITY_BLOCKS : 0n
 	const confirmedNonces = new Map<string, bigint>()
+	const confirmedNonceFor = async (account: Address) => {
+		const key = account.toLowerCase()
+		let nonce = confirmedNonces.get(key)
+		if (nonce === undefined) {
+			nonce = await confirmedNonceWithQuorum(readClients, config, account, finalityBlockNumber)
+			confirmedNonces.set(key, nonce)
+		}
+		return nonce
+	}
+	const receiptFinality = (receipt: { blockNumber: bigint }) => attemptHasFinality(blockNumber, receipt.blockNumber)
 	for (const [index, record] of unresolved.entries()) {
 		const receipt = receipts[index]
 		const updatedAt = new Date().toISOString()
 		if (receipt !== undefined) {
-			if (record.receiptBlock !== undefined && record.receiptBlock.hash.toLowerCase() === receipt.blockHash.toLowerCase()) continue
-			resolved.push({ ...record, ...(await receiptExpenditure(readClients, config, receipt)), updatedAt })
+			if (record.receiptBlock !== undefined && record.receiptBlock.hash.toLowerCase() === receipt.blockHash.toLowerCase()) {
+				if (receiptFinality(receipt)) resolved.push({ ...record, finalized: true, updatedAt })
+				continue
+			}
+			resolved.push({ ...record, ...(await receiptExpenditure(readClients, config, receipt)), finalized: receiptFinality(receipt), replacedBy: undefined, updatedAt })
 			continue
 		}
 		if (record.status === 'confirmed' || record.status === 'reverted') {
 			// The receipt's block was orphaned: the attempt is live again until a receipt or a consumed nonce says otherwise.
-			resolved.push({ ...record, actualGasCostEth: undefined, minedAt: undefined, receiptBlock: undefined, status: 'pending', updatedAt })
+			resolved.push({ ...record, actualGasCostEth: undefined, finalized: false, minedAt: undefined, receiptBlock: undefined, status: 'pending', updatedAt })
 			continue
 		}
-		const accountKey = record.account.toLowerCase()
-		let confirmedNonce = confirmedNonces.get(accountKey)
-		if (confirmedNonce === undefined) {
-			confirmedNonce = await confirmedNonceWithQuorum(readClients, config, record.account, finalityBlockNumber)
-			confirmedNonces.set(accountKey, confirmedNonce)
+		if (record.status === 'expired') {
+			// The replacement that retired this hash must itself reach finality; if it was orphaned the original is live again.
+			const [replacement] = record.replacedBy === undefined ? [undefined] : await transactionReceiptsOrMissingWithQuorum(readClients, endpoints, `settlement journal recovery ${record.transactionHash} replacement`, [record.replacedBy])
+			if (replacement !== undefined) {
+				if (receiptFinality(replacement)) resolved.push({ ...record, finalized: true, updatedAt })
+				continue
+			}
+			if (BigInt(record.nonce) < (await confirmedNonceFor(record.account))) resolved.push({ ...record, finalized: true, updatedAt })
+			else resolved.push({ ...record, finalized: false, replacedBy: undefined, status: 'pending', updatedAt })
+			continue
 		}
 		const nonce = BigInt(record.nonce)
-		if (nonce >= confirmedNonce) {
+		if (nonce >= (await confirmedNonceFor(record.account))) {
 			if (record.status === 'pending' && record.submissionMode === 'private' && attemptHasFinality(blockNumber, BigInt(record.lastValidBlockNumber))) resolved.push({ ...record, status: 'dropped', updatedAt })
 			continue
 		}
@@ -254,14 +279,18 @@ export async function reconcilePendingSettlements(readClients: readonly ReadClie
 			nonce,
 			toBlockNumber: finalityBlockNumber,
 		})
-		const retired: SettlementRecord = { ...record, status: 'expired', updatedAt }
+		// The consumption was observed at finality depth, so the retirement is final; the consumer's own record is verified separately.
+		const retired: SettlementRecord = { ...record, finalized: true, replacedBy: consumingHash, status: 'expired', updatedAt }
 		// A consumer the journal already knows (the bot's own re-send at the same nonce) keeps its own record.
 		if (consumingHash === undefined || records.some(existing => existing.transactionHash.toLowerCase() === consumingHash.toLowerCase())) {
 			resolved.push(retired)
 			continue
 		}
 		const mismatch = await recoveredTransactionIntentMismatchWithQuorum(readClients, config, `settlement journal recovery ${record.transactionHash}`, consumingHash, record.account, record.nonce, record.transactionIntent)
-		if (mismatch === undefined) resolved.push({ ...record, ...(await receiptOutcome(readClients, config, consumingHash)), transactionHash: consumingHash, updatedAt })
+		if (mismatch === undefined) {
+			const adopted = await receiptOutcome(readClients, config, consumingHash)
+			resolved.push({ ...record, ...adopted, finalized: attemptHasFinality(blockNumber, BigInt(adopted.receiptBlock.number)), replacedBy: undefined, transactionHash: consumingHash, updatedAt })
+		}
 		resolved.push(retired)
 	}
 	return resolved
