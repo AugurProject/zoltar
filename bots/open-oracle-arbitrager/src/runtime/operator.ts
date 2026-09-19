@@ -54,7 +54,7 @@ import { startOperatorControlPlane } from './operator-control-plane.ts'
 import { applyQueuedExecutionSettings, applyQueuedSigner, recordScanDecision, resetReportScanState } from './operator-execution-state.ts'
 import { createSettlementJournal, recoverPendingSettlements, runSettlementStage } from './settlement-stage.ts'
 import { createConfiguredDexPairReader } from './configured-dex-pair.ts'
-import { emptySettlementSnapshot, settlementGasSpentAttoEthOnUtcDay } from '#state/settlement-store'
+import { emptySettlementSnapshot } from '#state/settlement-store'
 import { completeSuccessfulPoll, completeUnconfiguredPoll } from './poll-completion.ts'
 import { selectQuorumHead } from './quorum-head.ts'
 import { acquireScanSignerOperation } from './signer-operations.ts'
@@ -780,7 +780,7 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 						state.priceHistory = [...state.priceHistory, ...samples]
 						state.marketObservations = mergeMarketObservations(state.marketObservations ?? [], [...centralizedMarketConsensusObservations(state.centralizedMarket), ...configuredDexMarkets.observations], config.centralizedMarkets.maximumObservationAgeMilliseconds)
 						// Settlements mined during a crash or receipt timeout must charge their gas before any candidate is judged against today's budget.
-						await recoverPendingSettlements({ blockNumber, config, journal: settlementJournal, readClients, state })
+						const reconciledSettlements = await recoverPendingSettlements({ blockNumber, config, journal: settlementJournal, readClients, state })
 						for (const { evaluated, report } of evaluatedReports) {
 							if (stopHead()) return
 							try {
@@ -839,7 +839,7 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 											continue
 										}
 										const riskDate = dateFromBlockTimestamp(block.timestamp)
-										const mismatch = candidateRiskMismatch(evaluated.candidate, positions, config.riskLimits, riskDate, archivedUtcDayGasSpentWeth(positionJournal.archived, riskDate) + settlementGasSpentAttoEthOnUtcDay(settlementJournal.records, riskDate))
+										const mismatch = candidateRiskMismatch(evaluated.candidate, positions, config.riskLimits, riskDate, archivedUtcDayGasSpentWeth(positionJournal.archived, riskDate) + reconciledSettlements.gasSpentAttoEthOnUtcDay(riskDate))
 										if (mismatch === undefined) candidates.push(evaluated.candidate)
 										else {
 											evaluated.opportunity.decision = 'risk-limit'
@@ -932,7 +932,7 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 									() => state.paused || shutdown?.isRequested() === true,
 									trackTransaction,
 									persistPosition,
-									archivedUtcDayGasSpentWeth(positionJournal.archived, dateFromBlockTimestamp(block.timestamp)) + settlementGasSpentAttoEthOnUtcDay(settlementJournal.records, dateFromBlockTimestamp(block.timestamp)),
+									archivedUtcDayGasSpentWeth(positionJournal.archived, dateFromBlockTimestamp(block.timestamp)) + reconciledSettlements.gasSpentAttoEthOnUtcDay(dateFromBlockTimestamp(block.timestamp)),
 								)
 								selected.opportunity.decision = 'submitted'
 								if (!state.executionHistory.some(existing => existing.transactionHash.toLowerCase() === record.transactionHash.toLowerCase())) state.executionHistory.unshift(record)

@@ -15,6 +15,7 @@ import type { CoordinatorGamePolicy } from '#core/game-policy'
 import type { ActiveReport } from '#monitoring/oracle-log-state'
 import type { OperationEntry, TransactionActivity } from '#state/operator-state'
 import { settlementEconomics, settlementMaxFeePerGas, signedSettlementGasLimit } from '#core/settlement-strategy'
+import { dateFromBlockTimestamp } from '#execution/recovery-support'
 import { emptySettlementSnapshot, loadSettlementJournal, settlementAttemptHoldsFlow, settlementAttemptIsUnresolved, settlementGasSpentAttoEthOnUtcDay, settlementJournalPath, type MutableSettlement, type SettlementRecord } from '#state/settlement-store'
 import { createSettlementJournal, recoverPendingSettlements, runSettlementStage, type SettlementStageConfiguration } from '../../src/runtime/settlement-stage.ts'
 import { createAnvilNodeForConnectionMode, getAnvilConnectionMode, type AnvilNode } from '../../../../solidity/ts/testSupport/simulator/anvilNode.ts'
@@ -552,11 +553,13 @@ describe('third-party settlement execution against OpenOracle', () => {
 			expect(parseDecimalWeth(state.settlements.utcDayGasSpentEth)).toBe(parseDecimalWeth(settled.actualGasCostEth) + parseDecimalWeth(withdrawal.projectedGasCostEth))
 			const withdrawnHead = await client.getBlock()
 			if (withdrawnHead.number === null || withdrawnHead.number === undefined) throw new Error('head block number missing')
-			await recoverPendingSettlements({ blockNumber: withdrawnHead.number, config: stageConfig, journal, readClients: [client], state })
+			const reconciled = await recoverPendingSettlements({ blockNumber: withdrawnHead.number, config: stageConfig, journal, readClients: [client], state })
 			expect(journal.records.map(record => `${record.kind}:${record.status}`)).toEqual(['reward-withdrawal:confirmed', 'settlement:confirmed'])
 			expect(state.operationLog.map(entry => entry.message)).toContain('Settlement attempt recovered')
 			const recoveredGasAttoEth = parseDecimalWeth(settled.actualGasCostEth) + parseDecimalWeth(withdrawal.actualGasCostEth)
 			expect(parseDecimalWeth(state.settlements.utcDayGasSpentEth)).toBe(recoveredGasAttoEth)
+			// The dispute path charges settlement gas only through the recovered view, so it sees the mined cost, not the stale projection.
+			expect(reconciled.gasSpentAttoEthOnUtcDay(dateFromBlockTimestamp(withdrawnHead.timestamp))).toBe(recoveredGasAttoEth)
 			// The recovered gas exhausts a budget set just below it, so the next candidate is refused instead of signed.
 			await runSettlementStage({
 				block: { baseFeePerGas: 0n, number: withdrawnHead.number, timestamp: withdrawnHead.timestamp },

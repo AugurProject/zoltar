@@ -80,12 +80,16 @@ type SettlementStageParameters = {
 	wallet: WriteClient | undefined
 }
 
+/** The settlement journal after recovery: the only source the dispute path may charge settlement gas from. */
+export type ReconciledSettlementJournal = { gasSpentAttoEthOnUtcDay: (day: Date) => bigint }
+
 /**
  * Resolves attempts left `pending` by an interrupted process from their receipts or their consumed nonces. The operator
  * runs this before any candidate is judged against the daily gas budget, so a settlement mined during a crash or receipt
- * timeout charges its actual gas before a dispute in the same scan can spend the remainder.
+ * timeout charges its actual gas before a dispute in the same scan can spend the remainder; the returned view is how the
+ * dispute path reads that gas, so it cannot be read before recovery has run.
  */
-export async function recoverPendingSettlements(parameters: Pick<SettlementStageParameters, 'config' | 'journal' | 'readClients' | 'state'> & { blockNumber: bigint }) {
+export async function recoverPendingSettlements(parameters: Pick<SettlementStageParameters, 'config' | 'journal' | 'readClients' | 'state'> & { blockNumber: bigint }): Promise<ReconciledSettlementJournal> {
 	const { config, journal, readClients, state } = parameters
 	const resolved = await reconcilePendingSettlements(readClients, config, journal.records, parameters.blockNumber)
 	for (const record of resolved) {
@@ -110,6 +114,7 @@ export async function recoverPendingSettlements(parameters: Pick<SettlementStage
 			reportId: record.reportId,
 		})
 	}
+	return { gasSpentAttoEthOnUtcDay: day => settlementGasSpentAttoEthOnUtcDay(journal.records, day) }
 }
 
 /**
