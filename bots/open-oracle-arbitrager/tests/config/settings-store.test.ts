@@ -8,8 +8,21 @@ import { mkdir, mkdtemp, open, readFile, rename, rm, stat, symlink, writeFile } 
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { Hex } from '@zoltar/bot-shared/ethereum'
-import { assertOperatorProfileIsolation, CONFIGURATION_REVISION_CONFLICT, loadOperatorSettings, loadOperatorSettingsWithRevision, operatorProfilePath, parseOperatorSettings, saveOperatorSettings, serializeOperatorSettings, switchOperatorNetworkProfile, type OperatorSettingsFilesystem } from '#config/settings-store'
+import {
+	assertOperatorProfileIsolation,
+	CONFIGURATION_REVISION_CONFLICT,
+	durableJournalPaths,
+	loadOperatorSettings,
+	loadOperatorSettingsWithRevision,
+	operatorProfilePath,
+	parseOperatorSettings,
+	saveOperatorSettings,
+	serializeOperatorSettings,
+	switchOperatorNetworkProfile,
+	type OperatorSettingsFilesystem,
+} from '#config/settings-store'
 import { executorDeploymentIntentPath } from '#execution/executor-deployment-store'
+import { parseSettlementSettings, settlementJournalPath } from '#state/settlement-store'
 
 const temporaryDirectories: string[] = []
 const privateKey = `0x${'11'.repeat(32)}` as Hex
@@ -83,6 +96,7 @@ function settings(privateKeyValue: Hex | undefined) {
 			uiHost: '127.0.0.1' as const,
 			uiPort: 4173,
 		},
+		settlement: parseSettlementSettings(undefined),
 		strategy: {
 			maxSpotTwapTicks: 75n,
 			minimumProfitBps: 200n,
@@ -291,6 +305,18 @@ describe('operator settings persistence', () => {
 		expect(parseOperatorSettings(serialized).rpcQuorum).toBe(1)
 	})
 
+	test('keeps settlement disabled for configuration files that predate the block and round-trips an enabled one', () => {
+		const serialized = serializeOperatorSettings(settings(undefined))
+		expect(serialized.settlement).toEqual({ enabled: false, maxGasPriceNanoEth: '50', minimumProfitWeth: '0.001', rewardWithdrawThresholdEth: '0.01' })
+		const { settlement: _omitted, ...legacy } = serialized
+		expect(parseOperatorSettings(legacy).settlement).toEqual(parseSettlementSettings(undefined))
+		const enabled = { ...serialized, settlement: { enabled: true, maxGasPriceNanoEth: '8', minimumProfitWeth: '0.002', rewardWithdrawThresholdEth: '0.05' } }
+		const parsed = parseOperatorSettings(enabled)
+		expect(parsed.settlement).toEqual({ enabled: true, maxGasPriceAttoEthPerGas: 8_000_000_000n, minimumProfitAttoWeth: 2n * 10n ** 15n, rewardWithdrawThresholdAttoEth: 5n * 10n ** 16n })
+		expect(serializeOperatorSettings(parsed).settlement).toEqual(enabled.settlement)
+		expect(() => parseOperatorSettings({ ...serialized, settlement: { enabled: true } })).toThrow('Every settlement setting is required')
+	})
+
 	test('validates and persists the dashboard RPC quorum policy', () => {
 		const serialized = serializeOperatorSettings(settings(undefined))
 		for (const rpcQuorum of [null, '1', 0, 3]) expect(() => parseOperatorSettings({ ...serialized, rpcQuorum })).toThrow('rpcQuorum must be 1 or 2')
@@ -434,6 +460,39 @@ describe('operator settings persistence', () => {
 				}),
 			),
 		).toThrow('must use distinct paths')
+	})
+
+	test('rejects a configured journal that aliases the settlement journal derived from the position file', () => {
+		const value = settings(undefined)
+		expect(durableJournalPaths(value.runtime)).toContain(settlementJournalPath(value.runtime.positionFile))
+		for (const key of ['historyFile', 'priceHistoryFile'] as const) {
+			expect(() => parseOperatorSettings(serializeOperatorSettings({ ...value, runtime: { ...value.runtime, [key]: '.state/nested/../positions.json.settlements' } }))).toThrow('derived settlement journal must use distinct paths')
+		}
+	})
+
+	test('rejects a dormant profile whose journal aliases the active chain settlement journal through a symlinked directory', async () => {
+		const directory = await mkdtemp(join(tmpdir(), 'zoltar-arbitrager-profile-settlement-alias-'))
+		temporaryDirectories.push(directory)
+		const durableDirectory = join(directory, 'durable')
+		const durableAlias = join(directory, 'durable-alias')
+		await mkdir(durableDirectory)
+		await symlink(durableDirectory, durableAlias, 'dir')
+		const path = join(directory, 'operator.json')
+		const mainnet = settings(undefined)
+		mainnet.runtime.historyFile = join(durableDirectory, 'mainnet-history.jsonl')
+		mainnet.runtime.positionFile = join(durableDirectory, 'mainnet-positions.json')
+		mainnet.runtime.priceHistoryFile = join(durableDirectory, 'mainnet-prices.jsonl')
+		// The Sepolia price history points at the mainnet settlement journal through the alias; nothing configured collides directly.
+		const sepolia = {
+			...mainnet,
+			centralizedMarkets: { ...mainnet.centralizedMarkets, assetChainId: 11_155_111 },
+			network: 'sepolia' as const,
+			runtime: { ...mainnet.runtime, historyFile: join(durableAlias, 'sepolia-history.jsonl'), positionFile: join(durableAlias, 'sepolia-positions.json'), priceHistoryFile: join(durableAlias, 'mainnet-positions.json.settlements') },
+		}
+		await saveOperatorSettings(path, mainnet)
+		await saveOperatorSettings(operatorProfilePath(path, 'sepolia'), sepolia)
+		await expect(switchOperatorNetworkProfile(path, 'sepolia', join(import.meta.dir, '..', '..', 'config', 'operator.example.json'))).rejects.toThrow('Mainnet and Sepolia profiles must use distinct durable journal paths')
+		expect((await loadOperatorSettings(path))?.network).toBe('mainnet')
 	})
 })
 

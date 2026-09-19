@@ -618,7 +618,8 @@ describe('signed transaction delivery', () => {
 		])
 		expect(result).toEqual({
 			acceptedTargets: ['https://rpc-a.example'],
-			failedTargets: [{ error: 'RPC unavailable', target: 'https://rpc-b.example' }],
+			// A transport failure is not a refusal: the node may still hold the transaction.
+			failedTargets: [{ error: 'RPC unavailable', rejected: false, target: 'https://rpc-b.example' }],
 			hash,
 			mode: 'public',
 		})

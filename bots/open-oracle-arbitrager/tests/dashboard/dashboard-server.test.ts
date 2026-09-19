@@ -1,3 +1,4 @@
+import { emptySettlementSnapshot } from '#state/settlement-store'
 import { afterEach, expect, test } from 'bun:test'
 import type { Address, Hex } from '@zoltar/bot-shared/ethereum'
 import { startDashboardServer } from '#dashboard/dashboard-server'
@@ -42,6 +43,7 @@ test('serves dashboard state and protects mutable controls with same-origin JSON
 		tokenMarkets: [],
 		priceHistory: [],
 		reportPaths: [],
+		settlements: emptySettlementSnapshot(),
 		transactionActivity: [],
 	}
 	let submission = validateSubmissionSettings({ mode: 'public', relayUrls: ['https://relay.flashbots.net'] })

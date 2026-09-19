@@ -3,9 +3,10 @@ import type { Address, Hex } from '@zoltar/bot-shared/ethereum'
 import type { DeploymentManifest } from '#config/deployment-auth'
 import { validateIndependentReadRpcUrls, type ConnectivitySettings } from '#monitoring/connectivity'
 import { type MutableStrategy } from '#state/operator-state'
+import type { MutableSettlement } from '#state/settlement-store'
 import { networkConfiguration, type NetworkConfiguration } from '#config/network'
 import type { RiskLimits } from '#core/safety-controls'
-import { assertOperatorProfileIsolation, loadOperatorSettings, type PersistedOperatorSettings } from '#config/settings-store'
+import { assertOperatorProfileIsolation, durableJournalPaths, loadOperatorSettings, type PersistedOperatorSettings } from '#config/settings-store'
 import type { SubmissionSettings } from '#execution/transaction-submission'
 import type { CentralizedMarketSettings } from '@zoltar/bot-shared/monitoring/centralized-markets'
 import { configuredQuorumRpcUrlMinimum, type RpcQuorumRequirement } from '@zoltar/bot-shared/monitoring/rpc-quorum-policy'
@@ -13,7 +14,7 @@ import { configuredQuorumRpcUrlMinimum, type RpcQuorumRequirement } from '@zolta
 export const defaultConfigurationFile = resolve(import.meta.dir, '..', '..', '.state', 'operator.json')
 
 export function assertDistinctPersistentPaths(settingsFile: string, runtime: Pick<PersistedOperatorSettings['runtime'], 'historyFile' | 'positionFile' | 'priceHistoryFile'>) {
-	const persistentPaths = [settingsFile, runtime.historyFile, runtime.positionFile, runtime.priceHistoryFile].map(path => resolve(path))
+	const persistentPaths = [settingsFile, ...durableJournalPaths(runtime)].map(path => resolve(path))
 	if (new Set(persistentPaths).size !== persistentPaths.length) throw new Error('Operator settings and runtime persistence files must use distinct paths')
 }
 
@@ -40,6 +41,7 @@ export type Configuration = MutableStrategy & {
 	quorumRpcUrls: string[]
 	rpcQuorum: RpcQuorumRequirement
 	riskLimits: RiskLimits
+	settlement: MutableSettlement
 	router: Address | undefined
 	settingsFile: string
 	submission: SubmissionSettings
@@ -95,6 +97,7 @@ export async function loadConfiguration(settingsFile = resolve(process.env['OPEN
 		quorumRpcUrls,
 		rpcQuorum: saved.rpcQuorum,
 		riskLimits: saved.runtime.riskLimits,
+		settlement: { ...saved.settlement },
 		router: deployment.uniswapRouter,
 		settingsFile,
 		submission: saved.submission,

@@ -130,7 +130,7 @@ async function canonicalBlockSnapshot<T>(client: ReadClient, endpoint: string, b
 	return { blockHash: blockAfter.hash, blockTimestamp: blockAfter.timestamp, value }
 }
 
-export async function pendingNonceWithQuorum(clients: readonly ReadClient[], config: Configuration, account: Address) {
+export async function pendingNonceWithQuorum(clients: readonly ReadClient[], config: Pick<Configuration, 'connectivity' | 'quorumRpcUrls'>, account: Address) {
 	const endpoints = [config.connectivity.readRpcUrl, ...config.quorumRpcUrls]
 	return settledQuorumValue(
 		'pending account nonce used for signing',

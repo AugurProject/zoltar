@@ -8,7 +8,8 @@ import { quorumValue, settledQuorumValue, sharedQuorumBlockNumber } from '../src
 import { boundedDashboardJson, dashboardAuthorities, dashboardRequestAuthorityIsAccepted, validateDashboardAuthentication } from '../src/dashboard/security.ts'
 import { acquireExclusiveProcessLock } from '../src/execution/process-lock.ts'
 import { createSignerOperationGate } from '../src/execution/signer-operation-gate.ts'
-import { maximumFeePerGas, paddedTransactionGas, prepareSignedTransaction, submitSignedTransaction, validateSubmissionSettings } from '../src/execution/transaction-submission.ts'
+import { isEndpointRejection } from '../src/execution/transaction-rejection.ts'
+import { cappedMaximumFeePerGas, maximumFeePerGas, paddedTransactionGas, prepareSignedTransaction, submissionRejectedEverywhere, submitSignedTransaction, validateSubmissionSettings } from '../src/execution/transaction-submission.ts'
 import { mainnet } from '@zoltar/core-shared/evm/ethereum'
 import { createContextualPublicClient, createPublicClient, encodeAbiParameters, http, parseTransaction, privateKeyToAccount, readContractAtBlock, RpcError, type Abi, type AbiValue, type Hex } from '../src/ethereum.ts'
 import { custom } from '../src/ethereum/rpc-transport.ts'
@@ -17,7 +18,7 @@ import { LOG_RPC_RESPONSE_BYTES } from '../src/infrastructure/bounded-json.ts'
 import { ConnectivityDegradedError, operationalFailureDisposition } from '../src/monitoring/resilience.ts'
 import { bigintToSafeNumber } from '../src/ethereum.ts'
 import { confirmCanonicalReceiptFinality, type CanonicalBlockReader } from '../src/execution/canonical-finality.ts'
-import { EndpointCheckFailure } from '../src/monitoring/connectivity.ts'
+import { EndpointCheckFailure, sendRawTransactionToRpc } from '../src/monitoring/connectivity.ts'
 import { configuredReadRpcEndpointMinimum, rpcQuorumRequirement } from '../src/monitoring/rpc-quorum-policy.ts'
 
 const temporaryDirectories: string[] = []
@@ -1256,6 +1257,25 @@ describe('shared bot primitives', () => {
 		expect(() => maximumFeePerGas((1n << 256n) - 1n)).toThrow('maximum fee per gas exceeds uint256')
 	})
 
+	test('bounds the signed fee ceiling and its tip by an operator cap', async () => {
+		const nanoEth = 10n ** 9n
+		expect(cappedMaximumFeePerGas(20n * nanoEth, 50n * nanoEth)).toBe(50n * nanoEth)
+		expect(cappedMaximumFeePerGas(20n * nanoEth, 10_000n * nanoEth)).toBe(maximumFeePerGas(20n * nanoEth))
+		expect(cappedMaximumFeePerGas(10n, 2_000_000_012n, 2n)).toBe(2_000_000_012n)
+		expect(() => cappedMaximumFeePerGas(10n, 0n)).toThrow('maximum fee per gas cap must be positive')
+		const account = privateKeyToAccount(`0x${'13'.repeat(32)}`)
+		if (account.signTransaction === undefined) throw new Error('Local test account cannot sign')
+		const sign = (maxFeePerGasCap: bigint) => prepareSignedTransaction({ baseFeePerGas: 20n * nanoEth, blockNumber: 100n, chainId: 1, data: '0x', from: account.address, gasEstimate: 21_000n, maxFeePerGasCap, nonce: 0n, signTransaction: account.signTransaction, to: '0x0000000000000000000000000000000000000010' })
+		const capped = await sign(50n * nanoEth)
+		expect(capped.transaction.maxFeePerGas).toBe(50n * nanoEth)
+		expect(capped.transaction.maxPriorityFeePerGas).toBe(2n * nanoEth)
+		expect(parseTransaction(capped.serializedTransaction).maxFeePerGas).toBe(50n * nanoEth)
+		// A cap below the default tip lowers the tip with it, keeping the transaction valid under EIP-1559.
+		const tiny = await sign(1n * nanoEth)
+		expect(tiny.transaction.maxFeePerGas).toBe(1n * nanoEth)
+		expect(tiny.transaction.maxPriorityFeePerGas).toBe(1n * nanoEth)
+	})
+
 	test('prices a signed transaction for its actual validity window', async () => {
 		const account = privateKeyToAccount(`0x${'12'.repeat(32)}`)
 		if (account.signTransaction === undefined) throw new Error('Local test account cannot sign')
@@ -1294,6 +1314,103 @@ describe('shared bot primitives', () => {
 				signMessage: async () => `0x${'22'.repeat(65)}`,
 			}),
 		).rejects.toThrow('distinct relay origins')
+	})
+
+	test('tells a public RPC refusal apart from a transport failure that may have followed an ingestion', async () => {
+		const hash = `0x${'44'.repeat(32)}` as const
+		const refusing = Bun.serve({ port: 0, fetch: () => Response.json({ id: 1, jsonrpc: '2.0', error: { code: -32000, message: 'insufficient funds' } }) })
+		const failing = Bun.serve({ port: 0, fetch: () => new Response('unavailable', { status: 503 }) })
+		const internal = Bun.serve({ port: 0, fetch: () => Response.json({ id: 1, jsonrpc: '2.0', error: { code: -32603, message: 'upstream timed out' } }) })
+		const ambiguous = Bun.serve({ port: 0, fetch: () => Response.json({ id: 1, jsonrpc: '2.0', error: { code: -32000, message: 'upstream request timed out' } }) })
+		try {
+			if (refusing.port === undefined || failing.port === undefined || internal.port === undefined || ambiguous.port === undefined) throw new Error('Public RPC stubs did not bind a port')
+			const submit = (publicRpcUrls: readonly string[]) =>
+				submitSignedTransaction({
+					address: '0x0000000000000000000000000000000000000001',
+					hash,
+					maxBlockNumber: 100n,
+					publicRpcUrls,
+					publicSubmit: (url, serializedTransaction) => sendRawTransactionToRpc(url, serializedTransaction, 1_000),
+					serializedTransaction: '0x1234',
+					settings: { minimumBundleRelaySuccesses: 1, mode: 'public', relayUrls: [] },
+					signMessage: async () => `0x${'22'.repeat(65)}`,
+				}).catch(error => error)
+			const refused = await submit([`http://127.0.0.1:${refusing.port.toString()}`])
+			expect(submissionRejectedEverywhere(refused)).toBeTrue()
+			const lost = await submit([`http://127.0.0.1:${failing.port.toString()}`])
+			expect(lost.failedTargets.map((target: { rejected?: boolean }) => target.rejected)).toEqual([false])
+			expect(submissionRejectedEverywhere(lost)).toBeFalse()
+			// One refusal beside one lost response is not a refusal everywhere: the lost one may hold the transaction.
+			expect(submissionRejectedEverywhere(await submit([`http://127.0.0.1:${refusing.port.toString()}`, `http://127.0.0.1:${failing.port.toString()}`]))).toBeFalse()
+			// A JSON-RPC internal error can come back from a gateway after it forwarded the transaction, so it is not a refusal.
+			expect(submissionRejectedEverywhere(await submit([`http://127.0.0.1:${internal.port.toString()}`]))).toBeFalse()
+			// The generic server code also carries gateway conditions; only an explicit pool refusal message proves the node holds nothing.
+			expect(submissionRejectedEverywhere(await submit([`http://127.0.0.1:${ambiguous.port.toString()}`]))).toBeFalse()
+			// A malformed error envelope stays an unknown outcome instead of escaping the fan-out.
+			const malformed = Bun.serve({ port: 0, fetch: () => Response.json({ id: 1, jsonrpc: '2.0', error: { code: -32000, message: 7 } }) })
+			try {
+				if (malformed.port === undefined) throw new Error('Malformed RPC stub did not bind a port')
+				const escaped = await submit([`http://127.0.0.1:${malformed.port.toString()}`])
+				expect(escaped.failedTargets.map((target: { rejected?: boolean }) => target.rejected)).toEqual([false])
+			} finally {
+				malformed.stop(true)
+			}
+			expect(submissionRejectedEverywhere(new Error('not a submission failure'))).toBeFalse()
+		} finally {
+			refusing.stop(true)
+			failing.stop(true)
+			internal.stop(true)
+			ambiguous.stop(true)
+		}
+	})
+
+	test('classifies only explicit transaction-pool refusals as rejections', async () => {
+		// One stub answers every send with the JSON-RPC error encoded in its path, so each case runs through the real send path.
+		const stub = Bun.serve({
+			port: 0,
+			fetch: request => {
+				const [, code, message] = new URL(request.url).pathname.split('/')
+				return Response.json({ id: 1, jsonrpc: '2.0', error: { code: Number(code), message: decodeURIComponent(message ?? '') } })
+			},
+		})
+		const classify = async (code: number, message: string) => {
+			if (stub.port === undefined) throw new Error('RPC stub did not bind a port')
+			const outcome = await sendRawTransactionToRpc(`http://127.0.0.1:${stub.port.toString()}/${code.toString()}/${encodeURIComponent(message)}`, '0x1234', 1_000).catch((error: unknown) => error)
+			return isEndpointRejection(outcome)
+		}
+		const refusals = [
+			'nonce too low',
+			'insufficient funds for gas * price + value',
+			'replacement transaction underpriced',
+			'transaction underpriced',
+			'exceeds block gas limit',
+			'gas limit too high',
+			'intrinsic gas too low',
+			'invalid sender',
+			'invalid signature',
+			'invalid chain id for signer',
+			'txpool is full',
+			'max fee per gas less than block base fee',
+			'fee cap less than block base fee',
+			'oversized data',
+			'transaction type not supported',
+		]
+		try {
+			for (const message of refusals) {
+				expect(await classify(-32000, message)).toBeTrue()
+				expect(await classify(-32003, message)).toBeTrue()
+				expect(await classify(-32010, message)).toBeTrue()
+				// A pool message under a non-pool code is a gateway condition, not proof the node holds nothing.
+				expect(await classify(-32603, message)).toBeFalse()
+			}
+			for (const message of ['upstream request timed out', 'rejected', 'execution reverted', 'too many requests', '']) expect(await classify(-32000, message)).toBeFalse()
+			// Invalid params means the request was never processed, whatever the message says.
+			expect(await classify(-32602, 'invalid argument 0: rlp: expected input list')).toBeTrue()
+			expect(await classify(-32602, '')).toBeTrue()
+			expect(isEndpointRejection(new Error('RPC -32000: nonce too low'))).toBeFalse()
+		} finally {
+			stub.stop(true)
+		}
 	})
 
 	test('does not accept an oversized private-relay response', async () => {

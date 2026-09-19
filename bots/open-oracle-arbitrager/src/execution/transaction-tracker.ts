@@ -18,7 +18,7 @@ export type TrackedSubmission = SignedTransaction &
 	SubmittedTransaction & {
 		estimatedNetProfitEth: string | undefined
 		kind: TransactionActivity['kind']
-		reportId: string
+		reportId: string | undefined
 		submittedAt: string
 		token: Address | undefined
 		tokenSymbol: string | undefined
@@ -60,7 +60,7 @@ export async function submitContractTransaction(
 	wallet: WriteClient,
 	config: Pick<Configuration, 'connectivity' | 'submission'>,
 	signed: SignedTransaction,
-	details: { estimatedNetProfitEth: string | undefined; kind: TransactionActivity['kind']; reportId: string; token?: Address | undefined; tokenSymbol?: string | undefined },
+	details: { estimatedNetProfitEth: string | undefined; kind: TransactionActivity['kind']; reportId: string | undefined; token?: Address | undefined; tokenSymbol?: string | undefined },
 	isPaused: () => boolean,
 	track: TrackTransaction,
 	boundary?: { beforeSubmit: () => Promise<unknown> | unknown; persistPending: () => Promise<unknown> } | undefined,

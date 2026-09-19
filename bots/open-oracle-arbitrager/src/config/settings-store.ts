@@ -5,6 +5,7 @@ import { executorDeploymentIntentPath } from '#execution/executor-deployment-sto
 import { validateSubmissionSettings, type SubmissionSettings } from '#execution/transaction-submission'
 import { validateConnectivitySettings, validateIndependentReadRpcUrls, type ConnectivitySettings, type NetworkName } from '#monitoring/connectivity'
 import { decimalWeth, parseDecimalWeth, updateStrategyFromRequest, type MutableStrategy, type StrategySettings } from '#state/operator-state'
+import { parseSettlementSettings, settlementJournalPath, settlementSettings, type MutableSettlement, type SettlementSettings } from '#state/settlement-store'
 import { renameAndSyncDirectory } from '@zoltar/bot-shared/config/durable-replacement'
 import { persistentPathIdentitiesMatch, persistentPathIdentity } from '@zoltar/bot-shared/config/persistent-path'
 import { assertCompatibleProfileProcessMode, chainSpecificPath } from '@zoltar/bot-shared/config/profiles'
@@ -46,6 +47,7 @@ export type PersistedOperatorSettings = {
 	privateKey: Hex | undefined
 	rpcQuorum: RpcQuorumRequirement
 	runtime: RuntimeSettings
+	settlement: MutableSettlement
 	strategy: MutableStrategy
 	submission: SubmissionSettings
 	tokenAddresses: readonly Address[]
@@ -116,6 +118,7 @@ export type StoredOperatorSettings = {
 	privateKey?: Hex | typeof PRESERVE_PRIVATE_KEY | undefined
 	rpcQuorum?: RpcQuorumRequirement | undefined
 	runtime: StoredRuntimeSettings
+	settlement: SettlementSettings
 	strategy: StrategySettings
 	submission: SubmissionSettings
 	tokenAddresses: readonly Address[]
@@ -127,7 +130,7 @@ function requiredRecord(value: unknown, name = 'Operator configuration') {
 }
 
 function validatedKeys(record: Record<string, unknown>) {
-	const allowed = new Set(['approvedUniverses', 'centralizedMarkets', 'connectivity', 'deployment', 'network', 'networkConfigured', 'paused', 'privateKey', 'rpcQuorum', 'runtime', 'strategy', 'submission', 'tokenAddresses', 'version'])
+	const allowed = new Set(['approvedUniverses', 'centralizedMarkets', 'connectivity', 'deployment', 'network', 'networkConfigured', 'paused', 'privateKey', 'rpcQuorum', 'runtime', 'settlement', 'strategy', 'submission', 'tokenAddresses', 'version'])
 	for (const key of Object.keys(record)) {
 		if (!allowed.has(key)) throw new Error(`Unknown operator configuration field: ${key}`)
 	}
@@ -155,6 +158,16 @@ function filePath(value: unknown, name: string) {
 	return value
 }
 
+/**
+ * Every file the runtime writes durable records to: the three configured journals plus the settlement journal, which is
+ * derived from the position file and must be isolated like the others so no configured path can alias it.
+ */
+export function durableJournalPaths(runtime: Pick<RuntimeSettings, 'historyFile' | 'positionFile' | 'priceHistoryFile'>) {
+	return [runtime.historyFile, runtime.positionFile, runtime.priceHistoryFile, settlementJournalPath(runtime.positionFile)]
+}
+
+const durableJournalPathsMustBeDistinct = 'Runtime historyFile, positionFile, priceHistoryFile, and the derived settlement journal must use distinct paths'
+
 function validateRuntimeSettings(value: unknown): RuntimeSettings {
 	const runtime = requiredRecord(value, 'Runtime settings')
 	const keys = ['execute', 'historyFile', 'lookbackBlocks', 'maxHedgeSlippageBps', 'once', 'positionFile', 'priceHistoryFile', 'riskLimits', 'ui', 'uiHost', 'uiPort']
@@ -173,8 +186,8 @@ function validateRuntimeSettings(value: unknown): RuntimeSettings {
 	const historyFile = filePath(runtime['historyFile'], 'Runtime historyFile')
 	const positionFile = filePath(runtime['positionFile'], 'Runtime positionFile')
 	const priceHistoryFile = filePath(runtime['priceHistoryFile'], 'Runtime priceHistoryFile')
-	const persistentPaths = [historyFile, positionFile, priceHistoryFile].map(path => resolve(path))
-	if (new Set(persistentPaths).size !== persistentPaths.length) throw new Error('Runtime historyFile, positionFile, and priceHistoryFile must use distinct paths')
+	const persistentPaths = durableJournalPaths({ historyFile, positionFile, priceHistoryFile }).map(path => resolve(path))
+	if (new Set(persistentPaths).size !== persistentPaths.length) throw new Error(durableJournalPathsMustBeDistinct)
 	return {
 		execute: runtime['execute'],
 		historyFile,
@@ -237,6 +250,7 @@ export function parseOperatorSettings(value: unknown, preservedPrivateKey?: Hex)
 	const marketSettings = requiredRecord(record['centralizedMarkets'] ?? defaultCentralizedMarkets(deployment.rep, chainId), 'Centralized market settings')
 	const centralizedMarkets = parseCentralizedMarketSettings({ ...marketSettings, assetAddress: deployment.rep, assetChainId: chainId })
 	const submission = validateSubmissionSettings(record['submission'])
+	const settlement = parseSettlementSettings(record['settlement'])
 	const runtime = validateRuntimeSettings(record['runtime'])
 	if (!networkConfigured && (!record['paused'] || runtime.execute)) throw new Error('An unconfigured network requires paused dry-run mode')
 	if (runtime.execute && deployment.quorumRpcUrls.length < configuredQuorumRpcUrlMinimum(rpcQuorum)) throw new Error('Live execution requires at least two independent quorum RPCs (three read endpoints total)')
@@ -250,6 +264,7 @@ export function parseOperatorSettings(value: unknown, preservedPrivateKey?: Hex)
 		privateKey: candidate.privateKey,
 		rpcQuorum,
 		runtime,
+		settlement,
 		strategy,
 		submission,
 		approvedUniverses: parseApprovedUniverses(record['approvedUniverses'] ?? []),
@@ -289,6 +304,7 @@ export function serializeOperatorSettings(settings: PersistedOperatorSettings, r
 			uiHost: settings.runtime.uiHost,
 			uiPort: settings.runtime.uiPort,
 		},
+		settlement: settlementSettings(settings.settlement),
 		strategy: {
 			maxSpotTwapTicks: settings.strategy.maxSpotTwapTicks.toString(),
 			minimumProfitBps: settings.strategy.minimumProfitBps.toString(),
@@ -316,7 +332,7 @@ async function persistentPathIdentities(paths: readonly string[]) {
 }
 
 async function durableJournalIdentities(settings: PersistedOperatorSettings) {
-	return await persistentPathIdentities([settings.runtime.historyFile, settings.runtime.positionFile, settings.runtime.priceHistoryFile])
+	return await persistentPathIdentities(durableJournalPaths(settings.runtime))
 }
 
 function identitiesContainMatch(identities: readonly Awaited<ReturnType<typeof persistentPathIdentity>>[], target: Awaited<ReturnType<typeof persistentPathIdentity>>) {

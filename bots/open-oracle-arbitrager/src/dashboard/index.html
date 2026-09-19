@@ -85,6 +85,60 @@
 				<p id="opportunities-empty" class="empty-state">No WETH/token report from an approved coordinator is inside its settlement window in the latest scan. Position capacity is a risk limit, not a hidden opportunity.</p>
 			</section>
 
+			<section id="settlements" class="panel" data-page-content="operations">
+				<div class="section-heading">
+					<div>
+						<p class="eyebrow">Third-party settlement</p>
+						<h2>Settlement queue</h2>
+					</div>
+					<span id="settlement-count" class="muted">0 awaiting settlement</span>
+				</div>
+				<div id="settlement-summary" class="balance-list settlement-summary"></div>
+				<div class="table-scroll mobile-record-scroll" tabindex="0" aria-label="Settlement queue table">
+					<table class="mobile-record-table">
+						<thead>
+							<tr>
+								<th>Report</th>
+								<th>Decision</th>
+								<th>Reason</th>
+								<th>Reward</th>
+								<th>Projected gas</th>
+								<th>Projected net</th>
+								<th>Past deadline</th>
+								<th>Token</th>
+								<th>Coordinator</th>
+							</tr>
+						</thead>
+						<tbody id="settlement-queue-body"></tbody>
+					</table>
+				</div>
+				<p id="settlement-queue-empty" class="empty-state">No approved-coordinator report is past its settlement deadline and unsettled.</p>
+				<div class="section-heading settlement-history-heading">
+					<div>
+						<h3>Settlement history</h3>
+					</div>
+					<span id="settlement-history-count" class="muted">0 transactions</span>
+				</div>
+				<div class="table-scroll mobile-record-scroll" tabindex="0" aria-label="Settlement history table">
+					<table class="mobile-record-table">
+						<thead>
+							<tr>
+								<th>Submitted</th>
+								<th>Kind</th>
+								<th>Report</th>
+								<th>Status</th>
+								<th>Reward</th>
+								<th>Projected gas</th>
+								<th>Actual gas</th>
+								<th>Transaction</th>
+							</tr>
+						</thead>
+						<tbody id="settlement-history-body"></tbody>
+					</table>
+				</div>
+				<p id="settlement-history-empty" class="empty-state">No settlement or reward withdrawal has been signed by this operator.</p>
+			</section>
+
 			<div class="operations-stack" data-page-content="operations">
 				<section id="position-lifecycle" class="panel">
 					<div class="section-heading">

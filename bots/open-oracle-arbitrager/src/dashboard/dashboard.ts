@@ -42,6 +42,8 @@ import {
 	transactionKindLabel,
 } from './dashboard-format.js'
 import { venueLabel } from '#core/venue-strategy'
+import { decisionBadge, element, explorerLink, headingRow, row, setText, shorten } from './dom.js'
+import { renderSettlements } from './settlement-panel.js'
 import type { SubmissionSettings } from '#execution/transaction-submission'
 
 const SVG_NAMESPACE = 'http://www.w3.org/2000/svg'
@@ -66,19 +68,6 @@ let connected = false
 let signerFeedback: { error: boolean; message: string } | undefined
 let signerRequestPending = false
 let pauseRequestPending: 'pause' | 'resume' | undefined
-
-function element(id: string): HTMLElement
-function element<T extends HTMLElement>(id: string, constructor: { new (): T }): T
-function element(id: string, constructor: { new (): HTMLElement } = HTMLElement) {
-	const found = document.getElementById(id)
-	if (!(found instanceof constructor)) throw new Error(`Missing dashboard element: ${id}`)
-	return found
-}
-
-function setText(id: string, value: string) {
-	const target = element(id)
-	if (target.textContent !== value) target.textContent = value
-}
 
 function prettyJson(value: unknown) {
 	const serialized = JSON.stringify(value, undefined, 2)
@@ -200,10 +189,6 @@ function synchronizePersistedConnectivity(configuration: unknown) {
 	updateNetworkTargetStatus()
 }
 
-function shorten(value: string, leading = 8, trailing = 6) {
-	return value.length <= leading + trailing + 1 ? value : `${value.slice(0, leading)}…${value.slice(-trailing)}`
-}
-
 function lines(id: string) {
 	return urlLines(element(id, HTMLTextAreaElement).value)
 }
@@ -294,48 +279,7 @@ async function api(path: string, init?: RequestInit) {
 	return value
 }
 
-function row(cells: readonly (HTMLElement | string)[], labels?: readonly string[]) {
-	const tableRow = document.createElement('tr')
-	for (const [index, value] of cells.entries()) {
-		const cell = document.createElement('td')
-		const label = labels?.[index]
-		if (label !== undefined) cell.dataset['label'] = label
-		if (typeof value === 'string') cell.textContent = value
-		else cell.append(value)
-		tableRow.append(cell)
-	}
-	return tableRow
-}
-
-function headingRow(labels: readonly string[]) {
-	const tableRow = document.createElement('tr')
-	for (const label of labels) {
-		const cell = document.createElement('th')
-		cell.scope = 'col'
-		cell.textContent = label
-		tableRow.append(cell)
-	}
-	return tableRow
-}
-
-function link(value: string, kind: 'address' | 'tx', focusKey: string) {
-	const anchor = document.createElement('a')
-	anchor.href = `${latestSnapshot?.explorerUrl ?? 'https://etherscan.io'}/${kind}/${value}`
-	anchor.dataset['focusKey'] = focusKey
-	anchor.target = '_blank'
-	anchor.rel = 'noreferrer'
-	anchor.textContent = shorten(value)
-	anchor.title = value
-	return anchor
-}
-
-function decisionBadge(opportunity: OpportunitySnapshot) {
-	const badge = document.createElement('span')
-	badge.className = 'decision'
-	badge.dataset['decision'] = opportunity.decision
-	badge.textContent = opportunity.decision.replaceAll('-', ' ')
-	return badge
-}
+const link = (value: string, kind: 'address' | 'tx', focusKey: string) => explorerLink(latestSnapshot?.explorerUrl ?? 'https://etherscan.io', value, kind, focusKey)
 
 function renderBalances(snapshot: PublicOperatorSnapshot) {
 	const list = element('balance-list')
@@ -373,12 +317,12 @@ const NOT_PRICED = '—'
 function opportunityRow(opportunity: OpportunitySnapshot) {
 	// A skipped report never reached a venue quote, so quote-derived columns stay blank; the direction column names the WETH/token pair instead.
 	if (opportunity.decision === 'skipped') {
-		return row([opportunity.reportId, decisionBadge(opportunity), NOT_PRICED, NOT_PRICED, opportunityDecisionReason(opportunity), `WETH/${opportunity.tokenSymbol}`, NOT_PRICED, NOT_PRICED, NOT_PRICED, `${opportunity.timeRemaining} ${opportunity.windowUnit}`, NOT_PRICED, NOT_PRICED], OPPORTUNITY_LABELS)
+		return row([opportunity.reportId, decisionBadge(opportunity.decision), NOT_PRICED, NOT_PRICED, opportunityDecisionReason(opportunity), `WETH/${opportunity.tokenSymbol}`, NOT_PRICED, NOT_PRICED, NOT_PRICED, `${opportunity.timeRemaining} ${opportunity.windowUnit}`, NOT_PRICED, NOT_PRICED], OPPORTUNITY_LABELS)
 	}
 	return row(
 		[
 			opportunity.reportId,
-			decisionBadge(opportunity),
+			decisionBadge(opportunity.decision),
 			opportunity.centralizedPriceDeviationBps === undefined ? 'Unavailable' : `${opportunity.centralizedPriceDeviationBps} bps`,
 			amount(opportunity.executablePriceRepPerEth, 'REP / ETH'),
 			opportunityDecisionReason(opportunity),
@@ -906,8 +850,8 @@ function renderTransactions(transactions: readonly PublicTransactionActivity[]) 
 			row(
 				[
 					new Date(transaction.updatedAt).toLocaleString(),
-					transaction.reportId,
-					link(transaction.hash, 'tx', `transaction:${transaction.reportId}:${transaction.hash}`),
+					transaction.reportId ?? '—',
+					link(transaction.hash, 'tx', `transaction:${transaction.reportId ?? 'wallet'}:${transaction.hash}`),
 					transactionKindLabel(transaction),
 					transaction.mode,
 					transaction.status.replaceAll('-', ' '),
@@ -1025,6 +969,7 @@ function render(snapshot: PublicOperatorSnapshot) {
 	notice.dataset['tone'] = noticeTone
 	renderBalances(snapshot)
 	renderOpportunities(snapshot.opportunities)
+	renderSettlements(snapshot.settlements, link)
 	renderTransactions(snapshot.transactionActivity)
 	renderEndpointChecks(snapshot)
 	renderOperations(snapshot.operationLog)
