@@ -42,17 +42,17 @@ function record(index: number, overrides: Partial<SettlementRecord> = {}): Settl
 describe('settlement settings', () => {
 	test('defaults to disabled with conservative thresholds when the configuration omits the block', () => {
 		expect(parseSettlementSettings(undefined)).toEqual(parseSettlementSettings(undefined))
-		expect(settlementSettings(parseSettlementSettings(undefined))).toEqual({ enabled: false, maxGasPriceGwei: '50', minimumProfitWeth: '0.001', rewardWithdrawThresholdEth: '0.01' })
+		expect(settlementSettings(parseSettlementSettings(undefined))).toEqual({ enabled: false, maxGasPriceNanoEth: '50', minimumProfitWeth: '0.001', rewardWithdrawThresholdEth: '0.01' })
 	})
 
 	test('round-trips a complete block and rejects partial, unknown, or out-of-range values', () => {
-		const parsed = parseSettlementSettings({ enabled: true, maxGasPriceGwei: '12.5', minimumProfitWeth: '0.0005', rewardWithdrawThresholdEth: '0.02' })
+		const parsed = parseSettlementSettings({ enabled: true, maxGasPriceNanoEth: '12.5', minimumProfitWeth: '0.0005', rewardWithdrawThresholdEth: '0.02' })
 		expect(parsed).toEqual({ enabled: true, maxGasPriceAttoEthPerGas: 12_500_000_000n, minimumProfitAttoWeth: 5n * 10n ** 14n, rewardWithdrawThresholdAttoEth: 2n * 10n ** 16n })
-		expect(settlementSettings(parsed)).toEqual({ enabled: true, maxGasPriceGwei: '12.5', minimumProfitWeth: '0.0005', rewardWithdrawThresholdEth: '0.02' })
+		expect(settlementSettings(parsed)).toEqual({ enabled: true, maxGasPriceNanoEth: '12.5', minimumProfitWeth: '0.0005', rewardWithdrawThresholdEth: '0.02' })
 		expect(() => parseSettlementSettings({ enabled: true })).toThrow('Every settlement setting is required')
 		expect(() => parseSettlementSettings({ ...settlementSettings(parsed), extra: 1 })).toThrow('Unknown settlement setting: extra')
 		expect(() => parseSettlementSettings({ ...settlementSettings(parsed), enabled: 'yes' })).toThrow('Settlement enabled must be a boolean')
-		expect(() => parseSettlementSettings({ ...settlementSettings(parsed), maxGasPriceGwei: '0' })).toThrow('maxGasPriceGwei must be from')
+		expect(() => parseSettlementSettings({ ...settlementSettings(parsed), maxGasPriceNanoEth: '0' })).toThrow('maxGasPriceNanoEth must be from')
 		expect(() => parseSettlementSettings({ ...settlementSettings(parsed), minimumProfitWeth: '2' })).toThrow('must not exceed 1 WETH')
 		expect(() => parseSettlementSettings({ ...settlementSettings(parsed), rewardWithdrawThresholdEth: '0' })).toThrow('rewardWithdrawThresholdEth must be from')
 	})

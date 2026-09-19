@@ -339,7 +339,7 @@ export const isSnapshot = object<PublicOperatorSnapshot>({
 		realizedIncomeEth: stringValue,
 		settings: object({
 			enabled: booleanValue,
-			maxGasPriceGwei: stringValue,
+			maxGasPriceNanoEth: stringValue,
 			minimumProfitWeth: stringValue,
 			rewardWithdrawThresholdEth: stringValue,
 		}),

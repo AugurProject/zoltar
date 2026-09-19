@@ -55,7 +55,7 @@
 	},
 	"settlement": {
 		"enabled": false,
-		"maxGasPriceGwei": "50",
+		"maxGasPriceNanoEth": "50",
 		"minimumProfitWeth": "0.001",
 		"rewardWithdrawThresholdEth": "0.01"
 	},

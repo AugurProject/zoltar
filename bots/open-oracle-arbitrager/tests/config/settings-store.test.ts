@@ -295,10 +295,10 @@ describe('operator settings persistence', () => {
 
 	test('keeps settlement disabled for configuration files that predate the block and round-trips an enabled one', () => {
 		const serialized = serializeOperatorSettings(settings(undefined))
-		expect(serialized.settlement).toEqual({ enabled: false, maxGasPriceGwei: '50', minimumProfitWeth: '0.001', rewardWithdrawThresholdEth: '0.01' })
+		expect(serialized.settlement).toEqual({ enabled: false, maxGasPriceNanoEth: '50', minimumProfitWeth: '0.001', rewardWithdrawThresholdEth: '0.01' })
 		const { settlement: _omitted, ...legacy } = serialized
 		expect(parseOperatorSettings(legacy).settlement).toEqual(parseSettlementSettings(undefined))
-		const enabled = { ...serialized, settlement: { enabled: true, maxGasPriceGwei: '8', minimumProfitWeth: '0.002', rewardWithdrawThresholdEth: '0.05' } }
+		const enabled = { ...serialized, settlement: { enabled: true, maxGasPriceNanoEth: '8', minimumProfitWeth: '0.002', rewardWithdrawThresholdEth: '0.05' } }
 		const parsed = parseOperatorSettings(enabled)
 		expect(parsed.settlement).toEqual({ enabled: true, maxGasPriceAttoEthPerGas: 8_000_000_000n, minimumProfitAttoWeth: 2n * 10n ** 15n, rewardWithdrawThresholdAttoEth: 5n * 10n ** 16n })
 		expect(serializeOperatorSettings(parsed).settlement).toEqual(enabled.settlement)

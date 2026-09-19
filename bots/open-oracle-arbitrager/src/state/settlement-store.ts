@@ -10,14 +10,14 @@ const DECIMAL = /^(?:0|[1-9]\d*)(?:\.\d{1,18})?$/
 const INTEGER = /^(?:0|[1-9]\d*)$/
 const ADDRESS = /^0x[0-9a-fA-F]{40}$/
 const HASH = /^0x[0-9a-fA-F]{64}$/
-const GWEI = 10n ** 9n
+const NANO_ETH = 10n ** 9n
 /** Bounds the dashboard history so the snapshot stays small while the journal keeps every record. */
 const SETTLEMENT_HISTORY_LIMIT = 200
 
 /** Operator-facing settlement settings, stored under `settlement` in the operator configuration. */
 export type SettlementSettings = {
 	enabled: boolean
-	maxGasPriceGwei: string
+	maxGasPriceNanoEth: string
 	minimumProfitWeth: string
 	rewardWithdrawThresholdEth: string
 }
@@ -131,26 +131,26 @@ export type SettlementSnapshot = {
 }
 
 function defaultSettlementSettings(): MutableSettlement {
-	return { enabled: false, maxGasPriceAttoEthPerGas: 50n * GWEI, minimumProfitAttoWeth: 10n ** 15n, rewardWithdrawThresholdAttoEth: 10n ** 16n }
+	return { enabled: false, maxGasPriceAttoEthPerGas: 50n * NANO_ETH, minimumProfitAttoWeth: 10n ** 15n, rewardWithdrawThresholdAttoEth: 10n ** 16n }
 }
 
-function decimalGwei(value: bigint) {
-	const whole = value / GWEI
-	const fraction = value % GWEI
+function decimalNanoEth(value: bigint) {
+	const whole = value / NANO_ETH
+	const fraction = value % NANO_ETH
 	if (fraction === 0n) return whole.toString()
 	return `${whole.toString()}.${fraction.toString().padStart(9, '0').replace(/0+$/, '')}`
 }
 
-function parseDecimalGwei(value: string) {
-	if (!/^(?:0|[1-9]\d*)(?:\.\d{1,9})?$/.test(value)) throw new Error(`Invalid gwei amount: ${value}`)
+function parseDecimalNanoEth(value: string) {
+	if (!/^(?:0|[1-9]\d*)(?:\.\d{1,9})?$/.test(value)) throw new Error(`Invalid nanoETH amount: ${value}`)
 	const [whole = '0', fraction = ''] = value.split('.')
-	return BigInt(whole) * GWEI + BigInt(fraction.padEnd(9, '0'))
+	return BigInt(whole) * NANO_ETH + BigInt(fraction.padEnd(9, '0'))
 }
 
 export function settlementSettings(settlement: MutableSettlement): SettlementSettings {
 	return {
 		enabled: settlement.enabled,
-		maxGasPriceGwei: decimalGwei(settlement.maxGasPriceAttoEthPerGas),
+		maxGasPriceNanoEth: decimalNanoEth(settlement.maxGasPriceAttoEthPerGas),
 		minimumProfitWeth: decimalWeth(settlement.minimumProfitAttoWeth),
 		rewardWithdrawThresholdEth: decimalWeth(settlement.rewardWithdrawThresholdAttoEth),
 	}
@@ -166,12 +166,12 @@ function requiredDecimal(record: Record<string, unknown>, key: keyof SettlementS
 export function parseSettlementSettings(value: unknown): MutableSettlement {
 	if (value === undefined) return defaultSettlementSettings()
 	const record = validateRecord(value, 'Settlement settings', 'Settlement settings must be a JSON object')
-	const allowed = new Set<keyof SettlementSettings>(['enabled', 'maxGasPriceGwei', 'minimumProfitWeth', 'rewardWithdrawThresholdEth'])
+	const allowed = new Set<keyof SettlementSettings>(['enabled', 'maxGasPriceNanoEth', 'minimumProfitWeth', 'rewardWithdrawThresholdEth'])
 	for (const key of Object.keys(record)) if (!allowed.has(key as keyof SettlementSettings)) throw new Error(`Unknown settlement setting: ${key}`)
 	if (Object.keys(record).length !== allowed.size) throw new Error('Every settlement setting is required')
 	if (typeof record['enabled'] !== 'boolean') throw new Error('Settlement enabled must be a boolean')
-	const maxGasPriceAttoEthPerGas = parseDecimalGwei(requiredDecimal(record, 'maxGasPriceGwei', 'Settlement maxGasPriceGwei'))
-	if (maxGasPriceAttoEthPerGas === 0n || maxGasPriceAttoEthPerGas > 10_000n * GWEI) throw new Error('Settlement maxGasPriceGwei must be from 0.000000001 to 10000')
+	const maxGasPriceAttoEthPerGas = parseDecimalNanoEth(requiredDecimal(record, 'maxGasPriceNanoEth', 'Settlement maxGasPriceNanoEth'))
+	if (maxGasPriceAttoEthPerGas === 0n || maxGasPriceAttoEthPerGas > 10_000n * NANO_ETH) throw new Error('Settlement maxGasPriceNanoEth must be from 0.000000001 to 10000')
 	const minimumProfitAttoWeth = parseDecimalWeth(requiredDecimal(record, 'minimumProfitWeth', 'Settlement minimumProfitWeth'))
 	if (minimumProfitAttoWeth > 10n ** 18n) throw new Error('Settlement minimumProfitWeth must not exceed 1 WETH')
 	const rewardWithdrawThresholdAttoEth = parseDecimalWeth(requiredDecimal(record, 'rewardWithdrawThresholdEth', 'Settlement rewardWithdrawThresholdEth'))

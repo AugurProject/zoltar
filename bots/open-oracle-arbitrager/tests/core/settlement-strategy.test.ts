@@ -6,7 +6,7 @@ import { parseSettlementSettings } from '#state/settlement-store'
 
 const wallet = getAddress('0x00000000000000000000000000000000000000aa')
 const coordinator = getAddress('0x00000000000000000000000000000000000000cc')
-const GWEI = 10n ** 9n
+const NANO_ETH = 10n ** 9n
 const timedGame = { currentReporter: coordinator, flags: 7n, reportTimestamp: 1_000n, settlementTime: 480n, settlementTimestamp: 0n }
 
 describe('settlement gas plan', () => {
@@ -38,41 +38,41 @@ describe('settlement eligibility', () => {
 })
 
 describe('settlement economics and decision', () => {
-	const settings = { ...parseSettlementSettings(undefined), maxGasPriceAttoEthPerGas: 10n * GWEI, minimumProfitAttoWeth: 10n ** 15n }
+	const settings = { ...parseSettlementSettings(undefined), maxGasPriceAttoEthPerGas: 10n * NANO_ETH, minimumProfitAttoWeth: 10n ** 15n }
 
 	test('nets the reward against the padded settle and reward-withdrawal limits the signatures carry, at the signed fee ceiling', () => {
-		const economics = settlementEconomics({ callbackGasLimit: 4_000_000n, gasPrice: 2n * GWEI, maxFeePerGas: 2n * GWEI, rewardAttoEth: 17_043_310_270_400_101n, settings })
+		const economics = settlementEconomics({ callbackGasLimit: 4_000_000n, gasPrice: 2n * NANO_ETH, maxFeePerGas: 2n * NANO_ETH, rewardAttoEth: 17_043_310_270_400_101n, settings })
 		expect(economics.gas).toBe(4_313_492n)
 		// The signer adds 20% and 10,000 gas to every estimate; the budget reserves exactly what the two signatures can spend.
 		expect(signedSettlementGasLimit(economics.gas)).toBe(paddedTransactionGas(4_313_492n))
 		expect(signedSettlementGasLimit(economics.gas)).toBe(5_186_190n)
 		expect(signedSettlementGasLimit(rewardWithdrawalGasPlan())).toBe(82_000n)
-		expect(economics.projectedGasCostAttoEth).toBe((5_186_190n + 82_000n) * 2n * GWEI)
+		expect(economics.projectedGasCostAttoEth).toBe((5_186_190n + 82_000n) * 2n * NANO_ETH)
 		expect(economics.netAttoEth).toBe(17_043_310_270_400_101n - economics.projectedGasCostAttoEth)
 		expect(economics.profitable).toBeTrue()
 		expect(economics.withinGasPriceCap).toBeTrue()
 		// The projected price only gates the cap; the cost is what the signature can pay when inclusion is delayed.
-		const exposed = settlementEconomics({ callbackGasLimit: 4_000_000n, gasPrice: 2n * GWEI, maxFeePerGas: 4n * GWEI, rewardAttoEth: 17_043_310_270_400_101n, settings })
-		expect(exposed.projectedGasCostAttoEth).toBe((5_186_190n + 82_000n) * 4n * GWEI)
+		const exposed = settlementEconomics({ callbackGasLimit: 4_000_000n, gasPrice: 2n * NANO_ETH, maxFeePerGas: 4n * NANO_ETH, rewardAttoEth: 17_043_310_270_400_101n, settings })
+		expect(exposed.projectedGasCostAttoEth).toBe((5_186_190n + 82_000n) * 4n * NANO_ETH)
 		expect(exposed.profitable).toBeFalse()
 		expect(exposed.withinGasPriceCap).toBeTrue()
 	})
 
 	test('rejects rewards that do not clear the minimum net and gas prices above the cap', () => {
-		const thin = settlementEconomics({ callbackGasLimit: 4_000_000n, gasPrice: 4n * GWEI, maxFeePerGas: 4n * GWEI, rewardAttoEth: 17_043_310_270_400_101n, settings })
+		const thin = settlementEconomics({ callbackGasLimit: 4_000_000n, gasPrice: 4n * NANO_ETH, maxFeePerGas: 4n * NANO_ETH, rewardAttoEth: 17_043_310_270_400_101n, settings })
 		expect(thin.netAttoEth).toBeLessThan(settings.minimumProfitAttoWeth)
 		expect(thin.profitable).toBeFalse()
 		expect(settlementEconomics({ callbackGasLimit: 0n, gasPrice: 1n, maxFeePerGas: 1n, rewardAttoEth: 0n, settings }).profitable).toBeFalse()
-		expect(settlementEconomics({ callbackGasLimit: 0n, gasPrice: 11n * GWEI, maxFeePerGas: 10n * GWEI, rewardAttoEth: 10n ** 18n, settings }).withinGasPriceCap).toBeFalse()
+		expect(settlementEconomics({ callbackGasLimit: 0n, gasPrice: 11n * NANO_ETH, maxFeePerGas: 10n * NANO_ETH, rewardAttoEth: 10n ** 18n, settings }).withinGasPriceCap).toBeFalse()
 	})
 
 	test('signs at the validity-horizon maximum but never above the operator gas price cap', () => {
-		// 20 gwei compounds to roughly 382 gwei over the 25-block horizon; a 50 gwei cap bounds the signature and the plan to 50 gwei.
-		expect(settlementMaxFeePerGas(20n * GWEI, { maxGasPriceAttoEthPerGas: 50n * GWEI })).toBe(50n * GWEI)
-		const uncapped = settlementMaxFeePerGas(20n * GWEI, { maxGasPriceAttoEthPerGas: 10_000n * GWEI })
-		expect(uncapped).toBeGreaterThan(380n * GWEI)
-		expect(uncapped).toBeLessThan(385n * GWEI)
-		expect(settlementMaxFeePerGas(0n, { maxGasPriceAttoEthPerGas: 50n * GWEI })).toBe(maximumFeePerGas(0n))
+		// 20 nanoETH compounds to roughly 382 nanoETH over the 25-block horizon; a 50 nanoETH cap bounds the signature and the plan to 50 nanoETH.
+		expect(settlementMaxFeePerGas(20n * NANO_ETH, { maxGasPriceAttoEthPerGas: 50n * NANO_ETH })).toBe(50n * NANO_ETH)
+		const uncapped = settlementMaxFeePerGas(20n * NANO_ETH, { maxGasPriceAttoEthPerGas: 10_000n * NANO_ETH })
+		expect(uncapped).toBeGreaterThan(380n * NANO_ETH)
+		expect(uncapped).toBeLessThan(385n * NANO_ETH)
+		expect(settlementMaxFeePerGas(0n, { maxGasPriceAttoEthPerGas: 50n * NANO_ETH })).toBe(maximumFeePerGas(0n))
 	})
 
 	test('explains the first gate that blocks execution in economic-then-operator order', () => {
@@ -90,15 +90,15 @@ describe('settlement economics and decision', () => {
 
 	test('withdraws accrued rewards only at the threshold, under the gas cap, within the daily gas budget, and when the operator can sign', () => {
 		const dailyGas = { limitAttoWeth: 5n * 10n ** 16n, spentAttoWeth: 0n }
-		const ready = { dailyGas, enabled: true, execute: true, gasPrice: GWEI, inFlight: false, maxFeePerGas: GWEI, paused: false, settings, signerReady: true, unclaimedRewardAttoEth: 10n ** 16n }
+		const ready = { dailyGas, enabled: true, execute: true, gasPrice: NANO_ETH, inFlight: false, maxFeePerGas: NANO_ETH, paused: false, settings, signerReady: true, unclaimedRewardAttoEth: 10n ** 16n }
 		expect(rewardWithdrawalDecision({ ...ready, unclaimedRewardAttoEth: undefined })).toBe('unavailable')
 		expect(rewardWithdrawalDecision({ ...ready, unclaimedRewardAttoEth: 10n ** 16n - 1n })).toBe('below-threshold')
-		expect(rewardWithdrawalDecision({ ...ready, gasPrice: 11n * GWEI })).toBe('gas-price-cap')
+		expect(rewardWithdrawalDecision({ ...ready, gasPrice: 11n * NANO_ETH })).toBe('gas-price-cap')
 		// The withdrawal is budgeted at the padded 82,000 gas its signature carries, not the 60,000 estimate.
-		expect(rewardWithdrawalDecision({ ...ready, dailyGas: { ...dailyGas, spentAttoWeth: 5n * 10n ** 16n - 82_000n * GWEI } })).toBe('due')
-		expect(rewardWithdrawalDecision({ ...ready, dailyGas: { ...dailyGas, spentAttoWeth: 5n * 10n ** 16n - 82_000n * GWEI + 1n } })).toBe('risk-limit')
+		expect(rewardWithdrawalDecision({ ...ready, dailyGas: { ...dailyGas, spentAttoWeth: 5n * 10n ** 16n - 82_000n * NANO_ETH } })).toBe('due')
+		expect(rewardWithdrawalDecision({ ...ready, dailyGas: { ...dailyGas, spentAttoWeth: 5n * 10n ** 16n - 82_000n * NANO_ETH + 1n } })).toBe('risk-limit')
 		// The budget is charged at the signed ceiling, which is what a delayed inclusion can actually pay.
-		expect(rewardWithdrawalDecision({ ...ready, dailyGas: { ...dailyGas, spentAttoWeth: 5n * 10n ** 16n - 82_000n * GWEI }, maxFeePerGas: 2n * GWEI })).toBe('risk-limit')
+		expect(rewardWithdrawalDecision({ ...ready, dailyGas: { ...dailyGas, spentAttoWeth: 5n * 10n ** 16n - 82_000n * NANO_ETH }, maxFeePerGas: 2n * NANO_ETH })).toBe('risk-limit')
 		expect(rewardWithdrawalDecision({ ...ready, enabled: false })).toBe('disabled')
 		expect(rewardWithdrawalDecision({ ...ready, execute: false })).toBe('dry-run')
 		expect(rewardWithdrawalDecision({ ...ready, signerReady: false })).toBe('signer-unavailable')

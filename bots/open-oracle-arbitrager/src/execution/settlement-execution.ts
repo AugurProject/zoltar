@@ -41,7 +41,7 @@ export type SettlementPlan = {
 	tokenSymbol: string
 }
 
-/** Reads the ETH the wallet has accrued inside OpenOracle through the read quorum; one wei stays behind as the contract's balance sentinel. */
+/** Reads the ETH the wallet has accrued inside OpenOracle through the read quorum; one attoETH stays behind as the contract's balance sentinel. */
 export async function unclaimedSettlementReward(readClients: readonly ReadClient[], config: Pick<Configuration, 'connectivity' | 'openOracle' | 'quorumRpcUrls'>, account: Address, blockNumber: bigint) {
 	const endpoints = [config.connectivity.readRpcUrl, ...config.quorumRpcUrls]
 	const balance = await settledQuorumValue(

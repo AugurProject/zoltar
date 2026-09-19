@@ -1139,7 +1139,7 @@ net. Settlement is off until `settlement` is set in the complete configuration:
 | --- | ---: | --- | --- |
 | Enabled | `false` | `enabled` | Allows settle and reward-withdrawal transactions in execution mode. Dry-run mode only reports decisions. |
 | Minimum net | `0.001 ETH` | `minimumProfitWeth` | Rejects settlements whose ETH reward minus projected gas is below this amount. |
-| Gas price cap | `50 gwei` | `maxGasPriceGwei` | Rejects settlements when the projected gas price exceeds the cap, and bounds the fee ceiling every settle and withdrawal is signed with, so a delayed inclusion can never pay more per gas than this. |
+| Gas price cap | `50 nanoETH` | `maxGasPriceNanoEth` | Rejects settlements when the projected gas price exceeds the cap, and bounds the fee ceiling every settle and withdrawal is signed with, so a delayed inclusion can never pay more per gas than this. |
 | Withdraw threshold | `0.01 ETH` | `rewardWithdrawThresholdEth` | Settler rewards accrue inside OpenOracle; the bot withdraws them once the unclaimed balance reaches this amount, at a gas price under the cap and within the daily gas budget. |
 
 Reports the wallet itself reported are excluded here because the position

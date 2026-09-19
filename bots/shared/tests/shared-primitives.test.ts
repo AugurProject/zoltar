@@ -1258,22 +1258,22 @@ describe('shared bot primitives', () => {
 	})
 
 	test('bounds the signed fee ceiling and its tip by an operator cap', async () => {
-		const gwei = 10n ** 9n
-		expect(cappedMaximumFeePerGas(20n * gwei, 50n * gwei)).toBe(50n * gwei)
-		expect(cappedMaximumFeePerGas(20n * gwei, 10_000n * gwei)).toBe(maximumFeePerGas(20n * gwei))
+		const nanoEth = 10n ** 9n
+		expect(cappedMaximumFeePerGas(20n * nanoEth, 50n * nanoEth)).toBe(50n * nanoEth)
+		expect(cappedMaximumFeePerGas(20n * nanoEth, 10_000n * nanoEth)).toBe(maximumFeePerGas(20n * nanoEth))
 		expect(cappedMaximumFeePerGas(10n, 2_000_000_012n, 2n)).toBe(2_000_000_012n)
 		expect(() => cappedMaximumFeePerGas(10n, 0n)).toThrow('maximum fee per gas cap must be positive')
 		const account = privateKeyToAccount(`0x${'13'.repeat(32)}`)
 		if (account.signTransaction === undefined) throw new Error('Local test account cannot sign')
-		const sign = (maxFeePerGasCap: bigint) => prepareSignedTransaction({ baseFeePerGas: 20n * gwei, blockNumber: 100n, chainId: 1, data: '0x', from: account.address, gasEstimate: 21_000n, maxFeePerGasCap, nonce: 0n, signTransaction: account.signTransaction, to: '0x0000000000000000000000000000000000000010' })
-		const capped = await sign(50n * gwei)
-		expect(capped.transaction.maxFeePerGas).toBe(50n * gwei)
-		expect(capped.transaction.maxPriorityFeePerGas).toBe(2n * gwei)
-		expect(parseTransaction(capped.serializedTransaction).maxFeePerGas).toBe(50n * gwei)
+		const sign = (maxFeePerGasCap: bigint) => prepareSignedTransaction({ baseFeePerGas: 20n * nanoEth, blockNumber: 100n, chainId: 1, data: '0x', from: account.address, gasEstimate: 21_000n, maxFeePerGasCap, nonce: 0n, signTransaction: account.signTransaction, to: '0x0000000000000000000000000000000000000010' })
+		const capped = await sign(50n * nanoEth)
+		expect(capped.transaction.maxFeePerGas).toBe(50n * nanoEth)
+		expect(capped.transaction.maxPriorityFeePerGas).toBe(2n * nanoEth)
+		expect(parseTransaction(capped.serializedTransaction).maxFeePerGas).toBe(50n * nanoEth)
 		// A cap below the default tip lowers the tip with it, keeping the transaction valid under EIP-1559.
-		const tiny = await sign(1n * gwei)
-		expect(tiny.transaction.maxFeePerGas).toBe(1n * gwei)
-		expect(tiny.transaction.maxPriorityFeePerGas).toBe(1n * gwei)
+		const tiny = await sign(1n * nanoEth)
+		expect(tiny.transaction.maxFeePerGas).toBe(1n * nanoEth)
+		expect(tiny.transaction.maxPriorityFeePerGas).toBe(1n * nanoEth)
 	})
 
 	test('prices a signed transaction for its actual validity window', async () => {

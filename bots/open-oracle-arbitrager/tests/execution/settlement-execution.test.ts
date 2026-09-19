@@ -26,9 +26,9 @@ const SIGNER_KEY = '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4
 const REPORTER_KEY = '0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d' as const
 const REWARD = 17_043_310_270_400_101n
 const SETTLEMENT_SECONDS = 100n
-const GWEI = 10n ** 9n
+const NANO_ETH = 10n ** 9n
 const network = networkConfiguration('mainnet')
-const settlement: MutableSettlement = { enabled: true, maxGasPriceAttoEthPerGas: 50n * GWEI, minimumProfitAttoWeth: 10n ** 15n, rewardWithdrawThresholdAttoEth: 10n ** 16n }
+const settlement: MutableSettlement = { enabled: true, maxGasPriceAttoEthPerGas: 50n * NANO_ETH, minimumProfitAttoWeth: 10n ** 15n, rewardWithdrawThresholdAttoEth: 10n ** 16n }
 
 describe('third-party settlement execution against OpenOracle', () => {
 	let node: AnvilNode
@@ -306,7 +306,7 @@ describe('third-party settlement execution against OpenOracle', () => {
 						config: stageConfig,
 						coordinatorPolicies: [policy],
 						dailyPositionGasSpentAttoWeth: 0n,
-						gasPrice: 2n * GWEI,
+						gasPrice: 2n * NANO_ETH,
 						isPaused: () => false,
 						journal,
 						readClients: [client],
@@ -395,7 +395,7 @@ describe('third-party settlement execution against OpenOracle', () => {
 			for (let waited = 0; records.length === 0 && waited < 200; waited++) await Bun.sleep(10)
 			const [original] = records
 			if (original === undefined) throw new Error('pending record missing')
-			const rebroadcastHash = await wallet.sendTransaction({ data: original.transactionIntent.data, gas: 400_000n, maxFeePerGas: 10n * GWEI, maxPriorityFeePerGas: 2n * GWEI, nonce, to: openOracle, value: 0n })
+			const rebroadcastHash = await wallet.sendTransaction({ data: original.transactionIntent.data, gas: 400_000n, maxFeePerGas: 10n * NANO_ETH, maxPriorityFeePerGas: 2n * NANO_ETH, nonce, to: openOracle, value: 0n })
 			await wallet.waitForTransactionReceipt({ hash: rebroadcastHash })
 			const final = await attempt
 			expect(final.transactionHash).toBe(rebroadcastHash)
@@ -482,7 +482,7 @@ describe('third-party settlement execution against OpenOracle', () => {
 		await pastSettlementWindow()
 		const mine = async (baseFeeGwei: bigint, blocks = 1) => {
 			for (let block = 0; block < blocks; block++) {
-				await node.anvilWindowEthereum.request({ method: 'anvil_setNextBlockBaseFeePerGas', params: [`0x${(baseFeeGwei * GWEI).toString(16)}`] })
+				await node.anvilWindowEthereum.request({ method: 'anvil_setNextBlockBaseFeePerGas', params: [`0x${(baseFeeGwei * NANO_ETH).toString(16)}`] })
 				await node.anvilWindowEthereum.request({ method: 'evm_mine', params: [] })
 			}
 		}
@@ -492,29 +492,29 @@ describe('third-party settlement execution against OpenOracle', () => {
 			const record = records[recordCount]
 			if (record === undefined) throw new Error('attempt was not journaled as pending')
 			expect(record.status).toBe('pending')
-			// 20 gwei compounds past 380 gwei over the signed horizon; the cap holds the signature at 50 gwei, and the journaled
+			// 20 nanoETH compounds past 380 nanoETH over the signed horizon; the cap holds the signature at 50 nanoETH, and the journaled
 			// exposure covers everything the signature can spend: its padded gas limit at that ceiling.
 			const signed = await client.getTransaction({ hash: record.transactionHash })
-			expect(signed.maxFeePerGas).toBe(50n * GWEI)
-			expect(parseDecimalWeth(record.projectedGasCostEth)).toBeGreaterThanOrEqual(signed.gas * 50n * GWEI)
+			expect(signed.maxFeePerGas).toBe(50n * NANO_ETH)
+			expect(parseDecimalWeth(record.projectedGasCostEth)).toBeGreaterThanOrEqual(signed.gas * 50n * NANO_ETH)
 			return { execution, record }
 		}
 		await node.anvilWindowEthereum.request({ method: 'evm_setAutomine', params: [false] })
 		try {
 			await mine(20n)
 			const base = await context(records, [])
-			expect(base.baseFeePerGas).toBe(20n * GWEI)
-			expect(base.maxFeePerGas).toBe(50n * GWEI)
+			expect(base.baseFeePerGas).toBe(20n * NANO_ETH)
+			expect(base.maxFeePerGas).toBe(50n * NANO_ETH)
 			// Inclusion two blocks later at a doubled base fee pays the base fee plus the tip, well under the cap.
 			// The plan comes from the queue's economics so the assertion ties the reserved exposure to the actual signature.
-			const economics = settlementEconomics({ callbackGasLimit: report.game.callbackGasLimit, gasPrice: 42n * GWEI, maxFeePerGas: base.maxFeePerGas, rewardAttoEth: REWARD, settings: settlement })
+			const economics = settlementEconomics({ callbackGasLimit: report.game.callbackGasLimit, gasPrice: 42n * NANO_ETH, maxFeePerGas: base.maxFeePerGas, rewardAttoEth: REWARD, settings: settlement })
 			const settle = await submitted(executeSettlement(base, { coordinator: report.helper.creator, gas: economics.gas, projectedGasCostAttoEth: economics.projectedGasCostAttoEth, report, rewardAttoEth: REWARD, token: token2, tokenSymbol: 'TK2' }), 0)
 			expect((await client.getTransaction({ hash: settle.record.transactionHash })).gas).toBe(signedSettlementGasLimit(economics.gas))
 			await mine(40n)
 			expect((await settle.execution).status).toBe('confirmed')
 			const receipt = await client.getTransactionReceipt({ hash: settle.record.transactionHash })
-			expect(receipt.effectiveGasPrice).toBe(42n * GWEI)
-			expect(parseDecimalWeth(records[1]?.actualGasCostEth ?? '0')).toBe(receipt.gasUsed * 42n * GWEI)
+			expect(receipt.effectiveGasPrice).toBe(42n * NANO_ETH)
+			expect(parseDecimalWeth(records[1]?.actualGasCostEth ?? '0')).toBe(receipt.gasUsed * 42n * NANO_ETH)
 			// A base fee above the cap for the whole signed horizon never includes the withdrawal: the attempt stays pending
 			// with its nonce unconsumed and no gas paid, instead of landing at a price the queue never approved.
 			await mine(20n)
