@@ -90,6 +90,10 @@ export function applyQueuedExecutionSettings(config: Configuration, state: Opera
 		config.riskLimits = pending.riskLimits
 		pending.riskLimits = undefined
 	}
+	if (pending.settlement !== undefined) {
+		config.settlement = pending.settlement
+		pending.settlement = undefined
+	}
 	if (pending.rpcQuorum !== undefined) {
 		config.rpcQuorum = pending.rpcQuorum
 		process.env['ZOLTAR_BOT_RPC_QUORUM'] = pending.rpcQuorum.toString()

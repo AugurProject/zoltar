@@ -10,6 +10,7 @@ import { join } from 'node:path'
 import type { Hex } from '@zoltar/bot-shared/ethereum'
 import { assertOperatorProfileIsolation, CONFIGURATION_REVISION_CONFLICT, loadOperatorSettings, loadOperatorSettingsWithRevision, operatorProfilePath, parseOperatorSettings, saveOperatorSettings, serializeOperatorSettings, switchOperatorNetworkProfile, type OperatorSettingsFilesystem } from '#config/settings-store'
 import { executorDeploymentIntentPath } from '#execution/executor-deployment-store'
+import { parseSettlementSettings } from '#state/settlement-store'
 
 const temporaryDirectories: string[] = []
 const privateKey = `0x${'11'.repeat(32)}` as Hex
@@ -83,6 +84,7 @@ function settings(privateKeyValue: Hex | undefined) {
 			uiHost: '127.0.0.1' as const,
 			uiPort: 4173,
 		},
+		settlement: parseSettlementSettings(undefined),
 		strategy: {
 			maxSpotTwapTicks: 75n,
 			minimumProfitBps: 200n,
@@ -289,6 +291,18 @@ describe('operator settings persistence', () => {
 		const serialized = serializeOperatorSettings(settings(undefined))
 		delete serialized.rpcQuorum
 		expect(parseOperatorSettings(serialized).rpcQuorum).toBe(1)
+	})
+
+	test('keeps settlement disabled for configuration files that predate the block and round-trips an enabled one', () => {
+		const serialized = serializeOperatorSettings(settings(undefined))
+		expect(serialized.settlement).toEqual({ enabled: false, maxGasPriceGwei: '50', minimumProfitWeth: '0.001', rewardWithdrawThresholdEth: '0.01' })
+		const { settlement: _omitted, ...legacy } = serialized
+		expect(parseOperatorSettings(legacy).settlement).toEqual(parseSettlementSettings(undefined))
+		const enabled = { ...serialized, settlement: { enabled: true, maxGasPriceGwei: '8', minimumProfitWeth: '0.002', rewardWithdrawThresholdEth: '0.05' } }
+		const parsed = parseOperatorSettings(enabled)
+		expect(parsed.settlement).toEqual({ enabled: true, maxGasPriceAttoEthPerGas: 8_000_000_000n, minimumProfitAttoWeth: 2n * 10n ** 15n, rewardWithdrawThresholdAttoEth: 5n * 10n ** 16n })
+		expect(serializeOperatorSettings(parsed).settlement).toEqual(enabled.settlement)
+		expect(() => parseOperatorSettings({ ...serialized, settlement: { enabled: true } })).toThrow('Every settlement setting is required')
 	})
 
 	test('validates and persists the dashboard RPC quorum policy', () => {

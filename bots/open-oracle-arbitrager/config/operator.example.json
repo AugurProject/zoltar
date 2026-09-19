@@ -53,6 +53,12 @@
 		"uiHost": "127.0.0.1",
 		"uiPort": 4173
 	},
+	"settlement": {
+		"enabled": false,
+		"maxGasPriceGwei": "50",
+		"minimumProfitWeth": "0.001",
+		"rewardWithdrawThresholdEth": "0.01"
+	},
 	"strategy": {
 		"maxSpotTwapTicks": "100",
 		"minimumProfitBps": "100",

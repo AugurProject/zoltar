@@ -1,6 +1,7 @@
 import type { PublicOperatorSnapshot, PublicTransactionActivity } from '#state/operator-state'
 import { countOpportunities, type EvaluatedOpportunitySnapshot, type OpportunityDecision, type OpportunitySnapshot, type SkippedOpportunitySnapshot } from '#state/opportunity-snapshot'
 import type { MarketPricePoint } from '#monitoring/market-monitor'
+import type { RewardWithdrawalDecision, SettlementCandidateSnapshot, SettlementDecision, SettlementSnapshot } from '#state/settlement-store'
 
 const DECIMAL_SCALE = 18
 
@@ -193,6 +194,45 @@ export function opportunityDecisionReason(opportunity: Pick<EvaluatedOpportunity
 		unprofitable: 'Modeled profit is below configured thresholds',
 	}
 	return reasons[opportunity.decision]
+}
+
+export function settlementDecisionReason(decision: SettlementDecision) {
+	const reasons: Record<SettlementDecision, string> = {
+		disabled: 'Third-party settlement is disabled in the complete configuration',
+		'dry-run-settlement': 'Reward covers gas and the minimum net; execution mode is disabled',
+		eligible: 'Reward covers gas and the minimum net',
+		'execution-failed': 'The settle transaction was skipped or reverted; see the operations log',
+		'gas-price-cap': 'Projected gas price exceeds the configured cap',
+		'in-flight': 'A settlement transaction for this report is already pending',
+		paused: 'Operator paused execution',
+		'risk-limit': 'The UTC-day gas-spend limit leaves no room for this settlement',
+		'signer-unavailable': 'Execution mode is locked until a local signer is set',
+		settled: 'Settled in this scan',
+		unprofitable: 'Reward does not cover projected gas plus the minimum net',
+	}
+	return reasons[decision]
+}
+
+/** Settled and failed rows stay visible for the scan but no longer wait, so the heading counts the rest. */
+export function settlementQueueCountLabel(queue: readonly Pick<SettlementCandidateSnapshot, 'decision'>[]) {
+	return `${queue.filter(candidate => candidate.decision !== 'settled' && candidate.decision !== 'execution-failed').length.toString()} awaiting settlement`
+}
+
+export function rewardWithdrawalLabel(settlements: Pick<SettlementSnapshot, 'settings' | 'unclaimedRewardEth' | 'withdrawalDecision'>) {
+	if (settlements.unclaimedRewardEth === undefined) return 'Requires a local signer'
+	const reasons: Record<RewardWithdrawalDecision, string> = {
+		'below-threshold': `withdraws at ${settlements.settings.rewardWithdrawThresholdEth} ETH`,
+		disabled: 'withdrawal disabled in the complete configuration',
+		'dry-run': 'withdrawal waits for execution mode',
+		due: 'withdrawal due',
+		'gas-price-cap': 'withdrawal waits for gas below the cap',
+		'in-flight': 'withdrawal pending',
+		paused: 'withdrawal paused',
+		'risk-limit': 'withdrawal waits for the UTC-day gas budget',
+		'signer-unavailable': 'withdrawal waits for a local signer',
+		unavailable: `withdraws at ${settlements.settings.rewardWithdrawThresholdEth} ETH`,
+	}
+	return `${exactAmount(settlements.unclaimedRewardEth, 'ETH')} · ${reasons[settlements.withdrawalDecision]}`
 }
 
 export function transactionKindLabel(transaction: Pick<PublicTransactionActivity, 'kind' | 'tokenSymbol'>) {

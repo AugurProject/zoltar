@@ -3,9 +3,8 @@ import type { Configuration } from '#config/configuration'
 import type { DeploymentSettings } from '#config/deployment-settings'
 import type { NetworkConfiguration } from '#config/network'
 import { authenticateConfiguredDeployments, authenticatedExecutionToken, loadCoordinatorPolicies, retainReportsAndLogs } from '#config/runtime-deployment'
-import { constantProductPairAbi } from '#contracts/abi'
 import type { ExecutionCandidate } from '#core/operator-types'
-import { positionConsumesRisk } from '#core/safety-controls'
+import { positionConsumesRisk, utcDayGasSpentWeth } from '#core/safety-controls'
 import { assertStoredExecutorDeploymentIntent } from '#execution/create2-executor'
 import { executeDispute } from '#execution/dispute-execution'
 import { loadBalances } from '#execution/balances'
@@ -32,7 +31,7 @@ import { createSignerOperationGate } from '@zoltar/bot-shared/execution/signer-o
 import { errorMessage } from '@zoltar/bot-shared/infrastructure/error-message'
 import { advanceCursorAfterSuccessfulHead, cursorForHeadScan, fetchLogsWithAdaptiveRanges, finalityAnchorRequiresReset, initialCursor, latestLogRange, newestFirstScanRanges, withFinalityAnchor, type SyncCursor } from '@zoltar/bot-shared/monitoring/block-sync'
 import { centralizedMarketConfigurationAllowsExecution, centralizedMarketConsensusObservations, centralizedPriceAllowsExecution, centralizedPriceDeviationBps, marketConsensusSettings } from '@zoltar/bot-shared/monitoring/centralized-markets'
-import { observeConstantProductMarkets, readConstantProductPairWithQuorum, requireCurrentConstantProductMarketEvidence } from '@zoltar/bot-shared/monitoring/constant-product-markets'
+import { observeConstantProductMarkets, requireCurrentConstantProductMarketEvidence } from '@zoltar/bot-shared/monitoring/constant-product-markets'
 import { requireDeployedContractsOnce } from '@zoltar/bot-shared/monitoring/deployed-contracts'
 import {
 	clearOrphanedDexEvidenceForHeadReplacement,
@@ -47,12 +46,15 @@ import {
 } from '@zoltar/bot-shared/monitoring/market-consensus'
 import { settledQuorumValue } from '@zoltar/bot-shared/monitoring/read-quorum'
 import { operationalFailureDisposition, pollUntilStopped, retryDelayMilliseconds } from '@zoltar/bot-shared/monitoring/resilience'
-import { rpcQuorumRequirement } from '@zoltar/bot-shared/monitoring/rpc-quorum-policy'
+
 import { OPEN_ORACLE_REPORT_DISPUTED_TOPIC, OPEN_ORACLE_REPORT_SETTLED_TOPIC, OPEN_ORACLE_REPORT_SUBMITTED_TOPIC } from '@zoltar/open-oracle-shared/openOracle/openOracle'
 import { createOperatorHeadWatcher, createScanWakeGate, startCentralizedMarketSampler } from './background-observers.ts'
 import { deploymentUpdateMustWait } from './deployment-transition.ts'
 import { startOperatorControlPlane } from './operator-control-plane.ts'
 import { applyQueuedExecutionSettings, applyQueuedSigner, recordScanDecision, resetReportScanState } from './operator-execution-state.ts'
+import { createSettlementJournal, runSettlementStage } from './settlement-stage.ts'
+import { createConfiguredDexPairReader } from './configured-dex-pair.ts'
+import { emptySettlementSnapshot, settlementGasSpentAttoEthOnUtcDay } from '#state/settlement-store'
 import { completeSuccessfulPoll, completeUnconfiguredPoll } from './poll-completion.ts'
 import { selectQuorumHead } from './quorum-head.ts'
 import { acquireScanSignerOperation } from './signer-operations.ts'
@@ -89,36 +91,7 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 				})
 	let client = createClient()
 	let readClients = [createClient(config.connectivity.readRpcUrl), ...config.quorumRpcUrls.map(url => createClient(url))]
-	const readConfiguredDexPair = async (pair: Address, block: Readonly<{ hash: `0x${string}`; number: bigint }>) =>
-		readConstantProductPairWithQuorum({
-			block,
-			chainId: config.network.chain.id,
-			endpoints: [config.connectivity.readRpcUrl, ...config.quorumRpcUrls],
-			pair,
-			readBlock: async (endpoint, canonicalBlockNumber) =>
-				await contextualRpcRead(
-					'eth_getBlockByNumber',
-					async requestClient => {
-						const endpointBlock = await requestClient.getBlock({ blockNumber: canonicalBlockNumber })
-						return { hash: endpointBlock.hash, number: endpointBlock.number, timestamp: endpointBlock.timestamp }
-					},
-					endpoint,
-				),
-			readPairAtBlock: async (endpoint, quorumPair, canonicalBlockHash) => {
-				const [token0, token1, reserves] = await contextualRpcRead(
-					'eth_call',
-					requestClient =>
-						Promise.all([
-							requestClient.readContract({ address: quorumPair, abi: constantProductPairAbi, blockHash: canonicalBlockHash, functionName: 'token0' }),
-							requestClient.readContract({ address: quorumPair, abi: constantProductPairAbi, blockHash: canonicalBlockHash, functionName: 'token1' }),
-							requestClient.readContract({ address: quorumPair, abi: constantProductPairAbi, blockHash: canonicalBlockHash, functionName: 'getReserves' }),
-						]),
-					endpoint,
-				)
-				return { reserve0: reserves[0], reserve1: reserves[1], token0, token1 }
-			},
-			requirement: rpcQuorumRequirement(),
-		})
+	const readConfiguredDexPair = createConfiguredDexPairReader(config, contextualRpcRead)
 	let wallet = createWallet()
 	let coordinatorPolicies: Awaited<ReturnType<typeof loadCoordinatorPolicies>> = []
 	let startupValidated = !config.networkConfigured
@@ -156,8 +129,10 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 		tokenMarkets: [],
 		priceHistory: await loadPriceHistory(config.priceHistoryFile, config.network.chain.id),
 		reportPaths: [],
+		settlements: emptySettlementSnapshot(config.settlement),
 		transactionActivity: [],
 	}
+	const settlementJournal = await createSettlementJournal(config, state)
 	const fixedState: {
 		deployment: DeploymentSettings
 		execute: boolean
@@ -393,6 +368,7 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 						fixedState.explorerUrl = network.explorerUrl
 						fixedState.networkConfigured = true
 						pending.network = undefined
+						await settlementJournal.reload()
 						centralizedMarketSampler.wake()
 					}
 					if (!deploymentSettingsDeferred && pending.connectivity !== undefined) {
@@ -861,7 +837,7 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 											continue
 										}
 										const riskDate = dateFromBlockTimestamp(block.timestamp)
-										const mismatch = candidateRiskMismatch(evaluated.candidate, positions, config.riskLimits, riskDate, archivedUtcDayGasSpentWeth(positionJournal.archived, riskDate))
+										const mismatch = candidateRiskMismatch(evaluated.candidate, positions, config.riskLimits, riskDate, archivedUtcDayGasSpentWeth(positionJournal.archived, riskDate) + settlementGasSpentAttoEthOnUtcDay(settlementJournal.records, riskDate))
 										if (mismatch === undefined) candidates.push(evaluated.candidate)
 										else {
 											evaluated.opportunity.decision = 'risk-limit'
@@ -918,6 +894,7 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 						state.lastPollAt = new Date().toISOString()
 						state.opportunities = opportunities
 						const selected = selectBestExecution(candidates, candidate => candidate.quote.netProfitAttoWeth)
+						const disputeAttempted = selected !== undefined && wallet !== undefined // a dispute attempt owns this poll's transaction slot even when it fails
 						if (selected !== undefined && wallet !== undefined) {
 							selected.opportunity.decision = 'selected'
 							try {
@@ -953,7 +930,7 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 									() => state.paused || shutdown?.isRequested() === true,
 									trackTransaction,
 									persistPosition,
-									archivedUtcDayGasSpentWeth(positionJournal.archived, dateFromBlockTimestamp(block.timestamp)),
+									archivedUtcDayGasSpentWeth(positionJournal.archived, dateFromBlockTimestamp(block.timestamp)) + settlementGasSpentAttoEthOnUtcDay(settlementJournal.records, dateFromBlockTimestamp(block.timestamp)),
 								)
 								selected.opportunity.decision = 'submitted'
 								if (!state.executionHistory.some(existing => existing.transactionHash.toLowerCase() === record.transactionHash.toLowerCase())) state.executionHistory.unshift(record)
@@ -979,6 +956,23 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 								console.error(`report=${selected.report.helper.reportId.toString()} executionFailed=${message}`)
 							}
 						}
+						await runSettlementStage({
+							block: { baseFeePerGas: block.baseFeePerGas ?? 0n, number: blockNumber, timestamp: block.timestamp },
+							client,
+							config,
+							coordinatorPolicies,
+							dailyPositionGasSpentAttoWeth: utcDayGasSpentWeth(positions, dateFromBlockTimestamp(block.timestamp)) + archivedUtcDayGasSpentWeth(positionJournal.archived, dateFromBlockTimestamp(block.timestamp)),
+							gasPrice,
+							isPaused: () => state.paused || shutdown?.isRequested() === true,
+							journal: settlementJournal,
+							readClients,
+							reports: reports.values(),
+							state,
+							tokenSymbol: token => tokenMarkets.find(market => market.address.toLowerCase() === token.toLowerCase())?.symbol,
+							track: trackTransaction,
+							transactionSlotFree: !disputeAttempted,
+							wallet,
+						})
 						state.priceHistory = state.priceHistory.slice(-2_000)
 						completedScan = countOpportunities(opportunities)
 						completedFinalityAnchor = headFinalityAnchor

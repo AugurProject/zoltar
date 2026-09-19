@@ -698,12 +698,31 @@ td {
 	overflow-wrap: anywhere;
 }
 
+.settlement-summary {
+	margin-bottom: 18px;
+}
+
+.settlement-history-heading {
+	margin-top: 22px;
+}
+
+.settlement-history-heading h3 {
+	margin: 0;
+	font-size: 1rem;
+}
+
 /* Skipped-report reasons carry venue addresses and quote failures; wrap them instead of pushing the remaining columns out of view. */
-#opportunities-body td[data-label="Reason"] {
+#opportunities-body td[data-label="Reason"],
+#settlement-queue-body td[data-label="Reason"] {
 	min-width: 16rem;
 	max-width: 22rem;
 	white-space: normal;
 	overflow-wrap: anywhere;
+}
+
+/* The settlement queue shows exact amounts; a shorter reason keeps the coordinator link inside a 1440px viewport. */
+#settlement-queue-body td[data-label="Reason"] {
+	min-width: 11rem;
 }
 
 th {
@@ -728,13 +747,16 @@ td {
 	font-weight: 750;
 }
 
-.decision[data-decision="dry-run-opportunity"] {
+.decision[data-decision="dry-run-opportunity"],
+.decision[data-decision="dry-run-settlement"],
+.decision[data-decision="pending"] {
 	background: rgb(115 183 255 / 10%);
 	color: var(--operator-info);
 }
 
 .decision[data-decision="submitted"],
 .decision[data-decision="risk-limit"],
+.decision[data-decision="gas-price-cap"],
 .decision[data-decision="market-risk"],
 .decision[data-decision="unprofitable"],
 .decision[data-decision="insufficient-inventory"],
@@ -746,12 +768,16 @@ td {
 	color: var(--warning);
 }
 
-.decision[data-decision="skipped"] {
+.decision[data-decision="skipped"],
+.decision[data-decision="disabled"],
+.decision[data-decision="in-flight"],
+.decision[data-decision="expired"] {
 	background: rgb(148 163 184 / 12%);
 	color: var(--muted);
 }
 
-.decision[data-decision="execution-failed"] {
+.decision[data-decision="execution-failed"],
+.decision[data-decision="reverted"] {
 	background: rgb(255 139 139 / 10%);
 	color: var(--danger);
 }
@@ -960,10 +986,18 @@ a {
 	#transactions-body td[data-label="Target results"],
 	#operations-body td[data-label="Why"],
 	#operations-body td[data-label="Details"],
-	#opportunities-body td[data-label="Reason"] {
+	#opportunities-body td[data-label="Reason"],
+	#settlement-queue-body td[data-label="Reason"] {
 		width: 100%;
 		min-width: 0;
 		max-width: 100%;
+	}
+
+	/* Settlement summary values are long enough to fight the label for width; stack them instead. */
+	.settlement-summary .balance-row {
+		flex-direction: column;
+		align-items: flex-start;
+		gap: 4px;
 	}
 
 	.mobile-record-table,

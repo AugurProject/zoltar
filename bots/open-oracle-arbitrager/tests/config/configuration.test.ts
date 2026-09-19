@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { keccak256, privateKeyToAccount, type Hex } from '@zoltar/bot-shared/ethereum'
 import { loadOperatorSettings, operatorProfilePath, saveOperatorSettings, type PersistedOperatorSettings } from '#config/settings-store'
+import { parseSettlementSettings } from '#state/settlement-store'
 import { assertDistinctPersistentPaths } from '#config/configuration'
 import { deterministicDeploymentProxy, executorDeploymentPlan } from '#execution/executor-deployment-primitives'
 import { clearExecutorDeploymentIntent, executorDeploymentIntentPath, saveExecutorDeploymentIntent } from '#execution/executor-deployment-store'
@@ -95,6 +96,7 @@ function settings(rpcUrl: string, uiPort: number, privateKey?: Hex): PersistedOp
 			uiHost: '127.0.0.1',
 			uiPort,
 		},
+		settlement: parseSettlementSettings(undefined),
 		strategy: {
 			maxSpotTwapTicks: 100n,
 			minimumProfitBps: 100n,

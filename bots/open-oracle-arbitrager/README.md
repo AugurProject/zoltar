@@ -637,6 +637,8 @@ The dashboard shows:
 - ETH, WETH, REP, executable REP value, and estimated portfolio value.
 - Native ETH stakes, WETH stakes, and ETH settler rewards locked in reports currently
   pending on discovered coordinators. The combined figure treats 1 WETH as 1 ETH.
+- Approved-coordinator reports awaiting third-party settlement, each with reward,
+  projected gas and net, decision, and the settlement and reward-withdrawal history.
 - Current opportunities, token-metadata-normalized inventory requirements, deadline
   window, token-specific direction, pool, and decision. WETH/token reports still
   inside their settlement window that the scan declined before any venue priced
@@ -1122,6 +1124,42 @@ Actual gas is assigned to the UTC day of each receipt's quorum-confirmed canonic
 block timestamp, not the local time at which the transaction was staged or later
 recovered. The durable position stores one dated gas expenditure per confirmed
 receipt, and both the execution limit and dashboard use that same ledger.
+
+### Third-party settlement
+
+The bot can also settle reports it never disputed. Every approved-coordinator
+report that is past its settlement deadline and still unsettled appears in the
+dashboard's **Settlement queue** with the settler reward the coordinator escrowed,
+the projected gas for `settle` (the callback gas limit plus the 1/63 slack
+OpenOracle requires after the callback, plus a fixed base and an amortised reward
+withdrawal), and the projected net. Settlement is off until `settlement` is set in
+the complete configuration:
+
+| Setting | Default | JSON field | Effect |
+| --- | ---: | --- | --- |
+| Enabled | `false` | `enabled` | Allows settle and reward-withdrawal transactions in execution mode. Dry-run mode only reports decisions. |
+| Minimum net | `0.001 ETH` | `minimumProfitWeth` | Rejects settlements whose ETH reward minus projected gas is below this amount. |
+| Gas price cap | `50 gwei` | `maxGasPriceGwei` | Rejects settlements when the projected gas price exceeds the cap. |
+| Withdraw threshold | `0.01 ETH` | `rewardWithdrawThresholdEth` | Settler rewards accrue inside OpenOracle; the bot withdraws them once the unclaimed balance reaches this amount, at a gas price under the cap and within the daily gas budget. |
+
+Reports the wallet itself reported are excluded here because the position
+lifecycle already settles and withdraws them. Reports off their coordinator
+template are never settled. Each scan spends at most one transaction: a dispute
+attempt takes precedence, then the eligible settlement with the highest projected
+net, then a due reward withdrawal. The bot simulates `settle` at the scan head
+before signing, so a report settled by someone else costs nothing. Settlement gas
+is charged to the UTC day of its mined block and shares the daily gas budget with
+positions in both directions: it blocks further settlements and dispute entries once
+the budget is spent. A report or reward withdrawal with an attempt that may still be
+mined is never re-sent. Pausing blocks new settlements and withdrawals.
+
+Every signed settlement and reward withdrawal is journaled in
+`<positionFile>.settlements` (append-only, chain-scoped) and shown under
+**Settlement history** with its projected and actual gas; records left `pending` by
+an interrupted process are resolved from their receipts on the next scan or expired
+once their signed validity horizon has passed; expired attempts are rechecked for
+256 blocks in case the mempool included them late. Realized settlement income (confirmed
+rewards minus every paid gas cost) is tracked separately from arbitrage P&amp;L.
 
 ### Durable position journal
 

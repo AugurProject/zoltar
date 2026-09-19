@@ -5,6 +5,7 @@ import { executorDeploymentIntentPath } from '#execution/executor-deployment-sto
 import { validateSubmissionSettings, type SubmissionSettings } from '#execution/transaction-submission'
 import { validateConnectivitySettings, validateIndependentReadRpcUrls, type ConnectivitySettings, type NetworkName } from '#monitoring/connectivity'
 import { decimalWeth, parseDecimalWeth, updateStrategyFromRequest, type MutableStrategy, type StrategySettings } from '#state/operator-state'
+import { parseSettlementSettings, settlementSettings, type MutableSettlement, type SettlementSettings } from '#state/settlement-store'
 import { renameAndSyncDirectory } from '@zoltar/bot-shared/config/durable-replacement'
 import { persistentPathIdentitiesMatch, persistentPathIdentity } from '@zoltar/bot-shared/config/persistent-path'
 import { assertCompatibleProfileProcessMode, chainSpecificPath } from '@zoltar/bot-shared/config/profiles'
@@ -46,6 +47,7 @@ export type PersistedOperatorSettings = {
 	privateKey: Hex | undefined
 	rpcQuorum: RpcQuorumRequirement
 	runtime: RuntimeSettings
+	settlement: MutableSettlement
 	strategy: MutableStrategy
 	submission: SubmissionSettings
 	tokenAddresses: readonly Address[]
@@ -116,6 +118,7 @@ export type StoredOperatorSettings = {
 	privateKey?: Hex | typeof PRESERVE_PRIVATE_KEY | undefined
 	rpcQuorum?: RpcQuorumRequirement | undefined
 	runtime: StoredRuntimeSettings
+	settlement: SettlementSettings
 	strategy: StrategySettings
 	submission: SubmissionSettings
 	tokenAddresses: readonly Address[]
@@ -127,7 +130,7 @@ function requiredRecord(value: unknown, name = 'Operator configuration') {
 }
 
 function validatedKeys(record: Record<string, unknown>) {
-	const allowed = new Set(['approvedUniverses', 'centralizedMarkets', 'connectivity', 'deployment', 'network', 'networkConfigured', 'paused', 'privateKey', 'rpcQuorum', 'runtime', 'strategy', 'submission', 'tokenAddresses', 'version'])
+	const allowed = new Set(['approvedUniverses', 'centralizedMarkets', 'connectivity', 'deployment', 'network', 'networkConfigured', 'paused', 'privateKey', 'rpcQuorum', 'runtime', 'settlement', 'strategy', 'submission', 'tokenAddresses', 'version'])
 	for (const key of Object.keys(record)) {
 		if (!allowed.has(key)) throw new Error(`Unknown operator configuration field: ${key}`)
 	}
@@ -237,6 +240,7 @@ export function parseOperatorSettings(value: unknown, preservedPrivateKey?: Hex)
 	const marketSettings = requiredRecord(record['centralizedMarkets'] ?? defaultCentralizedMarkets(deployment.rep, chainId), 'Centralized market settings')
 	const centralizedMarkets = parseCentralizedMarketSettings({ ...marketSettings, assetAddress: deployment.rep, assetChainId: chainId })
 	const submission = validateSubmissionSettings(record['submission'])
+	const settlement = parseSettlementSettings(record['settlement'])
 	const runtime = validateRuntimeSettings(record['runtime'])
 	if (!networkConfigured && (!record['paused'] || runtime.execute)) throw new Error('An unconfigured network requires paused dry-run mode')
 	if (runtime.execute && deployment.quorumRpcUrls.length < configuredQuorumRpcUrlMinimum(rpcQuorum)) throw new Error('Live execution requires at least two independent quorum RPCs (three read endpoints total)')
@@ -250,6 +254,7 @@ export function parseOperatorSettings(value: unknown, preservedPrivateKey?: Hex)
 		privateKey: candidate.privateKey,
 		rpcQuorum,
 		runtime,
+		settlement,
 		strategy,
 		submission,
 		approvedUniverses: parseApprovedUniverses(record['approvedUniverses'] ?? []),
@@ -289,6 +294,7 @@ export function serializeOperatorSettings(settings: PersistedOperatorSettings, r
 			uiHost: settings.runtime.uiHost,
 			uiPort: settings.runtime.uiPort,
 		},
+		settlement: settlementSettings(settings.settlement),
 		strategy: {
 			maxSpotTwapTicks: settings.strategy.maxSpotTwapTicks.toString(),
 			minimumProfitBps: settings.strategy.minimumProfitBps.toString(),

@@ -9,6 +9,8 @@ import { validateDeploymentSettings, type DeploymentSettings } from '#config/dep
 import type { ConnectivitySettings, EndpointCheck, NetworkName } from '#monitoring/connectivity'
 import type { SubmissionSettings, SubmissionTargetResult } from '#execution/transaction-submission'
 import { publicOpportunity, type OpportunitySnapshot } from '#state/opportunity-snapshot'
+import type { SettlementSnapshot } from '#state/settlement-store'
+import { parseExecutionRecord, type ExecutionRecord } from '#state/execution-record'
 import type { MarketPricePoint, TokenMarketSnapshot } from '#monitoring/market-monitor'
 import { archivedUtcDayGasSpentWeth, emptyPositionJournalArchive, type PositionJournalArchive, type PositionRecord } from '#state/position-store'
 import { positionConsumesRisk, utcDayGasSpentWeth, type RiskLimits } from '#core/safety-controls'
@@ -86,34 +88,16 @@ type ReportPathSnapshot = {
 	steps: readonly DisputeStepSnapshot[]
 }
 
-export type ExecutionRecord = {
-	actualGasCostEth: string
-	blockNumber: string
-	direction: 'buy-rep' | 'sell-rep'
-	estimatedNetProfitWeth: string
-	estimatedProfitBeforeGasEth: string
-	executedAt: string
-	pool: Address
-	poolFee: number
-	reportId: string
-	requiredToken: string
-	requiredWeth: string
-	token: Address
-	tokenSymbol: string
-	trackedNetProfitEth: string
-	transactionHash: Hex
-}
-
 export type TransactionActivity = {
 	acceptedTargets: readonly string[]
 	actualGasCostEth: string | undefined
 	estimatedNetProfitEth: string | undefined
 	failedTargets: readonly SubmissionTargetResult[]
 	hash: Hex
-	kind: 'approval-token' | 'approval-weth' | 'canonical-head' | 'dispute' | 'settle' | 'withdraw-replacement' | 'withdraw-token' | 'withdraw-weth'
+	kind: 'approval-token' | 'approval-weth' | 'canonical-head' | 'dispute' | 'settle' | 'withdraw-replacement' | 'withdraw-reward' | 'withdraw-token' | 'withdraw-weth'
 	mode: SubmissionSettings['mode']
 	originalHash: Hex
-	reportId: string
+	reportId: string | undefined
 	status: 'confirmation-unknown' | 'confirmed' | 'pending' | 'reverted' | 'submission-failed' | 'submitting'
 	submittedAt: string
 	trackedNetProfitEth: string | undefined
@@ -212,6 +196,7 @@ export type OperatorSnapshot = PollStatus & {
 	totalOpenHedgedNetProfitEth: string
 	totalRealizedNetProfitEth: string
 	totalTrackedNetProfitEth: string
+	settlements: SettlementSnapshot
 	transactionActivity: readonly TransactionActivity[]
 	updatedAt: string
 	wallet: Address | undefined
@@ -273,6 +258,7 @@ export type PublicOperatorSnapshot = PollStatus &
 		totalHedgedProfitBeforeGasEth: string
 		totalOpenHedgedNetProfitEth: string
 		totalRealizedNetProfitEth: string
+		settlements: SettlementSnapshot
 		transactionActivity: readonly PublicTransactionActivity[]
 		wallet: Address | undefined
 	}
@@ -301,6 +287,7 @@ export type OperatorState = PollStatus & {
 	tokenMarkets: TokenMarketSnapshot[]
 	priceHistory: MarketPricePoint[]
 	reportPaths: ReportPathSnapshot[]
+	settlements: SettlementSnapshot
 	transactionActivity: TransactionActivity[]
 }
 
@@ -506,6 +493,7 @@ export function publicOperatorSnapshot(snapshot: OperatorSnapshot): PublicOperat
 		totalHedgedProfitBeforeGasEth: snapshot.totalHedgedProfitBeforeGasEth,
 		totalOpenHedgedNetProfitEth: snapshot.totalOpenHedgedNetProfitEth,
 		totalRealizedNetProfitEth: snapshot.totalRealizedNetProfitEth,
+		settlements: snapshot.settlements,
 		transactionActivity: snapshot.transactionActivity.map(activity => ({
 			acceptedTargets: activity.acceptedTargets.map(publicEndpointTarget),
 			actualGasCostEth: activity.actualGasCostEth,
@@ -524,7 +512,7 @@ export function publicOperatorSnapshot(snapshot: OperatorSnapshot): PublicOperat
 	}
 }
 
-export function recordOperation(state: OperatorState, entry: Omit<OperationEntry, 'timestamp'> & { timestamp?: string | undefined }) {
+export function recordOperation(state: Pick<OperatorState, 'operationLog'>, entry: Omit<OperationEntry, 'timestamp'> & { timestamp?: string | undefined }) {
 	state.operationLog = [{ ...entry, timestamp: entry.timestamp ?? new Date().toISOString() }, ...state.operationLog].slice(0, 500)
 }
 
@@ -653,62 +641,6 @@ export function gameCapitalSnapshot(games: readonly Pick<OpenOracleGame, 'curren
 		eth: decimalWeth(eth),
 		totalEthWeth: decimalWeth(eth + wethAmount),
 		weth: decimalWeth(wethAmount),
-	}
-}
-
-export function parseExecutionRecord(value: unknown): ExecutionRecord | undefined {
-	if (typeof value !== 'object' || value === null || Array.isArray(value)) return undefined
-	const record = value as Record<string, unknown>
-	const decimal = /^(?:0|[1-9]\d*)(?:\.\d{1,18})?$/
-	if (
-		typeof record['actualGasCostEth'] !== 'string' ||
-		!decimal.test(record['actualGasCostEth']) ||
-		typeof record['blockNumber'] !== 'string' ||
-		!/^(?:0|[1-9]\d*)$/.test(record['blockNumber']) ||
-		(record['direction'] !== 'buy-rep' && record['direction'] !== 'sell-rep') ||
-		typeof record['estimatedNetProfitWeth'] !== 'string' ||
-		!decimal.test(record['estimatedNetProfitWeth']) ||
-		typeof record['estimatedProfitBeforeGasEth'] !== 'string' ||
-		!decimal.test(record['estimatedProfitBeforeGasEth']) ||
-		typeof record['executedAt'] !== 'string' ||
-		!Number.isFinite(Date.parse(record['executedAt'])) ||
-		typeof record['pool'] !== 'string' ||
-		!/^0x[0-9a-fA-F]{40}$/.test(record['pool']) ||
-		typeof record['poolFee'] !== 'number' ||
-		!Number.isSafeInteger(record['poolFee']) ||
-		record['poolFee'] < 0 ||
-		typeof record['reportId'] !== 'string' ||
-		!/^(?:0|[1-9]\d*)$/.test(record['reportId']) ||
-		typeof record['requiredToken'] !== 'string' ||
-		!decimal.test(record['requiredToken']) ||
-		typeof record['requiredWeth'] !== 'string' ||
-		!decimal.test(record['requiredWeth']) ||
-		typeof record['token'] !== 'string' ||
-		!/^0x[0-9a-fA-F]{40}$/.test(record['token']) ||
-		typeof record['tokenSymbol'] !== 'string' ||
-		record['tokenSymbol'].length === 0 ||
-		typeof record['trackedNetProfitEth'] !== 'string' ||
-		!decimal.test(record['trackedNetProfitEth'].replace(/^-/, '')) ||
-		typeof record['transactionHash'] !== 'string' ||
-		!/^0x[0-9a-fA-F]{64}$/.test(record['transactionHash'])
-	)
-		return undefined
-	return {
-		actualGasCostEth: record['actualGasCostEth'],
-		blockNumber: record['blockNumber'],
-		direction: record['direction'],
-		estimatedNetProfitWeth: record['estimatedNetProfitWeth'],
-		estimatedProfitBeforeGasEth: record['estimatedProfitBeforeGasEth'],
-		executedAt: record['executedAt'],
-		pool: record['pool'] as Address,
-		poolFee: record['poolFee'],
-		reportId: record['reportId'],
-		requiredToken: record['requiredToken'],
-		requiredWeth: record['requiredWeth'],
-		token: record['token'] as Address,
-		tokenSymbol: record['tokenSymbol'],
-		trackedNetProfitEth: record['trackedNetProfitEth'],
-		transactionHash: record['transactionHash'] as Hex,
 	}
 }
 
@@ -846,7 +778,7 @@ export function operatorSnapshot(
 	const openPositions = state.positions.filter(position => positionConsumesRisk(position.status))
 	const lockedAttoWeth = openPositions.reduce((total, position) => total + parseDecimalWeth(position.capitalAtRiskWeth), 0n)
 	const riskNow = state.blockTimestamp === undefined ? new Date() : new Date(bigintToSafeNumber(BigInt(state.blockTimestamp) * 1_000n, 'Operator block timestamp'))
-	const dailyGasSpentAttoWeth = utcDayGasSpentWeth(state.positions, riskNow) + archivedUtcDayGasSpentWeth(archived, riskNow)
+	const dailyGasSpentAttoWeth = utcDayGasSpentWeth(state.positions, riskNow) + archivedUtcDayGasSpentWeth(archived, riskNow) + parseDecimalWeth(state.settlements.utcDayGasSpentEth)
 	return {
 		activeReportCount: state.activeReportCount,
 		consecutivePollFailures: state.consecutivePollFailures ?? 0,
@@ -917,6 +849,7 @@ export function operatorSnapshot(
 		totalOpenHedgedNetProfitEth: totals.openHedgedNet,
 		totalRealizedNetProfitEth: totals.realized,
 		totalTrackedNetProfitEth: sumSignedEth(state.executionHistory, 'trackedNetProfitEth'),
+		settlements: state.settlements,
 		transactionActivity: state.transactionActivity.slice(0, 100),
 		updatedAt: new Date().toISOString(),
 		wallet: fixed.wallet,

@@ -1,3 +1,4 @@
+import { emptySettlementSnapshot, parseSettlementSettings, settlementSnapshot } from '#state/settlement-store'
 import { canonicalExecutorIdentity } from '#execution/executor-identity'
 import { afterEach, expect, test } from 'bun:test'
 import { Browser, type BrowserWindow, type Element } from 'happy-dom'
@@ -39,6 +40,7 @@ function operatorState(): OperatorState {
 		status: 'paused',
 		tokenAddresses: [],
 		tokenMarkets: [],
+		settlements: emptySettlementSnapshot(),
 		transactionActivity: [],
 	}
 }
@@ -385,6 +387,35 @@ test('lists skipped reports beside priced ones with their scan reason and token'
 			windowUnit: 'blocks',
 		},
 	]
+	const coordinator = `0x${'c'.repeat(40)}` as Address
+	const settlementHash = `0x${'5'.repeat(64)}` as const
+	state.settlements = settlementSnapshot({
+		now: new Date('2026-09-19T10:05:00.000Z'),
+		queue: [
+			{ callbackGasLimit: '4000000', coordinator, decision: 'dry-run-settlement', elapsed: '95', projectedGasCostEth: '0.008746984', projectedNetEth: '0.008296326270400101', reportId: '11', rewardEth: '0.017043310270400101', token: address, tokenSymbol: 'REP', windowUnit: 'seconds' },
+			{ callbackGasLimit: '4000000', coordinator, decision: 'settled', elapsed: '3', projectedGasCostEth: '0.008', projectedNetEth: '0.009', reportId: '10', rewardEth: '0.017', token: address, tokenSymbol: 'REP', windowUnit: 'seconds' },
+		],
+		records: [
+			{
+				account: address,
+				actualGasCostEth: '0.004',
+				coordinator,
+				kind: 'settlement',
+				minedAt: '2026-09-19T10:01:00.000Z',
+				projectedGasCostEth: '0.0087',
+				reportId: '9',
+				rewardEth: '0.017',
+				status: 'confirmed',
+				submissionBlockNumber: '90',
+				submittedAt: '2026-09-19T10:00:00.000Z',
+				transactionHash: settlementHash,
+				updatedAt: '2026-09-19T10:01:00.000Z',
+			},
+		],
+		settings: { ...parseSettlementSettings(undefined), enabled: true },
+		unclaimedRewardAttoEth: 17n * 10n ** 15n,
+		withdrawalDecision: 'dry-run',
+	})
 	const snapshot = () =>
 		operatorSnapshot(state, settings.strategy, settings.submission, settings.connectivity, {
 			deployment: settings.deployment,
@@ -412,6 +443,18 @@ test('lists skipped reports beside priced ones with their scan reason and token'
 	})
 	servers.push(server)
 	const { window } = await mountDashboard(server, '/operations')
+	const settlementQueue = element(window, 'settlement-queue-body', window.HTMLTableSectionElement)
+	for (let attempt = 0; attempt < 100 && settlementQueue.children.length < 2; attempt++) await Bun.sleep(10)
+	const settlementCells = (bodyId: string) => Array.from(element(window, bodyId, window.HTMLTableSectionElement).children[0]?.querySelectorAll('td') ?? [], cell => cell.textContent)
+	expect(settlementCells('settlement-queue-body')).toEqual(['11', 'dry run settlement', 'Reward covers gas and the minimum net; execution mode is disabled', '0.017043310270400101 ETH', '0.008746984 ETH', '0.008296326270400101 ETH', '95 seconds', 'WETH/REP', `${coordinator.slice(0, 8)}…${coordinator.slice(-6)}`])
+	expect(settlementCells('settlement-history-body').slice(1, 7)).toEqual(['settle', '9', 'confirmed', '0.017 ETH', '0.0087 ETH', '0.004 ETH'])
+	expect(element(window, 'settlement-count', window.HTMLElement).textContent).toBe('1 awaiting settlement')
+	expect(element(window, 'settlement-history-count', window.HTMLElement).textContent).toBe('1 transaction')
+	expect(element(window, 'settlement-summary', window.HTMLElement).textContent).toContain('0.017 ETH · withdrawal waits for execution mode')
+	expect(element(window, 'settlement-summary', window.HTMLElement).textContent).not.toContain('withdrawal due')
+	expect(element(window, 'settlement-summary', window.HTMLElement).textContent).toContain('0.013 ETH')
+	expect(element(window, 'settlement-summary', window.HTMLElement).textContent).toContain('0.013 ETH')
+	expect(element(window, 'settlement-queue-empty', window.HTMLElement).hidden).toBe(true)
 	const body = element(window, 'opportunities-body', window.HTMLTableSectionElement)
 	for (let attempt = 0; attempt < 100 && body.children.length < 2; attempt++) await Bun.sleep(10)
 	const cells = (rowIndex: number) => Array.from(body.children[rowIndex]?.querySelectorAll('td') ?? [], cell => cell.textContent)

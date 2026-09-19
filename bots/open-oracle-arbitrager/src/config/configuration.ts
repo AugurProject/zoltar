@@ -3,6 +3,7 @@ import type { Address, Hex } from '@zoltar/bot-shared/ethereum'
 import type { DeploymentManifest } from '#config/deployment-auth'
 import { validateIndependentReadRpcUrls, type ConnectivitySettings } from '#monitoring/connectivity'
 import { type MutableStrategy } from '#state/operator-state'
+import type { MutableSettlement } from '#state/settlement-store'
 import { networkConfiguration, type NetworkConfiguration } from '#config/network'
 import type { RiskLimits } from '#core/safety-controls'
 import { assertOperatorProfileIsolation, loadOperatorSettings, type PersistedOperatorSettings } from '#config/settings-store'
@@ -40,6 +41,7 @@ export type Configuration = MutableStrategy & {
 	quorumRpcUrls: string[]
 	rpcQuorum: RpcQuorumRequirement
 	riskLimits: RiskLimits
+	settlement: MutableSettlement
 	router: Address | undefined
 	settingsFile: string
 	submission: SubmissionSettings
@@ -95,6 +97,7 @@ export async function loadConfiguration(settingsFile = resolve(process.env['OPEN
 		quorumRpcUrls,
 		rpcQuorum: saved.rpcQuorum,
 		riskLimits: saved.runtime.riskLimits,
+		settlement: { ...saved.settlement },
 		router: deployment.uniswapRouter,
 		settingsFile,
 		submission: saved.submission,
