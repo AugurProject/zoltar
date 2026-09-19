@@ -405,6 +405,7 @@ test('lists skipped reports beside priced ones with their scan reason and token'
 				minedAt: '2026-09-19T10:01:00.000Z',
 				nonce: '7',
 				projectedGasCostEth: '0.0087',
+				receiptBlock: { hash: settlementHash, number: '91' },
 				reportId: '9',
 				rewardEth: '0.017',
 				status: 'confirmed',

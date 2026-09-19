@@ -309,6 +309,7 @@ export const isSnapshot = object<PublicOperatorSnapshot>({
 				kind: oneOf('reward-withdrawal', 'settlement'),
 				minedAt: optional(stringValue),
 				projectedGasCostEth: stringValue,
+				receiptBlock: optional(object({ hash: hexValue, number: stringValue })),
 				reportId: optional(stringValue),
 				rewardEth: stringValue,
 				lastValidBlockNumber: stringValue,

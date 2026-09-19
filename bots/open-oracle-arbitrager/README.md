@@ -1186,8 +1186,13 @@ budget at once and the report once the attempt's own signed horizon has finalize
 so a refusal that repeats re-signs at that cadence rather than on every scan. A
 dropped private attempt keeps being rechecked so a late receipt or a consumed nonce
 still lands in the journal; a dropped public attempt, which no node accepted, leaves
-the recheck set once its horizon has finalized. Realized settlement income (confirmed
-rewards minus every paid gas cost) is tracked separately from arbitrage P&amp;L.
+the recheck set once its horizon has finalized. A mined outcome records its receipt
+block and is rechecked until that block has finality: a receipt that moved to another
+block is re-read, and one a reorg orphaned returns the attempt to `pending`. When a
+replacement is adopted, its outcome is journaled before the replaced hash is retired,
+so an interruption between the two writes never loses the receipt. Realized
+settlement income (confirmed rewards minus every paid gas cost) is tracked
+separately from arbitrage P&amp;L.
 
 ### Durable position journal
 

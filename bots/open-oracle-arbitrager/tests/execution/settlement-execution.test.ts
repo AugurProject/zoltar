@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { createPublicClient, createWalletClient, encodeDeployData, http, keccak256, privateKeyToAccount, zeroAddress, type Address, type Hex } from '@zoltar/bot-shared/ethereum'
 import { decodeOpenOracleStatePreimage, type OpenOracleStatePreimage } from '@zoltar/open-oracle-shared/openOracle/openOracle'
-import { parseDecimalWeth } from '#state/operator-state'
+import { decimalSignedEth, parseDecimalWeth } from '#state/operator-state'
 import { networkConfiguration } from '#config/network'
 import { openOracleAbi } from '#contracts/abi'
 import type { ReadClient, WriteClient } from '#core/operator-types'
@@ -16,7 +16,7 @@ import type { ActiveReport } from '#monitoring/oracle-log-state'
 import type { OperationEntry, TransactionActivity } from '#state/operator-state'
 import { settlementEconomics, settlementMaxFeePerGas, signedSettlementGasLimit } from '#core/settlement-strategy'
 import { dateFromBlockTimestamp } from '#execution/recovery-support'
-import { emptySettlementSnapshot, loadSettlementJournal, settlementAttemptHoldsFlow, settlementAttemptIsUnresolved, settlementGasSpentAttoEthOnUtcDay, settlementJournalPath, type MutableSettlement, type SettlementRecord } from '#state/settlement-store'
+import { appendSettlementRecord, emptySettlementSnapshot, loadSettlementJournal, settlementAttemptHoldsFlow, settlementAttemptIsUnresolved, settlementGasSpentAttoEthOnUtcDay, settlementJournalPath, type MutableSettlement, type SettlementRecord } from '#state/settlement-store'
 import { createSettlementJournal, recoverPendingSettlements, runSettlementStage, type SettlementStageConfiguration } from '../../src/runtime/settlement-stage.ts'
 import { createAnvilNodeForConnectionMode, getAnvilConnectionMode, type AnvilNode } from '../../../../solidity/ts/testSupport/simulator/anvilNode.ts'
 import { statoblast_openOracle_OpenOracle_OpenOracle as openOracleArtifact } from '../../../../solidity/ts/types/contractArtifact'
@@ -370,12 +370,80 @@ describe('third-party settlement execution against OpenOracle', () => {
 		}
 	})
 
+	test('journals an in-process replacement before retiring the replaced hash', async () => {
+		const report = await submitReport()
+		await pastSettlementWindow()
+		// The signed settle never reaches a mempool; a manual rebroadcast of the same call at the same nonce lands instead.
+		const swallowingRpc = Bun.serve({
+			port: 0,
+			async fetch(request) {
+				const body: unknown = await request.json()
+				if (typeof body === 'object' && body !== null && Reflect.get(body, 'method') === 'eth_sendRawTransaction') {
+					const [raw] = Reflect.get(body, 'params') as [Hex]
+					return Response.json({ id: Reflect.get(body, 'id'), jsonrpc: '2.0', result: keccak256(raw) })
+				}
+				return fetch(node.rpcUrl, { body: JSON.stringify(body), headers: { 'content-type': 'application/json' }, method: 'POST' })
+			},
+		})
+		try {
+			const records: SettlementRecord[] = []
+			const base = await context(records, [])
+			const config = { ...base.config, connectivity: { ...base.config.connectivity, publicRpcUrls: [swallowingRpc.url.href] }, pollMilliseconds: 5_000 }
+			const nonce = await client.getTransactionCount({ address: account.address, blockTag: 'pending' })
+			const plan = { coordinator: report.helper.creator, gas: 250_000n, projectedGasCostAttoEth: 10n ** 15n, report, rewardAttoEth: REWARD, token: token2, tokenSymbol: 'TK2' }
+			const attempt = executeSettlement({ ...base, config }, plan)
+			for (let waited = 0; records.length === 0 && waited < 200; waited++) await Bun.sleep(10)
+			const [original] = records
+			if (original === undefined) throw new Error('pending record missing')
+			const rebroadcastHash = await wallet.sendTransaction({ data: original.transactionIntent.data, gas: 400_000n, maxFeePerGas: 10n * GWEI, maxPriorityFeePerGas: 2n * GWEI, nonce, to: openOracle, value: 0n })
+			await wallet.waitForTransactionReceipt({ hash: rebroadcastHash })
+			const final = await attempt
+			expect(final.transactionHash).toBe(rebroadcastHash)
+			expect(final.status).toBe('confirmed')
+			// The mined outcome is written first; the replaced hash is retired only afterwards.
+			expect(records.map(record => `${record.transactionHash === rebroadcastHash ? 'rebroadcast' : 'original'}:${record.status}`)).toEqual(['original:pending', 'rebroadcast:confirmed', 'original:expired'])
+		} finally {
+			swallowingRpc.stop(true)
+		}
+	})
+
+	test('returns a mined attempt to pending when a reorg orphans its receipt and re-resolves it afterwards', async () => {
+		const report = await submitReport()
+		await pastSettlementWindow()
+		const snapshot = await node.anvilWindowEthereum.anvilSnapshot()
+		const records: SettlementRecord[] = []
+		const base = await context(records, [])
+		const config = base.config
+		const plan = { coordinator: report.helper.creator, gas: 250_000n, projectedGasCostAttoEth: 10n ** 15n, report, rewardAttoEth: REWARD, token: token2, tokenSymbol: 'TK2' }
+		const confirmed = await executeSettlement(base, plan)
+		if (confirmed.receiptBlock === undefined) throw new Error('confirmed record is missing its receipt block')
+		// Inside the finality window the outcome is still rechecked; an unchanged receipt changes nothing.
+		expect(settlementAttemptIsUnresolved(confirmed, await client.getBlockNumber())).toBeTrue()
+		expect(await reconcilePendingSettlements([client], config, [confirmed], await client.getBlockNumber())).toEqual([])
+		// The receipt's block is reverted: the attempt is live again, holds its report, and charges its exposure.
+		await node.anvilWindowEthereum.anvilRevert(snapshot)
+		const [reverted] = await reconcilePendingSettlements([client], config, [confirmed], await client.getBlockNumber())
+		expect(reverted).toMatchObject({ actualGasCostEth: undefined, minedAt: undefined, receiptBlock: undefined, status: 'pending', transactionHash: confirmed.transactionHash })
+		if (reverted === undefined) throw new Error('reverted record missing')
+		expect(settlementAttemptHoldsFlow(reverted, await client.getBlockNumber())).toBeTrue()
+		expect(settlementGasSpentAttoEthOnUtcDay([reverted], new Date())).toBe(10n ** 15n)
+		// The transaction is not in the pool any more and its nonce is free, so it stays pending until something consumes it.
+		expect(await reconcilePendingSettlements([client], config, [reverted], await client.getBlockNumber())).toEqual([])
+		// The next scan re-settles the report at the same nonce; the orphaned hash is then retired against that outcome.
+		const resettled = await executeSettlement(await context(records, []), plan)
+		expect(resettled.nonce).toBe(reverted.nonce)
+		await node.anvilWindowEthereum.request({ method: 'anvil_mine', params: ['0xd'] })
+		const [retired] = await reconcilePendingSettlements([client], config, [resettled, reverted], await client.getBlockNumber())
+		expect(retired).toMatchObject({ status: 'expired', transactionHash: confirmed.transactionHash })
+		expect(await reconcilePendingSettlements([client], config, [resettled], await client.getBlockNumber())).toEqual([])
+	})
+
 	test('recovers interrupted attempts from receipts, adopts an intent-matching rebroadcast, and retires only nonces taken by other transactions', async () => {
 		const report = await submitReport()
 		await pastSettlementWindow()
 		const records: SettlementRecord[] = []
 		const confirmed = await executeSettlement(await context(records, []), { coordinator: report.helper.creator, gas: 250_000n, projectedGasCostAttoEth: 10n ** 15n, report, rewardAttoEth: REWARD, token: token2, tokenSymbol: 'TK2' })
-		const pending = (transactionHash: Hex, overrides: Partial<SettlementRecord> = {}): SettlementRecord => ({ ...confirmed, actualGasCostEth: undefined, minedAt: undefined, status: 'pending', transactionHash, ...overrides })
+		const pending = (transactionHash: Hex, overrides: Partial<SettlementRecord> = {}): SettlementRecord => ({ ...confirmed, actualGasCostEth: undefined, minedAt: undefined, receiptBlock: undefined, status: 'pending', transactionHash, ...overrides })
 		// The settle consumed its nonce more than a reorg window ago, so nonce-based recovery may judge it.
 		await node.anvilWindowEthereum.request({ method: 'anvil_mine', params: ['0x28'] })
 		const head = await client.getBlockNumber()
@@ -387,9 +455,10 @@ describe('third-party settlement execution against OpenOracle', () => {
 		expect(resolved[0]?.actualGasCostEth).toBe(confirmed.actualGasCostEth)
 		expect(resolved[0]?.minedAt).toBe(confirmed.minedAt)
 		// A rebroadcast under a hash the journal does not know keeps the original's identity but carries the mined hash and gas.
+		// The adopted outcome comes first so a write that stops after it never leaves an unaccounted receipt behind.
 		const adopted = await reconcilePendingSettlements([client], config, [pending(`0x${'cd'.repeat(32)}`)], head)
-		expect(adopted.map(entry => `${entry.transactionHash.slice(0, 6)}:${entry.status}`)).toEqual(['0xcdcd:expired', `${confirmed.transactionHash.slice(0, 6)}:confirmed`])
-		expect(adopted[1]).toMatchObject({ actualGasCostEth: confirmed.actualGasCostEth, minedAt: confirmed.minedAt, nonce: confirmed.nonce, reportId: confirmed.reportId })
+		expect(adopted.map(entry => `${entry.transactionHash.slice(0, 6)}:${entry.status}`)).toEqual([`${confirmed.transactionHash.slice(0, 6)}:confirmed`, '0xcdcd:expired'])
+		expect(adopted[0]).toMatchObject({ actualGasCostEth: confirmed.actualGasCostEth, minedAt: confirmed.minedAt, nonce: confirmed.nonce, receiptBlock: confirmed.receiptBlock, reportId: confirmed.reportId })
 		// When the consumer is the bot's own re-send the journal already holds its record, so only the old hash is retired.
 		expect((await reconcilePendingSettlements([client], config, [confirmed, pending(`0x${'cd'.repeat(32)}`)], head)).map(entry => `${entry.transactionHash.slice(0, 6)}:${entry.status}`)).toEqual(['0xcdcd:expired'])
 		expect(await reconcilePendingSettlements([client], config, [confirmed], head)).toEqual([])
@@ -548,7 +617,7 @@ describe('third-party settlement execution against OpenOracle', () => {
 			// the budget until the pre-evaluation recovery replaces that with the actual cost from its receipt.
 			const [withdrawal, settled] = journal.records
 			if (withdrawal === undefined || settled === undefined || withdrawal.actualGasCostEth === undefined || settled.actualGasCostEth === undefined) throw new Error('confirmed records missing')
-			await journal.persist({ ...withdrawal, actualGasCostEth: undefined, minedAt: undefined, status: 'pending' })
+			await journal.persist({ ...withdrawal, actualGasCostEth: undefined, minedAt: undefined, receiptBlock: undefined, status: 'pending' })
 			expect(journal.records.some(record => record.kind === 'reward-withdrawal' && record.status === 'pending')).toBeTrue()
 			expect(parseDecimalWeth(state.settlements.utcDayGasSpentEth)).toBe(parseDecimalWeth(settled.actualGasCostEth) + parseDecimalWeth(withdrawal.projectedGasCostEth))
 			const withdrawnHead = await client.getBlock()
@@ -584,12 +653,32 @@ describe('third-party settlement execution against OpenOracle', () => {
 			// An attempt whose nonce was consumed by the journaled settle with the same intent is retired, and the retirement is
 			// logged as the success it is rather than as a lost attempt.
 			const rebroadcastHash = `0x${'cd'.repeat(32)}` as const
-			await journal.persist({ ...settled, actualGasCostEth: undefined, minedAt: undefined, status: 'pending', transactionHash: rebroadcastHash })
+			await journal.persist({ ...settled, actualGasCostEth: undefined, minedAt: undefined, receiptBlock: undefined, status: 'pending', transactionHash: rebroadcastHash })
 			await node.anvilWindowEthereum.request({ method: 'anvil_mine', params: ['0xd'] })
 			state.operationLog.length = 0
 			await recoverPendingSettlements({ blockNumber: await client.getBlockNumber(), config: stageConfig, journal, readClients: [client], state })
 			expect(journal.records.map(record => `${record.transactionHash === rebroadcastHash ? 'rebroadcast' : record.kind}:${record.status}`)).toEqual(['rebroadcast:expired', 'reward-withdrawal:confirmed', 'settlement:confirmed'])
 			expect(state.operationLog.map(entry => [entry.level, entry.details])).toEqual([['info', `status=expired adoptedAs=${settled.transactionHash}`]])
+			// A crash between the two writes of an adoption: only the adopted outcome reached the journal. After a reload the
+			// pending original is retired against it, and the receipt's gas and reward are counted exactly once.
+			const interruptedHash = `0x${'ee'.repeat(32)}` as const
+			const original: SettlementRecord = { ...settled, actualGasCostEth: undefined, minedAt: undefined, receiptBlock: undefined, status: 'pending', transactionHash: interruptedHash }
+			const partialDirectory = await mkdtemp(join(tmpdir(), 'zoltar-settlement-partial-'))
+			try {
+				const partialConfig = { ...stageConfig, positionFile: join(partialDirectory, 'positions.json') }
+				await appendSettlementRecord(settlementJournalPath(partialConfig.positionFile), original, network.chain.id)
+				const [adoptedFirst] = await reconcilePendingSettlements([client], partialConfig, [original], await client.getBlockNumber())
+				if (adoptedFirst === undefined || adoptedFirst.transactionHash !== settled.transactionHash) throw new Error('adopted outcome should be resolved first')
+				await appendSettlementRecord(settlementJournalPath(partialConfig.positionFile), adoptedFirst, network.chain.id)
+				const reloadedState = { blockTimestamp: state.blockTimestamp, operationLog: [] as OperationEntry[], paused: false, settlements: emptySettlementSnapshot() }
+				const reloaded = await createSettlementJournal(partialConfig, reloadedState)
+				expect(reloaded.records.map(record => `${record.transactionHash === interruptedHash ? 'original' : 'adopted'}:${record.status}`)).toEqual(['adopted:confirmed', 'original:pending'])
+				await recoverPendingSettlements({ blockNumber: await client.getBlockNumber(), config: partialConfig, journal: reloaded, readClients: [client], state: reloadedState })
+				expect(reloaded.records.map(record => `${record.transactionHash === interruptedHash ? 'original' : 'adopted'}:${record.status}`)).toEqual(['original:expired', 'adopted:confirmed'])
+				expect(reloadedState.settlements.realizedIncomeEth).toBe(decimalSignedEth(parseDecimalWeth(settled.rewardEth) - parseDecimalWeth(settled.actualGasCostEth)))
+			} finally {
+				await rm(partialDirectory, { force: true, recursive: true })
+			}
 		} finally {
 			await rm(journalDirectory, { force: true, recursive: true })
 		}

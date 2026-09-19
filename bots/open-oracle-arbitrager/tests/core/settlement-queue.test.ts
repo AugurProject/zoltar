@@ -84,6 +84,7 @@ describe('settlement queue', () => {
 			minedAt: undefined,
 			nonce: '3',
 			projectedGasCostEth: '0.008',
+			receiptBlock: undefined,
 			reportId: '11',
 			rewardEth: '0.017',
 			status: 'pending',

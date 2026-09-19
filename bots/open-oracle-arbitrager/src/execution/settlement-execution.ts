@@ -106,12 +106,17 @@ async function signAndSubmit(context: SettlementExecutionContext, call: { data: 
 	if (observed.transactionHash.toLowerCase() !== signed.hash.toLowerCase()) {
 		// A replacement at the same nonce only counts when it carries the signed call; either way the signed hash can no longer land.
 		const mismatch = await recoveredTransactionIntentMismatchWithQuorum(context.readClients, context.config, 'settlement replacement', observed.transactionHash, account.address, nonce.toString(), durableTransactionIntent(signed.transaction))
-		await context.persist({ ...record, status: 'expired', updatedAt: new Date().toISOString() })
-		if (mismatch !== undefined) throw new Error(`Settlement transaction ${signed.hash} was replaced by ${observed.transactionHash}: ${mismatch}`)
+		if (mismatch !== undefined) {
+			await context.persist({ ...record, status: 'expired', updatedAt: new Date().toISOString() })
+			throw new Error(`Settlement transaction ${signed.hash} was replaced by ${observed.transactionHash}: ${mismatch}`)
+		}
 	}
 	const outcome = await receiptOutcome(context.readClients, context.config, observed.transactionHash)
 	const final: SettlementRecord = { ...record, ...outcome, transactionHash: observed.transactionHash, updatedAt: new Date().toISOString() }
+	// The mined outcome is journaled before the replaced hash is retired, so an interruption between the two writes leaves
+	// a pending original that recovery retires against the already journaled replacement, never an unaccounted receipt.
 	await context.persist(final)
+	if (final.transactionHash.toLowerCase() !== record.transactionHash.toLowerCase()) await context.persist({ ...record, status: 'expired', updatedAt: new Date().toISOString() })
 	return final
 }
 
@@ -127,7 +132,7 @@ async function receiptOutcome(readClients: readonly ReadClient[], config: Pick<C
 async function receiptExpenditure(readClients: readonly ReadClient[], config: Pick<Configuration, 'connectivity' | 'quorumRpcUrls'>, receipt: Parameters<typeof receiptGasExpendituresWithQuorum>[3][number] & { status: 'reverted' | 'success' }) {
 	const [expenditure] = await receiptGasExpendituresWithQuorum(readClients, [config.connectivity.readRpcUrl, ...config.quorumRpcUrls], 'settlement journal', [receipt])
 	if (expenditure === undefined) throw new Error(`Settlement receipt ${receipt.transactionHash} produced no gas expenditure`)
-	return { actualGasCostEth: decimalWeth(expenditure.costAttoEth), minedAt: expenditure.minedAt, status: receipt.status === 'success' ? ('confirmed' as const) : ('reverted' as const) }
+	return { actualGasCostEth: decimalWeth(expenditure.costAttoEth), minedAt: expenditure.minedAt, receiptBlock: { hash: receipt.blockHash, number: receipt.blockNumber.toString() }, status: receipt.status === 'success' ? ('confirmed' as const) : ('reverted' as const) }
 }
 
 /** Simulates at the head first so a report settled by someone else costs nothing instead of a reverted transaction. */
@@ -152,6 +157,7 @@ export async function executeSettlement(context: SettlementExecutionContext, pla
 		minedAt: undefined,
 		nonce: attempt.nonce,
 		projectedGasCostEth: decimalWeth(plan.projectedGasCostAttoEth),
+		receiptBlock: undefined,
 		reportId,
 		rewardEth: decimalWeth(plan.rewardAttoEth),
 		status: 'pending',
@@ -178,6 +184,7 @@ export async function executeRewardWithdrawal(context: SettlementExecutionContex
 		minedAt: undefined,
 		nonce: attempt.nonce,
 		projectedGasCostEth: decimalWeth(projectedGasCostAttoEth),
+		receiptBlock: undefined,
 		reportId: undefined,
 		rewardEth: decimalWeth(amountAttoEth),
 		status: 'pending',
@@ -197,7 +204,10 @@ export async function executeRewardWithdrawal(context: SettlementExecutionContex
  * attempt is `expired` and can never be mined. A private relay stops including at the signed horizon, so a private
  * attempt whose horizon has finalized without a receipt is `dropped`: it releases the report and the budget but keeps
  * being rechecked here, while a dropped public attempt (never accepted anywhere) leaves the recheck set once its own
- * horizon has finalized. Every outcome keeps its gas accounted, so nothing is re-sent on top of a live attempt.
+ * horizon has finalized. A mined outcome is rechecked until its receipt block has finality: a receipt that moved to
+ * another block is re-read, and one a reorg orphaned returns the attempt to `pending`. Every outcome keeps its gas
+ * accounted, so nothing is re-sent on top of a live attempt. Adopted outcomes precede the hash they retire so a partial
+ * write never loses the receipt.
  */
 export async function reconcilePendingSettlements(readClients: readonly ReadClient[], config: Pick<Configuration, 'connectivity' | 'quorumRpcUrls'>, records: readonly SettlementRecord[], blockNumber: bigint) {
 	const unresolved = records.filter(record => settlementAttemptIsUnresolved(record, blockNumber))
@@ -217,7 +227,13 @@ export async function reconcilePendingSettlements(readClients: readonly ReadClie
 		const receipt = receipts[index]
 		const updatedAt = new Date().toISOString()
 		if (receipt !== undefined) {
+			if (record.receiptBlock !== undefined && record.receiptBlock.hash.toLowerCase() === receipt.blockHash.toLowerCase()) continue
 			resolved.push({ ...record, ...(await receiptExpenditure(readClients, config, receipt)), updatedAt })
+			continue
+		}
+		if (record.status === 'confirmed' || record.status === 'reverted') {
+			// The receipt's block was orphaned: the attempt is live again until a receipt or a consumed nonce says otherwise.
+			resolved.push({ ...record, actualGasCostEth: undefined, minedAt: undefined, receiptBlock: undefined, status: 'pending', updatedAt })
 			continue
 		}
 		const accountKey = record.account.toLowerCase()
@@ -238,12 +254,15 @@ export async function reconcilePendingSettlements(readClients: readonly ReadClie
 			nonce,
 			toBlockNumber: finalityBlockNumber,
 		})
-		resolved.push({ ...record, status: 'expired', updatedAt })
+		const retired: SettlementRecord = { ...record, status: 'expired', updatedAt }
 		// A consumer the journal already knows (the bot's own re-send at the same nonce) keeps its own record.
-		if (consumingHash === undefined || records.some(existing => existing.transactionHash.toLowerCase() === consumingHash.toLowerCase())) continue
+		if (consumingHash === undefined || records.some(existing => existing.transactionHash.toLowerCase() === consumingHash.toLowerCase())) {
+			resolved.push(retired)
+			continue
+		}
 		const mismatch = await recoveredTransactionIntentMismatchWithQuorum(readClients, config, `settlement journal recovery ${record.transactionHash}`, consumingHash, record.account, record.nonce, record.transactionIntent)
-		if (mismatch !== undefined) continue
-		resolved.push({ ...record, ...(await receiptOutcome(readClients, config, consumingHash)), transactionHash: consumingHash, updatedAt })
+		if (mismatch === undefined) resolved.push({ ...record, ...(await receiptOutcome(readClients, config, consumingHash)), transactionHash: consumingHash, updatedAt })
+		resolved.push(retired)
 	}
 	return resolved
 }

@@ -57,14 +57,16 @@ export function settlementAttemptHoldsFlow(record: Pick<SettlementRecord, 'lastV
 }
 
 /**
- * Attempts whose outcome recovery still has to check: pending ones, dropped private ones (the relay may have shared the
- * transaction before its horizon), and dropped public ones inside their horizon. A public attempt that no node accepted is
- * final once its horizon has finalized; a dropped private one is rechecked until its nonce is consumed.
+ * Attempts whose outcome recovery still has to check: pending ones; dropped private ones (the relay may have shared the
+ * transaction before its horizon) and dropped public ones inside their horizon; and mined ones whose receipt block has
+ * not reached finality, because a short reorg can orphan the receipt after it was journaled. A public attempt that no
+ * node accepted is final once its horizon has finalized; a dropped private one is rechecked until its nonce is consumed.
  */
-export function settlementAttemptIsUnresolved(record: Pick<SettlementRecord, 'lastValidBlockNumber' | 'status' | 'submissionMode'>, blockNumber: bigint) {
+export function settlementAttemptIsUnresolved(record: Pick<SettlementRecord, 'lastValidBlockNumber' | 'receiptBlock' | 'status' | 'submissionMode'>, blockNumber: bigint) {
 	if (record.status === 'pending') return true
-	if (record.status !== 'dropped') return false
-	return record.submissionMode === 'private' || !settlementAttemptHorizonFinalized(record, blockNumber)
+	if (record.status === 'dropped') return record.submissionMode === 'private' || !settlementAttemptHorizonFinalized(record, blockNumber)
+	if (record.status === 'confirmed' || record.status === 'reverted') return record.receiptBlock !== undefined && !attemptHasFinality(blockNumber, BigInt(record.receiptBlock.number))
+	return false
 }
 
 /** One report awaiting third-party settlement, evaluated at the latest scan head. */
@@ -99,6 +101,8 @@ export type SettlementRecord = {
 	/** Receipt block timestamp; charges gas to the UTC day the chain mined it, like position expenditures. */
 	minedAt: string | undefined
 	nonce: string
+	/** The block that carried the receipt; a mined outcome is rechecked against it until that block has finality. */
+	receiptBlock: { hash: Hex; number: string } | undefined
 	/** Gas at the signed fee ceiling; the exposure a pending attempt charges to the daily budget until its outcome is known. */
 	projectedGasCostEth: string
 	reportId: string | undefined
@@ -214,6 +218,8 @@ function parseSettlementRecord(value: unknown): SettlementRecord | undefined {
 	if (record['kind'] === 'settlement' && (record['coordinator'] === undefined || record['reportId'] === undefined)) return undefined
 	const transactionIntent = parseTransactionIntent(record['transactionIntent'])
 	if (transactionIntent === undefined) return undefined
+	const receiptBlock = record['receiptBlock'] === undefined ? undefined : parseReceiptBlock(record['receiptBlock'])
+	if (record['receiptBlock'] !== undefined && receiptBlock === undefined) return undefined
 	return {
 		account: record['account'] as Address,
 		actualGasCostEth: typeof record['actualGasCostEth'] === 'string' ? record['actualGasCostEth'] : undefined,
@@ -223,6 +229,7 @@ function parseSettlementRecord(value: unknown): SettlementRecord | undefined {
 		minedAt: typeof record['minedAt'] === 'string' ? record['minedAt'] : undefined,
 		nonce: record['nonce'],
 		projectedGasCostEth: record['projectedGasCostEth'],
+		receiptBlock,
 		reportId: typeof record['reportId'] === 'string' ? record['reportId'] : undefined,
 		rewardEth: record['rewardEth'],
 		status: record['status'],
@@ -233,6 +240,13 @@ function parseSettlementRecord(value: unknown): SettlementRecord | undefined {
 		transactionIntent,
 		updatedAt: record['updatedAt'],
 	}
+}
+
+function parseReceiptBlock(value: unknown): SettlementRecord['receiptBlock'] {
+	if (typeof value !== 'object' || value === null || Array.isArray(value)) return undefined
+	const block = value as Record<string, unknown>
+	if (typeof block['hash'] !== 'string' || !HASH.test(block['hash']) || typeof block['number'] !== 'string' || !INTEGER.test(block['number'])) return undefined
+	return { hash: block['hash'] as Hex, number: block['number'] }
 }
 
 function parseTransactionIntent(value: unknown): DurableTransactionIntent | undefined {
