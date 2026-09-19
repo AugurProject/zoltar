@@ -913,6 +913,9 @@ describe('Open Oracle helpers', () => {
 	})
 
 	test('maps dispute and settle write failures into friendly guidance', () => {
+		const gasFailure = 'Transaction failed after using its full gas limit. Open the transaction details before retrying.'
+		expect(formatOpenOracleSettleWriteErrorMessage(new Error(gasFailure))).toBe(gasFailure)
+		expect(formatOpenOracleDisputeWriteErrorMessage(new Error(gasFailure))).toBe(gasFailure)
 		expect(formatOpenOracleSettleWriteErrorMessage(new Error('execution reverted: 0x98bdb2e0'))).toBe('This report requires a higher settlement gas limit because it executes a callback on settlement. Retry with the updated UI.')
 		expect(formatOpenOracleSettleWriteErrorMessage(new Error('execution reverted: settlement'))).toBe('This report is not ready to settle.')
 		expect(formatOpenOracleSettleWriteErrorMessage(new Error('execution reverted: no initial report'))).toBe('This report is invalid because its atomic initial report is missing.')
