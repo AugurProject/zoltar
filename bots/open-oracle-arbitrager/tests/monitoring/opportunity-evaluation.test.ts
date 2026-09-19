@@ -169,19 +169,86 @@ describe('report inspection over batched pool evaluations', () => {
 			const client = poolQuoterClient(fee => (fee === 3000 ? { buyIn: 7n * 10n ** 17n, replacementOut: 120n * 10n ** 18n, sellOut: 13n * 10n ** 17n } : { buyIn: 9n * 10n ** 17n, replacementOut: undefined, sellOut: 11n * 10n ** 17n }))
 			const decisions: string[] = []
 			const evaluated = await inspectReport(client, undefined, inspectionConfig, report, [otherPool, pool], 100n, marketBlock.hash, blockTimestamp, 10n ** 9n, undefined, metadata, true, true, false, [policy], message => decisions.push(message))
-			expect(evaluated?.opportunity.pool).toBe(pool.address)
-			expect(evaluated?.opportunity.decision).toBe('dry-run-opportunity')
+			expect(evaluated?.opportunity).toMatchObject({ decision: 'dry-run-opportunity', pool: pool.address })
 			expect(decisions).toEqual([])
 		} finally {
 			logged.mockRestore()
 		}
 	})
 
-	test('skips a venue when its replacement quote fails', async () => {
-		const client = poolQuoterClient(() => ({ buyIn: 7n * 10n ** 17n, replacementOut: undefined, sellOut: 13n * 10n ** 17n }))
+	test('keeps a report whose only venue quote failed visible with the quote failure', async () => {
+		const logged = spyOn(console, 'log').mockImplementation(() => {})
+		try {
+			const client = poolQuoterClient(() => ({ buyIn: 7n * 10n ** 17n, replacementOut: undefined, sellOut: 13n * 10n ** 17n }))
+			const decisions: string[] = []
+			const evaluated = await inspectReport(client, undefined, inspectionConfig, report, [pool], 100n, marketBlock.hash, blockTimestamp, 10n ** 9n, undefined, metadata, true, true, false, [policy], (_, reason) => decisions.push(reason))
+			expect(evaluated?.candidate).toBeUndefined()
+			expect(evaluated?.dexObservations).toEqual([])
+			const reason = `Venue quotes failed: Uniswap V3 ${pool.address}: Venue quote failed: Multicall contract call failed: execution reverted: replacement quote reverted`
+			expect(evaluated?.opportunity).toEqual({
+				decision: 'skipped',
+				reason,
+				reportId: '7',
+				token: rep,
+				tokenSymbol: 'REP',
+				timeRemaining: (report.game.reportTimestamp + report.game.settlementTime - blockTimestamp).toString(),
+				windowUnit: 'seconds',
+			})
+			expect(decisions).toEqual([reason])
+		} finally {
+			logged.mockRestore()
+		}
+	})
+
+	test('names the spot/TWAP limit when it removes every pool before quoting', async () => {
+		const logged = spyOn(console, 'log').mockImplementation(() => {})
+		try {
+			const client = poolQuoterClient(() => {
+				throw new Error('no pool should be quoted')
+			})
+			const decisions: string[] = []
+			const drifted: Pool = { ...pool, spotTick: 500n, twapTick: 0n }
+			const evaluated = await inspectReport(client, undefined, inspectionConfig, report, [drifted, { ...otherPool, spotTick: 500n, twapTick: 0n }], 100n, marketBlock.hash, blockTimestamp, 10n ** 9n, undefined, metadata, true, true, false, [policy], (_, reason) => decisions.push(reason))
+			expect(evaluated?.opportunity).toMatchObject({ decision: 'skipped', reason: '2 pools exceed the 100 tick spot/TWAP limit', reportId: '7' })
+			expect(decisions).toEqual(['2 pools exceed the 100 tick spot/TWAP limit'])
+			const mixedClient = poolQuoterClient(() => ({ buyIn: 7n * 10n ** 17n, replacementOut: undefined, sellOut: 13n * 10n ** 17n }))
+			const mixed = await inspectReport(mixedClient, undefined, inspectionConfig, report, [drifted, otherPool], 100n, marketBlock.hash, blockTimestamp, 10n ** 9n, undefined, metadata, true, true, false, [policy], () => {})
+			expect(mixed?.opportunity).toMatchObject({ decision: 'skipped', reason: `Venue quotes failed: Uniswap V3 ${otherPool.address}: Venue quote failed: Multicall contract call failed: execution reverted: replacement quote reverted; 1 pool exceeds the 100 tick spot/TWAP limit` })
+		} finally {
+			logged.mockRestore()
+		}
+	})
+
+	test('keeps only live WETH/token reports visible and logs template or pair mismatches', async () => {
+		const client = poolQuoterClient(() => {
+			throw new Error('no pool should be quoted')
+		})
 		const decisions: string[] = []
-		expect(await inspectReport(client, undefined, inspectionConfig, report, [pool], 100n, marketBlock.hash, blockTimestamp, 10n ** 9n, undefined, metadata, true, true, false, [policy], (_, reason) => decisions.push(reason))).toBeUndefined()
-		expect(decisions).toEqual(['No enabled venue passed its price and quote checks'])
+		const inspect = (candidate: OpenOracleStatePreimage, candidatePools: readonly Pool[], policies = [policy]) =>
+			inspectReport(client, undefined, inspectionConfig, candidate, candidatePools, 100n, marketBlock.hash, blockTimestamp, 10n ** 9n, undefined, metadata, true, true, false, policies, (_, reason) => decisions.push(reason))
+		expect(await inspect(report, [pool], [])).toBeUndefined()
+		const nonWeth = { ...report, game: { ...report.game, token1: otherPool.address } }
+		expect(await inspect(nonWeth, [pool], [{ ...policy, token1: otherPool.address }])).toBeUndefined()
+		expect((await inspect(report, [{ ...pool, token: otherPool.address }]))?.opportunity).toMatchObject({ decision: 'skipped', reason: 'No configured pool can price REP', reportId: '7' })
+		const disallowed = await inspectReport(client, undefined, { ...inspectionConfig, execute: true }, report, [pool], 100n, marketBlock.hash, blockTimestamp, 10n ** 9n, undefined, metadata, false, true, false, [policy], (_, reason) => decisions.push(reason))
+		expect(disallowed?.opportunity).toMatchObject({ decision: 'skipped', reason: 'Report token was observed permissionlessly and is not in the execution allowlist', tokenSymbol: 'REP' })
+		expect(decisions).toEqual(['Report creator is not an approved coordinator', 'Report token1 is not WETH', 'No configured pool can price REP', 'Report token was observed permissionlessly and is not in the execution allowlist'])
+	})
+
+	test('keeps timing skips visible while the report is inside its settlement window', async () => {
+		const logged = spyOn(console, 'log').mockImplementation(() => {})
+		try {
+			const client = poolQuoterClient(() => ({ buyIn: 7n * 10n ** 17n, replacementOut: 120n * 10n ** 18n, sellOut: 13n * 10n ** 17n }))
+			const inspect = (timestamp: bigint, minimumRemainingSeconds = 1n) => inspectReport(client, undefined, { ...inspectionConfig, minimumRemainingSeconds }, report, [pool], 100n, marketBlock.hash, timestamp, 10n ** 9n, undefined, metadata, true, true, false, [policy], () => {})
+			const beforeDelay = await inspect(report.game.reportTimestamp + 1n)
+			expect(beforeDelay?.opportunity).toMatchObject({ decision: 'skipped', reason: 'Dispute delay has not elapsed; disputable in 9 seconds', timeRemaining: '299' })
+			const tooLate = await inspect(report.game.reportTimestamp + report.game.settlementTime - 3n, 5n)
+			expect(tooLate?.opportunity).toMatchObject({ decision: 'skipped', reason: 'Only 3 seconds remain; the strategy requires at least 5', timeRemaining: '3' })
+			expect(await inspect(report.game.reportTimestamp + report.game.settlementTime)).toBeUndefined()
+			expect((await inspect(blockTimestamp))?.opportunity.decision).toBe('dry-run-opportunity')
+		} finally {
+			logged.mockRestore()
+		}
 	})
 })
 
@@ -261,8 +328,7 @@ for (const venue of ['uniswap-v2', 'uniswap-v4'] as const) {
 		const inspection: ReportInspectionConfiguration = { ...enabled, execute: false, maxSpotTwapTicks: 0n, minimumProfitAttoWeth: 0n, minimumProfitBps: 0n, minimumRemainingBlocks: 1n, minimumRemainingSeconds: 1n, openOracle: oracle }
 		const reader = independentClient(venue)
 		const evaluated = await inspectReport(reader.client, undefined, inspection, report, [{ ...pool, spotTick: 1000n }, selected], 100n, marketBlock.hash, 101n, 1n, undefined, { decimals: 18, symbol: 'REP' }, true, true, false, [{ ...report.game, coordinator: reporter, openOracle: oracle }], () => {})
-		expect(evaluated?.opportunity.venue).toBe(venue)
-		expect(evaluated?.opportunity.decision).toBe('dry-run-opportunity')
+		expect(evaluated?.opportunity).toMatchObject({ decision: 'dry-run-opportunity', venue })
 		const saved = parseOperatorSettings(await Bun.file(new URL('../../config/operator.example.json', import.meta.url)).json())
 		const execution = { ...enabled, connectivity: saved.connectivity, quorumRpcUrls: ['https://second.example'], executor: reporter, openOracle: oracle, twapSeconds: 60 }
 		const snapshot = await executionReadQuorum([reader.client, independentClient(venue).client], execution, report, selected, venue, 3000, 100n, reporter)
@@ -310,8 +376,7 @@ test('a higher-profit sell with a missing buy quote cannot block an executable a
 	const inspection: ReportInspectionConfiguration = { ...config, execute: false, maxSpotTwapTicks: 100n, minimumProfitAttoWeth: 0n, minimumProfitBps: 0n, minimumRemainingBlocks: 1n, minimumRemainingSeconds: 1n, openOracle: oracle }
 	const alternative: Pool = { venue: 'uniswap-v4', address: v4PoolManager, fee: 3000, token: rep }
 	const evaluated = await inspectReport(quoter.client, undefined, inspection, report, [pool, alternative], 100n, marketBlock.hash, 101n, 1n, undefined, { decimals: 18, symbol: 'REP' }, true, true, false, [{ ...report.game, coordinator: reporter, openOracle: oracle }], () => {})
-	expect(evaluated?.opportunity.venue).toBe('uniswap-v4')
-	expect(evaluated?.opportunity.decision).toBe('dry-run-opportunity')
+	expect(evaluated?.opportunity).toMatchObject({ decision: 'dry-run-opportunity', venue: 'uniswap-v4' })
 	const final = await executionReadQuorum([independentClient('uniswap-v4').client], execution, report, alternative, 'uniswap-v4', 3000, 100n, reporter)
 	expect(final.replacementAmount2).toBe(replacement)
 })

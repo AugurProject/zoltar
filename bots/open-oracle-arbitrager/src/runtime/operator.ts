@@ -23,7 +23,8 @@ import { candidateRiskMismatch } from '#monitoring/opportunity-evaluation'
 import { poolsForTokens } from '#monitoring/execution-pools'
 import { applyCoordinatorReports, applyLogs, compareLogs, logBlockNumber, reportId, type ActiveReport } from '#monitoring/oracle-log-state'
 import { inspectReport } from '#monitoring/report-inspection'
-import { appendExecutionHistoryIfMissing, decimalSignedEth, ensureExecutionHistoryWritable, gameCapitalSnapshot, loadExecutionHistory, recordOperation, type OperatorState, type OpportunitySnapshot } from '#state/operator-state'
+import { appendExecutionHistoryIfMissing, decimalSignedEth, ensureExecutionHistoryWritable, gameCapitalSnapshot, loadExecutionHistory, recordOperation, type OperatorState } from '#state/operator-state'
+import { countOpportunities, type OpportunitySnapshot } from '#state/opportunity-snapshot'
 import { archivedUtcDayGasSpentWeth, loadPositionJournalState, savePositionJournalState, type ExclusiveProcessLock, type PositionRecord } from '#state/position-store'
 import { bigintToSafeNumber, createContextualPublicClient, createRpcEndpointPool, createWalletClient, privateKeyToAccount, zeroAddress, type Address, type Chain, type PublicClient, type TransactionLog, type Transport } from '@zoltar/bot-shared/ethereum'
 import type { BotShutdownController } from '@zoltar/bot-shared/execution/bot-process-locks'
@@ -51,7 +52,7 @@ import { OPEN_ORACLE_REPORT_DISPUTED_TOPIC, OPEN_ORACLE_REPORT_SETTLED_TOPIC, OP
 import { createOperatorHeadWatcher, createScanWakeGate, startCentralizedMarketSampler } from './background-observers.ts'
 import { deploymentUpdateMustWait } from './deployment-transition.ts'
 import { startOperatorControlPlane } from './operator-control-plane.ts'
-import { applyQueuedExecutionSettings, applyQueuedSigner, resetReportScanState } from './operator-execution-state.ts'
+import { applyQueuedExecutionSettings, applyQueuedSigner, recordScanDecision, resetReportScanState } from './operator-execution-state.ts'
 import { completeSuccessfulPoll, completeUnconfiguredPoll } from './poll-completion.ts'
 import { selectQuorumHead } from './quorum-head.ts'
 import { acquireScanSignerOperation } from './signer-operations.ts'
@@ -684,7 +685,7 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 							reportId: undefined,
 						})
 					}
-					let completedOpportunityCount = 0
+					let completedScan = { evaluated: 0, skipped: 0 }
 					let completedFinalityAnchor: Awaited<ReturnType<typeof finalityAnchorForHead>> | undefined
 					let shutdownDuringHead = false
 					const stopHead = () => {
@@ -808,14 +809,7 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 								if (evaluated !== undefined) {
 									cycleDexObservations.push(...evaluated.dexObservations)
 									opportunities.push(evaluated.opportunity)
-									recordOperation(state, {
-										category: 'decision',
-										details: `direction=${evaluated.opportunity.direction} estimatedProfitEth=${evaluated.opportunity.estimatedNetProfitEth}`,
-										level: evaluated.opportunity.decision === 'execution-failed' ? 'error' : 'info',
-										message: `Decision: ${evaluated.opportunity.decision}`,
-										reason: `Profit and inventory gates evaluated for report ${evaluated.opportunity.reportId}`,
-										reportId: evaluated.opportunity.reportId,
-									})
+									recordScanDecision(state, evaluated.opportunity)
 									if (evaluated.candidate !== undefined) {
 										const referenceWeth = evaluated.candidate.quote.direction === 'sell-rep' ? evaluated.candidate.quote.grossProceedsAttoWeth : evaluated.candidate.quote.hedgeCostAttoWeth
 										const dexPriceRepPerEth = referenceWeth === 0n ? 0n : (evaluated.candidate.quote.hedgeAmountAttoRep * 10n ** 18n) / referenceWeth
@@ -986,7 +980,7 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 							}
 						}
 						state.priceHistory = state.priceHistory.slice(-2_000)
-						completedOpportunityCount = opportunities.length
+						completedScan = countOpportunities(opportunities)
 						completedFinalityAnchor = headFinalityAnchor
 					})
 					if (shutdownDuringHead || shutdown?.isRequested()) return true
@@ -1004,10 +998,10 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 						for (const id of settledReportIds) reports.delete(id)
 						cachedLogs = cachedLogs.filter(log => !settledReportIds.has(reportId(log)))
 					}
-					console.log(`scanBlock=${blockNumber.toString()} durationMs=${(Date.now() - scanStartedAt).toString()} activeReports=${state.activeReportCount.toString()} opportunities=${completedOpportunityCount.toString()}`)
+					console.log(`scanBlock=${blockNumber.toString()} durationMs=${(Date.now() - scanStartedAt).toString()} activeReports=${state.activeReportCount.toString()} opportunities=${completedScan.evaluated.toString()} skipped=${completedScan.skipped.toString()}`)
 					recordOperation(state, {
 						category: 'scan',
-						details: `${state.activeReportCount.toString()} active reports; ${completedOpportunityCount.toString()} opportunities`,
+						details: `${state.activeReportCount.toString()} active reports; ${completedScan.evaluated.toString()} opportunities; ${completedScan.skipped.toString()} skipped`,
 						level: nextError === undefined ? 'info' : 'warning',
 						message: 'Scan completed',
 						reason: `Block ${blockNumber.toString()}`,

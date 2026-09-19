@@ -8,7 +8,7 @@ import type { OpenOracleGame } from '@zoltar/open-oracle-shared/openOracle/openO
 import { validateDeploymentSettings, type DeploymentSettings } from '#config/deployment-settings'
 import type { ConnectivitySettings, EndpointCheck, NetworkName } from '#monitoring/connectivity'
 import type { SubmissionSettings, SubmissionTargetResult } from '#execution/transaction-submission'
-import type { Venue } from '#core/venue-strategy'
+import { publicOpportunity, type OpportunitySnapshot } from '#state/opportunity-snapshot'
 import type { MarketPricePoint, TokenMarketSnapshot } from '#monitoring/market-monitor'
 import { archivedUtcDayGasSpentWeth, emptyPositionJournalArchive, type PositionJournalArchive, type PositionRecord } from '#state/position-store'
 import { positionConsumesRisk, utcDayGasSpentWeth, type RiskLimits } from '#core/safety-controls'
@@ -84,26 +84,6 @@ type ReportPathSnapshot = {
 	reportId: string
 	settled: boolean
 	steps: readonly DisputeStepSnapshot[]
-}
-
-export type OpportunitySnapshot = {
-	centralizedPriceDeviationBps: string | undefined
-	decision: 'dry-run-opportunity' | 'eligible' | 'execution-failed' | 'history-unavailable' | 'insufficient-inventory' | 'market-risk' | 'paused' | 'risk-limit' | 'selected' | 'self-report' | 'signer-unavailable' | 'submitted' | 'unprofitable'
-	direction: 'buy-rep' | 'sell-rep'
-	estimatedNetProfitWeth: string
-	estimatedNetProfitEth: string
-	executablePriceRepPerEth: string
-	hasRequiredInventory: boolean | undefined
-	pool: Address
-	poolFee: number
-	reportId: string
-	requiredToken: string
-	requiredWeth: string
-	token: Address
-	tokenSymbol: string
-	timeRemaining: string
-	venue?: Venue | undefined
-	windowUnit: 'blocks' | 'seconds'
 }
 
 export type ExecutionRecord = {
@@ -438,25 +418,7 @@ export function publicOperatorSnapshot(snapshot: OperatorSnapshot): PublicOperat
 		openOracle: snapshot.openOracle,
 		operatorCapable: snapshot.operatorCapable,
 		operationLog: snapshot.operationLog.map(publicOperationEntry),
-		opportunities: snapshot.opportunities.map(opportunity => ({
-			centralizedPriceDeviationBps: opportunity.centralizedPriceDeviationBps,
-			decision: opportunity.decision,
-			direction: opportunity.direction,
-			estimatedNetProfitWeth: opportunity.estimatedNetProfitWeth,
-			estimatedNetProfitEth: opportunity.estimatedNetProfitEth,
-			executablePriceRepPerEth: opportunity.executablePriceRepPerEth,
-			hasRequiredInventory: opportunity.hasRequiredInventory,
-			pool: opportunity.pool,
-			poolFee: opportunity.poolFee,
-			reportId: opportunity.reportId,
-			requiredToken: opportunity.requiredToken,
-			requiredWeth: opportunity.requiredWeth,
-			token: opportunity.token,
-			tokenSymbol: opportunity.tokenSymbol,
-			timeRemaining: opportunity.timeRemaining,
-			venue: opportunity.venue,
-			windowUnit: opportunity.windowUnit,
-		})),
+		opportunities: snapshot.opportunities.map(publicOpportunity),
 		positions: snapshot.positions.map(position => ({
 			actualEntryGasCostEth: position.actualEntryGasCostEth,
 			direction: position.direction,

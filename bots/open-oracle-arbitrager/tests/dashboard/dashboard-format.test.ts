@@ -12,6 +12,7 @@ import {
 	marketAvailabilityPresentation,
 	marketPriceChartDescription,
 	networkTargetStatus,
+	opportunityCountLabel,
 	opportunityDecisionReason,
 	pauseControlState,
 	persistedConnectivity,
@@ -22,8 +23,8 @@ import {
 	statePollingFailureMessage,
 	sumSignedDecimals,
 	transactionKindLabel,
-	venueLabel,
 } from '#dashboard/dashboard-format'
+import { venueLabel } from '#core/venue-strategy'
 
 describe('dashboard exact ETH formatting', () => {
 	test('describes scheduled and active automatic retries at the top of the dashboard', () => {
@@ -137,6 +138,13 @@ describe('dashboard exact ETH formatting', () => {
 		expect(opportunityDecisionReason({ decision: 'insufficient-inventory', tokenSymbol: 'USDC' })).toBe('Wallet lacks the required WETH or USDC')
 		expect(transactionKindLabel({ kind: 'approval-token', tokenSymbol: 'USDC' })).toBe('approve USDC')
 		expect(transactionKindLabel({ kind: 'approval-weth', tokenSymbol: 'WETH' })).toBe('approval weth')
+	})
+
+	test('shows the scan reason for skipped reports and counts them apart from evaluated ones', () => {
+		expect(opportunityDecisionReason({ decision: 'skipped', reason: '2 pools exceed the 100 tick spot/TWAP limit' })).toBe('2 pools exceed the 100 tick spot/TWAP limit')
+		expect(opportunityCountLabel([])).toBe('0 evaluated')
+		expect(opportunityCountLabel([{ decision: 'unprofitable' }, { decision: 'eligible' }])).toBe('2 evaluated')
+		expect(opportunityCountLabel([{ decision: 'unprofitable' }, { decision: 'skipped' }])).toBe('1 evaluated · 1 skipped')
 	})
 
 	test('describes risk limits as capital and UTC-day gas-spend controls', () => {

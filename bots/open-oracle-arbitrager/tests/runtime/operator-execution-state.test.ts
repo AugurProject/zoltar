@@ -14,7 +14,7 @@ import { validateDeploymentSettings } from '#config/deployment-settings'
 import { loadConfiguration, runnableOperatorSettings } from '#config/configuration'
 import type { OperatorState } from '#state/operator-state'
 import type { PendingOperatorUpdates } from '../../src/runtime/operator-control-plane.ts'
-import { applyQueuedExecutionSettings, resetReportScanState } from '../../src/runtime/operator-execution-state.ts'
+import { applyQueuedExecutionSettings, recordScanDecision, resetReportScanState } from '../../src/runtime/operator-execution-state.ts'
 
 const temporaryDirectories: string[] = []
 
@@ -87,6 +87,32 @@ function reliableConsensus(observation: MarketConsensusObservation): MarketConse
 	const group = { askDepthAttoEth: 1n, bidDepthAttoEth: 1n, kind: 'cex' as const, maximumPriceRepPerEth: 10n, minimumPriceRepPerEth: 10n, observations: [observation], priceRepPerEth: 10n, reliable: true, reasons: [] }
 	return { assetId: observation.assetId, cex: group, chainId: 1, dex: { ...group, kind: 'dex', observations: [], reliable: false }, priceRepPerEth: 10n, reliable: true, reasons: [], sourceCount: 1 }
 }
+
+test('logs a decision entry for priced reports only; skipped reports already logged their gate', () => {
+	const state = operatorState()
+	const token = `0x${'1'.repeat(40)}` as const
+	recordScanDecision(state, { decision: 'skipped', reason: 'No configured pool can price REP', reportId: '11', token, tokenSymbol: 'REP', timeRemaining: '240', windowUnit: 'seconds' })
+	expect(state.operationLog).toEqual([])
+	recordScanDecision(state, {
+		centralizedPriceDeviationBps: undefined,
+		decision: 'unprofitable',
+		direction: 'sell-rep',
+		estimatedNetProfitEth: '-0.1',
+		estimatedNetProfitWeth: '-0.1',
+		executablePriceRepPerEth: '10',
+		hasRequiredInventory: undefined,
+		pool: token,
+		poolFee: 3_000,
+		reportId: '12',
+		requiredToken: '1',
+		requiredWeth: '1',
+		token,
+		tokenSymbol: 'REP',
+		timeRemaining: '10',
+		windowUnit: 'blocks',
+	})
+	expect(state.operationLog).toMatchObject([{ category: 'decision', details: 'direction=sell-rep estimatedProfitEth=-0.1', level: 'info', message: 'Decision: unprofitable', reportId: '12' }])
+})
 
 describe('queued operator execution settings', () => {
 	test('removes old-source evidence before a replacement source can authorize execution', async () => {

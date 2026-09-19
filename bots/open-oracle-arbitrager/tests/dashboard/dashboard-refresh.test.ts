@@ -332,6 +332,96 @@ function element<T extends Element>(window: BrowserWindow, id: string, construct
 	return found
 }
 
+async function mountDashboard(server: ReturnType<typeof startDashboardServer>, path: string) {
+	const browser = new Browser({ settings: { enableJavaScriptEvaluation: true, suppressInsecureJavaScriptEnvironmentWarning: true } })
+	browsers.push(browser)
+	const page = browser.newPage()
+	page.url = new URL(path, server.url).href
+	page.content = (await (await fetch(server.url)).text()).replace('<script type="module" src="/dashboard.js"></script>', '').replace('<script type="module" src="/header-notices.js"></script>', '')
+	const window = page.mainFrame.window
+	for (const [name, value] of Object.entries({ AbortController, Array, Boolean, Date, Error, Intl, JSON, Map, Math, Number, Object, Promise, Reflect, Set, String, SyntaxError, decodeURIComponent })) Reflect.set(window, name, value)
+	window.setInterval = () => {
+		const timeout = window.setTimeout(() => undefined, 1)
+		window.clearTimeout(timeout)
+		return timeout
+	}
+	window.fetch = async (input, init) => {
+		const inputUrl = typeof input === 'string' || input instanceof window.URL ? input.toString() : Reflect.get(input, 'url')
+		if (typeof inputUrl !== 'string') throw new Error('Unexpected request URL')
+		const url = new URL(inputUrl, server.url)
+		const response = init?.method === undefined || init.method === 'GET' ? await fetch(url) : await fetch(url, { body: String(init.body), headers: { 'content-type': 'application/json', origin: server.url.origin }, method: init.method })
+		return new window.Response(await response.text(), { headers: { 'content-type': response.headers.get('content-type') ?? 'application/json' }, status: response.status })
+	}
+	const build = await Bun.build({ entrypoints: [join(import.meta.dir, '..', '..', 'src', 'dashboard', 'dashboard.ts')], target: 'browser' })
+	const output = build.outputs[0]
+	if (!build.success || output === undefined) throw new Error('Could not build dashboard fixture')
+	page.evaluate(await output.text())
+	await page.waitUntilComplete()
+	return { page, window }
+}
+
+test('lists skipped reports beside priced ones with their scan reason and token', async () => {
+	const settings = parseOperatorSettings({ ...example, network: 'sepolia', networkConfigured: true, connectivity: { publicRpcUrls: ['https://rpc.example/'], readRpcUrl: 'https://rpc.example/' } })
+	const state = operatorState()
+	state.opportunities = [
+		{ decision: 'skipped', reason: '2 pools exceed the 100 tick spot/TWAP limit', reportId: '11', token: address, tokenSymbol: 'REP', timeRemaining: '241', windowUnit: 'seconds' },
+		{
+			centralizedPriceDeviationBps: undefined,
+			decision: 'unprofitable',
+			direction: 'sell-rep',
+			estimatedNetProfitEth: '-0.0031',
+			estimatedNetProfitWeth: '-0.0031',
+			executablePriceRepPerEth: '10.284',
+			hasRequiredInventory: undefined,
+			pool: address,
+			poolFee: 3_000,
+			reportId: '12',
+			requiredToken: '38',
+			requiredWeth: '0.151',
+			token: address,
+			tokenSymbol: 'REP',
+			timeRemaining: '27',
+			venue: 'uniswap-v3',
+			windowUnit: 'blocks',
+		},
+	]
+	const snapshot = () =>
+		operatorSnapshot(state, settings.strategy, settings.submission, settings.connectivity, {
+			deployment: settings.deployment,
+			execute: false,
+			executor: undefined,
+			expectedChainId: 11_155_111,
+			explorerUrl: 'https://sepolia.etherscan.io',
+			network: 'sepolia',
+			networkConfigured: true,
+			openOracle: settings.deployment.openOracle,
+			queuedWallet: undefined,
+			savedWallet: undefined,
+			wallet: undefined,
+		})
+	const server = startDashboardServer(0, {
+		getConfiguration: () => ({ configuration: serializeOperatorSettings(settings), revision: 'fixture' }),
+		getSnapshot: snapshot,
+		hostname: '127.0.0.1',
+		isNetworkConfigured: () => true,
+		setPaused: () => undefined,
+		updateConnectivity: value => value,
+		updateSigner: () => ({ wallet: undefined }),
+		updateStrategy: () => snapshot().settings,
+		updateSubmission: value => validateSubmissionSettings(value),
+	})
+	servers.push(server)
+	const { window } = await mountDashboard(server, '/operations')
+	const body = element(window, 'opportunities-body', window.HTMLTableSectionElement)
+	for (let attempt = 0; attempt < 100 && body.children.length < 2; attempt++) await Bun.sleep(10)
+	const cells = (rowIndex: number) => Array.from(body.children[rowIndex]?.querySelectorAll('td') ?? [], cell => cell.textContent)
+	expect(cells(0)).toEqual(['11', 'skipped', '—', '—', '2 pools exceed the 100 tick spot/TWAP limit', 'WETH/REP', '—', '—', '—', '241 seconds', '—', '—'])
+	expect(cells(1).slice(0, 6)).toEqual(['12', 'unprofitable', 'Unavailable', '10.284 REP / ETH', 'Modeled profit is below configured thresholds', 'sell REP'])
+	expect(body.children[0]?.querySelector('.decision')?.getAttribute('data-decision')).toBe('skipped')
+	expect(element(window, 'opportunity-count', window.HTMLElement).textContent).toBe('1 evaluated · 1 skipped')
+	expect(element(window, 'opportunities-empty', window.HTMLElement).hidden).toBe(true)
+})
+
 test('deployment form saves venue switches without configurable Uniswap addresses', async () => {
 	let settings = parseOperatorSettings({ ...example, network: 'sepolia', networkConfigured: true, connectivity: { publicRpcUrls: ['https://rpc.example/'], readRpcUrl: 'https://rpc.example/' } })
 	const snapshot = () =>
@@ -364,30 +454,7 @@ test('deployment form saves venue switches without configurable Uniswap addresse
 		updateSubmission: value => validateSubmissionSettings(value),
 	})
 	servers.push(server)
-	const browser = new Browser({ settings: { enableJavaScriptEvaluation: true, suppressInsecureJavaScriptEnvironmentWarning: true } })
-	browsers.push(browser)
-	const page = browser.newPage()
-	page.url = new URL('/settings', server.url).href
-	page.content = (await (await fetch(server.url)).text()).replace('<script type="module" src="/dashboard.js"></script>', '').replace('<script type="module" src="/header-notices.js"></script>', '')
-	const window = page.mainFrame.window
-	for (const [name, value] of Object.entries({ AbortController, Array, Boolean, Date, Error, Intl, JSON, Map, Math, Number, Object, Promise, Reflect, Set, String, SyntaxError, decodeURIComponent })) Reflect.set(window, name, value)
-	window.setInterval = () => {
-		const timeout = window.setTimeout(() => undefined, 1)
-		window.clearTimeout(timeout)
-		return timeout
-	}
-	window.fetch = async (input, init) => {
-		const inputUrl = typeof input === 'string' || input instanceof window.URL ? input.toString() : Reflect.get(input, 'url')
-		if (typeof inputUrl !== 'string') throw new Error('Unexpected request URL')
-		const url = new URL(inputUrl, server.url)
-		const response = init?.method === undefined || init.method === 'GET' ? await fetch(url) : await fetch(url, { body: String(init.body), headers: { 'content-type': 'application/json', origin: server.url.origin }, method: init.method })
-		return new window.Response(await response.text(), { headers: { 'content-type': response.headers.get('content-type') ?? 'application/json' }, status: response.status })
-	}
-	const build = await Bun.build({ entrypoints: [join(import.meta.dir, '..', '..', 'src', 'dashboard', 'dashboard.ts')], target: 'browser' })
-	const output = build.outputs[0]
-	if (!build.success || output === undefined) throw new Error('Could not build dashboard fixture')
-	page.evaluate(await output.text())
-	await page.waitUntilComplete()
+	const { page, window } = await mountDashboard(server, '/settings')
 	for (let attempt = 0; attempt < 100 && !element(window, 'deployment-v2-enabled', window.HTMLInputElement).checked; attempt++) await Bun.sleep(10)
 	const form = element(window, 'deployment-form', window.HTMLFormElement)
 	const save = async () => {

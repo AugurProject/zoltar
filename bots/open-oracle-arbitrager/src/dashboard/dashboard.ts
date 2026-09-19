@@ -13,18 +13,23 @@ import { closeResumePreflight, openResumePreflight } from '@zoltar/bot-shared/da
 import { createSectionNavigation } from '@zoltar/bot-shared/dashboard/section-navigation'
 import { urlLines } from '@zoltar/bot-shared/dashboard/forms'
 import type { ConnectivitySettings } from '#monitoring/connectivity'
-import type { OpportunitySnapshot, PublicExecutionRecord, PublicOperationEntry, PublicOperatorSnapshot, PublicPositionRecord, PublicTransactionActivity, StrategySettings } from '#state/operator-state'
+import type { PublicExecutionRecord, PublicOperationEntry, PublicOperatorSnapshot, PublicPositionRecord, PublicTransactionActivity, StrategySettings } from '#state/operator-state'
+import type { OpportunitySnapshot } from '#state/opportunity-snapshot'
 import {
+	amount,
 	blockAgeLabel,
 	botStatusLabels,
 	chartPointX,
 	chartTimeTickIndexes,
+	configurationNetwork,
 	connectivityControlsDisabled,
 	countLabel,
 	exactAmount,
+	isConfigurationEnvelope,
 	marketPoolStrategyUse,
 	marketPriceChartDescription,
 	networkTargetStatus,
+	opportunityCountLabel,
 	opportunityDecisionReason,
 	pauseControlState,
 	persistedConnectivity,
@@ -35,8 +40,8 @@ import {
 	statePollingFailureMessage,
 	sumSignedDecimals,
 	transactionKindLabel,
-	venueLabel,
 } from './dashboard-format.js'
+import { venueLabel } from '#core/venue-strategy'
 import type { SubmissionSettings } from '#execution/transaction-submission'
 
 const SVG_NAMESPACE = 'http://www.w3.org/2000/svg'
@@ -211,22 +216,6 @@ function loadDeployment(deployment: DashboardDeployment) {
 	element('deployment-manifest', HTMLTextAreaElement).value = deployment.deploymentManifest === undefined ? '' : JSON.stringify(deployment.deploymentManifest, undefined, 2)
 }
 
-function amount(value: string | undefined, symbol: string) {
-	if (value === undefined) return 'Unavailable'
-	const numeric = Number(value)
-	if (!Number.isFinite(numeric)) return `${value} ${symbol}`
-	return `${new Intl.NumberFormat('en-US', { maximumFractionDigits: 6 }).format(numeric)} ${symbol}`
-}
-
-function isConfigurationEnvelope(value: unknown): value is { configuration: unknown; revision: string } {
-	return typeof value === 'object' && value !== null && 'configuration' in value && 'revision' in value && typeof value.revision === 'string'
-}
-
-function configurationNetwork(configuration: unknown) {
-	const network = typeof configuration === 'object' && configuration !== null && !Array.isArray(configuration) ? Reflect.get(configuration, 'network') : undefined
-	return network === 'mainnet' || network === 'sepolia' ? network : undefined
-}
-
 function finishPendingProfileIfReady(network: 'mainnet' | 'sepolia') {
 	if (pendingNetworkProfile !== network || !pendingProfileStateConfirmed || persistedNetwork !== network) return false
 	pendingNetworkProfile = undefined
@@ -378,32 +367,38 @@ function renderBalances(snapshot: PublicOperatorSnapshot) {
 	}
 }
 
+const OPPORTUNITY_LABELS = ['Report', 'Decision', 'Reference deviation', 'Executable REP / ETH', 'Reason', 'Direction', 'Estimated net', 'Required WETH', 'Required token', 'Window', 'Venue', 'Pool / manager']
+const NOT_PRICED = '—'
+
+function opportunityRow(opportunity: OpportunitySnapshot) {
+	// A skipped report never reached a venue quote, so quote-derived columns stay blank; the direction column names the WETH/token pair instead.
+	if (opportunity.decision === 'skipped') {
+		return row([opportunity.reportId, decisionBadge(opportunity), NOT_PRICED, NOT_PRICED, opportunityDecisionReason(opportunity), `WETH/${opportunity.tokenSymbol}`, NOT_PRICED, NOT_PRICED, NOT_PRICED, `${opportunity.timeRemaining} ${opportunity.windowUnit}`, NOT_PRICED, NOT_PRICED], OPPORTUNITY_LABELS)
+	}
+	return row(
+		[
+			opportunity.reportId,
+			decisionBadge(opportunity),
+			opportunity.centralizedPriceDeviationBps === undefined ? 'Unavailable' : `${opportunity.centralizedPriceDeviationBps} bps`,
+			amount(opportunity.executablePriceRepPerEth, 'REP / ETH'),
+			opportunityDecisionReason(opportunity),
+			opportunity.direction === 'buy-rep' ? `buy ${opportunity.tokenSymbol}` : `sell ${opportunity.tokenSymbol}`,
+			amount(opportunity.estimatedNetProfitEth, 'ETH'),
+			amount(opportunity.requiredWeth, 'WETH'),
+			amount(opportunity.requiredToken, opportunity.tokenSymbol),
+			`${opportunity.timeRemaining} ${opportunity.windowUnit}`,
+			venueLabel(opportunity.venue),
+			link(opportunity.pool, 'address', `opportunity:${opportunity.reportId}:pool`),
+		],
+		OPPORTUNITY_LABELS,
+	)
+}
+
 function renderOpportunities(opportunities: readonly OpportunitySnapshot[]) {
 	const body = element('opportunities-body', HTMLTableSectionElement)
-	body.replaceChildren()
-	for (const opportunity of opportunities) {
-		body.append(
-			row(
-				[
-					opportunity.reportId,
-					decisionBadge(opportunity),
-					opportunity.centralizedPriceDeviationBps === undefined ? 'Unavailable' : `${opportunity.centralizedPriceDeviationBps} bps`,
-					amount(opportunity.executablePriceRepPerEth, 'REP / ETH'),
-					opportunityDecisionReason(opportunity),
-					opportunity.direction === 'buy-rep' ? `buy ${opportunity.tokenSymbol}` : `sell ${opportunity.tokenSymbol}`,
-					amount(opportunity.estimatedNetProfitEth, 'ETH'),
-					amount(opportunity.requiredWeth, 'WETH'),
-					amount(opportunity.requiredToken, opportunity.tokenSymbol),
-					`${opportunity.timeRemaining} ${opportunity.windowUnit}`,
-					venueLabel(opportunity.venue),
-					link(opportunity.pool, 'address', `opportunity:${opportunity.reportId}:pool`),
-				],
-				['Report', 'Decision', 'Reference deviation', 'Executable REP / ETH', 'Reason', 'Direction', 'Estimated net', 'Required WETH', 'Required token', 'Window', 'Venue', 'Pool / manager'],
-			),
-		)
-	}
+	body.replaceChildren(...opportunities.map(opportunityRow))
 	element('opportunities-empty').hidden = opportunities.length !== 0
-	setText('opportunity-count', `${opportunities.length.toString()} evaluated`)
+	setText('opportunity-count', opportunityCountLabel(opportunities))
 }
 
 function renderHistory(history: readonly PublicExecutionRecord[], recordCount: number) {

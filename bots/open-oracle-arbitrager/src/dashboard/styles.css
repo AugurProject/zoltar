@@ -698,6 +698,14 @@ td {
 	overflow-wrap: anywhere;
 }
 
+/* Skipped-report reasons carry venue addresses and quote failures; wrap them instead of pushing the remaining columns out of view. */
+#opportunities-body td[data-label="Reason"] {
+	min-width: 16rem;
+	max-width: 22rem;
+	white-space: normal;
+	overflow-wrap: anywhere;
+}
+
 th {
 	color: var(--muted);
 	font-size: 0.67rem;
@@ -736,6 +744,11 @@ td {
 .decision[data-decision="signer-unavailable"] {
 	background: rgb(240 195 107 / 9%);
 	color: var(--warning);
+}
+
+.decision[data-decision="skipped"] {
+	background: rgb(148 163 184 / 12%);
+	color: var(--muted);
 }
 
 .decision[data-decision="execution-failed"] {
@@ -946,8 +959,10 @@ a {
 
 	#transactions-body td[data-label="Target results"],
 	#operations-body td[data-label="Why"],
-	#operations-body td[data-label="Details"] {
+	#operations-body td[data-label="Details"],
+	#opportunities-body td[data-label="Reason"] {
 		width: 100%;
+		min-width: 0;
 		max-width: 100%;
 	}
 
