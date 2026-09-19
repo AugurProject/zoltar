@@ -1,3 +1,4 @@
+import { emptySettlementSnapshot } from '#state/settlement-store'
 import { canonicalExecutorIdentity } from '#execution/executor-identity'
 import { executorArtifact } from '#contracts/artifacts.generated'
 import { canonicalSecurityPoolFactory } from '#config/network'
@@ -50,6 +51,7 @@ function operatorState(): OperatorState {
 		status: 'running',
 		tokenAddresses: [],
 		tokenMarkets: [],
+		settlements: emptySettlementSnapshot(),
 		transactionActivity: [],
 	}
 }
@@ -71,6 +73,7 @@ function noPendingUpdates(): PendingOperatorUpdates {
 		persistedTokenAddresses: undefined,
 		riskLimits: undefined,
 		rpcQuorum: undefined,
+		settlement: undefined,
 		signerLock: undefined,
 		signerUpdate: false,
 		strategy: undefined,
@@ -112,6 +115,17 @@ test('logs a decision entry for priced reports only; skipped reports already log
 		windowUnit: 'blocks',
 	})
 	expect(state.operationLog).toMatchObject([{ category: 'decision', details: 'direction=sell-rep estimatedProfitEth=-0.1', level: 'info', message: 'Decision: unprofitable', reportId: '12' }])
+})
+
+test('applies queued settlement settings at the scan boundary and clears the queue entry', async () => {
+	const config = await exampleConfiguration()
+	const state = operatorState()
+	const pending = noPendingUpdates()
+	pending.settlement = { enabled: true, maxGasPriceAttoEthPerGas: 7n * 10n ** 9n, minimumProfitAttoWeth: 2n * 10n ** 15n, rewardWithdrawThresholdAttoEth: 3n * 10n ** 16n }
+	expect(config.settlement.enabled).toBe(false)
+	applyQueuedExecutionSettings(config, state, pending)
+	expect(config.settlement).toEqual({ enabled: true, maxGasPriceAttoEthPerGas: 7n * 10n ** 9n, minimumProfitAttoWeth: 2n * 10n ** 15n, rewardWithdrawThresholdAttoEth: 3n * 10n ** 16n })
+	expect(pending.settlement).toBeUndefined()
 })
 
 describe('queued operator execution settings', () => {

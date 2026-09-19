@@ -1,5 +1,6 @@
 import { keccak256, type Address, type BlockTransaction, type Hex, type JsonValue } from '../ethereum.ts'
 import { endpointLabel } from '../monitoring/connectivity.ts'
+import { isEndpointRejection } from './transaction-rejection.ts'
 import { boundedJsonResponse, RELAY_RESPONSE_BYTES } from '../infrastructure/bounded-json.ts'
 import { authenticatedRelayHeaders, type RelayAuthentication } from './relay-authentication.ts'
 
@@ -13,6 +14,8 @@ export type SubmissionSettings = {
 
 export type SubmissionTargetResult = {
 	error: string | undefined
+	/** True when the target refused the transaction at its pool, so it is known not to hold it; false or absent when the outcome is unknown (transport failure, internal or unrecognised error, unexpected hash). */
+	rejected?: boolean | undefined
 	target: string
 }
 
@@ -48,6 +51,11 @@ export class SubmissionFailure extends Error {
 		this.name = 'SubmissionFailure'
 		this.failedTargets = failedTargets
 	}
+}
+
+/** True only when every target refused the transaction outright; a timeout or HTTP failure may have followed an ingestion. */
+export function submissionRejectedEverywhere(error: unknown) {
+	return error instanceof SubmissionFailure && error.failedTargets.length !== 0 && error.failedTargets.every(target => target.rejected === true)
 }
 
 type JsonRpcResponse = {
@@ -143,6 +151,17 @@ export function maximumFeePerGas(baseFeePerGas: bigint, validityBlocks = DEFAULT
 	return maximum
 }
 
+/**
+ * The fee ceiling a capped transaction is signed with: the validity-horizon maximum, never above the operator's cap. The
+ * horizon maximum over 25 blocks is roughly 19x the base fee, so an uncapped signature can pay far more than the price the
+ * caller evaluated; planning against this value bounds the exposure to what the signature can actually spend.
+ */
+export function cappedMaximumFeePerGas(baseFeePerGas: bigint, maxFeePerGasCap: bigint, validityBlocks = DEFAULT_TRANSACTION_VALIDITY_BLOCKS) {
+	if (maxFeePerGasCap <= 0n) throw new Error('maximum fee per gas cap must be positive')
+	const horizonMaximum = maximumFeePerGas(baseFeePerGas, validityBlocks)
+	return horizonMaximum < maxFeePerGasCap ? horizonMaximum : maxFeePerGasCap
+}
+
 export async function prepareSignedTransaction(parameters: {
 	baseFeePerGas: bigint
 	blockNumber: bigint
@@ -151,17 +170,21 @@ export async function prepareSignedTransaction(parameters: {
 	from: Address
 	gasEstimate: bigint
 	lastValidBlockNumber?: bigint | undefined
+	/** Bounds the signed fee ceiling so delayed inclusion can never pay more per gas than the caller evaluated. */
+	maxFeePerGasCap?: bigint | undefined
 	nonce: bigint
 	signTransaction: (parameters: { chainId: number; data: Hex; gas: bigint; maxFeePerGas: bigint; maxPriorityFeePerGas: bigint; nonce: bigint; to: Address; value?: bigint | undefined }) => Promise<Hex>
 	to: Address
 	value?: bigint | undefined
 }): Promise<SignedTransaction> {
 	assertSubmissionWindowOpen(parameters.lastValidBlockNumber, parameters.blockNumber)
-	const maxPriorityFeePerGas = MAX_PRIORITY_FEE_PER_GAS
 	const gas = paddedTransactionGas(parameters.gasEstimate)
 	const defaultMaxBlockNumber = parameters.blockNumber + DEFAULT_TRANSACTION_VALIDITY_BLOCKS
 	const maxBlockNumber = parameters.lastValidBlockNumber === undefined || parameters.lastValidBlockNumber > defaultMaxBlockNumber ? defaultMaxBlockNumber : parameters.lastValidBlockNumber
-	const maxFeePerGas = maximumFeePerGas(parameters.baseFeePerGas, maxBlockNumber - parameters.blockNumber)
+	const validityBlocks = maxBlockNumber - parameters.blockNumber
+	const maxFeePerGas = parameters.maxFeePerGasCap === undefined ? maximumFeePerGas(parameters.baseFeePerGas, validityBlocks) : cappedMaximumFeePerGas(parameters.baseFeePerGas, parameters.maxFeePerGasCap, validityBlocks)
+	// EIP-1559 rejects a priority fee above the fee ceiling, so a cap below the default tip lowers the tip with it.
+	const maxPriorityFeePerGas = maxFeePerGas < MAX_PRIORITY_FEE_PER_GAS ? maxFeePerGas : MAX_PRIORITY_FEE_PER_GAS
 	const serializedTransaction = await parameters.signTransaction({
 		chainId: parameters.chainId,
 		data: parameters.data,
@@ -448,10 +471,8 @@ export async function submitSignedTransaction(parameters: {
 			if (rpcUrl === undefined) throw new Error('Missing public RPC URL for submission result')
 			const target = endpointLabel(rpcUrl)
 			if (result.status === 'fulfilled' && result.value.toLowerCase() === parameters.hash.toLowerCase()) acceptedTargets.push(target)
-			else {
-				const error = result.status === 'rejected' ? rejectionMessage(result.reason) : `Public RPC returned unexpected transaction hash ${result.value}`
-				failedTargets.push({ error, target })
-			}
+			else if (result.status === 'rejected') failedTargets.push({ error: rejectionMessage(result.reason), rejected: isEndpointRejection(result.reason), target })
+			else failedTargets.push({ error: `Public RPC returned unexpected transaction hash ${result.value}`, target })
 		}
 		if (acceptedTargets.length === 0) {
 			throw new SubmissionFailure(`Every public RPC rejected the transaction: ${failedTargets.map(result => `${result.target}: ${result.error ?? 'unknown error'}`).join('; ')}`, failedTargets)

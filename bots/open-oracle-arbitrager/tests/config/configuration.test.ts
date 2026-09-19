@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { keccak256, privateKeyToAccount, type Hex } from '@zoltar/bot-shared/ethereum'
 import { loadOperatorSettings, operatorProfilePath, saveOperatorSettings, type PersistedOperatorSettings } from '#config/settings-store'
+import { parseSettlementSettings } from '#state/settlement-store'
 import { assertDistinctPersistentPaths } from '#config/configuration'
 import { deterministicDeploymentProxy, executorDeploymentPlan } from '#execution/executor-deployment-primitives'
 import { clearExecutorDeploymentIntent, executorDeploymentIntentPath, saveExecutorDeploymentIntent } from '#execution/executor-deployment-store'
@@ -95,6 +96,7 @@ function settings(rpcUrl: string, uiPort: number, privateKey?: Hex): PersistedOp
 			uiHost: '127.0.0.1',
 			uiPort,
 		},
+		settlement: parseSettlementSettings(undefined),
 		strategy: {
 			maxSpotTwapTicks: 100n,
 			minimumProfitBps: 100n,
@@ -161,6 +163,8 @@ describe('file-only startup configuration', () => {
 
 	test('rejects an operator file reused as a runtime persistence file', () => {
 		expect(() => assertDistinctPersistentPaths('/state/operator.json', { historyFile: '/state/history.jsonl', positionFile: '/state/positions.json', priceHistoryFile: '/state/nested/../operator.json' })).toThrow('must use distinct paths')
+		// The settlement journal is derived from the position file, so the operator file may not sit there either.
+		expect(() => assertDistinctPersistentPaths('/state/positions.json.settlements', { historyFile: '/state/history.jsonl', positionFile: '/state/positions.json', priceHistoryFile: '/state/prices.jsonl' })).toThrow('must use distinct paths')
 	})
 
 	test('rejects every command-line argument', async () => {

@@ -1,3 +1,4 @@
+import { emptySettlementSnapshot } from '#state/settlement-store'
 import { expect, spyOn, test } from 'bun:test'
 import { parseCentralizedMarketSettings } from '@zoltar/bot-shared/monitoring/centralized-markets'
 import { networkConfiguration } from '#config/network'
@@ -26,6 +27,7 @@ function operatorState(): OperatorState {
 		status: 'syncing',
 		tokenAddresses: [],
 		tokenMarkets: [],
+		settlements: emptySettlementSnapshot(),
 		transactionActivity: [],
 	}
 }

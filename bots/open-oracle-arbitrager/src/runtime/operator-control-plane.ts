@@ -17,6 +17,7 @@ import { validateSubmissionSettings, type SubmissionSettings } from '#execution/
 import { checkConnectivity, checkSubmissionEndpoints, endpointLabel, updateSubmissionEndpointChecks, validateIndependentReadRpcUrls, type ConnectivitySettings } from '#monitoring/connectivity'
 import { operatorStatusAfterPause, type SyncCursor } from '@zoltar/bot-shared/monitoring/block-sync'
 import { loadExecutionHistory, operatorSnapshot, recordOperation, strategySettings, updateStrategyFromRequest, type MutableStrategy, type OperatorSnapshotFixedState, type OperatorState } from '#state/operator-state'
+import type { MutableSettlement } from '#state/settlement-store'
 import { acquireExecutionSignerLock, acquirePositionJournalLock, loadPositionJournal, type ExclusiveProcessLock } from '#state/position-store'
 import { checkIndependentRpcChains, updateOperatorConnectivity } from './connectivity-update.ts'
 import { configuredQuorumRpcUrlMinimum, type RpcQuorumRequirement } from '@zoltar/bot-shared/monitoring/rpc-quorum-policy'
@@ -44,6 +45,7 @@ export type PendingOperatorUpdates = {
 	persistedTokenAddresses: Address[] | undefined
 	riskLimits: RiskLimits | undefined
 	rpcQuorum: RpcQuorumRequirement | undefined
+	settlement: MutableSettlement | undefined
 	signerLock: ExclusiveProcessLock | undefined
 	signerUpdate: boolean
 	strategy: MutableStrategy | undefined
@@ -104,6 +106,7 @@ export function startOperatorControlPlane(parameters: {
 		persistedPrivateKey: undefined,
 		persistedTokenAddresses: undefined,
 		riskLimits: undefined,
+		settlement: undefined,
 		rpcQuorum: undefined,
 		signerLock: undefined,
 		signerUpdate: false,
@@ -236,6 +239,7 @@ export function startOperatorControlPlane(parameters: {
 					pending.privateKey = signer.privateKey
 					pending.riskLimits = next.runtime.riskLimits
 					pending.rpcQuorum = next.rpcQuorum
+					pending.settlement = { ...next.settlement }
 					pending.signerLock = nextPendingSignerLock
 					pending.signerUpdate = true
 					pending.strategy = mutableStrategy(next.strategy)

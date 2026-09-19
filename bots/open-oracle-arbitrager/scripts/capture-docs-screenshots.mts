@@ -5,6 +5,7 @@ import { join } from 'node:path'
 import { getAddress, keccak256, toHex } from '@zoltar/bot-shared/ethereum'
 import { startDashboardServer } from '#dashboard/dashboard-server'
 import { operatorSnapshot, type OperatorSnapshot, type OperatorState } from '#state/operator-state'
+import { emptySettlementSnapshot } from '#state/settlement-store'
 import { publicOperatorFailure, publicPollFailure } from '#state/public-failures'
 import type { PositionRecord } from '#state/position-store'
 
@@ -1657,17 +1658,10 @@ const positionDerivedSnapshot = operatorSnapshot(
 		status: 'running',
 		tokenAddresses: [],
 		tokenMarkets: [],
+		settlements: emptySettlementSnapshot(),
 		transactionActivity: [],
 	} satisfies OperatorState,
-	{
-		maxSpotTwapTicks: 120n,
-		minimumProfitBps: 100n,
-		minimumProfitAttoWeth: 10n ** 16n,
-		minimumRemainingBlocks: 3n,
-		minimumRemainingSeconds: 36n,
-		pollMilliseconds: 12_000,
-		twapSeconds: 1_800,
-	},
+	{ maxSpotTwapTicks: 120n, minimumProfitBps: 100n, minimumProfitAttoWeth: 10n ** 16n, minimumRemainingBlocks: 3n, minimumRemainingSeconds: 36n, pollMilliseconds: 12_000, twapSeconds: 1_800 },
 	{ minimumBundleRelaySuccesses: 1, mode: 'private', relayUrls: ['https://relay.flashbots.net/'] },
 	{ publicRpcUrls: ['https://rpc.example/'], readRpcUrl: 'https://read.example/' },
 	{ execute: true, executor, expectedChainId: 1, explorerUrl: 'https://etherscan.io', network: 'mainnet', openOracle, queuedWallet: undefined, savedWallet: wallet, wallet },
@@ -1768,6 +1762,7 @@ const snapshot = {
 	],
 	risk: positionDerivedSnapshot.risk,
 	savedWallet: wallet,
+	settlements: positionDerivedSnapshot.settlements,
 	settings: { maxSpotTwapTicks: '120', minimumProfitBps: '100', minimumProfitWeth: '0.01', minimumRemainingBlocks: '3', minimumRemainingSeconds: '36', pollMilliseconds: 12_000, twapSeconds: 1_800 },
 	status: 'running' as const,
 	submission: { minimumBundleRelaySuccesses: 1, mode: 'private' as const, relayUrls: ['https://relay.flashbots.net/'] },

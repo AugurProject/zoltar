@@ -1,3 +1,4 @@
+import { emptySettlementSnapshot, parseSettlementSettings, settlementSnapshot } from '#state/settlement-store'
 import { recordMarketDiscoveryFailure, recordObservedHead } from '#monitoring/market-discovery-status'
 import { requireDeployedContracts } from '@zoltar/bot-shared/monitoring/deployed-contracts'
 import { afterEach, describe, expect, spyOn, test } from 'bun:test'
@@ -18,10 +19,10 @@ import {
 	publicOperatorSnapshot,
 	updateStrategyFromRequest,
 	type ExecutionHistoryFilesystem,
-	type ExecutionRecord,
 	type MutableStrategy,
 	type OperatorState,
 } from '#state/operator-state'
+import type { ExecutionRecord } from '#state/execution-record'
 import { isSnapshot } from '#dashboard/snapshot-validation'
 import { publicPollFailure } from '#state/public-failures'
 import type { PositionRecord } from '#state/position-store'
@@ -52,6 +53,7 @@ function capabilityState(): OperatorState {
 		status: 'syncing',
 		tokenAddresses: [],
 		tokenMarkets: [],
+		settlements: emptySettlementSnapshot(),
 		transactionActivity: [],
 	}
 }
@@ -79,9 +81,42 @@ test('publishes skipped reports beside evaluated opportunities with only their s
 			windowUnit: 'blocks',
 		},
 	]
+	state.settlements = settlementSnapshot({
+		now: new Date('2026-09-19T10:00:00.000Z'),
+		queue: [{ callbackGasLimit: '4000000', coordinator: address, decision: 'eligible', elapsed: '3', projectedGasCostEth: '0.008', projectedNetEth: '0.009', reportId: '11', rewardEth: '0.017', token: address, tokenSymbol: 'REP', windowUnit: 'seconds' }],
+		records: [
+			{
+				account: address,
+				actualGasCostEth: undefined,
+				coordinator: undefined,
+				finalized: false,
+				kind: 'reward-withdrawal',
+				lastValidBlockNumber: '125',
+				minedAt: undefined,
+				nonce: '4',
+				projectedGasCostEth: '0.0001',
+				receiptBlock: undefined,
+				replacedBy: undefined,
+				reportId: undefined,
+				rewardEth: '0.05',
+				status: 'pending',
+				submissionBlockNumber: '100',
+				submissionMode: 'public',
+				submittedAt: '2026-09-19T10:00:00.000Z',
+				transactionHash: `0x${'5'.repeat(64)}`,
+				transactionIntent: { data: '0x', to: address, value: '0' },
+				updatedAt: '2026-09-19T10:00:00.000Z',
+			},
+		],
+		settings: parseSettlementSettings(undefined),
+		unclaimedRewardAttoEth: undefined,
+		withdrawalDecision: 'unavailable',
+	})
 	const snapshot = publicOperatorSnapshot(operatorSnapshot(state, strategy(), submission, connectivity, fixed))
 	expect(snapshot.opportunities).toEqual(state.opportunities)
+	expect(snapshot.settlements).toEqual(state.settlements)
 	expect(isSnapshot(JSON.parse(JSON.stringify(snapshot)))).toBe(true)
+	expect(isSnapshot(JSON.parse(JSON.stringify({ ...snapshot, settlements: { ...snapshot.settlements, queue: [{ ...snapshot.settlements.queue[0], decision: 'unknown' }] } })))).toBe(false)
 })
 
 test('reports operator capability only after a complete current scan and signer readiness', () => {
@@ -358,6 +393,7 @@ describe('operator strategy settings', () => {
 			tokenMarkets: [],
 			priceHistory: [],
 			reportPaths: [],
+			settlements: emptySettlementSnapshot(),
 			transactionActivity: [],
 		}
 		clearWalletDerivedState(state)
@@ -430,12 +466,44 @@ describe('operator execution history', () => {
 			status: 'running',
 			tokenAddresses: [],
 			tokenMarkets: [],
+			settlements: settlementSnapshot({
+				now: new Date(),
+				queue: [],
+				records: [
+					{
+						account: address,
+						actualGasCostEth: '0.004',
+						coordinator: address,
+						finalized: true,
+						kind: 'settlement',
+						lastValidBlockNumber: '125',
+						minedAt: new Date().toISOString(),
+						nonce: '5',
+						projectedGasCostEth: '0.005',
+						receiptBlock: { hash: `0x${'7'.repeat(64)}`, number: '101' },
+						replacedBy: undefined,
+						reportId: '3',
+						rewardEth: '0.017',
+						status: 'confirmed',
+						submissionBlockNumber: '100',
+						submissionMode: 'private',
+						submittedAt: new Date().toISOString(),
+						transactionHash: `0x${'6'.repeat(64)}`,
+						transactionIntent: { data: '0x', to: address, value: '0' },
+						updatedAt: new Date().toISOString(),
+					},
+				],
+				settings: parseSettlementSettings(undefined),
+				unclaimedRewardAttoEth: undefined,
+				withdrawalDecision: 'unavailable',
+			}),
 			transactionActivity: [],
 		}
 		const snapshot = operatorSnapshot(state, strategy(), submission, connectivity, fixed)
 		expect(snapshot.consecutivePollFailures).toBe(2)
 		expect(snapshot.positionRecordCount).toBe(5)
-		expect(snapshot.risk.usage.dailyGasSpentWeth).toBe('0.01')
+		// Position gas, archived gas, and today's settlement gas share one daily budget.
+		expect(snapshot.risk.usage.dailyGasSpentWeth).toBe('0.014')
 		expect(snapshot.totalHedgedProfitBeforeGasEth).toBe('0.5')
 		expect(snapshot.totalOpenHedgedNetProfitEth).toBe('0.07')
 		expect(snapshot.totalRealizedNetProfitEth).toBe('0.16')
@@ -494,6 +562,7 @@ describe('operator execution history', () => {
 			status: 'running',
 			tokenAddresses: [],
 			tokenMarkets: [],
+			settlements: emptySettlementSnapshot(),
 			transactionActivity: [],
 		}
 		const snapshot = operatorSnapshot(state, strategy(), submission, connectivity, fixed)
@@ -575,6 +644,7 @@ describe('operator execution history', () => {
 			status: 'running',
 			tokenAddresses: [],
 			tokenMarkets: [],
+			settlements: emptySettlementSnapshot(),
 			transactionActivity: [],
 		}
 		const snapshot = operatorSnapshot(state, strategy(), submission, connectivity, fixed)
@@ -629,6 +699,7 @@ describe('operator execution history', () => {
 			tokenMarkets: [],
 			priceHistory: [],
 			reportPaths: [],
+			settlements: emptySettlementSnapshot(),
 			transactionActivity: [],
 		}
 		const snapshot = operatorSnapshot(state, strategy(), submission, connectivity, fixed)
@@ -819,6 +890,7 @@ describe('operator execution history', () => {
 			tokenMarkets: [],
 			priceHistory: [],
 			reportPaths: [],
+			settlements: emptySettlementSnapshot(),
 			transactionActivity: [],
 		}
 		const snapshot = operatorSnapshot(state, strategy(), submission, connectivity, { ...fixed, execute: true, wallet: address })

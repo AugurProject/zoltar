@@ -637,6 +637,8 @@ The dashboard shows:
 - ETH, WETH, REP, executable REP value, and estimated portfolio value.
 - Native ETH stakes, WETH stakes, and ETH settler rewards locked in reports currently
   pending on discovered coordinators. The combined figure treats 1 WETH as 1 ETH.
+- Approved-coordinator reports awaiting third-party settlement, each with reward,
+  projected gas and net, decision, and the settlement and reward-withdrawal history.
 - Current opportunities, token-metadata-normalized inventory requirements, deadline
   window, token-specific direction, pool, and decision. WETH/token reports still
   inside their settlement window that the scan declined before any venue priced
@@ -1122,6 +1124,88 @@ Actual gas is assigned to the UTC day of each receipt's quorum-confirmed canonic
 block timestamp, not the local time at which the transaction was staged or later
 recovered. The durable position stores one dated gas expenditure per confirmed
 receipt, and both the execution limit and dashboard use that same ledger.
+
+### Third-party settlement
+
+The bot can also settle reports it never disputed. Every approved-coordinator
+report that is past its settlement deadline and still unsettled appears in the
+dashboard's **Settlement queue** with the settler reward the coordinator escrowed,
+the projected gas for `settle` (the callback gas limit plus the 1/63 slack
+OpenOracle requires after the callback, plus a fixed base and an amortised reward
+withdrawal, each padded the way the signer pads its gas limit), and the projected
+net. Settlement is off until `settlement` is set in the complete configuration:
+
+| Setting | Default | JSON field | Effect |
+| --- | ---: | --- | --- |
+| Enabled | `false` | `enabled` | Allows settle and reward-withdrawal transactions in execution mode. Dry-run mode only reports decisions. |
+| Minimum net | `0.001 ETH` | `minimumProfitWeth` | Rejects settlements whose ETH reward minus projected gas is below this amount. |
+| Gas price cap | `50 nanoETH` | `maxGasPriceNanoEth` | Rejects settlements when the projected gas price exceeds the cap, and bounds the fee ceiling every settle and withdrawal is signed with, so a delayed inclusion can never pay more per gas than this. |
+| Withdraw threshold | `0.01 ETH` | `rewardWithdrawThresholdEth` | Settler rewards accrue inside OpenOracle; the bot withdraws them once the unclaimed balance reaches this amount, at a gas price under the cap and within the daily gas budget. |
+
+Reports the wallet itself reported are excluded here because the position
+lifecycle already settles and withdraws them. Reports off their coordinator
+template are never settled. Each scan spends at most one transaction: a dispute
+attempt takes precedence, then the eligible settlement with the highest projected
+net, then a due reward withdrawal. Both wait (`history-unavailable`) whenever a
+position's history or receipt recovery has failed, the same gate that blocks
+disputes, because the shared daily gas budget cannot include that position's gas
+until recovery completes. The bot simulates `settle` at the scan head
+before signing, so a report settled by someone else costs nothing. Projected gas,
+the minimum net, and the daily budget are all judged at the fee ceiling the
+transaction is signed with (the 25-block validity maximum, bounded by the gas price
+cap), not at the lower price expected at submission, so the queue's net is the worst
+case the signature can pay. Settlement gas is charged to the UTC day of its mined
+block and shares the daily gas budget with positions in both directions: it blocks
+further settlements and dispute entries once the budget is spent, and an attempt that
+is still pending charges its signed exposure to whichever day is being judged until
+its outcome is known. A report or reward withdrawal with an attempt that may still be
+mined is never re-sent; that hold is scoped to the OpenOracle the attempt was sent to
+(and, for withdrawals, to the signing wallet), so an attempt journaled before a
+contract or signer change keeps its recovery and gas accounting without blocking the
+new contract's report of the same id or the new wallet's withdrawals. Pausing blocks
+new settlements and withdrawals.
+
+Because the signature is capped, a base fee that climbs above the cap after
+submission delays inclusion rather than raising the price. Under private submission
+the relay drops the transaction at its `maxBlockNumber`, which frees the nonce and
+lets the journal mark the attempt `dropped`. Under public submission the transaction
+has no deadline: it waits in the mempool until the base fee falls below the cap or
+the node evicts it, and because position transactions are signed at the next pending
+nonce they queue behind it for that time. Set the cap with that head-of-line effect
+on disputes in mind when running in public mode.
+
+Every signed settlement and reward withdrawal is journaled in
+`<positionFile>.settlements` (append-only, chain-scoped) with its nonce and durable
+intent, and shown under **Settlement history** with its projected and actual gas.
+That derived path is isolated like the configured journals: no configured runtime
+file, the operator settings file, or a dormant chain profile's journal may resolve
+to it, through symlinks or otherwise.
+Each scan reconciles records left `pending` by an interrupted process before any
+candidate is judged against the daily budget: a receipt resolves the attempt, and
+because a public transaction has no on-chain deadline an attempt without a receipt
+stays pending until another transaction consumes its nonce at a reorg-safe depth. A
+consuming transaction with the same intent (an operator rebroadcast) is adopted
+under its own hash; any other retires the attempt as `expired`. An attempt becomes
+`dropped` when it provably has no mempool to land from: a private attempt whose
+signed horizon has finalized without a receipt (the relay stops including it at
+`maxBlockNumber`), or a public attempt that every RPC refused with an explicit
+transaction-pool message (or an invalid-params error) or that a pause stopped
+between the journal write and the send; a timeout, HTTP failure, or unrecognised
+error may have followed an ingestion, so those attempts stay pending. Dropping releases the
+budget at once and the report once the attempt's own signed horizon has finalized,
+so a refusal that repeats re-signs at that cadence rather than on every scan. A
+dropped private attempt keeps being rechecked so a late receipt or a consumed nonce
+still lands in the journal; a dropped public attempt, which no node accepted, leaves
+the recheck set once its horizon has finalized. No outcome is final on age alone:
+a mined attempt records its receipt block and is rechecked until recovery has
+verified that block canonical twelve blocks deep (a receipt that moved to another
+block is re-read, one a reorg orphaned returns the attempt to `pending`), and an
+expired attempt remembers the transaction that replaced it and is rechecked the
+same way (an orphaned replacement returns the original to `pending`, or credits it
+if it landed after all). When a replacement is adopted, its outcome is journaled
+before the replaced hash is retired, so an interruption between the two writes never
+loses the receipt. Realized settlement income (confirmed rewards minus every paid
+gas cost) is tracked separately from arbitrage P&amp;L.
 
 ### Durable position journal
 
