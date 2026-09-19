@@ -68,6 +68,8 @@ type SettlementStageParameters = {
 	coordinatorPolicies: readonly CoordinatorGamePolicy[]
 	/** Position gas already counted against today's budget; settlement gas from the journal is added here. */
 	dailyPositionGasSpentAttoWeth: bigint
+	/** The position ledger's recovery gate: false while a position's history or receipt recovery has failed, which also blocks disputes. */
+	executionReady: boolean
 	gasPrice: bigint
 	isPaused: () => boolean
 	journal: SettlementJournal
@@ -135,6 +137,7 @@ export async function runSettlementStage(parameters: SettlementStageParameters) 
 		dailyGas,
 		enabled: config.settlement.enabled,
 		execute: config.execute,
+		executionReady: parameters.executionReady,
 		gasPrice: parameters.gasPrice,
 		inFlight: account !== undefined && rewardWithdrawalInFlight(journal.records, block.number, { account, openOracle: config.openOracle }),
 		maxFeePerGas,
@@ -151,6 +154,7 @@ export async function runSettlementStage(parameters: SettlementStageParameters) 
 		config,
 		coordinatorPolicies: parameters.coordinatorPolicies,
 		dailyGas,
+		executionReady: parameters.executionReady,
 		gasPrice: parameters.gasPrice,
 		maxFeePerGas,
 		paused: state.paused,
@@ -160,7 +164,8 @@ export async function runSettlementStage(parameters: SettlementStageParameters) 
 		tokenSymbol: parameters.tokenSymbol,
 	})
 	journal.publish(queue)
-	if (!signerReady || wallet === undefined || !config.settlement.enabled || state.paused || !parameters.transactionSlotFree) return
+	// Unrecovered position gas is missing from the budget, so nothing that shares it may sign until the ledger is whole again.
+	if (!signerReady || wallet === undefined || !config.settlement.enabled || !parameters.executionReady || state.paused || !parameters.transactionSlotFree) return
 	const context: SettlementExecutionContext = { baseFeePerGas: block.baseFeePerGas, blockNumber: block.number, client, config, isPaused: parameters.isPaused, maxFeePerGas, persist: journal.persist, readClients, track: parameters.track, wallet }
 	const plan = selectSettlementPlan(plans)
 	const candidate = plan === undefined ? undefined : queue.find(entry => entry.reportId === plan.report.helper.reportId.toString())

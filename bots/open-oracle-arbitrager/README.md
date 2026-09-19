@@ -1146,7 +1146,10 @@ Reports the wallet itself reported are excluded here because the position
 lifecycle already settles and withdraws them. Reports off their coordinator
 template are never settled. Each scan spends at most one transaction: a dispute
 attempt takes precedence, then the eligible settlement with the highest projected
-net, then a due reward withdrawal. The bot simulates `settle` at the scan head
+net, then a due reward withdrawal. Both wait (`history-unavailable`) whenever a
+position's history or receipt recovery has failed, the same gate that blocks
+disputes, because the shared daily gas budget cannot include that position's gas
+until recovery completes. The bot simulates `settle` at the scan head
 before signing, so a report settled by someone else costs nothing. Projected gas,
 the minimum net, and the daily budget are all judged at the fee ceiling the
 transaction is signed with (the 25-block validity maximum, bounded by the gas price

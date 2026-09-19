@@ -964,6 +964,7 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 							config,
 							coordinatorPolicies,
 							dailyPositionGasSpentAttoWeth: utcDayGasSpentWeth(positions, dateFromBlockTimestamp(block.timestamp)) + archivedUtcDayGasSpentWeth(positionJournal.archived, dateFromBlockTimestamp(block.timestamp)),
+							executionReady,
 							gasPrice,
 							isPaused: () => state.paused || shutdown?.isRequested() === true,
 							journal: settlementJournal,

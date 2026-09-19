@@ -13,6 +13,8 @@ export type SettlementQueueInput = {
 	blockTimestamp: bigint
 	config: Pick<Configuration, 'execute' | 'openOracle' | 'settlement'>
 	coordinatorPolicies: readonly CoordinatorGamePolicy[]
+	/** False while position history or receipt recovery has failed; the budget is then incomplete and nothing may sign. */
+	executionReady: boolean
 	/** Gas already spent on the current UTC day by positions and settlements, and the configured daily ceiling. */
 	dailyGas: { limitAttoWeth: bigint; spentAttoWeth: bigint }
 	gasPrice: bigint
@@ -39,7 +41,7 @@ export function settlementQueue(input: SettlementQueueInput): SettlementQueue {
 		const reportId = helper.reportId.toString()
 		const economics = settlementEconomics({ callbackGasLimit: game.callbackGasLimit, gasPrice: input.gasPrice, maxFeePerGas: input.maxFeePerGas, rewardAttoEth: game.settlerRewardAttoEth, settings: input.config.settlement })
 		const withinDailyGasBudget = input.dailyGas.spentAttoWeth + economics.projectedGasCostAttoEth <= input.dailyGas.limitAttoWeth
-		const decision = settlementDecision({ economics, enabled: input.config.settlement.enabled, execute: input.config.execute, inFlight: inFlightReports.has(reportId), paused: input.paused, signerReady: input.signerReady, withinDailyGasBudget })
+		const decision = settlementDecision({ economics, enabled: input.config.settlement.enabled, execute: input.config.execute, executionReady: input.executionReady, inFlight: inFlightReports.has(reportId), paused: input.paused, signerReady: input.signerReady, withinDailyGasBudget })
 		const timing = settlementTiming(game, input.blockNumber, input.blockTimestamp)
 		queue.push({
 			callbackGasLimit: game.callbackGasLimit.toString(),

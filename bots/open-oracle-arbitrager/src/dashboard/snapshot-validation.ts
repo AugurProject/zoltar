@@ -327,7 +327,7 @@ export const isSnapshot = object<PublicOperatorSnapshot>({
 			object({
 				callbackGasLimit: stringValue,
 				coordinator: hexValue,
-				decision: oneOf('disabled', 'dry-run-settlement', 'eligible', 'execution-failed', 'gas-price-cap', 'in-flight', 'paused', 'risk-limit', 'settled', 'signer-unavailable', 'unprofitable'),
+				decision: oneOf('disabled', 'dry-run-settlement', 'eligible', 'execution-failed', 'gas-price-cap', 'history-unavailable', 'in-flight', 'paused', 'risk-limit', 'settled', 'signer-unavailable', 'unprofitable'),
 				elapsed: stringValue,
 				projectedGasCostEth: stringValue,
 				projectedNetEth: stringValue,
@@ -347,7 +347,7 @@ export const isSnapshot = object<PublicOperatorSnapshot>({
 		}),
 		unclaimedRewardEth: optional(stringValue),
 		utcDayGasSpentEth: stringValue,
-		withdrawalDecision: oneOf('below-threshold', 'disabled', 'dry-run', 'due', 'gas-price-cap', 'in-flight', 'paused', 'risk-limit', 'signer-unavailable', 'unavailable'),
+		withdrawalDecision: oneOf('below-threshold', 'disabled', 'dry-run', 'due', 'gas-price-cap', 'history-unavailable', 'in-flight', 'paused', 'risk-limit', 'signer-unavailable', 'unavailable'),
 	}),
 	transactionActivity: array(
 		object({

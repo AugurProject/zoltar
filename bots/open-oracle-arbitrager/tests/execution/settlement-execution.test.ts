@@ -336,6 +336,7 @@ describe('third-party settlement execution against OpenOracle', () => {
 						config: stageConfig,
 						coordinatorPolicies: [policy],
 						dailyPositionGasSpentAttoWeth: 0n,
+						executionReady: true,
 						gasPrice: 2n * NANO_ETH,
 						isPaused: () => false,
 						journal,
@@ -600,13 +601,14 @@ describe('third-party settlement execution against OpenOracle', () => {
 			const journal = await createSettlementJournal(stageConfig, state)
 			const policy: CoordinatorGamePolicy = { ...report.game, coordinator: reporter.account.address, openOracle }
 			const reports = (): ActiveReport[] => [{ latest: report, settled: false, steps: [] }]
-			const stage = (transactionSlotFree: boolean) =>
+			const stage = (transactionSlotFree: boolean, options: { executionReady?: boolean; settlement?: Partial<MutableSettlement> } = {}) =>
 				runSettlementStage({
 					block: { baseFeePerGas: block.baseFeePerGas ?? 0n, number: block.number ?? 0n, timestamp: block.timestamp },
 					client,
-					config: stageConfig,
+					config: { ...stageConfig, settlement: { ...stageConfig.settlement, ...options.settlement } },
 					coordinatorPolicies: [policy],
 					dailyPositionGasSpentAttoWeth: 0n,
+					executionReady: options.executionReady ?? true,
 					gasPrice: 2n * 10n ** 9n,
 					isPaused: () => false,
 					journal,
@@ -623,6 +625,14 @@ describe('third-party settlement execution against OpenOracle', () => {
 			expect(state.settlements.queue.map(candidate => [candidate.reportId, candidate.decision])).toEqual([[report.helper.reportId.toString(), 'eligible']])
 			expect(state.settlements.withdrawalDecision).toBe('below-threshold')
 			expect(journal.records).toEqual([])
+			// Failed position recovery: the slot is free, the settlement is eligible, and a withdrawal would be due (the threshold is
+			// dropped to the rewards earlier tests left unclaimed), yet neither signs because the shared daily budget is incomplete.
+			const withdrawalThreshold = alreadyUnclaimed > 0n ? alreadyUnclaimed : 1n
+			await stage(true, { executionReady: false, settlement: { rewardWithdrawThresholdAttoEth: withdrawalThreshold } })
+			expect(state.settlements.queue.map(candidate => candidate.decision)).toEqual(['history-unavailable'])
+			expect(state.settlements.withdrawalDecision).toBe(alreadyUnclaimed > 0n ? 'history-unavailable' : 'below-threshold')
+			expect(journal.records).toEqual([])
+			expect(await client.readContract({ abi: openOracleAbi, address: openOracle, functionName: 'storedGame', args: [report.helper.reportId] }).then(game => game[4])).toBe(0n)
 			// Free slot: the best plan settles; the withdrawal waits for the next scan even though the accrued reward now meets the threshold.
 			await stage(true)
 			expect(state.settlements.queue[0]?.decision).toBe('settled')
@@ -641,6 +651,7 @@ describe('third-party settlement execution against OpenOracle', () => {
 				config: stageConfig,
 				coordinatorPolicies: [policy],
 				dailyPositionGasSpentAttoWeth: 0n,
+				executionReady: true,
 				gasPrice: 2n * 10n ** 9n,
 				isPaused: () => false,
 				journal,
@@ -681,6 +692,7 @@ describe('third-party settlement execution against OpenOracle', () => {
 				config: { ...stageConfig, riskLimits: { ...stageConfig.riskLimits, maxDailyGasSpendAttoWeth: recoveredGasAttoEth - 1n } },
 				coordinatorPolicies: [policy],
 				dailyPositionGasSpentAttoWeth: 0n,
+				executionReady: true,
 				gasPrice: 2n * 10n ** 9n,
 				isPaused: () => false,
 				journal,

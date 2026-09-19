@@ -29,10 +29,10 @@ export type MutableSettlement = {
 	rewardWithdrawThresholdAttoEth: bigint
 }
 
-export type SettlementDecision = 'disabled' | 'dry-run-settlement' | 'eligible' | 'execution-failed' | 'gas-price-cap' | 'in-flight' | 'paused' | 'risk-limit' | 'settled' | 'signer-unavailable' | 'unprofitable'
+export type SettlementDecision = 'disabled' | 'dry-run-settlement' | 'eligible' | 'execution-failed' | 'gas-price-cap' | 'history-unavailable' | 'in-flight' | 'paused' | 'risk-limit' | 'settled' | 'signer-unavailable' | 'unprofitable'
 
 /** Why accrued rewards were or were not withdrawn in the latest scan. */
-export type RewardWithdrawalDecision = 'below-threshold' | 'disabled' | 'dry-run' | 'due' | 'gas-price-cap' | 'in-flight' | 'paused' | 'risk-limit' | 'signer-unavailable' | 'unavailable'
+export type RewardWithdrawalDecision = 'below-threshold' | 'disabled' | 'dry-run' | 'due' | 'gas-price-cap' | 'history-unavailable' | 'in-flight' | 'paused' | 'risk-limit' | 'signer-unavailable' | 'unavailable'
 
 /** The signed horizon plus the reorg overlap has passed, so the attempt's own submission window is closed for good. */
 function settlementAttemptHorizonFinalized(record: Pick<SettlementRecord, 'lastValidBlockNumber'>, blockNumber: bigint) {

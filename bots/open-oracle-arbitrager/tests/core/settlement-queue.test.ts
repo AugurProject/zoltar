@@ -50,6 +50,7 @@ function input(overrides: Partial<SettlementQueueInput> = {}): SettlementQueueIn
 		config: { execute: true, openOracle, settlement: { ...parseSettlementSettings(undefined), enabled: true } },
 		coordinatorPolicies: [policy],
 		dailyGas: { limitAttoWeth: 5n * 10n ** 16n, spentAttoWeth: 0n },
+		executionReady: true,
 		gasPrice: 2n * NANO_ETH,
 		maxFeePerGas: 2n * NANO_ETH,
 		paused: false,
@@ -116,6 +117,9 @@ describe('settlement queue', () => {
 		expect(settlementQueue(input({ paused: true, reports: [report(11n)] })).queue[0]?.decision).toBe('paused')
 		expect(settlementQueue(input({ gasPrice: 51n * NANO_ETH, reports: [report(11n, { settlerRewardAttoEth: 10n ** 18n })] })).queue[0]?.decision).toBe('gas-price-cap')
 		expect(settlementQueue(input({ signerReady: false, reports: [report(11n)] })).queue[0]?.decision).toBe('signer-unavailable')
+		const unrecovered = settlementQueue(input({ executionReady: false, reports: [report(11n)] }))
+		expect(unrecovered.queue[0]?.decision).toBe('history-unavailable')
+		expect(unrecovered.plans.size).toBe(0)
 		expect(settlementQueue(input({ dailyGas: { limitAttoWeth: 5n * 10n ** 16n, spentAttoWeth: 45n * 10n ** 15n }, reports: [report(11n)] })).queue[0]?.decision).toBe('risk-limit')
 	})
 

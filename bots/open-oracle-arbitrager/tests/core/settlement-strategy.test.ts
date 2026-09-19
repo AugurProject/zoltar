@@ -76,7 +76,7 @@ describe('settlement economics and decision', () => {
 	})
 
 	test('explains the first gate that blocks execution in economic-then-operator order', () => {
-		const ready = { economics: { profitable: true, withinGasPriceCap: true }, enabled: true, execute: true, inFlight: false, paused: false, signerReady: true, withinDailyGasBudget: true }
+		const ready = { economics: { profitable: true, withinGasPriceCap: true }, enabled: true, execute: true, executionReady: true, inFlight: false, paused: false, signerReady: true, withinDailyGasBudget: true }
 		expect(settlementDecision(ready)).toBe('eligible')
 		expect(settlementDecision({ ...ready, economics: { profitable: false, withinGasPriceCap: false } })).toBe('unprofitable')
 		expect(settlementDecision({ ...ready, economics: { profitable: true, withinGasPriceCap: false } })).toBe('gas-price-cap')
@@ -84,13 +84,16 @@ describe('settlement economics and decision', () => {
 		expect(settlementDecision({ ...ready, enabled: false })).toBe('disabled')
 		expect(settlementDecision({ ...ready, execute: false })).toBe('dry-run-settlement')
 		expect(settlementDecision({ ...ready, signerReady: false })).toBe('signer-unavailable')
+		// Failed position recovery leaves the daily budget incomplete, so settlements wait exactly as disputes do.
+		expect(settlementDecision({ ...ready, executionReady: false })).toBe('history-unavailable')
+		expect(settlementDecision({ ...ready, executionReady: false, paused: true })).toBe('history-unavailable')
 		expect(settlementDecision({ ...ready, paused: true })).toBe('paused')
 		expect(settlementDecision({ ...ready, inFlight: true })).toBe('in-flight')
 	})
 
 	test('withdraws accrued rewards only at the threshold, under the gas cap, within the daily gas budget, and when the operator can sign', () => {
 		const dailyGas = { limitAttoWeth: 5n * 10n ** 16n, spentAttoWeth: 0n }
-		const ready = { dailyGas, enabled: true, execute: true, gasPrice: NANO_ETH, inFlight: false, maxFeePerGas: NANO_ETH, paused: false, settings, signerReady: true, unclaimedRewardAttoEth: 10n ** 16n }
+		const ready = { dailyGas, enabled: true, execute: true, executionReady: true, gasPrice: NANO_ETH, inFlight: false, maxFeePerGas: NANO_ETH, paused: false, settings, signerReady: true, unclaimedRewardAttoEth: 10n ** 16n }
 		expect(rewardWithdrawalDecision({ ...ready, unclaimedRewardAttoEth: undefined })).toBe('unavailable')
 		expect(rewardWithdrawalDecision({ ...ready, unclaimedRewardAttoEth: 10n ** 16n - 1n })).toBe('below-threshold')
 		expect(rewardWithdrawalDecision({ ...ready, gasPrice: 11n * NANO_ETH })).toBe('gas-price-cap')
@@ -102,6 +105,7 @@ describe('settlement economics and decision', () => {
 		expect(rewardWithdrawalDecision({ ...ready, enabled: false })).toBe('disabled')
 		expect(rewardWithdrawalDecision({ ...ready, execute: false })).toBe('dry-run')
 		expect(rewardWithdrawalDecision({ ...ready, signerReady: false })).toBe('signer-unavailable')
+		expect(rewardWithdrawalDecision({ ...ready, executionReady: false })).toBe('history-unavailable')
 		expect(rewardWithdrawalDecision({ ...ready, paused: true })).toBe('paused')
 		expect(rewardWithdrawalDecision({ ...ready, inFlight: true })).toBe('in-flight')
 		expect(rewardWithdrawalDecision(ready)).toBe('due')

@@ -30,7 +30,7 @@ export const sourceSizeAllowances = new Map<string, SourceSizeAllowance>([
 	]),
 	...allowances('Owning bot package: extract dashboard controllers, runtime orchestration, and journal persistence into focused modules.', [
 		['bots/open-oracle-arbitrager/src/dashboard/dashboard.ts', 1470],
-		['bots/open-oracle-arbitrager/src/runtime/operator.ts', 1037],
+		['bots/open-oracle-arbitrager/src/runtime/operator.ts', 1038],
 		['bots/open-oracle-arbitrager/src/state/operator-state.ts', 857],
 		['bots/open-oracle-arbitrager/src/state/position-store.ts', 631],
 		['bots/liquidator/src/dashboard/dashboard.ts', 1039],

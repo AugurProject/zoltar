@@ -76,14 +76,19 @@ export function settlementEconomics(parameters: { callbackGasLimit: bigint; gasP
 	}
 }
 
-/** Mirrors `opportunityDecision`: economic gates first, then operator state, so the queue explains why nothing was sent. */
-export function settlementDecision(parameters: { economics: Pick<SettlementEconomics, 'profitable' | 'withinGasPriceCap'>; enabled: boolean; execute: boolean; inFlight: boolean; paused: boolean; signerReady: boolean; withinDailyGasBudget: boolean }): SettlementDecision {
+/**
+ * Mirrors `opportunityDecision`: economic gates first, then operator state, so the queue explains why nothing was sent.
+ * `executionReady` is the position ledger's recovery gate: while a position's history or receipt recovery has failed, the
+ * daily budget cannot include that position's gas, so nothing that shares the budget may sign.
+ */
+export function settlementDecision(parameters: { economics: Pick<SettlementEconomics, 'profitable' | 'withinGasPriceCap'>; enabled: boolean; execute: boolean; executionReady: boolean; inFlight: boolean; paused: boolean; signerReady: boolean; withinDailyGasBudget: boolean }): SettlementDecision {
 	if (!parameters.economics.profitable) return 'unprofitable'
 	if (!parameters.economics.withinGasPriceCap) return 'gas-price-cap'
 	if (!parameters.withinDailyGasBudget) return 'risk-limit'
 	if (!parameters.enabled) return 'disabled'
 	if (!parameters.execute) return 'dry-run-settlement'
 	if (!parameters.signerReady) return 'signer-unavailable'
+	if (!parameters.executionReady) return 'history-unavailable'
 	if (parameters.paused) return 'paused'
 	if (parameters.inFlight) return 'in-flight'
 	return 'eligible'
@@ -98,6 +103,8 @@ export function rewardWithdrawalDecision(parameters: {
 	dailyGas: { limitAttoWeth: bigint; spentAttoWeth: bigint }
 	enabled: boolean
 	execute: boolean
+	/** The position ledger's recovery gate; a withdrawal shares the daily budget, so it waits like a settlement does. */
+	executionReady: boolean
 	gasPrice: bigint
 	inFlight: boolean
 	/** The signed fee ceiling; the budget is charged with it because that is what a delayed inclusion can pay. */
@@ -114,6 +121,7 @@ export function rewardWithdrawalDecision(parameters: {
 	if (!parameters.enabled) return 'disabled'
 	if (!parameters.execute) return 'dry-run'
 	if (!parameters.signerReady) return 'signer-unavailable'
+	if (!parameters.executionReady) return 'history-unavailable'
 	if (parameters.paused) return 'paused'
 	if (parameters.inFlight) return 'in-flight'
 	return 'due'
