@@ -5,7 +5,7 @@ import { executorDeploymentIntentPath } from '#execution/executor-deployment-sto
 import { validateSubmissionSettings, type SubmissionSettings } from '#execution/transaction-submission'
 import { validateConnectivitySettings, validateIndependentReadRpcUrls, type ConnectivitySettings, type NetworkName } from '#monitoring/connectivity'
 import { decimalWeth, parseDecimalWeth, updateStrategyFromRequest, type MutableStrategy, type StrategySettings } from '#state/operator-state'
-import { parseSettlementSettings, settlementSettings, type MutableSettlement, type SettlementSettings } from '#state/settlement-store'
+import { parseSettlementSettings, settlementJournalPath, settlementSettings, type MutableSettlement, type SettlementSettings } from '#state/settlement-store'
 import { renameAndSyncDirectory } from '@zoltar/bot-shared/config/durable-replacement'
 import { persistentPathIdentitiesMatch, persistentPathIdentity } from '@zoltar/bot-shared/config/persistent-path'
 import { assertCompatibleProfileProcessMode, chainSpecificPath } from '@zoltar/bot-shared/config/profiles'
@@ -158,6 +158,16 @@ function filePath(value: unknown, name: string) {
 	return value
 }
 
+/**
+ * Every file the runtime writes durable records to: the three configured journals plus the settlement journal, which is
+ * derived from the position file and must be isolated like the others so no configured path can alias it.
+ */
+export function durableJournalPaths(runtime: Pick<RuntimeSettings, 'historyFile' | 'positionFile' | 'priceHistoryFile'>) {
+	return [runtime.historyFile, runtime.positionFile, runtime.priceHistoryFile, settlementJournalPath(runtime.positionFile)]
+}
+
+const durableJournalPathsMustBeDistinct = 'Runtime historyFile, positionFile, priceHistoryFile, and the derived settlement journal must use distinct paths'
+
 function validateRuntimeSettings(value: unknown): RuntimeSettings {
 	const runtime = requiredRecord(value, 'Runtime settings')
 	const keys = ['execute', 'historyFile', 'lookbackBlocks', 'maxHedgeSlippageBps', 'once', 'positionFile', 'priceHistoryFile', 'riskLimits', 'ui', 'uiHost', 'uiPort']
@@ -176,8 +186,8 @@ function validateRuntimeSettings(value: unknown): RuntimeSettings {
 	const historyFile = filePath(runtime['historyFile'], 'Runtime historyFile')
 	const positionFile = filePath(runtime['positionFile'], 'Runtime positionFile')
 	const priceHistoryFile = filePath(runtime['priceHistoryFile'], 'Runtime priceHistoryFile')
-	const persistentPaths = [historyFile, positionFile, priceHistoryFile].map(path => resolve(path))
-	if (new Set(persistentPaths).size !== persistentPaths.length) throw new Error('Runtime historyFile, positionFile, and priceHistoryFile must use distinct paths')
+	const persistentPaths = durableJournalPaths({ historyFile, positionFile, priceHistoryFile }).map(path => resolve(path))
+	if (new Set(persistentPaths).size !== persistentPaths.length) throw new Error(durableJournalPathsMustBeDistinct)
 	return {
 		execute: runtime['execute'],
 		historyFile,
@@ -322,7 +332,7 @@ async function persistentPathIdentities(paths: readonly string[]) {
 }
 
 async function durableJournalIdentities(settings: PersistedOperatorSettings) {
-	return await persistentPathIdentities([settings.runtime.historyFile, settings.runtime.positionFile, settings.runtime.priceHistoryFile])
+	return await persistentPathIdentities(durableJournalPaths(settings.runtime))
 }
 
 function identitiesContainMatch(identities: readonly Awaited<ReturnType<typeof persistentPathIdentity>>[], target: Awaited<ReturnType<typeof persistentPathIdentity>>) {

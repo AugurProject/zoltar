@@ -163,6 +163,8 @@ describe('file-only startup configuration', () => {
 
 	test('rejects an operator file reused as a runtime persistence file', () => {
 		expect(() => assertDistinctPersistentPaths('/state/operator.json', { historyFile: '/state/history.jsonl', positionFile: '/state/positions.json', priceHistoryFile: '/state/nested/../operator.json' })).toThrow('must use distinct paths')
+		// The settlement journal is derived from the position file, so the operator file may not sit there either.
+		expect(() => assertDistinctPersistentPaths('/state/positions.json.settlements', { historyFile: '/state/history.jsonl', positionFile: '/state/positions.json', priceHistoryFile: '/state/prices.jsonl' })).toThrow('must use distinct paths')
 	})
 
 	test('rejects every command-line argument', async () => {

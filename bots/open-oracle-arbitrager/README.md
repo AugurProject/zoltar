@@ -1177,6 +1177,9 @@ on disputes in mind when running in public mode.
 Every signed settlement and reward withdrawal is journaled in
 `<positionFile>.settlements` (append-only, chain-scoped) with its nonce and durable
 intent, and shown under **Settlement history** with its projected and actual gas.
+That derived path is isolated like the configured journals: no configured runtime
+file, the operator settings file, or a dormant chain profile's journal may resolve
+to it, through symlinks or otherwise.
 Each scan reconciles records left `pending` by an interrupted process before any
 candidate is judged against the daily budget: a receipt resolves the attempt, and
 because a public transaction has no on-chain deadline an attempt without a receipt
