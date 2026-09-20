@@ -6,7 +6,7 @@ import { join } from 'node:path'
 import { privateKeyToAccount, type Address, type Hex } from '@zoltar/bot-shared/ethereum'
 import { createSignerOperationGate } from '@zoltar/bot-shared/execution/signer-operation-gate'
 import { loadConfiguration } from '#config/configuration'
-import { createDeploymentManifest } from '#config/deployment-auth'
+import { createDeploymentManifest } from '../helpers/deployment-manifest.ts'
 import { canonicalSecurityPoolFactory } from '#config/network'
 import { loadOperatorSettings, parseOperatorSettings, saveOperatorSettings } from '#config/settings-store'
 import type { ExecutionLockManager } from '#execution/execution-locks'
@@ -233,12 +233,11 @@ test('execution mode requires a startable live configuration and an active signe
 	expect(withoutQuorum.locks.acquired).toEqual([])
 
 	const withoutManifest = await startControlPlane({ privateKey: `0x${'11'.repeat(32)}`, quorumRpcUrls: ['https://quorum-one.example/', 'https://quorum-two.example/'] })
-	const unverifiable = await withoutManifest.put('/api/execution', { execute: true })
-	expect(unverifiable.status).toBe(400)
-	expect(await unverifiable.json()).toEqual({ error: 'Execution is enabled, but deployment.deploymentManifest is not configured' })
-	expect(withoutManifest.pending.execute).toBeUndefined()
-	expect(withoutManifest.locks.acquired).toEqual([])
-	expect((await loadOperatorSettings(withoutManifest.settingsFile))?.runtime.execute).toBe(false)
+	const armedWithoutManifest = await withoutManifest.put('/api/execution', { execute: true })
+	expect(armedWithoutManifest.status, await armedWithoutManifest.clone().text()).toBe(200)
+	expect(withoutManifest.pending.execute).toBe(true)
+	expect(withoutManifest.locks.acquired).toHaveLength(1)
+	expect((await loadOperatorSettings(withoutManifest.settingsFile))?.runtime.execute).toBe(true)
 
 	const withoutSigner = await startControlPlane({ manifest: true, quorumRpcUrls: ['https://quorum-one.example/', 'https://quorum-two.example/'] })
 	const unsigned = await withoutSigner.put('/api/execution', { execute: true })

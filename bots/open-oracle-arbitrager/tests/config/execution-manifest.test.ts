@@ -1,5 +1,5 @@
 import { afterEach, expect, test } from 'bun:test'
-import { mkdtemp, readFile, rm } from 'node:fs/promises'
+import { mkdtemp, writeFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { keccak256, type Hex } from '@zoltar/bot-shared/ethereum'
@@ -38,16 +38,16 @@ async function run(arguments_: readonly string[]) {
 	return { exitCode, output: `${stdout}${stderr}` }
 }
 
-test('generates and verifies every execution-manifest bytecode identity', async () => {
+test('verifies independently supplied bytecode pins and rejects RPC generation', async () => {
 	const directory = await mkdtemp(join(tmpdir(), 'zoltar-execution-manifest-'))
 	directories.push(directory)
 	const manifest = join(directory, 'manifest.json')
 	const address = '0x0000000000000000000000000000000000000001'
 	const code = '0x6001' as Hex
 	const generate = await run(['generate', '--network=sepolia', `--rpc-url=${rpc(code)}`, `--contract=executor:${address}`, `--output=${manifest}`])
-	expect(generate.exitCode, generate.output).toBe(0)
-	const parsed = JSON.parse(await readFile(manifest, 'utf8')) as { contracts: { runtimeCodeHash: string }[] }
-	expect(parsed.contracts[0]?.runtimeCodeHash).toBe(keccak256(code))
+	expect(generate.exitCode).toBe(1)
+	expect(generate.output).toContain('RPC-derived manifest generation is not supported')
+	await writeFile(manifest, JSON.stringify({ version: 1, network: 'sepolia', chainId: 11155111, contracts: [{ address, role: 'executor', runtimeCodeHash: keccak256(code) }] }))
 	const verify = await run(['verify', `--rpc-url=${rpc(code)}`, `--manifest=${manifest}`])
 	expect(verify.exitCode, verify.output).toBe(0)
 	const mismatch = await run(['verify', `--rpc-url=${rpc('0x6002')}`, `--manifest=${manifest}`])

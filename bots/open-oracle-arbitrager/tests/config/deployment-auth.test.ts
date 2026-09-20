@@ -1,6 +1,7 @@
+import { createDeploymentManifest } from '../helpers/deployment-manifest.ts'
 import { describe, expect, test } from 'bun:test'
 import { getAddress, keccak256, type Address, type Hex } from '@zoltar/bot-shared/ethereum'
-import { authenticateDeploymentManifest, createDeploymentManifest, parseDeploymentManifest, parseDeploymentRole, verifyDeploymentManifest, type DeploymentManifest } from '#config/deployment-auth'
+import { authenticateDeploymentManifest, parseDeploymentManifest, verifyDeploymentManifest, type DeploymentManifest } from '#config/deployment-auth'
 
 const openOracle = getAddress('0x0000000000000000000000000000000000000001')
 const executor = getAddress('0x0000000000000000000000000000000000000002')
@@ -67,9 +68,10 @@ describe('deployment authentication', () => {
 	})
 
 	test('recognizes the separately authenticated Uniswap execution roles', () => {
-		expect(parseDeploymentRole('uniswap-v2-router')).toBe('uniswap-v2-router')
-		expect(parseDeploymentRole('uniswap-v4-pool-manager')).toBe('uniswap-v4-pool-manager')
-		expect(parseDeploymentRole('uniswap-v4-quoter')).toBe('uniswap-v4-quoter')
+		for (const role of ['uniswap-v2-router', 'uniswap-v4-pool-manager', 'uniswap-v4-quoter'] as const) {
+			const parsed = parseDeploymentManifest({ ...manifest, contracts: [...manifest.contracts, { address: executor, role, runtimeCodeHash: keccak256(executorCode) }] })
+			expect(parsed.contracts.at(-1)?.role).toBe(role)
+		}
 	})
 
 	test('rejects manifests for another chain and duplicate identities', () => {

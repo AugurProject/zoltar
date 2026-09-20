@@ -28,8 +28,10 @@ export async function discoverCoordinatorPolicies(clients: readonly ReadClient[]
 				}
 				await assertBlock()
 				if (config.execute) {
-					if (config.deploymentManifest === undefined) throw new Error('Pool discovery requires an authenticated factory manifest')
-					await authenticateDeploymentManifest(config.deploymentManifest, { chainId: config.network.chain.id, network: config.network.name, required: [{ address: factory, role: 'security-pool-factory' }], readCode: address => client.getCode({ address, blockNumber }) })
+					const code = await client.getCode({ address: factory, blockNumber })
+					if (code === undefined || code === '0x') throw new Error('Canonical security pool factory is not deployed')
+					const manifest = config.deploymentManifest
+					if (manifest !== undefined) await authenticateDeploymentManifest(manifest, { chainId: config.network.chain.id, network: config.network.name, required: manifest.contracts.filter(entry => entry.address.toLowerCase() === factory.toLowerCase()), readCode: address => client.getCode({ address, blockNumber }) })
 				}
 				const count = await client.readContract({ address: factory, abi: securityPoolFactoryAbi, functionName: 'securityPoolDeploymentCount', blockNumber })
 				if (count > 10_000n) throw new Error('Security pool registry exceeds the discovery limit')

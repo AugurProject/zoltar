@@ -5,7 +5,7 @@ import { rpcFailureWithContext, type Address, type TransactionLog } from '@zolta
 import { OPEN_ORACLE_FLAG_STORE_ALL, OPEN_ORACLE_FLAG_TIME_TYPE, OPEN_ORACLE_FLAG_TRACK_DISPUTES, OPEN_ORACLE_REPORT_SETTLED_TOPIC } from '@zoltar/open-oracle-shared/openOracle/openOracle'
 import { openOraclePriceCoordinatorAbi } from '#contracts/abi'
 import { type Configuration } from '#config/configuration'
-import { authenticateDeploymentManifest, validateDeploymentManifestRequirements, type DeploymentRole } from '#config/deployment-auth'
+import { authenticateDeploymentManifest, type DeploymentRole } from '#config/deployment-auth'
 import { coordinatorPolicySafetyMismatch, retainedReportIds, type CoordinatorGamePolicy } from '#core/game-policy'
 import { applyLogs, logBlockNumber, reportId, type ActiveReport } from '#monitoring/oracle-log-state'
 import { compactFinalityWindow } from '@zoltar/bot-shared/monitoring/resilience'
@@ -70,19 +70,12 @@ function requiredDeploymentIdentities(config: Configuration) {
 	return identities
 }
 
-export function authenticatedExecutionToken(config: Configuration, token: Address) {
-	if (!config.execute) return true
-	return config.deploymentManifest?.contracts.some(entry => entry.role === 'token' && entry.address.toLowerCase() === token.toLowerCase()) === true
-}
-
 export async function authenticateConfiguredDeployments(clients: readonly ReadClient[], config: Configuration) {
 	if (!config.execute) return
 	const executor = canonicalExecutorIdentity()
 	if (config.executor?.toLowerCase() !== executor.address.toLowerCase()) throw new Error('Executor must use the canonical derived address')
 	const manifest = config.deploymentManifest
-	if (manifest === undefined) throw new Error('Execution requires an authenticated deployment manifest')
-	const required = [...requiredDeploymentIdentities(config), ...manifest.contracts.map(contract => ({ address: contract.address, role: contract.role }))]
-	validateDeploymentManifestRequirements(manifest, { chainId: config.network.chain.id, network: config.network.name, required })
+	const required = requiredDeploymentIdentities(config)
 	const endpoints = [config.connectivity.readRpcUrl, ...config.quorumRpcUrls]
 	await settledQuorumValue(
 		'Deployment authentication',
@@ -91,12 +84,17 @@ export async function authenticateConfiguredDeployments(clients: readonly ReadCl
 			try {
 				const executorCode = await client.getCode({ address: executor.address })
 				if (executorCode === undefined || keccak256(executorCode) !== executor.runtimeCodeHash) throw new Error('Canonical executor is missing or has unexpected bytecode; deploy the bundled executor')
-				await authenticateDeploymentManifest(manifest, {
-					chainId: config.network.chain.id,
-					network: config.network.name,
-					readCode: address => client.getCode({ address }),
-					required,
-				})
+				for (const identity of required) {
+					const code = await client.getCode({ address: identity.address })
+					if (code === undefined || code === '0x') throw new Error(`Canonical ${identity.role} ${identity.address} is not deployed`)
+				}
+				if (manifest !== undefined)
+					await authenticateDeploymentManifest(manifest, {
+						chainId: config.network.chain.id,
+						network: config.network.name,
+						readCode: address => client.getCode({ address }),
+						required: manifest.contracts,
+					})
 			} catch (error) {
 				throw rpcFailureWithContext(error, endpoint, 'eth_getCode')
 			}

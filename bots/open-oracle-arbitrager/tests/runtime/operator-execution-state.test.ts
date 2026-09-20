@@ -1,7 +1,7 @@
 import { emptySettlementSnapshot } from '#state/settlement-store'
 import { canonicalExecutorIdentity } from '#execution/executor-identity'
 import { executorArtifact } from '#contracts/artifacts.generated'
-import { canonicalSecurityPoolFactory } from '#config/network'
+import { canonicalSecurityPoolFactory, networkConfiguration } from '#config/network'
 import { afterEach, describe, expect, test } from 'bun:test'
 import { copyFile, mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -10,7 +10,7 @@ import type { MarketConsensusEstimate, MarketConsensusObservation } from '@zolta
 import { createPublicClient } from '@zoltar/bot-shared/ethereum'
 import { custom } from '@zoltar/bot-shared/ethereum/rpc-transport'
 import { authenticateConfiguredDeployments } from '#config/runtime-deployment'
-import { createDeploymentManifest } from '#config/deployment-auth'
+import { createDeploymentManifest } from '../helpers/deployment-manifest.ts'
 import { validateDeploymentSettings } from '#config/deployment-settings'
 import { loadConfiguration, runnableOperatorSettings } from '#config/configuration'
 import type { OperatorState } from '#state/operator-state'
@@ -193,25 +193,13 @@ describe('queued operator execution settings', () => {
 	})
 })
 
-test('V4-only execution starts and authenticates without V3 deployment identities', async () => {
+test('V4-only execution starts and authenticates without a manifest or V3 deployment identities', async () => {
 	const config = await exampleConfiguration()
 	const deployment = validateDeploymentSettings({ coordinatorAddresses: [config.openOracle], executor: config.openOracle, quorumRpcUrls: ['https://second.example', 'https://third.example'], uniswapV2Enabled: false, uniswapV3Enabled: false, uniswapV4Enabled: true }, config.network.name)
 	const manager = deployment.uniswapV4PoolManager
 	const quoter = deployment.uniswapV4Quoter
 	if (manager === undefined || quoter === undefined) throw new Error('Expected the canonical V4 pair')
-	const manifest = createDeploymentManifest(
-		config.network.name,
-		config.network.chain.id,
-		[
-			{ address: config.openOracle, role: 'open-oracle' },
-			{ address: canonicalSecurityPoolFactory(config.network.name), role: 'security-pool-factory' },
-			{ address: config.network.weth, role: 'weth' },
-			{ address: manager, role: 'uniswap-v4-pool-manager' },
-			{ address: quoter, role: 'uniswap-v4-quoter' },
-		],
-		async () => '0x01',
-	)
-	const settings = { ...config.operatorSettings, rpcQuorum: 2 as const, deployment: { ...deployment, deploymentManifest: await manifest }, runtime: { ...config.operatorSettings.runtime, execute: true } }
+	const settings = { ...config.operatorSettings, rpcQuorum: 2 as const, deployment, runtime: { ...config.operatorSettings.runtime, execute: true } }
 	expect(runnableOperatorSettings(config.settingsFile, settings).deployment.uniswapRouter).toBeUndefined()
 	const reads: string[] = []
 	const client = createPublicClient({
@@ -245,16 +233,36 @@ test('V4-only execution starts and authenticates without V3 deployment identitie
 for (const code of ['0x', '0x01'] as const)
 	test(`rejects canonical executor with missing or wrong code (${code})`, async () => {
 		const config = await exampleConfiguration()
-		const deploymentManifest = await createDeploymentManifest(
-			config.network.name,
-			config.network.chain.id,
-			[
-				{ address: config.openOracle, role: 'open-oracle' },
-				{ address: config.network.weth, role: 'weth' },
-				{ address: canonicalSecurityPoolFactory(config.network.name), role: 'security-pool-factory' },
-			],
-			async () => '0x01',
-		)
 		const client = createPublicClient({ chain: config.network.chain, transport: custom({ request: async () => code }) })
-		await expect(authenticateConfiguredDeployments([client], { ...config, execute: true, router: undefined, v2Router: undefined, v4PoolManager: undefined, v4Quoter: undefined, deploymentManifest })).rejects.toThrow('Canonical executor is missing or has unexpected bytecode')
+		await expect(authenticateConfiguredDeployments([client], { ...config, execute: true, router: undefined, v2Router: undefined, v4PoolManager: undefined, v4Quoter: undefined, deploymentManifest: undefined })).rejects.toThrow('Canonical executor is missing or has unexpected bytecode')
+	})
+
+for (const name of ['mainnet', 'sepolia'] as const)
+	test(`canonical ${name} deployment checks work without pins and reject every missing required contract`, async () => {
+		const base = await exampleConfiguration()
+		const deployment = validateDeploymentSettings({ quorumRpcUrls: [], uniswapV2Enabled: true, uniswapV3Enabled: true, uniswapV4Enabled: false }, name)
+		const config = { ...base, network: networkConfiguration(name), openOracle: deployment.openOracle, router: deployment.uniswapRouter, v2Router: deployment.uniswapV2Router, execute: true, deploymentManifest: undefined }
+		const expected = [config.openOracle, config.network.weth, canonicalSecurityPoolFactory(config.network.name), config.network.factory, config.network.quoter, config.router, config.v2Router].filter(address => address !== undefined)
+		let missing: string | undefined
+		const reads = new Set<string>()
+		const client = createPublicClient({
+			chain: config.network.chain,
+			transport: custom({
+				request: async ({ method, params }) => {
+					if (method !== 'eth_getCode' || !Array.isArray(params) || typeof params[0] !== 'string') throw new Error('Unexpected deployment read')
+					const address = params[0].toLowerCase()
+					reads.add(address)
+					if (address === canonicalExecutorIdentity().address.toLowerCase()) return `0x${executorArtifact.evm.deployedBytecode.object}`
+					return address === missing ? '0x' : '0x01'
+				},
+			}),
+		})
+		await authenticateConfiguredDeployments([client], config)
+		const pins = await createDeploymentManifest(name, config.network.chain.id, [{ address: config.openOracle, role: 'open-oracle' }], async () => '0x02')
+		await expect(authenticateConfiguredDeployments([client], { ...config, deploymentManifest: pins })).rejects.toThrow('runtime bytecode hash')
+		for (const address of expected) {
+			expect(reads.has(address.toLowerCase())).toBe(true)
+			missing = address.toLowerCase()
+			await expect(authenticateConfiguredDeployments([client], config)).rejects.toThrow('is not deployed')
+		}
 	})

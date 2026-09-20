@@ -1,6 +1,6 @@
 import { emptySettlementSnapshot, parseSettlementSettings, settlementSettings, settlementSnapshot } from '#state/settlement-store'
 import { canonicalExecutorIdentity } from '#execution/executor-identity'
-import { createDeploymentManifest } from '#config/deployment-auth'
+import { createDeploymentManifest } from '../helpers/deployment-manifest.ts'
 import { canonicalSecurityPoolFactory } from '#config/network'
 import { afterEach, expect, test } from 'bun:test'
 import { Browser, type BrowserWindow, type Element } from 'happy-dom'
@@ -633,7 +633,7 @@ test('focused risk, settlement, execution, and market forms load the saved confi
 	expect(element(window, 'usage-positions', window.HTMLElement).textContent).toBe('0 / 1')
 	expect(element(window, 'settlement-panel-summary', window.HTMLElement).textContent).toBe('Disabled · 0 reports awaiting settlement')
 	const checklist = () => Array.from(element(window, 'execution-checklist', window.HTMLUListElement).children, item => `${item.getAttribute('data-ready') ?? ''}:${item.querySelector('.readiness-label')?.textContent ?? ''}`)
-	expect(checklist()).toEqual(['false:Execution signer', 'false:Execution manifest', 'true:Independent quorum RPCs', 'true:Trading venue', 'true:Delivery'])
+	expect(checklist()).toEqual(['false:Execution signer', 'true:Independent quorum RPCs', 'true:Trading venue', 'true:Delivery'])
 	expect(element(window, 'execution-mode-summary', window.HTMLElement).textContent).toBe('Dry run · prerequisites missing')
 	expect(element(window, 'execution-enabled', window.HTMLInputElement).disabled).toBe(true)
 	const marketRows = () => Array.from(element(window, 'market-source-rows', window.HTMLTableSectionElement).querySelectorAll('tr'))
@@ -841,10 +841,10 @@ test('go-live checklist unlocks the switch once every prerequisite holds, report
 	const { page, window } = await mountDashboard(server, '/settings')
 	const checklistReady = () => Array.from(element(window, 'execution-checklist', window.HTMLUListElement).children, item => item.getAttribute('data-ready'))
 	for (let attempt = 0; attempt < 100 && checklistReady().length === 0; attempt++) await Bun.sleep(10)
-	expect(checklistReady()).toEqual(['true', 'true', 'true', 'true', 'true'])
+	expect(checklistReady()).toEqual(['true', 'true', 'true', 'true'])
 	expect(element(window, 'execution-mode-summary', window.HTMLElement).textContent).toBe('Dry run · ready to go live')
 	expect(element(window, 'execution-enabled', window.HTMLInputElement).disabled).toBe(false)
-	expect(element(window, 'manifest-summary', window.HTMLElement).textContent).toBe('Configured')
+	expect(element(window, 'manifest-summary', window.HTMLElement).textContent).toBe('Additional bytecode pins configured')
 	expect(element(window, 'quorum-rpc-urls', window.HTMLTextAreaElement).value).toBe('https://quorum-one.example/\nhttps://quorum-two.example/')
 
 	const submit = async (formId: string, statusId: string, pendingPrefix: string) => {
@@ -901,4 +901,11 @@ test('go-live checklist unlocks the switch once every prerequisite holds, report
 	const universeSave = element(window, 'tokens-form', window.HTMLFormElement).querySelector('button[type="submit"]')
 	if (!(universeSave instanceof window.HTMLButtonElement)) throw new Error('Missing universe save button')
 	expect(universeSave.disabled).toBe(true)
+	// Clearing optional pins must not reintroduce a live-execution prerequisite.
+	element(window, 'deployment-manifest', window.HTMLTextAreaElement).value = ''
+	element(window, 'manifest-form', window.HTMLFormElement).dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }))
+	for (let attempt = 0; attempt < 100 && settings.deployment.deploymentManifest !== undefined; attempt++) await Bun.sleep(10)
+	expect(settings.deployment.deploymentManifest).toBeUndefined()
+	expect(checklistReady()).toEqual(['true', 'true', 'true', 'true'])
+	expect(element(window, 'execution-enabled', window.HTMLInputElement).disabled).toBe(false)
 })

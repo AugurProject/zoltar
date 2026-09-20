@@ -20,7 +20,7 @@ const networkChainIds = {
 	sepolia: 11_155_111,
 } as const
 
-export function parseDeploymentRole(value: string): DeploymentRole {
+function parseDeploymentRole(value: string): DeploymentRole {
 	if (!roles.has(value as DeploymentRole)) throw new Error(`Unsupported deployment role: ${value}`)
 	return value as DeploymentRole
 }
@@ -42,7 +42,7 @@ export function parseDeploymentManifest(value: unknown): DeploymentManifest {
 		if (typeof contract['role'] !== 'string' || !roles.has(contract['role'] as DeploymentRole)) throw new Error('Deployment contract role is unsupported')
 		if (typeof contract['address'] !== 'string' || !isAddress(contract['address'])) throw new Error('Deployment contract address is invalid')
 		if (typeof contract['runtimeCodeHash'] !== 'string' || !/^0x[0-9a-fA-F]{64}$/.test(contract['runtimeCodeHash'])) throw new Error('Deployment runtime code hash must be bytes32')
-		const role = contract['role'] as DeploymentRole
+		const role = parseDeploymentRole(contract['role'])
 		const address = getAddress(contract['address'])
 		const identity = `${role}:${address.toLowerCase()}`
 		if (identities.has(identity)) throw new Error(`Duplicate deployment identity: ${identity}`)
@@ -78,25 +78,12 @@ export async function authenticateDeploymentManifest(
 	}
 }
 
-export function validateDeploymentManifestRequirements(manifest: DeploymentManifest, parameters: { chainId: number; network: DeploymentManifest['network']; required: readonly { address: Address; role: DeploymentRole }[] }) {
+function validateDeploymentManifestRequirements(manifest: DeploymentManifest, parameters: { chainId: number; network: DeploymentManifest['network']; required: readonly { address: Address; role: DeploymentRole }[] }) {
 	if (manifest.chainId !== parameters.chainId || manifest.network !== parameters.network) throw new Error(`Deployment manifest targets ${manifest.network} chain ${manifest.chainId.toString()}`)
 	for (const requirement of parameters.required) {
 		const entry = manifest.contracts.find(candidate => candidate.role === requirement.role && candidate.address.toLowerCase() === requirement.address.toLowerCase())
 		if (entry === undefined) throw new Error(`Deployment manifest is missing ${requirement.role} ${requirement.address}`)
 	}
-}
-
-export async function createDeploymentManifest(network: DeploymentManifest['network'], chainId: number, contracts: readonly { address: Address; role: DeploymentRole }[], readCode: (address: Address) => Promise<Hex | undefined>): Promise<DeploymentManifest> {
-	if (!Number.isSafeInteger(chainId) || chainId <= 0) throw new Error('Deployment manifest chainId must be a positive integer')
-	if (contracts.length === 0) throw new Error('Deployment manifest must contain contracts')
-	const entries = await Promise.all(
-		contracts.map(async contract => {
-			const code = await readCode(contract.address)
-			if (code === undefined || code === '0x') throw new Error(`Cannot generate manifest: ${contract.role} ${contract.address} has no runtime bytecode`)
-			return { ...contract, runtimeCodeHash: keccak256(code) }
-		}),
-	)
-	return parseDeploymentManifest({ chainId, contracts: entries, network, version: 1 })
 }
 
 export function verifyDeploymentManifest(manifest: DeploymentManifest, readCode: (address: Address) => Promise<Hex | undefined>) {

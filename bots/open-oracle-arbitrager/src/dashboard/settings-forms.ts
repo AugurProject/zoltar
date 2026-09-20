@@ -93,7 +93,7 @@ export function loadDeployment(deployment: DashboardDeployment, source?: Deploym
 		element('deployment-manifest', HTMLTextAreaElement).value = deployment.deploymentManifest === undefined ? '' : prettyJson(deployment.deploymentManifest)
 		markFormClean('manifest-form')
 	}
-	setText('manifest-summary', deployment.deploymentManifest === undefined ? 'Missing · required before live execution' : 'Configured')
+	setText('manifest-summary', deployment.deploymentManifest === undefined ? 'Optional' : 'Additional bytecode pins configured')
 }
 
 /** The RPC endpoints form saved new quorum URLs; they live in the deployment section, so the loaded copy follows. */
@@ -291,7 +291,7 @@ export function registerFocusedSettingsForms({ api, refresh, syncControls }: Foc
 			const manifestText = element('deployment-manifest', HTMLTextAreaElement).value.trim()
 			const deploymentManifest: unknown = manifestText === '' ? null : JSON.parse(manifestText)
 			loadDeployment(decodeDeployment(await put('/api/deployment', { deploymentManifest })).deployment, 'manifest-form')
-			return manifestText === '' ? 'Manifest removed. Live execution stays unavailable until one is saved.' : 'Manifest saved.'
+			return manifestText === '' ? 'Optional bytecode pins removed. Canonical deployment checks remain active.' : 'Manifest saved.'
 		})
 	})
 }

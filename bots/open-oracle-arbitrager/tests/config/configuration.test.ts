@@ -532,10 +532,7 @@ describe('file-only startup configuration', () => {
 			network: 'mainnet',
 			version: 1,
 		})
-		for (const [field, missingValue] of [
-			['uniswapV3Enabled', false],
-			['deploymentManifest', undefined],
-		] as const) {
+		for (const [field, missingValue] of [['uniswapV3Enabled', false]] as const) {
 			const invalidProfile = structuredClone(executableMainnetProfile)
 			const invalidDeployment = Reflect.get(invalidProfile, 'deployment')
 			if (typeof invalidDeployment !== 'object' || invalidDeployment === null || Array.isArray(invalidDeployment)) throw new Error('Executable deployment fixture is missing')

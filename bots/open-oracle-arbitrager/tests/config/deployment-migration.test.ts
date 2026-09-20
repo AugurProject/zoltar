@@ -9,7 +9,7 @@ import { canonicalCoreDeployment, canonicalUniswapDeployment } from '@zoltar/bot
 import { createPublicClient, getAddress } from '@zoltar/bot-shared/ethereum'
 import { custom } from '@zoltar/bot-shared/ethereum/rpc-transport'
 import { loadConfiguration } from '#config/configuration'
-import { createDeploymentManifest } from '#config/deployment-auth'
+import { createDeploymentManifest } from '../helpers/deployment-manifest.ts'
 import { validateDeploymentSettings } from '#config/deployment-settings'
 import { networkConfiguration } from '#config/network'
 import { authenticateConfiguredDeployments } from '#config/runtime-deployment'
@@ -33,7 +33,7 @@ for (const [name, v3, v4] of [
 	['V3 and V4', true, true],
 	['V4-only', false, true],
 ] as const) {
-	test(`migrates a legacy ${name} profile without changing venue intent or manifest requirements`, async () => {
+	test(`migrates a legacy ${name} profile without changing venue intent or additional bytecode pins`, async () => {
 		const directory = await mkdtemp(join(tmpdir(), 'arbitrager-venue-migration-'))
 		temporaryDirectories.push(directory)
 		const path = join(directory, 'operator.json')
