@@ -18,11 +18,12 @@ test('validates settings and submission envelopes before populating forms', () =
 
 test('rejects malformed chain and deployment responses before changing local configuration', () => {
 	const connectivity = { publicRpcUrls: ['https://rpc.example'], readRpcUrl: 'https://rpc.example' }
-	expect(decodeConnectivity({ connectivity, network: 'sepolia', rpcQuorum: 2 }).network).toBe('sepolia')
+	expect(decodeConnectivity({ connectivity, network: 'sepolia', quorumRpcUrls: ['https://quorum.example'], rpcQuorum: 2 }).quorumRpcUrls).toEqual(['https://quorum.example'])
 	for (const value of [
-		{ connectivity, network: 'other', rpcQuorum: 1 },
-		{ connectivity, network: 'mainnet', rpcQuorum: '1' },
-		{ connectivity: { ...connectivity, publicRpcUrls: [3] }, network: 'mainnet', rpcQuorum: 1 },
+		{ connectivity, network: 'other', quorumRpcUrls: [], rpcQuorum: 1 },
+		{ connectivity, network: 'mainnet', quorumRpcUrls: [], rpcQuorum: '1' },
+		{ connectivity, network: 'mainnet', rpcQuorum: 1 },
+		{ connectivity: { ...connectivity, publicRpcUrls: [3] }, network: 'mainnet', quorumRpcUrls: [], rpcQuorum: 1 },
 	])
 		expect(() => decodeConnectivity(value)).toThrow('invalid connectivity response')
 	const deployment = { uniswapV2Enabled: false, uniswapV3Enabled: true, uniswapV4Enabled: false, quorumRpcUrls: [] }

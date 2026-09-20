@@ -1,6 +1,10 @@
 import { renderRepMarketConsensusError, renderRepMarketConsensusPanel } from '@zoltar/bot-shared/dashboard/rep-market-consensus'
 import { isSnapshot } from './snapshot-validation.ts'
-import { decodeSettings, decodeSubmission, decodeDeployment, decodeConnectivity, decodePrediction, decodeExecutorDeployment, isStrategySettings, isSubmissionSettings, isDeploymentSettings, isStringArray, type DashboardDeployment } from './api-validation.ts'
+import { decodeConnectivity, decodePrediction, decodeExecutorDeployment, isRuntimeLimits, isSettlementSettings, isStrategySettings, isSubmissionSettings, isDeploymentSettings, isStringArray } from './api-validation.ts'
+import { applyQuorumRpcUrls, loadCentralizedMarkets, loadDeployment, loadExecutionMode, loadRuntimeLimits, loadSettings, loadSettlement, loadSubmission, registerFocusedSettingsForms, setLoadedRpcQuorum } from './settings-forms.ts'
+import { formIsSubmitting, markFormClean, refreshAllFormButtons, refreshFormButton, setFormSubmitting, trackForm } from './form-state.ts'
+import { renderSettingsInsights } from './settings-insights.ts'
+import { createSettingsNavigation } from './settings-navigation.ts'
 import { createUniverseExplorer } from '@zoltar/bot-shared/dashboard/universe-explorer'
 let approvedUniverseIds = new Set<string>()
 let universeSavePending = false
@@ -13,7 +17,7 @@ import { closeResumePreflight, openResumePreflight } from '@zoltar/bot-shared/da
 import { createSectionNavigation } from '@zoltar/bot-shared/dashboard/section-navigation'
 import { urlLines } from '@zoltar/bot-shared/dashboard/forms'
 import type { ConnectivitySettings } from '#monitoring/connectivity'
-import type { PublicExecutionRecord, PublicOperationEntry, PublicOperatorSnapshot, PublicPositionRecord, PublicTransactionActivity, StrategySettings } from '#state/operator-state'
+import type { PublicExecutionRecord, PublicOperationEntry, PublicOperatorSnapshot, PublicPositionRecord, PublicTransactionActivity } from '#state/operator-state'
 import type { OpportunitySnapshot } from '#state/opportunity-snapshot'
 import {
 	amount,
@@ -44,7 +48,6 @@ import {
 import { venueLabel } from '#core/venue-strategy'
 import { decisionBadge, element, explorerLink, headingRow, row, setText, shorten } from './dom.js'
 import { renderSettlements } from './settlement-panel.js'
-import type { SubmissionSettings } from '#execution/transaction-submission'
 
 const SVG_NAMESPACE = 'http://www.w3.org/2000/svg'
 let latestSnapshot: PublicOperatorSnapshot | undefined
@@ -59,6 +62,7 @@ let profileSwitchTimedOut = false
 let profileRequestEpoch = 0
 let deploymentLoaded = false
 let tokensLoaded = false
+let focusedRuntimeLoaded = false
 let configurationLoaded = false
 let configurationLoading = false
 let configurationLoadError: string | undefined
@@ -99,26 +103,30 @@ function setControlsEnabled(enabled: boolean) {
 	if (!mutationsEnabled) closeResumePreflight()
 	const fieldset = element('strategy-fieldset')
 	if (!(fieldset instanceof HTMLFieldSetElement)) throw new Error('Missing strategy fieldset')
-	fieldset.disabled = !focusedSettingsEnabled || !settingsLoaded
+	fieldset.disabled = !focusedSettingsEnabled || !settingsLoaded || formIsSubmitting('strategy-form')
 	const submissionFieldset = element('submission-fieldset')
 	if (!(submissionFieldset instanceof HTMLFieldSetElement)) throw new Error('Missing submission fieldset')
-	submissionFieldset.disabled = !focusedSettingsEnabled || !submissionLoaded
-	for (const id of ['connectivity-fieldset', 'deployment-fieldset', 'create2-fieldset', 'signer-fieldset', 'tokens-fieldset']) {
+	submissionFieldset.disabled = !focusedSettingsEnabled || !submissionLoaded || formIsSubmitting('submission-form')
+	for (const id of ['connectivity-fieldset', 'deployment-fieldset', 'manifest-fieldset', 'create2-fieldset', 'signer-fieldset', 'tokens-fieldset', 'runtime-fieldset', 'settlement-fieldset', 'execution-fieldset', 'market-fieldset']) {
 		const fieldset = element(id)
 		if (!(fieldset instanceof HTMLFieldSetElement)) throw new Error(`Missing ${id}`)
 		if (id === 'connectivity-fieldset') fieldset.disabled = connectivityControlsDisabled(configurationEnabled, connectivityRequestPending) || !connectivityLoaded
-		else if (id === 'deployment-fieldset' || id === 'create2-fieldset') fieldset.disabled = !focusedSettingsEnabled || !deploymentLoaded
+		else if (id === 'deployment-fieldset' || id === 'manifest-fieldset' || id === 'create2-fieldset') fieldset.disabled = !focusedSettingsEnabled || !deploymentLoaded
 		else if (id === 'tokens-fieldset') fieldset.disabled = !focusedSettingsEnabled || !tokensLoaded || universeSavePending
-		else fieldset.disabled = !focusedSettingsEnabled
+		else if (id === 'signer-fieldset') fieldset.disabled = !focusedSettingsEnabled
+		else fieldset.disabled = !focusedSettingsEnabled || !focusedRuntimeLoaded
+		// A save in flight keeps its fieldset locked regardless of the connection state so later edits cannot be lost.
+		if (formIsSubmitting(id.replace(/-fieldset$/, '-form'))) fieldset.disabled = true
 	}
 	element('network-name', HTMLSelectElement).disabled = !enabled || pendingNetworkProfile !== undefined || persistedNetwork === undefined
 	updateConfigurationControls()
+	refreshAllFormButtons()
 }
 
 function updateConfigurationControls() {
 	const fieldset = element('configuration-fieldset')
 	if (!(fieldset instanceof HTMLFieldSetElement)) throw new Error('Missing configuration fieldset')
-	fieldset.disabled = !connected || pendingNetworkProfile !== undefined || !configurationLoaded || latestSnapshot?.networkConfigured !== true || configurationLoading
+	fieldset.disabled = !connected || pendingNetworkProfile !== undefined || !configurationLoaded || latestSnapshot?.networkConfigured !== true || configurationLoading || formIsSubmitting('configuration-form')
 	element('reload-configuration-button', HTMLButtonElement).disabled = !connected || (pendingNetworkProfile !== undefined && !profileSwitchTimedOut) || configurationLoading
 	const profileRetry = element('profile-switch-retry-button', HTMLButtonElement)
 	profileRetry.hidden = !profileSwitchTimedOut
@@ -166,6 +174,7 @@ function synchronizePersistedConnectivity(configuration: unknown) {
 	const rpcQuorum = typeof configuration === 'object' && configuration !== null && !Array.isArray(configuration) ? Reflect.get(configuration, 'rpcQuorum') : undefined
 	if (rpcQuorum !== 1 && rpcQuorum !== 2) throw new Error('Bot returned an invalid RPC quorum setting')
 	element('rpc-quorum', HTMLSelectElement).value = rpcQuorum.toString()
+	setLoadedRpcQuorum(rpcQuorum)
 	const focused = persistedConnectivity(configuration)
 	if (focused === undefined) {
 		element('read-rpc-url', HTMLInputElement).value = ''
@@ -173,7 +182,7 @@ function synchronizePersistedConnectivity(configuration: unknown) {
 		persistedNetwork = selectedNetwork
 		element('network-name', HTMLSelectElement).value = selectedNetwork
 		const networkLabel = selectedNetwork === 'mainnet' ? 'Ethereum mainnet' : 'Sepolia'
-		setText('settings-chain-scope', `Editing the ${networkLabel} profile. Every setting and durable journal is retained only for this chain; selecting another chain loads its separate profile.`)
+		setText('settings-chain-scope', `Editing the ${networkLabel} profile.`)
 		element('network-name', HTMLSelectElement).disabled = false
 		connectivityLoaded = true
 		updateNetworkTargetStatus()
@@ -184,21 +193,9 @@ function synchronizePersistedConnectivity(configuration: unknown) {
 	element('network-name', HTMLSelectElement).disabled = false
 	persistedNetwork = focused.network
 	const networkLabel = focused.network === 'mainnet' ? 'Ethereum mainnet' : 'Sepolia'
-	setText('settings-chain-scope', `Editing the ${networkLabel} profile. Every setting and durable journal is retained only for this chain; selecting another chain loads its separate profile.`)
+	setText('settings-chain-scope', `Editing the ${networkLabel} profile.`)
 	connectivityLoaded = true
 	updateNetworkTargetStatus()
-}
-
-function lines(id: string) {
-	return urlLines(element(id, HTMLTextAreaElement).value)
-}
-
-function loadDeployment(deployment: DashboardDeployment) {
-	element('deployment-v2-enabled', HTMLInputElement).checked = deployment.uniswapV2Enabled
-	element('deployment-v3-enabled', HTMLInputElement).checked = deployment.uniswapV3Enabled
-	element('deployment-v4-enabled', HTMLInputElement).checked = deployment.uniswapV4Enabled
-	element('deployment-quorum-rpcs', HTMLTextAreaElement).value = deployment.quorumRpcUrls.join('\n')
-	element('deployment-manifest', HTMLTextAreaElement).value = deployment.deploymentManifest === undefined ? '' : JSON.stringify(deployment.deploymentManifest, undefined, 2)
 }
 
 function finishPendingProfileIfReady(network: 'mainnet' | 'sepolia') {
@@ -465,29 +462,6 @@ function renderProfitChart(history: readonly PublicExecutionRecord[], recordCoun
 	container.append(summary, svg)
 }
 
-function input(name: keyof StrategySettings) {
-	const found = document.querySelector(`[name="${name}"]`)
-	if (!(found instanceof HTMLInputElement)) throw new Error(`Missing strategy input: ${name}`)
-	return found
-}
-
-function loadSettings(settings: StrategySettings) {
-	input('minimumProfitWeth').value = settings.minimumProfitWeth
-	input('minimumProfitBps').value = settings.minimumProfitBps
-	input('maxSpotTwapTicks').value = settings.maxSpotTwapTicks
-	input('twapSeconds').value = settings.twapSeconds.toString()
-	input('minimumRemainingBlocks').value = settings.minimumRemainingBlocks
-	input('minimumRemainingSeconds').value = settings.minimumRemainingSeconds
-	input('pollMilliseconds').value = settings.pollMilliseconds.toString()
-}
-
-function loadSubmission(submission: SubmissionSettings) {
-	const mode = element('submission-mode', HTMLSelectElement)
-	mode.value = submission.mode
-	element('relay-urls', HTMLTextAreaElement).value = submission.relayUrls.join('\n')
-	element('minimum-bundle-relay-successes', HTMLInputElement).value = submission.minimumBundleRelaySuccesses.toString()
-}
-
 function loadConnectivity(connectivity: ConnectivitySettings) {
 	element('read-rpc-url', HTMLInputElement).value = connectivity.readRpcUrl
 	element('public-rpc-urls', HTMLTextAreaElement).value = connectivity.publicRpcUrls.join('\n')
@@ -499,16 +473,30 @@ function synchronizeFocusedConfiguration(configuration: unknown) {
 	const submission = Reflect.get(configuration, 'submission')
 	const deployment = Reflect.get(configuration, 'deployment')
 	const approvedUniverses = Reflect.get(configuration, 'approvedUniverses')
+	const runtime = Reflect.get(configuration, 'runtime')
+	const settlement = Reflect.get(configuration, 'settlement')
+	const centralizedMarkets = Reflect.get(configuration, 'centralizedMarkets')
 	if (!isStrategySettings(strategy) || !isSubmissionSettings(submission) || !isDeploymentSettings(deployment) || !isStringArray(approvedUniverses)) throw new Error('Bot returned an invalid configuration document')
+	const execute = typeof runtime === 'object' && runtime !== null ? Reflect.get(runtime, 'execute') : undefined
+	if (!isRuntimeLimits(runtime) || typeof execute !== 'boolean' || !isSettlementSettings(settlement) || typeof centralizedMarkets !== 'object' || centralizedMarkets === null || Array.isArray(centralizedMarkets)) throw new Error('Bot returned an invalid configuration document')
 	loadSettings(strategy)
 	settingsLoaded = true
 	loadSubmission(submission)
 	submissionLoaded = true
 	synchronizePersistedConnectivity(configuration)
-	loadDeployment(deployment)
+	loadDeployment(deployment, 'configuration')
 	deploymentLoaded = true
 	approvedUniverseIds = new Set(approvedUniverses)
 	tokensLoaded = true
+	markFormClean('tokens-form')
+	loadRuntimeLimits(runtime)
+	loadSettlement(settlement)
+	loadExecutionMode(execute)
+	loadCentralizedMarkets({ ...centralizedMarkets })
+	focusedRuntimeLoaded = true
+	markFormClean('connectivity-form')
+	markFormClean('configuration-form')
+	if (latestSnapshot !== undefined) renderSettingsInsights(latestSnapshot)
 }
 
 function renderEndpointChecks(snapshot: PublicOperatorSnapshot) {
@@ -556,7 +544,7 @@ function renderTokenMarkets(snapshot: PublicOperatorSnapshot) {
 	universeExplorer ??= createUniverseExplorer(element('approved-universes'), {
 		onChange: next => {
 			approvedUniverseIds = next
-			setText('tokens-status', 'Selection updated. Save universe approvals to apply.')
+			refreshFormButton('tokens-form')
 		},
 		savedMessage: '',
 	})
@@ -970,6 +958,7 @@ function render(snapshot: PublicOperatorSnapshot) {
 	renderBalances(snapshot)
 	renderOpportunities(snapshot.opportunities)
 	renderSettlements(snapshot.settlements, link)
+	renderSettingsInsights(snapshot)
 	renderTransactions(snapshot.transactionActivity)
 	renderEndpointChecks(snapshot)
 	renderOperations(snapshot.operationLog)
@@ -1115,9 +1104,7 @@ element('network-name', HTMLSelectElement).addEventListener('change', async even
 element('retry-settings-button').addEventListener('click', () => void loadCompleteConfiguration())
 element('configuration-form', HTMLFormElement).addEventListener('submit', async event => {
 	event.preventDefault()
-	const button = element('configuration-form', HTMLFormElement).querySelector('button[type="submit"]')
-	if (!(button instanceof HTMLButtonElement)) return
-	button.disabled = true
+	setFormSubmitting('configuration-form', true)
 	setText('configuration-status', 'Validating complete configuration…')
 	try {
 		const value: unknown = JSON.parse(element('configuration-json', HTMLTextAreaElement).value)
@@ -1131,11 +1118,12 @@ element('configuration-form', HTMLFormElement).addEventListener('submit', async 
 		element('configuration-json', HTMLTextAreaElement).value = prettyJson(response.configuration)
 		synchronizeFocusedConfiguration(response.configuration)
 		configurationRevision = response.revision
-		setText('configuration-status', 'Complete configuration saved. Changes apply at the next scan boundary.')
+		setText('configuration-status', 'Complete configuration saved.')
 	} catch (error) {
 		setText('configuration-status', error instanceof Error ? error.message : String(error))
 	} finally {
-		button.disabled = !connected
+		setFormSubmitting('configuration-form', false)
+		setControlsEnabled(connected)
 	}
 })
 element('price-token', HTMLSelectElement).addEventListener('change', () => {
@@ -1146,9 +1134,7 @@ element('tokens-form').addEventListener('submit', async event => {
 	const requestEpoch = profileRequestEpoch
 	universeSavePending = true
 	setControlsEnabled(connected)
-	const button = element('tokens-form', HTMLFormElement).querySelector<HTMLButtonElement>('button[type="submit"]')
-	if (button === null) throw new Error('Universe approval submit button is missing')
-	button.disabled = true
+	setFormSubmitting('tokens-form', true)
 	setText('tokens-status', 'Saving universe approvals…')
 	try {
 		await api('/api/approved-universes', {
@@ -1157,12 +1143,13 @@ element('tokens-form').addEventListener('submit', async event => {
 			method: 'PUT',
 		})
 		if (requestEpoch !== profileRequestEpoch) return
-		setText('tokens-status', 'Universe approvals saved. They apply before the next execution scan.')
+		markFormClean('tokens-form')
+		setText('tokens-status', 'Universe approvals saved.')
 	} catch (error) {
 		if (requestEpoch === profileRequestEpoch) setText('tokens-status', error instanceof Error ? error.message : String(error))
 	} finally {
 		universeSavePending = false
-		button.disabled = !connected
+		setFormSubmitting('tokens-form', false)
 		setControlsEnabled(connected)
 	}
 })
@@ -1229,69 +1216,9 @@ element('confirm-resume').addEventListener('click', () => {
 const dashboardPaths = new Set(['/overview', '/operations', '/games', '/markets', '/settings'])
 const { scrollToSection, syncSectionNavigation } = createSectionNavigation(link => dashboardPaths.has(new URL(link.href).pathname))
 
-element('strategy-form', HTMLFormElement).addEventListener('submit', async event => {
-	event.preventDefault()
-	const button = element('strategy-form', HTMLFormElement).querySelector('button[type="submit"]')
-	if (!(button instanceof HTMLButtonElement)) return
-	button.disabled = true
-	setText('form-status', 'Applying strategy…')
-	try {
-		const settings = {
-			maxSpotTwapTicks: input('maxSpotTwapTicks').value,
-			minimumProfitBps: input('minimumProfitBps').value,
-			minimumProfitWeth: input('minimumProfitWeth').value,
-			minimumRemainingBlocks: input('minimumRemainingBlocks').value,
-			minimumRemainingSeconds: input('minimumRemainingSeconds').value,
-			pollMilliseconds: Number(input('pollMilliseconds').value),
-			twapSeconds: Number(input('twapSeconds').value),
-		} satisfies StrategySettings
-		const response = decodeSettings(
-			await api('/api/settings', {
-				body: JSON.stringify(settings),
-				headers: { 'content-type': 'application/json' },
-				method: 'PUT',
-			}),
-		)
-		loadSettings(response.settings)
-		setText('form-status', 'Strategy saved. Applies to the next scan.')
-		await refresh()
-	} catch (error) {
-		setText('form-status', error instanceof Error ? error.message : String(error))
-		await refresh()
-	} finally {
-		button.disabled = !connected
-	}
-})
-
-element('submission-form', HTMLFormElement).addEventListener('submit', async event => {
-	event.preventDefault()
-	const button = element('submission-form', HTMLFormElement).querySelector('button[type="submit"]')
-	if (!(button instanceof HTMLButtonElement)) return
-	button.disabled = true
-	setText('submission-status', 'Applying submission settings…')
-	try {
-		const submission = {
-			minimumBundleRelaySuccesses: Number(element('minimum-bundle-relay-successes', HTMLInputElement).value),
-			mode: element('submission-mode', HTMLSelectElement).value,
-			relayUrls: urlLines(element('relay-urls', HTMLTextAreaElement).value),
-		}
-		const response = decodeSubmission(
-			await api('/api/submission', {
-				body: JSON.stringify(submission),
-				headers: { 'content-type': 'application/json' },
-				method: 'PUT',
-			}),
-		)
-		loadSubmission(response.submission)
-		setText('submission-status', 'Submission settings saved. Applies to the next scan.')
-		await refresh()
-	} catch (error) {
-		setText('submission-status', error instanceof Error ? error.message : String(error))
-		await refresh()
-	} finally {
-		button.disabled = !connected
-	}
-})
+registerFocusedSettingsForms({ api, refresh, syncControls: () => setControlsEnabled(connected) })
+// The universe explorer keeps its selection outside form controls, so its signature is the sorted selection.
+trackForm('tokens-form', () => [...approvedUniverseIds].sort().join(','))
 
 element('connectivity-form', HTMLFormElement).addEventListener('submit', async event => {
 	event.preventDefault()
@@ -1309,9 +1236,10 @@ element('connectivity-form', HTMLFormElement).addEventListener('submit', async e
 			readRpcUrl: element('read-rpc-url', HTMLInputElement).value.trim(),
 		}
 		const rpcQuorum = Number(element('rpc-quorum', HTMLSelectElement).value)
+		const quorumRpcUrls = urlLines(element('quorum-rpc-urls', HTMLTextAreaElement).value)
 		const response = decodeConnectivity(
 			await api('/api/connectivity', {
-				body: JSON.stringify({ connectivity, network: selectedNetwork, rpcQuorum }),
+				body: JSON.stringify({ connectivity, network: selectedNetwork, quorumRpcUrls, rpcQuorum }),
 				headers: { 'content-type': 'application/json' },
 				method: 'PUT',
 			}),
@@ -1321,48 +1249,20 @@ element('connectivity-form', HTMLFormElement).addEventListener('submit', async e
 		element('network-name', HTMLSelectElement).disabled = false
 		persistedNetwork = response.network
 		const networkLabel = response.network === 'mainnet' ? 'Ethereum mainnet' : 'Sepolia'
-		setText('settings-chain-scope', `Editing the ${networkLabel} profile. Every setting and durable journal is retained only for this chain; selecting another chain loads its separate profile.`)
+		setText('settings-chain-scope', `Editing the ${networkLabel} profile.`)
 		element('rpc-quorum', HTMLSelectElement).value = response.rpcQuorum.toString()
+		setLoadedRpcQuorum(response.rpcQuorum)
+		applyQuorumRpcUrls(response.quorumRpcUrls)
+		markFormClean('connectivity-form')
 		updateNetworkTargetStatus()
-		setText('connectivity-status', 'Chain and RPCs passed validation, were saved, and apply to the next scan.')
 		await refresh()
+		setText('connectivity-status', 'Chain and RPCs passed validation and were saved.')
 	} catch (error) {
-		setText('connectivity-status', error instanceof Error ? error.message : String(error))
 		await refresh()
+		setText('connectivity-status', error instanceof Error ? error.message : String(error))
 	} finally {
 		connectivityRequestPending = false
 		setControlsEnabled(connected)
-	}
-})
-
-element('deployment-form', HTMLFormElement).addEventListener('submit', async event => {
-	event.preventDefault()
-	const button = element('deployment-form', HTMLFormElement).querySelector('button[type="submit"]')
-	if (!(button instanceof HTMLButtonElement)) return
-	button.disabled = true
-	setText('deployment-status', 'Validating deployment configuration…')
-	try {
-		const manifestText = element('deployment-manifest', HTMLTextAreaElement).value.trim()
-		const deployment = {
-			deploymentManifest: manifestText === '' ? undefined : JSON.parse(manifestText),
-			quorumRpcUrls: lines('deployment-quorum-rpcs'),
-			uniswapV2Enabled: element('deployment-v2-enabled', HTMLInputElement).checked,
-			uniswapV3Enabled: element('deployment-v3-enabled', HTMLInputElement).checked,
-			uniswapV4Enabled: element('deployment-v4-enabled', HTMLInputElement).checked,
-		}
-		const response = decodeDeployment(
-			await api('/api/deployment', {
-				body: JSON.stringify(deployment),
-				headers: { 'content-type': 'application/json' },
-				method: 'PUT',
-			}),
-		)
-		loadDeployment(response.deployment)
-		setText('deployment-status', 'Deployment configuration saved. Protocol identities and quorum RPCs apply at the next scan boundary.')
-	} catch (error) {
-		setText('deployment-status', error instanceof Error ? error.message : String(error))
-	} finally {
-		button.disabled = !connected
 	}
 })
 
@@ -1461,6 +1361,7 @@ element('private-key', HTMLInputElement).addEventListener('input', () => {
 	if (latestSnapshot !== undefined) renderSignerStatus(latestSnapshot)
 })
 
+createSettingsNavigation()
 void refresh()
 void loadCompleteConfiguration()
 window.setInterval(() => void refresh(), 2_000)

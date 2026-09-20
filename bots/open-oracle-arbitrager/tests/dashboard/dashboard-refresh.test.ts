@@ -1,14 +1,16 @@
-import { emptySettlementSnapshot, parseSettlementSettings, settlementSnapshot } from '#state/settlement-store'
+import { emptySettlementSnapshot, parseSettlementSettings, settlementSettings, settlementSnapshot } from '#state/settlement-store'
 import { canonicalExecutorIdentity } from '#execution/executor-identity'
+import { createDeploymentManifest } from '#config/deployment-auth'
+import { canonicalSecurityPoolFactory } from '#config/network'
 import { afterEach, expect, test } from 'bun:test'
 import { Browser, type BrowserWindow, type Element } from 'happy-dom'
 import { join } from 'node:path'
 import { getAddress, type Address } from '@zoltar/bot-shared/ethereum'
 import { startDashboardServer } from '#dashboard/dashboard-server'
-import { operatorSnapshot, type MutableStrategy, type OperatorState } from '#state/operator-state'
+import { operatorSnapshot, type MutableStrategy, type OperatorState, type QueuedSettingsSection } from '#state/operator-state'
 import example from '../../config/operator.example.json'
-import { parseOperatorSettings, serializeOperatorSettings } from '#config/settings-store'
-import { validateDeploymentSettings } from '#config/deployment-settings'
+import { parseOperatorSettings, parseRuntimeLimitsRequest, parseStoredCentralizedMarkets, serializeOperatorSettings, serializeRuntimeLimits, serializeStoredCentralizedMarkets } from '#config/settings-store'
+import { mergeStoredDeploymentUpdate } from '#config/deployment-settings'
 import { validateSubmissionSettings } from '#execution/transaction-submission'
 
 const servers: ReturnType<typeof startDashboardServer>[] = []
@@ -96,6 +98,8 @@ test('keeps all mutations locked and ignores deferred old-chain responses until 
 		network,
 		networkConfigured,
 		rpcQuorum: 1,
+		runtime: example.runtime,
+		settlement: example.settlement,
 		strategy: {
 			maxSpotTwapTicks: currentStrategy.maxSpotTwapTicks.toString(),
 			minimumProfitBps: currentStrategy.minimumProfitBps.toString(),
@@ -496,7 +500,7 @@ test('deployment form saves venue switches without configurable Uniswap addresse
 		setPaused: () => undefined,
 		updateConnectivity: value => value,
 		updateDeployment: value => {
-			settings = { ...settings, deployment: validateDeploymentSettings(value, 'sepolia') }
+			settings = { ...settings, deployment: mergeStoredDeploymentUpdate(settings.deployment, value, 'sepolia') }
 			return settings.deployment
 		},
 		updateSigner: () => ({ wallet: undefined }),
@@ -510,14 +514,17 @@ test('deployment form saves venue switches without configurable Uniswap addresse
 	const save = async () => {
 		form.dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }))
 		await page.waitUntilComplete()
-		for (let attempt = 0; attempt < 100 && element(window, 'deployment-status', window.HTMLElement).textContent === 'Validating deployment configuration…'; attempt++) await Bun.sleep(10)
-		expect(element(window, 'deployment-status', window.HTMLElement).textContent).toContain('Deployment configuration saved')
+		for (let attempt = 0; attempt < 100 && element(window, 'deployment-status', window.HTMLElement).textContent === 'Validating venues…'; attempt++) await Bun.sleep(10)
+		expect(element(window, 'deployment-status', window.HTMLElement).textContent).toContain('Venues saved')
 	}
 	expect(form.checkValidity()).toBe(true)
 	for (const id of ['deployment-v3-factory', 'deployment-v3-quoter', 'deployment-v3-router', 'deployment-v2-router', 'deployment-v4-pool-manager', 'deployment-v4-quoter']) expect(window.document.getElementById(id)).toBeNull()
 	expect(window.document.getElementById('deployment-executor')?.tagName).toBe('P')
 	expect(window.document.getElementById('deployment-coordinators')?.tagName).toBe('P')
 	expect(window.document.getElementById('create2-salt')).toBeNull()
+	expect(window.document.getElementById('deployment-quorum-rpcs')).toBeNull()
+	expect(element(window, 'quorum-rpc-urls', window.HTMLTextAreaElement).closest('form')?.id).toBe('connectivity-form')
+	expect(element(window, 'deployment-manifest', window.HTMLTextAreaElement).closest('form')?.id).toBe('manifest-form')
 	await save()
 	const restored = () => parseOperatorSettings({ ...JSON.parse(JSON.stringify(serializeOperatorSettings(settings))), network: 'mainnet' }).deployment
 	expect(settings.deployment.executor).toBe(canonicalExecutorIdentity().address)
@@ -536,4 +543,362 @@ test('deployment form saves venue switches without configurable Uniswap addresse
 	await save()
 	expect(settings.deployment.uniswapV2Router).toBeUndefined()
 	expect(restored().uniswapV2Router).toBeDefined()
+})
+
+test('focused risk, settlement, execution, and market forms load the saved configuration and save through their endpoints', async () => {
+	let settings = parseOperatorSettings({ ...example, network: 'sepolia', networkConfigured: true, connectivity: { publicRpcUrls: ['https://rpc.example/'], readRpcUrl: 'https://rpc.example/' } })
+	const executionRequests: unknown[] = []
+	const queued: QueuedSettingsSection[] = []
+	let holdRuntimeSave: Promise<void> | undefined
+	const snapshot = () =>
+		operatorSnapshot(
+			operatorState(),
+			settings.strategy,
+			settings.submission,
+			settings.connectivity,
+			{
+				deployment: settings.deployment,
+				execute: false,
+				executor: undefined,
+				expectedChainId: 11_155_111,
+				explorerUrl: 'https://sepolia.etherscan.io',
+				network: 'sepolia',
+				networkConfigured: true,
+				openOracle: settings.deployment.openOracle,
+				queuedWallet: undefined,
+				savedWallet: undefined,
+				wallet: undefined,
+			},
+			settings.runtime.riskLimits,
+			queued,
+		)
+	const server = startDashboardServer(0, {
+		getConfiguration: () => ({ configuration: serializeOperatorSettings(settings), revision: 'fixture' }),
+		getSnapshot: snapshot,
+		hostname: '127.0.0.1',
+		isNetworkConfigured: () => true,
+		setPaused: () => undefined,
+		updateCentralizedMarkets: value => {
+			settings = { ...settings, centralizedMarkets: parseStoredCentralizedMarkets(value, settings.deployment.rep, settings.network) }
+			return serializeStoredCentralizedMarkets(settings.centralizedMarkets)
+		},
+		updateConnectivity: value => value,
+		updateExecution: value => {
+			executionRequests.push(value)
+			throw new Error('Execution requires an active signer')
+		},
+		updateRuntimeLimits: async value => {
+			settings = { ...settings, runtime: { ...settings.runtime, ...parseRuntimeLimitsRequest(value) } }
+			queued.push('risk')
+			if (holdRuntimeSave !== undefined) await holdRuntimeSave
+			return serializeRuntimeLimits(settings.runtime)
+		},
+		updateSettlement: value => {
+			settings = { ...settings, settlement: parseSettlementSettings(value) }
+			queued.push('settlement')
+			return settlementSettings(settings.settlement)
+		},
+		updateSigner: () => ({ wallet: undefined }),
+		updateStrategy: () => snapshot().settings,
+		updateSubmission: value => validateSubmissionSettings(value),
+	})
+	servers.push(server)
+	const { page, window } = await mountDashboard(server, '/settings')
+	const runtimeInput = (name: string) => {
+		const found = element(window, 'runtime-form', window.HTMLFormElement).querySelector(`[name="${name}"]`)
+		if (!(found instanceof window.HTMLInputElement)) throw new Error(`Missing runtime input ${name}`)
+		return found
+	}
+	const settlementInput = (name: string) => {
+		const found = element(window, 'settlement-form', window.HTMLFormElement).querySelector(`[name="${name}"]`)
+		if (!(found instanceof window.HTMLInputElement)) throw new Error(`Missing settlement input ${name}`)
+		return found
+	}
+	for (let attempt = 0; attempt < 100 && runtimeInput('maxTotalLockedWeth').value === ''; attempt++) await Bun.sleep(10)
+	for (const id of ['runtime-fieldset', 'settlement-fieldset', 'execution-fieldset', 'market-fieldset', 'manifest-fieldset']) expect(element(window, id, window.HTMLFieldSetElement).disabled).toBe(false)
+	expect(runtimeInput('maxPositionNotionalWeth').value).toBe('5')
+	expect(runtimeInput('maxTotalLockedWeth').value).toBe('10')
+	expect(runtimeInput('maxConcurrentPositions').value).toBe('1')
+	expect(runtimeInput('maxDailyGasSpendWeth').value).toBe('0.05')
+	expect(runtimeInput('lifecycleGasReserveWeth').value).toBe('0.01')
+	expect(runtimeInput('maxHedgeSlippageBps').value).toBe('50')
+	expect(runtimeInput('lookbackBlocks').value).toBe('256')
+	expect(element(window, 'settlement-enabled', window.HTMLInputElement).checked).toBe(false)
+	expect(settlementInput('settlementMinimumProfitWeth').value).toBe('0.001')
+	expect(settlementInput('settlementMaxGasPriceNanoEth').value).toBe('50')
+	expect(settlementInput('settlementRewardWithdrawThresholdEth').value).toBe('0.01')
+	expect(element(window, 'execution-enabled', window.HTMLInputElement).checked).toBe(false)
+	// Usage beside the caps, the settlement queue in the panel summary, and the go-live checklist all read the snapshot.
+	expect(element(window, 'usage-locked', window.HTMLElement).textContent).toBe('0 WETH / 10 WETH')
+	expect(element(window, 'usage-positions', window.HTMLElement).textContent).toBe('0 / 1')
+	expect(element(window, 'settlement-panel-summary', window.HTMLElement).textContent).toBe('Disabled · 0 reports awaiting settlement')
+	const checklist = () => Array.from(element(window, 'execution-checklist', window.HTMLUListElement).children, item => `${item.getAttribute('data-ready') ?? ''}:${item.querySelector('.readiness-label')?.textContent ?? ''}`)
+	expect(checklist()).toEqual(['false:Execution signer', 'false:Execution manifest', 'true:Independent quorum RPCs', 'true:Trading venue', 'true:Delivery'])
+	expect(element(window, 'execution-mode-summary', window.HTMLElement).textContent).toBe('Dry run · prerequisites missing')
+	expect(element(window, 'execution-enabled', window.HTMLInputElement).disabled).toBe(true)
+	const marketRows = () => Array.from(element(window, 'market-source-rows', window.HTMLTableSectionElement).querySelectorAll('tr'))
+	expect(marketRows()).toHaveLength(0)
+	expect(element(window, 'market-sources-empty', window.HTMLElement).hidden).toBe(false)
+	const marketInput = (name: string) => {
+		const found = element(window, 'market-form', window.HTMLFormElement).querySelector(`[name="${name}"]`)
+		if (!(found instanceof window.HTMLInputElement)) throw new Error(`Missing market input ${name}`)
+		return found
+	}
+	expect(marketInput('minimumSourceCount').value).toBe('2')
+	// Browser-side bounds mirror the parser so a rejected value never needs a round trip to explain itself.
+	expect([marketInput('minimumSourceCount').min, marketInput('minimumSourceCount').max]).toEqual(['1', '100'])
+	expect([marketInput('maximumObservationAgeMilliseconds').min, marketInput('maximumObservationAgeMilliseconds').max]).toEqual(['1000', '3600000'])
+	expect([marketInput('requestTimeoutMilliseconds').min, marketInput('requestTimeoutMilliseconds').max]).toEqual(['250', '60000'])
+	expect(window.document.querySelector('#settings-nav a[aria-current="true"]')?.getAttribute('data-settings-target')).toBe('settings-connect')
+	expect(marketInput('minimumBidDepthEth').value).toBe('2')
+	expect(element(window, 'market-required', window.HTMLInputElement).checked).toBe(false)
+	expect(JSON.parse(element(window, 'market-venue-consensus-json', window.HTMLTextAreaElement).value)).toEqual(serializeStoredCentralizedMarkets(settings.centralizedMarkets).venueConsensus)
+
+	// Save buttons stay disabled until an edit differs from the loaded values; the panel summary shows the unsaved state.
+	const saveButton = (formId: string) => {
+		const found = element(window, formId, window.HTMLFormElement).querySelector('button[type="submit"]')
+		if (!(found instanceof window.HTMLButtonElement)) throw new Error(`Missing save button for ${formId}`)
+		return found
+	}
+	const badges = (formId: string) => Array.from(window.document.querySelectorAll(`.settings-badges[data-form="${formId}"] .settings-badge`), badge => badge.textContent)
+	expect(saveButton('runtime-form').disabled).toBe(true)
+	expect(badges('runtime-form')).toEqual([])
+	runtimeInput('maxTotalLockedWeth').value = '12.5'
+	runtimeInput('maxTotalLockedWeth').dispatchEvent(new window.Event('input', { bubbles: true }))
+	expect(saveButton('runtime-form').disabled).toBe(false)
+	expect(badges('runtime-form')).toEqual(['Unsaved changes'])
+
+	const submit = async (formId: string, statusId: string, pendingMessage: string) => {
+		element(window, formId, window.HTMLFormElement).dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }))
+		await page.waitUntilComplete()
+		for (let attempt = 0; attempt < 100 && element(window, statusId, window.HTMLElement).textContent === pendingMessage; attempt++) await Bun.sleep(10)
+		return element(window, statusId, window.HTMLElement).textContent
+	}
+
+	runtimeInput('maxConcurrentPositions').value = '2'
+	runtimeInput('lookbackBlocks').value = '64'
+	// While the save is in flight the form is still dirty, yet a re-evaluation (as every snapshot refresh performs) must not re-enable Save.
+	let releaseRuntimeSave: (() => void) | undefined
+	holdRuntimeSave = new Promise(resolve => {
+		releaseRuntimeSave = resolve
+	})
+	element(window, 'runtime-form', window.HTMLFormElement).dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }))
+	await Bun.sleep(30)
+	expect(element(window, 'runtime-status', window.HTMLElement).textContent).toBe('Saving risk limits…')
+	// The whole fieldset locks during the request, so a later edit cannot be replaced silently by the response.
+	expect(element(window, 'runtime-fieldset', window.HTMLFieldSetElement).disabled).toBe(true)
+	runtimeInput('maxTotalLockedWeth').dispatchEvent(new window.Event('input', { bubbles: true }))
+	expect(saveButton('runtime-form').disabled).toBe(true)
+	releaseRuntimeSave?.()
+	holdRuntimeSave = undefined
+	for (let attempt = 0; attempt < 100 && element(window, 'runtime-status', window.HTMLElement).textContent === 'Saving risk limits…'; attempt++) await Bun.sleep(10)
+	expect(element(window, 'runtime-status', window.HTMLElement).textContent).toBe('Risk limits saved.')
+	expect(element(window, 'runtime-fieldset', window.HTMLFieldSetElement).disabled).toBe(false)
+	expect(settings.runtime.riskLimits.maxTotalLockedAttoWeth).toBe(125n * 10n ** 17n)
+	expect(settings.runtime.riskLimits.maxConcurrentPositions).toBe(2)
+	expect(settings.runtime.lookbackBlocks).toBe(64n)
+	expect(settings.runtime.execute).toBe(false)
+	expect(saveButton('runtime-form').disabled).toBe(true)
+	expect(badges('runtime-form')).toEqual(['Queued · next scan'])
+	runtimeInput('maxPositionNotionalWeth').value = '20'
+	expect(await submit('runtime-form', 'runtime-status', 'Saving risk limits…')).toBe('Runtime maxPositionNotionalAttoWeth cannot exceed maxTotalLockedAttoWeth')
+	expect(settings.runtime.riskLimits.maxPositionNotionalAttoWeth).toBe(5n * 10n ** 18n)
+	expect(saveButton('runtime-form').disabled).toBe(false)
+
+	element(window, 'settlement-enabled', window.HTMLInputElement).checked = true
+	settlementInput('settlementMaxGasPriceNanoEth').value = '30'
+	expect(await submit('settlement-form', 'settlement-status', 'Saving settlement…')).toBe('Settlement enabled.')
+	expect(settings.settlement).toEqual({ enabled: true, maxGasPriceAttoEthPerGas: 30n * 10n ** 9n, minimumProfitAttoWeth: 10n ** 15n, rewardWithdrawThresholdAttoEth: 10n ** 16n })
+	expect(element(window, 'settlement-enabled', window.HTMLInputElement).checked).toBe(true)
+	// The running bot still reports the old value until the boundary, so the summary names the saved switch instead.
+	for (let attempt = 0; attempt < 100 && !element(window, 'settlement-panel-summary', window.HTMLElement).textContent.startsWith('Enabling'); attempt++) await Bun.sleep(10)
+	expect(element(window, 'settlement-panel-summary', window.HTMLElement).textContent).toBe('Enabling at the next scan · 0 reports awaiting settlement')
+	settlementInput('settlementRewardWithdrawThresholdEth').value = '0'
+	expect(await submit('settlement-form', 'settlement-status', 'Saving settlement…')).toBe('Settlement rewardWithdrawThresholdEth must be from 0.000000000000000001 to 100')
+	expect(settings.settlement.rewardWithdrawThresholdAttoEth).toBe(10n ** 16n)
+
+	// The switch is locked while prerequisites are missing; a direct submit is still rejected by the bot and reset.
+	element(window, 'execution-enabled', window.HTMLInputElement).checked = true
+	expect(await submit('execution-form', 'execution-status', 'Saving execution mode…')).toBe('Execution requires an active signer')
+	expect(executionRequests).toEqual([{ execute: true }])
+	expect(element(window, 'execution-mode-summary', window.HTMLElement).textContent).toBe('Dry run · prerequisites missing')
+	expect(element(window, 'execution-enabled', window.HTMLInputElement).checked).toBe(false)
+
+	// The source table and thresholds rebuild the stored document; the bot binds the asset identity to the chain.
+	element(window, 'market-source-add', window.HTMLButtonElement).click()
+	expect(marketRows()).toHaveLength(1)
+	expect(element(window, 'market-sources-empty', window.HTMLElement).hidden).toBe(true)
+	expect(saveButton('market-form').disabled).toBe(false)
+	const rowInput = (name: string) => {
+		const found = marketRows()[0]?.querySelector(`[name="${name}"]`)
+		if (!(found instanceof window.HTMLInputElement)) throw new Error(`Missing source input ${name}`)
+		return found
+	}
+	rowInput('sourceExchangeId').value = 'kraken'
+	rowInput('sourceExchangeId').dispatchEvent(new window.Event('input', { bubbles: true }))
+	expect(marketRows()[0]?.querySelector('button')?.getAttribute('aria-label')).toBe('Remove kraken')
+	rowInput('sourceRepMarket').value = 'REP/USDT'
+	rowInput('sourceEthMarket').value = 'ETH/USDT'
+	marketInput('minimumSourceCount').value = '1'
+	expect(await submit('market-form', 'market-status', 'Validating market sources…')).toBe('Market sources saved.')
+	expect(settings.centralizedMarkets.sources).toEqual([{ ethMarket: 'ETH/USDT', exchangeId: 'kraken', repMarket: 'REP/USDT' }])
+	expect(settings.centralizedMarkets.minimumSourceCount).toBe(1)
+	expect(settings.centralizedMarkets.assetAddress).toBe(settings.deployment.rep)
+	expect(marketRows()).toHaveLength(1)
+	expect(saveButton('market-form').disabled).toBe(true)
+	rowInput('sourceEthMarket').value = ''
+	expect(await submit('market-form', 'market-status', 'Validating market sources…')).toBe('centralizedMarkets.sources[0].ethMarket must be ETH/USDT')
+	expect(settings.centralizedMarkets.sources[0]?.ethMarket).toBe('ETH/USDT')
+	element(window, 'market-venue-consensus-json', window.HTMLTextAreaElement).value = '{"dexSources": []'
+	expect(await submit('market-form', 'market-status', 'Validating market sources…')).toContain('JSON')
+	const removeButton = marketRows()[0]?.querySelector('button')
+	if (!(removeButton instanceof window.HTMLButtonElement)) throw new Error('Missing remove button')
+	removeButton.click()
+	expect(marketRows()).toHaveLength(0)
+	expect(element(window, 'market-sources-empty', window.HTMLElement).hidden).toBe(false)
+})
+
+test('go-live checklist unlocks the switch once every prerequisite holds, reports the armed state, and the RPC form carries quorum URLs', async () => {
+	const manifest = await createDeploymentManifest(
+		'sepolia',
+		11_155_111,
+		[
+			{ address: parseOperatorSettings({ ...example, network: 'sepolia' }).deployment.openOracle, role: 'open-oracle' },
+			{ address: canonicalSecurityPoolFactory('sepolia'), role: 'security-pool-factory' },
+		],
+		async () => '0x01',
+	)
+	let settings = parseOperatorSettings({
+		...example,
+		connectivity: { publicRpcUrls: ['https://rpc.example/'], readRpcUrl: 'https://rpc.example/' },
+		deployment: { ...example.deployment, deploymentManifest: manifest, quorumRpcUrls: ['https://quorum-one.example/', 'https://quorum-two.example/'] },
+		network: 'sepolia',
+		networkConfigured: true,
+		rpcQuorum: 2,
+	})
+	const queued: QueuedSettingsSection[] = []
+	let execute = false
+	const connectivityRequests: unknown[] = []
+	const deploymentRequests: unknown[] = []
+	let holdConnectivity: Promise<void> | undefined
+	const snapshot = () =>
+		operatorSnapshot(
+			operatorState(),
+			settings.strategy,
+			settings.submission,
+			settings.connectivity,
+			{
+				deployment: settings.deployment,
+				execute,
+				executor: undefined,
+				expectedChainId: 11_155_111,
+				explorerUrl: 'https://sepolia.etherscan.io',
+				network: 'sepolia',
+				networkConfigured: true,
+				openOracle: settings.deployment.openOracle,
+				queuedWallet: undefined,
+				savedWallet: undefined,
+				wallet: address,
+			},
+			settings.runtime.riskLimits,
+			queued,
+		)
+	const server = startDashboardServer(0, {
+		getConfiguration: () => ({ configuration: serializeOperatorSettings(settings), revision: 'fixture' }),
+		getSnapshot: snapshot,
+		hostname: '127.0.0.1',
+		isNetworkConfigured: () => true,
+		setPaused: () => undefined,
+		// Mirrors the bot's serialized settings queue: the connectivity write lands first and a later save reads it.
+		updateConnectivity: async value => {
+			connectivityRequests.push(value)
+			if (typeof value !== 'object' || value === null || !('quorumRpcUrls' in value) || !Array.isArray(value.quorumRpcUrls)) throw new Error('Expected quorum RPC URLs')
+			const quorumRpcUrls = value.quorumRpcUrls.map(String)
+			settings = { ...settings, deployment: { ...settings.deployment, quorumRpcUrls } }
+			queued.push('connectivity', 'deployment', 'universes')
+			if (holdConnectivity !== undefined) await holdConnectivity
+			return { connectivity: settings.connectivity, network: 'sepolia', quorumRpcUrls, rpcQuorum: 2 }
+		},
+		updateDeployment: async value => {
+			deploymentRequests.push(value)
+			if (holdConnectivity !== undefined) await holdConnectivity
+			settings = { ...settings, deployment: mergeStoredDeploymentUpdate(settings.deployment, value, 'sepolia') }
+			return settings.deployment
+		},
+		updateExecution: value => {
+			if (typeof value !== 'object' || value === null || !('execute' in value) || typeof value.execute !== 'boolean') throw new Error('Expected execute')
+			settings = { ...settings, paused: true, runtime: { ...settings.runtime, execute: value.execute } }
+			// The bot keeps reporting live until the boundary, so only an enable flips the snapshot immediately.
+			if (value.execute) execute = true
+			queued.push('execution')
+			return { execute: value.execute }
+		},
+		updateSigner: () => ({ wallet: address }),
+		updateStrategy: () => snapshot().settings,
+		updateSubmission: value => validateSubmissionSettings(value),
+	})
+	servers.push(server)
+	const { page, window } = await mountDashboard(server, '/settings')
+	const checklistReady = () => Array.from(element(window, 'execution-checklist', window.HTMLUListElement).children, item => item.getAttribute('data-ready'))
+	for (let attempt = 0; attempt < 100 && checklistReady().length === 0; attempt++) await Bun.sleep(10)
+	expect(checklistReady()).toEqual(['true', 'true', 'true', 'true', 'true'])
+	expect(element(window, 'execution-mode-summary', window.HTMLElement).textContent).toBe('Dry run · ready to go live')
+	expect(element(window, 'execution-enabled', window.HTMLInputElement).disabled).toBe(false)
+	expect(element(window, 'manifest-summary', window.HTMLElement).textContent).toBe('Configured')
+	expect(element(window, 'quorum-rpc-urls', window.HTMLTextAreaElement).value).toBe('https://quorum-one.example/\nhttps://quorum-two.example/')
+
+	const submit = async (formId: string, statusId: string, pendingPrefix: string) => {
+		element(window, formId, window.HTMLFormElement).dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }))
+		await page.waitUntilComplete()
+		for (let attempt = 0; attempt < 100 && element(window, statusId, window.HTMLElement).textContent.startsWith(pendingPrefix); attempt++) await Bun.sleep(10)
+		return element(window, statusId, window.HTMLElement).textContent
+	}
+	element(window, 'execution-enabled', window.HTMLInputElement).checked = true
+	expect(await submit('execution-form', 'execution-status', 'Saving execution mode…')).toBe('Live execution saved.')
+	expect(settings.runtime.execute).toBe(true)
+	for (let attempt = 0; attempt < 100 && !element(window, 'execution-mode-summary', window.HTMLElement).textContent.startsWith('Armed'); attempt++) await Bun.sleep(10)
+	expect(element(window, 'execution-mode-summary', window.HTMLElement).textContent).toBe('Armed · bot paused')
+	expect(Array.from(window.document.querySelectorAll('.settings-badges[data-form="execution-form"] .settings-badge'), badge => badge.textContent)).toEqual(['Queued · next scan'])
+	// Queuing a switch back to dry run on a live operator is not an armed state.
+	element(window, 'execution-enabled', window.HTMLInputElement).checked = false
+	expect(await submit('execution-form', 'execution-status', 'Saving execution mode…')).toBe('Dry-run mode saved.')
+	for (let attempt = 0; attempt < 100 && !element(window, 'execution-mode-summary', window.HTMLElement).textContent.startsWith('Live'); attempt++) await Bun.sleep(10)
+	expect(element(window, 'execution-mode-summary', window.HTMLElement).textContent).toBe('Live · dry run at the next scan')
+
+	element(window, 'quorum-rpc-urls', window.HTMLTextAreaElement).value = 'https://quorum-one.example/\nhttps://quorum-three.example/'
+	expect(await submit('connectivity-form', 'connectivity-status', 'Checking every endpoint')).toBe('Chain and RPCs passed validation and were saved.')
+	expect(connectivityRequests).toEqual([{ connectivity: { publicRpcUrls: ['https://rpc.example/'], readRpcUrl: 'https://rpc.example/' }, network: 'sepolia', quorumRpcUrls: ['https://quorum-one.example/', 'https://quorum-three.example/'], rpcQuorum: 2 }])
+	expect(settings.deployment.quorumRpcUrls).toEqual(['https://quorum-one.example/', 'https://quorum-three.example/'])
+	expect(element(window, 'quorum-rpc-urls', window.HTMLTextAreaElement).value).toBe('https://quorum-one.example/\nhttps://quorum-three.example/')
+	for (let attempt = 0; attempt < 100 && window.document.querySelectorAll('.settings-badges[data-form="deployment-form"] .settings-badge').length === 0; attempt++) await Bun.sleep(10)
+
+	// A venue save that overlaps a slow RPC save must not resurrect the previous quorum URLs or drop the manifest:
+	// each form sends only its own fields and the bot merges them into the latest saved section.
+	let releaseConnectivity: (() => void) | undefined
+	holdConnectivity = new Promise(resolve => {
+		releaseConnectivity = resolve
+	})
+	element(window, 'quorum-rpc-urls', window.HTMLTextAreaElement).value = 'https://quorum-four.example/\nhttps://quorum-five.example/'
+	element(window, 'connectivity-form', window.HTMLFormElement).dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }))
+	await Bun.sleep(30)
+	element(window, 'deployment-v4-enabled', window.HTMLInputElement).checked = true
+	element(window, 'deployment-form', window.HTMLFormElement).dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }))
+	await Bun.sleep(30)
+	expect(deploymentRequests.at(-1)).toEqual({ uniswapV2Enabled: true, uniswapV3Enabled: true, uniswapV4Enabled: true })
+	releaseConnectivity?.()
+	holdConnectivity = undefined
+	for (let attempt = 0; attempt < 100 && !element(window, 'connectivity-status', window.HTMLElement).textContent.startsWith('Chain and RPCs passed'); attempt++) await Bun.sleep(10)
+	for (let attempt = 0; attempt < 100 && element(window, 'deployment-status', window.HTMLElement).textContent !== 'Venues saved.'; attempt++) await Bun.sleep(10)
+	expect(element(window, 'deployment-status', window.HTMLElement).textContent).toBe('Venues saved.')
+	expect(settings.deployment.quorumRpcUrls).toEqual(['https://quorum-four.example/', 'https://quorum-five.example/'])
+	expect(settings.deployment.uniswapV4Enabled).toBe(true)
+	expect(settings.deployment.deploymentManifest).toBeDefined()
+	expect(element(window, 'quorum-rpc-urls', window.HTMLTextAreaElement).value).toBe('https://quorum-four.example/\nhttps://quorum-five.example/')
+	expect(element(window, 'deployment-v4-enabled', window.HTMLInputElement).checked).toBe(true)
+	expect(Array.from(window.document.querySelectorAll('.settings-badges[data-form="deployment-form"] .settings-badge'), badge => badge.textContent)).toEqual(['Queued · next scan'])
+	// The universe form has no controls of its own, yet it joins the same clean/queued model as every other panel.
+	expect(Array.from(window.document.querySelectorAll('.settings-badges[data-form="tokens-form"] .settings-badge'), badge => badge.textContent)).toEqual(['Queued · next scan'])
+	const universeSave = element(window, 'tokens-form', window.HTMLFormElement).querySelector('button[type="submit"]')
+	if (!(universeSave instanceof window.HTMLButtonElement)) throw new Error('Missing universe save button')
+	expect(universeSave.disabled).toBe(true)
 })

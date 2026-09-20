@@ -51,11 +51,11 @@ function summaryRow(label: string, value: string) {
 	return container
 }
 
-/** Settlement thresholds are edited in the complete configuration, so the panel states them beside the accrued figures. */
+/** Settlement thresholds are edited under Settings › Settlement, so the panel states them beside the accrued figures. */
 export function renderSettlements(settlements: SettlementSnapshot, link: Link) {
 	const { settings } = settlements
 	element('settlement-summary').replaceChildren(
-		summaryRow('Settlement', settings.enabled ? `enabled · minimum net ${settings.minimumProfitWeth} ETH · gas cap ${settings.maxGasPriceNanoEth} nanoETH` : 'disabled in the complete configuration'),
+		summaryRow('Settlement', settings.enabled ? `enabled · minimum net ${settings.minimumProfitWeth} ETH · gas cap ${settings.maxGasPriceNanoEth} nanoETH` : 'disabled · enable it under Settings › Settlement'),
 		summaryRow('Unclaimed reward in OpenOracle', rewardWithdrawalLabel(settlements)),
 		summaryRow('Realized settlement income', exactAmount(settlements.realizedIncomeEth, 'ETH')),
 	)

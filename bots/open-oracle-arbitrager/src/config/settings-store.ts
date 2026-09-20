@@ -95,7 +95,10 @@ function defaultCentralizedMarkets(assetAddress: `0x${string}`, assetChainId: nu
 	}
 }
 
-type StoredRuntimeSettings = Omit<RuntimeSettings, 'lookbackBlocks' | 'maxHedgeSlippageBps' | 'riskLimits'> & {
+/** The runtime fields the dashboard may change while the operator runs; the rest of `runtime` is fixed for the process. */
+export type RuntimeLimits = Pick<RuntimeSettings, 'lookbackBlocks' | 'maxHedgeSlippageBps' | 'riskLimits'>
+
+export type StoredRuntimeLimits = {
 	lookbackBlocks: string
 	maxHedgeSlippageBps: string
 	riskLimits: {
@@ -107,9 +110,13 @@ type StoredRuntimeSettings = Omit<RuntimeSettings, 'lookbackBlocks' | 'maxHedgeS
 	}
 }
 
+type StoredRuntimeSettings = Omit<RuntimeSettings, keyof RuntimeLimits> & StoredRuntimeLimits
+
+export type StoredCentralizedMarketSettings = Omit<ReturnType<typeof serializeCentralizedMarketSettings>, 'assetAddress' | 'assetChainId'>
+
 export type StoredOperatorSettings = {
 	approvedUniverses: readonly string[]
-	centralizedMarkets: Omit<ReturnType<typeof serializeCentralizedMarketSettings>, 'assetAddress' | 'assetChainId'>
+	centralizedMarkets: StoredCentralizedMarketSettings
 	connectivity?: ConnectivitySettings | undefined
 	deployment: StoredDeploymentSettings
 	network?: NetworkName | undefined
@@ -168,12 +175,11 @@ export function durableJournalPaths(runtime: Pick<RuntimeSettings, 'historyFile'
 
 const durableJournalPathsMustBeDistinct = 'Runtime historyFile, positionFile, priceHistoryFile, and the derived settlement journal must use distinct paths'
 
-function validateRuntimeSettings(value: unknown): RuntimeSettings {
-	const runtime = requiredRecord(value, 'Runtime settings')
-	const keys = ['execute', 'historyFile', 'lookbackBlocks', 'maxHedgeSlippageBps', 'once', 'positionFile', 'priceHistoryFile', 'riskLimits', 'ui', 'uiHost', 'uiPort']
-	if (Object.keys(runtime).some(key => !keys.includes(key)) || keys.some(key => !(key in runtime))) throw new Error('Runtime settings require exactly the supported runtime fields')
-	if (typeof runtime['execute'] !== 'boolean' || typeof runtime['once'] !== 'boolean' || typeof runtime['ui'] !== 'boolean') throw new Error('Runtime execute, once, and ui settings must be booleans')
-	if (runtime['uiHost'] !== '127.0.0.1' && runtime['uiHost'] !== '0.0.0.0') throw new Error('Runtime uiHost must be 127.0.0.1 or 0.0.0.0')
+const RUNTIME_LIMIT_KEYS = ['lookbackBlocks', 'maxHedgeSlippageBps', 'riskLimits']
+
+/** Parses the runtime fields the dashboard's risk form edits; `runtime` must carry them and may carry nothing else. */
+function parseRuntimeLimits(runtime: Record<string, unknown>): RuntimeLimits {
+	if (RUNTIME_LIMIT_KEYS.some(key => !(key in runtime))) throw new Error('Runtime limits require lookbackBlocks, maxHedgeSlippageBps, and riskLimits')
 	const risk = requiredRecord(runtime['riskLimits'], 'Runtime risk limits')
 	const riskKeys = ['lifecycleGasReserveWeth', 'maxConcurrentPositions', 'maxDailyGasSpendWeth', 'maxPositionNotionalWeth', 'maxTotalLockedWeth']
 	if (Object.keys(risk).some(key => !riskKeys.includes(key)) || riskKeys.some(key => !(key in risk))) throw new Error('Runtime risk limits require exactly the supported risk fields')
@@ -182,28 +188,11 @@ function validateRuntimeSettings(value: unknown): RuntimeSettings {
 	if (maxPositionNotionalAttoWeth > maxTotalLockedAttoWeth) throw new Error('Runtime maxPositionNotionalAttoWeth cannot exceed maxTotalLockedAttoWeth')
 	const maxHedgeSlippageBps = nonnegativeBigInt(runtime['maxHedgeSlippageBps'], 'Runtime maxHedgeSlippageBps')
 	if (maxHedgeSlippageBps > 1_000n) throw new Error('Runtime maxHedgeSlippageBps must be from 0 to 1000')
-	if (runtime['once'] && runtime['ui']) throw new Error('Runtime once and ui cannot both be enabled')
-	const historyFile = filePath(runtime['historyFile'], 'Runtime historyFile')
-	const positionFile = filePath(runtime['positionFile'], 'Runtime positionFile')
-	const priceHistoryFile = filePath(runtime['priceHistoryFile'], 'Runtime priceHistoryFile')
-	const persistentPaths = durableJournalPaths({ historyFile, positionFile, priceHistoryFile }).map(path => resolve(path))
-	if (new Set(persistentPaths).size !== persistentPaths.length) throw new Error(durableJournalPathsMustBeDistinct)
+	const lookbackBlocks = nonnegativeBigInt(runtime['lookbackBlocks'], 'Runtime lookbackBlocks')
+	if (lookbackBlocks > 256n) throw new Error('Runtime lookbackBlocks must be from 0 through 256')
 	return {
-		execute: runtime['execute'],
-		historyFile,
-		lookbackBlocks: (() => {
-			const value = nonnegativeBigInt(runtime['lookbackBlocks'], 'Runtime lookbackBlocks')
-			// Version 4 previously shipped 50000 as the Docker default. Migrate only
-			// that known value so existing named volumes can start under the bounded
-			// scanner without accepting arbitrary out-of-range configuration.
-			if (value === 50_000n) return 256n
-			if (value > 256n) throw new Error('Runtime lookbackBlocks must be from 0 through 256')
-			return value
-		})(),
+		lookbackBlocks,
 		maxHedgeSlippageBps,
-		once: runtime['once'],
-		positionFile,
-		priceHistoryFile,
 		riskLimits: {
 			lifecycleGasReserveAttoWeth: weth(risk['lifecycleGasReserveWeth'], 'Runtime lifecycleGasReserveWeth'),
 			maxConcurrentPositions: integer(risk['maxConcurrentPositions'], 'Runtime maxConcurrentPositions', 1, 1_000),
@@ -211,6 +200,66 @@ function validateRuntimeSettings(value: unknown): RuntimeSettings {
 			maxPositionNotionalAttoWeth,
 			maxTotalLockedAttoWeth,
 		},
+	}
+}
+
+export function parseRuntimeLimitsRequest(value: unknown): RuntimeLimits {
+	const runtime = requiredRecord(value, 'Runtime limits')
+	for (const key of Object.keys(runtime)) {
+		if (!RUNTIME_LIMIT_KEYS.includes(key)) throw new Error(`Unknown runtime limit field: ${key}`)
+	}
+	return parseRuntimeLimits(runtime)
+}
+
+export function serializeRuntimeLimits(limits: RuntimeLimits): StoredRuntimeLimits {
+	return {
+		lookbackBlocks: limits.lookbackBlocks.toString(),
+		maxHedgeSlippageBps: limits.maxHedgeSlippageBps.toString(),
+		riskLimits: {
+			lifecycleGasReserveWeth: decimalWeth(limits.riskLimits.lifecycleGasReserveAttoWeth),
+			maxConcurrentPositions: limits.riskLimits.maxConcurrentPositions,
+			maxDailyGasSpendWeth: decimalWeth(limits.riskLimits.maxDailyGasSpendAttoWeth),
+			maxPositionNotionalWeth: decimalWeth(limits.riskLimits.maxPositionNotionalAttoWeth),
+			maxTotalLockedWeth: decimalWeth(limits.riskLimits.maxTotalLockedAttoWeth),
+		},
+	}
+}
+
+/** The stored form of the market policy: the asset identity comes from the selected network, never from the file. */
+export function serializeStoredCentralizedMarkets(settings: CentralizedMarketSettings): StoredCentralizedMarketSettings {
+	const { assetAddress: _assetAddress, assetChainId: _assetChainId, ...centralizedMarkets } = serializeCentralizedMarketSettings(settings)
+	return centralizedMarkets
+}
+
+/** Binds a market policy document to the selected network's REP identity, ignoring any asset identity in the document. */
+export function parseStoredCentralizedMarkets(value: unknown, rep: Address, network: NetworkName): CentralizedMarketSettings {
+	const marketSettings = requiredRecord(value, 'Centralized market settings')
+	return parseCentralizedMarketSettings({ ...marketSettings, assetAddress: rep, assetChainId: networkDeployment(network).chainId })
+}
+
+function validateRuntimeSettings(value: unknown): RuntimeSettings {
+	const runtime = requiredRecord(value, 'Runtime settings')
+	const keys = ['execute', 'historyFile', 'once', 'positionFile', 'priceHistoryFile', 'ui', 'uiHost', 'uiPort', ...RUNTIME_LIMIT_KEYS]
+	if (Object.keys(runtime).some(key => !keys.includes(key)) || keys.some(key => !(key in runtime))) throw new Error('Runtime settings require exactly the supported runtime fields')
+	if (typeof runtime['execute'] !== 'boolean' || typeof runtime['once'] !== 'boolean' || typeof runtime['ui'] !== 'boolean') throw new Error('Runtime execute, once, and ui settings must be booleans')
+	if (runtime['uiHost'] !== '127.0.0.1' && runtime['uiHost'] !== '0.0.0.0') throw new Error('Runtime uiHost must be 127.0.0.1 or 0.0.0.0')
+	// Version 4 previously shipped 50000 as the Docker default. Migrate only that known value when a complete document is
+	// parsed (file load and the complete editor) so existing named volumes can start under the bounded scanner; the
+	// focused risk form submits limits alone and gets the ordinary range error instead.
+	const limits = parseRuntimeLimits(runtime['lookbackBlocks'] === '50000' ? { ...runtime, lookbackBlocks: '256' } : runtime)
+	if (runtime['once'] && runtime['ui']) throw new Error('Runtime once and ui cannot both be enabled')
+	const historyFile = filePath(runtime['historyFile'], 'Runtime historyFile')
+	const positionFile = filePath(runtime['positionFile'], 'Runtime positionFile')
+	const priceHistoryFile = filePath(runtime['priceHistoryFile'], 'Runtime priceHistoryFile')
+	const persistentPaths = durableJournalPaths({ historyFile, positionFile, priceHistoryFile }).map(path => resolve(path))
+	if (new Set(persistentPaths).size !== persistentPaths.length) throw new Error(durableJournalPathsMustBeDistinct)
+	return {
+		...limits,
+		execute: runtime['execute'],
+		historyFile,
+		once: runtime['once'],
+		positionFile,
+		priceHistoryFile,
 		ui: runtime['ui'],
 		uiHost: runtime['uiHost'],
 		uiPort: integer(runtime['uiPort'], 'Runtime uiPort', 1, 65_535),
@@ -246,9 +295,7 @@ export function parseOperatorSettings(value: unknown, preservedPrivateKey?: Hex)
 	const deployment = validateDeploymentSettings(record['deployment'], network)
 	const connectivity = networkConfigured ? validateConnectivitySettings(record['connectivity']) : { publicRpcUrls: [], readRpcUrl: 'http://127.0.0.1:1' }
 	validateIndependentReadRpcUrls(connectivity.readRpcUrl, deployment.quorumRpcUrls)
-	const { chainId } = networkDeployment(network)
-	const marketSettings = requiredRecord(record['centralizedMarkets'] ?? defaultCentralizedMarkets(deployment.rep, chainId), 'Centralized market settings')
-	const centralizedMarkets = parseCentralizedMarketSettings({ ...marketSettings, assetAddress: deployment.rep, assetChainId: chainId })
+	const centralizedMarkets = parseStoredCentralizedMarkets(record['centralizedMarkets'] ?? defaultCentralizedMarkets(deployment.rep, networkDeployment(network).chainId), deployment.rep, network)
 	const submission = validateSubmissionSettings(record['submission'])
 	const settlement = parseSettlementSettings(record['settlement'])
 	const runtime = validateRuntimeSettings(record['runtime'])
@@ -275,9 +322,8 @@ export function parseOperatorSettings(value: unknown, preservedPrivateKey?: Hex)
 export function serializeOperatorSettings(settings: PersistedOperatorSettings, redactPrivateKey = false): StoredOperatorSettings {
 	const { deploymentManifest, quorumRpcUrls, uniswapV2Enabled, uniswapV3Enabled, uniswapV4Enabled } = settings.deployment
 	const deployment = { deploymentManifest, quorumRpcUrls, uniswapV2Enabled, uniswapV3Enabled, uniswapV4Enabled }
-	const { assetAddress: _assetAddress, assetChainId: _assetChainId, ...centralizedMarkets } = serializeCentralizedMarketSettings(settings.centralizedMarkets)
 	return {
-		centralizedMarkets,
+		centralizedMarkets: serializeStoredCentralizedMarkets(settings.centralizedMarkets),
 		connectivity: settings.networkConfigured ? settings.connectivity : undefined,
 		deployment,
 		network: settings.network,
@@ -286,20 +332,12 @@ export function serializeOperatorSettings(settings: PersistedOperatorSettings, r
 		privateKey: redactPrivateKey && settings.privateKey !== undefined ? PRESERVE_PRIVATE_KEY : settings.privateKey,
 		rpcQuorum: settings.rpcQuorum,
 		runtime: {
+			...serializeRuntimeLimits(settings.runtime),
 			execute: settings.runtime.execute,
 			historyFile: settings.runtime.historyFile,
-			lookbackBlocks: settings.runtime.lookbackBlocks.toString(),
-			maxHedgeSlippageBps: settings.runtime.maxHedgeSlippageBps.toString(),
 			once: settings.runtime.once,
 			positionFile: settings.runtime.positionFile,
 			priceHistoryFile: settings.runtime.priceHistoryFile,
-			riskLimits: {
-				lifecycleGasReserveWeth: decimalWeth(settings.runtime.riskLimits.lifecycleGasReserveAttoWeth),
-				maxConcurrentPositions: settings.runtime.riskLimits.maxConcurrentPositions,
-				maxDailyGasSpendWeth: decimalWeth(settings.runtime.riskLimits.maxDailyGasSpendAttoWeth),
-				maxPositionNotionalWeth: decimalWeth(settings.runtime.riskLimits.maxPositionNotionalAttoWeth),
-				maxTotalLockedWeth: decimalWeth(settings.runtime.riskLimits.maxTotalLockedAttoWeth),
-			},
 			ui: settings.runtime.ui,
 			uiHost: settings.runtime.uiHost,
 			uiPort: settings.runtime.uiPort,

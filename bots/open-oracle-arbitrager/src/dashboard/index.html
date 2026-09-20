@@ -49,7 +49,7 @@
 						<div class="metric"><span>Per-position limit</span><strong id="risk-position-limit">—</strong></div>
 						<div class="metric"><span>Lifecycle reserve floor</span><strong id="risk-lifecycle-reserve">—</strong></div>
 					</div>
-					<p class="section-note">Risk limits are stored in the complete configuration below.</p>
+					<p class="section-note">Risk limits are edited under Settings › Risk limits and scanning.</p>
 				</section>
 			</div>
 
@@ -331,136 +331,259 @@
 				<div>
 					<p class="eyebrow">Operator controls</p>
 					<h2>Settings</h2>
-					<p id="settings-chain-scope" class="section-note">Select a chain profile first. Every setting and durable journal is stored separately for that chain.</p>
-					<p class="section-note">Coordinator-free event discovery scans newest first within <code>runtime.lookbackBlocks</code>: <code>0</code> disables it, and <code>1–256</code> scans that many latest blocks. Configure the value in Complete bot configuration. Approved coordinators use current contract state instead.</p>
+					<p id="settings-chain-scope" class="section-note">Select a chain profile first.</p>
 				</div>
 			</div>
+			<nav id="settings-nav" class="settings-nav" aria-label="Settings sections" data-page-content="settings">
+				<a href="#settings-connect" data-settings-target="settings-connect"><span class="settings-step">1</span>Connect</a><a href="#settings-markets" data-settings-target="settings-markets"><span class="settings-step">2</span>Markets</a><a href="#settings-policy" data-settings-target="settings-policy"><span class="settings-step">3</span>Trading policy</a><a href="#settings-go-live" data-settings-target="settings-go-live"><span class="settings-step">4</span>Go live</a><a href="#settings-advanced" data-settings-target="settings-advanced">Advanced</a>
+			</nav>
 			<div id="settings-load-state" class="notice settings-load-state" data-page-content="settings"><span id="settings-load-status" role="status" aria-live="polite">Loading operator configuration…</span><button id="retry-settings-button" class="button button-secondary" type="button" hidden>Retry</button></div>
 			<div class="settings-stack" data-page-content="settings">
-				<details id="network-connectivity" class="settings-group panel" open>
-					<summary>
-						<span class="settings-summary-copy"><strong>Chain and RPC connectivity</strong><small id="network-value">Unknown network</small></span>
-					</summary>
-					<div class="settings-body">
-						<p id="network-target-status" class="muted" role="status" aria-live="polite" hidden></p>
-						<p class="muted">Changing Chain saves the current profile, safely pauses the bot, and loads that chain's separate settings and journals without restarting the process.</p>
-						<form id="connectivity-form">
-							<fieldset id="connectivity-fieldset" disabled>
-								<!-- rpc-connectivity-fields -->
-							</fieldset>
-							<div id="profile-switch-retry-actions" class="form-actions" hidden><button id="profile-switch-retry-button" class="button button-secondary" type="button" hidden>Retry profile load</button></div>
-						</form>
-						<div id="endpoint-checks" class="endpoint-checks" aria-label="Endpoint health checks"></div>
-					</div>
-				</details>
+				<section id="settings-connect" class="settings-section" aria-labelledby="settings-connect-title">
+					<h3 id="settings-connect-title" class="settings-section-title"><span class="settings-step">1</span>Connect</h3>
+					<details id="network-connectivity" class="settings-group panel" open>
+						<summary>
+							<span class="settings-summary-copy"><strong>Chain and RPC endpoints</strong><small id="network-value">Unknown network</small></span><span class="settings-badges" data-form="connectivity-form"></span>
+						</summary>
+						<div class="settings-body">
+							<p id="network-target-status" class="muted" role="status" aria-live="polite" hidden></p>
+							<p class="section-note">Changing Chain saves the current profile, safely pauses the bot, and loads that chain's separate settings and journals without restarting the process. Every endpoint is checked against the selected chain before it is accepted.</p>
+							<form id="connectivity-form">
+								<fieldset id="connectivity-fieldset" disabled>
+									<!-- rpc-connectivity-fields -->
+								</fieldset>
+								<div id="profile-switch-retry-actions" class="form-actions" hidden><button id="profile-switch-retry-button" class="button button-secondary" type="button" hidden>Retry profile load</button></div>
+							</form>
+							<div id="endpoint-checks" class="endpoint-checks" aria-label="Endpoint health checks"></div>
+						</div>
+					</details>
+				</section>
 
-				<details class="settings-group panel" open>
-					<summary>
-						<span class="settings-summary-copy"><strong>Strategy</strong><small>Profit threshold, price safety, timing, and polling</small></span>
-					</summary>
-					<div class="settings-body">
-						<form id="strategy-form">
-							<fieldset id="strategy-fieldset" disabled>
-								<div class="field-grid">
-									<label><span>Minimum profit (WETH)</span><input name="minimumProfitWeth" type="number" min="0" max="1000" step="any" required /></label><label><span>Minimum return (bps)</span><input name="minimumProfitBps" type="number" min="0" max="100000" step="1" required /></label><label><span>Maximum spot/TWAP ticks</span><input name="maxSpotTwapTicks" type="number" min="0" max="100000" step="1" required /></label><label><span>TWAP window (seconds)</span><input name="twapSeconds" type="number" min="60" max="86400" required /></label><label><span>Minimum remaining blocks</span><input name="minimumRemainingBlocks" type="number" min="1" max="1000" step="1" required /></label><label><span>Minimum remaining seconds</span><input name="minimumRemainingSeconds" type="number" min="1" max="86400" step="1" required /></label><label><span>Poll interval (milliseconds)</span><input name="pollMilliseconds" type="number" min="1000" max="3600000" required /></label>
-								</div>
-								<div class="form-actions"><span id="form-status" class="muted" aria-live="polite">Changes do not enable execution.</span><button class="button" type="submit">Apply strategy</button></div>
-							</fieldset>
-						</form>
-					</div>
-				</details>
+				<section id="settings-markets" class="settings-section" aria-labelledby="settings-markets-title">
+					<h3 id="settings-markets-title" class="settings-section-title"><span class="settings-step">2</span>Markets</h3>
+					<details class="settings-group panel" open>
+						<summary>
+							<span class="settings-summary-copy"><strong>Approved universes</strong><small>Only explicitly approved universe REP can be traded</small></span><span class="settings-badges" data-form="tokens-form"></span>
+						</summary>
+						<div class="settings-body">
+							<form id="tokens-form">
+								<fieldset id="tokens-fieldset" disabled>
+									<div id="approved-universes" class="universe-explorer">Universe discovery has not completed.</div>
+									<p class="section-note">Existing positions continue recovery after a change.</p>
+									<div class="form-actions"><span id="tokens-status" class="muted" aria-live="polite"></span><button class="button" type="submit">Save universe approvals</button></div>
+								</fieldset>
+							</form>
+						</div>
+					</details>
 
-				<details class="settings-group panel" open>
-					<summary>
-						<span class="settings-summary-copy"><strong>Execution wallet</strong><small id="signer-status" class="muted" role="status" aria-live="polite">Locked</small></span>
-					</summary>
-					<div class="settings-body">
-						<form id="signer-form">
-							<fieldset id="signer-fieldset" disabled>
-								<label><span>Private key</span><input id="private-key" type="password" autocomplete="off" aria-describedby="signer-status" placeholder="0x…" spellcheck="false" required /></label><label class="remember-signer"><input id="remember-signer" type="checkbox" /><span>Save this key in the local operator file</span></label>
-								<div class="form-actions">
-									<span class="muted">Remembered keys remain local. Keys are never returned by the API, stored in history, or written to logs.</span>
-									<div class="button-group"><button id="forget-signer-button" class="button button-secondary" type="button">Forget saved key</button><button id="clear-signer-button" class="button button-secondary" type="button">Clear signer &amp; saved key</button><button id="set-signer-button" class="button" type="submit" disabled>Set signer</button></div>
-								</div>
-							</fieldset>
-						</form>
-					</div>
-				</details>
+					<details id="deployment-configuration" class="settings-group panel" open>
+						<summary>
+							<span class="settings-summary-copy"><strong>Venues and executor</strong><small>Uniswap versions and the executor contract</small></span><span class="settings-badges" data-form="deployment-form"></span>
+						</summary>
+						<div class="settings-body">
+							<form id="deployment-form">
+								<fieldset id="deployment-fieldset" disabled>
+									<div class="deployment-grid">
+										<div class="derived-contract"><span>Derived executor</span><p id="deployment-executor" class="mono">Loading deployment…</p></div><div class="derived-contract"><span>Pool coordinators</span><p id="deployment-coordinators" class="mono" tabindex="0" aria-label="Discovered pool coordinators">Discovered from approved universes.</p></div><label class="venue-switch"><input id="deployment-v2-enabled" type="checkbox" /><span>Enable Uniswap V2 · mainnet only</span></label><label class="venue-switch"><input id="deployment-v3-enabled" type="checkbox" /><span>Enable Uniswap V3</span></label><label class="venue-switch"><input id="deployment-v4-enabled" type="checkbox" /><span>Enable Uniswap V4</span></label>
+									</div>
+									<p class="section-note">Uniswap addresses follow the selected network. Each enabled version supplies its own prices; the TWAP check applies to V3.</p>
+									<div class="form-actions"><span id="deployment-status" class="muted" aria-live="polite"></span><button class="button" type="submit">Save venues</button></div>
+								</fieldset>
+							</form>
+							<form id="create2-form" class="create2-form">
+								<fieldset id="create2-fieldset" disabled>
+									<p class="section-note">Deploys through the canonical deterministic proxy with the active signer.</p>
+									<div class="form-actions"><span id="create2-status" class="muted" aria-live="polite"></span><button id="deploy-executor-button" class="button" type="submit">Deploy predictable executor</button></div>
+								</fieldset>
+							</form>
+						</div>
+					</details>
 
-				<details id="deployment-configuration" class="settings-group panel" open>
-					<summary>
-						<span class="settings-summary-copy"><strong>Deployment configuration</strong><small>Executor, venues, manifest, and quorum RPCs</small></span>
-					</summary>
-					<div class="settings-body">
-						<form id="deployment-form">
-							<fieldset id="deployment-fieldset" disabled>
-								<div class="deployment-grid">
-									<div class="derived-contract"><span>Derived executor</span><p id="deployment-executor" class="mono">Loading deployment…</p></div><label class="venue-switch"><input id="deployment-v2-enabled" type="checkbox" /><span>Enable Uniswap V2 · mainnet only</span></label><label class="venue-switch"><input id="deployment-v3-enabled" type="checkbox" /><span>Enable Uniswap V3</span></label><label class="venue-switch"><input id="deployment-v4-enabled" type="checkbox" /><span>Enable Uniswap V4</span></label><div class="derived-contract"><span>Pool coordinators</span><p id="deployment-coordinators" class="mono" tabindex="0" aria-label="Discovered pool coordinators">Discovered from approved universes.</p></div><label><span>Independent quorum RPCs · optional; quorum 2 requires two</span><textarea id="deployment-quorum-rpcs" rows="3" spellcheck="false"></textarea></label><label class="deployment-manifest-field"><span>Execution manifest JSON</span><textarea id="deployment-manifest" rows="8" spellcheck="false" placeholder="Required before execution" aria-describedby="deployment-manifest-help"></textarea></label>
-								</div>
-								<p class="section-note">Uniswap addresses follow the selected network. Each enabled version supplies its own prices. The TWAP check applies to V3.</p>
-								<p id="deployment-manifest-help" class="section-note">The read quorum authenticates contract bytecode before the configuration becomes active.</p>
-								<div class="form-actions"><span id="deployment-status" class="muted" aria-live="polite">Venue, manifest, and quorum changes apply at the next scan boundary.</span><button class="button" type="submit">Save deployment configuration</button></div>
-							</fieldset>
-						</form>
-						<form id="create2-form" class="create2-form">
-							<fieldset id="create2-fieldset" disabled>
+					<details class="settings-group panel" open>
+						<summary>
+							<span class="settings-summary-copy"><strong>REP market sources</strong><small>Centralized exchanges and consensus thresholds for the reference price</small></span><span class="settings-badges" data-form="market-form"></span>
+						</summary>
+						<div class="settings-body">
+							<form id="market-form">
+								<fieldset id="market-fieldset" disabled>
+									<div class="table-scroll" tabindex="0" aria-label="Centralized market sources">
+										<table class="market-source-table">
+											<thead>
+												<tr>
+													<th scope="col">Exchange · CCXT id</th>
+													<th scope="col">REP market</th>
+													<th scope="col">ETH market · blank when quoted in ETH</th>
+													<th scope="col"><span class="visually-hidden">Remove</span></th>
+												</tr>
+											</thead>
+											<tbody id="market-source-rows"></tbody>
+										</table>
+									</div>
+									<div class="market-source-actions"><p id="market-sources-empty" class="empty-state">No centralized sources configured; the guard relies on DEX evidence only.</p><button id="market-source-add" class="button button-secondary" type="button">Add source</button></div>
+									<label class="venue-switch form-switch"><input id="market-required" type="checkbox" /><span>Require market consensus before execution</span></label>
+									<div class="field-grid">
+										<label><span>Minimum sources</span><input name="minimumSourceCount" type="number" min="1" max="100" step="1" required /></label><label><span>Depth band (bps)</span><input name="depthBps" type="number" min="1" max="5000" step="1" required /></label><label><span>Maximum venue dispersion (bps)</span><input name="maximumVenueDispersionBps" type="number" min="1" max="10000" step="1" required /></label><label><span>Maximum DEX deviation (bps)</span><input name="maximumDexDeviationBps" type="number" min="1" max="10000" step="1" required /></label><label><span>Minimum bid depth (ETH)</span><input name="minimumBidDepthEth" type="number" min="0" step="any" required /></label><label><span>Minimum ask depth (ETH)</span><input name="minimumAskDepthEth" type="number" min="0" step="any" required /></label><label><span>Observation max age (ms)</span><input name="maximumObservationAgeMilliseconds" type="number" min="1000" max="3600000" step="1" required /></label><label><span>Request timeout (ms)</span><input name="requestTimeoutMilliseconds" type="number" min="250" max="60000" step="1" required /></label><label><span>Order book depth (levels)</span><input name="orderBookLimit" type="number" min="1" max="1000" step="1" required /></label>
+									</div>
+									<details class="settings-subpanel">
+										<summary>Venue consensus JSON · DEX sources and temporal quorum</summary>
+										<label><span>venueConsensus · leave empty to omit</span><textarea id="market-venue-consensus-json" class="mono" rows="10" spellcheck="false"></textarea></label>
+									</details>
+									<p class="section-note">Source changes discard prior evidence before a replacement source can authorize execution.</p>
+									<div class="form-actions"><span id="market-status" class="muted" aria-live="polite"></span><button class="button" type="submit">Save market sources</button></div>
+								</fieldset>
+							</form>
+						</div>
+					</details>
+				</section>
 
-								<div class="form-actions"><span id="create2-status" class="muted" aria-live="polite">Deployment uses the canonical deterministic deployment proxy and the active local signer.</span><button id="deploy-executor-button" class="button" type="submit">Deploy predictable executor</button></div>
-							</fieldset>
-						</form>
-					</div>
-				</details>
+				<section id="settings-policy" class="settings-section" aria-labelledby="settings-policy-title">
+					<h3 id="settings-policy-title" class="settings-section-title"><span class="settings-step">3</span>Trading policy</h3>
+					<details class="settings-group panel" open>
+						<summary>
+							<span class="settings-summary-copy"><strong>Strategy</strong><small>Profit threshold, price safety, timing, and polling</small></span><span class="settings-badges" data-form="strategy-form"></span>
+						</summary>
+						<div class="settings-body">
+							<form id="strategy-form">
+								<fieldset id="strategy-fieldset" disabled>
+									<div class="field-grid">
+										<label><span>Minimum profit (WETH)</span><input name="minimumProfitWeth" type="number" min="0" max="1000" step="any" required /></label><label><span>Minimum return (bps)</span><input name="minimumProfitBps" type="number" min="0" max="100000" step="1" required /></label><label><span>Maximum spot/TWAP ticks</span><input name="maxSpotTwapTicks" type="number" min="0" max="100000" step="1" required /></label><label><span>TWAP window (seconds)</span><input name="twapSeconds" type="number" min="60" max="86400" required /></label><label><span>Minimum remaining blocks</span><input name="minimumRemainingBlocks" type="number" min="1" max="1000" step="1" required /></label><label><span>Minimum remaining seconds</span><input name="minimumRemainingSeconds" type="number" min="1" max="86400" step="1" required /></label><label><span>Poll interval (milliseconds)</span><input name="pollMilliseconds" type="number" min="1000" max="3600000" required /></label>
+									</div>
+									<div class="form-actions"><span id="form-status" class="muted" aria-live="polite"></span><button class="button" type="submit">Save strategy</button></div>
+								</fieldset>
+							</form>
+						</div>
+					</details>
 
-				<details class="settings-group panel" open>
-					<summary>
-						<span class="settings-summary-copy"><strong>Submission</strong><small>Transaction delivery · applies to the next scan</small></span>
-					</summary>
-					<div class="settings-body">
-						<form id="submission-form">
-							<fieldset id="submission-fieldset" disabled>
-								<div class="submission-grid">
-									<label
-										><span>Delivery mode</span
-										><select id="submission-mode" name="submissionMode">
-											<option value="private">Private relays</option>
-											<option value="public">Public mempool</option>
-										</select></label
-									><label class="relay-urls-field"><span>Private relay URLs · one per line, up to 8</span><textarea id="relay-urls" name="relayUrls" rows="3" spellcheck="false"></textarea></label><label><span>Required successful bundle relays</span><input id="minimum-bundle-relay-successes" type="number" min="1" max="8" step="1" required /></label>
-								</div>
-								<div class="form-actions"><span id="submission-status" class="muted" aria-live="polite">Both delivery modes submit one parent-bound atomic entry transaction and require sufficient pre-existing ERC-20 and OpenOracle internal allowances before an opportunity is eligible.</span><button class="button" type="submit">Apply submission</button></div>
-							</fieldset>
-						</form>
-					</div>
-				</details>
+					<details class="settings-group panel" open>
+						<summary>
+							<span class="settings-summary-copy"><strong>Risk limits and scanning</strong><small>Capital caps, gas budget, hedge slippage, and event lookback</small></span><span class="settings-badges" data-form="runtime-form"></span>
+						</summary>
+						<div class="settings-body">
+							<div id="risk-usage" class="usage-row" aria-label="Current risk usage">
+								<div class="usage-metric"><span>Locked now</span><strong id="usage-locked">—</strong></div><div class="usage-metric"><span>Open positions</span><strong id="usage-positions">—</strong></div><div class="usage-metric"><span>Gas spent today</span><strong id="usage-daily-gas">—</strong></div>
+							</div>
+							<form id="runtime-form">
+								<fieldset id="runtime-fieldset" disabled>
+									<div class="field-grid">
+										<label><span>Maximum position notional (WETH)</span><input name="maxPositionNotionalWeth" type="number" min="0" step="any" required /></label><label><span>Maximum total locked (WETH)</span><input name="maxTotalLockedWeth" type="number" min="0" step="any" required /></label><label><span>Maximum concurrent positions</span><input name="maxConcurrentPositions" type="number" min="1" max="1000" step="1" required /></label><label><span>Maximum daily gas spend (WETH)</span><input name="maxDailyGasSpendWeth" type="number" min="0" step="any" required /></label><label><span>Lifecycle gas reserve (WETH)</span><input name="lifecycleGasReserveWeth" type="number" min="0" step="any" required /></label><label><span>Maximum hedge slippage (bps)</span><input name="maxHedgeSlippageBps" type="number" min="0" max="1000" step="1" required /></label><label><span>Event lookback (blocks · 0 disables)</span><input name="lookbackBlocks" type="number" min="0" max="256" step="1" required /></label>
+									</div>
+									<p class="section-note">Caps are rechecked before every entry; changing the lookback rebuilds the coordinator-free report window.</p>
+									<div class="form-actions"><span id="runtime-status" class="muted" aria-live="polite"></span><button class="button" type="submit">Save risk limits</button></div>
+								</fieldset>
+							</form>
+						</div>
+					</details>
 
-				<details class="settings-group panel" open>
-					<summary>
-						<span class="settings-summary-copy"><strong>Approved universes</strong><small>Only explicitly approved universe REP can be traded</small></span>
-					</summary>
-					<div class="settings-body">
-						<form id="tokens-form">
-							<fieldset id="tokens-fieldset" disabled>
-								<div id="approved-universes" class="universe-explorer">Universe discovery has not completed.</div>
-								<div class="form-actions"><span id="tokens-status" class="muted" aria-live="polite">Changes apply after saving. Existing positions continue recovery.</span><button class="button" type="submit">Save universe approvals</button></div>
-							</fieldset>
-						</form>
-					</div>
-				</details>
+					<details class="settings-group panel" open>
+						<summary>
+							<span class="settings-summary-copy"><strong>Settlement</strong><small id="settlement-panel-summary">Third-party settlement of reports the bot never disputed</small></span><span class="settings-badges" data-form="settlement-form"></span>
+						</summary>
+						<div class="settings-body">
+							<form id="settlement-form">
+								<fieldset id="settlement-fieldset" disabled>
+									<label class="venue-switch form-switch"><input id="settlement-enabled" type="checkbox" /><span>Enable third-party settlement</span></label>
+									<div class="field-grid">
+										<label><span>Minimum net (ETH)</span><input name="settlementMinimumProfitWeth" type="number" min="0" max="1" step="any" required /></label><label><span>Gas price cap (nanoETH)</span><input name="settlementMaxGasPriceNanoEth" type="number" min="0.000000001" max="10000" step="any" required /></label><label><span>Reward withdraw threshold (ETH)</span><input name="settlementRewardWithdrawThresholdEth" type="number" min="0.000000000000000001" max="100" step="any" required /></label>
+									</div>
+									<p class="section-note">Settler rewards are paid in ETH. Dry-run mode only reports settlement decisions; settlement shares the daily gas budget with positions.</p>
+									<div class="form-actions"><span id="settlement-status" class="muted" aria-live="polite"></span><button class="button" type="submit">Save settlement</button></div>
+								</fieldset>
+							</form>
+						</div>
+					</details>
+				</section>
 
-				<details id="complete-configuration" class="settings-group panel" open>
-					<summary>
-						<span class="settings-summary-copy"><strong>Complete bot configuration</strong><small>Advanced single source of truth</small></span>
-					</summary>
-					<div class="settings-body">
-						<div class="section-heading"><span></span><button id="reload-configuration-button" class="button button-secondary" type="button" disabled>Reload configuration</button></div>
-						<form id="configuration-form">
-							<fieldset id="configuration-fieldset" disabled>
-								<label><span>Operator configuration JSON</span><textarea id="configuration-json" class="configuration-json mono" rows="24" spellcheck="false" required></textarea></label>
-								<div class="form-actions"><span id="configuration-status" class="muted" aria-live="polite"></span><button class="button" type="submit">Validate &amp; save</button></div>
-							</fieldset>
-						</form>
-					</div>
-				</details>
+				<section id="settings-go-live" class="settings-section" aria-labelledby="settings-go-live-title">
+					<h3 id="settings-go-live-title" class="settings-section-title"><span class="settings-step">4</span>Go live</h3>
+					<details class="settings-group panel" open>
+						<summary>
+							<span class="settings-summary-copy"><strong>Execution wallet</strong><small id="signer-status" class="muted" role="status" aria-live="polite">Locked</small></span>
+						</summary>
+						<div class="settings-body">
+							<form id="signer-form">
+								<fieldset id="signer-fieldset" disabled>
+									<label><span>Private key</span><input id="private-key" type="password" autocomplete="off" aria-describedby="signer-status" placeholder="0x…" spellcheck="false" required /></label><label class="remember-signer"><input id="remember-signer" type="checkbox" /><span>Save this key in the local operator file</span></label>
+									<div class="form-actions">
+										<span class="muted">Keys stay local and are never returned by the API or logged.</span>
+										<div class="button-group"><button id="forget-signer-button" class="button button-secondary" type="button">Remove saved key · keep signer</button><button id="clear-signer-button" class="button button-secondary" type="button">Remove signer &amp; saved key</button><button id="set-signer-button" class="button" type="submit" disabled>Set signer</button></div>
+									</div>
+								</fieldset>
+							</form>
+						</div>
+					</details>
+
+					<details class="settings-group panel" open>
+						<summary>
+							<span class="settings-summary-copy"><strong>Submission</strong><small>Transaction delivery</small></span><span class="settings-badges" data-form="submission-form"></span>
+						</summary>
+						<div class="settings-body">
+							<form id="submission-form">
+								<fieldset id="submission-fieldset" disabled>
+									<div class="submission-grid">
+										<label
+											><span>Delivery mode</span
+											><select id="submission-mode" name="submissionMode">
+												<option value="private">Private relays</option>
+												<option value="public">Public mempool</option>
+											</select></label
+										><label class="relay-urls-field"><span>Private relay URLs · one per line, up to 8</span><textarea id="relay-urls" name="relayUrls" rows="3" spellcheck="false"></textarea></label><label><span>Required successful bundle relays</span><input id="minimum-bundle-relay-successes" type="number" min="1" max="8" step="1" required /></label>
+									</div>
+									<p class="section-note">Both delivery modes submit one parent-bound atomic entry transaction and require sufficient pre-existing ERC-20 and OpenOracle internal allowances before an opportunity is eligible.</p>
+									<div class="form-actions"><span id="submission-status" class="muted" aria-live="polite"></span><button class="button" type="submit">Save submission</button></div>
+								</fieldset>
+							</form>
+						</div>
+					</details>
+
+					<details id="execution-mode" class="settings-group panel" open>
+						<summary>
+							<span class="settings-summary-copy"><strong>Execution mode</strong><small id="execution-mode-summary">Dry run</small></span><span class="settings-badges" data-form="execution-form"></span>
+						</summary>
+						<div class="settings-body">
+							<ul id="execution-checklist" class="readiness-list" aria-label="Live execution prerequisites"></ul>
+							<form id="execution-form">
+								<fieldset id="execution-fieldset" disabled>
+									<label class="venue-switch form-switch"><input id="execution-enabled" type="checkbox" /><span>Live execution · sign and submit transactions</span></label>
+									<p class="section-note">Enabling pauses the bot; it activates at the next scan boundary and signs only after you resume through the readiness check.</p>
+									<div class="form-actions"><span id="execution-status" class="muted" aria-live="polite"></span><button class="button" type="submit">Save execution mode</button></div>
+								</fieldset>
+							</form>
+						</div>
+					</details>
+				</section>
+
+				<section id="settings-advanced" class="settings-section" aria-labelledby="settings-advanced-title">
+					<h3 id="settings-advanced-title" class="settings-section-title">Advanced</h3>
+					<details id="manifest-configuration" class="settings-group panel">
+						<summary>
+							<span class="settings-summary-copy"><strong>Execution manifest</strong><small id="manifest-summary">Required before live execution</small></span><span class="settings-badges" data-form="manifest-form"></span>
+						</summary>
+						<div class="settings-body">
+							<form id="manifest-form">
+								<fieldset id="manifest-fieldset" disabled>
+									<label><span>Execution manifest JSON</span><textarea id="deployment-manifest" class="mono" rows="8" spellcheck="false" placeholder="Required before execution" aria-describedby="deployment-manifest-help"></textarea></label>
+									<p id="deployment-manifest-help" class="section-note">Generate it with <code>bun run manifest -- generate</code>; the read quorum authenticates contract bytecode against it before the configuration becomes active.</p>
+									<div class="form-actions"><span id="manifest-status" class="muted" aria-live="polite"></span><button class="button" type="submit">Save manifest</button></div>
+								</fieldset>
+							</form>
+						</div>
+					</details>
+
+					<details id="complete-configuration" class="settings-group panel">
+						<summary>
+							<span class="settings-summary-copy"><strong>Complete configuration</strong><small>Export or import the whole operator file · prefer the forms above</small></span><span class="settings-badges" data-form="configuration-form"></span>
+						</summary>
+						<div class="settings-body">
+							<div class="section-heading"><p class="section-note">Saving here replaces every section at once and fails if a form saved since the last reload.</p><button id="reload-configuration-button" class="button button-secondary" type="button" disabled>Reload configuration</button></div>
+							<form id="configuration-form">
+								<fieldset id="configuration-fieldset" disabled>
+									<label><span>Operator configuration JSON</span><textarea id="configuration-json" class="configuration-json mono" rows="24" spellcheck="false" required></textarea></label>
+									<div class="form-actions"><span id="configuration-status" class="muted" aria-live="polite"></span><button class="button" type="submit">Save configuration</button></div>
+								</fieldset>
+							</form>
+						</div>
+					</details>
+				</section>
 			</div>
 		</main>
 

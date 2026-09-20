@@ -159,9 +159,9 @@ bun install --frozen-lockfile
 ```
 
 Copy the paused example and run the executable with no arguments. On first start,
-save the chain and RPC endpoints through **Chain and RPC connectivity** in the dashboard;
-then review deployment values in **Complete bot configuration** before enabling
-execution:
+save the chain and RPC endpoints through **Chain and RPC endpoints** in the dashboard;
+then work down the Settings steps (Connect, Markets, Trading policy, Go live) before
+enabling execution:
 
 ```bash
 install -d -m 700 .state
@@ -205,16 +205,20 @@ port binding. Keep `ZOLTAR_BOT_DASHBOARD_LOOPBACK_PUBLISHED` paired with that
 
 The saved RPC agreement requirement defaults to `1`, so the primary read RPC is
 sufficient and independent quorum RPCs are optional. To require two agreeing readers,
-select **2 agreeing readers · independent quorum** in **Chain and RPC connectivity**
-and configure two independent quorum RPC URLs in addition to the primary reader so
-one endpoint may be unavailable. The saved agreement requirement and endpoint set
-apply automatically at the next scan boundary.
+select **2 · require two agreeing independent RPCs** in **Chain and RPC endpoints**
+and enter two independent quorum RPC URLs in the same form so one endpoint may be
+unavailable. The saved agreement requirement and endpoint set apply automatically at
+the next scan boundary.
 
-In **Chain and RPC connectivity**, select the chain, enter its read and public RPC URLs, and
-save so every endpoint is checked against that chain. Reload the dashboard, open
-Settings, then open [**Complete bot configuration**](http://127.0.0.1:4173/settings#complete-configuration).
-Approve universes, deploy the derived executor, select venues, and choose chain-specific
-history, price, and position paths, and save. OpenOracle, genesis REP, and WETH
+In **Chain and RPC endpoints**, select the chain, enter its read, public, and quorum RPC
+URLs, and save so every endpoint is checked against that chain. The Settings page is
+grouped into setup steps with a jump bar: **1 · Connect** (chain and RPCs), **2 ·
+Markets** (approved universes, venues and the executor, REP market sources), **3 ·
+Trading policy** (strategy, risk limits, settlement), **4 · Go live** (wallet,
+submission, execution mode), and **Advanced** (execution manifest and the complete
+configuration file, collapsed by default). Chain-specific history, price, and
+position paths are process-fixed and can only be edited in the file while the bot is
+stopped. OpenOracle, genesis REP, and WETH
 come from `docs/mainnet-deployment-addresses.json` or
 `docs/sepolia-deployment-addresses.json`. The root market asset and chain are
 derived from the same manifest; saved settings omit these identities. Supported live configuration changes apply automatically at the next
@@ -295,7 +299,7 @@ when broader diagnostic event history is operationally important.
 
 ## Run on Sepolia
 
-Choose Sepolia in **Chain and RPC connectivity**. The bot saves the current chain
+Choose Sepolia in **Chain and RPC endpoints**. The bot saves the current chain
 profile, pauses at a safe scan boundary, releases its current chain locks, and loads
 the selected profile without exiting the process or restarting the container. The
 browser reconnects automatically.
@@ -436,8 +440,19 @@ bun run manifest -- verify --rpc-url=https://independent-provider.example --mani
 `config/execution-manifest.example.json` is deliberately placeholder-only and must never
 be used as an execution trust root.
 
-Execution mode can be changed in the complete JSON editor and applies at the next
-scan boundary. When execution starts without a
+Execution mode can be changed in the dashboard's **Execution mode** form or the
+complete JSON editor and applies at the next scan boundary. The form shows a
+readiness checklist (signer, manifest, quorum RPCs, venue, delivery) and keeps the
+live-execution switch locked until every row holds; the panel summary reads **Dry
+run**, **Armed** (saved, activating at the next scan with the bot paused), or
+**Live**. The bot additionally
+rejects a switch to live execution unless the saved file is already startable in
+live mode (quorum RPCs, an enabled venue, and the deployment manifest), binds live
+execution to the signer that will be active at that boundary (the queued signer
+when a signer change is pending, otherwise the running one), reserves its
+exclusive process lock before saving, and pauses the bot so signing begins only
+after **Resume bot** and its readiness check; the complete editor binds execution
+to the persisted key and leaves the pause state as submitted. When execution starts without a
 remembered signer, it remains locked until a key is set in the local dashboard. Signer set/clear
 changes apply at the next unpaused scan boundary; they do not interrupt the current
 scan or confirmation wait, and clearing a signer cannot cancel a transaction already
@@ -664,7 +679,8 @@ The dashboard shows:
 - A read-only active risk envelope showing configured position, locked-capital,
   daily-gas, and lifecycle-reserve limits alongside current usage and remaining
   capacity.
-- Persistent strategy, RPC fanout, relay submission controls, and pause/resume.
+- Persistent strategy, risk-limit, settlement, execution-mode, RPC fanout, relay
+  submission, and REP market source controls, and pause/resume.
 - A token catalog with wallet balances and supported WETH/token pools. Each pool
   address links to the selected-network explorer. The [market discovery section](#token-and-pool-discovery)
   owns the venue, price, and liquidity semantics. A token with no supported pool is
@@ -738,9 +754,16 @@ Direct file editing is an offline workflow: stop the bot, edit the configuration
 and restart it. While the bot is running, use the dashboard only; do not edit the
 file concurrently with a dashboard save.
 
-The dashboard's focused forms and **Complete bot configuration** JSON editor write
-the same versioned file. The complete editor exposes network, runtime, paths, risk,
-strategy, connectivity, submission, tokens, and deployment fields. A saved private
+The dashboard's focused forms and the **Complete configuration** JSON editor under
+Advanced write the same versioned file. The focused forms cover chain connectivity
+with the quorum RPC URLs, approved universes, venues, the execution manifest, the
+REP market source policy, strategy, risk limits and event lookback, third-party
+settlement, the signer, submission, and execution mode. Each form's save button stays
+disabled until an edit differs from the loaded values, an **Unsaved changes** badge
+marks edited panels, and a **Queued · next scan** badge marks sections the bot has
+saved but not yet applied at a scan boundary. The complete editor exposes those plus
+the process-fixed runtime fields (paths, dashboard bind, and `once`), which cannot
+change while the bot runs. A saved private
 key is returned as `__PRESERVE_SAVED_PRIVATE_KEY__`, never as key material; leaving
 that marker unchanged preserves the credential.
 
@@ -950,7 +973,10 @@ and an `ETH/QUOTE` reference market unless REP is quoted directly in ETH. The
 cross market must be exactly `ETH/<REP quote>`; direct `REP/ETH` books must omit
 it. Set `assetSymbol` to `REP`; the bot derives the root market address and chain
 from the selected network manifest. Existing `assetAddress` and `assetChainId`
-values cannot override that identity and are omitted when settings are saved. CEX and DEX source IDs share one global namespace so
+values cannot override that identity and are omitted when settings are saved. The
+dashboard's **REP market sources** form edits this `centralizedMarkets` document as a
+source table plus threshold fields, with `venueConsensus` in an advanced JSON block.
+CEX and DEX source IDs share one global namespace so
 one failure domain cannot vote in both groups. The dashboard shows each
 normalized REP/ETH observation and its executable bid and
 ask depth inside the configured `depthBps` band. A cross-quoted observation is
@@ -1107,8 +1133,10 @@ quote-refresh, simulation, or inventory guards.
 
 All other startup values are in `deployment`, `submission`, `approvedUniverses`, `tokenAddresses`, and
 `runtime`; `network` and `connectivity` are absent until the focused dashboard form
-saves them. The UI's complete JSON editor can change the remaining fields;
-deployment, execution-mode, and risk changes take effect at the next scan boundary.
+saves them. **Risk limits and scanning** edits `runtime.riskLimits`,
+`runtime.maxHedgeSlippageBps`, and `runtime.lookbackBlocks`; **Execution mode** edits
+`runtime.execute`; the complete JSON editor can change the same fields. Deployment,
+execution-mode, and risk changes take effect at the next scan boundary.
 Process persistence paths and the dashboard bind cannot be edited while the bot is
 running.
 
@@ -1133,7 +1161,8 @@ dashboard's **Settlement queue** with the settler reward the coordinator escrowe
 the projected gas for `settle` (the callback gas limit plus the 1/63 slack
 OpenOracle requires after the callback, plus a fixed base and an amortised reward
 withdrawal, each padded the way the signer pads its gas limit), and the projected
-net. Settlement is off until `settlement` is set in the complete configuration:
+net. Settlement is off until it is enabled in the dashboard's **Settlement** form or
+under `settlement` in the complete configuration:
 
 | Setting | Default | JSON field | Effect |
 | --- | ---: | --- | --- |

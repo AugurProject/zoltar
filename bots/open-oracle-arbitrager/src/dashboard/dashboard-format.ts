@@ -198,7 +198,7 @@ export function opportunityDecisionReason(opportunity: Pick<EvaluatedOpportunity
 
 export function settlementDecisionReason(decision: SettlementDecision) {
 	const reasons: Record<SettlementDecision, string> = {
-		disabled: 'Third-party settlement is disabled in the complete configuration',
+		disabled: 'Third-party settlement is disabled under Settings › Settlement',
 		'dry-run-settlement': 'Reward covers gas and the minimum net; execution mode is disabled',
 		eligible: 'Reward covers gas and the minimum net',
 		'execution-failed': 'The settle transaction was skipped or reverted; see the operations log',
@@ -223,7 +223,7 @@ export function rewardWithdrawalLabel(settlements: Pick<SettlementSnapshot, 'set
 	if (settlements.unclaimedRewardEth === undefined) return 'Requires a local signer'
 	const reasons: Record<RewardWithdrawalDecision, string> = {
 		'below-threshold': `withdraws at ${settlements.settings.rewardWithdrawThresholdEth} ETH`,
-		disabled: 'withdrawal disabled in the complete configuration',
+		disabled: 'withdrawal disabled under Settings › Settlement',
 		'dry-run': 'withdrawal waits for execution mode',
 		due: 'withdrawal due',
 		'gas-price-cap': 'withdrawal waits for gas below the cap',

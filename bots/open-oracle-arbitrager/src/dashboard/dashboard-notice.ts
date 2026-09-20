@@ -9,7 +9,7 @@ function failureNoticeTitle(snapshot: PublicOperatorSnapshot, retryState: string
 
 export function operatorNoticePresentation(snapshot: PublicOperatorSnapshot) {
 	let noticeTitle = 'Dry-run mode'
-	let noticeCopy = 'Opportunities are monitored, but this process cannot submit transactions. Enable runtime.execute in the configuration to change modes.'
+	let noticeCopy = 'Opportunities are monitored, but this process cannot submit transactions. Enable live execution under Settings › Execution mode.'
 	let noticeTone = 'info'
 	if (snapshot.execute) {
 		noticeTitle = 'Execution mode is locally armed'

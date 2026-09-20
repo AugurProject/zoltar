@@ -9,14 +9,12 @@ import { emptySettlementSnapshot } from '#state/settlement-store'
 import { publicOperatorFailure, publicPollFailure } from '#state/public-failures'
 import type { PositionRecord } from '#state/position-store'
 
-const SECTION_PAGES = new Map<string | undefined, string>([
-	['operations', 'operations'],
-	['token-market-title', 'markets'],
-	['network-connectivity', 'settings'],
-	['deployment-configuration', 'settings'],
-	['create2-form', 'settings'],
-	['complete-configuration', 'settings'],
-])
+/** Every captured section lives on Settings except the operations table and the market panel. */
+function sectionPage(section: string | undefined) {
+	if (section === undefined) return 'overview'
+	if (section === 'operations') return 'operations'
+	return section === 'token-market-title' ? 'markets' : 'settings'
+}
 
 function fixtureLastError(attention: string, pollFailureMetadata: boolean, rawRpcFailure: string, rawNonPollFailure: string) {
 	if (attention !== 'error') return undefined
@@ -243,7 +241,7 @@ async function captureScreenshots(chromium: string, origin: string, outputDirect
 				: []),
 		] as const) {
 			const mobile = name === 'dashboard-network-mobile.png' || name === 'dashboard-markets-mobile.png' || name === 'dashboard-opportunities-mobile.png' || name === 'deployment-mobile.png' || name === 'configuration-mobile.png' || name === 'settings-mobile.png'
-			const fragment = SECTION_PAGES.get(section) ?? 'overview'
+			const fragment = sectionPage(section)
 			await replacePage(`${origin}/${fragment}`, mobile ? 390 : 1440, mobile ? 844 : 900)
 			await Bun.sleep(750)
 			if (section !== undefined) {
@@ -1749,6 +1747,7 @@ const snapshot = {
 	positionRecordCount: positionDerivedSnapshot.positionRecordCount,
 	positions: positionDerivedSnapshot.positions,
 	priceHistory,
+	queuedSettings: [],
 	queuedWallet: undefined,
 	reportPaths: [
 		{
