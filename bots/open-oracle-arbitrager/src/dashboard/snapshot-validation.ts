@@ -82,7 +82,7 @@ export const isSnapshot = object<PublicOperatorSnapshot>({
 					role: oneOf(...deploymentRoles),
 				}),
 			),
-			executor: oneOf('deployed', 'mismatched', 'missing'),
+			executorDeployed: booleanValue,
 		}),
 	),
 	balances: optional(

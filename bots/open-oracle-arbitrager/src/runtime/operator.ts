@@ -414,7 +414,7 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 							if (value !== config.network.chain.id) throw new Error(`Read RPC chain mismatch: expected ${config.network.chain.id.toString()}, received ${value.toString()}`)
 						})
 						await requireDeployedContractsOnce(client, [{ name: 'Multicall3', address: config.network.multicall3 }])
-						state.canonicalDeployments = await authenticateConfiguredDeployments(readClients, config)
+						await authenticateConfiguredDeployments(readClients, config, state)
 						state.endpointChecks = [...(config.execute ? [] : await checkConnectivity(config.connectivity, config.network.chain.id)), ...(await checkSubmissionEndpoints(config.submission, config.network.chain.id))]
 						startupValidated = true
 						if (executionActivationPending) {

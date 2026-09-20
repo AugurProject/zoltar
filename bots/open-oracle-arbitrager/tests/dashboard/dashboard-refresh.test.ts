@@ -778,7 +778,7 @@ test('go-live checklist unlocks the switch once every prerequisite holds, report
 			{ address, deployed: true, role: 'open-oracle' },
 			{ address, deployed: false, role: 'uniswap-router' },
 		],
-		executor: 'missing',
+		executorDeployed: false,
 	}
 	const snapshot = () =>
 		operatorSnapshot(
@@ -814,7 +814,7 @@ test('go-live checklist unlocks the switch once every prerequisite holds, report
 					{ address, deployed: true, role: 'open-oracle' },
 					{ address, deployed: true, role: 'uniswap-router' },
 				],
-				executor: 'deployed',
+				executorDeployed: true,
 			}
 			return { address: executor, alreadyDeployed: false, transactionHash: undefined }
 		},

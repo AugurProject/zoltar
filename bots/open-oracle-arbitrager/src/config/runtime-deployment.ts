@@ -1,7 +1,6 @@
 import { canonicalExecutorIdentity } from '#execution/executor-identity'
 import { canonicalSecurityPoolFactory } from '#config/network'
 import type { DeploymentRole } from '#config/deployment-roles'
-import { keccak256 } from '@zoltar/bot-shared/ethereum'
 import { rpcFailureWithContext, type Address, type Hex, type TransactionLog } from '@zoltar/bot-shared/ethereum'
 import { OPEN_ORACLE_FLAG_STORE_ALL, OPEN_ORACLE_FLAG_TIME_TYPE, OPEN_ORACLE_FLAG_TRACK_DISPUTES, OPEN_ORACLE_REPORT_SETTLED_TOPIC } from '@zoltar/open-oracle-shared/openOracle/openOracle'
 import { openOraclePriceCoordinatorAbi } from '#contracts/abi'
@@ -14,6 +13,7 @@ import { availableSettledValues, quorumValue } from '@zoltar/bot-shared/monitori
 import { rpcQuorumDescription, rpcQuorumRequirement } from '@zoltar/bot-shared/monitoring/rpc-quorum-policy'
 import { errorMessage } from '@zoltar/bot-shared/infrastructure/error-message'
 import { endpointLabel } from '#monitoring/connectivity'
+import type { OperatorState } from '#state/operator-state'
 
 const MAX_UNTRUSTED_DRY_RUN_REPORTS = 256
 const REORG_OVERLAP_BLOCKS = 12n
@@ -72,30 +72,27 @@ function requiredDeploymentIdentities(config: Configuration) {
 	return identities
 }
 
-/** Presence of the canonical executor bytecode and the contracts live execution depends on, as last inspected by a scan. */
+/**
+ * Presence of the canonical executor and the contracts live execution depends on, as last inspected by a scan. The CREATE2
+ * address commits to the bundled init code and the executor has no constructor state, so any code at that address is the
+ * bundled runtime code; presence is the whole check.
+ */
 export type CanonicalDeploymentStatus = {
 	contracts: readonly { address: Address; deployed: boolean; role: DeploymentRole }[]
-	executor: 'deployed' | 'mismatched' | 'missing'
+	executorDeployed: boolean
 }
 
-function executorStatus(code: Hex | undefined, runtimeCodeHash: Hex): CanonicalDeploymentStatus['executor'] {
-	if (code === undefined || code === '0x') return 'missing'
-	return keccak256(code) === runtimeCodeHash ? 'deployed' : 'mismatched'
-}
+const hasCode = (code: Hex | undefined) => code !== undefined && code !== '0x'
 
 async function inspectCanonicalDeploymentsWith(client: ReadClient, config: Configuration): Promise<CanonicalDeploymentStatus> {
-	const executor = canonicalExecutorIdentity()
 	const required = requiredDeploymentIdentities(config)
-	const [executorCode, ...codes] = await Promise.all([client.getCode({ address: executor.address }), ...required.map(identity => client.getCode({ address: identity.address }))])
-	return {
-		contracts: required.map((identity, index) => ({ ...identity, deployed: codes[index] !== undefined && codes[index] !== '0x' })),
-		executor: executorStatus(executorCode, executor.runtimeCodeHash),
-	}
+	const [executorCode, ...codes] = await Promise.all([client.getCode({ address: canonicalExecutorIdentity().address }), ...required.map(identity => client.getCode({ address: identity.address }))])
+	return { contracts: required.map((identity, index) => ({ ...identity, deployed: hasCode(codes[index]) })), executorDeployed: hasCode(executorCode) }
 }
 
 /** The reason live execution cannot rely on the inspected deployments, or undefined when every canonical contract is present. */
 function canonicalDeploymentFailure(status: CanonicalDeploymentStatus) {
-	if (status.executor !== 'deployed') return 'Canonical executor is missing or has unexpected bytecode; deploy the bundled executor'
+	if (!status.executorDeployed) return 'Canonical executor is not deployed; deploy the bundled executor'
 	const missing = status.contracts.find(contract => !contract.deployed)
 	return missing === undefined ? undefined : `Canonical ${missing.role} ${missing.address} is not deployed`
 }
@@ -105,7 +102,6 @@ function canonicalDeploymentFailure(status: CanonicalDeploymentStatus) {
  * before execution is armed. Dry run inspects the primary read endpoint only. Live mode needs the configured quorum to
  * agree the deployments are present; an endpoint that still reports them absent is set aside like an unavailable one so a
  * lagging node cannot block a quorum that has verified them, and its observation is returned when no quorum verifies them.
- * An endpoint reporting foreign executor bytecode is returned ahead of any verification so live mode refuses to start.
  */
 async function inspectCanonicalDeployments(clients: readonly ReadClient[], config: Configuration): Promise<CanonicalDeploymentStatus> {
 	const endpoints = [config.connectivity.readRpcUrl, ...config.quorumRpcUrls]
@@ -123,9 +119,6 @@ async function inspectCanonicalDeployments(clients: readonly ReadClient[], confi
 	const requirement = rpcQuorumRequirement()
 	const settled = await Promise.allSettled(clients.map(observe))
 	const available = availableSettledValues(settled)
-	// Lag can only make a deployment look absent; foreign bytecode at the canonical address is never set aside as lagging.
-	const mismatched = available.find(observation => observation.value.executor === 'mismatched')
-	if (mismatched !== undefined) return mismatched.value
 	const verified = available.filter(observation => canonicalDeploymentFailure(observation.value) === undefined)
 	if (verified.length >= requirement) return quorumValue('Canonical deployments', verified, requirement)
 	const incomplete = available.find(observation => canonicalDeploymentFailure(observation.value) !== undefined)
@@ -141,11 +134,14 @@ function assertCanonicalDeployments(config: Pick<Configuration, 'executor'>, sta
 	if (failure !== undefined) throw new Error(failure)
 }
 
-/** Inspects the canonical deployments for the checklist and, in live mode, refuses to start until they are all present. */
-export async function authenticateConfiguredDeployments(clients: readonly ReadClient[], config: Configuration) {
-	const status = await inspectCanonicalDeployments(clients, config)
-	if (config.execute) assertCanonicalDeployments(config, status)
-	return status
+/**
+ * Inspects the canonical deployments and publishes the result for the checklist before live mode enforces it, so a failed
+ * live startup shows what is missing instead of the previous inspection.
+ */
+export async function authenticateConfiguredDeployments(clients: readonly ReadClient[], config: Configuration, state: Pick<OperatorState, 'canonicalDeployments'>) {
+	state.canonicalDeployments = await inspectCanonicalDeployments(clients, config)
+	if (config.execute) assertCanonicalDeployments(config, state.canonicalDeployments)
+	return state.canonicalDeployments
 }
 
 /**

@@ -90,8 +90,9 @@ for the report lifecycle assumptions and economics used by the arbitrager.
   Coordinator addresses are not configurable.
 - A deployed `OpenOracleArbitrageExecutor`. Deploy the stateless executor at a
   fixed CREATE2 address from the dashboard or with `bun run deploy-executor --`.
-  The bot derives the address and verifies the runtime against its bundled bytecode;
-  no executor address is entered manually.
+  The bot derives the address and checks that code exists there; the CREATE2
+  address commits to the bundled contract, so no executor address is entered
+  manually.
 - At least one enabled Uniswap version available on the selected network.
 - `deployment.uniswapV3Enabled` (new-profile default `true`) enables V3 with its spot/TWAP check.
 - Optionally, `deployment.uniswapV2Enabled` (new-profile default `true`) adds authenticated
@@ -105,8 +106,8 @@ for the report lifecycle assumptions and economics used by the arbitrager.
   router enables V2 or V3, and a saved PoolManager/Quoter pair enables V4. Saving
   records those choices as switches; all addresses still derive from the network.
 - Canonical deployment addresses bundled for the selected network, as in the chaos
-  bot. The bot checks that the core and enabled venue contracts are deployed and
-  verifies the executor against bundled bytecode. Coordinators and REP tokens come
+  bot. The bot checks that the core and enabled venue contracts and the executor
+  are deployed. Coordinators and REP tokens come
   from the canonical pool and universe registries, subject to universe approval.
 - One primary read RPC. Optional independent quorum RPCs add corroboration; when
   the saved `rpcQuorum` setting is `2`, configure two or more in addition to the primary. Only a retryable transport failure
@@ -390,7 +391,7 @@ bun run run
 ```
 
 Canonical contract addresses are supplied automatically from the bundled network
-deployment data. The bot inspects the executor bytecode and the canonical contracts
+deployment data. The bot inspects the executor deployment and the canonical contracts
 (OpenOracle, WETH, the security-pool factory, and the enabled Uniswap venue
 contracts) on its first scan and keeps re-checking each scan until all of them are
 present; live execution refuses to start until they hold.
@@ -1380,10 +1381,10 @@ entry from depending on wallet inventory already committed to recovery.
   contracts when `deployment.uniswapV4Enabled` is `true`, but only against standard-fee,
   hookless native-ETH/token pools. Neither V2 nor V4 requires a V3 pool.
   Uniswap identities are network-derived. Under the opt-in two-reader policy,
-  live mode checks canonical deployment availability and bundled executor bytecode
-  through at least two available read RPCs. Every
-  available authentication result must agree. Trusted addresses come from bundled
-  deployment data.
+  live mode checks canonical deployment availability, including the executor,
+  through at least two available read RPCs. The configured quorum must verify
+  the deployments; a reader that still reports one absent is treated like a
+  lagging endpoint. Trusted addresses come from bundled deployment data.
 - Quoter calls and TWAP checks are filters, not guarantees of inclusion or realized
   execution.
 - Under the opt-in two-reader policy, live execution uses the exact read-quorum rule
