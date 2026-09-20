@@ -28,8 +28,7 @@
 		"check": "bun run typecheck && bun run lint && bun run check:generated && bun run test && bun run check:docs && bun run format:check",
 		"run": "bun ./src/cli/run.ts",
 		"deploy-executor": "bun run compile-contracts && bun ./src/cli/deploy-executor.ts",
-		"reconcile": "bun ./src/cli/reconcile-position.ts",
-		"manifest": "bun ./src/config/execution-manifest.ts"
+		"reconcile": "bun ./src/cli/reconcile-position.ts"
 	},
 	"dependencies": {
 		"@zoltar/core-shared": "workspace:1.0.0",

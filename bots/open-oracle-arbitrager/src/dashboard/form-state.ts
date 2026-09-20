@@ -7,7 +7,6 @@ const FORM_SECTIONS: Readonly<Record<string, QueuedSettingsSection>> = {
 	'connectivity-form': 'connectivity',
 	'deployment-form': 'deployment',
 	'execution-form': 'execution',
-	'manifest-form': 'deployment',
 	'market-form': 'markets',
 	'runtime-form': 'risk',
 	'settlement-form': 'settlement',

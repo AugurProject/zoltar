@@ -554,21 +554,6 @@
 
 				<section id="settings-advanced" class="settings-section" aria-labelledby="settings-advanced-title">
 					<h3 id="settings-advanced-title" class="settings-section-title">Advanced</h3>
-					<details id="manifest-configuration" class="settings-group panel">
-						<summary>
-							<span class="settings-summary-copy"><strong>Execution manifest</strong><small id="manifest-summary">Required before live execution</small></span><span class="settings-badges" data-form="manifest-form"></span>
-						</summary>
-						<div class="settings-body">
-							<form id="manifest-form">
-								<fieldset id="manifest-fieldset" disabled>
-									<label><span>Execution manifest JSON</span><textarea id="deployment-manifest" class="mono" rows="8" spellcheck="false" placeholder="Required before execution" aria-describedby="deployment-manifest-help"></textarea></label>
-									<p id="deployment-manifest-help" class="section-note">Generate it with <code>bun run manifest -- generate</code>; the read quorum authenticates contract bytecode against it before the configuration becomes active.</p>
-									<div class="form-actions"><span id="manifest-status" class="muted" aria-live="polite"></span><button class="button" type="submit">Save manifest</button></div>
-								</fieldset>
-							</form>
-						</div>
-					</details>
-
 					<details id="complete-configuration" class="settings-group panel">
 						<summary>
 							<span class="settings-summary-copy"><strong>Complete configuration</strong><small>Export or import the whole operator file · prefer the forms above</small></span><span class="settings-badges" data-form="configuration-form"></span>

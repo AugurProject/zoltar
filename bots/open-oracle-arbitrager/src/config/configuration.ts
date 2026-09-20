@@ -1,6 +1,5 @@
 import { resolve } from 'node:path'
 import type { Address, Hex } from '@zoltar/bot-shared/ethereum'
-import type { DeploymentManifest } from '#config/deployment-auth'
 import { validateIndependentReadRpcUrls, type ConnectivitySettings } from '#monitoring/connectivity'
 import { type MutableStrategy } from '#state/operator-state'
 import type { MutableSettlement } from '#state/settlement-store'
@@ -22,7 +21,6 @@ export type Configuration = MutableStrategy & {
 	centralizedMarkets: CentralizedMarketSettings
 	connectivity: ConnectivitySettings
 	coordinatorAddresses: Address[]
-	deploymentManifest: DeploymentManifest | undefined
 	execute: boolean
 	executor: Address | undefined
 	historyFile: string
@@ -60,7 +58,6 @@ export function runnableOperatorSettings(settingsFile: string, saved: PersistedO
 	const quorumRpcUrls = [...validateIndependentReadRpcUrls(saved.connectivity.readRpcUrl, deployment.quorumRpcUrls)]
 	if (saved.runtime.execute && quorumRpcUrls.length < configuredQuorumRpcUrlMinimum(saved.rpcQuorum)) throw new Error('Execution is enabled, but live operation requires at least two independent quorum RPCs (three read endpoints total)')
 	if (saved.runtime.execute && deployment.uniswapRouter === undefined && deployment.uniswapV2Router === undefined && deployment.uniswapV4PoolManager === undefined) throw new Error('Execution requires at least one enabled Uniswap venue available on this network')
-	if (saved.runtime.execute && deployment.deploymentManifest === undefined) throw new Error('Execution is enabled, but deployment.deploymentManifest is not configured')
 	assertDistinctPersistentPaths(settingsFile, saved.runtime)
 	return { deployment, network, quorumRpcUrls }
 }
@@ -78,7 +75,6 @@ export async function loadConfiguration(settingsFile = resolve(process.env['OPEN
 		centralizedMarkets: saved.centralizedMarkets,
 		connectivity: saved.connectivity,
 		coordinatorAddresses: [...deployment.coordinatorAddresses],
-		deploymentManifest: deployment.deploymentManifest,
 		execute: saved.runtime.execute,
 		executor: deployment.executor,
 		historyFile: resolve(saved.runtime.historyFile),

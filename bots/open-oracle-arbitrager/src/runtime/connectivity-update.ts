@@ -20,8 +20,8 @@ export function splitQuorumRpcUrls(value: unknown, deployment: DeploymentSetting
 	if (typeof value !== 'object' || value === null || Array.isArray(value) || !('quorumRpcUrls' in value)) return { deployment, deploymentChanged: false, value }
 	const { quorumRpcUrls, ...connectivityValue } = value
 	if (!Array.isArray(quorumRpcUrls) || quorumRpcUrls.some(url => typeof url !== 'string')) throw new Error('Quorum RPC URLs must be an array of URLs')
-	const { deploymentManifest, uniswapV2Enabled, uniswapV3Enabled, uniswapV4Enabled } = deployment
-	const next = validateDeploymentSettings({ deploymentManifest, quorumRpcUrls, uniswapV2Enabled, uniswapV3Enabled, uniswapV4Enabled }, network)
+	const { uniswapV2Enabled, uniswapV3Enabled, uniswapV4Enabled } = deployment
+	const next = validateDeploymentSettings({ quorumRpcUrls, uniswapV2Enabled, uniswapV3Enabled, uniswapV4Enabled }, network)
 	const deploymentChanged = next.quorumRpcUrls.length !== deployment.quorumRpcUrls.length || next.quorumRpcUrls.some((url, index) => url !== deployment.quorumRpcUrls[index])
 	return { deployment: deploymentChanged ? next : deployment, deploymentChanged, value: connectivityValue }
 }

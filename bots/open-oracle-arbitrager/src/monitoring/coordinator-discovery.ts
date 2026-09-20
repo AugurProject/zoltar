@@ -1,5 +1,4 @@
 import type { Configuration } from '#config/configuration'
-import { authenticateDeploymentManifest } from '#config/deployment-auth'
 import { canonicalSecurityPoolFactory } from '#config/network'
 import { loadCoordinatorPolicies } from '#config/runtime-deployment'
 import type { ReadClient } from '#core/operator-types'
@@ -9,7 +8,7 @@ import { settledQuorumValue } from '@zoltar/bot-shared/monitoring/read-quorum'
 import { rpcQuorumRequirement } from '@zoltar/bot-shared/monitoring/rpc-quorum-policy'
 import { endpointLabel } from '#monitoring/connectivity'
 
-type DiscoveryConfiguration = Pick<Configuration, 'network' | 'openOracle' | 'operatorSettings' | 'execute' | 'deploymentManifest' | 'connectivity' | 'quorumRpcUrls'>
+type DiscoveryConfiguration = Pick<Configuration, 'network' | 'openOracle' | 'operatorSettings' | 'execute' | 'connectivity' | 'quorumRpcUrls'>
 
 /** The canonical factory registry authenticates pool provenance; the pool binds its coordinator immutably. */
 export async function discoverCoordinatorPolicies(clients: readonly ReadClient[], config: DiscoveryConfiguration, blockNumber: bigint, blockHash: Hex) {
@@ -28,8 +27,8 @@ export async function discoverCoordinatorPolicies(clients: readonly ReadClient[]
 				}
 				await assertBlock()
 				if (config.execute) {
-					if (config.deploymentManifest === undefined) throw new Error('Pool discovery requires an authenticated factory manifest')
-					await authenticateDeploymentManifest(config.deploymentManifest, { chainId: config.network.chain.id, network: config.network.name, required: [{ address: factory, role: 'security-pool-factory' }], readCode: address => client.getCode({ address, blockNumber }) })
+					const code = await client.getCode({ address: factory, blockNumber })
+					if (code === undefined || code === '0x') throw new Error('Canonical security pool factory is not deployed')
 				}
 				const count = await client.readContract({ address: factory, abi: securityPoolFactoryAbi, functionName: 'securityPoolDeploymentCount', blockNumber })
 				if (count > 10_000n) throw new Error('Security pool registry exceeds the discovery limit')

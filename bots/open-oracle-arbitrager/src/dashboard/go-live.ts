@@ -21,7 +21,6 @@ function readinessRows(snapshot: PublicOperatorSnapshot, configuration: GoLiveCo
 	const relays = configuration.relayUrls.length
 	return [
 		{ detail: signer === undefined ? 'Set one under Execution wallet' : shorten(signer), label: 'Execution signer', ready: signer !== undefined },
-		{ detail: configuration.deployment.deploymentManifest === undefined ? 'Save one under Advanced › Execution manifest' : 'Configured', label: 'Execution manifest', ready: configuration.deployment.deploymentManifest !== undefined },
 		{ detail: `${quorumRpcs.toString()} configured · ${requiredQuorumRpcs.toString()} required`, label: 'Independent quorum RPCs', ready: quorumRpcs >= requiredQuorumRpcs },
 		{ detail: venueEnabled ? 'Enabled' : 'Enable a Uniswap version under Venues and executor', label: 'Trading venue', ready: venueEnabled },
 		{ detail: configuration.submissionMode === 'private' ? `Private · ${relays.toString()} relay${relays === 1 ? '' : 's'}` : 'Public mempool', label: 'Delivery', ready: configuration.submissionMode === 'public' || relays > 0 },

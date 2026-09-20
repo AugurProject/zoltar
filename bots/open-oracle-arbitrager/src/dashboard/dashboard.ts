@@ -107,11 +107,11 @@ function setControlsEnabled(enabled: boolean) {
 	const submissionFieldset = element('submission-fieldset')
 	if (!(submissionFieldset instanceof HTMLFieldSetElement)) throw new Error('Missing submission fieldset')
 	submissionFieldset.disabled = !focusedSettingsEnabled || !submissionLoaded || formIsSubmitting('submission-form')
-	for (const id of ['connectivity-fieldset', 'deployment-fieldset', 'manifest-fieldset', 'create2-fieldset', 'signer-fieldset', 'tokens-fieldset', 'runtime-fieldset', 'settlement-fieldset', 'execution-fieldset', 'market-fieldset']) {
+	for (const id of ['connectivity-fieldset', 'deployment-fieldset', 'create2-fieldset', 'signer-fieldset', 'tokens-fieldset', 'runtime-fieldset', 'settlement-fieldset', 'execution-fieldset', 'market-fieldset']) {
 		const fieldset = element(id)
 		if (!(fieldset instanceof HTMLFieldSetElement)) throw new Error(`Missing ${id}`)
 		if (id === 'connectivity-fieldset') fieldset.disabled = connectivityControlsDisabled(configurationEnabled, connectivityRequestPending) || !connectivityLoaded
-		else if (id === 'deployment-fieldset' || id === 'manifest-fieldset' || id === 'create2-fieldset') fieldset.disabled = !focusedSettingsEnabled || !deploymentLoaded
+		else if (id === 'deployment-fieldset' || id === 'create2-fieldset') fieldset.disabled = !focusedSettingsEnabled || !deploymentLoaded
 		else if (id === 'tokens-fieldset') fieldset.disabled = !focusedSettingsEnabled || !tokensLoaded || universeSavePending
 		else if (id === 'signer-fieldset') fieldset.disabled = !focusedSettingsEnabled
 		else fieldset.disabled = !focusedSettingsEnabled || !focusedRuntimeLoaded

@@ -56,7 +56,6 @@ function settings(privateKeyValue: Hex | undefined) {
 		},
 		deployment: {
 			coordinatorAddresses: [],
-			deploymentManifest: undefined,
 			executor: canonicalExecutorIdentity().address,
 			openOracle: canonicalCoreDeployment(mainnet).openOracle,
 			quorumRpcUrls: ['https://quorum.example/'],
@@ -570,6 +569,6 @@ test('preserves default router intent through serialized network changes', () =>
 test('stores only venue switches and derives addresses again on load', () => {
 	const parsed = parseOperatorSettings({ ...example, deployment: { ...example.deployment, uniswapV2Enabled: false, uniswapV3Enabled: true, uniswapV4Enabled: true } })
 	const stored = serializeOperatorSettings(parsed)
-	expect(stored.deployment).toEqual({ deploymentManifest: undefined, quorumRpcUrls: [], uniswapV2Enabled: false, uniswapV3Enabled: true, uniswapV4Enabled: true })
+	expect(stored.deployment).toEqual({ quorumRpcUrls: [], uniswapV2Enabled: false, uniswapV3Enabled: true, uniswapV4Enabled: true })
 	expect(parseOperatorSettings(JSON.parse(JSON.stringify(stored))).deployment).toEqual(parsed.deployment)
 })

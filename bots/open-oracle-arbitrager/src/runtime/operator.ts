@@ -2,7 +2,7 @@ import { discoverCoordinatorPolicies } from '#monitoring/coordinator-discovery'
 import type { Configuration } from '#config/configuration'
 import type { DeploymentSettings } from '#config/deployment-settings'
 import type { NetworkConfiguration } from '#config/network'
-import { authenticateConfiguredDeployments, authenticatedExecutionToken, loadCoordinatorPolicies, retainReportsAndLogs } from '#config/runtime-deployment'
+import { authenticateConfiguredDeployments, loadCoordinatorPolicies, retainReportsAndLogs } from '#config/runtime-deployment'
 import type { ExecutionCandidate } from '#core/operator-types'
 import { positionConsumesRisk, utcDayGasSpentWeth } from '#core/safety-controls'
 import { assertStoredExecutorDeploymentIntent } from '#execution/create2-executor'
@@ -320,7 +320,6 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 						const deployment = pending.deployment
 						pending.deployment = undefined
 						config.coordinatorAddresses = [...deployment.coordinatorAddresses]
-						config.deploymentManifest = deployment.deploymentManifest
 						config.executor = deployment.executor
 						config.openOracle = deployment.openOracle
 						config.quorumRpcUrls = [...deployment.quorumRpcUrls]
@@ -726,31 +725,15 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 									try {
 										const metadata = tokenMarkets.find(market => market.address.toLowerCase() === report.latest.game.token2.toLowerCase())
 										if (metadata === undefined) throw new Error('Token metadata is unavailable')
-										const evaluated = await inspectReport(
-											client,
-											wallet,
-											config,
-											report.latest,
-											pools,
-											blockNumber,
-											blockHash,
-											block.timestamp,
-											gasPrice,
-											balances?.raw,
-											metadata,
-											executionTokenAllowed(executionTokens, report.latest.game.token2) && authenticatedExecutionToken(config, report.latest.game.token2),
-											executionReady,
-											state.paused,
-											coordinatorPolicies,
-											(message, reason) =>
-												recordOperation(state, {
-													category: 'decision',
-													details: undefined,
-													level: 'info',
-													message,
-													reason,
-													reportId,
-												}),
+										const evaluated = await inspectReport(client, wallet, config, report.latest, pools, blockNumber, blockHash, block.timestamp, gasPrice, balances?.raw, metadata, executionTokenAllowed(executionTokens, report.latest.game.token2), executionReady, state.paused, coordinatorPolicies, (message, reason) =>
+											recordOperation(state, {
+												category: 'decision',
+												details: undefined,
+												level: 'info',
+												message,
+												reason,
+												reportId,
+											}),
 										)
 										return { evaluated, report }
 									} catch (error) {

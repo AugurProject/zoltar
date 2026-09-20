@@ -9,12 +9,6 @@ import { formIsDirty, markFormClean, setFormSubmitting, trackForm } from './form
 import type { GoLiveConfiguration } from './go-live.ts'
 import { loadMarketSources, marketSourcesDocument, registerMarketSourceControls } from './market-sources-form.ts'
 
-function prettyJson(value: unknown) {
-	const serialized = JSON.stringify(value, undefined, 2)
-	if (serialized === undefined) throw new Error('Configuration cannot be represented as JSON')
-	return serialized
-}
-
 type FocusedFormContext = {
 	api: (path: string, init?: RequestInit) => Promise<unknown>
 	refresh: () => Promise<void>
@@ -68,11 +62,11 @@ export function loadSubmission(submission: SubmissionSettings) {
 	markFormClean('submission-form')
 }
 
-type DeploymentForm = 'connectivity-form' | 'deployment-form' | 'manifest-form'
+type DeploymentForm = 'connectivity-form' | 'deployment-form'
 
 /**
- * Venues, the manifest, and the quorum RPC URLs are one stored section but three forms. Each form submits only its own
- * fields and the bot returns the section merged with the latest saved values, so the three saves may overlap. A form that
+ * Venues and quorum RPC URLs share one stored section across two forms. Each form submits only its own
+ * fields and the bot returns the section merged with the latest saved values, so the saves may overlap. A form that
  * saved, or that has no unsaved edits, takes the returned values; a form mid-edit keeps them, except when the complete
  * configuration reloads and every form restarts from the file.
  */
@@ -89,11 +83,6 @@ export function loadDeployment(deployment: DashboardDeployment, source?: Deploym
 		element('quorum-rpc-urls', HTMLTextAreaElement).value = deployment.quorumRpcUrls.join('\n')
 		markFormClean('connectivity-form')
 	}
-	if (accepts('manifest-form')) {
-		element('deployment-manifest', HTMLTextAreaElement).value = deployment.deploymentManifest === undefined ? '' : prettyJson(deployment.deploymentManifest)
-		markFormClean('manifest-form')
-	}
-	setText('manifest-summary', deployment.deploymentManifest === undefined ? 'Missing · required before live execution' : 'Configured')
 }
 
 /** The RPC endpoints form saved new quorum URLs; they live in the deployment section, so the loaded copy follows. */
@@ -151,7 +140,7 @@ export function loadCentralizedMarkets(centralizedMarkets: Record<string, unknow
 	markFormClean('market-form')
 }
 
-const FOCUSED_FORMS = ['connectivity-form', 'deployment-form', 'manifest-form', 'market-form', 'runtime-form', 'settlement-form', 'execution-form', 'strategy-form', 'submission-form', 'configuration-form'] as const
+const FOCUSED_FORMS = ['connectivity-form', 'deployment-form', 'market-form', 'runtime-form', 'settlement-form', 'execution-form', 'strategy-form', 'submission-form', 'configuration-form'] as const
 
 /**
  * Wires the focused Settings forms that each edit one section of the operator file. Values load from the complete
@@ -273,7 +262,7 @@ export function registerFocusedSettingsForms({ api, refresh, syncControls }: Foc
 	element('deployment-form', HTMLFormElement).addEventListener('submit', event => {
 		event.preventDefault()
 		void submitFocusedForm('deployment-form', 'deployment-status', 'Validating venues…', async () => {
-			// Only the venue switches travel; the bot merges them into the latest saved section so a manifest or quorum save
+			// Only the venue switches travel; the bot merges them into the latest saved section so a quorum save
 			// that is still in flight from another form is never overwritten with cached values.
 			const venues = {
 				uniswapV2Enabled: element('deployment-v2-enabled', HTMLInputElement).checked,
@@ -282,16 +271,6 @@ export function registerFocusedSettingsForms({ api, refresh, syncControls }: Foc
 			}
 			loadDeployment(decodeDeployment(await put('/api/deployment', venues)).deployment, 'deployment-form')
 			return 'Venues saved.'
-		})
-	})
-
-	element('manifest-form', HTMLFormElement).addEventListener('submit', event => {
-		event.preventDefault()
-		void submitFocusedForm('manifest-form', 'manifest-status', 'Validating manifest…', async () => {
-			const manifestText = element('deployment-manifest', HTMLTextAreaElement).value.trim()
-			const deploymentManifest: unknown = manifestText === '' ? null : JSON.parse(manifestText)
-			loadDeployment(decodeDeployment(await put('/api/deployment', { deploymentManifest })).deployment, 'manifest-form')
-			return manifestText === '' ? 'Manifest removed. Live execution stays unavailable until one is saved.' : 'Manifest saved.'
 		})
 	})
 }

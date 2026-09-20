@@ -199,7 +199,7 @@ const config = (options => {
 				},
 			},
 			'bots/open-oracle-arbitrager': {
-				entry: ['src/cli/*.ts!', 'scripts/*.mts!', 'tests/**/*.ts', 'src/dashboard/dashboard.ts!', 'docs/chart-runtime.ts!', ...productionOnly(['src/config/execution-manifest.ts!'])],
+				entry: ['src/cli/*.ts!', 'scripts/*.mts!', 'tests/**/*.ts', 'src/dashboard/dashboard.ts!', 'docs/chart-runtime.ts!'],
 				project: ['**/*.{js,cjs,mjs,jsx,ts,cts,mts,tsx}!', '!docs/chart-runtime.js'],
 				ignoreDependencies: ['prettier-plugin-solidity'],
 				paths: {

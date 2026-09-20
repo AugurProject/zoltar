@@ -139,7 +139,7 @@ export function createOperatorSettingsControls(context: OperatorSettingsContext)
 				// Re-applying an already saved and effective live mode changes nothing, so it must not pause a running operator.
 				if (latest.settings.runtime.execute && (pending.execute ?? config.execute)) return { execute }
 				// Live execution activates at the next boundary, so the saved file must already be startable in live mode
-				// (quorum RPCs, an enabled venue, and the manifest); the bot is paused with it so arming never starts signing
+				// (quorum RPCs and an enabled venue); the bot is paused with it so arming never starts signing
 				// until the operator resumes through the readiness check.
 				const next = { ...latest.settings, paused: true, runtime: { ...latest.settings.runtime, execute } }
 				runnableOperatorSettings(config.settingsFile, next)

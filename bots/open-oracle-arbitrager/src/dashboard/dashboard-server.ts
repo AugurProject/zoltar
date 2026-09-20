@@ -72,12 +72,7 @@ function publicConfigurationUpdateError(error: unknown, conflict: boolean) {
 	return 'Configuration could not be saved. Review the submitted values and protected bot logs.'
 }
 
-const EXECUTION_UPDATE_MESSAGES = new Set([
-	'Execution requires an active signer',
-	'Execution is enabled, but live operation requires at least two independent quorum RPCs (three read endpoints total)',
-	'Execution requires at least one enabled Uniswap venue available on this network',
-	'Execution is enabled, but deployment.deploymentManifest is not configured',
-])
+const EXECUTION_UPDATE_MESSAGES = new Set(['Execution requires an active signer', 'Execution is enabled, but live operation requires at least two independent quorum RPCs (three read endpoints total)', 'Execution requires at least one enabled Uniswap venue available on this network'])
 
 /** Execution mode failures name the missing prerequisite so the operator can fix it; anything else stays in protected logs. */
 function publicExecutionUpdateError(error: unknown) {
