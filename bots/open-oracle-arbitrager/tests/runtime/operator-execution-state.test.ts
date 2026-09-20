@@ -10,7 +10,6 @@ import type { MarketConsensusEstimate, MarketConsensusObservation } from '@zolta
 import { createPublicClient } from '@zoltar/bot-shared/ethereum'
 import { custom } from '@zoltar/bot-shared/ethereum/rpc-transport'
 import { authenticateConfiguredDeployments } from '#config/runtime-deployment'
-import { createDeploymentManifest } from '../helpers/deployment-manifest.ts'
 import { validateDeploymentSettings } from '#config/deployment-settings'
 import { loadConfiguration, runnableOperatorSettings } from '#config/configuration'
 import type { OperatorState } from '#state/operator-state'
@@ -219,7 +218,6 @@ test('V4-only execution starts and authenticates without a manifest or V3 deploy
 		execute: true,
 		executor: deployment.executor,
 		coordinatorAddresses: [...deployment.coordinatorAddresses],
-		deploymentManifest: settings.deployment.deploymentManifest,
 		router: undefined,
 		v2Router: undefined,
 		v4PoolManager: manager,
@@ -234,14 +232,14 @@ for (const code of ['0x', '0x01'] as const)
 	test(`rejects canonical executor with missing or wrong code (${code})`, async () => {
 		const config = await exampleConfiguration()
 		const client = createPublicClient({ chain: config.network.chain, transport: custom({ request: async () => code }) })
-		await expect(authenticateConfiguredDeployments([client], { ...config, execute: true, router: undefined, v2Router: undefined, v4PoolManager: undefined, v4Quoter: undefined, deploymentManifest: undefined })).rejects.toThrow('Canonical executor is missing or has unexpected bytecode')
+		await expect(authenticateConfiguredDeployments([client], { ...config, execute: true, router: undefined, v2Router: undefined, v4PoolManager: undefined, v4Quoter: undefined })).rejects.toThrow('Canonical executor is missing or has unexpected bytecode')
 	})
 
 for (const name of ['mainnet', 'sepolia'] as const)
 	test(`canonical ${name} deployment checks work without pins and reject every missing required contract`, async () => {
 		const base = await exampleConfiguration()
 		const deployment = validateDeploymentSettings({ quorumRpcUrls: [], uniswapV2Enabled: true, uniswapV3Enabled: true, uniswapV4Enabled: false }, name)
-		const config = { ...base, network: networkConfiguration(name), openOracle: deployment.openOracle, router: deployment.uniswapRouter, v2Router: deployment.uniswapV2Router, execute: true, deploymentManifest: undefined }
+		const config = { ...base, network: networkConfiguration(name), openOracle: deployment.openOracle, router: deployment.uniswapRouter, v2Router: deployment.uniswapV2Router, execute: true }
 		const expected = [config.openOracle, config.network.weth, canonicalSecurityPoolFactory(config.network.name), config.network.factory, config.network.quoter, config.router, config.v2Router].filter(address => address !== undefined)
 		let missing: string | undefined
 		const reads = new Set<string>()
@@ -258,8 +256,6 @@ for (const name of ['mainnet', 'sepolia'] as const)
 			}),
 		})
 		await authenticateConfiguredDeployments([client], config)
-		const pins = await createDeploymentManifest(name, config.network.chain.id, [{ address: config.openOracle, role: 'open-oracle' }], async () => '0x02')
-		await expect(authenticateConfiguredDeployments([client], { ...config, deploymentManifest: pins })).rejects.toThrow('runtime bytecode hash')
 		for (const address of expected) {
 			expect(reads.has(address.toLowerCase())).toBe(true)
 			missing = address.toLowerCase()

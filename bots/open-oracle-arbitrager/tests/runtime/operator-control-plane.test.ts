@@ -6,8 +6,6 @@ import { join } from 'node:path'
 import { privateKeyToAccount, type Address, type Hex } from '@zoltar/bot-shared/ethereum'
 import { createSignerOperationGate } from '@zoltar/bot-shared/execution/signer-operation-gate'
 import { loadConfiguration } from '#config/configuration'
-import { createDeploymentManifest } from '../helpers/deployment-manifest.ts'
-import { canonicalSecurityPoolFactory } from '#config/network'
 import { loadOperatorSettings, parseOperatorSettings, saveOperatorSettings } from '#config/settings-store'
 import type { ExecutionLockManager } from '#execution/execution-locks'
 import type { OperatorSnapshotFixedState, OperatorState } from '#state/operator-state'
@@ -96,21 +94,7 @@ function recordingLockManager() {
 	return { acquired, manager, released }
 }
 
-/** A manifest whose identities are the selected network's canonical contracts; startup validation is not exercised here. */
-async function sepoliaManifest(openOracle: Address, weth: Address) {
-	return await createDeploymentManifest(
-		'sepolia',
-		11_155_111,
-		[
-			{ address: openOracle, role: 'open-oracle' },
-			{ address: canonicalSecurityPoolFactory('sepolia'), role: 'security-pool-factory' },
-			{ address: weth, role: 'weth' },
-		],
-		async () => '0x01',
-	)
-}
-
-async function startControlPlane(parameters: { manifest?: boolean; privateKey?: Hex; quorumRpcUrls?: readonly string[]; readRpcUrl?: string; rpcQuorum?: 1 | 2 } = {}) {
+async function startControlPlane(parameters: { privateKey?: Hex; quorumRpcUrls?: readonly string[]; readRpcUrl?: string; rpcQuorum?: 1 | 2 } = {}) {
 	const directory = await mkdtemp(join(tmpdir(), 'zoltar-arbitrager-control-plane-'))
 	temporaryDirectories.push(directory)
 	const settingsFile = join(directory, 'operator.json')
@@ -123,8 +107,7 @@ async function startControlPlane(parameters: { manifest?: boolean; privateKey?: 
 		rpcQuorum: parameters.rpcQuorum ?? 1,
 		runtime: { ...example.runtime, historyFile: join(directory, 'history.jsonl'), positionFile: join(directory, 'positions.json'), priceHistoryFile: join(directory, 'prices.jsonl'), uiPort: await unusedPort() },
 	})
-	const deploymentManifest = parameters.manifest === true ? await sepoliaManifest(settings.deployment.openOracle, settings.deployment.weth) : undefined
-	await saveOperatorSettings(settingsFile, { ...settings, deployment: { ...settings.deployment, deploymentManifest } })
+	await saveOperatorSettings(settingsFile, settings)
 	const config = await loadConfiguration(settingsFile)
 	config.privateKey = parameters.privateKey
 	const state = operatorState()
@@ -225,21 +208,21 @@ test('focused settlement, risk-limit, and market-source forms persist their sect
 })
 
 test('execution mode requires a startable live configuration and an active signer before reserving its lock', async () => {
-	const withoutQuorum = await startControlPlane({ manifest: true, privateKey: `0x${'11'.repeat(32)}`, quorumRpcUrls: ['https://quorum-one.example/'], rpcQuorum: 2 })
+	const withoutQuorum = await startControlPlane({ privateKey: `0x${'11'.repeat(32)}`, quorumRpcUrls: ['https://quorum-one.example/'], rpcQuorum: 2 })
 	const blocked = await withoutQuorum.put('/api/execution', { execute: true })
 	expect(blocked.status).toBe(400)
 	expect(await blocked.json()).toEqual({ error: 'Execution is enabled, but live operation requires at least two independent quorum RPCs (three read endpoints total)' })
 	expect(withoutQuorum.pending.execute).toBeUndefined()
 	expect(withoutQuorum.locks.acquired).toEqual([])
 
-	const withoutManifest = await startControlPlane({ privateKey: `0x${'11'.repeat(32)}`, quorumRpcUrls: ['https://quorum-one.example/', 'https://quorum-two.example/'] })
-	const armedWithoutManifest = await withoutManifest.put('/api/execution', { execute: true })
-	expect(armedWithoutManifest.status, await armedWithoutManifest.clone().text()).toBe(200)
-	expect(withoutManifest.pending.execute).toBe(true)
-	expect(withoutManifest.locks.acquired).toHaveLength(1)
-	expect((await loadOperatorSettings(withoutManifest.settingsFile))?.runtime.execute).toBe(true)
+	const canonicalDeployment = await startControlPlane({ privateKey: `0x${'11'.repeat(32)}`, quorumRpcUrls: ['https://quorum-one.example/', 'https://quorum-two.example/'] })
+	const armed = await canonicalDeployment.put('/api/execution', { execute: true })
+	expect(armed.status, await armed.clone().text()).toBe(200)
+	expect(canonicalDeployment.pending.execute).toBe(true)
+	expect(canonicalDeployment.locks.acquired).toHaveLength(1)
+	expect((await loadOperatorSettings(canonicalDeployment.settingsFile))?.runtime.execute).toBe(true)
 
-	const withoutSigner = await startControlPlane({ manifest: true, quorumRpcUrls: ['https://quorum-one.example/', 'https://quorum-two.example/'] })
+	const withoutSigner = await startControlPlane({ quorumRpcUrls: ['https://quorum-one.example/', 'https://quorum-two.example/'] })
 	const unsigned = await withoutSigner.put('/api/execution', { execute: true })
 	expect(unsigned.status).toBe(400)
 	expect(await unsigned.json()).toEqual({ error: 'Execution requires an active signer' })
@@ -252,7 +235,7 @@ test('execution mode requires a startable live configuration and an active signe
 test('execution mode reserves the running signer lock and pauses when enabled, and leaves the lock in place when disabled', async () => {
 	const privateKey = `0x${'22'.repeat(32)}` as Hex
 	const wallet = privateKeyToAccount(privateKey).address
-	const { config, fixedState, locks, pending, publicState, put, settingsFile, state } = await startControlPlane({ manifest: true, privateKey, quorumRpcUrls: ['https://quorum-one.example/', 'https://quorum-two.example/'] })
+	const { config, fixedState, locks, pending, publicState, put, settingsFile, state } = await startControlPlane({ privateKey, quorumRpcUrls: ['https://quorum-one.example/', 'https://quorum-two.example/'] })
 	Object.assign(state, { paused: false, status: 'running' })
 	expect((await publicState())['execute']).toBe(false)
 	const enabled = await put('/api/execution', { execute: true })
@@ -315,7 +298,7 @@ test('execution mode binds to a queued signer and skips lock acquisition when th
 	const runningKey = `0x${'33'.repeat(32)}` as Hex
 	const queuedKey = `0x${'44'.repeat(32)}` as Hex
 	const queuedWallet = privateKeyToAccount(queuedKey).address
-	const queued = await startControlPlane({ manifest: true, privateKey: runningKey, quorumRpcUrls: ['https://quorum-one.example/', 'https://quorum-two.example/'] })
+	const queued = await startControlPlane({ privateKey: runningKey, quorumRpcUrls: ['https://quorum-one.example/', 'https://quorum-two.example/'] })
 	queued.pending.signerUpdate = true
 	queued.pending.privateKey = queuedKey
 	queued.pending.persistedPrivateKey = undefined
@@ -325,7 +308,7 @@ test('execution mode binds to a queued signer and skips lock acquisition when th
 	expect(queued.pending.privateKey).toBe(queuedKey)
 	expect(queued.pending.signerLock).toBeDefined()
 
-	const clearing = await startControlPlane({ manifest: true, privateKey: runningKey, quorumRpcUrls: ['https://quorum-one.example/', 'https://quorum-two.example/'] })
+	const clearing = await startControlPlane({ privateKey: runningKey, quorumRpcUrls: ['https://quorum-one.example/', 'https://quorum-two.example/'] })
 	clearing.pending.signerUpdate = true
 	clearing.pending.privateKey = undefined
 	const rejected = await clearing.put('/api/execution', { execute: true })
@@ -333,7 +316,7 @@ test('execution mode binds to a queued signer and skips lock acquisition when th
 	expect(await rejected.json()).toEqual({ error: 'Execution requires an active signer' })
 	expect(clearing.locks.acquired).toEqual([])
 
-	const live = await startControlPlane({ manifest: true, privateKey: runningKey, quorumRpcUrls: ['https://quorum-one.example/', 'https://quorum-two.example/'] })
+	const live = await startControlPlane({ privateKey: runningKey, quorumRpcUrls: ['https://quorum-one.example/', 'https://quorum-two.example/'] })
 	live.fixedState.execute = true
 	live.config.execute = true
 	expect((await live.put('/api/execution', { execute: true })).status).toBe(200)
@@ -342,7 +325,7 @@ test('execution mode binds to a queued signer and skips lock acquisition when th
 	expect(live.pending.execute).toBe(true)
 
 	// Re-saving the running key queues it without a pending lock; the active lock still covers it, so none is reserved.
-	const requeued = await startControlPlane({ manifest: true, privateKey: runningKey, quorumRpcUrls: ['https://quorum-one.example/', 'https://quorum-two.example/'] })
+	const requeued = await startControlPlane({ privateKey: runningKey, quorumRpcUrls: ['https://quorum-one.example/', 'https://quorum-two.example/'] })
 	requeued.fixedState.execute = true
 	requeued.config.execute = true
 	requeued.pending.signerUpdate = true
@@ -392,22 +375,15 @@ test('the RPC endpoints form saves quorum RPC URLs into the deployment section a
 
 test('deployment saves merge only the submitted fields into the latest stored section', async () => {
 	const quorumOne = mockSepoliaRpc()
-	const { pending, put, settingsFile } = await startControlPlane({ manifest: true, quorumRpcUrls: [quorumOne] })
-	const before = await loadOperatorSettings(settingsFile)
+	const { pending, put, settingsFile } = await startControlPlane({ quorumRpcUrls: [quorumOne] })
 	const venues = await put('/api/deployment', { uniswapV2Enabled: false, uniswapV3Enabled: false, uniswapV4Enabled: true })
 	expect(venues.status, await venues.clone().text()).toBe(200)
 	const afterVenues = await loadOperatorSettings(settingsFile)
 	expect(afterVenues?.deployment.uniswapV4Enabled).toBe(true)
 	expect(afterVenues?.deployment.uniswapV3Enabled).toBe(false)
 	expect(afterVenues?.deployment.quorumRpcUrls).toEqual([quorumOne])
-	expect(afterVenues?.deployment.deploymentManifest).toEqual(before?.deployment.deploymentManifest)
 	expect(pending.deployment?.quorumRpcUrls).toEqual([quorumOne])
-	const removed = await put('/api/deployment', { deploymentManifest: null })
-	expect(removed.status, await removed.clone().text()).toBe(200)
-	const afterRemoval = await loadOperatorSettings(settingsFile)
-	expect(afterRemoval?.deployment.deploymentManifest).toBeUndefined()
-	expect(afterRemoval?.deployment.uniswapV4Enabled).toBe(true)
-	expect(afterRemoval?.deployment.quorumRpcUrls).toEqual([quorumOne])
+	expect((await put('/api/deployment', { deploymentManifest: null })).status).toBe(400)
 	expect((await put('/api/deployment', { executor: '0x0000000000000000000000000000000000000001' })).status).toBe(400)
 	expect((await loadOperatorSettings(settingsFile))?.deployment.uniswapV4Enabled).toBe(true)
 })

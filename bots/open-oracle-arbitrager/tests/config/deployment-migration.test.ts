@@ -9,7 +9,6 @@ import { canonicalCoreDeployment, canonicalUniswapDeployment } from '@zoltar/bot
 import { createPublicClient, getAddress } from '@zoltar/bot-shared/ethereum'
 import { custom } from '@zoltar/bot-shared/ethereum/rpc-transport'
 import { loadConfiguration } from '#config/configuration'
-import { createDeploymentManifest } from '../helpers/deployment-manifest.ts'
 import { validateDeploymentSettings } from '#config/deployment-settings'
 import { networkConfiguration } from '#config/network'
 import { authenticateConfiguredDeployments } from '#config/runtime-deployment'
@@ -33,30 +32,11 @@ for (const [name, v3, v4] of [
 	['V3 and V4', true, true],
 	['V4-only', false, true],
 ] as const) {
-	test(`migrates a legacy ${name} profile without changing venue intent or additional bytecode pins`, async () => {
+	test(`migrates a legacy ${name} profile without changing venue intent`, async () => {
 		const directory = await mkdtemp(join(tmpdir(), 'arbitrager-venue-migration-'))
 		temporaryDirectories.push(directory)
 		const path = join(directory, 'operator.json')
-		const deploymentManifest = await createDeploymentManifest(
-			'mainnet',
-			1,
-			[
-				{ address: openOracle, role: 'open-oracle' },
-				{ address: network.weth, role: 'weth' },
-				{ address: canonicalSecurityPoolFactory('mainnet'), role: 'security-pool-factory' },
-				{ address: coordinator, role: 'coordinator' },
-				{ address: uniswap.factory, role: 'uniswap-factory' },
-				{ address: uniswap.quoter, role: 'uniswap-quoter' },
-				...(v3 ? [{ address: uniswap.router, role: 'uniswap-router' as const }] : []),
-				...(v4
-					? [
-							{ address: uniswap.v4PoolManager, role: 'uniswap-v4-pool-manager' as const },
-							{ address: uniswap.v4Quoter, role: 'uniswap-v4-quoter' as const },
-						]
-					: []),
-			],
-			async () => '0x01',
-		)
+
 		// Version 4 profiles stored optional addresses, with no enable switches. JSON omits disabled routers.
 		await writeFile(
 			path,
@@ -69,7 +49,6 @@ for (const [name, v3, v4] of [
 				deployment: {
 					coordinatorAddresses: [coordinator],
 					executor,
-					deploymentManifest,
 					quorumRpcUrls: ['https://second.example', 'https://third.example'],
 					uniswapFactory: uniswap.factory,
 					uniswapQuoter: uniswap.quoter,
@@ -80,7 +59,7 @@ for (const [name, v3, v4] of [
 			}),
 		)
 		const config = await loadConfiguration(path)
-		const allowed = new Set(deploymentManifest.contracts.map(contract => contract.address.toLowerCase()))
+		const allowed = new Set([openOracle, network.weth, canonicalSecurityPoolFactory('mainnet'), ...(v3 ? [uniswap.factory, uniswap.quoter, uniswap.router] : []), ...(v4 ? [uniswap.v4PoolManager, uniswap.v4Quoter] : [])].map(address => address.toLowerCase()))
 		const client = createPublicClient({
 			chain: network.chain,
 			transport: custom({
@@ -91,7 +70,7 @@ for (const [name, v3, v4] of [
 				},
 			}),
 		})
-		// A V3-only legacy manifest has no V2 router. Migration must not make that identity mandatory.
+		// A V3-only profile has no V2 router. Migration must not make that identity mandatory.
 		await authenticateConfiguredDeployments([client], config)
 		expect(config.operatorSettings.deployment).toMatchObject({ uniswapV2Enabled: false, uniswapV3Enabled: v3, uniswapV4Enabled: v4 })
 		expect(config.router).toBe(v3 ? uniswap.router : undefined)
@@ -99,7 +78,7 @@ for (const [name, v3, v4] of [
 		expect(config.v4PoolManager).toBe(v4 ? uniswap.v4PoolManager : undefined)
 		await saveOperatorSettings(path, config.operatorSettings)
 		const stored = JSON.parse(await readFile(path, 'utf8'))
-		expect(stored.deployment).toEqual({ deploymentManifest, quorumRpcUrls: config.quorumRpcUrls, uniswapV2Enabled: false, uniswapV3Enabled: v3, uniswapV4Enabled: v4 })
+		expect(stored.deployment).toEqual({ quorumRpcUrls: config.quorumRpcUrls, uniswapV2Enabled: false, uniswapV3Enabled: v3, uniswapV4Enabled: v4 })
 		expect((await loadOperatorSettings(path))?.deployment).toEqual(config.operatorSettings.deployment)
 		await authenticateConfiguredDeployments([client], await loadConfiguration(path))
 		// A new network profile gets template defaults; returning to the migrated profile restores its choices.

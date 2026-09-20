@@ -1,7 +1,5 @@
 import { emptySettlementSnapshot, parseSettlementSettings, settlementSettings, settlementSnapshot } from '#state/settlement-store'
 import { canonicalExecutorIdentity } from '#execution/executor-identity'
-import { createDeploymentManifest } from '../helpers/deployment-manifest.ts'
-import { canonicalSecurityPoolFactory } from '#config/network'
 import { afterEach, expect, test } from 'bun:test'
 import { Browser, type BrowserWindow, type Element } from 'happy-dom'
 import { join } from 'node:path'
@@ -75,7 +73,6 @@ test('keeps all mutations locked and ignores deferred old-chain responses until 
 	const connectivity = { publicRpcUrls: ['https://rpc.example/'], readRpcUrl: 'https://rpc.example/' }
 	const deployment = {
 		coordinatorAddresses: [],
-		deploymentManifest: undefined,
 		executor: undefined,
 		openOracle: address,
 		quorumRpcUrls: [],
@@ -524,7 +521,6 @@ test('deployment form saves venue switches without configurable Uniswap addresse
 	expect(window.document.getElementById('create2-salt')).toBeNull()
 	expect(window.document.getElementById('deployment-quorum-rpcs')).toBeNull()
 	expect(element(window, 'quorum-rpc-urls', window.HTMLTextAreaElement).closest('form')?.id).toBe('connectivity-form')
-	expect(element(window, 'deployment-manifest', window.HTMLTextAreaElement).closest('form')?.id).toBe('manifest-form')
 	await save()
 	const restored = () => parseOperatorSettings({ ...JSON.parse(JSON.stringify(serializeOperatorSettings(settings))), network: 'mainnet' }).deployment
 	expect(settings.deployment.executor).toBe(canonicalExecutorIdentity().address)
@@ -538,7 +534,7 @@ test('deployment form saves venue switches without configurable Uniswap addresse
 	expect(settings.deployment.uniswapV4Quoter).toBeDefined()
 	expect(restored().uniswapV2Router).toBeUndefined()
 	expect(restored().uniswapRouter).toBeUndefined()
-	expect(serializeOperatorSettings(settings).deployment).toEqual({ deploymentManifest: undefined, quorumRpcUrls: [], uniswapV2Enabled: false, uniswapV3Enabled: false, uniswapV4Enabled: true })
+	expect(serializeOperatorSettings(settings).deployment).toEqual({ quorumRpcUrls: [], uniswapV2Enabled: false, uniswapV3Enabled: false, uniswapV4Enabled: true })
 	element(window, 'deployment-v2-enabled', window.HTMLInputElement).checked = true
 	await save()
 	expect(settings.deployment.uniswapV2Router).toBeUndefined()
@@ -615,7 +611,7 @@ test('focused risk, settlement, execution, and market forms load the saved confi
 		return found
 	}
 	for (let attempt = 0; attempt < 100 && runtimeInput('maxTotalLockedWeth').value === ''; attempt++) await Bun.sleep(10)
-	for (const id of ['runtime-fieldset', 'settlement-fieldset', 'execution-fieldset', 'market-fieldset', 'manifest-fieldset']) expect(element(window, id, window.HTMLFieldSetElement).disabled).toBe(false)
+	for (const id of ['runtime-fieldset', 'settlement-fieldset', 'execution-fieldset', 'market-fieldset']) expect(element(window, id, window.HTMLFieldSetElement).disabled).toBe(false)
 	expect(runtimeInput('maxPositionNotionalWeth').value).toBe('5')
 	expect(runtimeInput('maxTotalLockedWeth').value).toBe('10')
 	expect(runtimeInput('maxConcurrentPositions').value).toBe('1')
@@ -634,6 +630,8 @@ test('focused risk, settlement, execution, and market forms load the saved confi
 	expect(element(window, 'settlement-panel-summary', window.HTMLElement).textContent).toBe('Disabled · 0 reports awaiting settlement')
 	const checklist = () => Array.from(element(window, 'execution-checklist', window.HTMLUListElement).children, item => `${item.getAttribute('data-ready') ?? ''}:${item.querySelector('.readiness-label')?.textContent ?? ''}`)
 	expect(checklist()).toEqual(['false:Execution signer', 'true:Independent quorum RPCs', 'true:Trading venue', 'true:Delivery'])
+	expect(window.document.getElementById('manifest-configuration')).toBeNull()
+	expect(window.document.getElementById('manifest-form')).toBeNull()
 	expect(element(window, 'execution-mode-summary', window.HTMLElement).textContent).toBe('Dry run · prerequisites missing')
 	expect(element(window, 'execution-enabled', window.HTMLInputElement).disabled).toBe(true)
 	const marketRows = () => Array.from(element(window, 'market-source-rows', window.HTMLTableSectionElement).querySelectorAll('tr'))
@@ -759,19 +757,10 @@ test('focused risk, settlement, execution, and market forms load the saved confi
 })
 
 test('go-live checklist unlocks the switch once every prerequisite holds, reports the armed state, and the RPC form carries quorum URLs', async () => {
-	const manifest = await createDeploymentManifest(
-		'sepolia',
-		11_155_111,
-		[
-			{ address: parseOperatorSettings({ ...example, network: 'sepolia' }).deployment.openOracle, role: 'open-oracle' },
-			{ address: canonicalSecurityPoolFactory('sepolia'), role: 'security-pool-factory' },
-		],
-		async () => '0x01',
-	)
 	let settings = parseOperatorSettings({
 		...example,
 		connectivity: { publicRpcUrls: ['https://rpc.example/'], readRpcUrl: 'https://rpc.example/' },
-		deployment: { ...example.deployment, deploymentManifest: manifest, quorumRpcUrls: ['https://quorum-one.example/', 'https://quorum-two.example/'] },
+		deployment: { ...example.deployment, quorumRpcUrls: ['https://quorum-one.example/', 'https://quorum-two.example/'] },
 		network: 'sepolia',
 		networkConfigured: true,
 		rpcQuorum: 2,
@@ -844,7 +833,6 @@ test('go-live checklist unlocks the switch once every prerequisite holds, report
 	expect(checklistReady()).toEqual(['true', 'true', 'true', 'true'])
 	expect(element(window, 'execution-mode-summary', window.HTMLElement).textContent).toBe('Dry run · ready to go live')
 	expect(element(window, 'execution-enabled', window.HTMLInputElement).disabled).toBe(false)
-	expect(element(window, 'manifest-summary', window.HTMLElement).textContent).toBe('Additional bytecode pins configured')
 	expect(element(window, 'quorum-rpc-urls', window.HTMLTextAreaElement).value).toBe('https://quorum-one.example/\nhttps://quorum-two.example/')
 
 	const submit = async (formId: string, statusId: string, pendingPrefix: string) => {
@@ -872,7 +860,7 @@ test('go-live checklist unlocks the switch once every prerequisite holds, report
 	expect(element(window, 'quorum-rpc-urls', window.HTMLTextAreaElement).value).toBe('https://quorum-one.example/\nhttps://quorum-three.example/')
 	for (let attempt = 0; attempt < 100 && window.document.querySelectorAll('.settings-badges[data-form="deployment-form"] .settings-badge').length === 0; attempt++) await Bun.sleep(10)
 
-	// A venue save that overlaps a slow RPC save must not resurrect the previous quorum URLs or drop the manifest:
+	// A venue save that overlaps a slow RPC save must not resurrect the previous quorum URLs:
 	// each form sends only its own fields and the bot merges them into the latest saved section.
 	let releaseConnectivity: (() => void) | undefined
 	holdConnectivity = new Promise(resolve => {
@@ -892,7 +880,6 @@ test('go-live checklist unlocks the switch once every prerequisite holds, report
 	expect(element(window, 'deployment-status', window.HTMLElement).textContent).toBe('Venues saved.')
 	expect(settings.deployment.quorumRpcUrls).toEqual(['https://quorum-four.example/', 'https://quorum-five.example/'])
 	expect(settings.deployment.uniswapV4Enabled).toBe(true)
-	expect(settings.deployment.deploymentManifest).toBeDefined()
 	expect(element(window, 'quorum-rpc-urls', window.HTMLTextAreaElement).value).toBe('https://quorum-four.example/\nhttps://quorum-five.example/')
 	expect(element(window, 'deployment-v4-enabled', window.HTMLInputElement).checked).toBe(true)
 	expect(Array.from(window.document.querySelectorAll('.settings-badges[data-form="deployment-form"] .settings-badge'), badge => badge.textContent)).toEqual(['Queued · next scan'])
@@ -901,11 +888,4 @@ test('go-live checklist unlocks the switch once every prerequisite holds, report
 	const universeSave = element(window, 'tokens-form', window.HTMLFormElement).querySelector('button[type="submit"]')
 	if (!(universeSave instanceof window.HTMLButtonElement)) throw new Error('Missing universe save button')
 	expect(universeSave.disabled).toBe(true)
-	// Clearing optional pins must not reintroduce a live-execution prerequisite.
-	element(window, 'deployment-manifest', window.HTMLTextAreaElement).value = ''
-	element(window, 'manifest-form', window.HTMLFormElement).dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }))
-	for (let attempt = 0; attempt < 100 && settings.deployment.deploymentManifest !== undefined; attempt++) await Bun.sleep(10)
-	expect(settings.deployment.deploymentManifest).toBeUndefined()
-	expect(checklistReady()).toEqual(['true', 'true', 'true', 'true'])
-	expect(element(window, 'execution-enabled', window.HTMLInputElement).disabled).toBe(false)
 })

@@ -56,7 +56,6 @@ function settings(rpcUrl: string, uiPort: number, privateKey?: Hex): PersistedOp
 		connectivity: { publicRpcUrls: [rpcUrl], readRpcUrl: rpcUrl },
 		deployment: {
 			coordinatorAddresses: [],
-			deploymentManifest: undefined,
 			executor: undefined,
 			openOracle: '0x0000000000000000000000000000000000000000',
 			quorumRpcUrls: [],
@@ -520,18 +519,12 @@ describe('file-only startup configuration', () => {
 		const executableRuntime = Reflect.get(executableMainnetProfile, 'runtime')
 		const executableDeployment = Reflect.get(executableMainnetProfile, 'deployment')
 		if (typeof executableRuntime !== 'object' || executableRuntime === null || Array.isArray(executableRuntime) || typeof executableDeployment !== 'object' || executableDeployment === null || Array.isArray(executableDeployment)) throw new Error('Executable Mainnet profile fixture is invalid')
-		const executionAddress = '0x0000000000000000000000000000000000000001'
 		Reflect.set(executableRuntime, 'execute', true)
 		Reflect.set(executableMainnetProfile, 'privateKey', `0x${'11'.repeat(32)}`)
 		Reflect.set(executableDeployment, 'uniswapV2Enabled', false)
 		Reflect.set(executableDeployment, 'uniswapV3Enabled', true)
 		Reflect.set(executableDeployment, 'uniswapV4Enabled', false)
-		Reflect.set(executableDeployment, 'deploymentManifest', {
-			chainId: 1,
-			contracts: [{ address: executionAddress, role: 'open-oracle', runtimeCodeHash: `0x${'00'.repeat(32)}` }],
-			network: 'mainnet',
-			version: 1,
-		})
+
 		for (const [field, missingValue] of [['uniswapV3Enabled', false]] as const) {
 			const invalidProfile = structuredClone(executableMainnetProfile)
 			const invalidDeployment = Reflect.get(invalidProfile, 'deployment')

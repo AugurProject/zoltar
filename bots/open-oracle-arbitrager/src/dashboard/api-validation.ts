@@ -3,14 +3,13 @@ import type { SubmissionSettings } from '#execution/transaction-submission'
 import type { ConnectivitySettings } from '#monitoring/connectivity'
 import type { StoredRuntimeLimits } from '#config/settings-store'
 import type { SettlementSettings } from '#state/settlement-store'
-import { array, booleanValue, decode, numberValue, object, oneOf, optional, stringValue, unknownValue } from '@zoltar/bot-shared/dashboard/response-validation'
+import { array, booleanValue, decode, numberValue, object, oneOf, optional, stringValue } from '@zoltar/bot-shared/dashboard/response-validation'
 
 export type DashboardDeployment = {
 	quorumRpcUrls: readonly string[]
 	uniswapV2Enabled: boolean
 	uniswapV3Enabled: boolean
 	uniswapV4Enabled: boolean
-	deploymentManifest?: unknown
 }
 
 export function isStringArray(value: unknown): value is string[] {
@@ -41,7 +40,6 @@ export const isDeploymentSettings = object<DashboardDeployment>({
 	uniswapV2Enabled: booleanValue,
 	uniswapV3Enabled: booleanValue,
 	uniswapV4Enabled: booleanValue,
-	deploymentManifest: unknownValue,
 })
 
 export const isSettlementSettings = object<SettlementSettings>({ enabled: booleanValue, maxGasPriceNanoEth: stringValue, minimumProfitWeth: stringValue, rewardWithdrawThresholdEth: stringValue })

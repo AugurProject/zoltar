@@ -5,7 +5,6 @@ import { rpcFailureWithContext, type Address, type TransactionLog } from '@zolta
 import { OPEN_ORACLE_FLAG_STORE_ALL, OPEN_ORACLE_FLAG_TIME_TYPE, OPEN_ORACLE_FLAG_TRACK_DISPUTES, OPEN_ORACLE_REPORT_SETTLED_TOPIC } from '@zoltar/open-oracle-shared/openOracle/openOracle'
 import { openOraclePriceCoordinatorAbi } from '#contracts/abi'
 import { type Configuration } from '#config/configuration'
-import { authenticateDeploymentManifest, type DeploymentRole } from '#config/deployment-auth'
 import { coordinatorPolicySafetyMismatch, retainedReportIds, type CoordinatorGamePolicy } from '#core/game-policy'
 import { applyLogs, logBlockNumber, reportId, type ActiveReport } from '#monitoring/oracle-log-state'
 import { compactFinalityWindow } from '@zoltar/bot-shared/monitoring/resilience'
@@ -58,7 +57,7 @@ export async function loadCoordinatorPolicies(client: ReadClient, config: Pick<C
 }
 
 function requiredDeploymentIdentities(config: Configuration) {
-	const identities: { address: Address; role: DeploymentRole }[] = [
+	const identities: { address: Address; role: string }[] = [
 		{ address: config.openOracle, role: 'open-oracle' },
 		{ address: config.network.weth, role: 'weth' },
 		{ address: canonicalSecurityPoolFactory(config.network.name), role: 'security-pool-factory' },
@@ -74,7 +73,6 @@ export async function authenticateConfiguredDeployments(clients: readonly ReadCl
 	if (!config.execute) return
 	const executor = canonicalExecutorIdentity()
 	if (config.executor?.toLowerCase() !== executor.address.toLowerCase()) throw new Error('Executor must use the canonical derived address')
-	const manifest = config.deploymentManifest
 	const required = requiredDeploymentIdentities(config)
 	const endpoints = [config.connectivity.readRpcUrl, ...config.quorumRpcUrls]
 	await settledQuorumValue(
@@ -88,13 +86,6 @@ export async function authenticateConfiguredDeployments(clients: readonly ReadCl
 					const code = await client.getCode({ address: identity.address })
 					if (code === undefined || code === '0x') throw new Error(`Canonical ${identity.role} ${identity.address} is not deployed`)
 				}
-				if (manifest !== undefined)
-					await authenticateDeploymentManifest(manifest, {
-						chainId: config.network.chain.id,
-						network: config.network.name,
-						readCode: address => client.getCode({ address }),
-						required: manifest.contracts,
-					})
 			} catch (error) {
 				throw rpcFailureWithContext(error, endpoint, 'eth_getCode')
 			}

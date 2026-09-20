@@ -320,8 +320,8 @@ export function parseOperatorSettings(value: unknown, preservedPrivateKey?: Hex)
 }
 
 export function serializeOperatorSettings(settings: PersistedOperatorSettings, redactPrivateKey = false): StoredOperatorSettings {
-	const { deploymentManifest, quorumRpcUrls, uniswapV2Enabled, uniswapV3Enabled, uniswapV4Enabled } = settings.deployment
-	const deployment = { deploymentManifest, quorumRpcUrls, uniswapV2Enabled, uniswapV3Enabled, uniswapV4Enabled }
+	const { quorumRpcUrls, uniswapV2Enabled, uniswapV3Enabled, uniswapV4Enabled } = settings.deployment
+	const deployment = { quorumRpcUrls, uniswapV2Enabled, uniswapV3Enabled, uniswapV4Enabled }
 	return {
 		centralizedMarkets: serializeStoredCentralizedMarkets(settings.centralizedMarkets),
 		connectivity: settings.networkConfigured ? settings.connectivity : undefined,

@@ -320,7 +320,6 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 						const deployment = pending.deployment
 						pending.deployment = undefined
 						config.coordinatorAddresses = [...deployment.coordinatorAddresses]
-						config.deploymentManifest = deployment.deploymentManifest
 						config.executor = deployment.executor
 						config.openOracle = deployment.openOracle
 						config.quorumRpcUrls = [...deployment.quorumRpcUrls]

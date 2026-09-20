@@ -2,7 +2,6 @@ import { expect, test } from 'bun:test'
 import { discoverCoordinatorPolicies } from '#monitoring/coordinator-discovery'
 import { canonicalSecurityPoolFactory, networkConfiguration } from '#config/network'
 import { parseOperatorSettings } from '#config/settings-store'
-import { createDeploymentManifest } from '../helpers/deployment-manifest.ts'
 import { securityPoolAbi, securityPoolFactoryAbi, openOraclePriceCoordinatorAbi } from '@zoltar/bot-shared/contracts/abi'
 import { createPublicClient, decodeFunctionData, encodeAbiParameters, getAddress, type Hex } from '@zoltar/bot-shared/ethereum'
 import { custom } from '@zoltar/bot-shared/ethereum/rpc-transport'
@@ -18,7 +17,7 @@ const other = getAddress('0x0000000000000000000000000000000000000033')
 const hash: Hex = `0x${'ab'.repeat(32)}`
 const entry = { securityPool: pool, truthAuction: other, priceOracleManagerAndOperatorQueuer: coordinator, shareToken: other, parent: other, universeId: 0n, questionId: 1n, statoblastSecurityMultiplierBps: 20_000n, initialReportPriorityFeeAttoEthPerGas: 1n, currentRetentionRate: 1n, settlementCollateralAttoEth: 0n }
 
-function reader(options: { wrongCoordinator?: boolean; wrongCode?: boolean; missingCode?: boolean; wrongBlock?: boolean; unapproved?: boolean; shortPage?: boolean; unsafePolicy?: boolean; registryCount?: bigint; reorg?: boolean } = {}) {
+function reader(options: { wrongCoordinator?: boolean; missingCode?: boolean; wrongBlock?: boolean; unapproved?: boolean; shortPage?: boolean; unsafePolicy?: boolean; registryCount?: bigint; reorg?: boolean } = {}) {
 	let blockReads = 0
 	const targets: string[] = []
 	const provider = multicallProvider(
@@ -52,7 +51,7 @@ function reader(options: { wrongCoordinator?: boolean; wrongCode?: boolean; miss
 		({ method, params }) => {
 			if (method === 'eth_getCode') {
 				if (options.missingCode) return '0x'
-				return options.wrongCode ? '0x02' : '0x01'
+				return '0x01'
 			}
 			if (method === 'eth_getBlockByNumber') {
 				expect(params).toEqual(['0xa', false])
@@ -71,7 +70,6 @@ async function configuration() {
 		openOracle: settings.deployment.openOracle,
 		operatorSettings: settings,
 		execute: true,
-		deploymentManifest: await createDeploymentManifest('mainnet', 1, [{ address: factory, role: 'security-pool-factory' }], async () => '0x01'),
 		connectivity: settings.connectivity,
 		quorumRpcUrls: ['https://second.example'],
 	}
@@ -111,7 +109,6 @@ for (const [name, options, error] of [
 	['pool link', { wrongCoordinator: true }, 'inconsistent coordinator'],
 	['changed block', { reorg: true }, 'canonical block'],
 	['registry limit', { registryCount: 10_001n }, 'discovery limit'],
-	['factory code', { wrongCode: true }, 'runtime bytecode hash'],
 	['canonical block', { wrongBlock: true }, 'canonical block'],
 	['incomplete registry', { shortPage: true }, 'incomplete page'],
 	['unsafe coordinator policy', { unsafePolicy: true }, 'Multiplier exceeds'],
@@ -131,15 +128,8 @@ test('discovers an approved pool on a later registry page', async () => {
 	expect(client.targets.filter(target => target.toLowerCase() === factory.toLowerCase())).toHaveLength(3)
 })
 
-test('discovers through the canonical factory without requiring a factory pin', async () => {
+test('requires deployed canonical factory code', async () => {
 	const config = await configuration()
-	const deploymentManifest = await createDeploymentManifest('mainnet', 1, [{ address: config.openOracle, role: 'open-oracle' }], async () => '0x01')
-	const client = reader()
-	expect(await discoverCoordinatorPolicies([client.client], { ...config, deploymentManifest }, 10n, hash)).toHaveLength(1)
-})
-
-test('requires deployed canonical factory code even without additional pins', async () => {
-	const config = { ...(await configuration()), deploymentManifest: undefined }
 	expect(await discoverCoordinatorPolicies([reader().client], config, 10n, hash)).toHaveLength(1)
 	await expect(discoverCoordinatorPolicies([reader({ missingCode: true }).client], config, 10n, hash)).rejects.toThrow('Canonical security pool factory is not deployed')
 })

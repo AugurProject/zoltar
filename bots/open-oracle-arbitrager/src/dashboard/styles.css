@@ -418,10 +418,6 @@ section,
 	gap: 1rem;
 }
 
-.deployment-manifest-field {
-	grid-column: 1 / -1;
-}
-
 .create2-form {
 	margin-top: 1.5rem;
 	padding-top: 1.5rem;
@@ -1196,10 +1192,6 @@ a {
 
 	.deployment-grid {
 		grid-template-columns: 1fr;
-	}
-
-	.deployment-manifest-field {
-		grid-column: auto;
 	}
 
 	.app-header,

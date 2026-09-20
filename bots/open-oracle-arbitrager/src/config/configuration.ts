@@ -1,6 +1,5 @@
 import { resolve } from 'node:path'
 import type { Address, Hex } from '@zoltar/bot-shared/ethereum'
-import type { DeploymentManifest } from '#config/deployment-auth'
 import { validateIndependentReadRpcUrls, type ConnectivitySettings } from '#monitoring/connectivity'
 import { type MutableStrategy } from '#state/operator-state'
 import type { MutableSettlement } from '#state/settlement-store'
@@ -22,7 +21,6 @@ export type Configuration = MutableStrategy & {
 	centralizedMarkets: CentralizedMarketSettings
 	connectivity: ConnectivitySettings
 	coordinatorAddresses: Address[]
-	deploymentManifest: DeploymentManifest | undefined
 	execute: boolean
 	executor: Address | undefined
 	historyFile: string
@@ -77,7 +75,6 @@ export async function loadConfiguration(settingsFile = resolve(process.env['OPEN
 		centralizedMarkets: saved.centralizedMarkets,
 		connectivity: saved.connectivity,
 		coordinatorAddresses: [...deployment.coordinatorAddresses],
-		deploymentManifest: deployment.deploymentManifest,
 		execute: saved.runtime.execute,
 		executor: deployment.executor,
 		historyFile: resolve(saved.runtime.historyFile),

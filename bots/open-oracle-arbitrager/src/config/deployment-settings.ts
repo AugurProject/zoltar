@@ -1,5 +1,4 @@
 import { canonicalExecutorIdentity } from '#execution/executor-identity'
-import { parseDeploymentManifest, type DeploymentManifest } from '#config/deployment-auth'
 import { validateReadRpcUrls, type NetworkName } from '#monitoring/connectivity'
 import { canonicalCoreDeployment, canonicalNetworkDeployment, canonicalUniswapDeployment } from '@zoltar/bot-shared/config/canonical-deployment'
 import { getAddress, type Address } from '@zoltar/bot-shared/ethereum'
@@ -9,7 +8,6 @@ import sepolia from '../../../../docs/sepolia-deployment-addresses.json'
 
 export type DeploymentSettings = {
 	coordinatorAddresses: readonly Address[]
-	deploymentManifest: DeploymentManifest | undefined
 	executor: Address | undefined
 	openOracle: Address
 	quorumRpcUrls: readonly string[]
@@ -26,7 +24,7 @@ export type DeploymentSettings = {
 	weth: Address
 }
 
-export type StoredDeploymentSettings = Pick<DeploymentSettings, 'deploymentManifest' | 'quorumRpcUrls' | 'uniswapV2Enabled' | 'uniswapV3Enabled' | 'uniswapV4Enabled'>
+export type StoredDeploymentSettings = Pick<DeploymentSettings, 'quorumRpcUrls' | 'uniswapV2Enabled' | 'uniswapV3Enabled' | 'uniswapV4Enabled'>
 
 function record(value: unknown) {
 	return validateRecord(value, 'Deployment settings', 'Deployment settings must be a JSON object')
@@ -49,24 +47,24 @@ function urlArray(value: unknown) {
 	return validateReadRpcUrls(value.map(item => String(item)))
 }
 
-const STORED_DEPLOYMENT_KEYS = ['deploymentManifest', 'quorumRpcUrls', 'uniswapV2Enabled', 'uniswapV3Enabled', 'uniswapV4Enabled'] as const
+const STORED_DEPLOYMENT_KEYS = ['quorumRpcUrls', 'uniswapV2Enabled', 'uniswapV3Enabled', 'uniswapV4Enabled'] as const
 
 /**
  * A focused form sends only the stored fields it owns; the rest come from the latest saved section so two forms
- * saving back to back cannot resurrect each other's stale values. `deploymentManifest: null` removes the manifest.
+ * saving back to back cannot resurrect each other's stale values.
  */
 export function mergeStoredDeploymentUpdate(current: DeploymentSettings, value: unknown, network: NetworkName): DeploymentSettings {
 	const update = record(value)
 	for (const key of Object.keys(update)) {
 		if (!STORED_DEPLOYMENT_KEYS.some(allowed => allowed === key)) throw new Error(`Unknown deployment field: ${key}`)
 	}
-	const { deploymentManifest, quorumRpcUrls, uniswapV2Enabled, uniswapV3Enabled, uniswapV4Enabled } = current
-	return validateDeploymentSettings({ deploymentManifest, quorumRpcUrls, uniswapV2Enabled, uniswapV3Enabled, uniswapV4Enabled, ...update }, network)
+	const { quorumRpcUrls, uniswapV2Enabled, uniswapV3Enabled, uniswapV4Enabled } = current
+	return validateDeploymentSettings({ quorumRpcUrls, uniswapV2Enabled, uniswapV3Enabled, uniswapV4Enabled, ...update }, network)
 }
 
 export function validateDeploymentSettings(value: unknown, network: NetworkName = 'mainnet'): DeploymentSettings {
 	const settings = record(value)
-	const keys = ['coordinatorAddresses', 'deploymentManifest', 'executor', 'openOracle', 'quorumRpcUrls', 'rep', 'uniswapV2Enabled', 'uniswapV3Enabled', 'uniswapV4Enabled', 'uniswapFactory', 'uniswapQuoter', 'uniswapRouter', 'uniswapV2Router', 'uniswapV4PoolManager', 'uniswapV4Quoter', 'weth']
+	const keys = ['coordinatorAddresses', 'executor', 'openOracle', 'quorumRpcUrls', 'rep', 'uniswapV2Enabled', 'uniswapV3Enabled', 'uniswapV4Enabled', 'uniswapFactory', 'uniswapQuoter', 'uniswapRouter', 'uniswapV2Router', 'uniswapV4PoolManager', 'uniswapV4Quoter', 'weth']
 	const requiredKeys = ['quorumRpcUrls']
 	if (Object.keys(settings).some(key => !keys.includes(key)) || requiredKeys.some(key => !(key in settings))) throw new Error('Deployment settings require the supported core deployment fields')
 	const manifest = network === 'mainnet' ? mainnet : sepolia
@@ -83,7 +81,6 @@ export function validateDeploymentSettings(value: unknown, network: NetworkName 
 	})
 	return {
 		coordinatorAddresses: [],
-		deploymentManifest: settings['deploymentManifest'] === undefined || settings['deploymentManifest'] === null ? undefined : parseDeploymentManifest(settings['deploymentManifest']),
 		executor: canonicalExecutorIdentity().address,
 		openOracle: canonicalCoreDeployment(manifest).openOracle,
 		quorumRpcUrls: urlArray(settings['quorumRpcUrls']),

@@ -23,7 +23,6 @@ test('replaces the configured REP in both active and persisted live deployment s
 test('rejects insecure or credential-bearing quorum RPC URLs', () => {
 	const base = {
 		coordinatorAddresses: [],
-		deploymentManifest: undefined,
 		executor: undefined,
 		openOracle: address('1'),
 		quorumRpcUrls: ['https://quorum.example'],
@@ -130,4 +129,8 @@ test('can disable V3 independently while keeping V4 enabled', () => {
 	expect(settings.uniswapRouter).toBeUndefined()
 	expect(settings.uniswapV4PoolManager).toBeDefined()
 	expect(validateDeploymentSettings(JSON.parse(JSON.stringify(settings)), 'mainnet').uniswapRouter).toBeUndefined()
+})
+
+test('rejects removed operator-supplied bytecode pins', () => {
+	expect(() => validateDeploymentSettings({ quorumRpcUrls: [], deploymentManifest: { version: 1 } })).toThrow('supported core deployment fields')
 })
