@@ -3,7 +3,7 @@ import { parseApprovedUniverses, validateApprovedUniverseSelection } from '@zolt
 import { resolve } from 'node:path'
 import { privateKeyToAccount, type Address, type Hex } from '@zoltar/bot-shared/ethereum'
 import { assertDistinctPersistentPaths, mutableStrategy, runnableOperatorSettings, type Configuration } from '#config/configuration'
-import { monitoringTokensForDeployment, assertFocusedDeploymentCompatible, prepareDeploymentTokenTransition, validateDeploymentSettings, type DeploymentSettings } from '#config/deployment-settings'
+import { monitoringTokensForDeployment, assertFocusedDeploymentCompatible, mergeStoredDeploymentUpdate, prepareDeploymentTokenTransition, type DeploymentSettings } from '#config/deployment-settings'
 import { configurationRevisionConflict, loadOperatorSettingsWithRevision, parseOperatorSettings, saveOperatorSettings, serializeOperatorSettings, switchOperatorNetworkProfile, type PersistedOperatorSettings } from '#config/settings-store'
 import { signerCandidate } from '@zoltar/bot-shared/config/signer'
 import { startDashboardServer } from '#dashboard/dashboard-server'
@@ -339,7 +339,7 @@ export function startOperatorControlPlane(parameters: {
 			return queueSettingsUpdate(async () => {
 				const latest = await loadOperatorSettingsWithRevision(config.settingsFile)
 				if (latest === undefined) throw configurationRevisionConflict()
-				const next = validateDeploymentSettings(value, latest.settings.network)
+				const next = mergeStoredDeploymentUpdate(latest.settings.deployment, value, latest.settings.network)
 				if ((config.execute || latest.settings.runtime.execute) && next.quorumRpcUrls.length < configuredQuorumRpcUrlMinimum(latest.settings.rpcQuorum)) throw new Error('Live execution requires at least two independent quorum RPCs (three read endpoints total)')
 				assertFocusedDeploymentCompatible(next.rep, latest.settings.centralizedMarkets)
 				validateIndependentReadRpcUrls(latest.settings.connectivity.readRpcUrl, next.quorumRpcUrls)

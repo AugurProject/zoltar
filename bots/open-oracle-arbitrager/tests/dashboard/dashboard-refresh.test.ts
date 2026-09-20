@@ -10,7 +10,7 @@ import { startDashboardServer } from '#dashboard/dashboard-server'
 import { operatorSnapshot, type MutableStrategy, type OperatorState, type QueuedSettingsSection } from '#state/operator-state'
 import example from '../../config/operator.example.json'
 import { parseOperatorSettings, parseRuntimeLimitsRequest, parseStoredCentralizedMarkets, serializeOperatorSettings, serializeRuntimeLimits, serializeStoredCentralizedMarkets } from '#config/settings-store'
-import { validateDeploymentSettings } from '#config/deployment-settings'
+import { mergeStoredDeploymentUpdate } from '#config/deployment-settings'
 import { validateSubmissionSettings } from '#execution/transaction-submission'
 
 const servers: ReturnType<typeof startDashboardServer>[] = []
@@ -500,7 +500,7 @@ test('deployment form saves venue switches without configurable Uniswap addresse
 		setPaused: () => undefined,
 		updateConnectivity: value => value,
 		updateDeployment: value => {
-			settings = { ...settings, deployment: validateDeploymentSettings(value, 'sepolia') }
+			settings = { ...settings, deployment: mergeStoredDeploymentUpdate(settings.deployment, value, 'sepolia') }
 			return settings.deployment
 		},
 		updateSigner: () => ({ wallet: undefined }),
@@ -776,6 +776,8 @@ test('go-live checklist unlocks the switch once every prerequisite holds, report
 	const queued: QueuedSettingsSection[] = []
 	let execute = false
 	const connectivityRequests: unknown[] = []
+	const deploymentRequests: unknown[] = []
+	let holdConnectivity: Promise<void> | undefined
 	const snapshot = () =>
 		operatorSnapshot(
 			operatorState(),
@@ -804,13 +806,21 @@ test('go-live checklist unlocks the switch once every prerequisite holds, report
 		hostname: '127.0.0.1',
 		isNetworkConfigured: () => true,
 		setPaused: () => undefined,
-		updateConnectivity: value => {
+		// Mirrors the bot's serialized settings queue: the connectivity write lands first and a later save reads it.
+		updateConnectivity: async value => {
 			connectivityRequests.push(value)
 			if (typeof value !== 'object' || value === null || !('quorumRpcUrls' in value) || !Array.isArray(value.quorumRpcUrls)) throw new Error('Expected quorum RPC URLs')
 			const quorumRpcUrls = value.quorumRpcUrls.map(String)
 			settings = { ...settings, deployment: { ...settings.deployment, quorumRpcUrls } }
 			queued.push('connectivity', 'deployment', 'universes')
+			if (holdConnectivity !== undefined) await holdConnectivity
 			return { connectivity: settings.connectivity, network: 'sepolia', quorumRpcUrls, rpcQuorum: 2 }
+		},
+		updateDeployment: async value => {
+			deploymentRequests.push(value)
+			if (holdConnectivity !== undefined) await holdConnectivity
+			settings = { ...settings, deployment: mergeStoredDeploymentUpdate(settings.deployment, value, 'sepolia') }
+			return settings.deployment
 		},
 		updateExecution: value => {
 			if (typeof value !== 'object' || value === null || !('execute' in value) || typeof value.execute !== 'boolean') throw new Error('Expected execute')
@@ -858,6 +868,30 @@ test('go-live checklist unlocks the switch once every prerequisite holds, report
 	expect(settings.deployment.quorumRpcUrls).toEqual(['https://quorum-one.example/', 'https://quorum-three.example/'])
 	expect(element(window, 'quorum-rpc-urls', window.HTMLTextAreaElement).value).toBe('https://quorum-one.example/\nhttps://quorum-three.example/')
 	for (let attempt = 0; attempt < 100 && window.document.querySelectorAll('.settings-badges[data-form="deployment-form"] .settings-badge').length === 0; attempt++) await Bun.sleep(10)
+
+	// A venue save that overlaps a slow RPC save must not resurrect the previous quorum URLs or drop the manifest:
+	// each form sends only its own fields and the bot merges them into the latest saved section.
+	let releaseConnectivity: (() => void) | undefined
+	holdConnectivity = new Promise(resolve => {
+		releaseConnectivity = resolve
+	})
+	element(window, 'quorum-rpc-urls', window.HTMLTextAreaElement).value = 'https://quorum-four.example/\nhttps://quorum-five.example/'
+	element(window, 'connectivity-form', window.HTMLFormElement).dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }))
+	await Bun.sleep(30)
+	element(window, 'deployment-v4-enabled', window.HTMLInputElement).checked = true
+	element(window, 'deployment-form', window.HTMLFormElement).dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }))
+	await Bun.sleep(30)
+	expect(deploymentRequests.at(-1)).toEqual({ uniswapV2Enabled: true, uniswapV3Enabled: true, uniswapV4Enabled: true })
+	releaseConnectivity?.()
+	holdConnectivity = undefined
+	for (let attempt = 0; attempt < 100 && !element(window, 'connectivity-status', window.HTMLElement).textContent.startsWith('Chain and RPCs passed'); attempt++) await Bun.sleep(10)
+	for (let attempt = 0; attempt < 100 && element(window, 'deployment-status', window.HTMLElement).textContent !== 'Venues saved.'; attempt++) await Bun.sleep(10)
+	expect(element(window, 'deployment-status', window.HTMLElement).textContent).toBe('Venues saved.')
+	expect(settings.deployment.quorumRpcUrls).toEqual(['https://quorum-four.example/', 'https://quorum-five.example/'])
+	expect(settings.deployment.uniswapV4Enabled).toBe(true)
+	expect(settings.deployment.deploymentManifest).toBeDefined()
+	expect(element(window, 'quorum-rpc-urls', window.HTMLTextAreaElement).value).toBe('https://quorum-four.example/\nhttps://quorum-five.example/')
+	expect(element(window, 'deployment-v4-enabled', window.HTMLInputElement).checked).toBe(true)
 	expect(Array.from(window.document.querySelectorAll('.settings-badges[data-form="deployment-form"] .settings-badge'), badge => badge.textContent)).toEqual(['Queued · next scan'])
 	// The universe form has no controls of its own, yet it joins the same clean/queued model as every other panel.
 	expect(Array.from(window.document.querySelectorAll('.settings-badges[data-form="tokens-form"] .settings-badge'), badge => badge.textContent)).toEqual(['Queued · next scan'])

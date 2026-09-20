@@ -49,6 +49,21 @@ function urlArray(value: unknown) {
 	return validateReadRpcUrls(value.map(item => String(item)))
 }
 
+const STORED_DEPLOYMENT_KEYS = ['deploymentManifest', 'quorumRpcUrls', 'uniswapV2Enabled', 'uniswapV3Enabled', 'uniswapV4Enabled'] as const
+
+/**
+ * A focused form sends only the stored fields it owns; the rest come from the latest saved section so two forms
+ * saving back to back cannot resurrect each other's stale values. `deploymentManifest: null` removes the manifest.
+ */
+export function mergeStoredDeploymentUpdate(current: DeploymentSettings, value: unknown, network: NetworkName): DeploymentSettings {
+	const update = record(value)
+	for (const key of Object.keys(update)) {
+		if (!STORED_DEPLOYMENT_KEYS.some(allowed => allowed === key)) throw new Error(`Unknown deployment field: ${key}`)
+	}
+	const { deploymentManifest, quorumRpcUrls, uniswapV2Enabled, uniswapV3Enabled, uniswapV4Enabled } = current
+	return validateDeploymentSettings({ deploymentManifest, quorumRpcUrls, uniswapV2Enabled, uniswapV3Enabled, uniswapV4Enabled, ...update }, network)
+}
+
 export function validateDeploymentSettings(value: unknown, network: NetworkName = 'mainnet'): DeploymentSettings {
 	const settings = record(value)
 	const keys = ['coordinatorAddresses', 'deploymentManifest', 'executor', 'openOracle', 'quorumRpcUrls', 'rep', 'uniswapV2Enabled', 'uniswapV3Enabled', 'uniswapV4Enabled', 'uniswapFactory', 'uniswapQuoter', 'uniswapRouter', 'uniswapV2Router', 'uniswapV4PoolManager', 'uniswapV4Quoter', 'weth']
