@@ -2,7 +2,8 @@ import type { StoredRuntimeLimits } from '#config/settings-store'
 import type { SettlementSettings } from '#state/settlement-store'
 import type { StrategySettings } from '#state/operator-state'
 import type { SubmissionSettings } from '#execution/transaction-submission'
-import { decodeCentralizedMarkets, decodeDeployment, decodeExecution, decodeRuntimeLimits, decodeSettlement, type DashboardDeployment } from './api-validation.ts'
+import { urlLines } from '@zoltar/bot-shared/dashboard/forms'
+import { decodeCentralizedMarkets, decodeDeployment, decodeExecution, decodeRuntimeLimits, decodeSettings, decodeSettlement, decodeSubmission, type DashboardDeployment } from './api-validation.ts'
 import { element, setText } from './dom.js'
 import { formIsDirty, markFormClean, setFormSubmitting, trackForm } from './form-state.ts'
 import type { GoLiveConfiguration } from './go-live.ts'
@@ -17,6 +18,8 @@ function prettyJson(value: unknown) {
 type FocusedFormContext = {
 	api: (path: string, init?: RequestInit) => Promise<unknown>
 	refresh: () => Promise<void>
+	/** Re-derives every fieldset's locked state from connection and configuration state once a save has finished. */
+	syncControls: () => void
 }
 
 /** The last configuration the bot returned for each section; forms diff against it and the go-live checklist reads it. */
@@ -38,7 +41,7 @@ export function setLoadedRpcQuorum(rpcQuorum: 1 | 2) {
 }
 
 /** The strategy form's inputs are addressed by their JSON field name. */
-export function input(name: keyof StrategySettings) {
+function input(name: keyof StrategySettings) {
 	const found = document.querySelector(`[name="${name}"]`)
 	if (!(found instanceof HTMLInputElement)) throw new Error(`Missing strategy input: ${name}`)
 	return found
@@ -155,24 +158,57 @@ const FOCUSED_FORMS = ['connectivity-form', 'deployment-form', 'manifest-form', 
  * configuration document, every save reloads the section the bot returns, and a form's save button stays disabled until
  * an edit differs from the loaded values.
  */
-export function registerFocusedSettingsForms({ api, refresh }: FocusedFormContext) {
+export function registerFocusedSettingsForms({ api, refresh, syncControls }: FocusedFormContext) {
 	for (const formId of FOCUSED_FORMS) trackForm(formId)
 	registerMarketSourceControls()
 	/** Shared save flow for the focused forms: lock the button, send, reload the returned values, and refresh the snapshot. */
 	const submitFocusedForm = async (formId: string, statusId: string, pendingMessage: string, save: () => Promise<string>, onError?: () => void) => {
 		setFormSubmitting(formId, true)
 		setText(statusId, pendingMessage)
+		let outcome: string
 		try {
-			setText(statusId, await save())
+			outcome = await save()
 		} catch (error) {
 			onError?.()
-			setText(statusId, error instanceof Error ? error.message : String(error))
-		} finally {
-			setFormSubmitting(formId, false)
-			await refresh()
+			outcome = error instanceof Error ? error.message : String(error)
 		}
+		setFormSubmitting(formId, false)
+		syncControls()
+		// The snapshot refresh completes before the outcome is shown, so the status line always describes a settled panel.
+		await refresh()
+		setText(statusId, outcome)
 	}
 	const put = (path: string, body: unknown) => api(path, { body: JSON.stringify(body), headers: { 'content-type': 'application/json' }, method: 'PUT' })
+
+	element('strategy-form', HTMLFormElement).addEventListener('submit', event => {
+		event.preventDefault()
+		void submitFocusedForm('strategy-form', 'form-status', 'Saving strategy…', async () => {
+			const settings = {
+				maxSpotTwapTicks: input('maxSpotTwapTicks').value,
+				minimumProfitBps: input('minimumProfitBps').value,
+				minimumProfitWeth: input('minimumProfitWeth').value,
+				minimumRemainingBlocks: input('minimumRemainingBlocks').value,
+				minimumRemainingSeconds: input('minimumRemainingSeconds').value,
+				pollMilliseconds: Number(input('pollMilliseconds').value),
+				twapSeconds: Number(input('twapSeconds').value),
+			} satisfies StrategySettings
+			loadSettings(decodeSettings(await put('/api/settings', settings)).settings)
+			return 'Strategy saved.'
+		})
+	})
+
+	element('submission-form', HTMLFormElement).addEventListener('submit', event => {
+		event.preventDefault()
+		void submitFocusedForm('submission-form', 'submission-status', 'Saving submission…', async () => {
+			const submission = {
+				minimumBundleRelaySuccesses: Number(element('minimum-bundle-relay-successes', HTMLInputElement).value),
+				mode: element('submission-mode', HTMLSelectElement).value,
+				relayUrls: urlLines(element('relay-urls', HTMLTextAreaElement).value),
+			}
+			loadSubmission(decodeSubmission(await put('/api/submission', submission)).submission)
+			return 'Submission settings saved.'
+		})
+	})
 
 	element('runtime-form', HTMLFormElement).addEventListener('submit', event => {
 		event.preventDefault()

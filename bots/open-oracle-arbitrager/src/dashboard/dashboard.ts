@@ -1,8 +1,8 @@
 import { renderRepMarketConsensusError, renderRepMarketConsensusPanel } from '@zoltar/bot-shared/dashboard/rep-market-consensus'
 import { isSnapshot } from './snapshot-validation.ts'
-import { decodeSettings, decodeSubmission, decodeConnectivity, decodePrediction, decodeExecutorDeployment, isRuntimeLimits, isSettlementSettings, isStrategySettings, isSubmissionSettings, isDeploymentSettings, isStringArray } from './api-validation.ts'
-import { applyQuorumRpcUrls, input, loadCentralizedMarkets, loadDeployment, loadExecutionMode, loadRuntimeLimits, loadSettings, loadSettlement, loadSubmission, registerFocusedSettingsForms, setLoadedRpcQuorum } from './settings-forms.ts'
-import { markFormClean, refreshAllFormButtons, refreshFormButton, setFormSubmitting, trackForm } from './form-state.ts'
+import { decodeConnectivity, decodePrediction, decodeExecutorDeployment, isRuntimeLimits, isSettlementSettings, isStrategySettings, isSubmissionSettings, isDeploymentSettings, isStringArray } from './api-validation.ts'
+import { applyQuorumRpcUrls, loadCentralizedMarkets, loadDeployment, loadExecutionMode, loadRuntimeLimits, loadSettings, loadSettlement, loadSubmission, registerFocusedSettingsForms, setLoadedRpcQuorum } from './settings-forms.ts'
+import { formIsSubmitting, markFormClean, refreshAllFormButtons, refreshFormButton, setFormSubmitting, trackForm } from './form-state.ts'
 import { renderSettingsInsights } from './settings-insights.ts'
 import { createSettingsNavigation } from './settings-navigation.ts'
 import { createUniverseExplorer } from '@zoltar/bot-shared/dashboard/universe-explorer'
@@ -17,7 +17,7 @@ import { closeResumePreflight, openResumePreflight } from '@zoltar/bot-shared/da
 import { createSectionNavigation } from '@zoltar/bot-shared/dashboard/section-navigation'
 import { urlLines } from '@zoltar/bot-shared/dashboard/forms'
 import type { ConnectivitySettings } from '#monitoring/connectivity'
-import type { PublicExecutionRecord, PublicOperationEntry, PublicOperatorSnapshot, PublicPositionRecord, PublicTransactionActivity, StrategySettings } from '#state/operator-state'
+import type { PublicExecutionRecord, PublicOperationEntry, PublicOperatorSnapshot, PublicPositionRecord, PublicTransactionActivity } from '#state/operator-state'
 import type { OpportunitySnapshot } from '#state/opportunity-snapshot'
 import {
 	amount,
@@ -103,10 +103,10 @@ function setControlsEnabled(enabled: boolean) {
 	if (!mutationsEnabled) closeResumePreflight()
 	const fieldset = element('strategy-fieldset')
 	if (!(fieldset instanceof HTMLFieldSetElement)) throw new Error('Missing strategy fieldset')
-	fieldset.disabled = !focusedSettingsEnabled || !settingsLoaded
+	fieldset.disabled = !focusedSettingsEnabled || !settingsLoaded || formIsSubmitting('strategy-form')
 	const submissionFieldset = element('submission-fieldset')
 	if (!(submissionFieldset instanceof HTMLFieldSetElement)) throw new Error('Missing submission fieldset')
-	submissionFieldset.disabled = !focusedSettingsEnabled || !submissionLoaded
+	submissionFieldset.disabled = !focusedSettingsEnabled || !submissionLoaded || formIsSubmitting('submission-form')
 	for (const id of ['connectivity-fieldset', 'deployment-fieldset', 'manifest-fieldset', 'create2-fieldset', 'signer-fieldset', 'tokens-fieldset', 'runtime-fieldset', 'settlement-fieldset', 'execution-fieldset', 'market-fieldset']) {
 		const fieldset = element(id)
 		if (!(fieldset instanceof HTMLFieldSetElement)) throw new Error(`Missing ${id}`)
@@ -115,6 +115,8 @@ function setControlsEnabled(enabled: boolean) {
 		else if (id === 'tokens-fieldset') fieldset.disabled = !focusedSettingsEnabled || !tokensLoaded || universeSavePending
 		else if (id === 'signer-fieldset') fieldset.disabled = !focusedSettingsEnabled
 		else fieldset.disabled = !focusedSettingsEnabled || !focusedRuntimeLoaded
+		// A save in flight keeps its fieldset locked regardless of the connection state so later edits cannot be lost.
+		if (formIsSubmitting(id.replace(/-fieldset$/, '-form'))) fieldset.disabled = true
 	}
 	element('network-name', HTMLSelectElement).disabled = !enabled || pendingNetworkProfile !== undefined || persistedNetwork === undefined
 	updateConfigurationControls()
@@ -124,7 +126,7 @@ function setControlsEnabled(enabled: boolean) {
 function updateConfigurationControls() {
 	const fieldset = element('configuration-fieldset')
 	if (!(fieldset instanceof HTMLFieldSetElement)) throw new Error('Missing configuration fieldset')
-	fieldset.disabled = !connected || pendingNetworkProfile !== undefined || !configurationLoaded || latestSnapshot?.networkConfigured !== true || configurationLoading
+	fieldset.disabled = !connected || pendingNetworkProfile !== undefined || !configurationLoaded || latestSnapshot?.networkConfigured !== true || configurationLoading || formIsSubmitting('configuration-form')
 	element('reload-configuration-button', HTMLButtonElement).disabled = !connected || (pendingNetworkProfile !== undefined && !profileSwitchTimedOut) || configurationLoading
 	const profileRetry = element('profile-switch-retry-button', HTMLButtonElement)
 	profileRetry.hidden = !profileSwitchTimedOut
@@ -1121,6 +1123,7 @@ element('configuration-form', HTMLFormElement).addEventListener('submit', async 
 		setText('configuration-status', error instanceof Error ? error.message : String(error))
 	} finally {
 		setFormSubmitting('configuration-form', false)
+		setControlsEnabled(connected)
 	}
 })
 element('price-token', HTMLSelectElement).addEventListener('change', () => {
@@ -1213,67 +1216,7 @@ element('confirm-resume').addEventListener('click', () => {
 const dashboardPaths = new Set(['/overview', '/operations', '/games', '/markets', '/settings'])
 const { scrollToSection, syncSectionNavigation } = createSectionNavigation(link => dashboardPaths.has(new URL(link.href).pathname))
 
-element('strategy-form', HTMLFormElement).addEventListener('submit', async event => {
-	event.preventDefault()
-	setFormSubmitting('strategy-form', true)
-	setText('form-status', 'Saving strategy…')
-	try {
-		const settings = {
-			maxSpotTwapTicks: input('maxSpotTwapTicks').value,
-			minimumProfitBps: input('minimumProfitBps').value,
-			minimumProfitWeth: input('minimumProfitWeth').value,
-			minimumRemainingBlocks: input('minimumRemainingBlocks').value,
-			minimumRemainingSeconds: input('minimumRemainingSeconds').value,
-			pollMilliseconds: Number(input('pollMilliseconds').value),
-			twapSeconds: Number(input('twapSeconds').value),
-		} satisfies StrategySettings
-		const response = decodeSettings(
-			await api('/api/settings', {
-				body: JSON.stringify(settings),
-				headers: { 'content-type': 'application/json' },
-				method: 'PUT',
-			}),
-		)
-		loadSettings(response.settings)
-		setText('form-status', 'Strategy saved.')
-		await refresh()
-	} catch (error) {
-		setText('form-status', error instanceof Error ? error.message : String(error))
-		await refresh()
-	} finally {
-		setFormSubmitting('strategy-form', false)
-	}
-})
-
-element('submission-form', HTMLFormElement).addEventListener('submit', async event => {
-	event.preventDefault()
-	setFormSubmitting('submission-form', true)
-	setText('submission-status', 'Saving submission…')
-	try {
-		const submission = {
-			minimumBundleRelaySuccesses: Number(element('minimum-bundle-relay-successes', HTMLInputElement).value),
-			mode: element('submission-mode', HTMLSelectElement).value,
-			relayUrls: urlLines(element('relay-urls', HTMLTextAreaElement).value),
-		}
-		const response = decodeSubmission(
-			await api('/api/submission', {
-				body: JSON.stringify(submission),
-				headers: { 'content-type': 'application/json' },
-				method: 'PUT',
-			}),
-		)
-		loadSubmission(response.submission)
-		setText('submission-status', 'Submission settings saved.')
-		await refresh()
-	} catch (error) {
-		setText('submission-status', error instanceof Error ? error.message : String(error))
-		await refresh()
-	} finally {
-		setFormSubmitting('submission-form', false)
-	}
-})
-
-registerFocusedSettingsForms({ api, refresh })
+registerFocusedSettingsForms({ api, refresh, syncControls: () => setControlsEnabled(connected) })
 // The universe explorer keeps its selection outside form controls, so its signature is the sorted selection.
 trackForm('tokens-form', () => [...approvedUniverseIds].sort().join(','))
 
@@ -1312,11 +1255,11 @@ element('connectivity-form', HTMLFormElement).addEventListener('submit', async e
 		applyQuorumRpcUrls(response.quorumRpcUrls)
 		markFormClean('connectivity-form')
 		updateNetworkTargetStatus()
+		await refresh()
 		setText('connectivity-status', 'Chain and RPCs passed validation and were saved.')
-		await refresh()
 	} catch (error) {
-		setText('connectivity-status', error instanceof Error ? error.message : String(error))
 		await refresh()
+		setText('connectivity-status', error instanceof Error ? error.message : String(error))
 	} finally {
 		connectivityRequestPending = false
 		setControlsEnabled(connected)

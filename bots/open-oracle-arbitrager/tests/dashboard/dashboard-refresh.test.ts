@@ -685,12 +685,15 @@ test('focused risk, settlement, execution, and market forms load the saved confi
 	element(window, 'runtime-form', window.HTMLFormElement).dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }))
 	await Bun.sleep(30)
 	expect(element(window, 'runtime-status', window.HTMLElement).textContent).toBe('Saving risk limits…')
+	// The whole fieldset locks during the request, so a later edit cannot be replaced silently by the response.
+	expect(element(window, 'runtime-fieldset', window.HTMLFieldSetElement).disabled).toBe(true)
 	runtimeInput('maxTotalLockedWeth').dispatchEvent(new window.Event('input', { bubbles: true }))
 	expect(saveButton('runtime-form').disabled).toBe(true)
 	releaseRuntimeSave?.()
 	holdRuntimeSave = undefined
 	for (let attempt = 0; attempt < 100 && element(window, 'runtime-status', window.HTMLElement).textContent === 'Saving risk limits…'; attempt++) await Bun.sleep(10)
 	expect(element(window, 'runtime-status', window.HTMLElement).textContent).toBe('Risk limits saved.')
+	expect(element(window, 'runtime-fieldset', window.HTMLFieldSetElement).disabled).toBe(false)
 	expect(settings.runtime.riskLimits.maxTotalLockedAttoWeth).toBe(125n * 10n ** 17n)
 	expect(settings.runtime.riskLimits.maxConcurrentPositions).toBe(2)
 	expect(settings.runtime.lookbackBlocks).toBe(64n)

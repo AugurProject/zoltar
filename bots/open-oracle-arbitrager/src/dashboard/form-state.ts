@@ -95,12 +95,21 @@ export function trackForm(formId: string, extra?: () => string) {
 	refreshFormButton(formId)
 }
 
-/** Marks a save request as started or finished; the button follows the flag until the response arrives. */
+/**
+ * Marks a save request as started or finished. The whole fieldset locks while the request runs so an edit made in the
+ * meantime cannot be silently replaced by the response; the caller re-derives the fieldset state once it finishes.
+ */
 export function setFormSubmitting(formId: string, submitting: boolean) {
 	const tracked = trackedForms.get(formId)
 	if (tracked === undefined) return
 	tracked.submitting = submitting
+	const fieldset = tracked.form.querySelector('fieldset')
+	if (submitting && fieldset instanceof HTMLFieldSetElement) fieldset.disabled = true
 	refreshFormButton(formId)
+}
+
+export function formIsSubmitting(formId: string) {
+	return trackedForms.get(formId)?.submitting === true
 }
 
 /** Re-evaluates every save button after fieldsets lock or unlock, since a locked fieldset hides the dirty state. */
