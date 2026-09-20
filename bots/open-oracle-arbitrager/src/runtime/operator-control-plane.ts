@@ -16,10 +16,10 @@ import type { SignerOperationGate } from '@zoltar/bot-shared/execution/signer-op
 import { validateSubmissionSettings, type SubmissionSettings } from '#execution/transaction-submission'
 import { checkConnectivity, checkSubmissionEndpoints, endpointLabel, updateSubmissionEndpointChecks, validateIndependentReadRpcUrls, type ConnectivitySettings } from '#monitoring/connectivity'
 import { operatorStatusAfterPause, type SyncCursor } from '@zoltar/bot-shared/monitoring/block-sync'
-import { loadExecutionHistory, operatorSnapshot, recordOperation, strategySettings, updateStrategyFromRequest, type MutableStrategy, type OperatorSnapshotFixedState, type OperatorState } from '#state/operator-state'
+import { loadExecutionHistory, operatorSnapshot, recordOperation, type MutableStrategy, type OperatorSnapshotFixedState, type OperatorState } from '#state/operator-state'
 import type { MutableSettlement } from '#state/settlement-store'
 import { acquireExecutionSignerLock, acquirePositionJournalLock, loadPositionJournal, type ExclusiveProcessLock } from '#state/position-store'
-import { checkIndependentRpcChains, updateOperatorConnectivity } from './connectivity-update.ts'
+import { checkIndependentRpcChains, splitQuorumRpcUrls, updateOperatorConnectivity } from './connectivity-update.ts'
 import { configuredQuorumRpcUrlMinimum, type RpcQuorumRequirement } from '@zoltar/bot-shared/monitoring/rpc-quorum-policy'
 import { networkConfiguration } from '#config/network'
 import { type RiskLimits } from '#core/safety-controls'
@@ -28,6 +28,7 @@ import { loadPriceHistory } from '#monitoring/market-monitor'
 import { requireSafeDeploymentTransition } from './deployment-transition.ts'
 import { deployExecutorFromConnectivity, requireActivePersistedNetwork, requireActivePersistedRpcQuorum, requireNoPendingExecutorDeployment, requirePausedExecutorDeployment } from './executor-deployment-control.ts'
 import { acquireConfigurationSignerOperation, persistExecutorDeploymentIntentForRecovery, runConfigurationSignerOperation, type DeploymentRecoveryState } from './signer-operations.ts'
+import { createOperatorSettingsControls, queuedSettingsSections } from './operator-settings-controls.ts'
 
 export type PendingOperatorUpdates = {
 	centralizedMarkets: CentralizedMarketSettings | undefined
@@ -145,7 +146,9 @@ export function startOperatorControlPlane(parameters: {
 				revision: loaded.revision,
 			}
 		},
-		getSnapshot: () => operatorSnapshot(state, pending.strategy ?? config, pending.submission ?? config.submission, pending.connectivity ?? config.connectivity, fixedState, config.riskLimits),
+		// A queued switch to live execution is reported as live so Resume already routes through the readiness check; a queued
+		// switch back to dry run keeps reporting live because the running scan can still sign until the boundary.
+		getSnapshot: () => operatorSnapshot(state, pending.strategy ?? config, pending.submission ?? config.submission, pending.connectivity ?? config.connectivity, { ...fixedState, execute: fixedState.execute || pending.execute === true }, config.riskLimits, queuedSettingsSections(pending)),
 		isNetworkConfigured: () => config.networkConfigured,
 		hostname: config.uiHost,
 		loopbackPublished: process.env['ZOLTAR_BOT_DASHBOARD_LOOPBACK_PUBLISHED'] === 'true',
@@ -294,22 +297,26 @@ export function startOperatorControlPlane(parameters: {
 				if (latest.settings.networkConfigured) {
 					if (typeof value !== 'object' || value === null || Array.isArray(value) || !('network' in value) || value.network !== latest.settings.network) throw new Error('Select the chain profile before saving its RPC settings')
 				}
+				const quorum = splitQuorumRpcUrls(value, latest.settings.deployment, latest.settings.network)
 				const next = await updateOperatorConnectivity({
 					activeNetwork: latest.settings.network,
 					activeRpcQuorum: config.rpcQuorum,
-					deployment: latest.settings.deployment,
+					deployment: quorum.deployment,
 					endpointState: state,
 					execute: config.execute || latest.settings.runtime.execute,
 					persist: async update => {
-						await persistSettings(update(latest.settings), latest.revision)
+						await persistSettings(update({ ...latest.settings, deployment: quorum.deployment }), latest.revision)
 					},
 					submission: latest.settings.submission,
-					value,
+					value: quorum.value,
 				})
 				if (!config.networkConfigured) {
 					pending.network = networkConfiguration(next.network)
 				}
-				pending.centralizedMarkets = next.centralizedMarkets
+				if (quorum.deploymentChanged) pending.deployment = quorum.deployment
+				// The market document only changes here when the profile's asset identity does; an unchanged one must not look queued.
+				const activeMarkets = pending.centralizedMarkets ?? config.centralizedMarkets
+				if (next.centralizedMarkets.assetAddress.toLowerCase() !== activeMarkets.assetAddress.toLowerCase() || next.centralizedMarkets.assetChainId !== activeMarkets.assetChainId) pending.centralizedMarkets = next.centralizedMarkets
 				pending.rpcQuorum = next.rpcQuorum
 				pending.connectivity = next.connectivity
 				recordOperation(state, {
@@ -323,6 +330,7 @@ export function startOperatorControlPlane(parameters: {
 				return {
 					connectivity: next.connectivity,
 					network: next.network,
+					quorumRpcUrls: quorum.deployment.quorumRpcUrls,
 					rpcQuorum: next.rpcQuorum,
 				}
 			})
@@ -392,7 +400,9 @@ export function startOperatorControlPlane(parameters: {
 					requireActivePersistedRpcQuorum(config.rpcQuorum, latest.settings.rpcQuorum)
 					requirePausedExecutorDeployment(config.execute, state.paused)
 					if (lockManager === undefined) throw new Error('Executor deployment signer lock management is unavailable')
-					if (!config.execute) deploymentSignerLock = await lockManager.acquireSigner(privateKeyToAccount(privateKey).address)
+					// A queued arming already holds this signer's lock; re-acquiring would hand back the same retained lock and release it below.
+					const coveredByPendingLock = pending.signerLock !== undefined && pending.privateKey !== undefined && privateKeyToAccount(pending.privateKey).address.toLowerCase() === privateKeyToAccount(privateKey).address.toLowerCase()
+					if (!config.execute && !coveredByPendingLock) deploymentSignerLock = await lockManager.acquireSigner(privateKeyToAccount(privateKey).address)
 					if (!signerOperationGate.acquire('deployment')) throw new Error('Wait for the active signer operation to finish before deploying the executor')
 					signerOperationAcquired = true
 					const plannedDeployment = {
@@ -575,26 +585,7 @@ export function startOperatorControlPlane(parameters: {
 				return next
 			})
 		},
-		updateStrategy: async value => {
-			const next = mutableStrategy(pending.strategy ?? config)
-			updateStrategyFromRequest(next, value)
-			return queueSettingsUpdate(async () => {
-				await persistFocusedSettings(settings => ({
-					...settings,
-					strategy: next,
-				}))
-				pending.strategy = next
-				recordOperation(state, {
-					category: 'configuration',
-					details: undefined,
-					level: 'info',
-					message: 'Strategy update saved and queued',
-					reason: 'Applied at the next scan boundary',
-					reportId: undefined,
-				})
-				return strategySettings(next)
-			})
-		},
+		...createOperatorSettingsControls({ config, fixedState, getCursor: parameters.getCursor, lockManager, pending, persistFocusedSettings, persistSettings, queueSettingsUpdate, signerOperationGate, state }),
 	})
 	return { dashboard, pending }
 }

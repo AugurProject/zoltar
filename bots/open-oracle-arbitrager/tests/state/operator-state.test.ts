@@ -16,12 +16,12 @@ import {
 	loadExecutionHistory,
 	operatorSnapshot,
 	parseSignedDecimalEth,
-	publicOperatorSnapshot,
 	updateStrategyFromRequest,
 	type ExecutionHistoryFilesystem,
 	type MutableStrategy,
 	type OperatorState,
 } from '#state/operator-state'
+import { publicOperatorSnapshot } from '#state/public-snapshot'
 import type { ExecutionRecord } from '#state/execution-record'
 import { isSnapshot } from '#dashboard/snapshot-validation'
 import { publicPollFailure } from '#state/public-failures'

@@ -259,6 +259,7 @@ export const isSnapshot = object<PublicOperatorSnapshot>({
 		}),
 	),
 	paused: booleanValue,
+	queuedSettings: array(oneOf('connectivity', 'deployment', 'execution', 'markets', 'risk', 'settlement', 'strategy', 'submission', 'universes')),
 	queuedWallet: optional(union(nullValue, hexValue)),
 	savedWallet: optional(hexValue),
 	status: oneOf('connectivity-degraded', 'error', 'paused', 'running', 'stopped', 'syncing'),

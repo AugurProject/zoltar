@@ -528,6 +528,268 @@ input {
 	font-size: 0.78rem;
 }
 
+/* A switch that leads its own form sits flush with the heading rule and clears the fields or copy below it. */
+.form-switch {
+	margin: 0 0 14px;
+}
+
+.visually-hidden {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	margin: -1px;
+	padding: 0;
+	border: 0;
+	overflow: hidden;
+	clip: rect(0 0 0 0);
+	white-space: nowrap;
+}
+
+/* Settings is a stepper: a sticky chip row jumps between numbered groups and the current group is highlighted. */
+.settings-nav {
+	position: sticky;
+	z-index: 5;
+	display: flex;
+	gap: 8px;
+	margin: 0 -6px 4px;
+	padding: 10px 6px;
+	overflow-x: auto;
+	background: var(--bg);
+	scrollbar-width: thin;
+}
+
+.settings-nav a {
+	display: inline-flex;
+	align-items: center;
+	flex: 0 0 auto;
+	gap: 8px;
+	min-height: 36px;
+	padding: 0 14px;
+	border: 1px solid var(--border-strong);
+	border-radius: 99px;
+	color: var(--muted);
+	font-size: 0.8rem;
+	font-weight: 650;
+	text-decoration: none;
+}
+
+.settings-nav a:hover {
+	border-color: var(--accent);
+	color: var(--text);
+}
+
+.settings-nav a:focus-visible {
+	outline: 2px solid var(--accent);
+	outline-offset: 3px;
+	color: var(--text);
+}
+
+.settings-nav a[aria-current="true"] {
+	border-color: var(--accent);
+	background: rgb(119 224 173 / 12%);
+	color: var(--text);
+}
+
+.settings-step {
+	display: inline-grid;
+	place-items: center;
+	width: 20px;
+	height: 20px;
+	border-radius: 50%;
+	background: var(--accent);
+	color: var(--accent-ink);
+	font-family: var(--mono);
+	font-size: 0.7rem;
+	font-weight: 700;
+}
+
+.settings-section {
+	display: grid;
+	gap: 12px;
+	padding-top: 12px;
+}
+
+.settings-section-title {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	margin: 0;
+	color: var(--muted);
+	font-size: 0.8rem;
+	font-weight: 700;
+	letter-spacing: 0.08em;
+	text-transform: uppercase;
+}
+
+.settings-badges {
+	display: flex;
+	flex: none;
+	flex-wrap: wrap;
+	gap: 6px;
+	justify-content: flex-end;
+}
+
+.settings-badges:empty {
+	display: none;
+}
+
+.settings-badge {
+	padding: 4px 9px;
+	border: 1px solid var(--border-strong);
+	border-radius: 99px;
+	color: var(--muted);
+	font-family: var(--mono);
+	font-size: 0.66rem;
+	font-weight: 700;
+	text-transform: uppercase;
+	white-space: nowrap;
+}
+
+.settings-badge[data-kind="dirty"] {
+	border-color: var(--warning);
+	color: var(--warning);
+}
+
+.settings-badge[data-kind="queued"] {
+	border-color: rgb(115 183 255 / 42%);
+	background: rgb(115 183 255 / 10%);
+	color: var(--info);
+}
+
+/* Live usage sits directly above the caps it is measured against. */
+.usage-row {
+	display: grid;
+	grid-template-columns: repeat(3, minmax(0, 1fr));
+	gap: 14px;
+	margin-bottom: 16px;
+}
+
+.usage-metric {
+	display: grid;
+	gap: 4px;
+	padding: 12px 14px;
+	border: 1px solid var(--border);
+	border-radius: 8px;
+	background: rgb(11 16 23 / 60%);
+}
+
+.usage-metric span {
+	color: var(--muted);
+	font-size: 0.7rem;
+	font-weight: 650;
+	letter-spacing: 0.06em;
+	text-transform: uppercase;
+}
+
+.usage-metric strong {
+	font-family: var(--mono);
+	font-size: 0.86rem;
+	overflow-wrap: anywhere;
+}
+
+.readiness-list {
+	display: grid;
+	gap: 0;
+	margin: 0 0 16px;
+	padding: 0;
+	list-style: none;
+}
+
+.readiness-list li {
+	display: grid;
+	grid-template-columns: 22px minmax(0, 1fr) auto;
+	align-items: baseline;
+	gap: 10px;
+	padding: 9px 0;
+	border-top: 1px solid var(--border);
+	font-size: 0.8rem;
+}
+
+.readiness-list li:first-child {
+	border-top: 0;
+}
+
+.readiness-list strong {
+	font-family: var(--mono);
+	font-size: 0.78rem;
+	font-weight: 600;
+	text-align: right;
+	overflow-wrap: anywhere;
+}
+
+.readiness-mark {
+	font-family: var(--mono);
+	font-weight: 700;
+	text-align: center;
+}
+
+.readiness-list li[data-ready="true"] .readiness-mark {
+	color: var(--accent);
+}
+
+.readiness-list li[data-ready="false"] .readiness-mark,
+.readiness-list li[data-ready="false"] strong {
+	color: var(--warning);
+}
+
+.market-source-table input {
+	height: 36px;
+}
+
+.market-source-table td:last-child {
+	width: 1%;
+	white-space: nowrap;
+}
+
+.market-source-actions {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 14px;
+	margin: 12px 0 16px;
+}
+
+.market-source-actions .empty-state {
+	padding: 0;
+	text-align: left;
+}
+
+.button-compact {
+	min-height: 32px;
+	padding: 0 12px;
+	font-size: 0.74rem;
+}
+
+.settings-subpanel {
+	margin: 16px 0 4px;
+	padding: 12px 14px;
+	border: 1px solid var(--border);
+	border-radius: 8px;
+}
+
+.settings-subpanel > summary {
+	cursor: pointer;
+	color: var(--muted);
+	font-size: 0.78rem;
+	font-weight: 650;
+}
+
+.settings-subpanel[open] > summary {
+	margin-bottom: 12px;
+}
+
+.section-heading .section-note {
+	max-width: 60ch;
+}
+
+.settings-body > .section-note + form {
+	margin-top: 14px;
+}
+
+.create2-form > fieldset > .section-note {
+	margin-top: 0;
+}
+
 .remember-signer input,
 .venue-switch input {
 	width: 16px;
@@ -570,7 +832,13 @@ textarea {
 
 .button-group {
 	display: flex;
+	flex-wrap: wrap;
+	justify-content: flex-end;
 	gap: 10px;
+}
+
+.button-group .button {
+	white-space: nowrap;
 }
 
 .endpoint-checks {
@@ -852,6 +1120,78 @@ a {
 @media (max-width: 680px) {
 	.market-price-chart svg {
 		height: 300px;
+	}
+
+	.usage-row {
+		grid-template-columns: 1fr;
+	}
+
+	.readiness-list li {
+		grid-template-columns: 22px minmax(0, 1fr);
+	}
+
+	.readiness-list strong {
+		grid-column: 2;
+		text-align: left;
+	}
+
+	.market-source-actions {
+		align-items: stretch;
+		flex-direction: column;
+	}
+
+	/* Each source stacks as a labelled field group so the ETH market and Remove action never hide behind horizontal scroll. */
+	.market-source-table thead {
+		display: none;
+	}
+
+	.market-source-table tr,
+	.market-source-table td {
+		display: block;
+		width: auto;
+		padding: 6px 0;
+		border-top: 0;
+		white-space: normal;
+	}
+
+	.market-source-table tr {
+		padding: 10px 0;
+		border-top: 1px solid var(--border);
+	}
+
+	.market-source-table td::before {
+		content: attr(data-label);
+		display: block;
+		margin-bottom: 4px;
+		color: var(--muted);
+		font-size: 0.7rem;
+		font-weight: 650;
+		letter-spacing: 0.06em;
+		text-transform: uppercase;
+	}
+
+	.market-source-table td:last-child::before {
+		display: none;
+	}
+
+	/* Under the tall narrow header a second sticky bar would halve the reading window; one expanded group keeps jumps short anyway. */
+	.settings-nav {
+		position: static;
+	}
+
+	/* Badges drop under the panel copy so the title keeps its width beside the disclosure marker. */
+	.settings-group > summary {
+		flex-wrap: wrap;
+	}
+
+	.settings-group > summary > .settings-summary-copy {
+		flex: 1 1 0;
+	}
+
+	.settings-badges {
+		flex-basis: 100%;
+		order: 3;
+		justify-content: flex-start;
 	}
 
 	.deployment-grid {

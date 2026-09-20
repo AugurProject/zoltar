@@ -1,5 +1,5 @@
 import { networkConfiguration, parseNetworkName } from '#config/network'
-import type { DeploymentSettings } from '#config/deployment-settings'
+import { validateDeploymentSettings, type DeploymentSettings } from '#config/deployment-settings'
 import type { PersistedOperatorSettings } from '#config/settings-store'
 import type { SubmissionSettings } from '#execution/transaction-submission'
 import { checkConnectivity, checkSubmissionEndpoints, endpointLabel, readRpcChainId, updateConnectivityEndpointChecks, validateConnectivitySettingsForQuorum, validateIndependentReadRpcUrls, type EndpointCheck, type NetworkName } from '#monitoring/connectivity'
@@ -10,6 +10,20 @@ export async function checkIndependentRpcChains(rpcUrls: readonly string[], expe
 		const chainId = await readChainId(rpcUrl)
 		if (chainId !== expectedChainId) throw new Error(`${endpointLabel(rpcUrl)} returned chain ${chainId.toString()}; expected chain ${expectedChainId.toString()}`)
 	}
+}
+
+/**
+ * The RPC endpoints form also owns the independent quorum RPC URLs, which the operator file stores under `deployment`.
+ * Splits them off the connectivity request and rebuilds the deployment with the new URLs; identities never change here.
+ */
+export function splitQuorumRpcUrls(value: unknown, deployment: DeploymentSettings, network: NetworkName) {
+	if (typeof value !== 'object' || value === null || Array.isArray(value) || !('quorumRpcUrls' in value)) return { deployment, deploymentChanged: false, value }
+	const { quorumRpcUrls, ...connectivityValue } = value
+	if (!Array.isArray(quorumRpcUrls) || quorumRpcUrls.some(url => typeof url !== 'string')) throw new Error('Quorum RPC URLs must be an array of URLs')
+	const { deploymentManifest, uniswapV2Enabled, uniswapV3Enabled, uniswapV4Enabled } = deployment
+	const next = validateDeploymentSettings({ deploymentManifest, quorumRpcUrls, uniswapV2Enabled, uniswapV3Enabled, uniswapV4Enabled }, network)
+	const deploymentChanged = next.quorumRpcUrls.length !== deployment.quorumRpcUrls.length || next.quorumRpcUrls.some((url, index) => url !== deployment.quorumRpcUrls[index])
+	return { deployment: deploymentChanged ? next : deployment, deploymentChanged, value: connectivityValue }
 }
 
 export async function updateOperatorConnectivity(parameters: {

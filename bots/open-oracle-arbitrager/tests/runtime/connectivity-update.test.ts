@@ -3,7 +3,7 @@ import sepolia from '../../../../docs/sepolia-deployment-addresses.json'
 import { getAddress } from '@zoltar/bot-shared/ethereum'
 import { describe, expect, test } from 'bun:test'
 import { parseOperatorSettings, type PersistedOperatorSettings } from '#config/settings-store'
-import { checkIndependentRpcChains, updateOperatorConnectivity } from '../../src/runtime/connectivity-update.ts'
+import { checkIndependentRpcChains, splitQuorumRpcUrls, updateOperatorConnectivity } from '../../src/runtime/connectivity-update.ts'
 import { EndpointCheckFailure, type EndpointCheck } from '#monitoring/connectivity'
 import { deploymentUpdateMustWait, requireSafeDeploymentTransition } from '../../src/runtime/deployment-transition.ts'
 
@@ -22,6 +22,26 @@ function relayCheck(): EndpointCheck {
 }
 
 describe('operator connectivity updates', () => {
+	test('splits quorum RPC URLs off the RPC endpoints request into a same-identity deployment update', async () => {
+		const settings = await exampleSettings()
+		const untouched = splitQuorumRpcUrls(request('mainnet'), settings.deployment, 'mainnet')
+		expect(untouched.deploymentChanged).toBe(false)
+		expect(untouched.deployment).toBe(settings.deployment)
+		expect(untouched.value).toEqual(request('mainnet'))
+		const same = splitQuorumRpcUrls({ ...request('mainnet'), quorumRpcUrls: [] }, settings.deployment, 'mainnet')
+		expect(same.deploymentChanged).toBe(false)
+		expect(same.value).toEqual(request('mainnet'))
+		const changed = splitQuorumRpcUrls({ ...request('mainnet'), quorumRpcUrls: ['https://quorum-one.example/', 'https://quorum-two.example/'] }, settings.deployment, 'mainnet')
+		expect(changed.deploymentChanged).toBe(true)
+		expect(changed.deployment.quorumRpcUrls).toEqual(['https://quorum-one.example/', 'https://quorum-two.example/'])
+		expect(changed.deployment.openOracle).toBe(settings.deployment.openOracle)
+		expect(changed.deployment.uniswapV3Enabled).toBe(settings.deployment.uniswapV3Enabled)
+		expect(deploymentUpdateMustWait(settings.deployment, changed.deployment, [{ status: 'open' }])).toBe(false)
+		expect(changed.value).toEqual(request('mainnet'))
+		expect(() => splitQuorumRpcUrls({ ...request('mainnet'), quorumRpcUrls: 'https://quorum.example/' }, settings.deployment, 'mainnet')).toThrow('Quorum RPC URLs must be an array of URLs')
+		expect(() => splitQuorumRpcUrls({ ...request('mainnet'), quorumRpcUrls: ['not a url'] }, settings.deployment, 'mainnet')).toThrow()
+	})
+
 	test('distinguishes deployment identity switches from same-identity routing updates', async () => {
 		const current = (await exampleSettings()).deployment
 		expect(deploymentUpdateMustWait(current, { ...current, uniswapRouter: current.rep }, [{ status: 'open' }])).toBe(false)

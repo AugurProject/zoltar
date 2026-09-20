@@ -180,7 +180,10 @@ test('serves dashboard state and protects mutable controls with same-origin JSON
 	expect(pageSource).toContain('id="remember-signer" type="checkbox"')
 	expect(pageSource).toContain('id="forget-signer-button"')
 	expect(pageSource).toContain('Save this key in the local operator file')
-	expect(pageSource).toContain('Clear signer &amp; saved key')
+	expect(pageSource).toContain('Remove signer &amp; saved key')
+	expect(pageSource).toContain('id="settings-nav"')
+	expect(pageSource.indexOf('id="settings-go-live"')).toBeLessThan(pageSource.indexOf('id="settings-advanced"'))
+	expect(pageSource).toContain('<details id="complete-configuration" class="settings-group panel">')
 	expect(pageSource).toContain('Observed dispute paths')
 	expect(pageSource).toContain('Spot (WETH/token)')
 	expect(pageSource).not.toContain('id="launch-gate-link"')
@@ -250,6 +253,14 @@ test('serves dashboard state and protects mutable controls with same-origin JSON
 		method: 'PUT',
 	})
 	expect(crossOrigin.status).toBe(403)
+	for (const pathname of ['/api/settlement', '/api/runtime-limits', '/api/centralized-markets', '/api/execution']) {
+		const crossOriginFocusedForm = await fetch(`${origin}${pathname}`, {
+			body: JSON.stringify({ execute: true }),
+			headers: { 'content-type': 'application/json', origin: 'https://attacker.example' },
+			method: 'PUT',
+		})
+		expect(crossOriginFocusedForm.status, pathname).toBe(403)
+	}
 	const rebound = await fetch(`${origin}/api/paused`, {
 		body: JSON.stringify({ paused: false }),
 		headers: {
@@ -696,6 +707,22 @@ test('rejects every chain-specific mutation until network connectivity is config
 			chainSpecificMutations += 1
 			return []
 		},
+		updateSettlement: () => {
+			chainSpecificMutations += 1
+			throw new Error('Unexpected settlement update')
+		},
+		updateRuntimeLimits: () => {
+			chainSpecificMutations += 1
+			throw new Error('Unexpected runtime limit update')
+		},
+		updateCentralizedMarkets: () => {
+			chainSpecificMutations += 1
+			throw new Error('Unexpected market update')
+		},
+		updateExecution: () => {
+			chainSpecificMutations += 1
+			throw new Error('Unexpected execution update')
+		},
 	})
 	servers.push(server)
 	const origin = `http://${server.hostname}:${server.port}`
@@ -711,6 +738,10 @@ test('rejects every chain-specific mutation until network connectivity is config
 	for (const [pathname, method, body] of [
 		['/api/configuration', 'PUT', {}],
 		['/api/settings', 'PUT', {}],
+		['/api/settlement', 'PUT', {}],
+		['/api/runtime-limits', 'PUT', {}],
+		['/api/centralized-markets', 'PUT', {}],
+		['/api/execution', 'PUT', { execute: true }],
 		['/api/submission', 'PUT', {}],
 		['/api/deployment', 'PUT', {}],
 		['/api/executor-deployment', 'POST', {}],

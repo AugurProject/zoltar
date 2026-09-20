@@ -29,9 +29,9 @@ export const sourceSizeAllowances = new Map<string, SourceSizeAllowance>([
 		['bots/chaos/src/operations/zoltar.ts', 618],
 	]),
 	...allowances('Owning bot package: extract dashboard controllers, runtime orchestration, and journal persistence into focused modules.', [
-		['bots/open-oracle-arbitrager/src/dashboard/dashboard.ts', 1470],
+		['bots/open-oracle-arbitrager/src/dashboard/dashboard.ts', 1428],
 		['bots/open-oracle-arbitrager/src/runtime/operator.ts', 1038],
-		['bots/open-oracle-arbitrager/src/state/operator-state.ts', 857],
+		['bots/open-oracle-arbitrager/src/state/operator-state.ts', 642],
 		['bots/open-oracle-arbitrager/src/state/position-store.ts', 631],
 		['bots/liquidator/src/dashboard/dashboard.ts', 1039],
 		['bots/liquidator/src/cli/run.ts', 776],
@@ -52,7 +52,7 @@ export const sourceSizeAllowances = new Map<string, SourceSizeAllowance>([
 		['augurScan/browser/live-update.ts', 1096],
 	]),
 	...allowances('Bot QA and documentation capture scripts grew with every dashboard surface they exercise.', [
-		['bots/open-oracle-arbitrager/scripts/capture-docs-screenshots.mts', 1900],
+		['bots/open-oracle-arbitrager/scripts/capture-docs-screenshots.mts', 1899],
 		['bots/chaos/scripts/capture-dashboard-qa.mts', 947],
 	]),
 	...allowances('Repository tooling modules accumulated responsibilities that belong in separate modules.', [

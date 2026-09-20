@@ -1,9 +1,11 @@
 import { repMarketConsensusPanel } from '@zoltar/bot-shared/dashboard/rep-market-consensus'
 import { rpcConnectivityFields } from '@zoltar/bot-shared/dashboard/rpc-connectivity'
 import type { DeploymentSettings } from '#config/deployment-settings'
-import { CONFIGURATION_REVISION_CONFLICT } from '#config/settings-store'
+import { CONFIGURATION_REVISION_CONFLICT, type StoredCentralizedMarketSettings, type StoredRuntimeLimits } from '#config/settings-store'
 import type { SubmissionSettings } from '#execution/transaction-submission'
-import { publicOperatorSnapshot, type OperatorSnapshot, type StrategySettings } from '#state/operator-state'
+import type { OperatorSnapshot, StrategySettings } from '#state/operator-state'
+import { publicOperatorSnapshot } from '#state/public-snapshot'
+import type { SettlementSettings } from '#state/settlement-store'
 import { publicOperatorFailure, publicPollFailure } from '#state/public-failures'
 import { buildDashboardScript, dashboardHealthResponse, sharedDashboardAssetResponse } from '@zoltar/bot-shared/dashboard/assets'
 import { publicConnectivityError } from '@zoltar/bot-shared/dashboard/connectivity-error'
@@ -40,6 +42,10 @@ type DashboardController = {
 	updateSigner: (value: unknown) => { wallet: string | undefined } | Promise<{ wallet: string | undefined }>
 	switchNetworkProfile?: (value: unknown) => unknown | Promise<unknown>
 	updateStrategy: (value: unknown) => StrategySettings | Promise<StrategySettings>
+	updateSettlement?: (value: unknown) => SettlementSettings | Promise<SettlementSettings>
+	updateRuntimeLimits?: (value: unknown) => StoredRuntimeLimits | Promise<StoredRuntimeLimits>
+	updateCentralizedMarkets?: (value: unknown) => StoredCentralizedMarketSettings | Promise<StoredCentralizedMarketSettings>
+	updateExecution?: (value: unknown) => { execute: boolean } | Promise<{ execute: boolean }>
 	updateSubmission: (value: unknown) => SubmissionSettings | Promise<SubmissionSettings>
 	setApprovedUniverses?: (value: unknown) => readonly string[] | Promise<readonly string[]>
 	updateTokens?: (value: unknown) => readonly string[] | Promise<readonly string[]>
@@ -66,12 +72,42 @@ function publicConfigurationUpdateError(error: unknown, conflict: boolean) {
 	return 'Configuration could not be saved. Review the submitted values and protected bot logs.'
 }
 
+const EXECUTION_UPDATE_MESSAGES = new Set([
+	'Execution requires an active signer',
+	'Execution is enabled, but live operation requires at least two independent quorum RPCs (three read endpoints total)',
+	'Execution requires at least one enabled Uniswap venue available on this network',
+	'Execution is enabled, but deployment.deploymentManifest is not configured',
+])
+
+/** Execution mode failures name the missing prerequisite so the operator can fix it; anything else stays in protected logs. */
+function publicExecutionUpdateError(error: unknown) {
+	const message = errorMessage(error)
+	if (EXECUTION_UPDATE_MESSAGES.has(message)) return message
+	return 'Execution mode could not be changed. Review the signer, quorum RPCs, and protected bot logs.'
+}
+
+/** Field validation for the focused forms names the offending field of the operator's own submission; anything else stays in protected logs. */
+function publicFieldValidationError(error: unknown, prefix: string, fallback: string) {
+	const message = errorMessage(error)
+	return message.startsWith(prefix) ? message : fallback
+}
+
+/** Market policy validation names the offending field of the operator's own document; anything else stays in protected logs. */
+function publicMarketUpdateError(error: unknown) {
+	const message = errorMessage(error)
+	if (/^(?:Unknown )?centralizedMarkets\b|^Required venue consensus |^CEX and DEX sources /.test(message)) return message
+	return 'Market source settings could not be saved. Review the submitted JSON and protected bot logs.'
+}
+
 function publicConnectivityUpdateError(error: unknown) {
 	return publicConnectivityError(error, {
 		fallback: 'RPC connectivity checks failed. Review the submitted endpoints and retry.',
 		validationMessages: new Set([
 			'Live execution requires at least two independent quorum RPCs (three read endpoints total)',
 			'Network, RPC, and quorum settings are required',
+			'Quorum RPC URLs must be an array of URLs',
+			'Quorum RPC URLs must contain no more than 8 URLs',
+			'Read RPC quorum must use independent origins; changing only the URL path does not create an independent provider',
 			'RPC quorum must be 1 or 2',
 			'Select the chain profile before saving its RPC settings',
 			'Switch chain profiles with the Chain selector before editing that profile',
@@ -143,7 +179,7 @@ export function startDashboardServer(port: number, controller: DashboardControll
 		const source = await Bun.file(join(directory, 'index.html')).text()
 		return source
 			.replace('<!-- rep-market-consensus -->', repMarketConsensusPanel())
-			.replace('<!-- rpc-connectivity-fields -->', rpcConnectivityFields({ submissionLimit: 8, statusId: 'connectivity-status' }))
+			.replace('<!-- rpc-connectivity-fields -->', rpcConnectivityFields({ independentQuorum: true, statusId: 'connectivity-status', statusText: '', submissionLimit: 8, submitLabel: 'Save RPC endpoints' }))
 			.replace('<!-- operator-header -->', operatorHeader)
 			.replace('<body>', `<body data-page="${page}">`)
 	}
@@ -247,6 +283,46 @@ export function startDashboardServer(port: number, controller: DashboardControll
 					return json({ settings: await controller.updateStrategy(await boundedDashboardJson(request)) })
 				} catch (error) {
 					return publicError(error, 400, 'strategy-update', 'Strategy settings could not be saved. Review the submitted values and protected bot logs.')
+				}
+			}
+			if (request.method === 'PUT' && url.pathname === '/api/settlement') {
+				if (!dashboardRequestIsSameOrigin(request, acceptedAuthorities)) return json({ error: 'Cross-origin requests are not accepted' }, 403)
+				try {
+					await requireConfiguredChain(controller)
+					if (controller.updateSettlement === undefined) throw new Error('Settlement configuration is unavailable')
+					return json({ settlement: await controller.updateSettlement(await boundedDashboardJson(request)) })
+				} catch (error) {
+					return publicError(error, 400, 'settlement-update', publicFieldValidationError(error, 'Settlement ', 'Settlement settings could not be saved. Review the submitted values and protected bot logs.'))
+				}
+			}
+			if (request.method === 'PUT' && url.pathname === '/api/runtime-limits') {
+				if (!dashboardRequestIsSameOrigin(request, acceptedAuthorities)) return json({ error: 'Cross-origin requests are not accepted' }, 403)
+				try {
+					await requireConfiguredChain(controller)
+					if (controller.updateRuntimeLimits === undefined) throw new Error('Runtime limit configuration is unavailable')
+					return json({ runtime: await controller.updateRuntimeLimits(await boundedDashboardJson(request)) })
+				} catch (error) {
+					return publicError(error, 400, 'runtime-limits-update', publicFieldValidationError(error, 'Runtime ', 'Risk limits could not be saved. Review the submitted values and protected bot logs.'))
+				}
+			}
+			if (request.method === 'PUT' && url.pathname === '/api/centralized-markets') {
+				if (!dashboardRequestIsSameOrigin(request, acceptedAuthorities)) return json({ error: 'Cross-origin requests are not accepted' }, 403)
+				try {
+					await requireConfiguredChain(controller)
+					if (controller.updateCentralizedMarkets === undefined) throw new Error('Market source configuration is unavailable')
+					return json({ centralizedMarkets: await controller.updateCentralizedMarkets(await boundedDashboardJson(request)) })
+				} catch (error) {
+					return publicError(error, 400, 'centralized-markets-update', publicMarketUpdateError(error))
+				}
+			}
+			if (request.method === 'PUT' && url.pathname === '/api/execution') {
+				if (!dashboardRequestIsSameOrigin(request, acceptedAuthorities)) return json({ error: 'Cross-origin requests are not accepted' }, 403)
+				try {
+					await requireConfiguredChain(controller)
+					if (controller.updateExecution === undefined) throw new Error('Execution mode configuration is unavailable')
+					return json(await controller.updateExecution(await boundedDashboardJson(request)))
+				} catch (error) {
+					return publicError(error, 400, 'execution-update', publicExecutionUpdateError(error))
 				}
 			}
 			if (request.method === 'PUT' && url.pathname === '/api/submission') {

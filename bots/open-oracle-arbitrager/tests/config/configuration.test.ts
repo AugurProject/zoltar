@@ -813,7 +813,7 @@ describe('file-only startup configuration', () => {
 			method: 'PUT',
 		})
 		expect(developmentQuorumResponse.status, await developmentQuorumResponse.clone().text()).toBe(200)
-		expect(await developmentQuorumResponse.json()).toEqual({ connectivity: { publicRpcUrls: [activeRpcUrl], readRpcUrl: activeRpcUrl }, network: 'mainnet', rpcQuorum: 1 })
+		expect(await developmentQuorumResponse.json()).toEqual({ connectivity: { publicRpcUrls: [activeRpcUrl], readRpcUrl: activeRpcUrl }, network: 'mainnet', quorumRpcUrls: [], rpcQuorum: 1 })
 		expect((await loadOperatorSettings(path))?.rpcQuorum).toBe(1)
 		const restoreProductionQuorumResponse = await fetch(`${origin}/api/connectivity`, {
 			body: JSON.stringify({ connectivity: { publicRpcUrls: [activeRpcUrl], readRpcUrl: activeRpcUrl }, network: 'mainnet', rpcQuorum: 2 }),
