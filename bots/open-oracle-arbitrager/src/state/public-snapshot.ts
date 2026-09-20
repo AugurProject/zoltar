@@ -69,6 +69,7 @@ export function publicOperatorSnapshot(snapshot: OperatorSnapshot): PublicOperat
 					},
 		blockNumber: snapshot.blockNumber,
 		blockTimestamp: snapshot.blockTimestamp,
+		canonicalDeployments: snapshot.canonicalDeployments,
 		centralizedMarket: snapshot.centralizedMarket,
 		marketConsensus: snapshot.marketConsensus,
 		execute: snapshot.execute,

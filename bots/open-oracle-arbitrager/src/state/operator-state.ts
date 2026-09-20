@@ -6,6 +6,7 @@ import { dirname } from 'node:path'
 import { bigintToSafeNumber, type Address, type Hex } from '@zoltar/bot-shared/ethereum'
 import type { OpenOracleGame } from '@zoltar/open-oracle-shared/openOracle/openOracle'
 import { validateDeploymentSettings, type DeploymentSettings } from '#config/deployment-settings'
+import type { CanonicalDeploymentStatus } from '#config/runtime-deployment'
 import type { ConnectivitySettings, EndpointCheck, NetworkName } from '#monitoring/connectivity'
 import type { SubmissionSettings, SubmissionTargetResult } from '#execution/transaction-submission'
 import type { OpportunitySnapshot } from '#state/opportunity-snapshot'
@@ -123,6 +124,7 @@ export type PublicOperationEntry = Omit<OperationEntry, 'details' | 'reason'> & 
 export type MarketAvailabilityNotice = ({ kind: 'missing-deployment' } & MissingContractDeployment) | { kind: 'no-execution-pools'; chainId: number }
 
 type PollStatus = {
+	canonicalDeployments?: CanonicalDeploymentStatus | undefined
 	marketAvailability?: MarketAvailabilityNotice | undefined
 	lastError: string | undefined
 	lastPollAt: string | undefined
@@ -294,16 +296,6 @@ export type OperatorState = PollStatus & {
 
 export function recordOperation(state: Pick<OperatorState, 'operationLog'>, entry: Omit<OperationEntry, 'timestamp'> & { timestamp?: string | undefined }) {
 	state.operationLog = [{ ...entry, timestamp: entry.timestamp ?? new Date().toISOString() }, ...state.operationLog].slice(0, 500)
-}
-
-type PollFailureMetadata = Pick<OperatorState, 'consecutivePollFailures' | 'lastPollFailureAt' | 'lastRetryAt' | 'nextRetryAt' | 'retryInProgress'>
-
-export function clearPollFailureMetadata(state: PollFailureMetadata) {
-	state.consecutivePollFailures = 0
-	state.lastPollFailureAt = undefined
-	state.lastRetryAt = undefined
-	state.nextRetryAt = undefined
-	state.retryInProgress = false
 }
 
 export function clearWalletDerivedState(state: OperatorState) {
@@ -569,6 +561,7 @@ export function operatorSnapshot(
 		balances: state.balances,
 		blockNumber: state.blockNumber,
 		blockTimestamp: state.blockTimestamp,
+		canonicalDeployments: state.canonicalDeployments,
 		centralizedMarket: serializeCentralizedMarketEstimate(state.centralizedMarket),
 		marketConsensus: serializeMarketConsensusEstimate(state.marketConsensus, decimalWeth),
 		execute: fixed.execute,

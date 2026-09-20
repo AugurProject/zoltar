@@ -1,5 +1,6 @@
 import { emptySettlementSnapshot, parseSettlementSettings, settlementSnapshot } from '#state/settlement-store'
 import { recordMarketDiscoveryFailure, recordObservedHead } from '#monitoring/market-discovery-status'
+import { completeSuccessfulPoll } from '../../src/runtime/poll-completion.ts'
 import { requireDeployedContracts } from '@zoltar/bot-shared/monitoring/deployed-contracts'
 import { afterEach, describe, expect, spyOn, test } from 'bun:test'
 import { appendFile, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
@@ -8,7 +9,6 @@ import { join } from 'node:path'
 import type { Address, Hex } from '@zoltar/bot-shared/ethereum'
 import {
 	appendExecutionHistoryIfMissing,
-	clearPollFailureMetadata,
 	clearWalletDerivedState,
 	decimalSignedEth,
 	ensureExecutionHistoryWritable,
@@ -139,16 +139,19 @@ test('publishes the complete execution REP catalog to the dashboard snapshot', (
 
 describe('public poll failures', () => {
 	test('clears stale retry timing after recovery before retaining a non-poll warning', () => {
-		const state: { consecutivePollFailures: number; lastPollFailureAt: string | undefined; lastRetryAt: string | undefined; nextRetryAt: string | undefined; retryInProgress: boolean } = {
+		const state: Parameters<typeof completeSuccessfulPoll>[0] = {
 			consecutivePollFailures: 3,
+			lastError: 'RPC https://rpc.example request timed out',
 			lastPollFailureAt: '2026-08-17T12:00:00.000Z',
 			lastRetryAt: '2026-08-17T12:00:05.000Z',
+			marketAvailability: undefined,
 			nextRetryAt: '2026-08-17T12:00:10.000Z',
+			paused: false,
 			retryInProgress: true,
+			status: 'error',
 		}
-		clearPollFailureMetadata(state)
-		const recoveredState = { ...state, lastError: 'Report execution needs operator attention' }
-		expect(recoveredState).toEqual({ consecutivePollFailures: 0, lastError: 'Report execution needs operator attention', lastPollFailureAt: undefined, lastRetryAt: undefined, nextRetryAt: undefined, retryInProgress: false })
+		expect(completeSuccessfulPoll(state, 'Report execution needs operator attention', false)).toBe(false)
+		expect(state).toEqual({ consecutivePollFailures: 0, lastError: 'Report execution needs operator attention', lastPollFailureAt: undefined, lastRetryAt: undefined, marketAvailability: undefined, nextRetryAt: undefined, paused: false, retryInProgress: false, status: 'error' })
 	})
 
 	test.each([',', ';', ')'])('redacts the complete RPC URL token when its path contains %s', delimiter => {

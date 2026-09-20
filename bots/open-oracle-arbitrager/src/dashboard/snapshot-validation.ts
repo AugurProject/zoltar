@@ -1,3 +1,4 @@
+import { deploymentRoles } from '#config/deployment-roles'
 import type { PublicOperatorSnapshot } from '#state/operator-state'
 import { array, booleanValue, numberValue, object, oneOf, optional, stringValue, union } from '@zoltar/bot-shared/dashboard/response-validation'
 
@@ -72,6 +73,18 @@ export const isSnapshot = object<PublicOperatorSnapshot>({
 	),
 	activeReportCount: numberValue,
 	consecutivePollFailures: optional(numberValue),
+	canonicalDeployments: optional(
+		object({
+			contracts: array(
+				object({
+					address: hexValue,
+					deployed: booleanValue,
+					role: oneOf(...deploymentRoles),
+				}),
+			),
+			executor: oneOf('deployed', 'mismatched', 'missing'),
+		}),
+	),
 	balances: optional(
 		object({
 			availableEth: stringValue,

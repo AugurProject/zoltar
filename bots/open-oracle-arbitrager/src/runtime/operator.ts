@@ -2,7 +2,7 @@ import { discoverCoordinatorPolicies } from '#monitoring/coordinator-discovery'
 import type { Configuration } from '#config/configuration'
 import type { DeploymentSettings } from '#config/deployment-settings'
 import type { NetworkConfiguration } from '#config/network'
-import { authenticateConfiguredDeployments, loadCoordinatorPolicies, retainReportsAndLogs } from '#config/runtime-deployment'
+import { authenticateConfiguredDeployments, loadCoordinatorPolicies, refreshIncompleteCanonicalDeployments, retainReportsAndLogs } from '#config/runtime-deployment'
 import type { ExecutionCandidate } from '#core/operator-types'
 import { positionConsumesRisk, utcDayGasSpentWeth } from '#core/safety-controls'
 import { assertStoredExecutorDeploymentIntent } from '#execution/create2-executor'
@@ -44,7 +44,6 @@ import {
 	requireCanonicalDexEvidence,
 	type MarketConsensusObservation,
 } from '@zoltar/bot-shared/monitoring/market-consensus'
-import { settledQuorumValue } from '@zoltar/bot-shared/monitoring/read-quorum'
 import { operationalFailureDisposition, pollUntilStopped, retryDelayMilliseconds } from '@zoltar/bot-shared/monitoring/resilience'
 
 import { OPEN_ORACLE_REPORT_DISPUTED_TOPIC, OPEN_ORACLE_REPORT_SETTLED_TOPIC, OPEN_ORACLE_REPORT_SUBMITTED_TOPIC } from '@zoltar/open-oracle-shared/openOracle/openOracle'
@@ -56,7 +55,7 @@ import { createSettlementJournal, recoverPendingSettlements, runSettlementStage 
 import { createConfiguredDexPairReader } from './configured-dex-pair.ts'
 import { emptySettlementSnapshot } from '#state/settlement-store'
 import { completeSuccessfulPoll, completeUnconfiguredPoll } from './poll-completion.ts'
-import { selectQuorumHead } from './quorum-head.ts'
+import { selectQuorumChainClient, selectQuorumHead } from './quorum-head.ts'
 import { acquireScanSignerOperation } from './signer-operations.ts'
 
 const REORG_OVERLAP_BLOCKS = 12n
@@ -406,30 +405,16 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 					if (!config.networkConfigured) return completeUnconfiguredPoll(state)
 					if (!startupValidated) {
 						if (config.execute) {
-							const chainReads = readClients.map(async (_, index) => {
-								const endpoint = index === 0 ? endpointLabel(config.connectivity.readRpcUrl) : endpointLabel(config.quorumRpcUrls[index - 1] ?? '')
-								const rpcUrl = index === 0 ? config.connectivity.readRpcUrl : (config.quorumRpcUrls[index - 1] ?? '')
-								return {
-									endpoint,
-									index,
-									value: await contextualRpcRead('eth_chainId', requestClient => requestClient.getChainId(), rpcUrl),
-								}
-							})
-							const observedChainId = await settledQuorumValue('configured chain id', chainReads)
-							if (observedChainId !== config.network.chain.id)
-								throw new Error(`Read RPC quorum ${[config.connectivity.readRpcUrl, ...config.quorumRpcUrls].map(endpointLabel).join(', ')} returned chain ${observedChainId.toString()} while calling eth_chainId; expected ${config.network.name} chain ${config.network.chain.id.toString()}`)
-							const availableChainRead = (await Promise.allSettled(chainReads)).find(result => result.status === 'fulfilled')
-							const availableClient = availableChainRead === undefined ? undefined : readClients[availableChainRead.value.index]
-							if (availableClient === undefined) throw new Error('Configured chain validation requires an available read RPC endpoint')
-							client = availableClient
-							clientRpcUrl = availableChainRead === undefined ? undefined : ([config.connectivity.readRpcUrl, ...config.quorumRpcUrls][availableChainRead.value.index] ?? undefined)
+							const selected = await selectQuorumChainClient(readClients, [config.connectivity.readRpcUrl, ...config.quorumRpcUrls], config.network, contextualRpcRead)
+							client = selected.client
+							clientRpcUrl = selected.rpcUrl
 						}
 						await contextualRpcRead('eth_chainId', async requestClient => {
 							const value = await requestClient.getChainId()
 							if (value !== config.network.chain.id) throw new Error(`Read RPC chain mismatch: expected ${config.network.chain.id.toString()}, received ${value.toString()}`)
 						})
 						await requireDeployedContractsOnce(client, [{ name: 'Multicall3', address: config.network.multicall3 }])
-						await authenticateConfiguredDeployments(readClients, config)
+						state.canonicalDeployments = await authenticateConfiguredDeployments(readClients, config)
 						state.endpointChecks = [...(config.execute ? [] : await checkConnectivity(config.connectivity, config.network.chain.id)), ...(await checkSubmissionEndpoints(config.submission, config.network.chain.id))]
 						startupValidated = true
 						if (executionActivationPending) {
@@ -437,7 +422,7 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 							pending.execute = undefined
 							state.paused = config.paused
 						}
-					}
+					} else state.canonicalDeployments = await refreshIncompleteCanonicalDeployments(readClients, config, state.canonicalDeployments)
 					let nextError: string | undefined
 					if (positions.some(position => position.historyOutbox !== undefined)) {
 						try {

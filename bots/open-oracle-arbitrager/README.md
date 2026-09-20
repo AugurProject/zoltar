@@ -390,15 +390,22 @@ bun run run
 ```
 
 Canonical contract addresses are supplied automatically from the bundled network
-deployment data. The bot verifies deployment availability and checks the executor
-against its bundled bytecode before execution.
+deployment data. The bot inspects the executor bytecode and the canonical contracts
+(OpenOracle, WETH, the security-pool factory, and the enabled Uniswap venue
+contracts) on its first scan and keeps re-checking each scan until all of them are
+present; live execution refuses to start until they hold.
 
 Execution mode can be changed in the dashboard's **Execution mode** form or the
 complete JSON editor and applies at the next scan boundary. The form shows a
-readiness checklist (signer, quorum RPCs, venue, delivery) and keeps the
-live-execution switch locked until every row holds; the panel summary reads **Dry
-run**, **Armed** (saved, activating at the next scan with the bot paused), or
-**Live**. The bot additionally
+readiness checklist (signer, quorum RPCs, venue, deployed executor, canonical
+contracts, delivery) and keeps the live-execution switch locked until every
+required row holds; the on-chain rows come from the latest scan, so a freshly
+deployed executor appears once the bot has inspected it. A trailing **Pool
+coordinators** row is advisory: arming does not need a discovered pool, but nothing
+can trade until one exists.
+
+The panel summary reads **Dry run**, **Armed** (saved, activating at the
+next scan with the bot paused), or **Live**. The bot additionally
 rejects a switch to live execution unless the saved file is already startable in
 live mode (quorum RPCs and an enabled venue), binds live
 execution to the signer that will be active at that boundary (the queued signer

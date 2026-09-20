@@ -1,7 +1,17 @@
-import { type OperatorState, clearPollFailureMetadata } from '#state/operator-state'
+import type { OperatorState } from '#state/operator-state'
 import { operatorStatusAfterPause } from '@zoltar/bot-shared/monitoring/block-sync'
 
-type SuccessfulPollState = Pick<OperatorState, 'marketAvailability' | 'consecutivePollFailures' | 'lastError' | 'lastPollFailureAt' | 'lastRetryAt' | 'nextRetryAt' | 'paused' | 'retryInProgress' | 'status'>
+type PollFailureMetadata = Pick<OperatorState, 'consecutivePollFailures' | 'lastPollFailureAt' | 'lastRetryAt' | 'nextRetryAt' | 'retryInProgress'>
+
+type SuccessfulPollState = Pick<OperatorState, 'marketAvailability' | 'lastError' | 'paused' | 'status'> & PollFailureMetadata
+
+function clearPollFailureMetadata(state: PollFailureMetadata) {
+	state.consecutivePollFailures = 0
+	state.lastPollFailureAt = undefined
+	state.lastRetryAt = undefined
+	state.nextRetryAt = undefined
+	state.retryInProgress = false
+}
 
 export function completeSuccessfulPoll(state: SuccessfulPollState, nextError: string | undefined, stopAfterPoll: boolean) {
 	clearPollFailureMetadata(state)
