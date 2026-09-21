@@ -111,14 +111,13 @@
 }
 
 /* Deployment setup. */
+/* The progress metric's grid cell owns the divider above this row. */
 .deployment-setup__status {
 	display: flex;
 	align-items: center;
 	justify-content: space-between;
 	flex-wrap: wrap;
 	gap: var(--space-4);
-	padding-top: var(--space-3);
-	border-top: 1px solid var(--divider-subtle);
 }
 
 /* Help guide steps. */
