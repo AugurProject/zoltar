@@ -413,6 +413,7 @@ export async function executeLiquidation(wallet: WriteClient, settings: Operator
 		throw new Error('A different sponsor owns the pool pending price report')
 	}
 	const oracleFunding = pool.isPriceValid || usesExistingPendingReport ? { initialAttoWeth: 0n, proposedPrice: 0n } : await fundStaleOracle(wallet, settings, state, rpcPool, pool, 0n, priceStillAllowed)
+	const bountyAttoEth = pool.isPriceValid || usesExistingPendingReport ? 0n : pool.requestPriceCostAttoEth
 	await submitCall(
 		wallet,
 		settings,
@@ -421,7 +422,7 @@ export async function executeLiquidation(wallet: WriteClient, settings: Operator
 		{
 			data: encodeFunctionData({
 				abi: openOraclePriceCoordinatorAbi,
-				args: [candidate.target.address, wallet.account.address, candidate.requestedDebtAttoEth, `0x${'00'.repeat(32)}`, settings.strategy.stagedOperationValidForSeconds, oracleFunding.proposedPrice, oracleFunding.initialAttoWeth],
+				args: [candidate.target.address, wallet.account.address, candidate.requestedDebtAttoEth, `0x${'00'.repeat(32)}`, settings.strategy.stagedOperationValidForSeconds, oracleFunding.proposedPrice, oracleFunding.initialAttoWeth, bountyAttoEth],
 				functionName: 'requestPriceIfNeededAndStageLiquidation',
 			}),
 			gas: pool.isPriceValid ? 1_000_000n : 2_000_000n,
@@ -429,7 +430,7 @@ export async function executeLiquidation(wallet: WriteClient, settings: Operator
 			preSubmit: () => assertMarketPriceStillAllowed(priceStillAllowed),
 			receiptExpectation: pool.isPriceValid ? { coordinator: pool.manager, operation: 0, type: 'staged-success' } : { amount: candidate.requestedDebtAttoEth, coordinator: pool.manager, operator: wallet.account.address, receiver: wallet.account.address, target: candidate.target.address, type: 'pending-liquidation' },
 			to: pool.manager,
-			value: pool.isPriceValid || usesExistingPendingReport ? 0n : pool.requestPriceCostAttoEth,
+			value: bountyAttoEth,
 		},
 		'liquidation',
 	)
@@ -451,7 +452,7 @@ export async function maintainVault(wallet: WriteClient, settings: OperatorSetti
 			{
 				data: encodeFunctionData({
 					abi: openOraclePriceCoordinatorAbi,
-					args: [1, wallet.account.address, plan.amountAttoRep, settings.strategy.stagedOperationValidForSeconds, 0n, 0n],
+					args: [1, wallet.account.address, plan.amountAttoRep, settings.strategy.stagedOperationValidForSeconds, 0n, 0n, 0n],
 					functionName: 'requestPriceIfNeededAndStageOperation',
 				}),
 				gas: 700_000n,

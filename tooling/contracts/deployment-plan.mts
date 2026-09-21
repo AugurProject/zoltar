@@ -11,8 +11,8 @@ import { trading_TwoWayConstantProductFactory_TwoWayConstantProductFactory as fa
 const EXPECTED_RUNTIME_CODE_HASHES: Readonly<Record<string, Hash>> = {
 	...EXPECTED_SEPOLIA_DEPLOYMENT_RUNTIME_CODE_HASHES,
 	...EXPECTED_SEPOLIA_STATOBLAST_DEPLOYMENT_RUNTIME_CODE_HASHES,
-	tradingFactory: '0x8df1190273534251720a79dc2c987d23f93dbe838b432499dc20968db5cfc330',
-	tradingRouter: '0x9ef89d1167c7f0ff034df071268f3ce4a4e30ede55df12c5f12f75a1619e4c75',
+	tradingFactory: '0xdca8f464a42f5a91ce0b77929c6b1266e6c79a994bc99051058f445f55e78a9f',
+	tradingRouter: '0x457c0aea2e00d65872fa587eb11bcca05d5eec08f6488aef43e3132d2537cd1e',
 	arachnidCreate2Deployer: '0x2fa86add0aed31f33a762c9d88e807c475bd51d0f52bd0955754b2608f7e4989',
 	uniswapV3Factory: '0x6377aa1b105d3ee2a54d73d3652812d6209ca56871954f61ad6e87d9c184fa5e',
 	uniswapV3Quoter: '0x8410f80f6ddf60c46fe39dc3394f3b245c16d62d1c401f4ebc2d030afbb1a264',

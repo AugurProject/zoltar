@@ -33,6 +33,7 @@ const escalationGameSettlement = await readFile('solidity/contracts/statoblast/E
 const escalationGameEscrow = await readFile('solidity/contracts/statoblast/EscalationGameEscrow.sol', 'utf8')
 const escalationGameFactory = await readFile('solidity/contracts/statoblast/factories/EscalationGameFactory.sol', 'utf8')
 const priceCoordinator = await readFile('solidity/contracts/statoblast/OpenOraclePriceCoordinator.sol', 'utf8')
+const priceCoordinatorTypes = await readFile('solidity/contracts/statoblast/OpenOraclePriceCoordinatorTypes.sol', 'utf8')
 const liquidationApprovalRegistry = await readFile('solidity/contracts/statoblast/LiquidationApprovalRegistry.sol', 'utf8')
 const openOracleSource = await readFile('solidity/contracts/statoblast/openOracle/OpenOracle.sol', 'utf8')
 const openOracleProvenance = await readFile('solidity/contracts/statoblast/openOracle/UPSTREAM.md', 'utf8')
@@ -201,7 +202,7 @@ function assertMigrationSecurityCoverageCommitmentDocs(): void {
 	for (const functionName of externalPureFunctions) {
 		assert.ok(operatorReference.includes(`${functionName}(`), `operator reference must document SecurityPoolUtils.${functionName}`)
 	}
-	assert.match(priceCoordinator, /enum OperationType \{\s*Liquidation,\s*WithdrawRep,\s*AdjustVaultBackingFactor\s*\}/)
+	assert.match(priceCoordinatorTypes, /uint256 constant REQUEST_BOUNTY_OFFSET_ATTO_ETH = 101;[\s\S]*enum OperationType \{\s*Liquidation,\s*WithdrawRep,\s*AdjustVaultBackingFactor\s*\}/, 'coordinator types must pin the documented 101 attoETH bounty offset and the operation enum')
 	assert.match(coordinatorData, /"OperationType": \{ "0": "Liquidation", "1": "WithdrawRep", "2": "AdjustVaultBackingFactor" \}/)
 	assert.doesNotMatch(coordinatorData, /StagedOperationDisputeStakedRepSnapshotted|initiatorVault/)
 	assert.doesNotMatch(priceCoordinator, /event PendingOperationRecoveryConsumed/)
@@ -393,7 +394,7 @@ function assertCoordinatorRecoveryBranch(): void {
 	assert.match(requestCostEquation, /<mi>requestPriceCostAttoEth<\/mi>[\s\S]*?<mi>block\.basefee<\/mi>[\s\S]*?<mn>4<\/mn>[\s\S]*?<mi>callbackGasLimit<\/mi>[\s\S]*?<mi>gasConsumedOpenOracleReportPrice<\/mi>[\s\S]*?<mn>101<\/mn>/)
 	assert.match(
 		priceCoordinator,
-		/function getRequestPriceCostAttoEth\(\) public view returns \(uint256\) \{\s*return block\.basefee \* 4 \* \(getSettlementCallbackGasLimit\(\) \+ gasConsumedOpenOracleReportPrice\) \+ 101;/,
+		/function getRequestPriceCostAttoEth\(\) public view returns \(uint256\) \{\s*return block\.basefee \* _requestGasUnits\(\) \+ REQUEST_BOUNTY_OFFSET_ATTO_ETH;[\s\S]*?function _requestGasUnits\(\) private view returns \(uint256\) \{\s*return 4 \* \(getSettlementCallbackGasLimit\(\) \+ gasConsumedOpenOracleReportPrice\);/,
 		'coordinator request-cost implementation must retain the documented factors and boundary offset',
 	)
 }
@@ -418,9 +419,8 @@ function assertCoordinatorSettlementEconomics(): void {
 	)
 	assert.match(priceCoordinator, /if \(amount1 == 0 \|\| amount2 == 0\)/, 'coordinator must reject empty settled token amounts')
 	assert.match(priceCoordinator, /uint256 price = Math\.mulDiv\(amount2, PRICE_PRECISION, amount1\)/, 'coordinator must derive the settled REP/ETH ratio from final token amounts')
-	assert.match(priceCoordinator, /uint256 costAttoEth = getRequestPriceCostAttoEth\(\)/, 'coordinator must derive the request bounty from getRequestPriceCostAttoEth')
-	assert.match(priceCoordinator, /uint256 settlerRewardAttoEth = costAttoEth/, 'coordinator must assign the entire request bounty to the OpenOracle settler reward')
-	assert.match(priceCoordinator, /settlerReward: uint96\(settlerRewardAttoEth\)/, 'coordinator report creation must forward the full attoETH request bounty through the upstream unit-neutral settlerReward field')
+	assert.match(priceCoordinator, /uint256 costAttoEth = getRequestPriceCostAttoEth\(\);\s*require\(bountyAttoEth >= costAttoEth, 'Oracle bounty too small'\);\s*require\(msg\.value >= bountyAttoEth/, 'coordinator must require the committed bounty to cover getRequestPriceCostAttoEth and msg.value to cover the bounty')
+	assert.match(priceCoordinator, /uint256 settlerRewardAttoEth = bountyAttoEth;[\s\S]*?= _settlementBaseFeeCapForBounty\(bountyAttoEth\)[\s\S]*?settlerReward: uint96\(settlerRewardAttoEth\)/, 'coordinator must retain the committed bounty as the settler reward and derive the base-fee cap from it')
 }
 
 function assertOpenOracleVendorAndEventDocs(): void {

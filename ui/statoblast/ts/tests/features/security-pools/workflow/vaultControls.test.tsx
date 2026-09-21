@@ -127,6 +127,56 @@ describe('SecurityPoolWorkflowSection: vault controls', () => {
 		expect(within(withdrawDialog).getByText('REP Withdraw Amount').parentElement?.querySelector('input')?.disabled).toBe(false)
 	})
 
+	test('vault dialogs keep a single primary transaction action and end with Cancel', async () => {
+		const selectedPoolAddress = zeroAddress
+		const renderedComponent = await renderIntoDocument(
+			<ChainTimestampContext.Provider value={1n}>
+				<SecurityPoolWorkflowSection
+					{...createSecurityPoolWorkflowProps({
+						securityPoolAddress: selectedPoolAddress,
+						securityPools: [createSelectedPool({ marketDetails: createMarketDetails({ endTime: 2n }), securityPoolAddress: selectedPoolAddress })],
+						securityVault: createSecurityVaultProps({
+							securityVaultDetails: createSecurityVaultDetails({ securityPoolAddress: selectedPoolAddress }),
+							securityVaultForm: {
+								depositAmount: '1',
+								repWithdrawAmount: '1',
+								targetHealthFactor: '2',
+								securityPoolAddress: selectedPoolAddress,
+								selectedVaultOwner: zeroAddress,
+							},
+							walletRepBalanceAttoRep: 10n * 10n ** 18n,
+						}),
+						selectedPoolView: 'vaults',
+					})}
+					showHeader={false}
+				/>
+			</ChainTimestampContext.Provider>,
+		)
+		setCleanup(renderedComponent.cleanup)
+		const documentQueries = within(document.body)
+		const expectDialogActions = (dialog: HTMLElement, expectedLabels: string[]) => {
+			const actionRow = within(dialog).getByRole('button', { name: 'Cancel' }).closest('.actions')
+			if (actionRow === null) throw new Error('Dialog action row is missing')
+			const buttons = [...actionRow.querySelectorAll('button')]
+			expect(buttons.map(button => button.textContent?.trim())).toEqual(expectedLabels)
+			expect(buttons.map(button => button.classList.contains('primary'))).toEqual(expectedLabels.map(label => label === expectedLabels[expectedLabels.length - 2]))
+		}
+
+		await act(() => {
+			fireEvent.click(documentQueries.getAllByRole('button', { name: 'Deposit REP' })[0] as HTMLElement)
+		})
+		const depositDialog = documentQueries.getByRole('dialog', { name: 'Deposit REP' })
+		expectDialogActions(depositDialog, ['Approve 1\u00a0REP', 'Deposit REP', 'Cancel'])
+		await act(() => {
+			fireEvent.click(within(depositDialog).getByRole('button', { name: 'Cancel' }))
+		})
+
+		await act(() => {
+			fireEvent.click(documentQueries.getByRole('button', { name: 'Withdraw REP' }))
+		})
+		expectDialogActions(documentQueries.getByRole('dialog', { name: 'Withdraw REP' }), ['Withdraw REP', 'Cancel'])
+	})
+
 	test('keeps continuation-child vault deposits available after the question ends', async () => {
 		const selectedPoolAddress = zeroAddress
 		const renderedComponent = await renderIntoDocument(
