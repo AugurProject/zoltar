@@ -1,31 +1,18 @@
-import { element } from './dom.js'
-
-/** The operator-file sections a queued change can belong to; mirrors `queuedSettingsSections` on the server. */
-export type QueuedSettingsSection = 'connectivity' | 'deployment' | 'execution' | 'markets' | 'risk' | 'settlement' | 'strategy' | 'submission' | 'universes'
-
-const FORM_SECTIONS: Readonly<Record<string, QueuedSettingsSection>> = {
-	'connectivity-form': 'connectivity',
-	'deployment-form': 'deployment',
-	'execution-form': 'execution',
-	'market-form': 'markets',
-	'runtime-form': 'risk',
-	'settlement-form': 'settlement',
-	'strategy-form': 'strategy',
-	'submission-form': 'submission',
-	'tokens-form': 'universes',
-}
+import { element } from './dom.ts'
 
 type TrackedForm = {
 	clean: string
 	/** A save request is in flight; the button stays locked until it settles even if a refresh re-evaluates the form. */
 	submitting: boolean
-	/** Extra state that is not a form control, such as the universe explorer's selection. */
+	/** Extra state that is not a form control, such as a universe explorer's selection. */
 	extra: (() => string) | undefined
 	form: HTMLFormElement
+	/** The operator-file section the form edits, matched against the sections the bot reports as queued. */
+	section: string | undefined
 }
 
 const trackedForms = new Map<string, TrackedForm>()
-let queuedSections: ReadonlySet<QueuedSettingsSection> = new Set()
+let queuedSections: ReadonlySet<string> = new Set()
 
 function controlSignature(control: Element) {
 	if (control instanceof HTMLInputElement && (control.type === 'checkbox' || control.type === 'radio')) return control.checked ? '1' : '0'
@@ -56,7 +43,7 @@ function renderBadges(formId: string) {
 	if (container === undefined) return
 	const badges: HTMLElement[] = []
 	if (formIsDirty(formId)) badges.push(badge('dirty', 'Unsaved changes'))
-	const section = FORM_SECTIONS[formId]
+	const section = trackedForms.get(formId)?.section
 	if (section !== undefined && queuedSections.has(section)) badges.push(badge('queued', 'Queued · next scan'))
 	container.replaceChildren(...badges)
 }
@@ -85,9 +72,13 @@ export function markFormClean(formId: string) {
 	refreshFormButton(formId)
 }
 
-export function trackForm(formId: string, extra?: () => string) {
+/**
+ * Diffs a Settings form against its loaded values: the save button unlocks on edits and the panel summary shows an
+ * Unsaved changes badge, plus a Queued badge while the bot holds a saved change for the form's section.
+ */
+export function trackForm(formId: string, options: { extra?: () => string; section?: string | undefined } = {}) {
 	const form = element(formId, HTMLFormElement)
-	trackedForms.set(formId, { clean: signature({ extra, form }), extra, form, submitting: false })
+	trackedForms.set(formId, { clean: signature({ extra: options.extra, form }), extra: options.extra, form, section: options.section, submitting: false })
 	const update = () => refreshFormButton(formId)
 	form.addEventListener('input', update)
 	form.addEventListener('change', update)
@@ -117,7 +108,7 @@ export function refreshAllFormButtons() {
 }
 
 /** Marks every panel whose section the bot has queued for the next scan boundary. */
-export function setQueuedSections(sections: readonly QueuedSettingsSection[]) {
+export function setQueuedSections(sections: readonly string[]) {
 	queuedSections = new Set(sections)
 	for (const formId of trackedForms.keys()) renderBadges(formId)
 }

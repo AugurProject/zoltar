@@ -25,7 +25,7 @@ function receipt(): TransactionReceipt {
 	}
 }
 
-function submission(): TrackedSubmission {
+function submission(profitBeforeGasAttoEth: bigint | undefined = undefined): TrackedSubmission {
 	return {
 		acceptedTargets: ['https://rpc.example'],
 		estimatedNetProfitEth: undefined,
@@ -35,6 +35,7 @@ function submission(): TrackedSubmission {
 		lastValidBlockNumber: undefined,
 		maxBlockNumber: 110n,
 		mode: 'public',
+		profitBeforeGasAttoEth,
 		reportId: '7',
 		serializedTransaction: `0x${'34'.repeat(64)}` as Hex,
 		submittedAt: '2026-08-12T00:00:00.000Z',
@@ -64,4 +65,27 @@ test('bounds each receipt wait so shutdown is observed within the grace period',
 	expect(short.receipt.status).toBe('success')
 	expect(long.tracked.hash).toBe(hash)
 	expect(activities).toEqual(['confirmed', 'confirmed'])
+})
+
+test('nets a known pre-gas profit against the mined gas, and only the gas when the transaction reverted', async () => {
+	const activities: TransactionActivity[] = []
+	const client = createPublicClient({ chain: mainnet, transport: custom({ request: () => Promise.reject(new Error('confirmation retries must not read the chain')) }) })
+	const config = { connectivity: { publicRpcUrls: ['https://rpc.example'], readRpcUrl: 'https://rpc.example' }, pollMilliseconds: 1_000, submission: { minimumBundleRelaySuccesses: 1, mode: 'public', relayUrls: [] } } as const
+	const walletFor = (status: TransactionReceipt['status']) => ({ account, waitForTransactionReceipt: async () => ({ ...receipt(), status }) })
+	const track = (activity: TransactionActivity) => activities.push(activity)
+
+	await waitForTrackedTransaction(client, walletFor('success'), config, submission(10n ** 14n), track)
+	await waitForTrackedTransaction(client, walletFor('reverted'), config, submission(10n ** 14n), track)
+	await waitForTrackedTransaction(client, walletFor('success'), config, submission(), track)
+	// A same-nonce replacement is not credited until the caller authenticates its intent.
+	const replacementHash = `0x${'56'.repeat(32)}` as const
+	await waitForTrackedTransaction(client, { account, waitForTransactionReceipt: async () => ({ ...receipt(), transactionHash: replacementHash }) }, config, submission(10n ** 14n), track)
+
+	// The receipt burns 21,000 gas at 2 attoETH each.
+	expect(activities.map(activity => [activity.status, activity.hash, activity.actualGasCostEth, activity.trackedNetProfitEth])).toEqual([
+		['confirmed', hash, '0.000000000000042', '0.000099999999958'],
+		['reverted', hash, '0.000000000000042', '-0.000000000000042'],
+		['confirmed', hash, '0.000000000000042', undefined],
+		['confirmed', replacementHash, '0.000000000000042', undefined],
+	])
 })

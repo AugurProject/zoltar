@@ -7,7 +7,8 @@ import { HeaderToolbar } from '@zoltar/ui-core-shared/components/HeaderToolbar.j
 import { AddressValue } from '@zoltar/ui-core-shared/components/AddressValue.js'
 import { Badge } from '@zoltar/ui-core-shared/components/Badge.js'
 import { CurrencyValue } from '@zoltar/ui-core-shared/components/CurrencyValue.js'
-import { HeaderMetricGroup, HeaderMetricStrip } from '@zoltar/ui-core-shared/components/HeaderMetricStrip.js'
+import { EnvironmentDetailsToggle, HeaderMetricGroup, HeaderMetricStrip } from '@zoltar/ui-core-shared/components/HeaderMetricStrip.js'
+import { WalletBalanceGroup } from '@zoltar/ui-core-shared/components/WalletBalanceGroup.js'
 import { MetricField } from '@zoltar/ui-core-shared/components/MetricField.js'
 import { StateHint } from '@zoltar/ui-core-shared/components/StateHint.js'
 import { ToolbarField } from '@zoltar/ui-core-shared/components/ToolbarField.js'
@@ -20,7 +21,7 @@ import type { OverviewPanelsProps, RepPriceFailure } from '../types.js'
 import { getActiveNetworkProfile } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { getNetworkSwitchTarget } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
 import { abbreviateAddress } from '@zoltar/ui-core-shared/lib/address.js'
-import { formatUniverseDisplayLabel, formatUniverseLabel } from '../universes/lib/universe.js'
+import { formatUniverseDisplayLabel, formatUniverseLabel } from '@zoltar/ui-core-shared/lib/universeLabels.js'
 import type { UserMessagePresentation } from '@zoltar/ui-core-shared/lib/userCopy.js'
 
 function omitPresentationActionHint(presentation: UserMessagePresentation) {
@@ -183,17 +184,13 @@ export function OverviewPanels({
 					</WarningSurface>
 				) : undefined}
 				<HeaderMetricStrip expanded={showEnvironmentDetails}>
-					<HeaderMetricGroup label={commonCopy.balances}>
-						<MetricField className='overview-simulation-secondary' label={commonCopy.eth}>
-							<CurrencyValue value={showAccountBalances ? accountState.ethBalanceAttoEth : undefined} loading={isWalletAddressLoading || (showAccountBalances && isRefreshing && accountState.ethBalanceAttoEth === undefined)} compactWhenOverflow />
-						</MetricField>
-						<MetricField className='overview-metric-secondary' label={commonCopy.weth}>
-							<CurrencyValue value={showAccountBalances ? accountState.wethBalanceAttoEth : undefined} loading={isWalletAddressLoading || (showAccountBalances && isRefreshing && accountState.wethBalanceAttoEth === undefined)} compactWhenOverflow />
-						</MetricField>
-						<MetricField className='overview-simulation-secondary' label={commonCopy.rep}>
-							<CurrencyValue value={showAccountBalances ? universeRepBalanceAttoRep : undefined} loading={isWalletAddressLoading || (showAccountBalances && isLoadingUniverseRepBalance)} compactWhenOverflow />
-						</MetricField>
-					</HeaderMetricGroup>
+					<WalletBalanceGroup
+						balances={[
+							{ asset: commonCopy.eth, loading: isWalletAddressLoading || (showAccountBalances && isRefreshing && accountState.ethBalanceAttoEth === undefined), value: showAccountBalances ? accountState.ethBalanceAttoEth : undefined },
+							{ asset: commonCopy.weth, className: 'overview-metric-secondary', loading: isWalletAddressLoading || (showAccountBalances && isRefreshing && accountState.wethBalanceAttoEth === undefined), value: showAccountBalances ? accountState.wethBalanceAttoEth : undefined },
+							{ asset: commonCopy.rep, loading: isWalletAddressLoading || (showAccountBalances && isLoadingUniverseRepBalance), value: showAccountBalances ? universeRepBalanceAttoRep : undefined },
+						]}
+					/>
 					{showRepPrices ? (
 						<HeaderMetricGroup
 							label={commonCopy.prices}
@@ -229,9 +226,7 @@ export function OverviewPanels({
 						</HeaderMetricGroup>
 					) : undefined}
 				</HeaderMetricStrip>
-				<button className='overview-details-toggle secondary' type='button' aria-expanded={showEnvironmentDetails} onClick={() => setShowEnvironmentDetails(current => !current)}>
-					{showEnvironmentDetails ? appCopy.hideEnvironmentDetails : appCopy.showEnvironmentDetails}
-				</button>
+				<EnvironmentDetailsToggle expanded={showEnvironmentDetails} onToggle={() => setShowEnvironmentDetails(current => !current)} />
 				{universePresentation === undefined ? undefined : (
 					<StateHint
 						className='overview-universe-state'

@@ -7,14 +7,11 @@ import { ProtocolAppFrame } from '@zoltar/ui-core-shared/app/components/Protocol
 import { AppRouteContent } from './components/AppRouteContent.js'
 import { OverviewPanels } from '@zoltar/ui-zoltar-shared/features/overview/OverviewPanels.js'
 import { useAppRouteEffects } from './useAppRouteEffects.js'
-import { useDeploymentFlow } from '@zoltar/ui-zoltar-shared/features/deployment/hooks/useDeploymentFlow.js'
-import { buildDeploymentRouteContentProps } from '@zoltar/ui-zoltar-shared/features/deployment/lib/deploymentRoute.js'
+import { useProtocolAppShell } from '@zoltar/ui-zoltar-shared/features/appShell/hooks/useProtocolAppShell.js'
 import { useHashRoute } from '@zoltar/ui-core-shared/app/hooks/useHashRoute.js'
 import { useMarketCreation } from '@zoltar/ui-statoblast-shared/features/markets/hooks/useMarketCreation.js'
-import { useProtocolOnchainRuntime } from '@zoltar/ui-core-shared/app/hooks/useProtocolOnchainRuntime.js'
 import { useRepPrices } from '@zoltar/ui-statoblast-shared/features/open-oracle/hooks/useRepPrices.js'
-import { useUrlState } from '@zoltar/ui-core-shared/app/hooks/useUrlState.js'
-import { getActiveSimulationController } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
+import { useStatoblastUrlState } from './hooks/useStatoblastUrlState.js'
 import { initializeStatoblastActiveEnvironment } from './activeEnvironment.js'
 import { applicationTitle, formatAppDocumentTitle, getAppPageTitle } from './appPageTitle.js'
 import { buildRouteHref, getRouteHashSearch, parseRouteHash } from '@zoltar/ui-core-shared/navigation/routing.js'
@@ -27,7 +24,7 @@ import { getStatoblastDeploymentSections } from '@zoltar/ui-statoblast-shared/fe
 import { getInvalidStatoblastRouteState } from './lib/routeValidation.js'
 import { readUiPriceOracle, UiPriceOracleSettings } from './UiPriceOracleSettings.js'
 import { renderRepPriceSourceLabel } from '@zoltar/ui-statoblast-shared/features/security-pools/lib/repPriceSource.js'
-import { getRouteSecondaryNavigation, getShowDeployTab, getStatoblastRouteTabs, getTransactionRouteKey } from './lib/appNavigation.js'
+import { getRouteSecondaryNavigation, getStatoblastRouteTabs, getTransactionRouteKey } from './lib/appNavigation.js'
 import { useOpenOracleRoute } from './hooks/useOpenOracleRoute.js'
 import { useSecurityPoolsRoute } from './hooks/useSecurityPoolsRoute.js'
 
@@ -49,61 +46,45 @@ export function App() {
 		setSecurityPoolAddress,
 		setSecurityPoolQuestionId,
 		setSelectedPoolView,
-	} = useUrlState()
+	} = useStatoblastUrlState()
 	const { navigate, route } = useHashRoute()
 	const resolvedRoute = resolveEnumValue<Route>(route, 'not-found', ['deploy', 'security-pools', 'open-oracle', 'not-found'])
+	const { repPerEthFailure, repPerEthPrice, repPerEthSource, repPerEthSourceUrl, repUsdcFailure, repUsdcPrice, repUsdcSource, repUsdcSourceUrl, isLoadingRepPrices, isRefreshingRepPrices, refreshRepPrices } = useRepPrices()
 	const {
 		accountState,
 		activeEnvironmentNonce,
-		applicationDeploymentComplete,
-		baseHookConfig,
+		applicationDeploymentMissing,
 		canReadOnchainData,
-		changeWallet,
-		chainClockError,
-		connectWallet,
 		currentBlockNumber,
 		currentTimestamp,
-		deploymentStatusError,
 		deploymentStatuses,
-		disconnectWallet,
+		deployRouteContentProps,
 		environmentBootstrapError,
-		environmentReady,
-		errorMessages: onchainErrorMessages,
-		hasLoadedDeploymentStatuses,
-		isConnectingWallet,
-		isLoadingDeploymentStatuses,
-		isManagingWallet,
-		isOnActiveAppChain,
-		isRefreshing,
+		errorMessages,
+		overviewWalletProps,
 		readBackendMessage,
-		readBackendReady,
 		readBackendStatus,
-		refreshState,
-		setActiveEnvironmentNonce,
-		setDeploymentStatuses,
-		switchNetwork,
+		refreshActiveEnvironment,
+		refreshSimulationView,
+		routeContentBlocked,
+		showDeployTab,
+		simulationController,
 		transactionTray,
 		walletBootstrapComplete,
 		walletScopedAccountAddress,
 		walletScopedHookConfig,
-	} = useProtocolOnchainRuntime({
-		enableChainClock: route !== 'deploy',
-		onchainStateDependencies,
-		replaceEnvironment: async canCommit => {
-			let commitAllowed = false
-			await initializeStatoblastActiveEnvironment(window.location, {
-				shouldCommit: () => {
-					commitAllowed = canCommit()
-					return commitAllowed
-				},
-			})
-			return commitAllowed
+	} = useProtocolAppShell({
+		deploymentRoute: {
+			deploymentCompleteHref: buildRouteHref(statoblastRouting.getHash('security-pools'), writeSecurityPoolsViewQueryParam(getRouteHashSearch(), 'browse')),
+			getSections: getStatoblastDeploymentSections,
 		},
+		initializeEnvironment: options => initializeStatoblastActiveEnvironment(window.location, options),
+		isDeploymentRoute: route === 'deploy',
+		onchainStateDependencies,
 		onEnvironmentCommitted: () => setSelectedPoolRefreshNonce(currentNonce => currentNonce + 1),
+		onRefresh: refreshRepPrices,
 	})
 	const { transactionState } = transactionTray
-	const deploymentFlow = useDeploymentFlow({ ...baseHookConfig, deploymentStatuses, environmentRefreshKey: activeEnvironmentNonce, setDeploymentStatuses })
-	const { errorMessage: deploymentErrorMessage } = deploymentFlow
 	const marketCreation = useMarketCreation({
 		...walletScopedHookConfig,
 		activeUniverseId,
@@ -124,7 +105,6 @@ export function App() {
 		urlOpenOracleReportId,
 		walletScopedHookConfig,
 	})
-	const { repPerEthFailure, repPerEthPrice, repPerEthSource, repPerEthSourceUrl, repUsdcFailure, repUsdcPrice, repUsdcSource, repUsdcSourceUrl, isLoadingRepPrices, isRefreshingRepPrices, refreshRepPrices } = useRepPrices()
 	const {
 		activeSecurityPoolsView,
 		loadSecurityPools,
@@ -171,36 +151,14 @@ export function App() {
 		walletScopedAccountAddress,
 		walletScopedHookConfig,
 	})
-	const simulationController = getActiveSimulationController()
-	const refreshSimulationView = async () => {
-		await refreshState()
-		refreshRepPrices()
-	}
-	const refreshActiveEnvironment = async () => {
-		await initializeStatoblastActiveEnvironment()
-		setActiveEnvironmentNonce(currentNonce => currentNonce + 1)
-		setSelectedPoolRefreshNonce(currentNonce => currentNonce + 1)
-		await refreshSimulationView()
-	}
-	const errorMessages = [deploymentErrorMessage, ...onchainErrorMessages.filter(message => message !== deploymentStatusError), chainClockError].filter((message): message is string => message !== undefined)
-	const applicationDeploymentMissing = canReadOnchainData && applicationDeploymentComplete === false
-	const showApplicationDeploymentWarning = applicationDeploymentMissing
-	const disableRouteContent = route !== 'deploy' && (!readBackendReady || applicationDeploymentMissing)
-	const isRouteContentDisabled = disableRouteContent
 	const overviewProps = {
+		...overviewWalletProps,
 		activeUniverseId,
-		accountState,
-		isConnectingWallet,
-		isManagingWallet,
 		isLoadingRepPrices,
 		isRefreshingRepPrices,
 		isLoadingUniverseRepBalance: loadingZoltarForkAccess,
-		onConnect: () => void connectWallet(),
-		onChangeWallet: () => void changeWallet(),
-		onDisconnectWallet: () => void disconnectWallet(),
 		onGoToGenesisUniverse: () => setActiveUniverseId(0n),
 		onRefreshRepPrices: refreshRepPrices,
-		onSwitchNetwork: () => void switchNetwork(),
 		parentUniverseId: zoltarUniverse?.parentUniverseId,
 		repPerEthFailure,
 		repPerEthPrice: uiRepPerEthPrice,
@@ -211,13 +169,10 @@ export function App() {
 		repUsdcPrice,
 		repUsdcSource,
 		repUsdcSourceUrl,
-		readBackendStatus,
 		universeForkTime: zoltarUniverse?.forkTime,
 		universeHasForked: zoltarUniverse?.hasForked,
 		universePresentation: undefined,
 		universeRepBalanceAttoRep: zoltarUniverse?.totalTheoreticalSupplyAttoRep,
-		isRefreshing,
-		walletBootstrapComplete,
 	}
 	const invalidRouteState = getInvalidStatoblastRouteState({
 		activeSecurityPoolsView,
@@ -228,7 +183,6 @@ export function App() {
 		selectedPoolView,
 	})
 	const activeRoute = invalidRouteState.hasInvalidSecurityPoolsView || invalidRouteState.hasInvalidSelectedPoolView || invalidRouteState.hasInvalidOpenOracleView ? 'not-found' : resolvedRoute
-	const showDeployTab = getShowDeployTab({ applicationDeploymentMissing, deploymentStatusError, deploymentStatuses, hasLoadedDeploymentStatuses })
 	const tabNavigationProps = {
 		route,
 		tabs: getStatoblastRouteTabs({ route, showDeployTab }),
@@ -260,18 +214,6 @@ export function App() {
 		urlOpenOracleReportId,
 		walletBootstrapComplete,
 	})
-	const deployRouteContentProps = buildDeploymentRouteContentProps({
-		accountAddress: accountState.address,
-		deploymentStateReady: hasLoadedDeploymentStatuses && environmentReady && readBackendReady,
-		deploymentStatusError,
-		deploymentStatuses,
-		flow: deploymentFlow,
-		getSections: getStatoblastDeploymentSections,
-		isLoadingDeploymentStatuses,
-		isOnActiveAppChain,
-		deploymentCompleteHref: buildRouteHref(statoblastRouting.getHash('security-pools'), writeSecurityPoolsViewQueryParam(getRouteHashSearch(), 'browse')),
-		onRetryDeploymentStatus: () => void refreshState({ loadChainClock: false, loadWalletState: false }),
-	})
 	const secondaryNavigation = getRouteSecondaryNavigation({ activeOpenOracleView, activeSecurityPoolsView, route: activeRoute, setOpenOracleView, setSecurityPoolsView })
 	const transactionRouteKey = getTransactionRouteKey({ activeOpenOracleView, activeSecurityPoolsView, route })
 
@@ -292,8 +234,8 @@ export function App() {
 				/>
 			}
 			heading={<AppPageHeading formatDocumentTitle={formatAppDocumentTitle} pageTitle={pageTitle} />}
-			notices={<AppStatusNotices errorMessages={errorMessages} readBackendMessage={readBackendMessage} readBackendStatus={readBackendStatus} simulationBootstrapError={environmentBootstrapError} showApplicationDeploymentWarning={showApplicationDeploymentWarning} zoltarUniverseError={zoltarUniverseError} />}
-			routeContentDisabled={isRouteContentDisabled}
+			notices={<AppStatusNotices errorMessages={errorMessages} readBackendMessage={readBackendMessage} readBackendStatus={readBackendStatus} simulationBootstrapError={environmentBootstrapError} showApplicationDeploymentWarning={applicationDeploymentMissing} zoltarUniverseError={zoltarUniverseError} />}
+			routeContentDisabled={routeContentBlocked}
 			transactionRouteKey={transactionRouteKey}
 			transactionState={transactionState.value}
 		>

@@ -5,12 +5,11 @@ import type { NetworkConfiguration } from '#config/network'
 import { authenticateConfiguredDeployments, loadCoordinatorPolicies, refreshIncompleteCanonicalDeployments, retainReportsAndLogs } from '#config/runtime-deployment'
 import type { ExecutionCandidate } from '#core/operator-types'
 import { positionConsumesRisk, utcDayGasSpentWeth } from '#core/safety-controls'
-import { assertStoredExecutorDeploymentIntent } from '#execution/create2-executor'
 import { executeDispute } from '#execution/dispute-execution'
 import { loadBalances } from '#execution/balances'
 import type { ExecutionLockManager } from '#execution/execution-locks'
 import { canonicalBlockHashWithQuorum, executionFailureDecision, executionTokenAllowed, isExecutionPausedError, selectBestExecution } from '#execution/execution-orchestration'
-import { executorDeploymentIntentPath, loadExecutorDeploymentIntentForChain } from '#execution/executor-deployment-store'
+import { executorDeploymentIntentPath } from '#execution/executor-deployment-store'
 import { processPositionLifecycle, reconcileExpiredAttemptsWithQuorum } from '#execution/position-lifecycle'
 import { dateFromBlockTimestamp, pendingCoordinatorReports, pendingCoordinatorReportsWithQuorum } from '#execution/recovery-support'
 import { transactionLogLevel, type TrackTransaction } from '#execution/transaction-tracker'
@@ -57,6 +56,7 @@ import { emptySettlementSnapshot } from '#state/settlement-store'
 import { completeSuccessfulPoll, completeUnconfiguredPoll } from './poll-completion.ts'
 import { selectQuorumChainClient, selectQuorumHead } from './quorum-head.ts'
 import { acquireScanSignerOperation } from './signer-operations.ts'
+import { createDeploymentRecoveryReconciliation, loadDeploymentRecovery } from './deployment-recovery.ts'
 
 const REORG_OVERLAP_BLOCKS = 12n
 const MAX_LOG_SCAN_RANGE = 256n
@@ -172,23 +172,8 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 	const signerOperationGate = createSignerOperationGate()
 	let cursor: SyncCursor | undefined
 	const executorIntentPath = executorDeploymentIntentPath(config.settingsFile, config.network.name)
-	const pendingExecutorDeployment = await loadExecutorDeploymentIntentForChain(executorIntentPath, config.network.chain.id)
-	if (pendingExecutorDeployment !== undefined) await assertStoredExecutorDeploymentIntent(pendingExecutorDeployment, config.network.chain.id)
-	const deploymentRecovery = {
-		pending: pendingExecutorDeployment !== undefined,
-	}
-	if (pendingExecutorDeployment !== undefined) {
-		state.paused = true
-		state.status = 'paused'
-		recordOperation(state, {
-			category: 'configuration',
-			details: pendingExecutorDeployment.transactionHash,
-			level: 'error',
-			message: 'Execution paused for pending executor deployment recovery',
-			reason: 'Retry the executor deployment to reconcile its durable signed transaction before resuming',
-			reportId: undefined,
-		})
-	}
+	const deploymentRecovery = await loadDeploymentRecovery(executorIntentPath, config, state)
+	const deploymentRecoveryReconciliation = createDeploymentRecoveryReconciliation({ config, readClients: () => readClients, state })
 	const trackTransaction: TrackTransaction = activity => {
 		state.transactionActivity = [activity, ...state.transactionActivity.filter(existing => existing.originalHash.toLowerCase() !== activity.originalHash.toLowerCase())].slice(0, 100)
 		recordOperation(state, {
@@ -278,7 +263,7 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 				if (pending.profileSwitch || shutdown?.isRequested()) return true
 				state.consecutivePollFailures = consecutiveFailures
 				scanWakeGate.beginPoll()
-				const scanIntentLock = await acquireScanSignerOperation(signerOperationGate, deploymentRecovery, executorIntentPath)
+				const scanIntentLock = await acquireScanSignerOperation(signerOperationGate, deploymentRecovery, executorIntentPath, deploymentRecoveryReconciliation)
 				if (scanIntentLock === undefined) return 'deferred'
 				state.nextRetryAt = undefined
 				state.retryInProgress = consecutiveFailures > 0

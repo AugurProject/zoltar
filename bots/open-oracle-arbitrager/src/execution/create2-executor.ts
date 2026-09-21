@@ -5,6 +5,7 @@ import { createRpcEndpointPool } from '@zoltar/bot-shared/ethereum'
 import { availableSettledValues, quorumValue, settledQuorumValue } from '@zoltar/bot-shared/monitoring/read-quorum'
 import { ConnectivityDegradedError } from '@zoltar/bot-shared/monitoring/resilience'
 import type { ExecutorDeploymentIntent } from '#execution/executor-deployment-store'
+import { EXECUTOR_DEPLOYMENT_MESSAGES } from '#state/executor-deployment-recovery'
 import { configuredReadRpcEndpointMinimum, rpcQuorumRequirement } from '@zoltar/bot-shared/monitoring/rpc-quorum-policy'
 import { assertExecutorDeploymentActive, assertExecutorDeploymentEnvironment, assertExecutorDeploymentIntent, assertExecutorDeploymentReceipt, deterministicDeploymentProxy, executorCodeStatus, executorDeploymentPlan, submitExecutorDeploymentTransaction } from '#execution/executor-deployment-primitives'
 
@@ -69,7 +70,7 @@ async function waitForExecutorDeployment(parameters: { address: Address; clients
 			assertExecutorDeploymentReceipt(receipt.status, receipt.transactionHash)
 			return receipt
 		}
-		if (Date.now() >= deadline) throw new Error('Executor deployment was not included in a block before the confirmation deadline')
+		if (Date.now() >= deadline) throw new Error(EXECUTOR_DEPLOYMENT_MESSAGES.notIncludedBeforeDeadline)
 		await new Promise(resolve => {
 			setTimeout(resolve, 1_000)
 		})
@@ -106,7 +107,7 @@ export async function deployExecutorCreate2(parameters: {
 	if (environment.code === 'verified' && parameters.existingIntent === undefined) return { address: plan.address, alreadyDeployed: true, transactionHash: undefined }
 	if (environment.code === 'verified' && parameters.existingIntent !== undefined) {
 		const receipt = await includedExecutorDeployment({ address: plan.address, clients, expectedRuntimeCodeHash, transactionHash: parameters.existingIntent.transactionHash as Hash })
-		if (receipt === undefined) throw new ConnectivityDegradedError('Stored executor deployment transaction has no quorum-visible receipt; recovery remains pending')
+		if (receipt === undefined) throw new ConnectivityDegradedError(EXECUTOR_DEPLOYMENT_MESSAGES.quorumReceiptMissing)
 		if (receipt.transactionHash.toLowerCase() !== parameters.existingIntent.transactionHash.toLowerCase()) throw new Error('Executor deployment receipt does not match the stored signed transaction')
 		assertExecutorDeploymentReceipt(receipt.status, receipt.transactionHash)
 		return { address: plan.address, alreadyDeployed: true, transactionHash: parameters.existingIntent.transactionHash as Hash }

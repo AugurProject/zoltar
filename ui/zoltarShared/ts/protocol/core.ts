@@ -7,8 +7,6 @@ import { getContractLabel } from './contractLabels.js'
 
 export { waitForSubmittedTransactionReceipt } from '@zoltar/ui-core-shared/transactions/transactionReceipt.js'
 
-const RPC_STATE_RETRY_DELAYS_MILLISECONDS = [250, 500, 1_000, 2_000, 4_000] as const
-
 type ContractLabelResolver = (abi: readonly unknown[], functionName: string) => string | undefined
 
 let appContractLabelResolver: ContractLabelResolver | undefined
@@ -19,18 +17,6 @@ export function installAppContractLabelResolver(resolver: ContractLabelResolver)
 
 function resolveContractLabel(abi: readonly unknown[], functionName: string) {
 	return getContractLabel(abi, functionName) ?? appContractLabelResolver?.(abi, functionName)
-}
-
-export type RpcStateRetryWait = (milliseconds: number) => Promise<void>
-
-export async function readWithRpcStateRetries<T>(read: () => Promise<T>, isReady: (value: T) => boolean, wait: RpcStateRetryWait = async milliseconds => await new Promise(resolve => setTimeout(resolve, milliseconds))) {
-	let value = await read()
-	for (const delayMilliseconds of RPC_STATE_RETRY_DELAYS_MILLISECONDS) {
-		if (isReady(value)) return value
-		await wait(delayMilliseconds)
-		value = await read()
-	}
-	return value
 }
 
 type ContractRevertReasonParams = {

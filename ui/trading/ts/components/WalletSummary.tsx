@@ -1,7 +1,7 @@
 import { useState } from 'preact/hooks'
-import { CurrencyValue } from '@zoltar/ui-core-shared/components/CurrencyValue.js'
-import { HeaderMetricGroup, HeaderMetricStrip } from '@zoltar/ui-core-shared/components/HeaderMetricStrip.js'
-import { MetricField } from '@zoltar/ui-core-shared/components/MetricField.js'
+import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
+import { EnvironmentDetailsToggle, HeaderMetricStrip } from '@zoltar/ui-core-shared/components/HeaderMetricStrip.js'
+import { WalletBalanceGroup } from '@zoltar/ui-core-shared/components/WalletBalanceGroup.js'
 import type { WalletSummaryState } from '../lib/walletSummaryState.js'
 import * as copy from '../copy/app.js'
 
@@ -12,24 +12,14 @@ export function WalletSummary({ summary, onRetry, simulation = false }: { summar
 	return (
 		<section class='trading-wallet-summary' aria-label={copy.connectedWalletBalances} aria-busy={loading}>
 			<HeaderMetricStrip expanded={expanded}>
-				<HeaderMetricGroup label={copy.balances}>
-					<MetricField className='overview-simulation-secondary' label={copy.eth}>
-						<span data-wallet-asset='ETH'>
-							<CurrencyValue value={ready ? summary.ethAttoEth : undefined} loading={loading} compactWhenOverflow exactWhenRoundedToZero />
-						</span>
-					</MetricField>
-					<MetricField className='overview-simulation-secondary' label={copy.rep}>
-						<span data-wallet-asset='REP'>
-							<CurrencyValue value={ready ? summary.repAttoRep : undefined} loading={loading} compactWhenOverflow exactWhenRoundedToZero />
-						</span>
-					</MetricField>
-				</HeaderMetricGroup>
+				<WalletBalanceGroup
+					balances={[
+						{ asset: commonCopy.eth, exactWhenRoundedToZero: true, loading, value: ready ? summary.ethAttoEth : undefined },
+						{ asset: commonCopy.rep, exactWhenRoundedToZero: true, loading, value: ready ? summary.repAttoRep : undefined },
+					]}
+				/>
 			</HeaderMetricStrip>
-			{simulation && summary.account !== undefined ? (
-				<button class='overview-details-toggle secondary' type='button' aria-expanded={expanded} onClick={() => setExpanded(current => !current)}>
-					{expanded ? copy.hideEnvironmentDetails : copy.showEnvironmentDetails}
-				</button>
-			) : null}
+			{simulation && summary.account !== undefined ? <EnvironmentDetailsToggle expanded={expanded} onToggle={() => setExpanded(current => !current)} /> : null}
 			{summary.status === 'error' ? (
 				<div class='trading-wallet-error'>
 					<span class='error' role='alert' title={summary.error} aria-label={copy.walletBalanceError(summary.errorLabel, summary.error)}>

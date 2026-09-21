@@ -9,6 +9,7 @@ import {
 	assertSignerCompatibleWithDurableScope,
 	assertSignerCompatibleWithPending,
 	connectivityCandidate,
+	executionCandidate,
 	pausedCandidate,
 	preflightConnectivityUpdate,
 	restartSafeSettings,
@@ -26,6 +27,9 @@ import { createRetirementController } from './retirement-controller.ts'
 import { dashboardRecord as record, exactDashboardKeys as exactKeys, expectedRevision, transactionHash } from './dashboard-input.ts'
 import { dashboardState } from './dashboard-state.ts'
 
+/** The chaos bot keeps its signer reserved in every mode, so only the signer hand-off and release methods are needed. */
+export type ChaosProcessLocks = Pick<BotProcessLocks, 'acquireSigner' | 'commitSigner' | 'discardSigner' | 'release'>
+
 export type ConfigurationState = {
 	path: string
 	rememberSigner: boolean
@@ -39,7 +43,7 @@ export type DashboardControllerOptions = {
 	onScheduleRequested?: (() => void) | undefined
 	gate: SignerOperationGate
 	hostname: ChaosDashboardController['hostname']
-	locks: BotProcessLocks
+	locks: ChaosProcessLocks
 	loopbackPublished?: boolean | undefined
 	onConnectivityUpdated?: ((settings: OperatorSettings, checks: readonly EndpointCheck[]) => void) | undefined
 	saveConfiguration?: typeof saveSettings | undefined
@@ -538,6 +542,21 @@ export function createChaosDashboardController(options: DashboardControllerOptio
 				})
 			},
 		}),
+		async setExecution(value) {
+			await update(async () => {
+				const candidate = executionCandidate(options.configuration.settings, value)
+				assertSettingsUpdatePaused(options.configuration.settings, options.state.paused)
+				expectedRevision(candidate.revision, options.configuration.revision)
+				if (!options.configuration.settings.runtime.execute && candidate.settings.runtime.execute) assertLiveExecutionReadiness(options.state, candidate.settings)
+				await apply(candidate.settings, candidate.revision, options.configuration.rememberSigner, state => {
+					recordActivity(state, {
+						message: candidate.settings.runtime.execute ? 'Live execution enabled; resume to start signing' : 'Dry-run mode enabled',
+						status: 'info',
+						type: 'configuration',
+					})
+				})
+			})
+		},
 		async setSettings(value) {
 			await update(async () => {
 				const candidate = settingsPatchCandidate(options.configuration.settings, value)

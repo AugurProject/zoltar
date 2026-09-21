@@ -1,7 +1,8 @@
 import { requiredDeploymentRoles, type DeploymentRole } from '#config/deployment-roles'
 import type { PublicOperatorSnapshot } from '#state/operator-state'
+import { renderExecutionMode, type ReadinessRow } from '@zoltar/bot-shared/dashboard/readiness'
 import type { DashboardDeployment } from './api-validation.ts'
-import { element, setText, shorten } from './dom.js'
+import { shorten } from './dom.js'
 
 /** The parts of the loaded configuration the readiness checklist needs beside the live snapshot. */
 export type GoLiveConfiguration = {
@@ -12,11 +13,9 @@ export type GoLiveConfiguration = {
 	submissionMode: 'private' | 'public'
 }
 
-/** Advisory rows inform without blocking the switch: the bot tolerates them while armed, so they are not prerequisites. */
-type ReadinessRow = { advisory?: true; detail: string; label: string; ready: boolean }
-
 function executorRow(snapshot: PublicOperatorSnapshot): ReadinessRow {
 	const inspected = snapshot.canonicalDeployments
+	if (snapshot.executorDeploymentRecovery !== undefined) return { detail: 'Recover the pending deployment under Venues and executor', label: 'Executor', ready: false }
 	if (inspected === undefined) return { detail: 'Waiting for the first scan', label: 'Executor', ready: false }
 	if (inspected.executorDeployed) return { detail: snapshot.executor === undefined ? 'Deployed' : shorten(snapshot.executor), label: 'Executor', ready: true }
 	return { detail: 'Deploy it under Venues and executor', label: 'Executor', ready: false }
@@ -64,40 +63,8 @@ function readinessRows(snapshot: PublicOperatorSnapshot, configuration: GoLiveCo
 		executorRow(snapshot),
 		canonicalContractsRow(snapshot, configuration.deployment),
 		{ detail: configuration.submissionMode === 'private' ? `Private · ${relays.toString()} relay${relays === 1 ? '' : 's'}` : 'Public mempool', label: 'Delivery', ready: configuration.submissionMode === 'public' || relays > 0 },
-		{ advisory: true, detail: coordinators === 0 ? 'None discovered · not required to arm' : `${coordinators.toString()} discovered`, label: 'Pool coordinators', ready: coordinators > 0 },
+		{ advisory: true, detail: coordinators === 0 ? 'None discovered' : `${coordinators.toString()} discovered`, label: 'Pool coordinators', ready: coordinators > 0 },
 	]
-}
-
-/** The screen-reader status beside each row; an unmet advisory row is optional rather than a missing prerequisite. */
-function readinessStatus(row: ReadinessRow) {
-	if (row.ready) return ' ready'
-	return row.advisory ? ' optional' : ' missing'
-}
-
-function readinessItem(row: ReadinessRow) {
-	const item = document.createElement('li')
-	item.dataset['ready'] = row.ready ? 'true' : 'false'
-	if (row.advisory) item.dataset['advisory'] = 'true'
-	const mark = document.createElement('span')
-	mark.className = 'readiness-mark'
-	mark.setAttribute('aria-hidden', 'true')
-	mark.textContent = row.ready ? '✓' : '○'
-	const label = document.createElement('span')
-	label.className = 'readiness-label'
-	label.textContent = row.label
-	const detail = document.createElement('strong')
-	detail.textContent = row.detail
-	const status = document.createElement('span')
-	status.className = 'visually-hidden'
-	status.textContent = readinessStatus(row)
-	item.append(mark, label, detail, status)
-	return item
-}
-
-function executionSummary(saved: boolean, live: boolean, queued: boolean, ready: boolean) {
-	if (saved && queued) return 'Armed · bot paused'
-	if (live) return queued ? 'Live · dry run at the next scan' : 'Live'
-	return ready ? 'Dry run · ready to go live' : 'Dry run · prerequisites missing'
 }
 
 /**
@@ -105,12 +72,6 @@ function executionSummary(saved: boolean, live: boolean, queued: boolean, ready:
  * until every row is satisfied; switching a live operator back to dry run is always allowed.
  */
 export function renderGoLive(snapshot: PublicOperatorSnapshot, configuration: GoLiveConfiguration) {
-	const rows = readinessRows(snapshot, configuration)
-	element('execution-checklist', HTMLUListElement).replaceChildren(...rows.map(readinessItem))
-	const ready = rows.every(row => row.ready || row.advisory === true)
 	// The snapshot keeps reporting live until the boundary, so the saved mode decides whether a queued change arms or disarms.
-	setText('execution-mode-summary', executionSummary(configuration.execute, snapshot.execute, snapshot.queuedSettings.includes('execution'), ready))
-	const toggle = element('execution-enabled', HTMLInputElement)
-	toggle.disabled = !configuration.execute && !ready
-	toggle.setAttribute('aria-describedby', 'execution-checklist')
+	renderExecutionMode(readinessRows(snapshot, configuration), { live: snapshot.execute, queued: snapshot.queuedSettings.includes('execution'), saved: configuration.execute })
 }

@@ -133,6 +133,33 @@ async function inspectCanonicalDeployments(clients: readonly ReadClient[], confi
 	throw new ConnectivityDegradedError(`Deployment authentication requires at least ${rpcQuorumDescription(requirement)}${failures.length === 0 ? '' : `; ${failures.join('; ')}`}`)
 }
 
+/**
+ * Whether the configured read quorum agrees the canonical executor bytecode is present. Unlike the checklist inspection this
+ * never settles for a single endpoint's observation: it releases a deployment recovery that keeps the signer idle, so with a
+ * quorum of two, two independent endpoints must see the code. A lagging endpoint that still reports it absent is set aside
+ * like an unavailable one, but too few reachable endpoints is a connectivity failure rather than a verdict.
+ */
+export async function verifyCanonicalExecutorDeployed(clients: readonly ReadClient[], config: Configuration) {
+	const endpoints = [config.connectivity.readRpcUrl, ...config.quorumRpcUrls]
+	const requirement = rpcQuorumRequirement()
+	const settled = await Promise.allSettled(
+		clients.map(async (client, index) => {
+			const endpoint = endpointLabel(endpoints[index] ?? '')
+			try {
+				return { endpoint, value: hasCode(await client.getCode({ address: canonicalExecutorIdentity().address })) }
+			} catch (error) {
+				throw rpcFailureWithContext(error, endpoint, 'eth_getCode')
+			}
+		}),
+	)
+	const available = availableSettledValues(settled)
+	if (available.length < requirement) {
+		const failures = settled.flatMap(result => (result.status === 'rejected' ? [errorMessage(result.reason)] : []))
+		throw new ConnectivityDegradedError(`Executor deployment verification requires at least ${rpcQuorumDescription(requirement)}${failures.length === 0 ? '' : `; ${failures.join('; ')}`}`)
+	}
+	return new Set(available.filter(observation => observation.value).map(observation => observation.endpoint)).size >= requirement
+}
+
 /** Live execution refuses to start until the configured executor is the canonical one and every inspected deployment is present. */
 function assertCanonicalDeployments(config: Pick<Configuration, 'executor'>, status: CanonicalDeploymentStatus) {
 	if (config.executor?.toLowerCase() !== canonicalExecutorIdentity().address.toLowerCase()) throw new Error('Executor must use the canonical derived address')

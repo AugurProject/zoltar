@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import type { Address, Hash } from '@zoltar/core-shared/evm/ethereum'
-import { idleTransactionWorkflow, transactionPhase, transactionWorkflowReducer, type TransactionContext } from '../../features/live/transactionWorkflow.js'
+import { idleTransactionWorkflow, transactionPhase, transactionWorkflowError, transactionWorkflowHash, transactionWorkflowReceiptWarning, transactionWorkflowReducer, type TransactionContext } from '../../features/live/transactionWorkflow.js'
 
 const context: TransactionContext = {
 	account: '0x0000000000000000000000000000000000000001' as Address,
@@ -113,5 +113,23 @@ describe('transaction workflow state machine', () => {
 		state = transactionWorkflowReducer(state, { type: 'context-invalidated', message: 'Wallet account changed' })
 		state = transactionWorkflowReducer(state, { type: 'confirmed', context })
 		expect(state).toEqual({ kind: 'confirmed', context, operation: 'settlement', transactionHash: originalHash, notice: 'Wallet account changed' })
+	})
+
+	test('surfaces the newest wallet invalidation notice ahead of an earlier failure across every workflow', () => {
+		// Trade, liquidity, and settlement workflows share these selectors, so a context change reported after a
+		// failure always wins: it is the newer fact and the reason the failed request can no longer be retried as-is.
+		const failed = transactionWorkflowReducer(idleTransactionWorkflow, { type: 'failed', context, operation: 'trade', message: 'Router simulation failed' })
+		expect(transactionWorkflowError(failed, 'Trade transaction reverted')).toBe('Router simulation failed')
+		const invalidated = transactionWorkflowReducer(failed, { type: 'context-invalidated', message: 'Wallet account changed' })
+		expect(transactionWorkflowError(invalidated, 'Trade transaction reverted')).toBe('Wallet account changed')
+		expect(transactionWorkflowHash(invalidated)).toBeUndefined()
+		expect(transactionWorkflowReceiptWarning(invalidated)).toBeUndefined()
+
+		let reverted = transactionWorkflowReducer(idleTransactionWorkflow, { type: 'operation-preparing', context, operation: 'trade' })
+		reverted = transactionWorkflowReducer(reverted, { type: 'signature-requested', context, operation: 'trade' })
+		reverted = transactionWorkflowReducer(reverted, { type: 'broadcast', context, operation: 'trade', transactionHash: originalHash })
+		reverted = transactionWorkflowReducer(reverted, { type: 'reverted', context })
+		expect(transactionWorkflowError(reverted, 'Trade transaction reverted')).toBe('Trade transaction reverted')
+		expect(transactionWorkflowHash(reverted)).toBe(originalHash)
 	})
 })

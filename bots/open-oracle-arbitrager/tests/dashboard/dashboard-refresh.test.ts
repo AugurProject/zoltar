@@ -177,18 +177,7 @@ test('keeps all mutations locked and ignores deferred old-chain responses until 
 	page.content = (await (await fetch(server.url)).text()).replace('<script type="module" src="/dashboard.js"></script>', '').replace('<script type="module" src="/header-notices.js"></script>', '')
 	const window = page.mainFrame.window
 	for (const [name, value] of Object.entries({ AbortController, Array, Boolean, Date, Error, Intl, JSON, Map, Math, Number, Object, Promise, Reflect, Set, String, SyntaxError, decodeURIComponent })) Reflect.set(window, name, value)
-	const intervalCallbacks: (() => unknown)[] = []
-	window.setInterval = handler => {
-		if (typeof handler === 'function') intervalCallbacks.push(handler as () => unknown)
-		const timeout = window.setTimeout(() => undefined, 1)
-		window.clearTimeout(timeout)
-		return timeout
-	}
-	const triggerRefresh = () => {
-		const refresh = intervalCallbacks[0]
-		if (refresh === undefined) throw new Error('Dashboard did not register its refresh interval')
-		refresh()
-	}
+	const triggerRefresh = stubIntervals(window)
 	const nativeSetTimeout = window.setTimeout.bind(window)
 	window.setTimeout = (handler, timeout, ...arguments_) => nativeSetTimeout(handler, timeout === 500 ? 0 : timeout, ...arguments_)
 	window.fetch = async (input, init) => {
@@ -330,6 +319,22 @@ test('keeps all mutations locked and ignores deferred old-chain responses until 
 	expect(element(window, 'header-notices-count', window.HTMLElement).textContent).toBe('0')
 })
 
+/** Replaces the dashboard's polling intervals with a manual trigger so each test decides when a refresh happens. */
+function stubIntervals(window: BrowserWindow) {
+	const intervalCallbacks: (() => unknown)[] = []
+	window.setInterval = handler => {
+		if (typeof handler === 'function') intervalCallbacks.push(() => void handler())
+		const timeout = window.setTimeout(() => undefined, 1)
+		window.clearTimeout(timeout)
+		return timeout
+	}
+	return () => {
+		const refresh = intervalCallbacks[0]
+		if (refresh === undefined) throw new Error('Dashboard did not register its refresh interval')
+		refresh()
+	}
+}
+
 function element<T extends Element>(window: BrowserWindow, id: string, constructor: { new (): T }): T {
 	const found = window.document.getElementById(id)
 	if (!(found instanceof constructor)) throw new Error(`Missing dashboard element ${id}`)
@@ -344,11 +349,7 @@ async function mountDashboard(server: ReturnType<typeof startDashboardServer>, p
 	page.content = (await (await fetch(server.url)).text()).replace('<script type="module" src="/dashboard.js"></script>', '').replace('<script type="module" src="/header-notices.js"></script>', '')
 	const window = page.mainFrame.window
 	for (const [name, value] of Object.entries({ AbortController, Array, Boolean, Date, Error, Intl, JSON, Map, Math, Number, Object, Promise, Reflect, Set, String, SyntaxError, decodeURIComponent })) Reflect.set(window, name, value)
-	window.setInterval = () => {
-		const timeout = window.setTimeout(() => undefined, 1)
-		window.clearTimeout(timeout)
-		return timeout
-	}
+	const triggerRefresh = stubIntervals(window)
 	window.fetch = async (input, init) => {
 		const inputUrl = typeof input === 'string' || input instanceof window.URL ? input.toString() : Reflect.get(input, 'url')
 		if (typeof inputUrl !== 'string') throw new Error('Unexpected request URL')
@@ -361,8 +362,150 @@ async function mountDashboard(server: ReturnType<typeof startDashboardServer>, p
 	if (!build.success || output === undefined) throw new Error('Could not build dashboard fixture')
 	page.evaluate(await output.text())
 	await page.waitUntilComplete()
-	return { page, window }
+	return { page, triggerRefresh, window }
 }
+
+test('pending executor deployment recovery owns the overview notice, the executor form, and the resume refusal until it is reconciled', async () => {
+	const settings = parseOperatorSettings({
+		...example,
+		connectivity: { publicRpcUrls: ['https://rpc.example/'], readRpcUrl: 'https://rpc.example/' },
+		network: 'sepolia',
+		networkConfigured: true,
+	})
+	const transactionHash = `0x${'ab'.repeat(32)}` as const
+	let recovery: { transactionHash: typeof transactionHash } | undefined = { transactionHash }
+	// The bot refuses from its on-disk journal, which it can see before the dashboard's next poll reports the recovery.
+	let refusal: string | undefined = 'Recover the pending executor deployment before resuming execution'
+	let paused = true
+	const pauseRequests: boolean[] = []
+	const snapshot = () =>
+		operatorSnapshot({ ...operatorState(), paused, status: paused ? 'paused' : 'running' }, settings.strategy, settings.submission, settings.connectivity, {
+			deployment: settings.deployment,
+			execute: false,
+			executor: address,
+			executorDeploymentRecovery: recovery,
+			expectedChainId: 11_155_111,
+			explorerUrl: 'https://sepolia.etherscan.io',
+			network: 'sepolia',
+			networkConfigured: true,
+			openOracle: settings.deployment.openOracle,
+			queuedWallet: undefined,
+			savedWallet: undefined,
+			wallet: address,
+		})
+	const server = startDashboardServer(0, {
+		getConfiguration: () => ({ configuration: serializeOperatorSettings(settings), revision: 'fixture' }),
+		getSnapshot: snapshot,
+		hostname: '127.0.0.1',
+		isNetworkConfigured: () => true,
+		setPaused: paused => {
+			pauseRequests.push(paused)
+			if (!paused && refusal !== undefined) throw new Error(refusal)
+		},
+		deployExecutor: () => {
+			recovery = undefined
+			refusal = undefined
+			return { address, alreadyDeployed: true, transactionHash }
+		},
+		predictExecutor: () => ({ address, salt: `0x${'00'.repeat(32)}` }),
+		updateConnectivity: value => value,
+		updateSigner: () => ({ wallet: address }),
+		updateStrategy: () => snapshot().settings,
+		updateSubmission: value => validateSubmissionSettings(value),
+	})
+	servers.push(server)
+	const { page, triggerRefresh, window } = await mountDashboard(server, '/overview')
+	const noticeTitle = element(window, 'notice-title', window.HTMLElement)
+	const noticeCopy = element(window, 'notice-copy', window.HTMLElement)
+	const executorRecovery = element(window, 'create2-recovery', window.HTMLElement)
+	for (let attempt = 0; attempt < 100 && noticeTitle.textContent !== 'Executor deployment recovery required'; attempt++) await Bun.sleep(10)
+	expect(noticeTitle.textContent).toBe('Executor deployment recovery required')
+	expect(noticeCopy.textContent).toContain(`Executor deployment ${transactionHash.slice(0, 10)}…${transactionHash.slice(-8)}`)
+	expect(noticeCopy.textContent).toContain('Run Deploy predictable executor under Settings › Venues and executor with the same signer')
+	expect(element(window, 'notice', window.HTMLElement).dataset['tone']).toBe('danger')
+	expect(executorRecovery.hidden).toBe(false)
+	expect(element(window, 'create2-recovery-copy', window.HTMLElement).textContent).toBe(
+		`The executor deployment was signed but its receipt was never confirmed. Deploying again with the same signer confirms or rebroadcasts it; Resume stays blocked until then. Transaction ${transactionHash.slice(0, 8)}…${transactionHash.slice(-6)}`,
+	)
+	const recoveryTransaction = element(window, 'create2-recovery-copy', window.HTMLElement).querySelector('a')
+	expect(recoveryTransaction?.getAttribute('href')).toBe(`https://sepolia.etherscan.io/tx/${transactionHash}`)
+	expect(recoveryTransaction?.getAttribute('title')).toBe(transactionHash)
+	const executorReadiness = () => Array.from(element(window, 'execution-checklist', window.HTMLUListElement).children).find(item => item.querySelector('.readiness-label')?.textContent === 'Executor')
+	for (let attempt = 0; attempt < 100 && executorReadiness() === undefined; attempt++) await Bun.sleep(10)
+	expect(executorReadiness()?.getAttribute('data-ready')).toBe('false')
+	expect(executorReadiness()?.querySelector('strong')?.textContent).toBe('Recover the pending deployment under Venues and executor')
+
+	// The refused resume names the recovery step and stays on the notice across later polls instead of reverting to "Bot paused".
+	const pauseButton = element(window, 'pause-button', window.HTMLButtonElement)
+	expect(pauseButton.disabled).toBe(false)
+	pauseButton.click()
+	for (let attempt = 0; attempt < 100 && noticeTitle.textContent !== 'Unable to change bot state'; attempt++) await Bun.sleep(10)
+	expect(pauseRequests).toEqual([false])
+	const refusalCopy = 'Recover the pending executor deployment before resuming execution. Run Deploy predictable executor under Settings › Venues and executor with the same signer to confirm or rebroadcast it.'
+	expect(noticeTitle.textContent).toBe('Unable to change bot state')
+	expect(noticeCopy.textContent).toBe(refusalCopy)
+	triggerRefresh()
+	await page.waitUntilComplete()
+	await Bun.sleep(20)
+	expect(noticeTitle.textContent).toBe('Unable to change bot state')
+	expect(noticeCopy.textContent).toBe(refusalCopy)
+
+	// Reconciling the deployment from another dashboard client retires the refusal on the next poll; the snapshot notice takes over and every recovery surface clears.
+	recovery = undefined
+	refusal = undefined
+	triggerRefresh()
+	await page.waitUntilComplete()
+	for (let attempt = 0; attempt < 100 && noticeTitle.textContent === 'Unable to change bot state'; attempt++) await Bun.sleep(10)
+	expect(noticeTitle.textContent).toBe('Bot paused')
+	expect(executorRecovery.hidden).toBe(true)
+	expect(executorReadiness()?.querySelector('strong')?.textContent).toBe('Waiting for the first scan')
+
+	// A refusal that lands before the poll reports the journal is kept until a poll has shown the recovery and a later one shows it cleared.
+	refusal = 'Recover the pending executor deployment before resuming execution'
+	pauseButton.click()
+	for (let attempt = 0; attempt < 100 && noticeTitle.textContent !== 'Unable to change bot state'; attempt++) await Bun.sleep(10)
+	expect(pauseRequests).toEqual([false, false])
+	expect(noticeCopy.textContent).toBe(refusalCopy)
+	triggerRefresh()
+	await page.waitUntilComplete()
+	await Bun.sleep(20)
+	expect(noticeTitle.textContent).toBe('Unable to change bot state')
+
+	// Deploying from this page clears that refusal even though no poll ever showed the journal, so a later poll cannot revive it.
+	Reflect.set(window, 'confirm', () => true)
+	element(window, 'create2-form', window.HTMLFormElement).dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }))
+	await page.waitUntilComplete()
+	for (let attempt = 0; attempt < 100 && noticeTitle.textContent === 'Unable to change bot state'; attempt++) await Bun.sleep(10)
+	expect(element(window, 'create2-status', window.HTMLElement).textContent).toBe(`Verified existing executor at ${address}.`)
+	expect(noticeTitle.textContent).toBe('Bot paused')
+	expect(executorRecovery.hidden).toBe(true)
+	triggerRefresh()
+	await page.waitUntilComplete()
+	await Bun.sleep(20)
+	expect(noticeTitle.textContent).toBe('Bot paused')
+
+	pauseButton.click()
+	for (let attempt = 0; attempt < 100 && pauseRequests.length < 3; attempt++) await Bun.sleep(10)
+	await page.waitUntilComplete()
+	expect(pauseRequests).toEqual([false, false, false])
+	expect(noticeTitle.textContent).toBe('Bot paused')
+
+	// Any refusal retires once a poll shows the requested run state applied after all, for example by another client.
+	refusal = 'Configure the chain and RPC endpoints before resuming'
+	pauseButton.click()
+	for (let attempt = 0; attempt < 100 && noticeTitle.textContent !== 'Unable to change bot state'; attempt++) await Bun.sleep(10)
+	expect(noticeCopy.textContent).toBe('Configure the chain and RPC endpoints before resuming')
+	triggerRefresh()
+	await page.waitUntilComplete()
+	await Bun.sleep(20)
+	expect(noticeTitle.textContent).toBe('Unable to change bot state')
+	paused = false
+	triggerRefresh()
+	await page.waitUntilComplete()
+	for (let attempt = 0; attempt < 100 && noticeTitle.textContent === 'Unable to change bot state'; attempt++) await Bun.sleep(10)
+	// The fixture has no completed poll yet, so the snapshot's own readiness notice takes over instead of the refusal.
+	expect(noticeTitle.textContent).toBe('Operator not ready')
+})
 
 test('lists skipped reports beside priced ones with their scan reason and token', async () => {
 	const settings = parseOperatorSettings({ ...example, network: 'sepolia', networkConfigured: true, connectivity: { publicRpcUrls: ['https://rpc.example/'], readRpcUrl: 'https://rpc.example/' } })
@@ -850,7 +993,7 @@ test('go-live checklist unlocks the switch once every prerequisite holds, report
 	expect(checklistReady()).toEqual(['true', 'true', 'true', 'false', 'false', 'true', 'false'])
 	expect(checklistDetail('Executor')).toBe('Deploy it under Venues and executor')
 	expect(checklistDetail('Canonical contracts')).toBe('Missing Uniswap V3 router')
-	expect(checklistDetail('Pool coordinators')).toBe('None discovered · not required to arm')
+	expect(checklistDetail('Pool coordinators')).toBe('None discovered · optional')
 	// The advisory row is announced as optional, not as a missing prerequisite.
 	expect(Array.from(element(window, 'execution-checklist', window.HTMLUListElement).children, item => item.querySelector('.visually-hidden')?.textContent)).toEqual([' ready', ' ready', ' ready', ' missing', ' missing', ' ready', ' optional'])
 	expect(element(window, 'execution-mode-summary', window.HTMLElement).textContent).toBe('Dry run · prerequisites missing')

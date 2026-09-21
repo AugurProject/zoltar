@@ -1,7 +1,17 @@
 import { expect, test } from 'bun:test'
 import { decodeConfiguration, decodeMarketProbe, decodeSigner, decodeSnapshot } from '../../src/dashboard/api-validation.ts'
 
-const configuration = { approvedUniverses: [], childMarketConfigurations: [], centralizedMarkets: {}, desiredPools: [], networkConfigured: false, runtime: { historicalLogRecovery: false, logLookbackBlocks: 256 }, selectedPools: [], strategy: { enabled: true, limit: '1', retries: 3 } }
+const configuration = {
+	approvedUniverses: [],
+	childMarketConfigurations: [],
+	centralizedMarkets: {},
+	desiredPools: [],
+	networkConfigured: false,
+	runtime: { execute: false, historicalLogRecovery: false, logLookbackBlocks: 256 },
+	selectedPools: [],
+	strategy: { enabled: true, limit: '1', retries: 3 },
+	submission: { minimumBundleRelaySuccesses: 1, mode: 'public' as const, relayUrls: [] },
+}
 
 test('accepts unconfigured profiles and validates nested configuration before applying it', () => {
 	expect(decodeConfiguration(configuration)).toEqual(configuration)
@@ -11,7 +21,9 @@ test('accepts unconfigured profiles and validates nested configuration before ap
 		{},
 		{ ...configuration, strategy: { limit: {} } },
 		{ ...configuration, approvedUniverses: [1] },
-		{ ...configuration, runtime: { historicalLogRecovery: 'false', logLookbackBlocks: 256 } },
+		{ ...configuration, runtime: { execute: false, historicalLogRecovery: 'false', logLookbackBlocks: 256 } },
+		{ ...configuration, runtime: { historicalLogRecovery: false, logLookbackBlocks: 256 } },
+		{ ...configuration, submission: { minimumBundleRelaySuccesses: 1, mode: 'bundle', relayUrls: [] } },
 		{ ...configuration, connectivity: { publicRpcUrls: [], quorumRpcUrls: [], readRpcUrl: '', rpcQuorum: 3 } },
 	])
 		expect(() => decodeConfiguration(value)).toThrow('invalid configuration document')

@@ -74,6 +74,7 @@ export function publicOperatorSnapshot(snapshot: OperatorSnapshot): PublicOperat
 		marketConsensus: snapshot.marketConsensus,
 		execute: snapshot.execute,
 		executor: snapshot.executor,
+		executorDeploymentRecovery: snapshot.executorDeploymentRecovery,
 		coordinatorAddresses: snapshot.deployment.coordinatorAddresses,
 		executionHistory: snapshot.executionHistory.map(record => ({
 			actualGasCostEth: record.actualGasCostEth,

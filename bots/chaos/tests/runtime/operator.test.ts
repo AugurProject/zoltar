@@ -6,12 +6,13 @@ import example from '../../config/operator.example.json'
 import { privateKeyToAccount, zeroAddress, zeroHash, type Address } from '@zoltar/bot-shared/ethereum'
 import { EndpointCheckFailure, type EndpointCheck } from '@zoltar/bot-shared/monitoring/connectivity'
 import { parseSettings, serializedSettings, type OperatorSettings } from '../../src/config/settings.ts'
-import { createBotShutdownController, type BotProcessLocks } from '@zoltar/bot-shared/execution/bot-process-locks'
+import { createBotShutdownController } from '@zoltar/bot-shared/execution/bot-process-locks'
 import { OperationRediscoveryRequired } from '../../src/execution/transaction-executor.ts'
 import { IMMUTABLE_TOPOLOGY_CACHE_SCHEMA_VERSION, type CanonicalImmutableTopologyCache } from '../../src/monitoring/topology-cache.ts'
 import { reevaluateOperationContinuation } from '../../src/operations/catalog.ts'
 import { eligibleOperationPlans } from '../support/operation-plans.ts'
 import { executionProfileId, runChaosOperator } from '../../src/runtime/operator.ts'
+import type { ChaosProcessLocks } from '../../src/runtime/dashboard-controller.ts'
 import { backfillWaitMilliseconds, operatorWaitMilliseconds } from '../../src/core/scheduler.ts'
 import { actionableUrgentLifecyclePlan, lifecycleObstructions } from '../../src/runtime/lifecycle-readiness.ts'
 import { blockNovelEvaluations } from '../../src/runtime/obligations.ts'
@@ -20,7 +21,13 @@ import { runtimeTopologySummary } from '../../src/runtime/topology-summary.ts'
 import { evaluatePolicySafeContinuation } from '../../src/runtime/workflow-continuation.ts'
 import { abandonRetryableSelectableFailure, rediscoverableExecutionFailure, repairDurableSelectableFailures } from '../../src/runtime/workflow-repair.ts'
 import { planningOptions } from '../../src/runtime/canonical-scan.ts'
-import { assertSubmissionPreflightFresh, recordEndpointPreflightChecks, submissionPreflightConfigurationIdentity, submissionPreflightIsDue } from '../../src/runtime/submission-preflight.ts'
+import { assertSubmissionPreflightFresh, recordEndpointPreflightChecks, refreshSubmissionReadiness, submissionPreflightConfigurationIdentity, type SubmissionPreflightResources } from '../../src/runtime/submission-preflight.ts'
+
+/** Whether the refresh helper would probe again for this evidence: everything but `current` means it was due. */
+async function submissionPreflightIsDue(checks: readonly EndpointCheck[], settings: OperatorSettings, nowMilliseconds: number) {
+	const resources: SubmissionPreflightResources = { submissionPreflightChecks: checks, submissionPreflightConfigurationIdentity: submissionPreflightConfigurationIdentity(settings) }
+	return (await refreshSubmissionReadiness(resources, settings, { nowMilliseconds, preflight: async () => [] })) !== 'current'
+}
 import { loadDurableState, recordActivity, saveDurableState } from '../../src/state/operator-state.ts'
 import { initialDurableState, initialRuntimeState } from '../../src/state/initial-state.ts'
 import { randomOperationPlans, urgentOperationPlans } from '../../src/runtime/selection.ts'
@@ -39,7 +46,7 @@ afterEach(async () => {
 	)
 })
 
-function processLocks(): BotProcessLocks {
+function processLocks(): ChaosProcessLocks {
 	return {
 		acquireSigner: async () => undefined,
 		commitSigner: async () => undefined,
@@ -382,7 +389,7 @@ describe('chaos operator runtime', () => {
 		expect(storedChecks).toEqual(recoveredChecks)
 	})
 
-	test('periodically refreshes exact live submission endpoint evidence', () => {
+	test('periodically refreshes exact live submission endpoint evidence', async () => {
 		const base = parseSettings(example)
 		const now = Date.parse('2026-08-31T12:00:00.000Z')
 		const publicSettings: OperatorSettings = {
@@ -404,9 +411,9 @@ describe('chaos operator runtime', () => {
 		const secondPublicCheck = publicChecks[1]
 		if (firstPublicCheck === undefined || secondPublicCheck === undefined) throw new Error('Submission preflight fixture requires two public RPC checks')
 
-		expect(submissionPreflightIsDue([], publicSettings, now)).toBeTrue()
-		expect(submissionPreflightIsDue(publicChecks, publicSettings, now)).toBeFalse()
-		expect(submissionPreflightIsDue(publicChecks, publicSettings, now + 1)).toBeTrue()
+		expect(await submissionPreflightIsDue([], publicSettings, now)).toBeTrue()
+		expect(await submissionPreflightIsDue(publicChecks, publicSettings, now)).toBeFalse()
+		expect(await submissionPreflightIsDue(publicChecks, publicSettings, now + 1)).toBeTrue()
 		expect(() => assertSubmissionPreflightFresh(publicChecks, publicSettings, now)).not.toThrow()
 		let staleEvidenceFailure: unknown
 		try {
@@ -419,7 +426,7 @@ describe('chaos operator runtime', () => {
 		expect(staleEvidenceFailure.message).toContain('completed with stale endpoint evidence')
 		expect(staleEvidenceFailure.checks).toBe(publicChecks)
 		const degradedPublicChecks: EndpointCheck[] = [firstPublicCheck, { ...secondPublicCheck, chainId: undefined, checkedAt: new Date(now).toISOString(), error: 'RPC temporarily unavailable', failureDisposition: 'connectivity-degraded', status: 'failed' }]
-		expect(submissionPreflightIsDue(degradedPublicChecks, publicSettings, now)).toBeTrue()
+		expect(await submissionPreflightIsDue(degradedPublicChecks, publicSettings, now)).toBeTrue()
 		expect(assertSubmissionPreflightFresh(degradedPublicChecks, publicSettings, now)).toBe(degradedPublicChecks)
 		expect(() =>
 			assertSubmissionPreflightFresh(
@@ -431,12 +438,12 @@ describe('chaos operator runtime', () => {
 				now,
 			),
 		).toThrow('unsafe endpoint evidence')
-		expect(submissionPreflightIsDue([{ ...firstPublicCheck, error: 'failed', status: 'failed' }, secondPublicCheck], publicSettings, now)).toBeTrue()
-		expect(submissionPreflightIsDue([{ ...firstPublicCheck, chainId: 1 }, secondPublicCheck], publicSettings, now)).toBeTrue()
-		expect(submissionPreflightIsDue([{ ...firstPublicCheck, checkedAt: new Date(now + 1).toISOString() }, secondPublicCheck], publicSettings, now)).toBeTrue()
-		expect(submissionPreflightIsDue([{ ...firstPublicCheck, kind: 'read-rpc' }, secondPublicCheck], publicSettings, now)).toBeTrue()
+		expect(await submissionPreflightIsDue([{ ...firstPublicCheck, error: 'failed', status: 'failed' }, secondPublicCheck], publicSettings, now)).toBeTrue()
+		expect(await submissionPreflightIsDue([{ ...firstPublicCheck, chainId: 1 }, secondPublicCheck], publicSettings, now)).toBeTrue()
+		expect(await submissionPreflightIsDue([{ ...firstPublicCheck, checkedAt: new Date(now + 1).toISOString() }, secondPublicCheck], publicSettings, now)).toBeTrue()
+		expect(await submissionPreflightIsDue([{ ...firstPublicCheck, kind: 'read-rpc' }, secondPublicCheck], publicSettings, now)).toBeTrue()
 		expect(
-			submissionPreflightIsDue(
+			await submissionPreflightIsDue(
 				publicChecks,
 				{
 					...publicSettings,
@@ -466,7 +473,7 @@ describe('chaos operator runtime', () => {
 			{ authenticatedAddress: privateWallet, chainId: privateSettings.network.chainId, checkedAt: new Date(now).toISOString(), error: undefined, kind: 'private-relay', status: 'healthy', target: 'https://relay-two.example' },
 			{ authenticatedAddress: privateWallet, chainId: privateSettings.network.chainId, checkedAt: new Date(now).toISOString(), error: undefined, kind: 'private-relay', status: 'healthy', target: 'https://relay-one.example' },
 		]
-		expect(submissionPreflightIsDue(privateChecks, privateSettings, now)).toBeFalse()
+		expect(await submissionPreflightIsDue(privateChecks, privateSettings, now)).toBeFalse()
 		const privateThresholdSettings: OperatorSettings = {
 			...privateSettings,
 			submission: { ...privateSettings.submission, relayUrls: [...privateSettings.submission.relayUrls, 'https://relay-three.example/path'] },
@@ -477,13 +484,83 @@ describe('chaos operator runtime', () => {
 		]
 		expect(assertSubmissionPreflightFresh(degradedPrivateChecks, privateThresholdSettings, now)).toBe(degradedPrivateChecks)
 		expect(
-			submissionPreflightIsDue(
+			await submissionPreflightIsDue(
 				privateChecks.map(check => ({ ...check, authenticatedAddress: privateKeyToAccount(`0x${'22'.repeat(32)}`).address })),
 				privateSettings,
 				now,
 			),
 		).toBeTrue()
 		expect(submissionPreflightConfigurationIdentity({ ...privateSettings, privateKey: `0x${'22'.repeat(32)}` })).not.toBe(submissionPreflightConfigurationIdentity(privateSettings))
+	})
+
+	test('establishes submission readiness in dry run for both delivery modes and refreshes expired or failed evidence at the refresh cadence', async () => {
+		const base = parseSettings(example)
+		const now = Date.parse('2026-08-31T12:00:00.000Z')
+		const publicSettings: OperatorSettings = {
+			...base,
+			connectivity: { publicRpcUrls: ['https://submit-one.example/path'], quorumRpcUrls: [], readRpcUrl: 'https://read.example/path', rpcQuorum: 1 },
+			networkConfigured: true,
+			runtime: { ...base.runtime, execute: false },
+		}
+		const refresh = Math.max(publicSettings.runtime.lifecyclePollMilliseconds * 2, publicSettings.network.maximumBlockIntervalSeconds * 2_000)
+		const healthyPublic = (at: number): EndpointCheck[] => [{ chainId: publicSettings.network.chainId, checkedAt: new Date(at).toISOString(), error: undefined, kind: 'public-rpc', status: 'healthy', target: 'https://submit-one.example' }]
+		const failedPublic = (at: number): EndpointCheck[] => [{ chainId: undefined, checkedAt: new Date(at).toISOString(), error: 'connection refused', failureDisposition: 'connectivity-degraded', kind: 'public-rpc', status: 'failed', target: 'https://submit-one.example' }]
+		// A configured dry-run restart starts without evidence, which used to leave the go-live checklist unsatisfiable.
+		const resources: SubmissionPreflightResources = { submissionPreflightChecks: [], submissionPreflightConfigurationIdentity: undefined }
+		let probes = 0
+		let probeAt = now
+		let probeFails = false
+		const preflight = async (settings: OperatorSettings) => {
+			probes += 1
+			if (probeFails) throw new EndpointCheckFailure('Submission preflight did not meet its healthy endpoint threshold', failedPublic(probeAt))
+			return assertSubmissionPreflightFresh(healthyPublic(probeAt), settings, probeAt)
+		}
+		expect(await refreshSubmissionReadiness(resources, publicSettings, { nowMilliseconds: now, preflight })).toBe('refreshed')
+		expect(probes).toBe(1)
+		expect(resources.submissionPreflightChecks).toEqual(healthyPublic(now))
+		expect(() => assertSubmissionPreflightFresh(resources.submissionPreflightChecks, publicSettings, now)).not.toThrow()
+		expect(await refreshSubmissionReadiness(resources, publicSettings, { nowMilliseconds: now + refresh - 1, preflight })).toBe('current')
+		expect(probes).toBe(1)
+		// Expired evidence is refreshed again once the refresh interval has passed.
+		probeAt = now + refresh
+		expect(await refreshSubmissionReadiness(resources, publicSettings, { nowMilliseconds: now + refresh, preflight })).toBe('refreshed')
+		expect(probes).toBe(2)
+		expect(resources.submissionPreflightChecks).toEqual(healthyPublic(now + refresh))
+		// A dry-run failure records its evidence, does not fail the scan, and is retried at the refresh cadence.
+		probeFails = true
+		probeAt = now + 2 * refresh
+		expect(await refreshSubmissionReadiness(resources, publicSettings, { nowMilliseconds: now + 2 * refresh, preflight })).toBe('failed')
+		expect(probes).toBe(3)
+		expect(resources.submissionPreflightChecks).toEqual(failedPublic(now + 2 * refresh))
+		expect(await refreshSubmissionReadiness(resources, publicSettings, { nowMilliseconds: now + 2 * refresh + 1_000, preflight })).toBe('deferred')
+		expect(probes).toBe(3)
+		probeFails = false
+		probeAt = now + 3 * refresh
+		expect(await refreshSubmissionReadiness(resources, publicSettings, { nowMilliseconds: now + 3 * refresh, preflight })).toBe('refreshed')
+		expect(probes).toBe(4)
+		// Live mode keeps failing the cycle instead of tolerating a failed refresh.
+		probeFails = true
+		probeAt = now + 4 * refresh
+		await expect(refreshSubmissionReadiness(resources, { ...publicSettings, runtime: { ...publicSettings.runtime, execute: true } }, { nowMilliseconds: now + 4 * refresh, preflight })).rejects.toThrow('healthy endpoint threshold')
+		expect(resources.submissionPreflightChecks).toEqual(failedPublic(now + 4 * refresh))
+
+		// Private relays need the signer's authenticated probe: without a loaded signer the probe is skipped, with one it runs.
+		const privateKey = `0x${'11'.repeat(32)}` as const
+		const privateWallet = privateKeyToAccount(privateKey).address
+		const keyless: OperatorSettings = { ...publicSettings, submission: { minimumBundleRelaySuccesses: 1, mode: 'private', relayUrls: ['https://relay-one.example/path'] } }
+		const privateResources: SubmissionPreflightResources = { submissionPreflightChecks: [], submissionPreflightConfigurationIdentity: undefined }
+		let privateProbes = 0
+		const privatePreflight = async (settings: OperatorSettings) => {
+			privateProbes += 1
+			expect(settings.privateKey).toBe(privateKey)
+			return assertSubmissionPreflightFresh([{ authenticatedAddress: privateWallet, chainId: settings.network.chainId, checkedAt: new Date(now).toISOString(), error: undefined, kind: 'private-relay', status: 'healthy', target: 'https://relay-one.example' }], settings, now)
+		}
+		expect(await refreshSubmissionReadiness(privateResources, keyless, { nowMilliseconds: now, preflight: privatePreflight })).toBe('skipped')
+		expect(privateProbes).toBe(0)
+		expect(await refreshSubmissionReadiness(privateResources, { ...keyless, privateKey }, { nowMilliseconds: now, preflight: privatePreflight })).toBe('refreshed')
+		expect(privateProbes).toBe(1)
+		expect(privateResources.submissionPreflightChecks[0]?.authenticatedAddress).toBe(privateWallet)
+		expect(await refreshSubmissionReadiness(privateResources, { ...keyless, privateKey }, { nowMilliseconds: now + refresh - 1, preflight: privatePreflight })).toBe('current')
 	})
 
 	test('isolates durable state by deployment without coupling it to key persistence or index tuning', () => {

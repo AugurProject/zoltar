@@ -740,7 +740,7 @@ describe('file-only startup configuration', () => {
 			method: 'POST',
 		})
 		expect(deploymentResponse.status).toBe(400)
-		expect(await deploymentResponse.json()).toEqual({ error: 'Executor deployment could not be completed. Review chain state and protected bot logs.' })
+		expect(await deploymentResponse.json()).toEqual({ error: 'Wait for the saved RPC agreement requirement to apply at the next scan boundary before deploying the executor' })
 	})
 
 	test('serves and updates the complete redacted configuration while ignoring operational environment variables', async () => {

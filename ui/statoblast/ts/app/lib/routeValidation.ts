@@ -1,4 +1,5 @@
 import { hasPresentEmptyQueryParam } from '@zoltar/ui-core-shared/navigation/routing.js'
+import { hasInvalidViewQueryParam } from '@zoltar/ui-core-shared/navigation/viewQueryParam.js'
 import { isSupportedSelectedPoolView } from '@zoltar/ui-statoblast-shared/features/security-pools/lib/securityPoolWorkflow.js'
 import type { Route } from '@zoltar/ui-statoblast-shared/types/app.js'
 import type { SecurityPoolsView } from '@zoltar/ui-statoblast-shared/features/types.js'
@@ -8,17 +9,12 @@ const SECURITY_POOLS_VIEWS: readonly SecurityPoolsView[] = ['browse', 'create', 
 const OPEN_ORACLE_VIEWS: readonly OpenOracleView[] = ['browse', 'create', 'selected-report']
 
 export function getInvalidStatoblastRouteState({ activeSecurityPoolsView, openOracleView, resolvedRoute, search, securityPoolsView, selectedPoolView }: { activeSecurityPoolsView: SecurityPoolsView; openOracleView: string; resolvedRoute: Route; search: string; securityPoolsView: string; selectedPoolView: string }) {
-	const searchParams = new URLSearchParams(search)
-	const hasSecurityPoolsViewParam = searchParams.has('securityPoolsView')
-	const hasOpenOracleViewParam = searchParams.has('openOracleView')
-	const hasSelectedPoolViewParam = searchParams.has('selectedPoolView')
-	const hasInvalidSecurityPoolsView = hasPresentEmptyQueryParam(search, 'securityPoolsView') || (securityPoolsView !== '' && !SECURITY_POOLS_VIEWS.includes(securityPoolsView as SecurityPoolsView))
-	const hasInvalidOpenOracleView = hasPresentEmptyQueryParam(search, 'openOracleView') || (openOracleView !== '' && !OPEN_ORACLE_VIEWS.includes(openOracleView as OpenOracleView))
+	const hasSelectedPoolViewParam = new URLSearchParams(search).has('selectedPoolView')
 	const hasInvalidSelectedPoolView =
 		hasPresentEmptyQueryParam(search, 'selectedPoolView') || (hasSelectedPoolViewParam && (!isSupportedSelectedPoolView(selectedPoolView) || (resolvedRoute === 'security-pools' && activeSecurityPoolsView !== 'operate') || (resolvedRoute !== 'security-pools' && resolvedRoute !== 'open-oracle')))
 	return {
-		hasInvalidOpenOracleView: hasInvalidOpenOracleView || (hasOpenOracleViewParam && resolvedRoute !== 'open-oracle'),
-		hasInvalidSecurityPoolsView: hasInvalidSecurityPoolsView || (hasSecurityPoolsViewParam && resolvedRoute !== 'security-pools' && resolvedRoute !== 'open-oracle'),
+		hasInvalidOpenOracleView: hasInvalidViewQueryParam({ allowedRoutes: ['open-oracle'], allowedViews: OPEN_ORACLE_VIEWS, key: 'openOracleView', resolvedRoute, search, value: openOracleView }),
+		hasInvalidSecurityPoolsView: hasInvalidViewQueryParam({ allowedRoutes: ['security-pools', 'open-oracle'], allowedViews: SECURITY_POOLS_VIEWS, key: 'securityPoolsView', resolvedRoute, search, value: securityPoolsView }),
 		hasInvalidSelectedPoolView,
 	}
 }

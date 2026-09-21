@@ -74,6 +74,14 @@ async function assertSafeLockDirectory(path: string, filesystem: ProcessLockFile
 	if ((stats.mode & 0o7777) !== 0o700) throw new Error(`Process-lock directory ${path} has unsafe permissions; expected mode 0700`)
 }
 
+/** Another live process holds the lock; callers that can wait for it distinguish this from filesystem or permission failures. */
+export class ProcessLockHeldError extends Error {
+	constructor(subject: string, owner: string, lockPath: string) {
+		super(`${subject} is already locked (${owner}). Stop the other process before removing ${lockPath}.`)
+		this.name = 'ProcessLockHeldError'
+	}
+}
+
 export async function acquireExclusiveProcessLock(lockPath: string, subject: string, metadata: Record<string, string | number>, filesystem: ProcessLockFilesystem = processLockFilesystem): Promise<ExclusiveProcessLock> {
 	const lockDirectory = dirname(lockPath)
 	await filesystem.mkdir(lockDirectory, { mode: 0o700, recursive: true })
@@ -103,7 +111,7 @@ export async function acquireExclusiveProcessLock(lockPath: string, subject: str
 			void readError
 		}
 		await handle.close()
-		throw new Error(`${subject} is already locked (${owner}). Stop the other process before removing ${lockPath}.`)
+		throw new ProcessLockHeldError(subject, owner, lockPath)
 	}
 	const payload = `${JSON.stringify({ acquiredAt: new Date().toISOString(), ...metadata, pid: process.pid })}\n`
 	try {

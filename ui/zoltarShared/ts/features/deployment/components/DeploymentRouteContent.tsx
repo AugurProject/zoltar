@@ -1,3 +1,4 @@
+import * as appCopy from '@zoltar/ui-core-shared/copy/app.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as deploymentCopy from '../../../copy/deployment.js'
 import type { ComponentChildren } from 'preact'
@@ -47,7 +48,7 @@ export function DeploymentRouteContent({
 	let buttonContent: ComponentChildren = deploymentCopy.deployNextMissing
 	if (deployNextMissingPending) {
 		buttonContent = deploymentCopy.deploying
-	} else if (busyStepId !== undefined) buttonContent = deploymentCopy.deploymentRunningStatusLabel
+	} else if (busyStepId !== undefined) buttonContent = appCopy.deploymentInProgress
 	let nextDeployableContent: ComponentChildren = commonCopy.unavailable
 	if (isLoadingDeploymentStatuses) nextDeployableContent = <LoadingText />
 	else if (deploymentStateReady) nextDeployableContent = nextMissingStep?.label ?? deploymentCopy.allDeployed

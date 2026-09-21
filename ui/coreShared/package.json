@@ -151,10 +151,6 @@
 			"bun": "./ts/tests/app/useTransactionTrayController.test.tsx",
 			"default": "./js/tests/app/useTransactionTrayController.test.js"
 		},
-		"./tests/app/useUrlState.test.js": {
-			"bun": "./ts/tests/app/useUrlState.test.tsx",
-			"default": "./js/tests/app/useUrlState.test.js"
-		},
 		"./tests/approvedAmountValueComponent.test.js": {
 			"bun": "./ts/tests/approvedAmountValueComponent.test.tsx",
 			"default": "./js/tests/approvedAmountValueComponent.test.js"
@@ -326,10 +322,6 @@
 		"./app/hooks/useProtocolOnchainRuntime.js": {
 			"bun": "./ts/app/hooks/useProtocolOnchainRuntime.ts",
 			"default": "./js/app/hooks/useProtocolOnchainRuntime.js"
-		},
-		"./app/hooks/useUrlState.js": {
-			"bun": "./ts/app/hooks/useUrlState.ts",
-			"default": "./js/app/hooks/useUrlState.js"
 		},
 		"./app/lib/appRouteGate.js": {
 			"bun": "./ts/app/lib/appRouteGate.ts",
@@ -870,6 +862,42 @@
 		"./tests/components/entityCard.test.js": {
 			"bun": "./ts/tests/components/entityCard.test.tsx",
 			"default": "./js/tests/components/entityCard.test.js"
+		},
+		"./app/hooks/useUrlSearchState.js": {
+			"bun": "./ts/app/hooks/useUrlSearchState.ts",
+			"default": "./js/app/hooks/useUrlSearchState.js"
+		},
+		"./components/WalletBalanceGroup.js": {
+			"bun": "./ts/components/WalletBalanceGroup.tsx",
+			"default": "./js/components/WalletBalanceGroup.js"
+		},
+		"./lib/contractEnums.js": {
+			"bun": "./ts/lib/contractEnums.ts",
+			"default": "./js/lib/contractEnums.js"
+		},
+		"./lib/rpcStateRetries.js": {
+			"bun": "./ts/lib/rpcStateRetries.ts",
+			"default": "./js/lib/rpcStateRetries.js"
+		},
+		"./lib/universeLabels.js": {
+			"bun": "./ts/lib/universeLabels.ts",
+			"default": "./js/lib/universeLabels.js"
+		},
+		"./navigation/viewQueryParam.js": {
+			"bun": "./ts/navigation/viewQueryParam.ts",
+			"default": "./js/navigation/viewQueryParam.js"
+		},
+		"./tests/contractEnums.test.js": {
+			"bun": "./ts/tests/contractEnums.test.ts",
+			"default": "./js/tests/contractEnums.test.js"
+		},
+		"./tests/rpcStateRetries.test.js": {
+			"bun": "./ts/tests/rpcStateRetries.test.ts",
+			"default": "./js/tests/rpcStateRetries.test.js"
+		},
+		"./tests/viewQueryParam.test.js": {
+			"bun": "./ts/tests/viewQueryParam.test.ts",
+			"default": "./js/tests/viewQueryParam.test.js"
 		}
 	},
 	"version": "1.0.0"

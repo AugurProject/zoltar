@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useReducer, useRef, useState } from 'preact/hooks'
 import { createExclusiveWorkflowGuard } from '@zoltar/ui-core-shared/lib/requestGuard.js'
 import type { Quote } from './liveTradingTypes.js'
-import { idleTransactionWorkflow, transactionPhase, transactionWorkflowReducer } from './transactionWorkflow.js'
+import * as workflowCopy from '../../copy/workflows.js'
+import { idleTransactionWorkflow, transactionPhase, transactionWorkflowError, transactionWorkflowHash, transactionWorkflowReceiptWarning, transactionWorkflowReducer } from './transactionWorkflow.js'
 
 export function useTransactionWorkflow(onWorkflowLockChange: (locked: boolean) => void, defaultSlippage: string, defaultValidityMinutes: string) {
 	const [mode, setMode] = useState<'entry' | 'exit'>('entry')
@@ -12,9 +13,9 @@ export function useTransactionWorkflow(onWorkflowLockChange: (locked: boolean) =
 	const [quote, setQuote] = useState<Quote>()
 	const [workflowState, dispatchWorkflow] = useReducer(transactionWorkflowReducer, idleTransactionWorkflow)
 	const state = transactionPhase(workflowState)
-	const positionHash = workflowState.kind === 'pending' || workflowState.kind === 'confirmed' || workflowState.kind === 'reverted' || workflowState.kind === 'uncertain' ? workflowState.transactionHash : undefined
-	const message = workflowState.kind === 'failed' ? workflowState.message : workflowState.notice
-	const positionReceiptWarning = workflowState.kind === 'uncertain' ? workflowState.reason : undefined
+	const positionHash = transactionWorkflowHash(workflowState)
+	const message = transactionWorkflowError(workflowState, workflowCopy.tradeTransactionReverted)
+	const positionReceiptWarning = transactionWorkflowReceiptWarning(workflowState)
 	const positionWorkflow = useRef(createExclusiveWorkflowGuard()).current
 	const positionWorkflowLockedRef = useRef(false)
 	const liquidityWorkflowLockedRef = useRef(false)

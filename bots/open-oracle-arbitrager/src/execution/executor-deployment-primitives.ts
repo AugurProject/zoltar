@@ -7,6 +7,7 @@ import { submitSignedTransaction, validateSubmissionSettings } from '#execution/
 import { type Address, type Hash, type Hex, keccak256, parseTransaction, recoverTransactionAddress } from '@zoltar/bot-shared/ethereum'
 
 import { deterministicDeploymentProxy } from '#execution/executor-identity'
+import { EXECUTOR_DEPLOYMENT_MESSAGES } from '#state/executor-deployment-recovery'
 export { deterministicDeploymentProxy } from '#execution/executor-identity'
 
 const deterministicDeploymentProxyCode = '0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffe03601600081602082378035828234f58015156039578182fd5b8082525050506014600cf3' as Hex
@@ -51,7 +52,7 @@ export function assertExecutorDeploymentActive(isStopping: (() => boolean) | und
 
 export async function assertExecutorDeploymentIntent(intent: ExecutorDeploymentIntent, account: Address, chainId: number, plan: ExecutorDeploymentPlan) {
 	if (intent.account.toLowerCase() !== account.toLowerCase() || intent.address.toLowerCase() !== plan.address.toLowerCase() || intent.chainId !== chainId || intent.salt.toLowerCase() !== plan.salt.toLowerCase()) {
-		throw new Error('Pending executor deployment intent does not match the active signer, chain, address, and salt')
+		throw new Error(EXECUTOR_DEPLOYMENT_MESSAGES.intentMismatch)
 	}
 	if (keccak256(intent.serializedTransaction).toLowerCase() !== intent.transactionHash.toLowerCase()) throw new Error('Pending executor deployment intent transaction hash does not match its signed bytes')
 	if ((await recoverTransactionAddress({ serializedTransaction: intent.serializedTransaction })).toLowerCase() !== account.toLowerCase()) throw new Error('Pending executor deployment intent signed transaction uses a different account')

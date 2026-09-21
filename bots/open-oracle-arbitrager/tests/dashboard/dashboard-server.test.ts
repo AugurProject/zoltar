@@ -2,7 +2,8 @@ import { emptySettlementSnapshot } from '#state/settlement-store'
 import { afterEach, expect, test } from 'bun:test'
 import type { Address, Hex } from '@zoltar/bot-shared/ethereum'
 import { startDashboardServer } from '#dashboard/dashboard-server'
-import { operatorSnapshot, updateStrategyFromRequest, type MutableStrategy, type OperatorState } from '#state/operator-state'
+import { operatorSnapshot, type MutableStrategy, type OperatorState } from '#state/operator-state'
+import { updateStrategyFromRequest } from '#state/strategy-request'
 import { validateSubmissionSettings } from '#execution/transaction-submission'
 import type { PositionRecord } from '#state/position-store'
 import { EndpointCheckFailure } from '#monitoring/connectivity'
@@ -166,7 +167,8 @@ test('serves dashboard state and protects mutable controls with same-origin JSON
 	expect(pageSource).toContain('id="deployment-fieldset" disabled')
 	expect(pageSource).toContain('id="create2-fieldset" disabled')
 	expect(pageSource).toContain('Deploy predictable executor')
-	expect(pageSource).toContain('id="signer-status" class="muted" role="status" aria-live="polite"')
+	expect(pageSource).toContain('id="signer-summary"')
+	expect(pageSource).toContain('id="signer-status" class="action-status muted" role="status" aria-live="polite"')
 	expect(pageSource).toContain('id="centralized-market-status" class="muted" role="status" aria-live="polite"')
 	expect(pageSource).toContain('id="centralized-market-summary" class="metric-grid"')
 	expect(pageSource).not.toContain('id="centralized-market-summary" class="metric-grid" aria-live')
@@ -177,7 +179,7 @@ test('serves dashboard state and protects mutable controls with same-origin JSON
 	expect(pageSource).toContain('<th>Executable REP / ETH</th>')
 	expect(pageSource).toContain('<th>Reference deviation</th>')
 	expect(pageSource).toContain('aria-describedby="signer-status"')
-	expect(pageSource).toContain('id="remember-signer" type="checkbox"')
+	expect(pageSource).toContain('id="remember-signer" name="rememberSigner" type="checkbox"')
 	expect(pageSource).toContain('id="forget-signer-button"')
 	expect(pageSource).toContain('Save this key in the local operator file')
 	expect(pageSource).toContain('Remove signer &amp; saved key')
@@ -642,6 +644,57 @@ test('returns a structured unavailable response when the initial state read fail
 	expect(await response.json()).toEqual({ error: 'The bot tried to load the latest operator state for the dashboard, but it failed: RPC unavailable. Automatic retry remains active.' })
 })
 
+test('forwards operator-actionable pause and executor deployment refusals and hides everything else', async () => {
+	let pauseFailure: Error | undefined
+	let deploymentFailure: Error | undefined
+	const server = startDashboardServer(0, {
+		getSnapshot: () => {
+			throw new Error('Not needed')
+		},
+		isNetworkConfigured: () => true,
+		setPaused: () => {
+			if (pauseFailure !== undefined) throw pauseFailure
+		},
+		deployExecutor: () => {
+			if (deploymentFailure !== undefined) throw deploymentFailure
+			return { address, alreadyDeployed: true, transactionHash: undefined }
+		},
+		updateConnectivity: () => {
+			throw new Error('Not needed')
+		},
+		updateSigner: () => {
+			throw new Error('Not needed')
+		},
+		updateSubmission: () => {
+			throw new Error('Not needed')
+		},
+		updateStrategy: () => {
+			throw new Error('Not needed')
+		},
+	})
+	servers.push(server)
+	const origin = `http://${server.hostname}:${server.port}`
+	const request = async (pathname: string, method: string, body: unknown) => {
+		const response = await fetch(`${origin}${pathname}`, { body: JSON.stringify(body), headers: { 'content-type': 'application/json', origin }, method })
+		return { body: await response.json(), status: response.status }
+	}
+	pauseFailure = new Error('Recover the pending executor deployment before resuming execution')
+	expect(await request('/api/paused', 'PUT', { paused: false })).toEqual({ body: { error: 'Recover the pending executor deployment before resuming execution' }, status: 400 })
+	pauseFailure = new Error('ENOENT: /var/lib/zoltar/operator.json')
+	expect(await request('/api/paused', 'PUT', { paused: false })).toEqual({ body: { error: 'The bot run state could not be changed. Refresh current state and check protected bot logs.' }, status: 400 })
+	pauseFailure = undefined
+	expect((await request('/api/paused', 'PUT', { paused: false })).status).toBe(200)
+
+	deploymentFailure = new Error('Pending executor deployment intent does not match the active signer, chain, address, and salt')
+	expect(await request('/api/executor-deployment', 'POST', {})).toEqual({ body: { error: 'Pending executor deployment intent does not match the active signer, chain, address, and salt' }, status: 400 })
+	deploymentFailure = new Error('Stored executor deployment transaction has no quorum-visible receipt; recovery remains pending')
+	expect(await request('/api/executor-deployment', 'POST', {})).toEqual({ body: { error: 'Stored executor deployment transaction has no quorum-visible receipt; recovery remains pending' }, status: 400 })
+	deploymentFailure = new Error('https://user:secret@rpc.example/ returned HTTP 502')
+	expect(await request('/api/executor-deployment', 'POST', {})).toEqual({ body: { error: 'Executor deployment could not be completed. Review chain state and protected bot logs.' }, status: 400 })
+	deploymentFailure = undefined
+	expect(await request('/api/executor-deployment', 'POST', {})).toEqual({ body: { address, alreadyDeployed: true }, status: 200 })
+})
+
 test('rejects every chain-specific mutation until network connectivity is configured', async () => {
 	let configured = false
 	let chainSpecificMutations = 0
@@ -755,6 +808,8 @@ test('rejects every chain-specific mutation until network connectivity is config
 	}
 	expect(chainSpecificMutations).toBe(0)
 	expect(pauseMutations).toBe(0)
+	// The resume refusal names the missing chain configuration instead of the generic fallback.
+	expect(await (await request('/api/paused', 'PUT', { paused: false })).json()).toEqual({ error: 'Select and save the chain and RPC endpoints before changing chain-specific settings' })
 	expect((await request('/api/paused', 'PUT', { paused: true })).status).toBe(200)
 	expect(pauseMutations).toBe(1)
 	expect((await request('/api/connectivity')).status).toBe(200)
