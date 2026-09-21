@@ -377,14 +377,16 @@ test('passes every effective public RPC from the dashboard deployment path', asy
 
 async function runDeploymentScenario(options: {
 	alreadyDeployed?: boolean
-	differingRecoveryHeads?: boolean
 	existingIntent?: boolean
 	gasPrices?: Partial<Record<'primary' | 'secondary' | 'tertiary', bigint>>
 	lifecycleEvents?: string[]
 	matchingExistingReceipt?: boolean
 	primaryPreparationFails: boolean
 	primaryReceiptFails: boolean
+	receiptsUnavailable?: boolean
 	storedReceiptMissing?: boolean
+	tertiaryCodeLagsPolls?: number
+	tertiaryReceiptLagsPolls?: number
 }) {
 	const privateKey = `0x${'11'.repeat(32)}` as Hex
 	const account = privateKeyToAccount(privateKey)
@@ -395,42 +397,21 @@ async function runDeploymentScenario(options: {
 	const lifecycleEvents = options.lifecycleEvents ?? []
 	let deployed = options.alreadyDeployed === true
 	let transactionHash = `0x${'00'.repeat(32)}` as Hex
+	let tertiaryReceiptPolls = 0
+	// A lagging tertiary has not imported the inclusion block, so it exposes neither the receipt nor the deployed code until its lag is exhausted.
+	const tertiaryLagging = (name: string) => name === 'tertiary' && tertiaryReceiptPolls < (options.tertiaryReceiptLagsPolls ?? 0)
+	// A tertiary with lagging code serves the receipt while its code backend still answers from before the inclusion block.
+	const tertiaryCodeLagging = (name: string) => name === 'tertiary' && options.tertiaryCodeLagsPolls !== undefined && tertiaryReceiptPolls <= options.tertiaryCodeLagsPolls
 
 	const rpcResponse = (result: unknown) => Response.json({ id: 1, jsonrpc: '2.0', result })
-	const block = (number: bigint) => ({
-		baseFeePerGas: '0x1',
-		difficulty: '0x0',
-		extraData: '0x',
-		gasLimit: '0x1c9c380',
-		gasUsed: '0x5208',
-		hash: number === 100n ? `0x${'aa'.repeat(32)}` : `0x${'bb'.repeat(32)}`,
-		logsBloom: `0x${'00'.repeat(256)}`,
-		miner: `0x${'00'.repeat(20)}`,
-		mixHash: `0x${'00'.repeat(32)}`,
-		nonce: '0x0000000000000000',
-		number: `0x${number.toString(16)}`,
-		parentHash: `0x${'cc'.repeat(32)}`,
-		receiptsRoot: `0x${'dd'.repeat(32)}`,
-		sha3Uncles: `0x${'ee'.repeat(32)}`,
-		size: '0x1',
-		stateRoot: `0x${'ff'.repeat(32)}`,
-		timestamp: '0x1',
-		totalDifficulty: '0x0',
-		transactions: [],
-		transactionsRoot: `0x${'12'.repeat(32)}`,
-		uncles: [],
-	})
 	const handler = (name: 'primary' | 'secondary' | 'tertiary') => async (request: Request) => {
 		const body: unknown = await request.json()
 		if (typeof body !== 'object' || body === null || Array.isArray(body) || !('method' in body) || typeof body.method !== 'string' || !('params' in body) || !Array.isArray(body.params)) {
 			return new Response('invalid request', { status: 400 })
 		}
 		if (body.method === 'eth_chainId') return rpcResponse('0x1')
-		if (body.method === 'eth_blockNumber') {
-			const head = options.differingRecoveryHeads ? { primary: 112n, secondary: 113n, tertiary: 114n }[name] : 112n
-			return rpcResponse(`0x${head.toString(16)}`)
-		}
-		if (body.method === 'eth_getBlockByNumber') return rpcResponse(block(BigInt(String(body.params[0]))))
+		// The mock chain never advances past the inclusion block, so deployment must complete on the receipt alone.
+		if (body.method === 'eth_blockNumber') return rpcResponse('0x64')
 		if (body.method === 'eth_getTransactionCount') return rpcResponse('0x0')
 		if (body.method === 'eth_estimateGas') return rpcResponse('0x300000')
 		if (body.method === 'eth_gasPrice') return name === 'primary' && options.primaryPreparationFails ? new Response('primary preparation unavailable', { status: 503 }) : rpcResponse(`0x${(options.gasPrices?.[name] ?? 1_000_000_000n).toString(16)}`)
@@ -438,7 +419,7 @@ async function runDeploymentScenario(options: {
 			const address = body.params[0]
 			if (typeof address !== 'string') return new Response('invalid address', { status: 400 })
 			if (address.toLowerCase() === deterministicDeploymentProxy.toLowerCase()) return rpcResponse(deterministicDeploymentProxyCode)
-			if (address.toLowerCase() === plan.address.toLowerCase()) return rpcResponse(deployed ? runtimeCode : '0x')
+			if (address.toLowerCase() === plan.address.toLowerCase()) return rpcResponse(deployed && !tertiaryLagging(name) && !tertiaryCodeLagging(name) ? runtimeCode : '0x')
 			return rpcResponse('0x')
 		}
 		if (body.method === 'eth_sendRawTransaction') {
@@ -453,8 +434,11 @@ async function runDeploymentScenario(options: {
 			return rpcResponse(transactionHash)
 		}
 		if (body.method === 'eth_getTransactionReceipt') {
-			if (name === 'primary' && options.primaryReceiptFails) return new Response('primary receipt unavailable', { status: 503 })
+			if (options.receiptsUnavailable || (name === 'primary' && options.primaryReceiptFails)) return new Response(`${name} receipt unavailable`, { status: 503 })
 			if (options.storedReceiptMissing) return rpcResponse(null)
+			const lagging = tertiaryLagging(name)
+			if (name === 'tertiary') tertiaryReceiptPolls += 1
+			if (lagging) return rpcResponse(null)
 			return rpcResponse({
 				blockHash: `0x${'aa'.repeat(32)}`,
 				blockNumber: '0x64',
@@ -513,7 +497,7 @@ async function runDeploymentScenario(options: {
 			salt,
 		})
 		if (existingIntent === undefined) expect(persistedIntent).toBeDefined()
-		return { broadcastRequests, expected: { address: plan.address, alreadyDeployed: false, transactionHash }, lifecycleEvents, result }
+		return { broadcastRequests, expected: { address: plan.address, alreadyDeployed: false, transactionHash }, lifecycleEvents, result, tertiaryReceiptPolls }
 	} finally {
 		primary.stop(true)
 		secondary.stop(true)
@@ -549,8 +533,53 @@ test('confirms through the secondary when the primary fails receipt polling afte
 	expect(broadcastRequests[0]?.transaction).toBe(broadcastRequests[1]?.transaction)
 })
 
-test('recovers only when the stored executor deployment transaction itself is finalized', async () => {
-	const { broadcastRequests, result } = await runDeploymentScenario({ alreadyDeployed: true, differingRecoveryHeads: true, existingIntent: true, matchingExistingReceipt: true, primaryPreparationFails: false, primaryReceiptFails: false })
+test('completes deployment once the receipt is included without waiting for confirmations', async () => {
+	const startedAt = Date.now()
+	const { expected, result } = await runDeploymentScenario({ primaryPreparationFails: false, primaryReceiptFails: false })
+	expect(result).toEqual(expected)
+	expect(Date.now() - startedAt).toBeLessThan(5_000)
+})
+
+async function withRpcQuorum<T>(requirement: '1' | '2', run: () => Promise<T>) {
+	const previous = process.env['ZOLTAR_BOT_RPC_QUORUM']
+	try {
+		process.env['ZOLTAR_BOT_RPC_QUORUM'] = requirement
+		return await run()
+	} finally {
+		if (previous === undefined) delete process.env['ZOLTAR_BOT_RPC_QUORUM']
+		else process.env['ZOLTAR_BOT_RPC_QUORUM'] = previous
+	}
+}
+
+test('keeps polling under quorum 2 while a lagging reader is needed to see the included receipt', async () => {
+	const { expected, result, tertiaryReceiptPolls } = await withRpcQuorum('2', () => runDeploymentScenario({ primaryPreparationFails: false, primaryReceiptFails: true, tertiaryReceiptLagsPolls: 2 }))
+	expect(result).toEqual(expected)
+	expect(tertiaryReceiptPolls).toBeGreaterThanOrEqual(3)
+})
+
+test('ignores a lagging reader that has neither the receipt nor the code once the quorum has both', async () => {
+	const { expected, result, tertiaryReceiptPolls } = await withRpcQuorum('2', () => runDeploymentScenario({ primaryPreparationFails: false, primaryReceiptFails: false, tertiaryReceiptLagsPolls: 2 }))
+	expect(result).toEqual(expected)
+	expect(tertiaryReceiptPolls).toBe(1)
+})
+
+test('keeps polling when a reader serves the success receipt before its code backend imported the block', async () => {
+	const defaultQuorum = await runDeploymentScenario({ primaryPreparationFails: false, primaryReceiptFails: false, tertiaryCodeLagsPolls: 2 })
+	expect(defaultQuorum.result).toEqual(defaultQuorum.expected)
+	const onlySecondaryConsistent = await runDeploymentScenario({ primaryPreparationFails: false, primaryReceiptFails: true, tertiaryCodeLagsPolls: 2 })
+	expect(onlySecondaryConsistent.result).toEqual(onlySecondaryConsistent.expected)
+	expect(onlySecondaryConsistent.tertiaryReceiptPolls).toBe(1)
+	const quorum = await withRpcQuorum('2', () => runDeploymentScenario({ primaryPreparationFails: false, primaryReceiptFails: true, tertiaryCodeLagsPolls: 2 }))
+	expect(quorum.result).toEqual(quorum.expected)
+	expect(quorum.tertiaryReceiptPolls).toBeGreaterThanOrEqual(3)
+})
+
+test('reports every reader failure when no reader can serve the deployment receipt', async () => {
+	await expect(runDeploymentScenario({ primaryPreparationFails: false, primaryReceiptFails: false, receiptsUnavailable: true })).rejects.toThrow(/executor deployment receipt requires at least one available RPC endpoint; .*returned HTTP 503 while calling eth_getTransactionReceipt/)
+})
+
+test('recovers only when the stored executor deployment transaction itself is included', async () => {
+	const { broadcastRequests, result } = await runDeploymentScenario({ alreadyDeployed: true, existingIntent: true, matchingExistingReceipt: true, primaryPreparationFails: false, primaryReceiptFails: false })
 	expect(result.alreadyDeployed).toBe(true)
 	expect(result.transactionHash).toBeDefined()
 	expect(broadcastRequests).toEqual([])

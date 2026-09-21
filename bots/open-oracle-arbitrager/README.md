@@ -340,7 +340,8 @@ configuration as `<operator-config>.<network>.executor-deployment.json`. Each ch
 recovery intent is isolated from the other chain. The command also holds the same
 chain-and-signer process lock as the operator. Repeating the command with the same
 signer, chain, and salt recovers or rebroadcasts those exact bytes after a disconnect
-or crash; the journal is removed only after quorum-backed canonical finality. Set
+or crash; the journal is removed once the read quorum sees the included receipt and the
+verified executor runtime bytecode, without waiting for further confirmations. Set
 `OPEN_ORACLE_ARBITRAGER_CONFIG` when the operator configuration is not at its default
 path; both commands must use the same value.
 
