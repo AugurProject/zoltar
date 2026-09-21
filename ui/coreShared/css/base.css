@@ -738,6 +738,11 @@ button.quiet:disabled {
 	outline-offset: 2px;
 }
 
+.security-pool-link[aria-disabled="true"] {
+	cursor: not-allowed;
+	opacity: 0.55;
+}
+
 .actions {
 	display: flex;
 	flex-wrap: wrap;

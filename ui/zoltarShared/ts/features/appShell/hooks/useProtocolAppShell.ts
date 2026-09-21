@@ -3,7 +3,7 @@ import { useProtocolOnchainRuntime } from '@zoltar/ui-core-shared/app/hooks/useP
 import { getActiveSimulationController } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { useDeploymentFlow } from '../../deployment/hooks/useDeploymentFlow.js'
 import { buildDeploymentRouteContentProps } from '../../deployment/lib/deploymentRoute.js'
-import type { OverviewPanelsProps } from '../../types.js'
+import type { OverviewPanelsProps } from '@zoltar/ui-core-shared/app/components/OverviewPanels.js'
 import { shouldShowDeploymentTab } from '../lib/deploymentTab.js'
 
 type InitializeEnvironmentOptions = { shouldCommit?: () => boolean }
@@ -24,7 +24,7 @@ type UseProtocolAppShellParameters = {
 
 type OverviewWalletProps = Pick<OverviewPanelsProps, 'accountState' | 'isConnectingWallet' | 'isManagingWallet' | 'isRefreshing' | 'onChangeWallet' | 'onConnect' | 'onDisconnectWallet' | 'onSwitchNetwork' | 'readBackendStatus' | 'walletBootstrapComplete'>
 
-/** The application shell every protocol UI shares: environment runtime, deployment flow, merged notices, and the header wallet controls. */
+/** The application shell Zoltar and Statoblast share on the protocol on-chain runtime: environment runtime, deployment flow, merged notices, and the header wallet controls. Trading keeps its own wallet session and composes the shared header panel directly. */
 export function useProtocolAppShell({ deploymentRoute = {}, initializeEnvironment, isDeploymentRoute, onchainStateDependencies, onEnvironmentCommitted, onRefresh }: UseProtocolAppShellParameters) {
 	const runtime = useProtocolOnchainRuntime({
 		enableChainClock: !isDeploymentRoute,

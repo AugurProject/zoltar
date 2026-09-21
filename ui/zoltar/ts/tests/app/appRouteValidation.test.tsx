@@ -35,7 +35,7 @@ describe('Zoltar App route validation', () => {
 		await moduleMocks.mockModule('@zoltar/ui-core-shared/app/components/ProtocolAppFrame.js', () => ({ ProtocolAppFrame: ({ children }: { children: unknown }) => <div>{children}</div> }))
 		await moduleMocks.mockModule('@zoltar/ui-core-shared/app/components/RouteSubNavigation.js', () => ({ RouteSubNavigation: () => <div>subnav</div> }))
 		await moduleMocks.mockModule('../../app/components/AppRouteContent.js', () => ({ AppRouteContent: ({ route: activeRoute }: { route: string }) => <div>{`route:${activeRoute}`}</div> }))
-		await moduleMocks.mockModule('@zoltar/ui-zoltar-shared/features/overview/OverviewPanels.js', () => ({ OverviewPanels: () => <div>overview</div> }))
+		await moduleMocks.mockModule('@zoltar/ui-core-shared/app/components/OverviewPanels.js', () => ({ OverviewPanels: () => <div>overview</div> }))
 		await moduleMocks.mockModule('../../app/hooks/useAppRouteEffects.js', () => ({ useAppRouteEffects: () => undefined }))
 		await moduleMocks.mockModule('@zoltar/ui-zoltar-shared/features/deployment/hooks/useDeploymentFlow.js', () => ({ useDeploymentFlow: () => ({ errorMessage: undefined }) }))
 		await moduleMocks.mockModule('@zoltar/ui-zoltar-shared/features/deployment/lib/deploymentRoute.js', () => ({ buildDeploymentRouteContentProps: () => ({}) }))

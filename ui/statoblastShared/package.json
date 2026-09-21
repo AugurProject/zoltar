@@ -104,10 +104,6 @@
 			"bun": "./ts/features/security-pools/components/SelectedVaultSummarySection.tsx",
 			"default": "./js/features/security-pools/components/SelectedVaultSummarySection.js"
 		},
-		"./features/security-pools/components/UniverseDirectorySection.js": {
-			"bun": "./ts/features/security-pools/components/UniverseDirectorySection.tsx",
-			"default": "./js/features/security-pools/components/UniverseDirectorySection.js"
-		},
 		"./features/security-pools/hooks/useSecurityPoolCreation.js": {
 			"bun": "./ts/features/security-pools/hooks/useSecurityPoolCreation.ts",
 			"default": "./js/features/security-pools/hooks/useSecurityPoolCreation.js"
@@ -503,6 +499,10 @@
 		"./protocol/fundingTransactions.js": {
 			"bun": "./ts/protocol/fundingTransactions.ts",
 			"default": "./js/protocol/fundingTransactions.js"
+		},
+		"./features/security-pools/components/UniversePoolDirectorySection.js": {
+			"bun": "./ts/features/security-pools/components/UniversePoolDirectorySection.tsx",
+			"default": "./js/features/security-pools/components/UniversePoolDirectorySection.js"
 		}
 	},
 	"version": "1.0.0"

@@ -529,7 +529,6 @@ export function TradingSection({
 					onSelectAllOutcomeIndexes={setAllTargetOutcomeIndexes}
 					onToggleOutcomeIndex={toggleTargetOutcomeIndex}
 					selectedOutcomeIndexes={selectedTargetOutcomeIndexes}
-					selectedOutcomeIndexSet={selectedTargetOutcomeIndexSet}
 				/>
 				<TransactionReview
 					primary={[

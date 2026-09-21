@@ -1,6 +1,6 @@
-import { CurrencyValue } from '@zoltar/ui-core-shared/components/CurrencyValue.js'
-import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
-import * as copy from '../../copy/transactionSteps.js'
+import { CurrencyValue } from './CurrencyValue.js'
+import * as commonCopy from '../copy/common.js'
+import * as copy from '../copy/transactionSteps.js'
 
 export function EthAmount({ value }: { value: bigint | undefined }) {
 	const useNanoEth = value !== undefined && value > 0n && value < 10n ** 15n

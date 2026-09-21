@@ -1,11 +1,11 @@
-import { TransactionStepsModal } from './transactions/TransactionStepsModal.js'
+import { TransactionStepsModal } from '@zoltar/ui-core-shared/components/TransactionStepsModal.js'
 import { useState } from 'preact/hooks'
 import { AppHeaderShell } from '@zoltar/ui-core-shared/app/components/AppHeaderShell.js'
 import { AppPageHeading } from '@zoltar/ui-core-shared/app/components/AppPageHeading.js'
 import { AppStatusNotices } from '@zoltar/ui-core-shared/app/components/AppStatusNotices.js'
 import { ProtocolAppFrame } from '@zoltar/ui-core-shared/app/components/ProtocolAppFrame.js'
 import { AppRouteContent } from './components/AppRouteContent.js'
-import { OverviewPanels } from '@zoltar/ui-zoltar-shared/features/overview/OverviewPanels.js'
+import { OverviewPanels } from '@zoltar/ui-core-shared/app/components/OverviewPanels.js'
 import { useAppRouteEffects } from './useAppRouteEffects.js'
 import { useProtocolAppShell } from '@zoltar/ui-zoltar-shared/features/appShell/hooks/useProtocolAppShell.js'
 import { useHashRoute } from '@zoltar/ui-core-shared/app/hooks/useHashRoute.js'
@@ -154,21 +154,22 @@ export function App() {
 	const overviewProps = {
 		...overviewWalletProps,
 		activeUniverseId,
-		isLoadingRepPrices,
-		isRefreshingRepPrices,
 		isLoadingUniverseRepBalance: loadingZoltarForkAccess,
 		onGoToGenesisUniverse: () => setActiveUniverseId(0n),
-		onRefreshRepPrices: refreshRepPrices,
-		parentUniverseId: zoltarUniverse?.parentUniverseId,
-		repPerEthFailure,
-		repPerEthPrice: uiRepPerEthPrice,
-		repPerEthSource: uiUsesOpenOraclePrice ? undefined : repPerEthSource,
-		repPerEthSourceLabel: renderRepPriceSourceLabel(uiRepPerEthSource, uiRepPerEthSourceUrl),
-		repPerEthSourceUrl: uiRepPerEthSourceUrl,
-		repUsdcFailure,
-		repUsdcPrice,
-		repUsdcSource,
-		repUsdcSourceUrl,
+		repPrices: {
+			isLoading: isLoadingRepPrices,
+			isRefreshing: isRefreshingRepPrices,
+			onRefresh: refreshRepPrices,
+			repPerEthFailure,
+			repPerEthPrice: uiRepPerEthPrice,
+			repPerEthSource: uiUsesOpenOraclePrice ? undefined : repPerEthSource,
+			repPerEthSourceLabel: renderRepPriceSourceLabel(uiRepPerEthSource, uiRepPerEthSourceUrl),
+			repPerEthSourceUrl: uiRepPerEthSourceUrl,
+			repUsdcFailure,
+			repUsdcPrice,
+			repUsdcSource,
+			repUsdcSourceUrl,
+		},
 		universeForkTime: zoltarUniverse?.forkTime,
 		universeHasForked: zoltarUniverse?.hasForked,
 		universePresentation: undefined,

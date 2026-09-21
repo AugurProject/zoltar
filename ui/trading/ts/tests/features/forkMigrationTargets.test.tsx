@@ -74,14 +74,14 @@ describe('fork migration target selection', () => {
 		const context = scalarContext()
 		const rendered = await renderIntoDocument(<Harness context={context} />)
 		cleanup = rendered.cleanup
-		const tickInput = inputByLabel(rendered.container, 'Scalar fork tick')
+		const tickInput = inputByLabel(rendered.container, 'Select scalar target')
 
 		for (const tick of ['0', '25', '50', '75', '1 00']) {
 			await input(tickInput, tick)
-			await click(buttonByText(rendered.container, 'Add scalar target'))
+			await click(buttonByText(rendered.container, 'Add target'))
 		}
 		await click(inputByLabel(rendered.container, 'Invalid'))
-		await click(buttonByText(rendered.container, 'Add scalar target'))
+		await click(buttonByText(rendered.container, 'Add target'))
 
 		expect(rendered.container.querySelectorAll('.fork-target-selection button')).toHaveLength(6)
 		expect(rendered.container.textContent).toContain('Invalid')
@@ -94,14 +94,14 @@ describe('fork migration target selection', () => {
 	test('rejects a scalar tick beyond the fork question range instead of silently changing it', async () => {
 		const rendered = await renderIntoDocument(<Harness context={{ ...scalarContext(), numTicks: BigInt(Number.MAX_SAFE_INTEGER) + 1n }} />)
 		cleanup = rendered.cleanup
-		const tickInput = inputByLabel(rendered.container, 'Scalar fork tick')
+		const tickInput = inputByLabel(rendered.container, 'Select scalar target')
 		const outOfRangeTick = (BigInt(Number.MAX_SAFE_INTEGER) + 2n).toString()
 		await input(tickInput, outOfRangeTick)
 		const selectedOutcomeLabel = Array.from(rendered.container.querySelectorAll('.metric-label')).find(label => label.textContent === 'Selected Outcome')
 		const selectedOutcomeValue = selectedOutcomeLabel?.parentElement?.querySelector('.metric-field-value')
 
 		expect(tickInput.value).toBe(outOfRangeTick)
-		expect(buttonByText(rendered.container, 'Add scalar target').disabled).toBeTrue()
+		expect(buttonByText(rendered.container, 'Add target').disabled).toBeTrue()
 		expect(rendered.container.textContent).toContain('Enter an exact tick')
 		expect(selectedOutcomeValue?.textContent).toBe('Enter an exact tick')
 		await act(() => tickInput.dispatchEvent(new Event('blur', { bubbles: true })))
@@ -156,6 +156,6 @@ describe('fork migration target selection', () => {
 		cleanup = rendered.cleanup
 
 		expect(rendered.container.querySelector('.market-scalar-deploy')).not.toBeNull()
-		expect(inputByLabel(rendered.container, 'Scalar fork tick').getAttribute('type')).toBe('range')
+		expect(inputByLabel(rendered.container, 'Select scalar target').getAttribute('type')).toBe('range')
 	})
 })

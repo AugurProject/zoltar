@@ -1,28 +1,71 @@
-import { WalletConnectionControl, WalletNetworkControl } from '@zoltar/ui-core-shared/components/WalletConnectionControl.js'
-import { MainnetDisabledNotice } from '@zoltar/ui-core-shared/app/components/MainnetDisabledNotice.js'
-import * as appCopy from '@zoltar/ui-core-shared/copy/app.js'
-import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
-import { useState } from 'preact/hooks'
-import { HeaderToolbar } from '@zoltar/ui-core-shared/components/HeaderToolbar.js'
-import { AddressValue } from '@zoltar/ui-core-shared/components/AddressValue.js'
-import { Badge } from '@zoltar/ui-core-shared/components/Badge.js'
-import { CurrencyValue } from '@zoltar/ui-core-shared/components/CurrencyValue.js'
-import { EnvironmentDetailsToggle, HeaderMetricGroup, HeaderMetricStrip } from '@zoltar/ui-core-shared/components/HeaderMetricStrip.js'
-import { WalletBalanceGroup } from '@zoltar/ui-core-shared/components/WalletBalanceGroup.js'
-import { MetricField } from '@zoltar/ui-core-shared/components/MetricField.js'
-import { StateHint } from '@zoltar/ui-core-shared/components/StateHint.js'
-import { ToolbarField } from '@zoltar/ui-core-shared/components/ToolbarField.js'
-import { WalletChip, WalletChipLabel } from '@zoltar/ui-core-shared/components/WalletChip.js'
-import { TimestampValue } from '@zoltar/ui-core-shared/components/TimestampValue.js'
-import { WarningSurface } from '@zoltar/ui-core-shared/components/WarningSurface.js'
-import { getChainDisplayLabel, getChainIdDecimalLabel, getKnownChainName, isActiveAppChain } from '@zoltar/ui-core-shared/wallet/network.js'
-import { renderRepPriceSourceLabel } from '@zoltar/ui-core-shared/lib/repPriceSource.js'
-import type { OverviewPanelsProps, RepPriceFailure } from '../types.js'
-import { getActiveNetworkProfile } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
-import { getNetworkSwitchTarget } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
-import { abbreviateAddress } from '@zoltar/ui-core-shared/lib/address.js'
-import { formatUniverseDisplayLabel, formatUniverseLabel } from '@zoltar/ui-core-shared/lib/universeLabels.js'
-import type { UserMessagePresentation } from '@zoltar/ui-core-shared/lib/userCopy.js'
+import type { ComponentChildren } from 'preact'
+import { WalletConnectionControl, WalletNetworkControl } from '../../components/WalletConnectionControl.js'
+import * as appCopy from '../../copy/app.js'
+import * as commonCopy from '../../copy/common.js'
+import { AddressValue } from '../../components/AddressValue.js'
+import { Badge } from '../../components/Badge.js'
+import { CurrencyValue } from '../../components/CurrencyValue.js'
+import { HeaderMetricGroup } from '../../components/HeaderMetricStrip.js'
+import { WalletBalanceGroup } from '../../components/WalletBalanceGroup.js'
+import { MetricField } from '../../components/MetricField.js'
+import { StateHint } from '../../components/StateHint.js'
+import { ToolbarField } from '../../components/ToolbarField.js'
+import { WalletChip, WalletChipLabel } from '../../components/WalletChip.js'
+import { TimestampValue } from '../../components/TimestampValue.js'
+import { WarningSurface } from '../../components/WarningSurface.js'
+import { getChainDisplayLabel, getChainIdDecimalLabel, getKnownChainName, isActiveAppChain } from '../../wallet/network.js'
+import { renderRepPriceSourceLabel } from '../../lib/repPriceSource.js'
+import type { AccountState } from '../../types/app.js'
+import type { ReadBackendStatus } from '../../wallet/chainBackend.js'
+import { getActiveNetworkProfile } from '../../lib/activeEnvironment.js'
+import { getNetworkSwitchTarget } from '../../wallet/networkProfile.js'
+import { abbreviateAddress } from '../../lib/address.js'
+import { formatUniverseDisplayLabel, formatUniverseLabel } from '../../lib/universeLabels.js'
+import type { UserMessagePresentation } from '../../lib/userCopy.js'
+import { OverviewHeaderPanel } from './OverviewHeaderPanel.js'
+
+export type RepPriceFailure = 'no-liquidity' | 'rpc-error'
+
+type RepPriceSource = 'v4' | 'v3' | 'mock'
+
+/** The REP price group of the header strip; applications without price quotes omit it. */
+export type OverviewRepPricesProps = {
+	isLoading: boolean
+	isRefreshing: boolean
+	onRefresh: () => void
+	repPerEthFailure: RepPriceFailure | undefined
+	repPerEthPrice: bigint | undefined
+	repPerEthSource: RepPriceSource | undefined
+	repPerEthSourceLabel?: ComponentChildren
+	repPerEthSourceUrl: string | undefined
+	repUsdcFailure: RepPriceFailure | undefined
+	repUsdcPrice: bigint | undefined
+	repUsdcSource: RepPriceSource | undefined
+	repUsdcSourceUrl: string | undefined
+}
+
+export type OverviewPanelsProps = {
+	settingsMenu?: ComponentChildren
+	applicationTitle: string
+	activeUniverseId: bigint
+	accountState: AccountState
+	isConnectingWallet: boolean
+	isManagingWallet: boolean
+	walletBootstrapComplete: boolean
+	universeRepBalanceAttoRep: bigint | undefined
+	isLoadingUniverseRepBalance: boolean
+	universeForkTime?: bigint | undefined
+	universeHasForked?: boolean | undefined
+	universePresentation: UserMessagePresentation | undefined
+	isRefreshing: boolean
+	onConnect: () => void
+	onChangeWallet: () => void
+	onDisconnectWallet: () => void
+	onGoToGenesisUniverse: () => void
+	onSwitchNetwork: () => void
+	readBackendStatus?: ReadBackendStatus
+	repPrices?: OverviewRepPricesProps | undefined
+}
 
 function omitPresentationActionHint(presentation: UserMessagePresentation) {
 	const { actionHint, ...presentationWithoutActionHint } = presentation
@@ -50,6 +93,47 @@ function renderRepPriceFailure(failure: RepPriceFailure | undefined) {
 	)
 }
 
+function RepPriceGroup({ isLoading, isRefreshing, onRefresh, repPerEthFailure, repPerEthPrice, repPerEthSource, repPerEthSourceLabel, repPerEthSourceUrl, repUsdcFailure, repUsdcPrice, repUsdcSource, repUsdcSourceUrl }: OverviewRepPricesProps) {
+	const activeNetworkProfile = getActiveNetworkProfile()
+	const isRepPricingUnavailable = activeNetworkProfile.repPricingMode === 'unavailable'
+	const repPricingUnavailableLabel = appCopy.formatRepPricingUnavailable(activeNetworkProfile.displayName)
+	return (
+		<HeaderMetricGroup
+			label={commonCopy.prices}
+			secondary
+			action={
+				isRepPricingUnavailable ? undefined : (
+					<button type='button' className='quiet metric-label-refresh' onClick={onRefresh} disabled={isRefreshing} aria-label={appCopy.refreshRepPrices} title={isRefreshing ? appCopy.refreshingRepPrices : appCopy.refreshRepPrices}>
+						↻
+					</button>
+				)
+			}
+		>
+			<MetricField
+				className='overview-metric-secondary'
+				label={
+					<>
+						{appCopy.repPerEthCompact} {repPerEthSourceLabel ?? renderRepPriceSourceLabel(repPerEthSource, repPerEthSourceUrl)}
+					</>
+				}
+			>
+				{isRepPricingUnavailable ? repPricingUnavailableLabel : (renderRepPriceFailure(repPerEthPrice === undefined && !isLoading ? repPerEthFailure : undefined) ?? <CurrencyValue value={repPerEthPrice} loading={isLoading} copyable={false} compactWhenOverflow />)}
+			</MetricField>
+			<MetricField
+				className='overview-metric-secondary'
+				label={
+					<>
+						{appCopy.repUsdc} {renderRepPriceSourceLabel(repUsdcSource, repUsdcSourceUrl)}
+					</>
+				}
+			>
+				{isRepPricingUnavailable ? repPricingUnavailableLabel : (renderRepPriceFailure(repUsdcPrice === undefined && !isLoading ? repUsdcFailure : undefined) ?? <CurrencyValue value={repUsdcPrice} loading={isLoading} suffix={appCopy.usdc} units={6} compactWhenOverflow />)}
+			</MetricField>
+		</HeaderMetricGroup>
+	)
+}
+
+/** The protocol application header: wallet session, active universe, balances, optional REP prices, and universe state. */
 export function OverviewPanels({
 	settingsMenu,
 	applicationTitle,
@@ -57,26 +141,14 @@ export function OverviewPanels({
 	accountState,
 	isConnectingWallet,
 	isManagingWallet,
-	isLoadingRepPrices,
-	isRefreshingRepPrices,
 	isLoadingUniverseRepBalance,
 	onConnect,
 	onChangeWallet,
 	onDisconnectWallet,
 	onGoToGenesisUniverse,
-	onRefreshRepPrices,
 	onSwitchNetwork,
 	readBackendStatus,
-	showRepPrices = true,
-	repPerEthFailure,
-	repPerEthPrice,
-	repPerEthSource,
-	repPerEthSourceLabel,
-	repPerEthSourceUrl,
-	repUsdcFailure,
-	repUsdcPrice,
-	repUsdcSource,
-	repUsdcSourceUrl,
+	repPrices,
 	universeForkTime,
 	universeHasForked,
 	universePresentation,
@@ -84,7 +156,6 @@ export function OverviewPanels({
 	isRefreshing,
 	walletBootstrapComplete,
 }: OverviewPanelsProps) {
-	const [showEnvironmentDetails, setShowEnvironmentDetails] = useState(false)
 	const effectiveReadBackendStatus = readBackendStatus ?? {
 		blockNumber: undefined,
 		blockTimestamp: undefined,
@@ -96,8 +167,6 @@ export function OverviewPanels({
 	const isWalletAddressLoading = isConnectingWallet || isWalletBootstrapLoading
 	const isBrowserSimulationReadBackend = effectiveReadBackendStatus.rpcUrl === 'browser-simulation'
 	const activeNetworkProfile = getActiveNetworkProfile()
-	const isRepPricingUnavailable = activeNetworkProfile.repPricingMode === 'unavailable'
-	const repPricingUnavailableLabel = appCopy.formatRepPricingUnavailable(activeNetworkProfile.displayName)
 	const walletOnActiveNetwork = isActiveAppChain(accountState.chainId)
 	const hasWrongWalletNetwork = accountState.address !== undefined && !walletOnActiveNetwork
 	const showAccountBalances = walletBootstrapComplete && accountState.address !== undefined && !hasWrongWalletNetwork
@@ -140,36 +209,29 @@ export function OverviewPanels({
 		)
 	})()
 	return (
-		<section className='overview-shell'>
-			<article className={`overview-panel overview-wallet-panel${isBrowserSimulationReadBackend ? ' is-simulation' : ''}`}>
-				<HeaderToolbar
-					brand={
-						<>
-							<img src='./favicon.svg' alt='' width='28' height='28' />
-							{applicationTitle}
-						</>
-					}
-					badges={
-						activeNetworkBadge === undefined && environmentBadge === undefined && wrongNetworkBadge === undefined ? undefined : (
-							<>
-								{activeNetworkBadge}
-								{environmentBadge}
-								{wrongNetworkBadge}
-							</>
-						)
-					}
-					controls={
-						<>
-							{walletControl}
-							<ToolbarField label={commonCopy.universe}>
-								<span title={formatUniverseLabel(activeUniverseId)}>{formatUniverseDisplayLabel(activeUniverseId)}</span>
-							</ToolbarField>
-						</>
-					}
-					settings={settingsMenu}
-				/>
-				<MainnetDisabledNotice />
-				{universeHasForked ? (
+		<OverviewHeaderPanel
+			applicationTitle={applicationTitle}
+			simulation={isBrowserSimulationReadBackend}
+			settingsMenu={settingsMenu}
+			badges={
+				activeNetworkBadge === undefined && environmentBadge === undefined && wrongNetworkBadge === undefined ? undefined : (
+					<>
+						{activeNetworkBadge}
+						{environmentBadge}
+						{wrongNetworkBadge}
+					</>
+				)
+			}
+			controls={
+				<>
+					{walletControl}
+					<ToolbarField label={commonCopy.universe}>
+						<span title={formatUniverseLabel(activeUniverseId)}>{formatUniverseDisplayLabel(activeUniverseId)}</span>
+					</ToolbarField>
+				</>
+			}
+			notices={
+				universeHasForked ? (
 					<WarningSurface role='alert' surface='flat' variant='prominent' className='universe-fork-notice'>
 						<strong className='notice-title'>
 							{appCopy.universeForkNoticeLead}
@@ -182,8 +244,10 @@ export function OverviewPanels({
 						</strong>
 						<p>{appCopy.migrateRepToContinueUsingAugur}</p>
 					</WarningSurface>
-				) : undefined}
-				<HeaderMetricStrip expanded={showEnvironmentDetails}>
+				) : undefined
+			}
+			metrics={
+				<>
 					<WalletBalanceGroup
 						balances={[
 							{ asset: commonCopy.eth, loading: isWalletAddressLoading || (showAccountBalances && isRefreshing && accountState.ethBalanceAttoEth === undefined), value: showAccountBalances ? accountState.ethBalanceAttoEth : undefined },
@@ -191,43 +255,11 @@ export function OverviewPanels({
 							{ asset: commonCopy.rep, loading: isWalletAddressLoading || (showAccountBalances && isLoadingUniverseRepBalance), value: showAccountBalances ? universeRepBalanceAttoRep : undefined },
 						]}
 					/>
-					{showRepPrices ? (
-						<HeaderMetricGroup
-							label={commonCopy.prices}
-							secondary
-							action={
-								isRepPricingUnavailable ? undefined : (
-									<button type='button' className='quiet metric-label-refresh' onClick={onRefreshRepPrices} disabled={isRefreshingRepPrices} aria-label={appCopy.refreshRepPrices} title={isRefreshingRepPrices ? appCopy.refreshingRepPrices : appCopy.refreshRepPrices}>
-										↻
-									</button>
-								)
-							}
-						>
-							<MetricField
-								className='overview-metric-secondary'
-								label={
-									<>
-										{appCopy.repPerEthCompact} {repPerEthSourceLabel ?? renderRepPriceSourceLabel(repPerEthSource, repPerEthSourceUrl)}
-									</>
-								}
-							>
-								{isRepPricingUnavailable ? repPricingUnavailableLabel : (renderRepPriceFailure(repPerEthPrice === undefined && !isLoadingRepPrices ? repPerEthFailure : undefined) ?? <CurrencyValue value={repPerEthPrice} loading={isLoadingRepPrices} copyable={false} compactWhenOverflow />)}
-							</MetricField>
-							<MetricField
-								className='overview-metric-secondary'
-								label={
-									<>
-										{appCopy.repUsdc} {renderRepPriceSourceLabel(repUsdcSource, repUsdcSourceUrl)}
-									</>
-								}
-							>
-								{isRepPricingUnavailable ? repPricingUnavailableLabel : (renderRepPriceFailure(repUsdcPrice === undefined && !isLoadingRepPrices ? repUsdcFailure : undefined) ?? <CurrencyValue value={repUsdcPrice} loading={isLoadingRepPrices} suffix={appCopy.usdc} units={6} compactWhenOverflow />)}
-							</MetricField>
-						</HeaderMetricGroup>
-					) : undefined}
-				</HeaderMetricStrip>
-				<EnvironmentDetailsToggle expanded={showEnvironmentDetails} onToggle={() => setShowEnvironmentDetails(current => !current)} />
-				{universePresentation === undefined ? undefined : (
+					{repPrices === undefined ? undefined : <RepPriceGroup {...repPrices} />}
+				</>
+			}
+			footer={
+				universePresentation === undefined ? undefined : (
 					<StateHint
 						className='overview-universe-state'
 						presentation={omitPresentationActionHint(universePresentation)}
@@ -238,8 +270,8 @@ export function OverviewPanels({
 							</button>
 						}
 					/>
-				)}
-			</article>
-		</section>
+				)
+			}
+		/>
 	)
 }

@@ -11,10 +11,10 @@ import { TransactionActionButtonLockProvider } from '@zoltar/ui-core-shared/comp
 import { tryParseDecimalInput } from '@zoltar/ui-core-shared/forms/decimal.js'
 import type { RequestPriceModalProps } from '@zoltar/ui-statoblast-shared/features/security-pools/components/SecurityPoolOracleSections.js'
 import * as poolCopy from '@zoltar/ui-statoblast-shared/copy/securityPool.js'
-import * as copy from '../../copy/transactionSteps.js'
-import { embeddedTransactionSteps, TransactionStepsContent } from './TransactionStepsModal.js'
+import * as copy from '@zoltar/ui-core-shared/copy/transactionSteps.js'
+import { embeddedTransactionSteps, TransactionStepsContent } from '@zoltar/ui-core-shared/components/TransactionStepsModal.js'
 import { PriceRequestPreview } from './PriceRequestPreview.js'
-import { transactionSteps } from './transactionSteps.js'
+import { transactionSteps } from '@zoltar/ui-core-shared/transactions/transactionSteps.js'
 
 async function fetchUniswapPrice(review: NonNullable<RequestPriceModalProps['review']>) {
 	return await getCoordinatorInitialReportPrice(createConnectedReadClient(), review.managerAddress)

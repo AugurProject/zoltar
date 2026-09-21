@@ -5,6 +5,9 @@ import type { ChainBackend } from '@zoltar/ui-core-shared/wallet/chainBackend.js
 import { resolveConfiguredRpcUrl } from '@zoltar/ui-core-shared/wallet/rpcConfig.js'
 import { useEffect, useRef, useState } from 'preact/hooks'
 import { Badge } from '@zoltar/ui-core-shared/components/Badge.js'
+import { DeploymentStepList } from '@zoltar/ui-core-shared/components/DeploymentStepList.js'
+import { TransactionActionButton } from '@zoltar/ui-core-shared/components/TransactionActionButton.js'
+import type { ActionAvailability } from '@zoltar/ui-core-shared/types/components.js'
 import { DataGrid } from '@zoltar/ui-core-shared/components/DataGrid.js'
 import { MetricField } from '@zoltar/ui-core-shared/components/MetricField.js'
 import { ReadOnlyAddressValue } from '@zoltar/ui-core-shared/components/AddressValue.js'
@@ -91,6 +94,28 @@ function deploymentActionLabel(busy: boolean, nextStep: ReturnType<typeof nextTr
 	if (plan !== undefined && status !== undefined && isTradingDeploymentComplete(plan, status)) return appCopy.deploymentComplete
 	if (nextStep === undefined) return deploymentCopy.deployTradingContracts
 	return coreAppCopy.formatDeployContract(nextStep.label)
+}
+
+/** Why the deploy action is unavailable, so the disabled control explains itself instead of silently ignoring clicks. */
+function deploymentActionAvailability({
+	inspectionIsCurrent,
+	inspectionState,
+	nextStep,
+	registryError,
+	registryLoading,
+	selectedCoreChainName,
+	walletConnected,
+	walletReady,
+}: Readonly<{ inspectionIsCurrent: boolean; inspectionState: 'blocked' | 'idle' | 'loading' | 'ready' | 'error'; nextStep: boolean; registryError: boolean; registryLoading: boolean; selectedCoreChainName: string | undefined; walletConnected: boolean; walletReady: boolean }>): ActionAvailability {
+	if (registryLoading) return { disabled: true, loading: true, reason: deploymentCopy.loadingNetworks }
+	if (registryError) return { disabled: true, reason: deploymentCopy.networksUnavailable }
+	if (!inspectionIsCurrent || inspectionState === 'loading' || inspectionState === 'idle') return { disabled: true, loading: true, reason: deploymentCopy.checkingNetwork }
+	if (inspectionState === 'blocked') return { disabled: true, reason: appCopy.securityPoolFactoryNotDeployed }
+	if (inspectionState === 'error') return { disabled: true, reason: deploymentCopy.configurationUnavailable }
+	if (!nextStep) return { disabled: true, reason: appCopy.deploymentComplete }
+	if (!walletConnected) return { disabled: true, reason: commonCopy.walletConnectionRequired }
+	if (!walletReady) return { disabled: true, reason: selectedCoreChainName === undefined ? deploymentCopy.configurationUnavailable : deploymentCopy.walletMustUseNetwork(selectedCoreChainName) }
+	return { disabled: false, reason: undefined }
 }
 
 function contractStatusPresentation(deployed: boolean | undefined, isNext: boolean) {
@@ -381,7 +406,7 @@ export function TradingDeploymentSetup({
 	if (retryChecks)
 		retryAction = (
 			<button
-				class='secondary'
+				className='secondary'
 				type='button'
 				disabled={busy || registryLoading || inspectionState === 'loading'}
 				onClick={() => {
@@ -442,7 +467,7 @@ export function TradingDeploymentSetup({
 		}
 	}
 	return (
-		<div class='route-view-flow'>
+		<div className='route-view-flow'>
 			<RouteHeader title={appCopy.deploy} description={appCopy.deployRouteDescription} actions={standaloneWalletButton} />
 			<SectionBlock className='deployment-setup' title={deploymentCopy.tradingContracts}>
 				<ErrorNotice message={registryError} />
@@ -454,20 +479,8 @@ export function TradingDeploymentSetup({
 						</MetricField>
 					</DataGrid>
 				)}
-				{plan === undefined ? null : (
-					<ul class='deployment-setup__steps'>
-						{deploymentSteps.map(({ step, presentation }) => (
-							<li class='deployment-step' key={step.id}>
-								<Badge tone={presentation.tone}>{presentation.label}</Badge>
-								<div class='deployment-step__details'>
-									<strong>{step.label}</strong>
-									<ReadOnlyAddressValue address={step.address} responsiveAbbreviation />
-								</div>
-							</li>
-						))}
-					</ul>
-				)}
-				<div class='deployment-setup__status' role='status' aria-live='polite'>
+				{plan === undefined ? null : <DeploymentStepList steps={deploymentSteps.map(({ step, presentation }) => ({ address: step.address, badge: presentation, key: step.id, label: step.label }))} />}
+				<div className='deployment-setup__status' role='status' aria-live='polite'>
 					<MetricField label={deploymentCopy.deploymentProgress}>{deploymentProgress(deploymentStatus, 2)}</MetricField>
 					{inspection === undefined ? null : <Badge tone={inspection.tone}>{inspection.label}</Badge>}
 				</div>
@@ -475,16 +488,20 @@ export function TradingDeploymentSetup({
 				<ErrorNotice message={walletConnectionMessage} />
 				<ErrorNotice message={inspectionError} />
 				{actionMessage === undefined || actionError ? null : (
-					<p class='detail' role='status'>
+					<p className='detail' role='status'>
 						{actionMessage}
 					</p>
 				)}
 				<ErrorNotice message={actionError ? actionMessage : undefined} />
-				<div class='actions'>
+				<div className='actions'>
 					{deploymentComplete ? null : (
-						<button class='primary' type='button' disabled={busy || registryLoading || registryError !== undefined || !inspectionIsCurrent || inspectionState !== 'ready' || nextStep === undefined || !walletReady} aria-busy={busy} onClick={() => void deployNext()}>
-							{deploymentActionLabel(busy, nextStep, plan, deploymentStatus)}
-						</button>
+						<TransactionActionButton
+							availability={deploymentActionAvailability({ inspectionIsCurrent, inspectionState, nextStep: nextStep !== undefined, registryError: registryError !== undefined, registryLoading, selectedCoreChainName: selectedCore?.chainName, walletConnected, walletReady })}
+							idleLabel={deploymentActionLabel(false, nextStep, plan, deploymentStatus)}
+							pendingLabel={deploymentActionLabel(true, nextStep, plan, deploymentStatus)}
+							pending={busy}
+							onClick={() => void deployNext()}
+						/>
 					)}
 					{retryAction}
 				</div>

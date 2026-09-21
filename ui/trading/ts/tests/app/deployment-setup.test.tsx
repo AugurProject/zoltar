@@ -527,7 +527,7 @@ describe('trading deployment setup', () => {
 		})
 		await waitForText('RPC unavailable')
 		expect(rendered.container.textContent).toContain('RPC unavailable')
-		expect(Array.from(rendered.container.querySelectorAll('.deployment-step .badge')).map(status => status.textContent?.trim())).toEqual(['Checking', 'Checking'])
+		expect(Array.from(rendered.container.querySelectorAll('.contract-row .badge')).map(status => status.textContent?.trim())).toEqual(['Checking', 'Checking'])
 		const retry = Array.from(rendered.container.querySelectorAll('button')).find(button => button.textContent?.trim() === 'Retry checks')
 		if (!(retry instanceof HTMLButtonElement)) throw new Error('Retry checks button is unavailable')
 		rpcAvailable = true
@@ -595,7 +595,7 @@ describe('trading deployment setup', () => {
 		await waitForText('Deploy Trading factory')
 		await connectDeploymentWallet(rendered.container)
 		await waitForConnectedWallet(rendered.container)
-		expect(rendered.container.querySelector('.trading-overview .badge')?.textContent).toContain(core.chainName)
+		expect(rendered.container.querySelector('.overview-wallet-panel .badge')?.textContent).toContain(core.chainName)
 		expect(rendered.container.querySelector('.trading-wallet-actions .wallet-button')?.textContent).toContain(testWalletAccount)
 		for (let attempt = 0; attempt < 30; attempt++) {
 			if (rendered.container.querySelector('.trading-wallet-actions .wallet-button')?.getAttribute('aria-label') === `Disconnect wallet ${testWalletAccount}`) break

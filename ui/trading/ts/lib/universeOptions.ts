@@ -1,6 +1,5 @@
 import { formatUniverseDisplayLabel, formatUniverseLabel } from '@zoltar/ui-core-shared/lib/universeLabels.js'
-
-export type UniverseOption = Readonly<{ id: string; label: string; accessibleLabel?: string }>
+import type { UniverseOption } from '@zoltar/ui-core-shared/components/UniverseSelector.js'
 
 /** Uses the shared compact label, but never lets two selector options read the same: colliding entries fall back to their full label. */
 export function buildLiveUniverseOptions(universeIds: readonly bigint[]): readonly UniverseOption[] {

@@ -8,7 +8,7 @@ import { AppPageHeading } from '@zoltar/ui-core-shared/app/components/AppPageHea
 import { AppStatusNotices } from '@zoltar/ui-core-shared/app/components/AppStatusNotices.js'
 import { ProtocolAppFrame } from '@zoltar/ui-core-shared/app/components/ProtocolAppFrame.js'
 import { AppRouteContent } from './components/AppRouteContent.js'
-import { OverviewPanels } from '@zoltar/ui-zoltar-shared/features/overview/OverviewPanels.js'
+import { OverviewPanels } from '@zoltar/ui-core-shared/app/components/OverviewPanels.js'
 import { useAppRouteEffects } from './hooks/useAppRouteEffects.js'
 import { useProtocolAppShell } from '@zoltar/ui-zoltar-shared/features/appShell/hooks/useProtocolAppShell.js'
 import { useHashRoute } from '@zoltar/ui-core-shared/app/hooks/useHashRoute.js'
@@ -231,21 +231,8 @@ export function App() {
 							settingsMenu={settingsMenu}
 							applicationTitle={zoltarCopy.applicationTitle}
 							activeUniverseId={activeUniverseId}
-							isLoadingRepPrices={false}
-							isRefreshingRepPrices={false}
 							isLoadingUniverseRepBalance={loadingZoltarForkAccess}
 							onGoToGenesisUniverse={() => setActiveUniverseId(0n)}
-							onRefreshRepPrices={() => undefined}
-							parentUniverseId={zoltarUniverse?.parentUniverseId}
-							repPerEthFailure={undefined}
-							repPerEthPrice={undefined}
-							repPerEthSource={undefined}
-							repPerEthSourceUrl={undefined}
-							repUsdcFailure={undefined}
-							repUsdcPrice={undefined}
-							repUsdcSource={undefined}
-							repUsdcSourceUrl={undefined}
-							showRepPrices={false}
 							universeForkTime={zoltarUniverse?.forkTime}
 							universeHasForked={zoltarUniverse?.hasForked}
 							universePresentation={universePresentation}

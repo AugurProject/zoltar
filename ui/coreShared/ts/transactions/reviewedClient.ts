@@ -1,8 +1,8 @@
 import { formatUnits, getAddress, encodeFunctionData, maxUint256 } from '@zoltar/core-shared/evm/ethereum'
-import type { TransactionPlanStep, TransactionRequestPreview, WriteClient } from '@zoltar/ui-core-shared/wallet/chainBackend.js'
-import { createActiveEnvironmentGuard } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
-import { getErrorMessage, isRecoverableContractReadError, transactionErrorMessages } from '@zoltar/ui-core-shared/lib/errors.js'
-import { ABIS } from '@zoltar/ui-core-shared/abis.js'
+import type { TransactionPlanStep, TransactionRequestPreview, WriteClient } from '../wallet/chainBackend.js'
+import { createActiveEnvironmentGuard } from '../lib/activeEnvironment.js'
+import { getErrorMessage, isRecoverableContractReadError, transactionErrorMessages } from '../lib/errors.js'
+import { ABIS } from '../abis.js'
 import { createTransactionStepController, type TransactionStepDetails } from './transactionSteps.js'
 
 const actionDescriptions: Record<string, { title: string; description: string }> = {

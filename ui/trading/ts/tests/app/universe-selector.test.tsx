@@ -4,8 +4,8 @@ import { act } from 'preact/test-utils'
 import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
 import { App } from '../../app/App.js'
 import * as appCopy from '../../copy/app.js'
-import { UniverseSelector } from '../../components/UniverseSelector.js'
-import { WalletSummary } from '../../components/WalletSummary.js'
+import { UniverseSelector } from '@zoltar/ui-core-shared/components/UniverseSelector.js'
+import { TradingOverviewPanel } from '../../components/TradingOverviewPanel.js'
 import { hasTradingWalletControls, TradingWalletControls } from '../../components/TradingWalletControls.js'
 import { buildLiveUniverseOptions } from '../../lib/universeOptions.js'
 import { routeOwnsLiveWallet, walletSummaryAfterRouteChange, walletSummaryForUniverse } from '../../lib/walletSummaryState.js'
@@ -63,15 +63,15 @@ describe('universe selector', () => {
 		expect(tradingRouting.resolve(window.location.hash)).toBe('not-found')
 		const rendered = await renderIntoDocument(<App />)
 		cleanupRendered = rendered.cleanup
-		expect(rendered.container.querySelector('main')?.textContent).toContain('Page not found')
+		expect(rendered.container.querySelector('main')?.textContent).toContain('Page Not Found')
 		expect(rendered.container.querySelector('h1.visually-hidden')?.textContent).toBe('Not found')
 		const skipButton = Array.from(rendered.container.querySelectorAll('button')).find(button => button.textContent === 'Skip to main content')
 		if (skipButton === undefined) throw new Error('Shared application skip control is unavailable')
 		await act(() => skipButton.click())
-		expect(document.activeElement).toBe(rendered.container.querySelector('main'))
-		// The landmark holds the route content only, so skipping lands past the header and tab navigation.
+		expect(document.activeElement).toBe(rendered.container.querySelector('#app-content'))
+		// The shared frame focuses the route content only, so skipping lands past the header and tab navigation.
 		expect(document.activeElement?.querySelector('.tab-nav')).toBeNull()
-		expect(document.activeElement?.textContent).toContain('Page not found')
+		expect(document.activeElement?.textContent).toContain('Page Not Found')
 		expect(document.title).toBe(appCopy.documentTitle(appCopy.notFound))
 		expect(document.title).toBe('Not found · Statoblast trading')
 	})
@@ -274,7 +274,7 @@ describe('universe selector', () => {
 	})
 
 	test('keeps the balance slots in place while the wallet is disconnected or loading', async () => {
-		const disconnected = await renderIntoDocument(<WalletSummary summary={{ account: undefined, ethAttoEth: undefined, repAttoRep: undefined, status: 'disconnected', error: undefined, errorLabel: undefined, universeId: '1' }} />)
+		const disconnected = await renderIntoDocument(<TradingOverviewPanel simulation={false} walletSummary={{ account: undefined, ethAttoEth: undefined, repAttoRep: undefined, status: 'disconnected', error: undefined, errorLabel: undefined, universeId: '1' }} />)
 		cleanupRendered = disconnected.cleanup
 		const disconnectedCells = [...disconnected.container.querySelectorAll('.overview-inline-metrics .overview-metric-group-items > div')].map(cell => cell.className)
 		expect(disconnectedCells).toEqual(['overview-simulation-secondary', 'overview-simulation-secondary'])
@@ -286,7 +286,7 @@ describe('universe selector', () => {
 		expect(disconnected.container.querySelector('[data-wallet-asset="REP"]')?.textContent).toContain('—')
 		await disconnected.cleanup()
 
-		const loading = await renderIntoDocument(<WalletSummary summary={{ account: '0x8ba1f109551bD432803012645Ac136ddd64DBA72', ethAttoEth: undefined, repAttoRep: undefined, status: 'loading', error: undefined, errorLabel: undefined, universeId: '1' }} />)
+		const loading = await renderIntoDocument(<TradingOverviewPanel simulation={false} walletSummary={{ account: '0x8ba1f109551bD432803012645Ac136ddd64DBA72', ethAttoEth: undefined, repAttoRep: undefined, status: 'loading', error: undefined, errorLabel: undefined, universeId: '1' }} />)
 		cleanupRendered = loading.cleanup
 		const loadingCells = [...loading.container.querySelectorAll('.overview-inline-metrics .overview-metric-group-items > div')].map(cell => cell.className)
 		expect(loadingCells).toEqual(disconnectedCells)
@@ -297,7 +297,7 @@ describe('universe selector', () => {
 	test('keeps wallet balance failures visible with a retry', async () => {
 		const account = '0x8ba1f109551bD432803012645Ac136ddd64DBA72'
 		let retries = 0
-		const rendered = await renderIntoDocument(<WalletSummary summary={{ account, ethAttoEth: undefined, repAttoRep: undefined, status: 'error', error: 'REP balance RPC failed', errorLabel: 'Wallet balance read failed', universeId: '1' }} onRetry={() => retries++} />)
+		const rendered = await renderIntoDocument(<TradingOverviewPanel simulation={false} walletSummary={{ account, ethAttoEth: undefined, repAttoRep: undefined, status: 'error', error: 'REP balance RPC failed', errorLabel: 'Wallet balance read failed', universeId: '1' }} onRetryWalletSummary={() => retries++} />)
 		cleanupRendered = rendered.cleanup
 		expect(rendered.container.querySelector('[data-wallet-asset="ETH"]')?.textContent).toContain('—')
 		expect(rendered.container.querySelector('[data-wallet-asset="REP"]')?.textContent).toContain('—')
@@ -311,14 +311,14 @@ describe('universe selector', () => {
 		expect(walletSummaryAvailability(true, undefined, 'loading', undefined, true)?.status).toBe('loading')
 		const availability = walletSummaryAvailability(true, undefined, 'error', 'RPC request failed', true)
 		if (availability === undefined) throw new Error('A discovery failure must make wallet balances unavailable')
-		const rendered = await renderIntoDocument(<WalletSummary summary={{ account: '0x8ba1f109551bD432803012645Ac136ddd64DBA72', ethAttoEth: undefined, repAttoRep: undefined, status: availability.status, error: availability.error, errorLabel: availability.errorLabel, universeId: '1' }} />)
+		const rendered = await renderIntoDocument(<TradingOverviewPanel simulation={false} walletSummary={{ account: '0x8ba1f109551bD432803012645Ac136ddd64DBA72', ethAttoEth: undefined, repAttoRep: undefined, status: availability.status, error: availability.error, errorLabel: availability.errorLabel, universeId: '1' }} />)
 		cleanupRendered = rendered.cleanup
-		expect(rendered.container.querySelector('.trading-wallet-summary')?.getAttribute('aria-busy')).toBe('false')
+		expect(rendered.container.querySelector('[role="status"]')).toBeNull()
 		expect(rendered.container.querySelector('[role="alert"]')?.getAttribute('aria-label')).toContain('Security pool discovery failed: RPC request failed')
 	})
 
 	test('discloses simulation balances through the shared overview control', async () => {
-		const rendered = await renderIntoDocument(<WalletSummary simulation summary={{ account: '0x00000000000000000000000000000000000000A1', ethAttoEth: 1n, repAttoRep: 2n, status: 'ready', error: undefined, errorLabel: undefined, universeId: '0' }} />)
+		const rendered = await renderIntoDocument(<TradingOverviewPanel simulation walletSummary={{ account: '0x00000000000000000000000000000000000000A1', ethAttoEth: 1n, repAttoRep: 2n, status: 'ready', error: undefined, errorLabel: undefined, universeId: '0' }} />)
 		cleanupRendered = rendered.cleanup
 		const toggle = rendered.container.querySelector<HTMLButtonElement>('.overview-details-toggle')
 		expect(toggle?.getAttribute('aria-expanded')).toBe('false')
@@ -331,7 +331,7 @@ describe('universe selector', () => {
 	})
 
 	test('preserves all 18 decimals in authoritative wallet balances', async () => {
-		const rendered = await renderIntoDocument(<WalletSummary summary={{ account: '0x8ba1f109551bD432803012645Ac136ddd64DBA72', ethAttoEth: 1n, repAttoRep: 2n ** 256n - 1n, status: 'ready', error: undefined, errorLabel: undefined, universeId: '1' }} />)
+		const rendered = await renderIntoDocument(<TradingOverviewPanel simulation={false} walletSummary={{ account: '0x8ba1f109551bD432803012645Ac136ddd64DBA72', ethAttoEth: 1n, repAttoRep: 2n ** 256n - 1n, status: 'ready', error: undefined, errorLabel: undefined, universeId: '1' }} />)
 		cleanupRendered = rendered.cleanup
 		expect(rendered.container.querySelector('[data-wallet-asset="ETH"] button')?.getAttribute('title')).toBe('0.000000000000000001')
 		expect(rendered.container.querySelector('[data-wallet-asset="REP"] button')?.getAttribute('title')).toEndWith('.584007913129639935')

@@ -898,6 +898,42 @@
 		"./tests/viewQueryParam.test.js": {
 			"bun": "./ts/tests/viewQueryParam.test.ts",
 			"default": "./js/tests/viewQueryParam.test.js"
+		},
+		"./app/components/OverviewHeaderPanel.js": {
+			"bun": "./ts/app/components/OverviewHeaderPanel.tsx",
+			"default": "./js/app/components/OverviewHeaderPanel.js"
+		},
+		"./app/components/OverviewPanels.js": {
+			"bun": "./ts/app/components/OverviewPanels.tsx",
+			"default": "./js/app/components/OverviewPanels.js"
+		},
+		"./components/UniverseSelector.js": {
+			"bun": "./ts/components/UniverseSelector.tsx",
+			"default": "./js/components/UniverseSelector.js"
+		},
+		"./components/DeploymentStepList.js": {
+			"bun": "./ts/components/DeploymentStepList.tsx",
+			"default": "./js/components/DeploymentStepList.js"
+		},
+		"./components/SecurityPoolLink.js": {
+			"bun": "./ts/components/SecurityPoolLink.tsx",
+			"default": "./js/components/SecurityPoolLink.js"
+		},
+		"./components/TransactionStepsModal.js": {
+			"bun": "./ts/components/TransactionStepsModal.tsx",
+			"default": "./js/components/TransactionStepsModal.js"
+		},
+		"./components/TransactionFundingSummary.js": {
+			"bun": "./ts/components/TransactionFundingSummary.tsx",
+			"default": "./js/components/TransactionFundingSummary.js"
+		},
+		"./tests/transactionStepsModal.test.js": {
+			"bun": "./ts/tests/transactionStepsModal.test.tsx",
+			"default": "./js/tests/transactionStepsModal.test.js"
+		},
+		"./tests/app/overviewPanels.test.js": {
+			"bun": "./ts/tests/app/overviewPanels.test.tsx",
+			"default": "./js/tests/app/overviewPanels.test.js"
 		}
 	},
 	"version": "1.0.0"

@@ -53,7 +53,7 @@ export function renderLiveTradeSummary(quote: LiveTradeSummaryQuote, side: 'YES'
 					{ label: workflowCopy.youReceive, value: `${formatRoundedUnits(quote.value.result.ethOut)} ETH` },
 				]
 	return (
-		<div class='trade-summary trade-summary--review' aria-label={workflowCopy.tradeSummary}>
+		<div className='trade-summary trade-summary--review' aria-label={workflowCopy.tradeSummary}>
 			<TransactionReview
 				variant='inline'
 				primary={primary}
@@ -63,7 +63,7 @@ export function renderLiveTradeSummary(quote: LiveTradeSummaryQuote, side: 'YES'
 				]}
 			/>
 			{quote.kind === 'entry' ? (
-				<p class='detail payout-note'>
+				<p className='detail payout-note'>
 					<strong>{payoutCopy.conditionalPayout(formatCollateralEth(quote.value.result.totalLongShares, quote.value.market), side)}</strong>
 					{' · '}
 					{payoutCopy.currentBacking}
@@ -79,7 +79,7 @@ export function renderLiveTradeSummary(quote: LiveTradeSummaryQuote, side: 'YES'
 
 export function TradingTransactionHash({ hash }: { hash: Hash }) {
 	return (
-		<p class='transaction-hash'>
+		<p className='transaction-hash'>
 			<span>{workflowCopy.transaction}</span>
 			<TransactionHashLink hash={hash} />
 		</p>
@@ -102,14 +102,14 @@ export function ExecutionProtectionFields({ slippage, validityMinutes, disabled,
 					<FormInput id={validityId} value={validityMinutes} disabled={disabled} inputMode='numeric' adornment={workflowCopy.minutes} error={parsedValidityMinutes === undefined ? workflowCopy.validityValidation : undefined} onInput={event => onValidityInput(event.currentTarget.value)} />
 				</FormField>
 			</DataGrid>
-			<p class='detail'>{workflowCopy.transactionProtectionGuidance}</p>
+			<p className='detail'>{workflowCopy.transactionProtectionGuidance}</p>
 		</WorkflowSubsection>
 	)
 }
 
 export function BalanceLoadError({ message, retry, disabled = false }: { message: string; retry(): Promise<void>; disabled?: boolean }) {
 	return (
-		<div class='balance-recovery'>
+		<div className='balance-recovery'>
 			<RetryableNotice message={message} retryLabel={workflowCopy.retryBalances} disabled={disabled} onRetry={() => void retry()} />
 		</div>
 	)
