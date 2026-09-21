@@ -1,6 +1,7 @@
 import { expect, test } from 'bun:test'
 import { existsSync } from 'node:fs'
 import { startDashboardServer } from '../../src/dashboard/dashboard-server.ts'
+import { CONFIGURATION_COMMITTED_SAFELY_PAUSED } from '../../src/runtime/configuration-commit.ts'
 import { CHROMIUM_STARTUP_BUDGET_MILLISECONDS, startChromiumSession } from './chromium-session.ts'
 
 const chromium = process.env['CHROMIUM_PATH'] ?? Bun.which('chromium') ?? '/usr/bin/chromium'
@@ -15,6 +16,7 @@ browserTest(
 		let revision = 1
 		let ready = false
 		let rejectSave = false
+		let loseCommittedResponse = false
 		let releaseSave = () => {}
 		let saveGate: Promise<void> | undefined
 		const executionMutations: unknown[] = []
@@ -80,6 +82,12 @@ browserTest(
 				if (rejectSave) throw new Error('Execution change rejected')
 				execute = Reflect.get(Object(value), 'execute') === true
 				revision += 1
+				if (loseCommittedResponse) {
+					// The change committed, but the response reports an unknown outcome instead of success.
+					const committed = new Error('activation did not complete')
+					committed.name = CONFIGURATION_COMMITTED_SAFELY_PAUSED
+					throw committed
+				}
 			},
 			setObligation: () => {},
 			setPaused: () => {},
@@ -191,6 +199,20 @@ browserTest(
 				expect(await cdp.evaluate("document.querySelector('#execution-enabled')?.checked")).toBe(true)
 				expect(await cdp.evaluate('Array.from(document.querySelectorAll(\'.settings-badges[data-form="execution-form"] .settings-badge\'), badge => badge.textContent)')).toEqual([])
 				await capture(`live-${width}`)
+				// A committed change whose response is lost is reconciled from the reloaded configuration, not the pre-request mode.
+				loseCommittedResponse = true
+				await cdp.evaluate("document.querySelector('#execution-enabled').click()")
+				await cdp.evaluate('document.querySelector(\'#execution-form button[type="submit"]\').click()')
+				await waitFor("document.querySelector('#execution-status')?.textContent?.includes('Current configuration and state were reloaded') === true && document.querySelector('#execution-fieldset')?.disabled === false")
+				expect(executionMutations.at(-1)).toEqual({ execute: false, revision: String(revision - 1) })
+				expect(await cdp.evaluate("document.querySelector('#execution-enabled')?.checked")).toBe(false)
+				expect(await cdp.evaluate("document.querySelector('#execution-mode-summary')?.textContent")).toBe('Dry run · ready to go live')
+				expect(await cdp.evaluate('Array.from(document.querySelectorAll(\'.settings-badges[data-form="execution-form"] .settings-badge\'), badge => badge.textContent)')).toEqual([])
+				expect(await cdp.evaluate("document.querySelector('#execution-form button[type=\"submit\"]').matches(':disabled')")).toBe(true)
+				loseCommittedResponse = false
+				await cdp.evaluate("document.querySelector('#execution-enabled').click()")
+				await cdp.evaluate('document.querySelector(\'#execution-form button[type="submit"]\').click()')
+				await waitFor("document.querySelector('#execution-mode-summary')?.textContent === 'Live'")
 				// A live operator can always return to dry run, even after a prerequisite lapses.
 				ready = false
 				await cdp.evaluate("window.dispatchEvent(new Event('focus'))")

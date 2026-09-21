@@ -292,6 +292,40 @@ describe('bot process locks', () => {
 		await dryRun.disableExecution()
 	})
 
+	test('retains a signer lock whose release fails on disarm so rearming reuses it and shutdown retries it', async () => {
+		const privateKey = `0x${'bb'.repeat(32)}` as const
+		const address = privateKeyToAccount(privateKey).address
+		let acquisitions = 0
+		let releases = 0
+		const signerLock = {
+			path: 'signer.lock',
+			release: async () => {
+				releases += 1
+				if (releases === 1) throw new Error('transient signer release failure')
+			},
+		}
+		const locks = await acquireLiquidatorProcessLocks(
+			{ chainId: 1, execute: false, privateKey, stateFile: 'state.json' },
+			{
+				acquireSigner: async () => {
+					acquisitions += 1
+					return signerLock
+				},
+				acquireState: async () => ({ path: 'state.lock', release: async () => undefined }),
+			},
+		)
+		await locks.enableExecution(address)
+		expect(acquisitions).toBe(1)
+		await expect(locks.disableExecution()).rejects.toThrow('transient signer release failure')
+		// The failed release is retained rather than dropped: arming again reuses it instead of contending with itself.
+		await locks.enableExecution(address)
+		expect(acquisitions).toBe(1)
+		await locks.disableExecution()
+		expect(releases).toBe(2)
+		await locks.release()
+		expect(releases).toBe(2)
+	})
+
 	test('keeps the dry-run signer reservation of an always-locking process when live execution is disarmed', async () => {
 		const privateKey = `0x${'aa'.repeat(32)}` as const
 		const address = privateKeyToAccount(privateKey).address

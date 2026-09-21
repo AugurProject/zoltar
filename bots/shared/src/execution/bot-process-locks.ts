@@ -138,15 +138,21 @@ export async function acquireBotProcessLocks(settings: BotLockSettings, { acquir
 			}
 			execute = true
 		},
-		/** Returns to dry run; a bot that reserves signers only while live releases the signer lock again. */
+		/**
+		 * Returns to dry run; a bot that reserves signers only while live releases the signer lock again. A release that
+		 * fails stays retired under its address, so the next arm reuses it and process shutdown retries it.
+		 */
 		disableExecution: async () => {
 			if (!execute) return
 			execute = false
 			if (signerLocksInDryRun) return
 			const lock = signerLock
+			const address = signerAddress
 			signerLock = undefined
 			signerAddress = undefined
-			await lock?.release()
+			if (lock === undefined || address === undefined) return
+			retiredSignerLocks.set(signerKey(address), lock)
+			await releaseRetiredSignerLocks()
 		},
 		release: () => {
 			if (released) return Promise.resolve()

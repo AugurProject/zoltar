@@ -51,10 +51,11 @@ export function registerExecutionModeForm({ configuration, put, reconcile, refre
 				setFormSubmitting('execution-form', false)
 				const reconciliation = await reconcile(error, status)
 				mutationReconciled = !reconciliation.handled || reconciliation.reconciled
-				// A rejected switch changes nothing, so the control returns to the saved mode instead of showing an unapplied choice.
-				toggle.checked = loaded.execute === true
-				markFormClean('execution-form')
 				if (error instanceof Error && error.name === 'ConfigurationRevisionConflict') await refresh()
+				// The control returns to the saved mode instead of showing an unapplied choice: a rejected switch changed nothing,
+				// while a lost response may have committed, so the mode comes from the configuration reloaded above.
+				toggle.checked = (configuration() ?? loaded).execute === true
+				markFormClean('execution-form')
 				if (!reconciliation.handled) status.textContent = error instanceof Error ? error.message : 'Execution mode could not be changed.'
 			} finally {
 				setFormSubmitting('execution-form', false)
