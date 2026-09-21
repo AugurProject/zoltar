@@ -37,7 +37,6 @@ type ForkTargetPickerProps = {
 	selectedOutcomeIndexes: readonly bigint[]
 	/** Content above the targets, such as the fork question the targets belong to. */
 	summary?: ComponentChildren
-	title: string
 }
 
 /** A row in a mixed list marks selection with a badge; a list that only holds selected targets does not repeat it. */
@@ -115,10 +114,10 @@ function ScalarTargets({ disabled, onToggle, question, selectedOutcomeIndexes, s
 }
 
 /** Chooses the child universes a fork migration targets: a categorical list, or a scalar tick picker with the chosen ticks listed above it. */
-export function ForkTargetPicker({ actions, disabled, onToggle, question, selectedOutcomeIndexes, summary, title }: ForkTargetPickerProps) {
+export function ForkTargetPicker({ actions, disabled, onToggle, question, selectedOutcomeIndexes, summary }: ForkTargetPickerProps) {
 	const selectedSet = useMemo(() => new Set(selectedOutcomeIndexes.map(outcomeIndex => outcomeIndex.toString())), [selectedOutcomeIndexes])
 	return (
-		<WorkflowSubsection badge={actions} className='fork-target-picker' title={title}>
+		<WorkflowSubsection badge={actions} className='fork-target-picker' title={forkTargetCopy.targetChildUniverses}>
 			{summary}
 			<p className='fork-target-count' role='status'>
 				{forkTargetCopy.selectedTargetCount(selectedOutcomeIndexes.length)}

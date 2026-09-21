@@ -1,4 +1,5 @@
 import * as tradingCopy from '../../../copy/trading.js'
+import * as forkTargetCopy from '@zoltar/ui-zoltar-shared/copy/forkTargets.js'
 import type { ComponentChildren } from 'preact'
 import { ForkTargetPicker, type ForkTargetOption } from '@zoltar/ui-zoltar-shared/features/universes/components/ForkTargetPicker.js'
 import { WorkflowSubsection } from '@zoltar/ui-core-shared/components/WorkflowSubsection.js'
@@ -30,7 +31,7 @@ function scalarTargetOption(childUniverseByOutcomeIndex: ReadonlyMap<string, Zol
 
 function renderUnavailableSection(children: ComponentChildren) {
 	return (
-		<WorkflowSubsection className='fork-target-picker' title={tradingCopy.targetChildUniverses}>
+		<WorkflowSubsection className='fork-target-picker' title={forkTargetCopy.targetChildUniverses}>
 			<p className='detail'>{children}</p>
 		</WorkflowSubsection>
 	)
@@ -62,7 +63,6 @@ export function ShareMigrationTargetsSection({ disabled, loading = false, forkUn
 				onToggle={onToggleOutcomeIndex}
 				question={{ kind: 'categorical', targets: childUniverses.map(childTargetOption) }}
 				selectedOutcomeIndexes={selectedOutcomeIndexes}
-				title={tradingCopy.targetChildUniverses}
 			/>
 		)
 	}
@@ -81,7 +81,6 @@ export function ShareMigrationTargetsSection({ disabled, loading = false, forkUn
 				resolveTarget: outcomeIndex => scalarTargetOption(childUniverseByOutcomeIndex, scalarQuestion, outcomeIndex),
 			}}
 			selectedOutcomeIndexes={selectedOutcomeIndexes}
-			title={tradingCopy.targetChildUniverses}
 		/>
 	)
 }

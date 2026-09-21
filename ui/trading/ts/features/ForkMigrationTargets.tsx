@@ -45,7 +45,6 @@ export function ForkMigrationTargets({ context, selectedTargets, disabled, onCha
 					<strong>{context.title}</strong>
 				</div>
 			}
-			title={forkCopy.targetChildUniverses}
 		/>
 	)
 }

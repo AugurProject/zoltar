@@ -868,11 +868,12 @@
 
 .universe-selector {
 	display: block;
+	min-width: 0;
 }
 
-/* A fixed control width keeps the universe switcher in place while its option labels load. */
+/* The universe switcher sizes to its option labels so it occupies the same toolbar slot as a static universe value. */
 .header-toolbar-controls .universe-selector select {
-	width: 14rem;
+	width: auto;
 	min-width: 0;
 	max-width: 100%;
 	min-height: var(--touch-target-min);
@@ -886,19 +887,6 @@
 @media (min-width: 40.0625rem) {
 	.overview-wallet-panel:not(:has(.overview-metric-secondary, .overview-metric-group.is-secondary)) .overview-details-toggle {
 		display: none;
-	}
-}
-
-/* A brand, badge, wallet chip, and universe switcher only share one toolbar row from the desktop breakpoint. */
-@media (max-width: 79.9375rem) {
-	.header-toolbar:has(.universe-selector) {
-		grid-template-columns: minmax(0, 1fr) auto;
-	}
-
-	.header-toolbar:has(.universe-selector) .header-toolbar-controls {
-		grid-column: 1 / -1;
-		grid-row: 2;
-		justify-content: flex-start;
 	}
 }
 
@@ -960,21 +948,9 @@
 		white-space: nowrap;
 	}
 
-	/* The universe switcher takes its own full toolbar row so option labels are not clipped. */
-	.header-toolbar-controls:has(.universe-selector) {
-		flex-wrap: wrap;
-	}
-
-	.header-toolbar-controls:has(.universe-selector) .toolbar-field,
-	.header-toolbar-controls:has(.universe-selector) .toolbar-field-value,
-	.header-toolbar-controls .universe-selector {
-		flex: 1 1 auto;
-		min-width: 0;
-	}
-
+	/* The universe switcher fills the field's row on phones so option labels are not clipped. */
 	.header-toolbar-controls .universe-selector select {
 		width: 100%;
-		max-width: none;
 	}
 
 	.header-toolbar .environment-badge-row .badge {

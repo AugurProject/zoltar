@@ -128,12 +128,15 @@ export function LiveTrading({
 	}, [connect, walletConnectRequestNonce])
 	// A failed deployment lookup switches the application to the deployment setup route, which owns the
 	// error surface, so this route only ever renders while the deployment is still resolving.
-	if (configuration === undefined)
+	if (configuration === undefined) {
+		const loadingPresentation = liveWorkflowRoutePresentation(workflowRoute)
 		return (
 			<div className='route-view-flow'>
+				<RouteHeader title={loadingPresentation.title} description={loadingPresentation.description} />
 				<StateHint announcement='polite' presentation={{ key: 'loading', badgeLabel: commonCopy.loading, badgeTone: 'loading', detail: appCopy.loadingContracts, detailIsLoading: true }} />
 			</div>
 		)
+	}
 	// Connecting re-requests the deployment chain first, so the same action switches a wallet that is on another network.
 	let walletActionLabel = account === undefined ? appCopy.connectWallet : abbreviateAddress(account, 6, 4)
 	if (account === undefined && networkMismatchReason !== undefined) walletActionLabel = availabilityCopy.formatSwitchNetworkAction(configuration.chainName)

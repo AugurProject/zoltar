@@ -491,7 +491,9 @@ export function TradingDeploymentSetup({
 				)}
 				{plan === undefined ? null : <DeploymentStepList steps={deploymentSteps.map(({ step, presentation }) => ({ address: step.address, badge: presentation, key: step.id, label: step.label }))} />}
 				<div className='deployment-setup__status' role='status' aria-live='polite'>
-					<MetricField label={deploymentCopy.deploymentProgress}>{deploymentProgress(deploymentStatus, 2)}</MetricField>
+					<DataGrid dense>
+						<MetricField label={deploymentCopy.deploymentProgress}>{deploymentProgress(deploymentStatus, 2)}</MetricField>
+					</DataGrid>
 					{inspection === undefined ? null : (
 						<Badge id={inspectionBadgeId} tone={inspection.tone}>
 							{inspection.label}

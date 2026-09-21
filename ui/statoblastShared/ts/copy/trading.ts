@@ -11,7 +11,6 @@ export const formatMalformedOutcomeLabel = (outcomeIndex: string) => `Malformed 
 export const targetChildUniversesEmpty = 'No target child universes available.'
 export const notSelected = 'Not selected'
 export const selectAll = 'Select all'
-export const targetChildUniverses = 'Target Child Universes'
 export const childTargetsLockedReason = 'Child-universe targets unlock after this universe forks.'
 export const formatActionUnavailableReason = (actionLabel: string) => `${actionLabel} is not available right now.`
 export const redeemCompleteSetsAmount = 'Redeem Complete Sets Amount'

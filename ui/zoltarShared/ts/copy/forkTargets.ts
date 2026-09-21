@@ -1,3 +1,4 @@
+export const targetChildUniverses = 'Target Child Universes'
 export const addTarget = 'Add target'
 export const removeTarget = 'Remove target'
 export const selectScalarTarget = 'Select scalar target'
