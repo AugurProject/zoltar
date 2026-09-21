@@ -329,6 +329,9 @@ describe('trading header', () => {
 
 	test('ends wallet balance loading when selected-universe discovery fails', async () => {
 		expect(walletSummaryAvailability(true, undefined, 'loading', undefined, true)?.status).toBe('loading')
+		// The universe route names its own discovery and a redacted detail is not prefixed twice.
+		expect(walletSummaryAvailability(true, undefined, 'error', 'RPC request failed', true, 'Universe discovery failed')).toEqual({ status: 'error', error: 'Universe discovery failed: RPC request failed', errorLabel: 'Universe discovery failed' })
+		expect(walletSummaryAvailability(true, undefined, 'error', 'Universe discovery failed', true, 'Universe discovery failed')?.error).toBe('Universe discovery failed')
 		const availability = walletSummaryAvailability(true, undefined, 'error', 'RPC request failed', true)
 		if (availability === undefined) throw new Error('A discovery failure must make wallet balances unavailable')
 		const rendered = await renderIntoDocument(<TradingOverviewPanel simulation={false} walletSummary={{ account: '0x8ba1f109551bD432803012645Ac136ddd64DBA72', ethAttoEth: undefined, repAttoRep: undefined, status: availability.status, error: availability.error, errorLabel: availability.errorLabel, universeId: '1' }} />)

@@ -10,7 +10,7 @@ import { LiveTrading } from '../features/LiveTrading.js'
 import { TradingOverviewPanel } from '../components/TradingOverviewPanel.js'
 import { useUrlSearchState } from '@zoltar/ui-core-shared/app/hooks/useUrlSearchState.js'
 import { readStringQueryParam, readUniverseQueryParam, writeUniverseQueryParam } from '@zoltar/ui-core-shared/navigation/urlParams.js'
-import { resolveUniverseSelection, type LiveUniverses, type UniverseRequest } from '../lib/universeSelection.js'
+import { resolveUniverseSelection, type LiveUniverses } from '../lib/universeSelection.js'
 import { formatUniverseDisplayLabel, formatUniverseLabel } from '@zoltar/ui-core-shared/lib/universeLabels.js'
 import { routeOwnsLiveWallet, walletSummaryAfterRouteChange, walletSummaryForUniverse, type WalletSummaryState } from '../lib/walletSummaryState.js'
 import { TradingDeploymentSetup, type DeploymentWalletState, type TradingDeploymentSetupServices } from '../features/TradingDeploymentSetup.js'
@@ -63,7 +63,7 @@ const TRADING_NOT_FOUND_LINKS = [
 
 type LiveDeploymentStatus = 'loading' | 'verified' | 'unavailable'
 
-function readTradingUrlState(search: string): UniverseRequest {
+function readTradingUrlState(search: string) {
 	return { universeId: readUniverseQueryParam(search), present: readStringQueryParam(search, 'universe') !== undefined }
 }
 
@@ -111,13 +111,6 @@ export function App({
 	const urlUniverseIdRef = useRef(urlState.universeId)
 	urlUniverseIdRef.current = urlState.universeId
 	const [discoveryState, setDiscoveryState] = useState<'loading' | 'ready' | 'error'>('loading')
-	const universeSelection = resolveUniverseSelection(urlState, liveUniverses)
-	const selectedUniverseId = universeSelection.requestedUniverseId
-	const confirmedUniverseId = universeSelection.confirmedUniverseId
-	useEffect(() => {
-		// An unknown request is replaced by the universe discovery chose, so the URL, header, and routes agree.
-		if (universeSelection.replaceUrlUniverseId !== undefined) applyUrlStateUpdate(writeUniverseQueryParam(getOwnedSearch(), universeSelection.replaceUrlUniverseId), 'replace')
-	}, [applyUrlStateUpdate, getOwnedSearch, universeSelection.replaceUrlUniverseId])
 	const [liveWalletSummary, setLiveWalletSummary] = useState<WalletSummaryState>({ account: undefined, ethAttoEth: undefined, repAttoRep: undefined, status: 'disconnected', error: undefined, errorLabel: undefined, universeId: undefined })
 	const [walletSummaryRetryNonce, setWalletSummaryRetryNonce] = useState(0)
 	const [walletConnectRequestNonce, setWalletConnectRequestNonce] = useState(0)
@@ -136,6 +129,13 @@ export function App({
 		return true
 	}).value
 	workflowLockedRef.current = workflowLocked
+	const universeSelection = resolveUniverseSelection({ ...urlState, addressed: securityPoolAddressFromRoute(route) !== undefined }, liveUniverses)
+	const selectedUniverseId = universeSelection.requestedUniverseId
+	const confirmedUniverseId = universeSelection.confirmedUniverseId
+	useEffect(() => {
+		// An unknown request is replaced by the universe discovery chose, so the URL, header, and routes agree.
+		if (universeSelection.replaceUrlUniverseId !== undefined) applyUrlStateUpdate(writeUniverseQueryParam(getOwnedSearch(), universeSelection.replaceUrlUniverseId), 'replace')
+	}, [applyUrlStateUpdate, getOwnedSearch, universeSelection.replaceUrlUniverseId])
 	const updateWorkflowLock = useCallback((locked: boolean) => {
 		workflowLockedRef.current = locked
 		setWorkflowLocked(locked)
