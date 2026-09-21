@@ -72,7 +72,8 @@ describe('trading header', () => {
 		const rendered = await renderIntoDocument(<App initializeEnvironment={async () => undefined} loadLiveDeployment={async () => configuration} liveTradingServices={services} />)
 		cleanupRendered = rendered.cleanup
 		await waitFor(() => expect(rendered.container.textContent).toContain('Universe discovery failed: registry RPC unavailable'))
-		expect(rendered.container.querySelector('.header-toolbar-controls .toolbar-field-value')?.textContent).toBe('Unavailable')
+		// The header learns about the failure through the route's state effect, one commit after the route itself.
+		await waitFor(() => expect(rendered.container.querySelector('.header-toolbar-controls .toolbar-field-value')?.textContent).toBe('Unavailable'))
 	})
 
 	test('renders an explicit not-found route and updates the document title', async () => {
