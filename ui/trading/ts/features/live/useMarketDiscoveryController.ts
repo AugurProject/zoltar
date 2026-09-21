@@ -29,6 +29,7 @@ export function useMarketDiscoveryController({
 	configuration,
 	configurationError,
 	selectedUniverseId,
+	urlUniverseId,
 	onUniversesChange,
 	walletSummaryRetryNonce,
 	selected,
@@ -49,6 +50,8 @@ export function useMarketDiscoveryController({
 	configuration: DeploymentConfiguration | undefined
 	configurationError: string | undefined
 	selectedUniverseId: string | undefined
+	/** The `universe` parameter the application is currently honouring; recorded in each answer's scope. */
+	urlUniverseId: bigint | undefined
 	onUniversesChange(universeIds: readonly bigint[], selectedUniverseId: bigint | undefined, scope: UniverseDiscoveryScope): void
 	walletSummaryRetryNonce: number
 	selected: LiveMarket | undefined
@@ -96,7 +99,8 @@ export function useMarketDiscoveryController({
 		if (background && (market.discoveryState === 'loading' || (backgroundDiscovery.current !== undefined && discoveryRequests.isCurrent(backgroundDiscovery.current)))) return
 		const request = discoveryRequests.begin()
 		// The scope is fixed when the request begins; a request that lands after the URL or route moved on still answers only its own question.
-		const scope: UniverseDiscoveryScope = { requestedUniverseId: parsedUniverseId(selectedUniverseId), addressedPool: routePool?.toLowerCase() }
+		// It records the application's request (the `universe` parameter), not the resolved universe discovery is asked for.
+		const scope: UniverseDiscoveryScope = { requestedUniverseId: urlUniverseId, addressedPool: routePool?.toLowerCase() }
 		backgroundDiscovery.current = background ? request : undefined
 		if (!background) {
 			simulationRequests.invalidate()

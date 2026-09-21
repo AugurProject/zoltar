@@ -70,6 +70,7 @@ export function LiveTrading({
 	configuration,
 	configurationError,
 	selectedUniverseId,
+	urlUniverseId,
 	confirmedUniverseId,
 	loadUniverseSummary,
 	onDiscoveryStateChange,
@@ -87,6 +88,8 @@ export function LiveTrading({
 	configuration: DeploymentConfiguration | undefined
 	configurationError: string | undefined
 	selectedUniverseId?: string | undefined
+	/** The `universe` parameter the application is honouring, recorded in each discovery answer's scope. */
+	urlUniverseId?: bigint | undefined
 	/** The universe discovery has confirmed; the universe route waits for it so an unknown request never renders as a universe. */
 	confirmedUniverseId?: string | undefined
 	/** Test seam for the universe route's summary read. */
@@ -108,6 +111,7 @@ export function LiveTrading({
 		configuration,
 		configurationError,
 		selectedUniverseId,
+		urlUniverseId,
 		onUniversesChange,
 		onWorkflowLockChange,
 		onWalletSummaryChange,

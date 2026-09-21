@@ -22,6 +22,7 @@ export function useLiveTradingController({
 	configuration,
 	configurationError,
 	selectedUniverseId,
+	urlUniverseId,
 	onUniversesChange,
 	onWorkflowLockChange,
 	onWalletSummaryChange,
@@ -35,6 +36,7 @@ export function useLiveTradingController({
 	configuration: DeploymentConfiguration | undefined
 	configurationError: string | undefined
 	selectedUniverseId: string | undefined
+	urlUniverseId: bigint | undefined
 	onUniversesChange(universeIds: readonly bigint[], selectedUniverseId: bigint | undefined, scope: UniverseDiscoveryScope): void
 	onWorkflowLockChange(locked: boolean): void
 	onWalletSummaryChange(summary: WalletSummaryState): void
@@ -78,6 +80,7 @@ export function useLiveTradingController({
 		configuration,
 		configurationError,
 		selectedUniverseId,
+		urlUniverseId,
 		onUniversesChange,
 		walletSummaryRetryNonce,
 		selected,

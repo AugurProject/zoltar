@@ -235,6 +235,7 @@ export function App({
 				configuration={liveConfiguration}
 				configurationError={liveConfigurationError}
 				selectedUniverseId={selectedUniverseId}
+				urlUniverseId={urlState.universeId}
 				confirmedUniverseId={confirmedUniverseId}
 				onDiscoveryStateChange={setDiscoveryState}
 				{...(liveTradingServices === undefined ? {} : { controllerServices: liveTradingServices })}

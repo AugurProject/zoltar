@@ -143,6 +143,29 @@ describe('trading header', () => {
 		await waitFor(() => expect(rendered.container.querySelector('.header-toolbar-controls .toolbar-field-value')?.textContent).toBe('Genesis (0x0)'))
 	})
 
+	test('settles on the discovered universe without re-discovering in a loop', async () => {
+		window.history.replaceState(undefined, '', '/#/market')
+		const configuration: DeploymentConfiguration = { chainId: 31_337, chainName: 'Local', rpcUrl: 'http://127.0.0.1:1', securityPoolFactory: `0x${'11'.repeat(20)}`, factory: `0x${'22'.repeat(20)}`, router: `0x${'33'.repeat(20)}`, feeBps: 30 }
+		let discoveries = 0
+		const services = {
+			...liveTradingControllerServices,
+			createTradingPublicClient: () => ({}),
+			validateLiveDeployment: async () => undefined,
+			discoverTradingMarketPage: async () => {
+				discoveries += 1
+				return { start: 0n, count: 0n, total: 0n, previousStart: undefined, nextStart: undefined, markets: [], universeIds: [0n], selectedUniverseId: 0n }
+			},
+		}
+		const rendered = await renderIntoDocument(<App initializeEnvironment={async () => undefined} loadLiveDeployment={async () => configuration} liveTradingServices={services} />)
+		cleanupRendered = rendered.cleanup
+		await waitFor(() => expect(rendered.container.querySelector('.header-toolbar-controls .toolbar-field-value')?.textContent).toBe('Genesis (0x0)'))
+		// The confirmed universe is re-requested once; a confirmed answer must not read as foreign and restart discovery.
+		await act(async () => await Bun.sleep(300))
+		expect(discoveries).toBeLessThanOrEqual(2)
+		expect(rendered.container.querySelector('.header-toolbar-controls .toolbar-field-value')?.textContent).toBe('Genesis (0x0)')
+		expect(window.location.hash).toBe('#/market')
+	})
+
 	test('says the universe is unavailable when universe discovery fails', async () => {
 		window.history.replaceState(undefined, '', '/#/universe')
 		const configuration: DeploymentConfiguration = { chainId: 31_337, chainName: 'Local', rpcUrl: 'http://127.0.0.1:1', securityPoolFactory: `0x${'11'.repeat(20)}`, factory: `0x${'22'.repeat(20)}`, router: `0x${'33'.repeat(20)}`, feeBps: 30 }
