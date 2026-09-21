@@ -261,7 +261,9 @@ browserTest(
 		const connectivityMutations: unknown[] = []
 		let delayNextConnectivityMutation = true
 		let configurationRevision = 'fixture-1'
+		let executeMode = false
 		const settingsMutations: unknown[] = []
+		const executionMutations: unknown[] = []
 		let stateRequests = 0
 		const dashboard = startDashboardServer(0, {
 			getConfiguration: () => ({
@@ -276,7 +278,7 @@ browserTest(
 					},
 					network: { chainId: 11_155_111, explorerUrl, name: 'sepolia' },
 					paused: Reflect.get(initialDashboardState, 'paused') === true,
-					runtime: { execute: false },
+					runtime: { execute: executeMode },
 					submission: submissionConfigured
 						? {
 								minimumBundleRelaySuccesses: 2,
@@ -327,6 +329,10 @@ browserTest(
 			setObligation: () => {},
 			setPaused: () => {},
 			setReplacement: () => {},
+			setExecution: value => {
+				executionMutations.push(value)
+				executeMode = Reflect.get(Object(value), 'execute') === true
+			},
 			setSettings: value => settingsMutations.push(value),
 			setSigner: () => {},
 			setWorkflow: () => {},
@@ -370,6 +376,25 @@ browserTest(
 					await Bun.sleep(25)
 				}
 				throw new Error(message)
+			}
+			/** Flips the saved execution mode through the Execution mode panel so the policy form validates against it. */
+			const setExecutionMode = async (execute: boolean, message: string) => {
+				const count = executionMutations.length + 1
+				await cdp.evaluate(`(() => {
+					const toggle = document.querySelector('#execution-enabled')
+					const form = document.querySelector('#execution-form')
+					if (!(toggle instanceof HTMLInputElement) || !(form instanceof HTMLFormElement)) return
+					toggle.checked = ${execute ? 'true' : 'false'}
+					toggle.dispatchEvent(new Event('change', { bubbles: true }))
+					form.dispatchEvent(new SubmitEvent('submit', { bubbles: true, cancelable: true }))
+				})()`)
+				for (let attempt = 0; attempt < 200; attempt += 1) {
+					if (executionMutations.length === count) break
+					await Bun.sleep(25)
+				}
+				if (executionMutations.length !== count) throw new Error(message)
+				expect(executionMutations.at(-1)).toEqual({ execute, revision: configurationRevision })
+				await waitFor(`document.querySelector('#execution-status')?.textContent === ${JSON.stringify(execute ? 'Live execution enabled. Resume through the readiness check to start signing.' : 'Dry-run mode saved.')} && document.querySelector('#execution-fieldset')?.disabled === false`, message)
 			}
 			const waitForConnectivityMutation = async (count: number, message: string) => {
 				for (let attempt = 0; attempt < 200; attempt += 1) {
@@ -1050,16 +1075,16 @@ browserTest(
 							href: document.querySelector('#selectable-operation-catalog-link')?.getAttribute('href'),
 							text: document.querySelector('#selectable-operation-catalog-link')?.textContent,
 						},
-						executeDescription: document.querySelector('#execute')?.getAttribute('aria-describedby'),
-						executeHelp: document.querySelector('#execute-help')?.textContent,
+						executeDescription: document.querySelector('#execution-enabled')?.getAttribute('aria-describedby'),
+						executeHelp: document.querySelector('#execution-form .section-note')?.textContent,
 						connectivityDisabled: document.querySelector('#connectivity-fields')?.disabled,
 						connectivityHelp: document.querySelector('#connectivity-fields .notice')?.textContent,
 						initializerHelp: document.querySelector('label[for="initialize-genesis-universe"] + p')?.textContent,
 						initializerHelpId: document.querySelector('#initialize-genesis-universe')?.getAttribute('aria-describedby'),
 						initializeGenesisUniverse: document.querySelector('#initialize-genesis-universe')?.checked,
-						selectableScopeHelp: document.querySelector('#selectable-operation-scope-help')?.textContent,
+						selectableScopeHelp: document.querySelector('#all-selectable-operations-help')?.textContent,
 						readRpcUrl: document.querySelector('#read-rpc-url')?.value,
-						lede: document.querySelector('.settings-intro .lede')?.textContent,
+						lede: document.querySelector('#settings-chain-scope')?.textContent,
 						locked: document.querySelector('#settings-fields')?.disabled,
 						pauseNote: document.querySelector('#settings-pause-note')?.textContent,
 						pauseNoteVisible: document.querySelector('#settings-pause-note')?.classList.contains('hidden') === false,
@@ -1075,11 +1100,11 @@ browserTest(
 					readRpcUrl: `https://operator:${rpcSecret}@read-one.example/private`,
 					selectableScopeHelp:
 						'Turn this off for a staged rollout, then enable operations in the Operation catalog. An empty allowlist runs lifecycle obligations only unless genesis initialization is enabled; only its ordered initializer operations are exempt. Lifecycle discovery, recovery, and execution are never disabled by this control.',
-					executeDescription: 'execute-help',
-					executeHelp: 'Off is dry-run mode. Live mode can spend gas and protocol assets. It requires positive reserves and retains an ETH safety floor at least as large as one maximum gas-cost budget.',
+					executeDescription: 'execution-checklist',
+					executeHelp: 'Off is dry-run mode. Live mode can spend gas and protocol assets.',
 					lede: 'Changes apply before the next selection cycle.',
 					locked: true,
-					pauseNote: 'Execution-policy controls are locked while the bot is running. Pause the bot to review and change risk, caps, reserves, timing, or ecosystem scope.',
+					pauseNote: 'Execution policy and execution mode are locked while the bot is running. Pause the bot to review and change risk, caps, reserves, timing, ecosystem scope, or the live switch.',
 					pauseNoteVisible: true,
 				})
 				await cdp.evaluate(`(() => {
@@ -1176,10 +1201,10 @@ browserTest(
 						form.dispatchEvent(new SubmitEvent('submit', { bubbles: true, cancelable: true }))
 					})()`)
 				await waitFor("document.querySelector('#signer-status')?.textContent?.includes('configuration and state could not be reloaded') === true", `${viewport.label} partial signer reconciliation did not remain unresolved`)
-				expect(await cdp.evaluate(`document.querySelector('#signer-fields')?.disabled`)).toBe(true)
+				expect(await cdp.evaluate(`document.querySelector('#signer-fieldset')?.disabled`)).toBe(true)
 				await cdp.command('Network.setBlockedURLs', { urls: [] })
 				await cdp.evaluate("window.dispatchEvent(new Event('focus'))")
-				await waitFor("document.querySelector('#signer-status')?.textContent?.includes('Current configuration and state were reloaded') === true && document.querySelector('#signer-fields')?.disabled === false", `${viewport.label} unresolved signer mutation did not recover after a complete refresh`)
+				await waitFor("document.querySelector('#signer-status')?.textContent?.includes('Current configuration and state were reloaded') === true && document.querySelector('#signer-fieldset')?.disabled === false", `${viewport.label} unresolved signer mutation did not recover after a complete refresh`)
 
 				initialDashboardState = pausedWorkflowRenderingState
 				recoveredDashboardState = pausedWorkflowRenderingState
@@ -1249,13 +1274,12 @@ browserTest(
 					patch: { strategy: { selectableOperationAllowlist: ['open-oracle.blocked-sibling', 'trading.position.enter'] } },
 				})
 				await waitFor("document.querySelector('#settings-save-status')?.textContent === 'Execution policy saved.' && document.querySelector('#settings-fields')?.disabled === false", `${viewport.label} selectable-operation canary policy did not reconcile`)
+				await setExecutionMode(true, `${viewport.label} execution mode did not switch to live`)
 				await cdp.evaluate(`(() => {
-					const execute = document.querySelector('#execute')
 					const ethReserve = document.querySelector('#reserve-eth')
 					const repReserve = document.querySelector('#reserve-rep')
 					const form = document.querySelector('#settings-form')
-					if (!(execute instanceof HTMLInputElement) || !(ethReserve instanceof HTMLInputElement) || !(repReserve instanceof HTMLInputElement) || !(form instanceof HTMLFormElement)) return
-					execute.checked = true
+					if (!(ethReserve instanceof HTMLInputElement) || !(repReserve instanceof HTMLInputElement) || !(form instanceof HTMLFormElement)) return
 					ethReserve.value = '0'
 					repReserve.value = '10'
 					form.dispatchEvent(new SubmitEvent('submit', { bubbles: true, cancelable: true }))
@@ -1282,13 +1306,12 @@ browserTest(
 				})()`)
 				await waitFor("document.querySelector('#settings-save-status')?.textContent === 'ETH reserve must retain at least one maximum-gas-cost-sized safety floor.' && document.querySelector('#settings-fields')?.disabled === false", `${viewport.label} live policy did not retain one full gas budget as a safety floor`)
 				const mutationCountBeforePrecisionCheck = settingsMutations.length
+				await setExecutionMode(false, `${viewport.label} execution mode did not switch to dry run`)
 				await cdp.evaluate(`(() => {
-					const execute = document.querySelector('#execute')
 					const ethReserve = document.querySelector('#reserve-eth')
 					const repReserve = document.querySelector('#reserve-rep')
 					const form = document.querySelector('#settings-form')
-					if (!(execute instanceof HTMLInputElement) || !(ethReserve instanceof HTMLInputElement) || !(repReserve instanceof HTMLInputElement) || !(form instanceof HTMLFormElement)) return
-					execute.checked = false
+					if (!(ethReserve instanceof HTMLInputElement) || !(repReserve instanceof HTMLInputElement) || !(form instanceof HTMLFormElement)) return
 					ethReserve.value = '0.0000000000000000001'
 					repReserve.value = '0'
 					form.dispatchEvent(new SubmitEvent('submit', { bubbles: true, cancelable: true }))
@@ -1300,15 +1323,14 @@ browserTest(
 				expect(settingsMutations).toHaveLength(mutationCountBeforePrecisionCheck)
 
 				const mutationCountBeforeEqualDelay = settingsMutations.length
+				await setExecutionMode(true, `${viewport.label} execution mode did not switch to live`)
 				await cdp.evaluate(`(() => {
-					const execute = document.querySelector('#execute')
 					const minDelay = document.querySelector('#min-delay')
 					const maxDelay = document.querySelector('#max-delay')
 					const ethReserve = document.querySelector('#reserve-eth')
 					const repReserve = document.querySelector('#reserve-rep')
 					const form = document.querySelector('#settings-form')
-					if (!(execute instanceof HTMLInputElement) || !(minDelay instanceof HTMLInputElement) || !(maxDelay instanceof HTMLInputElement) || !(ethReserve instanceof HTMLInputElement) || !(repReserve instanceof HTMLInputElement) || !(form instanceof HTMLFormElement)) return
-					execute.checked = true
+					if (!(minDelay instanceof HTMLInputElement) || !(maxDelay instanceof HTMLInputElement) || !(ethReserve instanceof HTMLInputElement) || !(repReserve instanceof HTMLInputElement) || !(form instanceof HTMLFormElement)) return
 					minDelay.value = '60'
 					maxDelay.value = '60'
 					ethReserve.value = '0.05'
@@ -1333,23 +1355,22 @@ browserTest(
 				expect(settingsMutations).toHaveLength(mutationCountBeforeMaximumMinimumDelay)
 
 				const dryRunMutationCount = settingsMutations.length + 1
+				await setExecutionMode(false, `${viewport.label} execution mode did not switch to dry run`)
 				await cdp.evaluate(`(() => {
-					const execute = document.querySelector('#execute')
 					const minDelay = document.querySelector('#min-delay')
 					const maxDelay = document.querySelector('#max-delay')
 					const ethReserve = document.querySelector('#reserve-eth')
 					const repReserve = document.querySelector('#reserve-rep')
 					const maximumGasCost = document.querySelector('#maximum-gas-cost')
 					const form = document.querySelector('#settings-form')
-					if (!(execute instanceof HTMLInputElement) || !(minDelay instanceof HTMLInputElement) || !(maxDelay instanceof HTMLInputElement) || !(ethReserve instanceof HTMLInputElement) || !(repReserve instanceof HTMLInputElement) || !(maximumGasCost instanceof HTMLInputElement) || !(form instanceof HTMLFormElement)) return
-					execute.checked = false
+					if (!(minDelay instanceof HTMLInputElement) || !(maxDelay instanceof HTMLInputElement) || !(ethReserve instanceof HTMLInputElement) || !(repReserve instanceof HTMLInputElement) || !(maximumGasCost instanceof HTMLInputElement) || !(form instanceof HTMLFormElement)) return
 					minDelay.value = '60'
 					maxDelay.value = '3600'
 					ethReserve.value = '0'
 					repReserve.value = '0.000000000000000000'
 					maximumGasCost.value = '0.02'
 					form.dispatchEvent(new SubmitEvent('submit', { bubbles: true, cancelable: true }))
-				})()`)
+					})()`)
 				await waitForSettingsMutation(dryRunMutationCount, `${viewport.label} dry-run zero-reserve policy was not submitted`)
 				expect(settingsMutations.at(-1)).toEqual({
 					patch: {
@@ -1374,23 +1395,22 @@ browserTest(
 				await waitFor("document.querySelector('#settings-save-status')?.textContent === 'Execution policy saved.' && document.querySelector('#settings-fields')?.disabled === false", `${viewport.label} dry-run zero-reserve policy did not reconcile`)
 
 				const exactBoundaryMutationCount = settingsMutations.length + 1
+				await setExecutionMode(true, `${viewport.label} execution mode did not switch to live`)
 				await cdp.evaluate(`(() => {
-					const execute = document.querySelector('#execute')
 					const minDelay = document.querySelector('#min-delay')
 					const maxDelay = document.querySelector('#max-delay')
 					const ethReserve = document.querySelector('#reserve-eth')
 					const repReserve = document.querySelector('#reserve-rep')
 					const maximumGasCost = document.querySelector('#maximum-gas-cost')
 					const form = document.querySelector('#settings-form')
-					if (!(execute instanceof HTMLInputElement) || !(minDelay instanceof HTMLInputElement) || !(maxDelay instanceof HTMLInputElement) || !(ethReserve instanceof HTMLInputElement) || !(repReserve instanceof HTMLInputElement) || !(maximumGasCost instanceof HTMLInputElement) || !(form instanceof HTMLFormElement)) return
-					execute.checked = true
+					if (!(minDelay instanceof HTMLInputElement) || !(maxDelay instanceof HTMLInputElement) || !(ethReserve instanceof HTMLInputElement) || !(repReserve instanceof HTMLInputElement) || !(maximumGasCost instanceof HTMLInputElement) || !(form instanceof HTMLFormElement)) return
 					minDelay.value = '60'
 					maxDelay.value = '3600'
 					maximumGasCost.value = '0.123456789012345678'
 					ethReserve.value = '0.123456789012345678'
 					repReserve.value = '0.000000000000000001'
 					form.dispatchEvent(new SubmitEvent('submit', { bubbles: true, cancelable: true }))
-				})()`)
+					})()`)
 				await waitForSettingsMutation(exactBoundaryMutationCount, `${viewport.label} exact gas-cost safety-floor policy was not submitted`)
 				expect(settingsMutations.at(-1)).toEqual({
 					patch: {
@@ -1530,9 +1550,9 @@ browserTest(
 			await cdp.command('Page.navigate', { url: new URL('/settings', dashboard.url).href })
 			await waitFor("document.querySelector('#settings-scope')?.textContent === 'sepolia · chain 11155111'", 'Mobile settings fixture did not load')
 			const checkboxTargets = await cdp.evaluate(`[
-				...document.querySelectorAll('#execute, #allow-high-risk, #allow-irreversible, [data-ecosystem-toggle], #remember-signer'),
+				...document.querySelectorAll('#execution-enabled, #allow-high-risk, #allow-irreversible, [data-ecosystem-toggle], #remember-signer'),
 			].map(input => {
-				const label = input.closest('.checkbox-row') ?? input.labels?.[0]
+				const label = input.closest('.switch-field') ?? input.labels?.[0]
 				const bounds = label?.getBoundingClientRect()
 				return { height: bounds?.height, name: input.id || input.dataset.ecosystemToggle, width: bounds?.width }
 			})`)
@@ -1672,7 +1692,7 @@ browserTest(
 				throw new Error(message)
 			}
 			await cdp.command('Page.navigate', { url: new URL('/settings', dashboard.url).href })
-			await waitFor("document.querySelector('#signer-summary .identifier-value') !== null && document.querySelector('#signer-fields')?.disabled === false", 'Signer controls did not load before the indeterminate mutation')
+			await waitFor("document.querySelector('#signer-summary .identifier-value') !== null && document.querySelector('#signer-fieldset')?.disabled === false", 'Signer controls did not load before the indeterminate mutation')
 			await cdp.evaluate(`(() => {
 				const input = document.querySelector('#private-key')
 				const form = document.querySelector('#signer-form')
@@ -1687,7 +1707,7 @@ browserTest(
 					confirmationDisabled: document.querySelector('#confirm-resume')?.disabled,
 					pauseDisabled: document.querySelector('#pause-button')?.disabled,
 					settingsDisabled: document.querySelector('#settings-fields')?.disabled,
-					signerDisabled: document.querySelector('#signer-fields')?.disabled,
+					signerDisabled: document.querySelector('#signer-fieldset')?.disabled,
 					sensitiveVisible: document.documentElement.textContent?.includes('sensitive post-rename'),
 				})`),
 			).toMatchObject({
@@ -1701,13 +1721,13 @@ browserTest(
 
 			await cdp.evaluate("window.dispatchEvent(new Event('focus'))")
 			await waitFor("document.querySelector('#rpc-health-retry-button')?.disabled === false", 'Refresh did not finish after the indeterminate mutation')
-			expect(await cdp.evaluate("document.querySelector('#signer-fields')?.disabled === true && document.querySelector('#signer-status')?.textContent?.includes('permanently frozen') === true")).toBe(true)
+			expect(await cdp.evaluate("document.querySelector('#signer-fieldset')?.disabled === true && document.querySelector('#signer-status')?.textContent?.includes('permanently frozen') === true")).toBe(true)
 
 			await cdp.command('Page.navigate', { url: 'about:blank' })
 			await waitFor("document.readyState === 'complete'", 'Chromium did not reset before checking the server-process latch')
 			await cdp.command('Page.navigate', { url: new URL('/settings', dashboard.url).href })
 			await waitFor("document.querySelector('#configuration-status')?.textContent?.includes('permanently frozen in this server process and page') === true", 'A new page did not inherit the server-process mutation latch')
-			expect(await cdp.evaluate("document.querySelector('#pause-button')?.disabled === true && document.querySelector('#settings-fields')?.disabled === true && document.querySelector('#signer-fields')?.disabled === true")).toBe(true)
+			expect(await cdp.evaluate("document.querySelector('#pause-button')?.disabled === true && document.querySelector('#settings-fields')?.disabled === true && document.querySelector('#signer-fieldset')?.disabled === true")).toBe(true)
 		} finally {
 			try {
 				await browserSession?.close()

@@ -13,12 +13,12 @@ import { parseDesiredPools, parseStrategy, serializedSettings, type OperatorSett
 import { assertSettingsProfileIsolation, loadSettings, saveSettings, switchSettingsNetworkProfile } from '#config/settings-store'
 import { canonicalMarketPriceAllowsExecution, marketConfigurations, marketPriceAllowsExecution, selectedCandidate } from '#core/candidate-selection'
 import { createConfigurationMutationGate } from '#core/configuration-gate'
+import { createGoLiveControls } from '#core/go-live-controls'
 import { PRIVATE_INTENT_FINALITY_BLOCKS, recoveryWorkBlocksExecution, shouldStopAfterSuccessfulCycle } from '#core/cycle-control'
 import { createSystemDeploymentGate } from '#core/deployment-gate'
 import { inheritedChildPoolSelections, selectVaultMigration, validateApprovedUniverseSelection } from '#core/fork-migration'
 import { updateNetworkConnectivity } from '#core/network-connectivity'
 import { createSettingsUpdateQueue } from '#core/settings-update-queue'
-import { commitSignerMutation } from '#core/signer-mutation'
 import { evaluateCandidate, liquidationExecutionAllowed } from '#core/strategy'
 import { parseTransactionReconciliation, validateReconciliationIntentChain, verifyFinalizedReplacement } from '#core/transaction-reconciliation'
 import { startDashboardServer } from '#dashboard/dashboard-server'
@@ -30,7 +30,6 @@ import { canonicalBlockHash, chainFor, desiredPoolStatus } from '#monitoring/ope
 import { scanPools } from '#monitoring/pool-monitor'
 import { createPoolMonitorIndex } from '#monitoring/vault-positions'
 import { assertIntentSender, clearMarketEvidenceForConfigurationChange, commitReconciledIntent, initialRuntimeState, loadDurableState, operatorSnapshot, recordActivity, saveDurableState } from '#state/operator-state'
-import { signerCandidate } from '@zoltar/bot-shared/config/signer'
 import { createPublicClient, createRpcEndpointPool, createWalletClient, getAddress, privateKeyToAccount, type Address, type Hash } from '@zoltar/bot-shared/ethereum'
 import { acquireBotProcessLocks, acquireBotProcessLocksForShutdown, botDashboardLifecycle, BotProcessLockAcquisitionError, createBotShutdownController, type BotProcessLockOptions, type BotProcessLocks, type BotShutdownController } from '@zoltar/bot-shared/execution/bot-process-locks'
 import { centralizedMarketConsensusObservations, marketConsensusSettings, observeCentralizedMarkets, parseCentralizedMarketSettings } from '@zoltar/bot-shared/monitoring/centralized-markets'
@@ -172,6 +171,19 @@ async function runOperator(loaded: Awaited<ReturnType<typeof loadSettings>>, pro
 	const requireCurrentDexEvidence = async (configuration: ReturnType<typeof marketConfigurations>[number], estimate: Parameters<typeof requireCurrentConstantProductMarketEvidence>[3]) =>
 		requireCurrentConstantProductMarketEvidence(configuration, getAddress(configuration.assetAddress), settings.deployment.weth, estimate, readConfiguredDexPair)
 	const poolDeploymentDates = createPoolDeploymentDateCache()
+	const goLiveControls = createGoLiveControls({
+		activePrivateKey: () => activePrivateKey,
+		applySigner: privateKey => {
+			activePrivateKey = privateKey
+			wallet = privateKey === undefined ? undefined : createWalletClient({ account: privateKeyToAccount(privateKey), chain, transport: readPool.transport })
+			state.wallet = wallet?.account.address
+		},
+		locks: processLocks,
+		persist: persistSettings,
+		runMutation: mutation => configurationMutationGate.run(mutation),
+		settings: () => settings,
+		state,
+	})
 	const dashboard = settings.runtime.ui
 		? startDashboardServer(settings.runtime.uiPort, {
 				getConfiguration: () => serializedSettings(settings, true),
@@ -398,54 +410,7 @@ async function runOperator(loaded: Awaited<ReturnType<typeof loadSettings>>, pro
 						})
 						return serializedSettings(settings, true)
 					}),
-				setSigner: value =>
-					configurationMutationGate.run(async () => {
-						if (typeof value !== 'object' || value === null || Array.isArray(value)) {
-							throw new Error('Signer request must be an object')
-						}
-						const rawPrivateKey = Reflect.get(value, 'privateKey')
-						const rememberSigner = Reflect.get(value, 'rememberSigner')
-						if (typeof rawPrivateKey !== 'string' || typeof rememberSigner !== 'boolean') {
-							throw new Error('Signer request requires privateKey and rememberSigner')
-						}
-						const candidate = signerCandidate(rawPrivateKey.trim() === '' ? null : rawPrivateKey)
-						const nextSignerLock = await processLocks.acquireSigner(candidate.address)
-						try {
-							await commitSignerMutation(
-								candidate,
-								rememberSigner,
-								async signer => {
-									await persistSettings(current => ({ ...current, privateKey: signer.privateKey }))
-								},
-								signer => {
-									activePrivateKey = signer.privateKey
-									wallet =
-										activePrivateKey === undefined
-											? undefined
-											: createWalletClient({
-													account: privateKeyToAccount(activePrivateKey),
-													chain,
-													transport: readPool.transport,
-												})
-									state.wallet = wallet?.account.address
-								},
-							)
-						} catch (error) {
-							try {
-								await processLocks.discardSigner(candidate.address, nextSignerLock)
-							} catch (cleanupError) {
-								throw new AggregateError([error, cleanupError], 'Signer update failed and its provisional lock could not be released')
-							}
-							throw error
-						}
-						await processLocks.commitSigner(candidate.address, nextSignerLock)
-						recordActivity(state, {
-							kind: 'configuration',
-							message: candidate.address === undefined ? 'Active signer cleared' : `Signer ${candidate.address} activated${rememberSigner ? ' and saved' : ''}`,
-							status: 'info',
-						})
-						return { wallet: candidate.address }
-					}),
+				...goLiveControls,
 				setStrategy: value =>
 					configurationMutationGate.run(async () => {
 						const strategy = parseStrategy(value)

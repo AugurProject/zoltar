@@ -120,8 +120,7 @@ h2 {
 
 .topbar-actions,
 .section-heading,
-.form-actions,
-.signer-form {
+.form-actions {
 	display: flex;
 	align-items: center;
 	gap: 0.75rem;
@@ -137,7 +136,8 @@ main {
 	padding: clamp(1rem, 3vw, 2rem);
 }
 
-section,
+/* Settings steps are plain groupings; their panels carry the surface styling. */
+section:not(.settings-section),
 .settings-group {
 	min-width: 0;
 	padding: clamp(1rem, 2vw, 1.4rem);
@@ -170,16 +170,6 @@ section,
 
 .settings-group {
 	background: color-mix(in srgb, var(--surface), transparent 3%);
-}
-
-.settings-group > summary strong {
-	font-size: 1.05rem;
-}
-
-.settings-group > summary:focus-visible {
-	border-radius: 0.4rem;
-	outline: 3px solid color-mix(in srgb, var(--accent), transparent 25%);
-	outline-offset: 3px;
 }
 
 .policy-preview {
@@ -369,19 +359,9 @@ textarea {
 	line-height: 1.45;
 }
 
-#network-form textarea {
+#network-form textarea,
+#submission-form textarea {
 	min-height: 7rem;
-}
-
-#market-configuration-form {
-	margin-top: 1rem;
-}
-
-#market-configuration-form label {
-	display: grid;
-	gap: 0.35rem;
-	color: var(--muted);
-	font-size: 0.78rem;
 }
 
 input[type="checkbox"] {
@@ -505,32 +485,6 @@ td small {
 	grid-row: 1 / span 2;
 }
 
-.form-grid {
-	display: grid;
-	grid-template-columns: repeat(2, minmax(0, 1fr));
-	gap: 0.8rem;
-}
-
-.form-grid label,
-.signer-form label {
-	display: grid;
-	gap: 0.3rem;
-	color: var(--muted);
-	font-size: 0.78rem;
-}
-
-.form-grid .check,
-.signer-form .check {
-	display: flex;
-	align-items: center;
-	min-height: 2.75rem;
-	color: var(--text);
-}
-
-.form-actions {
-	grid-column: 1 / -1;
-}
-
 .recovery-list {
 	display: grid;
 	gap: 0.75rem;
@@ -595,14 +549,6 @@ td small {
 	font-size: 0.72rem;
 }
 
-.signer-form {
-	align-items: end;
-}
-
-.signer-form > :first-child {
-	flex: 1;
-}
-
 @media (max-width: 70rem) {
 	.metric-grid {
 		grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -620,7 +566,6 @@ td small {
 @media (max-width: 42rem) {
 	.section-heading,
 	.form-actions,
-	.signer-form,
 	.reconciliation-form {
 		align-items: stretch;
 		flex-direction: column;
@@ -652,8 +597,7 @@ td small {
 		padding: 0.65rem 1rem;
 	}
 
-	.metric-grid,
-	.form-grid {
+	.metric-grid {
 		grid-template-columns: 1fr 1fr;
 	}
 
@@ -725,12 +669,6 @@ td small {
 
 	tbody td.empty {
 		display: block;
-	}
-}
-
-@media (max-width: 26rem) {
-	.form-grid {
-		grid-template-columns: 1fr;
 	}
 }
 

@@ -1,6 +1,6 @@
 import { isRecord } from '@zoltar/bot-shared/infrastructure/json-validation'
 import { element } from './dom.js'
-import { refreshFormButton } from './form-state.ts'
+import { refreshFormButton } from '@zoltar/bot-shared/dashboard/form-state'
 
 type MarketSourceRow = { ethMarket: string | null; exchangeId: string; repMarket: string }
 

@@ -46,9 +46,10 @@ type DashboardConfiguration = {
 	desiredPools: unknown[]
 	network?: { chainId: number; explorerUrl: string; name: 'mainnet' | 'sepolia' }
 	networkConfigured?: boolean
-	runtime: { historicalLogRecovery: boolean; logLookbackBlocks: number }
+	runtime: { execute: boolean; historicalLogRecovery: boolean; logLookbackBlocks: number }
 	selectedPools: string[]
 	strategy: Record<string, string | number | boolean>
+	submission: { minimumBundleRelaySuccesses: number; mode: 'private' | 'public'; relayUrls: string[] }
 }
 
 function universe(id: string, parentId?: string, outcomeIndex?: string): DashboardUniverse {
@@ -76,9 +77,10 @@ function configuration(approvedUniverses = ['1'], network?: DashboardConfigurati
 		desiredPools: [],
 		network: network ?? { chainId: 1, explorerUrl: 'https://etherscan.io', name: 'mainnet' },
 		networkConfigured: network !== undefined,
-		runtime: { historicalLogRecovery: false, logLookbackBlocks: 256 },
+		runtime: { execute: false, historicalLogRecovery: false, logLookbackBlocks: 256 },
 		selectedPools: ['0x1111111111111111111111111111111111111111'],
 		strategy: {},
+		submission: { minimumBundleRelaySuccesses: 1, mode: 'public', relayUrls: [] },
 	}
 }
 
@@ -90,6 +92,8 @@ function state(
 	error?: string,
 	alerts: { message: string; severity: 'error' | 'warning' }[] = [],
 	options: {
+		deploymentCheckedBlock?: string
+		deploymentMissingName?: string
 		execute?: boolean
 		lastScannedBlock?: string
 		lastScannedTimestamp?: string
@@ -99,12 +103,15 @@ function state(
 		pendingTransactions?: PendingTransaction[]
 		rpcEndpointHealth?: { consecutiveFailures: number; latencyMilliseconds?: number; status: string; target: string }[]
 		universes?: DashboardUniverse[]
+		wallet?: string
 	} = {},
 ) {
 	return {
 		activities: [],
 		operatorCapable: true,
 		alerts,
+		deploymentCheckedBlock: options.deploymentCheckedBlock,
+		deploymentMissingName: options.deploymentMissingName,
 		error,
 		execute: options.execute ?? false,
 		lastScannedBlock: options.lastScannedBlock,
@@ -149,6 +156,7 @@ function state(
 		status: 'running',
 		marketSources: [],
 		universes: options.universes ?? [universe('1')],
+		wallet: options.wallet,
 	}
 }
 
@@ -214,6 +222,10 @@ async function dashboard(initialConfiguration = mainnetConfiguration(), initialS
 	let rejectPause = false
 	let networkConnectivityFailureMessage: string | undefined
 	const pauseRequests: unknown[] = []
+	const executionRequests: unknown[] = []
+	const submissionRequests: unknown[] = []
+	let rejectExecution: string | undefined
+	let loseExecutionResponse = false
 	const approvedUniverseRequests: string[][] = []
 	const selectedPoolRequests: string[][] = []
 	const supportedPoolRequests: unknown[] = []
@@ -225,6 +237,7 @@ async function dashboard(initialConfiguration = mainnetConfiguration(), initialS
 	let releaseMarketSourceRequest: (() => void) | undefined
 	let releaseApprovedUniverseRequest: (() => void) | undefined
 	let releaseSelectedPoolRequest: (() => void) | undefined
+	let releaseSubmissionRequest: (() => void) | undefined
 	window.fetch = async (input, init) => {
 		const inputUrl = typeof input === 'string' || input instanceof window.URL ? input.toString() : Reflect.get(input, 'url')
 		if (typeof inputUrl !== 'string') throw new Error('Unexpected request URL')
@@ -380,6 +393,25 @@ async function dashboard(initialConfiguration = mainnetConfiguration(), initialS
 			pauseRequests.push(request)
 			if (releasePauseRequest !== undefined) await new Promise<void>(resolve => (releasePauseRequest = resolve))
 		}
+		if (url.pathname === '/api/execution') {
+			const request: unknown = JSON.parse(String(init?.body))
+			executionRequests.push(request)
+			if (rejectExecution !== undefined) return new window.Response(JSON.stringify({ error: rejectExecution }), { headers: { 'content-type': 'application/json' }, status: 400 })
+			const execute = typeof request === 'object' && request !== null && Reflect.get(request, 'execute') === true
+			currentConfiguration = { ...currentConfiguration, runtime: { ...currentConfiguration.runtime, execute } }
+			if (execute) snapshot = { ...snapshot, paused: true }
+			// The change committed, but the response never reaches the dashboard.
+			if (loseExecutionResponse) throw new TypeError('fetch failed')
+			return new window.Response(JSON.stringify(currentConfiguration), { headers: { 'content-type': 'application/json' } })
+		}
+		if (url.pathname === '/api/submission') {
+			const request: unknown = JSON.parse(String(init?.body))
+			submissionRequests.push(request)
+			if (releaseSubmissionRequest !== undefined) await new Promise<void>(resolve => (releaseSubmissionRequest = resolve))
+			if (typeof request !== 'object' || request === null) throw new Error('Unexpected submission request')
+			currentConfiguration = { ...currentConfiguration, submission: { minimumBundleRelaySuccesses: Number(Reflect.get(request, 'minimumBundleRelaySuccesses')), mode: Reflect.get(request, 'mode') === 'private' ? 'private' : 'public', relayUrls: [...(Reflect.get(request, 'relayUrls') ?? [])].map(String) } }
+			return new window.Response(JSON.stringify(currentConfiguration), { headers: { 'content-type': 'application/json' } })
+		}
 		return new window.Response('{}', { headers: { 'content-type': 'application/json' } })
 	}
 	page.evaluate(await (await fetch(new URL('/dashboard.js', server.url))).text())
@@ -431,6 +463,17 @@ async function dashboard(initialConfiguration = mainnetConfiguration(), initialS
 		selectedPoolRequests,
 		supportedPoolRequests,
 		pauseRequests,
+		executionRequests,
+		submissionRequests,
+		rejectExecution: (message: string | undefined) => {
+			rejectExecution = message
+		},
+		loseExecutionResponse: (lose: boolean) => {
+			loseExecutionResponse = lose
+		},
+		setConfiguration: (next: DashboardConfiguration) => {
+			currentConfiguration = next
+		},
 		stateRequestCount: () => stateRequestCount,
 		setStateRequestFailure: (failed: boolean) => {
 			stateRequestFailure = failed
@@ -483,6 +526,14 @@ async function dashboard(initialConfiguration = mainnetConfiguration(), initialS
 		releaseApprovedUniverseRequest: () => {
 			const release = releaseApprovedUniverseRequest
 			releaseApprovedUniverseRequest = undefined
+			release?.()
+		},
+		suspendNextSubmissionRequest: () => {
+			releaseSubmissionRequest = () => undefined
+		},
+		releaseSubmissionRequest: () => {
+			const release = releaseSubmissionRequest
+			releaseSubmissionRequest = undefined
 			release?.()
 		},
 		suspendNextSelectedPoolRequest: () => {
@@ -646,7 +697,7 @@ describe('liquidator dashboard refresh behavior', () => {
 		await page.waitUntilComplete()
 		await Bun.sleep(1)
 		expect(pauseButton.disabled).toBe(false)
-		for (const id of ['network-fields', 'market-configuration-fields', 'strategy-fields', 'clear-signer']) {
+		for (const id of ['network-fields', 'market-configuration-fields', 'strategy-fields', 'submission-fieldset', 'execution-fieldset', 'clear-signer-button']) {
 			const control = page.window.document.getElementById(id)
 			expect(control?.hasAttribute('disabled')).toBe(true)
 		}
@@ -664,7 +715,7 @@ describe('liquidator dashboard refresh behavior', () => {
 		expect(page.window.document.getElementById('network-fields')?.hasAttribute('disabled')).toBe(false)
 		expect(page.window.document.getElementById('market-configuration-fields')?.hasAttribute('disabled')).toBe(false)
 		expect(page.window.document.getElementById('strategy-fields')?.hasAttribute('disabled')).toBe(false)
-		expect(page.window.document.getElementById('clear-signer')?.hasAttribute('disabled')).toBe(false)
+		expect(page.window.document.getElementById('clear-signer-button')?.hasAttribute('disabled')).toBe(false)
 		expect(signerInput.disabled).toBe(false)
 		await page.openMonitoredPools()
 		const recoveredPoolInput = page.window.document.querySelector('#pool-browser input[type=search]')
@@ -1086,6 +1137,235 @@ describe('liquidator dashboard refresh behavior', () => {
 		await Bun.sleep(1)
 		expect(page.pauseRequests.length).toBeGreaterThan(0)
 		expect(page.pauseRequests).toEqual(page.pauseRequests.map(() => ({ paused: false })))
+	})
+})
+
+describe('liquidator go-live settings', () => {
+	const readiness = (page: Awaited<ReturnType<typeof dashboard>>) =>
+		Array.from(page.window.document.querySelectorAll('#execution-checklist li'), item => `${item.getAttribute('data-ready') ?? ''}${item.getAttribute('data-advisory') === 'true' ? '~' : ''}:${item.querySelector('.readiness-label')?.textContent ?? ''}=${item.querySelector('strong')?.textContent ?? ''}`)
+
+	test('groups Settings into numbered steps with a jump bar and shared panels', async () => {
+		const page = await dashboard()
+		expect(Array.from(page.window.document.querySelectorAll('#settings-nav a'), chip => chip.textContent)).toEqual(['1Connect', '2Markets', '3Liquidation policy', '4Go live'])
+		expect(Array.from(page.window.document.querySelectorAll('.settings-section'), section => section.id)).toEqual(['settings-connect', 'settings-markets', 'settings-policy', 'settings-go-live'])
+		expect(Array.from(page.window.document.querySelectorAll('#settings-go-live .settings-group > summary strong'), title => title.textContent)).toEqual(['Execution wallet', 'Submission', 'Execution mode'])
+		expect(page.window.document.querySelector('#settings-nav a[aria-current="true"]')?.getAttribute('data-settings-target')).toBe('settings-connect')
+		expect(page.window.document.querySelector('.settings-badges[data-form="strategy-form"]')).not.toBeNull()
+		const strategySave = page.window.document.querySelector('#strategy-form button[type="submit"]')
+		if (!(strategySave instanceof page.window.HTMLButtonElement)) throw new Error('Expected strategy save button')
+		expect(strategySave.disabled).toBe(true)
+		const reserve = page.window.document.querySelector('#strategy-form input[name="walletReserveRep"]')
+		if (!(reserve instanceof page.window.HTMLInputElement)) throw new Error('Expected strategy input')
+		reserve.value = '250'
+		reserve.dispatchEvent(new page.window.Event('input', { bubbles: true }))
+		expect(strategySave.disabled).toBe(false)
+		expect(Array.from(page.window.document.querySelectorAll('.settings-badges[data-form="strategy-form"] .settings-badge'), badge => badge.textContent)).toEqual(['Unsaved changes'])
+	})
+
+	test('lists every live-execution prerequisite and locks the switch until they hold', async () => {
+		const page = await dashboard(configuration(), state(undefined, [], { lastScannedBlock: '120' }))
+		expect(readiness(page)).toEqual([
+			'false:Execution signer=Set one under Execution wallet',
+			'false:Chain and RPC endpoints=Save the chain and RPC endpoints under Connect',
+			'true:Independent quorum RPCs=0 configured · 0 required',
+			'true:Canonical contracts=Verified at block 120',
+			'true:Delivery=Public mempool',
+			'true~:Approved universes=1 approved',
+			'true~:Monitored pools=1 selected · 1 eligible',
+			'false~:Market evidence=No market sources configured · optional',
+		])
+		const toggle = page.window.document.getElementById('execution-enabled')
+		if (!(toggle instanceof page.window.HTMLInputElement)) throw new Error('Expected execution switch')
+		expect(toggle.disabled).toBe(true)
+		expect(page.window.document.getElementById('execution-mode-summary')?.textContent).toBe('Dry run · prerequisites missing')
+
+		// The configuration only reloads through a save, so the delivery form carries each connectivity change into the checklist.
+		const saveDelivery = async (mode: 'private' | 'public', relays: string) => {
+			const form = page.window.document.getElementById('submission-form')
+			const modeSelect = page.window.document.getElementById('submission-mode')
+			const relayInput = page.window.document.getElementById('relay-urls')
+			if (!(form instanceof page.window.HTMLFormElement) || !(modeSelect instanceof page.window.HTMLSelectElement) || !(relayInput instanceof page.window.HTMLTextAreaElement)) throw new Error('Expected submission controls')
+			modeSelect.value = mode
+			relayInput.value = relays
+			form.dispatchEvent(new page.window.Event('submit', { bubbles: true, cancelable: true }))
+			await page.waitUntilComplete()
+			await Bun.sleep(1)
+		}
+		page.setConfiguration({ ...mainnetConfiguration(), connectivity: { publicRpcUrls: ['https://public.example'], quorumRpcUrls: ['https://one.example'], readRpcUrl: 'https://read.example', rpcQuorum: 2 } })
+		page.setSnapshot(state(undefined, [], { deploymentCheckedBlock: '121', deploymentMissingName: 'Security pool factory', lastScannedBlock: '120', wallet: '0xabcdefabcdefabcdefabcdefabcdefabcdefabcd' }))
+		await page.refresh()
+		await saveDelivery('private', '')
+		expect(readiness(page)).toEqual([
+			'true:Execution signer=0xabcdef…efabcd',
+			'true:Chain and RPC endpoints=Ethereum mainnet · chain 1',
+			'false:Independent quorum RPCs=1 configured · 2 required',
+			'false:Canonical contracts=Missing Security pool factory at block 121',
+			'false:Delivery=Private · 0 relays',
+			'true~:Approved universes=1 approved',
+			'true~:Monitored pools=1 selected · 1 eligible',
+			'false~:Market evidence=No market sources configured · optional',
+		])
+		expect(toggle.disabled).toBe(true)
+
+		page.setConfiguration({ ...mainnetConfiguration(), connectivity: { publicRpcUrls: ['https://public.example'], quorumRpcUrls: ['https://one.example', 'https://two.example'], readRpcUrl: 'https://read.example', rpcQuorum: 2 } })
+		page.setSnapshot(state(undefined, [], { lastScannedBlock: '122', wallet: '0xabcdefabcdefabcdefabcdefabcdefabcdefabcd' }))
+		await page.refresh()
+		await saveDelivery('private', 'https://relay.example')
+		expect(readiness(page).slice(0, 5)).toEqual(['true:Execution signer=0xabcdef…efabcd', 'true:Chain and RPC endpoints=Ethereum mainnet · chain 1', 'true:Independent quorum RPCs=2 configured · 2 required', 'true:Canonical contracts=Verified at block 122', 'true:Delivery=Private · 1 relay'])
+		expect(toggle.disabled).toBe(false)
+		expect(page.window.document.getElementById('execution-mode-summary')?.textContent).toBe('Dry run · ready to go live')
+	})
+
+	test('arms live execution through the readiness-gated switch and returns to the saved mode when the bot rejects it', async () => {
+		const ready = { ...mainnetConfiguration(), connectivity: { publicRpcUrls: ['https://public.example'], quorumRpcUrls: [], readRpcUrl: 'https://read.example', rpcQuorum: 1 as const }, networkConfigured: true }
+		const page = await dashboard(ready, state(undefined, [], { lastScannedBlock: '120', wallet: '0xabcdefabcdefabcdefabcdefabcdefabcdefabcd' }))
+		const form = page.window.document.getElementById('execution-form')
+		const toggle = page.window.document.getElementById('execution-enabled')
+		const save = page.window.document.querySelector('#execution-form button[type="submit"]')
+		if (!(form instanceof page.window.HTMLFormElement) || !(toggle instanceof page.window.HTMLInputElement) || !(save instanceof page.window.HTMLButtonElement)) throw new Error('Expected execution mode controls')
+		expect(toggle.disabled).toBe(false)
+		expect(save.disabled).toBe(true)
+		toggle.checked = true
+		toggle.dispatchEvent(new page.window.Event('change', { bubbles: true }))
+		expect(save.disabled).toBe(false)
+		// Another form's save reloads the configuration without discarding the unsaved switch.
+		const submissionForm = page.window.document.getElementById('submission-form')
+		if (!(submissionForm instanceof page.window.HTMLFormElement)) throw new Error('Expected submission form')
+		submissionForm.dispatchEvent(new page.window.Event('submit', { bubbles: true, cancelable: true }))
+		await page.waitUntilComplete()
+		await Bun.sleep(1)
+		expect(page.submissionRequests).toHaveLength(1)
+		expect(toggle.checked).toBe(true)
+		expect(save.disabled).toBe(false)
+		expect(Array.from(page.window.document.querySelectorAll('.settings-badges[data-form="execution-form"] .settings-badge'), badge => badge.textContent)).toEqual(['Unsaved changes'])
+		page.rejectExecution('Live execution requires an active signer')
+		form.dispatchEvent(new page.window.Event('submit', { bubbles: true, cancelable: true }))
+		await page.waitUntilComplete()
+		await Bun.sleep(1)
+		expect(page.executionRequests).toEqual([{ execute: true }])
+		expect(toggle.checked).toBe(false)
+		expect(page.window.document.getElementById('execution-status')?.textContent).toBe('Live execution requires an active signer')
+		expect(page.window.document.getElementById('execution-status')?.classList.contains('error')).toBe(true)
+
+		page.rejectExecution(undefined)
+		toggle.checked = true
+		toggle.dispatchEvent(new page.window.Event('change', { bubbles: true }))
+		form.dispatchEvent(new page.window.Event('submit', { bubbles: true, cancelable: true }))
+		await page.waitUntilComplete()
+		await Bun.sleep(1)
+		expect(page.executionRequests).toEqual([{ execute: true }, { execute: true }])
+		expect(toggle.checked).toBe(true)
+		expect(page.window.document.getElementById('execution-status')?.textContent).toContain('Live execution armed')
+		expect(page.window.document.getElementById('execution-mode-summary')?.textContent).toBe('Dry run · ready to go live')
+		expect(Array.from(page.window.document.querySelectorAll('.settings-badges[data-form="execution-form"] .settings-badge'), badge => badge.textContent)).toEqual([])
+		page.setSnapshot(state(undefined, [], { execute: true, lastScannedBlock: '120', paused: true, wallet: '0xabcdefabcdefabcdefabcdefabcdefabcdefabcd' }))
+		await page.refresh()
+		expect(page.window.document.getElementById('execution-mode-summary')?.textContent).toBe('Live')
+		expect(page.window.document.getElementById('mode-badge')?.textContent).toBe('Live')
+	})
+
+	test('keeps a delivery save locked across polls until the bot answers', async () => {
+		const page = await dashboard()
+		const form = page.window.document.getElementById('submission-form')
+		const fieldset = page.window.document.getElementById('submission-fieldset')
+		const relays = page.window.document.getElementById('relay-urls')
+		const save = page.window.document.querySelector('#submission-form button[type="submit"]')
+		if (!(form instanceof page.window.HTMLFormElement) || !(fieldset instanceof page.window.HTMLFieldSetElement) || !(relays instanceof page.window.HTMLTextAreaElement) || !(save instanceof page.window.HTMLButtonElement)) throw new Error('Expected submission controls')
+		relays.value = 'https://relay.example'
+		relays.dispatchEvent(new page.window.Event('input', { bubbles: true }))
+		page.suspendNextSubmissionRequest()
+		form.dispatchEvent(new page.window.Event('submit', { bubbles: true, cancelable: true }))
+		await page.waitUntilComplete()
+		await Bun.sleep(1)
+		expect(page.submissionRequests).toHaveLength(1)
+		expect(fieldset.disabled).toBe(true)
+		// A poll re-derives every control's state; the in-flight save must stay locked and must not be sent again.
+		await page.refresh()
+		expect(fieldset.disabled).toBe(true)
+		expect(save.disabled).toBe(true)
+		form.dispatchEvent(new page.window.Event('submit', { bubbles: true, cancelable: true }))
+		await page.waitUntilComplete()
+		expect(page.submissionRequests).toHaveLength(1)
+		page.releaseSubmissionRequest()
+		await page.waitUntilComplete()
+		await Bun.sleep(1)
+		expect(fieldset.disabled).toBe(false)
+		expect(save.disabled).toBe(true)
+		expect(page.window.document.getElementById('submission-status')?.textContent).toContain('saved')
+	})
+
+	test('reloads the saved execution mode when an arming response is lost and keeps the switch locked until it can', async () => {
+		const ready = { ...mainnetConfiguration(), connectivity: { publicRpcUrls: ['https://public.example'], quorumRpcUrls: [], readRpcUrl: 'https://read.example', rpcQuorum: 1 as const }, networkConfigured: true }
+		const page = await dashboard(ready, state(undefined, [], { lastScannedBlock: '120', wallet: '0xabcdefabcdefabcdefabcdefabcdefabcdefabcd' }))
+		const form = page.window.document.getElementById('execution-form')
+		const fieldset = page.window.document.getElementById('execution-fieldset')
+		const toggle = page.window.document.getElementById('execution-enabled')
+		const status = page.window.document.getElementById('execution-status')
+		if (!(form instanceof page.window.HTMLFormElement) || !(fieldset instanceof page.window.HTMLFieldSetElement) || !(toggle instanceof page.window.HTMLInputElement) || status === null) throw new Error('Expected execution mode controls')
+		const submit = async () => {
+			form.dispatchEvent(new page.window.Event('submit', { bubbles: true, cancelable: true }))
+			await page.waitUntilComplete()
+			await Bun.sleep(1)
+		}
+		// The bot arms, but the response is lost while the configuration cannot be reloaded either: the panel stays locked.
+		page.loseExecutionResponse(true)
+		page.setConfigurationRequestFailure(true)
+		toggle.checked = true
+		toggle.dispatchEvent(new page.window.Event('change', { bubbles: true }))
+		await submit()
+		expect(page.executionRequests).toEqual([{ execute: true }])
+		expect(status.textContent).toContain('could not be reloaded')
+		expect(fieldset.disabled).toBe(true)
+		await page.refresh()
+		expect(fieldset.disabled).toBe(true)
+		// Retrying the configuration load resolves the outcome: the switch shows the armed mode the bot actually holds.
+		page.setConfigurationRequestFailure(false)
+		const retry = page.window.document.querySelector('#configuration-status button')
+		if (!(retry instanceof page.window.HTMLButtonElement)) throw new Error('Expected configuration retry')
+		retry.click()
+		await page.waitUntilComplete()
+		await Bun.sleep(1)
+		expect(toggle.checked).toBe(true)
+		expect(fieldset.disabled).toBe(false)
+		expect(Array.from(page.window.document.querySelectorAll('.settings-badges[data-form="execution-form"] .settings-badge'), badge => badge.textContent)).toEqual([])
+		expect(page.window.document.getElementById('execution-mode-summary')?.textContent).toBe('Dry run · ready to go live')
+		// A lost disarm response reloads immediately when the configuration is reachable.
+		toggle.checked = false
+		toggle.dispatchEvent(new page.window.Event('change', { bubbles: true }))
+		await submit()
+		expect(page.executionRequests).toEqual([{ execute: true }, { execute: false }])
+		expect(status.textContent).toContain('saved execution mode was reloaded')
+		expect(toggle.checked).toBe(false)
+		expect(fieldset.disabled).toBe(false)
+		// A refused change still restores the previous mode without a reload.
+		page.loseExecutionResponse(false)
+		page.rejectExecution('Live execution requires an active signer')
+		toggle.checked = true
+		toggle.dispatchEvent(new page.window.Event('change', { bubbles: true }))
+		await submit()
+		expect(toggle.checked).toBe(false)
+		expect(status.textContent).toBe('Live execution requires an active signer')
+	})
+
+	test('saves transaction delivery settings from the Submission panel', async () => {
+		const page = await dashboard()
+		const form = page.window.document.getElementById('submission-form')
+		const mode = page.window.document.getElementById('submission-mode')
+		const relays = page.window.document.getElementById('relay-urls')
+		const minimum = page.window.document.getElementById('minimum-bundle-relay-successes')
+		if (!(form instanceof page.window.HTMLFormElement) || !(mode instanceof page.window.HTMLSelectElement) || !(relays instanceof page.window.HTMLTextAreaElement) || !(minimum instanceof page.window.HTMLInputElement)) throw new Error('Expected submission controls')
+		expect(mode.value).toBe('public')
+		expect(minimum.value).toBe('1')
+		mode.value = 'private'
+		relays.value = 'https://relay-one.example\nhttps://relay-two.example\n'
+		minimum.value = '2'
+		form.dispatchEvent(new page.window.Event('submit', { bubbles: true, cancelable: true }))
+		await page.waitUntilComplete()
+		await Bun.sleep(1)
+		expect(page.submissionRequests).toEqual([{ minimumBundleRelaySuccesses: 2, mode: 'private', relayUrls: ['https://relay-one.example', 'https://relay-two.example'] }])
+		expect(page.window.document.getElementById('submission-status')?.textContent).toContain('saved')
+		expect(relays.value).toBe('https://relay-one.example\nhttps://relay-two.example')
+		expect(readiness(page)).toContain('true:Delivery=Private · 2 relays')
 	})
 })
 

@@ -9,6 +9,8 @@ import { requiredLiveInventory } from '../runtime/live-readiness.ts'
 import { pendingTransactionObservationKind } from '../state/pending-transaction-observation.ts'
 import { browserScript } from './browser-assets.ts'
 import { operatorHeader } from './header.ts'
+import { mutationRoutes } from './mutation-routes.ts'
+import { settingsPageMarkup } from './settings-page.ts'
 import { booleanField, compact, isoTimestampField, record, publicExplorerUrl, safeIntegerField, safeString, scalar, stringField } from './public-fields.ts'
 import { publicAlert, publicRetirement } from './public-retirement.ts'
 
@@ -20,6 +22,7 @@ export type ChaosDashboardController = {
 	setCancellation: (value: unknown) => unknown | Promise<unknown>
 	setCandidate: (value: unknown) => unknown | Promise<unknown>
 	setConnectivity?: ((value: unknown) => unknown | Promise<unknown>) | undefined
+	setExecution?: ((value: unknown) => unknown | Promise<unknown>) | undefined
 	setOperation?: ((value: unknown) => unknown | Promise<unknown>) | undefined
 	setObligation: (value: unknown) => unknown | Promise<unknown>
 	setReplacement: (value: unknown) => unknown | Promise<unknown>
@@ -931,7 +934,7 @@ export function startDashboardServer(port: number, controller: ChaosDashboardCon
 				const page = url.pathname === '/' ? 'overview' : url.pathname.slice(1)
 				if (dashboardPages.has(page)) {
 					const html = await Bun.file(join(directory, 'index.html')).text()
-					return new Response(html.replace('<!-- operator-header -->', operatorHeader).replace('<body>', `<body data-page="${page}">`), { headers: securityHeaders('text/html; charset=utf-8') })
+					return new Response(html.replace('<!-- operator-header -->', operatorHeader).replace('<!-- settings-page -->', settingsPageMarkup).replace('<body>', `<body data-page="${page}">`), { headers: securityHeaders('text/html; charset=utf-8') })
 				}
 				if (url.pathname === '/dashboard.css') return new Response(Bun.file(join(directory, 'styles.css')), { headers: securityHeaders('text/css; charset=utf-8') })
 				const asset = await sharedDashboardAssetResponse(url.pathname, join(directory, 'favicon.svg'))
@@ -962,22 +965,7 @@ export function startDashboardServer(port: number, controller: ChaosDashboardCon
 			}
 			if (request.method === 'PUT') {
 				if (!dashboardRequestIsSameOrigin(request, authorities)) return json({ error: 'Cross-origin requests are not accepted' }, 403)
-				const handlers = new Map<string, (value: unknown) => unknown | Promise<unknown>>([
-					['/api/reconciliation/candidate', controller.setCandidate],
-					['/api/reconciliation/cancellation', controller.setCancellation],
-					['/api/reconciliation/obligation', controller.setObligation],
-					['/api/paused', controller.setPaused],
-					['/api/reconciliation/replacement', controller.setReplacement],
-					['/api/reconciliation/workflow', controller.setWorkflow],
-					['/api/settings', controller.setSettings],
-					['/api/signer', controller.setSigner],
-				])
-				if (controller.setSchedule !== undefined) handlers.set('/api/schedule', controller.setSchedule)
-				if (controller.setSelection !== undefined) handlers.set('/api/selection', controller.setSelection)
-				if (controller.setOperation !== undefined) handlers.set('/api/operation', controller.setOperation)
-				if (controller.setRetirement !== undefined) handlers.set('/api/retirement', controller.setRetirement)
-				if (controller.setConnectivity !== undefined) handlers.set('/api/connectivity', controller.setConnectivity)
-				const handler = handlers.get(url.pathname)
+				const handler = mutationRoutes(controller).get(url.pathname)
 				if (handler !== undefined) {
 					return await enqueueMutation(async () => {
 						if (configurationCommitIndeterminate) return indeterminateConfigurationFailure()

@@ -284,6 +284,25 @@ describe('liquidator settings', () => {
 		}
 	})
 
+	test('writes a memory-only live signer as a paused dry-run file so a restart cannot execute without its key', async () => {
+		const directory = await mkdtemp(join(tmpdir(), 'zoltar-liquidator-restart-safe-'))
+		try {
+			const path = join(directory, 'operator.json')
+			const live = { ...parseSettings(settings), paused: false, runtime: { ...parseSettings(settings).runtime, execute: true } }
+			await saveSettings(path, live)
+			const reloaded = await loadSettings(path)
+			expect(reloaded.settings.runtime.execute).toBe(false)
+			expect(reloaded.settings.paused).toBe(true)
+			expect(reloaded.settings.privateKey).toBeUndefined()
+			await saveSettings(path, { ...live, privateKey: `0x${'11'.repeat(32)}` })
+			const saved = await loadSettings(path)
+			expect(saved.settings.runtime.execute).toBe(true)
+			expect(saved.settings.paused).toBe(false)
+		} finally {
+			await rm(directory, { force: true, recursive: true })
+		}
+	})
+
 	test('round trips the operator configuration without losing decimal precision', () => {
 		const parsed = parseSettings(settings)
 		expect(parsed.strategy.maximumGasCostAttoEth).toBe(2n * 10n ** 16n)

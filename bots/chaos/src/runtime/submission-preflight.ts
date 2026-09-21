@@ -28,7 +28,12 @@ export function submissionPreflightConfigurationIdentity(settings: OperatorSetti
 	return JSON.stringify([settings.network.chainId, settings.submission.mode, settings.submission.minimumBundleRelaySuccesses, authenticatedAddress, ...targets])
 }
 
-export function submissionPreflightIsDue(checks: readonly EndpointCheck[], settings: OperatorSettings, nowMilliseconds = Date.now()) {
+/** How long submission evidence stays current: the larger of two lifecycle polls and two configured block intervals. */
+function submissionPreflightRefreshMilliseconds(settings: OperatorSettings) {
+	return Math.max(settings.runtime.lifecyclePollMilliseconds * 2, settings.network.maximumBlockIntervalSeconds * 2_000)
+}
+
+function submissionPreflightIsDue(checks: readonly EndpointCheck[], settings: OperatorSettings, nowMilliseconds = Date.now()) {
 	const connectivity = settings.connectivity
 	if (connectivity === undefined) return true
 	const privateMode = settings.submission.mode === 'private'
@@ -37,7 +42,7 @@ export function submissionPreflightIsDue(checks: readonly EndpointCheck[], setti
 	const actualTargets = checks.map(check => check.target).sort()
 	if (expectedTargets.length === 0 || actualTargets.length !== expectedTargets.length || actualTargets.some((target, index) => target !== expectedTargets[index])) return true
 	const expectedAuthenticationAddress = privateMode && settings.privateKey !== undefined ? privateKeyToAccount(settings.privateKey).address.toLowerCase() : undefined
-	const refreshMilliseconds = Math.max(settings.runtime.lifecyclePollMilliseconds * 2, settings.network.maximumBlockIntervalSeconds * 2_000)
+	const refreshMilliseconds = submissionPreflightRefreshMilliseconds(settings)
 	return checks.some(check => {
 		const checkedAt = Date.parse(check.checkedAt)
 		const authenticationMatches = privateMode ? expectedAuthenticationAddress !== undefined && check.authenticatedAddress?.toLowerCase() === expectedAuthenticationAddress : check.authenticatedAddress === undefined
@@ -64,7 +69,7 @@ export function assertSubmissionPreflightFresh(checks: readonly EndpointCheck[],
 		return !authenticationMatches || check.kind !== expectedKind || malformedFailedEvidence || malformedHealthyEvidence || (!degradedWithoutChainEvidence && check.chainId !== settings.network.chainId)
 	})
 	if (incompatibleCheck !== undefined) throw new EndpointCheckFailure('Submission preflight evidence does not match the configured chain, mode, or signer', checks)
-	const refreshMilliseconds = Math.max(settings.runtime.lifecyclePollMilliseconds * 2, settings.network.maximumBlockIntervalSeconds * 2_000)
+	const refreshMilliseconds = submissionPreflightRefreshMilliseconds(settings)
 	const staleCheck = checks.find(check => {
 		const checkedAt = Date.parse(check.checkedAt)
 		return !Number.isFinite(checkedAt) || checkedAt > nowMilliseconds || nowMilliseconds - checkedAt >= refreshMilliseconds
@@ -89,4 +94,46 @@ export async function recordEndpointPreflightChecks(run: () => Promise<readonly 
 		if (error instanceof EndpointCheckFailure) recordChecks(error.checks)
 		throw error
 	}
+}
+
+export type SubmissionPreflightResources = {
+	submissionPreflightConfigurationIdentity: string | undefined
+	submissionPreflightChecks: readonly EndpointCheck[]
+	/** When a dry-run refresh last failed, so unhealthy endpoints are re-probed at the refresh cadence rather than every scan. */
+	submissionPreflightFailedAt?: number | undefined
+}
+
+export type SubmissionReadinessOutcome = 'current' | 'deferred' | 'failed' | 'refreshed' | 'skipped'
+
+/**
+ * Keeps submission evidence current in both execution modes, so the Execution mode checklist can be satisfied before
+ * the bot is armed instead of only after. Live mode keeps its strict behaviour: a failed refresh is an error for the
+ * scan cycle. Dry run records the failed checks as evidence, retries at the refresh cadence, and skips a private-relay
+ * probe until a signer is loaded, since the relay evidence must authenticate the account that will submit.
+ */
+export async function refreshSubmissionReadiness(resources: SubmissionPreflightResources, settings: OperatorSettings, options: { nowMilliseconds?: number; preflight?: (settings: OperatorSettings) => Promise<readonly EndpointCheck[]> } = {}): Promise<SubmissionReadinessOutcome> {
+	const nowMilliseconds = options.nowMilliseconds ?? Date.now()
+	const configurationIdentity = submissionPreflightConfigurationIdentity(settings)
+	const identityChanged = resources.submissionPreflightConfigurationIdentity !== configurationIdentity
+	if (!identityChanged && !submissionPreflightIsDue(resources.submissionPreflightChecks, settings, nowMilliseconds)) return 'current'
+	if (!settings.runtime.execute) {
+		if (settings.submission.mode === 'private' && settings.privateKey === undefined) return 'skipped'
+		if (!identityChanged && resources.submissionPreflightFailedAt !== undefined && nowMilliseconds - resources.submissionPreflightFailedAt < submissionPreflightRefreshMilliseconds(settings)) return 'deferred'
+	}
+	try {
+		await recordEndpointPreflightChecks(
+			async () => await (options.preflight ?? preflightTransactionSubmissionNetwork)(settings),
+			checks => {
+				resources.submissionPreflightConfigurationIdentity = configurationIdentity
+				resources.submissionPreflightChecks = checks
+			},
+		)
+	} catch (error) {
+		if (settings.runtime.execute) throw error
+		resources.submissionPreflightConfigurationIdentity = configurationIdentity
+		resources.submissionPreflightFailedAt = nowMilliseconds
+		return 'failed'
+	}
+	resources.submissionPreflightFailedAt = undefined
+	return 'refreshed'
 }

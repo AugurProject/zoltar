@@ -598,8 +598,10 @@ describe('liquidator dashboard server', () => {
 				return value
 			},
 			setSelectedPools: mutate,
+			setExecution: mutate,
 			setSigner: mutate,
 			setStrategy: mutate,
+			setSubmission: mutate,
 			testMarketSources: mutate,
 		})
 		servers.push(server)
@@ -614,12 +616,14 @@ describe('liquidator dashboard server', () => {
 		}
 		for (const [pathname, body] of [
 			['/api/approved-universes', []],
+			['/api/execution', { execute: true }],
 			['/api/market-configuration', {}],
 			['/api/paused', { paused: false }],
 			['/api/reconcile-transaction', {}],
 			['/api/selected-pools', []],
 			['/api/signer', {}],
 			['/api/strategy', {}],
+			['/api/submission', {}],
 			['/api/test-market-sources', {}],
 		] as const) {
 			expect((await request(pathname, body)).status).toBe(400)
@@ -632,6 +636,37 @@ describe('liquidator dashboard server', () => {
 		expect(configured).toBe(true)
 		expect((await request('/api/strategy')).status).toBe(200)
 		expect(chainSpecificMutations).toBe(1)
+	})
+
+	test('names the execution prerequisite or the competing signer owner without leaking the lock path', async () => {
+		let failure = 'Live execution requires an active signer'
+		const server = startDashboardServer(0, {
+			getConfiguration: () => ({}),
+			getState: () => ({}),
+			hostname: '127.0.0.1',
+			isNetworkConfigured: () => true,
+			setApprovedUniverses: value => value,
+			setExecution: () => {
+				throw new Error(failure)
+			},
+			setPaused: value => value,
+			setSelectedPools: value => value,
+			setSigner: value => value,
+			setStrategy: value => value,
+		})
+		servers.push(server)
+		const request = async () => {
+			const response = await fetch(new URL('/api/execution', server.url), { body: JSON.stringify({ execute: true }), headers: { 'content-type': 'application/json', origin: server.url.origin }, method: 'PUT' })
+			expect(response.status).toBe(400)
+			return Reflect.get(Object(await response.json()), 'error')
+		}
+		expect(await request()).toBe('Live execution requires an active signer')
+		failure = 'The saved key differs from the active signer; save or remove it before enabling live execution'
+		expect(await request()).toBe(failure)
+		failure = 'Execution signer 0x1111111111111111111111111111111111111111 on chain 1 is already locked (pid 4242 on host-a). Stop the other process before removing /workspace/.state/locks/signer.lock.'
+		expect(await request()).toBe('The signer is reserved by another liquidator process. Stop it or choose another signer before going live.')
+		failure = 'ENOENT: /workspace/.state/operator.json'
+		expect(await request()).toBe('Execution mode could not be changed. Review the signer, quorum RPCs, and protected bot logs.')
 	})
 
 	test('allows passwordless access through an explicitly loopback-published container port', async () => {

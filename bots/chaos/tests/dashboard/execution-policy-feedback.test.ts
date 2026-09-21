@@ -1,38 +1,101 @@
 import { expect, test } from 'bun:test'
 import { existsSync } from 'node:fs'
 import { startDashboardServer } from '../../src/dashboard/dashboard-server.ts'
+import { CONFIGURATION_COMMITTED_SAFELY_PAUSED } from '../../src/runtime/configuration-commit.ts'
 import { CHROMIUM_STARTUP_BUDGET_MILLISECONDS, startChromiumSession } from './chromium-session.ts'
 
 const chromium = process.env['CHROMIUM_PATH'] ?? Bun.which('chromium') ?? '/usr/bin/chromium'
 const browserTest = existsSync(chromium) ? test : test.skip
+const wallet = `0x${'ab'.repeat(20)}`
+const repToken = `0x${'e1'.repeat(20)}`
 
 browserTest(
-	'execution policy distinguishes drafts from active mode and saves explicitly at both widths',
+	'execution mode lists every live prerequisite, gates the switch on them, and saves the mode explicitly at both widths',
 	async () => {
 		let execute = false
 		let revision = 1
+		let ready = false
 		let rejectSave = false
+		let loseCommittedResponse = false
 		let releaseSave = () => {}
 		let saveGate: Promise<void> | undefined
-		let mutations = 0
+		const executionMutations: unknown[] = []
+		const settingsMutations: unknown[] = []
+		const checkedAt = () => new Date().toISOString()
 		const dashboard = startDashboardServer(0, {
 			hostname: '127.0.0.1',
-			getConfiguration: () => ({ revision: String(revision), settings: { paused: true, runtime: { execute }, strategy: { enabledEcosystems: ['open-oracle'], selectableOperationAllowlist: null } } }),
-			getState: () => ({ execute, paused: true, activities: [], evaluations: [], inventory: { rep: [] }, obligations: [], pendingTransactions: [], scheduler: { status: 'paused' }, workflows: [] }),
-			setSettings: async value => {
-				mutations += 1
-				await saveGate
-				if (rejectSave) throw new Error('Policy save rejected')
-				const nextExecute = Reflect.get(Object(Reflect.get(Object(Reflect.get(Object(value), 'patch')), 'runtime')), 'execute')
-				if (typeof nextExecute !== 'boolean') throw new Error('Missing execution setting')
-				execute = nextExecute
-				revision += 1
-			},
+			getConfiguration: () => ({
+				hasSigner: ready,
+				revision: String(revision),
+				settings: {
+					connectivity: ready ? { publicRpcUrls: ['https://submit.example/'], quorumRpcUrls: [], readRpcUrl: 'https://read.example/', rpcQuorum: 1 } : undefined,
+					network: { chainId: 11_155_111, explorerUrl: 'https://sepolia.etherscan.io', name: 'sepolia' },
+					networkConfigured: ready,
+					paused: true,
+					runtime: { execute },
+					scheduler: { maximumDelaySeconds: 3_600, minimumDelaySeconds: 60 },
+					strategy: {
+						allowHighRiskOperations: false,
+						allowIrreversibleOperations: false,
+						enabledEcosystems: ['open-oracle'],
+						initializeGenesisUniverse: false,
+						maximumEthPerOperation: '0.05',
+						maximumGasCostEth: '0.02',
+						maximumRepPerOperation: '10',
+						minimumEthReserve: ready ? '0.05' : '0',
+						minimumRepReserve: '10',
+						selectableOperationAllowlist: null,
+						workflowValidForBlocks: 288,
+					},
+					submission: { minimumBundleRelaySuccesses: 1, mode: 'public', relayUrls: [] },
+				},
+				signerAddress: ready ? wallet : undefined,
+			}),
+			getState: () => ({
+				activities: [],
+				evaluations: [],
+				execute,
+				inventory: ready ? { eth: '1000000000000000000', rep: [{ balance: '100000000000000000000', symbol: 'REP', token: repToken, universeId: '0' }] } : { rep: [] },
+				inventoryAvailable: ready,
+				lastScanAt: ready ? checkedAt() : undefined,
+				lastScannedBlock: ready ? '4242' : undefined,
+				obligations: [],
+				paused: true,
+				pendingTransactions: [],
+				rpcEndpointHealth: ready
+					? [
+							{ chainId: 11_155_111, checkedAt: checkedAt(), kind: 'read-rpc', status: 'healthy', target: 'https://read.example/' },
+							{ lastSuccessAt: checkedAt(), status: 'healthy', target: 'https://read.example/' },
+							{ chainId: 11_155_111, checkedAt: checkedAt(), kind: 'public-rpc', status: 'healthy', target: 'https://submit.example/' },
+						]
+					: [],
+				scheduler: { status: 'paused' },
+				topology: ready ? { anchor: { blockNumber: '4242', timestamp: '1000' }, auctions: [], complete: true, pairs: [], pools: [], reports: [], universes: [{ id: '0', knownChildOutcomes: [], repToken }] } : undefined,
+				wallet: ready ? wallet : undefined,
+				workflows: [],
+			}),
 			setCancellation: () => {},
 			setCandidate: () => {},
+			setExecution: async value => {
+				executionMutations.push(value)
+				await saveGate
+				if (rejectSave) throw new Error('Execution change rejected')
+				execute = Reflect.get(Object(value), 'execute') === true
+				revision += 1
+				if (loseCommittedResponse) {
+					// The change committed, but the response reports an unknown outcome instead of success.
+					const committed = new Error('activation did not complete')
+					committed.name = CONFIGURATION_COMMITTED_SAFELY_PAUSED
+					throw committed
+				}
+			},
 			setObligation: () => {},
 			setPaused: () => {},
 			setReplacement: () => {},
+			setSettings: value => {
+				settingsMutations.push(value)
+				revision += 1
+			},
 			setSigner: () => {},
 			setWorkflow: () => {},
 		})
@@ -55,6 +118,7 @@ browserTest(
 			}
 			throw new Error(`Timed out: ${expression}`)
 		}
+		const readiness = "Array.from(document.querySelectorAll('#execution-checklist li'), item => `${item.dataset.ready}${item.dataset.advisory === 'true' ? '~' : ''}:${item.querySelector('.readiness-label')?.textContent}`)"
 		const capture = async (name: string) => {
 			const result = await cdp.command('Page.captureScreenshot', { format: 'png' })
 			const data = Reflect.get(Object(result), 'data')
@@ -64,48 +128,101 @@ browserTest(
 		try {
 			for (const width of [1440, 390]) {
 				execute = false
+				ready = false
 				revision += 1
 				await cdp.command('Emulation.setDeviceMetricsOverride', { width, height: width === 390 ? 844 : 900, deviceScaleFactor: 1, mobile: false })
 				await cdp.command('Page.navigate', { url: new URL('/settings', dashboard.url).href })
-				await waitFor("document.querySelector('#settings-fields')?.disabled === false")
-				await cdp.evaluate("document.querySelector('#settings-form').scrollIntoView({ block: 'start' }); window.scrollBy(0, -document.querySelector('.operator-shell').getBoundingClientRect().height - 16)")
-				expect(await cdp.evaluate("document.querySelector('#execution-current-mode')?.textContent")).toBe('Current mode: Dry run')
-				await capture(`saved-${width}`)
-				const before = mutations
-				await cdp.evaluate("document.querySelector('#execute').click()")
-				expect(mutations).toBe(before)
-				expect(await cdp.evaluate("document.querySelector('#execution-draft-mode')?.textContent")).toBe('Live execution selected · not applied')
+				await waitFor("document.querySelector('#settings-fields')?.disabled === false && document.querySelector('#execution-fieldset')?.disabled === false")
+				expect(await cdp.evaluate("Array.from(document.querySelectorAll('#settings-nav a'), chip => chip.textContent)")).toEqual(['1Connect', '2Execution policy', '3Go live'])
+				expect(await cdp.evaluate("Array.from(document.querySelectorAll('#settings-go-live .settings-group > summary strong'), title => title.textContent)")).toEqual(['Transaction signer', 'Execution mode'])
+				// Nothing but the pause holds yet, so every required prerequisite is listed as missing and the switch stays locked.
+				expect(await cdp.evaluate(readiness)).toEqual(['true:Bot paused', 'false:Transaction signer', 'false:Chain and RPC endpoints', 'true:Independent quorum RPCs', 'false:Reserve policy', 'false:Canonical scan', 'false:Live inventory', 'false:Delivery', 'true~:Recovery work'])
+				expect(await cdp.evaluate("document.querySelector('#execution-mode-summary')?.textContent")).toBe('Dry run · prerequisites missing')
+				expect(await cdp.evaluate("document.querySelector('#execution-enabled')?.disabled")).toBe(true)
+				await cdp.evaluate("document.querySelector('#execution-mode').scrollIntoView({ block: 'start' }); window.scrollBy(0, -document.querySelector('.operator-shell').getBoundingClientRect().height - 16)")
+				await capture(`blocked-${width}`)
+				// The policy form keeps its own draft badge, independent of the execution mode switch.
+				await cdp.evaluate("document.querySelector('#allow-high-risk').click()")
+				expect(await cdp.evaluate("document.querySelector('#settings-draft-status')?.hidden")).toBe(false)
 				expect(await cdp.evaluate("document.querySelector('#settings-draft-status')?.textContent")).toBe('Unsaved changes')
-				expect(await cdp.evaluate("document.querySelector('#execution-current-mode')?.textContent")).toBe('Current mode: Dry run')
-				await cdp.evaluate("window.dispatchEvent(new Event('focus'))")
-				await capture(`draft-${width}`)
-				expect(await cdp.evaluate('document.body.scrollWidth === document.documentElement.clientWidth')).toBe(true)
 				await cdp.evaluate("document.querySelector('#discard-settings').click()")
-				expect(await cdp.evaluate("document.querySelector('#execute').checked")).toBe(false)
-				expect(await cdp.evaluate("document.querySelector('#settings-draft-status').hidden")).toBe(true)
-				await cdp.evaluate("document.querySelector('#execute').click()")
+				expect(await cdp.evaluate("document.querySelector('#settings-draft-status')?.hidden")).toBe(true)
+				expect(await cdp.evaluate("document.querySelector('#allow-high-risk')?.checked")).toBe(false)
+				expect(await cdp.evaluate('document.body.scrollWidth === document.documentElement.clientWidth')).toBe(true)
+
+				ready = true
+				await cdp.evaluate("window.dispatchEvent(new Event('focus'))")
+				await waitFor("document.querySelector('#execution-mode-summary')?.textContent === 'Dry run · ready to go live'")
+				expect(await cdp.evaluate(readiness)).toEqual(['true:Bot paused', 'true:Transaction signer', 'true:Chain and RPC endpoints', 'true:Independent quorum RPCs', 'true:Reserve policy', 'true:Canonical scan', 'true:Live inventory', 'true:Delivery', 'true~:Recovery work'])
+				expect(await cdp.evaluate("document.querySelector('#execution-enabled')?.disabled")).toBe(false)
+				expect(await cdp.evaluate("document.querySelector('#execution-form button[type=\"submit\"]').matches(':disabled')")).toBe(true)
+				await capture(`ready-${width}`)
+				const before = executionMutations.length
+				await cdp.evaluate("document.querySelector('#execution-enabled').click()")
+				expect(executionMutations).toHaveLength(before)
+				expect(await cdp.evaluate("document.querySelector('#execution-form button[type=\"submit\"]').matches(':disabled')")).toBe(false)
+				expect(await cdp.evaluate('Array.from(document.querySelectorAll(\'.settings-badges[data-form="execution-form"] .settings-badge\'), badge => badge.textContent)')).toEqual(['Unsaved changes'])
+				// The periodic refresh reloads the configuration without discarding the unsaved flip.
+				await cdp.evaluate("window.dispatchEvent(new Event('focus'))")
+				await Bun.sleep(300)
+				expect(await cdp.evaluate("document.querySelector('#execution-enabled')?.checked")).toBe(true)
+				expect(await cdp.evaluate('Array.from(document.querySelectorAll(\'.settings-badges[data-form="execution-form"] .settings-badge\'), badge => badge.textContent)')).toEqual(['Unsaved changes'])
 				rejectSave = true
-				await cdp.evaluate("document.querySelector('#save-settings').click()")
-				await waitFor("document.querySelector('#settings-save-status')?.textContent === 'Policy save rejected'")
-				expect(await cdp.evaluate("document.querySelector('#settings-draft-status').hidden")).toBe(false)
-				await capture(`failed-${width}`)
+				await cdp.evaluate('document.querySelector(\'#execution-form button[type="submit"]\').click()')
+				await waitFor("document.querySelector('#execution-status')?.textContent === 'Execution change rejected'")
+				expect(executionMutations.at(-1)).toEqual({ execute: true, revision: String(revision) })
+				expect(await cdp.evaluate("document.querySelector('#execution-enabled')?.checked")).toBe(false)
+				expect(await cdp.evaluate("document.querySelector('#execution-mode-summary')?.textContent")).toBe('Dry run · ready to go live')
+				await capture(`rejected-${width}`)
 				rejectSave = false
 				saveGate = new Promise(resolve => {
 					releaseSave = resolve
 				})
-				await cdp.evaluate("document.querySelector('#save-settings').click()")
-				await waitFor("document.querySelector('#settings-save-status')?.textContent === 'Saving…'")
-				expect(await cdp.evaluate("document.querySelector('#save-settings').matches(':disabled')")).toBe(true)
+				await cdp.evaluate("document.querySelector('#execution-enabled').click()")
+				await cdp.evaluate('document.querySelector(\'#execution-form button[type="submit"]\').click()')
+				await waitFor("document.querySelector('#execution-status')?.textContent === 'Enabling live execution…'")
+				expect(await cdp.evaluate("document.querySelector('#execution-fieldset')?.disabled")).toBe(true)
+				// A refresh and a repeated submit while the save is in flight neither unlock the form nor send it twice.
+				const inFlight = executionMutations.length
+				await cdp.evaluate("window.dispatchEvent(new Event('focus'))")
+				await Bun.sleep(300)
+				await cdp.evaluate("document.querySelector('#execution-form')?.dispatchEvent(new SubmitEvent('submit', { bubbles: true, cancelable: true }))")
+				await Bun.sleep(100)
+				expect(executionMutations).toHaveLength(inFlight)
+				expect(await cdp.evaluate("document.querySelector('#execution-fieldset')?.disabled")).toBe(true)
+				expect(await cdp.evaluate("document.querySelector('#execution-form button[type=\"submit\"]').matches(':disabled')")).toBe(true)
 				await capture(`saving-${width}`)
 				releaseSave()
 				saveGate = undefined
-				await waitFor("document.querySelector('#execution-current-mode')?.textContent === 'Current mode: Live execution'")
-				expect(await cdp.evaluate("document.querySelector('#settings-draft-status').hidden")).toBe(true)
+				await waitFor("document.querySelector('#execution-mode-summary')?.textContent === 'Live'")
+				expect(await cdp.evaluate("document.querySelector('#execution-status')?.textContent")).toContain('Live execution enabled')
+				expect(await cdp.evaluate("document.querySelector('#execution-enabled')?.checked")).toBe(true)
+				expect(await cdp.evaluate('Array.from(document.querySelectorAll(\'.settings-badges[data-form="execution-form"] .settings-badge\'), badge => badge.textContent)')).toEqual([])
 				await capture(`live-${width}`)
-				await cdp.evaluate("document.querySelector('#execute').click()")
-				expect(await cdp.evaluate("document.querySelector('#execution-draft-mode')?.textContent")).toBe('Dry run selected · not applied')
-				await cdp.evaluate("document.querySelector('#execute').click()")
-				expect(await cdp.evaluate("document.querySelector('#execution-draft-mode').hidden")).toBe(true)
+				// A committed change whose response is lost is reconciled from the reloaded configuration, not the pre-request mode.
+				loseCommittedResponse = true
+				await cdp.evaluate("document.querySelector('#execution-enabled').click()")
+				await cdp.evaluate('document.querySelector(\'#execution-form button[type="submit"]\').click()')
+				await waitFor("document.querySelector('#execution-status')?.textContent?.includes('Current configuration and state were reloaded') === true && document.querySelector('#execution-fieldset')?.disabled === false")
+				expect(executionMutations.at(-1)).toEqual({ execute: false, revision: String(revision - 1) })
+				expect(await cdp.evaluate("document.querySelector('#execution-enabled')?.checked")).toBe(false)
+				expect(await cdp.evaluate("document.querySelector('#execution-mode-summary')?.textContent")).toBe('Dry run · ready to go live')
+				expect(await cdp.evaluate('Array.from(document.querySelectorAll(\'.settings-badges[data-form="execution-form"] .settings-badge\'), badge => badge.textContent)')).toEqual([])
+				expect(await cdp.evaluate("document.querySelector('#execution-form button[type=\"submit\"]').matches(':disabled')")).toBe(true)
+				loseCommittedResponse = false
+				await cdp.evaluate("document.querySelector('#execution-enabled').click()")
+				await cdp.evaluate('document.querySelector(\'#execution-form button[type="submit"]\').click()')
+				await waitFor("document.querySelector('#execution-mode-summary')?.textContent === 'Live'")
+				// A live operator can always return to dry run, even after a prerequisite lapses.
+				ready = false
+				await cdp.evaluate("window.dispatchEvent(new Event('focus'))")
+				await waitFor("document.querySelector('#execution-checklist li:nth-child(2)')?.dataset.ready === 'false'")
+				expect(await cdp.evaluate("document.querySelector('#execution-enabled')?.disabled")).toBe(false)
+				await cdp.evaluate("document.querySelector('#execution-enabled').click()")
+				await cdp.evaluate('document.querySelector(\'#execution-form button[type="submit"]\').click()')
+				await waitFor("document.querySelector('#execution-status')?.textContent === 'Dry-run mode saved.'")
+				expect(executionMutations.at(-1)).toEqual({ execute: false, revision: String(revision - 1) })
+				expect(settingsMutations).toHaveLength(0)
 			}
 			expect(cdp.issues).toEqual([])
 		} finally {
