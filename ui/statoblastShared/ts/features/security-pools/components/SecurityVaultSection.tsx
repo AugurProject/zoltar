@@ -412,10 +412,10 @@ export function SecurityVaultSection({
 						{repWithdrawAmountField}
 						{effectiveRepExitMode === 'redeem' ? null : stagedOperationTimeoutField}
 						<div className='actions'>
+							{repExitActionButton}
 							<button className='secondary' type='button' onClick={closeVaultActionModal}>
 								{commonCopy.cancel}
 							</button>
-							{repExitActionButton}
 						</div>
 					</>
 				)}
@@ -429,9 +429,6 @@ export function SecurityVaultSection({
 					<MetricField label={securityPoolCopy.vault}>{selectedVaultOwner === undefined ? commonCopy.noneSelected : <AddressValue address={selectedVaultOwner} />}</MetricField>
 				</MetricGrid>
 				<div className='actions'>
-					<button className='secondary' type='button' onClick={closeVaultActionModal}>
-						{commonCopy.cancel}
-					</button>
 					<TransactionActionButton
 						idleLabel={securityPoolCopy.claimFees}
 						pendingLabel={securityPoolCopy.claimingFees}
@@ -439,6 +436,9 @@ export function SecurityVaultSection({
 						pending={securityVaultActiveAction === 'redeemFees'}
 						availability={{ disabled: !claimFeesEnabled || !canUseLoadedVaultActions || !hasClaimableFees, reason: canUseLoadedVaultActions && !hasClaimableFees ? securityPoolCopy.noClaimableFeesReason : claimFeesLauncherBlocker }}
 					/>
+					<button className='secondary' type='button' onClick={closeVaultActionModal}>
+						{commonCopy.cancel}
+					</button>
 				</div>
 			</OperationModal>
 		</>

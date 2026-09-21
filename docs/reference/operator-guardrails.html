@@ -561,7 +561,7 @@
 					<tbody>
 						<tr>
 							<td>Atomic initial report</td>
-							<td>The sponsor funds the ETH bounty and WETH/REP position; the coordinator submits that position atomically as the initial reporter. A caller-selected WETH amount above the dynamic minimum is allowed. See <a href="./open-oracle.html#security-guarantee">OpenOracle sizing and funding</a> for derivation, reporter withdrawals, application buffering, and escalation effects.</td>
+							<td>The sponsor commits an explicit ETH bounty of at least the dynamic request cost and funds the WETH/REP position; the coordinator retains the whole bounty and submits that position atomically as the initial reporter. A caller-selected WETH amount above the dynamic minimum is allowed. See <a href="./open-oracle.html#security-guarantee">OpenOracle sizing and funding</a> for derivation, reporter withdrawals, application buffering, and escalation effects.</td>
 							<td><a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/OpenOraclePriceCoordinator.sol">OpenOraclePriceCoordinator.sol</a>, <a href="https://github.com/AugurProject/zoltar/blob/main/ui/statoblastShared/ts/protocol/openOracle.ts">openOracle.ts</a></td>
 						</tr>
 						<tr>
@@ -577,7 +577,7 @@
 						<tr>
 							<td>Staging guardrails</td>
 							<td>Withdrawal and liquidation amounts must be non-zero. Validity must be positive and no more than five minutes. Withdrawals target the operator's own vault. Liquidation uses explicit operator, receiver, and target roles; receiver and target must differ. A delegated receiver requires a valid bounded approval and queue-time reservation, while the self-receiving operator path requires no signature.</td>
-							<td><a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/OpenOraclePriceCoordinator.sol">OpenOraclePriceCoordinator.sol</a></td>
+							<td><a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/OpenOraclePriceCoordinator.sol">OpenOraclePriceCoordinator.sol</a>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/OpenOraclePriceCoordinatorTypes.sol">OpenOraclePriceCoordinatorTypes.sol</a></td>
 						</tr>
 						<tr>
 							<td>Delegated receiver approvals</td>

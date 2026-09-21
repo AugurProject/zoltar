@@ -1008,7 +1008,8 @@ describe('Open Oracle helpers', () => {
 					expect(finalStep?.tokenFunding?.map(token => token.tokenAddress)).toEqual([getAddress(addressString(GENESIS_REPUTATION_TOKEN)), getAddress(WETH_ADDRESS)])
 					expect(finalStep?.tokenFunding?.[1]?.amount).toBe(minimumToken1ReportAttoEth)
 					expect(finalStep?.tokenFunding?.[0]?.amount).toBe((minimumToken1ReportAttoEth * minimumToken1ReportAttoEth + 10n ** 18n - 1n) / 10n ** 18n)
-					expect(finalStep?.value).toBe((finalStep?.oracleOutcome?.settlerRewardAttoEth ?? 0n) + (finalStep?.oracleOutcome?.ethRefundAttoEth ?? 0n))
+					expect(finalStep?.value).toBe(finalStep?.oracleOutcome?.settlerRewardAttoEth)
+					expect(finalStep?.args?.at(-1)).toBe(finalStep?.value)
 				},
 				onTransactionPrepared: preview => preparedFunctions.push(preview.functionName),
 			},
@@ -1312,9 +1313,13 @@ describe('Open Oracle helpers', () => {
 			let plannedFunctions: string[] = []
 			const preparedFunctions: string[] = []
 			const preparedQueueArguments: Array<readonly unknown[]> = []
+			const preparedQueueValues: Array<bigint | undefined> = []
 			const onTransactionPrepared: NonNullable<typeof uiWriteClient.onTransactionPrepared> = preview => {
 				preparedFunctions.push(preview.functionName)
-				if ((preview.functionName === 'requestPrice' || preview.functionName === 'requestPriceIfNeededAndStageOperation' || preview.functionName === 'requestPriceIfNeededAndStageLiquidation') && preview.args !== undefined) preparedQueueArguments.push(preview.args)
+				if ((preview.functionName === 'requestPrice' || preview.functionName === 'requestPriceIfNeededAndStageOperation' || preview.functionName === 'requestPriceIfNeededAndStageLiquidation') && preview.args !== undefined) {
+					preparedQueueArguments.push(preview.args)
+					preparedQueueValues.push(preview.value)
+				}
 			}
 			const readContract: typeof uiWriteClient.readContract = async parameters => {
 				if (parameters.functionName === 'lastPrice') return 0n as never
@@ -1364,10 +1369,13 @@ describe('Open Oracle helpers', () => {
 			else await queueOracleManagerOperation(withInitializedV4Pool(mockClient), managerAddress, 'liquidation', client.account.address, 1n, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, undefined, requestedInitialAttoWeth)
 
 			expect(quotedExactAmounts).toEqual(Array.from({ length: 8 }, () => requestedInitialAttoWeth))
+			// The committed bounty is the final argument and equals the ETH sent with the request.
+			const committedBounty = preparedQueueValues[0]
+			if (committedBounty === undefined || committedBounty <= 0n) throw new Error('Expected the oracle request to send a positive ETH bounty')
 			let expectedArguments: readonly unknown[]
-			if (operation === 'request') expectedArguments = [400_000_000_000_000_000n, requestedInitialAttoWeth]
-			else if (operation === 'liquidation-helper') expectedArguments = [client.account.address, client.account.address, 1n, `0x${'00'.repeat(32)}`, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, 400_000_000_000_000_000n, requestedInitialAttoWeth]
-			else expectedArguments = [expect.anything(), client.account.address, 1n, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, 400_000_000_000_000_000n, requestedInitialAttoWeth]
+			if (operation === 'request') expectedArguments = [400_000_000_000_000_000n, requestedInitialAttoWeth, committedBounty]
+			else if (operation === 'liquidation-helper') expectedArguments = [client.account.address, client.account.address, 1n, `0x${'00'.repeat(32)}`, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, 400_000_000_000_000_000n, requestedInitialAttoWeth, committedBounty]
+			else expectedArguments = [expect.anything(), client.account.address, 1n, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, 400_000_000_000_000_000n, requestedInitialAttoWeth, committedBounty]
 			expect(preparedQueueArguments).toEqual([expectedArguments])
 			expect(plannedFunctions).toEqual(preparedFunctions)
 			expect(plannedFunctions).toHaveLength(3)

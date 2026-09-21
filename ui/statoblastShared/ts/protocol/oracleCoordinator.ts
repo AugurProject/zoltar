@@ -417,8 +417,9 @@ async function fundCoordinatorInitialReport(client: WriteClient, managerAddress:
 	if (fundingRequirement.currentRepBalanceAttoRep < expectedRep) throw new Error('Insufficient REP balance for coordinator initial report')
 	const requiredEth = fundingRequirement.wethShortfallAttoEth + (finalStep.value ?? 0n)
 	if ((await client.getBalance({ address: client.account.address })) < requiredEth) throw new Error('Insufficient ETH for initial report funding and the oracle fee. Gas is additional.')
-	const estimatedBounty = await readOracleRequestCost(client, managerAddress)
-	if (estimatedBounty > (finalStep.value ?? 0n)) throw new Error('The oracle fee increased. Review the price request again before funding it.')
+	// The final step commits its whole ETH value as the settler bounty; the coordinator retains it in full.
+	const bountyAttoEth = finalStep.value ?? 0n
+	if ((await readOracleRequestCost(client, managerAddress)) > bountyAttoEth) throw new Error('The oracle fee increased. Review the price request again before funding it.')
 	const actions: FundingTransaction[] = []
 	if (fundingRequirement.wethShortfallAttoEth > 0n)
 		actions.push({
@@ -454,7 +455,7 @@ async function fundCoordinatorInitialReport(client: WriteClient, managerAddress:
 				{ tokenAddress: getWethAddress(), amount: currentWeth },
 			]
 		},
-		oracleOutcome: { settlerRewardAttoEth: estimatedBounty, ethRefundAttoEth: (finalStep.value ?? 0n) - estimatedBounty, returnToWallet: true },
+		oracleOutcome: { settlerRewardAttoEth: bountyAttoEth, returnToWallet: true },
 		tokenFunding: [
 			{ tokenAddress: fundingRequirement.reputationTokenAddress, amount: expectedRep, limit: fundingRequirement.initialReportAmount2 },
 			{ tokenAddress: getWethAddress(), amount: expectedWeth, limit: fundingRequirement.maximumInitialAttoWeth },
@@ -467,12 +468,12 @@ export async function requestOraclePrice(client: WriteClient, managerAddress: Ad
 	await assertCoordinatorRequestPriceAllowed(client, managerAddress)
 	const resolvedInitialReportPrice = proposedRepPerEthPrice ?? (await getCoordinatorInitialReportPrice(client, managerAddress, requestedInitialAttoWeth))
 	const requestValue = reviewedRequestValueAttoEth ?? (await loadBufferedOracleRequestEthCost(client, managerAddress))
-	await fundCoordinatorInitialReport(client, managerAddress, resolvedInitialReportPrice, requestedInitialAttoWeth, { functionName: 'requestPrice', contractAddress: managerAddress, value: requestValue, args: [resolvedInitialReportPrice, requestedInitialAttoWeth] })
+	await fundCoordinatorInitialReport(client, managerAddress, resolvedInitialReportPrice, requestedInitialAttoWeth, { functionName: 'requestPrice', contractAddress: managerAddress, value: requestValue, args: [resolvedInitialReportPrice, requestedInitialAttoWeth, requestValue] })
 	const callParams = {
 		address: managerAddress,
 		abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
 		functionName: 'requestPrice',
-		args: [resolvedInitialReportPrice, requestedInitialAttoWeth],
+		args: [resolvedInitialReportPrice, requestedInitialAttoWeth, requestValue],
 		value: requestValue,
 	}
 	const hash = await writeContractAndWait(client, () => callParams)
@@ -506,7 +507,7 @@ export async function queueSecurityPoolLiquidation(client: WriteClient, managerA
 		address: managerAddress,
 		abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
 		functionName: 'requestPriceIfNeededAndStageLiquidation',
-		args: [targetVault, receiverVault, amount, approvalId, validForSeconds, proposedRepPerEthPrice, requestedInitialAttoWeth],
+		args: [targetVault, receiverVault, amount, approvalId, validForSeconds, proposedRepPerEthPrice, requestedInitialAttoWeth, queueOperationValueAttoEth],
 		value: queueOperationValueAttoEth,
 	}
 	const { hash, receipt } = await writeContractAndWaitForReceipt(client, () => callParams)
@@ -528,7 +529,7 @@ export async function queueOracleManagerOperation(client: WriteClient, managerAd
 		address: managerAddress,
 		abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
 		functionName: 'requestPriceIfNeededAndStageOperation',
-		args: [encodeOracleQueueOperation(operation), targetVault, amount, validForSeconds, resolvedInitialReportPrice, requestedInitialAttoWeth],
+		args: [encodeOracleQueueOperation(operation), targetVault, amount, validForSeconds, resolvedInitialReportPrice, requestedInitialAttoWeth, queueOperationValueAttoEth],
 		value: queueOperationValueAttoEth,
 	}
 	const { hash, receipt } = await writeContractAndWaitForReceipt(client, () => callParams)

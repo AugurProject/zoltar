@@ -44,7 +44,7 @@ export const queueWithdrawal: OperationDefinition = {
 		steps.push(
 			encodeStep({
 				abi: openOraclePriceCoordinatorAbi,
-				args: [1, snapshot.wallet.address, requested, STAGED_WITHDRAWAL_VALIDITY_SECONDS, funding.price, funding.initialWethAttoEth],
+				args: [1, snapshot.wallet.address, requested, STAGED_WITHDRAWAL_VALIDITY_SECONDS, funding.price, funding.initialWethAttoEth, 0n],
 				evidence,
 				functionName: 'requestPriceIfNeededAndStageOperation',
 				id: 'queue-withdrawal',

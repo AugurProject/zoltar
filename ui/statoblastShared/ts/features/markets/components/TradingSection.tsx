@@ -504,7 +504,6 @@ export function TradingSection({
 						pendingLabel={tradingCopy.redeemingCompleteSets}
 						onClick={onRedeemCompleteSet}
 						pending={tradingActiveAction === 'redeemCompleteSet'}
-						tone='secondary'
 						availability={{ disabled: !isOnActiveAppChain || !redeemCompleteSetsEnabled || redeemCompleteSetGuardMessage !== undefined, reason: getModalActionReason(redeemCompleteSetsEnabled, redeemCompleteSetGuardMessage) }}
 					/>
 				</div>
@@ -555,7 +554,6 @@ export function TradingSection({
 						pendingLabel={tradingCopy.migratingShares}
 						onClick={onMigrateShares}
 						pending={tradingActiveAction === 'migrateShares'}
-						tone='secondary'
 						availability={{ disabled: !isOnActiveAppChain || !migrateSharesEnabled || migrateSharesGuardMessage !== undefined, reason: getModalActionReason(migrateSharesEnabled, migrateSharesGuardMessage) }}
 					/>
 				</div>
@@ -583,7 +581,6 @@ export function TradingSection({
 						pendingLabel={tradingCopy.redeemingShares}
 						onClick={onRedeemShares}
 						pending={tradingActiveAction === 'redeemShares'}
-						tone='secondary'
 						availability={{ disabled: !isOnActiveAppChain || !redeemSharesEnabled || redeemSharesGuardMessage !== undefined, reason: getModalActionReason(redeemSharesEnabled, redeemSharesGuardMessage) }}
 					/>
 				</div>

@@ -48,7 +48,7 @@ function oracleRequestSteps(snapshot: EcosystemSnapshot, coordinator: `0x${strin
 	steps.push(
 		encodeStep({
 			abi: openOraclePriceCoordinatorAbi,
-			args: [prepared.price, initialWethAttoEth],
+			args: [prepared.price, initialWethAttoEth, requestCostAttoEth],
 			evidence: [
 				eventEvidence(coordinator, 'PriceRequested(uint256,uint256)'),
 				exactTokenTransferToCoordinatorEvidence(snapshot, weth, coordinator, initialWethAttoEth),

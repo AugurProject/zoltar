@@ -152,6 +152,30 @@
 	width: min(100%, 24rem);
 }
 
+/* A transaction action reserves feedback space under its button, so dialog rows that pair it with plain buttons align to the top, share the button height, and stay on one line at desktop widths. */
+.modal-panel .actions:has(> .tx-action) {
+	align-items: flex-start;
+}
+
+.modal-panel .actions:has(> .tx-action) > button {
+	min-block-size: 3rem;
+}
+
+.modal-panel .actions:has(> .tx-action) > .tx-action {
+	flex: 1 1 10rem;
+	width: auto;
+	max-width: 24rem;
+}
+
+/* Cancel is always the last button and keeps the right edge, while the actions before it fill the row. */
+.modal-panel .actions:has(> .tx-action):has(> button:last-child) > .tx-action {
+	max-width: none;
+}
+
+.modal-panel .actions:has(> .tx-action) > button:last-child {
+	margin-inline-start: auto;
+}
+
 .tx-action-row {
 	display: flex;
 	align-items: center;

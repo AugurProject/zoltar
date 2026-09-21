@@ -16,7 +16,9 @@ import { createCompleteSet, depositRepToVault, depositToEscalationGame, getSecur
 import {
 	OperationType,
 	executeStagedOperation,
+	fundCoordinatorInitialReport,
 	getActiveStagedOperationCount,
+	getDefaultInitialReportPrice,
 	getIsPriceValid,
 	getLastPrice,
 	getOpenOracleExtraData,
@@ -561,6 +563,7 @@ describe('Price Oracle Refund Security Tests', () => {
 				inputs: [
 					{ name: 'proposedRepPerEthPrice', type: 'uint256' },
 					{ name: 'requestedInitialAttoWeth', type: 'uint256' },
+					{ name: 'bountyAttoEth', type: 'uint256' },
 				],
 				name: 'requestPrice',
 				outputs: [],
@@ -577,7 +580,7 @@ describe('Price Oracle Refund Security Tests', () => {
 			abi: requestPriceWithMinimumAbi,
 			functionName: 'requestPrice',
 			address: priceOracle,
-			args: [proposedRepPerEthPrice, requestedInitialAttoWeth],
+			args: [proposedRepPerEthPrice, requestedInitialAttoWeth, await getRequestPriceCostAttoEth(client, priceOracle)],
 			value: await getRequestPriceCostAttoEth(client, priceOracle),
 		})
 		await client.waitForTransactionReceipt({ hash })
@@ -713,7 +716,7 @@ describe('Price Oracle Refund Security Tests', () => {
 			abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
 			functionName: 'requestPrice',
 			address: priceOracle,
-			args: [proposedRepPerEthPrice, 0n],
+			args: [proposedRepPerEthPrice, 0n, await getRequestPriceCostAttoEth(client, priceOracle)],
 			value: (await getRequestPriceCostAttoEth(client, priceOracle)) + requestMinimumWethReport,
 			gasPrice: requestBaseFeeAttoEthPerGas,
 		})
@@ -792,6 +795,9 @@ describe('Price Oracle Refund Security Tests', () => {
 
 	test('coordinator constructor rejects unsafe oracle risk parameters', async () => {
 		const baseArgs = getOracleCoordinatorConstructorArgs()
+		const zeroRequestGasArgs = getOracleCoordinatorConstructorArgs()
+		zeroRequestGasArgs[3] = 0n
+		zeroRequestGasArgs[4] = 0
 		const buildArgsWithSizingParameters = (gasUnitsForOneDispute: bigint, targetPriceErrorForDispute: bigint, openOracleSecurityMultiplierBps: bigint, protocolFee: number, feePercentage: number): OracleCoordinatorConstructorArgs => [
 			baseArgs[0],
 			baseArgs[1],
@@ -880,6 +886,10 @@ describe('Price Oracle Refund Security Tests', () => {
 				args: buildArgsWithRiskParameters(ORACLE_ESCALATION_HALT_MULTIPLIER_BPS, ORACLE_MAX_SETTLEMENT_BASE_FEE_MULTIPLIER_BPS, 10001n),
 				message: /minimum liquidation price distance cannot exceed one hundred percent/i,
 			},
+			{
+				args: zeroRequestGasArgs,
+				message: /request gas units zero/i,
+			},
 		]
 
 		for (const invalidCase of invalidRiskParameterCases) {
@@ -938,7 +948,7 @@ describe('Price Oracle Refund Security Tests', () => {
 				abi: coordinatorAbi,
 				address: priceOracle,
 				functionName: 'requestPrice',
-				args: [1n, 0n],
+				args: [1n, 0n, costAttoEth - 1n],
 				value: costAttoEth - 1n,
 			}),
 			/Oracle bounty too small/,
@@ -948,7 +958,17 @@ describe('Price Oracle Refund Security Tests', () => {
 				abi: coordinatorAbi,
 				address: priceOracle,
 				functionName: 'requestPrice',
-				args: [0n, 0n],
+				args: [1n, 0n, costAttoEth],
+				value: costAttoEth - 1n,
+			}),
+			/Not enough ETH for oracle bounty/,
+		)
+		await assert.rejects(
+			client.writeContract({
+				abi: coordinatorAbi,
+				address: priceOracle,
+				functionName: 'requestPrice',
+				args: [0n, 0n, costAttoEth],
 				value: costAttoEth,
 			}),
 			/Initial oracle price zero/,
@@ -982,7 +1002,7 @@ describe('Price Oracle Refund Security Tests', () => {
 				abi: coordinatorAbi,
 				address: priceOracle,
 				functionName: 'requestPrice',
-				args: [1n, 1n << 128n],
+				args: [1n, 1n << 128n, costAttoEth],
 				value: costAttoEth,
 			}),
 			/WETH report exceeds uint128/,
@@ -992,7 +1012,7 @@ describe('Price Oracle Refund Security Tests', () => {
 				abi: coordinatorAbi,
 				address: priceOracle,
 				functionName: 'requestPrice',
-				args: [(1n << 128n) * 10n ** 18n, 1n],
+				args: [(1n << 128n) * 10n ** 18n, 1n, costAttoEth],
 				value: costAttoEth,
 			}),
 			/REP report exceeds uint128/,
@@ -1002,7 +1022,7 @@ describe('Price Oracle Refund Security Tests', () => {
 				abi: coordinatorAbi,
 				address: priceOracle,
 				functionName: 'requestPrice',
-				args: [1n, (1n << 128n) / 10n + 1n],
+				args: [1n, (1n << 128n) / 10n + 1n, costAttoEth],
 				value: costAttoEth,
 			}),
 			/Oracle escalation halt amount exceeds uint128 maximum/,
@@ -1015,12 +1035,12 @@ describe('Price Oracle Refund Security Tests', () => {
 	test('staged operation public guards cover argument geometry, request funding, and execution prerequisites', async () => {
 		const coordinatorAbi = statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi
 		const otherVault = addressString(TEST_ADDRESSES[1])
-		const stage = (operation: OperationType, targetVault: Address, amount: bigint, validForSeconds: bigint, value = 0n) =>
+		const stage = (operation: OperationType, targetVault: Address, amount: bigint, validForSeconds: bigint, value = 0n, bountyAttoEth = value) =>
 			client.writeContract({
 				abi: coordinatorAbi,
 				address: priceOracle,
 				functionName: 'requestPriceIfNeededAndStageOperation',
-				args: [operation, targetVault, amount, validForSeconds, 1n, 0n],
+				args: [operation, targetVault, amount, validForSeconds, 1n, 0n, bountyAttoEth],
 				value,
 			})
 
@@ -1045,7 +1065,8 @@ describe('Price Oracle Refund Security Tests', () => {
 			functionName: 'stagedOperationCounter',
 			args: [],
 		})
-		await assert.rejects(stage(OperationType.WithdrawRep, client.account.address, 1n, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS), /Not enough ETH was provided to request a fresh oracle price/)
+		await assert.rejects(stage(OperationType.WithdrawRep, client.account.address, 1n, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS), /Oracle bounty too small/)
+		await assert.rejects(stage(OperationType.WithdrawRep, client.account.address, 1n, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, 0n, await getRequestPriceCostAttoEth(client, priceOracle)), /Not enough ETH for oracle bounty/)
 		assert.strictEqual(
 			await client.readContract({
 				abi: coordinatorAbi,
@@ -1150,7 +1171,7 @@ describe('Price Oracle Refund Security Tests', () => {
 				encodeFunctionData({
 					abi: coordinatorAbi,
 					functionName: 'requestPrice',
-					args: [proposedRepPerEthPrice, initialWethReport],
+					args: [proposedRepPerEthPrice, initialWethReport, costAttoEth],
 				}),
 				costAttoEth + 1n,
 			),
@@ -1183,7 +1204,7 @@ describe('Price Oracle Refund Security Tests', () => {
 				encodeFunctionData({
 					abi: coordinatorAbi,
 					functionName: 'requestPriceIfNeededAndStageOperation',
-					args: [OperationType.Liquidation, client.account.address, 1n, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, proposedRepPerEthPrice, initialWethReport],
+					args: [OperationType.Liquidation, client.account.address, 1n, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, proposedRepPerEthPrice, initialWethReport, costAttoEth],
 				}),
 				costAttoEth + 1n,
 			),
@@ -1258,7 +1279,7 @@ describe('Price Oracle Refund Security Tests', () => {
 					abi: coordinatorAbi,
 					address: overflowCoordinator,
 					functionName: 'requestPrice',
-					args: [1n, 0n],
+					args: [1n, 0n, requestEthCost],
 					value: requestEthCost,
 					gasPrice: baseFeeAttoEthPerGas,
 				}),
@@ -1305,7 +1326,7 @@ describe('Price Oracle Refund Security Tests', () => {
 				abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
 				functionName: 'requestPrice',
 				address: priceOracle,
-				args: [proposedRepPerEthPrice, 0n],
+				args: [proposedRepPerEthPrice, 0n, requestEthCost],
 				value: requestEthCost,
 				gasPrice: requestBaseFeeAttoEthPerGas,
 			})
@@ -1386,7 +1407,7 @@ describe('Price Oracle Refund Security Tests', () => {
 			abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
 			functionName: 'requestPrice',
 			address: priceOracle,
-			args: [proposedRepPerEthPrice, 0n],
+			args: [proposedRepPerEthPrice, 0n, requestEthCost],
 			value: requestEthCost,
 			gasPrice: requestBaseFeeAttoEthPerGas,
 		})
@@ -1461,7 +1482,7 @@ describe('Price Oracle Refund Security Tests', () => {
 			abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
 			functionName: 'requestPrice',
 			address: priceOracle,
-			args: [proposedRepPerEthPrice, 0n],
+			args: [proposedRepPerEthPrice, 0n, requestEthCost],
 			value: requestEthCost,
 			gasPrice: baseFeeAttoEthPerGas,
 		})
@@ -1558,6 +1579,48 @@ describe('Price Oracle Refund Security Tests', () => {
 		assert.strictEqual((await getSecurityVault(client, securityPool, client.account.address)).capacityOwnershipAttoRep, repDeposit / 2n, 'failed settlement must not change capacity ownership')
 	})
 
+	test('the settlement basefee cap and settler reward follow the committed bounty instead of the request block basefee', async () => {
+		const callbackGasLimit = BigInt(ORACLE_SETTLEMENT_GAS) * 4n
+		const requestGasUnits = 4n * (callbackGasLimit + ORACLE_REPORT_GAS)
+		const impliedRequestBaseFeeAttoEthPerGas = 1n * 10n ** 9n
+		const bountyAttoEth = impliedRequestBaseFeeAttoEthPerGas * requestGasUnits + 101n
+		assert.strictEqual(await getRequestPriceCostAttoEth(client, priceOracle), 101n, 'zero-basefee test chains price the request at the minimum offset')
+
+		await requestPriceWithValue(client, priceOracle, bountyAttoEth)
+
+		const reportId = await getPendingReportId(client, priceOracle)
+		assert.ok(reportId > 0n, 'the committed bounty should open a pending report')
+		const expectedSettlementBaseFeeCap = (impliedRequestBaseFeeAttoEthPerGas * ORACLE_MAX_SETTLEMENT_BASE_FEE_MULTIPLIER_BPS) / 10000n
+		assert.strictEqual(await getPendingReportMaxSettlementBaseFee(client, priceOracle), expectedSettlementBaseFeeCap, 'a zero-basefee request must snapshot the cap implied by the bounty, so fee-free simulations write the same storage as mined requests')
+		const reportMeta = await getOpenOracleReportMeta(client, reportId)
+		assert.strictEqual(reportMeta.settlerRewardAttoEth, bountyAttoEth, 'the whole committed bounty should become the settler reward')
+	})
+
+	test('the coordinator retains the committed bounty and refunds only the ETH sent above it', async () => {
+		const proposedRepPerEthPrice = await getDefaultInitialReportPrice(client, priceOracle)
+		await fundCoordinatorInitialReport(client, priceOracle, proposedRepPerEthPrice)
+		const bountyAttoEth = 101n + 5n * 10n ** 15n
+		const excessAttoEth = 7n * 10n ** 15n
+		const balanceBefore = await getETHBalance(client, client.account.address)
+
+		const requestHash = await client.writeContract({
+			abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
+			functionName: 'requestPrice',
+			address: priceOracle,
+			args: [proposedRepPerEthPrice, 0n, bountyAttoEth],
+			value: bountyAttoEth + excessAttoEth,
+		})
+		const requestReceipt = await client.waitForTransactionReceipt({ hash: requestHash })
+		assert.strictEqual(requestReceipt.status, 'success', 'an overfunded request should succeed')
+
+		const balanceAfter = await getETHBalance(client, client.account.address)
+		if (requestReceipt.effectiveGasPrice === undefined) throw new Error('request receipt is missing its effective gas price')
+		const gasAttoEth = requestReceipt.gasUsed * requestReceipt.effectiveGasPrice
+		assert.strictEqual(balanceBefore - balanceAfter, bountyAttoEth + gasAttoEth, 'the sponsor should pay exactly the committed bounty plus gas and receive the excess back')
+		const reportMeta = await getOpenOracleReportMeta(client, await getPendingReportId(client, priceOracle))
+		assert.strictEqual(reportMeta.settlerRewardAttoEth, bountyAttoEth, 'the retained bounty should fund the settler reward without the refunded excess')
+	})
+
 	test('oracle settlement skips price updates and staged execution when settlement basefee is too high', async () => {
 		const costAttoEth = await getRequestPriceCostAttoEth(client, priceOracle)
 		await requestPriceIfNeededAndStageOperationWithValue(client, priceOracle, OperationType.WithdrawRep, client.account.address, 1n, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, costAttoEth)
@@ -1626,14 +1689,14 @@ describe('Price Oracle Refund Security Tests', () => {
 			args: [],
 		})
 
-		// Call requestPrice with overpayment
-		await requestPriceWithValue(client, priceOracle, overpayment)
+		// Call requestPrice with overpayment above the committed bounty
+		await requestPriceWithValue(client, priceOracle, overpayment, undefined, 0n, costAttoEth)
 
 		const finalBalance = await getETHBalance(client, client.account.address)
 
 		// The helper wraps a 2x WETH execution buffer before requesting the report.
-		// The unused WETH remains with the caller; any extra native ETH value should
-		// still be refunded by the coordinator.
+		// The unused WETH remains with the caller; any native ETH above the committed
+		// bounty should still be refunded by the coordinator.
 		const expectedEthDecrease = costAttoEth + minimumWethReport * 2n
 		assert.strictEqual(initialBalance - finalBalance, expectedEthDecrease, `Caller should spend the ETH bounty plus the buffered WETH funding (${expectedEthDecrease}), but spent ${initialBalance - finalBalance}`)
 	})
@@ -1855,7 +1918,7 @@ describe('Price Oracle Refund Security Tests', () => {
 				abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
 				functionName: 'requestPriceIfNeededAndStageOperation',
 				address: priceOracle,
-				args: [OperationType.WithdrawRep, counterpartyClient.account.address, counterpartyCapacityOwnershipAttoRep, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, 1n, 0n],
+				args: [OperationType.WithdrawRep, counterpartyClient.account.address, counterpartyCapacityOwnershipAttoRep, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, 1n, 0n, 0n],
 				account: counterpartyClient.account,
 			})
 			.then(
@@ -1937,7 +2000,7 @@ describe('Price Oracle Refund Security Tests', () => {
 				abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
 				functionName: 'requestPriceIfNeededAndStageOperation',
 				address: priceOracle,
-				args: [OperationType.WithdrawRep, counterpartyClient.account.address, repDeposit / 6n, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, 1n, 0n],
+				args: [OperationType.WithdrawRep, counterpartyClient.account.address, repDeposit / 6n, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, 1n, 0n, 0n],
 				account: counterpartyClient.account,
 			}),
 			/Only the pending report sponsor can queue more operations until settlement/,
@@ -1971,7 +2034,7 @@ describe('Price Oracle Refund Security Tests', () => {
 				abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
 				functionName: 'requestPriceIfNeededAndStageOperation',
 				address: priceOracle,
-				args: [OperationType.WithdrawRep, counterpartyClient.account.address, repDeposit / 5n, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, 1n, 0n],
+				args: [OperationType.WithdrawRep, counterpartyClient.account.address, repDeposit / 5n, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, 1n, 0n, 0n],
 				account: counterpartyClient.account,
 			})
 			.then(
