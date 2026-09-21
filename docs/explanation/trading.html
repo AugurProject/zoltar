@@ -1,13 +1,51 @@
 <!doctype html>
 <html lang="en">
-	<head><meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" /><meta name="description" content="How Statoblast Trading turns complete sets into Yes and No liquidity." /><title>How Statoblast Trading works</title><link rel="stylesheet" href="../assets/css/shared-docs.css" /><link rel="stylesheet" href="../assets/css/docsShell.css" /></head>
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<meta name="description" content="How Statoblast Trading turns complete sets into Yes and No liquidity." />
+		<title>How Statoblast Trading works</title>
+		<link rel="stylesheet" href="../assets/css/shared-docs.css" />
+		<link rel="stylesheet" href="../assets/css/docsShell.css" />
+	</head>
 	<body class="doc-openoracle">
 		<main id="main-content">
-			<header><p class="kicker">Explanation</p><h1>How Statoblast Trading works</h1><p>Statoblast Trading is a separate on-chain exchange around Statoblast outcome shares and one implementation of trading built on Statoblast. Other trading implementations can also be built on top of Statoblast. Statoblast core still owns market creation, collateral, migration, resolution, and redemption.</p></header>
-			<section id="complete-set-entry"><h2>From ETH to a directional position</h2><p>Each ETH entry first creates a <a href="../reference/glossary.html#complete-set">complete set</a>: one Yes, one No, and one Invalid share. The pair contains only Yes and No reserves. The router sends the unwanted directional share into the pair, receives more of the selected directional share, and returns the matching Invalid share to the user. Invalid never enters the automated market maker (AMM).</p><p>For a binary market, a trader choosing Yes receives a Yes-heavy position plus the Invalid share created with the complete set. The Invalid share remains a separate claim if the market later resolves Invalid.</p></section>
-			<section id="prices"><h2>What the prices mean</h2><p>Yes and No prices are conditional on valid resolution. They describe the relative price of the two directional outcomes; they are not estimates of invalidity. Interfaces should therefore label the Yes and No values directly and present Invalid separately.</p><p>Spot prices come from current reserves and can be manipulated. Protocol contracts never use them as truth or solvency oracles. Settlement uses the SecurityPool's resolved outcome, while solvency-sensitive REP/ETH operations use OpenOracle.</p></section>
-			<section id="market-isolation"><h2>One pair per SecurityPool</h2><p>Each SecurityPool maps to its own pair. Parent and child pools therefore have separate pairs, reserves, prices, and liquidity-provider tokens. A fork does not copy liquidity between them.</p><p>The router supports direct liquidity removal, exact-amount permits, and receive-based share authorization. See the <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/docs/trading/index.md">Trading contract documentation</a> for entrypoints, authorization payloads, and deployment details.</p></section>
+			<header>
+				<p class="kicker">Explanation</p>
+				<h1>How Statoblast Trading works</h1>
+				<p>Statoblast Trading is a separate on-chain exchange around Statoblast outcome shares, one of possibly many that can be built on Statoblast. Statoblast core still owns market creation, collateral, migration, resolution, and redemption.</p>
+			</header>
+			<section id="complete-set-entry">
+				<h2>From ETH to a directional position</h2>
+				<p>Each ETH entry first creates a <a href="../reference/glossary.html#complete-set">complete set</a>: one Yes, one No, and one Invalid share. The pair contains only Yes and No reserves. The router sends the unwanted directional share into the pair, receives more of the selected directional share, and returns the matching Invalid share to the user. Invalid never enters the automated market maker (AMM).</p>
+				<p>For a binary market, a trader choosing Yes receives a Yes-heavy position plus the Invalid share created with the complete set. The Invalid share remains a separate claim if the market later resolves Invalid.</p>
+			</section>
+			<section id="prices">
+				<h2>What the prices mean</h2>
+				<p>Yes and No prices are conditional on valid resolution. They describe the relative price of the two directional outcomes; they are not estimates of invalidity. Interfaces should therefore label the Yes and No values directly and present Invalid separately.</p>
+				<p>Spot prices come from current reserves and can be manipulated. Protocol contracts never use them as truth or solvency oracles. Settlement uses the SecurityPool's resolved outcome, while solvency-sensitive REP/ETH operations use OpenOracle.</p>
+			</section>
+			<section id="market-isolation">
+				<h2>One pair per SecurityPool</h2>
+				<p>Each SecurityPool maps to its own pair. Parent and child pools therefore have separate pairs, reserves, prices, and liquidity-provider tokens; liquidity, like <a href="./zoltar.html#non-guarantees">everything else in a fork</a>, is not copied between them.</p>
+				<p>Liquidity is removed directly from the pair; the router adds exact-amount permits for that path and handles exits and redemptions as share transfers, so the first-party UI never asks you for an allowance. The <a href="../reference/trading/router.html">router reference</a> lists every entrypoint.</p>
+			</section>
+			<section id="reading-paths">
+				<h2>Where to go next</h2>
+				<dl>
+					<dt>Learn by doing</dt>
+					<dd><a href="../tutorials/trading-first-market.html">Your first Trading market</a> and <a href="../tutorials/trading-first-trade.html">your first trade</a>.</dd>
+					<dt>Get something done</dt>
+					<dd><a href="../how-to/trading-set-up-development.html">Set up development</a>, <a href="../how-to/trading-configure-ui.html">configure the UI</a>, <a href="../how-to/trading-deploy-contracts.html">deploy the contracts</a>, <a href="../how-to/trading-seed-alternative-odds.html">seed alternative odds</a>, <a href="../how-to/trading-exit-a-position.html">exit a position</a>, <a href="../how-to/trading-remove-liquidity.html">remove liquidity</a>, <a href="../how-to/trading-handle-resolution.html">handle resolution</a>, and <a href="../how-to/trading-handle-a-fork.html">handle a fork</a>.</dd>
+					<dt>Understand the design</dt>
+					<dd><a href="./trading/two-way-market.html">The two-way market</a>, <a href="./trading/invalid-insurance.html">INVALID insurance</a>, <a href="./trading/pricing.html">conditional pricing</a>, <a href="./trading/liquidity-provider-position.html">the LP position</a>, <a href="./trading/early-exit-limit.html">early-exit limits</a>, <a href="./trading/forks-and-resolution.html">forks and resolution</a>, <a href="./trading/architecture-decisions.html">architecture decisions and limitations</a>.</dd>
+					<dt>Look something up</dt>
+					<dd><a href="../reference/trading/contracts.html">Contracts</a>, <a href="../reference/trading/router.html">router</a>, <a href="../reference/trading/events.html">events</a>, <a href="../reference/trading/sdk.html">SDK</a>, <a href="../reference/trading/configuration.html">deployment configuration</a>, <a href="../reference/trading/invariants.html">invariants</a>, <a href="../reference/trading/units-and-rounding.html">units and rounding</a>, and <a href="../reference/trading/security-model.html">the security model</a>.</dd>
+				</dl>
+			</section>
 		</main>
-		<script src="../assets/js/responsiveDocs.js"></script><script src="../assets/js/docsData.js"></script><script src="../assets/js/docsShell.js"></script>
+		<script src="../assets/js/responsiveDocs.js"></script>
+		<script src="../assets/js/docsData.js"></script>
+		<script src="../assets/js/docsShell.js"></script>
 	</body>
 </html>

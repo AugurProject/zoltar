@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<meta name="description" content="Operational evidence, review cadence, and response for each security-model assumption that can change with market or service conditions." />
+		<title>Monitor security assumptions</title>
+		<link rel="stylesheet" href="../assets/css/shared-docs.css" />
+		<link rel="stylesheet" href="../assets/css/docsShell.css" />
+	</head>
+	<body class="doc-openoracle">
+		<main id="main-content">
+			<article>
+				<header>
+					<p class="kicker">How-to guide</p>
+					<h1>Monitor security assumptions</h1>
+					<p>The contracts cannot tell you when an economic or liveness assumption has stopped holding. This guide lists, for each assumption whose truth changes with market or service conditions, what evidence to collect, how often to look, and what to do when the boundary is weak or unknown.</p>
+				</header>
+				<section id="how-to-use">
+					<h2>How to use this guide</h2>
+					<ol>
+						<li>Before a deadline-bearing or price-sensitive action, find the rows whose assumptions the action depends on. The <a href="../reference/security-model.html">security model</a> lists which assumptions protect which mechanism.</li>
+						<li>Collect the row's evidence at the same lineage, pool, timestamp, numeraire, and decision horizon as the action, on the stated cadence, and apply the response before proceeding whenever the evidence is weak or unknown.</li>
+					</ol>
+				</section>
+				<section id="assumption-monitoring">
+					<h2>What to watch, how often, and what to do</h2>
+
+					<table>
+						<thead>
+							<tr>
+								<th>Assumptions</th>
+								<th>Operational evidence</th>
+								<th>Review cadence</th>
+								<th>Response when the boundary is weak or unknown</th>
+							</tr>
+						</thead>
+						<tbody>
+							<tr>
+								<td>Executor incentives and participation — A01, A02, A03, A06</td>
+								<td>Expected reward after gas, fees, delay, and capital lockup; number and independence of active liquidators, escalation participants, bidders, correctors, and transition executors; settle-ready OpenOracle reports, callback-recovery candidates, and overflow operations</td>
+								<td>Continuously for deadline-bearing flows; before launch and after parameter or gas-regime changes</td>
+								<td>Fund or arrange independent executors, reduce exposed value, or disclose that the affected transition may stall</td>
+							</tr>
+							<tr>
+								<td>Fork lineage value and migration readiness — A05, A07, A09, A11</td>
+								<td>Parent and supported-child lineage value in one numeraire; observed user, custodian, exchange, interface, and proof-tool readiness to migrate assets and state within the applicable windows; documented continued-use value and secured value</td>
+								<td>Before a fork-security claim and throughout migration and coordination windows</td>
+								<td>Do not claim fork deterrence, practical migration, or value concentration; narrow supported lineage and exposure</td>
+							</tr>
+							<tr>
+								<td>REP value and liquidity versus secured exposure — A08, A13, A14</td>
+								<td>REP supply basis, price source, depth and price impact; REP discounted-cash-flow methodology; protocol-accounted ETH collateral or explicitly broader open interest</td>
+								<td>At launch, continuously while open interest exists, and after material price, supply, liquidity, or exposure changes</td>
+								<td>Cap or stop new exposure in clients and disclosures; do not describe REP backing as economically sufficient</td>
+							</tr>
+							<tr>
+								<td>Outcome evidence and escalation funding — A04, A10</td>
+								<td>Outcome evidence sources and availability; immediately mobilizable REP and transaction budget before each local-escalation deadline</td>
+								<td>From question creation through local resolution and any fork window</td>
+								<td>Mark the market or action impaired, surface the deadline, and avoid asserting that honest local correction remains fundable</td>
+							</tr>
+							<tr>
+								<td>Truth auction demand — A12</td>
+								<td>Auction demand, indicative REP/ETH depth, expected discount, and bidder operating cost</td>
+								<td>Before and during every repair auction</td>
+								<td>Disclose likely incomplete repair and plan operation of the child at only migrated collateral plus accepted auction ETH</td>
+							</tr>
+							<tr>
+								<td>Transaction inclusion and Ethereum execution — A16, A26</td>
+								<td>Inclusion delay, base fee, priority fee, reorg depth, block gas limit, and gas schedule against each immutable window and mandatory transition</td>
+								<td>Continuously while a deadline or mandatory transition is live</td>
+								<td>Raise transaction fees where rational, use independent submission paths, and disclose missed-deadline or stranded-transition risk</td>
+							</tr>
+							<tr>
+								<td>REP/ETH price correction — A17, A18, A19</td>
+								<td>Independent corrector availability, ownership and payoff independence, scenario-dependent wrapped Ether (WETH) and REP replacement capital, reference-market depth, manipulation cost, correction profit after fees, gas, and price impact, transaction budget, and settlement inclusion</td>
+								<td>Continuously while a report is pending or a cached price can authorize operations</td>
+								<td>Block or discourage new price-sensitive operations and disclose that an incorrect report may settle</td>
+							</tr>
+							<tr>
+								<td>Token behaviour and recipient compatibility — A21, A22</td>
+								<td>Mainnet external-token code and behavior; reviewed Sepolia genesis REP/WETH runtime bytecode, constructor allocations, and wiring; WETH redeemability; burn-sink status; recipient ETH and Ethereum Request for Comments 1155 (ERC-1155) compatibility</td>
+								<td>At deployment verification and before first use of a new recipient or integration</td>
+								<td>Reject the deployment or incompatible recipient; do not rely on redirected recovery</td>
+							</tr>
+							<tr>
+								<td>Deployments, clients, data, and keys — A20, A23, A24, A27, A28</td>
+								<td>Pinned compiler and toolchain identity; reproducible-build output, reviewed bytecode hashes, release manifest, deployed runtime code and wiring; independent reorg-aware RPC/event replay; hash and CREATE2 verification; signer, typed-data domain, nonce, witness, session, and approval inventory</td>
+								<td>At release, on every environment or account change, and continuously for indexers</td>
+								<td>Stop signing or operating, reject an unverifiable deployment, revoke compromised authority where possible, and re-establish canonical state from independent sources</td>
+							</tr>
+							<tr>
+								<td>Question selection — A15</td>
+								<td>Immutable question ID and metadata, evidence plan, and pool relevance</td>
+								<td>Before pool selection</td>
+								<td>Reject or warn on the selection; do not represent an admitted question as relevant or resolvable</td>
+							</tr>
+							<tr>
+								<td>Immutable parameters — A25</td>
+								<td>Deployed immutable values and every documented economic, timing, integer-width, and gas relationship</td>
+								<td>Before deployment and after any change in external gas or market conditions used by the model</td>
+								<td>Treat the immutable deployment as unsupported; there is no administrative parameter repair</td>
+							</tr>
+						</tbody>
+					</table>
+				</section>
+			</article>
+		</main>
+		<script src="../assets/js/responsiveDocs.js"></script>
+		<script src="../assets/js/docsData.js"></script>
+		<script src="../assets/js/docsShell.js"></script>
+	</body>
+</html>

@@ -253,6 +253,30 @@
 						</tr>
 					</tbody>
 				</table>
+				<h2 id="accounting-examples">Accounting examples</h2>
+				<h3 id="retention-rate-and-annualized-fee">Retention rate and annualized fee</h3>
+				<p><code>SecurityPoolUtils.calculateRetentionRate</code> returns a per-second retention factor scaled by <code>PRICE_PRECISION</code> (<code>1e18</code>). It equals <code>MAX_RETENTION_RATE</code> at zero utilization, declines linearly until utilization reaches <code>RETENTION_RATE_DIP</code> (80% of live minting capacity), and stays at <code>MIN_RETENTION_RATE</code> above that. Zero live minting capacity selects <code>MAX_RETENTION_RATE</code>.</p>
+				<ul>
+					<li><code>MAX_RETENTION_RATE = 999_999_996_848_000_000</code>, about a 10% yearly fee.</li>
+					<li><code>MIN_RETENTION_RATE = 999_999_977_880_000_000</code>, about a 50% yearly fee.</li>
+				</ul>
+				<p>Clients annualize a retention rate for display as follows; the contract never computes this value.</p>
+				<div class="equation" id="eq-securitypool-annual-fee">
+					<math display="block" aria-label="annual fee equals one minus the retention rate divided by price precision, raised to the number of seconds in a year" data-source="annualFee = 1 - (retentionRate / PRICE_PRECISION)^SECONDS_PER_YEAR"
+						><mrow
+							><mi>annualFee</mi><mo>=</mo><mn>1</mn><mo>−</mo
+							><msup
+								><mrow
+									><mo>(</mo><mfrac><mi>retentionRate</mi><mi>PRICE_PRECISION</mi></mfrac
+									><mo>)</mo></mrow
+								><mi>SECONDS_PER_YEAR</mi></msup
+							></mrow
+						></math
+					>
+				</div>
+				<h3 id="liquidation-transfer-rounding">Liquidation transfer rounding</h3>
+				<p>A liquidation request is an ETH-denominated debt amount. Execution caps it at the target vault's live debt and at the largest amount whose complete REP award (<code>LIQUIDATION_REP_BONUS_BPS</code> = 500, so 5%) the target can fund. The proportional capacity ownership that leaves the target is rounded down; the REP backing units that leave it are rounded up. The receiver incurs exactly the reported debt increase and receives those ownership and backing units. Target claims, fees, surplus, and unmatched ownership remain with the target.</p>
+				<p>Only a request covering the target's full position records the untransferable remainder as target-local bad debt. Partial requests leave the remainder as ordinary target debt. After the transfer the receiver must remain healthy and any remaining target position must still meet <code>minimumSecurityBondDebtAttoEth</code> and <code>minimumVaultRepDepositAttoRep</code>, so a liquidation cannot leave unusable dust.</p>
 			</article>
 		</main>
 		<script src="../../assets/js/responsiveDocs.js"></script>

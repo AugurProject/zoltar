@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<meta name="description" content="What closes a pair, what stays open, and why a fork leaves every migration decision to the holder." />
+		<title>Forks and resolution in Trading</title>
+		<link rel="stylesheet" href="../../assets/css/shared-docs.css" />
+		<link rel="stylesheet" href="../../assets/css/docsShell.css" />
+	</head>
+	<body class="doc-openoracle">
+		<main id="main-content">
+			<header>
+				<p class="kicker">Explanation</p>
+				<h1>Forks and resolution in Trading</h1>
+				<p>A pair closes when its market can no longer be traded safely, but it never traps a position. This page explains which events close it and what a holder does next.</p>
+			</header>
+			<section id="what-closes">
+				<h2>What closes a pair</h2>
+				<p>Swaps, initialization, and added liquidity close at question end, when the pool is non-operational or awaiting continuation, when its universe has forked, or when the forker exposes a final outcome. LP removal deliberately has none of those guards.</p>
+			</section>
+			<section id="after-a-fork">
+				<h2>After a fork</h2>
+				<figure class="diagram" id="fig-trading-fork-migration" aria-labelledby="fig-trading-fork-migration-caption">
+					<ol class="protocol-flow">
+						<li><strong>LP → Parent pair:</strong> <code>removeLiquidity()</code></li>
+						<li><strong>Parent pair → LP:</strong> parent YES + NO</li>
+						<li><strong>LP → ShareToken:</strong> <code>migrate(fromId, chosen outcomes)</code></li>
+						<li><strong>ShareToken → LP:</strong> selected child shares</li>
+						<li>Wait until migration and any truth auction return the child pool to Operational</li>
+						<li><strong>LP → Factory:</strong> <code>createPair(exact child pool)</code></li>
+						<li><strong>Factory → LP:</strong> isolated child pair</li>
+					</ol>
+					<figcaption id="fig-trading-fork-migration-caption"><span class="figure-label">Carrying liquidity across a fork.</span> Every step is the LP's own decision; nothing here happens automatically.</figcaption>
+				</figure>
+				<p>A fork does not select a branch or migrate LP. Parent and child pools may share one ShareToken contract, but they have different universe-specific token IDs and different pair addresses. <a href="../../how-to/trading-handle-a-fork.html">Handle a universe fork</a> gives the step-by-step procedure.</p>
+			</section>
+			<section id="after-resolution">
+				<h2>After resolution</h2>
+				<figure class="diagram" id="fig-trading-resolution" aria-labelledby="fig-trading-resolution-caption">
+					<ol class="protocol-flow">
+						<li><strong>Pair → Forker:</strong> <code>getQuestionOutcome(pool)</code></li>
+						<li><strong>Forker → Pair:</strong> current YES / NO / INVALID outcome</li>
+						<li><strong>Pair → Pair:</strong> swaps and additions closed</li>
+						<li><strong>Holder → Pair:</strong> <code>removeLiquidity</code> remains available</li>
+						<li><strong>Pair → Holder:</strong> raw YES + NO</li>
+						<li><strong>Holder → SecurityPool:</strong> <code>redeemShares()</code> for the winning token</li>
+						<li><strong>SecurityPool → Holder:</strong> current collateral value</li>
+					</ol>
+					<figcaption id="fig-trading-resolution-caption"><span class="figure-label">Settling after resolution.</span> The pair only closes; value is redeemed at the SecurityPool, never at the pair.</figcaption>
+				</figure>
+				<p>On INVALID, the matching wallet INVALID is the settlement insurance. Pair YES and NO fee growth creates no INVALID-branch redemption value. <a href="../../how-to/trading-handle-resolution.html">Handle resolution</a> gives the procedure.</p>
+			</section>
+		</main>
+		<script src="../../assets/js/responsiveDocs.js"></script>
+		<script src="../../assets/js/docsData.js"></script>
+		<script src="../../assets/js/docsShell.js"></script>
+	</body>
+</html>

@@ -3,7 +3,7 @@
 	<head>
 		<meta charset="utf-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
-		<meta name="description" content="A five-minute introduction to Zoltar, Statoblast, Trading, and OpenOracle." />
+		<meta name="description" content="A five-minute introduction to Zoltar, Statoblast, Trading, and OpenOracle for readers who know Ethereum and nothing else." />
 		<title>System overview</title>
 		<link rel="stylesheet" href="../assets/css/shared-docs.css" />
 		<link rel="stylesheet" href="../assets/css/docsShell.css" />
@@ -13,44 +13,63 @@
 			<header>
 				<p class="kicker">Start here</p>
 				<h1>System overview</h1>
-				<p>Consider one recurring example: “Will the fictional Aurora spacecraft launch before 31 December 2030?” Its possible <a href="../reference/glossary.html#outcome">outcomes</a> are Yes, No, and <a href="../reference/glossary.html#invalid">Invalid</a>. The system registers that question, creates a collateralized market, lets people trade its shares, and then resolves or branches the market.</p>
+				<p>Zoltar and Statoblast are Ethereum protocols for prediction markets whose outcomes nobody can buy. This page assumes you know what Ethereum and an ERC-20 token are, and nothing else. It introduces the three words you will meet on every other page, the four components, and the life of one market.</p>
 			</header>
-			<section id="components">
-				<h2>Four separate components</h2>
+			<section id="problem">
+				<h2>The problem</h2>
+				<p>A prediction market lets people trade on a question such as “Will the fictional Aurora spacecraft launch before 31 December 2030?” Its shares are worth something only after someone decides what actually happened. That decision is the weak point: whoever controls it controls the money.</p>
+				<p>Zoltar and Statoblast make the decision expensive to corrupt in two ways. Anyone who reports an outcome must stake a token they lose if they are wrong. And when reporters cannot agree, the system does not pick a side: it splits into parallel ledgers, one per possible answer, and lets the market decide which ledger stays valuable. A dishonest majority can win a vote, but it cannot stop honest participants from walking away with a copy of the books.</p>
+			</section>
+			<section id="vocabulary">
+				<h2>Three words you will see everywhere</h2>
 				<dl>
-					<dt>Zoltar</dt><dd>Registers global <a href="../reference/glossary.html#question">questions</a>, defines branching <a href="../reference/glossary.html#universe">universes</a>, manages universe-specific <a href="../reference/glossary.html#rep">REP</a>, and coordinates forks. It neither resolves market truth nor manages Statoblast settlement collateral.</dd>
-					<dt>Statoblast core</dt><dd>Deploys a <a href="../reference/glossary.html#security-pool">SecurityPool</a> for a question in a universe, holds ETH <a href="../reference/glossary.html#settlement-collateral">settlement collateral</a>, mints and burns Yes, No, and Invalid <a href="../reference/glossary.html#outcome-share">outcome shares</a>, tracks <a href="../reference/glossary.html#vault">vault</a> REP and <a href="../reference/glossary.html#capacity-ownership">capacity ownership</a>, resolves ordinary disputes locally, and handles migration and collateral repair after a fork.</dd>
-					<dt>Statoblast Trading</dt><dd>One separate on-chain trading implementation built around Statoblast shares. Other trading implementations can be built on top of Statoblast. It does not create or resolve markets.</dd>
-					<dt>OpenOracle</dt><dd>Supplies fresh, economically contestable REP/ETH prices for solvency-sensitive operations. It does not decide prediction-market outcomes.</dd>
+					<dt>REP</dt>
+					<dd>The <a href="../reference/glossary.html#rep">Reputation token</a>. Holding REP lets you report outcomes and underwrite markets. It is also what you lose if you report dishonestly or underwrite carelessly.</dd>
+					<dt>Universe</dt>
+					<dd>A <a href="../reference/glossary.html#universe">ledger that can branch</a>. Every question, market, and REP balance belongs to exactly one universe. When reporters split irreconcilably, the universe forks into children, one per possible answer, each with its own REP.</dd>
+					<dt>SecurityPool</dt>
+					<dd>The <a href="../reference/glossary.html#security-pool">contract for one market in one universe</a>. It holds the ETH that backs the market's shares and keeps the books on who underwrites the market, who is disputing its outcome, and who is owed what.</dd>
+				</dl>
+			</section>
+			<section id="components">
+				<h2>Four components</h2>
+				<dl>
+					<dt><a href="./zoltar.html">Zoltar</a></dt>
+					<dd>The ledger. It records questions, universes, REP, and forks. It never judges which answer is true.</dd>
+					<dt><a href="./statoblast.html">Statoblast core</a></dt>
+					<dd>The market. It deploys one SecurityPool per question and universe, mints and redeems shares, settles ordinary disputes locally, and moves markets into child universes after a fork.</dd>
+					<dt><a href="./trading.html">Statoblast Trading</a></dt>
+					<dd>An exchange for Statoblast shares. It is one of possibly many; it neither creates nor resolves markets.</dd>
+					<dt><a href="./open-oracle.html">OpenOracle</a></dt>
+					<dd>A price feed. It supplies a contestable REP/ETH exchange rate whenever the protocol must check that REP still covers ETH obligations. It has no say in market outcomes.</dd>
 				</dl>
 			</section>
 			<section id="lifecycle">
-				<h2>One market lifecycle</h2>
-				<p>Alice registers the example question. A creator deploys its SecurityPool in a selected universe. Vault owners deposit REP to provide security capacity, and traders deposit ETH to mint <a href="../reference/glossary.html#complete-set">complete sets</a>. After the question ends, reporting begins.</p>
+				<h2>One market, start to finish</h2>
+				<p>Alice registers the Aurora question in Zoltar and deploys its SecurityPool. Vault owners lock REP in the pool to underwrite it. Traders send ETH to the pool and receive <a href="../reference/glossary.html#complete-set">complete sets</a>: one Yes, one No, and one Invalid share for each unit of collateral, at the pool's current rate. They trade those shares however they like. When the launch deadline passes, reporting begins.</p>
 				<figure class="diagram" id="fig-market-lifecycle" aria-labelledby="market-lifecycle-caption">
 					<ol class="protocol-flow">
-						<li>Register question</li><li>Deploy SecurityPool</li><li>Deposit vault REP</li><li>Mint complete sets</li><li>Trade shares</li><li>Question ends</li><li>Initial report and <a href="./escalation-game.html">Escalation Game</a></li><li>Local resolution or Zoltar fork</li><li>Migrate into child pools</li><li>Repair missing collateral through a <a href="../reference/glossary.html#truth-auction">Truth Auction</a></li><li>Redeem</li>
+						<li>Register question</li>
+						<li>Deploy SecurityPool</li>
+						<li>Deposit vault REP</li>
+						<li>Mint complete sets</li>
+						<li>Trade shares</li>
+						<li>Question ends</li>
+						<li>Initial report and <a href="./escalation-game.html">Escalation Game</a></li>
+						<li>Local resolution or Zoltar fork</li>
+						<li>Migrate into child pools</li>
+						<li>Repair missing collateral through a <a href="../reference/glossary.html#truth-auction">Truth Auction</a></li>
+						<li>Redeem</li>
 					</ol>
-					<figcaption id="market-lifecycle-caption"><span class="figure-label">Market lifecycle.</span> The ordinary path resolves locally and skips branching, migration, and repair. The fork path creates branch-specific pools whose collateral depends on migration and auction demand.</figcaption>
+					<figcaption id="market-lifecycle-caption"><span class="figure-label">Market lifecycle.</span> The ordinary path resolves locally and skips the migration and repair steps. The fork path creates one child pool per answer and repairs each child's collateral separately.</figcaption>
 				</figure>
-					<p>In the ordinary path, one outcome has a strict local reporting lead and its shares redeem from the original pool. If two outcomes reach the <a href="../reference/glossary.html#non-decision-threshold">non-decision threshold</a>, Statoblast forks on the market question and can migrate into its Invalid, Yes, and No children. While the pool is still unresolved and operational, a fork of its universe on another question can also interrupt it; those children follow that other categorical or scalar question's valid answers. A finalized pool remains settled and rejects later fork migration. Users choose <a href="../reference/glossary.html#child-universe">child universes</a>; ETH follows specific migration claims and is never copied. A child with insufficient collateral may try to raise the difference by selling <a href="../reference/glossary.html#child-rep">child REP</a> in a Truth Auction.</p>
+				<p>Usually that is the end of the story. Reporters stake REP behind an answer in the pool's <a href="./escalation-game.html">Escalation Game</a>, a dispute round whose deadline moves later as the contested amount grows. When the deadline finally passes, the answer with the most REP behind it wins, and winning shares redeem the pool's ETH.</p>
+				<p>If two answers each attract so much REP that neither can be called the winner, the pool <em>forks</em>: its universe splits into an Invalid, a Yes, and a No child, and every vault owner and shareholder chooses which child to carry their claims into. The ETH is not duplicated. Each child receives only what migrates to it, and a child that comes up short holds a Truth Auction, selling its own REP for ETH to close the gap. <a href="./zoltar.html#non-guarantees">What a fork does and does not promise</a> is the single most important thing to understand about these protocols.</p>
 			</section>
-			<section id="assets">
-				<h2>Assets and custody</h2>
-				<table>
-					<thead><tr><th>Asset or claim</th><th>What it represents</th><th>Where it is held or recorded</th></tr></thead>
-					<tbody>
-						<tr><td>ETH settlement collateral</td><td>Backing for outstanding complete sets</td><td>The SecurityPool; it is allocated, not copied, during migration</td></tr>
-						<tr><td>REP</td><td>Universe-specific reporting and security capital</td><td>Wallets, SecurityPool vault accounting, Escalation Games, or migration contracts</td></tr>
-						<tr><td>Outcome shares</td><td>Yes, No, or Invalid claims for one pool and universe</td><td>The shared ERC-1155 ShareToken ledger</td></tr>
-						<tr><td>Capacity ownership</td><td>A vault's proportional claim on fee-eligible security capacity</td><td>SecurityPool vault accounting</td></tr>
-						<tr><td>Escalation claims</td><td>REP-backed positions on reported outcomes</td><td>The Escalation Game until claimed or migrated</td></tr>
-						<tr><td>Trading LP tokens</td><td>A claim on one pair's Yes and No reserves</td><td>The Trading pair's ERC-20 ledger</td></tr>
-					</tbody>
-				</table>
-			</section>
-			<nav aria-label="Continue reading"><a href="./statoblast.html">Follow a market in Statoblast</a> · <a href="./zoltar.html">Understand branching universes</a> · <a href="../reference/glossary.html">Look up terminology</a></nav>
+			<nav aria-label="Continue reading"><a href="./statoblast.html">Follow a market through Statoblast</a> · <a href="./zoltar.html">Understand branching universes</a> · <a href="../reference/glossary.html">Look up a term</a></nav>
 		</main>
-		<script src="../assets/js/responsiveDocs.js"></script><script src="../assets/js/docsData.js"></script><script src="../assets/js/docsShell.js"></script>
+		<script src="../assets/js/responsiveDocs.js"></script>
+		<script src="../assets/js/docsData.js"></script>
+		<script src="../assets/js/docsShell.js"></script>
 	</body>
 </html>

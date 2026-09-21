@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<meta name="description" content="Create and seed the first YES/NO pair for an existing SecurityPool and end with LP tokens and INVALID insurance in your wallet." />
+		<title>Your first Trading market</title>
+		<link rel="stylesheet" href="../assets/css/shared-docs.css" />
+		<link rel="stylesheet" href="../assets/css/docsShell.css" />
+	</head>
+	<body class="doc-openoracle">
+		<main id="main-content">
+			<header>
+				<p class="kicker">Tutorial</p>
+				<h1>Your first Trading market</h1>
+				<p>In this tutorial you create and seed the first pair for an existing SecurityPool. You will finish with an initialized YES/NO pair, LP tokens, and separately held INVALID shares in your wallet.</p>
+			</header>
+			<section id="before-you-start">
+				<h2>Before you start</h2>
+				<p>Build and open the standalone Trading UI on a supported network by following <a href="../how-to/trading-configure-ui.html">Configure the Trading UI</a>. If the network's deterministic trading contracts are missing, the UI shows the deployment screen; complete <a href="../how-to/trading-deploy-contracts.html">Deploy the Trading contracts</a> first. Fund a wallet on that network with enough ETH for the initial deposit and gas.</p>
+				<p>You also need a SecurityPool that can still be initialized: operational, unresolved, with a question that has not ended and a universe that has not forked. The UI checks this for you, as step 2 shows. The pool must also have a current valid REP price and enough minting capacity for the collateral your deposit creates.</p>
+				<p>The <strong>Minting capacity</strong> field on the pool's details shows used and ceiling ETH; the router simulation in step 4 is what confirms that your deposit fits. If it reports a stale price or insufficient capacity, do not submit: wait for a valid price and free capacity, or reduce the deposit.</p>
+			</section>
+			<section id="steps">
+				<h2>Initialize the pair</h2>
+				<ol>
+					<li>Open the live UI (no <code>?simulate=1</code>), connect the wallet, and select the <strong>Create new market</strong> tab.</li>
+					<li>The <strong>Security Pools</strong> list shows pools in the selected universe that have no trading market yet. Find the exact pool you want and select <strong>Details</strong>. Confirm the full address is the branch you intend, then look at the action button: if it reads <strong>Deploy trading pool</strong>, the pool is eligible; if it is disabled with a reason such as <strong>Question ended</strong>, <strong>Pool inactive</strong>, <strong>Awaiting fork continuation</strong>, or <strong>Universe forked</strong>, choose another pool. The <strong>Complete-set backing</strong> figure shown here can change as retention accrues; the router simulation in step 4 is authoritative for the rate your transaction will use. Select <strong>Deploy trading pool</strong>.</li>
+					<li>The create-market form opens with the badge <strong>Pair not created</strong> and <strong>Pair</strong> reading <strong>Not deployed</strong>. In the <strong>Initialize</strong> / <strong>Add</strong> / <strong>Remove</strong> switch, select <strong>Initialize</strong>, then enter an <strong>ETH amount</strong> and a <strong>Conditional YES price</strong> above 0% and below 100%. One transaction will create the pair and seed it.</li>
+					<li>Select <strong>Simulate liquidity transaction</strong>. The authoritative router simulation shows the complete-set shares created, YES and NO deposited, unused directional shares returned, INVALID retained, and expected LP tokens. Confirm the reserve direction matches the odds you intended.</li>
+					<li>Select <strong>Submit liquidity transaction</strong> and confirm it in the wallet. The client refreshes the account, network, current block, and simulation before submitting; if any of them changed, simulate again.</li>
+					<li>After confirmation, open the <strong>Market</strong> tab, select the pool, and verify that its badge reads <strong>Trading open</strong>, the <strong>Pair</strong> field shows an address, and the Conditional YES / NO bar shows the price you seeded (70% YES for the example below). Open <strong>Portfolio</strong>, select the same pool, and verify your new LP balance and the returned INVALID balance.</li>
+				</ol>
+			</section>
+			<section id="what-you-made">
+				<h2>What you now hold</h2>
+				<p>For a 70% Conditional YES price, the initialized reserves are roughly 30 YES to 70 NO. The NO reserve is the larger one because in a constant-product pair the <em>opposite</em> reserve sets the spot price; <a href="../explanation/trading/pricing.html">Conditional pricing</a> explains the apparent reversal. Your LP tokens represent only the deposited YES and NO. The INVALID shares and any unused directional shares stay in your wallet as separate balances.</p>
+				<p>Next: <a href="./trading-first-trade.html">make your first trade</a> against the pair you just created.</p>
+			</section>
+		</main>
+		<script src="../assets/js/responsiveDocs.js"></script>
+		<script src="../assets/js/docsData.js"></script>
+		<script src="../assets/js/docsShell.js"></script>
+	</body>
+</html>

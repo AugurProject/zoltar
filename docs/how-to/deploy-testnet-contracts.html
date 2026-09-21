@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<meta name="description" content="Deploy the complete deterministic Zoltar and Statoblast infrastructure to Sepolia or another compatible testnet, from GitHub Actions or a local shell." />
+		<title>Deploy testnet contracts</title>
+		<link rel="stylesheet" href="../assets/css/shared-docs.css" />
+		<link rel="stylesheet" href="../assets/css/docsShell.css" />
+	</head>
+	<body class="doc-openoracle reference-page">
+		<main id="main-content">
+			<article>
+				<header>
+					<p class="kicker">How-to guide</p>
+					<h1>Deploy testnet contracts</h1>
+					<p>The testnet deployer installs the complete deterministic infrastructure in one run. It is safe to rerun: a contract already at its target address is skipped only when its runtime bytecode matches, and an unexpected contract at a target address stops the deployment.</p>
+				</header>
+				<section id="before-you-deploy">
+					<h2>Before you deploy</h2>
+					<ul>
+						<li>Complete the repository setup in the <a href="https://github.com/AugurProject/zoltar/blob/main/README.md">README</a>.</li>
+						<li>Use a dedicated testnet account and fund it with enough testnet ETH for the remaining steps.</li>
+						<li>Use an HTTPS RPC endpoint. Loopback HTTP endpoints are accepted for local test networks.</li>
+						<li>Make sure the deployer account has no pending transactions.</li>
+					</ul>
+					<p>Sepolia is the default target (chain ID <code>11155111</code>). A different testnet must support EIP-1559, the Cancun opcodes used by Zoltar and Uniswap V4, and the Osaka <code>CLZ</code> opcode used by the compiled contracts. The deployer rejects Ethereum mainnet (chain ID <code>1</code>).</p>
+				</section>
+				<section id="deploy-with-github-actions">
+					<h2>Deploy with GitHub Actions</h2>
+					<p>Use the <a href="https://github.com/AugurProject/zoltar/blob/main/.github/workflows/deploy-testnet.yml">Deploy Testnet Contracts</a> workflow for a deployment from <code>main</code>.</p>
+					<ol>
+						<li>Create a protected GitHub environment named <code>testnet-deployment</code>.</li>
+						<li>Add the deployer's private key as the environment secret <code>TESTNET_DEPLOYER_PRIVATE_KEY</code>.</li>
+						<li>Open <strong>Actions → Deploy Testnet Contracts → Run workflow</strong>.</li>
+						<li>Select <code>main</code>, complete the inputs, and enter <code>DEPLOY</code> as the confirmation.</li>
+						<li>Review the job summary for each planned deployment's result and address. It includes transaction hashes for contracts deployed during the run.</li>
+					</ol>
+					<p>Use a public RPC URL without credentials. Workflow inputs are stored in GitHub metadata and are not secret.</p>
+				</section>
+				<section id="deploy-locally">
+					<h2>Deploy locally</h2>
+					<p>Load <code>PRIVATE_KEY</code> from a secret manager or a hidden prompt. Never paste the key into a command, because the command may be saved in shell history. In Bash:</p>
+					<pre class="code-scroll" tabindex="0"><code>read -rsp 'Testnet deployer private key: ' PRIVATE_KEY \
+  &amp;&amp; echo &amp;&amp; export PRIVATE_KEY</code></pre>
+					<p>Run the deployer with an explicit RPC endpoint and spending limits:</p>
+					<pre class="code-scroll" tabindex="0"><code>bun run deploy:testnet -- \
+  --rpc-url=https://rpc.example \
+  --chain-id=11155111 \
+  --max-fee-per-gas-nanoeth=100 \
+  --max-total-cost-eth=20</code></pre>
+					<p>Remove the key from the shell when the command finishes:</p>
+					<pre class="code-scroll" tabindex="0"><code>unset PRIVATE_KEY</code></pre>
+					<p>The deployer reads the exported <code>PRIVATE_KEY</code> automatically. You can instead pass <code>--private-key=0x...</code> directly, but then the complete command, and therefore the key, may be saved in shell history. Run <code>bun run deploy:testnet -- --help</code> for all options. Options other than <code>--private-key</code> also accept uppercase arguments after <code>--</code> or environment variables.</p>
+					<table>
+						<thead>
+							<tr>
+								<th>Input</th>
+								<th>Default</th>
+								<th>Purpose</th>
+							</tr>
+						</thead>
+						<tbody>
+							<tr>
+								<td><code>RPC_URL</code> / <code>--rpc-url</code></td>
+								<td>Required</td>
+								<td>RPC endpoint for the target network</td>
+							</tr>
+							<tr>
+								<td><code>CHAIN_ID</code> / <code>--chain-id</code></td>
+								<td><code>11155111</code></td>
+								<td>Expected decimal chain ID</td>
+							</tr>
+							<tr>
+								<td><code>MAX_FEE_PER_GAS_NANO_ETH</code> / <code>--max-fee-per-gas-nanoeth</code></td>
+								<td><code>100</code></td>
+								<td>Rejects higher RPC fee suggestions</td>
+							</tr>
+							<tr>
+								<td><code>MAX_TOTAL_COST_ETH</code> / <code>--max-total-cost-eth</code></td>
+								<td><code>20</code></td>
+								<td>Caps the conservative preflight estimate and transaction budget</td>
+							</tr>
+							<tr>
+								<td><code>PRIVATE_KEY</code> / <code>--private-key</code></td>
+								<td>Required</td>
+								<td><code>0x</code>-prefixed 32-byte deployer key</td>
+							</tr>
+						</tbody>
+					</table>
+					<p>The defaults are authorization limits, not a spend forecast or a required balance. Before sending a transaction, the command checks the RPC chain ID, EVM features, EIP-1559 support, canonical deployer compatibility, expected bytecode, and fee limits. It then estimates only the missing deployment steps. If the conservative estimate exceeds <code>MAX_TOTAL_COST_ETH</code>, it exits before funding or deploying anything. Per-transaction checks enforce the same budget while the deployment runs.</p>
+					<p>A successful run exits with status <code>0</code> after logging each planned contract with <code>Status: deployed</code>, <code>Status: already deployed</code>, or <code>Status: ready</code> (installed without a submitted transaction) and verifying the bootstrap support contracts. A step that fails logs <code>Status: failed</code> and stops the run.</p>
+				</section>
+				<section id="recover-an-interrupted-run">
+					<h2>Recover an interrupted run</h2>
+					<p>Wait for all pending transactions to settle, then rerun the same command. The deployer revalidates completed contracts and resumes with the first missing step. A testnet that rejects the fixed legacy transactions for the canonical deployers must provide both deployers as predeploys.</p>
+				</section>
+				<section id="what-gets-deployed">
+					<h2>What gets deployed</h2>
+					<ul>
+						<li>deterministic WETH and genesis REP</li>
+						<li>the canonical CREATE2 deployer and Permit2</li>
+						<li>a deterministic Uniswap V3 factory, SwapRouter, and QuoterV2</li>
+						<li>a Uniswap V4 PoolManager and Quoter</li>
+						<li>the Zoltar and Augur Statoblast protocol factories and their bootstrap support contracts</li>
+					</ul>
+					<p>The command does not create Uniswap pools or add liquidity. Protocol factories create market-specific security pools, share tokens, oracle coordinators, auctions, escalation games, delegates, and child-universe contracts later, when those features are used. Genesis REP allocations are reviewed as part of <a href="./launch-a-release.html#genesis-rep-deployment">launching a release</a>; the <a href="../reference/deployment-status.html">deployment status oracle reference</a> explains how clients read which steps are installed.</p>
+				</section>
+			</article>
+		</main>
+		<script src="../assets/js/responsiveDocs.js"></script>
+		<script src="../assets/js/docsData.js"></script>
+		<script src="../assets/js/docsShell.js"></script>
+	</body>
+</html>

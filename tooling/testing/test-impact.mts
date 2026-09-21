@@ -74,6 +74,11 @@ const TEST_IMPACT_RULES: readonly TestImpactRule[] = [
 			filePath === 'workflow/coverage.yml',
 	},
 	{
+		command: 'bun ./tooling/testing/bun-test.mts tooling/ui/ui-split-workflows.test.ts',
+		reason: 'developer documentation asserted by the UI split workflow test changed',
+		matches: filePath => filePath === 'README.md' || filePath === 'testnetwork/README.md' || /^docs\/how-to\/trading-.*\.html$/.test(filePath),
+	},
+	{
 		command: 'bun run test:browser:smoke',
 		reason: 'production build or browser smoke behavior changed',
 		matches: filePath => filePath === 'tooling/ui/production.mts' || filePath === 'tooling/ui/appPaths.mts' || filePath === 'tooling/ui/browserSmoke.mts' || filePath === 'ui/coreShared/css/application-surfaces.css',

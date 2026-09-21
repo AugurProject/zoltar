@@ -51,6 +51,11 @@
 					</tbody>
 				</table>
 				<p>The assumptions below explain what must remain true for these assets and transitions to retain their intended safety or liveness properties; they are not additional contract guarantees.</p>
+				<h3 id="security-review-orientation">Reviewing an operational concern</h3>
+				<p>
+					Before classifying an economic or liveness concern, use the <a href="#assumptions-participation">grouped assumptions</a> below to identify external dependencies, then follow their mechanics links. The invariant catalog owns the current requirement, status, and evidence for <a href="./invariants.html#ext-05"><code>EXT-05</code> recursive-fork gas behavior</a>.
+				</p>
+				<p>Operator work relies particularly on <a href="#assumption-a23">A23 verified deployments</a>, <a href="#assumption-a06">A06 lifecycle executors</a>, <a href="#assumption-a20">A20 chain-data and proof availability</a>, <a href="#assumption-a26">A26 Ethereum execution and finality</a>, <a href="#assumption-a27">A27 cryptographic security</a>, <a href="#assumption-a15">A15 intended question selection</a>, <a href="#assumption-a25">A25 safe immutable parameters</a>, <a href="#assumption-a22">A22 asset-recipient compatibility</a>, <a href="#assumption-a24">A24 client, remote procedure call (RPC), and wallet integrity</a>, and <a href="#assumption-a28">A28 account authority</a>.</p>
 			</section>
 
 			<section class="assumption-group" id="assumptions-participation">
@@ -210,8 +215,7 @@
 						<p>Interfaces and users verify the immutable question ID and metadata when selecting a market or pool, and the question has evidence and wording from which participants can reach an outcome or intentionally choose <code>Invalid</code>.</p>
 						<p class="assumption-failure"><strong>Failure boundary:</strong> Unverified selection can route users and capital to an unintended market or pool, while ambiguous wording or unavailable evidence can split local outcome coordination.</p>
 						<p class="assumption-links">
-							Mechanics: <a href="./invariants.html#uni-02"><code>UNI-02</code></a
-							> and <a href="../explanation/zoltar.html#questions">question identity</a>.
+							Mechanics: <a href="./invariants.html#uni-02"><code>UNI-02</code></a> and <a href="../explanation/zoltar.html#questions">question identity</a>.
 						</p>
 					</li>
 				</ol>
@@ -250,7 +254,7 @@
 						<h3>Canonical chain data and proof construction remain available</h3>
 						<p>Participants can access reorg-aware Ethereum history, recognized contract addresses, OpenOracle report state, and the event data needed to construct carry and nullifier proofs before use.</p>
 						<p class="assumption-failure"><strong>Failure boundary:</strong> A valid dispute, settlement, migration, or inherited claim can become practically unavailable even while its contract entrypoint remains live.</p>
-						<p class="assumption-links">Mechanics: <a href="./contracts.html">event replay</a>, <a href="../reference/merkle-mountain-range.html#proofs">carry proofs</a>, and <a href="./operator-guardrails.html#security-review-orientation">operator orientation</a>.</p>
+						<p class="assumption-links">Mechanics: <a href="./contracts.html">event replay</a>, <a href="../reference/merkle-mountain-range.html#proofs">carry proofs</a>, and <a href="#security-review-orientation">operator orientation</a>.</p>
 					</li>
 				</ol>
 			</section>
@@ -266,8 +270,7 @@
 						</p>
 						<p class="assumption-failure"><strong>Failure boundary:</strong> Origin-pool, genesis-fork, or oracle accounting can overstate balances, backing, burned supply, or WETH value.</p>
 						<p class="assumption-links">
-							Mechanics: <a href="./invariants.html#ext-01"><code>EXT-01</code></a
-							> and <a href="./open-oracle.html#openoracle-role">oracle token pair</a>.
+							Mechanics: <a href="./invariants.html#ext-01"><code>EXT-01</code></a> and <a href="./open-oracle.html#openoracle-role">oracle token pair</a>.
 						</p>
 					</li>
 					<li id="assumption-a22" value="22" data-assumption="A22">
@@ -280,13 +283,13 @@
 						<h3>Users select verified canonical deployments</h3>
 						<p>The reviewed release is built reproducibly with its pinned compiler and toolchain configuration. The deterministic manifest freshness check rejects address drift, while the deployment plan verifies pinned runtime-code hashes for planned contracts and bootstrap descendants. Users and integrations must still verify post-deployment wiring, factory and forker provenance, pool lineage, question ID, and the manifest against the intended network. Constructor admission alone is not a safety proof.</p>
 						<p class="assumption-failure"><strong>Failure boundary:</strong> Toolchain drift, unavailable or mismatched reviewed hashes, permissionless lookalike instances, wrong dependencies, or unintended lineage and question wiring can bypass the reviewed protocol even when the selected bytecode functions as configured.</p>
-						<p class="assumption-links">Mechanics: <a href="./operator-guardrails.html#immutable-protocol-release-posture">release posture</a>, <a href="../reference/deployment-status.html">deployment status</a>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/compile.ts">compiler configuration</a>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/openOracle/UPSTREAM.md">OpenOracle build provenance</a>, <a href="../explanation/escalation-game.html#lifecycle-first">deployment bytecode</a>, and <a href="./invariants.html#authority">authority invariants</a>.</p>
+						<p class="assumption-links">Mechanics: <a href="../how-to/launch-a-release.html#immutable-protocol-release-posture">release posture</a>, <a href="../reference/deployment-status.html">deployment status</a>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/compile.ts">compiler configuration</a>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/openOracle/UPSTREAM.md">OpenOracle build provenance</a>, <a href="../explanation/escalation-game.html#lifecycle-first">deployment bytecode</a>, and <a href="./invariants.html#authority">authority invariants</a>.</p>
 					</li>
 					<li id="assumption-a24" value="24" data-assumption="A24">
 						<h3>Clients, RPCs, and wallets preserve user intent and canonical state</h3>
 						<p>Interfaces, indexers, RPC providers, and wallet software return canonical, reorg-aware state; construct and display the intended chain, target, calldata, parameters, and ETH value; and submit only transactions the user authorizes. Users verify transaction previews rather than treating an application label as an onchain guarantee.</p>
 						<p class="assumption-failure"><strong>Failure boundary:</strong> Compromised or stale offchain software can misroute signatures or capital, hide deadlines or events, or cause users to authorize valid but unintended calls without violating contract guards.</p>
-						<p class="assumption-links">Mechanics: <a href="../reference/deployment-status.html">deployment discovery</a>, <a href="./contracts.html">contract interactions</a>, and <a href="./operator-guardrails.html#security-review-orientation">operator verification</a>.</p>
+						<p class="assumption-links">Mechanics: <a href="../reference/deployment-status.html">deployment discovery</a>, <a href="./contracts.html">contract interactions</a>, and <a href="#security-review-orientation">operator verification</a>.</p>
 					</li>
 					<li id="assumption-a25" value="25" data-assumption="A25">
 						<h3>Immutable parameters preserve economic and executable security margins</h3>
@@ -311,7 +314,7 @@
 						<h3>Participants retain control of account authority</h3>
 						<p>Participants protect the private keys, signing devices, session permissions, and delegated ERC-20 or ERC-1155 approvals that authorize their accounts. Account recovery and custody arrangements do not give an unintended party effective control during a security-sensitive window.</p>
 						<p class="assumption-failure"><strong>Failure boundary:</strong> A stolen key, compromised signer, or overbroad approval can authorize valid but unwanted transfers, deposits, bids, migrations, or configuration changes without violating a contract guard.</p>
-						<p class="assumption-links">Mechanics: <a href="./contracts.html">transaction authority</a>, <a href="./operator-guardrails.html#security-pool-guardrails">vault and pool operations</a>, and <a href="./operator-guardrails.html#assumption-monitoring">account-authority monitoring</a>.</p>
+						<p class="assumption-links">Mechanics: <a href="./contracts.html">transaction authority</a>, <a href="./operator-guardrails.html#security-pool-guardrails">vault and pool operations</a>, and <a href="../how-to/monitor-security-assumptions.html#assumption-monitoring">account-authority monitoring</a>.</p>
 					</li>
 				</ol>
 			</section>

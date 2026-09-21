@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<meta name="description" content="Choose between live and simulation modes, select a network, override the RPC, and see what the client verifies before it trades." />
+		<title>Configure the Trading UI</title>
+		<link rel="stylesheet" href="../assets/css/shared-docs.css" />
+		<link rel="stylesheet" href="../assets/css/docsShell.css" />
+	</head>
+	<body class="doc-openoracle">
+		<main id="main-content">
+			<header>
+				<p class="kicker">How-to guide</p>
+				<h1>Configure the Trading UI</h1>
+				<p>The standalone Trading UI runs in one of two modes and verifies its contracts before it lets you trade. This guide shows how to pick the mode and network you need.</p>
+			</header>
+			<section id="modes">
+				<h2>Choose a mode</h2>
+				<ul>
+					<li>With no mode parameter, the application reads live RPC and wallet state.</li>
+
+					<li><code>?simulate=1</code> boots the shared browser-local TEVM simulator with seeded contracts and balances.</li>
+				</ul>
+				<p>Simulation mode is labeled as such and is never evidence of live chain state. <a href="./trading-set-up-development.html">Set up Trading development</a> lists the commands and URLs.</p>
+			</section>
+			<section id="network">
+				<h2>Select a network and RPC</h2>
+				<p>The build copies the canonical mainnet and Sepolia core factory and deterministic proxy addresses from the root deployment manifests, together with a default public RPC URL for each network. When you open the live UI it derives the fixed-fee trading factory and router addresses with CREATE2 and checks whether both contracts are deployed. If either is missing, the deployment screen opens automatically; <a href="./trading-deploy-contracts.html">Deploy the Trading contracts</a> covers that flow. The UI verifies the RPC chain and core bytecode and lists each deterministic contract's deployment status. After both contracts are verified, live trading opens without saving a separate trading deployment configuration.</p>
+				<p>Use <strong>Settings</strong> beside the wallet to select another supported network or override its RPC URL. A custom RPC must use HTTPS or loopback HTTP and match the selected chain. Browser-led deployment uses a fixed 0.30% trading fee, and every trading and pool-deployment surface shows the deployed immutable fee as a percentage. Share, complete-set, and LP amounts are shown as their settlement-collateral value in ETH at the pool's current rate.</p>
+			</section>
+			<section id="what-the-client-does">
+				<h2>What you will see the client verify</h2>
+				<p>Every workflow starts from a SecurityPool address: <code>#/market</code> opens a market by address or from the <strong>Markets</strong> list, and <code>#/create-market</code> opens a security pool that has no trading market yet so you can deploy its pair and seed liquidity. Before any submission the client checks that the wallet reports the selected network, then simulates the entry, exit, liquidity, settlement, or fork-migration call through the actual contracts. A quote is pinned to one block hash and rejected if the block number or hash changes, so expect to be asked to simulate again after a new block. The <a href="../reference/trading/configuration.html#client">configuration reference</a> describes the client's discovery and verification behaviour in full.</p>
+				<p>Serve built assets from the same origin. Production code may connect only to the configured RPC, the wallet provider, and explicit explorer links. Simulation mode is unmistakably labeled and must never be presented as live state.</p>
+			</section>
+		</main>
+		<script src="../assets/js/responsiveDocs.js"></script>
+		<script src="../assets/js/docsData.js"></script>
+		<script src="../assets/js/docsShell.js"></script>
+	</body>
+</html>
