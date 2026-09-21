@@ -470,13 +470,8 @@ test('pending executor deployment recovery owns the overview notice, the executo
 	await page.waitUntilComplete()
 	await Bun.sleep(20)
 	expect(noticeTitle.textContent).toBe('Unable to change bot state')
-	recovery = { transactionHash }
-	triggerRefresh()
-	await page.waitUntilComplete()
-	for (let attempt = 0; attempt < 100 && executorRecovery.hidden; attempt++) await Bun.sleep(10)
-	expect(noticeTitle.textContent).toBe('Unable to change bot state')
 
-	// Deploying from this page reaches the same end state through the refresh it triggers.
+	// Deploying from this page clears that refusal even though no poll ever showed the journal, so a later poll cannot revive it.
 	Reflect.set(window, 'confirm', () => true)
 	element(window, 'create2-form', window.HTMLFormElement).dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }))
 	await page.waitUntilComplete()
@@ -484,6 +479,10 @@ test('pending executor deployment recovery owns the overview notice, the executo
 	expect(element(window, 'create2-status', window.HTMLElement).textContent).toBe(`Verified existing executor at ${address}.`)
 	expect(noticeTitle.textContent).toBe('Bot paused')
 	expect(executorRecovery.hidden).toBe(true)
+	triggerRefresh()
+	await page.waitUntilComplete()
+	await Bun.sleep(20)
+	expect(noticeTitle.textContent).toBe('Bot paused')
 
 	pauseButton.click()
 	for (let attempt = 0; attempt < 100 && pauseRequests.length < 3; attempt++) await Bun.sleep(10)

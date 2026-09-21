@@ -1155,6 +1155,8 @@ element('create2-form', HTMLFormElement).addEventListener('submit', async event 
 		)
 		setText('deployment-executor', result.address)
 		setText('create2-status', result.alreadyDeployed ? `Verified existing executor at ${result.address}.` : `Deployed ${result.address} in transaction ${result.transactionHash ?? 'unknown'}.`)
+		// A verified deployment is the recovery the refusal asked for; do not wait for a poll that may never have shown the journal.
+		if (pauseFailure?.message === EXECUTOR_DEPLOYMENT_RECOVERY_REQUIRED) pauseFailure = undefined
 		await refresh()
 	} catch (error) {
 		setText('create2-status', error instanceof Error ? error.message : String(error))
