@@ -359,6 +359,7 @@ export async function executeDispute(
 			failedTargets: [] as readonly SubmissionTargetResult[],
 			kind: transaction.kind,
 			mode: 'private' as const,
+			profitBeforeGasAttoEth: undefined,
 			reportId,
 			submittedAt,
 			token: transaction.token,

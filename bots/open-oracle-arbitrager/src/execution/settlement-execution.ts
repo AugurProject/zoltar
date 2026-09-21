@@ -5,8 +5,8 @@ import { rewardWithdrawalGasPlan, signedSettlementGasLimit } from '#core/settlem
 import { ATTEMPT_FINALITY_BLOCKS, attemptHasFinality, isExecutionPausedError, receiptGasExpendituresWithQuorum, transactionHashBySenderNonceWithQuorum, transactionReceiptsOrMissingWithQuorum, transactionReceiptsWithQuorum } from '#execution/execution-orchestration'
 import { confirmedNonceWithQuorum, durableTransactionIntent, pendingNonceWithQuorum, recoveredTransactionIntentMismatchWithQuorum } from '#execution/recovery-support'
 import { DEFAULT_TRANSACTION_VALIDITY_BLOCKS, prepareSignedTransaction, submissionRejectedEverywhere } from '#execution/transaction-submission'
-import { submitContractTransaction, waitForTrackedTransaction, type TrackTransaction } from '#execution/transaction-tracker'
-import { decimalWeth } from '#state/operator-state'
+import { submitContractTransaction, trackedActivity, trackedNetProfitEth, waitForTrackedTransaction, type TrackTransaction } from '#execution/transaction-tracker'
+import { decimalSignedEth, decimalWeth, parseDecimalWeth } from '#state/operator-state'
 import { settlementAttemptIsUnresolved, type SettlementRecord } from '#state/settlement-store'
 import { encodeFunctionData, zeroAddress, type Address, type Hex } from '@zoltar/bot-shared/ethereum'
 import { endpointLabel } from '#monitoring/connectivity'
@@ -60,7 +60,18 @@ function settleCalldata(report: OpenOracleStatePreimage) {
 
 type SignedAttempt = Pick<SettlementRecord, 'lastValidBlockNumber' | 'nonce' | 'submissionBlockNumber' | 'submissionMode' | 'transactionIntent'> & { hash: Hex }
 
-async function signAndSubmit(context: SettlementExecutionContext, call: { data: Hex; gas: bigint; kind: 'settle' | 'withdraw-reward'; reportId: string | undefined; token: Address | undefined; tokenSymbol: string | undefined }, pending: (attempt: SignedAttempt) => SettlementRecord) {
+type SettlementCall = {
+	data: Hex
+	gas: bigint
+	kind: 'settle' | 'withdraw-reward'
+	/** The ETH the call earns before gas: the settler reward for `settle`, nothing for a withdrawal of a reward already earned. */
+	profitBeforeGasAttoEth: bigint
+	reportId: string | undefined
+	token: Address | undefined
+	tokenSymbol: string | undefined
+}
+
+async function signAndSubmit(context: SettlementExecutionContext, call: SettlementCall, pending: (attempt: SignedAttempt) => SettlementRecord) {
 	const account = context.wallet.account
 	const signTransaction = account.signTransaction
 	if (signTransaction === undefined) throw new Error('Settlement requires a local transaction signer')
@@ -83,16 +94,35 @@ async function signAndSubmit(context: SettlementExecutionContext, call: { data: 
 	if (signed.transaction.maxFeePerGas !== context.maxFeePerGas) throw new Error(`Settlement signed a fee ceiling of ${signed.transaction.maxFeePerGas?.toString() ?? 'none'} but was evaluated at ${context.maxFeePerGas.toString()}`)
 	if (signed.transaction.gas !== signedSettlementGasLimit(call.gas)) throw new Error(`Settlement signed a gas limit of ${signed.transaction.gas.toString()} but was evaluated at ${signedSettlementGasLimit(call.gas).toString()}`)
 	const record = pending({ hash: signed.hash, lastValidBlockNumber: signed.maxBlockNumber.toString(), nonce: nonce.toString(), submissionBlockNumber: context.blockNumber.toString(), submissionMode: context.config.submission.mode, transactionIntent: durableTransactionIntent(signed.transaction) })
+	// The tracking table nets each transaction against its own signed gas exposure; the queue's projected net for a
+	// settlement additionally reserves the amortised reward withdrawal, which gets its own row here.
+	const signedGasCostAttoEth = signed.transaction.gas * context.maxFeePerGas
 	let journaled = false
 	let submission
 	try {
-		submission = await submitContractTransaction(context.client, context.wallet, context.config, signed, { estimatedNetProfitEth: undefined, kind: call.kind, reportId: call.reportId, token: call.token, tokenSymbol: call.tokenSymbol }, context.isPaused, context.track, {
-			beforeSubmit: () => {},
-			persistPending: async () => {
-				await context.persist(record)
-				journaled = true
+		submission = await submitContractTransaction(
+			context.client,
+			context.wallet,
+			context.config,
+			signed,
+			{
+				estimatedNetProfitEth: decimalSignedEth(call.profitBeforeGasAttoEth - signedGasCostAttoEth),
+				kind: call.kind,
+				profitBeforeGasAttoEth: call.profitBeforeGasAttoEth,
+				reportId: call.reportId,
+				token: call.token,
+				tokenSymbol: call.tokenSymbol,
 			},
-		})
+			context.isPaused,
+			context.track,
+			{
+				beforeSubmit: () => {},
+				persistPending: async () => {
+					await context.persist(record)
+					journaled = true
+				},
+			},
+		)
 	} catch (error) {
 		// A journaled public attempt that no node holds (paused between the journal write and the send, or every RPC
 		// refused it outright) has no mempool to land from; a public pending record never expires, so it is dropped here
@@ -102,7 +132,7 @@ async function signAndSubmit(context: SettlementExecutionContext, call: { data: 
 		if (journaled && context.config.submission.mode === 'public' && (isExecutionPausedError(error) || submissionRejectedEverywhere(error))) await context.persist({ ...record, status: 'dropped', updatedAt: new Date().toISOString() })
 		throw error
 	}
-	const { receipt: observed } = await waitForTrackedTransaction(context.client, context.wallet, context.config, submission, context.track, () => {}, context.isPaused)
+	const { receipt: observed, tracked } = await waitForTrackedTransaction(context.client, context.wallet, context.config, submission, context.track, () => {}, context.isPaused)
 	// A replacement seen at the head is not final: the retired original stays recoverable until the replacement has finality.
 	const retired = (): SettlementRecord => ({ ...record, finalized: false, replacedBy: observed.transactionHash, status: 'expired', updatedAt: new Date().toISOString() })
 	if (observed.transactionHash.toLowerCase() !== signed.hash.toLowerCase()) {
@@ -118,7 +148,11 @@ async function signAndSubmit(context: SettlementExecutionContext, call: { data: 
 	// The mined outcome is journaled before the replaced hash is retired, so an interruption between the two writes leaves
 	// a pending original that recovery retires against the already journaled replacement, never an unaccounted receipt.
 	await context.persist(final)
-	if (final.transactionHash.toLowerCase() !== record.transactionHash.toLowerCase()) await context.persist(retired())
+	if (final.transactionHash.toLowerCase() !== record.transactionHash.toLowerCase()) {
+		await context.persist(retired())
+		// The tracker left the authenticated rebroadcast's net open; it carried the signed call, so it is netted like the original.
+		context.track(trackedActivity(tracked, outcome.status, outcome.actualGasCostEth, observed.transactionHash, trackedNetProfitEth(call.profitBeforeGasAttoEth, outcome.status === 'confirmed', parseDecimalWeth(outcome.actualGasCostEth))))
+	}
 	return final
 }
 
@@ -150,7 +184,7 @@ export async function executeSettlement(context: SettlementExecutionContext, pla
 		gas: plan.gas,
 	})
 	const reportId = plan.report.helper.reportId.toString()
-	return signAndSubmit(context, { data: settleCalldata(plan.report), gas: plan.gas, kind: 'settle', reportId, token: plan.token, tokenSymbol: plan.tokenSymbol }, attempt => ({
+	return signAndSubmit(context, { data: settleCalldata(plan.report), gas: plan.gas, kind: 'settle', profitBeforeGasAttoEth: plan.rewardAttoEth, reportId, token: plan.token, tokenSymbol: plan.tokenSymbol }, attempt => ({
 		account: account.address,
 		actualGasCostEth: undefined,
 		coordinator: plan.coordinator,
@@ -179,7 +213,7 @@ export async function executeRewardWithdrawal(context: SettlementExecutionContex
 	const account = context.wallet.account
 	const gas = rewardWithdrawalGasPlan()
 	const projectedGasCostAttoEth = signedSettlementGasLimit(gas) * context.maxFeePerGas
-	return signAndSubmit(context, { data: encodeFunctionData({ abi: openOracleAbi, functionName: 'withdraw', args: [ETH_SENTINEL, amountAttoEth] }), gas, kind: 'withdraw-reward', reportId: undefined, token: undefined, tokenSymbol: undefined }, attempt => ({
+	return signAndSubmit(context, { data: encodeFunctionData({ abi: openOracleAbi, functionName: 'withdraw', args: [ETH_SENTINEL, amountAttoEth] }), gas, kind: 'withdraw-reward', profitBeforeGasAttoEth: 0n, reportId: undefined, token: undefined, tokenSymbol: undefined }, attempt => ({
 		account: account.address,
 		actualGasCostEth: undefined,
 		coordinator: undefined,
