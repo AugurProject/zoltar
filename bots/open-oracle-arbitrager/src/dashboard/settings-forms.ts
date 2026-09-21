@@ -1,11 +1,12 @@
 import type { StoredRuntimeLimits } from '#config/settings-store'
 import type { SettlementSettings } from '#state/settlement-store'
-import type { StrategySettings } from '#state/operator-state'
+import type { QueuedSettingsSection, StrategySettings } from '#state/operator-state'
 import type { SubmissionSettings } from '#execution/transaction-submission'
 import { urlLines } from '@zoltar/bot-shared/dashboard/forms'
 import { decodeCentralizedMarkets, decodeDeployment, decodeExecution, decodeRuntimeLimits, decodeSettings, decodeSettlement, decodeSubmission, type DashboardDeployment } from './api-validation.ts'
 import { element, setText } from './dom.js'
-import { formIsDirty, markFormClean, setFormSubmitting, trackForm } from './form-state.ts'
+import { createFocusedFormSubmitter, onFormSubmit } from '@zoltar/bot-shared/dashboard/focused-form'
+import { formIsDirty, markFormClean, trackForm } from '@zoltar/bot-shared/dashboard/form-state'
 import type { GoLiveConfiguration } from './go-live.ts'
 import { loadMarketSources, marketSourcesDocument, registerMarketSourceControls } from './market-sources-form.ts'
 
@@ -140,7 +141,18 @@ export function loadCentralizedMarkets(centralizedMarkets: Record<string, unknow
 	markFormClean('market-form')
 }
 
-const FOCUSED_FORMS = ['connectivity-form', 'deployment-form', 'market-form', 'runtime-form', 'settlement-form', 'execution-form', 'strategy-form', 'submission-form', 'configuration-form'] as const
+/** The operator-file section each focused form edits; mirrors `queuedSettingsSections` on the server. */
+const FOCUSED_FORMS: Readonly<Record<string, QueuedSettingsSection | undefined>> = {
+	'configuration-form': undefined,
+	'connectivity-form': 'connectivity',
+	'deployment-form': 'deployment',
+	'execution-form': 'execution',
+	'market-form': 'markets',
+	'runtime-form': 'risk',
+	'settlement-form': 'settlement',
+	'strategy-form': 'strategy',
+	'submission-form': 'submission',
+}
 
 /**
  * Wires the focused Settings forms that each edit one section of the operator file. Values load from the complete
@@ -148,29 +160,12 @@ const FOCUSED_FORMS = ['connectivity-form', 'deployment-form', 'market-form', 'r
  * an edit differs from the loaded values.
  */
 export function registerFocusedSettingsForms({ api, refresh, syncControls }: FocusedFormContext) {
-	for (const formId of FOCUSED_FORMS) trackForm(formId)
+	for (const [formId, section] of Object.entries(FOCUSED_FORMS)) trackForm(formId, { section })
 	registerMarketSourceControls()
-	/** Shared save flow for the focused forms: lock the button, send, reload the returned values, and refresh the snapshot. */
-	const submitFocusedForm = async (formId: string, statusId: string, pendingMessage: string, save: () => Promise<string>, onError?: () => void) => {
-		setFormSubmitting(formId, true)
-		setText(statusId, pendingMessage)
-		let outcome: string
-		try {
-			outcome = await save()
-		} catch (error) {
-			onError?.()
-			outcome = error instanceof Error ? error.message : String(error)
-		}
-		setFormSubmitting(formId, false)
-		syncControls()
-		// The snapshot refresh completes before the outcome is shown, so the status line always describes a settled panel.
-		await refresh()
-		setText(statusId, outcome)
-	}
+	const submitFocusedForm = createFocusedFormSubmitter({ refresh, syncControls })
 	const put = (path: string, body: unknown) => api(path, { body: JSON.stringify(body), headers: { 'content-type': 'application/json' }, method: 'PUT' })
 
-	element('strategy-form', HTMLFormElement).addEventListener('submit', event => {
-		event.preventDefault()
+	onFormSubmit(element('strategy-form', HTMLFormElement), () => {
 		void submitFocusedForm('strategy-form', 'form-status', 'Saving strategy…', async () => {
 			const settings = {
 				maxSpotTwapTicks: input('maxSpotTwapTicks').value,
@@ -186,8 +181,7 @@ export function registerFocusedSettingsForms({ api, refresh, syncControls }: Foc
 		})
 	})
 
-	element('submission-form', HTMLFormElement).addEventListener('submit', event => {
-		event.preventDefault()
+	onFormSubmit(element('submission-form', HTMLFormElement), () => {
 		void submitFocusedForm('submission-form', 'submission-status', 'Saving submission…', async () => {
 			const submission = {
 				minimumBundleRelaySuccesses: Number(element('minimum-bundle-relay-successes', HTMLInputElement).value),
@@ -199,8 +193,7 @@ export function registerFocusedSettingsForms({ api, refresh, syncControls }: Foc
 		})
 	})
 
-	element('runtime-form', HTMLFormElement).addEventListener('submit', event => {
-		event.preventDefault()
+	onFormSubmit(element('runtime-form', HTMLFormElement), () => {
 		void submitFocusedForm('runtime-form', 'runtime-status', 'Saving risk limits…', async () => {
 			const runtime = {
 				lookbackBlocks: runtimeInput('lookbackBlocks').value,
@@ -218,8 +211,7 @@ export function registerFocusedSettingsForms({ api, refresh, syncControls }: Foc
 		})
 	})
 
-	element('settlement-form', HTMLFormElement).addEventListener('submit', event => {
-		event.preventDefault()
+	onFormSubmit(element('settlement-form', HTMLFormElement), () => {
 		void submitFocusedForm('settlement-form', 'settlement-status', 'Saving settlement…', async () => {
 			const settlement = {
 				enabled: element('settlement-enabled', HTMLInputElement).checked,
@@ -233,8 +225,7 @@ export function registerFocusedSettingsForms({ api, refresh, syncControls }: Foc
 		})
 	})
 
-	element('execution-form', HTMLFormElement).addEventListener('submit', event => {
-		event.preventDefault()
+	onFormSubmit(element('execution-form', HTMLFormElement), () => {
 		void submitFocusedForm(
 			'execution-form',
 			'execution-status',
@@ -251,16 +242,14 @@ export function registerFocusedSettingsForms({ api, refresh, syncControls }: Foc
 		)
 	})
 
-	element('market-form', HTMLFormElement).addEventListener('submit', event => {
-		event.preventDefault()
+	onFormSubmit(element('market-form', HTMLFormElement), () => {
 		void submitFocusedForm('market-form', 'market-status', 'Validating market sources…', async () => {
 			loadCentralizedMarkets(decodeCentralizedMarkets(await put('/api/centralized-markets', marketSourcesDocument())).centralizedMarkets)
 			return 'Market sources saved.'
 		})
 	})
 
-	element('deployment-form', HTMLFormElement).addEventListener('submit', event => {
-		event.preventDefault()
+	onFormSubmit(element('deployment-form', HTMLFormElement), () => {
 		void submitFocusedForm('deployment-form', 'deployment-status', 'Validating venues…', async () => {
 			// Only the venue switches travel; the bot merges them into the latest saved section so a quorum save
 			// that is still in flight from another form is never overwritten with cached values.

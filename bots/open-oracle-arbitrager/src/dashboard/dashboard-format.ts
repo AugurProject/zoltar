@@ -1,3 +1,4 @@
+import { shorten } from '@zoltar/bot-shared/dashboard/dom'
 import type { PublicOperatorSnapshot, PublicTransactionActivity } from '#state/operator-state'
 import { countOpportunities, type EvaluatedOpportunitySnapshot, type OpportunityDecision, type OpportunitySnapshot, type SkippedOpportunitySnapshot } from '#state/opportunity-snapshot'
 import type { MarketPricePoint } from '#monitoring/market-monitor'
@@ -274,4 +275,15 @@ export function marketAvailabilityPresentation(notice: PublicOperatorSnapshot['m
 	if (notice.kind === 'no-execution-pools') return { title: 'No execution pools', detail: 'No pool candidates were found for the enabled Uniswap versions. Market checks continue automatically.' }
 	const names = [...new Set(notice.contracts.map(contract => contract.name))].join(', ')
 	return { title: 'Deployment unavailable', detail: `${names}: no contract at the configured ${notice.contracts.length === 1 ? 'address' : 'addresses'} on chain ${notice.chainId.toString()}. Availability is checked automatically.` }
+}
+
+/** The Execution wallet summary: the active signer, whether it is saved, and any queued change to it. */
+export function signerSummaryLabel(snapshot: { queuedWallet?: string | null | undefined; savedWallet?: string | undefined; wallet?: string | undefined }) {
+	const activeSigner = snapshot.wallet === undefined ? 'no active signer' : `active ${shorten(snapshot.wallet)}`
+	if (snapshot.queuedWallet === null) return `Clearing signer · ${activeSigner}`
+	if (typeof snapshot.queuedWallet === 'string') return `Applying ${shorten(snapshot.queuedWallet)} · ${activeSigner}`
+	if (snapshot.wallet === undefined) return snapshot.savedWallet === undefined ? 'Locked · no signer' : `Locked · ${shorten(snapshot.savedWallet)} available`
+	if (snapshot.savedWallet === undefined) return `Unlocked · ${shorten(snapshot.wallet)} · memory only`
+	if (snapshot.savedWallet.toLowerCase() === snapshot.wallet.toLowerCase()) return `Unlocked · ${shorten(snapshot.wallet)} · saved`
+	return `Unlocked · ${shorten(snapshot.wallet)} · saved ${shorten(snapshot.savedWallet)}`
 }

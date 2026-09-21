@@ -1,6 +1,6 @@
 import { reconcileIncludedTransactions } from '../execution/inclusion-journal.ts'
 import { createWalletClient, privateKeyToAccount, type Address } from '@zoltar/bot-shared/ethereum'
-import { botDashboardLifecycle, type BotProcessLocks, type BotShutdownController } from '@zoltar/bot-shared/execution/bot-process-locks'
+import { botDashboardLifecycle, type BotShutdownController } from '@zoltar/bot-shared/execution/bot-process-locks'
 import { createSignerOperationGate } from '@zoltar/bot-shared/execution/signer-operation-gate'
 import { errorMessage as formatErrorMessage } from '@zoltar/bot-shared/infrastructure/error-message'
 import { checkRpcEndpoint, EndpointCheckFailure, type EndpointCheck } from '@zoltar/bot-shared/monitoring/connectivity'
@@ -21,7 +21,7 @@ import { migrateEmptyBootstrapState } from '../state/bootstrap-migration.ts'
 import { bindRuntimeStateToSigner, loadRuntimeState, recordActivity, saveDurableState, setRuntimeExecutionAddress, type RuntimeState } from '../state/operator-state.ts'
 import { applyExecutionPolicy, blockExecutableEvaluations, chaosChain, createChaosReadPool, performCanonicalScan, planningOptions, unavailableOperationCatalog } from './canonical-scan.ts'
 import { restartSafeSettings } from './configuration-candidates.ts'
-import { createChaosDashboardController, type ConfigurationState } from './dashboard-controller.ts'
+import { createChaosDashboardController, type ChaosProcessLocks, type ConfigurationState } from './dashboard-controller.ts'
 import { checkDeploymentAvailability, recordUnavailableDeploymentScan, tradingDeploymentNotice } from './deployment-availability.ts'
 import { resetPristineStateForDeploymentProfile, verifyRetirementCompletionFinality } from './deployment-profile.ts'
 import { actionableUrgentLifecyclePlan, lifecycleObstructions } from './lifecycle-readiness.ts'
@@ -31,7 +31,7 @@ import { retirementPlanAllowed } from './retirement-operation-policy.ts'
 import { enforceRetirementContinuation, processRetirementCycle, retirementPositionsForScan, updateRetirementAssessment } from './retirement-runner.ts'
 import { interruptedSchedulerRunNeedsClosure, executeScheduledOperation, recordDryRun, scheduleAfterRecoveredTransaction, schedulerFor } from './scheduled-operation.ts'
 import { genesisInitializationDefinitionId, genesisInitializationPlan, randomOperationPlans } from './selection.ts'
-import { assertSubmissionPreflightFresh, preflightTransactionSubmissionNetwork, recordEndpointPreflightChecks, submissionPreflightConfigurationIdentity, submissionPreflightIsDue } from './submission-preflight.ts'
+import { assertSubmissionPreflightFresh, preflightTransactionSubmissionNetwork, recordEndpointPreflightChecks, refreshSubmissionReadiness, submissionPreflightConfigurationIdentity, type SubmissionPreflightResources } from './submission-preflight.ts'
 import { runtimeTopologySummary } from './topology-summary.ts'
 import { evaluatePolicySafeContinuation } from './workflow-continuation.ts'
 import { abandonRetryableSelectableFailure, rediscoverableExecutionFailure, repairDurableSelectableFailures, workflowForPlan } from './workflow-repair.ts'
@@ -43,11 +43,9 @@ type LoadedConfiguration = {
 	settings: OperatorSettings
 }
 
-type RuntimeResources = {
+type RuntimeResources = SubmissionPreflightResources & {
 	pool: ReturnType<typeof createChaosReadPool>
 	readPreflightChecks: readonly EndpointCheck[]
-	submissionPreflightConfigurationIdentity: string | undefined
-	submissionPreflightChecks: readonly EndpointCheck[]
 }
 
 const errorMessage = (error: unknown) => formatErrorMessage(error).slice(0, 1_500)
@@ -422,7 +420,7 @@ async function handleCycleFailure(error: unknown, configuration: ConfigurationSt
 	await persistState(configuration, state)
 }
 
-export async function runChaosOperator(loaded: LoadedConfiguration, locks: BotProcessLocks, shutdown: BotShutdownController) {
+export async function runChaosOperator(loaded: LoadedConfiguration, locks: ChaosProcessLocks, shutdown: BotShutdownController) {
 	const initialWallet = configuredWallet(loaded.settings)
 	const state = migrateEmptyBootstrapState(await loadRuntimeState(loaded.settings.runtime.stateFile, loaded.settings.paused, initialWallet, loaded.settings.network.chainId), loaded.settings)
 	const initialProfileId = executionProfileId(loaded.settings)
@@ -679,10 +677,10 @@ export async function runChaosOperator(loaded: LoadedConfiguration, locks: BotPr
 					backfillIncomplete = true
 					return settings.runtime.once
 				}
-				if (settings.runtime.execute && (resources.submissionPreflightConfigurationIdentity !== submissionPreflightConfigurationIdentity(settings) || submissionPreflightIsDue(resources.submissionPreflightChecks, settings))) {
-					await ensureSubmissionPreflight(resources, settings)
-					state.rpcEndpointHealth = resourceHealth(resources)
-				}
+				// Submission evidence is refreshed in every mode so the go-live checklist can be satisfied before arming.
+				const submissionReadiness = await refreshSubmissionReadiness(resources, settings)
+				if (submissionReadiness !== 'current') state.rpcEndpointHealth = resourceHealth(resources)
+				if (submissionReadiness === 'failed') console.log('chaosBot=submission readiness refresh failed in dry run; the recorded endpoint evidence stays visible until the next refresh')
 				const continuationWorkflows = state.workflows.filter(workflowNeedsContinuation)
 				if (continuationWorkflows.length > 1) {
 					throw new Error('Multiple partial workflows require explicit operator reconciliation')

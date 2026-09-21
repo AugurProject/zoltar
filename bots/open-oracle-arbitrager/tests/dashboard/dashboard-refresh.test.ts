@@ -850,7 +850,7 @@ test('go-live checklist unlocks the switch once every prerequisite holds, report
 	expect(checklistReady()).toEqual(['true', 'true', 'true', 'false', 'false', 'true', 'false'])
 	expect(checklistDetail('Executor')).toBe('Deploy it under Venues and executor')
 	expect(checklistDetail('Canonical contracts')).toBe('Missing Uniswap V3 router')
-	expect(checklistDetail('Pool coordinators')).toBe('None discovered · not required to arm')
+	expect(checklistDetail('Pool coordinators')).toBe('None discovered · optional')
 	// The advisory row is announced as optional, not as a missing prerequisite.
 	expect(Array.from(element(window, 'execution-checklist', window.HTMLUListElement).children, item => item.querySelector('.visually-hidden')?.textContent)).toEqual([' ready', ' ready', ' ready', ' missing', ' missing', ' ready', ' optional'])
 	expect(element(window, 'execution-mode-summary', window.HTMLElement).textContent).toBe('Dry run · prerequisites missing')

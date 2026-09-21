@@ -2,9 +2,9 @@ import { renderRepMarketConsensusError, renderRepMarketConsensusPanel } from '@z
 import { isSnapshot } from './snapshot-validation.ts'
 import { decodeConnectivity, decodePrediction, decodeExecutorDeployment, isRuntimeLimits, isSettlementSettings, isStrategySettings, isSubmissionSettings, isDeploymentSettings, isStringArray } from './api-validation.ts'
 import { applyQuorumRpcUrls, loadCentralizedMarkets, loadDeployment, loadExecutionMode, loadRuntimeLimits, loadSettings, loadSettlement, loadSubmission, registerFocusedSettingsForms, setLoadedRpcQuorum } from './settings-forms.ts'
-import { formIsSubmitting, markFormClean, refreshAllFormButtons, refreshFormButton, setFormSubmitting, trackForm } from './form-state.ts'
+import { formIsSubmitting, markFormClean, refreshAllFormButtons, refreshFormButton, setFormSubmitting, trackForm } from '@zoltar/bot-shared/dashboard/form-state'
 import { renderSettingsInsights } from './settings-insights.ts'
-import { createSettingsNavigation } from './settings-navigation.ts'
+import { createSettingsNavigation } from '@zoltar/bot-shared/dashboard/settings-navigation'
 import { createUniverseExplorer } from '@zoltar/bot-shared/dashboard/universe-explorer'
 let approvedUniverseIds = new Set<string>()
 let universeSavePending = false
@@ -41,6 +41,7 @@ import {
 	requiredSignerPrivateKey,
 	selectedTokenPriceHistory,
 	signerControlState,
+	signerSummaryLabel,
 	statePollingFailureMessage,
 	sumSignedDecimals,
 	transactionKindLabel,
@@ -793,21 +794,18 @@ function renderSignerStatus(snapshot: PublicOperatorSnapshot) {
 	const privateKeyInput = element('private-key', HTMLInputElement)
 	const rememberSignerInput = element('remember-signer', HTMLInputElement)
 	const signerStatus = element('signer-status')
+	// The panel summary reports the active and saved signer; the status line reports the last request's outcome.
+	setText('signer-summary', signerSummaryLabel(snapshot))
 	if (signerFeedback !== undefined) {
 		signerStatus.textContent = signerFeedback.message
 		signerStatus.setAttribute('role', signerFeedback.error ? 'alert' : 'status')
+		signerStatus.classList.toggle('error', signerFeedback.error)
 		privateKeyInput.setAttribute('aria-invalid', signerFeedback.error.toString())
 	} else {
+		signerStatus.textContent = 'Keys stay local and are never returned by the API or logged.'
 		signerStatus.setAttribute('role', 'status')
+		signerStatus.classList.remove('error')
 		privateKeyInput.setAttribute('aria-invalid', 'false')
-		const activeSigner = snapshot.wallet === undefined ? 'no active signer' : `active ${shorten(snapshot.wallet)}`
-		const savedSigner = snapshot.savedWallet === undefined ? 'not saved' : `saved ${shorten(snapshot.savedWallet)}`
-		if (snapshot.queuedWallet === null) signerStatus.textContent = `Clearing signer · ${activeSigner}`
-		else if (typeof snapshot.queuedWallet === 'string') signerStatus.textContent = `Applying ${shorten(snapshot.queuedWallet)} · ${activeSigner}`
-		else if (snapshot.wallet === undefined) signerStatus.textContent = snapshot.savedWallet === undefined ? 'Locked · no signer' : `Locked · ${shorten(snapshot.savedWallet)} available`
-		else if (snapshot.savedWallet === undefined) signerStatus.textContent = `Unlocked · ${shorten(snapshot.wallet)} · memory only`
-		else if (snapshot.savedWallet.toLowerCase() === snapshot.wallet.toLowerCase()) signerStatus.textContent = `Unlocked · ${shorten(snapshot.wallet)} · saved`
-		else signerStatus.textContent = `Unlocked · ${shorten(snapshot.wallet)} · ${savedSigner}`
 	}
 	const controls = signerControlState({
 		hasQueuedSigner: typeof snapshot.queuedWallet === 'string',
@@ -1218,7 +1216,7 @@ const { scrollToSection, syncSectionNavigation } = createSectionNavigation(link 
 
 registerFocusedSettingsForms({ api, refresh, syncControls: () => setControlsEnabled(connected) })
 // The universe explorer keeps its selection outside form controls, so its signature is the sorted selection.
-trackForm('tokens-form', () => [...approvedUniverseIds].sort().join(','))
+trackForm('tokens-form', { extra: () => [...approvedUniverseIds].sort().join(','), section: 'universes' })
 
 element('connectivity-form', HTMLFormElement).addEventListener('submit', async event => {
 	event.preventDefault()

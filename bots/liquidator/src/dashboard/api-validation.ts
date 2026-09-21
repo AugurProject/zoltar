@@ -101,9 +101,10 @@ export type Configuration = {
 	desiredPools: unknown[]
 	network?: { chainId: number; explorerUrl: string; name: 'mainnet' | 'sepolia' } | undefined
 	networkConfigured?: boolean | undefined
-	runtime: { historicalLogRecovery: boolean; logLookbackBlocks: number }
+	runtime: { execute: boolean; historicalLogRecovery: boolean; logLookbackBlocks: number }
 	selectedPools: string[]
 	strategy: Record<string, string | number | boolean>
+	submission: { minimumBundleRelaySuccesses: number; mode: 'private' | 'public'; relayUrls: string[] }
 }
 
 const strings = array(stringValue)
@@ -181,9 +182,10 @@ const configuration = object<Configuration>({
 	desiredPools: array(unknownValue),
 	network: optional(object<NonNullable<Configuration['network']>>({ chainId: numberValue, explorerUrl: stringValue, name: network })),
 	networkConfigured: optional(booleanValue),
-	runtime: object<Configuration['runtime']>({ historicalLogRecovery: booleanValue, logLookbackBlocks: numberValue }),
+	runtime: object<Configuration['runtime']>({ execute: booleanValue, historicalLogRecovery: booleanValue, logLookbackBlocks: numberValue }),
 	selectedPools: strings,
 	strategy: dictionary((value): value is string | number | boolean => stringValue(value) || numberValue(value) || booleanValue(value)),
+	submission: object<Configuration['submission']>({ minimumBundleRelaySuccesses: numberValue, mode: oneOf('private', 'public'), relayUrls: strings }),
 })
 type MarketProbe = { assets: { assetId: string; sources: { id: string; kind: 'cex' | 'dex'; market: string; reason?: string; status: 'failed' | 'observed' }[] }[]; blockNumber: string }
 const marketProbe = object<MarketProbe>({

@@ -69,6 +69,8 @@ export async function acquireBotProcessLocks(settings: BotLockSettings, { acquir
 		throw error
 	}
 
+	// Live execution can be armed at runtime, so the mode the signer reservation follows is tracked here rather than read from the startup settings.
+	let execute = settings.execute
 	let released = false
 	let releaseAttempt: Promise<void> | undefined
 	const retiredSignerLocks = new Map<string, ExclusiveProcessLock>()
@@ -81,7 +83,7 @@ export async function acquireBotProcessLocks(settings: BotLockSettings, { acquir
 	}
 	return {
 		acquireSigner: async (address: Address | undefined) => {
-			if ((!signerLocksInDryRun && !settings.execute) || address === undefined || (signerAddress !== undefined && address.toLowerCase() === signerAddress.toLowerCase())) return undefined
+			if ((!signerLocksInDryRun && !execute) || address === undefined || (signerAddress !== undefined && address.toLowerCase() === signerAddress.toLowerCase())) return undefined
 			const key = signerKey(address)
 			const retained = retiredSignerLocks.get(key)
 			if (retained !== undefined) {
@@ -91,7 +93,7 @@ export async function acquireBotProcessLocks(settings: BotLockSettings, { acquir
 			return acquirers.acquireSigner(settings.chainId, getAddress(address), settings.signerLockRoot)
 		},
 		commitSigner: async (address: Address | undefined, nextLock: ExclusiveProcessLock | undefined) => {
-			if (!signerLocksInDryRun && !settings.execute) return
+			if (!signerLocksInDryRun && !execute) return
 			const unchanged = address !== undefined && signerAddress !== undefined && address.toLowerCase() === signerAddress.toLowerCase()
 			if (unchanged) {
 				if (nextLock !== undefined) throw new Error(`Unchanged ${label} signer unexpectedly acquired another lock`)
@@ -109,6 +111,46 @@ export async function acquireBotProcessLocks(settings: BotLockSettings, { acquir
 		discardSigner: async (address: Address | undefined, lock: ExclusiveProcessLock | undefined) => {
 			if (lock === undefined) return
 			if (address === undefined) throw new Error(`Cannot discard a ${label} signer lock without its address`)
+			retiredSignerLocks.set(signerKey(address), lock)
+			await releaseRetiredSignerLocks()
+		},
+		/**
+		 * Arms live execution for the running process: a bot that reserves signers only while live takes the exclusive lock
+		 * for the signer here, so a second process cannot execute with the same key. Fails without changing the mode when
+		 * another process already holds that signer.
+		 */
+		enableExecution: async (address: Address) => {
+			if (execute) {
+				if (signerAddress !== undefined && signerAddress.toLowerCase() !== address.toLowerCase()) throw new Error(`Live execution is already reserved for ${label} signer ${signerAddress}`)
+				return
+			}
+			if (signerAddress === undefined || signerAddress.toLowerCase() !== address.toLowerCase()) {
+				const key = signerKey(address)
+				const retained = retiredSignerLocks.get(key)
+				retiredSignerLocks.delete(key)
+				const nextLock = retained ?? (await acquirers.acquireSigner(settings.chainId, getAddress(address), settings.signerLockRoot))
+				const previousLock = signerLock
+				const previousAddress = signerAddress
+				signerAddress = address
+				signerLock = nextLock
+				if (previousLock !== undefined && previousAddress !== undefined) retiredSignerLocks.set(signerKey(previousAddress), previousLock)
+				await releaseRetiredSignerLocks()
+			}
+			execute = true
+		},
+		/**
+		 * Returns to dry run; a bot that reserves signers only while live releases the signer lock again. A release that
+		 * fails stays retired under its address, so the next arm reuses it and process shutdown retries it.
+		 */
+		disableExecution: async () => {
+			if (!execute) return
+			execute = false
+			if (signerLocksInDryRun) return
+			const lock = signerLock
+			const address = signerAddress
+			signerLock = undefined
+			signerAddress = undefined
+			if (lock === undefined || address === undefined) return
 			retiredSignerLocks.set(signerKey(address), lock)
 			await releaseRetiredSignerLocks()
 		},

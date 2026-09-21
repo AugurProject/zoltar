@@ -133,9 +133,24 @@ or behind an authenticated TLS proxy: Basic authentication protects access but d
 not encrypt the private key or settings in transit. Mutable requests also retain
 same-origin and configured-authority checks, and JSON request bodies are capped at 1 MiB.
 
-Keep `runtime.execute` false until the factory, WETH, signer, selected pools, RPC
-endpoints, gas limits, and REP limits have been reviewed. When execution is
-enabled:
+The dashboard's Settings page is grouped into setup steps with a jump bar: **1 ·
+Connect** (chain and RPCs), **2 · Markets** (approved universes, market and pool
+configuration), **3 · Liquidation policy** (strategy and automation), and **4 · Go
+live** (execution signer, submission, execution mode). Each form's save button unlocks
+only after an edit differs from the loaded values and its panel shows an **Unsaved
+changes** badge until it is saved.
+
+Keep live execution off until the factory, WETH, signer, selected pools, RPC
+endpoints, gas limits, and REP limits have been reviewed. The **Execution mode**
+panel under Go live lists every prerequisite the bot enforces (execution signer,
+chain and RPC endpoints, independent quorum RPCs, canonical contracts, delivery)
+plus advisory rows for approved universes, monitored pools, and market evidence,
+and keeps the live switch locked until the required rows hold. Enabling it pauses
+the bot and reserves the signer for this process; resume through the readiness
+check to start signing. A memory-only signer arms live mode in the running process
+alone: the saved file keeps paused dry-run mode so a restart cannot execute without
+its key. `runtime.execute` in the operator file remains the startup mode. When
+execution is enabled:
 
 - `connectivity.readRpcUrl` supplies the local operational view.
 - `connectivity.rpcQuorum` is `1` or `2` and belongs to the selected chain profile.
@@ -147,8 +162,12 @@ enabled:
   is sent. Under the opt-in two-reader policy, one transport-unavailable endpoint degrades
   health without stopping a healthy two-reader quorum. A malformed or contradictory
   response is a safety fault and fails closed.
-- `submission.mode` may be `public` or `private`. ETH-funded stale-price requests
-  use the same signed-transaction delivery policy as other actions.
+- `submission.mode` may be `public` or `private` and is edited in the **Submission**
+  panel; private relays are checked against the selected chain before they are saved.
+  The mode cannot change while a pending transaction sent under the current mode
+  awaits recovery, because recovery resubmits with the saved delivery policy.
+  ETH-funded stale-price requests use the same signed-transaction delivery policy as
+  other actions.
 - `privateKey` is stored in the local operator file only when explicitly saved.
   The dashboard never returns it.
 

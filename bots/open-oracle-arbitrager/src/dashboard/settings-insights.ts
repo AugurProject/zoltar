@@ -1,7 +1,7 @@
 import type { PublicOperatorSnapshot } from '#state/operator-state'
 import { exactAmount } from './dashboard-format.js'
 import { setText } from './dom.js'
-import { setQueuedSections } from './form-state.ts'
+import { setQueuedSections } from '@zoltar/bot-shared/dashboard/form-state'
 import { renderGoLive } from './go-live.ts'
 import { goLiveConfiguration, savedSettlementEnabled } from './settings-forms.ts'
 
