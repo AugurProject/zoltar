@@ -1,6 +1,6 @@
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import { useCallback, useMemo, useRef } from 'preact/hooks'
-import { parseUnits } from '../lib/format.js'
+import { parseNonNegativeDecimalInput } from '@zoltar/ui-core-shared/forms/decimal.js'
 import type { WalletSummaryState } from '../lib/walletSummaryState.js'
 import { createLatestRequestGuard } from '@zoltar/ui-core-shared/lib/requestGuard.js'
 import { liveBalancesForMarket, marketAcceptsNewRisk, publicErrorMessage, type LiveMarket } from '../protocol/live.js'
@@ -113,7 +113,7 @@ export function useLiveTradingController({
 	useWalletSummaryEffects({ configuration, configurationError, selectedUniverseId: walletUniverseId, discoveryState, discoveryError, selected: selected ?? visibleMarkets[0], retryNonce: walletSummaryRetryNonce, onWalletSummaryChange, session: walletSession, services, requests: walletSummaryRequests })
 	const parsedAmount = useMemo(() => {
 		try {
-			return { value: parseUnits(amount), error: undefined }
+			return { value: parseNonNegativeDecimalInput(amount), error: undefined }
 		} catch (error) {
 			return { value: undefined, error: error instanceof Error ? error.message : 'Invalid amount' }
 		}

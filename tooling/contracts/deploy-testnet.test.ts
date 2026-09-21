@@ -3,7 +3,8 @@ import { getAddress, getCreateAddress, keccak256, privateKeyToAccount, type Addr
 import { getBootstrapDescendantAddresses, getInfraContractAddresses } from '../../ui/statoblastShared/ts/protocol/deploymentHelpers.ts'
 import type { WriteClient } from '../../ui/coreShared/ts/wallet/chainBackend.ts'
 import { SEPOLIA_NETWORK_PROFILE } from '../../ui/coreShared/ts/wallet/networkProfile.ts'
-import { getDeploymentSteps as getZoltarDeploymentSteps, PROXY_DEPLOYER_RUNTIME_CODE } from '../../ui/zoltarShared/ts/protocol/deployment.ts'
+import { PROXY_DEPLOYER_RUNTIME_CODE } from '@zoltar/core-shared/deployment/deploymentAddresses'
+import { getDeploymentSteps as getZoltarDeploymentSteps } from '../../ui/zoltarShared/ts/protocol/deployment.ts'
 import {
 	assertBootstrapDescendantCode,
 	assertConfirmedProxyCode,

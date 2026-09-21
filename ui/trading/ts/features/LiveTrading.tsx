@@ -1,7 +1,8 @@
 import { TimestampValue } from '@zoltar/ui-core-shared/components/TimestampValue.js'
 import type { RefObject } from 'preact'
 import { useEffect, useRef, useState } from 'preact/hooks'
-import { formatUnits, shortAddress } from '../lib/format.js'
+import { formatTrimmedUnits } from '@zoltar/ui-core-shared/lib/formatters.js'
+import { abbreviateAddress } from '@zoltar/ui-core-shared/lib/address.js'
 import { SecurityPoolLink } from '../components/SecurityPoolLink.js'
 import type { DeploymentConfiguration } from '../protocol/config.js'
 import { marketAcceptsNewRisk, type LiveMarket } from '../protocol/live.js'
@@ -50,7 +51,7 @@ function MarketFacts({ market, nowSeconds, workflowLocked, headingRef }: { marke
 				...(market.loadError === undefined
 					? [
 							{ label: liveCopy.questionEnd, value: <TimestampValue timestamp={market.endTime} relative={false} /> },
-							{ label: liveCopy.ammFee, value: `${formatUnits(market.feeBps, 2, 2)}%` },
+							{ label: liveCopy.ammFee, value: `${formatTrimmedUnits(market.feeBps, 2, 2)}%` },
 							{ label: liveCopy.pair, value: market.pair === undefined ? liveCopy.notDeployed : <ReadOnlyAddressValue address={market.pair} responsiveAbbreviation /> },
 						]
 					: []),
@@ -132,7 +133,7 @@ export function LiveTrading({
 			</div>
 		)
 	// Connecting re-requests the deployment chain first, so the same action switches a wallet that is on another network.
-	let walletActionLabel = account === undefined ? appCopy.connectWallet : shortAddress(account)
+	let walletActionLabel = account === undefined ? appCopy.connectWallet : abbreviateAddress(account, 6, 4)
 	if (account === undefined && networkMismatchReason !== undefined) walletActionLabel = availabilityCopy.formatSwitchNetworkAction(configuration.chainName)
 	const walletAction =
 		walletConnectRequestNonce === undefined ? (

@@ -82,20 +82,6 @@ export function parseReportingOutcomeInput(value: string): ReportingOutcomeKey {
 	}
 }
 
-export function getReportingOutcomeKey(outcome: ReportingOutcomeKey | bigint): ReportingOutcomeKey {
-	if (typeof outcome !== 'bigint') return outcome
-	switch (outcome) {
-		case 0n:
-			return 'invalid'
-		case 1n:
-			return 'yes'
-		case 2n:
-			return 'no'
-		default:
-			throw new Error(`Unsupported child universe outcome index: ${outcome.toString()}`)
-	}
-}
-
 export function balanceShortage(amount: bigint | undefined, balance: bigint | undefined): bigint | undefined {
 	if (amount === undefined || balance === undefined) return undefined
 	return amount > balance ? amount - balance : 0n

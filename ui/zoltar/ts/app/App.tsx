@@ -10,13 +10,11 @@ import { ProtocolAppFrame } from '@zoltar/ui-core-shared/app/components/Protocol
 import { AppRouteContent } from './components/AppRouteContent.js'
 import { OverviewPanels } from '@zoltar/ui-zoltar-shared/features/overview/OverviewPanels.js'
 import { useAppRouteEffects } from './hooks/useAppRouteEffects.js'
-import { useDeploymentFlow } from '@zoltar/ui-zoltar-shared/features/deployment/hooks/useDeploymentFlow.js'
-import { buildDeploymentRouteContentProps } from '@zoltar/ui-zoltar-shared/features/deployment/lib/deploymentRoute.js'
+import { useProtocolAppShell } from '@zoltar/ui-zoltar-shared/features/appShell/hooks/useProtocolAppShell.js'
 import { useHashRoute } from '@zoltar/ui-core-shared/app/hooks/useHashRoute.js'
-import { useProtocolOnchainRuntime } from '@zoltar/ui-core-shared/app/hooks/useProtocolOnchainRuntime.js'
 import { useQuestionCreation } from '@zoltar/ui-zoltar-shared/features/questions/hooks/useQuestionCreation.js'
 import { useZoltarUrlState } from './hooks/useZoltarUrlState.js'
-import { getActiveSimulationController, initializeActiveEnvironment } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
+import { initializeActiveEnvironment } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { formatAppDocumentTitle, getAppPageTitle } from './lib/appPageTitle.js'
 import { onchainStateDependencies } from './onchainStateDependencies.js'
 import { resolveLoadableValueState } from '@zoltar/ui-core-shared/lib/loadState.js'
@@ -41,53 +39,31 @@ export function App() {
 	const {
 		accountState,
 		activeEnvironmentNonce,
-		applicationDeploymentComplete,
-		baseHookConfig,
+		applicationDeploymentMissing,
 		canReadOnchainData,
-		changeWallet,
-		chainClockError,
-		connectWallet,
 		currentBlockNumber,
 		currentTimestamp,
-		deploymentStatusError,
 		deploymentStatuses,
-		disconnectWallet,
+		deployRouteContentProps,
 		environmentBootstrapError,
-		environmentReady,
-		errorMessages: onchainErrorMessages,
-		hasLoadedDeploymentStatuses,
-		isConnectingWallet,
-		isLoadingDeploymentStatuses,
-		isManagingWallet,
-		isOnActiveAppChain,
-		isRefreshing,
+		errorMessages,
+		overviewWalletProps,
 		readBackendMessage,
-		readBackendReady,
 		readBackendStatus,
-		refreshState,
-		setActiveEnvironmentNonce,
-		setDeploymentStatuses,
-		switchNetwork,
+		refreshActiveEnvironment,
+		refreshSimulationView,
+		routeContentBlocked,
+		showDeployTab,
+		simulationController,
 		transactionTray,
 		walletBootstrapComplete,
 		walletScopedHookConfig,
-	} = useProtocolOnchainRuntime({
-		enableChainClock: route !== 'deploy',
+	} = useProtocolAppShell({
+		initializeEnvironment: options => initializeActiveEnvironment(window.location, undefined, options),
+		isDeploymentRoute: route === 'deploy',
 		onchainStateDependencies,
-		replaceEnvironment: async canCommit => {
-			let commitAllowed = false
-			await initializeActiveEnvironment(window.location, undefined, {
-				shouldCommit: () => {
-					commitAllowed = canCommit()
-					return commitAllowed
-				},
-			})
-			return commitAllowed
-		},
 	})
 	const { transactionState } = transactionTray
-	const deploymentFlow = useDeploymentFlow({ ...baseHookConfig, deploymentStatuses, environmentRefreshKey: activeEnvironmentNonce, setDeploymentStatuses })
-	const { errorMessage: deploymentErrorMessage } = deploymentFlow
 	const {
 		approveZoltarForkRep,
 		createChildUniverse,
@@ -138,19 +114,6 @@ export function App() {
 		zoltarUniverseError,
 		zoltarUniverseMissing,
 	} = useQuestionCreation({ ...walletScopedHookConfig, activeUniverseId, autoLoadInitialData: walletBootstrapComplete && canReadOnchainData, deploymentStatuses, environmentRefreshKey: activeEnvironmentNonce })
-	const simulationController = getActiveSimulationController()
-	const refreshSimulationView = async () => {
-		await refreshState()
-	}
-	const refreshActiveEnvironment = async () => {
-		await initializeActiveEnvironment()
-		setActiveEnvironmentNonce(currentNonce => currentNonce + 1)
-		await refreshSimulationView()
-	}
-	const errorMessages = [deploymentErrorMessage, ...onchainErrorMessages.filter(message => message !== deploymentStatusError), chainClockError].filter((message): message is string => message !== undefined)
-	const applicationDeploymentMissing = canReadOnchainData && applicationDeploymentComplete === false
-	const showDeployTab = deploymentStatusError !== undefined || applicationDeploymentMissing || (hasLoadedDeploymentStatuses && deploymentStatuses.some(step => !step.deployed))
-	const showApplicationDeploymentWarning = applicationDeploymentMissing
 	const zoltarUniverseState = resolveLoadableValueState({
 		isLoading: loadingZoltarUniverse,
 		isMissing: zoltarUniverseMissing,
@@ -158,7 +121,7 @@ export function App() {
 	})
 	const showZoltarUniverseWarning = canReadOnchainData && zoltarUniverseState === 'missing'
 	const activeViewRequiresUniverse = !isUniverseIndependentZoltarView(activeZoltarView)
-	const isRouteContentDisabled = route !== 'deploy' && (!readBackendReady || applicationDeploymentMissing || (activeViewRequiresUniverse && showZoltarUniverseWarning))
+	const isRouteContentDisabled = routeContentBlocked || (route !== 'deploy' && activeViewRequiresUniverse && showZoltarUniverseWarning)
 	const universePresentation = showZoltarUniverseWarning ? getUniversePresentation(zoltarUniverseState) : undefined
 	const pageTitle = getAppPageTitle({ activeZoltarView, route: activeRoute })
 	useAppRouteEffects({
@@ -170,16 +133,6 @@ export function App() {
 		if (activeRoute !== 'zoltar' || !showZoltarUniverseWarning || !activeViewRequiresUniverse) return
 		replaceZoltarView('questions')
 	}, [activeRoute, activeViewRequiresUniverse, replaceZoltarView, showZoltarUniverseWarning])
-	const deployRouteContentProps = buildDeploymentRouteContentProps({
-		accountAddress: accountState.address,
-		deploymentStateReady: hasLoadedDeploymentStatuses && environmentReady && readBackendReady,
-		deploymentStatusError,
-		deploymentStatuses,
-		flow: deploymentFlow,
-		isLoadingDeploymentStatuses,
-		isOnActiveAppChain,
-		onRetryDeploymentStatus: () => void refreshState({ loadChainClock: false, loadWalletState: false }),
-	})
 	const zoltarRouteContentProps: MarketRouteContentProps = {
 		accountState,
 		activeUniverseId,
@@ -266,7 +219,7 @@ export function App() {
 					readBackendMessage={readBackendMessage}
 					readBackendStatus={readBackendStatus}
 					simulationBootstrapError={environmentBootstrapError}
-					showApplicationDeploymentWarning={showApplicationDeploymentWarning}
+					showApplicationDeploymentWarning={applicationDeploymentMissing}
 					zoltarUniverseError={zoltarUniverseError}
 				/>
 			}
@@ -274,21 +227,15 @@ export function App() {
 				<AppHeaderShell
 					renderOverview={settingsMenu => (
 						<OverviewPanels
+							{...overviewWalletProps}
 							settingsMenu={settingsMenu}
 							applicationTitle={zoltarCopy.applicationTitle}
 							activeUniverseId={activeUniverseId}
-							accountState={accountState}
-							isConnectingWallet={isConnectingWallet}
-							isManagingWallet={isManagingWallet}
 							isLoadingRepPrices={false}
 							isRefreshingRepPrices={false}
 							isLoadingUniverseRepBalance={loadingZoltarForkAccess}
-							onConnect={() => void connectWallet()}
-							onChangeWallet={() => void changeWallet()}
-							onDisconnectWallet={() => void disconnectWallet()}
 							onGoToGenesisUniverse={() => setActiveUniverseId(0n)}
 							onRefreshRepPrices={() => undefined}
-							onSwitchNetwork={() => void switchNetwork()}
 							parentUniverseId={zoltarUniverse?.parentUniverseId}
 							repPerEthFailure={undefined}
 							repPerEthPrice={undefined}
@@ -299,13 +246,10 @@ export function App() {
 							repUsdcSource={undefined}
 							repUsdcSourceUrl={undefined}
 							showRepPrices={false}
-							readBackendStatus={readBackendStatus}
 							universeForkTime={zoltarUniverse?.forkTime}
 							universeHasForked={zoltarUniverse?.hasForked}
 							universePresentation={universePresentation}
 							universeRepBalanceAttoRep={zoltarForkRepBalanceAttoRep}
-							isRefreshing={isRefreshing}
-							walletBootstrapComplete={walletBootstrapComplete}
 						/>
 					)}
 					simulationController={simulationController}

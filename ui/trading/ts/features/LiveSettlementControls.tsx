@@ -2,7 +2,8 @@ import { formatTimestamp } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { FormField } from '@zoltar/ui-core-shared/components/FormField.js'
 import { useEffect, useId, useMemo, useState } from 'preact/hooks'
 import type { Address, PublicClient, WalletClient } from '@zoltar/core-shared/evm/ethereum'
-import { formatUnits, parseUnitsOrUndefined } from '../lib/format.js'
+import { formatTrimmedUnits } from '@zoltar/ui-core-shared/lib/formatters.js'
+import { tryParseNonNegativeDecimalInput } from '@zoltar/ui-core-shared/forms/decimal.js'
 import { collateralAttoEthToAttoShares } from '../lib/shareValue.js'
 import { ForkMigrationTargets } from './ForkMigrationTargets.js'
 import type { DeploymentConfiguration } from '../protocol/config.js'
@@ -10,6 +11,7 @@ import { loadForkMigrationContext, type ForkMigrationContext, type ForkTarget } 
 import { createTradingPublicClient, publicErrorMessage, settlementAvailability, simulateSettlement, submitFreshSettlement, type LiveBalances, type LiveMarket, type SettlementOperation, type ShareOutcome } from '../protocol/live.js'
 import * as workflowCopy from '../copy/workflows.js'
 import * as settlementCopy from '../copy/settlement.js'
+import { resolvedShareOutcome } from '../lib/marketLabels.js'
 import { EnumDropdown } from '@zoltar/ui-core-shared/components/EnumDropdown.js'
 import { ErrorNotice } from '@zoltar/ui-core-shared/components/ErrorNotice.js'
 import { FormInput } from '@zoltar/ui-core-shared/components/FormInput.js'
@@ -35,13 +37,6 @@ export const liveSettlementServices: LiveSettlementServices = {
 	loadForkContext: loadForkMigrationContext,
 	simulate: simulateSettlement,
 	submit: submitFreshSettlement,
-}
-
-function resolvedQuestionOutcome(outcome: number): ShareOutcome | undefined {
-	if (outcome === 0) return settlementCopy.invalid
-	if (outcome === 1) return settlementCopy.yes
-	if (outcome === 2) return settlementCopy.no
-	return undefined
 }
 
 export function LiveSettlementControls({
@@ -94,8 +89,8 @@ export function LiveSettlementControls({
 	const [selectedForkTargets, setSelectedForkTargets] = useState<readonly ForkTarget[]>([])
 	const forkClient = useMemo(() => services.createPublicClient(configuration), [configuration, services])
 	const availability = settlementAvailability(market, balances)
-	const winningOutcome = resolvedQuestionOutcome(market.questionOutcome)
-	const parsedAmountAttoEth = parseUnitsOrUndefined(amount)
+	const winningOutcome = resolvedShareOutcome(market.questionOutcome)
+	const parsedAmountAttoEth = tryParseNonNegativeDecimalInput(amount)
 	const parsedAmount = parsedAmountAttoEth === undefined ? undefined : collateralAttoEthToAttoShares(parsedAmountAttoEth, market)
 	const targetOutcomeIndexes = useMemo(() => selectedForkTargets.map(target => target.outcomeIndex), [selectedForkTargets])
 	const targetOutcomeKey = targetOutcomeIndexes.map(target => target.toString()).join(',')
@@ -160,7 +155,7 @@ export function LiveSettlementControls({
 	if (state === 'ready' && actionableQuote !== undefined) {
 		if (actionableQuote.operation === 'migrate-shares') statusText = migrationSimulationSummary(actionableQuote.blockNumber, actionableQuote.sourceOutcome, BigInt(actionableQuote.targetOutcomeIndexes.length))
 		else if (actionableQuote.operation === 'redeem-complete-set')
-			statusText = settlementCopy.redemptionSimulationSummary(actionableQuote.blockNumber, formatUnits(actionableQuote.expectedAttoEth), formatUnits(actionableQuote.minimumAttoEth), formatUnits(actionableQuote.slippageBps, 2, 2), formatTimestamp(actionableQuote.deadline))
+			statusText = settlementCopy.redemptionSimulationSummary(actionableQuote.blockNumber, formatTrimmedUnits(actionableQuote.expectedAttoEth), formatTrimmedUnits(actionableQuote.minimumAttoEth), formatTrimmedUnits(actionableQuote.slippageBps, 2, 2), formatTimestamp(actionableQuote.deadline))
 		else statusText = settlementCopy.settlementSimulationSummary(actionableQuote.blockNumber)
 	}
 	const outcomeRef = useFocusOnKeyChange<HTMLDivElement>(state === 'confirmed' ? transactionHash : undefined)

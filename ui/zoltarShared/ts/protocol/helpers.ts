@@ -1,5 +1,6 @@
 import { encodeAbiParameters, getAddress, keccak256, zeroAddress, type Address } from '@zoltar/core-shared/evm/ethereum'
-import type { ForkOutcomeKey, MarketType, QuestionData, ReportingOutcomeKey, SecurityPoolSystemState } from '@zoltar/ui-core-shared/types/contracts.js'
+import type { ForkOutcomeKey, MarketType, QuestionData, ReportingOutcomeKey } from '@zoltar/ui-core-shared/types/contracts.js'
+import { getReportingOutcomeKey } from '@zoltar/ui-core-shared/lib/contractEnums.js'
 
 type IntegerLike = bigint | number
 
@@ -131,35 +132,6 @@ export function getQuestionIdHex(questionId: bigint) {
 	return `0x${questionId.toString(16)}`
 }
 
-export function getReportingOutcomeValue(outcome: ReportingOutcomeKey) {
-	switch (outcome) {
-		case 'invalid':
-			return 0
-		case 'yes':
-			return 1
-		case 'no':
-			return 2
-		default:
-			throw new Error(`Unhandled reporting outcome: ${JSON.stringify(outcome)}`)
-	}
-}
-
-export function getReportingOutcomeKey(outcome: bigint | number): ReportingOutcomeKey | 'none' {
-	switch (outcome) {
-		case 0:
-		case 0n:
-			return 'invalid'
-		case 1:
-		case 1n:
-			return 'yes'
-		case 2:
-		case 2n:
-			return 'no'
-		default:
-			return 'none'
-	}
-}
-
 export function getForkOutcomeKey(outcome: bigint | number, parentSecurityPoolAddress: Address): ForkOutcomeKey {
 	if (parentSecurityPoolAddress === zeroAddress) return 'none'
 	return getReportingOutcomeKey(outcome)
@@ -175,25 +147,6 @@ export function getEscalationSideLabel(key: ReportingOutcomeKey) {
 			return 'No'
 		default:
 			throw new Error(`Unhandled escalation side: ${JSON.stringify(key)}`)
-	}
-}
-
-export function getSecurityPoolSystemState(value: bigint | number): SecurityPoolSystemState {
-	switch (value) {
-		case 0:
-		case 0n:
-			return 'operational'
-		case 1:
-		case 1n:
-			return 'poolForked'
-		case 2:
-		case 2n:
-			return 'forkMigration'
-		case 3:
-		case 3n:
-			return 'forkTruthAuction'
-		default:
-			throw new Error(`Unhandled security pool system state: ${JSON.stringify(value)}`)
 	}
 }
 

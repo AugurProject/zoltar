@@ -9,7 +9,7 @@ import { ReadOnlyDetailAccordion } from '@zoltar/ui-core-shared/components/ReadO
 import { MetricField } from '@zoltar/ui-core-shared/components/MetricField.js'
 import type { ZoltarUniverseSummary } from '@zoltar/ui-core-shared/types/contracts.js'
 import { UniverseLink } from './UniverseLink.js'
-import { formatUniverseDisplayLabel } from '../lib/universe.js'
+import { formatUniverseDisplayLabel } from '@zoltar/ui-core-shared/lib/universeLabels.js'
 
 export function UniverseContextSummary({ universe, children }: { universe: ZoltarUniverseSummary; children?: ComponentChildren }) {
 	return (
