@@ -1,4 +1,4 @@
-import { readStringQueryParam } from './urlParams.js'
+import { readStringQueryParam, setOrDeleteSearchParam, updateSearchParams } from './urlParams.js'
 
 const OPEN_ORACLE_VIEW_QUERY_PARAM = 'openOracleView'
 const OPEN_ORACLE_REPORT_ID_QUERY_PARAM = 'openOracleReportId'
@@ -12,28 +12,15 @@ export function readOpenOracleViewQueryParam(search: string) {
 }
 
 export function writeOpenOracleViewQueryParam(search: string, view: string | undefined) {
-	const params = new URLSearchParams(search)
-	if (view === undefined || view.trim() === '') {
-		params.delete(OPEN_ORACLE_VIEW_QUERY_PARAM)
-	} else {
-		params.set(OPEN_ORACLE_VIEW_QUERY_PARAM, view.trim())
-	}
-
-	if (view !== 'selected-report') params.delete(OPEN_ORACLE_REPORT_ID_QUERY_PARAM)
-
-	const nextSearch = params.toString()
-	return nextSearch === '' ? '' : `?${nextSearch}`
+	return updateSearchParams(search, params => {
+		setOrDeleteSearchParam(params, OPEN_ORACLE_VIEW_QUERY_PARAM, view)
+		if (view !== 'selected-report') params.delete(OPEN_ORACLE_REPORT_ID_QUERY_PARAM)
+	})
 }
 
 export function writeOpenOracleReportIdQueryParam(search: string, reportId: string | undefined) {
-	const params = new URLSearchParams(search)
-	if (reportId === undefined || reportId.trim() === '') {
-		params.delete(OPEN_ORACLE_REPORT_ID_QUERY_PARAM)
-	} else {
-		params.set(OPEN_ORACLE_REPORT_ID_QUERY_PARAM, reportId.trim())
+	return updateSearchParams(search, params => {
+		if (setOrDeleteSearchParam(params, OPEN_ORACLE_REPORT_ID_QUERY_PARAM, reportId) === undefined) return
 		params.set(OPEN_ORACLE_VIEW_QUERY_PARAM, 'selected-report')
-	}
-
-	const nextSearch = params.toString()
-	return nextSearch === '' ? '' : `?${nextSearch}`
+	})
 }

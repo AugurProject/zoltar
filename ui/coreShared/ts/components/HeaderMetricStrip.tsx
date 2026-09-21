@@ -1,4 +1,5 @@
 import { toChildArray, type ComponentChildren } from 'preact'
+import * as appCopy from '../copy/app.js'
 
 type HeaderMetricStripProps = {
 	children: ComponentChildren
@@ -36,5 +37,14 @@ export function HeaderMetricGroup({ action, children, label, secondary = false }
 			</span>
 			<div className='overview-metric-group-items'>{children}</div>
 		</div>
+	)
+}
+
+/** Reveals the strip's secondary metrics on narrow screens, where they collapse behind this toggle. */
+export function EnvironmentDetailsToggle({ expanded, onToggle }: { expanded: boolean; onToggle: () => void }) {
+	return (
+		<button className='overview-details-toggle secondary' type='button' aria-expanded={expanded} onClick={onToggle}>
+			{expanded ? appCopy.hideEnvironmentDetails : appCopy.showEnvironmentDetails}
+		</button>
 	)
 }

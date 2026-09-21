@@ -1,5 +1,8 @@
 import { getCreate2Address, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
 
+/** Runtime bytecode of the deterministic proxy deployer that every canonical deployment goes through. */
+export const PROXY_DEPLOYER_RUNTIME_CODE = '0x60003681823780368234f58015156014578182fd5b80825250506014600cf3' satisfies Hex
+
 type LibraryReplacement = {
 	address: Address
 	hash: string

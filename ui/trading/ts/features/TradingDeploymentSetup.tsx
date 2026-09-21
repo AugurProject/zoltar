@@ -13,9 +13,12 @@ import { parseDeploymentSetupInput, type DeploymentConfiguration } from '../prot
 import { loadCoreDeployments } from '../protocol/coreDeployments.js'
 import { deployTradingStep, deploymentConfigurationForPlan, getTradingDeploymentPlan, isTradingDeploymentComplete, loadTradingDeploymentStatus, nextTradingDeploymentStep, type CoreDeployment, type TradingDeploymentPlan, type TradingDeploymentStep } from '../protocol/deployment.js'
 import { createWalletContextSubscription, getInjectedEthereum, type InjectedEthereum } from '../protocol/injected.js'
-import { connectedWalletAccount, connectWallet, createTradingWalletClient, publicErrorMessage, switchWalletChain, validateRpcChainId, waitForActiveEnvironmentReady, walletChainId } from '../protocol/live.js'
+import { readInjectedChainIdNumber, requestInjectedAccount, requireInjectedAccount, switchInjectedChain } from '@zoltar/ui-core-shared/wallet/injectedEthereum.js'
+import { createTradingWalletClient, publicErrorMessage, validateRpcChainId, waitForActiveEnvironmentReady } from '../protocol/live.js'
 import { RouteHeader } from '@zoltar/ui-core-shared/components/RouteHeader.js'
 import { ErrorNotice } from '@zoltar/ui-core-shared/components/ErrorNotice.js'
+import * as coreAppCopy from '@zoltar/ui-core-shared/copy/app.js'
+import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as appCopy from '../copy/app.js'
 import * as deploymentCopy from '../copy/deployment.js'
 
@@ -38,26 +41,26 @@ const defaultServices: TradingDeploymentSetupServices = {
 	connectWallet: async () => {
 		const provider = getInjectedEthereum()
 		if (provider === undefined) throw new Error(deploymentCopy.noInjectedWallet)
-		const account = await connectWallet(provider)
-		return { account, chainId: await walletChainId(provider), provider }
+		const account = await requestInjectedAccount(provider)
+		return { account, chainId: await readInjectedChainIdNumber(provider), provider }
 	},
 	getWalletProvider: getInjectedEthereum,
 	deployStep: async (publicClient, plan, step, onSubmitted) => {
 		const provider = getInjectedEthereum()
 		if (provider === undefined) throw new Error(deploymentCopy.noInjectedWallet)
-		let currentChainId = await walletChainId(provider)
+		let currentChainId = await readInjectedChainIdNumber(provider)
 		if (currentChainId !== plan.core.chainId) {
-			await switchWalletChain(provider, plan.core.chainId)
-			currentChainId = await walletChainId(provider)
+			await switchInjectedChain(provider, plan.core.chainId)
+			currentChainId = await readInjectedChainIdNumber(provider)
 		}
 		if (currentChainId !== plan.core.chainId) throw new Error(deploymentCopy.walletMustUseNetwork(plan.core.chainName))
-		const account = await connectWallet(provider)
+		const account = await requestInjectedAccount(provider)
 		const walletClient = createTradingWalletClient(provider, account)
 		await deployTradingStep(walletClient, publicClient, plan, step, onSubmitted, async () => {
 			validateRpcChainId(await publicClient.getChainId(), plan.core.chainId)
-			if (getInjectedEthereum() !== provider || (await walletChainId(provider)) !== plan.core.chainId || (await connectWallet(provider)) !== account) throw new Error(deploymentCopy.walletContextChangedBeforeDeployment)
+			if (getInjectedEthereum() !== provider || (await readInjectedChainIdNumber(provider)) !== plan.core.chainId || (await requestInjectedAccount(provider)) !== account) throw new Error(deploymentCopy.walletContextChangedBeforeDeployment)
 		})
-		if (getInjectedEthereum() !== provider || (await walletChainId(provider)) !== plan.core.chainId || (await connectWallet(provider)) !== account) throw new Error(deploymentCopy.walletContextChangedDuringDeployment)
+		if (getInjectedEthereum() !== provider || (await readInjectedChainIdNumber(provider)) !== plan.core.chainId || (await requestInjectedAccount(provider)) !== account) throw new Error(deploymentCopy.walletContextChangedDuringDeployment)
 	},
 	loadCoreDeployments,
 }
@@ -73,7 +76,7 @@ function inspectionPresentation(state: 'blocked' | 'idle' | 'loading' | 'ready' 
 	if (registryLoading) return { label: deploymentCopy.loadingNetworks, tone: 'muted' as const }
 	if (registryError) return { label: deploymentCopy.networksUnavailable, tone: 'warning' as const }
 	if (inputError) return { label: appCopy.invalidDeploymentSettings, tone: 'warning' as const }
-	if (busy) return { label: deploymentCopy.deploymentInProgress, tone: 'muted' as const }
+	if (busy) return { label: coreAppCopy.deploymentInProgress, tone: 'muted' as const }
 	if (deploymentComplete) return { label: appCopy.deploymentComplete, tone: 'ok' as const }
 	if (state === 'loading') return { label: deploymentCopy.checkingNetwork, tone: 'muted' as const }
 	if (state === 'ready') return undefined
@@ -84,17 +87,17 @@ function inspectionPresentation(state: 'blocked' | 'idle' | 'loading' | 'ready' 
 }
 
 function deploymentActionLabel(busy: boolean, nextStep: ReturnType<typeof nextTradingDeploymentStep>, plan: TradingDeploymentPlan | undefined, status: DeploymentStatus | undefined) {
-	if (busy) return deploymentCopy.deployingContract(nextStep?.label ?? deploymentCopy.contractFallbackLabel)
+	if (busy) return coreAppCopy.formatDeployingContract(nextStep?.label ?? deploymentCopy.contractFallbackLabel)
 	if (plan !== undefined && status !== undefined && isTradingDeploymentComplete(plan, status)) return appCopy.deploymentComplete
 	if (nextStep === undefined) return deploymentCopy.deployTradingContracts
-	return deploymentCopy.deployContract(nextStep.label)
+	return coreAppCopy.formatDeployContract(nextStep.label)
 }
 
 function contractStatusPresentation(deployed: boolean | undefined, isNext: boolean) {
 	if (deployed === undefined) return { label: appCopy.checkingContract, tone: 'muted' as const }
-	if (deployed) return { label: deploymentCopy.deployed, tone: 'ok' as const }
+	if (deployed) return { label: commonCopy.deployed, tone: 'ok' as const }
 	if (isNext) return { label: deploymentCopy.nextToDeploy, tone: 'muted' as const }
-	return { label: deploymentCopy.notDeployed, tone: 'warning' as const }
+	return { label: commonCopy.notDeployed, tone: 'warning' as const }
 }
 
 export function TradingDeploymentSetup({
@@ -296,10 +299,10 @@ export function TradingDeploymentSetup({
 			bindWalletProvider(initialProvider)
 			if (initialProvider === undefined && services.connectWallet === undefined) throw new Error(deploymentCopy.noInjectedWallet)
 			if (initialProvider !== undefined && selectedCore !== undefined) {
-				const currentChain = await walletChainId(initialProvider)
+				const currentChain = await readInjectedChainIdNumber(initialProvider)
 				if (currentChain !== selectedCore.chainId) {
-					await switchWalletChain(initialProvider, selectedCore.chainId)
-					const switchedChain = await walletChainId(initialProvider)
+					await switchInjectedChain(initialProvider, selectedCore.chainId)
+					const switchedChain = await readInjectedChainIdNumber(initialProvider)
 					if (switchedChain !== selectedCore.chainId) throw new Error(deploymentCopy.walletMustUseNetwork(selectedCore.chainName))
 				}
 			}
@@ -310,8 +313,8 @@ export function TradingDeploymentSetup({
 			const provider = initialProvider ?? connected.provider
 			bindWalletProvider(provider)
 			const contextRevision = walletContextEventRevision.current
-			const account = provider === undefined ? connected.account : await connectedWalletAccount(provider)
-			const connectedChain = provider === undefined ? connected.chainId : await walletChainId(provider)
+			const account = provider === undefined ? connected.account : await requireInjectedAccount(provider)
+			const connectedChain = provider === undefined ? connected.chainId : await readInjectedChainIdNumber(provider)
 			if (walletContextEventRevision.current !== contextRevision) throw new Error(deploymentCopy.walletContextChangedDuringConnection)
 			const currentProvider = services.getWalletProvider?.()
 			if (provider !== undefined && currentProvider !== undefined && currentProvider !== provider) throw new Error(deploymentCopy.walletProviderChangedDuringConnection)

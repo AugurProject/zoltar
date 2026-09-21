@@ -6,9 +6,11 @@ import { SECURITY_POOL_QUESTION_OUTCOME_ABI } from './securityPoolAbi.js'
 import { deriveHasForkActivity } from './forkActivity.js'
 import { sameAddress } from '@zoltar/ui-core-shared/lib/address.js'
 import type { ListedSecurityPool, SecurityPoolPage, SecurityPoolVaultSummary, SecurityVaultDetails, ReadClient } from '@zoltar/ui-core-shared/types/contracts.js'
-import { readRequiredMulticall, readWithRpcStateRetries } from '@zoltar/ui-zoltar-shared/protocol/core.js'
+import { readWithRpcStateRetries } from '@zoltar/ui-core-shared/lib/rpcStateRetries.js'
+import { readRequiredMulticall } from '@zoltar/ui-zoltar-shared/protocol/core.js'
 import { requireForkDataView } from './forkData.js'
-import { getForkOutcomeKey, getProtocolPageOffset, getQuestionIdHex, getReportingOutcomeKey, getSecurityPoolSystemState } from '@zoltar/ui-zoltar-shared/protocol/helpers.js'
+import { getReportingOutcomeKey, getSecurityPoolSystemState } from '@zoltar/ui-core-shared/lib/contractEnums.js'
+import { getForkOutcomeKey, getProtocolPageOffset, getQuestionIdHex } from '@zoltar/ui-zoltar-shared/protocol/helpers.js'
 import { requireSecurityPoolDeploymentTupleArray, requireSecurityVaultTupleArray, type SecurityPoolDeploymentTuple } from './helpers.js'
 import { getInfraContractAddresses } from './deploymentHelpers.js'
 import { loadMarketDetails } from '@zoltar/ui-zoltar-shared/protocol/zoltar.js'
@@ -457,12 +459,7 @@ async function loadSecurityPoolDetails(
 		feeEligibleCapacityOwnershipAttoRep: poolAccountingSnapshot.feeEligibleCapacityOwnershipAttoRep,
 		forkOutcome,
 		forkOwnSecurityPool,
-		hasForkActivity: deriveHasForkActivity({
-			forkOutcome,
-			migratedAttoRep,
-			systemState,
-			truthAuctionStartedAt,
-		}),
+		hasForkActivity: deriveHasForkActivity({ forkOutcome, migratedAttoRep, systemState, truthAuctionStartedAt }),
 		hasForkContinuationEscalationGame,
 		initialReportPriorityFeeAttoEthPerGas,
 		lastOraclePrice: lastSettlementTimestamp > 0n ? lastOraclePrice : undefined,

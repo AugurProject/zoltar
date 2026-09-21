@@ -9,7 +9,7 @@ import { PaginationControls } from '@zoltar/ui-core-shared/components/Pagination
 import { SectionBlock } from '@zoltar/ui-core-shared/components/SectionBlock.js'
 import { ReadOnlyAddressValue } from '@zoltar/ui-core-shared/components/AddressValue.js'
 import { liveCopy } from '../copy/live.js'
-import { formatUnits } from '../lib/format.js'
+import { formatTrimmedUnits } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { getTradingRouteHref, tradingListKindFor, type TradingListKind, type TradingLookupRoute } from '../lib/routing.js'
 import { marketAcceptsNewRisk, marketNewRiskBlocker, type LiveMarket } from '../protocol/live.js'
 import { livePairInitialized } from './liveTradingControllerHelpers.js'
@@ -73,7 +73,7 @@ function MarketRow({ listKind, lookupRoute, market, nowSeconds }: { listKind: Tr
 						<TimestampValue timestamp={market.endTime} relative={false} />
 					</MetricField>
 				) : undefined}
-				{market.loadError === undefined && listKind === 'markets' ? <MetricField label={liveCopy.ammFee}>{formatUnits(market.feeBps, 2, 2)}%</MetricField> : undefined}
+				{market.loadError === undefined && listKind === 'markets' ? <MetricField label={liveCopy.ammFee}>{formatTrimmedUnits(market.feeBps, 2, 2)}%</MetricField> : undefined}
 			</DataGrid>
 		</EntityCard>
 	)

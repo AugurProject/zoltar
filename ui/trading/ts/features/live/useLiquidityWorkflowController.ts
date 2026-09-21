@@ -3,7 +3,7 @@ import type { Address, Hash, WalletClient } from '@zoltar/core-shared/evm/ethere
 import { createExclusiveWorkflowGuard, createLatestRequestGuard } from '@zoltar/ui-core-shared/lib/requestGuard.js'
 import { waitForSubmittedTransactionReceipt } from '@zoltar/ui-core-shared/transactions/transactionReceipt.js'
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'preact/hooks'
-import { parseUnitsOrUndefined } from '../../lib/format.js'
+import { tryParseNonNegativeDecimalInput } from '@zoltar/ui-core-shared/forms/decimal.js'
 import { SHARE_QUANTITY_DECIMALS } from '../../lib/shareValue.js'
 import type { DeploymentConfiguration } from '../../protocol/config.js'
 import { marketAcceptsNewRisk, type LiquidityOperation, type LiveMarket } from '../../protocol/live.js'
@@ -64,12 +64,12 @@ export function useLiquidityWorkflowController({
 	const mounted = useRef(true)
 	const inputRevision = useRef(0)
 	// ETH deposits and fixed-scale LP quantities use different decimal precisions.
-	const requestedAmount = useCallback(() => parseUnitsOrUndefined(amount, operation === 'remove' ? SHARE_QUANTITY_DECIMALS : 18), [amount, operation])
+	const requestedAmount = useCallback(() => tryParseNonNegativeDecimalInput(amount, operation === 'remove' ? SHARE_QUANTITY_DECIMALS : 18), [amount, operation])
 	const parsed = useMemo(() => requestedAmount(), [requestedAmount])
 	const slippageBps = useMemo(() => parseSlippageBps(slippage), [slippage])
 	const validityMinutes = useMemo(() => parseTransactionValidityMinutes(transactionValidityMinutes), [transactionValidityMinutes])
 	const conditionalBps = useMemo(() => {
-		const value = parseUnitsOrUndefined(probability, 2)
+		const value = tryParseNonNegativeDecimalInput(probability, 2)
 		return value !== undefined && value > 0n && value < 10_000n ? value : undefined
 	}, [probability])
 	const operationAvailable = liquidityOperationAvailable(operation, market, nowSeconds)

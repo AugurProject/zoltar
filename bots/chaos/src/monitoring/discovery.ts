@@ -3,7 +3,8 @@ import * as abis from '@zoltar/bot-shared/contracts/abi'
 import { bigintToSafeNumber, getAddress, zeroAddress, type Address, type Hash } from '@zoltar/bot-shared/ethereum'
 import { requireDeployedContracts } from '@zoltar/bot-shared/monitoring/deployed-contracts'
 import { sameAddress } from '@zoltar/core-shared/evm/address'
-import { CANONICAL_PROXY_DEPLOYER, CANONICAL_PROXY_DEPLOYER_RUNTIME, GENESIS_UNISWAP_FEE, genesisUniswapSeederDeployment } from '../core/genesis-uniswap.ts'
+import { PROXY_DEPLOYER_RUNTIME_CODE } from '@zoltar/core-shared/deployment/deploymentAddresses'
+import { CANONICAL_PROXY_DEPLOYER, GENESIS_UNISWAP_FEE, genesisUniswapSeederDeployment } from '../core/genesis-uniswap.ts'
 import { canonicalUintString, type CanonicalUintString } from '../core/units.ts'
 import { validForkOutcomeRoutes } from '../operations/fork-outcomes.ts'
 import { assertAnchoredOracleRequestFunding } from '../operations/oracle-request-funding.ts'
@@ -21,6 +22,7 @@ import { cloneImmutableTopologyData, emptyCountedRegistryCursor, emptyImmutableT
 const UNISWAP_POOL_DISCOVERY_CONCURRENCY = Math.floor(DISCOVERY_RPC_QUEUE_LIMIT / 6)
 const DISCOVERY_QUESTION_RESIDENT_UTF8_BYTES = 32 * 1024 * 1024
 const OUTCOME_LABEL_PAGE_SIZE = 256n
+const hasCode = (code: string | undefined): code is string => code !== undefined && code !== '0x'
 const utf8Encoder = new TextEncoder()
 type TopologyMutationState = {
 	changed: boolean
@@ -96,8 +98,7 @@ async function authenticateConfiguredGraph(context: EcosystemDiscoveryContext, b
 		client.getCode({ address: deployments.tradingRouter, blockNumber }),
 	])
 	requireGraphEdge(getAddress(forkerZoltar), deployments.zoltar, 'SecurityPoolForker Zoltar edge')
-	const factory = tradingFactoryCode !== undefined && tradingFactoryCode !== '0x'
-	const router = tradingRouterCode !== undefined && tradingRouterCode !== '0x'
+	const [factory, router] = [hasCode(tradingFactoryCode), hasCode(tradingRouterCode)]
 	if (router && !factory) throw new Error('Configured trading router exists without its factory')
 	if (!factory) return { factory, router }
 	const tradingSecurityPoolFactory = await client.readContract({ abi: abis.twoWayConstantProductFactoryAbi, address: deployments.tradingFactory, blockNumber, functionName: 'securityPoolFactory' })
@@ -113,11 +114,9 @@ async function discoverUniverseUniswap(context: EcosystemDiscoveryContext, unive
 	const seeder = genesisUniswapSeederDeployment()
 	const uniswapFactory = context.deployments.uniswapV3Factory ?? canonicalUniswapDeployment(chainId).factory
 	const [factoryCode, proxyCode, seederCode] = await drainConcurrent([context.client.getCode({ address: uniswapFactory, blockNumber }), context.client.getCode({ address: CANONICAL_PROXY_DEPLOYER, blockNumber }), context.client.getCode({ address: seeder.address, blockNumber })])
-	if (proxyCode !== undefined && proxyCode !== '0x' && proxyCode.toLowerCase() !== CANONICAL_PROXY_DEPLOYER_RUNTIME) throw new Error('Canonical proxy deployer has unexpected runtime code')
-	if (seederCode !== undefined && seederCode !== '0x' && seederCode.toLowerCase() !== seeder.runtime.toLowerCase()) throw new Error('Genesis Uniswap seeder has unexpected runtime code')
-	const authenticatedSeeder = seederCode !== undefined && seederCode !== '0x'
-	const authenticatedProxy = proxyCode !== undefined && proxyCode !== '0x'
-	const factory = factoryCode !== undefined && factoryCode !== '0x'
+	if (hasCode(proxyCode) && proxyCode.toLowerCase() !== PROXY_DEPLOYER_RUNTIME_CODE) throw new Error('Canonical proxy deployer has unexpected runtime code')
+	if (hasCode(seederCode) && seederCode.toLowerCase() !== seeder.runtime.toLowerCase()) throw new Error('Genesis Uniswap seeder has unexpected runtime code')
+	const [factory, authenticatedProxy, authenticatedSeeder] = [hasCode(factoryCode), hasCode(proxyCode), hasCode(seederCode)]
 	const pools = await mapWithConcurrency(universes, UNISWAP_POOL_DISCOVERY_CONCURRENCY, async universe => {
 		if (!factory) return { initialized: false, liquidity: '0', repToken: universe.repToken, universeId: universe.id }
 		const pool = getAddress(await context.client.readContract({ abi: abis.genesisUniswapV3FactoryAbi, address: uniswapFactory, args: [universe.repToken, context.deployments.weth, GENESIS_UNISWAP_FEE], blockNumber, functionName: 'getPool' }))

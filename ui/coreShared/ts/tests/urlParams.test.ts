@@ -9,6 +9,7 @@ import {
 	readSelectedPoolViewQueryParam,
 	readUniverseQueryParam,
 	readZoltarViewQueryParam,
+	updateSearchParams,
 	writeSecurityPoolsViewQueryParam,
 	writeSecurityPoolQuestionIdQueryParam,
 	writeSecurityPoolQueryParam,
@@ -90,5 +91,11 @@ void describe('url params', () => {
 		expect(writeOpenOracleViewQueryParam('?foo=bar', 'selected-report')).toBe('?foo=bar&openOracleView=selected-report')
 		expect(writeOpenOracleViewQueryParam('?foo=bar&openOracleView=selected-report', undefined)).toBe('?foo=bar')
 		expect(writeOpenOracleViewQueryParam('?openOracleView=selected-report&openOracleReportId=42', 'create')).toBe('?openOracleView=create')
+	})
+
+	void test('updateSearchParams serializes mutations and drops the separator when nothing remains', () => {
+		expect(updateSearchParams('?a=1', params => params.set('b', '2'))).toBe('?a=1&b=2')
+		expect(updateSearchParams('?a=1', params => params.delete('a'))).toBe('')
+		expect(updateSearchParams('', () => undefined)).toBe('')
 	})
 })

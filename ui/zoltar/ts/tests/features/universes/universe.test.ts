@@ -2,7 +2,8 @@
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { getActiveNetworkProfile, installActiveEnvironmentForTesting, resetActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
-import { getGenesisReputationTokenAddress, formatUniverseLabel, getUniverseLinkHref, navigateToUniverse } from '@zoltar/ui-zoltar-shared/features/universes/lib/universe.js'
+import { formatUniverseLabel } from '@zoltar/ui-core-shared/lib/universeLabels.js'
+import { getGenesisReputationTokenAddress, getUniverseLinkHref, navigateToUniverse } from '@zoltar/ui-zoltar-shared/features/universes/lib/universe.js'
 import { createFakeBackend, createFakeSimulationProfile } from '@zoltar/ui-core-shared/tests/testUtils/fakeBackend.js'
 import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
 import { installTestRouting } from '@zoltar/ui-core-shared/tests/testUtils/testRouting.js'

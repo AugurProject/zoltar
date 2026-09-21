@@ -4,21 +4,6 @@ import { getGenesisReputationTokenAddress } from '../../../protocol/activeProtoc
 
 export { getGenesisReputationTokenAddress }
 
-export function formatUniverseLabel(universeId: bigint) {
-	return universeId === 0n ? `Genesis (${formatUniverseIdHex(universeId)})` : `Universe ${formatUniverseIdHex(universeId)}`
-}
-
-export function formatUniverseDisplayLabel(universeId: bigint) {
-	const fullLabel = formatUniverseLabel(universeId)
-	if (universeId === 0n || fullLabel.length <= 28) return fullLabel
-	const universeIdHex = formatUniverseIdHex(universeId)
-	return `Universe ${universeIdHex.slice(0, 10)}…${universeIdHex.slice(-6)}`
-}
-
-export function formatUniverseIdHex(universeId: bigint) {
-	return `0x${universeId.toString(16)}`
-}
-
 export function getUniverseLinkHref(universeId: bigint) {
 	const nextSearch = writeUniverseQueryParam(getRouteHashSearch(), universeId)
 	return buildRouteHref(getCurrentRouteHash(), nextSearch)

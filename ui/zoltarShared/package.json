@@ -185,6 +185,14 @@
 		"./features/zoltarTransactionPresentations.js": {
 			"bun": "./ts/features/zoltarTransactionPresentations.tsx",
 			"default": "./js/features/zoltarTransactionPresentations.js"
+		},
+		"./features/appShell/hooks/useProtocolAppShell.js": {
+			"bun": "./ts/features/appShell/hooks/useProtocolAppShell.ts",
+			"default": "./js/features/appShell/hooks/useProtocolAppShell.js"
+		},
+		"./features/appShell/lib/deploymentTab.js": {
+			"bun": "./ts/features/appShell/lib/deploymentTab.ts",
+			"default": "./js/features/appShell/lib/deploymentTab.js"
 		}
 	},
 	"version": "1.0.0"

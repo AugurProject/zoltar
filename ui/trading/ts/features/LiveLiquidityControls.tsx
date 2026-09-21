@@ -2,7 +2,7 @@ import { TimestampValue } from '@zoltar/ui-core-shared/components/TimestampValue
 import { FormField } from '@zoltar/ui-core-shared/components/FormField.js'
 import { ReadOnlyDetailAccordion } from '@zoltar/ui-core-shared/components/ReadOnlyDetailAccordion.js'
 import type { Address, WalletClient } from '@zoltar/core-shared/evm/ethereum'
-import { formatUnits } from '../lib/format.js'
+import { formatTrimmedUnits } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { formatCompleteSetQuantity, formatLpQuantity, formatOutcomeQuantity } from '../lib/shareValue.js'
 import type { DeploymentConfiguration } from '../protocol/config.js'
 import { marketAcceptsNewRisk, publicErrorMessage, simulateLiquidity, submitFreshLiquidity, type LiveBalances, type LiveMarket } from '../protocol/live.js'
@@ -132,7 +132,7 @@ export function LiveLiquidityControls({
 					<div class='exchange-preview'>
 						<div>
 							<p class='detail'>{liquidityCopy.youProvide}</p>
-							<strong class='decision-amount'>{quote.operation === 'remove' ? formatLpQuantity(quote.amount) : `${formatUnits(quote.amount)} ${workflowCopy.eth}`}</strong>
+							<strong class='decision-amount'>{quote.operation === 'remove' ? formatLpQuantity(quote.amount) : `${formatTrimmedUnits(quote.amount)} ${workflowCopy.eth}`}</strong>
 						</div>
 						<span class='exchange-arrow' aria-hidden='true'>
 							→
@@ -158,7 +158,7 @@ export function LiveLiquidityControls({
 					</div>
 					<p class='inline-facts'>
 						<span>
-							{liquidityCopy.slippageTolerance}: {formatUnits(quote.slippageBps, 2, 2)}%
+							{liquidityCopy.slippageTolerance}: {formatTrimmedUnits(quote.slippageBps, 2, 2)}%
 						</span>
 						<span>
 							{liquidityCopy.deadline}: <TimestampValue timestamp={quote.deadline} relative={false} />
