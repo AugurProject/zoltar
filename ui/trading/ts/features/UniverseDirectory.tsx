@@ -15,7 +15,7 @@ import * as appCopy from '../copy/app.js'
 
 export type LoadUniverseSummary = (configuration: DeploymentConfiguration, universeId: bigint) => Promise<ZoltarUniverseSummary | undefined>
 
-const loadUniverseSummary: LoadUniverseSummary = async (configuration, universeId) => await loadZoltarUniverseSummary(createTradingPublicClient(configuration), universeId)
+const loadUniverseSummary: LoadUniverseSummary = async (configuration, universeId) => await loadZoltarUniverseSummary(createTradingPublicClient(configuration), universeId, configuration.zoltar)
 
 type UniverseDirectoryProps = {
 	configuration: DeploymentConfiguration

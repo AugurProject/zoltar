@@ -107,7 +107,9 @@ export function App({
 	const [workflowLocked, setWorkflowLocked] = useState(false)
 	// The universe is chosen on the universe route through the shared `universe` query parameter; discovery confirms it exists.
 	const { applyUrlStateUpdate, getOwnedSearch, state: urlState } = useUrlSearchState(readTradingUrlState)
-	const [liveUniverses, setLiveUniverses] = useState<LiveUniverses>({ ids: [], selected: undefined })
+	const [liveUniverses, setLiveUniverses] = useState<LiveUniverses>({ ids: [], selected: undefined, forRequest: undefined })
+	const urlUniverseIdRef = useRef(urlState.universeId)
+	urlUniverseIdRef.current = urlState.universeId
 	const [discoveryState, setDiscoveryState] = useState<'loading' | 'ready' | 'error'>('loading')
 	const universeSelection = resolveUniverseSelection(urlState, liveUniverses)
 	const selectedUniverseId = universeSelection.requestedUniverseId
@@ -138,8 +140,8 @@ export function App({
 		workflowLockedRef.current = locked
 		setWorkflowLocked(locked)
 	}, [])
-	const updateLiveUniverses = useCallback((universeIds: readonly bigint[], authoritativeSelection: bigint | undefined) => setLiveUniverses({ ids: universeIds, selected: authoritativeSelection }), [])
-	const showUniverseField = route !== 'deploy' && route !== 'help' && liveDeploymentStatus !== 'unavailable'
+	const updateLiveUniverses = useCallback((universeIds: readonly bigint[], authoritativeSelection: bigint | undefined) => setLiveUniverses({ ids: universeIds, selected: authoritativeSelection, forRequest: urlUniverseIdRef.current }), [])
+	const showUniverseField = routeOwnsLiveWallet(route) && liveDeploymentStatus !== 'unavailable'
 	// The header names the universe the routes follow, like the other applications; it is chosen on the universe route and shown once discovery confirms it.
 	let universeValue: ComponentChildren = <LoadingText announce={false}>{appCopy.loadingWithEllipsis}</LoadingText>
 	if (confirmedUniverseId !== undefined) universeValue = <span title={formatUniverseLabel(BigInt(confirmedUniverseId))}>{formatUniverseDisplayLabel(BigInt(confirmedUniverseId))}</span>
@@ -166,7 +168,7 @@ export function App({
 		setLiveDeploymentStatus('loading')
 		setLiveConfiguration(undefined)
 		setLiveConfigurationError(undefined)
-		setLiveUniverses({ ids: [], selected: undefined })
+		setLiveUniverses({ ids: [], selected: undefined, forRequest: undefined })
 		setDiscoveryState('loading')
 		setLiveWalletSummary({ account: undefined, ethAttoEth: undefined, repAttoRep: undefined, status: 'disconnected', error: undefined, errorLabel: undefined, universeId: undefined })
 		try {

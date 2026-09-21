@@ -113,7 +113,7 @@ const waitForSeededPool = `(async () => {
 })()`
 const waitForLookup = `(async () => {
 	for (let attempt = 0; attempt < 600; attempt++) {
-		if (document.querySelector('.market-lookup') !== null && document.querySelector('.simulation-banner-details') !== null && document.querySelector('.universe-selector select')?.textContent?.includes('Genesis universe') === true) return true
+		if (document.querySelector('.market-lookup') !== null && document.querySelector('.simulation-banner-details') !== null && document.querySelector('.header-toolbar-controls .toolbar-field-value')?.textContent?.includes('Genesis (0x0)') === true) return true
 		await new Promise(resolve => setTimeout(resolve, 100))
 	}
 	throw new Error('The Trading lookup route did not become ready')
@@ -244,7 +244,7 @@ const scenarios = [
 		width,
 		height,
 		path: `${simulationPath}#/portfolio`,
-		assertExpression: `(async () => { await (${waitForRouteHeading('Portfolio')}); for (let attempt = 0; attempt < 100; attempt++) { if (!document.body.textContent?.includes('Discovering SecurityPools') && document.querySelector('.universe-selector select')?.textContent?.includes('Genesis universe') === true) return document.title === 'Portfolio · Statoblast trading' && document.querySelector('a[aria-current="page"]')?.textContent === 'Portfolio' && document.querySelector('#main-content .portfolio-section > .section-heading h2')?.textContent === 'Positions' && document.querySelector('.section .portfolio-groups > .operation-block') === null; await new Promise(resolve => setTimeout(resolve, 100)); } return false })()`,
+		assertExpression: `(async () => { await (${waitForRouteHeading('Portfolio')}); for (let attempt = 0; attempt < 100; attempt++) { if (!document.body.textContent?.includes('Discovering SecurityPools') && document.querySelector('.header-toolbar-controls .toolbar-field-value')?.textContent?.includes('Genesis (0x0)') === true) return document.title === 'Portfolio · Statoblast trading' && document.querySelector('a[aria-current="page"]')?.textContent === 'Portfolio' && document.querySelector('#main-content .portfolio-section > .section-heading h2')?.textContent === 'Positions' && document.querySelector('.section .portfolio-groups > .operation-block') === null; await new Promise(resolve => setTimeout(resolve, 100)); } return false })()`,
 	})),
 	...(
 		[

@@ -1,4 +1,9 @@
-export type LiveUniverses = Readonly<{ ids: readonly bigint[]; selected: bigint | undefined }>
+export type LiveUniverses = Readonly<{
+	ids: readonly bigint[]
+	selected: bigint | undefined
+	/** The `universe` parameter value that was current when this answer arrived; only that request may be rewritten from it. */
+	forRequest: bigint | undefined
+}>
 
 export type UniverseSelection = Readonly<{
 	/** The universe discovery is asked for and the routes filter by: the request until discovery answers, then the confirmed choice. */
@@ -21,6 +26,9 @@ export function resolveUniverseSelection(request: UniverseRequest, liveUniverses
 	const urlUniverseId = request.universeId
 	if (liveUniverses.ids.length === 0) return { requestedUniverseId: urlUniverseId?.toString(), confirmedUniverseId: undefined, replaceUrlUniverseId: undefined }
 	if (urlUniverseId !== undefined && liveUniverses.ids.includes(urlUniverseId)) return { requestedUniverseId: urlUniverseId.toString(), confirmedUniverseId: urlUniverseId.toString(), replaceUrlUniverseId: undefined }
+	// An answer produced for another request (for example an addressed market's single universe, still held after
+	// navigating back to a list route) confirms nothing for this one and must not rewrite its URL.
+	if (liveUniverses.forRequest !== urlUniverseId) return { requestedUniverseId: urlUniverseId?.toString(), confirmedUniverseId: undefined, replaceUrlUniverseId: undefined }
 	const confirmed = liveUniverses.selected?.toString()
 	return { requestedUniverseId: confirmed, confirmedUniverseId: confirmed, replaceUrlUniverseId: request.present ? liveUniverses.selected : undefined }
 }
