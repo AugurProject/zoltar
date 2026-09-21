@@ -18,6 +18,7 @@ import { errorMessage } from '@zoltar/bot-shared/infrastructure/error-message'
 import { optionalRecord as record } from '@zoltar/bot-shared/infrastructure/json-validation'
 import { join } from 'node:path'
 import type { PoolCatalogPage } from '../monitoring/pool-catalog.ts'
+import { PENDING_INTENT_MODE_CHANGE } from '#core/go-live-controls'
 import { operatorHeader } from './header.ts'
 import { settingsPageMarkup } from './settings-page.ts'
 
@@ -79,7 +80,7 @@ function publicExecutionUpdateError(error: unknown) {
 }
 
 function publicSubmissionUpdateError(error: unknown) {
-	return publicConnectivityError(error, { fallback: 'Submission settings could not be saved. Review the relay URLs and protected bot logs.' })
+	return publicConnectivityError(error, { fallback: 'Submission settings could not be saved. Review the relay URLs and protected bot logs.', validationMessages: new Set([PENDING_INTENT_MODE_CHANGE]) })
 }
 
 function publicOperatorFailure(error: string, fallback = 'The operation returned an unexpected error. Automatic retry remains active; check protected bot logs for details.') {

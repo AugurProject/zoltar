@@ -11,6 +11,8 @@ type GoLiveFormsContext = {
 	populateConfiguration: (configuration: Configuration) => void
 	put: (path: string, value: unknown) => Promise<unknown>
 	refresh: () => Promise<void>
+	/** Reloads the configuration document; resolves false when the bot could not be reached. */
+	reloadConfiguration: () => Promise<boolean>
 	/** Re-derives every control's locked state from connection and configuration state once a request has finished. */
 	syncControls: () => void
 }
@@ -19,7 +21,7 @@ type GoLiveFormsContext = {
  * The Go live forms: execution signer, transaction delivery, and the readiness-gated execution mode switch. Each
  * request reloads the configuration the bot returns and the checklist follows the latest snapshot.
  */
-export function registerGoLiveForms({ actionStatus, configuration, populateConfiguration, put, refresh, syncControls }: GoLiveFormsContext) {
+export function registerGoLiveForms({ actionStatus, configuration, populateConfiguration, put, refresh, reloadConfiguration, syncControls }: GoLiveFormsContext) {
 	const signerForm = element('signer-form', HTMLFormElement)
 	const signerFieldset = element('signer-fieldset', HTMLFieldSetElement)
 	const signerStatus = element('signer-status', HTMLSpanElement)
@@ -33,6 +35,8 @@ export function registerGoLiveForms({ actionStatus, configuration, populateConfi
 	const executionEnabled = element('execution-enabled', HTMLInputElement)
 	const executionStatus = element('execution-status', HTMLSpanElement)
 	let chainSettingsAvailable = false
+	// An execution save whose response was lost may have armed the bot; the panel stays locked until a reload resolves it.
+	let executionOutcomeUnknown = false
 	for (const formId of ['submission-form', 'execution-form']) trackForm(formId)
 
 	element('submission-form', HTMLFormElement).addEventListener('submit', async event => {
@@ -69,9 +73,18 @@ export function registerGoLiveForms({ actionStatus, configuration, populateConfi
 			await refresh()
 			actionStatus(executionStatus, next.runtime.execute ? 'Live execution armed; the bot is paused until you resume through the readiness check.' : 'Dry-run mode saved.')
 		} catch (error) {
-			// A rejected switch changes nothing, so the control returns to the saved mode instead of showing an unapplied choice.
-			executionEnabled.checked = loaded.runtime.execute
-			actionStatus(executionStatus, publicFailure(error, 'Could not change execution mode. Review the readiness checklist and retry.', true), true)
+			// `api` names a refused request `DashboardRequestRejected`; any other failure leaves the outcome unknown.
+			if (error instanceof Error && error.name === 'DashboardRequestRejected') {
+				// A rejected switch changes nothing, so the control returns to the saved mode instead of showing an unapplied choice.
+				executionEnabled.checked = loaded.runtime.execute
+				actionStatus(executionStatus, publicFailure(error, 'Could not change execution mode. Review the readiness checklist and retry.', true), true)
+			} else {
+				// The response was lost, so the bot may already be armed: the saved mode comes from a reloaded configuration.
+				executionOutcomeUnknown = true
+				actionStatus(executionStatus, 'The request outcome is unknown. Reloading the configuration…', true)
+				if (await reloadConfiguration()) actionStatus(executionStatus, 'The request outcome was unknown. The saved execution mode was reloaded; review it before saving again.', true)
+				else actionStatus(executionStatus, 'The request outcome is unknown and the configuration could not be reloaded. Execution mode stays locked until Retry configuration succeeds.', true)
+			}
 		} finally {
 			setFormSubmitting('execution-form', false)
 			syncControls()
@@ -119,6 +132,11 @@ export function registerGoLiveForms({ actionStatus, configuration, populateConfi
 	 * reloads the configuration; the form that just saved, or every form on a fresh profile load, takes the file's values.
 	 */
 	const load = (loaded: Configuration, source?: 'all' | 'execution-form' | 'submission-form') => {
+		// A fresh configuration settles an unknown execution outcome: the switch takes the file's mode again.
+		if (executionOutcomeUnknown) {
+			executionOutcomeUnknown = false
+			source = source === 'submission-form' ? 'all' : (source ?? 'execution-form')
+		}
 		if (source === 'all' || source === 'submission-form' || !formIsDirty('submission-form')) {
 			element('submission-mode', HTMLSelectElement).value = loaded.submission.mode
 			element('relay-urls', HTMLTextAreaElement).value = loaded.submission.relayUrls.join('\n')
@@ -145,7 +163,7 @@ export function registerGoLiveForms({ actionStatus, configuration, populateConfi
 			chainSettingsAvailable = enabled
 			// A save in flight keeps its fieldset locked regardless of the connection state so later edits cannot be lost.
 			submissionFieldset.disabled = !enabled || formIsSubmitting('submission-form')
-			executionFieldset.disabled = !enabled || !snapshotLoaded || formIsSubmitting('execution-form')
+			executionFieldset.disabled = !enabled || !snapshotLoaded || formIsSubmitting('execution-form') || executionOutcomeUnknown
 			signerFieldset.disabled = !enabled
 			// The individual controls carry the disabled state too, so a locked fieldset never hides an enabled input.
 			for (const control of signerForm.querySelectorAll<HTMLInputElement | HTMLButtonElement>('input, button')) control.disabled = !enabled

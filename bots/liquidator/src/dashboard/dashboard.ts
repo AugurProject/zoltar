@@ -144,7 +144,7 @@ async function api(path: string, options?: RequestInit, timeoutMilliseconds?: nu
 	if (!response.ok) {
 		const error = typeof value === 'object' && value !== null ? Reflect.get(value, 'error') : undefined
 		const message = typeof error === 'string' ? error : `Request failed with HTTP ${response.status.toString()}`
-		throw new Error(message)
+		throw Object.assign(new Error(message), { name: 'DashboardRequestRejected' })
 	}
 	return value
 }
@@ -879,7 +879,7 @@ const { scrollToSection, syncSectionNavigation } = createSectionNavigation()
 const TRACKED_FORMS = ['network-form', 'market-configuration-form', 'strategy-form'] as const
 for (const formId of TRACKED_FORMS) trackForm(formId)
 createSettingsNavigation()
-const goLiveForms = registerGoLiveForms({ actionStatus, configuration: () => currentConfiguration, populateConfiguration, put, refresh: () => refresh(), syncControls: () => setMutationControlsEnabled(stateConnected) })
+const goLiveForms = registerGoLiveForms({ actionStatus, configuration: () => currentConfiguration, populateConfiguration, put, refresh: () => refresh(), reloadConfiguration: () => loadConfiguration(), syncControls: () => setMutationControlsEnabled(stateConnected) })
 
 strategyForm.addEventListener('submit', async event => {
 	event.preventDefault()

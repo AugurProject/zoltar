@@ -225,6 +225,7 @@ async function dashboard(initialConfiguration = mainnetConfiguration(), initialS
 	const executionRequests: unknown[] = []
 	const submissionRequests: unknown[] = []
 	let rejectExecution: string | undefined
+	let loseExecutionResponse = false
 	const approvedUniverseRequests: string[][] = []
 	const selectedPoolRequests: string[][] = []
 	const supportedPoolRequests: unknown[] = []
@@ -399,6 +400,8 @@ async function dashboard(initialConfiguration = mainnetConfiguration(), initialS
 			const execute = typeof request === 'object' && request !== null && Reflect.get(request, 'execute') === true
 			currentConfiguration = { ...currentConfiguration, runtime: { ...currentConfiguration.runtime, execute } }
 			if (execute) snapshot = { ...snapshot, paused: true }
+			// The change committed, but the response never reaches the dashboard.
+			if (loseExecutionResponse) throw new TypeError('fetch failed')
 			return new window.Response(JSON.stringify(currentConfiguration), { headers: { 'content-type': 'application/json' } })
 		}
 		if (url.pathname === '/api/submission') {
@@ -464,6 +467,9 @@ async function dashboard(initialConfiguration = mainnetConfiguration(), initialS
 		submissionRequests,
 		rejectExecution: (message: string | undefined) => {
 			rejectExecution = message
+		},
+		loseExecutionResponse: (lose: boolean) => {
+			loseExecutionResponse = lose
 		},
 		setConfiguration: (next: DashboardConfiguration) => {
 			currentConfiguration = next
@@ -1286,6 +1292,59 @@ describe('liquidator go-live settings', () => {
 		expect(fieldset.disabled).toBe(false)
 		expect(save.disabled).toBe(true)
 		expect(page.window.document.getElementById('submission-status')?.textContent).toContain('saved')
+	})
+
+	test('reloads the saved execution mode when an arming response is lost and keeps the switch locked until it can', async () => {
+		const ready = { ...mainnetConfiguration(), connectivity: { publicRpcUrls: ['https://public.example'], quorumRpcUrls: [], readRpcUrl: 'https://read.example', rpcQuorum: 1 as const }, networkConfigured: true }
+		const page = await dashboard(ready, state(undefined, [], { lastScannedBlock: '120', wallet: '0xabcdefabcdefabcdefabcdefabcdefabcdefabcd' }))
+		const form = page.window.document.getElementById('execution-form')
+		const fieldset = page.window.document.getElementById('execution-fieldset')
+		const toggle = page.window.document.getElementById('execution-enabled')
+		const status = page.window.document.getElementById('execution-status')
+		if (!(form instanceof page.window.HTMLFormElement) || !(fieldset instanceof page.window.HTMLFieldSetElement) || !(toggle instanceof page.window.HTMLInputElement) || status === null) throw new Error('Expected execution mode controls')
+		const submit = async () => {
+			form.dispatchEvent(new page.window.Event('submit', { bubbles: true, cancelable: true }))
+			await page.waitUntilComplete()
+			await Bun.sleep(1)
+		}
+		// The bot arms, but the response is lost while the configuration cannot be reloaded either: the panel stays locked.
+		page.loseExecutionResponse(true)
+		page.setConfigurationRequestFailure(true)
+		toggle.checked = true
+		toggle.dispatchEvent(new page.window.Event('change', { bubbles: true }))
+		await submit()
+		expect(page.executionRequests).toEqual([{ execute: true }])
+		expect(status.textContent).toContain('could not be reloaded')
+		expect(fieldset.disabled).toBe(true)
+		await page.refresh()
+		expect(fieldset.disabled).toBe(true)
+		// Retrying the configuration load resolves the outcome: the switch shows the armed mode the bot actually holds.
+		page.setConfigurationRequestFailure(false)
+		const retry = page.window.document.querySelector('#configuration-status button')
+		if (!(retry instanceof page.window.HTMLButtonElement)) throw new Error('Expected configuration retry')
+		retry.click()
+		await page.waitUntilComplete()
+		await Bun.sleep(1)
+		expect(toggle.checked).toBe(true)
+		expect(fieldset.disabled).toBe(false)
+		expect(Array.from(page.window.document.querySelectorAll('.settings-badges[data-form="execution-form"] .settings-badge'), badge => badge.textContent)).toEqual([])
+		expect(page.window.document.getElementById('execution-mode-summary')?.textContent).toBe('Dry run · ready to go live')
+		// A lost disarm response reloads immediately when the configuration is reachable.
+		toggle.checked = false
+		toggle.dispatchEvent(new page.window.Event('change', { bubbles: true }))
+		await submit()
+		expect(page.executionRequests).toEqual([{ execute: true }, { execute: false }])
+		expect(status.textContent).toContain('saved execution mode was reloaded')
+		expect(toggle.checked).toBe(false)
+		expect(fieldset.disabled).toBe(false)
+		// A refused change still restores the previous mode without a reload.
+		page.loseExecutionResponse(false)
+		page.rejectExecution('Live execution requires an active signer')
+		toggle.checked = true
+		toggle.dispatchEvent(new page.window.Event('change', { bubbles: true }))
+		await submit()
+		expect(toggle.checked).toBe(false)
+		expect(status.textContent).toBe('Live execution requires an active signer')
 	})
 
 	test('saves transaction delivery settings from the Submission panel', async () => {

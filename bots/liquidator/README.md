@@ -164,6 +164,8 @@ execution is enabled:
   response is a safety fault and fails closed.
 - `submission.mode` may be `public` or `private` and is edited in the **Submission**
   panel; private relays are checked against the selected chain before they are saved.
+  The mode cannot change while a pending transaction sent under the current mode
+  awaits recovery, because recovery resubmits with the saved delivery policy.
   ETH-funded stale-price requests use the same signed-transaction delivery policy as
   other actions.
 - `privateKey` is stored in the local operator file only when explicitly saved.

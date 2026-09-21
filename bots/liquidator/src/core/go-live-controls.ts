@@ -9,6 +9,8 @@ import { checkSubmissionEndpoints } from '@zoltar/bot-shared/monitoring/connecti
 import { applyExecutionMode, parseExecutionRequest } from './execution-mode.ts'
 import { commitSignerMutation } from './signer-mutation.ts'
 
+export const PENDING_INTENT_MODE_CHANGE = 'The delivery mode cannot change while a pending transaction sent under the current mode awaits recovery'
+
 type GoLiveContext = {
 	activePrivateKey: () => Hex | undefined
 	/** Installs the signer in the running process: the active key, its wallet client, and the snapshot's wallet address. */
@@ -82,6 +84,10 @@ export function createGoLiveControls({ activePrivateKey, applySigner, locks, per
 		setSubmission: (value: unknown) =>
 			runMutation(async () => {
 				const submission = validateSubmissionSettings(value)
+				// Recovery resubmits a pending intent with the current delivery settings, so a mode change would broadcast a
+				// transaction that was signed for private relays (or vice versa) until that intent has been resolved.
+				const pendingOtherMode = state.pendingTransactions.filter(intent => intent.mode !== submission.mode).length
+				if (pendingOtherMode > 0) throw new Error(PENDING_INTENT_MODE_CHANGE)
 				await checkSubmissionEndpoints(submission, settings().network.chainId)
 				await persist(current => ({ ...current, submission }))
 				recordActivity(state, {
