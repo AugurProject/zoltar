@@ -162,9 +162,18 @@
 }
 
 .modal-panel .actions:has(> .tx-action) > .tx-action {
-	flex: 1 1 14rem;
+	flex: 1 1 10rem;
 	width: auto;
 	max-width: 24rem;
+}
+
+/* Cancel is always the last button and keeps the right edge, while the actions before it fill the row. */
+.modal-panel .actions:has(> .tx-action):has(> button:last-child) > .tx-action {
+	max-width: none;
+}
+
+.modal-panel .actions:has(> .tx-action) > button:last-child {
+	margin-inline-start: auto;
 }
 
 .tx-action-row {

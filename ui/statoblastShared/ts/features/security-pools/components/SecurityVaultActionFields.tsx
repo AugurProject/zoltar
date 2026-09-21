@@ -133,11 +133,6 @@ export function VaultDepositApprovalControl({
 }) {
 	const renderDepositActions = (approvalButton: ComponentChildren, approvalNotice: string | undefined, noticeId: string) => (
 		<TransactionActionGroup id={noticeId} message={approvalNotice ?? (canUseLoadedVaultActions ? depositActionGuardMessage : undefined)}>
-			{onCancel === undefined ? undefined : (
-				<button className='secondary' type='button' onClick={onCancel}>
-					{commonCopy.cancel}
-				</button>
-			)}
 			{approvalButton}
 			<TransactionActionButton
 				idleLabel={depositRepActionLabel}
@@ -146,6 +141,11 @@ export function VaultDepositApprovalControl({
 				pending={securityVaultActiveAction === 'depositRepToVault'}
 				availability={{ disabled: !depositRepToVaultEnabled || !canUseLoadedVaultActions || !hasPositiveDepositAmount || depositGuardMessage !== undefined, reason: canUseLoadedVaultActions ? depositActionGuardMessage : undefined }}
 			/>
+			{onCancel === undefined ? undefined : (
+				<button className='secondary' type='button' onClick={onCancel}>
+					{commonCopy.cancel}
+				</button>
+			)}
 		</TransactionActionGroup>
 	)
 	return (

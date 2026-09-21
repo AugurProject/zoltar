@@ -79,9 +79,6 @@ export function SecurityPoolRequestPriceModal({ canRequest, closeOnSuccessKey, c
 			) : undefined}
 			<TransactionReview variant='inline' primary={[{ label: transactionReviewCopy.youPay, value: <CurrencyValue precision='exact' value={review?.requestValueAttoEth} suffix={commonCopy.eth} /> }]} risks={[securityPoolCopy.requestPricePendingReportRisk, securityPoolCopy.requestPriceFundingRisk]} />
 			<div className='actions oracle-actions'>
-				<button className='secondary' type='button' onClick={onClose} disabled={pending}>
-					{commonCopy.cancel}
-				</button>
 				<TransactionActionButton
 					disabledReasonElementId={manualPriceError === undefined ? undefined : manualPriceFieldId}
 					showDisabledReason={confirmationGuardMessage !== undefined || manualPriceError === undefined}
@@ -93,6 +90,9 @@ export function SecurityPoolRequestPriceModal({ canRequest, closeOnSuccessKey, c
 					pending={pending}
 					availability={{ disabled: review === undefined || !canRequest || confirmationGuardMessage !== undefined || manualPriceError !== undefined, reason: canRequest ? (confirmationGuardMessage ?? manualPriceError) : undefined }}
 				/>
+				<button className='secondary' type='button' onClick={onClose} disabled={pending}>
+					{commonCopy.cancel}
+				</button>
 			</div>
 		</OperationModal>
 	)

@@ -127,7 +127,7 @@ describe('SecurityPoolWorkflowSection: vault controls', () => {
 		expect(within(withdrawDialog).getByText('REP Withdraw Amount').parentElement?.querySelector('input')?.disabled).toBe(false)
 	})
 
-	test('vault dialogs lead with Cancel and end with a single primary transaction action', async () => {
+	test('vault dialogs keep a single primary transaction action and end with Cancel', async () => {
 		const selectedPoolAddress = zeroAddress
 		const renderedComponent = await renderIntoDocument(
 			<ChainTimestampContext.Provider value={1n}>
@@ -159,14 +159,14 @@ describe('SecurityPoolWorkflowSection: vault controls', () => {
 			if (actionRow === null) throw new Error('Dialog action row is missing')
 			const buttons = [...actionRow.querySelectorAll('button')]
 			expect(buttons.map(button => button.textContent?.trim())).toEqual(expectedLabels)
-			expect(buttons.map(button => button.classList.contains('primary'))).toEqual(expectedLabels.map((_, index) => index === expectedLabels.length - 1))
+			expect(buttons.map(button => button.classList.contains('primary'))).toEqual(expectedLabels.map(label => label === expectedLabels[expectedLabels.length - 2]))
 		}
 
 		await act(() => {
 			fireEvent.click(documentQueries.getAllByRole('button', { name: 'Deposit REP' })[0] as HTMLElement)
 		})
 		const depositDialog = documentQueries.getByRole('dialog', { name: 'Deposit REP' })
-		expectDialogActions(depositDialog, ['Cancel', 'Approve 1\u00a0REP', 'Deposit REP'])
+		expectDialogActions(depositDialog, ['Approve 1\u00a0REP', 'Deposit REP', 'Cancel'])
 		await act(() => {
 			fireEvent.click(within(depositDialog).getByRole('button', { name: 'Cancel' }))
 		})
@@ -174,7 +174,7 @@ describe('SecurityPoolWorkflowSection: vault controls', () => {
 		await act(() => {
 			fireEvent.click(documentQueries.getByRole('button', { name: 'Withdraw REP' }))
 		})
-		expectDialogActions(documentQueries.getByRole('dialog', { name: 'Withdraw REP' }), ['Cancel', 'Withdraw REP'])
+		expectDialogActions(documentQueries.getByRole('dialog', { name: 'Withdraw REP' }), ['Withdraw REP', 'Cancel'])
 	})
 
 	test('keeps continuation-child vault deposits available after the question ends', async () => {
