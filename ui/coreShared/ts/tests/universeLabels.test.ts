@@ -27,10 +27,15 @@ describe('universe labels', () => {
 		expect(formatDistinctUniverseDisplayLabels([0n, 7n, longUniverseId])).toEqual([formatUniverseLabel(0n), formatUniverseLabel(7n), formatUniverseDisplayLabel(longUniverseId)])
 	})
 
-	test('falls back to full labels only when even the widest abbreviation cannot separate the IDs', () => {
-		// Same prefix and the entire suffix up to the abbreviated middle: only the full ID tells them apart.
-		const first = (0xabcdef1234n << 220n) | 1n
-		const second = (0xabcdef1234n << 220n) | 1n | (1n << 216n)
+	test('caps the widened suffix at a phone-friendly width and falls back to full labels beyond it', () => {
+		// Same eight leading digits and same trailing 18 digits: the widest compact suffix still collides, so only the full ID tells them apart.
+		const first = (0xabcdef12n << 96n) | (1n << 76n) | 0x123456n
+		const second = (0xabcdef12n << 96n) | (2n << 76n) | 0x123456n
 		expect(formatDistinctUniverseDisplayLabels([first, second])).toEqual([formatUniverseLabel(first), formatUniverseLabel(second)])
+		// One digit inside the widest suffix keeps the set compact, at the maximum label length the toolbar slot is sized for.
+		const separable = (0xabcdef12n << 96n) | (2n << 68n) | 0x123456n
+		const labels = formatDistinctUniverseDisplayLabels([first, separable])
+		expect(new Set(labels).size).toBe(2)
+		for (const label of labels) expect(label.length).toBe('Universe 0x'.length + 8 + 1 + 18)
 	})
 })
