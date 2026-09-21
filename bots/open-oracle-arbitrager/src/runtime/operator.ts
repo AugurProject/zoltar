@@ -94,6 +94,17 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 	let wallet = createWallet()
 	let coordinatorPolicies: Awaited<ReturnType<typeof loadCoordinatorPolicies>> = []
 	let startupValidated = !config.networkConfigured
+	/** Endpoints or deployment identities changed: rebuild every read client and forget what the previous ones inspected. */
+	const resetReadClients = () => {
+		readPool = createRpcEndpointPool([config.connectivity.readRpcUrl, ...config.quorumRpcUrls])
+		state.rpcEndpointHealth = readPool.snapshot()
+		client = createClient()
+		clientRpcUrl = undefined
+		readClients = [createClient(config.connectivity.readRpcUrl), ...config.quorumRpcUrls.map(url => createClient(url))]
+		wallet = createWallet()
+		state.canonicalDeployments = undefined
+		startupValidated = false
+	}
 	const executionHistory = await loadExecutionHistory(config.historyFile, config.network.chain.id)
 	for (const position of positions) {
 		const record = position.historyOutbox
@@ -331,13 +342,7 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 						fixedState.openOracle = deployment.openOracle
 						config.network.rep = deployment.rep
 						config.network.weth = deployment.weth
-						readPool = createRpcEndpointPool([config.connectivity.readRpcUrl, ...config.quorumRpcUrls])
-						state.rpcEndpointHealth = readPool.snapshot()
-						client = createClient()
-						clientRpcUrl = undefined
-						readClients = [createClient(config.connectivity.readRpcUrl), ...config.quorumRpcUrls.map(url => createClient(url))]
-						wallet = createWallet()
-						startupValidated = false
+						resetReadClients()
 						cursor = undefined
 						reports.clear()
 						cachedLogs = []
@@ -372,13 +377,7 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 					if (!deploymentSettingsDeferred && pending.connectivity !== undefined) {
 						config.connectivity = pending.connectivity
 						pending.connectivity = undefined
-						readPool = createRpcEndpointPool([config.connectivity.readRpcUrl, ...config.quorumRpcUrls])
-						state.rpcEndpointHealth = readPool.snapshot()
-						client = createClient()
-						clientRpcUrl = undefined
-						readClients = [createClient(config.connectivity.readRpcUrl), ...config.quorumRpcUrls.map(url => createClient(url))]
-						wallet = createWallet()
-						startupValidated = false
+						resetReadClients()
 					}
 					if (!deploymentSettingsDeferred && pending.signerUpdate) {
 						const appliedSigner = await applyQueuedSigner({
@@ -395,12 +394,7 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 						wallet = appliedSigner.wallet
 					}
 					if (executionActivationPending) {
-						readPool = createRpcEndpointPool([config.connectivity.readRpcUrl, ...config.quorumRpcUrls])
-						state.rpcEndpointHealth = readPool.snapshot()
-						client = createClient()
-						clientRpcUrl = undefined
-						readClients = [createClient(config.connectivity.readRpcUrl), ...config.quorumRpcUrls.map(url => createClient(url))]
-						wallet = createWallet()
+						resetReadClients()
 					}
 					if (!config.networkConfigured) return completeUnconfiguredPoll(state)
 					if (!startupValidated) {

@@ -136,9 +136,11 @@ function assertCanonicalDeployments(config: Pick<Configuration, 'executor'>, sta
 
 /**
  * Inspects the canonical deployments and publishes the result for the checklist before live mode enforces it, so a failed
- * live startup shows what is missing instead of the previous inspection.
+ * live startup shows what is missing instead of the previous inspection. The previous result is dropped first: it may
+ * predate a settings change, and an inspection that fails must not leave it looking verified.
  */
 export async function authenticateConfiguredDeployments(clients: readonly ReadClient[], config: Configuration, state: Pick<OperatorState, 'canonicalDeployments'>) {
+	state.canonicalDeployments = undefined
 	state.canonicalDeployments = await inspectCanonicalDeployments(clients, config)
 	if (config.execute) assertCanonicalDeployments(config, state.canonicalDeployments)
 	return state.canonicalDeployments

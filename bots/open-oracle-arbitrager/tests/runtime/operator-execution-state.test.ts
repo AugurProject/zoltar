@@ -283,6 +283,28 @@ test('dry-run authentication reports the missing executor and contracts without 
 	expect(reads).toBe(readsAfterVerification)
 })
 
+test('a failed re-inspection after enabling another venue does not leave the previous verified result behind', async () => {
+	const config = await exampleConfiguration()
+	const deployment = validateDeploymentSettings({ quorumRpcUrls: [], uniswapV2Enabled: false, uniswapV3Enabled: false, uniswapV4Enabled: true }, config.network.name)
+	const client = createPublicClient({
+		chain: config.network.chain,
+		transport: custom({
+			request: async ({ method, params }) => {
+				if (method !== 'eth_getCode' || !Array.isArray(params) || typeof params[0] !== 'string') throw new Error('Unexpected deployment read')
+				if (params[0].toLowerCase() === deployment.uniswapV4Quoter?.toLowerCase()) throw new Error('fetch failed')
+				return '0x01'
+			},
+		}),
+	})
+	const dryRun = { ...config, execute: false, router: undefined, v2Router: undefined, v4PoolManager: undefined, v4Quoter: undefined }
+	const state: Pick<OperatorState, 'canonicalDeployments'> = {}
+	await authenticateConfiguredDeployments([client], dryRun, state)
+	expect(state.canonicalDeployments?.executorDeployed).toBe(true)
+	// The V4 venue adds required contracts; the read for one of them fails, so nothing from the narrower inspection may remain.
+	await expect(authenticateConfiguredDeployments([client], { ...dryRun, v4PoolManager: deployment.uniswapV4PoolManager, v4Quoter: deployment.uniswapV4Quoter }, state)).rejects.toThrow('fetch failed')
+	expect(state.canonicalDeployments).toBeUndefined()
+})
+
 test('live authentication tolerates a lagging endpoint once the quorum has verified the deployments', async () => {
 	const config = await exampleConfiguration()
 	const clientReporting = (executorCode: string) =>
