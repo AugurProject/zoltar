@@ -2,8 +2,10 @@ import { TimestampValue } from '@zoltar/ui-core-shared/components/TimestampValue
 import { FormField } from '@zoltar/ui-core-shared/components/FormField.js'
 import { LoadingText } from '@zoltar/ui-core-shared/components/LoadingText.js'
 import { BackingDetails } from './BackingDetails.js'
-import type { Hash } from '@zoltar/core-shared/evm/ethereum'
-import { bigintToSafeNumber, formatRoundedUnits, formatUnits, parseUnitsOrUndefined } from '../lib/format.js'
+import { bigintToSafeNumber, type Hash } from '@zoltar/core-shared/evm/ethereum'
+import { formatTrimmedUnits } from '@zoltar/ui-core-shared/lib/formatters.js'
+import { tryParseNonNegativeDecimalInput } from '@zoltar/ui-core-shared/forms/decimal.js'
+import { formatRoundedUnits } from '../lib/format.js'
 import { attoSharesToCollateralAttoEth, averagePriceBps, collateralAttoEthToAttoShares, formatCollateralEth, formatCompleteSetQuantity, formatOutcomeQuantity } from '../lib/shareValue.js'
 import { ProbabilityBar } from '../components/ProbabilityBar.js'
 import { marketAcceptsNewRisk, type LiveBalances, type LiveMarket, type ShareOutcome } from '../protocol/live.js'
@@ -89,7 +91,7 @@ export function LivePositionControls({
 	const closed = !marketAcceptsNewRisk(market, nowSeconds)
 	const longBalance = side === 'YES' ? balances?.yes : balances?.no
 	const maximumExit = balances === undefined || longBalance === undefined ? undefined : maximumInsuredExit({ longOutcome: side, longBalance, invalidBalance: balances.invalid, yesReserve: market.yesReserve, noReserve: market.noReserve, feeBps: market.feeBps })
-	const parsedInput = parseUnitsOrUndefined(amount)
+	const parsedInput = tryParseNonNegativeDecimalInput(amount)
 	// Exit amounts are entered as complete-set collateral value, so convert them to the share amount the router redeems.
 	const exitAttoShares = mode === 'exit' && parsedInput !== undefined ? collateralAttoEthToAttoShares(parsedInput, market) : undefined
 	const slippageBps = parseSlippageBps(slippage)
@@ -224,17 +226,17 @@ export function LivePositionControls({
 						<DataGrid dense>
 							{quote.kind === 'entry' ? (
 								<>
-									<MetricField label={workflowCopy.averageOutcomePrice(side)}>{averagePrice === undefined ? workflowCopy.unavailableMetric : `${formatUnits(averagePrice, 2, 2)}%`}</MetricField>
+									<MetricField label={workflowCopy.averageOutcomePrice(side)}>{averagePrice === undefined ? workflowCopy.unavailableMetric : `${formatTrimmedUnits(averagePrice, 2, 2)}%`}</MetricField>
 									<MetricField label={workflowCopy.conditionalYesBeforeAfter}>
-										{formatUnits(quote.value.result.conditionalYesBpsBefore, 2, 2)}% / {formatUnits(quote.value.result.conditionalYesBpsAfter, 2, 2)}%
+										{formatTrimmedUnits(quote.value.result.conditionalYesBpsBefore, 2, 2)}% / {formatTrimmedUnits(quote.value.result.conditionalYesBpsAfter, 2, 2)}%
 									</MetricField>
-									<MetricField label={workflowCopy.conditionalYesPriceImpact}>{entryPriceImpactBps === undefined ? workflowCopy.unavailableMetric : `${entryPriceImpactBps > 0n ? workflowCopy.positiveSign : ''}${formatUnits(entryPriceImpactBps, 2, 2)} ${workflowCopy.percentagePoints}`}</MetricField>
+									<MetricField label={workflowCopy.conditionalYesPriceImpact}>{entryPriceImpactBps === undefined ? workflowCopy.unavailableMetric : `${entryPriceImpactBps > 0n ? workflowCopy.positiveSign : ''}${formatTrimmedUnits(entryPriceImpactBps, 2, 2)} ${workflowCopy.percentagePoints}`}</MetricField>
 								</>
 							) : (
 								<>
 									<MetricField label={workflowCopy.estimatedEthOut}>{`${formatRoundedUnits(quote.value.result.ethOut)} ${workflowCopy.eth}`}</MetricField>
 									<MetricField label={workflowCopy.minimumEthReceived}>
-										{formatUnits(quote.value.minimumEth)} {workflowCopy.eth}
+										{formatTrimmedUnits(quote.value.minimumEth)} {workflowCopy.eth}
 									</MetricField>
 								</>
 							)}
@@ -246,7 +248,7 @@ export function LivePositionControls({
 							<MetricField label={workflowCopy.deadline}>
 								<TimestampValue timestamp={quote.value.deadline} relative={false} />
 							</MetricField>
-							<MetricField label={workflowCopy.slippageTolerance}>{formatUnits(quote.value.slippageBps, 2, 2)}%</MetricField>
+							<MetricField label={workflowCopy.slippageTolerance}>{formatTrimmedUnits(quote.value.slippageBps, 2, 2)}%</MetricField>
 						</DataGrid>
 					</WorkflowSubsection>
 				</details>

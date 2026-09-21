@@ -1,14 +1,11 @@
 export const loadingNetworks = 'Loading networks'
 export const networksUnavailable = 'Networks unavailable'
-export const deploymentInProgress = 'Deployment in progress'
 export const checkingNetwork = 'Checking network'
 export const configurationUnavailable = 'Configuration unavailable'
 export const deployTradingContracts = 'Deploy trading contracts'
 export const contractFallbackLabel = 'contract'
 export const nextContractFallbackLabel = 'the next contract'
-export const deployed = 'Deployed'
 export const nextToDeploy = 'Next to deploy'
-export const notDeployed = 'Not deployed'
 export const walletContextChanged = 'Wallet context changed. Reconnect before deploying.'
 export const walletContextChangedBeforeDeployment = 'Wallet context changed before deployment; no transaction was submitted'
 export const walletContextChangedDuringDeployment = 'Wallet context changed during deployment; verify the transaction before continuing'
@@ -27,14 +24,6 @@ export const coreDeploymentsUnavailable = 'Unable to load canonical core deploym
 export const inspectionFailed = 'Unable to inspect the selected deployment'
 export const deploymentSettingsInvalid = 'Deployment settings are invalid'
 export const unknownRecoveryFallback = 'Unknown recovery error'
-
-export function deployingContract(label: string) {
-	return `Deploying ${label}…`
-}
-
-export function deployContract(label: string) {
-	return `Deploy ${label}`
-}
 
 export function walletMustUseNetwork(networkName: string) {
 	return `Wallet must use ${networkName}`

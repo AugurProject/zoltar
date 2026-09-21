@@ -1,6 +1,6 @@
 import { withReadTimeout } from '../lib/promise.js'
 import { assertNetworkEnabled } from './networkAvailability.js'
-import type { Address, EIP1193Provider } from '@zoltar/core-shared/evm/ethereum'
+import { bigintToSafeNumber, type Address, type EIP1193Provider } from '@zoltar/core-shared/evm/ethereum'
 import { tryParseAddressInput } from '../forms/inputs.js'
 
 type EthereumEventHandler = (...args: unknown[]) => void
@@ -56,19 +56,35 @@ export async function requireInjectedAccount(provider: InjectedEthereum, method:
 	return account
 }
 
+/** Prompts the wallet for access and returns the account it exposes. */
+export function requestInjectedAccount(provider: InjectedEthereum) {
+	return requireInjectedAccount(provider, 'eth_requestAccounts')
+}
+
 export function parseInjectedChainId(result: unknown) {
 	if (typeof result !== 'string' || !/^0x[0-9a-fA-F]+$/.test(result)) throw new Error('Wallet returned an invalid chain ID.')
 	return result
 }
 
-export async function readInjectedChainId(provider: InjectedEthereum) {
+async function readInjectedChainId(provider: InjectedEthereum) {
 	return parseInjectedChainId(await requestWalletRpc(provider, { method: 'eth_chainId', params: [] }))
 }
 
-export async function switchInjectedChain(provider: InjectedEthereum, chainId: string) {
-	if (!/^0x[0-9a-fA-F]+$/.test(chainId)) throw new Error('Requested wallet chain ID is invalid')
-	assertNetworkEnabled(chainId)
-	await provider.request({ method: 'wallet_switchEthereumChain', params: [{ chainId }] })
+/** The wallet chain as a number for callers that compare against `chain.id` style deployment configuration. */
+export async function readInjectedChainIdNumber(provider: InjectedEthereum) {
+	return bigintToSafeNumber(BigInt(await readInjectedChainId(provider)), 'Wallet chain ID')
+}
+
+export function formatChainIdHex(chainId: number) {
+	if (!Number.isSafeInteger(chainId) || chainId < 0) throw new Error('Requested wallet chain ID is invalid')
+	return `0x${chainId.toString(16)}`
+}
+
+export async function switchInjectedChain(provider: InjectedEthereum, chainId: string | number) {
+	const chainIdHex = typeof chainId === 'number' ? formatChainIdHex(chainId) : chainId
+	if (!/^0x[0-9a-fA-F]+$/.test(chainIdHex)) throw new Error('Requested wallet chain ID is invalid')
+	assertNetworkEnabled(chainIdHex)
+	await provider.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: chainIdHex }] })
 }
 
 export function subscribeToWalletContextChanges(eventSource: InjectedEthereumEventSource, onChange: (eventName: WalletContextChangeEvent) => void) {

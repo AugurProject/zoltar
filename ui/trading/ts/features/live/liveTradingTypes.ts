@@ -1,10 +1,10 @@
 import { discoverAddressedMarket, discoverTradingMarketPage, discoverUniverses } from '../../protocol/marketDiscovery.js'
 import type { Address, WalletClient } from '@zoltar/core-shared/evm/ethereum'
 import type { DeploymentConfiguration } from '../../protocol/config.js'
+import type { readInjectedChainIdNumber, requestInjectedAccount, switchInjectedChain } from '@zoltar/ui-core-shared/wallet/injectedEthereum.js'
 import type {
 	LiveBalances,
 	LiveMarket,
-	connectWallet,
 	createTradingPublicClient,
 	createTradingWalletClient,
 	discoverAllLiveMarketsInUniverse,
@@ -15,9 +15,7 @@ import type {
 	simulateExit,
 	submitFreshEntry,
 	submitFreshExit,
-	switchWalletChain,
 	validateLiveDeployment,
-	walletChainId,
 } from '../../protocol/live.js'
 import type { TransactionPhase } from './transactionWorkflow.js'
 
@@ -33,7 +31,7 @@ export type LiveTradingControllerServices = Readonly<{
 	discoverAddressedMarket: typeof discoverAddressedMarket
 	discoverTradingMarketPage: typeof discoverTradingMarketPage
 	discoverUniverses: typeof discoverUniverses
-	connectWallet: typeof connectWallet
+	connectWallet: typeof requestInjectedAccount
 	createTradingPublicClient: typeof createTradingPublicClient
 	createTradingWalletClient: typeof createTradingWalletClient
 	discoverAllLiveMarketsInUniverse: typeof discoverAllLiveMarketsInUniverse
@@ -44,7 +42,7 @@ export type LiveTradingControllerServices = Readonly<{
 	simulateExit: typeof simulateExit
 	submitFreshEntry: typeof submitFreshEntry
 	submitFreshExit: typeof submitFreshExit
-	switchWalletChain: typeof switchWalletChain
+	switchWalletChain: typeof switchInjectedChain
 	validateLiveDeployment: typeof validateLiveDeployment
-	walletChainId: typeof walletChainId
+	walletChainId: typeof readInjectedChainIdNumber
 }>

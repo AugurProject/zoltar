@@ -1,4 +1,6 @@
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
+import { getReportingOutcomeKey } from '@zoltar/ui-core-shared/lib/contractEnums.js'
+import * as blockerCopy from '../copy/marketBlockers.js'
 
 export type LiveMarket = Readonly<{
 	loadError?: string
@@ -36,26 +38,27 @@ export type LiveMarket = Readonly<{
 export type MarketLifecycle = Pick<LiveMarket, 'loadError' | 'tradingStatus' | 'systemState' | 'awaitingForkContinuation' | 'universeForkTime' | 'questionOutcome' | 'endTime'>
 
 function resolvedOutcomeLabel(questionOutcome: number) {
-	if (questionOutcome === 0) return 'Resolved INVALID'
-	if (questionOutcome === 1) return 'Resolved YES'
-	if (questionOutcome === 2) return 'Resolved NO'
-	return 'Question resolved'
+	const key = getReportingOutcomeKey(questionOutcome)
+	if (key === 'invalid') return blockerCopy.resolvedOutcome('INVALID')
+	if (key === 'yes') return blockerCopy.resolvedOutcome('YES')
+	if (key === 'no') return blockerCopy.resolvedOutcome('NO')
+	return blockerCopy.questionResolved
 }
 
 export function marketNewRiskBlocker(market: MarketLifecycle, nowSeconds: bigint) {
-	if (market.loadError !== undefined) return 'Market data unavailable'
+	if (market.loadError !== undefined) return blockerCopy.marketDataUnavailable
 	if (market.tradingStatus !== undefined && market.tradingStatus !== 6) {
-		if (market.tradingStatus === 1) return 'Question ended'
-		if (market.tradingStatus === 2) return 'Pool inactive'
-		if (market.tradingStatus === 3) return 'Awaiting fork continuation'
-		if (market.tradingStatus === 4) return 'Universe forked'
+		if (market.tradingStatus === 1) return blockerCopy.questionEnded
+		if (market.tradingStatus === 2) return blockerCopy.poolInactive
+		if (market.tradingStatus === 3) return blockerCopy.awaitingForkContinuation
+		if (market.tradingStatus === 4) return blockerCopy.universeForked
 		if (market.tradingStatus === 5) return resolvedOutcomeLabel(market.questionOutcome)
 	}
-	if (market.universeForkTime !== 0n) return 'Universe forked'
-	if (market.awaitingForkContinuation) return 'Awaiting fork continuation'
-	if (market.systemState !== 0) return 'Pool inactive'
+	if (market.universeForkTime !== 0n) return blockerCopy.universeForked
+	if (market.awaitingForkContinuation) return blockerCopy.awaitingForkContinuation
+	if (market.systemState !== 0) return blockerCopy.poolInactive
 	if (market.questionOutcome !== 3) return resolvedOutcomeLabel(market.questionOutcome)
-	if (nowSeconds >= market.endTime) return 'Question ended'
+	if (nowSeconds >= market.endTime) return blockerCopy.questionEnded
 	return undefined
 }
 

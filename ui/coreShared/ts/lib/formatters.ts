@@ -121,7 +121,7 @@ export function formatTrimmedUnits(value: bigint, units: number = 18, maximumFra
 	const base = 10n ** BigInt(units)
 	const whole = absoluteValue / base
 	const fraction = (absoluteValue % base).toString().padStart(units, '0').slice(0, maximumFractionDigits).replace(/0+$/, '')
-	return `${negative ? '-' : ''}${whole.toLocaleString()}${fraction.length > 0 ? `.${fraction}` : ''}`
+	return `${negative ? '-' : ''}${formatGroupedInteger(whole)}${fraction.length > 0 ? `.${fraction}` : ''}`
 }
 
 export function formatRoundedCurrencyBalance(value: bigint | undefined, units: number = 18, decimals: number = 2) {
@@ -177,25 +177,11 @@ export function formatTimestamp(timestamp: bigint) {
 	return formatUtcTimestamp(timestamp) ?? `Invalid timestamp (${timestamp.toString()})`
 }
 
-function formatRelativeDuration(seconds: bigint) {
-	if (seconds < SECONDS_PER_MINUTE) return 'less than a minute'
-
-	const days = seconds / SECONDS_PER_DAY
-	const hours = (seconds % SECONDS_PER_DAY) / SECONDS_PER_HOUR
-	const minutes = (seconds % SECONDS_PER_HOUR) / SECONDS_PER_MINUTE
-
-	if (days > 0n) return `${days}d ${hours}h ${minutes}m`
-
-	if (hours > 0n) return `${hours}h ${minutes}m`
-
-	return `${minutes}m`
-}
-
 export function formatRelativeTimestamp(timestamp: bigint, currentTimestamp: bigint) {
 	const delta = timestamp - currentTimestamp
 	if (delta === 0n) return 'now'
-	if (delta > 0n) return `in ${formatRelativeDuration(delta)}`
-	return `${formatRelativeDuration(-delta)} ago`
+	if (delta > 0n) return `in ${formatDuration(delta)}`
+	return `${formatDuration(-delta)} ago`
 }
 
 export function getWallClockTimestamp() {
