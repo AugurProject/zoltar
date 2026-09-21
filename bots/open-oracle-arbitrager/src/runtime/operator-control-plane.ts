@@ -26,8 +26,9 @@ import { type RiskLimits } from '#core/safety-controls'
 import type { CentralizedMarketSettings } from '@zoltar/bot-shared/monitoring/centralized-markets'
 import { loadPriceHistory } from '#monitoring/market-monitor'
 import { requireSafeDeploymentTransition } from './deployment-transition.ts'
+import { EXECUTOR_DEPLOYMENT_MESSAGES, RESUME_REQUIRES_CONFIGURED_CHAIN } from '#state/executor-deployment-recovery'
 import { deployExecutorFromConnectivity, requireActivePersistedNetwork, requireActivePersistedRpcQuorum, requireNoPendingExecutorDeployment, requirePausedExecutorDeployment } from './executor-deployment-control.ts'
-import { acquireConfigurationSignerOperation, persistExecutorDeploymentIntentForRecovery, runConfigurationSignerOperation, type DeploymentRecoveryState } from './signer-operations.ts'
+import { acquireConfigurationSignerOperation, clearDeploymentRecovery, executorDeploymentRecoveryStatus, persistExecutorDeploymentIntentForRecovery, runConfigurationSignerOperation, type DeploymentRecoveryState } from './signer-operations.ts'
 import { createOperatorSettingsControls, queuedSettingsSections } from './operator-settings-controls.ts'
 
 export type PendingOperatorUpdates = {
@@ -115,6 +116,9 @@ export function startOperatorControlPlane(parameters: {
 		submission: undefined,
 		tokenAddresses: undefined,
 	}
+	// A queued switch to live execution is reported as live so Resume already routes through the readiness check; a queued
+	// switch back to dry run keeps reporting live because the running scan can still sign until the boundary.
+	const snapshotFixedState = () => ({ ...fixedState, execute: fixedState.execute || pending.execute === true, executorDeploymentRecovery: executorDeploymentRecoveryStatus(parameters.deploymentRecovery) })
 	const persistSettings = (settings: PersistedOperatorSettings, expectedRevision?: string) => saveOperatorSettings(config.settingsFile, settings, undefined, expectedRevision)
 	const persistFocusedSettings = async (update: (settings: PersistedOperatorSettings) => PersistedOperatorSettings) => {
 		const latest = await loadOperatorSettingsWithRevision(config.settingsFile)
@@ -146,9 +150,7 @@ export function startOperatorControlPlane(parameters: {
 				revision: loaded.revision,
 			}
 		},
-		// A queued switch to live execution is reported as live so Resume already routes through the readiness check; a queued
-		// switch back to dry run keeps reporting live because the running scan can still sign until the boundary.
-		getSnapshot: () => operatorSnapshot(state, pending.strategy ?? config, pending.submission ?? config.submission, pending.connectivity ?? config.connectivity, { ...fixedState, execute: fixedState.execute || pending.execute === true }, config.riskLimits, queuedSettingsSections(pending)),
+		getSnapshot: () => operatorSnapshot(state, pending.strategy ?? config, pending.submission ?? config.submission, pending.connectivity ?? config.connectivity, snapshotFixedState(), config.riskLimits, queuedSettingsSections(pending)),
 		isNetworkConfigured: () => config.networkConfigured,
 		hostname: config.uiHost,
 		loopbackPublished: process.env['ZOLTAR_BOT_DASHBOARD_LOOPBACK_PUBLISHED'] === 'true',
@@ -273,7 +275,7 @@ export function startOperatorControlPlane(parameters: {
 			}),
 		setPaused: paused =>
 			queueSettingsUpdate(async () => {
-				if (!paused && !config.networkConfigured) throw new Error('Configure the chain and RPC endpoints before resuming')
+				if (!paused && !config.networkConfigured) throw new Error(RESUME_REQUIRES_CONFIGURED_CHAIN)
 				if (!paused) await requireNoPendingExecutorDeployment(config.settingsFile, config.network.name)
 				await persistFocusedSettings(settings => ({ ...settings, paused }))
 				pending.paused = paused
@@ -385,7 +387,7 @@ export function startOperatorControlPlane(parameters: {
 			if (parameters.isStopping?.()) throw new Error('Operator stopping before executor deployment')
 			if (typeof value !== 'object' || value === null || Array.isArray(value) || Object.keys(value).length !== 0) throw new Error('Executor deployment takes no address or salt overrides')
 			requirePausedExecutorDeployment(config.execute, state.paused)
-			if (config.privateKey === undefined) throw new Error('Set an execution signer before deploying the executor')
+			if (config.privateKey === undefined) throw new Error(EXECUTOR_DEPLOYMENT_MESSAGES.signerRequired)
 			const privateKey = config.privateKey
 			const plan = executorDeploymentPlan(canonicalExecutorSalt)
 			return await queueSettingsUpdate(async () => {
@@ -403,7 +405,7 @@ export function startOperatorControlPlane(parameters: {
 					// A queued arming already holds this signer's lock; re-acquiring would hand back the same retained lock and release it below.
 					const coveredByPendingLock = pending.signerLock !== undefined && pending.privateKey !== undefined && privateKeyToAccount(pending.privateKey).address.toLowerCase() === privateKeyToAccount(privateKey).address.toLowerCase()
 					if (!config.execute && !coveredByPendingLock) deploymentSignerLock = await lockManager.acquireSigner(privateKeyToAccount(privateKey).address)
-					if (!signerOperationGate.acquire('deployment')) throw new Error('Wait for the active signer operation to finish before deploying the executor')
+					if (!signerOperationGate.acquire('deployment')) throw new Error(EXECUTOR_DEPLOYMENT_MESSAGES.signerOperationBusy)
 					signerOperationAcquired = true
 					const plannedDeployment = {
 						...latest.settings.deployment,
@@ -425,7 +427,7 @@ export function startOperatorControlPlane(parameters: {
 					const next = { ...plannedDeployment, executor: deployed.address }
 					await persistSettings({ ...latest.settings, deployment: next }, latest.revision)
 					await clearExecutorDeploymentIntent(intentPath)
-					parameters.deploymentRecovery.pending = false
+					clearDeploymentRecovery(parameters.deploymentRecovery)
 					pending.deployment = next
 					// The deployment verified the runtime bytecode, so the checklist can show it before the next scan re-inspects.
 					if (state.canonicalDeployments !== undefined) state.canonicalDeployments = { ...state.canonicalDeployments, executorDeployed: true }

@@ -9,13 +9,18 @@ import { mainnet } from '@zoltar/core-shared/evm/ethereum'
 import { keccak256, privateKeyToAccount } from '@zoltar/bot-shared/ethereum'
 import type { Hex } from '@zoltar/bot-shared/ethereum'
 import { deployExecutorFromConnectivity, requireActivePersistedNetwork, requireActivePersistedRpcQuorum, requireNoPendingExecutorDeployment, requirePausedExecutorDeployment } from '../../src/runtime/executor-deployment-control.ts'
-import { acquireScanSignerOperation, persistExecutorDeploymentIntentForRecovery } from '../../src/runtime/signer-operations.ts'
+import { acquireScanSignerOperation, clearDeploymentRecovery, executorDeploymentRecoveryStatus, persistExecutorDeploymentIntentForRecovery, type DeploymentRecoveryState } from '../../src/runtime/signer-operations.ts'
 import { createSignerOperationGate } from '@zoltar/bot-shared/execution/signer-operation-gate'
 import { acquireExecutorDeploymentIntentLock, clearExecutorDeploymentIntent, executorDeploymentIntentPath, loadExecutorDeploymentIntent, saveExecutorDeploymentIntent, type ExecutorDeploymentIntent } from '#execution/executor-deployment-store'
 import { acquireExecutionSignerLock } from '#state/position-store'
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
+
+/** Builds the shared recovery state without letting TypeScript narrow it to the initial member, since the helpers reassign it in place. */
+function deploymentRecoveryState(initial: DeploymentRecoveryState = { pending: false }): DeploymentRecoveryState {
+	return { ...initial }
+}
 
 test('rejects executor deployment while a different saved network is pending', () => {
 	expect(() => requireActivePersistedNetwork('mainnet', 'sepolia')).toThrow('Wait for the saved network to apply at the next scan boundary')
@@ -155,23 +160,28 @@ test('blocks resume while a durable executor deployment intent remains unresolve
 test('blocks every scan signer path until deployment recovery clears its durable intent', async () => {
 	const directory = await mkdtemp(join(tmpdir(), 'zoltar-executor-scan-gate-'))
 	const gate = createSignerOperationGate()
-	const deploymentRecovery = { pending: true }
+	const account = privateKeyToAccount(`0x${'11'.repeat(32)}` as Hex)
+	const salt = `0x${'22'.repeat(32)}` as Hex
+	const plan = executorDeploymentPlan(salt)
+	const serializedTransaction = await account.signTransaction({ chainId: 1, data: plan.calldata, gas: 3_000_000n, gasPrice: 1n, nonce: 0, to: deterministicDeploymentProxy })
+	const deploymentRecovery = deploymentRecoveryState({ pending: true, transactionHash: keccak256(serializedTransaction) })
 	const intentPath = join(directory, 'deployment.json')
 	try {
 		expect(await acquireScanSignerOperation(gate, deploymentRecovery, intentPath)).toBeUndefined()
-		deploymentRecovery.pending = false
+		clearDeploymentRecovery(deploymentRecovery)
 		const intentLock = await acquireScanSignerOperation(gate, deploymentRecovery, intentPath)
 		expect(intentLock).toBeDefined()
 		await expect(acquireExecutorDeploymentIntentLock(intentPath)).rejects.toThrow('already locked')
 		gate.release('scan')
 		await intentLock?.release()
-		const account = privateKeyToAccount(`0x${'11'.repeat(32)}` as Hex)
-		const salt = `0x${'22'.repeat(32)}` as Hex
-		const plan = executorDeploymentPlan(salt)
-		const serializedTransaction = await account.signTransaction({ chainId: 1, data: plan.calldata, gas: 3_000_000n, gasPrice: 1n, nonce: 0, to: deterministicDeploymentProxy })
 		await saveExecutorDeploymentIntent(intentPath, { account: account.address, address: plan.address, chainId: 1, salt, serializedTransaction, transactionHash: keccak256(serializedTransaction), version: 1 })
 		expect(await acquireScanSignerOperation(gate, deploymentRecovery, intentPath)).toBeUndefined()
-		expect(deploymentRecovery.pending).toBe(true)
+		// The scan-time detection names the journaled transaction so the dashboard can link it, and clearing drops both fields together.
+		expect(deploymentRecovery).toEqual({ pending: true, transactionHash: keccak256(serializedTransaction) })
+		expect(executorDeploymentRecoveryStatus(deploymentRecovery)).toEqual({ transactionHash: keccak256(serializedTransaction) })
+		clearDeploymentRecovery(deploymentRecovery)
+		expect(deploymentRecovery).toEqual({ pending: false, transactionHash: undefined })
+		expect(executorDeploymentRecoveryStatus(deploymentRecovery)).toBeUndefined()
 	} finally {
 		await rm(directory, { force: true, recursive: true })
 	}
@@ -185,10 +195,10 @@ test('activates the signer blocker as soon as a fresh deployment intent is durab
 		const salt = `0x${'22'.repeat(32)}` as Hex
 		const plan = executorDeploymentPlan(salt)
 		const serializedTransaction = await account.signTransaction({ chainId: 1, data: plan.calldata, gas: 3_000_000n, gasPrice: 1n, nonce: 0, to: deterministicDeploymentProxy })
-		const deploymentRecovery = { pending: false }
+		const deploymentRecovery = deploymentRecoveryState()
 		const intentPath = join(directory, 'deployment.json')
 		await persistExecutorDeploymentIntentForRecovery(intentPath, { account: account.address, address: plan.address, chainId: 1, salt, serializedTransaction, transactionHash: keccak256(serializedTransaction), version: 1 }, deploymentRecovery)
-		expect(deploymentRecovery.pending).toBe(true)
+		expect(deploymentRecovery).toEqual({ pending: true, transactionHash: keccak256(serializedTransaction) })
 		expect(await acquireScanSignerOperation(createSignerOperationGate(), deploymentRecovery, intentPath)).toBeUndefined()
 		expect(await loadExecutorDeploymentIntent(intentPath)).toBeDefined()
 	} finally {
@@ -204,11 +214,11 @@ test('keeps the signer blocker active when deployment intent persistence is unce
 		const salt = `0x${'22'.repeat(32)}` as Hex
 		const plan = executorDeploymentPlan(salt)
 		const serializedTransaction = await account.signTransaction({ chainId: 1, data: plan.calldata, gas: 3_000_000n, gasPrice: 1n, nonce: 0, to: deterministicDeploymentProxy })
-		const deploymentRecovery = { pending: false }
+		const deploymentRecovery = deploymentRecoveryState()
 		const parentFile = join(directory, 'not-a-directory')
 		await writeFile(parentFile, 'occupied', 'utf8')
 		await expect(persistExecutorDeploymentIntentForRecovery(join(parentFile, 'deployment.json'), { account: account.address, address: plan.address, chainId: 1, salt, serializedTransaction, transactionHash: keccak256(serializedTransaction), version: 1 }, deploymentRecovery)).rejects.toThrow()
-		expect(deploymentRecovery.pending).toBe(true)
+		expect(deploymentRecovery).toEqual({ pending: true, transactionHash: keccak256(serializedTransaction) })
 		expect(await acquireScanSignerOperation(createSignerOperationGate(), deploymentRecovery, join(parentFile, 'deployment.json'))).toBeUndefined()
 	} finally {
 		await rm(directory, { force: true, recursive: true })

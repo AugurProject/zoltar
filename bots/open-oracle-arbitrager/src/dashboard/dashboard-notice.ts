@@ -1,5 +1,7 @@
+import { EXECUTOR_DEPLOYMENT_RECOVERY_REQUIRED } from '#state/executor-deployment-recovery'
 import type { PublicOperatorSnapshot } from '#state/operator-state'
 import { marketAvailabilityPresentation, pollRetryStatus } from './dashboard-format.ts'
+import { shorten } from './dom.js'
 
 function failureNoticeTitle(snapshot: PublicOperatorSnapshot, retryState: string | undefined) {
 	if (snapshot.retryInProgress) return 'Automatic retry in progress'
@@ -45,5 +47,29 @@ export function operatorNoticePresentation(snapshot: PublicOperatorSnapshot) {
 		noticeCopy = `${failure}${failureTime}${nextRetry}${retryDue}${lastRetry}`
 		noticeTone = 'danger'
 	}
+	// The recovery notice outranks everything else: no other notice explains why Resume is refused, and the poll status stays visible in the header.
+	if (snapshot.executorDeploymentRecovery !== undefined) {
+		noticeTitle = 'Executor deployment recovery required'
+		noticeCopy = executorDeploymentRecoveryCopy(snapshot.executorDeploymentRecovery)
+		noticeTone = 'danger'
+	}
 	return { noticeTitle, noticeCopy, noticeTone }
+}
+
+const EXECUTOR_DEPLOYMENT_RECOVERY_ACTION = 'Run Deploy predictable executor under Settings › Venues and executor with the same signer to confirm or rebroadcast it'
+
+/**
+ * The notice keeps the hash scannable; the executor form links the full transaction beside its copy.
+ * Beside the deploy button the copy names the button's effect instead of routing the operator to where they already are.
+ */
+export function executorDeploymentRecoveryCopy(recovery: NonNullable<PublicOperatorSnapshot['executorDeploymentRecovery']>, surface: 'notice' | 'executor-form' = 'notice') {
+	const transaction = surface === 'notice' ? `Executor deployment ${shorten(recovery.transactionHash, 10, 8)}` : 'The executor deployment'
+	const action = surface === 'notice' ? EXECUTOR_DEPLOYMENT_RECOVERY_ACTION : 'Deploying again with the same signer confirms or rebroadcasts it'
+	return `${transaction} was signed but its receipt was never confirmed. ${action}; Resume stays blocked until then.`
+}
+
+/** A refused pause or resume keeps the bot's reason verbatim and adds the recovery step when that reason is the pending recovery. */
+export function pauseFailurePresentation(failure: string) {
+	const noticeCopy = failure === EXECUTOR_DEPLOYMENT_RECOVERY_REQUIRED ? `${failure}. ${EXECUTOR_DEPLOYMENT_RECOVERY_ACTION}.` : failure
+	return { noticeTitle: 'Unable to change bot state', noticeCopy, noticeTone: 'danger' }
 }

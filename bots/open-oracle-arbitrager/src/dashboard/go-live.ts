@@ -17,6 +17,7 @@ type ReadinessRow = { advisory?: true; detail: string; label: string; ready: boo
 
 function executorRow(snapshot: PublicOperatorSnapshot): ReadinessRow {
 	const inspected = snapshot.canonicalDeployments
+	if (snapshot.executorDeploymentRecovery !== undefined) return { detail: 'Recover the pending deployment under Venues and executor', label: 'Executor', ready: false }
 	if (inspected === undefined) return { detail: 'Waiting for the first scan', label: 'Executor', ready: false }
 	if (inspected.executorDeployed) return { detail: snapshot.executor === undefined ? 'Deployed' : shorten(snapshot.executor), label: 'Executor', ready: true }
 	return { detail: 'Deploy it under Venues and executor', label: 'Executor', ready: false }

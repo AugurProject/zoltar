@@ -4,6 +4,7 @@ import type { DeploymentSettings } from '#config/deployment-settings'
 import { CONFIGURATION_REVISION_CONFLICT, type StoredCentralizedMarketSettings, type StoredRuntimeLimits } from '#config/settings-store'
 import type { SubmissionSettings } from '#execution/transaction-submission'
 import type { OperatorSnapshot, StrategySettings } from '#state/operator-state'
+import { EXECUTOR_DEPLOYMENT_MESSAGES, EXECUTOR_DEPLOYMENT_RECOVERY_REQUIRED, RESUME_REQUIRES_CONFIGURED_CHAIN } from '#state/executor-deployment-recovery'
 import { publicOperatorSnapshot } from '#state/public-snapshot'
 import type { SettlementSettings } from '#state/settlement-store'
 import { publicOperatorFailure, publicPollFailure } from '#state/public-failures'
@@ -79,6 +80,24 @@ function publicExecutionUpdateError(error: unknown) {
 	const message = errorMessage(error)
 	if (EXECUTION_UPDATE_MESSAGES.has(message)) return message
 	return 'Execution mode could not be changed. Review the signer, quorum RPCs, and protected bot logs.'
+}
+
+const PAUSE_UPDATE_MESSAGES = new Set([CHAIN_CONFIGURATION_REQUIRED, RESUME_REQUIRES_CONFIGURED_CHAIN, EXECUTOR_DEPLOYMENT_RECOVERY_REQUIRED])
+
+/** Resume refusals name the operator step that unblocks them; anything else stays in protected logs. */
+function publicPauseUpdateError(error: unknown) {
+	const message = errorMessage(error)
+	if (PAUSE_UPDATE_MESSAGES.has(message)) return message
+	return 'The bot run state could not be changed. Refresh current state and check protected bot logs.'
+}
+
+const FORWARDED_EXECUTOR_DEPLOYMENT_MESSAGES = new Set<string>([CHAIN_CONFIGURATION_REQUIRED, ...Object.values(EXECUTOR_DEPLOYMENT_MESSAGES)])
+
+/** Deployment and recovery prerequisites name the operator step that unblocks them; RPC and chain-state detail stays in protected logs. */
+function publicExecutorDeploymentError(error: unknown) {
+	const message = errorMessage(error)
+	if (FORWARDED_EXECUTOR_DEPLOYMENT_MESSAGES.has(message)) return message
+	return 'Executor deployment could not be completed. Review chain state and protected bot logs.'
 }
 
 /** Field validation for the focused forms names the offending field of the operator's own submission; anything else stays in protected logs. */
@@ -363,7 +382,7 @@ export function startDashboardServer(port: number, controller: DashboardControll
 					if (controller.deployExecutor === undefined) throw new Error('Executor deployment is unavailable')
 					return json(await controller.deployExecutor(await boundedDashboardJson(request)))
 				} catch (error) {
-					return publicError(error, 400, 'executor-deployment', 'Executor deployment could not be completed. Review chain state and protected bot logs.')
+					return publicError(error, 400, 'executor-deployment', publicExecutorDeploymentError(error))
 				}
 			}
 			if (request.method === 'POST' && url.pathname === '/api/executor-prediction') {
@@ -414,7 +433,7 @@ export function startDashboardServer(port: number, controller: DashboardControll
 					await controller.setPaused(value['paused'])
 					return json({ paused: value['paused'] })
 				} catch (error) {
-					return publicError(error, 400, 'pause-update', 'The bot run state could not be changed. Refresh current state and check protected bot logs.')
+					return publicError(error, 400, 'pause-update', publicPauseUpdateError(error))
 				}
 			}
 			return new Response('Not found', { status: 404 })

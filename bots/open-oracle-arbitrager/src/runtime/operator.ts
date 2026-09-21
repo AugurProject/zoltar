@@ -56,7 +56,7 @@ import { createConfiguredDexPairReader } from './configured-dex-pair.ts'
 import { emptySettlementSnapshot } from '#state/settlement-store'
 import { completeSuccessfulPoll, completeUnconfiguredPoll } from './poll-completion.ts'
 import { selectQuorumChainClient, selectQuorumHead } from './quorum-head.ts'
-import { acquireScanSignerOperation } from './signer-operations.ts'
+import { acquireScanSignerOperation, type DeploymentRecoveryState } from './signer-operations.ts'
 
 const REORG_OVERLAP_BLOCKS = 12n
 const MAX_LOG_SCAN_RANGE = 256n
@@ -174,9 +174,7 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 	const executorIntentPath = executorDeploymentIntentPath(config.settingsFile, config.network.name)
 	const pendingExecutorDeployment = await loadExecutorDeploymentIntentForChain(executorIntentPath, config.network.chain.id)
 	if (pendingExecutorDeployment !== undefined) await assertStoredExecutorDeploymentIntent(pendingExecutorDeployment, config.network.chain.id)
-	const deploymentRecovery = {
-		pending: pendingExecutorDeployment !== undefined,
-	}
+	const deploymentRecovery: DeploymentRecoveryState = pendingExecutorDeployment === undefined ? { pending: false } : { pending: true, transactionHash: pendingExecutorDeployment.transactionHash }
 	if (pendingExecutorDeployment !== undefined) {
 		state.paused = true
 		state.status = 'paused'
