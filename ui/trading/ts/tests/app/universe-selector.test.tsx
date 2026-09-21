@@ -264,15 +264,17 @@ describe('universe selector', () => {
 		expect(() => buildLiveUniverseOptions([7n, 7n])).toThrow('Universe IDs must be unique')
 	})
 
-	test('falls back to full labels when compact universe labels would collide', () => {
+	test('widens colliding compact universe labels instead of falling back to full IDs the phone header cannot show', () => {
 		// Same leading 8 and trailing 6 hex digits, different middle: the compact form would read identically.
 		const firstCollision = (0xabcdef12n << 96n) | (1n << 40n) | 0x123456n
 		const secondCollision = (0xabcdef12n << 96n) | (2n << 40n) | 0x123456n
 		const options = buildLiveUniverseOptions([0n, firstCollision, secondCollision])
 		expect(options[0]?.label).toBe('Genesis (0x0)')
-		expect(options[1]?.label).toBe(`Universe 0x${firstCollision.toString(16)}`)
-		expect(options[2]?.label).toBe(`Universe 0x${secondCollision.toString(16)}`)
 		expect(options[1]?.label).not.toBe(options[2]?.label)
+		expect(options[1]?.label).toBe(`Universe 0x${firstCollision.toString(16).slice(0, 8)}…${firstCollision.toString(16).slice(-14)}`)
+		expect(options[2]?.label).toBe(`Universe 0x${secondCollision.toString(16).slice(0, 8)}…${secondCollision.toString(16).slice(-14)}`)
+		expect(options[1]?.accessibleLabel).toBe(`Universe 0x${firstCollision.toString(16)}`)
+		expect(options[2]?.accessibleLabel).toBe(`Universe 0x${secondCollision.toString(16)}`)
 	})
 
 	test('keeps the balance slots in place while the wallet is disconnected or loading', async () => {
