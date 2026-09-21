@@ -9,6 +9,7 @@ import { operatorSnapshot, type MutableStrategy, type OperatorState, type Queued
 import example from '../../config/operator.example.json'
 import { parseOperatorSettings, parseRuntimeLimitsRequest, parseStoredCentralizedMarkets, serializeOperatorSettings, serializeRuntimeLimits, serializeStoredCentralizedMarkets } from '#config/settings-store'
 import { mergeStoredDeploymentUpdate } from '#config/deployment-settings'
+import { requiredDeploymentRoles } from '#config/deployment-roles'
 import { validateSubmissionSettings } from '#execution/transaction-submission'
 
 const servers: ReturnType<typeof startDashboardServer>[] = []
@@ -629,7 +630,9 @@ test('focused risk, settlement, execution, and market forms load the saved confi
 	expect(element(window, 'usage-positions', window.HTMLElement).textContent).toBe('0 / 1')
 	expect(element(window, 'settlement-panel-summary', window.HTMLElement).textContent).toBe('Disabled · 0 reports awaiting settlement')
 	const checklist = () => Array.from(element(window, 'execution-checklist', window.HTMLUListElement).children, item => `${item.getAttribute('data-ready') ?? ''}:${item.querySelector('.readiness-label')?.textContent ?? ''}`)
-	expect(checklist()).toEqual(['false:Execution signer', 'true:Independent quorum RPCs', 'true:Trading venue', 'true:Delivery'])
+	// No scan has inspected the chain yet, so the on-chain rows wait; pool coordinators are advisory and never block arming.
+	expect(checklist()).toEqual(['false:Execution signer', 'true:Independent quorum RPCs', 'true:Trading venue', 'false:Executor', 'false:Canonical contracts', 'true:Delivery', 'false:Pool coordinators'])
+	expect(Array.from(element(window, 'execution-checklist', window.HTMLUListElement).children, item => item.getAttribute('data-advisory'))).toEqual([null, null, null, null, null, null, 'true'])
 	expect(window.document.getElementById('manifest-configuration')).toBeNull()
 	expect(window.document.getElementById('manifest-form')).toBeNull()
 	expect(element(window, 'execution-mode-summary', window.HTMLElement).textContent).toBe('Dry run · prerequisites missing')
@@ -770,16 +773,20 @@ test('go-live checklist unlocks the switch once every prerequisite holds, report
 	const connectivityRequests: unknown[] = []
 	const deploymentRequests: unknown[] = []
 	let holdConnectivity: Promise<void> | undefined
+	const executor = canonicalExecutorIdentity().address
+	// The running V3-only profile has been inspected once; the V3 router is the only contract still missing.
+	const inspectedContracts = (routerDeployed: boolean) => requiredDeploymentRoles({ v2: false, v3: true, v4: false }).map(role => ({ address, deployed: routerDeployed || role !== 'uniswap-router', role }))
+	let canonicalDeployments: OperatorState['canonicalDeployments'] = { contracts: inspectedContracts(false), executorDeployed: false }
 	const snapshot = () =>
 		operatorSnapshot(
-			operatorState(),
+			{ ...operatorState(), canonicalDeployments },
 			settings.strategy,
 			settings.submission,
 			settings.connectivity,
 			{
 				deployment: settings.deployment,
 				execute,
-				executor: undefined,
+				executor,
 				expectedChainId: 11_155_111,
 				explorerUrl: 'https://sepolia.etherscan.io',
 				network: 'sepolia',
@@ -798,6 +805,11 @@ test('go-live checklist unlocks the switch once every prerequisite holds, report
 		hostname: '127.0.0.1',
 		isNetworkConfigured: () => true,
 		setPaused: () => undefined,
+		deployExecutor: () => {
+			canonicalDeployments = { contracts: inspectedContracts(true), executorDeployed: true }
+			return { address: executor, alreadyDeployed: false, transactionHash: undefined }
+		},
+		predictExecutor: () => ({ address: executor, salt: '0x0' }),
 		// Mirrors the bot's serialized settings queue: the connectivity write lands first and a later save reads it.
 		updateConnectivity: async value => {
 			connectivityRequests.push(value)
@@ -829,8 +841,27 @@ test('go-live checklist unlocks the switch once every prerequisite holds, report
 	servers.push(server)
 	const { page, window } = await mountDashboard(server, '/settings')
 	const checklistReady = () => Array.from(element(window, 'execution-checklist', window.HTMLUListElement).children, item => item.getAttribute('data-ready'))
+	const checklistDetail = (label: string) =>
+		Array.from(element(window, 'execution-checklist', window.HTMLUListElement).children)
+			.find(item => item.querySelector('.readiness-label')?.textContent === label)
+			?.querySelector('strong')?.textContent
 	for (let attempt = 0; attempt < 100 && checklistReady().length === 0; attempt++) await Bun.sleep(10)
-	expect(checklistReady()).toEqual(['true', 'true', 'true', 'true'])
+	// The saved settings are complete, but the scan found no executor bytecode, so the switch stays locked until it is deployed.
+	expect(checklistReady()).toEqual(['true', 'true', 'true', 'false', 'false', 'true', 'false'])
+	expect(checklistDetail('Executor')).toBe('Deploy it under Venues and executor')
+	expect(checklistDetail('Canonical contracts')).toBe('Missing Uniswap V3 router')
+	expect(checklistDetail('Pool coordinators')).toBe('None discovered · not required to arm')
+	// The advisory row is announced as optional, not as a missing prerequisite.
+	expect(Array.from(element(window, 'execution-checklist', window.HTMLUListElement).children, item => item.querySelector('.visually-hidden')?.textContent)).toEqual([' ready', ' ready', ' ready', ' missing', ' missing', ' ready', ' optional'])
+	expect(element(window, 'execution-mode-summary', window.HTMLElement).textContent).toBe('Dry run · prerequisites missing')
+	expect(element(window, 'execution-enabled', window.HTMLInputElement).disabled).toBe(true)
+	Reflect.set(window, 'confirm', () => true)
+	element(window, 'create2-form', window.HTMLFormElement).dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }))
+	await page.waitUntilComplete()
+	for (let attempt = 0; attempt < 100 && !element(window, 'create2-status', window.HTMLElement).textContent.startsWith('Deployed'); attempt++) await Bun.sleep(10)
+	expect(element(window, 'create2-status', window.HTMLElement).textContent).toBe(`Deployed ${executor} in transaction unknown.`)
+	for (let attempt = 0; attempt < 100 && checklistDetail('Executor') !== `${executor.slice(0, 8)}…${executor.slice(-6)}`; attempt++) await Bun.sleep(10)
+	expect(checklistReady()).toEqual(['true', 'true', 'true', 'true', 'true', 'true', 'false'])
 	expect(element(window, 'execution-mode-summary', window.HTMLElement).textContent).toBe('Dry run · ready to go live')
 	expect(element(window, 'execution-enabled', window.HTMLInputElement).disabled).toBe(false)
 	expect(element(window, 'quorum-rpc-urls', window.HTMLTextAreaElement).value).toBe('https://quorum-one.example/\nhttps://quorum-two.example/')
@@ -883,6 +914,11 @@ test('go-live checklist unlocks the switch once every prerequisite holds, report
 	expect(element(window, 'quorum-rpc-urls', window.HTMLTextAreaElement).value).toBe('https://quorum-four.example/\nhttps://quorum-five.example/')
 	expect(element(window, 'deployment-v4-enabled', window.HTMLInputElement).checked).toBe(true)
 	expect(Array.from(window.document.querySelectorAll('.settings-badges[data-form="deployment-form"] .settings-badge'), badge => badge.textContent)).toEqual(['Queued · next scan'])
+	// The saved V4 venue needs contracts the last scan never inspected, so the verified V3-only inspection no longer unlocks arming.
+	expect(checklistDetail('Canonical contracts')).toBe('Waiting for the next scan')
+	expect(checklistReady()).toEqual(['true', 'true', 'true', 'true', 'false', 'true', 'false'])
+	expect(element(window, 'execution-mode-summary', window.HTMLElement).textContent).toBe('Live · dry run at the next scan')
+	expect(element(window, 'execution-enabled', window.HTMLInputElement).disabled).toBe(true)
 	// The universe form has no controls of its own, yet it joins the same clean/queued model as every other panel.
 	expect(Array.from(window.document.querySelectorAll('.settings-badges[data-form="tokens-form"] .settings-badge'), badge => badge.textContent)).toEqual(['Queued · next scan'])
 	const universeSave = element(window, 'tokens-form', window.HTMLFormElement).querySelector('button[type="submit"]')

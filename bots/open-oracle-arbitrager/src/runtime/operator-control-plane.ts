@@ -427,6 +427,8 @@ export function startOperatorControlPlane(parameters: {
 					await clearExecutorDeploymentIntent(intentPath)
 					parameters.deploymentRecovery.pending = false
 					pending.deployment = next
+					// The deployment verified the runtime bytecode, so the checklist can show it before the next scan re-inspects.
+					if (state.canonicalDeployments !== undefined) state.canonicalDeployments = { ...state.canonicalDeployments, executorDeployed: true }
 					recordOperation(state, {
 						category: 'transaction',
 						details: deployed.transactionHash,

@@ -728,6 +728,11 @@ input {
 	color: var(--warning);
 }
 
+.readiness-list li[data-ready="false"][data-advisory="true"] .readiness-mark,
+.readiness-list li[data-ready="false"][data-advisory="true"] strong {
+	color: var(--muted);
+}
+
 .market-source-table input {
 	height: 36px;
 }

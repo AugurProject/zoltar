@@ -236,12 +236,19 @@ describe('third-party settlement execution against OpenOracle', () => {
 			const nonce = await client.getTransactionCount({ address: account.address, blockTag: 'pending' })
 			const plan = { coordinator: report.helper.creator, gas: 250_000n, projectedGasCostAttoEth: 10n ** 15n, report, rewardAttoEth: REWARD, token: token2, tokenSymbol: 'TK2' }
 			const attempt = executeSettlement({ ...base, config }, plan)
+			// The attempt and this test both poll for the replacement receipt; keep the expected rejection handled so the
+			// attempt cannot reject unhandled if its poll observes the replacement first.
+			const outcome = attempt.then(
+				() => undefined,
+				(error: unknown) => error,
+			)
 			for (let waited = 0; records.length === 0 && waited < 200; waited++) await Bun.sleep(10)
 			const snapshot = await node.anvilWindowEthereum.anvilSnapshot()
 			// Take the settle's nonce with a plain self-transfer; the receipt wait then resolves through the replacement instead.
 			const unrelatedHash = await wallet.sendTransaction({ nonce, to: account.address, value: 1n })
 			await wallet.waitForTransactionReceipt({ hash: unrelatedHash })
 			await expect(attempt).rejects.toThrow('was replaced by')
+			expect(await outcome).toBeInstanceOf(Error)
 			expect(records.map(record => `${record.status}:${record.transactionHash === unrelatedHash}`)).toEqual(['pending:false', 'expired:false'])
 			expect(await client.readContract({ abi: openOracleAbi, address: openOracle, functionName: 'storedGame', args: [report.helper.reportId] }).then(game => game[4])).toBe(0n)
 			// The retirement is not final until the replacement is twelve blocks deep; it is verified, never assumed from age.

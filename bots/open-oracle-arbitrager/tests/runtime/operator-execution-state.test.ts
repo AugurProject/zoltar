@@ -9,7 +9,7 @@ import { join } from 'node:path'
 import type { MarketConsensusEstimate, MarketConsensusObservation } from '@zoltar/bot-shared/monitoring/market-consensus'
 import { createPublicClient } from '@zoltar/bot-shared/ethereum'
 import { custom } from '@zoltar/bot-shared/ethereum/rpc-transport'
-import { authenticateConfiguredDeployments } from '#config/runtime-deployment'
+import { authenticateConfiguredDeployments, refreshIncompleteCanonicalDeployments } from '#config/runtime-deployment'
 import { validateDeploymentSettings } from '#config/deployment-settings'
 import { loadConfiguration, runnableOperatorSettings } from '#config/configuration'
 import type { OperatorState } from '#state/operator-state'
@@ -213,27 +213,136 @@ test('V4-only execution starts and authenticates without a manifest or V3 deploy
 			},
 		}),
 	})
-	await authenticateConfiguredDeployments([client, client], {
-		...config,
-		execute: true,
-		executor: deployment.executor,
-		coordinatorAddresses: [...deployment.coordinatorAddresses],
-		router: undefined,
-		v2Router: undefined,
-		v4PoolManager: manager,
-		v4Quoter: quoter,
-		quorumRpcUrls: ['https://second.example', 'https://third.example'],
-	})
+	await authenticateConfiguredDeployments(
+		[client, client],
+		{
+			...config,
+			execute: true,
+			executor: deployment.executor,
+			coordinatorAddresses: [...deployment.coordinatorAddresses],
+			router: undefined,
+			v2Router: undefined,
+			v4PoolManager: manager,
+			v4Quoter: quoter,
+			quorumRpcUrls: ['https://second.example', 'https://third.example'],
+		},
+		{},
+	)
 	expect(reads.length).toBeGreaterThan(0)
 	expect(() => runnableOperatorSettings(config.settingsFile, { ...settings, deployment: { ...settings.deployment, uniswapV4PoolManager: undefined, uniswapV4Quoter: undefined } })).toThrow('at least one enabled Uniswap venue')
 })
 
-for (const code of ['0x', '0x01'] as const)
-	test(`rejects canonical executor with missing or wrong code (${code})`, async () => {
-		const config = await exampleConfiguration()
-		const client = createPublicClient({ chain: config.network.chain, transport: custom({ request: async () => code }) })
-		await expect(authenticateConfiguredDeployments([client], { ...config, execute: true, router: undefined, v2Router: undefined, v4PoolManager: undefined, v4Quoter: undefined })).rejects.toThrow('Canonical executor is missing or has unexpected bytecode')
+test('rejects a missing canonical executor and publishes the failed inspection', async () => {
+	const config = await exampleConfiguration()
+	const client = createPublicClient({ chain: config.network.chain, transport: custom({ request: async () => '0x' }) })
+	const state: Pick<OperatorState, 'canonicalDeployments'> = { canonicalDeployments: { contracts: [], executorDeployed: true } }
+	await expect(authenticateConfiguredDeployments([client], { ...config, execute: true, router: undefined, v2Router: undefined, v4PoolManager: undefined, v4Quoter: undefined }, state)).rejects.toThrow('Canonical executor is not deployed; deploy the bundled executor')
+	// The checklist sees what the failed live startup found instead of the previous inspection.
+	expect(state.canonicalDeployments?.executorDeployed).toBe(false)
+	expect(state.canonicalDeployments?.contracts.every(contract => !contract.deployed)).toBe(true)
+})
+
+test('dry-run authentication reports the missing executor and contracts without failing', async () => {
+	const config = await exampleConfiguration()
+	const deployedExecutor = `0x${executorArtifact.evm.deployedBytecode.object}` as const
+	let executorCode: string = '0x'
+	const missing = new Set([config.network.weth.toLowerCase()])
+	let reads = 0
+	const client = createPublicClient({
+		chain: config.network.chain,
+		transport: custom({
+			request: async ({ method, params }) => {
+				if (method !== 'eth_getCode' || !Array.isArray(params) || typeof params[0] !== 'string') throw new Error('Unexpected deployment read')
+				reads += 1
+				const address = params[0].toLowerCase()
+				if (address === canonicalExecutorIdentity().address.toLowerCase()) return executorCode
+				return missing.has(address) ? '0x' : '0x01'
+			},
+		}),
 	})
+	const dryRun = { ...config, execute: false, router: undefined, v2Router: undefined, v4PoolManager: undefined, v4Quoter: undefined }
+	const absent = await authenticateConfiguredDeployments([client], dryRun, {})
+	expect(absent.executorDeployed).toBe(false)
+	expect(absent.contracts.map(contract => [contract.role, contract.deployed])).toEqual([
+		['open-oracle', true],
+		['weth', false],
+		['security-pool-factory', true],
+	])
+	await expect(authenticateConfiguredDeployments([client], { ...dryRun, execute: true }, {})).rejects.toThrow('Canonical executor is not deployed; deploy the bundled executor')
+	executorCode = deployedExecutor
+	// An incomplete inspection is repeated every scan; the executor deployed meanwhile shows up, and WETH is still reported absent.
+	const wethMissing = await refreshIncompleteCanonicalDeployments([client], dryRun, absent)
+	expect(wethMissing.executorDeployed).toBe(true)
+	await expect(authenticateConfiguredDeployments([client], { ...dryRun, execute: true }, {})).rejects.toThrow(`Canonical weth ${config.network.weth} is not deployed`)
+	missing.clear()
+	const verified = await refreshIncompleteCanonicalDeployments([client], dryRun, wethMissing)
+	expect(verified.contracts.every(contract => contract.deployed)).toBe(true)
+	// A verified inspection holds without further RPC reads until the settings change.
+	const readsAfterVerification = reads
+	expect(await refreshIncompleteCanonicalDeployments([client], dryRun, verified)).toBe(verified)
+	expect(reads).toBe(readsAfterVerification)
+})
+
+test('a failed re-inspection after enabling another venue does not leave the previous verified result behind', async () => {
+	const config = await exampleConfiguration()
+	const deployment = validateDeploymentSettings({ quorumRpcUrls: [], uniswapV2Enabled: false, uniswapV3Enabled: false, uniswapV4Enabled: true }, config.network.name)
+	const client = createPublicClient({
+		chain: config.network.chain,
+		transport: custom({
+			request: async ({ method, params }) => {
+				if (method !== 'eth_getCode' || !Array.isArray(params) || typeof params[0] !== 'string') throw new Error('Unexpected deployment read')
+				if (params[0].toLowerCase() === deployment.uniswapV4Quoter?.toLowerCase()) throw new Error('fetch failed')
+				return '0x01'
+			},
+		}),
+	})
+	const dryRun = { ...config, execute: false, router: undefined, v2Router: undefined, v4PoolManager: undefined, v4Quoter: undefined }
+	const state: Pick<OperatorState, 'canonicalDeployments'> = {}
+	await authenticateConfiguredDeployments([client], dryRun, state)
+	expect(state.canonicalDeployments?.executorDeployed).toBe(true)
+	// The V4 venue adds required contracts; the read for one of them fails, so nothing from the narrower inspection may remain.
+	await expect(authenticateConfiguredDeployments([client], { ...dryRun, v4PoolManager: deployment.uniswapV4PoolManager, v4Quoter: deployment.uniswapV4Quoter }, state)).rejects.toThrow('fetch failed')
+	expect(state.canonicalDeployments).toBeUndefined()
+})
+
+test('live authentication tolerates a lagging endpoint once the quorum has verified the deployments', async () => {
+	const config = await exampleConfiguration()
+	const clientReporting = (executorCode: string) =>
+		createPublicClient({
+			chain: config.network.chain,
+			transport: custom({
+				request: async ({ method, params }) => {
+					if (method !== 'eth_getCode' || !Array.isArray(params) || typeof params[0] !== 'string') throw new Error('Unexpected deployment read')
+					return params[0].toLowerCase() === canonicalExecutorIdentity().address.toLowerCase() ? executorCode : '0x01'
+				},
+			}),
+		})
+	const verified = clientReporting(`0x${executorArtifact.evm.deployedBytecode.object}`)
+	const lagging = clientReporting('0x')
+	const live = { ...config, execute: true, router: undefined, v2Router: undefined, v4PoolManager: undefined, v4Quoter: undefined, quorumRpcUrls: ['https://second.example', 'https://third.example'] }
+	expect((await authenticateConfiguredDeployments([lagging, verified], live, {})).executorDeployed).toBe(true)
+	// Without a verifying endpoint the incomplete observation is what the operator rejects.
+	await expect(authenticateConfiguredDeployments([lagging, lagging], live, {})).rejects.toThrow('Canonical executor is not deployed')
+	await expect(authenticateConfiguredDeployments([lagging, verified], { ...live, executor: config.openOracle }, {})).rejects.toThrow('Executor must use the canonical derived address')
+	const previous = process.env['ZOLTAR_BOT_RPC_QUORUM']
+	process.env['ZOLTAR_BOT_RPC_QUORUM'] = '2'
+	try {
+		expect((await authenticateConfiguredDeployments([lagging, verified, verified], live, {})).executorDeployed).toBe(true)
+		await expect(authenticateConfiguredDeployments([lagging, lagging, verified], live, {})).rejects.toThrow('Canonical executor is not deployed')
+		const offline = createPublicClient({
+			chain: config.network.chain,
+			transport: custom({
+				request: async () => {
+					throw new Error('fetch failed')
+				},
+			}),
+		})
+		await expect(authenticateConfiguredDeployments([offline, offline, verified], live, {})).rejects.toThrow('Deployment authentication requires at least two independent RPC endpoints')
+	} finally {
+		if (previous === undefined) delete process.env['ZOLTAR_BOT_RPC_QUORUM']
+		else process.env['ZOLTAR_BOT_RPC_QUORUM'] = previous
+	}
+})
 
 for (const name of ['mainnet', 'sepolia'] as const)
 	test(`canonical ${name} deployment checks work without pins and reject every missing required contract`, async () => {
@@ -255,10 +364,10 @@ for (const name of ['mainnet', 'sepolia'] as const)
 				},
 			}),
 		})
-		await authenticateConfiguredDeployments([client], config)
+		await authenticateConfiguredDeployments([client], config, {})
 		for (const address of expected) {
 			expect(reads.has(address.toLowerCase())).toBe(true)
 			missing = address.toLowerCase()
-			await expect(authenticateConfiguredDeployments([client], config)).rejects.toThrow('is not deployed')
+			await expect(authenticateConfiguredDeployments([client], config, {})).rejects.toThrow('is not deployed')
 		}
 	})

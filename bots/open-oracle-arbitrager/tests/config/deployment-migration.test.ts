@@ -71,7 +71,7 @@ for (const [name, v3, v4] of [
 			}),
 		})
 		// A V3-only profile has no V2 router. Migration must not make that identity mandatory.
-		await authenticateConfiguredDeployments([client], config)
+		await authenticateConfiguredDeployments([client], config, {})
 		expect(config.operatorSettings.deployment).toMatchObject({ uniswapV2Enabled: false, uniswapV3Enabled: v3, uniswapV4Enabled: v4 })
 		expect(config.router).toBe(v3 ? uniswap.router : undefined)
 		expect(config.v2Router).toBeUndefined()
@@ -80,7 +80,7 @@ for (const [name, v3, v4] of [
 		const stored = JSON.parse(await readFile(path, 'utf8'))
 		expect(stored.deployment).toEqual({ quorumRpcUrls: config.quorumRpcUrls, uniswapV2Enabled: false, uniswapV3Enabled: v3, uniswapV4Enabled: v4 })
 		expect((await loadOperatorSettings(path))?.deployment).toEqual(config.operatorSettings.deployment)
-		await authenticateConfiguredDeployments([client], await loadConfiguration(path))
+		await authenticateConfiguredDeployments([client], await loadConfiguration(path), {})
 		// A new network profile gets template defaults; returning to the migrated profile restores its choices.
 		const fresh = await switchOperatorNetworkProfile(path, 'sepolia', join(import.meta.dir, '../../config/operator.example.json'))
 		expect(fresh.settings.deployment).toMatchObject({ uniswapV2Enabled: true, uniswapV3Enabled: true, uniswapV4Enabled: false })

@@ -1,7 +1,8 @@
 import { endpointLabel } from '#monitoring/connectivity'
+import type { NetworkConfiguration } from '#config/network'
 import type { Chain, PublicClient, Transport } from '@zoltar/bot-shared/ethereum'
 import { errorMessage } from '@zoltar/bot-shared/infrastructure/error-message'
-import { availableSettledValues, quorumValue } from '@zoltar/bot-shared/monitoring/read-quorum'
+import { availableSettledValues, quorumValue, settledQuorumValue } from '@zoltar/bot-shared/monitoring/read-quorum'
 import { ConnectivityDegradedError } from '@zoltar/bot-shared/monitoring/resilience'
 import { rpcQuorumRequirement } from '@zoltar/bot-shared/monitoring/rpc-quorum-policy'
 
@@ -58,4 +59,21 @@ export async function selectQuorumHead<TClient>(readClients: readonly TClient[],
 	const selectedRpcUrl = selected === undefined ? undefined : endpoints[selected.index]
 	if (selected === undefined || selectedClient === undefined || selectedRpcUrl === undefined) throw new Error('Canonical head does not satisfy the configured RPC quorum requirement')
 	return { block: selected.block, client: selectedClient, rpcUrl: selectedRpcUrl }
+}
+
+/**
+ * Live mode starts on a read client only after the configured quorum agrees the endpoints serve the configured chain.
+ * The first endpoint that answered becomes the scan client until the canonical head selects one.
+ */
+export async function selectQuorumChainClient<TClient>(readClients: readonly TClient[], endpoints: readonly string[], network: Pick<NetworkConfiguration, 'chain' | 'name'>, contextualRpcRead: ContextualRpcRead) {
+	const chainReads = readClients.map(async (_, index) => {
+		const rpcUrl = endpoints[index] ?? ''
+		return { endpoint: endpointLabel(rpcUrl), index, value: await contextualRpcRead('eth_chainId', requestClient => requestClient.getChainId(), rpcUrl) }
+	})
+	const observedChainId = await settledQuorumValue('configured chain id', chainReads)
+	if (observedChainId !== network.chain.id) throw new Error(`Read RPC quorum ${endpoints.map(endpointLabel).join(', ')} returned chain ${observedChainId.toString()} while calling eth_chainId; expected ${network.name} chain ${network.chain.id.toString()}`)
+	const available = (await Promise.allSettled(chainReads)).find(result => result.status === 'fulfilled')
+	const client = available === undefined ? undefined : readClients[available.value.index]
+	if (available === undefined || client === undefined) throw new Error('Configured chain validation requires an available read RPC endpoint')
+	return { client, rpcUrl: endpoints[available.value.index] }
 }
