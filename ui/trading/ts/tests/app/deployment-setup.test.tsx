@@ -206,6 +206,13 @@ describe('trading deployment setup', () => {
 		cleanupRendered = rendered.cleanup
 		await waitForText('Security pool factory is not deployed')
 		expect(rendered.container.textContent).not.toContain('Unable to inspect the selected deployment')
+		// The inspection badge states the blocked reason once; the disabled deploy action references it instead of repeating it.
+		expect(rendered.container.textContent?.match(/Security pool factory is not deployed/gi) ?? []).toHaveLength(1)
+		const deployButton = rendered.container.querySelector<HTMLButtonElement>('.tx-action-button')
+		expect(deployButton?.disabled).toBe(true)
+		const describedBy = deployButton?.getAttribute('aria-describedby')
+		expect(describedBy).toBeTruthy()
+		expect(rendered.container.querySelector(`[id="${describedBy}"]`)?.textContent).toBe('Security pool factory is not deployed')
 		expect(rendered.container.textContent).toContain(plan.factory.address)
 		expect(rendered.container.textContent).toContain(plan.router.address)
 		expect(rendered.container.textContent).toContain('0 / 2')

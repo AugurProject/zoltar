@@ -40,11 +40,12 @@ type ForkTargetPickerProps = {
 	title: string
 }
 
-function renderTargetRow(target: ForkTargetOption, selected: boolean, disabled: boolean, onToggle: (outcomeIndex: bigint) => void) {
+/** A row in a mixed list marks selection with a badge; a list that only holds selected targets does not repeat it. */
+function renderTargetRow(target: ForkTargetOption, selected: boolean, disabled: boolean, onToggle: (outcomeIndex: bigint) => void, { selectedOnlyList = false } = {}) {
 	return {
 		details: (
 			<>
-				{selected ? <Badge>{commonCopy.selected}</Badge> : undefined}
+				{selected && !selectedOnlyList ? <Badge>{commonCopy.selected}</Badge> : undefined}
 				<Badge tone={target.status.tone}>{target.status.label}</Badge>
 			</>
 		),
@@ -81,7 +82,7 @@ function ScalarTargets({ disabled, onToggle, question, selectedOutcomeIndexes, s
 
 	return (
 		<div className='fork-target-scalar-picker'>
-			<OutcomeSelectionList className='fork-target-selection' emptyMessage={forkTargetCopy.noTargetsSelected} items={selectedOutcomeIndexes.map(outcomeIndex => renderTargetRow(question.resolveTarget(outcomeIndex), true, disabled, onToggle))} />
+			<OutcomeSelectionList className='fork-target-selection' emptyMessage={forkTargetCopy.noTargetsSelected} items={selectedOutcomeIndexes.map(outcomeIndex => renderTargetRow(question.resolveTarget(outcomeIndex), true, disabled, onToggle, { selectedOnlyList: true }))} />
 			<ScalarOutcomePicker
 				action={
 					<button type='button' className='secondary' disabled={disabled || candidate === undefined} onClick={() => candidate === undefined || onToggle(candidate.outcomeIndex)}>

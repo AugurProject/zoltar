@@ -129,6 +129,8 @@ describe('fork migration target selection', () => {
 
 		expect(rendered.container.textContent).toContain('Child pool missing')
 		expect(rendered.container.textContent).not.toContain('will be created')
+		// A list that only holds selected targets does not repeat a Selected badge on every row.
+		expect(Array.from(rendered.container.querySelectorAll('.fork-target-selection .badge'), badge => badge.textContent)).toEqual(['Child pool missing'])
 	})
 
 	test('selects labeled categorical targets independently from source INVALID, YES, and NO shares', async () => {

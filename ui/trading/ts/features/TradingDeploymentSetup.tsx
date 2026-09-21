@@ -3,7 +3,7 @@ import { createPublicClient, http, type Hash, type PublicClient } from '@zoltar/
 import { getActiveBackend, getActiveNetworkProfile } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import type { ChainBackend } from '@zoltar/ui-core-shared/wallet/chainBackend.js'
 import { resolveConfiguredRpcUrl } from '@zoltar/ui-core-shared/wallet/rpcConfig.js'
-import { useEffect, useRef, useState } from 'preact/hooks'
+import { useEffect, useId, useRef, useState } from 'preact/hooks'
 import { Badge } from '@zoltar/ui-core-shared/components/Badge.js'
 import { DeploymentStepList } from '@zoltar/ui-core-shared/components/DeploymentStepList.js'
 import { TransactionActionButton } from '@zoltar/ui-core-shared/components/TransactionActionButton.js'
@@ -395,6 +395,10 @@ export function TradingDeploymentSetup({
 	const inspectionIsCurrent = inspectedRevision === inputRevision.current
 	const inspection = inspectionPresentation(inspectionState, { busy, deploymentComplete, inputError: inputError !== undefined, plan: plan !== undefined, registryError: registryError !== undefined, registryLoading })
 	const retryChecks = registryError !== undefined || inspectionState === 'error'
+	const inspectionBadgeId = useId()
+	const deployAvailability = deploymentActionAvailability({ inspectionIsCurrent, inspectionState, nextStep: nextStep !== undefined, registryError: registryError !== undefined, registryLoading, selectedCoreChainName: selectedCore?.chainName, walletConnected, walletReady })
+	// The inspection badge already states the blocked reason; the action references it instead of repeating it.
+	const reasonShownByInspectionBadge = inspection !== undefined && inspection.label === deployAvailability.reason
 	let standaloneWalletButton
 	if (walletControlRequestNonce === undefined)
 		standaloneWalletButton = walletConnected ? (
@@ -482,7 +486,11 @@ export function TradingDeploymentSetup({
 				{plan === undefined ? null : <DeploymentStepList steps={deploymentSteps.map(({ step, presentation }) => ({ address: step.address, badge: presentation, key: step.id, label: step.label }))} />}
 				<div className='deployment-setup__status' role='status' aria-live='polite'>
 					<MetricField label={deploymentCopy.deploymentProgress}>{deploymentProgress(deploymentStatus, 2)}</MetricField>
-					{inspection === undefined ? null : <Badge tone={inspection.tone}>{inspection.label}</Badge>}
+					{inspection === undefined ? null : (
+						<Badge id={inspectionBadgeId} tone={inspection.tone}>
+							{inspection.label}
+						</Badge>
+					)}
 				</div>
 				<ErrorNotice message={walletConnected && !walletReady && selectedCore !== undefined ? deploymentCopy.connectedWalletMustUseNetwork(selectedCore.chainName) : undefined} />
 				<ErrorNotice message={walletConnectionMessage} />
@@ -496,11 +504,13 @@ export function TradingDeploymentSetup({
 				<div className='actions'>
 					{deploymentComplete ? null : (
 						<TransactionActionButton
-							availability={deploymentActionAvailability({ inspectionIsCurrent, inspectionState, nextStep: nextStep !== undefined, registryError: registryError !== undefined, registryLoading, selectedCoreChainName: selectedCore?.chainName, walletConnected, walletReady })}
+							availability={deployAvailability}
+							disabledReasonElementId={reasonShownByInspectionBadge ? inspectionBadgeId : undefined}
 							idleLabel={deploymentActionLabel(false, nextStep, plan, deploymentStatus)}
 							pendingLabel={deploymentActionLabel(true, nextStep, plan, deploymentStatus)}
 							pending={busy}
 							onClick={() => void deployNext()}
+							showDisabledReason={!reasonShownByInspectionBadge}
 						/>
 					)}
 					{retryAction}
