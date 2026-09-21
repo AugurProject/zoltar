@@ -77,14 +77,6 @@ function priorityFeePerGas(amount: string) {
 	return `${amount} nETH / gas`
 }
 
-function securityPoolDiscoveryFailed(error: string) {
-	return `Security pool discovery failed: ${error}`
-}
-
-function securityPoolFactoryDiscoveryFailed(error?: string) {
-	return `Security pool discovery failed: ${error ?? ''}`
-}
-
 const securityPoolDiscoveryFailedLead = 'Security pool discovery failed'
 const universeDiscoveryFailedLead = 'Universe discovery failed'
 
@@ -97,6 +89,14 @@ function discoveryFailureLead(route: string) {
 function describeDiscoveryFailure(lead: string, detail?: string) {
 	if (detail === undefined) return `${lead}: ${unknownDiscovery}`
 	return detail.startsWith(lead) ? detail : `${lead}: ${detail}`
+}
+
+function securityPoolDiscoveryFailed(error: string) {
+	return describeDiscoveryFailure(securityPoolDiscoveryFailedLead, error)
+}
+
+function securityPoolFactoryDiscoveryFailed(error?: string) {
+	return describeDiscoveryFailure(securityPoolDiscoveryFailedLead, error)
 }
 
 function securityPoolCouldNotLoad(error: string) {

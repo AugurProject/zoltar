@@ -132,12 +132,13 @@ describe('universe directory', () => {
 		cleanupRendered = rendered.cleanup
 		await waitFor(() => expect(rendered.container.textContent).toContain('Universe discovery failed: registry RPC unavailable'))
 		expect(rendered.container.textContent).not.toContain('Security pool discovery failed')
-		expect(discoveryStates.at(-1)).toBe('error')
+		await waitFor(() => expect(discoveryStates.at(-1)).toBe('error'))
 		expect(rendered.container.textContent).not.toContain('Loading universe details')
 		expect(rendered.container.querySelector('#app-content, .route-header')?.textContent).toContain('Universe')
 		await act(() => within(rendered.container).getByRole('button', { name: 'Retry' }).click())
 		await waitFor(() => expect(universesChanges.at(-1)).toEqual([0n, 1n]))
-		expect(discoveryStates.at(-1)).toBe('ready')
+		// The state callback runs from an effect, one commit after the answer itself.
+		await waitFor(() => expect(discoveryStates.at(-1)).toBe('ready'))
 		// The shell confirms the universe from the discovery result; until then the route keeps its loading state.
 		expect(rendered.container.textContent).toContain('Loading universe details')
 		expect(rendered.container.textContent).not.toContain('Child universes')
@@ -162,6 +163,21 @@ describe('universe directory', () => {
 		expect(notice).toBe('Universe discovery failed')
 		expect(notice).not.toContain('Security pool')
 		expect(notice).not.toContain('0xab')
+	})
+
+	test('names a redacted portfolio discovery failure once as well', async () => {
+		const services = {
+			...liveTradingControllerServices,
+			createTradingPublicClient: () => ({}),
+			validateLiveDeployment: async () => undefined,
+			discoverAllLiveMarketsInUniverse: async () => {
+				throw new Error(`call to 0x${'ab'.repeat(20)} reverted`)
+			},
+		}
+		const rendered = await renderIntoDocument(<LiveTrading route='portfolio' configuration={configuration} configurationError={undefined} selectedUniverseId='0' confirmedUniverseId='0' onWorkflowLockChange={() => undefined} controllerServices={services} />)
+		cleanupRendered = rendered.cleanup
+		await waitFor(() => expect(rendered.container.textContent).toContain('Security pool discovery failed'))
+		for (const alert of Array.from(rendered.container.querySelectorAll('[role="alert"]'))) expect(alert.textContent?.match(/Security pool discovery failed/g) ?? []).toHaveLength(1)
 	})
 
 	test('changing the universe does not count as an environment change', () => {

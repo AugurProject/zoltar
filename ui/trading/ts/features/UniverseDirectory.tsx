@@ -12,6 +12,7 @@ import { UniverseLink } from '@zoltar/ui-zoltar-shared/features/universes/compon
 import { loadZoltarUniverseSummary } from '@zoltar/ui-zoltar-shared/protocol/zoltar.js'
 import type { DeploymentConfiguration } from '../protocol/config.js'
 import { createTradingPublicClient, publicErrorMessage } from '../protocol/live.js'
+import { withReadTimeout } from '@zoltar/ui-core-shared/lib/promise.js'
 import * as appCopy from '../copy/app.js'
 
 export type LoadUniverseSummary = (configuration: DeploymentConfiguration, universeId: bigint) => Promise<ZoltarUniverseSummary | undefined>
@@ -41,7 +42,7 @@ export function UniverseDirectory({ configuration, connectionMessage, loadUniver
 		setState({ kind: 'loading' })
 		void (async () => {
 			try {
-				const universe = await loadUniverse(configuration, universeId)
+				const universe = await withReadTimeout(loadUniverse(configuration, universeId))
 				if (active) setState({ kind: 'ready', universe })
 			} catch (error) {
 				if (active) setState({ kind: 'error', message: publicErrorMessage(error, appCopy.universeUnavailable) })

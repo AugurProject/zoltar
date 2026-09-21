@@ -4,7 +4,7 @@ export type UniverseDiscoveryScope = Readonly<{ requestedUniverseId: bigint | un
 export type LiveUniverses = Readonly<{
 	ids: readonly bigint[]
 	selected: bigint | undefined
-	/** The `universe` parameter value that was current when this answer arrived; only that request may be rewritten from it. */
+	/** The `universe` parameter value the request was made for; only that request may be rewritten from its answer. */
 	forRequest: bigint | undefined
 	/** The addressed pool whose market produced this answer; an addressed answer speaks only for that pool's route. */
 	forPool: string | undefined

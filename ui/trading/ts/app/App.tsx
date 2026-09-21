@@ -132,7 +132,7 @@ export function App({
 	const selectedUniverseId = universeSelection.requestedUniverseId
 	const confirmedUniverseId = universeSelection.confirmedUniverseId
 	useEffect(() => {
-		// An unknown request is replaced by the universe discovery chose, so the URL, header, and routes agree.
+		// An unknown request is replaced by the universe that discovery chose, so the URL, header, and routes agree.
 		if (universeSelection.replaceUrlUniverseId !== undefined) applyUrlStateUpdate(writeUniverseQueryParam(getOwnedSearch(), universeSelection.replaceUrlUniverseId), 'replace')
 	}, [applyUrlStateUpdate, getOwnedSearch, universeSelection.replaceUrlUniverseId])
 	const updateWorkflowLock = useCallback((locked: boolean) => {

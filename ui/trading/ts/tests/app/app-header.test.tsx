@@ -104,7 +104,7 @@ describe('trading header', () => {
 		await waitFor(() => expect(rendered.container.querySelector('.header-toolbar-controls .toolbar-field-value')?.textContent).toBe('Universe 0x5'))
 	})
 
-	test('attributes a late discovery answer to the request it began with, not to the universe the URL moved to', async () => {
+	test('a request superseded while in flight settles nothing; only the answer to the current universe request does', async () => {
 		window.history.replaceState(undefined, '', '/#/universe?universe=5')
 		const configuration: DeploymentConfiguration = { chainId: 31_337, chainName: 'Local', rpcUrl: 'http://127.0.0.1:1', securityPoolFactory: `0x${'11'.repeat(20)}`, factory: `0x${'22'.repeat(20)}`, router: `0x${'33'.repeat(20)}`, feeBps: 30 }
 		const answers: Array<ReturnType<typeof createDeferred<{ start: bigint; count: bigint; total: bigint; previousStart: undefined; nextStart: undefined; markets: never[]; universeIds: bigint[]; selectedUniverseId: bigint }>>> = []
@@ -130,7 +130,7 @@ describe('trading header', () => {
 			answers[0]?.resolve({ start: 0n, count: 0n, total: 0n, previousStart: undefined, nextStart: undefined, markets: [], universeIds: [0n, 5n], selectedUniverseId: 5n })
 			await Bun.sleep(20)
 		})
-		// The universe-5 answer neither confirms nor rewrites the universe-7 request.
+		// The superseded universe-5 answer neither confirms nor rewrites the universe-7 request.
 		expect(window.location.hash).toBe('#/universe?universe=7')
 		expect(rendered.container.querySelector('.header-toolbar-controls .toolbar-field-value')?.textContent).toContain('Loading')
 		// Only the answer to the universe-7 request settles it (7 is unknown, so it falls back to genesis and rewrites).
