@@ -59,12 +59,12 @@ const getCoordinatorMinimumToken1Report = async (client: ReadClient, priceOracle
 		args: [],
 	})
 
-const getDefaultInitialReportPrice = async (client: ReadClient, priceOracleManagerAndOperatorQueuer: Address) => {
+export const getDefaultInitialReportPrice = async (client: ReadClient, priceOracleManagerAndOperatorQueuer: Address) => {
 	const lastPrice = await getLastPrice(client, priceOracleManagerAndOperatorQueuer)
 	return lastPrice > 0n ? lastPrice : PRICE_PRECISION
 }
 
-const fundCoordinatorInitialReport = async (client: WriteClient, priceOracleManagerAndOperatorQueuer: Address, proposedRepPerEthPrice: bigint, requestedInitialAttoWeth = 0n) => {
+export const fundCoordinatorInitialReport = async (client: WriteClient, priceOracleManagerAndOperatorQueuer: Address, proposedRepPerEthPrice: bigint, requestedInitialAttoWeth = 0n) => {
 	const [minimumToken1ReportAttoEth, rawReputationTokenAddress] = await Promise.all([
 		getCoordinatorMinimumToken1Report(client, priceOracleManagerAndOperatorQueuer),
 		client.readContract({
@@ -108,10 +108,22 @@ const fundCoordinatorInitialReport = async (client: WriteClient, priceOracleMana
 	return { maximumAmount2, maximumInitialAttoWeth, minimumToken1ReportAttoEth, proposedRepPerEthPrice, requestedInitialAttoWeth }
 }
 
-export const requestPriceIfNeededAndStageOperationWithValue = async (client: WriteClient, priceOracleManagerAndOperatorQueuer: Address, operation: OperationType, targetVault: Address, amount: bigint, validForSeconds: bigint, value: bigint) =>
-	await requestPriceIfNeededAndStageOperationWithInitialReportPrice(client, priceOracleManagerAndOperatorQueuer, operation, targetVault, amount, validForSeconds, await getDefaultInitialReportPrice(client, priceOracleManagerAndOperatorQueuer), value)
+// The committed bounty defaults to the sent value so the coordinator retains everything the caller funds.
+export const requestPriceIfNeededAndStageOperationWithValue = async (client: WriteClient, priceOracleManagerAndOperatorQueuer: Address, operation: OperationType, targetVault: Address, amount: bigint, validForSeconds: bigint, value: bigint, bountyAttoEth = value) =>
+	await requestPriceIfNeededAndStageOperationWithInitialReportPrice(client, priceOracleManagerAndOperatorQueuer, operation, targetVault, amount, validForSeconds, await getDefaultInitialReportPrice(client, priceOracleManagerAndOperatorQueuer), value, 0n, bountyAttoEth)
 
-export const requestPriceIfNeededAndStageOperationWithInitialReportPrice = async (client: WriteClient, priceOracleManagerAndOperatorQueuer: Address, operation: OperationType, targetVault: Address, amount: bigint, validForSeconds: bigint, proposedRepPerEthPrice: bigint, value: bigint, requestedInitialAttoWeth = 0n) => {
+export const requestPriceIfNeededAndStageOperationWithInitialReportPrice = async (
+	client: WriteClient,
+	priceOracleManagerAndOperatorQueuer: Address,
+	operation: OperationType,
+	targetVault: Address,
+	amount: bigint,
+	validForSeconds: bigint,
+	proposedRepPerEthPrice: bigint,
+	value: bigint,
+	requestedInitialAttoWeth = 0n,
+	bountyAttoEth = value,
+) => {
 	const shouldRequestPrice = !(await getIsPriceValid(client, priceOracleManagerAndOperatorQueuer)) && (await getPendingReportId(client, priceOracleManagerAndOperatorQueuer)) === 0n && (await getPendingSettlementOperationCount(client, priceOracleManagerAndOperatorQueuer)) === 0n
 	if (shouldRequestPrice) {
 		await fundCoordinatorInitialReport(client, priceOracleManagerAndOperatorQueuer, proposedRepPerEthPrice, requestedInitialAttoWeth)
@@ -121,7 +133,7 @@ export const requestPriceIfNeededAndStageOperationWithInitialReportPrice = async
 			abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
 			functionName: 'requestPriceIfNeededAndStageOperation',
 			address: priceOracleManagerAndOperatorQueuer,
-			args: [operation, targetVault, amount, validForSeconds, proposedRepPerEthPrice, requestedInitialAttoWeth],
+			args: [operation, targetVault, amount, validForSeconds, proposedRepPerEthPrice, requestedInitialAttoWeth, bountyAttoEth],
 			value,
 			gas: HIGH_GAS_SIMULATOR_WRITE_GAS,
 		}),
@@ -147,7 +159,7 @@ export const queueDelegatedLiquidationAtForcedPrice = async (client: WriteClient
 			abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
 			functionName: 'requestPriceIfNeededAndStageLiquidation',
 			address: priceOracleManagerAndOperatorQueuer,
-			args: [targetVault, receiverVault, requestedDebtAttoEth, approvalId, validForSeconds, forcedPrice, 0n],
+			args: [targetVault, receiverVault, requestedDebtAttoEth, approvalId, validForSeconds, forcedPrice, 0n, costAttoEth],
 			value: costAttoEth,
 			gas: HIGH_GAS_SIMULATOR_WRITE_GAS,
 		}),
@@ -170,7 +182,7 @@ export const requestPrice = async (client: WriteClient, priceOracleManagerAndOpe
 	return await requestPriceWithValue(client, priceOracleManagerAndOperatorQueuer, costAttoEth, await getDefaultInitialReportPrice(client, priceOracleManagerAndOperatorQueuer))
 }
 
-export const requestPriceWithValue = async (client: WriteClient, priceOracleManagerAndOperatorQueuer: Address, value: bigint, proposedRepPerEthPrice?: bigint, requestedInitialAttoWeth = 0n) => {
+export const requestPriceWithValue = async (client: WriteClient, priceOracleManagerAndOperatorQueuer: Address, value: bigint, proposedRepPerEthPrice?: bigint, requestedInitialAttoWeth = 0n, bountyAttoEth = value) => {
 	const resolvedInitialReportPrice = proposedRepPerEthPrice ?? (await getDefaultInitialReportPrice(client, priceOracleManagerAndOperatorQueuer))
 	await fundCoordinatorInitialReport(client, priceOracleManagerAndOperatorQueuer, resolvedInitialReportPrice, requestedInitialAttoWeth)
 	return await writeContractAndWait(client, () =>
@@ -178,7 +190,7 @@ export const requestPriceWithValue = async (client: WriteClient, priceOracleMana
 			abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
 			functionName: 'requestPrice',
 			address: priceOracleManagerAndOperatorQueuer,
-			args: [resolvedInitialReportPrice, requestedInitialAttoWeth],
+			args: [resolvedInitialReportPrice, requestedInitialAttoWeth, bountyAttoEth],
 			value,
 			gas: HIGH_GAS_SIMULATOR_WRITE_GAS,
 		}),

@@ -24,7 +24,7 @@ test('shows every step, token deposit, expected return and ETH cost before the f
 				{ amount: '3 REP', limit: '6 REP' },
 				{ amount: '1 WETH', limit: '2 WETH' },
 			],
-			oracleOutcome: { settlerRewardAttoEth: 10n, ethRefundAttoEth: 2n, returnToWallet: true },
+			oracleOutcome: { settlerRewardAttoEth: 12n, returnToWallet: true },
 		},
 	])
 	let confirmed = false
@@ -39,8 +39,8 @@ test('shows every step, token deposit, expected return and ETH cost before the f
 		expect(queries.getByRole('button', { name: /Approve WETH spending/ })).not.toBeNull()
 		expect(queries.getByText('3 REP')).not.toBeNull()
 		expect(queries.getByText('1 WETH')).not.toBeNull()
-		expect(queries.getByText('Settler bounty (est.)')).not.toBeNull()
-		expect(queries.getByText('Request refund (est.)')).not.toBeNull()
+		expect(queries.getByText('Settler bounty')).not.toBeNull()
+		expect(queries.queryByText(/Request refund/)).toBeNull()
 		expect(queries.getByRole('button', { name: /Request price/ })).not.toBeNull()
 		expect(confirmed).toBe(false)
 		await act(() => fireEvent.click(queries.getByRole('button', { name: /Approve REP spending/ })))
@@ -70,7 +70,7 @@ for (const choice of ['custom', 'max'] as const) {
 					{ amount: '3 REP', limit: '6 REP' },
 					{ amount: '1 WETH', limit: '2 WETH' },
 				],
-				oracleOutcome: { settlerRewardAttoEth: 10n, ethRefundAttoEth: 2n, returnToWallet: true },
+				oracleOutcome: { settlerRewardAttoEth: 12n, returnToWallet: true },
 			},
 		])
 		const review = controller.review()
@@ -95,8 +95,7 @@ for (const choice of ['custom', 'max'] as const) {
 			expect(await review).toBe(choice === 'custom' ? 9n : 2n ** 256n - 1n)
 			expect(transactionSteps.value?.steps[1]?.phase).toBe('upcoming')
 			expect(rendered.container.querySelector('.transaction-funding')).toBe(funding)
-			expect(funding.textContent).toContain('Settler bounty (est.)')
-			expect(funding.textContent).toContain('Request refund (est.)')
+			expect(funding.textContent).toContain('Settler bounty')
 			const hash = '0x1111111111111111111111111111111111111111111111111111111111111111'
 			await act(() => {
 				controller.submitted(hash)

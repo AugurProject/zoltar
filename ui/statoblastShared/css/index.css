@@ -952,18 +952,6 @@
 	overflow-wrap: anywhere;
 }
 
-.liquidation-modal-actions {
-	align-items: flex-start;
-}
-
-.liquidation-modal-actions > .tx-action {
-	align-self: flex-start;
-}
-
-.liquidation-modal-actions > button {
-	align-self: flex-start;
-}
-
 .reporting-header-stack {
 	display: grid;
 	gap: 1rem;
@@ -2932,13 +2920,19 @@
 	}
 	.liquidation-modal-actions {
 		display: grid;
-		grid-template-columns: auto minmax(0, 1fr);
+		grid-template-columns: minmax(0, 1fr);
 		margin: 0;
 		padding: var(--space-3);
 		border-top: 1px solid var(--border-default);
 		background: var(--surface-modal-opaque);
 		max-height: 35dvh;
 		overflow-y: auto;
+	}
+
+	/* The wrapped action label needs the full width, so Cancel keeps the right edge on its own row. */
+	.liquidation-modal-actions > button:last-child {
+		justify-self: end;
+		margin-inline-start: 0;
 	}
 }
 
@@ -2995,8 +2989,10 @@
 	min-block-size: 4rem;
 }
 
+/* The price-request confirm button is taller than a plain button, so its Cancel neighbour matches that height. */
 .operation-modal-body:has(> .request-price-fields) .transaction-step-close > button {
 	inline-size: 5rem;
+	min-block-size: 4rem;
 }
 
 @media (max-width: 600px) {
@@ -3013,7 +3009,8 @@
 		min-block-size: 3.625rem;
 	}
 
-	.operation-modal-body:has(> .request-price-fields) .transaction-plan-action-final .tx-action-button {
+	.operation-modal-body:has(> .request-price-fields) .transaction-plan-action-final .tx-action-button,
+	.operation-modal-body:has(> .request-price-fields) .transaction-step-close > button {
 		min-block-size: 4.875rem;
 	}
 

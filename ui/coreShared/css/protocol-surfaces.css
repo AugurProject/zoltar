@@ -1911,7 +1911,7 @@ main.global-transaction-tray-open :is(a, button, input, select, summary, textare
 .transaction-plan-action-final {
 	display: grid;
 	grid-template-columns: minmax(0, 1fr) auto;
-	align-items: end;
+	align-items: start;
 	gap: 0.5rem;
 }
 

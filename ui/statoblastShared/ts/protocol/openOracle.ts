@@ -350,7 +350,7 @@ export async function createOpenOracleReportInstance(
 	}
 	await runFundingTransactions(client, actions, {
 		functionName: 'report',
-		oracleOutcome: { settlerRewardAttoEth: parameters.settlerRewardAttoEth, ethRefundAttoEth: 0n, returnToWallet: false },
+		oracleOutcome: { settlerRewardAttoEth: parameters.settlerRewardAttoEth, returnToWallet: false },
 		contractAddress: getOpenOracleAddress(),
 		value: parameters.ethValueAttoEth,
 		tokenFunding: [

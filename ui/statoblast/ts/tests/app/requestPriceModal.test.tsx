@@ -403,8 +403,7 @@ test('keeps the funding and action layout visible with unknown values until an e
 		const queries = within(document.body)
 		expect(queries.getByText('Enter an estimated REP per ETH price, or fetch it from Uniswap.')).not.toBeNull()
 		expect(document.querySelector('.transaction-funding')?.textContent).toContain('— REP')
-		expect(queries.getByText('Settler bounty (est.)')).not.toBeNull()
-		expect(queries.getByText('Request refund (est.)')).not.toBeNull()
+		expect(queries.getByText('Settler bounty')).not.toBeNull()
 		for (const name of [/Approve REP/, /Approve WETH/, /^Request price/]) {
 			const button = queries.getByRole('button', { name })
 			expect(button.hasAttribute('disabled')).toBe(true)

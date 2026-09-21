@@ -433,9 +433,6 @@ export function LiquidationModal({
 					<LiquidationTransactionReview receiverHealthy={receiverHealthy} liquidationExecutionMode={liquidationExecutionMode} liquidationFundingPreview={liquidationFundingPreview} liquidationSimulation={liquidationSimulation} selectedPool={selectedPool} walletBalanceAttoEth={walletBalanceAttoEth} />
 				</div>
 				<div className='actions liquidation-modal-actions'>
-					<button className='secondary' onClick={closeLiquidationModal}>
-						{commonCopy.cancel}
-					</button>
 					<TransactionActionButton
 						disabledReasonElementId={delegatedReceiver && loadingLiquidationReceiverVaultSummary ? 'liquidation-receiver-loading-status' : undefined}
 						idleLabel={buttonLabels.idle}
@@ -452,6 +449,9 @@ export function LiquidationModal({
 						}}
 						showDisabledReason={!(delegatedReceiver && loadingLiquidationReceiverVaultSummary)}
 					/>
+					<button className='secondary' onClick={closeLiquidationModal}>
+						{commonCopy.cancel}
+					</button>
 				</div>
 			</section>
 		</div>

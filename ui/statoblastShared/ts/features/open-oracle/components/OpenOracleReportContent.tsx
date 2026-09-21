@@ -390,7 +390,6 @@ export function renderSelectedReportActionSection({
 								pendingLabel={openOracleCopy.submittingDispute}
 								onClick={onDisputeReport}
 								pending={openOracleActiveAction === 'dispute'}
-								tone='secondary'
 								availability={{
 									disabled: !isConnected || !isOnActiveAppChain || openOracleForm.reportId.trim() === '' || !disputeAvailability.canAct || disputeSubmission?.canSubmit === false,
 									reason: disputeActionDisabledReason,
@@ -438,7 +437,6 @@ export function renderSelectedReportActionSection({
 								pendingLabel={openOracleCopy.settlingReport}
 								onClick={onSettleReport}
 								pending={openOracleActiveAction === 'settle'}
-								tone='secondary'
 								availability={{
 									disabled: !isConnected || !isOnActiveAppChain || openOracleForm.reportId.trim() === '' || !settleAvailability.canAct,
 									reason: settleActionDisabledReason,

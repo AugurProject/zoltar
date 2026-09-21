@@ -16,7 +16,7 @@ export function PriceRequestPreview({ requestValue, reason, error, preparing, hi
 	return (
 		<>
 			<div className='transaction-step-content'>
-				<TransactionFundingSummary funding={[commonCopy.rep, commonCopy.weth].map(symbol => ({ amount: `${commonCopy.metricUnavailablePlaceholder} ${symbol}` }))} totalAttoEth={undefined} outcome={{ returnToWallet: true, settlerRewardAttoEth: undefined, ethRefundAttoEth: undefined }} />
+				<TransactionFundingSummary funding={[commonCopy.rep, commonCopy.weth].map(symbol => ({ amount: `${commonCopy.metricUnavailablePlaceholder} ${symbol}` }))} totalAttoEth={undefined} outcome={{ returnToWallet: true, settlerRewardAttoEth: undefined }} />
 				<p className='detail transaction-funding-note'>{copy.fundingDetail}</p>
 			</div>
 			<div className='transaction-step-actions transaction-approval-editor'>

@@ -88,7 +88,6 @@ export function VaultRepExitActionButton({
 			pendingLabel={repExitMode === 'redeem' ? securityPoolCopy.redeemingRep : securityPoolCopy.withdrawingRep}
 			onClick={repExitMode === 'redeem' ? onRedeemRepFromVault : onWithdrawRep}
 			pending={repExitMode === 'redeem' ? securityVaultActiveAction === 'redeemRepFromVault' : securityVaultActiveAction === 'queueWithdrawRep'}
-			tone='secondary'
 			availability={{
 				disabled: !repExitEnabled || !canUseLoadedVaultActions || (repExitMode === 'withdraw' && (!hasPositiveWithdrawAmount || !hasWithdrawableRep)) || repExitGuardMessage !== undefined,
 				reason: canUseLoadedVaultActions ? repExitGuardMessage : undefined,
