@@ -32,7 +32,7 @@ export type TransactionPlanStep = Pick<TransactionRequestPreview, 'functionName'
 	Partial<TransactionRequestPreview> & {
 		refreshFundingRequirements?: () => Promise<TransactionPlanStep['tokenFunding']>
 		optional?: boolean
-		oracleOutcome?: { settlerRewardAttoEth: bigint; ethRefundAttoEth: bigint; returnToWallet: boolean }
+		oracleOutcome?: { settlerRewardAttoEth: bigint; returnToWallet: boolean }
 		tokenFunding?: readonly { tokenAddress: Address; amount: bigint; limit?: bigint }[]
 	}
 

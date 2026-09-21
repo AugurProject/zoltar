@@ -75,8 +75,8 @@ export const contractSafetyPolicy = {
 				sourcePath: 'contracts/statoblast/OpenOraclePriceCoordinator.sol',
 				contractName: 'OpenOraclePriceCoordinator',
 			},
-			23_958,
-			'The reviewed coordinator supersedes older queued vault targets while preserving collateral validation; no further runtime growth is permitted.',
+			24_050,
+			'The reviewed coordinator takes an explicit request bounty and derives the settlement base-fee cap from it so fee-free simulations match mined gas and ETH movement; no further runtime growth is permitted.',
 		),
 		runtimeBudget(
 			{
