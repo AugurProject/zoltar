@@ -25,13 +25,15 @@ describe('trading header', () => {
 		url: 'http://localhost/#/market',
 	})
 
-	test('names the universe from the shared query parameter and offers the universe route instead of a header control', async () => {
-		window.history.replaceState(undefined, '', '/#/market?universe=2')
+	test('keeps a requested universe unconfirmed until discovery answers and offers the universe route instead of a header control', async () => {
+		window.history.replaceState(undefined, '', '/#/universe?universe=2')
 		const rendered = await renderIntoDocument(<App loadLiveDeployment={() => new Promise<DeploymentConfiguration>(() => undefined)} />)
 		cleanupRendered = rendered.cleanup
-		const universeField = rendered.container.querySelector('.header-toolbar-controls .toolbar-field-value')
-		expect(universeField?.textContent).toBe('Universe 0x2')
-		expect(universeField?.querySelector('span')?.getAttribute('title')).toBe('Universe 0x2')
+		// The header and the universe route show a loading state, never the unconfirmed ID, so an unknown request cannot flash as a universe.
+		expect(rendered.container.querySelector('.header-toolbar-controls .toolbar-field-value')?.textContent).toContain('Loading')
+		expect(rendered.container.textContent).not.toContain('Universe 0x2')
+		expect(rendered.container.textContent).not.toContain('not deployed')
+		expect(rendered.container.querySelector('#app-content .route-header')?.textContent).toContain('Universe')
 		expect(rendered.container.querySelector('.header-toolbar-controls select')).toBeNull()
 		const universeTab = Array.from(rendered.container.querySelectorAll<HTMLAnchorElement>('.tab-nav a')).find(anchor => anchor.textContent === 'Universe')
 		expect(universeTab?.getAttribute('href')).toBe('#/universe?universe=2')

@@ -65,14 +65,14 @@ export function UniverseDirectory({ configuration, loadUniverse = loadUniverseSu
 	return (
 		<div className='route-view-flow'>
 			<RouteHeader title={appCopy.universe} description={appCopy.universeRouteDescription} actions={genesisAction} />
-			{state.kind === 'loading' ? <StateHint announcement='polite' presentation={{ key: 'loading', badgeLabel: commonCopy.loading, badgeTone: 'loading', detail: appCopy.loadingUniverse, detailIsLoading: true }} /> : undefined}
+			{state.kind === 'loading' ? <StateHint announcement='polite' presentation={{ key: 'loading', badgeLabel: commonCopy.loading, badgeTone: 'loading', detail: commonCopy.loadingUniverseDetails, detailIsLoading: true }} /> : undefined}
 			{state.kind === 'error' ? <RetryableNotice onRetry={() => setRetryNonce(current => current + 1)} retryLabel={commonCopy.retry} presentation={{ key: 'load_failed', badgeLabel: commonCopy.error, badgeTone: 'blocked', detail: state.message }} /> : undefined}
 			{state.kind === 'ready' && state.universe === undefined ? <StateHint presentation={{ key: 'not_found', badgeLabel: commonCopy.notFound, badgeTone: 'blocked', detail: appCopy.universeNotFound(formatUniverseLabel(universeId)) }} /> : undefined}
 			{state.kind === 'ready' && state.universe !== undefined ? (
 				<UniverseDirectorySection zoltarUniverse={state.universe}>
-					<SectionBlock title={appCopy.childUniverses} variant='plain'>
+					<SectionBlock title={commonCopy.childUniverses} variant='plain'>
 						{state.universe.childUniverses.length === 0 ? (
-							<StateHint presentation={{ key: 'empty', badgeLabel: commonCopy.universe, badgeTone: 'muted', detail: appCopy.childUniversesEmpty }} />
+							<StateHint presentation={{ key: 'empty', badgeLabel: commonCopy.universe, badgeTone: 'muted', detail: commonCopy.childUniversesEmpty }} />
 						) : (
 							<div className='entity-card-list decision-card-list'>
 								{state.universe.childUniverses.map(childUniverse => {

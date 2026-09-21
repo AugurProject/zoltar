@@ -13,8 +13,6 @@ export const createQuestionAndPool = 'Create question and pool'
 export const creatingQuestionAndPool = 'Creating question and pool…'
 export const poolCreationInProgress = 'Security pool creation is already in progress.'
 export const universesDescription = undefined
-export const childUniversesTitle = 'Child universes'
-export const childUniversesEmptyDetail = 'No child universes are deployed for this universe.'
 export const createPoolFromQuestion = 'Create pool from question'
 export const formatCreatePoolFromQuestionLabel = (questionTitle: string, questionId: string) => `Create pool from question: ${questionTitle} (${questionId})`
 export const badDebt = 'Bad Debt'

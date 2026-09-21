@@ -65,9 +65,9 @@ export function UniversePoolDirectorySection({ activeUniverseId, loadingSecurity
 				</UniverseContextSummary>
 			</SectionBlock>
 
-			<SectionBlock title={securityPoolCopy.childUniversesTitle} variant='plain'>
+			<SectionBlock title={commonCopy.childUniverses} variant='plain'>
 				{zoltarUniverse.childUniverses.length === 0 ? (
-					<StateHint presentation={{ key: 'empty', badgeLabel: commonCopy.universe, badgeTone: 'muted', detail: securityPoolCopy.childUniversesEmptyDetail }} />
+					<StateHint presentation={{ key: 'empty', badgeLabel: commonCopy.universe, badgeTone: 'muted', detail: commonCopy.childUniversesEmpty }} />
 				) : (
 					<div className='entity-card-list decision-card-list'>
 						{zoltarUniverse.childUniverses.map(childUniverse => {

@@ -68,6 +68,7 @@ export function LiveTrading({
 	configuration,
 	configurationError,
 	selectedUniverseId,
+	confirmedUniverseId,
 	loadUniverseSummary,
 	onUniversesChange = () => undefined,
 	onWorkflowLockChange,
@@ -83,6 +84,8 @@ export function LiveTrading({
 	configuration: DeploymentConfiguration | undefined
 	configurationError: string | undefined
 	selectedUniverseId?: string | undefined
+	/** The universe discovery has confirmed; the universe route waits for it so an unknown request never renders as a universe. */
+	confirmedUniverseId?: string | undefined
 	/** Test seam for the universe route's summary read. */
 	loadUniverseSummary?: LoadUniverseSummary | undefined
 	onUniversesChange?(universeIds: readonly bigint[], selectedUniverseId: bigint | undefined): void
@@ -152,14 +155,14 @@ export function LiveTrading({
 		) : undefined
 	if (route === 'universe') {
 		// Discovery confirms the requested universe before the directory describes it, so an unknown request never renders as a universe.
-		if (selectedUniverseId === undefined)
+		if (confirmedUniverseId === undefined)
 			return (
 				<div className='route-view-flow'>
 					<RouteHeader title={appCopy.universe} description={appCopy.universeRouteDescription} />
-					<StateHint announcement='polite' presentation={{ key: 'loading', badgeLabel: commonCopy.loading, badgeTone: 'loading', detail: appCopy.loadingUniverse, detailIsLoading: true }} />
+					<StateHint announcement='polite' presentation={{ key: 'loading', badgeLabel: commonCopy.loading, badgeTone: 'loading', detail: commonCopy.loadingUniverseDetails, detailIsLoading: true }} />
 				</div>
 			)
-		return <UniverseDirectory configuration={configuration} universeId={BigInt(selectedUniverseId)} {...(loadUniverseSummary === undefined ? {} : { loadUniverse: loadUniverseSummary })} />
+		return <UniverseDirectory configuration={configuration} universeId={BigInt(confirmedUniverseId)} {...(loadUniverseSummary === undefined ? {} : { loadUniverse: loadUniverseSummary })} />
 	}
 	if (isTradingLookupRoute(route)) {
 		const routePresentation = liveWorkflowRoutePresentation(route)

@@ -8,7 +8,8 @@ import { Help } from '../features/Help.js'
 import { LiveTrading } from '../features/LiveTrading.js'
 import { TradingOverviewPanel } from '../components/TradingOverviewPanel.js'
 import { useUrlSearchState } from '@zoltar/ui-core-shared/app/hooks/useUrlSearchState.js'
-import { readUniverseQueryParam } from '@zoltar/ui-core-shared/navigation/urlParams.js'
+import { readUniverseQueryParam, writeUniverseQueryParam } from '@zoltar/ui-core-shared/navigation/urlParams.js'
+import { resolveUniverseSelection, type LiveUniverses } from '../lib/universeSelection.js'
 import { formatUniverseDisplayLabel, formatUniverseLabel } from '@zoltar/ui-core-shared/lib/universeLabels.js'
 import { routeOwnsLiveWallet, walletSummaryAfterRouteChange, walletSummaryForUniverse, type WalletSummaryState } from '../lib/walletSummaryState.js'
 import { TradingDeploymentSetup, type DeploymentWalletState, type TradingDeploymentSetupServices } from '../features/TradingDeploymentSetup.js'
@@ -61,17 +62,8 @@ const TRADING_NOT_FOUND_LINKS = [
 
 type LiveDeploymentStatus = 'loading' | 'verified' | 'unavailable'
 
-type LiveUniverses = Readonly<{ ids: readonly bigint[]; selected: bigint | undefined }>
-
 function readTradingUrlState(search: string) {
 	return { universeId: readUniverseQueryParam(search) }
-}
-
-/** The requested universe wins once discovery confirms it exists; an unknown or absent request follows discovery's authoritative choice. */
-function resolveSelectedUniverseId(requestedUniverseId: bigint | undefined, liveUniverses: LiveUniverses) {
-	if (liveUniverses.ids.length === 0) return requestedUniverseId?.toString()
-	if (requestedUniverseId !== undefined && liveUniverses.ids.includes(requestedUniverseId)) return requestedUniverseId.toString()
-	return liveUniverses.selected?.toString()
 }
 
 async function resolveCanonicalLiveDeployment(coreDeployments: readonly CoreDeployment[], createPublicClient: (configuration: DeploymentConfiguration) => PublicClient = createTradingPublicClient) {
@@ -110,9 +102,15 @@ export function App({
 	const [liveConfigurationError, setLiveConfigurationError] = useState<string>()
 	const [workflowLocked, setWorkflowLocked] = useState(false)
 	// The universe is chosen on the universe route through the shared `universe` query parameter; discovery confirms it exists.
-	const { state: urlState } = useUrlSearchState(readTradingUrlState)
+	const { applyUrlStateUpdate, getOwnedSearch, state: urlState } = useUrlSearchState(readTradingUrlState)
 	const [liveUniverses, setLiveUniverses] = useState<LiveUniverses>({ ids: [], selected: undefined })
-	const selectedUniverseId = resolveSelectedUniverseId(urlState.universeId, liveUniverses)
+	const universeSelection = resolveUniverseSelection(urlState.universeId, liveUniverses)
+	const selectedUniverseId = universeSelection.requestedUniverseId
+	const confirmedUniverseId = universeSelection.confirmedUniverseId
+	useEffect(() => {
+		// An unknown request is replaced by the universe discovery chose, so the URL, header, and routes agree.
+		if (universeSelection.replaceUrlUniverseId !== undefined) applyUrlStateUpdate(writeUniverseQueryParam(getOwnedSearch(), universeSelection.replaceUrlUniverseId), 'replace')
+	}, [applyUrlStateUpdate, getOwnedSearch, universeSelection.replaceUrlUniverseId])
 	const [liveWalletSummary, setLiveWalletSummary] = useState<WalletSummaryState>({ account: undefined, ethAttoEth: undefined, repAttoRep: undefined, status: 'disconnected', error: undefined, errorLabel: undefined, universeId: undefined })
 	const [walletSummaryRetryNonce, setWalletSummaryRetryNonce] = useState(0)
 	const [walletConnectRequestNonce, setWalletConnectRequestNonce] = useState(0)
@@ -137,10 +135,10 @@ export function App({
 	}, [])
 	const updateLiveUniverses = useCallback((universeIds: readonly bigint[], authoritativeSelection: bigint | undefined) => setLiveUniverses({ ids: universeIds, selected: authoritativeSelection }), [])
 	const showUniverseField = route !== 'deploy' && route !== 'help' && liveDeploymentStatus !== 'unavailable'
-	// The header names the universe the routes follow, like the other applications; it is chosen on the universe route.
-	let universeValue: ComponentChildren = <span>{appCopy.unavailable}</span>
-	if (selectedUniverseId !== undefined) universeValue = <span title={formatUniverseLabel(BigInt(selectedUniverseId))}>{formatUniverseDisplayLabel(BigInt(selectedUniverseId))}</span>
-	else if (liveDeploymentStatus === 'loading') universeValue = <LoadingText announce={false}>{appCopy.loadingWithEllipsis}</LoadingText>
+	// The header names the universe the routes follow, like the other applications; it is chosen on the universe route and shown once discovery confirms it.
+	let universeValue: ComponentChildren = <LoadingText announce={false}>{appCopy.loadingWithEllipsis}</LoadingText>
+	if (confirmedUniverseId !== undefined) universeValue = <span title={formatUniverseLabel(BigInt(confirmedUniverseId))}>{formatUniverseDisplayLabel(BigInt(confirmedUniverseId))}</span>
+	else if (liveDeploymentStatus === 'unavailable') universeValue = <span>{appCopy.unavailable}</span>
 	const walletSummary = walletSummaryForUniverse(liveWalletSummary, selectedUniverseId)
 	const retryWalletSummary = () => {
 		setLiveWalletSummary(current => ({ account: current.account, ethAttoEth: undefined, repAttoRep: undefined, status: current.account === undefined ? 'disconnected' : 'loading', error: undefined, errorLabel: undefined, universeId: selectedUniverseId }))
@@ -231,6 +229,7 @@ export function App({
 				configuration={liveConfiguration}
 				configurationError={liveConfigurationError}
 				selectedUniverseId={selectedUniverseId}
+				confirmedUniverseId={confirmedUniverseId}
 				onUniversesChange={updateLiveUniverses}
 				onWorkflowLockChange={updateWorkflowLock}
 				onWalletSummaryChange={setLiveWalletSummary}
