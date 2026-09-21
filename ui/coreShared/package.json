@@ -907,10 +907,6 @@
 			"bun": "./ts/app/components/OverviewPanels.tsx",
 			"default": "./js/app/components/OverviewPanels.js"
 		},
-		"./components/UniverseSelector.js": {
-			"bun": "./ts/components/UniverseSelector.tsx",
-			"default": "./js/components/UniverseSelector.js"
-		},
 		"./components/DeploymentStepList.js": {
 			"bun": "./ts/components/DeploymentStepList.tsx",
 			"default": "./js/components/DeploymentStepList.js"

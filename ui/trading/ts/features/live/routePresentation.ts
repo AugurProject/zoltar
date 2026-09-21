@@ -11,6 +11,7 @@ export function liveWorkflowRoutePresentation(route: TradingRoute) {
 /** The header every live route shows before its contracts resolve, so the title does not change once they do. */
 export function liveRouteLoadingPresentation(route: TradingRoute): { description?: string; title: string } {
 	if (route === 'portfolio') return { title: appCopy.portfolio }
+	if (route === 'universe') return { description: appCopy.universeRouteDescription, title: appCopy.universe }
 	if (route.startsWith('security-pool/')) return { description: appCopy.securityPoolRouteDescription, title: appCopy.securityPool }
 	return liveWorkflowRoutePresentation(tradingWorkflowRoute(route))
 }

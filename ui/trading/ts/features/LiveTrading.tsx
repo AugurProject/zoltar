@@ -29,6 +29,7 @@ import { DEFAULT_SLIPPAGE_PERCENT, DEFAULT_TRANSACTION_VALIDITY_MINUTES } from '
 import type { WalletSummaryState } from '../lib/walletSummaryState.js'
 import { liveRouteLoadingPresentation, liveWorkflowRoutePresentation } from './live/routePresentation.js'
 import { LiveSecurityPoolDetails, PairInitializationAction, SecurityPoolRouteEmptyState } from './LiveSecurityPoolDetails.js'
+import { UniverseDirectory, type LoadUniverseSummary } from './UniverseDirectory.js'
 import { LiveMarketBrowser, marketStatusLabel, marketStatusTone } from './LiveMarketBrowser.js'
 import { liveCopy } from '../copy/live.js'
 import * as availabilityCopy from '../copy/availability.js'
@@ -67,6 +68,7 @@ export function LiveTrading({
 	configuration,
 	configurationError,
 	selectedUniverseId,
+	loadUniverseSummary,
 	onUniversesChange = () => undefined,
 	onWorkflowLockChange,
 	onWalletSummaryChange = ignoreWalletSummaryChange,
@@ -81,6 +83,8 @@ export function LiveTrading({
 	configuration: DeploymentConfiguration | undefined
 	configurationError: string | undefined
 	selectedUniverseId?: string | undefined
+	/** Test seam for the universe route's summary read. */
+	loadUniverseSummary?: LoadUniverseSummary | undefined
 	onUniversesChange?(universeIds: readonly bigint[], selectedUniverseId: bigint | undefined): void
 	onWorkflowLockChange(locked: boolean): void
 	onWalletSummaryChange?(summary: WalletSummaryState): void
@@ -146,6 +150,17 @@ export function LiveTrading({
 				{walletActionLabel}
 			</button>
 		) : undefined
+	if (route === 'universe') {
+		// Discovery confirms the requested universe before the directory describes it, so an unknown request never renders as a universe.
+		if (selectedUniverseId === undefined)
+			return (
+				<div className='route-view-flow'>
+					<RouteHeader title={appCopy.universe} description={appCopy.universeRouteDescription} />
+					<StateHint announcement='polite' presentation={{ key: 'loading', badgeLabel: commonCopy.loading, badgeTone: 'loading', detail: appCopy.loadingUniverse, detailIsLoading: true }} />
+				</div>
+			)
+		return <UniverseDirectory configuration={configuration} universeId={BigInt(selectedUniverseId)} {...(loadUniverseSummary === undefined ? {} : { loadUniverse: loadUniverseSummary })} />
+	}
 	if (isTradingLookupRoute(route)) {
 		const routePresentation = liveWorkflowRoutePresentation(route)
 		return (

@@ -1,6 +1,7 @@
 import { buildRouteHref, createRouting, getRouteHashSearch, installRouting, type RoutingConfig } from '@zoltar/ui-core-shared/navigation/routing.js'
+import { writeUniverseQueryParam } from '@zoltar/ui-core-shared/navigation/urlParams.js'
 
-export type TradingRoute = 'create-market' | 'market' | 'liquidity' | 'portfolio' | 'deploy' | 'help' | `security-pool/${string}` | `market/${string}` | `liquidity/${string}` | `create-market/${string}`
+export type TradingRoute = 'create-market' | 'market' | 'liquidity' | 'portfolio' | 'universe' | 'deploy' | 'help' | `security-pool/${string}` | `market/${string}` | `liquidity/${string}` | `create-market/${string}`
 
 export type TradingLookupRoute = Extract<TradingRoute, 'market' | 'liquidity' | 'create-market'>
 
@@ -16,6 +17,7 @@ const TRADING_ROUTING_CONFIG: RoutingConfig<TradingRoute> = {
 		{ aliases: ['#/security-pools'], hash: '#/create-market', name: 'create-market' },
 		{ hash: '#/liquidity', name: 'liquidity' },
 		{ hash: '#/portfolio', name: 'portfolio' },
+		{ hash: '#/universe', name: 'universe' },
 		{ hash: '#/help', name: 'help' },
 		{
 			match: (routeHash: string): TradingRoute | undefined => {
@@ -37,8 +39,9 @@ export function getTradingRouteHref(routeHash: string) {
 	return buildRouteHref(routeHash, getRouteHashSearch())
 }
 
+/** The parts of the location that select the environment; the universe parameter changes what the routes show, not which chain they read. */
 export function getTradingEnvironmentLocationKey(location: Pick<Location, 'hash' | 'search'> = window.location) {
-	return `${location.search}|${getRouteHashSearch(location.hash)}`
+	return `${location.search}|${writeUniverseQueryParam(getRouteHashSearch(location.hash), undefined)}`
 }
 
 export function installTradingRouting() {

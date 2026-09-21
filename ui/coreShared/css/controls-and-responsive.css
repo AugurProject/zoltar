@@ -866,21 +866,6 @@
 	align-items: center;
 }
 
-.universe-selector {
-	display: block;
-	min-width: 0;
-}
-
-/* The universe switcher sizes to its option labels so it occupies the same toolbar slot as a static universe value; a label wider than the slot ends in an ellipsis instead of being cut mid-ID. */
-.header-toolbar-controls .universe-selector select {
-	width: auto;
-	min-width: 0;
-	max-width: 100%;
-	min-height: var(--touch-target-min);
-	overflow: hidden;
-	text-overflow: ellipsis;
-}
-
 /* The details toggle only appears when the strip has something to reveal: secondary metrics at the tablet breakpoint or a collapsed simulation strip on phones. */
 .overview-wallet-panel:not(.is-simulation):not(:has(.overview-metric-secondary, .overview-metric-group.is-secondary)) .overview-details-toggle {
 	display: none;
@@ -948,11 +933,6 @@
 
 	.header-toolbar-controls .toolbar-field-value {
 		white-space: nowrap;
-	}
-
-	/* The universe switcher fills the field's row on phones so option labels are not clipped. */
-	.header-toolbar-controls .universe-selector select {
-		width: 100%;
 	}
 
 	.header-toolbar .environment-badge-row .badge {

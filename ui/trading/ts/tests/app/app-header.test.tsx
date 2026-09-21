@@ -4,10 +4,8 @@ import { act } from 'preact/test-utils'
 import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
 import { App } from '../../app/App.js'
 import * as appCopy from '../../copy/app.js'
-import { UniverseSelector } from '@zoltar/ui-core-shared/components/UniverseSelector.js'
 import { TradingOverviewPanel } from '../../components/TradingOverviewPanel.js'
 import { hasTradingWalletControls, TradingWalletControls } from '../../components/TradingWalletControls.js'
-import { buildLiveUniverseOptions } from '../../lib/universeOptions.js'
 import { routeOwnsLiveWallet, walletSummaryAfterRouteChange, walletSummaryForUniverse } from '../../lib/walletSummaryState.js'
 import { filterMarketsByUniverse, walletSummaryAvailability, walletSummaryDiscoveryRetryStart, walletSummaryRefreshState } from '../../features/liveTradingControllerHelpers.js'
 import type { DeploymentConfiguration } from '../../protocol/config.js'
@@ -16,7 +14,7 @@ import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/rende
 
 beforeEach(() => installTradingRouting())
 
-describe('universe selector', () => {
+describe('trading header', () => {
 	let cleanupRendered: (() => Promise<void>) | undefined
 
 	installDomTestLifecycle({
@@ -27,34 +25,16 @@ describe('universe selector', () => {
 		url: 'http://localhost/#/market',
 	})
 
-	test('selects one universe from the top-level control', async () => {
-		let selected = '1'
-		const rendered = await renderIntoDocument(
-			<UniverseSelector
-				options={[
-					{ id: '1', label: 'Genesis universe' },
-					{ id: '2', label: 'Universe 2 · YES branch' },
-				]}
-				selectedId={selected}
-				disabled={false}
-				onChange={next => {
-					selected = next
-				}}
-			/>,
-		)
+	test('names the universe from the shared query parameter and offers the universe route instead of a header control', async () => {
+		window.history.replaceState(undefined, '', '/#/market?universe=2')
+		const rendered = await renderIntoDocument(<App loadLiveDeployment={() => new Promise<DeploymentConfiguration>(() => undefined)} />)
 		cleanupRendered = rendered.cleanup
-		const select = rendered.container.querySelector<HTMLSelectElement>('select')
-		expect(select?.tagName).toBe('SELECT')
-		expect(select?.getAttribute('aria-label')).toBe('Select universe')
-		expect(rendered.container.querySelector('.universe-selector > span')).toBeNull()
-		expect(Array.from(select?.options ?? [], option => option.textContent)).toEqual(['Genesis universe', 'Universe 2 · YES branch'])
-		expect(select?.value).toBe('1')
-		await act(() => {
-			if (select === null) throw new Error('Universe selector is unavailable')
-			select.value = '2'
-			select.dispatchEvent(new Event('change', { bubbles: true }))
-		})
-		expect(selected).toBe('2')
+		const universeField = rendered.container.querySelector('.header-toolbar-controls .toolbar-field-value')
+		expect(universeField?.textContent).toBe('Universe 0x2')
+		expect(universeField?.querySelector('span')?.getAttribute('title')).toBe('Universe 0x2')
+		expect(rendered.container.querySelector('.header-toolbar-controls select')).toBeNull()
+		const universeTab = Array.from(rendered.container.querySelectorAll<HTMLAnchorElement>('.tab-nav a')).find(anchor => anchor.textContent === 'Universe')
+		expect(universeTab?.getAttribute('href')).toBe('#/universe?universe=2')
 	})
 
 	test('renders an explicit not-found route and updates the document title', async () => {
@@ -136,9 +116,9 @@ describe('universe selector', () => {
 		cleanupRendered = rendered.cleanup
 		expect(rendered.container.querySelector('.trading-wallet-actions .wallet-chip.is-placeholder')?.textContent).toContain('Loading')
 		expect(rendered.container.querySelector('.trading-wallet-actions .wallet-button')).toBeNull()
-		// The universe field keeps its static slot while discovery resolves, so the toolbar does not change rows once a single universe is known.
+		// The universe field is a plain value chosen on the universe route; it never becomes a control.
 		expect(rendered.container.querySelector('.header-toolbar-controls .toolbar-field-value')?.textContent).toContain('Loading')
-		expect(rendered.container.querySelector('.header-toolbar-controls .universe-selector')).toBeNull()
+		expect(rendered.container.querySelector('.header-toolbar-controls select')).toBeNull()
 		if (resolveDeployment === undefined) throw new Error('Deployment resolver is unavailable')
 		resolveDeployment({ chainId: 31_337, chainName: 'Local', rpcUrl: 'http://127.0.0.1:1', securityPoolFactory: `0x${'11'.repeat(20)}`, factory: `0x${'22'.repeat(20)}`, router: `0x${'33'.repeat(20)}`, feeBps: 30 })
 		await act(async () => {
@@ -251,30 +231,6 @@ describe('universe selector', () => {
 		const second = { universeId: 2n } as LiveMarket
 		expect(filterMarketsByUniverse([first, second], '2')).toEqual([second])
 		expect(filterMarketsByUniverse([first, second], undefined)).toEqual([])
-	})
-
-	test('labels live universes with the shared genesis and hex universe labels', () => {
-		const longUniverseId = (1n << 200n) + 456n
-		const options = buildLiveUniverseOptions([0n, 7n, longUniverseId])
-		expect(options[0]).toEqual({ id: '0', label: 'Genesis (0x0)', accessibleLabel: 'Genesis (0x0)' })
-		expect(options[1]).toEqual({ id: '7', label: 'Universe 0x7', accessibleLabel: 'Universe 0x7' })
-		expect(options[2]?.label).toStartWith('Universe 0x')
-		expect(options[2]?.label).toContain('…')
-		expect(options[2]?.accessibleLabel).toBe(`Universe 0x${longUniverseId.toString(16)}`)
-		expect(() => buildLiveUniverseOptions([7n, 7n])).toThrow('Universe IDs must be unique')
-	})
-
-	test('widens colliding compact universe labels instead of falling back to full IDs the phone header cannot show', () => {
-		// Same leading 8 and trailing 6 hex digits, different middle: the compact form would read identically.
-		const firstCollision = (0xabcdef12n << 96n) | (1n << 40n) | 0x123456n
-		const secondCollision = (0xabcdef12n << 96n) | (2n << 40n) | 0x123456n
-		const options = buildLiveUniverseOptions([0n, firstCollision, secondCollision])
-		expect(options[0]?.label).toBe('Genesis (0x0)')
-		expect(options[1]?.label).not.toBe(options[2]?.label)
-		expect(options[1]?.label).toBe(`Universe 0x${firstCollision.toString(16).slice(0, 8)}…${firstCollision.toString(16).slice(-14)}`)
-		expect(options[2]?.label).toBe(`Universe 0x${secondCollision.toString(16).slice(0, 8)}…${secondCollision.toString(16).slice(-14)}`)
-		expect(options[1]?.accessibleLabel).toBe(`Universe 0x${firstCollision.toString(16)}`)
-		expect(options[2]?.accessibleLabel).toBe(`Universe 0x${secondCollision.toString(16)}`)
 	})
 
 	test('keeps the balance slots in place while the wallet is disconnected or loading', async () => {
