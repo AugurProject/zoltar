@@ -14,7 +14,7 @@ import type { RequestPriceReview } from '@zoltar/ui-statoblast-shared/features/s
 
 const review: RequestPriceReview = { managerAddress: getAddress('0x0000000000000000000000000000000000000001'), securityPoolAddress: getAddress('0x0000000000000000000000000000000000000002'), universeId: 0n, requestValueAttoEth: 12n }
 const props = { review, canRequest: true, pending: false, confirmationGuardMessage: undefined, closeOnSuccessKey: undefined, onClose: () => undefined, fetchPrice: async () => 2n * 10n ** 18n }
-const step = { contractAddress: undefined, spender: undefined, amount: undefined, ethValueAttoEth: 12n, description: 'Fund the report.' }
+const step = { contractAddress: undefined, contractLabel: undefined, spender: undefined, amount: undefined, ethValueAttoEth: 12n, description: 'Fund the report.' }
 
 function inputValue(element: HTMLElement) {
 	if (!(element instanceof HTMLInputElement)) throw new Error('Expected price input')

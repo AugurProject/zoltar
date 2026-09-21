@@ -68,6 +68,11 @@ function getOriginSecurityPoolShareTokenAddress(questionId: bigint, statoblastSe
 	})
 }
 
+type SecurityPoolCreationReview = {
+	description: string
+	title: string
+}
+
 export async function createSecurityPool(
 	client: WriteClient,
 	parameters: {
@@ -76,18 +81,23 @@ export async function createSecurityPool(
 		statoblastSecurityMultiplierBps: bigint
 	},
 	questionData?: QuestionData,
+	review?: SecurityPoolCreationReview,
 ) {
 	if (questionData !== undefined && getQuestionId(questionData, ['Yes', 'No']) !== parameters.questionId) throw new Error('Question ID does not match the binary question')
 	const poolCall = {
 		address: getDeploymentStepAddress('securityPoolFactory'),
 		abi: statoblast_factories_SecurityPoolFactory_SecurityPoolFactory.abi,
+		contractLabel: 'Security Pool Factory',
 		functionName: 'deployOriginSecurityPool',
 		args: [0n, parameters.questionId, parameters.statoblastSecurityMultiplierBps, parameters.initialReportPriorityFeeAttoEthPerGas],
 	} as const
+	// The review labels name the whole action so the wallet review does not fall back to the Multicall3 function name.
+	const reviewLabels = review === undefined ? {} : { reviewDescription: review.description, reviewTitle: review.title }
 	const { hash: deployPoolHash, receipt } = await writeContractAndWaitForReceipt(client, () =>
 		questionData === undefined
-			? poolCall
+			? { ...poolCall, ...reviewLabels }
 			: {
+					...reviewLabels,
 					address: getMulticall3Address(),
 					abi: statoblast_Multicall3_Multicall3.abi,
 					functionName: 'aggregate3',

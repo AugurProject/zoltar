@@ -11,7 +11,7 @@ import { createTransactionStepController, transactionSteps } from '../../app/tra
 test('shows every step, token deposit, expected return and ETH cost before the first confirmation', async () => {
 	const dom = installDomEnvironment()
 	const controller = createTransactionStepController()
-	const common = { contractAddress: undefined, spender: undefined, amount: undefined, ethValueAttoEth: 0n }
+	const common = { contractAddress: undefined, contractLabel: undefined, spender: undefined, amount: undefined, ethValueAttoEth: 0n }
 	controller.setPlan([
 		{ ...common, title: 'Approve REP spending', description: 'Allow REP spending.', amount: '6 REP' },
 		{ ...common, title: 'Approve WETH spending', description: 'Allow WETH spending.', amount: '2 WETH' },
@@ -53,16 +53,82 @@ test('shows every step, token deposit, expected return and ETH cost before the f
 	}
 })
 
+test('explains a step without token funding using its description, the operation rows, and the target contract', async () => {
+	const dom = installDomEnvironment()
+	const controller = createTransactionStepController()
+	const contractAddress = '0x00000000000000000000000000000000000000aa'
+	const description = 'Create the binary question and deploy its security pool in one transaction.'
+	controller.setPlan([{ title: 'Create question and security pool', description, contractAddress, contractLabel: 'Multicall3', spender: undefined, amount: undefined, ethValueAttoEth: 0n }])
+	const review = controller.review()
+	const rendered = await renderIntoDocument(
+		<GlobalTransactionPresentationProvider
+			transaction={{
+				tone: 'awaiting-wallet',
+				title: 'Creating Security Pool',
+				rows: [
+					{ label: 'Question ID', value: '123' },
+					{ label: 'Statoblast security multiplier', value: '2x' },
+				],
+			}}
+		>
+			<TransactionStepsModal contextKey='review' />
+		</GlobalTransactionPresentationProvider>,
+	)
+	try {
+		const queries = within(rendered.container)
+		expect(rendered.container.querySelector('.modal-header h3')?.textContent).toBe('Create question and security pool')
+		expect(queries.getByText(description)).not.toBeNull()
+		expect(queries.getByText('Question ID')).not.toBeNull()
+		expect(queries.getByText('123')).not.toBeNull()
+		expect(queries.getByText('Statoblast security multiplier')).not.toBeNull()
+		expect(queries.getByText('2x')).not.toBeNull()
+		expect(rendered.container.querySelector('.transaction-funding')).toBeNull()
+		expect(queries.getByText('Technical details')).not.toBeNull()
+		expect(rendered.container.querySelector('details .address-value')?.getAttribute('title')).toBe(contractAddress)
+		expect(rendered.container.querySelector('details dd')?.textContent).toContain('Multicall3')
+		await act(() => fireEvent.click(queries.getByRole('button', { name: 'Create question and security pool' })))
+		await review
+	} finally {
+		await rendered.cleanup()
+		dom.cleanup()
+	}
+})
+
+test('omits the explanation paragraph for a self-describing step and keeps the operation rows', async () => {
+	const dom = installDomEnvironment()
+	const controller = createTransactionStepController()
+	controller.setPlan([{ title: 'Deposit REP to vault', description: undefined, contractAddress: undefined, contractLabel: undefined, spender: undefined, amount: undefined, ethValueAttoEth: 0n }])
+	const review = controller.review()
+	const rendered = await renderIntoDocument(
+		<GlobalTransactionPresentationProvider transaction={{ tone: 'awaiting-wallet', title: 'Depositing REP', rows: [{ label: 'Vault', value: '0x00000000000000000000000000000000000000bb' }] }}>
+			<TransactionStepsModal contextKey='self-describing' />
+		</GlobalTransactionPresentationProvider>,
+	)
+	try {
+		const queries = within(rendered.container)
+		expect(rendered.container.querySelector('.transaction-step-content p.detail')).toBeNull()
+		expect(queries.getByText('Vault')).not.toBeNull()
+		expect(rendered.container.querySelector('details')).toBeNull()
+		expect(queries.getByRole('button', { name: 'Deposit REP to vault' }).hasAttribute('disabled')).toBe(false)
+		transactionSteps.value?.cancel()
+		await review.catch(() => undefined)
+	} finally {
+		await rendered.cleanup()
+		dom.cleanup()
+	}
+})
+
 for (const choice of ['custom', 'max'] as const) {
 	test(`reuses the approval amount control for ${choice} without sending the next step`, async () => {
 		const dom = installDomEnvironment()
 		const controller = createTransactionStepController()
 		controller.setPlan([
-			{ title: 'Approve REP spending', description: 'Allow REP spending.', contractAddress: undefined, spender: undefined, amount: '3 REP', ethValueAttoEth: 0n, approval: { requiredAmount: 3n, approvedAmount: 1n, tokenSymbol: 'REP', tokenUnits: 0 } },
+			{ title: 'Approve REP spending', description: 'Allow REP spending.', contractAddress: undefined, contractLabel: undefined, spender: undefined, amount: '3 REP', ethValueAttoEth: 0n, approval: { requiredAmount: 3n, approvedAmount: 1n, tokenSymbol: 'REP', tokenUnits: 0 } },
 			{
 				title: 'Request price',
 				description: 'Fund the report.',
 				contractAddress: undefined,
+				contractLabel: undefined,
 				spender: undefined,
 				amount: undefined,
 				ethValueAttoEth: 12n,
@@ -123,7 +189,7 @@ for (const result of ['success', 'reverted'] as const) {
 	test(`keeps one button per transaction and gates the next action after ${result}`, async () => {
 		const dom = installDomEnvironment()
 		const controller = createTransactionStepController()
-		const common = { contractAddress: undefined, spender: undefined, amount: undefined, ethValueAttoEth: 0n, description: 'Transaction purpose.' }
+		const common = { contractAddress: undefined, contractLabel: undefined, spender: undefined, amount: undefined, ethValueAttoEth: 0n, description: 'Transaction purpose.' }
 		controller.setPlan([
 			{ ...common, title: 'Wrap ETH' },
 			{ ...common, title: 'Approve REP' },
@@ -171,7 +237,7 @@ for (const result of ['success', 'reverted'] as const) {
 test('both insufficient approvals are enabled independently while the report waits for funding', async () => {
 	const dom = installDomEnvironment()
 	const controller = createTransactionStepController()
-	const common = { description: 'Authorize spending.', contractAddress: undefined, spender: undefined, amount: undefined, ethValueAttoEth: 0n }
+	const common = { description: 'Authorize spending.', contractAddress: undefined, contractLabel: undefined, spender: undefined, amount: undefined, ethValueAttoEth: 0n }
 	controller.setPlan([...['REP', 'WETH'].map(tokenSymbol => ({ ...common, title: `Approve ${tokenSymbol}`, approval: { requiredAmount: 3n, approvedAmount: 0n, tokenSymbol, tokenUnits: 0 } })), { ...common, title: 'Request price' }])
 	const choosing = controller.chooseFunding([0, 1])
 	const rendered = await renderIntoDocument(<TransactionStepsModal contextKey='independent' />)
@@ -192,7 +258,7 @@ test('both insufficient approvals are enabled independently while the report wai
 test('shows requirement-read failures from the enclosing operation after an approval confirms', async () => {
 	const dom = installDomEnvironment()
 	const controller = createTransactionStepController()
-	const common = { description: 'Transaction purpose.', contractAddress: undefined, spender: undefined, amount: undefined, ethValueAttoEth: 0n }
+	const common = { description: 'Transaction purpose.', contractAddress: undefined, contractLabel: undefined, spender: undefined, amount: undefined, ethValueAttoEth: 0n }
 	controller.setPlan([
 		{ ...common, title: 'Approve REP' },
 		{ ...common, title: 'Request price' },
@@ -225,7 +291,7 @@ for (const phase of ['skipped', 'failed'] as const) {
 	test(`keeps approval fields visible when approval is ${phase}`, async () => {
 		const dom = installDomEnvironment()
 		const controller = createTransactionStepController()
-		const common = { description: 'Authorize spending.', contractAddress: undefined, spender: undefined, amount: undefined, ethValueAttoEth: 0n }
+		const common = { description: 'Authorize spending.', contractAddress: undefined, contractLabel: undefined, spender: undefined, amount: undefined, ethValueAttoEth: 0n }
 		controller.setPlan([
 			{ ...common, title: 'Approve REP', approval: { requiredAmount: 3n, approvedAmount: phase === 'skipped' ? 3n : 0n, tokenSymbol: 'REP', tokenUnits: 0 } },
 			{ ...common, title: 'Request price' },
@@ -258,7 +324,7 @@ for (const result of ['pending', 'reverted'] as const) {
 	test(`keeps the final query hash accessible beside its action when ${result}`, async () => {
 		const dom = installDomEnvironment()
 		const controller = createTransactionStepController()
-		controller.setPlan([{ title: 'Request price', description: 'Fund the report.', contractAddress: undefined, spender: undefined, amount: undefined, ethValueAttoEth: 0n }])
+		controller.setPlan([{ title: 'Request price', description: 'Fund the report.', contractAddress: undefined, contractLabel: undefined, spender: undefined, amount: undefined, ethValueAttoEth: 0n }])
 		const review = controller.review()
 		transactionSteps.value?.confirm()
 		await review

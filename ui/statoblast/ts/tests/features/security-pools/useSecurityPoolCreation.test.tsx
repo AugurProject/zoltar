@@ -535,6 +535,70 @@ describe('useSecurityPoolCreation', () => {
 		expect(onTransactionHashes).toEqual(['0xabc'])
 		expect(refreshCalls).toBe(1)
 		expect(submittedParameters).toEqual([{ initialReportPriorityFeeAttoEthPerGas: 10_000_000_000n, questionId: 11n, statoblastSecurityMultiplierBps: 20_000n }])
+		expect(createSecurityPool.mock.calls[0]?.[2]).toBeUndefined()
+		expect(createSecurityPool.mock.calls[0]?.[3]).toEqual({ description: 'The security multiplier and initial report priority fee cannot be changed after the pool is deployed.', title: 'Create security pool' })
+	})
+
+	test('createPool labels the batched question-and-pool transaction for the wallet review', async () => {
+		const createSecurityPool = mock(async (client: { onTransactionSubmitted?: (hash: Hash) => void }) => {
+			client.onTransactionSubmitted?.('0xabc')
+			return {
+				deployPoolHash: '0xabc' as Hash,
+				initialReportPriorityFeeAttoEthPerGas: 10_000_000_000n,
+				questionCreatedAt: 1n,
+				questionId: '0x0b',
+				securityPoolAddress: '0x1111111111111111111111111111111111111111',
+				statoblastSecurityMultiplierBps: 20_000n,
+				universeId: 0n,
+			} as SecurityPoolCreationResult
+		})
+		await setupContractMocks({
+			loadMarketDetails: mock(async () => {
+				throw new Error('loadMarketDetails should not run for a new question')
+			}),
+			originSecurityPoolExists: mock(async () => false),
+			createSecurityPool,
+		})
+
+		const { useSecurityPoolCreation } = await import(`@zoltar/ui-statoblast-shared/features/security-pools/hooks/useSecurityPoolCreation.js?case=${crypto.randomUUID()}`)
+		const { getDefaultMarketFormState } = await import('@zoltar/ui-statoblast-shared/features/markets/lib/marketForm.js')
+		const requestedRows: { label: string; value: unknown }[][] = []
+		let state: UseSecurityPoolCreationState | undefined
+		const Harness = createHarness(
+			useSecurityPoolCreation,
+			{
+				accountAddress: zeroAddress,
+				deploymentStatuses: [createStatus('securityPoolFactory', true), createStatus('zoltarQuestionData', true)],
+				enabled: true,
+				onTransactionFinished: () => undefined,
+				onTransactionPresented: () => undefined,
+				onTransactionRequested: intent => {
+					requestedRows.push((intent.rows ?? []).map(row => ({ label: row.label, value: row.value })))
+					return undefined
+				},
+				onTransactionSubmitted: () => undefined,
+				refreshState: async () => undefined,
+				zoltarUniverseHasForked: false,
+			},
+			newState => {
+				state = newState
+			},
+		)
+
+		const renderedComponent = await renderIntoDocument(<Harness />)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		await act(async () => {
+			// A stale existing-question ID left in the form must not leak into the review rows for a new question.
+			await requireState(state).createPool(undefined, { initialReportPriorityFeeEth: '0.00000001', marketId: '0x99', statoblastSecurityMultiplierBps: '2' }, { ...getDefaultMarketFormState(), endTime: '2026-07-02T00:00:00.000Z', title: 'Batched question' })
+		})
+
+		expect(requireState(state).securityPoolCreationFeedback?.status.tone).toBe('success')
+		expect(createSecurityPool).toHaveBeenCalledTimes(1)
+		expect(requestedRows.map(rows => rows.map(row => row.label))).toEqual([['Question', 'Statoblast Security Multiplier', 'Initial Report Priority Fee']])
+		expect(requestedRows[0]?.[0]?.value).toBe('Batched question')
+		expect(createSecurityPool.mock.calls[0]?.[2]).toMatchObject({ title: 'Batched question' })
+		expect(createSecurityPool.mock.calls[0]?.[3]).toEqual({ description: 'The security multiplier and initial report priority fee cannot be changed after the pool is deployed.', title: 'Create question and security pool' })
 	})
 
 	test('createPool preserves the current market details when a stale duplicate-pool error resolves for an older market', async () => {

@@ -2,6 +2,7 @@ import { withReadTimeout } from '@zoltar/ui-core-shared/lib/promise.js'
 import { getQuestionId, getQuestionIdHex } from '@zoltar/ui-zoltar-shared/protocol/helpers.js'
 import { useSignal } from '@preact/signals'
 import { useEffect } from 'preact/hooks'
+import * as securityPoolCopy from '../../../copy/securityPool.js'
 import { createSecurityPool, originSecurityPoolExists } from '../../../protocol/securityPools.js'
 import { loadMarketDetails } from '@zoltar/ui-zoltar-shared/protocol/zoltar.js'
 import { useLoadController } from '@zoltar/ui-core-shared/hooks/useLoadController.js'
@@ -140,9 +141,11 @@ export function useSecurityPoolCreation({
 		}
 		const baseSecurityPoolForm = securityPoolFormOverride ?? securityPoolForm.value
 		const submittedSecurityPoolForm = questionIdOverride === undefined ? baseSecurityPoolForm : { ...baseSecurityPoolForm, marketId: questionIdOverride }
+		// A new question has no ID until the write derives it, and the existing-question field may hold a stale value.
 		const transactionContext = {
 			initialReportPriorityFeeEth: submittedSecurityPoolForm.initialReportPriorityFeeEth,
-			questionId: submittedSecurityPoolForm.marketId,
+			questionId: newQuestionForm === undefined ? submittedSecurityPoolForm.marketId : undefined,
+			questionTitle: newQuestionForm?.title,
 			statoblastSecurityMultiplierBps: tryParseStatoblastSecurityMultiplierBpsInput(submittedSecurityPoolForm.statoblastSecurityMultiplierBps),
 			universeId: activeUniverseId,
 		}
@@ -211,7 +214,8 @@ export function useSecurityPoolCreation({
 						throw new Error('A security pool for this question, Statoblast security multiplier, and priority fee already exists.')
 					}
 
-					const result = await createSecurityPool(createWalletWriteClient(walletAddress, { onTransactionPrepared, onTransactionSubmitted }), parameters, newQuestion?.questionData)
+					const review = { description: securityPoolCopy.createPoolReviewDescription, title: newQuestion === undefined ? securityPoolCopy.createPoolReviewTitle : securityPoolCopy.createQuestionAndPoolReviewTitle }
+					const result = await createSecurityPool(createWalletWriteClient(walletAddress, { onTransactionPrepared, onTransactionSubmitted }), parameters, newQuestion?.questionData, review)
 					capturedDetails = result.questionCreatedAt === undefined ? details : { ...details, createdAt: result.questionCreatedAt }
 					return { ...result, hash: result.deployPoolHash }
 				},

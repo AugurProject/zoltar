@@ -64,6 +64,54 @@ test('does not open the wallet until the transaction has its own explicit confir
 	expect(onTransactionPrepared).toHaveBeenCalledTimes(1)
 })
 
+test('titles the review from the prepared transaction labels instead of the contract function name', async () => {
+	const { reviewed, client } = setup()
+	const reviewTitle = 'Create question and security pool'
+	const reviewDescription = 'Creates the binary question and deploys its security pool in one transaction.'
+	reviewed.onTransactionPrepared?.({ account, chainName: client.chain.name, functionName: 'aggregate3', contractAddress: account, args: [[]], data: '0x', value: undefined, reviewTitle, reviewDescription })
+	const sending = reviewed.sendTransaction({ to: account, data: '0x' })
+	await waitForReview()
+	expect(transactionSteps.value?.steps[0]?.title).toBe(reviewTitle)
+	expect(transactionSteps.value?.steps[0]?.description).toBe(reviewDescription)
+	expect(transactionSteps.value?.steps[0]?.contractAddress).toBe(account)
+	confirm()
+	await sending
+})
+
+test('leaves the description empty for an unlabeled contract function instead of narrating the submission', async () => {
+	const { reviewed, client } = setup()
+	reviewed.onTransactionPrepared?.({ account, chainName: client.chain.name, functionName: 'depositRepToVault', contractAddress: account, contractLabel: 'Zoltar', args: [1n], data: '0x', value: undefined })
+	const sending = reviewed.sendTransaction({ to: account, data: '0x' })
+	await waitForReview()
+	expect(transactionSteps.value?.steps[0]?.title).toBe('Deposit REP To Vault')
+	expect(transactionSteps.value?.steps[0]?.description).toBeUndefined()
+	confirm()
+	await sending
+})
+
+test('keeps already readable plan step names unchanged', async () => {
+	const { reviewed, client } = setup()
+	const functionName = 'Deploy contract through deterministic proxy'
+	reviewed.onTransactionPlan?.([{ functionName, to: account, value: 0n }])
+	reviewed.onTransactionPrepared?.({ account, chainName: client.chain.name, functionName, to: account, args: undefined, data: '0x', value: 0n })
+	const sending = reviewed.sendTransaction({ to: account, data: '0x', value: 0n })
+	await waitForReview()
+	expect(transactionSteps.value?.steps[0]?.title).toBe(functionName)
+	confirm()
+	await sending
+})
+
+test('describes an unlabeled Multicall3 batch instead of exposing aggregate3', async () => {
+	const { reviewed, client } = setup()
+	reviewed.onTransactionPrepared?.({ account, chainName: client.chain.name, functionName: 'aggregate3', contractAddress: account, args: [[]], data: '0x', value: undefined })
+	const sending = reviewed.sendTransaction({ to: account, data: '0x' })
+	await waitForReview()
+	expect(transactionSteps.value?.steps[0]?.title).toBe('Batched transaction')
+	expect(transactionSteps.value?.steps[0]?.description).toBe('Run several contract calls in one transaction.')
+	confirm()
+	await sending
+})
+
 test('a chained action pauses again after each individual confirmation', async () => {
 	const { reviewed, sendTransaction } = setup()
 	reviewed.onTransactionPlan?.(Array.from({ length: 4 }, (_, step) => ({ functionName: 'Transfer ETH', to: account, value: BigInt(step) })))
@@ -448,7 +496,7 @@ for (const outcome of ['success', 'reverted'] as const) {
 
 test('a reverted final transaction does not claim there are remaining steps', async () => {
 	const controller = createTransactionStepController()
-	controller.setPlan([{ title: 'Request price', description: '', contractAddress: account, spender: undefined, amount: undefined, ethValueAttoEth: 0n }])
+	controller.setPlan([{ title: 'Request price', description: '', contractAddress: account, contractLabel: undefined, spender: undefined, amount: undefined, ethValueAttoEth: 0n }])
 	const review = controller.review()
 	confirm()
 	await review

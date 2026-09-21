@@ -2,6 +2,12 @@ import { TransactionActionButton, TransactionActionButtonLockProvider } from '@z
 import { TokenApprovalControl } from '@zoltar/ui-core-shared/components/TokenApprovalControl.js'
 import * as copy from '../../copy/transactionSteps.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
+import * as transactionCopy from '@zoltar/ui-core-shared/copy/transaction.js'
+import { AddressValue } from '@zoltar/ui-core-shared/components/AddressValue.js'
+import { ReadOnlyDetailAccordion } from '@zoltar/ui-core-shared/components/ReadOnlyDetailAccordion.js'
+import { TransactionObjectContext } from '@zoltar/ui-core-shared/components/TransactionObjectContext.js'
+import type { GlobalTransactionRow } from '@zoltar/ui-core-shared/types/components.js'
+import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import { GlobalTransactionPresentationProvider, useGlobalTransactionPresentation } from '@zoltar/ui-core-shared/components/GlobalTransactionPresentationContext.js'
 import { useEffect, useRef } from 'preact/hooks'
 import { OperationModal } from '@zoltar/ui-core-shared/components/OperationModal.js'
@@ -12,6 +18,29 @@ import { signal } from '@preact/signals'
 import { transactionSteps } from './transactionSteps.js'
 
 export const embeddedTransactionSteps = signal<AbortSignal | undefined>(undefined)
+
+/** Explains a step that has no token funding to summarize, using the enclosing operation's rows for the parameters being submitted. */
+function TransactionStepReview({ contractAddress, contractLabel, description, rows = [] }: { contractAddress: Address | undefined; contractLabel: string | undefined; description: string | undefined; rows?: GlobalTransactionRow[] | undefined }) {
+	return (
+		<>
+			{description === undefined ? undefined : <p className='detail'>{description}</p>}
+			<TransactionObjectContext items={rows} />
+			{contractAddress === undefined ? undefined : (
+				<ReadOnlyDetailAccordion title={commonCopy.technicalDetails}>
+					<dl className='global-transaction-notice-rows'>
+						<div className='global-transaction-notice-row'>
+							<dt>{transactionCopy.contract}</dt>
+							<dd>
+								{contractLabel === undefined ? undefined : <span>{contractLabel} </span>}
+								<AddressValue address={contractAddress} />
+							</dd>
+						</div>
+					</dl>
+				</ReadOnlyDetailAccordion>
+			)}
+		</>
+	)
+}
 
 export function TransactionStepsModal({ contextKey }: { contextKey: string }) {
 	useEffect(() => () => transactionSteps.peek()?.cancel(), [contextKey])
@@ -116,8 +145,7 @@ export function TransactionStepsContent({ contextKey, inline = false, onClose }:
 	const content = (
 		<>
 			<div className='transaction-step-content'>
-				{funding.length === 0 ? undefined : <TransactionFundingSummary funding={funding} totalAttoEth={totalEth} outcome={outcome} />}
-
+				{funding.length === 0 ? <TransactionStepReview contractAddress={current.contractAddress} contractLabel={current.contractLabel} description={completed ? undefined : current.description} rows={presentation?.rows} /> : <TransactionFundingSummary funding={funding} totalAttoEth={totalEth} outcome={outcome} />}
 				{funding.length === 0 || completed ? undefined : <p className='detail transaction-funding-note'>{copy.fundingDetail}</p>}
 			</div>
 			<div className='transaction-step-actions transaction-approval-editor'>{renderTransactionActions()}</div>
