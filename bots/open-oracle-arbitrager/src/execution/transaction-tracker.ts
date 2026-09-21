@@ -1,9 +1,10 @@
 import type { Configuration } from '#config/configuration'
+import { calculateTrackedNetProfitEth } from '#core/strategy'
 import { attemptConfirmationRecovery, guardedExecutionStep, guardedTransactionSubmission, isExecutionPausedError, journaledSubmission, retryPrivateSubmissionWithinWindow, waitForResolvedTransaction } from '#execution/execution-orchestration'
 import { assertSubmissionWindowOpen, mergeSubmissionFailures, SubmissionFailure, submitSignedTransaction, type SignedTransaction, type SubmissionTargetResult, type SubmittedTransaction } from '#execution/transaction-submission'
 import { sendRawTransactionToRpc } from '#monitoring/connectivity'
 import type { TransactionActivity } from '#state/operator-state'
-import { decimalWeth } from '#state/operator-state'
+import { decimalSignedEth, decimalWeth } from '#state/operator-state'
 import type { Account, Address, Chain, Hex, PublicClient, TransactionReplacement, Transport, WalletClient } from '@zoltar/bot-shared/ethereum'
 import { errorMessage } from '@zoltar/bot-shared/infrastructure/error-message'
 
@@ -18,6 +19,8 @@ export type TrackedSubmission = SignedTransaction &
 	SubmittedTransaction & {
 		estimatedNetProfitEth: string | undefined
 		kind: TransactionActivity['kind']
+		/** What the transaction earns before gas when it succeeds; set when the receipt alone determines the tracked net. */
+		profitBeforeGasAttoEth: bigint | undefined
 		reportId: string | undefined
 		submittedAt: string
 		token: Address | undefined
@@ -27,6 +30,11 @@ export type TrackedSubmission = SignedTransaction &
 export function receiptGasCost(receipt: { effectiveGasPrice?: bigint | undefined; gasUsed: bigint; transactionHash: Hex }) {
 	if (typeof receipt.effectiveGasPrice !== 'bigint') throw new Error(`Receipt ${receipt.transactionHash} is missing its effective gas price`)
 	return receipt.gasUsed * receipt.effectiveGasPrice
+}
+
+/** A reverted transaction earns nothing, so its tracked net is the gas it burned. */
+export function trackedNetProfitEth(profitBeforeGasAttoEth: bigint, succeeded: boolean, actualGasCostAttoEth: bigint) {
+	return decimalSignedEth(calculateTrackedNetProfitEth(succeeded ? profitBeforeGasAttoEth : 0n, actualGasCostAttoEth))
 }
 
 export function transactionLogLevel(status: TransactionActivity['status']) {
@@ -60,7 +68,7 @@ export async function submitContractTransaction(
 	wallet: WriteClient,
 	config: Pick<Configuration, 'connectivity' | 'submission'>,
 	signed: SignedTransaction,
-	details: { estimatedNetProfitEth: string | undefined; kind: TransactionActivity['kind']; reportId: string | undefined; token?: Address | undefined; tokenSymbol?: string | undefined },
+	details: { estimatedNetProfitEth: string | undefined; kind: TransactionActivity['kind']; profitBeforeGasAttoEth?: bigint | undefined; reportId: string | undefined; token?: Address | undefined; tokenSymbol?: string | undefined },
 	isPaused: () => boolean,
 	track: TrackTransaction,
 	boundary?: { beforeSubmit: () => Promise<unknown> | unknown; persistPending: () => Promise<unknown> } | undefined,
@@ -76,6 +84,7 @@ export async function submitContractTransaction(
 		failedTargets: [],
 		kind: details.kind,
 		mode: config.submission.mode,
+		profitBeforeGasAttoEth: details.profitBeforeGasAttoEth,
 		reportId: details.reportId,
 		submittedAt,
 		token: details.token,
@@ -201,7 +210,11 @@ export async function waitForTrackedTransaction(
 		onReplacement,
 		replacement => config.submission.mode === 'public' || replacement.reason === 'repriced',
 	)
-	const actualGasCostEth = decimalWeth(receiptGasCost(receipt))
-	track(trackedActivity(tracked, receipt.status === 'success' ? 'confirmed' : 'reverted', actualGasCostEth, receipt.transactionHash))
+	const actualGasCost = receiptGasCost(receipt)
+	// A same-nonce replacement is only known to carry this call once the caller authenticates its intent, so its net
+	// stays open until the caller tracks it.
+	const profitBeforeGasAttoEth = receipt.transactionHash.toLowerCase() === tracked.hash.toLowerCase() ? tracked.profitBeforeGasAttoEth : undefined
+	const netProfitEth = profitBeforeGasAttoEth === undefined ? undefined : trackedNetProfitEth(profitBeforeGasAttoEth, receipt.status === 'success', actualGasCost)
+	track(trackedActivity(tracked, receipt.status === 'success' ? 'confirmed' : 'reverted', decimalWeth(actualGasCost), receipt.transactionHash, netProfitEth))
 	return { receipt, tracked }
 }

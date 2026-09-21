@@ -185,6 +185,9 @@ describe('third-party settlement execution against OpenOracle', () => {
 		expect(Number.isFinite(Date.parse(record.minedAt ?? ''))).toBeTrue()
 		expect(records.map(entry => entry.status)).toEqual(['pending', 'confirmed'])
 		expect(activity.map(entry => `${entry.kind}:${entry.status}`)).toEqual(['settle:submitting', 'settle:pending', 'settle:confirmed'])
+		// The tracking table nets the reward against the signed gas exposure of this transaction alone and then the mined gas.
+		const settleGasPaid = parseDecimalWeth(record.actualGasCostEth ?? '0')
+		expect(activity.at(-1)).toMatchObject({ estimatedNetProfitEth: decimalSignedEth(REWARD - signedSettlementGasLimit(plan.gas) * settlementContext.maxFeePerGas), trackedNetProfitEth: decimalSignedEth(REWARD - settleGasPaid) })
 		expect(await client.readContract({ abi: openOracleAbi, address: openOracle, functionName: 'storedGame', args: [report.helper.reportId] }).then(game => game[4])).not.toBe(0n)
 		expect(await unclaimedSettlementReward([client], { connectivity: { publicRpcUrls: [node.rpcUrl], readRpcUrl: node.rpcUrl }, openOracle, quorumRpcUrls: [] }, account.address, await client.getBlockNumber())).toBe(REWARD)
 
@@ -196,6 +199,8 @@ describe('third-party settlement execution against OpenOracle', () => {
 		expect(withdrawal).toMatchObject({ coordinator: undefined, kind: 'reward-withdrawal', reportId: undefined, rewardEth: '0.017043310270400101', status: 'confirmed' })
 		expect(activity.at(-1)?.kind).toBe('withdraw-reward')
 		const gasPaid = parseDecimalWeth(withdrawal.actualGasCostEth ?? '0')
+		// The reward was earned by the settlement, so the withdrawal itself only nets its gas.
+		expect(activity.at(-1)).toMatchObject({ estimatedNetProfitEth: decimalSignedEth(-parseDecimalWeth(withdrawal.projectedGasCostEth)), status: 'confirmed', trackedNetProfitEth: decimalSignedEth(-gasPaid) })
 		expect((await client.getBalance({ address: account.address })) - balanceBefore).toBe(REWARD - gasPaid)
 		expect(await unclaimedSettlementReward([client], { connectivity: { publicRpcUrls: [node.rpcUrl], readRpcUrl: node.rpcUrl }, openOracle, quorumRpcUrls: [] }, account.address, await client.getBlockNumber())).toBe(0n)
 	})
@@ -231,7 +236,8 @@ describe('third-party settlement execution against OpenOracle', () => {
 		const rpc = swallowingRpc()
 		try {
 			const records: SettlementRecord[] = []
-			const base = await context(records, [])
+			const activity: TransactionActivity[] = []
+			const base = await context(records, activity)
 			const config = { ...base.config, connectivity: { ...base.config.connectivity, publicRpcUrls: [rpc.url] }, pollMilliseconds: 5_000 }
 			const nonce = await client.getTransactionCount({ address: account.address, blockTag: 'pending' })
 			const plan = { coordinator: report.helper.creator, gas: 250_000n, projectedGasCostAttoEth: 10n ** 15n, report, rewardAttoEth: REWARD, token: token2, tokenSymbol: 'TK2' }
@@ -250,6 +256,8 @@ describe('third-party settlement execution against OpenOracle', () => {
 			await expect(attempt).rejects.toThrow('was replaced by')
 			expect(await outcome).toBeInstanceOf(Error)
 			expect(records.map(record => `${record.status}:${record.transactionHash === unrelatedHash}`)).toEqual(['pending:false', 'expired:false'])
+			// The tracking row follows the unrelated transaction's receipt but never credits it with the reward.
+			expect(activity.at(-1)).toMatchObject({ hash: unrelatedHash, status: 'confirmed', trackedNetProfitEth: undefined })
 			expect(await client.readContract({ abi: openOracleAbi, address: openOracle, functionName: 'storedGame', args: [report.helper.reportId] }).then(game => game[4])).toBe(0n)
 			// The retirement is not final until the replacement is twelve blocks deep; it is verified, never assumed from age.
 			const [expired] = records.filter(record => record.status === 'expired')
@@ -415,7 +423,8 @@ describe('third-party settlement execution against OpenOracle', () => {
 		const rpc = swallowingRpc()
 		try {
 			const records: SettlementRecord[] = []
-			const base = await context(records, [])
+			const activity: TransactionActivity[] = []
+			const base = await context(records, activity)
 			const config = { ...base.config, connectivity: { ...base.config.connectivity, publicRpcUrls: [rpc.url] }, pollMilliseconds: 5_000 }
 			const nonce = await client.getTransactionCount({ address: account.address, blockTag: 'pending' })
 			const plan = { coordinator: report.helper.creator, gas: 250_000n, projectedGasCostAttoEth: 10n ** 15n, report, rewardAttoEth: REWARD, token: token2, tokenSymbol: 'TK2' }
@@ -434,6 +443,8 @@ describe('third-party settlement execution against OpenOracle', () => {
 			const retired = records[2]
 			if (retired === undefined) throw new Error('retired record missing')
 			expect(retired).toMatchObject({ finalized: false, replacedBy: rebroadcastHash })
+			// The rebroadcast carried the signed call, so the tracking row is netted under its hash once that is authenticated.
+			expect(activity.at(-1)).toMatchObject({ hash: rebroadcastHash, originalHash: original.transactionHash, status: 'confirmed', trackedNetProfitEth: decimalSignedEth(REWARD - parseDecimalWeth(final.actualGasCostEth ?? '0')) })
 			// A reorg orphans the rebroadcast and the original lands instead: the original is credited and the rebroadcast is live again.
 			await node.anvilWindowEthereum.anvilRevert(snapshot)
 			const [raw] = rpc.swallowed
