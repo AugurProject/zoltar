@@ -13,6 +13,10 @@ import type { DeploymentSettings } from '#config/deployment-settings'
 import type { ExclusiveProcessLock } from '#state/position-store'
 import example from '../../config/operator.example.json'
 import { startOperatorControlPlane } from '../../src/runtime/operator-control-plane.ts'
+import { clearDeploymentRecovery, type DeploymentRecoveryState } from '../../src/runtime/signer-operations.ts'
+import { executorDeploymentIntentPath, saveExecutorDeploymentIntent } from '#execution/executor-deployment-store'
+import { deterministicDeploymentProxy, executorDeploymentPlan } from '#execution/executor-deployment-primitives'
+import { keccak256 } from '@zoltar/bot-shared/ethereum'
 import { applyQueuedExecutionSettings, applyQueuedSigner } from '../../src/runtime/operator-execution-state.ts'
 
 const temporaryDirectories: string[] = []
@@ -94,16 +98,18 @@ function recordingLockManager() {
 	return { acquired, manager, released }
 }
 
-async function startControlPlane(parameters: { privateKey?: Hex; quorumRpcUrls?: readonly string[]; readRpcUrl?: string; rpcQuorum?: 1 | 2 } = {}) {
+async function startControlPlane(parameters: { deploymentRecovery?: DeploymentRecoveryState; networkConfigured?: boolean; privateKey?: Hex; quorumRpcUrls?: readonly string[]; readRpcUrl?: string; rpcQuorum?: 1 | 2 } = {}) {
 	const directory = await mkdtemp(join(tmpdir(), 'zoltar-arbitrager-control-plane-'))
 	temporaryDirectories.push(directory)
 	const settingsFile = join(directory, 'operator.json')
+	const networkConfigured = parameters.networkConfigured ?? true
 	const settings = parseOperatorSettings({
 		...example,
-		connectivity: { publicRpcUrls: [parameters.readRpcUrl ?? 'https://public.example/'], readRpcUrl: parameters.readRpcUrl ?? 'https://read.example/' },
+		// An unconfigured operator has not saved any RPC endpoints yet.
+		...(networkConfigured ? { connectivity: { publicRpcUrls: [parameters.readRpcUrl ?? 'https://public.example/'], readRpcUrl: parameters.readRpcUrl ?? 'https://read.example/' } } : { connectivity: undefined }),
 		deployment: { ...example.deployment, quorumRpcUrls: parameters.quorumRpcUrls ?? [] },
 		network: 'sepolia',
-		networkConfigured: true,
+		networkConfigured,
 		rpcQuorum: parameters.rpcQuorum ?? 1,
 		runtime: { ...example.runtime, historyFile: join(directory, 'history.jsonl'), positionFile: join(directory, 'positions.json'), priceHistoryFile: join(directory, 'prices.jsonl'), uiPort: await unusedPort() },
 	})
@@ -118,7 +124,7 @@ async function startControlPlane(parameters: { privateKey?: Hex; quorumRpcUrls?:
 		expectedChainId: config.network.chain.id,
 		explorerUrl: config.network.explorerUrl,
 		network: config.network.name,
-		networkConfigured: true,
+		networkConfigured: config.networkConfigured,
 		openOracle: config.openOracle,
 		queuedWallet: undefined,
 		savedWallet: undefined,
@@ -127,7 +133,7 @@ async function startControlPlane(parameters: { privateKey?: Hex; quorumRpcUrls?:
 	const locks = recordingLockManager()
 	const { dashboard, pending } = startOperatorControlPlane({
 		config,
-		deploymentRecovery: { pending: false },
+		deploymentRecovery: parameters.deploymentRecovery ?? { pending: false },
 		fixedState,
 		getCursor: () => undefined,
 		lockManager: locks.manager,
@@ -386,4 +392,43 @@ test('deployment saves merge only the submitted fields into the latest stored se
 	expect((await put('/api/deployment', { deploymentManifest: null })).status).toBe(400)
 	expect((await put('/api/deployment', { executor: '0x0000000000000000000000000000000000000001' })).status).toBe(400)
 	expect((await loadOperatorSettings(settingsFile))?.deployment.uniswapV4Enabled).toBe(true)
+})
+
+test('resume names the pending executor deployment recovery and the snapshot reports it until the deployment is reconciled', async () => {
+	const privateKey = `0x${'33'.repeat(32)}` as Hex
+	const account = privateKeyToAccount(privateKey)
+	const salt = `0x${'44'.repeat(32)}` as Hex
+	const plan = executorDeploymentPlan(salt)
+	const serializedTransaction = await account.signTransaction({ chainId: 11_155_111, data: plan.calldata, gas: 3_000_000n, gasPrice: 1n, nonce: 0, to: deterministicDeploymentProxy })
+	const transactionHash = keccak256(serializedTransaction)
+	const deploymentRecovery: DeploymentRecoveryState = { pending: true, transactionHash }
+	const { pending, publicState, put, settingsFile, state } = await startControlPlane({ deploymentRecovery, privateKey })
+	await saveExecutorDeploymentIntent(executorDeploymentIntentPath(settingsFile, 'sepolia'), { account: account.address, address: plan.address, chainId: 11_155_111, salt, serializedTransaction, transactionHash, version: 1 })
+	expect((await publicState())['executorDeploymentRecovery']).toEqual({ transactionHash })
+
+	const resume = await put('/api/paused', { paused: false })
+	expect(resume.status).toBe(400)
+	expect(await resume.json()).toEqual({ error: 'Recover the pending executor deployment before resuming execution' })
+	expect(pending.paused).toBeUndefined()
+	expect(state.paused).toBe(true)
+	expect((await loadOperatorSettings(settingsFile))?.paused).toBe(true)
+
+	// Pausing is never blocked by recovery, and the snapshot keeps naming the pending deployment.
+	const pause = await put('/api/paused', { paused: true })
+	expect(pause.status, await pause.clone().text()).toBe(200)
+	expect((await publicState())['executorDeploymentRecovery']).toEqual({ transactionHash })
+
+	clearDeploymentRecovery(deploymentRecovery)
+	expect((await publicState())['executorDeploymentRecovery']).toBeUndefined()
+})
+
+test('resume names the missing chain configuration instead of the generic run-state fallback', async () => {
+	const { publicState, put, state } = await startControlPlane({ networkConfigured: false })
+	expect((await publicState())['networkConfigured']).toBe(false)
+	const resume = await put('/api/paused', { paused: false })
+	expect(resume.status).toBe(400)
+	expect(await resume.json()).toEqual({ error: 'Select and save the chain and RPC endpoints before changing chain-specific settings' })
+	expect(state.paused).toBe(true)
+	// Pausing never needs a configured chain.
+	expect((await put('/api/paused', { paused: true })).status).toBe(200)
 })
