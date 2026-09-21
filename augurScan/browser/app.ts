@@ -514,7 +514,7 @@ export async function startScanner(demoFactory?: DemoFactory) {
 
 	const until = (value: string | number | Date | null | undefined) => {
 		if (!value) return 'time unknown'
-		const seconds = Math.ceil((new Date(value).getTime() - Date.now()) / 1000)
+		const seconds = Math.ceil((new Date(value).getTime() - (Date.now() + serverClockOffsetMs)) / 1000)
 		if (seconds <= 0) return 'now'
 		return seconds < 60 ? `in ${seconds}s` : `in ${Math.ceil(seconds / 60)}m`
 	}

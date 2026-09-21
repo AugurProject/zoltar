@@ -103,7 +103,9 @@
   function formatFixed(value, digits = 2) {
     if (!Number.isFinite(value))
       return "not available";
-    return value.toFixed(digits).replace(/\.?0+$/, "");
+    const fixed = value.toFixed(digits);
+    const trimmed = fixed.includes(".") ? fixed.replace(/\.?0+$/, "") : fixed;
+    return trimmed === "-0" ? "0" : trimmed;
   }
   function formatEth(value) {
     return `${formatFixed(value)} ETH`;
