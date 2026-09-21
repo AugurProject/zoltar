@@ -136,7 +136,7 @@ export function useMarketDiscoveryController({
 				market.setDiscoveryState('ready')
 				return
 			}
-			const detail = publicErrorMessage(error, 'Security pool discovery failed')
+			const detail = publicErrorMessage(error, route === 'universe' ? 'Universe discovery failed' : 'Security pool discovery failed')
 			market.setDiscoveryError(detail)
 			market.setDiscoveryState('error')
 			if (background) return

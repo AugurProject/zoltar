@@ -192,7 +192,11 @@ export async function loadZoltarQuestionPage(client: ReadClient, pageIndex: numb
 	}
 }
 
-/** Reads a universe from Zoltar; callers with their own deployment configuration pass its Zoltar address so every read targets the same deployment. */
+/**
+ * Reads a universe from Zoltar. Callers with their own deployment configuration pass its Zoltar address so the universe reads
+ * target that deployment; the fork question and outcome labels still come from the active profile's question data, so the
+ * address must belong to the same canonical deployment as the active network profile.
+ */
 export async function loadZoltarUniverseSummary(client: ReadClient, universeId: bigint, zoltarAddress: Address = getDeploymentStepAddress('zoltar')): Promise<ZoltarUniverseSummary | undefined> {
 	const [repToken, universe, forkTime, forkThresholdAttoRep, forkBurnDivisor] = await readRequiredMulticall(client, [
 		{

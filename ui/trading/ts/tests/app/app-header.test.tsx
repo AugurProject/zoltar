@@ -76,6 +76,27 @@ describe('trading header', () => {
 		await waitFor(() => expect(rendered.container.querySelector('.header-toolbar-controls .toolbar-field-value')?.textContent).toBe('Unavailable'))
 	})
 
+	test('shows wallet connection failures on the universe route', async () => {
+		window.history.replaceState(undefined, '', '/#/universe')
+		const configuration: DeploymentConfiguration = { chainId: 31_337, chainName: 'Local', rpcUrl: 'http://127.0.0.1:1', securityPoolFactory: `0x${'11'.repeat(20)}`, factory: `0x${'22'.repeat(20)}`, router: `0x${'33'.repeat(20)}`, feeBps: 30 }
+		const services = {
+			...liveTradingControllerServices,
+			createTradingPublicClient: () => ({}),
+			validateLiveDeployment: async () => undefined,
+			discoverUniverses: async () => ({ start: 0n, count: 0n, total: 0n, previousStart: undefined, nextStart: undefined, markets: [], universeIds: [0n], selectedUniverseId: 0n }),
+		}
+		const rendered = await renderIntoDocument(<App initializeEnvironment={async () => undefined} loadLiveDeployment={async () => configuration} liveTradingServices={services} />)
+		cleanupRendered = rendered.cleanup
+		await waitFor(() => expect(rendered.container.querySelector('.header-toolbar-controls .toolbar-field-value')?.textContent).toBe('Genesis (0x0)'))
+		const walletButton = rendered.container.querySelector<HTMLButtonElement>('.trading-wallet-actions .wallet-button')
+		expect(walletButton?.textContent).toBe('Connect wallet')
+		await act(async () => {
+			walletButton?.click()
+			await Bun.sleep(10)
+		})
+		await waitFor(() => expect(rendered.container.querySelector('#app-content [role="alert"]')?.textContent).toContain('No injected wallet was found'))
+	})
+
 	test('renders an explicit not-found route and updates the document title', async () => {
 		window.history.replaceState(undefined, '', '/#/missing')
 		expect(tradingRouting.resolve(window.location.hash)).toBe('not-found')

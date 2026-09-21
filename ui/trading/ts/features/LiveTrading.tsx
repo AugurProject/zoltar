@@ -164,6 +164,7 @@ export function LiveTrading({
 			return (
 				<div className='route-view-flow'>
 					<RouteHeader title={appCopy.universe} description={appCopy.universeRouteDescription} />
+					<ErrorNotice message={connectionMessage} />
 					{discoveryState === 'error' ? (
 						<RetryableNotice message={liveCopy.universeDiscoveryFailed(discoveryError)} retryLabel={commonCopy.retry} onRetry={refreshFromControl} disabled={workflowLocked} />
 					) : (
@@ -171,7 +172,7 @@ export function LiveTrading({
 					)}
 				</div>
 			)
-		return <UniverseDirectory configuration={configuration} universeId={BigInt(confirmedUniverseId)} {...(loadUniverseSummary === undefined ? {} : { loadUniverse: loadUniverseSummary })} />
+		return <UniverseDirectory configuration={configuration} connectionMessage={connectionMessage} universeId={BigInt(confirmedUniverseId)} {...(loadUniverseSummary === undefined ? {} : { loadUniverse: loadUniverseSummary })} />
 	}
 	if (isTradingLookupRoute(route)) {
 		const routePresentation = liveWorkflowRoutePresentation(route)

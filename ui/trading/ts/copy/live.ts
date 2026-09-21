@@ -85,8 +85,12 @@ function securityPoolFactoryDiscoveryFailed(error?: string) {
 	return `Security pool discovery failed: ${error ?? ''}`
 }
 
+const universeDiscoveryFailedLead = 'Universe discovery failed'
+
 function universeDiscoveryFailed(error?: string) {
-	return `Universe discovery failed: ${error ?? unknownDiscovery}`
+	// A redacted detail already reads as the lead; do not prefix it twice.
+	if (error === undefined || error.startsWith(universeDiscoveryFailedLead)) return error ?? `${universeDiscoveryFailedLead}: ${unknownDiscovery}`
+	return `${universeDiscoveryFailedLead}: ${error}`
 }
 
 function securityPoolCouldNotLoad(error: string) {

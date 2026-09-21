@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'preact/hooks'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
+import { ErrorNotice } from '@zoltar/ui-core-shared/components/ErrorNotice.js'
 import { RetryableNotice } from '@zoltar/ui-core-shared/components/RetryableNotice.js'
 import { RouteHeader } from '@zoltar/ui-core-shared/components/RouteHeader.js'
 import { StateHint } from '@zoltar/ui-core-shared/components/StateHint.js'
@@ -19,6 +20,8 @@ const loadUniverseSummary: LoadUniverseSummary = async (configuration, universeI
 
 type UniverseDirectoryProps = {
 	configuration: DeploymentConfiguration
+	/** Route-scoped wallet feedback rendered under the header, like every other live route. */
+	connectionMessage?: string | undefined
 	loadUniverse?: LoadUniverseSummary
 	/** The universe the market, liquidity, and portfolio routes currently follow. */
 	universeId: bigint
@@ -30,7 +33,7 @@ type UniverseLoadState = Readonly<{ kind: 'loading' } | { kind: 'ready'; univers
  * The universe route: where the selected universe comes from, what forked it, and which child universes can be opened.
  * Selection goes through the shared `universe` query parameter, so every route follows the choice made here.
  */
-export function UniverseDirectory({ configuration, loadUniverse = loadUniverseSummary, universeId }: UniverseDirectoryProps) {
+export function UniverseDirectory({ configuration, connectionMessage, loadUniverse = loadUniverseSummary, universeId }: UniverseDirectoryProps) {
 	const [state, setState] = useState<UniverseLoadState>({ kind: 'loading' })
 	const [retryNonce, setRetryNonce] = useState(0)
 	useEffect(() => {
@@ -58,6 +61,7 @@ export function UniverseDirectory({ configuration, loadUniverse = loadUniverseSu
 	return (
 		<div className='route-view-flow'>
 			<RouteHeader title={appCopy.universe} description={appCopy.universeRouteDescription} actions={genesisAction} />
+			<ErrorNotice message={connectionMessage} />
 			{state.kind === 'loading' ? <StateHint announcement='polite' presentation={{ key: 'loading', badgeLabel: commonCopy.loading, badgeTone: 'loading', detail: commonCopy.loadingUniverseDetails, detailIsLoading: true }} /> : undefined}
 			{state.kind === 'error' ? <RetryableNotice onRetry={() => setRetryNonce(current => current + 1)} retryLabel={commonCopy.retry} presentation={{ key: 'load_failed', badgeLabel: commonCopy.error, badgeTone: 'blocked', detail: state.message }} /> : undefined}
 			{state.kind === 'ready' && state.universe === undefined ? <StateHint presentation={{ key: 'not_found', badgeLabel: commonCopy.notFound, badgeTone: 'blocked', detail: appCopy.universeNotFound(formatUniverseLabel(universeId)) }} /> : undefined}

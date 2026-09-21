@@ -146,6 +146,24 @@ describe('universe directory', () => {
 		expect(rendered.container.querySelectorAll('.entity-card-list .entity-card')).toHaveLength(2)
 	})
 
+	test('redacts an address-bearing discovery error to the universe lead without prefixing it twice', async () => {
+		const services = {
+			...liveTradingControllerServices,
+			createTradingPublicClient: () => ({}),
+			validateLiveDeployment: async () => undefined,
+			discoverUniverses: async () => {
+				throw new Error(`call to 0x${'ab'.repeat(20)} reverted`)
+			},
+		}
+		const rendered = await renderIntoDocument(<LiveTrading route='universe' configuration={configuration} configurationError={undefined} selectedUniverseId='0' confirmedUniverseId={undefined} onWorkflowLockChange={() => undefined} controllerServices={services} />)
+		cleanupRendered = rendered.cleanup
+		await waitFor(() => expect(rendered.container.textContent).toContain('Universe discovery failed'))
+		const notice = rendered.container.querySelector('[role="alert"]')?.textContent ?? ''
+		expect(notice).toBe('Universe discovery failed')
+		expect(notice).not.toContain('Security pool')
+		expect(notice).not.toContain('0xab')
+	})
+
 	test('changing the universe does not count as an environment change', () => {
 		const base = getTradingEnvironmentLocationKey({ hash: '#/market?simulate=1&simScenario=deployed', search: '' })
 		expect(getTradingEnvironmentLocationKey({ hash: '#/market?simulate=1&simScenario=deployed&universe=2', search: '' })).toBe(base)
