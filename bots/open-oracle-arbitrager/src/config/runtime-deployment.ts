@@ -1,6 +1,6 @@
 import { canonicalExecutorIdentity } from '#execution/executor-identity'
 import { canonicalSecurityPoolFactory } from '#config/network'
-import type { DeploymentRole } from '#config/deployment-roles'
+import { requiredDeploymentRoles, type DeploymentRole } from '#config/deployment-roles'
 import { rpcFailureWithContext, type Address, type Hex, type TransactionLog } from '@zoltar/bot-shared/ethereum'
 import { OPEN_ORACLE_FLAG_STORE_ALL, OPEN_ORACLE_FLAG_TIME_TYPE, OPEN_ORACLE_FLAG_TRACK_DISPUTES, OPEN_ORACLE_REPORT_SETTLED_TOPIC } from '@zoltar/open-oracle-shared/openOracle/openOracle'
 import { openOraclePriceCoordinatorAbi } from '#contracts/abi'
@@ -60,16 +60,22 @@ export async function loadCoordinatorPolicies(client: ReadClient, config: Pick<C
 }
 
 function requiredDeploymentIdentities(config: Configuration) {
-	const identities: { address: Address; role: DeploymentRole }[] = [
-		{ address: config.openOracle, role: 'open-oracle' },
-		{ address: config.network.weth, role: 'weth' },
-		{ address: canonicalSecurityPoolFactory(config.network.name), role: 'security-pool-factory' },
-	]
-	if (config.router !== undefined) identities.push({ address: config.network.factory, role: 'uniswap-factory' }, { address: config.network.quoter, role: 'uniswap-quoter' }, { address: config.router, role: 'uniswap-router' })
-	if (config.v2Router !== undefined) identities.push({ address: config.v2Router, role: 'uniswap-v2-router' })
-	if (config.v4PoolManager !== undefined) identities.push({ address: config.v4PoolManager, role: 'uniswap-v4-pool-manager' })
-	if (config.v4Quoter !== undefined) identities.push({ address: config.v4Quoter, role: 'uniswap-v4-quoter' })
-	return identities
+	const addresses: Record<DeploymentRole, Address | undefined> = {
+		'open-oracle': config.openOracle,
+		'security-pool-factory': canonicalSecurityPoolFactory(config.network.name),
+		'uniswap-factory': config.network.factory,
+		'uniswap-quoter': config.network.quoter,
+		'uniswap-router': config.router,
+		'uniswap-v2-router': config.v2Router,
+		'uniswap-v4-pool-manager': config.v4PoolManager,
+		'uniswap-v4-quoter': config.v4Quoter,
+		weth: config.network.weth,
+	}
+	return requiredDeploymentRoles({ v2: config.v2Router !== undefined, v3: config.router !== undefined, v4: config.v4PoolManager !== undefined || config.v4Quoter !== undefined }).map(role => {
+		const address = addresses[role]
+		if (address === undefined) throw new Error(`Canonical ${role} address is unavailable on ${config.network.name}`)
+		return { address, role }
+	})
 }
 
 /**

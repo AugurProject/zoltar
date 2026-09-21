@@ -9,6 +9,7 @@ import { operatorSnapshot, type MutableStrategy, type OperatorState, type Queued
 import example from '../../config/operator.example.json'
 import { parseOperatorSettings, parseRuntimeLimitsRequest, parseStoredCentralizedMarkets, serializeOperatorSettings, serializeRuntimeLimits, serializeStoredCentralizedMarkets } from '#config/settings-store'
 import { mergeStoredDeploymentUpdate } from '#config/deployment-settings'
+import { requiredDeploymentRoles } from '#config/deployment-roles'
 import { validateSubmissionSettings } from '#execution/transaction-submission'
 
 const servers: ReturnType<typeof startDashboardServer>[] = []
@@ -773,13 +774,9 @@ test('go-live checklist unlocks the switch once every prerequisite holds, report
 	const deploymentRequests: unknown[] = []
 	let holdConnectivity: Promise<void> | undefined
 	const executor = canonicalExecutorIdentity().address
-	let canonicalDeployments: OperatorState['canonicalDeployments'] = {
-		contracts: [
-			{ address, deployed: true, role: 'open-oracle' },
-			{ address, deployed: false, role: 'uniswap-router' },
-		],
-		executorDeployed: false,
-	}
+	// The running V3-only profile has been inspected once; the V3 router is the only contract still missing.
+	const inspectedContracts = (routerDeployed: boolean) => requiredDeploymentRoles({ v2: false, v3: true, v4: false }).map(role => ({ address, deployed: routerDeployed || role !== 'uniswap-router', role }))
+	let canonicalDeployments: OperatorState['canonicalDeployments'] = { contracts: inspectedContracts(false), executorDeployed: false }
 	const snapshot = () =>
 		operatorSnapshot(
 			{ ...operatorState(), canonicalDeployments },
@@ -809,13 +806,7 @@ test('go-live checklist unlocks the switch once every prerequisite holds, report
 		isNetworkConfigured: () => true,
 		setPaused: () => undefined,
 		deployExecutor: () => {
-			canonicalDeployments = {
-				contracts: [
-					{ address, deployed: true, role: 'open-oracle' },
-					{ address, deployed: true, role: 'uniswap-router' },
-				],
-				executorDeployed: true,
-			}
+			canonicalDeployments = { contracts: inspectedContracts(true), executorDeployed: true }
 			return { address: executor, alreadyDeployed: false, transactionHash: undefined }
 		},
 		predictExecutor: () => ({ address: executor, salt: '0x0' }),
@@ -923,6 +914,11 @@ test('go-live checklist unlocks the switch once every prerequisite holds, report
 	expect(element(window, 'quorum-rpc-urls', window.HTMLTextAreaElement).value).toBe('https://quorum-four.example/\nhttps://quorum-five.example/')
 	expect(element(window, 'deployment-v4-enabled', window.HTMLInputElement).checked).toBe(true)
 	expect(Array.from(window.document.querySelectorAll('.settings-badges[data-form="deployment-form"] .settings-badge'), badge => badge.textContent)).toEqual(['Queued · next scan'])
+	// The saved V4 venue needs contracts the last scan never inspected, so the verified V3-only inspection no longer unlocks arming.
+	expect(checklistDetail('Canonical contracts')).toBe('Waiting for the next scan')
+	expect(checklistReady()).toEqual(['true', 'true', 'true', 'true', 'false', 'true', 'false'])
+	expect(element(window, 'execution-mode-summary', window.HTMLElement).textContent).toBe('Live · dry run at the next scan')
+	expect(element(window, 'execution-enabled', window.HTMLInputElement).disabled).toBe(true)
 	// The universe form has no controls of its own, yet it joins the same clean/queued model as every other panel.
 	expect(Array.from(window.document.querySelectorAll('.settings-badges[data-form="tokens-form"] .settings-badge'), badge => badge.textContent)).toEqual(['Queued · next scan'])
 	const universeSave = element(window, 'tokens-form', window.HTMLFormElement).querySelector('button[type="submit"]')

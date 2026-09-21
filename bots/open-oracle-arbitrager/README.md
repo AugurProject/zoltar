@@ -401,7 +401,9 @@ complete JSON editor and applies at the next scan boundary. The form shows a
 readiness checklist (signer, quorum RPCs, venue, deployed executor, canonical
 contracts, delivery) and keeps the live-execution switch locked until every
 required row holds; the on-chain rows come from the latest scan, so a freshly
-deployed executor appears once the bot has inspected it. A trailing **Pool
+deployed executor appears once the bot has inspected it, and a venue saved since
+that scan holds the contracts row until the next scan inspects its contracts. A
+trailing **Pool
 coordinators** row is advisory: arming does not need a discovered pool, but nothing
 can trade until one exists.
 

@@ -1,4 +1,4 @@
-import type { DeploymentRole } from '#config/deployment-roles'
+import { requiredDeploymentRoles, type DeploymentRole } from '#config/deployment-roles'
 import type { PublicOperatorSnapshot } from '#state/operator-state'
 import type { DashboardDeployment } from './api-validation.ts'
 import { element, setText, shorten } from './dom.js'
@@ -35,12 +35,19 @@ const contractRoleNames: Record<DeploymentRole, string> = {
 	weth: 'WETH',
 }
 
-function canonicalContractsRow(snapshot: PublicOperatorSnapshot): ReadinessRow {
+/**
+ * Readiness follows the saved venues, not the running ones: a venue saved since the last scan adds contracts the scan has
+ * not inspected yet, and a venue removed since then no longer matters.
+ */
+function canonicalContractsRow(snapshot: PublicOperatorSnapshot, deployment: DashboardDeployment): ReadinessRow {
 	const inspected = snapshot.canonicalDeployments
 	if (inspected === undefined) return { detail: 'Waiting for the first scan', label: 'Canonical contracts', ready: false }
-	const missing = inspected.contracts.filter(contract => !contract.deployed)
-	if (missing.length === 0) return { detail: `${inspected.contracts.length.toString()} verified`, label: 'Canonical contracts', ready: true }
-	return { detail: `Missing ${missing.map(contract => contractRoleNames[contract.role]).join(', ')}`, label: 'Canonical contracts', ready: false }
+	const required = requiredDeploymentRoles({ v2: deployment.uniswapV2Enabled && snapshot.network === 'mainnet', v3: deployment.uniswapV3Enabled, v4: deployment.uniswapV4Enabled })
+	const contracts = required.map(role => inspected.contracts.find(contract => contract.role === role))
+	if (contracts.some(contract => contract === undefined)) return { detail: 'Waiting for the next scan', label: 'Canonical contracts', ready: false }
+	const missing = contracts.flatMap(contract => (contract === undefined || contract.deployed ? [] : [contractRoleNames[contract.role]]))
+	if (missing.length === 0) return { detail: `${required.length.toString()} verified`, label: 'Canonical contracts', ready: true }
+	return { detail: `Missing ${missing.join(', ')}`, label: 'Canonical contracts', ready: false }
 }
 
 function readinessRows(snapshot: PublicOperatorSnapshot, configuration: GoLiveConfiguration): ReadinessRow[] {
@@ -55,7 +62,7 @@ function readinessRows(snapshot: PublicOperatorSnapshot, configuration: GoLiveCo
 		{ detail: `${quorumRpcs.toString()} configured · ${requiredQuorumRpcs.toString()} required`, label: 'Independent quorum RPCs', ready: quorumRpcs >= requiredQuorumRpcs },
 		{ detail: venueEnabled ? 'Enabled' : 'Enable a Uniswap version under Venues and executor', label: 'Trading venue', ready: venueEnabled },
 		executorRow(snapshot),
-		canonicalContractsRow(snapshot),
+		canonicalContractsRow(snapshot, configuration.deployment),
 		{ detail: configuration.submissionMode === 'private' ? `Private · ${relays.toString()} relay${relays === 1 ? '' : 's'}` : 'Public mempool', label: 'Delivery', ready: configuration.submissionMode === 'public' || relays > 0 },
 		{ advisory: true, detail: coordinators === 0 ? 'None discovered · not required to arm' : `${coordinators.toString()} discovered`, label: 'Pool coordinators', ready: coordinators > 0 },
 	]
