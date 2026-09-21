@@ -45,8 +45,17 @@ export async function loadSettings(path = resolve(process.env['ZOLTAR_LIQUIDATOR
 	return { path, revision: revision(contents), settings: parseSettings(JSON.parse(contents)) }
 }
 
+/**
+ * The form a restart can start from: live execution with a memory-only signer is armed in the running process alone,
+ * so the file keeps paused dry-run mode and a restart cannot execute without a saved key.
+ */
+function restartSafeSettings(settings: OperatorSettings): OperatorSettings {
+	if (settings.privateKey !== undefined || !settings.runtime.execute) return settings
+	return { ...settings, paused: true, runtime: { ...settings.runtime, execute: false } }
+}
+
 export async function saveSettings(path: string, settings: OperatorSettings, expectedRevision?: string, filesystem: SettingsFilesystem = settingsFilesystem) {
-	const contents = `${JSON.stringify(serializedSettings(settings), undefined, 2)}\n`
+	const contents = `${JSON.stringify(serializedSettings(restartSafeSettings(settings)), undefined, 2)}\n`
 	await filesystem.mkdir(dirname(path), { mode: 0o700, recursive: true })
 	if (expectedRevision !== undefined) {
 		const current = await filesystem.readFile(path, 'utf8')

@@ -120,6 +120,18 @@ export function assertSettingsUpdatePaused(current: OperatorSettings, runtimePau
 	}
 }
 
+/** The execution mode switch: exactly `execute` and the revision the operator loaded, applied to the current file. */
+export function executionCandidate(current: OperatorSettings, value: unknown) {
+	const body = record(value, 'Execution mode update')
+	exactKeys(body, ['execute', 'revision'], 'Execution mode update')
+	if (typeof body['execute'] !== 'boolean') throw new Error('Execution mode update requires execute')
+	const serialized = serializedSettings(current)
+	return {
+		revision: body['revision'],
+		settings: parseSettings({ ...serialized, runtime: { ...serialized.runtime, execute: body['execute'] } }, current.privateKey),
+	}
+}
+
 export function settingsPatchCandidate(current: OperatorSettings, value: unknown) {
 	const body = record(value, 'Settings update')
 	exactKeys(body, ['patch', 'revision'], 'Settings update')

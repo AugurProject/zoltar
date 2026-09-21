@@ -1,16 +1,12 @@
 import { expect, test } from 'bun:test'
 import { Window } from 'happy-dom'
 import { repMarketConsensusPanel } from '@zoltar/bot-shared/dashboard/rep-market-consensus'
-import { rpcConnectivityFields } from '@zoltar/bot-shared/dashboard/rpc-connectivity'
 import { operatorHeader } from '../../src/dashboard/header.ts'
+import { settingsPageMarkup } from '../../src/dashboard/settings-page.ts'
 
 async function dashboardFixture() {
 	const source = await Bun.file(new URL('../../src/dashboard/index.html', import.meta.url)).text()
-	return source
-		.replace('<!-- operator-header -->', operatorHeader)
-		.replace('<!-- rep-market-consensus -->', repMarketConsensusPanel())
-		.replace('<!-- rpc-connectivity-fields -->', rpcConnectivityFields({ submissionLimit: 8, statusId: 'connectivity-status' }))
-		.replace('<script type="module" src="/dashboard.js"></script>', '')
+	return source.replace('<!-- operator-header -->', operatorHeader).replace('<!-- rep-market-consensus -->', repMarketConsensusPanel()).replace('<!-- settings-page -->', settingsPageMarkup).replace('<script type="module" src="/dashboard.js"></script>', '')
 }
 
 test('keeps global notices in the header on every tab', async () => {

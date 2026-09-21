@@ -1,5 +1,4 @@
 import { repMarketConsensusPanel } from '@zoltar/bot-shared/dashboard/rep-market-consensus'
-import { rpcConnectivityFields } from '@zoltar/bot-shared/dashboard/rpc-connectivity'
 import type { DeploymentSettings } from '#config/deployment-settings'
 import { CONFIGURATION_REVISION_CONFLICT, type StoredCentralizedMarketSettings, type StoredRuntimeLimits } from '#config/settings-store'
 import type { SubmissionSettings } from '#execution/transaction-submission'
@@ -25,6 +24,7 @@ import {
 import { errorMessage } from '@zoltar/bot-shared/infrastructure/error-message'
 import { join } from 'node:path'
 import { operatorHeader } from './header.ts'
+import { settingsPageMarkup } from './settings-page.ts'
 
 type DashboardController = {
 	getConfiguration?: () => unknown | Promise<unknown>
@@ -191,11 +191,7 @@ export function startDashboardServer(port: number, controller: DashboardControll
 		const page = pathname === '/' ? 'overview' : pathname.slice(1)
 		if (!dashboardPages.has(page)) return undefined
 		const source = await Bun.file(join(directory, 'index.html')).text()
-		return source
-			.replace('<!-- rep-market-consensus -->', repMarketConsensusPanel())
-			.replace('<!-- rpc-connectivity-fields -->', rpcConnectivityFields({ independentQuorum: true, statusId: 'connectivity-status', statusText: '', submissionLimit: 8, submitLabel: 'Save RPC endpoints' }))
-			.replace('<!-- operator-header -->', operatorHeader)
-			.replace('<body>', `<body data-page="${page}">`)
+		return source.replace('<!-- rep-market-consensus -->', repMarketConsensusPanel()).replace('<!-- settings-page -->', settingsPageMarkup).replace('<!-- operator-header -->', operatorHeader).replace('<body>', `<body data-page="${page}">`)
 	}
 	const transpiler = new Bun.Transpiler({ loader: 'ts', target: 'browser' })
 	const hostname = controller.hostname ?? '127.0.0.1'

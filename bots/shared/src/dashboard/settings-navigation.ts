@@ -1,9 +1,14 @@
-import { element } from './dom.js'
+import { element } from './dom.ts'
 
-const NARROW_VIEWPORT = '(max-width: 680px)'
+const NARROW_VIEWPORT = '(max-width: 42rem)'
 
 function sections() {
 	return Array.from(document.querySelectorAll('.settings-section')).filter((section): section is HTMLElement => section instanceof HTMLElement)
+}
+
+/** A section rendered with `collapsed` (such as Advanced) starts closed everywhere and only expands when it is the target. */
+function startsCollapsed(section: HTMLElement) {
+	return section.dataset['settingsCollapsed'] === 'true'
 }
 
 function chips() {
@@ -29,10 +34,10 @@ function reducedMotion() {
 	return typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches
 }
 
-/** Every non-advanced group open, which is the wide-viewport layout and the state a widened viewport returns to. */
+/** Every non-collapsed group open, which is the wide-viewport layout and the state a widened viewport returns to. */
 function expandAll() {
 	for (const section of sections()) {
-		if (section.id === 'settings-advanced') continue
+		if (startsCollapsed(section)) continue
 		for (const details of section.querySelectorAll('details.settings-group')) if (details instanceof HTMLDetailsElement) details.open = true
 	}
 }
@@ -43,8 +48,7 @@ function expandOnly(sectionId: string) {
 		const open = section.id === sectionId
 		for (const details of section.querySelectorAll('details.settings-group')) {
 			if (!(details instanceof HTMLDetailsElement)) continue
-			// Advanced panels start collapsed everywhere and only expand when that group is the target.
-			if (section.id === 'settings-advanced' && !open) continue
+			if (startsCollapsed(section) && !open) continue
 			details.open = open
 		}
 	}
