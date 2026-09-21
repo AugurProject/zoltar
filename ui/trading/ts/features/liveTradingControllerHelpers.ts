@@ -51,7 +51,7 @@ export function walletSummaryDiscoveryRetryStart(discoveryState: 'loading' | 're
 	return discoveryState === 'error' || !selectedPoolAvailable || selectedPoolLoadError !== undefined ? currentPageStart : undefined
 }
 
-export function walletSummaryAvailability(configurationAvailable: boolean, configurationError: string | undefined, discoveryState: 'loading' | 'ready' | 'error', discoveryError: string | undefined, selectedPoolAvailable: boolean, discoveryLead = liveCopy.discoveryFailureLead('market')) {
+export function walletSummaryAvailability(configurationAvailable: boolean, configurationError: string | undefined, discoveryState: 'loading' | 'ready' | 'error', discoveryError: string | undefined, selectedPoolAvailable: boolean, discoveryLead: string) {
 	if (!configurationAvailable) return configurationError === undefined ? { status: 'loading' as const, error: undefined, errorLabel: undefined } : { status: 'error' as const, error: configurationError, errorLabel: 'Deployment unavailable' }
 	if (discoveryState === 'loading') return { status: 'loading' as const, error: undefined, errorLabel: undefined }
 	if (discoveryState === 'error') return { status: 'error' as const, error: liveCopy.describeDiscoveryFailure(discoveryLead, discoveryError), errorLabel: discoveryLead }

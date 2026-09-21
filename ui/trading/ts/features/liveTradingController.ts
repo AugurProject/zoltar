@@ -1,3 +1,4 @@
+import type { UniverseDiscoveryScope } from '../lib/universeSelection.js'
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import { useCallback, useMemo, useRef } from 'preact/hooks'
 import { parseNonNegativeDecimalInput } from '@zoltar/ui-core-shared/forms/decimal.js'
@@ -34,7 +35,7 @@ export function useLiveTradingController({
 	configuration: DeploymentConfiguration | undefined
 	configurationError: string | undefined
 	selectedUniverseId: string | undefined
-	onUniversesChange(universeIds: readonly bigint[], selectedUniverseId: bigint | undefined): void
+	onUniversesChange(universeIds: readonly bigint[], selectedUniverseId: bigint | undefined, scope: UniverseDiscoveryScope): void
 	onWorkflowLockChange(locked: boolean): void
 	onWalletSummaryChange(summary: WalletSummaryState): void
 	walletSummaryRetryNonce: number

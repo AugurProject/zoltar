@@ -6,6 +6,7 @@ import type { DeploymentConfiguration } from '../../protocol/config.js'
 import { marketAcceptsNewRisk, publicErrorMessage, type LiveMarket } from '../../protocol/live.js'
 import { discoveryCommitAllowed, quoteBasisChanged, securityPoolAddressFromRoute, walletSummaryDiscoveryRetryStart, type WorkflowOwner } from '../liveTradingControllerHelpers.js'
 import { liveCopy } from '../../copy/live.js'
+import type { UniverseDiscoveryScope } from '../../lib/universeSelection.js'
 import { parsedUniverseId } from './useLiveTradingState.js'
 import { tradingListKindFor } from '../../lib/routing.js'
 import type { useMarketDiscovery } from './useMarketDiscovery.js'
@@ -48,7 +49,7 @@ export function useMarketDiscoveryController({
 	configuration: DeploymentConfiguration | undefined
 	configurationError: string | undefined
 	selectedUniverseId: string | undefined
-	onUniversesChange(universeIds: readonly bigint[], selectedUniverseId: bigint | undefined): void
+	onUniversesChange(universeIds: readonly bigint[], selectedUniverseId: bigint | undefined, scope: UniverseDiscoveryScope): void
 	walletSummaryRetryNonce: number
 	selected: LiveMarket | undefined
 	routePool: Address | undefined
@@ -94,6 +95,8 @@ export function useMarketDiscoveryController({
 		const background = options.background === true
 		if (background && (market.discoveryState === 'loading' || (backgroundDiscovery.current !== undefined && discoveryRequests.isCurrent(backgroundDiscovery.current)))) return
 		const request = discoveryRequests.begin()
+		// The scope is fixed when the request begins; a request that lands after the URL or route moved on still answers only its own question.
+		const scope: UniverseDiscoveryScope = { requestedUniverseId: parsedUniverseId(selectedUniverseId), addressedPool: routePool?.toLowerCase() }
 		backgroundDiscovery.current = background ? request : undefined
 		if (!background) {
 			simulationRequests.invalidate()
@@ -127,7 +130,7 @@ export function useMarketDiscoveryController({
 				}
 			}
 			market.setMarkets(discovered.markets)
-			onUniversesChange(discovered.universeIds, discovered.selectedUniverseId)
+			onUniversesChange(discovered.universeIds, discovered.selectedUniverseId, scope)
 			market.setMarketPage({ start: discovered.start, total: discovered.total, previousStart: discovered.previousStart, nextStart: discovered.nextStart })
 			market.setDiscoveryError(undefined)
 			market.setDiscoveryState('ready')
@@ -143,7 +146,7 @@ export function useMarketDiscoveryController({
 			if (background) return
 			if (route === 'portfolio') {
 				portfolio.setPortfolioBalanceState('error')
-				portfolio.setPortfolioBalanceError(`Security pool discovery failed: ${detail}`)
+				portfolio.setPortfolioBalanceError(liveCopy.describeDiscoveryFailure(liveCopy.discoveryFailureLead(route), detail))
 			}
 			if (wallet.accountRef.current !== undefined) {
 				portfolio.setBalanceState('error')

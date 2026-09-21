@@ -1,3 +1,6 @@
+/** What a discovery request was for, captured when it began, so its answer is attributed to that request and not to whatever the URL says when it lands. */
+export type UniverseDiscoveryScope = Readonly<{ requestedUniverseId: bigint | undefined; addressedPool: string | undefined }>
+
 export type LiveUniverses = Readonly<{
 	ids: readonly bigint[]
 	selected: bigint | undefined

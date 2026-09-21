@@ -31,6 +31,7 @@ import type { WalletSummaryState } from '../lib/walletSummaryState.js'
 import { liveRouteLoadingPresentation, liveWorkflowRoutePresentation } from './live/routePresentation.js'
 import { LiveSecurityPoolDetails, PairInitializationAction, SecurityPoolRouteEmptyState } from './LiveSecurityPoolDetails.js'
 import { UniverseDirectory, type LoadUniverseSummary } from './UniverseDirectory.js'
+import type { UniverseDiscoveryScope } from '../lib/universeSelection.js'
 import { LiveMarketBrowser, marketStatusLabel, marketStatusTone } from './LiveMarketBrowser.js'
 import { liveCopy } from '../copy/live.js'
 import * as availabilityCopy from '../copy/availability.js'
@@ -92,7 +93,7 @@ export function LiveTrading({
 	loadUniverseSummary?: LoadUniverseSummary | undefined
 	/** Lets the shell know when universe discovery has failed, so the header can say so instead of loading forever. */
 	onDiscoveryStateChange?: ((state: 'loading' | 'ready' | 'error') => void) | undefined
-	onUniversesChange?(universeIds: readonly bigint[], selectedUniverseId: bigint | undefined): void
+	onUniversesChange?(universeIds: readonly bigint[], selectedUniverseId: bigint | undefined, scope: UniverseDiscoveryScope): void
 	onWorkflowLockChange(locked: boolean): void
 	onWalletSummaryChange?(summary: WalletSummaryState): void
 	walletSummaryRetryNonce?: number
