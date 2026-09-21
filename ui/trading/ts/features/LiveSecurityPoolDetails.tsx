@@ -1,6 +1,7 @@
 import { TimestampValue } from '@zoltar/ui-core-shared/components/TimestampValue.js'
 import { BackingDetails } from './BackingDetails.js'
-import { formatBpsMultiplier, formatCapacityOwnership, formatMintingCapacity, formatUnits } from '../lib/format.js'
+import { formatTrimmedUnits } from '@zoltar/ui-core-shared/lib/formatters.js'
+import { formatBpsMultiplier, formatCapacityOwnership, formatMintingCapacity } from '../lib/format.js'
 import { Badge } from '@zoltar/ui-core-shared/components/Badge.js'
 import { DataGrid } from '@zoltar/ui-core-shared/components/DataGrid.js'
 import { EmptyState } from '@zoltar/ui-core-shared/components/EmptyState.js'
@@ -14,22 +15,7 @@ import { getTradingRouteHref } from '../lib/routing.js'
 import { RouteHeader } from '@zoltar/ui-core-shared/components/RouteHeader.js'
 import { SecurityPoolIdentityFields } from './LiveMarketIdentity.js'
 import { liveCopy } from '../copy/live.js'
-
-function systemStateLabel(state: number) {
-	if (state === 0) return liveCopy.operational
-	if (state === 1) return liveCopy.poolForked
-	if (state === 2) return liveCopy.forkMigration
-	if (state === 3) return liveCopy.forkTruthAuction
-	return liveCopy.unknownSystemState(state)
-}
-
-function questionOutcomeLabel(outcome: number) {
-	if (outcome === 0) return liveCopy.invalid
-	if (outcome === 1) return liveCopy.yes
-	if (outcome === 2) return liveCopy.no
-	if (outcome === 3) return liveCopy.unresolvedOutcome
-	return liveCopy.unknownQuestionOutcome(outcome)
-}
+import { questionOutcomeLabel, systemStateLabel } from '../lib/marketLabels.js'
 
 export function PairInitializationAction({ market, nowSeconds }: { market: LiveMarket; nowSeconds: bigint }) {
 	const blocker = marketNewRiskBlocker(market, nowSeconds)
@@ -46,7 +32,7 @@ export function PairInitializationAction({ market, nowSeconds }: { market: LiveM
 		)
 	return (
 		<div class='pair-initialization'>
-			<p class='detail'>{market.pair === undefined ? liveCopy.undeployedPairDescription(formatUnits(market.feeBps, 2, 2)) : liveCopy.uninitializedPairDescription(formatUnits(market.feeBps, 2, 2))}</p>
+			<p class='detail'>{market.pair === undefined ? liveCopy.undeployedPairDescription(formatTrimmedUnits(market.feeBps, 2, 2)) : liveCopy.uninitializedPairDescription(formatTrimmedUnits(market.feeBps, 2, 2))}</p>
 			<div class='actions'>
 				<a class='button-link primary' href={getTradingRouteHref(`#/${market.pair === undefined ? 'create-market' : 'liquidity'}/${market.pool}`)}>
 					{market.pair === undefined ? liveCopy.deployTradingPool : liveCopy.initializeTradingPool}
@@ -154,9 +140,9 @@ export function LiveSecurityPoolDetails({
 							<ReadOnlyDetailAccordion title={liveCopy.capacity}>
 								<DataGrid dense>
 									<MetricField label={liveCopy.securityMultiplier}>{formatBpsMultiplier(market.statoblastSecurityMultiplierBps)}</MetricField>
-									<MetricField label={liveCopy.initialReportPriorityFee}>{liveCopy.priorityFeePerGas(formatUnits(market.initialReportPriorityFeeAttoEthPerGas, 9))}</MetricField>
+									<MetricField label={liveCopy.initialReportPriorityFee}>{liveCopy.priorityFeePerGas(formatTrimmedUnits(market.initialReportPriorityFeeAttoEthPerGas, 9))}</MetricField>
 									<MetricField label={liveCopy.registeredVaults}>{market.vaultCount.toString()}</MetricField>
-									<MetricField label={liveCopy.perSecondRetentionMultiplier}>{formatUnits(market.currentRetentionRate, 18, 12)}×</MetricField>
+									<MetricField label={liveCopy.perSecondRetentionMultiplier}>{formatTrimmedUnits(market.currentRetentionRate, 18, 12)}×</MetricField>
 									<MetricField label={liveCopy.totalAndFeeEligibleCapacityOwnership}>{formatCapacityOwnership(market.totalCapacityOwnershipAttoRep, market.feeEligibleCapacityOwnershipAttoRep)}</MetricField>
 								</DataGrid>
 							</ReadOnlyDetailAccordion>

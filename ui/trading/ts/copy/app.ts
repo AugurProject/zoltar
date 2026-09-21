@@ -2,9 +2,9 @@ export const appName = 'Statoblast trading'
 export const market = 'Market'
 export const liquidity = 'Liquidity'
 export const portfolio = 'Portfolio'
-export { changeWallet, hideEnvironmentDetails, showEnvironmentDetails } from '@zoltar/ui-core-shared/copy/app.js'
+export { changeWallet } from '@zoltar/ui-core-shared/copy/app.js'
 export { securityPools, universe } from '@zoltar/ui-core-shared/copy/common.js'
-export { balances, connectWallet, deploy, eth, loadingWithEllipsis, rep, retry, unavailable } from '@zoltar/ui-core-shared/copy/common.js'
+export { connectWallet, deploy, loadingWithEllipsis, retry, unavailable } from '@zoltar/ui-core-shared/copy/common.js'
 export const help = 'Help'
 export const securityPool = 'Security pool'
 export const notFound = 'Not found'
@@ -17,7 +17,6 @@ export const loadingBalances = 'Loading balances…'
 export const balancesUnavailable = 'Balances unavailable'
 const walletBalanceReadFailed = 'wallet balance read failed'
 export const loadingWalletBalances = 'Loading wallet ETH and current-universe REP balances'
-export const genesisUniverse = 'Genesis universe'
 export const loadingContracts = 'Loading trading contracts'
 export const marketRouteDescription = 'Open a market by security pool address or pick one from the list.'
 export const liquidityRouteDescription = 'Open a market by security pool address to initialize, add, or remove liquidity.'
@@ -77,10 +76,6 @@ export function disconnectWalletLabel(account: string) {
 
 export function walletBalanceError(errorLabel: string | undefined, error: string | undefined) {
 	return `${errorLabel ?? balancesUnavailable}: ${error ?? walletBalanceReadFailed}`
-}
-
-export function universeLabel(id: string) {
-	return `Universe ${id}`
 }
 
 export function openSecurityPoolLabel(address: string) {

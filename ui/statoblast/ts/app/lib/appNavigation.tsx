@@ -18,10 +18,6 @@ function getOpenOracleViewOptions(routeHash: string, search: string): ViewTabOpt
 	]
 }
 
-export function getShowDeployTab({ applicationDeploymentMissing, deploymentStatusError, deploymentStatuses, hasLoadedDeploymentStatuses }: { applicationDeploymentMissing: boolean; deploymentStatusError: string | undefined; deploymentStatuses: readonly { deployed: boolean }[]; hasLoadedDeploymentStatuses: boolean }) {
-	return deploymentStatusError !== undefined || applicationDeploymentMissing || (hasLoadedDeploymentStatuses && deploymentStatuses.some(step => !step.deployed))
-}
-
 export function getStatoblastRouteTabs({ route, showDeployTab }: { route: string; showDeployTab: boolean }): RouteTabDefinition[] {
 	return withDeploymentTab({
 		deploymentTab: { hash: statoblastRouting.getHash('deploy'), label: commonCopy.deploy, route: 'deploy' },

@@ -6,7 +6,7 @@ import { render } from 'preact'
 import { useState } from 'preact/hooks'
 import { act } from 'preact/test-utils'
 import { useAppRouteEffects } from '../../app/useAppRouteEffects.js'
-import { useUrlState } from '@zoltar/ui-core-shared/app/hooks/useUrlState.js'
+import { useStatoblastUrlState } from '../../app/hooks/useStatoblastUrlState.js'
 import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import { installTestRouting } from '@zoltar/ui-core-shared/tests/testUtils/testRouting.js'
@@ -48,7 +48,7 @@ function RouteEffectsHarness(props: RouteEffectsProps) {
 }
 
 function SecurityPoolQuestionRouteHarness() {
-	const { securityPoolQuestionId } = useUrlState()
+	const { securityPoolQuestionId } = useStatoblastUrlState()
 	const [hasCreationResult, setHasCreationResult] = useState(true)
 	const [marketId, setMarketId] = useState('stale-question')
 	useAppRouteEffects(
@@ -63,7 +63,7 @@ function SecurityPoolQuestionRouteHarness() {
 }
 
 function OpenOracleReportRouteHarness() {
-	const { openOracleReportId } = useUrlState()
+	const { openOracleReportId } = useStatoblastUrlState()
 	const [reportId, setReportId] = useState('stale-report')
 	useAppRouteEffects(
 		createDefaultProps({
@@ -76,7 +76,7 @@ function OpenOracleReportRouteHarness() {
 }
 
 function UrlStateHarness() {
-	const { openOracleReportId, securityPoolAddress, setOpenOracleReport, setSecurityPoolAddress } = useUrlState()
+	const { openOracleReportId, securityPoolAddress, setOpenOracleReport, setSecurityPoolAddress } = useStatoblastUrlState()
 
 	return (
 		<div>

@@ -9,7 +9,8 @@ import { buildForkCarriedEscalationProofs, withdrawForkedEscalationDeposits } fr
 import { createConnectedReadClient, createWalletWriteClient } from '@zoltar/ui-core-shared/wallet/clients.js'
 import { getErrorMessage } from '@zoltar/ui-core-shared/lib/errors.js'
 import { getTruthAuctionBidGuardMessage, getTruthAuctionBidPriceValidationMessage, getTruthAuctionTickAtPrice } from '../lib/truthAuctionBook.js'
-import { getReportingOutcomeKey, parseAddressInput, parseBigIntListInput, parseReportingOutcomeInput, parseReportingOutcomeListInput, resolveOptionalAddressInput } from '@zoltar/ui-core-shared/forms/inputs.js'
+import { parseAddressInput, parseBigIntListInput, parseReportingOutcomeInput, parseReportingOutcomeListInput, resolveOptionalAddressInput } from '@zoltar/ui-core-shared/forms/inputs.js'
+import { requireReportingOutcomeKey } from '@zoltar/ui-core-shared/lib/contractEnums.js'
 import { normalizeAddress } from '@zoltar/ui-core-shared/lib/address.js'
 import { createErrorActionFeedback, createPendingActionFeedback, createSuccessActionFeedback, createWarningActionFeedback } from '@zoltar/ui-core-shared/transactions/actionFeedback.js'
 import type { ActionFeedback } from '@zoltar/ui-core-shared/transactions/actionFeedback.js'
@@ -239,7 +240,7 @@ function useForkAuctionOperationsWithDependencies<TWriteClient>(
 			'createChildUniverse',
 			async (walletAddress, details, isCurrentSelection) => {
 				if (!isCurrentSelection()) return undefined
-				return await dependencies.createChildUniverseFromSecurityPool(dependencies.createWalletWriteClient(walletAddress, { onTransactionPrepared, onTransactionSubmitted }), details.securityPoolAddress, details.universeId, getReportingOutcomeKey(outcome))
+				return await dependencies.createChildUniverseFromSecurityPool(dependencies.createWalletWriteClient(walletAddress, { onTransactionPrepared, onTransactionSubmitted }), details.securityPoolAddress, details.universeId, requireReportingOutcomeKey(outcome))
 			},
 			'Failed to create child universe',
 		)

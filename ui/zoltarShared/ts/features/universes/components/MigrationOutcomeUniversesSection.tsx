@@ -6,7 +6,7 @@ import { OutcomeSelectionList } from '@zoltar/ui-core-shared/components/OutcomeS
 import { WorkflowSubsection } from '@zoltar/ui-core-shared/components/WorkflowSubsection.js'
 import { TransactionActionButton } from '@zoltar/ui-core-shared/components/TransactionActionButton.js'
 import { UniverseLink } from './UniverseLink.js'
-import { formatUniverseIdHex } from '../lib/universe.js'
+import { formatUniverseIdHex } from '@zoltar/ui-core-shared/lib/universeLabels.js'
 import type { ZoltarChildUniverseSummary } from '@zoltar/ui-core-shared/types/contracts.js'
 
 type MigrationOutcomeUniversesSectionProps = {

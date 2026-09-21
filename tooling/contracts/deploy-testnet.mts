@@ -2,12 +2,13 @@ import { appendFile } from 'node:fs/promises'
 import * as process from 'node:process'
 import { createWalletClient, defineChain, formatEther, http, keccak256, parseUnits, privateKeyToAccount, type Account, type Address, type Chain, type Hash, type Hex } from '@zoltar/core-shared/evm/ethereum'
 import { getBootstrapDescendantAddresses } from '../../ui/statoblastShared/ts/protocol/deploymentHelpers.ts'
-import { assertStaticDeploymentArtifactRuntimeCodeHashes, CANONICAL_DEPLOYER_RAW_GAS_PRICE, CANONICAL_DEPLOYER_RAW_TRANSACTION_COST, getProxyDeployerActivity, getProxyDeployerFundingShortfall, PROXY_DEPLOYER_RUNTIME_CODE } from '../../ui/zoltarShared/ts/protocol/deployment.ts'
+import { PROXY_DEPLOYER_RUNTIME_CODE } from '@zoltar/core-shared/deployment/deploymentAddresses'
+import { assertStaticDeploymentArtifactRuntimeCodeHashes, CANONICAL_DEPLOYER_RAW_GAS_PRICE, CANONICAL_DEPLOYER_RAW_TRANSACTION_COST, getProxyDeployerActivity, getProxyDeployerFundingShortfall } from '../../ui/zoltarShared/ts/protocol/deployment.ts'
 import { assertStaticStatoblastDeploymentArtifactRuntimeCodeHashes } from '../../ui/statoblastShared/ts/protocol/deployment.ts'
 import { PROXY_DEPLOYER_ADDRESS } from '../../ui/zoltarShared/ts/protocol/zoltarDeploymentHelpers.ts'
 import type { WriteClient } from '../../ui/coreShared/ts/wallet/chainBackend.ts'
 import { SEPOLIA_NETWORK_PROFILE, type NetworkProfile } from '../../ui/coreShared/ts/wallet/networkProfile.ts'
-import { readWithRpcStateRetries, type RpcStateRetryWait } from '../../ui/zoltarShared/ts/protocol/core.ts'
+import { readWithRpcStateRetries, type RpcStateRetryWait } from '../../ui/coreShared/ts/lib/rpcStateRetries.ts'
 import { ARACHNID_CREATE2_DEPLOYER_ADDRESS, ARACHNID_CREATE2_DEPLOYER_RUNTIME_CODE, getUniswapDeployment, resolveCanonicalCreate2DeployerForPreflight, type UniswapDeployment } from './uniswap-deployment.mts'
 import { createCompleteDeploymentPlan } from './deployment-plan.mts'
 
@@ -398,11 +399,7 @@ export function createDeploymentReceiptWaiter(client: Pick<WriteClient, 'waitFor
 
 export function createPreparedDeploymentClient(parameters: { chain: Chain; log?: (message: string) => void; maxFeePerGas?: bigint; maxTotalCost?: bigint; privateKey: Hex; rpcUrl: string }): WriteClient {
 	const account = privateKeyToAccount(parameters.privateKey)
-	const wallet = createWalletClient({
-		account,
-		chain: parameters.chain,
-		transport: http(parameters.rpcUrl),
-	})
+	const wallet = createWalletClient({ account, chain: parameters.chain, transport: http(parameters.rpcUrl) })
 	const maxTotalCost = parameters.maxTotalCost ?? parseMaxTotalCost(undefined)
 	const budget = createDeploymentBudget(maxTotalCost)
 	const sendTransaction = createBudgetedTransactionSender(

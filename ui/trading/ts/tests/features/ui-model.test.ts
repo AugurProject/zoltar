@@ -1,6 +1,8 @@
 import { describe, expect, test } from 'bun:test'
 import { getAddress } from '@zoltar/core-shared/evm/ethereum'
-import { bigintToSafeNumber, formatBpsMultiplier, formatCapacityOwnership, formatRoundedUnits, formatUnits, parseUnits, parseUnitsOrUndefined } from '../../lib/format.js'
+import { formatBpsMultiplier, formatCapacityOwnership, formatRoundedUnits } from '../../lib/format.js'
+import { parseNonNegativeDecimalInput, tryParseNonNegativeDecimalInput } from '@zoltar/ui-core-shared/forms/decimal.js'
+import { formatTrimmedUnits } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { attoSharesToCollateralAttoEth, averagePriceBps, collateralAttoEthToAttoShares, formatCollateralEth, formatCompleteSetQuantity, formatLpQuantity, formatOutcomeQuantity } from '../../lib/shareValue.js'
 import { forkMigrationBatchBlocker, forkMigrationBatchWarning, insuredExitLimitMessage, migrationSimulationSummary, settlementBalanceLabel, settlementInputBlocker } from '../../features/LiveSettlementModel.js'
 import { createSecurityPoolDeploymentIndex, liveBalancesForMarket, marketAcceptsNewRisk, publicErrorMessage, marketNewRiskBlocker, mapWithConcurrency, refreshSecurityPoolDeploymentIndex, registryBlockAnchorIsCanonical, settlementAvailability, shareBalanceScope, type LiveMarket } from '../../protocol/live.js'
@@ -86,28 +88,26 @@ describe('standalone trading UI model', () => {
 	})
 
 	test('parses and formats chain quantities without numbers', () => {
-		expect(parseUnits('2 550 000.25')).toBe(2_550_000_250_000_000_000_000_000n)
-		expect(parseUnitsOrUndefined(' 70\u00a0250.25 ', 2)).toBe(7_025_025n)
-		expect(parseUnits('1.2345')).toBe(1_234_500_000_000_000_000n)
-		expect(formatUnits(1_234_500_000_000_000_000n)).toBe('1.2345')
-		expect(() => parseUnits('1.0000000000000000001')).toThrow('18 decimal places')
-		expect(parseUnitsOrUndefined('70.25', 2)).toBe(7_025n)
-		expect(parseUnitsOrUndefined('70.251', 2)).toBeUndefined()
-		expect(parseUnitsOrUndefined('../70', 2)).toBeUndefined()
-		expect(() => formatUnits(1n, -1)).toThrow('Decimals must be a nonnegative safe integer')
-		expect(() => formatUnits(1n, 18, -1)).toThrow('Maximum fraction digits must be a nonnegative safe integer')
-	})
-
-	test('converts to a number only after proving the bigint is safe', () => {
-		expect(bigintToSafeNumber(9_007_199_254_740_991n)).toBe(Number.MAX_SAFE_INTEGER)
-		expect(() => bigintToSafeNumber(9_007_199_254_740_992n)).toThrow('safe integer range')
+		expect(parseNonNegativeDecimalInput('2 550 000.25')).toBe(2_550_000_250_000_000_000_000_000n)
+		expect(tryParseNonNegativeDecimalInput(' 70\u00a0250.25 ', 2)).toBe(7_025_025n)
+		expect(parseNonNegativeDecimalInput('1.2345')).toBe(1_234_500_000_000_000_000n)
+		expect(formatTrimmedUnits(1_234_500_000_000_000_000n)).toBe('1.2345')
+		expect(() => parseNonNegativeDecimalInput('1.0000000000000000001')).toThrow('18 decimal places')
+		expect(() => parseNonNegativeDecimalInput('-1')).toThrow('Enter a valid nonnegative amount')
+		expect(() => parseNonNegativeDecimalInput('')).toThrow('Enter a valid nonnegative amount')
+		expect(tryParseNonNegativeDecimalInput('70.25', 2)).toBe(7_025n)
+		expect(tryParseNonNegativeDecimalInput('70.251', 2)).toBeUndefined()
+		expect(tryParseNonNegativeDecimalInput('../70', 2)).toBeUndefined()
+		expect(tryParseNonNegativeDecimalInput('-0.5', 2)).toBeUndefined()
+		expect(() => formatTrimmedUnits(1n, -1)).toThrow('Units must be non-negative')
+		expect(() => formatTrimmedUnits(1n, 18, -1)).toThrow('Maximum fraction digits must be non-negative')
 	})
 
 	test('formats Statoblast settings for display', () => {
 		expect(formatBpsMultiplier(25_000n)).toBe('2.5×')
-		expect(formatCapacityOwnership(10_000n * 10n ** 18n, 9_500n * 10n ** 18n)).toBe('10,000 / 9,500 REP')
-		expect(formatUnits(999_999_996_848_000_000n, 18, 12)).toBe('0.999999996848')
-		expect(formatUnits(999_999_977_880_000_000n, 18, 12)).toBe('0.99999997788')
+		expect(formatCapacityOwnership(10_000n * 10n ** 18n, 9_500n * 10n ** 18n)).toBe('10 000 / 9 500 REP')
+		expect(formatTrimmedUnits(999_999_996_848_000_000n, 18, 12)).toBe('0.999999996848')
+		expect(formatTrimmedUnits(999_999_977_880_000_000n, 18, 12)).toBe('0.99999997788')
 		expect(formatRoundedUnits(999_999_996_848_000_000n)).toBe('1')
 		expect(formatRoundedUnits(4_999_500_000_000_000n)).toBe('0.005')
 		expect(formatRoundedUnits(4_949_999_999_999_999n)).toBe('0.0049')

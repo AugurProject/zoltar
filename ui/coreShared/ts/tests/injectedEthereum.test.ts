@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { createWalletContextSubscription, subscribeToWalletContextChanges, switchInjectedChain, type InjectedEthereum } from '../wallet/injectedEthereum.js'
+import { createWalletContextSubscription, formatChainIdHex, readInjectedChainIdNumber, requestInjectedAccount, subscribeToWalletContextChanges, switchInjectedChain, type InjectedEthereum } from '../wallet/injectedEthereum.js'
 
 test('rejects a mainnet switch before requesting the wallet and permits Sepolia', async () => {
 	const calls: unknown[] = []
@@ -13,6 +13,28 @@ test('rejects a mainnet switch before requesting the wallet and permits Sepolia'
 	expect(calls).toEqual([])
 	await switchInjectedChain(provider, '0xaa36a7')
 	expect(calls).toEqual([{ method: 'wallet_switchEthereumChain', params: [{ chainId: '0xaa36a7' }] }])
+	await switchInjectedChain(provider, 11155111)
+	expect(calls.at(-1)).toEqual({ method: 'wallet_switchEthereumChain', params: [{ chainId: '0xaa36a7' }] })
+	await expect(switchInjectedChain(provider, -1)).rejects.toThrow('Requested wallet chain ID is invalid')
+	expect(formatChainIdHex(11155111)).toBe('0xaa36a7')
+})
+
+test('reads the wallet chain as a number and requests the account through eth_requestAccounts', async () => {
+	const calls: unknown[] = []
+	const provider: InjectedEthereum = {
+		request: async parameters => {
+			calls.push(parameters)
+			if (parameters.method === 'eth_chainId') return '0xaa36a7'
+			if (parameters.method === 'eth_requestAccounts') return ['0x0000000000000000000000000000000000000001']
+			return undefined
+		},
+	}
+	expect(await readInjectedChainIdNumber(provider)).toBe(11155111)
+	expect(await requestInjectedAccount(provider)).toBe('0x0000000000000000000000000000000000000001')
+	expect(calls).toEqual([
+		{ method: 'eth_chainId', params: [] },
+		{ method: 'eth_requestAccounts', params: [] },
+	])
 })
 
 describe('injected wallet context events', () => {

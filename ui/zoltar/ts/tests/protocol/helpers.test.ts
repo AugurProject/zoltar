@@ -2,6 +2,7 @@
 
 import { describe, expect, test } from 'bun:test'
 import { getAddress, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
+import { getReportingOutcomeKey, getReportingOutcomeValue, getSecurityPoolSystemState } from '@zoltar/ui-core-shared/lib/contractEnums.js'
 import { getGenesisReputationTokenAddress } from '@zoltar/ui-zoltar-shared/protocol/activeProtocolAddresses.js'
 import {
 	bigintToAddress,
@@ -12,9 +13,6 @@ import {
 	getProtocolPageOffset,
 	getQuestionId,
 	getQuestionIdHex,
-	getReportingOutcomeKey,
-	getReportingOutcomeValue,
-	getSecurityPoolSystemState,
 	hasTimestamp,
 	hasTimestampAndNumber,
 	isBigintTriple,

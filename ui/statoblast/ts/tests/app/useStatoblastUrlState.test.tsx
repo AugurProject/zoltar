@@ -2,17 +2,17 @@
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { act } from 'preact/test-utils'
-import { useUrlState } from '../../app/hooks/useUrlState.js'
-import { installDomEnvironment } from '../testUtils/domEnvironment.js'
-import { installTestRouting } from '../testUtils/testRouting.js'
-import { renderIntoDocument } from '../testUtils/renderIntoDocument.js'
+import { useStatoblastUrlState } from '../../app/hooks/useStatoblastUrlState.js'
+import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
+import { installTestRouting } from '@zoltar/ui-core-shared/tests/testUtils/testRouting.js'
+import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 
-type UseUrlState = typeof import('../../app/hooks/useUrlState.js')['useUrlState']
+type UseUrlState = typeof useStatoblastUrlState
 type UseUrlStateState = ReturnType<UseUrlState>
 
 function createHarness(onRender: (state: UseUrlStateState) => void) {
 	return function UrlStateHarness() {
-		const state = useUrlState()
+		const state = useStatoblastUrlState()
 		onRender(state)
 		return <div />
 	}
@@ -26,7 +26,7 @@ function requireState(state: UseUrlStateState | undefined) {
 	return state
 }
 
-describe('useUrlState', () => {
+describe('useStatoblastUrlState', () => {
 	let cleanupDom: (() => void) | undefined
 	let cleanupRenderedComponent: (() => Promise<void>) | undefined
 
@@ -58,7 +58,6 @@ describe('useUrlState', () => {
 		expect(requireState(hookState).selectedPoolView).toBe('positions')
 		expect(requireState(hookState).securityPoolAddress).toBe('0x1111111111111111111111111111111111111111')
 		expect(requireState(hookState).securityPoolQuestionId).toBe('0x42')
-		expect(requireState(hookState).zoltarView).toBe('trading')
 	})
 
 	test('synchronizes hook state with hashchange and popstate events', async () => {
@@ -142,10 +141,5 @@ describe('useUrlState', () => {
 		expect(window.location.hash.includes('openOracleReportId=555')).toBe(true)
 		expect(window.location.hash.includes('openOracleView=selected-report')).toBe(true)
 		expect(requireState(hookState).openOracleReportId).toBe('555')
-
-		await act(() => {
-			requireState(hookState).setZoltarView('deploy')
-		})
-		expect(window.location.hash.includes('zoltarView=deploy')).toBe(true)
 	})
 })

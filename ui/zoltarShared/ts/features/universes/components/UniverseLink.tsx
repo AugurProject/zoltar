@@ -1,5 +1,6 @@
 import type { ComponentChildren } from 'preact'
-import { formatUniverseDisplayLabel, formatUniverseIdHex, formatUniverseLabel, getUniverseLinkHref, navigateToUniverse } from '../lib/universe.js'
+import { formatUniverseDisplayLabel, formatUniverseIdHex, formatUniverseLabel } from '@zoltar/ui-core-shared/lib/universeLabels.js'
+import { getUniverseLinkHref, navigateToUniverse } from '../lib/universe.js'
 
 type UniverseLinkProps = {
 	children?: ComponentChildren

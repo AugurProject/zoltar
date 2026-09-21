@@ -1,6 +1,6 @@
 import { concatHex, encodeAbiParameters, keccak256, parseAbiParameters, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
 import type { ReportingOutcomeKey } from '@zoltar/ui-core-shared/types/contracts.js'
-import { getReportingOutcomeValue } from '@zoltar/ui-zoltar-shared/protocol/helpers.js'
+import { getReportingOutcomeValue } from '@zoltar/ui-core-shared/lib/contractEnums.js'
 
 const NULLIFIER_DEPTH = 64
 const CARRY_LEAF_ABI = parseAbiParameters('address depositor, uint8 outcome, uint256 amountAttoRep, uint256 parentDepositIndex, uint256 cumulativeAmountAttoRep, uint256 sourceNodeId')

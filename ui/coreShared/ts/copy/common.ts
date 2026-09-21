@@ -111,6 +111,8 @@ export const loadMore = 'Show more'
 export const nextPage = 'Next page'
 export const previousPage = 'Previous page'
 export const formatDecimalNumberRequiredError = (fieldLabel: CopyTemplateValue) => `${fieldLabel} must be a decimal number.`
+export const nonNegativeAmountRequiredError = 'Enter a valid nonnegative amount.'
+export const formatDecimalPrecisionError = (units: number) => `Use no more than ${units} decimal places.`
 export const approvalAmountInvalidError = 'Approval amount must be a decimal number.'
 export const approvalAmount = 'Approval amount'
 export const formatApproveValue = (tokenLabel: CopyTemplateValue) => `Approve ${tokenLabel}`

@@ -1,4 +1,6 @@
 import { encodeDeployData, getAddress, getCreate2Address, toHex, type Address, type Hash, type Hex, type PublicClient } from '@zoltar/core-shared/evm/ethereum'
+import { PROXY_DEPLOYER_RUNTIME_CODE } from '@zoltar/core-shared/deployment/deploymentAddresses'
+import { readWithRpcStateRetries, type RpcStateRetryWait } from '@zoltar/ui-core-shared/lib/rpcStateRetries.js'
 import { waitForSubmittedTransactionReceipt, type SubmittedTransactionClient } from '@zoltar/ui-core-shared/transactions/transactionReceipt.js'
 import { tradingContracts } from '../generated/contractArtifact.js'
 import type { DeploymentConfiguration } from './config.js'
@@ -39,9 +41,6 @@ type TradingDeploymentWallet = Readonly<{
 const factoryContract = tradingContracts['contracts/trading/TwoWayConstantProductFactory.sol'].TwoWayConstantProductFactory
 const routerContract = tradingContracts['contracts/trading/TwoWayConstantProductRouter.sol'].TwoWayConstantProductRouter
 const zeroSalt = toHex(0, { size: 32 })
-const rpcStateRetryDelaysMilliseconds = [250, 500, 1_000, 2_000, 4_000] as const
-/** @internal exported for tests that simulate the canonical proxy deployer */
-export const CANONICAL_PROXY_DEPLOYER_RUNTIME_CODE = '0x60003681823780368234f58015156014578182fd5b80825250506014600cf3' satisfies Hex
 
 function requireFeeBps(feeBps: number) {
 	if (!Number.isSafeInteger(feeBps) || feeBps < 0 || feeBps >= 10_000) throw new Error('Trading fee must be a whole number from 0 to 9999 basis points')
@@ -101,7 +100,7 @@ async function validateTradingRouter(client: Pick<PublicClient, 'readContract'>,
 
 export async function loadTradingDeploymentStatus(client: Pick<PublicClient, 'getCode' | 'readContract'>, plan: TradingDeploymentPlan) {
 	const [proxyCode] = await Promise.all([client.getCode({ address: plan.core.proxyDeployer }), requireCode(client, plan.core.securityPoolFactory, 'SecurityPoolFactory')])
-	if (proxyCode === undefined || proxyCode.toLowerCase() !== CANONICAL_PROXY_DEPLOYER_RUNTIME_CODE.toLowerCase()) throw new Error(`Canonical proxy deployer has unexpected code at ${plan.core.proxyDeployer}`)
+	if (proxyCode === undefined || proxyCode.toLowerCase() !== PROXY_DEPLOYER_RUNTIME_CODE.toLowerCase()) throw new Error(`Canonical proxy deployer has unexpected code at ${plan.core.proxyDeployer}`)
 	const factoryCode = await client.getCode({ address: plan.factory.address })
 	const factoryDeployed = factoryCode !== undefined && factoryCode !== '0x'
 	if (factoryDeployed) await validateTradingFactory(client, plan)
@@ -136,14 +135,12 @@ export function nextTradingDeploymentStep(plan: TradingDeploymentPlan, status: R
 	return undefined
 }
 
-async function waitForInstalledTradingStep(publicClient: Pick<PublicClient, 'getCode' | 'readContract'>, plan: TradingDeploymentPlan, step: TradingDeploymentStep, wait: (milliseconds: number) => Promise<void> = async milliseconds => await new Promise(resolve => setTimeout(resolve, milliseconds))) {
-	let status = await loadTradingDeploymentStatus(publicClient, plan)
-	for (const delayMilliseconds of rpcStateRetryDelaysMilliseconds) {
-		if (status[step.id]) return status
-		await wait(delayMilliseconds)
-		status = await loadTradingDeploymentStatus(publicClient, plan)
-	}
-	return status
+function waitForInstalledTradingStep(publicClient: Pick<PublicClient, 'getCode' | 'readContract'>, plan: TradingDeploymentPlan, step: TradingDeploymentStep, wait?: RpcStateRetryWait) {
+	return readWithRpcStateRetries(
+		() => loadTradingDeploymentStatus(publicClient, plan),
+		status => status[step.id],
+		wait,
+	)
 }
 
 export async function deployTradingStep(
@@ -153,7 +150,7 @@ export async function deployTradingStep(
 	step: TradingDeploymentStep,
 	onSubmitted: (hash: Hash) => void = () => undefined,
 	beforeSend: () => Promise<void> = async () => undefined,
-	waitForRpcState?: (milliseconds: number) => Promise<void>,
+	waitForRpcState?: RpcStateRetryWait,
 ): Promise<Hash> {
 	const status = await loadTradingDeploymentStatus(publicClient, plan)
 	if (status[step.id]) throw new Error(`${step.label} is already deployed`)

@@ -22,7 +22,7 @@ void describe('formatting helpers', () => {
 	})
 
 	void test('formatTrimmedUnits truncates fractional digits and preserves grouped whole units', () => {
-		expect(formatTrimmedUnits(1_234_567_890_000_000_000_000n, 18, 4)).toBe(`${(1234).toLocaleString()}.5678`)
+		expect(formatTrimmedUnits(1_234_567_890_000_000_000_000n, 18, 4)).toBe('1 234.5678')
 		expect(formatTrimmedUnits(-1_200_000n, 6, 4)).toBe('-1.2')
 	})
 

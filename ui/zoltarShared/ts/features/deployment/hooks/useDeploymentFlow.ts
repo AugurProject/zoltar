@@ -12,7 +12,7 @@ import { assertActiveWallet } from '@zoltar/ui-core-shared/wallet/assertActiveWa
 import type { TransactionLifecycleParameters } from '../../../types/app.js'
 import type { DeploymentStatus, DeploymentStepId } from '@zoltar/ui-core-shared/types/contracts.js'
 import { assertDeploymentStepRuntimeCode } from '../../../protocol/deployment.js'
-import { readWithRpcStateRetries, type RpcStateRetryWait } from '../../../protocol/core.js'
+import { readWithRpcStateRetries, type RpcStateRetryWait } from '@zoltar/ui-core-shared/lib/rpcStateRetries.js'
 import { createActiveEnvironmentGuard } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 
 type UseDeploymentFlowParameters = TransactionLifecycleParameters & {

@@ -115,7 +115,7 @@ describe('DeploymentRouteContent', () => {
 
 		expectTransactionButtonDisabled(document.body, 'Deploy next missing', 'Deployment status is unavailable.')
 		expectTransactionButtonDisabled(document.body, 'Deploy Zoltar Question Data', 'Deployment status is unavailable.')
-		expect(document.body.textContent).not.toContain('Not Deployed')
+		expect(document.body.textContent).not.toContain('Not deployed')
 		expect(document.body.textContent).not.toContain('Can deploy now.')
 		expect(document.body.textContent).not.toContain('Requires ')
 		expect(document.body.textContent).toContain('Unavailable')

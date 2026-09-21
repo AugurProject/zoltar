@@ -2,7 +2,7 @@
 
 import { describe, expect, test } from 'bun:test'
 import { getAddress } from '@zoltar/core-shared/evm/ethereum'
-import { balanceShortage, getReportingOutcomeKey, parseAddressInput, parseBytes32Input, parseBigIntListInput, parseReportingOutcomeInput, parseReportingOutcomeListInput, parseReportIdInput, resolveOptionalAddressInput } from '../forms/inputs.js'
+import { balanceShortage, parseAddressInput, parseBytes32Input, parseBigIntListInput, parseReportingOutcomeInput, parseReportingOutcomeListInput, parseReportIdInput, resolveOptionalAddressInput } from '../forms/inputs.js'
 
 void describe('input helpers', () => {
 	void test('parses and trims required address inputs', () => {
@@ -54,14 +54,6 @@ void describe('input helpers', () => {
 		expect(parseReportingOutcomeListInput('YES, no, INVALID', 'Outcomes')).toEqual(['yes', 'no', 'invalid'])
 		expect(() => parseReportingOutcomeInput('maybe')).toThrow('Unknown reporting outcome')
 		expect(() => parseReportingOutcomeListInput('yes, maybe', 'Outcomes')).toThrow('Unknown reporting outcome')
-	})
-
-	void test('maps reporting outcome indexes to known keys', () => {
-		expect(getReportingOutcomeKey(0n)).toBe('invalid')
-		expect(getReportingOutcomeKey(1n)).toBe('yes')
-		expect(getReportingOutcomeKey(2n)).toBe('no')
-		expect(getReportingOutcomeKey('no')).toBe('no')
-		expect(() => getReportingOutcomeKey(9n)).toThrow('Unsupported child universe outcome index: 9')
 	})
 
 	void test('resolves parsed amounts and shortages across branches', () => {

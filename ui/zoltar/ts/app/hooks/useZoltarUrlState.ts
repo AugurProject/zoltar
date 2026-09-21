@@ -1,6 +1,6 @@
-import { useSignal } from '@preact/signals'
-import { useCallback, useEffect } from 'preact/hooks'
-import { buildRouteHref, getCurrentRouteHash, getRouteHashSearch, getTopLevelRouteSearch } from '@zoltar/ui-core-shared/navigation/routing.js'
+import { useCallback } from 'preact/hooks'
+import { useUrlSearchState, type UrlHistoryMode } from '@zoltar/ui-core-shared/app/hooks/useUrlSearchState.js'
+import { getTopLevelRouteSearch } from '@zoltar/ui-core-shared/navigation/routing.js'
 import { readUniverseQueryParam, readZoltarViewQueryParam, writeUniverseQueryParam, writeZoltarViewQueryParam } from '@zoltar/ui-core-shared/navigation/urlParams.js'
 
 type ZoltarUrlState = {
@@ -15,68 +15,35 @@ function readZoltarUrlState(search: string): ZoltarUrlState {
 	}
 }
 
-function getZoltarSearch(search = getRouteHashSearch()) {
+/** Drops query parameters owned by other products while keeping the shared environment parameters. */
+function getZoltarSearch(search: string) {
 	const filteredSearch = getTopLevelRouteSearch('zoltar', search)
 	const universeId = readUniverseQueryParam(search)
 	const zoltarView = readZoltarViewQueryParam(search)
 	return writeZoltarViewQueryParam(writeUniverseQueryParam(filteredSearch, universeId), zoltarView)
 }
 
-function readCurrentZoltarUrlState() {
-	return readZoltarUrlState(getZoltarSearch())
-}
-
 export function useZoltarUrlState() {
-	const urlState = useSignal<ZoltarUrlState>(readCurrentZoltarUrlState())
-
-	useEffect(() => {
-		const syncUrlState = () => {
-			const zoltarSearch = getZoltarSearch()
-			if (zoltarSearch !== getRouteHashSearch()) window.history.replaceState({}, '', buildRouteHref(getCurrentRouteHash(), zoltarSearch))
-			urlState.value = readZoltarUrlState(zoltarSearch)
-		}
-		syncUrlState()
-		window.addEventListener('hashchange', syncUrlState)
-		window.addEventListener('popstate', syncUrlState)
-		return () => {
-			window.removeEventListener('hashchange', syncUrlState)
-			window.removeEventListener('popstate', syncUrlState)
-		}
-	}, [])
-
-	const applyUrlStateUpdate = useCallback((nextSearch: string, historyMode: 'push' | 'replace' = 'push') => {
-		const currentSearch = getRouteHashSearch()
-		if (nextSearch !== currentSearch) {
-			const nextHref = buildRouteHref(getCurrentRouteHash(), nextSearch)
-			if (historyMode === 'replace') window.history.replaceState({}, '', nextHref)
-			else window.history.pushState({}, '', nextHref)
-		}
-		urlState.value = readZoltarUrlState(nextSearch)
-	}, [])
+	const { applyUrlStateUpdate, getOwnedSearch, state } = useUrlSearchState(readZoltarUrlState, { normalizeSearch: getZoltarSearch })
 
 	const setActiveUniverseId = useCallback(
 		(universeId: bigint | undefined) => {
-			applyUrlStateUpdate(writeUniverseQueryParam(getZoltarSearch(), universeId))
+			applyUrlStateUpdate(writeUniverseQueryParam(getOwnedSearch(), universeId))
 		},
-		[applyUrlStateUpdate],
+		[applyUrlStateUpdate, getOwnedSearch],
 	)
-
-	const setZoltarView = useCallback(
-		(view: string | undefined) => {
-			applyUrlStateUpdate(writeZoltarViewQueryParam(getZoltarSearch(), view === '' ? undefined : view))
+	const updateZoltarView = useCallback(
+		(view: string | undefined, historyMode: UrlHistoryMode) => {
+			applyUrlStateUpdate(writeZoltarViewQueryParam(getOwnedSearch(), view === '' ? undefined : view), historyMode)
 		},
-		[applyUrlStateUpdate],
+		[applyUrlStateUpdate, getOwnedSearch],
 	)
-	const replaceZoltarView = useCallback(
-		(view: string | undefined) => {
-			applyUrlStateUpdate(writeZoltarViewQueryParam(getZoltarSearch(), view === '' ? undefined : view), 'replace')
-		},
-		[applyUrlStateUpdate],
-	)
+	const setZoltarView = useCallback((view: string | undefined) => updateZoltarView(view, 'push'), [updateZoltarView])
+	const replaceZoltarView = useCallback((view: string | undefined) => updateZoltarView(view, 'replace'), [updateZoltarView])
 
 	return {
-		activeUniverseId: urlState.value.activeUniverseId,
-		zoltarView: urlState.value.zoltarView,
+		activeUniverseId: state.activeUniverseId,
+		zoltarView: state.zoltarView,
 		replaceZoltarView,
 		setActiveUniverseId,
 		setZoltarView,

@@ -9,10 +9,10 @@ import { AnvilWindowEthereum } from '../AnvilWindowEthereum'
 import { QuestionOutcome } from '../types/types'
 import { ReputationToken_ReputationToken, statoblast_WETH9_WETH9 } from '../../../types/contractArtifact'
 export { sortStringArrayByKeccak } from '@zoltar/core-shared/serialization/sortStringArrayByKeccak'
+import { PROXY_DEPLOYER_RUNTIME_CODE } from '@zoltar/core-shared/deployment/deploymentAddresses'
 const TOTAL_REP_SUPPLY_ATTO_REP = 11_000_000n * 10n ** 18n
 const ETH_AMOUNT_TO_MINT = 10n ** 30n
 const DEFAULT_APPROVAL_AMOUNT = (1n << 256n) - 1n
-const PROXY_DEPLOYER_BYTECODE = '0x60003681823780368234f58015156014578182fd5b80825250506014600cf3'
 
 function hexToBytes(value: string) {
 	const result = new Uint8Array((value.length - 2) / 2)
@@ -130,7 +130,7 @@ export const setupTestAccounts = async (anvilWindowEthereum: AnvilWindowEthereum
 	})
 
 	// Deploy the ProxyDeployer contract at its known address to avoid raw transaction
-	const proxyDeployerBytecode = PROXY_DEPLOYER_BYTECODE
+	const proxyDeployerBytecode = PROXY_DEPLOYER_RUNTIME_CODE
 	await anvilWindowEthereum.addStateOverrides({
 		[addressString(PROXY_DEPLOYER_ADDRESS)]: {
 			code: hexToBytes(proxyDeployerBytecode),
@@ -169,7 +169,7 @@ export const setupTestAccounts = async (anvilWindowEthereum: AnvilWindowEthereum
 
 export async function ensureProxyDeployerDeployed(client: WriteClient): Promise<void> {
 	const deployerBytecode = await client.getCode({ address: addressString(PROXY_DEPLOYER_ADDRESS) })
-	if (deployerBytecode === '0x60003681823780368234f58015156014578182fd5b80825250506014600cf3') return
+	if (deployerBytecode === PROXY_DEPLOYER_RUNTIME_CODE) return
 	const ethSendHash = await client.sendTransaction({ to: '0x4c8d290a1b368ac4728d83a9e8321fc3af2b39b1', amount: 10000000000000000n })
 	await client.waitForTransactionReceipt({ hash: ethSendHash })
 	const deployHash = await client.sendRawTransaction({

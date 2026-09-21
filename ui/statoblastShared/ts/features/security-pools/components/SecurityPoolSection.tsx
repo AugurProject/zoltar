@@ -23,7 +23,7 @@ import { MarketCreateQuestionSection } from '../../markets/components/MarketCrea
 import { getDefaultMarketFormState } from '../../markets/lib/marketForm.js'
 import { validateMarketForm } from '@zoltar/ui-zoltar-shared/features/questions/lib/questionCreation.js'
 import type { SecurityPoolSectionProps } from '../../types.js'
-import { formatUniverseIdHex } from '@zoltar/ui-zoltar-shared/features/universes/lib/universe.js'
+import { formatUniverseIdHex } from '@zoltar/ui-core-shared/lib/universeLabels.js'
 import { getWrongNetworkReason } from '@zoltar/ui-core-shared/wallet/network.js'
 import * as marketCopy from '@zoltar/ui-zoltar-shared/copy/market.js'
 

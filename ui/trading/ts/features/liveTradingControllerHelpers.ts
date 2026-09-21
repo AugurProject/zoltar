@@ -1,9 +1,9 @@
 import { discoverAddressedMarket, discoverTradingMarketPage, discoverUniverses } from '../protocol/marketDiscovery.js'
 import { getAddress, type Address, type Hash } from '@zoltar/core-shared/evm/ethereum'
-import { parseUnitsOrUndefined } from '../lib/format.js'
+import { tryParseNonNegativeDecimalInput } from '@zoltar/ui-core-shared/forms/decimal.js'
 import type { WalletSummaryState } from '../lib/walletSummaryState.js'
+import { readInjectedChainIdNumber, requestInjectedAccount, switchInjectedChain } from '@zoltar/ui-core-shared/wallet/injectedEthereum.js'
 import {
-	connectWallet,
 	createTradingPublicClient,
 	createTradingWalletClient,
 	discoverAllLiveMarketsInUniverse,
@@ -15,9 +15,7 @@ import {
 	simulateExit,
 	submitFreshEntry,
 	submitFreshExit,
-	switchWalletChain,
 	validateLiveDeployment,
-	walletChainId,
 	type LiveMarket,
 } from '../protocol/live.js'
 import type { LiveTradingControllerServices, TransactionState } from './live/liveTradingTypes.js'
@@ -28,7 +26,7 @@ export const liveTradingControllerServices: LiveTradingControllerServices = {
 	discoverAddressedMarket,
 	discoverTradingMarketPage,
 	discoverUniverses,
-	connectWallet,
+	connectWallet: requestInjectedAccount,
 	createTradingPublicClient,
 	createTradingWalletClient,
 	discoverAllLiveMarketsInUniverse,
@@ -39,9 +37,9 @@ export const liveTradingControllerServices: LiveTradingControllerServices = {
 	simulateExit,
 	submitFreshEntry,
 	submitFreshExit,
-	switchWalletChain,
+	switchWalletChain: switchInjectedChain,
 	validateLiveDeployment,
-	walletChainId,
+	walletChainId: readInjectedChainIdNumber,
 }
 
 export function walletSummaryRefreshState(account: Address | undefined, universeId: string | undefined): WalletSummaryState {
@@ -61,7 +59,7 @@ export function walletSummaryAvailability(configurationAvailable: boolean, confi
 }
 
 export function parseSlippageBps(value: string) {
-	const parsed = parseUnitsOrUndefined(value, 2)
+	const parsed = tryParseNonNegativeDecimalInput(value, 2)
 	return parsed !== undefined && parsed >= 0n && parsed <= 500n ? parsed : undefined
 }
 
