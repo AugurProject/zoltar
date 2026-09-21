@@ -152,6 +152,21 @@
 	width: min(100%, 24rem);
 }
 
+/* A transaction action reserves feedback space under its button, so dialog rows that pair it with plain buttons align to the top, share the button height, and stay on one line at desktop widths. */
+.modal-panel .actions:has(> .tx-action) {
+	align-items: flex-start;
+}
+
+.modal-panel .actions:has(> .tx-action) > button {
+	min-block-size: 3rem;
+}
+
+.modal-panel .actions:has(> .tx-action) > .tx-action {
+	flex: 1 1 14rem;
+	width: auto;
+	max-width: 24rem;
+}
+
 .tx-action-row {
 	display: flex;
 	align-items: center;

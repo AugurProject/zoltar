@@ -1694,6 +1694,7 @@ export const openOraclePriceCoordinatorAbi = [
 		inputs: [
 			{ name: 'proposedRepPerEthPrice', type: 'uint256', internalType: 'uint256' },
 			{ name: 'requestedInitialAttoWeth', type: 'uint256', internalType: 'uint256' },
+			{ name: 'bountyAttoEth', type: 'uint256', internalType: 'uint256' },
 		],
 		outputs: [],
 	},
@@ -1709,6 +1710,7 @@ export const openOraclePriceCoordinatorAbi = [
 			{ name: 'validForSeconds', type: 'uint256', internalType: 'uint256' },
 			{ name: 'proposedRepPerEthPrice', type: 'uint256', internalType: 'uint256' },
 			{ name: 'requestedInitialAttoWeth', type: 'uint256', internalType: 'uint256' },
+			{ name: 'bountyAttoEth', type: 'uint256', internalType: 'uint256' },
 		],
 		outputs: [],
 	},
@@ -1723,6 +1725,7 @@ export const openOraclePriceCoordinatorAbi = [
 			{ name: 'validForSeconds', type: 'uint256', internalType: 'uint256' },
 			{ name: 'proposedRepPerEthPrice', type: 'uint256', internalType: 'uint256' },
 			{ name: 'requestedInitialAttoWeth', type: 'uint256', internalType: 'uint256' },
+			{ name: 'bountyAttoEth', type: 'uint256', internalType: 'uint256' },
 		],
 		outputs: [],
 	},

@@ -952,18 +952,6 @@
 	overflow-wrap: anywhere;
 }
 
-.liquidation-modal-actions {
-	align-items: flex-start;
-}
-
-.liquidation-modal-actions > .tx-action {
-	align-self: flex-start;
-}
-
-.liquidation-modal-actions > button {
-	align-self: flex-start;
-}
-
 .reporting-header-stack {
 	display: grid;
 	gap: 1rem;

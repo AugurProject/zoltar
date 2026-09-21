@@ -114,7 +114,7 @@
 			<section id="request-funding">
 				<h2>Funding and report ownership</h2>
 
-				<p>Report funding is caller supplied. The coordinator's <code>getRequestPriceCostAttoEth()</code> getter calculates the request bounty from the current base fee, callback gas limit, and the coordinator's own report processing budget:</p>
+				<p>Report funding is caller supplied. The coordinator's <code>getRequestPriceCostAttoEth()</code> getter calculates the minimum request bounty from the current base fee, callback gas limit, and the coordinator's own report processing budget:</p>
 				<figure class="equation" id="eq-openoracle-request-price-cost">
 					<math aria-label="request price cost in attoETH equals block base fee times 4 times callback gas limit plus gas consumed open oracle report price, plus 101 attoETH" data-source="requestPriceCostAttoEth = block.basefee \cdot 4 \cdot (callbackGasLimit + gasConsumedOpenOracleReportPrice) + 101" display="block">
 						<mrow>
@@ -135,7 +135,7 @@
 					</math>
 					<p class="equation-note"><code>callbackGasLimit</code> is the gas reserved for the settlement callback, <code>gasConsumedOpenOracleReportPrice</code> is the coordinator's own report-price callback work, and the small <code>101</code> offset keeps the forwarded bounty strictly above the computed gas product so the OpenOracle-funded reward path has a positive buffer instead of landing exactly on the boundary.</p>
 				</figure>
-				<p id="refund-callback">If a cached price is usable, no new oracle request cost is retained and unused ETH is refunded. If a report is needed, only the first pending settlement slot retains the request cost. <code>requestPrice(proposedRepPerEthPrice, requestedInitialAttoWeth)</code> forwards exactly the bounty to OpenOracle and refunds any excess. The same transaction submits the initial WETH/REP position, so the refresh sponsor funds both the ETH bounty and report position up front.</p>
+				<p id="refund-callback">Every request path takes an explicit <code>bountyAttoEth</code>. When a call opens a report, the committed bounty must cover <code>getRequestPriceCostAttoEth()</code> at inclusion and <code>msg.value</code> must cover the bounty. The coordinator then retains the whole bounty as the settler reward. If a cached price is usable, nothing is retained and the ETH is refunded. If a report is needed, only the first pending settlement slot retains the bounty. <code>requestPrice(proposedRepPerEthPrice, requestedInitialAttoWeth, bountyAttoEth)</code> forwards exactly the bounty to OpenOracle and refunds any ETH above it. The same transaction submits the initial WETH/REP position, so the refresh sponsor funds both the ETH bounty and report position up front.</p>
 
 				<p>Both public request paths refund only a positive unused or excess amount by making a low-level native-ETH call to the caller. A contract caller must accept that callback. If it rejects the refund, the whole transaction reverts, including operation staging, immediate execution, and any report opened in the same transaction.</p>
 
@@ -398,7 +398,7 @@
 				<p>A callback that successfully enters the coordinator can still produce a rejected price. The coordinator clears the pending report id, emits <code>PriceReportRejected</code>, and leaves the price cache unchanged when any of the following conditions holds:</p>
 
 				<ul>
-					<li>the settlement base fee exceeds the request-time cap;</li>
+					<li>the settlement base fee exceeds the request-time cap, which is the base fee implied by the committed bounty scaled by <code>maxSettlementBaseFeeMultiplierBps</code>;</li>
 					<li><code>storedGame(reportId).numReports</code> is saturated at the <code>uint24</code> maximum, reported as <code>Counter saturated</code>;</li>
 					<li>the final history record's WETH amount is too small to support another dispute at that record's base fee plus the configured priority fee, reported as <code>Report uneconomic</code>;</li>
 					<li>either settled token amount is zero; or</li>
@@ -685,10 +685,10 @@
 						<tr>
 							<td><code>settlerRewardAttoEth</code></td>
 							<td>
-								Dynamic; see
+								Caller-committed; at least the
 								<a href="#eq-openoracle-request-price-cost">Oracle Request Cost</a>.
 							</td>
-							<td>The full request bounty is assigned to the account that settles the report and triggers the callback.</td>
+							<td>The full committed request bounty is assigned to the account that settles the report and triggers the callback.</td>
 						</tr>
 						<tr>
 							<td><code>settlementTime</code></td>

@@ -8,71 +8,7 @@ import { ISecurityPool, LiquidationRequest, LiquidationSnapshot } from './interf
 import { SecurityPoolUtils } from './SecurityPoolUtils.sol';
 import { Math } from './openOracle/openzeppelin/contracts/utils/math/Math.sol';
 import { LiquidationApprovalRegistry } from './LiquidationApprovalRegistry.sol';
-
-// price oracle
-uint256 constant PRICE_VALID_FOR_SECONDS = 5 minutes;
-uint256 constant PRICE_PRECISION = 1e18;
-uint256 constant MAX_OPERATION_VALID_FOR_SECONDS = 5 minutes;
-uint256 constant OPEN_ORACLE_PERCENTAGE_PRECISION = 1e7;
-uint8 constant OPEN_ORACLE_FLAG_TIME_TYPE = 1 << 0;
-uint8 constant OPEN_ORACLE_FLAG_TRACK_DISPUTES = 1 << 1;
-uint8 constant OPEN_ORACLE_FLAG_STORE_ALL = 1 << 2;
-uint256 constant FINAL_REPORT_UNECONOMIC = 0;
-uint256 constant FINAL_REPORT_PROFITABLE = 1;
-uint256 constant FINAL_REPORT_COUNTER_SATURATED = 2;
-
-interface IStoredOpenOracleGame {
-	function storedGame(uint256 reportId)
-		external
-		view
-		returns (
-			uint128 currentAmount1,
-			uint128 currentAmount2,
-			address currentReporter,
-			uint48 reportTimestamp,
-			uint48 settlementTimestamp
-		);
-}
-
-enum OperationType {
-	Liquidation,
-	WithdrawRep,
-	AdjustVaultBackingFactor
-}
-
-enum CoordinatorCheckpointReason {
-	SecurityPoolSetup,
-	PriceSeeded,
-	PriceRequested,
-	PriceReported,
-	PriceRejected,
-	PendingReportRecovered,
-	OperationQueued,
-	OperationExecuted
-}
-
-struct StagedOperation {
-	OperationType operation;
-	address operator;
-	address receiverVault;
-	address targetVault;
-	uint256 operationValue;
-	uint256 queuedAt;
-	uint256 validForSeconds;
-	uint256 snapshotTargetBackingUnits;
-	uint256 snapshotTargetCapacityOwnershipAttoRep;
-	bytes32 liquidationApprovalId;
-	uint256 reservedLiquidationDebtAttoEth;
-}
-
-struct HistoricalQueueSnapshot {
-	uint256 targetBackingUnits;
-	uint256 targetCapacityOwnershipAttoRep;
-	uint256 targetOpenInterestAttoEth;
-	uint256 targetDisputeStakedAttoRep;
-	uint256 totalPoolHeldAttoRep;
-	uint256 totalRepBackingUnits;
-}
+import './OpenOraclePriceCoordinatorTypes.sol';
 
 contract OpenOraclePriceCoordinator {
 	uint256 public constant MAX_PENDING_SETTLEMENT_OPERATIONS = 4;
@@ -148,6 +84,7 @@ contract OpenOraclePriceCoordinator {
 		gasConsumedOpenOracleReportPrice = _gasConsumedOpenOracleReportPrice;
 		gasConsumedSettlement = _gasConsumedSettlement;
 		require(_gasUnitsForOneDispute > 0, 'Dispute gas units zero');
+		require(_gasConsumedSettlement > 0 || _gasConsumedOpenOracleReportPrice > 0, 'Request gas units zero');
 		require(_initialReportPriorityFeeAttoEthPerGas > 0, 'Initial priority fee zero');
 		require(_targetPriceErrorForDispute <= OPEN_ORACLE_PERCENTAGE_PRECISION, 'Target price error cannot exceed one hundred percent');
 		require(_openOracleSecurityMultiplierBps >= SecurityPoolUtils.BPS_DENOMINATOR, 'Open Oracle Security multiplier must be at least one hundred percent');
@@ -205,7 +142,11 @@ contract OpenOraclePriceCoordinator {
 	}
 
 	function getRequestPriceCostAttoEth() public view returns (uint256) {
-		return block.basefee * 4 * (getSettlementCallbackGasLimit() + gasConsumedOpenOracleReportPrice) + 101;
+		return block.basefee * _requestGasUnits() + REQUEST_BOUNTY_OFFSET_ATTO_ETH;
+	}
+
+	function _requestGasUnits() private view returns (uint256) {
+		return 4 * (getSettlementCallbackGasLimit() + gasConsumedOpenOracleReportPrice);
 	}
 
 	function getQueuedOperationCostAttoEth() public pure returns (uint256) {
@@ -239,20 +180,36 @@ contract OpenOraclePriceCoordinator {
 			Math.mulDiv(disputeGasCost, openOracleSecurityMultiplierBps * (OPEN_ORACLE_PERCENTAGE_PRECISION + targetPriceErrorForDispute), SecurityPoolUtils.BPS_DENOMINATOR * correctionProfitNumerator, Math.Rounding.Ceil);
 	}
 
-	function requestPrice(uint256 proposedRepPerEthPrice, uint256 requestedInitialAttoWeth) public payable {
-		uint256 costAttoEth = getRequestPriceCostAttoEth();
-		require(msg.value >= costAttoEth, 'Oracle bounty too small');
+	// The caller commits an explicit bounty so the retained ETH never depends on the inclusion block's basefee.
+	function requestPrice(uint256 proposedRepPerEthPrice, uint256 requestedInitialAttoWeth, uint256 bountyAttoEth) public payable {
+		_requireRequestBounty(bountyAttoEth);
 		require(!isPriceValid(), 'Oracle price already fresh');
-		_requestPrice(msg.sender, costAttoEth, proposedRepPerEthPrice, requestedInitialAttoWeth);
+		_requestPrice(msg.sender, bountyAttoEth, proposedRepPerEthPrice, requestedInitialAttoWeth);
 
-		uint256 excess = msg.value - costAttoEth;
+		uint256 excess = msg.value - bountyAttoEth;
 		if (excess > 0) {
 			(bool sent, ) = payable(msg.sender).call{value: excess}('');
 			require(sent, 'Oracle coordinator failed to refund excess ETH bounty');
 		}
 	}
 
-	function _requestPrice(address sponsor, uint256 costAttoEth, uint256 proposedRepPerEthPrice, uint256 requestedInitialAttoWeth) private {
+	function _requireRequestBounty(uint256 bountyAttoEth) private view {
+		uint256 costAttoEth = getRequestPriceCostAttoEth();
+		require(bountyAttoEth >= costAttoEth, 'Oracle bounty too small');
+		require(msg.value >= bountyAttoEth, 'Not enough ETH for oracle bounty');
+	}
+
+	// The cap inverts getRequestPriceCostAttoEth for the committed bounty instead of reading block.basefee,
+	// so a fee-free simulation writes the same storage as the mined transaction and estimates the same gas.
+	function _settlementBaseFeeCapForBounty(uint256 bountyAttoEth) private view returns (uint256) {
+		uint256 impliedRequestBaseFeeAttoEthPerGas =
+			(bountyAttoEth - REQUEST_BOUNTY_OFFSET_ATTO_ETH) / _requestGasUnits();
+		return
+			(impliedRequestBaseFeeAttoEthPerGas * maxSettlementBaseFeeMultiplierBps) /
+			SecurityPoolUtils.BPS_DENOMINATOR;
+	}
+
+	function _requestPrice(address sponsor, uint256 bountyAttoEth, uint256 proposedRepPerEthPrice, uint256 requestedInitialAttoWeth) private {
 		require(pendingReportId == 0, 'Oracle request already pending');
 		require(proposedRepPerEthPrice > 0, 'Initial oracle price zero');
 		uint256 minimumWethReportAttoEth = minimumToken1ReportAttoEth();
@@ -263,13 +220,12 @@ contract OpenOraclePriceCoordinator {
 		uint256 openInterestEscalationHaltAttoEth = Math.ceilDiv(securityPool.settlementCollateralAttoEth(), OPEN_INTEREST_DIVIDER);
 		if (openInterestEscalationHaltAttoEth > escalationHaltAttoEth)
 			escalationHaltAttoEth = openInterestEscalationHaltAttoEth;
-		uint256 settlerRewardAttoEth = costAttoEth;
+		uint256 settlerRewardAttoEth = bountyAttoEth;
 		require(initialWethReportAttoEth <= type(uint128).max, 'WETH report exceeds uint128');
 		require(initialRepReportAttoRep <= type(uint128).max, 'REP report exceeds uint128');
 		require(escalationHaltAttoEth <= type(uint128).max, 'Oracle escalation halt amount exceeds uint128 maximum');
 		require(settlerRewardAttoEth <= type(uint96).max, 'Oracle settler reward exceeds uint96 maximum');
-		pendingReportMaxSettlementBaseFeeAttoEthPerGas =
-			(block.basefee * maxSettlementBaseFeeMultiplierBps) / SecurityPoolUtils.BPS_DENOMINATOR;
+		pendingReportMaxSettlementBaseFeeAttoEthPerGas = _settlementBaseFeeCapForBounty(bountyAttoEth);
 
 		uint8 flags = OPEN_ORACLE_FLAG_STORE_ALL | OPEN_ORACLE_FLAG_TRACK_DISPUTES;
 		if (timeType) flags |= OPEN_ORACLE_FLAG_TIME_TYPE;
@@ -280,7 +236,7 @@ contract OpenOraclePriceCoordinator {
 		require(reputationToken.transferFrom(sponsor, address(this), initialRepReportAttoRep), 'REP transfer for initial report failed');
 		require(weth.approve(address(openOracle), initialWethReportAttoEth), 'WETH approval for initial report failed');
 		require(reputationToken.approve(address(openOracle), initialRepReportAttoRep), 'REP approval for initial report failed');
-		pendingReportId = openOracle.report{value: costAttoEth}(reportParams, false, false, OpenOracle.TimingBoundaries({blockNumber: 0, blockNumberBound: 0, blockTimestamp: 0, blockTimestampBound: 0}));
+		pendingReportId = openOracle.report{value: bountyAttoEth}(reportParams, false, false, OpenOracle.TimingBoundaries({blockNumber: 0, blockNumberBound: 0, blockTimestamp: 0, blockTimestampBound: 0}));
 		emit PriceRequested(pendingReportId, pendingReportMaxSettlementBaseFeeAttoEthPerGas);
 		_emitCoordinatorStateCheckpoint(CoordinatorCheckpointReason.PriceRequested, pendingReportId, 0);
 	}
@@ -387,15 +343,15 @@ contract OpenOraclePriceCoordinator {
 			lastSettlementTimestamp + (block.chainid == 11155111 ? 1 hours : PRICE_VALID_FOR_SECONDS) > block.timestamp;
 	}
 
-	function requestPriceIfNeededAndStageOperation(OperationType operation, address targetVault, uint256 operationValue, uint256 validForSeconds, uint256 proposedRepPerEthPrice, uint256 requestedInitialAttoWeth) public payable {
-		_requestPriceIfNeededAndStageOperation(operation, targetVault, msg.sender, bytes32(0), operationValue, validForSeconds, proposedRepPerEthPrice, requestedInitialAttoWeth);
+	function requestPriceIfNeededAndStageOperation(OperationType operation, address targetVault, uint256 operationValue, uint256 validForSeconds, uint256 proposedRepPerEthPrice, uint256 requestedInitialAttoWeth, uint256 bountyAttoEth) public payable {
+		_requestPriceIfNeededAndStageOperation(operation, targetVault, msg.sender, bytes32(0), operationValue, validForSeconds, proposedRepPerEthPrice, requestedInitialAttoWeth, bountyAttoEth);
 	}
 
-	function requestPriceIfNeededAndStageLiquidation(address targetVault, address receiverVault, uint256 requestedDebtAttoEth, bytes32 approvalId, uint256 validForSeconds, uint256 proposedRepPerEthPrice, uint256 requestedInitialAttoWeth) external payable {
-		_requestPriceIfNeededAndStageOperation(OperationType.Liquidation, targetVault, receiverVault, approvalId, requestedDebtAttoEth, validForSeconds, proposedRepPerEthPrice, requestedInitialAttoWeth);
+	function requestPriceIfNeededAndStageLiquidation(address targetVault, address receiverVault, uint256 requestedDebtAttoEth, bytes32 approvalId, uint256 validForSeconds, uint256 proposedRepPerEthPrice, uint256 requestedInitialAttoWeth, uint256 bountyAttoEth) external payable {
+		_requestPriceIfNeededAndStageOperation(OperationType.Liquidation, targetVault, receiverVault, approvalId, requestedDebtAttoEth, validForSeconds, proposedRepPerEthPrice, requestedInitialAttoWeth, bountyAttoEth);
 	}
 
-	function _requestPriceIfNeededAndStageOperation(OperationType operation, address targetVault, address receiverVault, bytes32 approvalId, uint256 operationValue, uint256 validForSeconds, uint256 proposedRepPerEthPrice, uint256 requestedInitialAttoWeth) private {
+	function _requestPriceIfNeededAndStageOperation(OperationType operation, address targetVault, address receiverVault, bytes32 approvalId, uint256 operationValue, uint256 validForSeconds, uint256 proposedRepPerEthPrice, uint256 requestedInitialAttoWeth, uint256 bountyAttoEth) private {
 		require(operationValue > 0, 'Staged operation amount must be non-zero');
 		require(validForSeconds > 0, 'Staged operation timeout must be positive');
 		require(validForSeconds <= MAX_OPERATION_VALID_FOR_SECONDS, 'Staged operation timeout exceeds the maximum allowed');
@@ -450,10 +406,9 @@ contract OpenOraclePriceCoordinator {
 			bool isPendingSettlementOperationId = _trackPendingSettlementOperation(operationId);
 			_emitStagedOperationQueued(operationId, snapshot, isPendingSettlementOperationId);
 			if (shouldRequestPrice && isPendingSettlementOperationId) {
-				uint256 costAttoEth = getRequestPriceCostAttoEth();
-				require(msg.value >= costAttoEth, 'Not enough ETH was provided to request a fresh oracle price');
-				retained += costAttoEth;
-				_requestPrice(msg.sender, costAttoEth, proposedRepPerEthPrice, requestedInitialAttoWeth);
+				_requireRequestBounty(bountyAttoEth);
+				retained += bountyAttoEth;
+				_requestPrice(msg.sender, bountyAttoEth, proposedRepPerEthPrice, requestedInitialAttoWeth);
 			}
 		}
 
