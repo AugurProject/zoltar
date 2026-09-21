@@ -85,6 +85,10 @@ function securityPoolFactoryDiscoveryFailed(error?: string) {
 	return `Security pool discovery failed: ${error ?? ''}`
 }
 
+function universeDiscoveryFailed(error?: string) {
+	return `Universe discovery failed: ${error ?? unknownDiscovery}`
+}
+
 function securityPoolCouldNotLoad(error: string) {
 	return `This security pool could not be loaded. No trading, liquidity, or settlement action is available until its authoritative reads succeed: ${error}`
 }
@@ -172,6 +176,7 @@ export const liveCopy = {
 	priorityFeePerGas,
 	securityPoolDiscoveryFailed,
 	securityPoolFactoryDiscoveryFailed,
+	universeDiscoveryFailed,
 	securityPoolCouldNotLoad,
 	poolPageRange,
 } as const

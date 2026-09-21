@@ -10,6 +10,8 @@ import { routeOwnsLiveWallet, walletSummaryAfterRouteChange, walletSummaryForUni
 import { filterMarketsByUniverse, walletSummaryAvailability, walletSummaryDiscoveryRetryStart, walletSummaryRefreshState } from '../../features/liveTradingControllerHelpers.js'
 import type { DeploymentConfiguration } from '../../protocol/config.js'
 import type { LiveMarket } from '../../protocol/live.js'
+import { liveTradingControllerServices } from '../../features/liveTradingControllerHelpers.js'
+import { waitFor } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 
 beforeEach(() => installTradingRouting())
@@ -37,6 +39,40 @@ describe('trading header', () => {
 		expect(rendered.container.querySelector('.header-toolbar-controls select')).toBeNull()
 		const universeTab = Array.from(rendered.container.querySelectorAll<HTMLAnchorElement>('.tab-nav a')).find(anchor => anchor.textContent === 'Universe')
 		expect(universeTab?.getAttribute('href')).toBe('#/universe?universe=2')
+	})
+
+	test('rewrites an unknown universe request to the discovered universe so the URL, header, and routes agree', async () => {
+		window.history.replaceState(undefined, '', '/#/universe?universe=7&simulate=1')
+		const configuration: DeploymentConfiguration = { chainId: 31_337, chainName: 'Local', rpcUrl: 'http://127.0.0.1:1', securityPoolFactory: `0x${'11'.repeat(20)}`, factory: `0x${'22'.repeat(20)}`, router: `0x${'33'.repeat(20)}`, feeBps: 30 }
+		const services = {
+			...liveTradingControllerServices,
+			createTradingPublicClient: () => ({}),
+			validateLiveDeployment: async () => undefined,
+			discoverUniverses: async () => ({ start: 0n, count: 0n, total: 0n, previousStart: undefined, nextStart: undefined, markets: [], universeIds: [0n, 2n], selectedUniverseId: 0n }),
+		}
+		const rendered = await renderIntoDocument(<App initializeEnvironment={async () => undefined} loadLiveDeployment={async () => configuration} liveTradingServices={services} />)
+		cleanupRendered = rendered.cleanup
+		await waitFor(() => expect(window.location.hash).toBe('#/universe?universe=0&simulate=1'))
+		const universeField = rendered.container.querySelector('.header-toolbar-controls .toolbar-field-value')
+		expect(universeField?.textContent).toBe('Genesis (0x0)')
+		expect(universeField?.querySelector('span')?.getAttribute('title')).toBe('Genesis (0x0)')
+	})
+
+	test('says the universe is unavailable when universe discovery fails', async () => {
+		window.history.replaceState(undefined, '', '/#/universe')
+		const configuration: DeploymentConfiguration = { chainId: 31_337, chainName: 'Local', rpcUrl: 'http://127.0.0.1:1', securityPoolFactory: `0x${'11'.repeat(20)}`, factory: `0x${'22'.repeat(20)}`, router: `0x${'33'.repeat(20)}`, feeBps: 30 }
+		const services = {
+			...liveTradingControllerServices,
+			createTradingPublicClient: () => ({}),
+			validateLiveDeployment: async () => undefined,
+			discoverUniverses: async () => {
+				throw new Error('registry RPC unavailable')
+			},
+		}
+		const rendered = await renderIntoDocument(<App initializeEnvironment={async () => undefined} loadLiveDeployment={async () => configuration} liveTradingServices={services} />)
+		cleanupRendered = rendered.cleanup
+		await waitFor(() => expect(rendered.container.textContent).toContain('Universe discovery failed: registry RPC unavailable'))
+		expect(rendered.container.querySelector('.header-toolbar-controls .toolbar-field-value')?.textContent).toBe('Unavailable')
 	})
 
 	test('renders an explicit not-found route and updates the document title', async () => {

@@ -3,13 +3,14 @@ import { useRouteSignal } from '@zoltar/ui-core-shared/app/hooks/useHashRoute.js
 import { securityPoolAddressFromRoute } from '../features/liveTradingControllerHelpers.js'
 import { useCallback, useEffect, useRef, useState } from 'preact/hooks'
 import type { PublicClient } from '@zoltar/core-shared/evm/ethereum'
+import type { LiveTradingControllerServices } from '../features/live/liveTradingTypes.js'
 import type { ComponentChildren } from 'preact'
 import { Help } from '../features/Help.js'
 import { LiveTrading } from '../features/LiveTrading.js'
 import { TradingOverviewPanel } from '../components/TradingOverviewPanel.js'
 import { useUrlSearchState } from '@zoltar/ui-core-shared/app/hooks/useUrlSearchState.js'
-import { readUniverseQueryParam, writeUniverseQueryParam } from '@zoltar/ui-core-shared/navigation/urlParams.js'
-import { resolveUniverseSelection, type LiveUniverses } from '../lib/universeSelection.js'
+import { readStringQueryParam, readUniverseQueryParam, writeUniverseQueryParam } from '@zoltar/ui-core-shared/navigation/urlParams.js'
+import { resolveUniverseSelection, type LiveUniverses, type UniverseRequest } from '../lib/universeSelection.js'
 import { formatUniverseDisplayLabel, formatUniverseLabel } from '@zoltar/ui-core-shared/lib/universeLabels.js'
 import { routeOwnsLiveWallet, walletSummaryAfterRouteChange, walletSummaryForUniverse, type WalletSummaryState } from '../lib/walletSummaryState.js'
 import { TradingDeploymentSetup, type DeploymentWalletState, type TradingDeploymentSetupServices } from '../features/TradingDeploymentSetup.js'
@@ -62,8 +63,8 @@ const TRADING_NOT_FOUND_LINKS = [
 
 type LiveDeploymentStatus = 'loading' | 'verified' | 'unavailable'
 
-function readTradingUrlState(search: string) {
-	return { universeId: readUniverseQueryParam(search) }
+function readTradingUrlState(search: string): UniverseRequest {
+	return { universeId: readUniverseQueryParam(search), present: readStringQueryParam(search, 'universe') !== undefined }
 }
 
 async function resolveCanonicalLiveDeployment(coreDeployments: readonly CoreDeployment[], createPublicClient: (configuration: DeploymentConfiguration) => PublicClient = createTradingPublicClient) {
@@ -91,10 +92,13 @@ function tradingNetworkLabel(liveDeploymentStatus: LiveDeploymentStatus, liveCon
 export function App({
 	deploymentSetupServices,
 	initializeEnvironment = initializeTradingActiveEnvironment,
+	liveTradingServices,
 	loadLiveDeployment = resolveLiveDeployment,
 }: {
 	deploymentSetupServices?: TradingDeploymentSetupServices
 	initializeEnvironment?: () => Promise<unknown>
+	/** Test seam for the live routes' chain reads. */
+	liveTradingServices?: LiveTradingControllerServices
 	loadLiveDeployment?: () => Promise<DeploymentConfiguration>
 }) {
 	const [liveDeploymentStatus, setLiveDeploymentStatus] = useState<LiveDeploymentStatus>('loading')
@@ -105,7 +109,7 @@ export function App({
 	const { applyUrlStateUpdate, getOwnedSearch, state: urlState } = useUrlSearchState(readTradingUrlState)
 	const [liveUniverses, setLiveUniverses] = useState<LiveUniverses>({ ids: [], selected: undefined })
 	const [discoveryState, setDiscoveryState] = useState<'loading' | 'ready' | 'error'>('loading')
-	const universeSelection = resolveUniverseSelection(urlState.universeId, liveUniverses)
+	const universeSelection = resolveUniverseSelection(urlState, liveUniverses)
 	const selectedUniverseId = universeSelection.requestedUniverseId
 	const confirmedUniverseId = universeSelection.confirmedUniverseId
 	useEffect(() => {
@@ -233,6 +237,7 @@ export function App({
 				selectedUniverseId={selectedUniverseId}
 				confirmedUniverseId={confirmedUniverseId}
 				onDiscoveryStateChange={setDiscoveryState}
+				{...(liveTradingServices === undefined ? {} : { controllerServices: liveTradingServices })}
 				onUniversesChange={updateLiveUniverses}
 				onWorkflowLockChange={updateWorkflowLock}
 				onWalletSummaryChange={setLiveWalletSummary}

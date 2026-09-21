@@ -9,10 +9,18 @@ export type UniverseSelection = Readonly<{
 	replaceUrlUniverseId: bigint | undefined
 }>
 
+export type UniverseRequest = Readonly<{
+	/** The parsed `universe` parameter; undefined when absent or malformed. */
+	universeId: bigint | undefined
+	/** Whether a `universe` parameter is present at all, so a malformed value is rewritten like an unknown one. */
+	present: boolean
+}>
+
 /** Reconciles the `universe` query parameter with what discovery found on the deployment. */
-export function resolveUniverseSelection(urlUniverseId: bigint | undefined, liveUniverses: LiveUniverses): UniverseSelection {
+export function resolveUniverseSelection(request: UniverseRequest, liveUniverses: LiveUniverses): UniverseSelection {
+	const urlUniverseId = request.universeId
 	if (liveUniverses.ids.length === 0) return { requestedUniverseId: urlUniverseId?.toString(), confirmedUniverseId: undefined, replaceUrlUniverseId: undefined }
 	if (urlUniverseId !== undefined && liveUniverses.ids.includes(urlUniverseId)) return { requestedUniverseId: urlUniverseId.toString(), confirmedUniverseId: urlUniverseId.toString(), replaceUrlUniverseId: undefined }
 	const confirmed = liveUniverses.selected?.toString()
-	return { requestedUniverseId: confirmed, confirmedUniverseId: confirmed, replaceUrlUniverseId: urlUniverseId === undefined ? undefined : liveUniverses.selected }
+	return { requestedUniverseId: confirmed, confirmedUniverseId: confirmed, replaceUrlUniverseId: request.present ? liveUniverses.selected : undefined }
 }

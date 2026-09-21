@@ -165,7 +165,7 @@ export function LiveTrading({
 				<div className='route-view-flow'>
 					<RouteHeader title={appCopy.universe} description={appCopy.universeRouteDescription} />
 					{discoveryState === 'error' ? (
-						<RetryableNotice message={liveCopy.securityPoolFactoryDiscoveryFailed(discoveryError)} retryLabel={commonCopy.retry} onRetry={refreshFromControl} disabled={workflowLocked} />
+						<RetryableNotice message={liveCopy.universeDiscoveryFailed(discoveryError)} retryLabel={commonCopy.retry} onRetry={refreshFromControl} disabled={workflowLocked} />
 					) : (
 						<StateHint announcement='polite' presentation={{ key: 'loading', badgeLabel: commonCopy.loading, badgeTone: 'loading', detail: commonCopy.loadingUniverseDetails, detailIsLoading: true }} />
 					)}
