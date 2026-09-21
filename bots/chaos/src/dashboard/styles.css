@@ -1172,98 +1172,6 @@ tbody tr:last-child td {
 	margin-top: 1.25rem;
 }
 
-.settings-group summary strong {
-	font-size: 1rem;
-}
-
-.switch-row {
-	display: flex;
-	align-items: center;
-	justify-content: space-between;
-	gap: 1.25rem;
-	padding: 0.9rem;
-	border: 1px solid var(--operator-border);
-	border-radius: 0.65rem;
-	background: #0d1114;
-}
-
-.switch-row + .switch-row {
-	margin-top: 0.65rem;
-}
-
-.switch-row label {
-	display: flex;
-	align-items: center;
-	min-width: 2.75rem;
-	min-height: 2.75rem;
-	font-weight: 740;
-	cursor: pointer;
-}
-
-.switch-row p {
-	margin: 0.25rem 0 0;
-	color: var(--operator-muted);
-	font-size: 0.78rem;
-	line-height: 1.4;
-}
-
-.danger-switch {
-	border-color: rgb(255 117 111 / 28%);
-}
-
-.form-grid {
-	display: grid;
-	grid-template-columns: repeat(2, minmax(0, 1fr));
-	gap: 0.85rem;
-	margin-top: 1rem;
-}
-
-.form-grid-wide {
-	grid-column: 1 / -1;
-}
-
-.form-grid label,
-#signer-form label:not(.checkbox-row) {
-	display: grid;
-	gap: 0.4rem;
-	color: var(--operator-muted);
-	font-size: 0.78rem;
-	font-weight: 700;
-}
-
-.input-with-unit {
-	display: grid;
-	grid-template-columns: minmax(0, 1fr) auto;
-}
-
-.input-with-unit input {
-	border-radius: 0.55rem 0 0 0.55rem;
-}
-
-.input-with-unit span {
-	display: flex;
-	align-items: center;
-	padding: 0 0.7rem;
-	border: 1px solid var(--operator-border);
-	border-left: 0;
-	border-radius: 0 0.55rem 0.55rem 0;
-	background: var(--operator-surface-raised);
-	color: var(--operator-muted);
-	font-weight: 600;
-}
-
-.checkbox-row {
-	display: flex;
-	align-items: center;
-	gap: 0.65rem;
-	min-width: 2.75rem;
-	min-height: 2.75rem;
-	margin-top: 0.8rem;
-	color: var(--operator-muted);
-	font-size: 0.82rem;
-	cursor: pointer;
-}
-
 .ecosystem-controls {
 	display: flex;
 	flex-wrap: wrap;
@@ -1282,7 +1190,7 @@ tbody tr:last-child td {
 	font-weight: 700;
 }
 
-.ecosystem-controls .checkbox-row {
+.ecosystem-controls .switch-field {
 	margin: 0;
 }
 
@@ -1535,8 +1443,7 @@ tbody tr:last-child td {
 		font-size: 2.7rem;
 	}
 
-	.fact-grid,
-	.form-grid {
+	.fact-grid {
 		grid-template-columns: 1fr;
 	}
 
@@ -1574,10 +1481,6 @@ tbody tr:last-child td {
 	.stack-row > div:first-child,
 	.stack-row > .transaction-wait {
 		flex: 0 0 auto;
-	}
-
-	.switch-row {
-		align-items: flex-start;
 	}
 }
 
@@ -1689,28 +1592,6 @@ tbody tr:last-child td {
 .operation-selection input {
 	width: 1.25rem;
 	height: 1.25rem;
-}
-
-.policy-actions {
-	flex-wrap: wrap;
-	margin-top: 0;
-	margin-bottom: 1rem;
-}
-
-.policy-actions [hidden] {
-	display: none;
-}
-
-.policy-actions .action-status:not(:empty) {
-	flex-basis: 100%;
-}
-
-#execution-current-mode {
-	color: var(--operator-text);
-}
-
-#execution-draft-mode {
-	color: var(--operator-warning);
 }
 
 .operation-receipts {

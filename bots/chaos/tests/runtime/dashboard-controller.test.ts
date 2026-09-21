@@ -861,6 +861,36 @@ describe('chaos dashboard configuration boundary', () => {
 		expect(state.status).toBe('running')
 	})
 
+	test('arms and disarms live execution through the execution mode switch alone', async () => {
+		const current = configuredSettings(true, false)
+		const state = runtimeState(current)
+		const { configuration, controller } = noopController(current, state)
+		const setExecution = controller.setExecution
+		if (setExecution === undefined) throw new Error('Expected the execution mode control')
+		// The switch needs the same funded current-signer scan as the policy form did.
+		await expect(setExecution({ execute: true, revision: 'revision' })).rejects.toThrow('fresh, complete canonical scan for the configured signer')
+		expect(configuration.settings.runtime.execute).toBeFalse()
+		completeSignerScan(state, current, { eth: 0n })
+		await expect(setExecution({ execute: true, revision: 'revision' })).rejects.toThrow('minimumEthReserve plus one strategy.maximumEthPerOperation principal')
+		completeSignerScan(state, current)
+		await expect(setExecution({ execute: true, revision: 'stale' })).rejects.toThrow()
+		await expect(setExecution({ execute: true, revision: 'revision', paused: false })).rejects.toThrow('Execution mode update')
+		await expect(setExecution({ execute: 'yes', revision: 'revision' })).rejects.toThrow('requires execute')
+		await setExecution({ execute: true, revision: 'revision' })
+		expect(configuration.settings.runtime.execute).toBeTrue()
+		expect(configuration.settings.paused).toBeTrue()
+		expect(configuration.revision).toBe('revision:1')
+		expect(state.activities[0]?.message).toBe('Live execution enabled; resume to start signing')
+		await controller.setPaused({ paused: false, revision: 'revision:1' })
+		expect(state.status).toBe('running')
+		// Returning to dry run still requires the paused operator, like every other policy change.
+		await expect(setExecution({ execute: false, revision: 'revision:2' })).rejects.toThrow('changing execution policy')
+		await controller.setPaused({ paused: true, revision: 'revision:2' })
+		await setExecution({ execute: false, revision: 'revision:3' })
+		expect(configuration.settings.runtime.execute).toBeFalse()
+		expect(state.activities[0]?.message).toBe('Dry-run mode enabled')
+	})
+
 	test('requires CAS-shaped pause and signer updates', () => {
 		expect(pausedCandidate(settings(), { paused: true, revision: 'one' }).settings.paused).toBeTrue()
 		expect(() => pausedCandidate(settings(), { paused: true })).toThrow('missing revision')

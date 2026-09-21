@@ -1,5 +1,5 @@
 import { renderRepMarketConsensusError, renderRepMarketConsensusPanel } from '@zoltar/bot-shared/dashboard/rep-market-consensus'
-import { decodeConfiguration, decodeSnapshot, decodeMarketProbe, decodeSigner, type Configuration, type Snapshot, type MarketSourceRow, type Activity, type Universe } from './api-validation.ts'
+import { decodeConfiguration, decodeSnapshot, decodeMarketProbe, type Configuration, type Snapshot, type MarketSourceRow, type Activity, type Universe } from './api-validation.ts'
 import { activityBadgeClass } from './status-badges.js'
 import { cell, publicFailure } from './pool-presentation.ts'
 import { createPoolBrowser } from './pool-browser.ts'
@@ -10,12 +10,11 @@ import { createMetric, endpointHealthDetail, endpointRow, renderDisconnectedHead
 import { CONFIGURATION_REQUEST_TIMEOUT_MS, PROFILE_SWITCH_REQUEST_TIMEOUT_MESSAGE, PROFILE_SWITCH_REQUEST_TIMEOUT_MS, requestWithTimeout, singleFlight, STATE_REQUEST_TIMEOUT_MS } from '@zoltar/bot-shared/dashboard/polling'
 import { closeResumePreflight, openResumePreflight } from '@zoltar/bot-shared/dashboard/resume-preflight'
 import { createSectionNavigation } from '@zoltar/bot-shared/dashboard/section-navigation'
+import { createSettingsNavigation } from '@zoltar/bot-shared/dashboard/settings-navigation'
+import { markFormClean, trackForm } from '@zoltar/bot-shared/dashboard/form-state'
 import { urlLines } from '@zoltar/bot-shared/dashboard/forms'
-function element<T extends Element>(id: string, constructor: { new (): T }) {
-	const value = document.getElementById(id)
-	if (!(value instanceof constructor)) throw new Error(`Missing dashboard element #${id}`)
-	return value
-}
+import { registerGoLiveForms } from './go-live-forms.ts'
+import { element, shorten } from '@zoltar/bot-shared/dashboard/dom'
 
 const metrics = element('metrics', HTMLDivElement)
 const networkForm = element('network-form', HTMLFormElement)
@@ -57,11 +56,6 @@ const strategyForm = element('strategy-form', HTMLFormElement)
 const strategyFields = element('strategy-fields', HTMLFieldSetElement)
 const strategyStatus = element('strategy-status', HTMLSpanElement)
 const settingsChainScope = element('settings-chain-scope', HTMLParagraphElement)
-const signerForm = element('signer-form', HTMLFormElement)
-const signerStatus = element('signer-status', HTMLSpanElement)
-const updateSignerButton = element('update-signer', HTMLButtonElement)
-const clearSignerButton = element('clear-signer', HTMLButtonElement)
-const walletAddress = element('wallet-address', HTMLElement)
 const healthPolicyPreview = element('health-policy-preview', HTMLParagraphElement)
 const resumeDialog = element('resume-dialog', HTMLElement)
 const cancelResume = element('cancel-resume', HTMLButtonElement)
@@ -133,15 +127,15 @@ function setMutationControlsEnabled(enabled: boolean) {
 	networkFields.disabled = !configurationAvailable || pendingNetworkProfile !== undefined
 	marketConfigurationFields.disabled = !chainSettingsAvailable
 	strategyFields.disabled = !chainSettingsAvailable
-	const privateKeyField = signerForm.elements.namedItem('privateKey')
-	for (const control of signerForm.querySelectorAll<HTMLInputElement | HTMLButtonElement>('input, button')) control.disabled = !chainSettingsAvailable
-	updateSignerButton.disabled = !chainSettingsAvailable || !(privateKeyField instanceof HTMLInputElement) || privateKeyField.value.trim() === ''
+	// Execution mode is judged against the live snapshot, so it stays locked until one has arrived.
+	goLiveForms.setEnabled(chainSettingsAvailable, currentSnapshot !== undefined)
 	testMarketSourcesButton.disabled = !chainSettingsAvailable
 	recheckRecovery.disabled = !chainSettingsAvailable
 	if (!chainSettingsAvailable) {
 		for (const control of document.querySelectorAll<HTMLInputElement | HTMLButtonElement>('#recovery-list input, #recovery-list button')) control.disabled = true
 	}
 	if (currentSnapshot !== undefined) renderUniverses(currentSnapshot, !chainSettingsAvailable)
+	goLiveForms.render(currentSnapshot, currentConfiguration)
 }
 
 async function api(path: string, options?: RequestInit, timeoutMilliseconds?: number): Promise<unknown> {
@@ -205,10 +199,6 @@ function globalErrorPresentation(snapshot: Snapshot): { message: string | undefi
 	}
 	const message = snapshot.status === 'connectivity-degraded' ? 'RPC connectivity is degraded. Execution is blocked and the bot will retry automatically.' : `${scanFailureDetail(snapshot.error)} Automatic retry is active. Check the bot logs if the next cycle also fails.`
 	return { message, title: 'Scan failed', tone: 'error' }
-}
-
-function shortAddress(address: string) {
-	return address.length <= 18 ? address : `${address.slice(0, 10)}…${address.slice(-6)}`
 }
 
 function renderMetrics(snapshot: Snapshot) {
@@ -279,7 +269,7 @@ function renderMarketSources(sources: MarketSourceRow[]) {
 			const presentation = MARKET_SOURCE_STATUS_PRESENTATION[source.status]
 			badge.className = `badge ${presentation.badgeClass}`
 			badge.textContent = presentation.label
-			const cells = [cell(source.kind.toUpperCase()), cell(source.id), cell(shortAddress(source.assetId)), cell(source.market), cell(badge), cell(source.reason ?? presentation.defaultReason)]
+			const cells = [cell(source.kind.toUpperCase()), cell(source.id), cell(shorten(source.assetId)), cell(source.market), cell(badge), cell(source.reason ?? presentation.defaultReason)]
 			const labels = ['Venue', 'Source', 'REP asset', 'Market', 'Status', 'Reason']
 			const headings = ['source-kind-heading', 'source-id-heading', 'source-asset-heading', 'source-market-heading', 'source-status-heading', 'source-reason-heading']
 			for (const [index, value] of cells.entries()) {
@@ -491,7 +481,6 @@ function render(snapshot: Snapshot) {
 	renderAttention(snapshot)
 	recoveryGuidance.hidden = snapshot.paused
 	lastScan.textContent = scanStatusText(snapshot)
-	walletAddress.textContent = snapshot.wallet ?? 'No active signer'
 	const globalError = globalErrorPresentation(snapshot)
 	setGlobalError(globalError.message, globalError.title, globalError.tone)
 	renderMetrics(snapshot)
@@ -579,9 +568,11 @@ function populateConfiguration(configuration: Configuration) {
 	marketConfigurationJson.value = JSON.stringify({ children: configuration.childMarketConfigurations, desiredPools: configuration.desiredPools, root: configuration.centralizedMarkets }, undefined, 2) ?? ''
 	marketConfigurationFields.disabled = configuration.networkConfigured !== true
 	strategyFields.disabled = configuration.networkConfigured !== true
+	goLiveForms.load(configuration)
 	configurationStatus.classList.add('hidden')
 	configurationStatus.replaceChildren()
 	updateHealthPolicyPreview()
+	for (const formId of TRACKED_FORMS) markFormClean(formId)
 	if (currentSnapshot !== undefined) {
 		renderAttention(currentSnapshot)
 		renderUniverses(currentSnapshot)
@@ -845,7 +836,7 @@ function openResumeConfirmation(snapshot: Snapshot) {
 		['Recovery work', snapshot.pendingTransactions.length + snapshot.pendingStagedOperations.length === 0 ? 'Clear' : `${(snapshot.pendingTransactions.length + snapshot.pendingStagedOperations.length).toString()} unresolved`],
 		['Market evidence', snapshot.marketConsensus?.reliable === true ? 'Reliable' : 'Guarded / unavailable'],
 		['Eligible pools', snapshot.metrics.eligiblePoolCount.toString()],
-		['Execution signer', snapshot.wallet === undefined ? 'Missing' : shortAddress(snapshot.wallet)],
+		['Execution signer', snapshot.wallet === undefined ? 'Missing' : shorten(snapshot.wallet)],
 		['Automatic actions enabled', automaticActions.toString()],
 	])
 }
@@ -884,6 +875,11 @@ resumeDialog.addEventListener('cancel', () => actionStatus(pauseStatus, ''))
 strategyForm.addEventListener('input', updateHealthPolicyPreview)
 
 const { scrollToSection, syncSectionNavigation } = createSectionNavigation()
+/** Each focused form diffs against the loaded configuration; its save button unlocks on edits and the panel shows an Unsaved badge. */
+const TRACKED_FORMS = ['network-form', 'market-configuration-form', 'strategy-form'] as const
+for (const formId of TRACKED_FORMS) trackForm(formId)
+createSettingsNavigation()
+const goLiveForms = registerGoLiveForms({ actionStatus, configuration: () => currentConfiguration, populateConfiguration, put, refresh: () => refresh(), syncControls: () => setMutationControlsEnabled(stateConnected) })
 
 strategyForm.addEventListener('submit', async event => {
 	event.preventDefault()
@@ -910,56 +906,6 @@ strategyForm.addEventListener('submit', async event => {
 		actionStatus(strategyStatus, 'Saved')
 	} catch (error) {
 		actionStatus(strategyStatus, publicFailure(error, 'Could not save strategy. Review the fields and retry.'), true)
-	}
-})
-
-signerForm.addEventListener('submit', async event => {
-	event.preventDefault()
-	const privateKeyField = signerForm.elements.namedItem('privateKey')
-	const rememberField = signerForm.elements.namedItem('rememberSigner')
-	if (!(privateKeyField instanceof HTMLInputElement) || !(rememberField instanceof HTMLInputElement)) return
-	if (privateKeyField.value.trim() === '') {
-		actionStatus(signerStatus, 'Enter a private key or use Clear signer.', true)
-		return
-	}
-	actionStatus(signerStatus, 'Updating…')
-	try {
-		const result = decodeSigner(
-			await put('/api/signer', {
-				privateKey: privateKeyField.value,
-				rememberSigner: rememberField.checked,
-			}),
-		)
-		privateKeyField.value = ''
-		updateSignerButton.disabled = true
-		actionStatus(signerStatus, result.wallet === undefined ? 'Signer cleared' : `Signer active: ${shortAddress(result.wallet)}`)
-	} catch (error) {
-		actionStatus(signerStatus, publicFailure(error, 'Could not update the signer. Check the bot connection and retry.'), true)
-	}
-})
-
-signerForm.addEventListener('input', () => {
-	const privateKeyField = signerForm.elements.namedItem('privateKey')
-	updateSignerButton.disabled = pendingNetworkProfile !== undefined || !stateConnected || currentConfiguration?.networkConfigured !== true || !(privateKeyField instanceof HTMLInputElement) || privateKeyField.value.trim() === ''
-})
-
-clearSignerButton.addEventListener('click', async () => {
-	if (!window.confirm('Clear the active signer and remove its saved private key from the local operator file?')) return
-	clearSignerButton.disabled = true
-	actionStatus(signerStatus, 'Clearing…')
-	try {
-		const result = decodeSigner(
-			await put('/api/signer', {
-				privateKey: '',
-				rememberSigner: true,
-			}),
-		)
-		actionStatus(signerStatus, result.wallet === undefined ? 'Signer cleared' : 'Signer was not cleared', result.wallet !== undefined)
-		await refresh()
-	} catch (error) {
-		actionStatus(signerStatus, publicFailure(error, 'Could not clear the signer. Check the bot connection and retry.'), true)
-	} finally {
-		clearSignerButton.disabled = pendingNetworkProfile !== undefined || !stateConnected || currentConfiguration?.networkConfigured !== true
 	}
 })
 
@@ -1003,6 +949,8 @@ async function loadConfiguration() {
 			pendingProfileStateConfirmed = false
 		}
 		populateConfiguration(configuration)
+		// A fresh load, including another chain profile, restarts every Go live form from the file.
+		goLiveForms.load(configuration, 'all')
 		if (expectedNetwork !== undefined) {
 			const networkLabel = expectedNetwork === 'mainnet' ? 'Ethereum mainnet' : 'Sepolia'
 			actionStatus(networkStatus, configuration.networkConfigured === true ? `${networkLabel} profile loaded. Its saved settings are active.` : `${networkLabel} profile loaded; RPC setup required.`)

@@ -6,12 +6,13 @@ import example from '../../config/operator.example.json'
 import { privateKeyToAccount, zeroAddress, zeroHash, type Address } from '@zoltar/bot-shared/ethereum'
 import { EndpointCheckFailure, type EndpointCheck } from '@zoltar/bot-shared/monitoring/connectivity'
 import { parseSettings, serializedSettings, type OperatorSettings } from '../../src/config/settings.ts'
-import { createBotShutdownController, type BotProcessLocks } from '@zoltar/bot-shared/execution/bot-process-locks'
+import { createBotShutdownController } from '@zoltar/bot-shared/execution/bot-process-locks'
 import { OperationRediscoveryRequired } from '../../src/execution/transaction-executor.ts'
 import { IMMUTABLE_TOPOLOGY_CACHE_SCHEMA_VERSION, type CanonicalImmutableTopologyCache } from '../../src/monitoring/topology-cache.ts'
 import { reevaluateOperationContinuation } from '../../src/operations/catalog.ts'
 import { eligibleOperationPlans } from '../support/operation-plans.ts'
 import { executionProfileId, runChaosOperator } from '../../src/runtime/operator.ts'
+import type { ChaosProcessLocks } from '../../src/runtime/dashboard-controller.ts'
 import { backfillWaitMilliseconds, operatorWaitMilliseconds } from '../../src/core/scheduler.ts'
 import { actionableUrgentLifecyclePlan, lifecycleObstructions } from '../../src/runtime/lifecycle-readiness.ts'
 import { blockNovelEvaluations } from '../../src/runtime/obligations.ts'
@@ -39,7 +40,7 @@ afterEach(async () => {
 	)
 })
 
-function processLocks(): BotProcessLocks {
+function processLocks(): ChaosProcessLocks {
 	return {
 		acquireSigner: async () => undefined,
 		commitSigner: async () => undefined,

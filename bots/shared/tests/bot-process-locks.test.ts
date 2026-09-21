@@ -267,6 +267,44 @@ describe('bot process locks', () => {
 		releases.push(live.release)
 	})
 
+	test('arms a live-only process at runtime by reserving its signer and releases it on the way back to dry run', async () => {
+		const privateKey = `0x${'88'.repeat(32)}` as const
+		const otherKey = `0x${'99'.repeat(32)}` as const
+		const address = privateKeyToAccount(privateKey).address
+		const dryRun = await acquireLiquidatorProcessLocks({ chainId: 1, execute: false, privateKey, stateFile: await stateFile('dry-run.json') })
+		releases.push(dryRun.release)
+		await dryRun.enableExecution(address)
+		// The reservation is exclusive across processes and survives a second arm with the same signer.
+		await expect(acquireLiquidatorProcessLocks({ chainId: 1, execute: true, privateKey, stateFile: await stateFile('competitor.json') })).rejects.toThrow('already locked')
+		await dryRun.enableExecution(address)
+		await expect(dryRun.enableExecution(privateKeyToAccount(otherKey).address)).rejects.toThrow('already reserved')
+		// While live, a signer change moves the reservation like a process that started live.
+		const otherAddress = privateKeyToAccount(otherKey).address
+		const nextLock = await dryRun.acquireSigner(otherAddress)
+		expect(nextLock).toBeDefined()
+		await dryRun.commitSigner(otherAddress, nextLock)
+		const freed = await acquireLiquidatorProcessLocks({ chainId: 1, execute: true, privateKey, stateFile: await stateFile('freed.json') })
+		await freed.release()
+		await dryRun.disableExecution()
+		expect(await dryRun.acquireSigner(otherAddress)).toBeUndefined()
+		const released = await acquireLiquidatorProcessLocks({ chainId: 1, execute: true, privateKey: otherKey, stateFile: await stateFile('released.json') })
+		await released.release()
+		await dryRun.disableExecution()
+	})
+
+	test('keeps the dry-run signer reservation of an always-locking process when live execution is disarmed', async () => {
+		const privateKey = `0x${'aa'.repeat(32)}` as const
+		const address = privateKeyToAccount(privateKey).address
+		const bot = await acquireChaosProcessLocks({ chainId: 1, execute: true, privateKey, stateFile: await stateFile('chaos.json') })
+		releases.push(bot.release)
+		await bot.disableExecution()
+		await bot.enableExecution(address)
+		await bot.disableExecution()
+		const competitor = await acquireChaosProcessLocks({ chainId: 1, execute: false, privateKey, stateFile: await stateFile('competitor.json') })
+		releases.push(competitor.release)
+		await expect(competitor.acquireSigner(address)).rejects.toThrow('already locked')
+	})
+
 	test('shutdown request interrupts a long polling wait and remains idempotent', async () => {
 		using shutdown = createBotShutdownController()
 		const startedAt = Date.now()

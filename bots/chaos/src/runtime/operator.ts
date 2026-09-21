@@ -1,6 +1,6 @@
 import { reconcileIncludedTransactions } from '../execution/inclusion-journal.ts'
 import { createWalletClient, privateKeyToAccount, type Address } from '@zoltar/bot-shared/ethereum'
-import { botDashboardLifecycle, type BotProcessLocks, type BotShutdownController } from '@zoltar/bot-shared/execution/bot-process-locks'
+import { botDashboardLifecycle, type BotShutdownController } from '@zoltar/bot-shared/execution/bot-process-locks'
 import { createSignerOperationGate } from '@zoltar/bot-shared/execution/signer-operation-gate'
 import { errorMessage as formatErrorMessage } from '@zoltar/bot-shared/infrastructure/error-message'
 import { checkRpcEndpoint, EndpointCheckFailure, type EndpointCheck } from '@zoltar/bot-shared/monitoring/connectivity'
@@ -21,7 +21,7 @@ import { migrateEmptyBootstrapState } from '../state/bootstrap-migration.ts'
 import { bindRuntimeStateToSigner, loadRuntimeState, recordActivity, saveDurableState, setRuntimeExecutionAddress, type RuntimeState } from '../state/operator-state.ts'
 import { applyExecutionPolicy, blockExecutableEvaluations, chaosChain, createChaosReadPool, performCanonicalScan, planningOptions, unavailableOperationCatalog } from './canonical-scan.ts'
 import { restartSafeSettings } from './configuration-candidates.ts'
-import { createChaosDashboardController, type ConfigurationState } from './dashboard-controller.ts'
+import { createChaosDashboardController, type ChaosProcessLocks, type ConfigurationState } from './dashboard-controller.ts'
 import { checkDeploymentAvailability, recordUnavailableDeploymentScan, tradingDeploymentNotice } from './deployment-availability.ts'
 import { resetPristineStateForDeploymentProfile, verifyRetirementCompletionFinality } from './deployment-profile.ts'
 import { actionableUrgentLifecyclePlan, lifecycleObstructions } from './lifecycle-readiness.ts'
@@ -422,7 +422,7 @@ async function handleCycleFailure(error: unknown, configuration: ConfigurationSt
 	await persistState(configuration, state)
 }
 
-export async function runChaosOperator(loaded: LoadedConfiguration, locks: BotProcessLocks, shutdown: BotShutdownController) {
+export async function runChaosOperator(loaded: LoadedConfiguration, locks: ChaosProcessLocks, shutdown: BotShutdownController) {
 	const initialWallet = configuredWallet(loaded.settings)
 	const state = migrateEmptyBootstrapState(await loadRuntimeState(loaded.settings.runtime.stateFile, loaded.settings.paused, initialWallet, loaded.settings.network.chainId), loaded.settings)
 	const initialProfileId = executionProfileId(loaded.settings)

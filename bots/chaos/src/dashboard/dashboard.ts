@@ -2,6 +2,10 @@ import { createWorkflowHistory, type Workflow, type WorkflowStep } from './workf
 import { requestWithTimeout } from '@zoltar/bot-shared/dashboard/polling'
 import { optionalRecord as record } from '@zoltar/bot-shared/infrastructure/json-validation'
 import { createExecutionPolicyDraft } from './execution-policy-draft.js'
+import { createSettingsNavigation } from '@zoltar/bot-shared/dashboard/settings-navigation'
+import { element } from '@zoltar/bot-shared/dashboard/dom'
+import { decimalAtto } from './go-live.js'
+import { registerExecutionModeForm } from './execution-mode-form.js'
 import { createActivityTimeline } from './activity-timeline.js'
 import { createCatalogGroups } from './catalog-groups.js'
 import { fullIdentifier, formatDate, node, setBadge, statusLabel, statusTone, transactionExplorerUrl } from './dom.js'
@@ -186,12 +190,6 @@ const ecosystemLabels = new Map<string, string>([
 	['trading', 'Trading'],
 ])
 
-function element<T extends Element>(id: string, constructor: { new (): T }) {
-	const value = document.getElementById(id)
-	if (!(value instanceof constructor)) throw new Error(`Missing dashboard element #${id}`)
-	return value
-}
-
 const modeBadge = element('mode-badge', HTMLSpanElement)
 const networkBadge = element('network-badge', HTMLSpanElement)
 const signerBadge = element('signer-badge', HTMLSpanElement)
@@ -296,7 +294,6 @@ const discardConnectivityButton = element('discard-connectivity', HTMLButtonElem
 const connectivityStatus = element('connectivity-status', HTMLSpanElement)
 const settingsForm = element('settings-form', HTMLFormElement)
 const settingsFields = element('settings-fields', HTMLFieldSetElement)
-const executeInput = element('execute', HTMLInputElement)
 const highRiskInput = element('allow-high-risk', HTMLInputElement)
 const irreversibleInput = element('allow-irreversible', HTMLInputElement)
 const initializeGenesisInput = element('initialize-genesis-universe', HTMLInputElement)
@@ -314,11 +311,12 @@ const saveSettingsButton = element('save-settings', HTMLButtonElement)
 const discardSettingsButton = element('discard-settings', HTMLButtonElement)
 const settingsSaveStatus = element('settings-save-status', HTMLSpanElement)
 const signerForm = element('signer-form', HTMLFormElement)
-const signerFields = element('signer-fields', HTMLFieldSetElement)
+const signerFields = element('signer-fieldset', HTMLFieldSetElement)
 const signerSummary = element('signer-summary', HTMLElement)
 const privateKeyInput = element('private-key', HTMLInputElement)
 const rememberSignerInput = element('remember-signer', HTMLInputElement)
-const clearSignerButton = element('clear-signer', HTMLButtonElement)
+const setSignerButton = element('set-signer-button', HTMLButtonElement)
+const clearSignerButton = element('clear-signer-button', HTMLButtonElement)
 const signerStatus = element('signer-status', HTMLSpanElement)
 const resumeDialog = element('resume-dialog', HTMLDialogElement)
 const resumePreflight = element('resume-preflight', HTMLUListElement)
@@ -334,14 +332,14 @@ const settingsDraft = createExecutionPolicyDraft({
 	fields: settingsFields,
 	selectAll: allSelectableOperationsInput,
 	allowlist: selectableOperationAllowlistInput,
-	execute: executeInput,
 	discard: discardSettingsButton,
 	status: settingsSaveStatus,
-	currentMode: () => configuration?.execute,
 	reload: () => {
 		if (configuration !== undefined) renderConfiguration(configuration, true)
 	},
 })
+createSettingsNavigation()
+const executionModeForm = registerExecutionModeForm({ configuration: () => configuration, put, reconcile: (error, status) => reconcileUnknownMutation(error, status, 'configuration and state', 'settings'), refresh, snapshot: () => snapshot })
 let settingsRevision: string | number | undefined
 let connectivityDraftDirty = false
 let connectivityDraftConflict = false
@@ -860,7 +858,10 @@ function obligationDetail(obligation: Obligation) {
 function applyMutationControlLatches() {
 	updateSelectionControls()
 	if (pauseMutationUnreconciled || configurationCommitIndeterminate) pauseButton.disabled = true
-	if (settingsMutationUnreconciled || configurationCommitIndeterminate) settingsFields.disabled = true
+	if (settingsMutationUnreconciled || configurationCommitIndeterminate) {
+		settingsFields.disabled = true
+		executionModeForm.lock()
+	}
 	if (connectivityMutationUnreconciled || configurationCommitIndeterminate) connectivityFields.disabled = true
 	if (signerMutationUnreconciled || configurationCommitIndeterminate) signerFields.disabled = true
 	if (!configurationCommitIndeterminate) return
@@ -1489,9 +1490,11 @@ function renderConfiguration(value: Configuration, force = false) {
 	if (value.configurationCommitIndeterminate === true) latchConfigurationCommitIndeterminate()
 	const policyEditable = value.paused === true && snapshot?.paused === true && !settingsMutationUnreconciled && !configurationCommitIndeterminate
 	settingsFields.disabled = !policyEditable
+	executionModeForm.render(value, policyEditable)
 	connectivityFields.disabled = connectivityMutationUnreconciled || configurationCommitIndeterminate
 	settingsPauseNote.classList.toggle('hidden', policyEditable)
 	signerFields.disabled = signerMutationUnreconciled || configurationCommitIndeterminate
+	setSignerButton.disabled = privateKeyInput.value.trim() === ''
 	const network = value.network ?? snapshot?.network ?? 'Network unknown'
 	let networkTone: Parameters<typeof setBadge>[2] = 'success'
 	if (value.networkConfigured === false) networkTone = 'warning'
@@ -1538,7 +1541,6 @@ function renderConfiguration(value: Configuration, force = false) {
 	settingsDraft.conflict = false
 	saveSettingsButton.disabled = false
 	discardSettingsButton.disabled = true
-	executeInput.checked = value.execute === true
 	highRiskInput.checked = value.allowHighRiskOperations === true
 	irreversibleInput.checked = value.allowIrreversibleOperations === true
 	initializeGenesisInput.checked = value.initializeGenesisUniverse === true
@@ -1752,12 +1754,6 @@ function parseReserve(input: HTMLInputElement, name: string, requirement: 'live-
 	if (!/^(?:0|[1-9]\d*)(?:\.\d{1,18})?$/.test(value)) throw new Error(`${name} must be a non-negative decimal amount with at most 18 places.`)
 	if (requirement !== 'non-negative' && /^0(?:\.0+)?$/.test(value)) throw new Error(`${name} must be greater than zero${requirement === 'live-reserve' ? ' for live execution' : ''}.`)
 	return value
-}
-
-function decimalAtto(value: string) {
-	const [whole, fraction = ''] = value.split('.')
-	if (whole === undefined) throw new Error('Decimal amount is missing its whole-number component.')
-	return BigInt(whole) * 10n ** 18n + BigInt(fraction.padEnd(18, '0'))
 }
 
 let currentSectionLink: HTMLAnchorElement | undefined
@@ -2169,13 +2165,15 @@ settingsForm.addEventListener('submit', event => {
 			const maximumEthPerOperation = parseReserve(maximumEthOperationInput, 'Maximum ETH per operation', 'positive')
 			const maximumGasCostEth = parseReserve(maximumGasCostInput, 'Maximum gas cost', 'positive')
 			const maximumRepPerOperation = parseReserve(maximumRepOperationInput, 'Maximum REP per operation', 'positive')
-			const minimumEthReserve = parseReserve(reserveEthInput, 'ETH reserve', executeInput.checked ? 'live-reserve' : 'non-negative')
-			const minimumRepReserve = parseReserve(reserveRepInput, 'REP reserve', executeInput.checked ? 'live-reserve' : 'non-negative')
-			if (executeInput.checked && decimalAtto(minimumEthReserve) < decimalAtto(maximumGasCostEth)) throw new Error('ETH reserve must retain at least one maximum-gas-cost-sized safety floor.')
+			// The saved execution mode decides the reserve rules; the mode itself changes only through the Execution mode panel.
+			const live = configuration.execute === true
+			const minimumEthReserve = parseReserve(reserveEthInput, 'ETH reserve', live ? 'live-reserve' : 'non-negative')
+			const minimumRepReserve = parseReserve(reserveRepInput, 'REP reserve', live ? 'live-reserve' : 'non-negative')
+			if (live && decimalAtto(minimumEthReserve) < decimalAtto(maximumGasCostEth)) throw new Error('ETH reserve must retain at least one maximum-gas-cost-sized safety floor.')
 			await put('/api/settings', {
 				revision: settingsRevision,
 				patch: {
-					runtime: { execute: executeInput.checked },
+					runtime: { execute: live },
 					scheduler: { maximumDelaySeconds: maxDelaySeconds, minimumDelaySeconds: minDelaySeconds },
 					strategy: {
 						allowHighRiskOperations: highRiskInput.checked,
@@ -2216,6 +2214,8 @@ settingsForm.addEventListener('submit', event => {
 		}
 	})()
 })
+
+privateKeyInput.addEventListener('input', () => setSignerButton.toggleAttribute('disabled', privateKeyInput.value.trim() === ''))
 
 signerForm.addEventListener('submit', event => {
 	event.preventDefault()

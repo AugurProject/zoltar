@@ -1,5 +1,4 @@
 import { repMarketConsensusPanel } from '@zoltar/bot-shared/dashboard/rep-market-consensus'
-import { rpcConnectivityFields } from '@zoltar/bot-shared/dashboard/rpc-connectivity'
 import { buildDashboardScript, dashboardHealthResponse, sharedDashboardAssetResponse } from '@zoltar/bot-shared/dashboard/assets'
 import { publicConnectivityError } from '@zoltar/bot-shared/dashboard/connectivity-error'
 import {
@@ -20,6 +19,7 @@ import { optionalRecord as record } from '@zoltar/bot-shared/infrastructure/json
 import { join } from 'node:path'
 import type { PoolCatalogPage } from '../monitoring/pool-catalog.ts'
 import { operatorHeader } from './header.ts'
+import { settingsPageMarkup } from './settings-page.ts'
 
 export type DashboardController = {
 	getPoolCatalog?: (page: number, address?: Address, scope?: 'all' | 'monitored') => Promise<PoolCatalogPage>
@@ -38,8 +38,10 @@ export type DashboardController = {
 	testMarketSources?: (value: unknown) => unknown | Promise<unknown>
 	setSupportedPool?: (value: unknown) => unknown | Promise<unknown>
 	setSelectedPools: (value: unknown) => unknown | Promise<unknown>
+	setExecution?: (value: unknown) => unknown | Promise<unknown>
 	setSigner: (value: unknown) => unknown | Promise<unknown>
 	setStrategy: (value: unknown) => unknown | Promise<unknown>
+	setSubmission?: (value: unknown) => unknown | Promise<unknown>
 	switchNetworkProfile?: (value: unknown) => unknown | Promise<unknown>
 }
 
@@ -57,6 +59,27 @@ function publicConnectivityUpdateError(error: unknown) {
 			'Select the chain profile before saving its RPC settings',
 		]),
 	})
+}
+
+const EXECUTION_UPDATE_MESSAGES = new Set([
+	'Configure the chain and RPC endpoints before enabling live execution',
+	'Execution mode updates require execute',
+	'Live execution requires an active signer',
+	'Live execution with RPC quorum 2 requires at least two independent quorum RPCs (three read endpoints total)',
+	'The saved key differs from the active signer; save or remove it before enabling live execution',
+])
+
+/** Execution mode failures name the missing prerequisite so the operator can fix it; anything else stays in protected logs. */
+function publicExecutionUpdateError(error: unknown) {
+	const message = errorMessage(error)
+	if (EXECUTION_UPDATE_MESSAGES.has(message)) return message
+	// `acquireExecutionSignerLock` names the lock owner and path, which stay in protected logs.
+	if (/^Live execution is already reserved for /.test(message) || /^Execution signer .* is already locked/.test(message)) return 'The signer is reserved by another liquidator process. Stop it or choose another signer before going live.'
+	return 'Execution mode could not be changed. Review the signer, quorum RPCs, and protected bot logs.'
+}
+
+function publicSubmissionUpdateError(error: unknown) {
+	return publicConnectivityError(error, { fallback: 'Submission settings could not be saved. Review the relay URLs and protected bot logs.' })
 }
 
 function publicOperatorFailure(error: string, fallback = 'The operation returned an unexpected error. Automatic retry remains active; check protected bot logs for details.') {
@@ -101,6 +124,7 @@ function publicActivityDetails(kind: unknown, status: unknown, details: string) 
 	if (/^\d+ source\(s\) responded$/.test(details)) return details
 	if (/^\d+ CEX source\(s\) across \d+ REP asset\(s\)$/.test(details)) return details
 	if (/^chain=\d+ (?:factory=0x[0-9a-f]{40}|readRpc=[a-z0-9.:[\]-]+)$/i.test(details)) return details
+	if (/^mode=(?:private|public) relays=\d+$/.test(details)) return details
 	return undefined
 }
 
@@ -218,11 +242,7 @@ export function startDashboardServer(port: number, controller: DashboardControll
 		const page = pathname === '/' ? 'overview' : pathname.slice(1)
 		if (!dashboardPages.has(page)) return undefined
 		const source = await Bun.file(join(directory, 'index.html')).text()
-		return source
-			.replace('<!-- rep-market-consensus -->', repMarketConsensusPanel())
-			.replace('<!-- rpc-connectivity-fields -->', rpcConnectivityFields({ independentQuorum: true, statusId: 'network-status' }))
-			.replace('<!-- operator-header -->', operatorHeader)
-			.replace('<body>', `<body data-page="${page}">`)
+		return source.replace('<!-- rep-market-consensus -->', repMarketConsensusPanel()).replace('<!-- settings-page -->', settingsPageMarkup).replace('<!-- operator-header -->', operatorHeader).replace('<body>', `<body data-page="${page}">`)
 	}
 	let acceptedAuthorities: ReadonlySet<string> = new Set()
 	const server = Bun.serve({
@@ -301,6 +321,8 @@ export function startDashboardServer(port: number, controller: DashboardControll
 				['/api/strategy', controller.setStrategy],
 			])
 			if (controller.setSupportedPool !== undefined) handlers.set('/api/supported-pool', controller.setSupportedPool)
+			if (controller.setExecution !== undefined) handlers.set('/api/execution', controller.setExecution)
+			if (controller.setSubmission !== undefined) handlers.set('/api/submission', controller.setSubmission)
 			if (controller.setMarketConfiguration !== undefined) handlers.set('/api/market-configuration', controller.setMarketConfiguration)
 			if (controller.setNetworkConnectivity !== undefined) handlers.set('/api/network-connectivity', controller.setNetworkConnectivity)
 			if (controller.switchNetworkProfile !== undefined) handlers.set('/api/network-profile', controller.switchNetworkProfile)
@@ -315,7 +337,10 @@ export function startDashboardServer(port: number, controller: DashboardControll
 					const result = await handler(value)
 					return url.pathname === '/api/network-profile' ? closingJson(result) : json(result)
 				} catch (error) {
-					const fallback = url.pathname === '/api/network-connectivity' ? publicConnectivityUpdateError(error) : 'The dashboard change could not be saved. Review the submitted values and protected bot logs.'
+					let fallback = 'The dashboard change could not be saved. Review the submitted values and protected bot logs.'
+					if (url.pathname === '/api/network-connectivity') fallback = publicConnectivityUpdateError(error)
+					else if (url.pathname === '/api/execution') fallback = publicExecutionUpdateError(error)
+					else if (url.pathname === '/api/submission') fallback = publicSubmissionUpdateError(error)
 					return publicError(error, 400, `mutation:${url.pathname}`, fallback)
 				}
 			}
