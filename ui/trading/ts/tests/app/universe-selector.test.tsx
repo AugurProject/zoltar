@@ -37,7 +37,6 @@ describe('universe selector', () => {
 				]}
 				selectedId={selected}
 				disabled={false}
-				loading={false}
 				onChange={next => {
 					selected = next
 				}}
@@ -137,6 +136,9 @@ describe('universe selector', () => {
 		cleanupRendered = rendered.cleanup
 		expect(rendered.container.querySelector('.trading-wallet-actions .wallet-chip.is-placeholder')?.textContent).toContain('Loading')
 		expect(rendered.container.querySelector('.trading-wallet-actions .wallet-button')).toBeNull()
+		// The universe field keeps its static slot while discovery resolves, so the toolbar does not change rows once a single universe is known.
+		expect(rendered.container.querySelector('.header-toolbar-controls .toolbar-field-value')?.textContent).toContain('Loading')
+		expect(rendered.container.querySelector('.header-toolbar-controls .universe-selector')).toBeNull()
 		if (resolveDeployment === undefined) throw new Error('Deployment resolver is unavailable')
 		resolveDeployment({ chainId: 31_337, chainName: 'Local', rpcUrl: 'http://127.0.0.1:1', securityPoolFactory: `0x${'11'.repeat(20)}`, factory: `0x${'22'.repeat(20)}`, router: `0x${'33'.repeat(20)}`, feeBps: 30 })
 		await act(async () => {

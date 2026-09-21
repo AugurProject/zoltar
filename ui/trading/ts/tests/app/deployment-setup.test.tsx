@@ -574,6 +574,23 @@ describe('trading deployment setup', () => {
 		expect(feedback?.classList.contains('error')).toBe(true)
 	})
 
+	test('states a wrong-network wallet reason once and describes the deploy action with it', async () => {
+		window.history.replaceState(undefined, '', '/#/deploy')
+		const services: TradingDeploymentSetupServices = { createPublicClient: () => deploymentClient(), connectWallet: async () => ({ account: testWalletAccount, chainId: 1 }), loadCoreDeployments: async () => [core] }
+		const rendered = await renderIntoDocument(<TradingDeploymentSetup onComplete={() => undefined} services={services} />)
+		cleanupRendered = rendered.cleanup
+		await waitForText('Deploy Trading factory')
+		await connectDeploymentWallet(rendered.container)
+		await waitForConnectedWallet(rendered.container)
+		await waitForText(`The connected wallet must use ${core.chainName}`)
+		expect(rendered.container.textContent?.match(new RegExp(`wallet must use ${core.chainName}`, 'gi')) ?? []).toHaveLength(1)
+		const deployButton = rendered.container.querySelector<HTMLButtonElement>('.tx-action-button')
+		expect(deployButton?.disabled).toBe(true)
+		const describedBy = deployButton?.getAttribute('aria-describedby')
+		expect(describedBy).toBeTruthy()
+		expect(rendered.container.querySelector(`[id="${describedBy}"]`)?.textContent).toContain(`The connected wallet must use ${core.chainName}`)
+	})
+
 	test('keeps the app route locked while a deployment transaction is pending', async () => {
 		window.history.replaceState(undefined, '', '/#/deploy')
 		const loadedConfiguration = deploymentConfigurationForPlan(getTradingDeploymentPlan(core, 30), 'https://rpc.example/')

@@ -3,6 +3,7 @@ import { useRouteSignal } from '@zoltar/ui-core-shared/app/hooks/useHashRoute.js
 import { securityPoolAddressFromRoute } from '../features/liveTradingControllerHelpers.js'
 import { useCallback, useEffect, useRef, useState } from 'preact/hooks'
 import type { PublicClient } from '@zoltar/core-shared/evm/ethereum'
+import type { ComponentChildren } from 'preact'
 import { Help } from '../features/Help.js'
 import { LiveTrading } from '../features/LiveTrading.js'
 import { UniverseSelector } from '@zoltar/ui-core-shared/components/UniverseSelector.js'
@@ -21,6 +22,7 @@ import * as appCopy from '../copy/app.js'
 import * as availabilityCopy from '../copy/availability.js'
 import * as sharedAppCopy from '@zoltar/ui-core-shared/copy/app.js'
 import { Badge } from '@zoltar/ui-core-shared/components/Badge.js'
+import { LoadingText } from '@zoltar/ui-core-shared/components/LoadingText.js'
 import { AppHeaderShell } from '@zoltar/ui-core-shared/app/components/AppHeaderShell.js'
 import { AppPageHeading } from '@zoltar/ui-core-shared/app/components/AppPageHeading.js'
 import { NotFoundSection } from '@zoltar/ui-core-shared/app/components/NotFoundSection.js'
@@ -127,8 +129,14 @@ export function App({
 		})
 	}, [])
 	const showUniverseSelector = route !== 'deploy' && route !== 'help' && liveDeploymentStatus !== 'unavailable'
-	// A single universe is a fact, not a choice, so it renders as a plain toolbar value like the other applications.
+	// The switcher only mounts for a real choice. A single universe is a fact and renders as a plain toolbar value like the
+	// other applications, and the loading state keeps that same static slot so the toolbar does not change rows once discovery resolves.
+	const universeChoice = liveUniverseOptions.length > 1
 	const singleUniverse = liveUniverseOptions.length === 1 ? liveUniverseOptions[0] : undefined
+	let universeValue: ComponentChildren = <span>{appCopy.unavailable}</span>
+	if (universeChoice) universeValue = <UniverseSelector options={liveUniverseOptions} selectedId={selectedUniverseId} disabled={workflowLocked} onChange={setSelectedUniverseId} />
+	else if (singleUniverse !== undefined) universeValue = <span title={singleUniverse.accessibleLabel ?? singleUniverse.label}>{singleUniverse.label}</span>
+	else if (liveDeploymentStatus === 'loading') universeValue = <LoadingText announce={false}>{appCopy.loadingWithEllipsis}</LoadingText>
 	const walletSummary = walletSummaryForUniverse(liveWalletSummary, selectedUniverseId)
 	const retryWalletSummary = () => {
 		setLiveWalletSummary(current => ({ account: current.account, ethAttoEth: undefined, repAttoRep: undefined, status: current.account === undefined ? 'disconnected' : 'loading', error: undefined, errorLabel: undefined, universeId: selectedUniverseId }))
@@ -285,15 +293,7 @@ export function App({
 												onSwitchNetwork={() => setWalletConnectRequestNonce(current => current + 1)}
 											/>
 										) : undefined}
-										{showUniverseSelector ? (
-											<ToolbarField label={appCopy.universe}>
-												{singleUniverse === undefined ? (
-													<UniverseSelector options={liveUniverseOptions} selectedId={selectedUniverseId} disabled={workflowLocked} loading={liveDeploymentStatus === 'loading'} onChange={setSelectedUniverseId} />
-												) : (
-													<span title={singleUniverse.accessibleLabel ?? singleUniverse.label}>{singleUniverse.label}</span>
-												)}
-											</ToolbarField>
-										) : undefined}
+										{showUniverseSelector ? <ToolbarField label={appCopy.universe}>{universeValue}</ToolbarField> : undefined}
 									</>
 								)
 							}

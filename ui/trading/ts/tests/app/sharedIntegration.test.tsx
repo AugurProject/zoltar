@@ -162,7 +162,9 @@ test('Trading renders its shell while the environment is still bootstrapping', a
 	try {
 		await waitFor(() => expect(rendered.container.textContent).toContain('Loading trading contracts'))
 		expect(within(rendered.container).queryByRole('alert')).toBe(null)
-		expect(within(rendered.container).getByRole('combobox', { name: 'Select universe' }).textContent).toBe('Loading…')
+		// The universe field holds a static loading value; the switcher only mounts once there is more than one universe to choose from.
+		expect(rendered.container.querySelector('.header-toolbar-controls .toolbar-field-value')?.textContent).toBe('Loading…')
+		expect(within(rendered.container).queryByRole('combobox', { name: 'Select universe' })).toBe(null)
 	} finally {
 		await rendered.cleanup()
 		restoreEnvironment()

@@ -396,9 +396,15 @@ export function TradingDeploymentSetup({
 	const inspection = inspectionPresentation(inspectionState, { busy, deploymentComplete, inputError: inputError !== undefined, plan: plan !== undefined, registryError: registryError !== undefined, registryLoading })
 	const retryChecks = registryError !== undefined || inspectionState === 'error'
 	const inspectionBadgeId = useId()
+	const networkNoticeId = useId()
 	const deployAvailability = deploymentActionAvailability({ inspectionIsCurrent, inspectionState, nextStep: nextStep !== undefined, registryError: registryError !== undefined, registryLoading, selectedCoreChainName: selectedCore?.chainName, walletConnected, walletReady })
-	// The inspection badge already states the blocked reason; the action references it instead of repeating it.
+	// The inspection badge or the network notice already states the blocked reason; the action references it instead of repeating it.
 	const reasonShownByInspectionBadge = inspection !== undefined && inspection.label === deployAvailability.reason
+	const wrongNetworkNotice = walletConnected && !walletReady && selectedCore !== undefined ? deploymentCopy.connectedWalletMustUseNetwork(selectedCore.chainName) : undefined
+	const reasonShownByNetworkNotice = wrongNetworkNotice !== undefined && deployAvailability.reason === deploymentCopy.walletMustUseNetwork(selectedCore?.chainName ?? '')
+	let externalReasonId: string | undefined
+	if (reasonShownByInspectionBadge) externalReasonId = inspectionBadgeId
+	else if (reasonShownByNetworkNotice) externalReasonId = networkNoticeId
 	let standaloneWalletButton
 	if (walletControlRequestNonce === undefined)
 		standaloneWalletButton = walletConnected ? (
@@ -492,7 +498,7 @@ export function TradingDeploymentSetup({
 						</Badge>
 					)}
 				</div>
-				<ErrorNotice message={walletConnected && !walletReady && selectedCore !== undefined ? deploymentCopy.connectedWalletMustUseNetwork(selectedCore.chainName) : undefined} />
+				<ErrorNotice id={networkNoticeId} message={wrongNetworkNotice} />
 				<ErrorNotice message={walletConnectionMessage} />
 				<ErrorNotice message={inspectionError} />
 				{actionMessage === undefined || actionError ? null : (
@@ -505,12 +511,12 @@ export function TradingDeploymentSetup({
 					{deploymentComplete ? null : (
 						<TransactionActionButton
 							availability={deployAvailability}
-							disabledReasonElementId={reasonShownByInspectionBadge ? inspectionBadgeId : undefined}
+							disabledReasonElementId={externalReasonId}
 							idleLabel={deploymentActionLabel(false, nextStep, plan, deploymentStatus)}
 							pendingLabel={deploymentActionLabel(true, nextStep, plan, deploymentStatus)}
 							pending={busy}
 							onClick={() => void deployNext()}
-							showDisabledReason={!reasonShownByInspectionBadge}
+							showDisabledReason={externalReasonId === undefined}
 						/>
 					)}
 					{retryAction}
