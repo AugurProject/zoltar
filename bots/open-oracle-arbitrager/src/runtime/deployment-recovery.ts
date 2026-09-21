@@ -1,5 +1,5 @@
 import { type Configuration } from '#config/configuration'
-import { refreshIncompleteCanonicalDeployments } from '#config/runtime-deployment'
+import { verifyCanonicalExecutorDeployed } from '#config/runtime-deployment'
 import { type ReadClient } from '#core/operator-types'
 import { assertStoredExecutorDeploymentIntent } from '#execution/create2-executor'
 import { loadExecutorDeploymentIntentForChain } from '#execution/executor-deployment-store'
@@ -24,8 +24,11 @@ export async function loadDeploymentRecovery(intentPath: string, config: Configu
 	return { pending: true, transactionHash: pendingExecutorDeployment.transactionHash }
 }
 
-/** A journal reconciled outside this process (the CLI) is accepted once the read endpoints show the executor bytecode. */
-export function createDeploymentRecoveryReconciliation(parameters: { config: Configuration; readClients: () => readonly ReadClient[]; state: Pick<OperatorState, 'canonicalDeployments' | 'operationLog'> }): DeploymentRecoveryReconciliation {
+/**
+ * A journal reconciled outside this process (the CLI) is accepted once the configured read quorum shows the executor bytecode.
+ * The checklist refreshes on the scan that follows, so this check deliberately reads nothing else.
+ */
+export function createDeploymentRecoveryReconciliation(parameters: { config: Configuration; readClients: () => readonly ReadClient[]; state: Pick<OperatorState, 'operationLog'> }): DeploymentRecoveryReconciliation {
 	const { config, state } = parameters
 	return {
 		onReconciled: transactionHash =>
@@ -40,8 +43,7 @@ export function createDeploymentRecoveryReconciliation(parameters: { config: Con
 		verifyExecutorDeployed: async () => {
 			// An unconfigured operator has only placeholder endpoints; it stays paused for recovery until the chain is configured.
 			if (!config.networkConfigured) return false
-			state.canonicalDeployments = await refreshIncompleteCanonicalDeployments(parameters.readClients(), config, state.canonicalDeployments)
-			return state.canonicalDeployments.executorDeployed
+			return await verifyCanonicalExecutorDeployed(parameters.readClients(), config)
 		},
 	}
 }
