@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import { createPublicClient, custom, decodeFunctionData, encodeAbiParameters, getAddress } from '@zoltar/core-shared/evm/ethereum'
-import { CANONICAL_PROXY_DEPLOYER_RUNTIME_CODE, getTradingDeploymentPlan, loadTradingDeploymentStatus, nextTradingDeploymentStep, resolveInstalledTradingDeployment } from '../../protocol/deployment.js'
+import { PROXY_DEPLOYER_RUNTIME_CODE } from '@zoltar/core-shared/deployment/deploymentAddresses'
+import { getTradingDeploymentPlan, loadTradingDeploymentStatus, nextTradingDeploymentStep, resolveInstalledTradingDeployment } from '../../protocol/deployment.js'
 import { tradingContracts } from '../../generated/contractArtifact.js'
 
 function examplePlan() {
@@ -29,7 +30,7 @@ function installedDeploymentClient(core: ReturnType<typeof examplePlan>['core'],
 				if (method === 'eth_getCode' && Array.isArray(params)) {
 					const address = params[0]
 					if (typeof address !== 'string') throw new Error('Missing code address')
-					if (address.toLowerCase() === core.proxyDeployer.toLowerCase()) return CANONICAL_PROXY_DEPLOYER_RUNTIME_CODE
+					if (address.toLowerCase() === core.proxyDeployer.toLowerCase()) return PROXY_DEPLOYER_RUNTIME_CODE
 					if (address.toLowerCase() === core.securityPoolFactory.toLowerCase()) return '0x01'
 					if (state !== 'missing' && address.toLowerCase() === plan.factory.address.toLowerCase()) return '0x01'
 					if (state === 'complete' && address.toLowerCase() === plan.router.address.toLowerCase()) return '0x01'

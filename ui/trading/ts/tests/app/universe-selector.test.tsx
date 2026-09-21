@@ -251,18 +251,26 @@ describe('universe selector', () => {
 		expect(filterMarketsByUniverse([first, second], undefined)).toEqual([])
 	})
 
-	test('labels live genesis and non-genesis universes without ambiguous compact IDs', () => {
-		const firstCollision = 123_000_000_000_000_000_456n
-		const secondCollision = 123_999_999_999_999_999_456n
-		const options = buildLiveUniverseOptions([0n, 7n, firstCollision, secondCollision])
-		expect(options[0]).toEqual({ id: '0', label: 'Genesis universe', accessibleLabel: 'Genesis universe' })
-		expect(options[1]).toEqual({ id: '7', label: 'Universe 7', accessibleLabel: 'Universe 7' })
-		expect(options[2]?.label).toStartWith('Universe ')
-		expect(options[3]?.label).toStartWith('Universe ')
-		expect(options[2]?.label).not.toBe(options[3]?.label)
-		expect(options[2]?.accessibleLabel).toBe(`Universe ${firstCollision.toString()}`)
-		expect(options[3]?.accessibleLabel).toBe(`Universe ${secondCollision.toString()}`)
+	test('labels live universes with the shared genesis and hex universe labels', () => {
+		const longUniverseId = (1n << 200n) + 456n
+		const options = buildLiveUniverseOptions([0n, 7n, longUniverseId])
+		expect(options[0]).toEqual({ id: '0', label: 'Genesis (0x0)', accessibleLabel: 'Genesis (0x0)' })
+		expect(options[1]).toEqual({ id: '7', label: 'Universe 0x7', accessibleLabel: 'Universe 0x7' })
+		expect(options[2]?.label).toStartWith('Universe 0x')
+		expect(options[2]?.label).toContain('…')
+		expect(options[2]?.accessibleLabel).toBe(`Universe 0x${longUniverseId.toString(16)}`)
 		expect(() => buildLiveUniverseOptions([7n, 7n])).toThrow('Universe IDs must be unique')
+	})
+
+	test('falls back to full labels when compact universe labels would collide', () => {
+		// Same leading 8 and trailing 6 hex digits, different middle: the compact form would read identically.
+		const firstCollision = (0xabcdef12n << 96n) | (1n << 40n) | 0x123456n
+		const secondCollision = (0xabcdef12n << 96n) | (2n << 40n) | 0x123456n
+		const options = buildLiveUniverseOptions([0n, firstCollision, secondCollision])
+		expect(options[0]?.label).toBe('Genesis (0x0)')
+		expect(options[1]?.label).toBe(`Universe 0x${firstCollision.toString(16)}`)
+		expect(options[2]?.label).toBe(`Universe 0x${secondCollision.toString(16)}`)
+		expect(options[1]?.label).not.toBe(options[2]?.label)
 	})
 
 	test('keeps the balance slots in place while the wallet is disconnected or loading', async () => {

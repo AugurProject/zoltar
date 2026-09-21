@@ -13,16 +13,27 @@ export function readStringQueryParam(search: string, key: string) {
 	return value
 }
 
-function writeStringQueryParam(search: string, key: string, value: string | undefined) {
+/** Applies `mutate` to the parsed search parameters and serializes them back, omitting the `?` when nothing remains. */
+export function updateSearchParams(search: string, mutate: (params: URLSearchParams) => void) {
 	const params = new URLSearchParams(search)
-	if (value === undefined || value.trim() === '') {
-		params.delete(key)
-	} else {
-		params.set(key, value.trim())
-	}
-
+	mutate(params)
 	const nextSearch = params.toString()
 	return nextSearch === '' ? '' : `?${nextSearch}`
+}
+
+/** Sets `key` to the trimmed value, or deletes it for an empty value; returns the trimmed value so callers can branch on presence. */
+export function setOrDeleteSearchParam(params: URLSearchParams, key: string, value: string | undefined) {
+	const trimmed = value?.trim() ?? ''
+	if (trimmed === '') {
+		params.delete(key)
+		return undefined
+	}
+	params.set(key, trimmed)
+	return trimmed
+}
+
+function writeStringQueryParam(search: string, key: string, value: string | undefined) {
+	return updateSearchParams(search, params => setOrDeleteSearchParam(params, key, value))
 }
 
 export function readUniverseQueryParam(search: string) {
@@ -33,15 +44,7 @@ export function readUniverseQueryParam(search: string) {
 }
 
 export function writeUniverseQueryParam(search: string, universeId: bigint | undefined) {
-	const params = new URLSearchParams(search)
-	if (universeId === undefined) {
-		params.delete(UNIVERSE_QUERY_PARAM)
-	} else {
-		params.set(UNIVERSE_QUERY_PARAM, universeId.toString())
-	}
-
-	const nextSearch = params.toString()
-	return nextSearch === '' ? '' : `?${nextSearch}`
+	return writeStringQueryParam(search, UNIVERSE_QUERY_PARAM, universeId?.toString())
 }
 
 export function readSecurityPoolQueryParam(search: string) {
@@ -49,18 +52,14 @@ export function readSecurityPoolQueryParam(search: string) {
 }
 
 export function writeSecurityPoolQueryParam(search: string, securityPoolAddress: string | undefined) {
-	const params = new URLSearchParams(search)
-	if (securityPoolAddress === undefined || securityPoolAddress.trim() === '') {
-		params.delete(SECURITY_POOL_QUERY_PARAM)
-		params.delete(SELECTED_POOL_VIEW_QUERY_PARAM)
-	} else {
-		params.set(SECURITY_POOL_QUERY_PARAM, securityPoolAddress.trim())
+	return updateSearchParams(search, params => {
+		if (setOrDeleteSearchParam(params, SECURITY_POOL_QUERY_PARAM, securityPoolAddress) === undefined) {
+			params.delete(SELECTED_POOL_VIEW_QUERY_PARAM)
+			return
+		}
 		params.set(SECURITY_POOLS_VIEW_QUERY_PARAM, 'operate')
 		params.delete(SECURITY_POOL_QUESTION_ID_QUERY_PARAM)
-	}
-
-	const nextSearch = params.toString()
-	return nextSearch === '' ? '' : `?${nextSearch}`
+	})
 }
 
 export function readSecurityPoolQuestionIdQueryParam(search: string) {
@@ -68,18 +67,12 @@ export function readSecurityPoolQuestionIdQueryParam(search: string) {
 }
 
 export function writeSecurityPoolQuestionIdQueryParam(search: string, questionId: string | undefined) {
-	const params = new URLSearchParams(search)
-	if (questionId === undefined || questionId.trim() === '') {
-		params.delete(SECURITY_POOL_QUESTION_ID_QUERY_PARAM)
-	} else {
-		params.set(SECURITY_POOL_QUESTION_ID_QUERY_PARAM, questionId.trim())
+	return updateSearchParams(search, params => {
+		if (setOrDeleteSearchParam(params, SECURITY_POOL_QUESTION_ID_QUERY_PARAM, questionId) === undefined) return
 		params.set(SECURITY_POOLS_VIEW_QUERY_PARAM, 'create')
 		params.delete(SECURITY_POOL_QUERY_PARAM)
 		params.delete(SELECTED_POOL_VIEW_QUERY_PARAM)
-	}
-
-	const nextSearch = params.toString()
-	return nextSearch === '' ? '' : `?${nextSearch}`
+	})
 }
 
 export function readZoltarViewQueryParam(search: string) {
@@ -95,18 +88,11 @@ export function readSecurityPoolsViewQueryParam(search: string) {
 }
 
 export function writeSecurityPoolsViewQueryParam(search: string, view: string | undefined) {
-	const params = new URLSearchParams(search)
-	if (view === undefined || view.trim() === '') {
-		params.delete(SECURITY_POOLS_VIEW_QUERY_PARAM)
-	} else {
-		params.set(SECURITY_POOLS_VIEW_QUERY_PARAM, view.trim())
-	}
-
-	if (view !== 'create') params.delete(SECURITY_POOL_QUESTION_ID_QUERY_PARAM)
-	if (view !== 'operate') params.delete(SELECTED_POOL_VIEW_QUERY_PARAM)
-
-	const nextSearch = params.toString()
-	return nextSearch === '' ? '' : `?${nextSearch}`
+	return updateSearchParams(search, params => {
+		setOrDeleteSearchParam(params, SECURITY_POOLS_VIEW_QUERY_PARAM, view)
+		if (view !== 'create') params.delete(SECURITY_POOL_QUESTION_ID_QUERY_PARAM)
+		if (view !== 'operate') params.delete(SELECTED_POOL_VIEW_QUERY_PARAM)
+	})
 }
 
 export function readSelectedPoolViewQueryParam(search: string) {
@@ -114,14 +100,8 @@ export function readSelectedPoolViewQueryParam(search: string) {
 }
 
 export function writeSelectedPoolViewQueryParam(search: string, view: string | undefined) {
-	const params = new URLSearchParams(search)
-	if (view === undefined || view.trim() === '') {
-		params.delete(SELECTED_POOL_VIEW_QUERY_PARAM)
-	} else {
-		params.set(SELECTED_POOL_VIEW_QUERY_PARAM, view.trim())
+	return updateSearchParams(search, params => {
+		if (setOrDeleteSearchParam(params, SELECTED_POOL_VIEW_QUERY_PARAM, view) === undefined) return
 		params.set(SECURITY_POOLS_VIEW_QUERY_PARAM, 'operate')
-	}
-
-	const nextSearch = params.toString()
-	return nextSearch === '' ? '' : `?${nextSearch}`
+	})
 }

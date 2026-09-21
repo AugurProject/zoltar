@@ -15,7 +15,7 @@ const allowances = (reason: string, entries: readonly (readonly [path: string, m
 export const sourceSizeAllowances = new Map<string, SourceSizeAllowance>([
 	...allowances('Chaos: extract dashboard features, operation handlers, and persistence responsibilities into focused modules.', [
 		['bots/chaos/src/dashboard/dashboard.ts', 2275],
-		['bots/chaos/src/monitoring/discovery.ts', 1021],
+		['bots/chaos/src/monitoring/discovery.ts', 1020],
 		['bots/chaos/src/operations/trading.ts', 1726],
 		['bots/chaos/src/state/operator-state.ts', 1162],
 		['bots/chaos/src/execution/transaction-executor.ts', 1216],
@@ -39,7 +39,7 @@ export const sourceSizeAllowances = new Map<string, SourceSizeAllowance>([
 	...allowances('Owning UI library: separate workflow state and actions from rendering, and extract simulation scenario handlers.', [
 		['ui/statoblastShared/ts/features/truth-auctions/components/ForkAuctionSection.tsx', 1070],
 		['ui/coreShared/ts/simulation/tevmEngine.ts', 876],
-		['ui/statoblastShared/ts/protocol/securityPools.ts', 729],
+		['ui/statoblastShared/ts/protocol/securityPools.ts', 726],
 		['ui/coreShared/ts/components/SimulationBanner.tsx', 686],
 		['ui/coreShared/ts/app/hooks/useOnchainState.ts', 609],
 		['ui/statoblastShared/ts/features/open-oracle/lib/openOracle.ts', 682],
@@ -61,7 +61,7 @@ export const sourceSizeAllowances = new Map<string, SourceSizeAllowance>([
 		['tooling/testing/coverage-report.mts', 940],
 		['tooling/ui/watch.mts', 829],
 		['tooling/docs/check-docs-reference-values.mts', 839],
-		['tooling/contracts/deploy-testnet.mts', 711],
+		['tooling/contracts/deploy-testnet.mts', 708],
 		['tooling/docs/generate-contract-interaction-reference.mts', 671],
 	]),
 	...allowances('Documentation runtime bundles and Solidity-side TypeScript utilities still need responsibility extraction.', [

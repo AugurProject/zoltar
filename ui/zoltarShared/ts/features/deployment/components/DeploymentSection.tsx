@@ -1,3 +1,4 @@
+import * as appCopy from '@zoltar/ui-core-shared/copy/app.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as deploymentCopy from '../../../copy/deployment.js'
 import type { BadgeTone, DeploymentSectionProps } from '../../types.js'
@@ -34,19 +35,19 @@ function getStepStatus(stepDeployed: boolean, prerequisiteLabel: string | undefi
 			return {
 				badgeTone: 'pending',
 				detail: commonCopy.walletConnectionRequired,
-				label: deploymentCopy.notDeployedBadgeLabel,
+				label: commonCopy.notDeployed,
 				buttonLabel: commonCopy.deploy,
 			}
 		if (!isOnActiveAppChain)
 			return {
 				badgeTone: 'pending',
-				label: deploymentCopy.notDeployedBadgeLabel,
+				label: commonCopy.notDeployed,
 				buttonLabel: commonCopy.deploy,
 			}
 		return {
 			badgeTone: 'pending',
 			detail: deploymentCopy.deploymentReadyStatus,
-			label: deploymentCopy.notDeployedBadgeLabel,
+			label: commonCopy.notDeployed,
 			buttonLabel: commonCopy.deploy,
 		}
 	}
@@ -103,7 +104,7 @@ export function DeploymentSection({ title, completedGroup = false, steps, allSte
 							</div>
 							{step.deployed ? undefined : (
 								<TransactionActionButton
-									ariaLabel={isBusy ? deploymentCopy.formatDeployingContract(step.label) : deploymentCopy.formatDeployContract(step.label)}
+									ariaLabel={isBusy ? appCopy.formatDeployingContract(step.label) : appCopy.formatDeployContract(step.label)}
 									idleLabel={stepStatus.buttonLabel}
 									pendingLabel={deploymentCopy.deploying}
 									onClick={() => void onDeploy(step.id)}

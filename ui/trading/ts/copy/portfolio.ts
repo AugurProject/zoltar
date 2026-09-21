@@ -1,6 +1,4 @@
-export const yes = 'YES'
-export const no = 'NO'
-export const invalid = 'INVALID'
+export { invalid, no, yes } from './outcomes.js'
 export const lpYesClaim = 'LP YES claim'
 export const lpNoClaim = 'LP NO claim'
 export const claimCoveredByInvalid = 'Claim covered by separate INVALID'

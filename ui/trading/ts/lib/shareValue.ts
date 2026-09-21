@@ -1,4 +1,5 @@
-import { formatRoundedUnits, formatUnits } from './format.js'
+import { formatTrimmedUnits } from '@zoltar/ui-core-shared/lib/formatters.js'
+import { formatRoundedUnits } from './format.js'
 import type { LiveMarket } from '../protocol/liveMarket.js'
 
 /** The SecurityPool fields that define how many attoShares one attoETH of settlement collateral currently represents. */
@@ -31,7 +32,7 @@ export type ShareValueRounding = 'nearest' | 'down'
 
 function formatCollateralValue(amountAttoShares: bigint, rate: ShareValueRate, maximumFractionDigits: number, rounding: ShareValueRounding) {
 	const value = attoSharesToCollateralAttoEth(amountAttoShares, rate)
-	return rounding === 'down' ? formatUnits(value, 18, maximumFractionDigits) : formatRoundedUnits(value, 18, maximumFractionDigits)
+	return rounding === 'down' ? formatTrimmedUnits(value, 18, maximumFractionDigits) : formatRoundedUnits(value, 18, maximumFractionDigits)
 }
 
 /** Fixed genesis normalization for token quantities, independent of collateral backing. */
@@ -39,8 +40,8 @@ export const SHARE_QUANTITY_DECIMALS = 36
 
 function formatShareQuantity(amount: bigint, maximumFractionDigits: number, rounding: ShareValueRounding) {
 	if (amount < 0n) throw new Error('Share amounts cannot be negative')
-	const formatted = rounding === 'down' ? formatUnits(amount, SHARE_QUANTITY_DECIMALS, maximumFractionDigits) : formatRoundedUnits(amount, SHARE_QUANTITY_DECIMALS, maximumFractionDigits)
-	return amount > 0n && formatted === '0' ? `<${formatUnits(1n, maximumFractionDigits, maximumFractionDigits)}` : formatted
+	const formatted = rounding === 'down' ? formatTrimmedUnits(amount, SHARE_QUANTITY_DECIMALS, maximumFractionDigits) : formatRoundedUnits(amount, SHARE_QUANTITY_DECIMALS, maximumFractionDigits)
+	return amount > 0n && formatted === '0' ? `<${formatTrimmedUnits(1n, maximumFractionDigits, maximumFractionDigits)}` : formatted
 }
 
 export function formatOutcomeQuantity(amountAttoShares: bigint, outcome: 'YES' | 'NO' | 'INVALID', maximumFractionDigits = 4, rounding: ShareValueRounding = 'nearest') {

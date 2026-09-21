@@ -6,7 +6,8 @@ import { act } from 'preact/test-utils'
 import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
 import { App } from '../../app/App.js'
 import { TradingDeploymentSetup, type TradingDeploymentSetupServices } from '../../features/TradingDeploymentSetup.js'
-import { CANONICAL_PROXY_DEPLOYER_RUNTIME_CODE, deploymentConfigurationForPlan, getTradingDeploymentPlan } from '../../protocol/deployment.js'
+import { PROXY_DEPLOYER_RUNTIME_CODE } from '@zoltar/core-shared/deployment/deploymentAddresses'
+import { deploymentConfigurationForPlan, getTradingDeploymentPlan } from '../../protocol/deployment.js'
 import type { InjectedEthereum } from '../../protocol/injected.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import { installActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
@@ -37,7 +38,7 @@ function deploymentClient(rpcAvailable: () => boolean = () => true) {
 					if (method === 'eth_chainId') return '0xaa36a7'
 					if (method === 'eth_getCode' && Array.isArray(params)) {
 						const address = params[0]
-						if (typeof address === 'string' && address.toLowerCase() === core.proxyDeployer.toLowerCase()) return CANONICAL_PROXY_DEPLOYER_RUNTIME_CODE
+						if (typeof address === 'string' && address.toLowerCase() === core.proxyDeployer.toLowerCase()) return PROXY_DEPLOYER_RUNTIME_CODE
 						return typeof address === 'string' && address.toLowerCase() === core.securityPoolFactory.toLowerCase() ? '0x01' : '0x'
 					}
 					throw new Error(`Unexpected RPC method ${method}`)
@@ -152,7 +153,7 @@ describe('trading deployment setup', () => {
 					if (method === 'eth_getCode' && Array.isArray(params)) {
 						const address = params[0]
 						if (typeof address !== 'string') throw new Error('Missing code address')
-						if (address.toLowerCase() === core.proxyDeployer.toLowerCase()) return CANONICAL_PROXY_DEPLOYER_RUNTIME_CODE
+						if (address.toLowerCase() === core.proxyDeployer.toLowerCase()) return PROXY_DEPLOYER_RUNTIME_CODE
 						if ([core.securityPoolFactory, plan.factory.address].some(expected => expected.toLowerCase() === address.toLowerCase())) return '0x01'
 						return '0x'
 					}
@@ -192,7 +193,7 @@ describe('trading deployment setup', () => {
 						if (method === 'eth_chainId') return '0xaa36a7'
 						if (method === 'eth_getCode' && Array.isArray(params)) {
 							const address = params[0]
-							if (typeof address === 'string' && address.toLowerCase() === core.proxyDeployer.toLowerCase()) return CANONICAL_PROXY_DEPLOYER_RUNTIME_CODE
+							if (typeof address === 'string' && address.toLowerCase() === core.proxyDeployer.toLowerCase()) return PROXY_DEPLOYER_RUNTIME_CODE
 							return '0x'
 						}
 						throw new Error(`Unexpected RPC method ${method}`)
@@ -319,7 +320,7 @@ describe('trading deployment setup', () => {
 					if (method === 'eth_getCode' && Array.isArray(params)) {
 						const address = params[0]
 						if (typeof address !== 'string') throw new Error('Missing code address')
-						return address.toLowerCase() === core.proxyDeployer.toLowerCase() ? CANONICAL_PROXY_DEPLOYER_RUNTIME_CODE : '0x01'
+						return address.toLowerCase() === core.proxyDeployer.toLowerCase() ? PROXY_DEPLOYER_RUNTIME_CODE : '0x01'
 					}
 					if (method === 'eth_call') {
 						contractReadCount += 1
@@ -368,7 +369,7 @@ describe('trading deployment setup', () => {
 					if (method === 'eth_getCode' && Array.isArray(params)) {
 						const address = params[0]
 						if (typeof address !== 'string') throw new Error('Missing code address')
-						if (address.toLowerCase() === PROXY_DEPLOYER_ADDRESS.toLowerCase()) return CANONICAL_PROXY_DEPLOYER_RUNTIME_CODE
+						if (address.toLowerCase() === PROXY_DEPLOYER_ADDRESS.toLowerCase()) return PROXY_DEPLOYER_RUNTIME_CODE
 						return address.toLowerCase() === simulationCore.securityPoolFactory.toLowerCase() ? '0x01' : '0x'
 					}
 					if (method === 'eth_call') {
@@ -647,7 +648,7 @@ describe('trading deployment setup', () => {
 					if (method === 'eth_getCode' && Array.isArray(params)) {
 						const address = params[0]
 						if (typeof address !== 'string') throw new Error('Missing code address')
-						if (address.toLowerCase() === core.proxyDeployer.toLowerCase()) return CANONICAL_PROXY_DEPLOYER_RUNTIME_CODE
+						if (address.toLowerCase() === core.proxyDeployer.toLowerCase()) return PROXY_DEPLOYER_RUNTIME_CODE
 						if ([core.securityPoolFactory, plan.factory.address, plan.router.address].some(expected => expected.toLowerCase() === address.toLowerCase())) return '0x01'
 						return '0x'
 					}
