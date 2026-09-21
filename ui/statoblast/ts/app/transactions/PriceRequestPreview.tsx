@@ -4,6 +4,7 @@ import { InlineHint } from '@zoltar/ui-core-shared/components/InlineHint.js'
 import { TransactionActionButton } from '@zoltar/ui-core-shared/components/TransactionActionButton.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as copy from '@zoltar/ui-core-shared/copy/transactionSteps.js'
+import * as priceRequestCopy from '@zoltar/ui-statoblast-shared/copy/priceRequest.js'
 import { EthAmount, TransactionFundingSummary } from '@zoltar/ui-core-shared/components/TransactionFundingSummary.js'
 
 export function PriceRequestPreview({ requestValue, reason, error, preparing, hideReason, onClose, onRetry }: { requestValue: bigint | undefined; reason: string; error: string | undefined; preparing: boolean; hideReason: boolean; onClose: () => void; onRetry: (() => void) | undefined }) {
@@ -57,11 +58,11 @@ export function PriceRequestPreview({ requestValue, reason, error, preparing, hi
 							<TransactionActionButton
 								idleLabel={
 									<>
-										{copy.requestPrice} · <EthAmount value={requestValue} />
+										{priceRequestCopy.requestPrice} · <EthAmount value={requestValue} />
 									</>
 								}
 								pending={false}
-								pendingLabel={copy.formatPendingAction(copy.requestPrice)}
+								pendingLabel={copy.formatPendingAction(priceRequestCopy.requestPrice)}
 								onClick={() => undefined}
 								availability={{ disabled: true, reason }}
 								disabledReasonElementId={reasonId}

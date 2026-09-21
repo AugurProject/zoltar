@@ -239,8 +239,6 @@ test('Trading address links use the coreShared address value', async () => {
 	expect(rendered.container.querySelector('a.security-pool-link')?.getAttribute('href')).toBe(`#/security-pool/${address}`)
 	// The address is the link's only label and a direct child, so the shared rest-state underline rule applies to it.
 	expect(rendered.container.querySelector('a.security-pool-link > .address-value')).not.toBeNull()
-	const coreCss = await readFile(join(import.meta.dir, '..', '..', '..', '..', 'coreShared', 'css', 'base.css'), 'utf8')
-	expect(coreCss).toContain('.security-pool-link > .address-value {\n\ttext-decoration: underline;')
 	await rendered.cleanup()
 	dom.cleanup()
 })

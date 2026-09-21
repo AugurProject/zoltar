@@ -27,7 +27,7 @@ import { LiveLiquidityControls, liveLiquidityServices, type LiveLiquidityService
 import { LiveSettlementControls, liveSettlementServices, type LiveSettlementServices } from './LiveSettlementControls.js'
 import { DEFAULT_SLIPPAGE_PERCENT, DEFAULT_TRANSACTION_VALIDITY_MINUTES } from './LiveTradingTransactionUi.js'
 import type { WalletSummaryState } from '../lib/walletSummaryState.js'
-import { liveWorkflowRoutePresentation } from './live/routePresentation.js'
+import { liveRouteLoadingPresentation, liveWorkflowRoutePresentation } from './live/routePresentation.js'
 import { LiveSecurityPoolDetails, PairInitializationAction, SecurityPoolRouteEmptyState } from './LiveSecurityPoolDetails.js'
 import { LiveMarketBrowser, marketStatusLabel, marketStatusTone } from './LiveMarketBrowser.js'
 import { liveCopy } from '../copy/live.js'
@@ -129,7 +129,7 @@ export function LiveTrading({
 	// A failed deployment lookup switches the application to the deployment setup route, which owns the
 	// error surface, so this route only ever renders while the deployment is still resolving.
 	if (configuration === undefined) {
-		const loadingPresentation = liveWorkflowRoutePresentation(workflowRoute)
+		const loadingPresentation = liveRouteLoadingPresentation(route)
 		return (
 			<div className='route-view-flow'>
 				<RouteHeader title={loadingPresentation.title} description={loadingPresentation.description} />

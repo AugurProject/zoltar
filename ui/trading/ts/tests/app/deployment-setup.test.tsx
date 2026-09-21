@@ -574,6 +574,22 @@ describe('trading deployment setup', () => {
 		expect(feedback?.classList.contains('error')).toBe(true)
 	})
 
+	test('explains incomplete deployment settings on the deploy action instead of a never-ending network check', async () => {
+		window.history.replaceState(undefined, '', '/#/deploy')
+		const services: TradingDeploymentSetupServices = { createPublicClient: () => deploymentClient(), loadCoreDeployments: async () => [] }
+		const rendered = await renderIntoDocument(<TradingDeploymentSetup onComplete={() => undefined} services={services} />)
+		cleanupRendered = rendered.cleanup
+		await act(async () => await Bun.sleep(0))
+		await waitForText('Complete deployment settings')
+		expect(rendered.container.textContent).not.toContain('Checking network')
+		expect(rendered.container.querySelector('.tx-action-feedback .loading-value')).toBeNull()
+		const deployButton = rendered.container.querySelector<HTMLButtonElement>('.tx-action-button')
+		expect(deployButton?.disabled).toBe(true)
+		const describedBy = deployButton?.getAttribute('aria-describedby')
+		expect(describedBy).toBeTruthy()
+		expect(rendered.container.querySelector(`[id="${describedBy}"]`)?.textContent).toBe('Complete deployment settings')
+	})
+
 	test('states a wrong-network wallet reason once and describes the deploy action with it', async () => {
 		window.history.replaceState(undefined, '', '/#/deploy')
 		const services: TradingDeploymentSetupServices = { createPublicClient: () => deploymentClient(), connectWallet: async () => ({ account: testWalletAccount, chainId: 1 }), loadCoreDeployments: async () => [core] }

@@ -1,4 +1,4 @@
-import type { ChainBackend } from '../wallet/chainBackend.js'
+import type { ChainBackend } from '@zoltar/ui-core-shared/wallet/chainBackend.js'
 import { createReviewedClient } from './reviewedClient.js'
 
 export function withTransactionReviews<T extends ChainBackend>(backend: T): T {

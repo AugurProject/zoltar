@@ -28,7 +28,7 @@ declare global {
 function getRepPriceQuoter(): RepPriceQuoter {
 	return globalThis.__zoltarRepPriceQuoterOverride__ ?? { getRepAddress, isRepPricingEnabled, quoteBestExactInputWithSource, quoteBestV3ExactInputWithSource, quoteRepForUsdcV4WithSource }
 }
-import type { RepPriceFailure } from '@zoltar/ui-core-shared/app/components/OverviewPanels.js'
+import type { RepPriceFailure } from '@zoltar/ui-core-shared/lib/repPriceSource.js'
 
 const ATTO_ETH_PER_ETH = 10n ** 18n
 const ATTO_REP = 10n ** 18n

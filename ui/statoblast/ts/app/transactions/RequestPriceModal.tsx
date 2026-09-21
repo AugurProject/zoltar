@@ -11,7 +11,7 @@ import { TransactionActionButtonLockProvider } from '@zoltar/ui-core-shared/comp
 import { tryParseDecimalInput } from '@zoltar/ui-core-shared/forms/decimal.js'
 import type { RequestPriceModalProps } from '@zoltar/ui-statoblast-shared/features/security-pools/components/SecurityPoolOracleSections.js'
 import * as poolCopy from '@zoltar/ui-statoblast-shared/copy/securityPool.js'
-import * as copy from '@zoltar/ui-core-shared/copy/transactionSteps.js'
+import * as priceRequestCopy from '@zoltar/ui-statoblast-shared/copy/priceRequest.js'
 import { embeddedTransactionSteps, TransactionStepsContent } from '@zoltar/ui-core-shared/components/TransactionStepsModal.js'
 import { PriceRequestPreview } from './PriceRequestPreview.js'
 import { transactionSteps } from '@zoltar/ui-core-shared/transactions/transactionSteps.js'
@@ -45,8 +45,8 @@ export function RequestPriceModal({ review, onConfirm, onClose, canRequest, conf
 	const current = valid && run.current?.key === key && run.current?.signal.aborted === false
 	const showSteps = current && ownsWorkflow && workflow?.steps[workflow.activeIndex] !== undefined
 	const error = attempted === key && !running && presentation?.tone === 'error' ? presentation.detail : undefined
-	const estimatePrompt = validPrice ? copy.preparingPriceRequest : copy.enterPriceEstimate
-	const previewPrompt = fetching ? copy.fetchingUniswapPrice : estimatePrompt
+	const estimatePrompt = validPrice ? priceRequestCopy.preparingPriceRequest : priceRequestCopy.enterPriceEstimate
+	const previewPrompt = fetching ? priceRequestCopy.fetchingUniswapPrice : estimatePrompt
 
 	useLayoutEffect(() => {
 		quoteAttempt.current += 1
@@ -112,7 +112,7 @@ export function RequestPriceModal({ review, onConfirm, onClose, canRequest, conf
 			if (attempt !== quoteAttempt.current || !mounted.current) return
 			setPrice(formatUnits(value, 18))
 		} catch (error) {
-			if (attempt === quoteAttempt.current && mounted.current) setQuoteError(getErrorMessage(error, copy.uniswapPriceFailed))
+			if (attempt === quoteAttempt.current && mounted.current) setQuoteError(getErrorMessage(error, priceRequestCopy.uniswapPriceFailed))
 		} finally {
 			if (attempt === quoteAttempt.current && mounted.current) setFetching(false)
 		}
@@ -138,7 +138,7 @@ export function RequestPriceModal({ review, onConfirm, onClose, canRequest, conf
 				error={priceError ?? quoteError}
 				action={
 					<button className='secondary request-price-fetch' type='button' disabled={sending || fetching} onClick={() => void fetchQuote()}>
-						{fetching ? <LoadingText>{copy.fetchingUniswapPrice}</LoadingText> : copy.fetchUniswapPrice}
+						{fetching ? <LoadingText>{priceRequestCopy.fetchingUniswapPrice}</LoadingText> : priceRequestCopy.fetchUniswapPrice}
 					</button>
 				}
 			/>

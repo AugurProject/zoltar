@@ -14,7 +14,7 @@ import { WalletChip, WalletChipLabel } from '../../components/WalletChip.js'
 import { TimestampValue } from '../../components/TimestampValue.js'
 import { WarningSurface } from '../../components/WarningSurface.js'
 import { getChainDisplayLabel, getChainIdDecimalLabel, getKnownChainName, isActiveAppChain } from '../../wallet/network.js'
-import { renderRepPriceSourceLabel } from '../../lib/repPriceSource.js'
+import { renderRepPriceSourceLabel, type RepPriceFailure, type RepPriceSource } from '../../lib/repPriceSource.js'
 import type { AccountState } from '../../types/app.js'
 import type { ReadBackendStatus } from '../../wallet/chainBackend.js'
 import { getActiveNetworkProfile } from '../../lib/activeEnvironment.js'
@@ -23,10 +23,6 @@ import { abbreviateAddress } from '../../lib/address.js'
 import { formatUniverseDisplayLabel, formatUniverseLabel } from '../../lib/universeLabels.js'
 import type { UserMessagePresentation } from '../../lib/userCopy.js'
 import { OverviewHeaderPanel } from './OverviewHeaderPanel.js'
-
-export type RepPriceFailure = 'no-liquidity' | 'rpc-error'
-
-type RepPriceSource = 'v4' | 'v3' | 'mock'
 
 /** The REP price group of the header strip; applications without price quotes omit it. */
 export type OverviewRepPricesProps = {

@@ -96,19 +96,35 @@ function deploymentActionLabel(busy: boolean, nextStep: ReturnType<typeof nextTr
 	return coreAppCopy.formatDeployContract(nextStep.label)
 }
 
-/** Why the deploy action is unavailable, so the disabled control explains itself instead of silently ignoring clicks. */
+/** Why the deploy action is unavailable, so the disabled control explains itself instead of silently ignoring clicks. The order mirrors `inspectionPresentation`, so the badge and the action never disagree. */
 function deploymentActionAvailability({
+	inputError,
 	inspectionIsCurrent,
 	inspectionState,
 	nextStep,
 	registryError,
 	registryLoading,
 	selectedCoreChainName,
+	settingsIncomplete,
 	walletConnected,
 	walletReady,
-}: Readonly<{ inspectionIsCurrent: boolean; inspectionState: 'blocked' | 'idle' | 'loading' | 'ready' | 'error'; nextStep: boolean; registryError: boolean; registryLoading: boolean; selectedCoreChainName: string | undefined; walletConnected: boolean; walletReady: boolean }>): ActionAvailability {
+}: Readonly<{
+	inputError: boolean
+	inspectionIsCurrent: boolean
+	inspectionState: 'blocked' | 'idle' | 'loading' | 'ready' | 'error'
+	nextStep: boolean
+	registryError: boolean
+	registryLoading: boolean
+	selectedCoreChainName: string | undefined
+	settingsIncomplete: boolean
+	walletConnected: boolean
+	walletReady: boolean
+}>): ActionAvailability {
 	if (registryLoading) return { disabled: true, loading: true, reason: deploymentCopy.loadingNetworks }
 	if (registryError) return { disabled: true, reason: deploymentCopy.networksUnavailable }
+	if (inputError) return { disabled: true, reason: appCopy.invalidDeploymentSettings }
+	// Inspection parks in idle while the settings are incomplete; that is a settings problem, not a check in flight.
+	if (settingsIncomplete) return { disabled: true, reason: appCopy.completeDeploymentSettings }
 	if (!inspectionIsCurrent || inspectionState === 'loading' || inspectionState === 'idle') return { disabled: true, loading: true, reason: deploymentCopy.checkingNetwork }
 	if (inspectionState === 'blocked') return { disabled: true, reason: appCopy.securityPoolFactoryNotDeployed }
 	if (inspectionState === 'error') return { disabled: true, reason: deploymentCopy.configurationUnavailable }
@@ -397,7 +413,18 @@ export function TradingDeploymentSetup({
 	const retryChecks = registryError !== undefined || inspectionState === 'error'
 	const inspectionBadgeId = useId()
 	const networkNoticeId = useId()
-	const deployAvailability = deploymentActionAvailability({ inspectionIsCurrent, inspectionState, nextStep: nextStep !== undefined, registryError: registryError !== undefined, registryLoading, selectedCoreChainName: selectedCore?.chainName, walletConnected, walletReady })
+	const deployAvailability = deploymentActionAvailability({
+		inputError: inputError !== undefined,
+		inspectionIsCurrent,
+		inspectionState,
+		nextStep: nextStep !== undefined,
+		registryError: registryError !== undefined,
+		registryLoading,
+		selectedCoreChainName: selectedCore?.chainName,
+		settingsIncomplete: selectedCore === undefined || chainId === '' || effectiveRpcUrl === '',
+		walletConnected,
+		walletReady,
+	})
 	// The inspection badge or the network notice already states the blocked reason; the action references it instead of repeating it.
 	const reasonShownByInspectionBadge = inspection !== undefined && inspection.label === deployAvailability.reason
 	const wrongNetworkNotice = walletConnected && !walletReady && selectedCore !== undefined ? deploymentCopy.connectedWalletMustUseNetwork(selectedCore.chainName) : undefined
