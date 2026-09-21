@@ -85,12 +85,18 @@ function securityPoolFactoryDiscoveryFailed(error?: string) {
 	return `Security pool discovery failed: ${error ?? ''}`
 }
 
+const securityPoolDiscoveryFailedLead = 'Security pool discovery failed'
 const universeDiscoveryFailedLead = 'Universe discovery failed'
 
-function universeDiscoveryFailed(error?: string) {
-	// A redacted detail already reads as the lead; do not prefix it twice.
-	if (error === undefined || error.startsWith(universeDiscoveryFailedLead)) return error ?? `${universeDiscoveryFailedLead}: ${unknownDiscovery}`
-	return `${universeDiscoveryFailedLead}: ${error}`
+/** The lead a route's discovery failure is reported under: the universe route discovers universes, every other live route discovers security pools. */
+function discoveryFailureLead(route: string) {
+	return route === 'universe' ? universeDiscoveryFailedLead : securityPoolDiscoveryFailedLead
+}
+
+/** Composes a discovery failure under its lead; a detail that already carries the lead (a redacted error) is not prefixed twice. */
+function describeDiscoveryFailure(lead: string, detail?: string) {
+	if (detail === undefined) return `${lead}: ${unknownDiscovery}`
+	return detail.startsWith(lead) ? detail : `${lead}: ${detail}`
 }
 
 function securityPoolCouldNotLoad(error: string) {
@@ -180,7 +186,8 @@ export const liveCopy = {
 	priorityFeePerGas,
 	securityPoolDiscoveryFailed,
 	securityPoolFactoryDiscoveryFailed,
-	universeDiscoveryFailed,
+	discoveryFailureLead,
+	describeDiscoveryFailure,
 	securityPoolCouldNotLoad,
 	poolPageRange,
 } as const

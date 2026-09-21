@@ -1,3 +1,4 @@
+import { liveCopy } from '../copy/live.js'
 import { discoverAddressedMarket, discoverTradingMarketPage, discoverUniverses } from '../protocol/marketDiscovery.js'
 import { getAddress, type Address, type Hash } from '@zoltar/core-shared/evm/ethereum'
 import { tryParseNonNegativeDecimalInput } from '@zoltar/ui-core-shared/forms/decimal.js'
@@ -50,19 +51,10 @@ export function walletSummaryDiscoveryRetryStart(discoveryState: 'loading' | 're
 	return discoveryState === 'error' || !selectedPoolAvailable || selectedPoolLoadError !== undefined ? currentPageStart : undefined
 }
 
-/** The lead a route's discovery failure is reported under; the universe route discovers universes, every other live route discovers security pools. */
-export function discoveryFailureLead(route: string) {
-	return route === 'universe' ? 'Universe discovery failed' : 'Security pool discovery failed'
-}
-
-export function walletSummaryAvailability(configurationAvailable: boolean, configurationError: string | undefined, discoveryState: 'loading' | 'ready' | 'error', discoveryError: string | undefined, selectedPoolAvailable: boolean, discoveryLead = discoveryFailureLead('market')) {
+export function walletSummaryAvailability(configurationAvailable: boolean, configurationError: string | undefined, discoveryState: 'loading' | 'ready' | 'error', discoveryError: string | undefined, selectedPoolAvailable: boolean, discoveryLead = liveCopy.discoveryFailureLead('market')) {
 	if (!configurationAvailable) return configurationError === undefined ? { status: 'loading' as const, error: undefined, errorLabel: undefined } : { status: 'error' as const, error: configurationError, errorLabel: 'Deployment unavailable' }
 	if (discoveryState === 'loading') return { status: 'loading' as const, error: undefined, errorLabel: undefined }
-	if (discoveryState === 'error') {
-		// A redacted detail already carries the lead; it is not prefixed a second time.
-		const error = discoveryError === undefined || discoveryError.startsWith(discoveryLead) ? (discoveryError ?? `${discoveryLead}: unknown discovery error`) : `${discoveryLead}: ${discoveryError}`
-		return { status: 'error' as const, error, errorLabel: discoveryLead }
-	}
+	if (discoveryState === 'error') return { status: 'error' as const, error: liveCopy.describeDiscoveryFailure(discoveryLead, discoveryError), errorLabel: discoveryLead }
 	if (selectedPoolAvailable) return undefined
 	return { status: 'error' as const, error: 'No security pool is available in the selected universe', errorLabel: 'No security pool in this universe' }
 }

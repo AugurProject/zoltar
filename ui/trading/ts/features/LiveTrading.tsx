@@ -166,7 +166,7 @@ export function LiveTrading({
 					<RouteHeader title={appCopy.universe} description={appCopy.universeRouteDescription} />
 					<ErrorNotice message={connectionMessage} />
 					{discoveryState === 'error' ? (
-						<RetryableNotice message={liveCopy.universeDiscoveryFailed(discoveryError)} retryLabel={commonCopy.retry} onRetry={refreshFromControl} disabled={workflowLocked} />
+						<RetryableNotice message={liveCopy.describeDiscoveryFailure(liveCopy.discoveryFailureLead(route), discoveryError)} retryLabel={commonCopy.retry} onRetry={refreshFromControl} disabled={workflowLocked} />
 					) : (
 						<StateHint announcement='polite' presentation={{ key: 'loading', badgeLabel: commonCopy.loading, badgeTone: 'loading', detail: commonCopy.loadingUniverseDetails, detailIsLoading: true }} />
 					)}

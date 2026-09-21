@@ -4,7 +4,8 @@ import type { createLatestRequestGuard, RequestIdentity } from '@zoltar/ui-core-
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import type { DeploymentConfiguration } from '../../protocol/config.js'
 import { marketAcceptsNewRisk, publicErrorMessage, type LiveMarket } from '../../protocol/live.js'
-import { discoveryCommitAllowed, discoveryFailureLead, quoteBasisChanged, securityPoolAddressFromRoute, walletSummaryDiscoveryRetryStart, type WorkflowOwner } from '../liveTradingControllerHelpers.js'
+import { discoveryCommitAllowed, quoteBasisChanged, securityPoolAddressFromRoute, walletSummaryDiscoveryRetryStart, type WorkflowOwner } from '../liveTradingControllerHelpers.js'
+import { liveCopy } from '../../copy/live.js'
 import { parsedUniverseId } from './useLiveTradingState.js'
 import { tradingListKindFor } from '../../lib/routing.js'
 import type { useMarketDiscovery } from './useMarketDiscovery.js'
@@ -136,7 +137,7 @@ export function useMarketDiscoveryController({
 				market.setDiscoveryState('ready')
 				return
 			}
-			const detail = publicErrorMessage(error, discoveryFailureLead(route))
+			const detail = publicErrorMessage(error, liveCopy.discoveryFailureLead(route))
 			market.setDiscoveryError(detail)
 			market.setDiscoveryState('error')
 			if (background) return

@@ -107,9 +107,10 @@ export function App({
 	const [workflowLocked, setWorkflowLocked] = useState(false)
 	// The universe is chosen on the universe route through the shared `universe` query parameter; discovery confirms it exists.
 	const { applyUrlStateUpdate, getOwnedSearch, state: urlState } = useUrlSearchState(readTradingUrlState)
-	const [liveUniverses, setLiveUniverses] = useState<LiveUniverses>({ ids: [], selected: undefined, forRequest: undefined })
+	const [liveUniverses, setLiveUniverses] = useState<LiveUniverses>({ ids: [], selected: undefined, forRequest: undefined, forPool: undefined })
 	const urlUniverseIdRef = useRef(urlState.universeId)
 	urlUniverseIdRef.current = urlState.universeId
+	const addressedPoolRef = useRef<string>()
 	const [discoveryState, setDiscoveryState] = useState<'loading' | 'ready' | 'error'>('loading')
 	const [liveWalletSummary, setLiveWalletSummary] = useState<WalletSummaryState>({ account: undefined, ethAttoEth: undefined, repAttoRep: undefined, status: 'disconnected', error: undefined, errorLabel: undefined, universeId: undefined })
 	const [walletSummaryRetryNonce, setWalletSummaryRetryNonce] = useState(0)
@@ -129,7 +130,9 @@ export function App({
 		return true
 	}).value
 	workflowLockedRef.current = workflowLocked
-	const universeSelection = resolveUniverseSelection({ ...urlState, addressed: securityPoolAddressFromRoute(route) !== undefined }, liveUniverses)
+	const addressedPool = securityPoolAddressFromRoute(route)
+	addressedPoolRef.current = addressedPool?.toLowerCase()
+	const universeSelection = resolveUniverseSelection({ ...urlState, addressedPool: addressedPool?.toLowerCase() }, liveUniverses)
 	const selectedUniverseId = universeSelection.requestedUniverseId
 	const confirmedUniverseId = universeSelection.confirmedUniverseId
 	useEffect(() => {
@@ -140,7 +143,7 @@ export function App({
 		workflowLockedRef.current = locked
 		setWorkflowLocked(locked)
 	}, [])
-	const updateLiveUniverses = useCallback((universeIds: readonly bigint[], authoritativeSelection: bigint | undefined) => setLiveUniverses({ ids: universeIds, selected: authoritativeSelection, forRequest: urlUniverseIdRef.current }), [])
+	const updateLiveUniverses = useCallback((universeIds: readonly bigint[], authoritativeSelection: bigint | undefined) => setLiveUniverses({ ids: universeIds, selected: authoritativeSelection, forRequest: urlUniverseIdRef.current, forPool: addressedPoolRef.current }), [])
 	const showUniverseField = routeOwnsLiveWallet(route) && liveDeploymentStatus !== 'unavailable'
 	// The header names the universe the routes follow, like the other applications; it is chosen on the universe route and shown once discovery confirms it.
 	let universeValue: ComponentChildren = <LoadingText announce={false}>{appCopy.loadingWithEllipsis}</LoadingText>
@@ -158,7 +161,6 @@ export function App({
 	}, [])
 	const updateDeploymentWalletState = useCallback((state: DeploymentWalletState) => setDeploymentWalletState(state), [])
 	const deploymentSetupActive = route !== 'not-found' && route !== 'help' && (route === 'deploy' || liveDeploymentStatus === 'unavailable')
-	const addressedPool = securityPoolAddressFromRoute(route)
 	const workflowRoute = tradingWorkflowRoute(route)
 	const displayedRoute = deploymentSetupActive ? 'deploy' : workflowRoute
 	const refreshActiveEnvironment = useCallback(async () => {
@@ -168,7 +170,7 @@ export function App({
 		setLiveDeploymentStatus('loading')
 		setLiveConfiguration(undefined)
 		setLiveConfigurationError(undefined)
-		setLiveUniverses({ ids: [], selected: undefined, forRequest: undefined })
+		setLiveUniverses({ ids: [], selected: undefined, forRequest: undefined, forPool: undefined })
 		setDiscoveryState('loading')
 		setLiveWalletSummary({ account: undefined, ethAttoEth: undefined, repAttoRep: undefined, status: 'disconnected', error: undefined, errorLabel: undefined, universeId: undefined })
 		try {

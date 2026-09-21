@@ -58,6 +58,51 @@ describe('trading header', () => {
 		expect(universeField?.querySelector('span')?.getAttribute('title')).toBe('Genesis (0x0)')
 	})
 
+	test('follows an addressed market into its universe and rewrites a disagreeing parameter', async () => {
+		const pool = `0x${'ab'.repeat(20)}`
+		window.history.replaceState(undefined, '', `/#/market/${pool}?universe=0`)
+		const configuration: DeploymentConfiguration = { chainId: 31_337, chainName: 'Local', rpcUrl: 'http://127.0.0.1:1', securityPoolFactory: `0x${'11'.repeat(20)}`, factory: `0x${'22'.repeat(20)}`, router: `0x${'33'.repeat(20)}`, feeBps: 30 }
+		const market: LiveMarket = {
+			pool,
+			pair: `0x${'cd'.repeat(20)}`,
+			shareToken: `0x${'ef'.repeat(20)}`,
+			universeId: 5n,
+			questionId: 2n,
+			title: 'Universe five market',
+			description: 'Addressed route fixture',
+			endTime: 2n ** 255n,
+			statoblastSecurityMultiplierBps: 20_000n,
+			initialReportPriorityFeeAttoEthPerGas: 1n,
+			systemState: 0,
+			awaitingForkContinuation: false,
+			universeForkTime: 0n,
+			vaultCount: 1n,
+			shareTokenSupplyAttoShares: 10n * 10n ** 36n,
+			settlementCollateralAttoEth: 10n * 10n ** 18n,
+			currentRetentionRate: 10n ** 18n,
+			totalCapacityOwnershipAttoRep: 1n,
+			feeEligibleCapacityOwnershipAttoRep: 1n,
+			mintingCapacityCeilingAttoEth: 2n,
+			availableMintingCapacityAttoEth: 1n,
+			feeBps: 30n,
+			tradingStatus: 0,
+			questionOutcome: 3,
+			yesReserve: 50n * 10n ** 36n,
+			noReserve: 50n * 10n ** 36n,
+			lpTotalSupply: 50n * 10n ** 36n,
+		}
+		const services = {
+			...liveTradingControllerServices,
+			createTradingPublicClient: () => ({}),
+			validateLiveDeployment: async () => undefined,
+			discoverAddressedMarket: async () => ({ start: 0n, count: 1n, total: 1n, previousStart: undefined, nextStart: undefined, markets: [market], universeIds: [5n], selectedUniverseId: 5n }),
+		}
+		const rendered = await renderIntoDocument(<App initializeEnvironment={async () => undefined} loadLiveDeployment={async () => configuration} liveTradingServices={services} />)
+		cleanupRendered = rendered.cleanup
+		await waitFor(() => expect(window.location.hash).toBe(`#/market/${pool}?universe=5`))
+		await waitFor(() => expect(rendered.container.querySelector('.header-toolbar-controls .toolbar-field-value')?.textContent).toBe('Universe 0x5'))
+	})
+
 	test('says the universe is unavailable when universe discovery fails', async () => {
 		window.history.replaceState(undefined, '', '/#/universe')
 		const configuration: DeploymentConfiguration = { chainId: 31_337, chainName: 'Local', rpcUrl: 'http://127.0.0.1:1', securityPoolFactory: `0x${'11'.repeat(20)}`, factory: `0x${'22'.repeat(20)}`, router: `0x${'33'.repeat(20)}`, feeBps: 30 }
