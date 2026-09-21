@@ -85,6 +85,7 @@ export const isSnapshot = object<PublicOperatorSnapshot>({
 			executorDeployed: booleanValue,
 		}),
 	),
+	executorDeploymentRecovery: optional(object({ transactionHash: hexValue })),
 	balances: optional(
 		object({
 			availableEth: stringValue,

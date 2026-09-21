@@ -7,23 +7,13 @@ import { appendFile, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { Address, Hex } from '@zoltar/bot-shared/ethereum'
-import {
-	appendExecutionHistoryIfMissing,
-	clearWalletDerivedState,
-	decimalSignedEth,
-	ensureExecutionHistoryWritable,
-	gameCapitalSnapshot,
-	loadExecutionHistory,
-	operatorSnapshot,
-	parseSignedDecimalEth,
-	updateStrategyFromRequest,
-	type ExecutionHistoryFilesystem,
-	type MutableStrategy,
-	type OperatorState,
-} from '#state/operator-state'
+import { appendExecutionHistoryIfMissing, clearWalletDerivedState, decimalSignedEth, ensureExecutionHistoryWritable, gameCapitalSnapshot, loadExecutionHistory, operatorSnapshot, parseSignedDecimalEth, type ExecutionHistoryFilesystem, type MutableStrategy, type OperatorState } from '#state/operator-state'
 import { publicOperatorSnapshot } from '#state/public-snapshot'
+import { updateStrategyFromRequest } from '#state/strategy-request'
 import type { ExecutionRecord } from '#state/execution-record'
 import { isSnapshot } from '#dashboard/snapshot-validation'
+import { operatorNoticePresentation, pauseFailurePresentation } from '#dashboard/dashboard-notice'
+import { EXECUTOR_DEPLOYMENT_RECOVERY_REQUIRED } from '#state/executor-deployment-recovery'
 import { publicPollFailure } from '#state/public-failures'
 import type { PositionRecord } from '#state/position-store'
 
@@ -117,6 +107,37 @@ test('publishes skipped reports beside evaluated opportunities with only their s
 	expect(snapshot.settlements).toEqual(state.settlements)
 	expect(isSnapshot(JSON.parse(JSON.stringify(snapshot)))).toBe(true)
 	expect(isSnapshot(JSON.parse(JSON.stringify({ ...snapshot, settlements: { ...snapshot.settlements, queue: [{ ...snapshot.settlements.queue[0], decision: 'unknown' }] } })))).toBe(false)
+})
+
+test('publishes the pending executor deployment recovery and lets it own the operator notice', () => {
+	const state = capabilityState()
+	state.paused = true
+	state.status = 'paused'
+	const transactionHash = `0x${'7'.repeat(64)}` as Hex
+	const recovering = publicOperatorSnapshot(operatorSnapshot(state, strategy(), submission, connectivity, { ...fixed, executorDeploymentRecovery: { transactionHash } }))
+	expect(recovering.executorDeploymentRecovery).toEqual({ transactionHash })
+	expect(isSnapshot(JSON.parse(JSON.stringify(recovering)))).toBe(true)
+	expect(isSnapshot(JSON.parse(JSON.stringify({ ...recovering, executorDeploymentRecovery: { transactionHash: 'pending' } })))).toBe(false)
+	const notice = operatorNoticePresentation(recovering)
+	expect(notice.noticeTitle).toBe('Executor deployment recovery required')
+	expect(notice.noticeTone).toBe('danger')
+	expect(notice.noticeCopy).toContain(`Executor deployment ${transactionHash.slice(0, 10)}…${transactionHash.slice(-8)}`)
+	expect(notice.noticeCopy).toContain('Deploy predictable executor')
+	// A poll failure would normally own the notice; the recovery step still wins because nothing else explains the refused resume.
+	state.lastError = 'RPC unavailable'
+	expect(operatorNoticePresentation(publicOperatorSnapshot(operatorSnapshot(state, strategy(), submission, connectivity, { ...fixed, executorDeploymentRecovery: { transactionHash } }))).noticeTitle).toBe('Executor deployment recovery required')
+
+	const idle = publicOperatorSnapshot(operatorSnapshot(state, strategy(), submission, connectivity, fixed))
+	expect(idle.executorDeploymentRecovery).toBeUndefined()
+	expect(operatorNoticePresentation(idle).noticeTitle).not.toBe('Executor deployment recovery required')
+	// A refused resume keeps the bot's verbatim reason and only appends the recovery step when that reason is the pending recovery.
+	expect(pauseFailurePresentation(EXECUTOR_DEPLOYMENT_RECOVERY_REQUIRED)).toEqual({
+		noticeCopy: 'Recover the pending executor deployment before resuming execution. Run Deploy predictable executor under Settings › Venues and executor with the same signer to confirm or rebroadcast it.',
+		noticeTitle: 'Unable to change bot state',
+		noticeTone: 'danger',
+	})
+	expect(pauseFailurePresentation('Configure the chain and RPC endpoints before resuming')).toEqual({ noticeCopy: 'Configure the chain and RPC endpoints before resuming', noticeTitle: 'Unable to change bot state', noticeTone: 'danger' })
+	expect(pauseFailurePresentation('The bot run state could not be changed. Refresh current state and check protected bot logs.').noticeCopy).not.toContain('Deploy predictable executor')
 })
 
 test('reports operator capability only after a complete current scan and signer readiness', () => {

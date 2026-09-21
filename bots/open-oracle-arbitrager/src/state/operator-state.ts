@@ -1,4 +1,3 @@
-import { record as validateRecord, integer } from '@zoltar/bot-shared/infrastructure/json-validation'
 import type { UniverseIdentity } from '@zoltar/bot-shared/monitoring/universe-policy'
 import type { MissingContractDeployment } from '@zoltar/bot-shared/monitoring/deployed-contracts'
 import { mkdir, open, readFile } from 'node:fs/promises'
@@ -7,6 +6,7 @@ import { bigintToSafeNumber, type Address, type Hex } from '@zoltar/bot-shared/e
 import type { OpenOracleGame } from '@zoltar/open-oracle-shared/openOracle/openOracle'
 import { validateDeploymentSettings, type DeploymentSettings } from '#config/deployment-settings'
 import type { CanonicalDeploymentStatus } from '#config/runtime-deployment'
+import type { ExecutorDeploymentRecoveryStatus } from '#state/executor-deployment-recovery'
 import type { ConnectivitySettings, EndpointCheck, NetworkName } from '#monitoring/connectivity'
 import type { SubmissionSettings, SubmissionTargetResult } from '#execution/transaction-submission'
 import type { OpportunitySnapshot } from '#state/opportunity-snapshot'
@@ -144,6 +144,7 @@ export type OperatorSnapshot = PollStatus & {
 	marketConsensus?: ReturnType<typeof serializeMarketConsensusEstimate>
 	execute: boolean
 	executor: Address | undefined
+	executorDeploymentRecovery?: ExecutorDeploymentRecoveryStatus | undefined
 	executionHistory: readonly ExecutionRecord[]
 	executionHistoryRecordCount: number
 	positionRecordCount: number
@@ -229,6 +230,7 @@ export type PublicOperatorSnapshot = PollStatus &
 		marketConsensus?: ReturnType<typeof serializeMarketConsensusEstimate>
 		execute: boolean
 		executor: Address | undefined
+		executorDeploymentRecovery?: ExecutorDeploymentRecoveryStatus | undefined
 		coordinatorAddresses: readonly Address[]
 		executionHistory: readonly PublicExecutionRecord[]
 		executionHistoryRecordCount: number
@@ -303,16 +305,6 @@ export function clearWalletDerivedState(state: OperatorState) {
 	state.opportunities = []
 }
 
-const SETTING_LABELS = {
-	maxSpotTwapTicks: 'Maximum spot/TWAP ticks',
-	minimumProfitBps: 'Minimum return',
-	minimumProfitWeth: 'Minimum profit',
-	minimumRemainingBlocks: 'Minimum remaining blocks',
-	minimumRemainingSeconds: 'Minimum remaining seconds',
-	pollMilliseconds: 'Poll interval',
-	twapSeconds: 'TWAP window',
-} satisfies Record<keyof StrategySettings, string>
-
 export function parseDecimalWeth(value: string) {
 	if (!/^(?:0|[1-9]\d*)(?:\.\d{1,18})?$/.test(value)) throw new Error(`Invalid WETH amount: ${value}`)
 	const [whole = '0', fraction = ''] = value.split('.')
@@ -337,55 +329,6 @@ export function strategySettings(strategy: MutableStrategy): StrategySettings {
 		pollMilliseconds: strategy.pollMilliseconds,
 		twapSeconds: strategy.twapSeconds,
 	}
-}
-
-function requiredRecord(value: unknown) {
-	return validateRecord(value, 'Settings', 'Settings must be a JSON object')
-}
-
-function requiredDecimal(record: Record<string, unknown>, key: keyof StrategySettings) {
-	const value = record[key]
-	if (typeof value !== 'string') throw new Error(`${SETTING_LABELS[key]} must be a decimal value`)
-	return value
-}
-
-function requiredInteger(record: Record<string, unknown>, key: keyof StrategySettings, minimum: number, maximum: number) {
-	const label = SETTING_LABELS[key]
-	return integer(record[key], label, minimum, maximum, `${label} must be an integer from ${minimum.toString()} to ${maximum.toString()}`)
-}
-
-function requiredBigInt(record: Record<string, unknown>, key: keyof StrategySettings, minimum: bigint, maximum: bigint) {
-	const value = requiredDecimal(record, key)
-	if (!/^(?:0|[1-9]\d*)$/.test(value)) throw new Error(`${SETTING_LABELS[key]} must be a non-negative integer`)
-	const parsed = BigInt(value)
-	if (parsed < minimum || parsed > maximum) throw new Error(`${SETTING_LABELS[key]} must be from ${minimum.toString()} to ${maximum.toString()}`)
-	return parsed
-}
-
-export function updateStrategyFromRequest(strategy: MutableStrategy, value: unknown) {
-	const record = requiredRecord(value)
-	const allowed = new Set<keyof StrategySettings>(['maxSpotTwapTicks', 'minimumProfitBps', 'minimumProfitWeth', 'minimumRemainingBlocks', 'minimumRemainingSeconds', 'pollMilliseconds', 'twapSeconds'])
-	for (const key of Object.keys(record)) {
-		if (!allowed.has(key as keyof StrategySettings)) throw new Error(`Unknown strategy setting: ${key}`)
-	}
-	const expected = allowed.size
-	if (Object.keys(record).length !== expected) throw new Error('Every strategy setting is required')
-	const minimumProfitAttoWeth = parseDecimalWeth(requiredDecimal(record, 'minimumProfitWeth'))
-	if (minimumProfitAttoWeth > 1_000n * 10n ** 18n) throw new Error('Minimum profit must not exceed 1000 WETH')
-	const maxSpotTwapTicks = requiredBigInt(record, 'maxSpotTwapTicks', 0n, 100_000n)
-	const minimumProfitBps = requiredBigInt(record, 'minimumProfitBps', 0n, 100_000n)
-	const minimumRemainingBlocks = requiredBigInt(record, 'minimumRemainingBlocks', 1n, 1_000n)
-	const minimumRemainingSeconds = requiredBigInt(record, 'minimumRemainingSeconds', 1n, 86_400n)
-	const pollMilliseconds = requiredInteger(record, 'pollMilliseconds', 1_000, 3_600_000)
-	const twapSeconds = requiredInteger(record, 'twapSeconds', 60, 86_400)
-	strategy.maxSpotTwapTicks = maxSpotTwapTicks
-	strategy.minimumProfitBps = minimumProfitBps
-	strategy.minimumProfitAttoWeth = minimumProfitAttoWeth
-	strategy.minimumRemainingBlocks = minimumRemainingBlocks
-	strategy.minimumRemainingSeconds = minimumRemainingSeconds
-	strategy.pollMilliseconds = pollMilliseconds
-	strategy.twapSeconds = twapSeconds
-	return strategySettings(strategy)
 }
 
 export function decimalWeth(value: bigint) {
@@ -524,6 +467,7 @@ export type OperatorSnapshotFixedState = {
 	deployment?: DeploymentSettings | undefined
 	execute: boolean
 	executor: Address | undefined
+	executorDeploymentRecovery?: ExecutorDeploymentRecoveryStatus | undefined
 	expectedChainId: number
 	explorerUrl: string
 	network: NetworkName
@@ -566,6 +510,7 @@ export function operatorSnapshot(
 		marketConsensus: serializeMarketConsensusEstimate(state.marketConsensus, decimalWeth),
 		execute: fixed.execute,
 		executor: fixed.executor,
+		executorDeploymentRecovery: fixed.executorDeploymentRecovery,
 		executionHistory: state.executionHistory.slice(0, 500),
 		executionHistoryRecordCount: state.executionHistory.length,
 		positionRecordCount: state.positions.length + archived.positionCount,
