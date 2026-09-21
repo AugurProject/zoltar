@@ -3135,12 +3135,14 @@
 .transaction-plan-action-final {
 	display: grid;
 	grid-template-columns: minmax(0, 1fr) auto;
-	align-items: end;
+	align-items: start;
 	gap: 0.5rem;
 }
 
+/* The price-request confirm button is taller than a plain button, so its Cancel neighbour matches that height. */
 .operation-modal-body:has(> .request-price-fields) .transaction-step-close > button {
 	inline-size: 5rem;
+	min-block-size: 4rem;
 }
 
 .transaction-step-close {
@@ -3275,7 +3277,8 @@
 		min-block-size: 3.625rem;
 	}
 
-	.operation-modal-body:has(> .request-price-fields) .transaction-plan-action-final .tx-action-button {
+	.operation-modal-body:has(> .request-price-fields) .transaction-plan-action-final .tx-action-button,
+	.operation-modal-body:has(> .request-price-fields) .transaction-step-close > button {
 		min-block-size: 4.875rem;
 	}
 
