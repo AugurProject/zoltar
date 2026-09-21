@@ -5,6 +5,10 @@ import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/rende
 import { waitFor, within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import type { ZoltarUniverseSummary } from '@zoltar/ui-core-shared/types/contracts.js'
 import { UniverseDirectory } from '../../features/UniverseDirectory.js'
+import { LiveTrading } from '../../features/LiveTrading.js'
+import { liveTradingControllerServices } from '../../features/liveTradingControllerHelpers.js'
+import { render } from 'preact'
+import { act } from 'preact/test-utils'
 import type { DeploymentConfiguration } from '../../protocol/config.js'
 import { getTradingEnvironmentLocationKey, installTradingRouting } from '../../lib/routing.js'
 
@@ -94,6 +98,51 @@ describe('universe directory', () => {
 		within(rendered.container).getByRole('button', { name: 'Retry' }).click()
 		await waitFor(() => expect(rendered.container.textContent).toContain('Child universes'))
 		expect(attempts).toBe(2)
+	})
+
+	test('the universe route waits for discovery, reports a failed discovery with a retry, and describes the universe once confirmed', async () => {
+		let discoveries = 0
+		const discoveryStates: string[] = []
+		const services = {
+			...liveTradingControllerServices,
+			createTradingPublicClient: () => ({}),
+			validateLiveDeployment: async () => undefined,
+			discoverUniverses: async () => {
+				discoveries += 1
+				if (discoveries === 1) throw new Error('registry RPC unavailable')
+				return { start: 0n, count: 0n, total: 0n, previousStart: undefined, nextStart: undefined, markets: [], universeIds: [0n, 1n], selectedUniverseId: 1n }
+			},
+		}
+		const universesChanges: Array<readonly bigint[]> = []
+		const view = (confirmedUniverseId: string | undefined) => (
+			<LiveTrading
+				route='universe'
+				configuration={configuration}
+				configurationError={undefined}
+				selectedUniverseId='1'
+				confirmedUniverseId={confirmedUniverseId}
+				loadUniverseSummary={async () => createUniverse()}
+				onWorkflowLockChange={() => undefined}
+				onUniversesChange={ids => universesChanges.push(ids)}
+				onDiscoveryStateChange={state => discoveryStates.push(state)}
+				controllerServices={services}
+			/>
+		)
+		const rendered = await renderIntoDocument(view(undefined))
+		cleanupRendered = rendered.cleanup
+		await waitFor(() => expect(rendered.container.textContent).toContain('registry RPC unavailable'))
+		expect(discoveryStates.at(-1)).toBe('error')
+		expect(rendered.container.textContent).not.toContain('Loading universe details')
+		expect(rendered.container.querySelector('#app-content, .route-header')?.textContent).toContain('Universe')
+		await act(() => within(rendered.container).getByRole('button', { name: 'Retry' }).click())
+		await waitFor(() => expect(universesChanges.at(-1)).toEqual([0n, 1n]))
+		expect(discoveryStates.at(-1)).toBe('ready')
+		// The shell confirms the universe from the discovery result; until then the route keeps its loading state.
+		expect(rendered.container.textContent).toContain('Loading universe details')
+		expect(rendered.container.textContent).not.toContain('Child universes')
+		await act(() => render(view('1'), rendered.container))
+		await waitFor(() => expect(rendered.container.textContent).toContain('Child universes'))
+		expect(rendered.container.querySelectorAll('.entity-card-list .entity-card')).toHaveLength(2)
 	})
 
 	test('changing the universe does not count as an environment change', () => {

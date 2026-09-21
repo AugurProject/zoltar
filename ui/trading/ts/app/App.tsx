@@ -104,6 +104,7 @@ export function App({
 	// The universe is chosen on the universe route through the shared `universe` query parameter; discovery confirms it exists.
 	const { applyUrlStateUpdate, getOwnedSearch, state: urlState } = useUrlSearchState(readTradingUrlState)
 	const [liveUniverses, setLiveUniverses] = useState<LiveUniverses>({ ids: [], selected: undefined })
+	const [discoveryState, setDiscoveryState] = useState<'loading' | 'ready' | 'error'>('loading')
 	const universeSelection = resolveUniverseSelection(urlState.universeId, liveUniverses)
 	const selectedUniverseId = universeSelection.requestedUniverseId
 	const confirmedUniverseId = universeSelection.confirmedUniverseId
@@ -138,7 +139,7 @@ export function App({
 	// The header names the universe the routes follow, like the other applications; it is chosen on the universe route and shown once discovery confirms it.
 	let universeValue: ComponentChildren = <LoadingText announce={false}>{appCopy.loadingWithEllipsis}</LoadingText>
 	if (confirmedUniverseId !== undefined) universeValue = <span title={formatUniverseLabel(BigInt(confirmedUniverseId))}>{formatUniverseDisplayLabel(BigInt(confirmedUniverseId))}</span>
-	else if (liveDeploymentStatus === 'unavailable') universeValue = <span>{appCopy.unavailable}</span>
+	else if (discoveryState === 'error') universeValue = <span>{appCopy.unavailable}</span>
 	const walletSummary = walletSummaryForUniverse(liveWalletSummary, selectedUniverseId)
 	const retryWalletSummary = () => {
 		setLiveWalletSummary(current => ({ account: current.account, ethAttoEth: undefined, repAttoRep: undefined, status: current.account === undefined ? 'disconnected' : 'loading', error: undefined, errorLabel: undefined, universeId: selectedUniverseId }))
@@ -162,6 +163,7 @@ export function App({
 		setLiveConfiguration(undefined)
 		setLiveConfigurationError(undefined)
 		setLiveUniverses({ ids: [], selected: undefined })
+		setDiscoveryState('loading')
 		setLiveWalletSummary({ account: undefined, ethAttoEth: undefined, repAttoRep: undefined, status: 'disconnected', error: undefined, errorLabel: undefined, universeId: undefined })
 		try {
 			await initializeEnvironment()
@@ -230,6 +232,7 @@ export function App({
 				configurationError={liveConfigurationError}
 				selectedUniverseId={selectedUniverseId}
 				confirmedUniverseId={confirmedUniverseId}
+				onDiscoveryStateChange={setDiscoveryState}
 				onUniversesChange={updateLiveUniverses}
 				onWorkflowLockChange={updateWorkflowLock}
 				onWalletSummaryChange={setLiveWalletSummary}

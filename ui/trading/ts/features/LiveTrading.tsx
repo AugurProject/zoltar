@@ -12,6 +12,7 @@ import { Badge } from '@zoltar/ui-core-shared/components/Badge.js'
 import { EmptyState } from '@zoltar/ui-core-shared/components/EmptyState.js'
 import { ErrorNotice } from '@zoltar/ui-core-shared/components/ErrorNotice.js'
 import { ReadOnlyAddressValue } from '@zoltar/ui-core-shared/components/AddressValue.js'
+import { RetryableNotice } from '@zoltar/ui-core-shared/components/RetryableNotice.js'
 import { RouteHeader } from '@zoltar/ui-core-shared/components/RouteHeader.js'
 import { StateHint } from '@zoltar/ui-core-shared/components/StateHint.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
@@ -70,6 +71,7 @@ export function LiveTrading({
 	selectedUniverseId,
 	confirmedUniverseId,
 	loadUniverseSummary,
+	onDiscoveryStateChange,
 	onUniversesChange = () => undefined,
 	onWorkflowLockChange,
 	onWalletSummaryChange = ignoreWalletSummaryChange,
@@ -88,6 +90,8 @@ export function LiveTrading({
 	confirmedUniverseId?: string | undefined
 	/** Test seam for the universe route's summary read. */
 	loadUniverseSummary?: LoadUniverseSummary | undefined
+	/** Lets the shell know when universe discovery has failed, so the header can say so instead of loading forever. */
+	onDiscoveryStateChange?: ((state: 'loading' | 'ready' | 'error') => void) | undefined
 	onUniversesChange?(universeIds: readonly bigint[], selectedUniverseId: bigint | undefined): void
 	onWorkflowLockChange(locked: boolean): void
 	onWalletSummaryChange?(summary: WalletSummaryState): void
@@ -127,6 +131,7 @@ export function LiveTrading({
 	// Moving between addressed markets keeps the same page title, so focus the new market heading here instead of relying on the app heading.
 	const marketHeadingRef = useFocusOnKeyChange<HTMLHeadingElement>(selected?.pool, false)
 	const previousWalletConnectRequestNonce = useRef(walletConnectRequestNonce)
+	useEffect(() => onDiscoveryStateChange?.(discoveryState), [discoveryState, onDiscoveryStateChange])
 	useEffect(() => {
 		if (walletConnectRequestNonce === undefined) return
 		if (previousWalletConnectRequestNonce.current === walletConnectRequestNonce) return
@@ -155,11 +160,15 @@ export function LiveTrading({
 		) : undefined
 	if (route === 'universe') {
 		// Discovery confirms the requested universe before the directory describes it, so an unknown request never renders as a universe.
-		if (confirmedUniverseId === undefined)
+		if (confirmedUniverseId === undefined || discoveryState === 'error')
 			return (
 				<div className='route-view-flow'>
 					<RouteHeader title={appCopy.universe} description={appCopy.universeRouteDescription} />
-					<StateHint announcement='polite' presentation={{ key: 'loading', badgeLabel: commonCopy.loading, badgeTone: 'loading', detail: commonCopy.loadingUniverseDetails, detailIsLoading: true }} />
+					{discoveryState === 'error' ? (
+						<RetryableNotice message={liveCopy.securityPoolFactoryDiscoveryFailed(discoveryError)} retryLabel={commonCopy.retry} onRetry={refreshFromControl} disabled={workflowLocked} />
+					) : (
+						<StateHint announcement='polite' presentation={{ key: 'loading', badgeLabel: commonCopy.loading, badgeTone: 'loading', detail: commonCopy.loadingUniverseDetails, detailIsLoading: true }} />
+					)}
 				</div>
 			)
 		return <UniverseDirectory configuration={configuration} universeId={BigInt(confirmedUniverseId)} {...(loadUniverseSummary === undefined ? {} : { loadUniverse: loadUniverseSummary })} />

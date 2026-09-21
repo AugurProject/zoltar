@@ -1,18 +1,11 @@
 import { useEffect, useState } from 'preact/hooks'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
-import * as marketCopy from '@zoltar/ui-zoltar-shared/copy/market.js'
-import * as universeCopy from '@zoltar/ui-zoltar-shared/copy/zoltar.js'
-import { Badge } from '@zoltar/ui-core-shared/components/Badge.js'
-import { EntityCard } from '@zoltar/ui-core-shared/components/EntityCard.js'
-import { MetricField } from '@zoltar/ui-core-shared/components/MetricField.js'
-import { ReadOnlyDetailAccordion } from '@zoltar/ui-core-shared/components/ReadOnlyDetailAccordion.js'
 import { RetryableNotice } from '@zoltar/ui-core-shared/components/RetryableNotice.js'
 import { RouteHeader } from '@zoltar/ui-core-shared/components/RouteHeader.js'
-import { SectionBlock } from '@zoltar/ui-core-shared/components/SectionBlock.js'
 import { StateHint } from '@zoltar/ui-core-shared/components/StateHint.js'
 import { formatUniverseLabel } from '@zoltar/ui-core-shared/lib/universeLabels.js'
 import type { ZoltarUniverseSummary } from '@zoltar/ui-core-shared/types/contracts.js'
-import type { BadgeTone } from '@zoltar/ui-core-shared/types/components.js'
+import { ChildUniverseList } from '@zoltar/ui-zoltar-shared/features/universes/components/ChildUniverseList.js'
 import { UniverseDirectorySection } from '@zoltar/ui-zoltar-shared/features/universes/components/UniverseDirectorySection.js'
 import { UniverseLink } from '@zoltar/ui-zoltar-shared/features/universes/components/UniverseLink.js'
 import { loadZoltarUniverseSummary } from '@zoltar/ui-zoltar-shared/protocol/zoltar.js'
@@ -70,43 +63,7 @@ export function UniverseDirectory({ configuration, loadUniverse = loadUniverseSu
 			{state.kind === 'ready' && state.universe === undefined ? <StateHint presentation={{ key: 'not_found', badgeLabel: commonCopy.notFound, badgeTone: 'blocked', detail: appCopy.universeNotFound(formatUniverseLabel(universeId)) }} /> : undefined}
 			{state.kind === 'ready' && state.universe !== undefined ? (
 				<UniverseDirectorySection zoltarUniverse={state.universe}>
-					<SectionBlock title={commonCopy.childUniverses} variant='plain'>
-						{state.universe.childUniverses.length === 0 ? (
-							<StateHint presentation={{ key: 'empty', badgeLabel: commonCopy.universe, badgeTone: 'muted', detail: commonCopy.childUniversesEmpty }} />
-						) : (
-							<div className='entity-card-list decision-card-list'>
-								{state.universe.childUniverses.map(childUniverse => {
-									const isActive = childUniverse.universeId === universeId
-									let badge: { label: string; tone: BadgeTone } = { label: commonCopy.notDeployed, tone: 'muted' }
-									if (isActive) badge = { label: commonCopy.selected, tone: 'warning' }
-									else if (childUniverse.exists) badge = { label: commonCopy.deployed, tone: 'ok' }
-									return (
-										<EntityCard
-											key={childUniverse.universeId.toString()}
-											headerActions={
-												isActive || !childUniverse.exists ? undefined : (
-													<UniverseLink className='button-link secondary-link' universeId={childUniverse.universeId}>
-														{commonCopy.select}
-													</UniverseLink>
-												)
-											}
-											badge={<Badge tone={badge.tone}>{badge.label}</Badge>}
-											title={childUniverse.outcomeLabel}
-											variant='record'
-										>
-											<ReadOnlyDetailAccordion title={universeCopy.universeDetails}>
-												<MetricField label={commonCopy.universe}>{formatUniverseLabel(childUniverse.universeId)}</MetricField>
-												<MetricField label={marketCopy.parentUniverse}>
-													<UniverseLink universeId={childUniverse.parentUniverseId} />
-												</MetricField>
-												{childUniverse.reputationTokenSymbol === undefined ? undefined : <MetricField label={commonCopy.reputationToken}>{childUniverse.reputationTokenSymbol}</MetricField>}
-											</ReadOnlyDetailAccordion>
-										</EntityCard>
-									)
-								})}
-							</div>
-						)}
-					</SectionBlock>
+					<ChildUniverseList activeUniverseId={universeId} childUniverses={state.universe.childUniverses} />
 				</UniverseDirectorySection>
 			) : undefined}
 		</div>

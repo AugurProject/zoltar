@@ -197,6 +197,10 @@
 		"./copy/forkTargets.js": {
 			"bun": "./ts/copy/forkTargets.ts",
 			"default": "./js/copy/forkTargets.js"
+		},
+		"./features/universes/components/ChildUniverseList.js": {
+			"bun": "./ts/features/universes/components/ChildUniverseList.tsx",
+			"default": "./js/features/universes/components/ChildUniverseList.js"
 		}
 	},
 	"version": "1.0.0"
