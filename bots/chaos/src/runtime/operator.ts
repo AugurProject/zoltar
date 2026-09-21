@@ -31,7 +31,7 @@ import { retirementPlanAllowed } from './retirement-operation-policy.ts'
 import { enforceRetirementContinuation, processRetirementCycle, retirementPositionsForScan, updateRetirementAssessment } from './retirement-runner.ts'
 import { interruptedSchedulerRunNeedsClosure, executeScheduledOperation, recordDryRun, scheduleAfterRecoveredTransaction, schedulerFor } from './scheduled-operation.ts'
 import { genesisInitializationDefinitionId, genesisInitializationPlan, randomOperationPlans } from './selection.ts'
-import { assertSubmissionPreflightFresh, preflightTransactionSubmissionNetwork, recordEndpointPreflightChecks, submissionPreflightConfigurationIdentity, submissionPreflightIsDue } from './submission-preflight.ts'
+import { assertSubmissionPreflightFresh, preflightTransactionSubmissionNetwork, recordEndpointPreflightChecks, refreshSubmissionReadiness, submissionPreflightConfigurationIdentity, type SubmissionPreflightResources } from './submission-preflight.ts'
 import { runtimeTopologySummary } from './topology-summary.ts'
 import { evaluatePolicySafeContinuation } from './workflow-continuation.ts'
 import { abandonRetryableSelectableFailure, rediscoverableExecutionFailure, repairDurableSelectableFailures, workflowForPlan } from './workflow-repair.ts'
@@ -43,11 +43,9 @@ type LoadedConfiguration = {
 	settings: OperatorSettings
 }
 
-type RuntimeResources = {
+type RuntimeResources = SubmissionPreflightResources & {
 	pool: ReturnType<typeof createChaosReadPool>
 	readPreflightChecks: readonly EndpointCheck[]
-	submissionPreflightConfigurationIdentity: string | undefined
-	submissionPreflightChecks: readonly EndpointCheck[]
 }
 
 const errorMessage = (error: unknown) => formatErrorMessage(error).slice(0, 1_500)
@@ -679,10 +677,10 @@ export async function runChaosOperator(loaded: LoadedConfiguration, locks: Chaos
 					backfillIncomplete = true
 					return settings.runtime.once
 				}
-				if (settings.runtime.execute && (resources.submissionPreflightConfigurationIdentity !== submissionPreflightConfigurationIdentity(settings) || submissionPreflightIsDue(resources.submissionPreflightChecks, settings))) {
-					await ensureSubmissionPreflight(resources, settings)
-					state.rpcEndpointHealth = resourceHealth(resources)
-				}
+				// Submission evidence is refreshed in every mode so the go-live checklist can be satisfied before arming.
+				const submissionReadiness = await refreshSubmissionReadiness(resources, settings)
+				if (submissionReadiness !== 'current') state.rpcEndpointHealth = resourceHealth(resources)
+				if (submissionReadiness === 'failed') console.log('chaosBot=submission readiness refresh failed in dry run; the recorded endpoint evidence stays visible until the next refresh')
 				const continuationWorkflows = state.workflows.filter(workflowNeedsContinuation)
 				if (continuationWorkflows.length > 1) {
 					throw new Error('Multiple partial workflows require explicit operator reconciliation')
