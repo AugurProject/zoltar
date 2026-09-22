@@ -8,10 +8,10 @@ import { ConnectivityDegradedError } from '@zoltar/bot-shared/monitoring/resilie
 import { submitSignedTransaction } from '@zoltar/bot-shared/execution/transaction-submission'
 import type { OperatorSettings } from '#config/settings'
 import { stagedOperationOutcome } from '#core/staged-outcome'
-import { ambiguousRecoveryAction, PRIVATE_INTENT_FINALITY_BLOCKS, requireRecoveredTransactionSuccess } from '#core/cycle-control'
+import { ambiguousRecoveryAction, PRIVATE_INTENT_FINALITY_BLOCKS } from '#core/cycle-control'
 import { canonicalBlockHash } from '#monitoring/operator-chain'
-import { initialRuntimeState, assertIntentSender, recordActivity, recoveredIntentCanBeResubmitted, resolveRecoveredIntentJournal, saveDurableState } from '#state/operator-state'
-import { validateReceiptExpectation } from '#execution/receipt-validation'
+import { initialRuntimeState, assertIntentSender, recordActivity, recoveredIntentCanBeResubmitted, saveDurableState } from '#state/operator-state'
+import { resolveFinalizedReceipt } from '#execution/receipt-transition'
 import { nextStagedHistoricalRecoveryRange, recordStagedRecoveryChunk, recordStagedRecoveryGap, stagedRecoveryAnchorMatches } from '#execution/staged-recovery-journal'
 
 const MAXIMUM_RECOVERY_LOG_RANGE = 256n
@@ -106,24 +106,7 @@ export async function recoverPendingTransactions(
 		const receiptResult = await finalizedReceiptWithQuorum(settings, wallet, intent.hash, pool)
 		const receipt = receiptResult.receipt
 		if (receipt !== undefined) {
-			const receiptOutcome = receipt.status === 'success' ? validateReceiptExpectation(receipt, intent.receiptExpectation) : { queuedOperationId: undefined }
-			if (receiptOutcome.queuedOperationId !== undefined && intent.receiptExpectation.type === 'pending-liquidation') {
-				state.pendingStagedOperations.push({
-					coordinator: intent.receiptExpectation.coordinator,
-					operationId: receiptOutcome.queuedOperationId,
-					queuedBlock: receipt.blockNumber,
-					target: intent.receiptExpectation.target,
-				})
-			}
-			resolveRecoveredIntentJournal(state, intent.hash, receipt.status)
-			recordActivity(state, {
-				hash: intent.hash,
-				kind: intent.kind,
-				message: receipt.status === 'success' ? `Recovered confirmation: ${intent.label}` : `Recovered revert: ${intent.label}`,
-				status: receipt.status === 'success' ? 'confirmed' : 'failed',
-			})
-			await saveDurableState(settings.runtime.stateFile, state)
-			requireRecoveredTransactionSuccess(receipt.status, intent.hash)
+			await resolveFinalizedReceipt(settings.runtime.stateFile, state, intent, receipt)
 			continue
 		}
 		if (receiptResult.observed) return true
@@ -275,7 +258,7 @@ export async function reconcilePendingStagedOperations(settings: OperatorSetting
 			await saveDurableState(settings.runtime.stateFile, state)
 		}
 		if (outcome === undefined) continue
-		if (outcome.operation !== 0n || outcome.operationId !== pending.operationId || typeof outcome.success !== 'boolean' || typeof outcome.errorMessage !== 'string') {
+		if (outcome.operation !== BigInt(pending.operation ?? 0) || outcome.operationId !== pending.operationId || typeof outcome.success !== 'boolean' || typeof outcome.errorMessage !== 'string') {
 			throw new Error(`Coordinator returned an invalid outcome for staged operation ${pending.operationId.toString()}`)
 		}
 		let finalized: boolean
@@ -296,15 +279,20 @@ export async function reconcilePendingStagedOperations(settings: OperatorSetting
 			continue
 		}
 		if (!finalized) continue
-		delete pending.candidateOutcome
-		state.pendingStagedOperations = state.pendingStagedOperations.filter(operation => operation.coordinator.toLowerCase() !== pending.coordinator.toLowerCase() || operation.operationId !== pending.operationId)
-		recordActivity(state, {
+		const next = {
+			...state,
+			activities: [...state.activities],
+			pendingStagedOperations: state.pendingStagedOperations.filter(operation => operation.coordinator.toLowerCase() !== pending.coordinator.toLowerCase() || operation.operationId !== pending.operationId),
+		}
+		recordActivity(next, {
 			details: `coordinator=${pending.coordinator} operation=${pending.operationId.toString()} target=${pending.target}`,
-			kind: 'liquidation',
-			message: outcome.success ? 'Staged liquidation settled successfully' : `Staged liquidation failed: ${outcome.errorMessage}`,
+			kind: pending.operation === 1 ? 'withdrawal' : 'liquidation',
+			message: outcome.success ? 'Staged operation settled successfully' : `Staged operation failed: ${outcome.errorMessage}`,
 			status: outcome.success ? 'confirmed' : 'failed',
 		})
-		await saveDurableState(settings.runtime.stateFile, state)
-		if (!outcome.success) throw new Error(`Staged liquidation ${pending.operationId.toString()} failed: ${outcome.errorMessage}`)
+		await saveDurableState(settings.runtime.stateFile, next)
+		state.activities = next.activities
+		state.pendingStagedOperations = next.pendingStagedOperations
+		if (!outcome.success) throw new Error(`Staged operation ${pending.operationId.toString()} failed: ${outcome.errorMessage}`)
 	}
 }

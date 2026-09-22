@@ -7,7 +7,7 @@ import { openOraclePriceCoordinatorAbi, erc20Abi, securityPoolAbi, securityPoolF
 import { isPoolExecutionEligible, type VaultMigration } from '#core/fork-migration'
 import { BPS_DENOMINATOR, LIQUIDATION_REP_BONUS_BPS, PRICE_PRECISION, conservativeLiquidationRep, liquidationSubmissionLabel, type LiquidationCandidate } from '#core/strategy'
 import { recordActivity, saveDurableState, type PendingTransactionIntent, type PoolObservation, type RuntimeState } from '#state/operator-state'
-import { validateReceiptExpectation } from '#execution/receipt-validation'
+import { resolveFinalizedReceipt } from '#execution/receipt-transition'
 import { finalizedReceiptWithQuorum } from '#execution/recovery'
 import type { createRpcEndpointPool } from '@zoltar/bot-shared/ethereum'
 import { assertExecutionActive, assertGasCostLimitForBaseFee, assertMarketPriceStillAllowed, assertOperatorNotStopping, assertRepLimits, assertStaleLiquidationExposureBound, conservativeStaleTopUp, liquidationExecutionStep, planVaultMaintenance, requireFinalizedTransactionReceipt } from '#execution/execution-safety'
@@ -157,26 +157,9 @@ async function submitCall(wallet: WriteClient, settings: OperatorSettings, state
 	}
 	const receiptResult = await finalizedReceiptWithQuorum(settings, wallet, hash, pool)
 	const receipt = requireFinalizedTransactionReceipt(call.label, hash, receiptResult)
-	if (receipt.status !== 'success') {
-		throw new Error(`${call.label} reverted in transaction ${receipt.transactionHash}`)
-	}
-	const receiptOutcome = validateReceiptExpectation(receipt, call.receiptExpectation ?? { type: 'transaction' })
-	if (receiptOutcome.queuedOperationId !== undefined && call.receiptExpectation?.type === 'pending-liquidation') {
-		state.pendingStagedOperations.push({
-			coordinator: call.receiptExpectation.coordinator,
-			operationId: receiptOutcome.queuedOperationId,
-			queuedBlock: receipt.blockNumber,
-			target: call.receiptExpectation.target,
-		})
-	}
-	state.pendingTransactions = state.pendingTransactions.filter(intent => intent.hash.toLowerCase() !== receipt.transactionHash.toLowerCase())
-	recordActivity(state, {
-		hash: receipt.transactionHash,
-		kind,
-		message: call.label,
-		status: 'confirmed',
-	})
-	await saveDurableState(settings.runtime.stateFile, state)
+	const intent = state.pendingTransactions.find(pending => pending.hash.toLowerCase() === hash.toLowerCase())
+	if (intent === undefined) throw new Error('Submitted transaction is missing its pending intent')
+	await resolveFinalizedReceipt(settings.runtime.stateFile, state, intent, receipt)
 	return receipt.transactionHash
 }
 
@@ -428,7 +411,7 @@ export async function executeLiquidation(wallet: WriteClient, settings: Operator
 			gas: pool.isPriceValid ? 1_000_000n : 2_000_000n,
 			label: liquidationSubmissionLabel(pool.isPriceValid, usesExistingPendingReport),
 			preSubmit: () => assertMarketPriceStillAllowed(priceStillAllowed),
-			receiptExpectation: pool.isPriceValid ? { coordinator: pool.manager, operation: 0, type: 'staged-success' } : { amount: candidate.requestedDebtAttoEth, coordinator: pool.manager, operator: wallet.account.address, receiver: wallet.account.address, target: candidate.target.address, type: 'pending-liquidation' },
+			receiptExpectation: { coordinator: pool.manager, operation: 0, type: 'coordinator-operation' },
 			to: pool.manager,
 			value: bountyAttoEth,
 		},
@@ -458,7 +441,7 @@ export async function maintainVault(wallet: WriteClient, settings: OperatorSetti
 				gas: 700_000n,
 				label: 'Withdraw surplus REP from liquidator vault',
 				preSubmit: () => assertMarketPriceStillAllowed(priceStillAllowed),
-				receiptExpectation: { coordinator: pool.manager, operation: 1, type: 'staged-success' },
+				receiptExpectation: { coordinator: pool.manager, operation: 1, type: 'coordinator-operation' },
 				to: pool.manager,
 			},
 			'withdrawal',

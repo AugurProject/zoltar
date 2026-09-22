@@ -110,6 +110,7 @@ export type PendingStagedOperation = {
 	historicalRecoveryComplete?: boolean | undefined
 	latestRecoveryBlock?: bigint | undefined
 	nextHistoricalBlock?: bigint | undefined
+	operation?: 0 | 1
 	operationId: bigint
 	queuedBlock: bigint
 	recoveryAnchorBlock?: bigint | undefined
@@ -124,7 +125,7 @@ export type PendingTransactionIntent = {
 	maxBlockNumber: bigint
 	mode: 'private' | 'public'
 	nonce: bigint
-	receiptExpectation: { type: 'transaction' } | { coordinator: Address; operation: 0 | 1; type: 'staged-success' } | { amount: bigint; coordinator: Address; operator: Address; receiver: Address; target: Address; type: 'pending-liquidation' }
+	receiptExpectation: { type: 'transaction' } | { coordinator: Address; operation: 0 | 1; type: 'coordinator-operation' | 'staged-success' } | { amount: bigint; coordinator: Address; operator: Address; receiver: Address; target: Address; type: 'pending-liquidation' }
 	requiresMarketEvidence: boolean
 	sender: Address
 	serializedTransaction: Hex
@@ -169,9 +170,7 @@ function parseStagedOperation(value: unknown): 0 | 1 {
 function parseReceiptExpectation(rawExpectation: object): ReceiptExpectation {
 	const expectationType = Reflect.get(rawExpectation, 'type')
 	if (expectationType === 'transaction') return { type: 'transaction' }
-	if (expectationType === 'staged-success') {
-		return { coordinator: getAddress(String(Reflect.get(rawExpectation, 'coordinator'))), operation: parseStagedOperation(Reflect.get(rawExpectation, 'operation')), type: 'staged-success' }
-	}
+	if (expectationType === 'coordinator-operation' || expectationType === 'staged-success') return { coordinator: getAddress(String(Reflect.get(rawExpectation, 'coordinator'))), operation: parseStagedOperation(Reflect.get(rawExpectation, 'operation')), type: expectationType }
 	if (expectationType === 'pending-liquidation') {
 		return {
 			amount: BigInt(String(Reflect.get(rawExpectation, 'amount'))),
@@ -615,6 +614,7 @@ export async function loadDurableState(path: string, expectedChainId: number): P
 				...(typeof historicalRecoveryComplete === 'boolean' ? { historicalRecoveryComplete } : {}),
 				...(typeof latestRecoveryBlock === 'string' ? { latestRecoveryBlock: BigInt(latestRecoveryBlock) } : {}),
 				...(typeof nextHistoricalBlock === 'string' ? { nextHistoricalBlock: BigInt(nextHistoricalBlock) } : {}),
+				...(Reflect.get(operation, 'operation') === undefined ? {} : { operation: parseStagedOperation(Reflect.get(operation, 'operation')) }),
 				operationId: BigInt(operationId),
 				queuedBlock: BigInt(queuedBlock),
 				...(typeof recoveryAnchorBlock === 'string' && isHash(recoveryAnchorHash) ? { recoveryAnchorBlock: BigInt(recoveryAnchorBlock), recoveryAnchorHash } : {}),

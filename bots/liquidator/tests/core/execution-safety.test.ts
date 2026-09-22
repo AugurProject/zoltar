@@ -1,5 +1,4 @@
 import { describe, expect, test } from 'bun:test'
-import { openOraclePriceCoordinatorAbi } from '@zoltar/bot-shared/contracts/abi'
 import { ambiguousRecoveryAction, PRIVATE_INTENT_FINALITY_BLOCKS, recoveryWorkBlocksExecution, requireRecoveredTransactionSuccess, shouldStopAfterSuccessfulCycle } from '../../src/core/cycle-control.ts'
 import { hasStagedLiquidation } from '../../src/core/staged-operations.ts'
 import { stagedOperationOutcome } from '../../src/core/staged-outcome.ts'
@@ -17,103 +16,11 @@ import {
 } from '../../src/execution/execution-safety.ts'
 import { validateReceiptExpectation } from '../../src/execution/receipt-validation.ts'
 import { initialRuntimeState } from '../../src/state/operator-state.ts'
-import { encodeEventTopics } from '@zoltar/core-shared/evm/ethereum'
-import { encodeAbiParameters, getAddress, type TransactionReceipt } from '@zoltar/bot-shared/ethereum'
+import { getAddress } from '@zoltar/bot-shared/ethereum'
+import { coordinator, queuedLiquidationReceipt, stagedOperationReceipt } from './receipt-fixtures.ts'
 import { maximumFeePerGas, paddedTransactionGas } from '@zoltar/bot-shared/execution/transaction-submission'
 import { nextStagedHistoricalRecoveryRange, recordStagedRecoveryChunk, recordStagedRecoveryGap, stagedRecoveryAnchorMatches } from '../../src/execution/staged-recovery-journal.ts'
 import { availableExecutionObservations, liquidationExecutionSnapshotObservation } from '../../src/monitoring/execution-quorum.ts'
-
-const coordinator = getAddress('0x0000000000000000000000000000000000000010')
-
-function stagedOperationReceipt(success: boolean): TransactionReceipt {
-	const topics = encodeEventTopics({
-		abi: openOraclePriceCoordinatorAbi,
-		args: { errorMessage: success ? '' : 'liquidation too close to threshold', operation: 0n, operationId: 1n, success },
-		eventName: 'ExecutedStagedOperation',
-	})
-	if (topics.some(topic => topic === null)) throw new Error('Test event topics must not contain wildcards')
-	return {
-		blockHash: `0x${'11'.repeat(32)}`,
-		blockNumber: 1n,
-		cumulativeGasUsed: 1n,
-		from: getAddress('0x0000000000000000000000000000000000000020'),
-		gasUsed: 1n,
-		logs: [
-			{
-				address: coordinator,
-				blockHash: `0x${'11'.repeat(32)}`,
-				blockNumber: 1n,
-				data: encodeAbiParameters(
-					[
-						{ name: 'operation', type: 'uint8' },
-						{ name: 'success', type: 'bool' },
-						{ name: 'errorMessage', type: 'string' },
-					],
-					[0n, success, success ? '' : 'liquidation too close to threshold'],
-				),
-				topics: topics.filter(topic => topic !== null),
-			},
-		],
-		status: 'success',
-		to: coordinator,
-		transactionHash: `0x${'22'.repeat(32)}`,
-		transactionIndex: 0n,
-	}
-}
-
-function queuedLiquidationReceipt(isPendingSlot: boolean): TransactionReceipt {
-	const operator = getAddress('0x0000000000000000000000000000000000000020')
-	const target = getAddress('0x0000000000000000000000000000000000000030')
-	const queuedTopics = encodeEventTopics({
-		abi: openOraclePriceCoordinatorAbi,
-		args: { operationId: 1n, operator, targetVault: target },
-		eventName: 'StagedOperationQueued',
-	})
-	const routeTopics = encodeEventTopics({ abi: openOraclePriceCoordinatorAbi, args: { operationId: 1n, operator, receiverVault: operator }, eventName: 'LiquidationRouteStaged' })
-	if (queuedTopics.some(topic => topic === null) || routeTopics.some(topic => topic === null)) throw new Error('Test event topics must not contain wildcards')
-	return {
-		...stagedOperationReceipt(true),
-		logs: [
-			{
-				address: coordinator,
-				blockHash: `0x${'11'.repeat(32)}`,
-				blockNumber: 1n,
-				data: encodeAbiParameters(
-					[
-						{ name: 'operation', type: 'uint8' },
-						{ name: 'operationValue', type: 'uint256' },
-						{ name: 'queuedAt', type: 'uint256' },
-						{ name: 'validForSeconds', type: 'uint256' },
-						{ name: 'snapshotTargetBackingUnits', type: 'uint256' },
-						{ name: 'snapshotTargetCapacityOwnershipAttoRep', type: 'uint256' },
-						{ name: 'snapshotTargetOpenInterestAttoEth', type: 'uint256' },
-						{ name: 'snapshotTargetDisputeStakedAttoRep', type: 'uint256' },
-						{ name: 'snapshotTotalPoolHeldAttoRep', type: 'uint256' },
-						{ name: 'snapshotTotalRepBackingUnits', type: 'uint256' },
-						{ name: 'isPendingSlot', type: 'bool' },
-					],
-					[0n, 10n, 1n, 60n, 10n, 10n, 10n, 0n, 10n, 10n, isPendingSlot],
-				),
-				topics: queuedTopics.filter(topic => topic !== null),
-			},
-			{
-				address: coordinator,
-				blockHash: `0x${'11'.repeat(32)}`,
-				blockNumber: 1n,
-				data: encodeAbiParameters(
-					[
-						{ name: 'targetVault', type: 'address' },
-						{ name: 'approvalId', type: 'bytes32' },
-						{ name: 'requestedDebtAttoEth', type: 'uint256' },
-						{ name: 'reservedDebtAttoEth', type: 'uint256' },
-					],
-					[target, `0x${'00'.repeat(32)}`, 10n, 0n],
-				),
-				topics: routeTopics.filter(topic => topic !== null),
-			},
-		],
-	}
-}
 
 describe('liquidator execution safety', () => {
 	test('tolerates one offline scan but never hides malformed state behind two agreeing scans', async () => {
@@ -434,17 +341,24 @@ describe('liquidator execution safety', () => {
 		expect(() => assertGasCostLimitForBaseFee(100_000n, baseFeePerGas, paddedCeiling - 1n)).toThrow('maximumGasCostAttoEth')
 	})
 
-	test('does not treat a successful outer receipt as a successful failed staged operation', () => {
-		expect(() => validateReceiptExpectation(stagedOperationReceipt(false), { coordinator, operation: 0, type: 'staged-success' })).toThrow('liquidation too close to threshold')
-		expect(() => validateReceiptExpectation(stagedOperationReceipt(true), { coordinator, operation: 0, type: 'staged-success' })).not.toThrow()
+	test('classifies a failed staged operation without calling it successful', () => {
+		const expectation = { amount: 10n, coordinator, operator: queuedLiquidationReceipt(false).from, receiver: queuedLiquidationReceipt(false).from, target: getAddress('0x0000000000000000000000000000000000000030'), type: 'pending-liquidation' as const }
+		for (const success of [false, true]) {
+			const receipt = queuedLiquidationReceipt(false)
+			receipt.logs.push(...stagedOperationReceipt(success).logs)
+			expect(validateReceiptExpectation(receipt, expectation)).toMatchObject({ type: success ? 'terminal-success' : 'terminal-failure' })
+		}
 	})
 
-	test('requires a stale liquidation to occupy the pending settlement slot', () => {
+	test('accepts immediate completion after a stale snapshot but requires an outcome or a genuine pending slot', () => {
 		const initiator = getAddress('0x0000000000000000000000000000000000000020')
 		const target = getAddress('0x0000000000000000000000000000000000000030')
 		const expectation = { amount: 10n, coordinator, operator: initiator, receiver: initiator, target, type: 'pending-liquidation' as const }
-		expect(() => validateReceiptExpectation(queuedLiquidationReceipt(false), expectation)).toThrow('pending settlement slot')
-		expect(validateReceiptExpectation(queuedLiquidationReceipt(true), expectation).queuedOperationId).toBe(1n)
+		expect(() => validateReceiptExpectation(queuedLiquidationReceipt(false), expectation)).toThrow()
+		expect(validateReceiptExpectation(queuedLiquidationReceipt(true), expectation)).toMatchObject({ type: 'queued', queuedOperationId: 1n })
+		const immediate = queuedLiquidationReceipt(false)
+		immediate.logs.push(...stagedOperationReceipt(true).logs)
+		expect(validateReceiptExpectation(immediate, expectation)).toMatchObject({ type: 'terminal-success' })
 	})
 
 	test('reconciles the eventual outcome of a queued stale liquidation', () => {
