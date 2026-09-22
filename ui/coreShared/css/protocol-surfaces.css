@@ -1078,13 +1078,13 @@ main.global-transaction-tray-open :is(a, button, input, select, summary, textare
 	gap: 1rem;
 }
 
-/* The form stays visible for context while its transaction steps are reviewed and sent below it; its own action row would only duplicate the review's. */
+/* The form stays in place, disabled, while its transaction steps are reviewed and sent below it, so nothing moves. */
 .operation-modal-body[inert] {
 	opacity: 0.6;
 }
 
-.operation-modal-body[inert] .tx-action-group {
-	display: none;
+.operation-modal-body[inert] :is(button, input, select, textarea, summary) {
+	cursor: default;
 }
 
 .operation-modal-steps {
