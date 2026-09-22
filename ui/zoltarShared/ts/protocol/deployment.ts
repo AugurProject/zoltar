@@ -1,14 +1,14 @@
 import { encodeDeployData, getAddress, keccak256, type Address, type Hash, type Hex } from '@zoltar/core-shared/evm/ethereum'
 import { ABIS } from '@zoltar/ui-core-shared/abis.js'
 import { constructorArgumentsFromInitCode, createDeploymentStatusOracleAddressHelper, PROXY_DEPLOYER_RUNTIME_CODE } from '@zoltar/core-shared/deployment/deploymentAddresses'
-import { DeploymentStatusOracle_DeploymentStatusOracle, GenesisReputationToken_GenesisReputationToken, Zoltar_Zoltar, ZoltarQuestionData_ZoltarQuestionData, statoblast_Multicall3_Multicall3, statoblast_WETH9_WETH9 } from '@zoltar/ui-core-shared/contractArtifact.js'
+import { DeploymentStatusOracle_DeploymentStatusOracle, GenesisReputationToken_GenesisReputationToken, Zoltar_Zoltar, ZoltarQuestionData_ZoltarQuestionData, statoblast_Multicall3_Multicall3 } from '@zoltar/ui-core-shared/contractArtifact.js'
 import { MULTICALL3_BYTECODE, PROXY_DEPLOYER_ADDRESS, ZERO_SALT, getZoltarContractAddresses, getZoltarInitCode, getZoltarQuestionDataByteCode } from './zoltarDeploymentHelpers.js'
 import { readWithRpcStateRetries, type RpcStateRetryWait } from '@zoltar/ui-core-shared/lib/rpcStateRetries.js'
 import { waitForSubmittedTransactionReceipt } from './core.js'
 import type { DeploymentStatusSnapshot, DeploymentStep, DeploymentStepId, ReadClient, WriteClient } from '@zoltar/ui-core-shared/types/contracts.js'
 import type { TransactionRequestPreview } from '@zoltar/ui-core-shared/wallet/chainBackend.js'
 import { getRuntimeNetworkProfile, type NetworkProfile } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
-import { SEPOLIA_GENESIS_REP_INIT_CODE, SEPOLIA_WETH_INIT_CODE } from '@zoltar/ui-core-shared/lib/sepoliaDeploymentConfig.js'
+import { SEPOLIA_GENESIS_REP_INIT_CODE } from '@zoltar/ui-core-shared/lib/sepoliaDeploymentConfig.js'
 
 const PROXY_DEPLOYER_SIGNER = getAddress('0x4c8d290a1b368ac4728d83a9e8321fc3af2b39b1')
 const PROXY_DEPLOYER_RAW_TRANSACTION = '0xf87e8085174876e800830186a08080ad601f80600e600039806000f350fe60003681823780368234f58015156014578182fd5b80825250506014600cf31ba02222222222222222222222222222222222222222222222222222222222222222a02222222222222222222222222222222222222222222222222222222222222222' satisfies Hex
@@ -23,7 +23,6 @@ export const EXPECTED_SEPOLIA_DEPLOYMENT_RUNTIME_CODE_HASHES: Readonly<Partial<R
 	multicall3: '0x1ff11a2c64e95bb3d4e330d0235adbe3c3f78eeecb5c5104ac38c89673dfaade',
 	proxyDeployer: '0x5acaad953250bec20933f7c72a25bb03bfa54767ebd3a750396276512c46a79c',
 	reputationToken: '0x1939fc9070edce2ad78392d5145b884e58d307171bc2e24a95927db370002b86',
-	weth: '0x664399615dc3e489416583855e1125048c92043bc544f20dc1de8f1a78106b20',
 	zoltar: '0xce0f32efa6776e07ed2972c37d68bafe22b8828385330b4ea8e2a886817cc272',
 	zoltarQuestionData: '0xcacb1ffe2a738ceda0aced156f7ff50b405b57d66a6c1307e5d8ff87789a4340',
 }
@@ -31,7 +30,6 @@ export const EXPECTED_SEPOLIA_DEPLOYMENT_RUNTIME_CODE_HASHES: Readonly<Partial<R
 const STATIC_DEPLOYMENT_ARTIFACT_RUNTIME_CODE_BY_STEP_ID = {
 	deploymentStatusOracle: `0x${DeploymentStatusOracle_DeploymentStatusOracle.evm.deployedBytecode.object}`,
 	multicall3: `0x${statoblast_Multicall3_Multicall3.evm.deployedBytecode.object}`,
-	weth: `0x${statoblast_WETH9_WETH9.evm.deployedBytecode.object}`,
 	zoltarQuestionData: `0x${ZoltarQuestionData_ZoltarQuestionData.evm.deployedBytecode.object}`,
 } satisfies Readonly<Partial<Record<DeploymentStepId, Hex>>>
 
@@ -233,7 +231,7 @@ function markDeploymentTransactionPrepared(
 
 export function getZoltarDeploymentStatusOracleStepAddresses(profile = getRuntimeNetworkProfile()) {
 	const addresses = getZoltarContractAddresses(profile)
-	return [PROXY_DEPLOYER_ADDRESS, ...(profile.id === 'sepolia' ? [profile.wethAddress, profile.genesisRepTokenAddress] : []), addresses.multicall3, addresses.zoltarQuestionData, addresses.zoltar] satisfies Address[]
+	return [PROXY_DEPLOYER_ADDRESS, ...(profile.id === 'sepolia' ? [profile.genesisRepTokenAddress] : []), addresses.multicall3, addresses.zoltarQuestionData, addresses.zoltar] satisfies Address[]
 }
 
 function getDeploymentStatusOracleByteCode(profile = getRuntimeNetworkProfile()) {
@@ -383,13 +381,6 @@ export function getDeploymentSteps(profile: NetworkProfile = getRuntimeNetworkPr
 		profile.id === 'sepolia'
 			? ([
 					{
-						id: 'weth',
-						label: 'Wrapped Ether',
-						address: profile.wethAddress,
-						dependencies: ['proxyDeployer'],
-						deploy: async client => await deployViaProxy(client, SEPOLIA_WETH_INIT_CODE),
-					},
-					{
 						id: 'reputationToken',
 						label: 'Genesis Reputation Token',
 						address: profile.genesisRepTokenAddress,
@@ -462,7 +453,6 @@ export function getZoltarDeploymentStepConstructorArguments(profile: NetworkProf
 		zoltar: constructorArgumentsFromInitCode(getZoltarInitCode(addresses.zoltarQuestionData, profile.genesisRepTokenAddress), Zoltar_Zoltar.evm.bytecode.object),
 	}
 	if (profile.id === 'sepolia') {
-		constructorArguments.weth = constructorArgumentsFromInitCode(SEPOLIA_WETH_INIT_CODE, statoblast_WETH9_WETH9.evm.bytecode.object)
 		constructorArguments.reputationToken = constructorArgumentsFromInitCode(SEPOLIA_GENESIS_REP_INIT_CODE, GenesisReputationToken_GenesisReputationToken.evm.bytecode.object)
 	}
 	return constructorArguments

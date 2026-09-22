@@ -88,6 +88,7 @@ export function readSecurityPoolsViewQueryParam(search: string) {
 }
 
 export function writeSecurityPoolsViewQueryParam(search: string, view: string | undefined) {
+	view = view?.trim()
 	return updateSearchParams(search, params => {
 		setOrDeleteSearchParam(params, SECURITY_POOLS_VIEW_QUERY_PARAM, view)
 		if (view !== 'create') params.delete(SECURITY_POOL_QUESTION_ID_QUERY_PARAM)

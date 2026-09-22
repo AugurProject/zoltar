@@ -99,3 +99,8 @@ void describe('url params', () => {
 		expect(updateSearchParams('', () => undefined)).toBe('')
 	})
 })
+
+test('normalizes a pool view before preserving its dependent query parameters', () => {
+	expect(writeSecurityPoolsViewQueryParam('?questionId=42&selectedPoolView=vaults', ' create ')).toBe('?questionId=42&securityPoolsView=create')
+	expect(writeSecurityPoolsViewQueryParam('?questionId=42&selectedPoolView=vaults', ' operate ')).toBe('?selectedPoolView=vaults&securityPoolsView=operate')
+})

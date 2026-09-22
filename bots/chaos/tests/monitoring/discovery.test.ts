@@ -137,7 +137,7 @@ test('discovers and authenticates fixed-fee REP/WETH pools for every canonical u
 })
 
 test('discovers Sepolia pools using the network default when no factory override is supplied', async () => {
-	const uniswapFactory = getAddress('0xEf09Be426F8d6D2786cADEA7D3A8b0D09cEB79B4')
+	const uniswapFactory = getAddress('0x0227628f3F023bb0B980b67D528571c95c6DaC1c')
 	const rep = address(10)
 	const pool = address(41)
 	const fake = fakeClient(10n, hash(10), { chainId: 11155111, uniswapFactory, uniswapPoolsByRep: { [rep.toLowerCase()]: { initialized: true, liquidity: 7n, pool } } })

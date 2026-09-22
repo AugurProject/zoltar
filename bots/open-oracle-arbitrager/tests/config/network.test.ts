@@ -25,8 +25,8 @@ describe('operator networks', () => {
 	})
 })
 
-test('uses the deploy:testnet factory and quoter for Sepolia CLI defaults', () => {
+test('uses the published Uniswap factory and QuoterV2 for Sepolia CLI defaults', () => {
 	const network = networkConfiguration('sepolia')
-	expect(network.factory).toBe('0xEf09Be426F8d6D2786cADEA7D3A8b0D09cEB79B4')
-	expect(network.quoter).toBe('0x6Aa53e5023fFDa81f7EEE31bdA5D35437A5DD841')
+	expect(network.factory).toBe('0x0227628f3F023bb0B980b67D528571c95c6DaC1c')
+	expect(network.quoter).toBe('0xEd1f6473345F45b75F8179591dd5bA1888cf2FB3')
 })

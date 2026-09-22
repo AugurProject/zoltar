@@ -50,8 +50,8 @@ test('verification jobs carry the deployed constructor arguments and compiler pr
 	const openOracle = jobById.get('openOracle')
 	expect(openOracle?.compilerProfile).toBe('openOracle')
 	expect(openOracle?.contractIdentifier).toBe('src/OpenOracleSlim.sol:OpenOracle')
-	const weth = jobById.get('weth')
-	expect(weth?.constructorArguments).toBe('')
+	const multicall3 = jobById.get('multicall3')
+	expect(multicall3?.constructorArguments).toBe('')
 })
 
 test('a manifest address that does not match the computed init code fails the plan', async () => {

@@ -42,7 +42,8 @@ test(
 	async () => {
 		await withDeploymentNode(11_155_111, async node => {
 			const client = createPreparedDeploymentClient({ chain: SEPOLIA_NETWORK_PROFILE.chain, maxFeePerGas: MAX_FEE_PER_GAS, maxTotalCost: MAX_TOTAL_COST, privateKey: ANVIL_PRIVATE_KEY, rpcUrl: node.rpcUrl, log: () => {} })
-			const plan = createCompleteDeploymentPlan(SEPOLIA_NETWORK_PROFILE, await getUniswapDeployment(SEPOLIA_NETWORK_PROFILE.wethAddress))
+			const uniswap = await getUniswapDeployment(11_155_111)
+			const plan = createCompleteDeploymentPlan(SEPOLIA_NETWORK_PROFILE, uniswap)
 			const existing = await runDeploymentPlan(
 				plan.filter(step => !['zoltarDeploymentStatusOracle', 'tradingFactory', 'tradingRouter'].includes(step.id)),
 				client,
@@ -59,6 +60,11 @@ test(
 				writeGitHubSummary: false,
 			})
 			expect(deployment.results.filter(result => result.status === 'deployed').map(result => result.id)).toEqual(['zoltarDeploymentStatusOracle', 'tradingFactory', 'tradingRouter'])
+			// The fresh node had none of Uniswap's published Sepolia contracts; the deployer installed them at the published addresses.
+			for (const contract of uniswap.publishedContracts) expect(await client.getCode({ address: contract.address })).not.toBe('0x')
+			expect(await client.readContract({ abi: [{ inputs: [{ name: 'fee', type: 'uint24' }], name: 'feeAmountTickSpacing', outputs: [{ name: '', type: 'int24' }], stateMutability: 'view', type: 'function' }], address: uniswap.addresses.uniswapV3FactoryAddress, functionName: 'feeAmountTickSpacing', args: [3000] })).toBe(
+				60n,
+			)
 			expect(deployment.results.filter(result => result.status === 'skipped')).toHaveLength(existing.length)
 			const previousProfile = getRuntimeNetworkProfile()
 			setRuntimeNetworkProfile(SEPOLIA_NETWORK_PROFILE)
@@ -79,6 +85,23 @@ test(
 				await expect(deployTestnet({ chainId: 11_155_111, log: () => {}, maxFeePerGas: MAX_FEE_PER_GAS, maxTotalCost: MAX_TOTAL_COST, privateKey: ANVIL_PRIVATE_KEY, rpcUrl: node.rpcUrl, writeGitHubSummary: false })).rejects.toThrow(`Unexpected runtime code for ${id}`)
 				await node.anvilWindowEthereum.addStateOverrides({ [step.address]: { code: hexToBytes(originalCode) } })
 			}
+		})
+	},
+	TEST_TIMEOUT_MS,
+)
+
+test(
+	'Custom testnets receive deterministic WETH, a complete Uniswap deployment, and matching protocol runtime hashes',
+	async () => {
+		const chainId = 31_337
+		await withDeploymentNode(chainId, async node => {
+			const deployment = await deployTestnet({ chainId, log: () => {}, maxFeePerGas: MAX_FEE_PER_GAS, maxTotalCost: MAX_TOTAL_COST, privateKey: ANVIL_PRIVATE_KEY, rpcUrl: node.rpcUrl, writeGitHubSummary: false })
+			const uniswap = await getUniswapDeployment(chainId)
+			expect(uniswap.kind).toBe('deterministic')
+			expect(deployment.results.map(result => result.status)).toEqual(deployment.results.map(() => 'deployed'))
+			expect(deployment.results.map(result => result.id)).toEqual(createCompleteDeploymentPlan(SEPOLIA_NETWORK_PROFILE, uniswap).map(step => step.id))
+			const repeated = await deployTestnet({ chainId, log: () => {}, maxFeePerGas: MAX_FEE_PER_GAS, maxTotalCost: MAX_TOTAL_COST, privateKey: ANVIL_PRIVATE_KEY, rpcUrl: node.rpcUrl, writeGitHubSummary: false })
+			expect(repeated.results.every(result => result.status === 'skipped')).toBe(true)
 		})
 	},
 	TEST_TIMEOUT_MS,

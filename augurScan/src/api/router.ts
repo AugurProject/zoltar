@@ -86,6 +86,7 @@ export const handleApi = async (request: Request, sql: SQL, freshnessThresholdMs
 			return rows.length === 0 ? json({ error: 'Contract not found' }, 404) : json(rows[0])
 		}
 	} catch (error) {
+		if (error instanceof URIError) return json({ error: 'Invalid URI encoding' }, 400)
 		if (error instanceof ApiRequestError) return json({ error: error.message }, 400)
 		if (error instanceof ApiConflictError) return json({ error: error.message }, 409)
 		console.error(`augurScan API request failed (${error instanceof Error ? error.name : typeof error})`)
