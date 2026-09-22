@@ -6,6 +6,7 @@ import { useState } from 'preact/hooks'
 import { act } from 'preact/test-utils'
 import { GlobalTransactionPresentationProvider } from '../components/GlobalTransactionPresentationContext.js'
 import { OperationModal } from '../components/OperationModal.js'
+import { TransactionActionGroup } from '../components/TransactionActionButton.js'
 import { TransactionStepsModal } from '../components/TransactionStepsModal.js'
 import { createTransactionStepController, transactionSteps } from '../transactions/transactionSteps.js'
 import type { GlobalTransactionPresentation } from '../types/components.js'
@@ -173,6 +174,64 @@ test('sends an approval-only workflow from the form control without a separate r
 		expect(await review).toBeUndefined()
 		expect(transactionSteps.value).not.toBe(failedWorkflow)
 		expect(transactionSteps.value?.steps[0]?.phase).toBe('pending')
+	} finally {
+		await rendered.cleanup()
+		transactionSteps.value?.cancel()
+	}
+})
+
+test("renders the review actions in the form's own action row and isolates the rest of the form", async () => {
+	const presentation = signal<GlobalTransactionPresentation | undefined>(undefined)
+	let controller: ReturnType<typeof createTransactionStepController> | undefined
+	let review: Promise<bigint | undefined> | undefined
+	function Harness() {
+		return (
+			<GlobalTransactionPresentationProvider transaction={presentation.value}>
+				<OperationModal isOpen title='Withdraw REP' onClose={() => undefined}>
+					<input aria-label='Amount' defaultValue='42' />
+					<TransactionActionGroup message={undefined}>
+						<button
+							type='button'
+							onClick={() => {
+								presentation.value = { operationKey: 'withdrawal', title: 'Preparing withdrawal', tone: 'preparing' }
+								controller = createTransactionStepController()
+								controller.setPlan([step])
+								review = controller.review().catch(() => undefined)
+							}}
+						>
+							Withdraw
+						</button>
+						<button type='button'>Cancel</button>
+					</TransactionActionGroup>
+				</OperationModal>
+				<TransactionStepsModal contextKey='wallet' />
+			</GlobalTransactionPresentationProvider>
+		)
+	}
+	const rendered = await renderIntoDocument(<Harness />)
+	try {
+		const queries = within(document.body)
+		const dialog = queries.getByRole('dialog', { name: 'Withdraw REP' })
+		await act(() => fireEvent.click(queries.getByRole('button', { name: 'Withdraw' })))
+		const slot = dialog.querySelector('[data-review-actions-slot]')
+		if (!(slot instanceof HTMLElement)) throw new Error('Expected the form action row to host the review')
+		// One action row: the form's own buttons are replaced by the review's confirm and cancel.
+		expect(within(slot).getByRole('button', { name: 'Send withdrawal' })).not.toBeNull()
+		expect(within(slot).getByRole('button', { name: 'Cancel' })).not.toBeNull()
+		expect(queries.queryByRole('button', { name: 'Withdraw' })).toBeNull()
+		expect(dialog.querySelectorAll('button').length).toBe(3)
+		expect(dialog.querySelector('.operation-modal-steps .transaction-step-actions')).toBeNull()
+		expect(slot.hasAttribute('inert')).toBe(false)
+		expect(dialog.querySelector('.operation-modal-body')?.hasAttribute('inert')).toBe(false)
+		expect(queries.getByRole('textbox', { name: 'Amount' }).closest('[inert]')).not.toBeNull()
+		await act(() => fireEvent.click(within(slot).getByRole('button', { name: 'Send withdrawal' })))
+		await review
+		expect(transactionSteps.value?.steps[0]?.phase).toBe('pending')
+		await act(() => {
+			controller?.submitted(hash)
+			presentation.value = { operationKey: 'withdrawal', title: 'Transaction confirmed', tone: 'success', hash }
+			controller?.receipt(hash, 'success')
+		})
 	} finally {
 		await rendered.cleanup()
 		transactionSteps.value?.cancel()

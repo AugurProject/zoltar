@@ -1091,7 +1091,8 @@ main.global-transaction-tray-open :is(a, button, input, select, summary, textare
 }
 
 /* The form stays in place, disabled, while its transaction steps are reviewed and sent below it, so nothing moves. */
-.operation-modal-body[inert] {
+.operation-modal-body[inert],
+.operation-modal-body [inert] {
 	opacity: 0.6;
 }
 
