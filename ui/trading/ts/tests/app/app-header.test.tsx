@@ -4,19 +4,20 @@ import { act } from 'preact/test-utils'
 import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
 import { App } from '../../app/App.js'
 import * as appCopy from '../../copy/app.js'
-import { UniverseSelector } from '../../components/UniverseSelector.js'
-import { WalletSummary } from '../../components/WalletSummary.js'
+import { TradingOverviewPanel } from '../../components/TradingOverviewPanel.js'
 import { hasTradingWalletControls, TradingWalletControls } from '../../components/TradingWalletControls.js'
-import { buildLiveUniverseOptions } from '../../lib/universeOptions.js'
 import { routeOwnsLiveWallet, walletSummaryAfterRouteChange, walletSummaryForUniverse } from '../../lib/walletSummaryState.js'
 import { filterMarketsByUniverse, walletSummaryAvailability, walletSummaryDiscoveryRetryStart, walletSummaryRefreshState } from '../../features/liveTradingControllerHelpers.js'
 import type { DeploymentConfiguration } from '../../protocol/config.js'
 import type { LiveMarket } from '../../protocol/live.js'
+import { liveTradingControllerServices } from '../../features/liveTradingControllerHelpers.js'
+import { waitFor } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
+import { createDeferred } from '@zoltar/ui-core-shared/tests/testUtils/deferred.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 
 beforeEach(() => installTradingRouting())
 
-describe('universe selector', () => {
+describe('trading header', () => {
 	let cleanupRendered: (() => Promise<void>) | undefined
 
 	installDomTestLifecycle({
@@ -27,35 +28,181 @@ describe('universe selector', () => {
 		url: 'http://localhost/#/market',
 	})
 
-	test('selects one universe from the top-level control', async () => {
-		let selected = '1'
-		const rendered = await renderIntoDocument(
-			<UniverseSelector
-				options={[
-					{ id: '1', label: 'Genesis universe' },
-					{ id: '2', label: 'Universe 2 · YES branch' },
-				]}
-				selectedId={selected}
-				disabled={false}
-				loading={false}
-				onChange={next => {
-					selected = next
-				}}
-			/>,
-		)
+	test('keeps a requested universe unconfirmed until discovery answers and offers the universe route instead of a header control', async () => {
+		window.history.replaceState(undefined, '', '/#/universe?universe=2')
+		const rendered = await renderIntoDocument(<App loadLiveDeployment={() => new Promise<DeploymentConfiguration>(() => undefined)} />)
 		cleanupRendered = rendered.cleanup
-		const select = rendered.container.querySelector<HTMLSelectElement>('select')
-		expect(select?.tagName).toBe('SELECT')
-		expect(select?.getAttribute('aria-label')).toBe('Select universe')
-		expect(rendered.container.querySelector('.universe-selector > span')).toBeNull()
-		expect(Array.from(select?.options ?? [], option => option.textContent)).toEqual(['Genesis universe', 'Universe 2 · YES branch'])
-		expect(select?.value).toBe('1')
-		await act(() => {
-			if (select === null) throw new Error('Universe selector is unavailable')
-			select.value = '2'
-			select.dispatchEvent(new Event('change', { bubbles: true }))
+		// The header and the universe route show a loading state, never the unconfirmed ID, so an unknown request cannot flash as a universe.
+		expect(rendered.container.querySelector('.header-toolbar-controls .toolbar-field-value')?.textContent).toContain('Loading')
+		expect(rendered.container.textContent).not.toContain('Universe 0x2')
+		expect(rendered.container.textContent).not.toContain('not deployed')
+		expect(rendered.container.querySelector('#app-content .route-header')?.textContent).toContain('Universe')
+		expect(rendered.container.querySelector('.header-toolbar-controls select')).toBeNull()
+		const universeTab = Array.from(rendered.container.querySelectorAll<HTMLAnchorElement>('.tab-nav a')).find(anchor => anchor.textContent === 'Universe')
+		expect(universeTab?.getAttribute('href')).toBe('#/universe?universe=2')
+	})
+
+	test('rewrites an unknown universe request to the discovered universe so the URL, header, and routes agree', async () => {
+		window.history.replaceState(undefined, '', '/#/universe?universe=7&simulate=1')
+		const configuration: DeploymentConfiguration = { chainId: 31_337, chainName: 'Local', rpcUrl: 'http://127.0.0.1:1', securityPoolFactory: `0x${'11'.repeat(20)}`, factory: `0x${'22'.repeat(20)}`, router: `0x${'33'.repeat(20)}`, feeBps: 30 }
+		const services = {
+			...liveTradingControllerServices,
+			createTradingPublicClient: () => ({}),
+			validateLiveDeployment: async () => undefined,
+			discoverUniverses: async () => ({ start: 0n, count: 0n, total: 0n, previousStart: undefined, nextStart: undefined, markets: [], universeIds: [0n, 2n], selectedUniverseId: 0n }),
+		}
+		const rendered = await renderIntoDocument(<App initializeEnvironment={async () => undefined} loadLiveDeployment={async () => configuration} liveTradingServices={services} />)
+		cleanupRendered = rendered.cleanup
+		await waitFor(() => expect(window.location.hash).toBe('#/universe?universe=0&simulate=1'))
+		const universeField = rendered.container.querySelector('.header-toolbar-controls .toolbar-field-value')
+		expect(universeField?.textContent).toBe('Genesis (0x0)')
+		expect(universeField?.querySelector('span')?.getAttribute('title')).toBe('Genesis (0x0)')
+	})
+
+	test('follows an addressed market into its universe and rewrites a disagreeing parameter', async () => {
+		const pool = `0x${'ab'.repeat(20)}`
+		window.history.replaceState(undefined, '', `/#/market/${pool}?universe=0`)
+		const configuration: DeploymentConfiguration = { chainId: 31_337, chainName: 'Local', rpcUrl: 'http://127.0.0.1:1', securityPoolFactory: `0x${'11'.repeat(20)}`, factory: `0x${'22'.repeat(20)}`, router: `0x${'33'.repeat(20)}`, feeBps: 30 }
+		const market: LiveMarket = {
+			pool,
+			pair: `0x${'cd'.repeat(20)}`,
+			shareToken: `0x${'ef'.repeat(20)}`,
+			universeId: 5n,
+			questionId: 2n,
+			title: 'Universe five market',
+			description: 'Addressed route fixture',
+			endTime: 2n ** 255n,
+			statoblastSecurityMultiplierBps: 20_000n,
+			initialReportPriorityFeeAttoEthPerGas: 1n,
+			systemState: 0,
+			awaitingForkContinuation: false,
+			universeForkTime: 0n,
+			vaultCount: 1n,
+			shareTokenSupplyAttoShares: 10n * 10n ** 36n,
+			settlementCollateralAttoEth: 10n * 10n ** 18n,
+			currentRetentionRate: 10n ** 18n,
+			totalCapacityOwnershipAttoRep: 1n,
+			feeEligibleCapacityOwnershipAttoRep: 1n,
+			mintingCapacityCeilingAttoEth: 2n,
+			availableMintingCapacityAttoEth: 1n,
+			feeBps: 30n,
+			tradingStatus: 0,
+			questionOutcome: 3,
+			yesReserve: 50n * 10n ** 36n,
+			noReserve: 50n * 10n ** 36n,
+			lpTotalSupply: 50n * 10n ** 36n,
+		}
+		const services = {
+			...liveTradingControllerServices,
+			createTradingPublicClient: () => ({}),
+			validateLiveDeployment: async () => undefined,
+			discoverAddressedMarket: async () => ({ start: 0n, count: 1n, total: 1n, previousStart: undefined, nextStart: undefined, markets: [market], universeIds: [5n], selectedUniverseId: 5n }),
+		}
+		const rendered = await renderIntoDocument(<App initializeEnvironment={async () => undefined} loadLiveDeployment={async () => configuration} liveTradingServices={services} />)
+		cleanupRendered = rendered.cleanup
+		await waitFor(() => expect(window.location.hash).toBe(`#/market/${pool}?universe=5`))
+		await waitFor(() => expect(rendered.container.querySelector('.header-toolbar-controls .toolbar-field-value')?.textContent).toBe('Universe 0x5'))
+	})
+
+	test('a request superseded while in flight settles nothing; only the answer to the current universe request does', async () => {
+		window.history.replaceState(undefined, '', '/#/universe?universe=5')
+		const configuration: DeploymentConfiguration = { chainId: 31_337, chainName: 'Local', rpcUrl: 'http://127.0.0.1:1', securityPoolFactory: `0x${'11'.repeat(20)}`, factory: `0x${'22'.repeat(20)}`, router: `0x${'33'.repeat(20)}`, feeBps: 30 }
+		const answers: Array<ReturnType<typeof createDeferred<{ start: bigint; count: bigint; total: bigint; previousStart: undefined; nextStart: undefined; markets: never[]; universeIds: bigint[]; selectedUniverseId: bigint }>>> = []
+		const services = {
+			...liveTradingControllerServices,
+			createTradingPublicClient: () => ({}),
+			validateLiveDeployment: async () => undefined,
+			discoverUniverses: async () => {
+				const answer = createDeferred<{ start: bigint; count: bigint; total: bigint; previousStart: undefined; nextStart: undefined; markets: never[]; universeIds: bigint[]; selectedUniverseId: bigint }>()
+				answers.push(answer)
+				return await answer.promise
+			},
+		}
+		const rendered = await renderIntoDocument(<App initializeEnvironment={async () => undefined} loadLiveDeployment={async () => configuration} liveTradingServices={services} />)
+		cleanupRendered = rendered.cleanup
+		await waitFor(() => expect(answers).toHaveLength(1))
+		// The user moves to universe 7 while the universe-5 discovery is still in flight.
+		await act(async () => {
+			window.history.replaceState(undefined, '', '/#/universe?universe=7')
+			window.dispatchEvent(new Event('popstate'))
 		})
-		expect(selected).toBe('2')
+		await act(async () => {
+			answers[0]?.resolve({ start: 0n, count: 0n, total: 0n, previousStart: undefined, nextStart: undefined, markets: [], universeIds: [0n, 5n], selectedUniverseId: 5n })
+			await Bun.sleep(20)
+		})
+		// The superseded universe-5 answer neither confirms nor rewrites the universe-7 request.
+		expect(window.location.hash).toBe('#/universe?universe=7')
+		expect(rendered.container.querySelector('.header-toolbar-controls .toolbar-field-value')?.textContent).toContain('Loading')
+		// Only the answer to the universe-7 request settles it (7 is unknown, so it falls back to genesis and rewrites).
+		await waitFor(() => expect(answers).toHaveLength(2))
+		await act(async () => {
+			answers[1]?.resolve({ start: 0n, count: 0n, total: 0n, previousStart: undefined, nextStart: undefined, markets: [], universeIds: [0n, 5n], selectedUniverseId: 0n })
+			await Bun.sleep(20)
+		})
+		await waitFor(() => expect(window.location.hash).toBe('#/universe?universe=0'))
+		await waitFor(() => expect(rendered.container.querySelector('.header-toolbar-controls .toolbar-field-value')?.textContent).toBe('Genesis (0x0)'))
+	})
+
+	test('settles on the discovered universe without re-discovering in a loop', async () => {
+		window.history.replaceState(undefined, '', '/#/market')
+		const configuration: DeploymentConfiguration = { chainId: 31_337, chainName: 'Local', rpcUrl: 'http://127.0.0.1:1', securityPoolFactory: `0x${'11'.repeat(20)}`, factory: `0x${'22'.repeat(20)}`, router: `0x${'33'.repeat(20)}`, feeBps: 30 }
+		let discoveries = 0
+		const services = {
+			...liveTradingControllerServices,
+			createTradingPublicClient: () => ({}),
+			validateLiveDeployment: async () => undefined,
+			discoverTradingMarketPage: async () => {
+				discoveries += 1
+				return { start: 0n, count: 0n, total: 0n, previousStart: undefined, nextStart: undefined, markets: [], universeIds: [0n], selectedUniverseId: 0n }
+			},
+		}
+		const rendered = await renderIntoDocument(<App initializeEnvironment={async () => undefined} loadLiveDeployment={async () => configuration} liveTradingServices={services} />)
+		cleanupRendered = rendered.cleanup
+		await waitFor(() => expect(rendered.container.querySelector('.header-toolbar-controls .toolbar-field-value')?.textContent).toBe('Genesis (0x0)'))
+		// The confirmed universe is re-requested once; a confirmed answer must not read as foreign and restart discovery.
+		await act(async () => await Bun.sleep(300))
+		expect(discoveries).toBeLessThanOrEqual(2)
+		expect(rendered.container.querySelector('.header-toolbar-controls .toolbar-field-value')?.textContent).toBe('Genesis (0x0)')
+		expect(window.location.hash).toBe('#/market')
+	})
+
+	test('says the universe is unavailable when universe discovery fails', async () => {
+		window.history.replaceState(undefined, '', '/#/universe')
+		const configuration: DeploymentConfiguration = { chainId: 31_337, chainName: 'Local', rpcUrl: 'http://127.0.0.1:1', securityPoolFactory: `0x${'11'.repeat(20)}`, factory: `0x${'22'.repeat(20)}`, router: `0x${'33'.repeat(20)}`, feeBps: 30 }
+		const services = {
+			...liveTradingControllerServices,
+			createTradingPublicClient: () => ({}),
+			validateLiveDeployment: async () => undefined,
+			discoverUniverses: async () => {
+				throw new Error('registry RPC unavailable')
+			},
+		}
+		const rendered = await renderIntoDocument(<App initializeEnvironment={async () => undefined} loadLiveDeployment={async () => configuration} liveTradingServices={services} />)
+		cleanupRendered = rendered.cleanup
+		await waitFor(() => expect(rendered.container.textContent).toContain('Universe discovery failed: registry RPC unavailable'))
+		// The header learns about the failure through the route's state effect, one commit after the route itself.
+		await waitFor(() => expect(rendered.container.querySelector('.header-toolbar-controls .toolbar-field-value')?.textContent).toBe('Unavailable'))
+	})
+
+	test('shows wallet connection failures on the universe route', async () => {
+		window.history.replaceState(undefined, '', '/#/universe')
+		const configuration: DeploymentConfiguration = { chainId: 31_337, chainName: 'Local', rpcUrl: 'http://127.0.0.1:1', securityPoolFactory: `0x${'11'.repeat(20)}`, factory: `0x${'22'.repeat(20)}`, router: `0x${'33'.repeat(20)}`, feeBps: 30 }
+		const services = {
+			...liveTradingControllerServices,
+			createTradingPublicClient: () => ({}),
+			validateLiveDeployment: async () => undefined,
+			discoverUniverses: async () => ({ start: 0n, count: 0n, total: 0n, previousStart: undefined, nextStart: undefined, markets: [], universeIds: [0n], selectedUniverseId: 0n }),
+		}
+		const rendered = await renderIntoDocument(<App initializeEnvironment={async () => undefined} loadLiveDeployment={async () => configuration} liveTradingServices={services} />)
+		cleanupRendered = rendered.cleanup
+		await waitFor(() => expect(rendered.container.querySelector('.header-toolbar-controls .toolbar-field-value')?.textContent).toBe('Genesis (0x0)'))
+		const walletButton = rendered.container.querySelector<HTMLButtonElement>('.trading-wallet-actions .wallet-button')
+		expect(walletButton?.textContent).toBe('Connect wallet')
+		await act(async () => {
+			walletButton?.click()
+			await Bun.sleep(10)
+		})
+		await waitFor(() => expect(rendered.container.querySelector('#app-content [role="alert"]')?.textContent).toContain('No injected wallet was found'))
 	})
 
 	test('renders an explicit not-found route and updates the document title', async () => {
@@ -63,15 +210,15 @@ describe('universe selector', () => {
 		expect(tradingRouting.resolve(window.location.hash)).toBe('not-found')
 		const rendered = await renderIntoDocument(<App />)
 		cleanupRendered = rendered.cleanup
-		expect(rendered.container.querySelector('main')?.textContent).toContain('Page not found')
+		expect(rendered.container.querySelector('main')?.textContent).toContain('Page Not Found')
 		expect(rendered.container.querySelector('h1.visually-hidden')?.textContent).toBe('Not found')
 		const skipButton = Array.from(rendered.container.querySelectorAll('button')).find(button => button.textContent === 'Skip to main content')
 		if (skipButton === undefined) throw new Error('Shared application skip control is unavailable')
 		await act(() => skipButton.click())
-		expect(document.activeElement).toBe(rendered.container.querySelector('main'))
-		// The landmark holds the route content only, so skipping lands past the header and tab navigation.
+		expect(document.activeElement).toBe(rendered.container.querySelector('#app-content'))
+		// The shared frame focuses the route content only, so skipping lands past the header and tab navigation.
 		expect(document.activeElement?.querySelector('.tab-nav')).toBeNull()
-		expect(document.activeElement?.textContent).toContain('Page not found')
+		expect(document.activeElement?.textContent).toContain('Page Not Found')
 		expect(document.title).toBe(appCopy.documentTitle(appCopy.notFound))
 		expect(document.title).toBe('Not found · Statoblast trading')
 	})
@@ -137,6 +284,9 @@ describe('universe selector', () => {
 		cleanupRendered = rendered.cleanup
 		expect(rendered.container.querySelector('.trading-wallet-actions .wallet-chip.is-placeholder')?.textContent).toContain('Loading')
 		expect(rendered.container.querySelector('.trading-wallet-actions .wallet-button')).toBeNull()
+		// The universe field is a plain value chosen on the universe route; it never becomes a control.
+		expect(rendered.container.querySelector('.header-toolbar-controls .toolbar-field-value')?.textContent).toContain('Loading')
+		expect(rendered.container.querySelector('.header-toolbar-controls select')).toBeNull()
 		if (resolveDeployment === undefined) throw new Error('Deployment resolver is unavailable')
 		resolveDeployment({ chainId: 31_337, chainName: 'Local', rpcUrl: 'http://127.0.0.1:1', securityPoolFactory: `0x${'11'.repeat(20)}`, factory: `0x${'22'.repeat(20)}`, router: `0x${'33'.repeat(20)}`, feeBps: 30 })
 		await act(async () => {
@@ -251,30 +401,8 @@ describe('universe selector', () => {
 		expect(filterMarketsByUniverse([first, second], undefined)).toEqual([])
 	})
 
-	test('labels live universes with the shared genesis and hex universe labels', () => {
-		const longUniverseId = (1n << 200n) + 456n
-		const options = buildLiveUniverseOptions([0n, 7n, longUniverseId])
-		expect(options[0]).toEqual({ id: '0', label: 'Genesis (0x0)', accessibleLabel: 'Genesis (0x0)' })
-		expect(options[1]).toEqual({ id: '7', label: 'Universe 0x7', accessibleLabel: 'Universe 0x7' })
-		expect(options[2]?.label).toStartWith('Universe 0x')
-		expect(options[2]?.label).toContain('…')
-		expect(options[2]?.accessibleLabel).toBe(`Universe 0x${longUniverseId.toString(16)}`)
-		expect(() => buildLiveUniverseOptions([7n, 7n])).toThrow('Universe IDs must be unique')
-	})
-
-	test('falls back to full labels when compact universe labels would collide', () => {
-		// Same leading 8 and trailing 6 hex digits, different middle: the compact form would read identically.
-		const firstCollision = (0xabcdef12n << 96n) | (1n << 40n) | 0x123456n
-		const secondCollision = (0xabcdef12n << 96n) | (2n << 40n) | 0x123456n
-		const options = buildLiveUniverseOptions([0n, firstCollision, secondCollision])
-		expect(options[0]?.label).toBe('Genesis (0x0)')
-		expect(options[1]?.label).toBe(`Universe 0x${firstCollision.toString(16)}`)
-		expect(options[2]?.label).toBe(`Universe 0x${secondCollision.toString(16)}`)
-		expect(options[1]?.label).not.toBe(options[2]?.label)
-	})
-
 	test('keeps the balance slots in place while the wallet is disconnected or loading', async () => {
-		const disconnected = await renderIntoDocument(<WalletSummary summary={{ account: undefined, ethAttoEth: undefined, repAttoRep: undefined, status: 'disconnected', error: undefined, errorLabel: undefined, universeId: '1' }} />)
+		const disconnected = await renderIntoDocument(<TradingOverviewPanel simulation={false} walletSummary={{ account: undefined, ethAttoEth: undefined, repAttoRep: undefined, status: 'disconnected', error: undefined, errorLabel: undefined, universeId: '1' }} />)
 		cleanupRendered = disconnected.cleanup
 		const disconnectedCells = [...disconnected.container.querySelectorAll('.overview-inline-metrics .overview-metric-group-items > div')].map(cell => cell.className)
 		expect(disconnectedCells).toEqual(['overview-simulation-secondary', 'overview-simulation-secondary'])
@@ -286,7 +414,7 @@ describe('universe selector', () => {
 		expect(disconnected.container.querySelector('[data-wallet-asset="REP"]')?.textContent).toContain('—')
 		await disconnected.cleanup()
 
-		const loading = await renderIntoDocument(<WalletSummary summary={{ account: '0x8ba1f109551bD432803012645Ac136ddd64DBA72', ethAttoEth: undefined, repAttoRep: undefined, status: 'loading', error: undefined, errorLabel: undefined, universeId: '1' }} />)
+		const loading = await renderIntoDocument(<TradingOverviewPanel simulation={false} walletSummary={{ account: '0x8ba1f109551bD432803012645Ac136ddd64DBA72', ethAttoEth: undefined, repAttoRep: undefined, status: 'loading', error: undefined, errorLabel: undefined, universeId: '1' }} />)
 		cleanupRendered = loading.cleanup
 		const loadingCells = [...loading.container.querySelectorAll('.overview-inline-metrics .overview-metric-group-items > div')].map(cell => cell.className)
 		expect(loadingCells).toEqual(disconnectedCells)
@@ -297,7 +425,7 @@ describe('universe selector', () => {
 	test('keeps wallet balance failures visible with a retry', async () => {
 		const account = '0x8ba1f109551bD432803012645Ac136ddd64DBA72'
 		let retries = 0
-		const rendered = await renderIntoDocument(<WalletSummary summary={{ account, ethAttoEth: undefined, repAttoRep: undefined, status: 'error', error: 'REP balance RPC failed', errorLabel: 'Wallet balance read failed', universeId: '1' }} onRetry={() => retries++} />)
+		const rendered = await renderIntoDocument(<TradingOverviewPanel simulation={false} walletSummary={{ account, ethAttoEth: undefined, repAttoRep: undefined, status: 'error', error: 'REP balance RPC failed', errorLabel: 'Wallet balance read failed', universeId: '1' }} onRetryWalletSummary={() => retries++} />)
 		cleanupRendered = rendered.cleanup
 		expect(rendered.container.querySelector('[data-wallet-asset="ETH"]')?.textContent).toContain('—')
 		expect(rendered.container.querySelector('[data-wallet-asset="REP"]')?.textContent).toContain('—')
@@ -308,17 +436,20 @@ describe('universe selector', () => {
 	})
 
 	test('ends wallet balance loading when selected-universe discovery fails', async () => {
-		expect(walletSummaryAvailability(true, undefined, 'loading', undefined, true)?.status).toBe('loading')
-		const availability = walletSummaryAvailability(true, undefined, 'error', 'RPC request failed', true)
+		expect(walletSummaryAvailability(true, undefined, 'loading', undefined, true, 'Security pool discovery failed')?.status).toBe('loading')
+		// The universe route names its own discovery and a redacted detail is not prefixed twice.
+		expect(walletSummaryAvailability(true, undefined, 'error', 'RPC request failed', true, 'Universe discovery failed')).toEqual({ status: 'error', error: 'Universe discovery failed: RPC request failed', errorLabel: 'Universe discovery failed' })
+		expect(walletSummaryAvailability(true, undefined, 'error', 'Universe discovery failed', true, 'Universe discovery failed')?.error).toBe('Universe discovery failed')
+		const availability = walletSummaryAvailability(true, undefined, 'error', 'RPC request failed', true, 'Security pool discovery failed')
 		if (availability === undefined) throw new Error('A discovery failure must make wallet balances unavailable')
-		const rendered = await renderIntoDocument(<WalletSummary summary={{ account: '0x8ba1f109551bD432803012645Ac136ddd64DBA72', ethAttoEth: undefined, repAttoRep: undefined, status: availability.status, error: availability.error, errorLabel: availability.errorLabel, universeId: '1' }} />)
+		const rendered = await renderIntoDocument(<TradingOverviewPanel simulation={false} walletSummary={{ account: '0x8ba1f109551bD432803012645Ac136ddd64DBA72', ethAttoEth: undefined, repAttoRep: undefined, status: availability.status, error: availability.error, errorLabel: availability.errorLabel, universeId: '1' }} />)
 		cleanupRendered = rendered.cleanup
-		expect(rendered.container.querySelector('.trading-wallet-summary')?.getAttribute('aria-busy')).toBe('false')
+		expect(rendered.container.querySelector('[role="status"]')).toBeNull()
 		expect(rendered.container.querySelector('[role="alert"]')?.getAttribute('aria-label')).toContain('Security pool discovery failed: RPC request failed')
 	})
 
 	test('discloses simulation balances through the shared overview control', async () => {
-		const rendered = await renderIntoDocument(<WalletSummary simulation summary={{ account: '0x00000000000000000000000000000000000000A1', ethAttoEth: 1n, repAttoRep: 2n, status: 'ready', error: undefined, errorLabel: undefined, universeId: '0' }} />)
+		const rendered = await renderIntoDocument(<TradingOverviewPanel simulation walletSummary={{ account: '0x00000000000000000000000000000000000000A1', ethAttoEth: 1n, repAttoRep: 2n, status: 'ready', error: undefined, errorLabel: undefined, universeId: '0' }} />)
 		cleanupRendered = rendered.cleanup
 		const toggle = rendered.container.querySelector<HTMLButtonElement>('.overview-details-toggle')
 		expect(toggle?.getAttribute('aria-expanded')).toBe('false')
@@ -331,7 +462,7 @@ describe('universe selector', () => {
 	})
 
 	test('preserves all 18 decimals in authoritative wallet balances', async () => {
-		const rendered = await renderIntoDocument(<WalletSummary summary={{ account: '0x8ba1f109551bD432803012645Ac136ddd64DBA72', ethAttoEth: 1n, repAttoRep: 2n ** 256n - 1n, status: 'ready', error: undefined, errorLabel: undefined, universeId: '1' }} />)
+		const rendered = await renderIntoDocument(<TradingOverviewPanel simulation={false} walletSummary={{ account: '0x8ba1f109551bD432803012645Ac136ddd64DBA72', ethAttoEth: 1n, repAttoRep: 2n ** 256n - 1n, status: 'ready', error: undefined, errorLabel: undefined, universeId: '1' }} />)
 		cleanupRendered = rendered.cleanup
 		expect(rendered.container.querySelector('[data-wallet-asset="ETH"] button')?.getAttribute('title')).toBe('0.000000000000000001')
 		expect(rendered.container.querySelector('[data-wallet-asset="REP"] button')?.getAttribute('title')).toEndWith('.584007913129639935')

@@ -14,7 +14,7 @@ export function OutcomeHolding({ amount, outcome, market }: { amount: bigint; ou
 	return (
 		<>
 			{formatOutcomeQuantity(amount, outcome)}
-			{amount === 0n ? null : <small class='payout-caption'>{payout}</small>}
+			{amount === 0n ? null : <small className='payout-caption'>{payout}</small>}
 		</>
 	)
 }

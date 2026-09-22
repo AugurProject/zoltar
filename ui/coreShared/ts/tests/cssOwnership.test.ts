@@ -76,8 +76,8 @@ test('feature stylesheets own their product rules and load after the shared shee
 	expect(zoltarPage).not.toContain(statoblastLink)
 	expect(statoblastPage.indexOf(sharedLink)).toBeLessThan(statoblastPage.indexOf(zoltarLink))
 	expect(statoblastPage.indexOf(zoltarLink)).toBeLessThan(statoblastPage.indexOf(statoblastLink))
-	expect(tradingPage).toContain(sharedLink)
-	expect(tradingPage).not.toContain(zoltarLink)
+	// Trading renders the shared fork question preview on its universe route, so it loads the Zoltar feature sheet after the shared sheet.
+	expect(tradingPage.indexOf(sharedLink)).toBeLessThan(tradingPage.indexOf(zoltarLink))
 	expect(tradingPage).not.toContain(statoblastLink)
 })
 

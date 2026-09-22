@@ -30,22 +30,22 @@ function LivePortfolioBalanceMetrics({ market, balances }: { market: LiveMarket;
 	const maximumNoExit = maximumInsuredExit({ longOutcome: 'NO', longBalance: balances.no, invalidBalance: balances.invalid, yesReserve: market.yesReserve, noReserve: market.noReserve, feeBps: market.feeBps })
 	return (
 		<>
-			<div class='portfolio-position-summary'>
+			<div className='portfolio-position-summary'>
 				{availability.completeSets === 0n ? undefined : (
-					<div class='portfolio-position-value'>
-						<span class='metric-label'>{availability.canRedeemCompleteSets ? payoutCopy.redemptionValue : payoutCopy.backingValue}</span>
+					<div className='portfolio-position-value'>
+						<span className='metric-label'>{availability.canRedeemCompleteSets ? payoutCopy.redemptionValue : payoutCopy.backingValue}</span>
 						<strong>{market.loadError === undefined ? formatCollateralEth(availability.completeSets, market) : payoutCopy.unavailable}</strong>
-						<small class='payout-caption'>{formatCompleteSetQuantity(availability.completeSets)}</small>
+						<small className='payout-caption'>{formatCompleteSetQuantity(availability.completeSets)}</small>
 					</div>
 				)}
-				<ul class='portfolio-holdings'>
+				<ul className='portfolio-holdings'>
 					{balances.yes === 0n ? undefined : (
-						<li class='portfolio-holding-yes'>
+						<li className='portfolio-holding-yes'>
 							<OutcomeHolding amount={balances.yes} outcome={portfolioCopy.yes} market={market} />
 						</li>
 					)}
 					{balances.no === 0n ? undefined : (
-						<li class='portfolio-holding-no'>
+						<li className='portfolio-holding-no'>
 							<OutcomeHolding amount={balances.no} outcome={portfolioCopy.no} market={market} />
 						</li>
 					)}
@@ -76,7 +76,7 @@ function LivePortfolioBalanceMetrics({ market, balances }: { market: LiveMarket;
 				</WorkflowSubsection>
 			</ReadOnlyDetailAccordion>
 			{market.questionOutcome === 3 && market.loadError === undefined ? (
-				<p class='detail payout-note'>
+				<p className='detail payout-note'>
 					{payoutCopy.conditionalNote} {payoutCopy.holdingFeeNote}
 				</p>
 			) : null}
@@ -99,19 +99,19 @@ function hasPortfolioBalance(balances: LiveBalances) {
 export function LivePortfolio({ entries, balanceState, balanceError, retryBalances }: { entries: readonly PortfolioBalanceEntry[]; balanceState: BalanceState; balanceError: string | undefined; retryBalances(): Promise<void> }) {
 	const visibleEntries = balanceState === 'ready' ? entries.filter(entry => entry.error !== undefined || (entry.balances !== undefined && hasPortfolioBalance(entry.balances))) : entries
 	return (
-		<div class='portfolio-positions' aria-busy={balanceState === 'loading'}>
+		<div className='portfolio-positions' aria-busy={balanceState === 'loading'}>
 			{balanceState === 'disconnected' ? <EmptyState title={portfolioCopy.disconnectedGuidance} /> : null}
 			{balanceState === 'loading' ? <EmptyState live title={portfolioCopy.loadingPoolBalances} /> : null}
 			{balanceState === 'error' ? <BalanceLoadError message={balanceError ?? portfolioCopy.portfolioBalancesUnavailable} retry={retryBalances} /> : null}
 			{balanceState === 'ready' && visibleEntries.length === 0 ? <EmptyState title={portfolioCopy.noPortfolioBalances} /> : null}
 			{visibleEntries.length === 0 ? null : (
-				<div class='entity-card-list'>
+				<div className='entity-card-list'>
 					{visibleEntries.map(entry => (
 						<EntityCard
 							surface='card'
 							className='portfolio-record'
 							headerActions={
-								<a class='button-link primary' href={getTradingRouteHref(`#/market/${entry.market.pool}`)}>
+								<a className='button-link primary' href={getTradingRouteHref(`#/market/${entry.market.pool}`)}>
 									{portfolioCopy.openPosition}
 								</a>
 							}
@@ -121,7 +121,7 @@ export function LivePortfolio({ entries, balanceState, balanceError, retryBalanc
 						>
 							{renderPortfolioStatus(entry)}
 							{entry.market.loadError === undefined ? (
-								<p class='detail'>
+								<p className='detail'>
 									{liveCopy.questionEnd}: <TimestampValue timestamp={entry.market.endTime} relative={false} />
 								</p>
 							) : undefined}

@@ -7,9 +7,9 @@ import { MAINNET_NETWORK_PROFILE } from '@zoltar/ui-core-shared/wallet/networkPr
 import { createDeferred } from '@zoltar/ui-core-shared/tests/testUtils/deferred.js'
 import { resetActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { createFakeBackend } from '@zoltar/ui-core-shared/tests/testUtils/fakeBackend.js'
-import { createReviewedClient } from '../../app/transactions/reviewedClient.js'
-import { withTransactionReviews } from '../../app/transactions/reviewedBackend.js'
-import { createTransactionStepController, transactionSteps } from '../../app/transactions/transactionSteps.js'
+import { createReviewedClient } from '@zoltar/ui-statoblast-shared/protocol/reviewedClient.js'
+import { withTransactionReviews } from '@zoltar/ui-statoblast-shared/protocol/reviewedBackend.js'
+import { createTransactionStepController, transactionSteps } from '@zoltar/ui-core-shared/transactions/transactionSteps.js'
 
 const account = '0x0000000000000000000000000000000000000001'
 const hash: Hash = `0x${'1'.repeat(64)}`

@@ -2,7 +2,7 @@ import * as appCopy from '@zoltar/ui-core-shared/copy/app.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as deploymentCopy from '../../../copy/deployment.js'
 import type { BadgeTone, DeploymentSectionProps } from '../../types.js'
-import { Badge } from '@zoltar/ui-core-shared/components/Badge.js'
+import { DeploymentStepList, type DeploymentStepRow } from '@zoltar/ui-core-shared/components/DeploymentStepList.js'
 import { SectionBlock } from '@zoltar/ui-core-shared/components/SectionBlock.js'
 import { TransactionActionButton } from '@zoltar/ui-core-shared/components/TransactionActionButton.js'
 import { getDeploymentStepAvailability, getPrerequisiteLabel } from '../lib/deployment.js'
@@ -63,8 +63,8 @@ function getStepStatus(stepDeployed: boolean, prerequisiteLabel: string | undefi
 export function DeploymentSection({ title, completedGroup = false, steps, allSteps, accountAddress, busyStepId, deploymentStateReady, deploymentStatusReasonElementId, isOnActiveAppChain, onDeploy }: DeploymentSectionProps) {
 	return (
 		<SectionBlock className='contract-panel' title={completedGroup ? undefined : title} variant='plain'>
-			<div className='contract-list'>
-				{steps.map(step => {
+			<DeploymentStepList
+				steps={steps.map((step): DeploymentStepRow => {
 					const stepIndex = allSteps.findIndex(candidate => candidate.id === step.id)
 					const prerequisiteLabel = stepIndex === -1 ? undefined : getPrerequisiteLabel(allSteps, stepIndex)
 					const isBusy = busyStepId === step.id
@@ -87,37 +87,28 @@ export function DeploymentSection({ title, completedGroup = false, steps, allSte
 					const statusDetailId = stepStatus.detail === undefined ? undefined : `deployment-${step.id}-status-detail`
 					// Without a wallet the status detail already carries the wallet reason unless a prerequisite occupies it; with a wallet the detail explains a prerequisite.
 					const showInlineDisabledReason = deploymentStateReady && (prerequisiteLabel === undefined ? accountAddress !== undefined : accountAddress === undefined)
-
-					return (
-						<div className='contract-row' key={step.id}>
-							<div className='contract-copy'>
-								<div className='contract-topline'>
-									{stepStatus.label === undefined || (completedGroup && step.deployed) ? undefined : <Badge tone={stepStatus.badgeTone}>{stepStatus.label}</Badge>}
-									<h3>{step.label}</h3>
-								</div>
-								<p className='address'>{step.address}</p>
-								{stepStatus.detail === undefined ? undefined : (
-									<p className='detail' id={statusDetailId}>
-										{stepStatus.detail}
-									</p>
-								)}
-							</div>
-							{step.deployed ? undefined : (
-								<TransactionActionButton
-									ariaLabel={isBusy ? appCopy.formatDeployingContract(step.label) : appCopy.formatDeployContract(step.label)}
-									idleLabel={stepStatus.buttonLabel}
-									pendingLabel={deploymentCopy.deploying}
-									onClick={() => void onDeploy(step.id)}
-									pending={isBusy}
-									availability={availability}
-									disabledReasonElementId={deploymentStateReady ? statusDetailId : deploymentStatusReasonElementId}
-									showDisabledReason={showInlineDisabledReason}
-								/>
-							)}
-						</div>
-					)
+					return {
+						action: step.deployed ? undefined : (
+							<TransactionActionButton
+								ariaLabel={isBusy ? appCopy.formatDeployingContract(step.label) : appCopy.formatDeployContract(step.label)}
+								idleLabel={stepStatus.buttonLabel}
+								pendingLabel={deploymentCopy.deploying}
+								onClick={() => void onDeploy(step.id)}
+								pending={isBusy}
+								availability={availability}
+								disabledReasonElementId={deploymentStateReady ? statusDetailId : deploymentStatusReasonElementId}
+								showDisabledReason={showInlineDisabledReason}
+							/>
+						),
+						address: step.address,
+						badge: stepStatus.label === undefined || (completedGroup && step.deployed) ? undefined : { label: stepStatus.label, tone: stepStatus.badgeTone },
+						detail: stepStatus.detail,
+						detailId: statusDetailId,
+						key: step.id,
+						label: step.label,
+					}
 				})}
-			</div>
+			/>
 		</SectionBlock>
 	)
 }

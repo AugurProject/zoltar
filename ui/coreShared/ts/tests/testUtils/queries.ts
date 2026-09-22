@@ -87,7 +87,17 @@ function getAccessibleName(element: Element): string {
 		consultedNodes.delete(element)
 		return normalizeText(labelTexts.filter(t => t.length > 0).join(' '))
 	}
-	return normalizeText(element.textContent ?? '')
+	return normalizeText(visibleTextContent(element))
+}
+
+/** Name-from-content: descendants hidden from assistive technology do not contribute, as in the accessible name algorithm. The root itself is the referenced node, so its own hidden state is ignored. */
+function visibleTextContent(element: Element): string {
+	let result = ''
+	for (const child of Array.from(element.childNodes)) {
+		if (child.nodeType === Node.TEXT_NODE) result += child.textContent ?? ''
+		else if (child.nodeType === Node.ELEMENT_NODE && (child as Element).getAttribute('aria-hidden') !== 'true') result += visibleTextContent(child as Element)
+	}
+	return result
 }
 
 function computeLabelTextForControl(label: Element, control: Element): string {

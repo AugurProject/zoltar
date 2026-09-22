@@ -13,6 +13,7 @@
 		"@preact/signals": "2.0.1",
 		"@zoltar/ui-core-shared": "workspace:1.0.0",
 		"@zoltar/ui-statoblast-shared": "workspace:1.0.0",
+		"@zoltar/ui-zoltar-shared": "workspace:1.0.0",
 		"preact": "10.26.4",
 		"@tevm/memory-client": "1.0.0-rc.151",
 		"@tevm/common": "1.0.0-rc.151",

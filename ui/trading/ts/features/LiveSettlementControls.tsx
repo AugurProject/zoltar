@@ -14,6 +14,9 @@ import * as settlementCopy from '../copy/settlement.js'
 import { resolvedShareOutcome } from '../lib/marketLabels.js'
 import { EnumDropdown } from '@zoltar/ui-core-shared/components/EnumDropdown.js'
 import { ErrorNotice } from '@zoltar/ui-core-shared/components/ErrorNotice.js'
+import { StateHint } from '@zoltar/ui-core-shared/components/StateHint.js'
+import { WarningSurface } from '@zoltar/ui-core-shared/components/WarningSurface.js'
+import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import { FormInput } from '@zoltar/ui-core-shared/components/FormInput.js'
 import { TransactionActionButton, TransactionActionGroup } from '@zoltar/ui-core-shared/components/TransactionActionButton.js'
 import { ViewTabs } from '@zoltar/ui-core-shared/components/ViewTabs.js'
@@ -206,13 +209,13 @@ export function LiveSettlementControls({
 	]
 	const groupMessage = resolveActionGroupMessage(state, actionAvailability, statusText)
 	return (
-		<div class='settlement-controls'>
+		<div className='settlement-controls'>
 			<ViewTabs ariaLabel={settlementCopy.operationLabel} semantics='switcher' variant='segmented' size='compact' value={operation} onChange={selectOperation} options={operationOptions} />
 			{(() => {
 				if (operation === 'redeem-complete-set')
 					return (
 						<>
-							<p class='detail'>
+							<p className='detail'>
 								{settlementCopy.completeSetRedemptionPrefix} {settlementBalanceLabel(balanceState, availability.completeSets, market)}.
 							</p>
 							<FormField id={amountId} label={settlementCopy.completeSetValueToRedeem}>
@@ -231,11 +234,11 @@ export function LiveSettlementControls({
 							</FormField>
 						</>
 					)
-				if (operation === 'redeem-winning-shares') return <p class='detail'>{winningOutcome === undefined ? settlementCopy.winningRedemptionUnavailable : settlementCopy.winningRedemptionGuidance(winningOutcome, settlementBalanceLabel(balanceState, availability.winningBalance, market, winningOutcome))}</p>
+				if (operation === 'redeem-winning-shares') return <p className='detail'>{winningOutcome === undefined ? settlementCopy.winningRedemptionUnavailable : settlementCopy.winningRedemptionGuidance(winningOutcome, settlementBalanceLabel(balanceState, availability.winningBalance, market, winningOutcome))}</p>
 				return (
 					<>
-						<p class='detail'>{settlementCopy.migrationGuidance}</p>
-						<div class='field'>
+						<p className='detail'>{settlementCopy.migrationGuidance}</p>
+						<div className='field'>
 							<span>{settlementCopy.sourceShare}</span>
 							<EnumDropdown
 								ariaLabel={settlementCopy.sourceShare}
@@ -252,26 +255,26 @@ export function LiveSettlementControls({
 								}}
 							/>
 						</div>
-						<p class='detail'>
+						<p className='detail'>
 							{settlementCopy.selectedSourceBalance} {settlementBalanceLabel(balanceState, sourceBalance, market, sourceOutcome)}
 						</p>
-						{forkContextState === 'loading' || forkContextState === 'idle' ? (
-							<p class='detail' role='status'>
-								{settlementCopy.loadingForkDetails}
-							</p>
-						) : null}
+						{forkContextState === 'loading' || forkContextState === 'idle' ? <StateHint announcement='polite' presentation={{ key: 'loading', badgeLabel: commonCopy.loading, badgeTone: 'loading', detail: settlementCopy.loadingForkDetails, detailIsLoading: true }} /> : null}
 						{forkContextState === 'error' ? (
 							<>
 								<ErrorNotice message={forkContextError ?? settlementCopy.forkDetailsUnavailable} />
-								<div class='actions'>
-									<button type='button' class='secondary' disabled={workflowLocked} onClick={() => setForkContextNonce(current => current + 1)}>
+								<div className='actions'>
+									<button type='button' className='secondary' disabled={workflowLocked} onClick={() => setForkContextNonce(current => current + 1)}>
 										{settlementCopy.retryForkDetails}
 									</button>
 								</div>
 							</>
 						) : null}
 						{forkContext === undefined ? null : <ForkMigrationTargets context={forkContext} selectedTargets={selectedForkTargets} disabled={workflowLocked} onChange={updateForkTargets} />}
-						{forkMigrationBatchWarning(selectedForkTargets) === undefined ? null : <p class='warning'>{forkMigrationBatchWarning(selectedForkTargets)}</p>}
+						{forkMigrationBatchWarning(selectedForkTargets) === undefined ? null : (
+							<WarningSurface role='status' surface='flat' variant='compact'>
+								<p>{forkMigrationBatchWarning(selectedForkTargets)}</p>
+							</WarningSurface>
+						)}
 					</>
 				)
 			})()}
@@ -291,7 +294,7 @@ export function LiveSettlementControls({
 				/>
 			) : null}
 			{balanceState === 'error' && networkMismatchReason === undefined ? <BalanceLoadError message={balanceError ?? settlementCopy.walletBalancesUnavailable} retry={retryBalances} disabled={workflowLocked} /> : null}
-			<div class='transaction-outcome' ref={outcomeRef} tabIndex={-1}>
+			<div className='transaction-outcome' ref={outcomeRef} tabIndex={-1}>
 				{transactionHash === undefined ? null : <TradingTransactionHash hash={transactionHash} />}
 				<ErrorNotice message={receiptWarning} />
 				<ErrorNotice message={state === 'error' ? error : undefined} />

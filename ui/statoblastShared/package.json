@@ -104,10 +104,6 @@
 			"bun": "./ts/features/security-pools/components/SelectedVaultSummarySection.tsx",
 			"default": "./js/features/security-pools/components/SelectedVaultSummarySection.js"
 		},
-		"./features/security-pools/components/UniverseDirectorySection.js": {
-			"bun": "./ts/features/security-pools/components/UniverseDirectorySection.tsx",
-			"default": "./js/features/security-pools/components/UniverseDirectorySection.js"
-		},
 		"./features/security-pools/hooks/useSecurityPoolCreation.js": {
 			"bun": "./ts/features/security-pools/hooks/useSecurityPoolCreation.ts",
 			"default": "./js/features/security-pools/hooks/useSecurityPoolCreation.js"
@@ -503,6 +499,22 @@
 		"./protocol/fundingTransactions.js": {
 			"bun": "./ts/protocol/fundingTransactions.ts",
 			"default": "./js/protocol/fundingTransactions.js"
+		},
+		"./features/security-pools/components/UniversePoolDirectorySection.js": {
+			"bun": "./ts/features/security-pools/components/UniversePoolDirectorySection.tsx",
+			"default": "./js/features/security-pools/components/UniversePoolDirectorySection.js"
+		},
+		"./protocol/reviewedClient.js": {
+			"bun": "./ts/protocol/reviewedClient.ts",
+			"default": "./js/protocol/reviewedClient.js"
+		},
+		"./protocol/reviewedBackend.js": {
+			"bun": "./ts/protocol/reviewedBackend.ts",
+			"default": "./js/protocol/reviewedBackend.js"
+		},
+		"./copy/priceRequest.js": {
+			"bun": "./ts/copy/priceRequest.ts",
+			"default": "./js/copy/priceRequest.js"
 		}
 	},
 	"version": "1.0.0"

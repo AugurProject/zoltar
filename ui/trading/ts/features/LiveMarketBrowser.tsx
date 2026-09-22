@@ -55,10 +55,10 @@ function MarketRow({ listKind, lookupRoute, market, nowSeconds }: { listKind: Tr
 			badge={listKind === 'markets' ? <Badge tone={marketStatusTone(market, nowSeconds)}>{marketStatusLabel(market, nowSeconds)}</Badge> : undefined}
 			actions={
 				<>
-					<a class='button-link primary' href={getTradingRouteHref(primaryHref)}>
+					<a className='button-link primary' href={getTradingRouteHref(primaryHref)}>
 						{primaryLabel}
 					</a>
-					<a class='button-link' href={getTradingRouteHref(secondaryHref)}>
+					<a className='button-link' href={getTradingRouteHref(secondaryHref)}>
 						{secondaryLabel}
 					</a>
 				</>
@@ -117,7 +117,7 @@ export function LiveMarketBrowser({
 				{markets.length === 0 ? (
 					<EmptyState title={presentation.empty} />
 				) : (
-					<div class='entity-card-list market-list'>
+					<div className='entity-card-list market-list'>
 						{markets.map(market => (
 							<MarketRow key={market.pool} listKind={listKind} lookupRoute={lookupRoute} market={market} nowSeconds={nowSeconds} />
 						))}
@@ -144,9 +144,9 @@ export function LiveMarketBrowser({
 			}
 		>
 			{/* This disclosure contains an interactive lookup form, rather than read-only reference data. */}
-			<details class='read-only-detail-accordion'>
+			<details className='read-only-detail-accordion'>
 				<summary>{liveCopy.openByAddress}</summary>
-				<div class='read-only-detail-accordion-content'>
+				<div className='read-only-detail-accordion-content'>
 					<OpenPoolForm disabled={workflowLocked} target={lookupRoute} />
 				</div>
 			</details>

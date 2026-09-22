@@ -738,6 +738,24 @@ button.quiet:disabled {
 	outline-offset: 2px;
 }
 
+/* A bare address is the link's only label, so it carries a rest-state underline that does not depend on hover. */
+.security-pool-link > .address-value {
+	text-decoration: underline;
+	text-decoration-color: var(--muted);
+	text-decoration-thickness: 0.08em;
+	text-underline-offset: 0.16em;
+}
+
+.security-pool-link:hover > .address-value,
+.security-pool-link:focus-visible > .address-value {
+	text-decoration-color: color-mix(in srgb, var(--accent) 65%, transparent);
+}
+
+.security-pool-link[aria-disabled="true"] {
+	cursor: not-allowed;
+	opacity: 0.55;
+}
+
 .actions {
 	display: flex;
 	flex-wrap: wrap;

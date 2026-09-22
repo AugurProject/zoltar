@@ -1,12 +1,12 @@
-import { GlobalTransactionPresentationProvider } from '@zoltar/ui-core-shared/components/GlobalTransactionPresentationContext.js'
-import { TransactionActionButtonLockProvider } from '@zoltar/ui-core-shared/components/TransactionActionButton.js'
+import { GlobalTransactionPresentationProvider } from '../components/GlobalTransactionPresentationContext.js'
+import { TransactionActionButtonLockProvider } from '../components/TransactionActionButton.js'
 import { expect, test } from 'bun:test'
 import { act } from 'preact/test-utils'
-import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
-import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
-import { fireEvent, within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
-import { TransactionStepsModal } from '../../app/transactions/TransactionStepsModal.js'
-import { createTransactionStepController, transactionSteps } from '../../app/transactions/transactionSteps.js'
+import { installDomEnvironment } from './testUtils/domEnvironment.js'
+import { renderIntoDocument } from './testUtils/renderIntoDocument.js'
+import { fireEvent, within } from './testUtils/queries.js'
+import { TransactionStepsModal } from '../components/TransactionStepsModal.js'
+import { createTransactionStepController, transactionSteps } from '../transactions/transactionSteps.js'
 
 test('shows every step, token deposit, expected return and ETH cost before the first confirmation', async () => {
 	const dom = installDomEnvironment()

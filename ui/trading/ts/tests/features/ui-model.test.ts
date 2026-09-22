@@ -9,13 +9,22 @@ import { createSecurityPoolDeploymentIndex, liveBalancesForMarket, marketAccepts
 import { maximumAfterSlippage, minimumAfterSlippage, requireTransactionSlippageBps, requireTransactionValidityMinutes, retainApprovedMaximum, retainApprovedMinimum } from '../../protocol/tradeQuote.js'
 import { broadcastUncertainMessage, discoveryCommitAllowed, failedSubmissionTransition, livePairInitialized, parseSlippageBps, parseTransactionValidityMinutes, positionControlsWorkflowLocked, securityPoolAddressFromRoute } from '../../features/liveTradingControllerHelpers.js'
 import { isTradingLookupRoute, tradingListKindFor, tradingRouting } from '../../lib/routing.js'
-import { liveWorkflowRoutePresentation } from '../../features/live/routePresentation.js'
+import { liveRouteLoadingPresentation, liveWorkflowRoutePresentation } from '../../features/live/routePresentation.js'
 import { liquidityOperationAvailable } from '../../features/live/useLiquidityWorkflowController.js'
 
 describe('standalone trading UI model', () => {
 	test('keeps the header badge as the only network disclosure on route headers', () => {
 		expect(liveWorkflowRoutePresentation('market').description).not.toContain('Browser Simulation')
 		expect(liveWorkflowRoutePresentation('market').description).not.toContain('Ethereum Mainnet')
+	})
+
+	test('names the route the user is on while contracts load so the header does not change once they resolve', () => {
+		const pool = `0x${'ab'.repeat(20)}`
+		expect(liveRouteLoadingPresentation('portfolio')).toEqual({ title: 'Portfolio' })
+		expect(liveRouteLoadingPresentation(`security-pool/${pool}`)).toEqual({ description: 'Identity, lifecycle, and capacity of the security pool that backs this market.', title: 'Security pool' })
+		expect(liveRouteLoadingPresentation(`market/${pool}`)).toEqual(liveWorkflowRoutePresentation('market'))
+		expect(liveRouteLoadingPresentation(`liquidity/${pool}`)).toEqual(liveWorkflowRoutePresentation('liquidity'))
+		expect(liveRouteLoadingPresentation('create-market')).toEqual(liveWorkflowRoutePresentation('create-market'))
 	})
 
 	test('presents liquidity as its own workflow instead of repeating the market header', () => {
