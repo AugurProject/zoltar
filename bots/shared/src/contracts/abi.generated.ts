@@ -2375,8 +2375,6 @@ export const escalationGameAbi = [
 	},
 	{ type: 'function', name: 'computeIterativeAttritionCostAttoRep', stateMutability: 'view', inputs: [{ name: 'timeSinceStart', type: 'uint256', internalType: 'uint256' }], outputs: [{ name: '', type: 'uint256', internalType: 'uint256' }] },
 	{ type: 'function', name: 'computeTimeSinceStartFromAttritionCostAttoRep', stateMutability: 'view', inputs: [{ name: 'attritionCostAttoRep', type: 'uint256', internalType: 'uint256' }], outputs: [{ name: '', type: 'uint256', internalType: 'uint256' }] },
-	{ type: 'function', name: 'cumulativeClaimRetention', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'uint256', internalType: 'uint256' }] },
-	{ type: 'function', name: 'cumulativeClaimRetentionExponent', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'uint256', internalType: 'uint256' }] },
 	{
 		type: 'function',
 		name: 'depositRepOnOutcome',
@@ -2720,24 +2718,20 @@ export const escalationGameAbi = [
 	},
 	{
 		type: 'function',
-		name: 'applyInheritedClaimRetention',
+		name: 'getInheritedClaimAllocation',
 		stateMutability: 'view',
 		inputs: [
-			{ name: 'amountAttoRep', type: 'uint256', internalType: 'uint256' },
-			{ name: 'parentDepositIndex', type: 'uint256', internalType: 'uint256' },
-		],
-		outputs: [{ name: '', type: 'uint256', internalType: 'uint256' }],
-	},
-	{
-		type: 'function',
-		name: 'applyInheritedSourceStorageBasis',
-		stateMutability: 'view',
-		inputs: [
+			{ name: 'outcomeIndex', type: 'uint8', internalType: 'uint8' },
 			{ name: 'amountAttoRep', type: 'uint256', internalType: 'uint256' },
 			{ name: 'cumulativeAmountAttoRep', type: 'uint256', internalType: 'uint256' },
-			{ name: 'parentDepositIndex', type: 'uint256', internalType: 'uint256' },
+			{ name: 'leafIndex', type: 'uint256', internalType: 'uint256' },
 		],
-		outputs: [{ name: '', type: 'uint256', internalType: 'uint256' }],
+		outputs: [
+			{ name: 'sourceAmountAttoRep', type: 'uint256', internalType: 'uint256' },
+			{ name: 'retainedAmountAttoRep', type: 'uint256', internalType: 'uint256' },
+			{ name: 'rewardAmountAttoRep', type: 'uint256', internalType: 'uint256' },
+			{ name: 'retainedCumulativeAttoRep', type: 'uint256', internalType: 'uint256' },
+		],
 	},
 ] as const
 

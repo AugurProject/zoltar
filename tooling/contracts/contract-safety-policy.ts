@@ -67,8 +67,8 @@ export const contractSafetyPolicy = {
 				sourcePath: 'contracts/statoblast/EscalationGame.sol',
 				contractName: 'EscalationGame',
 			},
-			24_428,
-			'The reviewed game preserves selector routing and now bubbles retention-call failures; no further runtime growth is permitted.',
+			24_282,
+			'The reviewed game uses exact recursive claim allocations and preserves allocation-call revert bubbling; the smaller runtime budget permits no further growth.',
 		),
 		runtimeBudget(
 			{
@@ -101,8 +101,8 @@ export const contractSafetyPolicy = {
 				sourcePath: 'contracts/statoblast/factories/EscalationGameFactory.sol',
 				contractName: 'EscalationGameFactory',
 			},
-			46_673,
-			'The factory embeds the reviewed game with retention-call revert bubbling and permits no further growth.',
+			47_014,
+			'The factory embeds deterministic interval consumption and prefix accounting for successive haircuts; the 341-byte increase fixes claim-order underflows. No further growth is permitted.',
 		),
 	] satisfies readonly BytecodeBudget[],
 	exactLayoutPairs: [

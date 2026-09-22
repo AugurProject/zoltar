@@ -219,7 +219,7 @@
 						<tr>
 							<td><code>setPoolFinancials(newSettlementCollateralAttoEth, newTotalCapacityOwnershipAttoRep, newFeeEligibleCapacityOwnershipAttoRep, newTotalBadDebtAttoEth)</code></td>
 							<td><code>SecurityPoolForker</code> only</td>
-							<td>Fee-eligible capacity ownership does not exceed total capacity ownership. For supplied settlement collateral net of aggregate bad debt, current price-converted capacity is sufficient, combined pool-held and dispute-staked REP satisfies the associated-REP constraint, and pool-held REP alone satisfies the migration-safety constraint; no lifecycle or value-change guard.</td>
+							<td>Fee-eligible capacity ownership does not exceed total capacity ownership. Actual ETH covers the supplied collateral plus all accrued fee liabilities. Installing inherited liabilities does not require current REP solvency: operational redemptions, deposits and liquidations provide exit or recovery, while new minting retains current capacity and backing checks.</td>
 							<td>Replaces settlement collateral, both price-independent capacity-ownership totals, and aggregate pool bad debt, resets the fee timestamp to the current block, opens the finalized child fee epoch unless the child has a fixed outcome and no continuation game, and clears fee-index rounding carry.</td>
 							<td><code>PoolAccountingCheckpoint</code>, including for repeated financial values</td>
 						</tr>

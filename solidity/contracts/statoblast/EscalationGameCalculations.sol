@@ -102,6 +102,11 @@ abstract contract EscalationGameCalculations is EscalationGameState {
 	}
 
 	function _computeWinningWithdrawal(uint8 outcomeIndex, uint256 depositAmountAttoRep, uint256 cumulativeAmountAttoRep) internal view returns (uint256 amountToWithdrawAttoRep, uint256 burnAmountAttoRep) {
+		return
+			_computeAllocatedWinningWithdrawal(outcomeIndex, depositAmountAttoRep, depositAmountAttoRep, cumulativeAmountAttoRep);
+	}
+
+	function _computeAllocatedWinningWithdrawal(uint8 outcomeIndex, uint256 principalAttoRep, uint256 depositAmountAttoRep, uint256 cumulativeAmountAttoRep) private view returns (uint256 amountToWithdrawAttoRep, uint256 burnAmountAttoRep) {
 		uint256 bindingCapitalAttoRep = getBindingCapitalAttoRep();
 		uint256 winningOutcomeBalanceAttoRep = outcomeState[outcomeIndex].balanceAttoRep;
 		uint256 actualForkThresholdAttoRep = securityPool.zoltar().getForkThresholdAttoRep(securityPool.universeId());
@@ -110,13 +115,18 @@ abstract contract EscalationGameCalculations is EscalationGameState {
 			actualForkThresholdAttoRep = nonDecisionThresholdAttoRep;
 		}
 		return
-			proofVerifier.computeWinningWithdrawal(depositAmountAttoRep, cumulativeAmountAttoRep, bindingCapitalAttoRep, winningOutcomeBalanceAttoRep, actualForkThresholdAttoRep, nonDecisionThresholdAttoRep);
+			proofVerifier.computeAllocatedWinningWithdrawal(principalAttoRep, depositAmountAttoRep, cumulativeAmountAttoRep, bindingCapitalAttoRep, winningOutcomeBalanceAttoRep, actualForkThresholdAttoRep, nonDecisionThresholdAttoRep);
 	}
 
-	function _computeCarriedWinningWithdrawal(uint8 outcomeIndex, uint256 depositAmountAttoRep, uint256 cumulativeAmountAttoRep, uint256 parentDepositIndex) internal view returns (uint256 amountToWithdrawAttoRep, uint256 burnAmountAttoRep) {
-		depositAmountAttoRep = _applyInheritedSourceRetention(depositAmountAttoRep, parentDepositIndex);
-		cumulativeAmountAttoRep = _applyInheritedSourceRetention(cumulativeAmountAttoRep, parentDepositIndex);
-		return _computeWinningWithdrawal(outcomeIndex, depositAmountAttoRep, cumulativeAmountAttoRep);
+	function _computeCarriedWinningWithdrawal(uint8 outcomeIndex, uint256 depositAmountAttoRep, uint256 cumulativeAmountAttoRep, uint256 leafIndex) internal view returns (uint256 amountToWithdrawAttoRep, uint256 burnAmountAttoRep) {
+		(
+			,
+			uint256 principalAttoRep,
+			uint256 rewardAmountAttoRep,
+			uint256 rewardCumulativeAttoRep
+		) = _getInheritedClaimAllocation(outcomeIndex, depositAmountAttoRep, cumulativeAmountAttoRep, leafIndex);
+		return
+			_computeAllocatedWinningWithdrawal(outcomeIndex, principalAttoRep, rewardAmountAttoRep, rewardCumulativeAttoRep);
 	}
 
 	function _getOutcomeBalances()

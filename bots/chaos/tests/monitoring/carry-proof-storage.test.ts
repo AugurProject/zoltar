@@ -36,6 +36,15 @@ test('constructs and simulates a carry withdrawal exclusively from anchored stor
 	expect(fixture.calls.some(call => call.method === 'eth_getLogs')).toBeFalse()
 })
 
+test('uses allocated principal separately from the preserved reward interval', async () => {
+	const fixture = storageFixture()
+	fixture.setRetainedPrincipal(9n)
+	const result = await scan(fixture)
+	expect(result.withdrawals[0]?.amountToWithdrawAttoRep).toBe('15')
+	expect(result.withdrawals[0]?.burnAmountAttoRep).toBe('4')
+	expect(fixture.calls.some(call => call.functionName === 'getInheritedClaimAllocation')).toBeTrue()
+})
+
 test('reconstructs repeated forks and skips consumed inherited identities', async () => {
 	const fixture = storageFixture()
 	const second = slot(source, 1)

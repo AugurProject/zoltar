@@ -6,9 +6,8 @@ contract RetentionCallHarness is EscalationGameStorage {
 	function setMode(uint256 value) external {
 		mode = value;
 	}
-	function evaluate(bool storageBasis) external view returns (uint256) {
-		if (storageBasis) return _applyInheritedSourceStorageBasis(1, 2, 3);
-		return _applyInheritedSourceRetention(1, 3);
+	function evaluate() external view returns (uint256, uint256, uint256, uint256) {
+		return _getInheritedClaimAllocation(1, 1, 2, 0);
 	}
 	fallback() external {
 		if (mode == 0) revert('Retention unavailable');
@@ -19,7 +18,10 @@ contract RetentionCallHarness is EscalationGameStorage {
 		}
 		assembly {
 			mstore(0, 42)
-			return(0, 32)
+			mstore(32, 21)
+			mstore(64, 63)
+			mstore(96, 84)
+			return(0, 128)
 		}
 	}
 }

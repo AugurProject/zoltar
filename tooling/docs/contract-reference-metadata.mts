@@ -47,7 +47,7 @@ export const contractPagesDirectory = 'docs/reference/contracts'
 export function contractPageOutputPath(contractName: string): string {
 	return `${contractPagesDirectory}/${contractName.toLowerCase()}.html`
 }
-export const expectedProductionSoliditySourceFingerprint = 'e12e43baa1b603f018a3ba59c6e40988579633126f7f0d2e28af6b497ab3af04'
+export const expectedProductionSoliditySourceFingerprint = 'e995d42a01db3ec1e55357d702df7fdb9a4ebd2978b9bbce2ba381274621f749'
 
 export const documentedEventSchemas: Array<{ name: string; parameters: string; sourcePath: string }> = [
 	{
@@ -984,7 +984,7 @@ export const contractReferences: ContractReference[] = [
 				declarations: [{ name: 'setPoolFinancials' }],
 				effect: 'Replaces settlement collateral, both price-independent capacity-ownership totals, and aggregate pool bad debt, resets the fee timestamp to the current block, opens the finalized child fee epoch unless the child has a fixed outcome and no continuation game, and clears fee-index rounding carry.',
 				preconditions:
-					'Fee-eligible capacity ownership does not exceed total capacity ownership. For supplied settlement collateral net of aggregate bad debt, current price-converted capacity is sufficient, combined pool-held and dispute-staked REP satisfies the associated-REP constraint, and pool-held REP alone satisfies the migration-safety constraint; no lifecycle or value-change guard.',
+					'Fee-eligible capacity ownership does not exceed total capacity ownership. Actual ETH covers the supplied collateral plus all accrued fee liabilities. Installing inherited liabilities does not require current REP solvency: operational redemptions, deposits and liquidations provide exit or recovery, while new minting retains current capacity and backing checks.',
 				signals: '`PoolAccountingCheckpoint`, including for repeated financial values',
 			},
 			{
@@ -1175,18 +1175,18 @@ export const contractReferences: ContractReference[] = [
 		],
 	},
 	{
-		compiledAbiFingerprint: 'b5a5cdf236031f69d66662704e6a9f748eee9faf6ef61c8678f5e60b027196ff',
+		compiledAbiFingerprint: '385d910622559d91ac780de766111610a84ba44937155c3f2215013f4690c4d2',
 		name: 'EscalationGame',
 		purpose: 'Escrows outcome REP, raises the running resolution cost, detects non-decision, and settles local or carried deposits.',
-		readAbiFingerprint: 'ed587e847ca84dfb0faa31896f294197b8e84a13c229b3bab68447f262dae58d',
+		readAbiFingerprint: 'ec968a73ca57dbb165694c802301a569bebb49b30e5e3f1677b870608e97ceb6',
 		readSurface:
-			'Base getters are `securityPool`, `repToken`, `activationTime`, `nonDecisionThresholdAttoRep`, `startBondAttoRep`, `nonDecisionTimestamp`, `nonDecisionState`, `forkContinuation`, `forkElapsedAtStart`, `forkResumedAt`, `fixedQuestionOutcome`, `nodes`, `disputeStakedRepByVaultAttoRep`, `totalDisputeStakedAttoRep`, `truthAuctionRepBeforeAttoRep`, `truthAuctionRepRemainingAttoRep`, `cumulativeClaimRetention`, and `cumulativeClaimRetentionExponent`. The claim delegate fallback exposes `rootClaimSourceGame`, `applyInheritedClaimRetention`, and `applyInheritedSourceStorageBasis`. The source-storage-basis read allocates retained carry by cumulative-prefix differences so leaf allocations sum to the aggregate checkpoint. `disputeStakedRepByVaultAttoRep` is locally attributed current-game escrow used for health; inherited carry remains aggregate commitment state until proof settlement. Use `previewDepositOnOutcome`, `computeIterativeAttritionCostAttoRep`, `computeTimeSinceStartFromAttritionCostAttoRep`, `totalCostAttoRep`, `getEscalationGameEndDate`, `getQuestionResolution`, `getFinalQuestionResolution`, `hasReachedNonDecision`, `canTriggerOwnFork`, `getBindingCapitalAttoRep`, `getOutcomeBalancesAttoRep`, `getDepositsByOutcome`, `getDepositsByOutcomeLength`, `forkCarrySnapshotInitialized`, `getOutcomeState`, `getForkCarrySnapshot`, `getForkCarryRoots`, `isForkCarryFundingComplete`, `getCarryLeafPageByOutcome`, `getProofConsumedCarriedDepositIndexesByOutcome`, `getLocalUnresolvedPrincipalByVaultAndOutcome`, and `getForkedEscrowByVaultAndOutcome` for calculations, lifecycle authorization, pages, carry state, and escrow. Vault-funded deposits and all withdrawals route through `SecurityPool`; after an ordinary game starts, wallet-funded deposits use `depositRepOnOutcome` and mint no pool backing units.',
+			'Base getters are `securityPool`, `repToken`, `activationTime`, `nonDecisionThresholdAttoRep`, `startBondAttoRep`, `nonDecisionTimestamp`, `nonDecisionState`, `forkContinuation`, `forkElapsedAtStart`, `forkResumedAt`, `fixedQuestionOutcome`, `nodes`, `disputeStakedRepByVaultAttoRep`, `totalDisputeStakedAttoRep`, `truthAuctionRepBeforeAttoRep`, and `truthAuctionRepRemainingAttoRep`. The claim delegate fallback exposes `rootClaimSourceGame`, `getInheritedClaimAllocation`, and `getUnresolvedClaimInterval`. The allocation read returns source principal, retained principal, reward-interval principal, and the retained cumulative reward position from exact per-generation interval rounding. Exported principal intervals compact previously consumed prefixes; reward positions never compact, and allocations within a game remain fixed in every claim order. `disputeStakedRepByVaultAttoRep` is locally attributed current-game escrow used for health; inherited carry remains aggregate commitment state until proof settlement. Use `previewDepositOnOutcome`, `computeIterativeAttritionCostAttoRep`, `computeTimeSinceStartFromAttritionCostAttoRep`, `totalCostAttoRep`, `getEscalationGameEndDate`, `getQuestionResolution`, `getFinalQuestionResolution`, `hasReachedNonDecision`, `canTriggerOwnFork`, `getBindingCapitalAttoRep`, `getOutcomeBalancesAttoRep`, `getDepositsByOutcome`, `getDepositsByOutcomeLength`, `forkCarrySnapshotInitialized`, `getOutcomeState`, `getForkCarrySnapshot`, `getForkCarryRoots`, `isForkCarryFundingComplete`, `getCarryLeafPageByOutcome`, `getProofConsumedCarriedDepositIndexesByOutcome`, `getLocalUnresolvedPrincipalByVaultAndOutcome`, and `getForkedEscrowByVaultAndOutcome` for calculations, lifecycle authorization, pages, carry state, and escrow. Vault-funded deposits and all withdrawals route through `SecurityPool`; after an ordinary game starts, wallet-funded deposits use `depositRepOnOutcome` and mint no pool backing units.',
 		readDeclarations: [
 			{ name: 'previewDepositOnOutcome' },
 			{ name: 'disputeStakedRepByVaultAttoRep', sourcePath: 'solidity/contracts/statoblast/EscalationGameState.sol' },
 			{ name: 'rootClaimSourceGame', sourcePath: 'solidity/contracts/statoblast/EscalationGameClaimDelegate.sol' },
-			{ name: 'applyInheritedClaimRetention', sourcePath: 'solidity/contracts/statoblast/EscalationGameClaimDelegate.sol' },
-			{ name: 'applyInheritedSourceStorageBasis', sourcePath: 'solidity/contracts/statoblast/EscalationGameClaimDelegate.sol' },
+			{ name: 'getInheritedClaimAllocation', sourcePath: 'solidity/contracts/statoblast/EscalationGameClaimDelegate.sol' },
+			{ name: 'getUnresolvedClaimInterval', sourcePath: 'solidity/contracts/statoblast/EscalationGameClaimDelegate.sol' },
 			{ name: 'computeIterativeAttritionCostAttoRep', sourcePath: 'solidity/contracts/statoblast/EscalationGameCalculations.sol' },
 			{ name: 'computeTimeSinceStartFromAttritionCostAttoRep', sourcePath: 'solidity/contracts/statoblast/EscalationGameCalculations.sol' },
 			{ name: 'totalCostAttoRep', sourcePath: 'solidity/contracts/statoblast/EscalationGameCalculations.sol' },
@@ -1224,8 +1224,6 @@ export const contractReferences: ContractReference[] = [
 			{ name: 'totalDisputeStakedAttoRep', sourcePath: 'solidity/contracts/statoblast/EscalationGameStorage.sol' },
 			{ name: 'truthAuctionRepBeforeAttoRep', sourcePath: 'solidity/contracts/statoblast/EscalationGameStorage.sol' },
 			{ name: 'truthAuctionRepRemainingAttoRep', sourcePath: 'solidity/contracts/statoblast/EscalationGameStorage.sol' },
-			{ name: 'cumulativeClaimRetention', sourcePath: 'solidity/contracts/statoblast/EscalationGameStorage.sol' },
-			{ name: 'cumulativeClaimRetentionExponent', sourcePath: 'solidity/contracts/statoblast/EscalationGameStorage.sol' },
 			{ name: 'fixedQuestionOutcome', sourcePath: 'solidity/contracts/statoblast/EscalationGameStorage.sol' },
 		],
 		sourcePath: 'solidity/contracts/statoblast/EscalationGame.sol',

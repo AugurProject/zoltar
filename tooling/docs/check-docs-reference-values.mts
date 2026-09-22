@@ -269,10 +269,7 @@ function assertLazyClaimCommitmentDocs(): void {
 	assert.match(liquidationHtml, /id="fig-liquidation-punitive-flow"/)
 	assert.doesNotMatch(escalationGameClaimDelegate, /moveEscalationClaim|payoutClaimBundle|getClaimOwner|liquidationClaimRep/)
 	assert.doesNotMatch(escalationGameEscrow, /Escrow principal missing/)
-	assert.match(
-		escalationGameClaimDelegate,
-		/retainedCumulativeAmountAttoRep = IEscalationClaimCheckpointSource\(sourceGame\)[\s\S]*\.applyInheritedClaimRetention\(cumulativeAmountAttoRep, parentDepositIndex\);[\s\S]*retainedPreviousAmountAttoRep = IEscalationClaimCheckpointSource\(sourceGame\)[\s\S]*\.applyInheritedClaimRetention\(cumulativeAmountAttoRep - amountAttoRep, parentDepositIndex\);[\s\S]*return retainedCumulativeAmountAttoRep - retainedPreviousAmountAttoRep/,
-	)
+	assert.match(escalationGameClaimDelegate, /retainedAmountAttoRep = _applyTruthAuctionRetention\(endAttoRep\) - _applyTruthAuctionRetention\(startAttoRep\)/)
 }
 
 function assertEscalationGameBytecodeDocs(): void {

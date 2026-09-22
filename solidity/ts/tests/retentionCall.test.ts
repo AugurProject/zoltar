@@ -6,7 +6,7 @@ import { setupTestAccounts } from '../testSupport/simulator/utils/utilities'
 import { test_statoblast_RetentionCallHarness_RetentionCallHarness as harness } from '../types/contractArtifact'
 
 const { getAnvilWindowEthereum } = useIsolatedAnvilNode()
-test('retention self-calls preserve failures and validate return data', async () => {
+test('allocation self-calls preserve failures and validate return data', async () => {
 	const ethereum = getAnvilWindowEthereum()
 	await setupTestAccounts(ethereum)
 	const client = createWriteClient(ethereum, TEST_ADDRESSES[0])
@@ -14,15 +14,9 @@ test('retention self-calls preserve failures and validate return data', async ()
 	const receipt = await client.waitForTransactionReceipt({ hash })
 	const address = receipt.contractAddress
 	if (address === undefined) throw new Error('Harness deployment did not return an address')
-	for (const storageBasis of [false, true]) {
-		await expect(client.readContract({ address, abi: harness.abi, functionName: 'evaluate', args: [storageBasis] })).rejects.toThrow('Retention unavailable')
-	}
+	await expect(client.readContract({ address, abi: harness.abi, functionName: 'evaluate', args: [] })).rejects.toThrow('Retention unavailable')
 	await writeContractAndWait(client, () => client.writeContract({ address, abi: harness.abi, functionName: 'setMode', args: [1n] }))
-	for (const storageBasis of [false, true]) {
-		await expect(client.readContract({ address, abi: harness.abi, functionName: 'evaluate', args: [storageBasis] })).rejects.toThrow('Invalid retention response')
-	}
+	await expect(client.readContract({ address, abi: harness.abi, functionName: 'evaluate', args: [] })).rejects.toThrow('Invalid allocation response')
 	await writeContractAndWait(client, () => client.writeContract({ address, abi: harness.abi, functionName: 'setMode', args: [2n] }))
-	for (const storageBasis of [false, true]) {
-		expect(await client.readContract({ address, abi: harness.abi, functionName: 'evaluate', args: [storageBasis] })).toBe(42n)
-	}
+	expect(await client.readContract({ address, abi: harness.abi, functionName: 'evaluate', args: [] })).toEqual([42n, 21n, 63n, 84n])
 })

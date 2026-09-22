@@ -8,7 +8,6 @@ import { EscalationGameStorage } from './EscalationGameStorage.sol';
 import { SystemState } from './interfaces/ISecurityPool.sol';
 import { IEscalationGameEvents } from './interfaces/IEscalationGame.sol';
 import { MerkleMountainRange } from './MerkleMountainRange.sol';
-import { Math } from './openOracle/openzeppelin/contracts/utils/math/Math.sol';
 import { IERC20PermitAuthorization, IERC3009Authorization } from '../vendor/authorization/IERC20Authorization.sol';
 import {
 	Deposit,
@@ -182,6 +181,13 @@ contract EscalationGameDepositDelegate is EscalationGameStorage, IEscalationGame
 		Node storage node = nodes[nodeId];
 		bytes32 carryHash = MerkleMountainRange.hashLeaf(node.depositor, node.outcome, node.amountAttoRep, node.parentDepositIndex, node.cumulativeAmountAttoRep, nodeId);
 		uint256 leafCount = state.currentLeafCount;
+		// Extend the Fenwick tree with the consumed sum in this new node's
+		// existing range. Future appends therefore preserve earlier consumption.
+		uint256 nextIndex = leafCount + 1;
+		uint256 rangeStart = nextIndex - (nextIndex & (~nextIndex + 1));
+		state.consumedPrincipalTree[nextIndex] =
+			_consumedPrincipalBefore(uint8(node.outcome), leafCount) -
+			_consumedPrincipalBefore(uint8(node.outcome), rangeStart);
 		uint256 peakHeight;
 		uint256 carryStartIndex = leafCount;
 		state.currentCarryNodeHashes[0][carryStartIndex] = carryHash;
@@ -209,16 +215,6 @@ contract EscalationGameDepositDelegate is EscalationGameStorage, IEscalationGame
 		uint256 repRemainingAttoRep = repBeforeAttoRep - repToRemoveAttoRep;
 		truthAuctionRepBeforeAttoRep = repBeforeAttoRep;
 		truthAuctionRepRemainingAttoRep = repRemainingAttoRep;
-		uint256 ratioShift = Math.log2(repBeforeAttoRep) - Math.log2(repRemainingAttoRep);
-		uint256 scaledRemaining = repRemainingAttoRep << ratioShift;
-		if (scaledRemaining > repBeforeAttoRep) {
-			scaledRemaining >>= 1;
-			ratioShift -= 1;
-		}
-		uint256 nextRetention = Math.mulDiv(cumulativeClaimRetention, scaledRemaining, repBeforeAttoRep);
-		uint256 normalizationShift = 255 - Math.log2(nextRetention);
-		cumulativeClaimRetention = nextRetention << normalizationShift;
-		cumulativeClaimRetentionExponent += ratioShift + normalizationShift;
 		totalDisputeStakedAttoRep = (totalDisputeStakedAttoRep * repRemainingAttoRep) / repBeforeAttoRep;
 		forkCarryDisputeStakedAttoRep = (forkCarryDisputeStakedAttoRep * repRemainingAttoRep) / repBeforeAttoRep;
 		for (uint256 outcomeIndex = 0; outcomeIndex < 3; outcomeIndex++) {
@@ -255,7 +251,21 @@ contract EscalationGameDepositDelegate is EscalationGameStorage, IEscalationGame
 		emit VaultEscrowUpdated(ownerAddress, _claimEscrowedRepByVault(ownerAddress), totalDisputeStakedAttoRep);
 	}
 
-	function consumeUnresolvedRepForClaimOwners(address bundleId, uint8 outcomeIndex, uint256 amountAttoRep) external {
+	function consumeCarriedDeposit(uint8 outcomeIndex, uint256 parentDepositIndex, uint256 amountAttoRep, uint256 cumulativeAmountAttoRep, uint256 leafIndex, uint256 effectiveInheritedAttoRep) external {
+		require(!outcomeState[outcomeIndex].consumedParentDepositIndexes[parentDepositIndex], 'Deposit settled');
+		OutcomeState storage state = outcomeState[outcomeIndex];
+		(uint256 sourceBasisAttoRep, uint256 sourceRetainedAmountAttoRep, , ) = _getInheritedClaimAllocation(outcomeIndex, amountAttoRep, cumulativeAmountAttoRep, leafIndex);
+		require(effectiveInheritedAttoRep >= sourceRetainedAmountAttoRep, 'Carried REP low');
+		state.consumedParentDepositIndexes[parentDepositIndex] = true;
+		_recordConsumedPrincipal(outcomeIndex, leafIndex, sourceRetainedAmountAttoRep);
+		state.inheritedConsumedSourceAttoRep += sourceBasisAttoRep;
+		state.inheritedConsumedRetainedAttoRep += sourceRetainedAmountAttoRep;
+		require(sourceBasisAttoRep <= state.inheritedUnresolvedTotalAttoRep, 'Carried source low');
+		state.inheritedUnresolvedTotalAttoRep -= sourceBasisAttoRep;
+	}
+
+	function consumeUnresolvedRepForClaimOwners(address bundleId, uint8 outcomeIndex, uint256 amountAttoRep, uint256 leafIndex) external {
+		_recordConsumedPrincipal(outcomeIndex, leafIndex, amountAttoRep);
 		require(unresolvedRepByVaultAttoRep[bundleId] >= amountAttoRep, 'Claim accounting remainder');
 		require(localUnresolvedPrincipalByVaultAndOutcome[bundleId][outcomeIndex] >= amountAttoRep, 'Claim accounting remainder');
 		unresolvedRepByVaultAttoRep[bundleId] -= amountAttoRep;
