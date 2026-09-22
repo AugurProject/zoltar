@@ -1071,6 +1071,18 @@ main.global-transaction-tray-open :is(a, button, input, select, summary, textare
 
 .operation-modal-panel {
 	width: min(54rem, calc(100vw - 2rem));
+	overflow: hidden;
+}
+
+/* The header stays pinned; everything below it scrolls inside the panel's padding box. */
+.operation-modal-scroll {
+	display: grid;
+	gap: 1rem;
+	flex: 1 1 auto;
+	min-height: 0;
+	overflow: auto;
+	margin: 0 -1.25rem -1.25rem;
+	padding: 0 1.25rem 1.25rem;
 }
 
 .operation-modal-body {
@@ -1981,6 +1993,12 @@ main.global-transaction-tray-open :is(a, button, input, select, summary, textare
 	.modal-panel:has(.transaction-step-actions) > .modal-header {
 		margin: -0.75rem -0.75rem 0;
 		padding: 0.5rem 0.75rem;
+	}
+
+	.modal-panel:has(.transaction-step-actions) > .operation-modal-scroll {
+		gap: 0.75rem;
+		margin: 0 -0.75rem -0.75rem;
+		padding: 0 0.75rem 0.75rem;
 	}
 
 	.transaction-funding {

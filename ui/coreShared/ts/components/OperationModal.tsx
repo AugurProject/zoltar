@@ -142,29 +142,32 @@ export function OperationModal({ children, closeDisabled = false, closeOnSuccess
 						×
 					</button>
 				</div>
-				{description === undefined ? undefined : (
-					<p id={descriptionId} className='detail'>
-						{description}
-					</p>
-				)}
-				{showContext ? <TransactionObjectContext items={context} /> : undefined}
-				<div className='operation-modal-body' inert={showSteps || undefined}>
-					{children}
+				{/* Only this region scrolls, so the title and close control stay pinned. */}
+				<div className='operation-modal-scroll'>
+					{description === undefined ? undefined : (
+						<p id={descriptionId} className='detail'>
+							{description}
+						</p>
+					)}
+					{showContext ? <TransactionObjectContext items={context} /> : undefined}
+					<div className='operation-modal-body' inert={showSteps || undefined}>
+						{children}
+					</div>
+					{/* Outcome notices sit below the form so its controls never move; the dialog scrolls to them instead. */}
+					{showNotice ? (
+						<div ref={noticeRef}>
+							<TransactionPresentationNotice className='operation-modal-transaction-notice' transaction={modalTransaction} />
+						</div>
+					) : undefined}
+					{showSteps ? (
+						<div className='operation-modal-steps'>
+							{/* The dialog already shows its context rows above the form, so the step review only keeps the rows it does not cover. */}
+							<GlobalTransactionPresentationProvider transaction={modalTransaction}>
+								<TransactionStepsContent contextKey={titleId} focusOnMount keepActionsVisible onClose={returnToForm} />
+							</GlobalTransactionPresentationProvider>
+						</div>
+					) : undefined}
 				</div>
-				{/* Outcome notices sit below the form so its controls never move; the dialog scrolls to them instead. */}
-				{showNotice ? (
-					<div ref={noticeRef}>
-						<TransactionPresentationNotice className='operation-modal-transaction-notice' transaction={modalTransaction} />
-					</div>
-				) : undefined}
-				{showSteps ? (
-					<div className='operation-modal-steps'>
-						{/* The dialog already shows its context rows above the form, so the step review only keeps the rows it does not cover. */}
-						<GlobalTransactionPresentationProvider transaction={modalTransaction}>
-							<TransactionStepsContent contextKey={titleId} focusOnMount keepActionsVisible onClose={returnToForm} />
-						</GlobalTransactionPresentationProvider>
-					</div>
-				) : undefined}
 			</section>
 		</div>
 	)
