@@ -95,8 +95,9 @@ export function OperationModal({ children, closeDisabled = false, closeOnSuccess
 		}
 	}, [activeTransaction?.hash, activeTransaction?.tone, activeTransactionOperationKey, closeOnSuccessKey, isOpen, onClose, ownsWorkflow, workflow?.cancel])
 
+	// The inline review takes focus itself when it appears; returning to the form hands focus back to the close control.
 	useLayoutEffect(() => {
-		if (!isOpen || !dialogRef.current?.contains(document.activeElement)) return
+		if (!isOpen || showSteps || !dialogRef.current?.contains(document.activeElement)) return
 		if (cannotClose) dialogRef.current.focus()
 		else closeButtonRef.current?.focus()
 	}, [showSteps])
@@ -142,7 +143,7 @@ export function OperationModal({ children, closeDisabled = false, closeOnSuccess
 					<div className='operation-modal-steps'>
 						{/* The dialog already shows its context rows above the form, so the step review only keeps the rows it does not cover. */}
 						<GlobalTransactionPresentationProvider transaction={modalTransaction}>
-							<TransactionStepsContent contextKey={titleId} onClose={returnToForm} onBack={returnToForm} />
+							<TransactionStepsContent contextKey={titleId} focusOnMount keepActionsVisible onBack={returnToForm} onClose={returnToForm} />
 						</GlobalTransactionPresentationProvider>
 					</div>
 				) : undefined}

@@ -56,6 +56,7 @@ for (const outcome of ['success', 'failure', 'approval', 'cancel', 'multi-step']
 			expect(document.querySelectorAll('[role="dialog"]')).toHaveLength(1)
 			expect(form()?.hasAttribute('inert')).toBe(true)
 			expect(steps()).not.toBeNull()
+			expect(steps()?.contains(document.activeElement)).toBe(true)
 			expect(queries.getByRole('textbox', { name: 'Amount' }).getAttribute('value')).toBe('42')
 			if (controller === undefined) throw new Error('Missing transaction controller')
 			if (outcome === 'cancel') {
@@ -159,7 +160,23 @@ test('sends an approval-only workflow from the form control without a separate r
 		expect(document.querySelectorAll('[role="dialog"]')).toHaveLength(1)
 		expect(dialog.querySelector('.operation-modal-steps')).toBeNull()
 		expect(dialog.querySelector('.operation-modal-body')?.hasAttribute('inert')).toBe(false)
-		expect(queries.queryByRole('button', { name: 'Send withdrawal' })).toBeNull()
+		expect(dialog.querySelector('.transaction-plan-action')).toBeNull()
+		expect(within(dialog).getAllByRole('button', { name: 'Approve REP' })).toHaveLength(1)
+
+		// A rejected approval surfaces through the dialog notice and leaves the form ready for another attempt.
+		const failedWorkflow = transactionSteps.value
+		await act(() => {
+			controller?.failed('Action canceled in wallet.')
+			presentation.value = { operationKey: 'approval', title: 'Approval failed', tone: 'error', detail: 'Action canceled in wallet.' }
+		})
+		expect(dialog.querySelector('.operation-modal-steps')).toBeNull()
+		expect(dialog.querySelector('.operation-modal-body')?.hasAttribute('inert')).toBe(false)
+		expect(dialog.querySelector('.operation-modal-transaction-notice')?.textContent).toContain('Action canceled in wallet.')
+		expect(queries.getByRole('button', { name: 'Close' }).hasAttribute('disabled')).toBe(false)
+		await act(() => fireEvent.click(queries.getByRole('button', { name: 'Approve REP' })))
+		expect(await review).toBeUndefined()
+		expect(transactionSteps.value).not.toBe(failedWorkflow)
+		expect(transactionSteps.value?.steps[0]?.phase).toBe('pending')
 	} finally {
 		await rendered.cleanup()
 		transactionSteps.value?.cancel()
