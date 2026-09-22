@@ -24,12 +24,14 @@ test('ignores obsolete address overrides and omits them from saved configuration
 	expect(Object.values(parseSettings({ ...example, network: { ...example.network, kind: 'custom', name: 'Local test', chainId: 31337 } }).deployment)).not.toContain(zeroAddress)
 })
 
-test('selects the deployed Uniswap factory for each network', () => {
+test('selects the published Uniswap factory for each network', () => {
 	for (const [chainId, factory] of [
 		[1, '0x1F98431c8aD98523631AE4a59f267346ea31F984'],
-		[11155111, '0xEf09Be426F8d6D2786cADEA7D3A8b0D09cEB79B4'],
+		[11155111, '0x0227628f3F023bb0B980b67D528571c95c6DaC1c'],
 	] as const) {
 		const settings = parseSettings({ ...example, network: { ...example.network, chainId, name: chainId === 1 ? 'mainnet' : 'sepolia' } })
 		expect(settings.deployment.uniswapV3Factory).toBe(factory)
 	}
+	const custom = parseSettings({ ...example, network: { ...example.network, kind: 'custom', name: 'Local test', chainId: 31337 } })
+	expect(custom.deployment.uniswapV3Factory).toBe('0x0227628f3F023bb0B980b67D528571c95c6DaC1c')
 })

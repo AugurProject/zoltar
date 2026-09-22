@@ -32,7 +32,7 @@ The node is intentionally ephemeral. `docker compose down` stops it, and startin
   bun run deploy:testnet -- --private-key=0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80 --rpc-url=http://localhost:8545 --chain-id=11155111
   ```
 
-  This well-known key is safe only for local development. The deployer checks and installs all deterministic protocol infrastructure needed by the other tools.
+  This well-known key is safe only for local development. The deployer first replays Uniswap's original Sepolia creation transactions through Anvil cheatcodes, so WETH, the V3 factory, QuoterV2, and the V4 contracts exist locally with Sepolia's exact bytecode and addresses, then checks and installs all deterministic protocol infrastructure needed by the other tools.
 - **augurScan:** after deploying the protocol, refresh its checked-in contract manifest from the current deterministic deployment data before building the image:
 
   ```bash
@@ -41,7 +41,7 @@ The node is intentionally ephemeral. `docker compose down` stops it, and startin
   bun run metadata:snapshot
   ```
 
-  In `augurScan/.env`, set `NETWORKS=sepolia`, `SEPOLIA_RPC_URL=http://anvil:8545`, and `SEPOLIA_START_BLOCK=0`, then run `docker compose up --build --force-recreate`. Set the optional Sepolia AMM and Uniswap environment addresses only after deploying those contracts.
+  In `augurScan/.env`, set `NETWORKS=sepolia`, `SEPOLIA_RPC_URL=http://anvil:8545`, and `SEPOLIA_START_BLOCK=0`, then run `docker compose up --build --force-recreate`. The Sepolia Uniswap V3 factory in `augurScan/.env.example` is Uniswap's published contract, which the testnet deployer installs locally; set the optional Sepolia AMM factory address only after deploying that contract.
 - **trading UI:** from `trading/`, run `docker compose up --build --force-recreate`, then open `http://localhost:4163/#/deploy`. Use chain ID `11155111` and `http://localhost:8545` in its live deployment setup. Host-side deployment commands use `TRADING_RPC_URL=http://localhost:8545`; a deployment manifest shown in the browser must also contain the browser-reachable host URL.
 - **liquidator:** from the repository root run `cd bots/liquidator` and `docker compose up --build --force-recreate`. Open `http://127.0.0.1:4183`, select Sepolia in **Chain and RPC connectivity**, enter `http://anvil:8545` for the primary and public RPC URLs, leave the optional independent quorum RPC list empty, save, and run `docker compose restart`. Keep execution disabled unless its deployment addresses and signer are configured for this chain.
 - **open-oracle arbitrager:** from the repository root run `cd bots/open-oracle-arbitrager` and `docker compose up --build --force-recreate`. Open `http://127.0.0.1:4173`, select Sepolia and **1 reader · primary only** in **Chain and RPC connectivity**, enter `http://anvil:8545` for the primary and public RPC URLs, leave the optional independent quorum RPC list empty, save, and run `docker compose restart`. Keep execution disabled unless its deployment manifest, contract addresses, and signer are configured for this chain.

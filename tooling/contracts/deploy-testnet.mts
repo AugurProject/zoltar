@@ -9,10 +9,9 @@ import { PROXY_DEPLOYER_ADDRESS } from '../../ui/zoltarShared/ts/protocol/zoltar
 import type { WriteClient } from '../../ui/coreShared/ts/wallet/chainBackend.ts'
 import { SEPOLIA_NETWORK_PROFILE, type NetworkProfile } from '../../ui/coreShared/ts/wallet/networkProfile.ts'
 import { readWithRpcStateRetries, type RpcStateRetryWait } from '../../ui/coreShared/ts/lib/rpcStateRetries.ts'
-import { ARACHNID_CREATE2_DEPLOYER_ADDRESS, ARACHNID_CREATE2_DEPLOYER_RUNTIME_CODE, getUniswapDeployment, resolveCanonicalCreate2DeployerForPreflight, type UniswapDeployment } from './uniswap-deployment.mts'
+import { ARACHNID_CREATE2_DEPLOYER_ADDRESS, ARACHNID_CREATE2_DEPLOYER_RUNTIME_CODE, createDevelopmentNodeRpc, ensurePublishedContracts, getUniswapDeployment, resolveCanonicalCreate2DeployerForPreflight, SEPOLIA_CHAIN_ID, type UniswapDeployment } from './uniswap-deployment.mts'
 import { createCompleteDeploymentPlan } from './deployment-plan.mts'
 
-const DEFAULT_CHAIN_ID = 11_155_111
 export const DEFAULT_MAX_FEE_PER_GAS_NANO_ETH = '100'
 export const DEFAULT_MAX_TOTAL_COST_ETH = '20'
 export const DEPLOYMENT_RECEIPT_TIMEOUT_MILLISECONDS = 60 * 60 * 1_000
@@ -31,14 +30,9 @@ export const CONSERVATIVE_DEPLOYMENT_GAS: Readonly<Record<string, bigint>> = {
 	proxyDeployer: 500_000n,
 	tradingFactory: 7_000_000n,
 	tradingRouter: 6_250_000n,
-	uniswapV3Factory: 8_500_000n,
-	uniswapV3Quoter: 3_000_000n,
 	uniswapV3SwapRouter: 4_250_000n,
-	uniswapV4PoolManager: 8_000_000n,
-	uniswapV4Quoter: 2_250_000n,
 	deploymentStatusOracle: 1_000_000n,
 	zoltarDeploymentStatusOracle: 1_000_000n,
-	weth: 1_000_000n,
 	reputationToken: 1_250_000n,
 	multicall3: 1_250_000n,
 	uniformPriceDualCapBatchAuctionFactory: 4_750_000n,
@@ -60,13 +54,13 @@ const EXPECTED_BOOTSTRAP_DESCENDANT_RUNTIME_CODE_HASHES: Readonly<Record<'mainne
 		escalationGameCreationCodePartOne: '0x93c6b909efa8ca71264528576baf1c865fe619d7ca74c50e1a630c30882bfa35',
 		escalationGameCreationCodePartTwo: '0x4595ae5be84a73e3b23c7c48db5257ea57b22773af70c1739df57113187d84fe',
 		escalationGameProofVerifier: '0xfc49238fed42490497fb4e8674a8c246e50c23e3ab87bf87b5f1d0f7e4a4393a',
-		liquidationApprovalRegistryDeployer: '0x1137376c49da19620de0e5c8fc1db1e5efbaabfb93c9c81735b7b6e7653defc9',
+		liquidationApprovalRegistryDeployer: '0x5a661f6b85cc4e29294e3792c954ea748e0edd2cdab70925b6d41d1cb702c7b4',
 		liquidationApprovalRegistryImplementation: '0x3627fef43fff4635e4ed78d5499bc1d7ac142e00bec7514272a699416b1933d8',
 		priceCoordinatorCreationCodeFirstChunk: '0x7452e81ed1bb74cb8dd49ae66a37a3b95bae741e295cec599adca940e0db9f14',
 		priceCoordinatorCreationCodeSecondChunk: '0x8f290111f938ad7ec01662ddf5996f8c9e7348975ea2155ac9d829b883d46e34',
-		priceCoordinatorDeploymentWorker: '0x46c8b243e0421efcbc16bd39485e5288624e6a3f78ba56827604809b3b58c445',
-		securityPoolDeployer: '0x903268b7f0c6c12f0c343b1860018353b4c1ab6d561f98c0c7a52bb0ba561758',
-		securityPoolDeploymentWorker: '0xc8bd400f79ef05382754bf1146ee19f87699474eda5df714bb3b025317a266b9',
+		priceCoordinatorDeploymentWorker: '0x6c00d3aa6e35f4b5e4bc63f78521bb7f9e674aa68f7c0de4dec1607d632104ee',
+		securityPoolDeployer: '0x5b18ef349b59f0653b00b8de3127cc57eaf6c369714c9678145955023837ce1a',
+		securityPoolDeploymentWorker: '0xffb90b6d1f3f6398393f321bcb6072a23ed58af0bf54a5a30afd6cdc2dc162af',
 		securityPoolCreationCodeFirstChunk: '0x3bc9f4bce628e35cb08b7e9563e782e17ad8267e7a42a817b1fbdcedc50473a0',
 		securityPoolCreationCodeSecondChunk: '0x00b8207645285e47c9ae252f1b9dbfdc632cfc23268859bfa588a1814ccffb52',
 		securityPoolEventEmitter: '0xeba6704d61b9cc7692fb72313334ec67980dd1569acb0703f1ba906c4cb50716',
@@ -153,7 +147,7 @@ function commandLineValue(optionName: string, assignmentName: string, argv: read
 }
 
 export function parseChainId(value: string | undefined) {
-	if (value === undefined) return DEFAULT_CHAIN_ID
+	if (value === undefined) return SEPOLIA_CHAIN_ID
 	if (!/^[1-9]\d*$/.test(value)) throw new Error('CHAIN_ID must be a canonical positive decimal integer without leading zeros')
 	const chainId = Number(value)
 	if (!Number.isSafeInteger(chainId) || chainId <= 0) throw new Error('CHAIN_ID must be a positive safe integer')
@@ -218,7 +212,7 @@ function isPrivateKey(value: string | undefined): value is Hex {
 function createDeploymentProfile(chainId: number, rpcUrl: string, uniswapAddresses: UniswapDeployment['addresses']): NetworkProfile {
 	const chain = defineChain({
 		id: chainId,
-		name: chainId === DEFAULT_CHAIN_ID ? 'Sepolia' : `Testnet ${chainId.toString()}`,
+		name: chainId === SEPOLIA_CHAIN_ID ? 'Sepolia' : `Testnet ${chainId.toString()}`,
 		nativeCurrency: {
 			decimals: 18,
 			name: 'Ether',
@@ -610,7 +604,7 @@ export async function deployTestnet(parameters: { chainId: number; maxFeePerGas?
 	const chainId = parseChainId(parameters.chainId.toString())
 	const rpcUrl = parseRpcUrl(parameters.rpcUrl)
 	const log = parameters.log ?? console.log
-	const uniswap = await getUniswapDeployment(SEPOLIA_NETWORK_PROFILE.wethAddress)
+	const uniswap = await getUniswapDeployment()
 	const profile = createDeploymentProfile(chainId, rpcUrl, uniswap.addresses)
 	const client = createPreparedDeploymentClient({
 		chain: profile.chain,
@@ -624,6 +618,7 @@ export async function deployTestnet(parameters: { chainId: number; maxFeePerGas?
 	if (actualChainId !== chainId) throw new Error(`RPC chain mismatch: expected ${chainId.toString()}, received ${actualChainId.toString()}`)
 	await assertRequiredEvmCompatible(client, chainId)
 	await assertEip1559Compatible(client, chainId)
+	await ensurePublishedContracts(client, createDevelopmentNodeRpc(rpcUrl), chainId, uniswap.publishedContracts, log)
 	await assertNoPendingDeployerTransactions(client, client.account.address)
 	await assertCanonicalCreate2DeployerCode(client)
 	await assertProxyCode(client)
@@ -688,10 +683,11 @@ Pass RPC and cost limits as uppercase assignments after --, for example:
   --max-fee-per-gas-nanoeth=100  Rejects higher RPC fee suggestions
   --max-total-cost-eth=20     Caps the preflight estimate and transaction costs
 
-Custom testnets receive the same deterministic WETH and genesis REP deployment
-used by Sepolia. The RPC must support Cancun, EIP-1559, and the canonical
-unprotected legacy deployer transactions. Ethereum mainnet chain ID 1 is
-intentionally rejected.`
+Every testnet uses Uniswap's published Sepolia WETH, V3 factory, QuoterV2, and V4
+contracts plus a deterministic SwapRouter and genesis REP. Anvil development nodes
+receive the published contracts at their Sepolia addresses automatically; any other
+RPC must already have them or the deployer aborts before spending. The RPC must
+support Cancun, EIP-1559, and the legacy deployer transactions. Chain ID 1 is rejected.`
 }
 
 function printHelp() {

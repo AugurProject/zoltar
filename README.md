@@ -177,12 +177,23 @@ as `deployed` or `skip` and verifying the bootstrap support contracts.
 
 Every deployment includes:
 
-- deterministic WETH and genesis REP
+- deterministic genesis REP
 - the canonical CREATE2 deployer and Permit2
-- a deterministic Uniswap V3 factory, SwapRouter, and QuoterV2
-- a Uniswap V4 PoolManager and Quoter
+- a deterministic Uniswap V3 SwapRouter bound to Uniswap's Sepolia factory
 - the Zoltar and Augur Statoblast protocol factories and their bootstrap support
   contracts
+
+WETH, the Uniswap V3 factory, QuoterV2, the V4 PoolManager, and the V4 Quoter are
+Uniswap's published Sepolia contracts
+([V3](https://developers.uniswap.org/docs/protocols/v3/deployments/v3-ethereum-deployments),
+[V4](https://developers.uniswap.org/docs/protocols/v4/deployments)). The deployer
+verifies that each one carries Uniswap's exact runtime code before deploying. On
+an Anvil development node it first replays Uniswap's original creation
+transactions, vendored byte for byte in `scripts/artifacts/uniswap-deployment.json`,
+so a clean local chain holds the same contracts at the same addresses as Sepolia.
+Any other RPC must already have them, or the deployer aborts before spending
+anything. Uniswap publishes no SwapRouter (v1) on Sepolia, so the deployer
+installs one bound to the published factory.
 
 The command does not create Uniswap pools or add liquidity. Protocol factories
 create market-specific security pools, share tokens, oracle coordinators,

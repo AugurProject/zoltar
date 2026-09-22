@@ -36,16 +36,17 @@ describe('network profile helpers', () => {
 		expect(buildTransactionExplorerUrl(profile, '0xabc')).toBeUndefined()
 	})
 
-	test('defines Sepolia with deterministically deployable WETH and genesis REP', () => {
+	test("defines Sepolia with Uniswap's published WETH and deterministically deployable genesis REP", () => {
 		expect(SEPOLIA_NETWORK_PROFILE.id).toBe('sepolia')
 		expect(SEPOLIA_NETWORK_PROFILE.chainIdHex).toBe('0xaa36a7')
 		expect(SEPOLIA_NETWORK_PROFILE.chain.id).toBe(11155111)
 		expect(SEPOLIA_NETWORK_PROFILE.genesisRepTokenAddress).toBe(SEPOLIA_GENESIS_REP_ADDRESS)
 		expect(SEPOLIA_NETWORK_PROFILE.wethAddress).toBe(SEPOLIA_WETH_ADDRESS)
+		expect(SEPOLIA_WETH_ADDRESS).toBe(getAddress('0xfFf9976782d46CC05630D1f6eBAb18b2324d6B14'))
 		expect(SEPOLIA_NETWORK_PROFILE.repPricingMode).toBe('uniswap')
-		expect(SEPOLIA_NETWORK_PROFILE.uniswapV4QuoterAddress).toBe(getAddress('0x29322b72F451C5f4eba5b3C862C76896470c059A'))
-		expect(SEPOLIA_NETWORK_PROFILE.uniswapV3FactoryAddress).toBe(getAddress('0xEf09Be426F8d6D2786cADEA7D3A8b0D09cEB79B4'))
-		expect(SEPOLIA_NETWORK_PROFILE.uniswapV3QuoterAddress).toBe(getAddress('0x6Aa53e5023fFDa81f7EEE31bdA5D35437A5DD841'))
+		expect(SEPOLIA_NETWORK_PROFILE.uniswapV4QuoterAddress).toBe(getAddress('0x61b3f2011a92d183c7dbadbda940a7555ccf9227'))
+		expect(SEPOLIA_NETWORK_PROFILE.uniswapV3FactoryAddress).toBe(getAddress('0x0227628f3F023bb0B980b67D528571c95c6DaC1c'))
+		expect(SEPOLIA_NETWORK_PROFILE.uniswapV3QuoterAddress).toBe(getAddress('0xEd1f6473345F45b75F8179591dd5bA1888cf2FB3'))
 		expect(SEPOLIA_NETWORK_PROFILE.usdcAddress).toBe(getAddress('0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238'))
 		expect(buildTransactionExplorerUrl(SEPOLIA_NETWORK_PROFILE, '0xabc')).toBe('https://sepolia.etherscan.io/tx/0xabc')
 		expect(getPublicNetworkProfile('sepolia')).toBe(SEPOLIA_NETWORK_PROFILE)

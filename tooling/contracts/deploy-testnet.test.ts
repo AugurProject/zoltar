@@ -545,7 +545,7 @@ describe('testnet deployment plan', () => {
 	})
 
 	test('covers every bootstrap infrastructure address and orders every dependency first', async () => {
-		const uniswap = await getUniswapDeployment(SEPOLIA_NETWORK_PROFILE.wethAddress)
+		const uniswap = await getUniswapDeployment()
 		const plan = createCompleteDeploymentPlan(SEPOLIA_NETWORK_PROFILE, uniswap)
 		const addressSet = new Set(plan.map(step => step.address))
 		const infrastructure = getInfraContractAddresses(SEPOLIA_NETWORK_PROFILE)
@@ -571,17 +571,15 @@ describe('testnet deployment plan', () => {
 			...directInfrastructure,
 			trading.factory.address,
 			trading.router.address,
-			SEPOLIA_NETWORK_PROFILE.wethAddress,
 			SEPOLIA_NETWORK_PROFILE.genesisRepTokenAddress,
 			uniswap.addresses.arachnidCreate2DeployerAddress,
 			uniswap.addresses.permit2Address,
-			uniswap.addresses.uniswapV3FactoryAddress,
-			uniswap.addresses.uniswapV3QuoterAddress,
 			uniswap.addresses.uniswapV3SwapRouterAddress,
-			uniswap.addresses.uniswapV4PoolManagerAddress,
-			uniswap.addresses.uniswapV4QuoterAddress,
 		]
 		for (const address of requiredAddresses) expect(addressSet.has(address)).toBe(true)
+		const publishedAddresses = [SEPOLIA_NETWORK_PROFILE.wethAddress, uniswap.addresses.uniswapV3FactoryAddress, uniswap.addresses.uniswapV3QuoterAddress, uniswap.addresses.uniswapV4PoolManagerAddress, uniswap.addresses.uniswapV4QuoterAddress]
+		expect(uniswap.publishedContracts.map(contract => contract.address)).toEqual(publishedAddresses)
+		for (const address of publishedAddresses) expect(addressSet.has(address)).toBe(false)
 		expect(Object.keys(bootstrapDescendants)).toHaveLength(16)
 		expect(new Set(Object.values(bootstrapDescendants)).size).toBe(16)
 		for (const address of Object.values(bootstrapDescendants)) expect(addressSet.has(address)).toBe(false)
@@ -596,7 +594,7 @@ describe('testnet deployment plan', () => {
 		expect(bootstrapDescendants.securityPoolCreationCodeFirstChunk).toBe(getCreateAddress({ from: bootstrapDescendants.securityPoolDeploymentWorker, nonce: 1n }))
 		expect(bootstrapDescendants.securityPoolCreationCodeSecondChunk).toBe(getCreateAddress({ from: bootstrapDescendants.securityPoolDeploymentWorker, nonce: 2n }))
 		expect(plan.some(step => step.id === 'escalationGameFactory')).toBe(true)
-		expect(plan).toHaveLength(27)
+		expect(plan).toHaveLength(22)
 		expect(new Set(plan.map(step => step.id)).size).toBe(plan.length)
 		expect(new Set(plan.map(step => step.address)).size).toBe(plan.length)
 		expect(Object.keys(CONSERVATIVE_DEPLOYMENT_GAS).sort()).toEqual(plan.map(step => step.id).sort())

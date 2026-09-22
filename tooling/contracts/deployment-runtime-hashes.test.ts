@@ -6,7 +6,7 @@ import { MAINNET_NETWORK_PROFILE, SEPOLIA_NETWORK_PROFILE, getRuntimeNetworkProf
 import { createAnvilNodeForConnectionMode, type AnvilNode } from '../../solidity/ts/testSupport/simulator/anvilNode.ts'
 import { assertBootstrapDescendantCode, createPreparedDeploymentClient, deployTestnet, runDeploymentPlan } from './deploy-testnet.mts'
 import { createCompleteDeploymentPlan } from './deployment-plan.mts'
-import { getUniswapDeployment } from './uniswap-deployment.mts'
+import { createDevelopmentNodeRpc, ensurePublishedContracts, getUniswapDeployment } from './uniswap-deployment.mts'
 
 const ANVIL_PRIVATE_KEY = '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80' satisfies Hex
 const MAX_FEE_PER_GAS = 100_000_000_000n
@@ -42,7 +42,8 @@ test(
 	async () => {
 		await withDeploymentNode(11_155_111, async node => {
 			const client = createPreparedDeploymentClient({ chain: SEPOLIA_NETWORK_PROFILE.chain, maxFeePerGas: MAX_FEE_PER_GAS, maxTotalCost: MAX_TOTAL_COST, privateKey: ANVIL_PRIVATE_KEY, rpcUrl: node.rpcUrl, log: () => {} })
-			const plan = createCompleteDeploymentPlan(SEPOLIA_NETWORK_PROFILE, await getUniswapDeployment(SEPOLIA_NETWORK_PROFILE.wethAddress))
+			const uniswap = await getUniswapDeployment()
+			const plan = createCompleteDeploymentPlan(SEPOLIA_NETWORK_PROFILE, uniswap)
 			const existing = await runDeploymentPlan(
 				plan.filter(step => !['zoltarDeploymentStatusOracle', 'tradingFactory', 'tradingRouter'].includes(step.id)),
 				client,
@@ -59,6 +60,11 @@ test(
 				writeGitHubSummary: false,
 			})
 			expect(deployment.results.filter(result => result.status === 'deployed').map(result => result.id)).toEqual(['zoltarDeploymentStatusOracle', 'tradingFactory', 'tradingRouter'])
+			// The fresh node had none of Uniswap's published Sepolia contracts; the deployer installed them at the published addresses.
+			for (const contract of uniswap.publishedContracts) expect(await client.getCode({ address: contract.address })).not.toBe('0x')
+			expect(await client.readContract({ abi: [{ inputs: [{ name: 'fee', type: 'uint24' }], name: 'feeAmountTickSpacing', outputs: [{ name: '', type: 'int24' }], stateMutability: 'view', type: 'function' }], address: uniswap.addresses.uniswapV3FactoryAddress, functionName: 'feeAmountTickSpacing', args: [3000] })).toBe(
+				60n,
+			)
 			expect(deployment.results.filter(result => result.status === 'skipped')).toHaveLength(existing.length)
 			const previousProfile = getRuntimeNetworkProfile()
 			setRuntimeNetworkProfile(SEPOLIA_NETWORK_PROFILE)
@@ -79,6 +85,31 @@ test(
 				await expect(deployTestnet({ chainId: 11_155_111, log: () => {}, maxFeePerGas: MAX_FEE_PER_GAS, maxTotalCost: MAX_TOTAL_COST, privateKey: ANVIL_PRIVATE_KEY, rpcUrl: node.rpcUrl, writeGitHubSummary: false })).rejects.toThrow(`Unexpected runtime code for ${id}`)
 				await node.anvilWindowEthereum.addStateOverrides({ [step.address]: { code: hexToBytes(originalCode) } })
 			}
+		})
+	},
+	TEST_TIMEOUT_MS,
+)
+
+test(
+	'Custom testnet nodes receive the published Uniswap contracts and the deterministic SwapRouter',
+	async () => {
+		const chainId = 31_337
+		await withDeploymentNode(chainId, async node => {
+			const client = createPreparedDeploymentClient({ chain: { ...SEPOLIA_NETWORK_PROFILE.chain, id: chainId }, log: () => {}, maxFeePerGas: MAX_FEE_PER_GAS, maxTotalCost: MAX_TOTAL_COST, privateKey: ANVIL_PRIVATE_KEY, rpcUrl: node.rpcUrl })
+			const uniswap = await getUniswapDeployment()
+			expect(await ensurePublishedContracts(client, createDevelopmentNodeRpc(node.rpcUrl), chainId, uniswap.publishedContracts)).toEqual(['weth', 'uniswapV3Factory', 'uniswapV3Quoter', 'uniswapV4PoolManager', 'uniswapV4Quoter'])
+			expect(await ensurePublishedContracts(client, createDevelopmentNodeRpc(node.rpcUrl), chainId, uniswap.publishedContracts)).toEqual([])
+			const uniswapStepIds = new Set(uniswap.steps.map(step => step.id))
+			const plan = createCompleteDeploymentPlan(SEPOLIA_NETWORK_PROFILE, uniswap).filter(step => step.id === 'proxyDeployer' || uniswapStepIds.has(step.id))
+			expect(plan.map(step => step.id)).toEqual(['arachnidCreate2Deployer', 'permit2', 'proxyDeployer', 'uniswapV3SwapRouter'])
+			const results = await runDeploymentPlan(plan, client, () => {})
+			// Replaying the published V4 Quoter already installed the canonical CREATE2 deployer.
+			expect(results.map(result => [result.id, result.status])).toEqual([
+				['arachnidCreate2Deployer', 'skipped'],
+				['permit2', 'deployed'],
+				['proxyDeployer', 'deployed'],
+				['uniswapV3SwapRouter', 'deployed'],
+			])
 		})
 	},
 	TEST_TIMEOUT_MS,

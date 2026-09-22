@@ -1,11 +1,21 @@
 import { canonicalUniswapDeployment } from '../../bots/shared/src/config/canonical-deployment.ts'
 import { describe, expect, test } from 'bun:test'
-import { concatHex, getAddress, type Hash, type Hex, type TransactionReceipt } from '@zoltar/core-shared/evm/ethereum'
+import { concatHex, getAddress, keccak256, type Address, type Hash, type Hex, type TransactionReceipt } from '@zoltar/core-shared/evm/ethereum'
 import type { WriteClient } from '../../ui/coreShared/ts/wallet/chainBackend.ts'
 import { SEPOLIA_NETWORK_PROFILE } from '../../ui/coreShared/ts/wallet/networkProfile.ts'
-import { ARACHNID_CREATE2_DEPLOYER_ADDRESS, ARACHNID_CREATE2_DEPLOYER_RUNTIME_CODE, PERMIT2_ADDRESS, assertPermit2ImmutableValues, assertUniswapDeploymentArtifact, getUniswapDeployment, resolveCanonicalCreate2DeployerForPreflight } from './uniswap-deployment.mts'
+import {
+	ARACHNID_CREATE2_DEPLOYER_ADDRESS,
+	ARACHNID_CREATE2_DEPLOYER_RUNTIME_CODE,
+	SEPOLIA_CHAIN_ID,
+	SEPOLIA_PUBLISHED_UNISWAP_ADDRESSES,
+	assertPermit2ImmutableValues,
+	ensurePublishedContracts,
+	assertUniswapDeploymentArtifact,
+	getUniswapDeployment,
+	resolveCanonicalCreate2DeployerForPreflight,
+} from './uniswap-deployment.mts'
 
-const WETH = getAddress('0x65156FD21726b8efcB627fa38c506E3f3542F601')
+const WETH = SEPOLIA_NETWORK_PROFILE.wethAddress
 
 function asWriteClient(client: Partial<WriteClient>): WriteClient {
 	return {
@@ -16,6 +26,12 @@ function asWriteClient(client: Partial<WriteClient>): WriteClient {
 
 function successReceipt(): TransactionReceipt {
 	return { ...({} as TransactionReceipt), status: 'success' }
+}
+
+// Unit doubles cannot reproduce Uniswap's bytecode, so they accept a one-byte stand-in as the expected runtime code.
+async function stubbedPublishedContracts() {
+	const { publishedContracts } = await getUniswapDeployment()
+	return publishedContracts.map(contract => ({ ...contract, expectedRuntimeCodeHash: keccak256('0x01') }))
 }
 
 describe('Uniswap testnet deployment', () => {
@@ -45,7 +61,7 @@ describe('Uniswap testnet deployment', () => {
 
 	test('rejects a changed deployment artifact before constructing a plan', async () => {
 		const artifact = await Bun.file(new URL('../../scripts/artifacts/uniswap-deployment.json', import.meta.url)).text()
-		const changedArtifact = artifact.replace('"uniswapV3Factory": "0x60', '"uniswapV3Factory": "0x61')
+		const changedArtifact = artifact.replace('"uniswapV3SwapRouter": "0x60', '"uniswapV3SwapRouter": "0x61')
 		expect(changedArtifact).not.toBe(artifact)
 		expect(() => assertUniswapDeploymentArtifact(changedArtifact)).toThrow('Uniswap deployment artifact is stale or changed')
 	})
@@ -63,43 +79,131 @@ describe('Uniswap testnet deployment', () => {
 		expect(() => assertPermit2ImmutableValues(concatHex([wrongChainId, domainSeparator]), immutableReferences, { chainId, domainSeparator })).toThrow('immutable _CACHED_CHAIN_ID')
 	})
 
-	test('builds the complete deterministic core and quoting dependency graph', async () => {
-		const deployment = await getUniswapDeployment(WETH)
-		expect(deployment.steps.map(step => step.id)).toEqual(['arachnidCreate2Deployer', 'permit2', 'uniswapV3Factory', 'uniswapV3Quoter', 'uniswapV3SwapRouter', 'uniswapV4PoolManager', 'uniswapV4Quoter'])
-		expect(deployment.steps.map(step => step.dependencies)).toEqual([[], ['arachnidCreate2Deployer'], ['proxyDeployer'], ['proxyDeployer', 'uniswapV3Factory'], ['proxyDeployer', 'uniswapV3Factory'], ['proxyDeployer'], ['proxyDeployer', 'uniswapV4PoolManager']])
-		expect(new Set(deployment.steps.map(step => step.address)).size).toBe(deployment.steps.length)
-		const addressById = new Map(deployment.steps.map(step => [step.id, step.address]))
-		expect(addressById.get('arachnidCreate2Deployer')).toBe(ARACHNID_CREATE2_DEPLOYER_ADDRESS)
-		expect(addressById.get('permit2')).toBe(PERMIT2_ADDRESS)
-		expect(addressById.get('uniswapV3Factory')).toBe(deployment.addresses.uniswapV3FactoryAddress)
-		expect(addressById.get('uniswapV3Quoter')).toBe(deployment.addresses.uniswapV3QuoterAddress)
-		expect(addressById.get('uniswapV3SwapRouter')).toBe(deployment.addresses.uniswapV3SwapRouterAddress)
-		expect(addressById.get('uniswapV4PoolManager')).toBe(deployment.addresses.uniswapV4PoolManagerAddress)
-		expect(addressById.get('uniswapV4Quoter')).toBe(deployment.addresses.uniswapV4QuoterAddress)
+	test('lists the published Sepolia contracts as prerequisites and only installs the canonical deployers, Permit2, and a SwapRouter', async () => {
+		const deployment = await getUniswapDeployment()
+		expect(deployment.steps.map(step => step.id)).toEqual(['arachnidCreate2Deployer', 'permit2', 'uniswapV3SwapRouter'])
+		expect(deployment.steps.map(step => step.dependencies)).toEqual([[], ['arachnidCreate2Deployer'], ['proxyDeployer']])
+		expect(deployment.publishedContracts.map(({ address, id, label }) => ({ address, id, label }))).toEqual([
+			{ address: WETH, id: 'weth', label: 'Wrapped Ether' },
+			{ address: SEPOLIA_PUBLISHED_UNISWAP_ADDRESSES.uniswapV3FactoryAddress, id: 'uniswapV3Factory', label: 'Uniswap V3 Factory' },
+			{ address: SEPOLIA_PUBLISHED_UNISWAP_ADDRESSES.uniswapV3QuoterAddress, id: 'uniswapV3Quoter', label: 'Uniswap V3 QuoterV2' },
+			{ address: SEPOLIA_PUBLISHED_UNISWAP_ADDRESSES.uniswapV4PoolManagerAddress, id: 'uniswapV4PoolManager', label: 'Uniswap V4 PoolManager' },
+			{ address: SEPOLIA_PUBLISHED_UNISWAP_ADDRESSES.uniswapV4QuoterAddress, id: 'uniswapV4Quoter', label: 'Uniswap V4 Quoter' },
+		])
+		expect(deployment.publishedContracts.map(contract => contract.install.kind)).toEqual(['create', 'create', 'create', 'create', 'create2'])
+		expect(deployment.publishedContracts.map(contract => contract.expectedRuntimeCodeHash)).toEqual([
+			'0xc864e10689f2da18833652a3b075d43106e87f0f90d95ee64f6f0b33bc026083',
+			'0xacb5afea1f8877239fadd30358add13f2f9d4fb80175402c686d392295224fef',
+			'0xe4068c0e5f3f2d9980793dd4314d2222dca27d03fd999cb5dca580fd90ceea0e',
+			'0x09930125a49f5b95caf8052991cc14d1240dca8b43f42b899115b86867e4bce1',
+			'0xf481a751ac453d40c46d12360b85b05472028c1b113ab63749d69a5f8b0e47d1',
+		])
 		expect(deployment.addresses).toEqual({
 			arachnidCreate2DeployerAddress: getAddress('0x4e59b44847b379578588920cA78FbF26c0B4956C'),
 			permit2Address: getAddress('0x000000000022D473030F116dDEE9F6B43aC78BA3'),
-			uniswapV3FactoryAddress: getAddress('0xEf09Be426F8d6D2786cADEA7D3A8b0D09cEB79B4'),
-			uniswapV3QuoterAddress: getAddress('0x6Aa53e5023fFDa81f7EEE31bdA5D35437A5DD841'),
-			uniswapV3SwapRouterAddress: getAddress('0xC0a0e58Ae39603398D474BFd49d2904dE1464C99'),
-			uniswapV4PoolManagerAddress: getAddress('0x9C27Fce9ad85dE98C7e95031Bf3F0B3D2CD677ad'),
-			uniswapV4QuoterAddress: getAddress('0x29322b72F451C5f4eba5b3C862C76896470c059A'),
+			uniswapV3FactoryAddress: getAddress('0x0227628f3F023bb0B980b67D528571c95c6DaC1c'),
+			uniswapV3QuoterAddress: getAddress('0xEd1f6473345F45b75F8179591dd5bA1888cf2FB3'),
+			uniswapV3SwapRouterAddress: getAddress('0xa277024D80f829d58471239f4359933Dd6f18155'),
+			uniswapV4PoolManagerAddress: getAddress('0xE03A1074c86CFeDd5C142C4F04F1a1536e203543'),
+			uniswapV4QuoterAddress: getAddress('0x61b3f2011a92d183c7dbadbda940a7555ccf9227'),
 		})
-		expect(deployment.addresses.uniswapV3SwapRouterAddress).not.toBe(SEPOLIA_NETWORK_PROFILE.uniswapV3QuoterAddress)
+		expect(deployment.steps.find(step => step.id === 'uniswapV3SwapRouter')?.expectedRuntimeCodeHash).toMatch(/^0x[0-9a-f]{64}$/)
 	})
 
-	test('keeps core addresses stable while binding the V3 quoter to the selected WETH', async () => {
-		const first = await getUniswapDeployment(WETH)
-		const second = await getUniswapDeployment(getAddress('0x0000000000000000000000000000000000000001'))
-		expect(second.addresses.uniswapV3FactoryAddress).toBe(first.addresses.uniswapV3FactoryAddress)
-		expect(second.addresses.uniswapV4PoolManagerAddress).toBe(first.addresses.uniswapV4PoolManagerAddress)
-		expect(second.addresses.uniswapV4QuoterAddress).toBe(first.addresses.uniswapV4QuoterAddress)
-		expect(second.addresses.uniswapV3QuoterAddress).not.toBe(first.addresses.uniswapV3QuoterAddress)
-		expect(second.addresses.uniswapV3SwapRouterAddress).not.toBe(first.addresses.uniswapV3SwapRouterAddress)
+	test('accepts published contracts that already have the exact runtime code without touching the node', async () => {
+		const publishedContracts = await stubbedPublishedContracts()
+		const rpcCalls: string[] = []
+		const installed = await ensurePublishedContracts(
+			asWriteClient({ getCode: async () => '0x01' }),
+			async (method: string) => {
+				rpcCalls.push(method)
+				return undefined
+			},
+			SEPOLIA_CHAIN_ID,
+			publishedContracts,
+		)
+		expect(installed).toEqual([])
+		expect(rpcCalls).toEqual([])
+	})
+
+	test('rejects published addresses whose runtime code differs from the vendored deployment', async () => {
+		const { publishedContracts } = await getUniswapDeployment()
+		await expect(ensurePublishedContracts(asWriteClient({ getCode: async () => '0x01' }), async () => undefined, SEPOLIA_CHAIN_ID, publishedContracts)).rejects.toThrow('Unexpected runtime code for Wrapped Ether at 0xfFf9976782d46CC05630D1f6eBAb18b2324d6B14')
+	})
+
+	test('refuses missing published contracts on a node without Anvil cheatcodes', async () => {
+		const publishedContracts = await stubbedPublishedContracts()
+		const missing = publishedContracts[2]
+		if (missing === undefined) throw new Error('Expected published contracts')
+		await expect(
+			ensurePublishedContracts(
+				asWriteClient({ getCode: async ({ address }) => (address === missing.address ? '0x' : '0x01') }),
+				async (method: string) => {
+					throw new Error(`Method ${method} not found`)
+				},
+				SEPOLIA_CHAIN_ID,
+				publishedContracts,
+			),
+		).rejects.toThrow(`Uniswap V3 QuoterV2 (${missing.address}) published by Uniswap has no code on chain 11155111. Use a Sepolia RPC or an Anvil development node.`)
+	})
+
+	test('installs missing published contracts on a development node by replaying the vendored creation transactions', async () => {
+		const publishedContracts = await stubbedPublishedContracts()
+		const installedCode = new Set<string>([ARACHNID_CREATE2_DEPLOYER_ADDRESS.toLowerCase()])
+		const rpcCalls: { method: string; params: readonly unknown[] }[] = []
+		let pendingCreation: Address | undefined
+		const rpc = async (method: string, params: readonly unknown[]) => {
+			rpcCalls.push({ method, params })
+			if (method === 'eth_sendTransaction') {
+				const request = params[0]
+				if (typeof request !== 'object' || request === null || !('from' in request)) throw new Error('Unexpected creation request')
+				const creator = String(request.from)
+				const target = publishedContracts.find(contract => contract.install.creator === creator && !installedCode.has(contract.address.toLowerCase()))
+				if (target === undefined) throw new Error(`No pending published contract for ${creator}`)
+				pendingCreation = target.address
+				return `0x${'3'.repeat(64)}`
+			}
+			return undefined
+		}
+		const client = asWriteClient({
+			getCode: async ({ address }) => {
+				if (address.toLowerCase() === ARACHNID_CREATE2_DEPLOYER_ADDRESS.toLowerCase()) return ARACHNID_CREATE2_DEPLOYER_RUNTIME_CODE
+				return installedCode.has(address.toLowerCase()) ? '0x01' : '0x'
+			},
+			waitForTransactionReceipt: async () => {
+				if (pendingCreation === undefined) throw new Error('No pending creation')
+				installedCode.add(pendingCreation.toLowerCase())
+				const created = pendingCreation
+				return created === SEPOLIA_PUBLISHED_UNISWAP_ADDRESSES.uniswapV4QuoterAddress ? successReceipt() : { ...successReceipt(), contractAddress: created }
+			},
+		})
+		const installed = await ensurePublishedContracts(client, rpc, SEPOLIA_CHAIN_ID, publishedContracts)
+		expect(installed).toEqual(['weth', 'uniswapV3Factory', 'uniswapV3Quoter', 'uniswapV4PoolManager', 'uniswapV4Quoter'])
+		expect(rpcCalls[0]?.method).toBe('anvil_nodeInfo')
+		expect(rpcCalls.slice(1, 6).map(call => call.method)).toEqual(['anvil_impersonateAccount', 'anvil_setBalance', 'anvil_setNonce', 'eth_sendTransaction', 'anvil_stopImpersonatingAccount'])
+		expect(rpcCalls[3]?.params).toEqual(['0x3344BBDCeb8f6fb52de759c127E4A44EFb40432A', '0x0'])
+		expect(rpcCalls.filter(call => call.method === 'anvil_setNonce').map(call => call.params[1])).toEqual(['0x0', '0x1', '0xd', '0x5b'])
+		const creations = rpcCalls.filter(call => call.method === 'eth_sendTransaction').map(call => call.params[0])
+		expect(creations).toHaveLength(5)
+		const create2Request = creations[4]
+		if (typeof create2Request !== 'object' || create2Request === null || !('to' in create2Request) || !('data' in create2Request) || !('from' in create2Request)) throw new Error('Expected a CREATE2 deployer request')
+		expect(create2Request.to).toBe(ARACHNID_CREATE2_DEPLOYER_ADDRESS)
+		expect(String(create2Request.data).startsWith('0x0000000000000000000000000000000000000000000000000000000000000080')).toBe(true)
+		expect(create2Request.from).toBe('0x7024cc7e60D6560f0B5877DA2bb921FCbF1f4375')
+		expect(rpcCalls[rpcCalls.length - 3]?.method).toBe('anvil_setBalance')
+	})
+
+	test('rejects a replayed creation that lands somewhere other than the published address', async () => {
+		const { publishedContracts } = await getUniswapDeployment()
+		const client = asWriteClient({
+			getCode: async () => '0x',
+			waitForTransactionReceipt: async () => ({ ...successReceipt(), contractAddress: getAddress('0x00000000000000000000000000000000000000bb') }),
+		})
+		await expect(ensurePublishedContracts(client, async (method: string) => (method === 'eth_sendTransaction' ? `0x${'4'.repeat(64)}` : undefined), SEPOLIA_CHAIN_ID, publishedContracts)).rejects.toThrow('Wrapped Ether was created at 0x00000000000000000000000000000000000000bb instead of the published address')
 	})
 
 	test('waits for a concurrent canonical CREATE2 deployer transaction', async () => {
-		const step = (await getUniswapDeployment(WETH)).steps.find(candidate => candidate.id === 'arachnidCreate2Deployer')
+		const step = (await getUniswapDeployment()).steps.find(candidate => candidate.id === 'arachnidCreate2Deployer')
 		if (step === undefined) throw new Error('Expected canonical CREATE2 deployer step')
 		let installed = false
 		let rawBroadcastCalled = false
@@ -134,7 +238,7 @@ describe('Uniswap testnet deployment', () => {
 	test('retries CREATE2 deployer code verification when RPC state lags the confirmed receipt', async () => {
 		const retryDelays: number[] = []
 		const step = (
-			await getUniswapDeployment(WETH, async delayMilliseconds => {
+			await getUniswapDeployment(async delayMilliseconds => {
 				retryDelays.push(delayMilliseconds)
 			})
 		).steps.find(candidate => candidate.id === 'arachnidCreate2Deployer')
@@ -157,7 +261,7 @@ describe('Uniswap testnet deployment', () => {
 	})
 
 	test('accepts an already-known canonical CREATE2 deployer broadcast race', async () => {
-		const step = (await getUniswapDeployment(WETH)).steps.find(candidate => candidate.id === 'arachnidCreate2Deployer')
+		const step = (await getUniswapDeployment()).steps.find(candidate => candidate.id === 'arachnidCreate2Deployer')
 		if (step === undefined) throw new Error('Expected canonical CREATE2 deployer step')
 		let installed = false
 		let pending = false
@@ -190,7 +294,7 @@ describe('Uniswap testnet deployment', () => {
 	})
 
 	test('accepts a canonical CREATE2 deployment that confirms before its broadcast returns', async () => {
-		const step = (await getUniswapDeployment(WETH)).steps.find(candidate => candidate.id === 'arachnidCreate2Deployer')
+		const step = (await getUniswapDeployment()).steps.find(candidate => candidate.id === 'arachnidCreate2Deployer')
 		if (step === undefined) throw new Error('Expected canonical CREATE2 deployer step')
 		let installed = false
 		const client = asWriteClient({
@@ -215,7 +319,7 @@ describe('Uniswap testnet deployment', () => {
 	test('retries stale CREATE2 code after a broadcast reports an already-confirmed nonce', async () => {
 		const retryDelays: number[] = []
 		const step = (
-			await getUniswapDeployment(WETH, async delayMilliseconds => {
+			await getUniswapDeployment(async delayMilliseconds => {
 				retryDelays.push(delayMilliseconds)
 			})
 		).steps.find(candidate => candidate.id === 'arachnidCreate2Deployer')
@@ -249,7 +353,7 @@ describe('Uniswap testnet deployment', () => {
 	test('accepts delayed CREATE2 code after its signer nonce was already confirmed', async () => {
 		const retryDelays: number[] = []
 		const step = (
-			await getUniswapDeployment(WETH, async delayMilliseconds => {
+			await getUniswapDeployment(async delayMilliseconds => {
 				retryDelays.push(delayMilliseconds)
 			})
 		).steps.find(candidate => candidate.id === 'arachnidCreate2Deployer')
@@ -281,7 +385,7 @@ describe('Uniswap testnet deployment', () => {
 	})
 
 	test('rejects unexpected code installed during a canonical CREATE2 deployer broadcast race', async () => {
-		const step = (await getUniswapDeployment(WETH)).steps.find(candidate => candidate.id === 'arachnidCreate2Deployer')
+		const step = (await getUniswapDeployment()).steps.find(candidate => candidate.id === 'arachnidCreate2Deployer')
 		if (step === undefined) throw new Error('Expected canonical CREATE2 deployer step')
 		let code: Hex | undefined
 		const client = asWriteClient({
@@ -302,7 +406,7 @@ describe('Uniswap testnet deployment', () => {
 	})
 
 	test('rejects an incompatible canonical raw gas price without funding', async () => {
-		const step = (await getUniswapDeployment(WETH)).steps.find(candidate => candidate.id === 'arachnidCreate2Deployer')
+		const step = (await getUniswapDeployment()).steps.find(candidate => candidate.id === 'arachnidCreate2Deployer')
 		if (step === undefined) throw new Error('Expected canonical CREATE2 deployer step')
 		let writeCalled = false
 		const client = asWriteClient({
@@ -326,7 +430,7 @@ describe('Uniswap testnet deployment', () => {
 	})
 
 	test('tests canonical raw-transaction policy before CREATE2 signer funding', async () => {
-		const step = (await getUniswapDeployment(WETH)).steps.find(candidate => candidate.id === 'arachnidCreate2Deployer')
+		const step = (await getUniswapDeployment()).steps.find(candidate => candidate.id === 'arachnidCreate2Deployer')
 		if (step === undefined) throw new Error('Expected canonical CREATE2 deployer step')
 		let fundingCalled = false
 		const client = asWriteClient({
@@ -353,7 +457,7 @@ describe('Uniswap testnet deployment', () => {
 		let rawBroadcastCount = 0
 		const retryDelays: number[] = []
 		const step = (
-			await getUniswapDeployment(WETH, async delayMilliseconds => {
+			await getUniswapDeployment(async delayMilliseconds => {
 				retryDelays.push(delayMilliseconds)
 				codeVisible = true
 			})
@@ -381,7 +485,7 @@ describe('Uniswap testnet deployment', () => {
 	})
 
 	test('enforces CREATE2 raw-transaction cost authorization before broadcast', async () => {
-		const step = (await getUniswapDeployment(WETH)).steps.find(candidate => candidate.id === 'arachnidCreate2Deployer')
+		const step = (await getUniswapDeployment()).steps.find(candidate => candidate.id === 'arachnidCreate2Deployer')
 		if (step === undefined) throw new Error('Expected canonical CREATE2 deployer step')
 		let writeCalled = false
 		const client = asWriteClient({
@@ -407,18 +511,24 @@ describe('Uniswap testnet deployment', () => {
 	})
 })
 
-test('bot Sepolia defaults match the deployed Uniswap bytecode and WETH', async () => {
-	const deployment = await getUniswapDeployment(SEPOLIA_NETWORK_PROFILE.wethAddress)
-	const defaults = canonicalUniswapDeployment(11155111)
-	expect(defaults.factory).toBe(deployment.addresses.uniswapV3FactoryAddress)
-	expect(defaults.quoter).toBe(deployment.addresses.uniswapV3QuoterAddress)
-	expect(defaults.router).toBe(deployment.addresses.uniswapV3SwapRouterAddress)
-	expect(defaults.v2Router).toBeUndefined()
-	expect(defaults).toMatchObject({ v4PoolManager: deployment.addresses.uniswapV4PoolManagerAddress, v4Quoter: deployment.addresses.uniswapV4QuoterAddress })
+test('bot testnet defaults match the published Uniswap contracts and the deployed SwapRouter', async () => {
+	const deployment = await getUniswapDeployment()
+	for (const chainId of [11155111, 31337]) {
+		expect(canonicalUniswapDeployment(chainId)).toEqual({
+			factory: deployment.addresses.uniswapV3FactoryAddress,
+			quoter: deployment.addresses.uniswapV3QuoterAddress,
+			router: deployment.addresses.uniswapV3SwapRouterAddress,
+			v2Router: undefined,
+			v4PoolManager: deployment.addresses.uniswapV4PoolManagerAddress,
+			v4Quoter: deployment.addresses.uniswapV4QuoterAddress,
+		})
+	}
 })
 
-test('UI Sepolia pricing uses the same deployed Uniswap contracts as the bots', async () => {
-	const { addresses } = await getUniswapDeployment(SEPOLIA_NETWORK_PROFILE.wethAddress)
+test('UI Sepolia pricing uses the same published Uniswap contracts as the bots', async () => {
+	expect(SEPOLIA_CHAIN_ID).toBe(SEPOLIA_NETWORK_PROFILE.chain.id)
+	expect(SEPOLIA_CHAIN_ID).toBe(11155111)
+	const { addresses } = await getUniswapDeployment()
 	expect(SEPOLIA_NETWORK_PROFILE.uniswapV3FactoryAddress).toBe(addresses.uniswapV3FactoryAddress)
 	expect(SEPOLIA_NETWORK_PROFILE.uniswapV3QuoterAddress).toBe(addresses.uniswapV3QuoterAddress)
 	expect(SEPOLIA_NETWORK_PROFILE.uniswapV4QuoterAddress).toBe(addresses.uniswapV4QuoterAddress)
