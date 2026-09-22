@@ -260,6 +260,7 @@ Supply:
 - intentional non-goals;
 - authoritative implementation or research sources;
 - pages or material intentionally deleted;
+- pages moved, converted, split, or regenerated from another location, with the source;
 - validation performed.
 
 Ask the reviewer to assess reader-purpose completion, mode purity, concision,
