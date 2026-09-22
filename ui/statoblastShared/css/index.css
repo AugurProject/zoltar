@@ -3034,7 +3034,9 @@
 		justify-content: flex-start;
 		min-inline-size: 0;
 	}
+	/* An address longer than the field clips with an ellipsis at rest; focusing the field still scrolls to the caret. */
 	.pool-selection-control input {
 		font-size: var(--font-label);
+		text-overflow: ellipsis;
 	}
 }
