@@ -1,33 +1,32 @@
-import { concatHex, encodeAbiParameters, encodeDeployData, getAddress, getCreateAddress, getCreate2Address, keccak256, toHex, type Address, type Hash, type Hex } from '@zoltar/core-shared/evm/ethereum'
+import { concatHex, encodeAbiParameters, encodeDeployData, getAddress, getCreateAddress, getCreate2Address, keccak256, toHex, zeroAddress, type Address, type Hash, type Hex } from '@zoltar/core-shared/evm/ethereum'
 import { readWithRpcStateRetries, type RpcStateRetryWait } from '../../ui/coreShared/ts/lib/rpcStateRetries.ts'
 import { waitForSubmittedTransactionReceipt } from '../../ui/zoltarShared/ts/protocol/core.ts'
 import type { TransactionReceipt } from '@zoltar/core-shared/evm/ethereum'
 import { assertCanonicalRawTransactionFeeCompatible, CANONICAL_DEPLOYER_RAW_TRANSACTION_COST, fundCanonicalDeployerSigner, isInsufficientFundsError } from '../../ui/zoltarShared/ts/protocol/deployment.ts'
 import { PROXY_DEPLOYER_ADDRESS, ZERO_SALT } from '../../ui/zoltarShared/ts/protocol/zoltarDeploymentHelpers.ts'
 import type { WriteClient } from '../../ui/coreShared/ts/wallet/chainBackend.ts'
-import { SEPOLIA_NETWORK_PROFILE } from '../../ui/coreShared/ts/wallet/networkProfile.ts'
+import { getUniswapNetworkDeployment, SEPOLIA_CHAIN_ID, type UniswapNetworkDeployment } from '@zoltar/core-shared/deployment/uniswapDeployments'
+import { statoblast_WETH9_WETH9 } from '../../solidity/ts/types/contractArtifact.ts'
+import type { PublishedContract } from './published-contracts.mts'
 
 const UNISWAP_DEPLOYMENT_ARTIFACT = new URL('../../scripts/artifacts/uniswap-deployment.json', import.meta.url)
-const UNISWAP_DEPLOYMENT_ARTIFACT_SHA256 = '1dede65404f6e3f7c912e8798077f4235af1831a48c50a08672bfccb986f98ea'
+const UNISWAP_DEPLOYMENT_ARTIFACT_SHA256 = '55a0caff0d9b6d9c3b8d8883a3ebe73ef462641e54fe2f46b077bf084bc97161'
 
 export const ARACHNID_CREATE2_DEPLOYER_ADDRESS = getAddress('0x4e59b44847b379578588920ca78fbf26c0b4956c')
 export const ARACHNID_CREATE2_DEPLOYER_RUNTIME_CODE = '0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffe03601600081602082378035828234f58015156039578182fd5b8082525050506014600cf3' satisfies Hex
 export const PERMIT2_ADDRESS = getAddress('0x000000000022D473030F116dDEE9F6B43aC78BA3')
-export const SEPOLIA_CHAIN_ID = SEPOLIA_NETWORK_PROFILE.chain.id
-// Uniswap's published Sepolia deployment, used by every testnet:
-// https://developers.uniswap.org/docs/protocols/v3/deployments/v3-ethereum-deployments
-// https://developers.uniswap.org/docs/protocols/v4/deployments
-// Uniswap publishes no SwapRouter (v1) on Sepolia, so the deployer still installs a
-// deterministic SwapRouter bound to the published factory for the arbitrage executor.
-export const SEPOLIA_PUBLISHED_UNISWAP_ADDRESSES = {
-	uniswapV3FactoryAddress: getAddress('0x0227628f3F023bb0B980b67D528571c95c6DaC1c'),
-	uniswapV3QuoterAddress: getAddress('0xEd1f6473345F45b75F8179591dd5bA1888cf2FB3'),
-	uniswapV4PoolManagerAddress: getAddress('0xE03A1074c86CFeDd5C142C4F04F1a1536e203543'),
-	uniswapV4QuoterAddress: getAddress('0x61b3f2011a92d183c7dbadbda940a7555ccf9227'),
-} as const
-const DEVELOPMENT_NODE_CREATOR_BALANCE = 1_000_000_000_000_000_000n
-// tooling/contracts/deployment-runtime-hashes.test.ts verifies this on Anvil.
-const SEPOLIA_SWAP_ROUTER_RUNTIME_CODE_HASH = '0xca7d8f5518a35dc3dae4f1a90b95c16307baec1321442b55aa82187eff242faf' satisfies Hash
+export { SEPOLIA_CHAIN_ID }
+// Runtime code hashes of the deterministic deployments; tooling/contracts/deployment-runtime-hashes.test.ts verifies every one on Anvil.
+// Published chains only deploy the SwapRouter, bound to Uniswap's Sepolia factory and WETH.
+const PUBLISHED_SWAP_ROUTER_RUNTIME_CODE_HASH = '0xca7d8f5518a35dc3dae4f1a90b95c16307baec1321442b55aa82187eff242faf' satisfies Hash
+const DETERMINISTIC_RUNTIME_CODE_HASHES = {
+	uniswapV3Factory: '0x6377aa1b105d3ee2a54d73d3652812d6209ca56871954f61ad6e87d9c184fa5e',
+	uniswapV3Quoter: '0x8410f80f6ddf60c46fe39dc3394f3b245c16d62d1c401f4ebc2d030afbb1a264',
+	uniswapV3SwapRouter: '0xf552d94a11865ed5100a536873ca827262cd361e489af067f4759a899833b5f5',
+	uniswapV4PoolManager: '0xa761717f06c9ace7b3599d9a5fe795c17ef062a378d317d562f2aea4d52d2c49',
+	uniswapV4Quoter: '0x988a8710947628ebe53e490c56f534703e45cf6d31c9707d8e0288d9ff65623b',
+	weth: '0x664399615dc3e489416583855e1125048c92043bc544f20dc1de8f1a78106b20',
+} as const satisfies Record<string, Hash>
 
 const ARACHNID_CREATE2_DEPLOYER_SIGNER = getAddress('0x3fab184622dc19b6109349b94811493bf2a45362')
 const ARACHNID_CREATE2_DEPLOYER_RAW_TRANSACTION =
@@ -37,6 +36,14 @@ const ARACHNID_CREATE2_DEPLOYER_FUNDING = 10_000_000_000_000_000n
 const PERMIT2_SALT = '0x0000000000000000000000000000000000000000d3af2663da51c10215000000' satisfies Hex
 
 const ZERO_HASH = '0x0000000000000000000000000000000000000000000000000000000000000000' satisfies Hash
+
+const ADDRESS_CONSTRUCTOR_ABI = [
+	{
+		inputs: [{ name: 'dependency', type: 'address' }],
+		stateMutability: 'nonpayable',
+		type: 'constructor',
+	},
+] as const
 
 const TWO_ADDRESS_CONSTRUCTOR_ABI = [
 	{
@@ -59,32 +66,17 @@ type UniswapDeploymentStep = {
 	verifyRuntimeCode?: (client: WriteClient, code: Hex) => Promise<void>
 }
 
-type PublishedContractInstall = { creator: Address; initCode: Hex; kind: 'create'; nonce: bigint } | { creator: Address; deployer: Address; initCode: Hex; kind: 'create2'; salt: Hash }
-
-export type PublishedContract = {
-	address: Address
-	expectedRuntimeCodeHash: Hash
-	id: string
-	install: PublishedContractInstall
-	label: string
-	transactionHash: Hash
-}
-
-export type DevelopmentNodeRpc = (method: string, params: readonly unknown[]) => Promise<unknown>
-
 export type UniswapDeployment = {
-	addresses: {
+	addresses: UniswapNetworkAddresses & {
 		arachnidCreate2DeployerAddress: Address
 		permit2Address: Address
-		uniswapV3FactoryAddress: Address
-		uniswapV3QuoterAddress: Address
-		uniswapV3SwapRouterAddress: Address
-		uniswapV4PoolManagerAddress: Address
-		uniswapV4QuoterAddress: Address
 	}
+	kind: UniswapNetworkDeployment['kind']
 	publishedContracts: readonly PublishedContract[]
 	steps: readonly UniswapDeploymentStep[]
 }
+
+type UniswapNetworkAddresses = Omit<UniswapNetworkDeployment, 'kind' | 'uniswapV2RouterAddress'>
 
 type Permit2Compilation = {
 	deployedBytecodeTemplate: Hex
@@ -104,7 +96,11 @@ type PublishedContractRecord = Omit<PublishedContract, 'id' | 'label'>
 type UniswapDeploymentArtifacts = {
 	permit2: Permit2Compilation
 	sepoliaPublished: Readonly<Record<PublishedContractId, PublishedContractRecord>>
+	uniswapV3Factory: Hex
+	uniswapV3Quoter: Hex
 	uniswapV3SwapRouter: Hex
+	uniswapV4PoolManager: Hex
+	uniswapV4Quoter: Hex
 }
 
 const PUBLISHED_CONTRACT_LABELS: Readonly<Record<PublishedContractId, string>> = {
@@ -216,7 +212,11 @@ function parseUniswapDeploymentArtifacts(contents: string): UniswapDeploymentArt
 			uniswapV4Quoter: parsePublishedContract(published['uniswapV4Quoter'], 'uniswapV4Quoter'),
 			weth: parsePublishedContract(published['weth'], 'weth'),
 		},
+		uniswapV3Factory: parseBytecode(value['uniswapV3Factory'], 'Uniswap V3 Factory'),
+		uniswapV3Quoter: parseBytecode(value['uniswapV3Quoter'], 'Uniswap V3 QuoterV2'),
 		uniswapV3SwapRouter: parseBytecode(value['uniswapV3SwapRouter'], 'Uniswap V3 SwapRouter'),
+		uniswapV4PoolManager: parseBytecode(value['uniswapV4PoolManager'], 'Uniswap V4 PoolManager'),
+		uniswapV4Quoter: parseBytecode(value['uniswapV4Quoter'], 'Uniswap V4 Quoter'),
 	}
 }
 
@@ -309,7 +309,7 @@ async function getArachnidCreate2DeployerActivity(client: WriteClient) {
 	}
 }
 
-async function arachnidCreate2DeployerIsInstalled(client: WriteClient) {
+export async function arachnidCreate2DeployerIsInstalled(client: WriteClient) {
 	const code = await client.getCode({ address: ARACHNID_CREATE2_DEPLOYER_ADDRESS })
 	if (code === undefined || code === '0x') return false
 	if (code.toLowerCase() !== ARACHNID_CREATE2_DEPLOYER_RUNTIME_CODE.toLowerCase()) throw new Error(`Unexpected code at canonical CREATE2 deployer ${ARACHNID_CREATE2_DEPLOYER_ADDRESS}`)
@@ -399,7 +399,7 @@ async function broadcastCanonicalCreate2Deployer(client: WriteClient, allowInsuf
 	return resolvedHash
 }
 
-async function deployArachnidCreate2Deployer(client: WriteClient, wait?: RpcStateRetryWait) {
+export async function deployArachnidCreate2Deployer(client: WriteClient, wait?: RpcStateRetryWait) {
 	if (await arachnidCreate2DeployerIsInstalled(client)) return ZERO_HASH
 	const activity = await getArachnidCreate2DeployerActivity(client)
 	if (activity.deploymentPending) {
@@ -448,121 +448,54 @@ async function deployPermit2(client: WriteClient, initCode: Hex) {
 	return resolvedHash
 }
 
-export function createDevelopmentNodeRpc(rpcUrl: string): DevelopmentNodeRpc {
-	return async (method, params) => {
-		const response = await fetch(rpcUrl, { body: JSON.stringify({ id: 1, jsonrpc: '2.0', method, params }), headers: { 'content-type': 'application/json' }, method: 'POST' })
-		const payload: unknown = await response.json()
-		if (typeof payload !== 'object' || payload === null) throw new Error(`RPC ${method} returned an invalid response`)
-		if ('error' in payload && payload.error !== undefined && payload.error !== null) throw new Error(`RPC ${method} failed: ${JSON.stringify(payload.error)}`)
-		return 'result' in payload ? payload.result : undefined
-	}
-}
-
-function hasCode(code: Hex | undefined): code is Hex {
-	return code !== undefined && code !== '0x'
-}
-
-async function isDevelopmentNode(rpc: DevelopmentNodeRpc) {
-	try {
-		await rpc('anvil_nodeInfo', [])
-		return true
-	} catch (error) {
-		if (error instanceof Error) return false
-		throw error
-	}
-}
-
-async function sendFromImpersonatedAccount(client: Pick<WriteClient, 'waitForTransactionReceipt'>, rpc: DevelopmentNodeRpc, creator: Address, nonce: bigint | undefined, transaction: { data: Hex; to?: Address }) {
-	await rpc('anvil_impersonateAccount', [creator])
-	try {
-		await rpc('anvil_setBalance', [creator, `0x${DEVELOPMENT_NODE_CREATOR_BALANCE.toString(16)}`])
-		if (nonce !== undefined) await rpc('anvil_setNonce', [creator, `0x${nonce.toString(16)}`])
-		const hash = await rpc('eth_sendTransaction', [{ ...transaction, from: creator }])
-		if (typeof hash !== 'string' || !/^0x[0-9a-fA-F]{64}$/.test(hash)) throw new Error('Development node returned an invalid transaction hash')
-		const receipt = await client.waitForTransactionReceipt({ hash: hash as Hash })
-		if (receipt.status !== 'success') throw new Error(`Development node transaction ${hash} reverted`)
-		return receipt
-	} finally {
-		await rpc('anvil_stopImpersonatingAccount', [creator])
-	}
-}
-
-async function installPublishedContract(client: WriteClient, rpc: DevelopmentNodeRpc, contract: PublishedContract, wait?: RpcStateRetryWait) {
-	if (contract.install.kind === 'create') {
-		const receipt = await sendFromImpersonatedAccount(client, rpc, contract.install.creator, contract.install.nonce, { data: contract.install.initCode })
-		const created = receipt.contractAddress ?? undefined
-		if (created === undefined || getAddress(created) !== contract.address) throw new Error(`${contract.label} was created at ${created === undefined ? 'no address' : getAddress(created)} instead of the published address ${contract.address}`)
-		return
-	}
-	// The published CREATE2 deployment replays through the canonical deployer from the creator's live nonce.
-	if (!(await arachnidCreate2DeployerIsInstalled(client))) await deployArachnidCreate2Deployer(client, wait)
-	await sendFromImpersonatedAccount(client, rpc, contract.install.creator, undefined, { data: concatHex([contract.install.salt, contract.install.initCode]), to: contract.install.deployer })
-}
-
-function assertPublishedRuntimeCode(contract: PublishedContract, code: Hex) {
-	const actual = keccak256(code)
-	if (actual !== contract.expectedRuntimeCodeHash) throw new Error(`Unexpected runtime code for ${contract.label} at ${contract.address}: expected ${contract.expectedRuntimeCodeHash}, received ${actual}`)
-}
-
-/**
- * Verifies that every published contract has Uniswap's exact runtime code. On a
- * development node (Anvil) the missing ones are installed at their published
- * addresses by replaying Uniswap's original creation transactions byte for byte;
- * anywhere else missing contracts abort.
- */
-export async function ensurePublishedContracts(client: WriteClient, rpc: DevelopmentNodeRpc, chainId: number, contracts: readonly PublishedContract[], log: (message: string) => void = () => undefined, wait?: RpcStateRetryWait) {
-	const missing: PublishedContract[] = []
-	for (const contract of contracts) {
-		const code = await client.getCode({ address: contract.address })
-		if (hasCode(code)) assertPublishedRuntimeCode(contract, code)
-		else missing.push(contract)
-	}
-	if (missing.length === 0) return []
-	if (!(await isDevelopmentNode(rpc))) {
-		throw new Error(`${missing.map(contract => `${contract.label} (${contract.address})`).join(', ')} published by Uniswap ${missing.length === 1 ? 'has' : 'have'} no code on chain ${chainId.toString()}. Use a Sepolia RPC or an Anvil development node.`)
-	}
-	for (const contract of missing) {
-		log(`${contract.label} (${contract.id})\n  ├─ Address: ${contract.address}\n  ├─ Replaying: ${contract.transactionHash}\n  └─ Status: installing on the development node`)
-		await installPublishedContract(client, rpc, contract, wait)
-		const code = await client.getCode({ address: contract.address })
-		if (!hasCode(code)) throw new Error(`${contract.label} installation left no code at ${contract.address}`)
-		assertPublishedRuntimeCode(contract, code)
-	}
-	return missing.map(contract => contract.id)
-}
-
-export async function getUniswapDeployment(wait?: RpcStateRetryWait): Promise<UniswapDeployment> {
+export async function getUniswapDeployment(chainId: number, wait?: RpcStateRetryWait): Promise<UniswapDeployment> {
 	const artifacts = await getUniswapDeploymentArtifacts()
 	const permit2Compilation = artifacts.permit2
 	const permit2InitCode = permit2Compilation.initCode
 	const computedPermit2Address = getCreate2Address({ bytecode: permit2InitCode, from: ARACHNID_CREATE2_DEPLOYER_ADDRESS, salt: PERMIT2_SALT })
 	if (computedPermit2Address !== PERMIT2_ADDRESS) throw new Error(`Compiled Permit2 address ${computedPermit2Address} does not match canonical address ${PERMIT2_ADDRESS}`)
-	const { uniswapV3FactoryAddress, uniswapV3QuoterAddress, uniswapV4PoolManagerAddress, uniswapV4QuoterAddress } = SEPOLIA_PUBLISHED_UNISWAP_ADDRESSES
-	// The SwapRouter runtime hash embeds this WETH immutable, so the plan is bound to Uniswap's Sepolia WETH.
-	const wethAddress = SEPOLIA_NETWORK_PROFILE.wethAddress
-	const expectedPublishedAddresses: Readonly<Record<PublishedContractId, Address>> = { uniswapV3Factory: uniswapV3FactoryAddress, uniswapV3Quoter: uniswapV3QuoterAddress, uniswapV4PoolManager: uniswapV4PoolManagerAddress, uniswapV4Quoter: uniswapV4QuoterAddress, weth: wethAddress }
-	const publishedContracts = (['weth', 'uniswapV3Factory', 'uniswapV3Quoter', 'uniswapV4PoolManager', 'uniswapV4Quoter'] as const).map((id): PublishedContract => {
-		const record = artifacts.sepoliaPublished[id]
-		if (record.address !== expectedPublishedAddresses[id]) throw new Error(`Vendored ${id} address ${record.address} does not match the published address ${expectedPublishedAddresses[id]}`)
-		return { ...record, id, label: PUBLISHED_CONTRACT_LABELS[id] }
-	})
-	const v3SwapRouterInitCode = encodeDeployData({
-		abi: TWO_ADDRESS_CONSTRUCTOR_ABI,
-		args: [uniswapV3FactoryAddress, wethAddress],
-		bytecode: artifacts.uniswapV3SwapRouter,
-	})
-	const uniswapV3SwapRouterAddress = deterministicAddress(v3SwapRouterInitCode)
+	const { kind, uniswapV2RouterAddress: _unusedV2Router, ...network } = getUniswapNetworkDeployment(chainId)
+	// Published deployments need vendored creation transactions and runtime hashes; only Sepolia has them today.
+	if (kind === 'published' && chainId !== SEPOLIA_CHAIN_ID) throw new Error(`Chain ${chainId.toString()} has a published Uniswap deployment without vendored creation transactions and runtime code hashes; only Sepolia is supported by deploy:testnet`)
+	const wethInitCode = `0x${statoblast_WETH9_WETH9.evm.bytecode.object}` satisfies Hex
+	const v3QuoterInitCode = encodeDeployData({ abi: TWO_ADDRESS_CONSTRUCTOR_ABI, args: [network.uniswapV3FactoryAddress, network.wethAddress], bytecode: artifacts.uniswapV3Quoter })
+	const v3SwapRouterInitCode = encodeDeployData({ abi: TWO_ADDRESS_CONSTRUCTOR_ABI, args: [network.uniswapV3FactoryAddress, network.wethAddress], bytecode: artifacts.uniswapV3SwapRouter })
+	const v4PoolManagerInitCode = encodeDeployData({ abi: ADDRESS_CONSTRUCTOR_ABI, args: [zeroAddress], bytecode: artifacts.uniswapV4PoolManager })
+	const v4QuoterInitCode = encodeDeployData({ abi: ADDRESS_CONSTRUCTOR_ABI, args: [network.uniswapV4PoolManagerAddress], bytecode: artifacts.uniswapV4Quoter })
+	const deterministicStep = (id: keyof typeof DETERMINISTIC_RUNTIME_CODE_HASHES, label: string, address: Address, initCode: Hex, dependencies: readonly string[]): UniswapDeploymentStep => {
+		const derived = deterministicAddress(initCode)
+		if (derived !== address) throw new Error(`${label} init code derives ${derived}, but the Uniswap registry lists ${address}`)
+		return { address, dependencies, deploy: async client => await deployViaProxy(client, initCode), expectedRuntimeCodeHash: DETERMINISTIC_RUNTIME_CODE_HASHES[id], id, label }
+	}
+	const swapRouterStep: UniswapDeploymentStep =
+		kind === 'published'
+			? { ...deterministicStep('uniswapV3SwapRouter', 'Uniswap V3 SwapRouter', network.uniswapV3SwapRouterAddress, v3SwapRouterInitCode, ['proxyDeployer']), expectedRuntimeCodeHash: PUBLISHED_SWAP_ROUTER_RUNTIME_CODE_HASH }
+			: deterministicStep('uniswapV3SwapRouter', 'Uniswap V3 SwapRouter', network.uniswapV3SwapRouterAddress, v3SwapRouterInitCode, ['proxyDeployer', 'uniswapV3Factory'])
+	const networkSteps: readonly UniswapDeploymentStep[] =
+		kind === 'published'
+			? [swapRouterStep]
+			: [
+					deterministicStep('weth', 'Wrapped Ether', network.wethAddress, wethInitCode, ['proxyDeployer']),
+					deterministicStep('uniswapV3Factory', 'Uniswap V3 Factory', network.uniswapV3FactoryAddress, artifacts.uniswapV3Factory, ['proxyDeployer']),
+					deterministicStep('uniswapV3Quoter', 'Uniswap V3 QuoterV2', network.uniswapV3QuoterAddress, v3QuoterInitCode, ['proxyDeployer', 'uniswapV3Factory']),
+					swapRouterStep,
+					deterministicStep('uniswapV4PoolManager', 'Uniswap V4 PoolManager', network.uniswapV4PoolManagerAddress, v4PoolManagerInitCode, ['proxyDeployer']),
+					deterministicStep('uniswapV4Quoter', 'Uniswap V4 Quoter', network.uniswapV4QuoterAddress, v4QuoterInitCode, ['proxyDeployer', 'uniswapV4PoolManager']),
+				]
+	const publishedIds = ['weth', 'uniswapV3Factory', 'uniswapV3Quoter', 'uniswapV4PoolManager', 'uniswapV4Quoter'] as const
+	const publishedAddresses: Readonly<Record<PublishedContractId, Address>> = { uniswapV3Factory: network.uniswapV3FactoryAddress, uniswapV3Quoter: network.uniswapV3QuoterAddress, uniswapV4PoolManager: network.uniswapV4PoolManagerAddress, uniswapV4Quoter: network.uniswapV4QuoterAddress, weth: network.wethAddress }
+	const publishedContracts: readonly PublishedContract[] =
+		kind !== 'published'
+			? []
+			: publishedIds.map((id): PublishedContract => {
+					const record = artifacts.sepoliaPublished[id]
+					if (record.address !== publishedAddresses[id]) throw new Error(`Vendored ${id} address ${record.address} does not match the registry address ${publishedAddresses[id]}`)
+					return { ...record, id, label: PUBLISHED_CONTRACT_LABELS[id] }
+				})
 
 	return {
-		addresses: {
-			arachnidCreate2DeployerAddress: ARACHNID_CREATE2_DEPLOYER_ADDRESS,
-			permit2Address: PERMIT2_ADDRESS,
-			uniswapV3FactoryAddress,
-			uniswapV3QuoterAddress,
-			uniswapV3SwapRouterAddress,
-			uniswapV4PoolManagerAddress,
-			uniswapV4QuoterAddress,
-		},
+		addresses: { ...network, arachnidCreate2DeployerAddress: ARACHNID_CREATE2_DEPLOYER_ADDRESS, permit2Address: PERMIT2_ADDRESS },
+		kind,
 		publishedContracts,
 		steps: [
 			{
@@ -580,14 +513,7 @@ export async function getUniswapDeployment(wait?: RpcStateRetryWait): Promise<Un
 				label: 'Uniswap Permit2',
 				verifyRuntimeCode: async (client, code) => await verifyPermit2RuntimeCode(client, code, permit2Compilation),
 			},
-			{
-				address: uniswapV3SwapRouterAddress,
-				dependencies: ['proxyDeployer'],
-				deploy: async client => await deployViaProxy(client, v3SwapRouterInitCode),
-				expectedRuntimeCodeHash: SEPOLIA_SWAP_ROUTER_RUNTIME_CODE_HASH,
-				id: 'uniswapV3SwapRouter',
-				label: 'Uniswap V3 SwapRouter',
-			},
+			...networkSteps,
 		],
 	}
 }

@@ -32,7 +32,7 @@ The node is intentionally ephemeral. `docker compose down` stops it, and startin
   bun run deploy:testnet -- --private-key=0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80 --rpc-url=http://localhost:8545 --chain-id=11155111
   ```
 
-  This well-known key is safe only for local development. The deployer first replays Uniswap's original Sepolia creation transactions through Anvil cheatcodes, so WETH, the V3 factory, QuoterV2, and the V4 contracts exist locally with Sepolia's exact bytecode and addresses, then checks and installs all deterministic protocol infrastructure needed by the other tools.
+  This well-known key is safe only for local development. On a clean Anvil node the deployer first replays Uniswap's original Sepolia creation transactions through Anvil cheatcodes, so WETH, the V3 factory, QuoterV2, and the V4 contracts exist locally at their Sepolia addresses with the exact bytecode. It then checks and installs the deterministic protocol infrastructure the other tools need.
 - **augurScan:** after deploying the protocol, refresh its checked-in contract manifest from the current deterministic deployment data before building the image:
 
   ```bash

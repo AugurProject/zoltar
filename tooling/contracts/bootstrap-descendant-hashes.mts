@@ -1,0 +1,66 @@
+import type { Hash } from '@zoltar/core-shared/evm/ethereum'
+
+/**
+ * Runtime code hashes of the contracts that protocol factories create on first use.
+ * `sepolia` covers Sepolia and any chain with Uniswap's published Sepolia WETH;
+ * `deterministic` covers testnets whose WETH is the deterministic WETH9 deployment.
+ * tooling/contracts/deployment-runtime-hashes.test.ts verifies every table on Anvil.
+ */
+export type BootstrapDescendantHashProfile = 'deterministic' | 'mainnet' | 'sepolia'
+
+export const EXPECTED_BOOTSTRAP_DESCENDANT_RUNTIME_CODE_HASHES: Readonly<Record<BootstrapDescendantHashProfile, Readonly<Record<string, Hash>>>> = {
+	sepolia: {
+		escalationGameCreationCodePartOne: '0x93c6b909efa8ca71264528576baf1c865fe619d7ca74c50e1a630c30882bfa35',
+		escalationGameCreationCodePartTwo: '0x4595ae5be84a73e3b23c7c48db5257ea57b22773af70c1739df57113187d84fe',
+		escalationGameProofVerifier: '0xfc49238fed42490497fb4e8674a8c246e50c23e3ab87bf87b5f1d0f7e4a4393a',
+		liquidationApprovalRegistryDeployer: '0x5a661f6b85cc4e29294e3792c954ea748e0edd2cdab70925b6d41d1cb702c7b4',
+		liquidationApprovalRegistryImplementation: '0x3627fef43fff4635e4ed78d5499bc1d7ac142e00bec7514272a699416b1933d8',
+		priceCoordinatorCreationCodeFirstChunk: '0x7452e81ed1bb74cb8dd49ae66a37a3b95bae741e295cec599adca940e0db9f14',
+		priceCoordinatorCreationCodeSecondChunk: '0x8f290111f938ad7ec01662ddf5996f8c9e7348975ea2155ac9d829b883d46e34',
+		priceCoordinatorDeploymentWorker: '0x6c00d3aa6e35f4b5e4bc63f78521bb7f9e674aa68f7c0de4dec1607d632104ee',
+		securityPoolDeployer: '0x5b18ef349b59f0653b00b8de3127cc57eaf6c369714c9678145955023837ce1a',
+		securityPoolDeploymentWorker: '0xffb90b6d1f3f6398393f321bcb6072a23ed58af0bf54a5a30afd6cdc2dc162af',
+		securityPoolCreationCodeFirstChunk: '0x3bc9f4bce628e35cb08b7e9563e782e17ad8267e7a42a817b1fbdcedc50473a0',
+		securityPoolCreationCodeSecondChunk: '0x00b8207645285e47c9ae252f1b9dbfdc632cfc23268859bfa588a1814ccffb52',
+		securityPoolEventEmitter: '0xeba6704d61b9cc7692fb72313334ec67980dd1569acb0703f1ba906c4cb50716',
+		securityPoolForkerEscalationGameForkerDelegate: '0x6a1eb3024c3c559ca01572bc9145e937067dd398ac3390ea2c3c705915fc1e24',
+		securityPoolForkerEventEmitter: '0x92d59da635e21ffdd97f4afba607032f6274c3f197115ce9f9a0e632b42a2897',
+		securityPoolForkerVaultMigrationDelegate: '0x40a80907e1e7aea220c635b3897440f43300348274357a4a9ad95937f4ba9633',
+	},
+	deterministic: {
+		escalationGameCreationCodePartOne: '0x93c6b909efa8ca71264528576baf1c865fe619d7ca74c50e1a630c30882bfa35',
+		escalationGameCreationCodePartTwo: '0x4595ae5be84a73e3b23c7c48db5257ea57b22773af70c1739df57113187d84fe',
+		escalationGameProofVerifier: '0xfc49238fed42490497fb4e8674a8c246e50c23e3ab87bf87b5f1d0f7e4a4393a',
+		liquidationApprovalRegistryDeployer: '0x1137376c49da19620de0e5c8fc1db1e5efbaabfb93c9c81735b7b6e7653defc9',
+		liquidationApprovalRegistryImplementation: '0x3627fef43fff4635e4ed78d5499bc1d7ac142e00bec7514272a699416b1933d8',
+		priceCoordinatorCreationCodeFirstChunk: '0x7452e81ed1bb74cb8dd49ae66a37a3b95bae741e295cec599adca940e0db9f14',
+		priceCoordinatorCreationCodeSecondChunk: '0x8f290111f938ad7ec01662ddf5996f8c9e7348975ea2155ac9d829b883d46e34',
+		priceCoordinatorDeploymentWorker: '0x46c8b243e0421efcbc16bd39485e5288624e6a3f78ba56827604809b3b58c445',
+		securityPoolDeployer: '0x903268b7f0c6c12f0c343b1860018353b4c1ab6d561f98c0c7a52bb0ba561758',
+		securityPoolDeploymentWorker: '0xc8bd400f79ef05382754bf1146ee19f87699474eda5df714bb3b025317a266b9',
+		securityPoolCreationCodeFirstChunk: '0x3bc9f4bce628e35cb08b7e9563e782e17ad8267e7a42a817b1fbdcedc50473a0',
+		securityPoolCreationCodeSecondChunk: '0x00b8207645285e47c9ae252f1b9dbfdc632cfc23268859bfa588a1814ccffb52',
+		securityPoolEventEmitter: '0xeba6704d61b9cc7692fb72313334ec67980dd1569acb0703f1ba906c4cb50716',
+		securityPoolForkerEscalationGameForkerDelegate: '0x6a1eb3024c3c559ca01572bc9145e937067dd398ac3390ea2c3c705915fc1e24',
+		securityPoolForkerEventEmitter: '0x92d59da635e21ffdd97f4afba607032f6274c3f197115ce9f9a0e632b42a2897',
+		securityPoolForkerVaultMigrationDelegate: '0x40a80907e1e7aea220c635b3897440f43300348274357a4a9ad95937f4ba9633',
+	},
+	mainnet: {
+		escalationGameCreationCodePartOne: '0x93c6b909efa8ca71264528576baf1c865fe619d7ca74c50e1a630c30882bfa35',
+		escalationGameCreationCodePartTwo: '0x4595ae5be84a73e3b23c7c48db5257ea57b22773af70c1739df57113187d84fe',
+		escalationGameProofVerifier: '0xfc49238fed42490497fb4e8674a8c246e50c23e3ab87bf87b5f1d0f7e4a4393a',
+		liquidationApprovalRegistryDeployer: '0xfce140cd76f63ba45b1f7c17b376a4d03c6d424e1630144a620a7b0cbbde52aa',
+		liquidationApprovalRegistryImplementation: '0x3627fef43fff4635e4ed78d5499bc1d7ac142e00bec7514272a699416b1933d8',
+		priceCoordinatorCreationCodeFirstChunk: '0x7452e81ed1bb74cb8dd49ae66a37a3b95bae741e295cec599adca940e0db9f14',
+		priceCoordinatorCreationCodeSecondChunk: '0x8f290111f938ad7ec01662ddf5996f8c9e7348975ea2155ac9d829b883d46e34',
+		priceCoordinatorDeploymentWorker: '0x6227c19069391462c0591c16e0b9d5dadbf9f1b8276984031895b28aa767471f',
+		securityPoolDeployer: '0xfe23514ad1df9bc5dc993d7caed239432f909414cb027514baf54d58882062b0',
+		securityPoolDeploymentWorker: '0x2a9adeaf776cce74e36796fa55eb4b4e5f2691ee9e320f0014be0d5d4131c9a4',
+		securityPoolCreationCodeFirstChunk: '0x3bc9f4bce628e35cb08b7e9563e782e17ad8267e7a42a817b1fbdcedc50473a0',
+		securityPoolCreationCodeSecondChunk: '0x00b8207645285e47c9ae252f1b9dbfdc632cfc23268859bfa588a1814ccffb52',
+		securityPoolEventEmitter: '0xeba6704d61b9cc7692fb72313334ec67980dd1569acb0703f1ba906c4cb50716',
+		securityPoolForkerEscalationGameForkerDelegate: '0x730e091c23780df3712f7ba29dd68ef5ad16d7de7cbb5f87a5680c679bd285be',
+		securityPoolForkerEventEmitter: '0x92d59da635e21ffdd97f4afba607032f6274c3f197115ce9f9a0e632b42a2897',
+		securityPoolForkerVaultMigrationDelegate: '0x0648deaa7ad848974c7ee2b83237b8187e052ee8481bc065a80b0ffb69956553',
+	},
+}

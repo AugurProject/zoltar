@@ -1,5 +1,5 @@
 import { SEPOLIA_REP_ALLOCATIONS } from '@zoltar/zoltar-shared/deployment/sepoliaRepAllocations'
-import { encodeDeployData, getAddress, getCreate2Address, toHex } from '@zoltar/core-shared/evm/ethereum'
+import { encodeDeployData, getCreate2Address, toHex } from '@zoltar/core-shared/evm/ethereum'
 import { GenesisReputationToken_GenesisReputationToken } from '../contractArtifact.js'
 
 const PROXY_DEPLOYER_ADDRESS = '0x7A0D94F55792C434D74A40883c6ED8545e406D12'
@@ -16,7 +16,3 @@ export const SEPOLIA_GENESIS_REP_ADDRESS = getCreate2Address({
 	from: PROXY_DEPLOYER_ADDRESS,
 	salt: ZERO_SALT,
 })
-
-// Uniswap's published Sepolia WETH:
-// https://developers.uniswap.org/docs/protocols/v3/deployments/v3-ethereum-deployments
-export const SEPOLIA_WETH_ADDRESS = getAddress('0xfFf9976782d46CC05630D1f6eBAb18b2324d6B14')

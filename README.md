@@ -73,9 +73,9 @@ query (for example, `#/deploy?network=sepolia`). The application then uses
 Sepolia chain ID `11155111`, its configured public RPC, Sepolia Etherscan links,
 and Sepolia-specific deterministic contract addresses.
 
-The Sepolia deployment flow includes WETH and genesis REP before the contracts
-that depend on them. Initial Sepolia REP holders and exact 18-decimal balances
-are defined in
+The Sepolia deployment flow installs genesis REP before the contracts that
+depend on it; WETH is Uniswap's published Sepolia contract. Initial Sepolia REP
+holders and exact 18-decimal balances are defined in
 [`shared/zoltar/ts/deployment/sepoliaRepAllocations.ts`](./shared/zoltar/ts/deployment/sepoliaRepAllocations.ts).
 Changing that list also changes the deterministic genesis REP address and every
 dependent deployment address.
@@ -179,21 +179,30 @@ Every deployment includes:
 
 - deterministic genesis REP
 - the canonical CREATE2 deployer and Permit2
-- a deterministic Uniswap V3 SwapRouter bound to Uniswap's Sepolia factory
+- a deterministic Uniswap V3 SwapRouter
 - the Zoltar and Augur Statoblast protocol factories and their bootstrap support
   contracts
 
-WETH, the Uniswap V3 factory, QuoterV2, the V4 PoolManager, and the V4 Quoter are
-Uniswap's published Sepolia contracts
+Uniswap addresses come from one registry shared by the UI, the bots, and the
+deployer (`shared/core/ts/deployment/uniswapDeployments.ts`).
+
+On Sepolia, WETH, the Uniswap V3 factory, QuoterV2, the V4 PoolManager, and the
+V4 Quoter are Uniswap's published contracts
 ([V3](https://developers.uniswap.org/docs/protocols/v3/deployments/v3-ethereum-deployments),
 [V4](https://developers.uniswap.org/docs/protocols/v4/deployments)). The deployer
-verifies that each one carries Uniswap's exact runtime code before deploying. On
-an Anvil development node it first replays Uniswap's original creation
-transactions, vendored byte for byte in `scripts/artifacts/uniswap-deployment.json`,
-so a clean local chain holds the same contracts at the same addresses as Sepolia.
-Any other RPC must already have them, or the deployer aborts before spending
-anything. Uniswap publishes no SwapRouter (v1) on Sepolia, so the deployer
-installs one bound to the published factory.
+verifies that each one carries Uniswap's exact runtime code. An Anvil node with
+the Sepolia chain ID receives them by replaying Uniswap's original creation
+transactions, vendored byte for byte in `scripts/artifacts/uniswap-deployment.json`.
+Uniswap publishes no SwapRouter (v1) on Sepolia, so the deployer installs one
+bound to the published factory.
+
+Any other chain receives deterministic WETH plus a complete Uniswap V3 and V4
+deployment from the pinned bytecode, so deploying to a new testnet needs no
+configuration. Reusing Uniswap's own contracts on another chain additionally
+requires vendoring their creation transactions and runtime hashes in the
+artifact; today only Sepolia has them. The bots read core addresses from the
+tracked Sepolia manifest, so they target Sepolia and Sepolia replays (such as the
+local Anvil network) until a deterministic testnet has a generated manifest.
 
 The command does not create Uniswap pools or add liquidity. Protocol factories
 create market-specific security pools, share tokens, oracle coordinators,

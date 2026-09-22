@@ -9,8 +9,10 @@ import { PROXY_DEPLOYER_ADDRESS } from '../../ui/zoltarShared/ts/protocol/zoltar
 import type { WriteClient } from '../../ui/coreShared/ts/wallet/chainBackend.ts'
 import { SEPOLIA_NETWORK_PROFILE, type NetworkProfile } from '../../ui/coreShared/ts/wallet/networkProfile.ts'
 import { readWithRpcStateRetries, type RpcStateRetryWait } from '../../ui/coreShared/ts/lib/rpcStateRetries.ts'
-import { ARACHNID_CREATE2_DEPLOYER_ADDRESS, ARACHNID_CREATE2_DEPLOYER_RUNTIME_CODE, createDevelopmentNodeRpc, ensurePublishedContracts, getUniswapDeployment, resolveCanonicalCreate2DeployerForPreflight, SEPOLIA_CHAIN_ID, type UniswapDeployment } from './uniswap-deployment.mts'
+import { ARACHNID_CREATE2_DEPLOYER_ADDRESS, ARACHNID_CREATE2_DEPLOYER_RUNTIME_CODE, getUniswapDeployment, resolveCanonicalCreate2DeployerForPreflight, SEPOLIA_CHAIN_ID, type UniswapDeployment } from './uniswap-deployment.mts'
+import { createDevelopmentNodeRpc, ensurePublishedContracts } from './published-contracts.mts'
 import { createCompleteDeploymentPlan } from './deployment-plan.mts'
+import { EXPECTED_BOOTSTRAP_DESCENDANT_RUNTIME_CODE_HASHES, type BootstrapDescendantHashProfile } from './bootstrap-descendant-hashes.mts'
 
 export const DEFAULT_MAX_FEE_PER_GAS_NANO_ETH = '100'
 export const DEFAULT_MAX_TOTAL_COST_ETH = '20'
@@ -30,9 +32,14 @@ export const CONSERVATIVE_DEPLOYMENT_GAS: Readonly<Record<string, bigint>> = {
 	proxyDeployer: 500_000n,
 	tradingFactory: 7_000_000n,
 	tradingRouter: 6_250_000n,
+	uniswapV3Factory: 8_500_000n,
+	uniswapV3Quoter: 3_000_000n,
 	uniswapV3SwapRouter: 4_250_000n,
+	uniswapV4PoolManager: 8_000_000n,
+	uniswapV4Quoter: 2_250_000n,
 	deploymentStatusOracle: 1_000_000n,
 	zoltarDeploymentStatusOracle: 1_000_000n,
+	weth: 1_000_000n,
 	reputationToken: 1_250_000n,
 	multicall3: 1_250_000n,
 	uniformPriceDualCapBatchAuctionFactory: 4_750_000n,
@@ -49,45 +56,6 @@ export const CONSERVATIVE_DEPLOYMENT_GAS: Readonly<Record<string, bigint>> = {
 	securityPoolFactory: 14_750_000n,
 }
 const CANONICAL_DEPLOYER_STEP_IDS = new Set(['arachnidCreate2Deployer', 'proxyDeployer'])
-const EXPECTED_BOOTSTRAP_DESCENDANT_RUNTIME_CODE_HASHES: Readonly<Record<'mainnet' | 'sepolia', Readonly<Record<string, Hash>>>> = {
-	sepolia: {
-		escalationGameCreationCodePartOne: '0x93c6b909efa8ca71264528576baf1c865fe619d7ca74c50e1a630c30882bfa35',
-		escalationGameCreationCodePartTwo: '0x4595ae5be84a73e3b23c7c48db5257ea57b22773af70c1739df57113187d84fe',
-		escalationGameProofVerifier: '0xfc49238fed42490497fb4e8674a8c246e50c23e3ab87bf87b5f1d0f7e4a4393a',
-		liquidationApprovalRegistryDeployer: '0x5a661f6b85cc4e29294e3792c954ea748e0edd2cdab70925b6d41d1cb702c7b4',
-		liquidationApprovalRegistryImplementation: '0x3627fef43fff4635e4ed78d5499bc1d7ac142e00bec7514272a699416b1933d8',
-		priceCoordinatorCreationCodeFirstChunk: '0x7452e81ed1bb74cb8dd49ae66a37a3b95bae741e295cec599adca940e0db9f14',
-		priceCoordinatorCreationCodeSecondChunk: '0x8f290111f938ad7ec01662ddf5996f8c9e7348975ea2155ac9d829b883d46e34',
-		priceCoordinatorDeploymentWorker: '0x6c00d3aa6e35f4b5e4bc63f78521bb7f9e674aa68f7c0de4dec1607d632104ee',
-		securityPoolDeployer: '0x5b18ef349b59f0653b00b8de3127cc57eaf6c369714c9678145955023837ce1a',
-		securityPoolDeploymentWorker: '0xffb90b6d1f3f6398393f321bcb6072a23ed58af0bf54a5a30afd6cdc2dc162af',
-		securityPoolCreationCodeFirstChunk: '0x3bc9f4bce628e35cb08b7e9563e782e17ad8267e7a42a817b1fbdcedc50473a0',
-		securityPoolCreationCodeSecondChunk: '0x00b8207645285e47c9ae252f1b9dbfdc632cfc23268859bfa588a1814ccffb52',
-		securityPoolEventEmitter: '0xeba6704d61b9cc7692fb72313334ec67980dd1569acb0703f1ba906c4cb50716',
-		securityPoolForkerEscalationGameForkerDelegate: '0x6a1eb3024c3c559ca01572bc9145e937067dd398ac3390ea2c3c705915fc1e24',
-		securityPoolForkerEventEmitter: '0x92d59da635e21ffdd97f4afba607032f6274c3f197115ce9f9a0e632b42a2897',
-		securityPoolForkerVaultMigrationDelegate: '0x40a80907e1e7aea220c635b3897440f43300348274357a4a9ad95937f4ba9633',
-	},
-	mainnet: {
-		escalationGameCreationCodePartOne: '0x93c6b909efa8ca71264528576baf1c865fe619d7ca74c50e1a630c30882bfa35',
-		escalationGameCreationCodePartTwo: '0x4595ae5be84a73e3b23c7c48db5257ea57b22773af70c1739df57113187d84fe',
-		escalationGameProofVerifier: '0xfc49238fed42490497fb4e8674a8c246e50c23e3ab87bf87b5f1d0f7e4a4393a',
-		liquidationApprovalRegistryDeployer: '0xfce140cd76f63ba45b1f7c17b376a4d03c6d424e1630144a620a7b0cbbde52aa',
-		liquidationApprovalRegistryImplementation: '0x3627fef43fff4635e4ed78d5499bc1d7ac142e00bec7514272a699416b1933d8',
-		priceCoordinatorCreationCodeFirstChunk: '0x7452e81ed1bb74cb8dd49ae66a37a3b95bae741e295cec599adca940e0db9f14',
-		priceCoordinatorCreationCodeSecondChunk: '0x8f290111f938ad7ec01662ddf5996f8c9e7348975ea2155ac9d829b883d46e34',
-		priceCoordinatorDeploymentWorker: '0x6227c19069391462c0591c16e0b9d5dadbf9f1b8276984031895b28aa767471f',
-		securityPoolDeployer: '0xfe23514ad1df9bc5dc993d7caed239432f909414cb027514baf54d58882062b0',
-		securityPoolDeploymentWorker: '0x2a9adeaf776cce74e36796fa55eb4b4e5f2691ee9e320f0014be0d5d4131c9a4',
-		securityPoolCreationCodeFirstChunk: '0x3bc9f4bce628e35cb08b7e9563e782e17ad8267e7a42a817b1fbdcedc50473a0',
-		securityPoolCreationCodeSecondChunk: '0x00b8207645285e47c9ae252f1b9dbfdc632cfc23268859bfa588a1814ccffb52',
-		securityPoolEventEmitter: '0xeba6704d61b9cc7692fb72313334ec67980dd1569acb0703f1ba906c4cb50716',
-		securityPoolForkerEscalationGameForkerDelegate: '0x730e091c23780df3712f7ba29dd68ef5ad16d7de7cbb5f87a5680c679bd285be',
-		securityPoolForkerEventEmitter: '0x92d59da635e21ffdd97f4afba607032f6274c3f197115ce9f9a0e632b42a2897',
-		securityPoolForkerVaultMigrationDelegate: '0x0648deaa7ad848974c7ee2b83237b8187e052ee8481bc065a80b0ffb69956553',
-	},
-}
-
 type DeploymentPlanStep<TClient> = {
 	address: Address
 	dependencies: readonly string[]
@@ -232,6 +200,7 @@ function createDeploymentProfile(chainId: number, rpcUrl: string, uniswapAddress
 		uniswapV3FactoryAddress: uniswapAddresses.uniswapV3FactoryAddress,
 		uniswapV3QuoterAddress: uniswapAddresses.uniswapV3QuoterAddress,
 		uniswapV4QuoterAddress: uniswapAddresses.uniswapV4QuoterAddress,
+		wethAddress: uniswapAddresses.wethAddress,
 	}
 }
 
@@ -564,10 +533,10 @@ async function assertCanonicalCreate2DeployerCode(client: CodeReader) {
 	if (code.toLowerCase() !== ARACHNID_CREATE2_DEPLOYER_RUNTIME_CODE.toLowerCase()) throw new Error(`Unexpected code at canonical CREATE2 deployer ${ARACHNID_CREATE2_DEPLOYER_ADDRESS}`)
 }
 
-export async function assertBootstrapDescendantCode(client: CodeReader, profile: NetworkProfile, wait?: RpcStateRetryWait, expectedRuntimeCodeHashes?: Readonly<Record<string, Hash>>) {
+export async function assertBootstrapDescendantCode(client: CodeReader, profile: NetworkProfile, wait?: RpcStateRetryWait, expectedRuntimeCodeHashes?: Readonly<Record<string, Hash>> | BootstrapDescendantHashProfile) {
 	const bootstrapDescendants = getBootstrapDescendantAddresses(profile)
 	if (profile.id === 'simulation') throw new Error('Exact bootstrap descendant runtime-code verification is unavailable for simulation')
-	const resolvedExpectedRuntimeCodeHashes = expectedRuntimeCodeHashes ?? EXPECTED_BOOTSTRAP_DESCENDANT_RUNTIME_CODE_HASHES[profile.id]
+	const resolvedExpectedRuntimeCodeHashes = typeof expectedRuntimeCodeHashes === 'object' ? expectedRuntimeCodeHashes : EXPECTED_BOOTSTRAP_DESCENDANT_RUNTIME_CODE_HASHES[expectedRuntimeCodeHashes ?? profile.id]
 	const entries = Object.entries(bootstrapDescendants)
 	const codes = await readWithRpcStateRetries(
 		async () => {
@@ -604,7 +573,7 @@ export async function deployTestnet(parameters: { chainId: number; maxFeePerGas?
 	const chainId = parseChainId(parameters.chainId.toString())
 	const rpcUrl = parseRpcUrl(parameters.rpcUrl)
 	const log = parameters.log ?? console.log
-	const uniswap = await getUniswapDeployment()
+	const uniswap = await getUniswapDeployment(chainId)
 	const profile = createDeploymentProfile(chainId, rpcUrl, uniswap.addresses)
 	const client = createPreparedDeploymentClient({
 		chain: profile.chain,
@@ -618,7 +587,6 @@ export async function deployTestnet(parameters: { chainId: number; maxFeePerGas?
 	if (actualChainId !== chainId) throw new Error(`RPC chain mismatch: expected ${chainId.toString()}, received ${actualChainId.toString()}`)
 	await assertRequiredEvmCompatible(client, chainId)
 	await assertEip1559Compatible(client, chainId)
-	await ensurePublishedContracts(client, createDevelopmentNodeRpc(rpcUrl), chainId, uniswap.publishedContracts, log)
 	await assertNoPendingDeployerTransactions(client, client.account.address)
 	await assertCanonicalCreate2DeployerCode(client)
 	await assertProxyCode(client)
@@ -629,9 +597,10 @@ export async function deployTestnet(parameters: { chainId: number; maxFeePerGas?
 	if (authorizedMaxFeePerGas < CANONICAL_DEPLOYER_RAW_GAS_PRICE && (!canonicalCreate2Installed || !proxyInstalled)) {
 		throw new Error(`MAX_FEE_PER_GAS_NANO_ETH authorizes ${authorizedMaxFeePerGas.toString()} attoETH per gas, but missing canonical deployers require fixed ${CANONICAL_DEPLOYER_RAW_GAS_PRICE.toString()} attoETH per gas raw transactions`)
 	}
+	await ensurePublishedContracts(client, createDevelopmentNodeRpc(rpcUrl), chainId, uniswap.publishedContracts, log)
 	const plan = createCompleteDeploymentPlan(profile, uniswap)
 	const knownInstalledAddresses = new Set<Address>()
-	if (canonicalCreate2Installed) knownInstalledAddresses.add(ARACHNID_CREATE2_DEPLOYER_ADDRESS)
+	if (canonicalCreate2Installed || (await resolveCanonicalCreate2DeployerForPreflight(client))) knownInstalledAddresses.add(ARACHNID_CREATE2_DEPLOYER_ADDRESS)
 	if (proxyInstalled) knownInstalledAddresses.add(PROXY_DEPLOYER_ADDRESS)
 	const estimate = await preflightDeploymentPlan(plan, client, CONSERVATIVE_DEPLOYMENT_GAS, authorizedMaxFeePerGas, authorizedMaxTotalCost, knownInstalledAddresses)
 	log(
@@ -664,7 +633,7 @@ export async function deployTestnet(parameters: { chainId: number; maxFeePerGas?
 	)
 	const results = await runDeploymentPlan(plan, client, log, undefined, knownInstalledAddresses)
 	await assertProxyCode(client)
-	const bootstrapDescendants = await assertBootstrapDescendantCode(client, profile)
+	const bootstrapDescendants = await assertBootstrapDescendantCode(client, profile, undefined, uniswap.kind === 'deterministic' ? 'deterministic' : undefined)
 	if (parameters.writeGitHubSummary !== false) await writeGitHubSummary(chainId, client.account.address, results)
 	return { account: client.account.address, proofVerifier: bootstrapDescendants.escalationGameProofVerifier, results }
 }
@@ -683,11 +652,12 @@ Pass RPC and cost limits as uppercase assignments after --, for example:
   --max-fee-per-gas-nanoeth=100  Rejects higher RPC fee suggestions
   --max-total-cost-eth=20     Caps the preflight estimate and transaction costs
 
-Every testnet uses Uniswap's published Sepolia WETH, V3 factory, QuoterV2, and V4
-contracts plus a deterministic SwapRouter and genesis REP. Anvil development nodes
-receive the published contracts at their Sepolia addresses automatically; any other
-RPC must already have them or the deployer aborts before spending. The RPC must
-support Cancun, EIP-1559, and the legacy deployer transactions. Chain ID 1 is rejected.`
+Sepolia uses Uniswap's published WETH, V3 factory, QuoterV2, and V4 contracts plus
+a deterministic SwapRouter and genesis REP; an Anvil node with the Sepolia chain ID
+receives Uniswap's contracts by replaying their creation transactions. Any other
+chain receives deterministic WETH, genesis REP, and a complete Uniswap deployment.
+The RPC must support Cancun, EIP-1559, and the canonical legacy deployer
+transactions. Ethereum mainnet chain ID 1 is intentionally rejected.`
 }
 
 function printHelp() {

@@ -32,6 +32,8 @@ test('selects the published Uniswap factory for each network', () => {
 		const settings = parseSettings({ ...example, network: { ...example.network, chainId, name: chainId === 1 ? 'mainnet' : 'sepolia' } })
 		expect(settings.deployment.uniswapV3Factory).toBe(factory)
 	}
+	// Custom networks replay Sepolia: their core addresses come from the Sepolia manifest, so Uniswap must too.
 	const custom = parseSettings({ ...example, network: { ...example.network, kind: 'custom', name: 'Local test', chainId: 31337 } })
 	expect(custom.deployment.uniswapV3Factory).toBe('0x0227628f3F023bb0B980b67D528571c95c6DaC1c')
+	expect(custom.deployment.weth).toBe('0xfFf9976782d46CC05630D1f6eBAb18b2324d6B14')
 })
