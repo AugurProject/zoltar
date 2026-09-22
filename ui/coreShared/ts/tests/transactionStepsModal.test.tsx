@@ -85,7 +85,7 @@ test('explains a step without token funding using its description, the operation
 		expect(rendered.container.querySelector('.transaction-funding')).toBeNull()
 		expect(queries.getByText('Technical details')).not.toBeNull()
 		expect(rendered.container.querySelector('details .address-value')?.getAttribute('title')).toBe(contractAddress)
-		expect(rendered.container.querySelector('details dd')?.textContent).toContain('Multicall3')
+		expect(rendered.container.querySelector('details dd')?.textContent).toBe(`Multicall3 ${contractAddress}`)
 		await act(() => fireEvent.click(queries.getByRole('button', { name: 'Create question and security pool' })))
 		await review
 	} finally {

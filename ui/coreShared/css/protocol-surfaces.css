@@ -760,14 +760,6 @@ main.global-transaction-tray-open :is(a, button, input, select, summary, textare
 	align-items: center;
 }
 
-.transaction-step-contract {
-	display: inline-flex;
-	flex-wrap: wrap;
-	align-items: center;
-	gap: 0 0.4rem;
-	max-width: 100%;
-}
-
 .global-transaction-notice .transaction-hash-link {
 	font-size: var(--font-label);
 	line-height: var(--line-height-tight);
