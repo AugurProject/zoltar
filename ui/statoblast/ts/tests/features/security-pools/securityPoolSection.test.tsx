@@ -11,6 +11,7 @@ import { SecurityPoolSection } from '@zoltar/ui-statoblast-shared/features/secur
 import { formatOpenInterestFeePerYearPercent, ORIGIN_POOL_INITIAL_RETENTION_RATE } from '@zoltar/ui-statoblast-shared/features/security-pools/lib/retentionRate.js'
 import type { SecurityPoolSectionProps } from '@zoltar/ui-zoltar-shared/features/types.js'
 import type { AccountState } from '@zoltar/ui-zoltar-shared/types/app.js'
+import { createTransactionStepController } from '@zoltar/ui-core-shared/transactions/transactionSteps.js'
 import { describe, expect, mock, test } from 'bun:test'
 import { h, render } from 'preact'
 import { act } from 'preact/test-utils'
@@ -72,6 +73,105 @@ describe('SecurityPoolSection', () => {
 			await cleanupRenderedComponent?.()
 			cleanupRenderedComponent = undefined
 		},
+	})
+
+	test('renders the owned transaction review inline instead of the submit button and dismisses it on cancel', async () => {
+		const review = new AbortController()
+		const controller = createTransactionStepController(review.signal)
+		controller.setPlan([{ title: 'Create security pool', description: 'Pool parameters are fixed at deployment.', contractAddress: undefined, contractLabel: undefined, spender: undefined, amount: undefined, ethValueAttoEth: 0n }])
+		const pendingReview = controller.review()
+		const onDismissSecurityPoolReview = mock(() => review.abort())
+		const renderedComponent = await renderIntoDocument(h(SecurityPoolSection, createProps({ onDismissSecurityPoolReview, securityPoolCreating: true, securityPoolReviewSignal: review.signal })))
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const queries = within(document.body)
+		expect(queries.getByText('Transaction Review')).not.toBeNull()
+		expect(queries.getByText('Pool parameters are fixed at deployment.')).not.toBeNull()
+		const confirmButton = queries.getByRole('button', { name: 'Create security pool' })
+		expect(queries.queryByRole('button', { name: /Creating pool/ })).toBeNull()
+		expect(document.querySelector('[role=dialog]')).toBeNull()
+		expect(document.activeElement).toBe(confirmButton)
+		await act(() => {
+			fireEvent.click(queries.getByRole('button', { name: 'Cancel' }))
+		})
+		expect(onDismissSecurityPoolReview).toHaveBeenCalledTimes(1)
+		await expect(pendingReview).rejects.toThrow('Remaining transactions canceled')
+		await act(() => {
+			render(h(SecurityPoolSection, createProps({ onDismissSecurityPoolReview, securityPoolCreating: false, securityPoolReviewSignal: undefined })), renderedComponent.container)
+		})
+		expect(document.activeElement).toBe(queries.getByRole('button', { name: 'Create pool' }))
+	})
+
+	test('keeps the form locked while a failed transaction review awaits dismissal', async () => {
+		const review = new AbortController()
+		const controller = createTransactionStepController(review.signal)
+		controller.setPlan([{ title: 'Create security pool', description: undefined, contractAddress: undefined, contractLabel: undefined, spender: undefined, amount: undefined, ethValueAttoEth: 0n }])
+		const pendingReview = controller.review()
+		controller.failed('User rejected the request')
+		const renderedComponent = await renderIntoDocument(h(SecurityPoolSection, createProps({ securityPoolCreating: false, securityPoolReviewSignal: review.signal })))
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const queries = within(document.body)
+		expect(queries.getByRole('alert').textContent).toContain('User rejected the request')
+		expect(queries.getByRole('button', { name: 'Close' })).not.toBeNull()
+		expect(queries.queryByRole('radio', { name: 'Use a question ID' })).toBeNull()
+		expect((queries.getByRole('textbox', { name: 'Statoblast Security Multiplier' }) as HTMLInputElement).disabled).toBe(true)
+		expect(queries.queryByRole('button', { name: 'Create pool' })).toBeNull()
+		review.abort()
+		await expect(pendingReview).rejects.toThrow('Remaining transactions canceled')
+	})
+
+	test('dismisses an owned transaction review when the card unmounts', async () => {
+		const review = new AbortController()
+		const controller = createTransactionStepController(review.signal)
+		controller.setPlan([{ title: 'Create security pool', description: undefined, contractAddress: undefined, contractLabel: undefined, spender: undefined, amount: undefined, ethValueAttoEth: 0n }])
+		const pendingReview = controller.review()
+		const onDismissSecurityPoolReview = mock(() => review.abort())
+		const renderedComponent = await renderIntoDocument(h(SecurityPoolSection, createProps({ onDismissSecurityPoolReview, securityPoolCreating: true, securityPoolReviewSignal: review.signal })))
+		expect(onDismissSecurityPoolReview).not.toHaveBeenCalled()
+		await renderedComponent.unmount()
+		expect(onDismissSecurityPoolReview).toHaveBeenCalledTimes(1)
+		await expect(pendingReview).rejects.toThrow('Remaining transactions canceled')
+	})
+
+	test('renders the owned transaction review in place of the pool retry after a partial success', async () => {
+		const review = new AbortController()
+		const controller = createTransactionStepController(review.signal)
+		controller.setPlan([{ title: 'Create security pool', description: undefined, contractAddress: undefined, contractLabel: undefined, spender: undefined, amount: undefined, ethValueAttoEth: 0n }])
+		const pendingReview = controller.review()
+		const renderedComponent = await renderIntoDocument(
+			h(
+				SecurityPoolSection,
+				createProps({
+					marketResult: { createQuestionHash: zeroHash, marketType: 'binary', questionId: '0x03' },
+					onCreateQuestionAndSecurityPool: () => undefined,
+					securityPoolCreating: true,
+					securityPoolReviewSignal: review.signal,
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const queries = within(document.body)
+		expect(queries.getByText('Question created. The security pool transaction is next.')).not.toBeNull()
+		expect(queries.getByRole('button', { name: 'Create security pool' })).not.toBeNull()
+		expect(queries.queryByRole('button', { name: /Retry pool creation|Creating pool/ })).toBeNull()
+		review.abort()
+		await expect(pendingReview).rejects.toThrow('Remaining transactions canceled')
+	})
+
+	test('keeps the submit button when the active transaction review belongs to another flow', async () => {
+		const other = new AbortController()
+		const controller = createTransactionStepController(other.signal)
+		controller.setPlan([{ title: 'Request price', description: undefined, contractAddress: undefined, contractLabel: undefined, spender: undefined, amount: undefined, ethValueAttoEth: 0n }])
+		const pendingReview = controller.review()
+		const renderedComponent = await renderIntoDocument(h(SecurityPoolSection, createProps({ securityPoolReviewSignal: new AbortController().signal })))
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		expect(within(document.body).queryByText('Request price')).toBeNull()
+		expectTransactionButtonEnabled(document.body, 'Create pool')
+		other.abort()
+		await expect(pendingReview).rejects.toThrow('Remaining transactions canceled')
 	})
 
 	test('disables pool creation when the wallet is disconnected', async () => {

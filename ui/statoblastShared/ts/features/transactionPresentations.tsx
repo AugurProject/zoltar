@@ -16,16 +16,19 @@ import { formatStatoblastSecurityMultiplier } from './markets/lib/trading.js'
 type SecurityPoolCreationTransactionContext = {
 	initialReportPriorityFeeEth?: string | undefined
 	questionId?: string | undefined
+	questionTitle?: string | undefined
 	statoblastSecurityMultiplierBps?: bigint | undefined
 	universeId?: bigint | undefined
 }
 
 function getSecurityPoolCreationTransactionRows(context: SecurityPoolCreationTransactionContext | undefined) {
 	if (context === undefined) return undefined
+	// Keep the same order as the success presentation so the review dialog does not reflow on confirmation.
 	return [
-		...(context.initialReportPriorityFeeEth === undefined || context.initialReportPriorityFeeEth.trim() === '' ? [] : [{ label: commonCopy.initialReportPriorityFee, value: formatValueWithUnit(context.initialReportPriorityFeeEth.trim(), commonCopy.eth) }]),
+		...(context.questionTitle === undefined || context.questionTitle.trim() === '' ? [] : [{ label: commonCopy.question, value: context.questionTitle.trim() }]),
 		...(context.questionId === undefined || context.questionId.trim() === '' ? [] : [{ label: commonCopy.questionId, value: <IdentifierValue value={context.questionId.trim()} /> }]),
 		...(context.statoblastSecurityMultiplierBps === undefined ? [] : [{ label: statoblastAppCopy.statoblastSecurityMultiplierBps, value: `${formatStatoblastSecurityMultiplier(context.statoblastSecurityMultiplierBps)}x` }]),
+		...(context.initialReportPriorityFeeEth === undefined || context.initialReportPriorityFeeEth.trim() === '' ? [] : [{ label: commonCopy.initialReportPriorityFee, value: formatValueWithUnit(context.initialReportPriorityFeeEth.trim(), commonCopy.eth) }]),
 	]
 }
 

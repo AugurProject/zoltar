@@ -1,10 +1,11 @@
-import path from 'node:path'
 import { componentProjects, type Project } from '../repo/projects.ts'
-import { repositoryRoot } from '../repo/root.mts'
+import { runTaskProcess } from '../repo/task-process.mts'
 
 export type ComponentCiPlanEntry = {
 	readonly command: readonly string[]
 	readonly cwd: string
+	/** Dependency audits query the package registry, so registry connection failures are retried instead of failing the job. */
+	readonly retryTransientNetworkErrors?: true
 }
 
 export function createComponentCiPlan(packageName: string, registry?: readonly Project[]): ComponentCiPlanEntry[] {
@@ -18,7 +19,8 @@ export function createComponentCiPlan(packageName: string, registry?: readonly P
 				const task = project.tasks[name]
 				return task !== undefined && check.covers?.includes(name) !== true ? [task] : []
 			})
-			const commands = [...independentTasks, check, audit]
+			const commands: ComponentCiPlanEntry[] = [...independentTasks, check].map(task => ({ command: task.command, cwd: task.cwd }))
+			commands.push({ command: audit.command, cwd: audit.cwd, retryTransientNetworkErrors: true })
 			return [ci.componentName, commands] as const
 		}),
 	)
@@ -32,8 +34,7 @@ export async function runComponentCiCommand(args: readonly string[] = process.ar
 	if (packageName === undefined) throw new Error('Unknown component package: (missing)')
 	for (const task of createComponentCiPlan(packageName)) {
 		console.log(`component-ci(${packageName}): ${task.command.join(' ')}`)
-		const child = Bun.spawn({ cmd: [...task.command], cwd: path.join(repositoryRoot, task.cwd), stdin: 'inherit', stdout: 'inherit', stderr: 'inherit' })
-		const exitCode = await child.exited
+		const exitCode = await runTaskProcess({ command: task.command, cwd: task.cwd, retryTransientNetworkErrors: task.retryTransientNetworkErrors === true })
 		if (exitCode !== 0) process.exit(exitCode)
 	}
 }

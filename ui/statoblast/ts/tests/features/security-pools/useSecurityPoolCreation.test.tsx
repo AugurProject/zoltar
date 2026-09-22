@@ -69,9 +69,10 @@ async function setupContractMocks({ loadMarketDetails, createSecurityPool, origi
 
 	await moduleMocks.mockModule('@zoltar/ui-core-shared/wallet/clients.js', () => ({
 		createConnectedReadClient: mock(() => ({ kind: 'read-client' })),
-		createWalletWriteClient: mock((walletAddress: Address, options: { onTransactionSubmitted: (hash: Hash) => void }) => ({
+		createWalletWriteClient: mock((walletAddress: Address, options: { onTransactionSubmitted: (hash: Hash) => void; reviewSignal?: AbortSignal }) => ({
 			walletAddress,
 			onTransactionSubmitted: options.onTransactionSubmitted,
+			reviewSignal: options.reviewSignal,
 		})),
 	}))
 }
@@ -535,6 +536,142 @@ describe('useSecurityPoolCreation', () => {
 		expect(onTransactionHashes).toEqual(['0xabc'])
 		expect(refreshCalls).toBe(1)
 		expect(submittedParameters).toEqual([{ initialReportPriorityFeeAttoEthPerGas: 10_000_000_000n, questionId: 11n, statoblastSecurityMultiplierBps: 20_000n }])
+		expect(createSecurityPool.mock.calls[0]?.[2]).toBeUndefined()
+		expect(createSecurityPool.mock.calls[0]?.[3]).toEqual({ description: 'The security multiplier and initial report priority fee cannot be changed after the pool is deployed.', title: 'Create security pool' })
+	})
+
+	test('createPool keeps a failed transaction review open until it is dismissed', async () => {
+		const { embeddedTransactionSteps } = await import('@zoltar/ui-core-shared/components/TransactionStepsModal.js')
+		const { createTransactionStepController, transactionSteps } = await import('@zoltar/ui-core-shared/transactions/transactionSteps.js')
+		const createSecurityPool = mock(async (client: { reviewSignal?: AbortSignal }) => {
+			// Simulate the reviewed client publishing the review, then the wallet rejecting it.
+			const controller = createTransactionStepController(client.reviewSignal)
+			controller.setPlan([{ title: 'Create security pool', description: undefined, contractAddress: undefined, contractLabel: undefined, spender: undefined, amount: undefined, ethValueAttoEth: 0n }])
+			void controller.review().catch(() => undefined)
+			throw new Error('User rejected the request')
+		})
+		await setupContractMocks({
+			loadMarketDetails: mock(async () => createMarketDetails({ questionId: '0x0b' })),
+			originSecurityPoolExists: mock(async () => false),
+			createSecurityPool,
+		})
+
+		const { useSecurityPoolCreation } = await import(`@zoltar/ui-statoblast-shared/features/security-pools/hooks/useSecurityPoolCreation.js?case=${crypto.randomUUID()}`)
+		let state: UseSecurityPoolCreationState | undefined
+		const Harness = createHarness(
+			useSecurityPoolCreation,
+			{
+				accountAddress: zeroAddress,
+				deploymentStatuses: [createStatus('securityPoolFactory', true), createStatus('zoltarQuestionData', true)],
+				enabled: true,
+				onTransactionFinished: () => undefined,
+				onTransactionPresented: () => undefined,
+				onTransactionRequested: () => undefined,
+				onTransactionSubmitted: () => undefined,
+				refreshState: async () => undefined,
+				zoltarUniverseHasForked: false,
+			},
+			newState => {
+				state = newState
+			},
+		)
+
+		const renderedComponent = await renderIntoDocument(<Harness />)
+		cleanupRenderedComponent = renderedComponent.cleanup
+		try {
+			await act(async () => {
+				await requireState(state).createPool('11', { initialReportPriorityFeeEth: '0.00000001', marketId: '', statoblastSecurityMultiplierBps: '2' })
+			})
+
+			expect(requireState(state).securityPoolCreationFeedback?.status.tone).toBe('error')
+			const reviewSignal = requireState(state).securityPoolReviewSignal
+			expect(reviewSignal).toBeInstanceOf(AbortSignal)
+			expect(reviewSignal?.aborted).toBe(false)
+			expect(embeddedTransactionSteps.value).toBe(reviewSignal)
+			expect(transactionSteps.value?.reviewSignal).toBe(reviewSignal)
+
+			await act(() => {
+				requireState(state).dismissSecurityPoolReview()
+			})
+			expect(requireState(state).securityPoolReviewSignal).toBeUndefined()
+			expect(embeddedTransactionSteps.value).toBeUndefined()
+			expect(reviewSignal?.aborted).toBe(true)
+		} finally {
+			transactionSteps.value?.cancel()
+		}
+	})
+
+	test('createPool labels the batched question-and-pool transaction for the wallet review', async () => {
+		const { embeddedTransactionSteps } = await import('@zoltar/ui-core-shared/components/TransactionStepsModal.js')
+		let embeddedDuringWrite: AbortSignal | undefined
+		let reviewSignalDuringWrite: AbortSignal | undefined
+		const createSecurityPool = mock(async (client: { onTransactionSubmitted?: (hash: Hash) => void; reviewSignal?: AbortSignal }) => {
+			embeddedDuringWrite = embeddedTransactionSteps.value
+			reviewSignalDuringWrite = client.reviewSignal
+			client.onTransactionSubmitted?.('0xabc')
+			return {
+				deployPoolHash: '0xabc' as Hash,
+				initialReportPriorityFeeAttoEthPerGas: 10_000_000_000n,
+				questionCreatedAt: 1n,
+				questionId: '0x0b',
+				securityPoolAddress: '0x1111111111111111111111111111111111111111',
+				statoblastSecurityMultiplierBps: 20_000n,
+				universeId: 0n,
+			} as SecurityPoolCreationResult
+		})
+		await setupContractMocks({
+			loadMarketDetails: mock(async () => {
+				throw new Error('loadMarketDetails should not run for a new question')
+			}),
+			originSecurityPoolExists: mock(async () => false),
+			createSecurityPool,
+		})
+
+		const { useSecurityPoolCreation } = await import(`@zoltar/ui-statoblast-shared/features/security-pools/hooks/useSecurityPoolCreation.js?case=${crypto.randomUUID()}`)
+		const { getDefaultMarketFormState } = await import('@zoltar/ui-statoblast-shared/features/markets/lib/marketForm.js')
+		const requestedRows: { label: string; value: unknown }[][] = []
+		let state: UseSecurityPoolCreationState | undefined
+		const Harness = createHarness(
+			useSecurityPoolCreation,
+			{
+				accountAddress: zeroAddress,
+				deploymentStatuses: [createStatus('securityPoolFactory', true), createStatus('zoltarQuestionData', true)],
+				enabled: true,
+				onTransactionFinished: () => undefined,
+				onTransactionPresented: () => undefined,
+				onTransactionRequested: intent => {
+					requestedRows.push((intent.rows ?? []).map(row => ({ label: row.label, value: row.value })))
+					return undefined
+				},
+				onTransactionSubmitted: () => undefined,
+				refreshState: async () => undefined,
+				zoltarUniverseHasForked: false,
+			},
+			newState => {
+				state = newState
+			},
+		)
+
+		const renderedComponent = await renderIntoDocument(<Harness />)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		await act(async () => {
+			// A stale existing-question ID left in the form must not leak into the review rows for a new question.
+			await requireState(state).createPool(undefined, { initialReportPriorityFeeEth: '0.00000001', marketId: '0x99', statoblastSecurityMultiplierBps: '2' }, { ...getDefaultMarketFormState(), endTime: '2026-07-02T00:00:00.000Z', title: 'Batched question' })
+		})
+
+		expect(requireState(state).securityPoolCreationFeedback?.status.tone).toBe('success')
+		expect(createSecurityPool).toHaveBeenCalledTimes(1)
+		// The review renders inside the Create Pool card: the write client and the embedded-steps signal share one review signal for the write, released afterwards.
+		expect(reviewSignalDuringWrite).toBeInstanceOf(AbortSignal)
+		expect(embeddedDuringWrite).toBe(reviewSignalDuringWrite)
+		expect(reviewSignalDuringWrite?.aborted).toBe(true)
+		expect(embeddedTransactionSteps.value).toBeUndefined()
+		expect(requireState(state).securityPoolReviewSignal).toBeUndefined()
+		expect(requestedRows.map(rows => rows.map(row => row.label))).toEqual([['Question', 'Statoblast Security Multiplier', 'Initial Report Priority Fee']])
+		expect(requestedRows[0]?.[0]?.value).toBe('Batched question')
+		expect(createSecurityPool.mock.calls[0]?.[2]).toMatchObject({ title: 'Batched question' })
+		expect(createSecurityPool.mock.calls[0]?.[3]).toEqual({ description: 'The security multiplier and initial report priority fee cannot be changed after the pool is deployed.', title: 'Create question and security pool' })
 	})
 
 	test('createPool preserves the current market details when a stale duplicate-pool error resolves for an older market', async () => {

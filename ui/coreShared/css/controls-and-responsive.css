@@ -301,6 +301,11 @@
 	gap: var(--space-4);
 }
 
+/* A nested stack that only groups its parent's children keeps the parent's rhythm. */
+.route-workflow-stack > .workflow-stack {
+	margin-top: 0;
+}
+
 .route-view-flow,
 .market-route-flow {
 	display: grid;

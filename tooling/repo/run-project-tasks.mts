@@ -1,11 +1,13 @@
-import path from 'node:path'
 import { projectDependencyClosure, projects, projectsInTaskGroup, projectTaskNames, taskProjects, topologicallySortedProjects, validateProjectRegistry, type Project, type ProjectTaskName } from './projects.ts'
 import { repositoryRoot as defaultRepositoryRoot } from './root.mts'
+import { runTaskProcess } from './task-process.mts'
 
 export type ProjectTaskPlanEntry = {
 	readonly command: readonly string[]
 	readonly cwd: string
 	readonly projectId: string
+	/** Dependency audits query the package registry, so registry connection failures are retried instead of failing the run. */
+	readonly retryTransientNetworkErrors?: true
 }
 
 export function createProjectTaskPlan(taskName: ProjectTaskName, requestedProjectIds: readonly string[] | undefined = undefined, registry: readonly Project[] = projects): ProjectTaskPlanEntry[] {
@@ -19,7 +21,7 @@ export function createProjectTaskPlan(taskName: ProjectTaskName, requestedProjec
 	const entries = orderedProjects.map(project => {
 		const task = project.tasks[taskName]
 		if (task === undefined) throw new Error(`${project.id} does not support ${taskName}`)
-		return { command: task.command, cwd: task.cwd, projectId: project.id }
+		return { command: task.command, cwd: task.cwd, projectId: project.id, ...(taskName === 'audit' ? { retryTransientNetworkErrors: true as const } : {}) }
 	})
 	return taskName === 'setup' ? entries.filter((entry, index) => entries.findIndex(other => other.cwd === entry.cwd && JSON.stringify(other.command) === JSON.stringify(entry.command)) === index) : entries
 }
@@ -27,8 +29,7 @@ export function createProjectTaskPlan(taskName: ProjectTaskName, requestedProjec
 export async function runProjectTaskPlan(plan: readonly ProjectTaskPlanEntry[], repositoryRoot = defaultRepositoryRoot): Promise<number> {
 	for (const entry of plan) {
 		console.log(`project:${entry.projectId}: ${entry.command.join(' ')}`)
-		const child = Bun.spawn({ cmd: [...entry.command], cwd: path.join(repositoryRoot, entry.cwd), stdin: 'inherit', stdout: 'inherit', stderr: 'inherit' })
-		const exitCode = await child.exited
+		const exitCode = await runTaskProcess({ command: entry.command, cwd: entry.cwd, repositoryRoot, retryTransientNetworkErrors: entry.retryTransientNetworkErrors === true })
 		if (exitCode !== 0) return exitCode
 	}
 	return 0
@@ -59,6 +60,8 @@ if (import.meta.main) {
 		selected = projects.filter(project => project.path.startsWith(prefix))
 	} else {
 		const projectIds = args.filter(argument => argument !== '--dependencies')
+		const unknownProjectId = projectIds.find(projectId => !projects.some(project => project.id === projectId))
+		if (unknownProjectId !== undefined) throw new Error(`Unknown project: ${unknownProjectId}`)
 		if (projectIds.length > 0) selected = withDependencies ? projectDependencyClosure(projectIds) : projects.filter(project => projectIds.includes(project.id))
 	}
 	const selectedIds = selected?.filter(project => project.tasks[taskName as ProjectTaskName] !== undefined).map(project => project.id)

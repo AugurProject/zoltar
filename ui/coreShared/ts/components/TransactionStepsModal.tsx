@@ -2,6 +2,12 @@ import { TransactionActionButton, TransactionActionButtonLockProvider } from './
 import { TokenApprovalControl } from './TokenApprovalControl.js'
 import * as copy from '../copy/transactionSteps.js'
 import * as commonCopy from '../copy/common.js'
+import * as transactionCopy from '../copy/transaction.js'
+import { AddressValue } from './AddressValue.js'
+import { ReadOnlyDetailAccordion } from './ReadOnlyDetailAccordion.js'
+import { TransactionObjectContext } from './TransactionObjectContext.js'
+import type { GlobalTransactionRow } from '../types/components.js'
+import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import { GlobalTransactionPresentationProvider, useGlobalTransactionPresentation } from './GlobalTransactionPresentationContext.js'
 import { useEffect, useRef } from 'preact/hooks'
 import { OperationModal } from './OperationModal.js'
@@ -12,6 +18,34 @@ import { signal } from '@preact/signals'
 import { transactionSteps } from '../transactions/transactionSteps.js'
 
 export const embeddedTransactionSteps = signal<AbortSignal | undefined>(undefined)
+
+/** Explains a step that has no token funding to summarize, using the enclosing operation's rows for the parameters being submitted. */
+function TransactionStepReview({ contractAddress, contractLabel, description, rows = [] }: { contractAddress: Address | undefined; contractLabel: string | undefined; description: string | undefined; rows?: GlobalTransactionRow[] | undefined }) {
+	return (
+		<>
+			{description === undefined ? undefined : <p className='detail'>{description}</p>}
+			<TransactionObjectContext items={rows} />
+			{contractAddress === undefined ? undefined : (
+				<ReadOnlyDetailAccordion title={commonCopy.technicalDetails}>
+					<dl className='global-transaction-notice-rows'>
+						<div className='global-transaction-notice-row'>
+							<dt>{transactionCopy.contract}</dt>
+							<dd>
+								{contractLabel === undefined ? (
+									<AddressValue address={contractAddress} copyable={false} />
+								) : (
+									<>
+										{contractLabel} <AddressValue address={contractAddress} copyable={false} />
+									</>
+								)}
+							</dd>
+						</div>
+					</dl>
+				</ReadOnlyDetailAccordion>
+			)}
+		</>
+	)
+}
 
 export function TransactionStepsModal({ contextKey }: { contextKey: string }) {
 	useEffect(() => () => transactionSteps.peek()?.cancel(), [contextKey])
@@ -24,19 +58,39 @@ export function TransactionStepsModal({ contextKey }: { contextKey: string }) {
 	return <TransactionStepsContent contextKey={contextKey} />
 }
 
-export function TransactionStepsContent({ contextKey, inline = false, onClose }: { contextKey: string; inline?: boolean; onClose?: () => void }) {
+export function TransactionStepsContent({ contextKey, focusOnMount = false, heading, inline = false, keepActionsVisible = false, onClose }: { contextKey: string; focusOnMount?: boolean; heading?: string | undefined; inline?: boolean; keepActionsVisible?: boolean; onClose?: (() => void) | undefined }) {
 	const presentation = useGlobalTransactionPresentation()
 	const errorRef = useRef<HTMLDivElement>(null)
+	const actionsRef = useRef<HTMLDivElement>(null)
 	const workflow = transactionSteps.value
 	const current = workflow?.steps[workflow.activeIndex]
 	const operationFailed = presentation?.tone === 'error'
 	const operationError = typeof presentation?.detail === 'string' ? presentation.detail : copy.requirementsFailed
 	const error = operationFailed && (current?.error === undefined || current?.error === 'Transaction reverted.') ? operationError : current?.error
+	const pending = error === undefined && (workflow?.steps.some(step => step.phase === 'pending') ?? false)
 	useEffect(() => {
 		if (error !== undefined) errorRef.current?.scrollIntoView?.({ block: 'nearest' })
 	}, [error])
+	// A review in page flow can slip under the fixed transaction tray, so keep its actions clear as they change state.
+	// The tray grows with each presentation update, so wait for that layout and center rather than edge-align.
+	useEffect(() => {
+		if (!keepActionsVisible || typeof requestAnimationFrame !== 'function') return
+		let frame: number | undefined
+		frame = requestAnimationFrame(() => {
+			frame = requestAnimationFrame(() => actionsRef.current?.scrollIntoView?.({ block: 'center' }))
+		})
+		return () => {
+			if (frame !== undefined) cancelAnimationFrame(frame)
+		}
+	}, [keepActionsVisible, pending, presentation])
+	// A review that replaced the control the user activated takes over its focus.
+	useEffect(() => {
+		if (!focusOnMount) return
+		const actions = actionsRef.current
+		if (actions === null || actions.contains(document.activeElement)) return
+		actions.querySelector<HTMLElement>('button:not(:disabled), input:not(:disabled)')?.focus()
+	}, [focusOnMount])
 	if (workflow === undefined || current === undefined) return undefined
-	const pending = error === undefined && workflow.steps.some(step => step.phase === 'pending')
 	const completed = workflow.steps.every(step => step.phase === 'confirmed' || step.phase === 'skipped')
 	const funding = workflow.steps.flatMap(step => step.tokenFunding ?? [])
 	const outcome = workflow.steps.find(step => step.oracleOutcome !== undefined)?.oracleOutcome
@@ -115,12 +169,18 @@ export function TransactionStepsContent({ contextKey, inline = false, onClose }:
 	)
 	const content = (
 		<>
+			{heading === undefined ? undefined : (
+				<div className='transaction-review-header'>
+					<h4>{heading}</h4>
+				</div>
+			)}
 			<div className='transaction-step-content'>
-				{funding.length === 0 ? undefined : <TransactionFundingSummary funding={funding} totalAttoEth={totalEth} outcome={outcome} />}
-
+				{funding.length === 0 ? <TransactionStepReview contractAddress={current.contractAddress} contractLabel={current.contractLabel} description={completed ? undefined : current.description} rows={presentation?.rows} /> : <TransactionFundingSummary funding={funding} totalAttoEth={totalEth} outcome={outcome} />}
 				{funding.length === 0 || completed ? undefined : <p className='detail transaction-funding-note'>{copy.fundingDetail}</p>}
 			</div>
-			<div className='transaction-step-actions transaction-approval-editor'>{renderTransactionActions()}</div>
+			<div className='transaction-step-actions transaction-approval-editor' ref={actionsRef}>
+				{renderTransactionActions()}
+			</div>
 		</>
 	)
 	return (
