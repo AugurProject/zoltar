@@ -1,5 +1,8 @@
+import { registerTransactionReviewScope } from '../transactions/transactionReviewScope.js'
+import { transactionSteps } from '../transactions/transactionSteps.js'
+import { TransactionStepsContent } from './TransactionStepsContent.js'
 import * as commonCopy from '../copy/common.js'
-import { useEffect, useId, useRef } from 'preact/hooks'
+import { useId, useLayoutEffect, useRef, useState } from 'preact/hooks'
 import { useModalFocusIsolation } from '../hooks/useModalFocusIsolation.js'
 import type { OperationModalProps } from '../types/components.js'
 import { useGlobalTransactionPresentation } from './GlobalTransactionPresentationContext.js'
@@ -22,10 +25,28 @@ function getModalTransactionPresentation(transaction: ReturnType<typeof useGloba
 	}
 }
 
-export function OperationModal({ children, closeDisabled = false, closeOnSuccessKey, context = [], description, isOpen, onClose, title }: OperationModalProps) {
+export function OperationModal({ children, closeDisabled = false, closeOnSuccessKey, context = [], description, embedTransactionSteps = true, isOpen, onClose, title }: OperationModalProps) {
 	const dialogRef = useRef<HTMLElement | null>(null)
 	const closeButtonRef = useRef<HTMLButtonElement | null>(null)
+	const [dismissedOperationKey, setDismissedOperationKey] = useState<string>()
+	const [reviewScope, setReviewScope] = useState<AbortController>()
+	useLayoutEffect(() => {
+		if (!isOpen || !embedTransactionSteps) return
+		setDismissedOperationKey(undefined)
+		const scope = new AbortController()
+		const unregister = registerTransactionReviewScope(scope.signal)
+		setReviewScope(scope)
+		return () => {
+			scope.abort()
+			unregister()
+		}
+	}, [isOpen, embedTransactionSteps])
+	const workflow = transactionSteps.value
+	const ownsWorkflow = reviewScope !== undefined && !reviewScope.signal.aborted && workflow?.reviewSignal === reviewScope.signal
+	const showSteps = ownsWorkflow && workflow?.steps[workflow.activeIndex] !== undefined
 	const activeTransaction = useGlobalTransactionPresentation()
+	const pending = ownsWorkflow && workflow.steps.some(step => step.phase === 'pending' && step.error === undefined) && activeTransaction?.tone !== 'error'
+	const cannotClose = closeDisabled || pending
 	const activeTransactionOperationKey = getTransactionOperationKey(activeTransaction)
 	const modalTransaction = getModalTransactionPresentation(activeTransaction, context)
 	const titleId = useId()
@@ -35,10 +56,13 @@ export function OperationModal({ children, closeDisabled = false, closeOnSuccess
 	const transactionOperationKeyAtOpenRef = useRef<string | undefined>()
 	const wasOpenRef = useRef(false)
 	const requestClose = () => {
-		if (!closeDisabled) onClose()
+		if (!cannotClose) {
+			if (ownsWorkflow) workflow.cancel()
+			onClose()
+		}
 	}
 
-	useEffect(() => {
+	useLayoutEffect(() => {
 		if (!isOpen) {
 			wasOpenRef.current = false
 			modalOperationKeysRef.current = new Set()
@@ -54,8 +78,20 @@ export function OperationModal({ children, closeDisabled = false, closeOnSuccess
 			modalOperationKeysRef.current.add(activeTransactionOperationKey)
 		}
 		const submittedActionSucceeded = activeTransaction?.tone === 'success' && activeTransaction.hash !== undefined && activeTransaction.hash === closeOnSuccessKey && activeTransactionOperationKey !== undefined && modalOperationKeysRef.current.has(activeTransactionOperationKey)
-		if (submittedActionSucceeded) onClose()
-	}, [activeTransaction?.hash, activeTransaction?.tone, activeTransactionOperationKey, closeOnSuccessKey, isOpen, onClose])
+		if (submittedActionSucceeded) {
+			if (ownsWorkflow) workflow.cancel()
+			onClose()
+		} else if (ownsWorkflow && activeTransaction?.tone === 'success' && activeTransaction.hash !== undefined && workflow.steps.some(step => step.hash === activeTransaction.hash)) {
+			// A standalone approval completed; keep the form for the actual action.
+			workflow.cancel()
+		}
+	}, [activeTransaction?.hash, activeTransaction?.tone, activeTransactionOperationKey, closeOnSuccessKey, isOpen, onClose, ownsWorkflow, workflow?.cancel])
+
+	useLayoutEffect(() => {
+		if (!isOpen || !dialogRef.current?.contains(document.activeElement)) return
+		if (cannotClose) dialogRef.current.focus()
+		else closeButtonRef.current?.focus()
+	}, [showSteps])
 
 	useModalFocusIsolation({
 		dialogRef,
@@ -68,12 +104,12 @@ export function OperationModal({ children, closeDisabled = false, closeOnSuccess
 
 	return (
 		<div className='modal-backdrop' role='presentation' onClick={requestClose}>
-			<section ref={dialogRef} className='modal-panel operation-modal-panel' role='dialog' tabIndex={-1} aria-busy={closeDisabled || undefined} aria-modal='true' aria-labelledby={titleId} aria-describedby={descriptionId} onClick={event => event.stopPropagation()}>
+			<section ref={dialogRef} className='modal-panel operation-modal-panel' role='dialog' tabIndex={-1} aria-busy={cannotClose || undefined} aria-modal='true' aria-labelledby={titleId} aria-describedby={descriptionId} onClick={event => event.stopPropagation()}>
 				<div className='modal-header'>
 					<div className='modal-header-title'>
 						<h3 id={titleId}>{title}</h3>
 					</div>
-					<button ref={closeButtonRef} className='quiet modal-close-button' type='button' aria-label={commonCopy.close} title={commonCopy.close} disabled={closeDisabled} onClick={requestClose}>
+					<button ref={closeButtonRef} className='quiet modal-close-button' type='button' aria-label={commonCopy.close} title={commonCopy.close} disabled={cannotClose} onClick={requestClose}>
 						×
 					</button>
 				</div>
@@ -83,8 +119,24 @@ export function OperationModal({ children, closeDisabled = false, closeOnSuccess
 					</p>
 				)}
 				<TransactionObjectContext items={context} />
-				{!wasOpenRef.current || modalTransaction === undefined || activeTransactionOperationKey === undefined || activeTransactionOperationKey === transactionOperationKeyAtOpenRef.current ? undefined : <TransactionPresentationNotice className='operation-modal-transaction-notice' transaction={modalTransaction} />}
-				<div className='operation-modal-body'>{children}</div>
+				{showSteps || !wasOpenRef.current || modalTransaction === undefined || activeTransactionOperationKey === undefined || activeTransactionOperationKey === transactionOperationKeyAtOpenRef.current || activeTransactionOperationKey === dismissedOperationKey ? undefined : (
+					<TransactionPresentationNotice className='operation-modal-transaction-notice' transaction={modalTransaction} />
+				)}
+				<div className='operation-modal-body' hidden={showSteps} style={showSteps ? { display: 'none' } : undefined}>
+					{children}
+				</div>
+				{showSteps ? (
+					<div className='operation-modal-body'>
+						<TransactionStepsContent
+							contextKey={titleId}
+							onClose={requestClose}
+							onBack={() => {
+								setDismissedOperationKey(activeTransactionOperationKey)
+								workflow.cancel()
+							}}
+						/>
+					</div>
+				) : undefined}
 			</section>
 		</div>
 	)

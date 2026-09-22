@@ -1,3 +1,4 @@
+import { getTransactionReviewSignal } from './transactionReviewScope.js'
 import * as commonCopy from '../copy/common.js'
 import type { TransactionPlanStep } from '../wallet/chainBackend.js'
 import { signal } from '@preact/signals'
@@ -36,7 +37,7 @@ type TransactionSteps = {
 
 export const transactionSteps = signal<TransactionSteps | undefined>(undefined)
 
-export function createTransactionStepController(signal?: AbortSignal) {
+export function createTransactionStepController(signal = getTransactionReviewSignal()) {
 	let canceled = false
 	let rejectReview: ((reason: Error) => void) | undefined
 	const steps: TransactionStep[] = []

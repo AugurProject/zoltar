@@ -1,3 +1,4 @@
+import { getTransactionReviewSignal } from '@zoltar/ui-core-shared/transactions/transactionReviewScope.js'
 import { formatUnits, getAddress, encodeFunctionData, maxUint256 } from '@zoltar/core-shared/evm/ethereum'
 import type { TransactionPlanStep, TransactionRequestPreview, WriteClient } from '@zoltar/ui-core-shared/wallet/chainBackend.js'
 import { createActiveEnvironmentGuard } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
@@ -66,7 +67,7 @@ async function describeTransaction(client: WriteClient, preview: TransactionRequ
 	return details
 }
 
-export function createReviewedClient(client: WriteClient, validate: () => Promise<void> = async () => undefined, signal?: AbortSignal): WriteClient {
+export function createReviewedClient(client: WriteClient, validate: () => Promise<void> = async () => undefined, signal = getTransactionReviewSignal()): WriteClient {
 	const controller = createTransactionStepController(signal)
 	const environment = createActiveEnvironmentGuard()
 	let preview: TransactionRequestPreview | undefined

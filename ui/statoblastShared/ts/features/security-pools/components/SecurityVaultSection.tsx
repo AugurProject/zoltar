@@ -382,7 +382,13 @@ export function SecurityVaultSection({
 					</>
 				)}
 			</OperationModal>
-			<OperationModal context={vaultTransactionContext} isOpen={vaultActionModal === 'withdraw-rep'} onClose={closeVaultActionModal} title={repExitActionLabel}>
+			<OperationModal
+				closeOnSuccessKey={(securityVaultResult?.action === 'queueWithdrawRep' || securityVaultResult?.action === 'redeemRepFromVault') && securityVaultResult.stagedExecution?.success !== false ? securityVaultResult.hash : undefined}
+				context={vaultTransactionContext}
+				isOpen={vaultActionModal === 'withdraw-rep'}
+				onClose={closeVaultActionModal}
+				title={repExitActionLabel}
+			>
 				{currentSelectedVaultDetails === undefined ? <p className='detail'>{securityPoolCopy.selectedVaultDetailsUnavailable}</p> : null}
 				{currentSelectedVaultDetails === undefined ? null : (
 					<>
@@ -423,7 +429,7 @@ export function SecurityVaultSection({
 			<VaultBackingFactorModal context={vaultTransactionContext} isOpen={vaultActionModal === 'adjust-backing'} onClose={closeVaultActionModal} result={securityVaultResult} error={securityVaultError}>
 				{adjustmentForm}
 			</VaultBackingFactorModal>
-			<OperationModal context={vaultTransactionContext} isOpen={vaultActionModal === 'claim-fees'} onClose={closeVaultActionModal} title={securityPoolCopy.claimFeesTitle}>
+			<OperationModal closeOnSuccessKey={securityVaultResult?.action === 'redeemFees' ? securityVaultResult.hash : undefined} context={vaultTransactionContext} isOpen={vaultActionModal === 'claim-fees'} onClose={closeVaultActionModal} title={securityPoolCopy.claimFeesTitle}>
 				<MetricGrid>
 					<MetricField label={securityPoolCopy.claimableFees}>{currentSelectedVaultDetails === undefined ? commonCopy.metricUnavailablePlaceholder : <CurrencyValue exactWhenRoundedToZero value={currentSelectedVaultDetails.claimableFeesAttoEth} suffix={commonCopy.eth} />}</MetricField>
 					<MetricField label={securityPoolCopy.vault}>{selectedVaultOwner === undefined ? commonCopy.noneSelected : <AddressValue address={selectedVaultOwner} />}</MetricField>

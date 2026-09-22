@@ -217,6 +217,7 @@ export type TransactionActionButtonProps = {
 }
 
 export type OperationModalProps = {
+	embedTransactionSteps?: boolean
 	children: ComponentChildren
 	closeDisabled?: boolean
 	closeOnSuccessKey?: string | undefined

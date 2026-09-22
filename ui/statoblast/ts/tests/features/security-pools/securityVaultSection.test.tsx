@@ -1,5 +1,9 @@
 /// <reference types="bun-types" />
 
+import { signal } from '@preact/signals'
+import { act } from 'preact/test-utils'
+import { GlobalTransactionPresentationProvider } from '@zoltar/ui-core-shared/components/GlobalTransactionPresentationContext.js'
+import type { GlobalTransactionPresentation } from '@zoltar/ui-core-shared/types/components.js'
 import { zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
 import { fireEvent, within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
@@ -1346,4 +1350,41 @@ describe('SecurityVaultSection', () => {
 		expect(depositLauncher.disabled).toBe(true)
 		expect(getTransactionButtonState(document.body, 'Deposit REP').reason).toBe('Switch to Sepolia.')
 	})
+
+	for (const action of ['queueWithdrawRep', 'redeemFees', 'redeemRepFromVault'] as const) {
+		test(`closes the vault dialog for a matching ${action} success`, async () => {
+			const presentation = signal<GlobalTransactionPresentation | undefined>(undefined)
+			const result = signal<SecurityVaultSectionProps['securityVaultResult']>(undefined)
+			function Harness() {
+				return (
+					<GlobalTransactionPresentationProvider transaction={presentation.value}>
+						<SecurityVaultSection
+							{...createSecurityVaultSectionProps({
+								modalFirst: true,
+								securityVaultResult: result.value,
+								securityVaultDetails: createSecurityVaultDetails({ disputeStakedAttoRep: 0n }),
+								...(action === 'redeemRepFromVault' ? { poolState: evaluateSecurityPoolState({ lifecycleState: 'ended', universeHasForked: false }) } : {}),
+							})}
+						/>
+					</GlobalTransactionPresentationProvider>
+				)
+			}
+			const rendered = await renderIntoDocument(<Harness />)
+			try {
+				const page = within(document.body)
+				await act(() => fireEvent.click(page.getByRole('button', { name: { redeemFees: 'Claim fees', redeemRepFromVault: 'Redeem REP', queueWithdrawRep: 'Withdraw REP' }[action] })))
+				expect(page.getByRole('dialog')).not.toBeNull()
+				await act(() => {
+					presentation.value = { tone: 'pending', title: 'Transaction pending', operationKey: 'vault-action', hash: '0x01' }
+				})
+				await act(() => {
+					result.value = { action, hash: '0x01' }
+					presentation.value = { tone: 'success', title: 'Transaction confirmed', operationKey: 'vault-action', hash: '0x01' }
+				})
+				expect(page.queryByRole('dialog')).toBeNull()
+			} finally {
+				await rendered.cleanup()
+			}
+		})
+	}
 })

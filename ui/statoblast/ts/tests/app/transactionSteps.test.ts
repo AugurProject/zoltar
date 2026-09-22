@@ -9,6 +9,7 @@ import { resetActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/act
 import { createFakeBackend } from '@zoltar/ui-core-shared/tests/testUtils/fakeBackend.js'
 import { createReviewedClient } from '@zoltar/ui-statoblast-shared/protocol/reviewedClient.js'
 import { withTransactionReviews } from '@zoltar/ui-statoblast-shared/protocol/reviewedBackend.js'
+import { registerTransactionReviewScope } from '@zoltar/ui-core-shared/transactions/transactionReviewScope.js'
 import { createTransactionStepController, transactionSteps } from '@zoltar/ui-core-shared/transactions/transactionSteps.js'
 
 const account = '0x0000000000000000000000000000000000000001'
@@ -507,3 +508,29 @@ test('canceling while the price request gas estimate is pending prevents submiss
 	expect(await result).toBeInstanceOf(Error)
 	expect(sendTransaction).not.toHaveBeenCalled()
 })
+
+for (const explicit of [false, true]) {
+	test(`captures the initiating modal scope without overriding explicit ownership: ${explicit}`, async () => {
+		const modal = new AbortController()
+		const independent = new AbortController()
+		const unregister = registerTransactionReviewScope(modal.signal)
+		const { client, sendTransaction } = setup()
+		const reviewed = createReviewedClient({ ...client, sendTransaction }, undefined, explicit ? independent.signal : undefined)
+		try {
+			const sending = reviewed.sendTransaction({ to: account, value: 1n }).then(
+				() => 'sent',
+				() => 'canceled',
+			)
+			await waitForReview()
+			expect(transactionSteps.value?.reviewSignal).toBe(explicit ? independent.signal : modal.signal)
+			modal.abort()
+			unregister()
+			if (explicit) confirm()
+			expect(await sending).toBe(explicit ? 'sent' : 'canceled')
+			expect(sendTransaction).toHaveBeenCalledTimes(explicit ? 1 : 0)
+		} finally {
+			unregister()
+			independent.abort()
+		}
+	})
+}
