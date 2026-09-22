@@ -133,8 +133,16 @@ function stripMatchingPrefix(message: string, prefix: string | undefined) {
 	return stripped
 }
 
+/** Library diagnostics such as tevm's `Docs:`, `Details:`, and `Version:` trailers add nothing a user can act on. */
+function stripDiagnosticTrailers(detail: string) {
+	return detail
+		.replace(/\s*\bDocs:\s*https?:\/\/\S+/gi, '')
+		.replace(/\s*\bDetails:\s*(\{.*?\}|\[.*?\]|[^{}[\]]*?)(?=\s*\bVersion:|$)/gi, '')
+		.replace(/\s*\bVersion:\s*\S+/gi, '')
+}
+
 function stripErrorWrappers(detail: string) {
-	let sanitized = detail
+	let sanitized = stripDiagnosticTrailers(detail)
 	const wrapperPatterns = [/^(failed to [^:.]+[:.]\s*)+/i, /^(internal json-rpc error[.:]?\s*)+/i, /^(transaction execution reverted(?::)?\s*)+/i, /^(execution reverted(?::)?\s*)+/i, /^(call reverted(?::)?\s*)+/i, /^(reverted(?::)?\s*)+/i, /^(error:\s*)+/i]
 
 	for (const pattern of wrapperPatterns) {
@@ -150,7 +158,7 @@ function isJsonOnlyValue(value: string) {
 
 function isGenericErrorDetail(value: string) {
 	const comparable = normalizeComparableMessage(value)
-	return comparable === '' || comparable === '[object object]' || comparable === 'unknown error' || comparable === 'for an unknown reason'
+	return comparable === '' || comparable === '[object object]' || comparable === 'unknown error' || comparable === 'for an unknown reason' || comparable === 'revert'
 }
 
 function getKnownTransactionErrorDetail(details: string[]) {

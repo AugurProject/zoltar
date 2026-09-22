@@ -28,6 +28,7 @@ function getModalTransactionPresentation(transaction: ReturnType<typeof useGloba
 export function OperationModal({ children, closeDisabled = false, closeOnSuccessKey, context = [], description, embedTransactionSteps = true, isOpen, onClose, title }: OperationModalProps) {
 	const dialogRef = useRef<HTMLElement | null>(null)
 	const closeButtonRef = useRef<HTMLButtonElement | null>(null)
+	const noticeRef = useRef<HTMLDivElement | null>(null)
 	const [dismissedOperationKey, setDismissedOperationKey] = useState<string>()
 	const [reviewScope, setReviewScope] = useState<AbortController>()
 	useLayoutEffect(() => {
@@ -109,6 +110,11 @@ export function OperationModal({ children, closeDisabled = false, closeOnSuccess
 		onClose: requestClose,
 	})
 
+	const showNotice = !(showSteps || !wasOpenRef.current || modalTransaction === undefined || activeTransactionOperationKey === undefined || activeTransactionOperationKey === transactionOperationKeyAtOpenRef.current || activeTransactionOperationKey === dismissedOperationKey)
+	useEffect(() => {
+		if (showNotice) noticeRef.current?.scrollIntoView?.({ block: 'nearest' })
+	}, [showNotice, modalTransaction?.tone, modalTransaction?.hash])
+
 	if (!isOpen) return undefined
 
 	const returnToForm = () => {
@@ -133,12 +139,15 @@ export function OperationModal({ children, closeDisabled = false, closeOnSuccess
 					</p>
 				)}
 				<TransactionObjectContext items={context} />
-				{showSteps || !wasOpenRef.current || modalTransaction === undefined || activeTransactionOperationKey === undefined || activeTransactionOperationKey === transactionOperationKeyAtOpenRef.current || activeTransactionOperationKey === dismissedOperationKey ? undefined : (
-					<TransactionPresentationNotice className='operation-modal-transaction-notice' transaction={modalTransaction} />
-				)}
 				<div className='operation-modal-body' inert={showSteps || undefined}>
 					{children}
 				</div>
+				{/* Outcome notices sit below the form so its controls never move; the dialog scrolls to them instead. */}
+				{showNotice ? (
+					<div ref={noticeRef}>
+						<TransactionPresentationNotice className='operation-modal-transaction-notice' transaction={modalTransaction} />
+					</div>
+				) : undefined}
 				{showSteps ? (
 					<div className='operation-modal-steps'>
 						{/* The dialog already shows its context rows above the form, so the step review only keeps the rows it does not cover. */}
