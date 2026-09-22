@@ -1,4 +1,3 @@
-export const confirmed = 'Confirmed'
 export const notCompleted = 'Not completed'
 export const skipped = 'Not needed'
 export const ifNeeded = 'If needed'

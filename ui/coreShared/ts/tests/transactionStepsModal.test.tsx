@@ -152,6 +152,7 @@ for (const result of ['success', 'reverted'] as const) {
 				const secondReview = controller.review()
 				await act(() => undefined)
 				expect(button('Wrap ETH').hasAttribute('disabled')).toBe(true)
+				expect(button('Wrap ETH').textContent).toBe('Wrap ETH')
 				expect(button('Approve REP').hasAttribute('disabled')).toBe(false)
 				expect(button('Request price').hasAttribute('disabled')).toBe(true)
 				await act(() => fireEvent.click(button('Approve REP')))
