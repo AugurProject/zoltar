@@ -67,8 +67,8 @@ export const contractSafetyPolicy = {
 				sourcePath: 'contracts/statoblast/EscalationGame.sol',
 				contractName: 'EscalationGame',
 			},
-			24_428,
-			'The reviewed game preserves selector routing and now bubbles retention-call failures; no further runtime growth is permitted.',
+			24_536,
+			'The game adds shared continuation response-period admission while preserving ordinary finality and selector routing; this bug fix uses 108 additional runtime bytes, with no further growth permitted.',
 		),
 		runtimeBudget(
 			{
@@ -101,8 +101,8 @@ export const contractSafetyPolicy = {
 				sourcePath: 'contracts/statoblast/factories/EscalationGameFactory.sol',
 				contractName: 'EscalationGameFactory',
 			},
-			46_673,
-			'The factory embeds the reviewed game with retention-call revert bubbling and permits no further growth.',
+			47_027,
+			'The factory embeds the response-period admission fix and inherited settlement token-funding check; these bug fixes use 354 additional initcode bytes, with no further growth permitted.',
 		),
 	] satisfies readonly BytecodeBudget[],
 	exactLayoutPairs: [

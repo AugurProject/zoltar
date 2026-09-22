@@ -47,7 +47,7 @@ export const contractPagesDirectory = 'docs/reference/contracts'
 export function contractPageOutputPath(contractName: string): string {
 	return `${contractPagesDirectory}/${contractName.toLowerCase()}.html`
 }
-export const expectedProductionSoliditySourceFingerprint = 'e12e43baa1b603f018a3ba59c6e40988579633126f7f0d2e28af6b497ab3af04'
+export const expectedProductionSoliditySourceFingerprint = 'a52f475c7a45614bbf10332870c158c583fb6a12d8aa72ff88a41e815117d70f'
 
 export const documentedEventSchemas: Array<{ name: string; parameters: string; sourcePath: string }> = [
 	{
@@ -1178,7 +1178,7 @@ export const contractReferences: ContractReference[] = [
 		compiledAbiFingerprint: 'b5a5cdf236031f69d66662704e6a9f748eee9faf6ef61c8678f5e60b027196ff',
 		name: 'EscalationGame',
 		purpose: 'Escrows outcome REP, raises the running resolution cost, detects non-decision, and settles local or carried deposits.',
-		readAbiFingerprint: 'ed587e847ca84dfb0faa31896f294197b8e84a13c229b3bab68447f262dae58d',
+		readAbiFingerprint: 'eef79eba3507015cc5f9bb0198da1e4ba1ebb6be17e9d4d1c536ee681a66e82c',
 		readSurface:
 			'Base getters are `securityPool`, `repToken`, `activationTime`, `nonDecisionThresholdAttoRep`, `startBondAttoRep`, `nonDecisionTimestamp`, `nonDecisionState`, `forkContinuation`, `forkElapsedAtStart`, `forkResumedAt`, `fixedQuestionOutcome`, `nodes`, `disputeStakedRepByVaultAttoRep`, `totalDisputeStakedAttoRep`, `truthAuctionRepBeforeAttoRep`, `truthAuctionRepRemainingAttoRep`, `cumulativeClaimRetention`, and `cumulativeClaimRetentionExponent`. The claim delegate fallback exposes `rootClaimSourceGame`, `applyInheritedClaimRetention`, and `applyInheritedSourceStorageBasis`. The source-storage-basis read allocates retained carry by cumulative-prefix differences so leaf allocations sum to the aggregate checkpoint. `disputeStakedRepByVaultAttoRep` is locally attributed current-game escrow used for health; inherited carry remains aggregate commitment state until proof settlement. Use `previewDepositOnOutcome`, `computeIterativeAttritionCostAttoRep`, `computeTimeSinceStartFromAttritionCostAttoRep`, `totalCostAttoRep`, `getEscalationGameEndDate`, `getQuestionResolution`, `getFinalQuestionResolution`, `hasReachedNonDecision`, `canTriggerOwnFork`, `getBindingCapitalAttoRep`, `getOutcomeBalancesAttoRep`, `getDepositsByOutcome`, `getDepositsByOutcomeLength`, `forkCarrySnapshotInitialized`, `getOutcomeState`, `getForkCarrySnapshot`, `getForkCarryRoots`, `isForkCarryFundingComplete`, `getCarryLeafPageByOutcome`, `getProofConsumedCarriedDepositIndexesByOutcome`, `getLocalUnresolvedPrincipalByVaultAndOutcome`, and `getForkedEscrowByVaultAndOutcome` for calculations, lifecycle authorization, pages, carry state, and escrow. Vault-funded deposits and all withdrawals route through `SecurityPool`; after an ordinary game starts, wallet-funded deposits use `depositRepOnOutcome` and mint no pool backing units.',
 		readDeclarations: [
