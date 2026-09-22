@@ -20,7 +20,7 @@
 
 				<h2 id="interactions">State-changing interactions</h2>
 				<!-- Validated read ABI fingerprint: e4ad6ab91244711a2008716cfbdf62b6237d39321eefa984a4fdc7856267b8bc -->
-				<!-- Validated complete compiled ABI fingerprint: 3e9a23e31e07edd4ebbf7af8e14a7b01b1ea30d8483217d4cc4f6f7f8784a1d9 -->
+				<!-- Validated complete compiled ABI fingerprint: 9292800021cde5c8c9dd6f96beb32a33a034949cd1d8d0d68671c3f900b27d2b -->
 				<table>
 					<thead>
 						<tr>
@@ -68,10 +68,10 @@
 							<td><code>AuctionFinalized</code></td>
 						</tr>
 						<tr>
-							<td><code>withdrawBids(withdrawFor, tickIndices, proRataTotal, secondaryProRataTotal)</code></td>
+							<td><code>withdrawBids(withdrawFor, tickIndices, proRataTotal, secondaryProRataTotal, repBackingUnitsTotal)</code></td>
 							<td>Auction owner only</td>
 							<td>Auction finalized; caller is owner. Nonempty indexes belong to <code>withdrawFor</code> and remain unsettled.</td>
-							<td>For a nonempty list, returns <code>totalFilledAttoRep</code>, <code>totalRefundAttoEth</code>, <code>totalProRataAllocation</code>, and <code>totalSecondaryProRataAllocation</code> in ABI order. The forker uses the first and two allocation totals to credit REP backing units, capacity ownership, and bad debt; the auction adds the aggregate <code>totalRefundAttoEth</code> to the beneficiary pull-payment balance without calling recipient code. Withdrawal-time allocation assigns division dust from deterministic cumulative ETH positions, making each payout independent of claim order. An empty list returns four zeros without changing bids or emitting events.</td>
+							<td>Returns filled REP, ETH refund, capacity allocation, bad-debt allocation, and REP backing-unit allocation in ABI order. The forker credits the three allocations to the vault; the auction credits refunds to the beneficiary pull-payment balance without calling recipient code. Capacity and debt use fixed cumulative ETH positions. Backing units use the corresponding cumulative filled-REP positions to exhaust <code>repBackingUnitsTotal</code> without claim-order dependence. An empty list returns five zeros without changing bids or emitting events.</td>
 							<td><code>BidSettled</code> per processed bid; one <code>EthRefundCredited</code> for the call when aggregate <code>totalRefundAttoEth</code> is positive</td>
 						</tr>
 						<tr>
