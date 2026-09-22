@@ -86,14 +86,15 @@ export function TransactionStepsContent({ contextKey, onClose, onBack }: { conte
 							)}
 							{final ? (
 								<div className='actions transaction-step-close'>
-									{error === undefined || onBack === undefined ? undefined : (
+									{error !== undefined && onBack !== undefined ? (
 										<button className='secondary' type='button' onClick={onBack}>
 											{copy.backToForm}
 										</button>
+									) : (
+										<button className='secondary' type='button' onClick={onClose ?? workflow.cancel} disabled={pending}>
+											{completed || error !== undefined ? commonCopy.close : commonCopy.cancel}
+										</button>
 									)}
-									<button className='secondary' type='button' onClick={onClose ?? workflow.cancel} disabled={pending}>
-										{completed || error !== undefined ? commonCopy.close : commonCopy.cancel}
-									</button>
 								</div>
 							) : undefined}
 							<div className='transaction-step-hash'>{step.hash === undefined ? undefined : <TransactionHashLink hash={step.hash} />}</div>
@@ -105,12 +106,13 @@ export function TransactionStepsContent({ contextKey, onClose, onBack }: { conte
 	)
 	const content = (
 		<>
-			<div className='transaction-step-content'>
-				{funding.length === 0 ? undefined : <TransactionFundingSummary funding={funding} totalAttoEth={totalEth} outcome={outcome} />}
-
-				{funding.length === 0 || completed ? undefined : <p className='detail transaction-funding-note'>{copy.fundingDetail}</p>}
-			</div>
-			<div className='transaction-step-actions transaction-approval-editor'>{renderTransactionActions()}</div>
+			{funding.length === 0 ? undefined : (
+				<div className='transaction-step-content'>
+					<TransactionFundingSummary funding={funding} totalAttoEth={totalEth} outcome={outcome} />
+					{completed ? undefined : <p className='detail transaction-funding-note'>{copy.fundingDetail}</p>}
+				</div>
+			)}
+			<div className={`transaction-step-actions transaction-approval-editor${funding.length === 0 ? ' transaction-step-actions-standalone' : ''}`}>{renderTransactionActions()}</div>
 		</>
 	)
 	return (

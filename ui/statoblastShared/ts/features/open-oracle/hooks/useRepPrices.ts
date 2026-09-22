@@ -285,6 +285,8 @@ export function useRepPrices({ enabled = true }: UseRepPricesOptions = {}): RepP
 		if (!enabled || cacheExpiry.value === undefined) return
 		const delay = Math.max(0, cacheExpiry.value - Date.now())
 		const timeout = window.setTimeout(() => {
+			// A load already in flight (for example the mount refresh of an expired cache) re-arms this timer when it resolves.
+			if (repPricesLoad.isLoading.value) return
 			refreshRepPricesInternal(true)
 		}, delay)
 		return () => window.clearTimeout(timeout)

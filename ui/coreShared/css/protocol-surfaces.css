@@ -1792,6 +1792,12 @@ main.global-transaction-tray-open :is(a, button, input, select, summary, textare
 	border-top: 1px solid var(--border-default);
 }
 
+/* Without a funding summary above it there is nothing for the rule to separate. */
+.transaction-step-actions-standalone {
+	padding-top: 0;
+	border-top: 0;
+}
+
 .transaction-funding {
 	display: grid;
 	grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1898,7 +1904,7 @@ main.global-transaction-tray-open :is(a, button, input, select, summary, textare
 .transaction-step-actions .tx-action-group > .actions {
 	display: grid;
 	grid-template-columns: repeat(2, minmax(0, 1fr));
-	align-items: end;
+	align-items: start;
 	gap: 0.5rem;
 }
 

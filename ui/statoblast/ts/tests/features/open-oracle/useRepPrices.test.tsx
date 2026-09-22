@@ -266,9 +266,13 @@ describe('useRepPrices', () => {
 		readClient.simulateContract = async () => {
 			throw new Error('Simulation mock pricing should not hit the onchain quoter')
 		}
+		let readClientCount = 0
 		const backend: ChainBackend = {
 			...createFakeBackend({ profile }),
-			createReadClient: () => readClient,
+			createReadClient: () => {
+				readClientCount += 1
+				return readClient
+			},
 		}
 
 		const resetEnvironment = installActiveEnvironmentForTesting(backend, simulationController)
@@ -308,6 +312,8 @@ describe('useRepPrices', () => {
 				expect(secondQueries.getByTestId('rep-per-usdc').textContent).toBe((2n * 10n ** 6n).toString())
 				expect(secondQueries.getByTestId('rep-refreshing').textContent).toBe('idle')
 			})
+			// The expired cache triggers exactly one background load, not a mount load plus an expiry-timer load.
+			expect(readClientCount).toBe(2)
 		} finally {
 			Reflect.set(Date, 'now', originalDateNow)
 		}
