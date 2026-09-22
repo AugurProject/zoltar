@@ -37,11 +37,11 @@ Omissions. This is not a coverage audit; an undocumented contract behavior is no
 
 Pass 2: read each page as the intended reader.
 
-Read every changed narrative page once, top to bottom, at reading speed, in the order the site presents them. Do this after pass 1 so that you read for comprehension rather than for facts.
+Read every changed page once, top to bottom, at reading speed, in the order the site presents them; reference pages get steps 1, 4, and 5 only. Do this after pass 1 so that you read for comprehension rather than for facts.
 
 1. Terminology. Build a table of every protocol concept across the changed pages: concept, the names and casings used for it, and where each first appears. Any concept with more than one name, any name with more than one meaning, and any first use without a definition or glossary link is a finding. Include the relationship between product names: a reader must be able to tell whether two names refer to the same system.
 
-2. Order. Mark any sentence that depends on something the page has not yet introduced, any summary that appears before the thing it summarizes, and any second introduction of a concept the page already covered. Confirm the heading sequence alone tells a story that fits the page's mode as `docs/AGENTS.md` defines it; a page whose headings follow, for instance, problem → model → mechanism → result for an explanation or goal → action → result → next action for a tutorial passes, and any order works when a reader can stop after each section with a coherent picture.
+2. Order. Mark any sentence that depends on something the page has not yet introduced, any summary that appears before the thing it summarizes, and any second introduction of a concept the page already covered. Confirm the heading sequence alone tells a story that fits the page's mode as `docs/AGENTS.md` defines it, for instance problem → model → mechanism → result for an explanation or goal → action → result → next action for a tutorial.
 
 3. Sentences and structure. Report a sentence when its actor, condition, exception, mechanism, and result compete so that a reader must reread it. Report a list when its items are not parallel, contain multiple sentences or nested conditions, or replace a relationship that prose would make clear. Report a table whose cells hold paragraphs or branches. Report legalistic phrasing, noun stacks, ambiguous `former` or `latter`, and passive voice that hides an actor who matters. Report the comprehension problem, not a word count. Group repeated style problems into one finding per page with representative examples.
 
@@ -52,7 +52,7 @@ Read every changed narrative page once, top to bottom, at reading speed, in the 
 6. Deletion. For each page, name any sentence, section, example, callout, or visual that does not advance the reader job, applying the `docs/AGENTS.md` deletion pass and remediation order. Recommend a visual only when you can name the reader question it answers and the prose it replaces.
 
 Validation assessment:
-- Compare the supplied validation with `docs/AGENTS.md`. Prose-only changes need HTML, link, formatting, and `git diff --check` runs. Corpus or manifest changes need navigation, search, and index freshness checks. Generated pages and embedded runtime behavior need their generator and runtime checks. Pages with worked examples, reference constants, or interactive tools need `docs:check-examples` and `docs:check-reference-values`; name the existing check, not a manual recompute, as the validation for a numeric finding. Duplication findings name `docs:check-content`, the cross-page duplicate paragraph and formula check.
+- Compare the supplied validation with `docs/AGENTS.md`. Prose-only changes need HTML, link, formatting, and `git diff --check` runs. Corpus or manifest changes need navigation, search, and index freshness checks. Generated pages and embedded runtime behavior need their generator and runtime checks. Pages with worked examples, reference constants, or interactive tools need `docs:check-examples` and `docs:check-reference-values`; name `docs:check-reference-values` or `docs:check-examples` as the validation for a numeric finding when the page is already in that check's scope, and otherwise recommend extending the check to the page. Duplication findings name `docs:check-content`, the cross-page duplicate paragraph and formula check.
 - Flag any test that freezes narrative wording, paragraph order, examples, or page existence without a machine-readable reason, and recommend narrowing it instead of restoring prose to satisfy it.
 
 Findings and severity:
@@ -86,7 +86,7 @@ Low:
 
 Not findings by themselves: the page could say more; a related behavior is undocumented elsewhere; a Diátaxis mode or deleted section is absent; the page has no visual when prose is clear; page length; sentence length; a tone preference without a named reader problem.
 
-For every High or Medium finding state: the affected reader; the concrete misunderstanding, failed step, or lost connection; the source evidence with `path:line`; the smallest remedy in delete → move → link → rewrite → add order; and a validation that would catch it when practical.
+For every High or Medium finding state: the affected reader; the concrete misunderstanding, failed step, or lost connection; the source evidence with `path:line`; the smallest remedy in delete → move → link → rewrite → add order; and, as the contract requires for every finding, the validation that would catch it.
 
 Scoring:
 - Score against the handoff's acceptance criteria, reader jobs, primary modes, and non-goals.
