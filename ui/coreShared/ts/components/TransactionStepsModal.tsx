@@ -31,8 +31,10 @@ function TransactionStepReview({ contractAddress, contractLabel, description, ro
 						<div className='global-transaction-notice-row'>
 							<dt>{transactionCopy.contract}</dt>
 							<dd>
-								{contractLabel === undefined ? undefined : <span>{contractLabel} </span>}
-								<AddressValue address={contractAddress} />
+								<span className='transaction-step-contract'>
+									{contractLabel === undefined ? undefined : <span>{contractLabel}</span>}
+									<AddressValue address={contractAddress} />
+								</span>
 							</dd>
 						</div>
 					</dl>
