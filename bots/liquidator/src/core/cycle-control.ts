@@ -14,8 +14,8 @@ export function requireRecoveredTransactionSuccess(status: 'reverted' | 'success
 
 export const PRIVATE_INTENT_FINALITY_BLOCKS = 12n
 
-export function ambiguousRecoveryAction(intent: { maxBlockNumber: bigint; mode: 'private' | 'public'; requiresMarketEvidence: boolean }, canonicalHeads: readonly bigint[]) {
+export function ambiguousRecoveryAction(intent: { requiresMarketEvidence: boolean }) {
+	// A relay deadline cannot invalidate signed calldata or release the nonce.
 	if (!intent.requiresMarketEvidence) return 'resubmit' as const
-	if (intent.mode === 'private' && canonicalHeads.length > 0 && canonicalHeads.every(head => head >= intent.maxBlockNumber + PRIVATE_INTENT_FINALITY_BLOCKS)) return 'expire-private' as const
 	return 'retain' as const
 }

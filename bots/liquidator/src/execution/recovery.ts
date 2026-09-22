@@ -1,15 +1,16 @@
-import { createPublicClient, parseTransaction, type Account, type Chain, type Hex, type Transport, type WalletClient } from '@zoltar/bot-shared/ethereum'
+import { createPublicClient, createWalletClient, encodeFunctionData, parseTransaction, type Account, type Chain, type Hex, type Transport, type WalletClient } from '@zoltar/bot-shared/ethereum'
 import { createRpcEndpointPool } from '@zoltar/bot-shared/ethereum'
 import { fetchLogsWithAdaptiveRanges, latestLogRange, newestFirstScanRanges } from '@zoltar/bot-shared/monitoring/block-sync'
 import { confirmCanonicalReceiptFinality } from '@zoltar/bot-shared/execution/canonical-finality'
 import { sendRawTransactionToRpc } from '@zoltar/bot-shared/monitoring/connectivity'
 import { availableSettledValues, settledQuorumValue } from '@zoltar/bot-shared/monitoring/read-quorum'
 import { ConnectivityDegradedError } from '@zoltar/bot-shared/monitoring/resilience'
-import { submitSignedTransaction } from '@zoltar/bot-shared/execution/transaction-submission'
+import { DEFAULT_TRANSACTION_VALIDITY_BLOCKS, submitSignedTransaction } from '@zoltar/bot-shared/execution/transaction-submission'
 import type { OperatorSettings } from '#config/settings'
 import { stagedOperationOutcome } from '#core/staged-outcome'
 import { ambiguousRecoveryAction, PRIVATE_INTENT_FINALITY_BLOCKS, requireRecoveredTransactionSuccess } from '#core/cycle-control'
-import { canonicalBlockHash } from '#monitoring/operator-chain'
+import { securityPoolAbi, securityPoolFactoryAbi } from '@zoltar/bot-shared/contracts/abi'
+import type { PendingTransactionIntent } from '#state/operator-state'
 import { initialRuntimeState, assertIntentSender, recordActivity, recoveredIntentCanBeResubmitted, resolveRecoveredIntentJournal, saveDurableState } from '#state/operator-state'
 import { validateReceiptExpectation } from '#execution/receipt-validation'
 import { nextStagedHistoricalRecoveryRange, recordStagedRecoveryChunk, recordStagedRecoveryGap, stagedRecoveryAnchorMatches } from '#execution/staged-recovery-journal'
@@ -90,6 +91,25 @@ export async function finalizedReceiptWithQuorum(settings: OperatorSettings, wal
 	return { observed: true as const, receipt }
 }
 
+// Match exact supported calldata, not just a historical label or lack of a price check.
+// Migration needs a refreshed fork selection and deadline; generic calls need their own replay policy.
+function replayIneligibilityReason(settings: OperatorSettings, intent: PendingTransactionIntent) {
+	const transaction = parseTransaction(intent.serializedTransaction)
+	if ((transaction.value ?? 0n) !== 0n) return 'Automatic replay of value-bearing calls is unsupported'
+	if (intent.kind === 'fees' && settings.selectedPools.some(pool => pool.toLowerCase() === transaction.to?.toLowerCase()) && transaction.data === encodeFunctionData({ abi: securityPoolAbi, functionName: 'redeemFees', args: [intent.sender] })) return undefined
+	if (
+		intent.kind === 'deployment' &&
+		settings.strategy.allowAutomaticPoolCreation &&
+		transaction.to?.toLowerCase() === settings.deployment.securityPoolFactory.toLowerCase() &&
+		settings.desiredPools.some(
+			desired =>
+				settings.approvedUniverses.includes(desired.universeId) && transaction.data === encodeFunctionData({ abi: securityPoolFactoryAbi, functionName: 'deployOriginSecurityPool', args: [desired.universeId, desired.questionId, desired.statoblastSecurityMultiplierBps, desired.initialReportPriorityFeeAttoEthPerGas] }),
+		)
+	)
+		return undefined
+	return intent.kind === 'migration' ? 'Vault migration requires a fresh approved fork selection and migration-window check' : 'The signed call is no longer authorized by current settings or has no automatic replay policy'
+}
+
 export async function recoverPendingTransactions(
 	settings: OperatorSettings,
 	wallet: WalletClient<Transport, Chain, Account>,
@@ -127,6 +147,11 @@ export async function recoverPendingTransactions(
 			continue
 		}
 		if (receiptResult.observed) return true
+		const requireReconciliation = async (reason: string): Promise<never> => {
+			intent.reconciliationReason = `${reason}; inspect the transaction and reconcile its receipt or replace signer nonce ${intent.nonce.toString()} before resuming`
+			await saveDurableState(settings.runtime.stateFile, state)
+			throw new Error(`Transaction ${intent.hash}: ${intent.reconciliationReason}`)
+		}
 		const nonce = await settledQuorumValue(
 			`pending signer nonce for ${intent.hash}`,
 			clients.map(async ({ client, endpoint }) => ({
@@ -139,30 +164,54 @@ export async function recoverPendingTransactions(
 			settings.connectivity.rpcQuorum,
 		)
 		if (nonce > intent.nonce) {
-			throw new Error(`Transaction ${intent.hash} has no receipt but signer nonce ${intent.nonce.toString()} was consumed; manual reconciliation is required`)
+			await requireReconciliation('The signer nonce was consumed without a receipt for this transaction; manual reconciliation is required')
 		}
-		const settledBlocks = await Promise.allSettled(clients.map(async ({ client }) => await client.getBlockNumber()))
-		const blocks = availableSettledValues(settledBlocks)
-		if (blocks.length < settings.connectivity.rpcQuorum) throw new ConnectivityDegradedError(`Transaction ${intent.hash} recovery does not satisfy the configured RPC quorum requirement`)
-		const recoveryAction = ambiguousRecoveryAction(intent, blocks)
-		if (recoveryAction === 'expire-private') {
-			await canonicalBlockHash(settings, intent.maxBlockNumber + PRIVATE_INTENT_FINALITY_BLOCKS, pool)
-			state.pendingTransactions = state.pendingTransactions.filter(value => value.hash.toLowerCase() !== intent.hash.toLowerCase())
-			recordActivity(state, {
-				hash: intent.hash,
-				kind: intent.kind,
-				message: `Private price-dependent intent expired after canonical finality without inclusion: ${intent.label}`,
-				status: 'failed',
-			})
-			await saveDurableState(settings.runtime.stateFile, state)
-			continue
+		const recoveryAction = ambiguousRecoveryAction(intent)
+		if (recoveryAction === 'retain') await requireReconciliation('Fresh market evidence is required; relay expiry does not prove the signed transaction cannot execute')
+		const eligibilityReason = replayIneligibilityReason(settings, intent)
+		if (eligibilityReason !== undefined) await requireReconciliation(eligibilityReason)
+		const transaction = parseTransaction(intent.serializedTransaction)
+		try {
+			await settledQuorumValue(
+				`recovery simulation for ${intent.hash}`,
+				clients.map(async ({ endpoint }) => ({
+					endpoint,
+					value: await createWalletClient({ account: wallet.account, chain: wallet.chain, transport: pool.transportFor(endpoint) }).call({
+						account: intent.sender,
+						to: transaction.to,
+						data: transaction.data,
+						value: transaction.value,
+						gas: transaction.gas,
+						maxFeePerGas: transaction.maxFeePerGas,
+						maxPriorityFeePerGas: transaction.maxPriorityFeePerGas,
+					}),
+				})),
+				settings.connectivity.rpcQuorum,
+			)
+		} catch (error) {
+			await requireReconciliation(`Current-chain replay simulation failed: ${error instanceof Error ? error.message : String(error)}`)
 		}
-		if (recoveryAction === 'retain') {
-			const recovery = intent.mode === 'public' ? 'manual reconciliation or a later receipt is required' : `private validity and ${PRIVATE_INTENT_FINALITY_BLOCKS.toString()} canonical confirmation blocks must pass`
-			throw new Error(`Price-dependent transaction ${intent.hash} remains ambiguous; ${recovery}`)
-		}
+		// Read the envelope head after simulation so a slow preflight cannot reuse an expired window.
+		const block = await settledQuorumValue(
+			`recovery relay window block for ${intent.hash}`,
+			clients.map(async ({ client, endpoint }) => {
+				const current = await client.getBlock()
+				return { endpoint, value: { number: current.number, hash: current.hash, baseFeePerGas: current.baseFeePerGas } }
+			}),
+			settings.connectivity.rpcQuorum,
+		)
+		if (block.number === undefined || block.hash === undefined || block.baseFeePerGas === undefined) throw new ConnectivityDegradedError('Recovery block is missing canonical identity or base fee')
+		if (intent.lastValidBlockNumber !== undefined && block.number >= intent.lastValidBlockNumber) await requireReconciliation('The calldata validity deadline has expired')
+		if (transaction.maxFeePerGas === undefined || transaction.maxFeePerGas < block.baseFeePerGas) await requireReconciliation('The signed fee ceiling is below the current base fee; envelope renewal cannot raise it')
 		if (!recoveredIntentCanBeResubmitted(intent)) throw new Error(`Price-dependent transaction ${intent.hash} cannot be resubmitted without fresh market evidence`)
 		if (wallet.account.signMessage === undefined) throw new Error('Execution signer cannot authenticate transaction recovery')
+		if (isStopping()) return true
+		if (intent.mode === 'private') {
+			const futureWindow = block.number + DEFAULT_TRANSACTION_VALIDITY_BLOCKS
+			intent.maxBlockNumber = intent.lastValidBlockNumber === undefined || intent.lastValidBlockNumber > futureWindow ? futureWindow : intent.lastValidBlockNumber
+		}
+		delete intent.reconciliationReason
+		await saveDurableState(settings.runtime.stateFile, state)
 		if (isStopping()) return true
 		await submitSignedTransaction({
 			address: intent.sender,
@@ -171,7 +220,7 @@ export async function recoverPendingTransactions(
 			publicRpcUrls: settings.connectivity.publicRpcUrls,
 			publicSubmit: sendRawTransactionToRpc,
 			serializedTransaction: intent.serializedTransaction,
-			settings: settings.submission,
+			settings: { ...settings.submission, mode: intent.mode },
 			signMessage: wallet.account.signMessage,
 		})
 		return true
