@@ -4,6 +4,8 @@ import { getPoolUniverseTransactionRows, humanizeTransactionAction } from '../tr
 describe('shared transaction presentation helpers', () => {
 	test('humanizes camel-case actions with protocol units', () => {
 		expect(humanizeTransactionAction('depositRepToWethVault')).toBe('Deposit REP To WETH Vault')
+		expect(humanizeTransactionAction('Deploy contract through deterministic proxy')).toBe('Deploy contract through deterministic proxy')
+		expect(humanizeTransactionAction('aggregate3')).toBe('Aggregate3')
 	})
 
 	test('builds the common security-pool identity row', () => {

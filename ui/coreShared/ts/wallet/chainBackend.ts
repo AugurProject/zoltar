@@ -46,6 +46,9 @@ export type TransactionRequestPreview = {
 	dataLabel?: string | undefined
 	functionName: string
 	requiresWalletConfirmation?: boolean | undefined
+	/** User-facing action name shown while the transaction awaits review; falls back to the function name. */
+	reviewTitle?: string | undefined
+	reviewDescription?: string | undefined
 	to?: Address | undefined
 	toLabel?: string | undefined
 	value: bigint | undefined

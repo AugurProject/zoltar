@@ -86,6 +86,34 @@ describe('QuestionCreateSection', () => {
 		expectTransactionButtonDisabled(document.body, 'Create question', 'Connect a wallet before creating a question.')
 	})
 
+	test('renders the inline transaction review in place of the overridden submit button', async () => {
+		const renderedComponent = await renderIntoDocument(
+			<QuestionCreateSection
+				accountAddress={zeroAddress}
+				canUseForFork={false}
+				hasForked={false}
+				isOnActiveAppChain={true}
+				loadingZoltarQuestions={false}
+				onCreateQuestion={() => undefined}
+				onOpenForkTab={() => undefined}
+				onQuestionFormChange={() => undefined}
+				onResetQuestion={() => undefined}
+				onUseQuestionForFork={() => undefined}
+				questionCreating={false}
+				questionError={undefined}
+				questionForm={createQuestionForm()}
+				questionResult={undefined}
+				submitActionOverride={{ availability: { disabled: false, reason: undefined }, idleLabel: 'Create question and pool', onSubmit: () => undefined, pending: true, pendingLabel: 'Creating…', reviewContent: <div data-testid='inline-review'>Confirm the pool transaction</div> }}
+				zoltarQuestions={[]}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		expect(documentQueries.getByText('Confirm the pool transaction')).not.toBeNull()
+		expect(documentQueries.queryByRole('button', { name: /Create question and pool|Creating…/ })).toBeNull()
+	})
+
 	test('reviews, submits, and offers only the Zoltar fork handoff after success', async () => {
 		let createCount = 0
 		let resetCount = 0

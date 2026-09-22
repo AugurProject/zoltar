@@ -120,7 +120,7 @@ void describe('deployment helpers', () => {
 		const deploymentSteps = getDeploymentSteps()
 		const deploymentStatusOracleStep = deploymentSteps.find(step => step.id === 'deploymentStatusOracle')
 
-		expect(deploymentSteps.map(step => step.id)).toEqual(['proxyDeployer', 'deploymentStatusOracle', 'weth', 'reputationToken', 'multicall3', 'zoltarQuestionData', 'zoltar'])
+		expect(deploymentSteps.map(step => step.id)).toEqual(['proxyDeployer', 'deploymentStatusOracle', 'reputationToken', 'multicall3', 'zoltarQuestionData', 'zoltar'])
 		expect(deploymentStatusOracleStep?.dependencies).toEqual(['proxyDeployer'])
 		expect(deploymentStatusOracleStep?.label).toBe('Deployment Status Oracle')
 		expect(deploymentSteps.find(step => step.id === 'zoltarQuestionData')?.dependencies).toEqual(['proxyDeployer'])
@@ -134,21 +134,20 @@ void describe('deployment helpers', () => {
 		const sections = getDeploymentSections(deploymentStatuses)
 		const proxyDeployerSection = sections.find(section => section.title === 'Utilities')
 
-		expect(proxyDeployerSection?.steps.map(step => step.id)).toEqual(['proxyDeployer', 'deploymentStatusOracle', 'weth', 'multicall3'])
+		expect(proxyDeployerSection?.steps.map(step => step.id)).toEqual(['proxyDeployer', 'deploymentStatusOracle', 'multicall3'])
 	})
 
-	void test('deploys Sepolia WETH and allocated REP before wiring REP into Zoltar', async () => {
+	void test('deploys allocated Sepolia REP before wiring REP into Zoltar', async () => {
 		const resetEnvironment = installActiveEnvironmentForTesting(createFakeBackend({ profile: SEPOLIA_NETWORK_PROFILE }))
 		try {
 			const deploymentSteps = getDeploymentSteps()
-			const deployableIds = ['weth', 'reputationToken', 'zoltarQuestionData', 'zoltar'] as const
+			const deployableIds = ['reputationToken', 'zoltarQuestionData', 'zoltar'] as const
 			for (const stepId of deployableIds) {
 				const step = deploymentSteps.find(candidate => candidate.id === stepId)
 				if (step === undefined) throw new Error(`Expected ${stepId} Sepolia deployment step`)
 				await step.deploy(writeClient as unknown as UiWriteClient)
 			}
 
-			expect(await readClient.getCode({ address: SEPOLIA_NETWORK_PROFILE.wethAddress })).not.toBeUndefined()
 			expect(await readClient.getCode({ address: SEPOLIA_NETWORK_PROFILE.genesisRepTokenAddress })).not.toBeUndefined()
 			expect(
 				await readClient.readContract({

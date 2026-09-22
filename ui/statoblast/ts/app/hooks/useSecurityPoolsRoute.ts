@@ -79,7 +79,22 @@ export function useSecurityPoolsRoute({
 	const { createMarket, loadZoltarForkAccess, marketCreating, marketError, marketForm, marketResult, resetMarket, setMarketForm, zoltarUniverse } = marketCreation
 	const { executePendingPoolOperation, loadingPoolOracleManager, loadPoolOracleManager, poolOracleActiveAction, poolOracleManagerDetails, poolOracleManagerError, poolOracleManagerErrorAddress, poolPriceOracleResult, requestPoolPrice } = priceOracleManager
 	const zoltarUniverseHasForked = zoltarUniverse?.hasForked === true
-	const { checkingDuplicateOriginPool, createPool, duplicateOriginPoolExists, loadingMarketDetails, marketDetails, poolCreationMarketDetails, resetSecurityPoolCreation, securityPoolCreating, securityPoolError, securityPoolForm, securityPoolResult, setSecurityPoolForm } = useSecurityPoolCreation({
+	const {
+		checkingDuplicateOriginPool,
+		createPool,
+		dismissSecurityPoolReview,
+		duplicateOriginPoolExists,
+		loadingMarketDetails,
+		marketDetails,
+		poolCreationMarketDetails,
+		resetSecurityPoolCreation,
+		securityPoolCreating,
+		securityPoolError,
+		securityPoolForm,
+		securityPoolResult,
+		securityPoolReviewSignal,
+		setSecurityPoolForm,
+	} = useSecurityPoolCreation({
 		...walletScopedHookConfig,
 		activeUniverseId,
 		deploymentStatuses,
@@ -312,6 +327,8 @@ export function useSecurityPoolsRoute({
 			securityPoolError,
 			securityPoolForm,
 			securityPoolResult,
+			securityPoolReviewSignal,
+			onDismissSecurityPoolReview: dismissSecurityPoolReview,
 			marketCreating,
 			marketError,
 			marketForm,

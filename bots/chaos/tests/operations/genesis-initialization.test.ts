@@ -157,5 +157,5 @@ test('uses the Sepolia factory when an older snapshot omits the factory address'
 	delete snapshot.deployments.uniswapV3Factory
 	snapshot.genesisUniswap = { factory: true, initialized: false, liquidity: '0', proxy: true, seeder: true }
 	const creation = evaluateSelectableOperationDefinition('trading.genesis-uniswap.create-pool', snapshot, options)
-	expect(creation.plan?.steps[0]?.to).toBe('0xEf09Be426F8d6D2786cADEA7D3A8b0D09cEB79B4')
+	expect(creation.plan?.steps[0]?.to).toBe('0x0227628f3F023bb0B980b67D528571c95c6DaC1c')
 })

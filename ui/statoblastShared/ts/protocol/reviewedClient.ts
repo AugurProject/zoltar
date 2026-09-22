@@ -3,6 +3,7 @@ import type { TransactionPlanStep, TransactionRequestPreview, WriteClient } from
 import { createActiveEnvironmentGuard } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { getErrorMessage, isRecoverableContractReadError, transactionErrorMessages } from '@zoltar/ui-core-shared/lib/errors.js'
 import { ABIS } from '@zoltar/ui-core-shared/abis.js'
+import { humanizeTransactionAction } from '@zoltar/ui-core-shared/transactions/transactionPresentations.js'
 import { createTransactionStepController, type TransactionStepDetails } from '@zoltar/ui-core-shared/transactions/transactionSteps.js'
 
 const actionDescriptions: Record<string, { title: string; description: string }> = {
@@ -14,6 +15,7 @@ const actionDescriptions: Record<string, { title: string; description: string }>
 	report: { title: 'Create oracle report', description: 'Deposit the approved tokens and start the oracle report.' },
 	requestPriceIfNeededAndStageLiquidation: { title: 'Queue liquidation', description: 'Queue the liquidation and fund a price report if needed. Settlement may execute the queued liquidation.' },
 	requestPriceIfNeededAndStageOperation: { title: 'Queue vault operation', description: 'Queue the vault change and fund a price report if needed. Settlement may execute the queued change.' },
+	aggregate3: { title: 'Batched transaction', description: 'Run several contract calls in one transaction.' },
 }
 
 async function describeTransaction(client: WriteClient, preview: TransactionRequestPreview & Pick<TransactionPlanStep, 'optional' | 'tokenFunding' | 'oracleOutcome'>, requiredApprovalAmount?: bigint): Promise<TransactionStepDetails> {
@@ -32,9 +34,10 @@ async function describeTransaction(client: WriteClient, preview: TransactionRequ
 				}
 			}),
 		),
-		title: action?.title ?? preview.functionName.replace(/([a-z])([A-Z])/g, '$1 $2').replace(/^./, character => character.toUpperCase()),
-		description: action?.description ?? `Submit this action to ${preview.contractLabel ?? preview.toLabel ?? 'the contract'}.`,
+		title: preview.reviewTitle ?? action?.title ?? humanizeTransactionAction(preview.functionName),
+		description: preview.reviewDescription ?? action?.description,
 		contractAddress: preview.contractAddress ?? preview.to,
+		contractLabel: preview.contractLabel ?? preview.toLabel,
 		spender: undefined,
 		amount: undefined,
 		ethValueAttoEth: preview.value,

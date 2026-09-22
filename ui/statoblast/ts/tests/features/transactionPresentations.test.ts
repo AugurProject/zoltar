@@ -6,6 +6,7 @@ import {
 	createForkAuctionTransactionIntent,
 	createLiquidationSuccessPresentation,
 	createLiquidationTransactionIntent,
+	createSecurityPoolCreationSuccessPresentation,
 	createSecurityPoolCreationTransactionIntent,
 	createSecurityVaultSuccessPresentation,
 	createSecurityVaultTransactionIntent,
@@ -82,6 +83,26 @@ describe('transaction presentations', () => {
 		})
 
 		expect(intent.rows).toEqual([{ label: 'Statoblast Security Multiplier', value: '2.5x' }])
+	})
+
+	test('orders security pool creation rows like the success presentation and leads with a new question title', () => {
+		const intent = createSecurityPoolCreationTransactionIntent({
+			initialReportPriorityFeeEth: '0.00000001',
+			questionTitle: ' Will it rain? ',
+			statoblastSecurityMultiplierBps: 20_000n,
+		})
+		const success = createSecurityPoolCreationSuccessPresentation({
+			deployPoolHash: '0x1234',
+			initialReportPriorityFeeAttoEthPerGas: 10_000_000_000n,
+			questionId: '0x0b',
+			securityPoolAddress: '0x1111111111111111111111111111111111111111',
+			statoblastSecurityMultiplierBps: 20_000n,
+			universeId: 0n,
+		})
+
+		expect(intent.rows?.[0]).toEqual({ label: 'Question', value: 'Will it rain?' })
+		expect(intent.rows?.slice(1).map(row => row.label)).toEqual(['Statoblast Security Multiplier', 'Initial Report Priority Fee'])
+		expect(success.rows?.map(row => row.label)).toEqual(['Pool', 'Question ID', 'Statoblast Security Multiplier', 'Initial Report Priority Fee'])
 	})
 
 	test('uses resolved token symbols in Open Oracle approval and withdrawal titles', () => {
