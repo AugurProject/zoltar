@@ -105,13 +105,9 @@ for (const outcome of ['success', 'failure', 'approval', 'cancel', 'multi-step']
 				expect(queries.queryByRole('dialog')).toBeNull()
 				expect(transactionSteps.value).toBeUndefined()
 			} else {
-				if (outcome === 'failure') {
-					expect(queries.getByRole('alert').textContent).toContain('Transaction reverted')
-					await act(() => fireEvent.click(queries.getByRole('button', { name: 'Back' })))
-					expect(dialog.querySelector('.operation-modal-transaction-notice') === null).toBe(true)
-				} else {
-					expect(dialog.querySelector('.operation-modal-transaction-notice') !== null).toBe(true)
-				}
+				// Both outcomes return to the form on their own and explain themselves through the notice below it.
+				expect(dialog.querySelector('.operation-modal-transaction-notice')?.textContent).toContain(outcome === 'failure' ? 'Transaction reverted' : 'Transaction confirmed')
+				expect(queries.queryByRole('button', { name: 'Back' })).toBeNull()
 				expect(queries.getByRole('dialog')).toBe(dialog)
 				expect(steps()).toBeNull()
 				expect(form()?.hasAttribute('inert')).toBe(false)

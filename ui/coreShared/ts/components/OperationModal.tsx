@@ -53,6 +53,13 @@ export function OperationModal({ children, closeDisabled = false, closeOnSuccess
 		if (ownedWorkflow === undefined || activeStep === undefined || !approvalOnly || activeStep.phase !== 'review') return
 		ownedWorkflow.confirmStep(ownedWorkflow.activeIndex)
 	}, [activeStep, approvalOnly, ownedWorkflow])
+	// A step that fails after it was sent returns to the form on its own; the outcome notice below the form explains what happened.
+	const activeTransactionTone = useGlobalTransactionPresentation()?.tone
+	useEffect(() => {
+		if (ownedWorkflow === undefined || activeStep === undefined || activeStep.phase === 'review' || activeStep.phase === 'upcoming') return
+		if (activeStep.phase !== 'failed' && activeTransactionTone !== 'error') return
+		ownedWorkflow.cancel()
+	}, [activeStep, activeTransactionTone, ownedWorkflow])
 	const activeTransaction = useGlobalTransactionPresentation()
 	const pending = ownsWorkflow && workflow.steps.some(step => step.phase === 'pending' && step.error === undefined) && activeTransaction?.tone !== 'error'
 	const cannotClose = closeDisabled || pending
@@ -152,7 +159,7 @@ export function OperationModal({ children, closeDisabled = false, closeOnSuccess
 					<div className='operation-modal-steps'>
 						{/* The dialog already shows its context rows above the form, so the step review only keeps the rows it does not cover. */}
 						<GlobalTransactionPresentationProvider transaction={modalTransaction}>
-							<TransactionStepsContent contextKey={titleId} focusOnMount keepActionsVisible onBack={returnToForm} onClose={returnToForm} />
+							<TransactionStepsContent contextKey={titleId} focusOnMount keepActionsVisible onClose={returnToForm} />
 						</GlobalTransactionPresentationProvider>
 					</div>
 				) : undefined}

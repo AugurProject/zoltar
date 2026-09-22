@@ -50,11 +50,10 @@ type TransactionStepsContentProps = {
 	heading?: string | undefined
 	/** Keep the actions scrolled into view as they change state when the review sits in page flow under the transaction tray. */
 	keepActionsVisible?: boolean
-	onBack?: () => void
 	onClose?: (() => void) | undefined
 }
 
-export function TransactionStepsContent({ contextKey, focusOnMount = false, heading, keepActionsVisible = false, onBack, onClose }: TransactionStepsContentProps) {
+export function TransactionStepsContent({ contextKey, focusOnMount = false, heading, keepActionsVisible = false, onClose }: TransactionStepsContentProps) {
 	const presentation = useGlobalTransactionPresentation()
 	const errorRef = useRef<HTMLDivElement>(null)
 	const actionsRef = useRef<HTMLDivElement>(null)
@@ -149,15 +148,9 @@ export function TransactionStepsContent({ contextKey, focusOnMount = false, head
 							)}
 							{final ? (
 								<div className='actions transaction-step-close'>
-									{error !== undefined && onBack !== undefined ? (
-										<button className='secondary' type='button' onClick={onBack}>
-											{copy.backToForm}
-										</button>
-									) : (
-										<button className='secondary' type='button' onClick={onClose ?? workflow.cancel} disabled={pending}>
-											{completed || error !== undefined ? commonCopy.close : commonCopy.cancel}
-										</button>
-									)}
+									<button className='secondary' type='button' onClick={onClose ?? workflow.cancel} disabled={pending}>
+										{completed || error !== undefined ? commonCopy.close : commonCopy.cancel}
+									</button>
 								</div>
 							) : undefined}
 							<div className='transaction-step-hash'>{step.hash === undefined ? undefined : <TransactionHashLink hash={step.hash} />}</div>
