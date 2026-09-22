@@ -399,13 +399,27 @@ describe('app route effects integration', () => {
 			for (const value of ['0x8', '0x84834d4D', '0x84834d4Dccea071b363e53952BD300F7bf56a00']) {
 				await act(() => fireEvent.input(input, { target: { value } }))
 			}
-			expect(pushes).toBe(0)
-			expect(replaces).toBe(3)
+			expect(pushes).toBe(1)
+			expect(replaces).toBe(2)
 			expect(window.location.hash).toContain('securityPool=0x84834d4Dccea071b363e53952BD300F7bf56a00')
 
 			await act(() => fireEvent.input(input, { target: { value: '0x84834d4Dccea071b363e53952BD300F7bf56a009' } }))
 			expect(pushes).toBe(1)
 			expect(replaces).toBe(3)
+			expect(document.getElementById('security-pool')?.textContent).toBe('0x84834d4Dccea071b363e53952BD300F7bf56a009')
+
+			// Editing a loaded pool's address keeps its entry so Back returns to it after the next pool loads.
+			for (const value of ['0x84834d4Dccea071b363e53952BD300F7bf56a00', '0x84834d4Dccea071b363e53952BD300F7bf56a0', '0x00000000000000000000000000000000000000ab']) {
+				await act(() => fireEvent.input(input, { target: { value } }))
+			}
+			expect(pushes).toBe(2)
+			expect(replaces).toBe(5)
+			expect(document.getElementById('security-pool')?.textContent).toBe('0x00000000000000000000000000000000000000ab')
+
+			await act(() => {
+				window.history.back()
+				window.dispatchEvent(new Event('popstate'))
+			})
 			expect(document.getElementById('security-pool')?.textContent).toBe('0x84834d4Dccea071b363e53952BD300F7bf56a009')
 		} finally {
 			window.history.pushState = originalPushState

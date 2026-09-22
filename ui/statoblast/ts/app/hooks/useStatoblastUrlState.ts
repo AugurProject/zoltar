@@ -46,8 +46,17 @@ export function useStatoblastUrlState() {
 	const writeStringParam = useCallback((write: (search: string, value: string | undefined) => string, value: string | undefined) => applyUrlStateUpdate(write(getOwnedSearch(), emptyToUndefined(value))), [applyUrlStateUpdate, getOwnedSearch])
 
 	const setActiveUniverseId = useCallback((universeId: bigint | undefined) => applyUrlStateUpdate(writeUniverseQueryParam(getOwnedSearch(), universeId)), [applyUrlStateUpdate, getOwnedSearch])
-	// Keystrokes toward an address replace the current history entry; only a complete address is a navigable selection.
-	const setSecurityPoolAddress = useCallback((securityPoolAddress: string) => applyUrlStateUpdate(writeSecurityPoolQueryParam(getOwnedSearch(), emptyToUndefined(securityPoolAddress)), isHexAddressInput(securityPoolAddress) ? 'push' : 'replace'), [applyUrlStateUpdate, getOwnedSearch])
+	// Editing keeps one history entry per editing session: the first keystroke away from a complete (or empty) address pushes,
+	// later keystrokes replace that entry, and completing an address replaces it too, so Back returns to the previous pool.
+	const setSecurityPoolAddress = useCallback(
+		(securityPoolAddress: string) => {
+			const ownedSearch = getOwnedSearch()
+			const currentAddress = readSecurityPoolQueryParam(ownedSearch) ?? ''
+			const currentIsPartial = currentAddress !== '' && !isHexAddressInput(currentAddress)
+			applyUrlStateUpdate(writeSecurityPoolQueryParam(ownedSearch, emptyToUndefined(securityPoolAddress)), currentIsPartial ? 'replace' : 'push')
+		},
+		[applyUrlStateUpdate, getOwnedSearch],
+	)
 	const setSecurityPoolQuestionId = useCallback((questionId: string | undefined) => writeStringParam(writeSecurityPoolQuestionIdQueryParam, questionId), [writeStringParam])
 	const setOpenOracleReport = useCallback((reportId: string | undefined) => writeStringParam(writeOpenOracleReportIdQueryParam, reportId), [writeStringParam])
 	const setOpenOracleView = useCallback((view: string | undefined) => writeStringParam(writeOpenOracleViewQueryParam, view), [writeStringParam])

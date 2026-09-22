@@ -3021,7 +3021,7 @@
 }
 .pool-selection-control input {
 	font-family: var(--font-mono);
-	font-size: clamp(0.625rem, 2.35vw, 0.9rem);
+	font-size: clamp(0.8125rem, 2.35vw, 0.9rem);
 }
 .pool-capacity-values {
 	display: flex;
