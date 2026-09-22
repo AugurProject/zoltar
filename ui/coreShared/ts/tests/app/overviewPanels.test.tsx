@@ -340,8 +340,8 @@ describe('OverviewPanels', () => {
 
 	test('keeps existing prices visible while refreshing', async () => {
 		const queries = await renderOverviewPanels({ repPrices: { isLoading: true, isRefreshing: true, repPerEthPrice: 2439024390243902439024n, repUsdcPrice: 1234567n } })
-		expect(queries.queryByTitle('2 439.024390243902439024') !== null).toBe(true)
-		expect(queries.queryByTitle('1.234567') !== null).toBe(true)
+		expect(queries.getByTitle('2 439.024390243902439024')).toBeDefined()
+		expect(queries.getByTitle('1.234567 USDC')).toBeDefined()
 	})
 
 	test('renders a refresh button for REP prices and wires it to the provided handler', async () => {

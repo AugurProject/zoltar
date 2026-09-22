@@ -109,35 +109,33 @@ export function OperationModal({ children, closeDisabled = false, closeOnSuccess
 
 	return (
 		<>
-		<div className='modal-backdrop' role='presentation' onClick={requestClose}>
-			<section ref={dialogRef} className='modal-panel operation-modal-panel' role='dialog' tabIndex={-1} aria-busy={cannotClose || undefined} aria-modal='true' aria-labelledby={titleId} aria-describedby={descriptionId} onClick={event => event.stopPropagation()}>
-				<div className='modal-header'>
-					<div className='modal-header-title'>
-						<h3 id={titleId}>{title}</h3>
+			<div className='modal-backdrop' role='presentation' onClick={requestClose}>
+				<section ref={dialogRef} className='modal-panel operation-modal-panel' role='dialog' tabIndex={-1} aria-busy={cannotClose || undefined} aria-modal='true' aria-labelledby={titleId} aria-describedby={descriptionId} onClick={event => event.stopPropagation()}>
+					<div className='modal-header'>
+						<div className='modal-header-title'>
+							<h3 id={titleId}>{title}</h3>
+						</div>
+						<button ref={closeButtonRef} className='quiet modal-close-button' type='button' aria-label={commonCopy.close} title={commonCopy.close} disabled={cannotClose} onClick={requestClose}>
+							×
+						</button>
 					</div>
-					<button ref={closeButtonRef} className='quiet modal-close-button' type='button' aria-label={commonCopy.close} title={commonCopy.close} disabled={cannotClose} onClick={requestClose}>
-						×
-					</button>
-				</div>
-				{description === undefined ? undefined : (
-					<p id={descriptionId} className='detail'>
-						{description}
-					</p>
-				)}
-				<TransactionObjectContext items={context} />
-				{showSteps || !wasOpenRef.current || modalTransaction === undefined || activeTransactionOperationKey === undefined || activeTransactionOperationKey === transactionOperationKeyAtOpenRef.current || activeTransactionOperationKey === dismissedOperationKey ? undefined : (
-					<TransactionPresentationNotice className='operation-modal-transaction-notice' transaction={modalTransaction} />
-				)}
-				<div className='operation-modal-body'>
-					{children}
-				</div>
-			</section>
-		</div>
-		{showSteps ? (
-			<OperationModal embedTransactionSteps={false} isOpen title={workflow.steps.at(-1)?.title ?? title} closeDisabled={pending} onClose={returnToForm}>
-				<TransactionStepsContent contextKey={titleId} onClose={returnToForm} onBack={returnToForm} />
-			</OperationModal>
-		) : undefined}
+					{description === undefined ? undefined : (
+						<p id={descriptionId} className='detail'>
+							{description}
+						</p>
+					)}
+					<TransactionObjectContext items={context} />
+					{showSteps || !wasOpenRef.current || modalTransaction === undefined || activeTransactionOperationKey === undefined || activeTransactionOperationKey === transactionOperationKeyAtOpenRef.current || activeTransactionOperationKey === dismissedOperationKey ? undefined : (
+						<TransactionPresentationNotice className='operation-modal-transaction-notice' transaction={modalTransaction} />
+					)}
+					<div className='operation-modal-body'>{children}</div>
+				</section>
+			</div>
+			{showSteps ? (
+				<OperationModal embedTransactionSteps={false} isOpen title={workflow.steps.at(-1)?.title ?? title} closeDisabled={pending} onClose={returnToForm}>
+					<TransactionStepsContent contextKey={titleId} onClose={returnToForm} onBack={returnToForm} />
+				</OperationModal>
+			) : undefined}
 		</>
 	)
 }

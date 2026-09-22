@@ -247,7 +247,7 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 		await renderWorkflow(createSecurityPoolWorkflowProps({ securityPoolAddress: '0x00000000000000000000000000000000000000ab', securityPoolOverviewError: 'Loading timed out. Please retry.' }))
 		const queries = within(document.body)
 		expect(queries.getByRole('alert').textContent).toContain('Loading timed out')
-		expect(queries.getByRole('button', { name: 'Open pool' }).hasAttribute('disabled')).toBe(false)
+		expect(queries.getByRole('button', { name: 'Refresh pool' }).hasAttribute('disabled')).toBe(false)
 		expect(queries.queryByText('Pool not found.') === null).toBe(true)
 	})
 

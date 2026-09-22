@@ -17,19 +17,19 @@ test('updates pool selection immediately and never shows contents for a differen
 	const pool = createSelectedPool()
 	function Harness() {
 		const [address, setAddress] = useState(pool.securityPoolAddress.toString())
-		return <SecurityPoolWorkflowSection {...createSecurityPoolWorkflowProps({securityPoolAddress: address, securityPools: [pool], onSecurityPoolAddressChange: setAddress})} />
+		return <SecurityPoolWorkflowSection {...createSecurityPoolWorkflowProps({ securityPoolAddress: address, securityPools: [pool], onSecurityPoolAddressChange: setAddress })} />
 	}
 	setCleanup((await renderIntoDocument(<Harness />)).cleanup)
 	const page = within(document.body)
-	expect(page.queryByRole('textbox', {name: 'Security Pool Address'}) !== null).toBe(true)
-	const input = page.getByRole('textbox', {name: 'Security Pool Address'})
-	expect(page.queryByRole('button', {name: 'Change pool'}) === null).toBe(true)
-	expect(page.queryByRole('button', {name: 'Open pool'}) === null).toBe(true)
-	await act(() => fireEvent.input(input, {target: {value: '0x123'}}))
+	expect(page.queryByRole('textbox', { name: 'Security Pool Address' }) !== null).toBe(true)
+	const input = page.getByRole('textbox', { name: 'Security Pool Address' })
+	expect(page.queryByRole('button', { name: 'Change pool' }) === null).toBe(true)
+	expect(page.queryByRole('button', { name: 'Open pool' }) === null).toBe(true)
+	await act(() => fireEvent.input(input, { target: { value: '0x123' } }))
 	expect(document.querySelector('.pool-object-identity') === null).toBe(true)
-	await act(() => fireEvent.input(input, {target: {value: '0x1111111111111111111111111111111111111111'}}))
+	await act(() => fireEvent.input(input, { target: { value: '0x1111111111111111111111111111111111111111' } }))
 	expect(document.querySelector('.pool-object-identity') === null).toBe(true)
-	await act(() => fireEvent.input(input, {target: {value: pool.securityPoolAddress}}))
+	await act(() => fireEvent.input(input, { target: { value: pool.securityPoolAddress } }))
 	expect(document.querySelector('.pool-object-identity') !== null).toBe(true)
 })
 

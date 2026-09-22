@@ -535,12 +535,17 @@ for (const explicit of [false, true]) {
 	})
 }
 
- test('describes a standalone unlimited approval as Max REP', async () => {
+test('describes a standalone unlimited approval as Max REP', async () => {
 	const { client } = setup()
-	const reviewed = createReviewedClient({ ...client, readContract: createReadContractStub(request => request.functionName === 'symbol' ? 'REP' : 18), sendTransaction: async () => hash })
+	const reviewed = createReviewedClient({ ...client, readContract: createReadContractStub(request => (request.functionName === 'symbol' ? 'REP' : 18)), sendTransaction: async () => hash })
 	const data = encodeFunctionData({ abi: ABIS.mainnet.erc20, functionName: 'approve', args: [account, maxUint256] })
 	reviewed.onTransactionPrepared?.({ functionName: 'approve', contractAddress: account, account, args: [account, maxUint256], chainName: client.chain.name, value: undefined, data })
 	const sending = reviewed.sendTransaction({ to: account, data })
 	await waitForReview()
-	try { expect(transactionSteps.value?.steps[0]?.amount).toBe('Max REP') } finally { confirm(); await sending }
+	try {
+		expect(transactionSteps.value?.steps[0]?.amount).toBe('Max REP')
+	} finally {
+		confirm()
+		await sending
+	}
 })
