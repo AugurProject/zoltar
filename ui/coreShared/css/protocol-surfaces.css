@@ -775,6 +775,11 @@ main.global-transaction-tray-open :is(a, button, input, select, summary, textare
 	overflow-wrap: anywhere;
 }
 
+/* Copyable values center their text inside a touch-sized button, so center the label against them. */
+.global-transaction-notice-row:has(.address-value.copyable, .identifier-value.copyable) {
+	align-items: center;
+}
+
 .global-transaction-notice .transaction-hash-link {
 	font-size: var(--font-label);
 	line-height: var(--line-height-tight);
@@ -1576,6 +1581,16 @@ main.global-transaction-tray-open :is(a, button, input, select, summary, textare
 	color: var(--text);
 }
 
+/* Locked text controls stay readable but visibly differ from editable ones, matching disabled buttons. */
+.field input:disabled:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+.field select:disabled,
+.field textarea:disabled {
+	border-color: var(--disabled-control-border);
+	background-color: var(--disabled-control-bg);
+	color: var(--disabled-control-text);
+	cursor: not-allowed;
+}
+
 .field input.is-invalid,
 .field input[aria-invalid="true"],
 .field select.is-invalid,
@@ -1791,12 +1806,6 @@ main.global-transaction-tray-open :is(a, button, input, select, summary, textare
 	gap: 0.75rem;
 	padding-top: 1rem;
 	border-top: 1px solid var(--border-default);
-}
-
-/* Without a funding summary above it there is nothing for the rule to separate. */
-.transaction-step-actions-standalone {
-	padding-top: 0;
-	border-top: 0;
 }
 
 .transaction-funding {

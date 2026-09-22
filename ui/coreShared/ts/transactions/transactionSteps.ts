@@ -12,8 +12,10 @@ export type TransactionStepDetails = {
 	tokenFunding?: readonly { amount: string; limit: string | undefined }[]
 	optional?: boolean
 	title: string
-	description: string
+	/** Explains the step when the title alone does not convey its consequence; omitted for self-describing actions. */
+	description: string | undefined
 	contractAddress: Address | undefined
+	contractLabel: string | undefined
 	spender: Address | undefined
 	amount: string | undefined
 	ethValueAttoEth: bigint | undefined

@@ -12,6 +12,9 @@ export const retryPoolCreation = 'Retry pool creation'
 export const createQuestionAndPool = 'Create question and pool'
 export const creatingQuestionAndPool = 'Creating question and pool…'
 export const poolCreationInProgress = 'Security pool creation is already in progress.'
+export const createQuestionAndPoolReviewTitle = 'Create question and security pool'
+export const createPoolReviewTitle = 'Create security pool'
+export const createPoolReviewDescription = 'The security multiplier and initial report priority fee cannot be changed after the pool is deployed.'
 export const universesDescription = undefined
 export const createPoolFromQuestion = 'Create pool from question'
 export const formatCreatePoolFromQuestionLabel = (questionTitle: string, questionId: string) => `Create pool from question: ${questionTitle} (${questionId})`

@@ -95,17 +95,17 @@ function buildDepthLinePath(points: TruthAuctionDepthPoint[]) {
 }
 
 export function TruthAuctionDepthChart({ clearingTick, onSelectTick, points }: TruthAuctionDepthChartProps) {
-	if (points.length === 0) return null
-
-	const plotWidth = CHART_WIDTH - CHART_PADDING.left - CHART_PADDING.right
-	const plotHeight = CHART_HEIGHT - CHART_PADDING.top - CHART_PADDING.bottom
-	const baselineY = CHART_HEIGHT - CHART_PADDING.bottom
 	const gradientIdRef = useRef<string | undefined>(undefined)
 	if (gradientIdRef.current === undefined) {
 		gradientIdRef.current = `truth-auction-depth-fill-${nextDepthGradientId.toString()}`
 		nextDepthGradientId += 1
 	}
 	const gradientId = gradientIdRef.current
+	if (points.length === 0) return null
+
+	const plotWidth = CHART_WIDTH - CHART_PADDING.left - CHART_PADDING.right
+	const plotHeight = CHART_HEIGHT - CHART_PADDING.top - CHART_PADDING.bottom
+	const baselineY = CHART_HEIGHT - CHART_PADDING.bottom
 	const highestLoadedPrice = points[0]?.price
 	const lowestLoadedPrice = points[points.length - 1]?.price
 	const midpointIndex = points.length >= 3 ? Math.floor(points.length / 2) : undefined

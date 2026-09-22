@@ -3,7 +3,7 @@ import { requestWithTimeout } from '@zoltar/bot-shared/dashboard/polling'
 import { optionalRecord as record } from '@zoltar/bot-shared/infrastructure/json-validation'
 import { createExecutionPolicyDraft } from './execution-policy-draft.js'
 import { createSettingsNavigation } from '@zoltar/bot-shared/dashboard/settings-navigation'
-import { element } from '@zoltar/bot-shared/dashboard/dom'
+import { element, markCurrentPage } from '@zoltar/bot-shared/dashboard/dom'
 import { decimalAtto } from './go-live.js'
 import { registerExecutionModeForm } from './execution-mode-form.js'
 import { createActivityTimeline } from './activity-timeline.js'
@@ -1762,7 +1762,7 @@ const sectionLinks = [...document.querySelectorAll<HTMLAnchorElement>('.section-
 function showDashboardPage(pathname: string, push = false) {
 	const page = pathname === '/' ? 'overview' : pathname.replace(/^\//, '').replace(/\/$/, '')
 	document.body.dataset['page'] = page
-	for (const link of sectionLinks) link.toggleAttribute('aria-current', new URL(link.href).pathname.replace(/\/$/, '') === `/${page}`)
+	for (const link of sectionLinks) markCurrentPage(link, new URL(link.href).pathname.replace(/\/$/, '') === `/${page}`)
 	const activeLink = sectionLinks.find(link => link.hasAttribute('aria-current'))
 	const navigation = activeLink?.closest<HTMLElement>('.section-nav')
 	if (activeLink !== undefined && navigation !== null && navigation !== undefined) {

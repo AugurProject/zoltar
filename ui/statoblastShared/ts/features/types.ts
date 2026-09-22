@@ -79,6 +79,9 @@ type SecurityPoolRouteContentProps = {
 	securityPoolError: string | undefined
 	securityPoolForm: SecurityPoolFormState
 	securityPoolResult: SecurityPoolCreationResult | undefined
+	/** Identifies the transaction review that the Create Pool card renders inline instead of the global review modal. */
+	securityPoolReviewSignal?: AbortSignal | undefined
+	onDismissSecurityPoolReview?: () => void
 	marketCreating: boolean
 	marketError: string | undefined
 	marketForm: MarketFormState
