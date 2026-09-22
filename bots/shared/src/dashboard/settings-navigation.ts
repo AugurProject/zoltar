@@ -48,7 +48,6 @@ function expandOnly(sectionId: string) {
 		const open = section.id === sectionId
 		for (const details of section.querySelectorAll('details.settings-group')) {
 			if (!(details instanceof HTMLDetailsElement)) continue
-			if (startsCollapsed(section) && !open) continue
 			details.open = open
 		}
 	}
@@ -105,6 +104,7 @@ export function createSettingsNavigation() {
 			// Widening past the breakpoint restores the all-open layout a wide viewport starts with.
 			const nowNarrow = isNarrow()
 			if (narrow && !nowNarrow) expandAll()
+			if (!narrow && nowNarrow) expandOnly(jumpTarget ?? chips().find(chip => chip.hasAttribute('aria-current'))?.dataset['settingsTarget'] ?? sections()[0]?.id ?? '')
 			narrow = nowNarrow
 			placeUnderHeader()
 		},
@@ -127,6 +127,7 @@ export function createSettingsNavigation() {
 		settleTimer = setTimeout(settleJump, 200)
 	}
 	nav.addEventListener('click', event => {
+		if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
 		const chip = event.target instanceof Element ? event.target.closest('a[data-settings-target]') : undefined
 		if (!(chip instanceof HTMLAnchorElement)) return
 		const sectionId = chip.dataset['settingsTarget']
@@ -138,6 +139,7 @@ export function createSettingsNavigation() {
 		jumpTarget = sectionId
 		scheduleSettle()
 		const section = document.getElementById(sectionId)
+		if (!isNarrow()) for (const details of section?.querySelectorAll('details.settings-group') ?? []) if (details instanceof HTMLDetailsElement) details.open = true
 		if (section instanceof HTMLElement && typeof section.scrollIntoView === 'function') section.scrollIntoView({ behavior: reducedMotion() ? 'auto' : 'smooth', block: 'start' })
 	})
 	let frame: number | undefined

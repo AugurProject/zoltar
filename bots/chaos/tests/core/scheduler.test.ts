@@ -150,3 +150,15 @@ describe('durable chaos scheduler', () => {
 		})
 	})
 })
+
+test('does not schedule a paused scheduler before its first countdown', async () => {
+	const state = initialDurableState(1, false)
+	const scheduler = createChaosScheduler({ clock: () => 0, persist: async () => {}, random: minimum => minimum, settings, state: state.scheduler })
+	await scheduler.pause()
+	await scheduler.ensureScheduled()
+	expect(state.scheduler.status).toBe('paused')
+	expect(state.scheduler.nextRunAt).toBeUndefined()
+	await scheduler.resume()
+	expect(state.scheduler.status).toBe('scheduled')
+	expect(state.scheduler.nextRunAt).toBe('1970-01-01T00:01:00.000Z')
+})

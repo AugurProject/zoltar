@@ -22,7 +22,7 @@ function controlSignature(control: Element) {
 
 function signature(tracked: Pick<TrackedForm, 'extra' | 'form'>) {
 	const controls = Array.from(tracked.form.querySelectorAll('input, select, textarea'), control => `${control.getAttribute('name') ?? control.id}=${controlSignature(control)}`)
-	return [...controls, tracked.extra?.() ?? ''].join('|')
+	return JSON.stringify([...controls, tracked.extra?.() ?? ''])
 }
 
 function badgeContainer(formId: string) {

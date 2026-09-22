@@ -216,7 +216,7 @@ test('merges repeated background market samples once and drops stale observation
 		sourceId,
 	})
 	const existing = [observation('binance', 'a', 899), observation('uniswap-v3', 'block:1', 950, '0xpool')]
-	const merged = mergeMarketObservations(existing, [observation('binance', 'a', 899), observation('binance', 'b', 990), observation('uniswap-v3', 'block:1', 950, '0xother')], 100, 1_000)
+	const merged = mergeMarketObservations(existing, [observation('binance', 'a', 899), observation('binance', 'b', 990), observation('binance', 'b', 990), observation('uniswap-v3', 'block:1', 950, '0xother')], 100, 1_000)
 	expect(merged.map(entry => [entry.sourceId, entry.observationId, entry.marketId])).toEqual([
 		['uniswap-v3', 'block:1', '0xpool'],
 		['binance', 'b', undefined],

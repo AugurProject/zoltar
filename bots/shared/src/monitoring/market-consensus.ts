@@ -16,7 +16,15 @@ const MAXIMUM_RETAINED_OBSERVATIONS = 2_000
 export function mergeMarketObservations(existing: readonly MarketConsensusObservation[], additions: readonly MarketConsensusObservation[], maximumAgeMilliseconds: number, now = Date.now()) {
 	const identity = (observation: MarketConsensusObservation) => `${observation.sourceId}:${observation.marketId ?? ''}:${observation.observationId}`
 	const recorded = new Set(existing.map(identity))
-	const merged = [...existing, ...additions.filter(observation => !recorded.has(identity(observation)))]
+	const merged = [
+		...existing,
+		...additions.filter(observation => {
+			const key = identity(observation)
+			if (recorded.has(key)) return false
+			recorded.add(key)
+			return true
+		}),
+	]
 	return merged.filter(observation => observation.observedAt <= now && now - observation.observedAt <= maximumAgeMilliseconds).slice(-MAXIMUM_RETAINED_OBSERVATIONS)
 }
 
