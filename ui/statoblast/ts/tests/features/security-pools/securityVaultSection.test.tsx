@@ -952,18 +952,10 @@ describe('SecurityVaultSection', () => {
 
 		const depositDialog = documentQueries.getByRole('dialog', { name: 'Deposit REP' })
 		const depositDialogQueries = within(depositDialog)
-		const transactionContext = depositDialog.querySelector('.transaction-object-context')
-		if (!(transactionContext instanceof HTMLElement)) throw new Error('Expected deposit transaction context')
+		expect(depositDialog.querySelector('.transaction-object-context')).toBeNull()
 		expect(depositDialogQueries.queryByRole('heading', { name: 'Vault Summary' })).toBeNull()
 		expect(depositDialogQueries.getByText('This vault does not exist. Deposit REP to create it.')).not.toBeNull()
 		expect(depositDialogQueries.getByText('REP backing')).not.toBeNull()
-		expect(transactionContext.textContent?.includes('Universe 0x1')).toBe(false)
-		expect(transactionContext.textContent?.includes('Sepolia')).toBe(false)
-		expect(
-			within(transactionContext)
-				.getAllByRole('button', { name: `Copy address ${zeroAddress}` })
-				.every(button => button.textContent === zeroAddress),
-		).toBe(true)
 	})
 
 	test('associates invalid deposit target factor guidance in embedded and modal deposit layouts', async () => {

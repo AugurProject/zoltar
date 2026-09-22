@@ -7,7 +7,6 @@ import { useModalFocusIsolation } from '../hooks/useModalFocusIsolation.js'
 import type { OperationModalProps } from '../types/components.js'
 import { GlobalTransactionPresentationProvider, useGlobalTransactionPresentation } from './GlobalTransactionPresentationContext.js'
 import { TransactionPresentationNotice } from './TransactionPresentationNotice.js'
-import { TransactionObjectContext } from './TransactionObjectContext.js'
 
 function getTransactionOperationKey(transaction: ReturnType<typeof useGlobalTransactionPresentation>) {
 	return transaction?.operationKey ?? transaction?.dismissKey ?? transaction?.hash
@@ -27,7 +26,7 @@ function getModalTransactionPresentation(transaction: ReturnType<typeof useGloba
 	}
 }
 
-export function OperationModal({ children, closeDisabled = false, closeOnSuccessKey, context = [], description, embedTransactionSteps = true, isOpen, onClose, showContext = true, title }: OperationModalProps) {
+export function OperationModal({ children, closeDisabled = false, closeOnSuccessKey, context = [], description, embedTransactionSteps = true, isOpen, onClose, title }: OperationModalProps) {
 	const dialogRef = useRef<HTMLElement | null>(null)
 	const closeButtonRef = useRef<HTMLButtonElement | null>(null)
 	const noticeRef = useRef<HTMLDivElement | null>(null)
@@ -149,7 +148,6 @@ export function OperationModal({ children, closeDisabled = false, closeOnSuccess
 							{description}
 						</p>
 					)}
-					{showContext ? <TransactionObjectContext items={context} /> : undefined}
 					<div className='operation-modal-body' inert={showSteps || undefined}>
 						{children}
 					</div>

@@ -363,26 +363,12 @@ export function SecurityVaultSection({
 				vaultReadinessActions={vaultReadinessActions}
 				walletRepBalanceError={vaultActionModal === 'deposit-rep' ? undefined : walletRepBalanceError}
 			/>
-			<OperationModal
-				closeOnSuccessKey={securityVaultResult?.action === 'depositRepToVault' ? securityVaultResult.hash : undefined}
-				context={vaultTransactionContext}
-				isOpen={vaultActionModal === 'deposit-rep'}
-				onClose={closeVaultActionModal}
-				showContext={currentSelectedVaultDetails === undefined || !vaultExistsOnchain}
-				title={depositRepActionLabel}
-			>
+			<OperationModal closeOnSuccessKey={securityVaultResult?.action === 'depositRepToVault' ? securityVaultResult.hash : undefined} context={vaultTransactionContext} isOpen={vaultActionModal === 'deposit-rep'} onClose={closeVaultActionModal} title={depositRepActionLabel}>
 				{currentSelectedVaultDetails === undefined ? <p className='detail'>{securityPoolCopy.selectedVaultDetailsUnavailable}</p> : null}
 				{currentSelectedVaultDetails === undefined ? null : (
 					<>
 						{vaultExistsOnchain ? (
-							<SelectedVaultSummarySection
-								{...selectedVaultSummaryProps}
-								capacityOwnershipAttoRep={currentSelectedVaultDetails.capacityOwnershipAttoRep}
-								question={selectedMarketTitle}
-								securityPoolAddress={currentSelectedVaultDetails.securityPoolAddress}
-								securityVaultDetails={currentSelectedVaultDetails}
-								variant='embedded'
-							/>
+							<SelectedVaultSummarySection {...selectedVaultSummaryProps} capacityOwnershipAttoRep={currentSelectedVaultDetails.capacityOwnershipAttoRep} securityVaultDetails={currentSelectedVaultDetails} variant='embedded' />
 						) : (
 							<StateHint presentation={{ key: 'not_found', badgeLabel: securityPoolCopy.vaultMissing, badgeTone: 'muted', detail: securityPoolCopy.missingVaultDepositDetail }} />
 						)}
@@ -402,21 +388,13 @@ export function SecurityVaultSection({
 				context={vaultTransactionContext}
 				isOpen={vaultActionModal === 'withdraw-rep'}
 				onClose={closeVaultActionModal}
-				showContext={currentSelectedVaultDetails === undefined}
 				title={repExitActionLabel}
 			>
 				{currentSelectedVaultDetails === undefined ? <p className='detail'>{securityPoolCopy.selectedVaultDetailsUnavailable}</p> : null}
 				{currentSelectedVaultDetails === undefined ? null : (
 					<>
 						{effectiveRepExitMode === 'redeem' ? null : <VaultQueuedOperationStatusCards {...operationStatusProps} operation='withdrawRep' />}
-						<SelectedVaultSummarySection
-							{...selectedVaultSummaryProps}
-							capacityOwnershipAttoRep={currentSelectedVaultDetails.capacityOwnershipAttoRep}
-							question={selectedMarketTitle}
-							securityPoolAddress={currentSelectedVaultDetails.securityPoolAddress}
-							securityVaultDetails={currentSelectedVaultDetails}
-							variant='embedded'
-						/>
+						<SelectedVaultSummarySection {...selectedVaultSummaryProps} capacityOwnershipAttoRep={currentSelectedVaultDetails.capacityOwnershipAttoRep} securityVaultDetails={currentSelectedVaultDetails} variant='embedded' />
 						<MetricGrid>
 							<MetricField label={repExitAmountLabel}>
 								{(() => {

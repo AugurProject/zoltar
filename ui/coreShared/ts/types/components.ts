@@ -221,12 +221,11 @@ export type OperationModalProps = {
 	children: ComponentChildren
 	closeDisabled?: boolean
 	closeOnSuccessKey?: string | undefined
+	/** Rows the dialog already implies (question, pool, vault); transaction notices inside it omit matching rows. */
 	context?: TransactionContextItem[]
 	description?: ComponentChildren
 	isOpen: boolean
 	onClose: () => void
-	/** Set to false when the form already presents the context rows; they still filter duplicate rows out of transaction notices. */
-	showContext?: boolean
 	title: ComponentChildren
 }
 
