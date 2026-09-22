@@ -5,6 +5,7 @@ import { encodeAbiParameters, encodeEventTopics, zeroAddress, type Address } fro
 import { createSecurityPool } from '@zoltar/ui-statoblast-shared/protocol/securityPools.js'
 import { createWalletWriteClient } from '@zoltar/ui-core-shared/wallet/clients.js'
 import type { WriteClient as UiWriteClient } from '@zoltar/ui-core-shared/types/contracts.js'
+import type { TransactionRequestPreview } from '@zoltar/ui-core-shared/wallet/chainBackend.js'
 import { createInjectedBackend } from '@zoltar/ui-core-shared/wallet/chainBackend.js'
 import { MAINNET_NETWORK_PROFILE, SEPOLIA_NETWORK_PROFILE } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
 import { installActiveEnvironmentForTesting, resetActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
@@ -58,16 +59,22 @@ describe('security pool creation helper', () => {
 		const questionData = { title: 'Atomic question', description: '', startTime: 0n, endTime: (await mockWindow.getTime()) + DAY, numTicks: 0n, displayValueMin: 0n, displayValueMax: 0n, answerUnit: '' }
 		const questionId = getQuestionId(questionData, ['Yes', 'No'])
 		const submittedHashes: string[] = []
+		const preparedPreviews: TransactionRequestPreview[] = []
 		const result = await createSecurityPool(
-			createWalletWriteClient(addressString(TEST_ADDRESSES[0]), { onTransactionSubmitted: hash => submittedHashes.push(hash) }),
+			createWalletWriteClient(addressString(TEST_ADDRESSES[0]), { onTransactionPrepared: preview => preparedPreviews.push(preview), onTransactionSubmitted: hash => submittedHashes.push(hash) }),
 			{
 				initialReportPriorityFeeAttoEthPerGas: 10_000_000_000n,
 				questionId,
 				statoblastSecurityMultiplierBps: 20_000n,
 			},
 			questionData,
+			{ description: 'Pool parameters are fixed at deployment.', title: 'Create question and security pool' },
 		)
 		expect(submittedHashes).toEqual([result.deployPoolHash])
+		expect(preparedPreviews.map(preview => preview.functionName)).toEqual(['aggregate3'])
+		expect(preparedPreviews[0]?.contractLabel).toBe('Multicall3')
+		expect(preparedPreviews[0]?.reviewTitle).toBe('Create question and security pool')
+		expect(preparedPreviews[0]?.reviewDescription).toBe('Pool parameters are fixed at deployment.')
 		expect(result.questionCreatedAt).toBeGreaterThan(0n)
 		expect(result.questionId).toBe(`0x${questionId.toString(16).padStart(64, '0')}`)
 		expect(result.securityPoolAddress).toBe(getSecurityPoolAddresses(zeroAddress, 0n, questionId, 20_000n).securityPool)
@@ -129,10 +136,14 @@ describe('security pool creation helper', () => {
 				args: { securityPool: securityPoolAddress, parent: zeroAddress, universeId: 0n },
 			}),
 		})
-		const fakeClientBase: Pick<UiWriteClient, 'account' | 'sendTransaction' | 'waitForTransactionReceipt'> = {
+		const preparedPreviews: TransactionRequestPreview[] = []
+		const fakeClientBase: Pick<UiWriteClient, 'account' | 'onTransactionPrepared' | 'sendTransaction' | 'waitForTransactionReceipt'> = {
 			account: {
 				address: addressString(TEST_ADDRESSES[0]) as Address,
 				type: 'json-rpc',
+			},
+			onTransactionPrepared: preview => {
+				preparedPreviews.push(preview)
 			},
 			sendTransaction: async () => '0x1234',
 			waitForTransactionReceipt: async () =>
@@ -143,12 +154,22 @@ describe('security pool creation helper', () => {
 		}
 		const fakeClient = fakeClientBase as UiWriteClient
 
-		const result = await createSecurityPool(fakeClient, {
-			initialReportPriorityFeeAttoEthPerGas: 10_000_000_000n,
-			questionId: 123n,
-			statoblastSecurityMultiplierBps: 20_000n,
-		})
+		const result = await createSecurityPool(
+			fakeClient,
+			{
+				initialReportPriorityFeeAttoEthPerGas: 10_000_000_000n,
+				questionId: 123n,
+				statoblastSecurityMultiplierBps: 20_000n,
+			},
+			undefined,
+			{ description: 'Pool parameters are fixed at deployment.', title: 'Create security pool' },
+		)
 
 		expect(result.securityPoolAddress).toBe(expectedSecurityPoolAddress)
+		expect(preparedPreviews).toHaveLength(1)
+		expect(preparedPreviews[0]?.functionName).toBe('deployOriginSecurityPool')
+		expect(preparedPreviews[0]?.contractLabel).toBe('Security Pool Factory')
+		expect(preparedPreviews[0]?.reviewTitle).toBe('Create security pool')
+		expect(preparedPreviews[0]?.reviewDescription).toBe('Pool parameters are fixed at deployment.')
 	})
 })

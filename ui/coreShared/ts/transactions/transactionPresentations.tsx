@@ -14,7 +14,7 @@ export type PoolUniverseTransactionContext = {
 
 export function humanizeTransactionAction(action: string) {
 	return action
-		.replace(/([A-Z])/g, ' $1')
+		.replace(/([a-z0-9])([A-Z])/g, '$1 $2')
 		.replace(/^./, value => value.toUpperCase())
 		.replaceAll(/\bRep\b/g, commonCopy.rep)
 		.replaceAll(/\bEth\b/g, commonCopy.eth)
