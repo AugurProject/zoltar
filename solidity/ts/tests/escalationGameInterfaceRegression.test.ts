@@ -8,8 +8,6 @@ const escalationGameSourcePath = 'contracts/statoblast/EscalationGame.sol'
 const escalationGameContractName = 'EscalationGame'
 const escalationGameBytecodeSnapshotPath = `${import.meta.dir}/fixtures/escalationGameBytecode.snapshot.json`
 const eip170DeployedBytecodeLimitBytes = 24_576
-// Keep the project budget aligned with the EIP-170 deployed bytecode limit.
-const escalationGameDeployedBytecodeBudgetBytes = 24_576
 
 type EscalationGameBytecodeSnapshot = {
 	creationBytes: number
@@ -180,7 +178,7 @@ test('EscalationGame storage layout keeps inherited state slots stable', () => {
 	assert.deepStrictEqual(storageMemberSummary(typeTable, 'struct EscalationClaimBundle'), [{ label: 'disputeStakedRepClaimUnits', slot: '0', offset: 0, type: 'uint256' }])
 })
 
-test('EscalationGame bytecode stays within size budgets and preserves runtime snapshot', () => {
+test('EscalationGame bytecode stays within EIP-170 and preserves runtime snapshot', () => {
 	const escalationGameOutput = getEscalationGameOutput()
 	const creationBytecode = getBytecodeObject(escalationGameOutput, 'bytecode')
 	const deployedBytecode = getBytecodeObject(escalationGameOutput, 'deployedBytecode')
@@ -192,6 +190,5 @@ test('EscalationGame bytecode stays within size budgets and preserves runtime sn
 	}
 
 	assert.ok(actualSnapshot.deployedBytes <= eip170DeployedBytecodeLimitBytes, `EscalationGame deployed bytecode exceeds EIP-170: ${actualSnapshot.deployedBytes}`)
-	assert.ok(actualSnapshot.deployedBytes <= escalationGameDeployedBytecodeBudgetBytes, `EscalationGame deployed bytecode exceeds project budget: ${actualSnapshot.deployedBytes}`)
 	assert.deepStrictEqual(actualSnapshot, getExpectedEscalationGameBytecodeSnapshot(actualSnapshot), 'EscalationGame bytecode changed; review the change and refresh the snapshot with bun run update:escalation-game-bytecode-snapshot')
 })

@@ -8,20 +8,21 @@ import { projectQuery } from '../repo/query-projects.mts'
 import { repositoryRoot } from '../repo/root.mts'
 import { dockerGlobalArguments, dockerInstructions, parseDockerfile } from '../testing/packaging-parsers.ts'
 
-const activeCiWorkflowPath = join(repositoryRoot, '.github', 'workflows/ci.yml')
-// Validate the pending CI update until it is moved into GitHub's workflow directory.
-const pendingCiWorkflowPath = join(repositoryRoot, 'workflow/ci.yml')
-const knipCiWorkflowPath = existsSync(pendingCiWorkflowPath) ? pendingCiWorkflowPath : activeCiWorkflowPath
-const browserWorkflowPath = join(repositoryRoot, '.github', 'workflows/browser-workflow.yml')
-const activeCoverageWorkflowPath = join(repositoryRoot, '.github', 'workflows/coverage.yml')
-const coverageWorkflowPath = activeCoverageWorkflowPath
+// Validate pending workflow definitions until they are moved into GitHub's active directory.
+const workflowDefinitionPath = (name: string) => {
+	const pendingPath = join(repositoryRoot, 'workflow', name)
+	return existsSync(pendingPath) ? pendingPath : join(repositoryRoot, '.github', 'workflows', name)
+}
+const ciWorkflowPath = workflowDefinitionPath('ci.yml')
+const browserWorkflowPath = workflowDefinitionPath('browser-workflow.yml')
+const coverageWorkflowPath = workflowDefinitionPath('coverage.yml')
 const testDomainsWorkflowPath = join(repositoryRoot, '.github', 'workflows/test-domains.yml')
 const testStabilityWorkflowPath = join(repositoryRoot, '.github', 'workflows/test-stability.yml')
 const deployTestnetWorkflowPath = join(repositoryRoot, '.github', 'workflows/deploy-testnet.yml')
 const setupActionPath = join(repositoryRoot, '.github', 'actions/setup-ci/action.yml')
 const setupComponentActionPath = join(repositoryRoot, '.github', 'actions/setup-component/action.yml')
-const ipfsDeployWorkflowPath = join(repositoryRoot, '.github', 'workflows/ipfs-deploy.yml')
-const versionDeployWorkflowPath = join(repositoryRoot, '.github', 'workflows/version-deploy.yml')
+const ipfsDeployWorkflowPath = workflowDefinitionPath('ipfs-deploy.yml')
+const versionDeployWorkflowPath = workflowDefinitionPath('version-deploy.yml')
 const dockerfilePath = join(repositoryRoot, 'ui', 'Dockerfile')
 const rootPackagePath = join(repositoryRoot, 'package.json')
 const tradingPackagePath = join(repositoryRoot, 'ui', 'trading', 'package.json')
@@ -56,19 +57,113 @@ const workflowTestPaths = (workflow: Record<string, unknown>) =>
 			return [...command.matchAll(/(?:^|\s)([A-Za-z0-9_./-]+\.test\.(?:ts|tsx))(?=\s|$)/gu)].map(match => join(workingDirectory ?? '', match[1] ?? '').replaceAll('\\', '/'))
 		}),
 	)
-describe('split UI workflow paths', () => {
-	test('IPFS publication checks out the exact revision whose CI passed', async () => {
+describe('split UI workflow definitions (pending updates when present)', () => {
+	test('IPFS publication pins CI and manual dispatch revisions even if the branch advances during validation', async () => {
 		const jobs = workflowJobs(await readWorkflow(ipfsDeployWorkflowPath))
 		const steps = workflowSteps(jobs['publish'])
 		const checkout = steps.find(step => typeof step['uses'] === 'string' && step['uses'].startsWith('actions/checkout@'))
-		expect(requireRecord(checkout?.['with'], 'IPFS checkout inputs')['ref']).toBe('${{ github.event.workflow_run.head_sha || github.ref }}')
+		// A manual dispatch records github.sha; github.ref can advance while its validation runs.
+		expect(requireRecord(checkout?.['with'], 'IPFS checkout inputs')['ref']).toBe('${{ github.event.workflow_run.head_sha || github.sha }}')
 		const setup = steps.find(step => step['uses'] === './.github/actions/setup-bun')
 		expect(setup).toBeDefined()
 		expect(setup?.['with']).toBeUndefined()
 	})
 
+	test('CI requires browser transactions and coverage before allowing publication', async () => {
+		const jobs = workflowJobs(await readWorkflow(ciWorkflowPath))
+		const required = requireRecord(jobs['required'], 'required CI gate')
+		for (const [name, workflow] of [
+			['browser-workflow', 'browser-workflow.yml'],
+			['coverage', 'coverage.yml'],
+		]) {
+			if (name === undefined) throw new Error('Missing required job name')
+			const job = requireRecord(jobs[name], name)
+			expect(job['uses']).toBe(`./.github/workflows/${workflow}`)
+			expect(job['if']).toBe("needs.changes.outputs.core == 'true'")
+			expect(required['needs']).toContain(name)
+		}
+		const release = workflowJobs(await readWorkflow(versionDeployWorkflowPath))
+		expect(requireRecord(release['deploy'], 'release deployment')['needs']).toBe('tests')
+		expect(requireRecord(release['tests'], 'release tests')['uses']).toBe('./.github/workflows/ci.yml')
+		const publish = workflowJobs(await readWorkflow(ipfsDeployWorkflowPath))
+		expect(requireRecord(publish['validate-manual'], 'manual validation')['uses']).toBe('./.github/workflows/ci.yml')
+		expect(requireRecord(publish['publish'], 'publication')['needs']).toBe('validate-manual')
+	})
+
+	test('latest promotion serializes publishers and rejects stale commits', async () => {
+		const jobs = workflowJobs(await readWorkflow(ipfsDeployWorkflowPath))
+		const promotion = requireRecord(jobs['promote'], 'latest promotion')
+		expect(requireRecord(promotion['concurrency'], 'promotion concurrency')).toEqual({ group: 'ipfs-latest', 'cancel-in-progress': false, queue: 'max' })
+		expect(promotion['needs']).toBe('publish')
+		const step = workflowSteps(promotion).find(step => step['name'] === 'Promote current main revision')
+		const command = step?.['run']
+		if (typeof command !== 'string') throw new Error('Missing promotion command')
+		for (const current of ['candidate', 'newer']) {
+			const result = spawnSync(
+				'bash',
+				[
+					'-e',
+					'-c',
+					`gh() { echo "$CURRENT_MAIN"; }
+docker() { echo "PROMOTED $*"; }
+${command}`,
+				],
+				{
+					env: { CURRENT_MAIN: current, CANDIDATE_SHA: 'candidate', IMAGE_NAME: 'ghcr.io/example/app', GITHUB_REPOSITORY: 'example/app' },
+					encoding: 'utf8',
+				},
+			)
+			expect(result.status).toBe(0)
+			expect(result.stdout.includes('PROMOTED')).toBe(current === 'candidate')
+			if (current === 'candidate') expect(result.stdout).toContain('ghcr.io/example/app:sha-candidate')
+		}
+	})
+
+	test('GitHub release promotion always chooses the highest published version under a shared lock', async () => {
+		const jobs = workflowJobs(await readWorkflow(versionDeployWorkflowPath))
+		const deploy = workflowSteps(jobs['deploy']).find(step => step['name'] === 'Create or update GitHub release')
+		expect(deploy?.['run']).toContain('--latest=false')
+		const promotion = requireRecord(jobs['promote-release'], 'release promotion')
+		expect(promotion['needs']).toBe('deploy')
+		expect(requireRecord(promotion['concurrency'], 'release promotion concurrency')).toEqual({ group: 'version-release-latest', 'cancel-in-progress': false, queue: 'max' })
+		const command = workflowSteps(promotion).find(step => step['name'] === 'Promote highest published version')?.['run']
+		if (typeof command !== 'string') throw new Error('Missing release promotion command')
+		for (const triggeringTag of ['v9', 'v10', 'v11']) {
+			const result = spawnSync(
+				'bash',
+				[
+					'-e',
+					'-o',
+					'pipefail',
+					'-c',
+					`gh() {
+ if [[ "$1" == "api" ]]; then printf '%s\n' v9 v11 v10 nightly; else echo "PROMOTED $*"; fi
+}
+${command}`,
+				],
+				{ env: { GITHUB_REPOSITORY: 'example/app', GITHUB_REF_NAME: triggeringTag }, encoding: 'utf8' },
+			)
+			expect(result.status).toBe(0)
+			expect(result.stdout).toContain('release edit v11 --repo example/app --latest')
+		}
+		const unavailable = spawnSync(
+			'bash',
+			[
+				'-e',
+				'-o',
+				'pipefail',
+				'-c',
+				`gh() { if [[ "$1" == "api" ]]; then return 1; else echo 'PROMOTED'; fi; }
+${command}`,
+			],
+			{ env: { GITHUB_REPOSITORY: 'example/app' }, encoding: 'utf8' },
+		)
+		expect(unavailable.status).not.toBe(0)
+		expect(unavailable.stdout).not.toContain('PROMOTED')
+	})
+
 	test('CI validates test ownership before scope-dependent jobs', async () => {
-		const jobs = workflowJobs(await readWorkflow(activeCiWorkflowPath))
+		const jobs = workflowJobs(await readWorkflow(ciWorkflowPath))
 		const changesSteps = workflowSteps(jobs['changes'])
 		expect(changesSteps.some(step => step['run'] === 'bun run test:preflight')).toBe(true)
 	})
@@ -77,9 +172,9 @@ describe('split UI workflow paths', () => {
 	})
 
 	test('split CI remains callable by the version release workflow', async () => {
-		const workflow = await readWorkflow(activeCiWorkflowPath)
+		const workflow = await readWorkflow(ciWorkflowPath)
 		expect(requireRecord(workflow['on'], 'CI triggers')).toHaveProperty('workflow_call')
-		const releaseWorkflow = await readWorkflow(join(repositoryRoot, '.github', 'workflows', 'version-deploy.yml'))
+		const releaseWorkflow = await readWorkflow(versionDeployWorkflowPath)
 		const releaseJobs = workflowJobs(releaseWorkflow)
 		expect(Object.values(releaseJobs).some(job => isRecord(job) && job['uses'] === './.github/workflows/ci.yml')).toBe(true)
 	})
@@ -109,7 +204,8 @@ describe('split UI workflow paths', () => {
 	test('browser workflow gates expensive steps using the canonical CI classifier', async () => {
 		const workflow = await readWorkflow(browserWorkflowPath)
 		const triggers = requireRecord(workflow['on'], 'browser workflow triggers')
-		expect(triggers).toHaveProperty('pull_request')
+		expect(triggers).toHaveProperty('workflow_call')
+		expect(triggers).not.toHaveProperty('pull_request')
 		expect(triggers).toHaveProperty('workflow_dispatch')
 		const job = requireRecord(workflowJobs(workflow)['browser-workflow'], 'browser workflow job')
 		const steps = workflowSteps(job)
@@ -118,7 +214,7 @@ describe('split UI workflow paths', () => {
 		const scope = steps.find(step => step['id'] === 'scope')
 		expect(scope).toBeDefined()
 		expect(requireRecord(scope?.['env'], 'browser scope environment')['BASE_SHA']).toBe('${{ github.event.pull_request.base.sha }}')
-		expect(scope?.['run']).toBe(workflowSteps(workflowJobs(await readWorkflow(activeCiWorkflowPath))['changes']).find(step => step['id'] === 'scope')?.['run'])
+		expect(scope?.['run']).toBe(workflowSteps(workflowJobs(await readWorkflow(ciWorkflowPath))['changes']).find(step => step['id'] === 'scope')?.['run'])
 		const setup = steps.find(step => step['uses'] === './.github/actions/setup-ci')
 		const run = steps.find(step => step['run'] === 'bun run test:browser:workflow')
 		for (const step of [setup, run]) {
@@ -133,7 +229,7 @@ describe('split UI workflow paths', () => {
 		const steps = Object.values(workflowJobs(workflow)).flatMap(workflowSteps)
 		expect(steps.some(step => step['run'] === 'bun run test:browser:smoke')).toBe(true)
 		expect(steps.some(step => step['run'] === 'bun run test:browser:workflow')).toBe(true)
-		const ciWorkflow = await readWorkflow(activeCiWorkflowPath)
+		const ciWorkflow = await readWorkflow(ciWorkflowPath)
 		const ciJobs = workflowJobs(ciWorkflow)
 		const requiredBrowserJob = requireRecord(ciJobs['browser-smoke'], 'required browser smoke job')
 		expect(requiredBrowserJob['if']).toBe("needs.changes.outputs.core == 'true'")
@@ -141,10 +237,12 @@ describe('split UI workflow paths', () => {
 		expect(requireRecord(ciJobs['required'], 'required CI result')['needs']).toContain('browser-smoke')
 	})
 
-	test('manual coverage publishes and retains the canonical policy report', async () => {
+	test('automatic coverage publishes and retains the canonical policy report', async () => {
 		const workflow = await readWorkflow(coverageWorkflowPath)
 		const triggers = requireRecord(workflow['on'], 'coverage triggers')
-		expect(Object.keys(triggers)).toEqual(['workflow_dispatch'])
+		expect(triggers).toHaveProperty('workflow_dispatch')
+		expect(triggers).toHaveProperty('workflow_call')
+		expect(triggers).toHaveProperty('schedule')
 		const steps = Object.values(workflowJobs(workflow)).flatMap(workflowSteps)
 		expect(steps.some(step => step['run'] === 'bun run coverage')).toBe(false)
 		expect(steps.some(step => step['run'] === 'bun run coverage:full')).toBe(true)
@@ -170,7 +268,7 @@ describe('split UI workflow paths', () => {
 		expect(testDomainConcurrency['group']).toContain("${{ inputs.invocation || 'direct' }}")
 		const concurrencyInvocation = (invocation: string | undefined) => invocation ?? 'direct'
 		expect(concurrencyInvocation(undefined)).not.toBe(concurrencyInvocation(String(invocationInput['default'])))
-		const ciWorkflow = await readWorkflow(activeCiWorkflowPath)
+		const ciWorkflow = await readWorkflow(ciWorkflowPath)
 		const ciJobs = workflowJobs(ciWorkflow)
 		const domainTestsJob = requireRecord(ciJobs['domain-tests'], 'CI domain-tests job')
 		expect(domainTestsJob['uses']).toBe('./.github/workflows/test-domains.yml')
@@ -196,7 +294,7 @@ describe('split UI workflow paths', () => {
 	})
 
 	test('infrastructure-only runs retain Solidity coverage without application preparation', async () => {
-		const ciJobs = workflowJobs(await readWorkflow(activeCiWorkflowPath))
+		const ciJobs = workflowJobs(await readWorkflow(ciWorkflowPath))
 		const domainJobs = workflowJobs(await readWorkflow(testDomainsWorkflowPath))
 		expect(requireRecord(ciJobs['infrastructure-checks'], 'infrastructure checks')['if']).toBe("needs.changes.outputs.infrastructure == 'true' && needs.changes.outputs.core != 'true'")
 		expect(requireRecord(domainJobs['prepare'], 'prepare')['if']).toBe('inputs.application && !inputs.prepared')
@@ -229,7 +327,7 @@ describe('split UI workflow paths', () => {
 	})
 
 	test('required gates reject failures, cancellations, and unexpected skips for every selected route', async () => {
-		const ciJobs = workflowJobs(await readWorkflow(knipCiWorkflowPath))
+		const ciJobs = workflowJobs(await readWorkflow(ciWorkflowPath))
 		const required = requireRecord(ciJobs['required'], 'required CI gate')
 		expect(required['needs']).toEqual(expect.arrayContaining(['domain-tests', 'infrastructure-checks', 'prepare', 'checks', 'knip', 'audit']))
 		const gate = workflowSteps(required)[0]
@@ -243,7 +341,7 @@ describe('split UI workflow paths', () => {
 				const env = Object.fromEntries(Object.keys(gateEnv).map(key => [key, key.endsWith('_RESULT') ? 'skipped' : 'false']))
 				Object.assign(env, { CHANGES_RESULT: 'success', CORE_SELECTED: String(core), DOCS_SELECTED: String(core), INFRA_SELECTED: String(infrastructure), DOMAIN_TESTS_SELECTED: String(core || infrastructure), INFRA_CHECKS_SELECTED: String(infrastructure && !core) })
 				const selected = ['CHANGES_RESULT']
-				if (core) selected.push('PREPARE_RESULT', 'APPLICATION_TESTS_RESULT', 'DOCS_RESULT', 'BROWSER_SMOKE_RESULT', 'CHECKS_RESULT', 'KNIP_RESULT', 'AUDIT_RESULT')
+				if (core) selected.push('PREPARE_RESULT', 'APPLICATION_TESTS_RESULT', 'DOCS_RESULT', 'BROWSER_SMOKE_RESULT', 'BROWSER_WORKFLOW_RESULT', 'COVERAGE_RESULT', 'CHECKS_RESULT', 'KNIP_RESULT', 'AUDIT_RESULT')
 				if (core || infrastructure) selected.push('DOMAIN_TESTS_RESULT')
 				if (infrastructure && !core) selected.push('INFRA_RESULT')
 				for (const key of selected) env[key] = 'success'
@@ -286,7 +384,7 @@ describe('split UI workflow paths', () => {
 	})
 
 	test('stacked PRs run CI, with one build and one automatic owner for docs and browser smoke', async () => {
-		const ci = await readWorkflow(activeCiWorkflowPath)
+		const ci = await readWorkflow(ciWorkflowPath)
 		expect(requireRecord(ci['on'], 'CI triggers')).toHaveProperty('pull_request')
 		expect(requireRecord(ci['on'], 'CI triggers')['pull_request']).toBeNull()
 		const jobs = workflowJobs(ci)
@@ -313,7 +411,8 @@ describe('split UI workflow paths', () => {
 		expect(workflowSteps(jobs['checks']).some(step => step['run'] === 'bun run check:static && bun run check:repository')).toBe(true)
 		expect(requireRecord(jobs['docs-checks'], 'documentation checks')['if']).toBe("needs.changes.outputs.docs == 'true' || needs.changes.outputs.core == 'true'")
 		const browser = await readWorkflow(browserWorkflowPath)
-		expect(requireRecord(browser['on'], 'browser triggers')['pull_request']).toBeNull()
+		expect(requireRecord(browser['on'], 'browser triggers')).toHaveProperty('workflow_call')
+		expect(requireRecord(browser['on'], 'browser triggers')).not.toHaveProperty('pull_request')
 		expect(requireRecord(workflowJobs(browser)['browser-smoke'], 'manual smoke')['if']).toBe("github.event_name == 'workflow_dispatch'")
 		const domains = workflowJobs(await readWorkflow(testDomainsWorkflowPath))
 		expect(requireRecord(domains['application-tests'], 'application shards')['if']).toBe("always() && !cancelled() && inputs.application && needs.timing-history-input.result == 'success' && (needs.prepare.result == 'success' || (inputs.prepared && needs.prepare.result == 'skipped'))")
@@ -350,7 +449,7 @@ describe('split UI workflow paths', () => {
 		const query = await projectQuery()
 		expect(query.componentArtifactOutputs).toContain('ui/trading/ts/generated/contractArtifact.ts')
 		expect(query.generatedCachePaths).toContain('ui/trading/ts/generated/contractArtifact.ts')
-		const workflow = await readFile(activeCiWorkflowPath, 'utf8')
+		const workflow = await readFile(ciWorkflowPath, 'utf8')
 		expect(workflow.match(/steps\.projects\.outputs\.component_artifact_outputs/gu)).toHaveLength(2)
 	})
 
@@ -387,7 +486,7 @@ describe('split UI workflow paths', () => {
 	})
 
 	test('clean CI emits the complete UI dependency DAG while testnet deployment stays headless', async () => {
-		const ciWorkflow = await readFile(activeCiWorkflowPath, 'utf8')
+		const ciWorkflow = await readFile(ciWorkflowPath, 'utf8')
 		const buildIndex = ciWorkflow.indexOf('bun run ui:build:apps')
 		const preflightIndex = ciWorkflow.indexOf('bun run ci:preflight:current')
 		expect(buildIndex).toBeGreaterThan(0)
@@ -406,7 +505,7 @@ describe('split UI workflow paths', () => {
 	})
 
 	test('CI refreshes deployment runtime dependencies before the parallel preflight', async () => {
-		const workflow = await readWorkflow(activeCiWorkflowPath)
+		const workflow = await readWorkflow(ciWorkflowPath)
 		const prepareSteps = workflowSteps(workflowJobs(workflow)['prepare'])
 		const command = String(prepareSteps.find(step => step['name'] === 'TypeScript checks and production UI build')?.['run'])
 		const lines = command.split('\n').map(line => line.trim())
@@ -437,7 +536,7 @@ describe('split UI workflow paths', () => {
 	})
 
 	test('dead-code CI installs every bot workspace before analyzing it', async () => {
-		const workflow = await readWorkflow(knipCiWorkflowPath)
+		const workflow = await readWorkflow(ciWorkflowPath)
 		const job = requireRecord(workflowJobs(workflow)['knip'], 'Knip job')
 		expect(job['if']).toBe("needs.changes.outputs.core == 'true'")
 		expect(job['continue-on-error']).toBeUndefined()
@@ -478,7 +577,7 @@ describe('split UI workflow paths', () => {
 	})
 
 	test('activatable workflows replace every stale monolithic UI setup command', async () => {
-		const activeSources = await Promise.all([readFile(activeCiWorkflowPath, 'utf8'), readFile(deployTestnetWorkflowPath, 'utf8'), readFile(setupActionPath, 'utf8'), readFile(setupComponentActionPath, 'utf8')])
+		const activeSources = await Promise.all([readFile(ciWorkflowPath, 'utf8'), readFile(deployTestnetWorkflowPath, 'utf8'), readFile(setupActionPath, 'utf8'), readFile(setupComponentActionPath, 'utf8')])
 		for (const source of activeSources) {
 			expect(source).not.toMatch(/\(cd ui &&|ui\/bun\.lock|ui\/package\.json|ui\/dist(?:\s|$)|ui\/ts\//)
 		}

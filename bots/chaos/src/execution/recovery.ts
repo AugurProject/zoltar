@@ -22,29 +22,12 @@ import { recordActivity, type PendingTransactionIntent } from '../state/operator
 import { observePendingTransaction } from '../state/pending-transaction-observation.ts'
 import { manualReconciliationBlocker, observeIntent, persist, retainClosedSubmissionWindow, retainManualReconciliation, retainUnreadableReceiptEvidence } from './recovery-journal.ts'
 import { requireSuccessfulReceipt, stepReceiptEvidenceDisposition, type ReceiptEvidenceDisposition } from './receipt-validation.ts'
-import {
-	balanceObservations,
-	agreedMaximumGasEstimate,
-	assertExecutionActive,
-	agreedLatestBlock,
-	agreedExactCall,
-	assertFreshWalletAssetDebits,
-	assertRequestedTransactionHash,
-	assertStepPreflightCalls,
-	captureBalanceEvidence,
-	captureStorageEvidence,
-	CHAOS_FINALITY_BLOCKS,
-	exactAttestedEthBalance,
-	executionReadClients,
-	includedReceiptWithQuorum,
-	requiredConnectivity,
-	sameCanonicalExecutionAnchor,
-	storageObservations,
-	TransactionAwaitingRecovery,
-	OperationRediscoveryRequired,
-	type CanonicalExecutionAnchor,
-	type ExecutionEnvironment,
-} from './transaction-executor.ts'
+import { balanceObservations, captureBalanceEvidence, captureStorageEvidence, storageObservations } from './execution-evidence.ts'
+import { agreedMaximumGasEstimate, agreedLatestBlock, agreedExactCall, exactAttestedEthBalance, executionReadClients, requiredConnectivity, sameCanonicalExecutionAnchor } from './execution-quorum.ts'
+import { assertExecutionActive, assertRequestedTransactionHash, CHAOS_FINALITY_BLOCKS, OperationRediscoveryRequired, type CanonicalExecutionAnchor, type ExecutionEnvironment } from './execution-context.ts'
+import { assertFreshWalletAssetDebits, assertStepPreflightCalls } from './execution-preflight.ts'
+import { includedReceiptWithQuorum } from './execution-receipts.ts'
+import { TransactionAwaitingRecovery } from './transaction-executor.ts'
 import { assertRecoverySubmissionMode, BOT_COMPATIBLE_RECOVERY_TRANSACTION_TYPE, pendingIntentRecoveryAction, recoveryGasCostBlocker, transactionIsStrictNonceCancellation, transactionMatchesIntent } from './recovery-policy.ts'
 import { assertOperationPrincipalCaps } from './safety.ts'
 

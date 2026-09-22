@@ -3,6 +3,10 @@
 import { afterEach, describe, expect, mock, spyOn, test } from 'bun:test'
 import { getAddress, isHex, keccak256, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import { createInjectedBackend, normalizeAccount } from '../wallet/chainBackend.js'
+import { createWalletWriteClient } from '../wallet/clients.js'
+import { installActiveEnvironmentForTesting } from '../lib/activeEnvironment.js'
+import { runWriteAction } from '../transactions/writeAction.js'
+import { createInitialTransactionTrayState, markTransactionRequested, markTransactionSubmitted, markTransactionFailed, markTransactionFinished, isTransactionActionLocked } from '../transactions/transactionTray.js'
 import { MAINNET_NETWORK_PROFILE } from '../wallet/networkProfile.js'
 import type { InjectedEthereum } from '../wallet/injectedEthereum.js'
 import { installFetchStub } from './testUtils/fetchStub.js'
@@ -450,3 +454,95 @@ test('times out wallet-backed reads while leaving wallet approval requests unbou
 	resolveApproval([zeroAddress])
 	expect(await approval).toEqual([zeroAddress])
 })
+
+for (const receiptStatus of ['0x1', '0x0']) {
+	test(`keeps a broadcast action locked through an RPC outage until receipt ${receiptStatus}`, async () => {
+		const hash = '0x0000000000000000000000000000000000000000000000000000000000000001'
+		let receiptReads = 0
+		let broadcasts = 0
+		let releaseReceipt: (() => void) | undefined
+		const receiptReady = new Promise<void>(resolve => {
+			releaseReceipt = resolve
+		})
+		let notifyOutage: (() => void) | undefined
+		const outage = new Promise<void>(resolve => {
+			notifyOutage = resolve
+		})
+		const provider = createMockInjectedEthereum(async ({ method }) => {
+			if (method === 'eth_accounts') return [zeroAddress]
+			if (method === 'eth_chainId') return '0xaa36a7'
+			if (method === 'eth_getTransactionCount') return '0x1'
+			if (method === 'eth_estimateGas') return '0x5208'
+			if (method === 'eth_gasPrice' || method === 'eth_maxPriorityFeePerGas') return '0x1'
+			if (method === 'eth_sendTransaction') {
+				broadcasts++
+				return hash
+			}
+			if (method === 'eth_getTransactionReceipt') {
+				receiptReads++
+				if (receiptReads === 1) {
+					notifyOutage?.()
+					throw new Error('RPC offline')
+				}
+				await receiptReady
+				return { blockHash: hash, blockNumber: '0x1', cumulativeGasUsed: '0x5208', effectiveGasPrice: '0x1', from: zeroAddress, gasUsed: '0x5208', logs: [], status: receiptStatus, to: zeroAddress, transactionHash: hash, transactionIndex: '0x0', type: '0x2' }
+			}
+			throw new Error(`Unexpected RPC ${method}`)
+		})
+		const backend = createInjectedBackend({ provider })
+		const restore = installActiveEnvironmentForTesting(backend)
+		let state = createInitialTransactionTrayState()
+		const statuses: Array<string | undefined> = []
+		const client = createWalletWriteClient(zeroAddress, {
+			onTransactionSubmitted: (submittedHash, status?: 'pending' | 'uncertain') => {
+				statuses.push(status)
+				state = markTransactionSubmitted(state, submittedHash, status)
+			},
+		})
+		const failed = mock((message: string) => {
+			state = markTransactionFailed(state, message)
+		})
+		const succeeded = mock(() => undefined)
+		const action = runWriteAction(
+			{
+				accountAddress: zeroAddress,
+				missingWalletMessage: 'Connect wallet',
+				onTransactionRequested: () => {
+					state = markTransactionRequested(state, { action: 'createMarket', source: 'zoltar', submittedTitle: 'Creating Question' })
+					return true
+				},
+				onTransactionFailed: failed,
+				onTransactionFinished: () => {
+					state = markTransactionFinished(state)
+				},
+				refreshState: async () => undefined,
+				setErrorMessage: () => undefined,
+			},
+			async () => {
+				const submittedHash = await client.sendTransaction({ to: zeroAddress })
+				const receipt = await client.waitForTransactionReceipt({ hash: submittedHash, pollingInterval: 1 })
+				if (receipt.status === 'reverted') throw new Error('Transaction reverted')
+				return { hash: submittedHash }
+			},
+			'Transaction failed',
+			succeeded,
+		)
+		try {
+			await outage
+			await Bun.sleep(20)
+			expect(isTransactionActionLocked(state)).toBe(true)
+			expect(state.active?.tone).toBe('pending')
+			expect(state.active?.hash).toBe(hash)
+			expect(statuses).toContain('uncertain')
+			expect(failed).not.toHaveBeenCalled()
+		} finally {
+			releaseReceipt?.()
+			await action
+			restore()
+		}
+		expect(broadcasts).toBe(1)
+		expect(isTransactionActionLocked(state)).toBe(false)
+		expect(succeeded).toHaveBeenCalledTimes(receiptStatus === '0x1' ? 1 : 0)
+		expect(failed).toHaveBeenCalledTimes(receiptStatus === '0x0' ? 1 : 0)
+	})
+}

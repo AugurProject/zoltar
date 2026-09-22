@@ -1,6 +1,6 @@
 import type { Address, Hash } from '@zoltar/core-shared/evm/ethereum'
 import { statoblast_SecurityPool_SecurityPool } from '../contractArtifact.js'
-import type { ForkAuctionAction, ForkAuctionActionResult, ReadClient, WriteClient } from '@zoltar/ui-core-shared/types/contracts.js'
+import type { ForkAuctionAction, ForkAuctionActionResult, ReadClient } from '@zoltar/ui-core-shared/types/contracts.js'
 
 export async function readSecurityPoolUniverseId(client: Pick<ReadClient, 'readContract'>, securityPoolAddress: Address) {
 	return await client.readContract({
@@ -11,9 +11,8 @@ export async function readSecurityPoolUniverseId(client: Pick<ReadClient, 'readC
 	})
 }
 
-export async function executeForkAuctionAction(client: WriteClient, action: ForkAuctionAction, securityPoolAddress: Address, universeId: bigint, request: () => Promise<Hash>) {
-	const hash = await request()
-	await client.waitForTransactionReceipt({ hash })
+export async function executeForkAuctionAction(action: ForkAuctionAction, securityPoolAddress: Address, universeId: bigint, requestConfirmedTransaction: () => Promise<Hash>) {
+	const hash = await requestConfirmedTransaction()
 	return {
 		action,
 		hash,
