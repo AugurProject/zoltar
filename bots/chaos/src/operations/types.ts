@@ -548,6 +548,8 @@ export interface ImmutableTopologyPlanningCapacity {
 }
 
 export interface PlanningOptions {
+	/** Retained from the reviewed or durable plan; builders must revalidate against canonical state. */
+	reviewedDeadlineTimestamp?: string | undefined
 	operationInputs?: OperationInputValues
 
 	seed: number
