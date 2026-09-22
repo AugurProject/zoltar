@@ -145,12 +145,20 @@ test(
 			if (typeof result !== 'object' || result === null) throw new Error('Browser evaluation returned no result')
 			return Reflect.get(result, 'value')
 		}
+		// A condition that throws is not yet true: right after a navigation the previous document still answers
+		// evaluations and its selectors resolve to null, so the poll keeps going until the timeout instead of failing once.
 		async function waitFor(expression: string) {
+			let lastError: unknown
 			for (let attempt = 0; attempt < 150; attempt += 1) {
-				if ((await evaluate(expression)) === true) return
+				try {
+					if ((await evaluate(expression)) === true) return
+					lastError = undefined
+				} catch (error) {
+					lastError = error
+				}
 				await Bun.sleep(100)
 			}
-			throw new Error(`Browser condition timed out: ${expression}`)
+			throw new Error(`Browser condition timed out: ${expression}${lastError === undefined ? '' : ` (last error: ${lastError instanceof Error ? lastError.message : String(lastError)})`}`)
 		}
 		async function expectFullTokenAddress() {
 			expect(

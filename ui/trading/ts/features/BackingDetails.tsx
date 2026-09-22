@@ -11,7 +11,7 @@ export function BackingDetails({ market }: { market: LiveMarket }) {
 	const valuation = market.valuation
 	const feeReduction = valuation === undefined || market.settlementCollateralAttoEth === 0n ? undefined : ((market.settlementCollateralAttoEth - valuation.projectedCollateralAttoEth) * 1_000_000n) / market.settlementCollateralAttoEth
 	return (
-		<details class='backing-details'>
+		<details className='backing-details'>
 			<summary>{payoutCopy.backingValue}</summary>
 			<DataGrid dense>
 				<MetricField label={payoutCopy.backingPerSet}>{formatCollateralEth(10n ** 36n, market)}</MetricField>
@@ -25,7 +25,7 @@ export function BackingDetails({ market }: { market: LiveMarket }) {
 					</>
 				)}
 			</DataGrid>
-			<p class='detail payout-note'>
+			<p className='detail payout-note'>
 				{payoutCopy.holdingFeeNote}
 				{valuation === undefined || valuation.timestamp >= valuation.feeEndTime ? null : <> {payoutCopy.feeProjectionNote}</>}
 			</p>

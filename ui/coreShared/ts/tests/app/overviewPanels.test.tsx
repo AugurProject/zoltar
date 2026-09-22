@@ -1,14 +1,14 @@
 /// <reference types="bun-types" />
 
-import { installActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
-import { getUniversePresentation } from '@zoltar/ui-core-shared/lib/userCopy.js'
-import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
-import { createFakeBackend, createFakeSimulationProfile } from '@zoltar/ui-core-shared/tests/testUtils/fakeBackend.js'
-import { fireEvent, waitFor, within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
-import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
-import { installTestRouting } from '@zoltar/ui-core-shared/tests/testUtils/testRouting.js'
-import { SEPOLIA_NETWORK_PROFILE } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
-import { OverviewPanels } from '@zoltar/ui-zoltar-shared/features/overview/OverviewPanels.js'
+import { installActiveEnvironmentForTesting } from '../../lib/activeEnvironment.js'
+import { getUniversePresentation } from '../../lib/userCopy.js'
+import { installDomTestLifecycle } from '../testUtils/domTestLifecycle.js'
+import { createFakeBackend, createFakeSimulationProfile } from '../testUtils/fakeBackend.js'
+import { fireEvent, waitFor, within } from '../testUtils/queries.js'
+import { renderIntoDocument } from '../testUtils/renderIntoDocument.js'
+import { installTestRouting } from '../testUtils/testRouting.js'
+import { SEPOLIA_NETWORK_PROFILE } from '../../wallet/networkProfile.js'
+import { OverviewPanels, type OverviewRepPricesProps } from '../../app/components/OverviewPanels.js'
 import { describe, expect, mock, test } from 'bun:test'
 import { act } from 'preact/test-utils'
 
@@ -36,7 +36,22 @@ describe('OverviewPanels', () => {
 		fireEvent.click(summary)
 	}
 
-	async function renderOverviewPanels(overrides: Partial<Parameters<typeof OverviewPanels>[0]> = {}) {
+	type OverviewPanelsOverrides = Partial<Omit<Parameters<typeof OverviewPanels>[0], 'repPrices'>> & { repPrices?: Partial<OverviewRepPricesProps> | undefined }
+
+	async function renderOverviewPanels(overrides: OverviewPanelsOverrides = {}) {
+		const baseRepPrices: OverviewRepPricesProps = {
+			isLoading: false,
+			isRefreshing: false,
+			onRefresh: () => undefined,
+			repPerEthFailure: undefined,
+			repPerEthPrice: undefined,
+			repPerEthSource: undefined,
+			repPerEthSourceUrl: undefined,
+			repUsdcFailure: undefined,
+			repUsdcPrice: undefined,
+			repUsdcSource: undefined,
+			repUsdcSourceUrl: undefined,
+		}
 		const baseProps: Parameters<typeof OverviewPanels>[0] = {
 			applicationTitle: 'Zoltar',
 			activeUniverseId: 0n,
@@ -48,39 +63,31 @@ describe('OverviewPanels', () => {
 			},
 			isConnectingWallet: false,
 			isManagingWallet: false,
-			isLoadingRepPrices: false,
-			isRefreshingRepPrices: false,
 			isLoadingUniverseRepBalance: false,
 			isRefreshing: false,
 			onConnect: () => undefined,
 			onChangeWallet: () => undefined,
 			onDisconnectWallet: () => undefined,
 			onGoToGenesisUniverse: () => undefined,
-			onRefreshRepPrices: () => undefined,
 			onSwitchNetwork: () => undefined,
-			repPerEthFailure: undefined,
-			repPerEthPrice: undefined,
-			repPerEthSource: undefined,
-			repPerEthSourceUrl: undefined,
-			repUsdcFailure: undefined,
-			repUsdcPrice: undefined,
-			repUsdcSource: undefined,
-			repUsdcSourceUrl: undefined,
 			universeForkTime: undefined,
 			universeHasForked: false,
 			universePresentation: undefined,
 			universeRepBalanceAttoRep: undefined,
 			walletBootstrapComplete: true,
 		}
+		const { repPrices: repPricesOverride, ...propOverrides } = overrides
+		const repPrices = 'repPrices' in overrides && repPricesOverride === undefined ? undefined : { ...baseRepPrices, ...repPricesOverride }
 
 		const renderedComponent = await renderIntoDocument(
 			<OverviewPanels
 				{...baseProps}
-				{...overrides}
+				{...propOverrides}
 				accountState={{
 					...baseProps.accountState,
-					...overrides.accountState,
+					...propOverrides.accountState,
 				}}
+				repPrices={repPrices}
 			/>,
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
@@ -203,8 +210,7 @@ describe('OverviewPanels', () => {
 
 	test('distinguishes missing liquidity from a failed REP price request', async () => {
 		const documentQueries = await renderOverviewPanels({
-			repPerEthFailure: 'no-liquidity',
-			repUsdcFailure: 'rpc-error',
+			repPrices: { repPerEthFailure: 'no-liquidity', repUsdcFailure: 'rpc-error' },
 		})
 
 		expect(documentQueries.getByText('No liquidity available')).not.toBeNull()
@@ -217,8 +223,7 @@ describe('OverviewPanels', () => {
 
 	test('renders an application-provided REP per ETH source label', async () => {
 		const documentQueries = await renderOverviewPanels({
-			repPerEthPrice: 2n * 10n ** 18n,
-			repPerEthSourceLabel: <span>Custom oracle</span>,
+			repPrices: { repPerEthPrice: 2n * 10n ** 18n, repPerEthSourceLabel: <span>Custom oracle</span> },
 		})
 
 		expect(documentQueries.getByText('Custom oracle')).not.toBeNull()
@@ -327,7 +332,7 @@ describe('OverviewPanels', () => {
 
 	test('renders the REP/ETH panel from the canonical REP per ETH quote', async () => {
 		const documentQueries = await renderOverviewPanels({
-			repPerEthPrice: 2439024390243902439024n,
+			repPrices: { repPerEthPrice: 2439024390243902439024n },
 		})
 		expect(documentQueries.getByTitle('2 439.024390243902439024')).toBeDefined()
 		expect(documentQueries.queryByText(/0\.00041/)).toBeNull()
@@ -336,7 +341,7 @@ describe('OverviewPanels', () => {
 	test('renders a refresh button for REP prices and wires it to the provided handler', async () => {
 		const onRefreshRepPrices = mock(() => undefined)
 		const documentQueries = await renderOverviewPanels({
-			onRefreshRepPrices,
+			repPrices: { onRefresh: onRefreshRepPrices },
 		})
 		const refreshButton = documentQueries.getByRole('button', { name: 'Refresh REP prices' })
 		fireEvent.click(refreshButton)
@@ -362,10 +367,7 @@ describe('OverviewPanels', () => {
 
 	test('keeps stale REP prices visible while the refresh control shows an in-flight refresh', async () => {
 		const documentQueries = await renderOverviewPanels({
-			isLoadingRepPrices: false,
-			isRefreshingRepPrices: true,
-			repPerEthPrice: 2439024390243902439024n,
-			repUsdcPrice: 1234567n,
+			repPrices: { isLoading: false, isRefreshing: true, repPerEthPrice: 2439024390243902439024n, repUsdcPrice: 1234567n },
 		})
 
 		const refreshButton = documentQueries.getByRole('button', { name: 'Refresh REP prices' })
@@ -533,7 +535,7 @@ describe('OverviewPanels', () => {
 		expect(document.body.querySelector('.header-toolbar-controls .toolbar-field-value > span')?.getAttribute('title')).toBe('Genesis (0x0)')
 		await cleanupRenderedComponent?.()
 
-		await renderOverviewPanels({ walletBootstrapComplete: false, showRepPrices: false })
+		await renderOverviewPanels({ walletBootstrapComplete: false, repPrices: undefined })
 		expect(readSlots()).toEqual(['overview-simulation-secondary', 'overview-metric-secondary', 'overview-simulation-secondary'])
 		expect(readGroups()).toEqual([{ label: 'Balances', columns: '3', secondary: false }])
 		await cleanupRenderedComponent?.()

@@ -6,6 +6,7 @@ import { TransactionActionButtonLockProvider } from '../../components/Transactio
 import { GlobalTransactionTray } from './GlobalTransactionTray.js'
 
 export function ProtocolAppFrame({
+	actionsLocked = false,
 	activeUniverseId,
 	children,
 	currentBlockNumber,
@@ -17,6 +18,8 @@ export function ProtocolAppFrame({
 	transactionRouteKey,
 	transactionState,
 }: {
+	/** Locks transaction actions for a workflow the application tracks outside the shared transaction tray. */
+	actionsLocked?: boolean
 	activeUniverseId?: bigint
 	children: ComponentChildren
 	currentBlockNumber: bigint | undefined
@@ -26,8 +29,11 @@ export function ProtocolAppFrame({
 	notices: ComponentChildren
 	routeContentDisabled: boolean
 	transactionRouteKey: string
-	transactionState: TransactionTrayState
+	/** The shared transaction tray state; applications with their own transaction presentation omit it. */
+	transactionState?: TransactionTrayState | undefined
 }) {
+	const activeTransaction = transactionState?.active
+	const locked = actionsLocked || (transactionState !== undefined && isTransactionActionLocked(transactionState))
 	return (
 		<ChainBlockNumberContext.Provider value={currentBlockNumber}>
 			<ChainTimestampContext.Provider value={currentTimestamp}>
@@ -35,10 +41,10 @@ export function ProtocolAppFrame({
 					{heading}
 					{notices}
 					{header}
-					<GlobalTransactionPresentationProvider transaction={transactionState.active}>
-						<GlobalTransactionTray {...(activeUniverseId === undefined ? {} : { activeUniverseId })} routeKey={transactionRouteKey} transaction={transactionState.active} />
+					<GlobalTransactionPresentationProvider transaction={activeTransaction}>
+						{transactionState === undefined ? undefined : <GlobalTransactionTray {...(activeUniverseId === undefined ? {} : { activeUniverseId })} routeKey={transactionRouteKey} transaction={activeTransaction} />}
 						<div id='app-content' tabIndex={-1}>
-							<TransactionActionButtonLockProvider locked={isTransactionActionLocked(transactionState)}>
+							<TransactionActionButtonLockProvider locked={locked}>
 								<fieldset className='route-shell' disabled={routeContentDisabled}>
 									{children}
 								</fieldset>

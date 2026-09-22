@@ -6,13 +6,14 @@ export { changeWallet } from '@zoltar/ui-core-shared/copy/app.js'
 export { securityPools, universe } from '@zoltar/ui-core-shared/copy/common.js'
 export { connectWallet, deploy, loadingWithEllipsis, retry, unavailable } from '@zoltar/ui-core-shared/copy/common.js'
 export const help = 'Help'
+export const universeRouteDescription = 'Market, liquidity, and portfolio follow the selected universe.'
+export const universeUnavailable = 'Unable to load the universe'
+export function universeNotFound(label: string) {
+	return `${label} is not deployed on this network.`
+}
 export const securityPool = 'Security pool'
 export const notFound = 'Not found'
-export const pageNotFound = 'Page not found'
-export const returnToMarket = 'Return to market'
 export const disconnectWallet = 'Disconnect wallet'
-export const selectUniverse = 'Select universe'
-export const connectedWalletBalances = 'Connected wallet balances'
 export const loadingBalances = 'Loading balances…'
 export const balancesUnavailable = 'Balances unavailable'
 const walletBalanceReadFailed = 'wallet balance read failed'

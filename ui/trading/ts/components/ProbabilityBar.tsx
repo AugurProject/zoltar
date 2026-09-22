@@ -8,14 +8,14 @@ function roundedProbabilityLabels(yesPercent: number) {
 export function ProbabilityBar({ yesPercent, beforePercent }: { yesPercent: number; beforePercent?: number }) {
 	const labels = roundedProbabilityLabels(yesPercent)
 	return (
-		<figure class='probability' aria-label={probabilityCopy.conditionalYesPriceLabel(labels.yes)}>
-			<div class='probability__labels'>
+		<figure className='probability' aria-label={probabilityCopy.conditionalYesPriceLabel(labels.yes)}>
+			<div className='probability__labels'>
 				<span>{probabilityCopy.probabilityLabel(probabilityCopy.yes, labels.yes)}</span>
 				<span>{probabilityCopy.probabilityLabel(probabilityCopy.no, labels.no)}</span>
 			</div>
-			<div class='probability__track'>
-				<div class='probability__yes' style={{ width: `${yesPercent}%` }} />
-				{beforePercent === undefined ? null : <span class='probability__marker' style={{ left: `${beforePercent}%` }} aria-label={probabilityCopy.beforePriceLabel(beforePercent.toFixed(1))} />}
+			<div className='probability__track'>
+				<div className='probability__yes' style={{ width: `${yesPercent}%` }} />
+				{beforePercent === undefined ? null : <span className='probability__marker' style={{ left: `${beforePercent}%` }} aria-label={probabilityCopy.beforePriceLabel(beforePercent.toFixed(1))} />}
 			</div>
 		</figure>
 	)

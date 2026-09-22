@@ -1,5 +1,5 @@
-import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
-import type { TransactionPlanStep } from '@zoltar/ui-core-shared/wallet/chainBackend.js'
+import * as commonCopy from '../copy/common.js'
+import type { TransactionPlanStep } from '../wallet/chainBackend.js'
 import { signal } from '@preact/signals'
 import { formatUnits, maxUint256, type Address, type Hash } from '@zoltar/core-shared/evm/ethereum'
 

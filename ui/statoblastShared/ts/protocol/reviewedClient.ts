@@ -4,7 +4,7 @@ import { createActiveEnvironmentGuard } from '@zoltar/ui-core-shared/lib/activeE
 import { getErrorMessage, isRecoverableContractReadError, transactionErrorMessages } from '@zoltar/ui-core-shared/lib/errors.js'
 import { ABIS } from '@zoltar/ui-core-shared/abis.js'
 import { humanizeTransactionAction } from '@zoltar/ui-core-shared/transactions/transactionPresentations.js'
-import { createTransactionStepController, type TransactionStepDetails } from './transactionSteps.js'
+import { createTransactionStepController, type TransactionStepDetails } from '@zoltar/ui-core-shared/transactions/transactionSteps.js'
 
 const actionDescriptions: Record<string, { title: string; description: string }> = {
 	'Transfer ETH': { title: 'Transfer ETH', description: 'Send ETH from your wallet to the recipient below.' },

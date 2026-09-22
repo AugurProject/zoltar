@@ -4,6 +4,9 @@ import { assertNever } from './assert.js'
 
 export type RepPriceSource = 'v4' | 'v3' | 'mock'
 
+/** Why a REP price quote is missing: the pool has no liquidity, or the quote request itself failed. */
+export type RepPriceFailure = 'no-liquidity' | 'rpc-error'
+
 type RepPriceSourceCopy = {
 	badgeLabel: string | undefined
 	linkTitle: string | undefined
