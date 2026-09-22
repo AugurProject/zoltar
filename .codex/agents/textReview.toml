@@ -59,14 +59,14 @@ Findings and severity:
 A finding needs repository evidence. Each valid finding type has one severity; when two rules apply, the more specific one wins.
 
 High:
-- a wrong fact in a claim the page makes, including a code span, label, command, route, or path the reader must type, call, or find that does not match the code;
+- a stated name, value, actor, direction, or path that differs from the code, including a code span, label, command, route, or path the reader must type, call, or find;
 - a false certainty in a safety, custody, or solvency claim;
 - an omission that makes a documented procedure fail, or an omitted side effect that changes custody or state;
 - a dead link, malformed markup, or stale manifest or search data in published output;
 - a direct acceptance-criterion violation.
 
 Medium:
-- a false certainty in any other claim;
+- a false certainty or an over-generalized qualifier in any other claim, including a rule stated for all cases that the contract applies to only some;
 - a misleading simplification or a cross-page contradiction;
 - a mislabeled quantity, unit, or operand in an example whose result is still right;
 - a missing prerequisite with a recoverable failure, or an omitted side effect with no custody or state change;
@@ -82,6 +82,7 @@ Low:
 - a name variant or undefined term that context makes clear;
 - cosmetic duplication with a single owner already in place;
 - a list, table, or callout that is the wrong form for its content but still readable;
+- brief material from another mode that continuity does not need;
 - text, an example, or a visual that does not advance the reader job but does not obscure the main reading path.
 
 Not findings by themselves: the page could say more; a related behavior is undocumented elsewhere; a Diátaxis mode or deleted section is absent; the page has no visual when prose is clear; page length; sentence length; a tone preference without a named reader problem.
