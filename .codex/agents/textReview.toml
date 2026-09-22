@@ -41,7 +41,7 @@ Read every changed narrative page once, top to bottom, at reading speed, in the 
 
 1. Terminology. Build a table of every protocol concept across the changed pages: concept, the names and casings used for it, and where each first appears. Any concept with more than one name, any name with more than one meaning, and any first use without a definition or glossary link is a finding. Include the relationship between product names: a reader must be able to tell whether two names refer to the same system.
 
-2. Order. Mark any sentence that depends on something the page has not yet introduced, any summary that appears before the thing it summarizes, and any second introduction of a concept the page already covered. Confirm the heading sequence alone tells a sensible story: problem → model → mechanism → branches → result for explanation; goal → action → result → next action for a tutorial; situation → prerequisites → actions → verification → recovery for a how-to; orientation → predictable lookup structure for reference.
+2. Order. Mark any sentence that depends on something the page has not yet introduced, any summary that appears before the thing it summarizes, and any second introduction of a concept the page already covered. Confirm the heading sequence alone tells a story that fits the page's mode as `docs/AGENTS.md` defines it; a page whose headings follow, for instance, problem → model → mechanism → result for an explanation or goal → action → result → next action for a tutorial passes, and any order works when a reader can stop after each section with a coherent picture.
 
 3. Sentences and structure. Report a sentence when its actor, condition, exception, mechanism, and result compete so that a reader must reread it. Report a list when its items are not parallel, contain multiple sentences or nested conditions, or replace a relationship that prose would make clear. Report a table whose cells hold paragraphs or branches. Report legalistic phrasing, noun stacks, ambiguous `former` or `latter`, and passive voice that hides an actor who matters. Report the comprehension problem, not a word count. Group repeated style problems into one finding per page with representative examples.
 
@@ -52,15 +52,37 @@ Read every changed narrative page once, top to bottom, at reading speed, in the 
 6. Deletion. For each page, name any sentence, section, example, callout, or visual that does not advance the reader job. Do not preserve text because it already exists. Do not recommend adding content when deletion, movement, linking, rewriting, or a better presentation meets the need. Recommend a visual only when you can name the reader question it answers and the prose it replaces.
 
 Validation assessment:
-- Compare the supplied validation with `docs/AGENTS.md`. Prose-only changes need HTML, link, formatting, and `git diff --check` runs. Corpus or manifest changes need navigation, search, and index freshness checks. Generated pages and embedded runtime behavior need their generator and runtime checks. Pages with worked examples, reference constants, or interactive tools need `docs:check-examples`, `docs:check-reference-values`, and `docs:check-content`; name the existing check, not a manual recompute, as the validation for a numeric finding.
+- Compare the supplied validation with `docs/AGENTS.md`. Prose-only changes need HTML, link, formatting, and `git diff --check` runs. Corpus or manifest changes need navigation, search, and index freshness checks. Generated pages and embedded runtime behavior need their generator and runtime checks. Pages with worked examples, reference constants, or interactive tools need `docs:check-examples` and `docs:check-reference-values`; name the existing check, not a manual recompute, as the validation for a numeric finding. Duplication findings name `docs:check-content`, the cross-page duplicate paragraph and formula check.
 - Flag any test that freezes narrative wording, paragraph order, examples, or page existence without a machine-readable reason, and recommend narrowing it instead of restoring prose to satisfy it.
 
-Findings:
-A finding needs repository evidence. Valid findings are: a factual error or unsupported certainty in a claim the page makes; an omission or contradiction that blocks the reader job as defined above; terminology drift or an undefined term; a broken narrative order; prose or structure that materially obstructs linear reading; harmful duplication or contested ownership; a substantial mode violation; broken links, markup, navigation, or generated data; a direct acceptance-criterion violation; a validation gap that would let one of these recur.
+Findings and severity:
+A finding needs repository evidence. Each valid finding type has one severity; when two rules apply, the more specific one wins.
+
+High:
+- a wrong fact in a claim the page makes;
+- a false certainty in a safety, custody, or solvency claim;
+- an omission that makes a documented procedure fail, or an omitted side effect that changes custody or state;
+- a dead link, malformed markup, or stale manifest or search data in published output;
+- a direct acceptance-criterion violation.
+
+Medium:
+- a false certainty in any other claim;
+- a misleading simplification or a cross-page contradiction;
+- a mislabeled quantity, unit, or operand in an example whose result is still right;
+- a missing prerequisite with a recoverable failure, or an omitted side effect with no custody or state change;
+- terminology drift that leaves the reader unsure which system or concept is meant, or an undefined term the page depends on;
+- a narrative order or prose structure the reader cannot recover from without rereading or leaving the page;
+- a substantial Diátaxis mode violation;
+- duplication whose copies can drift apart, or contested ownership of a normative claim;
+- a validation gap that would let a High or Medium defect recur.
+
+Low:
+- bounded wording, casing, or ordering issues the reader recovers from in place;
+- a name variant or undefined term that context makes clear;
+- cosmetic duplication with a single owner already in place;
+- a list, table, or callout that is the wrong form for its content but still readable.
 
 Not findings by themselves: the page could say more; a related behavior is undocumented elsewhere; a Diátaxis mode or deleted section is absent; the page has no visual when prose is clear; page length; sentence length; a tone preference without a named reader problem.
-
-Severity: a wrong fact, a false certainty in a safety or custody claim, or an omission that makes a documented procedure fail is High. A misleading simplification, a cross-page contradiction, a mislabeled quantity in an example, a missing prerequisite with a recoverable failure, or terminology drift that leaves the reader unsure which system is meant is Medium. A dead link, malformed markup, stale manifest or search data, or a direct acceptance-criterion violation is High, as the contract's broken-build and missing-criterion cases. A substantial mode violation or a validation gap that would let a High or Medium defect recur is Medium. Bounded wording, casing, ordering, and duplication issues with limited immediate risk are Low. When two rules apply, the more specific one wins: a mislabeled example quantity is Medium even though it is also a wrong fact.
 
 For every High or Medium finding state: the affected reader; the concrete misunderstanding, failed step, or lost connection; the source evidence with `path:line`; the smallest remedy in delete → move → link → rewrite → add order; and a validation that would catch it when practical.
 
