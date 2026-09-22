@@ -155,3 +155,18 @@ test('execution mode rendering lists prerequisites with advisory rows and gates 
 	renderExecutionMode(ready, { live: true, queued: true, saved: false })
 	expect(document.querySelector('#execution-mode-summary')?.textContent).toBe('Live · dry run at the next scan')
 })
+
+test('form signatures distinguish delimiters inside field values', async () => {
+	installWindow('<form id="delimiter-form"><input name="a" value="x|b=y"><input name="b" value="z"><button type="submit">Save</button></form>')
+	const { formIsDirty, trackForm, refreshFormButton } = await import('../src/dashboard/form-state.ts')
+	trackForm('delimiter-form')
+	const first = document.querySelector('input[name="a"]')
+	const second = document.querySelector('input[name="b"]')
+	const button = document.querySelector('button')
+	if (!(first instanceof HTMLInputElement) || !(second instanceof HTMLInputElement) || !(button instanceof HTMLButtonElement)) throw new Error('Missing form controls')
+	first.value = 'x'
+	second.value = 'y|b=z'
+	refreshFormButton('delimiter-form')
+	expect(formIsDirty('delimiter-form')).toBe(true)
+	expect(button.disabled).toBe(false)
+})

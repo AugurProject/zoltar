@@ -1014,7 +1014,7 @@ export const indexerProgressEstimate = (network: NetworkFreshnessRecord, previou
 	const hundredths = remainingBlocks > 0 && roundedHundredths >= 10_000n ? 9_999n : roundedHundredths
 	const percentage = `${hundredths / 100n}.${String(hundredths % 100n).padStart(2, '0')}`
 	if (remainingBlocks === 0) return { percentage: '100.00', eta: indexerHeadFreshness(network, sampledAt).stale ? 'RPC head stale' : 'Caught up' }
-	let blocksPerSecond = previousSample?.blocksPerSecond
+	let blocksPerSecond = previousSample !== undefined && boundedIndexed >= previousSample.indexedBlock ? previousSample.blocksPerSecond : undefined
 	if (previousSample !== undefined && boundedIndexed > previousSample.indexedBlock && sampledAt - previousSample.sampledAt >= 1_000) {
 		const observedRate = (boundedIndexed - previousSample.indexedBlock) / ((sampledAt - previousSample.sampledAt) / 1_000)
 		blocksPerSecond = blocksPerSecond === undefined ? observedRate : blocksPerSecond * 0.7 + observedRate * 0.3
@@ -1025,7 +1025,7 @@ export const indexerProgressEstimate = (network: NetworkFreshnessRecord, previou
 			: {
 					indexedBlock: boundedIndexed,
 					sampledAt,
-					blocksPerSecond: boundedIndexed < (previousSample?.indexedBlock ?? boundedIndexed) ? undefined : blocksPerSecond,
+					blocksPerSecond,
 				}
 	return {
 		percentage,

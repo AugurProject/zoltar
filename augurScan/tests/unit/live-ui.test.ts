@@ -1458,3 +1458,9 @@ test('clears pending detail state for native dismissal unless a programmatic rec
 test('explains undecodable function calls without treating bytecode prefixes as proof of deployment', () => {
 	expect(decodedActionLabel('Unknown call 0x60a06040', '0xabc', 'Factory')).toBe('Unrecognized function 0x60a06040 · no matching ABI')
 })
+
+test('discards the previous indexing rate immediately after progress rolls backward', () => {
+	const result = indexerProgressEstimate({ start_block: '0', indexed_block: '100', observed_block: '1000' }, { indexedBlock: 200, sampledAt: 1000, blocksPerSecond: 10 }, 2000)
+	expect(result.eta).toBe('Estimating ETA')
+	expect(result.sample?.blocksPerSecond).toBeUndefined()
+})
