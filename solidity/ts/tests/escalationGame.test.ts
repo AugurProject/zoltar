@@ -1277,7 +1277,8 @@ describe('Escalation Game Test Suite', () => {
 	})
 
 	test('empty started game becomes final only after its exact end timestamp', async () => {
-		const escalationGame = await deployEscalationGame(client, reportBond, nonDecisionThresholdAttoRep)
+		const { escalationGameAddress: escalationGame } = await deployEscalationGameWithProofPool()
+		await startEscalation(escalationGame, reportBond, nonDecisionThresholdAttoRep)
 		const escalationEndDate = await readEscalationGameEndDate(escalationGame)
 
 		await mockWindow.setTime(escalationEndDate - 1n)
