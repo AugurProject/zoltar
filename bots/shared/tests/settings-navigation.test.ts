@@ -9,7 +9,7 @@ let view: Window | undefined
 function setup(width: number) {
 	const current = new Window({ width, height: 900, url: 'http://localhost/settings' })
 	view = current
-	for (const name of ['window', 'document', 'Element', 'HTMLElement', 'HTMLAnchorElement', 'HTMLDetailsElement', 'MutationObserver', 'ResizeObserver', 'getComputedStyle']) {
+	for (const name of ['window', 'document', 'Element', 'HTMLElement', 'HTMLAnchorElement', 'HTMLDetailsElement', 'MutationObserver', 'ResizeObserver', 'getComputedStyle', 'setTimeout', 'clearTimeout']) {
 		previousGlobals.set(name, Object.getOwnPropertyDescriptor(globalThis, name))
 		Object.defineProperty(globalThis, name, { configurable: true, value: name === 'window' ? current : Reflect.get(current, name) })
 	}
