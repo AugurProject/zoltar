@@ -25,7 +25,7 @@ function getModalTransactionPresentation(transaction: ReturnType<typeof useGloba
 	}
 }
 
-export function OperationModal({ children, closeDisabled = false, closeOnSuccessKey, context = [], description, embedTransactionSteps = true, isOpen, onClose, title }: OperationModalProps) {
+export function OperationModal({ children, closeDisabled = false, closeOnSuccessKey, context = [], description, embedTransactionSteps = true, isOpen, onClose, showContext = true, title }: OperationModalProps) {
 	const dialogRef = useRef<HTMLElement | null>(null)
 	const closeButtonRef = useRef<HTMLButtonElement | null>(null)
 	const noticeRef = useRef<HTMLDivElement | null>(null)
@@ -145,7 +145,7 @@ export function OperationModal({ children, closeDisabled = false, closeOnSuccess
 						{description}
 					</p>
 				)}
-				<TransactionObjectContext items={context} />
+				{showContext ? <TransactionObjectContext items={context} /> : undefined}
 				<div className='operation-modal-body' inert={showSteps || undefined}>
 					{children}
 				</div>

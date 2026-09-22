@@ -1734,6 +1734,21 @@
 	align-items: start;
 }
 
+/* Question and pool context share the vault summary instead of a separate block above the form. */
+.security-pool-selected-vault-context {
+	display: grid;
+	grid-template-columns: minmax(0, 1.45fr) minmax(0, 2.16fr);
+	gap: var(--space-3);
+	padding-bottom: var(--space-3);
+	border-bottom: 1px solid var(--divider-subtle);
+}
+
+@media (max-width: 40rem) {
+	.security-pool-selected-vault-context {
+		grid-template-columns: minmax(0, 1fr);
+	}
+}
+
 .security-pool-browse-vault-row-top-compact:where(.with-bad-debt) {
 	grid-template-columns: minmax(0, 1.45fr) repeat(4, minmax(8.5rem, 0.72fr));
 }

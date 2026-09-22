@@ -225,6 +225,8 @@ export type OperationModalProps = {
 	description?: ComponentChildren
 	isOpen: boolean
 	onClose: () => void
+	/** Set to false when the form already presents the context rows; they still filter duplicate rows out of transaction notices. */
+	showContext?: boolean
 	title: ComponentChildren
 }
 

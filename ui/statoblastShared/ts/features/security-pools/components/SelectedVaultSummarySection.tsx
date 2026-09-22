@@ -9,19 +9,53 @@ import { EntityCard } from '@zoltar/ui-core-shared/components/EntityCard.js'
 import { SectionBlock } from '@zoltar/ui-core-shared/components/SectionBlock.js'
 import { VaultMetricGrid } from './VaultMetricGrid.js'
 import type { SecurityVaultSectionProps } from '../../types.js'
+import type { Address } from '@zoltar/core-shared/evm/ethereum'
 
 type SelectedVaultSummarySectionProps = Pick<SecurityVaultSectionProps, 'repPerEthPrice' | 'repPerEthSource' | 'repPerEthSourceUrl' | 'selectedPoolStatoblastSecurityMultiplierBps'> & {
 	capacityOwnershipAttoRep: bigint
 	currentVaultIsHealthy?: boolean | undefined
+	/** Shown above the vault row in the embedded variant so a dialog needs no separate context block. */
+	question?: string | undefined
+	securityPoolAddress?: Address | undefined
 	securityVaultDetails: NonNullable<SecurityVaultSectionProps['securityVaultDetails']>
 	selectedVaultIsOwnedByAccount: boolean
 	variant?: 'embedded' | 'record'
 }
 
-export function SelectedVaultSummarySection({ repPerEthPrice, repPerEthSource, repPerEthSourceUrl, capacityOwnershipAttoRep, currentVaultIsHealthy, securityVaultDetails, selectedPoolStatoblastSecurityMultiplierBps, selectedVaultIsOwnedByAccount, variant = 'record' }: SelectedVaultSummarySectionProps) {
+export function SelectedVaultSummarySection({
+	repPerEthPrice,
+	repPerEthSource,
+	repPerEthSourceUrl,
+	capacityOwnershipAttoRep,
+	currentVaultIsHealthy,
+	question,
+	securityPoolAddress,
+	securityVaultDetails,
+	selectedPoolStatoblastSecurityMultiplierBps,
+	selectedVaultIsOwnedByAccount,
+	variant = 'record',
+}: SelectedVaultSummarySectionProps) {
 	const summaryTitle = <span>{securityPoolCopy.vaultSummary}</span>
 	const embeddedContent = (
 		<div className='security-pool-selected-vault-summary security-pool-browse-vault-list'>
+			{question === undefined && securityPoolAddress === undefined ? undefined : (
+				<div className='security-pool-selected-vault-context'>
+					{question === undefined ? undefined : (
+						<div className='security-pool-browse-vault-row-kpi'>
+							<span>{commonCopy.question}</span>
+							<strong>{question}</strong>
+						</div>
+					)}
+					{securityPoolAddress === undefined ? undefined : (
+						<div className='security-pool-browse-vault-row-kpi'>
+							<span>{commonCopy.securityPoolAddress}</span>
+							<strong>
+								<AddressValue address={securityPoolAddress} />
+							</strong>
+						</div>
+					)}
+				</div>
+			)}
 			<div className='security-pool-browse-vault-row'>
 				<div className={`security-pool-browse-vault-row-top security-pool-browse-vault-row-top-compact${securityVaultDetails.badDebtAttoEth > 0n ? ' with-bad-debt' : ''}`}>
 					<div className='security-pool-browse-vault-row-title'>
