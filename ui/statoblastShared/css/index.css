@@ -3011,7 +3011,7 @@
 	grid-template-columns: minmax(0, 1fr) auto;
 }
 .pool-selection-control input {
-	font-family: var(--font-mono);
+	font-family: var(--font-family-mono);
 	font-size: clamp(0.8125rem, 2.35vw, 0.9rem);
 }
 .pool-capacity-values {
