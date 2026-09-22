@@ -169,7 +169,7 @@
 				</table>
 				<h2 id="accounting-examples">Accounting examples</h2>
 				<h3 id="required-support-threshold">Required support threshold</h3>
-				<p>The contract waits <code>activationDelay</code> (three days) after <code>start()</code> before the escalation clock begins. From day 3 the cumulative binding-capital requirement rises from the configured start bond <code>S</code> to the non-decision threshold <code>T</code> over the seven-week <code>ESCALATION_TIME_LENGTH</code>, reaching <code>T</code> on day 52. The contract evaluates a fixed-point curve; this expression is its readable idealization.</p>
+				<p>The contract waits <code>activationDelay</code> (3 days) after <code>start()</code> before the escalation clock begins. From day 3 the cumulative binding-capital requirement rises from the configured start bond <code>S</code> to the non-decision threshold <code>T</code> over the 49-day <code>ESCALATION_TIME_LENGTH</code>, reaching <code>T</code> on day 52. The contract evaluates a fixed-point curve; this expression is its readable idealization.</p>
 				<div class="equation" id="eq-escalation-required-support">
 					<math display="block" aria-label="required support is zero before day 3, the start bond on day 3, an exponential interpolation from the start bond to the non-decision threshold between days 3 and 52, and the threshold from day 52 onward" data-source="A(d) = 0 for 0 ≤ d &lt; 3; S for d = 3; S × exp(ln(T / S) × (d − 3) / 49) for 3 &lt; d &lt; 52; T for d ≥ 52"
 						><mtable
@@ -204,7 +204,7 @@
 				</div>
 				<h3 id="winning-deposit-payout">Winning-deposit payout</h3>
 				<p>Binding capital is the median outcome balance at settlement; no outcome balance can exceed the non-decision threshold. The reward-eligible cap is binding capital plus binding capital divided by <code>EXCESS_REWARD_WINDOW_DIVISOR</code> (2), so only the portion of winning deposits up to 1.5 × binding capital participates in the bonus. Of the binding capital, <code>3 / 5</code> funds the reward pool and <code>2 / 5</code> funds the haircut pool; both are shared pro rata across the reward-eligible principal.</p>
-				<p>Let binding capital be <code>10 REP</code>, so the reward-eligible cap is <code>10 + 10 / 2 = 15 REP</code>, the reward pool is <code>10 × 3 / 5 = 6 REP</code>, and the haircut pool is <code>10 × 2 / 5 = 4 REP</code>. If the winning outcome holds <code>15 REP</code> and one deposit contributed <code>5 REP</code> inside the eligible range:</p>
+				<p>Let binding capital be <code>10 REP</code>, so the reward-eligible cap is <code>15 REP</code>, the reward pool is <code>6 REP</code>, and the haircut pool is <code>4 REP</code>. If the winning outcome holds <code>15 REP</code> and one deposit contributed <code>5 REP</code> inside the eligible range:</p>
 				<ul>
 					<li>Principal returned: <code>5 REP</code>.</li>
 					<li>Bonus: <code>5 × 6 / 15 = 2 REP</code>.</li>

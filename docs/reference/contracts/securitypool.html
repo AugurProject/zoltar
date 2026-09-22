@@ -257,8 +257,8 @@
 				<h3 id="retention-rate-and-annualized-fee">Retention rate and annualized fee</h3>
 				<p><code>SecurityPoolUtils.calculateRetentionRate</code> returns a per-second retention factor scaled by <code>PRICE_PRECISION</code> (<code>1e18</code>). It equals <code>MAX_RETENTION_RATE</code> at zero utilization, declines linearly until utilization reaches <code>RETENTION_RATE_DIP</code> (80% of live minting capacity), and stays at <code>MIN_RETENTION_RATE</code> above that. Zero live minting capacity selects <code>MAX_RETENTION_RATE</code>.</p>
 				<ul>
-					<li><code>MAX_RETENTION_RATE = 999_999_996_848_000_000</code>, about a 10% yearly fee.</li>
-					<li><code>MIN_RETENTION_RATE = 999_999_977_880_000_000</code>, about a 50% yearly fee.</li>
+					<li><code>MAX_RETENTION_RATE = 999_999_996_848_000_000</code>, about a 9.5% yearly fee.</li>
+					<li><code>MIN_RETENTION_RATE = 999_999_977_880_000_000</code>, about a 50.2% yearly fee.</li>
 				</ul>
 				<p>Clients annualize a retention rate for display as follows; the contract never computes this value.</p>
 				<div class="equation" id="eq-securitypool-annual-fee">

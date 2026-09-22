@@ -24,7 +24,7 @@
 				<h2>Three words you will see everywhere</h2>
 				<dl>
 					<dt>REP</dt>
-					<dd>The <a href="../reference/glossary.html#rep">Reputation token</a>. Holding REP lets you report outcomes and underwrite markets. It is also what you risk: a reporter loses REP when the outcome they supported loses, and an underwriter loses REP when their vault is liquidated.</dd>
+					<dd>The <a href="../reference/glossary.html#rep">Reputation token</a>. Holding REP lets you report outcomes and underwrite markets. It is also what you risk: a reporter loses REP when the outcome they supported loses, and an underwriter loses REP when their <a href="../reference/glossary.html#vault">vault</a>, the account inside a SecurityPool that holds their backing, is liquidated.</dd>
 					<dt>Universe</dt>
 					<dd>A <a href="../reference/glossary.html#universe">ledger that can branch</a>. Markets and REP balances belong to a particular universe. Questions are registered globally, so the same question can have markets in multiple universes. When reporters split irreconcilably, the universe forks into children, one per possible answer, each with its own REP.</dd>
 					<dt>SecurityPool</dt>
@@ -46,7 +46,7 @@
 			</section>
 			<section id="lifecycle">
 				<h2>One market, start to finish</h2>
-				<p>Alice registers the Aurora question in Zoltar and deploys its SecurityPool. Vault owners lock REP in the pool to underwrite it. Traders send ETH to the pool and receive <a href="../reference/glossary.html#complete-set">complete sets</a>: one Yes, one No, and one Invalid share for each unit of collateral, at the pool's current rate. They trade those shares however they like. When the launch deadline passes, reporting begins.</p>
+				<p>Alice registers the Aurora question in Zoltar and deploys its SecurityPool. Underwriters lock REP in <a href="../reference/glossary.html#vault">vaults</a>, accounts that provide economic backing for the market. Traders send ETH to the pool and receive <a href="../reference/glossary.html#complete-set">complete sets</a>: one Yes share, one No share, and one <a href="../reference/glossary.html#invalid">Invalid</a> share, the outcome used when the question cannot be validly resolved, for each unit of collateral at the pool's current rate. They trade those shares however they like. When the launch deadline passes, reporting begins.</p>
 				<figure class="diagram" id="fig-market-lifecycle" aria-labelledby="market-lifecycle-caption">
 					<ol class="protocol-flow">
 						<li>Register question</li>
@@ -64,7 +64,7 @@
 					<figcaption id="market-lifecycle-caption"><span class="figure-label">Market lifecycle.</span> The ordinary path resolves locally and skips the migration and repair steps. The fork path creates one child pool per answer and repairs each child's collateral separately.</figcaption>
 				</figure>
 				<p>Usually that is the end of the story. Reporters stake REP behind an answer in the pool's <a href="./escalation-game.html">Escalation Game</a>, a dispute round whose deadline moves later as the contested amount grows. When the deadline finally passes, the answer with the most REP behind it wins, and winning shares redeem the pool's ETH.</p>
-				<p>If two answers each attract so much REP that neither can be called the winner, the pool <em>forks</em>: its universe splits into an Invalid, a Yes, and a No child, and every vault owner and shareholder chooses which child to carry their claims into. The ETH is not duplicated. Each child receives only what migrates to it, and a child that comes up short holds a Truth Auction, selling its own REP for ETH to close the gap. <a href="./zoltar.html#non-guarantees">What a fork does and does not promise</a> is the single most important thing to understand about these protocols.</p>
+				<p>If two answers each attract so much REP that neither can be called the winner, the pool <em>forks</em>: its universe splits into an Invalid, a Yes, and a No child. Vault owners choose a child for their vault. Shareholders can materialize their share claims in multiple children. ETH is not duplicated: each child receives only what migrates to it, and a child that comes up short holds a Truth Auction, selling its own REP for ETH to close the gap. <a href="./statoblast.html#forks-migration">Forks and migration</a> follows both paths in detail, and <a href="./zoltar.html#non-guarantees">what a fork does and does not promise</a> is the single most important thing to understand about these protocols.</p>
 			</section>
 			<nav aria-label="Continue reading"><a href="./statoblast.html">Follow a market through Statoblast</a> · <a href="./zoltar.html">Understand branching universes</a> · <a href="../reference/glossary.html">Look up a term</a></nav>
 		</main>
