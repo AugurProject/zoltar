@@ -2632,11 +2632,6 @@
 	text-align: center;
 }
 
-.pool-selection-toolbar {
-	display: flex;
-	justify-content: flex-end;
-}
-
 .pool-selection-control {
 	min-width: 0;
 }
@@ -2780,10 +2775,6 @@
 
 	.pool-workspace-navigation .selected-pool-workspace-tabs.view-tabs {
 		max-width: 100%;
-	}
-
-	.pool-selection-toolbar {
-		justify-content: flex-start;
 	}
 
 	.pool-tools-options {
