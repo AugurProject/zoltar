@@ -120,11 +120,11 @@ export const stateCatalogRows = async (sql: SQL, chainId: number | undefined, qu
 				(SELECT count(DISTINCT universe_id) FROM universe_events WHERE chain_id = ${chainId} AND canonical)::integer AS universes`
 	const questions =
 		chainId === undefined
-			? await sql`SELECT q.*, n.id AS network_id,
+			? await sql`SELECT q.*, q.start_time::text AS start_time, q.end_time::text AS end_time, n.id AS network_id,
 				(SELECT count(*) FROM pools p WHERE p.chain_id = q.chain_id AND p.question_id = q.question_id AND p.canonical) AS pool_count,
 				(SELECT count(*) FROM universe_events u WHERE u.chain_id = q.chain_id AND u.fork_question_id = q.question_id AND u.event_name = 'UniverseForked' AND u.canonical) AS fork_count
 				FROM questions q JOIN networks n USING (chain_id) WHERE q.canonical ORDER BY q.created_timestamp DESC LIMIT ${queryLimit}`
-			: await sql`SELECT q.*, n.id AS network_id,
+			: await sql`SELECT q.*, q.start_time::text AS start_time, q.end_time::text AS end_time, n.id AS network_id,
 				(SELECT count(*) FROM pools p WHERE p.chain_id = q.chain_id AND p.question_id = q.question_id AND p.canonical) AS pool_count,
 				(SELECT count(*) FROM universe_events u WHERE u.chain_id = q.chain_id AND u.fork_question_id = q.question_id AND u.event_name = 'UniverseForked' AND u.canonical) AS fork_count
 				FROM questions q JOIN networks n USING (chain_id) WHERE q.canonical AND q.chain_id = ${chainId} ORDER BY q.created_timestamp DESC LIMIT ${queryLimit}`
