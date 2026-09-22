@@ -6,7 +6,7 @@ import * as transactionCopy from '../copy/transaction.js'
 import { AddressValue } from './AddressValue.js'
 import { ReadOnlyDetailAccordion } from './ReadOnlyDetailAccordion.js'
 import { TransactionObjectContext } from './TransactionObjectContext.js'
-import type { GlobalTransactionRow } from '../types/components.js'
+import type { GlobalTransactionPresentation, GlobalTransactionRow } from '../types/components.js'
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import { GlobalTransactionPresentationProvider, useGlobalTransactionPresentation } from './GlobalTransactionPresentationContext.js'
 import { useEffect, useRef } from 'preact/hooks'
@@ -43,6 +43,12 @@ function TransactionStepReview({ contractAddress, contractLabel, description, ro
 	)
 }
 
+function getFailurePresentation(error: string | undefined, presentation: GlobalTransactionPresentation | undefined, stepTitle: string | undefined): GlobalTransactionPresentation | undefined {
+	if (error === undefined) return undefined
+	if (presentation !== undefined) return { ...presentation, detail: error }
+	return { detail: error, title: stepTitle ?? error, tone: 'error' }
+}
+
 type TransactionStepsContentProps = {
 	contextKey: string
 	/** Move focus into the actions when the review replaced the control the user activated. */
@@ -63,7 +69,7 @@ export function TransactionStepsContent({ contextKey, focusOnMount = false, head
 	const operationError = typeof presentation?.detail === 'string' ? presentation.detail : copy.requirementsFailed
 	const error = operationFailed && (current?.error === undefined || current?.error === 'Transaction reverted.') ? operationError : current?.error
 	// Failures use the same notice as the transaction tray and dialogs, including the technical rows needed to debug them.
-	const failure = error === undefined ? undefined : operationFailed && presentation !== undefined ? { ...presentation, detail: error } : { detail: error, title: current?.title ?? error, tone: 'error' as const }
+	const failure = getFailurePresentation(error, operationFailed ? presentation : undefined, current?.title)
 	const pending = error === undefined && (workflow?.steps.some(step => step.phase === 'pending') ?? false)
 	useEffect(() => {
 		if (error !== undefined) errorRef.current?.scrollIntoView?.({ block: 'nearest' })
