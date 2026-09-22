@@ -15,11 +15,11 @@ Before reviewing:
 Default reader:
 Unless the handoff says otherwise, the reader understands Ethereum and smart-contract basics and knows nothing about Zoltar, Statoblast, or their vocabulary. Every protocol-specific term must be defined on first use or linked to `docs/reference/glossary.html`.
 
-Do the review as two passes. Finish the first before starting the second. Record findings as you go; do not rely on memory of a page you read earlier.
+Do the review as two passes. Finish the first before starting the second. Record findings as you go; do not rely on memory of a page you read earlier. If the handoff scopes you to one section of a larger change, run both passes on that section's pages only; still grep the whole corpus for ownership in Pass 1 step 1 and Pass 2 step 5, and build the terminology table in Pass 2 step 1 across every changed page.
 
 Pass 1: verify claims against code.
 
-Run this procedure on every changed page. Treat moved, converted, split, or regenerated content as newly written: it was verified, if at all, against the code of the day it was authored, and the code has moved since. Work in cost order so that the expensive steps are not the ones dropped when the change set is large: first run steps 2 and 3 on the pages the handoff lists as moved, converted, or regenerated, then steps 2 and 3 on the remaining how-to, tutorial, and example-bearing pages, then steps 1, 4, 5, and 6 on every page. If the handoff scopes you to one section of a larger change, verify only that section but still grep the whole corpus for ownership and terminology.
+Run this procedure on every changed page. Treat moved, converted, split, or regenerated content as newly written: it was verified, if at all, against the code of the day it was authored, and the code has moved since. Work in cost order so that the expensive steps are not the ones dropped when the change set is large: first run steps 2 and 3 on the pages the handoff lists as moved, converted, or regenerated, then steps 2 and 3 on the remaining how-to, tutorial, and example-bearing pages, then steps 1, 4, 5, and 6 on every page.
 
 1. Identifiers. Extract every code span, contract name, function, event, parameter, storage field, error string, command, script name, environment variable, flag, file path, route, query parameter, UI label, and URL. Grep each one in the repository: contracts under `solidity/contracts/`, scripts in `package.json` and `tooling/`, workflows under `.github/workflows/`, UI copy under `ui/*/ts/copy/` and routing under `ui/*/ts/lib/`. A quoted label must match the rendered string, including suffixes the code appends. An identifier that does not exist, or exists with a different name, signature, or parameter order, is a finding.
 
