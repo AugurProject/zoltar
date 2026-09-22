@@ -1,10 +1,12 @@
+import { markCurrentPage } from './dom.ts'
+
 export function createSectionNavigation(linkFilter: (link: HTMLAnchorElement) => boolean = () => true) {
 	const sectionLinks = [...document.querySelectorAll<HTMLAnchorElement>('.section-nav a[href^="/"]')].filter(linkFilter)
 
 	function showDashboardPage(pathname: string, push = false) {
 		const page = pathname === '/' ? 'overview' : pathname.replace(/^\//, '').replace(/\/$/, '')
 		document.body.dataset['page'] = page
-		for (const link of sectionLinks) link.toggleAttribute('aria-current', new URL(link.href).pathname.replace(/\/$/, '') === `/${page}`)
+		for (const link of sectionLinks) markCurrentPage(link, new URL(link.href).pathname.replace(/\/$/, '') === `/${page}`)
 		const activeLink = sectionLinks.find(link => link.hasAttribute('aria-current'))
 		const navigation = activeLink?.closest<HTMLElement>('.section-nav')
 		if (activeLink !== undefined && navigation !== null && navigation !== undefined) {
@@ -81,10 +83,8 @@ export function createSectionNavigation(linkFilter: (link: HTMLAnchorElement) =>
 		const activePath = window.location.pathname === '/' ? '/overview' : window.location.pathname
 		let activeLink: HTMLAnchorElement | undefined
 		for (const link of sectionLinks) {
-			if (link.pathname === activePath) {
-				link.setAttribute('aria-current', 'page')
-				activeLink = link
-			} else link.removeAttribute('aria-current')
+			markCurrentPage(link, link.pathname === activePath)
+			if (link.pathname === activePath) activeLink = link
 		}
 		if (activeLink !== undefined) revealSectionLink(activeLink)
 		const targetId = window.location.hash.slice(1)
