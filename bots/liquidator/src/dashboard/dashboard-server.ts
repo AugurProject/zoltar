@@ -1,3 +1,4 @@
+import { LIVE_SIGNER_MISMATCH } from '../core/execution-mode.ts'
 import { repMarketConsensusPanel } from '@zoltar/bot-shared/dashboard/rep-market-consensus'
 import { buildDashboardScript, dashboardHealthResponse, sharedDashboardAssetResponse } from '@zoltar/bot-shared/dashboard/assets'
 import { publicConnectivityError } from '@zoltar/bot-shared/dashboard/connectivity-error'
@@ -18,7 +19,7 @@ import { errorMessage } from '@zoltar/bot-shared/infrastructure/error-message'
 import { optionalRecord as record } from '@zoltar/bot-shared/infrastructure/json-validation'
 import { join } from 'node:path'
 import type { PoolCatalogPage } from '../monitoring/pool-catalog.ts'
-import { PENDING_INTENT_MODE_CHANGE } from '#core/go-live-controls'
+import { PENDING_INTENT_MODE_CHANGE, PENDING_SIGNER_RECOVERY } from '#core/go-live-controls'
 import { operatorHeader } from './header.ts'
 import { settingsPageMarkup } from './settings-page.ts'
 
@@ -67,7 +68,9 @@ const EXECUTION_UPDATE_MESSAGES = new Set([
 	'Execution mode updates require execute',
 	'Live execution requires an active signer',
 	'Live execution with RPC quorum 2 requires at least two independent quorum RPCs (three read endpoints total)',
-	'The saved key differs from the active signer; save or remove it before enabling live execution',
+	LIVE_SIGNER_MISMATCH,
+	PENDING_SIGNER_RECOVERY,
+	'Configure the chain and RPC endpoints before resuming',
 ])
 
 /** Execution mode failures name the missing prerequisite so the operator can fix it; anything else stays in protected logs. */
@@ -341,6 +344,7 @@ export function startDashboardServer(port: number, controller: DashboardControll
 					let fallback = 'The dashboard change could not be saved. Review the submitted values and protected bot logs.'
 					if (url.pathname === '/api/network-connectivity') fallback = publicConnectivityUpdateError(error)
 					else if (url.pathname === '/api/execution') fallback = publicExecutionUpdateError(error)
+					else if ((url.pathname === '/api/signer' || url.pathname === '/api/paused') && EXECUTION_UPDATE_MESSAGES.has(errorMessage(error))) fallback = errorMessage(error)
 					else if (url.pathname === '/api/submission') fallback = publicSubmissionUpdateError(error)
 					return publicError(error, 400, `mutation:${url.pathname}`, fallback)
 				}

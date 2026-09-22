@@ -51,7 +51,7 @@ describe('liquidator execution mode', () => {
 		expect(shortQuorum.events).toEqual([])
 		// A saved key that is not the active signer would go live on restart, so arming a memory-only signer beside it is refused.
 		const savedOther = arm(configured({ privateKey: `0x${'22'.repeat(32)}` }), privateKey)
-		await expect(savedOther.outcome).rejects.toThrow('The saved key differs from the active signer; save or remove it before enabling live execution')
+		await expect(savedOther.outcome).rejects.toThrow('The saved key differs from the active signer; return to dry run and save or remove the conflicting saved key before rearming live execution')
 		expect(savedOther.events).toEqual([])
 		const savedSame = arm(configured({ privateKey }), privateKey)
 		await expect(savedSame.outcome).resolves.toEqual({ address: signer, changed: true })
