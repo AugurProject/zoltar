@@ -13,20 +13,20 @@
 			<header>
 				<p class="kicker">Start here</p>
 				<h1>System overview</h1>
-				<p>Zoltar and Statoblast are Ethereum protocols for prediction markets whose outcomes nobody can buy. This page assumes you know what Ethereum and an ERC-20 token are, and nothing else. It introduces the three words you will meet on every other page, the four components, and the life of one market.</p>
+				<p>Zoltar and Statoblast are Ethereum protocols for prediction markets, designed to make outcome manipulation costly. This page assumes you know what Ethereum and an ERC-20 token are, and nothing else. It introduces the three words you will meet on every other page, the four components, and the life of one market.</p>
 			</header>
 			<section id="problem">
 				<h2>The problem</h2>
 				<p>A prediction market lets people trade on a question such as “Will the fictional Aurora spacecraft launch before 31 December 2030?” Its shares are worth something only after someone decides what actually happened. That decision is the weak point: whoever controls it controls the money.</p>
-				<p>Zoltar and Statoblast make the decision expensive to corrupt in two ways. Anyone who reports an outcome must stake a token they lose if they are wrong. And when reporters cannot agree, the system does not pick a side: it splits into parallel ledgers, one per possible answer, and lets the market decide which ledger stays valuable. A dishonest majority can win a vote, but it cannot stop honest participants from walking away with a copy of the books.</p>
+				<p>Zoltar and Statoblast make the decision expensive to corrupt in two ways. Anyone who reports an outcome must stake a token behind it, and the contracts settle in favour of the outcome with the most stake behind it. Reporters whose outcome loses forfeit REP, so backing an answer the rest of the market will not support is costly. Whether that pressure keeps reports honest depends on the <a href="../reference/security-model.html#assumptions-participation">participation assumptions</a> in the security model. And when reporters cannot agree, the system does not pick a side: it splits into parallel ledgers, one per possible answer, and lets the market decide which ledger stays valuable. A dishonest majority can win a vote, but it cannot stop honest participants from walking away with a copy of the books.</p>
 			</section>
 			<section id="vocabulary">
 				<h2>Three words you will see everywhere</h2>
 				<dl>
 					<dt>REP</dt>
-					<dd>The <a href="../reference/glossary.html#rep">Reputation token</a>. Holding REP lets you report outcomes and underwrite markets. It is also what you lose if you report dishonestly or underwrite carelessly.</dd>
+					<dd>The <a href="../reference/glossary.html#rep">Reputation token</a>. Holding REP lets you report outcomes and underwrite markets. It is also what you risk: a reporter loses REP when the outcome they supported loses, and an underwriter loses REP when their vault is liquidated.</dd>
 					<dt>Universe</dt>
-					<dd>A <a href="../reference/glossary.html#universe">ledger that can branch</a>. Every question, market, and REP balance belongs to exactly one universe. When reporters split irreconcilably, the universe forks into children, one per possible answer, each with its own REP.</dd>
+					<dd>A <a href="../reference/glossary.html#universe">ledger that can branch</a>. Markets and REP balances belong to a particular universe. Questions are registered globally, so the same question can have markets in multiple universes. When reporters split irreconcilably, the universe forks into children, one per possible answer, each with its own REP.</dd>
 					<dt>SecurityPool</dt>
 					<dd>The <a href="../reference/glossary.html#security-pool">contract for one market in one universe</a>. It holds the ETH that backs the market's shares and keeps the books on who underwrites the market, who is disputing its outcome, and who is owed what.</dd>
 				</dl>
