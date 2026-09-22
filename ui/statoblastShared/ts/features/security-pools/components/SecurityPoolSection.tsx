@@ -2,7 +2,7 @@ import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as securityPoolCopy from '../../../copy/securityPool.js'
 import * as statoblastAppCopy from '../../../copy/app.js'
 import type { ComponentChildren } from 'preact'
-import { useState } from 'preact/hooks'
+import { useEffect, useRef, useState } from 'preact/hooks'
 import { AddressValue } from '@zoltar/ui-core-shared/components/AddressValue.js'
 import { EntityCard } from '@zoltar/ui-core-shared/components/EntityCard.js'
 import { ErrorNotice } from '@zoltar/ui-core-shared/components/ErrorNotice.js'
@@ -14,6 +14,8 @@ import { RouteWorkflowPanel } from '@zoltar/ui-core-shared/components/RouteWorkf
 import { SectionBlock } from '@zoltar/ui-core-shared/components/SectionBlock.js'
 import { TransactionActionButton } from '@zoltar/ui-core-shared/components/TransactionActionButton.js'
 import { TransactionHashLink } from '@zoltar/ui-core-shared/components/TransactionHashLink.js'
+import { TransactionStepsContent } from '@zoltar/ui-core-shared/components/TransactionStepsModal.js'
+import { transactionSteps } from '@zoltar/ui-core-shared/transactions/transactionSteps.js'
 import { isActiveAppChain } from '@zoltar/ui-core-shared/wallet/network.js'
 import { formatOpenInterestFeePerYearPercent, ORIGIN_POOL_INITIAL_RETENTION_RATE } from '../lib/retentionRate.js'
 import { formatCurrencyBalanceWithUnit } from '@zoltar/ui-core-shared/lib/formatters.js'
@@ -26,6 +28,7 @@ import type { SecurityPoolSectionProps } from '../../types.js'
 import { formatUniverseIdHex } from '@zoltar/ui-core-shared/lib/universeLabels.js'
 import { getWrongNetworkReason } from '@zoltar/ui-core-shared/wallet/network.js'
 import * as marketCopy from '@zoltar/ui-zoltar-shared/copy/market.js'
+import * as transactionReviewCopy from '@zoltar/ui-core-shared/copy/transactionReview.js'
 
 export function SecurityPoolSection({
 	accountState,
@@ -46,11 +49,13 @@ export function SecurityPoolSection({
 	onResetMarket = () => undefined,
 	onReturnToBrowse,
 	onSecurityPoolFormChange,
+	onDismissSecurityPoolReview,
 	onResetSecurityPoolCreation,
 	securityPoolCreating,
 	securityPoolError,
 	securityPoolForm,
 	securityPoolResult,
+	securityPoolReviewSignal,
 	showHeader = true,
 	questionAndPoolCreating = false,
 	poolCreationMarketDetails: carriedPoolCreationMarketDetails,
@@ -65,7 +70,28 @@ export function SecurityPoolSection({
 	}
 	const isOnActiveAppChain = isActiveAppChain(accountState.chainId)
 	const [questionSource, setQuestionSource] = useState<'existing' | 'new'>(marketResult === undefined ? 'existing' : 'new')
-	const questionSourceLocked = questionAndPoolCreating || marketCreating || securityPoolCreating || marketResult !== undefined
+	const reviewWorkflow = transactionSteps.value
+	const ownsTransactionReview = securityPoolReviewSignal !== undefined && reviewWorkflow?.reviewSignal === securityPoolReviewSignal && reviewWorkflow.steps[reviewWorkflow.activeIndex] !== undefined
+	// The review replaces the submit button so the form stays visible while the user confirms the transaction.
+	const inlineTransactionReview = ownsTransactionReview ? <TransactionStepsContent contextKey='security-pool-creation' focusOnMount heading={transactionReviewCopy.transactionReview} inline keepActionsVisible onClose={onDismissSecurityPoolReview} /> : undefined
+	const panelRef = useRef<HTMLDivElement>(null)
+	const returnFocusAfterReview = useRef(false)
+	// Leaving the card (for example through the route tabs) would strand a review that only this card renders.
+	const dismissOwnedReview = useRef<(() => void) | undefined>(undefined)
+	dismissOwnedReview.current = ownsTransactionReview ? onDismissSecurityPoolReview : undefined
+	useEffect(() => () => dismissOwnedReview.current?.(), [])
+	// When the review closes, return focus to the submit button once it is interactive again.
+	useEffect(() => {
+		if (ownsTransactionReview) {
+			returnFocusAfterReview.current = true
+			return
+		}
+		if (!returnFocusAfterReview.current || securityPoolCreating) return
+		returnFocusAfterReview.current = false
+		panelRef.current?.querySelector<HTMLElement>('.actions .tx-action-button:not(:disabled)')?.focus()
+	}, [ownsTransactionReview, securityPoolCreating])
+	// A review that is still showing (including a failed one awaiting Close) keeps the form it summarizes locked.
+	const questionSourceLocked = questionAndPoolCreating || marketCreating || securityPoolCreating || ownsTransactionReview || marketResult !== undefined
 	const hasSecurityPoolResult = securityPoolResult !== undefined
 	const statoblastSecurityMultiplierValidationMessage = getStatoblastSecurityMultiplierValidationMessage(securityPoolForm.statoblastSecurityMultiplierBps)
 	const initialReportPriorityFeeValidationMessage = getInitialReportPriorityFeeValidationMessage(securityPoolForm.initialReportPriorityFeeEth)
@@ -232,142 +258,149 @@ export function SecurityPoolSection({
 
 	return (
 		<RouteWorkflowPanel showHeader={showHeader} title={commonCopy.createPool}>
-			{hasSecurityPoolResult ? (
-				<>
-					{createdPoolResult}
-					<ErrorNotice message={securityPoolError} />
-				</>
-			) : (
-				<>
-					{questionSourceLocked ? undefined : (
-						<SectionBlock variant='plain'>
-							<fieldset className='pool-question-source' disabled={questionSourceLocked}>
-								<legend>{securityPoolCopy.questionSourceLegend}</legend>
-								<label>
-									<input checked={questionSource === 'existing'} disabled={questionSourceLocked} name='security-pool-question-source' type='radio' value='existing' onChange={() => setQuestionSource('existing')} /> {securityPoolCopy.useQuestionId}
-								</label>
-								<label>
-									<input checked={questionSource === 'new'} disabled={questionSourceLocked} name='security-pool-question-source' type='radio' value='new' onChange={() => setQuestionSource('new')} /> {securityPoolCopy.createNewQuestion}
-								</label>
-							</fieldset>
-						</SectionBlock>
-					)}
+			<div className='workflow-stack' ref={panelRef}>
+				{hasSecurityPoolResult ? (
+					<>
+						{createdPoolResult}
+						<ErrorNotice message={securityPoolError} />
+					</>
+				) : (
+					<>
+						{questionSourceLocked ? undefined : (
+							<SectionBlock variant='plain'>
+								<fieldset className='pool-question-source' disabled={questionSourceLocked}>
+									<legend>{securityPoolCopy.questionSourceLegend}</legend>
+									<label>
+										<input checked={questionSource === 'existing'} disabled={questionSourceLocked} name='security-pool-question-source' type='radio' value='existing' onChange={() => setQuestionSource('existing')} /> {securityPoolCopy.useQuestionId}
+									</label>
+									<label>
+										<input checked={questionSource === 'new'} disabled={questionSourceLocked} name='security-pool-question-source' type='radio' value='new' onChange={() => setQuestionSource('new')} /> {securityPoolCopy.createNewQuestion}
+									</label>
+								</fieldset>
+							</SectionBlock>
+						)}
 
-					{questionSource === 'existing' ? (
-						<SectionBlock variant='plain'>
-							<div className='form-grid'>
-								<div className='field'>
-									<LookupFieldRow disabled={questionSourceLocked} label={commonCopy.questionId} value={securityPoolForm.marketId} onInput={marketId => onSecurityPoolFormChange({ marketId })} placeholder={commonCopy.hexValuePlaceholder} />
-									<p className='field-help'>{securityPoolCopy.questionIdFallbackHint}</p>
-								</div>
-								{loadingMarketDetails ? (
-									<p className='detail'>
-										<LoadingText>{securityPoolCopy.loadingQuestion}</LoadingText>
-									</p>
-								) : undefined}
-								{marketDetails === undefined ? undefined : (
-									<div className='loaded-question-preview'>
-										<Question question={marketDetails} variant='preview' />
+						{questionSource === 'existing' ? (
+							<SectionBlock variant='plain'>
+								<div className='form-grid'>
+									<div className='field'>
+										<LookupFieldRow disabled={questionSourceLocked} label={commonCopy.questionId} value={securityPoolForm.marketId} onInput={marketId => onSecurityPoolFormChange({ marketId })} placeholder={commonCopy.hexValuePlaceholder} />
+										<p className='field-help'>{securityPoolCopy.questionIdFallbackHint}</p>
 									</div>
-								)}
+									{loadingMarketDetails ? (
+										<p className='detail'>
+											<LoadingText>{securityPoolCopy.loadingQuestion}</LoadingText>
+										</p>
+									) : undefined}
+									{marketDetails === undefined ? undefined : (
+										<div className='loaded-question-preview'>
+											<Question question={marketDetails} variant='preview' />
+										</div>
+									)}
 
-								{poolConfigurationFields}
+									{poolConfigurationFields}
 
-								<div className='actions'>
-									<TransactionActionButton
-										idleLabel={createButtonLabel}
-										pendingLabel={securityPoolCopy.creatingPool}
-										onClick={() => onCreateSecurityPool()}
-										pending={securityPoolCreating}
-										availability={{ disabled: isCreateDisabled, loading: createDisabledReasonLoading, reason: createDisabledReason }}
-										disabledReasonElementId={visibleFieldErrorId}
-										showDisabledReason={visibleFieldErrorId === undefined}
-									/>
+									{inlineTransactionReview ?? (
+										<div className='actions'>
+											<TransactionActionButton
+												idleLabel={createButtonLabel}
+												pendingLabel={securityPoolCopy.creatingPool}
+												onClick={() => onCreateSecurityPool()}
+												pending={securityPoolCreating}
+												availability={{ disabled: isCreateDisabled, loading: createDisabledReasonLoading, reason: createDisabledReason }}
+												disabledReasonElementId={visibleFieldErrorId}
+												showDisabledReason={visibleFieldErrorId === undefined}
+											/>
+										</div>
+									)}
 								</div>
-							</div>
-							{!duplicateOriginPoolExists ? undefined : <p className='detail'>{securityPoolCopy.duplicatePoolDetail}</p>}
-							{marketDetails !== undefined && marketDetails.marketType !== 'binary' ? <p className='notice error'>{securityPoolCopy.ineligibleQuestionDetail}</p> : undefined}
-							{zoltarUniverseHasForked ? <p className='notice error'>{securityPoolCopy.poolCreationAfterForkReason}</p> : undefined}
-						</SectionBlock>
-					) : undefined}
+								{!duplicateOriginPoolExists ? undefined : <p className='detail'>{securityPoolCopy.duplicatePoolDetail}</p>}
+								{marketDetails !== undefined && marketDetails.marketType !== 'binary' ? <p className='notice error'>{securityPoolCopy.ineligibleQuestionDetail}</p> : undefined}
+								{zoltarUniverseHasForked ? <p className='notice error'>{securityPoolCopy.poolCreationAfterForkReason}</p> : undefined}
+							</SectionBlock>
+						) : undefined}
 
-					{questionSource === 'new' && marketResult === undefined ? (
-						<SectionBlock description={securityPoolCopy.createQuestionForPoolDetail} title={commonCopy.createQuestion} variant='plain'>
-							<MarketCreateQuestionSection
-								accountAddress={accountState.address}
-								formDisabled={questionSourceLocked}
-								hasForked={false}
-								isOnActiveAppChain={isOnActiveAppChain}
-								loadingZoltarQuestions={false}
-								marketCreating={marketCreating}
-								marketError={marketError}
-								marketForm={marketForm ?? fallbackMarketForm}
-								marketResult={marketResult}
-								onCreateMarket={onCreateMarket}
-								{...(onCreateQuestionAndSecurityPool === undefined
-									? {}
-									: {
-											submitActionOverride: {
-												availability: {
-													disabled: questionAndPoolCreating || securityPoolCreating || marketCreating || createQuestionAndPoolDisabledReason !== undefined,
-													reason: createQuestionAndPoolDisabledReason,
+						{questionSource === 'new' && marketResult === undefined ? (
+							<SectionBlock description={securityPoolCopy.createQuestionForPoolDetail} title={commonCopy.createQuestion} variant='plain'>
+								<MarketCreateQuestionSection
+									accountAddress={accountState.address}
+									formDisabled={questionSourceLocked}
+									hasForked={false}
+									isOnActiveAppChain={isOnActiveAppChain}
+									loadingZoltarQuestions={false}
+									marketCreating={marketCreating}
+									marketError={marketError}
+									marketForm={marketForm ?? fallbackMarketForm}
+									marketResult={marketResult}
+									onCreateMarket={onCreateMarket}
+									{...(onCreateQuestionAndSecurityPool === undefined
+										? {}
+										: {
+												submitActionOverride: {
+													availability: {
+														disabled: questionAndPoolCreating || securityPoolCreating || marketCreating || createQuestionAndPoolDisabledReason !== undefined,
+														reason: createQuestionAndPoolDisabledReason,
+													},
+													idleLabel: securityPoolCopy.createQuestionAndPool,
+													onSubmit: onCreateQuestionAndSecurityPool,
+													pending: questionAndPoolCreating,
+													pendingLabel: securityPoolCopy.creatingQuestionAndPool,
+													...(inlineTransactionReview === undefined ? {} : { reviewContent: inlineTransactionReview }),
 												},
-												idleLabel: securityPoolCopy.createQuestionAndPool,
-												onSubmit: onCreateQuestionAndSecurityPool,
-												pending: questionAndPoolCreating,
-												pendingLabel: securityPoolCopy.creatingQuestionAndPool,
-											},
-										})}
-								onMarketFormChange={onMarketFormChange}
-								onOpenForkTab={() => undefined}
-								onResetMarket={onResetMarket}
-								submitFields={poolConfigurationFields}
-								onUseQuestionForFork={() => undefined}
-								onUseQuestionForPool={questionId => onSecurityPoolFormChange({ marketId: questionId })}
-								zoltarQuestions={[]}
-							/>
-						</SectionBlock>
-					) : undefined}
-					{questionSource === 'new' && marketResult !== undefined ? (
-						<EntityCard
-							surface='flat'
-							title={marketForm.title}
-							variant='record'
-							actions={
-								<div className='actions'>
-									<TransactionActionButton
-										idleLabel={securityPoolCopy.retryPoolCreation}
-										pendingLabel={securityPoolCopy.creatingPool}
-										onClick={() => onCreateSecurityPool(marketResult.questionId)}
-										pending={questionAndPoolCreating || securityPoolCreating}
-										availability={{
-											disabled: questionAndPoolCreating || securityPoolCreating || createDisabledReason !== undefined,
-											loading: questionAndPoolCreating || securityPoolCreating,
-											reason: questionAndPoolCreating || securityPoolCreating ? securityPoolCopy.poolCreationInProgress : createDisabledReason,
-										}}
-									/>
-								</div>
-							}
-						>
-							<p className='detail'>{securityPoolCopy.questionCreatedPoolPending}</p>
-							<ul className='status-list hashes'>
-								<li>
-									<span>{commonCopy.questionId}</span>
-									<strong>{marketResult.questionId}</strong>
-								</li>
-								<li>
-									<span>{marketCopy.creationTransactionHash}</span>
-									<strong>
-										<TransactionHashLink hash={marketResult.createQuestionHash} />
-									</strong>
-								</li>
-							</ul>
-						</EntityCard>
-					) : undefined}
+											})}
+									onMarketFormChange={onMarketFormChange}
+									onOpenForkTab={() => undefined}
+									onResetMarket={onResetMarket}
+									submitFields={poolConfigurationFields}
+									onUseQuestionForFork={() => undefined}
+									onUseQuestionForPool={questionId => onSecurityPoolFormChange({ marketId: questionId })}
+									zoltarQuestions={[]}
+								/>
+							</SectionBlock>
+						) : undefined}
+						{questionSource === 'new' && marketResult !== undefined ? (
+							<EntityCard
+								surface='flat'
+								title={marketForm.title}
+								variant='record'
+								actions={
+									inlineTransactionReview ?? (
+										<div className='actions'>
+											<TransactionActionButton
+												idleLabel={securityPoolCopy.retryPoolCreation}
+												pendingLabel={securityPoolCopy.creatingPool}
+												onClick={() => onCreateSecurityPool(marketResult.questionId)}
+												pending={questionAndPoolCreating || securityPoolCreating}
+												availability={{
+													disabled: questionAndPoolCreating || securityPoolCreating || createDisabledReason !== undefined,
+													loading: questionAndPoolCreating || securityPoolCreating,
+													reason: questionAndPoolCreating || securityPoolCreating ? securityPoolCopy.poolCreationInProgress : createDisabledReason,
+												}}
+											/>
+										</div>
+									)
+								}
+							>
+								<p className='detail'>{securityPoolCopy.questionCreatedPoolPending}</p>
+								<ul className='status-list hashes'>
+									<li>
+										<span>{commonCopy.questionId}</span>
+										<strong>{marketResult.questionId}</strong>
+									</li>
+									<li>
+										<span>{marketCopy.creationTransactionHash}</span>
+										<strong>
+											<TransactionHashLink hash={marketResult.createQuestionHash} />
+										</strong>
+									</li>
+								</ul>
+							</EntityCard>
+						) : undefined}
 
-					<ErrorNotice message={securityPoolError} />
-				</>
-			)}
+						<ErrorNotice message={securityPoolError} />
+					</>
+				)}
+			</div>
 		</RouteWorkflowPanel>
 	)
 }

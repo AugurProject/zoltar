@@ -42,6 +42,12 @@ test('workspace setup installs once even when several projects are selected', ()
 	expect(createProjectTaskPlan('setup')[0]?.command).toEqual(['bun', './tooling/repo/install-frozen.mts'])
 })
 
+test('only dependency audits retry transient registry failures', () => {
+	const auditRegistry: readonly Project[] = [{ id: 'app', path: 'app', type: 'ui-app', dependencies: [], tasks: { audit: { command: ['bun', 'audit'], cwd: 'app', inputs: ['app/package.json'] }, test: { command: ['bun', 'test'], cwd: 'app', inputs: ['app/**'] } }, generatedDirectories: [] }]
+	expect(createProjectTaskPlan('audit', undefined, auditRegistry)).toEqual([{ command: ['bun', 'audit'], cwd: 'app', projectId: 'app', retryTransientNetworkErrors: true }])
+	expect(createProjectTaskPlan('test', undefined, auditRegistry)[0]?.retryTransientNetworkErrors).toBeUndefined()
+})
+
 test('project task plans reject unknown projects and unsupported tasks', () => {
 	expect(() => createProjectTaskPlan('build', ['missing'], registry)).toThrow('Unknown project')
 	expect(() => createProjectTaskPlan('test', ['app'], registry)).toThrow('does not support test')

@@ -28,6 +28,10 @@ test('component CI runs an independently declared test before check and audit', 
 	])
 })
 
+test('component CI retries only the registry-backed audit on transient network errors', () => {
+	expect(createComponentCiPlan('package', [component(['lint'])]).map(entry => entry.retryTransientNetworkErrors === true)).toEqual([false, false, true])
+})
+
 test('component CI does not duplicate tests covered by the check task', () => {
 	expect(createComponentCiPlan('package', [component(['lint', 'test'])]).map(entry => entry.command)).toEqual([
 		['bun', 'run', 'check'],

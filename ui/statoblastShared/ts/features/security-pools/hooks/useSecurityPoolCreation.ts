@@ -2,10 +2,13 @@ import { withReadTimeout } from '@zoltar/ui-core-shared/lib/promise.js'
 import { getQuestionId, getQuestionIdHex } from '@zoltar/ui-zoltar-shared/protocol/helpers.js'
 import { useSignal } from '@preact/signals'
 import { useEffect } from 'preact/hooks'
+import * as securityPoolCopy from '../../../copy/securityPool.js'
 import { createSecurityPool, originSecurityPoolExists } from '../../../protocol/securityPools.js'
 import { loadMarketDetails } from '@zoltar/ui-zoltar-shared/protocol/zoltar.js'
 import { useLoadController } from '@zoltar/ui-core-shared/hooks/useLoadController.js'
 import { createConnectedReadClient, createWalletWriteClient } from '@zoltar/ui-core-shared/wallet/clients.js'
+import { embeddedTransactionSteps } from '@zoltar/ui-core-shared/components/TransactionStepsModal.js'
+import { transactionSteps } from '@zoltar/ui-core-shared/transactions/transactionSteps.js'
 import { useRequestGuard } from '@zoltar/ui-core-shared/lib/requestGuard.js'
 import { getErrorMessage, isRecoverableContractReadError } from '@zoltar/ui-core-shared/lib/errors.js'
 import { createErrorActionFeedback, createPendingActionFeedback, createSuccessActionFeedback, createWarningActionFeedback } from '@zoltar/ui-core-shared/transactions/actionFeedback.js'
@@ -59,6 +62,16 @@ export function useSecurityPoolCreation({
 	const marketDetails = useSignal<MarketDetails | undefined>(undefined)
 	const poolCreationMarketDetails = useSignal<MarketDetails | undefined>(undefined)
 	const securityPoolCreating = useSignal(false)
+	// The transaction review for pool creation renders inside the Create Pool card instead of the global modal.
+	const securityPoolReview = useSignal<AbortController | undefined>(undefined)
+	const dismissSecurityPoolReview = () => {
+		const review = securityPoolReview.value
+		if (review === undefined) return
+		review.abort()
+		if (embeddedTransactionSteps.value === review.signal) embeddedTransactionSteps.value = undefined
+		securityPoolReview.value = undefined
+	}
+	useEffect(() => dismissSecurityPoolReview, [])
 	const securityPoolSubmissionInProgress = useSignal(false)
 	const securityPoolError = useSignal<string | undefined>(undefined)
 	const securityPoolForm = useSignal<SecurityPoolFormState>(getDefaultSecurityPoolFormState())
@@ -140,15 +153,22 @@ export function useSecurityPoolCreation({
 		}
 		const baseSecurityPoolForm = securityPoolFormOverride ?? securityPoolForm.value
 		const submittedSecurityPoolForm = questionIdOverride === undefined ? baseSecurityPoolForm : { ...baseSecurityPoolForm, marketId: questionIdOverride }
+		// A new question has no ID until the write derives it, and the existing-question field may hold a stale value.
 		const transactionContext = {
 			initialReportPriorityFeeEth: submittedSecurityPoolForm.initialReportPriorityFeeEth,
-			questionId: submittedSecurityPoolForm.marketId,
+			questionId: newQuestionForm === undefined ? submittedSecurityPoolForm.marketId : undefined,
+			questionTitle: newQuestionForm?.title,
 			statoblastSecurityMultiplierBps: tryParseStatoblastSecurityMultiplierBpsInput(submittedSecurityPoolForm.statoblastSecurityMultiplierBps),
 			universeId: activeUniverseId,
 		}
 		securityPoolSubmissionInProgress.value = true
 		securityPoolResult.value = undefined
 		poolCreationMarketDetails.value = undefined
+		dismissSecurityPoolReview()
+		const review = new AbortController()
+		securityPoolReview.value = review
+		embeddedTransactionSteps.value = review.signal
+		let reviewShowsFailure = false
 		securityPoolCreationFeedback.value = createPendingActionFeedback('createSecurityPool', 'Creating security pool')
 
 		let capturedDetails: MarketDetails | undefined
@@ -176,6 +196,8 @@ export function useSecurityPoolCreation({
 					},
 					onTransactionFailed,
 					onWriteError: message => {
+						// A review that reached the user stays open after a failure so its error and Close control remain visible.
+						reviewShowsFailure = !review.signal.aborted && transactionSteps.peek()?.reviewSignal === review.signal
 						securityPoolCreationFeedback.value = createErrorActionFeedback('createSecurityPool', 'Security pool creation failed', message)
 					},
 					refreshState,
@@ -211,7 +233,8 @@ export function useSecurityPoolCreation({
 						throw new Error('A security pool for this question, Statoblast security multiplier, and priority fee already exists.')
 					}
 
-					const result = await createSecurityPool(createWalletWriteClient(walletAddress, { onTransactionPrepared, onTransactionSubmitted }), parameters, newQuestion?.questionData)
+					const reviewLabels = { description: securityPoolCopy.createPoolReviewDescription, title: newQuestion === undefined ? securityPoolCopy.createPoolReviewTitle : securityPoolCopy.createQuestionAndPoolReviewTitle }
+					const result = await createSecurityPool(createWalletWriteClient(walletAddress, { onTransactionPrepared, onTransactionSubmitted, reviewSignal: review.signal }), parameters, newQuestion?.questionData, reviewLabels)
 					capturedDetails = result.questionCreatedAt === undefined ? details : { ...details, createdAt: result.questionCreatedAt }
 					return { ...result, hash: result.deployPoolHash }
 				},
@@ -229,6 +252,7 @@ export function useSecurityPoolCreation({
 				},
 			)
 		} finally {
+			if (!reviewShowsFailure) dismissSecurityPoolReview()
 			securityPoolSubmissionInProgress.value = false
 		}
 	}
@@ -268,7 +292,9 @@ export function useSecurityPoolCreation({
 		securityPoolError: securityPoolError.value,
 		securityPoolForm: securityPoolForm.value,
 		securityPoolResult: securityPoolResult.value,
+		securityPoolReviewSignal: securityPoolReview.value?.signal,
 		poolCreationMarketDetails: poolCreationMarketDetails.value,
+		dismissSecurityPoolReview,
 		resetSecurityPoolCreation,
 		setSecurityPoolForm: (updater: (current: SecurityPoolFormState) => SecurityPoolFormState) => {
 			securityPoolForm.value = updater(securityPoolForm.value)
