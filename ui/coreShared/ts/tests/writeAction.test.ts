@@ -3,6 +3,7 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { getAddress } from '@zoltar/core-shared/evm/ethereum'
 import { installActiveEnvironmentForTesting } from '../lib/activeEnvironment.js'
+import { transactionErrorMessages } from '../lib/errors.js'
 import type { ChainBackend } from '../wallet/chainBackend.js'
 import { MAINNET_NETWORK_PROFILE } from '../wallet/networkProfile.js'
 import { createInitialTransactionTrayState, markTransactionCanceled, markTransactionFailed, markTransactionFinished, markTransactionRequested } from '../transactions/transactionTray.js'
@@ -469,6 +470,56 @@ describe('runWriteAction', () => {
 		)
 
 		expect(writeCanceled).toBe(true)
+		expect(transactionState.active).toBeUndefined()
+		expect(transactionState.pendingIntent).toBeUndefined()
+		expect(transactionState.inFlightCount).toBe(0)
+	})
+
+	test('treats a canceled transaction review as a cancellation instead of a failure', async () => {
+		let transactionState = createInitialTransactionTrayState()
+		let writeCanceled = false
+		let failureMessage: string | undefined
+		let inlineErrorMessage: string | undefined
+
+		await runWriteAction(
+			{
+				accountAddress: walletAddress,
+				missingWalletMessage: 'Connect wallet',
+				onTransactionCanceled: () => {
+					transactionState = markTransactionCanceled(transactionState)
+				},
+				onTransactionFailed: message => {
+					failureMessage = message
+					transactionState = markTransactionFailed(transactionState, message)
+				},
+				onTransactionFinished: () => {
+					transactionState = markTransactionFinished(transactionState)
+				},
+				onTransactionRequested: () => {
+					transactionState = markTransactionRequested(transactionState, {
+						action: 'approve',
+						source: 'statoblast',
+						submittedDetail: 'Approval submitted.',
+						submittedTitle: 'Approving REP',
+					})
+				},
+				onWriteCanceled: () => {
+					writeCanceled = true
+				},
+				refreshState: async () => undefined,
+				setErrorMessage: message => {
+					inlineErrorMessage = message
+				},
+			},
+			async () => {
+				throw new Error('Could not approve REP.', { cause: new Error(transactionErrorMessages.reviewCanceled) })
+			},
+			'Failed to approve REP',
+		)
+
+		expect(writeCanceled).toBe(true)
+		expect(failureMessage).toBeUndefined()
+		expect(inlineErrorMessage).toBeUndefined()
 		expect(transactionState.active).toBeUndefined()
 		expect(transactionState.pendingIntent).toBeUndefined()
 		expect(transactionState.inFlightCount).toBe(0)

@@ -1,5 +1,5 @@
 import type { Address, Hash } from '@zoltar/core-shared/evm/ethereum'
-import { formatRefreshErrorMessage, formatWriteErrorMessage } from '../lib/errors.js'
+import { formatRefreshErrorMessage, formatWriteErrorMessage, isTransactionReviewCancellation } from '../lib/errors.js'
 import { assertActiveWallet, type ActiveWalletContext } from '../wallet/assertActiveWallet.js'
 import type { WriteOperationsParameters } from '../types/app.js'
 import type { TransactionIntent } from '../types/components.js'
@@ -81,6 +81,12 @@ export async function runWriteAction<TResult extends { hash: Hash }>(parameters:
 			}
 		} catch (error) {
 			if (!environmentGuard.isCurrent()) return
+			if (isTransactionReviewCancellation(error)) {
+				// Closing the review dialog cancels the remaining steps; nothing failed.
+				parameters.onWriteCanceled?.()
+				parameters.onTransactionCanceled?.()
+				return
+			}
 			const message = parameters.formatErrorMessage?.(error, errorFallback) ?? formatWriteErrorMessage(error, errorFallback)
 			if (ownsTransaction) parameters.onTransactionFailed?.(message)
 			if (parameters.onWriteError === undefined) {

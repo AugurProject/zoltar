@@ -1973,6 +1973,11 @@ main.global-transaction-tray-open :is(a, button, input, select, summary, textare
 		gap: 0.5rem;
 	}
 
+	/* Side-by-side approval columns misalign once a label wraps, so stack them. */
+	.transaction-step-actions .tx-action-group > .actions {
+		grid-template-columns: minmax(0, 1fr);
+	}
+
 	.transaction-step-content {
 		gap: 0.5rem;
 	}

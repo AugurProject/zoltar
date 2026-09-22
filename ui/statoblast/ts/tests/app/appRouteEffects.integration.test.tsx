@@ -289,6 +289,33 @@ describe('app route effects integration', () => {
 		}
 	})
 
+	test('loads a route security pool only once its address is complete', async () => {
+		const dom = installDomEnvironment('http://localhost/#/security-pools')
+		const calls: string[] = []
+		const initialProps = createDefaultProps({
+			loadSecurityPools: async securityPoolAddress => {
+				calls.push(securityPoolAddress ?? '')
+			},
+			route: 'security-pools',
+			securityPoolAddress: '0x84834d4D',
+		})
+
+		const { cleanup, container } = await renderIntoDocument(<RouteEffectsHarness {...initialProps} />)
+		expect(calls).toEqual([])
+
+		await act(() => {
+			render(<RouteEffectsHarness {...initialProps} securityPoolAddress='0x84834d4Dccea071b363e53952BD300F7bf56a0' />, container)
+		})
+		expect(calls).toEqual([])
+
+		await act(() => {
+			render(<RouteEffectsHarness {...initialProps} securityPoolAddress='0x84834d4Dccea071b363e53952BD300F7bf56a009' />, container)
+		})
+		expect(calls).toEqual(['0x84834d4Dccea071b363e53952BD300F7bf56a009'])
+		await cleanup()
+		dom.cleanup()
+	})
+
 	test('does not repeatedly reload the same unresolved security pool across rerenders', async () => {
 		const dom = installDomEnvironment('http://localhost/#/security-pools')
 		const calls: string[] = []

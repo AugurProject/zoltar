@@ -1,5 +1,6 @@
 import { getTransactionReviewSignal } from './transactionReviewScope.js'
 import * as commonCopy from '../copy/common.js'
+import { transactionErrorMessages } from '../lib/errors.js'
 import type { TransactionPlanStep } from '../wallet/chainBackend.js'
 import { signal } from '@preact/signals'
 import { formatUnits, maxUint256, type Address, type Hash } from '@zoltar/core-shared/evm/ethereum'
@@ -44,7 +45,7 @@ export function createTransactionStepController(signal = getTransactionReviewSig
 	let activeIndex = -1
 	const stop = () => {
 		canceled = true
-		rejectReview?.(new Error('Remaining transactions canceled. Transactions already sent are unchanged.'))
+		rejectReview?.(new Error(transactionErrorMessages.reviewCanceled))
 		rejectReview = undefined
 	}
 	const clear = () => {

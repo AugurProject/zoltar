@@ -3,6 +3,12 @@ export const transactionErrorMessages = {
 	canceledOrReplaced: 'Transaction canceled or replaced.',
 	confirmationUnavailable: 'Could not confirm the transaction. Check its status before retrying.',
 	insufficientApproval: 'Approval confirmed, but it is below the report requirement. Review funding again to approve the required total before continuing.',
+	reviewCanceled: 'Remaining transactions canceled. Transactions already sent are unchanged.',
+}
+
+/** True when the user closed or backed out of a transaction review, which is a cancellation rather than a failure. */
+export function isTransactionReviewCancellation(error: unknown) {
+	return collectErrorDetails(error).some(detail => detail === transactionErrorMessages.reviewCanceled)
 }
 
 function isTransactionErrorMessage(message: string | undefined) {

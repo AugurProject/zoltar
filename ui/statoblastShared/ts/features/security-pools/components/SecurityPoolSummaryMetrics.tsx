@@ -1,6 +1,7 @@
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as statoblastAppCopy from '../../../copy/app.js'
 import * as securityPoolCopy from '../../../copy/securityPool.js'
+import * as poolWorkspaceCopy from '../../../copy/poolWorkspace.js'
 import type { ComponentChildren } from 'preact'
 import { CurrencyValue } from '@zoltar/ui-core-shared/components/CurrencyValue.js'
 import { MetricGrid } from '@zoltar/ui-core-shared/components/MetricGrid.js'
@@ -54,7 +55,7 @@ export function SecurityPoolSummaryMetrics({ calculationPriceConfigured = false,
 				) : undefined}
 				{resolvedPoolHeldRepPerCapacityBps === undefined ? undefined : <MetricField label={securityPoolCopy.poolHeldRepPerCapacity}>{formatRepPerCapacityBps(resolvedPoolHeldRepPerCapacityBps)}</MetricField>}
 				{omitHeadlineMetrics || omitCapacity ? undefined : (
-					<MetricField label={securityPoolCopy.openInterestMintedMax} valueClassName='pool-capacity-values'>
+					<MetricField label={poolWorkspaceCopy.capacityLabel} valueClassName='pool-capacity-values'>
 						<CurrencyValue exactWhenRoundedToZero value={pool.settlementCollateralAttoEth} suffix={commonCopy.eth} /> <span>/</span> {mintingCapacityAttoEth === undefined ? commonCopy.unavailable : <CurrencyValue exactWhenRoundedToZero value={mintingCapacityAttoEth} suffix={commonCopy.eth} />}
 					</MetricField>
 				)}
