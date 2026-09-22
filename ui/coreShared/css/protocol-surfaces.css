@@ -215,6 +215,11 @@ strong.metric-value-danger {
 	transform: translateY(-1.5rem) scale(0.97);
 }
 
+/* The stacked dialog has no blurred backdrop, so its panel must be opaque. */
+.modal-backdrop ~ .modal-backdrop > .modal-panel {
+	background: var(--surface-modal-opaque);
+}
+
 .modal-panel {
 	width: min(48rem, 100%);
 	max-height: min(90vh, 58rem);
