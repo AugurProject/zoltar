@@ -471,8 +471,8 @@ describe('OperationModal', () => {
 		expect(within(dialog).getByRole('status').textContent).toContain('Approval Amount')
 		expect(within(dialog).queryByText('Technical details')).toBeNull()
 		expect(within(dialog).queryByText('approve')).toBeNull()
-		expect(dialog.textContent?.match(/Security Pool Address/g)).toHaveLength(1)
-		expect(dialog.textContent?.match(/Outcome/g)).toHaveLength(1)
+		expect(dialog.textContent?.includes('Security Pool Address')).toBe(false)
+		expect(dialog.textContent?.includes('Outcome')).toBe(false)
 		await act(() => {
 			fireEvent.click(documentQueries.getByRole('button', { name: 'Complete prerequisite' }))
 		})
@@ -484,8 +484,8 @@ describe('OperationModal', () => {
 		expect(within(dialog).getByRole('status').textContent).toContain('Approval Amount')
 		expect(within(dialog).queryByText('Technical details')).toBeNull()
 		expect(within(dialog).queryByText('approve')).toBeNull()
-		expect(dialog.textContent?.match(/Security Pool Address/g)).toHaveLength(1)
-		expect(dialog.textContent?.match(/Outcome/g)).toHaveLength(1)
+		expect(dialog.textContent?.includes('Security Pool Address')).toBe(false)
+		expect(dialog.textContent?.includes('Outcome')).toBe(false)
 		expect(within(dialog).getByText('Fail transaction')).not.toBeNull()
 		await act(() => {
 			fireEvent.click(documentQueries.getByRole('button', { name: 'Fail transaction' }))
@@ -597,7 +597,7 @@ describe('OperationModal', () => {
 		container.remove()
 	})
 
-	test('keeps transaction object identity at the top of the confirmation dialog', async () => {
+	test('does not repeat the implied transaction context inside the dialog', async () => {
 		const container = document.createElement('div')
 		document.body.appendChild(container)
 		const poolAddress = '0x6E2940600Ac1a17F51A1F82429aDF75f2df6Dab6'
@@ -623,11 +623,12 @@ describe('OperationModal', () => {
 		})
 
 		const dialog = within(container).getByRole('dialog', { name: 'Review Action' })
-		expect(within(dialog).queryByText('Confirm transaction context')).toBeNull()
-		expect(within(dialog).getByText('Will this resolve?')).not.toBeNull()
-		expect(within(dialog).getByText('Genesis (0)')).not.toBeNull()
-		expect(within(dialog).getByRole('button', { name: `Copy address ${poolAddress}` }).textContent).toBe(poolAddress)
-		expect(within(dialog).getByRole('button', { name: `Copy address ${vaultAddress}` }).textContent).toBe(vaultAddress)
+		// The page already shows the question, pool, universe, and vault; the dialog spends its space on the form instead.
+		expect(dialog.querySelector('.transaction-object-context')).toBeNull()
+		expect(within(dialog).queryByText('Will this resolve?')).toBeNull()
+		expect(within(dialog).queryByText('Genesis (0)')).toBeNull()
+		expect(within(dialog).queryByRole('button', { name: `Copy address ${poolAddress}` })).toBeNull()
+		expect(within(dialog).queryByRole('button', { name: `Copy address ${vaultAddress}` })).toBeNull()
 
 		render(null, container)
 		container.remove()
