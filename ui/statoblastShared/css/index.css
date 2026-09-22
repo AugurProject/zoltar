@@ -3030,8 +3030,21 @@
 	flex-wrap: wrap;
 	gap: var(--space-2);
 }
+/* Reserve the busy label width so the address input does not shrink while a refresh runs. */
+.pool-selection-control .lookup-field-controls > .actions {
+	min-inline-size: 11.75rem;
+}
 @media (max-width: 600px) {
 	.pool-selection-control .lookup-field-controls {
 		grid-template-columns: minmax(0, 1fr);
+	}
+	.pool-selection-control .lookup-field-controls.has-action > .actions {
+		grid-column: 1;
+		grid-row: auto;
+		justify-content: flex-start;
+		min-inline-size: 0;
+	}
+	.pool-selection-control input {
+		font-size: 0.66rem;
 	}
 }
