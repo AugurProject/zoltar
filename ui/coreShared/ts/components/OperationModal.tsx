@@ -2,10 +2,10 @@ import { registerTransactionReviewScope } from '../transactions/transactionRevie
 import { transactionSteps } from '../transactions/transactionSteps.js'
 import { TransactionStepsContent } from './TransactionStepsContent.js'
 import * as commonCopy from '../copy/common.js'
-import { useId, useLayoutEffect, useRef, useState } from 'preact/hooks'
+import { useEffect, useId, useLayoutEffect, useRef, useState } from 'preact/hooks'
 import { useModalFocusIsolation } from '../hooks/useModalFocusIsolation.js'
 import type { OperationModalProps } from '../types/components.js'
-import { useGlobalTransactionPresentation } from './GlobalTransactionPresentationContext.js'
+import { GlobalTransactionPresentationProvider, useGlobalTransactionPresentation } from './GlobalTransactionPresentationContext.js'
 import { TransactionPresentationNotice } from './TransactionPresentationNotice.js'
 import { TransactionObjectContext } from './TransactionObjectContext.js'
 
@@ -43,7 +43,15 @@ export function OperationModal({ children, closeDisabled = false, closeOnSuccess
 	}, [isOpen, embedTransactionSteps])
 	const workflow = transactionSteps.value
 	const ownsWorkflow = reviewScope !== undefined && !reviewScope.signal.aborted && workflow?.reviewSignal === reviewScope.signal
-	const showSteps = ownsWorkflow && workflow?.steps[workflow.activeIndex] !== undefined
+	const ownedWorkflow = ownsWorkflow ? workflow : undefined
+	const activeStep = ownedWorkflow?.steps[ownedWorkflow.activeIndex]
+	// A workflow made only of approvals was started by the form's own approve control, which already shows the amount and its pending state.
+	const approvalOnly = ownedWorkflow !== undefined && activeStep !== undefined && ownedWorkflow.steps.every(step => step.spender !== undefined)
+	const showSteps = activeStep !== undefined && !approvalOnly
+	useEffect(() => {
+		if (ownedWorkflow === undefined || activeStep === undefined || !approvalOnly || activeStep.phase !== 'review') return
+		ownedWorkflow.confirmStep(ownedWorkflow.activeIndex)
+	}, [activeStep, approvalOnly, ownedWorkflow])
 	const activeTransaction = useGlobalTransactionPresentation()
 	const pending = ownsWorkflow && workflow.steps.some(step => step.phase === 'pending' && step.error === undefined) && activeTransaction?.tone !== 'error'
 	const cannotClose = closeDisabled || pending
@@ -108,34 +116,37 @@ export function OperationModal({ children, closeDisabled = false, closeOnSuccess
 	}
 
 	return (
-		<>
-			<div className='modal-backdrop' role='presentation' onClick={requestClose}>
-				<section ref={dialogRef} className='modal-panel operation-modal-panel' role='dialog' tabIndex={-1} aria-busy={cannotClose || undefined} aria-modal='true' aria-labelledby={titleId} aria-describedby={descriptionId} onClick={event => event.stopPropagation()}>
-					<div className='modal-header'>
-						<div className='modal-header-title'>
-							<h3 id={titleId}>{title}</h3>
-						</div>
-						<button ref={closeButtonRef} className='quiet modal-close-button' type='button' aria-label={commonCopy.close} title={commonCopy.close} disabled={cannotClose} onClick={requestClose}>
-							×
-						</button>
+		<div className='modal-backdrop' role='presentation' onClick={requestClose}>
+			<section ref={dialogRef} className='modal-panel operation-modal-panel' role='dialog' tabIndex={-1} aria-busy={cannotClose || undefined} aria-modal='true' aria-labelledby={titleId} aria-describedby={descriptionId} onClick={event => event.stopPropagation()}>
+				<div className='modal-header'>
+					<div className='modal-header-title'>
+						<h3 id={titleId}>{title}</h3>
 					</div>
-					{description === undefined ? undefined : (
-						<p id={descriptionId} className='detail'>
-							{description}
-						</p>
-					)}
-					<TransactionObjectContext items={context} />
-					{showSteps || !wasOpenRef.current || modalTransaction === undefined || activeTransactionOperationKey === undefined || activeTransactionOperationKey === transactionOperationKeyAtOpenRef.current || activeTransactionOperationKey === dismissedOperationKey ? undefined : (
-						<TransactionPresentationNotice className='operation-modal-transaction-notice' transaction={modalTransaction} />
-					)}
-					<div className='operation-modal-body'>{children}</div>
-				</section>
-			</div>
-			{showSteps ? (
-				<OperationModal embedTransactionSteps={false} isOpen title={workflow.steps.at(-1)?.title ?? title} closeDisabled={pending} onClose={returnToForm}>
-					<TransactionStepsContent contextKey={titleId} onClose={returnToForm} onBack={returnToForm} />
-				</OperationModal>
-			) : undefined}
-		</>
+					<button ref={closeButtonRef} className='quiet modal-close-button' type='button' aria-label={commonCopy.close} title={commonCopy.close} disabled={cannotClose} onClick={requestClose}>
+						×
+					</button>
+				</div>
+				{description === undefined ? undefined : (
+					<p id={descriptionId} className='detail'>
+						{description}
+					</p>
+				)}
+				<TransactionObjectContext items={context} />
+				{showSteps || !wasOpenRef.current || modalTransaction === undefined || activeTransactionOperationKey === undefined || activeTransactionOperationKey === transactionOperationKeyAtOpenRef.current || activeTransactionOperationKey === dismissedOperationKey ? undefined : (
+					<TransactionPresentationNotice className='operation-modal-transaction-notice' transaction={modalTransaction} />
+				)}
+				<div className='operation-modal-body' inert={showSteps || undefined}>
+					{children}
+				</div>
+				{showSteps ? (
+					<div className='operation-modal-steps'>
+						{/* The dialog already shows its context rows above the form, so the step review only keeps the rows it does not cover. */}
+						<GlobalTransactionPresentationProvider transaction={modalTransaction}>
+							<TransactionStepsContent contextKey={titleId} onClose={returnToForm} onBack={returnToForm} />
+						</GlobalTransactionPresentationProvider>
+					</div>
+				) : undefined}
+			</section>
+		</div>
 	)
 }

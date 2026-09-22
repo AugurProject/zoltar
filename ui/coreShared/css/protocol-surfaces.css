@@ -205,22 +205,6 @@ strong.metric-value-danger {
 	backdrop-filter: blur(10px);
 }
 
-.modal-backdrop ~ .modal-backdrop {
-	background: color-mix(in srgb, var(--bg-deep) 24%, transparent);
-	backdrop-filter: none;
-	padding-top: 4rem;
-}
-
-.modal-backdrop[inert] > .modal-panel {
-	transform: translateY(-1.5rem) scale(0.97);
-	opacity: 0.72;
-}
-
-/* The stacked dialog has no blurred backdrop, so its panel must be opaque. */
-.modal-backdrop ~ .modal-backdrop > .modal-panel {
-	background: var(--surface-modal-opaque);
-}
-
 .modal-panel {
 	width: min(48rem, 100%);
 	max-height: min(90vh, 58rem);
@@ -1092,6 +1076,18 @@ main.global-transaction-tray-open :is(a, button, input, select, summary, textare
 .operation-modal-body {
 	display: grid;
 	gap: 1rem;
+}
+
+/* The form stays visible for context while its transaction steps are reviewed and sent below it. */
+.operation-modal-body[inert] {
+	opacity: 0.6;
+}
+
+.operation-modal-steps {
+	display: grid;
+	gap: 1rem;
+	padding-top: 1rem;
+	border-top: 1px solid var(--border-default);
 }
 
 .operation-modal-transaction-notice {
