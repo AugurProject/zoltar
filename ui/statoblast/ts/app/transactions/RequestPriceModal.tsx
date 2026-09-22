@@ -161,7 +161,7 @@ export function RequestPriceModal({ review, onConfirm, onClose, canRequest, conf
 							reason={confirmationGuardMessage ?? priceError ?? (typeof error === 'string' ? error : undefined) ?? previewPrompt}
 							error={confirmationGuardMessage ?? (typeof error === 'string' ? error : undefined)}
 							preparing={valid && (running || attempted !== key)}
-							hideReason={priceError !== undefined || error !== undefined || confirmationGuardMessage !== undefined}
+							hideReason={!validPrice || priceError !== undefined || error !== undefined || confirmationGuardMessage !== undefined}
 							onClose={close}
 							onRetry={error === undefined ? undefined : () => setRetry(value => value + 1)}
 						/>

@@ -338,6 +338,12 @@ describe('OverviewPanels', () => {
 		expect(documentQueries.queryByText(/0\.00041/)).toBeNull()
 	})
 
+	test('keeps existing prices visible while refreshing', async () => {
+		const queries = await renderOverviewPanels({ repPrices: { isLoading: true, isRefreshing: true, repPerEthPrice: 2439024390243902439024n, repUsdcPrice: 1234567n } })
+		expect(queries.queryByTitle('2 439.024390243902439024') !== null).toBe(true)
+		expect(queries.queryByTitle('1.234567') !== null).toBe(true)
+	})
+
 	test('renders a refresh button for REP prices and wires it to the provided handler', async () => {
 		const onRefreshRepPrices = mock(() => undefined)
 		const documentQueries = await renderOverviewPanels({

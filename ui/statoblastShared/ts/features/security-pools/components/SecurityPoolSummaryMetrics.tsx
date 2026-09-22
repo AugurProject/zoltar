@@ -24,6 +24,7 @@ type SecurityPoolSummaryMetricsProps = {
 	metricVariant?: MetricGridVariant
 	/** Skip the vault count, security multiplier, and open interest cells when a headline strip already shows them. */
 	omitHeadlineMetrics?: boolean
+	omitCapacity?: boolean
 	pool: ListedSecurityPool
 	showPoolAddress?: boolean
 	showTotalBacking?: boolean
@@ -44,6 +45,7 @@ export function SecurityPoolSummaryMetrics({
 	currentTimestamp,
 	metricVariant = 'default',
 	omitHeadlineMetrics = false,
+	omitCapacity = false,
 	pool,
 	showPoolAddress = false,
 	showTotalBacking = false,
@@ -71,9 +73,9 @@ export function SecurityPoolSummaryMetrics({
 					</MetricField>
 				) : undefined}
 				{resolvedPoolHeldRepPerCapacityBps === undefined ? undefined : <MetricField label={securityPoolCopy.poolHeldRepPerCapacity}>{formatRepPerCapacityBps(resolvedPoolHeldRepPerCapacityBps)}</MetricField>}
-				{omitHeadlineMetrics ? undefined : (
-					<MetricField label={securityPoolCopy.openInterestMintedMax}>
-						<CurrencyValue exactWhenRoundedToZero value={pool.settlementCollateralAttoEth} suffix={commonCopy.eth} /> / {mintingCapacityAttoEth === undefined ? commonCopy.unavailable : <CurrencyValue exactWhenRoundedToZero value={mintingCapacityAttoEth} suffix={commonCopy.eth} />}
+				{omitHeadlineMetrics || omitCapacity ? undefined : (
+					<MetricField label={securityPoolCopy.openInterestMintedMax} valueClassName='pool-capacity-values'>
+						<CurrencyValue exactWhenRoundedToZero value={pool.settlementCollateralAttoEth} suffix={commonCopy.eth} /> <span>/</span> {mintingCapacityAttoEth === undefined ? commonCopy.unavailable : <CurrencyValue exactWhenRoundedToZero value={mintingCapacityAttoEth} suffix={commonCopy.eth} />}
 					</MetricField>
 				)}
 				{children}

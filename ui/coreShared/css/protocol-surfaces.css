@@ -205,12 +205,23 @@ strong.metric-value-danger {
 	backdrop-filter: blur(10px);
 }
 
+.modal-backdrop ~ .modal-backdrop {
+	background: color-mix(in srgb, var(--bg-deep) 24%, transparent);
+	backdrop-filter: none;
+	padding-top: 4rem;
+}
+
+.modal-backdrop[inert] > .modal-panel {
+	transform: translateY(-1.5rem) scale(0.97);
+}
+
 .modal-panel {
 	width: min(48rem, 100%);
 	max-height: min(90vh, 58rem);
 	overflow: auto;
 	isolation: isolate;
-	display: grid;
+	display: flex;
+	flex-direction: column;
 	gap: 1rem;
 	padding: 1.25rem;
 	border: 1px solid var(--border-strong);
@@ -219,13 +230,16 @@ strong.metric-value-danger {
 	box-shadow: var(--shadow-overlay);
 }
 
+.modal-panel > * {
+	flex-shrink: 0;
+}
+
 .modal-header {
 	display: flex;
 	justify-content: space-between;
 	align-items: flex-start;
 	gap: 1rem;
-	position: sticky;
-	top: 0;
+	position: relative;
 	z-index: var(--z-nav);
 	margin: -1.25rem -1.25rem 0;
 	padding: 0.9rem 1.25rem 0.85rem;
@@ -1758,24 +1772,10 @@ main.global-transaction-tray-open :is(a, button, input, select, summary, textare
 	}
 }
 
-/* Multi-step transaction review modal: funding summary, per-step actions, and the approval editor. */
-.modal-panel:has(.transaction-step-actions) {
-	overflow: hidden;
-	grid-template-rows: auto minmax(0, 1fr);
-}
-
-.modal-panel:has(.transaction-step-actions) > .modal-header {
-	position: relative;
-}
-
-.operation-modal-body:has(> .transaction-step-actions) {
-	min-height: 0;
-	grid-template-rows: minmax(0, 1fr) auto;
-}
-
+/* Transaction reviews share the panel scroll area with their funding and actions. */
 .transaction-step-content {
 	min-height: 0;
-	overflow: auto;
+	overflow: visible;
 	display: grid;
 	gap: 1rem;
 }

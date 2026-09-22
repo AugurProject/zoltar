@@ -19,7 +19,7 @@ const hash = '0x1111111111111111111111111111111111111111111111111111111111111111
 const step = { title: 'Send withdrawal', description: 'Withdraw REP.', contractAddress: undefined, spender: undefined, amount: undefined, ethValueAttoEth: 0n }
 
 for (const outcome of ['success', 'failure', 'approval', 'cancel', 'multi-step'] as const) {
-	test(`keeps transaction review in its initiating dialog through ${outcome}`, async () => {
+	test(`keeps the initiating dialog behind transaction review through ${outcome}`, async () => {
 		const presentation = signal<GlobalTransactionPresentation | undefined>(undefined)
 		const completedHash = signal<string | undefined>(undefined)
 		let controller: ReturnType<typeof createTransactionStepController> | undefined
@@ -51,13 +51,16 @@ for (const outcome of ['success', 'failure', 'approval', 'cancel', 'multi-step']
 			const queries = within(document.body)
 			const dialog = queries.getByRole('dialog', { name: 'Withdraw REP' })
 			await act(() => fireEvent.click(queries.getByRole('button', { name: 'Review withdrawal' })))
-			expect(document.querySelectorAll('[role="dialog"]')).toHaveLength(1)
-			expect(queries.getByRole('dialog')).toBe(dialog)
+			expect(document.querySelectorAll('[role="dialog"]')).toHaveLength(2)
+			expect(dialog.parentElement?.hasAttribute('inert')).toBe(true)
+			expect(dialog.querySelector('.operation-modal-body')?.hasAttribute('hidden')).toBe(false)
+			const reviewDialog = queries.getByRole('dialog')
+			expect(queries.getByRole('dialog')).toBe(reviewDialog)
 			if (controller === undefined) throw new Error('Missing transaction controller')
 			if (outcome === 'cancel') {
 				await act(() => fireEvent.click(queries.getByRole('button', { name: 'Cancel' })))
 				await review
-				expect(queries.queryByRole('dialog')).toBeNull()
+				expect(queries.getByRole('dialog')).toBe(dialog)
 				expect(transactionSteps.value).toBeUndefined()
 				return
 			}
@@ -68,23 +71,23 @@ for (const outcome of ['success', 'failure', 'approval', 'cancel', 'multi-step']
 				controller?.submitted(firstHash)
 				presentation.value = { operationKey: 'withdrawal', title: 'Withdrawal pending', tone: 'pending', hash: firstHash }
 			})
-			expect(queries.getByRole('dialog')).toBe(dialog)
+			expect(queries.getByRole('dialog')).toBe(reviewDialog)
 			expect(queries.getByRole('button', { name: 'Close' }).hasAttribute('disabled')).toBe(true)
 			await act(() => fireEvent.keyDown(dialog, { key: 'Escape' }))
-			expect(queries.getByRole('dialog')).toBe(dialog)
+			expect(queries.getByRole('dialog')).toBe(reviewDialog)
 			if (outcome === 'multi-step') {
 				await act(() => {
 					controller?.receipt(firstHash, 'success')
 					review = controller?.review(1).catch(() => undefined)
 				})
-				expect(queries.getByRole('dialog')).toBe(dialog)
+				expect(queries.getByRole('dialog')).toBe(reviewDialog)
 				for (const unrelatedHash of [undefined, '0x33']) {
 					await act(() => {
 						presentation.value = { tone: 'success', title: 'Unrelated transaction confirmed', ...(unrelatedHash === undefined ? {} : { hash: unrelatedHash }), operationKey: 'unrelated' }
 					})
 					expect(transactionSteps.value?.steps[1]?.phase).toBe('review')
 				}
-				expect(queries.getByRole('dialog')).toBe(dialog)
+				expect(queries.getByRole('dialog')).toBe(reviewDialog)
 				await act(() => fireEvent.click(queries.getByRole('button', { name: 'Send withdrawal' })))
 				await review
 				await act(() => controller?.submitted(hash))
@@ -98,7 +101,6 @@ for (const outcome of ['success', 'failure', 'approval', 'cancel', 'multi-step']
 				expect(queries.queryByRole('dialog')).toBeNull()
 				expect(transactionSteps.value).toBeUndefined()
 			} else {
-				expect(queries.getByRole('dialog')).toBe(dialog)
 				if (outcome === 'failure') {
 					expect(queries.getByRole('alert').textContent).toContain('Transaction reverted')
 					await act(() => fireEvent.click(queries.getByRole('button', { name: 'Back' })))
@@ -106,6 +108,7 @@ for (const outcome of ['success', 'failure', 'approval', 'cancel', 'multi-step']
 				} else {
 					expect(dialog.querySelector('.operation-modal-transaction-notice') !== null).toBe(true)
 				}
+				expect(queries.getByRole('dialog')).toBe(dialog)
 				expect(queries.getByRole('textbox', { name: 'Amount' }).getAttribute('value')).toBe('42')
 				expect(transactionSteps.value).toBeUndefined()
 			}

@@ -1,5 +1,4 @@
 export const poolDetails = 'Pool details'
-export const changePool = 'Change pool'
 export const moreTools = 'More tools'
 export const moreActions = 'More actions'
 export const capacityLabel = 'Open interest / estimated capacity'

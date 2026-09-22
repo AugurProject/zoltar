@@ -213,7 +213,7 @@ async function loadRepPrices(backend: ChainBackend, forceRefresh: boolean) {
 
 export function useRepPrices({ enabled = true }: UseRepPricesOptions = {}): RepPrices {
 	const backend = getActiveBackend()
-	const cachedRepPrices = getFreshCachedRepPrices(backend)
+	const cachedRepPrices = getCachedRepPrices(backend)
 	const displayedBackend = useRef(backend)
 	const repPerEthPrice = useSignal<bigint | undefined>(cachedRepPrices?.repPerEthPrice)
 	const repPerEthFailure = useSignal<RepPriceFailure | undefined>(undefined)
@@ -272,7 +272,7 @@ export function useRepPrices({ enabled = true }: UseRepPricesOptions = {}): RepP
 
 	useEffect(() => {
 		if (!enabled) return
-		const nextCachedRepPrices = getFreshCachedRepPrices(backend)
+		const nextCachedRepPrices = getCachedRepPrices(backend)
 		applyRepPriceLoadResult({
 			prices: nextCachedRepPrices,
 			repPerEthFailure: undefined,
@@ -285,7 +285,6 @@ export function useRepPrices({ enabled = true }: UseRepPricesOptions = {}): RepP
 		if (!enabled || cacheExpiry.value === undefined) return
 		const delay = Math.max(0, cacheExpiry.value - Date.now())
 		const timeout = window.setTimeout(() => {
-			applyRepPriceLoadResult({ prices: undefined, repPerEthFailure: undefined, repUsdcFailure: undefined })
 			refreshRepPricesInternal(true)
 		}, delay)
 		return () => window.clearTimeout(timeout)

@@ -102,7 +102,13 @@ export function OperationModal({ children, closeDisabled = false, closeOnSuccess
 
 	if (!isOpen) return undefined
 
+	const returnToForm = () => {
+		setDismissedOperationKey(activeTransactionOperationKey)
+		if (ownsWorkflow) workflow.cancel()
+	}
+
 	return (
+		<>
 		<div className='modal-backdrop' role='presentation' onClick={requestClose}>
 			<section ref={dialogRef} className='modal-panel operation-modal-panel' role='dialog' tabIndex={-1} aria-busy={cannotClose || undefined} aria-modal='true' aria-labelledby={titleId} aria-describedby={descriptionId} onClick={event => event.stopPropagation()}>
 				<div className='modal-header'>
@@ -122,22 +128,16 @@ export function OperationModal({ children, closeDisabled = false, closeOnSuccess
 				{showSteps || !wasOpenRef.current || modalTransaction === undefined || activeTransactionOperationKey === undefined || activeTransactionOperationKey === transactionOperationKeyAtOpenRef.current || activeTransactionOperationKey === dismissedOperationKey ? undefined : (
 					<TransactionPresentationNotice className='operation-modal-transaction-notice' transaction={modalTransaction} />
 				)}
-				<div className='operation-modal-body' hidden={showSteps} style={showSteps ? { display: 'none' } : undefined}>
+				<div className='operation-modal-body'>
 					{children}
 				</div>
-				{showSteps ? (
-					<div className='operation-modal-body'>
-						<TransactionStepsContent
-							contextKey={titleId}
-							onClose={requestClose}
-							onBack={() => {
-								setDismissedOperationKey(activeTransactionOperationKey)
-								workflow.cancel()
-							}}
-						/>
-					</div>
-				) : undefined}
 			</section>
 		</div>
+		{showSteps ? (
+			<OperationModal embedTransactionSteps={false} isOpen title={workflow.steps.at(-1)?.title ?? title} closeDisabled={pending} onClose={returnToForm}>
+				<TransactionStepsContent contextKey={titleId} onClose={returnToForm} onBack={returnToForm} />
+			</OperationModal>
+		) : undefined}
+		</>
 	)
 }

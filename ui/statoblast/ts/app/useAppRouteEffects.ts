@@ -32,7 +32,7 @@ type Props = {
 }
 
 function shouldRefreshSelectedPoolForRoute({ environmentReady, route, securityPoolAddress, selectedPoolSecurityPoolAddress, walletBootstrapComplete }: { environmentReady: boolean; route: Route; securityPoolAddress: string; selectedPoolSecurityPoolAddress: string | undefined; walletBootstrapComplete: boolean }) {
-	return environmentReady && route === 'security-pools' && walletBootstrapComplete && securityPoolAddress !== '' && selectedPoolSecurityPoolAddress === undefined
+	return environmentReady && route === 'security-pools' && walletBootstrapComplete && /^0x[0-9a-fA-F]{40}$/.test(securityPoolAddress) && selectedPoolSecurityPoolAddress === undefined
 }
 
 function shouldSyncSecurityPoolAddressToRouteForms({ route }: { route: Route; securityPoolAddress: string }) {
@@ -134,7 +134,7 @@ export function useAppRouteEffects({
 			if (route !== 'security-pools' || securityPoolAddress === '' || selectedPoolSecurityPoolAddress !== undefined || !environmentReady || !walletBootstrapComplete) lastRequestedSecurityPoolAddress.current = undefined
 			return
 		}
-		if (!environmentReady || route !== 'security-pools' || securityPoolAddress === '' || !walletBootstrapComplete) return
+		if (!environmentReady || route !== 'security-pools' || !/^0x[0-9a-fA-F]{40}$/.test(securityPoolAddress) || !walletBootstrapComplete) return
 		const requestKey = `${activeEnvironmentNonce}:${securityPoolAddress}`
 		if (lastRequestedSecurityPoolAddress.current === requestKey) return
 		lastRequestedSecurityPoolAddress.current = requestKey

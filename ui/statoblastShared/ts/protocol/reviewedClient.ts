@@ -1,3 +1,4 @@
+import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import { getTransactionReviewSignal } from '@zoltar/ui-core-shared/transactions/transactionReviewScope.js'
 import { formatUnits, getAddress, encodeFunctionData, maxUint256 } from '@zoltar/core-shared/evm/ethereum'
 import type { TransactionPlanStep, TransactionRequestPreview, WriteClient } from '@zoltar/ui-core-shared/wallet/chainBackend.js'
@@ -55,11 +56,11 @@ async function describeTransaction(client: WriteClient, preview: TransactionRequ
 	try {
 		const [symbol, decimals] = await Promise.all([client.readContract({ address: preview.contractAddress, abi: ABIS.mainnet.erc20, functionName: 'symbol' }), client.readContract({ address: preview.contractAddress, abi: ABIS.mainnet.erc20, functionName: 'decimals' })])
 		details.title = `Approve ${symbol} spending`
-		details.amount = `${formatUnits(amount, Number(decimals))} ${symbol}`
+		details.amount = `${amount === maxUint256 ? commonCopy.max : formatUnits(amount, Number(decimals))} ${symbol}`
 		if (requiredApprovalAmount !== undefined) {
 			const approvedAmount = await client.readContract({ address: preview.contractAddress, abi: ABIS.mainnet.erc20, functionName: 'allowance', args: [client.account.address, details.spender] })
 			details.approval = { requiredAmount: requiredApprovalAmount, approvedAmount, tokenSymbol: symbol, tokenUnits: Number(decimals) }
-			details.amount = `${formatUnits(requiredApprovalAmount, Number(decimals))} ${symbol}`
+			details.amount = `${requiredApprovalAmount === maxUint256 ? commonCopy.max : formatUnits(requiredApprovalAmount, Number(decimals))} ${symbol}`
 		}
 	} catch (error) {
 		throw new Error('Could not read token details for approval. Retry before sending any transactions.', { cause: error })
