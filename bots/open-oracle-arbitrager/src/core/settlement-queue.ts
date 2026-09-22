@@ -1,4 +1,5 @@
 import type { Address } from '@zoltar/bot-shared/ethereum'
+import { compareBigint } from '@zoltar/bot-shared/infrastructure/compare'
 import type { Configuration } from '#config/configuration'
 import { gamePolicyMismatch, type CoordinatorGamePolicy } from '#core/game-policy'
 import { settlementDecision, settlementEconomics, settlementEligibilityMismatch, settlementTiming } from '#core/settlement-strategy'
@@ -58,7 +59,7 @@ export function settlementQueue(input: SettlementQueueInput): SettlementQueue {
 		})
 		if (decision === 'eligible') plans.set(reportId, { coordinator: helper.creator, gas: economics.gas, projectedGasCostAttoEth: economics.projectedGasCostAttoEth, report: report.latest, rewardAttoEth: game.settlerRewardAttoEth, token: game.token2, tokenSymbol: input.tokenSymbol(game.token2) ?? 'token' })
 	}
-	queue.sort((left, right) => (BigInt(right.reportId) > BigInt(left.reportId) ? 1 : -1))
+	queue.sort((left, right) => compareBigint(BigInt(right.reportId), BigInt(left.reportId)))
 	return { plans, queue }
 }
 

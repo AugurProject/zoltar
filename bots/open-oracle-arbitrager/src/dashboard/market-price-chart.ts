@@ -19,7 +19,7 @@ function chartPrice(value: number) {
 	return new Intl.NumberFormat('en-US', { maximumSignificantDigits: 5, notation: 'scientific' }).format(value)
 }
 
-export function renderMarketPriceChart(snapshot: PublicOperatorSnapshot) {
+export function renderMarketPriceChart(snapshot: Pick<PublicOperatorSnapshot, 'priceHistory'>) {
 	const selector = element('price-token', HTMLSelectElement)
 	const selected = selector.value
 	const tokens = [...new Map(snapshot.priceHistory.map(point => [point.token.toLowerCase(), { address: point.token, symbol: point.symbol }])).values()]
@@ -33,11 +33,12 @@ export function renderMarketPriceChart(snapshot: PublicOperatorSnapshot) {
 	const samplesWereFocused = previousSamples?.querySelector('summary') === document.activeElement
 	container.replaceChildren()
 	setText('price-point-count', `${countLabel(points.length, 'persisted sample')}`)
-	if (points.length === 0) {
+	const finitePoints = points.filter(point => Number.isFinite(Number(point.priceWeth)))
+	if (finitePoints.length === 0) {
 		container.textContent = 'No quoted price samples are available for this token.'
 		return
 	}
-	const values = points.map(point => Number(point.priceWeth)).filter(Number.isFinite)
+	const values = finitePoints.map(point => Number(point.priceWeth))
 	const minimum = Math.min(...values)
 	const maximum = Math.max(...values)
 	const range = maximum - minimum || Math.max(maximum, 1)
@@ -47,12 +48,12 @@ export function renderMarketPriceChart(snapshot: PublicOperatorSnapshot) {
 	const plot = { bottom: compact ? 250 : 220, left: 105, right: width - 70, top: 24 }
 	const plotWidth = plot.right - plot.left
 	const plotHeight = plot.bottom - plot.top
-	const orderedPoints = [...points].sort((left, right) => Date.parse(left.sampledAt) - Date.parse(right.sampledAt))
+	const orderedPoints = [...finitePoints].sort((left, right) => Date.parse(left.sampledAt) - Date.parse(right.sampledAt))
 	const times = orderedPoints.map(point => Date.parse(point.sampledAt))
 	const first = Math.min(...times)
 	const last = Math.max(...times)
 	const timeRange = last - first || 1
-	const series = [...new Map(points.map(point => [point.pool.toLowerCase(), point.venue])).entries()]
+	const series = [...new Map(finitePoints.map(point => [point.pool.toLowerCase(), point.venue])).entries()]
 	const svg = document.createElementNS(SVG_NAMESPACE, 'svg')
 	svg.setAttribute('viewBox', `0 0 ${width.toString()} ${height.toString()}`)
 	svg.setAttribute('role', 'img')
@@ -64,7 +65,7 @@ export function renderMarketPriceChart(snapshot: PublicOperatorSnapshot) {
 	title.textContent = `${points[0]?.symbol ?? 'Token'} spot price in WETH by exchange pool`
 	const description = document.createElementNS(SVG_NAMESPACE, 'desc')
 	description.id = descriptionId
-	description.textContent = marketPriceChartDescription(points)
+	description.textContent = marketPriceChartDescription(orderedPoints)
 	svg.append(title, description)
 	for (const fraction of [0, 0.5, 1]) {
 		const y = plot.bottom - fraction * plotHeight
@@ -128,7 +129,7 @@ export function renderMarketPriceChart(snapshot: PublicOperatorSnapshot) {
 	const summary = document.createElement('summary')
 	summary.dataset['focusKey'] = `price-samples:${token}:summary`
 	const recentPoints = orderedPoints.slice(-100).reverse()
-	summary.textContent = `Recent exact price samples (${recentPoints.length.toString()} of ${countLabel(points.length, 'sample')})`
+	summary.textContent = `Recent exact price samples (${recentPoints.length.toString()} of ${countLabel(finitePoints.length, 'sample')})`
 	const tableScroll = document.createElement('div')
 	tableScroll.className = 'table-scroll'
 	tableScroll.tabIndex = 0
