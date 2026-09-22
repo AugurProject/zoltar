@@ -743,8 +743,9 @@ mutation and keeps the prior runtime settings active; fix the settings path or
 permissions and retry.
 
 Deployment identities are execution trust roots. REP, WETH, OpenOracle, and all
-Uniswap addresses come from the selected network. Mainnet uses upstream Uniswap;
-Sepolia uses the contracts installed by `deploy:testnet`. The saved configuration
+Uniswap addresses come from the selected network. Mainnet and Sepolia use
+Uniswap's published factory, quoter, and V4 contracts; the Sepolia V3 router is
+the SwapRouter installed by `deploy:testnet`. The saved configuration
 contains V2/V3/V4 enable switches, not Uniswap addresses. The dashboard validates
 venue switches and independent RPC settings before saving them
 for the next scan boundary. Executor and coordinator overrides are ignored and

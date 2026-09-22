@@ -13,6 +13,11 @@
 			"bun": "./ts/deployment/protocolConfig.ts",
 			"default": "./js/deployment/protocolConfig.js"
 		},
+		"./deployment/uniswapDeployments": {
+			"types": "./ts/deployment/uniswapDeployments.ts",
+			"bun": "./ts/deployment/uniswapDeployments.ts",
+			"default": "./js/deployment/uniswapDeployments.js"
+		},
 		"./evm/ethereum": {
 			"types": "./ts/evm/ethereum.ts",
 			"bun": "./ts/evm/ethereum.ts",

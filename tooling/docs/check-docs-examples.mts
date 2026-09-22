@@ -196,7 +196,7 @@ async function renderDeploymentMapping(
 						json: async () => ({
 							deploymentSteps: [
 								{ id: 'deploymentStatusOracle', label: 'Deployment Status Oracle' },
-								{ id: 'weth', label: 'Wrapped Ether' },
+								{ id: 'reputationToken', label: 'Genesis Reputation Token' },
 							],
 						}),
 						ok: true,

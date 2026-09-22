@@ -12,7 +12,7 @@ import { installActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/a
 import { createInitialTransactionTrayState, markTransactionPrepared, markTransactionRequested } from '@zoltar/ui-core-shared/transactions/transactionTray.js'
 import { createFakeBackend, createFakeSimulationProfile } from '@zoltar/ui-core-shared/tests/testUtils/fakeBackend.js'
 import { MAINNET_NETWORK_PROFILE, SEPOLIA_NETWORK_PROFILE } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
-import { SEPOLIA_GENESIS_REP_INIT_CODE, SEPOLIA_WETH_INIT_CODE } from '@zoltar/ui-core-shared/lib/sepoliaDeploymentConfig.js'
+import { SEPOLIA_GENESIS_REP_INIT_CODE } from '@zoltar/ui-core-shared/lib/sepoliaDeploymentConfig.js'
 import { DeploymentStatusOracle_DeploymentStatusOracle, ZoltarQuestionData_ZoltarQuestionData } from '@zoltar/ui-core-shared/contractArtifact.js'
 import { PROXY_DEPLOYER_RUNTIME_CODE } from '@zoltar/core-shared/deployment/deploymentAddresses'
 import { assertStaticDeploymentArtifactRuntimeCodeHashes, fundCanonicalDeployerSigner } from '@zoltar/ui-zoltar-shared/protocol/deployment.js'
@@ -96,7 +96,7 @@ contract AtomicFunding {
 
 describe('contract deployment internals', () => {
 	test('rejects generated deployment artifacts that do not match the pinned runtime hashes', () => {
-		expect(assertStaticDeploymentArtifactRuntimeCodeHashes()).toEqual(['deploymentStatusOracle', 'multicall3', 'weth', 'zoltarQuestionData'])
+		expect(assertStaticDeploymentArtifactRuntimeCodeHashes()).toEqual(['deploymentStatusOracle', 'multicall3', 'zoltarQuestionData'])
 		expect(() =>
 			assertStaticDeploymentArtifactRuntimeCodeHashes({
 				expectedRuntimeCodeHashes: { zoltarQuestionData: keccak256('0x01') },
@@ -147,18 +147,16 @@ describe('contract deployment internals', () => {
 		expect(bytecode['object']).toBe(sentBytecode)
 	})
 
-	test('adds WETH and allocated genesis REP ahead of Sepolia protocol dependencies', () => {
+	test('adds allocated genesis REP ahead of Sepolia protocol dependencies and keeps WETH external', () => {
 		const resetEnvironment = installActiveEnvironmentForTesting(createFakeBackend({ profile: SEPOLIA_NETWORK_PROFILE }))
 		try {
 			const steps = createDeploymentSteps()
-			const wethStep = steps.find(step => step.id === 'weth')
 			const repStep = steps.find(step => step.id === 'reputationToken')
 			const zoltarStep = steps.find(step => step.id === 'zoltar')
 
-			expect(wethStep?.address).toBe(SEPOLIA_NETWORK_PROFILE.wethAddress)
+			expect(steps.some(step => step.address === SEPOLIA_NETWORK_PROFILE.wethAddress)).toBe(false)
 			expect(repStep?.address).toBe(SEPOLIA_NETWORK_PROFILE.genesisRepTokenAddress)
 			expect(zoltarStep?.dependencies).toContain('reputationToken')
-			expect(SEPOLIA_WETH_INIT_CODE).toStartWith('0x')
 			expect(SEPOLIA_GENESIS_REP_INIT_CODE).toStartWith('0x')
 		} finally {
 			resetEnvironment()
