@@ -1,6 +1,7 @@
 import { defineChain, getAddress, type Address, type Hash } from '@zoltar/core-shared/evm/ethereum'
 import { mainnet, type Chain } from '@zoltar/core-shared/evm/ethereum'
-import { SEPOLIA_GENESIS_REP_ADDRESS, SEPOLIA_WETH_ADDRESS } from '../lib/sepoliaDeploymentConfig.js'
+import { SEPOLIA_GENESIS_REP_ADDRESS } from '../lib/sepoliaDeploymentConfig.js'
+import { getUniswapNetworkDeployment, MAINNET_CHAIN_ID, SEPOLIA_CHAIN_ID } from '@zoltar/core-shared/deployment/uniswapDeployments'
 import { DEFAULT_NETWORK, MAINNET_ENABLED } from './networkAvailability.js'
 import { sameChainId } from './chainId.js'
 
@@ -21,17 +22,12 @@ export type NetworkProfile = {
 	wethAddress: Address
 }
 
-export const MAINNET_WETH_ADDRESS = '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2' satisfies Address
+// Uniswap addresses (including each network's WETH) come from the shared registry that the bots and deployer use.
+const MAINNET_UNISWAP = getUniswapNetworkDeployment(MAINNET_CHAIN_ID)
+const SEPOLIA_UNISWAP = getUniswapNetworkDeployment(SEPOLIA_CHAIN_ID)
+export const MAINNET_WETH_ADDRESS = MAINNET_UNISWAP.wethAddress
 const MAINNET_USDC_ADDRESS = '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48' satisfies Address
-const MAINNET_UNISWAP_V3_FACTORY_ADDRESS = '0x1F98431c8aD98523631AE4a59f267346ea31F984' satisfies Address
-const MAINNET_UNISWAP_V3_QUOTER_ADDRESS = '0x61fFE014bA17989E743c5F6cB21bF9697530B21e' satisfies Address
-const MAINNET_UNISWAP_V4_QUOTER_ADDRESS = '0x52f0e24d1c21c8a0cb1e5a5dd6198556bd9e1203' satisfies Address
-
 const SEPOLIA_USDC_ADDRESS = getAddress('0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238')
-// Sepolia uses deploy:testnet contracts, matching the bots. Deployment tests verify these pins.
-const SEPOLIA_UNISWAP_V3_FACTORY_ADDRESS = getAddress('0xEf09Be426F8d6D2786cADEA7D3A8b0D09cEB79B4')
-const SEPOLIA_UNISWAP_V3_QUOTER_ADDRESS = getAddress('0x6Aa53e5023fFDa81f7EEE31bdA5D35437A5DD841')
-const SEPOLIA_UNISWAP_V4_QUOTER_ADDRESS = getAddress('0x29322b72F451C5f4eba5b3C862C76896470c059A')
 
 const sepoliaChain = defineChain({
 	id: 11155111,
@@ -73,9 +69,9 @@ export const MAINNET_NETWORK_PROFILE: NetworkProfile = {
 	repPricingMode: 'uniswap',
 	transactionExplorerBaseUrl: 'https://etherscan.io/tx/',
 	uniswapPoolExplorerBaseUrl: 'https://app.uniswap.org/explore/pools/ethereum',
-	uniswapV3FactoryAddress: MAINNET_UNISWAP_V3_FACTORY_ADDRESS,
-	uniswapV3QuoterAddress: MAINNET_UNISWAP_V3_QUOTER_ADDRESS,
-	uniswapV4QuoterAddress: MAINNET_UNISWAP_V4_QUOTER_ADDRESS,
+	uniswapV3FactoryAddress: MAINNET_UNISWAP.uniswapV3FactoryAddress,
+	uniswapV3QuoterAddress: MAINNET_UNISWAP.uniswapV3QuoterAddress,
+	uniswapV4QuoterAddress: MAINNET_UNISWAP.uniswapV4QuoterAddress,
 	usdcAddress: MAINNET_USDC_ADDRESS,
 	wethAddress: MAINNET_WETH_ADDRESS,
 }
@@ -90,11 +86,11 @@ export const SEPOLIA_NETWORK_PROFILE: NetworkProfile = {
 	repPricingMode: 'uniswap',
 	transactionExplorerBaseUrl: 'https://sepolia.etherscan.io/tx/',
 	uniswapPoolExplorerBaseUrl: 'https://app.uniswap.org/explore/pools/ethereum_sepolia',
-	uniswapV3FactoryAddress: SEPOLIA_UNISWAP_V3_FACTORY_ADDRESS,
-	uniswapV3QuoterAddress: SEPOLIA_UNISWAP_V3_QUOTER_ADDRESS,
-	uniswapV4QuoterAddress: SEPOLIA_UNISWAP_V4_QUOTER_ADDRESS,
+	uniswapV3FactoryAddress: SEPOLIA_UNISWAP.uniswapV3FactoryAddress,
+	uniswapV3QuoterAddress: SEPOLIA_UNISWAP.uniswapV3QuoterAddress,
+	uniswapV4QuoterAddress: SEPOLIA_UNISWAP.uniswapV4QuoterAddress,
 	usdcAddress: SEPOLIA_USDC_ADDRESS,
-	wethAddress: SEPOLIA_WETH_ADDRESS,
+	wethAddress: SEPOLIA_UNISWAP.wethAddress,
 }
 
 export function getPublicNetworkProfile(network: string | undefined): NetworkProfile {

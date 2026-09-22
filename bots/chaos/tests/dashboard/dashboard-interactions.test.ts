@@ -1636,6 +1636,14 @@ browserTest(
 				})`)
 				expect(navigationAfterRefresh).toEqual({ scrollLeft: Reflect.get(navigationBeforeRefresh, 'scrollLeft'), scrollY: Reflect.get(navigationBeforeRefresh, 'scrollY') })
 			}
+			// In-page navigation must move the `aria-current="page"` marker the stylesheet and
+			// assistive technology key on, not just an empty `aria-current` attribute.
+			for (const route of ['ecosystem', 'settings']) {
+				await cdp.evaluate(`document.querySelector('.section-nav a[href="/${route}"]')?.click()`)
+				await waitFor(`document.body.dataset.page === '${route}'`, `Clicking the /${route} link did not switch the page`)
+				const currentLinks = await cdp.evaluate("[...document.querySelectorAll('.section-nav a')].filter(link => link.hasAttribute('aria-current')).map(link => [new URL(link.href).pathname, link.getAttribute('aria-current')])")
+				expect(currentLinks).toEqual([[`/${route}`, 'page']])
+			}
 		} finally {
 			try {
 				await browserSession?.close()

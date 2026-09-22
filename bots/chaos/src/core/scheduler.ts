@@ -74,8 +74,8 @@ export function createChaosScheduler(options: ChaosSchedulerOptions) {
 		isDue: () => schedulerIsDue(options.state, currentMilliseconds(clock)),
 		waitMilliseconds: () => schedulerWaitMilliseconds(options.state, currentMilliseconds(clock)),
 		async ensureScheduled() {
+			if (options.state.status === 'paused' || options.state.status === 'running') return cloneSchedulerState(options.state)
 			if (options.state.nextRunAt !== undefined) {
-				if (options.state.status === 'paused' || options.state.status === 'running') return cloneSchedulerState(options.state)
 				const next = cloneSchedulerState(options.state)
 				next.status = schedulerIsDue(next, currentMilliseconds(clock)) ? 'due' : 'scheduled'
 				if (next.status === options.state.status) return next

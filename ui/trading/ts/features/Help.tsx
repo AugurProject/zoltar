@@ -5,27 +5,27 @@ import * as appCopy from '../copy/app.js'
 
 export function Help() {
 	return (
-		<div class='route-view-flow'>
+		<div className='route-view-flow'>
 			<RouteHeader title={appCopy.marketGuide} description={appCopy.marketGuideDescription} />
 			<SectionBlock title={appCopy.marketGuideStepsTitle}>
-				<ol class='guide-steps'>
+				<ol className='guide-steps'>
 					{appCopy.marketGuideSteps.map(step => (
 						<li key={step.number}>
 							<strong>{step.title}</strong>
-							<p class='detail'>{step.description}</p>
+							<p className='detail'>{step.description}</p>
 						</li>
 					))}
 				</ol>
 			</SectionBlock>
 			<SectionBlock>
 				<WorkflowSubsection title={appCopy.priceMeaningTitle}>
-					<p class='detail'>{appCopy.priceMeaningDescription}</p>
+					<p className='detail'>{appCopy.priceMeaningDescription}</p>
 				</WorkflowSubsection>
 				<WorkflowSubsection title={appCopy.shareValueTitle}>
-					<p class='detail'>{appCopy.shareValueDescription}</p>
+					<p className='detail'>{appCopy.shareValueDescription}</p>
 				</WorkflowSubsection>
 				<WorkflowSubsection title={appCopy.remainingSharesTitle}>
-					<p class='detail'>{appCopy.remainingSharesDescription}</p>
+					<p className='detail'>{appCopy.remainingSharesDescription}</p>
 				</WorkflowSubsection>
 			</SectionBlock>
 		</div>

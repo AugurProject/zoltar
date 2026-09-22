@@ -162,7 +162,9 @@ test('Trading renders its shell while the environment is still bootstrapping', a
 	try {
 		await waitFor(() => expect(rendered.container.textContent).toContain('Loading trading contracts'))
 		expect(within(rendered.container).queryByRole('alert')).toBe(null)
-		expect(within(rendered.container).getByRole('combobox', { name: 'Select universe' }).textContent).toBe('Loading…')
+		// The universe field holds a static value; universes are chosen on the universe route, never from the header.
+		expect(rendered.container.querySelector('.header-toolbar-controls .toolbar-field-value')?.textContent).toBe('Loading…')
+		expect(within(rendered.container).queryByRole('combobox')).toBe(null)
 	} finally {
 		await rendered.cleanup()
 		restoreEnvironment()
@@ -235,6 +237,8 @@ test('Trading address links use the coreShared address value', async () => {
 	const rendered = await renderIntoDocument(<SecurityPoolLink value={address} />)
 	expect(rendered.container.querySelector('a.security-pool-link .address-value')?.getAttribute('title')).toBe(address)
 	expect(rendered.container.querySelector('a.security-pool-link')?.getAttribute('href')).toBe(`#/security-pool/${address}`)
+	// The address is the link's only label and a direct child, so the shared rest-state underline rule applies to it.
+	expect(rendered.container.querySelector('a.security-pool-link > .address-value')).not.toBeNull()
 	await rendered.cleanup()
 	dom.cleanup()
 })

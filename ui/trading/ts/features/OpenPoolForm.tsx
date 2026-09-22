@@ -13,7 +13,7 @@ export function OpenPoolForm({ disabled, target = 'market' }: { disabled: boolea
 	const invalid = address.trim() !== '' && !valid
 	return (
 		<form
-			class='open-pool-form'
+			className='open-pool-form'
 			onSubmit={event => {
 				event.preventDefault()
 				if (disabled || !valid) return
@@ -28,7 +28,7 @@ export function OpenPoolForm({ disabled, target = 'market' }: { disabled: boolea
 				placeholder={liveCopy.poolAddressPlaceholder}
 				onInput={setAddress}
 				action={
-					<button class='primary' type='submit' disabled={disabled || !valid}>
+					<button className='primary' type='submit' disabled={disabled || !valid}>
 						{liveCopy.openPool}
 					</button>
 				}

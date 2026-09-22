@@ -16,3 +16,9 @@ export function setText(id: string, value: string) {
 export function shorten(value: string, leading = 8, trailing = 6) {
 	return value.length <= leading + trailing + 1 ? value : `${value.slice(0, leading)}…${value.slice(-trailing)}`
 }
+
+/** `aria-current` needs the literal `page` value: an empty attribute reads as "not current" to both CSS and assistive technology. */
+export function markCurrentPage(link: Element, current: boolean) {
+	if (current) link.setAttribute('aria-current', 'page')
+	else link.removeAttribute('aria-current')
+}

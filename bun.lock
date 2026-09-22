@@ -262,6 +262,7 @@
         "@zoltar/trading-shared": "workspace:1.0.0",
         "@zoltar/ui-core-shared": "workspace:1.0.0",
         "@zoltar/ui-statoblast-shared": "workspace:1.0.0",
+        "@zoltar/ui-zoltar-shared": "workspace:1.0.0",
         "@zoltar/zoltar-shared": "workspace:1.0.0",
         "preact": "10.26.4",
       },

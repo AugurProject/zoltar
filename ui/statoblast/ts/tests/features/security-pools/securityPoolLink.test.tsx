@@ -36,13 +36,15 @@ describe('SecurityPoolLink', () => {
 		},
 	})
 
-	test('renders the full pool address and follows normal left-click navigation', async () => {
+	test('renders the shared address value and follows normal left-click navigation', async () => {
 		const securityPoolAddress = getAddress('0x00000000000000000000000000000000000000f1')
 		const renderedComponent = await renderIntoDocument(<SecurityPoolLink securityPoolAddress={securityPoolAddress} selectedPoolView='fork-workflow' universeId={11n} />)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		const link = documentQueries.getByRole('link', { name: securityPoolAddress }) as HTMLAnchorElement
+		const link = documentQueries.getByRole('link', { name: securityPoolAddress })
+		expect(link.querySelector('.address-value')?.getAttribute('title')).toBe(securityPoolAddress)
+		expect(link.querySelector('.address-value-full')?.textContent).toBe(securityPoolAddress)
 		const expectedHref = getSecurityPoolLinkHref(securityPoolAddress, 'fork-workflow', 11n)
 		expect(link.getAttribute('href')).toBe(expectedHref)
 		let hashchangeCount = 0

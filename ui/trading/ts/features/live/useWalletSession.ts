@@ -10,6 +10,7 @@ import type { DeploymentConfiguration } from '../../protocol/config.js'
 import { getInjectedEthereum, subscribeToWalletContextChanges, type InjectedEthereum, type WalletContextChangeEvent } from '../../protocol/injected.js'
 import { publicErrorMessage, type LiveMarket } from '../../protocol/live.js'
 import { walletSummaryAvailability, walletSummaryRefreshState, type GuardedWalletWrite, type WorkflowOwner } from '../liveTradingControllerHelpers.js'
+import { liveCopy } from '../../copy/live.js'
 import type { LiveTradingControllerServices } from './liveTradingTypes.js'
 import type { usePortfolioQueries } from './usePortfolioQueries.js'
 import type { useTransactionWorkflow } from './useTransactionWorkflow.js'
@@ -372,6 +373,7 @@ export function useWalletSessionController({
 }
 
 export function useWalletSummaryEffects({
+	route,
 	configuration,
 	configurationError,
 	selectedUniverseId,
@@ -384,6 +386,7 @@ export function useWalletSummaryEffects({
 	services,
 	requests,
 }: {
+	route: string
 	configuration: DeploymentConfiguration | undefined
 	configurationError: string | undefined
 	selectedUniverseId: string | undefined
@@ -421,7 +424,7 @@ export function useWalletSummaryEffects({
 			session.setWalletSummaryStatus('disconnected')
 			return
 		}
-		const availability = walletSummaryAvailability(configuration !== undefined, configurationError, discoveryState, discoveryError, selected !== undefined || selectedUniverseId !== undefined)
+		const availability = walletSummaryAvailability(configuration !== undefined, configurationError, discoveryState, discoveryError, selected !== undefined || selectedUniverseId !== undefined, liveCopy.discoveryFailureLead(route))
 		if (availability !== undefined) {
 			session.setWalletSummaryStatus(availability.status)
 			session.setWalletSummaryError(availability.error)

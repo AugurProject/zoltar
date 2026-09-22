@@ -140,21 +140,21 @@ export function LivePositionControls({
 	const quoteSide = quote?.kind === 'entry' ? oppositeOutcome : side
 	const groupMessage = resolveActionGroupMessage(state, actionAvailability, statusText)
 	return (
-		<div class='position-controls' aria-busy={balanceState === 'loading' || revalidatingAfterReceipt}>
+		<div className='position-controls' aria-busy={balanceState === 'loading' || revalidatingAfterReceipt}>
 			<ProbabilityBar yesPercent={yesPercent} />
 			<BackingDetails market={market} />
-			<ul class='portfolio-holdings trade-holdings' aria-busy={balanceState === 'loading'}>
-				<li class={`portfolio-holding-yes ${side === 'YES' ? 'selected-holding' : ''}`} data-outcome='yes'>
-					<span class='holding-quantity'>{walletBalanceLabel(balances?.yes, workflowCopy.yes)}</span>
-					{balances === undefined ? <small class='payout-caption'>{workflowCopy.walletYes}</small> : undefined}
+			<ul className='portfolio-holdings trade-holdings' aria-busy={balanceState === 'loading'}>
+				<li className={`portfolio-holding-yes ${side === 'YES' ? 'selected-holding' : ''}`} data-outcome='yes'>
+					<span className='holding-quantity'>{walletBalanceLabel(balances?.yes, workflowCopy.yes)}</span>
+					{balances === undefined ? <small className='payout-caption'>{workflowCopy.walletYes}</small> : undefined}
 				</li>
-				<li class={`portfolio-holding-no ${side === 'NO' ? 'selected-holding' : ''}`} data-outcome='no'>
-					<span class='holding-quantity'>{walletBalanceLabel(balances?.no, workflowCopy.no)}</span>
-					{balances === undefined ? <small class='payout-caption'>{workflowCopy.walletNo}</small> : undefined}
+				<li className={`portfolio-holding-no ${side === 'NO' ? 'selected-holding' : ''}`} data-outcome='no'>
+					<span className='holding-quantity'>{walletBalanceLabel(balances?.no, workflowCopy.no)}</span>
+					{balances === undefined ? <small className='payout-caption'>{workflowCopy.walletNo}</small> : undefined}
 				</li>
 				<li data-outcome='invalid'>
-					<span class='holding-quantity'>{walletBalanceLabel(balances?.invalid, 'INVALID')}</span>
-					{balances === undefined ? <small class='payout-caption'>{workflowCopy.walletInvalid}</small> : undefined}
+					<span className='holding-quantity'>{walletBalanceLabel(balances?.invalid, 'INVALID')}</span>
+					{balances === undefined ? <small className='payout-caption'>{workflowCopy.walletInvalid}</small> : undefined}
 				</li>
 			</ul>
 			{balanceState === 'loading' && balances !== undefined ? <LoadingText>{appCopy.loadingBalances}</LoadingText> : undefined}
@@ -199,7 +199,7 @@ export function LivePositionControls({
 			</FormField>
 			<ExecutionProtectionFields slippage={slippage} validityMinutes={transactionValidityMinutes} disabled={controlsDisabled} onSlippageInput={setSlippage} onValidityInput={setTransactionValidityMinutes} />
 			{quote === undefined ? null : renderLiveTradeSummary(quote, side)}
-			<div class='transaction-outcome' ref={outcomeRef} tabIndex={-1}>
+			<div className='transaction-outcome' ref={outcomeRef} tabIndex={-1}>
 				{transactionHash === undefined ? null : <TradingTransactionHash hash={transactionHash} />}
 				<ErrorNotice message={receiptWarning} />
 				<ErrorNotice message={message} />
@@ -209,7 +209,7 @@ export function LivePositionControls({
 				</TransactionActionGroup>
 			</div>
 			{quote === undefined ? null : (
-				<details class='trade-breakdown'>
+				<details className='trade-breakdown'>
 					<summary>{workflowCopy.fullTradeBreakdown}</summary>
 					<WorkflowSubsection title={workflowCopy.quoteShares}>
 						<DataGrid dense>

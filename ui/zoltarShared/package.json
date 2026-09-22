@@ -50,10 +50,6 @@
 			"bun": "./ts/features/deployment/lib/deploymentRoute.ts",
 			"default": "./js/features/deployment/lib/deploymentRoute.js"
 		},
-		"./features/overview/OverviewPanels.js": {
-			"bun": "./ts/features/overview/OverviewPanels.tsx",
-			"default": "./js/features/overview/OverviewPanels.js"
-		},
 		"./features/questions/components/QuestionCreateSection.js": {
 			"bun": "./ts/features/questions/components/QuestionCreateSection.tsx",
 			"default": "./js/features/questions/components/QuestionCreateSection.js"
@@ -193,6 +189,18 @@
 		"./features/appShell/lib/deploymentTab.js": {
 			"bun": "./ts/features/appShell/lib/deploymentTab.ts",
 			"default": "./js/features/appShell/lib/deploymentTab.js"
+		},
+		"./features/universes/components/ForkTargetPicker.js": {
+			"bun": "./ts/features/universes/components/ForkTargetPicker.tsx",
+			"default": "./js/features/universes/components/ForkTargetPicker.js"
+		},
+		"./copy/forkTargets.js": {
+			"bun": "./ts/copy/forkTargets.ts",
+			"default": "./js/copy/forkTargets.js"
+		},
+		"./features/universes/components/ChildUniverseList.js": {
+			"bun": "./ts/features/universes/components/ChildUniverseList.tsx",
+			"default": "./js/features/universes/components/ChildUniverseList.js"
 		}
 	},
 	"version": "1.0.0"

@@ -298,3 +298,12 @@ test('returns opaque 500 responses for database failures', async () => {
 	expect(body).toBe('{"error":"Internal server error"}')
 	expect(body).not.toContain(sensitivePassword)
 })
+
+test('returns 400 for malformed percent encoding in entity paths', async () => {
+	const database = new SQL('postgres://user:unused@127.0.0.1:1/unused', { connectionTimeout: 1 })
+	databases.push(database)
+	for (const path of ['state/forks/1/%', 'state/timeline/1/universe/%E0%A4%A']) {
+		const response = await handleApi(new Request(`http://localhost/api/v1/${path}`), database)
+		expect(response?.status).toBe(400)
+	}
+})

@@ -11,7 +11,7 @@ export { isUiAppId, parseUiAppId, UI_APP_IDS, type UiAppId } from './appIds.mts'
 export const featureStylesheets: Record<UiAppId, readonly string[]> = {
 	zoltar: ['zoltar-shared.css'],
 	statoblast: ['zoltar-shared.css', 'statoblast-shared.css'],
-	trading: ['app.css'],
+	trading: ['zoltar-shared.css', 'app.css'],
 }
 
 export type UiPackageId = 'coreShared' | 'zoltarShared' | 'statoblastShared' | UiAppId

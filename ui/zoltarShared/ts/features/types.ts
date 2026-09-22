@@ -4,19 +4,8 @@ import type { DeploymentStatus, DeploymentStepId, MarketDetails, MarketDetailsPa
 
 import type { LoadableValueState } from '@zoltar/ui-core-shared/lib/loadState.js'
 import type { TokenApprovalState } from '@zoltar/ui-core-shared/transactions/tokenApproval.js'
-import type { UserMessagePresentation } from '@zoltar/ui-core-shared/lib/userCopy.js'
-import type { ReadBackendStatus } from '@zoltar/ui-core-shared/wallet/chainBackend.js'
-import type { ComponentChildren } from 'preact'
 
 export type * from '@zoltar/ui-core-shared/types/components.js'
-
-type RepPerEthPriceProps = {
-	repPerEthPrice: bigint | undefined
-	repPerEthSource: 'v4' | 'v3' | 'mock' | undefined
-	repPerEthSourceUrl: string | undefined
-}
-
-export type RepPriceFailure = 'no-liquidity' | 'rpc-error'
 
 export type DeploymentSectionProps = {
 	title: string
@@ -30,39 +19,6 @@ export type DeploymentSectionProps = {
 	deploymentStatusReasonElementId?: string | undefined
 	onDeploy: (stepId: DeploymentStepId) => Promise<void>
 }
-
-export type OverviewPanelsProps = {
-	settingsMenu?: ComponentChildren
-	applicationTitle: string
-	activeUniverseId: bigint
-	accountState: AccountState
-	isConnectingWallet: boolean
-	isManagingWallet: boolean
-	walletBootstrapComplete: boolean
-	parentUniverseId: bigint | undefined
-	universeRepBalanceAttoRep: bigint | undefined
-	isLoadingUniverseRepBalance: boolean
-	universeForkTime?: bigint | undefined
-	universeHasForked?: boolean | undefined
-	universePresentation: UserMessagePresentation | undefined
-	isRefreshing: boolean
-	repUsdcPrice: bigint | undefined
-	repUsdcFailure: RepPriceFailure | undefined
-	repUsdcSource: 'v4' | 'v3' | 'mock' | undefined
-	repUsdcSourceUrl: string | undefined
-	isLoadingRepPrices: boolean
-	isRefreshingRepPrices: boolean
-	onConnect: () => void
-	onChangeWallet: () => void
-	onDisconnectWallet: () => void
-	onGoToGenesisUniverse: () => void
-	onRefreshRepPrices: () => void
-	onSwitchNetwork: () => void
-	showRepPrices?: boolean
-	readBackendStatus?: ReadBackendStatus
-	repPerEthFailure: RepPriceFailure | undefined
-	repPerEthSourceLabel?: ComponentChildren
-} & RepPerEthPriceProps
 
 export type ZoltarView = 'create' | 'questions' | 'universes'
 

@@ -99,13 +99,15 @@
 				<section id="what-gets-deployed">
 					<h2>What gets deployed</h2>
 					<ul>
-						<li>deterministic WETH and genesis REP</li>
+						<li>deterministic genesis REP</li>
 						<li>the canonical CREATE2 deployer and Permit2</li>
-						<li>a deterministic Uniswap V3 factory, SwapRouter, and QuoterV2</li>
-						<li>a Uniswap V4 PoolManager and Quoter</li>
+						<li>a deterministic Uniswap V3 SwapRouter</li>
 						<li>the Zoltar and Augur Statoblast protocol factories and their bootstrap support contracts</li>
 						<li>the Statoblast Trading factory and router, at the canonical 0.30% fee</li>
 					</ul>
+					<p>Uniswap addresses come from one registry shared by the UI, the bots, and the deployer (<code>shared/core/ts/deployment/uniswapDeployments.ts</code>).</p>
+					<p>On Sepolia, WETH, the Uniswap V3 factory, QuoterV2, the V4 PoolManager, and the V4 Quoter are Uniswap's published contracts (<a href="https://developers.uniswap.org/docs/protocols/v3/deployments/v3-ethereum-deployments">V3</a>, <a href="https://developers.uniswap.org/docs/protocols/v4/deployments">V4</a>). The deployer verifies that each one carries Uniswap's exact runtime code. An Anvil node with the Sepolia chain ID receives them by replaying Uniswap's original creation transactions, vendored byte for byte in <code>scripts/artifacts/uniswap-deployment.json</code>. Uniswap publishes no SwapRouter (v1) on Sepolia, so the deployer installs one bound to the published factory.</p>
+					<p>Any other chain receives deterministic WETH plus a complete Uniswap V3 and V4 deployment from the pinned bytecode, so deploying to a new testnet needs no configuration. Reusing Uniswap's own contracts on another chain additionally requires vendoring their creation transactions and runtime hashes in the artifact; today only Sepolia has them. The bots read core addresses from the tracked Sepolia manifest, so they target Sepolia and Sepolia replays (such as the local Anvil network) until a deterministic testnet has a generated manifest.</p>
 					<p>The command does not create Uniswap pools or add liquidity. Protocol factories create market-specific security pools, share tokens, oracle coordinators, auctions, escalation games, delegates, and child-universe contracts later, when those features are used. Genesis REP allocations are reviewed as part of <a href="./launch-a-release.html#genesis-rep-deployment">launching a release</a>; the <a href="../reference/deployment-status.html">deployment status oracle reference</a> explains how clients read which steps are installed.</p>
 				</section>
 			</article>

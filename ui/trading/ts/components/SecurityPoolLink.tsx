@@ -1,12 +1,8 @@
-import { ReadOnlyAddressValue } from '@zoltar/ui-core-shared/components/AddressValue.js'
+import { SecurityPoolLink as SharedSecurityPoolLink } from '@zoltar/ui-core-shared/components/SecurityPoolLink.js'
 import { getTradingRouteHref } from '../lib/routing.js'
 import { openSecurityPoolLabel } from '../copy/app.js'
 
-/** Plain link from a SecurityPool address to its detail route. */
+/** The shared pool link addressed to Trading's security pool route. */
 export function SecurityPoolLink({ value, disabled = false }: { value: string; disabled?: boolean }) {
-	return (
-		<a class='security-pool-link' href={getTradingRouteHref(`#/security-pool/${value}`)} aria-label={openSecurityPoolLabel(value)} aria-disabled={disabled} onClick={disabled ? event => event.preventDefault() : undefined}>
-			<ReadOnlyAddressValue address={value} responsiveAbbreviation />
-		</a>
-	)
+	return <SharedSecurityPoolLink ariaLabel={openSecurityPoolLabel(value)} disabled={disabled} href={getTradingRouteHref(`#/security-pool/${value}`)} securityPoolAddress={value} />
 }

@@ -301,6 +301,11 @@
 	gap: var(--space-4);
 }
 
+/* A nested stack that only groups its parent's children keeps the parent's rhythm. */
+.route-workflow-stack > .workflow-stack {
+	margin-top: 0;
+}
+
 .route-view-flow,
 .market-route-flow {
 	display: grid;
@@ -888,6 +893,17 @@
 .header-toolbar-settings {
 	display: flex;
 	align-items: center;
+}
+
+/* The details toggle only appears when the strip has something to reveal: secondary metrics at the tablet breakpoint or a collapsed simulation strip on phones. */
+.overview-wallet-panel:not(.is-simulation):not(:has(.overview-metric-secondary, .overview-metric-group.is-secondary)) .overview-details-toggle {
+	display: none;
+}
+
+@media (min-width: 40.0625rem) {
+	.overview-wallet-panel:not(:has(.overview-metric-secondary, .overview-metric-group.is-secondary)) .overview-details-toggle {
+		display: none;
+	}
 }
 
 /* Until both groups fit on one row, the balance and price groups take one row each, sized to their content with a shared caption column. */

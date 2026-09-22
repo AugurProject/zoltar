@@ -12,7 +12,10 @@ import { Badge } from '@zoltar/ui-core-shared/components/Badge.js'
 import { EmptyState } from '@zoltar/ui-core-shared/components/EmptyState.js'
 import { ErrorNotice } from '@zoltar/ui-core-shared/components/ErrorNotice.js'
 import { ReadOnlyAddressValue } from '@zoltar/ui-core-shared/components/AddressValue.js'
+import { RetryableNotice } from '@zoltar/ui-core-shared/components/RetryableNotice.js'
 import { RouteHeader } from '@zoltar/ui-core-shared/components/RouteHeader.js'
+import { StateHint } from '@zoltar/ui-core-shared/components/StateHint.js'
+import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import { SectionBlock } from '@zoltar/ui-core-shared/components/SectionBlock.js'
 import { StickyObjectContext } from '@zoltar/ui-core-shared/components/StickyObjectContext.js'
 import { ViewTabs } from '@zoltar/ui-core-shared/components/ViewTabs.js'
@@ -25,8 +28,10 @@ import { LiveLiquidityControls, liveLiquidityServices, type LiveLiquidityService
 import { LiveSettlementControls, liveSettlementServices, type LiveSettlementServices } from './LiveSettlementControls.js'
 import { DEFAULT_SLIPPAGE_PERCENT, DEFAULT_TRANSACTION_VALIDITY_MINUTES } from './LiveTradingTransactionUi.js'
 import type { WalletSummaryState } from '../lib/walletSummaryState.js'
-import { liveWorkflowRoutePresentation } from './live/routePresentation.js'
+import { liveRouteLoadingPresentation, liveWorkflowRoutePresentation } from './live/routePresentation.js'
 import { LiveSecurityPoolDetails, PairInitializationAction, SecurityPoolRouteEmptyState } from './LiveSecurityPoolDetails.js'
+import { UniverseDirectory, type LoadUniverseSummary } from './UniverseDirectory.js'
+import type { UniverseDiscoveryScope } from '../lib/universeSelection.js'
 import { LiveMarketBrowser, marketStatusLabel, marketStatusTone } from './LiveMarketBrowser.js'
 import { liveCopy } from '../copy/live.js'
 import * as availabilityCopy from '../copy/availability.js'
@@ -65,6 +70,10 @@ export function LiveTrading({
 	configuration,
 	configurationError,
 	selectedUniverseId,
+	urlUniverseId,
+	confirmedUniverseId,
+	loadUniverseSummary,
+	onDiscoveryStateChange,
 	onUniversesChange = () => undefined,
 	onWorkflowLockChange,
 	onWalletSummaryChange = ignoreWalletSummaryChange,
@@ -79,7 +88,15 @@ export function LiveTrading({
 	configuration: DeploymentConfiguration | undefined
 	configurationError: string | undefined
 	selectedUniverseId?: string | undefined
-	onUniversesChange?(universeIds: readonly bigint[], selectedUniverseId: bigint | undefined): void
+	/** The `universe` parameter the application is honouring, recorded in each discovery answer's scope. */
+	urlUniverseId?: bigint | undefined
+	/** The universe discovery has confirmed; the universe route waits for it so an unknown request never renders as a universe. */
+	confirmedUniverseId?: string | undefined
+	/** Test seam for the universe route's summary read. */
+	loadUniverseSummary?: LoadUniverseSummary | undefined
+	/** Lets the shell know when universe discovery has failed, so the header can say so instead of loading forever. */
+	onDiscoveryStateChange?: ((state: 'loading' | 'ready' | 'error') => void) | undefined
+	onUniversesChange?(universeIds: readonly bigint[], selectedUniverseId: bigint | undefined, scope: UniverseDiscoveryScope): void
 	onWorkflowLockChange(locked: boolean): void
 	onWalletSummaryChange?(summary: WalletSummaryState): void
 	walletSummaryRetryNonce?: number
@@ -94,6 +111,7 @@ export function LiveTrading({
 		configuration,
 		configurationError,
 		selectedUniverseId,
+		urlUniverseId,
 		onUniversesChange,
 		onWorkflowLockChange,
 		onWalletSummaryChange,
@@ -118,6 +136,7 @@ export function LiveTrading({
 	// Moving between addressed markets keeps the same page title, so focus the new market heading here instead of relying on the app heading.
 	const marketHeadingRef = useFocusOnKeyChange<HTMLHeadingElement>(selected?.pool, false)
 	const previousWalletConnectRequestNonce = useRef(walletConnectRequestNonce)
+	useEffect(() => onDiscoveryStateChange?.(discoveryState), [discoveryState, onDiscoveryStateChange])
 	useEffect(() => {
 		if (walletConnectRequestNonce === undefined) return
 		if (previousWalletConnectRequestNonce.current === walletConnectRequestNonce) return
@@ -126,25 +145,44 @@ export function LiveTrading({
 	}, [connect, walletConnectRequestNonce])
 	// A failed deployment lookup switches the application to the deployment setup route, which owns the
 	// error surface, so this route only ever renders while the deployment is still resolving.
-	if (configuration === undefined)
+	if (configuration === undefined) {
+		const loadingPresentation = liveRouteLoadingPresentation(route)
 		return (
-			<div class='route-view-flow'>
-				<RouteHeader title={<span role='status'>{appCopy.loadingContracts}</span>} />
+			<div className='route-view-flow'>
+				<RouteHeader title={loadingPresentation.title} description={loadingPresentation.description} />
+				<StateHint announcement='polite' presentation={{ key: 'loading', badgeLabel: commonCopy.loading, badgeTone: 'loading', detail: appCopy.loadingContracts, detailIsLoading: true }} />
 			</div>
 		)
+	}
 	// Connecting re-requests the deployment chain first, so the same action switches a wallet that is on another network.
 	let walletActionLabel = account === undefined ? appCopy.connectWallet : abbreviateAddress(account, 6, 4)
 	if (account === undefined && networkMismatchReason !== undefined) walletActionLabel = availabilityCopy.formatSwitchNetworkAction(configuration.chainName)
 	const walletAction =
 		walletConnectRequestNonce === undefined ? (
-			<button class='secondary wallet-button' type='button' disabled={workflowLocked} onClick={connect}>
+			<button className='secondary wallet-button' type='button' disabled={workflowLocked} onClick={connect}>
 				{walletActionLabel}
 			</button>
 		) : undefined
+	if (route === 'universe') {
+		// Discovery confirms the requested universe before the directory describes it, so an unknown request never renders as a universe.
+		if (confirmedUniverseId === undefined || discoveryState === 'error')
+			return (
+				<div className='route-view-flow'>
+					<RouteHeader title={appCopy.universe} description={appCopy.universeRouteDescription} />
+					<ErrorNotice message={connectionMessage} />
+					{discoveryState === 'error' ? (
+						<RetryableNotice message={liveCopy.describeDiscoveryFailure(liveCopy.discoveryFailureLead(route), discoveryError)} retryLabel={commonCopy.retry} onRetry={refreshFromControl} disabled={workflowLocked} />
+					) : (
+						<StateHint announcement='polite' presentation={{ key: 'loading', badgeLabel: commonCopy.loading, badgeTone: 'loading', detail: commonCopy.loadingUniverseDetails, detailIsLoading: true }} />
+					)}
+				</div>
+			)
+		return <UniverseDirectory configuration={configuration} connectionMessage={connectionMessage} universeId={BigInt(confirmedUniverseId)} {...(loadUniverseSummary === undefined ? {} : { loadUniverse: loadUniverseSummary })} />
+	}
 	if (isTradingLookupRoute(route)) {
 		const routePresentation = liveWorkflowRoutePresentation(route)
 		return (
-			<div class='route-view-flow'>
+			<div className='route-view-flow'>
 				<RouteHeader title={routePresentation.title} description={routePresentation.description} actions={walletAction} />
 				<ErrorNotice message={connectionMessage} />
 				<LiveMarketBrowser lookupRoute={route} markets={listedMarkets} pageMarketCount={visibleMarkets.length} discoveryState={discoveryState} discoveryError={discoveryError} marketPage={marketPage} workflowLocked={workflowLocked} nowSeconds={nowSeconds} retry={refreshFromControl} loadMarketPage={loadMarketPage} />
@@ -157,7 +195,7 @@ export function LiveTrading({
 				<LiveSecurityPoolDetails market={selected} refreshError={discoveryState === 'error' ? (discoveryError ?? liveCopy.unknownDiscovery) : undefined} refreshing={discoveryState === 'loading'} retry={refreshFromControl} workflowLocked={workflowLocked} nowSeconds={nowSeconds} connectionMessage={connectionMessage} />
 			)
 		return (
-			<div class='route-view-flow'>
+			<div className='route-view-flow'>
 				<RouteHeader title={appCopy.securityPool} description={appCopy.securityPoolRouteDescription} />
 				<ErrorNotice message={connectionMessage} />
 				<SectionBlock variant='plain' busy={discoveryState === 'loading'}>
@@ -170,14 +208,14 @@ export function LiveTrading({
 		// Balances cannot be judged empty until discovery has produced the pools they belong to.
 		const discovering = discoveryState === 'loading' && visibleMarkets.length === 0
 		return (
-			<div class='route-view-flow'>
+			<div className='route-view-flow'>
 				<RouteHeader title={appCopy.portfolio} actions={walletAction} />
 				<ErrorNotice message={connectionMessage} />
 				<SectionBlock variant='plain' busy={discoveryState === 'loading'}>
 					{discovering ? <EmptyState live title={liveCopy.discoveringSecurityPools} /> : null}
 					<ErrorNotice message={discoveryState === 'error' ? liveCopy.securityPoolFactoryDiscoveryFailed(discoveryError) : undefined} />
-					{discoveryState === 'ready' && visibleMarkets.length === 0 ? <p class='detail'>{liveCopy.noSecurityPoolsInUniverse}</p> : null}
-					{discoveryState === 'error' || discovering ? null : <LivePortfolio entries={visiblePortfolioEntries} balanceState={portfolioBalanceState} balanceError={portfolioBalanceError} retryBalances={retryPortfolioBalances} />}
+					{discoveryState === 'ready' && visibleMarkets.length === 0 ? <EmptyState title={liveCopy.noSecurityPoolsInUniverse} /> : null}
+					{discoveryState === 'error' || discovering || (discoveryState === 'ready' && visibleMarkets.length === 0) ? null : <LivePortfolio entries={visiblePortfolioEntries} balanceState={portfolioBalanceState} balanceError={portfolioBalanceError} retryBalances={retryPortfolioBalances} />}
 				</SectionBlock>
 			</div>
 		)
@@ -200,16 +238,16 @@ export function LiveTrading({
 	// The route header names the workflow; the object header below carries the market question, status, and facts, so
 	// neither repeats the other. Focus lands on the object header when the addressed market changes.
 	return (
-		<div class='route-view-flow'>
+		<div className='route-view-flow'>
 			<RouteHeader title={routePresentation.title} description={selected === undefined ? routePresentation.description : undefined} actions={walletAction} />
 			<ErrorNotice message={connectionMessage} />
 			{createdMarketTitle === undefined ? null : (
-				<p class='detail' role='status'>
+				<p className='detail' role='status'>
 					{liveCopy.marketCreated(createdMarketTitle)} <a href={getTradingRouteHref(routePool === undefined ? '#/liquidity' : `#/liquidity/${routePool}`)}>{appCopy.liquidity}</a>
 				</p>
 			)}
 			<ErrorNotice message={selected !== undefined && discoveryState === 'error' ? liveCopy.securityPoolRefreshFailed(discoveryError ?? liveCopy.unknownDiscovery) : undefined} />
-			<div class='market-stack'>
+			<div className='market-stack'>
 				{selected === undefined ? (
 					<SectionBlock variant='plain' busy={discoveryState === 'loading'}>
 						<SecurityPoolRouteEmptyState discoveryState={discoveryState} discoveryError={discoveryError} workflowLocked={workflowLocked} retry={refreshFromControl} />
@@ -221,7 +259,7 @@ export function LiveTrading({
 						return (
 							<SectionBlock variant='plain'>
 								<MarketFacts market={selected} nowSeconds={nowSeconds} workflowLocked={workflowLocked} headingRef={marketHeadingRef} />
-								<p class='detail'>
+								<p className='detail'>
 									{liveCopy.poolAlreadyExists} <a href={getTradingRouteHref(`#/liquidity/${selected.pool}`)}>{appCopy.liquidity}</a>
 								</p>
 							</SectionBlock>
@@ -266,7 +304,7 @@ export function LiveTrading({
 						<SectionBlock key={selected.pool} className='market-workspace'>
 							<MarketFacts market={selected} nowSeconds={nowSeconds} workflowLocked={workflowLocked} headingRef={marketHeadingRef} />
 							<ViewTabs ariaLabel={appCopy.marketWorkspaceViews} semantics='tabs' size='compact' value={activeView} onChange={openView} options={viewOptions} />
-							<div class='market-workspace-panel' role='tabpanel' id={MARKET_WORKSPACE_PANEL_ID} aria-labelledby={viewTabId(activeView)}>
+							<div className='market-workspace-panel' role='tabpanel' id={MARKET_WORKSPACE_PANEL_ID} aria-labelledby={viewTabId(activeView)}>
 								{activeView === 'settlement' ? (
 									<LiveSettlementControls
 										configuration={configuration}

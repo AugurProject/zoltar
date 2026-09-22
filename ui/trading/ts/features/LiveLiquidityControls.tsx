@@ -101,8 +101,8 @@ export function LiveLiquidityControls({
 	const probabilityInvalid = operation === 'initialize' && probability.trim() !== '' && conditionalBps === undefined
 	const groupMessage = resolveActionGroupMessage(state, actionAvailability, statusText)
 	return (
-		<div class='liquidity-controls'>
-			{balanceState === 'disconnected' ? <p class='detail'>{liquidityCopy.disconnectedGuidance}</p> : null}
+		<div className='liquidity-controls'>
+			{balanceState === 'disconnected' ? <p className='detail'>{liquidityCopy.disconnectedGuidance}</p> : null}
 			{balanceState === 'error' && networkMismatchReason === undefined ? <BalanceLoadError message={liquidityCopy.balancesUnavailable(balanceError ?? liquidityCopy.balanceRefreshFallback)} retry={retryBalances} disabled={workflowLocked} /> : null}
 			<ViewTabs
 				ariaLabel={liquidityCopy.operationLabel}
@@ -126,37 +126,37 @@ export function LiveLiquidityControls({
 				</FormField>
 			) : null}
 			<ExecutionProtectionFields slippage={slippage} validityMinutes={transactionValidityMinutes} disabled={workflowLocked} onSlippageInput={updateSlippage} onValidityInput={updateValidity} />
-			<p class='detail'>{operation === 'remove' ? liquidityCopy.removalGuidance : liquidityCopy.additionGuidance}</p>
+			<p className='detail'>{operation === 'remove' ? liquidityCopy.removalGuidance : liquidityCopy.additionGuidance}</p>
 			{quote === undefined ? null : (
 				<>
-					<div class='exchange-preview'>
+					<div className='exchange-preview'>
 						<div>
-							<p class='detail'>{liquidityCopy.youProvide}</p>
-							<strong class='decision-amount'>{quote.operation === 'remove' ? formatLpQuantity(quote.amount) : `${formatTrimmedUnits(quote.amount)} ${workflowCopy.eth}`}</strong>
+							<p className='detail'>{liquidityCopy.youProvide}</p>
+							<strong className='decision-amount'>{quote.operation === 'remove' ? formatLpQuantity(quote.amount) : `${formatTrimmedUnits(quote.amount)} ${workflowCopy.eth}`}</strong>
 						</div>
-						<span class='exchange-arrow' aria-hidden='true'>
+						<span className='exchange-arrow' aria-hidden='true'>
 							→
 						</span>
 						<div>
-							<p class='detail'>{liquidityCopy.youReceive}</p>
+							<p className='detail'>{liquidityCopy.youReceive}</p>
 							{quote.operation === 'remove' ? (
-								<ul class='portfolio-holdings'>
-									<li class='portfolio-holding-yes'>{formatOutcomeQuantity(quote.expectedYes, liquidityCopy.yes)}</li>
-									<li class='portfolio-holding-no'>{formatOutcomeQuantity(quote.expectedNo, liquidityCopy.no)}</li>
+								<ul className='portfolio-holdings'>
+									<li className='portfolio-holding-yes'>{formatOutcomeQuantity(quote.expectedYes, liquidityCopy.yes)}</li>
+									<li className='portfolio-holding-no'>{formatOutcomeQuantity(quote.expectedNo, liquidityCopy.no)}</li>
 								</ul>
 							) : (
 								<>
-									<strong class='decision-amount'>{formatLpQuantity(quote.expectedLiquidity)}</strong>
-									<ul class='portfolio-holdings'>
+									<strong className='decision-amount'>{formatLpQuantity(quote.expectedLiquidity)}</strong>
+									<ul className='portfolio-holdings'>
 										<li>{formatOutcomeQuantity(quote.result.invalidInsurance, liquidityCopy.invalid)}</li>
-										{quote.result.yesReturned === 0n ? undefined : <li class='portfolio-holding-yes'>{formatOutcomeQuantity(quote.result.yesReturned, liquidityCopy.yes)}</li>}
-										{quote.result.noReturned === 0n ? undefined : <li class='portfolio-holding-no'>{formatOutcomeQuantity(quote.result.noReturned, liquidityCopy.no)}</li>}
+										{quote.result.yesReturned === 0n ? undefined : <li className='portfolio-holding-yes'>{formatOutcomeQuantity(quote.result.yesReturned, liquidityCopy.yes)}</li>}
+										{quote.result.noReturned === 0n ? undefined : <li className='portfolio-holding-no'>{formatOutcomeQuantity(quote.result.noReturned, liquidityCopy.no)}</li>}
 									</ul>
 								</>
 							)}
 						</div>
 					</div>
-					<p class='inline-facts'>
+					<p className='inline-facts'>
 						<span>
 							{liquidityCopy.slippageTolerance}: {formatTrimmedUnits(quote.slippageBps, 2, 2)}%
 						</span>
@@ -179,7 +179,7 @@ export function LiveLiquidityControls({
 					</ReadOnlyDetailAccordion>
 				</>
 			)}
-			<div class='transaction-outcome' ref={outcomeRef} tabIndex={-1}>
+			<div className='transaction-outcome' ref={outcomeRef} tabIndex={-1}>
 				{transactionHash === undefined ? null : <TradingTransactionHash hash={transactionHash} />}
 				<ErrorNotice message={receiptWarning} />
 				<ErrorNotice message={error} />

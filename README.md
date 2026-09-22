@@ -76,9 +76,9 @@ query (for example, `#/deploy?network=sepolia`). The application then uses
 Sepolia chain ID `11155111`, its configured public RPC, Sepolia Etherscan links,
 and Sepolia-specific deterministic contract addresses.
 
-The Sepolia deployment flow includes WETH and genesis REP before the contracts
-that depend on them. Initial Sepolia REP holders and exact 18-decimal balances
-are defined in
+The Sepolia deployment flow installs genesis REP before the contracts that
+depend on it; WETH is Uniswap's published Sepolia contract. Initial Sepolia REP
+holders and exact 18-decimal balances are defined in
 [`shared/zoltar/ts/deployment/sepoliaRepAllocations.ts`](./shared/zoltar/ts/deployment/sepoliaRepAllocations.ts).
 Changing that list also changes the deterministic genesis REP address and every
 dependent deployment address.

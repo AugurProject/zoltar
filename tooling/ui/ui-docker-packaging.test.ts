@@ -25,11 +25,13 @@ describe('UI Docker packaging', () => {
 				if (instruction.keyword !== 'RUN') continue
 				const app = /production\.mts (zoltar|statoblast|trading)/u.exec(instruction.value)?.[1]
 				if (app === undefined) continue
-				const packages = app === 'trading' ? ['trading'] : ['zoltarShared']
+				// Every app loads the Zoltar feature sheet; Statoblast adds its own and Trading adds its app sheet.
+				const packages = ['zoltarShared']
 				if (app === 'statoblast') packages.push('statoblastShared')
+				if (app === 'trading') packages.push('trading')
 				for (const sharedPackage of packages) {
 					expect(copies).toContain(`./ui/${sharedPackage}/css/ /source/ui/${sharedPackage}/css/`)
-					expect(await Bun.file(join(repositoryRoot, 'ui', sharedPackage, 'css', app === 'trading' ? 'app.css' : 'index.css')).exists()).toBe(true)
+					expect(await Bun.file(join(repositoryRoot, 'ui', sharedPackage, 'css', sharedPackage === 'trading' ? 'app.css' : 'index.css')).exists()).toBe(true)
 				}
 			}
 		}

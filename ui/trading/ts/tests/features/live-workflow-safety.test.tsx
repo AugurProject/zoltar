@@ -181,6 +181,7 @@ describe('live workflow safety boundary', () => {
 				if (deferChildDiscovery) await childDiscovery.promise
 				return { start: 0n, count: 1n, total: 1n, previousStart: undefined, nextStart: undefined, markets: [childMarket], universeIds: [1n, 2n], selectedUniverseId: 2n }
 			}
+			if (requestedUniverseId === 3n) return { start: 0n, count: 0n, total: 0n, previousStart: undefined, nextStart: undefined, markets: [], universeIds: [1n, 2n, 3n], selectedUniverseId: 3n }
 			return { ...(await discoverMarkets()), universeIds: [1n, 2n], selectedUniverseId: 1n }
 		}
 		const controllerServices = {
@@ -488,5 +489,11 @@ describe('live workflow safety boundary', () => {
 		await act(async () => button('Remove').click())
 		expect(hasButton('Approve exact LP amount')).toBeFalse()
 		expect(hasButton('Simulate liquidity transaction')).toBeTrue()
+		// A universe without pools shows the route-level empty state once; the portfolio list does not add a second one.
+		await act(() => render(<LiveTrading route='portfolio' configuration={configuration} configurationError={undefined} selectedUniverseId='3' onWorkflowLockChange={locked => workflowLocks.push(locked)} onWalletSummaryChange={recordWalletSummary} />, rendered.container))
+		await settleAsyncWorkflow()
+		await waitForDom(() => document.body.textContent?.includes('No security pools are deployed in the selected universe.') === true, 'empty universe portfolio')
+		expect(document.querySelectorAll('.empty-state')).toHaveLength(1)
+		expect(document.querySelector('.portfolio-positions')).toBeNull()
 	})
 })

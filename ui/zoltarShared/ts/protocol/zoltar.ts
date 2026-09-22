@@ -192,8 +192,12 @@ export async function loadZoltarQuestionPage(client: ReadClient, pageIndex: numb
 	}
 }
 
-export async function loadZoltarUniverseSummary(client: ReadClient, universeId: bigint): Promise<ZoltarUniverseSummary | undefined> {
-	const zoltarAddress = getDeploymentStepAddress('zoltar')
+/**
+ * Reads a universe from Zoltar. Callers with their own deployment configuration pass its Zoltar address so the universe reads
+ * target that deployment; the fork question and outcome labels still come from the active profile's question data, so the
+ * address must belong to the same canonical deployment as the active network profile.
+ */
+export async function loadZoltarUniverseSummary(client: ReadClient, universeId: bigint, zoltarAddress: Address = getDeploymentStepAddress('zoltar')): Promise<ZoltarUniverseSummary | undefined> {
 	const [repToken, universe, forkTime, forkThresholdAttoRep, forkBurnDivisor] = await readRequiredMulticall(client, [
 		{
 			abi: Zoltar_Zoltar.abi,
@@ -246,7 +250,7 @@ export async function loadZoltarUniverseSummary(client: ReadClient, universeId: 
 				const pageResponse = await client.readContract({
 					abi: Zoltar_Zoltar.abi,
 					functionName: 'getDeployedChildUniverses',
-					address: getDeploymentStepAddress('zoltar'),
+					address: zoltarAddress,
 					args: [universeId, currentIndex, CONTRACT_PAGE_SIZE],
 				})
 				if (!Array.isArray(pageResponse) || pageResponse.length !== 3) throw new Error('Unexpected deployed child universe page response')
@@ -304,7 +308,7 @@ export async function loadZoltarUniverseSummary(client: ReadClient, universeId: 
 					childOutcomeEntries.map(({ outcomeIndex }) => ({
 						abi: Zoltar_Zoltar.abi,
 						functionName: 'getChildUniverseId',
-						address: getDeploymentStepAddress('zoltar'),
+						address: zoltarAddress,
 						args: [universeId, outcomeIndex],
 					})),
 				),
@@ -316,7 +320,7 @@ export async function loadZoltarUniverseSummary(client: ReadClient, universeId: 
 					childUniverseIds.map((childUniverseId: bigint) => ({
 						abi: Zoltar_Zoltar.abi,
 						functionName: 'universes',
-						address: getDeploymentStepAddress('zoltar'),
+						address: zoltarAddress,
 						args: [childUniverseId],
 					})),
 				),

@@ -10,8 +10,8 @@ type OpenOraclePriceValueProps = {
 }
 
 export function OpenOraclePriceValue({ currentTimestamp, lastPrice, lastSettlementTimestamp, priceValidUntilTimestamp }: OpenOraclePriceValueProps) {
-	if (lastPrice === undefined || lastSettlementTimestamp === 0n) return commonCopy.unavailable
 	const chainCurrentTimestamp = useChainTimestamp()
+	if (lastPrice === undefined || lastSettlementTimestamp === 0n) return commonCopy.unavailable
 	const resolvedCurrentTimestamp = currentTimestamp ?? chainCurrentTimestamp
 
 	const validityPresentation =

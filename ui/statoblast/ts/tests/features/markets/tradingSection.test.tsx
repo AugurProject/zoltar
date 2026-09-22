@@ -805,7 +805,7 @@ void describe('TradingSection', () => {
 		const slider = modalQueries.getByRole('slider') as HTMLInputElement
 
 		expect(modalQueries.getByText('Select scalar target')).not.toBeNull()
-		expect(modalQueries.getByText('Select at least one scalar target universe.')).not.toBeNull()
+		expect(modalQueries.getByText('No target child universes selected.')).not.toBeNull()
 		expect(modalQueries.getByRole('button', { name: 'Add target' })).not.toBeNull()
 
 		await act(() => {
@@ -820,7 +820,7 @@ void describe('TradingSection', () => {
 			fireEvent.click(modalQueries.getByRole('button', { name: 'Add target' }))
 		})
 
-		expect(modalQueries.queryByText('Select at least one scalar target universe.')).toBeNull()
+		expect(modalQueries.queryByText('No target child universes selected.')).toBeNull()
 		expect(modalQueries.getByRole('button', { name: 'Remove target' })).not.toBeNull()
 	})
 
