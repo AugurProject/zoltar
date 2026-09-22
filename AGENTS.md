@@ -261,7 +261,13 @@ Supply:
 - authoritative implementation or research sources;
 - pages or material intentionally deleted;
 - pages moved, converted, split, or regenerated from another location, with the source;
-- validation performed.
+- validation performed;
+- when the change set is split, the section this run owns and the sections other runs own.
+
+When more than about fifteen pages change, spawn the reviewer once per documentation
+section (tutorials, how-to guides, explanation, reference, and start-here or landing
+pages) with the same handoff and a stated section, and disposition the union of the
+findings. One run cannot finish both verification passes over a large corpus.
 
 Ask the reviewer to assess reader-purpose completion, mode purity, concision,
 canonical ownership, accuracy of claims actually made, rendered correctness,

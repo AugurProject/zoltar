@@ -19,7 +19,7 @@ Do the review as two passes. Finish the first before starting the second. Record
 
 Pass 1: verify claims against code.
 
-Run this procedure on every changed page. Treat moved, converted, split, or regenerated content as newly written: it was verified, if at all, against the code of the day it was authored, and the code has moved since. Prioritize the pages the handoff lists as moved or converted.
+Run this procedure on every changed page. Treat moved, converted, split, or regenerated content as newly written: it was verified, if at all, against the code of the day it was authored, and the code has moved since. Work in cost order so that the expensive steps are not the ones dropped when the change set is large: first run steps 2 and 3 on the pages the handoff lists as moved, converted, or regenerated, then steps 2 and 3 on the remaining how-to, tutorial, and example-bearing pages, then steps 1, 4, 5, and 6 on every page. If the handoff scopes you to one section of a larger change, verify only that section but still grep the whole corpus for ownership and terminology.
 
 1. Identifiers. Extract every code span, contract name, function, event, parameter, storage field, error string, command, script name, environment variable, flag, file path, route, query parameter, UI label, and URL. Grep each one in the repository: contracts under `solidity/contracts/`, scripts in `package.json` and `tooling/`, workflows under `.github/workflows/`, UI copy under `ui/*/ts/copy/` and routing under `ui/*/ts/lib/`. A quoted label must match the rendered string, including suffixes the code appends. An identifier that does not exist, or exists with a different name, signature, or parameter order, is a finding.
 
@@ -39,7 +39,7 @@ Pass 2: read each page as the intended reader.
 
 Read every changed page once, top to bottom, at reading speed, in the order the site presents them; reference pages get steps 1, 4, and 5 only. Do this after pass 1 so that you read for comprehension rather than for facts.
 
-1. Terminology. Build a table of every protocol concept across the changed pages: concept, the names and casings used for it, and where each first appears. Any concept with more than one name, any name with more than one meaning, and any first use without a definition or glossary link is a finding. Include the relationship between product names: a reader must be able to tell whether two names refer to the same system.
+1. Terminology. Build a table of every protocol concept across the whole change set, not one section, plus the name `docs/reference/glossary.html` gives each concept: concept, the names and casings used for it, and where each first appears. Any concept with more than one name, any name with more than one meaning, and any first use without a definition or glossary link is a finding. Include the relationship between product names: a reader must be able to tell whether two names refer to the same system.
 
 2. Order. Mark any sentence that depends on something the page has not yet introduced, any summary that appears before the thing it summarizes, and any second introduction of a concept the page already covered. Confirm the heading sequence alone tells a story that fits the page's mode as `docs/AGENTS.md` defines it; that file fixes no heading order, so the check is only that each heading builds on the previous one and the mode's stated early elements, such as a tutorial's observable result, arrive early.
 
