@@ -5,7 +5,7 @@ import { act } from 'preact/test-utils'
 import { installDomEnvironment } from './testUtils/domEnvironment.js'
 import { renderIntoDocument } from './testUtils/renderIntoDocument.js'
 import { fireEvent, within } from './testUtils/queries.js'
-import { TransactionStepsModal } from '../components/TransactionStepsModal.js'
+import { TransactionStepsContent, TransactionStepsModal } from '../components/TransactionStepsModal.js'
 import { createTransactionStepController, transactionSteps } from '../transactions/transactionSteps.js'
 
 test('shows every step, token deposit, expected return and ETH cost before the first confirmation', async () => {
@@ -90,6 +90,37 @@ test('explains a step without token funding using its description, the operation
 		await review
 	} finally {
 		await rendered.cleanup()
+		dom.cleanup()
+	}
+})
+
+test('only keeps inline actions visible when asked, leaving modal-embedded steps alone', async () => {
+	const dom = installDomEnvironment()
+	const scrolled: string[] = []
+	const originalScrollIntoView = Element.prototype.scrollIntoView
+	Element.prototype.scrollIntoView = function (this: Element, options?: boolean | ScrollIntoViewOptions) {
+		scrolled.push(`${this.className}:${JSON.stringify(options)}`)
+	}
+	const originalRequestAnimationFrame = globalThis.requestAnimationFrame
+	globalThis.requestAnimationFrame = callback => {
+		callback(0)
+		return 0
+	}
+	const controller = createTransactionStepController()
+	controller.setPlan([{ title: 'Create security pool', description: undefined, contractAddress: undefined, contractLabel: undefined, spender: undefined, amount: undefined, ethValueAttoEth: 0n }])
+	const review = controller.review()
+	try {
+		const embedded = await renderIntoDocument(<TransactionStepsContent contextKey='embedded' inline />)
+		expect(scrolled).toEqual([])
+		await embedded.cleanup()
+		const kept = await renderIntoDocument(<TransactionStepsContent contextKey='kept' inline keepActionsVisible />)
+		expect(scrolled).toEqual(['transaction-step-actions transaction-approval-editor:{"block":"center"}'])
+		await kept.cleanup()
+	} finally {
+		Element.prototype.scrollIntoView = originalScrollIntoView
+		globalThis.requestAnimationFrame = originalRequestAnimationFrame
+		transactionSteps.value?.cancel()
+		await review.catch(() => undefined)
 		dom.cleanup()
 	}
 })

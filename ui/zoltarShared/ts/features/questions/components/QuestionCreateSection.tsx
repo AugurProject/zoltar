@@ -62,6 +62,8 @@ type QuestionCreateSectionProps = {
 		onSubmit: () => void
 		pending: boolean
 		pendingLabel: string
+		/** Replaces the submit button while the submitted transaction is being reviewed inline. */
+		reviewContent?: ComponentChildren
 	}
 	zoltarQuestions: MarketDetails[]
 }
@@ -453,9 +455,11 @@ export function QuestionCreateSection({
 						</fieldset>
 						{submitFields}
 
-						<div className='actions'>
-							<TransactionActionButton idleLabel={submitAction.idleLabel} pendingLabel={submitAction.pendingLabel} onClick={() => undefined} pending={submitAction.pending} type='submit' availability={submitAction.availability} />
-						</div>
+						{submitActionOverride?.reviewContent ?? (
+							<div className='actions'>
+								<TransactionActionButton idleLabel={submitAction.idleLabel} pendingLabel={submitAction.pendingLabel} onClick={() => undefined} pending={submitAction.pending} type='submit' availability={submitAction.availability} />
+							</div>
+						)}
 					</form>
 				</SectionBlock>
 			) : undefined}

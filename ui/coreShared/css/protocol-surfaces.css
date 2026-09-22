@@ -1561,6 +1561,16 @@ main.global-transaction-tray-open :is(a, button, input, select, summary, textare
 	color: var(--text);
 }
 
+/* Locked text controls stay readable but visibly differ from editable ones, matching disabled buttons. */
+.field input:disabled:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+.field select:disabled,
+.field textarea:disabled {
+	border-color: var(--disabled-control-border);
+	background-color: var(--disabled-control-bg);
+	color: var(--disabled-control-text);
+	cursor: not-allowed;
+}
+
 .field input.is-invalid,
 .field input[aria-invalid="true"],
 .field select.is-invalid,
