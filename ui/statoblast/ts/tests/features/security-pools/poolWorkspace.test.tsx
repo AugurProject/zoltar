@@ -38,6 +38,17 @@ function NavigationHarness() {
 	const pool = createSelectedPool()
 	return <SecurityPoolWorkflowSection {...createSecurityPoolWorkflowProps({ securityPoolAddress: pool.securityPoolAddress, securityPools: [pool], selectedPoolView: view, onSelectedPoolViewChange: setView })} />
 }
+test('shows the refresh busy label only while a shown pool reloads', async () => {
+	const pool = createSelectedPool()
+	const freshAddressRender = await renderIntoDocument(<SecurityPoolWorkflowSection {...createSecurityPoolWorkflowProps({ loadingSecurityPools: true, securityPoolAddress: '0x1111111111111111111111111111111111111111', securityPools: [pool] })} />)
+	const page = within(document.body)
+	expect(page.getByRole('button', { name: 'Refresh pool' }).hasAttribute('disabled')).toBe(true)
+	expect(page.queryByText('Refreshing pool…') === null).toBe(true)
+	await freshAddressRender.cleanup()
+	setCleanup((await renderIntoDocument(<SecurityPoolWorkflowSection {...createSecurityPoolWorkflowProps({ loadingSecurityPools: true, securityPoolAddress: pool.securityPoolAddress, securityPools: [pool] })} />)).cleanup)
+	expect(within(document.body).getByRole('button', { name: 'Refreshing pool…' }).hasAttribute('disabled')).toBe(true)
+})
+
 test('keeps a directly opened advanced view visible and returns to the three primary tabs', async () => {
 	setCleanup((await renderIntoDocument(<NavigationHarness />)).cleanup)
 	const page = within(document.body)

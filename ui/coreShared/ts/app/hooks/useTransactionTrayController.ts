@@ -2,7 +2,6 @@ import { useSignal } from '@preact/signals'
 import { useRef } from 'preact/hooks'
 import type { Hash } from '@zoltar/core-shared/evm/ethereum'
 import type { TransactionRequestPreview } from '../../wallet/chainBackend.js'
-import { transactionErrorMessages } from '../../lib/errors.js'
 import { createInitialTransactionTrayState, markTransactionCanceled, markTransactionFailed, markTransactionFinished, markTransactionPrepared, markTransactionPresented, markTransactionRequested, markTransactionSubmitted } from '../../transactions/transactionTray.js'
 import type { GlobalTransactionPresentation, TransactionIntent } from '../../types/components.js'
 
@@ -23,11 +22,6 @@ export function useTransactionTrayController({ onFinished }: TransactionTrayCont
 		},
 		onTransactionFailed: (message: string) => {
 			if (!isCurrentGeneration()) return
-			// Runners that format the review cancellation themselves must not present it as a failed transaction.
-			if (message === transactionErrorMessages.reviewCanceled) {
-				transactionState.value = markTransactionCanceled(transactionState.value)
-				return
-			}
 			transactionState.value = markTransactionFailed(transactionState.value, message)
 		},
 		onTransactionFinished: () => {
