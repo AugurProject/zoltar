@@ -101,8 +101,8 @@ export const contractSafetyPolicy = {
 				sourcePath: 'contracts/statoblast/factories/EscalationGameFactory.sol',
 				contractName: 'EscalationGameFactory',
 			},
-			46_673,
-			'The factory embeds the reviewed game with retention-call revert bubbling and permits no further growth.',
+			46_867,
+			'The factory embeds the reviewed game with inherited threshold-tie reconciliation after auction haircuts and permits no further growth.',
 		),
 	] satisfies readonly BytecodeBudget[],
 	exactLayoutPairs: [

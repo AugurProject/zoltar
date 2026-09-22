@@ -32,6 +32,7 @@ const eventDomains: Readonly<Record<string, EventDomainDefinition>> = {
 		'GameContinuedFromFork',
 		'GameStarted',
 		'InheritedThresholdTie',
+		'InheritedThresholdTieReopened',
 		'LocalDepositAppended',
 		'NonDecisionReached',
 		'ResidualRepSweptToSecurityPool',

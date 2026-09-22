@@ -2293,6 +2293,7 @@ export const escalationGameAbi = [
 		],
 	},
 	{ type: 'event', name: 'InheritedThresholdTie', anonymous: false, inputs: [{ name: 'sourceGame', type: 'address', internalType: 'address', indexed: true }] },
+	{ type: 'event', name: 'InheritedThresholdTieReopened', anonymous: false, inputs: [] },
 	{
 		type: 'event',
 		name: 'LocalDepositAppended',
