@@ -11,7 +11,7 @@ import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import { GlobalTransactionPresentationProvider, useGlobalTransactionPresentation } from './GlobalTransactionPresentationContext.js'
 import { useEffect, useRef } from 'preact/hooks'
 import { EthAmount, TransactionFundingSummary } from './TransactionFundingSummary.js'
-import { InlineHint } from './InlineHint.js'
+import { TransactionPresentationNotice } from './TransactionPresentationNotice.js'
 import { TransactionHashLink } from './TransactionHashLink.js'
 import { transactionSteps } from '../transactions/transactionSteps.js'
 
@@ -62,6 +62,8 @@ export function TransactionStepsContent({ contextKey, focusOnMount = false, head
 	const operationFailed = presentation?.tone === 'error'
 	const operationError = typeof presentation?.detail === 'string' ? presentation.detail : copy.requirementsFailed
 	const error = operationFailed && (current?.error === undefined || current?.error === 'Transaction reverted.') ? operationError : current?.error
+	// Failures use the same notice as the transaction tray and dialogs, including the technical rows needed to debug them.
+	const failure = error === undefined ? undefined : operationFailed && presentation !== undefined ? { ...presentation, detail: error } : { detail: error, title: current?.title ?? error, tone: 'error' as const }
 	const pending = error === undefined && (workflow?.steps.some(step => step.phase === 'pending') ?? false)
 	useEffect(() => {
 		if (error !== undefined) errorRef.current?.scrollIntoView?.({ block: 'nearest' })
@@ -93,7 +95,7 @@ export function TransactionStepsContent({ contextKey, focusOnMount = false, head
 	const renderTransactionActions = () => (
 		<div className='tx-action-group'>
 			<div className='tx-action-feedback' ref={errorRef}>
-				{error === undefined ? undefined : <InlineHint message={error} role='alert' />}
+				{failure === undefined ? undefined : <TransactionPresentationNotice className='transaction-step-failure' transaction={failure} />}
 			</div>
 			<div className='actions'>
 				{workflow.steps.map((step, index) => {

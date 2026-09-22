@@ -17,7 +17,9 @@ function getModalTransactionPresentation(transaction: ReturnType<typeof useGloba
 	if (transaction === undefined) return undefined
 	const contextIdentityKeys = new Set(context.flatMap(item => (item.identityKey === undefined ? [] : [item.identityKey])))
 	const contextLabels = new Set(context.flatMap(item => (typeof item.label === 'string' ? [item.label] : [])))
-	const { technicalRows: _technicalRows, ...modalTransaction } = transaction
+	// Progress notices stay compact, but a failure keeps its technical rows (contract, function, arguments) so the user can debug it.
+	const { technicalRows, ...compactTransaction } = transaction
+	const modalTransaction = transaction.tone === 'error' && technicalRows !== undefined ? { ...compactTransaction, technicalRows } : compactTransaction
 	if (transaction.rows === undefined) return modalTransaction
 	return {
 		...modalTransaction,

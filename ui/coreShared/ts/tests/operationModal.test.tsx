@@ -493,8 +493,9 @@ describe('OperationModal', () => {
 
 		expect(documentQueries.getByRole('dialog', { name: 'Migrate Shares' })).not.toBeNull()
 		expect(within(dialog).getByRole('alert').textContent).toContain('The share migration transaction failed.')
-		expect(within(dialog).queryByText('Technical details')).toBeNull()
-		expect(within(dialog).queryByText('migrateShares')).toBeNull()
+		// A failure keeps its technical rows so the user can debug it, unlike the compact progress notices above.
+		expect(within(dialog).getByText('Technical details')).not.toBeNull()
+		expect(within(dialog).getByText('migrateShares')).not.toBeNull()
 	})
 
 	test('keeps a transaction that predates the modal hidden across its lifecycle and surfaces a later operation', async () => {
