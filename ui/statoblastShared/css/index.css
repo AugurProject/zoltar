@@ -3045,6 +3045,6 @@
 		min-inline-size: 0;
 	}
 	.pool-selection-control input {
-		font-size: 0.66rem;
+		font-size: var(--font-label);
 	}
 }
