@@ -79,8 +79,11 @@ export function createTransactionStepController(signal = getTransactionReviewSig
 			},
 		}
 	}
+	const assertActive = () => {
+		if (canceled) throw new Error(transactionErrorMessages.reviewCanceled)
+	}
 	const reviewChoices = async (indices: readonly number[]) => {
-		if (canceled) throw new Error('Transaction sequence canceled. Review the action again.')
+		assertActive()
 		const current = transactionSteps.peek()
 		if (current !== undefined && current.cancel !== cancel) {
 			if (current.steps.some(step => step.phase === 'review' || step.phase === 'pending')) throw new Error('Finish or cancel the current transaction first.')
@@ -112,6 +115,7 @@ export function createTransactionStepController(signal = getTransactionReviewSig
 		})
 	}
 	return {
+		assertActive,
 		setPlan(details: TransactionStepDetails[]) {
 			if (steps.length > 0) throw new Error('The transaction plan has already started.')
 			steps.push(...details.map(step => ({ ...step, phase: 'upcoming' as const })))
@@ -120,7 +124,7 @@ export function createTransactionStepController(signal = getTransactionReviewSig
 			return (await reviewChoices([index])).amount
 		},
 		async chooseFunding(indices: readonly number[]) {
-			if (canceled) throw new Error('Transaction sequence canceled. Review the action again.')
+			assertActive()
 			for (let index = 0; index < steps.length - 1; index += 1) {
 				const step = steps[index]
 				if (step !== undefined && !indices.includes(index) && step.phase !== 'confirmed') step.phase = 'skipped'

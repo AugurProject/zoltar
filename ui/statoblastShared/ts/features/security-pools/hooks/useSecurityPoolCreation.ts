@@ -179,6 +179,7 @@ export function useSecurityPoolCreation({
 				{
 					accountAddress,
 					missingWalletMessage: 'Connect a wallet before creating a security pool',
+					reviewSignal: review.signal,
 					onRefreshError: (message, hash) => {
 						securityPoolCreationFeedback.value = createWarningActionFeedback('createSecurityPool', 'Security pool created', message, hash)
 						const result = securityPoolResult.value

@@ -13,6 +13,8 @@ import type { GlobalTransactionPresentation } from '../types/components.js'
 import { installDomTestLifecycle } from './testUtils/domTestLifecycle.js'
 import { fireEvent, within } from './testUtils/queries.js'
 import { renderIntoDocument } from './testUtils/renderIntoDocument.js'
+import { createDeferred } from './testUtils/deferred.js'
+import { isTransactionReviewCancellation } from '../lib/errors.js'
 
 installDomTestLifecycle()
 
@@ -235,5 +237,47 @@ test("renders the review actions in the form's own action row and isolates the r
 	} finally {
 		await rendered.cleanup()
 		transactionSteps.value?.cancel()
+	}
+})
+
+test('closing the dialog during preparation cancels its captured scope before a review is published', async () => {
+	const preparing = createDeferred<void>()
+	const resume = createDeferred<void>()
+	let completion: Promise<unknown> | undefined
+	function Harness() {
+		const [open, setOpen] = useState(true)
+		return (
+			<OperationModal isOpen={open} title='Withdraw REP' onClose={() => setOpen(false)}>
+				<button
+					type='button'
+					onClick={() => {
+						const controller = createTransactionStepController()
+						controller.setPlan([step])
+						completion = (async () => {
+							preparing.resolve()
+							await resume.promise
+							return await controller.review()
+						})().catch(error => error)
+					}}
+				>
+					Withdraw REP
+				</button>
+			</OperationModal>
+		)
+	}
+	const rendered = await renderIntoDocument(<Harness />)
+	try {
+		const queries = within(document.body)
+		await act(() => fireEvent.click(queries.getByRole('button', { name: 'Withdraw REP' })))
+		await preparing.promise
+		expect(transactionSteps.value).toBeUndefined()
+		await act(() => fireEvent.click(queries.getByRole('button', { name: 'Close' })))
+		resume.resolve()
+		expect(isTransactionReviewCancellation(await completion)).toBe(true)
+		expect(queries.queryByRole('dialog')).toBeNull()
+		expect(transactionSteps.value).toBeUndefined()
+	} finally {
+		resume.resolve()
+		await rendered.cleanup()
 	}
 })
