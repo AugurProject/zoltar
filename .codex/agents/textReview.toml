@@ -45,11 +45,11 @@ Read every changed narrative page once, top to bottom, at reading speed, in the 
 
 3. Sentences and structure. Report a sentence when its actor, condition, exception, mechanism, and result compete so that a reader must reread it. Report a list when its items are not parallel, contain multiple sentences or nested conditions, or replace a relationship that prose would make clear. Report a table whose cells hold paragraphs or branches. Report legalistic phrasing, noun stacks, ambiguous `former` or `latter`, and passive voice that hides an actor who matters. Report the comprehension problem, not a word count. Group repeated style problems into one finding per page with representative examples.
 
-4. Mode. Confirm the page serves one primary Diátaxis mode as `docs/AGENTS.md` defines it. Brief continuity material from another mode is acceptable when it links to the owner. Report a page that teaches inside a tutorial, catalogues inside an explanation, or narrates inside a reference.
+4. Mode. Confirm the page serves one primary Diátaxis mode under the `docs/AGENTS.md` mode contract. Report a page that teaches inside a tutorial, catalogues inside an explanation, or narrates inside a reference, and name the owner the material should link to instead.
 
-5. Ownership. When a distinctive fact, formula, example, warning, or guardrail appears on a changed page, grep the docs corpus for it. Report the duplicate when two pages carry the same explanatory burden or can drift apart, name the recommended owner, and prescribe the smallest deletion, move, link, or rewrite. A non-owner keeps at most the sentence it needs for continuity plus a link. Formal invariants, generated reference, and explanation may state the same property for different reader needs; that alone is not duplication.
+5. Ownership. When a distinctive fact, formula, example, warning, or guardrail appears on a changed page, grep the docs corpus for it. Report the duplicate when two pages carry the same explanatory burden or can drift apart, name the recommended owner under the `docs/AGENTS.md` single-owner rule, and prescribe the smallest remedy in its remediation order. Formal invariants, generated reference, and explanation may state the same property for different reader needs; that alone is not duplication.
 
-6. Deletion. For each page, name any sentence, section, example, callout, or visual that does not advance the reader job. Do not preserve text because it already exists. Do not recommend adding content when deletion, movement, linking, rewriting, or a better presentation meets the need. Recommend a visual only when you can name the reader question it answers and the prose it replaces.
+6. Deletion. For each page, name any sentence, section, example, callout, or visual that does not advance the reader job, applying the `docs/AGENTS.md` deletion pass and remediation order. Recommend a visual only when you can name the reader question it answers and the prose it replaces.
 
 Validation assessment:
 - Compare the supplied validation with `docs/AGENTS.md`. Prose-only changes need HTML, link, formatting, and `git diff --check` runs. Corpus or manifest changes need navigation, search, and index freshness checks. Generated pages and embedded runtime behavior need their generator and runtime checks. Pages with worked examples, reference constants, or interactive tools need `docs:check-examples` and `docs:check-reference-values`; name the existing check, not a manual recompute, as the validation for a numeric finding. Duplication findings name `docs:check-content`, the cross-page duplicate paragraph and formula check.
@@ -59,7 +59,7 @@ Findings and severity:
 A finding needs repository evidence. Each valid finding type has one severity; when two rules apply, the more specific one wins.
 
 High:
-- a wrong fact in a claim the page makes;
+- a wrong fact in a claim the page makes, including a code span, label, command, route, or path the reader must type, call, or find that does not match the code;
 - a false certainty in a safety, custody, or solvency claim;
 - an omission that makes a documented procedure fail, or an omitted side effect that changes custody or state;
 - a dead link, malformed markup, or stale manifest or search data in published output;
@@ -74,13 +74,15 @@ Medium:
 - a narrative order or prose structure the reader cannot recover from without rereading or leaving the page;
 - a substantial Diátaxis mode violation;
 - duplication whose copies can drift apart, or contested ownership of a normative claim;
-- a validation gap that would let a High or Medium defect recur.
+- a validation gap that would let a High or Medium defect recur, or a test that freezes narrative wording, paragraph order, examples, or page existence without a machine-readable reason;
+- text, an example, or a visual that does not advance the reader job and obscures the main reading path.
 
 Low:
-- bounded wording, casing, or ordering issues the reader recovers from in place;
+- bounded wording, casing, or ordering issues in prose, not in an identifier, that the reader recovers from in place;
 - a name variant or undefined term that context makes clear;
 - cosmetic duplication with a single owner already in place;
-- a list, table, or callout that is the wrong form for its content but still readable.
+- a list, table, or callout that is the wrong form for its content but still readable;
+- text, an example, or a visual that does not advance the reader job but does not obscure the main reading path.
 
 Not findings by themselves: the page could say more; a related behavior is undocumented elsewhere; a Diátaxis mode or deleted section is absent; the page has no visual when prose is clear; page length; sentence length; a tone preference without a named reader problem.
 
