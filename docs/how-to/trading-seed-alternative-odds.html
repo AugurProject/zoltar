@@ -17,7 +17,7 @@
 			</header>
 			<section id="steps">
 				<h2>Compute the deposits</h2>
-				<p>The UI's <strong>Initialize</strong> form takes a Conditional YES percentage and passes it to the router's <code>createPairAndInitializeWithEth</code> as basis points (<code>conditionalYesBps</code>); both do this arithmetic for you; <a href="../tutorials/trading-first-market.html">Your first Trading market</a> uses that path. Use the formula below only when calling <code>pair.initialize(yesAmount, noAmount, …)</code> yourself.</p>
+				<p>The UI's <strong>Initialize</strong> form takes a Conditional YES percentage and passes it to the router's <code>createPairAndInitializeWithEth</code> as basis points (<code>conditionalYesBps</code>); both do this arithmetic for you; <a href="../tutorials/trading-first-market.html">Your first Trading market</a> uses that path. Use the formula below only when calling <code>pair.initialize(yesAmount, noAmount, minLiquidity, recipient)</code> yourself. That direct path has two prerequisites the router handles for you: approve the pair as an operator on the canonical ShareToken, because <code>initialize</code> pulls both reserves from the caller, and deposit enough that the smaller reserve exceeds <code>MINIMUM_LIQUIDITY</code> (1,000 attoShares), since that amount is permanently locked. See the <a href="../reference/trading/contracts.html#pair">pair reference</a>.</p>
 				<p>Choose the Conditional YES price <code>p</code> in basis points with <code>0 &lt; p &lt; 10,000</code>, and let <code>q</code> be the number of complete sets you created.</p>
 				<ul>
 					<li>If <code>p ≥ 5,000</code>, deposit all <code>q</code> NO and <code>⌊q × (10,000 − p) / p⌋</code> YES.</li>

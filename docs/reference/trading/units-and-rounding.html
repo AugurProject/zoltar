@@ -19,7 +19,7 @@
 				<h2>Units</h2>
 				<ul>
 					<li>ETH and collateral outputs use attoETH (10<sup>−18</sup> ETH).</li>
-					<li>Shares and LP tokens use attoShares, the 18-decimal atomic <code>uint256</code> unit: one displayed share is 10<sup>18</sup> attoShares. At an empty SecurityPool, one attoETH creates 10<sup>18</sup> attoShares (one displayed share) of every outcome. Protocol retention makes the later collateral-to-share ratio dynamic, so clients must use the current mutation result rather than assuming this initial rate.</li>
+					<li>Shares and LP tokens use attoShares, the 18-decimal atomic <code>uint256</code> unit: one displayed share is 10<sup>18</sup> attoShares. At an empty SecurityPool, one attoETH creates 10<sup>18</sup> attoShares (one displayed share) of every outcome. Protocol <a href="../glossary.html#retention">retention</a> makes the later collateral-to-share ratio dynamic, so clients must use the current mutation result rather than assuming this initial rate.</li>
 					<li>Fees, slippage, initial conditional price, and displayed conditional price use basis points over 10,000 where applicable.</li>
 					<li>Deadlines and question end times are Unix seconds.</li>
 					<li>Universe IDs are <code>uint248</code>. A token ID is <code>(universeId &lt;&lt; 8) | outcome</code>, with local outcomes INVALID = 0, YES = 1, NO = 2.</li>

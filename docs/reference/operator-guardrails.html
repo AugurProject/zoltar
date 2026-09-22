@@ -109,7 +109,7 @@
 							</tr>
 							<tr>
 								<td>Direct ETH receiver</td>
-								<td>Ordinary calls to <code>receive()</code> accept ETH only from the forker, its truth auction, or its parent pool. Forced ETH can bypass <code>receive()</code>; it remains raw, unaccounted surplus and is not collateral or accrued fees.</td>
+								<td>Ordinary calls to <code>receive()</code> accept ETH only from the forker, its Truth Auction, or its parent pool. Forced ETH can bypass <code>receive()</code>; it remains raw, unaccounted surplus and is not collateral or accrued fees.</td>
 								<td><a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPool.sol">SecurityPool.sol</a></td>
 							</tr>
 							<tr>
@@ -456,7 +456,7 @@
 						<tbody>
 							<tr>
 								<td>Owner</td>
-								<td>Child-pool truth auctions are owned by <code>SecurityPoolForker</code>. The direct auction <code>startAuction</code> and <code>finalize</code> calls are owner-only, while anyone can reach them through <code>startTruthAuction</code> and <code>finalizeTruthAuction</code>.</td>
+								<td>Child-pool Truth Auctions are owned by <code>SecurityPoolForker</code>. The direct auction <code>startAuction</code> and <code>finalize</code> calls are owner-only, while anyone can reach them through <code>startTruthAuction</code> and <code>finalizeTruthAuction</code>.</td>
 								<td><a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/UniformPriceDualCapBatchAuction.sol">UniformPriceDualCapBatchAuction.sol</a>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPoolForker.sol">SecurityPoolForker.sol</a></td>
 							</tr>
 							<tr>

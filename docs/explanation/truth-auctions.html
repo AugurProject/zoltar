@@ -3,16 +3,20 @@
 	<head>
 		<meta charset="utf-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
-		<title>Truth auctions</title>
+		<title>Truth Auctions</title>
 		<link rel="stylesheet" href="../assets/css/shared-docs.css" />
 		<link rel="stylesheet" href="../assets/css/docsShell.css" />
 	</head>
 	<body class="doc-openoracle">
 		<main>
 			<header>
-				<h1>Truth auctions</h1>
+				<h1>Truth Auctions</h1>
 				<p>A child pool has 100 ETH of outstanding claims but receives only 70 ETH of settlement collateral through migration. Its Truth Auction tries to raise the missing 30 ETH by selling child REP.</p>
-				<ul><li><strong>Full repair:</strong> bidders contribute 30 ETH, so the child reaches its 100 ETH target.</li><li><strong>Partial repair:</strong> bidders contribute 12 ETH, so the child operates with 82 ETH and remains impaired.</li><li><strong>No demand:</strong> no qualifying bid contributes ETH, so the child remains at 70 ETH.</li></ul>
+				<ul>
+					<li><strong>Full repair:</strong> bidders contribute 30 ETH, so the child reaches its 100 ETH target.</li>
+					<li><strong>Partial repair:</strong> bidders contribute 12 ETH, so the child operates with 82 ETH and remains impaired.</li>
+					<li><strong>No demand:</strong> no qualifying bid contributes ETH, so the child remains at 70 ETH.</li>
+				</ul>
 				<p><strong>The auction repairs collateral and never selects truth.</strong> It sells REP belonging to an already-defined child universe. The child resumes with only the ETH that migration and accepted bids actually provide.</p>
 				<p>Winning positions settle into REP backing units and matching capacity ownership in the child pool rather than receiving a simple REP transfer.</p>
 			</header>
@@ -43,11 +47,11 @@
 				<h3>Bidding end</h3>
 				<p>When bidding ends, anyone may finalize the auction. Finalization clears the batch auction, sends the raised ETH into the respective security pool, and computes the accounting rates used to settle bidders. The child activates with legitimate migration settlement collateral plus retained bid ETH, even when that total is below the original fork snapshot. Full repair is not guaranteed, and the remaining impairment is borne by the affected child's open-interest holders.</p>
 
-					<p>Finalization records unclaimed auction ownership in an unassigned pool position. A winning bidder later assigns its proportional REP backing, capacity ownership, and accrued fees to a child-pool vault; the auction does not send REP directly to the wallet. Forced ETH does not count as migrated or auction-raised collateral, so it cannot fake a successful repair.</p>
+				<p>Finalization records unclaimed auction ownership in an unassigned pool position. A winning bidder later assigns its proportional REP backing, capacity ownership, and accrued fees to a child-pool vault; the auction does not send REP directly to the wallet. Forced ETH does not count as migrated or auction-raised collateral, so it cannot fake a successful repair.</p>
 			</section>
 
-				<section id="clearing">
-					<h2>How clearing works</h2>
+			<section id="clearing">
+				<h2>How clearing works</h2>
 				<p>The clearing process walks demand from the highest price downward. A bid above the clearing tick wins in full, a bid below it loses in full, and bids at the clearing tick share the last fill in the order they arrived.</p>
 
 				<p>Two constraints limit how much the auction can clear:</p>
@@ -57,10 +61,10 @@
 				</ul>
 				<p>As soon as cumulative demand is enough to hit either cap at some price, that price becomes the clearing tick and all winning bids settle from it at one price. That is a valid uniform clearing even when the REP cap binds before the ETH repair target is fully met.</p>
 
-					<h3>When demand is too low</h3>
-					<p>If demand never reaches a full clearing price, only bids that meet the auction's qualification threshold participate; lower bids receive refunds. Qualifying bidders share the available REP for the ETH they collectively contribute. With no qualifying demand, all bids refund and the child remains impaired.</p>
-					<p>The contract uses bounded tick indexing and exact integer accounting so finalization does not loop over every possible price. See the <a href="../reference/contracts/uniformpricedualcapbatchauction.html">auction contract reference</a> for tick bounds, rounding, storage, and getter details, and the <a href="../reference/contracts/securitypoolforker.html">SecurityPoolForker reference</a> for child-pool settlement accounting.</p>
-				</section>
+				<h3>When demand is too low</h3>
+				<p>If demand never reaches a full clearing price, only bids that meet the auction's qualification threshold participate; lower bids receive refunds. Qualifying bidders share the available REP for the ETH they collectively contribute. With no qualifying demand, all bids refund and the child remains impaired.</p>
+				<p>The contract uses bounded tick indexing and exact integer accounting so finalization does not loop over every possible price. See the <a href="../reference/contracts/uniformpricedualcapbatchauction.html">auction contract reference</a> for tick bounds, rounding, storage, and getter details, and the <a href="../reference/contracts/securitypoolforker.html">SecurityPoolForker reference</a> for child-pool settlement accounting.</p>
+			</section>
 
 			<section id="interactive-example">
 				<h2>Interactive clearing example</h2>

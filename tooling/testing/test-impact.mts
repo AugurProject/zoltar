@@ -76,7 +76,7 @@ const TEST_IMPACT_RULES: readonly TestImpactRule[] = [
 	{
 		command: 'bun ./tooling/testing/bun-test.mts tooling/ui/ui-split-workflows.test.ts',
 		reason: 'developer documentation asserted by the UI split workflow test changed',
-		matches: filePath => filePath === 'README.md' || filePath === 'testnetwork/README.md' || /^docs\/how-to\/trading-.*\.html$/.test(filePath),
+		matches: filePath => filePath === 'README.md' || filePath === 'testnetwork/README.md' || filePath === 'docs/how-to/trading-set-up-development.html',
 	},
 	{
 		command: 'bun run test:browser:smoke',

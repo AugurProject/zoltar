@@ -55,7 +55,19 @@
 				<p>
 					Before classifying an economic or liveness concern, use the <a href="#assumptions-participation">grouped assumptions</a> below to identify external dependencies, then follow their mechanics links. The invariant catalog owns the current requirement, status, and evidence for <a href="./invariants.html#ext-05"><code>EXT-05</code> recursive-fork gas behavior</a>.
 				</p>
-				<p>Operator work relies particularly on <a href="#assumption-a23">A23 verified deployments</a>, <a href="#assumption-a06">A06 lifecycle executors</a>, <a href="#assumption-a20">A20 chain-data and proof availability</a>, <a href="#assumption-a26">A26 Ethereum execution and finality</a>, <a href="#assumption-a27">A27 cryptographic security</a>, <a href="#assumption-a15">A15 intended question selection</a>, <a href="#assumption-a25">A25 safe immutable parameters</a>, <a href="#assumption-a22">A22 asset-recipient compatibility</a>, <a href="#assumption-a24">A24 client, remote procedure call (RPC), and wallet integrity</a>, and <a href="#assumption-a28">A28 account authority</a>.</p>
+				<p>Operator work relies particularly on these assumptions:</p>
+				<ul>
+					<li><a href="#assumption-a06">A06 lifecycle executors</a></li>
+					<li><a href="#assumption-a15">A15 intended question selection</a></li>
+					<li><a href="#assumption-a20">A20 chain-data and proof availability</a></li>
+					<li><a href="#assumption-a22">A22 asset-recipient compatibility</a></li>
+					<li><a href="#assumption-a23">A23 verified deployments</a></li>
+					<li><a href="#assumption-a24">A24 client, remote procedure call (RPC), and wallet integrity</a></li>
+					<li><a href="#assumption-a25">A25 safe immutable parameters</a></li>
+					<li><a href="#assumption-a26">A26 Ethereum execution and finality</a></li>
+					<li><a href="#assumption-a27">A27 cryptographic security</a></li>
+					<li><a href="#assumption-a28">A28 account authority</a></li>
+				</ul>
 			</section>
 
 			<section class="assumption-group" id="assumptions-participation">
@@ -183,7 +195,7 @@
 						<p class="assumption-links">Mechanics: <a href="../explanation/zoltar.html#accounting">REP splitting</a>, <a href="../explanation/statoblast.html#forks-migration">pool migration</a>, and <a href="./operator-guardrails.html#share-migration">operator migration guidance</a>.</p>
 					</li>
 					<li id="assumption-a12" value="12" data-assumption="A12">
-						<h3>Truth auctions can convert supported child REP efficiently</h3>
+						<h3>Truth Auctions can convert supported child REP efficiently</h3>
 						<p>When repair is needed, enough demand can buy some supported-child REP for ETH at an acceptably small discount and operating cost. This does not assume that the full repair target is raised.</p>
 						<p class="assumption-failure"><strong>Failure boundary:</strong> Weak or strategically withheld demand leaves the child operational with impaired collateral.</p>
 						<p class="assumption-links">Mechanics: <a href="../explanation/truth-auctions.html#lifecycle">auction lifecycle</a>, <a href="../explanation/truth-auctions.html#clearing">clearing</a>, and <a href="../explanation/statoblast.html#forks-migration">repair accounting</a>.</p>
@@ -329,7 +341,7 @@
 					</li>
 					<li id="excluded-guarantee-eg02">
 						<strong>EG02.</strong>
-						A truth auction may raise less than its repair target; the child then activates with migrated collateral plus accepted auction ETH.
+						A Truth Auction may raise less than its repair target; the child then activates with migrated collateral plus accepted auction ETH.
 					</li>
 					<li id="excluded-guarantee-eg03">
 						<strong>EG03.</strong>
@@ -345,7 +357,7 @@
 					</li>
 					<li id="excluded-guarantee-eg06">
 						<strong>EG06.</strong>
-						Escalation principal and expected rewards are not senior to open-interest repair. A child truth auction may proportionally reduce them, and a losing escalation claim pays its committed depositor nothing.
+						Escalation principal and expected rewards are not senior to open-interest repair. A child Truth Auction may proportionally reduce them, and a losing escalation claim pays its committed depositor nothing.
 					</li>
 				</ul>
 			</section>

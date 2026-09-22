@@ -74,8 +74,15 @@ async function assertEscalationRulesMatchContracts(): Promise<void> {
 	assert.ok(escalationPayoutExample.cumulativeAmountAttoRep <= escalationPayoutExample.winningOutcomeBalanceAttoRep, 'the example deposit must sit inside the winning balance')
 	// Sanity-check the TypeScript port with a boundary the Solidity guarantees: a full-cap position pays the whole pool.
 	const wholeCap = computeWinningWithdrawal({ ...escalationPayoutExample, cumulativeAmountAttoRep: 15n * attoPrecision, depositAmountAttoRep: 15n * attoPrecision, winningOutcomeBalanceAttoRep: 15n * attoPrecision })
+	assert.equal(wholeCap.rewardEligiblePrincipalAttoRep, wholeCap.rewardEligibleCapAttoRep, 'a winning balance at the cap makes the principal equal the cap')
 	assert.equal(wholeCap.bonusAttoRep, wholeCap.rewardPoolAttoRep)
 	assert.equal(wholeCap.burnAttoRep, wholeCap.haircutPoolAttoRep)
+	// The pools are divided by the reward-eligible principal, not the cap. Exercise a winning balance below the cap so the
+	// two differ; the published divisor must follow the principal.
+	const belowCap = computeWinningWithdrawal({ ...escalationPayoutExample, cumulativeAmountAttoRep: 12n * attoPrecision, winningOutcomeBalanceAttoRep: 12n * attoPrecision })
+	assert.ok(belowCap.rewardEligiblePrincipalAttoRep < belowCap.rewardEligibleCapAttoRep, 'the below-cap case must make the principal smaller than the cap')
+	assert.equal(belowCap.bonusAttoRep, (escalationPayoutExample.depositAmountAttoRep * belowCap.rewardPoolAttoRep) / belowCap.rewardEligiblePrincipalAttoRep, 'the bonus must divide by the reward-eligible principal')
+	assert.equal(belowCap.burnAttoRep, (escalationPayoutExample.depositAmountAttoRep * belowCap.haircutPoolAttoRep) / belowCap.rewardEligiblePrincipalAttoRep, 'the haircut must divide by the reward-eligible principal')
 }
 
 async function assertRetentionRulesMatchContracts(): Promise<void> {

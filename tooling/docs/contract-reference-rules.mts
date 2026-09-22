@@ -26,12 +26,12 @@ export const retentionRules = {
 	dipUtilizationPercent: 80n,
 } as const
 
-export const liquidationRules = {
+export const liquidationRules: { repBonusBps: bigint; bpsDenominator: bigint; capacityOwnershipRounding: RoundingDirection; repBackingUnitsRounding: RoundingDirection } = {
 	repBonusBps: 500n,
 	bpsDenominator: 10_000n,
-	capacityOwnershipRounding: 'down' as RoundingDirection,
-	repBackingUnitsRounding: 'up' as RoundingDirection,
-} as const
+	capacityOwnershipRounding: 'down',
+	repBackingUnitsRounding: 'up',
+}
 
 export const auctionRules = {
 	minTick: -524_288n,
@@ -50,6 +50,7 @@ export type EscalationPayoutInput = {
 
 export type EscalationPayout = {
 	rewardEligibleCapAttoRep: bigint
+	rewardEligiblePrincipalAttoRep: bigint
 	rewardPoolAttoRep: bigint
 	haircutPoolAttoRep: bigint
 	bonusAttoRep: bigint
@@ -76,7 +77,7 @@ export function computeWinningWithdrawal(input: EscalationPayoutInput, rules = e
 	}
 	const payoutAttoRep = input.depositAmountAttoRep + bonusAttoRep
 	const scaledPayoutAttoRep = input.actualForkThresholdAttoRep < input.nonDecisionThresholdAttoRep ? (payoutAttoRep * input.actualForkThresholdAttoRep) / input.nonDecisionThresholdAttoRep : payoutAttoRep
-	return { bonusAttoRep, burnAttoRep, haircutPoolAttoRep, payoutAttoRep, rewardEligibleCapAttoRep, rewardPoolAttoRep, scaledPayoutAttoRep }
+	return { bonusAttoRep, burnAttoRep, haircutPoolAttoRep, payoutAttoRep, rewardEligibleCapAttoRep, rewardEligiblePrincipalAttoRep, rewardPoolAttoRep, scaledPayoutAttoRep }
 }
 
 export const escalationPayoutExample: EscalationPayoutInput = {

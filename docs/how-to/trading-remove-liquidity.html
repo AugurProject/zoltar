@@ -19,13 +19,13 @@
 				<h2>Remove through the pair</h2>
 				<ol>
 					<li>Preview the proportional YES and NO outputs.</li>
-					<li>Set <code>minYesOut</code> and <code>minNoOut</code>.</li>
-					<li>Call the pair's own <code>removeLiquidity</code>. The first-party UI uses this path, so it never asks for a router allowance. The call also binds an on-chain deadline.</li>
+					<li>Set the pair's <code>minYes</code> and <code>minNo</code> bounds and a <code>deadline</code>.</li>
+					<li>Call the pair's own <code>removeLiquidity(liquidity, minYes, minNo, recipient, deadline)</code>. The first-party UI uses this path, so it never asks for a router allowance. The deadline is enforced on chain.</li>
 				</ol>
 			</section>
 			<section id="through-the-router">
 				<h2>Remove through the router</h2>
-				<p>Integrations that need router-based removal can call <code>removeLiquidityWithPermit</code> with an exact-amount ERC-2612 signature. Ordinary exact allowances remain available for already submitted permits, Safes, and clients without signature support. Never grant a permanent or implicit infinite allowance.</p>
+				<p>Integrations that need router-based removal can call the router's <code>removeLiquidityWithPermit</code>, whose bounds are named <code>minYesOut</code> and <code>minNoOut</code>, with an exact-amount ERC-2612 signature. Ordinary exact allowances remain available for already submitted permits, Safes, and clients without signature support. Never grant a permanent or implicit infinite allowance.</p>
 			</section>
 			<section id="what-removal-does-not-do">
 				<h2>What removal does not do</h2>
