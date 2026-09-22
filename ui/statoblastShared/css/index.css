@@ -2950,11 +2950,6 @@
 	gap: var(--space-2);
 }
 
-/* Keep the feedback slot a constant height so the actions do not move between the empty, preparing, and ready states. */
-.operation-modal-body:has(> .request-price-fields) .transaction-step-actions .tx-action-feedback:empty {
-	min-block-size: 2.9em;
-}
-
 .request-price-fields {
 	display: grid;
 	gap: 1rem;

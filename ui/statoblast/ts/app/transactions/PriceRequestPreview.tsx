@@ -13,11 +13,13 @@ export function PriceRequestPreview({ requestValue, reason, error, preparing, hi
 	useEffect(() => {
 		if (error !== undefined) errorRef.current?.scrollIntoView?.({ block: 'nearest' })
 	}, [error])
+	// While preparing, the primary action carries the busy state so the feedback slot stays empty and the actions do not move.
+	const reasonHidden = hideReason || preparing
 	let visibleFeedback = undefined
 	if (error !== undefined) {
 		visibleFeedback = <InlineHint id={reasonId} message={error} role='alert' />
-	} else if (!hideReason) {
-		visibleFeedback = <InlineHint id={reasonId} message={reason} loading={preparing} />
+	} else if (!reasonHidden) {
+		visibleFeedback = <InlineHint id={reasonId} message={reason} />
 	}
 	return (
 		<>
@@ -28,9 +30,9 @@ export function PriceRequestPreview({ requestValue, reason, error, preparing, hi
 			<div className='transaction-step-actions transaction-approval-editor'>
 				<div className='tx-action-group'>
 					{/* A hidden reason lives outside the feedback container so the empty container collapses instead of reserving space. */}
-					{error === undefined && hideReason ? (
+					{error === undefined && reasonHidden ? (
 						<div className='visually-hidden'>
-							<InlineHint id={reasonId} message={reason} loading={preparing} />
+							<InlineHint id={reasonId} message={reason} />
 						</div>
 					) : undefined}
 					<div className='tx-action-feedback' ref={errorRef} aria-live='polite'>
@@ -67,8 +69,8 @@ export function PriceRequestPreview({ requestValue, reason, error, preparing, hi
 										{priceRequestCopy.requestPrice} · <EthAmount value={requestValue} />
 									</>
 								}
-								pending={false}
-								pendingLabel={copy.formatPendingAction(priceRequestCopy.requestPrice)}
+								pending={preparing}
+								pendingLabel={priceRequestCopy.preparingPriceRequest}
 								onClick={() => undefined}
 								availability={{ disabled: true, reason }}
 								disabledReasonElementId={reasonId}

@@ -1,5 +1,6 @@
 import { useCallback } from 'preact/hooks'
 import { useUrlSearchState } from '@zoltar/ui-core-shared/app/hooks/useUrlSearchState.js'
+import { isHexAddressInput } from '@zoltar/ui-core-shared/lib/address.js'
 import { readOpenOracleReportIdQueryParam, readOpenOracleViewQueryParam, writeOpenOracleReportIdQueryParam, writeOpenOracleViewQueryParam } from '@zoltar/ui-core-shared/navigation/openOracleUrlParams.js'
 import {
 	readSecurityPoolsViewQueryParam,
@@ -45,7 +46,8 @@ export function useStatoblastUrlState() {
 	const writeStringParam = useCallback((write: (search: string, value: string | undefined) => string, value: string | undefined) => applyUrlStateUpdate(write(getOwnedSearch(), emptyToUndefined(value))), [applyUrlStateUpdate, getOwnedSearch])
 
 	const setActiveUniverseId = useCallback((universeId: bigint | undefined) => applyUrlStateUpdate(writeUniverseQueryParam(getOwnedSearch(), universeId)), [applyUrlStateUpdate, getOwnedSearch])
-	const setSecurityPoolAddress = useCallback((securityPoolAddress: string) => writeStringParam(writeSecurityPoolQueryParam, securityPoolAddress), [writeStringParam])
+	// Keystrokes toward an address replace the current history entry; only a complete address is a navigable selection.
+	const setSecurityPoolAddress = useCallback((securityPoolAddress: string) => applyUrlStateUpdate(writeSecurityPoolQueryParam(getOwnedSearch(), emptyToUndefined(securityPoolAddress)), isHexAddressInput(securityPoolAddress) ? 'push' : 'replace'), [applyUrlStateUpdate, getOwnedSearch])
 	const setSecurityPoolQuestionId = useCallback((questionId: string | undefined) => writeStringParam(writeSecurityPoolQuestionIdQueryParam, questionId), [writeStringParam])
 	const setOpenOracleReport = useCallback((reportId: string | undefined) => writeStringParam(writeOpenOracleReportIdQueryParam, reportId), [writeStringParam])
 	const setOpenOracleView = useCallback((view: string | undefined) => writeStringParam(writeOpenOracleViewQueryParam, view), [writeStringParam])
