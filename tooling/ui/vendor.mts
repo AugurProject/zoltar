@@ -179,7 +179,6 @@ const invokedScriptPath = process.argv[1]
 if (invokedScriptPath !== undefined && path.resolve(invokedScriptPath) === currentScriptPath) {
 	vendor().catch(error => {
 		console.error(error)
-		debugger
 		process.exit(1)
 	})
 }

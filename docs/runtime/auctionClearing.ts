@@ -2,7 +2,9 @@ import { type AuctionBidInput, calculateAuctionModel } from '../charts/chartMode
 
 function formatFixed(value: number, digits = 2): string {
 	if (!Number.isFinite(value)) return 'not available'
-	return value.toFixed(digits).replace(/\.?0+$/, '')
+	const fixed = value.toFixed(digits)
+	const trimmed = fixed.includes('.') ? fixed.replace(/\.?0+$/, '') : fixed
+	return trimmed === '-0' ? '0' : trimmed
 }
 
 function formatEth(value: number): string {
