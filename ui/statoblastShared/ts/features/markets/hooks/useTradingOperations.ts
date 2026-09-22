@@ -17,7 +17,7 @@ import { convertSettlementCollateralAttoEthToAttoShares, estimateMintCheckpoint,
 import { createErrorActionFeedback, createPendingActionFeedback, createSuccessActionFeedback, createWarningActionFeedback } from '@zoltar/ui-core-shared/transactions/actionFeedback.js'
 import type { ActionFeedback } from '@zoltar/ui-core-shared/transactions/actionFeedback.js'
 import { createTradingSuccessPresentation, createTradingTransactionIntent, createTradingWarningPresentation } from '../../transactionPresentations.js'
-import { buildWriteActionConfig, runWriteAction } from '@zoltar/ui-core-shared/transactions/writeAction.js'
+import { buildWriteActionConfig, runWriteAction, type WriteActionContext } from '@zoltar/ui-core-shared/transactions/writeAction.js'
 import { refreshWalletStateOnly } from '@zoltar/ui-core-shared/lib/refreshState.js'
 import type { TradingFormState, WriteOperationsParameters } from '../../../types/app.js'
 import type { DeploymentStatus, TradingActionResult, TradingDetails, ZoltarUniverseSummary } from '@zoltar/ui-core-shared/types/contracts.js'
@@ -158,7 +158,7 @@ export function useTradingOperations(
 		await tradingDetailsLoad.run(isCurrent === undefined ? loadOptions : { ...loadOptions, isCurrent })
 	}
 
-	const runTradingAction = async (actionName: TradingActionResult['action'], action: (walletAddress: Address, securityPoolAddress: Address, currentForm: TradingFormState, isCurrentSelection: () => boolean) => Promise<TradingActionResult | undefined>, errorFallback: string) => {
+	const runTradingAction = async (actionName: TradingActionResult['action'], action: (walletAddress: Address, securityPoolAddress: Address, currentForm: TradingFormState, isCurrentSelection: () => boolean, context: WriteActionContext) => Promise<TradingActionResult | undefined>, errorFallback: string) => {
 		const currentForm = tradingForm.value
 		const actionSelectionKey = currentTradingSelectionKey
 		const transactionContext = {
@@ -263,7 +263,8 @@ export function useTradingOperations(
 						if (guardMessage !== undefined) throw new Error(guardMessage)
 					}
 					if (!isActionSelectionCurrent()) return undefined
-					const result = await action(walletAddress, securityPoolAddress, currentForm, isActionSelectionCurrent)
+					activeWallet.assertActive()
+					const result = await action(walletAddress, securityPoolAddress, currentForm, isActionSelectionCurrent, activeWallet)
 					return result
 				},
 				errorFallback,
@@ -284,9 +285,9 @@ export function useTradingOperations(
 	const createCompleteSet = async () =>
 		await runTradingAction(
 			'createCompleteSet',
-			async (walletAddress, securityPoolAddress, currentForm, isCurrentSelection) => {
+			async (walletAddress, securityPoolAddress, currentForm, isCurrentSelection, context) => {
 				if (!isCurrentSelection()) return undefined
-				return await dependencies.createCompleteSetInSecurityPool(walletAddress, { onTransactionPrepared, onTransactionSubmitted }, securityPoolAddress, parseTradingAmountInput(currentForm.completeSetAmount, 'Complete set amount'))
+				return await dependencies.createCompleteSetInSecurityPool(walletAddress, { onTransactionPrepared, onTransactionSubmitted, reviewSignal: context.reviewSignal }, securityPoolAddress, parseTradingAmountInput(currentForm.completeSetAmount, 'Complete set amount'))
 			},
 			'Failed to mint complete sets',
 		)
@@ -294,13 +295,13 @@ export function useTradingOperations(
 	const redeemCompleteSet = async () =>
 		await runTradingAction(
 			'redeemCompleteSet',
-			async (walletAddress, securityPoolAddress, currentForm, isCurrentSelection) => {
+			async (walletAddress, securityPoolAddress, currentForm, isCurrentSelection, context) => {
 				const latestMintCapacity = await dependencies.loadSecurityPoolMintCapacity(securityPoolAddress)
 				if (!isCurrentSelection()) return undefined
 				const redeemAmountAttoEth = parseTradingAmountInput(currentForm.redeemAmount, 'Redeem amount')
 				const redeemAmountAttoShares = convertSettlementCollateralAttoEthToAttoShares(redeemAmountAttoEth, latestMintCapacity.settlementCollateralAttoEth, latestMintCapacity.shareTokenSupplyAttoShares)
 				if (redeemAmountAttoShares === undefined) throw new Error('Redeeming is unavailable because this pool has complete-set shares but no collateral.')
-				return await dependencies.redeemCompleteSetInSecurityPool(walletAddress, { onTransactionPrepared, onTransactionSubmitted }, securityPoolAddress, redeemAmountAttoShares)
+				return await dependencies.redeemCompleteSetInSecurityPool(walletAddress, { onTransactionPrepared, onTransactionSubmitted, reviewSignal: context.reviewSignal }, securityPoolAddress, redeemAmountAttoShares)
 			},
 			'Failed to redeem complete sets',
 		)
@@ -308,9 +309,9 @@ export function useTradingOperations(
 	const redeemShares = async () =>
 		await runTradingAction(
 			'redeemShares',
-			async (walletAddress, securityPoolAddress, _currentForm, isCurrentSelection) => {
+			async (walletAddress, securityPoolAddress, _currentForm, isCurrentSelection, context) => {
 				if (!isCurrentSelection()) return undefined
-				return await dependencies.redeemSharesInSecurityPool(walletAddress, { onTransactionPrepared, onTransactionSubmitted }, securityPoolAddress)
+				return await dependencies.redeemSharesInSecurityPool(walletAddress, { onTransactionPrepared, onTransactionSubmitted, reviewSignal: context.reviewSignal }, securityPoolAddress)
 			},
 			'Failed to redeem shares',
 		)
@@ -318,9 +319,15 @@ export function useTradingOperations(
 	const migrateShares = async () =>
 		await runTradingAction(
 			'migrateShares',
-			async (walletAddress, securityPoolAddress, currentForm, isCurrentSelection) => {
+			async (walletAddress, securityPoolAddress, currentForm, isCurrentSelection, context) => {
 				if (!isCurrentSelection()) return undefined
-				return await dependencies.migrateSharesFromUniverse(walletAddress, { onTransactionPrepared, onTransactionSubmitted }, securityPoolAddress, parseReportingOutcomeInput(currentForm.selectedShareOutcome), parseBigIntListInput(currentForm.targetOutcomeIndexes, 'Target child universes'))
+				return await dependencies.migrateSharesFromUniverse(
+					walletAddress,
+					{ onTransactionPrepared, onTransactionSubmitted, reviewSignal: context.reviewSignal },
+					securityPoolAddress,
+					parseReportingOutcomeInput(currentForm.selectedShareOutcome),
+					parseBigIntListInput(currentForm.targetOutcomeIndexes, 'Target child universes'),
+				)
 			},
 			'Failed to migrate shares',
 		)

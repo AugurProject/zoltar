@@ -103,7 +103,7 @@ export function createReviewedClient(client: WriteClient, validate: () => Promis
 		preview = undefined
 		try {
 			if (!environment.isCurrent()) throw new Error('The network changed. Review the action again.')
-			signal?.throwIfAborted()
+			controller.assertActive()
 			await validate()
 			plan ??= [transaction]
 			await initialize()
@@ -123,7 +123,7 @@ export function createReviewedClient(client: WriteClient, validate: () => Promis
 				transaction = { ...transaction, args: approvalArgs, data: encodeFunctionData({ abi: ABIS.mainnet.erc20, functionName: 'approve', args: approvalArgs }) }
 			}
 			stepIndex += 1
-			signal?.throwIfAborted()
+			controller.assertActive()
 			await validate()
 			if (!environment.isCurrent()) throw new Error('The network changed. Review the action again.')
 			const currentFunding = await expected.refreshFundingRequirements?.()
@@ -138,13 +138,13 @@ export function createReviewedClient(client: WriteClient, validate: () => Promis
 			}
 			if (expected.tokenFunding !== undefined) await validate()
 			if (!environment.isCurrent()) throw new Error('The network changed. Review the action again.')
-			signal?.throwIfAborted()
+			controller.assertActive()
 			if (transaction.functionName === 'requestPrice') {
 				await client.estimateGas({ account: client.account, to: transaction.contractAddress, data: transaction.data, value: transaction.value })
 				// This validates the direct call; the wallet must estimate any delegation wrapper itself.
 				await validate()
 				if (!environment.isCurrent()) throw new Error('The network changed. Review the action again.')
-				signal?.throwIfAborted()
+				controller.assertActive()
 			}
 			client.onTransactionPrepared?.(transaction)
 			const hash = await execute(approvalArgs)
@@ -164,7 +164,7 @@ export function createReviewedClient(client: WriteClient, validate: () => Promis
 		runFundingTransaction: async (requiredIndices, execute) => {
 			try {
 				if (!environment.isCurrent()) throw new Error('The network changed. Review the action again.')
-				signal?.throwIfAborted()
+				controller.assertActive()
 				await validate()
 				await initialize()
 				selectedFunding = await controller.chooseFunding(requiredIndices)

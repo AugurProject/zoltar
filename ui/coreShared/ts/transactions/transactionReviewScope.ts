@@ -2,8 +2,8 @@ import { signal } from '@preact/signals'
 
 const modalScopes = signal<readonly AbortSignal[]>([])
 
-// Capture the scope when a reviewed client is created, so opening another dialog
-// cannot move an existing workflow or let it outlive its initiating form.
+// Capture before asynchronous preparation and pass the signal to reviewed clients,
+// so opening another dialog cannot move an action out of its initiating form.
 export function getTransactionReviewSignal() {
 	return modalScopes.peek().at(-1)
 }

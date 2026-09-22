@@ -210,8 +210,7 @@ strong.metric-value-danger {
 	max-height: min(90vh, 58rem);
 	overflow: auto;
 	isolation: isolate;
-	display: flex;
-	flex-direction: column;
+	display: grid;
 	gap: 1rem;
 	padding: 1.25rem;
 	border: 1px solid var(--border-strong);
@@ -220,16 +219,13 @@ strong.metric-value-danger {
 	box-shadow: var(--shadow-overlay);
 }
 
-.modal-panel > * {
-	flex-shrink: 0;
-}
-
 .modal-header {
 	display: flex;
 	justify-content: space-between;
 	align-items: flex-start;
 	gap: 1rem;
-	position: relative;
+	position: sticky;
+	top: 0;
 	z-index: var(--z-nav);
 	margin: -1.25rem -1.25rem 0;
 	padding: 0.9rem 1.25rem 0.85rem;
@@ -1070,8 +1066,19 @@ main.global-transaction-tray-open :is(a, button, input, select, summary, textare
 }
 
 .operation-modal-panel {
+	display: flex;
+	flex-direction: column;
 	width: min(54rem, calc(100vw - 2rem));
 	overflow: hidden;
+}
+
+.operation-modal-panel > * {
+	flex-shrink: 0;
+}
+
+.operation-modal-panel > .modal-header {
+	position: relative;
+	top: auto;
 }
 
 /* The header stays pinned; everything below it scrolls inside the panel's padding box. */

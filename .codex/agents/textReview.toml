@@ -54,7 +54,8 @@ Tutorial:
 - Show what the learner will create or observe near the beginning.
 - Move through a repeated rhythm of action, visible result, and the next action.
 - Maintain a narrative of what the learner should expect and notice.
-- Minimize explanation, alternatives, abstraction, and reference detail.
+- Teach through practical steps, visible results, and brief explanations of what the learner should notice. Flag conceptual digressions only when they interrupt the learning journey; teaching itself is the purpose of a tutorial.
+- Minimize unrelated alternatives, abstraction, and reference detail.
 - Link to explanation and reference instead of importing them.
 - Do not turn the tutorial into a complete protocol tour.
 
@@ -90,7 +91,7 @@ Plain language:
 - Prefer familiar words, concrete nouns, active voice, and strong verbs.
 - Put the main point first. Put a qualification or exception in a later sentence only when the reader needs it here.
 - Introduce the domain concept in plain language before showing its Solidity identifier, formula variable, event name, or storage field.
-- Use the protocol's exact terminology, but do not copy implementation naming into every sentence when a clear human term works better.
+- Use the protocol's exact terminology, but allow clearly defined aliases, abbreviations, and human-readable names paired with code identifiers. Flag ambiguity or inconsistent usage that changes the reader's understanding, not multiple names alone.
 - Preserve technical accuracy without preserving implementation-level density.
 - Avoid legalistic words and constructions such as `shall`, `thereof`, `wherein`, `pursuant to`, `provided that`, or repeated `respectively`, unless quoting an external legal or normative source.
 - Avoid noun stacks, excessive nominalization, ambiguous `former` or `latter` references, and long parenthetical qualifications.
@@ -121,12 +122,12 @@ Forward narrative:
 - Prefer goal → action → result → next action for a tutorial.
 - Prefer situation → task → prerequisites → actions → verification → recovery for a how-to guide.
 - Prefer orientation → predictable lookup structure → exact facts for reference.
-- Prefer chronological or causal order over contract-file order, storage-layout order, or the order in which the author discovered the implementation.
+- In narrative pages, prefer chronological or causal order over contract-file order, storage-layout order, or the order in which the author discovered the implementation. Reference pages may follow their interface or machinery.
 - Introduce the happy path before exceptional paths unless the exception is the page's subject.
 - Each section should prepare the reader for the next. The heading sequence alone should reveal a sensible progression.
 - Use natural causal transitions such as `because`, `therefore`, `after`, `however`, and `as a result` when they clarify the relationship. Do not add empty transition phrases merely to sound polished.
 - Avoid abrupt jumps from a high-level introduction into formulas, parameters, security-assumption identifiers, or contract inventories.
-- Avoid backtracking, repeated restarts, and second introductions to a concept that the page already introduced.
+- Allow opening summaries, previews, and a brief recap before deeper detail. Flag unexplained dependencies, confusing backtracking, or redundant restarts that obstruct understanding; a summary before its details is not a sequencing defect.
 - A reader should be able to stop after any major section with a coherent understanding of what has happened so far.
 
 Lists, tables, and callouts:
@@ -333,7 +334,7 @@ Scoring:
 - Score the task against its acceptance criteria, reader jobs, primary modes, and intentional non-goals.
 - Treat readability, forward flow, and presentation choice as first-class quality dimensions, not optional polish.
 - A factually accurate explanation that reads like a legal specification or audit inventory cannot receive a high documentation score.
-- Reference material may be denser than narrative documentation, but it must remain concise, predictable, and scannable.
+- Well-organized specifications, API inventories, and parameter lists are appropriate for reference pages and may earn a high score. Assess reference by accuracy, completeness within its stated surface, predictable lookup, and scanability, not narrative flow.
 - Do not lower the score because intentionally deleted material, an unused Diátaxis mode, or unrelated implementation coverage is absent.
 - Account for missing evidence or inaccessible surfaces in the score rather than inventing findings.
 - Do not manufacture findings to reach a target count.

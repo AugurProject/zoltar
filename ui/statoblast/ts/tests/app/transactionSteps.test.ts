@@ -5,10 +5,12 @@ import { afterEach, expect, mock, test } from 'bun:test'
 import { createWalletClient, custom, publicActions, encodeFunctionData, decodeFunctionData, maxUint256, type Hash, type TransactionReceipt, type ReplacementReason } from '@zoltar/core-shared/evm/ethereum'
 import { MAINNET_NETWORK_PROFILE } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
 import { createDeferred } from '@zoltar/ui-core-shared/tests/testUtils/deferred.js'
-import { resetActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
+import { installActiveEnvironmentForTesting, resetActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { createFakeBackend } from '@zoltar/ui-core-shared/tests/testUtils/fakeBackend.js'
 import { createReviewedClient } from '@zoltar/ui-statoblast-shared/protocol/reviewedClient.js'
 import { withTransactionReviews } from '@zoltar/ui-statoblast-shared/protocol/reviewedBackend.js'
+import { runWriteAction } from '@zoltar/ui-core-shared/transactions/writeAction.js'
+import { createInitialTransactionTrayState, markTransactionCanceled, markTransactionFailed, markTransactionFinished, markTransactionRequested } from '@zoltar/ui-core-shared/transactions/transactionTray.js'
 import { registerTransactionReviewScope } from '@zoltar/ui-core-shared/transactions/transactionReviewScope.js'
 import { createTransactionStepController, transactionSteps } from '@zoltar/ui-core-shared/transactions/transactionSteps.js'
 
@@ -597,3 +599,167 @@ test('describes a standalone unlimited approval as Max REP', async () => {
 		await sending
 	}
 })
+
+for (const phase of ['before-send', 'validation', 'metadata', 'funding', 'after-confirmation'] as const) {
+	test(`closing the initiating scope during ${phase} clears the action without reporting failure`, async () => {
+		const { client, sendTransaction } = setup()
+		const restore = installActiveEnvironmentForTesting(createFakeBackend({ accountAddress: account }))
+		const scope = new AbortController()
+		const unregister = registerTransactionReviewScope(scope.signal)
+		const reached = createDeferred<void>()
+		const resume = createDeferred<void>()
+		const pause = async () => {
+			reached.resolve()
+			await resume.promise
+		}
+		let validationCount = 0
+		const reviewed = createReviewedClient(
+			{
+				...client,
+				sendTransaction,
+				readContract: createReadContractStub(async request => {
+					if (request.functionName === 'symbol') {
+						await pause()
+						return 'REP'
+					}
+					return 18
+				}),
+			},
+			async () => {
+				validationCount += 1
+				if ((phase === 'validation' || phase === 'funding') && validationCount === 1) await pause()
+				if (phase === 'after-confirmation' && validationCount === 2) await pause()
+			},
+		)
+		let tray = createInitialTransactionTrayState()
+		const canceled = mock(() => undefined)
+		const failed = mock(() => undefined)
+		const inlineError = mock((message: string | undefined) => message)
+		try {
+			if (phase === 'before-send') scope.abort()
+			const sending = runWriteAction(
+				{
+					accountAddress: account,
+					missingWalletMessage: 'Connect wallet',
+					onTransactionRequested: () => {
+						tray = markTransactionRequested(tray, { action: 'approve', source: 'statoblast', submittedTitle: 'Approving REP', submittedDetail: 'Approval submitted.' })
+					},
+					onTransactionCanceled: () => {
+						tray = markTransactionCanceled(tray)
+					},
+					onTransactionFinished: () => {
+						tray = markTransactionFinished(tray)
+					},
+					onTransactionFailed: message => {
+						failed()
+						tray = markTransactionFailed(tray, message)
+					},
+					onWriteCanceled: canceled,
+					setErrorMessage: inlineError,
+					refreshState: async () => undefined,
+				},
+				async () => {
+					if (phase === 'metadata') return { hash: await reviewed.writeContract({ address: account, abi: ABIS.mainnet.erc20, functionName: 'approve', args: [account, 1n] }) }
+					if (phase === 'funding') {
+						reviewed.onTransactionPlan?.([{ functionName: 'Transfer ETH', to: account, value: 1n }])
+						await reviewed.runFundingTransaction?.([0], async () => {
+							await reviewed.sendTransaction({ to: account, value: 1n })
+						})
+						return undefined
+					}
+					return { hash: await reviewed.sendTransaction({ to: account, value: 1n }) }
+				},
+				'Failed to send transaction',
+			)
+			if (phase === 'after-confirmation') {
+				await waitForReview()
+				confirm()
+			}
+			if (phase !== 'before-send') {
+				await reached.promise
+				scope.abort()
+				resume.resolve()
+			}
+			await sending
+			expect(canceled).toHaveBeenCalledTimes(1)
+			expect(failed).not.toHaveBeenCalled()
+			expect(inlineError.mock.calls).toEqual(phase === 'before-send' ? [] : [[undefined]])
+			expect(sendTransaction).not.toHaveBeenCalled()
+			expect(transactionSteps.value).toBeUndefined()
+			expect(tray.active).toBeUndefined()
+			expect(tray.pendingIntent).toBeUndefined()
+			expect(tray.inFlightCount).toBe(0)
+		} finally {
+			resume.resolve()
+			scope.abort()
+			unregister()
+			restore()
+		}
+	})
+}
+
+for (const ownership of ['closed', 'open', 'standalone'] as const) {
+	test(`keeps ${ownership} action ownership when another modal opens before client creation`, async () => {
+		const { client, sendTransaction, receipt } = setup()
+		const backend = withTransactionReviews({ ...createFakeBackend({ accountAddress: account }), createWriteClient: () => ({ ...client, sendTransaction, waitForTransactionReceipt: async () => receipt }) })
+		const restore = installActiveEnvironmentForTesting(backend)
+		const owner = new AbortController()
+		const other = new AbortController()
+		const unregisterOwner = ownership === 'standalone' ? () => undefined : registerTransactionReviewScope(owner.signal)
+		let unregisterOther = () => undefined
+		const reached = createDeferred<void>()
+		const resume = createDeferred<void>()
+		const canceled = mock(() => undefined)
+		const failed = mock(() => undefined)
+		try {
+			const sending = runWriteAction(
+				{
+					accountAddress: account,
+					missingWalletMessage: 'Connect wallet',
+					onTransactionRequested: () => undefined,
+					onTransactionFinished: () => undefined,
+					onWriteCanceled: canceled,
+					onTransactionFailed: failed,
+					setErrorMessage: () => undefined,
+					refreshState: async () => undefined,
+				},
+				async (walletAddress, context) => {
+					reached.resolve()
+					await resume.promise
+					const reviewed = backend.createWriteClient(walletAddress, { reviewSignal: context.reviewSignal })
+					const submittedHash = await reviewed.sendTransaction({ to: account, value: 1n })
+					await reviewed.waitForTransactionReceipt({ hash: submittedHash })
+					return { hash: submittedHash }
+				},
+				'Failed to send transaction',
+			)
+			await reached.promise
+			if (ownership === 'closed') {
+				owner.abort()
+				unregisterOwner()
+			}
+			unregisterOther = registerTransactionReviewScope(other.signal)
+			resume.resolve()
+			if (ownership !== 'closed') {
+				await waitForReview()
+				expect(transactionSteps.value?.reviewSignal).not.toBe(other.signal)
+				if (ownership === 'open') expect(transactionSteps.value?.reviewSignal).toBe(owner.signal)
+				other.abort()
+				confirm()
+			}
+			await sending
+			expect(sendTransaction).toHaveBeenCalledTimes(ownership === 'closed' ? 0 : 1)
+			expect(canceled).toHaveBeenCalledTimes(ownership === 'closed' ? 1 : 0)
+			expect(failed).not.toHaveBeenCalled()
+			if (ownership === 'closed') expect(transactionSteps.value).toBeUndefined()
+			else expect(transactionSteps.value?.steps[0]?.phase).toBe('confirmed')
+		} finally {
+			resume.resolve()
+			owner.abort()
+			other.abort()
+			unregisterOwner()
+			unregisterOther()
+			restore()
+		}
+	})
+}

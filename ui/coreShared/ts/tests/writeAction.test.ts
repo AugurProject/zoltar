@@ -3,6 +3,8 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { getAddress } from '@zoltar/core-shared/evm/ethereum'
 import { installActiveEnvironmentForTesting } from '../lib/activeEnvironment.js'
+import { registerTransactionReviewScope } from '../transactions/transactionReviewScope.js'
+import { createDeferred } from './testUtils/deferred.js'
 import { transactionErrorMessages } from '../lib/errors.js'
 import type { ChainBackend } from '../wallet/chainBackend.js'
 import { MAINNET_NETWORK_PROFILE } from '../wallet/networkProfile.js'
@@ -50,6 +52,59 @@ describe('runWriteAction', () => {
 	afterEach(() => {
 		restoreActiveEnvironment?.()
 		restoreActiveEnvironment = undefined
+	})
+
+	test.each(['embedded', 'explicit'])('closing during the initial wallet check cancels without taking ownership of another transaction: %s', async ownership => {
+		const walletCheck = createDeferred<readonly (typeof walletAddress)[]>()
+		const backend = createFakeBackend({ accountAddress: walletAddress })
+		backend.getAccounts = async () => await walletCheck.promise
+		restoreActiveEnvironment?.()
+		restoreActiveEnvironment = installActiveEnvironmentForTesting(backend)
+		const modal = new AbortController()
+		const unregister = ownership === 'embedded' ? registerTransactionReviewScope(modal.signal) : () => undefined
+		const events: string[] = []
+		try {
+			const action = runWriteAction(
+				{
+					reviewSignal: ownership === 'explicit' ? modal.signal : undefined,
+					accountAddress: walletAddress,
+					missingWalletMessage: 'Connect wallet',
+					onTransactionRequested: () => {
+						events.push('requested')
+					},
+					onTransactionCanceled: () => {
+						events.push('tray canceled')
+					},
+					onTransactionFinished: () => {
+						events.push('finished')
+					},
+					onTransactionFailed: () => {
+						events.push('failed')
+					},
+					onWriteCanceled: () => {
+						events.push('canceled')
+					},
+					setErrorMessage: message => {
+						if (message !== undefined) events.push(message)
+					},
+					refreshState: async () => {
+						events.push('refreshed')
+					},
+				},
+				async () => {
+					events.push('submitted')
+					return { hash: transactionHash }
+				},
+				'Failed to create question',
+			)
+			modal.abort()
+			unregister()
+			walletCheck.resolve([walletAddress])
+			await action
+			expect(events).toEqual(['canceled'])
+		} finally {
+			unregister()
+		}
 	})
 
 	test('uses the provided missing-wallet message when no wallet is connected', async () => {
@@ -523,6 +578,33 @@ describe('runWriteAction', () => {
 		expect(transactionState.active).toBeUndefined()
 		expect(transactionState.pendingIntent).toBeUndefined()
 		expect(transactionState.inFlightCount).toBe(0)
+	})
+
+	test('keeps an unrelated request abort on the failure path', async () => {
+		let canceled = false
+		let failure: string | undefined
+		await runWriteAction(
+			{
+				accountAddress: walletAddress,
+				missingWalletMessage: 'Connect wallet',
+				onTransactionRequested: () => undefined,
+				onTransactionFinished: () => undefined,
+				onTransactionCanceled: () => {
+					canceled = true
+				},
+				onTransactionFailed: message => {
+					failure = message
+				},
+				refreshState: async () => undefined,
+				setErrorMessage: () => undefined,
+			},
+			async () => {
+				throw new DOMException('RPC request aborted', 'AbortError')
+			},
+			'Failed to send transaction',
+		)
+		expect(canceled).toBe(false)
+		expect(failure).toContain('RPC request aborted')
 	})
 
 	test('delegates missing-wallet errors to onWriteError when provided', async () => {

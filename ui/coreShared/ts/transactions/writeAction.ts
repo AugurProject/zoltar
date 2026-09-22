@@ -1,9 +1,16 @@
 import type { Address, Hash } from '@zoltar/core-shared/evm/ethereum'
-import { formatRefreshErrorMessage, formatWriteErrorMessage, isTransactionReviewCancellation } from '../lib/errors.js'
+import { formatRefreshErrorMessage, formatWriteErrorMessage, isTransactionReviewCancellation, transactionErrorMessages } from '../lib/errors.js'
 import { assertActiveWallet, type ActiveWalletContext } from '../wallet/assertActiveWallet.js'
 import type { WriteOperationsParameters } from '../types/app.js'
 import type { TransactionIntent } from '../types/components.js'
 import { createActiveEnvironmentGuard } from '../lib/activeEnvironment.js'
+
+import { getTransactionReviewSignal } from './transactionReviewScope.js'
+
+export type WriteActionContext = ActiveWalletContext & {
+	reviewSignal: AbortSignal
+	assertActive: () => void
+}
 
 type RunWriteActionParameters = {
 	accountAddress: Address | undefined
@@ -16,6 +23,7 @@ type RunWriteActionParameters = {
 	onTransactionRequested: () => boolean | void
 	onWriteCanceled?: (() => void) | undefined
 	onWriteError?: ((message: string) => void) | undefined
+	reviewSignal?: AbortSignal | undefined
 	refreshErrorFallback?: string
 	refreshState: WriteOperationsParameters['refreshState']
 	setErrorMessage: (message: string | undefined) => void
@@ -49,7 +57,7 @@ export function buildWriteActionConfig(params: BuildWriteActionConfigParameters,
 	}
 }
 
-export async function runWriteAction<TResult extends { hash: Hash }>(parameters: RunWriteActionParameters, action: (walletAddress: Address, activeWallet: ActiveWalletContext) => Promise<TResult | undefined>, errorFallback: string, onSuccess?: (result: TResult, walletAddress: Address) => Promise<void> | void) {
+export async function runWriteAction<TResult extends { hash: Hash }>(parameters: RunWriteActionParameters, action: (walletAddress: Address, activeWallet: WriteActionContext) => Promise<TResult | undefined>, errorFallback: string, onSuccess?: (result: TResult, walletAddress: Address) => Promise<void> | void) {
 	if (parameters.accountAddress === undefined) {
 		if (parameters.onWriteError === undefined) {
 			parameters.setErrorMessage(parameters.missingWalletMessage)
@@ -59,12 +67,19 @@ export async function runWriteAction<TResult extends { hash: Hash }>(parameters:
 		return
 	}
 
+	// Capture ownership before wallet checks or action-specific preparation can yield.
+	const reviewSignal = parameters.reviewSignal ?? getTransactionReviewSignal() ?? new AbortController().signal
+	const assertActive = () => {
+		if (reviewSignal.aborted) throw new Error(transactionErrorMessages.reviewCanceled)
+	}
 	let ownsTransaction = false
 	try {
 		const environmentGuard = createActiveEnvironmentGuard()
 		let result: TResult | undefined
 		try {
+			assertActive()
 			const activeWallet = await assertActiveWallet(parameters.accountAddress)
+			assertActive()
 			if (!environmentGuard.isCurrent()) return
 			if (parameters.onTransactionRequested() === false) {
 				parameters.onWriteCanceled?.()
@@ -72,7 +87,7 @@ export async function runWriteAction<TResult extends { hash: Hash }>(parameters:
 			}
 			ownsTransaction = true
 			parameters.setErrorMessage(undefined)
-			result = await action(parameters.accountAddress, activeWallet)
+			result = await action(parameters.accountAddress, { ...activeWallet, reviewSignal, assertActive })
 			if (!environmentGuard.isCurrent()) return
 			if (result === undefined) {
 				parameters.onWriteCanceled?.()
@@ -84,7 +99,7 @@ export async function runWriteAction<TResult extends { hash: Hash }>(parameters:
 			if (isTransactionReviewCancellation(error)) {
 				// Closing the review dialog cancels the remaining steps; nothing failed.
 				parameters.onWriteCanceled?.()
-				parameters.onTransactionCanceled?.()
+				if (ownsTransaction) parameters.onTransactionCanceled?.()
 				return
 			}
 			const message = parameters.formatErrorMessage?.(error, errorFallback) ?? formatWriteErrorMessage(error, errorFallback)
