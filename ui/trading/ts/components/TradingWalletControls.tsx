@@ -48,7 +48,7 @@ export function TradingWalletControls({ account, deploymentSetupActive, deployme
 	const showsConnectAction = liveWalletVisible && !showsSwitchNetworkAction && (!simulation || account === undefined)
 	if (!hasTradingWalletControls({ deploymentSetupActive, liveDeploymentStatus, routeOwnsLiveWallet })) return null
 	return (
-		<div class='trading-wallet-actions'>
+		<div className='trading-wallet-actions'>
 			{deploymentSetupActive ? (
 				<WalletConnectionControl
 					label={deploymentWalletLabel(deploymentWalletState)}

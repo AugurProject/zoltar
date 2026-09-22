@@ -1,5 +1,6 @@
 import type { ComponentChildren } from 'preact'
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
+import { SecurityPoolLink as SharedSecurityPoolLink } from '@zoltar/ui-core-shared/components/SecurityPoolLink.js'
 import { getSecurityPoolLinkHref, navigateToSecurityPool } from '../lib/securityPoolNavigation.js'
 
 type SecurityPoolLinkProps = {
@@ -11,23 +12,11 @@ type SecurityPoolLinkProps = {
 	universeId?: bigint | undefined
 }
 
-export function SecurityPoolLink({ ariaLabel, children, className = '', securityPoolAddress, selectedPoolView, universeId }: SecurityPoolLinkProps) {
-	const href = getSecurityPoolLinkHref(securityPoolAddress, selectedPoolView, universeId)
-	const label = children ?? securityPoolAddress
-
+/** The shared pool link addressed to the Statoblast security pool route, keeping the selected view and universe in the query. */
+export function SecurityPoolLink({ ariaLabel, children, className, securityPoolAddress, selectedPoolView, universeId }: SecurityPoolLinkProps) {
 	return (
-		<a
-			aria-label={ariaLabel}
-			className={`security-pool-link ${className}`}
-			href={href}
-			onClick={event => {
-				if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
-				event.preventDefault()
-				navigateToSecurityPool(securityPoolAddress, selectedPoolView, universeId)
-			}}
-			title={securityPoolAddress}
-		>
-			{label}
-		</a>
+		<SharedSecurityPoolLink ariaLabel={ariaLabel} className={className} href={getSecurityPoolLinkHref(securityPoolAddress, selectedPoolView, universeId)} onNavigate={() => navigateToSecurityPool(securityPoolAddress, selectedPoolView, universeId)} securityPoolAddress={securityPoolAddress}>
+			{children}
+		</SharedSecurityPoolLink>
 	)
 }

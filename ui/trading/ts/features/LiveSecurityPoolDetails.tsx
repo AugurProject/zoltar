@@ -21,20 +21,20 @@ export function PairInitializationAction({ market, nowSeconds }: { market: LiveM
 	const blocker = marketNewRiskBlocker(market, nowSeconds)
 	if (blocker !== undefined)
 		return (
-			<div class='pair-initialization'>
-				<p class='detail'>{liveCopy.conditionalPriceUnavailable}</p>
-				<div class='actions'>
-					<button class='primary' type='button' disabled>
+			<div className='pair-initialization'>
+				<p className='detail'>{liveCopy.conditionalPriceUnavailable}</p>
+				<div className='actions'>
+					<button className='primary' type='button' disabled>
 						{liveCopy.pairInitializationUnavailable(blocker)}
 					</button>
 				</div>
 			</div>
 		)
 	return (
-		<div class='pair-initialization'>
-			<p class='detail'>{market.pair === undefined ? liveCopy.undeployedPairDescription(formatTrimmedUnits(market.feeBps, 2, 2)) : liveCopy.uninitializedPairDescription(formatTrimmedUnits(market.feeBps, 2, 2))}</p>
-			<div class='actions'>
-				<a class='button-link primary' href={getTradingRouteHref(`#/${market.pair === undefined ? 'create-market' : 'liquidity'}/${market.pool}`)}>
+		<div className='pair-initialization'>
+			<p className='detail'>{market.pair === undefined ? liveCopy.undeployedPairDescription(formatTrimmedUnits(market.feeBps, 2, 2)) : liveCopy.uninitializedPairDescription(formatTrimmedUnits(market.feeBps, 2, 2))}</p>
+			<div className='actions'>
+				<a className='button-link primary' href={getTradingRouteHref(`#/${market.pair === undefined ? 'create-market' : 'liquidity'}/${market.pool}`)}>
 					{market.pair === undefined ? liveCopy.deployTradingPool : liveCopy.initializeTradingPool}
 				</a>
 			</div>
@@ -68,29 +68,29 @@ export function LiveSecurityPoolDetails({
 	// Return to the landing whose list includes this pool: markets once a pair exists, otherwise market creation.
 	const browseBack = market.pair === undefined ? { href: '#/create-market', label: appCopy.createMarket } : { href: '#/market', label: liveCopy.marketList }
 	return (
-		<div class='route-view-flow'>
+		<div className='route-view-flow'>
 			<RouteHeader
 				eyebrow={appCopy.securityPool}
 				title={market.title}
 				badge={market.loadError === undefined ? undefined : <Badge tone='warning'>{appCopy.poolDataUnavailable}</Badge>}
 				actions={
-					<a class='button-link' href={getTradingRouteHref(browseBack.href)}>
+					<a className='button-link' href={getTradingRouteHref(browseBack.href)}>
 						{browseBack.label}
 					</a>
 				}
 			/>
 			<ErrorNotice message={connectionMessage} />
 			<SectionBlock title={liveCopy.marketFacts}>
-				<div class='security-pool-details' aria-busy={refreshing}>
+				<div className='security-pool-details' aria-busy={refreshing}>
 					{refreshMessage === undefined ? null : (
-						<p class='detail' role='status'>
+						<p className='detail' role='status'>
 							{refreshMessage}
 						</p>
 					)}
 					<ErrorNotice message={errorMessage} />
 					{errorMessage !== undefined && !refreshing ? (
-						<div class='actions'>
-							<button class='secondary' type='button' disabled={workflowLocked} onClick={retry}>
+						<div className='actions'>
+							<button className='secondary' type='button' disabled={workflowLocked} onClick={retry}>
 								{hasLoadedDetails ? liveCopy.retryRefresh : liveCopy.retrySecurityPool}
 							</button>
 						</div>
@@ -126,8 +126,8 @@ export function LiveSecurityPoolDetails({
 							{market.pair === undefined ? (
 								<PairInitializationAction market={market} nowSeconds={nowSeconds} />
 							) : (
-								<div class='actions'>
-									<a class='button-link primary' href={getTradingRouteHref(`#/market/${market.pool}`)}>
+								<div className='actions'>
+									<a className='button-link primary' href={getTradingRouteHref(`#/market/${market.pool}`)}>
 										{liveCopy.tradePool}
 									</a>
 								</div>
@@ -161,8 +161,8 @@ export function SecurityPoolRouteEmptyState({ discoveryState, discoveryError, wo
 		return (
 			<>
 				<ErrorNotice message={liveCopy.securityPoolDiscoveryFailed(discoveryError ?? liveCopy.unknownDiscovery)} />
-				<div class='actions'>
-					<button class='secondary' type='button' disabled={workflowLocked} onClick={retry}>
+				<div className='actions'>
+					<button className='secondary' type='button' disabled={workflowLocked} onClick={retry}>
 						{liveCopy.retryDiscovery}
 					</button>
 				</div>

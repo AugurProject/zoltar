@@ -206,6 +206,13 @@ describe('trading deployment setup', () => {
 		cleanupRendered = rendered.cleanup
 		await waitForText('Security pool factory is not deployed')
 		expect(rendered.container.textContent).not.toContain('Unable to inspect the selected deployment')
+		// The inspection badge states the blocked reason once; the disabled deploy action references it instead of repeating it.
+		expect(rendered.container.textContent?.match(/Security pool factory is not deployed/gi) ?? []).toHaveLength(1)
+		const deployButton = rendered.container.querySelector<HTMLButtonElement>('.tx-action-button')
+		expect(deployButton?.disabled).toBe(true)
+		const describedBy = deployButton?.getAttribute('aria-describedby')
+		expect(describedBy).toBeTruthy()
+		expect(rendered.container.querySelector(`[id="${describedBy}"]`)?.textContent).toBe('Security pool factory is not deployed')
 		expect(rendered.container.textContent).toContain(plan.factory.address)
 		expect(rendered.container.textContent).toContain(plan.router.address)
 		expect(rendered.container.textContent).toContain('0 / 2')
@@ -527,7 +534,7 @@ describe('trading deployment setup', () => {
 		})
 		await waitForText('RPC unavailable')
 		expect(rendered.container.textContent).toContain('RPC unavailable')
-		expect(Array.from(rendered.container.querySelectorAll('.deployment-step .badge')).map(status => status.textContent?.trim())).toEqual(['Checking', 'Checking'])
+		expect(Array.from(rendered.container.querySelectorAll('.contract-row .badge')).map(status => status.textContent?.trim())).toEqual(['Checking', 'Checking'])
 		const retry = Array.from(rendered.container.querySelectorAll('button')).find(button => button.textContent?.trim() === 'Retry checks')
 		if (!(retry instanceof HTMLButtonElement)) throw new Error('Retry checks button is unavailable')
 		rpcAvailable = true
@@ -567,6 +574,39 @@ describe('trading deployment setup', () => {
 		expect(feedback?.classList.contains('error')).toBe(true)
 	})
 
+	test('explains incomplete deployment settings on the deploy action instead of a never-ending network check', async () => {
+		window.history.replaceState(undefined, '', '/#/deploy')
+		const services: TradingDeploymentSetupServices = { createPublicClient: () => deploymentClient(), loadCoreDeployments: async () => [] }
+		const rendered = await renderIntoDocument(<TradingDeploymentSetup onComplete={() => undefined} services={services} />)
+		cleanupRendered = rendered.cleanup
+		await act(async () => await Bun.sleep(0))
+		await waitForText('Complete deployment settings')
+		expect(rendered.container.textContent).not.toContain('Checking network')
+		expect(rendered.container.querySelector('.tx-action-feedback .loading-value')).toBeNull()
+		const deployButton = rendered.container.querySelector<HTMLButtonElement>('.tx-action-button')
+		expect(deployButton?.disabled).toBe(true)
+		const describedBy = deployButton?.getAttribute('aria-describedby')
+		expect(describedBy).toBeTruthy()
+		expect(rendered.container.querySelector(`[id="${describedBy}"]`)?.textContent).toBe('Complete deployment settings')
+	})
+
+	test('states a wrong-network wallet reason once and describes the deploy action with it', async () => {
+		window.history.replaceState(undefined, '', '/#/deploy')
+		const services: TradingDeploymentSetupServices = { createPublicClient: () => deploymentClient(), connectWallet: async () => ({ account: testWalletAccount, chainId: 1 }), loadCoreDeployments: async () => [core] }
+		const rendered = await renderIntoDocument(<TradingDeploymentSetup onComplete={() => undefined} services={services} />)
+		cleanupRendered = rendered.cleanup
+		await waitForText('Deploy Trading factory')
+		await connectDeploymentWallet(rendered.container)
+		await waitForConnectedWallet(rendered.container)
+		await waitForText(`The connected wallet must use ${core.chainName}`)
+		expect(rendered.container.textContent?.match(new RegExp(`wallet must use ${core.chainName}`, 'gi')) ?? []).toHaveLength(1)
+		const deployButton = rendered.container.querySelector<HTMLButtonElement>('.tx-action-button')
+		expect(deployButton?.disabled).toBe(true)
+		const describedBy = deployButton?.getAttribute('aria-describedby')
+		expect(describedBy).toBeTruthy()
+		expect(rendered.container.querySelector(`[id="${describedBy}"]`)?.textContent).toContain(`The connected wallet must use ${core.chainName}`)
+	})
+
 	test('keeps the app route locked while a deployment transaction is pending', async () => {
 		window.history.replaceState(undefined, '', '/#/deploy')
 		const loadedConfiguration = deploymentConfigurationForPlan(getTradingDeploymentPlan(core, 30), 'https://rpc.example/')
@@ -595,7 +635,7 @@ describe('trading deployment setup', () => {
 		await waitForText('Deploy Trading factory')
 		await connectDeploymentWallet(rendered.container)
 		await waitForConnectedWallet(rendered.container)
-		expect(rendered.container.querySelector('.trading-overview .badge')?.textContent).toContain(core.chainName)
+		expect(rendered.container.querySelector('.overview-wallet-panel .badge')?.textContent).toContain(core.chainName)
 		expect(rendered.container.querySelector('.trading-wallet-actions .wallet-button')?.textContent).toContain(testWalletAccount)
 		for (let attempt = 0; attempt < 30; attempt++) {
 			if (rendered.container.querySelector('.trading-wallet-actions .wallet-button')?.getAttribute('aria-label') === `Disconnect wallet ${testWalletAccount}`) break

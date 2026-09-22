@@ -1,3 +1,4 @@
+import type { UniverseDiscoveryScope } from '../lib/universeSelection.js'
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import { useCallback, useMemo, useRef } from 'preact/hooks'
 import { parseNonNegativeDecimalInput } from '@zoltar/ui-core-shared/forms/decimal.js'
@@ -21,6 +22,7 @@ export function useLiveTradingController({
 	configuration,
 	configurationError,
 	selectedUniverseId,
+	urlUniverseId,
 	onUniversesChange,
 	onWorkflowLockChange,
 	onWalletSummaryChange,
@@ -34,7 +36,8 @@ export function useLiveTradingController({
 	configuration: DeploymentConfiguration | undefined
 	configurationError: string | undefined
 	selectedUniverseId: string | undefined
-	onUniversesChange(universeIds: readonly bigint[], selectedUniverseId: bigint | undefined): void
+	urlUniverseId: bigint | undefined
+	onUniversesChange(universeIds: readonly bigint[], selectedUniverseId: bigint | undefined, scope: UniverseDiscoveryScope): void
 	onWorkflowLockChange(locked: boolean): void
 	onWalletSummaryChange(summary: WalletSummaryState): void
 	walletSummaryRetryNonce: number
@@ -77,6 +80,7 @@ export function useLiveTradingController({
 		configuration,
 		configurationError,
 		selectedUniverseId,
+		urlUniverseId,
 		onUniversesChange,
 		walletSummaryRetryNonce,
 		selected,
@@ -110,7 +114,7 @@ export function useLiveTradingController({
 		refresh,
 	})
 	usePortfolioRefreshEffects({ route, configuration, account, selected, visibleMarkets, marketRevision: markets, selectedUniverseId: walletUniverseId, walletContextInvalidated, accountRef, queries: portfolioQueries, services, portfolioBalanceRequests, balanceRequests })
-	useWalletSummaryEffects({ configuration, configurationError, selectedUniverseId: walletUniverseId, discoveryState, discoveryError, selected: selected ?? visibleMarkets[0], retryNonce: walletSummaryRetryNonce, onWalletSummaryChange, session: walletSession, services, requests: walletSummaryRequests })
+	useWalletSummaryEffects({ route, configuration, configurationError, selectedUniverseId: walletUniverseId, discoveryState, discoveryError, selected: selected ?? visibleMarkets[0], retryNonce: walletSummaryRetryNonce, onWalletSummaryChange, session: walletSession, services, requests: walletSummaryRequests })
 	const parsedAmount = useMemo(() => {
 		try {
 			return { value: parseNonNegativeDecimalInput(amount), error: undefined }
