@@ -41,3 +41,5 @@ export { parseTransaction, recoverTransactionAddress, privateKeyToAccount, getCr
 
 /** @internal Used by tests that construct or decode raw RPC evidence. */
 export { decodeFunctionResult, encodeEventTopics } from './ethereum/abi.js'
+
+export { boundedResponseText } from './ethereum/bounded-response.js'

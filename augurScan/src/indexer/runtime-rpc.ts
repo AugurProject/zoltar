@@ -1,7 +1,7 @@
 import { errorChain } from '../../../shared/core/ts/errors/errorChain.ts'
 import type { AddressActivity, StoredTransaction } from '../database.ts'
 import { type Address, createPublicClient, type Hash, http, type Log, type PublicClient, type RpcFetchFn, zeroAddress } from '../ethereum.ts'
-import { safePrunedStateProviderMessage } from '../logging.ts'
+import { parseLoggedRpcResponse, safePrunedStateProviderMessage } from '../logging.ts'
 import { RpcRequestMethodError, type RpcRequestQueue, withRpcRequestQueue } from '../rpc-request-queue.ts'
 import { bigintToSafeNumber } from '../time.ts'
 import type { ContractMetadata, StoredLog } from '../types.ts'
@@ -187,6 +187,7 @@ export const createLogClient = (rpcUrl: string, endpoint: string, queue: RpcRequ
 			http(rpcUrl, {
 				fetchFn,
 				requestTimeout: 20_000,
+				responseParser: parseLoggedRpcResponse,
 				retryCount: 2,
 				...(retryDelay === undefined ? {} : { retryDelay }),
 			}),
