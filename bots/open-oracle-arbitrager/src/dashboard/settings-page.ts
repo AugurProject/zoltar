@@ -116,11 +116,10 @@ const settlementPanel = settingsGroup({
 })
 
 const configurationPanel = settingsGroup({
-	body: `<div class="section-heading"><p class="section-note">Saving here replaces every section at once and fails if a form saved since the last reload.</p><button id="reload-configuration-button" class="button button-secondary" type="button" disabled>Reload configuration</button></div><form id="configuration-form"><fieldset id="configuration-fieldset" disabled><label><span>Operator configuration JSON</span><textarea id="configuration-json" class="configuration-json mono" rows="24" spellcheck="false" required></textarea></label>${formActions({ statusId: 'configuration-status', submitLabel: 'Save configuration' })}</fieldset></form>`,
-	formId: 'configuration-form',
+	body: `<div class="section-heading"><button id="reload-configuration-button" class="button button-secondary" type="button" disabled>Reload configuration</button></div><form id="configuration-form"><fieldset id="configuration-fieldset" disabled><label><span>Operator configuration JSON</span><textarea id="configuration-json" class="configuration-json mono" rows="24" spellcheck="false" readonly></textarea></label><span id="configuration-status" class="action-status muted" role="status" aria-live="polite"></span></fieldset></form>`,
 	id: 'complete-configuration',
 	open: false,
-	summary: 'Export or import the whole operator file · prefer the forms above',
+	summary: 'Copy the current operator file · save changes in the forms above',
 	title: 'Complete configuration',
 })
 

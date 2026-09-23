@@ -1220,6 +1220,33 @@ describe('liquidator go-live settings', () => {
 		expect(page.window.document.getElementById('strategy-status')?.textContent).toContain('Minimum liquidation debt cannot exceed the maximum')
 	})
 
+	test('strategy review includes units and allowed ranges for ETH, REP, and bps changes', async () => {
+		const saved = mainnetConfiguration()
+		saved.strategy = { ...example.strategy }
+		const page = await dashboard(saved, state())
+		const form = page.window.document.getElementById('strategy-form')
+		if (!(form instanceof page.window.HTMLFormElement)) throw new Error('Expected strategy form')
+		for (const [name, value] of [
+			['maximumGasCostEth', '0.03'],
+			['walletReserveRep', '120'],
+			['vaultTargetHealthBps', '13000'],
+		] as const) {
+			const input = form.querySelector(`[name="${name}"]`)
+			if (!(input instanceof page.window.HTMLInputElement)) throw new Error(`Expected ${name} input`)
+			input.value = value
+		}
+		form.dispatchEvent(new page.window.Event('submit', { bubbles: true, cancelable: true }))
+		let review = page.window.document.querySelector('.operator-confirm-dialog')
+		for (let attempt = 0; attempt < 100 && review === null; attempt++) {
+			await Bun.sleep(10)
+			review = page.window.document.querySelector('.operator-confirm-dialog')
+		}
+		expect(review?.textContent).toContain('0.02 ETH→0.03 ETH')
+		expect(review?.textContent).toContain('100 REP→120 REP')
+		expect(review?.textContent).toContain('12500 bps→13000 bps')
+		expect(review?.textContent).toContain('10,001–1,000,000 bps')
+	})
+
 	test('market review omits canonical root identity restored by the server', async () => {
 		const saved = mainnetConfiguration()
 		saved.centralizedMarkets = { ...example.centralizedMarkets, assetAddress: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', assetChainId: 1 }

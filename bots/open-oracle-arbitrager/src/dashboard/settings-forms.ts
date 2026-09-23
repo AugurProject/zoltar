@@ -153,7 +153,6 @@ export function loadCentralizedMarkets(centralizedMarkets: Record<string, unknow
 
 /** The operator-file section each focused form edits; mirrors `queuedSettingsSections` on the server. */
 const FOCUSED_FORMS: Readonly<Record<string, QueuedSettingsSection | undefined>> = {
-	'configuration-form': undefined,
 	'connectivity-form': 'connectivity',
 	'deployment-form': 'deployment',
 	'execution-form': 'execution',

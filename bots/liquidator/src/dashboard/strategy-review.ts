@@ -1,18 +1,19 @@
 import type { Configuration } from './api-validation.ts'
 import { integer, parseDecimalAmount } from '@zoltar/bot-shared/infrastructure/json-validation'
+import { formatAmount } from '@zoltar/bot-shared/dashboard/amount'
 
 const amountFields = [
-	['minimumLiquidationDebtEth', 'Minimum liquidation debt (ETH)'],
-	['maximumLiquidationDebtEth', 'Maximum liquidation debt (ETH)'],
-	['minimumRewardValueEth', 'Minimum reward (ETH)'],
-	['maximumGasCostEth', 'Maximum gas cost (ETH)'],
-	['maximumOracleRequestCostEth', 'Maximum oracle cost (ETH)'],
-	['fallbackRepPerEthPrice', 'Fallback REP / ETH price'],
-	['walletReserveRep', 'Wallet REP reserve'],
-	['maximumPerPoolRep', 'REP per pool limit'],
-	['maximumTotalDeployedRep', 'Total deployed REP limit'],
-	['minimumRepWithdrawalRep', 'Minimum REP withdrawal'],
-	['redeemFeesAboveEth', 'Redeem fees above (ETH)'],
+	['minimumLiquidationDebtEth', 'Minimum liquidation debt (ETH)', 'ETH'],
+	['maximumLiquidationDebtEth', 'Maximum liquidation debt (ETH)', 'ETH'],
+	['minimumRewardValueEth', 'Minimum reward (ETH)', 'ETH'],
+	['maximumGasCostEth', 'Maximum gas cost (ETH)', 'ETH'],
+	['maximumOracleRequestCostEth', 'Maximum oracle cost (ETH)', 'ETH'],
+	['fallbackRepPerEthPrice', 'Fallback REP / ETH price', 'REP / ETH'],
+	['walletReserveRep', 'Wallet REP reserve', 'REP'],
+	['maximumPerPoolRep', 'REP per pool limit', 'REP'],
+	['maximumTotalDeployedRep', 'Total deployed REP limit', 'REP'],
+	['minimumRepWithdrawalRep', 'Minimum REP withdrawal', 'REP'],
+	['redeemFeesAboveEth', 'Redeem fees above (ETH)', 'ETH'],
 ] as const
 
 const integerFields = [
@@ -60,6 +61,16 @@ export function strategyReviewRows(saved: Configuration, next: Record<string, st
 		if (String(before) === String(after)) return []
 		if (name === 'logLookbackBlocks') return [{ label: 'log lookback blocks', before: `${before} blocks`, after: `${after} blocks` }]
 		if (name === 'historicalLogRecovery') return [{ label: 'historical log recovery', before: before === true ? 'Enabled' : 'Disabled', after: after === true ? 'Enabled' : 'Disabled' }]
+		const amountField = amountFields.find(field => field[0] === name)
+		if (amountField !== undefined) {
+			return [{ label: `${amountField[1]} · ≥0, ≤18 decimal places`, before: before === undefined ? '—' : formatAmount(String(before), amountField[2]), after: formatAmount(String(after), amountField[2]) }]
+		}
+		const integerField = integerFields.find(field => field[0] === name)
+		if (integerField !== undefined) {
+			const unit = name === 'stagedOperationValidForSeconds' ? 'seconds' : 'bps'
+			const range = `${integerField[2].toLocaleString('en-US')}–${integerField[3].toLocaleString('en-US')} ${unit}`
+			return [{ label: `${integerField[1]} · ${range}`, before: `${String(before ?? '—')} ${unit}`, after: `${String(after)} ${unit}` }]
+		}
 		return [{ label: name.replace(/([A-Z])/g, ' $1').toLowerCase(), before: String(before ?? '—'), after: String(after) }]
 	})
 }

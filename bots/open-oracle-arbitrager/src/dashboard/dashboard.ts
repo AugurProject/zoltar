@@ -68,7 +68,6 @@ let focusedRuntimeLoaded = false
 let configurationLoaded = false
 let configurationLoading = false
 let configurationLoadError: string | undefined
-let configurationRevision: string | undefined
 let configuredScanIntervalMilliseconds: number | undefined
 let initialFragmentApplied = false
 let connected = false
@@ -135,7 +134,7 @@ function setControlsEnabled(enabled: boolean) {
 function updateConfigurationControls() {
 	const fieldset = element('configuration-fieldset')
 	if (!(fieldset instanceof HTMLFieldSetElement)) throw new Error('Missing configuration fieldset')
-	fieldset.disabled = !connected || pendingNetworkProfile !== undefined || !configurationLoaded || latestSnapshot?.networkConfigured !== true || configurationLoading || formIsSubmitting('configuration-form')
+	fieldset.disabled = !connected || pendingNetworkProfile !== undefined || !configurationLoaded || latestSnapshot?.networkConfigured !== true || configurationLoading
 	element('reload-configuration-button', HTMLButtonElement).disabled = !connected || (pendingNetworkProfile !== undefined && !profileSwitchTimedOut) || configurationLoading
 	const profileRetry = element('profile-switch-retry-button', HTMLButtonElement)
 	profileRetry.hidden = !profileSwitchTimedOut
@@ -236,7 +235,6 @@ async function loadCompleteConfiguration() {
 		if (pendingNetworkProfile !== undefined && network !== pendingNetworkProfile) return
 		element('configuration-json', HTMLTextAreaElement).value = prettyJson(envelope.configuration)
 		synchronizeFocusedConfiguration(envelope.configuration)
-		configurationRevision = envelope.revision
 		configurationLoaded = true
 		configurationLoadError = undefined
 		setText('configuration-status', '')
@@ -245,7 +243,6 @@ async function loadCompleteConfiguration() {
 		if (requestEpoch !== profileRequestEpoch) return
 		configurationLoaded = false
 		configurationLoadError = error instanceof Error ? error.message : String(error)
-		configurationRevision = undefined
 		setText('configuration-status', `${configurationLoadError} Use Reload configuration to retry.`)
 	} finally {
 		configurationLoading = false
@@ -484,7 +481,6 @@ function synchronizeFocusedConfiguration(configuration: unknown) {
 	loadCentralizedMarkets({ ...centralizedMarkets })
 	focusedRuntimeLoaded = true
 	markFormClean('connectivity-form')
-	markFormClean('configuration-form')
 	if (latestSnapshot !== undefined) renderSettingsInsights(latestSnapshot)
 }
 
@@ -939,30 +935,6 @@ element('network-name', HTMLSelectElement).addEventListener('change', async even
 	}
 })
 element('retry-settings-button').addEventListener('click', () => void loadCompleteConfiguration())
-element('configuration-form', HTMLFormElement).addEventListener('submit', async event => {
-	event.preventDefault()
-	setFormSubmitting('configuration-form', true)
-	setText('configuration-status', 'Validating complete configuration…')
-	try {
-		const value: unknown = JSON.parse(element('configuration-json', HTMLTextAreaElement).value)
-		if (configurationRevision === undefined) throw new Error('Reload the configuration before saving')
-		const response = await api('/api/configuration', {
-			body: prettyJson({ configuration: value, revision: configurationRevision }),
-			headers: { 'content-type': 'application/json' },
-			method: 'PUT',
-		})
-		if (!isConfigurationEnvelope(response)) throw new Error('Bot returned an invalid configuration document')
-		element('configuration-json', HTMLTextAreaElement).value = prettyJson(response.configuration)
-		synchronizeFocusedConfiguration(response.configuration)
-		configurationRevision = response.revision
-		setText('configuration-status', 'Complete configuration saved.')
-	} catch (error) {
-		setText('configuration-status', error instanceof Error ? error.message : String(error))
-	} finally {
-		setFormSubmitting('configuration-form', false)
-		setControlsEnabled(connected)
-	}
-})
 element('price-token', HTMLSelectElement).addEventListener('change', () => {
 	if (latestSnapshot !== undefined) renderMarketPriceChart(latestSnapshot)
 })

@@ -197,10 +197,12 @@ test('keeps all mutations locked and ignores deferred old-chain responses until 
 	const triggerRefresh = stubIntervals(window)
 	const nativeSetTimeout = window.setTimeout.bind(window)
 	window.setTimeout = (handler, timeout, ...arguments_) => nativeSetTimeout(handler, timeout === 500 ? 0 : timeout, ...arguments_)
+	let completeConfigurationWrites = 0
 	window.fetch = async (input, init) => {
 		const inputUrl = typeof input === 'string' || input instanceof window.URL ? input.toString() : Reflect.get(input, 'url')
 		if (typeof inputUrl !== 'string') throw new Error('Unexpected request URL')
 		const url = new URL(inputUrl, server.url)
+		if (url.pathname === '/api/configuration' && init?.method === 'PUT') completeConfigurationWrites += 1
 		const response = init?.method === undefined || init.method === 'GET' ? await fetch(url) : await fetch(url, { body: String(init.body), headers: { 'content-type': 'application/json', origin: server.url.origin }, method: init.method })
 		return new window.Response(await response.text(), { headers: { 'content-type': response.headers.get('content-type') ?? 'application/json' }, status: response.status })
 	}
@@ -214,6 +216,19 @@ test('keeps all mutations locked and ignores deferred old-chain responses until 
 	const initialConfigurationStatus = element(window, 'configuration-status', window.HTMLElement).textContent
 	if (!element(window, 'settings-chain-scope', window.HTMLElement).textContent.includes('Ethereum mainnet')) throw new Error(`Initial configuration did not load: ${initialConfigurationStatus}`)
 	expect(element(window, 'settings-chain-scope', window.HTMLElement).textContent).toContain('Ethereum mainnet')
+	const rawConfiguration = element(window, 'configuration-json', window.HTMLTextAreaElement)
+	const rawConfigurationForm = element(window, 'configuration-form', window.HTMLFormElement)
+	const editedConfiguration: unknown = JSON.parse(rawConfiguration.value)
+	const runtime = typeof editedConfiguration === 'object' && editedConfiguration !== null ? Reflect.get(editedConfiguration, 'runtime') : undefined
+	const riskLimits = typeof runtime === 'object' && runtime !== null ? Reflect.get(runtime, 'riskLimits') : undefined
+	if (typeof riskLimits !== 'object' || riskLimits === null) throw new Error('Missing loaded risk limits')
+	Reflect.set(riskLimits, 'maxTotalLockedWeth', '12')
+	rawConfiguration.value = JSON.stringify(editedConfiguration)
+	rawConfigurationForm.dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }))
+	await Bun.sleep(20)
+	expect(completeConfigurationWrites).toBe(0)
+	expect(rawConfiguration.readOnly).toBe(true)
+	expect(rawConfigurationForm.querySelector('button[type="submit"]')).toBeNull()
 	expect(element(window, 'launch-notice', window.HTMLElement).hidden).toBe(true)
 	expect(element(window, 'capability-badge', window.HTMLElement).textContent).toBe('Capability unavailable')
 	expect(element(window, 'attention-badge', window.HTMLElement).dataset['tone']).toBe('warning')
