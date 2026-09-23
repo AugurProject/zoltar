@@ -720,7 +720,7 @@ contract SecurityPool is SecurityPoolStorage {
 		totalCapacityOwnershipAttoRep = newTotalCapacityOwnershipAttoRep;
 		feeEligibleCapacityOwnershipAttoRep = newFeeEligibleCapacityOwnershipAttoRep;
 		totalBadDebtAttoEth = newTotalBadDebtAttoEth;
-		DelegateCallForwarder.invoke(operationsDelegate, abi.encodeCall(SecurityPoolSettlementDelegate.setValidatedSettlementCollateral, (newSettlementCollateralAttoEth)));
+		DelegateCallForwarder.invoke(operationsDelegate, abi.encodeCall(SecurityPoolSettlementDelegate.setFundedSettlementCollateral, (newSettlementCollateralAttoEth)));
 		lastUpdatedFeeAccumulator = block.timestamp;
 		feeEpochEndTime =
 			hasInheritedForkOutcome && address(escalationGame) == address(0x0) ? block.timestamp : type(uint256).max;
