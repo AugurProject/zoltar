@@ -25,5 +25,5 @@ export function migrateEmptyBootstrapState<T extends DurableState>(state: T, set
 	// Keep the signer and every audit entry. This only clears the obsolete absence
 	// latch; the persisted pause and all current readiness checks still apply.
 	const onlyAbsenceFailures = missingDeploymentErrors.length > 0 && state.activities.filter(activity => activity.type === 'error').length === missingDeploymentErrors.length
-	return { ...state, profileId: executionProfileId(settings), safetyPaused: state.safetyPaused && !onlyAbsenceFailures }
+	return { ...state, profileId: executionProfileId(settings), safetyPaused: state.safetyPaused && !onlyAbsenceFailures, uniswapV3Factory: state.uniswapV3Factory ?? settings.deployment.uniswapV3Factory }
 }

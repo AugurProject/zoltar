@@ -260,19 +260,8 @@ describe('chaos-bot durable state', () => {
 		pendingStep.status = 'planned'
 		pendingStep.transactionIntentId = undefined
 		durable.workflows = [pendingRetirementWorkflow]
-		await saveDurableState(path, durable)
-
-		let recoveryStateReturned = false
-		await expect(
-			loadRuntimeState(path, false, configuredSigner, 1).then(() => {
-				recoveryStateReturned = true
-			}),
-		).rejects.toThrow('durable signer')
-		expect(recoveryStateReturned).toBeFalse()
-		const keylessRuntime = initialRuntimeState(false, undefined, 1, durable)
-		expect(() => bindRuntimeStateToSigner(keylessRuntime, configuredSigner)).toThrow('durable signer')
-		expect(keylessRuntime.signerAddress).toBeUndefined()
-		expect(keylessRuntime.workflows[0]?.status).toBe('planned')
+		await expect(saveDurableState(path, durable)).rejects.toThrow('durable signer')
+		expect(() => initialRuntimeState(false, undefined, 1, durable)).toThrow('durable signer')
 	})
 
 	test('honors a durable safety pause across process restart', () => {
@@ -372,7 +361,7 @@ describe('chaos-bot durable state', () => {
 		expect((await loadDurableState(path, 1)).retirement.lastObservedBalances).toEqual({})
 	})
 
-	test('fails closed when persisted retirement state targets zero or the durable signer', async () => {
+	test('fails closed when persisted retirement state targets zero or a wallet other than the durable signer', async () => {
 		const path = await statePath()
 		const signer = getAddress('0x0000000000000000000000000000000000000099')
 		const state = initialDurableState(1, true, 'profile:test', signer)
@@ -380,11 +369,14 @@ describe('chaos-bot durable state', () => {
 		const stored = JSON.parse(await readFile(path, 'utf8')) as { retirement: Record<string, unknown> }
 		stored.retirement['status'] = 'requested'
 		stored.retirement['requestedAt'] = createdAt
-		for (const recipient of [getAddress('0x0000000000000000000000000000000000000000'), signer]) {
+		for (const recipient of [getAddress('0x0000000000000000000000000000000000000000'), getAddress('0x0000000000000000000000000000000000000098')]) {
 			stored.retirement['recipient'] = recipient
 			await writeFile(path, `${JSON.stringify(stored)}\n`)
-			await expect(loadDurableState(path, 1)).rejects.toThrow(recipient === signer ? 'durable signer' : 'zero address')
+			await expect(loadDurableState(path, 1)).rejects.toThrow(recipient === getAddress('0x0000000000000000000000000000000000000000') ? 'zero address' : 'durable signer')
 		}
+		stored.retirement['recipient'] = signer
+		await writeFile(path, `${JSON.stringify(stored)}\n`)
+		expect((await loadDurableState(path, 1)).retirement.recipient).toBe(signer)
 	})
 
 	test('persists proof-bound residual replacement acceptance and discards the legacy unbound shape', async () => {
@@ -393,7 +385,7 @@ describe('chaos-bot durable state', () => {
 		const state = initialDurableState(1, true, 'profile:test', signer)
 		state.profileId = 'profile:test'
 		state.retirement.status = 'drained-with-residuals'
-		state.retirement.recipient = emitter
+		state.retirement.recipient = signer
 		state.retirement.completionEvidence = {
 			blockHash: topic0,
 			blockNumber: '50',

@@ -1608,6 +1608,20 @@ describe('included transaction rollback', () => {
 })
 
 describe('retirement sweep signing acceptance', () => {
+	test('persists the cancellation barrier before signing a catalog WETH unwrap during retirement', async () => {
+		const fixture = await finalizedExecutionFixture([])
+		const environment: ExecutionEnvironment = fixture.environment
+		environment.state.retirement.status = 'draining'
+		const wallet = environment.wallet
+		if (wallet === undefined) throw new Error('Missing signing wallet')
+		wallet.account.signTransaction = async () => {
+			expect((await loadDurableState(fixture.stateFile, 1)).retirement.finalSweepStartedAt).toBeDefined()
+			throw new Error('signer response lost')
+		}
+		await expect(executeOperationPlan(environment, { ...executablePlan(), definitionId: 'open-oracle.weth.unwrap' })).rejects.toThrow('signer response lost')
+		expect(environment.state.retirement.finalSweepStartedAt).toBeDefined()
+	})
+
 	test('persists cancellation barrier before signing and retains it after broadcast failure', async () => {
 		const fixture = await finalizedExecutionFixture([])
 		const environment: ExecutionEnvironment = fixture.environment
@@ -1653,7 +1667,7 @@ test('production V3 drain survives burn confirmation, reload and collect-only ex
 	const environment: ExecutionEnvironment = fixture.environment
 	const state = fixture.state
 	state.retirement.status = 'draining'
-	state.retirement.recipient = caller
+	state.retirement.recipient = environment.sender
 	state.scheduler.status = 'paused'
 	const snapshot = snapshotFixture()
 	snapshot.wallet.address = environment.sender

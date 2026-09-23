@@ -159,13 +159,15 @@
 					</div>
 					<p id="retirement-summary" class="muted">No retirement has been requested.</p>
 					<form id="retirement-form">
-						<label>Recipient <input id="retirement-recipient" required autocomplete="off" placeholder="0x…" /></label>
-						<label>Maximum unmatched-share loss (bps) <input id="retirement-max-loss" type="number" min="0" max="10000" value="0" /></label>
-						<label><input id="retirement-exit-unmatched" type="checkbox" /> Exit unmatched shares within the loss limit</label>
-						<label><input id="retirement-migrate-claims" type="checkbox" /> Permit migration required to recover existing claims</label>
-						<label><input id="retirement-exit-after" type="checkbox" /> Exit the process after proven completion</label>
-						<label>Typed confirmation <input id="retirement-confirmation" required autocomplete="off" /></label>
-						<div class="dialog-actions"><button id="retirement-request" type="submit">Request drain</button><button id="retirement-cancel" class="secondary" type="button">Cancel drain</button></div>
+						<p id="retirement-destination" class="muted">Configure a signer wallet before requesting retirement.</p>
+						<fieldset id="retirement-request-options" disabled hidden>
+							<label>Maximum unmatched-share loss (bps) <input id="retirement-max-loss" type="number" min="0" max="10000" value="0" /></label>
+							<label><input id="retirement-exit-unmatched" type="checkbox" /> Exit unmatched shares within the loss limit</label>
+							<label><input id="retirement-migrate-claims" type="checkbox" /> Permit migration required to recover existing claims</label>
+							<label><input id="retirement-exit-after" type="checkbox" /> Exit the process after proven completion</label>
+						</fieldset>
+						<label id="retirement-confirmation-label" hidden>Typed confirmation <input id="retirement-confirmation" required autocomplete="off" disabled /></label>
+						<div id="retirement-actions" class="dialog-actions" hidden><button id="retirement-request" type="submit" disabled>Request drain</button><button id="retirement-cancel" class="secondary" type="button" disabled>Cancel drain</button></div>
 						<span id="retirement-action-status" class="action-status" role="alert"></span>
 					</form>
 					<details>
@@ -175,11 +177,15 @@
 						</form>
 					</details>
 					<details>
-						<summary>Accept residuals for profile replacement</summary>
+						<summary>Accept residuals for deployment replacement</summary>
 						<form id="retirement-residual-form" class="reconciliation-form">
-							<label>Target deployment profile <input id="retirement-residual-target-profile" required autocomplete="off" /></label>
+							<div id="retirement-residual-evidence" hidden>
+								<p id="retirement-residual-block"></p>
+								<ul id="retirement-residual-list"></ul>
+							</div>
+							<label>Target deployment ID <input id="retirement-residual-target-profile" required autocomplete="off" /></label>
 							<label>Review rationale <textarea id="retirement-residual-reason" required minlength="12" maxlength="2048"></textarea></label>
-							<label>Typed confirmation <input id="retirement-residual-confirmation" required autocomplete="off" placeholder="ACCEPT RESIDUALS FOR profile:id" /></label>
+							<label>Typed confirmation <input id="retirement-residual-confirmation" required autocomplete="off" placeholder="ACCEPT RESIDUALS FOR target-id" /></label>
 							<button id="retirement-residual-submit" type="submit" disabled>Accept residuals</button>
 						</form>
 					</details>

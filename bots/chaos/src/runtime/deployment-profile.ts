@@ -2,12 +2,23 @@ import type { Address, Hash } from '@zoltar/bot-shared/ethereum'
 import { requestTransport } from '@zoltar/bot-shared/ethereum/rpc-transport'
 import { confirmCanonicalReceiptFinality } from '@zoltar/bot-shared/execution/canonical-finality'
 import type { OperatorSettings } from '../config/settings.ts'
+import { deploymentFactoryId } from '../config/execution-profile.ts'
 import { resetRuntimeStateForProfile, type RuntimeState } from '../state/operator-state.ts'
 import { isPristineBootstrapState } from '../state/pristine.ts'
 import type { RetirementCompletionEvidence } from '../state/retirement.ts'
 import { chaosReadClients, chaosReadEndpoints, createChaosReadPool } from './canonical-scan.ts'
 
 type BoundRetirementCompletionEvidence = RetirementCompletionEvidence & { profileId: string; signerAddress: Address }
+
+export class RetirementCompletionPendingError extends Error {
+	constructor() {
+		super('Retirement completion block is not finalized')
+	}
+}
+
+export function retirementReplacementTargetId(targetProfileId: string, factory: Address) {
+	return deploymentFactoryId(targetProfileId, factory)
+}
 
 function finalizedBlock(value: unknown, endpoint: string) {
 	if (typeof value !== 'object' || value === null || !('hash' in value) || !('number' in value)) throw new Error(`RPC ${endpoint} returned an invalid finalized block`)
@@ -51,11 +62,12 @@ export async function verifyRetirementCompletionFinality(settings: OperatorSetti
 		undefined,
 		2,
 	)
-	if (!finalized) throw new Error('Retirement completion block is not finalized')
+	if (!finalized) throw new RetirementCompletionPendingError()
 }
 
-export async function resetPristineStateForDeploymentProfile(state: RuntimeState, expectedProfileId: string, paused: boolean, wallet: Address | undefined, stateFile: string, verifyCompletionEvidence: (evidence: BoundRetirementCompletionEvidence) => Promise<void>) {
-	if (state.profileId === expectedProfileId) return false
+export async function resetPristineStateForDeploymentProfile(state: RuntimeState, expectedProfileId: string, factory: Address | undefined, paused: boolean, wallet: Address | undefined, stateFile: string, verifyCompletionEvidence: (evidence: BoundRetirementCompletionEvidence) => Promise<void>) {
+	if (factory === undefined) throw new Error('Configured deployment is missing its Uniswap V3 factory')
+	if (state.profileId === expectedProfileId && (state.uniswapV3Factory === undefined || state.uniswapV3Factory.toLowerCase() === factory.toLowerCase())) return false
 	if (!isPristineBootstrapState(state)) {
 		const evidence = state.retirement.completionEvidence
 		const override = state.retirement.profileReplacementOverride
@@ -65,7 +77,7 @@ export async function resetPristineStateForDeploymentProfile(state: RuntimeState
 			override !== undefined &&
 			state.retirement.recipient !== undefined &&
 			override.sourceProfileId === state.profileId &&
-			override.targetProfileId === expectedProfileId &&
+			override.targetProfileId === retirementReplacementTargetId(expectedProfileId, factory) &&
 			override.recipient.toLowerCase() === state.retirement.recipient.toLowerCase() &&
 			override.completionBlockHash.toLowerCase() === evidence.blockHash.toLowerCase() &&
 			override.completionBlockNumber === evidence.blockNumber
@@ -74,5 +86,6 @@ export async function resetPristineStateForDeploymentProfile(state: RuntimeState
 		await verifyCompletionEvidence(boundCompletionEvidence(state, wallet))
 	}
 	resetRuntimeStateForProfile(state, expectedProfileId, paused, wallet)
+	state.uniswapV3Factory = factory
 	return true
 }
