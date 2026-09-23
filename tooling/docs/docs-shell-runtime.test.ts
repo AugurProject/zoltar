@@ -3,7 +3,9 @@ import { installDomEnvironment } from '../../ui/coreShared/ts/tests/testUtils/do
 
 const globalKeys = ['HTMLScriptElement', 'HTMLAnchorElement', 'HTMLDialogElement', 'IntersectionObserver', 'KeyboardEvent'] as const
 
-async function loadShell(url = 'http://localhost/docs/explanation/open-oracle.html', viewportWidth = 1280) {
+type DocsManifest = { sections: Array<Record<string, unknown>>; pages: Array<Record<string, unknown>> }
+
+async function loadShell(url = 'http://localhost/docs/explanation/open-oracle.html', viewportWidth = 1280, transformManifest?: (data: DocsManifest) => DocsManifest) {
 	const previousGlobals = new Map<string, PropertyDescriptor | undefined>()
 	for (const key of globalKeys) previousGlobals.set(key, Object.getOwnPropertyDescriptor(globalThis, key))
 	const environment = installDomEnvironment(url)
@@ -17,6 +19,11 @@ async function loadShell(url = 'http://localhost/docs/explanation/open-oracle.ht
 	document.write(source)
 	document.close()
 	Function(await Bun.file('docs/assets/js/docsData.js').text())()
+	if (transformManifest !== undefined) {
+		const data: unknown = Reflect.get(window, 'statoblastDocs')
+		if (typeof data !== 'object' || data === null || !Array.isArray(Reflect.get(data, 'sections')) || !Array.isArray(Reflect.get(data, 'pages'))) throw new Error('docsData.js must define the documentation manifest')
+		Reflect.set(window, 'statoblastDocs', transformManifest({ pages: Reflect.get(data, 'pages'), sections: Reflect.get(data, 'sections') }))
+	}
 	const runtimeScript = document.createElement('script')
 	runtimeScript.src = 'http://localhost/docs/assets/js/docsShell.js'
 	Object.defineProperty(document, 'currentScript', { configurable: true, value: runtimeScript })
@@ -50,6 +57,26 @@ test('documentation landing keeps global navigation compact and omits a redundan
 		expect(document.querySelectorAll('.docs-navigation-section[open]')).toHaveLength(0)
 		expect(document.querySelector('.docs-right')?.hasAttribute('hidden')).toBeTrue()
 		expect(document.querySelector('.docs-mobile-outline')).toBeNull()
+	} finally {
+		shell.cleanup()
+	}
+})
+
+test('navigation lists reading-path sections in manifest order and omits sections without pages', async () => {
+	const emptySection = { description: 'A section with no pages yet.', id: 'zz-empty', title: 'Empty section' }
+	const shell = await loadShell('http://localhost/docs/explanation/open-oracle.html', 1280, data => ({ ...data, sections: [...data.sections, emptySection] }))
+	try {
+		const data: unknown = Reflect.get(window, 'statoblastDocs')
+		if (typeof data !== 'object' || data === null) throw new Error('docsData.js must define the documentation manifest')
+		const sections: unknown = Reflect.get(data, 'sections')
+		const pages: unknown = Reflect.get(data, 'pages')
+		if (!Array.isArray(sections) || !Array.isArray(pages)) throw new Error('documentation manifest must list sections and pages')
+		expect(sections.some(section => Reflect.get(section, 'id') === emptySection.id)).toBeTrue()
+		const populatedSectionTitles = sections.filter(section => pages.some(page => Reflect.get(page, 'section') === Reflect.get(section, 'id'))).map(section => Reflect.get(section, 'title'))
+		const renderedSectionTitles = Array.from(document.querySelectorAll('.docs-navigation-section > summary')).map(summary => summary.textContent)
+		expect(renderedSectionTitles).toEqual(populatedSectionTitles)
+		expect(renderedSectionTitles).not.toContain(emptySection.title)
+		expect(renderedSectionTitles.length).toBeGreaterThan(0)
 	} finally {
 		shell.cleanup()
 	}
