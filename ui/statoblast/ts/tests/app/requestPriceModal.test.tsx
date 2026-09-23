@@ -223,6 +223,47 @@ test('allows another price request after a failed transaction step', async () =>
 	}
 })
 
+test.each(['preparation', 'transaction step'] as const)('does not restart after a %s failure when the price changes or a new quote arrives', async failure => {
+	const dom = installDomEnvironment()
+	let attempts = 0
+	let quoteReads = 0
+	const prices: bigint[] = []
+	const onConfirm = async (request: RequestPriceReview, signal?: AbortSignal) => {
+		attempts += 1
+		if (request.proposedRepPerEthPrice !== undefined) prices.push(request.proposedRepPerEthPrice)
+		if (failure === 'preparation') return
+		const controller = createTransactionStepController(signal)
+		controller.setPlan([{ ...step, title: 'Request price' }])
+		controller.startWithoutReview(0)
+		controller.failed('nonce too low')
+	}
+	const rendered = await renderIntoDocument(
+		<GlobalTransactionPresentationProvider transaction={failure === 'preparation' ? { tone: 'error', title: 'Price request failed', detail: 'Uniswap quote unavailable.' } : undefined}>
+			<RequestPriceModal {...props} fetchPrice={async () => BigInt(++quoteReads === 1 ? 2 : 4) * 10n ** 18n} onConfirm={onConfirm} />
+		</GlobalTransactionPresentationProvider>,
+	)
+	try {
+		const queries = within(document.body)
+		await act(() => fireEvent.click(queries.getByRole('button', { name: 'Fetch from Uniswap' })))
+		await settle()
+		expect(attempts).toBe(1)
+		await act(() => fireEvent.input(queries.getByRole('textbox', { name: 'Open Oracle REP/ETH starting price' }), { target: { value: '3' } }))
+		await settle()
+		expect(attempts).toBe(1)
+		await act(() => fireEvent.click(queries.getByRole('button', { name: 'Fetch from Uniswap' })))
+		await settle()
+		expect(inputValue(queries.getByRole('textbox', { name: 'Open Oracle REP/ETH starting price' }))).toBe('4')
+		expect(attempts).toBe(1)
+		await act(() => fireEvent.click(queries.getByRole('button', { name: 'Review request' })))
+		await settle()
+		expect(attempts).toBe(2)
+		expect(prices).toEqual([2n * 10n ** 18n, 4n * 10n ** 18n])
+	} finally {
+		await rendered.cleanup()
+		dom.cleanup()
+	}
+})
+
 test.each(['automatic', 'manual'] as const)('prepares %s again after visiting an invalid selection', async source => {
 	const dom = installDomEnvironment()
 	const prices: Array<bigint | undefined> = []

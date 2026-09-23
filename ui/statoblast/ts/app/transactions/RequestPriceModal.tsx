@@ -28,6 +28,7 @@ export function RequestPriceModal({ review, onConfirm, onClose, canRequest, conf
 	const [price, setPrice] = useState('')
 	const [retry, setRetry] = useState(0)
 	const [reviewAfterFailure, setReviewAfterFailure] = useState(false)
+	const [failureLatched, setFailureLatched] = useState(false)
 	const [running, setRunning] = useState(false)
 	const [attempted, setAttempted] = useState<string>()
 	const run = useRef<{ key: string; signal: AbortSignal; cancel: () => void }>()
@@ -48,6 +49,7 @@ export function RequestPriceModal({ review, onConfirm, onClose, canRequest, conf
 	const current = valid && run.current?.key === key && run.current?.signal.aborted === false
 	const showSteps = current && ownsWorkflow && workflow?.steps[workflow.activeIndex] !== undefined
 	const error = attempted === key && !running && presentation?.tone === 'error' ? presentation.detail : undefined
+	const failedCurrentAttempt = (key !== undefined && attempted === key && !running && presentation?.tone === 'error') || (showSteps && workflow?.steps.some(step => step.phase === 'failed'))
 	const estimatePrompt = validPrice ? priceRequestCopy.preparingPriceRequest : priceRequestCopy.enterPriceEstimate
 	let previewPrompt = estimatePrompt
 	if (fetching) previewPrompt = priceRequestCopy.fetchingUniswapPrice
@@ -60,7 +62,11 @@ export function RequestPriceModal({ review, onConfirm, onClose, canRequest, conf
 		setPrice('')
 		setAttempted(undefined)
 		setReviewAfterFailure(false)
+		setFailureLatched(false)
 	}, [review])
+	useLayoutEffect(() => {
+		if (failedCurrentAttempt) setFailureLatched(true)
+	}, [failedCurrentAttempt])
 	useLayoutEffect(() => {
 		if (!current && !sending) run.current?.cancel()
 	}, [current, sending])
@@ -76,7 +82,7 @@ export function RequestPriceModal({ review, onConfirm, onClose, canRequest, conf
 		[],
 	)
 	useEffect(() => {
-		if (!valid || review === undefined || key === undefined || running || attempted === key || reviewAfterFailure) return
+		if (!valid || review === undefined || key === undefined || running || attempted === key || reviewAfterFailure || failureLatched) return
 		const timer = setTimeout(() => {
 			const cancellation = new AbortController()
 			embeddedTransactionSteps.value = cancellation.signal
@@ -98,7 +104,7 @@ export function RequestPriceModal({ review, onConfirm, onClose, canRequest, conf
 			})
 		}, 300)
 		return () => clearTimeout(timer)
-	}, [valid, review, key, running, attempted, proposedPrice, reviewAfterFailure])
+	}, [valid, review, key, running, attempted, proposedPrice, reviewAfterFailure, failureLatched])
 	const close = () => {
 		if (sending) return
 		quoteAttempt.current += 1
@@ -115,6 +121,7 @@ export function RequestPriceModal({ review, onConfirm, onClose, canRequest, conf
 		const attempt = ++quoteAttempt.current
 		setFetching(true)
 		setQuoteError(undefined)
+		if (failureLatched) setReviewAfterFailure(true)
 		run.current?.cancel()
 		try {
 			const value = await fetchPrice(review)
@@ -142,6 +149,7 @@ export function RequestPriceModal({ review, onConfirm, onClose, canRequest, conf
 					quoteAttempt.current += 1
 					setFetching(false)
 					setQuoteError(undefined)
+					if (failureLatched) setReviewAfterFailure(true)
 					setPrice(value)
 				}}
 				error={priceError ?? quoteError}
@@ -190,6 +198,7 @@ export function RequestPriceModal({ review, onConfirm, onClose, canRequest, conf
 								reviewAfterFailure && valid
 									? () => {
 											setReviewAfterFailure(false)
+											setFailureLatched(false)
 											setRetry(value => value + 1)
 										}
 									: undefined
