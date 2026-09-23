@@ -152,7 +152,7 @@ root = bagPeaks(occupiedPeaks, peakCount)</code></pre>
 					<p>Choose a snapshot leaf count and one occupied peak. The planner reports the global <code>leafIndex</code> range of that peak, checks an in-peak offset, and reports the exact sibling-array lengths the verifier enforces. It does not construct hashes or replace an off-chain proof builder.</p>
 					<div class="tool-outcome-strip">
 						<div data-primary-output><span>Selection</span><output data-mmr-output="selection">Valid in-peak offset</output></div>
-						<div data-primary-output><span>Selected peak capacity</span><output data-mmr-output="capacity">4 leaves; global leafIndex 8…11</output></div>
+						<div data-primary-output><span>Selected peak capacity</span><output data-mmr-output="capacity">4 leaves; leafIndex 8…11</output></div>
 					</div>
 					<div class="tool-workspace">
 						<div class="tool-control-stack tool-workspace-controls">
@@ -175,7 +175,7 @@ root = bagPeaks(occupiedPeaks, peakCount)</code></pre>
 								<summary>Proof position</summary>
 								<div class="example-grid">
 									<label>
-										In-peak offset (<code>leafIndex - peakStart</code>)
+										In-peak offset
 										<input type="text" inputmode="numeric" pattern="[0-9]+" value="0" data-tool-input="leafIndex" />
 									</label>
 								</div>

@@ -207,7 +207,7 @@ function updatePlanner(): void {
 
 	writeOutput('binary', `${leafCount.toString(2)}₂`)
 	writeOutput('peaks', formatHeightRanges(peaks))
-	writeOutput('capacity', `${capacity.toLocaleString()} ${capacity === 1n ? 'leaf' : 'leaves'}; global leafIndex ${peakStart.toLocaleString()}…${(peakStart + capacity - 1n).toLocaleString()}`)
+	writeOutput('capacity', `${capacity.toLocaleString()} ${capacity === 1n ? 'leaf' : 'leaves'}; leafIndex ${peakStart.toLocaleString()}…${(peakStart + capacity - 1n).toLocaleString()}`)
 	const mmrSiblings = peakHeight + peaks.length - 1
 	const proofLengthMaximum = Math.max(mmrSiblings, 64)
 	writeOutput('mmrSiblings', String(mmrSiblings))

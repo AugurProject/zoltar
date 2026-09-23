@@ -358,7 +358,7 @@ async function checkMmrProofPlannerStates(): Promise<void> {
 			},
 			{
 				binary: '1101₂',
-				capacity: '4 leaves; global leafIndex 8…11',
+				capacity: '4 leaves; leafIndex 8…11',
 				mmrSiblings: '4',
 				nullifierSiblings: '64',
 				peaks: '0, 2, 3',
