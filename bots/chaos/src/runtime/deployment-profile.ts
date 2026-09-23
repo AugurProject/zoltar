@@ -10,8 +10,8 @@ import { chaosReadClients, chaosReadEndpoints, createChaosReadPool } from './can
 
 type BoundRetirementCompletionEvidence = RetirementCompletionEvidence & { profileId: string; signerAddress: Address }
 
-export function retirementReplacementTargetId(sourceProfileId: string, targetProfileId: string, factory: Address) {
-	return sourceProfileId === targetProfileId ? deploymentFactoryId(targetProfileId, factory) : targetProfileId
+export function retirementReplacementTargetId(targetProfileId: string, factory: Address) {
+	return deploymentFactoryId(targetProfileId, factory)
 }
 
 function finalizedBlock(value: unknown, endpoint: string) {
@@ -71,7 +71,7 @@ export async function resetPristineStateForDeploymentProfile(state: RuntimeState
 			override !== undefined &&
 			state.retirement.recipient !== undefined &&
 			override.sourceProfileId === state.profileId &&
-			override.targetProfileId === retirementReplacementTargetId(state.profileId, expectedProfileId, factory) &&
+			override.targetProfileId === retirementReplacementTargetId(expectedProfileId, factory) &&
 			override.recipient.toLowerCase() === state.retirement.recipient.toLowerCase() &&
 			override.completionBlockHash.toLowerCase() === evidence.blockHash.toLowerCase() &&
 			override.completionBlockNumber === evidence.blockNumber

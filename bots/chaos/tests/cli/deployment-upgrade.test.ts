@@ -457,7 +457,11 @@ test('requires the exact retirement confirmation before changing the old state',
 test('waits for explicit acceptance of residuals before switching deployments', async () => {
 	const { path, settings, signer, stateFile } = await fixture(true)
 	const state = await loadDurableState(stateFile, settings.network.chainId)
-	const targetProfileId = executionProfileId({ ...settings, deployment: canonicalDeployment(settings.network.chainId) })
+	const current = canonicalDeployment(settings.network.chainId)
+	const targetProfileId = executionProfileId({ ...settings, deployment: current })
+	const factory = current.uniswapV3Factory
+	if (factory === undefined) throw new Error('Canonical factory fixture is missing')
+	const targetDeploymentId = deploymentFactoryId(targetProfileId, factory)
 	state.retirement.status = 'drained-with-residuals'
 	state.retirement.recipient = signer
 	state.retirement.completionEvidence = {
@@ -483,13 +487,13 @@ test('waits for explicit acceptance of residuals before switching deployments', 
 		).kind,
 	).toBe('retiring')
 	expect((await loadSettings(path)).settings.deployment).toEqual(settings.deployment)
-	acceptResidualProfileReplacement(state.retirement, state.profileId, targetProfileId, 'Reviewed retained asset and accepted replacement.', `ACCEPT RESIDUALS FOR ${targetProfileId}`)
+	acceptResidualProfileReplacement(state.retirement, state.profileId, targetDeploymentId, 'Reviewed retained asset and accepted replacement.', `ACCEPT RESIDUALS FOR ${targetDeploymentId}`)
 	const completionEvidence = state.retirement.completionEvidence
 	if (completionEvidence === undefined) throw new Error('Missing residual completion evidence')
 	applyRetirementAssessment(state.retirement, { action: undefined, blockers: [], proof: completionEvidence.proof, residuals: completionEvidence.residuals, status: 'drained-with-residuals' }, zeroHash, 43n, { profileId: state.profileId, scannedWallet: signer, signerAddress: signer })
 	expect(state.retirement.completionEvidence).toEqual(completionEvidence)
 	await saveDurableState(stateFile, state)
-	expect((await loadDurableState(stateFile, settings.network.chainId)).retirement.profileReplacementOverride).toMatchObject({ sourceProfileId: state.profileId, targetProfileId })
+	expect((await loadDurableState(stateFile, settings.network.chainId)).retirement.profileReplacementOverride).toMatchObject({ sourceProfileId: state.profileId, targetProfileId: targetDeploymentId })
 	expect(await retirementUpgradeStatus(path, async () => undefined)).toBe('ready')
 	expect(
 		(

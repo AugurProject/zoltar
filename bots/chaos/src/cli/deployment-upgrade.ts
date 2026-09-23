@@ -133,7 +133,7 @@ export async function prepareCurrentDeployment(options: PreparationOptions = {})
 		const currentProfileId = executionProfileId(current)
 		const currentFactory = current.deployment.uniswapV3Factory
 		if (currentFactory === undefined) throw new Error('Current deployment is missing its Uniswap V3 factory')
-		const replacementTargetId = retirementReplacementTargetId(activeProfileId, currentProfileId, currentFactory)
+		const replacementTargetId = retirementReplacementTargetId(currentProfileId, currentFactory)
 		const pristine = isPristineBootstrapState(state)
 		const wallet = configuredWallet(active)
 		if (wallet !== undefined && state.signerAddress !== undefined && wallet.toLowerCase() !== state.signerAddress.toLowerCase()) {
@@ -203,7 +203,7 @@ export async function retirementUpgradeStatus(path?: string, verifyCompletion: t
 	const currentFactory = current.deployment.uniswapV3Factory
 	if (currentFactory === undefined) throw new Error('Current deployment is missing its Uniswap V3 factory')
 	const currentProfileId = executionProfileId(current)
-	const replacementTargetId = retirementReplacementTargetId(executionProfileId(active), currentProfileId, currentFactory)
+	const replacementTargetId = retirementReplacementTargetId(currentProfileId, currentFactory)
 	if (state.retirement.status === 'drained-with-residuals' && state.retirement.profileReplacementOverride?.targetProfileId !== replacementTargetId) return 'retiring'
 	const wallet = configuredWallet(active)
 	const checked = initialRuntimeState(active.paused, wallet, active.network.chainId, structuredClone(state))
@@ -224,8 +224,8 @@ async function main() {
 				const current = { ...loaded.settings, deployment: canonicalDeployment(loaded.settings.network.chainId) }
 				const factory = current.deployment.uniswapV3Factory
 				if (factory === undefined) throw new Error('Current deployment is missing its Uniswap V3 factory')
-				const targetProfileId = retirementReplacementTargetId(state.profileId, executionProfileId(current), factory)
-				console.log(`Retirement has residuals. Review them and accept replacement for ${targetProfileId} in the dashboard.`)
+				const targetDeploymentId = retirementReplacementTargetId(executionProfileId(current), factory)
+				console.log(`Retirement has residuals. Review them and accept replacement for ${targetDeploymentId} in the dashboard.`)
 			} else console.log(`Old deployment retirement is ${state.retirement.status}. Inspect the dashboard Retirement panel for blockers and progress.`)
 		}
 		if (status === 'retiring') process.exitCode = RETIRING_EXIT_CODE

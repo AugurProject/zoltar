@@ -1,4 +1,4 @@
-import { resetPristineStateForDeploymentProfile } from '../../src/runtime/deployment-profile.ts'
+import { resetPristineStateForDeploymentProfile, retirementReplacementTargetId } from '../../src/runtime/deployment-profile.ts'
 import { afterEach, describe, expect, test } from 'bun:test'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -9,7 +9,7 @@ import type { EcosystemSnapshot, OperationPlan } from '../../src/operations/type
 import { processRetirementCycle, updateRetirementAssessment } from '../../src/runtime/retirement-runner.ts'
 import { loadDurableState, saveDurableState, type RuntimeState } from '../../src/state/operator-state.ts'
 import { initialDurableState, initialRuntimeState } from '../../src/state/initial-state.ts'
-import { cancelRetirement, DEFAULT_RETIREMENT_POLICIES, requestRetirement, uniswapV3PositionKey } from '../../src/state/retirement.ts'
+import { acceptResidualProfileReplacement, cancelRetirement, DEFAULT_RETIREMENT_POLICIES, requestRetirement, uniswapV3PositionKey } from '../../src/state/retirement.ts'
 import { createDurableWorkflow } from '../../src/runtime/workflows.ts'
 import { readV3PositionsWithQuorum, reconcileV3PositionJournal, recordV3ScanSuccess } from '../../src/runtime/retirement-v3-positions.ts'
 import { address, hash, snapshotFixture } from '../operations/fixture.ts'
@@ -75,6 +75,31 @@ async function cycle(path: string, state: RuntimeState, snapshot: EcosystemSnaps
 }
 
 describe('Drain & Retire persisted restart behavior', () => {
+	test('a residual override for changed core contracts cannot authorize another target factory', async () => {
+		const path = await statePath()
+		const snapshot = emptySnapshot()
+		const state = requestedState(snapshot)
+		const targetProfileId = 'profile:replacement'
+		const firstFactory = address(50)
+		const changedFactory = address(51)
+		const recipient = snapshot.wallet.address
+		state.retirement.status = 'drained-with-residuals'
+		state.retirement.completionEvidence = {
+			blockHash: hash(2),
+			blockNumber: '2',
+			completedAt: new Date(0).toISOString(),
+			profileId: state.profileId,
+			proof: { actionableObligations: 0, claimableAssets: 0, collectableV3Positions: 0, knownApprovals: 0, ownedLiquidityPositions: 0, partialWorkflows: 0, pendingTransactions: 0 },
+			residuals: [{ amount: '1', asset: 'TEST', category: 'operator-accepted', reason: 'Reviewed retained asset' }],
+			signerAddress: recipient,
+		}
+		const targetId = retirementReplacementTargetId(targetProfileId, firstFactory)
+		acceptResidualProfileReplacement(state.retirement, state.profileId, targetId, 'Reviewed residuals for the first factory.', `ACCEPT RESIDUALS FOR ${targetId}`)
+		await expect(resetPristineStateForDeploymentProfile(state, targetProfileId, changedFactory, false, recipient, path, async () => {})).rejects.toThrow('drain it first')
+		expect(state.profileId).toBe('profile:test')
+		expect(await resetPristineStateForDeploymentProfile(state, targetProfileId, firstFactory, false, recipient, path, async () => {})).toBeTrue()
+	})
+
 	test.each(['trading.genesis-uniswap.seed-pool', 'trading.universe-uniswap.seed-pool'])('cancel, reseed, restart, and retire again uses fresh V3 balances: %s', async operationId => {
 		const path = await statePath()
 		const snapshot = emptySnapshot()

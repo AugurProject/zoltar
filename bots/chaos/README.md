@@ -138,10 +138,11 @@ Restart the same bot after this CLI command; it saves the drain request and exit
 
 Optional flags are `--migrate-existing-claims`, `--exit-unmatched-shares=<maximum-loss-bps>`, and `--exit-after-completion`. Inspect progress in the running dashboard, or stop the bot and use `bun run run -- --retirement-status` with the matching direct Bun or Compose prefix above. Cancel in the dashboard or, after stopping the bot, with `bun run run -- --cancel-drain --confirm "CANCEL DRAIN"` using the same prefix rule. After status or cancellation through the CLI, restart direct Bun with `bun run run` or the pinned old Docker service with `docker compose start chaos`. After cancellation, `start.bat` would detect the still-outdated contracts and request retirement again. Cancellation is unavailable once the first retirement WETH unwrap begins.
 
-If retirement reports `drained-with-residuals`, review the completion evidence and residual list before accepting replacement for the shown target deployment ID. When only the Uniswap factory changes, that ID starts with `factory:v1:`; copy the full ID shown by the launcher. Use the dashboard while the bot runs, or stop it for the CLI command below, using the matching direct Bun or Compose prefix. After Compose CLI acceptance, run `start.bat` to finish the switch.
+If retirement reports `drained-with-residuals`, review the completion evidence and residual list before accepting replacement for the shown target deployment ID. That `factory:v1:` ID binds both the target core profile and its Uniswap factory; copy the full ID shown by the launcher. Use the dashboard while the bot runs, or stop it for the CLI command below, using the matching direct Bun or Compose prefix. After Compose CLI acceptance, run `start.bat` to finish the switch.
 
 ```sh
-bun run run -- --accept-residuals profile:next --reason "Reviewed current residuals and accepted replacement." --confirm "ACCEPT RESIDUALS FOR profile:next"
+target_id='factory:v1:…' # replace with the full ID printed by start.bat
+bun run run -- --accept-residuals "$target_id" --reason "Reviewed current residuals and accepted replacement." --confirm "ACCEPT RESIDUALS FOR $target_id"
 ```
 
 If retirement flags a legacy Uniswap V3 position whose ownership and coordinates you can verify, register it in the dashboard. For CLI use, stop the bot, run the command below with the matching direct Bun or Compose prefix, and restart the same bot afterward:
@@ -172,7 +173,7 @@ When no drain is active for an operated old profile, the launcher derives the re
 
 The old configuration must already permit unpaused live execution with a configured signer and at least two independent read RPC origins; the launcher does not turn execution on. Two readers are required to verify retirement completion even when normal operation uses `rpcQuorum: 1`. The launcher checks retirement every minute and switches to the current addresses only after verifying completion, using a new unused state file and preserving the old one.
 
-If retirement has residuals, review and accept replacement for the displayed target profile in the dashboard. Closing the launcher window leaves the retiring Docker service running; rerun `start.bat` to resume the handoff. `start.bat doctor` only checks the saved profile and does not switch it.
+If retirement has residuals, review and accept replacement for the displayed target deployment ID in the dashboard. Closing the launcher window leaves the retiring Docker service running; rerun `start.bat` to resume the handoff. `start.bat doctor` only checks the saved profile and does not switch it.
 
 For the keyless first-boot edit, export only the safe template to a protected Linux directory, choose a new state path and replace every placeholder, then restore its ownership in the volume:
 

@@ -22,7 +22,7 @@ import { processRetirementCycle } from '../../src/runtime/retirement-runner.ts'
 import { recordV3ScanFailure, recordV3ScanSuccess } from '../../src/runtime/retirement-v3-positions.ts'
 import { recordCanonicalRecoveredBalances } from '../../src/state/retirement.ts'
 
-import { resetPristineStateForDeploymentProfile, verifyRetirementCompletionFinality } from '../../src/runtime/deployment-profile.ts'
+import { resetPristineStateForDeploymentProfile, retirementReplacementTargetId, verifyRetirementCompletionFinality } from '../../src/runtime/deployment-profile.ts'
 import { createDurableWorkflow, markWorkflowFailed, refreshWorkflowContinuation, durableWorkflowPlan } from '../../src/runtime/workflows.ts'
 
 const temporaryDirectories: string[] = []
@@ -638,8 +638,9 @@ describe('Drain & Retire planning', () => {
 		const retirement = request()
 		const residual = assessRetirement({ blockHash: hash(2), blockNumber: 2n, canonicalScanComplete: true, evaluations: [], retirement, snapshot, state: initialDurableState(31337), v3: [] })
 		applyRetirementAssessment(retirement, residual, hash(2), 2n, completionBinding, now)
-		acceptResidualProfileReplacement(retirement, 'profile:test', 'profile:replacement', 'Residual share loss was reviewed and accepted.', 'ACCEPT RESIDUALS FOR profile:replacement', now)
-		expect(retirement.profileReplacementOverride).toMatchObject({ completionBlockHash: hash(2), completionBlockNumber: '2', recipient: address(1), sourceProfileId: 'profile:test', targetProfileId: 'profile:replacement' })
+		const targetDeploymentId = retirementReplacementTargetId('profile:replacement', address(50))
+		acceptResidualProfileReplacement(retirement, 'profile:test', targetDeploymentId, 'Residual share loss was reviewed and accepted.', `ACCEPT RESIDUALS FOR ${targetDeploymentId}`, now)
+		expect(retirement.profileReplacementOverride).toMatchObject({ completionBlockHash: hash(2), completionBlockNumber: '2', recipient: address(1), sourceProfileId: 'profile:test', targetProfileId: targetDeploymentId })
 
 		const mismatchedRuntime = initialRuntimeState(true, snapshot.wallet.address, 31_337)
 		mismatchedRuntime.profileId = 'profile:other'
