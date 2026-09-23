@@ -718,6 +718,7 @@ describe('file-only startup configuration', () => {
 				positionFile: join(directory, 'positions.json'),
 				priceHistoryFile: join(directory, 'prices.jsonl'),
 			},
+			strategy: { ...configured.strategy, pollMilliseconds: 60_000 },
 		})
 		const child = Bun.spawn([executable, runSource], {
 			env: { ...process.env, OPEN_ORACLE_ARBITRAGER_CONFIG: path },
@@ -727,6 +728,7 @@ describe('file-only startup configuration', () => {
 		children.push(child)
 		const origin = `http://127.0.0.1:${dashboardPort.toString()}`
 		await waitForJson(origin, '/api/state')
+		await waitForStateValue(origin, 'consecutivePollFailures', 1)
 		const saveResponse = await fetch(`${origin}/api/connectivity`, {
 			body: JSON.stringify({ connectivity: { publicRpcUrls: [rpcUrl], readRpcUrl: rpcUrl }, network: 'mainnet', rpcQuorum: 2 }),
 			headers: { 'content-type': 'application/json', origin },

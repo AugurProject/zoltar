@@ -188,7 +188,7 @@
 				<section id="escalation-resolution-and-deposits">
 					<h2>Escalation resolution and deposits</h2>
 					<p>This section specifies accepted deposits, edge-case resolution results, and the consumption of carry proofs or residual REP.</p>
-					<table>
+					<table class="escalation-guardrails-table">
 						<thead>
 							<tr>
 								<th>Area</th>
@@ -269,7 +269,7 @@
 							</tr>
 							<tr>
 								<td><code>nonDecisionState = None</code></td>
-								<td>No explicit non-decision transition has occurred. Deposits may remain available subject to the ordinary activation, continuation, timing, and amount guards.</td>
+								<td>No explicit non-decision state is active. Deposits may remain available subject to the ordinary activation, continuation, timing, and amount guards.</td>
 								<td>
 									<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/EscalationGame.sol"><code>EscalationGame.previewDepositOnOutcome</code></a
 									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/EscalationGameDepositDelegate.sol"><code>EscalationGameDepositDelegate.recordDepositFromSecurityPool</code></a>
@@ -286,11 +286,12 @@
 							</tr>
 							<tr>
 								<td><code>nonDecisionState = InheritedThresholdTie</code></td>
-								<td>Snapshot initialization preserved two or more threshold-full balances without fabricating a local timestamp. The game closes further deposits. With a fixed child outcome it follows the continuation clock and cannot trigger its own fork; without one, <code>canTriggerOwnFork()</code> returns true directly.</td>
+								<td>Snapshot initialization preserved two or more threshold-full balances without fabricating a local timestamp. Deposits stay closed while this state persists. With a fixed child outcome, the game follows the continuation clock and cannot trigger its own fork. Otherwise, an auction haircut that removes the threshold tie clears this state and emits <code>InheritedThresholdTieReopened</code>: ordinary pool-mediated deposit checks apply after the pool resumes the game, fork eligibility clears, and the clock rebases to the reduced binding capital with a fresh response period on resume. An unfixed tie that remains threshold-full retains fork eligibility; a genuine local non-decision is unchanged.</td>
 								<td>
 									<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/EscalationGameCarry.sol"><code>EscalationGameCarry.initializeForkCarrySnapshotWithResolutionBalances</code></a
 									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/EscalationGameCalculations.sol"><code>EscalationGameCalculations.getEscalationGameEndDate</code></a
-									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/EscalationGameCalculations.sol"><code>EscalationGameCalculations.canTriggerOwnFork</code></a>
+									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/EscalationGameCalculations.sol"><code>EscalationGameCalculations.canTriggerOwnFork</code></a
+									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/EscalationGameDepositDelegate.sol"><code>EscalationGameDepositDelegate.applyTruthAuctionHaircut</code></a>
 								</td>
 							</tr>
 							<tr>

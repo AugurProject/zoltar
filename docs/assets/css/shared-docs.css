@@ -683,6 +683,25 @@ body.doc-openoracle table {
 	border-collapse: collapse;
 	font-size: 0.95rem;
 }
+body.doc-openoracle .escalation-guardrails-table {
+	table-layout: fixed;
+}
+body.doc-openoracle .escalation-guardrails-table :is(th, td) {
+	overflow-wrap: anywhere;
+}
+body.doc-openoracle .escalation-guardrails-table td > code:only-child {
+	white-space: normal;
+	overflow-wrap: anywhere;
+}
+body.doc-openoracle .escalation-guardrails-table th:first-child {
+	width: 18%;
+}
+body.doc-openoracle .escalation-guardrails-table th:nth-child(2) {
+	width: 52%;
+}
+body.doc-openoracle .escalation-guardrails-table th:last-child {
+	width: 30%;
+}
 body.doc-openoracle pre.code-scroll {
 	max-width: 100%;
 	overflow-x: auto;
