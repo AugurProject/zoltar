@@ -204,6 +204,7 @@ export async function recoverPendingTransactions(
 		if (block.number === undefined || block.hash === undefined || block.baseFeePerGas === undefined) throw new ConnectivityDegradedError('Recovery block is missing canonical identity or base fee')
 		if (intent.lastValidBlockNumber !== undefined && block.number >= intent.lastValidBlockNumber) await requireReconciliation('The calldata validity deadline has expired')
 		if (transaction.maxFeePerGas === undefined || transaction.maxFeePerGas < block.baseFeePerGas) await requireReconciliation('The signed fee ceiling is below the current base fee; envelope renewal cannot raise it')
+		if (transaction.gas === undefined || transaction.maxFeePerGas === undefined || transaction.gas * transaction.maxFeePerGas > settings.strategy.maximumGasCostAttoEth) await requireReconciliation('The signed transaction exceeds the current maximum gas cost; replacement requires newly approved signed limits')
 		if (intent.kind === 'fees') {
 			const address = transaction.to
 			if (address === undefined) throw new Error('Fee redemption transaction is missing its pool address')

@@ -2,7 +2,7 @@ import { expect, test } from 'bun:test'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { createWalletClient, defineChain, encodeAbiParameters, encodeFunctionData, privateKeyToAccount } from '@zoltar/bot-shared/ethereum'
+import { createWalletClient, defineChain, encodeAbiParameters, encodeFunctionData, parseTransaction, privateKeyToAccount } from '@zoltar/bot-shared/ethereum'
 import { custom } from '@zoltar/bot-shared/ethereum/rpc-transport'
 import { securityPoolAbi, securityPoolFactoryAbi } from '@zoltar/bot-shared/contracts/abi'
 import { prepareSignedTransaction } from '@zoltar/bot-shared/execution/transaction-submission'
@@ -312,3 +312,25 @@ test('requires quorum agreement on claimable fees before replay', async () => {
 		await f.close()
 	}
 })
+
+for (const exceedsLimit of [true, false])
+	test(`checks signed maximum gas cost against the current spending limit (exceeds=${exceedsLimit})`, async () => {
+		const f = await fixture()
+		try {
+			const transaction = parseTransaction(f.signed.serializedTransaction)
+			if (transaction.gas === undefined || transaction.maxFeePerGas === undefined) throw new Error('Missing signed gas limits')
+			f.settings.strategy.maximumGasCostAttoEth = transaction.gas * transaction.maxFeePerGas - (exceedsLimit ? 1n : 0n)
+			if (exceedsLimit) {
+				await expect(recoverPendingTransactions(f.settings, f.wallet, f.state)).rejects.toThrow('current maximum gas cost')
+				expect(f.broadcasts).toHaveLength(0)
+				const durable = await loadDurableState(f.settings.runtime.stateFile, f.settings.network.chainId)
+				expect(durable.pendingTransactions[0]).toMatchObject({ maxBlockNumber: 125n, serializedTransaction: f.signed.serializedTransaction })
+				expect(durable.pendingTransactions[0]?.reconciliationReason).toContain('current maximum gas cost')
+			} else {
+				await recoverPendingTransactions(f.settings, f.wallet, f.state)
+				expect(f.broadcasts).toHaveLength(1)
+			}
+		} finally {
+			await f.close()
+		}
+	})
