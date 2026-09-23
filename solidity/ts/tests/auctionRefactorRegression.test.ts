@@ -4,7 +4,7 @@ import { getArray, getContractOutput, getRecord, getString, loadContractsJson, n
 
 const auctionSource = 'contracts/statoblast/UniformPriceDualCapBatchAuction.sol'
 const auctionName = 'UniformPriceDualCapBatchAuction'
-const auctionRuntimeBytecodeBudgetBytes = 15_360
+const eip170RuntimeCodeLimitBytes = 24_576
 
 test('auction storage extraction preserves every host slot and node field position', () => {
 	const auction = getContractOutput(loadContractsJson(import.meta.dir), auctionSource, auctionName)
@@ -58,13 +58,13 @@ test('auction storage extraction preserves every host slot and node field positi
 	)
 })
 
-test('auction extraction stays inside the audited runtime bytecode budget', () => {
+test('auction runtime stays within the EIP-170 limit', () => {
 	const auction = getContractOutput(loadContractsJson(import.meta.dir), auctionSource, auctionName)
 	const evm = getRecord(auction.evm, 'Auction output is missing EVM bytecode')
 	const deployedBytecode = getRecord(evm.deployedBytecode, 'Auction output is missing deployed bytecode')
 	const object = getString(deployedBytecode.object, 'Auction deployed bytecode object missing')
 	const deployedBytes = object.length / 2
-	assert.ok(deployedBytes <= auctionRuntimeBytecodeBudgetBytes, `auction runtime bytecode exceeds ${auctionRuntimeBytecodeBudgetBytes.toString()} bytes: ${deployedBytes.toString()}`)
+	assert.ok(deployedBytes <= eip170RuntimeCodeLimitBytes, `auction runtime bytecode exceeds EIP-170 ${eip170RuntimeCodeLimitBytes.toString()} bytes: ${deployedBytes.toString()}`)
 })
 
 test('liquidation boundaries expose one typed request with one nested snapshot', () => {

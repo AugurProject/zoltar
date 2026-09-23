@@ -7,7 +7,7 @@ import { privateKeyToAccount, zeroAddress, zeroHash, type Address } from '@zolta
 import { EndpointCheckFailure, type EndpointCheck } from '@zoltar/bot-shared/monitoring/connectivity'
 import { loadSettings, parseSettings, serializedSettings, type OperatorSettings } from '../../src/config/settings.ts'
 import { createBotShutdownController } from '@zoltar/bot-shared/execution/bot-process-locks'
-import { OperationRediscoveryRequired } from '../../src/execution/transaction-executor.ts'
+import { OperationRediscoveryRequired } from '../../src/execution/execution-context.ts'
 import { IMMUTABLE_TOPOLOGY_CACHE_SCHEMA_VERSION, type CanonicalImmutableTopologyCache } from '../../src/monitoring/topology-cache.ts'
 import { reevaluateOperationContinuation } from '../../src/operations/catalog.ts'
 import { eligibleOperationPlans } from '../support/operation-plans.ts'

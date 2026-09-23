@@ -1,4 +1,4 @@
-import { discoverAddressedMarket, discoverTradingMarketPage, discoverUniverses } from '../../protocol/marketDiscovery.js'
+import type { discoverAddressedMarket, discoverTradingMarketPage, discoverUniverses } from '../../protocol/marketDiscovery.js'
 import type { Address, WalletClient } from '@zoltar/core-shared/evm/ethereum'
 import type { DeploymentConfiguration } from '../../protocol/config.js'
 import type { readInjectedChainIdNumber, requestInjectedAccount, switchInjectedChain } from '@zoltar/ui-core-shared/wallet/injectedEthereum.js'

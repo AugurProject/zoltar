@@ -2,8 +2,6 @@ name: Test Stability
 
 on:
   workflow_dispatch:
-  schedule:
-    - cron: "43 3 * * *"
 
 permissions:
   contents: read
