@@ -10,8 +10,8 @@ type QuestionProjection = {
 	createdTimestamp: Date
 	title: string
 	description: string
-	startTime: Date
-	endTime: Date
+	startTime: string
+	endTime: string
 	numTicks: string
 	displayValueMin: string
 	displayValueMax: string
@@ -208,8 +208,8 @@ export const eventProjectionsFrom = (log: StoredLog): readonly Projection[] => {
 				createdTimestamp: timestamp(args['createdTimestamp'], 'createdTimestamp'),
 				title: string(data['title'], 'title'),
 				description: string(data['description'], 'description'),
-				startTime: timestamp(data['startTime'], 'startTime'),
-				endTime: timestamp(data['endTime'], 'endTime'),
+				startTime: integerString(data['startTime'], 'startTime'),
+				endTime: integerString(data['endTime'], 'endTime'),
 				numTicks: integerString(data['numTicks'], 'numTicks'),
 				displayValueMin: integerString(data['displayValueMin'], 'displayValueMin'),
 				displayValueMax: integerString(data['displayValueMax'], 'displayValueMax'),

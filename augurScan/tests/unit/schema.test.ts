@@ -17,6 +17,7 @@ test('accepts the PostgreSQL release used to generate the schema fingerprint acr
 test('initializes an empty database, migrates the preceding schema, and accepts the current marker', () => {
 	expect(schemaInitializationAction(undefined, [])).toBe('initialize')
 	expect(schemaInitializationAction(CURRENT_SCHEMA_VERSION, ['augurscan_schema', 'networks'])).toBe('current')
+	expect(schemaInitializationAction('3', ['augurscan_schema', 'networks'])).toBe('migrate-from-3')
 	expect(schemaInitializationAction('2', ['augurscan_schema', 'networks'])).toBe('migrate-from-2')
 	expect(schemaInitializationAction('1', ['augurscan_schema', 'networks'])).toBe('migrate-from-1')
 })
@@ -198,4 +199,11 @@ test('reports both failures when PostgreSQL also rejects the rollback', async ()
 		if (!(error instanceof AggregateError)) throw error
 		expect(error.errors).toEqual([schemaFailure, rollbackFailure])
 	}
+})
+
+test('retains historical date fingerprints and v3 ownership during migration', async () => {
+	const schema = await Bun.file(new URL('../../schema.sql', import.meta.url)).text()
+	for (const version of ['1', '2', '3'] as const) expect(expectedSchemaLayout(schema, version).columns).toContain('questions.start_time|timestamp with time zone|not-null||')
+	expect(expectedSchemaLayout(schema, '3').relations).toContain('table:indexer_ownership')
+	expect(expectedSchemaLayout(schema, CURRENT_SCHEMA_VERSION).columns).toContain('questions.start_time|bigint|not-null||')
 })
