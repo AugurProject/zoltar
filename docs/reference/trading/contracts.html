@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<meta name="description" content="Constructor, entrypoints, and status semantics of the Trading factory, pair, math library, and predeployment share sink." />
+		<title>Trading contracts</title>
+		<link rel="stylesheet" href="../../assets/css/shared-docs.css" />
+		<link rel="stylesheet" href="../../assets/css/docsShell.css" />
+	</head>
+	<body class="doc-openoracle">
+		<main id="main-content">
+			<header>
+				<p class="kicker">Reference</p>
+				<h1>Trading contracts</h1>
+				<p>All Trading contracts compile with Solidity 0.8.35 for Osaka. Revert strings are operational diagnostics, not stable compatibility commitments.</p>
+			</header>
+			<section id="factory">
+				<h2>TwoWayConstantProductFactory</h2>
+				<ul>
+					<li><code>constructor(ISecurityPoolFactory, uint256 feeBps)</code> fixes the core factory and fee; <code>feeBps &lt; 10,000</code>.</li>
+					<li><code>createPair(ISecurityPool)</code> validates the exact canonical pool, deploys with CREATE2, and returns the existing canonical pair on duplicate calls.</li>
+					<li><code>getPair(ISecurityPool) → pair</code> maps exact pool identity to a pair.</li>
+					<li><code>isPair(address) → bool</code> recognizes router-eligible pairs.</li>
+					<li><code>predictPair(ISecurityPool) → address</code> calculates the CREATE2 address.</li>
+					<li><code>securityPoolFactory()</code>, <code>feeBps()</code>, and <code>predeploymentShareSink()</code> expose immutable configuration.</li>
+				</ul>
+				<p>Canonical validation requires the pool's own <code>securityPoolFactory</code>, the factory's <code>(originId, universeId)</code> lookup, and <code>shareToken.canonicalPoolByUniverse(universeId)</code> all to agree.</p>
+				<p>CREATE2 pair addresses exist counterfactually before code is deployed, when ERC-1155 receiver checks cannot run. Each factory therefore deploys an ownerless <code>PredeploymentShareSink</code>. A pair constructor transfers any canonical INVALID, YES, or NO already present at its future address into that sink before returning. Those quarantined shares are permanently inaccessible; do not send shares to a predicted pair address.</p>
+			</section>
+			<section id="pair">
+				<h2>TwoWayConstantProductPair</h2>
+				<p>Immutable accessors expose <code>factory</code>, <code>securityPool</code>, <code>shareToken</code>, <code>universeId</code>, <code>questionId</code>, <code>invalidTokenId</code>, <code>yesTokenId</code>, <code>noTokenId</code>, and <code>feeBps</code>. LP ERC-20 accessors are <code>name</code>, <code>symbol</code>, <code>decimals</code>, <code>totalSupply</code>, <code>balanceOf</code>, <code>allowance</code>, <code>approve</code>, <code>transfer</code>, and <code>transferFrom</code>.</p>
+				<ul>
+					<li><code>getReserves()</code> returns recorded YES and NO reserves.</li>
+					<li><code>tradingStatus()</code> returns <code>Open</code>, <code>QuestionEnded</code>, <code>PoolInactive</code>, <code>AwaitingForkContinuation</code>, <code>UniverseForked</code>, <code>QuestionResolved</code>, or <code>Uninitialized</code>.</li>
+					<li><code>initialize(yesAmount, noAmount, minLiquidity, recipient)</code> pulls the first reserves, locks <code>MINIMUM_LIQUIDITY</code>, and mints the remainder once.</li>
+					<li><code>addLiquidity(maxYes, maxNo, minLiquidity, recipient)</code> synchronizes donations, selects the largest proportional amounts, pulls them, and mints LP.</li>
+					<li><code>removeLiquidity(liquidity, minYes, minNo, recipient, deadline)</code> burns caller LP and returns proportional raw shares before the deadline. It has no lifecycle-close guard.</li>
+					<li><code>swapExactInput(yesForNo, amountIn, minAmountOut, recipient)</code> pulls the gross input and sends the floor-rounded output.</li>
+					<li><code>swapExactOutput(yesForNo, amountOut, maxAmountIn, recipient)</code> pulls the ceil-rounded required input and sends the exact output.</li>
+					<li><code>quoteExactInput</code> and <code>quoteExactOutput</code> quote against effective balances including donations.</li>
+					<li><code>sync()</code> records authoritative balances, reverting if balances fell below reserves or INVALID is present.</li>
+					<li><code>onERC1155Received</code>, <code>onERC1155BatchReceived</code>, and <code>supportsInterface</code> implement receiver discovery. Only the canonical ShareToken's exact YES/NO IDs are accepted. Pre-initialization transfers must be initiated by the pair's own pull.</li>
+				</ul>
+				<p><code>tradingStatus()</code> is a concise action blocker, not an authoritative settlement summary. The first matching condition wins in this order: <code>Uninitialized</code>, <code>UniverseForked</code>, <code>AwaitingForkContinuation</code>, <code>PoolInactive</code>, <code>QuestionResolved</code>, <code>QuestionEnded</code>, then <code>Open</code>. An uninitialized forked pair therefore reports <code>Uninitialized</code>, and a finalized question reports <code>QuestionResolved</code> even after its end time. Read <code>SecurityPoolForker.getQuestionOutcome(pool)</code> when the finalized outcome itself is required.</p>
+			</section>
+			<section id="sink">
+				<h2>PredeploymentShareSink</h2>
+				<p>Accepts ERC-1155 transfers and has no withdrawal or administrative method. It exists only to preserve clean pair initialization and the zero-INVALID invariant after counterfactual-address poisoning attempts.</p>
+			</section>
+			<section id="math">
+				<h2>TwoWayConstantProductMath</h2>
+				<p>The internal library provides exact-input and exact-output quotes, ceil rounding through the repository's full-precision <code>Math.mulDiv</code>, proportional deposits, initial odds, and conditional price basis points. Production paths never multiply reserve products. Rounding directions are listed in <a href="./units-and-rounding.html">Units and rounding</a>.</p>
+			</section>
+		</main>
+		<script src="../../assets/js/responsiveDocs.js"></script>
+		<script src="../../assets/js/docsData.js"></script>
+		<script src="../../assets/js/docsShell.js"></script>
+	</body>
+</html>

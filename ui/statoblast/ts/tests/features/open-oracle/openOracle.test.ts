@@ -1034,6 +1034,7 @@ describe('Open Oracle helpers', () => {
 		expect(getAddress(reportDetails.token1)).toBe(getAddress(WETH_ADDRESS))
 		expect(getAddress(reportDetails.token2)).toBe(getAddress(addressString(GENESIS_REPUTATION_TOKEN)))
 		expect(reportDetails.settlementTimestamp).toBe(0n)
+		expect(details.pendingReportReadyAtTimestamp).toBe(reportDetails.reportTimestamp + reportDetails.settlementTime)
 		expect(reportDetails.token1Decimals).toBe(18)
 		expect(reportDetails.token2Decimals).toBe(18)
 		expect(reportDetails.token1Symbol).toBe('WETH')

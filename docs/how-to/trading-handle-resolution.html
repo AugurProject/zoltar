@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<meta name="description" content="After a market resolves, unwind LP, redeem complete sets, and claim winning shares through the SecurityPool." />
+		<title>Handle resolution</title>
+		<link rel="stylesheet" href="../assets/css/shared-docs.css" />
+		<link rel="stylesheet" href="../assets/css/docsShell.css" />
+	</head>
+	<body class="doc-openoracle">
+		<main id="main-content">
+			<header>
+				<p class="kicker">How-to guide</p>
+				<h1>Handle resolution</h1>
+				<p>Once an authoritative outcome exists, swaps and liquidity additions are closed but every asset you hold still has a defined exit. This guide takes each one in turn.</p>
+			</header>
+			<section id="steps">
+				<h2>Unwind after resolution</h2>
+				<ol>
+					<li>Remove LP into raw YES and NO (<a href="./trading-remove-liquidity.html">Remove liquidity</a>).</li>
+					<li>If the wallet holds complete sets and the pool still permits the operational path, redeem them explicitly.</li>
+					<li>Redeem the winning share through <code>SecurityPool.redeemShares</code>.</li>
+				</ol>
+				<p>On an INVALID result, INVALID is the only winning share. Raw YES and NO balances, including pair fee accrual, are not valuable merely because they are nonzero. An interface must show the exact YES, NO, or INVALID result and never infer it from reserve prices.</p>
+			</section>
+			<section id="in-the-ui">
+				<h2>In the live UI</h2>
+				<p>In the market view, open the <strong>Settlement</strong> tab and, under <strong>Settlement operation</strong>, select <strong>Redeem YES</strong> (or whichever outcome won). Select <strong>Simulate authoritative settlement</strong>, then <strong>Submit settlement transaction</strong>. Submitting <strong>Redeem YES</strong> redeems the wallet's entire winning-share balance for the exact SecurityPool through <code>redeemShares</code>. Submission simulates again at the latest block and stops if the redemption would now fail. Choose <strong>Complete set</strong> instead to redeem an explicitly entered amount of matching INVALID, YES, and NO.</p>
+			</section>
+		</main>
+		<script src="../assets/js/responsiveDocs.js"></script>
+		<script src="../assets/js/docsData.js"></script>
+		<script src="../assets/js/docsShell.js"></script>
+	</body>
+</html>

@@ -53,7 +53,7 @@ abstract contract EscalationGameSettlement is EscalationGameEscrow {
 		_verifyAndConsumeCarriedDepositProof(outcomeIndex, proof);
 		_emitCarryDepositConsumed(outcomeIndex, proof.depositor, proof.amountAttoRep, proof.parentDepositIndex, proof.sourceNodeId, CarryConsumptionReason.WinningClaim);
 		uint256 burnAmountAttoRep;
-		(amountToWithdrawAttoRep, burnAmountAttoRep) = _computeCarriedWinningWithdrawal(outcomeIndex, proof.amountAttoRep, proof.cumulativeAmountAttoRep, proof.parentDepositIndex);
+		(amountToWithdrawAttoRep, burnAmountAttoRep) = _computeCarriedWinningWithdrawal(outcomeIndex, proof.amountAttoRep, proof.cumulativeAmountAttoRep, proof.leafIndex);
 		_delegateDepositCall(abi.encodeCall(EscalationGameDepositDelegate.creditExternalClaimOwners, (forkCarrySourceGame, depositor, proof.parentDepositIndex, amountToWithdrawAttoRep, burnAmountAttoRep)));
 		_burnWinningHaircut(burnAmountAttoRep, winnerHaircutPaidByFork);
 		emit ClaimDeposit(depositor, outcome, proof.parentDepositIndex, originalDepositAmountAttoRep, amountToWithdrawAttoRep, burnAmountAttoRep, true);

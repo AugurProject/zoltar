@@ -24,10 +24,12 @@ abstract contract SecurityPoolSettlementDelegate is SecurityPoolStorage {
 		emit CompleteSetCreated(msg.sender, msg.value, completeSetsToMintAttoShares, shareTokenSupplyAttoShares, settlementCollateralAttoEth);
 	}
 
-	function setValidatedSettlementCollateral(uint256 nextSettlementCollateralAttoEth) external payable {
-		ISecurityPool pool = ISecurityPool(payable(address(this)));
-		_validateSettlementCollateral(pool, nextSettlementCollateralAttoEth);
-		settlementCollateralAttoEth = nextSettlementCollateralAttoEth;
+	function setFundedSettlementCollateral(uint256 inheritedCollateralAttoEth) external {
+		// Inherited share liabilities need funded ETH, even when current REP
+		// solvency prevents new minting. Activation opens redemption and recovery.
+		uint256 feeLiabilitiesAttoEth = totalClaimableVaultFeesAttoEth + unallocatedAccruedFeesAttoEth;
+		require(feeLiabilitiesAttoEth <= address(this).balance && inheritedCollateralAttoEth <= address(this).balance - feeLiabilitiesAttoEth, 'Collateral unfunded');
+		settlementCollateralAttoEth = inheritedCollateralAttoEth;
 	}
 
 	function _validateSettlementCollateral(ISecurityPool pool, uint256 nextSettlementCollateralAttoEth) private view {

@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { isAccountTransactionValue, isLogDetailValue, isRecord } from '../../browser/api-validation.ts'
+import { isAccountTransactionValue, isLogDetailValue, isQuestionStateEntityValue, isRecord } from '../../browser/api-validation.ts'
 import { handleApi } from '../../src/api.ts'
 import { decodeOpaqueCursor } from '../../src/cursor-codec.ts'
 import {
@@ -187,7 +187,7 @@ const indexedBlock = (name: string, parentHash: ReturnType<typeof blockHash>, co
 							},
 						},
 					],
-		logs: summary === undefined ? [] : [log(hash, summary)],
+		logs: summary === undefined ? [] : [{ ...log(hash, summary), blockNumber: number }],
 	}
 }
 
@@ -455,6 +455,7 @@ postgresTest('migrates v1 canonical and orphan timeline evidence through current
 		await database.sql.unsafe('ALTER TABLE public.networks DROP COLUMN applied_abi_source_hash, DROP COLUMN applied_application_source_hash, DROP COLUMN applied_projection_source_hash')
 		await database.sql.unsafe('ALTER TABLE public.contracts DROP COLUMN configured_deployment_block')
 		await database.sql.unsafe('DROP INDEX public.pool_snapshots_detail_page, public.protocol_timeline_entity_history_page, public.protocol_timeline_history_page, public.vault_snapshots_detail_page')
+		await database.sql.unsafe('ALTER TABLE questions ALTER COLUMN start_time TYPE timestamptz USING to_timestamp(start_time), ALTER COLUMN end_time TYPE timestamptz USING to_timestamp(end_time)')
 		await database.sql`UPDATE augurscan_schema SET schema_version = '1' WHERE singleton`
 		await database.sql.unsafe('DROP INDEX public.protocol_timeline_recent')
 		try {
@@ -3933,7 +3934,7 @@ postgresTest(
 				) VALUES (
 					${operationsChainId}, ${hash}, ${transactionHash}, 0, 1, 1,
 					timestamptz '2026-01-01 00:00:20+00', 'Will the 🔮 forecast resolve?', 'Unicode cursor fixture',
-					timestamptz '2026-01-01 00:00:20+00', timestamptz '2026-01-02 00:00:20+00',
+					1767225620, 1767312020,
 					1000, 0, 1, 'probability', '["No","Yes"]'::jsonb, true
 				)
 			`
@@ -4575,3 +4576,80 @@ postgresTest('returns the originating transaction action on every log row', asyn
 		await database.close()
 	}
 })
+
+for (const scenario of ['question seconds', 'receipt discovery order'] as const) {
+	postgresTest(`persists ${scenario} atomically and advances the checkpoint`, async () => {
+		if (postgresUrl === undefined) throw new Error('POSTGRES_TEST_URL disappeared')
+		const database = new ScannerDatabase(postgresUrl)
+		const fixtureChain = chainId + 80_000 + process.pid
+		let lease: IndexerLease | undefined
+		try {
+			await initializeSchema(database.sql)
+			await database.seedNetwork({
+				id: `regression-${fixtureChain}`,
+				name: 'Regression',
+				chainId: fixtureChain,
+				rpcUrls: [],
+				startBlock: 2n,
+				explorerBaseUrl: '',
+				nativeSymbol: 'ETH',
+				confirmationDepth: 0n,
+				contracts: [
+					[rediscoveredAddress, 'REP', 'reputationToken'],
+					[wethAddress, 'WETH', 'weth'],
+				],
+			})
+			lease = await database.tryAcquireIndexerLock(fixtureChain)
+			if (lease === undefined) throw new Error('Missing writer lease')
+			const block = indexedBlock('regression-two', blockHash('regression-parent'), [], 'regression')
+			const questionLogs = ['0', '8640000000000', '8640000000001', '281474976710655'].map((seconds, index) =>
+				decodedLog(block.hash, index, address, 'QuestionCreated', {
+					questionId: String(index),
+					createdTimestamp: '1767225600',
+					outcomeOptions: [],
+					questionData: { title: 'Exact question', description: '', startTime: seconds, endTime: seconds, numTicks: '100', displayValueMin: '0', displayValueMax: '100', answerUnit: '' },
+				}),
+			)
+			const creation = decodedLog(block.hash, 1, address, 'PoolCreated', { token0: rediscoveredAddress, token1: wethAddress, pool: uniswapPairAddress, fee: '3000', tickSpacing: '60' })
+			const initialize = decodedLog(block.hash, 2, uniswapPairAddress, 'Initialize', { sqrtPriceX96: '79228162514264337593543950336' })
+			const swap = decodedLog(block.hash, 3, uniswapPairAddress, 'Swap', { sqrtPriceX96: '79228162514264337593543950337', liquidity: '100' })
+			const unsupported = decodedLog(block.hash, 4, pairAddress, 'Initialize', { sqrtPriceX96: '79228162514264337593543950336' })
+			const evidence = { ...block, logs: scenario === 'question seconds' ? questionLogs : [swap, initialize, unsupported, creation, creation] }
+			await expect(
+				database.storeBlocks(fixtureChain, [evidence], lease, undefined, async () => {
+					throw new Error('canonical anchor changed')
+				}),
+			).rejects.toThrow('canonical anchor changed')
+			expect(await database.checkpoint(fixtureChain, lease)).toBeUndefined()
+			expect((await database.sql`SELECT count(*)::int AS count FROM logs WHERE chain_id = ${fixtureChain}`)[0]?.['count']).toBe(0)
+			await database.storeBlock(fixtureChain, evidence, lease)
+			expect(await database.checkpoint(fixtureChain, lease)).toEqual({ number: 2n, hash: block.hash })
+			if (scenario === 'question seconds') {
+				const rows = await database.sql`SELECT start_time::text, end_time::text FROM questions WHERE chain_id = ${fixtureChain} ORDER BY question_id`
+				expect(rows).toEqual(['0', '8640000000000', '8640000000001', '281474976710655'].map(seconds => ({ start_time: seconds, end_time: seconds })))
+				const response = await handleApi(new Request(`http://localhost/api/v1/state/catalog?chainId=${fixtureChain}`), database.sql)
+				if (response === undefined) throw new Error('Missing state response')
+				const body: unknown = await response.json()
+				if (!isRecord(body) || !Array.isArray(body['questions'])) throw new Error('Missing questions')
+				expect(body['questions'].every(isQuestionStateEntityValue)).toBe(true)
+				expect(body['questions']).toContainEqual(expect.objectContaining({ start_time: '281474976710655', end_time: '281474976710655' }))
+				await database.sql`DELETE FROM questions WHERE chain_id = ${fixtureChain} AND question_id <> 0`
+				await database.sql`UPDATE questions SET start_time = 1767225600, end_time = 8640000000000, canonical = false WHERE chain_id = ${fixtureChain}`
+				await database.sql.unsafe('ALTER TABLE questions ALTER COLUMN start_time TYPE timestamptz USING to_timestamp(start_time), ALTER COLUMN end_time TYPE timestamptz USING to_timestamp(end_time)')
+				await database.sql`DELETE FROM augurscan_schema_migrations WHERE schema_version = ${CURRENT_SCHEMA_VERSION}`
+				await database.sql`UPDATE augurscan_schema SET schema_version = '3' WHERE singleton`
+				await initializeSchema(database.sql)
+				const migratedQuestions = await database.sql`SELECT start_time::text, end_time::text, canonical FROM questions WHERE chain_id = ${fixtureChain}`
+				expect(migratedQuestions).toEqual([{ start_time: '1767225600', end_time: '8640000000000', canonical: false }])
+				await initializeSchema(database.sql)
+			} else {
+				const rows = await database.sql`SELECT event_name FROM uniswap_rep_eth_price_observations WHERE chain_id = ${fixtureChain} AND canonical ORDER BY log_index`
+				expect(rows).toEqual([{ event_name: 'Initialize' }, { event_name: 'Swap' }])
+			}
+		} finally {
+			await lease?.release()
+			for (const table of ['questions', 'uniswap_rep_eth_price_observations', 'uniswap_rep_eth_markets', 'protocol_timeline_entries', 'actions', 'logs', 'transactions', 'blocks', 'contracts', 'networks']) await database.sql.unsafe(`DELETE FROM ${table} WHERE chain_id = $1`, [fixtureChain])
+			await database.close()
+		}
+	})
+}

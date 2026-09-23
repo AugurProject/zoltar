@@ -16,6 +16,8 @@ interface IEscalationGameEvents {
 	event NonDecisionReached(uint256 nonDecisionTimestamp);
 	/// @notice A continuation inherited two or more threshold-full outcomes without fabricating a local timestamp.
 	event InheritedThresholdTie(address indexed sourceGame);
+	/// @notice An auction reduced an unfixed inherited tie below non-decision, reopening ordinary reporting.
+	event InheritedThresholdTieReopened();
 	/// @notice Accepted REP and resulting escrow totals, all in attoREP. `depositIndex` is the local
 	/// per-outcome array index; `LocalDepositAppended.parentDepositIndex` is the stable continuation identity.
 	/// `cumulativeRepAmountAttoRep` is the resulting outcome total.

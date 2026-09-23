@@ -2,8 +2,8 @@ import type { SQL } from 'bun'
 
 export type RichListSort = 'eth' | 'weth' | 'transactions'
 
-export const richListRows = async (sql: SQL, query: { readonly chainId?: number; readonly address?: string; readonly limit: number; readonly offset: number; readonly sort: RichListSort }) => {
-	const { chainId, address, limit, offset } = query
+export const richListRows = async (sql: SQL, query: { readonly snapshotBlock?: string; readonly chainId?: number; readonly address?: string; readonly limit: number; readonly offset: number; readonly sort: RichListSort }) => {
+	const { chainId, address, limit, offset, snapshotBlock } = query
 	const orderBy = {
 		eth: 'native_balance DESC, transaction_count DESC',
 		weth: 'weth_balance DESC, transaction_count DESC',
@@ -12,15 +12,34 @@ export const richListRows = async (sql: SQL, query: { readonly chainId?: number;
 	const values: Array<string | number> = []
 	const chainClause = chainId === undefined ? '' : `AND activity.chain_id = $${values.push(chainId)}`
 	const addressClause = address === undefined ? '' : `AND activity.address = $${values.push(address)}`
+	const snapshotParameter = snapshotBlock === undefined ? undefined : `$${values.push(snapshotBlock)}::bigint`
+	const throughSnapshot = (column: string) => (snapshotParameter === undefined ? '' : `AND ${column} <= ${snapshotParameter}`)
+	// Dynamic identities are mutable in contracts; recover their labels and kinds from discovery evidence.
+	const contractsAtSnapshot =
+		snapshotParameter === undefined
+			? 'SELECT chain_id, address, label, kind, canonical FROM contracts'
+			: `SELECT chain_id, address, label, kind, canonical FROM contracts
+			WHERE canonical AND provenance = 'manifest'
+				AND (configured_deployment_block IS NULL OR configured_deployment_block <= ${snapshotParameter})
+			UNION ALL
+			(SELECT DISTINCT ON (discovery.chain_id, discovery.address)
+				discovery.chain_id, discovery.address, discovery.label, discovery.kind, discovery.canonical
+			FROM contract_discoveries discovery
+			JOIN blocks block ON block.chain_id = discovery.chain_id AND block.hash = discovery.block_hash AND block.canonical
+			WHERE discovery.canonical AND discovery.block_number <= ${snapshotParameter}
+				AND NOT EXISTS (SELECT 1 FROM contracts manifest WHERE manifest.chain_id = discovery.chain_id
+					AND manifest.address = discovery.address AND manifest.canonical AND manifest.provenance = 'manifest')
+			ORDER BY discovery.chain_id, discovery.address, discovery.block_number DESC, discovery.tx_hash DESC)`
+	const contractTable = snapshotParameter === undefined ? 'contracts' : 'snapshot_contracts'
 	values.push(limit, offset)
 	return await sql.unsafe(
-		`WITH activity_summary AS (
+		`WITH ${snapshotParameter === undefined ? '' : `snapshot_contracts AS (${contractsAtSnapshot}),`} activity_summary AS (
 			SELECT activity.chain_id, activity.address, min(activity.block_number) AS first_seen_block,
 				max(activity.block_number) AS last_seen_block,
 				count(DISTINCT activity.tx_hash) FILTER (WHERE activity.role = 'sender') AS transaction_count,
 				count(DISTINCT activity.tx_hash) AS interaction_count,
 				count(DISTINCT NULLIF(activity.pool_address, '0x0000000000000000000000000000000000000000')) AS pool_count
-			FROM address_activity activity WHERE activity.canonical ${chainClause} ${addressClause}
+			FROM address_activity activity WHERE activity.canonical ${throughSnapshot('activity.block_number')} ${chainClause} ${addressClause}
 			GROUP BY activity.chain_id, activity.address
 		), latest_balances AS (
 			SELECT DISTINCT ON (snapshot.chain_id, snapshot.address, snapshot.asset_address)
@@ -30,9 +49,9 @@ export const richListRows = async (sql: SQL, query: { readonly chainId?: number;
 			JOIN blocks observed_block ON observed_block.chain_id = snapshot.chain_id
 				AND observed_block.hash = snapshot.block_hash AND observed_block.canonical
 			JOIN networks observed_network ON observed_network.chain_id = snapshot.chain_id
-			WHERE snapshot.canonical AND snapshot.block_number <= observed_network.indexed_block AND (
+			WHERE snapshot.canonical AND snapshot.block_number <= ${snapshotParameter ?? 'observed_network.indexed_block'} AND (
 				snapshot.asset_kind = 'native' OR EXISTS (
-					SELECT 1 FROM contracts asset
+					SELECT 1 FROM ${contractTable} asset
 					WHERE asset.chain_id = snapshot.chain_id AND asset.address = snapshot.asset_address AND asset.canonical
 						AND asset.kind IN ('reputationToken', 'weth')
 				)
@@ -51,20 +70,21 @@ export const richListRows = async (sql: SQL, query: { readonly chainId?: number;
 			SELECT chain_id,
 				count(*) FILTER (WHERE kind = 'reputationToken') AS rep_token_count,
 				count(*) FILTER (WHERE kind = 'weth') AS weth_token_count
-			FROM contracts WHERE canonical GROUP BY chain_id
+			FROM ${contractTable} WHERE canonical GROUP BY chain_id
 		), latest_token_metadata AS (
+			-- Superseded metadata clears its row flag; the block determines historical canonicality.
 			SELECT DISTINCT ON (metadata.chain_id, metadata.address)
 				metadata.chain_id, metadata.address, metadata.name, metadata.symbol, metadata.decimals
 			FROM token_metadata metadata
 			JOIN blocks observed_block ON observed_block.chain_id = metadata.chain_id
 				AND observed_block.hash = metadata.block_hash AND observed_block.canonical
 			JOIN networks observed_network ON observed_network.chain_id = metadata.chain_id
-			WHERE metadata.canonical AND metadata.read_block <= observed_network.indexed_block
+			WHERE ${snapshotParameter === undefined ? 'metadata.canonical' : 'true'} ${throughSnapshot('observed_block.number')} AND metadata.read_block <= ${snapshotParameter ?? 'observed_network.indexed_block'}
 			ORDER BY metadata.chain_id, metadata.address, metadata.read_block DESC
 		), latest_vaults AS (
 			SELECT DISTINCT ON (chain_id, pool_address, vault_address) chain_id, pool_address, vault_address,
 				rep_backing_units, capacity_ownership_atto_rep, claimable_fees_atto_eth, block_number
-			FROM vault_snapshots WHERE canonical
+			FROM vault_snapshots WHERE canonical ${throughSnapshot('block_number')}
 			ORDER BY chain_id, pool_address, vault_address, block_number DESC, log_index DESC
 		), vault_summary AS (
 			SELECT chain_id, vault_address AS address, count(*) AS vault_count,
@@ -90,7 +110,7 @@ export const richListRows = async (sql: SQL, query: { readonly chainId?: number;
 			LEFT JOIN asset_summary assets USING (chain_id)
 			LEFT JOIN balance_summary balance USING (chain_id, address)
 			LEFT JOIN vault_summary vault USING (chain_id, address)
-			LEFT JOIN contracts c ON c.chain_id = activity.chain_id AND c.address = activity.address AND c.canonical
+			LEFT JOIN ${contractTable} c ON c.chain_id = activity.chain_id AND c.address = activity.address AND c.canonical
 		), page AS (
 			SELECT *, row_number() OVER (ORDER BY ${orderBy}, chain_id, address) AS page_order FROM ranked
 			ORDER BY ${orderBy}, chain_id, address
@@ -104,14 +124,14 @@ export const richListRows = async (sql: SQL, query: { readonly chainId?: number;
 				) ORDER BY association.pool_address)
 				FROM (SELECT DISTINCT pool_activity.pool_address FROM address_activity pool_activity
 					WHERE pool_activity.chain_id = page.chain_id AND pool_activity.address = page.address
-						AND pool_activity.canonical AND pool_activity.pool_address <> '0x0000000000000000000000000000000000000000'
+						AND pool_activity.canonical ${throughSnapshot('pool_activity.block_number')} AND pool_activity.pool_address <> '0x0000000000000000000000000000000000000000'
 					ORDER BY pool_activity.pool_address LIMIT 100) association
-				LEFT JOIN contracts pool_contract ON pool_contract.chain_id = page.chain_id
+				LEFT JOIN ${contractTable} pool_contract ON pool_contract.chain_id = page.chain_id
 					AND pool_contract.address = association.pool_address AND pool_contract.canonical
 				LEFT JOIN LATERAL (SELECT pool.question_id FROM pools pool
-					WHERE pool.chain_id = page.chain_id AND pool.pool_address = association.pool_address AND pool.canonical
+					WHERE pool.chain_id = page.chain_id AND pool.pool_address = association.pool_address AND pool.canonical ${throughSnapshot('pool.block_number')}
 					ORDER BY pool.block_number DESC LIMIT 1) pool ON true
-				LEFT JOIN questions question ON question.chain_id = page.chain_id AND question.question_id = pool.question_id AND question.canonical
+				LEFT JOIN questions question ON question.chain_id = page.chain_id AND question.question_id = pool.question_id AND question.canonical ${throughSnapshot('question.block_number')}
 			), '[]'::jsonb) AS pool_associations,
 				COALESCE((SELECT jsonb_agg(jsonb_build_object(
 					'poolAddress', position.pool_address, 'questionTitle', question.title,
@@ -124,9 +144,9 @@ export const richListRows = async (sql: SQL, query: { readonly chainId?: number;
 					WHERE latest_position.chain_id = page.chain_id AND latest_position.vault_address = page.address
 					ORDER BY latest_position.pool_address LIMIT 100) position
 				LEFT JOIN LATERAL (SELECT pool.question_id FROM pools pool
-					WHERE pool.chain_id = page.chain_id AND pool.pool_address = position.pool_address AND pool.canonical
+					WHERE pool.chain_id = page.chain_id AND pool.pool_address = position.pool_address AND pool.canonical ${throughSnapshot('pool.block_number')}
 					ORDER BY pool.block_number DESC LIMIT 1) pool ON true
-				LEFT JOIN questions question ON question.chain_id = page.chain_id AND question.question_id = pool.question_id AND question.canonical
+				LEFT JOIN questions question ON question.chain_id = page.chain_id AND question.question_id = pool.question_id AND question.canonical ${throughSnapshot('question.block_number')}
 			), '[]'::jsonb) AS vault_positions,
 				COALESCE((SELECT jsonb_agg(jsonb_build_object(
 					'address', token.asset_address, 'balance', token.balance::text, 'blockNumber', token.block_number::text,
@@ -136,10 +156,10 @@ export const richListRows = async (sql: SQL, query: { readonly chainId?: number;
 				FROM (SELECT * FROM latest_balances rep_token WHERE rep_token.chain_id = page.chain_id
 					AND rep_token.address = page.address AND rep_token.asset_kind = 'rep' ORDER BY rep_token.asset_address LIMIT 100) token
 				LEFT JOIN latest_token_metadata metadata ON metadata.chain_id = token.chain_id AND metadata.address = token.asset_address
-				LEFT JOIN contracts token_contract ON token_contract.chain_id = token.chain_id
+				LEFT JOIN ${contractTable} token_contract ON token_contract.chain_id = token.chain_id
 					AND token_contract.address = token.asset_address AND token_contract.canonical
 				LEFT JOIN LATERAL (SELECT event.universe_id FROM universe_events event
-					WHERE event.chain_id = token.chain_id AND event.reputation_token_address = token.asset_address AND event.canonical
+					WHERE event.chain_id = token.chain_id AND event.reputation_token_address = token.asset_address AND event.canonical ${throughSnapshot('event.block_number')}
 					ORDER BY event.block_number DESC, event.log_index DESC LIMIT 1) universe ON true
 			), '[]'::jsonb) AS rep_balances,
 				COALESCE((SELECT jsonb_agg(jsonb_build_object(
@@ -159,7 +179,7 @@ export const richListRows = async (sql: SQL, query: { readonly chainId?: number;
 					'blockNumber', event.block_number::text, 'provenance', 'historical interaction'
 				) ORDER BY event.block_number DESC, event.log_index DESC)
 				FROM (SELECT * FROM escalation_game_events evidence WHERE evidence.chain_id = page.chain_id
-					AND evidence.canonical AND lower(evidence.event_data->>'depositor') = page.address
+					AND evidence.canonical ${throughSnapshot('evidence.block_number')} AND lower(evidence.event_data->>'depositor') = page.address
 					ORDER BY evidence.block_number DESC, evidence.log_index DESC LIMIT 100) event
 			), '[]'::jsonb) AS escalation_claims,
 				COALESCE((SELECT jsonb_agg(jsonb_build_object(
@@ -167,7 +187,7 @@ export const richListRows = async (sql: SQL, query: { readonly chainId?: number;
 					'blockNumber', event.block_number::text, 'provenance', 'historical interaction'
 				) ORDER BY event.block_number DESC, event.log_index DESC)
 				FROM (SELECT * FROM truth_auction_events evidence WHERE evidence.chain_id = page.chain_id
-					AND evidence.canonical AND lower(evidence.event_data->>'bidder') = page.address
+					AND evidence.canonical ${throughSnapshot('evidence.block_number')} AND lower(evidence.event_data->>'bidder') = page.address
 					ORDER BY evidence.block_number DESC, evidence.log_index DESC LIMIT 100) event
 			), '[]'::jsonb) AS auction_claims
 			FROM page
@@ -208,9 +228,9 @@ export const addressPortfolioRows = async (
 			positions AS (
 				SELECT balance.market_address, balance.balance, transfer_count.transfer_count, market.pool_address, question.title AS question_title
 				FROM balances balance JOIN transfer_counts transfer_count USING (market_address)
-				LEFT JOIN amm_markets market ON market.chain_id = ${chainId} AND market.pair_address = balance.market_address AND market.canonical
-				LEFT JOIN pools pool ON pool.chain_id = market.chain_id AND pool.pool_address = market.pool_address AND pool.canonical
-				LEFT JOIN questions question ON question.chain_id = pool.chain_id AND question.question_id = pool.question_id AND question.canonical
+				LEFT JOIN amm_markets market ON market.chain_id = ${chainId} AND market.pair_address = balance.market_address AND market.canonical AND market.block_number <= ${snapshotBlock}
+				LEFT JOIN pools pool ON pool.chain_id = market.chain_id AND pool.pool_address = market.pool_address AND pool.canonical AND pool.block_number <= ${snapshotBlock}
+				LEFT JOIN questions question ON question.chain_id = pool.chain_id AND question.question_id = pool.question_id AND question.canonical AND question.block_number <= ${snapshotBlock}
 				WHERE balance.balance <> 0
 			), totals AS (SELECT count(*)::integer AS total FROM positions)
 			SELECT page.market_address, page.balance::text, page.transfer_count, page.pool_address, page.question_title, totals.total

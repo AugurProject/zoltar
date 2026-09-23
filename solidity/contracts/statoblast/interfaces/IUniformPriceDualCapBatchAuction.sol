@@ -78,13 +78,14 @@ interface IUniformPriceDualCapBatchAuction is IUniformPriceDualCapBatchAuctionEv
 		view
 		returns (bool hitCap, int256 clearingTickOut, uint256 accumulatedBidAttoEth, uint256 bidAtClearingTickAttoEth);
 
-	function withdrawBids(address withdrawFor, TickIndex[] calldata tickIndices, uint256 proRataTotal, uint256 secondaryProRataTotal)
+	function withdrawBids(address withdrawFor, TickIndex[] calldata tickIndices, uint256 proRataTotal, uint256 secondaryProRataTotal, uint256 repBackingUnitsTotal)
 		external
 		returns (
 			uint256 totalFilledAttoRep,
 			uint256 totalRefundAttoEth,
 			uint256 totalProRataAllocation,
-			uint256 totalSecondaryProRataAllocation
+			uint256 totalSecondaryProRataAllocation,
+			uint256 totalRepBackingUnitsAllocation
 		);
 
 	function refundLosingBids(TickIndex[] calldata tickIndices) external;

@@ -121,7 +121,13 @@ export function LiquidationContextSummary({
 				</div>
 			</div>
 			<MetricField label={statoblastAppCopy.openOraclePrice} valueTagName='span'>
-				<OpenOraclePriceValue currentTimestamp={currentTimestamp} lastPrice={poolOraclePrice} lastSettlementTimestamp={poolOracleSettlementTimestamp} priceValidUntilTimestamp={currentPoolOracleManagerDetails?.priceValidUntilTimestamp} />
+				<OpenOraclePriceValue
+					currentTimestamp={currentTimestamp}
+					lastPrice={poolOraclePrice}
+					lastSettlementTimestamp={poolOracleSettlementTimestamp}
+					pendingReportReadyAtTimestamp={currentPoolOracleManagerDetails?.pendingReportReadyAtTimestamp}
+					priceValidUntilTimestamp={currentPoolOracleManagerDetails?.priceValidUntilTimestamp}
+				/>
 			</MetricField>
 			<ReadOnlyDetailAccordion title={liquidationCopy.vaultContextDetails}>
 				<DataGrid>

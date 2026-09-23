@@ -11,7 +11,7 @@
 		<main>
 			<header>
 				<h1>Vault liquidation</h1>
-				<p>Liquidation moves part of an unhealthy vault's allocated debt, REP backing, and capacity ownership to a receiver vault. The receiver receives the funded 5% REP award, subject to caps and rounding. The operator only submits the operation and receives no automatic protocol payment.</p>
+				<p>Liquidation moves part of an unhealthy vault's allocated debt, REP backing, and capacity ownership to a receiver vault. The receiver earns a REP award funded by the target; the operator only submits the operation and receives no automatic protocol payment.</p>
 			</header>
 
 			<section id="position-model">
@@ -30,39 +30,43 @@
 				<h2>Capacity and live health</h2>
 				<p>A vault has a saved target backing factor, initialized by its first deposit and reused by later deposits. This target determines REP-denominated capacity ownership; it is distinct from live vault health. See the <a href="../reference/contracts/securitypool.html">SecurityPool reference</a> for target changes and capacity accounting. The pool totals capacity ownership in constant time. The live REP/ETH oracle price and the pool Statoblast security multiplier convert that total into current ETH minting capacity. A REP price change therefore changes capacity without rewriting vaults, and it never deletes already-open interest.</p>
 				<p>Vault health uses the vault's live REP backing, locally attributed dispute-staked REP, proportional live open interest, capacity ownership, the settled REP/ETH price, and the pool multiplier. The ordinary associated-REP branch counts pool-held and locally staked REP. The free-REP branch counts only pool-held REP because locked claims may lose. Required REP is rounded upward.</p>
-				<p>A delegated approval may require a higher post-liquidation health factor. <code>10,000</code> means exactly the protocol minimum. The signed factor is applied to both backing branches and is checked again against live post-liquidation state at execution; a queue-time preview is never a guarantee.</p>
+				<p>A delegated approval may demand that the receiver be healthier than the protocol minimum after the transfer. That requirement is checked against live post-liquidation state at execution; a queue-time preview is never a guarantee. The <a href="../reference/contracts/liquidationapprovalregistry.html#minimum-post-liquidation-health-factor">LiquidationApprovalRegistry reference</a> defines the field.</p>
 			</section>
 
 			<section id="rule">
 				<h2 id="punitive-liquidation">Funded transfer and bad debt</h2>
-					<p>The requested amount is ETH-denominated debt. Execution limits the transfer to the target's live debt and to the amount whose complete 5% REP award the target can fund. It then moves the corresponding backing and capacity ownership to the receiver. If a request covers the target's full position but some debt cannot be transferred safely, that remainder becomes target-local bad debt.</p>
+				<p>The requested amount is ETH-denominated debt. Execution transfers no more than the target actually owes and no more than the target can fund the receiver's award for, then moves the matching backing and capacity ownership to the receiver. If a request covers the target's full position but some debt cannot be transferred safely, that remainder becomes target-local bad debt.</p>
 				<figure class="diagram" id="fig-liquidation-punitive-flow" aria-labelledby="liquidation-flow-title">
 					<p class="diagram-title" id="liquidation-flow-title">Delegated Liquidation Transfer</p>
-					<div class="plot-chart" data-plot-chart="fig-liquidation-punitive-flow" data-plot-width="900" data-plot-height="230" role="img" aria-label="Floor-rounded capacity ownership and ceiling-rounded REP backing units leave the target vault. The authorized receiver incurs the exact reported debt increase and receives those ownership and backing units. Residual target debt becomes bad debt only on a full-target request."><span class="plot-chart-fallback">Floor-rounded proportional capacity ownership and ceiling-rounded REP backing units leave the target. The authorized receiver incurs the exact reported debt increase and receives the ownership and backing units; target claims, fees, surplus, and unmatched ownership remain. Only a full-target request records residual target debt as bad debt.</span></div>
+					<div class="plot-chart" data-plot-chart="fig-liquidation-punitive-flow" data-plot-width="900" data-plot-height="230" role="img" aria-label="Floor-rounded capacity ownership and ceiling-rounded REP backing units leave the target vault. The authorized receiver incurs the exact reported debt increase and receives those ownership and backing units. Residual target debt becomes bad debt only on a full-target request."><span class="plot-chart-fallback">Capacity ownership and REP backing units leave the target. The authorized receiver incurs the reported debt increase and receives the ownership and backing units; target claims, fees, surplus, and unmatched ownership remain. Only a full-target request records residual target debt as bad debt.</span></div>
 					<p class="diagram-caption"><span class="figure-label">Liquidation accounting</span>The operator submits the transaction, while the authorized receiver accepts the funded liability and receives the award.</p>
 				</figure>
-					<p>The receiver must remain healthy after accepting the position, and any remaining target position must still meet the protocol's minimum sizes. These checks prevent liquidation from creating unusable dust positions. The exact caps, rounding, and accounting fields are listed in the <a href="../reference/contracts/securitypool.html">SecurityPool contract reference</a>.</p>
+				<p>The receiver must remain healthy after accepting the position, and any remaining target position must still meet the protocol's minimum sizes. These checks prevent liquidation from creating unusable dust positions. The award percentage, rounding directions, and caps are in the <a href="../reference/contracts/securitypool.html#liquidation-transfer-rounding">SecurityPool contract reference</a>.</p>
 			</section>
 
 			<section id="receiver-approvals">
 				<h2>Bounded receiver approval</h2>
-					<p>A receiver can approve an operator directly or by a bounded signature. The approval is specific to a pool, limits how much debt the receiver will accept, sets a validity window and minimum resulting health, and can be revoked for future liquidations. Existing staged work retains its reservation so cleanup remains deterministic. See the <a href="../reference/contracts/liquidationapprovalregistry.html">LiquidationApprovalRegistry reference</a> for fields, nonce rules, and wallet-signature handling.</p>
+				<p>A receiver can approve an operator directly or by a bounded signature. The approval is specific to a pool, limits how much debt the receiver will accept, sets a validity window and minimum resulting health, and can be revoked for future liquidations. Existing staged work retains its reservation so cleanup remains deterministic. See the <a href="../reference/contracts/liquidationapprovalregistry.html">LiquidationApprovalRegistry reference</a> for fields, nonce rules, and wallet-signature handling.</p>
 			</section>
 
 			<section id="queue-semantics">
 				<h2>Reservation and queued execution</h2>
-					<p>The price coordinator reserves the receiver's approval quota while it obtains a fresh REP/ETH price. Execution then rechecks the live target and receiver rather than trusting the earlier preview. Success consumes only the debt actually moved and releases unused quota; expiration or terminal failure releases the reservation so the receiver is not blocked permanently. The <a href="../reference/operator-guardrails.html#repeth-oracle-operations">REP/ETH oracle operations reference</a> covers staging, recovery, and failure handling.</p>
+				<p>The price coordinator reserves the receiver's approval quota while it obtains a fresh REP/ETH price. Execution then rechecks the live target and receiver rather than trusting the earlier preview. Success consumes only the debt actually moved and releases unused quota; expiration or terminal failure releases the reservation so the receiver is not blocked permanently. The <a href="../reference/operator-guardrails.html#repeth-oracle-operations">REP/ETH oracle operations reference</a> covers staging, recovery, and failure handling.</p>
 			</section>
 
-				<section id="fork-behavior">
+			<section id="fork-behavior">
 				<h2>Fork isolation</h2>
-					<p>Approvals and reservations belong to one pool and its coordinator. They are not copied into child pools or universes. A receiver approving liabilities in one universe has not approved them in a child. Pending parent operations remain permissionlessly cleanable after the parent becomes unable to execute, releasing their reservations.</p>
-				</section>
+				<p>Approvals and reservations belong to one pool and its coordinator and are not copied into child pools or universes; see <a href="./zoltar.html#non-guarantees">what Zoltar does not guarantee</a>. A receiver approving liabilities in one universe has not approved them in a child. Pending parent operations remain permissionlessly cleanable after the parent becomes unable to execute, releasing their reservations.</p>
+			</section>
 
-				<section id="related-references">
-					<h2>Related references</h2>
-					<ul><li><a href="../reference/contracts/securitypool.html">SecurityPool functions and accounting</a></li><li><a href="../reference/contracts/liquidationapprovalregistry.html">Liquidation approval fields and signatures</a></li><li><a href="../reference/operator-guardrails.html#repeth-oracle-operations">Price-coordinator operations and recovery</a></li></ul>
-				</section>
+			<section id="related-references">
+				<h2>Related references</h2>
+				<ul>
+					<li><a href="../reference/contracts/securitypool.html">SecurityPool functions and accounting</a></li>
+					<li><a href="../reference/contracts/liquidationapprovalregistry.html">Liquidation approval fields and signatures</a></li>
+					<li><a href="../reference/operator-guardrails.html#repeth-oracle-operations">Price-coordinator operations and recovery</a></li>
+				</ul>
+			</section>
 		</main>
 		<script src="../assets/js/chartRuntime.js"></script>
 		<script src="../assets/js/responsiveDocs.js"></script>

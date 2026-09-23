@@ -13,7 +13,7 @@ import {
 	backingUnitsToAttoRep,
 	withdrawFromEscalationGame,
 } from '../../testSupport/simulator/utils/contracts/securityPool'
-import { forkUniverse, getRepTokenAddress, getTotalTheoreticalSupply, getZoltarAddress, getZoltarForkThreshold } from '../../testSupport/simulator/utils/contracts/zoltar'
+import { splitMigrationRep, forkUniverse, getRepTokenAddress, getTotalTheoreticalSupply, getZoltarAddress, getZoltarForkThreshold } from '../../testSupport/simulator/utils/contracts/zoltar'
 import { getEscalationGameDeposits, getEscalationGameOutcomeState, getEscalationGameTotalCost, getQuestionResolution } from '../../testSupport/simulator/utils/contracts/escalationGame'
 import {
 	createChildUniverse,
@@ -680,6 +680,85 @@ describe('Statoblast: escalation migration', () => {
 		})
 		await client.waitForTransactionReceipt({ hash })
 		strictEqualTypeSafe(theoreticalSupplyBeforeClaim - (await getTotalTheoreticalSupply(client, childRepToken)), (reportBond * 2n) / 5n, 'the unrelated continuation should burn the winner haircut at settlement')
+	})
+
+	async function resumeUnrelatedContinuation(inheritedNo: bigint) {
+		await mockWindow.setTime((await getQuestionEndDate(client, questionId)) + 1n)
+		await refreshCurrentPrice()
+		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, 100n * reportBond)
+		if (inheritedNo > 0n) await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.No, inheritedNo)
+		const forkQuestion = { ...questionData, title: 'mixed settlement and response period regression', endTime: (await mockWindow.getTime()) + DAY }
+		await createQuestion(client, forkQuestion, outcomes)
+		await mockWindow.setTime(forkQuestion.endTime + 1n)
+		await approveToken(client, addressString(GENESIS_REPUTATION_TOKEN), getZoltarAddress())
+		await forkUniverse(client, genesisUniverse, getQuestionId(forkQuestion, outcomes))
+		await initiateSecurityPoolFork(client, securityPoolAddresses.securityPool)
+		await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
+		await migrateVaultWithUnresolvedEscalation(client, securityPoolAddresses.securityPool, client.account.address, QuestionOutcome.Yes)
+		const universe = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
+		const pool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, universe, questionId, statoblastSecurityMultiplierBps)
+		const game = await getSecurityPoolsEscalationGame(client, pool.securityPool)
+		await splitMigrationRep(client, genesisUniverse, repDeposit, [QuestionOutcome.Yes])
+		await mockWindow.advanceTime(8n * 7n * DAY + DAY)
+		await startTruthAuction(client, pool.securityPool)
+		if ((await getSystemState(client, pool.securityPool)) === SystemState.ForkTruthAuction) await finalizeTruthAuction(client, pool.securityPool)
+		await completeForkContinuation(pool.securityPool)
+		await setVaultCapacityFixture(client, mockWindow, pool.priceOracleManagerAndOperatorQueuer, client.account.address, 0n)
+		strictEqualTypeSafe(await client.readContract({ abi: statoblast_EscalationGame_EscalationGame.abi, address: game, functionName: 'truthAuctionRepBeforeAttoRep' }), 0n, 'fixture must not apply an auction haircut')
+		return { pool, game, token: getRepTokenAddress(universe) }
+	}
+
+	// I = inherited winner, L = local loser, W = local winner.
+	for (const order of ['ILW', 'IWL', 'LIW', 'LWI', 'WIL', 'WLI']) {
+		test(`mixed inherited/local settlement completes in order ${order}`, async () => {
+			const { pool, game, token } = await resumeUnrelatedContinuation(20n * reportBond)
+			await depositToEscalationGame(client, pool.securityPool, QuestionOutcome.No, 300n * reportBond)
+			await depositToEscalationGame(client, pool.securityPool, QuestionOutcome.Yes, 300n * reportBond)
+			const deadline = await client.readContract({ abi: statoblast_EscalationGame_EscalationGame.abi, address: game, functionName: 'getEscalationGameEndDate' })
+			await mockWindow.setTime(deadline + DAY)
+			const proof = await createCarryProof(client, securityPoolAddresses.escalationGame, {
+				expectedOutcome: QuestionOutcome.Yes,
+				parentDepositIndex: 0n,
+				leafIndex: 0n,
+				merkleMountainRangePeakIndex: 0n,
+				merkleMountainRangeSiblings: [],
+				nullifierSiblings: new SparseNullifierTree().getProof(0n),
+			})
+			const supplyBefore = await getTotalTheoreticalSupply(client, token)
+			const walletBefore = await getERC20Balance(client, token, client.account.address)
+			let expectedEscrow = 720n * reportBond
+			for (const claim of order) {
+				const walletBeforeClaim = await getERC20Balance(client, token, client.account.address)
+				let expectedPayout = 0n
+				if (claim === 'I') expectedPayout = 148n * reportBond
+				if (claim === 'W') expectedPayout = 444n * reportBond
+				if (claim === 'I') {
+					await writeContractAndWait(client, () => client.writeContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: pool.securityPool, functionName: 'withdrawForkedEscalationDeposits', args: [QuestionOutcome.Yes, [proof]] }))
+				} else {
+					await withdrawFromEscalationGame(client, pool.securityPool, claim === 'L' ? QuestionOutcome.No : QuestionOutcome.Yes, [0n])
+				}
+				expectedEscrow -= (claim === 'I' ? 120n : 300n) * reportBond
+				strictEqualTypeSafe(await client.readContract({ abi: statoblast_EscalationGame_EscalationGame.abi, address: game, functionName: 'totalDisputeStakedAttoRep' }), expectedEscrow, 'each claim releases only its logical escrow component')
+				strictEqualTypeSafe((await getERC20Balance(client, token, client.account.address)) - walletBeforeClaim, expectedPayout, 'each payout retains its original economics')
+			}
+			strictEqualTypeSafe((await getERC20Balance(client, token, client.account.address)) - walletBefore, 592n * reportBond, 'inherited and local winners retain their payouts')
+			strictEqualTypeSafe(supplyBefore - (await getTotalTheoreticalSupply(client, token)), 128n * reportBond, 'all winner haircuts are burned exactly once')
+			strictEqualTypeSafe(await getERC20Balance(client, token, game), 0n, 'all funded REP is spent')
+			strictEqualTypeSafe(await client.readContract({ abi: statoblast_EscalationGame_EscalationGame.abi, address: game, functionName: 'totalDisputeStakedAttoRep' }), 0n, 'all logical escrow is released')
+			strictEqualTypeSafe((await getSecurityVault(client, pool.securityPool, client.account.address)).disputeStakedAttoRep, 0n, 'local vault principal is released')
+		})
+	}
+
+	test('unrelated continuation admits an opposing challenge despite a provisional leader', async () => {
+		const { pool, game } = await resumeUnrelatedContinuation(0n)
+		const resumedAt = await client.readContract({ abi: statoblast_EscalationGame_EscalationGame.abi, address: game, functionName: 'forkResumedAt' })
+		strictEqualTypeSafe(await client.readContract({ abi: statoblast_EscalationGame_EscalationGame.abi, address: game, functionName: 'forkElapsedAtStart' }), 0n, 'fork occurs before parent activation')
+		await mockWindow.advanceTime(1n)
+		assert.ok((await mockWindow.getTime()) < resumedAt + 3n * DAY, 'fixture remains within the response period')
+		strictEqualTypeSafe(await getQuestionResolution(client, game), QuestionOutcome.Yes, 'attrition already exposes a provisional leader')
+		strictEqualTypeSafe(await client.readContract({ abi: statoblast_EscalationGame_EscalationGame.abi, address: game, functionName: 'getFinalQuestionResolution' }), BigInt(QuestionOutcome.None), 'response period is not final')
+		await depositToEscalationGame(client, pool.securityPool, QuestionOutcome.No, 300n * reportBond)
+		strictEqualTypeSafe((await getEscalationGameOutcomeState(client, game, QuestionOutcome.No)).balanceAttoRep, 300n * reportBond, 'preview and execution both admit the challenge')
 	})
 
 	test('each lazily created continuation starts from the complete parent escalation totals', async () => {
