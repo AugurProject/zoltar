@@ -2,6 +2,7 @@ import { createDashboardHealthView } from './dashboard-health-view.js'
 import { createDashboardCatalogView } from './dashboard-catalog-view.js'
 import { createDashboardTopologyView } from './dashboard-topology-view.js'
 import { createDashboardRecoveryView } from './dashboard-recovery-view.js'
+import { registerWorkflowReconciliation } from './workflow-reconciliation.js'
 import { createDashboardSettingsView } from './dashboard-settings-view.js'
 import { createWorkflowHistory } from './workflow-history.js'
 import { requestWithTimeout } from '@zoltar/bot-shared/dashboard/polling'
@@ -620,6 +621,7 @@ const workflowForm = element('workflow-form', HTMLFormElement)
 const workflowFields = element('workflow-fields', HTMLFieldSetElement)
 const workflowReasonInput = element('workflow-reason', HTMLTextAreaElement)
 const workflowConfirmationInput = element('workflow-confirmation', HTMLInputElement)
+const workflowSubmitButton = element('workflow-submit', HTMLButtonElement)
 const workflowStatus = element('workflow-status', HTMLSpanElement)
 const workflowRetryButton = element('workflow-retry', HTMLButtonElement)
 const obligations = element('obligations', HTMLDivElement)
@@ -997,6 +999,7 @@ function renderSnapshot(value: Snapshot) {
 	renderOperatorAlerts(operatorAlerts, value.alerts)
 	renderCountdown()
 	applyMutationControlLatches()
+	syncWorkflowSubmit()
 }
 
 function markRecoveryContextRefreshesLoading() {
@@ -1387,46 +1390,18 @@ candidateForm.addEventListener('submit', event => {
 	})()
 })
 
-workflowForm.addEventListener('submit', event => {
-	event.preventDefault()
-	void (async () => {
-		const workflow = snapshot?.currentWorkflow
-		if (snapshot?.paused !== true) {
-			workflowStatus.textContent = 'Pause the bot before workflow reconciliation.'
-			return
-		}
-		if (workflow?.status !== 'waiting-continuation' || workflow.id === undefined || workflow.updatedAt === undefined) {
-			await requestRecoveryContextRefresh(workflowRecoveryContext)
-			return
-		}
-		const reason = workflowReasonInput.value.trim()
-		if (reason.length < 12) {
-			workflowStatus.textContent = 'Enter a detailed audit reason (at least 12 characters).'
-			return
-		}
-		workflowFields.disabled = true
-		workflowStatus.textContent = 'Saving reconciliation…'
-		let mutationReconciled = true
-		try {
-			await put('/api/reconciliation/workflow', {
-				action: 'abandon',
-				confirmation: workflowConfirmationInput.value,
-				reason,
-				updatedAt: workflow.updatedAt,
-				workflowId: workflow.id,
-			})
-			workflowReasonInput.value = ''
-			workflowConfirmationInput.value = ''
-			workflowStatus.textContent = 'Partial workflow abandonment saved.'
-			await refresh()
-		} catch (error) {
-			const reconciliation = await reconcileUnknownMutation(error, workflowStatus, 'state')
-			mutationReconciled = !reconciliation.handled || reconciliation.reconciled
-			if (!reconciliation.handled) workflowStatus.textContent = error instanceof Error ? error.message : 'Partial workflow reconciliation failed.'
-		} finally {
-			workflowFields.disabled = !mutationReconciled || snapshot?.paused !== true || snapshot.currentWorkflow?.status !== 'waiting-continuation'
-		}
-	})()
+const syncWorkflowSubmit = registerWorkflowReconciliation({
+	confirmationInput: workflowConfirmationInput,
+	fields: workflowFields,
+	form: workflowForm,
+	getSnapshot: () => snapshot,
+	put,
+	reasonInput: workflowReasonInput,
+	reconcileUnknownMutation: (error, status) => reconcileUnknownMutation(error, status, 'state'),
+	refresh,
+	requestContextRefresh: () => requestRecoveryContextRefresh(workflowRecoveryContext),
+	status: workflowStatus,
+	submitButton: workflowSubmitButton,
 })
 
 function renderObligationConfirmationHelp() {

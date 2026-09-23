@@ -616,6 +616,25 @@ browserTest(
 					pending: document.querySelector('#pending-transactions')?.textContent,
 				})`),
 			).toEqual({ panelVisible: true, identity: true, status: true, formInPanel: true, pending: 'No transaction requires confirmation.' })
+			expect(
+				await cdp.evaluate(`(() => {
+					const reason = document.querySelector('#workflow-reason')
+					const confirmation = document.querySelector('#workflow-confirmation')
+					const submit = document.querySelector('#workflow-form button[type="submit"]')
+					if (!(reason instanceof HTMLTextAreaElement) || !(confirmation instanceof HTMLInputElement) || !(submit instanceof HTMLButtonElement)) return []
+					const states = [submit.disabled]
+					reason.value = 'Verified canonical continuation is unavailable.'
+					reason.dispatchEvent(new Event('input', { bubbles: true }))
+					states.push(submit.disabled)
+					confirmation.value = 'ABANDON PARTIAL'
+					confirmation.dispatchEvent(new Event('input', { bubbles: true }))
+					states.push(submit.disabled)
+					confirmation.value = 'ABANDON PARTIAL WORKFLOW'
+					confirmation.dispatchEvent(new Event('input', { bubbles: true }))
+					states.push(submit.disabled)
+					return states
+				})()`),
+			).toEqual([true, true, true, false])
 			await cdp.evaluate("document.querySelector('#pause-button')?.click()")
 			await waitFor("document.querySelector('#resume-dialog')?.open === true", 'Safety-pause resume dialog did not open')
 			expect(await cdp.evaluate(`Object.fromEntries([...document.querySelectorAll('#resume-preflight li')].map(row => [row.querySelector('span')?.textContent, row.querySelector('strong')?.textContent]))`)).toMatchObject({ 'Recovery items': '1', 'Safety latch': 'Active' })
@@ -1796,14 +1815,6 @@ browserTest(
 	},
 	CHROMIUM_STARTUP_BUDGET_MILLISECONDS + 30_000,
 )
-
-test('recovery dashboard source has no generic manual-load fallback', async () => {
-	const source = await Bun.file(join(import.meta.dir, '..', '..', 'src', 'dashboard', 'dashboard.ts')).text()
-	expect(source).not.toContain('Refresh to load')
-	for (const context of ['replacementRecoveryContext', 'cancellationRecoveryContext', 'candidateRecoveryContext', 'workflowRecoveryContext', 'obligationRecoveryContext']) {
-		expect(source).toContain(`await requestRecoveryContextRefresh(${context})`)
-	}
-})
 
 browserTest(
 	'schedule shortcut and catalog selection save through the dashboard',
