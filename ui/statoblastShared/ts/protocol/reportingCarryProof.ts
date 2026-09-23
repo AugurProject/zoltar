@@ -85,7 +85,6 @@ export function buildCarryMerkleMountainRangeProof(leafHashes: readonly Hex[], t
 	if (targetPeakHeight === undefined || targetPeakLeaves === undefined || targetPeakOffset === undefined) throw new Error('Target carry leaf is not inside the Merkle Mountain Range')
 
 	let relativeLeafIndex = targetLeafIndex - targetPeakOffset
-	const peakRelativeLeafIndex = relativeLeafIndex
 	let levelHashes = [...targetPeakLeaves]
 	const merkleMountainRangeSiblings: Hex[] = []
 	while (levelHashes.length > 1) {
@@ -116,7 +115,8 @@ export function buildCarryMerkleMountainRangeProof(leafHashes: readonly Hex[], t
 			return peakRoot
 		}),
 	)
-	return { merkleMountainRangePeakIndex: BigInt(targetPeakHeight), merkleMountainRangeSiblings, peakRelativeLeafIndex, root }
+	// The verifier takes the global leaf position and derives the in-peak offset itself.
+	return { leafIndex: BigInt(targetLeafIndex), merkleMountainRangePeakIndex: BigInt(targetPeakHeight), merkleMountainRangeSiblings, root }
 }
 
 function buildZeroHashes() {

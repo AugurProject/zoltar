@@ -118,7 +118,7 @@ contract TwoWayConstantProductRouter is IERC1155Receiver {
 		result = _initializeWithEth(pair, conditionalYesBpsValue, minLiquidity, recipient);
 	}
 
-	function addLiquidityWithEth(ITwoWayConstantProductPair pair, uint256 minLiquidity, address recipient, uint256 deadline) external payable nonReentrant beforeDeadline(deadline) returns (LiquidityResult memory result) {
+	function addLiquidityWithEth(ITwoWayConstantProductPair pair, uint256 maxYesUsed, uint256 maxNoUsed, uint256 minLiquidity, address recipient, uint256 deadline) external payable nonReentrant beforeDeadline(deadline) returns (LiquidityResult memory result) {
 		_validatePair(pair);
 		require(msg.value > 0, 'ETH input is zero');
 		require(recipient != address(0) && recipient != address(this), 'Invalid recipient');
@@ -129,6 +129,9 @@ contract TwoWayConstantProductRouter is IERC1155Receiver {
 		require(mintedInvalid > 0 && mintedInvalid == mintedYes && mintedYes == mintedNo, 'Unequal complete set');
 		_approvePair(pair);
 		(uint256 yesUsed, uint256 noUsed, uint256 liquidity) = pair.addLiquidity(mintedYes, mintedNo, minLiquidity, recipient);
+		// Complete sets supply equal YES and NO, so the reserve ratio alone sets the deposit mix. A swap toward even
+		// odds raises the minority-side deposit and the minted LP together, which minLiquidity cannot detect.
+		require(yesUsed <= maxYesUsed && noUsed <= maxNoUsed, 'Liquidity price slippage');
 		uint256 yesReturned = mintedYes - yesUsed;
 		uint256 noReturned = mintedNo - noUsed;
 		_transferShares(pool, recipient, mintedInvalid, yesReturned, noReturned);

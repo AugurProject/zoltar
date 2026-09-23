@@ -1125,7 +1125,7 @@ describe('Escalation Game Test Suite', () => {
 		await assert.rejects(client.readContract({ abi: verifierAbi, address: proofVerifierAddress, functionName: 'computeAcceptedDepositAmount', args: [1n, 0n, 0n, 10n, 1n, 10n, [1n, 0n, 0n]] }), /Below start bond/)
 		await assert.rejects(client.readContract({ abi: verifierAbi, address: proofVerifierAddress, functionName: 'getCurrentCarryPeakForLeaf', args: [0n, 0n] }), /Carry peak absent/)
 		await assert.rejects(client.readContract({ abi: verifierAbi, address: proofVerifierAddress, functionName: 'computeMerkleMountainRangeRootFromProof', args: [zeroHash(), 1n, 0n, 64n, []] }), /Bad carry peak/)
-		await assert.rejects(client.readContract({ abi: verifierAbi, address: proofVerifierAddress, functionName: 'computeMerkleMountainRangeRootFromProof', args: [zeroHash(), 1n, 0n, 1n, []] }), /Carry peak absent/)
+		await assert.rejects(client.readContract({ abi: verifierAbi, address: proofVerifierAddress, functionName: 'computeMerkleMountainRangeRootFromProof', args: [zeroHash(), 3n, 2n, 1n, []] }), /Bad carry peak/)
 		await assert.rejects(client.readContract({ abi: verifierAbi, address: proofVerifierAddress, functionName: 'computeMerkleMountainRangeRootFromProof', args: [zeroHash(), 2n, 2n, 1n, []] }), /Bad carry leaf/)
 		await assert.rejects(client.readContract({ abi: verifierAbi, address: proofVerifierAddress, functionName: 'computeMerkleMountainRangeRootFromProof', args: [zeroHash(), 2n, 0n, 1n, []] }), /Bad MMR proof length/)
 	})

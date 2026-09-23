@@ -138,6 +138,10 @@ contract EscalationGameProofVerifier {
 	}
 
 	function getCurrentCarryPeakForLeaf(uint256 leafCount, uint256 leafIndex) external pure returns (uint256 peakHeight, uint256 peakStartIndex) {
+		return _getCarryPeakForLeaf(leafCount, leafIndex);
+	}
+
+	function _getCarryPeakForLeaf(uint256 leafCount, uint256 leafIndex) private pure returns (uint256 peakHeight, uint256 peakStartIndex) {
 		for (uint256 reverseHeight = MERKLE_MOUNTAIN_RANGE_MAX_PEAKS; reverseHeight > 0; ) {
 			unchecked {
 				--reverseHeight;
@@ -173,10 +177,14 @@ contract EscalationGameProofVerifier {
 		return MerkleMountainRange.bagPeaks(peaks, peakCount);
 	}
 
+	// leafIndex is the global MMR position. Claim accounting keys consumed principal
+	// and inherited-versus-local provenance by it, so the in-peak path is derived
+	// from that position rather than accepted as a separate caller-chosen offset.
 	function computeMerkleMountainRangeRootFromProof(bytes32 leafHash, uint256 leafCount, uint256 leafIndex, uint256 peakHeight, bytes32[] calldata siblings) external pure returns (bytes32) {
-		require(peakHeight < MERKLE_MOUNTAIN_RANGE_MAX_PEAKS, 'Bad carry peak');
-		require(((leafCount >> peakHeight) & 1) == 1, 'Carry peak absent');
-		require(leafIndex < (uint256(1) << peakHeight), 'Bad carry leaf');
+		require(leafIndex < leafCount, 'Bad carry leaf');
+		(uint256 leafPeakHeight, uint256 peakStartIndex) = _getCarryPeakForLeaf(leafCount, leafIndex);
+		require(peakHeight == leafPeakHeight, 'Bad carry peak');
+		uint256 peakLeafOffset = leafIndex - peakStartIndex;
 
 		uint256 peakCount = 0;
 		for (uint256 index = 0; index < MERKLE_MOUNTAIN_RANGE_MAX_PEAKS; index++) {
@@ -189,7 +197,7 @@ contract EscalationGameProofVerifier {
 		bytes32 peakRoot = leafHash;
 		for (uint256 level = 0; level < peakHeight; level++) {
 			bytes32 siblingHash = siblings[level];
-			if (((leafIndex >> level) & 1) == 0) {
+			if (((peakLeafOffset >> level) & 1) == 0) {
 				peakRoot = MerkleMountainRange.hashParent(peakRoot, siblingHash);
 			} else {
 				peakRoot = MerkleMountainRange.hashParent(siblingHash, peakRoot);

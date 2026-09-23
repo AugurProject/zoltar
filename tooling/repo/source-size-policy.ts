@@ -75,6 +75,6 @@ export const sourceSizeAllowances = new Map<string, SourceSizeAllowance>([
 	...allowances('SecurityPool delegate extraction is ongoing and bytecode-sensitive.', [
 		['solidity/contracts/statoblast/SecurityPool.sol', 757],
 		['solidity/contracts/statoblast/SecurityPoolForker.sol', 677],
-		['solidity/contracts/statoblast/OpenOraclePriceCoordinator.sol', 647],
+		['solidity/contracts/statoblast/OpenOraclePriceCoordinator.sol', 645],
 	]),
 ])

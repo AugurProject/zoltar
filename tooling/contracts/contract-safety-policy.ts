@@ -75,8 +75,8 @@ export const contractSafetyPolicy = {
 				sourcePath: 'contracts/statoblast/OpenOraclePriceCoordinator.sol',
 				contractName: 'OpenOraclePriceCoordinator',
 			},
-			24_050,
-			'The reviewed coordinator takes an explicit request bounty and derives the settlement base-fee cap from it so fee-free simulations match mined gas and ETH movement; no further runtime growth is permitted.',
+			24_116,
+			'The reviewed coordinator takes an explicit request bounty and derives the settlement base-fee cap from it so fee-free simulations match mined gas and ETH movement. Rejecting settlements whose final report is already stale adds 66 runtime bytes; no further runtime growth is permitted.',
 		),
 		runtimeBudget(
 			{
@@ -101,7 +101,7 @@ export const contractSafetyPolicy = {
 				sourcePath: 'contracts/statoblast/factories/EscalationGameFactory.sol',
 				contractName: 'EscalationGameFactory',
 			},
-			47_644,
+			47_568,
 			'The factory embeds exact allocation, fork-aware finality, threshold-tie reconciliation, and continuation admission with settlement accounting. The latest admission and accounting fixes add 343 initcode bytes; no further growth is permitted.',
 		),
 	] satisfies readonly BytecodeBudget[],

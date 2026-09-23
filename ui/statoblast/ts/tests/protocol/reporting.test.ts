@@ -876,12 +876,12 @@ describe('reporting protocol client', () => {
 		await expect(buildForkCarriedEscalationProofs(client, securityPoolAddress, 'yes', [firstLeaf.parentDepositIndex])).rejects.toThrow('Parent carry leaf 9 is already settled.')
 	})
 
-	test('buildForkCarriedEscalationProofs encodes peak-relative indexes for three- and six-leaf tail peaks', async () => {
+	test('buildForkCarriedEscalationProofs encodes global leaf indexes with the containing peak height for three- and six-leaf tail peaks', async () => {
 		const parentEscalationGameAddress = getAddress('0x00000000000000000000000000000000000000f1')
 		const depositor = getAddress('0x00000000000000000000000000000000000000f2')
-		for (const { leafCount, targetGlobalIndex, targetPeakIndex } of [
-			{ leafCount: 3, targetGlobalIndex: 2, targetPeakIndex: 0n },
-			{ leafCount: 6, targetGlobalIndex: 5, targetPeakIndex: 1n },
+		for (const { leafCount, targetGlobalIndex, targetPeakHeight } of [
+			{ leafCount: 3, targetGlobalIndex: 2, targetPeakHeight: 0n },
+			{ leafCount: 6, targetGlobalIndex: 5, targetPeakHeight: 1n },
 		]) {
 			const leaves = Array.from({ length: leafCount }, (_, index) => ({
 				amountAttoRep: BigInt(index + 1),
@@ -924,7 +924,7 @@ describe('reporting protocol client', () => {
 				}),
 			} as unknown as Parameters<typeof buildForkCarriedEscalationProofs>[0]
 
-			await expect(buildForkCarriedEscalationProofs(client, securityPoolAddress, 'yes', [targetLeaf.parentDepositIndex])).resolves.toMatchObject([{ leafIndex: targetPeakIndex, parentDepositIndex: targetLeaf.parentDepositIndex }])
+			await expect(buildForkCarriedEscalationProofs(client, securityPoolAddress, 'yes', [targetLeaf.parentDepositIndex])).resolves.toMatchObject([{ leafIndex: BigInt(targetGlobalIndex), merkleMountainRangePeakIndex: targetPeakHeight, parentDepositIndex: targetLeaf.parentDepositIndex }])
 		}
 	})
 

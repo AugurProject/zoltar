@@ -66,8 +66,8 @@ for (const id of ['trading.pair.create-and-initialize', 'trading.pair.initialize
 	schemas[id] = [
 		{ key: 'target', label: id === 'trading.pair.create-and-initialize' ? 'Security pool' : 'Trading pair', kind: 'choice', choices: id === 'trading.pair.create-and-initialize' ? 'pools' : 'pairs', path: ['args', 0] },
 		amountField(['value'], 'Exact ETH amount'),
-		amountField(['args', adding ? 1 : 2], entering ? 'Minimum long shares' : 'Minimum LP tokens', entering ? 'minimumOutput' : 'minimumLiquidity'),
-		integer('deadline', 'Deadline (Unix seconds)', ['args', adding ? 3 : 4]),
+		amountField(['args', adding ? 3 : 2], entering ? 'Minimum long shares' : 'Minimum LP tokens', entering ? 'minimumOutput' : 'minimumLiquidity'),
+		integer('deadline', 'Deadline (Unix seconds)', ['args', adding ? 5 : 4]),
 		...(entering
 			? [
 					{
