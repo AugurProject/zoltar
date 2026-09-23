@@ -355,7 +355,7 @@ describe('chaos launch doctor', () => {
 			},
 			probe: async () => ({
 				...probeResult,
-				snapshot: { ...probeResult.snapshot, wallet: { ethBalanceAttoEth: '10000000000000000', tokens: [] } },
+				snapshot: { ...probeResult.snapshot, wallet: { ethBalanceAttoEth: (10n ** 16n).toString(), tokens: [] } },
 			}),
 		})
 
