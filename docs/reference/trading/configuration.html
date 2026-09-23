@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<meta name="description" content="Environment variables read by the local Trading deployment script and the manifest it writes." />
+		<title>Trading deployment configuration</title>
+		<link rel="stylesheet" href="../../assets/css/shared-docs.css" />
+		<link rel="stylesheet" href="../../assets/css/docsShell.css" />
+	</head>
+	<body class="doc-openoracle">
+		<main id="main-content">
+			<header>
+				<p class="kicker">Reference</p>
+				<h1>Trading deployment configuration</h1>
+				<p>The local deployment script and the standalone client read the inputs below. No public trading deployment manifest is bundled; the client derives and verifies its contracts at startup.</p>
+			</header>
+			<section id="environment">
+				<h2>Environment variables</h2>
+				<table>
+					<thead>
+						<tr>
+							<th>Name</th>
+							<th>Meaning</th>
+							<th>Default</th>
+						</tr>
+					</thead>
+					<tbody>
+						<tr>
+							<td><code>TRADING_RPC_URL</code></td>
+							<td>JSON-RPC endpoint</td>
+							<td><code>http://127.0.0.1:8545</code></td>
+						</tr>
+						<tr>
+							<td><code>TRADING_DEPLOYER</code></td>
+							<td>Unlocked RPC account</td>
+							<td>First <code>eth_accounts</code> entry</td>
+						</tr>
+						<tr>
+							<td><code>ZOLTAR_DEPLOYMENT_MANIFEST</code></td>
+							<td>Existing matching core manifest</td>
+							<td>Required</td>
+						</tr>
+						<tr>
+							<td><code>TRADING_FEE_BPS</code></td>
+							<td>Immutable AMM fee</td>
+							<td><code>30</code></td>
+						</tr>
+					</tbody>
+				</table>
+				<p>Secrets do not belong in manifests or <code>.env.example</code>.</p>
+			</section>
+			<section id="manifest">
+				<h2>Deployment manifest</h2>
+				<p><code>bun run trading:deploy:local</code> writes <code>solidity/deployments/trading/local.json</code> for scripts and integration environments. The file is git-ignored because local addresses are ephemeral. A generated manifest contains:</p>
+				<ul>
+					<li><code>network</code>: decimal and hexadecimal chain IDs plus the deployment RPC;</li>
+					<li><code>core</code>: verified SecurityPoolFactory and source manifest path;</li>
+					<li><code>trading</code>: factory, router, and immutable <code>feeBps</code>;</li>
+					<li><code>transactions</code>: <code>factory</code> and <code>router</code> objects shaped as <code>{ hash, blockNumber: "&lt;base-10 integer string&gt;" }</code>. <code>blockNumber</code> is a JSON string, not a JavaScript number, so large receipt block numbers remain exact;</li>
+					<li><code>compilerProfiles</code>: exact versions and settings from the main Solidity artifact;</li>
+					<li><code>bytecodeHashes</code>: creation-bytecode commitments;</li>
+					<li><code>deployer</code> and <code>deployedAt</code>.</li>
+				</ul>
+				<p>Pairs never appear as static deployment inputs. Discover them dynamically with <code>getPair(pool)</code>, verify with <code>isPair</code>, or derive the deterministic address with <code>predictPair</code>. Review a manifest before publishing it, and never copy local ephemeral addresses into a public-network file.</p>
+			</section>
+			<section id="client">
+				<h2>What the client uses</h2>
+				<p>The live client discovers pools from the canonical <code>SecurityPoolFactory</code> in bounded pages, isolates individual market-read failures, never hard-codes market addresses, and refreshes market data and wallet balances in the background. The pool details view shows total and fee-eligible capacity ownership in REP; neither is an ETH deposit limit. The ETH minting-capacity ceiling is computed from the current REP price, and available capacity is that ceiling minus checkpointed settlement collateral, floored at zero. Entry, exit, liquidity, settlement, and fork-migration calls are simulated through the actual contracts, and every read in one simulation is pinned to the same canonical block hash. A quote does not expire when a new block arrives: immediately before submission the client simulates the call again at the latest block and submits with the minimum or maximum amounts and the deadline approved in the quote, where the call accepts them. Submission stops if that simulation fails or its result falls outside the approved bounds.</p>
+				<p>The build writes <code>core-deployments.json</code> from the root mainnet and Sepolia deployment manifests and adds each network's default public RPC URL. The live client defaults to the first supported network, computes the trading contracts with the fixed 0.30% trading fee through the core deployment's canonical CREATE2 proxy, and checks each address directly. If either contract is missing, it lets the connected wallet deploy and verify it. <strong>Settings</strong> beside the wallet selects another supported network or accepts an optional HTTPS or loopback HTTP RPC override. The router handles entry and liquidity operations as well as approval-free receive-based share exits and complete-set redemptions; the canonical pair supports ERC-2612 permits and deadline-bound direct liquidity removal.</p>
+			</section>
+		</main>
+		<script src="../../assets/js/responsiveDocs.js"></script>
+		<script src="../../assets/js/docsData.js"></script>
+		<script src="../../assets/js/docsShell.js"></script>
+	</body>
+</html>

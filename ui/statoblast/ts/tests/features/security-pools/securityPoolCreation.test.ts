@@ -84,9 +84,19 @@ describe('security pool creation helper', () => {
 		const questionData = { title: 'Atomic rollback', description: '', startTime: 0n, endTime: (await mockWindow.getTime()) + DAY, numTicks: 0n, displayValueMin: 0n, displayValueMax: 0n, answerUnit: '' }
 		const questionId = getQuestionId(questionData, ['Yes', 'No'])
 		const walletClient = createWalletWriteClient(addressString(TEST_ADDRESSES[0]))
-		await expect(createSecurityPool(walletClient, { initialReportPriorityFeeAttoEthPerGas: 10_000_000_000n, questionId, statoblastSecurityMultiplierBps: 10_000n }, questionData)).rejects.toThrow()
+		await expect(createSecurityPool(walletClient, { initialReportPriorityFeeAttoEthPerGas: 10_000_000_000n, questionId, statoblastSecurityMultiplierBps: 10_000n }, questionData)).rejects.toThrow('Security pool deployment would revert: Multiplier must exceed 10001 BPS')
 		const createdAt = await walletClient.readContract({ address: getInfraContractAddresses().zoltarQuestionData, abi: ZoltarQuestionData_ZoltarQuestionData.abi, functionName: 'questionCreatedTimestamp', args: [questionId] })
 		expect(createdAt).toBe(0n)
+	})
+
+	test('identifies a failing question creation before requesting a wallet transaction', async () => {
+		const questionData = { title: 'Already created question', description: '', startTime: 0n, endTime: (await mockWindow.getTime()) + DAY, numTicks: 0n, displayValueMin: 0n, displayValueMax: 0n, answerUnit: '' }
+		const questionId = getQuestionId(questionData, ['Yes', 'No'])
+		await createQuestion(client, questionData, ['Yes', 'No'])
+		const submittedHashes: string[] = []
+		const walletClient = createWalletWriteClient(addressString(TEST_ADDRESSES[0]), { onTransactionSubmitted: hash => submittedHashes.push(hash) })
+		await expect(createSecurityPool(walletClient, { initialReportPriorityFeeAttoEthPerGas: 10_000_000_000n, questionId, statoblastSecurityMultiplierBps: 20_000n }, questionData)).rejects.toThrow('Question creation would revert: Question already exists and cannot be created twice')
+		expect(submittedHashes).toEqual([])
 	})
 
 	afterEach(() => resetActiveEnvironmentForTesting())

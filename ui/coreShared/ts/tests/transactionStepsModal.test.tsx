@@ -5,7 +5,8 @@ import { act } from 'preact/test-utils'
 import { installDomEnvironment } from './testUtils/domEnvironment.js'
 import { renderIntoDocument } from './testUtils/renderIntoDocument.js'
 import { fireEvent, within } from './testUtils/queries.js'
-import { TransactionStepsContent, TransactionStepsModal } from '../components/TransactionStepsModal.js'
+import { TransactionStepsModal } from '../components/TransactionStepsModal.js'
+import { TransactionStepsContent } from '../components/TransactionStepsContent.js'
 import { createTransactionStepController, transactionSteps } from '../transactions/transactionSteps.js'
 
 test('shows every step, token deposit, expected return and ETH cost before the first confirmation', async () => {
@@ -110,10 +111,10 @@ test('only keeps inline actions visible when asked, leaving modal-embedded steps
 	controller.setPlan([{ title: 'Create security pool', description: undefined, contractAddress: undefined, contractLabel: undefined, spender: undefined, amount: undefined, ethValueAttoEth: 0n }])
 	const review = controller.review()
 	try {
-		const embedded = await renderIntoDocument(<TransactionStepsContent contextKey='embedded' inline />)
+		const embedded = await renderIntoDocument(<TransactionStepsContent contextKey='embedded' />)
 		expect(scrolled).toEqual([])
 		await embedded.cleanup()
-		const kept = await renderIntoDocument(<TransactionStepsContent contextKey='kept' inline keepActionsVisible />)
+		const kept = await renderIntoDocument(<TransactionStepsContent contextKey='kept' keepActionsVisible />)
 		expect(scrolled).toEqual(['transaction-step-actions transaction-approval-editor:{"block":"center"}'])
 		await kept.cleanup()
 	} finally {
@@ -249,6 +250,7 @@ for (const result of ['success', 'reverted'] as const) {
 				const secondReview = controller.review()
 				await act(() => undefined)
 				expect(button('Wrap ETH').hasAttribute('disabled')).toBe(true)
+				expect(button('Wrap ETH').textContent).toBe('Wrap ETH')
 				expect(button('Approve REP').hasAttribute('disabled')).toBe(false)
 				expect(button('Request price').hasAttribute('disabled')).toBe(true)
 				await act(() => fireEvent.click(button('Approve REP')))

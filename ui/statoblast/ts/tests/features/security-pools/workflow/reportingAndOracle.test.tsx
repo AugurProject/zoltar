@@ -665,7 +665,7 @@ describe('SecurityPoolWorkflowSection: reporting and oracle', () => {
 		fireEvent.click(queries.getByRole('button', { name: 'Manual price' }))
 		const confirm = queries.getByRole('button', { name: 'Review funding and steps' })
 		expect(getTransactionButtonState(document.body, 'Review funding and steps').disabled).toBe(true)
-		const input = queries.getByRole('textbox', { name: 'REP per ETH' })
+		const input = queries.getByRole('textbox', { name: 'Open Oracle REP/ETH starting price' })
 		for (const value of ['0', '-1', 'abc', '0.0000000000000000001', (2n ** 256n).toString()]) {
 			fireEvent.input(input, { target: { value } })
 			expect(getTransactionButtonState(document.body, 'Review funding and steps').disabled).toBe(true)

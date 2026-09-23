@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<meta name="description" content="Deploy the deterministic Trading factory and router from the browser on a public network or local Anvil, or from the local deployment script." />
+		<title>Deploy the Trading contracts</title>
+		<link rel="stylesheet" href="../assets/css/shared-docs.css" />
+		<link rel="stylesheet" href="../assets/css/docsShell.css" />
+	</head>
+	<body class="doc-openoracle">
+		<main id="main-content">
+			<header>
+				<p class="kicker">How-to guide</p>
+				<h1>Deploy the Trading contracts</h1>
+				<p>Trading ships as one factory and one router at deterministic addresses derived from the core deployment. This guide deploys them from the browser or from a script.</p>
+			</header>
+			<section id="use-an-installed-public-network-core">
+				<h2>Use an installed public-network core</h2>
+				<p>The root mainnet and Sepolia manifests describe planned deterministic addresses; they do not prove that the contracts are live. Continue only after the selected network has reviewed core code at those addresses. The <a href="../reference/deployment-status.html">deployment status reference</a> explains that distinction.</p>
+				<p>From <code>ui/trading</code>, start the standalone UI:</p>
+				<pre class="code-scroll" tabindex="0"><code>docker network inspect zoltar &gt;/dev/null 2&gt;&amp;1 \
+  || docker network create zoltar
+docker compose up --build --force-recreate</code></pre>
+				<ol>
+					<li>Open <code>http://localhost:4163/#/deploy</code>. The UI selects the canonical deployment and its default public RPC, then checks the RPC chain, canonical proxy, and core factory. To use another supported network or RPC URL, open <strong>Settings</strong> beside the wallet before connecting.</li>
+					<li>Connect a wallet and review the status shown for the Trading factory and Trading router.</li>
+					<li>Submit the factory transaction, then the router transaction. Progress reaches <code>2 / 2</code> once both deterministic contracts and their immutable links have been verified. If you return with the same settings, the flow resumes at the first missing contract.</li>
+				</ol>
+				<p>Browser-led deployment uses a fixed 0.30% trading fee. Deploying a trading pool for a market is not part of this setup: browse SecurityPools afterwards and deploy a pool only for a selected SecurityPool that does not have one. Its deployment prompt states the immutable fee as a percentage before submission.</p>
+				<p>For local source development instead of Docker, run <code>bun run app:serve:trading</code> from the repository root and open the same <code>#/deploy</code> route.</p>
+			</section>
+			<section id="use-local-anvil">
+				<h2>Use local Anvil</h2>
+				<p>Complete the repository root setup, then start Anvil as chain ID 1 so it uses the mainnet deterministic-address profile:</p>
+				<pre class="code-scroll" tabindex="0"><code>bun run anvil -- --chain-id 1 \
+  --block-base-fee-per-gas 0 --gas-price 0 --no-priority-fee</code></pre>
+				<ol>
+					<li>In another terminal, run <code>bun run app:serve:statoblast</code>, open <code>http://localhost:12347/?rpcUrl=http://127.0.0.1:8545#/deploy</code>, connect an Anvil account, and use the Statoblast deployment screen to install the core contracts and security pool factory. Wait until its deployment plan is complete.</li>
+					<li>Start the Trading Docker UI from <code>ui/trading</code> with the Compose command above.</li>
+					<li>Open <code>http://localhost:4163/#/deploy</code> and follow the public-network steps with <strong>Ethereum Mainnet</strong> and <code>http://127.0.0.1:8545</code>. The browser deploys the trading factory and router through the same deterministic proxy.</li>
+				</ol>
+				<p>For script or integration testing, run the local deployment script against the matching root manifest from the repository root:</p>
+				<pre class="code-scroll" tabindex="0"><code>ZOLTAR_DEPLOYMENT_MANIFEST=docs/mainnet-deployment-addresses.json \
+TRADING_RPC_URL=http://127.0.0.1:8545 \
+bun run trading:deploy:local</code></pre>
+				<p>The script verifies code at the configured core <code>SecurityPoolFactory</code>, deploys <code>TwoWayConstantProductFactory(coreFactory, feeBps)</code>, deploys <code>TwoWayConstantProductRouter(factory)</code>, and records chain ID, inputs, outputs, transaction hashes, compiler settings, and bytecode hashes. The <a href="../reference/trading/configuration.html">configuration reference</a> lists its environment variables and the manifest it writes. The fee is immutable and no economically optimal value is claimed.</p>
+			</section>
+		</main>
+		<script src="../assets/js/responsiveDocs.js"></script>
+		<script src="../assets/js/docsData.js"></script>
+		<script src="../assets/js/docsShell.js"></script>
+	</body>
+</html>

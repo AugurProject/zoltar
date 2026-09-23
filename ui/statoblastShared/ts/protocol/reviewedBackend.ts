@@ -13,6 +13,7 @@ export function withTransactionReviews<T extends ChainBackend>(backend: T): T {
 				if (BigInt(await backend.getChainId()) !== BigInt(backend.profile.chain.id)) throw new Error('The network changed. Review the action again.')
 			},
 			callbacks?.reviewSignal,
+			callbacks?.skipAppReview,
 		)
 	return backend
 }

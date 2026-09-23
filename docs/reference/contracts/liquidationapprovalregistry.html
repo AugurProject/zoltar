@@ -90,6 +90,9 @@
 						</tr>
 					</tbody>
 				</table>
+				<h2 id="accounting-examples">Accounting examples</h2>
+				<h3 id="minimum-post-liquidation-health-factor">Minimum post-liquidation health factor</h3>
+				<p><code>minPostLiquidationHealthFactorBps</code> is applied to both vault-health branches at execution. <code>10,000</code> (<code>BPS_DENOMINATOR</code>) means exactly the protocol minimum; a larger value requires the receiver to be over-collateralized by that ratio after accepting the position. The factor is checked against live post-liquidation state, not the queue-time preview.</p>
 			</article>
 		</main>
 		<script src="../../assets/js/responsiveDocs.js"></script>
