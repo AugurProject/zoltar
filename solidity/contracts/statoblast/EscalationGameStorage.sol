@@ -11,6 +11,7 @@ import {
 import { BinaryOutcomes } from './BinaryOutcomes.sol';
 
 abstract contract EscalationGameStorage {
+	uint256 internal constant activationDelay = 3 days;
 	uint256 public activationTime;
 	uint256 public nonDecisionThresholdAttoRep;
 	uint256 public startBondAttoRep;
@@ -23,8 +24,11 @@ abstract contract EscalationGameStorage {
 	uint256 internal nextNodeId = 1;
 	mapping(uint256 => Node) public nodes;
 	mapping(address => EscalationClaimBundle) internal escalationClaimBundles;
+	// Logical escrow: unsettled local/bundle principal plus remaining inherited
+	// backing. This is not the token balance or a budget for winner rewards.
 	uint256 public totalDisputeStakedAttoRep;
 	mapping(address => uint256) internal unresolvedRepByVaultAttoRep;
+	// Original local principal still represented by unconsumed claims.
 	uint256 internal totalLocalUnresolvedAttoRep;
 	mapping(address => uint256[3]) internal localUnresolvedPrincipalByVaultAndOutcome;
 	mapping(address => bool) internal localUnresolvedTotalsExportedByVault;
@@ -32,6 +36,8 @@ abstract contract EscalationGameStorage {
 	bool internal forkCarrySnapshotRequiresForkedEscrow;
 	bool internal winnerHaircutPaidByFork;
 	uint256 internal forkCarryInitialBackingAttoRep;
+	// The inherited component of totalDisputeStakedAttoRep. Inherited expenditure
+	// retires at most this component; local principal is released on settlement.
 	uint256 internal forkCarryDisputeStakedAttoRep;
 	address internal forkCarrySourceGame;
 	address internal forkCarryRootClaimSourceGame;
@@ -40,6 +46,17 @@ abstract contract EscalationGameStorage {
 	uint256 internal forkCarryBackingExportedBeforeResumeAttoRep;
 	uint256 public truthAuctionRepBeforeAttoRep;
 	uint256 public truthAuctionRepRemainingAttoRep;
+
+	function _isDepositResolutionOpen(BinaryOutcomes.BinaryOutcome provisionalResolution) internal view returns (bool) {
+		// A provisional leader cannot close an unresolved unrelated continuation's
+		// guaranteed response period. Equality remains open, matching finality.
+		return
+			provisionalResolution == BinaryOutcomes.BinaryOutcome.None ||
+			(forkContinuation &&
+				fixedQuestionOutcome == BinaryOutcomes.BinaryOutcome.None &&
+				forkResumedAt != 0 &&
+				block.timestamp <= forkResumedAt + activationDelay);
+	}
 
 	function _claimEscrowedRepByVault(address vault) internal view returns (uint256 amountAttoRep) {
 		return _applyTruthAuctionRetention(escalationClaimBundles[vault].disputeStakedRepClaimUnits);

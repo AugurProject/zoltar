@@ -1026,6 +1026,15 @@ describe('Escalation Game Test Suite', () => {
 			})
 
 		const fresh = await deployEscalationGameTestSecurityPool()
+		await assert.rejects(
+			client.readContract({
+				abi: statoblast_EscalationGame_EscalationGame.abi,
+				address: fresh.escalationGameAddress,
+				functionName: 'previewDepositOnOutcome',
+				args: [QuestionOutcome.None, reportBond],
+			}),
+			/Invalid deposit preview/,
+		)
 		await assert.rejects(record(fresh.testSecurityPoolAddress, 0n, 0n), /Deposit zero/)
 		await assert.rejects(record(fresh.testSecurityPoolAddress, reportBond, reportBond + 1n), /Preview mismatch/)
 		await assert.rejects(record(fresh.testSecurityPoolAddress, nonDecisionThresholdAttoRep + 1n, nonDecisionThresholdAttoRep + 1n), /Deposit exceeds room/)
@@ -1063,6 +1072,50 @@ describe('Escalation Game Test Suite', () => {
 		await initializeSnapshotViaTestSecurityPool(maximumHeight.testSecurityPoolAddress, [zeroPeakArray(), zeroPeakArray(), zeroPeakArray()], [0n, (1n << 64n) - 1n, 0n], [0n, 0n, 0n], [zeroHash(), zeroHash(), zeroHash()])
 		await assert.rejects(record(maximumHeight.testSecurityPoolAddress, reportBond, reportBond), /MMR too tall/)
 	})
+
+	for (const elapsed of [1n, FRESH_FORK_RESPONSE_PERIOD - 1n, FRESH_FORK_RESPONSE_PERIOD, FRESH_FORK_RESPONSE_PERIOD + 1n]) {
+		test(`continuation response admission at elapsed ${elapsed} separates provisional and final resolution`, async () => {
+			const parent = await deployEscalationGameTestSecurityPool()
+			await depositOnOutcomeViaProofTestSecurityPool(parent.testSecurityPoolAddress, client.account.address, QuestionOutcome.Yes, 100n * reportBond)
+			const child = await deployEscalationGameWithProofPool()
+			await startEscalationFromFork(child.escalationGameAddress, reportBond, nonDecisionThresholdAttoRep, 0n)
+			await initializeSnapshotViaTestSecurityPool(
+				child.testSecurityPoolAddress,
+				[zeroPeakArray(), await readCarryPeaks(parent.escalationGameAddress, QuestionOutcome.Yes), zeroPeakArray()],
+				[0n, 1n, 0n],
+				[0n, 100n * reportBond, 0n],
+				[zeroHash(), await readNullifierRoot(parent.escalationGameAddress, QuestionOutcome.Yes), zeroHash()],
+			)
+			await fundEscalationGame(child.escalationGameAddress, 300n * reportBond)
+			await resumeEscalationFromFork(child.escalationGameAddress)
+			const resumedAt = await client.readContract({ abi: statoblast_EscalationGame_EscalationGame.abi, address: child.escalationGameAddress, functionName: 'forkResumedAt' })
+			const beforeBoundary = await mockWindow.anvilSnapshot()
+			await mockWindow.setTime(resumedAt + elapsed)
+			assert.strictEqual(await getQuestionResolution(client, child.escalationGameAddress), QuestionOutcome.Yes)
+			const finalResolution = await client.readContract({ abi: statoblast_EscalationGame_EscalationGame.abi, address: child.escalationGameAddress, functionName: 'getFinalQuestionResolution' })
+			const preview = () => client.readContract({ abi: statoblast_EscalationGame_EscalationGame.abi, address: child.escalationGameAddress, functionName: 'previewDepositOnOutcome', args: [QuestionOutcome.No, 300n * reportBond] })
+			// Call recording directly as well: an execution-only guard must not diverge from preview.
+			const record = () => writeContractAndWait(client, () => client.writeContract({ abi: escalationGameProofTestPoolArtifact.abi, address: child.testSecurityPoolAddress, functionName: 'recordDeposit', args: [client.account.address, QuestionOutcome.No, 300n * reportBond, 300n * reportBond] }))
+			const recordAtBoundary = async () => {
+				await mockWindow.anvilRevert(beforeBoundary)
+				if (elapsed > 1n) await mockWindow.setTime(resumedAt + elapsed - 1n)
+				return record()
+			}
+			if (elapsed > FRESH_FORK_RESPONSE_PERIOD) {
+				assert.strictEqual(finalResolution, BigInt(QuestionOutcome.Yes))
+				await assert.rejects(preview(), /Invalid deposit preview/)
+				await assert.rejects(recordAtBoundary(), /Question resolved/)
+				assert.strictEqual(await readCarryTotal(child.escalationGameAddress, QuestionOutcome.No), 0n)
+			} else {
+				assert.strictEqual(finalResolution, BigInt(QuestionOutcome.None))
+				assert.deepStrictEqual(await preview(), [300n * reportBond, 300n * reportBond])
+				await recordAtBoundary()
+				assert.strictEqual((await client.getBlock()).timestamp, resumedAt + elapsed, 'execution must use the exact tested timestamp')
+				assert.strictEqual((await readOutcomeState(child.escalationGameAddress, QuestionOutcome.No)).balanceAttoRep, 300n * reportBond)
+				assert.ok((await readEscalationGameEndDate(child.escalationGameAddress)) > resumedAt + FRESH_FORK_RESPONSE_PERIOD, 'the accepted challenge extends the game through its binding capital')
+			}
+		})
+	}
 
 	test('proof verifier public boundaries expose deterministic error reasons', async () => {
 		const { proofVerifierAddress } = await deployEscalationGameWithProofPool()
@@ -2775,6 +2828,42 @@ describe('Escalation Game Test Suite', () => {
 		)
 		assert.strictEqual(await getERC20Balance(client, getRepTokenAddress(0n), child.escalationGameAddress), 0n, 'terminal losing carry should become sweepable after every logical liability is zero')
 	})
+
+	for (const retentionDivisor of [1n, 2n]) {
+		test(`carried claims reserve unpaid burns against actual tokens with retention 1/${retentionDivisor}`, async () => {
+			const parent = await deployEscalationGameTestSecurityPool()
+			await depositOnOutcomeViaProofTestSecurityPool(parent.testSecurityPoolAddress, client.account.address, QuestionOutcome.Yes, 100n * reportBond)
+			await depositOnOutcomeViaProofTestSecurityPool(parent.testSecurityPoolAddress, client.account.address, QuestionOutcome.No, 20n * reportBond)
+			const child = await deployEscalationGameWithProofPool()
+			await startEscalationFromFork(child.escalationGameAddress, reportBond, nonDecisionThresholdAttoRep, 0n)
+			await initializeSnapshotFromSourceViaTestSecurityPool(
+				child.testSecurityPoolAddress,
+				parent.escalationGameAddress,
+				zeroHash(),
+				[zeroPeakArray(), await readCarryPeaks(parent.escalationGameAddress, QuestionOutcome.Yes), await readCarryPeaks(parent.escalationGameAddress, QuestionOutcome.No)],
+				[0n, 1n, 1n],
+				[0n, 100n * reportBond, 20n * reportBond],
+				[zeroHash(), await readNullifierRoot(parent.escalationGameAddress, QuestionOutcome.Yes), await readNullifierRoot(parent.escalationGameAddress, QuestionOutcome.No)],
+			)
+			if (retentionDivisor === 2n) await applyTruthAuctionHaircutViaTestSecurityPool(child.testSecurityPoolAddress, 60n * reportBond)
+			await resumeEscalationFromFork(child.escalationGameAddress)
+			await depositOnOutcomeViaProofTestSecurityPool(child.testSecurityPoolAddress, client.account.address, QuestionOutcome.No, (300n * reportBond) / retentionDivisor)
+			await depositOnOutcomeViaProofTestSecurityPool(child.testSecurityPoolAddress, client.account.address, QuestionOutcome.Yes, (300n * reportBond) / retentionDivisor)
+			await mockWindow.setTime((await readEscalationGameEndDate(child.escalationGameAddress)) + DAY)
+			await writeContractAndWait(client, () => client.writeContract({ abi: escalationGameProofTestPoolArtifact.abi, address: child.testSecurityPoolAddress, functionName: 'drainAllRep', args: [client.account.address] }))
+			await fundEscalationGame(child.escalationGameAddress, (148n * reportBond) / retentionDivisor)
+			const proof = await createCarryProof(parent.escalationGameAddress, 0n, 0n, 0n, [], new SparseNullifierTree().getProof(0n))
+			const rootBefore = await readNullifierRoot(child.escalationGameAddress, QuestionOutcome.Yes)
+			const walletBefore = await getERC20Balance(client, getRepTokenAddress(0n), client.account.address)
+			await assert.rejects(withdrawDepositViaProofTestSecurityPool(child.testSecurityPoolAddress, QuestionOutcome.Yes, proof), /Escrow low/)
+			assert.strictEqual(await readNullifierRoot(child.escalationGameAddress, QuestionOutcome.Yes), rootBefore, 'failed funding check must not consume the proof')
+			assert.strictEqual(await getERC20Balance(client, getRepTokenAddress(0n), client.account.address), walletBefore, 'failed funding check must not pay the winner')
+			await fundEscalationGame(child.escalationGameAddress, (32n * reportBond) / retentionDivisor)
+			await withdrawDepositViaProofTestSecurityPool(child.testSecurityPoolAddress, QuestionOutcome.Yes, proof)
+			assert.strictEqual(await getERC20Balance(client, getRepTokenAddress(0n), child.escalationGameAddress), 0n, 'payout plus burn consumes the funded tokens')
+			assert.strictEqual(await client.readContract({ abi: statoblast_EscalationGame_EscalationGame.abi, address: child.escalationGameAddress, functionName: 'totalDisputeStakedAttoRep' }), (600n * reportBond) / retentionDivisor, 'token expenditure must preserve local principal accounting')
+		})
+	}
 
 	test('losing carried proofs are unnecessary and cannot drain aggregate backing', async () => {
 		const parent = await deployEscalationGameWithProofPool()

@@ -32,10 +32,10 @@ export { loadErc20Balance } from '@zoltar/ui-zoltar-shared/protocol/deployment.j
 
 export const EXPECTED_SEPOLIA_STATOBLAST_DEPLOYMENT_RUNTIME_CODE_HASHES: Readonly<Partial<Record<DeploymentStepId, Hash>>> = {
 	escalationGameClaimDelegate: '0xed5d44482ceeac7091409ffd63a592fabad32aca961274fc2e077f369864f229',
-	escalationGameFactory: '0x33aae3727b57c74a6c919310ee2a05c52a43e7f03469dfc589cae01bced0c921',
+	escalationGameFactory: '0xf1f7868bf21cfa82c9f237cbab9ca6d655bddfeafcd30a107de77c483eba42e8',
 	openOracle: '0x994db45e5c25cab071f7f8cfecbe28badd177f9015fd8efe58f17dbf18aab408',
 	priceOracleManagerAndOperatorQueuerFactory: '0xb185263475371fc4ece55ae61642c6c95ce2e078ffe3fbe6d7c4a371a2450956',
-	securityPoolFactory: '0x5f624e810fb73ec3b0f065a5ab2f4e423a1c9191c6c86421a9931d074e176635',
+	securityPoolFactory: '0xb1705b716064e1494b0a64ad9c7cff13ee6a3cc69b6d7b5bb0582dd222a4a557',
 	securityPoolOperationsDelegate: '0x1e79c114f23f1c753219621b70a930a989edefeaf38cabbe90bbc1976995fe88',
 	securityPoolForker: '0x4e7ecf70a154ab6459c57cbcf87b38a6a64e8e8913ccadd506fc4568a25efd2e',
 	securityPoolUtils: '0xcf6de5fe07d78d52cec5f0b8dcc9244225895355d3530cca5ff2a1159a7b6f57',
@@ -73,10 +73,10 @@ export function assertStaticStatoblastDeploymentArtifactRuntimeCodeHashes(
 
 const EXPECTED_MAINNET_RUNTIME_CODE_HASHES: Readonly<Partial<Record<DeploymentStepId, Hash>>> = {
 	escalationGameClaimDelegate: '0xed5d44482ceeac7091409ffd63a592fabad32aca961274fc2e077f369864f229',
-	escalationGameFactory: '0x33aae3727b57c74a6c919310ee2a05c52a43e7f03469dfc589cae01bced0c921',
+	escalationGameFactory: '0xf1f7868bf21cfa82c9f237cbab9ca6d655bddfeafcd30a107de77c483eba42e8',
 	openOracle: '0x994db45e5c25cab071f7f8cfecbe28badd177f9015fd8efe58f17dbf18aab408',
 	priceOracleManagerAndOperatorQueuerFactory: '0xed003af4f41874a708a79563f7e182b5bd60b9ad056ed9a5f5d32236ebf9b408',
-	securityPoolFactory: '0x6e26d62686124efe3c5df6e15626143e8dce106d5ec0155bb02113ac635d1dbb',
+	securityPoolFactory: '0x187db42920959f158504a251208e76d3a1ff2e1157ec922f38549ef87fb7de88',
 	securityPoolOperationsDelegate: '0x1e79c114f23f1c753219621b70a930a989edefeaf38cabbe90bbc1976995fe88',
 	securityPoolForker: '0xddaf221253abdfb6146cc9e0718751515217bdec37a717f36dceb7347849cd40',
 	securityPoolUtils: '0xcf6de5fe07d78d52cec5f0b8dcc9244225895355d3530cca5ff2a1159a7b6f57',

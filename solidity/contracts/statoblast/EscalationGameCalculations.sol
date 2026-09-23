@@ -55,6 +55,7 @@ abstract contract EscalationGameCalculations is EscalationGameState {
 		return computeIterativeAttritionCostAttoRep(elapsedSinceActivation);
 	}
 
+	// The attrition leader is provisional until getFinalQuestionResolution is non-None.
 	function getQuestionResolution() public view returns (BinaryOutcomes.BinaryOutcome outcome) {
 		(uint256 invalidBalanceAttoRep, uint256 yesBalanceAttoRep, uint256 noBalanceAttoRep) = _getOutcomeBalances();
 		outcome = proofVerifier.resolveQuestion([invalidBalanceAttoRep, yesBalanceAttoRep, noBalanceAttoRep], totalCostAttoRep());

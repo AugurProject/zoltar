@@ -67,8 +67,8 @@ export const contractSafetyPolicy = {
 				sourcePath: 'contracts/statoblast/EscalationGame.sol',
 				contractName: 'EscalationGame',
 			},
-			24_364,
-			'The game combines exact recursive claim allocation with fork-aware finality for delayed migration. The 82-byte increase over the allocation fix preserves unresolved carry; no further growth is permitted.',
+			24_434,
+			'The game combines exact recursive claim allocation and fork-aware finality with continuation response-period admission. Admission adds 70 runtime bytes to the merged game; no further growth is permitted.',
 		),
 		runtimeBudget(
 			{
@@ -101,8 +101,8 @@ export const contractSafetyPolicy = {
 				sourcePath: 'contracts/statoblast/factories/EscalationGameFactory.sol',
 				contractName: 'EscalationGameFactory',
 			},
-			47_301,
-			'The factory embeds exact interval consumption, prefix accounting, fork-aware finality, and inherited threshold-tie reconciliation. Tie reconciliation adds 198 bytes to the combined allocation and finality fixes; no further growth is permitted.',
+			47_644,
+			'The factory embeds exact allocation, fork-aware finality, threshold-tie reconciliation, and continuation admission with settlement accounting. The latest admission and accounting fixes add 343 initcode bytes; no further growth is permitted.',
 		),
 	] satisfies readonly BytecodeBudget[],
 	exactLayoutPairs: [

@@ -16,7 +16,6 @@ import { EscalationClaimBundle } from './EscalationGameTypes.sol';
 abstract contract EscalationGameState is EscalationGameStorage, IEscalationGameEvents {
 	using SafeERC20Ops for IERC20;
 
-	uint256 internal constant activationDelay = 3 days;
 	ISecurityPool public immutable securityPool;
 	ReputationToken public immutable repToken;
 	EscalationGameProofVerifier internal immutable proofVerifier;

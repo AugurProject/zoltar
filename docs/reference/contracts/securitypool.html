@@ -101,7 +101,7 @@
 							<td><code>withdrawForkedEscalationDeposits(outcome, proofs)</code></td>
 							<td>Anyone; a nonempty list must name one original depositor across all proofs</td>
 							<td>Game configured; operational child pool; valid final outcome. A nonempty list additionally requires an initialized and fully resumed continuation game, valid unconsumed winning proofs, and one common depositor.</td>
-							<td>A nonempty list verifies and consumes carried proofs, then pays winning child REP to the immutable depositor committed in each leaf. Stable continuation identities retain the creating game, and the cumulative retention-index ratio applies every intervening auction haircut in constant ancestry work. An empty list returns after the outer lifecycle checks without proof verification, state change, or event.</td>
+							<td>A nonempty list verifies and consumes carried proofs, then pays winning child REP to the immutable depositor committed in each leaf. Stable continuation identities retain the creating game. Allocations follow the source-game chain and apply each auction haircut through cumulative interval rounding; read cost grows with fork depth. An empty list returns after the outer lifecycle checks without proof verification, state change, or event.</td>
 							<td>Per processed proof, escalation-game <code>CarryDepositConsumed</code> and <code>ClaimDeposit</code>. No event for an empty list</td>
 						</tr>
 						<tr>

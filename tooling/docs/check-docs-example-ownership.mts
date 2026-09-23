@@ -53,11 +53,11 @@ function roundingDirectionOf(statement: string, label: string): RoundingDirectio
 async function assertEscalationRulesMatchContracts(): Promise<void> {
 	const proofVerifier = await readFile('solidity/contracts/statoblast/EscalationGameProofVerifier.sol', 'utf8')
 	const escalationGameTypes = await readFile('solidity/contracts/statoblast/EscalationGameTypes.sol', 'utf8')
-	const escalationGameState = await readFile('solidity/contracts/statoblast/EscalationGameState.sol', 'utf8')
+	const escalationGameStorage = await readFile('solidity/contracts/statoblast/EscalationGameStorage.sol', 'utf8')
 	assert.equal(solidityConstant(escalationGameTypes, 'EXCESS_REWARD_WINDOW_DIVISOR', 'EscalationGameTypes.sol'), escalationRules.excessRewardWindowDivisor)
 	assert.equal(solidityConstant(escalationGameTypes, 'ESCALATION_TIME_LENGTH', 'EscalationGameTypes.sol'), escalationTimeLengthSeconds)
-	const activationDelay = escalationGameState.match(/activationDelay = (\d+) days;/)
-	assert.ok(activationDelay?.[1] !== undefined, 'EscalationGameState.sol must define activationDelay in days')
+	const activationDelay = escalationGameStorage.match(/activationDelay = (\d+) days;/)
+	assert.ok(activationDelay?.[1] !== undefined, 'EscalationGameStorage.sol must define activationDelay in days')
 	assert.equal(BigInt(activationDelay[1]), escalationRules.activationDays)
 	const directWithdrawal = solidityFunction(proofVerifier, 'computeWinningWithdrawal', 'EscalationGameProofVerifier.sol')
 	assert.match(
