@@ -48,7 +48,7 @@ cp config/operator.custom-chain-placeholder.json .state/operator.json
 chmod 600 .state/operator.json
 ```
 
-Replace every placeholder RPC and relay URL. Keep `paused: true` and `runtime.execute: false`, and choose a new unused `runtime.stateFile` for a new chain, deployment, or signer. Restarts retain a pinned deployment, and an unpinned state from the recognized older Sepolia profile is pinned on its next start. An unrecognized operated profile fails closed; see [network and deployment profile](./OPERATOR_REFERENCE.md#network-and-deployment-profile). Never repoint an operated state path at another identity; preserve its main file and companion stores together.
+Replace every placeholder RPC and relay URL. Keep `paused: true` and `runtime.execute: false`, and choose a new unused `runtime.stateFile` for a new chain, deployment, or signer. Direct bot and Compose restarts retain a pinned deployment. On Windows, `start.bat` selects current contract addresses after safely retiring an operated older deployment. An unrecognized operated profile fails closed; see [network and deployment profile](./OPERATOR_REFERENCE.md#network-and-deployment-profile). Never repoint an operated state path at another identity; preserve its main file and companion stores together.
 
 Live execution with the recommended `rpcQuorum: 2` requires the primary reader and at least two independent quorum-reader origins; `rpcQuorum: 1` runs live against a single trusted reader. Keep `runtime.protocolStartBlock` at `"0"` unless you have verified the earliest relevant deployment or carry event. Configure authenticated private relays before enabling deadline-bound operations. The [network and deployment profile](./OPERATOR_REFERENCE.md#network-and-deployment-profile) and [RPC and submission configuration](./OPERATOR_REFERENCE.md#rpc-and-submission-configuration) are the canonical sources for exact fields, graph checks, reader limits, custom-chain requirements, and relay rules.
 
@@ -152,7 +152,7 @@ bun run run -- --register-v3-position '{"owner":"0x…","pool":"0x…","token0":
 
 Retirement reuses canonical discovery, simulation, receipt evidence, and transaction recovery. Its fail-closed operation catalog is independent of ordinary random-operation ecosystem and allowlist settings. It removes custom Trading LP, redeems complete sets and resolved winning shares, claims vault fees and eligible REP, processes escalation, fork, auction, and refund obligations, withdraws OpenOracle token and native credits while retaining exactly their mandatory one-unit sentinel, optionally performs only claim-required migration, unwraps WETH, revokes known ERC-20, ERC-1155, LP, router, and OpenOracle internal approvals, transfers reusable tokens, and sends native ETH last while retaining both the configured ETH reserve and one maximum gas-cost budget. Disabled sweeping or WETH unwrapping produces an explicit accepted residual. Unresolved shares remain time-locked; only canonically resolved losing shares or zero-payout winning dust become residuals. Recovered balances are cumulative increases observed between complete canonical retirement scans.
 
-For safe testnet redeployment, drain the old profile, review any residuals, archive the owner-only state and completion proof, and configure a distinct state file for the new profile. An operated deployment must use a distinct state file. The shipped zero-root bootstrap has a narrowly checked upgrade migration that preserves its signer and audit history.
+For safe testnet redeployment, drain the old profile, review any residuals, preserve the owner-only state and completion proof, and configure a distinct state file for the new profile. An operated deployment must use a distinct state file. The Windows `start.bat` launcher performs this selection after verified retirement and leaves the old state in place. The shipped zero-root bootstrap has a narrowly checked upgrade migration that preserves its signer and audit history.
 
 ## Run with Docker
 
@@ -165,6 +165,12 @@ docker compose logs --tail 100 chaos
 ```
 
 First boot copies the safe paused, dry, keyless template. Stop the service and complete steps 3–6 before live use. The shipped Compose service and image's default `bun run run` command automatically run the full stopped preflight when the persisted configuration is live-capable; startup aborts on failed state, signer, network, or funding checks. Missing core scan deployments instead allow startup in the waiting state; deployment-graph and funding readiness remain incomplete until the contracts exist. An alternate container command does not receive that automatic gate, so run `bun src/cli/doctor.ts --if-live-capable` before any alternate operator launcher. `start.bat doctor` exposes the explicit gate on Windows. Do not copy a remembered key through an ordinary host directory; provision the protected volume through a secret manager.
+
+On Windows, `start.bat` checks the built image's current deployment manifest before launch. It updates an unused old profile immediately. A keyless journal with only dry-run history moves to a new state file without retirement.
+
+For an operated old profile, the launcher prompts for a retirement recipient and the exact drain confirmation, then starts the old pinned bot to retire under its saved policy. The old configuration must already permit unpaused live execution with a configured signer; the launcher does not turn execution on. It checks retirement every minute and switches to the current addresses only after verifying completion, using a new unused state file and preserving the old one.
+
+If retirement has residuals, review and accept replacement for the displayed target profile in the dashboard. Closing the launcher window leaves the retiring Docker service running; rerun `start.bat` to resume the handoff. `start.bat doctor` only checks the saved profile and does not switch it.
 
 For the keyless first-boot edit, export only the safe template to a protected Linux directory, choose a new state path and replace every placeholder, then restore its ownership in the volume:
 
