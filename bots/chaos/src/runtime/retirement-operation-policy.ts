@@ -153,8 +153,15 @@ function migrationPlanRecoversWalletClaim(plan: OperationPlan, snapshot: Ecosyst
 	return hasVaultClaim || (shares !== undefined && [shares.invalid, shares.yes, shares.no].some(value => BigInt(value) > 0n)) || pool.unresolvedEscalationMigrationReadyOutcomes.length > 0
 }
 
+function planPaysOnlySigner(plan: OperationPlan, snapshot: EcosystemSnapshot | undefined) {
+	const recipient = plan.metadata['recipient']
+	if (plan.definitionId === 'open-oracle.withdraw-to' && recipient === undefined) return false
+	if (recipient === undefined) return true
+	return snapshot !== undefined && typeof recipient === 'string' && recipient.toLowerCase() === snapshot.wallet.address.toLowerCase()
+}
+
 export function retirementPlanAllowed(plan: OperationPlan, snapshot: EcosystemSnapshot, policies: DurableRetirementState['policies']) {
-	return operationAllowedDuringRetirement(plan.definitionId, policies) && migrationPlanRecoversWalletClaim(plan, snapshot)
+	return operationAllowedDuringRetirement(plan.definitionId, policies) && migrationPlanRecoversWalletClaim(plan, snapshot) && planPaysOnlySigner(plan, snapshot)
 }
 
 function exitPlanWithinLossLimit(plan: OperationPlan, maximumExitLossBps: number) {
@@ -172,6 +179,7 @@ export function retirementPlanFromEvaluations(evaluations: readonly EvaluatedOpe
 		if (!evaluation.eligibility.eligible || evaluation.plan === undefined) return []
 		if (!operationAllowedDuringRetirement(evaluation.plan.definitionId, policies) || !exitPlanWithinLossLimit(evaluation.plan, policies.maximumExitLossBps)) return []
 		if (snapshot !== undefined && !migrationPlanRecoversWalletClaim(evaluation.plan, snapshot)) return []
+		if (!planPaysOnlySigner(evaluation.plan, snapshot)) return []
 		return [evaluation.plan]
 	})
 	return eligible.sort((left, right) => {

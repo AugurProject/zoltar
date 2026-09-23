@@ -113,7 +113,7 @@ export function initialRetirementState(): DurableRetirementState {
 
 export function assertSafeRetirementRecipient(recipient: Address, signerAddress: Address | undefined) {
 	if (recipient.toLowerCase() === zeroAddress) throw new Error('Retirement recipient must not be the zero address')
-	if (signerAddress !== undefined && recipient.toLowerCase() === signerAddress.toLowerCase()) throw new Error('Retirement recipient must not be the durable signer')
+	if (signerAddress === undefined || recipient.toLowerCase() !== signerAddress.toLowerCase()) throw new Error('Retirement recipient must be the durable signer')
 }
 
 export function uniswapV3PositionKey(owner: Address, tickLower: number, tickUpper: number) {
