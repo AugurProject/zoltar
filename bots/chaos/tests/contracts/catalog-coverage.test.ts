@@ -74,7 +74,7 @@ const curatedAbiBindings = [
 			{
 				artifactSource: 'contracts/statoblast/EscalationGameClaimDelegate.sol',
 				contract: 'EscalationGameClaimDelegate',
-				functions: ['applyInheritedClaimRetention', 'applyInheritedSourceStorageBasis'],
+				functions: ['getInheritedClaimAllocation'],
 			},
 		],
 	},
