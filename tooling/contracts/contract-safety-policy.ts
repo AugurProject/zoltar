@@ -83,8 +83,8 @@ export const contractSafetyPolicy = {
 				sourcePath: 'contracts/statoblast/SecurityPoolForker.sol',
 				contractName: 'SecurityPoolForker',
 			},
-			24_135,
-			'The forker delegates finality to the game, removing duplicated checks while retaining migration guards; no further runtime growth is permitted.',
+			24_046,
+			'The forker delegates finality to the game and preserves fractional truth-auction backing without duplicated checks; no further runtime growth is permitted.',
 		),
 	] satisfies readonly BytecodeBudget[],
 	initcodeBudgets: [
@@ -93,8 +93,8 @@ export const contractSafetyPolicy = {
 				sourcePath: 'contracts/statoblast/SecurityPoolForker.sol',
 				contractName: 'SecurityPoolForker',
 			},
-			48_438,
-			'The forker initcode reflects shared game finality and minimum constructor arguments; no further growth is permitted.',
+			48_298,
+			'The forker initcode reflects shared game finality and proportional auction backing; no further growth is permitted.',
 		),
 		initcodeBudget(
 			{
