@@ -45,9 +45,8 @@ export async function scanCarryStorage(context: { client: Pick<ChaosReadClient, 
 			merkleMountainRangeSiblings: proof.merkleMountainRangeSiblings,
 			nullifierSiblings: proof.nullifierSiblings,
 		}
-		const [retainedDeposit, retainedCumulative, bindingCapital, nonDecisionThreshold, gameEnd, universeId, zoltar, gameWithdrawal, simulation] = await drainConcurrent([
-			client.readContract({ abi: escalationGameAbi, address: candidate.game, args: [argument.amountAttoRep, argument.parentDepositIndex], blockNumber, functionName: 'applyInheritedClaimRetention' }),
-			client.readContract({ abi: escalationGameAbi, address: candidate.game, args: [argument.cumulativeAmountAttoRep, argument.parentDepositIndex], blockNumber, functionName: 'applyInheritedClaimRetention' }),
+		const [allocation, bindingCapital, nonDecisionThreshold, gameEnd, universeId, zoltar, gameWithdrawal, simulation] = await drainConcurrent([
+			client.readContract({ abi: escalationGameAbi, address: candidate.game, args: [candidate.outcome, argument.amountAttoRep, argument.cumulativeAmountAttoRep, argument.leafIndex], blockNumber, functionName: 'getInheritedClaimAllocation' }),
 			client.readContract({ abi: escalationGameAbi, address: candidate.game, blockNumber, functionName: 'getBindingCapitalAttoRep' }),
 			client.readContract({ abi: escalationGameAbi, address: candidate.game, blockNumber, functionName: 'nonDecisionThresholdAttoRep' }),
 			client.readContract({ abi: escalationGameAbi, address: candidate.game, blockNumber, functionName: 'getEscalationGameEndDate' }),
@@ -60,8 +59,9 @@ export async function scanCarryStorage(context: { client: Pick<ChaosReadClient, 
 		const economics = computeWinningEconomics({
 			actualForkThresholdAttoRep: forkTime > gameEnd ? nonDecisionThreshold : forkThreshold,
 			bindingCapitalAttoRep: bindingCapital,
-			cumulativeAmountAttoRep: retainedCumulative,
-			depositAmountAttoRep: retainedDeposit,
+			cumulativeAmountAttoRep: allocation.retainedCumulativeAttoRep,
+			depositAmountAttoRep: allocation.rewardAmountAttoRep,
+			principalAttoRep: allocation.retainedAmountAttoRep,
 			nonDecisionThresholdAttoRep: nonDecisionThreshold,
 			winningOutcomeBalanceAttoRep: candidate.state.balanceAttoRep,
 		})

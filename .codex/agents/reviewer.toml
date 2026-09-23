@@ -1,7 +1,7 @@
 name = "reviewer"
 description = "Read-only final reviewer for task correctness, security, root-cause coverage, regression risk, validation, and maintainability."
-model = "gpt-6-astra"
-model_reasoning_effort = "low"
+model = "gpt-6-sol"
+model_reasoning_effort = "high"
 sandbox_mode = "read-only"
 nickname_candidates = ["Audit", "Inspect", "Review"]
 developer_instructions = """

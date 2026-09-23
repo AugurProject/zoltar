@@ -87,8 +87,9 @@ export const riskHistoryRows = async (
 			JOIN blocks block ON block.chain_id = timeline.chain_id AND block.hash = timeline.block_hash
 			WHERE timeline.chain_id = ${chainId} AND timeline.semantic_event_kind = 'VaultLiquidated' AND timeline.canonical
 				AND timeline.block_number <= ${asOfBlock}
+				AND timeline.source_contract = ${poolAddress}
 				AND (timeline.summary_data->>'targetVault' = ${vaultAddress ?? ''} OR timeline.summary_data->>'vault' = ${vaultAddress ?? ''}
-					OR (timeline.source_contract = ${poolAddress} AND ${kind === 'pools'}))
+					OR ${kind === 'pools'})
 				AND (${positions.liquidations === undefined} OR (timeline.block_number, timeline.log_index, timeline.tx_hash, timeline.block_hash,
 					timeline.entity_type, timeline.entity_identity) < (${positions.liquidations?.[0] ?? '0'}::bigint,
 						${positions.liquidations?.[1] ?? 0}::integer, ${positions.liquidations?.[2] ?? `0x${'0'.repeat(64)}`},

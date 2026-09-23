@@ -11,6 +11,7 @@ import {
 import { BinaryOutcomes } from './BinaryOutcomes.sol';
 
 abstract contract EscalationGameStorage {
+	uint256 internal constant activationDelay = 3 days;
 	uint256 public activationTime;
 	uint256 public nonDecisionThresholdAttoRep;
 	uint256 public startBondAttoRep;
@@ -23,8 +24,11 @@ abstract contract EscalationGameStorage {
 	uint256 internal nextNodeId = 1;
 	mapping(uint256 => Node) public nodes;
 	mapping(address => EscalationClaimBundle) internal escalationClaimBundles;
+	// Logical escrow: unsettled local/bundle principal plus remaining inherited
+	// backing. This is not the token balance or a budget for winner rewards.
 	uint256 public totalDisputeStakedAttoRep;
 	mapping(address => uint256) internal unresolvedRepByVaultAttoRep;
+	// Original local principal still represented by unconsumed claims.
 	uint256 internal totalLocalUnresolvedAttoRep;
 	mapping(address => uint256[3]) internal localUnresolvedPrincipalByVaultAndOutcome;
 	mapping(address => bool) internal localUnresolvedTotalsExportedByVault;
@@ -32,19 +36,27 @@ abstract contract EscalationGameStorage {
 	bool internal forkCarrySnapshotRequiresForkedEscrow;
 	bool internal winnerHaircutPaidByFork;
 	uint256 internal forkCarryInitialBackingAttoRep;
+	// The inherited component of totalDisputeStakedAttoRep. Inherited expenditure
+	// retires at most this component; local principal is released on settlement.
 	uint256 internal forkCarryDisputeStakedAttoRep;
 	address internal forkCarrySourceGame;
 	address internal forkCarryRootClaimSourceGame;
-	// A normalized binary floating-point checkpoint. The effective retention is
-	// `mantissa * 2^-exponent`; keeping the mantissa's high bit set prevents an
-	// arbitrary number of fork haircuts from underflowing the lineage index.
-	uint256 public cumulativeClaimRetention = uint256(1) << 255;
-	uint256 public cumulativeClaimRetentionExponent;
 	BinaryOutcomes.BinaryOutcome public fixedQuestionOutcome;
 	NonDecisionState public nonDecisionState;
 	uint256 internal forkCarryBackingExportedBeforeResumeAttoRep;
 	uint256 public truthAuctionRepBeforeAttoRep;
 	uint256 public truthAuctionRepRemainingAttoRep;
+
+	function _isDepositResolutionOpen(BinaryOutcomes.BinaryOutcome provisionalResolution) internal view returns (bool) {
+		// A provisional leader cannot close an unresolved unrelated continuation's
+		// guaranteed response period. Equality remains open, matching finality.
+		return
+			provisionalResolution == BinaryOutcomes.BinaryOutcome.None ||
+			(forkContinuation &&
+				fixedQuestionOutcome == BinaryOutcomes.BinaryOutcome.None &&
+				forkResumedAt != 0 &&
+				block.timestamp <= forkResumedAt + activationDelay);
+	}
 
 	function _claimEscrowedRepByVault(address vault) internal view returns (uint256 amountAttoRep) {
 		return _applyTruthAuctionRetention(escalationClaimBundles[vault].disputeStakedRepClaimUnits);
@@ -61,24 +73,41 @@ abstract contract EscalationGameStorage {
 		return (amountAttoRep * truthAuctionRepRemainingAttoRep) / truthAuctionRepBeforeAttoRep;
 	}
 
-	function _applyInheritedSourceRetention(uint256 amountAttoRep, uint256 parentDepositIndex) internal view returns (uint256 retainedAmountAttoRep) {
-		(bool success, bytes memory retentionData) = address(this).staticcall(abi.encodeWithSignature('applyInheritedClaimRetention(uint256,uint256)', amountAttoRep, parentDepositIndex));
-		return _decodeRetentionResponse(success, retentionData);
+	function _recordConsumedPrincipal(uint8 outcomeIndex, uint256 leafIndex, uint256 amountAttoRep) internal {
+		// Carry indexes are strictly below 2^64. Updating the fixed-size tree does
+		// not depend on the number or order of previously settled deposits.
+		uint256 index = leafIndex + 1;
+		while (index <= outcomeState[outcomeIndex].currentLeafCount) {
+			outcomeState[outcomeIndex].consumedPrincipalTree[index] += amountAttoRep;
+			index += index & (~index + 1);
+		}
 	}
 
-	function _applyInheritedSourceStorageBasis(uint256 amountAttoRep, uint256 cumulativeAmountAttoRep, uint256 parentDepositIndex) internal view returns (uint256) {
-		(bool success, bytes memory retentionData) = address(this).staticcall(abi.encodeWithSignature('applyInheritedSourceStorageBasis(uint256,uint256,uint256)', amountAttoRep, cumulativeAmountAttoRep, parentDepositIndex));
-		return _decodeRetentionResponse(success, retentionData);
+	function _consumedPrincipalBefore(uint8 outcomeIndex, uint256 leafIndex) internal view returns (uint256 amountAttoRep) {
+		while (leafIndex != 0) {
+			amountAttoRep += outcomeState[outcomeIndex].consumedPrincipalTree[leafIndex];
+			leafIndex &= leafIndex - 1;
+		}
 	}
 
-	function _decodeRetentionResponse(bool success, bytes memory retentionData) private pure returns (uint256) {
+	function _getInheritedClaimAllocation(uint8 outcomeIndex, uint256 amountAttoRep, uint256 cumulativeAmountAttoRep, uint256 leafIndex)
+		internal
+		view
+		returns (
+			uint256 sourceAmountAttoRep,
+			uint256 retainedAmountAttoRep,
+			uint256 rewardAmountAttoRep,
+			uint256 retainedCumulativeAttoRep
+		)
+	{
+		(bool success, bytes memory data) = address(this).staticcall(abi.encodeWithSignature('getInheritedClaimAllocation(uint8,uint256,uint256,uint256)', outcomeIndex, amountAttoRep, cumulativeAmountAttoRep, leafIndex));
 		if (!success) {
 			assembly ('memory-safe') {
-				revert(add(retentionData, 32), mload(retentionData))
+				revert(add(data, 32), mload(data))
 			}
 		}
-		require(retentionData.length == 32, 'Invalid retention response');
-		return abi.decode(retentionData, (uint256));
+		require(data.length == 128, 'Invalid allocation response');
+		return abi.decode(data, (uint256, uint256, uint256, uint256));
 	}
 
 	function _repToClaimUnits(uint256 amountAttoRep) internal view returns (uint256 claimUnits) {

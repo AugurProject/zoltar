@@ -331,11 +331,19 @@ describe('Statoblast: privileged authorization matrix', () => {
 				}),
 			},
 			{
+				name: 'consumeCarriedDeposit',
+				data: encodeFunctionData({
+					abi: statoblast_EscalationGameDepositDelegate_EscalationGameDepositDelegate.abi,
+					functionName: 'consumeCarriedDeposit',
+					args: [QuestionOutcome.Yes, 0n, 1n, 1n, 0n, 1n],
+				}),
+			},
+			{
 				name: 'consumeUnresolvedRepForClaimOwners',
 				data: encodeFunctionData({
 					abi: statoblast_EscalationGameDepositDelegate_EscalationGameDepositDelegate.abi,
 					functionName: 'consumeUnresolvedRepForClaimOwners',
-					args: [client.account.address, QuestionOutcome.Yes, 1n],
+					args: [client.account.address, QuestionOutcome.Yes, 1n, 0n],
 				}),
 			},
 			{

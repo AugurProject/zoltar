@@ -217,9 +217,11 @@ export type TransactionActionButtonProps = {
 }
 
 export type OperationModalProps = {
+	embedTransactionSteps?: boolean
 	children: ComponentChildren
 	closeDisabled?: boolean
 	closeOnSuccessKey?: string | undefined
+	/** Rows the dialog already implies (question, pool, vault); transaction notices inside it omit matching rows. */
 	context?: TransactionContextItem[]
 	description?: ComponentChildren
 	isOpen: boolean

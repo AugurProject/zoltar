@@ -8,7 +8,6 @@ import { EscalationGameStorage } from './EscalationGameStorage.sol';
 import { SystemState } from './interfaces/ISecurityPool.sol';
 import { IEscalationGameEvents } from './interfaces/IEscalationGame.sol';
 import { MerkleMountainRange } from './MerkleMountainRange.sol';
-import { Math } from './openOracle/openzeppelin/contracts/utils/math/Math.sol';
 import { IERC20PermitAuthorization, IERC3009Authorization } from '../vendor/authorization/IERC20Authorization.sol';
 import {
 	Deposit,
@@ -160,7 +159,7 @@ contract EscalationGameDepositDelegate is EscalationGameStorage, IEscalationGame
 	function _validateAcceptedDeposit(BinaryOutcomes.BinaryOutcome outcome, uint8 outcomeIndex, uint256 currentBalanceAttoRep, uint256 attoRepAmount, uint256 expectedCumulativeRepAmountAttoRep) private view {
 		require(nonDecisionState == NonDecisionState.None, 'Non-decision done');
 		require(outcome != BinaryOutcomes.BinaryOutcome.None, 'No outcome');
-		require(IEscalationGameDepositContext(address(this)).getQuestionResolution() == BinaryOutcomes.BinaryOutcome.None, 'Question resolved');
+		require(_isDepositResolutionOpen(IEscalationGameDepositContext(address(this)).getQuestionResolution()), 'Question resolved');
 		require(currentBalanceAttoRep < nonDecisionThresholdAttoRep, 'Outcome full');
 		require(attoRepAmount > 0, 'Deposit zero');
 		require(expectedCumulativeRepAmountAttoRep == currentBalanceAttoRep + attoRepAmount, 'Preview mismatch');
@@ -182,6 +181,13 @@ contract EscalationGameDepositDelegate is EscalationGameStorage, IEscalationGame
 		Node storage node = nodes[nodeId];
 		bytes32 carryHash = MerkleMountainRange.hashLeaf(node.depositor, node.outcome, node.amountAttoRep, node.parentDepositIndex, node.cumulativeAmountAttoRep, nodeId);
 		uint256 leafCount = state.currentLeafCount;
+		// Extend the Fenwick tree with the consumed sum in this new node's
+		// existing range. Future appends therefore preserve earlier consumption.
+		uint256 nextIndex = leafCount + 1;
+		uint256 rangeStart = nextIndex - (nextIndex & (~nextIndex + 1));
+		state.consumedPrincipalTree[nextIndex] =
+			_consumedPrincipalBefore(uint8(node.outcome), leafCount) -
+			_consumedPrincipalBefore(uint8(node.outcome), rangeStart);
 		uint256 peakHeight;
 		uint256 carryStartIndex = leafCount;
 		state.currentCarryNodeHashes[0][carryStartIndex] = carryHash;
@@ -209,21 +215,22 @@ contract EscalationGameDepositDelegate is EscalationGameStorage, IEscalationGame
 		uint256 repRemainingAttoRep = repBeforeAttoRep - repToRemoveAttoRep;
 		truthAuctionRepBeforeAttoRep = repBeforeAttoRep;
 		truthAuctionRepRemainingAttoRep = repRemainingAttoRep;
-		uint256 ratioShift = Math.log2(repBeforeAttoRep) - Math.log2(repRemainingAttoRep);
-		uint256 scaledRemaining = repRemainingAttoRep << ratioShift;
-		if (scaledRemaining > repBeforeAttoRep) {
-			scaledRemaining >>= 1;
-			ratioShift -= 1;
-		}
-		uint256 nextRetention = Math.mulDiv(cumulativeClaimRetention, scaledRemaining, repBeforeAttoRep);
-		uint256 normalizationShift = 255 - Math.log2(nextRetention);
-		cumulativeClaimRetention = nextRetention << normalizationShift;
-		cumulativeClaimRetentionExponent += ratioShift + normalizationShift;
 		totalDisputeStakedAttoRep = (totalDisputeStakedAttoRep * repRemainingAttoRep) / repBeforeAttoRep;
 		forkCarryDisputeStakedAttoRep = (forkCarryDisputeStakedAttoRep * repRemainingAttoRep) / repBeforeAttoRep;
 		for (uint256 outcomeIndex = 0; outcomeIndex < 3; outcomeIndex++) {
 			outcomeState[outcomeIndex].balanceAttoRep =
 				(outcomeState[outcomeIndex].balanceAttoRep * repRemainingAttoRep) / repBeforeAttoRep;
+		}
+		// An unrelated continuation inherits a balance predicate, not an irrevocable
+		// local fork decision. Auction-weakened ties must admit funded reports again.
+		// Fixed outcomes retain their settlement-only lifecycle.
+		if (
+			nonDecisionState == NonDecisionState.InheritedThresholdTie &&
+			fixedQuestionOutcome == BinaryOutcomes.BinaryOutcome.None &&
+			!game.hasReachedNonDecision()
+		) {
+			nonDecisionState = NonDecisionState.None;
+			emit InheritedThresholdTieReopened();
 		}
 		forkElapsedAtStart = game.computeTimeSinceStartFromAttritionCostAttoRep(game.getBindingCapitalAttoRep());
 		IERC20(game.repToken()).safeTransfer(poolAddress, repToRemoveAttoRep);
@@ -255,7 +262,21 @@ contract EscalationGameDepositDelegate is EscalationGameStorage, IEscalationGame
 		emit VaultEscrowUpdated(ownerAddress, _claimEscrowedRepByVault(ownerAddress), totalDisputeStakedAttoRep);
 	}
 
-	function consumeUnresolvedRepForClaimOwners(address bundleId, uint8 outcomeIndex, uint256 amountAttoRep) external {
+	function consumeCarriedDeposit(uint8 outcomeIndex, uint256 parentDepositIndex, uint256 amountAttoRep, uint256 cumulativeAmountAttoRep, uint256 leafIndex, uint256 effectiveInheritedAttoRep) external {
+		require(!outcomeState[outcomeIndex].consumedParentDepositIndexes[parentDepositIndex], 'Deposit settled');
+		OutcomeState storage state = outcomeState[outcomeIndex];
+		(uint256 sourceBasisAttoRep, uint256 sourceRetainedAmountAttoRep, , ) = _getInheritedClaimAllocation(outcomeIndex, amountAttoRep, cumulativeAmountAttoRep, leafIndex);
+		require(effectiveInheritedAttoRep >= sourceRetainedAmountAttoRep, 'Carried REP low');
+		state.consumedParentDepositIndexes[parentDepositIndex] = true;
+		_recordConsumedPrincipal(outcomeIndex, leafIndex, sourceRetainedAmountAttoRep);
+		state.inheritedConsumedSourceAttoRep += sourceBasisAttoRep;
+		state.inheritedConsumedRetainedAttoRep += sourceRetainedAmountAttoRep;
+		require(sourceBasisAttoRep <= state.inheritedUnresolvedTotalAttoRep, 'Carried source low');
+		state.inheritedUnresolvedTotalAttoRep -= sourceBasisAttoRep;
+	}
+
+	function consumeUnresolvedRepForClaimOwners(address bundleId, uint8 outcomeIndex, uint256 amountAttoRep, uint256 leafIndex) external {
+		_recordConsumedPrincipal(outcomeIndex, leafIndex, amountAttoRep);
 		require(unresolvedRepByVaultAttoRep[bundleId] >= amountAttoRep, 'Claim accounting remainder');
 		require(localUnresolvedPrincipalByVaultAndOutcome[bundleId][outcomeIndex] >= amountAttoRep, 'Claim accounting remainder');
 		unresolvedRepByVaultAttoRep[bundleId] -= amountAttoRep;
@@ -270,12 +291,15 @@ contract EscalationGameDepositDelegate is EscalationGameStorage, IEscalationGame
 
 	function creditExternalClaimOwners(address, address bundleId, uint256, uint256 amountAttoRep, uint256 burnAmountAttoRep) external {
 		uint256 backingConsumed = amountAttoRep + (winnerHaircutPaidByFork ? 0 : burnAmountAttoRep);
-		require(totalDisputeStakedAttoRep >= backingConsumed, 'Escrow low');
+		IERC20 token = IERC20(IEscalationGameDepositContext(address(this)).repToken());
+		// Losing local principal may already be settled while its tokens still fund
+		// this reward. Check actual expenditure against tokens, not logical escrow.
+		require(token.balanceOf(address(this)) >= backingConsumed, 'Escrow low');
 		uint256 inheritedBackingConsumed =
 			backingConsumed < forkCarryDisputeStakedAttoRep ? backingConsumed : forkCarryDisputeStakedAttoRep;
 		forkCarryDisputeStakedAttoRep -= inheritedBackingConsumed;
-		totalDisputeStakedAttoRep -= backingConsumed;
+		totalDisputeStakedAttoRep -= inheritedBackingConsumed;
 		if (amountAttoRep == 0) return;
-		IERC20(IEscalationGameDepositContext(address(this)).repToken()).safeTransfer(bundleId, amountAttoRep);
+		token.safeTransfer(bundleId, amountAttoRep);
 	}
 }

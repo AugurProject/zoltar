@@ -313,9 +313,9 @@ export function SecurityVaultSection({
 		...extraReadinessActions,
 	])
 	const depositAmountField = <VaultDepositAmountField disabled={!depositRepToVaultEnabled} onChange={depositAmount => onSecurityVaultFormChange({ depositAmount })} value={normalizedSecurityVaultForm.depositAmount} walletRepBalanceAttoRep={walletRepBalanceAttoRep} />
-	const depositBackingFactorField = (
-		<DepositBackingFactorField minimumBps={minimumBps} saved={!!currentSelectedVaultDetails?.targetBackingFactorBps} value={depositTargetHealthFactor} error={targetHealthFactorGuardMessage} disabled={!depositRepToVaultEnabled} onChange={targetHealthFactor => onSecurityVaultFormChange({ targetHealthFactor })} />
-	)
+	const savedBackingFactor = !!currentSelectedVaultDetails?.targetBackingFactorBps
+	const depositBackingFactorField = <DepositBackingFactorField minimumBps={minimumBps} value={depositTargetHealthFactor} error={targetHealthFactorGuardMessage} disabled={!depositRepToVaultEnabled} onChange={targetHealthFactor => onSecurityVaultFormChange({ targetHealthFactor })} />
+	const savedBackingFactorMetric = <MetricField label={securityPoolCopy.vaultBackingFactor}>{depositTargetHealthFactor}×</MetricField>
 	const depositApprovalControlProps = {
 		approveRepEnabled,
 		canUseLoadedVaultActions,
@@ -373,8 +373,9 @@ export function SecurityVaultSection({
 							<StateHint presentation={{ key: 'not_found', badgeLabel: securityPoolCopy.vaultMissing, badgeTone: 'muted', detail: securityPoolCopy.missingVaultDepositDetail }} />
 						)}
 						{depositAmountField}
-						{depositBackingFactorField}
+						{savedBackingFactor ? undefined : depositBackingFactorField}
 						<MetricGrid>
+							{savedBackingFactor ? savedBackingFactorMetric : undefined}
 							<MetricField label={securityPoolCopy.walletRep}>{walletRepBalanceLoading ? <LoadingText>{commonCopy.loading}</LoadingText> : <CurrencyValue value={walletRepBalanceAttoRep} suffix={repTokenSymbol} />}</MetricField>
 						</MetricGrid>
 						<ErrorNotice message={walletRepBalanceError} />
@@ -382,7 +383,13 @@ export function SecurityVaultSection({
 					</>
 				)}
 			</OperationModal>
-			<OperationModal context={vaultTransactionContext} isOpen={vaultActionModal === 'withdraw-rep'} onClose={closeVaultActionModal} title={repExitActionLabel}>
+			<OperationModal
+				closeOnSuccessKey={(securityVaultResult?.action === 'queueWithdrawRep' || securityVaultResult?.action === 'redeemRepFromVault') && securityVaultResult.stagedExecution?.success !== false ? securityVaultResult.hash : undefined}
+				context={vaultTransactionContext}
+				isOpen={vaultActionModal === 'withdraw-rep'}
+				onClose={closeVaultActionModal}
+				title={repExitActionLabel}
+			>
 				{currentSelectedVaultDetails === undefined ? <p className='detail'>{securityPoolCopy.selectedVaultDetailsUnavailable}</p> : null}
 				{currentSelectedVaultDetails === undefined ? null : (
 					<>
@@ -423,7 +430,7 @@ export function SecurityVaultSection({
 			<VaultBackingFactorModal context={vaultTransactionContext} isOpen={vaultActionModal === 'adjust-backing'} onClose={closeVaultActionModal} result={securityVaultResult} error={securityVaultError}>
 				{adjustmentForm}
 			</VaultBackingFactorModal>
-			<OperationModal context={vaultTransactionContext} isOpen={vaultActionModal === 'claim-fees'} onClose={closeVaultActionModal} title={securityPoolCopy.claimFeesTitle}>
+			<OperationModal closeOnSuccessKey={securityVaultResult?.action === 'redeemFees' ? securityVaultResult.hash : undefined} context={vaultTransactionContext} isOpen={vaultActionModal === 'claim-fees'} onClose={closeVaultActionModal} title={securityPoolCopy.claimFeesTitle}>
 				<MetricGrid>
 					<MetricField label={securityPoolCopy.claimableFees}>{currentSelectedVaultDetails === undefined ? commonCopy.metricUnavailablePlaceholder : <CurrencyValue exactWhenRoundedToZero value={currentSelectedVaultDetails.claimableFeesAttoEth} suffix={commonCopy.eth} />}</MetricField>
 					<MetricField label={securityPoolCopy.vault}>{selectedVaultOwner === undefined ? commonCopy.noneSelected : <AddressValue address={selectedVaultOwner} />}</MetricField>
@@ -464,7 +471,7 @@ export function SecurityVaultSection({
 
 			<SectionBlock title={depositRepActionLabel} variant='embedded'>
 				{depositAmountField}
-				{depositBackingFactorField}
+				{savedBackingFactor ? <MetricGrid>{savedBackingFactorMetric}</MetricGrid> : depositBackingFactorField}
 				<VaultDepositApprovalControl {...depositApprovalControlProps} />
 			</SectionBlock>
 

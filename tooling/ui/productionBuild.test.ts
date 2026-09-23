@@ -917,10 +917,13 @@ productionWorkflowTest('production bundle executes deployment, reporting, fork m
 	const baseUrl = server.url.toString().replace(/\/$/, '')
 	const state = JSON.parse(
 		await loadProductionDocumentInChromium(`${baseUrl}/statoblast/#/deploy?simulate=1&simScenario=baseline`, { height: 900, width: 1440 }, async driver => {
+			// Reviews inside a dialog render their actions in the form's own action row, close the dialog on the final success,
+			// and return to the form on failure; the standalone review still offers Close. Handle all of those here.
 			const completeTransactionReview = async (autoCloseSuccessTitle?: string) => {
+				await driver.evaluate('window.__zoltarReviewClicked = false')
 				for (let attempt = 0; attempt < 2400; attempt += 1) {
 					const result = await driver.evaluate(
-						`(() => { const notice = document.querySelector('.global-transaction-notice'); if (${JSON.stringify(autoCloseSuccessTitle ?? '')} && !document.querySelector('[role="dialog"]') && notice?.querySelector('.badge')?.textContent?.trim() === 'Confirmed' && notice?.querySelector('strong')?.textContent?.trim() === ${JSON.stringify(autoCloseSuccessTitle ?? '')}) return 'complete'; const actions = document.querySelector('.transaction-step-actions'); if (!actions) return 'waiting'; const close = actions.querySelector('.transaction-step-close button'); if (close instanceof HTMLButtonElement && close.textContent?.trim() === 'Close' && !close.disabled) { close.click(); return 'complete' } const button = [...actions.querySelectorAll('.transaction-plan-action .tx-action-button')].find(candidate => candidate instanceof HTMLButtonElement && !candidate.disabled); if (button instanceof HTMLButtonElement) button.click(); return 'waiting' })()`,
+						`(() => { const dialog = document.querySelector('[role="dialog"]'); const notice = document.querySelector('.global-transaction-notice'); const badge = notice?.querySelector('.badge')?.textContent?.trim(); const title = notice?.querySelector('strong')?.textContent?.trim(); if (${JSON.stringify(autoCloseSuccessTitle ?? '')} && !dialog && badge === 'Confirmed' && title === ${JSON.stringify(autoCloseSuccessTitle ?? '')}) return 'complete'; if (dialog?.querySelector('.global-transaction-notice .badge')?.textContent?.trim() === 'Failed') return 'complete'; const actions = document.querySelector('.transaction-step-actions'); if (!actions) return window.__zoltarReviewClicked ? 'complete' : 'waiting'; const close = actions.querySelector('.transaction-step-close button'); if (close instanceof HTMLButtonElement && close.textContent?.trim() === 'Close' && !close.disabled) { close.click(); return 'complete' } const button = [...actions.querySelectorAll('.transaction-plan-action .tx-action-button')].find(candidate => candidate instanceof HTMLButtonElement && !candidate.disabled); if (button instanceof HTMLButtonElement) { button.click(); window.__zoltarReviewClicked = true } return 'waiting' })()`,
 					)
 					if (result === 'complete') return
 					await Bun.sleep(50)
@@ -960,9 +963,8 @@ productionWorkflowTest('production bundle executes deployment, reporting, fork m
 			let depositReady = false
 			for (let attempt = 0; attempt < 600 && !depositReady; attempt += 1) {
 				const readiness = await driver.evaluate(
-					`(() => { const dialog = document.querySelector('[role="dialog"]'); const buttons = [...(dialog?.querySelectorAll('button') ?? [])]; const deposit = buttons.find(candidate => candidate.textContent?.trim() === 'Deposit REP'); const approval = buttons.find(candidate => candidate.textContent?.trim().startsWith('Approve ') && !candidate.disabled); if (approval instanceof HTMLButtonElement) { approval.click(); return 'approval' } return deposit instanceof HTMLButtonElement && !deposit.disabled })()`,
+					`(() => { const dialog = document.querySelector('[role="dialog"]'); const buttons = [...(dialog?.querySelectorAll('button') ?? [])]; const deposit = buttons.find(candidate => candidate.textContent?.trim() === 'Deposit REP'); if (deposit instanceof HTMLButtonElement && !deposit.disabled) return true; const approval = buttons.find(candidate => candidate.textContent?.trim().startsWith('Approve ') && !candidate.disabled); if (approval instanceof HTMLButtonElement) { approval.click(); return 'approval' } return false })()`,
 				)
-				if (readiness === 'approval') await completeTransactionReview()
 				depositReady = readiness === true
 				if (!depositReady) await Bun.sleep(50)
 			}
@@ -997,9 +999,8 @@ productionWorkflowTest('production bundle executes deployment, reporting, fork m
 			let reportingDepositReady = false
 			for (let attempt = 0; attempt < 600 && !reportingDepositReady; attempt += 1) {
 				const readiness = await driver.evaluate(
-					`(() => { const dialog = document.querySelector('[role="dialog"]'); const buttons = [...(dialog?.querySelectorAll('button') ?? [])]; const deposit = buttons.find(candidate => candidate.textContent?.trim() === 'Deposit REP'); const approval = buttons.find(candidate => candidate.textContent?.trim().startsWith('Approve ') && !candidate.disabled); if (approval instanceof HTMLButtonElement) { approval.click(); return 'approval' } return deposit instanceof HTMLButtonElement && !deposit.disabled })()`,
+					`(() => { const dialog = document.querySelector('[role="dialog"]'); const buttons = [...(dialog?.querySelectorAll('button') ?? [])]; const deposit = buttons.find(candidate => candidate.textContent?.trim() === 'Deposit REP'); if (deposit instanceof HTMLButtonElement && !deposit.disabled) return true; const approval = buttons.find(candidate => candidate.textContent?.trim().startsWith('Approve ') && !candidate.disabled); if (approval instanceof HTMLButtonElement) { approval.click(); return 'approval' } return false })()`,
 				)
-				if (readiness === 'approval') await completeTransactionReview()
 				reportingDepositReady = readiness === true
 				if (!reportingDepositReady) await Bun.sleep(50)
 			}
@@ -1027,39 +1028,37 @@ productionWorkflowTest('production bundle executes deployment, reporting, fork m
 				{ width: 390, height: 844 },
 			]) {
 				await driver.resize(viewport)
-				await driver.setInputByLabel('REP per ETH', '')
-				await driver.waitForBodyText('Enter an estimated REP per ETH price')
+				await driver.setInputByLabel('Open Oracle REP/ETH starting price', '')
+				await driver.waitForBodyText('Enter a starting price')
 				expect(await driver.evaluate("document.querySelector('.transaction-deposits')?.getBoundingClientRect().height > 0")).toBe(true)
 				const emptyGeometry = await priceDialogGeometry()
-				await driver.setInputByLabel('REP per ETH', 'a')
+				await driver.setInputByLabel('Open Oracle REP/ETH starting price', 'a')
 				await driver.waitForBodyText('Enter a positive REP per ETH price')
 				expect(await priceDialogGeometry()).toEqual(emptyGeometry)
-				await driver.setInputByLabel('REP per ETH', '')
+				await driver.setInputByLabel('Open Oracle REP/ETH starting price', '')
 				await driver.clickButton('Fetch from Uniswap')
 				expect(await priceDialogGeometry()).toEqual(emptyGeometry)
 				await driver.waitForButtonEnabled('Fetch from Uniswap')
 				await driver.waitForBodyWithoutText('Preparing funding and approvals…')
 				expect(await driver.evaluate("document.querySelector('.request-price-fields input')?.value")).toBe('3')
 				expect(await priceDialogGeometry()).toEqual(emptyGeometry)
-				await driver.setInputByLabel('REP per ETH', '2')
+				await driver.setInputByLabel('Open Oracle REP/ETH starting price', '2')
 				await driver.waitForBodyText('Preparing funding and approvals…')
 				await driver.waitForBodyWithoutText('Preparing funding and approvals…')
 				expect(await priceDialogGeometry()).toEqual(emptyGeometry)
-				await driver.setInputByLabel('REP per ETH', '')
-				await driver.waitForBodyText('Enter an estimated REP per ETH price')
+				await driver.setInputByLabel('Open Oracle REP/ETH starting price', '')
+				await driver.waitForBodyText('Enter a starting price')
 				expect(await priceDialogGeometry()).toEqual(emptyGeometry)
 			}
 			await driver.resize({ width: 1440, height: 900 })
 			expect(await driver.evaluate('document.querySelectorAll(\'[role="dialog"]\').length')).toBe(1)
-			await driver.setInputByLabel('REP per ETH', '3')
+			await driver.setInputByLabel('Open Oracle REP/ETH starting price', '3')
 			await driver.waitForBodyText('Preparing funding and approvals…')
 			await driver.waitForBodyWithoutText('Preparing funding and approvals…')
 			await completeTransactionReview('Price Requested')
 			await driver.waitForTransactionStatus('Confirmed', 'Price Requested')
 			expect(await driver.evaluate('document.querySelector(\'[role="dialog"]\') === null')).toBe(true)
 			await driver.clickButton('+1 day')
-			await driver.waitForButtonEnabled('Refresh oracle')
-			await driver.clickButton('Refresh oracle')
 			await driver.waitForBodyText('PENDING REQUEST')
 			const pendingReportOpened = await driver.evaluate(`(() => { const button = [...document.querySelectorAll('button')].find(candidate => candidate.textContent?.trim().startsWith('Report #')); if (!(button instanceof HTMLButtonElement)) return false; button.click(); return true })()`)
 			expect(pendingReportOpened).toBe(true)
