@@ -294,8 +294,56 @@ describe('Drain & Retire planning', () => {
 		expect(result.steps.map(step => step.id)).toEqual(['collect-full-v3-position'])
 	})
 
+	test('rescans closed positions and restores status from current quorum balances', async () => {
+		for (const [liquidity, tokensOwed0, status, steps] of [
+			[7n, 0n, 'active', ['burn-full-v3-position', 'collect-full-v3-position']],
+			[0n, 3n, 'collect-only', ['collect-full-v3-position']],
+			[0n, 0n, 'closed', []],
+		] as const) {
+			const current = position('closed')
+			const retirement = request()
+			const emptyParameters = { blockHash: hash(101), blockNumber: 101n, canonicalScanComplete: true, evaluations: [], retirement, snapshot: emptySnapshot(), state: initialDurableState(31337), v3: [] }
+			applyRetirementAssessment(retirement, assessRetirement(emptyParameters), hash(101), 101n, completionBinding)
+			expect(retirement.completionEvidence).toBeDefined()
+			retirement.positions = [current]
+			const anchors: V3PositionAnchor[] = []
+			const reader = async (candidate: DurableV3Position, anchor: V3PositionAnchor) => {
+				anchors.push(anchor)
+				return { liquidity, position: candidate, tokensOwed0, tokensOwed1: 0n }
+			}
+			const observations = await readV3PositionsWithQuorum([reader, reader], 2, retirement.positions, v3Anchor(102n))
+			expect(anchors).toEqual([v3Anchor(102n), v3Anchor(102n)])
+			expect(observations).toHaveLength(1)
+			for (const observation of observations) recordV3ScanSuccess({ retirement }, observation, 102n)
+			expect(current.status).toBe(status)
+			const assessment = assessRetirement({ blockHash: hash(102), blockNumber: 102n, canonicalScanComplete: true, evaluations: [], retirement, snapshot: emptySnapshot(), state: initialDurableState(31337), v3: observations })
+			applyRetirementAssessment(retirement, assessment, hash(102), 102n, completionBinding)
+			if (steps.length > 0) {
+				expect(retirement.completionEvidence).toBeUndefined()
+				expect(assessment.action?.kind).toBe('v3-position')
+				if (assessment.action?.kind !== 'v3-position') throw new Error('Expected V3 recovery action')
+				expect(buildV3RetirementPlan(emptySnapshot(), assessment.action.observation, 0).steps.map(step => step.id)).toEqual([...steps])
+			} else expect(assessment.status).toBe('drained')
+		}
+	})
+
+	test('missing observations for retained positions invalidate completion evidence', () => {
+		for (const status of ['active', 'closed', 'collect-only'] as const) {
+			const retirement = request()
+			const parameters = { blockHash: hash(100), blockNumber: 100n, canonicalScanComplete: true, evaluations: [], retirement, snapshot: emptySnapshot(), state: initialDurableState(31337), v3: [] }
+			applyRetirementAssessment(retirement, assessRetirement(parameters), hash(100), 100n, completionBinding)
+			expect(retirement.completionEvidence).toBeDefined()
+			retirement.positions = [position(status)]
+			const assessment = assessRetirement({ ...parameters, blockHash: hash(101), blockNumber: 101n })
+			expect(assessment.status).toBe('blocked')
+			applyRetirementAssessment(retirement, assessment, hash(101), 101n, completionBinding)
+			expect(retirement.completionEvidence).toBeUndefined()
+			expect(retirement.profileReplacementOverride).toBeUndefined()
+		}
+	})
+
 	test('requires RPC quorum for current position amounts', async () => {
-		const current = position()
+		const current = position('closed')
 		const reader = (liquidity: bigint) => async () => ({ liquidity, position: current, tokensOwed0: 2n, tokensOwed1: 3n })
 		const observations = await readV3PositionsWithQuorum([reader(5n), reader(5n), reader(9n)], 2, [current], v3Anchor(100n))
 		expect(observations[0]).toMatchObject({ liquidity: 5n, tokensOwed0: 2n, tokensOwed1: 3n })
@@ -305,7 +353,7 @@ describe('Drain & Retire planning', () => {
 	test('rejects a competing-fork V3 quorum before recording retirement completion', async () => {
 		const canonicalBlockHash = hash(100)
 		const competingBlockHash = hash(101)
-		const current = position('active')
+		const current = position('closed')
 		const state = initialRuntimeState(true, address(1), 31_337)
 		request(state.retirement)
 		state.retirement.positions = [current]
