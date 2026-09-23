@@ -85,7 +85,7 @@ assertMigrationSecurityCoverageCommitmentDocs()
 assertRepricingBoundaryDocs()
 assertLazyClaimCommitmentDocs()
 assertEscalationGameBytecodeDocs()
-assertLifecycleReferences()
+await assertLifecycleReferences()
 assertContractInteractionDistinctions()
 assertSolidityFunctionReader()
 await assertProductionSolidityInventory()
@@ -432,8 +432,8 @@ function assertOpenOracleVendorAndEventDocs(): void {
 	assert.doesNotMatch(whitepaperStatoblast, /id="fig-statoblast-auction-clearing"/, 'whitepaper must delegate auction clearing to the canonical focused diagram')
 }
 
-function assertLifecycleReferences(): void {
-	assert.match(escalationGameState, /activationDelay = 3 days/)
+async function assertLifecycleReferences(): Promise<void> {
+	assert.match(await readFile('solidity/contracts/statoblast/EscalationGameStorage.sol', 'utf8'), /activationDelay = 3 days/)
 	assert.match(escalationGameTypes, /ESCALATION_TIME_LENGTH = 4233600; \/\/ 7 weeks/)
 	assert.match(securityPoolUtils, /MIGRATION_TIME = 8 weeks/)
 	for (const systemState of ['Operational', 'PoolForked', 'ForkMigration', 'ForkTruthAuction']) {
