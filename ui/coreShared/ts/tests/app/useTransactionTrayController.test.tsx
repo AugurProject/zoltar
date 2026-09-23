@@ -51,6 +51,32 @@ describe('useTransactionTrayController', () => {
 		expect(finishedCount).toBe(1)
 	})
 
+	test('admits a new transaction after a failed attempt finishes', async () => {
+		let controller: ReturnType<typeof useTransactionTrayController> | undefined
+		function Harness() {
+			controller = useTransactionTrayController()
+			return null
+		}
+		const rendered = await renderIntoDocument(<Harness />)
+		cleanupRendered = rendered.cleanup
+		if (controller === undefined) throw new Error('Transaction tray controller did not initialize')
+		const intent = { action: 'createMarket' as const, source: 'zoltar' as const, submittedTitle: 'Creating Question' }
+		await act(() => {
+			expect(controller?.onTransactionRequested(intent)).toBe(true)
+			controller?.onTransactionFailed('nonce too low')
+			controller?.onTransactionFinished()
+		})
+		expect(controller.transactionState.value.inFlightCount).toBe(0)
+		expect(controller.transactionState.value.active?.tone).toBe('error')
+		let admitted: boolean | void
+		await act(() => {
+			admitted = controller?.onTransactionRequested(intent)
+		})
+		expect(admitted).toBe(true)
+		expect(controller.transactionState.value.active?.tone).toBe('awaiting-wallet')
+		expect(controller.transactionState.value.inFlightCount).toBe(1)
+	})
+
 	test('resets for a replacement environment and ignores callbacks from the previous generation', async () => {
 		let controller: ReturnType<typeof useTransactionTrayController> | undefined
 		function Harness() {

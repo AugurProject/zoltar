@@ -13,6 +13,7 @@ type TransactionPresentationNoticeProps = {
 	dismissible?: boolean
 	noticeRef?: RefObject<HTMLDivElement>
 	onDismiss?: () => void
+	onRetry?: (() => void) | undefined
 	transaction: GlobalTransactionPresentation
 }
 
@@ -25,7 +26,7 @@ function getTransactionBadge(tone: GlobalTransactionPresentation['tone']): { lab
 	return { tone: 'warning', label: transactionCopy.attention }
 }
 
-export function TransactionPresentationNotice({ className = '', compact = false, contextWarning, dismissible = false, noticeRef, onDismiss, transaction }: TransactionPresentationNoticeProps) {
+export function TransactionPresentationNotice({ className = '', compact = false, contextWarning, dismissible = false, noticeRef, onDismiss, onRetry, transaction }: TransactionPresentationNoticeProps) {
 	const badge = getTransactionBadge(transaction.tone)
 	const transactionHash = transaction.hash
 	const rows = transaction.rows ?? []
@@ -85,6 +86,11 @@ export function TransactionPresentationNotice({ className = '', compact = false,
 			</div>
 			{!dismissible || compact ? undefined : (
 				<div className='global-transaction-actions'>
+					{transaction.tone !== 'error' || onRetry === undefined ? undefined : (
+						<button className='secondary' type='button' onClick={onRetry}>
+							{transactionCopy.reviewAndRetry}
+						</button>
+					)}
 					<button className={`${transaction.tone === 'success' || transaction.tone === 'error' ? 'primary' : 'quiet'} global-transaction-dismiss`} type='button' onClick={onDismiss}>
 						{transactionCopy.dismiss}
 					</button>

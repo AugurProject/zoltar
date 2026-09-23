@@ -57,6 +57,51 @@ for (const outcome of ['confirmed', 'failed'] as const) {
 	})
 }
 
+test('returns an embedded failed transaction to its form for review before resubmission', async () => {
+	const presentation = signal<GlobalTransactionPresentation | undefined>(undefined)
+	let attempts = 0
+	function Harness() {
+		return (
+			<GlobalTransactionPresentationProvider transaction={presentation.value}>
+				<OperationModal isOpen title='Deposit REP' onClose={() => undefined}>
+					<button
+						type='button'
+						onClick={() => {
+							attempts += 1
+							presentation.value = { operationKey: `deposit-${attempts}`, title: 'Depositing REP', tone: 'preparing' }
+							const controller = createTransactionStepController()
+							controller.setPlan([step])
+							controller.startWithoutReview(0)
+							if (attempts === 1) {
+								controller.failed('nonce too low')
+								presentation.value = { operationKey: 'deposit-1', title: 'Deposit failed', tone: 'error', detail: 'nonce too low' }
+							}
+						}}
+					>
+						Deposit REP
+					</button>
+				</OperationModal>
+			</GlobalTransactionPresentationProvider>
+		)
+	}
+	const rendered = await renderIntoDocument(<Harness />)
+	try {
+		const queries = within(document.body)
+		const submit = queries.getByRole('button', { name: 'Deposit REP' })
+		await act(() => fireEvent.click(submit))
+		expect(queries.getByRole('alert').textContent).toContain('nonce too low')
+		await act(() => fireEvent.click(queries.getByRole('button', { name: 'Review and retry' })))
+		expect(queries.queryByRole('alert')).toBeNull()
+		expect(document.activeElement).toBe(submit)
+		await act(() => fireEvent.click(submit))
+		expect(attempts).toBe(2)
+		expect(transactionSteps.value?.steps[0]?.phase).toBe('pending')
+	} finally {
+		transactionSteps.value?.cancel()
+		await rendered.cleanup()
+	}
+})
+
 for (const outcome of ['success', 'failure', 'approval', 'cancel', 'multi-step'] as const) {
 	test(`keeps transaction review inside the initiating dialog through ${outcome}`, async () => {
 		const presentation = signal<GlobalTransactionPresentation | undefined>(undefined)

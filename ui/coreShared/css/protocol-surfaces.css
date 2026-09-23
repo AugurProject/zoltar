@@ -772,6 +772,8 @@ main.global-transaction-tray-open :is(a, button, input, select, summary, textare
 
 .global-transaction-actions {
 	display: flex;
+	flex-wrap: wrap;
+	gap: 0.5rem;
 	justify-content: flex-end;
 	padding-top: 0.2rem;
 }
@@ -2076,6 +2078,14 @@ main.global-transaction-tray-open :is(a, button, input, select, summary, textare
 		min-width: 0;
 		font-size: 0.8125rem;
 		padding-inline: 0.65rem;
+	}
+
+	.transaction-plan-action-final {
+		grid-template-columns: minmax(0, 1fr);
+	}
+
+	.transaction-step-close button {
+		flex: 1;
 	}
 
 	.transaction-approval-editor .workflow-metric-grid {

@@ -25,7 +25,7 @@ export function TransactionStepsModal({ contextKey }: { contextKey: string }) {
 		<GlobalTransactionPresentationProvider transaction={undefined}>
 			<OperationModal embedTransactionSteps={false} isOpen closeDisabled={pending} title={workflow.steps.at(-1)?.title ?? current.title} onClose={workflow.cancel}>
 				<GlobalTransactionPresentationProvider transaction={presentation}>
-					<TransactionStepsContent contextKey={contextKey} />
+					<TransactionStepsContent contextKey={contextKey} onRetry={workflow.cancel} />
 				</GlobalTransactionPresentationProvider>
 			</OperationModal>
 		</GlobalTransactionPresentationProvider>

@@ -34,6 +34,7 @@ export function OperationModal({ children, closeDisabled = false, closeOnSuccess
 	const bodyRef = useRef<HTMLDivElement | null>(null)
 	const [reviewActionsSlot, setReviewActionsSlot] = useState<HTMLElement | null>(null)
 	const [dismissedOperationKey, setDismissedOperationKey] = useState<string>()
+	const [focusFormAfterRetry, setFocusFormAfterRetry] = useState(false)
 	const [reviewScope, setReviewScope] = useState<AbortController>()
 	useLayoutEffect(() => {
 		if (!isOpen || !embedTransactionSteps) return
@@ -143,12 +144,23 @@ export function OperationModal({ children, closeDisabled = false, closeOnSuccess
 	useEffect(() => {
 		if (showNotice) noticeRef.current?.scrollIntoView?.({ block: 'nearest' })
 	}, [showNotice, modalTransaction?.tone, modalTransaction?.hash])
+	useLayoutEffect(() => {
+		if (!focusFormAfterRetry || !isOpen || showNotice) return
+		const body = bodyRef.current
+		const action = body?.querySelector<HTMLElement>('.tx-action-button:not(:disabled)') ?? body?.querySelector<HTMLElement>('button[type="submit"]:not(:disabled)') ?? body?.querySelector<HTMLElement>('button:not(:disabled)') ?? body?.querySelector<HTMLElement>('input:not(:disabled)')
+		action?.focus()
+		setFocusFormAfterRetry(false)
+	}, [focusFormAfterRetry, isOpen, showNotice])
 
 	if (!isOpen) return undefined
 
 	const returnToForm = () => {
 		setDismissedOperationKey(activeTransactionOperationKey)
 		if (ownsWorkflow) workflow.cancel()
+	}
+	const retryFromForm = () => {
+		returnToForm()
+		setFocusFormAfterRetry(true)
 	}
 	const reviewActionsSlotContext = showSteps
 		? {
@@ -185,7 +197,7 @@ export function OperationModal({ children, closeDisabled = false, closeOnSuccess
 					{/* Outcome notices sit below the form so its controls never move; the dialog scrolls to them instead. */}
 					{showNotice ? (
 						<div ref={noticeRef}>
-							<TransactionPresentationNotice className='operation-modal-transaction-notice' dismissible={modalTransaction.tone === 'success' || modalTransaction.tone === 'error'} onDismiss={requestClose} transaction={modalTransaction} />
+							<TransactionPresentationNotice className='operation-modal-transaction-notice' dismissible={modalTransaction.tone === 'success' || modalTransaction.tone === 'error'} onDismiss={requestClose} onRetry={modalTransaction.tone === 'error' ? retryFromForm : undefined} transaction={modalTransaction} />
 						</div>
 					) : undefined}
 					{showSteps ? (

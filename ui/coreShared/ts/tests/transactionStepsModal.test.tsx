@@ -9,6 +9,45 @@ import { TransactionStepsModal } from '../components/TransactionStepsModal.js'
 import { TransactionStepsContent } from '../components/TransactionStepsContent.js'
 import { createTransactionStepController, transactionSteps } from '../transactions/transactionSteps.js'
 
+test('returns a failed transaction to its action for a fresh submission', async () => {
+	const dom = installDomEnvironment()
+	let attempts = 0
+	const start = () => {
+		attempts += 1
+		const controller = createTransactionStepController()
+		controller.setPlan([{ title: 'Deposit REP', description: 'Deposit REP into the vault.', contractAddress: undefined, contractLabel: undefined, spender: undefined, amount: undefined, ethValueAttoEth: 0n }])
+		controller.startWithoutReview(0)
+		if (attempts === 1) controller.failed('nonce too low')
+	}
+	const rendered = await renderIntoDocument(
+		<>
+			<button type='button' onClick={start}>
+				Deposit REP into vault
+			</button>
+			<TransactionStepsModal contextKey='deposit' />
+		</>,
+	)
+	try {
+		const queries = within(rendered.container)
+		const submit = queries.getByRole('button', { name: 'Deposit REP into vault' })
+		submit.focus()
+		await act(() => fireEvent.click(submit))
+		expect(queries.getByRole('alert').textContent).toContain('nonce too low')
+		const dismiss = queries.getByRole('button', { name: 'Dismiss' })
+		expect(dismiss.classList.contains('primary')).toBe(true)
+		await act(() => fireEvent.click(queries.getByRole('button', { name: 'Review and retry' })))
+		expect(transactionSteps.value).toBeUndefined()
+		expect(document.activeElement).toBe(submit)
+		await act(() => fireEvent.click(submit))
+		expect(attempts).toBe(2)
+		expect(transactionSteps.value?.steps[0]?.phase).toBe('pending')
+	} finally {
+		transactionSteps.value?.cancel()
+		await rendered.cleanup()
+		dom.cleanup()
+	}
+})
+
 test('shows every step, token deposit, expected return and ETH cost before the first confirmation', async () => {
 	const dom = installDomEnvironment()
 	const controller = createTransactionStepController()
