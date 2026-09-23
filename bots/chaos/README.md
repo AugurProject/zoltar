@@ -128,29 +128,29 @@ State may contain a remembered key, signed transactions, and credentialed endpoi
 
 Drain & Retire is a durable, restart-safe retirement workflow for one deployment profile. It is different from pause: pause stops signing, while drain stops new random exposure but continues pending-transaction recovery, partial-workflow cleanup, matured lifecycle obligations, claims, withdrawals, redemptions, allowance revocation, and asset recovery. A safety pause always overrides drain. `SIGINT` and `SIGTERM` retain their normal graceful-boundary behavior.
 
-While the bot is running, request drain in the dashboard. For CLI use, stop the bot first and ensure the signer key is saved in settings; the CLI needs the bot's exclusive state lock. The exact confirmation contains the active profile and configured signer address. Recovered ETH and REP go to that signer wallet:
+While the bot is running, request drain in the dashboard. For CLI use, stop the same bot first and ensure the signer key is saved in settings; the CLI needs the bot's exclusive state lock. The commands below use direct Bun and its local state file. For a Compose bot, run `docker compose stop chaos` from this directory, then replace `bun run run --` in each command with `docker compose run --rm --no-deps chaos bun src/cli/run.ts` so the command uses the container's state volume. The exact confirmation contains the active profile and configured signer address. Recovered ETH and REP go to that signer wallet:
 
 ```sh
 bun run run -- --drain 0xSigner --confirm "DRAIN profile:id TO 0xSigner"
 ```
 
-Restart the same bot service after this CLI command; it saves the drain request and exits. On Windows, run `start.bat` again to resume the retiring deployment.
+Restart the same bot after this CLI command; it saves the drain request and exits. Use `bun run run` for direct Bun, or `start.bat` on Windows to resume the retiring Compose service.
 
-Optional flags are `--migrate-existing-claims`, `--exit-unmatched-shares=<maximum-loss-bps>`, and `--exit-after-completion`. Inspect progress in the running dashboard, or stop the bot and use `bun run run -- --retirement-status`. Cancel in the dashboard or, after stopping the bot, with `bun run run -- --cancel-drain --confirm "CANCEL DRAIN"`. After CLI cancellation, restart the pinned old Docker service with `docker compose start chaos` from this directory, or restart the direct Bun operator with the same settings. `start.bat` detects the still-outdated contracts and requests retirement again. Cancellation is unavailable once the first retirement WETH unwrap begins.
+Optional flags are `--migrate-existing-claims`, `--exit-unmatched-shares=<maximum-loss-bps>`, and `--exit-after-completion`. Inspect progress in the running dashboard, or stop the bot and use `bun run run -- --retirement-status` with the matching direct Bun or Compose prefix above. Cancel in the dashboard or, after stopping the bot, with `bun run run -- --cancel-drain --confirm "CANCEL DRAIN"` using the same prefix rule. After status or cancellation through the CLI, restart direct Bun with `bun run run` or the pinned old Docker service with `docker compose start chaos`. After cancellation, `start.bat` would detect the still-outdated contracts and request retirement again. Cancellation is unavailable once the first retirement WETH unwrap begins.
 
-If retirement reports `drained-with-residuals`, review the completion evidence and residual list before accepting replacement for the shown target profile. Use the dashboard while the bot runs, or stop it for the CLI command below. After CLI acceptance, restart `start.bat` to finish the switch.
+If retirement reports `drained-with-residuals`, review the completion evidence and residual list before accepting replacement for the shown target profile. Use the dashboard while the bot runs, or stop it for the CLI command below, using the matching direct Bun or Compose prefix. After Compose CLI acceptance, run `start.bat` to finish the switch.
 
 ```sh
 bun run run -- --accept-residuals profile:next --reason "Reviewed current residuals and accepted replacement." --confirm "ACCEPT RESIDUALS FOR profile:next"
 ```
 
-If retirement flags a legacy Uniswap V3 position whose ownership and coordinates you can verify, register it in the dashboard. For CLI use, stop the bot, run the command below, and restart the same bot service afterward:
+If retirement flags a legacy Uniswap V3 position whose ownership and coordinates you can verify, register it in the dashboard. For CLI use, stop the bot, run the command below with the matching direct Bun or Compose prefix, and restart the same bot afterward:
 
 ```sh
 bun run run -- --register-v3-position '{"owner":"0x…","pool":"0x…","token0":"0x…","token1":"0x…","fee":3000,"tickLower":-120,"tickUpper":120,"workflowId":"receipt:0x…"}' --confirm "REGISTER V3 profile:id"
 ```
 
-Recovered ETH and REP go to the signer wallet. Recovery may spend existing shares or REP when a claim requires it; the default launcher policy does not enable claim-linked migration. For the exact claim catalog, proof requirements, and residual categories, see [drain and retirement controls](./OPERATOR_REFERENCE.md#drain-and-retirement-controls).
+Recovery may spend existing shares or REP when a claim requires it; the default launcher policy does not enable claim-linked migration. For the exact claim catalog, proof requirements, and residual categories, see [drain and retirement controls](./OPERATOR_REFERENCE.md#drain-and-retirement-controls).
 
 For safe testnet redeployment, drain the old profile, review any residuals, preserve the owner-only state and completion proof, and configure a distinct state file for the new profile. The Windows `start.bat` launcher uses a distinct state file after verified retirement and leaves the old state in place. The shipped zero-root bootstrap has a narrowly checked upgrade migration that preserves its signer and audit history.
 

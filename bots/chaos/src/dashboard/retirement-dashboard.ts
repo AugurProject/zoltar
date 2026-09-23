@@ -138,8 +138,10 @@ export function createRetirementDashboard(options: RetirementDashboardOptions) {
 	return {
 		render(value: RetirementSnapshot) {
 			const retirement = value.retirement
-			destination.textContent = value.wallet === undefined || value.profileId === undefined ? 'Configure a signer wallet before requesting retirement.' : `Recovered ETH and REP go to signer wallet ${value.wallet}. Type DRAIN ${value.profileId} TO ${value.wallet} to confirm.`
 			const status = retirement?.status ?? 'inactive'
+			const canCancel = ['requested', 'draining', 'waiting', 'blocked'].includes(status) && retirement?.finalSweepStartedAt === undefined
+			destination.hidden = status !== 'inactive' && !canCancel
+			destination.textContent = status === 'inactive' ? (value.wallet === undefined || value.profileId === undefined ? 'Configure a signer wallet before requesting retirement.' : `Recovered ETH and REP go to the signer wallet. Type DRAIN ${value.profileId} TO ${value.wallet} to confirm.`) : 'Type CANCEL DRAIN to cancel before WETH unwrapping begins.'
 			let tone = 'warning'
 			if (status === 'drained') tone = 'success'
 			else if (status === 'blocked') tone = 'error'
@@ -149,7 +151,7 @@ export function createRetirementDashboard(options: RetirementDashboardOptions) {
 			if (status === 'known-claims-recovered') summary.textContent = 'Earlier history remains unverified; additional claims may exist.'
 			else if (status === 'inactive') summary.textContent = 'No retirement has been requested.'
 			else summary.textContent = `${retirement?.positions.length.toString() ?? '0'} V3 position records; ${retirement?.blockers.length.toString() ?? '0'} blockers; signer wallet ${retirement?.recipient ?? 'not recorded'}.`
-			cancel.disabled = status === 'inactive' || retirement?.finalSweepStartedAt !== undefined || status === 'drained' || status === 'drained-with-residuals'
+			cancel.disabled = !canCancel
 			residualSubmit.disabled = status !== 'drained-with-residuals'
 		},
 	}
