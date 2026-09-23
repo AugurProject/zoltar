@@ -5,6 +5,13 @@ import { RpcError } from '@zoltar/core-shared/evm/ethereum'
 import { formatRefreshErrorMessage, formatWriteErrorMessage, getErrorMessage, isCloseableErrorMessage, isRecoverableContractReadError } from '../lib/errors.js'
 
 void describe('error helpers', () => {
+	void test('drops library diagnostic trailers from revert details', () => {
+		const tevmRevert = new Error('revert Docs: https://tevm.sh/reference/tevm/errors/classes/reverterror/ Details: {"error":"revert","errorType":"EVMError"} Version: 1.0.0-next.148')
+		expect(formatWriteErrorMessage(tevmRevert, 'Failed to deposit REP')).toBe('Transaction failed while attempting to deposit REP.')
+		const nonceError = new Error('Transaction creation failed. Details: the tx doesn’t have the correct nonce. account has nonce of: 24 tx has nonce of: 25 Version: 1.0.0-next.148')
+		expect(formatWriteErrorMessage(nonceError, 'Failed to deposit REP')).toBe('Transaction failed while attempting to deposit REP. Reason: Transaction creation failed')
+	})
+
 	void test('marks user-rejected wallet errors as closeable', () => {
 		expect(getErrorMessage(new Error('User rejected the request.'), 'Couldn’t deploy SecurityPoolUtils.')).toBe('Action canceled in wallet.')
 		expect(isCloseableErrorMessage(getErrorMessage(new Error('User rejected the request.'), 'Couldn’t deploy SecurityPoolUtils.'))).toBe(true)

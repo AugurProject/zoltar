@@ -12,8 +12,9 @@ import { tryParseDecimalInput } from '@zoltar/ui-core-shared/forms/decimal.js'
 import type { RequestPriceModalProps } from '@zoltar/ui-statoblast-shared/features/security-pools/components/SecurityPoolOracleSections.js'
 import * as poolCopy from '@zoltar/ui-statoblast-shared/copy/securityPool.js'
 import * as priceRequestCopy from '@zoltar/ui-statoblast-shared/copy/priceRequest.js'
-import { embeddedTransactionSteps, TransactionStepsContent } from '@zoltar/ui-core-shared/components/TransactionStepsModal.js'
+import { embeddedTransactionSteps } from '@zoltar/ui-core-shared/components/TransactionStepsModal.js'
 import { PriceRequestPreview } from './PriceRequestPreview.js'
+import { TransactionStepsContent } from '@zoltar/ui-core-shared/components/TransactionStepsContent.js'
 import { transactionSteps } from '@zoltar/ui-core-shared/transactions/transactionSteps.js'
 
 async function fetchUniswapPrice(review: NonNullable<RequestPriceModalProps['review']>) {
@@ -148,11 +149,11 @@ export function RequestPriceModal({ review, onConfirm, onClose, canRequest, conf
 	return (
 		<GlobalTransactionPresentationProvider transaction={undefined}>
 			<TransactionActionButtonLockProvider locked={false}>
-				<OperationModal isOpen={review !== undefined} title={poolCopy.requestNewPriceTitle} onClose={close} closeDisabled={sending}>
+				<OperationModal embedTransactionSteps={false} isOpen={review !== undefined} title={poolCopy.requestNewPriceTitle} onClose={close} closeDisabled={sending}>
 					{priceControls}
 					{showSteps ? (
 						<GlobalTransactionPresentationProvider transaction={presentation}>
-							<TransactionStepsContent contextKey={key ?? ''} inline onClose={close} />
+							<TransactionStepsContent contextKey={key ?? ''} onClose={close} />
 						</GlobalTransactionPresentationProvider>
 					) : (
 						<PriceRequestPreview
@@ -160,7 +161,7 @@ export function RequestPriceModal({ review, onConfirm, onClose, canRequest, conf
 							reason={confirmationGuardMessage ?? priceError ?? (typeof error === 'string' ? error : undefined) ?? previewPrompt}
 							error={confirmationGuardMessage ?? (typeof error === 'string' ? error : undefined)}
 							preparing={valid && (running || attempted !== key)}
-							hideReason={priceError !== undefined || error !== undefined || confirmationGuardMessage !== undefined}
+							hideReason={!validPrice || priceError !== undefined || error !== undefined || confirmationGuardMessage !== undefined}
 							onClose={close}
 							onRetry={error === undefined ? undefined : () => setRetry(value => value + 1)}
 						/>

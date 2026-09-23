@@ -522,7 +522,7 @@ void describe('SecurityPoolsSection', () => {
 		expect(documentQueries.queryByText('Selected pool')).toBeNull()
 		expect(documentQueries.queryByText('Pool status')).toBeNull()
 		expect(documentQueries.queryByText('Next step')).toBeNull()
-		expect(documentQueries.getByRole('button', { name: 'Change pool' })).not.toBeNull()
+		expect(documentQueries.queryByRole('textbox', { name: 'Security Pool Address' }) !== null).toBe(true)
 		expect(document.body.querySelector('.selected-pool-context-details')).toBeNull()
 		const objectHeader = document.body.querySelector('.selected-pool-object-header')
 		if (!(objectHeader instanceof HTMLElement)) throw new Error('Expected the selected-pool object header')
