@@ -1064,6 +1064,12 @@ export function reduceEscalationEvent(state: ReplayState, log: ReplayLog) {
 		state.escalationLifecycles.set(log.emitter, lifecycle)
 		return
 	}
+	if (log.eventName === 'InheritedThresholdTieReopened') {
+		const lifecycle = state.escalationLifecycles.get(log.emitter)
+		if (lifecycle?.nonDecisionState !== 'inheritedThresholdTie') throw new Error('reopening requires an inherited threshold tie')
+		lifecycle.nonDecisionState = 'none'
+		return
+	}
 	if (log.eventName === 'InheritedThresholdTie') {
 		const lifecycle = state.escalationLifecycles.get(log.emitter) ?? {}
 		const sourceGame = requireAddress(log.args, 'sourceGame')
