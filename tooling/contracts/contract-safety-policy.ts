@@ -67,8 +67,8 @@ export const contractSafetyPolicy = {
 				sourcePath: 'contracts/statoblast/EscalationGame.sol',
 				contractName: 'EscalationGame',
 			},
-			24_428,
-			'The reviewed game preserves selector routing and now bubbles retention-call failures; no further runtime growth is permitted.',
+			24_503,
+			'The game adds fork-aware finality to preserve unresolved carry during delayed migration, sharing the fork-time lookup with payout calculation to bound the 75-byte runtime increase; no further runtime growth is permitted.',
 		),
 		runtimeBudget(
 			{
@@ -83,8 +83,8 @@ export const contractSafetyPolicy = {
 				sourcePath: 'contracts/statoblast/SecurityPoolForker.sol',
 				contractName: 'SecurityPoolForker',
 			},
-			24_416,
-			'The reviewed forker preserves fractional auction backing and migration guards; no further runtime growth is permitted.',
+			24_046,
+			'The forker delegates finality to the game and preserves fractional truth-auction backing without duplicated checks; no further runtime growth is permitted.',
 		),
 	] satisfies readonly BytecodeBudget[],
 	initcodeBudgets: [
@@ -93,16 +93,16 @@ export const contractSafetyPolicy = {
 				sourcePath: 'contracts/statoblast/SecurityPoolForker.sol',
 				contractName: 'SecurityPoolForker',
 			},
-			48_675,
-			'The reviewed forker initcode includes proportional auction settlement and minimum constructor arguments; no further growth is permitted.',
+			48_298,
+			'The forker initcode reflects shared game finality and proportional auction backing; no further growth is permitted.',
 		),
 		initcodeBudget(
 			{
 				sourcePath: 'contracts/statoblast/factories/EscalationGameFactory.sol',
 				contractName: 'EscalationGameFactory',
 			},
-			46_673,
-			'The factory embeds the reviewed game with retention-call revert bubbling and permits no further growth.',
+			46_755,
+			'The factory embeds the game with fork-aware finality, increasing minimum initcode by 82 bytes to preserve unresolved carry during delayed migration; no further growth is permitted.',
 		),
 	] satisfies readonly BytecodeBudget[],
 	exactLayoutPairs: [

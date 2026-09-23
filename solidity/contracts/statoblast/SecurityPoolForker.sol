@@ -666,12 +666,7 @@ contract SecurityPoolForker is SecurityPoolForkerBase {
 			return BinaryOutcomes.BinaryOutcome(data.fixedQuestionOutcomePlusOne - 1);
 		if (systemState == SystemState.Operational) {
 			EscalationGame escalationGame = securityPool.escalationGame();
-			uint256 forkTime = zoltar.getForkTime(securityPool.universeId());
-			if (address(escalationGame) != address(0x0)) {
-				uint256 escalationEndDate = escalationGame.getEscalationGameEndDate();
-				if (block.timestamp > escalationEndDate && (forkTime == 0 || escalationEndDate < forkTime))
-					return escalationGame.getFinalQuestionResolution();
-			}
+			if (address(escalationGame) != address(0x0)) return escalationGame.getFinalQuestionResolution();
 		}
 		return BinaryOutcomes.BinaryOutcome.None;
 	}
