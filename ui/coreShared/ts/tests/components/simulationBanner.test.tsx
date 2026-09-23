@@ -441,6 +441,7 @@ describe('SimulationBanner', () => {
 			expect(advancedQueries.getByText('Time travel')).toBeTruthy()
 
 			const expectedPresets = [
+				{ label: '+10 min', seconds: 10n * 60n },
 				{ label: '+1 hour', seconds: 60n * 60n },
 				{ label: '+1 day', seconds: 24n * 60n * 60n },
 				{ label: '+1 week', seconds: 7n * 24n * 60n * 60n },
@@ -452,7 +453,7 @@ describe('SimulationBanner', () => {
 				expect(advancedQueries.getByRole('button', { name: preset.label })).toBeTruthy()
 			}
 
-			for (const [index, preset] of expectedPresets.slice(2).entries()) {
+			for (const [index, preset] of expectedPresets.entries()) {
 				fireEvent.click(advancedQueries.getByRole('button', { name: preset.label }))
 				await waitFor(() => {
 					expect(advanceTime).toHaveBeenNthCalledWith(index + 1, preset.seconds)

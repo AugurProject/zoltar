@@ -19,14 +19,8 @@ import { getSimulationAccountOptionLabel, SimulationAccountControls, SimulationW
 import { ErrorNotice } from './ErrorNotice.js'
 import { CopyErrorMessage } from './CopyErrorMessage.js'
 import type { BadgeTone } from '../types/components.js'
+import { SIMULATION_TIME_PRESETS } from '../simulation/timePresets.js'
 
-const SIMULATION_TIME_PRESETS = [
-	{ label: simulationCopy.plus1Hour, seconds: 60n * 60n },
-	{ label: simulationCopy.plus1Day, seconds: 24n * 60n * 60n },
-	{ label: simulationCopy.plus1Week, seconds: 7n * 24n * 60n * 60n },
-	{ label: simulationCopy.plus1Month, seconds: 30n * 24n * 60n * 60n },
-	{ label: simulationCopy.plus1Year, seconds: 365n * 24n * 60n * 60n },
-] as const
 const SIMULATION_REP_MINT_AMOUNT = 1_000_000n * 10n ** 18n
 type SimulationBannerProps = {
 	controller: SimulationController

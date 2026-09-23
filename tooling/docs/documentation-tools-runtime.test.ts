@@ -342,7 +342,7 @@ test('MMR planner updates valid output and guards invalid leaf and index boundar
 		expect(peakHeight.value).toBe('2')
 		expect(peakHeight.tabIndex).toBe(-1)
 		expect(peakHeight.getAttribute('aria-hidden')).toBe('true')
-		expect(selection.value).toBe('Valid peak-local index')
+		expect(selection.value).toBe('Valid in-peak offset')
 		expect(siblings.value).toBe('4')
 		expect(heightTwo.getAttribute('aria-pressed')).toBe('true')
 		preset.click()
@@ -381,13 +381,13 @@ test('MMR planner updates valid output and guards invalid leaf and index boundar
 		expect(leafIndex.getAttribute('aria-invalid')).toBe('true')
 		expect(leafIndex.getAttribute('aria-describedby')).toContain(leafIndexError.id)
 		expect(leafIndexError.hidden).toBeFalse()
-		expect(leafIndexError.textContent).toBe('Enter an index from 0 through 7.')
-		expect(selection.value).toBe('Index must be between 0 and 7')
+		expect(leafIndexError.textContent).toBe('Enter an offset from 0 through 7.')
+		expect(selection.value).toBe('Offset must be between 0 and 7')
 		leafIndex.value = '7'
 		leafIndex.dispatchEvent(new Event('input'))
 		expect(leafIndex.hasAttribute('aria-invalid')).toBeFalse()
 		expect(leafIndexError.hidden).toBeTrue()
-		expect(selection.value).toBe('Valid peak-local index')
+		expect(selection.value).toBe('Valid in-peak offset')
 	} finally {
 		cleanup()
 	}
