@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<meta name="description" content="Factory and pair events, what their fields identify, and how indexers should attribute router-mediated operations." />
+		<title>Trading events</title>
+		<link rel="stylesheet" href="../../assets/css/shared-docs.css" />
+		<link rel="stylesheet" href="../../assets/css/docsShell.css" />
+	</head>
+	<body class="doc-openoracle">
+		<main id="main-content">
+			<header>
+				<p class="kicker">Reference</p>
+				<h1>Trading events</h1>
+				<p>The factory and pair emit every reserve and LP state change. The router emits an event only for the two share-transfer operations it executes itself.</p>
+			</header>
+			<section id="factory">
+				<h2>Factory</h2>
+				<p><code>PairCreated(securityPool, shareToken, universeId, pair, feeBps)</code> identifies one exact branch market and its immutable fee.</p>
+			</section>
+			<section id="pair">
+				<h2>Pair</h2>
+				<ul>
+					<li><code>LiquidityInitialized(provider, recipient, yesAmount, noAmount, liquidity)</code> records the first reserve contribution and circulating LP minted; locked minimum liquidity is separate.</li>
+					<li><code>LiquidityAdded(provider, recipient, yesAmount, noAmount, liquidity)</code> records proportional reserve use.</li>
+					<li><code>LiquidityRemoved(provider, recipient, yesAmount, noAmount, liquidity)</code> records raw-share output.</li>
+					<li><code>Swap(sender, recipient, yesForNo, exactOutput, amountIn, amountOut, feeAmount, resultingYesReserve, resultingNoReserve)</code> provides authoritative direction, mode, amounts, fee, and resulting state.</li>
+					<li><code>Sync(yesReserve, noReserve)</code> records reserves after synchronization or mutation.</li>
+					<li><code>PredeploymentSharesQuarantined(invalidAmount, yesAmount, noAmount)</code> records canonical shares removed from a counterfactual pair address during construction. The destination is the factory's immutable <code>predeploymentShareSink</code>.</li>
+					<li>Standard ERC-20 <code>Transfer</code> and <code>Approval</code> events describe LP ownership and allowances.</li>
+				</ul>
+			</section>
+			<section id="router">
+				<h2>Router</h2>
+				<ul>
+					<li><code>PositionExitedByTransfer(owner, pair, completeSetShares, longSharesUsed, longSharesRefunded, payoutRecipient)</code> records an insured exit initiated by <code>owner</code>'s share transfer.</li>
+					<li><code>CompleteSetRedeemedByTransfer(securityPool, completeSetShares, payoutRecipient)</code> records a complete-set redemption initiated by share transfer.</li>
+				</ul>
+			</section>
+			<section id="attribution">
+				<h2>Attributing router operations</h2>
+				<p>For router-mediated operations, pair <code>provider</code>/<code>sender</code> fields and SecurityPool <code>creator</code>/<code>redeemer</code> fields identify the router, not the initiating wallet. Pair <code>recipient</code> identifies the explicit asset recipient. Insured exits carry the owner in <code>PositionExitedByTransfer</code>. For complete-set redemptions, take the owner from the ShareToken <code>TransferBatch</code> log's <code>from</code> field, since <code>CompleteSetRedeemedByTransfer</code> records only the pool and payout recipient. Entry and liquidity operations emit no router event, so for those an indexer must combine the transaction sender, the called router method, pair and core logs, and the explicit recipient; it must not infer wallet attribution from the immediate-caller fields alone.</p>
+				<p>Router return tuples are available from authoritative call simulation only; they are not stored in a mined receipt. Mined complete-set and ETH-flow evidence comes from the SecurityPool's <code>CompleteSetCreated</code> and <code>CompleteSetRedeemed</code> events plus transaction logs.</p>
+			</section>
+		</main>
+		<script src="../../assets/js/responsiveDocs.js"></script>
+		<script src="../../assets/js/docsData.js"></script>
+		<script src="../../assets/js/docsShell.js"></script>
+	</body>
+</html>

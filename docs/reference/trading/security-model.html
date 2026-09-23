@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<meta name="description" content="Signature and callback authorization, custody guarantees, the remaining risks, the assumptions Trading makes, and how to report a vulnerability." />
+		<title>Trading security model</title>
+		<link rel="stylesheet" href="../../assets/css/shared-docs.css" />
+		<link rel="stylesheet" href="../../assets/css/docsShell.css" />
+	</head>
+	<body class="doc-openoracle">
+		<main id="main-content">
+			<header>
+				<p class="kicker">Reference</p>
+				<h1>Trading security model</h1>
+				<p>Trading has not been audited. Tests and internal reviews are not substitutes for an independent security assessment. This page states what the contracts defend against, what they assume, and what they leave to the user.</p>
+			</header>
+			<section id="authorization">
+				<h2>Signature and callback authorization</h2>
+				<p>LP permits use the standard ERC-2612 nonce, deadline, chain-bound EIP-712 domain, owner, spender, and exact value. The LP ledger is the repository's vendored <code>ERC20.sol</code>, sourced from the MIT-licensed <a href="https://github.com/OpenZeppelin/openzeppelin-contracts/tree/v5.2.0/contracts/token/ERC20">OpenZeppelin Contracts v5.2.0 release</a>. Its local changes pin Solidity 0.8.35, use repository formatting and descriptive revert strings, and substitute Augur unit terminology in comments; its state-transition and allowance algorithms are unchanged. <code>TradingLiquidityToken.sol</code> adapts the MIT-licensed <a href="https://github.com/OpenZeppelin/openzeppelin-contracts/blob/v5.2.0/contracts/token/ERC20/extensions/ERC20Permit.sol">v5.2.0 ERC20Permit</a> by using the repository's shared OpenZeppelin-derived EIP-712/ECDSA primitive, a fixed version <code>1</code>, descriptive revert strings, and the stable <code>Zoltar Two-Way LP</code> domain name. It omits <code>Nonces</code>, <code>IERC20Permit</code>, and <code>EIP712</code> inheritance only because their exact storage and hashing behavior is implemented directly by the local nonce mapping and shared authorization primitive. No signature or curve algorithm is reimplemented in the pair.</p>
+				<p>OpenZeppelin ERC-20 prohibits minting to the zero address. The pair therefore locks <code>MINIMUM_LIQUIDITY</code> at the non-callable <code>MINIMUM_LIQUIDITY_LOCK</code> address instead of treating the zero address as an LP holder. Only pair operations can invoke the inherited internal mint and burn functions. A signature is authorization, not transaction privacy: integrations should use short deadlines and exact amounts. A Safe that does not produce an ECDSA permit uses an ordinary exact allowance.</p>
+				<p>Receive-based ERC-1155 operations use no off-chain signature. The ShareToken call must be submitted by the owner, while the versioned payload binds all contract identities, operation inputs, recipients, slippage, and deadline. Copying an observed payload cannot redirect assets and cannot separately consume an allowance because the router requires <code>operator == from</code>.</p>
+			</section>
+			<section id="custody">
+				<h2>Custody and reentrancy</h2>
+				<p>The pair rejects foreign ShareTokens, INVALID, and noncanonical universe IDs in both single and batch callbacks. A reentrancy lock covers all reserve and LP mutations. Recipient callbacks can execute arbitrary code, so final reserves are read from authoritative balances after transfers. Recorded-balance deficits revert; valid donations synchronize upward.</p>
+				<p>The router recognizes pairs only through its immutable factory, opens callback state only around one expected pool and share token, and restores its starting share balances. Its ETH receiver opens only around redemption from that pool. This prevents unsolicited callbacks and keeps forced ETH separate from exit proceeds.</p>
+				<p>Factory checks prevent a malicious pool from borrowing another question's ShareToken or universe identity. CREATE2 plus one immutable fee gives one canonical pair per exact pool without privileged replacement.</p>
+				<p>Because an ERC-1155 transfer to an address without code cannot invoke a receiver callback, an attacker can send shares to a predicted CREATE2 address before deployment. Pair construction detects its canonical INVALID, YES, and NO balances and irrecoverably quarantines them in the factory's ownerless sink. Initialization then starts with zero canonical balances, including zero INVALID. Foreign token contracts cannot be enumerated and may still assign irrelevant balances to the address; the pair never recognizes or moves them.</p>
+			</section>
+			<section id="assumptions">
+				<h2>Assumptions</h2>
+				<ul>
+					<li>The configured Zoltar <code>SecurityPoolFactory</code>, pool, <code>ShareToken</code>, forker, question data, and universe state are canonical and behave as implemented in the matching core release.</li>
+					<li>Users set realistic slippage and deadlines and obtain a fresh simulation in the current block immediately before submission.</li>
+					<li>Wallets and RPC endpoints accurately report account, chain, balances, approvals, and receipts.</li>
+					<li>ERC-1155 recipients can execute arbitrary code, so pair and router accounting uses reentrancy guards and updates from authoritative balances after callbacks.</li>
+					<li>Direct valid YES/NO donations accrue to current LPs. Direct INVALID and foreign token IDs are rejected.</li>
+					<li>Canonical shares sent to a predicted pair address before deployment are irrecoverably quarantined in the factory's ownerless sink. Users must not transfer assets to counterfactual addresses.</li>
+					<li>Forced ETH can remain in the router; an exit forwards only its measured operation delta.</li>
+				</ul>
+			</section>
+			<section id="known-risks">
+				<h2>Known risks</h2>
+				<p>Constant-product spot prices are manipulable and expose users to front-running and sandwiches. There is no TWAP or manipulation-resistant oracle. A lifecycle transition, fork, resolution, reserve donation, retention update, or intervening trade can invalidate a quote; contract guards and slippage bounds make the transaction revert rather than promise execution. Initial liquidity determines the starting conditional price and should be initialized atomically. LP tokens cover only YES/NO reserves; separately held INVALID can be lost, transferred, or insufficient. A valid-resolution LP can suffer directional loss, and YES/NO reserves may have no redemption value after an INVALID result.</p>
+				<p>Remaining risks also include first-price choice, stale simulation, lifecycle races, recipient denial of ETH or ERC-1155 reception, core-contract bugs, and approval misuse. Slippage and deadlines bound execution but do not remove MEV. The immutable factory fee is a deployment choice, not a claim of economic optimality.</p>
+			</section>
+			<section id="reporting">
+				<h2>Reporting a vulnerability</h2>
+				<p>Report a suspected vulnerability through <a href="https://github.com/AugurProject/zoltar/security/advisories/new">GitHub private vulnerability reporting</a>. Include the affected commit, contracts and functions, prerequisites, a minimal reproduction, expected impact, and whether funds or deployment keys may be at immediate risk. If private reporting is unavailable, open a public issue asking maintainers to establish a private channel, but do not include vulnerability details. Do not exploit a live deployment or publish details before maintainers have had a reasonable opportunity to respond.</p>
+			</section>
+		</main>
+		<script src="../../assets/js/responsiveDocs.js"></script>
+		<script src="../../assets/js/docsData.js"></script>
+		<script src="../../assets/js/docsShell.js"></script>
+	</body>
+</html>
