@@ -2,7 +2,7 @@ import type { Address, Hash, WalletClient } from '@zoltar/core-shared/evm/ethere
 import { statoblast_SecurityPool_SecurityPool } from '@zoltar/ui-statoblast-shared/contractArtifact.js'
 import type { DeploymentConfiguration } from './config.js'
 import type { LiveBalances, LiveMarket, MarketLifecycle } from './liveMarket.js'
-import { deadlineAtBlock, minimumAfterSlippage, requireQuoteBlock, requireTransactionSlippageBps, requireTransactionValidityMinutes, retainApprovedMinimum, stableSimulation, UI_SLIPPAGE_BPS, type TransactionExpiry } from './tradeQuote.js'
+import { deadlineAtBlock, minimumAfterSlippage, requireTransactionSlippageBps, requireTransactionValidityMinutes, retainApprovedMinimum, stableSimulation, UI_SLIPPAGE_BPS, type TransactionExpiry } from './tradeQuote.js'
 import { encodeReceiveBasedRedeemRequest, shareOperationRouter, shareTokenAbi } from './authorization.js'
 
 const securityPoolAbi = statoblast_SecurityPool_SecurityPool.abi
@@ -123,12 +123,10 @@ export async function simulateSettlement(
 }
 
 export async function submitFreshSettlement(client: WalletClient, configuration: DeploymentConfiguration, account: Address, quote: Awaited<ReturnType<typeof simulateSettlement>>, guardedWrite: GuardedWalletWrite): Promise<Hash> {
-	await requireQuoteBlock(client, quote)
 	let parameters: Readonly<{ amount?: bigint; deadline?: bigint; validityMinutes?: bigint; slippageBps?: bigint; sourceOutcome?: ShareOutcome; targetOutcomeIndexes?: readonly bigint[] }> = {}
 	if (quote.operation === 'redeem-complete-set') parameters = { amount: quote.amount, deadline: quote.deadline, slippageBps: quote.slippageBps }
 	else if (quote.operation === 'migrate-shares') parameters = { sourceOutcome: quote.sourceOutcome, targetOutcomeIndexes: quote.targetOutcomeIndexes }
 	const refreshed = await simulateSettlementWithExpiryParameters(client, configuration, quote.market, account, quote.operation, parameters)
-	if (refreshed.blockNumber !== quote.blockNumber || refreshed.blockHash !== quote.blockHash) throw new Error('Settlement changed blocks during revalidation')
 	if (quote.operation === 'redeem-complete-set') {
 		if (refreshed.operation !== 'redeem-complete-set') throw new Error('Settlement operation changed during revalidation')
 		const minimumEth = retainApprovedMinimum(quote.minimumAttoEth, refreshed.expectedAttoEth, 'ETH output')
