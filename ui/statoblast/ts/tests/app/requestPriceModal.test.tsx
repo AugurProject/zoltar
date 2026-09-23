@@ -182,8 +182,10 @@ test('shows preparation failure with retry and keeps manual entry available', as
 test('allows another price request after a failed transaction step', async () => {
 	const dom = installDomEnvironment()
 	let attempts = 0
-	const onConfirm = async (_request: RequestPriceReview, signal?: AbortSignal) => {
+	const prices: bigint[] = []
+	const onConfirm = async (request: RequestPriceReview, signal?: AbortSignal) => {
 		attempts += 1
+		if (request.proposedRepPerEthPrice !== undefined) prices.push(request.proposedRepPerEthPrice)
 		const controller = createTransactionStepController(signal)
 		controller.setPlan([{ ...step, title: 'Request price' }])
 		controller.startWithoutReview(0)
@@ -194,10 +196,22 @@ test('allows another price request after a failed transaction step', async () =>
 		const queries = within(document.body)
 		await act(() => fireEvent.click(queries.getByRole('button', { name: 'Fetch from Uniswap' })))
 		await settle()
-		expect(queries.getByRole('button', { name: 'Retry request' })).not.toBeNull()
-		await act(() => fireEvent.click(queries.getByRole('button', { name: 'Retry request' })))
+		expect(queries.getByRole('button', { name: 'Review and retry' }).classList.contains('secondary')).toBe(true)
+		expect(queries.getByRole('button', { name: 'Dismiss' }).classList.contains('primary')).toBe(true)
+		await act(() => fireEvent.click(queries.getByRole('button', { name: 'Review and retry' })))
+		await settle()
+		expect(attempts).toBe(1)
+		const priceInput = queries.getByRole('textbox', { name: 'Open Oracle REP/ETH starting price' })
+		expect(priceInput.hasAttribute('disabled')).toBe(false)
+		expect(document.activeElement).toBe(priceInput)
+		expect(inputValue(priceInput)).toBe('2')
+		await act(() => fireEvent.input(priceInput, { target: { value: '3' } }))
+		await settle()
+		expect(attempts).toBe(1)
+		await act(() => fireEvent.click(queries.getByRole('button', { name: 'Review request' })))
 		await settle()
 		expect(attempts).toBe(2)
+		expect(prices).toEqual([2n * 10n ** 18n, 3n * 10n ** 18n])
 	} finally {
 		await rendered.cleanup()
 		dom.cleanup()

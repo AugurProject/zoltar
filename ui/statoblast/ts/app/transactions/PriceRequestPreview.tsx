@@ -7,7 +7,25 @@ import * as copy from '@zoltar/ui-core-shared/copy/transactionSteps.js'
 import * as priceRequestCopy from '@zoltar/ui-statoblast-shared/copy/priceRequest.js'
 import { EthAmount, TransactionFundingSummary } from '@zoltar/ui-core-shared/components/TransactionFundingSummary.js'
 
-export function PriceRequestPreview({ requestValue, reason, error, preparing, hideReason, onClose, onRetry }: { requestValue: bigint | undefined; reason: string; error: string | undefined; preparing: boolean; hideReason: boolean; onClose: () => void; onRetry: (() => void) | undefined }) {
+export function PriceRequestPreview({
+	requestValue,
+	reason,
+	error,
+	preparing,
+	hideReason,
+	onClose,
+	onRetry,
+	onReview,
+}: {
+	requestValue: bigint | undefined
+	reason: string
+	error: string | undefined
+	preparing: boolean
+	hideReason: boolean
+	onClose: () => void
+	onRetry: (() => void) | undefined
+	onReview?: (() => void) | undefined
+}) {
 	const reasonId = useId()
 	const errorRef = useRef<HTMLDivElement>(null)
 	useEffect(() => {
@@ -65,14 +83,18 @@ export function PriceRequestPreview({ requestValue, reason, error, preparing, hi
 						<div className='transaction-plan-action transaction-plan-action-wide transaction-plan-action-final'>
 							<TransactionActionButton
 								idleLabel={
-									<>
-										{priceRequestCopy.requestPrice} · <EthAmount value={requestValue} />
-									</>
+									onReview === undefined ? (
+										<>
+											{priceRequestCopy.requestPrice} · <EthAmount value={requestValue} />
+										</>
+									) : (
+										priceRequestCopy.reviewPriceRequest
+									)
 								}
 								pending={preparing}
 								pendingLabel={priceRequestCopy.preparingPriceRequest}
-								onClick={() => undefined}
-								availability={{ disabled: true, reason }}
+								onClick={onReview ?? (() => undefined)}
+								availability={{ disabled: onReview === undefined, reason }}
 								disabledReasonElementId={reasonId}
 								showDisabledReason={false}
 								tone='primary'

@@ -2969,6 +2969,10 @@
 	min-block-size: 4rem;
 }
 
+.operation-modal-body:has(> .request-price-fields) .transaction-plan-action-retry .transaction-step-close > button {
+	inline-size: auto;
+}
+
 @media (max-width: 600px) {
 	.modal-panel:has(.request-price-fields) {
 		block-size: calc(100dvh - 2rem);

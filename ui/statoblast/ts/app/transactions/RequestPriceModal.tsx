@@ -27,9 +27,11 @@ export function RequestPriceModal({ review, onConfirm, onClose, canRequest, conf
 	const quoteAttempt = useRef(0)
 	const [price, setPrice] = useState('')
 	const [retry, setRetry] = useState(0)
+	const [reviewAfterFailure, setReviewAfterFailure] = useState(false)
 	const [running, setRunning] = useState(false)
 	const [attempted, setAttempted] = useState<string>()
 	const run = useRef<{ key: string; signal: AbortSignal; cancel: () => void }>()
+	const priceControlsRef = useRef<HTMLDivElement>(null)
 	const mounted = useRef(true)
 	const confirm = useRef(onConfirm)
 	confirm.current = onConfirm
@@ -46,9 +48,10 @@ export function RequestPriceModal({ review, onConfirm, onClose, canRequest, conf
 	const current = valid && run.current?.key === key && run.current?.signal.aborted === false
 	const showSteps = current && ownsWorkflow && workflow?.steps[workflow.activeIndex] !== undefined
 	const error = attempted === key && !running && presentation?.tone === 'error' ? presentation.detail : undefined
-	const failedStep = showSteps && !running && workflow?.steps.some(step => step.phase === 'failed')
 	const estimatePrompt = validPrice ? priceRequestCopy.preparingPriceRequest : priceRequestCopy.enterPriceEstimate
-	const previewPrompt = fetching ? priceRequestCopy.fetchingUniswapPrice : estimatePrompt
+	let previewPrompt = estimatePrompt
+	if (fetching) previewPrompt = priceRequestCopy.fetchingUniswapPrice
+	if (reviewAfterFailure) previewPrompt = priceRequestCopy.reviewPriceBeforeRetry
 
 	useLayoutEffect(() => {
 		quoteAttempt.current += 1
@@ -56,10 +59,14 @@ export function RequestPriceModal({ review, onConfirm, onClose, canRequest, conf
 		setQuoteError(undefined)
 		setPrice('')
 		setAttempted(undefined)
+		setReviewAfterFailure(false)
 	}, [review])
 	useLayoutEffect(() => {
 		if (!current && !sending) run.current?.cancel()
 	}, [current, sending])
+	useLayoutEffect(() => {
+		if (reviewAfterFailure && !showSteps) priceControlsRef.current?.querySelector<HTMLInputElement>('input:not(:disabled)')?.focus()
+	}, [reviewAfterFailure, showSteps])
 	useEffect(
 		() => () => {
 			mounted.current = false
@@ -69,7 +76,7 @@ export function RequestPriceModal({ review, onConfirm, onClose, canRequest, conf
 		[],
 	)
 	useEffect(() => {
-		if (!valid || review === undefined || key === undefined || running || attempted === key) return
+		if (!valid || review === undefined || key === undefined || running || attempted === key || reviewAfterFailure) return
 		const timer = setTimeout(() => {
 			const cancellation = new AbortController()
 			embeddedTransactionSteps.value = cancellation.signal
@@ -91,7 +98,7 @@ export function RequestPriceModal({ review, onConfirm, onClose, canRequest, conf
 			})
 		}, 300)
 		return () => clearTimeout(timer)
-	}, [valid, review, key, running, attempted, proposedPrice])
+	}, [valid, review, key, running, attempted, proposedPrice, reviewAfterFailure])
 	const close = () => {
 		if (sending) return
 		quoteAttempt.current += 1
@@ -120,7 +127,7 @@ export function RequestPriceModal({ review, onConfirm, onClose, canRequest, conf
 		}
 	}
 	const priceControls = (
-		<div className='request-price-fields'>
+		<div className='request-price-fields' ref={priceControlsRef}>
 			{quoteError === undefined ? undefined : (
 				<span className='visually-hidden' role='alert'>
 					{quoteError}
@@ -154,31 +161,32 @@ export function RequestPriceModal({ review, onConfirm, onClose, canRequest, conf
 					{priceControls}
 					{showSteps ? (
 						<GlobalTransactionPresentationProvider transaction={presentation}>
-							<TransactionStepsContent contextKey={key ?? ''} onClose={close} />
-							{error === undefined && !failedStep ? undefined : (
-								<div className='actions transaction-step-close'>
-									<button
-										className='primary'
-										type='button'
-										onClick={() => {
-											run.current?.cancel()
-											setRetry(value => value + 1)
-										}}
-									>
-										{priceRequestCopy.retryPriceRequest}
-									</button>
-								</div>
-							)}
+							<TransactionStepsContent
+								contextKey={key ?? ''}
+								onClose={close}
+								onRetry={() => {
+									run.current?.cancel()
+									setReviewAfterFailure(true)
+								}}
+							/>
 						</GlobalTransactionPresentationProvider>
 					) : (
 						<PriceRequestPreview
 							requestValue={review?.requestValueAttoEth}
 							reason={confirmationGuardMessage ?? priceError ?? (typeof error === 'string' ? error : undefined) ?? previewPrompt}
 							error={confirmationGuardMessage ?? (typeof error === 'string' ? error : undefined)}
-							preparing={valid && (running || attempted !== key)}
+							preparing={valid && !reviewAfterFailure && (running || attempted !== key)}
 							hideReason={!validPrice || priceError !== undefined || error !== undefined || confirmationGuardMessage !== undefined}
 							onClose={close}
 							onRetry={error === undefined ? undefined : () => setRetry(value => value + 1)}
+							onReview={
+								reviewAfterFailure && valid
+									? () => {
+											setReviewAfterFailure(false)
+											setRetry(value => value + 1)
+										}
+									: undefined
+							}
 						/>
 					)}
 				</OperationModal>
