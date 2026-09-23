@@ -411,11 +411,11 @@ function assertCoordinatorSettlementEconomics(): void {
 	assert.ok(correctionGasBudget * 3n < settlementGasCostAboveAssumption * 10n, 'an actual priority fee above configuration can weaken the 10/3 base-fee-only bound')
 	assert.match(
 		priceCoordinator,
-		/uint256 maxSettlementBaseFeeAttoEthPerGas = pendingReportMaxSettlementBaseFeeAttoEthPerGas;\s*pendingReportMaxSettlementBaseFeeAttoEthPerGas = 0;\s*if \(block\.basefee > maxSettlementBaseFeeAttoEthPerGas\)/,
+		/uint256 maxSettlementBaseFeeAttoEthPerGas = pendingReportMaxSettlementBaseFeeAttoEthPerGas;\s*pendingReportMaxSettlementBaseFeeAttoEthPerGas = 0;\s*\(string memory rejectionReason, uint256 priceTimestamp\) = _validateSettledReport\(reportId, amount1, amount2, maxSettlementBaseFeeAttoEthPerGas\);[\s\S]*?function _validateSettledReport\([\s\S]*?\{\s*if \(block\.basefee > maxSettlementBaseFeeAttoEthPerGas\)/,
 		'coordinator must preserve the request-time cap before clearing it and accept an equal settlement base fee',
 	)
 	assert.match(priceCoordinator, /if \(amount1 == 0 \|\| amount2 == 0\)/, 'coordinator must reject empty settled token amounts')
-	assert.match(priceCoordinator, /uint256 price = Math\.mulDiv\(amount2, PRICE_PRECISION, amount1\)/, 'coordinator must derive the settled REP/ETH ratio from final token amounts')
+	assert.match(priceCoordinator, /lastPrice = Math\.mulDiv\(amount2, PRICE_PRECISION, amount1\)/, 'coordinator must derive the settled REP/ETH ratio from final token amounts')
 	assert.match(priceCoordinator, /uint256 costAttoEth = getRequestPriceCostAttoEth\(\);\s*require\(bountyAttoEth >= costAttoEth, 'Oracle bounty too small'\);\s*require\(msg\.value >= bountyAttoEth/, 'coordinator must require the committed bounty to cover getRequestPriceCostAttoEth and msg.value to cover the bounty')
 	assert.match(priceCoordinator, /uint256 settlerRewardAttoEth = bountyAttoEth;[\s\S]*?= _settlementBaseFeeCapForBounty\(bountyAttoEth\)[\s\S]*?settlerReward: uint96\(settlerRewardAttoEth\)/, 'coordinator must retain the committed bounty as the settler reward and derive the base-fee cap from it')
 }
@@ -615,10 +615,10 @@ function assertContractInteractionDistinctions(): void {
 	assert.match(securityPoolForker, /require\(claimTickIndices\.length == 0, 'Not final'\)/)
 	assert.match(securityPoolForker, /block\.timestamp <= data\.forkActivationTime \+ SecurityPoolUtils\.MIGRATION_TIME/)
 	assert.match(securityPoolForkerVaultMigrationDelegate, /require\(address\(childrenByPoolAndOutcome\[parent\]\[outcomeIndex\]\) == address\(0x0\), 'Child pool exists'\)/)
-	assert.match(priceCoordinator, /_rejectReportAndPendingOperations\(reportId, 'Base fee too high'\);\s*return;/)
-	assert.match(priceCoordinator, /finalReportDisputeStatus == FINAL_REPORT_COUNTER_SATURATED\s*\? 'Counter saturated'\s*: 'Report uneconomic'/)
-	assert.match(priceCoordinator, /_rejectReportAndPendingOperations\(reportId, 'Empty oracle settlement'\);\s*return;/)
-	assert.match(priceCoordinator, /_rejectReportAndPendingOperations\(reportId, 'Oracle price is zero'\);\s*return;/)
+	assert.match(priceCoordinator, /if \(block\.basefee > maxSettlementBaseFeeAttoEthPerGas\) return \('Base fee too high', 0\);/)
+	assert.match(priceCoordinator, /return \('Counter saturated', 0\);\s*if \(numReports == 0 \|\| !_isFinalReportProfitable\(reportId, numReports, amount1\)\)\s*return \('Report uneconomic', 0\);/)
+	assert.match(priceCoordinator, /\+ settlementTime;\s*if \(!_isFreshPriceTimestamp\(priceTimestamp\)\) return \('Report stale', 0\);[\s\S]*?return \('Empty oracle settlement', 0\);[\s\S]*?return \('Oracle price is zero', 0\);/)
+	assert.match(priceCoordinator, /_rejectReportAndPendingOperations\(reportId, rejectionReason\);\s*return;\s*\}[\s\S]*?lastSettlementTimestamp = priceTimestamp;/)
 	assert.match(priceCoordinator, /require\(\s*msg\.sender == pendingReportSponsor,\s*'Only the pending report sponsor can queue more operations until settlement'/)
 	assert.match(priceCoordinator, /bool shouldRequestPrice = pendingReportId == 0 && pendingSettlementOperationIds\.length == 0/)
 	assert.match(priceCoordinator, /if \(shouldRequestPrice && isPendingSettlementOperationId\)/)
