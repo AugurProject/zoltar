@@ -5,6 +5,9 @@ import { hasErrorCode, hasErrorMessage } from '../lib/errors.js'
 import { sameChainId } from './chainId.js'
 import { getNetworkSwitchTarget, getDefaultNetworkProfile, type NetworkProfile } from './networkProfile.js'
 import { resolveConfiguredRpcConfig, type ConfiguredRpcSource, type RejectedRpcOverride } from './rpcConfig.js'
+import { createRecoveringReceiptWaiter } from '../transactions/receiptRecovery.js'
+
+export type TransactionSubmissionStatus = 'pending' | 'uncertain'
 
 export type ReadClient = ReturnType<typeof createPublicClient>
 export type WriteClient = WalletClient<Transport, NetworkProfile['chain'], Account> &
@@ -14,7 +17,7 @@ export type WriteClient = WalletClient<Transport, NetworkProfile['chain'], Accou
 		assertCanonicalRawTransactionCost?: (signer: Address, costAttoEth: bigint) => void
 		installSimulationProxyDeployer?: (parameters: { address: Address; runtimeCode: Hex }) => Promise<void>
 		onTransactionPrepared?: ((preview: TransactionRequestPreview) => void) | undefined
-		onTransactionSubmitted?: ((hash: Hash) => void) | undefined
+		onTransactionSubmitted?: ((hash: Hash, status?: TransactionSubmissionStatus) => void) | undefined
 		patchSimulationGenesisRepToken?: (parameters: { repAddress: Address; zoltarAddress: Address }) => Promise<void>
 		recordCanonicalFunding?: (signer: Address, amountAttoEth: bigint) => void
 		recordCanonicalRawTransaction?: (signer: Address, costAttoEth: bigint) => void
@@ -27,7 +30,8 @@ export type CreateWriteClientCallbacks = {
 	/** Send a single transaction straight to the wallet instead of waiting for a second app confirmation. */
 	skipAppReview?: boolean | undefined
 	onTransactionPrepared?: ((preview: TransactionRequestPreview) => void) | undefined
-	onTransactionSubmitted?: (hash: Hash) => void
+	onTransactionSubmitted?: (hash: Hash, status?: TransactionSubmissionStatus) => void
+	isCurrentEnvironment?: () => boolean
 }
 
 export type TransactionPlanStep = Pick<TransactionRequestPreview, 'functionName'> &
@@ -128,6 +132,7 @@ function withTransactionCallbacks(baseClient: WriteClient, callbacks: CreateWrit
 		...baseClient,
 		onTransactionPrepared: callbacks.onTransactionPrepared,
 		onTransactionSubmitted: callbacks.onTransactionSubmitted,
+		waitForTransactionReceipt: createRecoveringReceiptWaiter(baseClient, callbacks),
 		sendRawTransaction,
 		sendTransaction,
 		writeContract,

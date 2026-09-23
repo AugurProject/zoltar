@@ -1,4 +1,4 @@
-import { OperationRediscoveryRequired } from '../execution/transaction-executor.ts'
+import { OperationRediscoveryRequired } from '../execution/execution-context.ts'
 import { operationHasCanonicalContinuationBuilder } from '../operations/catalog.ts'
 import type { OperationPlan } from '../operations/types.ts'
 import { recordActivity, type DurableWorkflow, type RuntimeState } from '../state/operator-state.ts'

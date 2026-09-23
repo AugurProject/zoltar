@@ -1,4 +1,9 @@
-import { createWorkflowHistory, type Workflow, type WorkflowStep } from './workflow-history.js'
+import { createDashboardHealthView } from './dashboard-health-view.js'
+import { createDashboardCatalogView } from './dashboard-catalog-view.js'
+import { createDashboardTopologyView } from './dashboard-topology-view.js'
+import { createDashboardRecoveryView } from './dashboard-recovery-view.js'
+import { createDashboardSettingsView } from './dashboard-settings-view.js'
+import { createWorkflowHistory } from './workflow-history.js'
 import { requestWithTimeout } from '@zoltar/bot-shared/dashboard/polling'
 import { optionalRecord as record } from '@zoltar/bot-shared/infrastructure/json-validation'
 import { createExecutionPolicyDraft } from './execution-policy-draft.js'
@@ -8,175 +13,495 @@ import { decimalAtto } from './go-live.js'
 import { registerExecutionModeForm } from './execution-mode-form.js'
 import { createActivityTimeline } from './activity-timeline.js'
 import { createCatalogGroups } from './catalog-groups.js'
-import { fullIdentifier, formatDate, node, setBadge, statusLabel, statusTone, transactionExplorerUrl } from './dom.js'
-import { createRetirementDashboard, parsePublicRetirement } from './retirement-dashboard.js'
+import { fullIdentifier, formatDate, node, transactionExplorerUrl } from './dom.js'
+import { createRetirementDashboard } from './retirement-dashboard.js'
 import { createOperationDialog } from './operation-dialog.js'
 import { renderOperatorAlerts } from './operator-alerts.js'
-import { pendingTransactionSummary, type PendingTransactionObservationView } from './pending-transaction-summary.js'
 import { activeSchedulerWorkLabel, createSelectionControls } from './selection-controls.js'
-type RepBalance = {
-	balance?: string | number | undefined
-	symbol?: string | undefined
-	token?: string | undefined
-	universeId?: string | undefined
-}
+import { type Snapshot, type Configuration, stringValue, type OperationEvaluation, type Obligation, parseConfiguration, parseSnapshot } from './dashboard-data.ts'
 
-type OperationEvaluation = {
-	blockers: string[]
-	candidateCount?: string | number | undefined
-	classification?: string | undefined
-	description?: string | undefined
-	ecosystem?: string | undefined
-	eligible?: boolean | undefined
-	enabled?: boolean | undefined
-	id?: string | undefined
-	independentlyExecutable?: boolean | undefined
-	label?: string | undefined
-	prerequisites: string[]
-	risk?: string | undefined
-}
+const { renderHeader, renderOverview, renderUnavailableRpcHealth, renderUnavailableSubmissionHealth } = createDashboardHealthView({
+	get lastBlock() {
+		return lastBlock
+	},
+	get lastScan() {
+		return lastScan
+	},
+	get formatRelative() {
+		return formatRelative
+	},
+	get modeBadge() {
+		return modeBadge
+	},
+	get configuration() {
+		return configuration
+	},
+	set configuration(value) {
+		configuration = value
+	},
+	get networkBadge() {
+		return networkBadge
+	},
+	get signerBadge() {
+		return signerBadge
+	},
+	get recoveryItemCount() {
+		return recoveryItemCount
+	},
+	get recoveryBadge() {
+		return recoveryBadge
+	},
+	get pauseMutationPending() {
+		return pauseMutationPending
+	},
+	set pauseMutationPending(value) {
+		pauseMutationPending = value
+	},
+	get pauseButton() {
+		return pauseButton
+	},
+	get pauseMutationUnreconciled() {
+		return pauseMutationUnreconciled
+	},
+	set pauseMutationUnreconciled(value) {
+		pauseMutationUnreconciled = value
+	},
+	get configurationCommitIndeterminate() {
+		return configurationCommitIndeterminate
+	},
+	set configurationCommitIndeterminate(value) {
+		configurationCommitIndeterminate = value
+	},
+	get nextRun() {
+		return nextRun
+	},
+	get parsePositiveNumber() {
+		return parsePositiveNumber
+	},
+	get lastDelay() {
+		return lastDelay
+	},
+	get formatDuration() {
+		return formatDuration
+	},
+	get operationIsIndependentlyExecutable() {
+		return operationIsIndependentlyExecutable
+	},
+	get eligibleCount() {
+		return eligibleCount
+	},
+	get selectedOperation() {
+		return selectedOperation
+	},
+	get walletShort() {
+		return walletShort
+	},
+	get balanceEth() {
+		return balanceEth
+	},
+	get balanceWeth() {
+		return balanceWeth
+	},
+	get balanceRepTotal() {
+		return balanceRepTotal
+	},
+	get repBalances() {
+		return repBalances
+	},
+	get renderWorkflow() {
+		return renderWorkflow
+	},
+	get renderWorkflowHistory() {
+		return renderWorkflowHistory
+	},
+	get renderCoverage() {
+		return renderCoverage
+	},
+	get retirementDashboard() {
+		return retirementDashboard
+	},
+	get rpcHealthRetryButton() {
+		return rpcHealthRetryButton
+	},
+	get rpcHealthStatus() {
+		return rpcHealthStatus
+	},
+	get rpcConfiguredTotal() {
+		return rpcConfiguredTotal
+	},
+	get rpcHealthyCount() {
+		return rpcHealthyCount
+	},
+	get rpcRequiredQuorum() {
+		return rpcRequiredQuorum
+	},
+	get rpcChainReadiness() {
+		return rpcChainReadiness
+	},
+	get rpcLastCheck() {
+		return rpcLastCheck
+	},
+	get submissionHealthStatus() {
+		return submissionHealthStatus
+	},
+	get submissionMode() {
+		return submissionMode
+	},
+	get submissionHealthyCount() {
+		return submissionHealthyCount
+	},
+	get submissionRequiredThreshold() {
+		return submissionRequiredThreshold
+	},
+	get submissionFreshness() {
+		return submissionFreshness
+	},
+	get submissionSignerProof() {
+		return submissionSignerProof
+	},
+	get submissionLastCheck() {
+		return submissionLastCheck
+	},
+})
 
-type Topology = {
-	anchorBlock?: string | number | undefined
-	anchorTimestamp?: string | number | undefined
-	auctions: Array<{ address?: string | undefined; bidCount?: number | undefined; endTime?: string | number | undefined; finalized?: boolean | undefined; pool?: string | undefined; startTime?: string | number | undefined }>
-	complete?: boolean | undefined
-	pairs: Array<{ address?: string | undefined; feeBps?: string | number | undefined; pool?: string | undefined; status?: string | number | undefined; universeId?: string | undefined }>
-	pools: Array<{ address?: string | undefined; awaitingForkContinuation?: boolean | undefined; coordinator?: string | undefined; questionId?: string | undefined; systemState?: string | number | undefined; universeId?: string | undefined; vaultCount?: number | undefined }>
-	reports: Array<{ currentReporter?: string | undefined; flags?: string | number | undefined; reportId?: string | undefined; settlementTime?: string | number | undefined; token1?: string | undefined; token2?: string | undefined }>
-	totalCounts: { auctions: number; pairs: number; pools: number; reports: number; universes: number }
-	truncated?: boolean | undefined
-	universes: Array<{ forkQuestionId?: string | undefined; forkTime?: string | number | undefined; id?: string | undefined; knownChildOutcomeCount?: number | undefined; parentUniverseId?: string | undefined; repToken?: string | undefined }>
-}
+const { renderCatalog, renderEcosystems } = createDashboardCatalogView({
+	get catalogFilter() {
+		return catalogFilter
+	},
+	get catalogClassificationFilter() {
+		return catalogClassificationFilter
+	},
+	get catalogEligibilityFilter() {
+		return catalogEligibilityFilter
+	},
+	get catalogSignature() {
+		return catalogSignature
+	},
+	set catalogSignature(value) {
+		catalogSignature = value
+	},
+	get normalizeEcosystem() {
+		return normalizeEcosystem
+	},
+	get displayedClassification() {
+		return displayedClassification
+	},
+	get operationIsIndependentlyExecutable() {
+		return operationIsIndependentlyExecutable
+	},
+	get publicCandidateCount() {
+		return publicCandidateCount
+	},
+	get catalogCaption() {
+		return catalogCaption
+	},
+	get catalogRowCache() {
+		return catalogRowCache
+	},
+	get classificationLabel() {
+		return classificationLabel
+	},
+	get operationDialog() {
+		return operationDialog
+	},
+	get selectionControls() {
+		return selectionControls
+	},
+	get catalogRows() {
+		return catalogRows
+	},
+	get renderCatalogGroups() {
+		return renderCatalogGroups
+	},
+	get updateSelectionControls() {
+		return updateSelectionControls
+	},
+	get ecosystemOrder() {
+		return ecosystemOrder
+	},
+	get parsePositiveNumber() {
+		return parsePositiveNumber
+	},
+	get ecosystemLabels() {
+		return ecosystemLabels
+	},
+	get ecosystemGrid() {
+		return ecosystemGrid
+	},
+})
 
-type PendingTransaction = {
-	cancellationHash?: string | undefined
-	hash?: string | undefined
-	label?: string | undefined
-	maxBlockNumber?: string | number | undefined
-	nonce?: string | number | undefined
-	observation?: PendingTransactionObservationView | undefined
-	operationId?: string | undefined
-	recoveryBlocker?: string | undefined
-	replacementHash?: string | undefined
-	status?: string | undefined
-	submittedAt?: string | undefined
-	submissionBlock?: string | number | undefined
-}
+const { renderTopology } = createDashboardTopologyView({
+	get topologyGroupSignatures() {
+		return topologyGroupSignatures
+	},
+	get topologyAnchor() {
+		return topologyAnchor
+	},
+	get topologyStatus() {
+		return topologyStatus
+	},
+	get topologyUniverses() {
+		return topologyUniverses
+	},
+	get topologyPools() {
+		return topologyPools
+	},
+	get topologyReports() {
+		return topologyReports
+	},
+	get topologyAuctions() {
+		return topologyAuctions
+	},
+	get topologyPairs() {
+		return topologyPairs
+	},
+})
 
-type Obligation = {
-	attemptCount?: number | undefined
-	automaticRetryCount?: number | undefined
-	automaticRetryLimit?: number | undefined
-	blockers: string[]
-	dueAt?: string | undefined
-	ecosystem?: string | undefined
-	id?: string | undefined
-	label?: string | undefined
-	notBefore?: string | undefined
-	operationId?: string | undefined
-	status?: string | undefined
-	updatedAt?: string | undefined
-}
+const { renderWorkflow, renderCoverage, renderRecovery } = createDashboardRecoveryView({
+	get currentWorkflow() {
+		return currentWorkflow
+	},
+	get ecosystemLabel() {
+		return ecosystemLabel
+	},
+	get transactionIdentifier() {
+		return transactionIdentifier
+	},
+	get ecosystemOrder() {
+		return ecosystemOrder
+	},
+	get normalizeEcosystem() {
+		return normalizeEcosystem
+	},
+	get operationIsIndependentlyExecutable() {
+		return operationIsIndependentlyExecutable
+	},
+	get ecosystemLabels() {
+		return ecosystemLabels
+	},
+	get coverageSummary() {
+		return coverageSummary
+	},
+	get pendingCount() {
+		return pendingCount
+	},
+	get obligationCount() {
+		return obligationCount
+	},
+	get obligationFields() {
+		return obligationFields
+	},
+	get workflowFields() {
+		return workflowFields
+	},
+	get obligationIdInput() {
+		return obligationIdInput
+	},
+	get replacementFields() {
+		return replacementFields
+	},
+	get cancellationFields() {
+		return cancellationFields
+	},
+	get candidateFields() {
+		return candidateFields
+	},
+	get pendingTransactions() {
+		return pendingTransactions
+	},
+	get transactionLine() {
+		return transactionLine
+	},
+	get obligations() {
+		return obligations
+	},
+	get obligationDetail() {
+		return obligationDetail
+	},
+})
 
-type Activity = {
-	at?: string | undefined
-	details?: string | undefined
-	ecosystem?: string | undefined
-	label?: string | undefined
-	operationId?: string | undefined
-	status?: string | undefined
-	summary?: string | undefined
-	txHash?: string | undefined
-}
-
-type RpcHealth = {
-	chainReady?: boolean | undefined
-	configuredReadEndpointCount?: number | undefined
-	healthyReadEndpointCount?: number | undefined
-	lastCheckedAt?: string | undefined
-	requiredReadQuorum?: number | undefined
-	status?: 'degraded' | 'not-checked' | 'not-configured' | 'ready' | undefined
-}
-
-type SubmissionHealth = {
-	checkedOriginCount?: number | undefined
-	configuredOriginCount?: number | undefined
-	freshOriginCount?: number | undefined
-	healthyOriginCount?: number | undefined
-	lastCheckedAt?: string | undefined
-	mode?: 'private' | 'public' | undefined
-	proofMatchesSigner?: boolean | undefined
-	ready?: boolean | undefined
-	requiredHealthyOriginCount?: number | undefined
-	status?: 'degraded' | 'not-checked' | 'not-configured' | 'ready' | 'stale' | undefined
-}
-
-type Snapshot = {
-	activities: Activity[]
-	alerts: { message?: string | undefined; severity?: string | undefined }[]
-	chainId?: string | number | undefined
-	currentWorkflow?: Workflow | undefined
-	workflows: Workflow[]
-	execute?: boolean | undefined
-	inventory: { eth?: string | number | undefined; rep: RepBalance[]; weth?: string | number | undefined }
-	inventoryAvailable?: boolean | undefined
-	lastScanAt?: string | undefined
-	lastDeploymentCheckedBlock?: string | number | undefined
-	lastDeploymentCheckAt?: string | undefined
-	lastScannedBlock?: string | number | undefined
-	network?: string | undefined
-	obligations: Obligation[]
-	operationEvaluations: OperationEvaluation[]
-	paused?: boolean | undefined
-	pendingTransactions: PendingTransaction[]
-	profileId?: string | undefined
-	retirement?: { blockers: unknown[]; finalSweepStartedAt?: string | undefined; positions: unknown[]; recipient?: string | undefined; requestedAt?: string | undefined; status?: string | undefined; updatedAt?: string | undefined } | undefined
-	rpcHealth: RpcHealth
-	submissionHealth: SubmissionHealth
-	safetyPaused?: boolean | undefined
-	scheduler: {
-		due?: boolean | undefined
-		lastDelaySeconds?: string | number | undefined
-		lastRunAt?: string | undefined
-		nextRunAt?: string | undefined
-		selectedOperationId?: string | undefined
-		status?: string | undefined
-	}
-	signerReady?: boolean | undefined
-	status?: string | undefined
-	topology: Topology
-	wallet?: string | undefined
-}
-
-type Configuration = {
-	allowHighRiskOperations?: boolean | undefined
-	allowIrreversibleOperations?: boolean | undefined
-	initializeGenesisUniverse?: boolean | undefined
-	chainId?: string | number | undefined
-	configurationCommitIndeterminate?: boolean | undefined
-	connectivity?: { publicRpcUrls: string[]; quorumRpcUrls: string[]; readRpcUrl?: string | undefined; rpcQuorum?: string | number | undefined } | undefined
-	enabledEcosystems: string[]
-	execute?: boolean | undefined
-	explorerUrl?: string | undefined
-	hasSigner?: boolean | undefined
-	maximumDelaySeconds?: string | number | undefined
-	maximumEthPerOperation?: string | number | undefined
-	maximumGasCostEth?: string | number | undefined
-	maximumRepPerOperation?: string | number | undefined
-	minimumDelaySeconds?: string | number | undefined
-	minimumEthReserve?: string | number | undefined
-	minimumRepReserve?: string | number | undefined
-	network?: string | undefined
-	networkConfigured?: boolean | undefined
-	paused?: boolean | undefined
-	rememberSigner?: boolean | undefined
-	revision?: string | number | undefined
-	rpcQuorum?: string | number | undefined
-	selectableOperationAllowlist?: string[] | null | undefined
-	wallet?: string | undefined
-	workflowValidForBlocks?: string | number | undefined
-}
+const { renderConfiguration, renderCountdown } = createDashboardSettingsView({
+	get latchConfigurationCommitIndeterminate() {
+		return latchConfigurationCommitIndeterminate
+	},
+	get snapshot() {
+		return snapshot
+	},
+	set snapshot(value) {
+		snapshot = value
+	},
+	get settingsMutationUnreconciled() {
+		return settingsMutationUnreconciled
+	},
+	set settingsMutationUnreconciled(value) {
+		settingsMutationUnreconciled = value
+	},
+	get configurationCommitIndeterminate() {
+		return configurationCommitIndeterminate
+	},
+	set configurationCommitIndeterminate(value) {
+		configurationCommitIndeterminate = value
+	},
+	get settingsFields() {
+		return settingsFields
+	},
+	get executionModeForm() {
+		return executionModeForm
+	},
+	get connectivityFields() {
+		return connectivityFields
+	},
+	get connectivityMutationUnreconciled() {
+		return connectivityMutationUnreconciled
+	},
+	set connectivityMutationUnreconciled(value) {
+		connectivityMutationUnreconciled = value
+	},
+	get settingsPauseNote() {
+		return settingsPauseNote
+	},
+	get signerFields() {
+		return signerFields
+	},
+	get signerMutationUnreconciled() {
+		return signerMutationUnreconciled
+	},
+	set signerMutationUnreconciled(value) {
+		signerMutationUnreconciled = value
+	},
+	get setSignerButton() {
+		return setSignerButton
+	},
+	get privateKeyInput() {
+		return privateKeyInput
+	},
+	get networkBadge() {
+		return networkBadge
+	},
+	get settingsScope() {
+		return settingsScope
+	},
+	get connectivityDraftDirty() {
+		return connectivityDraftDirty
+	},
+	set connectivityDraftDirty(value) {
+		connectivityDraftDirty = value
+	},
+	get connectivityDraftRevision() {
+		return connectivityDraftRevision
+	},
+	set connectivityDraftRevision(value) {
+		connectivityDraftRevision = value
+	},
+	get connectivityDraftConflict() {
+		return connectivityDraftConflict
+	},
+	set connectivityDraftConflict(value) {
+		connectivityDraftConflict = value
+	},
+	get saveConnectivityButton() {
+		return saveConnectivityButton
+	},
+	get discardConnectivityButton() {
+		return discardConnectivityButton
+	},
+	get connectivityStatus() {
+		return connectivityStatus
+	},
+	get rpcQuorumInput() {
+		return rpcQuorumInput
+	},
+	get readRpcUrlInput() {
+		return readRpcUrlInput
+	},
+	get quorumRpcUrlsInput() {
+		return quorumRpcUrlsInput
+	},
+	get publicRpcUrlsInput() {
+		return publicRpcUrlsInput
+	},
+	get signerSummary() {
+		return signerSummary
+	},
+	get rememberSignerInput() {
+		return rememberSignerInput
+	},
+	get settingsDraft() {
+		return settingsDraft
+	},
+	get settingsRevision() {
+		return settingsRevision
+	},
+	set settingsRevision(value) {
+		settingsRevision = value
+	},
+	get saveSettingsButton() {
+		return saveSettingsButton
+	},
+	get discardSettingsButton() {
+		return discardSettingsButton
+	},
+	get settingsSaveStatus() {
+		return settingsSaveStatus
+	},
+	get highRiskInput() {
+		return highRiskInput
+	},
+	get irreversibleInput() {
+		return irreversibleInput
+	},
+	get initializeGenesisInput() {
+		return initializeGenesisInput
+	},
+	get allSelectableOperationsInput() {
+		return allSelectableOperationsInput
+	},
+	get selectableOperationAllowlistInput() {
+		return selectableOperationAllowlistInput
+	},
+	get minDelayInput() {
+		return minDelayInput
+	},
+	get maxDelayInput() {
+		return maxDelayInput
+	},
+	get reserveEthInput() {
+		return reserveEthInput
+	},
+	get reserveRepInput() {
+		return reserveRepInput
+	},
+	get maximumEthOperationInput() {
+		return maximumEthOperationInput
+	},
+	get maximumGasCostInput() {
+		return maximumGasCostInput
+	},
+	get maximumRepOperationInput() {
+		return maximumRepOperationInput
+	},
+	get workflowValidBlocksInput() {
+		return workflowValidBlocksInput
+	},
+	get applyMutationControlLatches() {
+		return applyMutationControlLatches
+	},
+	get countdown() {
+		return countdown
+	},
+	get countdownProgress() {
+		return countdownProgress
+	},
+	get schedulerState() {
+		return schedulerState
+	},
+	get formatDuration() {
+		return formatDuration
+	},
+	get parsePositiveNumber() {
+		return parsePositiveNumber
+	},
+})
 
 const stateRequestTimeoutMilliseconds = 5_000
 const configurationRequestTimeoutMilliseconds = 5_000
@@ -446,299 +771,6 @@ const obligationRecoveryContext: RecoveryContextRefresh = {
 
 const recoveryContexts = [replacementRecoveryContext, cancellationRecoveryContext, candidateRecoveryContext, workflowRecoveryContext, obligationRecoveryContext] as const
 
-function stringValue(value: unknown) {
-	return typeof value === 'string' ? value : undefined
-}
-
-function booleanValue(value: unknown) {
-	return typeof value === 'boolean' ? value : undefined
-}
-
-function scalarValue(value: unknown) {
-	return typeof value === 'string' || typeof value === 'number' ? value : undefined
-}
-
-function nonnegativeIntegerValue(value: unknown) {
-	return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 ? value : undefined
-}
-
-function parsePendingTransactionObservation(value: unknown): PendingTransactionObservationView | undefined {
-	const source = record(value)
-	if (source === undefined) return undefined
-	return { checkedAt: stringValue(source['checkedAt']), head: scalarValue(source['head']), includedBlock: scalarValue(source['includedBlock']), kind: stringValue(source['kind']) }
-}
-
-function rpcHealthStatusValue(value: unknown): RpcHealth['status'] {
-	return value === 'degraded' || value === 'not-checked' || value === 'not-configured' || value === 'ready' ? value : undefined
-}
-
-function submissionHealthStatusValue(value: unknown): SubmissionHealth['status'] {
-	return value === 'degraded' || value === 'not-checked' || value === 'not-configured' || value === 'ready' || value === 'stale' ? value : undefined
-}
-
-function strings(value: unknown) {
-	return Array.isArray(value) ? value.flatMap(entry => (typeof entry === 'string' ? [entry] : [])) : []
-}
-
-function nullableStrings(value: unknown) {
-	if (value === null) return null
-	return Array.isArray(value) ? strings(value) : undefined
-}
-
-function list<T>(value: unknown, transform: (entry: Record<string, unknown>) => T) {
-	return Array.isArray(value)
-		? value.flatMap(entry => {
-				const source = record(entry)
-				return source === undefined ? [] : [transform(source)]
-			})
-		: []
-}
-
-function parseWorkflowStep(source: Record<string, unknown>): WorkflowStep {
-	return {
-		confirmedAt: stringValue(source['confirmedAt']),
-		label: stringValue(source['label']),
-		status: stringValue(source['status']),
-		txHash: stringValue(source['txHash']),
-	}
-}
-
-function parseWorkflow(value: unknown) {
-	const source = record(value)
-	if (source === undefined) return undefined
-	return {
-		classification: stringValue(source['classification']),
-		completedAt: stringValue(source['completedAt']),
-		ecosystem: stringValue(source['ecosystem']),
-		id: stringValue(source['id']),
-		label: stringValue(source['label']),
-		operationId: stringValue(source['operationId']),
-		startedAt: stringValue(source['startedAt']),
-		status: stringValue(source['status']),
-		updatedAt: stringValue(source['updatedAt']),
-		steps: list(source['steps'], parseWorkflowStep),
-	}
-}
-
-function parseTopology(value: unknown): Topology {
-	const source = record(value) ?? {}
-	const counts = record(source['totalCounts']) ?? {}
-	return {
-		anchorBlock: scalarValue(source['anchorBlock']),
-		anchorTimestamp: scalarValue(source['anchorTimestamp']),
-		auctions: list(source['auctions'], entry => ({
-			address: stringValue(entry['address']),
-			bidCount: nonnegativeIntegerValue(entry['bidCount']),
-			endTime: scalarValue(entry['endTime']),
-			finalized: booleanValue(entry['finalized']),
-			pool: stringValue(entry['pool']),
-			startTime: scalarValue(entry['startTime']),
-		})),
-		complete: booleanValue(source['complete']),
-		pairs: list(source['pairs'], entry => ({
-			address: stringValue(entry['address']),
-			feeBps: scalarValue(entry['feeBps']),
-			pool: stringValue(entry['pool']),
-			status: scalarValue(entry['status']),
-			universeId: stringValue(entry['universeId']),
-		})),
-		pools: list(source['pools'], entry => ({
-			address: stringValue(entry['address']),
-			awaitingForkContinuation: booleanValue(entry['awaitingForkContinuation']),
-			coordinator: stringValue(entry['coordinator']),
-			questionId: stringValue(entry['questionId']),
-			systemState: scalarValue(entry['systemState']),
-			universeId: stringValue(entry['universeId']),
-			vaultCount: nonnegativeIntegerValue(entry['vaultCount']),
-		})),
-		reports: list(source['reports'], entry => ({
-			currentReporter: stringValue(entry['currentReporter']),
-			flags: scalarValue(entry['flags']),
-			reportId: stringValue(entry['reportId']),
-			settlementTime: scalarValue(entry['settlementTime']),
-			token1: stringValue(entry['token1']),
-			token2: stringValue(entry['token2']),
-		})),
-		totalCounts: {
-			auctions: nonnegativeIntegerValue(counts['auctions']) ?? 0,
-			pairs: nonnegativeIntegerValue(counts['pairs']) ?? 0,
-			pools: nonnegativeIntegerValue(counts['pools']) ?? 0,
-			reports: nonnegativeIntegerValue(counts['reports']) ?? 0,
-			universes: nonnegativeIntegerValue(counts['universes']) ?? 0,
-		},
-		truncated: booleanValue(source['truncated']),
-		universes: list(source['universes'], entry => ({
-			forkQuestionId: stringValue(entry['forkQuestionId']),
-			forkTime: scalarValue(entry['forkTime']),
-			id: stringValue(entry['id']),
-			knownChildOutcomeCount: nonnegativeIntegerValue(entry['knownChildOutcomeCount']),
-			parentUniverseId: stringValue(entry['parentUniverseId']),
-			repToken: stringValue(entry['repToken']),
-		})),
-	}
-}
-
-function parseSnapshot(value: unknown): Snapshot {
-	const source = record(value) ?? {}
-	const inventory = record(source['inventory']) ?? {}
-	const rpcHealth = record(source['rpcHealth']) ?? {}
-	const submissionHealth = record(source['submissionHealth']) ?? {}
-	const scheduler = record(source['scheduler']) ?? {}
-	return {
-		activities: list(source['activities'], entry => ({
-			at: stringValue(entry['at']),
-			details: stringValue(entry['details']),
-			ecosystem: stringValue(entry['ecosystem']),
-			label: stringValue(entry['label']),
-			operationId: stringValue(entry['operationId']),
-			status: stringValue(entry['status']),
-			summary: stringValue(entry['summary']),
-			txHash: stringValue(entry['txHash']),
-		})),
-		alerts: list(source['alerts'], entry => ({ message: stringValue(entry['message']), severity: stringValue(entry['severity']) })),
-		chainId: scalarValue(source['chainId']),
-		currentWorkflow: parseWorkflow(source['currentWorkflow']),
-		workflows: list(source['workflows'], parseWorkflow).filter(value => value !== undefined),
-		execute: booleanValue(source['execute']),
-		inventory: {
-			eth: scalarValue(inventory['eth']),
-			rep: list(inventory['rep'], entry => ({
-				balance: scalarValue(entry['balance']),
-				symbol: stringValue(entry['symbol']),
-				token: stringValue(entry['token']),
-				universeId: stringValue(entry['universeId']),
-			})),
-			weth: scalarValue(inventory['weth']),
-		},
-		inventoryAvailable: booleanValue(source['inventoryAvailable']),
-		lastScanAt: stringValue(source['lastScanAt']),
-		lastDeploymentCheckedBlock: scalarValue(source['lastDeploymentCheckedBlock']),
-		lastDeploymentCheckAt: stringValue(source['lastDeploymentCheckAt']),
-		lastScannedBlock: scalarValue(source['lastScannedBlock']),
-		network: stringValue(source['network']),
-		obligations: list(source['obligations'], entry => ({
-			attemptCount: nonnegativeIntegerValue(entry['attemptCount']),
-			automaticRetryCount: nonnegativeIntegerValue(entry['automaticRetryCount']),
-			automaticRetryLimit: nonnegativeIntegerValue(entry['automaticRetryLimit']),
-			blockers: strings(entry['blockers']),
-			dueAt: stringValue(entry['dueAt']),
-			ecosystem: stringValue(entry['ecosystem']),
-			id: stringValue(entry['id']),
-			label: stringValue(entry['label']),
-			notBefore: stringValue(entry['notBefore']),
-			operationId: stringValue(entry['operationId']),
-			status: stringValue(entry['status']),
-			updatedAt: stringValue(entry['updatedAt']),
-		})),
-		operationEvaluations: list(source['operationEvaluations'], entry => ({
-			blockers: strings(entry['blockers']),
-			candidateCount: scalarValue(entry['candidateCount']),
-			classification: stringValue(entry['classification']),
-			description: stringValue(entry['description']),
-			ecosystem: stringValue(entry['ecosystem']),
-			eligible: booleanValue(entry['eligible']),
-			enabled: booleanValue(entry['enabled']),
-			id: stringValue(entry['id']),
-			independentlyExecutable: booleanValue(entry['independentlyExecutable']),
-			label: stringValue(entry['label']),
-			prerequisites: strings(entry['prerequisites']),
-			risk: stringValue(entry['risk']),
-		})),
-		paused: booleanValue(source['paused']),
-		pendingTransactions: list(source['pendingTransactions'], entry => ({
-			cancellationHash: stringValue(entry['cancellationHash']),
-			hash: stringValue(entry['hash']),
-			label: stringValue(entry['label']),
-			maxBlockNumber: scalarValue(entry['maxBlockNumber']),
-			nonce: scalarValue(entry['nonce']),
-			observation: parsePendingTransactionObservation(entry['observation']),
-			operationId: stringValue(entry['operationId']),
-			recoveryBlocker: stringValue(entry['recoveryBlocker']),
-			replacementHash: stringValue(entry['replacementHash']),
-			status: stringValue(entry['status']),
-			submittedAt: stringValue(entry['submittedAt']),
-			submissionBlock: scalarValue(entry['submissionBlock']),
-		})),
-		profileId: stringValue(source['profileId']),
-		retirement: parsePublicRetirement(source['retirement']),
-		rpcHealth: {
-			chainReady: booleanValue(rpcHealth['chainReady']),
-			configuredReadEndpointCount: nonnegativeIntegerValue(rpcHealth['configuredReadEndpointCount']),
-			healthyReadEndpointCount: nonnegativeIntegerValue(rpcHealth['healthyReadEndpointCount']),
-			lastCheckedAt: stringValue(rpcHealth['lastCheckedAt']),
-			requiredReadQuorum: nonnegativeIntegerValue(rpcHealth['requiredReadQuorum']),
-			status: rpcHealthStatusValue(rpcHealth['status']),
-		},
-		submissionHealth: {
-			checkedOriginCount: nonnegativeIntegerValue(submissionHealth['checkedOriginCount']),
-			configuredOriginCount: nonnegativeIntegerValue(submissionHealth['configuredOriginCount']),
-			freshOriginCount: nonnegativeIntegerValue(submissionHealth['freshOriginCount']),
-			healthyOriginCount: nonnegativeIntegerValue(submissionHealth['healthyOriginCount']),
-			lastCheckedAt: stringValue(submissionHealth['lastCheckedAt']),
-			mode: submissionHealth['mode'] === 'private' || submissionHealth['mode'] === 'public' ? submissionHealth['mode'] : undefined,
-			proofMatchesSigner: booleanValue(submissionHealth['proofMatchesSigner']),
-			ready: booleanValue(submissionHealth['ready']),
-			requiredHealthyOriginCount: nonnegativeIntegerValue(submissionHealth['requiredHealthyOriginCount']),
-			status: submissionHealthStatusValue(submissionHealth['status']),
-		},
-		safetyPaused: booleanValue(source['safetyPaused']),
-		scheduler: {
-			due: booleanValue(scheduler['due']),
-			lastDelaySeconds: scalarValue(scheduler['lastDelaySeconds']),
-			lastRunAt: stringValue(scheduler['lastRunAt']),
-			nextRunAt: stringValue(scheduler['nextRunAt']),
-			selectedOperationId: stringValue(scheduler['selectedOperationId']),
-			status: stringValue(scheduler['status']),
-		},
-		signerReady: booleanValue(source['signerReady']),
-		status: stringValue(source['status']),
-		topology: parseTopology(source['topology']),
-		wallet: stringValue(source['wallet']),
-	}
-}
-
-function parseConfiguration(value: unknown): Configuration {
-	const source = record(value) ?? {}
-	const connectivity = record(source['connectivity'])
-	const selectableOperationAllowlist = source['selectableOperationAllowlist']
-	return {
-		allowHighRiskOperations: booleanValue(source['allowHighRiskOperations']),
-		allowIrreversibleOperations: booleanValue(source['allowIrreversibleOperations']),
-		chainId: scalarValue(source['chainId']),
-		configurationCommitIndeterminate: booleanValue(source['configurationCommitIndeterminate']),
-		connectivity:
-			connectivity === undefined
-				? undefined
-				: {
-						publicRpcUrls: strings(connectivity['publicRpcUrls']),
-						quorumRpcUrls: strings(connectivity['quorumRpcUrls']),
-						readRpcUrl: stringValue(connectivity['readRpcUrl']),
-						rpcQuorum: scalarValue(connectivity['rpcQuorum']),
-					},
-		enabledEcosystems: strings(source['enabledEcosystems']),
-		execute: booleanValue(source['execute']),
-		explorerUrl: stringValue(source['explorerUrl']),
-		hasSigner: booleanValue(source['hasSigner']),
-		initializeGenesisUniverse: booleanValue(source['initializeGenesisUniverse']),
-		maximumDelaySeconds: scalarValue(source['maximumDelaySeconds']),
-		maximumEthPerOperation: scalarValue(source['maximumEthPerOperation']),
-		maximumGasCostEth: scalarValue(source['maximumGasCostEth']),
-		maximumRepPerOperation: scalarValue(source['maximumRepPerOperation']),
-		minimumDelaySeconds: scalarValue(source['minimumDelaySeconds']),
-		minimumEthReserve: scalarValue(source['minimumEthReserve']),
-		minimumRepReserve: scalarValue(source['minimumRepReserve']),
-		network: stringValue(source['network']),
-		networkConfigured: booleanValue(source['networkConfigured']),
-		paused: booleanValue(source['paused']),
-		rememberSigner: booleanValue(source['rememberSigner']),
-		revision: scalarValue(source['revision']),
-		rpcQuorum: scalarValue(source['rpcQuorum']),
-		selectableOperationAllowlist: nullableStrings(selectableOperationAllowlist),
-		wallet: stringValue(source['wallet']),
-		workflowValidForBlocks: scalarValue(source['workflowValidForBlocks']),
-	}
-}
-
 async function requestJson(path: string, timeoutMilliseconds: number, init?: RequestInit) {
 	let response: Response
 	let value: unknown
@@ -917,522 +949,13 @@ function recoveryItemCount(value: Snapshot) {
 	return value.pendingTransactions.length + value.obligations.length + selectableContinuation
 }
 
-function renderHeader(value: Snapshot) {
-	const checkedBlock = value.lastDeploymentCheckedBlock ?? value.lastScannedBlock
-	lastBlock.textContent = checkedBlock === undefined ? 'Block —' : `Block ${String(checkedBlock)}`
-	lastScan.textContent = value.lastDeploymentCheckedBlock === undefined ? formatRelative(value.lastScanAt) : formatRelative(value.lastDeploymentCheckAt).replace('Scanned', 'Deployments checked')
-	if (value.safetyPaused === true) setBadge(modeBadge, 'Safety paused', 'error')
-	else if (value.paused === true) setBadge(modeBadge, 'Paused', 'warning')
-	else if (value.execute === true) setBadge(modeBadge, 'Live execution', 'warning')
-	else setBadge(modeBadge, 'Dry run', 'info')
-	const networkName = value.network ?? configuration?.network ?? 'Network unknown'
-	const chainId = value.chainId ?? configuration?.chainId
-	setBadge(networkBadge, chainId === undefined ? networkName : `${networkName} · ${String(chainId)}`, value.network === undefined && configuration?.network === undefined ? 'warning' : 'neutral')
-	let signerLabel = 'Signer missing'
-	if (value.signerReady === true) signerLabel = 'Signer ready'
-	else if (value.wallet !== undefined) signerLabel = 'Read-only — signer not loaded'
-	setBadge(signerBadge, signerLabel, value.signerReady === true ? 'success' : 'warning')
-	const recoveryItems = recoveryItemCount(value)
-	setBadge(recoveryBadge, `${recoveryItems.toString()} recovery item${recoveryItems === 1 ? '' : 's'}`, 'warning')
-	recoveryBadge.classList.toggle('hidden', recoveryItems === 0)
-	let pauseLabel = value.paused === true ? 'Resume' : 'Pause'
-	if (pauseMutationPending) pauseLabel = value.paused === true ? 'Resuming…' : 'Pausing…'
-	pauseButton.textContent = pauseLabel
-	pauseButton.disabled = pauseMutationPending || pauseMutationUnreconciled || configurationCommitIndeterminate
-}
-
-function renderOverview(value: Snapshot) {
-	nextRun.textContent = formatDate(value.scheduler.nextRunAt)
-	const delay = parsePositiveNumber(value.scheduler.lastDelaySeconds)
-	lastDelay.textContent = delay === undefined ? '—' : formatDuration(delay)
-	const executable = value.operationEvaluations.filter(operationIsIndependentlyExecutable)
-	const eligible = executable.filter(operation => operation.enabled !== false && operation.eligible === true)
-	eligibleCount.textContent = `${eligible.length.toString()} of ${executable.length.toString()}`
-	const selected = value.operationEvaluations.find(operation => operation.id === value.scheduler.selectedOperationId)
-	selectedOperation.textContent = selected?.label ?? value.scheduler.selectedOperationId ?? 'None'
-	walletShort.replaceChildren(value.wallet === undefined ? document.createTextNode('No execution account configured') : fullIdentifier(value.wallet, 'wallet address'))
-	walletShort.removeAttribute('title')
-	if (value.wallet !== undefined && value.inventoryAvailable === true) {
-		balanceEth.textContent = formatAtomic18(value.inventory.eth)
-		balanceWeth.textContent = formatAtomic18(value.inventory.weth)
-		balanceRepTotal.textContent = value.inventory.rep.length === 0 ? '—' : `${value.inventory.rep.length.toString()} token${value.inventory.rep.length === 1 ? '' : 's'}`
-		renderRepBalances(value.inventory.rep)
-	} else {
-		balanceEth.textContent = '—'
-		balanceWeth.textContent = '—'
-		balanceRepTotal.textContent = '—'
-		repBalances.className = 'token-list empty-state'
-		repBalances.textContent = value.wallet === undefined ? '—' : 'Inventory unavailable until this account is scanned.'
-	}
-	renderRpcHealth(value)
-	renderSubmissionHealth(value.submissionHealth)
-	renderWorkflow(value.currentWorkflow, value.pendingTransactions)
-	renderWorkflowHistory(value.workflows, configuration?.explorerUrl, value.paused === true)
-	renderCoverage(value.operationEvaluations)
-	retirementDashboard.render(value)
-}
-
-function renderRpcHealth(value: Snapshot) {
-	rpcHealthRetryButton.classList.add('hidden')
-	const health = value.rpcHealth
-	if (health.status === 'ready') setBadge(rpcHealthStatus, 'Quorum ready', 'success')
-	else if (health.status === 'degraded') setBadge(rpcHealthStatus, 'Quorum blocked', 'error')
-	else if (health.status === 'not-checked') setBadge(rpcHealthStatus, 'Awaiting health check', 'warning')
-	else setBadge(rpcHealthStatus, 'Health unavailable', 'warning')
-	const configured = health.configuredReadEndpointCount
-	rpcConfiguredTotal.textContent = configured === undefined ? '—' : `${configured.toString()} endpoint${configured === 1 ? '' : 's'}`
-	const healthy = health.healthyReadEndpointCount
-	if (healthy === undefined) rpcHealthyCount.textContent = '—'
-	else rpcHealthyCount.textContent = configured === undefined ? healthy.toString() : `${healthy.toString()} of ${configured.toString()}`
-	const quorum = health.requiredReadQuorum
-	rpcRequiredQuorum.textContent = quorum === undefined ? '—' : `${quorum.toString()} endpoint${quorum === 1 ? '' : 's'}`
-	const chain = value.chainId === undefined ? 'configured chain' : `chain ${String(value.chainId)}`
-	if (health.chainReady === true) rpcChainReadiness.textContent = `Ready for ${chain}`
-	else if (health.chainReady === false) rpcChainReadiness.textContent = `Not ready for ${chain}`
-	else rpcChainReadiness.textContent = 'Not yet verified'
-	rpcLastCheck.textContent = health.lastCheckedAt === undefined ? 'No completed check' : formatDate(health.lastCheckedAt)
-}
-
-function renderUnavailableRpcHealth(previousResultIsStale: boolean) {
-	rpcHealthRetryButton.classList.remove('hidden')
-	setBadge(rpcHealthStatus, 'Health unavailable', 'warning')
-	rpcConfiguredTotal.textContent = '—'
-	rpcHealthyCount.textContent = '—'
-	rpcRequiredQuorum.textContent = '—'
-	rpcChainReadiness.textContent = 'Unavailable until state refresh succeeds'
-	rpcLastCheck.textContent = previousResultIsStale ? 'Previous health result is stale' : 'No current health result'
-}
-
-function originCount(value: number | undefined) {
-	return value === undefined ? '—' : `${value.toString()} origin${value === 1 ? '' : 's'}`
-}
-
-function renderSubmissionHealth(health: SubmissionHealth) {
-	if (health.status === 'ready') setBadge(submissionHealthStatus, 'Path ready', 'success')
-	else if (health.status === 'degraded') setBadge(submissionHealthStatus, 'Path blocked', 'error')
-	else if (health.status === 'stale') setBadge(submissionHealthStatus, 'Evidence stale', 'warning')
-	else if (health.status === 'not-checked') setBadge(submissionHealthStatus, 'Awaiting path check', 'warning')
-	else setBadge(submissionHealthStatus, 'Path not configured', 'neutral')
-	if (health.mode === 'private') submissionMode.textContent = 'Private relay'
-	else if (health.mode === 'public') submissionMode.textContent = 'Public RPC'
-	else submissionMode.textContent = '—'
-	const configured = health.configuredOriginCount
-	const healthy = health.healthyOriginCount
-	if (healthy === undefined) submissionHealthyCount.textContent = '—'
-	else if (configured === undefined) submissionHealthyCount.textContent = originCount(healthy)
-	else submissionHealthyCount.textContent = `${healthy.toString()} of ${configured.toString()} origins`
-	submissionRequiredThreshold.textContent = originCount(health.requiredHealthyOriginCount)
-	const checked = health.checkedOriginCount
-	const fresh = health.freshOriginCount
-	submissionFreshness.textContent = checked === undefined || fresh === undefined ? 'Not yet verified' : `${fresh.toString()} fresh of ${checked.toString()} checked`
-	if (health.mode !== 'private') submissionSignerProof.textContent = 'Not required'
-	else if (health.proofMatchesSigner === true) submissionSignerProof.textContent = 'Matches current signer'
-	else if (health.proofMatchesSigner === false) submissionSignerProof.textContent = 'Does not match current signer'
-	else submissionSignerProof.textContent = 'Not yet proven'
-	submissionLastCheck.textContent = health.lastCheckedAt === undefined ? 'No completed check' : formatDate(health.lastCheckedAt)
-}
-
-function renderUnavailableSubmissionHealth(previousResultIsStale: boolean) {
-	setBadge(submissionHealthStatus, 'Path unavailable', 'warning')
-	submissionMode.textContent = '—'
-	submissionHealthyCount.textContent = '—'
-	submissionRequiredThreshold.textContent = '—'
-	submissionFreshness.textContent = previousResultIsStale ? 'Previous readiness is stale' : 'Unavailable until state refresh succeeds'
-	submissionSignerProof.textContent = 'Not yet proven'
-	submissionLastCheck.textContent = 'No current path result'
-}
-
-function renderRepBalances(values: RepBalance[]) {
-	if (values.length === 0) {
-		repBalances.className = 'token-list empty-state'
-		repBalances.textContent = 'No REP inventory observed.'
-		return
-	}
-	repBalances.className = 'token-list'
-	const rows = values.map(value => {
-		const row = node('div', 'token-row')
-		const identity = node('div')
-		identity.append(node('strong', undefined, value.symbol ?? 'REP'))
-		identity.append(node('small', 'mono', value.universeId === undefined ? (value.token ?? '—') : `Universe ${value.universeId}`))
-		row.append(identity, node('strong', 'mono', formatAtomic18(value.balance)))
-		return row
-	})
-	repBalances.replaceChildren(...rows)
-}
-
-function transactionWaitNote(transaction: PendingTransaction) {
-	const summary = pendingTransactionSummary(transaction)
-	const note = node('div', `transaction-wait ${summary.tone}`)
-	note.append(node('strong', undefined, summary.headline))
-	if (summary.detail !== '') note.append(node('small', undefined, summary.detail))
-	return note
-}
-
-function renderWorkflow(value: Workflow | undefined, pendingTransactions: readonly PendingTransaction[]) {
-	if (value === undefined) {
-		currentWorkflow.className = 'empty-state'
-		currentWorkflow.textContent = 'No operation is in progress.'
-		return
-	}
-	currentWorkflow.className = ''
-	const heading = node('div', 'workflow-heading')
-	const copy = node('div')
-	copy.append(node('strong', undefined, value.label ?? value.operationId ?? 'Active workflow'))
-	copy.append(node('p', undefined, `${ecosystemLabel(value.ecosystem)} · started ${formatDate(value.startedAt)}`))
-	const status = node('span')
-	setBadge(status, value.status === undefined ? 'In progress' : statusLabel(value.status), statusTone(value.status))
-	heading.append(copy, status)
-	const stepHashes = new Set(value.steps.flatMap(step => (step.txHash === undefined ? [] : [step.txHash.toLowerCase()])))
-	const waitingTransaction = value.status === 'waiting-transaction' ? pendingTransactions.find(transaction => transaction.hash !== undefined && stepHashes.has(transaction.hash.toLowerCase())) : undefined
-	const steps = node('ol', 'step-list')
-	for (const step of value.steps) {
-		const row = node('li')
-		const marker = node('span', `step-dot ${step.status ?? ''}`)
-		marker.setAttribute('aria-hidden', 'true')
-		const detail = node('span', 'step-detail')
-		const readableStatus = statusLabel(step.status)
-		const status = node('span', `step-status ${statusTone(step.status)}`, readableStatus)
-		status.dataset['stepStatus'] = step.status?.trim().toLowerCase() || 'waiting'
-		detail.append(status)
-		if (step.txHash !== undefined) {
-			const hash = transactionIdentifier(step.txHash, 'workflow transaction hash')
-			hash.classList.add('step-hash')
-			hash.dataset['stepHash'] = ''
-			detail.append(hash)
-		}
-		row.append(marker, node('span', 'step-label', step.label ?? 'Workflow step'), detail)
-		steps.append(row)
-	}
-	if (value.steps.length === 0) steps.append(node('li', undefined, 'Workflow state is being prepared.'))
-	currentWorkflow.replaceChildren(heading, ...(waitingTransaction === undefined ? [] : [transactionWaitNote(waitingTransaction)]), steps)
-}
-
-function renderCoverage(values: OperationEvaluation[]) {
-	const cards = ecosystemOrder.map(ecosystem => {
-		const operations = values.filter(value => normalizeEcosystem(value.ecosystem) === ecosystem && operationIsIndependentlyExecutable(value))
-		const eligible = operations.filter(value => value.enabled !== false && value.eligible === true).length
-		const card = node('div', 'coverage-card')
-		card.append(node('span', undefined, ecosystemLabels.get(ecosystem) ?? ecosystem), node('strong', undefined, `${eligible.toString()}/${operations.length.toString()}`), node('small', undefined, 'eligible operations'))
-		return card
-	})
-	coverageSummary.replaceChildren(...cards)
-}
-
-function normalizedCatalogCopy(value: string) {
-	return value
-		.trim()
-		.replaceAll(/\s+/g, ' ')
-		.replace(/[.?!]+$/, '')
-		.toLowerCase()
-}
-
 const operationDialog = createOperationDialog({ request: value => put('/api/operation', value, 120_000) })
 
 const renderCatalogGroups = createCatalogGroups(catalogRows, ecosystemOrder, ecosystemLabel)
 const catalogRowCache = new Map<string, { row: HTMLTableRowElement; signature: string }>()
 let catalogSignature = ''
 
-function renderCatalog(values: OperationEvaluation[]) {
-	if (document.querySelector('#operation-dialog[open]') !== null) return
-	const selectedEcosystem = catalogFilter.value
-	const selectedClassification = catalogClassificationFilter.value
-	const selectedEligibility = catalogEligibilityFilter.value
-	const signature = JSON.stringify({ values, selectedEcosystem, selectedClassification, selectedEligibility })
-	if (signature === catalogSignature) return
-	catalogSignature = signature
-	const filtered = values.filter(value => {
-		if (selectedEcosystem !== 'all' && normalizeEcosystem(value.ecosystem) !== selectedEcosystem) return false
-		if (selectedClassification !== 'all' && displayedClassification(value) !== selectedClassification) return false
-		const independentlyExecutable = operationIsIndependentlyExecutable(value)
-		const eligible = independentlyExecutable && value.enabled !== false && value.eligible === true
-		let eligibility = 'blocked'
-		if (!independentlyExecutable) eligibility = 'not-selectable'
-		else if (value.enabled === false) eligibility = 'disabled'
-		else if (eligible) eligibility = 'eligible'
-		return selectedEligibility === 'all' || selectedEligibility === eligibility
-	})
-	const candidateTotal = filtered.reduce((total, value) => total + BigInt(publicCandidateCount(value.candidateCount) ?? 0), 0n)
-	catalogCaption.textContent = `${filtered.length.toString()} of ${values.length.toString()} classified catalog entr${values.length === 1 ? 'y' : 'ies'} shown · ${candidateTotal.toString()} live candidate${candidateTotal === 1n ? '' : 's'}.`
-	const rows = filtered.map(value => {
-		const key = value.id ?? ''
-		const rowSignature = JSON.stringify(value)
-		const reused = catalogRowCache.get(key)
-		// Reusing an unchanged row keeps its checkbox, focus, and layout untouched across polls.
-		if (reused !== undefined && reused.signature === rowSignature) return reused.row
-		const row = document.createElement('tr')
-		const enabled = value.enabled !== false
-		const independentlyExecutable = operationIsIndependentlyExecutable(value)
-		const displayClassification = displayedClassification(value)
-		const eligible = independentlyExecutable && enabled && value.eligible === true
-		let displayedBlockers: string[] = []
-		if (!eligible) {
-			displayedBlockers = value.blockers
-			if (displayedBlockers.length === 0) {
-				if (!independentlyExecutable) displayedBlockers = ['This surface is classified for coverage but cannot be selected as a standalone operation']
-				else if (!enabled) displayedBlockers = ['Disabled by operator policy']
-				else displayedBlockers = ['No eligible candidate in current state']
-			}
-		}
-		const nameCell = node('td', 'operation-name')
-		nameCell.append(node('strong', undefined, value.label ?? value.id ?? 'Unnamed operation'))
-		const description = value.description?.trim()
-		if (description !== undefined && description !== '' && !displayedBlockers.some(blocker => normalizedCatalogCopy(blocker) === normalizedCatalogCopy(description))) {
-			nameCell.append(node('small', 'operation-description', description))
-		}
-		const classificationCell = node('td')
-		const classificationBadge = node('span')
-		let classificationTone: Parameters<typeof setBadge>[2] = 'success'
-		if (displayClassification === 'excluded-dangerous') classificationTone = 'error'
-		else if (displayClassification === 'role-restricted' || displayClassification === 'prerequisite' || displayClassification === 'coverage-alias') classificationTone = 'neutral'
-		else if (displayClassification === 'lifecycle-obligation') classificationTone = 'info'
-		setBadge(classificationBadge, classificationLabel(displayClassification), classificationTone)
-		classificationCell.append(classificationBadge)
-		const riskCell = node('td')
-		const riskBadge = node('span')
-		setBadge(riskBadge, statusLabel(value.risk ?? 'standard'), value.risk === 'irreversible' || value.risk === 'high' ? 'warning' : 'neutral')
-		riskCell.append(riskBadge)
-		const candidatesCell = node('td', 'mono', String(publicCandidateCount(value.candidateCount) ?? 0))
-		const eligibilityCell = node('td')
-		nameCell.dataset['label'] = 'Operation'
-		classificationCell.dataset['label'] = 'Classification'
-		riskCell.dataset['label'] = 'Risk'
-		candidatesCell.dataset['label'] = 'Candidates'
-		eligibilityCell.dataset['label'] = 'Eligibility'
-		const eligibilityBadge = node('span')
-		if (!independentlyExecutable) setBadge(eligibilityBadge, 'Not independently selectable', 'neutral')
-		else if (!enabled) setBadge(eligibilityBadge, 'Disabled', 'neutral')
-		else if (eligible) setBadge(eligibilityBadge, 'Eligible', 'success')
-		else setBadge(eligibilityBadge, 'Blocked', 'warning')
-		eligibilityCell.append(eligibilityBadge)
-		if (!eligible) {
-			const listValue = node('ul', 'blocker-list')
-			for (const reason of displayedBlockers) listValue.append(node('li', undefined, reason))
-			eligibilityCell.append(listValue)
-		}
-		const open = node('button', 'operation-open secondary', 'Open operation')
-		open.type = 'button'
-		open.setAttribute('aria-label', `Open ${value.label ?? 'operation'}`)
-		open.addEventListener('click', () => operationDialog.open(value))
-		nameCell.append(open)
-		if (value.classification === 'selectable' && independentlyExecutable && value.id !== undefined) selectionControls.appendToggle(nameCell, value.id, value.label ?? value.id)
-		row.dataset['ecosystem'] = normalizeEcosystem(value.ecosystem)
-		row.dataset['operationId'] = key
-		row.append(nameCell, classificationCell, riskCell, candidatesCell, eligibilityCell)
-		catalogRowCache.set(key, { row, signature: rowSignature })
-		return row
-	})
-	if (rows.length === 0) {
-		catalogRows.replaceChildren(node('p', 'empty-state', 'No operations match this filter.'))
-		return
-	}
-	renderCatalogGroups(rows)
-	updateSelectionControls()
-}
-
-function renderEcosystems(values: OperationEvaluation[]) {
-	const cards = ecosystemOrder.map(ecosystem => {
-		const operations = values.filter(value => normalizeEcosystem(value.ecosystem) === ecosystem && operationIsIndependentlyExecutable(value))
-		const enabled = operations.filter(value => value.enabled !== false)
-		const eligible = enabled.filter(value => value.eligible === true)
-		const candidates = eligible.reduce((total, value) => total + (parsePositiveNumber(value.candidateCount) ?? 0), 0)
-		const card = node('article', 'panel ecosystem-card')
-		card.dataset['ecosystem'] = ecosystem
-		const heading = node('div', 'panel-heading')
-		heading.append(node('h3', undefined, ecosystemLabels.get(ecosystem) ?? ecosystem))
-		const readiness = node('span')
-		if (eligible.length > 0) setBadge(readiness, 'Ready', 'success')
-		else if (operations.length === 0) setBadge(readiness, 'Discovering', 'neutral')
-		else setBadge(readiness, 'Blocked', 'warning')
-		heading.append(readiness)
-		const metrics = node('div', 'ecosystem-metrics')
-		for (const [label, amount] of [
-			['Independent operations', operations.length],
-			['Eligible', eligible.length],
-			['Candidates', candidates],
-		] as const) {
-			const metric = node('div')
-			metric.append(node('strong', undefined, amount.toString()), node('span', undefined, label))
-			metrics.append(metric)
-		}
-		let summary: HTMLElement | undefined
-		if (operations.length === 0) summary = node('p', 'muted', 'Waiting for protocol discovery.')
-		else {
-			const blockers =
-				eligible.length > 0
-					? []
-					: [
-							...new Set(
-								operations.flatMap(value => {
-									const operation = value.label ?? value.id ?? 'Unnamed operation'
-									let reasons = value.blockers
-									if (value.enabled === false) reasons = ['Disabled by operator policy']
-									else if (reasons.length === 0) reasons = ['No eligible candidate in current state']
-									return reasons.map(reason => `${operation}: ${reason}`)
-								}),
-							),
-						].slice(0, 3)
-			if (blockers.length > 0) {
-				summary = node('ul', 'blocker-list')
-				for (const blocker of blockers) summary.append(node('li', undefined, blocker))
-			}
-		}
-		card.append(heading, metrics)
-		if (summary !== undefined) card.append(summary)
-		return card
-	})
-	ecosystemGrid.replaceChildren(...cards)
-}
-
-function topologyIdentifier(value: string | undefined, fallback: string, type: string) {
-	return value === undefined ? node('span', 'mono muted', fallback) : fullIdentifier(value, type)
-}
-
-function topologyIdentifierFact(label: string, value: string | undefined, type: string) {
-	const fact = node('span', 'topology-fact topology-identifier-fact')
-	fact.append(node('span', undefined, label), topologyIdentifier(value, 'Unavailable', type))
-	return fact
-}
-
 const topologyGroupSignatures = new WeakMap<HTMLDivElement, string>()
-
-function renderTopologyGroup(target: HTMLDivElement, values: readonly unknown[], render: (value: Record<string, unknown>) => HTMLElement) {
-	const signature = JSON.stringify(values)
-	if (topologyGroupSignatures.get(target) === signature) return
-	topologyGroupSignatures.set(target, signature)
-	if (values.length === 0) {
-		target.className = 'topology-list empty-state'
-		target.textContent = 'None discovered at this anchor.'
-		return
-	}
-	target.className = 'topology-list'
-	target.replaceChildren(
-		...values.flatMap(value => {
-			const source = record(value)
-			return source === undefined ? [] : [render(source)]
-		}),
-	)
-}
-
-function topologyRow(identity: HTMLElement | string, facts: Array<HTMLElement | string>) {
-	const row = node('div', 'topology-row')
-	const heading = node('strong')
-	heading.append(typeof identity === 'string' ? document.createTextNode(identity) : identity)
-	const details = node('small', 'topology-facts')
-	for (const fact of facts) details.append(typeof fact === 'string' ? node('span', 'topology-fact', fact) : fact)
-	row.append(heading, details)
-	return row
-}
-
-function renderTopology(value: Topology) {
-	const visibleTotal = value.universes.length + value.pools.length + value.reports.length + value.auctions.length + value.pairs.length
-	const discoveredTotal = value.totalCounts.universes + value.totalCounts.pools + value.totalCounts.reports + value.totalCounts.auctions + value.totalCounts.pairs
-	if (value.anchorBlock === undefined) {
-		setBadge(topologyAnchor, 'Anchor unavailable', 'warning')
-		topologyStatus.textContent = 'Waiting for the first canonical scan to publish its sanitized protocol topology.'
-	} else {
-		setBadge(topologyAnchor, `Block ${String(value.anchorBlock)}`, value.complete === false || value.truncated === true ? 'warning' : 'success')
-		if (value.truncated === true) {
-			topologyStatus.textContent = `${visibleTotal.toString()} of ${discoveredTotal.toString()} anchored protocol identities shown · dashboard projection is capped; canonical discovery is ${value.complete === false ? 'incomplete' : 'complete'}.`
-		} else {
-			topologyStatus.textContent = `${visibleTotal.toString()} protocol identit${visibleTotal === 1 ? 'y' : 'ies'} · discovery ${value.complete === false ? 'incomplete' : 'complete'}.`
-		}
-	}
-	renderTopologyGroup(topologyUniverses, value.universes, source =>
-		topologyRow(`Universe ${String(source['id'] ?? '—')}`, [source['parentUniverseId'] === undefined ? 'genesis' : `parent ${String(source['parentUniverseId'])}`, `${String(source['knownChildOutcomeCount'] ?? 0)} child routes`, topologyIdentifierFact('REP', stringValue(source['repToken']), 'universe REP token')]),
-	)
-	renderTopologyGroup(topologyPools, value.pools, source =>
-		topologyRow(topologyIdentifier(stringValue(source['address']), 'Pool unavailable', 'security pool address'), [
-			`universe ${String(source['universeId'] ?? '—')}`,
-			`state ${String(source['systemState'] ?? '—')}`,
-			`${String(source['vaultCount'] ?? 0)} vaults${source['awaitingForkContinuation'] === true ? ' · fork continuation pending' : ''}`,
-		]),
-	)
-	renderTopologyGroup(topologyReports, value.reports, source =>
-		topologyRow(`Report ${String(source['reportId'] ?? '—')}`, [
-			topologyIdentifierFact('Token 1', stringValue(source['token1']), 'report token 1'),
-			topologyIdentifierFact('Token 2', stringValue(source['token2']), 'report token 2'),
-			`settlement ${String(source['settlementTime'] ?? '—')}`,
-			`flags ${String(source['flags'] ?? '—')}`,
-		]),
-	)
-	renderTopologyGroup(topologyAuctions, value.auctions, source =>
-		topologyRow(topologyIdentifier(stringValue(source['address']), 'Auction unavailable', 'truth auction address'), [topologyIdentifierFact('Pool', stringValue(source['pool']), 'truth auction pool address'), source['finalized'] === true ? 'finalized' : 'active', `${String(source['bidCount'] ?? 0)} indexed bids`]),
-	)
-	renderTopologyGroup(topologyPairs, value.pairs, source =>
-		topologyRow(topologyIdentifier(stringValue(source['address']), 'Pair unavailable', 'trading pair address'), [
-			topologyIdentifierFact('Pool', stringValue(source['pool']), 'trading pair pool address'),
-			`universe ${String(source['universeId'] ?? '—')}`,
-			`status ${String(source['status'] ?? '—')}`,
-			`${String(source['feeBps'] ?? '—')} bps`,
-		]),
-	)
-}
-
-function renderRecovery(value: Snapshot) {
-	pendingCount.textContent = value.pendingTransactions.length.toString()
-	obligationCount.textContent = value.obligations.length.toString()
-	obligationFields.disabled = value.paused !== true || value.obligations.length === 0
-	workflowFields.disabled = value.paused !== true || value.currentWorkflow?.classification !== 'selectable' || value.currentWorkflow.status !== 'waiting-continuation'
-	const selectedObligation = obligationIdInput.value
-	obligationIdInput.replaceChildren(
-		...value.obligations.map(obligation => {
-			const option = document.createElement('option')
-			option.value = obligation.id ?? ''
-			option.textContent = `${obligation.label ?? obligation.operationId ?? 'Lifecycle obligation'} · ${statusLabel(obligation.status ?? 'pending')}`
-			return option
-		}),
-	)
-	if (value.obligations.some(obligation => obligation.id === selectedObligation)) {
-		obligationIdInput.value = selectedObligation
-	}
-	replacementFields.disabled = value.paused !== true || value.pendingTransactions.length !== 1 || value.pendingTransactions[0]?.cancellationHash !== undefined
-	cancellationFields.disabled = value.paused !== true || value.pendingTransactions.length !== 1 || value.pendingTransactions[0]?.replacementHash !== undefined
-	const queuedCandidate = value.pendingTransactions[0]?.replacementHash ?? value.pendingTransactions[0]?.cancellationHash
-	candidateFields.disabled = value.paused !== true || queuedCandidate === undefined
-	if (value.pendingTransactions.length === 0) {
-		pendingTransactions.className = 'stack-list empty-state'
-		pendingTransactions.textContent = 'No transaction requires confirmation.'
-	} else {
-		pendingTransactions.className = 'stack-list'
-		pendingTransactions.replaceChildren(
-			...value.pendingTransactions.map(transaction => {
-				const row = node('div', 'stack-row')
-				const copy = node('div')
-				copy.append(node('strong', undefined, transaction.label ?? transaction.operationId ?? 'Pending transaction'))
-				copy.append(transactionLine(`Nonce ${String(transaction.nonce ?? '—')}`, transaction.hash, 'pending transaction hash'))
-				if (transaction.replacementHash !== undefined) {
-					copy.append(transactionLine('Replacement queued', transaction.replacementHash, 'replacement transaction hash'))
-				}
-				if (transaction.cancellationHash !== undefined) {
-					copy.append(transactionLine('Cancellation queued', transaction.cancellationHash, 'cancellation transaction hash'))
-				}
-				const status = node('span')
-				setBadge(status, statusLabel(transaction.status ?? 'pending'), statusTone(transaction.status ?? 'pending'))
-				row.append(copy, status, transactionWaitNote(transaction))
-				return row
-			}),
-		)
-	}
-	if (value.obligations.length === 0) {
-		obligations.className = 'stack-list empty-state'
-		obligations.textContent = 'No follow-up obligation is due.'
-	} else {
-		obligations.className = 'stack-list'
-		obligations.replaceChildren(
-			...value.obligations.map(obligation => {
-				const row = node('div', 'stack-row')
-				const copy = node('div')
-				copy.append(node('strong', undefined, obligation.label ?? obligation.operationId ?? 'Lifecycle obligation'))
-				copy.append(node('small', undefined, obligationDetail(obligation)))
-				const status = node('span')
-				const automaticRetryWaiting = obligation.status === 'deferred' && obligation.notBefore !== undefined
-				setBadge(status, automaticRetryWaiting ? 'Retry waiting' : statusLabel(obligation.status ?? 'pending'), automaticRetryWaiting ? 'warning' : statusTone(obligation.status ?? 'pending'))
-				row.append(copy, status)
-				return row
-			}),
-		)
-	}
-}
 
 function renderSnapshot(value: Snapshot) {
 	renderHeader(value)
@@ -1444,123 +967,6 @@ function renderSnapshot(value: Snapshot) {
 	renderActivities(value.activities, configuration?.explorerUrl)
 	renderOperatorAlerts(operatorAlerts, value.alerts)
 	renderCountdown()
-	applyMutationControlLatches()
-}
-
-function renderCountdown() {
-	const value = snapshot
-	if (value === undefined) return
-	if (value.paused === true) {
-		countdown.textContent = 'Paused'
-		countdownProgress.style.width = '0%'
-		setBadge(schedulerState, 'Scheduling stopped', 'warning')
-		return
-	}
-	const activeWork = activeSchedulerWorkLabel(value)
-	if (activeWork !== undefined) {
-		countdown.textContent = 'On hold'
-		countdownProgress.style.width = '100%'
-		setBadge(schedulerState, activeWork, 'warning')
-		return
-	}
-	if (value.scheduler.nextRunAt === undefined) {
-		countdown.textContent = value.scheduler.due === true ? 'Due now' : 'Waiting'
-		countdownProgress.style.width = value.scheduler.due === true ? '100%' : '0%'
-		setBadge(schedulerState, value.scheduler.status === undefined ? 'Not scheduled' : statusLabel(value.scheduler.status), value.scheduler.due === true ? 'warning' : 'neutral')
-		return
-	}
-	const nextTimestamp = new Date(value.scheduler.nextRunAt).getTime()
-	if (!Number.isFinite(nextTimestamp)) {
-		countdown.textContent = '—'
-		setBadge(schedulerState, 'Invalid schedule', 'error')
-		return
-	}
-	const remainingSeconds = Math.max(0, Math.ceil((nextTimestamp - Date.now()) / 1_000))
-	countdown.textContent = remainingSeconds === 0 ? 'Due now' : formatDuration(remainingSeconds)
-	const totalSeconds = parsePositiveNumber(value.scheduler.lastDelaySeconds)
-	let elapsedFraction = remainingSeconds === 0 ? 1 : 0
-	if (totalSeconds !== undefined && totalSeconds !== 0) elapsedFraction = Math.min(1, Math.max(0, 1 - remainingSeconds / totalSeconds))
-	countdownProgress.style.width = `${(elapsedFraction * 100).toFixed(1)}%`
-	let schedulerLabel = value.scheduler.status === undefined ? 'Scheduled' : statusLabel(value.scheduler.status)
-	if (remainingSeconds === 0) schedulerLabel = 'Selecting operation'
-	setBadge(schedulerState, schedulerLabel, remainingSeconds === 0 ? 'warning' : 'success')
-}
-
-function renderConfiguration(value: Configuration, force = false) {
-	if (value.configurationCommitIndeterminate === true) latchConfigurationCommitIndeterminate()
-	const policyEditable = value.paused === true && snapshot?.paused === true && !settingsMutationUnreconciled && !configurationCommitIndeterminate
-	settingsFields.disabled = !policyEditable
-	executionModeForm.render(value, policyEditable)
-	connectivityFields.disabled = connectivityMutationUnreconciled || configurationCommitIndeterminate
-	settingsPauseNote.classList.toggle('hidden', policyEditable)
-	signerFields.disabled = signerMutationUnreconciled || configurationCommitIndeterminate
-	setSignerButton.disabled = privateKeyInput.value.trim() === ''
-	const network = value.network ?? snapshot?.network ?? 'Network unknown'
-	let networkTone: Parameters<typeof setBadge>[2] = 'success'
-	if (value.networkConfigured === false) networkTone = 'warning'
-	else if (value.network === undefined) networkTone = 'neutral'
-	setBadge(networkBadge, value.chainId === undefined ? network : `${network} · ${String(value.chainId)}`, networkTone)
-	settingsScope.textContent = value.chainId === undefined ? network : `${network} · chain ${String(value.chainId)}`
-	settingsScope.className = 'badge neutral'
-	if (connectivityDraftDirty) {
-		if (value.revision !== connectivityDraftRevision) {
-			connectivityDraftConflict = true
-			saveConnectivityButton.disabled = true
-			discardConnectivityButton.disabled = false
-			connectivityStatus.textContent = 'Configuration changed elsewhere. Discard this RPC draft and re-enter the complete replacement set before saving.'
-		}
-	} else {
-		if (value.rpcQuorum === 1 || value.rpcQuorum === 2) rpcQuorumInput.value = String(value.rpcQuorum)
-		readRpcUrlInput.value = value.connectivity?.readRpcUrl ?? ''
-		quorumRpcUrlsInput.value = value.connectivity?.quorumRpcUrls.join('\n') ?? ''
-		publicRpcUrlsInput.value = value.connectivity?.publicRpcUrls.join('\n') ?? ''
-		connectivityDraftRevision = value.revision
-		connectivityDraftConflict = false
-		saveConnectivityButton.disabled = false
-		discardConnectivityButton.disabled = true
-	}
-	const wallet = value.wallet ?? snapshot?.wallet
-	signerSummary.replaceChildren()
-	if (value.hasSigner === true) {
-		if (wallet === undefined) signerSummary.append(node('span', undefined, 'Signer configured'))
-		else signerSummary.append(fullIdentifier(wallet, 'transaction signer address'))
-		signerSummary.append(node('span', 'signer-persistence', ` · ${value.rememberSigner === true ? 'remembered locally' : 'memory only'}`))
-	} else signerSummary.textContent = 'No signer configured'
-	rememberSignerInput.checked = value.rememberSigner === true
-	if (settingsDraft.dirty && !force) {
-		settingsDraft.render()
-		if (value.revision !== settingsRevision) {
-			settingsDraft.conflict = true
-			saveSettingsButton.disabled = true
-			discardSettingsButton.disabled = false
-			settingsSaveStatus.textContent = 'Configuration changed elsewhere. Discard these edits and reload before saving.'
-		}
-		return
-	}
-	settingsRevision = value.revision
-	settingsDraft.conflict = false
-	saveSettingsButton.disabled = false
-	discardSettingsButton.disabled = true
-	highRiskInput.checked = value.allowHighRiskOperations === true
-	irreversibleInput.checked = value.allowIrreversibleOperations === true
-	initializeGenesisInput.checked = value.initializeGenesisUniverse === true
-	const allSelectableOperations = value.selectableOperationAllowlist === null
-	allSelectableOperationsInput.checked = allSelectableOperations
-	selectableOperationAllowlistInput.value = Array.isArray(value.selectableOperationAllowlist) ? value.selectableOperationAllowlist.join('\n') : ''
-	selectableOperationAllowlistInput.disabled = allSelectableOperations
-	minDelayInput.value = String(value.minimumDelaySeconds ?? 60)
-	maxDelayInput.value = String(value.maximumDelaySeconds ?? 3_600)
-	reserveEthInput.value = String(value.minimumEthReserve ?? '0.05')
-	reserveRepInput.value = String(value.minimumRepReserve ?? '10')
-	maximumEthOperationInput.value = String(value.maximumEthPerOperation ?? '0.05')
-	maximumGasCostInput.value = String(value.maximumGasCostEth ?? '0.02')
-	maximumRepOperationInput.value = String(value.maximumRepPerOperation ?? '10')
-	workflowValidBlocksInput.value = String(value.workflowValidForBlocks ?? 288)
-	for (const toggle of document.querySelectorAll('[data-ecosystem-toggle]')) {
-		if (!(toggle instanceof HTMLInputElement)) continue
-		toggle.checked = value.enabledEcosystems.includes(toggle.dataset['ecosystemToggle'] ?? '')
-	}
-	settingsDraft.render()
 	applyMutationControlLatches()
 }
 

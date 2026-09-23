@@ -1,5 +1,5 @@
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
-import { getActiveBackend } from '../lib/activeEnvironment.js'
+import { createActiveEnvironmentGuard, getActiveBackend } from '../lib/activeEnvironment.js'
 import type { CreateWriteClientCallbacks } from './chainBackend.js'
 export type { ReadClient, WriteClient } from './chainBackend.js'
 export { normalizeAccount } from './chainBackend.js'
@@ -9,5 +9,5 @@ export function createConnectedReadClient() {
 }
 
 export function createWalletWriteClient(accountAddress: Address, callbacks: CreateWriteClientCallbacks = {}) {
-	return getActiveBackend().createWriteClient(accountAddress, callbacks)
+	return getActiveBackend().createWriteClient(accountAddress, { ...callbacks, isCurrentEnvironment: createActiveEnvironmentGuard().isCurrent })
 }
