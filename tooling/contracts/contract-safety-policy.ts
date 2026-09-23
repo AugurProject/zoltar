@@ -101,8 +101,8 @@ export const contractSafetyPolicy = {
 				sourcePath: 'contracts/statoblast/factories/EscalationGameFactory.sol',
 				contractName: 'EscalationGameFactory',
 			},
-			46_755,
-			'The factory embeds the game with fork-aware finality, increasing minimum initcode by 82 bytes to preserve unresolved carry during delayed migration; no further growth is permitted.',
+			46_949,
+			'The factory embeds fork-aware finality and inherited threshold-tie reconciliation after auction haircuts; no further growth is permitted.',
 		),
 	] satisfies readonly BytecodeBudget[],
 	exactLayoutPairs: [

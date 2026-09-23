@@ -2504,6 +2504,90 @@ describe('Escalation Game Test Suite', () => {
 		assert.strictEqual(snapshotEventNames.filter(eventName => eventName === 'InheritedThresholdTie').length, 1, 'snapshot initialization should emit one inherited-threshold-tie lifecycle event')
 	})
 
+	for (const retainedBacking of [2n * nonDecisionThresholdAttoRep, 2n * nonDecisionThresholdAttoRep - 1n, nonDecisionThresholdAttoRep / 10n, 1n]) {
+		test(`auction reconciles an inherited threshold tie with ${retainedBacking} retained backing`, async () => {
+			const child = await deployEscalationGameWithProofPool()
+			await startEscalationFromFork(child.escalationGameAddress, reportBond, nonDecisionThresholdAttoRep, ESCALATION_TIME_LENGTH)
+			await initializeSnapshotWithResolutionBalancesViaTestSecurityPool(
+				child.testSecurityPoolAddress,
+				[zeroPeakArray(), zeroPeakArray(), zeroPeakArray()],
+				[0n, 1n, 1n],
+				[0n, nonDecisionThresholdAttoRep, nonDecisionThresholdAttoRep],
+				[0n, nonDecisionThresholdAttoRep, nonDecisionThresholdAttoRep],
+				[zeroHash(), zeroHash(), zeroHash()],
+			)
+			await applyTruthAuctionHaircutViaTestSecurityPool(child.testSecurityPoolAddress, 2n * nonDecisionThresholdAttoRep - retainedBacking)
+			const remainsFull = retainedBacking === 2n * nonDecisionThresholdAttoRep
+			assert.strictEqual(await readNonDecisionState(child.escalationGameAddress), remainsFull ? NON_DECISION_STATE_INHERITED_THRESHOLD_TIE : NON_DECISION_STATE_NONE, 'only a structurally full inherited tie may retain the fork commitment')
+			assert.strictEqual(await readCanTriggerOwnFork(child.escalationGameAddress), remainsFull)
+			assert.strictEqual(await readNonDecisionTimestamp(child.escalationGameAddress), 0n)
+			assert.strictEqual((await readOutcomeState(child.escalationGameAddress, QuestionOutcome.Yes)).balanceAttoRep, retainedBacking / 2n)
+			assert.strictEqual((await readOutcomeState(child.escalationGameAddress, QuestionOutcome.Yes)).inheritedUnresolvedTotalAttoRep, retainedBacking / 2n, 'effective inherited principal must retain the same auction fraction')
+			await resumeEscalationFromFork(child.escalationGameAddress)
+			if (remainsFull) {
+				await assert.rejects(depositOnOutcomeViaProofTestSecurityPool(child.testSecurityPoolAddress, client.account.address, QuestionOutcome.Yes, reportBond), /revert/i)
+				return
+			}
+			const resumedAt = await client.readContract({ abi: statoblast_EscalationGame_EscalationGame.abi, address: child.escalationGameAddress, functionName: 'forkResumedAt' })
+			const endDate = await client.readContract({ abi: statoblast_EscalationGame_EscalationGame.abi, address: child.escalationGameAddress, functionName: 'getEscalationGameEndDate' })
+			assert.strictEqual(endDate, resumedAt + 3n * DAY, 'the rebased continuation must retain a fresh response window')
+			if (retainedBacking === 1n) {
+				await mockWindow.setTime(endDate + 1n)
+				assert.strictEqual(await getQuestionResolution(client, child.escalationGameAddress), QuestionOutcome.Invalid, 'zero-rounded balances resolve without new funding')
+				return
+			}
+			const preview = await client.readContract({ abi: statoblast_EscalationGame_EscalationGame.abi, address: child.escalationGameAddress, functionName: 'previewDepositOnOutcome', args: [QuestionOutcome.Yes, reportBond] })
+			await depositOnOutcomeViaProofTestSecurityPool(child.testSecurityPoolAddress, client.account.address, QuestionOutcome.Yes, reportBond)
+			assert.strictEqual((await readOutcomeState(child.escalationGameAddress, QuestionOutcome.Yes)).balanceAttoRep, preview[1], 'execution must admit the previewed deposit')
+			await mockWindow.setTime(endDate + ESCALATION_TIME_LENGTH)
+			assert.strictEqual(await getQuestionResolution(client, child.escalationGameAddress), QuestionOutcome.Yes, 'a funded report must break the inherited tie')
+		})
+	}
+
+	test('a reopened inherited tie carries retention and authenticated payouts through another continuation', async () => {
+		const parent = await deployEscalationGameWithProofPool()
+		await startEscalation(parent.escalationGameAddress, reportBond, nonDecisionThresholdAttoRep)
+		await depositOnOutcomeViaProofTestSecurityPool(parent.testSecurityPoolAddress, client.account.address, QuestionOutcome.Yes, nonDecisionThresholdAttoRep)
+		await depositOnOutcomeViaProofTestSecurityPool(parent.testSecurityPoolAddress, client.account.address, QuestionOutcome.No, nonDecisionThresholdAttoRep)
+		let source = parent.escalationGameAddress
+		let descendant = parent
+		for (let generation = 0; generation < 2; generation += 1) {
+			descendant = await deployEscalationGameWithProofPool()
+			await startEscalationFromFork(descendant.escalationGameAddress, reportBond, nonDecisionThresholdAttoRep, 0n)
+			await initializeSnapshotFromSourceViaTestSecurityPool(
+				descendant.testSecurityPoolAddress,
+				source,
+				zeroHash(),
+				[zeroPeakArray(), await readCarryPeaks(source, QuestionOutcome.Yes), await readCarryPeaks(source, QuestionOutcome.No)],
+				[0n, 1n, 1n],
+				[0n, await readCarryTotal(source, QuestionOutcome.Yes), await readCarryTotal(source, QuestionOutcome.No)],
+				[zeroHash(), await readNullifierRoot(source, QuestionOutcome.Yes), await readNullifierRoot(source, QuestionOutcome.No)],
+			)
+			const backing = await getERC20Balance(client, getRepTokenAddress(0n), descendant.escalationGameAddress)
+			await applyTruthAuctionHaircutViaTestSecurityPool(descendant.testSecurityPoolAddress, backing / 2n)
+			await resumeEscalationFromFork(descendant.escalationGameAddress)
+			assert.strictEqual(await readNonDecisionState(descendant.escalationGameAddress), NON_DECISION_STATE_NONE)
+			assert.strictEqual(await readCanTriggerOwnFork(descendant.escalationGameAddress), false)
+			source = descendant.escalationGameAddress
+		}
+		assert.strictEqual(await readNonDecisionState(parent.escalationGameAddress), NON_DECISION_STATE_LOCAL, 'descendant auctions must preserve the original local transition')
+		await depositOnOutcomeViaProofTestSecurityPool(descendant.testSecurityPoolAddress, client.account.address, QuestionOutcome.Yes, reportBond)
+		const endDate = await client.readContract({ abi: statoblast_EscalationGame_EscalationGame.abi, address: descendant.escalationGameAddress, functionName: 'getEscalationGameEndDate' })
+		await mockWindow.setTime(endDate + 1n)
+		assert.strictEqual(await getQuestionResolution(client, descendant.escalationGameAddress), QuestionOutcome.Yes)
+		const backingBefore = await getERC20Balance(client, getRepTokenAddress(0n), descendant.escalationGameAddress)
+		const walletBefore = await getERC20Balance(client, getRepTokenAddress(0n), client.account.address)
+		const burnedBefore = await getERC20Balance(client, getRepTokenAddress(0n), addressString(BURN_ADDRESS))
+		const proof = await createCarryProof(parent.escalationGameAddress, 0n, 0n, 0n, [], new SparseNullifierTree().getProof(0n), 1n)
+		await withdrawDepositViaProofTestSecurityPool(descendant.testSecurityPoolAddress, QuestionOutcome.Yes, proof)
+		const paid = (await getERC20Balance(client, getRepTokenAddress(0n), client.account.address)) - walletBefore
+		const burned = (await getERC20Balance(client, getRepTokenAddress(0n), addressString(BURN_ADDRESS))) - burnedBefore
+		assert.ok(paid > 0n, 'the original depositor must receive a funded retained payout')
+		assert.strictEqual(backingBefore - (await getERC20Balance(client, getRepTokenAddress(0n), descendant.escalationGameAddress)), paid + burned, 'payout plus deterrence burn must conserve backing')
+		assert.strictEqual(await readCarryTotal(descendant.escalationGameAddress, QuestionOutcome.Yes), reportBond, 'only the fresh local claim remains after the ancestor claim is consumed')
+		await assert.rejects(withdrawDepositViaProofTestSecurityPool(descendant.testSecurityPoolAddress, QuestionOutcome.Yes, proof), /revert/i, 'reopening must not permit duplicate ancestor claims')
+	})
+
 	test('a fixed-outcome continuation settles an inherited threshold tie instead of authorizing another fork', async () => {
 		const child = await deployEscalationGameWithProofPool()
 		await startEscalationFromFork(child.escalationGameAddress, reportBond, nonDecisionThresholdAttoRep, 0n, QuestionOutcome.Yes)
@@ -2516,7 +2600,9 @@ describe('Escalation Game Test Suite', () => {
 			[zeroHash(), zeroHash(), zeroHash()],
 		)
 
+		await applyTruthAuctionHaircutViaTestSecurityPool(child.testSecurityPoolAddress, nonDecisionThresholdAttoRep)
 		assert.strictEqual(await readNonDecisionState(child.escalationGameAddress), NON_DECISION_STATE_INHERITED_THRESHOLD_TIE, 'the fixed child should retain the inherited threshold-tie lifecycle state')
+		await assert.rejects(depositOnOutcomeViaProofTestSecurityPool(child.testSecurityPoolAddress, client.account.address, QuestionOutcome.Yes, reportBond), /revert/i, 'a haircut must not reopen fixed-outcome reporting')
 		assert.strictEqual(await readCanTriggerOwnFork(child.escalationGameAddress), false, 'a fixed child should continue to its selected outcome instead of forking again')
 		await resumeEscalationFromFork(child.escalationGameAddress)
 		const continuationEndDate = await client.readContract({
