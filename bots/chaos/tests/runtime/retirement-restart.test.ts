@@ -118,7 +118,7 @@ describe('Drain & Retire persisted restart behavior', () => {
 		reconcileV3PositionJournal(state.retirement, state.workflows, state.profileId, snapshot.wallet.address)
 		expect(state.retirement.positions).toHaveLength(1)
 		expect(state.retirement.positions[0]).toMatchObject({ id: original.id, creationWorkflowId: original.creationWorkflowId, creationTransactionHash: hash(12), status: 'closed' })
-		const recipient = address(99)
+		const recipient = snapshot.wallet.address
 		requestRetirement(state.retirement, state.profileId, recipient, DEFAULT_RETIREMENT_POLICIES, `DRAIN ${state.profileId} TO ${recipient}`, state.signerAddress)
 		state = await reload(path, state)
 		snapshot.wallet.openOracleEthCredit = '0'
@@ -129,7 +129,7 @@ describe('Drain & Retire persisted restart behavior', () => {
 		state = await reload(path, state)
 		expect(state.retirement.positions[0]?.status).toBe('active')
 		expect(state.retirement.completionEvidence).toBeUndefined()
-		await expect(resetPristineStateForDeploymentProfile(state, 'profile:replacement', false, state.wallet, path, async () => {})).rejects.toThrow('drain it first')
+		await expect(resetPristineStateForDeploymentProfile(state, 'profile:replacement', address(50), false, state.wallet, path, async () => {})).rejects.toThrow('drain it first')
 		const current = state.retirement.positions[0]
 		if (current === undefined) throw new Error('Restored position missing')
 		recordV3ScanSuccess(state, { liquidity: 0n, position: current, tokensOwed0: 0n, tokensOwed1: 0n }, 4n)
