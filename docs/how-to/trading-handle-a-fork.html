@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<meta name="description" content="After a fork closes the parent pair, remove LP, migrate each source share into the branches you choose, and open a new pair in the child." />
+		<title>Handle a universe fork</title>
+		<link rel="stylesheet" href="../assets/css/shared-docs.css" />
+		<link rel="stylesheet" href="../assets/css/docsShell.css" />
+	</head>
+	<body class="doc-openoracle">
+		<main id="main-content">
+			<header>
+				<p class="kicker">How-to guide</p>
+				<h1>Handle a universe fork</h1>
+				<p>A fork closes the parent pair for swaps and additions and leaves every migration decision to you. This guide walks through moving a position into the child universe or universes you choose.</p>
+			</header>
+			<section id="steps">
+				<h2>Migrate a position</h2>
+				<ol>
+					<li>Remove parent LP into parent YES and NO shares (<a href="./trading-remove-liquidity.html">Remove liquidity</a>).</li>
+					<li>Decide the destination branch or branches for each of your INVALID, YES, and NO balances. Nothing in Trading chooses a branch or migrates LP for you.</li>
+					<li>For every nonzero parent balance you intend to migrate, submit one <code>ShareToken.migrate(fromId, targetOutcomeIndexes)</code> call with that token ID and the explicitly chosen, strictly increasing target outcome indexes. Each call mints the matching child-universe share balance. The parent balance stays visible, but that source token ID is locked for the wallet and can no longer be transferred.</li>
+					<li>After each call, verify the expected child token ID and balance, then refresh or discover the canonical child SecurityPool.</li>
+					<li>Wait until migration and truth-auction processing return the child to <code>Operational</code>, then create a new pair for that exact child pool. Parent and child token IDs and reserves remain isolated.</li>
+				</ol>
+			</section>
+			<section id="choosing-targets">
+				<h2>Choose fork targets</h2>
+				<p>Source and destination are independent: a parent INVALID, YES, or NO share can migrate into any valid branch of the fork question, and the child receives the same share outcome as the source. Migrating parent YES into three scalar branches, for example, produces child YES shares in all three children.</p>
+				<ul>
+					<li>For a categorical fork, select Invalid or one or more labeled answers.</li>
+					<li>For a scalar fork, select Invalid or add one or more exact scalar ticks. The UI displays the human value and derives the packed onchain outcome index.</li>
+				</ul>
+				<p>A single-target call may create a missing child SecurityPool. A multi-target call must reference children whose canonical pools already exist. To migrate one source share to several new scalar outcomes, submit each missing outcome by itself; locking prevents transfers but not later migration of the same source into a new child. Once those children exist, another source share can target all of them in one call. Every call must add at least one source-and-child entitlement the wallet has not migrated before.</p>
+			</section>
+			<section id="in-the-ui">
+				<h2>In the live UI</h2>
+				<p>The <strong>Fork migration</strong> action loads the actual fork question, keeps the INVALID/YES/NO source selector separate from its categorical or scalar target picker, and accepts many target branches. It simulates the exact <code>ShareToken.migrate</code> call before submission and states that the entire selected source balance is copied and locked. Repeat the workflow for each source share you intentionally choose. <a href="../explanation/trading/forks-and-resolution.html">Forks and resolution</a> explains why the pair behaves this way.</p>
+			</section>
+		</main>
+		<script src="../assets/js/responsiveDocs.js"></script>
+		<script src="../assets/js/docsData.js"></script>
+		<script src="../assets/js/docsShell.js"></script>
+	</body>
+</html>

@@ -160,8 +160,15 @@
         const stillOverflows = math.scrollWidth > availableWidth + overflowThreshold;
         overflowCue(equation, stillOverflows, 'Horizontal scrolling reveals the full equation.');
     }
+    function scrollableContentLabel(container) {
+        if (container.matches('.table-wrap, .table-scroll, .docs-auto-table-scroll'))
+            return 'Horizontal scrolling reveals the full table.';
+        if (container.matches('pre.code-scroll'))
+            return 'Horizontal scrolling reveals the full command.';
+        return 'Horizontal scrolling reveals the full content.';
+    }
     function markScrollableContent(container) {
-        const label = container.matches('.table-wrap, .table-scroll, .docs-auto-table-scroll') ? 'Horizontal scrolling reveals the full table.' : 'Horizontal scrolling reveals the full content.';
+        const label = scrollableContentLabel(container);
         const responsiveTableReflows = window.matchMedia(compactEquationQuery).matches && container.querySelector(':scope > .docs-responsive-table') !== null;
         overflowCue(container, !responsiveTableReflows && container.scrollWidth > container.clientWidth + overflowThreshold, label);
     }
@@ -204,7 +211,7 @@
         prepareResponsiveTables();
         for (const equation of document.querySelectorAll('.equation'))
             fitEquation(equation);
-        for (const container of document.querySelectorAll('.table-wrap, .table-scroll, .docs-auto-table-scroll')) {
+        for (const container of document.querySelectorAll('.table-wrap, .table-scroll, .docs-auto-table-scroll, pre.code-scroll')) {
             markScrollableContent(container);
         }
     }

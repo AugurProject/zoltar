@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<meta name="description" content="How a constant-product pair over YES and NO alone turns one ETH entry into a directional position with INVALID insurance." />
+		<title>The two-way market</title>
+		<link rel="stylesheet" href="../../assets/css/shared-docs.css" />
+		<link rel="stylesheet" href="../../assets/css/docsShell.css" />
+	</head>
+	<body class="doc-openoracle">
+		<main id="main-content">
+			<header>
+				<p class="kicker">Explanation</p>
+				<h1>The two-way market</h1>
+				<p>Statoblast Trading is the two-reserve constant-product design from <a href="https://micah-zoltu.medium.com/augur-constant-product-with-invalid-insurance-385fca7efbc7">How To Build: Augur Constant Product with Invalid Insurance</a>, adapted to the current Zoltar protocol. This page explains what happens inside one entry.</p>
+			</header>
+			<section id="mental-model">
+				<h2>Mental model</h2>
+				<p>A Zoltar SecurityPool holds ETH collateral for one question in one universe branch. Its canonical ShareToken is ERC-1155: creating one complete set mints equal INVALID, YES, and NO shares for that pool's universe-specific token IDs; redeeming a complete set burns those three shares and returns collateral at the pool's current dynamic rate.</p>
+				<p>The Trading factory maps the exact SecurityPool address to one immutable-fee pair. The pair is both the YES/NO constant-product reserve and the transferable LP token; it never accepts INVALID. The stateless router coordinates complete-set creation or redemption, pair swaps, and bounded asset delivery. Users and liquidity providers keep INVALID separately in their wallets. The invariant to remember is:</p>
+				<div class="equation" id="eq-trading-zero-invalid">
+					<math display="block" aria-label="the pair's INVALID balance is always zero" data-source="shareToken.balanceOf(pair, invalidTokenId) == 0"
+						><mrow><mi>shareToken.balanceOf</mi><mo>(</mo><mi>pair</mi><mo>,</mo><mi>invalidTokenId</mi><mo>)</mo><mo>=</mo><mn>0</mn></mrow></math
+					>
+				</div>
+				<p>Trading and added liquidity are open only while the question has not ended, the pool is operational, its universe has not forked, no continuation is pending, and no outcome is final. Raw LP removal remains available after closure. Parent and child SecurityPools are distinct markets and therefore use distinct pairs.</p>
+			</section>
+			<section id="one-entry">
+				<h2>One entry, step by step</h2>
+				<p>The pair maintains <code>k = YES reserve × NO reserve</code>. Entering YES looks like this; entering NO is the mirror image.</p>
+				<figure class="diagram" id="fig-trading-enter-position" aria-labelledby="fig-trading-enter-position-caption">
+					<ol class="protocol-flow">
+						<li><strong>User → Router:</strong> <code>enterPosition(pair, YES)</code> with ETH</li>
+						<li><strong>Router → SecurityPool:</strong> <code>createCompleteSet{value: ETH}()</code></li>
+						<li><strong>SecurityPool → Router:</strong> q INVALID + q YES + q NO</li>
+						<li><strong>Router → Pair:</strong> swap q NO for YES</li>
+						<li><strong>Pair → Router:</strong> additional YES</li>
+						<li><strong>Router → User:</strong> q INVALID + total YES</li>
+					</ol>
+					<figcaption id="fig-trading-enter-position-caption"><span class="figure-label">Entering a YES position.</span> The trader ends up holding the INVALID from the complete set; the pair never sees it.</figcaption>
+				</figure>
+				<p>Suppose the reserves are 1,000 YES and 1,000 NO, the fee is zero, and 100 complete-set shares are created. Contract math uses attoShares, where one displayed share is 10<sup>18</sup> attoShares. Swapping 100 NO therefore yields 90.909090909090909090 YES after flooring to a whole number of attoShares. The wallet receives 190.909090909090909090 YES and 100 INVALID; the reserves become 909.090909090909090910 YES and 1,100 NO. Flooring the output favors existing liquidity providers.</p>
+				<p>A NO purchase simply reverses the reserves. No position record is created anywhere: wallet YES, NO, INVALID, and LP balances are the complete accounting state.</p>
+			</section>
+		</main>
+		<script src="../../assets/js/responsiveDocs.js"></script>
+		<script src="../../assets/js/docsData.js"></script>
+		<script src="../../assets/js/docsShell.js"></script>
+	</body>
+</html>
