@@ -478,8 +478,10 @@ async function runChaosDoctorWithLoaded(loaded: LoadedDoctorSettings, dependenci
 			}
 		const probeWallet = configuredSigner ?? zeroAddress
 		const result = await dependencies.probe(loaded.settings, probeWallet)
-		const fundingBlockers = liveFundingBlockers(loaded.settings, result.snapshot)
-		if (fundingBlockers.length !== 0) throw new Error(`Live funding readiness failed: ${fundingBlockers.join('; ')}`)
+		if (durableState.retirement.status === 'inactive') {
+			const fundingBlockers = liveFundingBlockers(loaded.settings, result.snapshot)
+			if (fundingBlockers.length !== 0) throw new Error(`Live funding readiness failed: ${fundingBlockers.join('; ')}`)
+		}
 		return {
 			anchor: { blockHash: result.anchor.blockHash, blockNumber: result.anchor.blockNumber.toString() },
 			checks: {

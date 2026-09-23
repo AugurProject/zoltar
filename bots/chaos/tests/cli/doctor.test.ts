@@ -337,6 +337,32 @@ describe('chaos launch doctor', () => {
 		await expect(runChaosDoctor(dependencies)).rejects.toThrow('signer ETH 0.000000000000000123 ETH is below the required 0.12 ETH')
 	})
 
+	test('resumes an active drain after REP is recovered without requiring trading inventory', async () => {
+		const baseline = await settingsFixture('operator.configured-placeholder.json')
+		const privateKey = `0x${'22'.repeat(32)}` as const
+		const signer = privateKeyToAccount(privateKey).address
+		const settings = { ...baseline, privateKey, runtime: { ...baseline.runtime, execute: true } }
+		const state = initialDurableState(settings.network.chainId, false, executionProfileId(settings), signer)
+		requestRetirement(state.retirement, state.profileId, signer, DEFAULT_RETIREMENT_POLICIES, `DRAIN ${state.profileId} TO ${signer}`, signer)
+		state.retirement.status = 'draining'
+		let submissionChecked = false
+		const dependencies = passiveDoctorDependencies(settings, {
+			loadState: async () => state,
+			preflightSubmission: async () => {
+				submissionChecked = true
+				return []
+			},
+			probe: async () => ({
+				...probeResult,
+				snapshot: { ...probeResult.snapshot, wallet: { ethBalanceAttoEth: '10000000000000000', tokens: [] } },
+			}),
+		})
+
+		const report = await runChaosLaunchGate(dependencies)
+		expect(submissionChecked).toBe(true)
+		expect(report.checks).toMatchObject({ durableState: 'passed', deploymentCodeAndGraph: 'passed', submission: 'passed' })
+	})
+
 	test('fails before durable-state or network reads when another operator owns a required lock', async () => {
 		const settings = await settingsFixture('operator.configured-placeholder.json')
 		let stateLoaded = false
