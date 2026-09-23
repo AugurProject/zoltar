@@ -26,6 +26,7 @@ type SecurityPoolSummaryMetricsProps = {
 	omitHeadlineMetrics?: boolean
 	omitCapacity?: boolean
 	pool: ListedSecurityPool
+	pendingReportReadyAtTimestamp?: bigint | undefined
 	showTotalBacking?: boolean
 	variant?: 'embedded' | 'hero'
 }
@@ -36,7 +37,20 @@ function formatRepPerCapacityBps(value: bigint) {
 	return `${whole.toString()}${fraction === '' ? '' : `.${fraction}`}×`
 }
 
-export function SecurityPoolSummaryMetrics({ calculationPriceConfigured = false, calculationRepPerEthPrice, children, className = '', currentTimestamp, metricVariant = 'default', omitHeadlineMetrics = false, omitCapacity = false, pool, showTotalBacking = false, variant = 'embedded' }: SecurityPoolSummaryMetricsProps) {
+export function SecurityPoolSummaryMetrics({
+	calculationPriceConfigured = false,
+	calculationRepPerEthPrice,
+	children,
+	className = '',
+	currentTimestamp,
+	metricVariant = 'default',
+	omitHeadlineMetrics = false,
+	omitCapacity = false,
+	pendingReportReadyAtTimestamp,
+	pool,
+	showTotalBacking = false,
+	variant = 'embedded',
+}: SecurityPoolSummaryMetricsProps) {
 	const mintingCapacityAttoEth = calculateMintingCapacityAttoEth(pool.totalCapacityOwnershipAttoRep, calculationPriceConfigured ? calculationRepPerEthPrice : pool.lastOraclePrice, pool.statoblastSecurityMultiplierBps)
 	const resolvedPoolHeldRepPerCapacityBps = pool.totalCapacityOwnershipAttoRep === 0n ? undefined : (pool.totalPoolHeldAttoRep * 10_000n) / pool.totalCapacityOwnershipAttoRep
 	if (variant === 'embedded')
@@ -91,7 +105,7 @@ export function SecurityPoolSummaryMetrics({ calculationPriceConfigured = false,
 				<div className='security-pool-hero-oracle'>
 					<span className='security-pool-hero-oracle-label'>{securityPoolCopy.currentOraclePrice}</span>
 					<strong className='security-pool-hero-oracle-value'>
-						<OpenOraclePriceValue currentTimestamp={currentTimestamp} lastPrice={pool.lastOraclePrice} lastSettlementTimestamp={pool.lastOracleSettlementTimestamp} priceValidUntilTimestamp={undefined} />
+						<OpenOraclePriceValue currentTimestamp={currentTimestamp} lastPrice={pool.lastOraclePrice} lastSettlementTimestamp={pool.lastOracleSettlementTimestamp} pendingReportReadyAtTimestamp={pendingReportReadyAtTimestamp} priceValidUntilTimestamp={undefined} />
 					</strong>
 				</div>
 				<div className='security-pool-hero-progress'>

@@ -348,6 +348,7 @@ export function SecurityPoolWorkflowSection(props: SecurityPoolWorkflowSectionPr
 		return undefined
 	})()
 	useSelectedPoolRefreshEffects({
+		currentTimestamp,
 		currentForkAuctionDetails,
 		currentPoolOracleManagerDetails,
 		currentPoolOracleManagerError,
