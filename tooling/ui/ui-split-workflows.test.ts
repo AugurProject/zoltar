@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import { spawnSync } from 'node:child_process'
 import { existsSync } from 'node:fs'
-import { access, readFile } from 'node:fs/promises'
+import { access, readFile, readdir } from 'node:fs/promises'
 import { join } from 'node:path'
 import { taskProjects } from '../repo/projects.ts'
 import { projectQuery } from '../repo/query-projects.mts'
@@ -17,7 +17,7 @@ const ciWorkflowPath = workflowDefinitionPath('ci.yml')
 const browserWorkflowPath = workflowDefinitionPath('browser-workflow.yml')
 const coverageWorkflowPath = workflowDefinitionPath('coverage.yml')
 const testDomainsWorkflowPath = join(repositoryRoot, '.github', 'workflows/test-domains.yml')
-const testStabilityWorkflowPath = join(repositoryRoot, '.github', 'workflows/test-stability.yml')
+const testStabilityWorkflowPath = workflowDefinitionPath('test-stability.yml')
 const deployTestnetWorkflowPath = join(repositoryRoot, '.github', 'workflows/deploy-testnet.yml')
 const setupActionPath = join(repositoryRoot, '.github', 'actions/setup-ci/action.yml')
 const setupComponentActionPath = join(repositoryRoot, '.github', 'actions/setup-component/action.yml')
@@ -58,6 +58,17 @@ const workflowTestPaths = (workflow: Record<string, unknown>) =>
 		}),
 	)
 describe('split UI workflow definitions (pending updates when present)', () => {
+	test('workflows have no time-based triggers after staged updates are activated', async () => {
+		const directory = join(repositoryRoot, '.github', 'workflows')
+		const scheduled = []
+		for (const name of await readdir(directory)) {
+			if (!/\.ya?ml$/u.test(name)) continue
+			const triggers = requireRecord((await readWorkflow(workflowDefinitionPath(name)))['on'], `${name} triggers`)
+			if ('schedule' in triggers) scheduled.push(name)
+		}
+		expect(scheduled).toEqual([])
+	})
+
 	test('IPFS publication pins CI and manual dispatch revisions even if the branch advances during validation', async () => {
 		const jobs = workflowJobs(await readWorkflow(ipfsDeployWorkflowPath))
 		const steps = workflowSteps(jobs['publish'])
@@ -242,7 +253,7 @@ ${command}`,
 		const triggers = requireRecord(workflow['on'], 'coverage triggers')
 		expect(triggers).toHaveProperty('workflow_dispatch')
 		expect(triggers).toHaveProperty('workflow_call')
-		expect(triggers).toHaveProperty('schedule')
+		expect(triggers).not.toHaveProperty('schedule')
 		const steps = Object.values(workflowJobs(workflow)).flatMap(workflowSteps)
 		expect(steps.some(step => step['run'] === 'bun run coverage')).toBe(false)
 		expect(steps.some(step => step['run'] === 'bun run coverage:full')).toBe(true)
@@ -286,6 +297,7 @@ ${command}`,
 		expect(domainSteps.some(step => step['run'] === 'bun run test:mutation:smoke')).toBe(true)
 
 		const stabilityWorkflow = await readWorkflow(testStabilityWorkflowPath)
+		expect(requireRecord(stabilityWorkflow['on'], 'test-stability triggers')).toHaveProperty('workflow_dispatch')
 		const stabilitySteps = Object.values(workflowJobs(stabilityWorkflow)).flatMap(workflowSteps)
 		const stabilityTestPaths = workflowTestPaths(stabilityWorkflow).sort()
 		expect(stabilityTestPaths).toEqual(['augurScan/tests/api/live.test.ts', 'augurScan/tests/replay/indexer-lifecycle.test.ts', 'tooling/docs/documentation-tools-runtime.test.ts', 'tooling/ui/chromiumPath.test.ts', 'ui/statoblast/ts/tests/features/open-oracle/useRepPrices.test.tsx'].sort())
