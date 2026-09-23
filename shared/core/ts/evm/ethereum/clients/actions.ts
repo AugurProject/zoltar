@@ -58,16 +58,45 @@ function getReplacementReason(originalTransaction: BlockTransaction, replacement
 
 const REPLACEMENT_SCAN_BLOCK_DEPTH = 12n
 
-async function findReplacementTransaction(actions: PublicClientActions, originalTransaction: BlockTransaction, parameters: { fromBlock: bigint; toBlock: bigint }, blockReader: Pick<PublicClientActions, 'getBlock'> = actions) {
-	for (let blockNumber = parameters.fromBlock; blockNumber <= parameters.toBlock; blockNumber += 1n) {
-		const block = await blockReader.getBlock({
-			blockNumber,
-			includeTransactions: true,
-		})
-		const replacementTransaction = block.transactions.find((transaction): transaction is BlockTransaction => isBlockTransaction(transaction) && transaction.hash !== originalTransaction.hash && transaction.nonce === originalTransaction.nonce && transaction.from.toLowerCase() === originalTransaction.from.toLowerCase())
-		if (replacementTransaction !== undefined) return replacementTransaction
+type ReplacementScanBlock = { number: bigint; hash: Hash }
+
+async function scanReplacementTransactions(blockReader: Pick<PublicClientActions, 'getBlock'>, originalTransaction: BlockTransaction, latestBlockNumber: bigint, previousHistory: readonly ReplacementScanBlock[]): Promise<{ history: ReplacementScanBlock[]; transaction?: BlockTransaction }> {
+	// Expire checkpoints outside the supported lookback before making any reads.
+	// A large head jump must not introduce a dependency on older RPC history.
+	const earliestBlock = latestBlockNumber > REPLACEMENT_SCAN_BLOCK_DEPTH ? latestBlockNumber - REPLACEMENT_SCAN_BLOCK_DEPTH : 0n
+	let history = previousHistory.filter(scanned => scanned.number >= earliestBlock)
+	// Validate even at an unchanged height. A linked tip authenticates its scanned
+	// ancestors; after a reorg, walk backwards to the newest retained common one.
+	while (history.length > 0) {
+		const tip = history.at(-1)
+		if (tip === undefined) break
+		if (tip.number <= latestBlockNumber && (await blockReader.getBlock({ blockNumber: tip.number })).hash === tip.hash) break
+		history.pop()
 	}
-	return undefined
+
+	// Recovery beyond retained history deliberately restarts only the supported
+	// recent window. Older affected blocks are unknown, never marked as scanned.
+	const ancestor = history.at(-1)
+	const firstBlock = ancestor === undefined ? earliestBlock : ancestor.number + 1n
+	if (firstBlock > latestBlockNumber) return { history }
+
+	let transaction: BlockTransaction | undefined
+	for (let blockNumber = firstBlock; blockNumber <= latestBlockNumber; blockNumber += 1n) {
+		const block = await blockReader.getBlock({ blockNumber, includeTransactions: true })
+		if (block.hash === undefined) throw new Error('Replacement scan requires a mined block hash')
+		const previous = history.at(-1)
+		if (previous !== undefined && block.parentHash !== previous.hash) return { history: [] }
+		history.push({ number: blockNumber, hash: block.hash })
+		history = history.filter(scanned => scanned.number >= earliestBlock)
+		transaction = block.transactions.find((candidate): candidate is BlockTransaction => isBlockTransaction(candidate) && candidate.hash !== originalTransaction.hash && candidate.nonce === originalTransaction.nonce && candidate.from.toLowerCase() === originalTransaction.from.toLowerCase())
+		if (transaction !== undefined) break
+	}
+
+	// Do not commit a partial or mixed-chain scan, or report an orphan candidate.
+	// Parent linkage plus a final canonical tip read validates the entire batch.
+	const tip = history.at(-1)
+	if (tip === undefined || (await blockReader.getBlock({ blockNumber: tip.number })).hash !== tip.hash) return { history: [] }
+	return { history, ...(transaction === undefined ? {} : { transaction }) }
 }
 
 export function buildRpcTransactionRequest(parameters: {
@@ -408,7 +437,7 @@ export function buildPublicClientActions<TTransport extends Transport, TChain ex
 						)
 					}
 					let originalTransaction = parameters.transaction
-					let lastScannedReplacementBlock: bigint | undefined
+					let replacementScanHistory: ReplacementScanBlock[] = []
 					if (parameters.onReplaced !== undefined && originalTransaction === undefined) {
 						try {
 							originalTransaction = await retryReceiptRateLimited(
@@ -447,15 +476,12 @@ export function buildPublicClientActions<TTransport extends Transport, TChain ex
 							if (originalTransaction !== undefined) {
 								const transactionToReplace = originalTransaction
 								const latestBlockNumber = await retryReceiptRateLimited(async () => await actions.getBlockNumber())
-								let firstScanBlock = lastScannedReplacementBlock === undefined ? 0n : lastScannedReplacementBlock + 1n
-								if (latestBlockNumber > REPLACEMENT_SCAN_BLOCK_DEPTH && firstScanBlock < latestBlockNumber - REPLACEMENT_SCAN_BLOCK_DEPTH) {
-									firstScanBlock = latestBlockNumber - REPLACEMENT_SCAN_BLOCK_DEPTH
-								}
 								const replacementBlockReader: Pick<PublicClientActions, 'getBlock'> = {
 									getBlock: async parameters => await retryReceiptRateLimited(async () => await actions.getBlock(parameters)),
 								}
-								const replacementTransaction = firstScanBlock > latestBlockNumber ? undefined : await findReplacementTransaction(actions, transactionToReplace, { fromBlock: firstScanBlock, toBlock: latestBlockNumber }, replacementBlockReader)
-								lastScannedReplacementBlock = latestBlockNumber
+								const scan = await scanReplacementTransactions(replacementBlockReader, transactionToReplace, latestBlockNumber, replacementScanHistory)
+								replacementScanHistory = scan.history
+								const replacementTransaction = scan.transaction
 								if (replacementTransaction !== undefined) {
 									const transactionReceipt = await retryReceiptRateLimited(
 										async () =>
