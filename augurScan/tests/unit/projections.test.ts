@@ -44,7 +44,7 @@ describe('state projections', () => {
 		if (projection?.type !== 'question') throw new Error('question projection missing')
 		expect(projection.questionId).toBe('42')
 		expect(projection.outcomeOptions).toEqual(['Yes', 'No'])
-		expect(projection.endTime.toISOString()).toBe('1970-01-01T00:35:00.000Z')
+		expect(projection.endTime).toBe('2100')
 	})
 
 	test('captures complete pool and vault accounting snapshots', () => {
@@ -447,3 +447,17 @@ describe('state projections', () => {
 		})
 	})
 })
+
+for (const seconds of ['0', '8640000000000', '8640000000001', '281474976710655']) {
+	test(`preserves question timestamps as exact seconds: ${seconds}`, () => {
+		const [projection] = projectionsFrom(
+			log('QuestionCreated', {
+				questionId: '42',
+				createdTimestamp: '1000',
+				outcomeOptions: [],
+				questionData: { title: 'Distant future', description: '', startTime: seconds, endTime: seconds, numTicks: '100', displayValueMin: '0', displayValueMax: '100', answerUnit: '' },
+			}),
+		)
+		expect(projection).toMatchObject({ type: 'question', startTime: seconds, endTime: seconds })
+	})
+}

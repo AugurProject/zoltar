@@ -3601,3 +3601,58 @@ describe('shared ethereum compatibility layer', () => {
 		await expect(client.multicall({ allowFailure: false, contracts, multicallAddress: MULTICALL_ADDRESS })).rejects.toThrow('Multicall contract call failed: execution reverted: pool not initialized')
 	})
 })
+
+for (const anonymous of [true, false]) {
+	test(`encodes OR topic slots with anonymous=${anonymous}`, () => {
+		const abi = [
+			{
+				type: 'event',
+				name: 'Alternatives',
+				anonymous,
+				inputs: [
+					{ name: 'first', type: 'uint256', indexed: true },
+					{ name: 'data', type: 'uint256', indexed: false },
+					{ name: 'last', type: 'uint256', indexed: true },
+				],
+			},
+		] as const
+		const one = toHex(1n, { size: 32 })
+		const two = toHex(2n, { size: 32 })
+		const signature = anonymous ? [] : [keccak256('Alternatives(uint256,uint256,uint256)')]
+		for (const args of [{ first: [1n, 2n], last: null }, [[1n, 2n], null], [[1n, 2n], 99n, null]]) {
+			expect(encodeEventTopics({ abi, eventName: 'Alternatives', args })).toEqual([...signature, [one, two], null])
+		}
+		expect(encodeEventTopics({ abi, eventName: 'Alternatives', args: { last: [1n, 2n] } })).toEqual([...signature, null, [one, two]])
+		const single = [{ type: 'event', name: 'Single', anonymous, inputs: [{ name: 'value', type: 'uint256', indexed: true }] }] as const
+		expect(encodeEventTopics({ abi: single, eventName: 'Single', args: { value: [1n, 2n] } })).toEqual([...(anonymous ? [] : [keccak256('Single(uint256)')]), [one, two]])
+	})
+}
+
+for (const anonymous of [true, false]) {
+	test(`keeps indexed ABI arrays and tuples scalar beside OR filters (anonymous=${anonymous})`, () => {
+		const abi = [
+			{
+				type: 'event',
+				name: 'Complex',
+				anonymous,
+				inputs: [
+					{ name: 'values', type: 'uint256[]', indexed: true },
+					{
+						name: 'pair',
+						type: 'tuple',
+						indexed: true,
+						components: [
+							{ name: 'a', type: 'uint256' },
+							{ name: 'b', type: 'uint256' },
+						],
+					},
+					{ name: 'choice', type: 'uint256', indexed: true },
+				],
+			},
+		] as const
+		const scalar = encodeEventTopics({ abi, eventName: 'Complex', args: { values: [1n, 2n], pair: [3n, 4n], choice: 5n } })
+		const alternatives = encodeEventTopics({ abi, eventName: 'Complex', args: { values: [1n, 2n], pair: [3n, 4n], choice: [5n, 6n] } })
+		expect(alternatives.slice(0, -1)).toEqual(scalar.slice(0, -1))
+		expect(alternatives.at(-1)).toEqual([toHex(5n, { size: 32 }), toHex(6n, { size: 32 })])
+	})
+}
