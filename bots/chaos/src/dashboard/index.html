@@ -291,7 +291,7 @@
 					<form id="workflow-form" class="reconciliation-form" hidden>
 						<fieldset id="workflow-fields" disabled>
 							<p class="muted">If a partial random workflow can no longer produce its exact canonical continuation, abandonment transfers responsibility to the operator and starts a fresh randomized wait.</p>
-							<label>Audit reason<textarea id="workflow-reason" minlength="12" maxlength="2048" required></textarea></label>
+							<label>Audit reason <small id="workflow-reason-help">12–2048 characters</small><textarea id="workflow-reason" aria-describedby="workflow-reason-help" minlength="12" maxlength="2048" required></textarea></label>
 							<label>Type ABANDON PARTIAL WORKFLOW to confirm<input id="workflow-confirmation" autocomplete="off" spellcheck="false" type="text" /></label>
 							<div class="form-actions"><button id="workflow-submit" class="danger-action" type="submit" disabled>Abandon partial workflow</button></div>
 						</fieldset>

@@ -616,6 +616,7 @@ browserTest(
 					pending: document.querySelector('#pending-transactions')?.textContent,
 				})`),
 			).toEqual({ panelVisible: true, identity: true, status: true, formInPanel: true, pending: 'No transaction requires confirmation.' })
+			expect(await cdp.evaluate("document.querySelector('#workflow-reason')?.getAttribute('aria-describedby') === 'workflow-reason-help' && document.querySelector('#workflow-reason-help')?.textContent?.includes('12–2048 characters') === true")).toBe(true)
 			expect(
 				await cdp.evaluate(`(() => {
 					const reason = document.querySelector('#workflow-reason')
@@ -632,9 +633,12 @@ browserTest(
 					confirmation.value = 'ABANDON PARTIAL WORKFLOW'
 					confirmation.dispatchEvent(new Event('input', { bubbles: true }))
 					states.push(submit.disabled)
+					reason.value = '12345678901'
+					reason.dispatchEvent(new Event('input', { bubbles: true }))
+					states.push(submit.disabled)
 					return states
 				})()`),
-			).toEqual([true, true, true, false])
+			).toEqual([true, true, true, false, true])
 			await cdp.evaluate("document.querySelector('#pause-button')?.click()")
 			await waitFor("document.querySelector('#resume-dialog')?.open === true", 'Safety-pause resume dialog did not open')
 			expect(await cdp.evaluate(`Object.fromEntries([...document.querySelectorAll('#resume-preflight li')].map(row => [row.querySelector('span')?.textContent, row.querySelector('strong')?.textContent]))`)).toMatchObject({ 'Recovery items': '1', 'Safety latch': 'Active' })
