@@ -1,6 +1,6 @@
 import type { Address, Hash } from '@zoltar/core-shared/evm/ethereum'
 import type { GlobalTransactionPresentation, TransactionIntent } from './components.js'
-import type { TransactionRequestPreview } from '../wallet/chainBackend.js'
+import type { TransactionRequestPreview, TransactionSubmissionStatus } from '../wallet/chainBackend.js'
 
 export type RefreshStateOptions = {
 	loadChainClock?: boolean
@@ -18,7 +18,7 @@ export type WriteOperationsParameters = {
 	onTransactionPresented: (presentation: GlobalTransactionPresentation) => void
 	onTransactionPrepared?: (preview: TransactionRequestPreview) => void
 	onTransactionRequested: (intent: TransactionIntent) => boolean | void
-	onTransactionSubmitted: (hash: Hash) => void
+	onTransactionSubmitted: (hash: Hash, status?: TransactionSubmissionStatus) => void
 	refreshState: RefreshState
 }
 

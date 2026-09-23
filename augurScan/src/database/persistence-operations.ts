@@ -2,7 +2,7 @@ import type { SQL } from 'bun'
 import { databaseJsonText } from '../database-json.ts'
 import { storeLogProjections } from '../database-projections.ts'
 import { captureDirectObservationInvalidation, captureHistoryInvalidation, type IndexerLease, invalidateCanonicalHistory, recordChainReorganization, withIndexerLease } from './history.ts'
-import { assertBlockAppend, assertContractDeploymentObservation, assertLogScanCursorUpdate, DatabaseConsistencyError, type EvidenceProvenance, type IndexedBlock, lockLiveEventWriter, serializedInterpretation } from './records.ts'
+import { canonicalBlockLogs, assertBlockAppend, assertContractDeploymentObservation, assertLogScanCursorUpdate, DatabaseConsistencyError, type EvidenceProvenance, type IndexedBlock, lockLiveEventWriter, serializedInterpretation } from './records.ts'
 import type { ScannerDatabase } from './block-persistence.ts'
 
 export async function storeBlock(this: ScannerDatabase, chainId: number, block: IndexedBlock, lease: IndexerLease, provenance?: EvidenceProvenance): Promise<void> {
@@ -17,6 +17,7 @@ export async function storeBlocks(this: ScannerDatabase, chainId: number, blocks
 }
 
 export async function persistBlockInTransaction(this: ScannerDatabase, transaction: SQL, chainId: number, block: IndexedBlock, provenance?: EvidenceProvenance): Promise<void> {
+	const logs = canonicalBlockLogs(block)
 	const checkpointRows = await transaction`SELECT start_block, indexed_block, indexed_hash FROM networks WHERE chain_id = ${chainId} FOR UPDATE`
 	const checkpoint = checkpointRows[0]
 	if (checkpoint === undefined) throw new Error(`Network ${chainId} must be seeded before indexing`)
@@ -120,7 +121,7 @@ export async function persistBlockInTransaction(this: ScannerDatabase, transacti
 					ON CONFLICT (chain_id, block_hash, tx_hash, address, pool_address) DO UPDATE SET role = CASE WHEN EXCLUDED.role = 'sender' THEN 'sender' ELSE address_activity.role END, canonical = true
 				`
 	}
-	for (const item of block.logs) {
+	for (const item of logs) {
 		await transaction`
 					INSERT INTO logs (chain_id, tx_hash, block_hash, block_number, transaction_index, log_index, emitter_address, topics, data, event_name, event_signature, arguments, display_arguments, argument_schema, decode_status, decode_error, summary, canonical, finalized)
 					VALUES (${chainId}, ${item.transactionHash}, ${item.blockHash}, ${item.blockNumber.toString()}, ${item.transactionIndex}, ${item.logIndex}, ${item.address.toLowerCase()}, (${databaseJsonText(item.topics)}::text)::jsonb, ${item.data}, ${item.decoded.name ?? null}, ${item.decoded.signature ?? null}, (${databaseJsonText(item.decoded.arguments ?? null)}::text)::jsonb, (${databaseJsonText(item.decoded.displayArguments ?? null)}::text)::jsonb, (${databaseJsonText(item.decoded.argumentSchema ?? [])}::text)::jsonb, ${item.decoded.status}, ${item.decoded.error ?? null}, ${item.decoded.summary}, true, ${item.blockNumber <= block.finalizedThrough})

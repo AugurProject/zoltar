@@ -14,17 +14,16 @@ const allowances = (reason: string, entries: readonly (readonly [path: string, m
  */
 export const sourceSizeAllowances = new Map<string, SourceSizeAllowance>([
 	...allowances('Chaos: extract dashboard features, operation handlers, and persistence responsibilities into focused modules.', [
-		['bots/chaos/src/dashboard/dashboard.ts', 2275],
+		['bots/chaos/src/dashboard/dashboard.ts', 1681],
 		['bots/chaos/src/monitoring/discovery.ts', 1020],
 		['bots/chaos/src/operations/trading.ts', 1726],
 		['bots/chaos/src/state/operator-state.ts', 1162],
-		['bots/chaos/src/execution/transaction-executor.ts', 1216],
-		['bots/chaos/src/runtime/operator.ts', 898],
+		['bots/chaos/src/runtime/operator.ts', 899],
 		['bots/chaos/src/monitoring/topology-cache.ts', 1043],
 		['bots/chaos/src/dashboard/dashboard-server.ts', 989],
 		['bots/chaos/src/state/protocol-index-store.ts', 1000],
 		['bots/chaos/src/operations/open-oracle.ts', 1024],
-		['bots/chaos/src/execution/recovery.ts', 660],
+		['bots/chaos/src/execution/recovery.ts', 643],
 		['bots/chaos/src/monitoring/protocol-index.ts', 699],
 		['bots/chaos/src/operations/zoltar.ts', 618],
 	]),
@@ -34,10 +33,9 @@ export const sourceSizeAllowances = new Map<string, SourceSizeAllowance>([
 		['bots/open-oracle-arbitrager/src/state/position-store.ts', 631],
 		['bots/liquidator/src/dashboard/dashboard.ts', 987],
 		['bots/liquidator/src/cli/run.ts', 741],
-		['bots/liquidator/src/state/operator-state.ts', 713],
+		['bots/liquidator/src/state/operator-state.ts', 661],
 	]),
 	...allowances('Owning UI library: separate workflow state and actions from rendering, and extract simulation scenario handlers.', [
-		['ui/statoblastShared/ts/features/truth-auctions/components/ForkAuctionSection.tsx', 1070],
 		['ui/coreShared/ts/simulation/tevmEngine.ts', 876],
 		['ui/statoblastShared/ts/protocol/securityPools.ts', 726],
 		['ui/coreShared/ts/components/SimulationBanner.tsx', 686],
@@ -47,7 +45,7 @@ export const sourceSizeAllowances = new Map<string, SourceSizeAllowance>([
 		['ui/statoblastShared/ts/features/security-pools/hooks/useSecurityPoolsOverview.ts', 659],
 	]),
 	...allowances('The AugurScan browser bundle and its live-update module still need feature-level decomposition.', [
-		['augurScan/browser/app.ts', 5891],
+		['augurScan/browser/app.ts', 3920],
 		['augurScan/browser/live-update.ts', 1096],
 	]),
 	...allowances('Bot QA and documentation capture scripts grew with every dashboard surface they exercise.', [

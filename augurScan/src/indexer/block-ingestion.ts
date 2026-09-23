@@ -2,7 +2,7 @@ import { runtimeConfig } from '../config.ts'
 import type { EvidenceProvenance, HistoryInvalidationReason, IndexerLease, ScannerDatabase } from '../database.ts'
 import { createPublicClient, http, type PublicClient } from '../ethereum.ts'
 import { ChainConfigurationError, createLogClient, createRpcDiagnosticContext, rpcProviderLabel } from '../indexer-runtime.ts'
-import { createRpcLoggingFetch } from '../logging.ts'
+import { createRpcLoggingFetch, parseLoggedRpcResponse } from '../logging.ts'
 import { withRpcRequestQueue } from '../rpc-request-queue.ts'
 import type { NetworkConfig } from '../types.ts'
 import { type IndexerRpcProvider, rpcExchangeLog, rpcRequestQueue } from './planning.ts'
@@ -57,6 +57,7 @@ export class NetworkIndexer {
 			const transport = http(rpcUrl, {
 				fetchFn: loggingFetch,
 				requestTimeout: 20_000,
+				responseParser: parseLoggedRpcResponse,
 				retryCount: 2,
 			})
 			const client = createPublicClient({ transport: withRpcRequestQueue(transport, rpcRequestQueue, endpoint) })

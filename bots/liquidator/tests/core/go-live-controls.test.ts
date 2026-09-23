@@ -47,7 +47,7 @@ describe('liquidator go-live controls', () => {
 
 	test('keeps the delivery mode of a pending intent until recovery resolves it', async () => {
 		const { controller, settings: current } = controls(settings, [pendingIntent('public')])
-		// Recovery would resubmit the public intent through the new mode, so the switch waits for the intent to settle.
+		// Keep delivery settings stable while an unresolved intent still depends on them.
 		await expect(controller.setSubmission({ minimumBundleRelaySuccesses: 1, mode: 'private', relayUrls: ['https://relay.flashbots.net'] })).rejects.toThrow(PENDING_INTENT_MODE_CHANGE)
 		expect(current().submission.mode).toBe('public')
 		// Same-mode edits stay possible while the intent is pending.

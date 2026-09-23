@@ -434,7 +434,6 @@ export async function buildForkCarriedEscalationProofs(client: ReadClient, secur
 export async function withdrawForkedEscalationDeposits(client: WriteClient, securityPoolAddress: Address, outcome: ReportingOutcomeKey, proofs: readonly CarriedDepositProof[]) {
 	const universeId = await readSecurityPoolUniverseId(client, securityPoolAddress)
 	return await executeForkAuctionAction(
-		client,
 		'settleForkedEscalation',
 		securityPoolAddress,
 		universeId,

@@ -36,7 +36,8 @@ export async function readV3Position(client: Pick<PublicClient, 'getBlock' | 'ge
 export async function readV3PositionsWithQuorum(readers: readonly V3PositionReader[], requiredQuorum: number, positions: readonly DurableV3Position[], anchor: V3PositionAnchor) {
 	if (readers.length < requiredQuorum) throw new Error('Retirement V3 scan does not have enough RPC clients for quorum')
 	const observations: V3PositionObservation[] = []
-	for (const position of positions.filter(candidate => candidate.status === 'active' || candidate.status === 'blocked' || candidate.status === 'collect-only' || candidate.status === 'pending-confirmation')) {
+	// Closed is a historical balance observation: the same owner and ticks can be seeded again.
+	for (const position of positions) {
 		const settled = await Promise.allSettled(readers.map(reader => reader(position, anchor)))
 		const successful = settled.flatMap(result => (result.status === 'fulfilled' ? [result.value] : []))
 		const grouped = new Map<string, V3PositionObservation[]>()

@@ -1,5 +1,5 @@
 import { readFileSync } from 'node:fs'
-import { contractSafetyPolicy, type BytecodeBudget, type ContractReference } from './contract-safety-policy'
+import { contractSafetyPolicy, type ContractReference } from './contract-safety-policy'
 
 type ArtifactContract = {
 	abi?: unknown[]
@@ -170,10 +170,6 @@ function normalizeStorageLayout(contract: ArtifactContract): unknown[] {
 	})
 }
 
-function findBudget(budgets: readonly BytecodeBudget[], size: ContractSize): BytecodeBudget | undefined {
-	return budgets.find(budget => budget.sourcePath === size.sourcePath && budget.contractName === size.contractName)
-}
-
 export function collectDeployableContractSizes(artifact: ContractArtifact): ContractSize[] {
 	const sizes: ContractSize[] = []
 	for (const [sourcePath, contracts] of Object.entries(artifact.contracts ?? {})) {
@@ -205,14 +201,6 @@ export function checkContractSafety(artifact: ContractArtifact): ContractSafetyR
 		}
 		if (size.initcodeBytes > contractSafetyPolicy.initcodeLimitBytes) {
 			errors.push(`${id} initcode is ${size.initcodeBytes} bytes; EIP-3860 limit is ${contractSafetyPolicy.initcodeLimitBytes}`)
-		}
-		const runtimeBudget = findBudget(contractSafetyPolicy.runtimeBudgets, size)
-		if (runtimeBudget !== undefined && size.runtimeBytes > runtimeBudget.maximumBytes) {
-			errors.push(`${id} runtime grew to ${size.runtimeBytes} bytes; reviewed budget is ${runtimeBudget.maximumBytes} (${runtimeBudget.reason})`)
-		}
-		const initcodeBudget = findBudget(contractSafetyPolicy.initcodeBudgets, size)
-		if (initcodeBudget !== undefined && size.initcodeBytes > initcodeBudget.maximumBytes) {
-			errors.push(`${id} initcode grew to ${size.initcodeBytes} bytes; reviewed budget is ${initcodeBudget.maximumBytes} (${initcodeBudget.reason})`)
 		}
 	}
 

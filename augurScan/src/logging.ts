@@ -1,6 +1,7 @@
 import { mkdir, open, rename, rm, stat } from 'node:fs/promises'
 import path from 'node:path'
-import type { JsonValue, RpcFetchFn } from './ethereum.ts'
+import { boundedLogLine, MINIMUM_LOG_RECORD_BYTES } from './bounded-log-record.ts'
+import { boundedResponseText, type JsonValue, RpcError, type RpcFetchFn } from './ethereum.ts'
 
 const JSON_RPC_ERROR_NAMES = new Map<number, string>([
 	[-32700, 'Parse error'],
@@ -13,7 +14,7 @@ const JSON_RPC_ERROR_NAMES = new Map<number, string>([
 export const jsonRpcErrorName = (code: number): string | undefined => JSON_RPC_ERROR_NAMES.get(code) ?? (code >= -32099 && code <= -32000 ? 'Server error' : undefined)
 
 export const safeRpcProviderMessage = (value: unknown): string | undefined => {
-	if (typeof value !== 'string') return undefined
+	if (typeof value !== 'string' || value.length > 4096) return undefined
 	const message = [...value]
 		.map(character => {
 			const codePoint = character.codePointAt(0)
@@ -27,7 +28,7 @@ export const safeRpcProviderMessage = (value: unknown): string | undefined => {
 }
 
 export const safePrunedStateProviderMessage = (value: unknown): string | undefined => {
-	if (typeof value !== 'string') return undefined
+	if (typeof value !== 'string' || value.length > 4096) return undefined
 	const normalized = value.replace(/\s+/gu, ' ').trim().toLowerCase()
 	if (/^state at block (?:#[0-9]+|0x[0-9a-f]+|[0-9]+) is pruned[.!]?$/u.test(normalized)) return 'state at requested block is pruned'
 	if (normalized.includes('missing trie node')) return 'missing trie node'
@@ -57,13 +58,13 @@ export class RotatingJsonLog {
 	#pending: Promise<void> = Promise.resolve()
 
 	constructor(filename: string, maximumBytes = DEFAULT_RPC_LOG_MAX_BYTES) {
-		if (!Number.isSafeInteger(maximumBytes) || maximumBytes < 1) throw new Error('Log maximum size must be a positive safe integer')
+		if (!Number.isSafeInteger(maximumBytes) || maximumBytes < MINIMUM_LOG_RECORD_BYTES) throw new Error(`Log maximum size must be a safe integer of at least ${MINIMUM_LOG_RECORD_BYTES} bytes`)
 		this.#filename = filename
 		this.#maximumBytes = maximumBytes
 	}
 
 	append(record: unknown): Promise<void> {
-		const line = `${JSON.stringify(record)}\n`
+		const line = boundedLogLine(record, this.#maximumBytes)
 		const write = this.#pending.then(() => this.#appendLine(line))
 		this.#pending = write.catch(() => {})
 		return write
@@ -72,6 +73,7 @@ export class RotatingJsonLog {
 	async #appendLine(line: string): Promise<void> {
 		await mkdir(path.dirname(this.#filename), { recursive: true })
 		const lineBytes = Buffer.byteLength(line)
+		if (lineBytes > this.#maximumBytes) throw new Error('Log record exceeds the file size limit')
 		let currentBytes = 0
 		try {
 			currentBytes = (await stat(this.#filename)).size
@@ -100,11 +102,13 @@ type RpcEnvelope = {
 	readonly result?: JsonValue
 }
 
+const isJsonObject = (value: JsonValue): value is { readonly [key: string]: JsonValue } => typeof value === 'object' && value !== null && !Array.isArray(value)
+
 const parseEnvelope = (body: unknown): RpcEnvelope | undefined => {
-	if (typeof body !== 'string') return undefined
+	if (typeof body !== 'string' || body.length > 64 * 1024) return undefined
 	try {
-		const parsed: JsonValue = JSON.parse(body) as JsonValue
-		return typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed) ? (parsed as RpcEnvelope) : undefined
+		const parsed: JsonValue = JSON.parse(body)
+		return isJsonObject(parsed) ? parsed : undefined
 	} catch (error) {
 		if (error instanceof SyntaxError) return undefined
 		throw error
@@ -122,7 +126,19 @@ const isRpcIdentifier = (value: unknown): value is number | string | null => val
 
 const isSuccessfulRpcResponse = (request: RpcEnvelope | undefined, response: RpcEnvelope | undefined): boolean => response?.jsonrpc === '2.0' && isRpcIdentifier(request?.id) && response.id === request.id && Object.hasOwn(response, 'result') && !Object.hasOwn(response, 'error')
 
-const responseHeaders = (response: Response): Record<string, string> => Object.fromEntries(response.headers.entries())
+// Log ranges aggregate many blocks; ordinary calls have a smaller allocation budget.
+const responseLimit = (method: unknown): number => (method === 'eth_getLogs' ? 32 : 4) * 1024 * 1024
+const parsedResponses = new WeakMap<Response, { readonly value: JsonValue } | { readonly error: unknown }>()
+
+export const parseLoggedRpcResponse = async (response: Response, method: string): Promise<JsonValue> => {
+	const parsed = parsedResponses.get(response)
+	if (parsed !== undefined) {
+		parsedResponses.delete(response)
+		if ('error' in parsed) throw parsed.error
+		return parsed.value
+	}
+	return JSON.parse(await boundedResponseText(response, responseLimit(method), `RPC ${method}`))
+}
 
 const appendRpcRecord = async (log: RotatingJsonLog, logPath: string, record: unknown): Promise<void> => {
 	try {
@@ -140,17 +156,38 @@ export const createRpcLoggingFetch = (rpcUrl: string, consoleEndpoint: string, l
 		const requestBody = init?.body
 		const requestEnvelope = parseEnvelope(requestBody)
 		const startedAt = new Date()
+		let response: Response | undefined
 		try {
-			const response = await fetchFn(input, init)
-			const responseBody = await response.clone().text()
-			const responseEnvelope = parseEnvelope(responseBody)
+			response = await fetchFn(input, init)
+			let responseBody: string
+			try {
+				responseBody = await boundedResponseText(response, responseLimit(requestEnvelope?.method), `RPC ${typeof requestEnvelope?.method === 'string' ? requestEnvelope.method : 'unknown'}`, init?.signal)
+			} catch (error) {
+				// Preserve HTTP retry/category semantics even when its diagnostic body
+				// cannot be read. Abort and timeout remain the original failures.
+				if (!response.ok && !init?.signal?.aborted) {
+					throw Object.assign(new RpcError(`HTTP ${response.status} while calling ${typeof requestEnvelope?.method === 'string' ? requestEnvelope.method : 'unknown'}`, { code: response.status, cause: error }), { status: response.status })
+				}
+				throw error
+			}
+			// Keep the fetch response readable for callers while the transport reuses
+			// this parse. There is no unread network tee branch.
+			const bufferedResponse = new Response(response.body === null ? null : responseBody, { status: response.status, statusText: response.statusText, headers: response.headers })
+			let responseEnvelope: RpcEnvelope | undefined
+			try {
+				const value: JsonValue = JSON.parse(responseBody)
+				parsedResponses.set(bufferedResponse, { value })
+				if (isJsonObject(value)) responseEnvelope = value
+			} catch (error) {
+				parsedResponses.set(bufferedResponse, { error })
+			}
 			const rpcError = rpcErrorFrom(responseEnvelope)
 			if (!response.ok || !isSuccessfulRpcResponse(requestEnvelope, responseEnvelope)) {
 				await appendRpcRecord(log, logPath, {
 					timestamp: startedAt.toISOString(),
 					rpcServer: rpcUrl,
 					request: { body: requestBody, headers: init?.headers, method: init?.method },
-					response: { body: responseBody, headers: responseHeaders(response), status: response.status, statusText: response.statusText },
+					response: { body: responseBody, headers: response.headers, status: response.status, statusText: response.statusText },
 				})
 			}
 			if (rpcError !== undefined) {
@@ -168,13 +205,14 @@ export const createRpcLoggingFetch = (rpcUrl: string, consoleEndpoint: string, l
 					}
 				} else console.error(message)
 			}
-			return response
+			return bufferedResponse
 		} catch (error) {
 			await appendRpcRecord(log, logPath, {
 				timestamp: startedAt.toISOString(),
 				rpcServer: rpcUrl,
 				request: { body: requestBody, headers: init?.headers, method: init?.method },
-				transportError: error instanceof Error ? { message: error.message, name: error.name, stack: error.stack } : String(error),
+				...(response === undefined ? {} : { response: { headers: response.headers, status: response.status, statusText: response.statusText, truncated: true } }),
+				transportError: error instanceof Error ? { message: error.message, name: error.name, stack: error.stack, ...('maximumBytes' in error ? { maximumBytes: error.maximumBytes, truncated: true } : {}), ...('receivedBytes' in error ? { receivedBytes: error.receivedBytes } : {}) } : error,
 			})
 			console.error(`RPC transport error from ${consoleEndpoint}; method ${typeof requestEnvelope?.method === 'string' ? requestEnvelope.method : 'unknown'}; full exchange logged to ${logPath}`)
 			throw error
