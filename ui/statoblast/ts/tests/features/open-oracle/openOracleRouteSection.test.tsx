@@ -1,5 +1,8 @@
 /// <reference types="bun-types" />
 
+import { signal } from '@preact/signals'
+import { GlobalTransactionPresentationProvider } from '@zoltar/ui-core-shared/components/GlobalTransactionPresentationContext.js'
+import type { GlobalTransactionPresentation } from '@zoltar/ui-core-shared/types/components.js'
 import { zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
 import { fireEvent, within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
@@ -1004,5 +1007,36 @@ describe('OpenOracleSection route create view', () => {
 		const documentQueries = within(document.body)
 		expect(documentQueries.getByText('Failed to load Open Oracle balances')).not.toBeNull()
 		expect(documentQueries.queryByText(openOracleCopy.loadingOracleBalances)).toBeNull()
+	})
+
+	test('closes the dispute form only after the matching dispute succeeds', async () => {
+		const presentation = signal<GlobalTransactionPresentation | undefined>(undefined)
+		const result = signal<OpenOracleSectionProps['openOracleResult']>(undefined)
+		function Harness() {
+			return (
+				<GlobalTransactionPresentationProvider transaction={presentation.value}>
+					<OpenOracleSection
+						{...createOpenOracleSectionProps({
+							activeView: 'selected-report',
+							openOracleResult: result.value,
+							openOracleReportDetails: createOpenOracleReportDetails({ currentReporter: '0x3000000000000000000000000000000000000000', currentTime: 200n, disputeDelay: 10n, reportTimestamp: 100n, settlementTime: 200n }),
+						})}
+					/>
+				</GlobalTransactionPresentationProvider>
+			)
+		}
+		const rendered = await renderIntoDocument(<Harness />)
+		cleanupRenderedComponent = rendered.cleanup
+		const page = within(document.body)
+		await act(() => fireEvent.click(page.getByRole('button', { name: 'Dispute & swap' })))
+		expect(page.getByRole('dialog')).not.toBeNull()
+		await act(() => {
+			presentation.value = { tone: 'pending', title: 'Dispute pending', operationKey: 'dispute', hash: '0x01' }
+		})
+		await act(() => {
+			result.value = { action: 'dispute', hash: '0x01' }
+			presentation.value = { tone: 'success', title: 'Dispute confirmed', operationKey: 'dispute', hash: '0x01' }
+		})
+		expect(page.queryByRole('dialog')).toBeNull()
 	})
 })

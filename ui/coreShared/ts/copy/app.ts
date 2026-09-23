@@ -3,7 +3,6 @@ export const changeWallet = 'Change wallet'
 export const disconnectWallet = 'Disconnect'
 const accountMenu = 'Account Menu'
 export const formatAccountMenuLabel = (account: string) => `${accountMenu} ${account}`
-export const currentNetwork = 'Current Network'
 export const formatSwitchToNetwork = (networkName: string) => `Switch to ${networkName}`
 export const qaWallet = 'QA wallet'
 export const simulationQaWallet = 'Simulation QA wallet'
@@ -15,8 +14,6 @@ export const qaWalletDisconnectedDetail = 'No account is exposed until the app c
 export const ethereumMainnet = 'Ethereum Mainnet'
 export const managingWallet = 'Updating wallet…'
 export const unknownNetwork = 'Unknown network'
-export const sepoliaNetwork = 'Sepolia (11155111)'
-export const formatNetworkWithChainId = (networkLabel: string, chainId: string) => `${networkLabel} (${chainId})`
 export const refreshRepPrices = 'Refresh REP prices'
 export const formatRepPricingUnavailable = (networkName: string) => `Not configured on ${networkName}`
 export const repPriceNoLiquidity = 'No liquidity available'

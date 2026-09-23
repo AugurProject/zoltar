@@ -508,7 +508,7 @@ function useSecurityPoolsOverviewWithDependencies<TWriteClient>(
 						await refreshWalletStateOnly(refreshState)
 					},
 				},
-				async walletAddress => {
+				async (walletAddress, context) => {
 					const targetVault = parseAddressInput(submittedLiquidation.targetVault, 'Target vault')
 					const receiverVault = parseAddressInput(submittedLiquidation.receiverVault, 'Receiver vault')
 					const approvalId = parseBytes32Input(submittedLiquidation.approvalId, 'Liquidation approval ID')
@@ -520,7 +520,7 @@ function useSecurityPoolsOverviewWithDependencies<TWriteClient>(
 							throw new Error('The wallet or network changed while loading liquidation funding. Review the refreshed funding requirements and try again.')
 						}
 					}
-					const writeClient = dependencies.createWalletWriteClient(walletAddress, { onTransactionPrepared, onTransactionSubmitted })
+					const writeClient = dependencies.createWalletWriteClient(walletAddress, { onTransactionPrepared, onTransactionSubmitted, reviewSignal: context.reviewSignal })
 					const fundingPreview = await resolveLiquidationFundingPreview(managerAddress, walletAddress)
 					ensureFundingContextIsCurrent()
 					if (getCurrentLiquidationFundingPreviewRequestKey() === fundingPreviewKey) {

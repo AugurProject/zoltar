@@ -105,9 +105,7 @@ export function DeploymentRouteContent({
 						<div>
 							<p className='detail'>{deploymentCopy.contractsDeployed}</p>
 							<strong>
-								<LoadableValue loading={isLoadingDeploymentStatuses} placeholder={deploymentCopy.loadingDeploymentStatus}>
-									{deploymentStateReady ? `${deployedContractCount.toString()} / ${totalContractCount.toString()}` : commonCopy.unavailable}
-								</LoadableValue>
+								<LoadableValue loading={isLoadingDeploymentStatuses}>{deploymentStateReady ? `${deployedContractCount.toString()} / ${totalContractCount.toString()}` : commonCopy.unavailable}</LoadableValue>
 							</strong>
 						</div>
 						<div>

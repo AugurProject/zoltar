@@ -16,7 +16,7 @@ import { createErrorActionFeedback, createPendingActionFeedback, createSuccessAc
 import type { ActionFeedback } from '@zoltar/ui-core-shared/transactions/actionFeedback.js'
 import { requireDefined } from '@zoltar/ui-core-shared/forms/required.js'
 import { createForkAuctionSuccessPresentation, createForkAuctionTransactionIntent, createForkAuctionWarningPresentation } from '../../transactionPresentations.js'
-import { buildWriteActionConfig, runWriteAction } from '@zoltar/ui-core-shared/transactions/writeAction.js'
+import { buildWriteActionConfig, runWriteAction, type WriteActionContext } from '@zoltar/ui-core-shared/transactions/writeAction.js'
 import { useRequestGuard } from '@zoltar/ui-core-shared/lib/requestGuard.js'
 import { parseBigIntInput } from '@zoltar/ui-core-shared/forms/integerInput.js'
 import { parseTruthAuctionAmountInput, parseTruthAuctionPriceInput } from '@zoltar/ui-core-shared/forms/formInputs.js'
@@ -141,7 +141,7 @@ function useForkAuctionOperationsWithDependencies<TWriteClient>(
 
 	const runForkAuctionAction = async (
 		actionName: ForkAuctionActionResult['action'],
-		action: (walletAddress: Address, details: ForkAuctionDetails, isCurrentSelection: () => boolean) => Promise<ForkAuctionActionResult | undefined>,
+		action: (walletAddress: Address, details: ForkAuctionDetails, isCurrentSelection: () => boolean, context: WriteActionContext) => Promise<ForkAuctionActionResult | undefined>,
 		errorFallback: string,
 		securityPoolAddressOverride?: Address,
 		universeIdOverride?: bigint,
@@ -191,13 +191,14 @@ function useForkAuctionOperationsWithDependencies<TWriteClient>(
 						await refreshWalletStateOnly(refreshState)
 					},
 				},
-				async walletAddress => {
+				async (walletAddress, context) => {
 					forkAuctionResult.value = undefined
 					const resolvedSecurityPoolAddress = securityPoolAddressOverride ?? resolveForkAuctionSecurityPoolAddress()
 					const details = await dependencies.loadForkAuctionDetails(resolvedSecurityPoolAddress)
 					if (shouldApplyCurrentSelection()) forkAuctionDetails.value = details
 					if (!isCurrentSelection()) return undefined
-					return await action(walletAddress, details, isCurrentSelection)
+					context.assertActive()
+					return await action(walletAddress, details, isCurrentSelection, context)
 				},
 				errorFallback,
 				async result => {
@@ -218,9 +219,9 @@ function useForkAuctionOperationsWithDependencies<TWriteClient>(
 	const forkWithOwnEscalation = async () =>
 		await runForkAuctionAction(
 			'forkWithOwnEscalation',
-			async (walletAddress, details, isCurrentSelection) => {
+			async (walletAddress, details, isCurrentSelection, context) => {
 				if (!isCurrentSelection()) return undefined
-				return await dependencies.forkZoltarWithOwnEscalation(dependencies.createWalletWriteClient(walletAddress, { onTransactionPrepared, onTransactionSubmitted }), details.securityPoolAddress, details.universeId)
+				return await dependencies.forkZoltarWithOwnEscalation(dependencies.createWalletWriteClient(walletAddress, { onTransactionPrepared, onTransactionSubmitted, reviewSignal: context.reviewSignal }), details.securityPoolAddress, details.universeId)
 			},
 			'Failed to fork with own escalation game',
 		)
@@ -228,9 +229,9 @@ function useForkAuctionOperationsWithDependencies<TWriteClient>(
 	const initiateFork = async () =>
 		await runForkAuctionAction(
 			'initiateFork',
-			async (walletAddress, details, isCurrentSelection) => {
+			async (walletAddress, details, isCurrentSelection, context) => {
 				if (!isCurrentSelection()) return undefined
-				return await dependencies.initiateSecurityPoolFork(dependencies.createWalletWriteClient(walletAddress, { onTransactionPrepared, onTransactionSubmitted }), details.securityPoolAddress, details.universeId)
+				return await dependencies.initiateSecurityPoolFork(dependencies.createWalletWriteClient(walletAddress, { onTransactionPrepared, onTransactionSubmitted, reviewSignal: context.reviewSignal }), details.securityPoolAddress, details.universeId)
 			},
 			'Failed to initiate security pool fork',
 		)
@@ -238,9 +239,9 @@ function useForkAuctionOperationsWithDependencies<TWriteClient>(
 	const createChildUniverse = async (outcome: ReportingOutcomeKey | bigint) =>
 		await runForkAuctionAction(
 			'createChildUniverse',
-			async (walletAddress, details, isCurrentSelection) => {
+			async (walletAddress, details, isCurrentSelection, context) => {
 				if (!isCurrentSelection()) return undefined
-				return await dependencies.createChildUniverseFromSecurityPool(dependencies.createWalletWriteClient(walletAddress, { onTransactionPrepared, onTransactionSubmitted }), details.securityPoolAddress, details.universeId, requireReportingOutcomeKey(outcome))
+				return await dependencies.createChildUniverseFromSecurityPool(dependencies.createWalletWriteClient(walletAddress, { onTransactionPrepared, onTransactionSubmitted, reviewSignal: context.reviewSignal }), details.securityPoolAddress, details.universeId, requireReportingOutcomeKey(outcome))
 			},
 			'Failed to create child universe',
 		)
@@ -250,10 +251,10 @@ function useForkAuctionOperationsWithDependencies<TWriteClient>(
 			const submittedRepMigrationOutcomes = forkAuctionForm.value.repMigrationOutcomes
 			return runForkAuctionAction(
 				'migrateRepToZoltar',
-				async (walletAddress, details, isCurrentSelection) => {
+				async (walletAddress, details, isCurrentSelection, context) => {
 					if (!isCurrentSelection()) return undefined
 					return await dependencies.migrateRepToZoltarFromSecurityPool(
-						dependencies.createWalletWriteClient(walletAddress, { onTransactionPrepared, onTransactionSubmitted }),
+						dependencies.createWalletWriteClient(walletAddress, { onTransactionPrepared, onTransactionSubmitted, reviewSignal: context.reviewSignal }),
 						details.securityPoolAddress,
 						details.universeId,
 						outcomesOverride ?? parseReportingOutcomeListInput(submittedRepMigrationOutcomes, 'REP migration outcomes'),
@@ -268,9 +269,9 @@ function useForkAuctionOperationsWithDependencies<TWriteClient>(
 			const submittedSelectedOutcome = forkAuctionForm.value.selectedOutcome
 			return runForkAuctionAction(
 				'migrateVault',
-				async (walletAddress, details, isCurrentSelection) => {
+				async (walletAddress, details, isCurrentSelection, context) => {
 					if (!isCurrentSelection()) return undefined
-					return await dependencies.migrateSecurityVault(dependencies.createWalletWriteClient(walletAddress, { onTransactionPrepared, onTransactionSubmitted }), details.securityPoolAddress, details.universeId, parseReportingOutcomeInput(submittedSelectedOutcome))
+					return await dependencies.migrateSecurityVault(dependencies.createWalletWriteClient(walletAddress, { onTransactionPrepared, onTransactionSubmitted, reviewSignal: context.reviewSignal }), details.securityPoolAddress, details.universeId, parseReportingOutcomeInput(submittedSelectedOutcome))
 				},
 				'Failed to migrate vault',
 			)
@@ -283,11 +284,11 @@ function useForkAuctionOperationsWithDependencies<TWriteClient>(
 			const submittedDepositIndexes = forkAuctionForm.value.depositIndexes
 			return runForkAuctionAction(
 				'claimParentEscalationDeposits',
-				async (walletAddress, details, isCurrentSelection) => {
+				async (walletAddress, details, isCurrentSelection, context) => {
 					const resolvedVaultAddress = vaultAddress ?? resolveOptionalAddressInput(submittedVaultAddress, walletAddress, 'Vault address')
 					if (!isCurrentSelection()) return undefined
 					return await dependencies.claimParentEscalationDeposits(
-						dependencies.createWalletWriteClient(walletAddress, { onTransactionPrepared, onTransactionSubmitted }),
+						dependencies.createWalletWriteClient(walletAddress, { onTransactionPrepared, onTransactionSubmitted, reviewSignal: context.reviewSignal }),
 						details.securityPoolAddress,
 						details.universeId,
 						resolvedVaultAddress,
@@ -302,9 +303,9 @@ function useForkAuctionOperationsWithDependencies<TWriteClient>(
 	const migrateUnresolvedEscalation = async (selectedChildOutcome: ReportingOutcomeKey) =>
 		await runForkAuctionAction(
 			'migrateUnresolvedEscalation',
-			async (walletAddress, details, isCurrentSelection) => {
+			async (walletAddress, details, isCurrentSelection, context) => {
 				if (!isCurrentSelection()) return undefined
-				return await dependencies.migrateVaultWithUnresolvedEscalation(dependencies.createWalletWriteClient(walletAddress, { onTransactionPrepared, onTransactionSubmitted }), details.securityPoolAddress, walletAddress, details.universeId, selectedChildOutcome)
+				return await dependencies.migrateVaultWithUnresolvedEscalation(dependencies.createWalletWriteClient(walletAddress, { onTransactionPrepared, onTransactionSubmitted, reviewSignal: context.reviewSignal }), details.securityPoolAddress, walletAddress, details.universeId, selectedChildOutcome)
 			},
 			'Failed to clear unresolved parent escalation-deposit accounting',
 		)
@@ -312,9 +313,9 @@ function useForkAuctionOperationsWithDependencies<TWriteClient>(
 	const startTruthAuction = async (securityPoolAddressOverride?: Address, universeIdOverride?: bigint) =>
 		await runForkAuctionAction(
 			'startTruthAuction',
-			async (walletAddress, details, isCurrentSelection) => {
+			async (walletAddress, details, isCurrentSelection, context) => {
 				if (!isCurrentSelection()) return undefined
-				return await dependencies.startTruthAuctionForSecurityPool(dependencies.createWalletWriteClient(walletAddress, { onTransactionPrepared, onTransactionSubmitted }), details.securityPoolAddress, details.universeId)
+				return await dependencies.startTruthAuctionForSecurityPool(dependencies.createWalletWriteClient(walletAddress, { onTransactionPrepared, onTransactionSubmitted, reviewSignal: context.reviewSignal }), details.securityPoolAddress, details.universeId)
 			},
 			'Failed to start truth auction',
 			securityPoolAddressOverride,
@@ -327,7 +328,7 @@ function useForkAuctionOperationsWithDependencies<TWriteClient>(
 			const submittedBidPriceInput = forkAuctionForm.value.submitBidPrice
 			return runForkAuctionAction(
 				'submitBid',
-				async (walletAddress, details, isCurrentSelection) => {
+				async (walletAddress, details, isCurrentSelection, context) => {
 					const walletBalanceAttoEth = await dependencies.createConnectedReadClient().getBalance({ address: walletAddress })
 					const bidGuardMessage = getTruthAuctionBidGuardMessage({
 						accountAddress: walletAddress,
@@ -345,7 +346,14 @@ function useForkAuctionOperationsWithDependencies<TWriteClient>(
 					const bidTick = getTruthAuctionTickAtPrice(bidPrice)
 					if (bidTick === undefined) throw new Error('Bid price is outside the supported auction range.')
 					if (!isCurrentSelection()) return undefined
-					return await dependencies.submitTruthAuctionBid(dependencies.createWalletWriteClient(walletAddress, { onTransactionPrepared, onTransactionSubmitted }), details.securityPoolAddress, details.universeId, truthAuctionAddress, bidTick, parseTruthAuctionAmountInput(submittedBidAmountInput, 'Bid amount'))
+					return await dependencies.submitTruthAuctionBid(
+						dependencies.createWalletWriteClient(walletAddress, { onTransactionPrepared, onTransactionSubmitted, reviewSignal: context.reviewSignal }),
+						details.securityPoolAddress,
+						details.universeId,
+						truthAuctionAddress,
+						bidTick,
+						parseTruthAuctionAmountInput(submittedBidAmountInput, 'Bid amount'),
+					)
 				},
 				'Failed to submit truth auction bid',
 				securityPoolAddressOverride,
@@ -359,14 +367,22 @@ function useForkAuctionOperationsWithDependencies<TWriteClient>(
 			const submittedRefundBidIndex = forkAuctionForm.value.refundBidIndex
 			return runForkAuctionAction(
 				'refundLosingBids',
-				async (walletAddress, details, isCurrentSelection) => {
+				async (walletAddress, details, isCurrentSelection, context) => {
 					const truthAuctionAddress = requireDefined(details.truthAuctionAddress, 'Truth auction not available')
 					const normalizedBids = selectedBids === undefined ? [{ tick: parseBigIntInput(submittedRefundTick, 'Refund tick'), bidIndex: parseBigIntInput(submittedRefundBidIndex, 'Refund bid index') }] : filterSelectedSettlementBids(selectedBids)
 					if (normalizedBids.length === 0) throw new Error('Pick one or more bids to refund first.')
 					const selectedBid = normalizedBids[0]
 					if (selectedBid === undefined) throw new Error('Pick one or more bids to refund first.')
 					if (!isCurrentSelection()) return undefined
-					return await dependencies.refundTruthAuctionBid(dependencies.createWalletWriteClient(walletAddress, { onTransactionPrepared, onTransactionSubmitted }), details.securityPoolAddress, details.universeId, truthAuctionAddress, selectedBid.tick, selectedBid.bidIndex, normalizedBids)
+					return await dependencies.refundTruthAuctionBid(
+						dependencies.createWalletWriteClient(walletAddress, { onTransactionPrepared, onTransactionSubmitted, reviewSignal: context.reviewSignal }),
+						details.securityPoolAddress,
+						details.universeId,
+						truthAuctionAddress,
+						selectedBid.tick,
+						selectedBid.bidIndex,
+						normalizedBids,
+					)
 				},
 				'Failed to refund losing bids',
 				securityPoolAddressOverride,
@@ -377,9 +393,9 @@ function useForkAuctionOperationsWithDependencies<TWriteClient>(
 	const finalizeTruthAuction = async (securityPoolAddressOverride?: Address, universeIdOverride?: bigint) =>
 		await runForkAuctionAction(
 			'finalizeTruthAuction',
-			async (walletAddress, details, isCurrentSelection) => {
+			async (walletAddress, details, isCurrentSelection, context) => {
 				if (!isCurrentSelection()) return undefined
-				return await dependencies.finalizeSecurityPoolTruthAuction(dependencies.createWalletWriteClient(walletAddress, { onTransactionPrepared, onTransactionSubmitted }), details.securityPoolAddress, details.universeId)
+				return await dependencies.finalizeSecurityPoolTruthAuction(dependencies.createWalletWriteClient(walletAddress, { onTransactionPrepared, onTransactionSubmitted, reviewSignal: context.reviewSignal }), details.securityPoolAddress, details.universeId)
 			},
 			'Failed to finalize truth auction',
 			securityPoolAddressOverride,
@@ -389,10 +405,10 @@ function useForkAuctionOperationsWithDependencies<TWriteClient>(
 	const withdrawAuctionRefund = async (securityPoolAddressOverride?: Address, universeIdOverride?: bigint) =>
 		await runForkAuctionAction(
 			'withdrawAuctionRefund',
-			async (walletAddress, details, isCurrentSelection) => {
+			async (walletAddress, details, isCurrentSelection, context) => {
 				const truthAuctionAddress = requireDefined(details.truthAuctionAddress, 'Truth auction not available')
 				if (!isCurrentSelection()) return undefined
-				return await dependencies.withdrawTruthAuctionRefund(dependencies.createWalletWriteClient(walletAddress, { onTransactionPrepared, onTransactionSubmitted }), details.securityPoolAddress, details.universeId, truthAuctionAddress)
+				return await dependencies.withdrawTruthAuctionRefund(dependencies.createWalletWriteClient(walletAddress, { onTransactionPrepared, onTransactionSubmitted, reviewSignal: context.reviewSignal }), details.securityPoolAddress, details.universeId, truthAuctionAddress)
 			},
 			'Failed to withdraw auction refund',
 			securityPoolAddressOverride,
@@ -408,7 +424,7 @@ function useForkAuctionOperationsWithDependencies<TWriteClient>(
 			const submittedClaimBidIndex = forkAuctionForm.value.claimBidIndex
 			return runForkAuctionAction(
 				'claimAuctionProceeds',
-				async (walletAddress, details, isCurrentSelection) => {
+				async (walletAddress, details, isCurrentSelection, context) => {
 					const bidderAddress = resolveOptionalAddressInput(submittedSettlementAddress, walletAddress, 'Bidder address')
 					const normalizedClaimBids = selectedClaimBids === undefined ? [{ tick: parseBigIntInput(submittedClaimBidTick, 'Settlement bid tick'), bidIndex: parseBigIntInput(submittedClaimBidIndex, 'Settlement bid index') }] : filterSelectedSettlementBids(selectedClaimBids)
 					const normalizedRefundBids = selectedRefundBids === undefined ? [] : filterSelectedSettlementBids(selectedRefundBids)
@@ -416,7 +432,7 @@ function useForkAuctionOperationsWithDependencies<TWriteClient>(
 					const selectedBid = normalizedClaimBids[0] ?? normalizedRefundBids[0]
 					if (selectedBid === undefined) throw new Error('Pick one or more bids to settle first.')
 					if (!isCurrentSelection()) return undefined
-					const result = await dependencies.settleTruthAuctionBids(dependencies.createWalletWriteClient(walletAddress, { onTransactionPrepared, onTransactionSubmitted }), details.securityPoolAddress, details.universeId, bidderAddress, normalizedClaimBids, normalizedRefundBids)
+					const result = await dependencies.settleTruthAuctionBids(dependencies.createWalletWriteClient(walletAddress, { onTransactionPrepared, onTransactionSubmitted, reviewSignal: context.reviewSignal }), details.securityPoolAddress, details.universeId, bidderAddress, normalizedClaimBids, normalizedRefundBids)
 					return {
 						...result,
 						settlementMode: getTruthAuctionSettlementMode(normalizedClaimBids, normalizedRefundBids),
@@ -433,10 +449,10 @@ function useForkAuctionOperationsWithDependencies<TWriteClient>(
 	const settleForkedEscalation = async (outcome: ReportingOutcomeKey, parentDepositIndexes: bigint[]) =>
 		await runForkAuctionAction(
 			'settleForkedEscalation',
-			async (walletAddress, details, isCurrentSelection) => {
+			async (walletAddress, details, isCurrentSelection, context) => {
 				const proofs = await dependencies.buildForkCarriedEscalationProofs(details.securityPoolAddress, outcome, parentDepositIndexes)
 				if (!isCurrentSelection()) return undefined
-				return await dependencies.withdrawForkedEscalationDeposits(dependencies.createWalletWriteClient(walletAddress, { onTransactionPrepared, onTransactionSubmitted }), details.securityPoolAddress, outcome, proofs)
+				return await dependencies.withdrawForkedEscalationDeposits(dependencies.createWalletWriteClient(walletAddress, { onTransactionPrepared, onTransactionSubmitted, reviewSignal: context.reviewSignal }), details.securityPoolAddress, outcome, proofs)
 			},
 			'Failed to settle fork-carried escalation deposits',
 		)
@@ -447,10 +463,10 @@ function useForkAuctionOperationsWithDependencies<TWriteClient>(
 			const submittedDirectForkQuestionId = forkAuctionForm.value.directForkQuestionId
 			return runForkAuctionAction(
 				'forkUniverse',
-				async (walletAddress, details, isCurrentSelection) => {
+				async (walletAddress, details, isCurrentSelection, context) => {
 					if (!isCurrentSelection()) return undefined
 					return await dependencies.forkUniverseDirectly(
-						dependencies.createWalletWriteClient(walletAddress, { onTransactionPrepared, onTransactionSubmitted }),
+						dependencies.createWalletWriteClient(walletAddress, { onTransactionPrepared, onTransactionSubmitted, reviewSignal: context.reviewSignal }),
 						parseBigIntInput(submittedDirectForkUniverseId, 'Fork universe ID'),
 						parseBigIntInput(submittedDirectForkQuestionId, 'Fork question ID'),
 						details.securityPoolAddress,

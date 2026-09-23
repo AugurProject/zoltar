@@ -359,7 +359,7 @@ export function OpenOracleReportDetailsCard({
 				</ReadOnlyDetailAccordion>
 			</div>
 
-			<OperationModal context={reportTransactionContext} isOpen={selectedReportModal === 'dispute'} onClose={() => onSelectedReportModalChange(undefined)} title={openOracleCopy.disputeAndSwap}>
+			<OperationModal closeOnSuccessKey={openOracleResult?.action === 'dispute' ? openOracleResult.hash : undefined} context={reportTransactionContext} isOpen={selectedReportModal === 'dispute'} onClose={() => onSelectedReportModalChange(undefined)} title={openOracleCopy.disputeAndSwap}>
 				{renderSelectedReportActionSection({
 					actionMode: 'dispute',
 					disputeSubmission: openOracleDisputeSubmission,

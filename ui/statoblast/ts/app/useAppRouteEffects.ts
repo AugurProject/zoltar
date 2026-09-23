@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'preact/hooks'
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import { useMissingDeploymentRedirect } from '@zoltar/ui-core-shared/app/hooks/useMissingDeploymentRedirect.js'
-import { normalizeAddress } from '@zoltar/ui-core-shared/lib/address.js'
+import { isHexAddressInput, normalizeAddress } from '@zoltar/ui-core-shared/lib/address.js'
 import { useOpenOracleRouteSync } from '@zoltar/ui-statoblast-shared/features/open-oracle/hooks/useOpenOracleRouteSync.js'
 import type { Route } from '@zoltar/ui-statoblast-shared/types/app.js'
 
@@ -32,7 +32,7 @@ type Props = {
 }
 
 function shouldRefreshSelectedPoolForRoute({ environmentReady, route, securityPoolAddress, selectedPoolSecurityPoolAddress, walletBootstrapComplete }: { environmentReady: boolean; route: Route; securityPoolAddress: string; selectedPoolSecurityPoolAddress: string | undefined; walletBootstrapComplete: boolean }) {
-	return environmentReady && route === 'security-pools' && walletBootstrapComplete && securityPoolAddress !== '' && selectedPoolSecurityPoolAddress === undefined
+	return environmentReady && route === 'security-pools' && walletBootstrapComplete && isHexAddressInput(securityPoolAddress) && selectedPoolSecurityPoolAddress === undefined
 }
 
 function shouldSyncSecurityPoolAddressToRouteForms({ route }: { route: Route; securityPoolAddress: string }) {
@@ -134,7 +134,7 @@ export function useAppRouteEffects({
 			if (route !== 'security-pools' || securityPoolAddress === '' || selectedPoolSecurityPoolAddress !== undefined || !environmentReady || !walletBootstrapComplete) lastRequestedSecurityPoolAddress.current = undefined
 			return
 		}
-		if (!environmentReady || route !== 'security-pools' || securityPoolAddress === '' || !walletBootstrapComplete) return
+		if (!environmentReady || route !== 'security-pools' || !isHexAddressInput(securityPoolAddress) || !walletBootstrapComplete) return
 		const requestKey = `${activeEnvironmentNonce}:${securityPoolAddress}`
 		if (lastRequestedSecurityPoolAddress.current === requestKey) return
 		lastRequestedSecurityPoolAddress.current = requestKey
