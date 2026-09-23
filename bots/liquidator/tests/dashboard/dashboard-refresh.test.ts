@@ -688,6 +688,19 @@ describe('liquidator dashboard refresh behavior', () => {
 		expect(recovered.window.document.getElementById('global-error')?.classList.contains('hidden')).toBe(true)
 	})
 
+	test('configuration retry does not refresh retained health after a state failure', async () => {
+		const page = await dashboard(mainnetConfiguration(), state(), false, true)
+		page.setStateRequestFailure(true)
+		await page.refresh()
+		expect(page.window.document.getElementById('operator-health')?.textContent).toContain('Dashboard state is stale; retrying.')
+		page.setConfigurationRequestFailure(false)
+		const retry = page.window.document.querySelector('#configuration-status button')
+		if (!(retry instanceof page.window.HTMLButtonElement)) throw new Error('Expected configuration retry')
+		retry.click()
+		await page.waitUntilComplete()
+		expect(page.window.document.getElementById('operator-health')?.textContent).toContain('Dashboard state is stale; retrying.')
+	})
+
 	test('keeps emergency Pause available while identity-dependent controls fail closed', async () => {
 		const page = await dashboard(configuration(['1'], { chainId: 1, explorerUrl: 'https://etherscan.io', name: 'mainnet' }), state())
 		page.setStateRequestFailure(true)

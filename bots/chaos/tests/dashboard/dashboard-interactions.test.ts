@@ -347,6 +347,7 @@ browserTest(
 				const accept = () => {
 					const dialog = document.querySelector('.operator-confirm-dialog')
 					if (!(dialog instanceof HTMLDialogElement)) return
+					window.operatorDialogReview = dialog.textContent ?? ''
 					const input = dialog.querySelector('input')
 					if (input instanceof HTMLInputElement) {
 						input.value = dialog.querySelector('label strong')?.textContent ?? ''
@@ -1311,6 +1312,18 @@ browserTest(
 					patch: { strategy: { selectableOperationAllowlist: ['open-oracle.blocked-sibling', 'trading.position.enter'] } },
 				})
 				await waitFor("document.querySelector('#settings-save-status')?.textContent === 'Execution policy saved.' && document.querySelector('#settings-fields')?.disabled === false", `${viewport.label} selectable-operation canary policy did not reconcile`)
+				const highRiskMutationCount = settingsMutations.length + 1
+				await cdp.evaluate(`(() => {
+					window.operatorDialogReview = ''
+					const highRisk = document.querySelector('#allow-high-risk')
+					const form = document.querySelector('#settings-form')
+					if (!(highRisk instanceof HTMLInputElement) || !(form instanceof HTMLFormElement)) return
+					highRisk.checked = true
+					form.dispatchEvent(new SubmitEvent('submit', { bubbles: true, cancelable: true }))
+				})()`)
+				await waitForSettingsMutation(highRiskMutationCount, `${viewport.label} high-risk policy was not submitted`)
+				expect(await cdp.evaluate('window.operatorDialogReview')).toMatch(/High-risk operations\s*Blocked\s*→\s*Allowed/)
+				await waitFor("document.querySelector('#settings-save-status')?.textContent === 'Execution policy saved.' && document.querySelector('#settings-fields')?.disabled === false", `${viewport.label} high-risk policy did not reconcile`)
 				await setExecutionMode(true, `${viewport.label} execution mode did not switch to live`)
 				await cdp.evaluate(`(() => {
 					const ethReserve = document.querySelector('#reserve-eth')

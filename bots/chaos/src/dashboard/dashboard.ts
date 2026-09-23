@@ -8,6 +8,7 @@ import { requestWithTimeout } from '@zoltar/bot-shared/dashboard/polling'
 import { confirmOperatorAction } from '@zoltar/bot-shared/dashboard/confirmation'
 import { optionalRecord as record } from '@zoltar/bot-shared/infrastructure/json-validation'
 import { createExecutionPolicyDraft } from './execution-policy-draft.js'
+import { executionPolicyReviewRows, type ExecutionPolicyPatch } from './execution-policy-review.js'
 import { createSettingsNavigation } from '@zoltar/bot-shared/dashboard/settings-navigation'
 import { element, markCurrentPage } from '@zoltar/bot-shared/dashboard/dom'
 import { decimalAtto } from './go-live.js'
@@ -1607,34 +1608,28 @@ settingsForm.addEventListener('submit', event => {
 			const minimumEthReserve = parseReserve(reserveEthInput, 'ETH reserve', live ? 'live-reserve' : 'non-negative')
 			const minimumRepReserve = parseReserve(reserveRepInput, 'REP reserve', live ? 'live-reserve' : 'non-negative')
 			if (live && decimalAtto(minimumEthReserve) < decimalAtto(maximumGasCostEth)) throw new Error('ETH reserve must retain at least one maximum-gas-cost-sized safety floor.')
-			const riskChanges = [
-				{ label: 'Maximum ETH / operation', before: `${configuration.maximumEthPerOperation ?? '—'} ETH`, after: `${maximumEthPerOperation} ETH` },
-				{ label: 'Maximum gas cost', before: `${configuration.maximumGasCostEth ?? '—'} ETH`, after: `${maximumGasCostEth} ETH` },
-				{ label: 'Maximum REP / operation', before: `${configuration.maximumRepPerOperation ?? '—'} REP`, after: `${maximumRepPerOperation} REP` },
-				{ label: 'ETH reserve', before: `${configuration.minimumEthReserve ?? '—'} ETH`, after: `${minimumEthReserve} ETH` },
-				{ label: 'REP reserve', before: `${configuration.minimumRepReserve ?? '—'} REP`, after: `${minimumRepReserve} REP` },
-				{ label: 'Irreversible operations', before: configuration.allowIrreversibleOperations === true ? 'Allowed' : 'Blocked', after: irreversibleInput.checked ? 'Allowed' : 'Blocked' },
-			].filter(change => change.before !== change.after)
-			if (riskChanges.length > 0 && !(await confirmOperatorAction({ title: 'Review execution policy', description: 'These limits and permissions apply before the next selection cycle.', changes: riskChanges, confirmLabel: 'Save policy' }))) return
+			const policyPatch: ExecutionPolicyPatch = {
+				runtime: { execute: live },
+				scheduler: { maximumDelaySeconds: maxDelaySeconds, minimumDelaySeconds: minDelaySeconds },
+				strategy: {
+					allowHighRiskOperations: highRiskInput.checked,
+					allowIrreversibleOperations: irreversibleInput.checked,
+					initializeGenesisUniverse: initializeGenesisInput.checked,
+					enabledEcosystems,
+					maximumEthPerOperation,
+					maximumGasCostEth,
+					maximumRepPerOperation,
+					minimumEthReserve,
+					minimumRepReserve,
+					selectableOperationAllowlist,
+					workflowValidForBlocks,
+				},
+			}
+			const policyChanges = executionPolicyReviewRows(configuration, policyPatch)
+			if (policyChanges.length > 0 && !(await confirmOperatorAction({ title: 'Review execution policy', description: 'These limits and permissions apply before the next selection cycle.', changes: policyChanges, confirmLabel: 'Save policy' }))) return
 			await put('/api/settings', {
 				revision: settingsRevision,
-				patch: {
-					runtime: { execute: live },
-					scheduler: { maximumDelaySeconds: maxDelaySeconds, minimumDelaySeconds: minDelaySeconds },
-					strategy: {
-						allowHighRiskOperations: highRiskInput.checked,
-						allowIrreversibleOperations: irreversibleInput.checked,
-						initializeGenesisUniverse: initializeGenesisInput.checked,
-						enabledEcosystems,
-						maximumEthPerOperation,
-						maximumGasCostEth,
-						maximumRepPerOperation,
-						minimumEthReserve,
-						minimumRepReserve,
-						selectableOperationAllowlist,
-						workflowValidForBlocks,
-					},
-				},
+				patch: policyPatch,
 			})
 			settingsDraft.dirty = false
 			settingsDraft.conflict = false

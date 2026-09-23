@@ -14,7 +14,7 @@ const allowances = (reason: string, entries: readonly (readonly [path: string, m
  */
 export const sourceSizeAllowances = new Map<string, SourceSizeAllowance>([
 	...allowances('Chaos: extract dashboard features, operation handlers, and persistence responsibilities into focused modules.', [
-		['bots/chaos/src/dashboard/dashboard.ts', 1722],
+		['bots/chaos/src/dashboard/dashboard.ts', 1717],
 		['bots/chaos/src/monitoring/discovery.ts', 1020],
 		['bots/chaos/src/operations/trading.ts', 1726],
 		['bots/chaos/src/state/operator-state.ts', 1162],

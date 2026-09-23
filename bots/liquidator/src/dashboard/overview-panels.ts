@@ -6,8 +6,10 @@ import { renderOperatorHealth } from '@zoltar/bot-shared/dashboard/health-panel'
 import type { Configuration, Snapshot } from './api-validation.ts'
 
 let renderedAlertKey: string | undefined
+const stateReceiptTimes = new WeakMap<Snapshot, number>()
 
 export function renderOverviewHealth(snapshot: Snapshot, configuration: Configuration | undefined, stale = false) {
+	if (!stateReceiptTimes.has(snapshot)) stateReceiptTimes.set(snapshot, Date.now())
 	const limit = configuration?.strategy['maximumTotalDeployedRep']
 	renderOperatorHealth(element('operator-health', HTMLDivElement), {
 		mode: snapshot.execute ? 'Live armed' : 'Dry run',
@@ -17,10 +19,11 @@ export function renderOverviewHealth(snapshot: Snapshot, configuration: Configur
 		lastAction: snapshot.activities[0]?.message ?? 'No action yet',
 		paused: snapshot.paused,
 		stale,
+		stateReceivedAt: stateReceiptTimes.get(snapshot),
 	})
 }
 
-export function renderOverviewMetrics(snapshot: Snapshot, configuration: Configuration | undefined) {
+export function renderOverviewMetrics(snapshot: Snapshot, configuration: Configuration | undefined, stale = false) {
 	element('metrics', HTMLDivElement).replaceChildren(
 		createMetric('Pools', snapshot.metrics.poolCount.toString()),
 		createMetric('Selected', snapshot.metrics.selectedPoolCount.toString()),
@@ -30,7 +33,7 @@ export function renderOverviewMetrics(snapshot: Snapshot, configuration: Configu
 		createMetric('Open interest assumed', formatAmount(snapshot.metrics.assumedOpenInterestEth, 'ETH')),
 	)
 	element('wallet-metrics', HTMLDivElement).replaceChildren(createMetric('Wallet ETH', formatAmount(snapshot.metrics.walletEth, 'ETH')), createMetric('Wallet REP', formatAmount(snapshot.metrics.walletRep, 'REP')), createMetric('REP deployed in pools', formatAmount(snapshot.metrics.deployedRep, 'REP')))
-	renderOverviewHealth(snapshot, configuration)
+	renderOverviewHealth(snapshot, configuration, stale)
 }
 
 export function renderOverviewAlerts(snapshot: Pick<Snapshot, 'alerts' | 'pendingTransactions'>) {

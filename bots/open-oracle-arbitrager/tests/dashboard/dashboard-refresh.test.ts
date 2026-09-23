@@ -876,6 +876,34 @@ test('focused risk, settlement, execution, and market forms load the saved confi
 	expect(settings.runtime.execute).toBe(false)
 	expect(saveButton('runtime-form').disabled).toBe(true)
 	expect(badges('runtime-form')).toEqual(['Queued · next scan'])
+	for (const [field, value, label] of [
+		['maxHedgeSlippageBps', '75', 'Maximum hedge slippage'],
+		['lookbackBlocks', '32', 'Lookback period'],
+	] as const) {
+		const previous = settings.runtime[field]
+		runtimeInput(field).value = value
+		runtimeInput(field).dispatchEvent(new window.Event('input', { bubbles: true }))
+		element(window, 'runtime-form', window.HTMLFormElement).dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }))
+		let review = window.document.querySelector('.operator-confirm-dialog')
+		for (let attempt = 0; attempt < 100 && review === null; attempt++) {
+			await Bun.sleep(10)
+			review = window.document.querySelector('.operator-confirm-dialog')
+		}
+		expect(review?.textContent).toContain(label)
+		const unit = field === 'maxHedgeSlippageBps' ? 'bps' : 'blocks'
+		expect(review?.textContent).toContain(`${previous} ${unit}→${value} ${unit}`)
+		expect(settings.runtime[field]).toBe(previous)
+		await acceptOperatorDialog(window)
+		await page.waitUntilComplete()
+		for (let attempt = 0; attempt < 100 && settings.runtime[field] === previous; attempt++) await Bun.sleep(10)
+		expect(settings.runtime[field]).toBe(BigInt(value))
+	}
+	runtimeInput('maxHedgeSlippageBps').value = ''
+	element(window, 'runtime-form', window.HTMLFormElement).dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }))
+	await Bun.sleep(10)
+	expect(element(window, 'runtime-status', window.HTMLElement).textContent).toBe('Maximum hedge slippage must be a whole number from 0 to 1000 bps.')
+	expect(settings.runtime.maxHedgeSlippageBps).toBe(75n)
+	runtimeInput('maxHedgeSlippageBps').value = '75'
 	runtimeInput('maxPositionNotionalWeth').value = '20'
 	runtimeInput('maxPositionNotionalWeth').dispatchEvent(new window.Event('input', { bubbles: true }))
 	expect(await submit('runtime-form', 'runtime-status', 'Saving risk limits…')).toBe('Per-position WETH limit cannot exceed the total locked WETH limit.')

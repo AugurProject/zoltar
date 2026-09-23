@@ -216,11 +216,22 @@ export function registerFocusedSettingsForms({ api, refresh, syncControls }: Foc
 			const positionLimit = nonnegativeAtomicValue(runtimeInput('maxPositionNotionalWeth').value, 'WETH')
 			const totalLimit = nonnegativeAtomicValue(runtimeInput('maxTotalLockedWeth').value, 'WETH')
 			if (positionLimit > totalLimit) throw new Error('Per-position WETH limit cannot exceed the total locked WETH limit.')
-			const changes = riskFields.flatMap(field => {
-				const before = String(saved.riskLimits[field])
-				const after = runtimeInput(field).value
-				return before === after ? [] : [{ label: field.replace(/([A-Z])/g, ' $1'), before: `${before} ${field === 'maxConcurrentPositions' ? 'positions' : 'WETH'}`, after: `${after} ${field === 'maxConcurrentPositions' ? 'positions' : 'WETH'}` }]
-			})
+			const hedgeSlippageValue = runtimeInput('maxHedgeSlippageBps').value
+			const maxHedgeSlippageBps = Number(hedgeSlippageValue)
+			if (!/^\d+$/.test(hedgeSlippageValue) || !Number.isSafeInteger(maxHedgeSlippageBps) || maxHedgeSlippageBps > 1_000) throw new Error('Maximum hedge slippage must be a whole number from 0 to 1000 bps.')
+			const lookbackValue = runtimeInput('lookbackBlocks').value
+			const lookbackBlocks = Number(lookbackValue)
+			if (!/^\d+$/.test(lookbackValue) || !Number.isSafeInteger(lookbackBlocks) || lookbackBlocks > 256) throw new Error('Lookback period must be a whole number from 0 to 256 blocks.')
+			const changes = riskFields
+				.flatMap(field => {
+					const before = String(saved.riskLimits[field])
+					const after = runtimeInput(field).value
+					return before === after ? [] : [{ label: field.replace(/([A-Z])/g, ' $1'), before: `${before} ${field === 'maxConcurrentPositions' ? 'positions' : 'WETH'}`, after: `${after} ${field === 'maxConcurrentPositions' ? 'positions' : 'WETH'}` }]
+				})
+				.concat(
+					saved.maxHedgeSlippageBps === runtimeInput('maxHedgeSlippageBps').value ? [] : [{ label: 'Maximum hedge slippage', before: `${saved.maxHedgeSlippageBps} bps`, after: `${maxHedgeSlippageBps} bps` }],
+					saved.lookbackBlocks === runtimeInput('lookbackBlocks').value ? [] : [{ label: 'Lookback period', before: `${saved.lookbackBlocks} blocks`, after: `${lookbackBlocks} blocks` }],
+				)
 			if (changes.length > 0 && !(await confirmOperatorAction({ title: 'Review risk limits', description: 'These limits govern the next scan and live execution.', changes, confirmLabel: 'Save risk limits' }))) return
 			await submitFocusedForm('runtime-form', 'runtime-status', 'Saving risk limits…', async () => {
 				const runtime = {

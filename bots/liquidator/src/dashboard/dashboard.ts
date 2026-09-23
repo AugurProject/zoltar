@@ -536,7 +536,7 @@ function populateConfiguration(configuration: Configuration) {
 	updateHealthPolicyPreview()
 	for (const formId of TRACKED_FORMS) markFormClean(formId)
 	if (currentSnapshot !== undefined) {
-		renderOverviewMetrics(currentSnapshot, currentConfiguration)
+		renderOverviewMetrics(currentSnapshot, currentConfiguration, !stateConnected)
 		renderAttention(currentSnapshot)
 		renderUniverses(currentSnapshot)
 		updatePoolBrowser()

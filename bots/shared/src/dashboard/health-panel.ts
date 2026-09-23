@@ -12,6 +12,7 @@ export type OperatorHealth = {
 	paused: boolean
 	stale: boolean
 	scanStaleAfterMilliseconds?: number | undefined
+	stateReceivedAt?: number | undefined
 }
 
 function healthSlot(label: string, value: string) {
@@ -48,5 +49,5 @@ function Panel({ health, stateReceivedAt }: { health: OperatorHealth; stateRecei
 }
 
 export function renderOperatorHealth(target: HTMLElement, health: OperatorHealth) {
-	render(h(Panel, { health, stateReceivedAt: Date.now() }), target)
+	render(h(Panel, { health, stateReceivedAt: health.stateReceivedAt ?? Date.now() }), target)
 }

@@ -992,6 +992,29 @@ fieldset {
 	gap: 0.75rem;
 }
 
+.operator-confirm-dialog .dialog-actions button {
+	min-height: 2.75rem;
+	padding: 0.65rem 0.95rem;
+	border: 1px solid var(--operator-border);
+	border-radius: 0.55rem;
+	background: var(--operator-surface-raised);
+	color: var(--operator-text);
+	font-weight: 700;
+	cursor: pointer;
+}
+
+.operator-confirm-dialog .dialog-actions button[type="submit"] {
+	border-color: var(--operator-accent);
+	background: var(--operator-accent);
+	color: #04120d;
+}
+
+.operator-confirm-dialog .dialog-actions button.danger {
+	border-color: var(--operator-error);
+	background: var(--operator-error);
+	color: #20070b;
+}
+
 .alert-row {
 	display: flex;
 	align-items: center;
