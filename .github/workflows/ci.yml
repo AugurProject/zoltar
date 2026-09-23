@@ -205,6 +205,14 @@ jobs:
           ZOLTAR_USE_EXISTING_PRODUCTION_BUILD: "1"
           ZOLTAR_RUN_PRODUCTION_REBUILD_INVARIANTS: "1"
 
+  browser-workflow:
+    name: Required production browser transactions
+    needs: [changes, prepare]
+    if: needs.changes.outputs.core == 'true'
+    uses: ./.github/workflows/browser-workflow.yml
+    with:
+      prepared: true
+
   checks:
     name: Repository checks
     needs: changes
@@ -315,7 +323,7 @@ jobs:
   required:
     name: Required
     if: always()
-    needs: [changes, docs-checks, component-inputs, prepare, domain-tests, application-tests, browser-smoke, checks, knip, audit, infrastructure-checks, packages, augur-scan-integration]
+    needs: [changes, docs-checks, component-inputs, prepare, domain-tests, application-tests, browser-smoke, browser-workflow, checks, knip, audit, infrastructure-checks, packages, augur-scan-integration]
     runs-on: ubuntu-latest
     steps:
       - name: Verify required jobs
@@ -334,6 +342,7 @@ jobs:
           PREPARE_RESULT: ${{ needs.prepare.result }}
           APPLICATION_TESTS_RESULT: ${{ needs.application-tests.result }}
           DOMAIN_TESTS_RESULT: ${{ needs.domain-tests.result }}
+          BROWSER_WORKFLOW_RESULT: ${{ needs.browser-workflow.result }}
           BROWSER_SMOKE_RESULT: ${{ needs.browser-smoke.result }}
           CHECKS_RESULT: ${{ needs.checks.result }}
           KNIP_RESULT: ${{ needs.knip.result }}
@@ -360,7 +369,7 @@ jobs:
           require_result "${PACKAGES_SELECTED}" "${PACKAGES_RESULT}" packages
           require_result "${INTEGRATION_SELECTED}" "${INTEGRATION_RESULT}" augurScan-integration
           require_result "${CORE_SELECTED}" "${KNIP_RESULT}" knip
-          for result in PREPARE_RESULT APPLICATION_TESTS_RESULT BROWSER_SMOKE_RESULT CHECKS_RESULT AUDIT_RESULT; do
+          for result in PREPARE_RESULT APPLICATION_TESTS_RESULT BROWSER_SMOKE_RESULT BROWSER_WORKFLOW_RESULT CHECKS_RESULT AUDIT_RESULT; do
             require_result "${CORE_SELECTED}" "${!result}" "${result}"
           done
           if [[ "${FORCED_FULL}" == "true" && "${ALL_SCOPES_SELECTED}" != "true" ]]; then

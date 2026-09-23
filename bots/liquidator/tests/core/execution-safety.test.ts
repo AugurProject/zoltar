@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { openOraclePriceCoordinatorAbi } from '@zoltar/bot-shared/contracts/abi'
-import { ambiguousRecoveryAction, PRIVATE_INTENT_FINALITY_BLOCKS, recoveryWorkBlocksExecution, requireRecoveredTransactionSuccess, shouldStopAfterSuccessfulCycle } from '../../src/core/cycle-control.ts'
+import { ambiguousRecoveryAction, recoveryWorkBlocksExecution, requireRecoveredTransactionSuccess, shouldStopAfterSuccessfulCycle } from '../../src/core/cycle-control.ts'
 import { hasStagedLiquidation } from '../../src/core/staged-operations.ts'
 import { stagedOperationOutcome } from '../../src/core/staged-outcome.ts'
 import {
@@ -250,13 +250,12 @@ describe('liquidator execution safety', () => {
 		expect(dependentTransactionStarted).toBe(false)
 	})
 
-	test('retains ambiguous price-dependent intents until a receipt or private finality proof exists', () => {
+	test('retains ambiguous price-dependent intents even after relay expiry', () => {
 		const publicIntent = { maxBlockNumber: 100n, mode: 'public' as const, requiresMarketEvidence: true }
 		const privateIntent = { ...publicIntent, mode: 'private' as const }
-		expect(ambiguousRecoveryAction(publicIntent, [1_000n, 1_000n])).toBe('retain')
-		expect(ambiguousRecoveryAction(privateIntent, [100n + PRIVATE_INTENT_FINALITY_BLOCKS - 1n, 1_000n])).toBe('retain')
-		expect(ambiguousRecoveryAction(privateIntent, [100n + PRIVATE_INTENT_FINALITY_BLOCKS, 1_000n])).toBe('expire-private')
-		expect(ambiguousRecoveryAction({ ...publicIntent, requiresMarketEvidence: false }, [100n])).toBe('resubmit')
+		expect(ambiguousRecoveryAction(publicIntent)).toBe('retain')
+		expect(ambiguousRecoveryAction(privateIntent)).toBe('retain')
+		expect(ambiguousRecoveryAction({ ...publicIntent, requiresMarketEvidence: false })).toBe('resubmit')
 	})
 
 	test('enforces per-pool and aggregate REP exposure for maintenance deposits', () => {

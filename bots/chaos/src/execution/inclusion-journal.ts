@@ -6,7 +6,8 @@ import type { Hex } from '@zoltar/bot-shared/ethereum'
 import { settledQuorumValue } from '@zoltar/bot-shared/monitoring/read-quorum'
 import { recordActivity, type PendingTransactionIntent, type RuntimeState } from '../state/operator-state.ts'
 import type { IncludedTransaction } from '../state/included-transactions.ts'
-import { agreedLatestBlock, executionReadClients, requiredConnectivity, type ExecutionEnvironment } from './transaction-executor.ts'
+import { agreedLatestBlock, executionReadClients, requiredConnectivity } from './execution-quorum.ts'
+import { type ExecutionEnvironment } from './execution-context.ts'
 import { persist } from './recovery-journal.ts'
 import { TransactionAwaitingRecovery } from './receipt-validation.ts'
 
@@ -127,7 +128,7 @@ function rollbackIncludedTransactions(state: RuntimeState, first: IncludedTransa
 	if (state.retirement.requestedAt === first.retirement.requestedAt) {
 		state.retirement.lastObservedBalances = structuredClone(first.retirement.lastObservedBalances)
 		state.retirement.recoveredBalances = structuredClone(first.retirement.recoveredBalances)
-		state.retirement.finalSweepStartedAt = first.retirement.finalSweepStartedAt
+		state.retirement.finalSweepStartedAt ??= first.retirement.finalSweepStartedAt
 	}
 	state.retirement.positions = [...structuredClone(first.retirement.positions), ...state.retirement.positions.filter(position => position.registeredBy === 'operator' && !first.retirement.positions.some(previous => previous.id === position.id))]
 	state.retirement.blockers = []
@@ -142,7 +143,7 @@ function rollbackIncludedTransactions(state: RuntimeState, first: IncludedTransa
 	state.topology = undefined
 	state.lastScanAt = undefined
 	state.lastScannedBlock = undefined
-	state.scheduler.status = state.paused ? 'paused' : 'idle'
+	state.scheduler.status = state.paused || state.retirement.status !== 'inactive' ? 'paused' : 'idle'
 	state.scheduler.nextRunAt = undefined
 	state.scheduler.selectedOperationId = undefined
 	recordActivity(state, { type: 'recovery', status: 'info', hash: first.receiptHash, message: `Chain reorganization: rolled back ${affected.length.toString()} transaction outcomes; reconciling retained signed transactions before new work` })

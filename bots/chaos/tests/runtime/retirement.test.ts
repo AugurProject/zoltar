@@ -1,4 +1,10 @@
-import { describe, expect, test } from 'bun:test'
+import { abandonRetryableSelectableFailure } from '../../src/runtime/workflow-repair.ts'
+import { evaluatePolicySafeContinuation } from '../../src/runtime/workflow-continuation.ts'
+import { executeScheduledOperation } from '../../src/runtime/scheduled-operation.ts'
+import { afterEach, describe, expect, test } from 'bun:test'
+import { mkdtemp, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import example from '../../config/operator.example.json'
 import { address, hash, snapshotFixture } from '../operations/fixture.ts'
 import { buildRetirementLiquidityRemovalPlan } from '../../src/operations/retirement-liquidity.ts'
@@ -18,7 +24,12 @@ import { recordCanonicalRecoveredBalances } from '../../src/state/retirement.ts'
 import { assertOperationEthFunding } from '../../src/execution/safety.ts'
 
 import { resetPristineStateForDeploymentProfile, verifyRetirementCompletionFinality } from '../../src/runtime/deployment-profile.ts'
-import { createDurableWorkflow, markWorkflowFailed } from '../../src/runtime/workflows.ts'
+import { createDurableWorkflow, markWorkflowFailed, refreshWorkflowContinuation, durableWorkflowPlan } from '../../src/runtime/workflows.ts'
+
+const temporaryDirectories: string[] = []
+afterEach(async () => {
+	await Promise.all(temporaryDirectories.splice(0).map(directory => rm(directory, { recursive: true, force: true })))
+})
 
 const now = '2026-09-07T00:00:00.000Z'
 const completionBinding = { profileId: 'profile:test', scannedWallet: address(1), signerAddress: address(1) }
@@ -261,6 +272,8 @@ describe('Drain & Retire planning', () => {
 		expect(allowed('statoblast.vault.deposit-rep', DEFAULT_RETIREMENT_POLICIES)).toBeFalse()
 		expect(allowed('zoltar.universe.fork', DEFAULT_RETIREMENT_POLICIES)).toBeFalse()
 		expect(allowed('statoblast.oracle.recover-report', DEFAULT_RETIREMENT_POLICIES)).toBeTrue()
+		expect(allowed('retirement.uniswap-v3.drain-position', DEFAULT_RETIREMENT_POLICIES)).toBeTrue()
+		expect(allowed('retirement.unknown', DEFAULT_RETIREMENT_POLICIES)).toBeFalse()
 		expect(allowed('trading.shares.migrate', DEFAULT_RETIREMENT_POLICIES)).toBeFalse()
 		expect(allowed('trading.shares.migrate', { ...DEFAULT_RETIREMENT_POLICIES, migrateExistingClaims: true })).toBeTrue()
 		expect(allowed('trading.position.exit', { ...DEFAULT_RETIREMENT_POLICIES, exitUnmatchedShares: true, maximumExitLossBps: 0 }, { maximumLong: 10n.toString(), minimumEthAttoEth: 10n.toString() })).toBeTrue()
@@ -284,8 +297,56 @@ describe('Drain & Retire planning', () => {
 		expect(result.steps.map(step => step.id)).toEqual(['collect-full-v3-position'])
 	})
 
+	test('rescans closed positions and restores status from current quorum balances', async () => {
+		for (const [liquidity, tokensOwed0, status, steps] of [
+			[7n, 0n, 'active', ['burn-full-v3-position', 'collect-full-v3-position']],
+			[0n, 3n, 'collect-only', ['collect-full-v3-position']],
+			[0n, 0n, 'closed', []],
+		] as const) {
+			const current = position('closed')
+			const retirement = request()
+			const emptyParameters = { blockHash: hash(101), blockNumber: 101n, canonicalScanComplete: true, evaluations: [], retirement, snapshot: emptySnapshot(), state: initialDurableState(31337), v3: [] }
+			applyRetirementAssessment(retirement, assessRetirement(emptyParameters), hash(101), 101n, completionBinding)
+			expect(retirement.completionEvidence).toBeDefined()
+			retirement.positions = [current]
+			const anchors: V3PositionAnchor[] = []
+			const reader = async (candidate: DurableV3Position, anchor: V3PositionAnchor) => {
+				anchors.push(anchor)
+				return { liquidity, position: candidate, tokensOwed0, tokensOwed1: 0n }
+			}
+			const observations = await readV3PositionsWithQuorum([reader, reader], 2, retirement.positions, v3Anchor(102n))
+			expect(anchors).toEqual([v3Anchor(102n), v3Anchor(102n)])
+			expect(observations).toHaveLength(1)
+			for (const observation of observations) recordV3ScanSuccess({ retirement }, observation, 102n)
+			expect(current.status).toBe(status)
+			const assessment = assessRetirement({ blockHash: hash(102), blockNumber: 102n, canonicalScanComplete: true, evaluations: [], retirement, snapshot: emptySnapshot(), state: initialDurableState(31337), v3: observations })
+			applyRetirementAssessment(retirement, assessment, hash(102), 102n, completionBinding)
+			if (steps.length > 0) {
+				expect(retirement.completionEvidence).toBeUndefined()
+				expect(assessment.action?.kind).toBe('v3-position')
+				if (assessment.action?.kind !== 'v3-position') throw new Error('Expected V3 recovery action')
+				expect(buildV3RetirementPlan(emptySnapshot(), assessment.action.observation, 0).steps.map(step => step.id)).toEqual([...steps])
+			} else expect(assessment.status).toBe('drained')
+		}
+	})
+
+	test('missing observations for retained positions invalidate completion evidence', () => {
+		for (const status of ['active', 'closed', 'collect-only'] as const) {
+			const retirement = request()
+			const parameters = { blockHash: hash(100), blockNumber: 100n, canonicalScanComplete: true, evaluations: [], retirement, snapshot: emptySnapshot(), state: initialDurableState(31337), v3: [] }
+			applyRetirementAssessment(retirement, assessRetirement(parameters), hash(100), 100n, completionBinding)
+			expect(retirement.completionEvidence).toBeDefined()
+			retirement.positions = [position(status)]
+			const assessment = assessRetirement({ ...parameters, blockHash: hash(101), blockNumber: 101n })
+			expect(assessment.status).toBe('blocked')
+			applyRetirementAssessment(retirement, assessment, hash(101), 101n, completionBinding)
+			expect(retirement.completionEvidence).toBeUndefined()
+			expect(retirement.profileReplacementOverride).toBeUndefined()
+		}
+	})
+
 	test('requires RPC quorum for current position amounts', async () => {
-		const current = position()
+		const current = position('closed')
 		const reader = (liquidity: bigint) => async () => ({ liquidity, position: current, tokensOwed0: 2n, tokensOwed1: 3n })
 		const observations = await readV3PositionsWithQuorum([reader(5n), reader(5n), reader(9n)], 2, [current], v3Anchor(100n))
 		expect(observations[0]).toMatchObject({ liquidity: 5n, tokensOwed0: 2n, tokensOwed1: 3n })
@@ -295,7 +356,7 @@ describe('Drain & Retire planning', () => {
 	test('rejects a competing-fork V3 quorum before recording retirement completion', async () => {
 		const canonicalBlockHash = hash(100)
 		const competingBlockHash = hash(101)
-		const current = position('active')
+		const current = position('closed')
 		const state = initialRuntimeState(true, address(1), 31_337)
 		request(state.retirement)
 		state.retirement.positions = [current]
@@ -685,4 +746,133 @@ describe('Drain & Retire planning', () => {
 		reconcileV3PositionJournal(retirement, [pending], 'profile:test', address(1), now)
 		expect(retirement.positions[1]).toMatchObject({ creationTransactionHash: hash(10), status: 'active' })
 	})
+})
+
+test('retirement dispatch keeps ordinary scheduling paused', async () => {
+	const snapshot = emptySnapshot()
+	const settings = parseSettings(example)
+	const directory = await mkdtemp(join(tmpdir(), 'chaos-retirement-dispatch-'))
+	temporaryDirectories.push(directory)
+	settings.runtime.stateFile = join(directory, 'state.json')
+	settings.paused = false
+	settings.runtime.execute = true
+	const state = initialRuntimeState(false, snapshot.wallet.address, snapshot.chainId, initialDurableState(snapshot.chainId, false, 'profile:test', snapshot.wallet.address))
+	state.retirement = request()
+	state.scheduler.status = 'paused'
+	let executed = false
+	await executeScheduledOperation(
+		{ settings, path: 'test', rememberSigner: false, revision: 'test' },
+		state,
+		plan('retirement.sweep.erc20'),
+		async () => {
+			expect(state.scheduler.status).toBe('paused')
+			executed = true
+		},
+		() => false,
+		'retirement',
+	)
+	expect(executed).toBeTrue()
+	expect(state.scheduler.status).toBe('paused')
+	const configuration = { settings, path: 'test', rememberSigner: false, revision: 'test' }
+	await expect(
+		executeScheduledOperation(
+			configuration,
+			state,
+			plan('open-oracle.weth.wrap'),
+			async () => {},
+			() => false,
+		),
+	).rejects.toThrow('disabled during retirement')
+	state.paused = true
+	await expect(
+		executeScheduledOperation(
+			configuration,
+			state,
+			plan('retirement.sweep.erc20'),
+			async () => {},
+			() => false,
+			'retirement',
+		),
+	).rejects.toThrow('paused')
+	state.paused = false
+	settings.runtime.execute = false
+	await expect(
+		executeScheduledOperation(
+			configuration,
+			state,
+			plan('retirement.sweep.erc20'),
+			async () => {},
+			() => false,
+			'retirement',
+		),
+	).rejects.toThrow('disabled')
+})
+
+test('V3 retirement continuation rebuilds collect after confirmed burn', () => {
+	const snapshot = emptySnapshot()
+	const owned = position()
+	const state = initialRuntimeState(false, snapshot.wallet.address, snapshot.chainId, initialDurableState(snapshot.chainId, false, 'profile:test', snapshot.wallet.address))
+	state.retirement = request()
+	state.retirement.positions.push(owned)
+	const workflow = createDurableWorkflow(buildV3RetirementPlan(snapshot, { position: owned, liquidity: 10n, tokensOwed0: 0n, tokensOwed1: 0n }, 0))
+	const burn = workflow.steps[0]
+	if (burn === undefined) throw new Error('Missing burn')
+	burn.status = 'confirmed'
+	burn.transactionHash = hash(90)
+	workflow.status = 'waiting-continuation'
+	state.workflows.push(workflow)
+	const selection = evaluatePolicySafeContinuation(snapshot, workflow, parseSettings(example), snapshot.anchor.blockNumber, true, { state, observations: [{ position: owned, liquidity: 0n, tokensOwed0: 4n, tokensOwed1: 3n }] })
+	const fresh = selection.evaluation.plan
+	expect(fresh?.steps.map(step => step.id)).toEqual(['collect-full-v3-position'])
+	if (fresh === undefined) throw new Error('Missing continuation')
+	refreshWorkflowContinuation(workflow, fresh)
+	expect(workflow.steps[0]).toEqual(burn)
+	expect(durableWorkflowPlan(workflow).steps).toHaveLength(2)
+	expect(state.workflows).toHaveLength(1)
+	const select = (observations: V3PositionObservation[]) => evaluatePolicySafeContinuation(snapshot, workflow, parseSettings(example), snapshot.anchor.blockNumber, true, { state, observations }).evaluation
+	expect(select([]).eligibility.eligible).toBeFalse()
+	expect(select([{ position: owned, liquidity: 10n, tokensOwed0: 4n, tokensOwed1: 3n }]).eligibility.eligible).toBeFalse()
+	expect(select([{ position: owned, liquidity: 0n, tokensOwed0: 0n, tokensOwed1: 0n }]).plan?.steps).toEqual([])
+	owned.profileId = 'wrong-profile'
+	expect(select([{ position: owned, liquidity: 0n, tokensOwed0: 4n, tokensOwed1: 3n }]).eligibility.eligible).toBeFalse()
+	owned.profileId = state.profileId
+	owned.owner = address(2)
+	expect(select([{ position: owned, liquidity: 0n, tokensOwed0: 4n, tokensOwed1: 3n }]).eligibility.eligible).toBeFalse()
+	owned.owner = snapshot.wallet.address
+	const collect = workflow.steps[1]
+	if (collect === undefined) throw new Error('Missing collect')
+	collect.status = 'signed'
+	expect(select([{ position: owned, liquidity: 0n, tokensOwed0: 4n, tokensOwed1: 3n }]).eligibility.eligible).toBeFalse()
+	markWorkflowFailed(workflow, collect.id, 'collect reverted', 'receipt-reverted')
+	expect(abandonRetryableSelectableFailure(state, durableWorkflowPlan(workflow))).toBeTrue()
+	expect(workflow.status).toBe('waiting-continuation')
+	expect(workflow.continuationDisposition).toBe('cleanup-only')
+	expect(workflow.steps[0]).toEqual(burn)
+})
+
+test('a locally rejected sweep dispatch leaves retirement cancellable', async () => {
+	const snapshot = emptySnapshot()
+	snapshot.wallet.ethBalanceAttoEth = '0'
+	snapshot.wallet.tokens = [{ address: address(80), allowances: {}, balance: '7', openOracleCredit: '0', symbol: 'TEST' }]
+	const settings = parseSettings(example)
+	settings.paused = false
+	settings.runtime.execute = true
+	const state = initialRuntimeState(false, snapshot.wallet.address, snapshot.chainId, initialDurableState(snapshot.chainId, false, 'profile:test', snapshot.wallet.address))
+	state.retirement = request()
+	await expect(
+		processRetirementCycle({
+			execute: async () => {
+				throw new Error('local dispatch rejected')
+			},
+			persist: async () => {},
+			prepareExecution: async () => {},
+			scan: { anchor: { baseFeePerGas: 1n, blockHash: hash(1), blockNumber: 1n, timestamp: 1n }, executionReady: true, canonicalLifecyclePresenceComplete: true, carryProofsComplete: true, indexComplete: true, snapshot },
+			settings,
+			state,
+			v3: [],
+		}),
+	).rejects.toThrow('local dispatch rejected')
+	expect(state.retirement.finalSweepStartedAt).toBeUndefined()
+	cancelRetirement(state.retirement, 'CANCEL DRAIN')
+	expect(state.retirement.status).toBe('inactive')
 })

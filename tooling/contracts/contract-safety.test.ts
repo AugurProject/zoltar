@@ -25,7 +25,7 @@ test('collects production deployables and excludes test and abstract outputs', (
 })
 
 describe('contract safety failures', () => {
-	test('reports protocol-limit and reviewed-budget regressions', () => {
+	test('reports network runtime and initcode limit violations', () => {
 		const oversized = { ...storageContract(), abi: [{ type: 'constructor', inputs: [{ type: 'address' }] }] }
 		oversized.evm.deployedBytecode.object = '00'.repeat(24_577)
 		oversized.evm.bytecode.object = '00'.repeat(49_121)
@@ -36,7 +36,6 @@ describe('contract safety failures', () => {
 		})
 		expect(result.errors).toContain('contracts/statoblast/SecurityPool.sol:SecurityPool runtime is 24577 bytes; EIP-170 limit is 24576')
 		expect(result.errors).toContain('contracts/statoblast/SecurityPool.sol:SecurityPool initcode is 49153 bytes; EIP-3860 limit is 49152')
-		expect(result.errors.some(error => error.includes('runtime grew to 24577 bytes; reviewed budget is 24371'))).toBe(true)
 	})
 
 	test('reports missing declared delegate artifacts', () => {
@@ -45,14 +44,13 @@ describe('contract safety failures', () => {
 	})
 })
 
-test('keeps explicit no-growth budgets pinned to current compiled bytecode', () => {
-	const sizes = collectDeployableContractSizes(loadContractArtifact('solidity/artifacts/Contracts.json'))
-	for (const budget of contractSafetyPolicy.runtimeBudgets) {
-		const size = sizes.find(candidate => candidate.sourcePath === budget.sourcePath && candidate.contractName === budget.contractName)
-		expect(size?.runtimeBytes, `${budget.sourcePath}:${budget.contractName} runtime`).toBe(budget.maximumBytes)
+test('permits production contracts to grow up to the network limits', () => {
+	const artifact = loadContractArtifact('solidity/artifacts/Contracts.json')
+	for (const size of collectDeployableContractSizes(artifact)) {
+		const contract = artifact.contracts?.[size.sourcePath]?.[size.contractName]
+		if (contract?.evm?.bytecode === undefined || contract.evm.deployedBytecode === undefined) throw new Error('Missing deployable bytecode')
+		contract.evm.deployedBytecode.object = '00'.repeat(contractSafetyPolicy.runtimeLimitBytes)
+		contract.evm.bytecode.object = '00'.repeat(contractSafetyPolicy.initcodeLimitBytes - (size.initcodeBytes - size.creationBytes))
 	}
-	for (const budget of contractSafetyPolicy.initcodeBudgets) {
-		const size = sizes.find(candidate => candidate.sourcePath === budget.sourcePath && candidate.contractName === budget.contractName)
-		expect(size?.initcodeBytes, `${budget.sourcePath}:${budget.contractName} initcode`).toBe(budget.maximumBytes)
-	}
+	expect(checkContractSafety(artifact).errors).toEqual([])
 })

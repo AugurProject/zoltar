@@ -19,6 +19,7 @@ type Call = {
 	data: Hex
 	gas: bigint
 	label: string
+	lastValidBlockNumber?: bigint | undefined
 	preSubmit?: (() => Promise<unknown> | unknown) | undefined
 	receiptExpectation?: PendingTransactionIntent['receiptExpectation'] | undefined
 	to: Address
@@ -89,6 +90,7 @@ async function submitCall(wallet: WriteClient, settings: OperatorSettings, state
 		data: call.data,
 		from: account.address,
 		gasEstimate: call.gas,
+		lastValidBlockNumber: call.lastValidBlockNumber,
 		nonce,
 		signTransaction: account.signTransaction,
 		to: call.to,
@@ -99,6 +101,7 @@ async function submitCall(wallet: WriteClient, settings: OperatorSettings, state
 		hash: signed.hash,
 		kind,
 		label: call.label,
+		lastValidBlockNumber: signed.lastValidBlockNumber,
 		maxBlockNumber: signed.maxBlockNumber,
 		mode: settings.submission.mode,
 		nonce: signed.transaction.nonce,

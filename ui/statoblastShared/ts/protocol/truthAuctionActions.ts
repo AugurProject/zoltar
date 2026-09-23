@@ -7,7 +7,6 @@ import { executeForkAuctionAction } from './securityPoolActions.js'
 
 export async function startTruthAuctionForSecurityPool(client: WriteClient, securityPoolAddress: Address, universeId: bigint) {
 	return await executeForkAuctionAction(
-		client,
 		'startTruthAuction',
 		securityPoolAddress,
 		universeId,
@@ -21,7 +20,7 @@ export async function startTruthAuctionForSecurityPool(client: WriteClient, secu
 	)
 }
 export async function submitTruthAuctionBid(client: WriteClient, securityPoolAddress: Address, universeId: bigint, truthAuctionAddress: Address, tick: bigint, amount: bigint) {
-	return await executeForkAuctionAction(client, 'submitBid', securityPoolAddress, universeId, async () => {
+	return await executeForkAuctionAction('submitBid', securityPoolAddress, universeId, async () => {
 		const callParams = {
 			address: truthAuctionAddress,
 			abi: statoblast_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
@@ -41,7 +40,6 @@ type TruthAuctionSettlementBidBatch = readonly TruthAuctionSettlementBidIdentifi
 
 export async function refundTruthAuctionBid(client: WriteClient, securityPoolAddress: Address, universeId: bigint, truthAuctionAddress: Address, tick: bigint, bidIndex: bigint, selectedBids?: readonly TruthAuctionSettlementBidIdentifier[]) {
 	return await executeForkAuctionAction(
-		client,
 		'refundLosingBids',
 		securityPoolAddress,
 		universeId,
@@ -50,14 +48,13 @@ export async function refundTruthAuctionBid(client: WriteClient, securityPoolAdd
 				address: truthAuctionAddress,
 				abi: statoblast_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
 				functionName: 'refundLosingBids',
-				args: selectedBids === undefined ? [{ tick, bidIndex }] : selectedBids,
+				args: [selectedBids ?? [{ tick, bidIndex }]],
 			})),
 	)
 }
 
 export async function settleTruthAuctionBids(client: WriteClient, securityPoolAddress: Address, universeId: bigint, vaultAddress: Address, claimTickIndices: TruthAuctionSettlementBidBatch, refundTickIndices: TruthAuctionSettlementBidBatch) {
 	return await executeForkAuctionAction(
-		client,
 		'claimAuctionProceeds',
 		securityPoolAddress,
 		universeId,
@@ -72,7 +69,6 @@ export async function settleTruthAuctionBids(client: WriteClient, securityPoolAd
 }
 export async function withdrawTruthAuctionRefund(client: WriteClient, securityPoolAddress: Address, universeId: bigint, truthAuctionAddress: Address) {
 	return await executeForkAuctionAction(
-		client,
 		'withdrawAuctionRefund',
 		securityPoolAddress,
 		universeId,
@@ -86,7 +82,6 @@ export async function withdrawTruthAuctionRefund(client: WriteClient, securityPo
 }
 export async function finalizeSecurityPoolTruthAuction(client: WriteClient, securityPoolAddress: Address, universeId: bigint) {
 	return await executeForkAuctionAction(
-		client,
 		'finalizeTruthAuction',
 		securityPoolAddress,
 		universeId,
