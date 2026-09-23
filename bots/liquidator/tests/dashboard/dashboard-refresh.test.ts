@@ -212,6 +212,7 @@ async function dashboard(initialConfiguration = mainnetConfiguration(), initialS
 	let selectionFailure = false
 	const catalogRequests: string[] = []
 	const catalogSearches: (string | null)[] = []
+	const marketConfigurationRequests: unknown[] = []
 	let snapshot = initialState
 	let stateResponseOverride: unknown
 	let currentConfiguration = initialConfiguration
@@ -336,6 +337,13 @@ async function dashboard(initialConfiguration = mainnetConfiguration(), initialS
 			if (releaseMarketSourceRequest !== undefined) await new Promise<void>(resolve => (releaseMarketSourceRequest = resolve))
 			return new window.Response(JSON.stringify({ assets: [{ assetId: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', sources: [{ id: 'uniswap-v2', kind: 'dex', market: '0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb', status: 'observed' }] }], blockNumber: '42' }), { headers: { 'content-type': 'application/json' } })
 		}
+		if (url.pathname === '/api/market-configuration') {
+			const request: unknown = JSON.parse(String(init?.body))
+			marketConfigurationRequests.push(request)
+			if (typeof request !== 'object' || request === null) throw new Error('Unexpected market configuration request')
+			currentConfiguration = { ...currentConfiguration, centralizedMarkets: Reflect.get(request, 'root'), childMarketConfigurations: Reflect.get(request, 'children'), desiredPools: Reflect.get(request, 'desiredPools') }
+			return new window.Response(JSON.stringify(currentConfiguration), { headers: { 'content-type': 'application/json' } })
+		}
 		if (url.pathname === '/api/paused' && rejectPause) {
 			return new window.Response(JSON.stringify({ error: 'Fixture rejected /api/paused with secret' }), { headers: { 'content-type': 'application/json' }, status: 400 })
 		}
@@ -440,6 +448,7 @@ async function dashboard(initialConfiguration = mainnetConfiguration(), initialS
 		},
 		catalogRequests,
 		catalogSearches,
+		marketConfigurationRequests,
 		setCatalogFailure: (failed: boolean) => {
 			catalogFailure = failed
 		},
@@ -1212,6 +1221,53 @@ describe('liquidator go-live settings', () => {
 		expect(review).not.toBeNull()
 		expect(review?.textContent).not.toContain('assetAddress')
 		expect(review?.textContent).not.toContain('assetChainId')
+	})
+
+	test('saves a REP/ETH source without an ETH market', async () => {
+		const saved = mainnetConfiguration()
+		saved.centralizedMarkets = { ...example.centralizedMarkets, sources: [{ exchangeId: 'kraken', repMarket: 'REP/ETH', ethMarket: null }] }
+		const page = await dashboard(saved, state())
+		const form = page.window.document.getElementById('market-configuration-form')
+		const minimumSources = page.window.document.querySelector('#market-configuration-editor input[type="number"][min="1"][max="100"]')
+		if (!(form instanceof page.window.HTMLFormElement) || !(minimumSources instanceof page.window.HTMLInputElement)) throw new Error('Expected market configuration controls')
+		minimumSources.value = '1'
+		minimumSources.dispatchEvent(new page.window.Event('input', { bubbles: true }))
+		await Bun.sleep(10)
+		expect(form.checkValidity()).toBe(true)
+		const save = form.querySelector('button[type="submit"]')
+		if (!(save instanceof page.window.HTMLButtonElement)) throw new Error('Expected market save button')
+		expect(save.disabled).toBe(false)
+		save.click()
+		for (let attempt = 0; attempt < 100 && page.window.document.querySelector('.operator-confirm-dialog') === null; attempt++) await Bun.sleep(10)
+		const confirm = page.window.document.getElementById('operator-confirm-submit')
+		if (!(confirm instanceof page.window.HTMLButtonElement)) throw new Error('Expected market review confirmation')
+		confirm.click()
+		for (let attempt = 0; attempt < 100 && page.marketConfigurationRequests.length === 0; attempt++) await Bun.sleep(10)
+		expect(page.marketConfigurationRequests).toHaveLength(1)
+		expect(page.marketConfigurationRequests[0]).toMatchObject({ root: { sources: [{ exchangeId: 'kraken', repMarket: 'REP/ETH', ethMarket: null }] } })
+	})
+
+	test('enables saving when removing a source is the only change', async () => {
+		const saved = mainnetConfiguration()
+		saved.centralizedMarkets = { ...example.centralizedMarkets, sources: [{ exchangeId: 'kraken', repMarket: 'REP/ETH', ethMarket: null }] }
+		const page = await dashboard(saved, state())
+		const form = page.window.document.getElementById('market-configuration-form')
+		const remove = page.window.document.querySelector('#market-configuration-editor section:first-child .market-editor-row button')
+		if (!(form instanceof page.window.HTMLFormElement) || !(remove instanceof page.window.HTMLButtonElement)) throw new Error('Expected source removal controls')
+		const save = form.querySelector('button[type="submit"]')
+		if (!(save instanceof page.window.HTMLButtonElement)) throw new Error('Expected market save button')
+		expect(save.disabled).toBe(true)
+		remove.click()
+		await Bun.sleep(10)
+		expect(save.disabled).toBe(false)
+		save.click()
+		for (let attempt = 0; attempt < 100 && page.window.document.querySelector('.operator-confirm-dialog') === null; attempt++) await Bun.sleep(10)
+		const confirm = page.window.document.getElementById('operator-confirm-submit')
+		if (!(confirm instanceof page.window.HTMLButtonElement)) throw new Error('Expected market review confirmation')
+		confirm.click()
+		for (let attempt = 0; attempt < 100 && page.marketConfigurationRequests.length === 0; attempt++) await Bun.sleep(10)
+		expect(page.marketConfigurationRequests).toHaveLength(1)
+		expect(page.marketConfigurationRequests[0]).toMatchObject({ root: { sources: [] } })
 	})
 
 	test('lists every live-execution prerequisite and locks the switch until they hold', async () => {

@@ -2,6 +2,7 @@ import { render } from 'preact'
 import { useState } from 'preact/hooks'
 import { Badge } from '@zoltar/ui-core-shared/components/Badge.js'
 import { nonnegativeAtomicValue } from '@zoltar/bot-shared/dashboard/amount'
+import { refreshFormButton } from '@zoltar/bot-shared/dashboard/form-state'
 import { isRecord } from '@zoltar/bot-shared/infrastructure/json-validation'
 
 type Market = Record<string, unknown>
@@ -91,7 +92,7 @@ function listEditor(title: string, fields: readonly string[], values: Market[], 
 			</div>
 			{values.map((item, index) => (
 				<div className='market-editor-row' key={index}>
-					{fields.map(field => textField(labels[field] ?? field, item[field], value => onChange(values.map((current, at) => (at === index ? { ...current, [field]: value } : current)))))}
+					{fields.map(field => textField(labels[field] ?? field, item[field], value => onChange(values.map((current, at) => (at === index ? { ...current, [field]: value } : current))), { required: field !== 'ethMarket' }))}
 					<button type='button' className='secondary' onClick={() => onChange(values.filter((_, at) => at !== index))}>
 						Remove
 					</button>
@@ -226,6 +227,7 @@ export function renderMarketConfiguration(target: HTMLElement, configuration: { 
 		const update = (next: Draft) => {
 			currentDraft = next
 			setDraft(next)
+			setTimeout(() => refreshFormButton('market-configuration-form'), 0)
 		}
 		return (
 			<div className='market-configuration-editor'>
