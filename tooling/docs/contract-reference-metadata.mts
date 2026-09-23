@@ -983,8 +983,7 @@ export const contractReferences: ContractReference[] = [
 				caller: '`SecurityPoolForker` only',
 				declarations: [{ name: 'setPoolFinancials' }],
 				effect: 'Replaces settlement collateral, both price-independent capacity-ownership totals, and aggregate pool bad debt, resets the fee timestamp to the current block, opens the finalized child fee epoch unless the child has a fixed outcome and no continuation game, and clears fee-index rounding carry.',
-				preconditions:
-					'Fee-eligible capacity ownership does not exceed total capacity ownership. Actual ETH covers the supplied collateral plus all accrued fee liabilities. Installing inherited liabilities does not require current REP solvency: operational redemptions, deposits and liquidations provide exit or recovery, while new minting retains current capacity and backing checks.',
+				preconditions: 'Fee-eligible capacity ownership does not exceed total capacity ownership. Actual ETH covers the supplied collateral plus all accrued fee liabilities. Installing inherited liabilities does not require current REP solvency.',
 				signals: '`PoolAccountingCheckpoint`, including for repeated financial values',
 			},
 			{

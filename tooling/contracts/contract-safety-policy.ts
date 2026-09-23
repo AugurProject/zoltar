@@ -83,8 +83,8 @@ export const contractSafetyPolicy = {
 				sourcePath: 'contracts/statoblast/SecurityPoolForker.sol',
 				contractName: 'SecurityPoolForker',
 			},
-			24_505,
-			'The reviewed forker adds understandable revert reasons while retaining size-limited migration guards; no further runtime growth is permitted.',
+			24_135,
+			'The forker delegates finality to the game, removing duplicated checks while retaining migration guards; no further runtime growth is permitted.',
 		),
 	] satisfies readonly BytecodeBudget[],
 	initcodeBudgets: [
@@ -93,8 +93,8 @@ export const contractSafetyPolicy = {
 				sourcePath: 'contracts/statoblast/SecurityPoolForker.sol',
 				contractName: 'SecurityPoolForker',
 			},
-			48_815,
-			'The reviewed forker initcode includes the added revert reasons and minimum constructor arguments; no further growth is permitted.',
+			48_438,
+			'The forker initcode reflects shared game finality and minimum constructor arguments; no further growth is permitted.',
 		),
 		initcodeBudget(
 			{
