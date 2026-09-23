@@ -33,6 +33,28 @@ body {
 	overflow-wrap: anywhere;
 }
 
+#retirement-form {
+	display: grid;
+	gap: 0.65rem;
+}
+
+#retirement-request-options {
+	display: grid;
+	gap: 0.65rem;
+	min-width: 0;
+	margin: 0;
+	padding: 0;
+	border: 0;
+}
+
+#retirement-request-options[hidden] {
+	display: none;
+}
+
+#retirement-actions[hidden] {
+	display: none;
+}
+
 body[data-page="overview"] [data-page-content]:not([data-page-content="overview"]):not([data-page-content="all"]),
 body[data-page="workflows"] [data-page-content]:not([data-page-content="workflows"]):not([data-page-content="all"]),
 body[data-page="catalog"] [data-page-content]:not([data-page-content="catalog"]):not([data-page-content="all"]),

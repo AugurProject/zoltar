@@ -14,7 +14,7 @@ import { CHAOS_OPERATION_CATALOG } from '../operations/catalog.ts'
 import { MINIMUM_WORKFLOW_VALIDITY_BLOCKS } from '../operations/timing.ts'
 import { assertExactKeys as assertExactRequiredAndOptionalKeys, requiredRecord, uint256String } from '../state/validators.ts'
 import { assertSepoliaUniswapFactory, canonicalDeployment } from './canonical-deployment.ts'
-import { executionProfileId } from './execution-profile.ts'
+import { deploymentFactoryId, executionProfileId } from './execution-profile.ts'
 
 const PRESERVE_PRIVATE_KEY = '__PRESERVE_SAVED_PRIVATE_KEY__'
 export const CONFIGURATION_REVISION_CONFLICT = 'ConfigurationRevisionConflict'
@@ -321,12 +321,6 @@ function parseStrategy(value: unknown): StrategySettings {
 		selectableOperationAllowlist: 'selectableOperationAllowlist' in strategy ? parseSelectableOperationAllowlist(strategy['selectableOperationAllowlist']) : [],
 		workflowValidForBlocks: BigInt(integer(strategy['workflowValidForBlocks'], 'strategy.workflowValidForBlocks', MINIMUM_WORKFLOW_VALIDITY_BLOCKS, 1_000_000)),
 	}
-}
-
-function deploymentFactoryId(profileId: string, factory: Address) {
-	return `factory:v1:${createHash('sha256')
-		.update(JSON.stringify({ profileId, factory: factory.toLowerCase() }))
-		.digest('hex')}`
 }
 
 function parseDeploymentPin(value: unknown, network: OperatorSettings['network']): DeploymentSettings {

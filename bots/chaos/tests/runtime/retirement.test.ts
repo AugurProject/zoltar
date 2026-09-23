@@ -386,6 +386,8 @@ describe('Drain & Retire planning', () => {
 		expect(retirement.completionEvidence).toBeUndefined()
 		const runtime = initialRuntimeState(true, snapshot.wallet.address, 31_337, durable)
 		await expect(resetPristineStateForDeploymentProfile(runtime, 'profile:replacement', address(50), true, snapshot.wallet.address, '/tmp/retirement-state.json', async () => undefined)).rejects.toThrow('drain it first')
+		runtime.uniswapV3Factory = address(49)
+		await expect(resetPristineStateForDeploymentProfile(runtime, runtime.profileId, address(50), true, snapshot.wallet.address, '/tmp/retirement-state.json', async () => undefined)).rejects.toThrow('drain it first')
 	})
 
 	test('revokes ERC-20, ERC-1155, and LP approvals one deterministic target at a time', () => {

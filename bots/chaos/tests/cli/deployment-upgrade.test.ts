@@ -5,7 +5,7 @@ import { join } from 'node:path'
 import example from '../../config/operator.example.json'
 import { prepareCurrentDeployment, retirementUpgradeStatus } from '../../src/cli/deployment-upgrade.ts'
 import { canonicalDeployment } from '../../src/config/canonical-deployment.ts'
-import { executionProfileId } from '../../src/config/execution-profile.ts'
+import { deploymentFactoryId, executionProfileId } from '../../src/config/execution-profile.ts'
 import { loadSettings, parseSettings, serializedSettings } from '../../src/config/settings.ts'
 import { applyRetirementAssessment } from '../../src/runtime/retirement-assessment.ts'
 import { initialDurableState } from '../../src/state/initial-state.ts'
@@ -19,7 +19,7 @@ afterEach(async () => {
 	await Promise.all(directories.splice(0).map(path => rm(path, { force: true, recursive: true })))
 })
 
-async function fixture(operated: boolean) {
+async function fixture(operated: boolean, factoryOnly = false) {
 	const directory = await mkdtemp('/tmp/zoltar-chaos-current-deployment-')
 	directories.push(directory)
 	const path = join(directory, 'operator.json')
@@ -27,12 +27,14 @@ async function fixture(operated: boolean) {
 	const settings = parseSettings({
 		...example,
 		connectivity: { publicRpcUrls: ['https://broadcast.example'], quorumRpcUrls: ['https://second.example'], readRpcUrl: 'https://read.example', rpcQuorum: 1 },
+		...(factoryOnly ? { network: { ...example.network, chainId: 4_242_424_242, explorerUrl: 'https://explorer.factory-replay.example', kind: 'custom', name: 'Factory Replay' } } : {}),
 		networkConfigured: true,
 		paused: false,
 		privateKey: signerKey,
 		runtime: { ...example.runtime, execute: true, stateFile },
 	})
-	settings.deployment.zoltar = getAddress('0x0000000000000000000000000000000000000001')
+	if (factoryOnly) settings.deployment.uniswapV3Factory = getAddress('0x0000000000000000000000000000000000000001')
+	else settings.deployment.zoltar = getAddress('0x0000000000000000000000000000000000000001')
 	await writeFile(path, `${JSON.stringify(serializedSettings(settings))}\n`, { mode: 0o600 })
 	const signer = privateKeyToAccount(signerKey).address
 	const state = initialDurableState(settings.network.chainId, true, executionProfileId(settings), operated ? signer : undefined)
@@ -56,6 +58,17 @@ test('updates a pristine old pin to the current contracts without changing its s
 	})
 	expect(result.kind).toBe('current')
 	expect((await loadSettings(path)).settings.deployment).toEqual(canonicalDeployment(11_155_111))
+	expect(await readFile(stateFile)).toEqual(before)
+})
+
+test('moves a pristine factory-only journal aside before selecting the current factory', async () => {
+	const { path, settings, stateFile } = await fixture(false, true)
+	const before = await readFile(stateFile)
+	const result = await prepareCurrentDeployment({ acquireLocks: noLocks, path })
+	expect(result.kind).toBe('current')
+	const next = (await loadSettings(path)).settings
+	expect(next.deployment.uniswapV3Factory).toBe(canonicalDeployment(settings.network.chainId).uniswapV3Factory)
+	expect(next.runtime.stateFile).not.toBe(stateFile)
 	expect(await readFile(stateFile)).toEqual(before)
 })
 
@@ -242,6 +255,76 @@ test('uses a fresh state path after verified retirement and preserves the old jo
 	expect(loaded.settings.deployment).toEqual(canonicalDeployment(11_155_111))
 	expect(loaded.settings.runtime.stateFile).not.toBe(stateFile)
 	expect(await readFile(stateFile)).toEqual(before)
+})
+
+test('retires an operated pinned deployment when only its Uniswap factory changes', async () => {
+	const { path, settings, signer, stateFile } = await fixture(true, true)
+	const canonical = canonicalDeployment(settings.network.chainId)
+	expect(executionProfileId(settings)).toBe(executionProfileId({ ...settings, deployment: canonical }))
+	expect(settings.deployment.uniswapV3Factory).not.toBe(canonical.uniswapV3Factory)
+	const request = await prepareCurrentDeployment({ acquireLocks: noLocks, ask: async () => `DRAIN ${executionProfileId(settings)} TO ${signer}`, path })
+	expect(request.kind).toBe('retiring')
+	expect((await loadSettings(path)).settings.deployment.uniswapV3Factory).toBe(settings.deployment.uniswapV3Factory)
+	const state = await loadDurableState(stateFile, settings.network.chainId)
+	expect(state.retirement).toMatchObject({ recipient: signer, status: 'requested' })
+	state.retirement.status = 'drained'
+	state.retirement.completionEvidence = {
+		blockHash: zeroHash,
+		blockNumber: '42',
+		completedAt: '2026-09-23T00:00:00.000Z',
+		profileId: state.profileId,
+		proof: { actionableObligations: 0, claimableAssets: 0, collectableV3Positions: 0, knownApprovals: 0, ownedLiquidityPositions: 0, partialWorkflows: 0, pendingTransactions: 0 },
+		residuals: [],
+		signerAddress: signer,
+	}
+	await saveDurableState(stateFile, state)
+	const oldJournal = await readFile(stateFile)
+	expect(await retirementUpgradeStatus(path, async () => undefined)).toBe('ready')
+	let finalityChecked = false
+	const result = await prepareCurrentDeployment({
+		acquireLocks: noLocks,
+		path,
+		verifyCompletion: async () => {
+			finalityChecked = true
+		},
+	})
+	expect(result.kind).toBe('current')
+	expect(finalityChecked).toBeTrue()
+	const next = (await loadSettings(path)).settings
+	expect(next.deployment).toEqual(canonical)
+	expect(next.runtime.stateFile).not.toBe(stateFile)
+	expect(await readFile(stateFile)).toEqual(oldJournal)
+})
+
+test('requires a factory-bound residual acceptance for a factory-only replacement', async () => {
+	const { path, settings, signer, stateFile } = await fixture(true, true)
+	const factory = canonicalDeployment(settings.network.chainId).uniswapV3Factory
+	if (factory === undefined) throw new Error('Canonical factory fixture is missing')
+	const state = await loadDurableState(stateFile, settings.network.chainId)
+	state.retirement.status = 'drained-with-residuals'
+	state.retirement.recipient = signer
+	state.retirement.completionEvidence = {
+		blockHash: zeroHash,
+		blockNumber: '42',
+		completedAt: '2026-09-23T00:00:00.000Z',
+		profileId: state.profileId,
+		proof: { actionableObligations: 0, claimableAssets: 0, collectableV3Positions: 0, knownApprovals: 0, ownedLiquidityPositions: 0, partialWorkflows: 0, pendingTransactions: 0 },
+		residuals: [{ amount: '1', asset: 'TEST', category: 'operator-accepted', reason: 'Reviewed retained asset' }],
+		signerAddress: signer,
+	}
+	await saveDurableState(stateFile, state)
+	const targetId = deploymentFactoryId(state.profileId, factory)
+	expect(targetId).toStartWith('factory:v1:')
+	expect(await retirementUpgradeStatus(path, async () => undefined)).toBe('retiring')
+	const waiting = await prepareCurrentDeployment({ acquireLocks: noLocks, path })
+	expect(waiting).toMatchObject({ kind: 'retiring' })
+	expect(waiting.message).toContain(targetId)
+	acceptResidualProfileReplacement(state.retirement, state.profileId, targetId, 'Reviewed residuals before replacing this factory.', `ACCEPT RESIDUALS FOR ${targetId}`)
+	await saveDurableState(stateFile, state)
+	expect(await retirementUpgradeStatus(path, async () => undefined)).toBe('ready')
+	const result = await prepareCurrentDeployment({ acquireLocks: noLocks, path, verifyCompletion: async () => undefined })
+	expect(result.kind).toBe('current')
+	expect((await loadSettings(path)).settings.runtime.stateFile).not.toBe(stateFile)
 })
 
 test('keeps the old deployment when finality verification fails', async () => {

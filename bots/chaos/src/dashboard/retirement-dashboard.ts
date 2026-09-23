@@ -40,11 +40,15 @@ export function createRetirementDashboard(options: RetirementDashboardOptions) {
 	const summary = retirementElement('retirement-summary', HTMLParagraphElement)
 	const destination = retirementElement('retirement-destination', HTMLParagraphElement)
 	const form = retirementElement('retirement-form', HTMLFormElement)
+	const requestOptions = retirementElement('retirement-request-options', HTMLFieldSetElement)
 	const maximumLoss = retirementElement('retirement-max-loss', HTMLInputElement)
 	const exitUnmatched = retirementElement('retirement-exit-unmatched', HTMLInputElement)
 	const migrateClaims = retirementElement('retirement-migrate-claims', HTMLInputElement)
 	const exitAfter = retirementElement('retirement-exit-after', HTMLInputElement)
+	const confirmationLabel = retirementElement('retirement-confirmation-label', HTMLLabelElement)
 	const confirmation = retirementElement('retirement-confirmation', HTMLInputElement)
+	const actions = retirementElement('retirement-actions', HTMLDivElement)
+	const request = retirementElement('retirement-request', HTMLButtonElement)
 	const cancel = retirementElement('retirement-cancel', HTMLButtonElement)
 	const actionStatus = retirementElement('retirement-action-status', HTMLSpanElement)
 	const v3Form = retirementElement('retirement-v3-form', HTMLFormElement)
@@ -62,15 +66,21 @@ export function createRetirementDashboard(options: RetirementDashboardOptions) {
 	const residualReason = retirementElement('retirement-residual-reason', HTMLTextAreaElement)
 	const residualConfirmation = retirementElement('retirement-residual-confirmation', HTMLInputElement)
 	const residualSubmit = retirementElement('retirement-residual-submit', HTMLButtonElement)
+	let requestInFlight = false
 
 	form.addEventListener('submit', event => {
 		event.preventDefault()
 		void (async () => {
+			if (request.disabled || requestInFlight) return
 			const profileId = options.current()?.profileId
 			if (profileId === undefined) {
 				actionStatus.textContent = 'Wait for the durable deployment profile to load.'
 				return
 			}
+			requestInFlight = true
+			request.disabled = true
+			requestOptions.disabled = true
+			let saved = false
 			try {
 				await options.put({
 					action: 'request',
@@ -78,10 +88,18 @@ export function createRetirementDashboard(options: RetirementDashboardOptions) {
 					policies: { exitAfterCompletion: exitAfter.checked, exitUnmatchedShares: exitUnmatched.checked, maximumExitLossBps: maximumLoss.valueAsNumber, migrateExistingClaims: migrateClaims.checked, sweepAssets: true, unwrapWeth: true },
 					profileId,
 				})
+				saved = true
 				actionStatus.textContent = 'Drain request saved.'
 				await options.refresh()
 			} catch (error) {
 				actionStatus.textContent = error instanceof Error ? error.message : 'Drain request failed.'
+			} finally {
+				requestInFlight = false
+				if (!saved) {
+					const current = options.current()
+					request.disabled = (current?.retirement?.status ?? 'inactive') !== 'inactive' || current?.wallet === undefined || current.profileId === undefined
+					requestOptions.disabled = request.disabled
+				}
 			}
 		})()
 	})
@@ -127,7 +145,7 @@ export function createRetirementDashboard(options: RetirementDashboardOptions) {
 		void (async () => {
 			try {
 				await options.put({ action: 'accept-residuals', confirmation: residualConfirmation.value, reason: residualReason.value, targetProfileId: residualTargetProfile.value.trim() })
-				actionStatus.textContent = 'Residual profile replacement acceptance saved.'
+				actionStatus.textContent = 'Residual deployment replacement acceptance saved.'
 				await options.refresh()
 			} catch (error) {
 				actionStatus.textContent = error instanceof Error ? error.message : 'Residual acceptance failed.'
@@ -140,8 +158,9 @@ export function createRetirementDashboard(options: RetirementDashboardOptions) {
 			const retirement = value.retirement
 			const status = retirement?.status ?? 'inactive'
 			const canCancel = ['requested', 'draining', 'waiting', 'blocked'].includes(status) && retirement?.finalSweepStartedAt === undefined
-			destination.hidden = status !== 'inactive' && !canCancel
-			if (status !== 'inactive') destination.textContent = 'Type CANCEL DRAIN to cancel before WETH unwrapping begins.'
+			destination.hidden = status !== 'inactive' && !canCancel && status !== 'known-claims-recovered'
+			if (status === 'known-claims-recovered') destination.textContent = `Recovered ETH and REP go to signer wallet ${retirement?.recipient ?? 'not recorded'}.`
+			else if (status !== 'inactive') destination.textContent = 'Type CANCEL DRAIN to cancel before WETH unwrapping begins.'
 			else if (value.wallet === undefined || value.profileId === undefined) destination.textContent = 'Configure a signer wallet before requesting retirement.'
 			else destination.textContent = `Recovered ETH and REP go to the signer wallet. Type DRAIN ${value.profileId} TO ${value.wallet} to confirm.`
 			let tone = 'warning'
@@ -153,7 +172,15 @@ export function createRetirementDashboard(options: RetirementDashboardOptions) {
 			if (status === 'known-claims-recovered') summary.textContent = 'Earlier history remains unverified; additional claims may exist.'
 			else if (status === 'inactive') summary.textContent = 'No retirement has been requested.'
 			else summary.textContent = `${retirement?.positions.length.toString() ?? '0'} V3 position records; ${retirement?.blockers.length.toString() ?? '0'} blockers; signer wallet ${retirement?.recipient ?? 'not recorded'}.`
+			request.disabled = status !== 'inactive' || value.wallet === undefined || value.profileId === undefined || requestInFlight
+			requestOptions.disabled = request.disabled
+			requestOptions.hidden = status !== 'inactive'
 			cancel.disabled = !canCancel
+			confirmationLabel.hidden = status !== 'inactive' && !canCancel
+			confirmation.disabled = confirmationLabel.hidden
+			request.hidden = status !== 'inactive'
+			cancel.hidden = !canCancel
+			actions.hidden = request.hidden && cancel.hidden
 			residualSubmit.disabled = status !== 'drained-with-residuals'
 		},
 	}

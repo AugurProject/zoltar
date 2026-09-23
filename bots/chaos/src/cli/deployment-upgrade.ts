@@ -11,7 +11,7 @@ import { executionProfileId } from '../config/execution-profile.ts'
 import { assertSettingsProfileIsolation, loadSettings, saveSettings, type OperatorSettings } from '../config/settings.ts'
 import { CHAOS_PROCESS_LOCK_OPTIONS } from '../core/process-lock-options.ts'
 import { chaosReadEndpoints } from '../runtime/canonical-scan.ts'
-import { resetPristineStateForDeploymentProfile, verifyRetirementCompletionFinality } from '../runtime/deployment-profile.ts'
+import { resetPristineStateForDeploymentProfile, retirementReplacementTargetId, verifyRetirementCompletionFinality } from '../runtime/deployment-profile.ts'
 import { initialRuntimeState } from '../state/initial-state.ts'
 import { migrateEmptyBootstrapState } from '../state/bootstrap-migration.ts'
 import { loadDurableState, saveDurableState } from '../state/operator-state.ts'
@@ -130,6 +130,9 @@ export async function prepareCurrentDeployment(options: PreparationOptions = {})
 		const current: OperatorSettings = { ...active, deployment: canonicalDeployment(active.network.chainId) }
 		const activeProfileId = executionProfileId(active)
 		const currentProfileId = executionProfileId(current)
+		const currentFactory = current.deployment.uniswapV3Factory
+		if (currentFactory === undefined) throw new Error('Current deployment is missing its Uniswap V3 factory')
+		const replacementTargetId = retirementReplacementTargetId(activeProfileId, currentProfileId, currentFactory)
 		const pristine = isPristineBootstrapState(state)
 		const wallet = configuredWallet(active)
 		if (wallet !== undefined && state.signerAddress !== undefined && wallet.toLowerCase() !== state.signerAddress.toLowerCase()) {
@@ -151,15 +154,18 @@ export async function prepareCurrentDeployment(options: PreparationOptions = {})
 		}
 
 		if (pristine) {
+			if (activeProfileId === currentProfileId) {
+				const nextStateFile = await saveCurrentWithNewState(loaded, current, replacementTargetId)
+				return { kind: 'current', message: `Selected current factory in new state file ${nextStateFile}. The unused old journal was preserved.` }
+			}
 			await assertSettingsProfileIsolation(loaded.path, current)
 			await saveSettings(loaded.path, current, loaded.revision)
 			return { kind: 'current', message: 'Selected current contract addresses; the unused state will adopt them at startup.' }
 		}
 		if (isUnoperatedKeylessState(active, state)) {
-			const nextStateFile = await saveCurrentWithNewState(loaded, current, currentProfileId)
+			const nextStateFile = await saveCurrentWithNewState(loaded, current, replacementTargetId)
 			return { kind: 'current', message: `Selected current contracts in new state file ${nextStateFile}. The old keyless journal was preserved.` }
 		}
-		if (activeProfileId === currentProfileId) throw new Error('A factory-only deployment change with operated state needs manual review and a distinct state file')
 
 		if (state.retirement.status === 'inactive') {
 			await requestOldProfileRetirement(active, state, options.ask ?? askTerminal)
@@ -169,13 +175,13 @@ export async function prepareCurrentDeployment(options: PreparationOptions = {})
 		if (state.retirement.status !== 'drained' && state.retirement.status !== 'drained-with-residuals') {
 			return { kind: 'retiring', message: `Old deployment retirement is ${state.retirement.status}. Its pin and state remain in place.` }
 		}
-		if (state.retirement.status === 'drained-with-residuals' && state.retirement.profileReplacementOverride?.targetProfileId !== currentProfileId) {
-			return { kind: 'retiring', message: `Retirement has residuals. Review them and accept replacement for ${currentProfileId} in the dashboard before switching.` }
+		if (state.retirement.status === 'drained-with-residuals' && state.retirement.profileReplacementOverride?.targetProfileId !== replacementTargetId) {
+			return { kind: 'retiring', message: `Retirement has residuals. Review them and accept replacement for ${replacementTargetId} in the dashboard before switching.` }
 		}
 
 		const checked = initialRuntimeState(active.paused, wallet, active.network.chainId, structuredClone(state))
-		await resetPristineStateForDeploymentProfile(checked, currentProfileId, current.deployment.uniswapV3Factory, current.paused, wallet, active.runtime.stateFile, async evidence => (options.verifyCompletion ?? verifyRetirementCompletionFinality)(current, evidence))
-		const nextStateFile = await saveCurrentWithNewState(loaded, current, currentProfileId)
+		await resetPristineStateForDeploymentProfile(checked, currentProfileId, currentFactory, current.paused, wallet, active.runtime.stateFile, async evidence => (options.verifyCompletion ?? verifyRetirementCompletionFinality)(current, evidence))
+		const nextStateFile = await saveCurrentWithNewState(loaded, current, replacementTargetId)
 		return { kind: 'current', message: `Verified retirement and selected current contracts in new state file ${nextStateFile}. The old state was preserved.` }
 	} finally {
 		await locks.release()
@@ -188,10 +194,14 @@ export async function retirementUpgradeStatus(path?: string, verifyCompletion: t
 	const active = restoreDeploymentForDurableState(loaded.settings, state, loaded.needsDeploymentPin)
 	if (state.retirement.status !== 'drained' && state.retirement.status !== 'drained-with-residuals') return 'retiring'
 	const current: OperatorSettings = { ...active, deployment: canonicalDeployment(active.network.chainId) }
-	if (state.retirement.status === 'drained-with-residuals' && state.retirement.profileReplacementOverride?.targetProfileId !== executionProfileId(current)) return 'retiring'
+	const currentFactory = current.deployment.uniswapV3Factory
+	if (currentFactory === undefined) throw new Error('Current deployment is missing its Uniswap V3 factory')
+	const currentProfileId = executionProfileId(current)
+	const replacementTargetId = retirementReplacementTargetId(executionProfileId(active), currentProfileId, currentFactory)
+	if (state.retirement.status === 'drained-with-residuals' && state.retirement.profileReplacementOverride?.targetProfileId !== replacementTargetId) return 'retiring'
 	const wallet = configuredWallet(active)
 	const checked = initialRuntimeState(active.paused, wallet, active.network.chainId, structuredClone(state))
-	await resetPristineStateForDeploymentProfile(checked, executionProfileId(current), current.deployment.uniswapV3Factory, current.paused, wallet, active.runtime.stateFile, async evidence => verifyCompletion(current, evidence))
+	await resetPristineStateForDeploymentProfile(checked, currentProfileId, currentFactory, current.paused, wallet, active.runtime.stateFile, async evidence => verifyCompletion(current, evidence))
 	return 'ready'
 }
 
@@ -205,7 +215,10 @@ async function main() {
 			const loaded = await loadSettings()
 			const state = await loadDurableState(loaded.settings.runtime.stateFile, loaded.settings.network.chainId)
 			if (state.retirement.status === 'drained-with-residuals') {
-				const targetProfileId = executionProfileId({ ...loaded.settings, deployment: canonicalDeployment(loaded.settings.network.chainId) })
+				const current = { ...loaded.settings, deployment: canonicalDeployment(loaded.settings.network.chainId) }
+				const factory = current.deployment.uniswapV3Factory
+				if (factory === undefined) throw new Error('Current deployment is missing its Uniswap V3 factory')
+				const targetProfileId = retirementReplacementTargetId(state.profileId, executionProfileId(current), factory)
 				console.log(`Retirement has residuals. Review them and accept replacement for ${targetProfileId} in the dashboard.`)
 			} else console.log(`Old deployment retirement is ${state.retirement.status}. Inspect the dashboard Retirement panel for blockers and progress.`)
 		}

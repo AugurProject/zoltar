@@ -2,12 +2,17 @@ import type { Address, Hash } from '@zoltar/bot-shared/ethereum'
 import { requestTransport } from '@zoltar/bot-shared/ethereum/rpc-transport'
 import { confirmCanonicalReceiptFinality } from '@zoltar/bot-shared/execution/canonical-finality'
 import type { OperatorSettings } from '../config/settings.ts'
+import { deploymentFactoryId } from '../config/execution-profile.ts'
 import { resetRuntimeStateForProfile, type RuntimeState } from '../state/operator-state.ts'
 import { isPristineBootstrapState } from '../state/pristine.ts'
 import type { RetirementCompletionEvidence } from '../state/retirement.ts'
 import { chaosReadClients, chaosReadEndpoints, createChaosReadPool } from './canonical-scan.ts'
 
 type BoundRetirementCompletionEvidence = RetirementCompletionEvidence & { profileId: string; signerAddress: Address }
+
+export function retirementReplacementTargetId(sourceProfileId: string, targetProfileId: string, factory: Address) {
+	return sourceProfileId === targetProfileId ? deploymentFactoryId(targetProfileId, factory) : targetProfileId
+}
 
 function finalizedBlock(value: unknown, endpoint: string) {
 	if (typeof value !== 'object' || value === null || !('hash' in value) || !('number' in value)) throw new Error(`RPC ${endpoint} returned an invalid finalized block`)
@@ -55,8 +60,8 @@ export async function verifyRetirementCompletionFinality(settings: OperatorSetti
 }
 
 export async function resetPristineStateForDeploymentProfile(state: RuntimeState, expectedProfileId: string, factory: Address | undefined, paused: boolean, wallet: Address | undefined, stateFile: string, verifyCompletionEvidence: (evidence: BoundRetirementCompletionEvidence) => Promise<void>) {
-	if (state.profileId === expectedProfileId) return false
 	if (factory === undefined) throw new Error('Configured deployment is missing its Uniswap V3 factory')
+	if (state.profileId === expectedProfileId && (state.uniswapV3Factory === undefined || state.uniswapV3Factory.toLowerCase() === factory.toLowerCase())) return false
 	if (!isPristineBootstrapState(state)) {
 		const evidence = state.retirement.completionEvidence
 		const override = state.retirement.profileReplacementOverride
@@ -66,7 +71,7 @@ export async function resetPristineStateForDeploymentProfile(state: RuntimeState
 			override !== undefined &&
 			state.retirement.recipient !== undefined &&
 			override.sourceProfileId === state.profileId &&
-			override.targetProfileId === expectedProfileId &&
+			override.targetProfileId === retirementReplacementTargetId(state.profileId, expectedProfileId, factory) &&
 			override.recipient.toLowerCase() === state.retirement.recipient.toLowerCase() &&
 			override.completionBlockHash.toLowerCase() === evidence.blockHash.toLowerCase() &&
 			override.completionBlockNumber === evidence.blockNumber
