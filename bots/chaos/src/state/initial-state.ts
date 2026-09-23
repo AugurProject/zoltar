@@ -44,7 +44,8 @@ export function initialRuntimeState(paused: boolean, wallet: Address | undefined
 	const restoredSchedulerStatus = durableState.scheduler.status
 	const effectivePaused = paused || durableState.safetyPaused
 	let activeSchedulerStatus = restoredSchedulerStatus
-	if (restoredSchedulerStatus === 'running') activeSchedulerStatus = 'running'
+	if (durableState.retirement.status !== 'inactive') activeSchedulerStatus = 'paused'
+	else if (restoredSchedulerStatus === 'running') activeSchedulerStatus = 'running'
 	else if (effectivePaused) activeSchedulerStatus = 'paused'
 	else if (restoredSchedulerStatus === 'paused') activeSchedulerStatus = 'idle'
 	const durableSafetyError = durableState.safetyPaused ? durableState.activities.find(activity => activity.type === 'error' && activity.status === 'failed')?.message : undefined
