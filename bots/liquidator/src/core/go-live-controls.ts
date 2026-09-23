@@ -60,14 +60,15 @@ export function createGoLiveControls({ activePrivateKey, applySigner, locks, per
 				if (typeof rawPrivateKey !== 'string' || typeof rememberSigner !== 'boolean') throw new Error('Signer request requires privateKey and rememberSigner')
 				const candidate = signerCandidate(rawPrivateKey.trim() === '' ? null : rawPrivateKey)
 				const active = activePrivateKey()
+				const current = settings()
 				if (candidate.privateKey?.toLowerCase() !== active?.toLowerCase()) {
-					// Keep an active recovery identity even in dry run or while paused. After an ephemeral-key restart,
-					// restoring the pending sender is safe; staged-outcome recovery only reads coordinator logs.
 					const activeRecovery = active !== undefined && (state.pendingTransactions.length > 0 || state.pendingStagedOperations.length > 0)
 					const differentPendingSender = state.pendingTransactions.some(intent => intent.sender.toLowerCase() !== candidate.address?.toLowerCase())
-					if (activeRecovery || differentPendingSender) throw new Error(PENDING_SIGNER_RECOVERY)
+					// The persisted intents authenticate their sender on load. Only that sender can replace a stale
+					// active signer, and live execution must remain paused until the replacement is complete.
+					const restoringPendingSender = state.pendingTransactions.length > 0 && state.pendingStagedOperations.length === 0 && (!current.runtime.execute || (current.paused && state.paused)) && !differentPendingSender
+					if ((activeRecovery && !restoringPendingSender) || differentPendingSender) throw new Error(PENDING_SIGNER_RECOVERY)
 				}
-				const current = settings()
 				// Validate the configuration that would result, before reservations or durable writes.
 				if (current.runtime.execute) assertLiveExecutionReadiness(rememberSigner ? { ...current, privateKey: candidate.privateKey } : current, candidate.privateKey)
 				const nextSignerLock = await locks.acquireSigner(candidate.address)

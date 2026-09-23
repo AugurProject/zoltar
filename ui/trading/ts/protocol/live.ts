@@ -420,7 +420,7 @@ async function simulateExitWithExpiry(client: WalletClient, configuration: Deplo
 	const {
 		blockNumber,
 		blockHash,
-		result: { simulation, deadline, maximumLongShares },
+		result: { simulation, deadline, longBalance, maximumLongShares },
 	} = await stableSimulation(client, async block => {
 		const deadline = deadlineAtBlock(expiry, block.blockTimestamp)
 		const quote = await client.simulateContract({ abi: pair.abi, address: pairAddress, functionName: 'quoteExactOutput', account, args: [side === 'YES', completeSets], blockHash: block.blockHash })
@@ -437,7 +437,7 @@ async function simulateExitWithExpiry(client: WalletClient, configuration: Deplo
 		const transfer = receiveBasedExitArguments(market, side, completeSets, maximumLongShares, minimumEth, account, deadline)
 		const simulation = await client.simulateContract({ abi: shareTokenAbi, address: market.shareToken, functionName: 'safeBatchTransferFrom', account, args: [account, shareOperationRouter(configuration), transfer.ids, transfer.amounts, transfer.data], blockHash: block.blockHash })
 		void simulation
-		return { simulation: { result: { completeSetShares: completeSets, longSharesSwapped, totalLongShares, invalidInsurance: completeSets, ethOut: estimatedEthOut, feeAmount: quote.result[1] } }, deadline, maximumLongShares }
+		return { simulation: { result: { completeSetShares: completeSets, longSharesSwapped, totalLongShares, invalidInsurance: completeSets, ethOut: estimatedEthOut, feeAmount: quote.result[1] } }, deadline, longBalance, maximumLongShares }
 	})
 	return {
 		blockNumber,
@@ -448,6 +448,7 @@ async function simulateExitWithExpiry(client: WalletClient, configuration: Deplo
 		market,
 		deadline,
 		slippageBps,
+		longBalance,
 		maximumLongShares,
 		minimumEth: minimumAfterSlippage(simulation.result.ethOut, slippageBps),
 	}
@@ -462,7 +463,7 @@ export async function submitFreshExit(client: WalletClient, configuration: Deplo
 	const refreshed = await simulateExitWithExpiry(client, configuration, quote.market, account, quote.side, quote.completeSets, quote.deadline, quote.slippageBps)
 	const pairAddress = quote.market.pair
 	if (pairAddress === undefined) throw new Error('Pair disappeared from the simulated market')
-	if (refreshed.maximumLongShares < quote.maximumLongShares) throw new Error('YES/NO balance no longer covers the approved exit transfer; simulate again')
+	if (refreshed.longBalance < quote.maximumLongShares) throw new Error('YES/NO balance no longer covers the approved exit transfer; simulate again')
 	const maximumLongShares = retainApprovedMaximum(quote.maximumLongShares, refreshed.result.totalLongShares, 'long shares')
 	const minimumEth = retainApprovedMinimum(quote.minimumEth, refreshed.result.ethOut, 'ETH output')
 	const transfer = receiveBasedExitArguments(quote.market, quote.side, quote.completeSets, maximumLongShares, minimumEth, account, quote.deadline)
