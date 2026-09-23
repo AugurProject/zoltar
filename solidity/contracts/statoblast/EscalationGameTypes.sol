@@ -44,6 +44,10 @@ struct OutcomeState {
 	uint256 snapshotLeafCount;
 	bytes32[MERKLE_MOUNTAIN_RANGE_MAX_PEAKS] snapshotPeaks;
 	uint256 inheritedUnresolvedTotalAttoRep;
+	uint256 inheritedConsumedSourceAttoRep;
+	uint256 inheritedConsumedRetainedAttoRep;
+	// Fenwick sums in immutable MMR leaf order, used to compact exported intervals.
+	mapping(uint256 => uint256) consumedPrincipalTree;
 	uint256 currentLeafCount;
 	bytes32[MERKLE_MOUNTAIN_RANGE_MAX_PEAKS] currentPeaks;
 	// The current unresolved carry state after local and inherited deposits are consumed.

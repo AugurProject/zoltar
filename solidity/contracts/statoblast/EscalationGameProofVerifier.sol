@@ -50,6 +50,11 @@ contract EscalationGameProofVerifier {
 	}
 
 	function computeWinningWithdrawal(uint256 depositAmountAttoRep, uint256 cumulativeAmountAttoRep, uint256 bindingCapitalAttoRep, uint256 winningOutcomeBalanceAttoRep, uint256 actualForkThresholdAttoRep, uint256 nonDecisionThresholdAttoRep) external pure returns (uint256 amountToWithdrawAttoRep, uint256 burnAmountAttoRep) {
+		return
+			computeAllocatedWinningWithdrawal(depositAmountAttoRep, depositAmountAttoRep, cumulativeAmountAttoRep, bindingCapitalAttoRep, winningOutcomeBalanceAttoRep, actualForkThresholdAttoRep, nonDecisionThresholdAttoRep);
+	}
+
+	function computeAllocatedWinningWithdrawal(uint256 principalAttoRep, uint256 depositAmountAttoRep, uint256 cumulativeAmountAttoRep, uint256 bindingCapitalAttoRep, uint256 winningOutcomeBalanceAttoRep, uint256 actualForkThresholdAttoRep, uint256 nonDecisionThresholdAttoRep) public pure returns (uint256 amountToWithdrawAttoRep, uint256 burnAmountAttoRep) {
 		uint256 depositStartAttoRep = cumulativeAmountAttoRep - depositAmountAttoRep;
 		uint256 rewardEligibleCapAttoRep = bindingCapitalAttoRep + bindingCapitalAttoRep / EXCESS_REWARD_WINDOW_DIVISOR;
 		uint256 rewardEligiblePrincipalAttoRep =
@@ -57,7 +62,7 @@ contract EscalationGameProofVerifier {
 				? winningOutcomeBalanceAttoRep
 				: rewardEligibleCapAttoRep;
 		if (rewardEligiblePrincipalAttoRep == 0) {
-			amountToWithdrawAttoRep = depositAmountAttoRep;
+			amountToWithdrawAttoRep = principalAttoRep;
 		} else {
 			uint256 eligibleEndAttoRep =
 				cumulativeAmountAttoRep < rewardEligibleCapAttoRep ? cumulativeAmountAttoRep : rewardEligibleCapAttoRep;
@@ -69,7 +74,7 @@ contract EscalationGameProofVerifier {
 				(rewardEligibleDepositAttoRep * ((bindingCapitalAttoRep * 3) / 5)) / rewardEligiblePrincipalAttoRep;
 			burnAmountAttoRep =
 				(rewardEligibleDepositAttoRep * ((bindingCapitalAttoRep * 2) / 5)) / rewardEligiblePrincipalAttoRep;
-			amountToWithdrawAttoRep = depositAmountAttoRep + bonusAttoRep;
+			amountToWithdrawAttoRep = principalAttoRep + bonusAttoRep;
 		}
 		if (actualForkThresholdAttoRep < nonDecisionThresholdAttoRep) {
 			amountToWithdrawAttoRep =

@@ -29,7 +29,7 @@ import {
 const items = (abi: readonly unknown[]): readonly unknown[] => abi
 const event = (abi: readonly { type: string; name?: string }[], name: string): unknown => abi.find(item => item.type === 'event' && item.name === name)
 const generated = (value: unknown): unknown => value
-const delegatedEscalationGameViews = new Set(['applyInheritedClaimRetention', 'applyInheritedSourceStorageBasis'])
+const delegatedEscalationGameViews = new Set(['getInheritedClaimAllocation'])
 const erc20Functions = new Set(['allowance', 'approve', 'balanceOf', 'decimals', 'name', 'symbol', 'totalSupply', 'transfer', 'transferFrom'])
 
 describe('generated bot contract ABIs', () => {
