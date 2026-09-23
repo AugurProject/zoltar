@@ -3181,6 +3181,87 @@ describe('Statoblast: fork migration', () => {
 			approximatelyEqual(repairedCollateral, parentSettlementCollateralAtForkAttoEth, tickRoundingTolerance, 'partial migration plus truth auction should reconstruct the fork collateral snapshot up to bounded tick-price rounding')
 		})
 
+		test('inherited financial installation rejects unfunded collateral and preserves accrued fees', async () => {
+			await createCompleteSet(client, securityPoolAddresses.securityPool, PRICE_PRECISION)
+			await mockWindow.advanceTime(DAY)
+			await updateSettlementCollateral(client, securityPoolAddresses.securityPool)
+			const collateral = await getSettlementCollateralAttoEth(client, securityPoolAddresses.securityPool)
+			const fees = await getTotalAccruedFees(client, securityPoolAddresses.securityPool)
+			const balance = await getETHBalance(client, securityPoolAddresses.securityPool)
+			const capacity = await getTotalCapacityOwnershipAttoRep(client, securityPoolAddresses.securityPool)
+			assert.ok(fees > 0n, 'the fixture must reserve accrued fee liabilities')
+			const install = (sender: typeof client, amount: bigint) => writeContractAndWait(sender, () => sender.writeContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: securityPoolAddresses.securityPool, functionName: 'setPoolFinancials', args: [amount, capacity, capacity, 0n] }))
+			await assert.rejects(install(client, collateral), /Only forker/)
+			const forkerAddress = getInfraContractAddresses().securityPoolForker
+			await mockWindow.impersonateAccount(forkerAddress)
+			await mockWindow.setBalance(forkerAddress, PRICE_PRECISION)
+			const forkerClient = createWriteClient(mockWindow, BigInt(forkerAddress))
+			await assert.rejects(install(forkerClient, balance + 1n), /Collateral unfunded/)
+			await assert.rejects(install(forkerClient, balance), /Collateral unfunded/, 'accrued fees cannot fund inherited collateral')
+			strictEqualTypeSafe(await getSettlementCollateralAttoEth(client, securityPoolAddresses.securityPool), collateral)
+			strictEqualTypeSafe(await getTotalAccruedFees(client, securityPoolAddresses.securityPool), fees)
+			strictEqualTypeSafe(await getTotalCapacityOwnershipAttoRep(client, securityPoolAddresses.securityPool), capacity)
+		})
+
+		for (const scenario of ['full', 'partial-purchased', 'partial-empty', 'fixed'] as const) {
+			test(`an inactive child finalizes over-capacity collateral and permits exit: ${scenario}`, async () => {
+				const otherVault = createWriteClient(mockWindow, TEST_ADDRESSES[1])
+				await approveAndDepositRepToVault(otherVault, repDeposit, questionId)
+				await setVaultCapacityFixture(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, client.account.address, repDeposit / 4n)
+				await setVaultCapacityFixture(otherVault, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, otherVault.account.address, repDeposit / 4n)
+				await createCompleteSet(client, securityPoolAddresses.securityPool, PRICE_PRECISION)
+				const shares = await getShareTokenSupplyAttoShares(client, securityPoolAddresses.securityPool)
+				const capacity = await getTotalCapacityOwnershipAttoRep(client, securityPoolAddresses.securityPool)
+				if (scenario === 'fixed') {
+					await mockWindow.setTime((await getQuestionEndDate(client, questionId)) + 1n)
+					await approveToken(client, addressString(GENESIS_REPUTATION_TOKEN), getZoltarAddress())
+					await forkUniverse(client, genesisUniverse, questionId)
+					await initiateSecurityPoolFork(client, securityPoolAddresses.securityPool)
+				} else {
+					await triggerExternalForkForSecurityPool(undefined, `over-capacity finalization ${scenario}`)
+				}
+				await migrateVault(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
+				if (scenario === 'full' || scenario === 'fixed') await migrateVault(otherVault, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
+				const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
+				const child = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, statoblastSecurityMultiplierBps)
+				const migratedCollateral = await getETHBalance(client, child.securityPool)
+				await mockWindow.advanceTime(8n * 7n * DAY + DAY)
+				if (scenario === 'partial-purchased' || scenario === 'partial-empty') {
+					await startTruthAuction(client, child.securityPool)
+					strictEqualTypeSafe(await getSystemState(client, child.securityPool), SystemState.ForkTruthAuction)
+					if (scenario === 'partial-purchased') {
+						const parentData = await getSecurityPoolForkerForkData(client, securityPoolAddresses.securityPool)
+						await participateAuction(otherVault, child.truthAuction, parentData.auctionableAttoRepAtFork / 2n, await getEthRaiseCapAttoEth(client, child.truthAuction))
+					}
+					await mockWindow.advanceTime(7n * DAY + DAY)
+				}
+				// Use an accepted OpenOracle report on the inactive child, funded with
+				// normally split REP. No oracle storage or callback impersonation.
+				await approveToken(client, addressString(GENESIS_REPUTATION_TOKEN), getZoltarAddress())
+				await addRepToMigrationBalance(client, genesisUniverse, repDeposit * 3n)
+				await splitMigrationRep(client, genesisUniverse, repDeposit * 3n, [QuestionOutcome.Yes])
+				await manipulatePriceOracle(client, mockWindow, child.priceOracleManagerAndOperatorQueuer, repDeposit * 2n)
+				const acceptedPrice = await getLastPrice(client, child.priceOracleManagerAndOperatorQueuer)
+				assert.ok((capacity * PRICE_PRECISION) / (acceptedPrice * 2n) < migratedCollateral, 'the live price must put inherited collateral over capacity')
+				await assert.rejects(redeemCompleteSet(client, child.securityPool, shares), /Pool inactive/)
+				if (scenario === 'full' || scenario === 'fixed') await startTruthAuction(client, child.securityPool)
+				else await finalizeTruthAuction(client, child.securityPool)
+				strictEqualTypeSafe(await getSystemState(client, child.securityPool), SystemState.Operational)
+				strictEqualTypeSafe(await getTotalCapacityOwnershipAttoRep(client, child.securityPool), capacity, 'finalization must not fabricate capacity')
+				strictEqualTypeSafe(await getShareTokenSupplyAttoShares(client, child.securityPool), shares, 'all inherited share entitlements must remain reserved')
+				const collateral = await getSettlementCollateralAttoEth(client, child.securityPool)
+				strictEqualTypeSafe(collateral + (await getTotalAccruedFees(client, child.securityPool)), await getETHBalance(client, child.securityPool), 'installed collateral and fees must match actual funding')
+				if (scenario === 'partial-empty') strictEqualTypeSafe(collateral, migratedCollateral, 'an empty auction must preserve all received ETH')
+				await assert.rejects(createCompleteSet(client, child.securityPool, 1n), scenario === 'fixed' ? /Settlement unavailable/ : /Over capacity/)
+				for (const outcome of [QuestionOutcome.Invalid, QuestionOutcome.Yes, QuestionOutcome.No]) await migrateShares(client, securityPoolAddresses.shareToken, genesisUniverse, outcome, [QuestionOutcome.Yes])
+				if (scenario === 'fixed') await redeemShares(client, child.securityPool)
+				else await redeemCompleteSet(client, child.securityPool, shares)
+				strictEqualTypeSafe(await getShareTokenSupplyAttoShares(client, child.securityPool), 0n)
+				strictEqualTypeSafe(await getSettlementCollateralAttoEth(client, child.securityPool), 0n, 'holders must exit without waiting for market-price recovery')
+				strictEqualTypeSafe(await getLastPrice(client, child.priceOracleManagerAndOperatorQueuer), acceptedPrice)
+			})
+		}
+
 		test('directly forking the pool question preserves child branch semantics', async () => {
 			const endTime = await getQuestionEndDate(client, questionId)
 			await mockWindow.setTime(endTime + 10000n)
@@ -3444,10 +3525,13 @@ describe('Statoblast: fork migration', () => {
 				nullifierSiblings: new SparseNullifierTree().getProof(0n),
 			})
 			const canonicalSettlementSnapshot = await mockWindow.anvilSnapshot()
+			const packedClaimState = await mockWindow.request({ method: 'eth_getStorageAt', params: [yesEscalationGame, formatStorageSlot(447n), 'latest'] })
+			if (typeof packedClaimState !== 'string') throw new Error('Missing packed claim state')
+			const divergentClaimState = (BigInt(packedClaimState) & ~(255n << 160n)) | (BigInt(QuestionOutcome.No) << 160n)
 			await mockWindow.addStateOverrides({
 				[yesEscalationGame]: {
 					stateDiff: {
-						[formatStorageSlot(441n)]: BigInt(QuestionOutcome.No),
+						[formatStorageSlot(447n)]: divergentClaimState,
 					},
 				},
 			})

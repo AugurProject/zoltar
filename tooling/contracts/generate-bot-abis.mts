@@ -17,7 +17,7 @@ const statoblast = (contract: string, functions?: readonly string[]): ContractSe
 const trading = (contract: string): ContractSelection => ({ artifactSource: `contracts/trading/${contract}.sol`, contract })
 const root = (contract: string, functions?: readonly string[]): ContractSelection => ({ artifactSource: `contracts/${contract}.sol`, contract, ...(functions === undefined ? {} : { functions }) })
 const uniswapSeeder = (contract: string): ContractSelection => ({ artifactSource: 'contracts/chaos/GenesisUniswapV3Seeder.sol', contract })
-const escalationGame = [statoblast('EscalationGame'), statoblast('EscalationGameClaimDelegate', ['applyInheritedClaimRetention', 'applyInheritedSourceStorageBasis'])]
+const escalationGame = [statoblast('EscalationGame'), statoblast('EscalationGameClaimDelegate', ['getInheritedClaimAllocation'])]
 
 /** One generated module in bots/shared serves every bot; names follow the contract names so bots alias locally if they prefer shorter ones. */
 const SHARED_ABI_EXPORTS: readonly AbiExport[] = [

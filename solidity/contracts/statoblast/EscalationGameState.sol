@@ -120,8 +120,8 @@ abstract contract EscalationGameState is EscalationGameStorage, IEscalationGameE
 		totalLocalUnresolvedAttoRep -= amountAttoRep;
 	}
 
-	function _consumeUnresolvedRepForClaimOwners(address bundleId, uint8 outcomeIndex, uint256 amountAttoRep) internal {
-		_delegateDepositCall(abi.encodeCall(EscalationGameDepositDelegate.consumeUnresolvedRepForClaimOwners, (bundleId, outcomeIndex, amountAttoRep)));
+	function _consumeUnresolvedRepForClaimOwners(address bundleId, uint8 outcomeIndex, uint256 amountAttoRep, uint256 leafIndex) internal {
+		_delegateDepositCall(abi.encodeCall(EscalationGameDepositDelegate.consumeUnresolvedRepForClaimOwners, (bundleId, outcomeIndex, amountAttoRep, leafIndex)));
 	}
 
 	function _safeTransferRep(address receiver, uint256 amountAttoRep) internal {
