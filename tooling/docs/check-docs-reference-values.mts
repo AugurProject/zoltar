@@ -6,11 +6,11 @@ import { diagramGraphSpecs } from '../../docs/charts/diagramModels'
 import type { DiagramGraphNode } from '../../docs/charts/diagramTypes'
 import { getMainnetProtocolConfig } from '../contracts/protocol-config.ts'
 import { walkFiles } from '../repo/walk.mts'
+import { assertAccountingExampleOwnership } from './check-docs-example-ownership.mts'
 import { htmlToDocumentationText } from './docs-html-text.mts'
 import { repositorySourceUrl } from './repository-source-links.mts'
 
 const normalizeHtmlSource = (source: string): string => source.replaceAll(/<\/([a-z][\w:-]*)\s+>/gi, '</$1>')
-const html = normalizeHtmlSource(await readFile('docs/explanation/escalation-game.html', 'utf8'))
 const invariantsHtml = normalizeHtmlSource(await readFile('docs/reference/invariants.html', 'utf8'))
 const liquidationHtml = normalizeHtmlSource(await readFile('docs/explanation/liquidations.html', 'utf8'))
 const openOracleIntegration = normalizeHtmlSource(await readFile('docs/reference/open-oracle.html', 'utf8'))
@@ -18,7 +18,7 @@ const whitepaperStatoblast = normalizeHtmlSource(await readFile('docs/explanatio
 const diagramModelsSource = await readFile('docs/charts/diagramModels.ts', 'utf8')
 const coordinatorData = await readFile('docs/data/open-oracle-coordinator.json', 'utf8')
 const compiledContractArtifacts: unknown = JSON.parse(await readFile('solidity/artifacts/Contracts.json', 'utf8'))
-const operatorReference = htmlToDocumentationText(await readFile('docs/reference/operator-guardrails.html', 'utf8'))
+const operatorReference = (await Promise.all(['docs/reference/operator-guardrails.html', 'docs/reference/contract-inventory.html'].map(async pagePath => htmlToDocumentationText(await readFile(pagePath, 'utf8'))))).join('\n')
 const contractInteractionReference = (await Promise.all(['docs/reference/contracts.html', ...[...new Bun.Glob('docs/reference/contracts/*.html').scanSync('.')].toSorted()].map(async pagePath => htmlToDocumentationText(await readFile(pagePath, 'utf8'))))).join('\n')
 const contractReferenceGenerator = `${await readFile('tooling/docs/generate-contract-interaction-reference.mts', 'utf8')}\n${await readFile('tooling/docs/contract-reference-metadata.mts', 'utf8')}`
 const escalationGame = await readFile('solidity/contracts/statoblast/EscalationGame.sol', 'utf8')
@@ -67,7 +67,7 @@ const escalationGameForkThresholdTest = await readFile('solidity/ts/tests/escala
 const escalationGameBytecodeSnapshot = await readFile('solidity/ts/tests/fixtures/escalationGameBytecode.snapshot.json', 'utf8')
 
 await assertNoNarrativeDocumentationSnapshots()
-assertEscalationContinuationReference()
+await assertAccountingExampleOwnership()
 assertSystemDecisionForkTriggers()
 assertDisputeStakedReplayIdentityDocs()
 assertAggregateEscalationContinuationDocs()
@@ -91,7 +91,7 @@ assertSolidityFunctionReader()
 await assertProductionSolidityInventory()
 
 async function assertNoNarrativeDocumentationSnapshots(): Promise<void> {
-	const validatorPaths = ['tooling/docs/check-docs-examples.mts', 'tooling/docs/check-docs-reference-values.mts']
+	const validatorPaths = ['tooling/docs/check-docs-examples.mts', 'tooling/docs/check-docs-example-ownership.mts', 'tooling/docs/check-docs-reference-values.mts']
 	for (const validatorPath of validatorPaths) {
 		const validatorSource = await readFile(validatorPath, 'utf8')
 		assert.deepEqual(findNarrativeDocumentationAssertions(validatorSource, validatorPath), [], `${validatorPath} must validate documentation structure, formulas, generated data, or executable behavior without freezing narrative prose`)
@@ -100,9 +100,11 @@ async function assertNoNarrativeDocumentationSnapshots(): Promise<void> {
 	const paraphraseFriendlyFixture = `assert.match(html, /id="purpose"/)`
 	const formulaFixture = `assert.match(openOracleIntegration, /data-source="amount = principal \\cdot rate"/)`
 	const narrativeFixture = `assert.match(html, /The mechanism always follows this exact sentence/)`
+	const suffixedNarrativeFixture = `assert.match(feesHtml, /the fee starts low and rises/)`
 	assert.deepEqual(findNarrativeDocumentationAssertions(paraphraseFriendlyFixture, 'paraphrase-fixture.mts'), [])
 	assert.deepEqual(findNarrativeDocumentationAssertions(formulaFixture, 'formula-fixture.mts'), [])
 	assert.equal(findNarrativeDocumentationAssertions(narrativeFixture, 'narrative-fixture.mts').length, 1)
+	assert.equal(findNarrativeDocumentationAssertions(suffixedNarrativeFixture, 'suffixed-narrative-fixture.mts').length, 1)
 }
 
 function findNarrativeDocumentationAssertions(source: string, sourcePath: string): string[] {
@@ -128,7 +130,9 @@ function findNarrativeDocumentationAssertions(source: string, sourcePath: string
 function isStaticDocumentationExpression(expression: ts.Expression | undefined): boolean {
 	if (expression === undefined) return false
 	if (ts.isIdentifier(expression)) {
-		return new Set(['html', 'invariantsHtml', 'liquidationHtml', 'openOracleIntegration', 'whitepaperStatoblast', 'operatorReference', 'contractInteractionReference', 'openOracleHtml', 'auctionDesignHtml', 'statoblastHtml', 'requestCostEquation']).has(expression.text) || /(?:Entry|Row)$/.test(expression.text)
+		return (
+			new Set(['html', 'invariantsHtml', 'liquidationHtml', 'openOracleIntegration', 'whitepaperStatoblast', 'operatorReference', 'contractInteractionReference', 'openOracleHtml', 'auctionDesignHtml', 'statoblastHtml', 'requestCostEquation']).has(expression.text) || /(?:Entry|Row|Html|Examples)$/.test(expression.text)
+		)
 	}
 	return ts.isCallExpression(expression) && ts.isIdentifier(expression.expression) && expression.expression.text === 'blockWithId'
 }
@@ -147,10 +151,6 @@ function isNarrativeDocumentationIncludes(expression: ts.Expression | undefined,
 	const argumentText = argument.getText(sourceFile)
 	if (/^[`'"][A-Za-z_]\w*\([^`'"\n]*\)[`'"]$/.test(argumentText) || argumentText.includes('${') || argumentText.includes('/')) return false
 	return /\s/.test(argumentText.slice(1, -1))
-}
-
-function assertEscalationContinuationReference(): void {
-	assert.match(html, /href="\.\.\/reference\/merkle-mountain-range\.html"/)
 }
 
 function assertSystemDecisionForkTriggers(): void {
@@ -298,7 +298,7 @@ function assertNonDecisionLifecycleDocs(): void {
 		.filter(member => member.length > 0)
 	assert.deepEqual(enumMembers, ['None', 'Local', 'InheritedThresholdTie'])
 	assert.match(securityPoolForker, /function getQuestionOutcome\([\s\S]*if \(data\.fixedQuestionOutcomePlusOne > 0\)[\s\S]*return BinaryOutcomes\.BinaryOutcome\(data\.fixedQuestionOutcomePlusOne - 1\)/)
-	assert.match(escalationGameCalculations, /function getFinalQuestionResolution\(\)[\s\S]*if \(block\.timestamp <= getEscalationGameEndDate\(\)\) return BinaryOutcomes\.BinaryOutcome\.None/)
+	assert.match(escalationGameCalculations, /function getFinalQuestionResolution\(\)[\s\S]*uint256 endDate = getEscalationGameEndDate\(\);\s*if \(block\.timestamp <= endDate\) return BinaryOutcomes\.BinaryOutcome\.None/)
 }
 
 function assertAuditFindingRemediations(): void {
