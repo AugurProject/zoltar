@@ -67,8 +67,8 @@ export const contractSafetyPolicy = {
 				sourcePath: 'contracts/statoblast/EscalationGame.sol',
 				contractName: 'EscalationGame',
 			},
-			24_503,
-			'The game adds fork-aware finality to preserve unresolved carry during delayed migration, sharing the fork-time lookup with payout calculation to bound the 75-byte runtime increase; no further runtime growth is permitted.',
+			24_576,
+			'The merged game preserves continuation response-period admission and fork-aware finality at the EIP-170 limit; the preview reads its outcome balance once, and no further runtime growth is permitted.',
 		),
 		runtimeBudget(
 			{
@@ -101,8 +101,8 @@ export const contractSafetyPolicy = {
 				sourcePath: 'contracts/statoblast/factories/EscalationGameFactory.sol',
 				contractName: 'EscalationGameFactory',
 			},
-			46_949,
-			'The factory embeds fork-aware finality and inherited threshold-tie reconciliation after auction haircuts; no further growth is permitted.',
+			47_282,
+			'The factory embeds the merged game with continuation admission, fork-aware finality, and inherited tie reopening after auction haircuts; no further initcode growth is permitted.',
 		),
 	] satisfies readonly BytecodeBudget[],
 	exactLayoutPairs: [
