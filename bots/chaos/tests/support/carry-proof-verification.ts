@@ -22,6 +22,17 @@ function occupiedPeakCount(leafCount: bigint) {
 	return count
 }
 
+function containingPeak(leafCount: bigint, leafIndex: bigint) {
+	let peakStartIndex = 0n
+	for (let height = CARRY_MMR_MAXIMUM_PEAKS - 1; height >= 0; height -= 1) {
+		if (((leafCount >> BigInt(height)) & 1n) === 0n) continue
+		const nextPeakStartIndex = peakStartIndex + (1n << BigInt(height))
+		if (leafIndex < nextPeakStartIndex) return { height: BigInt(height), peakStartIndex }
+		peakStartIndex = nextPeakStartIndex
+	}
+	throw new Error('Carry proof leaf has no occupied peak')
+}
+
 export function computeMerkleMountainRangeRootFromProof(leafHash: Hash, leafCountValue: string, proof: MerkleMountainRangeProof): Hash {
 	const leafCount = BigInt(leafCountValue)
 	if (leafCount === 0n || leafCount >= MAXIMUM_CARRY_LEAF_COUNT) throw new Error('Carry proof leaf count is outside the MMR capacity')
@@ -29,7 +40,10 @@ export function computeMerkleMountainRangeRootFromProof(leafHash: Hash, leafCoun
 	if (peakHeight >= BigInt(CARRY_MMR_MAXIMUM_PEAKS)) throw new Error('Carry proof peak height is too high')
 	if (((leafCount >> peakHeight) & 1n) !== 1n) throw new Error('Carry proof selected peak is absent')
 	const leafIndex = BigInt(proof.leafIndex)
-	if (leafIndex >= 1n << peakHeight) throw new Error('Carry proof leaf index is outside its peak')
+	if (leafIndex >= leafCount) throw new Error('Carry proof global leaf index is outside the MMR')
+	const { height: leafPeakHeight, peakStartIndex } = containingPeak(leafCount, leafIndex)
+	if (leafPeakHeight !== peakHeight) throw new Error('Carry proof peak height does not contain its global leaf index')
+	const peakLeafOffset = leafIndex - peakStartIndex
 	const expectedLength = Number(peakHeight) + occupiedPeakCount(leafCount) - 1
 	if (proof.merkleMountainRangeSiblings.length !== expectedLength) throw new Error(`Carry proof has ${proof.merkleMountainRangeSiblings.length.toString()} siblings instead of ${expectedLength.toString()}`)
 
@@ -37,7 +51,7 @@ export function computeMerkleMountainRangeRootFromProof(leafHash: Hash, leafCoun
 	for (let level = 0; level < Number(peakHeight); level += 1) {
 		const sibling = proof.merkleMountainRangeSiblings[level]
 		if (sibling === undefined) throw new Error(`Carry proof path sibling ${level.toString()} is missing`)
-		peakRoot = ((leafIndex >> BigInt(level)) & 1n) === 0n ? hashCarryParent(peakRoot, sibling) : hashCarryParent(sibling, peakRoot)
+		peakRoot = ((peakLeafOffset >> BigInt(level)) & 1n) === 0n ? hashCarryParent(peakRoot, sibling) : hashCarryParent(sibling, peakRoot)
 	}
 	const peaks: Hash[] = []
 	let siblingIndex = Number(peakHeight)

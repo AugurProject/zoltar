@@ -75,6 +75,8 @@ function liquidityQuote(amount: bigint) {
 		expectedLiquidity: amount,
 		expectedYes: 0n,
 		expectedNo: 0n,
+		expectedYesDeposit: amount,
+		expectedNoDeposit: amount,
 	}
 }
 

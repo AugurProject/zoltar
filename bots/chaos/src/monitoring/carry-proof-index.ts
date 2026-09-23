@@ -49,7 +49,7 @@ interface SparseNullifierState {
 }
 
 interface MerkleMountainRangeProof {
-	/** Offset within the selected peak, not the global MMR slot. */
+	/** Global MMR slot; the verifier derives the offset within the selected peak. */
 	leafIndex: string
 	/** The Solidity field is named peakIndex, but its value is the selected peak height. */
 	merkleMountainRangePeakIndex: string
@@ -249,7 +249,7 @@ export function createMerkleMountainRangeProof(hashes: readonly Hash[], globalLe
 		siblings.push(peak)
 	}
 	return {
-		leafIndex: selected.relativeLeafIndex.toString(),
+		leafIndex: globalLeafIndex.toString(),
 		merkleMountainRangePeakIndex: selected.height.toString(),
 		merkleMountainRangeSiblings: siblings,
 	}
