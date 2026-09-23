@@ -22,12 +22,10 @@ export async function latestBlockIdentity(client: Pick<WalletClient, 'getBlock'>
 	return { blockNumber: block.number, blockHash: block.hash, blockTimestamp: block.timestamp }
 }
 
+// Every read inside `simulate` must pin `block.blockHash`, so a block landing mid-simulation cannot mix states.
 export async function stableSimulation<T>(client: Pick<WalletClient, 'getBlock'>, simulate: (block: Readonly<{ blockNumber: bigint; blockHash: Hash; blockTimestamp: bigint }>) => Promise<T>) {
-	const before = await latestBlockIdentity(client)
-	const result = await simulate(before)
-	const after = await latestBlockIdentity(client)
-	if (after.blockNumber !== before.blockNumber || after.blockHash !== before.blockHash) throw new Error('Block changed during simulation; simulate again')
-	return { ...before, result }
+	const block = await latestBlockIdentity(client)
+	return { ...block, result: await simulate(block) }
 }
 
 export type TransactionExpiry = bigint | Readonly<{ validityMinutes: bigint }>
@@ -40,11 +38,6 @@ export function deadlineAtBlock(expiry: TransactionExpiry, blockTimestamp: bigin
 	if (typeof expiry === 'bigint') return expiry
 	requireTransactionValidityMinutes(expiry.validityMinutes)
 	return blockTimestamp + expiry.validityMinutes * 60n
-}
-
-export async function requireQuoteBlock(client: Pick<WalletClient, 'getBlock'>, quote: Readonly<{ blockNumber: bigint; blockHash: Hash }>) {
-	const current = await latestBlockIdentity(client)
-	if (current.blockNumber !== quote.blockNumber || current.blockHash !== quote.blockHash) throw new Error('Quote is stale; simulate again before submission')
 }
 
 export function retainApprovedMinimum(approved: bigint, refreshed: bigint, label: string) {
