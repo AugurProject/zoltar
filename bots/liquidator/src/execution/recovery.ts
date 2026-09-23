@@ -7,6 +7,7 @@ import { availableSettledValues, settledQuorumValue } from '@zoltar/bot-shared/m
 import { ConnectivityDegradedError } from '@zoltar/bot-shared/monitoring/resilience'
 import { DEFAULT_TRANSACTION_VALIDITY_BLOCKS, submitSignedTransaction } from '@zoltar/bot-shared/execution/transaction-submission'
 import type { OperatorSettings } from '#config/settings'
+import { isPoolExecutionEligible } from '#core/fork-migration'
 import { stagedOperationOutcome } from '#core/staged-outcome'
 import { ambiguousRecoveryAction, PRIVATE_INTENT_FINALITY_BLOCKS, requireRecoveredTransactionSuccess } from '#core/cycle-control'
 import { securityPoolAbi, securityPoolFactoryAbi } from '@zoltar/bot-shared/contracts/abi'
@@ -203,6 +204,25 @@ export async function recoverPendingTransactions(
 		if (block.number === undefined || block.hash === undefined || block.baseFeePerGas === undefined) throw new ConnectivityDegradedError('Recovery block is missing canonical identity or base fee')
 		if (intent.lastValidBlockNumber !== undefined && block.number >= intent.lastValidBlockNumber) await requireReconciliation('The calldata validity deadline has expired')
 		if (transaction.maxFeePerGas === undefined || transaction.maxFeePerGas < block.baseFeePerGas) await requireReconciliation('The signed fee ceiling is below the current base fee; envelope renewal cannot raise it')
+		if (intent.kind === 'fees') {
+			const address = transaction.to
+			if (address === undefined) throw new Error('Fee redemption transaction is missing its pool address')
+			const feeState = await settledQuorumValue(
+				`fee redemption eligibility for ${intent.hash}`,
+				clients.map(async ({ client, endpoint }) => {
+					const [vault, systemState, universeId] = await Promise.all([
+						client.readContract({ abi: securityPoolAbi, address, functionName: 'securityVaults', args: [intent.sender], blockNumber: block.number }),
+						client.readContract({ abi: securityPoolAbi, address, functionName: 'systemState', blockNumber: block.number }),
+						client.readContract({ abi: securityPoolAbi, address, functionName: 'universeId', blockNumber: block.number }),
+					])
+					return { endpoint, value: { claimableFeesAttoEth: vault[2], systemState, universeId } }
+				}),
+				settings.connectivity.rpcQuorum,
+			)
+			if (!isPoolExecutionEligible({ selected: settings.selectedPools.some(pool => pool.toLowerCase() === address.toLowerCase()), approvedUniverse: settings.approvedUniverses.includes(feeState.universeId), systemState: feeState.systemState }))
+				await requireReconciliation('Fee redemption pool is no longer eligible under current universe and pool policy')
+			if (feeState.claimableFeesAttoEth === 0n || feeState.claimableFeesAttoEth < settings.strategy.redeemFeesAboveAttoEth) await requireReconciliation('Fee redemption no longer meets the positive claimable-fee threshold')
+		}
 		if (!recoveredIntentCanBeResubmitted(intent)) throw new Error(`Price-dependent transaction ${intent.hash} cannot be resubmitted without fresh market evidence`)
 		if (wallet.account.signMessage === undefined) throw new Error('Execution signer cannot authenticate transaction recovery')
 		if (isStopping()) return true

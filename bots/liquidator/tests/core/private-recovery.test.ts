@@ -2,7 +2,7 @@ import { expect, test } from 'bun:test'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { createWalletClient, defineChain, encodeFunctionData, privateKeyToAccount } from '@zoltar/bot-shared/ethereum'
+import { createWalletClient, defineChain, encodeAbiParameters, encodeFunctionData, privateKeyToAccount } from '@zoltar/bot-shared/ethereum'
 import { custom } from '@zoltar/bot-shared/ethereum/rpc-transport'
 import { securityPoolAbi, securityPoolFactoryAbi } from '@zoltar/bot-shared/contracts/abi'
 import { prepareSignedTransaction } from '@zoltar/bot-shared/execution/transaction-submission'
@@ -25,7 +25,7 @@ async function fixture(kind: 'fees' | 'deployment' = 'fees') {
 			? encodeFunctionData({ abi: securityPoolAbi, functionName: 'redeemFees', args: [account.address] })
 			: encodeFunctionData({ abi: securityPoolFactoryAbi, functionName: 'deployOriginSecurityPool', args: [desired.universeId, desired.questionId, desired.statoblastSecurityMultiplierBps, desired.initialReportPriorityFeeAttoEthPerGas] })
 	const signed = await prepareSignedTransaction({ baseFeePerGas: 1n, blockNumber: 100n, chainId: settings.network.chainId, data, from: account.address, gasEstimate: 250_000n, nonce: 0n, signTransaction: account.signTransaction, to: target })
-	const control = { head: 140n, nonce: 0n, fail: false, simulationFails: false, baseFee: 1n, receipt: false, advanceDuringSimulation: 0n }
+	const control = { head: 140n, nonce: 0n, fail: false, simulationFails: false, baseFee: 1n, receipt: false, advanceDuringSimulation: 0n, claimableFees: 10n ** 18n, systemState: 0n, universeId: 0n }
 	const broadcasts: unknown[] = []
 	const persistedWindows: string[] = []
 	const server = Bun.serve({
@@ -44,6 +44,10 @@ async function fixture(kind: 'fees' | 'deployment' = 'fees') {
 			else if (method === 'eth_blockNumber') result = `0x${control.head.toString(16)}`
 			else if (method === 'eth_getBlockByNumber') result = { number: Reflect.get(payload, 'params')?.[0] === 'latest' ? `0x${control.head.toString(16)}` : Reflect.get(payload, 'params')?.[0], hash: `0x${'11'.repeat(32)}`, baseFeePerGas: `0x${control.baseFee.toString(16)}`, timestamp: '0x1', transactions: [] }
 			else if (method === 'eth_call') {
+				const data = Reflect.get(payload, 'params')?.[0]?.data
+				if (data === encodeFunctionData({ abi: securityPoolAbi, functionName: 'securityVaults', args: [account.address] })) return Response.json({ id, jsonrpc: '2.0', result: encodeAbiParameters([{ type: 'uint256' }, { type: 'uint256' }, { type: 'uint256' }, { type: 'uint256' }], [0n, 0n, control.claimableFees, 0n]) })
+				if (data === encodeFunctionData({ abi: securityPoolAbi, functionName: 'systemState' })) return Response.json({ id, jsonrpc: '2.0', result: encodeAbiParameters([{ type: 'uint256' }], [control.systemState]) })
+				if (data === encodeFunctionData({ abi: securityPoolAbi, functionName: 'universeId' })) return Response.json({ id, jsonrpc: '2.0', result: encodeAbiParameters([{ type: 'uint256' }], [control.universeId]) })
 				if (control.simulationFails) return Response.json({ id, jsonrpc: '2.0', error: { code: -32000, message: 'execution reverted' } })
 				control.head += control.advanceDuringSimulation
 				result = '0x'
@@ -248,6 +252,63 @@ test('derives the future window after a slow simulation advances the chain', asy
 		await recoverPendingTransactions(f.settings, f.wallet, f.state)
 		expect(f.persistedWindows).toEqual(['195'])
 	} finally {
+		await f.close()
+	}
+})
+
+for (const reason of ['zero fees', 'below threshold', 'forked pool', 'unapproved universe'] as const)
+	test(`retains fee redemption without broadcasting after ${reason}`, async () => {
+		const f = await fixture()
+		try {
+			if (reason === 'zero fees') {
+				f.control.claimableFees = 0n
+				f.settings.strategy.redeemFeesAboveAttoEth = 0n
+			}
+			if (reason === 'below threshold') f.control.claimableFees = 1n
+			if (reason === 'forked pool') f.control.systemState = 1n
+			if (reason === 'unapproved universe') f.control.universeId = 1n
+			await expect(recoverPendingTransactions(f.settings, f.wallet, f.state)).rejects.toThrow('Fee redemption')
+			expect(f.broadcasts).toHaveLength(0)
+			expect(f.state.pendingTransactions).toHaveLength(1)
+			expect((await loadDurableState(f.settings.runtime.stateFile, f.settings.network.chainId)).pendingTransactions[0]?.reconciliationReason).toContain('Fee redemption')
+		} finally {
+			await f.close()
+		}
+	})
+
+test('allows fee redemption exactly at a positive configured threshold', async () => {
+	const f = await fixture()
+	try {
+		f.control.claimableFees = f.settings.strategy.redeemFeesAboveAttoEth
+		await recoverPendingTransactions(f.settings, f.wallet, f.state)
+		expect(f.broadcasts).toHaveLength(1)
+	} finally {
+		await f.close()
+	}
+})
+
+test('requires quorum agreement on claimable fees before replay', async () => {
+	const f = await fixture()
+	const secondary = Bun.serve({
+		hostname: '127.0.0.1',
+		port: 0,
+		async fetch(request) {
+			const payload = await request.json()
+			const response = await fetch(f.settings.connectivity.readRpcUrl, { method: 'POST', body: JSON.stringify(payload) })
+			const body = await response.json()
+			if (Reflect.get(payload, 'method') === 'eth_call' && Reflect.get(payload, 'params')?.[0]?.data === encodeFunctionData({ abi: securityPoolAbi, functionName: 'securityVaults', args: [f.wallet.account.address] }))
+				body.result = encodeAbiParameters([{ type: 'uint256' }, { type: 'uint256' }, { type: 'uint256' }, { type: 'uint256' }], [0n, 0n, 0n, 0n])
+			return Response.json(body)
+		},
+	})
+	try {
+		f.settings.connectivity.quorumRpcUrls = [secondary.url.toString()]
+		f.settings.connectivity.rpcQuorum = 2
+		await expect(recoverPendingTransactions(f.settings, f.wallet, f.state)).rejects.toThrow('RPC disagreement')
+		expect(f.broadcasts).toHaveLength(0)
+		expect(f.state.pendingTransactions[0]?.maxBlockNumber).toBe(125n)
+	} finally {
+		secondary.stop(true)
 		await f.close()
 	}
 })
