@@ -71,7 +71,7 @@ async function describeTransaction(client: WriteClient, preview: TransactionRequ
 	return details
 }
 
-export function createReviewedClient(client: WriteClient, validate: () => Promise<void> = async () => undefined, signal = getTransactionReviewSignal()): WriteClient {
+export function createReviewedClient(client: WriteClient, validate: () => Promise<void> = async () => undefined, signal = getTransactionReviewSignal(), skipAppReview = false): WriteClient {
 	const controller = createTransactionStepController(signal)
 	const environment = createActiveEnvironmentGuard()
 	let preview: TransactionRequestPreview | undefined
@@ -111,7 +111,11 @@ export function createReviewedClient(client: WriteClient, validate: () => Promis
 			if (expected === undefined || expected.functionName !== transaction.functionName || (expected.value ?? 0n) !== (transaction.value ?? 0n) || (expected.contractAddress ?? expected.to) !== (transaction.contractAddress ?? transaction.to))
 				throw new Error('The transaction plan changed. No further transactions were sent. Review the action again.')
 			if (transaction.functionName === 'approve' && (expected.args?.[0] !== transaction.args?.[0] || expected.args?.[1] !== transaction.args?.[1])) throw new Error('The approval amount changed. Review the action again.')
-			const selectedAmount = selectedFunding === undefined ? await controller.review(stepIndex) : selectedFunding.amount
+			let selectedAmount = selectedFunding?.amount
+			if (selectedFunding === undefined) {
+				if (skipAppReview) controller.startWithoutReview(stepIndex)
+				else selectedAmount = await controller.review(stepIndex)
+			}
 			selectedFunding = undefined
 			let approvalArgs: readonly [ReturnType<typeof getAddress>, bigint] | undefined
 			if (selectedAmount !== undefined) {

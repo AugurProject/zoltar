@@ -232,7 +232,7 @@ export function useSecurityPoolCreation({
 					}
 
 					const reviewLabels = { title: newQuestion === undefined ? securityPoolCopy.createPoolReviewTitle : securityPoolCopy.createQuestionAndPoolReviewTitle }
-					const result = await createSecurityPool(createWalletWriteClient(walletAddress, { onTransactionPrepared, onTransactionSubmitted, reviewSignal: review.signal }), parameters, newQuestion?.questionData, reviewLabels)
+					const result = await createSecurityPool(createWalletWriteClient(walletAddress, { onTransactionPrepared, onTransactionSubmitted, reviewSignal: review.signal, skipAppReview: true }), parameters, newQuestion?.questionData, reviewLabels)
 					capturedDetails = result.questionCreatedAt === undefined ? details : { ...details, createdAt: result.questionCreatedAt }
 					return { ...result, hash: result.deployPoolHash }
 				},

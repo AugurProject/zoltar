@@ -67,6 +67,34 @@ test('does not open the wallet until the transaction has its own explicit confir
 	expect(onTransactionPrepared).toHaveBeenCalledTimes(1)
 })
 
+test('a wallet-only pool action starts the wallet request without a page confirmation', async () => {
+	const { client, sendTransaction } = setup()
+	const walletRequest = createDeferred<Hash>()
+	sendTransaction.mockImplementationOnce(async () => await walletRequest.promise)
+	const backend = withTransactionReviews({ ...createFakeBackend({ accountAddress: account }), createWriteClient: () => ({ ...client, sendTransaction }) })
+	const reviewed = backend.createWriteClient(account, { skipAppReview: true })
+	const sending = reviewed.sendTransaction({ to: account, value: 1n })
+	await new Promise(resolve => setTimeout(resolve, 10))
+	try {
+		expect(transactionSteps.value?.steps[0]?.phase).toBe('pending')
+		expect(sendTransaction).toHaveBeenCalledTimes(1)
+	} finally {
+		walletRequest.resolve(hash)
+		transactionSteps.value?.cancel()
+		await sending.catch(() => undefined)
+	}
+})
+
+test('a wallet-only pool action reports a wallet rejection without waiting for a page confirmation', async () => {
+	const { client, sendTransaction } = setup()
+	sendTransaction.mockRejectedValueOnce(new Error('User rejected the request'))
+	const backend = withTransactionReviews({ ...createFakeBackend({ accountAddress: account }), createWriteClient: () => ({ ...client, sendTransaction }) })
+	const reviewed = backend.createWriteClient(account, { skipAppReview: true })
+	await expect(reviewed.sendTransaction({ to: account, value: 1n })).rejects.toThrow('User rejected the request')
+	expect(sendTransaction).toHaveBeenCalledTimes(1)
+	expect(transactionSteps.value?.steps[0]?.phase).toBe('failed')
+})
+
 test('titles the review from the prepared transaction labels instead of the contract function name', async () => {
 	const { reviewed, client } = setup()
 	const reviewTitle = 'Create question and security pool'

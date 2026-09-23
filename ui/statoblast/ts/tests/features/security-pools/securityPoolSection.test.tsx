@@ -75,7 +75,7 @@ describe('SecurityPoolSection', () => {
 		},
 	})
 
-	test('renders the owned transaction review inline without a cancel button', async () => {
+	test('lets the user dismiss an unexpected pre-wallet review and unlock the form', async () => {
 		const review = new AbortController()
 		const controller = createTransactionStepController(review.signal)
 		controller.setPlan([{ title: 'Create security pool', description: 'Pool parameters are fixed at deployment.', contractAddress: undefined, contractLabel: undefined, spender: undefined, amount: undefined, ethValueAttoEth: 0n }])
@@ -91,13 +91,30 @@ describe('SecurityPoolSection', () => {
 		expect(queries.queryByRole('button', { name: /Creating pool/ })).toBeNull()
 		expect(document.querySelector('[role=dialog]')).toBeNull()
 		expect(document.activeElement).toBe(confirmButton)
-		expect(queries.queryByRole('button', { name: 'Cancel' })).toBeNull()
-		review.abort()
+		const cancelButton = queries.getByRole('button', { name: 'Cancel' })
+		await act(() => cancelButton.click())
+		expect(onDismissSecurityPoolReview).toHaveBeenCalledTimes(1)
 		await expect(pendingReview).rejects.toThrow('Remaining transactions canceled')
 		await act(() => {
 			render(h(SecurityPoolSection, createProps({ onDismissSecurityPoolReview, securityPoolCreating: false, securityPoolReviewSignal: undefined })), renderedComponent.container)
 		})
 		expect(document.activeElement).toBe(queries.getByRole('button', { name: 'Create pool' }))
+		expect((queries.getByRole('textbox', { name: 'Statoblast Security Multiplier' }) as HTMLInputElement).disabled).toBe(false)
+	})
+
+	test('shows wallet-pending pool creation without an app cancel action', async () => {
+		const review = new AbortController()
+		const controller = createTransactionStepController(review.signal)
+		controller.setPlan([{ title: 'Create security pool', description: undefined, contractAddress: undefined, contractLabel: undefined, spender: undefined, amount: undefined, ethValueAttoEth: 0n }])
+		controller.startWithoutReview(0)
+		const renderedComponent = await renderIntoDocument(h(SecurityPoolSection, createProps({ securityPoolCreating: true, securityPoolReviewSignal: review.signal })))
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const queries = within(document.body)
+		expect(queries.getByText('Transaction Review')).not.toBeNull()
+		expect(queries.queryByRole('button', { name: 'Cancel' })).toBeNull()
+		expect(queries.queryByRole('button', { name: 'Create pool' })).toBeNull()
+		review.abort()
 	})
 
 	test('shows a failed transaction review without a close button', async () => {
