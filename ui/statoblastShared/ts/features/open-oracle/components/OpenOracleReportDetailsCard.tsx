@@ -73,20 +73,21 @@ function useLiveSettlementTime(report: OpenOracleReportDetails | undefined, load
 	const reportKey = report === undefined ? undefined : `${report.reportId}:${report.reportTimestamp}:${report.settlementTime}:${report.currentTime}:${report.isDistributed}`
 	const [clock, setClock] = useState<{ key: string | undefined; elapsedSeconds: bigint }>({ key: undefined, elapsedSeconds: 0n })
 	const refresh = useRef({ loading, onLoadReport })
+	const lastRefresh = useRef<{ key: string; at: number } | undefined>(undefined)
 	refresh.current = { loading, onLoadReport }
 	useEffect(() => {
 		setClock(current => (current.key === reportKey && current.elapsedSeconds === 0n ? current : { key: reportKey, elapsedSeconds: 0n }))
 		if (report === undefined || !report.timeType || report.isDistributed || report.reportTimestamp === 0n) return
 		const readyAt = report.reportTimestamp + report.settlementTime
-		if (report.currentTime >= readyAt) return
+		const refreshKey = `${report.reportId}:${report.reportTimestamp}`
 		const startedAt = Date.now()
-		let lastRefreshAt = 0
 		const interval = setInterval(() => {
 			const now = Date.now()
 			const elapsedSeconds = BigInt(Math.floor((now - startedAt) / 1000))
 			setClock(current => (current.key === reportKey && current.elapsedSeconds === elapsedSeconds ? current : { key: reportKey, elapsedSeconds }))
-			if (report.currentTime + elapsedSeconds < readyAt || now - lastRefreshAt < 5000 || refresh.current.loading) return
-			lastRefreshAt = now
+			if (report.currentTime + elapsedSeconds < readyAt || refresh.current.loading) return
+			if (lastRefresh.current?.key === refreshKey && now - lastRefresh.current.at < 5000) return
+			lastRefresh.current = { key: refreshKey, at: now }
 			refresh.current.onLoadReport(report.reportId.toString())
 		}, 250)
 		return () => clearInterval(interval)

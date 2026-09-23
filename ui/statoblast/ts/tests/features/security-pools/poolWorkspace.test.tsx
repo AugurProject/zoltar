@@ -219,3 +219,31 @@ for (const outcome of ['disputed', 'settled'] as const) {
 		}
 	})
 }
+
+test('refreshes the selected pool when one pending price report is replaced by another', async () => {
+	const pool = createSelectedPool({ lastOraclePrice: undefined, lastOracleSettlementTimestamp: 0n })
+	const refreshes: string[] = []
+	function Harness() {
+		const [manager, setManager] = useState(createOracleManagerDetails({ lastPrice: 0n, lastSettlementTimestamp: 0n, pendingReportId: 7n, pendingReportReadyAtTimestamp: 200n }))
+		return (
+			<ChainTimestampContext.Provider value={100n}>
+				<button type='button' onClick={() => setManager(createOracleManagerDetails({ lastPrice: 10n ** 18n, lastSettlementTimestamp: 80n, pendingReportId: 8n, pendingReportReadyAtTimestamp: 154n }))}>
+					Replace report
+				</button>
+				<SecurityPoolWorkflowSection
+					{...createSecurityPoolWorkflowProps({
+						securityPoolAddress: pool.securityPoolAddress,
+						securityPools: [pool],
+						selectedPoolView: 'price-oracle',
+						poolOracleManagerDetails: manager,
+						onRefreshSelectedPoolData: () => refreshes.push('pool'),
+					})}
+				/>
+			</ChainTimestampContext.Provider>
+		)
+	}
+	setCleanup((await renderIntoDocument(<Harness />)).cleanup)
+	await act(() => fireEvent.click(within(document.body).getByRole('button', { name: 'Replace report' })))
+	expect(refreshes).toEqual(['pool'])
+	expect(document.body.textContent).toContain('New price available in 54s')
+})

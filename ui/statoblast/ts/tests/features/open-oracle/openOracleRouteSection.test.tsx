@@ -910,6 +910,58 @@ describe('OpenOracleSection route create view', () => {
 		expectTransactionButtonDisabled(document.body, 'Settle report')
 	})
 
+	test('refreshes a report when chain time jumps directly to its deadline', async () => {
+		const reloads: string[] = []
+		function ReportHarness() {
+			const [report, setReport] = useState(createOpenOracleReportDetails({ currentReporter: '0x3000000000000000000000000000000000000000', currentTime: 100n, disputeDelay: 0n, reportTimestamp: 100n, settlementTime: 60n, timeType: true }))
+			return (
+				<ChainTimestampContext.Provider value={160n}>
+					<OpenOracleSection
+						{...createOpenOracleSectionProps({
+							activeView: 'selected-report',
+							onLoadOracleReport: () => {
+								reloads.push('report')
+								setReport(current => ({ ...current, currentTime: 160n, disputeOccurred: true, reportTimestamp: 160n, settlementTime: 60n }))
+							},
+							openOracleReportDetails: report,
+							openOracleReportLookupState: 'ready',
+						})}
+					/>
+				</ChainTimestampContext.Provider>
+			)
+		}
+		cleanupRenderedComponent = (await renderIntoDocument(<ReportHarness />)).cleanup
+		await act(async () => await new Promise(resolve => setTimeout(resolve, 1150)))
+		expect(reloads).toContain('report')
+		expect(within(document.body).getByText('Settle in 1m 0s')).not.toBeNull()
+		expectTransactionButtonDisabled(document.body, 'Settle report')
+	})
+
+	test('throttles refreshes while an overdue report remains pending', async () => {
+		const reloads: string[] = []
+		function ReportHarness() {
+			const [report, setReport] = useState(createOpenOracleReportDetails({ currentReporter: '0x3000000000000000000000000000000000000000', currentTime: 160n, disputeDelay: 0n, reportTimestamp: 100n, settlementTime: 60n, timeType: true }))
+			return (
+				<OpenOracleSection
+					{...createOpenOracleSectionProps({
+						activeView: 'selected-report',
+						onLoadOracleReport: () => {
+							reloads.push('report')
+							setReport(current => ({ ...current, currentTime: current.currentTime + 1n }))
+						},
+						openOracleReportDetails: report,
+						openOracleReportLookupState: 'ready',
+					})}
+				/>
+			)
+		}
+		cleanupRenderedComponent = (await renderIntoDocument(<ReportHarness />)).cleanup
+		await act(async () => await new Promise(resolve => setTimeout(resolve, 400)))
+		expect(reloads).toEqual(['report'])
+		await act(async () => await new Promise(resolve => setTimeout(resolve, 750)))
+		expect(reloads).toEqual(['report'])
+	})
+
 	test('keeps the settlement countdown moving above one hour', async () => {
 		cleanupRenderedComponent = (
 			await renderIntoDocument(

@@ -96,7 +96,7 @@ export function useSelectedPoolRefreshEffects({
 	useEffect(() => {
 		if (currentPoolOracleManagerDetails === undefined) return
 		const previous = previousPendingReport.current
-		if (previous !== undefined && sameAddress(previous.managerAddress, currentPoolOracleManagerDetails.managerAddress) && previous.reportId > 0n && currentPoolOracleManagerDetails.pendingReportId === 0n) {
+		if (previous !== undefined && sameAddress(previous.managerAddress, currentPoolOracleManagerDetails.managerAddress) && previous.reportId > 0n && previous.reportId !== currentPoolOracleManagerDetails.pendingReportId) {
 			onRefreshSelectedPoolData(selectedPool?.securityPoolAddress)
 		}
 		previousPendingReport.current = { managerAddress: currentPoolOracleManagerDetails.managerAddress, reportId: currentPoolOracleManagerDetails.pendingReportId }
