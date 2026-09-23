@@ -1026,6 +1026,15 @@ describe('Escalation Game Test Suite', () => {
 			})
 
 		const fresh = await deployEscalationGameTestSecurityPool()
+		await assert.rejects(
+			client.readContract({
+				abi: statoblast_EscalationGame_EscalationGame.abi,
+				address: fresh.escalationGameAddress,
+				functionName: 'previewDepositOnOutcome',
+				args: [QuestionOutcome.None, reportBond],
+			}),
+			/Invalid deposit preview/,
+		)
 		await assert.rejects(record(fresh.testSecurityPoolAddress, 0n, 0n), /Deposit zero/)
 		await assert.rejects(record(fresh.testSecurityPoolAddress, reportBond, reportBond + 1n), /Preview mismatch/)
 		await assert.rejects(record(fresh.testSecurityPoolAddress, nonDecisionThresholdAttoRep + 1n, nonDecisionThresholdAttoRep + 1n), /Deposit exceeds room/)

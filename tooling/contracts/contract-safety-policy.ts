@@ -101,7 +101,7 @@ export const contractSafetyPolicy = {
 				sourcePath: 'contracts/statoblast/factories/EscalationGameFactory.sol',
 				contractName: 'EscalationGameFactory',
 			},
-			47_074,
+			47_088,
 			'The factory embeds the merged game with continuation response-period admission and fork-aware finality; no further initcode growth is permitted.',
 		),
 	] satisfies readonly BytecodeBudget[],

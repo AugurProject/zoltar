@@ -15,12 +15,12 @@ contract EscalationGame is EscalationGameSettlement {
 	EscalationGameDepositDelegate private immutable depositDelegate;
 
 	constructor(ISecurityPool _securityPool, ReputationToken _repToken, EscalationGameProofVerifier _proofVerifier, EscalationGameClaimDelegate _claimDelegate) EscalationGameState(_securityPool, _repToken, _proofVerifier, _claimDelegate) {
+		fixedQuestionOutcome = BinaryOutcomes.BinaryOutcome.None;
 		depositDelegate = new EscalationGameDepositDelegate();
 	}
 
 	function start(uint256 _startBondAttoRep, uint256 _nonDecisionThresholdAttoRep) external {
 		_initializeStartParams(_startBondAttoRep, _nonDecisionThresholdAttoRep);
-		fixedQuestionOutcome = BinaryOutcomes.BinaryOutcome.None;
 		activationTime = block.timestamp + activationDelay;
 		emit GameStarted(activationTime, startBondAttoRep, nonDecisionThresholdAttoRep);
 	}
@@ -47,11 +47,12 @@ contract EscalationGame is EscalationGameSettlement {
 	function previewDepositOnOutcome(BinaryOutcomes.BinaryOutcome outcome, uint256 amountAttoRep) external view returns (uint256 acceptedAmountAttoRep, uint256 resultingCumulativeAmountAttoRep) {
 		// Keep one reason for this read-only quote path so the size-constrained game
 		// can retain the state-changing paths' more specific failure reasons.
+		require(outcome != BinaryOutcomes.BinaryOutcome.None, 'Invalid deposit preview');
 		uint256 outcomeIndex = uint256(outcome);
 		uint256 currentBalance = outcomeState[outcomeIndex].balanceAttoRep;
-		require(nonDecisionState == NonDecisionState.None && outcome != BinaryOutcomes.BinaryOutcome.None && _isDepositResolutionOpen(getQuestionResolution()) && currentBalance < nonDecisionThresholdAttoRep && amountAttoRep >= startBondAttoRep, 'Invalid deposit preview');
-		uint256 room = nonDecisionThresholdAttoRep - currentBalance;
-		(acceptedAmountAttoRep, resultingCumulativeAmountAttoRep) = _getAcceptedDepositAmount(outcomeIndex, amountAttoRep, currentBalance, room);
+		require(nonDecisionState == NonDecisionState.None && _isDepositResolutionOpen(getQuestionResolution()) && currentBalance < nonDecisionThresholdAttoRep && amountAttoRep >= startBondAttoRep, 'Invalid deposit preview');
+		return
+			_getAcceptedDepositAmount(outcomeIndex, amountAttoRep, currentBalance, nonDecisionThresholdAttoRep - currentBalance);
 	}
 
 	function recordDepositFromSecurityPool(address depositor, BinaryOutcomes.BinaryOutcome outcome, uint256 amountAttoRep, uint256 expectedCumulativeAttoRep) external returns (uint256 parentDepositIndex) {
