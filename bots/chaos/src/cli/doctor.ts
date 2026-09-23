@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 
-import { assertDurableDeploymentFactory, restoreDeploymentForDurableState } from '../config/deployment-state.ts'
+import { assertDurableDeploymentFactory, assertSepoliaDurableFactory, restoreDeploymentForDurableState } from '../config/deployment-state.ts'
 import { formatDecimalAmount } from '@zoltar/bot-shared/infrastructure/json-validation'
 import { migrateEmptyBootstrapState } from '../state/bootstrap-migration.ts'
 import { requireDeployedContracts } from '@zoltar/bot-shared/monitoring/deployed-contracts'
@@ -424,6 +424,7 @@ function familyReachability(settings: OperatorSettings, result: ChaosDoctorProbe
 }
 
 export function assertDoctorDurableStateScope(settings: OperatorSettings, state: DurableState, wallet: Address | undefined, stateFile = settings.runtime.stateFile) {
+	assertSepoliaDurableFactory(settings.network.chainId, state)
 	const expectedProfileId = executionProfileId(settings)
 	if (state.profileId !== expectedProfileId && !isPristineBootstrapState(state)) {
 		throw new Error(`Durable state ${stateFile} belongs to deployment profile ${state.profileId}, expected ${expectedProfileId}`)

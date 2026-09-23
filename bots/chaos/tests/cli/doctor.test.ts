@@ -414,6 +414,8 @@ describe('chaos launch doctor', () => {
 
 		const pristine = initialDurableState(settings.network.chainId)
 		expect(assertDoctorDurableStateScope(settings, pristine, wallet, '/state.json').profile).toBe('pristine-bootstrap')
+		pristine.uniswapV3Factory = getAddress('0xEf09Be426F8d6D2786cADEA7D3A8b0D09cEB79B4')
+		expect(() => assertDoctorDurableStateScope(settings, pristine, wallet, '/state.json')).toThrow('Sepolia requires the published Uniswap V3 factory')
 	})
 
 	test('rejects a changed factory even if its configuration identity is recomputed', async () => {

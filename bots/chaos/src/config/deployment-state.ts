@@ -3,7 +3,12 @@ import { assertSepoliaUniswapFactory, canonicalDeployment, legacyDeploymentForPr
 import { executionProfileId } from './execution-profile.ts'
 import type { OperatorSettings } from './settings.ts'
 
-export function restoreDeploymentForDurableState(settings: OperatorSettings, state: Pick<DurableState, 'profileId'>, needsDeploymentPin = false): OperatorSettings {
+export function assertSepoliaDurableFactory(chainId: number, state: Pick<DurableState, 'uniswapV3Factory'>) {
+	if (state.uniswapV3Factory !== undefined) assertSepoliaUniswapFactory(chainId, state.uniswapV3Factory)
+}
+
+export function restoreDeploymentForDurableState(settings: OperatorSettings, state: Pick<DurableState, 'profileId' | 'uniswapV3Factory'>, needsDeploymentPin = false): OperatorSettings {
+	assertSepoliaDurableFactory(settings.network.chainId, state)
 	const previous = needsDeploymentPin ? legacyDeploymentForProfile(settings.network.chainId, state.profileId) : undefined
 	const restored = previous === undefined ? settings : { ...settings, deployment: previous }
 	if (restored.deployment.uniswapV3Factory !== undefined) assertSepoliaUniswapFactory(restored.network.chainId, restored.deployment.uniswapV3Factory)
