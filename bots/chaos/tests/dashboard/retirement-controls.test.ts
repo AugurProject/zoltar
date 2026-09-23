@@ -1,0 +1,120 @@
+import { existsSync } from 'node:fs'
+import { expect, test } from 'bun:test'
+import { startDashboardServer } from '../../src/dashboard/dashboard-server.ts'
+import { CHROMIUM_STARTUP_BUDGET_MILLISECONDS, startChromiumSession } from './chromium-session.ts'
+
+const chromium = process.env['CHROMIUM_PATH'] ?? Bun.which('google-chrome') ?? Bun.which('chromium') ?? '/usr/bin/chromium'
+const browserTest = existsSync(chromium) ? test : test.skip
+const wallet = `0x${'ab'.repeat(20)}`
+const profileId = `profile:v1:${'12'.repeat(32)}`
+
+browserTest(
+	'shows signer destination and residual evidence across states and widths',
+	async () => {
+		let status = 'inactive'
+		const dashboard = startDashboardServer(0, {
+			getConfiguration: () => ({ hasSigner: true, revision: 'retirement-controls', settings: { network: { chainId: 11_155_111, name: 'sepolia' }, paused: true, runtime: { execute: false }, strategy: {} }, signerAddress: wallet }),
+			getState: () => ({
+				activities: [],
+				evaluations: [],
+				inventory: { rep: [] },
+				obligations: [],
+				paused: true,
+				pendingTransactions: [],
+				profileId,
+				retirement: {
+					blockers: [],
+					positions: [],
+					recipient: wallet,
+					status,
+					...(status === 'drained-with-residuals'
+						? {
+								completionEvidence: {
+									blockHash: `0x${'34'.repeat(32)}`,
+									blockNumber: '123456',
+									completedAt: '2026-09-23T00:00:00.000Z',
+									proof: { actionableObligations: 0, claimableAssets: 0, collectableV3Positions: 0, knownApprovals: 0, ownedLiquidityPositions: 0, partialWorkflows: 0, pendingTransactions: 0 },
+									residuals: [{ amount: '20000000000000000', asset: 'REP', category: 'operator-accepted', reason: 'Old claim is no longer redeemable' }],
+								},
+							}
+						: {}),
+				},
+				wallet,
+				workflows: [],
+			}),
+			hostname: '127.0.0.1',
+			setCancellation: () => {},
+			setCandidate: () => {},
+			setObligation: () => {},
+			setPaused: () => {},
+			setReplacement: () => {},
+			setSettings: () => {},
+			setSigner: () => {},
+			setWorkflow: () => {},
+		})
+		const browser = await startChromiumSession(chromium)
+		const evaluate = async (expression: string) => {
+			const response = await browser.send('Runtime.evaluate', { awaitPromise: true, expression, returnByValue: true })
+			const result = typeof response === 'object' && response !== null ? Reflect.get(response, 'result') : undefined
+			return typeof result === 'object' && result !== null ? Reflect.get(result, 'value') : undefined
+		}
+		try {
+			await browser.send('Runtime.enable')
+			await browser.send('Page.enable')
+			for (const [width, height] of [
+				[1440, 900],
+				[390, 844],
+			] as const) {
+				await browser.send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: false })
+				for (const [nextStatus, marker, requestDisabled, cancelDisabled] of [
+					['inactive', 'to confirm.', false, true],
+					['requested', 'to cancel', true, false],
+					['known-claims-recovered', wallet, true, true],
+					['drained-with-residuals', 'to cancel', true, true],
+				] as const) {
+					status = nextStatus
+					await browser.send('Page.navigate', { url: new URL('/overview', dashboard.url).href })
+					let rendered = false
+					for (let attempt = 0; attempt < 200; attempt += 1) {
+						if (
+							await evaluate(
+								`document.querySelector('#retirement-destination')?.textContent?.includes(${JSON.stringify(marker)}) === true && document.querySelector('#retirement-status')?.textContent?.toLowerCase() === ${JSON.stringify(nextStatus === 'known-claims-recovered' ? 'all known claims recovered' : nextStatus.replaceAll('-', ' '))}`,
+							)
+						) {
+							rendered = true
+							break
+						}
+						await Bun.sleep(25)
+					}
+					expect(rendered).toBeTrue()
+					expect(await evaluate("document.querySelector('#retirement-destination')?.hidden")).toBe(nextStatus === 'drained-with-residuals')
+					expect(await evaluate("document.querySelector('#retirement-request')?.disabled")).toBe(requestDisabled)
+					expect(await evaluate("document.querySelector('#retirement-request-options')?.disabled")).toBe(requestDisabled)
+					expect(await evaluate("document.querySelector('#retirement-request-options')?.hidden")).toBe(nextStatus !== 'inactive')
+					expect(await evaluate("document.querySelector('#retirement-cancel')?.disabled")).toBe(cancelDisabled)
+					expect(await evaluate("document.querySelector('#retirement-confirmation')?.disabled")).toBe(nextStatus === 'known-claims-recovered' || nextStatus === 'drained-with-residuals')
+					expect(await evaluate("document.querySelector('#retirement-confirmation-label')?.hidden")).toBe(nextStatus === 'known-claims-recovered' || nextStatus === 'drained-with-residuals')
+					expect(await evaluate("document.querySelector('#retirement-request')?.hidden")).toBe(nextStatus !== 'inactive')
+					expect(await evaluate("document.querySelector('#retirement-cancel')?.hidden")).toBe(nextStatus !== 'requested')
+					expect(await evaluate("document.querySelector('#retirement-actions')?.hidden")).toBe(nextStatus === 'known-claims-recovered' || nextStatus === 'drained-with-residuals')
+					expect(await evaluate("document.querySelector('#retirement-recipient') === null")).toBeTrue()
+					if (nextStatus === 'drained-with-residuals') {
+						expect(await evaluate("document.querySelector('#retirement-residual-evidence')?.textContent?.includes('123456')")).toBeTrue()
+						expect(await evaluate(`document.querySelector('#retirement-residual-evidence')?.textContent?.includes(${JSON.stringify(`0x${'34'.repeat(32)}`)})`)).toBeTrue()
+						expect(await evaluate("document.querySelector('#retirement-residual-evidence')?.textContent?.includes('20000000000000000 REP')")).toBeTrue()
+						expect(await evaluate("document.querySelector('#retirement-residual-evidence')?.textContent?.includes('operator-accepted')")).toBeTrue()
+						expect(await evaluate("document.querySelector('#retirement-residual-evidence')?.textContent?.includes('Old claim is no longer redeemable')")).toBeTrue()
+						expect(await evaluate("document.querySelector('#retirement-residual-submit')?.disabled")).toBeFalse()
+						expect(await evaluate('document.body.scrollWidth > innerWidth')).toBeFalse()
+					}
+					if (nextStatus === 'inactive') expect(await evaluate("document.querySelector('#retirement-exit-after')?.closest('label')?.getBoundingClientRect().bottom <= document.querySelector('#retirement-confirmation')?.closest('label')?.getBoundingClientRect().top")).toBeTrue()
+				}
+			}
+			expect(browser.issues).toEqual([])
+		} finally {
+			await browser.close()
+			dashboard.stop(true)
+		}
+	},
+	CHROMIUM_STARTUP_BUDGET_MILLISECONDS + 20_000,
+)

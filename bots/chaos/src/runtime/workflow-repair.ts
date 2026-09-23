@@ -1,4 +1,5 @@
-import { OperationRediscoveryRequired } from '../execution/transaction-executor.ts'
+import { V3_RETIREMENT_OPERATION } from './retirement-v3-continuation.ts'
+import { OperationRediscoveryRequired } from '../execution/execution-context.ts'
 import { operationHasCanonicalContinuationBuilder } from '../operations/catalog.ts'
 import type { OperationPlan } from '../operations/types.ts'
 import { recordActivity, type DurableWorkflow, type RuntimeState } from '../state/operator-state.ts'
@@ -13,7 +14,7 @@ export function rediscoverableExecutionFailure(state: RuntimeState, plan: Operat
 	const workflow = workflowForPlan(state, plan)
 	if (workflow === undefined || workflowFailureHasTransaction(workflow)) return false
 	markWorkflowForRediscovery(workflow, error)
-	if (workflow.classification === 'selectable' && workflow.steps.some(step => step.status === 'confirmed') && operationHasCanonicalContinuationBuilder(workflow.operationId)) {
+	if (workflow.classification === 'selectable' && workflow.steps.some(step => step.status === 'confirmed') && (workflow.operationId === V3_RETIREMENT_OPERATION || operationHasCanonicalContinuationBuilder(workflow.operationId))) {
 		workflow.continuationDisposition = 'cleanup-only'
 	}
 	return true
@@ -23,7 +24,7 @@ function repairRetryableSelectableWorkflow(state: RuntimeState, workflow: Durabl
 	if (workflow.classification !== 'selectable' || workflow.status !== 'failed' || !retryableOnChainWorkflowFailure(workflow)) {
 		return false
 	}
-	if (workflow.steps.some(step => step.status === 'confirmed') && operationHasCanonicalContinuationBuilder(workflow.operationId)) {
+	if (workflow.steps.some(step => step.status === 'confirmed') && (workflow.operationId === V3_RETIREMENT_OPERATION || operationHasCanonicalContinuationBuilder(workflow.operationId))) {
 		markRetryableWorkflowForRediscovery(workflow, 'A canonically included on-chain failure left confirmed preparation on chain; canonical cleanup is required')
 		recordActivity(state, {
 			ecosystem: workflow.ecosystem,

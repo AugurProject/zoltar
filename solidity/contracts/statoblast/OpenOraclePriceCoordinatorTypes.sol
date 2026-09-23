@@ -11,9 +11,6 @@ uint256 constant REQUEST_BOUNTY_OFFSET_ATTO_ETH = 101;
 uint8 constant OPEN_ORACLE_FLAG_TIME_TYPE = 1 << 0;
 uint8 constant OPEN_ORACLE_FLAG_TRACK_DISPUTES = 1 << 1;
 uint8 constant OPEN_ORACLE_FLAG_STORE_ALL = 1 << 2;
-uint256 constant FINAL_REPORT_UNECONOMIC = 0;
-uint256 constant FINAL_REPORT_PROFITABLE = 1;
-uint256 constant FINAL_REPORT_COUNTER_SATURATED = 2;
 
 interface IStoredOpenOracleGame {
 	function storedGame(uint256 reportId)

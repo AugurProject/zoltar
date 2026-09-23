@@ -1,4 +1,6 @@
+import { V3_RETIREMENT_OPERATION } from './retirement-v3-continuation.ts'
 import type { Address } from '@zoltar/bot-shared/ethereum'
+import { settledQuorumValue } from '@zoltar/bot-shared/monitoring/read-quorum'
 import type { OperatorSettings } from '../config/settings.ts'
 import type { OperationPlan } from '../operations/types.ts'
 import { evaluateOperationCatalog } from '../operations/catalog.ts'
@@ -8,9 +10,27 @@ import { chaosReadClients, planningOptions, type CanonicalAnchor, type Canonical
 import { applyRetirementAssessment, assessRetirement } from './retirement-assessment.ts'
 import { buildV3RetirementPlan, readV3Position, readV3PositionsWithQuorum, reconcileV3PositionJournal, recordV3ScanFailure, recordV3ScanSuccess } from './retirement-v3-positions.ts'
 import type { V3PositionObservation } from './retirement-types.ts'
-import { retirementCleanupBlocker } from './workflows.ts'
+import { retirementCleanupBlocker, workflowNeedsContinuation } from './workflows.ts'
 
 type RetirementScan = Pick<CanonicalScanResult, 'anchor' | 'executionReady' | 'canonicalLifecyclePresenceComplete' | 'carryProofsComplete' | 'indexComplete' | 'snapshot'>
+
+export async function retirementCompletionEvidenceCanonical(settings: OperatorSettings, pool: Parameters<typeof chaosReadClients>[1], state: RuntimeState, anchor: Pick<CanonicalAnchor, 'blockHash' | 'blockNumber'>) {
+	const evidence = state.retirement.completionEvidence
+	if (evidence === undefined) return true
+	const completionBlock = BigInt(evidence.blockNumber)
+	if (completionBlock > anchor.blockNumber) return true
+	if (completionBlock === anchor.blockNumber) return evidence.blockHash.toLowerCase() === anchor.blockHash.toLowerCase()
+	const canonicalHash = await settledQuorumValue(
+		`retirement completion block ${evidence.blockNumber}`,
+		chaosReadClients(settings, pool).map(async observation => {
+			const block = await observation.client.getBlock({ blockNumber: completionBlock })
+			if (block.hash == null || block.number !== completionBlock) throw new Error(`RPC ${observation.endpoint} returned an invalid retirement completion block identity`)
+			return { endpoint: observation.endpoint, value: block.hash.toLowerCase() }
+		}),
+		2,
+	)
+	return canonicalHash === evidence.blockHash.toLowerCase()
+}
 
 export function enforceRetirementContinuation(state: RuntimeState, workflow: DurableWorkflow, hasCanonicalContinuation: boolean, operationAllowed: boolean) {
 	if (state.retirement.status === 'inactive' || operationAllowed) return true
@@ -30,7 +50,7 @@ function retirementEvaluationsForScan(scan: RetirementScan, settings: OperatorSe
 	})
 }
 
-export function updateRetirementAssessment(scan: RetirementScan, settings: OperatorSettings, state: RuntimeState, v3: readonly V3PositionObservation[]) {
+export function updateRetirementAssessment(scan: RetirementScan, settings: OperatorSettings, state: RuntimeState, v3: readonly V3PositionObservation[], evidenceCanonical = true) {
 	if (state.retirement.status === 'inactive') return undefined
 	state.evaluations = retirementEvaluationsForScan(scan, settings, state)
 	const canonicalScanComplete = scan.canonicalLifecyclePresenceComplete && scan.carryProofsComplete && scan.indexComplete
@@ -48,7 +68,7 @@ export function updateRetirementAssessment(scan: RetirementScan, settings: Opera
 		executionReady: scan.executionReady,
 		sweepLimits: { maximumEthAttoEth: settings.strategy.maximumEthPerOperationAttoEth, maximumGasCostAttoEth: settings.strategy.maximumGasCostAttoEth, maximumRepAttoRep: settings.strategy.maximumRepPerOperationAttoRep, minimumEthReserveAttoEth: settings.strategy.minimumEthReserveAttoEth },
 	})
-	applyRetirementAssessment(state.retirement, assessment, scan.anchor.blockHash, scan.anchor.blockNumber, { profileId: state.profileId, scannedWallet: scan.snapshot.wallet.address, signerAddress: state.signerAddress })
+	applyRetirementAssessment(state.retirement, assessment, scan.anchor.blockHash, scan.anchor.blockNumber, { profileId: state.profileId, scannedWallet: scan.snapshot.wallet.address, signerAddress: state.signerAddress }, undefined, evidenceCanonical)
 	state.scheduler.status = 'paused'
 	return assessment
 }
@@ -56,11 +76,13 @@ export function updateRetirementAssessment(scan: RetirementScan, settings: Opera
 export async function retirementPositionsForScan(parameters: { anchor: Pick<CanonicalAnchor, 'blockHash' | 'blockNumber'>; pool: Parameters<typeof chaosReadClients>[1]; profileId: string; settings: OperatorSettings; state: RuntimeState; wallet: Address | undefined }) {
 	const { anchor, pool, profileId, settings, state, wallet } = parameters
 	if (wallet !== undefined) reconcileV3PositionJournal(state.retirement, state.workflows, profileId, wallet)
-	if (state.retirement.status === 'inactive' || state.retirement.positions.length === 0) return []
+	const continuationPositions = new Set(state.workflows.filter(workflow => workflow.operationId === V3_RETIREMENT_OPERATION && workflowNeedsContinuation(workflow)).map(workflow => workflow.metadata['positionId']))
+	const positions = state.retirement.positions.filter(position => state.retirement.status !== 'inactive' || continuationPositions.has(position.id))
+	if (positions.length === 0) return []
 	if (settings.connectivity === undefined) throw new Error('Retirement V3 scan requires configured RPC connectivity')
 	const readers = chaosReadClients(settings, pool).map(candidate => (position: Parameters<typeof readV3Position>[1], positionAnchor: Parameters<typeof readV3Position>[2]) => readV3Position(candidate.client, position, positionAnchor))
 	const observations: V3PositionObservation[] = []
-	for (const position of state.retirement.positions) {
+	for (const position of positions) {
 		try {
 			const positionObservations = await readV3PositionsWithQuorum(readers, settings.connectivity.rpcQuorum, [position], anchor)
 			for (const observation of positionObservations) recordV3ScanSuccess(state, observation, anchor.blockNumber)
@@ -83,10 +105,6 @@ export async function processRetirementCycle(parameters: { execute: (plan: Opera
 	}
 	await parameters.prepareExecution()
 	const plan = assessment.action.kind === 'existing-plan' ? assessment.action.plan : buildV3RetirementPlan(scan.snapshot, assessment.action.observation, 0)
-	if (plan.definitionId.startsWith('retirement.sweep.') && state.retirement.finalSweepStartedAt === undefined) {
-		state.retirement.finalSweepStartedAt = new Date().toISOString()
-		await parameters.persist()
-	}
 	await parameters.execute(plan)
 	return settings.runtime.once
 }

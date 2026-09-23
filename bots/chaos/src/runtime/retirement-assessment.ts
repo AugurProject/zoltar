@@ -134,6 +134,11 @@ export function assessRetirement(parameters: {
 	}
 	for (const position of parameters.retirement.positions.filter(candidate => candidate.status === 'blocked')) blockers.push({ category: 'ambiguous-position', details: `Ownership could not be proven for ${position.pool}`, id: position.id })
 	for (const position of parameters.retirement.positions.filter(candidate => candidate.status === 'pending-confirmation')) blockers.push({ category: 'ambiguous-position', details: `Position ${position.id} is awaiting canonical pool and ownership verification`, id: position.id })
+	for (const position of parameters.retirement.positions) {
+		if (!parameters.v3.some(observation => observation.position.id === position.id) && !blockers.some(blocker => blocker.id === position.id)) {
+			blockers.push({ category: 'ambiguous-position', details: `Position ${position.id} has no canonical balance observation at the retirement scan anchor`, id: position.id })
+		}
+	}
 	const residuals = [...shareClassification.residuals, ...retainedAssetResiduals(parameters.snapshot, parameters.retirement)]
 	const canonicalClaims = canonicalClaimableAssetCount(parameters.snapshot, parameters.retirement)
 	if (canonicalClaims > 0 && claimPlan === undefined && nativeCreditPlan === undefined) blockers.push({ category: 'operator-action', details: 'Canonical claimable assets exist but no safe retirement plan is currently executable', id: 'claimable-assets-without-plan' })
@@ -157,7 +162,6 @@ export function assessRetirement(parameters: {
 	if (operationalBlockers.some(blocker => blocker.category !== 'temporarily-locked')) return { action, blockers, proof, residuals, status: 'blocked' }
 	if (operationalBlockers.length !== 0) return { action, blockers, proof, residuals, status: 'waiting' }
 	if (outstanding > 0) return { action, blockers, proof, residuals, status: 'draining' }
-	if (parameters.sweepLimits !== undefined && BigInt(parameters.snapshot.wallet.ethBalanceAttoEth) > 0n) residuals.push({ amount: parameters.snapshot.wallet.ethBalanceAttoEth, asset: 'ETH', category: 'mandatory-sentinel', reason: 'Configured ETH reserve and final-sweep gas budget retained after native sweeping' })
 	if (historyLimited) return { action, blockers, proof, residuals, status: 'known-claims-recovered' }
 	return { action, blockers, proof, residuals, status: residuals.length === 0 ? 'drained' : 'drained-with-residuals' }
 }
@@ -168,7 +172,7 @@ export type RetirementCompletionBinding = {
 	signerAddress: Address | undefined
 }
 
-export function applyRetirementAssessment(retirement: DurableRetirementState, assessment: RetirementAssessment, blockHash: Hash, blockNumber: bigint, binding: RetirementCompletionBinding, now = new Date().toISOString()) {
+export function applyRetirementAssessment(retirement: DurableRetirementState, assessment: RetirementAssessment, blockHash: Hash, blockNumber: bigint, binding: RetirementCompletionBinding, now = new Date().toISOString(), evidenceCanonical = true) {
 	const terminal = assessment.status === 'drained' || assessment.status === 'drained-with-residuals'
 	const completionSigner = binding.signerAddress
 	if (terminal) {
@@ -177,9 +181,34 @@ export function applyRetirementAssessment(retirement: DurableRetirementState, as
 		const outstanding = assessment.proof.actionableObligations + assessment.proof.claimableAssets + assessment.proof.collectableV3Positions + assessment.proof.knownApprovals + assessment.proof.ownedLiquidityPositions + assessment.proof.partialWorkflows + assessment.proof.pendingTransactions
 		if (outstanding !== 0) throw new Error('Retirement completion requires every canonical proof count to be zero')
 	}
+	const previousEvidence = retirement.completionEvidence
+	const override = retirement.profileReplacementOverride
+	const preserveCompletionEvidence =
+		evidenceCanonical &&
+		terminal &&
+		retirement.status === assessment.status &&
+		previousEvidence !== undefined &&
+		retirement.recipient?.toLowerCase() === completionSigner?.toLowerCase() &&
+		previousEvidence.profileId === binding.profileId &&
+		previousEvidence.signerAddress?.toLowerCase() === completionSigner?.toLowerCase() &&
+		JSON.stringify(previousEvidence.residuals) === JSON.stringify(assessment.residuals)
+	const preserveAcceptedResiduals =
+		preserveCompletionEvidence &&
+		previousEvidence !== undefined &&
+		assessment.status === 'drained-with-residuals' &&
+		override !== undefined &&
+		retirement.recipient !== undefined &&
+		override.sourceProfileId === binding.profileId &&
+		override.recipient.toLowerCase() === retirement.recipient.toLowerCase() &&
+		override.completionBlockHash.toLowerCase() === previousEvidence.blockHash.toLowerCase() &&
+		override.completionBlockNumber === previousEvidence.blockNumber
 	retirement.blockers = assessment.blockers
 	retirement.status = assessment.status
 	retirement.updatedAt = now
+	if (preserveCompletionEvidence) {
+		if (!preserveAcceptedResiduals) retirement.profileReplacementOverride = undefined
+		return
+	}
 	retirement.profileReplacementOverride = undefined
 	if (!terminal) {
 		retirement.completionEvidence = undefined

@@ -1,6 +1,7 @@
 import type { EntityHistory, QuestionRecord, StateCatalog, StateEntity, StateTab, UniverseRecord } from './browser-types.ts'
 import { exactUnit } from './format.ts'
 import { short, shortIdentifier } from './identifier-format.ts'
+import { questionDateLabel, questionStatus } from './question-time.ts'
 import type { createStateComponents } from './state-components.ts'
 
 type StateComponents = ReturnType<typeof createStateComponents>
@@ -21,13 +22,6 @@ export interface StateEntityDeps {
 	readonly stateData: StateCatalog | undefined
 	readonly counted: (value: string | number | bigint | null | undefined, singular: string, plural?: string) => string
 	readonly staticAddressField: StateComponents['staticAddressField']
-}
-
-export const questionStatus = (question: QuestionRecord): string => {
-	const now = Date.now()
-	if (now < new Date(question.start_time).getTime()) return 'Scheduled'
-	if (now < new Date(question.end_time).getTime()) return 'Open'
-	return 'Ended'
 }
 
 export const renderQuestionDetailPage = async (deps: StateEntityDeps, question: QuestionRecord, suppliedHistory?: EntityHistory): Promise<void> => {
@@ -73,11 +67,11 @@ export const renderQuestionDetailPage = async (deps: StateEntityDeps, question: 
 	definition.append(outcomes)
 	const timeline = element('div', 'timeline')
 	for (const [label, value] of [
-		['Created', question.created_timestamp],
-		['Starts', question.start_time],
-		['Ends', question.end_time],
+		['Created', new Date(question.created_timestamp).toLocaleDateString('en-GB')],
+		['Starts', questionDateLabel(question.start_time)],
+		['Ends', questionDateLabel(question.end_time)],
 	] as const)
-		timeline.append(element('div', 'timeline-step', `${label} · ${new Date(value).toLocaleDateString('en-GB')}`))
+		timeline.append(element('div', 'timeline-step', `${label} · ${value}`))
 	definition.append(timeline)
 	if (!canonicalQuestionRoute || questionTab === 'overview') fragment.append(definition)
 	const usage = element('section', 'static-card')

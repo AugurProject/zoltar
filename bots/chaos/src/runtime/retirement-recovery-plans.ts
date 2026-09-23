@@ -1,6 +1,5 @@
 import { getAddress, zeroAddress } from '@zoltar/bot-shared/ethereum'
 import { erc1155Abi, erc20Abi, openOracleAbi, twoWayConstantProductPairAbi, weth9Abi } from '@zoltar/bot-shared/contracts/abi'
-import { retirementErc20TransferAbi } from '../contracts/retirement-abi.ts'
 import { encodeStep, planBase } from '../operations/planning.ts'
 import type { EcosystemSnapshot, OperationPlan } from '../operations/types.ts'
 import { assertSafeRetirementRecipient, type DurableRetirementState } from '../state/retirement.ts'
@@ -117,20 +116,17 @@ export function buildNativeOpenOracleCreditPlan(snapshot: EcosystemSnapshot, ret
 			ecosystem: 'open-oracle',
 			label: 'Withdraw native OpenOracle credit',
 			metadata: { amount: amount.toString(), recipient: retirement.recipient },
-			postconditions: ['OpenOracle native credit retains exactly its mandatory one-unit sentinel and the recipient receives the recoverable balance'],
+			postconditions: ['OpenOracle native credit retains exactly its mandatory one-unit sentinel and pays the recoverable balance to the signer'],
 			risk: 'low',
 			snapshot,
 			steps: [
 				encodeStep({
 					abi: openOracleAbi,
 					args: [zeroAddress, amount, retirement.recipient],
-					evidence: [
-						{ abi: 'function tokenHolder(address owner,address token) view returns (uint256)', args: [snapshot.wallet.address, zeroAddress], contract: snapshot.deployments.openOracle, expected: '1', functionName: 'tokenHolder', kind: 'storage-postcondition', relation: 'equals' },
-						{ account: retirement.recipient, asset: 'ETH', direction: 'increase', kind: 'balance-change' },
-					],
+					evidence: [{ abi: 'function tokenHolder(address owner,address token) view returns (uint256)', args: [snapshot.wallet.address, zeroAddress], contract: snapshot.deployments.openOracle, expected: '1', functionName: 'tokenHolder', kind: 'storage-postcondition', relation: 'equals' }],
 					functionName: 'withdrawTo',
 					id: 'withdraw-native-credit',
-					label: 'Withdraw native OpenOracle credit to retirement recipient',
+					label: 'Withdraw native OpenOracle credit to signer',
 					to: snapshot.deployments.openOracle,
 				}),
 			],
@@ -166,52 +162,5 @@ export function buildAssetSweepPlan(snapshot: EcosystemSnapshot, retirement: Dur
 			planningSeed: seed,
 		}
 	}
-	const repTokens = new Set(snapshot.universes.map(universe => universe.repToken.toLowerCase()))
-	const token = [...snapshot.wallet.tokens].filter(candidate => candidate.address.toLowerCase() !== snapshot.deployments.weth.toLowerCase() && BigInt(candidate.balance) > 0n).sort((left, right) => left.address.localeCompare(right.address))[0]
-	if (token !== undefined) {
-		const balance = BigInt(token.balance)
-		const isRep = repTokens.has(token.address.toLowerCase())
-		const amount = isRep && balance > limits.maximumRepAttoRep ? limits.maximumRepAttoRep : balance
-		return {
-			...planBase({
-				definitionId: 'retirement.sweep.erc20',
-				ecosystem: 'trading',
-				label: 'Sweep reusable ERC-20 asset',
-				metadata: { amount: amount.toString(), recipient: retirement.recipient, token: token.address },
-				postconditions: ['The selected reusable token amount is transferred to the retirement recipient'],
-				risk: 'low',
-				snapshot,
-				steps: [encodeStep({ abi: retirementErc20TransferAbi, args: [retirement.recipient, amount], functionName: 'transfer', id: 'sweep-erc20', label: 'Sweep ERC-20 asset', to: token.address, walletAssetDebits: [{ amount: amount.toString(), asset: token.address, category: isRep ? 'rep' : 'other', kind: 'erc20' }] })],
-			}),
-			planningSeed: seed,
-		}
-	}
-	const spendableEth = BigInt(snapshot.wallet.ethBalanceAttoEth) - limits.minimumEthReserveAttoEth - limits.maximumGasCostAttoEth
-	if (spendableEth <= 0n) return undefined
-	const amount = spendableEth < limits.maximumEthAttoEth ? spendableEth : limits.maximumEthAttoEth
-	return {
-		...planBase({
-			definitionId: 'retirement.sweep.native-last',
-			ecosystem: 'trading',
-			label: 'Sweep native ETH last',
-			metadata: { amount: amount.toString(), recipient: retirement.recipient },
-			postconditions: ['Native ETH is transferred last while the configured ETH reserve and one maximum gas budget remain'],
-			risk: 'low',
-			snapshot,
-			steps: [
-				{
-					data: '0x',
-					evidence: [{ account: retirement.recipient, asset: 'ETH', direction: 'increase', kind: 'balance-change' }],
-					gasLimit: '21000',
-					id: 'sweep-native-eth',
-					label: 'Sweep native ETH',
-					preflightCalls: [],
-					to: retirement.recipient,
-					value: amount.toString(),
-					walletAssetDebits: [{ amount: amount.toString(), asset: 'ETH', kind: 'native' }],
-				},
-			],
-		}),
-		planningSeed: seed,
-	}
+	return undefined
 }

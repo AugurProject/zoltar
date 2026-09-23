@@ -1,5 +1,6 @@
 name: Coverage
 
+# Full coverage is resource-intensive; run this workflow only by manual dispatch.
 on:
   workflow_dispatch:
 
@@ -7,7 +8,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: coverage-${{ github.ref }}
+  group: coverage-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: false
 
 env:

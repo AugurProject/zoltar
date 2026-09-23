@@ -343,9 +343,13 @@ export const isVaultStateEntityValue = (value: unknown): boolean =>
 	hasStringFields(value, ['chain_id', 'network_id', 'pool_address', 'vault_address', 'rep_backing_units', 'capacity_ownership_atto_rep', 'claimable_fees_atto_eth', 'fee_index', 'vault_fee_remainder', 'resulting_total_rep_backing_units', 'resulting_fee_eligible_capacity_ownership_atto_rep', 'block_number']) &&
 	isNullableString(value['question_title'])
 
+const isQuestionSeconds = (value: unknown): boolean => typeof value === 'string' && /^(0|[1-9][0-9]{0,14})$/.test(value) && BigInt(value) <= 281_474_976_710_655n
+
 export const isQuestionStateEntityValue = (value: unknown): boolean =>
 	isRecord(value) &&
 	hasStringFields(value, ['chain_id', 'network_id', 'question_id', 'title', 'description', 'created_timestamp', 'start_time', 'end_time', 'num_ticks', 'display_value_min', 'display_value_max', 'answer_unit', 'pool_count', 'fork_count']) &&
+	isQuestionSeconds(value['start_time']) &&
+	isQuestionSeconds(value['end_time']) &&
 	Array.isArray(value['outcome_options']) &&
 	value['outcome_options'].every(isString) &&
 	(value['block_number'] === undefined || isString(value['block_number']))

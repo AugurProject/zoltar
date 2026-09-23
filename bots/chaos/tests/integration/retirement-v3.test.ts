@@ -7,7 +7,6 @@ import { createAnvilNodeForConnectionMode, type AnvilNode } from '../../../../so
 import { createWriteClient } from '../../../../solidity/ts/testSupport/simulator/utils/clients.ts'
 import { TEST_ADDRESSES } from '../../../../solidity/ts/testSupport/simulator/utils/constants.ts'
 import { setupTestAccounts } from '../../../../solidity/ts/testSupport/simulator/utils/utilities.ts'
-import { addressString } from '../../../../solidity/ts/testSupport/simulator/utils/bigint.ts'
 import { buildAllowanceRevocationPlan, buildAssetSweepPlan, buildNativeOpenOracleCreditPlan } from '../../src/runtime/retirement-recovery-plans.ts'
 import { buildV3RetirementPlan, readV3Position, readV3PositionsWithQuorum } from '../../src/runtime/retirement-v3-positions.ts'
 import { DEFAULT_RETIREMENT_POLICIES, initialRetirementState, uniswapV3PositionKey, type DurableV3Position } from '../../src/state/retirement.ts'
@@ -15,7 +14,7 @@ import { recordV3ScanSuccess } from '../../src/runtime/retirement-v3-positions.t
 import { loadDurableState, saveDurableState } from '../../src/state/operator-state.ts'
 import { initialDurableState } from '../../src/state/initial-state.ts'
 import { address, snapshotFixture } from '../operations/fixture.ts'
-import { encodeDeployData, getAddress, type Abi, type Address, type Hex } from '@zoltar/bot-shared/ethereum'
+import { encodeDeployData, type Abi, type Address, type Hex } from '@zoltar/bot-shared/ethereum'
 
 const tokenAbi = [
 	{
@@ -241,7 +240,27 @@ describe('Drain & Retire on a local chain', () => {
 			const terminal = await loadDurableState(path, 31_337)
 			expect(terminal.retirement.positions[0]?.status).toBe('closed')
 			const terminalAnchor = await currentV3Anchor(owner)
-			expect(await readV3PositionsWithQuorum([async (candidate, anchor) => await readV3Position(owner, candidate, anchor)], 1, terminal.retirement.positions, terminalAnchor)).toEqual([])
+			const readers = [async (candidate: DurableV3Position, anchor: Parameters<typeof readV3Position>[2]) => await readV3Position(owner, candidate, anchor)]
+			expect(await readV3PositionsWithQuorum(readers, 1, terminal.retirement.positions, terminalAnchor)).toMatchObject([{ liquidity: 0n, tokensOwed0: 0n, tokensOwed1: 0n }])
+			const retained = terminal.retirement.positions[0]
+			if (retained === undefined) throw new Error('Closed position missing')
+			await expect(readV3PositionsWithQuorum(readers, 1, [{ ...retained, token0: token1 }], terminalAnchor)).rejects.toThrow('No RPC quorum')
+			await expect(readV3PositionsWithQuorum(readers, 1, terminal.retirement.positions, { ...terminalAnchor, blockHash: `0x${'ff'.repeat(32)}` })).rejects.toThrow('No RPC quorum')
+			const reseedHash = await owner.writeContract({ abi: poolAbi, address: pool, args: [owner.account.address, -120, 120, 12n, 0n, 0n], functionName: 'seed' })
+			await owner.waitForTransactionReceipt({ hash: reseedHash })
+			retained.creationTransactionHash = reseedHash
+			await saveDurableState(path, terminal)
+			const reseeded = await loadDurableState(path, 31_337)
+			const reseedAnchor = await currentV3Anchor(owner)
+			const observations = await readV3PositionsWithQuorum(readers, 1, reseeded.retirement.positions, reseedAnchor)
+			expect(observations).toHaveLength(1)
+			for (const observation of observations) {
+				expect(observation.liquidity).toBe(12n)
+				recordV3ScanSuccess(reseeded, observation, reseedAnchor.blockNumber)
+				expect(observation.position.status).toBe('active')
+				await executePlan(owner, buildV3RetirementPlan(snapshotFixture(), observation, 3))
+			}
+			expect(await readV3PositionsWithQuorum(readers, 1, reseeded.retirement.positions, await currentV3Anchor(owner))).toMatchObject([{ liquidity: 0n, tokensOwed0: 0n, tokensOwed1: 0n }])
 		} finally {
 			await rm(directory, { force: true, recursive: true })
 		}
@@ -276,10 +295,10 @@ describe('Drain & Retire on a local chain', () => {
 		expect(await readV3Position(owner, otherPosition, await currentV3Anchor(owner))).toMatchObject({ liquidity: 90n, tokensOwed0: 5n, tokensOwed1: 6n })
 	})
 
-	test('collects a zero-liquidity position, revokes allowance, and sweeps native ETH last with gas reserve', async () => {
+	test('collects a zero-liquidity position, revokes allowance, and recovers native credit to the signer', async () => {
 		const simulator = requiredNode().anvilWindowEthereum
 		const owner = createWriteClient(simulator, TEST_ADDRESSES[2])
-		const recipient = getAddress(addressString(TEST_ADDRESSES[3]))
+		const recipient = owner.account.address
 		const token0 = await deploy(owner, tokenBytecode, tokenAbi)
 		const token1 = await deploy(owner, tokenBytecode, tokenAbi)
 		const pool = await deploy(owner, poolBytecode, poolAbi, [token0, token1])
@@ -316,23 +335,19 @@ describe('Drain & Retire on a local chain', () => {
 		const retirementWithRecipient = { ...initialRetirementState(), policies: { ...DEFAULT_RETIREMENT_POLICIES }, recipient, status: 'draining' as const }
 		const creditPlan = buildNativeOpenOracleCreditPlan(snapshot, retirementWithRecipient, 5)
 		if (creditPlan === undefined) throw new Error('Native OpenOracle credit withdrawal was not planned')
-		const creditRecipientBefore = await owner.getBalance({ address: recipient })
+		const oracleBalanceBefore = await owner.getBalance({ address: oracle })
 		for (const step of creditPlan.steps) await owner.waitForTransactionReceipt({ hash: await owner.sendTransaction({ data: step.data, to: step.to }) })
 		expect(await owner.readContract({ abi: openOracleAbi, address: oracle, args: [owner.account.address, address(0)], functionName: 'tokenHolder' })).toBe(1n)
-		expect((await owner.getBalance({ address: recipient })) - creditRecipientBefore).toBe(100n)
+		expect(oracleBalanceBefore - (await owner.getBalance({ address: oracle }))).toBe(100n)
 
 		snapshot.wallet.tokens = []
 		snapshot.wallet.ethBalanceAttoEth = (5n * 10n ** 18n).toString()
 		const sweep = buildAssetSweepPlan(snapshot, retirementWithRecipient, 6, { maximumEthAttoEth: 10n ** 18n, maximumGasCostAttoEth: 2n * 10n ** 16n, maximumRepAttoRep: 10n ** 18n, minimumEthReserveAttoEth: 10n ** 18n })
-		if (sweep === undefined) throw new Error('Native sweep was not planned')
-		expect(sweep.definitionId).toBe('retirement.sweep.native-last')
-		const recipientBefore = await owner.getBalance({ address: recipient })
-		for (const step of sweep.steps) await owner.waitForTransactionReceipt({ hash: await owner.sendTransaction({ data: step.data, to: step.to, value: BigInt(step.value ?? '0') }) })
-		expect((await owner.getBalance({ address: recipient })) - recipientBefore).toBe(10n ** 18n)
+		expect(sweep).toBeUndefined()
 		expect(await owner.getBalance({ address: owner.account.address })).toBeGreaterThan(10n ** 18n)
 	})
 
-	test('never builds zero-address transfers or repeated self-sweeps on a local chain', async () => {
+	test('rejects other destinations and never builds signer-to-signer sweeps on a local chain', async () => {
 		const owner = createWriteClient(requiredNode().anvilWindowEthereum, TEST_ADDRESSES[2])
 		const snapshot = snapshotFixture()
 		snapshot.wallet.address = owner.account.address
@@ -342,13 +357,17 @@ describe('Drain & Retire on a local chain', () => {
 		const limits = { maximumEthAttoEth: 10n ** 18n, maximumGasCostAttoEth: 1n, maximumRepAttoRep: 10n ** 18n, minimumEthReserveAttoEth: 1n }
 		for (const [recipient, expectedError] of [
 			[address(0), 'zero address'],
-			[owner.account.address, 'durable signer'],
+			[address(99), 'durable signer'],
 		] as const) {
 			const retirement = { ...initialRetirementState(), recipient, status: 'draining' as const }
 			expect(() => buildAssetSweepPlan(snapshot, retirement, 1, limits)).toThrow(expectedError)
 			expect(() => buildAssetSweepPlan(snapshot, retirement, 2, limits)).toThrow(expectedError)
 			expect(() => buildNativeOpenOracleCreditPlan(snapshot, retirement, 3)).toThrow(expectedError)
 		}
+		const selfRetirement = { ...initialRetirementState(), recipient: owner.account.address, status: 'draining' as const }
+		snapshot.wallet.tokens = []
+		expect(buildAssetSweepPlan(snapshot, selfRetirement, 4, limits)).toBeUndefined()
+		expect(buildNativeOpenOracleCreditPlan(snapshot, selfRetirement, 5)).toBeDefined()
 		expect(await owner.getBalance({ address: owner.account.address })).toBe(before)
 		expect(await owner.getBalance({ address: address(0) })).toBe(0n)
 	})

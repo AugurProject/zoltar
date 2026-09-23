@@ -5,7 +5,7 @@ import type { RefreshGate } from './live-update.ts'
 import { isCurrentCanonicalGeneration, isCurrentContextRequest, refreshPresentation } from './live-update.ts'
 import { exactUnit } from './format.ts'
 import { short, shortIdentifier } from './identifier-format.ts'
-import { questionStatus } from './state-entity-pages.ts'
+import { questionStatus } from './question-time.ts'
 
 interface SystemRouteDeps {
 	state: SystemRouteState

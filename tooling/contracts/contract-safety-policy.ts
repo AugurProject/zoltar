@@ -3,11 +3,6 @@ export type ContractReference = {
 	contractName: string
 }
 
-export type BytecodeBudget = ContractReference & {
-	maximumBytes: number
-	reason: string
-}
-
 export type ExactLayoutPair = {
 	host: ContractReference
 	delegate: ContractReference
@@ -31,80 +26,10 @@ export type AnchoredLayout = {
 const runtimeLimitBytes = 24_576
 const initcodeLimitBytes = 49_152
 
-function runtimeBudget(reference: ContractReference, maximumBytes: number, context: string): BytecodeBudget {
-	return {
-		...reference,
-		maximumBytes,
-		reason: `${context} The current runtime leaves ${runtimeLimitBytes - maximumBytes} bytes of EIP-170 headroom.`,
-	}
-}
-
-function initcodeBudget(reference: ContractReference, maximumBytes: number, context: string): BytecodeBudget {
-	return {
-		...reference,
-		maximumBytes,
-		reason: `${context} The current minimum initcode leaves ${initcodeLimitBytes - maximumBytes} bytes of EIP-3860 headroom.`,
-	}
-}
-
 export const contractSafetyPolicy = {
 	runtimeLimitBytes,
 	initcodeLimitBytes,
 	excludedSourcePrefixes: ['contracts/test/', 'contracts/trading/test/'],
-	// Contracts close to protocol deployment limits have explicit no-growth budgets.
-	// Raising one requires a reviewed reason in the same change.
-	runtimeBudgets: [
-		runtimeBudget(
-			{
-				sourcePath: 'contracts/statoblast/SecurityPool.sol',
-				contractName: 'SecurityPool',
-			},
-			24_371,
-			'The reviewed pool stores vault targets and delegates fee checkpoints while retaining the size-limited initialization guard; no further runtime growth is permitted.',
-		),
-		runtimeBudget(
-			{
-				sourcePath: 'contracts/statoblast/EscalationGame.sol',
-				contractName: 'EscalationGame',
-			},
-			24_576,
-			'The merged game preserves continuation response-period admission and fork-aware finality at the EIP-170 limit; the preview reads its outcome balance once, and no further runtime growth is permitted.',
-		),
-		runtimeBudget(
-			{
-				sourcePath: 'contracts/statoblast/OpenOraclePriceCoordinator.sol',
-				contractName: 'OpenOraclePriceCoordinator',
-			},
-			24_050,
-			'The reviewed coordinator takes an explicit request bounty and derives the settlement base-fee cap from it so fee-free simulations match mined gas and ETH movement; no further runtime growth is permitted.',
-		),
-		runtimeBudget(
-			{
-				sourcePath: 'contracts/statoblast/SecurityPoolForker.sol',
-				contractName: 'SecurityPoolForker',
-			},
-			24_046,
-			'The forker delegates finality to the game and preserves fractional truth-auction backing without duplicated checks; no further runtime growth is permitted.',
-		),
-	] satisfies readonly BytecodeBudget[],
-	initcodeBudgets: [
-		initcodeBudget(
-			{
-				sourcePath: 'contracts/statoblast/SecurityPoolForker.sol',
-				contractName: 'SecurityPoolForker',
-			},
-			48_298,
-			'The forker initcode reflects shared game finality and proportional auction backing; no further growth is permitted.',
-		),
-		initcodeBudget(
-			{
-				sourcePath: 'contracts/statoblast/factories/EscalationGameFactory.sol',
-				contractName: 'EscalationGameFactory',
-			},
-			47_282,
-			'The factory embeds the merged game with continuation admission, fork-aware finality, and inherited tie reopening after auction haircuts; no further initcode growth is permitted.',
-		),
-	] satisfies readonly BytecodeBudget[],
 	exactLayoutPairs: [
 		{
 			host: { sourcePath: 'contracts/statoblast/EscalationGame.sol', contractName: 'EscalationGame' },

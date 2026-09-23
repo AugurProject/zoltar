@@ -419,13 +419,10 @@ describe('Price Oracle Refund Security Tests', () => {
 		assert.strictEqual(replayed.pendingSettlementOperationCount, pendingSettlementOperationCount, `${context}: pending settlement count replay mismatch`)
 	}
 
-	test.each([
-		{ expectedFlags: OPEN_ORACLE_FLAG_TRACK_DISPUTES | OPEN_ORACLE_FLAG_STORE_ALL, label: 'block', timeType: false },
-		{ expectedFlags: OPEN_ORACLE_FLAG_TIME_TYPE | OPEN_ORACLE_FLAG_TRACK_DISPUTES | OPEN_ORACLE_FLAG_STORE_ALL, label: 'timestamp', timeType: true },
-	] as const)('coordinator keeps the exact legacy $label-clock flag template and settlement economics', async ({ expectedFlags, timeType }) => {
+	test('coordinator keeps the exact timestamp-clock flag template and settlement economics', async () => {
+		const expectedFlags = OPEN_ORACLE_FLAG_TIME_TYPE | OPEN_ORACLE_FLAG_TRACK_DISPUTES | OPEN_ORACLE_FLAG_STORE_ALL
 		const constructorArgs = getOracleCoordinatorConstructorArgs()
 		constructorArgs[9] = 2
-		constructorArgs[14] = timeType
 		const coordinator = await deployContract(client, encodeOracleCoordinatorDeployData(constructorArgs))
 		await client.writeContract({
 			abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
@@ -441,18 +438,14 @@ describe('Price Oracle Refund Security Tests', () => {
 		const report = (await loadOpenOracleEventState(client, reportId)).latest
 		const optionalFlags = OPEN_ORACLE_FLAG_STORE_SETTLEMENT_ELIGIBILITY | OPEN_ORACLE_FLAG_FEES_ONLY_AT_HALT | OPEN_ORACLE_FLAG_FLEXIBLE_ESCALATION
 
-		assert.strictEqual(report.game.flags, expectedFlags, 'coordinator report flags should remain exactly 6 or 7')
+		assert.strictEqual(report.game.flags, expectedFlags, 'coordinator report flags should remain exactly 7')
 		assert.strictEqual(report.game.flags & optionalFlags, 0n, 'coordinator must not silently enable any new optional behavior')
 		assert.ok(report.game.currentAmount1 >= requestedInitialAttoWeth, 'coordinator should honor the requested WETH floor')
 		assert.strictEqual(report.game.currentAmount2, report.game.currentAmount1, 'one REP per ETH should preserve matching report notionals')
 		assert.strictEqual(report.game.feePercentage, BigInt(ORACLE_FEE_PERCENTAGE), 'coordinator fee economics should remain unchanged')
 		assert.strictEqual(report.game.protocolFee, BigInt(ORACLE_PROTOCOL_FEE), 'coordinator protocol-fee economics should remain unchanged')
 
-		if (timeType) {
-			await mockWindow.setTime(report.game.reportTimestamp + report.game.settlementTime - 1n)
-		} else {
-			await mockWindow.request({ method: 'evm_mine', params: [] })
-		}
+		await mockWindow.setTime(report.game.reportTimestamp + report.game.settlementTime - 1n)
 		await openOracleSettle(client, reportId)
 		assert.strictEqual(await getPendingReportId(client, coordinator), 0n, 'settlement callback should clear the coordinator report')
 		assert.strictEqual(await getLastPrice(client, coordinator), proposedRepPerEthPrice, 'settlement should publish the same REP/ETH price')
@@ -791,6 +784,16 @@ describe('Price Oracle Refund Security Tests', () => {
 		const invalidArgs = getOracleCoordinatorConstructorArgs()
 		invalidArgs[6] = MAX_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS + 1n
 		await assert.rejects(async () => await deployContract(client, encodeOracleCoordinatorDeployData(invalidArgs)), /initial report priority fee exceeds openoracle limits/i)
+	})
+
+	test('coordinator constructor requires a timestamp clock with dispute tracking', async () => {
+		// Price freshness is measured from the final report timestamp, so block-number games are unsupported.
+		const blockClockArgs = getOracleCoordinatorConstructorArgs()
+		blockClockArgs[14] = false
+		await assert.rejects(async () => await deployContract(client, encodeOracleCoordinatorDeployData(blockClockArgs)), /Oracle must track disputes on a timestamp clock/)
+		const untrackedArgs = getOracleCoordinatorConstructorArgs()
+		untrackedArgs[15] = false
+		await assert.rejects(async () => await deployContract(client, encodeOracleCoordinatorDeployData(untrackedArgs)), /Oracle must track disputes on a timestamp clock/)
 	})
 
 	test('coordinator constructor rejects unsafe oracle risk parameters', async () => {
@@ -2059,11 +2062,13 @@ describe('Price Oracle Refund Security Tests', () => {
 	test('expired pending auto-execute slots do not block later valid oracle settlements', async () => {
 		const costAttoEth = await getRequestPriceCostAttoEth(client, priceOracle)
 
-		await requestPriceIfNeededAndStageOperationWithInitialReportPrice(client, priceOracle, OperationType.WithdrawRep, client.account.address, 1n, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, 10n ** 18n, costAttoEth)
+		// A one-second operation window expires just after settlement eligibility while the report is still fresh.
+		const operationValidForSeconds = 1n
+		await requestPriceIfNeededAndStageOperationWithInitialReportPrice(client, priceOracle, OperationType.WithdrawRep, client.account.address, 1n, operationValidForSeconds, 10n ** 18n, costAttoEth)
 
 		const pendingReportId = await getPendingReportId(client, priceOracle)
 		const reportMeta = await getOpenOracleReportMeta(client, pendingReportId)
-		await mockWindow.advanceTime(BigInt(reportMeta.settlementTime) + DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS + 1n)
+		await mockWindow.advanceTime(BigInt(reportMeta.settlementTime) + operationValidForSeconds + 1n)
 		await openOracleSettle(client, pendingReportId)
 
 		const isPriceValid = await getIsPriceValid(client, priceOracle)

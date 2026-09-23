@@ -1818,7 +1818,7 @@ describe('network indexer lifecycle', () => {
 		expect(coverage).toEqual({ currentBlockLogs: [currentLog], remainingLogs: [laterLog] })
 	})
 
-	test('stores same-block and later REP activity after discovering the token mid-segment', async () => {
+	test.each([false, true])('stores discovered REP activity and orders pool receipts (pool=%p)', async includePool => {
 		const zoltarAddress = getAddress('0x7000000000000000000000000000000000000007')
 		const repAddress = getAddress('0x8000000000000000000000000000000000000008')
 		const wethAddress = getAddress('0x9000000000000000000000000000000000000009')
@@ -1842,7 +1842,7 @@ describe('network indexer lifecycle', () => {
 			blockHash: blockHashes.get(blockNumber),
 			blockNumber: toHex(blockNumber),
 			data,
-			logIndex: '0x0',
+			logIndex: toHex(transactionIndex),
 			removed: false,
 			topics,
 			transactionHash: hash(transactionDigit),
@@ -1851,7 +1851,14 @@ describe('network indexer lifecycle', () => {
 		const deployLog = rawLog(zoltarAddress, 10n, '1', 0, topicsFrom(encodeEventTopics({ abi: deployAbi, eventName: 'DeployChild', args: { universeId: 1n, outcomeIndex: 2n, childUniverseId: 3n } })), encodeAbiParameters([{ type: 'address' }, { type: 'address' }, { type: 'uint256' }], [sender, repAddress, 1_000n]))
 		const sameBlockRepLog = rawLog(repAddress, 10n, '2', 1, topicsFrom(encodeEventTopics({ abi: transferAbi, eventName: 'Transfer', args: { from: sender, to: holder } })), encodeAbiParameters([{ type: 'uint256' }], [100n]))
 		const laterRepLog = rawLog(repAddress, 12n, '3', 0, topicsFrom(encodeEventTopics({ abi: transferAbi, eventName: 'Transfer', args: { from: sender, to: holder } })), encodeAbiParameters([{ type: 'uint256' }], [50n]))
-		const allLogs = [deployLog, sameBlockRepLog, laterRepLog]
+		const factoryAddress = getAddress('0xc00000000000000000000000000000000000000c')
+		const poolAddress = getAddress('0xd00000000000000000000000000000000000000d')
+		const poolAbi = parseAbi(['event PoolCreated(address indexed token0,address indexed token1,uint24 indexed fee,int24 tickSpacing,address pool)'])
+		const initializeAbi = parseAbi(['event Initialize(uint160 sqrtPriceX96,int24 tick)'])
+		const poolCreated = rawLog(factoryAddress, 10n, '4', 1, topicsFrom(encodeEventTopics({ abi: poolAbi, eventName: 'PoolCreated', args: { token0: repAddress, token1: wethAddress, fee: 3000n } })), encodeAbiParameters([{ type: 'int24' }, { type: 'address' }], [60n, poolAddress]))
+		const initialization = rawLog(poolAddress, 10n, '5', 3, topicsFrom(encodeEventTopics({ abi: initializeAbi, eventName: 'Initialize' })), encodeAbiParameters([{ type: 'uint160' }, { type: 'int24' }], [2n ** 96n, 0n]))
+		const trackedLate = { ...deployLog, transactionHash: hash('5'), transactionIndex: '0x3', logIndex: '0x4' }
+		const allLogs = includePool ? [deployLog, poolCreated, { ...sameBlockRepLog, transactionIndex: '0x2', logIndex: '0x2' }, initialization, trackedLate, laterRepLog] : [deployLog, sameBlockRepLog, laterRepLog]
 		const rpcLogQueries: Array<{ readonly addresses: readonly string[]; readonly fromBlock: bigint; readonly toBlock: bigint }> = []
 		const stateQueries: bigint[] = []
 		const metadataQueryBlocks: bigint[] = []
@@ -1906,7 +1913,11 @@ describe('network indexer lifecycle', () => {
 						const fromBlock = BigInt(String(filter.fromBlock))
 						const toBlock = BigInt(String(filter.toBlock))
 						rpcLogQueries.push({ addresses, fromBlock, toBlock })
-						return allLogs.filter(log => addresses.some(candidate => candidate.toLowerCase() === log.address.toLowerCase()) && BigInt(log.blockNumber) >= fromBlock && BigInt(log.blockNumber) <= toBlock)
+						const topics = 'topics' in filter && Array.isArray(filter.topics) ? filter.topics : []
+						return allLogs.filter(
+							log =>
+								addresses.some(candidate => candidate.toLowerCase() === log.address.toLowerCase()) && BigInt(log.blockNumber) >= fromBlock && BigInt(log.blockNumber) <= toBlock && topics.every((topic, index) => topic === null || (Array.isArray(topic) ? topic.includes(log.topics[index]) : topic === log.topics[index])),
+						)
 					}
 					const transactionHash = String(request.params?.[0])
 					const sourceLog = allLogs.find(log => log.transactionHash === transactionHash)
@@ -1933,7 +1944,7 @@ describe('network indexer lifecycle', () => {
 							cumulativeGasUsed: '0x5208',
 							from: sender,
 							gasUsed: '0x5208',
-							logs: [sourceLog],
+							logs: allLogs.filter(log => log.transactionHash === sourceLog.transactionHash),
 							status: '0x1',
 							to: sourceLog.address,
 							transactionHash: sourceLog.transactionHash,
@@ -1952,6 +1963,7 @@ describe('network indexer lifecycle', () => {
 			[zoltarAddress.toLowerCase(), { address: zoltarAddress, deploymentBlock: 10n, deploymentBlockExact: true, kind: 'zoltar', label: 'Zoltar', provenance: 'manifest' }],
 			[wethAddress.toLowerCase(), { address: wethAddress, deploymentBlock: 10n, deploymentBlockExact: true, kind: 'weth', label: 'WETH', provenance: 'manifest' }],
 		])
+		if (includePool) contracts.set(factoryAddress.toLowerCase(), { address: factoryAddress, deploymentBlock: 10n, deploymentBlockExact: true, kind: 'uniswapV3Factory', label: 'V3 factory', provenance: 'manifest' })
 		const lease: IndexerLease = {
 			backendPid: 1,
 			connection: database.sql as IndexerLease['connection'],
@@ -1982,10 +1994,7 @@ describe('network indexer lifecycle', () => {
 			const network = {
 				chainId: 31_337,
 				confirmationDepth: 100n,
-				contracts: [
-					[zoltarAddress, 'Zoltar', 'zoltar', 10n],
-					[wethAddress, 'WETH', 'weth', 10n],
-				] as const,
+				contracts: [[zoltarAddress, 'Zoltar', 'zoltar', 10n], [wethAddress, 'WETH', 'weth', 10n], ...(includePool ? [[factoryAddress, 'V3 factory', 'uniswapV3Factory', 10n] as const] : [])] as const,
 				explorerBaseUrl: 'https://example.invalid',
 				id: 'rep-lifecycle',
 				name: 'REP lifecycle',
@@ -1997,6 +2006,14 @@ describe('network indexer lifecycle', () => {
 			expect(error.mock.calls).toEqual([])
 			expect(storedBlocks.map(block => block.number)).toEqual([10n, 12n])
 			expect(headerQueryBlocks).not.toContain(11n)
+			if (includePool)
+				expect(storedBlocks[0]?.logs.map(log => [log.logIndex, log.decoded.name])).toEqual([
+					[0, 'DeployChild'],
+					[1, 'PoolCreated'],
+					[2, 'Transfer'],
+					[3, 'Initialize'],
+					[4, 'DeployChild'],
+				])
 			const storedRepLogs = storedBlocks.flatMap(block => block.logs).filter(log => log.address === repAddress)
 			expect(storedRepLogs.map(log => log.blockNumber)).toEqual([10n, 12n])
 			expect(storedBlocks.flatMap(block => block.addressActivity).some(activity => activity.address === holder)).toBe(true)

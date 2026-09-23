@@ -16,7 +16,7 @@ export function createRetirementController(options: RetirementControllerOptions)
 			const action = body['action']
 			const candidateState: RuntimeState = { ...options.state, activities: [...options.state.activities], retirement: structuredClone(options.state.retirement) }
 			if (action === 'request') {
-				exactKeys(body, ['action', 'confirmation', 'policies', 'profileId', 'recipient'], 'Retirement update')
+				exactKeys(body, ['action', 'confirmation', 'policies', 'profileId'], 'Retirement update')
 				if (body['profileId'] !== options.state.profileId) throw new Error('Retirement deployment profile does not match the active durable profile')
 				const rawPolicies = record(body['policies'], 'Retirement policies')
 				exactKeys(rawPolicies, ['exitAfterCompletion', 'exitUnmatchedShares', 'maximumExitLossBps', 'migrateExistingClaims', 'sweepAssets', 'unwrapWeth'], 'Retirement policies')
@@ -29,7 +29,8 @@ export function createRetirementController(options: RetirementControllerOptions)
 					unwrapWeth: rawPolicies['unwrapWeth'] === true,
 				}
 				if (!Number.isSafeInteger(policies.maximumExitLossBps) || policies.maximumExitLossBps < 0 || policies.maximumExitLossBps > 10_000) throw new Error('maximumExitLossBps must be an integer from 0 through 10000')
-				requestRetirement(candidateState.retirement, options.state.profileId, getAddress(String(body['recipient'])), policies, String(body['confirmation']), options.state.signerAddress)
+				if (options.state.signerAddress === undefined) throw new Error('Retirement requires a bound signer')
+				requestRetirement(candidateState.retirement, options.state.profileId, options.state.signerAddress, policies, String(body['confirmation']), options.state.signerAddress)
 				recordActivity(candidateState, { message: `Drain & Retire requested for ${options.state.profileId}`, status: 'info', type: 'configuration' })
 			} else if (action === 'cancel') {
 				exactKeys(body, ['action', 'confirmation'], 'Retirement update')

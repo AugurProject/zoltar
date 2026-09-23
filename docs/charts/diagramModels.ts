@@ -210,7 +210,7 @@ export const diagramGraphSpecs = {
 			section(
 				'membership',
 				[
-					node('deposit-leaf', 'Deposit leaf', 'blue', ['peak-local leafIndex']),
+					node('deposit-leaf', 'Deposit leaf', 'blue', ['global leafIndex']),
 					node('siblings', 'In-peak siblings', 'slate', ['bottom-up', 'count = peak height']),
 					node('selected-peak', 'Selected peak', 'green', ['peakIndex is its height']),
 					node('other-peaks', 'Other peak roots', 'slate', ['ascending height', 'bag right to left']),

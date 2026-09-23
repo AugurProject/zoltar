@@ -63,7 +63,20 @@ export function recordDryRun(state: Pick<RuntimeState, 'activities'>, plan: Oper
 	})
 }
 
-export async function executeScheduledOperation(configuration: ConfigurationState, state: RuntimeState, plan: OperationPlan, execute: () => Promise<void>, recover: (error: unknown) => boolean, trigger: 'scheduled' | 'manual' = 'scheduled') {
+export async function executeScheduledOperation(configuration: ConfigurationState, state: RuntimeState, plan: OperationPlan, execute: () => Promise<void>, recover: (error: unknown) => boolean, trigger: 'scheduled' | 'manual' | 'retirement' = 'scheduled') {
+	if (trigger === 'retirement') {
+		if (state.retirement.status === 'inactive') throw new Error('Retirement execution requires active retirement')
+		if (state.paused || configuration.settings.paused) throw new Error('Chaos bot is paused')
+		if (!configuration.settings.runtime.execute) throw new Error('Transaction execution is disabled')
+		if (state.scheduler.status !== 'paused') throw new Error('Retirement requires paused random scheduling')
+		try {
+			await execute()
+		} catch (error) {
+			if (error instanceof TransactionAwaitingRecovery || !recover(error)) throw error
+		}
+		return
+	}
+	if (state.retirement.status !== 'inactive') throw new Error('Random operations are disabled during retirement')
 	if (trigger === 'manual' && (state.paused || configuration.settings.paused)) throw new Error('Chaos bot is paused')
 	const scheduler = schedulerFor(configuration, state)
 	await scheduler.begin(plan.definitionId, trigger)
@@ -86,6 +99,10 @@ export async function executeScheduledOperation(configuration: ConfigurationStat
 export async function scheduleAfterRecoveredTransaction(configuration: ConfigurationState, state: RuntimeState, operationId: string) {
 	if (state.scheduler.selectedOperationId !== operationId) return false
 	const scheduler = schedulerFor(configuration, state)
+	if (state.retirement.status !== 'inactive') {
+		await scheduler.pause()
+		return true
+	}
 	await scheduler.complete(operationId)
 	if (configuration.settings.paused || state.paused) await scheduler.pause()
 	return true
@@ -103,8 +120,21 @@ function workflowStartedAfterLastScheduledRun(state: RuntimeState) {
 	})
 }
 
-export function interruptedSchedulerRunNeedsClosure(state: RuntimeState) {
+function interruptedSchedulerRunNeedsClosure(state: RuntimeState) {
 	if (state.pendingTransactions.length !== 0 || state.workflows.some(workflowNeedsContinuation)) return false
 	if (state.scheduler.status === 'running') return true
 	return state.scheduler.status === 'paused' && workflowStartedAfterLastScheduledRun(state)
+}
+
+export async function closeInterruptedSchedulerRun(configuration: ConfigurationState, state: RuntimeState) {
+	if (!interruptedSchedulerRunNeedsClosure(state)) return
+	const scheduler = schedulerFor(configuration, state)
+	await (state.retirement.status === 'inactive' ? scheduler.complete(state.scheduler.selectedOperationId) : scheduler.pause())
+	if (configuration.settings.paused || state.paused) await scheduler.pause()
+	recordActivity(state, {
+		message: state.retirement.status === 'inactive' ? 'Interrupted scheduler run was closed with a fresh randomized wait before any new operation' : 'Interrupted scheduler run remains paused for retirement',
+		status: 'info',
+		type: 'recovery',
+	})
+	await saveDurableState(configuration.settings.runtime.stateFile, state)
 }

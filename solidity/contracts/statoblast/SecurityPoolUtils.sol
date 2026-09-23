@@ -82,10 +82,15 @@ library SecurityPoolUtils {
 			uint256 nextFeesOwedRemainder
 		)
 	{
-		uint256 resultingSettlementCollateralAttoEth =
-			(settlementCollateralAttoEth * _rpow(retentionRate, timeDelta, PRICE_PRECISION)) / PRICE_PRECISION;
+		// Both carries hold decay that was already counted but not yet credited, and settlement
+		// collateral still retains it. Decaying it again would let dust collateral credit more than it holds.
+		uint256 pendingDecayAttoEth = (indexRemainder + feesOwedRemainder) / PRICE_PRECISION;
+		uint256 decayingCollateralAttoEth =
+			settlementCollateralAttoEth > pendingDecayAttoEth ? settlementCollateralAttoEth - pendingDecayAttoEth : 0;
+		uint256 resultingCollateralAttoEth =
+			(decayingCollateralAttoEth * _rpow(retentionRate, timeDelta, PRICE_PRECISION)) / PRICE_PRECISION;
 		uint256 scaledFeeDelta =
-			(settlementCollateralAttoEth - resultingSettlementCollateralAttoEth) * PRICE_PRECISION + indexRemainder;
+			(decayingCollateralAttoEth - resultingCollateralAttoEth) * PRICE_PRECISION + indexRemainder;
 		feeIndexDelta = scaledFeeDelta / feeEligibleCapacityOwnershipAttoRep;
 		nextIndexRemainder = scaledFeeDelta % feeEligibleCapacityOwnershipAttoRep;
 		uint256 feesOwedDelta = feeIndexDelta * feeEligibleCapacityOwnershipAttoRep + feesOwedRemainder;

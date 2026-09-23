@@ -295,7 +295,6 @@ export async function loadForkAuctionDetails(client: ReadClient, securityPoolAdd
 
 export async function forkZoltarWithOwnEscalation(client: WriteClient, securityPoolAddress: Address, universeId: bigint) {
 	return await executeForkAuctionAction(
-		client,
 		'forkWithOwnEscalation',
 		securityPoolAddress,
 		universeId,
@@ -310,7 +309,6 @@ export async function forkZoltarWithOwnEscalation(client: WriteClient, securityP
 }
 export async function initiateSecurityPoolFork(client: WriteClient, securityPoolAddress: Address, universeId: bigint) {
 	return await executeForkAuctionAction(
-		client,
 		'initiateFork',
 		securityPoolAddress,
 		universeId,
@@ -325,7 +323,6 @@ export async function initiateSecurityPoolFork(client: WriteClient, securityPool
 }
 export async function createChildUniverseFromSecurityPool(client: WriteClient, securityPoolAddress: Address, universeId: bigint, outcome: ReportingOutcomeKey) {
 	return await executeForkAuctionAction(
-		client,
 		'createChildUniverse',
 		securityPoolAddress,
 		universeId,
@@ -340,7 +337,6 @@ export async function createChildUniverseFromSecurityPool(client: WriteClient, s
 }
 export async function migrateRepToZoltarFromSecurityPool(client: WriteClient, securityPoolAddress: Address, universeId: bigint, outcomes: ReportingOutcomeKey[]) {
 	return await executeForkAuctionAction(
-		client,
 		'migrateRepToZoltar',
 		securityPoolAddress,
 		universeId,
@@ -355,7 +351,6 @@ export async function migrateRepToZoltarFromSecurityPool(client: WriteClient, se
 }
 export async function migrateSecurityVault(client: WriteClient, securityPoolAddress: Address, universeId: bigint, outcome: ReportingOutcomeKey) {
 	return await executeForkAuctionAction(
-		client,
 		'migrateVault',
 		securityPoolAddress,
 		universeId,
@@ -370,7 +365,7 @@ export async function migrateSecurityVault(client: WriteClient, securityPoolAddr
 }
 export async function claimParentEscalationDeposits(client: WriteClient, securityPoolAddress: Address, universeId: bigint, vaultAddress: Address, outcome: ReportingOutcomeKey, depositIndexes: bigint[]) {
 	const outcomeIndex = getReportingOutcomeValue(outcome)
-	return await executeForkAuctionAction(client, 'claimParentEscalationDeposits', securityPoolAddress, universeId, async () => {
+	return await executeForkAuctionAction('claimParentEscalationDeposits', securityPoolAddress, universeId, async () => {
 		return await writeContractAndWait(client, () => ({
 			address: getInfraContractAddresses().securityPoolForker,
 			abi: statoblast_SecurityPoolForker_SecurityPoolForker.abi,
@@ -382,7 +377,6 @@ export async function claimParentEscalationDeposits(client: WriteClient, securit
 export async function migrateVaultWithUnresolvedEscalation(client: WriteClient, securityPoolAddress: Address, vaultAddress: Address, universeId: bigint, outcome: ReportingOutcomeKey) {
 	const outcomeIndex = getReportingOutcomeValue(outcome)
 	return await executeForkAuctionAction(
-		client,
 		'migrateUnresolvedEscalation',
 		securityPoolAddress,
 		universeId,

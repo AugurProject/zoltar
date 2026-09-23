@@ -1,3 +1,4 @@
+import { evaluateV3RetirementContinuation, V3_RETIREMENT_OPERATION, type RetirementContinuationContext } from './retirement-v3-continuation.ts'
 import type { OperatorSettings } from '../config/settings.ts'
 import { operationHasCanonicalContinuationBuilder, reevaluateOperationContinuation } from '../operations/catalog.ts'
 import type { EcosystemSnapshot, EvaluatedOperation, OperationContinuationDisposition } from '../operations/types.ts'
@@ -5,7 +6,18 @@ import type { DurableWorkflow } from '../state/operator-state.ts'
 import { applyExecutionPolicy, planningOptions } from './canonical-scan.ts'
 import { durableWorkflowPlan } from './workflows.ts'
 
-export function evaluatePolicySafeContinuation(snapshot: EcosystemSnapshot, workflow: DurableWorkflow, settings: OperatorSettings, anchorBlock: string, retirementCleanup = false): { continuationDisposition?: OperationContinuationDisposition; evaluation: EvaluatedOperation } {
+export function evaluatePolicySafeContinuation(
+	snapshot: EcosystemSnapshot,
+	workflow: DurableWorkflow,
+	settings: OperatorSettings,
+	anchorBlock: string,
+	retirementCleanup = false,
+	retirementContext?: RetirementContinuationContext,
+): { continuationDisposition?: OperationContinuationDisposition; evaluation: EvaluatedOperation } {
+	if (workflow.operationId === V3_RETIREMENT_OPERATION) {
+		if (retirementContext === undefined) throw new Error('Retirement continuation requires canonical position observations')
+		return { evaluation: evaluateV3RetirementContinuation(snapshot, workflow, retirementContext) }
+	}
 	const evaluate = (continuationDisposition: OperationContinuationDisposition | undefined) => {
 		const evaluation = reevaluateOperationContinuation(snapshot, durableWorkflowPlan(workflow), planningOptions(settings, workflow.planningSeed), {
 			confirmedStepIds: workflow.steps.filter(step => step.status === 'confirmed').map(step => step.id),

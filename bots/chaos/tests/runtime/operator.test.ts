@@ -1,13 +1,13 @@
 import { getAddress } from '@zoltar/bot-shared/ethereum'
 import { afterEach, describe, expect, test } from 'bun:test'
-import { mkdtemp, readFile, rm } from 'node:fs/promises'
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import example from '../../config/operator.example.json'
 import { privateKeyToAccount, zeroAddress, zeroHash, type Address } from '@zoltar/bot-shared/ethereum'
 import { EndpointCheckFailure, type EndpointCheck } from '@zoltar/bot-shared/monitoring/connectivity'
-import { parseSettings, serializedSettings, type OperatorSettings } from '../../src/config/settings.ts'
+import { loadSettings, parseSettings, serializedSettings, type OperatorSettings } from '../../src/config/settings.ts'
 import { createBotShutdownController } from '@zoltar/bot-shared/execution/bot-process-locks'
-import { OperationRediscoveryRequired } from '../../src/execution/transaction-executor.ts'
+import { OperationRediscoveryRequired } from '../../src/execution/execution-context.ts'
 import { IMMUTABLE_TOPOLOGY_CACHE_SCHEMA_VERSION, type CanonicalImmutableTopologyCache } from '../../src/monitoring/topology-cache.ts'
 import { reevaluateOperationContinuation } from '../../src/operations/catalog.ts'
 import { eligibleOperationPlans } from '../support/operation-plans.ts'
@@ -75,9 +75,10 @@ function topologyCacheWithVaults(pool: Address, vaults: Address[]): CanonicalImm
 const FIRST_PRIVATE_KEY = `0x${'11'.repeat(32)}` as const
 const SECOND_PRIVATE_KEY = `0x${'22'.repeat(32)}` as const
 
-function restartSettings(stateFile: string, deploymentIdentity: number, privateKey: `0x${string}` | null) {
+function restartSettings(stateFile: string, deploymentIdentity: number, privateKey: `0x${string}` | null, network: unknown = example.network) {
 	const settings = parseSettings({
 		...example,
+		network,
 		privateKey,
 		runtime: {
 			...example.runtime,
@@ -603,12 +604,121 @@ describe('chaos operator runtime', () => {
 		expect(durable.profileId).toBe(executionProfileId(settings))
 	})
 
+	test('pins the selected deployment before starting a new operator', async () => {
+		const directory = await mkdtemp('/tmp/zoltar-chaos-operator-pin-')
+		temporaryDirectories.push(directory)
+		const path = join(directory, 'operator.json')
+		const stateFile = join(directory, 'state.json')
+		await writeFile(path, `${JSON.stringify({ ...example, runtime: { ...example.runtime, once: true, stateFile, ui: false } })}\n`, { mode: 0o600 })
+		const loaded = await loadSettings(path)
+		expect(loaded.needsDeploymentPin).toBeTrue()
+		using shutdown = createBotShutdownController()
+		await runChaosOperator(loaded, processLocks(), shutdown)
+		const persisted: unknown = JSON.parse(await readFile(path, 'utf8'))
+		if (typeof persisted !== 'object' || persisted === null || !('deploymentPin' in persisted)) throw new Error('Operator did not persist its deployment pin')
+		expect((await loadSettings(path)).needsDeploymentPin).toBeFalse()
+		const boundState = await loadDurableState(stateFile, loaded.settings.network.chainId)
+		expect(boundState.profileId).toBe(executionProfileId(loaded.settings))
+		expect(boundState.uniswapV3Factory).toBe(loaded.settings.deployment.uniswapV3Factory)
+	})
+
+	test('restarts an operated historical Sepolia profile and pins its original addresses', async () => {
+		const directory = await mkdtemp('/tmp/zoltar-chaos-operator-legacy-')
+		temporaryDirectories.push(directory)
+		const path = join(directory, 'operator.json')
+		const stateFile = join(directory, 'state.json')
+		await writeFile(path, `${JSON.stringify({ ...example, runtime: { ...example.runtime, once: true, stateFile, ui: false } })}\n`, { mode: 0o600 })
+		const profileId = 'profile:v1:831bd7a49fd68a696ac753b612ce41ec5c50580b093ab8e1e5151a26883e29ae'
+		const operated = initialDurableState(11_155_111, true, profileId)
+		operated.activities.push({ at: new Date(0).toISOString(), message: 'Existing operation', status: 'info', type: 'configuration' })
+		await saveDurableState(stateFile, operated)
+		using shutdown = createBotShutdownController()
+		await runChaosOperator(await loadSettings(path), processLocks(), shutdown)
+		const loaded = await loadSettings(path)
+		expect(executionProfileId(loaded.settings)).toBe(profileId)
+		expect(loaded.settings.deployment.uniswapV3Factory).toBe('0x0227628f3F023bb0B980b67D528571c95c6DaC1c')
+		const restarted = await loadDurableState(stateFile, loaded.settings.network.chainId)
+		expect(restarted.profileId).toBe(profileId)
+		expect(restarted.uniswapV3Factory).toBe(loaded.settings.deployment.uniswapV3Factory)
+	})
+
+	test('keeps an existing deployment pin when historical Sepolia state belongs to another profile', async () => {
+		const directory = await mkdtemp('/tmp/zoltar-chaos-operator-pinned-history-')
+		temporaryDirectories.push(directory)
+		const path = join(directory, 'operator.json')
+		const stateFile = join(directory, 'state.json')
+		const settings = parseSettings({ ...example, runtime: { ...example.runtime, once: true, stateFile, ui: false } })
+		await writeFile(path, `${JSON.stringify(serializedSettings(settings))}\n`, { mode: 0o600 })
+		const operated = initialDurableState(11_155_111, true, 'profile:v1:831bd7a49fd68a696ac753b612ce41ec5c50580b093ab8e1e5151a26883e29ae')
+		operated.activities.push({ at: new Date(0).toISOString(), message: 'Existing operation', status: 'info', type: 'configuration' })
+		await saveDurableState(stateFile, operated)
+		const configBefore = await readFile(path)
+		const stateBefore = await readFile(stateFile)
+		using shutdown = createBotShutdownController()
+		await expect(runChaosOperator(await loadSettings(path), processLocks(), shutdown)).rejects.toThrow('configure a distinct state file for the new deployment profile')
+		expect(await readFile(path)).toEqual(configBefore)
+		expect(await readFile(stateFile)).toEqual(stateBefore)
+	})
+
+	test('refuses historical Sepolia state already bound to a different Uniswap factory', async () => {
+		const directory = await mkdtemp('/tmp/zoltar-chaos-operator-wrong-factory-')
+		temporaryDirectories.push(directory)
+		const path = join(directory, 'operator.json')
+		const stateFile = join(directory, 'state.json')
+		await writeFile(path, `${JSON.stringify({ ...example, runtime: { ...example.runtime, once: true, stateFile, ui: false } })}\n`, { mode: 0o600 })
+		const operated = initialDurableState(11_155_111, true, 'profile:v1:831bd7a49fd68a696ac753b612ce41ec5c50580b093ab8e1e5151a26883e29ae')
+		operated.activities.push({ at: new Date(0).toISOString(), message: 'Existing operation', status: 'info', type: 'configuration' })
+		operated.uniswapV3Factory = getAddress('0xEf09Be426F8d6D2786cADEA7D3A8b0D09cEB79B4')
+		await saveDurableState(stateFile, operated)
+		const configBefore = await readFile(path)
+		const stateBefore = await readFile(stateFile)
+		using shutdown = createBotShutdownController()
+		await expect(runChaosOperator(await loadSettings(path), processLocks(), shutdown)).rejects.toThrow('Sepolia requires the published Uniswap V3 factory')
+		expect(await readFile(path)).toEqual(configBefore)
+		expect(await readFile(stateFile)).toEqual(stateBefore)
+	})
+
+	test('refuses a pristine Sepolia profile reset when the old state is bound to another factory', async () => {
+		const directory = await mkdtemp('/tmp/zoltar-chaos-operator-pristine-wrong-factory-')
+		temporaryDirectories.push(directory)
+		const path = join(directory, 'operator.json')
+		const stateFile = join(directory, 'state.json')
+		await writeFile(path, `${JSON.stringify({ ...example, runtime: { ...example.runtime, once: true, stateFile, ui: false } })}\n`, { mode: 0o600 })
+		const pristine = initialDurableState(11_155_111, true, 'profile:older-pristine')
+		pristine.uniswapV3Factory = getAddress('0xEf09Be426F8d6D2786cADEA7D3A8b0D09cEB79B4')
+		await saveDurableState(stateFile, pristine)
+		const configBefore = await readFile(path)
+		const stateBefore = await readFile(stateFile)
+		using shutdown = createBotShutdownController()
+		await expect(runChaosOperator(await loadSettings(path), processLocks(), shutdown)).rejects.toThrow('Sepolia requires the published Uniswap V3 factory')
+		expect(await readFile(path)).toEqual(configBefore)
+		expect(await readFile(stateFile)).toEqual(stateBefore)
+	})
+
+	test('leaves an unrecognized operated profile and its configuration untouched', async () => {
+		const directory = await mkdtemp('/tmp/zoltar-chaos-operator-unknown-')
+		temporaryDirectories.push(directory)
+		const path = join(directory, 'operator.json')
+		const stateFile = join(directory, 'state.json')
+		await writeFile(path, `${JSON.stringify({ ...example, runtime: { ...example.runtime, once: true, stateFile, ui: false } })}\n`, { mode: 0o600 })
+		const operated = initialDurableState(11_155_111, true, 'profile:v1:unknown-history')
+		operated.activities.push({ at: new Date(0).toISOString(), message: 'Existing operation', status: 'info', type: 'configuration' })
+		await saveDurableState(stateFile, operated)
+		const configBefore = await readFile(path)
+		const stateBefore = await readFile(stateFile)
+		using shutdown = createBotShutdownController()
+		await expect(runChaosOperator(await loadSettings(path), processLocks(), shutdown)).rejects.toThrow('configure a distinct state file for the new deployment profile')
+		expect(await readFile(path)).toEqual(configBefore)
+		expect(await readFile(stateFile)).toEqual(stateBefore)
+	})
+
 	test('invalidates a keyless protocol index when startup first binds the configured signer', async () => {
 		const directory = await mkdtemp('/tmp/zoltar-chaos-operator-keyless-index-')
 		temporaryDirectories.push(directory)
 		const stateFile = join(directory, 'state.json')
 		const settings = restartSettings(stateFile, 1, FIRST_PRIVATE_KEY)
 		const durable = initialDurableState(settings.network.chainId, true, executionProfileId(settings))
+		durable.uniswapV3Factory = settings.deployment.uniswapV3Factory
 		durable.protocolIndex = {
 			auctionBids: {},
 			auctionRefunds: {},
@@ -724,6 +834,7 @@ describe('chaos operator runtime', () => {
 		)
 		const signer = privateKeyToAccount(FIRST_PRIVATE_KEY).address
 		const durable = initialDurableState(settings.network.chainId, true, executionProfileId(settings), signer)
+		durable.uniswapV3Factory = settings.deployment.uniswapV3Factory
 		durable.safetyPaused = true
 		durable.scheduler = {
 			lastDelaySeconds: 60,
@@ -754,6 +865,7 @@ describe('chaos operator runtime', () => {
 		const settings = restartSettings(stateFile, 1, FIRST_PRIVATE_KEY)
 		const signer = privateKeyToAccount(FIRST_PRIVATE_KEY).address
 		const durable = initialDurableState(settings.network.chainId, true, executionProfileId(settings), signer)
+		durable.uniswapV3Factory = settings.deployment.uniswapV3Factory
 		durable.scheduler = {
 			lastDelaySeconds: 3_600,
 			lastRunAt: '2026-08-25T00:02:01.000Z',
@@ -841,19 +953,26 @@ describe('chaos operator runtime', () => {
 		const directory = await mkdtemp('/tmp/zoltar-chaos-operator-pristine-')
 		temporaryDirectories.push(directory)
 		const stateFile = join(directory, 'state.json')
-		const previousSettings = restartSettings(stateFile, 1, null)
-		await saveDurableState(stateFile, initialDurableState(previousSettings.network.chainId, true, executionProfileId(previousSettings)))
-		const changedSettings = restartSettings(stateFile, 2, null)
+		const customNetwork = { ...example.network, chainId: 31337, kind: 'custom', name: 'Local test' }
+		const previousSettings = restartSettings(stateFile, 1, null, customNetwork)
+		const previousState = initialDurableState(previousSettings.network.chainId, true, executionProfileId(previousSettings))
+		previousState.uniswapV3Factory = previousSettings.deployment.uniswapV3Factory
+		await saveDurableState(stateFile, previousState)
+		const changedSettings = restartSettings(stateFile, 2, null, customNetwork)
+		changedSettings.deployment.uniswapV3Factory = getAddress('0x0000000000000000000000000000000000000001')
 
 		using shutdown = createBotShutdownController()
 		await runChaosOperator({ path: join(directory, 'operator.json'), revision: 'test-revision', settings: changedSettings }, processLocks(), shutdown)
 
 		const durable = await loadDurableState(stateFile, changedSettings.network.chainId)
 		expect(durable.profileId).toBe(executionProfileId(changedSettings))
+		expect(durable.uniswapV3Factory).toBe(changedSettings.deployment.uniswapV3Factory)
 		expect(durable.signerAddress).toBeUndefined()
 		expect(durable.workflows).toEqual([])
 		expect(durable.obligations).toEqual([])
 		expect(durable.activities[0]?.message).toBe('Durable runtime initialized for the configured deployment profile')
+		using restartedShutdown = createBotShutdownController()
+		await runChaosOperator({ path: join(directory, 'operator.json'), revision: 'test-revision', settings: changedSettings }, processLocks(), restartedShutdown)
 	})
 
 	test('closes a finalized selectable revert as an audited attempt without a global stop', () => {

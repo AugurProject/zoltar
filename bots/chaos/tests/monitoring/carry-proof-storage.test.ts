@@ -36,6 +36,15 @@ test('constructs and simulates a carry withdrawal exclusively from anchored stor
 	expect(fixture.calls.some(call => call.method === 'eth_getLogs')).toBeFalse()
 })
 
+test('uses allocated principal separately from the preserved reward interval', async () => {
+	const fixture = storageFixture()
+	fixture.setRetainedPrincipal(9n)
+	const result = await scan(fixture)
+	expect(result.withdrawals[0]?.amountToWithdrawAttoRep).toBe('15')
+	expect(result.withdrawals[0]?.burnAmountAttoRep).toBe('4')
+	expect(fixture.calls.some(call => call.functionName === 'getInheritedClaimAllocation')).toBeTrue()
+})
+
 test('reconstructs repeated forks and skips consumed inherited identities', async () => {
 	const fixture = storageFixture()
 	const second = slot(source, 1)
@@ -107,7 +116,7 @@ test('matches Statoblast UI reference vectors for multiple MMR peaks and consume
 	target.inherited = leaves
 	target.consumed.push(fixture.leaf.leaf.parentDepositIndex)
 	const candidates = await load(fixture)
-	// Reference vectors from ui/statoblastShared/ts/protocol/reportingCarryProof.ts at 707342ba5.
+	// Reference vectors from ui/statoblastShared/ts/protocol/reportingCarryProof.ts at 707342ba5, with leafIndex as the global MMR slot.
 	// Three slot(source, index) leaves, index 0 consumed; hash ABI-encoded bytes32[] nullifier siblings.
 	// Keep these fixed so the isolated bot package does not require a UI build.
 	expect(
@@ -131,7 +140,7 @@ test('matches Statoblast UI reference vectors for multiple MMR peaks and consume
 		},
 		{
 			parentDepositIndex: '7922816251426433759354395033602',
-			leafIndex: '0',
+			leafIndex: '2',
 			merkleMountainRangePeakIndex: '0',
 			merkleMountainRangeSiblings: ['0xc408daae22afc1ac502346d55051a1afca1778a34b4b4df97771c07e856b453d'],
 			nullifierSiblingsHash: '0xa676fe0e06d31936e21d2b993fc1f7903742856f4f7cd9a925a72bf4e67c437f',

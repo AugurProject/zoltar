@@ -8,8 +8,6 @@ const escalationGameSourcePath = 'contracts/statoblast/EscalationGame.sol'
 const escalationGameContractName = 'EscalationGame'
 const escalationGameBytecodeSnapshotPath = `${import.meta.dir}/fixtures/escalationGameBytecode.snapshot.json`
 const eip170DeployedBytecodeLimitBytes = 24_576
-// Keep the project budget aligned with the EIP-170 deployed bytecode limit.
-const escalationGameDeployedBytecodeBudgetBytes = 24_576
 
 type EscalationGameBytecodeSnapshot = {
 	creationBytes: number
@@ -100,7 +98,7 @@ function getExpectedEscalationGameBytecodeSnapshot(actualSnapshot: EscalationGam
 	}
 }
 
-test('EscalationGame storage layout keeps inherited state slots stable', () => {
+test('EscalationGame storage layout matches the shared delegate accounting', () => {
 	const escalationGameOutput = getEscalationGameOutput()
 	const storageLayout = normalizeStorageLayout(escalationGameOutput)
 
@@ -116,33 +114,31 @@ test('EscalationGame storage layout keeps inherited state slots stable', () => {
 			{ label: 'forkElapsedAtStart', slot: '6', offset: 0, type: 'uint256' },
 			{ label: 'forkResumedAt', slot: '7', offset: 0, type: 'uint256' },
 			{ label: 'outcomeState', slot: '8', offset: 0, type: 'struct OutcomeState[3]' },
-			{ label: 'nextNodeId', slot: '425', offset: 0, type: 'uint256' },
-			{ label: 'nodes', slot: '426', offset: 0, type: 'mapping(uint256 => struct Node)' },
-			{ label: 'escalationClaimBundles', slot: '427', offset: 0, type: 'mapping(address => struct EscalationClaimBundle)' },
-			{ label: 'totalDisputeStakedAttoRep', slot: '428', offset: 0, type: 'uint256' },
-			{ label: 'unresolvedRepByVaultAttoRep', slot: '429', offset: 0, type: 'mapping(address => uint256)' },
-			{ label: 'totalLocalUnresolvedAttoRep', slot: '430', offset: 0, type: 'uint256' },
-			{ label: 'localUnresolvedPrincipalByVaultAndOutcome', slot: '431', offset: 0, type: 'mapping(address => uint256[3])' },
-			{ label: 'localUnresolvedTotalsExportedByVault', slot: '432', offset: 0, type: 'mapping(address => bool)' },
+			{ label: 'nextNodeId', slot: '434', offset: 0, type: 'uint256' },
+			{ label: 'nodes', slot: '435', offset: 0, type: 'mapping(uint256 => struct Node)' },
+			{ label: 'escalationClaimBundles', slot: '436', offset: 0, type: 'mapping(address => struct EscalationClaimBundle)' },
+			{ label: 'totalDisputeStakedAttoRep', slot: '437', offset: 0, type: 'uint256' },
+			{ label: 'unresolvedRepByVaultAttoRep', slot: '438', offset: 0, type: 'mapping(address => uint256)' },
+			{ label: 'totalLocalUnresolvedAttoRep', slot: '439', offset: 0, type: 'uint256' },
+			{ label: 'localUnresolvedPrincipalByVaultAndOutcome', slot: '440', offset: 0, type: 'mapping(address => uint256[3])' },
+			{ label: 'localUnresolvedTotalsExportedByVault', slot: '441', offset: 0, type: 'mapping(address => bool)' },
 			{
 				label: 'forkedEscrowByVaultAndOutcome',
-				slot: '433',
+				slot: '442',
 				offset: 0,
 				type: 'mapping(address => mapping(uint8 => struct ForkedEscrowState))',
 			},
-			{ label: 'forkCarrySnapshotRequiresForkedEscrow', slot: '434', offset: 0, type: 'bool' },
-			{ label: 'winnerHaircutPaidByFork', slot: '434', offset: 1, type: 'bool' },
-			{ label: 'forkCarryInitialBackingAttoRep', slot: '435', offset: 0, type: 'uint256' },
-			{ label: 'forkCarryDisputeStakedAttoRep', slot: '436', offset: 0, type: 'uint256' },
-			{ label: 'forkCarrySourceGame', slot: '437', offset: 0, type: 'address' },
-			{ label: 'forkCarryRootClaimSourceGame', slot: '438', offset: 0, type: 'address' },
-			{ label: 'cumulativeClaimRetention', slot: '439', offset: 0, type: 'uint256' },
-			{ label: 'cumulativeClaimRetentionExponent', slot: '440', offset: 0, type: 'uint256' },
-			{ label: 'fixedQuestionOutcome', slot: '441', offset: 0, type: 'enum BinaryOutcomes.BinaryOutcome' },
-			{ label: 'nonDecisionState', slot: '441', offset: 1, type: 'enum NonDecisionState' },
-			{ label: 'forkCarryBackingExportedBeforeResumeAttoRep', slot: '442', offset: 0, type: 'uint256' },
-			{ label: 'truthAuctionRepBeforeAttoRep', slot: '443', offset: 0, type: 'uint256' },
-			{ label: 'truthAuctionRepRemainingAttoRep', slot: '444', offset: 0, type: 'uint256' },
+			{ label: 'forkCarrySnapshotRequiresForkedEscrow', slot: '443', offset: 0, type: 'bool' },
+			{ label: 'winnerHaircutPaidByFork', slot: '443', offset: 1, type: 'bool' },
+			{ label: 'forkCarryInitialBackingAttoRep', slot: '444', offset: 0, type: 'uint256' },
+			{ label: 'forkCarryDisputeStakedAttoRep', slot: '445', offset: 0, type: 'uint256' },
+			{ label: 'forkCarrySourceGame', slot: '446', offset: 0, type: 'address' },
+			{ label: 'forkCarryRootClaimSourceGame', slot: '447', offset: 0, type: 'address' },
+			{ label: 'fixedQuestionOutcome', slot: '447', offset: 20, type: 'enum BinaryOutcomes.BinaryOutcome' },
+			{ label: 'nonDecisionState', slot: '447', offset: 21, type: 'enum NonDecisionState' },
+			{ label: 'forkCarryBackingExportedBeforeResumeAttoRep', slot: '448', offset: 0, type: 'uint256' },
+			{ label: 'truthAuctionRepBeforeAttoRep', slot: '449', offset: 0, type: 'uint256' },
+			{ label: 'truthAuctionRepRemainingAttoRep', slot: '450', offset: 0, type: 'uint256' },
 		],
 	)
 
@@ -152,15 +148,18 @@ test('EscalationGame storage layout keeps inherited state slots stable', () => {
 		{ label: 'snapshotLeafCount', slot: '1', offset: 0, type: 'uint256' },
 		{ label: 'snapshotPeaks', slot: '2', offset: 0, type: 'bytes32[64]' },
 		{ label: 'inheritedUnresolvedTotalAttoRep', slot: '66', offset: 0, type: 'uint256' },
-		{ label: 'currentLeafCount', slot: '67', offset: 0, type: 'uint256' },
-		{ label: 'currentPeaks', slot: '68', offset: 0, type: 'bytes32[64]' },
-		{ label: 'currentNullifierRoot', slot: '132', offset: 0, type: 'bytes32' },
-		{ label: 'localHeadNodeId', slot: '133', offset: 0, type: 'uint256' },
-		{ label: 'localUnresolvedTotalAttoRep', slot: '134', offset: 0, type: 'uint256' },
-		{ label: 'localNodeIds', slot: '135', offset: 0, type: 'uint256[]' },
-		{ label: 'currentCarryNodeHashes', slot: '136', offset: 0, type: 'mapping(uint256 => mapping(uint256 => bytes32))' },
-		{ label: 'consumedParentDepositIndexes', slot: '137', offset: 0, type: 'mapping(uint256 => bool)' },
-		{ label: 'proofConsumedDepositIndexes', slot: '138', offset: 0, type: 'uint256[]' },
+		{ label: 'inheritedConsumedSourceAttoRep', slot: '67', offset: 0, type: 'uint256' },
+		{ label: 'inheritedConsumedRetainedAttoRep', slot: '68', offset: 0, type: 'uint256' },
+		{ label: 'consumedPrincipalTree', slot: '69', offset: 0, type: 'mapping(uint256 => uint256)' },
+		{ label: 'currentLeafCount', slot: '70', offset: 0, type: 'uint256' },
+		{ label: 'currentPeaks', slot: '71', offset: 0, type: 'bytes32[64]' },
+		{ label: 'currentNullifierRoot', slot: '135', offset: 0, type: 'bytes32' },
+		{ label: 'localHeadNodeId', slot: '136', offset: 0, type: 'uint256' },
+		{ label: 'localUnresolvedTotalAttoRep', slot: '137', offset: 0, type: 'uint256' },
+		{ label: 'localNodeIds', slot: '138', offset: 0, type: 'uint256[]' },
+		{ label: 'currentCarryNodeHashes', slot: '139', offset: 0, type: 'mapping(uint256 => mapping(uint256 => bytes32))' },
+		{ label: 'consumedParentDepositIndexes', slot: '140', offset: 0, type: 'mapping(uint256 => bool)' },
+		{ label: 'proofConsumedDepositIndexes', slot: '141', offset: 0, type: 'uint256[]' },
 	])
 	assert.deepStrictEqual(storageMemberSummary(typeTable, 'struct Node'), [
 		{ label: 'parentNodeId', slot: '0', offset: 0, type: 'uint256' },
@@ -180,7 +179,7 @@ test('EscalationGame storage layout keeps inherited state slots stable', () => {
 	assert.deepStrictEqual(storageMemberSummary(typeTable, 'struct EscalationClaimBundle'), [{ label: 'disputeStakedRepClaimUnits', slot: '0', offset: 0, type: 'uint256' }])
 })
 
-test('EscalationGame bytecode stays within size budgets and preserves runtime snapshot', () => {
+test('EscalationGame bytecode stays within EIP-170 and preserves runtime snapshot', () => {
 	const escalationGameOutput = getEscalationGameOutput()
 	const creationBytecode = getBytecodeObject(escalationGameOutput, 'bytecode')
 	const deployedBytecode = getBytecodeObject(escalationGameOutput, 'deployedBytecode')
@@ -192,6 +191,5 @@ test('EscalationGame bytecode stays within size budgets and preserves runtime sn
 	}
 
 	assert.ok(actualSnapshot.deployedBytes <= eip170DeployedBytecodeLimitBytes, `EscalationGame deployed bytecode exceeds EIP-170: ${actualSnapshot.deployedBytes}`)
-	assert.ok(actualSnapshot.deployedBytes <= escalationGameDeployedBytecodeBudgetBytes, `EscalationGame deployed bytecode exceeds project budget: ${actualSnapshot.deployedBytes}`)
 	assert.deepStrictEqual(actualSnapshot, getExpectedEscalationGameBytecodeSnapshot(actualSnapshot), 'EscalationGame bytecode changed; review the change and refresh the snapshot with bun run update:escalation-game-bytecode-snapshot')
 })
