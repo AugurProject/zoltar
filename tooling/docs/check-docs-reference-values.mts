@@ -313,7 +313,7 @@ function assertAuditFindingRemediations(): void {
 	assert.doesNotMatch(truthAuction, /REFUND_PUSH_GAS_LIMIT|_payOrDeferRefund/, 'Truth-auction settlement must not retain the callback-based push-refund path')
 	assert.match(
 		securityPoolForker,
-		/function _getTruthAuctionCap\([\s\S]*Math\.ceilDiv\(data\.migratedAttoRep, SecurityPoolUtils\.MAX_AUCTION_VAULT_HAIRCUT_DIVISOR\)[\s\S]*Math\.mulDiv\(migratedPoolRepRetentionAttoRep, combinedAuctionableAttoRep, poolAuctionableRepAtForkAttoRep, Math\.Rounding\.Ceil\)[\s\S]*function _finalizeBackingUnitsAfterAuction\([\s\S]*uint256 incumbentRepAfterAttoRep =[\s\S]*Math\.mulDiv\(poolRepBeforeAttoRep, combinedRepBeforeAttoRep - repPurchasedAttoRep, combinedRepBeforeAttoRep\)[\s\S]*if \(incumbentRepAfterAttoRep == 0\)[\s\S]*auctionRepBackingUnitsPerAttoRep = SecurityPoolUtils\.PRICE_PRECISION;[\s\S]*Math\.ceilDiv\(poolRepAfterAttoRep, incumbentRepAfterAttoRep\)/,
+		/function _getTruthAuctionCap\([\s\S]*Math\.ceilDiv\(data\.migratedAttoRep, SecurityPoolUtils\.MAX_AUCTION_VAULT_HAIRCUT_DIVISOR\)[\s\S]*Math\.mulDiv\(migratedPoolRepRetentionAttoRep, combinedAuctionableAttoRep, poolAuctionableRepAtForkAttoRep, Math\.Rounding\.Ceil\)[\s\S]*function _finalizeBackingUnitsAfterAuction\([\s\S]*uint256 existingPoolBackingUnits = _getPoolAuctionableRepAtFork\(parentData\);[\s\S]*uint256 poolHeldRepAtFinalizationAttoRep = existingPoolBackingUnits \+ disputeStakedRepSoldAttoRep;[\s\S]*uint256 existingOwnersResidualRepAttoRep = poolHeldRepAtFinalizationAttoRep - repPurchasedAttoRep;[\s\S]*if \(existingOwnersResidualRepAttoRep == 0\)[\s\S]*auctionRepBackingUnits = Math\.mulDiv\(poolHeldRepAtFinalizationAttoRep, SecurityPoolUtils\.PRICE_PRECISION, 1\);[\s\S]*Math\.mulDiv\(existingPoolBackingUnits, poolHeldRepAtFinalizationAttoRep, existingOwnersResidualRepAttoRep, Math\.Rounding\.Ceil\)[\s\S]*auctionRepBackingUnits = totalRepBackingUnitsAtFinalization - existingPoolBackingUnits;/,
 		'Truth-auction REP backing units must reserve positive migrated claims and use bounded child-local scaling',
 	)
 	assert.match(contractReferenceGenerator, /settleAuctionBids[\s\S]*EthRefundCredited[\s\S]*claimAuctionProceeds[\s\S]*EthRefundCredited/, 'Generated public wrapper rows must expose refund-credit signals')
@@ -536,7 +536,7 @@ function assertContractInteractionDistinctions(): void {
 			assert.ok(isRecord(output))
 			return output['name']
 		}),
-		['totalFilledAttoRep', 'totalRefundAttoEth', 'totalProRataAllocation', 'totalSecondaryProRataAllocation'],
+		['totalFilledAttoRep', 'totalRefundAttoEth', 'totalProRataAllocation', 'totalSecondaryProRataAllocation', 'totalRepBackingUnitsAllocation'],
 	)
 	assert.match(truthAuction, /function _refundLosingBids\([\s\S]*for \(uint256 i = 0; i < tickIndices\.length; i\+\+\)[\s\S]*_creditRefund\(bidder, totalRefundAttoEth\)/)
 	assert.match(truthAuction, /function _creditRefund\([\s\S]*if \(amountAttoEth == 0\) return;[\s\S]*pendingEthRefundsAttoEth\[bidder\] = pendingAmountAttoEth;[\s\S]*emit EthRefundCredited\(/)
