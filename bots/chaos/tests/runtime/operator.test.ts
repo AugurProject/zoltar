@@ -900,18 +900,24 @@ describe('chaos operator runtime', () => {
 		temporaryDirectories.push(directory)
 		const stateFile = join(directory, 'state.json')
 		const previousSettings = restartSettings(stateFile, 1, null)
-		await saveDurableState(stateFile, initialDurableState(previousSettings.network.chainId, true, executionProfileId(previousSettings)))
+		const previousState = initialDurableState(previousSettings.network.chainId, true, executionProfileId(previousSettings))
+		previousState.uniswapV3Factory = previousSettings.deployment.uniswapV3Factory
+		await saveDurableState(stateFile, previousState)
 		const changedSettings = restartSettings(stateFile, 2, null)
+		changedSettings.deployment.uniswapV3Factory = getAddress('0x0000000000000000000000000000000000000001')
 
 		using shutdown = createBotShutdownController()
 		await runChaosOperator({ path: join(directory, 'operator.json'), revision: 'test-revision', settings: changedSettings }, processLocks(), shutdown)
 
 		const durable = await loadDurableState(stateFile, changedSettings.network.chainId)
 		expect(durable.profileId).toBe(executionProfileId(changedSettings))
+		expect(durable.uniswapV3Factory).toBe(changedSettings.deployment.uniswapV3Factory)
 		expect(durable.signerAddress).toBeUndefined()
 		expect(durable.workflows).toEqual([])
 		expect(durable.obligations).toEqual([])
 		expect(durable.activities[0]?.message).toBe('Durable runtime initialized for the configured deployment profile')
+		using restartedShutdown = createBotShutdownController()
+		await runChaosOperator({ path: join(directory, 'operator.json'), revision: 'test-revision', settings: changedSettings }, processLocks(), restartedShutdown)
 	})
 
 	test('closes a finalized selectable revert as an audited attempt without a global stop', () => {

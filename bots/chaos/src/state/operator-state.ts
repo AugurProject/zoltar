@@ -256,6 +256,7 @@ export function resetRuntimeStateForProfile(state: RuntimeState, profileId: stri
 	const safetyPaused = state.safetyPaused
 	const replacement = initialRuntimeState(paused || safetyPaused, wallet, state.chainId, initialDurableState(state.chainId, paused, profileId, wallet))
 	replacement.safetyPaused = safetyPaused
+	replacement.uniswapV3Factory = undefined
 	Object.assign(state, replacement)
 	return state
 }
