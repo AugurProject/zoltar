@@ -92,6 +92,12 @@ export const formatReportNumberTitle = (reportId: string) => `Report #${reportId
 export const reportTimestamp = 'Report Timestamp'
 export const reportBlock = 'Report Block'
 export const reportActions = 'Report Actions'
+export function formatSettleCountdown(remaining: bigint, timeType: boolean) {
+	if (!timeType) return `Settle in ${remaining} block${remaining === 1n ? '' : 's'}`
+	if (remaining < 60n) return `Settle in ${remaining}s`
+	if (remaining < 3600n) return `Settle in ${remaining / 60n}m ${remaining % 60n}s`
+	return `Settle in ${remaining / 3600n}h ${(remaining % 3600n) / 60n}m ${remaining % 60n}s`
+}
 export const searchReports = 'Search this page'
 export const settlingReport = 'Settling report…'
 export const settlingReportTitle = 'Settling Report'

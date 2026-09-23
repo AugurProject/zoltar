@@ -83,6 +83,10 @@
 	color: var(--danger);
 }
 
+.oracle-price-validity.warning {
+	color: var(--warning);
+}
+
 .comparison-record-list {
 	display: grid;
 	gap: var(--space-2);
@@ -1095,6 +1099,26 @@
 
 .action-launcher-card.compact {
 	padding-block: 0.55rem;
+}
+
+.open-oracle-report-actions .action-launcher-card {
+	grid-template-rows: minmax(2.5rem, 1fr) auto;
+}
+
+.open-oracle-report-actions .action-launcher-card-copy {
+	display: flex;
+	align-items: center;
+}
+
+.open-oracle-report-actions #open-oracle-settle-countdown {
+	color: var(--status-pending);
+	font-family: var(--font-family-mono);
+}
+
+@media (max-width: 50rem) {
+	.open-oracle-report-actions {
+		row-gap: 0;
+	}
 }
 
 @media (max-width: 50rem) {
