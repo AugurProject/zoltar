@@ -3,6 +3,26 @@ import { useEffect, useRef, useState } from 'preact/hooks'
 
 type Change = { label: string; before: string; after: string }
 
+function reviewLabel(path: string) {
+	const parts = path.split(' › ').filter(part => part !== 'Setting' && part !== 'root')
+	const labels: string[] = []
+	for (let index = 0; index < parts.length; index++) {
+		const part = parts[index] ?? ''
+		const collection = { children: 'Child market', desiredPools: 'Desired pool', dexSources: 'DEX source', pools: 'Pool', sources: 'Source' }[part]
+		if (collection !== undefined && /^\d+$/.test(parts[index + 1] ?? '')) {
+			labels.push(`${collection} ${parts[++index]}`)
+			continue
+		}
+		const words = part
+			.replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+			.split(' ')
+			.map(word => ({ eth: 'ETH', id: 'ID', rep: 'REP', weth: 'WETH' })[word.toLowerCase()] ?? word.toLowerCase())
+		const label = words.join(' ')
+		labels.push(label.charAt(0).toUpperCase() + label.slice(1))
+	}
+	return labels.join(' · ') || 'Setting'
+}
+
 export function reviewChangeRows(before: unknown, after: unknown, path = 'Setting'): Change[] {
 	const object = (value: unknown): Record<string, unknown> | undefined => (typeof value === 'object' && value !== null && !Array.isArray(value) ? Object.fromEntries(Object.entries(value)) : undefined)
 	const oldObject = object(before)
@@ -18,7 +38,7 @@ export function reviewChangeRows(before: unknown, after: unknown, path = 'Settin
 		if (value === null) return 'None'
 		return String(value)
 	}
-	return display(before) === display(after) ? [] : [{ label: path, before: display(before), after: display(after) }]
+	return display(before) === display(after) ? [] : [{ label: reviewLabel(path), before: display(before), after: display(after) }]
 }
 
 type Confirmation = {

@@ -970,8 +970,8 @@ test('focused risk, settlement, execution, and market forms load the saved confi
 		await Bun.sleep(10)
 		sourceReview = window.document.querySelector('.operator-confirm-dialog')
 	}
-	expect(sourceReview?.textContent).toContain('Setting › sources › 1 › exchangeId—→kraken')
-	expect(sourceReview?.textContent).toContain('Setting › sources › 1 › repMarket—→REP/USDT')
+	expect(sourceReview?.textContent).toContain('Source 1 · Exchange ID—→kraken')
+	expect(sourceReview?.textContent).toContain('Source 1 · REP market—→REP/USDT')
 	await acceptOperatorDialog(window)
 	await page.waitUntilComplete()
 	for (let attempt = 0; attempt < 100 && element(window, 'market-status', window.HTMLElement).textContent === 'Validating market sources…'; attempt++) await Bun.sleep(10)
