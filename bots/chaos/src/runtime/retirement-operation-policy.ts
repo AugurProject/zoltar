@@ -1,3 +1,4 @@
+import { V3_RETIREMENT_OPERATION } from './retirement-v3-continuation.ts'
 import { CHAOS_OPERATION_CATALOG } from '../operations/catalog.ts'
 import type { EcosystemSnapshot, EvaluatedOperation, OperationPlan } from '../operations/types.ts'
 import type { DurableRetirementState } from '../state/retirement.ts'
@@ -5,6 +6,7 @@ import type { DurableRetirementState } from '../state/retirement.ts'
 type RetirementOperationDisposition = 'claim-linked-migration' | 'prohibited' | 'recovery' | 'unmatched-exit'
 
 const RECOVERY_OPERATIONS = [
+	V3_RETIREMENT_OPERATION,
 	'open-oracle.push-or-credit',
 	'open-oracle.settle',
 	'open-oracle.weth.unwrap',

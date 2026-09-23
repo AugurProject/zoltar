@@ -1,3 +1,11 @@
+import { processRetirementCycle, retirementPositionsForScan } from '../../src/runtime/retirement-runner.ts'
+import { retirementUniswapV3PositionAbi } from '../../src/contracts/retirement-abi.ts'
+import { buildV3RetirementPlan } from '../../src/runtime/retirement-v3-positions.ts'
+import { evaluateV3RetirementContinuation, reconcileClosedV3RetirementWorkflow } from '../../src/runtime/retirement-v3-continuation.ts'
+import { blockInterruptedWorkflows, durableWorkflowPlan, refreshWorkflowContinuation } from '../../src/runtime/workflows.ts'
+import { uniswapV3PositionKey, type DurableV3Position } from '../../src/state/retirement.ts'
+import { snapshotFixture } from '../operations/fixture.ts'
+import { executeScheduledOperation } from '../../src/runtime/scheduled-operation.ts'
 import { markRetryableLifecycleWorkflowForRediscovery, retainWorkflow } from '../../src/runtime/workflows.ts'
 import { reconcileIncludedTransactions } from '../../src/execution/inclusion-journal.ts'
 import { recoverPendingTransactions } from '../../src/execution/recovery.ts'
@@ -923,6 +931,7 @@ describe('workflow-wide ETH funding', () => {
 })
 
 type FinalizedExecutionReceiptState = {
+	v3?: { position: DurableV3Position; liquidity: bigint; tokensOwed0: bigint; tokensOwed1: bigint }
 	nonce?: bigint
 	canonicalReceiptHash?: `0x${string}`
 	transactionHashes?: `0x${string}`[]
@@ -950,8 +959,21 @@ function finalizedExecutionRpcServer(state: FinalizedExecutionReceiptState) {
 					return Response.json({ id, jsonrpc: '2.0', result: toHex(10n ** 20n) })
 				case 'eth_getTransactionCount':
 					return Response.json({ id, jsonrpc: '2.0', result: toHex(state.nonce ?? 3n) })
-				case 'eth_call':
-					return Response.json({ id, jsonrpc: '2.0', result: '0x' })
+				case 'eth_call': {
+					const parameters = 'params' in body && Array.isArray(body.params) ? body.params : []
+					const transaction = rpcRequest(parameters[0])
+					const data = 'data' in transaction ? transaction.data : undefined
+					const v3 = state.v3
+					let result = '0x'
+					if (v3 !== undefined) {
+						const abi = retirementUniswapV3PositionAbi
+						if (data === encodeFunctionData({ abi, functionName: 'token0' })) result = encodeAbiParameters([{ type: 'address' }], [v3.position.token0])
+						if (data === encodeFunctionData({ abi, functionName: 'token1' })) result = encodeAbiParameters([{ type: 'address' }], [v3.position.token1])
+						if (data === encodeFunctionData({ abi, functionName: 'fee' })) result = encodeAbiParameters([{ type: 'uint24' }], [v3.position.fee])
+						if (data === encodeFunctionData({ abi, functionName: 'positions', args: [v3.position.positionKey] })) result = encodeAbiParameters([{ type: 'uint128' }, { type: 'uint256' }, { type: 'uint256' }, { type: 'uint128' }, { type: 'uint128' }], [v3.liquidity, 0n, 0n, v3.tokensOwed0, v3.tokensOwed1])
+					}
+					return Response.json({ id, jsonrpc: '2.0', result })
+				}
 				case 'eth_estimateGas':
 					return Response.json({ id, jsonrpc: '2.0', result: '0x5208' })
 				case 'eth_sendRawTransaction': {
@@ -1583,4 +1605,190 @@ describe('included transaction rollback', () => {
 		expect(fixture.state.includedTransactions).toHaveLength(0)
 		expect((await loadDurableState(fixture.stateFile, 1)).includedTransactions).toHaveLength(0)
 	})
+})
+
+describe('retirement sweep signing acceptance', () => {
+	test('persists the cancellation barrier before signing a catalog WETH unwrap during retirement', async () => {
+		const fixture = await finalizedExecutionFixture([])
+		const environment: ExecutionEnvironment = fixture.environment
+		environment.state.retirement.status = 'draining'
+		const wallet = environment.wallet
+		if (wallet === undefined) throw new Error('Missing signing wallet')
+		wallet.account.signTransaction = async () => {
+			expect((await loadDurableState(fixture.stateFile, 1)).retirement.finalSweepStartedAt).toBeDefined()
+			throw new Error('signer response lost')
+		}
+		await expect(executeOperationPlan(environment, { ...executablePlan(), definitionId: 'open-oracle.weth.unwrap' })).rejects.toThrow('signer response lost')
+		expect(environment.state.retirement.finalSweepStartedAt).toBeDefined()
+	})
+
+	test('persists cancellation barrier before signing and retains it after broadcast failure', async () => {
+		const fixture = await finalizedExecutionFixture([])
+		const environment: ExecutionEnvironment = fixture.environment
+		environment.state.retirement.status = 'draining'
+		environment.state.scheduler.status = 'paused'
+		environment.beforeBroadcast = async () => {
+			const durable = await loadDurableState(fixture.stateFile, 1)
+			expect(durable.retirement.finalSweepStartedAt).toBeDefined()
+			throw new Error('broadcast interrupted')
+		}
+		const plan = { ...executablePlan(), definitionId: 'retirement.sweep.erc20' }
+		await expect(
+			executeScheduledOperation(
+				{ settings: environment.settings, path: 'test', revision: 'test', rememberSigner: false },
+				environment.state,
+				plan,
+				async () => {
+					await executeOperationPlan(environment, plan)
+				},
+				() => false,
+				'retirement',
+			),
+		).rejects.toThrow('broadcast interrupted')
+		expect(environment.state.scheduler.status).toBe('paused')
+		expect(environment.state.retirement.finalSweepStartedAt).toBeDefined()
+		expect(environment.state.pendingTransactions).toHaveLength(1)
+	})
+	test('local pre-signing failure does not close cancellation', async () => {
+		const fixture = await finalizedExecutionFixture([])
+		const environment: ExecutionEnvironment = fixture.environment
+		environment.state.retirement.status = 'draining'
+		environment.beforeSign = async () => {
+			throw new Error('submission preflight unavailable')
+		}
+		await expect(executeOperationPlan(environment, { ...executablePlan(), definitionId: 'retirement.sweep.erc20' })).rejects.toThrow('submission preflight unavailable')
+		expect(environment.state.retirement.finalSweepStartedAt).toBeUndefined()
+		expect(environment.state.pendingTransactions).toHaveLength(0)
+	})
+})
+
+test('production V3 drain survives burn confirmation, reload and collect-only execution', async () => {
+	const fixture = await finalizedExecutionFixture([], '0x1', 99n)
+	const environment: ExecutionEnvironment = fixture.environment
+	const state = fixture.state
+	state.retirement.status = 'draining'
+	state.retirement.recipient = environment.sender
+	state.scheduler.status = 'paused'
+	const snapshot = snapshotFixture()
+	snapshot.wallet.address = environment.sender
+	snapshot.chainId = state.chainId
+	snapshot.anchor.blockHash = finalityBlockHash
+	snapshot.anchor.blockNumber = '99'
+	const positionKey = uniswapV3PositionKey(environment.sender, -120, 120)
+	const position: DurableV3Position = {
+		createdAt: new Date().toISOString(),
+		creationWorkflowId: 'operator',
+		fee: 3000,
+		id: `${target.toLowerCase()}:${positionKey}`,
+		owner: environment.sender,
+		pool: target,
+		positionKey,
+		profileId: state.profileId,
+		registeredBy: 'operator',
+		status: 'active',
+		tickLower: -120,
+		tickUpper: 120,
+		token0: sender,
+		token1: caller,
+	}
+	state.retirement.positions.push(position)
+	const plan = buildV3RetirementPlan(snapshot, { position, liquidity: 10n, tokensOwed0: 0n, tokensOwed1: 0n }, 0)
+	let signingSteps = 0
+	environment.beforeSign = async () => {
+		signingSteps += 1
+		if (signingSteps === 2) throw new Error('stop before collect')
+	}
+	await expect(
+		processRetirementCycle({
+			execute: async selected => {
+				expect(selected.definitionId).toBe(plan.definitionId)
+				await executeScheduledOperation(
+					{ settings: environment.settings, path: 'test', revision: 'test', rememberSigner: false },
+					state,
+					selected,
+					async () => {
+						await executeOperationPlan(environment, selected)
+					},
+					() => false,
+					'retirement',
+				)
+			},
+			persist: async () => {
+				await saveDurableState(fixture.stateFile, state)
+			},
+			prepareExecution: async () => {},
+			scan: { anchor: { blockHash: finalityBlockHash, blockNumber: 99n, baseFeePerGas: 1n, timestamp: receiptClockTimestamp }, executionReady: true, canonicalLifecyclePresenceComplete: true, carryProofsComplete: true, indexComplete: true, snapshot },
+			settings: environment.settings,
+			state,
+			v3: [{ position, liquidity: 10n, tokensOwed0: 0n, tokensOwed1: 0n }],
+		}),
+	).rejects.toThrow('stop before collect')
+	const restarted = initialRuntimeState(false, state.wallet, state.chainId, await loadDurableState(fixture.stateFile, state.chainId))
+	blockInterruptedWorkflows(restarted)
+	const recoveryEnvironment = { ...environment, state: restarted, beforeSign: undefined }
+	await reconcileIncludedTransactions(recoveryEnvironment)
+	const workflow = restarted.workflows[0]
+	const owned = restarted.retirement.positions[0]
+	if (workflow === undefined || owned === undefined) throw new Error('Missing persisted drain')
+	expect(workflow.status).toBe('waiting-continuation')
+	const burn = structuredClone(workflow.steps[0])
+	expect(burn?.status).toBe('confirmed')
+	expect(burn?.transactionHash).toBeDefined()
+	snapshot.anchor.blockNumber = '112'
+	fixture.receiptState.v3 = { position: owned, liquidity: 0n, tokensOwed0: 4n, tokensOwed1: 3n }
+	const observations = await retirementPositionsForScan({ anchor: { blockHash: finalityBlockHash, blockNumber: 112n }, pool: environment.pool, profileId: restarted.profileId, settings: environment.settings, state: restarted, wallet: environment.sender })
+	expect(observations).toHaveLength(1)
+	// A disappeared burn must return to receipt recovery before any collect plan is accepted.
+	const reorgState = structuredClone(restarted)
+	reorgState.retirement.finalSweepStartedAt = '2026-09-22T00:00:00.000Z'
+	fixture.receiptState.canonicalReceiptHash = `0x${'99'.repeat(32)}`
+	fixture.receiptState.receiptVisible = false
+	expect(await reconcileIncludedTransactions({ ...recoveryEnvironment, state: reorgState })).toBeTrue()
+	const reorgWorkflow = reorgState.workflows[0]
+	if (reorgWorkflow === undefined) throw new Error('Missing rolled-back workflow')
+	expect(evaluateV3RetirementContinuation(snapshot, reorgWorkflow, { state: reorgState, observations }).eligibility.eligible).toBeFalse()
+	expect(reorgState.pendingTransactions).toHaveLength(1)
+	expect(reorgState.scheduler.status).toBe('paused')
+	expect(reorgState.retirement.finalSweepStartedAt).toBe('2026-09-22T00:00:00.000Z')
+	fixture.receiptState.canonicalReceiptHash = receiptBlockHash
+	fixture.receiptState.receiptVisible = true
+	const evaluation = evaluateV3RetirementContinuation(snapshot, workflow, { state: restarted, observations })
+	if (evaluation.plan === undefined) throw new Error(evaluation.eligibility.blockers.join('; '))
+	expect(evaluation.plan.steps.map(step => step.id)).toEqual(['collect-full-v3-position'])
+	const zeroState = structuredClone(restarted)
+	const zeroWorkflow = zeroState.workflows[0]
+	const zeroPosition = zeroState.retirement.positions[0]
+	if (zeroWorkflow === undefined || zeroPosition === undefined) throw new Error('Missing zero-position fixture')
+	const history = structuredClone(zeroWorkflow.steps)
+	zeroState.retirement.status = 'inactive'
+	zeroPosition.status = 'closed'
+	fixture.receiptState.v3 = { position: zeroPosition, liquidity: 0n, tokensOwed0: 0n, tokensOwed1: 0n }
+	const zeroObservations = await retirementPositionsForScan({ anchor: { blockHash: finalityBlockHash, blockNumber: 112n }, pool: environment.pool, profileId: zeroState.profileId, settings: environment.settings, state: zeroState, wallet: environment.sender })
+	expect(zeroObservations).toHaveLength(1)
+	reconcileClosedV3RetirementWorkflow(snapshot, zeroWorkflow, { state: zeroState, observations: zeroObservations })
+	expect(zeroWorkflow.status).toBe('completed')
+	expect(zeroWorkflow.steps).toEqual(history)
+	expect(zeroState.activities[0]?.message).toContain('zero liquidity and owed tokens')
+	refreshWorkflowContinuation(workflow, evaluation.plan)
+	await executeOperationPlan(recoveryEnvironment, durableWorkflowPlan(workflow))
+	expect(restarted.workflows).toHaveLength(1)
+	expect(workflow.status).toBe('completed')
+	expect(workflow.steps[0]).toEqual(burn)
+	expect(fixture.receiptState.transactionHashes).toHaveLength(2)
+	expect(restarted.scheduler.status).toBe('paused')
+})
+
+test('a throwing signer cannot reopen sweep cancellation', async () => {
+	const fixture = await finalizedExecutionFixture([])
+	const environment: ExecutionEnvironment = fixture.environment
+	environment.state.retirement.status = 'draining'
+	const wallet = environment.wallet
+	if (wallet === undefined) throw new Error('Missing signing wallet')
+	wallet.account.signTransaction = async () => {
+		expect((await loadDurableState(fixture.stateFile, 1)).retirement.finalSweepStartedAt).toBeDefined()
+		throw new Error('signer response lost')
+	}
+	await expect(executeOperationPlan(environment, { ...executablePlan(), definitionId: 'retirement.sweep.erc20' })).rejects.toThrow('signer response lost')
+	expect(environment.state.retirement.finalSweepStartedAt).toBeDefined()
+	expect((await loadDurableState(fixture.stateFile, 1)).retirement.finalSweepStartedAt).toBeDefined()
 })

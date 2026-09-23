@@ -253,6 +253,26 @@ describe('Drain & Retire persisted restart behavior', () => {
 		expect(state.retirement.status).toBe('drained-with-residuals')
 	})
 
+	test('does not repeat a WETH unwrap after a canonical scan', async () => {
+		const path = await statePath()
+		const snapshot = emptySnapshot()
+		snapshot.wallet.tokens = [{ address: snapshot.deployments.weth, allowances: {}, balance: '7', openOracleCredit: '0', symbol: 'WETH' }]
+		let state = await reload(path, requestedState(snapshot))
+		const executed: string[] = []
+		await cycle(path, state, snapshot, executed, async plan => {
+			expect(plan.definitionId).toBe('open-oracle.weth.unwrap')
+			const persistedBeforeExecution = await loadDurableState(path, snapshot.chainId)
+			expect(persistedBeforeExecution.retirement.finalSweepStartedAt).toBeUndefined()
+			const token = snapshot.wallet.tokens[0]
+			if (token === undefined) throw new Error('Expected sweep fixture')
+			token.balance = '0'
+		})
+		state = await reload(path, state)
+		await cycle(path, state, snapshot, executed)
+		expect(state.retirement.status).toBe('drained')
+		expect(executed).toEqual(['open-oracle.weth.unwrap'])
+	})
+
 	test('does not send signer-held tokens during a restarted retirement', async () => {
 		const path = await statePath()
 		const snapshot = emptySnapshot()
