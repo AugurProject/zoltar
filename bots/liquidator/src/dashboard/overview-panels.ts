@@ -49,7 +49,7 @@ export function renderOverviewAlerts(snapshot: Pick<Snapshot, 'alerts' | 'pendin
 function overviewAlertRows(snapshot: Pick<Snapshot, 'alerts' | 'pendingTransactions'>) {
 	const alerts: { actionHref?: string; actionLabel?: string; message: string; severity: 'error' | 'warning' }[] = snapshot.alerts.map(alert => ({ ...alert }))
 	if (snapshot.pendingTransactions.length > 0) {
-		const recoveryAlert = alerts.find(alert => alert.message === `${snapshot.pendingTransactions.length.toString()} transaction intent(s) require recovery before execution can continue`)
+		const recoveryAlert = alerts.find(alert => alert.severity === 'error' && alert.message.startsWith(`${snapshot.pendingTransactions.length.toString()} transaction intent`) && alert.message.includes('recovery before execution can continue'))
 		if (recoveryAlert === undefined)
 			alerts.unshift({
 				actionHref: '/operations#recovery',

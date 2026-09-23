@@ -878,7 +878,11 @@ fieldset {
 }
 
 @media (max-width: 42rem) {
-	/* Under the tall narrow header a second sticky bar would halve the reading window; one expanded group keeps jumps short anyway. */
+	/* Let the tall mobile header scroll away so forms retain a useful reading window. */
+	.operator-shell {
+		position: static;
+	}
+
 	.settings-nav {
 		position: static;
 	}
@@ -1246,6 +1250,12 @@ body .button:disabled {
 	box-shadow: none;
 	opacity: 1;
 	cursor: not-allowed;
+}
+
+button.danger-action {
+	border-color: var(--operator-error);
+	background: var(--operator-error);
+	color: #20070b;
 }
 
 .operator-shell .eyebrow,

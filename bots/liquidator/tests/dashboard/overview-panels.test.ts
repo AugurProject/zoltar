@@ -40,3 +40,9 @@ test('recovery action gets its own row when the server omits a transaction alert
 	expect(rows[0]?.actionHref).toBe('/operations#recovery')
 	expect(rows[1]?.actionHref).toBeUndefined()
 })
+
+test('singular transaction wording shows one linked recovery alert', async () => {
+	const rows = await alertRows([{ message: '1 transaction intent requires recovery before execution can continue', severity: 'error' }])
+	expect(rows).toHaveLength(1)
+	expect(rows[0]?.actionHref).toBe('/operations#recovery')
+})
