@@ -3,8 +3,6 @@ name: Coverage
 on:
   workflow_dispatch:
   workflow_call:
-  schedule:
-    - cron: "23 3 * * 1"
 
 permissions:
   contents: read
