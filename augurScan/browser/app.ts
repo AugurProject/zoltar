@@ -1,3 +1,4 @@
+import { questionStatus, questionDateLabel } from './question-time.ts'
 import { short, shortIdentifier } from './identifier-format.ts'
 import { requiredElementRole } from './dom-elements.ts'
 
@@ -4478,13 +4479,6 @@ export async function startScanner(demoFactory?: DemoFactory) {
 		$('#state-detail').replaceChildren(fragment)
 	}
 
-	const questionStatus = (question: QuestionRecord): string => {
-		const now = Date.now()
-		if (now < new Date(question.start_time).getTime()) return 'Scheduled'
-		if (now < new Date(question.end_time).getTime()) return 'Open'
-		return 'Ended'
-	}
-
 	const renderQuestionDetail = async (question: QuestionRecord, requestVersion: number, canonicalGeneration: number, suppliedHistory?: EntityHistory): Promise<void> => {
 		const history = suppliedHistory ?? (await fetchEntityHistory('questions', question))
 		if (requestVersion !== stateDetailRequestVersion || !isCurrentCanonicalGeneration(canonicalGeneration, canonicalDataGeneration)) return
@@ -4503,11 +4497,11 @@ export async function startScanner(demoFactory?: DemoFactory) {
 		definition.append(outcomes)
 		const timeline = element('div', 'timeline')
 		for (const [label, value] of [
-			['Created', question.created_timestamp],
-			['Starts', question.start_time],
-			['Ends', question.end_time],
+			['Created', new Date(question.created_timestamp).toLocaleDateString('en-GB')],
+			['Starts', questionDateLabel(question.start_time)],
+			['Ends', questionDateLabel(question.end_time)],
 		] as const)
-			timeline.append(element('div', 'timeline-step', `${label} · ${new Date(value).toLocaleDateString('en-GB')}`))
+			timeline.append(element('div', 'timeline-step', `${label} · ${value}`))
 		definition.append(timeline)
 		fragment.append(definition)
 		const usage = element('section', 'static-card')

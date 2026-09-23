@@ -1,5 +1,5 @@
 import { dependencyDiscoveryKinds } from '../contract-discovery.ts'
-import type { IndexedBlock, RichListBalance, StoredTransaction } from '../database.ts'
+import { canonicalBlockLogs, type IndexedBlock, type RichListBalance, type StoredTransaction } from '../database.ts'
 import { readRichListBalance } from '../direct-observations.ts'
 import { type Address, getAddress, type Hash, type Log, type BlockTransaction, type TransactionReceipt, zeroAddress } from '../ethereum.ts'
 import { addressActivityFrom, ChainContinuityError, commitCanonicalRead, confirmCanonicalBlock, isProtocolEvidenceEmitter, isPrunedHistoricalStateError, jsonEvidence, labelsFrom, readWithPrunedStateFallback, requireLogPosition, requireReceiptPosition } from '../indexer-runtime.ts'
@@ -204,7 +204,7 @@ export async function indexBlock(
 			contracts: discovered,
 			tokenMetadata: readTokenMetadata,
 			transactions: storedTransactions,
-			logs: storedLogs,
+			logs: canonicalBlockLogs({ number, hash: block.hash, logs: storedLogs }),
 			addressActivity: addressActivityFrom(storedTransactions, storedLogs, contracts),
 			contractDeploymentObservations: [],
 			logScanCursors: [],
