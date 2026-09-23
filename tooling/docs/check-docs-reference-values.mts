@@ -295,7 +295,7 @@ function assertNonDecisionLifecycleDocs(): void {
 		.filter(member => member.length > 0)
 	assert.deepEqual(enumMembers, ['None', 'Local', 'InheritedThresholdTie'])
 	assert.match(securityPoolForker, /function getQuestionOutcome\([\s\S]*if \(data\.fixedQuestionOutcomePlusOne > 0\)[\s\S]*return BinaryOutcomes\.BinaryOutcome\(data\.fixedQuestionOutcomePlusOne - 1\)/)
-	assert.match(escalationGameCalculations, /function getFinalQuestionResolution\(\)[\s\S]*if \(block\.timestamp <= getEscalationGameEndDate\(\)\) return BinaryOutcomes\.BinaryOutcome\.None/)
+	assert.match(escalationGameCalculations, /function getFinalQuestionResolution\(\)[\s\S]*uint256 endDate = getEscalationGameEndDate\(\);\s*if \(block\.timestamp <= endDate\) return BinaryOutcomes\.BinaryOutcome\.None/)
 }
 
 function assertAuditFindingRemediations(): void {

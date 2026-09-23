@@ -67,8 +67,8 @@ export const contractSafetyPolicy = {
 				sourcePath: 'contracts/statoblast/EscalationGame.sol',
 				contractName: 'EscalationGame',
 			},
-			24_282,
-			'The reviewed game uses exact recursive claim allocations and preserves allocation-call revert bubbling; the smaller runtime budget permits no further growth.',
+			24_364,
+			'The game combines exact recursive claim allocation with fork-aware finality for delayed migration. The 82-byte increase over the allocation fix preserves unresolved carry; no further growth is permitted.',
 		),
 		runtimeBudget(
 			{
@@ -101,8 +101,8 @@ export const contractSafetyPolicy = {
 				sourcePath: 'contracts/statoblast/factories/EscalationGameFactory.sol',
 				contractName: 'EscalationGameFactory',
 			},
-			47_014,
-			'The factory embeds deterministic interval consumption and prefix accounting for successive haircuts; the 341-byte increase fixes claim-order underflows. No further growth is permitted.',
+			47_103,
+			'The factory embeds exact interval consumption, prefix accounting, and fork-aware finality. Combining delayed-migration finality adds 89 bytes to the allocation fix; no further growth is permitted.',
 		),
 	] satisfies readonly BytecodeBudget[],
 	exactLayoutPairs: [
