@@ -33,6 +33,7 @@ export function storageFixture() {
 	let cycle = false
 	let badAnchor = false
 	let badEconomics = false
+	let principalAttoRep = 10n
 	const pool = (game: Address) => getAddress(toHex(BigInt(game) + 1n, { size: 20 }))
 	function resolve(target: Address) {
 		return games.find(game => game.game.toLowerCase() === target.toLowerCase() || pool(game.game).toLowerCase() === target.toLowerCase())
@@ -114,8 +115,8 @@ export function storageFixture() {
 			case 'getFinalQuestionResolution':
 			case 'getQuestionOutcome':
 				return [0n]
-			case 'applyInheritedClaimRetention':
-				return [args[0] ?? 0n]
+			case 'getInheritedClaimAllocation':
+				return [args[1] ?? 0n, principalAttoRep, args[1] ?? 0n, args[2] ?? 0n]
 			case 'getBindingCapitalAttoRep':
 			case 'nonDecisionThresholdAttoRep':
 			case 'getForkThresholdAttoRep':
@@ -131,7 +132,7 @@ export function storageFixture() {
 			case 'withdrawForkedEscalationDeposits':
 				return []
 			case 'withdrawDeposit':
-				return [wallet, badEconomics ? 999n : 16n, 10n]
+				return [wallet, badEconomics ? 999n : principalAttoRep + 6n, 10n]
 			default:
 				break
 		}
@@ -176,6 +177,9 @@ export function storageFixture() {
 		},
 		setBadAnchor: () => {
 			badAnchor = true
+		},
+		setRetainedPrincipal: (value: bigint) => {
+			principalAttoRep = value
 		},
 		setBadEconomics: () => {
 			badEconomics = true

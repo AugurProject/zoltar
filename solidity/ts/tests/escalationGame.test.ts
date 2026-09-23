@@ -1645,7 +1645,7 @@ describe('Escalation Game Test Suite', () => {
 		await traceProofConsumedCarriedDepositIndexes(child.escalationGameAddress, QuestionOutcome.Yes, 0n, MAX_UINT256)
 	})
 
-	test('carried proof settlement consumes local unresolved overflow when inherited total is smaller than the proof amount', async () => {
+	test('an inconsistent inherited snapshot cannot consume unrelated local principal', async () => {
 		const parent = await deployEscalationGameWithProofPool()
 		await startEscalation(parent.escalationGameAddress, reportBond, nonDecisionThresholdAttoRep)
 		await depositOnOutcomeViaProofTestSecurityPool(parent.testSecurityPoolAddress, client.account.address, QuestionOutcome.Yes, 3n * reportBond)
@@ -1662,9 +1662,15 @@ describe('Escalation Game Test Suite', () => {
 		await advanceForkContinuationPastStart(child.escalationGameAddress, recursiveResolutionTargetCost)
 
 		const proof = await createCarryProof(parent.escalationGameAddress, 0n, 0n, 0n, [], new SparseNullifierTree().getProof(0n))
-		await withdrawDepositViaProofTestSecurityPool(child.testSecurityPoolAddress, QuestionOutcome.Yes, proof)
+		const nullifierBefore = await readNullifierRoot(child.escalationGameAddress, QuestionOutcome.Yes)
+		const backingBefore = await getERC20Balance(client, getRepTokenAddress(0n), child.escalationGameAddress)
+		await assert.rejects(withdrawDepositViaProofTestSecurityPool(child.testSecurityPoolAddress, QuestionOutcome.Yes, proof), /Carried REP low/)
+		assert.strictEqual(await readNullifierRoot(child.escalationGameAddress, QuestionOutcome.Yes), nullifierBefore, 'rejection must not consume the proof identity')
+		assert.strictEqual(await getERC20Balance(client, getRepTokenAddress(0n), child.escalationGameAddress), backingBefore, 'rejection must preserve backing')
 
-		assert.strictEqual(await readCarryTotal(child.escalationGameAddress, QuestionOutcome.Yes), 0n, 'settling the proof should consume inherited REP first and then the local unresolved overflow')
+		assert.strictEqual(await readCarryTotal(child.escalationGameAddress, QuestionOutcome.Yes), 3n * reportBond, 'rejection must preserve both inherited and local unresolved principal')
+		await claimDepositForWinningViaTestSecurityPool(child.testSecurityPoolAddress, 0n, QuestionOutcome.Yes)
+		assert.strictEqual(await readCarryTotal(child.escalationGameAddress, QuestionOutcome.Yes), reportBond, 'the independently funded local deposit must still settle')
 		await assertOutcomeCarryTotalsMatchComponents(child.escalationGameAddress)
 	})
 
@@ -1903,6 +1909,71 @@ describe('Escalation Game Test Suite', () => {
 
 		await settleInOrder([0, 1])
 		await settleInOrder([1, 0])
+	})
+
+	test('successive auction haircuts preserve recursive claims in either order', async () => {
+		const firstAmount = 8n * reportBond + 3n
+		const secondAmount = 8n * reportBond + 5n
+		const aggregateAmount = firstAmount + secondAmount
+		const parent = await deployEscalationGameWithProofPool()
+		await startEscalation(parent.escalationGameAddress, reportBond, nonDecisionThresholdAttoRep)
+		await depositOnOutcomeViaProofTestSecurityPool(parent.testSecurityPoolAddress, client.account.address, QuestionOutcome.Yes, firstAmount)
+		await depositOnOutcomeViaProofTestSecurityPool(parent.testSecurityPoolAddress, client.account.address, QuestionOutcome.Yes, secondAmount)
+
+		const child = await deployEscalationGameWithProofPool()
+		await startEscalationFromFork(child.escalationGameAddress, reportBond, nonDecisionThresholdAttoRep, 0n)
+		await initializeSnapshotFromSourceViaTestSecurityPool(
+			child.testSecurityPoolAddress,
+			parent.escalationGameAddress,
+			zeroHash(),
+			[zeroPeakArray(), await readCarryPeaks(parent.escalationGameAddress, QuestionOutcome.Yes), zeroPeakArray()],
+			[0n, await readCarryLeafCount(parent.escalationGameAddress, QuestionOutcome.Yes), 0n],
+			[0n, aggregateAmount, 0n],
+			[zeroHash(), await readNullifierRoot(parent.escalationGameAddress, QuestionOutcome.Yes), zeroHash()],
+		)
+		await recordForkedEscrowForOutcomeViaTestSecurityPool(child.testSecurityPoolAddress, client.account.address, QuestionOutcome.Yes, aggregateAmount, aggregateAmount)
+		const childRepBefore = await getERC20Balance(client, getRepTokenAddress(0n), child.escalationGameAddress)
+		await applyTruthAuctionHaircutViaTestSecurityPool(child.testSecurityPoolAddress, childRepBefore / 2n)
+		await advanceForkContinuationPastStart(child.escalationGameAddress, recursiveResolutionTargetCost)
+
+		const childCarryTotal = await readCarryTotal(child.escalationGameAddress, QuestionOutcome.Yes)
+		assert.strictEqual(childCarryTotal, aggregateAmount / 2n)
+		assert.strictEqual(firstAmount / 2n + secondAmount / 2n + 1n, childCarryTotal, 'the fixture must expose an aggregate-versus-leaf floor difference')
+		const childPeaks = await readCarryPeaks(child.escalationGameAddress, QuestionOutcome.Yes)
+		const childLeafCount = await readCarryLeafCount(child.escalationGameAddress, QuestionOutcome.Yes)
+		const childNullifierRoot = await readNullifierRoot(child.escalationGameAddress, QuestionOutcome.Yes)
+		const firstLeafHash = hashCarryLeaf(client.account.address, QuestionOutcome.Yes, firstAmount, 0n, firstAmount, 1n)
+		const secondLeafHash = hashCarryLeaf(client.account.address, QuestionOutcome.Yes, secondAmount, 1n, aggregateAmount, 2n)
+
+		const settleInOrder = async (leafOrder: readonly [0 | 1, 0 | 1]) => {
+			const grandchild = await deployEscalationGameWithProofPool()
+			await startEscalationFromFork(grandchild.escalationGameAddress, reportBond, nonDecisionThresholdAttoRep, 0n)
+			await initializeSnapshotFromSourceViaTestSecurityPool(grandchild.testSecurityPoolAddress, child.escalationGameAddress, zeroHash(), [zeroPeakArray(), childPeaks, zeroPeakArray()], [0n, childLeafCount, 0n], [0n, childCarryTotal, 0n], [zeroHash(), childNullifierRoot, zeroHash()])
+			await recordForkedEscrowForOutcomeViaTestSecurityPool(grandchild.testSecurityPoolAddress, client.account.address, QuestionOutcome.Yes, childCarryTotal, childCarryTotal)
+			const grandchildRepBefore = await getERC20Balance(client, getRepTokenAddress(0n), grandchild.escalationGameAddress)
+			await applyTruthAuctionHaircutViaTestSecurityPool(grandchild.testSecurityPoolAddress, grandchildRepBefore / 4n)
+			await advanceForkContinuationPastStart(grandchild.escalationGameAddress, recursiveResolutionTargetCost)
+			const nullifierTree = new SparseNullifierTree()
+			const payouts = [0n, 0n]
+			const allocatedTotal = (childCarryTotal * 3n) / 4n
+			let totalPaid = 0n
+			for (const leafIndex of leafOrder) {
+				const isFirst = leafIndex === 0
+				const proof = await createCarryProof(parent.escalationGameAddress, BigInt(leafIndex), BigInt(leafIndex), 1n, [isFirst ? secondLeafHash : firstLeafHash], nullifierTree.getProof(BigInt(leafIndex)), BigInt(leafIndex + 1))
+				const before = await getERC20Balance(client, getRepTokenAddress(0n), client.account.address)
+				await withdrawDepositViaProofTestSecurityPool(grandchild.testSecurityPoolAddress, QuestionOutcome.Yes, proof)
+				const payout = (await getERC20Balance(client, getRepTokenAddress(0n), client.account.address)) - before
+				payouts[leafIndex] = payout
+				totalPaid += payout
+				assert.strictEqual(await readCarryTotal(grandchild.escalationGameAddress, QuestionOutcome.Yes), allocatedTotal - totalPaid)
+				nullifierTree.consume(BigInt(leafIndex))
+			}
+			assert.strictEqual(await readCarryTotal(grandchild.escalationGameAddress, QuestionOutcome.Yes), 0n, 'every settlement order must consume the aggregate retained checkpoint exactly')
+			assert.strictEqual(totalPaid, allocatedTotal, 'cumulative allocations must pay the whole retained principal with no rounding residue')
+			return payouts
+		}
+
+		assert.deepStrictEqual(await settleInOrder([0, 1]), await settleInOrder([1, 0]), 'each immutable leaf must receive the same allocation in either order')
 	})
 
 	test('direct child settlement applies its truth-auction haircut once and consumes the inherited source basis', async () => {

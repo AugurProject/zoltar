@@ -59,7 +59,13 @@ async function assertEscalationRulesMatchContracts(): Promise<void> {
 	const activationDelay = escalationGameStorage.match(/activationDelay = (\d+) days;/)
 	assert.ok(activationDelay?.[1] !== undefined, 'EscalationGameStorage.sol must define activationDelay in days')
 	assert.equal(BigInt(activationDelay[1]), escalationRules.activationDays)
-	const withdrawal = solidityFunction(proofVerifier, 'computeWinningWithdrawal', 'EscalationGameProofVerifier.sol')
+	const directWithdrawal = solidityFunction(proofVerifier, 'computeWinningWithdrawal', 'EscalationGameProofVerifier.sol')
+	assert.match(
+		directWithdrawal,
+		/computeAllocatedWinningWithdrawal\(depositAmountAttoRep, depositAmountAttoRep, cumulativeAmountAttoRep, bindingCapitalAttoRep, winningOutcomeBalanceAttoRep, actualForkThresholdAttoRep, nonDecisionThresholdAttoRep\)/,
+		'direct withdrawals must use the deposit amount as both principal and reward basis',
+	)
+	const withdrawal = solidityFunction(proofVerifier, 'computeAllocatedWinningWithdrawal', 'EscalationGameProofVerifier.sol')
 	assert.match(withdrawal, /bindingCapitalAttoRep \+ bindingCapitalAttoRep \/ EXCESS_REWARD_WINDOW_DIVISOR/, 'the reward-eligible cap must add binding capital divided by the excess-reward window divisor')
 	const pools = [...withdrawal.matchAll(/\(\(bindingCapitalAttoRep \* (\d+)\) \/ (\d+)\)/g)].map(match => ({ denominator: BigInt(match[2] ?? ''), numerator: BigInt(match[1] ?? '') }))
 	assert.deepEqual(pools, [
