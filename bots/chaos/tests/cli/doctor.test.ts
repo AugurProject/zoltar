@@ -18,7 +18,7 @@ import {
 	type ChaosDoctorDependencies,
 	type ChaosDoctorProbeResult,
 } from '../../src/cli/doctor.ts'
-import { parseSettings } from '../../src/config/settings.ts'
+import { loadSettings, parseSettings, serializedSettings } from '../../src/config/settings.ts'
 import { executionProfileId } from '../../src/config/execution-profile.ts'
 import { MINIMUM_WORKFLOW_VALIDITY_BLOCKS } from '../../src/operations/timing.ts'
 import { immutableTopologySidecarDirectory } from '../support/state-sidecars.ts'
@@ -62,7 +62,7 @@ function passiveDoctorDependencies(settings: Awaited<ReturnType<typeof settingsF
 		deploymentAvailability: async () => undefined,
 		acquireLocks: async () => ({ release: async () => undefined }),
 		assertProfileIsolation: async () => undefined,
-		load: async () => ({ path: '/private/operator.json', revision: 'sha256:test', settings }),
+		load: async () => ({ path: '/private/operator.json', revision: 'sha256:test', settings, needsDeploymentPin: false }),
 		loadState: async (_path, chainId) => initialDurableState(chainId, true, executionProfileId(settings)),
 		preflightSubmission: async () => [],
 		probe: async () => probeResult,
@@ -337,6 +337,33 @@ describe('chaos launch doctor', () => {
 		await expect(runChaosDoctor(dependencies)).rejects.toThrow('signer ETH 0.000000000000000123 ETH is below the required 0.12 ETH')
 	})
 
+	test('resumes an active drain after REP is recovered without requiring trading inventory', async () => {
+		const baseline = await settingsFixture('operator.configured-placeholder.json')
+		const privateKey = `0x${'22'.repeat(32)}` as const
+		const signer = privateKeyToAccount(privateKey).address
+		const settings = { ...baseline, privateKey, runtime: { ...baseline.runtime, execute: true } }
+		const state = initialDurableState(settings.network.chainId, false, executionProfileId(settings), signer)
+		state.uniswapV3Factory = settings.deployment.uniswapV3Factory
+		requestRetirement(state.retirement, state.profileId, signer, DEFAULT_RETIREMENT_POLICIES, `DRAIN ${state.profileId} TO ${signer}`, signer)
+		state.retirement.status = 'draining'
+		let submissionChecked = false
+		const dependencies = passiveDoctorDependencies(settings, {
+			loadState: async () => state,
+			preflightSubmission: async () => {
+				submissionChecked = true
+				return []
+			},
+			probe: async () => ({
+				...probeResult,
+				snapshot: { ...probeResult.snapshot, wallet: { ethBalanceAttoEth: (10n ** 16n).toString(), tokens: [] } },
+			}),
+		})
+
+		const report = await runChaosLaunchGate(dependencies)
+		expect(submissionChecked).toBe(true)
+		expect(report.checks).toMatchObject({ durableState: 'passed', deploymentCodeAndGraph: 'passed', submission: 'passed' })
+	})
+
 	test('fails before durable-state or network reads when another operator owns a required lock', async () => {
 		const settings = await settingsFixture('operator.configured-placeholder.json')
 		let stateLoaded = false
@@ -360,6 +387,27 @@ describe('chaos launch doctor', () => {
 		expect(probed).toBe(false)
 	})
 
+	test('loads real configuration without reading malformed durable state before lock acquisition', async () => {
+		const directory = await mkdtemp(join(tmpdir(), 'zoltar-chaos-doctor-lock-'))
+		temporaryDirectories.push(directory)
+		const path = join(directory, 'operator.json')
+		const stateFile = join(directory, 'state.json')
+		const settings = await settingsFixture('operator.configured-placeholder.json')
+		const stored = serializedSettings(settings)
+		Reflect.deleteProperty(stored, 'deploymentPin')
+		stored.runtime.stateFile = stateFile
+		await writeFile(path, `${JSON.stringify(stored)}\n`, { mode: 0o600 })
+		await writeFile(stateFile, 'malformed state', { mode: 0o600 })
+		const dependencies = passiveDoctorDependencies(settings, {
+			acquireLocks: async () => {
+				throw new Error('Chaos-bot state is already locked by pid 42')
+			},
+			load: async () => loadSettings(path),
+			loadState: loadDurableState,
+		})
+		await expect(runChaosDoctor(dependencies)).rejects.toThrow('already locked')
+	})
+
 	test('validates deployment profile and signer scope without mutating state', async () => {
 		const baseline = await settingsFixture('operator.configured-placeholder.json')
 		const privateKey = `0x${'44'.repeat(32)}` as const
@@ -370,9 +418,11 @@ describe('chaos launch doctor', () => {
 		expect(() => assertDoctorDurableStateScope(settings, wrongProfile, wallet, '/state.json')).toThrow('belongs to deployment profile')
 
 		const wrongSigner = initialDurableState(settings.network.chainId, true, executionProfileId(settings), privateKeyToAccount(`0x${'55'.repeat(32)}`).address)
+		wrongSigner.uniswapV3Factory = settings.deployment.uniswapV3Factory
 		expect(() => assertDoctorDurableStateScope(settings, wrongSigner, wallet, '/state.json')).toThrow('scoped to signer')
 
 		const wrongIndex = initialDurableState(settings.network.chainId, true, executionProfileId(settings), wallet)
+		wrongIndex.uniswapV3Factory = settings.deployment.uniswapV3Factory
 		wrongIndex.protocolIndex = {
 			auctionBids: {},
 			auctionRefunds: {},
@@ -393,13 +443,58 @@ describe('chaos launch doctor', () => {
 
 		const pristine = initialDurableState(settings.network.chainId)
 		expect(assertDoctorDurableStateScope(settings, pristine, wallet, '/state.json').profile).toBe('pristine-bootstrap')
+		pristine.uniswapV3Factory = getAddress('0xEf09Be426F8d6D2786cADEA7D3A8b0D09cEB79B4')
+		expect(() => assertDoctorDurableStateScope(settings, pristine, wallet, '/state.json')).toThrow('Sepolia requires the published Uniswap V3 factory')
+	})
+
+	test('rejects a changed factory even if its configuration identity is recomputed', async () => {
+		const base = await settingsFixture('operator.configured-placeholder.json')
+		const unpinned = serializedSettings(base)
+		Reflect.deleteProperty(unpinned, 'deploymentPin')
+		const settings = parseSettings({ ...unpinned, network: { ...base.network, chainId: 31337, kind: 'custom', name: 'Local test' } })
+		const state = initialDurableState(settings.network.chainId, true, executionProfileId(settings))
+		state.activities.push({ at: new Date(0).toISOString(), message: 'existing history', status: 'info', type: 'configuration' })
+		state.uniswapV3Factory = settings.deployment.uniswapV3Factory
+		const changed = { ...settings, deployment: { ...settings.deployment, uniswapV3Factory: getAddress('0x0000000000000000000000000000000000000001') } }
+		const persisted = serializedSettings(changed)
+		const parsed = parseSettings(persisted)
+		expect(executionProfileId(parsed)).toBe(state.profileId)
+		expect(() => assertDoctorDurableStateScope(parsed, state, undefined, '/state.json')).toThrow('different Uniswap V3 factory')
+		state.uniswapV3Factory = undefined
+		expect(() => assertDoctorDurableStateScope(parsed, state, undefined, '/state.json')).toThrow('different Uniswap V3 factory')
+	})
+
+	test('preflights an unpinned operated Sepolia state against its original deployment', async () => {
+		const directory = await mkdtemp(join(tmpdir(), 'zoltar-chaos-doctor-legacy-'))
+		temporaryDirectories.push(directory)
+		const path = join(directory, 'operator.json')
+		const stateFile = join(directory, 'chaos.sepolia.json')
+		const settings = await settingsFixture('operator.configured-placeholder.json')
+		const stored = serializedSettings(settings)
+		Reflect.deleteProperty(stored, 'deploymentPin')
+		stored.runtime.stateFile = stateFile
+		await writeFile(path, `${JSON.stringify(stored)}\n`, { mode: 0o600 })
+		const previousProfile = 'profile:v1:831bd7a49fd68a696ac753b612ce41ec5c50580b093ab8e1e5151a26883e29ae'
+		const state = initialDurableState(11_155_111, true, previousProfile)
+		state.activities.push({ at: new Date(0).toISOString(), message: 'Existing deployment activity', status: 'info', type: 'configuration' })
+		await saveDurableState(stateFile, state)
+		const before = await readFile(path)
+		const result = await runChaosDoctor(
+			passiveDoctorDependencies(settings, {
+				deploymentAvailability: async () => 'Waiting for deployment availability',
+				load: async () => loadSettings(path),
+				loadState: loadDurableState,
+			}),
+		)
+		expect(result.checks.durableState).toBe('passed')
+		expect(await readFile(path)).toEqual(before)
 	})
 
 	test('rejects mismatched-profile retirement state before network probing', async () => {
 		const settings = await settingsFixture('operator.configured-placeholder.json')
 		const recipient = getAddress('0x0000000000000000000000000000000000000099')
-		const requested = initialDurableState(settings.network.chainId, true, 'profile:wrong')
-		requestRetirement(requested.retirement, requested.profileId, recipient, DEFAULT_RETIREMENT_POLICIES, `DRAIN ${requested.profileId} TO ${recipient}`, undefined)
+		const requested = initialDurableState(settings.network.chainId, true, 'profile:wrong', recipient)
+		requestRetirement(requested.retirement, requested.profileId, recipient, DEFAULT_RETIREMENT_POLICIES, `DRAIN ${requested.profileId} TO ${recipient}`, recipient)
 		const registered = initialDurableState(settings.network.chainId, true, 'profile:wrong')
 		registerV3Position(registered.retirement, {
 			creationWorkflowId: 'legacy:position',

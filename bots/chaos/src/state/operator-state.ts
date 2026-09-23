@@ -193,6 +193,7 @@ export type DurableState = {
 	obligations: DurableObligation[]
 	pendingTransactions: PendingTransactionIntent[]
 	profileId: string
+	uniswapV3Factory?: Address | undefined
 	protocolIndex: ChaosProtocolIndex | undefined
 	retirement: DurableRetirementState
 	safetyPaused: boolean
@@ -255,6 +256,7 @@ export function resetRuntimeStateForProfile(state: RuntimeState, profileId: stri
 	const safetyPaused = state.safetyPaused
 	const replacement = initialRuntimeState(paused || safetyPaused, wallet, state.chainId, initialDurableState(state.chainId, paused, profileId, wallet))
 	replacement.safetyPaused = safetyPaused
+	replacement.uniswapV3Factory = undefined
 	Object.assign(state, replacement)
 	return state
 }
@@ -956,7 +958,7 @@ async function loadDurableStateFile(path: string, expectedChainId: number, files
 	assertExactKeys(
 		state,
 		['activities', 'chainId', 'lifecyclePresenceBlocker', 'obligationTombstones', 'obligations', 'pendingTransactions', 'profileId', 'protocolIndex', ...(storedVersion === 3 ? [] : ['retirement']), 'safetyPaused', 'scheduler', 'signerAddress', 'version', 'workflows'],
-		['includedTransactions', 'rollbackQueue'],
+		['includedTransactions', 'rollbackQueue', 'uniswapV3Factory'],
 		'chaos-bot state',
 	)
 	if (state['chainId'] !== expectedChainId) throw new Error(`Chaos-bot state belongs to chain ${String(state['chainId'])}, expected chain ${expectedChainId.toString()}`)
@@ -1040,6 +1042,7 @@ async function loadDurableStateFile(path: string, expectedChainId: number, files
 		obligations,
 		pendingTransactions,
 		profileId: identifier(state['profileId'], 'profileId'),
+		uniswapV3Factory: state['uniswapV3Factory'] === undefined ? undefined : getAddress(nonemptyString(state['uniswapV3Factory'], 'chaos-bot state.uniswapV3Factory')),
 		protocolIndex,
 		retirement: storedVersion === 3 || state['retirement'] === undefined ? initialRetirementState() : parseRetirementState(state['retirement'], signerAddress),
 		safetyPaused: state['safetyPaused'],
@@ -1055,7 +1058,10 @@ export async function loadDurableState(path: string, expectedChainId: number, fi
 }
 
 function serializedDurableState(
-	state: Pick<DurableState, 'rollbackQueue' | 'includedTransactions' | 'activities' | 'chainId' | 'lifecyclePresenceBlocker' | 'obligationTombstones' | 'obligations' | 'pendingTransactions' | 'profileId' | 'protocolIndex' | 'retirement' | 'safetyPaused' | 'scheduler' | 'signerAddress' | 'workflows'>,
+	state: Pick<
+		DurableState,
+		'rollbackQueue' | 'includedTransactions' | 'activities' | 'chainId' | 'lifecyclePresenceBlocker' | 'obligationTombstones' | 'obligations' | 'pendingTransactions' | 'profileId' | 'protocolIndex' | 'retirement' | 'safetyPaused' | 'scheduler' | 'signerAddress' | 'uniswapV3Factory' | 'workflows'
+	>,
 	persistedProtocolIndex: ChaosProtocolIndex | ProtocolIndexReference | null = state.protocolIndex ?? null,
 ) {
 	return {
@@ -1068,6 +1074,7 @@ function serializedDurableState(
 		rollbackQueue: serializedRollbackQueue(state.rollbackQueue),
 		pendingTransactions: state.pendingTransactions.map(serializedTransactionIntent),
 		profileId: state.profileId,
+		...(state.uniswapV3Factory === undefined ? {} : { uniswapV3Factory: state.uniswapV3Factory }),
 		protocolIndex: persistedProtocolIndex,
 		retirement: state.retirement,
 		safetyPaused: state.safetyPaused,
@@ -1080,7 +1087,7 @@ function serializedDurableState(
 
 type PersistableDurableState = Pick<
 	DurableState,
-	'rollbackQueue' | 'includedTransactions' | 'activities' | 'chainId' | 'lifecyclePresenceBlocker' | 'obligationTombstones' | 'obligations' | 'pendingTransactions' | 'profileId' | 'protocolIndex' | 'retirement' | 'safetyPaused' | 'scheduler' | 'signerAddress' | 'workflows'
+	'rollbackQueue' | 'includedTransactions' | 'activities' | 'chainId' | 'lifecyclePresenceBlocker' | 'obligationTombstones' | 'obligations' | 'pendingTransactions' | 'profileId' | 'protocolIndex' | 'retirement' | 'safetyPaused' | 'scheduler' | 'signerAddress' | 'uniswapV3Factory' | 'workflows'
 >
 
 function snapshotDurableState(state: PersistableDurableState) {
@@ -1097,6 +1104,7 @@ function snapshotDurableState(state: PersistableDurableState) {
 		obligations: [...state.obligations],
 		pendingTransactions: [...state.pendingTransactions],
 		profileId: state.profileId,
+		uniswapV3Factory: state.uniswapV3Factory,
 		protocolIndex: undefined,
 		retirement: structuredClone(state.retirement),
 		safetyPaused: state.safetyPaused,

@@ -33,6 +33,7 @@ test('restarts an empty bootstrap that recorded the previous zero-address deploy
 		await runChaosOperator({ path: join(directory, 'settings.json'), revision: 'fixture', settings }, { acquireSigner: async () => undefined, commitSigner: async () => undefined, discardSigner: async () => undefined, release: async () => undefined }, shutdown)
 		const migrated = await loadDurableState(stateFile, 11155111)
 		expect(migrated.profileId).toBe(executionProfileId(settings))
+		expect(migrated.uniswapV3Factory).toBe(settings.deployment.uniswapV3Factory)
 		expect(migrated.activities).toEqual(old.activities)
 		expect(migrated.signerAddress).toBe(old.signerAddress)
 		expect(migrated.safetyPaused).toBeFalse()
@@ -86,7 +87,7 @@ test('doctor accepts the same bootstrap migration without writing or mutating sa
 	old.activities.push({ at: new Date().toISOString(), message: 'Configured the network', type: 'configuration', status: 'info' })
 	const profile = old.profileId
 	const result = await runChaosDoctor({
-		load: async () => ({ path: '/tmp/unused.json', revision: 'fixture', settings }),
+		load: async () => ({ path: '/tmp/unused.json', revision: 'fixture', settings, needsDeploymentPin: false }),
 		loadState: async () => old,
 		acquireLocks: async () => ({ release: async () => undefined }),
 		assertProfileIsolation: async () => undefined,

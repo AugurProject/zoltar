@@ -17,8 +17,49 @@ body {
 	color: var(--operator-text);
 }
 
-#retirement-summary {
+#retirement-summary,
+#retirement-destination,
+#retirement-residual-evidence {
 	overflow-wrap: anywhere;
+}
+
+#retirement-residual-evidence[hidden] {
+	display: none;
+}
+
+#retirement-residual-list {
+	display: grid;
+	gap: 0.45rem;
+	margin: 0.65rem 0 1rem;
+	padding-left: 1.3rem;
+	font-size: 0.84rem;
+	line-height: 1.45;
+}
+
+#retirement-form {
+	display: grid;
+	gap: 0.65rem;
+}
+
+#retirement-form[hidden] {
+	display: none;
+}
+
+#retirement-request-options {
+	display: grid;
+	gap: 0.65rem;
+	min-width: 0;
+	margin: 0;
+	padding: 0;
+	border: 0;
+}
+
+#retirement-request-options[hidden] {
+	display: none;
+}
+
+#retirement-actions[hidden] {
+	display: none;
 }
 
 body[data-page="overview"] [data-page-content]:not([data-page-content="overview"]):not([data-page-content="all"]),

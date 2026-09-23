@@ -1,4 +1,5 @@
 import { zeroAddress } from '@zoltar/bot-shared/ethereum'
+import { restoreDeploymentForDurableState } from '../../src/config/deployment-state.ts'
 import { chmod, mkdir, mkdtemp, open, readFile, readdir, rename, rm, stat, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
@@ -9,6 +10,8 @@ const PRESERVE_PRIVATE_KEY = '__PRESERVE_SAVED_PRIVATE_KEY__'
 import { publicChaosConfiguration } from '../../src/dashboard/dashboard-server.ts'
 import { executionProfileId } from '../../src/config/execution-profile.ts'
 import { chaosChain } from '../../src/runtime/canonical-scan.ts'
+import { initialDurableState } from '../../src/state/initial-state.ts'
+import { saveDurableState } from '../../src/state/operator-state.ts'
 
 const directories: string[] = []
 const configDirectory = resolve(import.meta.dir, '../../config')
@@ -62,6 +65,29 @@ async function liveConfiguredExample(): Promise<Record<string, unknown>> {
 }
 
 describe('chaos-bot settings', () => {
+	test('restores a previously operated Sepolia deployment when the canonical manifest changes', async () => {
+		const directory = await temporaryDirectory()
+		const path = join(directory, 'operator.json')
+		const stateFile = join(directory, 'chaos.sepolia.json')
+		const source: unknown = JSON.parse(await readFile(configuredPlaceholderPath, 'utf8'))
+		const config = record(source)
+		const runtime = record(config['runtime'])
+		await writeFile(path, `${JSON.stringify({ ...config, runtime: { ...runtime, stateFile } })}\n`, { mode: 0o600 })
+		const previousProfile = 'profile:v1:831bd7a49fd68a696ac753b612ce41ec5c50580b093ab8e1e5151a26883e29ae'
+		const state = initialDurableState(11_155_111, true, previousProfile)
+		state.activities.push({ at: new Date(0).toISOString(), message: 'Existing deployment activity', status: 'info', type: 'configuration' })
+		await saveDurableState(stateFile, state)
+
+		const loaded = await loadSettings(path)
+		const restored = restoreDeploymentForDurableState(loaded.settings, state, loaded.needsDeploymentPin)
+		expect(executionProfileId(restored)).toBe(previousProfile)
+		expect(restored.deployment.uniswapV3Factory).toBe('0x0227628f3F023bb0B980b67D528571c95c6DaC1c')
+		await saveSettings(path, restored, loaded.revision)
+		const persisted = record(JSON.parse(await readFile(path, 'utf8')))
+		expect(persisted['deploymentPin']).toBeDefined()
+		expect(executionProfileId((await loadSettings(path)).settings)).toBe(previousProfile)
+	})
+
 	test('parses every committed configuration example through the production schema', async () => {
 		const paths = (await readdir(configDirectory)).filter(name => name.startsWith('operator.') && name.endsWith('.json')).map(name => resolve(configDirectory, name))
 		expect(paths).toEqual(expect.arrayContaining([examplePath, configuredPlaceholderPath, customChainPlaceholderPath]))
@@ -125,6 +151,7 @@ describe('chaos-bot settings', () => {
 		expect(executionProfileId(roundTripped)).toBe(executionProfileId(settings))
 		const differentChain = parseSettings({
 			...serialized,
+			deploymentPin: undefined,
 			network: { ...serialized.network, chainId: 4_242_424_243 },
 		})
 		expect(executionProfileId(differentChain)).not.toBe(executionProfileId(settings))
@@ -171,6 +198,7 @@ describe('chaos-bot settings', () => {
 		expect(sepolia.network).toEqual({ chainId: 11_155_111, explorerUrl: 'https://sepolia.etherscan.io', maximumBlockIntervalSeconds: 60, name: 'sepolia' })
 		const mainnet = parseSettings({
 			...serializedSettings(sepolia),
+			deploymentPin: undefined,
 			network: { chainId: 1, explorerUrl: 'https://etherscan.io', name: 'mainnet' },
 			runtime: { ...serializedSettings(sepolia).runtime, stateFile: '.state/chaos.mainnet.json' },
 		})
@@ -198,6 +226,7 @@ describe('chaos-bot settings', () => {
 		const custom = parseSettings({ ...customSource, runtime: { ...record(customSource['runtime']), stateFile: sharedStateFile } })
 		const mainnet = parseSettings({
 			...serializedSettings(custom),
+			deploymentPin: undefined,
 			network: { chainId: 1, explorerUrl: 'https://etherscan.io', name: 'mainnet' },
 			runtime: { ...serializedSettings(custom).runtime, stateFile: sharedStateFile },
 		})
@@ -472,6 +501,7 @@ describe('chaos-bot settings', () => {
 		const base = parseSettings({ ...example, runtime: { ...record(example['runtime']), stateFile: statePath } })
 		const mainnet = parseSettings({
 			...serializedSettings(base),
+			deploymentPin: undefined,
 			network: { chainId: 1, explorerUrl: 'https://etherscan.io', name: 'mainnet' },
 			runtime: { ...serializedSettings(base).runtime, stateFile: statePath },
 		})

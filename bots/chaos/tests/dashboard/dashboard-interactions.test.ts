@@ -6,6 +6,7 @@ import { expect, test } from 'bun:test'
 import { startDashboardServer } from '../../src/dashboard/dashboard-server.ts'
 import { CONFIGURATION_COMMIT_INDETERMINATE } from '../../src/runtime/configuration-commit.ts'
 import { recordPreflightFailure } from '../../src/execution/preflight-failure.ts'
+import { getAddress } from '@zoltar/bot-shared/ethereum'
 import type { RuntimeState } from '../../src/state/operator-state.ts'
 
 type RecoveryScenario = {
@@ -1734,7 +1735,7 @@ browserTest(
 		const requests: unknown[] = []
 		const dashboard = startDashboardServer(0, {
 			getConfiguration: () => ({ revision: 'retirement-review', settings: { network: { chainId: 1, name: 'mainnet' }, paused: true, runtime: { execute: false }, scheduler: { maximumDelaySeconds: 3600, minimumDelaySeconds: 60 }, strategy: { enabledEcosystems: [] } } }),
-			getState: () => state({ profileId: 'profile:review', retirement: { blockers: [], positions: [], status: 'inactive' } }),
+			getState: () => state({ profileId: 'profile:review', retirement: { blockers: [], positions: [], status: 'inactive' }, wallet: walletAddress }),
 			hostname: '127.0.0.1',
 			setCancellation: () => {},
 			setCandidate: () => {},
@@ -1753,10 +1754,10 @@ browserTest(
 			await cdp.command('Page.navigate', { url: new URL('/recovery', dashboard.url).href })
 			for (let attempt = 0; attempt < 100 && (await cdp.evaluate("document.querySelector('#rpc-health-retry-button')?.disabled")) !== false; attempt++) await Bun.sleep(25)
 			expect(await cdp.evaluate("document.querySelector('#rpc-health-retry-button')?.disabled")).toBe(false)
-			for (let attempt = 0; attempt < 100 && (await cdp.evaluate("document.querySelector('#retirement-start')?.hidden")) !== false; attempt++) await Bun.sleep(25)
-			expect(await cdp.evaluate("document.querySelector('#retirement-start')?.hidden")).toBe(false)
+			for (let attempt = 0; attempt < 100 && (await cdp.evaluate("document.querySelector('#retirement-start')?.disabled")) !== false; attempt++) await Bun.sleep(25)
+			expect(await cdp.evaluate("document.querySelector('#retirement-start')?.disabled")).toBe(false)
 			await cdp.evaluate("document.querySelector('#retirement-start')?.click()")
-			await cdp.evaluate(`(() => { document.querySelector('#retirement-recipient').value = '${walletAddress}'; document.querySelector('#retirement-max-loss').value = '10001'; document.querySelector('#retirement-form').dispatchEvent(new SubmitEvent('submit', { bubbles: true, cancelable: true })) })()`)
+			await cdp.evaluate("(() => { document.querySelector('#retirement-max-loss').value = '10001'; document.querySelector('#retirement-form').dispatchEvent(new SubmitEvent('submit', { bubbles: true, cancelable: true })) })()")
 			for (let attempt = 0; attempt < 100 && (await cdp.evaluate("document.querySelector('#retirement-action-status')?.textContent?.includes('0 to 10000 bps')")) !== true; attempt++) await Bun.sleep(25)
 			expect(await cdp.evaluate("document.querySelector('#retirement-action-status')?.textContent")).toContain('0 to 10000 bps')
 			expect(await cdp.evaluate("document.querySelector('.operator-confirm-dialog') === null")).toBe(true)
@@ -1769,7 +1770,6 @@ browserTest(
 				const height = index === 0 ? 900 : 844
 				await cdp.command('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: false })
 				await cdp.evaluate(`(() => {
-					document.querySelector('#retirement-recipient').value = '${walletAddress}'
 					document.querySelector('#retirement-max-loss').value = '250'
 					document.querySelector('#retirement-exit-unmatched').checked = ${policy.exitUnmatchedShares}
 					document.querySelector('#retirement-migrate-claims').checked = ${policy.migrateExistingClaims}
@@ -1779,7 +1779,7 @@ browserTest(
 				for (let attempt = 0; attempt < 100 && (await cdp.evaluate("document.querySelector('.operator-confirm-dialog')?.open")) !== true; attempt++) await Bun.sleep(25)
 				const review = await cdp.evaluate("[...document.querySelectorAll('.operator-review-row')].map(row => ({ label: row.querySelector('strong')?.textContent, before: row.querySelectorAll('span')[0]?.textContent, after: row.querySelectorAll('span')[2]?.textContent }))")
 				expect(review).toMatchObject([
-					{ label: 'Recipient', before: 'Current wallet' },
+					{ label: 'Signer destination', before: 'Current signer' },
 					{ label: 'Maximum unmatched-share loss', after: '250 bps' },
 					{ label: 'Exit unmatched shares', after: policy.exitUnmatchedShares ? 'Enabled' : 'Disabled' },
 					{ label: 'Migrate existing claims', after: policy.migrateExistingClaims ? 'Enabled' : 'Disabled' },
@@ -1803,7 +1803,17 @@ browserTest(
 				if (typeof request !== 'object' || request === null) throw new Error('Expected retirement request')
 				expect(Reflect.get(request, 'policies')).toMatchObject({ ...policy, maximumExitLossBps: 250 })
 				if (!Array.isArray(review)) throw new Error('Expected retirement review rows')
-				expect(Reflect.get(review[0], 'after')).toBe(Reflect.get(request, 'recipient'))
+				expect(Reflect.get(review[0], 'after')).toBe(getAddress(walletAddress))
+				expect(Reflect.get(request, 'recipient')).toBeUndefined()
+				if (index < 2) {
+					await cdp.command('Page.navigate', { url: new URL(`/recovery?review=${(index + 1).toString()}`, dashboard.url).href })
+					for (let attempt = 0; attempt < 100 && (await cdp.evaluate(`location.search === '?review=${(index + 1).toString()}' && document.readyState === 'complete'`)) !== true; attempt++) await Bun.sleep(25)
+					for (let attempt = 0; attempt < 100 && (await cdp.evaluate("document.querySelector('#rpc-health-retry-button')?.disabled")) !== false; attempt++) await Bun.sleep(25)
+					for (let attempt = 0; attempt < 100 && (await cdp.evaluate("document.querySelector('#retirement-start')?.disabled")) !== false; attempt++) await Bun.sleep(25)
+					await cdp.evaluate("document.querySelector('#retirement-start')?.click()")
+					for (let attempt = 0; attempt < 100 && (await cdp.evaluate("document.querySelector('#retirement-form')?.hidden")) !== false; attempt++) await Bun.sleep(25)
+					expect(await cdp.evaluate("document.querySelector('#retirement-form')?.hidden")).toBe(false)
+				}
 			}
 			expect(cdp.issues.filter(issue => issue.kind === 'pageerror')).toEqual([])
 		} finally {
