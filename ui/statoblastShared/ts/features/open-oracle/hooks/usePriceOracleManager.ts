@@ -94,6 +94,7 @@ function usePriceOracleManagerWithDependencies<TWriteClient>(
 				{
 					accountAddress,
 					missingWalletMessage: 'Connect a wallet before requesting a price',
+					reviewSignal: signal,
 					onTransactionCanceled,
 					onWriteCanceled: () => {
 						poolOracleFeedback.value = undefined
@@ -119,7 +120,7 @@ function usePriceOracleManagerWithDependencies<TWriteClient>(
 						poolOracleManagerErrorAddress.value = managerAddress
 					},
 				},
-				async walletAddress => {
+				async (walletAddress, context) => {
 					try {
 						signal?.throwIfAborted()
 						const refreshedManagerDetails = await dependencies.loadOracleManagerDetails(managerAddress)
@@ -127,7 +128,7 @@ function usePriceOracleManagerWithDependencies<TWriteClient>(
 						poolOracleManagerDetails.value = refreshedManagerDetails
 						if (refreshedManagerDetails?.isPriceValid) throw new Error('A fresh oracle price is already available')
 						if ((refreshedManagerDetails?.pendingReportId ?? 0n) > 0n) throw new Error('Oracle price request is already pending')
-						const writeClient = dependencies.createWalletWriteClient(walletAddress, { onTransactionPrepared, onTransactionSubmitted, reviewSignal: signal })
+						const writeClient = dependencies.createWalletWriteClient(walletAddress, { onTransactionPrepared, onTransactionSubmitted, reviewSignal: context.reviewSignal })
 						const initialReportFunding = await dependencies.loadCoordinatorInitialReportFundingRequirement(writeClient, managerAddress, walletAddress, proposedRepPerEthPrice)
 						if (initialReportFunding.currentRepBalanceAttoRep < initialReportFunding.requiredRepAttoRep) {
 							throw new Error(`Need ${formatAdditionalCurrencyBalance(initialReportFunding.requiredRepAttoRep - initialReportFunding.currentRepBalanceAttoRep, 'REP')} in this wallet to fund the initial report.`)
@@ -193,7 +194,7 @@ function usePriceOracleManagerWithDependencies<TWriteClient>(
 						poolOracleManagerErrorAddress.value = managerAddress
 					},
 				},
-				async walletAddress => await dependencies.executeOracleManagerStagedOperation(dependencies.createWalletWriteClient(walletAddress, { onTransactionPrepared, onTransactionSubmitted }), managerAddress, operationId),
+				async (walletAddress, context) => await dependencies.executeOracleManagerStagedOperation(dependencies.createWalletWriteClient(walletAddress, { onTransactionPrepared, onTransactionSubmitted, reviewSignal: context.reviewSignal }), managerAddress, operationId),
 				'Failed to execute staged operation',
 				result => {
 					poolPriceOracleResult.value = result

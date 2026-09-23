@@ -2632,11 +2632,6 @@
 	text-align: center;
 }
 
-.pool-selection-toolbar {
-	display: flex;
-	justify-content: flex-end;
-}
-
 .pool-selection-control {
 	min-width: 0;
 }
@@ -2780,10 +2775,6 @@
 
 	.pool-workspace-navigation .selected-pool-workspace-tabs.view-tabs {
 		max-width: 100%;
-	}
-
-	.pool-selection-toolbar {
-		justify-content: flex-start;
 	}
 
 	.pool-tools-options {
@@ -2945,27 +2936,9 @@
 	border: 0;
 }
 
-/* Keep the price editor and transaction actions anchored as quotes and allowances load. */
-.operation-modal-body:has(> .request-price-fields):has(> .transaction-step-actions) {
-	grid-template-rows: auto minmax(0, 1fr) auto;
-}
-
-.modal-panel:has(.request-price-fields) {
-	block-size: min(52rem, calc(100dvh - 2rem));
-	max-block-size: calc(100dvh - 2rem);
-}
-
-.operation-modal-body:has(> .request-price-fields) .transaction-step-content {
-	align-content: start;
-}
-
 .operation-modal-body:has(> .request-price-fields) .transaction-step-actions .tx-action-group,
 .operation-modal-body:has(> .request-price-fields) .transaction-step-actions .tx-action-group:has(.tx-action-feedback:empty) {
 	gap: var(--space-2);
-}
-
-.operation-modal-body:has(> .request-price-fields) .transaction-step-actions .tx-action-group > .tx-action-feedback {
-	min-block-size: 4.5em;
 }
 
 .request-price-fields {
@@ -2973,6 +2946,7 @@
 	gap: 1rem;
 }
 
+/* The error row keeps its height so the funding summary and actions do not move when a price becomes invalid. */
 .request-price-fields .lookup-field-controls.has-action {
 	grid-template-columns: minmax(0, 1fr) auto;
 	grid-template-rows: auto minmax(3rem, auto);
@@ -3032,5 +3006,39 @@
 
 	.operation-modal-body:has(> .request-price-fields) .transaction-step-content {
 		overflow: visible;
+	}
+}
+
+.pool-selection-control .lookup-field-controls {
+	grid-template-columns: minmax(0, 1fr) auto;
+}
+.pool-selection-control input {
+	font-family: var(--font-family-mono);
+	font-size: clamp(0.8125rem, 2.35vw, 0.9rem);
+}
+.pool-capacity-values {
+	display: flex;
+	align-items: baseline;
+	flex-wrap: wrap;
+	gap: var(--space-2);
+}
+/* Reserve the busy label width so the address input does not shrink while a refresh runs. */
+.pool-selection-control .lookup-field-controls > .actions {
+	min-inline-size: 11.75rem;
+}
+@media (max-width: 600px) {
+	.pool-selection-control .lookup-field-controls {
+		grid-template-columns: minmax(0, 1fr);
+	}
+	.pool-selection-control .lookup-field-controls.has-action > .actions {
+		grid-column: 1;
+		grid-row: auto;
+		justify-content: flex-start;
+		min-inline-size: 0;
+	}
+	/* An address longer than the field clips with an ellipsis at rest; focusing the field still scrolls to the caret. */
+	.pool-selection-control input {
+		font-size: var(--font-label);
+		text-overflow: ellipsis;
 	}
 }

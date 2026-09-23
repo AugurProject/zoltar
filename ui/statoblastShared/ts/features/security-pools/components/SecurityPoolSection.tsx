@@ -14,7 +14,7 @@ import { RouteWorkflowPanel } from '@zoltar/ui-core-shared/components/RouteWorkf
 import { SectionBlock } from '@zoltar/ui-core-shared/components/SectionBlock.js'
 import { TransactionActionButton } from '@zoltar/ui-core-shared/components/TransactionActionButton.js'
 import { TransactionHashLink } from '@zoltar/ui-core-shared/components/TransactionHashLink.js'
-import { TransactionStepsContent } from '@zoltar/ui-core-shared/components/TransactionStepsModal.js'
+import { TransactionStepsContent } from '@zoltar/ui-core-shared/components/TransactionStepsContent.js'
 import { transactionSteps } from '@zoltar/ui-core-shared/transactions/transactionSteps.js'
 import { isActiveAppChain } from '@zoltar/ui-core-shared/wallet/network.js'
 import { formatOpenInterestFeePerYearPercent, ORIGIN_POOL_INITIAL_RETENTION_RATE } from '../lib/retentionRate.js'
@@ -69,11 +69,14 @@ export function SecurityPoolSection({
 		title: securityPoolCopy.createQuestionForPoolTitle,
 	}
 	const isOnActiveAppChain = isActiveAppChain(accountState.chainId)
-	const [questionSource, setQuestionSource] = useState<'existing' | 'new'>(marketResult === undefined ? 'existing' : 'new')
+	// An unfinished question-and-pool flow keeps its question; otherwise use an explicitly selected ID or start a new question.
+	const [questionSource, setQuestionSource] = useState<'existing' | 'new'>(marketResult !== undefined || (securityPoolForm.marketId.trim() === '' && marketDetails === undefined) ? 'new' : 'existing')
 	const reviewWorkflow = transactionSteps.value
 	const ownsTransactionReview = securityPoolReviewSignal !== undefined && reviewWorkflow?.reviewSignal === securityPoolReviewSignal && reviewWorkflow.steps[reviewWorkflow.activeIndex] !== undefined
-	// The review replaces the submit button so the form stays visible while the user confirms the transaction.
-	const inlineTransactionReview = ownsTransactionReview ? <TransactionStepsContent contextKey='security-pool-creation' focusOnMount heading={transactionReviewCopy.transactionReview} inline keepActionsVisible onClose={onDismissSecurityPoolReview} /> : undefined
+	// The wallet confirms normal pool creation. Keep an escape if a pre-wallet review is unexpectedly published.
+	const inlineTransactionReview = ownsTransactionReview ? (
+		<TransactionStepsContent cancelable={reviewWorkflow.steps[reviewWorkflow.activeIndex]?.phase === 'review'} contextKey='security-pool-creation' focusOnMount heading={transactionReviewCopy.transactionReview} keepActionsVisible onClose={onDismissSecurityPoolReview} />
+	) : undefined
 	const panelRef = useRef<HTMLDivElement>(null)
 	const returnFocusAfterReview = useRef(false)
 	// Leaving the card (for example through the route tabs) would strand a review that only this card renders.
@@ -90,7 +93,7 @@ export function SecurityPoolSection({
 		returnFocusAfterReview.current = false
 		panelRef.current?.querySelector<HTMLElement>('.actions .tx-action-button:not(:disabled)')?.focus()
 	}, [ownsTransactionReview, securityPoolCreating])
-	// A review that is still showing (including a failed one awaiting Close) keeps the form it summarizes locked.
+	// A transaction still showing keeps the form it summarizes locked while the wallet decides.
 	const questionSourceLocked = questionAndPoolCreating || marketCreating || securityPoolCreating || ownsTransactionReview || marketResult !== undefined
 	const hasSecurityPoolResult = securityPoolResult !== undefined
 	const statoblastSecurityMultiplierValidationMessage = getStatoblastSecurityMultiplierValidationMessage(securityPoolForm.statoblastSecurityMultiplierBps)
@@ -220,7 +223,7 @@ export function SecurityPoolSection({
 								onClick={() => {
 									onResetSecurityPoolCreation()
 									onResetMarket()
-									setQuestionSource('existing')
+									setQuestionSource('new')
 								}}
 							>
 								{securityPoolCopy.createAnotherPool}
@@ -267,17 +270,15 @@ export function SecurityPoolSection({
 				) : (
 					<>
 						{questionSourceLocked ? undefined : (
-							<SectionBlock variant='plain'>
-								<fieldset className='pool-question-source' disabled={questionSourceLocked}>
-									<legend>{securityPoolCopy.questionSourceLegend}</legend>
-									<label>
-										<input checked={questionSource === 'existing'} disabled={questionSourceLocked} name='security-pool-question-source' type='radio' value='existing' onChange={() => setQuestionSource('existing')} /> {securityPoolCopy.useQuestionId}
-									</label>
-									<label>
-										<input checked={questionSource === 'new'} disabled={questionSourceLocked} name='security-pool-question-source' type='radio' value='new' onChange={() => setQuestionSource('new')} /> {securityPoolCopy.createNewQuestion}
-									</label>
-								</fieldset>
-							</SectionBlock>
+							<fieldset className='pool-question-source' disabled={questionSourceLocked}>
+								<legend>{securityPoolCopy.questionSourceLegend}</legend>
+								<label>
+									<input checked={questionSource === 'new'} disabled={questionSourceLocked} name='security-pool-question-source' type='radio' value='new' onChange={() => setQuestionSource('new')} /> {securityPoolCopy.createNewQuestion}
+								</label>
+								<label>
+									<input checked={questionSource === 'existing'} disabled={questionSourceLocked} name='security-pool-question-source' type='radio' value='existing' onChange={() => setQuestionSource('existing')} /> {securityPoolCopy.useQuestionId}
+								</label>
+							</fieldset>
 						)}
 
 						{questionSource === 'existing' ? (
