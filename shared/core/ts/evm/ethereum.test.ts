@@ -1758,13 +1758,13 @@ describe('shared ethereum compatibility layer', () => {
 			if (method === 'eth_blockNumber') return '0x0'
 			if (method === 'eth_getBlockByNumber') {
 				expect(getArrayEntry(params, 0, 'replacement block params')).toBe('0x0')
-				expect(getArrayEntry(params, 1, 'replacement block params')).toBe(true)
+				expect(typeof getArrayEntry(params, 1, 'replacement block params')).toBe('boolean')
 				return {
 					hash: BLOCK_HASH,
 					number: '0x0',
 					parentHash: `0x${'44'.repeat(32)}`,
 					timestamp: '0x5',
-					transactions: [replacementTransaction],
+					transactions: getArrayEntry(params, 1, 'block params') === true ? [replacementTransaction] : [replacementHash],
 				}
 			}
 			throw new Error(`Unexpected rpc method: ${method}`)
@@ -1793,7 +1793,7 @@ describe('shared ethereum compatibility layer', () => {
 				transactionHash: replacementHash,
 			},
 		])
-		expect(calls.map(call => call.method)).toEqual(['eth_getTransactionByHash', 'eth_getTransactionReceipt', 'eth_blockNumber', 'eth_getBlockByNumber', 'eth_getTransactionReceipt'])
+		expect(calls.map(call => call.method)).toEqual(['eth_getTransactionByHash', 'eth_getTransactionReceipt', 'eth_blockNumber', 'eth_getBlockByNumber', 'eth_getBlockByNumber', 'eth_getTransactionReceipt'])
 	})
 
 	test('waitForTransactionReceipt uses a supplied transaction when its hash is no longer available', async () => {
@@ -1840,21 +1840,24 @@ describe('shared ethereum compatibility layer', () => {
 					number: '0x0',
 					parentHash: `0x${'44'.repeat(32)}`,
 					timestamp: '0x5',
-					transactions: [
-						{
-							blockHash: BLOCK_HASH,
-							blockNumber: '0x0',
-							from: OWNER_ADDRESS,
-							gas: '0x5208',
-							hash: replacementHash,
-							input: '0x1234',
-							nonce: '0x7',
-							to: RECIPIENT_ADDRESS,
-							transactionIndex: '0x0',
-							type: '0x2',
-							value: '0x5',
-						},
-					],
+					transactions:
+						getArrayEntry(params, 1, 'block params') === true
+							? [
+									{
+										blockHash: BLOCK_HASH,
+										blockNumber: '0x0',
+										from: OWNER_ADDRESS,
+										gas: '0x5208',
+										hash: replacementHash,
+										input: '0x1234',
+										nonce: '0x7',
+										to: RECIPIENT_ADDRESS,
+										transactionIndex: '0x0',
+										type: '0x2',
+										value: '0x5',
+									},
+								]
+							: [replacementHash],
 				}
 			}
 			throw new Error(`Unexpected rpc method: ${method}`)
@@ -1871,7 +1874,7 @@ describe('shared ethereum compatibility layer', () => {
 
 		expect(receipt.transactionHash).toBe(replacementHash)
 		expect(replacements).toEqual([replacementHash])
-		expect(calls.map(call => call.method)).toEqual(['eth_getTransactionReceipt', 'eth_blockNumber', 'eth_getBlockByNumber', 'eth_getTransactionReceipt'])
+		expect(calls.map(call => call.method)).toEqual(['eth_getTransactionReceipt', 'eth_blockNumber', 'eth_getBlockByNumber', 'eth_getBlockByNumber', 'eth_getTransactionReceipt'])
 	})
 
 	test('public client rejects malformed fixed-width rpc hashes', async () => {
@@ -2614,12 +2617,13 @@ describe('shared ethereum compatibility layer', () => {
 					secondBlockRequests += 1
 					if (secondBlockRequests === 1) throw { code: 429, message: 'rate limit exceeded' }
 				}
+				const transactions = getArrayEntry(params, 1, 'block params') === true ? [replacementTransaction] : [replacementHash]
 				return {
 					hash: BLOCK_HASH,
 					number: blockNumber,
-					parentHash: `0x${'44'.repeat(32)}`,
+					parentHash: BLOCK_HASH,
 					timestamp: '0x5',
-					transactions: blockNumber === '0x1' ? [replacementTransaction] : [],
+					transactions: blockNumber === '0x1' ? transactions : [],
 				}
 			}
 			throw new Error(`Unexpected rpc method: ${method}`)
@@ -2629,7 +2633,7 @@ describe('shared ethereum compatibility layer', () => {
 		const receipt = await client.waitForTransactionReceipt({ hash: originalHash, onReplaced: () => undefined, pollingInterval: 0, timeout: 50 })
 
 		expect(receipt.transactionHash).toBe(replacementHash)
-		expect(calls.filter(call => call.method === 'eth_getBlockByNumber').map(call => getArrayEntry(call.params, 0, 'block params'))).toEqual(['0x0', '0x1', '0x1'])
+		expect(calls.filter(call => call.method === 'eth_getBlockByNumber').map(call => getArrayEntry(call.params, 0, 'block params'))).toEqual(['0x0', '0x1', '0x1', '0x1'])
 	})
 
 	test('waitForTransactionReceipt scans previous blocks for delayed replacement detection', async () => {
@@ -2680,12 +2684,13 @@ describe('shared ethereum compatibility layer', () => {
 			if (method === 'eth_blockNumber') return '0x2'
 			if (method === 'eth_getBlockByNumber') {
 				const blockNumber = getArrayEntry(params, 0, 'replacement block params')
+				const transactions = getArrayEntry(params, 1, 'block params') === true ? [replacementTransaction] : [replacementHash]
 				return {
 					hash: BLOCK_HASH,
 					number: blockNumber,
-					parentHash: `0x${'44'.repeat(32)}`,
+					parentHash: BLOCK_HASH,
 					timestamp: '0x5',
-					transactions: blockNumber === '0x1' ? [replacementTransaction] : [],
+					transactions: blockNumber === '0x1' ? transactions : [],
 				}
 			}
 			throw new Error(`Unexpected rpc method: ${method}`)
@@ -2706,7 +2711,7 @@ describe('shared ethereum compatibility layer', () => {
 
 		expect(receipt.transactionHash).toBe(replacementHash)
 		expect(replacements).toEqual([replacementHash])
-		expect(calls.filter(call => call.method === 'eth_getBlockByNumber').map(call => getArrayEntry(call.params, 0, 'block params'))).toEqual(['0x0', '0x1'])
+		expect(calls.filter(call => call.method === 'eth_getBlockByNumber').map(call => getArrayEntry(call.params, 0, 'block params'))).toEqual(['0x0', '0x1', '0x1'])
 	})
 
 	test('waitForTransactionReceipt bounds replacement reads without historical nonce access', async () => {
@@ -2727,7 +2732,8 @@ describe('shared ethereum compatibility layer', () => {
 		await expect(client.waitForTransactionReceipt({ hash: originalHash, onReplaced: () => undefined, pollingInterval: 0, timeout: 0 })).rejects.toThrow()
 		expect(calls.filter(call => call.method === 'eth_getTransactionCount')).toHaveLength(0)
 		const blocks = calls.filter(call => call.method === 'eth_getBlockByNumber')
-		expect(blocks.length).toBeLessThanOrEqual(13)
+		expect(blocks.filter(call => getArrayEntry(call.params, 1, 'block params') === true).length).toBeLessThanOrEqual(13)
+		expect(blocks.filter(call => getArrayEntry(call.params, 1, 'block params') === false)).toHaveLength(1)
 		expect(blocks.every(call => BigInt(String(getArrayEntry(call.params, 0, 'block params'))) >= 0x100000n - 12n)).toBe(true)
 	})
 
@@ -2787,7 +2793,7 @@ describe('shared ethereum compatibility layer', () => {
 					number: '0x0',
 					parentHash: `0x${'44'.repeat(32)}`,
 					timestamp: '0x5',
-					transactions: [replacementTransaction],
+					transactions: getArrayEntry(params, 1, 'block params') === true ? [replacementTransaction] : [replacementHash],
 				}
 			}
 			throw new Error(`Unexpected rpc method: ${method}`)
@@ -2808,7 +2814,7 @@ describe('shared ethereum compatibility layer', () => {
 
 		expect(receipt.transactionHash).toBe(replacementHash)
 		expect(replacements).toEqual([replacementHash])
-		expect(calls.map(call => call.method)).toEqual(['eth_getTransactionByHash', 'eth_getTransactionReceipt', 'eth_getTransactionByHash', 'eth_blockNumber', 'eth_getBlockByNumber', 'eth_getTransactionReceipt'])
+		expect(calls.map(call => call.method)).toEqual(['eth_getTransactionByHash', 'eth_getTransactionReceipt', 'eth_getTransactionByHash', 'eth_blockNumber', 'eth_getBlockByNumber', 'eth_getBlockByNumber', 'eth_getTransactionReceipt'])
 	})
 
 	test('simulateContract forwards account and call overrides into eth_call', async () => {

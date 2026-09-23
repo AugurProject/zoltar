@@ -41,6 +41,7 @@ export const eventSourceByName: Record<string, string> = {
 	GameContinuedFromFork: 'solidity/contracts/statoblast/EscalationGameState.sol',
 	GameStarted: 'solidity/contracts/statoblast/EscalationGameState.sol',
 	InheritedThresholdTie: 'solidity/contracts/statoblast/interfaces/IEscalationGame.sol',
+	InheritedThresholdTieReopened: 'solidity/contracts/statoblast/interfaces/IEscalationGame.sol',
 	LocalDepositAppended: 'solidity/contracts/statoblast/interfaces/IEscalationGame.sol',
 	LiquidationApprovalConsumed: 'solidity/contracts/statoblast/LiquidationApprovalRegistry.sol',
 	LiquidationApprovalNonceInvalidated: 'solidity/contracts/statoblast/LiquidationApprovalRegistry.sol',

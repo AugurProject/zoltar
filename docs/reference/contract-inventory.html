@@ -1,0 +1,327 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<meta name="description" content="Caller and trust boundaries of the deployment helpers, the SecurityPoolUtils read surface, and the complete production contract inventory." />
+		<title>Contract inventory</title>
+		<link rel="stylesheet" href="../assets/css/shared-docs.css" />
+		<link rel="stylesheet" href="../assets/css/docsShell.css" />
+	</head>
+	<body class="doc-openoracle reference-page">
+		<main id="main-content">
+			<article>
+				<header>
+					<p class="kicker">Reference</p>
+					<h1 id="support-module-inventory">Contract inventory</h1>
+					<p>The <a href="./contracts.html">contract interaction reference</a> covers the contracts users and keepers call. This page inventories the supporting production contracts: deployment helpers, delegate modules, storage and type libraries, the shared utility library, and vendored dependencies, with the trust boundary of each.</p>
+				</header>
+				<section id="caller-and-trust-boundaries">
+					<h2>Caller and trust boundaries</h2>
+					<p>Deployment helpers are not interchangeable with canonical protocol discovery. Several are intentionally permissionless and namespace <code>CREATE2</code> salts by <code>msg.sender</code>; an application must discover canonical instances through <code>SecurityPoolFactory</code>, recognized pools, and recognized forker events rather than treating every factory-created address as canonical.</p>
+					<table>
+						<thead>
+							<tr>
+								<th>Module</th>
+								<th>Direct caller boundary</th>
+								<th>Canonical-use boundary</th>
+							</tr>
+						</thead>
+						<tbody>
+							<tr>
+								<td><code>EscalationGameFactory</code></td>
+								<td><code>deployEscalationGame</code> and <code>deployEscalationGameFromFork</code> have no permission check, but a successful caller must implement the <code>ISecurityPool</code> reads used during construction; an EOA or incompatible contract reverts. The caller is bound into the new game as its <code>securityPool</code>; the factory itself becomes the game's immutable <code>owner</code> and immediately calls <code>start</code> or <code>startFromFork</code>. Ordinary deployment requires a threshold above one attoREP and lowers a start bond at or above that threshold to <code>threshold - 1</code>. The factory has no owner role and no later <code>resumeFromFork</code> relay.</td>
+								<td>Accept a game only after <code>EscalationGameSet</code> from a recognized pool. In the supported continuation path, the owning pool calls <code>resumeFromFork</code>, which also verifies aggregate funding.</td>
+							</tr>
+							<tr>
+								<td><code>ShareTokenFactory</code></td>
+								<td>Anyone can call <code>deployShareToken</code> to deploy or retrieve a token under <code>keccak256(abi.encode(msg.sender, salt, questionId))</code>; that caller is the token's initial authorized address.</td>
+								<td>Origin lineage tokens are the instances created by <code>SecurityPoolFactory</code> and named in <code>DeploySecurityPool</code>; children reuse the parent's token.</td>
+							</tr>
+							<tr>
+								<td><code>UniformPriceDualCapBatchAuctionFactory</code></td>
+								<td>Anyone can call <code>deployUniformPriceDualCapBatchAuction</code>. Its salt is namespaced by caller and supplied salt, and its operational owner is the caller-supplied <code>owner</code> address.</td>
+								<td>During external-universe initiation, the source must be authorized by its declared share token; own-game initiation does not perform that check, and neither relationship proves configured-factory registration. Child linking requires a deployed auction that this forker has never trusted before and preserves the source's factory and forker. Canonical pools remain the instances registered by the configured <code>SecurityPoolFactory</code>.</td>
+							</tr>
+							<tr>
+								<td><code>PriceOracleManagerAndOperatorQueuerFactory</code></td>
+								<td>Anyone can call <code>deployPriceOracleManagerAndOperatorQueuer</code> under a caller-namespaced salt with caller-supplied OpenOracle, REP token, and positive <code>initialReportPriorityFeeAttoEthPerGas</code>; coordinator construction rejects zero and values that would consume the reserved OpenOracle <code>uint128</code> report and escalation-halt capacity. The caller therefore chooses this immutable gas-price assumption within that bound.</td>
+								<td>A pool coordinator is the instance named by canonical <code>DeploySecurityPool</code>; <code>SecurityPoolFactory</code> atomically binds it to that pool before returning, and canonical child deployment inherits the value from the parent coordinator.</td>
+							</tr>
+							<tr>
+								<td><code>SecurityPoolDeployer</code> and <code>SecurityPoolDeploymentWorker</code></td>
+								<td>Only the configured <code>SecurityPoolFactory</code> may call the deployer; only that deployer may call its worker.</td>
+								<td>They are code-size deployment plumbing. <code>ProxyDeployer</code> deploys one deterministic <code>SecurityPoolOperationsDelegate</code>, and its address is passed into the <code>SecurityPoolFactory</code> constructor. The factory passes that address through its deployer and worker to every pool. Its deterministic address is published as <code>securityPoolOperationsDelegate</code>. Pools become canonical only when the factory emits <code>SecurityPoolRegistered</code> and <code>DeploySecurityPool</code>.</td>
+							</tr>
+							<tr>
+								<td><code>SecurityPoolMigrationProxy</code></td>
+								<td>Only its immutable <code>owner</code>, the <code>SecurityPoolForker</code> that created it, may call <code>lockRep</code>, <code>forkUniverse</code>, <code>splitToChild</code>, or <code>sweepChildRep</code>.</td>
+								<td>Its deterministic per-parent address is exposed by <code>getMigrationProxyAddress</code> and recorded in fork snapshot events; users do not call it.</td>
+							</tr>
+							<tr>
+								<td><code>EscalationGameDepositDelegate</code>, <code>EscalationGameClaimDelegate</code>, <code>EscalationGameForker</code>, <code>SecurityPoolForkerVaultMigrationDelegate</code>, <code>SecurityPoolSettlementDelegate</code>, and <code>SecurityPoolOperationsDelegate</code></td>
+								<td>Their public methods are delegatecall implementations. The deposit delegate implements <code>recordDeposit</code>, <code>recordForkedEscrowForOutcome</code>, <code>applyTruthAuctionHaircut</code>, funding-gated <code>resumeFromFork</code>, <code>consumeEscrowedRepForOwner</code>, <code>consumeUnresolvedRepForClaimOwners</code>, <code>creditClaimOwners</code>, and <code>creditExternalClaimOwners</code>. The shared claim delegate handles retention checkpoint reads and initialization; it has no ownership or import surface. The forker delegates implement escalation and vault migration. <code>SecurityPoolSettlementDelegate</code> is abstract and contributes complete-set and fork-finalization collateral validation to the single deployed <code>SecurityPoolOperationsDelegate</code>. That operations delegate implements <code>setVaultCapacity</code>, funded REP-backing-unit, capacity-ownership, receiver-debt, and full-request bad-debt liquidation accounting while isolating fees and claims, plus permissionless continuation resume. A direct call may revert against uninitialized state or may mutate only the helper's isolated storage; it is not a protocol action.</td>
+								<td>Accept resulting state and logs only when the recognized game, pool, or forker executes the matching wrapper through <code>delegatecall</code>. State changes and events then occur in that recognized contract's context. Canonical liquidation enters through <code>SecurityPool.performLiquidation</code>; continuation progress enters through <code>SecurityPool.resumeForkedEscalationGame</code>.</td>
+							</tr>
+							<tr>
+								<td>
+									<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPoolEventEmitter.sol"><code>SecurityPoolEventEmitter</code> and <code>SecurityPoolForkEventEmitter</code></a>
+								</td>
+								<td><code>SecurityPoolEventEmitter</code> inherits the pool's typed <code>SecurityPoolStorage</code> base and exposes <code>emitPoolAccountingCheckpoint</code> and <code>emitVaultAccountingCheckpoint</code>. <code>SecurityPoolForkEventEmitter</code> inherits the forker's typed <code>SecurityPoolForkerStorage</code> base and exposes <code>emitForkSnapshotEvents</code>. The entrypoints are externally callable and <code>payable</code>, but direct calls execute against the helper's own storage and emit from the helper address. Payability permits delegatecalls from value-bearing protocol flows; callers must not send ETH directly because it is not protocol collateral and the helpers have no recovery surface.</td>
+								<td>Pools delegate accounting checkpoints to their pool-layout emitter, while the forker delegates fork snapshots to its forker-layout emitter, so logs are emitted from the recognized pool or forker address. Indexers must reject matching signatures from either helper or any unrecognized emitter. External-universe fork initiation requires declared-share-token authorization; own-game initiation does not. Child linking preserves the source factory and forker and rejects undeployed or previously trusted auctions. Configured-factory registration remains the canonicality boundary. Storage-layout tests protect both typed delegate layouts.</td>
+							</tr>
+							<tr>
+								<td><code>EscalationGameProofVerifier</code>, <code>MerkleMountainRange</code>, and <code>SecurityPoolUtils</code></td>
+								<td>Stateless or library math and proof routines have no lifecycle authority. Public verifier calls can be used for previews, but do not mutate a game or pool.</td>
+								<td>A result becomes protocol state only through a recognized game, pool, or forker transaction and its events.</td>
+							</tr>
+							<tr>
+								<td><code>DeploymentStatusOracle</code></td>
+								<td>Anyone can call <code>getDeploymentMask</code>; the constructor alone fixes the ordered address list and emits <code>DeploymentAddressesSet</code>.</td>
+								<td>It reports code presence only, not canonical wiring or readiness. Decode it using its constructor event or the matching deployment manifest order.</td>
+							</tr>
+						</tbody>
+					</table>
+				</section>
+				<section id="securitypoolutils-read-surface">
+					<h2>SecurityPoolUtils read surface</h2>
+					<p>These external pure previews distinguish REP-denominated capacity ownership from ETH-denominated open interest. REP-per-ETH prices use <code>PRICE_PRECISION</code>, and health factors and security multipliers use basis points. The previews have no lifecycle, caller, freshness, or canonical-pool authority; only a recognized pool or coordinator transaction can apply their result.</p>
+					<table>
+						<thead>
+							<tr>
+								<th>Function</th>
+								<th>Exact boundary behavior</th>
+								<th>Conceptual owner</th>
+							</tr>
+						</thead>
+						<tbody>
+							<tr>
+								<td><code>calculateFeeAccrual(settlementCollateralAttoEth, retentionRate, timeDelta, indexRemainder, feeEligibleCapacityOwnershipAttoRep, feesOwedRemainder)</code></td>
+								<td>Applies fixed-point retention over elapsed time, carries the global index remainder, and returns whole credited fees plus the next fee remainder. Canonical callers avoid zero eligible capacity ownership before this division.</td>
+								<td><a href="../explanation/fees.html">Fee accrual</a></td>
+							</tr>
+							<tr>
+								<td><code>calculateVaultFee(capacityOwnershipAttoRep, feeIndexDelta, remainder)</code></td>
+								<td>Floors the vault's whole fee credit and returns the remaining fixed-point numerator for its next checkpoint.</td>
+								<td><a href="../explanation/fees.html">Fee accrual</a></td>
+							</tr>
+							<tr>
+								<td><code>calculateMintingCapacityAttoEth(capacityOwnershipAttoRep, repEthPrice, securityMultiplierBps)</code></td>
+								<td>Converts aggregate REP-denominated ownership into current ETH capacity using the live REP-per-ETH price and pool multiplier. Zero ownership or price returns zero.</td>
+								<td><a href="../explanation/liquidations.html#capacity-and-health">Dynamic capacity</a></td>
+							</tr>
+							<tr>
+								<td><code>calculateVaultOpenInterestAttoEth(activeOpenInterestAttoEth, vaultCapacityOwnershipAttoRep, totalCapacityOwnershipAttoRep)</code></td>
+								<td>Attributes live pool open interest pro rata to capacity ownership, rounding a positive vault share upward. Zero vault or total ownership returns zero.</td>
+								<td><a href="../explanation/liquidations.html#capacity-and-health">Dynamic capacity</a></td>
+							</tr>
+							<tr>
+								<td><code>calculateBundledLiquidationTransfer(targetBackingUnits, targetCapacityOwnershipAttoRep, targetOpenInterestAttoEth, requestedDebtAttoEth, repEthPrice, currentPoolHeldAttoRepBalance, currentTotalRepBackingUnits, minimumRemainingAttoRep)</code></td>
+								<td>Returns zero when the request, target open interest, capacity ownership, or price is zero. Caps a nominal debt quote by target open interest and by the complete 5%-bonus award fundable from target pool-held REP, then rounds proportional capacity ownership downward. Execution derives moved debt separately from the receiver's exact live open-interest increase. Partial requests preserve the configured REP minimum. On a full-target request, bad debt is target open interest minus exact moved debt and can include both an award-unfunded slice and integer-allocation residue.</td>
+								<td><a href="../explanation/liquidations.html#punitive-liquidation">Vault liquidation</a></td>
+							</tr>
+							<tr>
+								<td><code>isVaultHealthy(poolHeldVaultRepBackingAttoRep, disputeStakedAttoRep, openInterestAttoEth, repEthPrice, poolSecurityMultiplierBps)</code></td>
+								<td>Checks the associated-REP and free pool-held REP requirements against live open interest. Both requirements round upward; zero open interest is healthy. <code>isVaultHealthyAtFactor</code> applies an approval-selected factor of at least 10,000 to both branches.</td>
+								<td><a href="../explanation/liquidations.html#capacity-and-health">Capacity and health</a></td>
+							</tr>
+							<tr>
+								<td><code>calculateRetentionRate(settlementCollateralAttoEth, mintingCapacityAttoEth)</code></td>
+								<td>Zero live minting capacity returns the maximum retention rate. Otherwise retention decreases linearly through the 80% utilization dip and remains at the minimum rate above it.</td>
+								<td><a href="../explanation/fees.html">Retention rate</a></td>
+							</tr>
+						</tbody>
+					</table>
+				</section>
+				<section id="production-contract-inventory">
+					<h2>Production contract inventory</h2>
+					<table>
+						<thead>
+							<tr>
+								<th>Area</th>
+								<th>Named contracts and modules</th>
+								<th>Role</th>
+							</tr>
+						</thead>
+						<tbody>
+							<tr>
+								<td>Deployment tracking</td>
+								<td>
+									<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/DeploymentStatusOracle.sol"><code>DeploymentStatusOracle.sol</code></a>
+								</td>
+								<td>Reports one code-presence bit per configured deployment-step address. See <a href="../reference/deployment-status.html">Deployment Status Oracle</a>.</td>
+							</tr>
+							<tr>
+								<td>Carry proof hashing</td>
+								<td>
+									<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/MerkleMountainRange.sol"><code>MerkleMountainRange.sol</code></a
+									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/EscalationGameProofVerifier.sol"><code>EscalationGameProofVerifier.sol</code></a
+									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/EscalationGameTypes.sol"><code>EscalationGameTypes.sol</code></a>
+								</td>
+								<td>Defines the carried-deposit leaf shape, the 64-peak limit, proof-length rules, and nullifier-root replay protection. See <a href="../reference/merkle-mountain-range.html">Merkle Mountain Range carry proofs</a>.</td>
+							</tr>
+							<tr>
+								<td>Escalation game composition</td>
+								<td>
+									<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/EscalationGame.sol"><code>EscalationGame.sol</code></a
+									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/EscalationGameCalculations.sol"><code>EscalationGameCalculations.sol</code></a
+									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/EscalationGameCarry.sol"><code>EscalationGameCarry.sol</code></a
+									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/EscalationGameClaimDelegate.sol"><code>EscalationGameClaimDelegate.sol</code></a
+									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/EscalationGameDepositDelegate.sol"><code>EscalationGameDepositDelegate.sol</code></a
+									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/EscalationGameEscrow.sol"><code>EscalationGameEscrow.sol</code></a
+									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/EscalationGameSettlement.sol"><code>EscalationGameSettlement.sol</code></a
+									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/EscalationGameState.sol"><code>EscalationGameState.sol</code></a
+									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/EscalationGameStorage.sol"><code>EscalationGameStorage.sol</code></a>
+								</td>
+								<td>Splits the game across immutable ownership and storage, claim and deposit delegation, calculations, continuation proofs, escrow, and settlement without exposing those internal modules as separate canonical games.</td>
+							</tr>
+							<tr>
+								<td>ERC-20 support</td>
+								<td>
+									<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/ERC20.sol"><code>ERC20.sol</code></a
+									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/IERC20.sol"><code>IERC20.sol</code></a
+									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/IExternalGenesisReputationToken.sol"><code>IExternalGenesisReputationToken.sol</code></a
+									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/IERC20Metadata.sol"><code>IERC20Metadata.sol</code></a
+									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/Context.sol"><code>Context.sol</code></a
+									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/SafeERC20Ops.sol"><code>SafeERC20Ops.sol</code></a
+									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/GenesisReputationToken.sol"><code>GenesisReputationToken.sol</code></a
+									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/ReputationToken.sol"><code>ReputationToken.sol</code></a>
+								</td>
+								<td>Base REP token implementation, ERC-20 and external genesis REPv2 interfaces, metadata, execution context, safe transfer wrappers, the constructor-allocated genesis token with fixed theoretical supply, and the inherited <code>transfer</code>, <code>approve</code>, and <code>transferFrom</code> entrypoints.</td>
+							</tr>
+							<tr>
+								<td>ERC-1155 and token ids</td>
+								<td>
+									<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/tokens/ERC1155.sol"><code>ERC1155.sol</code></a
+									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/tokens/ShareToken.sol"><code>ShareToken.sol</code></a
+									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/tokens/TokenId.sol"><code>TokenId.sol</code></a
+									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/interfaces/IERC1155.sol"><code>IERC1155.sol</code></a
+									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/interfaces/IERC1155Receiver.sol"><code>IERC1155Receiver.sol</code></a
+									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/interfaces/IERC165.sol"><code>IERC165.sol</code></a
+									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/interfaces/IShareToken.sol"><code>IShareToken.sol</code></a>
+								</td>
+								<td>Outcome-share token plumbing, interface support, token-id encoding, inherited <code>setApprovalForAll</code>, and both single and batch <code>safeTransferFrom</code> forms.</td>
+							</tr>
+							<tr>
+								<td>Factories and deployers</td>
+								<td>
+									<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/factories/EscalationGameFactory.sol"><code>EscalationGameFactory.sol</code></a
+									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/factories/SecurityPoolFactory.sol"><code>SecurityPoolFactory.sol</code></a
+									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/factories/SecurityPoolDeployer.sol"><code>SecurityPoolDeployer.sol</code></a
+									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/factories/ShareTokenFactory.sol"><code>ShareTokenFactory.sol</code></a
+									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/factories/UniformPriceDualCapBatchAuctionFactory.sol"><code>UniformPriceDualCapBatchAuctionFactory.sol</code></a
+									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/factories/PriceOracleManagerAndOperatorQueuerFactory.sol"><code>PriceOracleManagerAndOperatorQueuerFactory.sol</code></a>
+								</td>
+								<td>Deterministic deployment entrypoints for pool, share-token, oracle-coordinator, escalation-game, and auction instances.</td>
+							</tr>
+							<tr>
+								<td>Migration, settlement, liquidation, and storage modules</td>
+								<td>
+									<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPoolStorage.sol"><code>SecurityPoolStorage.sol</code></a
+									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/DelegateCallForwarder.sol"><code>DelegateCallForwarder.sol</code></a
+									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPoolSettlementDelegate.sol"><code>SecurityPoolSettlementDelegate.sol</code></a
+									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPoolOperationsDelegate.sol"><code>SecurityPoolOperationsDelegate.sol</code></a
+									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPoolMigrationProxy.sol"><code>SecurityPoolMigrationProxy.sol</code></a
+									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPoolForker.sol"><code>SecurityPoolForker.sol</code></a
+									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPoolForkerAuctionSettlementBase.sol"><code>SecurityPoolForkerAuctionSettlementBase.sol</code></a
+									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPoolForkerBase.sol"><code>SecurityPoolForkerBase.sol</code></a
+									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPoolForkerStorage.sol"><code>SecurityPoolForkerStorage.sol</code></a
+									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPoolForkerTypes.sol"><code>SecurityPoolForkerTypes.sol</code></a
+									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPoolForkerVaultMigrationBase.sol"><code>SecurityPoolForkerVaultMigrationBase.sol</code></a
+									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPoolForkerVaultMigrationDelegate.sol"><code>SecurityPoolForkerVaultMigrationDelegate.sol</code></a
+									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/UniformPriceDualCapBatchAuctionStorage.sol"><code>UniformPriceDualCapBatchAuctionStorage.sol</code></a
+									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/OpenOraclePriceCoordinatorTypes.sol"><code>OpenOraclePriceCoordinatorTypes.sol</code></a
+									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/EscalationGameForker.sol"><code>EscalationGameForker.sol</code></a
+									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPoolEventEmitter.sol"><code>SecurityPoolEventEmitter.sol</code></a> , <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/LiquidationApprovalRegistry.sol"><code>LiquidationApprovalRegistry.sol</code></a
+									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SignatureValidation.sol"><code>SignatureValidation.sol</code></a>
+								</td>
+								<td>Defines shared pool storage, delegated liquidation accounting and bounded approval reservations, Elliptic Curve Digital Signature Algorithm (ECDSA) and ERC-1271 signature validation, funded continuation delegatecalls, fork-time state, truth-auction settlement, vault and unresolved-escalation migration, event encoding, and stable proxy identity used while routing parent state into child pools.</td>
+							</tr>
+							<tr>
+								<td>Protocol interfaces</td>
+								<td>
+									<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/interfaces/IEscalationGame.sol"><code>IEscalationGame.sol</code></a
+									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/interfaces/ISecurityPool.sol"><code>ISecurityPool.sol</code></a
+									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/interfaces/ISecurityPoolForker.sol"><code>ISecurityPoolForker.sol</code></a
+									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/interfaces/ISecurityPoolForkerChildEscalationGameInitializer.sol"><code>ISecurityPoolForkerChildEscalationGameInitializer.sol</code></a
+									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/interfaces/IUniformPriceDualCapBatchAuction.sol"><code>IUniformPriceDualCapBatchAuction.sol</code></a
+									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/interfaces/IWeth9.sol"><code>IWeth9.sol</code></a>
+								</td>
+								<td>Typed boundaries used by games, pools, migration delegates, auctions, and WETH integration.</td>
+							</tr>
+							<tr>
+								<td>Protocol utilities</td>
+								<td>
+									<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/Constants.sol"><code>Constants.sol</code></a
+									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/ScalarOutcomes.sol"><code>ScalarOutcomes.sol</code></a
+									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/BinaryOutcomes.sol"><code>BinaryOutcomes.sol</code></a
+									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPoolUtils.sol"><code>SecurityPoolUtils.sol</code></a
+									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/Multicall3.sol"><code>Multicall3.sol</code></a
+									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/WETH9.sol"><code>WETH9.sol</code></a>
+								</td>
+								<td>Shared constants and math, outcome representations, Multicall3 <code>aggregate</code>, <code>tryAggregate</code>, <code>tryBlockAndAggregate</code>, <code>blockAndAggregate</code>, <code>aggregate3</code>, <code>aggregate3Value</code>, and block-context reads, plus standard WETH9 <code>deposit</code>, <code>withdraw</code>, approval, and transfer support.</td>
+							</tr>
+							<tr>
+								<td>Operator deployment helper</td>
+								<td>
+									<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/chaos/GenesisUniswapV3Seeder.sol"><code>GenesisUniswapV3Seeder.sol</code></a>
+								</td>
+								<td>Lets the Chaos bot mint a bounded full-range genesis REP/WETH Uniswap V3 position, pays the pool callback from exact operator approvals, and refunds unused tokens.</td>
+							</tr>
+							<tr>
+								<td>Trading protocol</td>
+								<td>
+									<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/trading/PredeploymentShareSink.sol"><code>PredeploymentShareSink.sol</code></a
+									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/trading/TradingLiquidityToken.sol"><code>TradingLiquidityToken.sol</code></a
+									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/trading/TwoWayConstantProductFactory.sol"><code>TwoWayConstantProductFactory.sol</code></a
+									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/trading/TwoWayConstantProductMath.sol"><code>TwoWayConstantProductMath.sol</code></a
+									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/trading/TwoWayConstantProductPair.sol"><code>TwoWayConstantProductPair.sol</code></a
+									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/trading/TwoWayConstantProductRouter.sol"><code>TwoWayConstantProductRouter.sol</code></a
+									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/trading/interfaces/ITradingShareToken.sol"><code>ITradingShareToken.sol</code></a
+									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/trading/interfaces/ITwoWayConstantProductFactory.sol"><code>ITwoWayConstantProductFactory.sol</code></a
+									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/trading/interfaces/ITwoWayConstantProductPair.sol"><code>ITwoWayConstantProductPair.sol</code></a
+									>.
+								</td>
+								<td>Deterministic two-outcome pool deployment, constant-product pricing and reserves, routed liquidity and swap operations, receive-based share authorization, permit-enabled liquidity tokens, canonical Statoblast share-token integration, and quarantine of shares sent to counterfactual pair addresses before deployment.</td>
+							</tr>
+							<tr>
+								<td>REP authorization support</td>
+								<td>
+									<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/vendor/authorization/AuthorizationSignatures.sol"><code>AuthorizationSignatures.sol</code></a
+									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/vendor/authorization/ERC20Authorization.sol"><code>ERC20Authorization.sol</code></a
+									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/vendor/authorization/IERC20Authorization.sol"><code>IERC20Authorization.sol</code></a
+									>.
+								</td>
+								<td>Pinned signature recovery, EIP-712 domain handling, ERC-2612 permits, and recipient-bound ERC-3009 transfers used by newly deployed child REP.</td>
+							</tr>
+							<tr>
+								<td>Imported oracle integration</td>
+								<td>
+									<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/openOracle/UPSTREAM.md"><code>UPSTREAM.md</code></a
+									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/openOracle/OpenOracle.sol"><code>OpenOracle.sol</code></a
+									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/openOracle/libraries/Errors.sol"><code>Errors.sol</code></a
+									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/openOracle/interfaces/ISignatureTransfer.sol"><code>ISignatureTransfer.sol</code></a
+									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/openOracle/openzeppelin/contracts/interfaces/IERC20.sol"><code>interfaces/IERC20.sol</code></a
+									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/openOracle/openzeppelin/contracts/interfaces/IERC165.sol"><code>interfaces/IERC165.sol</code></a
+									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/openOracle/openzeppelin/contracts/token/ERC20/IERC20.sol"><code>token/ERC20/IERC20.sol</code></a
+									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/openOracle/openzeppelin/contracts/interfaces/IERC1363.sol"><code>IERC1363.sol</code></a
+									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/openOracle/openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol"><code>SafeERC20.sol</code></a
+									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/openOracle/openzeppelin/contracts/utils/Panic.sol"><code>Panic.sol</code></a
+									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/openOracle/openzeppelin/contracts/utils/ReentrancyGuard.sol"><code>ReentrancyGuard.sol</code></a
+									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/openOracle/openzeppelin/contracts/utils/StorageSlot.sol"><code>StorageSlot.sol</code></a
+									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/openOracle/openzeppelin/contracts/utils/introspection/IERC165.sol"><code>utils/introspection/IERC165.sol</code></a
+									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/openOracle/openzeppelin/contracts/utils/math/Math.sol"><code>Math.sol</code></a
+									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/openOracle/openzeppelin/contracts/utils/math/SafeCast.sol"><code>SafeCast.sol</code></a>
+								</td>
+								<td>OpenOracle's imported source, exact <code>openPunt</code> revision, compiler profile, and dependency provenance are owned by <code>UPSTREAM.md</code>. The coordinator submits attoETH/attoREP reports with dispute history and full game storage enabled; it does not enable the new optional flags. OpenOracle's packed event stream remains separate from Zoltar replay.</td>
+							</tr>
+						</tbody>
+					</table>
+				</section>
+			</article>
+		</main>
+		<script src="../assets/js/responsiveDocs.js"></script>
+		<script src="../assets/js/docsData.js"></script>
+		<script src="../assets/js/docsShell.js"></script>
+	</body>
+</html>

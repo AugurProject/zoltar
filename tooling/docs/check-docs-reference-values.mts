@@ -6,11 +6,11 @@ import { diagramGraphSpecs } from '../../docs/charts/diagramModels'
 import type { DiagramGraphNode } from '../../docs/charts/diagramTypes'
 import { getMainnetProtocolConfig } from '../contracts/protocol-config.ts'
 import { walkFiles } from '../repo/walk.mts'
+import { assertAccountingExampleOwnership } from './check-docs-example-ownership.mts'
 import { htmlToDocumentationText } from './docs-html-text.mts'
 import { repositorySourceUrl } from './repository-source-links.mts'
 
 const normalizeHtmlSource = (source: string): string => source.replaceAll(/<\/([a-z][\w:-]*)\s+>/gi, '</$1>')
-const html = normalizeHtmlSource(await readFile('docs/explanation/escalation-game.html', 'utf8'))
 const invariantsHtml = normalizeHtmlSource(await readFile('docs/reference/invariants.html', 'utf8'))
 const liquidationHtml = normalizeHtmlSource(await readFile('docs/explanation/liquidations.html', 'utf8'))
 const openOracleIntegration = normalizeHtmlSource(await readFile('docs/reference/open-oracle.html', 'utf8'))
@@ -18,7 +18,7 @@ const whitepaperStatoblast = normalizeHtmlSource(await readFile('docs/explanatio
 const diagramModelsSource = await readFile('docs/charts/diagramModels.ts', 'utf8')
 const coordinatorData = await readFile('docs/data/open-oracle-coordinator.json', 'utf8')
 const compiledContractArtifacts: unknown = JSON.parse(await readFile('solidity/artifacts/Contracts.json', 'utf8'))
-const operatorReference = htmlToDocumentationText(await readFile('docs/reference/operator-guardrails.html', 'utf8'))
+const operatorReference = (await Promise.all(['docs/reference/operator-guardrails.html', 'docs/reference/contract-inventory.html'].map(async pagePath => htmlToDocumentationText(await readFile(pagePath, 'utf8'))))).join('\n')
 const contractInteractionReference = (await Promise.all(['docs/reference/contracts.html', ...[...new Bun.Glob('docs/reference/contracts/*.html').scanSync('.')].toSorted()].map(async pagePath => htmlToDocumentationText(await readFile(pagePath, 'utf8'))))).join('\n')
 const contractReferenceGenerator = `${await readFile('tooling/docs/generate-contract-interaction-reference.mts', 'utf8')}\n${await readFile('tooling/docs/contract-reference-metadata.mts', 'utf8')}`
 const escalationGame = await readFile('solidity/contracts/statoblast/EscalationGame.sol', 'utf8')
@@ -67,7 +67,7 @@ const escalationGameForkThresholdTest = await readFile('solidity/ts/tests/escala
 const escalationGameBytecodeSnapshot = await readFile('solidity/ts/tests/fixtures/escalationGameBytecode.snapshot.json', 'utf8')
 
 await assertNoNarrativeDocumentationSnapshots()
-assertEscalationContinuationReference()
+await assertAccountingExampleOwnership()
 assertSystemDecisionForkTriggers()
 assertDisputeStakedReplayIdentityDocs()
 assertAggregateEscalationContinuationDocs()
@@ -85,13 +85,13 @@ assertMigrationSecurityCoverageCommitmentDocs()
 assertRepricingBoundaryDocs()
 assertLazyClaimCommitmentDocs()
 assertEscalationGameBytecodeDocs()
-assertLifecycleReferences()
+await assertLifecycleReferences()
 assertContractInteractionDistinctions()
 assertSolidityFunctionReader()
 await assertProductionSolidityInventory()
 
 async function assertNoNarrativeDocumentationSnapshots(): Promise<void> {
-	const validatorPaths = ['tooling/docs/check-docs-examples.mts', 'tooling/docs/check-docs-reference-values.mts']
+	const validatorPaths = ['tooling/docs/check-docs-examples.mts', 'tooling/docs/check-docs-example-ownership.mts', 'tooling/docs/check-docs-reference-values.mts']
 	for (const validatorPath of validatorPaths) {
 		const validatorSource = await readFile(validatorPath, 'utf8')
 		assert.deepEqual(findNarrativeDocumentationAssertions(validatorSource, validatorPath), [], `${validatorPath} must validate documentation structure, formulas, generated data, or executable behavior without freezing narrative prose`)
@@ -100,9 +100,11 @@ async function assertNoNarrativeDocumentationSnapshots(): Promise<void> {
 	const paraphraseFriendlyFixture = `assert.match(html, /id="purpose"/)`
 	const formulaFixture = `assert.match(openOracleIntegration, /data-source="amount = principal \\cdot rate"/)`
 	const narrativeFixture = `assert.match(html, /The mechanism always follows this exact sentence/)`
+	const suffixedNarrativeFixture = `assert.match(feesHtml, /the fee starts low and rises/)`
 	assert.deepEqual(findNarrativeDocumentationAssertions(paraphraseFriendlyFixture, 'paraphrase-fixture.mts'), [])
 	assert.deepEqual(findNarrativeDocumentationAssertions(formulaFixture, 'formula-fixture.mts'), [])
 	assert.equal(findNarrativeDocumentationAssertions(narrativeFixture, 'narrative-fixture.mts').length, 1)
+	assert.equal(findNarrativeDocumentationAssertions(suffixedNarrativeFixture, 'suffixed-narrative-fixture.mts').length, 1)
 }
 
 function findNarrativeDocumentationAssertions(source: string, sourcePath: string): string[] {
@@ -128,7 +130,9 @@ function findNarrativeDocumentationAssertions(source: string, sourcePath: string
 function isStaticDocumentationExpression(expression: ts.Expression | undefined): boolean {
 	if (expression === undefined) return false
 	if (ts.isIdentifier(expression)) {
-		return new Set(['html', 'invariantsHtml', 'liquidationHtml', 'openOracleIntegration', 'whitepaperStatoblast', 'operatorReference', 'contractInteractionReference', 'openOracleHtml', 'auctionDesignHtml', 'statoblastHtml', 'requestCostEquation']).has(expression.text) || /(?:Entry|Row)$/.test(expression.text)
+		return (
+			new Set(['html', 'invariantsHtml', 'liquidationHtml', 'openOracleIntegration', 'whitepaperStatoblast', 'operatorReference', 'contractInteractionReference', 'openOracleHtml', 'auctionDesignHtml', 'statoblastHtml', 'requestCostEquation']).has(expression.text) || /(?:Entry|Row|Html|Examples)$/.test(expression.text)
+		)
 	}
 	return ts.isCallExpression(expression) && ts.isIdentifier(expression.expression) && expression.expression.text === 'blockWithId'
 }
@@ -147,10 +151,6 @@ function isNarrativeDocumentationIncludes(expression: ts.Expression | undefined,
 	const argumentText = argument.getText(sourceFile)
 	if (/^[`'"][A-Za-z_]\w*\([^`'"\n]*\)[`'"]$/.test(argumentText) || argumentText.includes('${') || argumentText.includes('/')) return false
 	return /\s/.test(argumentText.slice(1, -1))
-}
-
-function assertEscalationContinuationReference(): void {
-	assert.match(html, /href="\.\.\/reference\/merkle-mountain-range\.html"/)
 }
 
 function assertSystemDecisionForkTriggers(): void {
@@ -298,7 +298,7 @@ function assertNonDecisionLifecycleDocs(): void {
 		.filter(member => member.length > 0)
 	assert.deepEqual(enumMembers, ['None', 'Local', 'InheritedThresholdTie'])
 	assert.match(securityPoolForker, /function getQuestionOutcome\([\s\S]*if \(data\.fixedQuestionOutcomePlusOne > 0\)[\s\S]*return BinaryOutcomes\.BinaryOutcome\(data\.fixedQuestionOutcomePlusOne - 1\)/)
-	assert.match(escalationGameCalculations, /function getFinalQuestionResolution\(\)[\s\S]*if \(block\.timestamp <= getEscalationGameEndDate\(\)\) return BinaryOutcomes\.BinaryOutcome\.None/)
+	assert.match(escalationGameCalculations, /function getFinalQuestionResolution\(\)[\s\S]*uint256 endDate = getEscalationGameEndDate\(\);\s*if \(block\.timestamp <= endDate\) return BinaryOutcomes\.BinaryOutcome\.None/)
 }
 
 function assertAuditFindingRemediations(): void {
@@ -313,7 +313,7 @@ function assertAuditFindingRemediations(): void {
 	assert.doesNotMatch(truthAuction, /REFUND_PUSH_GAS_LIMIT|_payOrDeferRefund/, 'Truth-auction settlement must not retain the callback-based push-refund path')
 	assert.match(
 		securityPoolForker,
-		/function _getTruthAuctionCap\([\s\S]*Math\.ceilDiv\(data\.migratedAttoRep, SecurityPoolUtils\.MAX_AUCTION_VAULT_HAIRCUT_DIVISOR\)[\s\S]*Math\.mulDiv\(migratedPoolRepRetentionAttoRep, combinedAuctionableAttoRep, poolAuctionableRepAtForkAttoRep, Math\.Rounding\.Ceil\)[\s\S]*function _finalizeBackingUnitsAfterAuction\([\s\S]*uint256 incumbentRepAfterAttoRep =[\s\S]*Math\.mulDiv\(poolRepBeforeAttoRep, combinedRepBeforeAttoRep - repPurchasedAttoRep, combinedRepBeforeAttoRep\)[\s\S]*if \(incumbentRepAfterAttoRep == 0\)[\s\S]*auctionRepBackingUnitsPerAttoRep = SecurityPoolUtils\.PRICE_PRECISION;[\s\S]*Math\.ceilDiv\(poolRepAfterAttoRep, incumbentRepAfterAttoRep\)/,
+		/function _getTruthAuctionCap\([\s\S]*Math\.ceilDiv\(data\.migratedAttoRep, SecurityPoolUtils\.MAX_AUCTION_VAULT_HAIRCUT_DIVISOR\)[\s\S]*Math\.mulDiv\(migratedPoolRepRetentionAttoRep, combinedAuctionableAttoRep, poolAuctionableRepAtForkAttoRep, Math\.Rounding\.Ceil\)[\s\S]*function _finalizeBackingUnitsAfterAuction\([\s\S]*uint256 existingPoolBackingUnits = _getPoolAuctionableRepAtFork\(parentData\);[\s\S]*uint256 poolHeldRepAtFinalizationAttoRep = existingPoolBackingUnits \+ disputeStakedRepSoldAttoRep;[\s\S]*uint256 existingOwnersResidualRepAttoRep = poolHeldRepAtFinalizationAttoRep - repPurchasedAttoRep;[\s\S]*if \(existingOwnersResidualRepAttoRep == 0\)[\s\S]*auctionRepBackingUnits = Math\.mulDiv\(poolHeldRepAtFinalizationAttoRep, SecurityPoolUtils\.PRICE_PRECISION, 1\);[\s\S]*Math\.mulDiv\(existingPoolBackingUnits, poolHeldRepAtFinalizationAttoRep, existingOwnersResidualRepAttoRep, Math\.Rounding\.Ceil\)[\s\S]*auctionRepBackingUnits = totalRepBackingUnitsAtFinalization - existingPoolBackingUnits;/,
 		'Truth-auction REP backing units must reserve positive migrated claims and use bounded child-local scaling',
 	)
 	assert.match(contractReferenceGenerator, /settleAuctionBids[\s\S]*EthRefundCredited[\s\S]*claimAuctionProceeds[\s\S]*EthRefundCredited/, 'Generated public wrapper rows must expose refund-credit signals')
@@ -432,8 +432,8 @@ function assertOpenOracleVendorAndEventDocs(): void {
 	assert.doesNotMatch(whitepaperStatoblast, /id="fig-statoblast-auction-clearing"/, 'whitepaper must delegate auction clearing to the canonical focused diagram')
 }
 
-function assertLifecycleReferences(): void {
-	assert.match(escalationGameState, /activationDelay = 3 days/)
+async function assertLifecycleReferences(): Promise<void> {
+	assert.match(await readFile('solidity/contracts/statoblast/EscalationGameStorage.sol', 'utf8'), /activationDelay = 3 days/)
 	assert.match(escalationGameTypes, /ESCALATION_TIME_LENGTH = 4233600; \/\/ 7 weeks/)
 	assert.match(securityPoolUtils, /MIGRATION_TIME = 8 weeks/)
 	for (const systemState of ['Operational', 'PoolForked', 'ForkMigration', 'ForkTruthAuction']) {
@@ -536,7 +536,7 @@ function assertContractInteractionDistinctions(): void {
 			assert.ok(isRecord(output))
 			return output['name']
 		}),
-		['totalFilledAttoRep', 'totalRefundAttoEth', 'totalProRataAllocation', 'totalSecondaryProRataAllocation'],
+		['totalFilledAttoRep', 'totalRefundAttoEth', 'totalProRataAllocation', 'totalSecondaryProRataAllocation', 'totalRepBackingUnitsAllocation'],
 	)
 	assert.match(truthAuction, /function _refundLosingBids\([\s\S]*for \(uint256 i = 0; i < tickIndices\.length; i\+\+\)[\s\S]*_creditRefund\(bidder, totalRefundAttoEth\)/)
 	assert.match(truthAuction, /function _creditRefund\([\s\S]*if \(amountAttoEth == 0\) return;[\s\S]*pendingEthRefundsAttoEth\[bidder\] = pendingAmountAttoEth;[\s\S]*emit EthRefundCredited\(/)

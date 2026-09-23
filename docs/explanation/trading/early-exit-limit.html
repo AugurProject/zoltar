@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<meta name="description" content="The three bounds that cap how many complete sets a directional wallet can redeem, with a numeric example." />
+		<title>Why early ETH exits are limited</title>
+		<link rel="stylesheet" href="../../assets/css/shared-docs.css" />
+		<link rel="stylesheet" href="../../assets/css/docsShell.css" />
+	</head>
+	<body class="doc-openoracle">
+		<main id="main-content">
+			<header>
+				<p class="kicker">Explanation</p>
+				<h1>Why early ETH exits are limited</h1>
+				<p>Turning a directional position back into ETH means rebuilding complete sets. Three wallet and pool quantities cap how many you can rebuild.</p>
+			</header>
+			<section id="bounds">
+				<h2>The three bounds</h2>
+				<p>To redeem <code>q</code> complete sets from a long-YES wallet, the router needs <code>q</code> INVALID, <code>q</code> YES for the sets, and extra YES to purchase exactly <code>q</code> NO:</p>
+				<ul>
+					<li><code>q ≤ wallet INVALID</code></li>
+					<li><code>q + required YES input(q) ≤ wallet YES</code></li>
+					<li><code>q &lt; pair NO reserve</code></li>
+				</ul>
+				<p>The SDK binary-searches these monotonic conditions; the chosen candidate is then simulated through the router.</p>
+				<figure class="diagram" id="fig-trading-insured-exit" aria-labelledby="fig-trading-insured-exit-caption">
+					<ol class="protocol-flow">
+						<li><strong>User → Router:</strong> q INVALID + (q + swap input) YES</li>
+						<li><strong>Router → Pair:</strong> exact-output swap for q NO</li>
+						<li><strong>Pair → Router:</strong> q NO</li>
+						<li><strong>Router → SecurityPool:</strong> <code>redeemCompleteSet(q)</code></li>
+						<li><strong>SecurityPool → Router:</strong> current ETH value</li>
+						<li><strong>Router → User:</strong> measured ETH delta</li>
+					</ol>
+					<figcaption id="fig-trading-insured-exit-caption"><span class="figure-label">An insured exit.</span> Pre-existing ETH in the router is never mixed into the delta the user receives.</figcaption>
+				</figure>
+			</section>
+			<section id="example">
+				<h2>Example</h2>
+				<p>A wallet holds 150 INVALID and 260 YES. If buying 100 NO requires 112 YES, redeeming 100 sets needs 212 YES and succeeds. Trying 150 might require 181 extra YES, or 331 in total, and fails on YES even though INVALID would cover it. If the wallet instead had only 60 INVALID, at most 60 sets are insured. Whatever YES cannot be insured remains a valid directional asset; it has not disappeared.</p>
+			</section>
+		</main>
+		<script src="../../assets/js/responsiveDocs.js"></script>
+		<script src="../../assets/js/docsData.js"></script>
+		<script src="../../assets/js/docsShell.js"></script>
+	</body>
+</html>

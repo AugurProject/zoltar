@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<meta name="description" content="The seven design decisions behind the Trading contracts and the features the MVP deliberately leaves out." />
+		<title>Trading architecture decisions and limitations</title>
+		<link rel="stylesheet" href="../../assets/css/shared-docs.css" />
+		<link rel="stylesheet" href="../../assets/css/docsShell.css" />
+	</head>
+	<body class="doc-openoracle">
+		<main id="main-content">
+			<header>
+				<p class="kicker">Explanation</p>
+				<h1>Trading architecture decisions and limitations</h1>
+				<p>Trading is deliberately small. This page records why each decision was made and which features are out of scope, so that future work does not weaken the pair's one hard invariant.</p>
+			</header>
+			<section id="decisions">
+				<h2>Decisions</h2>
+				<ol>
+					<li><strong>Two reserves only.</strong> YES × NO avoids the three-way quadratic and does not price INVALID.</li>
+					<li><strong>Exact SecurityPool identity.</strong> A pair is keyed by the pool address, validated through both factory lineage and the ShareToken's universe mapping. <code>SecurityPool address → factory → one deterministic pair</code> is the market identity; parent and child branch pools always map to different pairs even when they share one ShareToken. The pair derives token IDs from its pool's universe using the local ordering Invalid, Yes, No.</li>
+					<li><strong>One immutable fee per factory.</strong> There is no owner, protocol fee switch, or mutable parameter.</li>
+					<li><strong>Balance-delta integration.</strong> Complete-set creation and redemption use actual observed balance and attoETH deltas because Zoltar collateral <a href="../../reference/glossary.html#retention">retention</a> changes the ETH-to-share rate. The router never assumes a fixed ratio, preserves pre-existing forced ETH and token balances, and restores its starting share balances before completing an operation.</li>
+					<li><strong>Minimum-reserve LP scale.</strong> The initializer receives <code>min(YES, NO) − 1,000</code> LP units, and another 1,000 units are permanently locked. Total initial supply is <code>min(YES, NO)</code>. Proportional ownership, not the absolute token count, is authoritative.</li>
+					<li><strong>Donations accrue to LPs.</strong> State-changing paths synchronize higher actual balances; balances below recorded reserves revert. The pair rejects INVALID and foreign shares in ERC-1155 callbacks, uses <code>uint256</code> reserves, and keeps fees in reserves. Its constructor quarantines canonical shares sent to the predictable CREATE2 address before deployment.</li>
+					<li><strong>No automatic fork behavior.</strong> Parent liquidity is removed as parent shares. The user explicitly chooses migration targets and initializes distinct child pairs.</li>
+				</ol>
+			</section>
+			<section id="limitations">
+				<h2>Limitations and non-goals</h2>
+				<p>The MVP intentionally does not implement a three-way invariant, INVALID trading, an invalidity-probability oracle, weighted reserves, quadratic solvers, flash swaps, a protocol fee, governance controls, upgradeable proxies, automatic branch selection, automatic LP migration, an insured-position NFT, or per-user on-chain position accounting.</p>
+				<p>It also has no TWAP, routing across markets, guaranteed deep liquidity, or mechanism to withdraw more early ETH than complete-set insurance and reserves permit. Spot prices are manipulable and must not be used as protocol oracles. Live mode derives and verifies the deterministic trading contracts on a supported canonical core network. Public deployments require gas benchmarks against a real-core funded lifecycle fixture, adversarial integration testing, and an external audit; see the <a href="../../reference/trading/security-model.html">Trading security model</a>.</p>
+				<p>Future work may add separate INVALID markets, safer oracle observations, routing, or bounded convenience flows. Those are distinct designs and must not weaken the invariant that this pair never accepts or holds INVALID.</p>
+			</section>
+		</main>
+		<script src="../../assets/js/responsiveDocs.js"></script>
+		<script src="../../assets/js/docsData.js"></script>
+		<script src="../../assets/js/docsShell.js"></script>
+	</body>
+</html>

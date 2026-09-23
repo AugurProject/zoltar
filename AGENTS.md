@@ -260,7 +260,15 @@ Supply:
 - intentional non-goals;
 - authoritative implementation or research sources;
 - pages or material intentionally deleted;
-- validation performed.
+- pages moved, converted, split, or regenerated from another location, with the source;
+- validation performed;
+- when the change set is split, the section this run owns and the sections other runs own.
+
+When more than about fifteen pages change, spawn the reviewer once per `sections`
+entry in `docs/manifest.json` that contains a changed page, with the same handoff and
+the owned section stated; the landing page `docs/documentation.html` joins the
+start-here run. Disposition the union of the findings. One run cannot finish both
+verification passes over a large corpus.
 
 Ask the reviewer to assess reader-purpose completion, mode purity, concision,
 canonical ownership, accuracy of claims actually made, rendered correctness,

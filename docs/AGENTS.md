@@ -32,6 +32,15 @@ Provide one reliable, concrete learning journey.
 - Do not turn the tutorial into a complete protocol tour.
 - Use visuals, screenshots, diagrams, charts, what ever makes the document easier to understand
 
+### Start-here page
+
+Bring a reader who knows Ethereum, and nothing about this protocol, to the point
+where the other pages make sense.
+
+- Define every protocol term on first use, in the sentence that uses it.
+- Say what problem the mechanism solves before saying how it works.
+- Prefer one concrete running example over abstract role descriptions.
+
 ### How-to guide
 
 Help a competent reader accomplish one real task.

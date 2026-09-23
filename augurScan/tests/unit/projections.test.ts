@@ -398,6 +398,11 @@ describe('state projections', () => {
 			domain: 'escalation',
 			entityIdentity: pool.toLowerCase(),
 		})
+		expect(projectionsFrom(log('InheritedThresholdTieReopened', {})).at(-1)).toMatchObject({
+			domain: 'escalation',
+			semanticEventKind: 'InheritedThresholdTieReopened',
+			entityIdentity: pool.toLowerCase(),
+		})
 		expect(projectionsFrom(log('VaultBadDebtRecorded', { targetVault: vault })).at(-1)).toMatchObject({
 			domain: 'risk',
 			entityType: 'vault',
