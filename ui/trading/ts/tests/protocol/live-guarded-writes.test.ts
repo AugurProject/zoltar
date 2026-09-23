@@ -247,6 +247,7 @@ describe('live guarded transaction writes', () => {
 				expect(call.args[1]).toBe(4n)
 				expect(call.args[2]).toBe(4n)
 			} else expect(call.args.at(-3)).toBe(9n)
+			if (call.functionName === 'addLiquidityWithEth') expect(call.args.slice(1, 3)).toEqual([6n, 6n])
 		}
 		const chainTimedQuote = await simulateLiquidity(client, configuration, market, account, 'add', 10n, 5_000n, 1_440n, slippageBps)
 		expect(chainTimedQuote.deadline).toBe(86_401n)
@@ -260,6 +261,31 @@ describe('live guarded transaction writes', () => {
 		await expect(simulateLiquidity(client, configuration, market, account, 'add', 10n, 5_000n, 0n, slippageBps)).rejects.toThrow('between 1 and 1440 minutes')
 		await expect(simulateLiquidity(client, configuration, market, account, 'add', 10n, 5_000n, 1_441n, slippageBps)).rejects.toThrow('between 1 and 1440 minutes')
 		expect(calls).toHaveLength(callsBeforeRejectedSlippage)
+	})
+
+	test('rejects a liquidity addition whose refreshed deposit mix exceeds the approved maximum', async () => {
+		const chain = { noUsed: 5n, sends: 0 }
+		const client = createWalletClient({
+			account,
+			transport: custom({
+				async request({ method, params }) {
+					if (method === 'eth_blockNumber') return '0x2'
+					if (method === 'eth_getBlockByNumber') return { hash: blockHash, number: '0x2', parentHash: `0x${'aa'.repeat(32)}`, timestamp: '0x1', transactions: [] }
+					if (method === 'eth_sendTransaction') {
+						chain.sends += 1
+						return transactionHash
+					}
+					if (method !== 'eth_call') throw new Error(`Unexpected RPC method ${method}`)
+					const decoded = decodeFunctionData({ abi: routerAbi, data: callData(params) })
+					if (decoded.functionName !== 'addLiquidityWithEth') throw new Error(`Unexpected simulation ${decoded.functionName}`)
+					return encodeAbiParameters([{ type: 'tuple', components: [address, uint256, uint256, uint256, uint256, uint256, uint256, uint256] }], [[pair, 20n, 20n, chain.noUsed, 0n, 20n - chain.noUsed, 20n, 10n]])
+				},
+			}),
+		})
+		const quote = await simulateLiquidity(client, configuration, market, account, 'add', 20n, 5_000n, 7n, 50n)
+		chain.noUsed = 20n
+		await expect(submitFreshLiquidity(client, configuration, account, quote, async write => await write())).rejects.toThrow('approved maximum NO deposit')
+		expect(chain.sends).toBe(0)
 	})
 
 	test('checks the wallet context after entry, exit, and liquidity revalidation and before every broadcast', async () => {

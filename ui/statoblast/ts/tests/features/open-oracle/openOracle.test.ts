@@ -47,7 +47,7 @@ import { createWriteClient, type WriteClient } from '../../../../../../solidity/
 import { deployOriginSecurityPool, ensureInfraDeployed, getSecurityPoolAddresses } from '../../../../../../solidity/ts/testSupport/simulator/utils/contracts/deployStatoblast.js'
 import { ensureZoltarDeployed } from '../../../../../../solidity/ts/testSupport/simulator/utils/contracts/zoltar.js'
 import { createQuestion, getQuestionId } from '../../../../../../solidity/ts/testSupport/simulator/utils/contracts/zoltarQuestionData.js'
-import { getOpenOracleExtraData, getRequestPriceCostAttoEth, requestPriceWithValue } from '../../../../../../solidity/ts/testSupport/simulator/utils/contracts/statoblast.js'
+import { getOpenOracleExtraData, getOpenOracleReportMeta, getRequestPriceCostAttoEth, requestPriceWithValue } from '../../../../../../solidity/ts/testSupport/simulator/utils/contracts/statoblast.js'
 
 function installInjectedEthereum(mockWindow: AnvilWindowEthereum, accountAddress: Address = addressString(TEST_ADDRESSES[0])) {
 	const globalWindow = globalThis as typeof globalThis & { window?: Window }
@@ -1095,7 +1095,7 @@ describe('Open Oracle helpers', () => {
 
 		await requestPriceWithValue(client, managerAddress, seededRequestEthCost, seededRepEthPrice)
 		const seededReportId = (await loadOracleManagerDetails(uiReadClient, managerAddress)).pendingReportId
-		await mockWindow.advanceTime(DAY)
+		await mockWindow.advanceTime(BigInt((await getOpenOracleReportMeta(client, seededReportId)).settlementTime) + 1n)
 		await settleOracleReport(uiWriteClient, getOpenOracleAddress(), seededReportId)
 		await mockWindow.advanceTime(60n * 60n + 1n)
 
@@ -1121,7 +1121,7 @@ describe('Open Oracle helpers', () => {
 		if (typeof minimumToken1ReportAttoEth !== 'bigint') throw new Error('expected bigint minimumToken1ReportAttoEth')
 		await requestOraclePrice(uiWriteClient, managerAddress, minimumToken1ReportAttoEth)
 		const reportId = (await loadOracleManagerDetails(uiReadClient, managerAddress)).pendingReportId
-		await mockWindow.advanceTime(DAY)
+		await mockWindow.advanceTime(BigInt((await getOpenOracleReportMeta(client, reportId)).settlementTime) + 1n)
 		await settleOracleReport(uiWriteClient, getOpenOracleAddress(), reportId)
 		const wethBalanceAttoEthAfterSettlement = await loadErc20Balance(uiReadClient, WETH_ADDRESS, uiWriteClient.account.address)
 
@@ -1467,7 +1467,8 @@ describe('Open Oracle helpers', () => {
 
 		const repBeforeSettlement = await loadErc20Balance(uiReadClient, addressString(GENESIS_REPUTATION_TOKEN), uiWriteClient.account.address)
 		const wethBeforeSettlement = await loadErc20Balance(uiReadClient, WETH_ADDRESS, uiWriteClient.account.address)
-		await mockWindow.advanceTime(DAY)
+		const { settlementTime } = await getOpenOracleReportMeta(client, reportId)
+		await mockWindow.advanceTime(BigInt(settlementTime) + 1n)
 		await settleOracleReport(uiWriteClient, openOracleAddress, reportId)
 		expect(await loadErc20Balance(uiReadClient, addressString(GENESIS_REPUTATION_TOKEN), uiWriteClient.account.address)).toBe(repBeforeSettlement + expectedAmount2)
 		expect(await loadErc20Balance(uiReadClient, WETH_ADDRESS, uiWriteClient.account.address)).toBe(wethBeforeSettlement + amount1)
@@ -1478,7 +1479,7 @@ describe('Open Oracle helpers', () => {
 
 		const managerDetails = await loadOracleManagerDetails(uiReadClient, managerAddress)
 		expect(managerDetails.pendingReportId).toBe(0n)
-		expect(managerDetails.lastSettlementTimestamp).toBeGreaterThan(0n)
+		expect(managerDetails.lastSettlementTimestamp).toBe(reportDetails.reportTimestamp + BigInt(settlementTime))
 		expect(managerDetails.isPriceValid).toBe(true)
 		expect(managerDetails.priceValidUntilTimestamp).toBe(managerDetails.lastSettlementTimestamp + 60n * 60n)
 	})

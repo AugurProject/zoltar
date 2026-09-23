@@ -112,7 +112,7 @@ contract OpenOraclePriceCoordinator {
 		feePercentage = _feePercentage;
 		multiplier = _multiplier;
 		timeType = _timeType;
-		require(_trackDisputes);
+		require(_trackDisputes && _timeType, 'Oracle must track disputes on a timestamp clock');
 		trackDisputes = _trackDisputes;
 		protocolFeeRecipient = _protocolFeeRecipient;
 		escalationHaltMultiplierBps = _escalationHaltMultiplierBps;
@@ -227,8 +227,7 @@ contract OpenOraclePriceCoordinator {
 		require(settlerRewardAttoEth <= type(uint96).max, 'Oracle settler reward exceeds uint96 maximum');
 		pendingReportMaxSettlementBaseFeeAttoEthPerGas = _settlementBaseFeeCapForBounty(bountyAttoEth);
 
-		uint8 flags = OPEN_ORACLE_FLAG_STORE_ALL | OPEN_ORACLE_FLAG_TRACK_DISPUTES;
-		if (timeType) flags |= OPEN_ORACLE_FLAG_TIME_TYPE;
+		uint8 flags = OPEN_ORACLE_FLAG_STORE_ALL | OPEN_ORACLE_FLAG_TRACK_DISPUTES | OPEN_ORACLE_FLAG_TIME_TYPE;
 		OpenOracle.OracleGame memory reportParams = OpenOracle.OracleGame({currentAmount1: uint128(initialWethReportAttoEth), currentAmount2: uint128(initialRepReportAttoRep), currentReporter: address(this), reportTimestamp: 0, settlementTimestamp: 0, token1: address(weth), lastReportOppoTime: 0, settlementTime: settlementTime, escalationHalt: uint128(escalationHaltAttoEth), protocolFeeRecipient: protocolFeeRecipient, settlerReward: uint96(settlerRewardAttoEth), token2: address(reputationToken), numReports: 0, disputeDelay: disputeDelay, feePercentage: feePercentage, multiplier: multiplier, callbackContract: address(this), callbackGasLimit: getSettlementCallbackGasLimit(), protocolFee: protocolFee, flags: flags});
 
 		pendingReportSponsor = sponsor;
@@ -263,26 +262,14 @@ contract OpenOraclePriceCoordinator {
 		pendingReportSponsor = address(0);
 		uint256 maxSettlementBaseFeeAttoEthPerGas = pendingReportMaxSettlementBaseFeeAttoEthPerGas;
 		pendingReportMaxSettlementBaseFeeAttoEthPerGas = 0;
-		if (block.basefee > maxSettlementBaseFeeAttoEthPerGas) {
-			_rejectReportAndPendingOperations(reportId, 'Base fee too high');
+		(string memory rejectionReason, uint256 priceTimestamp) = _validateSettledReport(reportId, amount1, amount2, maxSettlementBaseFeeAttoEthPerGas);
+		if (bytes(rejectionReason).length != 0) {
+			_rejectReportAndPendingOperations(reportId, rejectionReason);
 			return;
 		}
-		uint256 finalReportDisputeStatus = _getFinalReportDisputeStatus(reportId, amount1);
-		if (finalReportDisputeStatus != FINAL_REPORT_PROFITABLE) {
-			_rejectReportAndPendingOperations(reportId, finalReportDisputeStatus == FINAL_REPORT_COUNTER_SATURATED ? 'Counter saturated' : 'Report uneconomic');
-			return;
-		}
-		if (amount1 == 0 || amount2 == 0) {
-			_rejectReportAndPendingOperations(reportId, 'Empty oracle settlement');
-			return;
-		}
-		uint256 price = Math.mulDiv(amount2, PRICE_PRECISION, amount1);
-		if (price == 0) {
-			_rejectReportAndPendingOperations(reportId, 'Oracle price is zero');
-			return;
-		}
-		lastSettlementTimestamp = block.timestamp;
-		lastPrice = price;
+		// Freshness runs from settlement eligibility: the final report is frozen then, however late settle() is called.
+		lastSettlementTimestamp = priceTimestamp;
+		lastPrice = Math.mulDiv(amount2, PRICE_PRECISION, amount1);
 		securityPool.updateRetentionRate();
 		emit PriceReported(reportId, lastPrice, lastSettlementTimestamp);
 		if (pendingSettlementOperationIds.length != 0) {
@@ -315,15 +302,24 @@ contract OpenOraclePriceCoordinator {
 		}
 	}
 
-	function _getFinalReportDisputeStatus(uint256 reportId, uint256 finalAmount1) private view returns (uint256) {
-		(, , , , , , , , , , , , uint24 numReports, , , , , , , ) = openOracle.storedGame(reportId);
-		if (numReports == type(uint24).max) return FINAL_REPORT_COUNTER_SATURATED;
-		if (numReports == 0) return FINAL_REPORT_UNECONOMIC;
+	function _validateSettledReport(uint256 reportId, uint256 amount1, uint256 amount2, uint256 maxSettlementBaseFeeAttoEthPerGas) private view returns (string memory reason, uint256 priceTimestamp) {
+		if (block.basefee > maxSettlementBaseFeeAttoEthPerGas) return ('Base fee too high', 0);
+		(, , , uint48 finalReportTimestamp, , , , , , , , , uint24 numReports, , , , , , , ) = openOracle.storedGame(reportId);
+		if (numReports == type(uint24).max) return ('Counter saturated', 0);
+		if (numReports == 0 || !_isFinalReportProfitable(reportId, numReports, amount1))
+			return ('Report uneconomic', 0);
+		priceTimestamp = uint256(finalReportTimestamp) + settlementTime;
+		if (!_isFreshPriceTimestamp(priceTimestamp)) return ('Report stale', 0);
+		if (amount1 == 0 || amount2 == 0) return ('Empty oracle settlement', 0);
+		if (Math.mulDiv(amount2, PRICE_PRECISION, amount1) == 0) return ('Oracle price is zero', 0);
+	}
+
+	function _isFinalReportProfitable(uint256 reportId, uint24 numReports, uint256 finalAmount1) private view returns (bool) {
 		(, , uint128 finalReportBaseFee, ) = openOracle.disputeHistory(reportId, numReports - 1);
 		uint256 minimumProfitableReportAttoEth =
 			_minimumToken1ReportAttoEthForGasPrice(initialReportPriorityFeeAttoEthPerGas) +
 				_minimumToken1ReportAttoEthForGasPrice(uint256(finalReportBaseFee));
-		return finalAmount1 >= minimumProfitableReportAttoEth ? FINAL_REPORT_PROFITABLE : FINAL_REPORT_UNECONOMIC;
+		return finalAmount1 >= minimumProfitableReportAttoEth;
 	}
 
 	function _withdrawOpenOracleReporterBalances(address sponsor) private {
@@ -337,10 +333,12 @@ contract OpenOraclePriceCoordinator {
 	}
 
 	function isPriceValid() public view returns (bool) {
-		return
-			lastPrice > 0 &&
-			lastSettlementTimestamp != 0 &&
-			lastSettlementTimestamp + (block.chainid == 11155111 ? 1 hours : PRICE_VALID_FOR_SECONDS) > block.timestamp;
+		return lastPrice > 0 && _isFreshPriceTimestamp(lastSettlementTimestamp);
+	}
+
+	function _isFreshPriceTimestamp(uint256 priceTimestamp) private view returns (bool) {
+		uint256 validForSeconds = block.chainid == 11155111 ? 1 hours : PRICE_VALID_FOR_SECONDS;
+		return priceTimestamp != 0 && priceTimestamp + validForSeconds > block.timestamp;
 	}
 
 	function requestPriceIfNeededAndStageOperation(OperationType operation, address targetVault, uint256 operationValue, uint256 validForSeconds, uint256 proposedRepPerEthPrice, uint256 requestedInitialAttoWeth, uint256 bountyAttoEth) public payable {

@@ -1289,9 +1289,9 @@ function routerEthDefinition(kind: 'create-and-initialize' | 'initialize' | 'add
 				args = [target, 5_000n, inputInteger(options, 'minimumLiquidity', minimumAfterSlippage(minted - 1_000n), 1n, minted - 1_000n), snapshot.wallet.address, BigInt(deadline)]
 				evidence = kind === 'create-and-initialize' ? [eventEvidence(snapshot.deployments.tradingFactory, 'PairCreated(address,address,uint248,address,uint256)')] : [eventEvidence(target, 'LiquidityInitialized(address,address,uint256,uint256,uint256)')]
 			} else if (kind === 'add') {
-				const liquidity = pair === undefined ? undefined : proportionalLiquidity(pair, minted, minted)?.liquidity
-				if (liquidity === undefined) return undefined
-				args = [target, inputInteger(options, 'minimumLiquidity', minimumAfterSlippage(liquidity), 1n, liquidity), snapshot.wallet.address, BigInt(deadline)]
+				const quoted = pair === undefined ? undefined : proportionalLiquidity(pair, minted, minted)
+				if (quoted === undefined) return undefined
+				args = [target, maximumAfterSlippage(quoted.yesUsed), maximumAfterSlippage(quoted.noUsed), inputInteger(options, 'minimumLiquidity', minimumAfterSlippage(quoted.liquidity), 1n, quoted.liquidity), snapshot.wallet.address, BigInt(deadline)]
 				evidence = [eventEvidence(target, 'LiquidityAdded(address,address,uint256,uint256,uint256)')]
 			} else {
 				if (pair === undefined || longOutcome === undefined) return undefined

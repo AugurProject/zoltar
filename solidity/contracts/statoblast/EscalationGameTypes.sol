@@ -95,8 +95,10 @@ struct CarriedDepositProof {
 	uint256 parentDepositIndex;
 	uint256 cumulativeAmountAttoRep;
 	uint256 sourceNodeId;
+	// Global position across the whole snapshot MMR, not the offset inside a peak.
 	uint256 leafIndex;
 	bytes32[] merkleMountainRangeSiblings;
+	// Height of the peak containing leafIndex; must match the height derived from it.
 	uint256 merkleMountainRangePeakIndex;
 	bytes32[] nullifierSiblings;
 }

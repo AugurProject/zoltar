@@ -412,13 +412,13 @@ export async function buildForkCarriedEscalationProofs(client: ReadClient, secur
 		if (leafIndex === -1) throw new Error(`Parent carry leaf ${parentDepositIndex.toString()} is unavailable.`)
 		const targetLeaf = orderedLeaves[leafIndex]
 		if (targetLeaf === undefined) throw new Error(`Parent carry leaf ${parentDepositIndex.toString()} is unavailable.`)
-		const { merkleMountainRangePeakIndex, merkleMountainRangeSiblings, peakRelativeLeafIndex } = buildCarryMerkleMountainRangeProof(leafHashes, leafIndex)
+		const { leafIndex: globalLeafIndex, merkleMountainRangePeakIndex, merkleMountainRangeSiblings } = buildCarryMerkleMountainRangeProof(leafHashes, leafIndex)
 		const nullifierSiblings = nullifierTree.getProof(parentDepositIndex)
 		proofs.push({
 			amountAttoRep: targetLeaf.amountAttoRep,
 			cumulativeAmountAttoRep: targetLeaf.cumulativeAmountAttoRep,
 			depositor: targetLeaf.depositor,
-			leafIndex: BigInt(peakRelativeLeafIndex),
+			leafIndex: globalLeafIndex,
 			merkleMountainRangePeakIndex,
 			merkleMountainRangeSiblings,
 			nullifierSiblings,
