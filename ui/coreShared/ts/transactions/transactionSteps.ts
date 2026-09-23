@@ -1,4 +1,6 @@
+import { getTransactionReviewSignal } from './transactionReviewScope.js'
 import * as commonCopy from '../copy/common.js'
+import { transactionErrorMessages } from '../lib/errors.js'
 import type { TransactionPlanStep } from '../wallet/chainBackend.js'
 import { signal } from '@preact/signals'
 import { formatUnits, maxUint256, type Address, type Hash } from '@zoltar/core-shared/evm/ethereum'
@@ -38,14 +40,14 @@ type TransactionSteps = {
 
 export const transactionSteps = signal<TransactionSteps | undefined>(undefined)
 
-export function createTransactionStepController(signal?: AbortSignal) {
+export function createTransactionStepController(signal = getTransactionReviewSignal()) {
 	let canceled = false
 	let rejectReview: ((reason: Error) => void) | undefined
 	const steps: TransactionStep[] = []
 	let activeIndex = -1
 	const stop = () => {
 		canceled = true
-		rejectReview?.(new Error('Remaining transactions canceled. Transactions already sent are unchanged.'))
+		rejectReview?.(new Error(transactionErrorMessages.reviewCanceled))
 		rejectReview = undefined
 	}
 	const clear = () => {
@@ -77,13 +79,19 @@ export function createTransactionStepController(signal?: AbortSignal) {
 			},
 		}
 	}
-	const reviewChoices = async (indices: readonly number[]) => {
-		if (canceled) throw new Error('Transaction sequence canceled. Review the action again.')
+	const assertActive = () => {
+		if (canceled) throw new Error(transactionErrorMessages.reviewCanceled)
+	}
+	const claimWorkflow = () => {
+		assertActive()
 		const current = transactionSteps.peek()
 		if (current !== undefined && current.cancel !== cancel) {
 			if (current.steps.some(step => step.phase === 'review' || step.phase === 'pending')) throw new Error('Finish or cancel the current transaction first.')
 			current.cancel()
 		}
+	}
+	const reviewChoices = async (indices: readonly number[]) => {
+		claimWorkflow()
 		const first = indices[0]
 		if (first === undefined || indices.some(index => steps[index] === undefined)) throw new Error('An unexpected transaction was blocked. Review the action again.')
 		activeIndex = first
@@ -110,15 +118,25 @@ export function createTransactionStepController(signal?: AbortSignal) {
 		})
 	}
 	return {
+		assertActive,
 		setPlan(details: TransactionStepDetails[]) {
 			if (steps.length > 0) throw new Error('The transaction plan has already started.')
 			steps.push(...details.map(step => ({ ...step, phase: 'upcoming' as const })))
+		},
+		startWithoutReview(index: number) {
+			claimWorkflow()
+			const step = steps[index]
+			if (steps.length !== 1 || index !== 0 || step?.phase !== 'upcoming' || step.approval !== undefined || (step.tokenFunding?.length ?? 0) > 0) throw new Error('Only a single transaction without approvals can skip app review.')
+			activeIndex = index
+			step.phase = 'pending'
+			publish()
+			return undefined
 		},
 		async review(index = activeIndex + 1) {
 			return (await reviewChoices([index])).amount
 		},
 		async chooseFunding(indices: readonly number[]) {
-			if (canceled) throw new Error('Transaction sequence canceled. Review the action again.')
+			assertActive()
 			for (let index = 0; index < steps.length - 1; index += 1) {
 				const step = steps[index]
 				if (step !== undefined && !indices.includes(index) && step.phase !== 'confirmed') step.phase = 'skipped'

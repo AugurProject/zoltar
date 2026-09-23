@@ -1066,12 +1066,57 @@ main.global-transaction-tray-open :is(a, button, input, select, summary, textare
 }
 
 .operation-modal-panel {
+	display: flex;
+	flex-direction: column;
 	width: min(54rem, calc(100vw - 2rem));
+	overflow: hidden;
+}
+
+.operation-modal-panel > * {
+	flex-shrink: 0;
+}
+
+.operation-modal-panel > .modal-header {
+	position: relative;
+	top: auto;
+}
+
+/* The header stays pinned; everything below it scrolls inside the panel's padding box. */
+.operation-modal-scroll {
+	display: grid;
+	gap: 1rem;
+	flex: 1 1 auto;
+	min-height: 0;
+	overflow: auto;
+	margin: 0 -1.25rem -1.25rem;
+	padding: 0 1.25rem 1.25rem;
 }
 
 .operation-modal-body {
 	display: grid;
 	gap: 1rem;
+}
+
+/* The form stays in place, disabled, while its transaction steps are reviewed and sent below it, so nothing moves. */
+.operation-modal-body[inert],
+.operation-modal-body [inert] {
+	opacity: 0.6;
+}
+
+.operation-modal-body[inert] :is(button, input, select, textarea, summary) {
+	cursor: default;
+}
+
+.operation-modal-steps {
+	display: grid;
+	gap: 1rem;
+	padding-top: 1rem;
+	border-top: 1px solid var(--border-default);
+}
+
+.operation-modal-steps .transaction-step-content > .read-only-detail-accordion:first-child {
+	border-top: 0;
+	padding-top: 0;
 }
 
 .operation-modal-transaction-notice {
@@ -1773,24 +1818,10 @@ main.global-transaction-tray-open :is(a, button, input, select, summary, textare
 	}
 }
 
-/* Multi-step transaction review modal: funding summary, per-step actions, and the approval editor. */
-.modal-panel:has(.transaction-step-actions) {
-	overflow: hidden;
-	grid-template-rows: auto minmax(0, 1fr);
-}
-
-.modal-panel:has(.transaction-step-actions) > .modal-header {
-	position: relative;
-}
-
-.operation-modal-body:has(> .transaction-step-actions) {
-	min-height: 0;
-	grid-template-rows: minmax(0, 1fr) auto;
-}
-
+/* Transaction reviews share the panel scroll area with their funding and actions. */
 .transaction-step-content {
 	min-height: 0;
-	overflow: auto;
+	overflow: visible;
 	display: grid;
 	gap: 1rem;
 }
@@ -1908,7 +1939,7 @@ main.global-transaction-tray-open :is(a, button, input, select, summary, textare
 .transaction-step-actions .tx-action-group > .actions {
 	display: grid;
 	grid-template-columns: repeat(2, minmax(0, 1fr));
-	align-items: end;
+	align-items: start;
 	gap: 0.5rem;
 }
 
@@ -1972,9 +2003,20 @@ main.global-transaction-tray-open :is(a, button, input, select, summary, textare
 		padding: 0.5rem 0.75rem;
 	}
 
+	.modal-panel:has(.transaction-step-actions) > .operation-modal-scroll {
+		gap: 0.75rem;
+		margin: 0 -0.75rem -0.75rem;
+		padding: 0 0.75rem 0.75rem;
+	}
+
 	.transaction-funding {
 		grid-template-columns: minmax(0, 1fr);
 		gap: 0.5rem;
+	}
+
+	/* Side-by-side approval columns misalign once a label wraps, so stack them. */
+	.transaction-step-actions .tx-action-group > .actions {
+		grid-template-columns: minmax(0, 1fr);
 	}
 
 	.transaction-step-content {
