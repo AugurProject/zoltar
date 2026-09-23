@@ -464,8 +464,8 @@ describe('chaos launch doctor', () => {
 	test('rejects mismatched-profile retirement state before network probing', async () => {
 		const settings = await settingsFixture('operator.configured-placeholder.json')
 		const recipient = getAddress('0x0000000000000000000000000000000000000099')
-		const requested = initialDurableState(settings.network.chainId, true, 'profile:wrong')
-		requestRetirement(requested.retirement, requested.profileId, recipient, DEFAULT_RETIREMENT_POLICIES, `DRAIN ${requested.profileId} TO ${recipient}`, undefined)
+		const requested = initialDurableState(settings.network.chainId, true, 'profile:wrong', recipient)
+		requestRetirement(requested.retirement, requested.profileId, recipient, DEFAULT_RETIREMENT_POLICIES, `DRAIN ${requested.profileId} TO ${recipient}`, recipient)
 		const registered = initialDurableState(settings.network.chainId, true, 'profile:wrong')
 		registerV3Position(registered.retirement, {
 			creationWorkflowId: 'legacy:position',

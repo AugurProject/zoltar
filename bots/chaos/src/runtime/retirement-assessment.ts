@@ -157,7 +157,6 @@ export function assessRetirement(parameters: {
 	if (operationalBlockers.some(blocker => blocker.category !== 'temporarily-locked')) return { action, blockers, proof, residuals, status: 'blocked' }
 	if (operationalBlockers.length !== 0) return { action, blockers, proof, residuals, status: 'waiting' }
 	if (outstanding > 0) return { action, blockers, proof, residuals, status: 'draining' }
-	if (parameters.sweepLimits !== undefined && BigInt(parameters.snapshot.wallet.ethBalanceAttoEth) > 0n) residuals.push({ amount: parameters.snapshot.wallet.ethBalanceAttoEth, asset: 'ETH', category: 'mandatory-sentinel', reason: 'Configured ETH reserve and final-sweep gas budget retained after native sweeping' })
 	if (historyLimited) return { action, blockers, proof, residuals, status: 'known-claims-recovered' }
 	return { action, blockers, proof, residuals, status: residuals.length === 0 ? 'drained' : 'drained-with-residuals' }
 }

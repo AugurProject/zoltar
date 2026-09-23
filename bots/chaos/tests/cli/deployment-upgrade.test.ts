@@ -145,8 +145,8 @@ test('selects current contracts for a safely migratable zero-root bootstrap jour
 
 test('prompts once to retire operated old contracts and keeps the old pin until completion', async () => {
 	const { path, settings, signer, stateFile } = await fixture(true)
-	const recipient = getAddress('0x0000000000000000000000000000000000000099')
-	const answers = [recipient, `DRAIN ${executionProfileId(settings)} TO ${recipient}`]
+	const recipient = signer
+	const answers = [`DRAIN ${executionProfileId(settings)} TO ${recipient}`]
 	const result = await prepareCurrentDeployment({
 		acquireLocks: noLocks,
 		ask: async () => {
@@ -166,13 +166,13 @@ test('prompts once to retire operated old contracts and keeps the old pin until 
 })
 
 test('discloses default retirement policies and replaces policies from a cancelled drain', async () => {
-	const { path, settings, stateFile } = await fixture(true)
+	const { path, settings, signer, stateFile } = await fixture(true)
 	const state = await loadDurableState(stateFile, settings.network.chainId)
 	state.retirement.cancelledAt = new Date(0).toISOString()
 	state.retirement.policies = { ...DEFAULT_RETIREMENT_POLICIES, exitUnmatchedShares: true, maximumExitLossBps: 1_000, sweepAssets: false }
 	await saveDurableState(stateFile, state)
-	const recipient = getAddress('0x0000000000000000000000000000000000000099')
-	const answers = [recipient, `DRAIN ${state.profileId} TO ${recipient}`]
+	const recipient = signer
+	const answers = [`DRAIN ${state.profileId} TO ${recipient}`]
 	const prompts: string[] = []
 	await prepareCurrentDeployment({
 		acquireLocks: noLocks,
@@ -184,7 +184,7 @@ test('discloses default retirement policies and replaces policies from a cancell
 		},
 		path,
 	})
-	expect(prompts[1]).toContain('default retirement policies')
+	expect(prompts[0]).toContain('recover claimable ETH and REP to signer')
 	expect((await loadDurableState(stateFile, settings.network.chainId)).retirement.policies).toEqual(DEFAULT_RETIREMENT_POLICIES)
 })
 
@@ -212,7 +212,7 @@ test('uses a fresh state path after verified retirement and preserves the old jo
 	const { path, settings, signer, stateFile } = await fixture(true)
 	const state = await loadDurableState(stateFile, settings.network.chainId)
 	state.retirement.status = 'drained'
-	state.retirement.recipient = getAddress('0x0000000000000000000000000000000000000099')
+	state.retirement.recipient = signer
 	state.retirement.completionEvidence = {
 		blockHash: zeroHash,
 		blockNumber: '42',
@@ -248,7 +248,7 @@ test('keeps the old deployment when finality verification fails', async () => {
 	const { path, settings, signer, stateFile } = await fixture(true)
 	const state = await loadDurableState(stateFile, settings.network.chainId)
 	state.retirement.status = 'drained'
-	state.retirement.recipient = getAddress('0x0000000000000000000000000000000000000099')
+	state.retirement.recipient = signer
 	state.retirement.completionEvidence = {
 		blockHash: zeroHash,
 		blockNumber: '42',
@@ -324,7 +324,7 @@ test('waits for explicit acceptance of residuals before switching deployments', 
 	const state = await loadDurableState(stateFile, settings.network.chainId)
 	const targetProfileId = executionProfileId({ ...settings, deployment: canonicalDeployment(settings.network.chainId) })
 	state.retirement.status = 'drained-with-residuals'
-	state.retirement.recipient = getAddress('0x0000000000000000000000000000000000000099')
+	state.retirement.recipient = signer
 	state.retirement.completionEvidence = {
 		blockHash: zeroHash,
 		blockNumber: '42',

@@ -3,6 +3,7 @@ import { optionalRecord as retirementRecord } from '@zoltar/bot-shared/infrastru
 type RetirementSnapshot = {
 	profileId?: string | undefined
 	retirement?: { blockers: unknown[]; finalSweepStartedAt?: string | undefined; positions: unknown[]; recipient?: string | undefined; status?: string | undefined } | undefined
+	wallet?: string | undefined
 }
 
 function retirementStringValue(value: unknown) {
@@ -37,8 +38,8 @@ function retirementElement<T extends Element>(id: string, constructor: { new ():
 export function createRetirementDashboard(options: RetirementDashboardOptions) {
 	const statusElement = retirementElement('retirement-status', HTMLSpanElement)
 	const summary = retirementElement('retirement-summary', HTMLParagraphElement)
+	const destination = retirementElement('retirement-destination', HTMLParagraphElement)
 	const form = retirementElement('retirement-form', HTMLFormElement)
-	const recipient = retirementElement('retirement-recipient', HTMLInputElement)
 	const maximumLoss = retirementElement('retirement-max-loss', HTMLInputElement)
 	const exitUnmatched = retirementElement('retirement-exit-unmatched', HTMLInputElement)
 	const migrateClaims = retirementElement('retirement-migrate-claims', HTMLInputElement)
@@ -76,7 +77,6 @@ export function createRetirementDashboard(options: RetirementDashboardOptions) {
 					confirmation: confirmation.value,
 					policies: { exitAfterCompletion: exitAfter.checked, exitUnmatchedShares: exitUnmatched.checked, maximumExitLossBps: maximumLoss.valueAsNumber, migrateExistingClaims: migrateClaims.checked, sweepAssets: true, unwrapWeth: true },
 					profileId,
-					recipient: recipient.value.trim(),
 				})
 				actionStatus.textContent = 'Drain request saved.'
 				await options.refresh()
@@ -138,6 +138,7 @@ export function createRetirementDashboard(options: RetirementDashboardOptions) {
 	return {
 		render(value: RetirementSnapshot) {
 			const retirement = value.retirement
+			destination.textContent = value.wallet === undefined || value.profileId === undefined ? 'Configure a signer wallet before requesting retirement.' : `Recovered ETH and REP stay in signer wallet ${value.wallet}. Type DRAIN ${value.profileId} TO ${value.wallet} to confirm.`
 			const status = retirement?.status ?? 'inactive'
 			let tone = 'warning'
 			if (status === 'drained') tone = 'success'
@@ -147,8 +148,7 @@ export function createRetirementDashboard(options: RetirementDashboardOptions) {
 			statusElement.textContent = status === 'known-claims-recovered' ? 'All known claims recovered' : status.replaceAll('-', ' ')
 			if (status === 'known-claims-recovered') summary.textContent = 'Earlier history remains unverified; additional claims may exist.'
 			else if (status === 'inactive') summary.textContent = 'No retirement has been requested.'
-			else summary.textContent = `${retirement?.positions.length.toString() ?? '0'} V3 position records; ${retirement?.blockers.length.toString() ?? '0'} blockers; recipient ${retirement?.recipient ?? 'not recorded'}.`
-			recipient.disabled = status !== 'inactive'
+			else summary.textContent = `${retirement?.positions.length.toString() ?? '0'} V3 position records; ${retirement?.blockers.length.toString() ?? '0'} blockers; signer wallet ${retirement?.recipient ?? 'not recorded'}.`
 			cancel.disabled = status === 'inactive' || retirement?.finalSweepStartedAt !== undefined || status === 'drained' || status === 'drained-with-residuals'
 			residualSubmit.disabled = status !== 'drained-with-residuals'
 		},

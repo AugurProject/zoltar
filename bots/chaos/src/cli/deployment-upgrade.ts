@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 
-import { getAddress, privateKeyToAccount } from '@zoltar/bot-shared/ethereum'
+import { privateKeyToAccount } from '@zoltar/bot-shared/ethereum'
 import { acquireBotProcessLocks } from '@zoltar/bot-shared/execution/bot-process-locks'
 import { createInterface } from 'node:readline/promises'
 import { lstat } from 'node:fs/promises'
@@ -104,8 +104,9 @@ async function requestOldProfileRetirement(settings: OperatorSettings, state: Aw
 		throw new Error('Enable live execution with a configured signer and unpause the old profile before requesting automatic retirement')
 	}
 	if (new Set(chaosReadEndpoints(settings).map(rpcUrl => new URL(rpcUrl).origin)).size < 2) throw new Error('Retirement completion requires at least two independent RPC readers')
-	const recipient = getAddress((await ask('Updated contracts found. Enter the retirement recipient for recovered assets: ')).trim())
 	const wallet = configuredWallet(settings)
+	if (wallet === undefined) throw new Error('Retirement requires a configured signer')
+	const recipient = wallet
 	assertSafeRetirementRecipient(recipient, state.signerAddress ?? wallet)
 	const confirmation = `DRAIN ${state.profileId} TO ${recipient}`
 	requestRetirement(
@@ -113,7 +114,7 @@ async function requestOldProfileRetirement(settings: OperatorSettings, state: Aw
 		state.profileId,
 		recipient,
 		DEFAULT_RETIREMENT_POLICIES,
-		await ask(`The launcher uses default retirement policies: sweep assets and unwrap WETH; no unmatched-share exit, claim migration, or automatic exit after completion. These replace any policies from a cancelled drain. Type ${confirmation} to continue: `),
+		await ask(`Updated contracts found. The launcher will recover claimable ETH and REP to signer ${recipient} and unwrap WETH; no unmatched-share exit, claim migration, or automatic exit after completion. These replace any policies from a cancelled drain. Type ${confirmation} to continue: `),
 		state.signerAddress ?? wallet,
 	)
 	await saveDurableState(settings.runtime.stateFile, state)

@@ -203,30 +203,27 @@ describe('chaos dashboard configuration boundary', () => {
 		completeSignerScan(state, current)
 		const { controller } = noopController(current, state)
 		if (controller.setRetirement === undefined) throw new Error('Retirement controller is unavailable')
-		const recipient = '0x0000000000000000000000000000000000000099'
+		const recipient = state.signerAddress
+		if (recipient === undefined) throw new Error('Expected a bound signer')
 		await controller.setRetirement({
 			action: 'request',
 			confirmation: `DRAIN profile:test TO ${recipient}`,
 			policies: { exitAfterCompletion: false, exitUnmatchedShares: false, maximumExitLossBps: 0, migrateExistingClaims: false, sweepAssets: true, unwrapWeth: true },
 			profileId: 'profile:test',
-			recipient,
 		})
 		expect(state.retirement).toMatchObject({ recipient, status: 'requested' })
 		await controller.setRetirement({ action: 'cancel', confirmation: 'CANCEL DRAIN' })
 		expect(state.retirement.status).toBe('inactive')
 	})
 
-	test('rejects zero and durable-signer recipients at the dashboard API boundary', async () => {
+	test('rejects externally supplied retirement recipients at the dashboard API boundary', async () => {
 		const current = configuredSettings(false, true)
 		const state = runtimeState(current)
 		state.profileId = 'profile:test'
 		completeSignerScan(state, current)
 		const { controller } = noopController(current, state)
 		if (controller.setRetirement === undefined || state.signerAddress === undefined) throw new Error('Retirement controller is unavailable')
-		for (const [recipient, expectedError] of [
-			['0x0000000000000000000000000000000000000000', 'zero address'],
-			[state.signerAddress, 'durable signer'],
-		] as const) {
+		for (const recipient of ['0x0000000000000000000000000000000000000000', state.signerAddress]) {
 			const error = await captureFailure(
 				async () =>
 					await controller.setRetirement?.({
@@ -237,7 +234,7 @@ describe('chaos dashboard configuration boundary', () => {
 						recipient,
 					}),
 			)
-			expect(String(error)).toContain(expectedError)
+			expect(String(error)).toContain('unsupported field recipient')
 			expect(state.retirement.status).toBe('inactive')
 		}
 	})
@@ -273,7 +270,7 @@ describe('chaos dashboard configuration boundary', () => {
 		bindRuntimeStateToSigner(state, signer)
 		state.profileId = 'profile:test'
 		state.retirement.status = 'drained-with-residuals'
-		state.retirement.recipient = '0x0000000000000000000000000000000000000099'
+		state.retirement.recipient = signer
 		state.retirement.completionEvidence = {
 			blockHash: zeroHash,
 			blockNumber: '42',

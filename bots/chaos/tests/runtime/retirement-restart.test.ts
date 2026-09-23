@@ -46,7 +46,7 @@ function liveSettings() {
 
 function requestedState(snapshot: EcosystemSnapshot) {
 	const durable = initialDurableState(snapshot.chainId, false, 'profile:test', snapshot.wallet.address)
-	const recipient = address(99)
+	const recipient = snapshot.wallet.address
 	requestRetirement(durable.retirement, durable.profileId, recipient, DEFAULT_RETIREMENT_POLICIES, `DRAIN ${durable.profileId} TO ${recipient}`, snapshot.wallet.address)
 	return initialRuntimeState(false, snapshot.wallet.address, snapshot.chainId, durable)
 }
@@ -189,25 +189,16 @@ describe('Drain & Retire persisted restart behavior', () => {
 		expect(state.retirement.status).toBe('drained-with-residuals')
 	})
 
-	test('persists the final-sweep boundary before execution and never repeats the sweep after restart', async () => {
+	test('does not send signer-held tokens during a restarted retirement', async () => {
 		const path = await statePath()
 		const snapshot = emptySnapshot()
 		snapshot.wallet.tokens = [{ address: address(80), allowances: {}, balance: '7', openOracleCredit: '0', symbol: 'TEST' }]
 		let state = await reload(path, requestedState(snapshot))
 		const executed: string[] = []
-		await cycle(path, state, snapshot, executed, async plan => {
-			expect(plan.definitionId).toBe('retirement.sweep.erc20')
-			const persistedBeforeExecution = await loadDurableState(path, snapshot.chainId)
-			expect(persistedBeforeExecution.retirement.finalSweepStartedAt).toBeDefined()
-			const token = snapshot.wallet.tokens[0]
-			if (token === undefined) throw new Error('Expected sweep fixture')
-			token.balance = '0'
-		})
+		await cycle(path, state, snapshot, executed)
 		state = await reload(path, state)
 		await cycle(path, state, snapshot, executed)
-		expect(state.retirement.status).toBe('drained')
-		state = await reload(path, state)
-		await cycle(path, state, snapshot, executed)
-		expect(executed).toEqual(['retirement.sweep.erc20'])
+		expect(executed).toEqual([])
+		expect(snapshot.wallet.tokens[0]?.balance).toBe('7')
 	})
 })

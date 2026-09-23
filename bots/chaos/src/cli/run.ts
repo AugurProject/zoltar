@@ -2,7 +2,7 @@
 import { assertDurableDeploymentFactory, restoreDeploymentForDurableState } from '../config/deployment-state.ts'
 import { errorMessage } from '@zoltar/bot-shared/infrastructure/error-message'
 
-import { getAddress, privateKeyToAccount } from '@zoltar/bot-shared/ethereum'
+import { getAddress, privateKeyToAccount, zeroAddress } from '@zoltar/bot-shared/ethereum'
 import { acquireBotProcessLocksForShutdown, BotProcessLockAcquisitionError, createBotShutdownController, type BotProcessLocks } from '@zoltar/bot-shared/execution/bot-process-locks'
 import { assertSettingsProfileIsolation, loadSettings } from '../config/settings.ts'
 import { CHAOS_PROCESS_LOCK_OPTIONS } from '../core/process-lock-options.ts'
@@ -41,7 +41,8 @@ export function parseRunCommand(args: readonly string[]): RunCommand {
 	const lossArgument = args.find(argument => argument.startsWith('--exit-unmatched-shares='))
 	const maximumExitLossBps = lossArgument === undefined ? 0 : Number(lossArgument.slice('--exit-unmatched-shares='.length))
 	if (!Number.isSafeInteger(maximumExitLossBps) || maximumExitLossBps < 0 || maximumExitLossBps > 10_000) throw new Error('Unmatched-share loss must be an integer from 0 through 10000 bps')
-	assertSafeRetirementRecipient(getAddress(args[1]), undefined)
+	const recipient = getAddress(args[1])
+	if (recipient.toLowerCase() === zeroAddress) throw new Error('Retirement recipient must not be the zero address')
 	return {
 		confirmation,
 		exitAfterCompletion: args.includes('--exit-after-completion'),
@@ -49,7 +50,7 @@ export function parseRunCommand(args: readonly string[]): RunCommand {
 		kind: 'request-drain',
 		maximumExitLossBps,
 		migrateExistingClaims: args.includes('--migrate-existing-claims'),
-		recipient: args[1],
+		recipient,
 	}
 }
 
