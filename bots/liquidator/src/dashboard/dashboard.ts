@@ -1,7 +1,8 @@
 import { renderRepMarketConsensusError, renderRepMarketConsensusPanel } from '@zoltar/bot-shared/dashboard/rep-market-consensus'
 import { decodeConfiguration, decodeSnapshot, decodeMarketProbe, type Configuration, type Snapshot, type MarketSourceRow, type Universe } from './api-validation.ts'
 import { renderActivities } from './activity-panel.tsx'
-import { cell, publicFailure } from './pool-presentation.ts'
+import { renderMarketSources } from './market-source-panel.tsx'
+import { publicFailure } from './pool-presentation.ts'
 import { createPoolBrowser } from './pool-browser.ts'
 import { createUniverseExplorer } from '@zoltar/bot-shared/dashboard/universe-explorer'
 import { readinessGuidance } from './readiness-status.js'
@@ -36,7 +37,6 @@ const testMarketSourcesButton = element('test-market-sources', HTMLButtonElement
 const showActiveAdmissionButton = element('show-active-admission', HTMLButtonElement)
 const marketSourceCaption = element('market-source-caption', HTMLTableCaptionElement)
 const marketSourceTestStatus = element('market-source-test-status', HTMLSpanElement)
-const marketSourceRows = element('market-source-rows', HTMLTableSectionElement)
 const recoveryList = element('recovery-list', HTMLDivElement)
 const recoveryGuidance = element('recovery-guidance', HTMLParagraphElement)
 const recheckRecovery = element('recheck-recovery', HTMLButtonElement)
@@ -156,13 +156,6 @@ function put(path: string, value: unknown, timeoutMilliseconds?: number, timeout
 	return requestWithTimeout(signal => api(path, { ...options, signal }), timeoutMilliseconds, timeoutMessage)
 }
 
-const MARKET_SOURCE_STATUS_PRESENTATION: Record<MarketSourceRow['status'], { badgeClass: string; defaultReason: string; label: string }> = {
-	admitted: { badgeClass: 'success', defaultReason: 'Meets the active admission policy', label: 'Admitted' },
-	excluded: { badgeClass: 'warning', defaultReason: 'Excluded by the active admission policy', label: 'Excluded' },
-	failed: { badgeClass: 'warning', defaultReason: 'Probe did not return usable evidence', label: 'Failed' },
-	observed: { badgeClass: '', defaultReason: 'Probe succeeded; admission still requires the persistence and consensus policy', label: 'Observed' },
-}
-
 const NETWORK_LABELS = new Map<string | undefined, string>([
 	['mainnet', 'Mainnet'],
 	['sepolia', 'Sepolia'],
@@ -198,36 +191,6 @@ function globalErrorPresentation(snapshot: Snapshot): { message: string | undefi
 	}
 	const message = snapshot.status === 'connectivity-degraded' ? 'RPC connectivity is degraded. Execution is blocked and the bot will retry automatically.' : `${scanFailureDetail(snapshot.error)} Automatic retry is active. Check the bot logs if the next cycle also fails.`
 	return { message, title: 'Scan failed', tone: 'error' }
-}
-
-function renderMarketSources(sources: MarketSourceRow[]) {
-	if (sources.length === 0) {
-		const row = document.createElement('tr')
-		const empty = cell('No market sources are configured.')
-		empty.colSpan = 6
-		empty.className = 'empty'
-		row.append(empty)
-		marketSourceRows.replaceChildren(row)
-		return
-	}
-	marketSourceRows.replaceChildren(
-		...sources.map(source => {
-			const row = document.createElement('tr')
-			const badge = document.createElement('span')
-			const presentation = MARKET_SOURCE_STATUS_PRESENTATION[source.status]
-			badge.className = `badge ${presentation.badgeClass}`
-			badge.textContent = presentation.label
-			const cells = [cell(source.kind.toUpperCase()), cell(source.id), cell(shorten(source.assetId)), cell(source.market), cell(badge), cell(source.reason ?? presentation.defaultReason)]
-			const labels = ['Venue', 'Source', 'REP asset', 'Market', 'Status', 'Reason']
-			const headings = ['source-kind-heading', 'source-id-heading', 'source-asset-heading', 'source-market-heading', 'source-status-heading', 'source-reason-heading']
-			for (const [index, value] of cells.entries()) {
-				value.dataset['label'] = labels[index]
-				value.headers = headings[index] ?? ''
-			}
-			row.append(...cells)
-			return row
-		}),
-	)
 }
 
 function renderRecovery(snapshot: Snapshot) {

@@ -1,4 +1,4 @@
-import { decodeSnapshot } from '../../src/dashboard/api-validation.ts'
+import { decodeSnapshot, type MarketSourceRow } from '../../src/dashboard/api-validation.ts'
 import { afterEach, describe, expect, spyOn, test } from 'bun:test'
 import { Browser } from 'happy-dom'
 import type { PoolCatalogPage } from '../../src/monitoring/pool-catalog.ts'
@@ -98,6 +98,7 @@ function state(
 		execute?: boolean
 		lastScannedBlock?: string
 		lastScannedTimestamp?: string
+		marketSources?: MarketSourceRow[]
 		network?: 'mainnet' | 'sepolia'
 		paused?: boolean
 		pendingStagedOperations?: { candidateBlock?: string; coordinator: string; historicalRecoveryComplete: boolean; latestRecoveryBlock?: string; nextHistoricalBlock?: string; operationId: string; queuedBlock: string; target: string }[]
@@ -155,7 +156,7 @@ function state(
 		],
 		scanning: false,
 		status: 'running',
-		marketSources: [],
+		marketSources: options.marketSources ?? [],
 		universes: options.universes ?? [universe('1')],
 		wallet: options.wallet,
 	}
@@ -1026,6 +1027,21 @@ describe('liquidator dashboard refresh behavior', () => {
 		expect(page.window.document.activeElement?.getAttribute('data-record-key')).toBe(recordKey)
 		const refreshedDetails = page.window.document.querySelector('details[data-pool-address]')
 		expect(refreshedDetails instanceof page.window.HTMLDetailsElement && refreshedDetails.open).toBe(true)
+	})
+
+	test('keeps unchanged market-source rows mounted across polls and updates changed evidence', async () => {
+		const source: MarketSourceRow = { assetId: '0x1111111111111111111111111111111111111111', id: 'kraken', kind: 'cex', market: 'REP/USDT', status: 'admitted' }
+		const page = await dashboard(mainnetConfiguration(), state(undefined, [], { marketSources: [source] }))
+		const rows = page.window.document.getElementById('market-source-rows')
+		const first = rows?.querySelector('tr')
+		if (rows === null || first === null || first === undefined) throw new Error('Expected market source row')
+		page.setSnapshot(state(undefined, [], { marketSources: [{ ...source }] }))
+		await page.refresh()
+		expect(rows.querySelector('tr') === first).toBe(true)
+		page.setSnapshot(state(undefined, [], { marketSources: [{ ...source, reason: 'Quorum failed', status: 'failed' }] }))
+		await page.refresh()
+		expect(rows.querySelector('tr') === first).toBe(true)
+		expect(rows.textContent).toContain('Quorum failed')
 	})
 
 	test('does not repeat unchanged alerts and sanitizes mutation failures', async () => {

@@ -856,6 +856,30 @@ test('focused risk, settlement, execution, and market forms load the saved confi
 	expect([marketInput('requestTimeoutMilliseconds').min, marketInput('requestTimeoutMilliseconds').max]).toEqual(['250', '60000'])
 	expect(window.document.querySelector('#settings-nav a[aria-current="true"]')?.getAttribute('data-settings-target')).toBe('settings-connect')
 	expect(marketInput('minimumBidDepthEth').value).toBe('2')
+	const minimumAskDepth = marketInput('minimumAskDepthEth')
+	minimumAskDepth.value = '0.0000000000000000001'
+	minimumAskDepth.dispatchEvent(new window.Event('input', { bubbles: true }))
+	element(window, 'market-form', window.HTMLFormElement).dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }))
+	await Bun.sleep(20)
+	expect(window.document.querySelector('.operator-confirm-dialog') === null).toBe(true)
+	expect(element(window, 'market-status', window.HTMLElement).textContent).toContain('centralizedMarkets.minimumAskDepthEth')
+	minimumAskDepth.value = '2'
+	minimumAskDepth.dispatchEvent(new window.Event('input', { bubbles: true }))
+	const venueEnabled = element(window, 'venue-consensus-enabled', window.HTMLInputElement)
+	const wasVenueEnabled = venueEnabled.checked
+	venueEnabled.checked = true
+	venueEnabled.dispatchEvent(new window.Event('change', { bubbles: true }))
+	const venueDepth = element(window, 'market-form', window.HTMLFormElement).querySelector('[name="venue-dexProbeDepthEth"]')
+	if (!(venueDepth instanceof window.HTMLInputElement)) throw new Error('Expected venue depth input')
+	const savedVenueDepth = venueDepth.value
+	venueDepth.value = '0.0000000000000000001'
+	element(window, 'market-form', window.HTMLFormElement).dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }))
+	await Bun.sleep(20)
+	expect(window.document.querySelector('.operator-confirm-dialog') === null).toBe(true)
+	expect(element(window, 'market-status', window.HTMLElement).textContent).toContain('centralizedMarkets.venueConsensus.dexProbeDepthEth')
+	venueDepth.value = savedVenueDepth
+	venueEnabled.checked = wasVenueEnabled
+	venueEnabled.dispatchEvent(new window.Event('change', { bubbles: true }))
 	expect(element(window, 'market-required', window.HTMLInputElement).checked).toBe(false)
 	expect(element(window, 'venue-consensus-enabled', window.HTMLInputElement).checked).toBe(settings.centralizedMarkets.venueConsensus !== undefined)
 	expect(window.document.querySelectorAll('#venue-dex-source-rows tr')).toHaveLength(settings.centralizedMarkets.venueConsensus?.dexSources.length ?? 0)

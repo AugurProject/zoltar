@@ -1,4 +1,4 @@
-import { isRecord } from '@zoltar/bot-shared/infrastructure/json-validation'
+import { isRecord, parseDecimalAmount } from '@zoltar/bot-shared/infrastructure/json-validation'
 import { element } from './dom.js'
 import { refreshFormButton } from '@zoltar/bot-shared/dashboard/form-state'
 
@@ -81,6 +81,11 @@ function readNumber(record: Record<string, unknown>, key: string) {
 	const value = record[key]
 	if (typeof value === 'number') return value.toString()
 	return typeof value === 'string' ? value : ''
+}
+
+function marketDepth(value: string, label: string) {
+	parseDecimalAmount(value, label)
+	return value
 }
 
 function readSources(value: unknown): MarketSourceRow[] {
@@ -183,7 +188,7 @@ export function marketSourcesDocument(): Record<string, unknown> {
 					return { sourceId: read('sourceId'), pair: read('pair'), feeBps: Number(read('feeBps')) }
 				}),
 				...Object.fromEntries(VENUE_NUMBER_FIELDS.map(name => [name, Number(venueInput(name).value)])),
-				...Object.fromEntries(VENUE_DECIMAL_FIELDS.map(name => [name, venueInput(name).value.trim()])),
+				...Object.fromEntries(VENUE_DECIMAL_FIELDS.map(name => [name, marketDepth(venueInput(name).value.trim(), `centralizedMarkets.venueConsensus.${name}`)])),
 			}
 		: undefined
 	const document_: Record<string, unknown> = {
@@ -192,7 +197,7 @@ export function marketSourcesDocument(): Record<string, unknown> {
 		sources,
 	}
 	for (const name of NUMBER_FIELDS) document_[name] = Number(thresholdInput(name).value)
-	for (const name of DECIMAL_FIELDS) document_[name] = thresholdInput(name).value.trim()
+	for (const name of DECIMAL_FIELDS) document_[name] = marketDepth(thresholdInput(name).value.trim(), `centralizedMarkets.${name}`)
 	if (venueConsensus !== undefined) document_['venueConsensus'] = venueConsensus
 	return document_
 }
