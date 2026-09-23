@@ -1,8 +1,8 @@
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as statoblastAppCopy from '../../../copy/app.js'
 import * as securityPoolCopy from '../../../copy/securityPool.js'
+import * as poolWorkspaceCopy from '../../../copy/poolWorkspace.js'
 import type { ComponentChildren } from 'preact'
-import { AddressValue } from '@zoltar/ui-core-shared/components/AddressValue.js'
 import { CurrencyValue } from '@zoltar/ui-core-shared/components/CurrencyValue.js'
 import { MetricGrid } from '@zoltar/ui-core-shared/components/MetricGrid.js'
 import { MetricField } from '@zoltar/ui-core-shared/components/MetricField.js'
@@ -24,8 +24,9 @@ type SecurityPoolSummaryMetricsProps = {
 	metricVariant?: MetricGridVariant
 	/** Skip the vault count, security multiplier, and open interest cells when a headline strip already shows them. */
 	omitHeadlineMetrics?: boolean
+	omitCapacity?: boolean
 	pool: ListedSecurityPool
-	showPoolAddress?: boolean
+	pendingReportReadyAtTimestamp?: bigint | undefined
 	showTotalBacking?: boolean
 	variant?: 'embedded' | 'hero'
 }
@@ -44,8 +45,9 @@ export function SecurityPoolSummaryMetrics({
 	currentTimestamp,
 	metricVariant = 'default',
 	omitHeadlineMetrics = false,
+	omitCapacity = false,
+	pendingReportReadyAtTimestamp,
 	pool,
-	showPoolAddress = false,
 	showTotalBacking = false,
 	variant = 'embedded',
 }: SecurityPoolSummaryMetricsProps) {
@@ -54,11 +56,6 @@ export function SecurityPoolSummaryMetrics({
 	if (variant === 'embedded')
 		return (
 			<MetricGrid className={className} variant={metricVariant}>
-				{showPoolAddress ? (
-					<MetricField label={securityPoolCopy.poolAddress}>
-						<AddressValue address={pool.securityPoolAddress} />
-					</MetricField>
-				) : undefined}
 				{omitHeadlineMetrics ? undefined : <MetricField label={securityPoolCopy.vaultCount}>{pool.vaultCount.toString()}</MetricField>}
 				{omitHeadlineMetrics ? undefined : <MetricField label={statoblastAppCopy.statoblastSecurityMultiplierBps}>{formatStatoblastSecurityMultiplier(pool.statoblastSecurityMultiplierBps)}x</MetricField>}
 				<MetricField label={commonCopy.initialReportPriorityFee}>{formatCurrencyBalanceWithUnit(pool.initialReportPriorityFeeAttoEthPerGas, commonCopy.eth, 18)}</MetricField>
@@ -71,9 +68,9 @@ export function SecurityPoolSummaryMetrics({
 					</MetricField>
 				) : undefined}
 				{resolvedPoolHeldRepPerCapacityBps === undefined ? undefined : <MetricField label={securityPoolCopy.poolHeldRepPerCapacity}>{formatRepPerCapacityBps(resolvedPoolHeldRepPerCapacityBps)}</MetricField>}
-				{omitHeadlineMetrics ? undefined : (
-					<MetricField label={securityPoolCopy.openInterestMintedMax}>
-						<CurrencyValue exactWhenRoundedToZero value={pool.settlementCollateralAttoEth} suffix={commonCopy.eth} /> / {mintingCapacityAttoEth === undefined ? commonCopy.unavailable : <CurrencyValue exactWhenRoundedToZero value={mintingCapacityAttoEth} suffix={commonCopy.eth} />}
+				{omitHeadlineMetrics || omitCapacity ? undefined : (
+					<MetricField label={poolWorkspaceCopy.capacityLabel} valueClassName='pool-capacity-values'>
+						<CurrencyValue exactWhenRoundedToZero value={pool.settlementCollateralAttoEth} suffix={commonCopy.eth} /> <span>/</span> {mintingCapacityAttoEth === undefined ? commonCopy.unavailable : <CurrencyValue exactWhenRoundedToZero value={mintingCapacityAttoEth} suffix={commonCopy.eth} />}
 					</MetricField>
 				)}
 				{children}
@@ -108,7 +105,7 @@ export function SecurityPoolSummaryMetrics({
 				<div className='security-pool-hero-oracle'>
 					<span className='security-pool-hero-oracle-label'>{securityPoolCopy.currentOraclePrice}</span>
 					<strong className='security-pool-hero-oracle-value'>
-						<OpenOraclePriceValue currentTimestamp={currentTimestamp} lastPrice={pool.lastOraclePrice} lastSettlementTimestamp={pool.lastOracleSettlementTimestamp} priceValidUntilTimestamp={undefined} />
+						<OpenOraclePriceValue currentTimestamp={currentTimestamp} lastPrice={pool.lastOraclePrice} lastSettlementTimestamp={pool.lastOracleSettlementTimestamp} pendingReportReadyAtTimestamp={pendingReportReadyAtTimestamp} priceValidUntilTimestamp={undefined} />
 					</strong>
 				</div>
 				<div className='security-pool-hero-progress'>
@@ -132,16 +129,7 @@ export function SecurityPoolSummaryMetrics({
 					/>
 				</div>
 			</div>
-			{showPoolAddress || children === undefined ? (
-				<div className='security-pool-secondary-facts'>
-					{showPoolAddress ? (
-						<MetricField label={securityPoolCopy.poolAddress}>
-							<AddressValue address={pool.securityPoolAddress} />
-						</MetricField>
-					) : null}
-					{children}
-				</div>
-			) : null}
+			{children === undefined ? null : <div className='security-pool-secondary-facts'>{children}</div>}
 		</div>
 	)
 }

@@ -16,11 +16,11 @@
 					<p class="lede">Escrows outcome REP, raises the running resolution cost, detects non-decision, and settles local or carried deposits. <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/EscalationGame.sol">EscalationGame source contract</a></p>
 				</header>
 				<h2 id="read-surface">Read surface</h2>
-				<p>Base getters are <code>securityPool</code>, <code>repToken</code>, <code>activationTime</code>, <code>nonDecisionThresholdAttoRep</code>, <code>startBondAttoRep</code>, <code>nonDecisionTimestamp</code>, <code>nonDecisionState</code>, <code>forkContinuation</code>, <code>forkElapsedAtStart</code>, <code>forkResumedAt</code>, <code>fixedQuestionOutcome</code>, <code>nodes</code>, <code>disputeStakedRepByVaultAttoRep</code>, <code>totalDisputeStakedAttoRep</code>, <code>truthAuctionRepBeforeAttoRep</code>, <code>truthAuctionRepRemainingAttoRep</code>, <code>cumulativeClaimRetention</code>, and <code>cumulativeClaimRetentionExponent</code>. The claim delegate fallback exposes <code>rootClaimSourceGame</code>, <code>applyInheritedClaimRetention</code>, and <code>applyInheritedSourceStorageBasis</code>. The source-storage-basis read allocates retained carry by cumulative-prefix differences so leaf allocations sum to the aggregate checkpoint. <code>disputeStakedRepByVaultAttoRep</code> is locally attributed current-game escrow used for health; inherited carry remains aggregate commitment state until proof settlement. Use <code>previewDepositOnOutcome</code>, <code>computeIterativeAttritionCostAttoRep</code>, <code>computeTimeSinceStartFromAttritionCostAttoRep</code>, <code>totalCostAttoRep</code>, <code>getEscalationGameEndDate</code>, <code>getQuestionResolution</code>, <code>getFinalQuestionResolution</code>, <code>hasReachedNonDecision</code>, <code>canTriggerOwnFork</code>, <code>getBindingCapitalAttoRep</code>, <code>getOutcomeBalancesAttoRep</code>, <code>getDepositsByOutcome</code>, <code>getDepositsByOutcomeLength</code>, <code>forkCarrySnapshotInitialized</code>, <code>getOutcomeState</code>, <code>getForkCarrySnapshot</code>, <code>getForkCarryRoots</code>, <code>isForkCarryFundingComplete</code>, <code>getCarryLeafPageByOutcome</code>, <code>getProofConsumedCarriedDepositIndexesByOutcome</code>, <code>getLocalUnresolvedPrincipalByVaultAndOutcome</code>, and <code>getForkedEscrowByVaultAndOutcome</code> for calculations, lifecycle authorization, pages, carry state, and escrow. Vault-funded deposits and all withdrawals route through <code>SecurityPool</code>; after an ordinary game starts, wallet-funded deposits use <code>depositRepOnOutcome</code> and mint no pool backing units.</p>
+				<p>Base getters are <code>securityPool</code>, <code>repToken</code>, <code>activationTime</code>, <code>nonDecisionThresholdAttoRep</code>, <code>startBondAttoRep</code>, <code>nonDecisionTimestamp</code>, <code>nonDecisionState</code>, <code>forkContinuation</code>, <code>forkElapsedAtStart</code>, <code>forkResumedAt</code>, <code>fixedQuestionOutcome</code>, <code>nodes</code>, <code>disputeStakedRepByVaultAttoRep</code>, <code>totalDisputeStakedAttoRep</code>, <code>truthAuctionRepBeforeAttoRep</code>, and <code>truthAuctionRepRemainingAttoRep</code>. The claim delegate fallback exposes <code>rootClaimSourceGame</code>, <code>getInheritedClaimAllocation</code>, and <code>getUnresolvedClaimInterval</code>. The allocation read returns source principal, retained principal, reward-interval length, and the cumulative reward endpoint after per-generation auction rounding. The reward interval is the deposit’s range within its outcome’s cumulative deposits: its start is the returned endpoint minus the returned length. It determines which portion enters the reward calculation; the length is not a payable reward. Exported principal intervals compact consumed prefixes, while reward positions remain unshifted by prior claims. Allocations within a game stay fixed in every claim order. <code>disputeStakedRepByVaultAttoRep</code> is locally attributed current-game escrow used for health; inherited carry remains aggregate commitment state until proof settlement. Use <code>previewDepositOnOutcome</code>, <code>computeIterativeAttritionCostAttoRep</code>, <code>computeTimeSinceStartFromAttritionCostAttoRep</code>, <code>totalCostAttoRep</code>, <code>getEscalationGameEndDate</code>, <code>getQuestionResolution</code>, <code>getFinalQuestionResolution</code>, <code>hasReachedNonDecision</code>, <code>canTriggerOwnFork</code>, <code>getBindingCapitalAttoRep</code>, <code>getOutcomeBalancesAttoRep</code>, <code>getDepositsByOutcome</code>, <code>getDepositsByOutcomeLength</code>, <code>forkCarrySnapshotInitialized</code>, <code>getOutcomeState</code>, <code>getForkCarrySnapshot</code>, <code>getForkCarryRoots</code>, <code>isForkCarryFundingComplete</code>, <code>getCarryLeafPageByOutcome</code>, <code>getProofConsumedCarriedDepositIndexesByOutcome</code>, <code>getLocalUnresolvedPrincipalByVaultAndOutcome</code>, and <code>getForkedEscrowByVaultAndOutcome</code> for calculations, lifecycle authorization, pages, carry state, and escrow. Vault-funded deposits and all withdrawals route through <code>SecurityPool</code>; after an ordinary game starts, wallet-funded deposits use <code>depositRepOnOutcome</code> and mint no pool backing units.</p>
 
 				<h2 id="interactions">State-changing interactions</h2>
-				<!-- Validated read ABI fingerprint: ed587e847ca84dfb0faa31896f294197b8e84a13c229b3bab68447f262dae58d -->
-				<!-- Validated complete compiled ABI fingerprint: b5a5cdf236031f69d66662704e6a9f748eee9faf6ef61c8678f5e60b027196ff -->
+				<!-- Validated read ABI fingerprint: 758abbd7c7c8651a4529ea9dd79049f8eb134075cde6fa80042ad2ec3151a30b -->
+				<!-- Validated complete compiled ABI fingerprint: 0cd67689ccaf5934b894e93259c66b744503d45986e0bca94f3ba978908a86c9 -->
 				<table>
 					<thead>
 						<tr>
@@ -54,11 +54,11 @@
 							<td><code>ForkContinuationResumed</code></td>
 						</tr>
 						<tr>
-							<td><code>applyTruthAuctionHaircut(repToRemove)</code></td>
+							<td><code>applyTruthAuctionHaircut(repToRemoveAttoRep)</code></td>
 							<td>The child pool's <code>SecurityPoolForker</code> only</td>
 							<td>Paused fork continuation; no prior auction haircut; the requested amount is below the game's live REP balance.</td>
-							<td>Transfers the sold child REP to the pool, applies one retention ratio to escrow and outcome balances, and rebases elapsed curve time. The fork remains final and the game remains paused until the pool resumes it.</td>
-							<td><code>TruthAuctionHaircutApplied</code> and REP <code>Transfer</code></td>
+							<td>Transfers sold REP to the pool, proportionally reduces escrow and outcome balances, and rebases curve time. If an unfixed continuation inherited two threshold-full outcome balances and the haircut leaves them below the current game threshold, ordinary pool-mediated deposit checks apply after the pool resumes the game. Fixed outcomes and local non-decisions retain their state. The game stays paused until the pool resumes it.</td>
+							<td><code>TruthAuctionHaircutApplied</code> and REP <code>Transfer</code>; <code>InheritedThresholdTieReopened</code> when an unfixed inherited tie reopens</td>
 						</tr>
 						<tr>
 							<td><code>depositRepOnOutcome(outcome, maximumDepositAttoRep)</code></td>
@@ -167,6 +167,51 @@
 						</tr>
 					</tbody>
 				</table>
+				<h2 id="accounting-examples">Accounting examples</h2>
+				<h3 id="required-support-threshold">Required support threshold</h3>
+				<p>The contract waits <code>activationDelay</code> (3 days) after <code>start()</code> before the escalation clock begins. From day 3 the cumulative binding-capital requirement rises from the configured start bond <code>S</code> to the non-decision threshold <code>T</code> over the 49-day <code>ESCALATION_TIME_LENGTH</code>, reaching <code>T</code> on day 52. The contract evaluates a fixed-point curve; this expression is its readable idealization.</p>
+				<div class="equation" id="eq-escalation-required-support">
+					<math display="block" aria-label="required support is zero before day 3, the start bond on day 3, an exponential interpolation from the start bond to the non-decision threshold between days 3 and 52, and the threshold from day 52 onward" data-source="A(d) = 0 for 0 ≤ d &lt; 3; S for d = 3; S × exp(ln(T / S) × (d − 3) / 49) for 3 &lt; d &lt; 52; T for d ≥ 52"
+						><mtable
+							><mtr
+								><mtd><mi>A</mi><mo>(</mo><mi>d</mi><mo>)</mo></mtd
+								><mtd><mo>=</mo></mtd
+								><mtd><mn>0</mn></mtd
+								><mtd><mtext>for</mtext><mspace width="0.3em"></mspace><mn>0</mn><mo>≤</mo><mi>d</mi><mo>&lt;</mo><mn>3</mn></mtd></mtr
+							><mtr
+								><mtd></mtd><mtd><mo>=</mo></mtd
+								><mtd><mi>S</mi></mtd
+								><mtd><mtext>for</mtext><mspace width="0.3em"></mspace><mi>d</mi><mo>=</mo><mn>3</mn></mtd></mtr
+							><mtr
+								><mtd></mtd><mtd><mo>=</mo></mtd
+								><mtd
+									><mstyle displaystyle="true"
+										><mi>S</mi><mo>×</mo><mi>exp</mi><mo>(</mo><mi>ln</mi><mo>(</mo><mfrac><mi>T</mi><mi>S</mi></mfrac
+										><mo>)</mo><mo>×</mo
+										><mfrac
+											><mrow><mi>d</mi><mo>−</mo><mn>3</mn></mrow
+											><mn>49</mn></mfrac
+										><mo>)</mo></mstyle
+									></mtd
+								><mtd><mtext>for</mtext><mspace width="0.3em"></mspace><mn>3</mn><mo>&lt;</mo><mi>d</mi><mo>&lt;</mo><mn>52</mn></mtd></mtr
+							><mtr
+								><mtd></mtd><mtd><mo>=</mo></mtd
+								><mtd><mi>T</mi></mtd
+								><mtd><mtext>for</mtext><mspace width="0.3em"></mspace><mi>d</mi><mo>≥</mo><mn>52</mn></mtd></mtr
+							></mtable
+						></math
+					>
+				</div>
+				<h3 id="winning-deposit-payout">Winning-deposit payout</h3>
+				<p>Binding capital is the median outcome balance at settlement; no outcome balance can exceed the non-decision threshold. The reward-eligible cap is binding capital plus binding capital divided by <code>EXCESS_REWARD_WINDOW_DIVISOR</code> (2), so only the portion of winning deposits up to 1.5 × binding capital participates in the bonus. Of the binding capital, <code>3 / 5</code> funds the reward pool and <code>2 / 5</code> funds the haircut pool; both are shared pro rata across the reward-eligible principal, which is the smaller of the winning outcome balance and that cap.</p>
+				<p>Let binding capital be <code>10 REP</code>, so the reward-eligible cap is <code>15 REP</code>, the reward pool is <code>6 REP</code>, and the haircut pool is <code>4 REP</code>. If the winning outcome holds <code>15 REP</code> and one deposit contributed <code>5 REP</code> inside the eligible range:</p>
+				<ul>
+					<li>Principal returned: <code>5 REP</code>.</li>
+					<li>Bonus: <code>5 × 6 / 15 = 2 REP</code>.</li>
+					<li>Winning payout: <code>5 + 2 = 7 REP</code>.</li>
+					<li>Haircut burned: <code>5 × 4 / 15 = 1.333333333333333333 REP</code> at attoREP precision.</li>
+				</ul>
+				<p>A winning deposit position above <code>15 REP</code> returns its principal without a bonus. When Zoltar's fork threshold at settlement is below the game's non-decision threshold, the whole withdrawal is scaled by their ratio. If this game's non-decision threshold were <code>20 REP</code> and the fork threshold <code>16 REP</code>, the <code>7 REP</code> payout becomes <code>7 × 16 / 20 = 5.6 REP</code>, rounded down to attoREP. Fork scaling can therefore reduce the final transfer below principal.</p>
 			</article>
 		</main>
 		<script src="../../assets/js/responsiveDocs.js"></script>

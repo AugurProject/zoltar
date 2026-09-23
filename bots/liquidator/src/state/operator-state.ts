@@ -1,9 +1,10 @@
+import { parsePendingTransactionIntent } from './pending-transaction-intent.ts'
 import type { RuntimeState } from './runtime-state.ts'
 export type { RuntimeState } from './runtime-state.ts'
 import { randomBytes } from 'node:crypto'
 import { dirname } from 'node:path'
 import { mkdir, open, readFile, rename, rm } from 'node:fs/promises'
-import { getAddress, isHex, keccak256, parseTransaction, recoverTransactionAddress, type Address, type Hex } from '@zoltar/bot-shared/ethereum'
+import { getAddress, isHex, type Address, type Hex } from '@zoltar/bot-shared/ethereum'
 import { compareBigint } from '@zoltar/bot-shared/infrastructure/compare'
 import { formatDecimalAmount } from '@zoltar/bot-shared/infrastructure/json-validation'
 import { isVaultMigrationSourceEligible } from '#core/fork-migration'
@@ -121,7 +122,11 @@ export type PendingTransactionIntent = {
 	hash: Hex
 	kind: 'deployment' | 'deposit' | 'fees' | 'liquidation' | 'migration' | 'withdrawal'
 	label: string
+	/** Renewable relay envelope deadline; not calldata validity. */
 	maxBlockNumber: bigint
+	/** Calldata-enforced block deadline, when present; never renewed. */
+	lastValidBlockNumber?: bigint | undefined
+	reconciliationReason?: string | undefined
 	mode: 'private' | 'public'
 	nonce: bigint
 	receiptExpectation: { type: 'transaction' } | { coordinator: Address; operation: 0 | 1; type: 'staged-success' } | { amount: bigint; coordinator: Address; operator: Address; receiver: Address; target: Address; type: 'pending-liquidation' }
@@ -130,8 +135,6 @@ export type PendingTransactionIntent = {
 	serializedTransaction: Hex
 	submissionBlock: bigint
 }
-
-type ReceiptExpectation = PendingTransactionIntent['receiptExpectation']
 
 function marketConfigurationList(marketConfigurations: CentralizedMarketSettings | readonly CentralizedMarketSettings[] | undefined): readonly CentralizedMarketSettings[] {
 	if (marketConfigurations === undefined) return []
@@ -159,30 +162,6 @@ function poolCentralizedPriceDeviationBps(pool: { lastPrice: bigint; repToken: A
 	if (settings?.venueConsensus !== undefined) return marketConsensusDeviationBps(pool.lastPrice, marketConsensus, pool.repToken)
 	if (centralizedMarket === undefined || settings === undefined) return undefined
 	return centralizedPriceDeviationBps(pool.lastPrice, centralizedMarket, pool.repToken)
-}
-
-function parseStagedOperation(value: unknown): 0 | 1 {
-	if (value === 0 || value === 1) return value
-	throw new Error('Pending transaction intent has invalid staged operation')
-}
-
-function parseReceiptExpectation(rawExpectation: object): ReceiptExpectation {
-	const expectationType = Reflect.get(rawExpectation, 'type')
-	if (expectationType === 'transaction') return { type: 'transaction' }
-	if (expectationType === 'staged-success') {
-		return { coordinator: getAddress(String(Reflect.get(rawExpectation, 'coordinator'))), operation: parseStagedOperation(Reflect.get(rawExpectation, 'operation')), type: 'staged-success' }
-	}
-	if (expectationType === 'pending-liquidation') {
-		return {
-			amount: BigInt(String(Reflect.get(rawExpectation, 'amount'))),
-			coordinator: getAddress(String(Reflect.get(rawExpectation, 'coordinator'))),
-			operator: getAddress(String(Reflect.get(rawExpectation, 'operator'))),
-			receiver: getAddress(String(Reflect.get(rawExpectation, 'receiver'))),
-			target: getAddress(String(Reflect.get(rawExpectation, 'target'))),
-			type: 'pending-liquidation',
-		}
-	}
-	throw new Error('Pending transaction intent has invalid receipt expectation')
 }
 
 function isHash(value: unknown): value is Hex {
@@ -621,39 +600,7 @@ export async function loadDurableState(path: string, expectedChainId: number): P
 				target: getAddress(String(Reflect.get(operation, 'target'))),
 			}
 		}),
-		pendingTransactions: (await Promise.all(
-			pendingTransactions.map(async (intent: unknown) => {
-				if (typeof intent !== 'object' || intent === null || Array.isArray(intent)) throw new Error('Pending transaction intent must be an object')
-				const hash = Reflect.get(intent, 'hash')
-				const kind = Reflect.get(intent, 'kind')
-				const label = Reflect.get(intent, 'label')
-				const maxBlockNumber = Reflect.get(intent, 'maxBlockNumber')
-				const mode = Reflect.get(intent, 'mode')
-				const nonce = Reflect.get(intent, 'nonce')
-				const rawExpectation = Reflect.get(intent, 'receiptExpectation')
-				const rawRequiresMarketEvidence = Reflect.get(intent, 'requiresMarketEvidence')
-				const sender = Reflect.get(intent, 'sender')
-				const serializedTransaction = Reflect.get(intent, 'serializedTransaction')
-				const submissionBlock = Reflect.get(intent, 'submissionBlock')
-				if (typeof hash !== 'string' || !/^0x[0-9a-fA-F]{64}$/.test(hash) || typeof serializedTransaction !== 'string' || !/^0x(?:[0-9a-fA-F]{2})+$/.test(serializedTransaction)) throw new Error('Pending transaction intent has invalid transaction hex')
-				if (keccak256(serializedTransaction as Hex).toLowerCase() !== hash.toLowerCase()) throw new Error('Pending transaction intent hash does not match its serialized transaction')
-				if (typeof label !== 'string' || (kind !== 'deployment' && kind !== 'deposit' && kind !== 'fees' && kind !== 'liquidation' && kind !== 'migration' && kind !== 'withdrawal')) throw new Error('Pending transaction intent has invalid metadata')
-				if (mode !== 'private' && mode !== 'public') throw new Error('Pending transaction intent has invalid mode')
-				if (typeof nonce !== 'string' || typeof maxBlockNumber !== 'string' || typeof submissionBlock !== 'string') throw new Error('Pending transaction intent has invalid numeric metadata')
-				if (typeof sender !== 'string') throw new Error('Pending transaction intent is missing sender')
-				const parsedNonce = BigInt(nonce)
-				const parsedTransaction = parseTransaction(serializedTransaction as Hex)
-				if (parsedTransaction.chainId !== BigInt(expectedChainId)) throw new Error(`Pending transaction intent belongs to chain ${parsedTransaction.chainId?.toString() ?? 'unknown'}, expected chain ${expectedChainId.toString()}`)
-				if (parsedTransaction.nonce !== parsedNonce) throw new Error('Pending transaction intent nonce does not match its serialized transaction')
-				const normalizedSender = getAddress(sender)
-				const recoveredSender = await recoverTransactionAddress({ serializedTransaction: serializedTransaction as Hex })
-				if (recoveredSender.toLowerCase() !== normalizedSender.toLowerCase()) throw new Error('Pending transaction intent sender does not match its serialized transaction')
-				if (typeof rawExpectation !== 'object' || rawExpectation === null || Array.isArray(rawExpectation)) throw new Error('Pending transaction intent is missing receipt expectation')
-				const receiptExpectation = parseReceiptExpectation(rawExpectation)
-				const requiresMarketEvidence = typeof rawRequiresMarketEvidence === 'boolean' ? rawRequiresMarketEvidence : kind === 'deposit' || kind === 'liquidation' || kind === 'withdrawal'
-				return { hash: hash as Hex, kind, label, maxBlockNumber: BigInt(maxBlockNumber), mode, nonce: parsedNonce, receiptExpectation, requiresMarketEvidence, sender: normalizedSender, serializedTransaction: serializedTransaction as Hex, submissionBlock: BigInt(submissionBlock) }
-			}),
-		)) as PendingTransactionIntent[],
+		pendingTransactions: await Promise.all(pendingTransactions.map((intent: unknown) => parsePendingTransactionIntent(intent, expectedChainId))),
 		version: 2,
 	}
 }
@@ -688,6 +635,7 @@ export async function saveDurableState(path: string, state: RuntimeState) {
 				pendingTransactions: state.pendingTransactions.map(intent => ({
 					...intent,
 					maxBlockNumber: intent.maxBlockNumber.toString(),
+					lastValidBlockNumber: intent.lastValidBlockNumber?.toString(),
 					nonce: intent.nonce.toString(),
 					receiptExpectation: intent.receiptExpectation.type === 'pending-liquidation' ? { ...intent.receiptExpectation, amount: intent.receiptExpectation.amount.toString() } : intent.receiptExpectation,
 					submissionBlock: intent.submissionBlock.toString(),

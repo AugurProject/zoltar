@@ -92,6 +92,9 @@
     left.append(element('p', 'docs-navigation-title', 'Documentation'));
     const navigation = element('nav', 'docs-navigation');
     for (const section of data.sections) {
+        // A reading-path section without pages yet has nothing to navigate to.
+        if (sectionPages(section.id).length === 0)
+            continue;
         const sectionDetails = element('details', 'docs-navigation-section');
         sectionDetails.open = currentPage?.section === section.id;
         sectionDetails.append(element('summary', '', section.title));

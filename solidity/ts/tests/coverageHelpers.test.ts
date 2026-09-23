@@ -219,8 +219,6 @@ test('coverage classifier keeps known untraceable source-map lines from manifest
 				"        require(proofSiblings.length == NULLIFIER_DEPTH, 'Bad nullifier length');",
 				'        bytes32 observedRoot = _getCurrentNullifierRoot(selectedOutcome);',
 				"        require(emptyRoot == observedRoot, 'Bad nullifier proof');",
-				'        if (amount > inheritedAmountToConsume) {',
-				'        }',
 				'    }',
 				'}',
 			],

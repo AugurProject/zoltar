@@ -94,9 +94,8 @@ export function VaultBackingFactorForm({
 	)
 }
 
-export function DepositBackingFactorField({ value, error, disabled, minimumBps, saved = false, onChange }: { value: string; minimumBps?: bigint | undefined; saved?: boolean; error: string | undefined; disabled: boolean; onChange: (value: string) => void }) {
+export function DepositBackingFactorField({ value, error, disabled, minimumBps, onChange }: { value: string; minimumBps?: bigint | undefined; error: string | undefined; disabled: boolean; onChange: (value: string) => void }) {
 	const descriptionId = useId()
-	if (saved) return <MetricField label={securityPoolCopy.vaultBackingFactor}>{value}×</MetricField>
 	return (
 		<label className='field'>
 			<span>{securityPoolCopy.targetHealthFactor}</span>

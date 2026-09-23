@@ -5,6 +5,8 @@ import { createMarketParameters, createSecurityPoolParameters } from '@zoltar/ui
 import { validateMarketForm } from '@zoltar/ui-zoltar-shared/features/questions/lib/questionCreation.js'
 import { hasDeployedStep } from '@zoltar/ui-core-shared/lib/deploymentStatus.js'
 import { sortStringArrayByKeccak } from '@zoltar/core-shared/serialization/sortStringArrayByKeccak'
+import { formatUnits } from '@zoltar/core-shared/evm/ethereum'
+import { MAX_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS } from '@zoltar/statoblast-shared/initialReport/oracleInitialReport'
 import type { MarketFormState, SecurityPoolFormState } from '@zoltar/ui-zoltar-shared/types/app.js'
 
 void describe('market creation helpers', () => {
@@ -469,6 +471,10 @@ void describe('market creation helpers', () => {
 				} as SecurityPoolFormState),
 			).toThrow('Statoblast security multiplier must be at least 1.0002')
 		}
+	})
+
+	test('security pool creation revalidates the maximum priority fee before submission', () => {
+		expect(() => createSecurityPoolParameters({ marketId: '42', statoblastSecurityMultiplierBps: '2', initialReportPriorityFeeEth: formatUnits(MAX_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS + 1n, 18) })).toThrow('Initial-report priority fee is too large for Open Oracle report limits.')
 	})
 })
 

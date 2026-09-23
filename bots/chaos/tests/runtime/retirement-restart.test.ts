@@ -6,10 +6,12 @@ import { join } from 'node:path'
 import example from '../../config/operator.example.json'
 import { parseSettings } from '../../src/config/settings.ts'
 import type { EcosystemSnapshot, OperationPlan } from '../../src/operations/types.ts'
-import { processRetirementCycle } from '../../src/runtime/retirement-runner.ts'
+import { processRetirementCycle, updateRetirementAssessment } from '../../src/runtime/retirement-runner.ts'
 import { loadDurableState, saveDurableState, type RuntimeState } from '../../src/state/operator-state.ts'
 import { initialDurableState, initialRuntimeState } from '../../src/state/initial-state.ts'
-import { DEFAULT_RETIREMENT_POLICIES, requestRetirement, uniswapV3PositionKey } from '../../src/state/retirement.ts'
+import { cancelRetirement, DEFAULT_RETIREMENT_POLICIES, requestRetirement, uniswapV3PositionKey } from '../../src/state/retirement.ts'
+import { createDurableWorkflow } from '../../src/runtime/workflows.ts'
+import { readV3PositionsWithQuorum, reconcileV3PositionJournal, recordV3ScanSuccess } from '../../src/runtime/retirement-v3-positions.ts'
 import { address, hash, snapshotFixture } from '../operations/fixture.ts'
 
 const directories: string[] = []
@@ -73,6 +75,68 @@ async function cycle(path: string, state: RuntimeState, snapshot: EcosystemSnaps
 }
 
 describe('Drain & Retire persisted restart behavior', () => {
+	test.each(['trading.genesis-uniswap.seed-pool', 'trading.universe-uniswap.seed-pool'])('cancel, reseed, restart, and retire again uses fresh V3 balances: %s', async operationId => {
+		const path = await statePath()
+		const snapshot = emptySnapshot()
+		let state = requestedState(snapshot)
+		const seed = (id: string, transactionHash: ReturnType<typeof hash>) => {
+			const workflow = createDurableWorkflow({
+				classification: 'selectable',
+				createdAtBlock: '1',
+				definitionId: operationId,
+				ecosystem: 'trading',
+				id,
+				label: 'Seed',
+				metadata: { pool: address(70), token0: address(71), token1: address(72) },
+				obligation: false,
+				planningSeed: 1,
+				postconditions: ['seeded'],
+				priority: 'random',
+				risk: 'medium',
+				steps: [{ data: '0x', evidence: [{ kind: 'receipt-success' }], gasLimit: '1', id: 'seed-genesis-uniswap-pool', label: 'Seed', preflightCalls: [], to: address(73), value: '0', walletAssetDebits: [] }],
+			})
+			workflow.status = 'completed'
+			for (const step of workflow.steps) {
+				step.status = 'confirmed'
+				step.transactionHash = transactionHash
+			}
+			return workflow
+		}
+		state.workflows = [seed('first', hash(11))]
+		reconcileV3PositionJournal(state.retirement, state.workflows, state.profileId, snapshot.wallet.address)
+		const original = state.retirement.positions[0]
+		if (original === undefined) throw new Error('Seed position missing')
+		recordV3ScanSuccess(state, { liquidity: 0n, position: original, tokensOwed0: 0n, tokensOwed1: 0n }, 2n)
+		// An unresolved claim keeps the first retirement cancellable after the V3 drain.
+		snapshot.wallet.openOracleEthCredit = '9'
+		const scan = { anchor: { baseFeePerGas: 1n, blockHash: hash(2), blockNumber: 2n, timestamp: 2n }, executionReady: true, canonicalLifecyclePresenceComplete: true, carryProofsComplete: true, indexComplete: true, snapshot }
+		updateRetirementAssessment(scan, liveSettings(), state, [{ liquidity: 0n, position: original, tokensOwed0: 0n, tokensOwed1: 0n }])
+		expect(state.retirement.status).toBe('draining')
+		cancelRetirement(state.retirement, 'CANCEL DRAIN')
+		state = await reload(path, state)
+		state.workflows.push(seed('reseed', hash(12)))
+		reconcileV3PositionJournal(state.retirement, state.workflows, state.profileId, snapshot.wallet.address)
+		expect(state.retirement.positions).toHaveLength(1)
+		expect(state.retirement.positions[0]).toMatchObject({ id: original.id, creationWorkflowId: original.creationWorkflowId, creationTransactionHash: hash(12), status: 'closed' })
+		const recipient = address(99)
+		requestRetirement(state.retirement, state.profileId, recipient, DEFAULT_RETIREMENT_POLICIES, `DRAIN ${state.profileId} TO ${recipient}`, state.signerAddress)
+		state = await reload(path, state)
+		snapshot.wallet.openOracleEthCredit = '0'
+		scan.anchor = { ...scan.anchor, blockHash: hash(3), blockNumber: 3n }
+		const observations = await readV3PositionsWithQuorum([async position => ({ liquidity: 9n, position, tokensOwed0: 0n, tokensOwed1: 0n })], 1, state.retirement.positions, scan.anchor)
+		for (const observation of observations) recordV3ScanSuccess(state, observation, 3n)
+		expect(updateRetirementAssessment(scan, liveSettings(), state, observations)?.action?.kind).toBe('v3-position')
+		state = await reload(path, state)
+		expect(state.retirement.positions[0]?.status).toBe('active')
+		expect(state.retirement.completionEvidence).toBeUndefined()
+		await expect(resetPristineStateForDeploymentProfile(state, 'profile:replacement', false, state.wallet, path, async () => {})).rejects.toThrow('drain it first')
+		const current = state.retirement.positions[0]
+		if (current === undefined) throw new Error('Restored position missing')
+		recordV3ScanSuccess(state, { liquidity: 0n, position: current, tokensOwed0: 0n, tokensOwed1: 0n }, 4n)
+		reconcileV3PositionJournal(state.retirement, state.workflows, state.profileId, snapshot.wallet.address)
+		expect(current.status).toBe('closed')
+	})
+
 	test('persists known-only recovery without permitting full-retirement exit or profile replacement', async () => {
 		const path = await statePath()
 		const snapshot = emptySnapshot()

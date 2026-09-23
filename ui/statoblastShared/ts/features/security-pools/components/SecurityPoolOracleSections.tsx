@@ -248,7 +248,7 @@ export function SecurityPoolPriceOracleSection({
 		<SectionBlock density='compact' title={securityPoolCopy.poolPriceOracle} variant='plain'>
 			<MetricGrid>
 				<MetricField label={statoblastAppCopy.openOraclePrice} valueTagName='span'>
-					<OpenOraclePriceValue currentTimestamp={currentTimestamp} lastPrice={priceValues?.lastPrice} lastSettlementTimestamp={priceValues?.lastSettlementTimestamp ?? 0n} priceValidUntilTimestamp={managerDetails?.priceValidUntilTimestamp} />
+					<OpenOraclePriceValue currentTimestamp={currentTimestamp} lastPrice={priceValues?.lastPrice} lastSettlementTimestamp={priceValues?.lastSettlementTimestamp ?? 0n} pendingReportReadyAtTimestamp={managerDetails?.pendingReportReadyAtTimestamp} priceValidUntilTimestamp={managerDetails?.priceValidUntilTimestamp} />
 					<button className='quiet metric-label-refresh' type='button' onClick={() => onLoadManager(managerAddress)} disabled={loadingManager} aria-label={securityPoolCopy.refreshOracle} aria-busy={loadingManager} title={securityPoolCopy.refreshOracle}>
 						{loadingManager ? <span className='spinner' aria-hidden='true' /> : <span aria-hidden='true'>↻</span>}
 					</button>

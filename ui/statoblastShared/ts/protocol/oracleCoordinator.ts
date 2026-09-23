@@ -16,6 +16,7 @@ import { requireStagedOperationTupleArray } from '@zoltar/ui-zoltar-shared/proto
 import { type WriteContractClient, readRequiredMulticall, writeContractAndWait, writeContractAndWaitForReceipt } from '@zoltar/ui-zoltar-shared/protocol/core.js'
 import { getInfraContractAddresses } from './deploymentHelpers.js'
 import { loadOpenOracleStoredState } from './openOracleState.js'
+import { hasOpenOracleFlag, OPEN_ORACLE_FLAG_TIME_TYPE } from '@zoltar/open-oracle-shared/openOracle/openOracle'
 import { requireBigintArray, requireBigintValue } from './decoders.js'
 import { wrapWeth } from './openOracle.js'
 
@@ -161,6 +162,7 @@ export async function loadOracleManagerDetails(client: ReadClient, managerAddres
 	let stagedOperations: import('@zoltar/ui-core-shared/types/contracts.js').StagedOracleOperation[] = []
 	let token1: Address | undefined
 	let token2: Address | undefined
+	let pendingReportReadyAtTimestamp: bigint | undefined
 	if (activeStagedOperationCount > 0n) {
 		const previewCount = activeStagedOperationCount < ACTIVE_STAGED_OPERATION_PREVIEW_LIMIT ? activeStagedOperationCount : ACTIVE_STAGED_OPERATION_PREVIEW_LIMIT
 		const activeStagedOperationsResponse = await client.readContract({
@@ -219,6 +221,10 @@ export async function loadOracleManagerDetails(client: ReadClient, managerAddres
 		exactToken1Report = storedState.initialAmount1
 		token1 = storedState.latest.game.token1
 		token2 = storedState.latest.game.token2
+		const pendingGame = storedState.latest.game
+		if (hasOpenOracleFlag(pendingGame, OPEN_ORACLE_FLAG_TIME_TYPE) && pendingGame.reportTimestamp > 0n) {
+			pendingReportReadyAtTimestamp = pendingGame.reportTimestamp + pendingGame.settlementTime
+		}
 	}
 	return {
 		activeStagedOperationCount,
@@ -234,6 +240,7 @@ export async function loadOracleManagerDetails(client: ReadClient, managerAddres
 		pendingSettlementOperationIds: normalizedPendingSettlementOperationIds,
 		pendingSettlementQueueCapacity: normalizedPendingSettlementQueueCapacity,
 		pendingReportId,
+		pendingReportReadyAtTimestamp,
 		priceValidUntilTimestamp: getOracleManagerPriceValidUntilTimestamp(lastSettlementTimestamp),
 		queuedOperationCostAttoEth: normalizedQueuedOperationEthCost,
 		requestPriceCostAttoEth: normalizedRequestPriceEthCost,

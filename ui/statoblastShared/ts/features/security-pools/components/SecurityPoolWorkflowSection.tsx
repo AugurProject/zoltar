@@ -348,6 +348,7 @@ export function SecurityPoolWorkflowSection(props: SecurityPoolWorkflowSectionPr
 		return undefined
 	})()
 	useSelectedPoolRefreshEffects({
+		currentTimestamp,
 		currentForkAuctionDetails,
 		currentPoolOracleManagerDetails,
 		currentPoolOracleManagerError,
@@ -408,11 +409,12 @@ export function SecurityPoolWorkflowSection(props: SecurityPoolWorkflowSectionPr
 					selectedPoolSummaryPool,
 					selectedPoolView,
 				}
-	const poolControls = <PoolSelectionControl address={securityPoolAddress} hasPool={selectedPool !== undefined} loading={loadingSecurityPools} onAddressChange={onSecurityPoolAddressChange} onLoad={onRefreshSelectedPoolData} />
+	const poolControls = <PoolSelectionControl address={securityPoolAddress} loading={loadingSecurityPools} onAddressChange={onSecurityPoolAddressChange} onLoad={onRefreshSelectedPoolData} poolLoaded={selectedPool !== undefined} />
 	return (
 		<RouteWorkflowPanel showHeader={showHeader && objectHeaderProps === undefined} title={securityPoolCopy.selectedPool}>
 			<div className='pool-context'>
-				{objectHeaderProps === undefined ? poolControls : <SecurityPoolObjectHeader {...objectHeaderProps} actions={poolControls} />}
+				{poolControls}
+				{objectHeaderProps === undefined ? undefined : <SecurityPoolObjectHeader {...objectHeaderProps} />}
 				<ErrorNotice message={securityPoolOverviewError} />
 				{selectedPool !== undefined ? (
 					<PoolAttention

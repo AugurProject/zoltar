@@ -88,6 +88,7 @@ function UrlStateHarness() {
 			<button type='button' onClick={() => setSecurityPoolAddress('0x84834d4Dccea071b363e53952BD300F7bf56a009')}>
 				Set Pool
 			</button>
+			<input aria-label='Security Pool Address' value={securityPoolAddress} onInput={event => setSecurityPoolAddress(event.currentTarget.value)} />
 		</div>
 	)
 }
@@ -289,6 +290,33 @@ describe('app route effects integration', () => {
 		}
 	})
 
+	test('loads a route security pool only once its address is complete', async () => {
+		const dom = installDomEnvironment('http://localhost/#/security-pools')
+		const calls: string[] = []
+		const initialProps = createDefaultProps({
+			loadSecurityPools: async securityPoolAddress => {
+				calls.push(securityPoolAddress ?? '')
+			},
+			route: 'security-pools',
+			securityPoolAddress: '0x84834d4D',
+		})
+
+		const { cleanup, container } = await renderIntoDocument(<RouteEffectsHarness {...initialProps} />)
+		expect(calls).toEqual([])
+
+		await act(() => {
+			render(<RouteEffectsHarness {...initialProps} securityPoolAddress='0x84834d4Dccea071b363e53952BD300F7bf56a0' />, container)
+		})
+		expect(calls).toEqual([])
+
+		await act(() => {
+			render(<RouteEffectsHarness {...initialProps} securityPoolAddress='0x84834d4Dccea071b363e53952BD300F7bf56a009' />, container)
+		})
+		expect(calls).toEqual(['0x84834d4Dccea071b363e53952BD300F7bf56a009'])
+		await cleanup()
+		dom.cleanup()
+	})
+
 	test('does not repeatedly reload the same unresolved security pool across rerenders', async () => {
 		const dom = installDomEnvironment('http://localhost/#/security-pools')
 		const calls: string[] = []
@@ -347,6 +375,58 @@ describe('app route effects integration', () => {
 
 		await cleanup()
 		dom.cleanup()
+	})
+
+	test('replaces history while an address is typed and pushes once it is complete', async () => {
+		const dom = installDomEnvironment('http://localhost/#/security-pools?securityPoolsView=operate')
+		const originalPushState = window.history.pushState.bind(window.history)
+		const originalReplaceState = window.history.replaceState.bind(window.history)
+		let pushes = 0
+		let replaces = 0
+		window.history.pushState = (...parameters: Parameters<History['pushState']>) => {
+			pushes += 1
+			return originalPushState(...parameters)
+		}
+		window.history.replaceState = (...parameters: Parameters<History['replaceState']>) => {
+			replaces += 1
+			return originalReplaceState(...parameters)
+		}
+		const { cleanup } = await renderIntoDocument(<UrlStateHarness />)
+		try {
+			pushes = 0
+			replaces = 0
+			const input = within(document.body).getByRole('textbox', { name: 'Security Pool Address' })
+			for (const value of ['0x8', '0x84834d4D', '0x84834d4Dccea071b363e53952BD300F7bf56a00']) {
+				await act(() => fireEvent.input(input, { target: { value } }))
+			}
+			expect(pushes).toBe(1)
+			expect(replaces).toBe(2)
+			expect(window.location.hash).toContain('securityPool=0x84834d4Dccea071b363e53952BD300F7bf56a00')
+
+			await act(() => fireEvent.input(input, { target: { value: '0x84834d4Dccea071b363e53952BD300F7bf56a009' } }))
+			expect(pushes).toBe(1)
+			expect(replaces).toBe(3)
+			expect(document.getElementById('security-pool')?.textContent).toBe('0x84834d4Dccea071b363e53952BD300F7bf56a009')
+
+			// Editing a loaded pool's address keeps its entry so Back returns to it after the next pool loads.
+			for (const value of ['0x84834d4Dccea071b363e53952BD300F7bf56a00', '0x84834d4Dccea071b363e53952BD300F7bf56a0', '0x00000000000000000000000000000000000000ab']) {
+				await act(() => fireEvent.input(input, { target: { value } }))
+			}
+			expect(pushes).toBe(2)
+			expect(replaces).toBe(5)
+			expect(document.getElementById('security-pool')?.textContent).toBe('0x00000000000000000000000000000000000000ab')
+
+			await act(() => {
+				window.history.back()
+				window.dispatchEvent(new Event('popstate'))
+			})
+			expect(document.getElementById('security-pool')?.textContent).toBe('0x84834d4Dccea071b363e53952BD300F7bf56a009')
+		} finally {
+			window.history.pushState = originalPushState
+			window.history.replaceState = originalReplaceState
+			await cleanup()
+			dom.cleanup()
+		}
 	})
 
 	test('refreshes the selected pool with its route address after pool creation succeeds', async () => {

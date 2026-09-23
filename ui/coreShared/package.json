@@ -195,6 +195,10 @@
 			"bun": "./ts/tests/noticeStack.test.tsx",
 			"default": "./js/tests/noticeStack.test.js"
 		},
+		"./tests/operationModalTransactionSteps.test.js": {
+			"bun": "./ts/tests/operationModalTransactionSteps.test.tsx",
+			"default": "./js/tests/operationModalTransactionSteps.test.js"
+		},
 		"./tests/operationModal.test.js": {
 			"bun": "./ts/tests/operationModal.test.tsx",
 			"default": "./js/tests/operationModal.test.js"
@@ -914,6 +918,10 @@
 		"./components/SecurityPoolLink.js": {
 			"bun": "./ts/components/SecurityPoolLink.tsx",
 			"default": "./js/components/SecurityPoolLink.js"
+		},
+		"./components/TransactionStepsContent.js": {
+			"bun": "./ts/components/TransactionStepsContent.tsx",
+			"default": "./js/components/TransactionStepsContent.js"
 		},
 		"./components/TransactionStepsModal.js": {
 			"bun": "./ts/components/TransactionStepsModal.tsx",
