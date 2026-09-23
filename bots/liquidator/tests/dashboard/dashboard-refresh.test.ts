@@ -1220,7 +1220,7 @@ describe('liquidator go-live settings', () => {
 		expect(page.window.document.getElementById('strategy-status')?.textContent).toContain('Minimum liquidation debt cannot exceed the maximum')
 	})
 
-	test('strategy review includes units and allowed ranges for ETH, REP, and bps changes', async () => {
+	test('strategy review includes units for ETH, REP, and bps changes', async () => {
 		const saved = mainnetConfiguration()
 		saved.strategy = { ...example.strategy }
 		const page = await dashboard(saved, state())
@@ -1244,7 +1244,21 @@ describe('liquidator go-live settings', () => {
 		expect(review?.textContent).toContain('0.02 ETH→0.03 ETH')
 		expect(review?.textContent).toContain('100 REP→120 REP')
 		expect(review?.textContent).toContain('12500 bps→13000 bps')
-		expect(review?.textContent).toContain('10,001–1,000,000 bps')
+		expect(review?.textContent).not.toContain('decimal places')
+	})
+
+	test('rejects an amount with more than 18 decimal places before opening strategy review', async () => {
+		const saved = mainnetConfiguration()
+		saved.strategy = { ...example.strategy }
+		const page = await dashboard(saved, state())
+		const form = page.window.document.getElementById('strategy-form')
+		const input = form?.querySelector('[name="maximumGasCostEth"]')
+		if (!(form instanceof page.window.HTMLFormElement) || !(input instanceof page.window.HTMLInputElement)) throw new Error('Expected strategy controls')
+		input.value = '0.0000000000000000001'
+		form.dispatchEvent(new page.window.Event('submit', { bubbles: true, cancelable: true }))
+		await Bun.sleep(20)
+		expect(page.window.document.querySelector('.operator-confirm-dialog')).toBeNull()
+		expect(page.window.document.getElementById('strategy-status')?.textContent).toContain('Maximum gas cost (ETH) must be a non-negative decimal with at most 18 places')
 	})
 
 	test('market review omits canonical root identity restored by the server', async () => {

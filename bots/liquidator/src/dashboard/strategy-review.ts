@@ -63,13 +63,12 @@ export function strategyReviewRows(saved: Configuration, next: Record<string, st
 		if (name === 'historicalLogRecovery') return [{ label: 'historical log recovery', before: before === true ? 'Enabled' : 'Disabled', after: after === true ? 'Enabled' : 'Disabled' }]
 		const amountField = amountFields.find(field => field[0] === name)
 		if (amountField !== undefined) {
-			return [{ label: `${amountField[1]} · ≥0, ≤18 decimal places`, before: before === undefined ? '—' : formatAmount(String(before), amountField[2]), after: formatAmount(String(after), amountField[2]) }]
+			return [{ label: amountField[1], before: before === undefined ? '—' : formatAmount(String(before), amountField[2]), after: formatAmount(String(after), amountField[2]) }]
 		}
 		const integerField = integerFields.find(field => field[0] === name)
 		if (integerField !== undefined) {
 			const unit = name === 'stagedOperationValidForSeconds' ? 'seconds' : 'bps'
-			const range = `${integerField[2].toLocaleString('en-US')}–${integerField[3].toLocaleString('en-US')} ${unit}`
-			return [{ label: `${integerField[1]} · ${range}`, before: `${String(before ?? '—')} ${unit}`, after: `${String(after)} ${unit}` }]
+			return [{ label: integerField[1], before: `${String(before ?? '—')} ${unit}`, after: `${String(after)} ${unit}` }]
 		}
 		return [{ label: name.replace(/([A-Z])/g, ' $1').toLowerCase(), before: String(before ?? '—'), after: String(after) }]
 	})
