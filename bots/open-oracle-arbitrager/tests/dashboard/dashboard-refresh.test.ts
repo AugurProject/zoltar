@@ -228,17 +228,27 @@ test('keeps all mutations locked and ignores deferred old-chain responses until 
 	await page.waitUntilComplete()
 	expect(element(window, 'capability-badge', window.HTMLElement).hidden).toBe(true)
 	expect(element(window, 'attention-badge', window.HTMLElement).dataset['tone']).toBe('ok')
+	configurationGate = new Promise(resolve => (releaseConfiguration = resolve))
+	element(window, 'reload-configuration-button', window.HTMLButtonElement).click()
+	await Bun.sleep(10)
 	stateFailure = true
 	triggerRefresh()
-	await page.waitUntilComplete()
+	for (let attempt = 0; attempt < 100 && !element(window, 'operator-health', window.HTMLElement).textContent.includes('Dashboard state is stale; retrying.'); attempt++) await Bun.sleep(10)
 	expect(element(window, 'launch-notice', window.HTMLElement).hidden).toBe(true)
 	expect(element(window, 'capability-badge', window.HTMLElement).textContent).toBe('Capability unavailable')
 	expect(element(window, 'attention-badge', window.HTMLElement).dataset['tone']).toBe('warning')
+	expect(element(window, 'operator-health', window.HTMLElement).textContent).toContain('Dashboard state is stale; retrying.')
+	releaseConfiguration?.()
+	for (let attempt = 0; attempt < 100 && element(window, 'configuration-status', window.HTMLElement).textContent !== ''; attempt++) await Bun.sleep(10)
+	expect(element(window, 'configuration-status', window.HTMLElement).textContent).toBe('')
+	expect(element(window, 'operator-health', window.HTMLElement).textContent).toContain('Dashboard state is stale; retrying.')
+	configurationGate = undefined
 	stateFailure = false
 	triggerRefresh()
 	await page.waitUntilComplete()
 	expect(element(window, 'capability-badge', window.HTMLElement).hidden).toBe(true)
 	expect(element(window, 'attention-badge', window.HTMLElement).dataset['tone']).toBe('ok')
+	expect(element(window, 'operator-health', window.HTMLElement).textContent).not.toContain('Dashboard state is stale; retrying.')
 
 	capable = false
 	triggerRefresh()

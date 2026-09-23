@@ -467,7 +467,7 @@ function synchronizeFocusedConfiguration(configuration: unknown) {
 	const execute = typeof runtime === 'object' && runtime !== null ? Reflect.get(runtime, 'execute') : undefined
 	if (!isRuntimeLimits(runtime) || typeof execute !== 'boolean' || !isSettlementSettings(settlement) || typeof centralizedMarkets !== 'object' || centralizedMarkets === null || Array.isArray(centralizedMarkets)) throw new Error('Bot returned an invalid configuration document')
 	configuredScanIntervalMilliseconds = strategy.pollMilliseconds
-	if (latestSnapshot !== undefined) renderHealth(latestSnapshot, configuredScanIntervalMilliseconds, false)
+	if (latestSnapshot !== undefined) renderHealth(latestSnapshot, configuredScanIntervalMilliseconds, !connected)
 	loadSettings(strategy)
 	settingsLoaded = true
 	loadSubmission(submission)

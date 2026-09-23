@@ -33,13 +33,23 @@ export function renderOverviewMetrics(snapshot: Snapshot, configuration: Configu
 	renderOverviewHealth(snapshot, configuration)
 }
 
-export function renderOverviewAlerts(snapshot: Snapshot) {
+export function renderOverviewAlerts(snapshot: Pick<Snapshot, 'alerts' | 'pendingTransactions'>) {
 	const alertKey = `${snapshot.pendingTransactions.length.toString()}\n${snapshot.alerts.map(alert => `${alert.severity}:${alert.message}`).join('\n')}`
 	if (renderedAlertKey === alertKey) return
 	renderedAlertKey = alertKey
+	const alerts = overviewAlertRows(snapshot)
+	const target = element('operator-alerts', HTMLUListElement)
+	target.classList.toggle('hidden', alerts.length === 0)
+	render(
+		h(Fragment, null, ...alerts.map((alert, index) => h('li', { key: index, class: `notice alert-row ${alert.severity}` }, h('span', null, alert.message), alert.actionHref === undefined || alert.actionLabel === undefined ? undefined : h('a', { class: 'alert-action', href: alert.actionHref }, alert.actionLabel)))),
+		target,
+	)
+}
+
+function overviewAlertRows(snapshot: Pick<Snapshot, 'alerts' | 'pendingTransactions'>) {
 	const alerts: { actionHref?: string; actionLabel?: string; message: string; severity: 'error' | 'warning' }[] = snapshot.alerts.map(alert => ({ ...alert }))
 	if (snapshot.pendingTransactions.length > 0) {
-		const recoveryAlert = alerts[0]
+		const recoveryAlert = alerts.find(alert => alert.message === `${snapshot.pendingTransactions.length.toString()} transaction intent(s) require recovery before execution can continue`)
 		if (recoveryAlert === undefined)
 			alerts.unshift({
 				actionHref: '/operations#recovery',
@@ -52,10 +62,5 @@ export function renderOverviewAlerts(snapshot: Snapshot) {
 			recoveryAlert.actionLabel = 'Review recovery'
 		}
 	}
-	const target = element('operator-alerts', HTMLUListElement)
-	target.classList.toggle('hidden', alerts.length === 0)
-	render(
-		h(Fragment, null, ...alerts.map((alert, index) => h('li', { key: index, class: `notice alert-row ${alert.severity}` }, h('span', null, alert.message), alert.actionHref === undefined || alert.actionLabel === undefined ? undefined : h('a', { class: 'alert-action', href: alert.actionHref }, alert.actionLabel)))),
-		target,
-	)
+	return alerts
 }
