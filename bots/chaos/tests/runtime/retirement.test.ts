@@ -629,6 +629,20 @@ describe('Drain & Retire planning', () => {
 		expect(residual.status).toBe('drained-with-residuals')
 	})
 
+	test('keeps a clean completion block stable across later clean scans', () => {
+		const snapshot = emptySnapshot()
+		const retirement = request()
+		const state = initialDurableState(31337)
+		const first = assessRetirement({ blockHash: hash(100), blockNumber: 100n, canonicalScanComplete: true, evaluations: [], retirement, snapshot, state, v3: [] })
+		applyRetirementAssessment(retirement, first, hash(100), 100n, completionBinding)
+		const evidence = structuredClone(retirement.completionEvidence)
+		const later = assessRetirement({ blockHash: hash(103), blockNumber: 103n, canonicalScanComplete: true, evaluations: [], retirement, snapshot, state, v3: [] })
+		applyRetirementAssessment(retirement, later, hash(103), 103n, completionBinding)
+		expect(retirement.completionEvidence).toEqual(evidence)
+		applyRetirementAssessment(retirement, later, hash(103), 103n, completionBinding, now, false)
+		expect(retirement.completionEvidence).toMatchObject({ blockHash: hash(103), blockNumber: '103' })
+	})
+
 	test('binds a residual replacement override to current completion evidence, profile, and recipient', async () => {
 		const snapshot = emptySnapshot()
 		const pool = snapshot.pools[0]

@@ -10,6 +10,12 @@ import { chaosReadClients, chaosReadEndpoints, createChaosReadPool } from './can
 
 type BoundRetirementCompletionEvidence = RetirementCompletionEvidence & { profileId: string; signerAddress: Address }
 
+export class RetirementCompletionPendingError extends Error {
+	constructor() {
+		super('Retirement completion block is not finalized')
+	}
+}
+
 export function retirementReplacementTargetId(targetProfileId: string, factory: Address) {
 	return deploymentFactoryId(targetProfileId, factory)
 }
@@ -56,7 +62,7 @@ export async function verifyRetirementCompletionFinality(settings: OperatorSetti
 		undefined,
 		2,
 	)
-	if (!finalized) throw new Error('Retirement completion block is not finalized')
+	if (!finalized) throw new RetirementCompletionPendingError()
 }
 
 export async function resetPristineStateForDeploymentProfile(state: RuntimeState, expectedProfileId: string, factory: Address | undefined, paused: boolean, wallet: Address | undefined, stateFile: string, verifyCompletionEvidence: (evidence: BoundRetirementCompletionEvidence) => Promise<void>) {

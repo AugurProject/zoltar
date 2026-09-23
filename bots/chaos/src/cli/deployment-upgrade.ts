@@ -11,7 +11,7 @@ import { executionProfileId } from '../config/execution-profile.ts'
 import { assertSettingsProfileIsolation, loadSettings, saveSettings, type OperatorSettings } from '../config/settings.ts'
 import { CHAOS_PROCESS_LOCK_OPTIONS } from '../core/process-lock-options.ts'
 import { chaosReadEndpoints } from '../runtime/canonical-scan.ts'
-import { resetPristineStateForDeploymentProfile, retirementReplacementTargetId, verifyRetirementCompletionFinality } from '../runtime/deployment-profile.ts'
+import { resetPristineStateForDeploymentProfile, retirementReplacementTargetId, RetirementCompletionPendingError, verifyRetirementCompletionFinality } from '../runtime/deployment-profile.ts'
 import { initialRuntimeState } from '../state/initial-state.ts'
 import { migrateEmptyBootstrapState } from '../state/bootstrap-migration.ts'
 import { loadDurableState, saveDurableState } from '../state/operator-state.ts'
@@ -186,7 +186,12 @@ export async function prepareCurrentDeployment(options: PreparationOptions = {})
 		}
 
 		const checked = initialRuntimeState(active.paused, wallet, active.network.chainId, structuredClone(state))
-		await resetPristineStateForDeploymentProfile(checked, currentProfileId, currentFactory, current.paused, wallet, active.runtime.stateFile, async evidence => (options.verifyCompletion ?? verifyRetirementCompletionFinality)(current, evidence))
+		try {
+			await resetPristineStateForDeploymentProfile(checked, currentProfileId, currentFactory, current.paused, wallet, active.runtime.stateFile, async evidence => (options.verifyCompletion ?? verifyRetirementCompletionFinality)(current, evidence))
+		} catch (error) {
+			if (error instanceof RetirementCompletionPendingError) return { kind: 'retiring', message: 'Old deployment retirement is waiting for its completion block to finalize. Its pin and state remain in place.' }
+			throw error
+		}
 		const nextStateFile = await saveCurrentWithNewState(loaded, current, replacementTargetId)
 		return { kind: 'current', message: `Verified retirement and selected current contracts in new state file ${nextStateFile}. The old state was preserved.` }
 	} finally {
@@ -207,7 +212,12 @@ export async function retirementUpgradeStatus(path?: string, verifyCompletion: t
 	if (state.retirement.status === 'drained-with-residuals' && state.retirement.profileReplacementOverride?.targetProfileId !== replacementTargetId) return 'retiring'
 	const wallet = configuredWallet(active)
 	const checked = initialRuntimeState(active.paused, wallet, active.network.chainId, structuredClone(state))
-	await resetPristineStateForDeploymentProfile(checked, currentProfileId, currentFactory, current.paused, wallet, active.runtime.stateFile, async evidence => verifyCompletion(current, evidence))
+	try {
+		await resetPristineStateForDeploymentProfile(checked, currentProfileId, currentFactory, current.paused, wallet, active.runtime.stateFile, async evidence => verifyCompletion(current, evidence))
+	} catch (error) {
+		if (error instanceof RetirementCompletionPendingError) return 'retiring'
+		throw error
+	}
 	return 'ready'
 }
 
@@ -225,8 +235,10 @@ async function main() {
 				const factory = current.deployment.uniswapV3Factory
 				if (factory === undefined) throw new Error('Current deployment is missing its Uniswap V3 factory')
 				const targetDeploymentId = retirementReplacementTargetId(executionProfileId(current), factory)
-				console.log(`Retirement has residuals. Review them and accept replacement for ${targetDeploymentId} in the dashboard.`)
-			} else console.log(`Old deployment retirement is ${state.retirement.status}. Inspect the dashboard Retirement panel for blockers and progress.`)
+				if (state.retirement.profileReplacementOverride?.targetProfileId !== targetDeploymentId) console.log(`Retirement has residuals. Review them and accept replacement for ${targetDeploymentId} in the dashboard.`)
+				else console.log('Old deployment retirement is waiting for its completion block to finalize.')
+			} else if (state.retirement.status === 'drained') console.log('Old deployment retirement is waiting for its completion block to finalize.')
+			else console.log(`Old deployment retirement is ${state.retirement.status}. Inspect the dashboard Retirement panel for blockers and progress.`)
 		}
 		if (status === 'retiring') process.exitCode = RETIRING_EXIT_CODE
 		return

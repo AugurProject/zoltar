@@ -32,7 +32,7 @@ import { actionableUrgentLifecyclePlan, lifecycleObstructions } from './lifecycl
 import { createManualOperationController } from './manual-operations.ts'
 import { beginLifecycleObligation, blockNovelEvaluations, completeLifecycleObligation, failLifecycleObligation, lifecyclePresenceBlockerMessage, obligationForPlan, synchronizeLifecycleObligations, waitForCanonicalLifecycleConfirmation } from './obligations.ts'
 import { retirementPlanAllowed } from './retirement-operation-policy.ts'
-import { enforceRetirementContinuation, processRetirementCycle, retirementPositionsForScan, updateRetirementAssessment } from './retirement-runner.ts'
+import { enforceRetirementContinuation, processRetirementCycle, retirementCompletionEvidenceCanonical, retirementPositionsForScan, updateRetirementAssessment } from './retirement-runner.ts'
 import { closeInterruptedSchedulerRun, executeScheduledOperation, recordDryRun, scheduleAfterRecoveredTransaction, schedulerFor } from './scheduled-operation.ts'
 import { genesisInitializationDefinitionId, genesisInitializationPlan, randomOperationPlans } from './selection.ts'
 import { assertSubmissionPreflightFresh, preflightTransactionSubmissionNetwork, recordEndpointPreflightChecks, refreshSubmissionReadiness, submissionPreflightConfigurationIdentity, type SubmissionPreflightResources } from './submission-preflight.ts'
@@ -668,7 +668,7 @@ export async function runChaosOperator(loaded: LoadedConfiguration, locks: Chaos
 					state.evaluations = blockNovelEvaluations(state.evaluations, state.lifecyclePresenceBlocker)
 				}
 				const retirementV3 = await retirementPositionsForScan({ anchor: scan.anchor, pool: resources.pool, profileId: expectedProfileId, settings, state, wallet: state.wallet })
-				updateRetirementAssessment(scan, settings, state, retirementV3)
+				updateRetirementAssessment(scan, settings, state, retirementV3, await retirementCompletionEvidenceCanonical(settings, resources.pool, state, scan.anchor))
 				await persistState(configuration, state)
 				if (!scan.executionReady) {
 					backfillIncomplete = true

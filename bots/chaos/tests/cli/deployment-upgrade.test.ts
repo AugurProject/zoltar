@@ -8,6 +8,7 @@ import { canonicalDeployment } from '../../src/config/canonical-deployment.ts'
 import { deploymentFactoryId, executionProfileId } from '../../src/config/execution-profile.ts'
 import { loadSettings, parseSettings, serializedSettings } from '../../src/config/settings.ts'
 import { applyRetirementAssessment } from '../../src/runtime/retirement-assessment.ts'
+import { RetirementCompletionPendingError } from '../../src/runtime/deployment-profile.ts'
 import { initialDurableState } from '../../src/state/initial-state.ts'
 import { loadDurableState, saveDurableState } from '../../src/state/operator-state.ts'
 import { acceptResidualProfileReplacement, DEFAULT_RETIREMENT_POLICIES } from '../../src/state/retirement.ts'
@@ -412,6 +413,42 @@ test('keeps the old deployment when finality verification fails', async () => {
 	).rejects.toThrow('Finalized block mismatch')
 	expect(await readFile(path)).toEqual(configBefore)
 	expect(await readFile(stateFile)).toEqual(stateBefore)
+})
+
+test('keeps polling a completed retirement until its block becomes finalized', async () => {
+	const { path, settings, signer, stateFile } = await fixture(true)
+	const state = await loadDurableState(stateFile, settings.network.chainId)
+	state.retirement.status = 'drained'
+	state.retirement.recipient = signer
+	state.retirement.completionEvidence = {
+		blockHash: zeroHash,
+		blockNumber: '42',
+		completedAt: '2026-09-23T00:00:00.000Z',
+		profileId: state.profileId,
+		proof: { actionableObligations: 0, claimableAssets: 0, collectableV3Positions: 0, knownApprovals: 0, ownedLiquidityPositions: 0, partialWorkflows: 0, pendingTransactions: 0 },
+		residuals: [],
+		signerAddress: signer,
+	}
+	await saveDurableState(stateFile, state)
+	let polls = 0
+	const verifyCompletion = async () => {
+		polls += 1
+		if (polls <= 3) throw new RetirementCompletionPendingError()
+	}
+	for (let attempt = 0; attempt < 3; attempt += 1) expect(await retirementUpgradeStatus(path, verifyCompletion)).toBe('retiring')
+	expect(
+		(
+			await prepareCurrentDeployment({
+				acquireLocks: noLocks,
+				path,
+				verifyCompletion: async () => {
+					throw new RetirementCompletionPendingError()
+				},
+			})
+		).kind,
+	).toBe('retiring')
+	expect(await retirementUpgradeStatus(path, verifyCompletion)).toBe('ready')
+	expect((await loadSettings(path)).settings.runtime.stateFile).toBe(stateFile)
 })
 
 test('rejects a changed signer before requesting retirement or changing either file', async () => {

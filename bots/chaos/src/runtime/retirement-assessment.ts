@@ -172,7 +172,7 @@ export type RetirementCompletionBinding = {
 	signerAddress: Address | undefined
 }
 
-export function applyRetirementAssessment(retirement: DurableRetirementState, assessment: RetirementAssessment, blockHash: Hash, blockNumber: bigint, binding: RetirementCompletionBinding, now = new Date().toISOString()) {
+export function applyRetirementAssessment(retirement: DurableRetirementState, assessment: RetirementAssessment, blockHash: Hash, blockNumber: bigint, binding: RetirementCompletionBinding, now = new Date().toISOString(), evidenceCanonical = true) {
 	const terminal = assessment.status === 'drained' || assessment.status === 'drained-with-residuals'
 	const completionSigner = binding.signerAddress
 	if (terminal) {
@@ -183,23 +183,32 @@ export function applyRetirementAssessment(retirement: DurableRetirementState, as
 	}
 	const previousEvidence = retirement.completionEvidence
 	const override = retirement.profileReplacementOverride
-	const preserveAcceptedResiduals =
-		retirement.status === 'drained-with-residuals' &&
-		assessment.status === 'drained-with-residuals' &&
+	const preserveCompletionEvidence =
+		evidenceCanonical &&
+		terminal &&
+		retirement.status === assessment.status &&
 		previousEvidence !== undefined &&
+		retirement.recipient?.toLowerCase() === completionSigner?.toLowerCase() &&
+		previousEvidence.profileId === binding.profileId &&
+		previousEvidence.signerAddress?.toLowerCase() === completionSigner?.toLowerCase() &&
+		JSON.stringify(previousEvidence.residuals) === JSON.stringify(assessment.residuals)
+	const preserveAcceptedResiduals =
+		preserveCompletionEvidence &&
+		previousEvidence !== undefined &&
+		assessment.status === 'drained-with-residuals' &&
 		override !== undefined &&
 		retirement.recipient !== undefined &&
 		override.sourceProfileId === binding.profileId &&
 		override.recipient.toLowerCase() === retirement.recipient.toLowerCase() &&
 		override.completionBlockHash.toLowerCase() === previousEvidence.blockHash.toLowerCase() &&
-		override.completionBlockNumber === previousEvidence.blockNumber &&
-		previousEvidence.profileId === binding.profileId &&
-		previousEvidence.signerAddress?.toLowerCase() === completionSigner?.toLowerCase() &&
-		JSON.stringify(previousEvidence.residuals) === JSON.stringify(assessment.residuals)
+		override.completionBlockNumber === previousEvidence.blockNumber
 	retirement.blockers = assessment.blockers
 	retirement.status = assessment.status
 	retirement.updatedAt = now
-	if (preserveAcceptedResiduals) return
+	if (preserveCompletionEvidence) {
+		if (!preserveAcceptedResiduals) retirement.profileReplacementOverride = undefined
+		return
+	}
 	retirement.profileReplacementOverride = undefined
 	if (!terminal) {
 		retirement.completionEvidence = undefined

@@ -5,8 +5,9 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import example from '../../config/operator.example.json'
 import { parseSettings } from '../../src/config/settings.ts'
+import { createChaosReadPool } from '../../src/runtime/canonical-scan.ts'
 import type { EcosystemSnapshot, OperationPlan } from '../../src/operations/types.ts'
-import { processRetirementCycle, updateRetirementAssessment } from '../../src/runtime/retirement-runner.ts'
+import { processRetirementCycle, retirementCompletionEvidenceCanonical, updateRetirementAssessment } from '../../src/runtime/retirement-runner.ts'
 import { loadDurableState, saveDurableState, type RuntimeState } from '../../src/state/operator-state.ts'
 import { initialDurableState, initialRuntimeState } from '../../src/state/initial-state.ts'
 import { acceptResidualProfileReplacement, cancelRetirement, DEFAULT_RETIREMENT_POLICIES, requestRetirement, uniswapV3PositionKey } from '../../src/state/retirement.ts'
@@ -58,7 +59,7 @@ async function reload(path: string, state: RuntimeState) {
 	return initialRuntimeState(false, state.wallet, state.chainId, await loadDurableState(path, state.chainId))
 }
 
-async function cycle(path: string, state: RuntimeState, snapshot: EcosystemSnapshot, executed: string[], onExecute?: (plan: OperationPlan) => Promise<void>) {
+async function cycle(path: string, state: RuntimeState, snapshot: EcosystemSnapshot, executed: string[], onExecute?: (plan: OperationPlan) => Promise<void>, blockNumber = 1n) {
 	await processRetirementCycle({
 		execute: async plan => {
 			executed.push(plan.definitionId)
@@ -67,7 +68,7 @@ async function cycle(path: string, state: RuntimeState, snapshot: EcosystemSnaps
 		},
 		persist: async () => await saveDurableState(path, state),
 		prepareExecution: async () => {},
-		scan: { anchor: { baseFeePerGas: 1n, blockHash: hash(1), blockNumber: 1n, timestamp: 1n }, executionReady: true, canonicalLifecyclePresenceComplete: true, carryProofsComplete: true, indexComplete: true, snapshot },
+		scan: { anchor: { baseFeePerGas: 1n, blockHash: hash(Number(blockNumber)), blockNumber, timestamp: 1n }, executionReady: true, canonicalLifecyclePresenceComplete: true, carryProofsComplete: true, indexComplete: true, snapshot },
 		settings: liveSettings(),
 		state,
 		v3: [],
@@ -75,6 +76,54 @@ async function cycle(path: string, state: RuntimeState, snapshot: EcosystemSnaps
 }
 
 describe('Drain & Retire persisted restart behavior', () => {
+	test('repeated clean scans and restart retain the first completion block for finality', async () => {
+		const path = await statePath()
+		const snapshot = emptySnapshot()
+		let state = requestedState(snapshot)
+		await cycle(path, state, snapshot, [], undefined, 100n)
+		const evidence = structuredClone(state.retirement.completionEvidence)
+		expect(evidence?.blockNumber).toBe('100')
+		await cycle(path, state, snapshot, [], undefined, 101n)
+		expect(state.retirement.completionEvidence).toEqual(evidence)
+		state = await reload(path, state)
+		await cycle(path, state, snapshot, [], undefined, 102n)
+		expect(state.retirement.completionEvidence).toEqual(evidence)
+	})
+
+	test('replaces an old completion block when independent readers show a reorg', async () => {
+		const snapshot = emptySnapshot()
+		const state = requestedState(snapshot)
+		const path = await statePath()
+		await cycle(path, state, snapshot, [], undefined, 100n)
+		let canonicalHash = hash(100)
+		const serveBlock = () =>
+			Bun.serve({
+				port: 0,
+				fetch: async request => {
+					const body = await request.json()
+					const id = typeof body === 'object' && body !== null ? Reflect.get(body, 'id') : undefined
+					return Response.json({ id, jsonrpc: '2.0', result: { hash: canonicalHash, number: '0x64', timestamp: '0x1', transactions: [] } })
+				},
+			})
+		const first = serveBlock()
+		const second = serveBlock()
+		try {
+			const settings = liveSettings()
+			settings.connectivity = { publicRpcUrls: [first.url.origin], readRpcUrl: first.url.origin, quorumRpcUrls: [second.url.origin], rpcQuorum: 1 }
+			const pool = createChaosReadPool(settings)
+			const anchor = { blockHash: hash(101), blockNumber: 101n }
+			expect(await retirementCompletionEvidenceCanonical(settings, pool, state, anchor)).toBeTrue()
+			canonicalHash = hash(99)
+			expect(await retirementCompletionEvidenceCanonical(settings, pool, state, anchor)).toBeFalse()
+			const scan = { anchor: { ...anchor, baseFeePerGas: 1n, timestamp: 1n }, executionReady: true, canonicalLifecyclePresenceComplete: true, carryProofsComplete: true, indexComplete: true, snapshot }
+			updateRetirementAssessment(scan, settings, state, [], false)
+			expect(state.retirement.completionEvidence).toMatchObject({ blockHash: hash(101), blockNumber: '101' })
+		} finally {
+			first.stop(true)
+			second.stop(true)
+		}
+	})
+
 	test('a residual override for changed core contracts cannot authorize another target factory', async () => {
 		const path = await statePath()
 		const snapshot = emptySnapshot()
