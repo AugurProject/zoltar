@@ -44,6 +44,11 @@ describe('test impact recommendations', () => {
 		])
 	})
 
+	test('maps developer documentation asserted by the UI split workflow test to that test', () => {
+		expect(commandsFor(['docs/how-to/trading-set-up-development.html'])).toEqual(['bun ./tooling/testing/bun-test.mts tooling/ui/ui-split-workflows.test.ts'])
+		expect(commandsFor(['testnetwork/README.md'])).toEqual(['bun ./tooling/testing/bun-test.mts tooling/ui/ui-split-workflows.test.ts'])
+	})
+
 	test('specialized external integration tiers replace ineffective raw test commands', () => {
 		expect(commandsFor(['ui/zoltar/ts/tests/protocol/uniswapQuoter.integration.test.ts'])).toEqual(['bun run test:integration:mainnet'])
 		expect(commandsFor(['ui/zoltar/ts/tests/protocol/uniswapQuoter.fork.test.ts'])).toEqual(['bun run test:integration:mainnet-fork'])

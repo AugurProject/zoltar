@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<meta name="description" content="Withdraw a liquidity position as raw YES and NO shares directly from the pair or through the router with a permit." />
+		<title>Remove liquidity</title>
+		<link rel="stylesheet" href="../assets/css/shared-docs.css" />
+		<link rel="stylesheet" href="../assets/css/docsShell.css" />
+	</head>
+	<body class="doc-openoracle">
+		<main id="main-content">
+			<header>
+				<p class="kicker">How-to guide</p>
+				<h1>Remove liquidity</h1>
+				<p>Use this guide to withdraw an LP position. Removal works in every lifecycle phase, including after the market has closed.</p>
+			</header>
+			<section id="steps">
+				<h2>Remove through the pair</h2>
+				<ol>
+					<li>Preview the proportional YES and NO outputs.</li>
+					<li>Set the pair's <code>minYes</code> and <code>minNo</code> bounds and a <code>deadline</code>.</li>
+					<li>Call the pair's own <code>removeLiquidity(liquidity, minYes, minNo, recipient, deadline)</code>. The first-party UI uses this path, so it never asks for a router allowance. The deadline is enforced on chain.</li>
+				</ol>
+			</section>
+			<section id="through-the-router">
+				<h2>Remove through the router</h2>
+				<p>Integrations that need router-based removal can call the router's <code>removeLiquidityWithPermit</code>, whose bounds are named <code>minYesOut</code> and <code>minNoOut</code>, with an exact-amount ERC-2612 signature. Ordinary exact allowances remain available for already submitted permits, Safes, and clients without signature support. Never grant a permanent or implicit infinite allowance.</p>
+			</section>
+			<section id="what-removal-does-not-do">
+				<h2>What removal does not do</h2>
+				<p>Removal stays available after question end, resolution, fork, migration, and truth-auction phases, and always returns raw YES and NO. It does not inspect or consume your wallet INVALID, redeem complete sets, settle winning shares, select a child branch, or migrate liquidity. For those, see <a href="./trading-handle-resolution.html">Handle resolution</a> and <a href="./trading-handle-a-fork.html">Handle a universe fork</a>.</p>
+			</section>
+		</main>
+		<script src="../assets/js/responsiveDocs.js"></script>
+		<script src="../assets/js/docsData.js"></script>
+		<script src="../assets/js/docsShell.js"></script>
+	</body>
+</html>

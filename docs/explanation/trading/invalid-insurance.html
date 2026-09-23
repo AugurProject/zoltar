@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<meta name="description" content="Why the INVALID share from every entry is held rather than traded, and what it is worth when a market resolves INVALID." />
+		<title>INVALID insurance</title>
+		<link rel="stylesheet" href="../../assets/css/shared-docs.css" />
+		<link rel="stylesheet" href="../../assets/css/docsShell.css" />
+	</head>
+	<body class="doc-openoracle">
+		<main id="main-content">
+			<header>
+				<p class="kicker">Explanation</p>
+				<h1>INVALID insurance</h1>
+				<p>INVALID is held, not traded. This page explains what that buys a trader and what it cannot tell them.</p>
+			</header>
+			<section id="how-it-works">
+				<h2>How it works</h2>
+				<p>Each ordinary ETH entry returns one INVALID share for each base directional share created. If the question resolves INVALID, the holder redeems through the authoritative SecurityPool winner path at the current collateral value.</p>
+				<p>Keeping INVALID out of the pair removes the on-chain three-reserve quadratic and makes an ordinary entry insured against INVALID. The cost is that nothing in the AMM can detect a suspicious market from an INVALID price, because no such price exists.</p>
+			</section>
+			<section id="worked-example">
+				<h2>A worked INVALID result</h2>
+				<p>Alice entered with enough ETH to mint 100 complete-set shares, received 190 YES after her swap, and kept 100 INVALID. The market resolves INVALID. The pair's YES and NO balances do not become valuable merely because they are nonzero. Alice redeems her 100 winning INVALID through the pool. Because of protocol <a href="../../reference/glossary.html#retention">retention</a>, the refund is the current net collateral value, not necessarily her original gross ETH.</p>
+				<p>Liquidity providers hold INVALID separately in exactly the same way. Selling or transferring LP tokens never moves that insurance.</p>
+			</section>
+		</main>
+		<script src="../../assets/js/responsiveDocs.js"></script>
+		<script src="../../assets/js/docsData.js"></script>
+		<script src="../../assets/js/docsShell.js"></script>
+	</body>
+</html>
