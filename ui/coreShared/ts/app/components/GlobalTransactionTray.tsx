@@ -3,6 +3,7 @@ import * as appCopy from '../../copy/app.js'
 import { TransactionPresentationNotice } from '../../components/TransactionPresentationNotice.js'
 import { WarningSurface } from '../../components/WarningSurface.js'
 import type { GlobalTransactionPresentation } from '../../types/components.js'
+import { dismissGlobalTransaction, getGlobalTransactionDismissKey, isGlobalTransactionDismissed } from '../../transactions/globalTransactionDismissal.js'
 
 function formatUniverseIdHex(universeId: bigint) {
 	return `0x${universeId.toString(16)}`
@@ -14,57 +15,22 @@ type GlobalTransactionTrayProps = {
 	transaction: GlobalTransactionPresentation | undefined
 }
 
-const dismissedKeys = new Set<string>()
-const MAX_REMEMBERED_DISMISSALS = 100
-
 function getTransactionKey(transaction: GlobalTransactionPresentation | undefined) {
 	return transaction?.operationKey ?? transaction?.dismissKey ?? transaction?.hash
 }
 
-function getDismissalTransactionKey(transaction: GlobalTransactionPresentation | undefined) {
-	const dismissKey = transaction?.dismissKey
-	if (dismissKey !== undefined && !dismissKey.startsWith('transaction-request-')) return dismissKey
-	return transaction?.hash ?? dismissKey ?? transaction?.operationKey
-}
-
-function getDismissKey(transaction: GlobalTransactionPresentation | undefined) {
-	const transactionKey = getDismissalTransactionKey(transaction)
-	if (transactionKey === undefined || transaction === undefined) return undefined
-	return `${transaction.tone}:${transactionKey}`
-}
-
-function shouldRememberDismissal(transaction: GlobalTransactionPresentation) {
-	const transactionKey = getDismissalTransactionKey(transaction)
-	return transactionKey !== undefined && !transactionKey.startsWith('transaction-request-')
-}
-
-function rememberDismissal(dismissKey: string) {
-	if (dismissedKeys.size >= MAX_REMEMBERED_DISMISSALS) {
-		const oldestDismissedKey = dismissedKeys.values().next().value
-		if (oldestDismissedKey !== undefined) dismissedKeys.delete(oldestDismissedKey)
-	}
-	dismissedKeys.add(dismissKey)
-}
-
 export function GlobalTransactionTray({ activeUniverseId, routeKey, transaction }: GlobalTransactionTrayProps) {
-	const [dismissedKey, setDismissedKey] = useState<string | undefined>(() => {
-		const transactionDismissKey = getDismissKey(transaction)
-		if (transactionDismissKey === undefined || !dismissedKeys.has(transactionDismissKey)) return undefined
-		return transactionDismissKey
-	})
-	const dismissKeyRef = useRef(getDismissKey(transaction))
+	const [dismissedKey, setDismissedKey] = useState<string>()
+	const dismissed = isGlobalTransactionDismissed(transaction)
+	const dismissKeyRef = useRef(getGlobalTransactionDismissKey(transaction))
 	const transactionOriginRef = useRef({ routeHash: window.location.hash, routeKey, transactionKey: getTransactionKey(transaction) })
 	const noticeRef = useRef<HTMLDivElement>(null)
 
 	useEffect(() => {
-		const nextDismissKey = getDismissKey(transaction)
-		if (nextDismissKey === dismissKeyRef.current) return
-		dismissKeyRef.current = nextDismissKey
-		if (nextDismissKey === undefined || !dismissedKeys.has(nextDismissKey)) {
-			setDismissedKey(undefined)
-			return
-		}
-		setDismissedKey(nextDismissKey)
+		const nextKey = getGlobalTransactionDismissKey(transaction)
+		if (nextKey === dismissKeyRef.current) return
+		dismissKeyRef.current = nextKey
+		setDismissedKey(undefined)
 	}, [transaction])
 
 	useEffect(() => {
@@ -87,20 +53,19 @@ export function GlobalTransactionTray({ activeUniverseId, routeKey, transaction 
 			main.style.removeProperty('--global-transaction-tray-height')
 			document.documentElement.style.removeProperty('scroll-padding-bottom')
 		}
-	}, [transaction, dismissedKey])
+	}, [transaction, dismissed, dismissedKey])
 
 	if (transaction === undefined) return undefined
 
-	const transactionDismissKey = getDismissKey(transaction)
+	const transactionDismissKey = getGlobalTransactionDismissKey(transaction)
 	const transactionKey = getTransactionKey(transaction)
 	if (transactionOriginRef.current.transactionKey !== transactionKey) transactionOriginRef.current = { routeHash: window.location.hash, routeKey, transactionKey }
-	if (transactionDismissKey !== undefined && transactionDismissKey === dismissedKey) return undefined
+	if (dismissed || transactionDismissKey === dismissedKey) return undefined
 	const canDismiss = transaction.tone !== 'awaiting-wallet' && transaction.tone !== 'preparing' && transactionDismissKey !== undefined
 	const compact = canDismiss && transaction.tone !== 'pending' && routeKey !== undefined && transactionOriginRef.current.routeKey !== undefined && routeKey !== transactionOriginRef.current.routeKey
 	const dismiss = () => {
-		if (transactionDismissKey === undefined) return
-		if (shouldRememberDismissal(transaction)) rememberDismissal(transactionDismissKey)
 		setDismissedKey(transactionDismissKey)
+		dismissGlobalTransaction(transaction)
 	}
 	const originHash = transactionOriginRef.current.routeHash
 	const returnHref = transaction.tone === 'error' && originHash !== '' && window.location.hash !== originHash ? originHash : undefined

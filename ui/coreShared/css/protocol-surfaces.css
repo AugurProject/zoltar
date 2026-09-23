@@ -1880,6 +1880,10 @@ main.global-transaction-tray-open :is(a, button, input, select, summary, textare
 	font-size: var(--font-caption);
 }
 
+.transaction-step-confirmed {
+	margin-block-start: 0.25rem;
+}
+
 .transaction-step-hash .transaction-hash-link {
 	display: block;
 	overflow: hidden;
@@ -1997,6 +2001,18 @@ main.global-transaction-tray-open :is(a, button, input, select, summary, textare
 	grid-template-columns: minmax(0, 1fr) auto;
 	align-items: start;
 	gap: 0.5rem;
+}
+
+.transaction-step-success-feedback {
+	grid-column: 1 / -1;
+}
+
+.transaction-plan-action-complete .transaction-step-close {
+	grid-column: 1 / -1;
+}
+
+.transaction-plan-action-complete .transaction-step-close button {
+	width: 100%;
 }
 
 .transaction-step-close {

@@ -3022,7 +3022,7 @@
 
 /* The price-request confirm button is taller than a plain button, so its Cancel neighbour matches that height. */
 .operation-modal-body:has(> .request-price-fields) .transaction-step-close > button {
-	inline-size: 5rem;
+	min-inline-size: 6.5rem;
 	min-block-size: 4rem;
 }
 

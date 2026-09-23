@@ -1,5 +1,6 @@
 import { createDeferred } from '@zoltar/ui-core-shared/tests/testUtils/deferred.js'
 import { GlobalTransactionPresentationProvider } from '@zoltar/ui-core-shared/components/GlobalTransactionPresentationContext.js'
+import { GlobalTransactionTray } from '@zoltar/ui-core-shared/app/components/GlobalTransactionTray.js'
 import { afterEach, expect, test } from 'bun:test'
 import { act } from 'preact/test-utils'
 import { render } from 'preact'
@@ -30,6 +31,79 @@ async function settle() {
 afterEach(() => {
 	transactionSteps.value?.cancel()
 	embeddedTransactionSteps.value = undefined
+})
+
+test('keeps final confirmation with the completed price steps and dismisses the matching tray', async () => {
+	const dom = installDomEnvironment()
+	const presentation = signal<GlobalTransactionPresentation | undefined>(undefined)
+	const completedHash = signal<string | undefined>(undefined)
+	const requestAllowed = signal(true)
+	const guard = signal<string | undefined>(undefined)
+	const hash = '0x3333333333333333333333333333333333333333333333333333333333333333'
+	let controller: ReturnType<typeof createTransactionStepController> | undefined
+	let closed = false
+	function Harness() {
+		return (
+			<GlobalTransactionPresentationProvider transaction={presentation.value}>
+				<GlobalTransactionTray routeKey='security-pools' transaction={presentation.value} />
+				<RequestPriceModal
+					{...props}
+					canRequest={requestAllowed.value}
+					confirmationGuardMessage={guard.value}
+					closeOnSuccessKey={completedHash.value}
+					onClose={() => {
+						closed = true
+					}}
+					onConfirm={async (_request, signal) => {
+						controller = createTransactionStepController(signal)
+						controller.setPlan([{ ...step, title: 'Request price' }])
+						controller.startWithoutReview(0)
+					}}
+				/>
+			</GlobalTransactionPresentationProvider>
+		)
+	}
+	const rendered = await renderIntoDocument(<Harness />)
+	try {
+		const queries = within(document.body)
+		await act(() => fireEvent.input(queries.getByRole('textbox', { name: 'Open Oracle REP/ETH starting price' }), { target: { value: '3' } }))
+		await settle()
+		if (controller === undefined) throw new Error('Missing price request controller')
+		await act(() => {
+			controller?.submitted(hash)
+			controller?.receipt(hash, 'success')
+			requestAllowed.value = false
+			guard.value = 'A price request is already pending.'
+		})
+		await settle()
+		const dialogBeforeResult = queries.getByRole('dialog', { name: 'Request New Price' })
+		expect(within(dialogBeforeResult).getByRole('button', { name: 'Dismiss' }).hasAttribute('disabled')).toBe(true)
+		expect(within(dialogBeforeResult).getByRole('button', { name: 'Close' }).hasAttribute('disabled')).toBe(true)
+		expect(within(dialogBeforeResult).getByRole('textbox', { name: 'Open Oracle REP/ETH starting price' }).hasAttribute('disabled')).toBe(true)
+		await act(() => {
+			completedHash.value = hash
+			presentation.value = { tone: 'success', title: 'Price requested', hash, operationKey: 'price-request', rows: [{ label: 'Security Pool Address', value: review.securityPoolAddress }] }
+		})
+		await settle()
+		const dialog = queries.getByRole('dialog', { name: 'Request New Price' })
+		expect(closed).toBe(false)
+		expect(dialog.querySelector('.transaction-step-success')?.textContent).toContain('Price requested')
+		expect(dialog.querySelector('.transaction-step-success')?.textContent).toContain(review.securityPoolAddress)
+		expect(within(dialog).getByRole('textbox', { name: 'Open Oracle REP/ETH starting price' }).hasAttribute('disabled')).toBe(true)
+		expect(within(dialog).queryByRole('button', { name: /Request price/ })).toBeNull()
+		expect(dialog.textContent?.match(new RegExp(hash, 'g')) ?? []).toHaveLength(1)
+		await act(() => {
+			presentation.value = { tone: 'warning', title: 'Price requested', detail: 'Price request succeeded, but refreshing the UI failed', hash, operationKey: 'price-request', rows: [{ label: 'Security Pool Address', value: review.securityPoolAddress }] }
+		})
+		await settle()
+		expect(dialog.querySelector('.transaction-step-success')?.textContent).toContain('Price request succeeded, but refreshing the UI failed')
+		await act(() => fireEvent.click(within(dialog).getByRole('button', { name: 'Dismiss' })))
+		expect(closed).toBe(true)
+		expect(document.querySelector('.global-transaction-tray')).toBeNull()
+	} finally {
+		await rendered.cleanup()
+		dom.cleanup()
+	}
 })
 
 test('prepares approval and request actions alongside editable price controls in a single dialog', async () => {

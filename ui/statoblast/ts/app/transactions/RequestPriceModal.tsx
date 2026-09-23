@@ -16,6 +16,7 @@ import { embeddedTransactionSteps } from '@zoltar/ui-core-shared/components/Tran
 import { PriceRequestPreview } from './PriceRequestPreview.js'
 import { TransactionStepsContent } from '@zoltar/ui-core-shared/components/TransactionStepsContent.js'
 import { transactionSteps } from '@zoltar/ui-core-shared/transactions/transactionSteps.js'
+import { dismissGlobalTransaction } from '@zoltar/ui-core-shared/transactions/globalTransactionDismissal.js'
 import { AddressValue } from '@zoltar/ui-core-shared/components/AddressValue.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as transactionCopy from '@zoltar/ui-core-shared/copy/transaction.js'
@@ -54,7 +55,10 @@ export function RequestPriceModal({ review, onConfirm, onClose, canRequest, conf
 	const valid = review !== undefined && canRequest && confirmationGuardMessage === undefined && validPrice && !fetching
 	const ownsWorkflow = run.current !== undefined && workflow?.reviewSignal === run.current.signal
 	const sending = ownsWorkflow && (workflow?.steps.some(step => step.phase === 'pending') ?? false)
-	const current = valid && run.current?.key === key && run.current?.signal.aborted === false
+	const finalReceiptConfirmed = ownsWorkflow && workflow?.steps.at(-1)?.hash !== undefined && workflow.steps.every(step => step.phase === 'confirmed' || step.phase === 'skipped')
+	const completedRequest = closeOnSuccessKey !== undefined && (presentation?.tone === 'success' || presentation?.tone === 'warning') && presentation.hash === closeOnSuccessKey && finalReceiptConfirmed && workflow?.steps.at(-1)?.hash === closeOnSuccessKey
+	const awaitingResult = finalReceiptConfirmed && !completedRequest && presentation?.tone !== 'error' && run.current?.key === key && run.current?.signal.aborted === false
+	const current = (valid || completedRequest || awaitingResult) && run.current?.key === key && run.current?.signal.aborted === false
 	const showSteps = current && ownsWorkflow && workflow?.steps[workflow.activeIndex] !== undefined
 	const currentAttemptError = attempted === key && !running && presentation?.tone === 'error' ? presentation.detail : undefined
 	const error = failureLatched ? failureMessage : currentAttemptError
@@ -152,18 +156,15 @@ export function RequestPriceModal({ review, onConfirm, onClose, canRequest, conf
 		return () => clearTimeout(timer)
 	}, [valid, review, key, running, attempted, proposedPrice, manualRequestRequired, failureLatched])
 	const close = () => {
-		if (sending) return
+		if (sending || awaitingResult) return
+		if (completedRequest) dismissGlobalTransaction(presentation)
 		quoteAttempt.current += 1
 		setFetching(false)
 		run.current?.cancel()
 		onClose()
 	}
-	useEffect(() => {
-		if (closeOnSuccessKey !== undefined && presentation?.tone === 'success') close()
-	}, [closeOnSuccessKey, presentation?.tone])
-
 	const fetchQuote = async () => {
-		if (review === undefined || sending || fetching) return
+		if (review === undefined || sending || awaitingResult || completedRequest || fetching) return
 		const attempt = ++quoteAttempt.current
 		setFetching(true)
 		setQuoteError(undefined)
@@ -190,7 +191,7 @@ export function RequestPriceModal({ review, onConfirm, onClose, canRequest, conf
 				label={poolCopy.manualRepPerEth}
 				value={price}
 				inputMode='decimal'
-				disabled={sending}
+				disabled={sending || awaitingResult || completedRequest}
 				onInput={value => {
 					quoteAttempt.current += 1
 					setFetching(false)
@@ -200,7 +201,7 @@ export function RequestPriceModal({ review, onConfirm, onClose, canRequest, conf
 				}}
 				error={priceError ?? quoteError}
 				action={
-					<button className='secondary request-price-fetch' type='button' disabled={sending || fetching} onClick={() => void fetchQuote()}>
+					<button className='secondary request-price-fetch' type='button' disabled={sending || awaitingResult || completedRequest || fetching} onClick={() => void fetchQuote()}>
 						{fetching ? <LoadingText>{priceRequestCopy.fetchingUniswapPrice}</LoadingText> : priceRequestCopy.fetchUniswapPrice}
 					</button>
 				}
@@ -211,11 +212,11 @@ export function RequestPriceModal({ review, onConfirm, onClose, canRequest, conf
 	return (
 		<GlobalTransactionPresentationProvider transaction={undefined}>
 			<TransactionActionButtonLockProvider locked={false}>
-				<OperationModal embedTransactionSteps={false} isOpen={review !== undefined} title={poolCopy.requestNewPriceTitle} onClose={close} closeDisabled={sending}>
+				<OperationModal embedTransactionSteps={false} isOpen={review !== undefined} title={poolCopy.requestNewPriceTitle} onClose={close} closeDisabled={sending || awaitingResult}>
 					{priceControls}
 					{showSteps ? (
 						<GlobalTransactionPresentationProvider transaction={presentation}>
-							<TransactionStepsContent contextKey={key ?? ''} onClose={close} />
+							<TransactionStepsContent contextKey={key ?? ''} onClose={close} showCompletedResult />
 						</GlobalTransactionPresentationProvider>
 					) : (
 						<PriceRequestPreview

@@ -109,6 +109,52 @@ test('shows every step, token deposit, expected return and ETH cost before the f
 	}
 })
 
+test('keeps confirmed wrap and approval steps visible while the final request awaits review', async () => {
+	const dom = installDomEnvironment()
+	const controller = createTransactionStepController()
+	const common = { description: undefined, contractAddress: undefined, contractLabel: undefined, spender: undefined, amount: undefined, ethValueAttoEth: 0n }
+	controller.setPlan([
+		{ ...common, title: 'Wrap ETH into WETH', ethValueAttoEth: 1n },
+		{ ...common, title: 'Approve WETH', approval: { requiredAmount: 3n, approvedAmount: 0n, tokenSymbol: 'WETH', tokenUnits: 0 } },
+		{ ...common, title: 'Request price' },
+	])
+	const wrapReview = controller.review(0)
+	const rendered = await renderIntoDocument(<TransactionStepsContent contextKey='price-confirmations' />)
+	try {
+		const queries = within(rendered.container)
+		await act(() => fireEvent.click(queries.getByRole('button', { name: /Wrap ETH into WETH/ })))
+		await wrapReview
+		await act(() => {
+			controller.submitted('0x1111111111111111111111111111111111111111111111111111111111111111')
+			controller.receipt('0x1111111111111111111111111111111111111111111111111111111111111111', 'success')
+		})
+		let approvalReview: Promise<bigint | undefined> | undefined
+		await act(() => {
+			approvalReview = controller.review(1)
+		})
+		expect(queries.getByRole('button', { name: 'Approve WETH' }).hasAttribute('disabled')).toBe(false)
+		await act(() => fireEvent.click(queries.getByRole('button', { name: 'Approve WETH' })))
+		await approvalReview
+		await act(() => {
+			controller.submitted('0x2222222222222222222222222222222222222222222222222222222222222222')
+			controller.receipt('0x2222222222222222222222222222222222222222222222222222222222222222', 'success')
+		})
+		let requestReview: Promise<bigint | undefined> | undefined
+		await act(() => {
+			requestReview = controller.review(2)
+		})
+		expect(queries.getByRole('button', { name: /Wrap ETH into WETH/ }).textContent).toContain('Confirmed')
+		expect(rendered.container.querySelector('.transaction-step-confirmed')?.textContent).toBe('Confirmed')
+		expect(queries.getByRole('button', { name: 'Request price' }).hasAttribute('disabled')).toBe(false)
+		transactionSteps.value?.cancel()
+		await requestReview?.catch(() => undefined)
+	} finally {
+		transactionSteps.value?.cancel()
+		await rendered.cleanup()
+		dom.cleanup()
+	}
+})
+
 test('explains a step without token funding using its description, the operation rows, and the target contract', async () => {
 	const dom = installDomEnvironment()
 	const controller = createTransactionStepController()
