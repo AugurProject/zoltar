@@ -448,6 +448,7 @@ describe('Statoblast: truth auction', () => {
 			}
 			const vaultAfterAuction = await getSecurityVault(client, yesSecurityPool.securityPool, client.account.address)
 			strictEqualTypeSafe(vaultAfterAuction.disputeStakedAttoRep, (vaultBeforeAuction.disputeStakedAttoRep * repRemainingAfterHaircut) / repBeforeHaircut, 'the carried escalation claim should retain the same auction fraction as its backing')
+			approximatelyEqual(await backingUnitsToAttoRep(client, yesSecurityPool.securityPool, vaultAfterAuction.repBackingUnits), (vaultAfterAuction.repBackingUnits * poolIncumbentRepAfterAuction) / parentForkData.auctionableAttoRepAtFork, 1n, 'escrow sales must preserve the proportional pool-held incumbent claim')
 			const forkResumedAt = await client.readContract({
 				address: childEscalationGame,
 				abi: statoblast_EscalationGame_EscalationGame.abi,
@@ -1104,7 +1105,7 @@ describe('Statoblast: truth auction', () => {
 			const childBalanceBeforeFinalize = await getERC20Balance(client, childRepToken, yesSecurityPool.securityPool)
 			const originalClaimBeforeFinalize = await backingUnitsToAttoRep(client, yesSecurityPool.securityPool, originalVaultBeforeFinalize.repBackingUnits)
 			assert.ok(originalClaimBeforeFinalize > 0n, 'the migrated vault should retain positive pool-held child REP backing before finalization')
-			assert.ok(originalClaimBeforeFinalize <= childBalanceBeforeFinalize, "before finalization the migrated vault claim should stay bounded by the child pool's pool-held REP balance")
+			assert.ok(originalClaimBeforeFinalize <= childBalanceBeforeFinalize, "before finalization the migrated owner's REP claim should stay bounded by the child pool's pool-held REP balance")
 
 			await mockWindow.advanceTime(8n * 7n * DAY + DAY)
 			await startTruthAuction(client, yesSecurityPool.securityPool)
@@ -1126,7 +1127,7 @@ describe('Statoblast: truth auction', () => {
 			const childBalanceAfterFinalize = await getERC20Balance(client, childRepToken, yesSecurityPool.securityPool)
 			const originalClaimAfterFinalize = await backingUnitsToAttoRep(client, yesSecurityPool.securityPool, originalVaultAfterFinalize.repBackingUnits)
 			assert.ok(originalClaimAfterFinalize > 0n, 'the migrated vault should remain redeemable after finalization')
-			assert.ok(originalClaimAfterFinalize <= childBalanceAfterFinalize, 'the migrated vault claim should stay bounded by the child pools remaining REP balance')
+			assert.ok(originalClaimAfterFinalize <= childBalanceAfterFinalize, "the migrated owner's REP claim should stay bounded by the child pool's remaining REP balance")
 			const disputeStakedRepBeforeAuctionAttoRep = await client.readContract({ address: childEscalationGame, abi: statoblast_EscalationGame_EscalationGame.abi, functionName: 'truthAuctionRepBeforeAttoRep' })
 			const disputeStakedRepRemainingAfterAuctionAttoRep = await client.readContract({ address: childEscalationGame, abi: statoblast_EscalationGame_EscalationGame.abi, functionName: 'truthAuctionRepRemainingAttoRep' })
 			assert.ok(disputeStakedRepBeforeAuctionAttoRep > 0n, 'the test auction should sell inherited escalation backing')
@@ -1590,6 +1591,52 @@ describe('Statoblast: truth auction', () => {
 			strictEqualTypeSafe(await getTotalAccruedFees(client, yesSecurityPool.securityPool), await getTotalClaimableVaultFeesAttoEth(client, yesSecurityPool.securityPool), 'all forked-pool fees should reconcile after the later checkpoint')
 		})
 
+		for (const percentSold of [1n, 10n, 49n]) {
+			test(`partial truth auction selling about ${percentSold}% preserves the migrated vault and bidder REP claims`, async () => {
+				const passiveVault = createWriteClient(mockWindow, TEST_ADDRESSES[6])
+				await approveAndDepositRepToVault(passiveVault, repDeposit, questionId)
+				await mockWindow.setTime((await getQuestionEndDate(client, questionId)) + 10000n)
+				await setVaultCapacityFixture(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, client.account.address, repDeposit / 4n)
+				await createCompleteSet(createWriteClient(mockWindow, TEST_ADDRESSES[1]), securityPoolAddresses.securityPool, 10n * 10n ** 18n)
+
+				await triggerExternalForkForSecurityPool(undefined, `partial ${percentSold}% truth auction source`)
+				await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
+				await migrateVault(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
+				const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
+				const child = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, statoblastSecurityMultiplierBps)
+				const poolBackingUnitsBeforeAuction = (await getSecurityPoolForkerForkData(client, securityPoolAddresses.securityPool)).auctionableAttoRepAtFork
+				strictEqualTypeSafe(poolBackingUnitsBeforeAuction, 2n * repDeposit, 'two 10,000-REP deposits should form the pool backing-unit baseline')
+				const migratedVaultBeforeAuction = await getSecurityVault(client, child.securityPool, client.account.address)
+				strictEqualTypeSafe(migratedVaultBeforeAuction.repBackingUnits, repDeposit, 'only one vault should own child backing units before the auction')
+
+				await mockWindow.advanceTime(8n * 7n * DAY + DAY)
+				await startTruthAuction(client, child.securityPool)
+				strictEqualTypeSafe(await getSystemState(client, child.securityPool), SystemState.ForkTruthAuction, 'a partially migrated child should require a truth auction')
+				const requestedPurchase = (poolBackingUnitsBeforeAuction * percentSold) / 100n
+				const bidder = createWriteClient(mockWindow, TEST_ADDRESSES[2])
+				const tick = await participateAuction(bidder, child.truthAuction, requestedPurchase, await getEthRaiseCapAttoEth(client, child.truthAuction))
+				await mockWindow.advanceTime(7n * DAY + DAY)
+				await finalizeTruthAuction(client, child.securityPool)
+
+				const purchasedRep = await getTotalRepPurchasedAttoRep(client, child.truthAuction)
+				assert.ok(purchasedRep > 0n && purchasedRep < poolBackingUnitsBeforeAuction / 2n, 'the auction must remain partial and below the integer-rate rounding boundary')
+				approximatelyEqual(purchasedRep, requestedPurchase, repDeposit / 100n, 'the auction should sell approximately the requested share of inventory')
+				const residualRepForExistingOwners = poolBackingUnitsBeforeAuction - purchasedRep
+				const expectedTotalBackingUnits = (poolBackingUnitsBeforeAuction * poolBackingUnitsBeforeAuction + residualRepForExistingOwners - 1n) / residualRepForExistingOwners
+				const migratedVaultAfterAuction = await getSecurityVault(client, child.securityPool, client.account.address)
+				strictEqualTypeSafe(migratedVaultAfterAuction.repBackingUnits, repDeposit, 'finalization must preserve the migrated vault backing-unit count')
+				const expectedMigratedClaim = (repDeposit * residualRepForExistingOwners) / poolBackingUnitsBeforeAuction
+				approximatelyEqual(await backingUnitsToAttoRep(client, child.securityPool, migratedVaultAfterAuction.repBackingUnits), expectedMigratedClaim, 1n, 'the migrated vault must retain its proportional REP claim')
+				strictEqualTypeSafe(await getTotalRepBackingUnits(client, child.securityPool), expectedTotalBackingUnits, 'the denominator must preserve the fractional haircut')
+
+				await claimAuctionProceeds(client, child.securityPool, bidder.account.address, [{ tick, bidIndex: 0n }])
+				const bidderVault = await getSecurityVault(client, child.securityPool, bidder.account.address)
+				approximatelyEqual(await backingUnitsToAttoRep(client, child.securityPool, bidderVault.repBackingUnits), purchasedRep, 1n, 'the bidder must receive the REP purchased')
+				const unassignedPosition = await getUnassignedPosition(child.securityPool)
+				strictEqualTypeSafe(unassignedPosition.repBackingUnits, repDeposit, 'the other vault must retain its unmigrated backing units without auction dust')
+			})
+		}
+
 		test('simple truth auction: participant buys rep and can claim proceeds', async () => {
 			// Setup: create open interest, trigger fork, migrate
 			const endTime = await getQuestionEndDate(client, questionId)
@@ -1644,7 +1691,12 @@ describe('Statoblast: truth auction', () => {
 			strictEqualTypeSafe(await getSettlementCollateralAttoEth(client, yesSecurityPool.securityPool), childEthBalanceBeforeFinalize + expectedEthToBuy, 'child pool collateral accounting should include truth-auction ETH')
 			strictEqualTypeSafe(await getETHBalance(client, getInfraContractAddresses().securityPoolForker), forkerEthBalanceBeforeFinalize, 'forker should not retain truth-auction ETH')
 
-			// Verify participant got REP allocation
+			const purchasedAttoRep = await getTotalRepPurchasedAttoRep(client, yesSecurityPool.truthAuction)
+			const incumbentResidualAttoRep = repAtFork - purchasedAttoRep
+			const expectedDenominator = (repAtFork * repAtFork + incumbentResidualAttoRep - 1n) / incumbentResidualAttoRep
+			strictEqualTypeSafe(await getTotalRepBackingUnits(client, yesSecurityPool.securityPool), expectedDenominator, 'partial auctions must preserve the fractional incumbent haircut')
+			const incumbentVault = await getSecurityVault(client, yesSecurityPool.securityPool, client.account.address)
+			approximatelyEqual(await backingUnitsToAttoRep(client, yesSecurityPool.securityPool, incumbentVault.repBackingUnits), (incumbentVault.repBackingUnits * incumbentResidualAttoRep) / repAtFork, 1n, 'incumbent claims must follow the proportional auction haircut')
 
 			// Claim proceeds
 			await claimAuctionProceeds(client, yesSecurityPool.securityPool, auctionParticipant.account.address, [{ tick: auctionTick, bidIndex: 0n }])
@@ -1652,7 +1704,7 @@ describe('Statoblast: truth auction', () => {
 			// Verify they got backingUnits shares matching purchasedRep (with tolerance for rounding)
 			const vault = await getSecurityVault(client, yesSecurityPool.securityPool, auctionParticipant.account.address)
 			const repFromBackingUnits = await backingUnitsToAttoRep(client, yesSecurityPool.securityPool, vault.repBackingUnits)
-			assert.ok(repFromBackingUnits > 0n, 'auction participant should have some rep')
+			strictEqualTypeSafe(repFromBackingUnits, purchasedAttoRep, 'the sole bidder must receive the purchased REP')
 		})
 
 		test('claimAuctionProceeds releases ETH for a finalized losing bid without mutating vault accounting', async () => {
@@ -1766,7 +1818,7 @@ describe('Statoblast: truth auction', () => {
 		})
 
 		test('multiple filled auction participants can all redeem purchased vault REP', async () => {
-			const { yesSecurityPool, expectedEthToBuy, losingBidder, losingEth, losingTick, winningBidderA, winningBidderB, winningEthA, winningEthB, winningTickA, winningTickB, winningBidIndexB } = await setupTruthAuctionWithTwoWinningBids(false)
+			const { yesSecurityPool, repAtFork, expectedEthToBuy, losingBidder, losingEth, losingTick, winningBidderA, winningBidderB, winningEthA, winningEthB, winningTickA, winningTickB, winningBidIndexB } = await setupTruthAuctionWithTwoWinningBids(false)
 			const childRepToken = getRepTokenAddress(getChildUniverseId(genesisUniverse, QuestionOutcome.Yes))
 			const childEthBeforeFinalize = await getETHBalance(client, yesSecurityPool.securityPool)
 
@@ -1781,8 +1833,8 @@ describe('Statoblast: truth auction', () => {
 			await claimAuctionProceeds(client, yesSecurityPool.securityPool, losingBidder.account.address, [{ tick: losingTick, bidIndex: 0n }])
 			strictEqualTypeSafe(await getPendingAuctionRefund(yesSecurityPool.truthAuction, losingBidder.account.address), losingEth, 'multiple-participant losing-bid refund credit')
 			await withdrawPendingAuctionRefund(losingBidder, yesSecurityPool.truthAuction)
-			await claimAuctionProceeds(client, yesSecurityPool.securityPool, winningBidderA.account.address, [{ tick: winningTickA, bidIndex: 0n }])
-			await claimAuctionProceeds(client, yesSecurityPool.securityPool, winningBidderB.account.address, [{ tick: winningTickB, bidIndex: winningBidIndexB }])
+			const claimHashA = await claimAuctionProceeds(client, yesSecurityPool.securityPool, winningBidderA.account.address, [{ tick: winningTickA, bidIndex: 0n }])
+			const claimHashB = await claimAuctionProceeds(client, yesSecurityPool.securityPool, winningBidderB.account.address, [{ tick: winningTickB, bidIndex: winningBidIndexB }])
 
 			strictEqualTypeSafe((await getETHBalance(client, losingBidder.account.address)) - losingEthBeforeClaim, losingEth, 'losing auction participant should receive their ETH back')
 			strictEqualTypeSafe(await getETHBalance(client, winningBidderA.account.address), winningAEthBeforeClaim, 'first filled auction participant should not receive an ETH refund')
@@ -1794,8 +1846,23 @@ describe('Statoblast: truth auction', () => {
 			const winningBRepClaim = await backingUnitsToAttoRep(client, yesSecurityPool.securityPool, winningVaultBAfterClaim.repBackingUnits)
 			const minimumWinningARepAtLimit = (winningEthA * PRICE_PRECISION) / tickToPrice(winningTickA)
 			const minimumWinningBRepAtLimit = (winningEthB * PRICE_PRECISION) / tickToPrice(winningTickB)
-			assert.ok(winningARepClaim >= minimumWinningARepAtLimit, 'first filled auction participant should receive vault REP at least as good as their limit order')
-			assert.ok(winningBRepClaim >= minimumWinningBRepAtLimit, 'second filled auction participant should receive vault REP at least as good as their limit order')
+			const purchasedRepFromClaim = async (hash: Hex) => {
+				const receipt = await client.waitForTransactionReceipt({ hash })
+				for (const log of receipt.logs) {
+					if (log.address.toLowerCase() !== getInfraContractAddresses().securityPoolForker.toLowerCase()) continue
+					const event = decodeEventLog({ abi: statoblast_SecurityPoolForker_SecurityPoolForker.abi, data: log.data, topics: log.topics })
+					if (event.eventName === 'ClaimAuctionProceeds') return event.args.amountAttoRep
+				}
+				throw new Error('Missing auction purchase event')
+			}
+			const purchasedA = await purchasedRepFromClaim(claimHashA)
+			const purchasedB = await purchasedRepFromClaim(claimHashB)
+			assert.ok(purchasedA >= minimumWinningARepAtLimit, 'the first auction fill must satisfy its limit order')
+			assert.ok(purchasedB >= minimumWinningBRepAtLimit, 'the second auction fill must satisfy its limit order')
+			approximatelyEqual(winningARepClaim, purchasedA, 1n, "first bidder's REP claim must match its purchase within one attoREP of backing-unit rounding")
+			approximatelyEqual(winningBRepClaim, purchasedB, 1n, "second bidder's REP claim must match its purchase within one attoREP of backing-unit rounding")
+			strictEqualTypeSafe(purchasedA + purchasedB, await getTotalRepPurchasedAttoRep(client, yesSecurityPool.truthAuction), 'all auction REP must be assigned')
+			strictEqualTypeSafe(winningVaultAAfterClaim.repBackingUnits + winningVaultBAfterClaim.repBackingUnits, (await getTotalRepBackingUnits(client, yesSecurityPool.securityPool)) - repAtFork, 'all bidder backing units must be assigned without dust')
 
 			await finalizeChildQuestionAsYes(yesSecurityPool)
 			strictEqualTypeSafe(await getQuestionOutcome(client, yesSecurityPool.securityPool), QuestionOutcome.Yes, 'child question should eventually finalize before multi-winner auction REP redemption')
@@ -1804,9 +1871,11 @@ describe('Statoblast: truth auction', () => {
 			const winningBRepBeforeRedeem = await getERC20Balance(client, childRepToken, winningBidderB.account.address)
 			const childRepBeforeRedeem = await getERC20Balance(client, childRepToken, yesSecurityPool.securityPool)
 			const winningARedeemClaim = await backingUnitsToAttoRep(client, yesSecurityPool.securityPool, winningVaultAAfterClaim.repBackingUnits)
-			const winningBRedeemClaim = await backingUnitsToAttoRep(client, yesSecurityPool.securityPool, winningVaultBAfterClaim.repBackingUnits)
+			const winningBRepBeforeFirstRedeem = await backingUnitsToAttoRep(client, yesSecurityPool.securityPool, winningVaultBAfterClaim.repBackingUnits)
 
 			await redeemRepFromVault(winningBidderA, yesSecurityPool.securityPool, winningBidderA.account.address)
+			const winningBRedeemClaim = await backingUnitsToAttoRep(client, yesSecurityPool.securityPool, winningVaultBAfterClaim.repBackingUnits)
+			approximatelyEqual(winningBRedeemClaim, winningBRepBeforeFirstRedeem, 1n, 'the first redemption may redistribute only sub-attoREP rounding residue')
 			await redeemRepFromVault(winningBidderB, yesSecurityPool.securityPool, winningBidderB.account.address)
 
 			const winningVaultAAfterRedeem = await getSecurityVault(client, yesSecurityPool.securityPool, winningBidderA.account.address)
@@ -2644,6 +2713,10 @@ describe('Statoblast: truth auction', () => {
 			const secondVaultReverseOrder = await getSecurityVault(client, yesSecurityPool.securityPool, secondBidder.account.address)
 			const reverseOrderCapacityOwnershipAttoRepTotal = firstVaultReverseOrder.capacityOwnershipAttoRep + secondVaultReverseOrder.capacityOwnershipAttoRep
 
+			const auctionBackingBudget = (await getTotalRepBackingUnits(client, yesSecurityPool.securityPool)) - repAtFork
+			strictEqualTypeSafe(firstVaultFirstOrder.repBackingUnits + secondVaultFirstOrder.repBackingUnits, auctionBackingBudget, 'all auction backing units must be assigned without dust')
+			strictEqualTypeSafe(firstVaultReverseOrder.repBackingUnits, firstVaultFirstOrder.repBackingUnits, 'REP backing allocation must not depend on claim order')
+			strictEqualTypeSafe(secondVaultReverseOrder.repBackingUnits, secondVaultFirstOrder.repBackingUnits, 'REP backing allocation must not depend on claim order')
 			strictEqualTypeSafe(firstOrderCapacityOwnershipAttoRepTotal, forkDataBeforeClaims.auctionedCapacityOwnershipAttoRep, 'capacity ownership')
 			strictEqualTypeSafe(reverseOrderCapacityOwnershipAttoRepTotal, forkDataBeforeClaims.auctionedCapacityOwnershipAttoRep, 'capacity ownership')
 			strictEqualTypeSafe(firstVaultReverseOrder.capacityOwnershipAttoRep, firstVaultFirstOrder.capacityOwnershipAttoRep, 'capacity ownership')
@@ -2712,7 +2785,7 @@ describe('Statoblast: truth auction', () => {
 			const positiveRepForward = await readVault(positiveRepVault)
 			strictEqualTypeSafe(zeroRepForward[0], 0n, 'capacity ownership')
 			strictEqualTypeSafe(zeroRepForward[1], 0n, 'capacity ownership')
-			strictEqualTypeSafe(positiveRepForward[0], 10n, 'positive REP settlement should create backingUnits at the configured rate')
+			strictEqualTypeSafe(positiveRepForward[0], 10n, 'positive REP settlement should receive its assigned backing-unit allocation')
 			strictEqualTypeSafe(positiveRepForward[1], 3n, 'capacity ownership')
 			strictEqualTypeSafe(await client.readContract({ address: poolAddress, abi: test_statoblast_SecurityPoolForkerAuctionSettlementHarness_AuctionSettlementPoolHarness.abi, functionName: 'vaultBadDebtAttoEth', args: [zeroRepVault] }), 1n, 'a debt-only auction position should still assign its bad-debt slice')
 			strictEqualTypeSafe(
