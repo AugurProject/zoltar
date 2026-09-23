@@ -1,7 +1,7 @@
 import type { Account } from '@zoltar/bot-shared/ethereum'
 import type { OperationPlan } from '../operations/types.ts'
 import { persist } from './recovery-journal.ts'
-import { assertExecutionActive, type ExecutionEnvironment } from './transaction-executor.ts'
+import { assertExecutionActive, type ExecutionEnvironment } from './execution-context.ts'
 
 export function withRetirementSweepBarrier(environment: ExecutionEnvironment, plan: Pick<OperationPlan, 'definitionId'>, signTransaction: NonNullable<Account['signTransaction']>) {
 	if (!plan.definitionId.startsWith('retirement.sweep.')) return signTransaction
@@ -16,13 +16,4 @@ export function withRetirementSweepBarrier(environment: ExecutionEnvironment, pl
 		assertExecutionActive(environment)
 		return await signTransaction(transaction)
 	}
-}
-
-export function requiredExecutionWallet(environment: ExecutionEnvironment) {
-	const wallet = environment.wallet
-	if (wallet === undefined) throw new Error('Transaction execution requires the configured signer')
-	if (wallet.account.address.toLowerCase() !== environment.sender.toLowerCase()) {
-		throw new Error('Execution signer does not match the configured transaction sender')
-	}
-	return wallet
 }

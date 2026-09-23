@@ -74,6 +74,25 @@ describe('transactionTray', () => {
 		expect(finished.inFlightCount).toBe(0)
 	})
 
+	test('keeps an uncertain receipt locked and restores its normal detail when tracking recovers', () => {
+		const requested = markTransactionRequested(createInitialTransactionTrayState(), {
+			action: 'createMarket',
+			source: 'zoltar',
+			submittedDetail: 'Question creation transaction submitted.',
+			submittedTitle: 'Creating Question',
+		})
+		const submitted = markTransactionSubmitted(requested, transactionHash)
+		const uncertain = markTransactionSubmitted(submitted, transactionHash, 'uncertain')
+		expect(isTransactionActionLocked(uncertain)).toBe(true)
+		expect(uncertain.active?.hash).toBe(transactionHash)
+		expect(uncertain.active?.tone).toBe('pending')
+		expect(uncertain.active?.detail).toBe('Confirmation unavailable. Checking automatically; do not resubmit.')
+		expect(uncertain.active?.operationKey).toBe(submitted.active?.operationKey)
+		const recovered = markTransactionSubmitted(uncertain, transactionHash, 'pending')
+		expect(recovered.active?.detail).toBe('Question creation transaction submitted.')
+		expect(isTransactionActionLocked(recovered)).toBe(true)
+	})
+
 	test('ignores submitted hashes when no pending intent exists', () => {
 		const submitted = markTransactionSubmitted(createInitialTransactionTrayState(), transactionHash)
 

@@ -1,7 +1,7 @@
 import { useSignal } from '@preact/signals'
 import { useRef } from 'preact/hooks'
 import type { Hash } from '@zoltar/core-shared/evm/ethereum'
-import type { TransactionRequestPreview } from '../../wallet/chainBackend.js'
+import type { TransactionRequestPreview, TransactionSubmissionStatus } from '../../wallet/chainBackend.js'
 import { createInitialTransactionTrayState, markTransactionCanceled, markTransactionFailed, markTransactionFinished, markTransactionPrepared, markTransactionPresented, markTransactionRequested, markTransactionSubmitted } from '../../transactions/transactionTray.js'
 import type { GlobalTransactionPresentation, TransactionIntent } from '../../types/components.js'
 
@@ -43,9 +43,9 @@ export function useTransactionTrayController({ onFinished }: TransactionTrayCont
 			transactionState.value = markTransactionRequested(transactionState.value, intent)
 			return true
 		},
-		onTransactionSubmitted: (hash: Hash) => {
+		onTransactionSubmitted: (hash: Hash, status?: TransactionSubmissionStatus) => {
 			if (!isCurrentGeneration()) return
-			transactionState.value = markTransactionSubmitted(transactionState.value, hash)
+			transactionState.value = markTransactionSubmitted(transactionState.value, hash, status)
 		},
 		resetForEnvironment: () => {
 			transactionGenerationRef.current += 1

@@ -1,7 +1,8 @@
 import type { Hash } from '@zoltar/core-shared/evm/ethereum'
 import { getActiveBackend } from '../lib/activeEnvironment.js'
 import { createAwaitingWalletPresentation, createPreparedWalletPresentation, createTransactionFailurePresentation } from './transactionPresentations.js'
-import type { TransactionRequestPreview } from '../wallet/chainBackend.js'
+import type { TransactionRequestPreview, TransactionSubmissionStatus } from '../wallet/chainBackend.js'
+import { confirmationUnavailableDetail } from '../copy/transaction.js'
 import type { GlobalTransactionPresentation, TransactionIntent } from '../types/components.js'
 
 export type TransactionTrayState = {
@@ -64,7 +65,7 @@ export function markTransactionPrepared(state: TransactionTrayState, preview: Tr
 	}
 }
 
-export function markTransactionSubmitted(state: TransactionTrayState, hash: Hash): TransactionTrayState {
+export function markTransactionSubmitted(state: TransactionTrayState, hash: Hash, status: TransactionSubmissionStatus = 'pending'): TransactionTrayState {
 	const pendingIntent = state.pendingIntent
 	if (pendingIntent === undefined) {
 		const active = state.active
@@ -75,6 +76,7 @@ export function markTransactionSubmitted(state: TransactionTrayState, hash: Hash
 				...active,
 				dismissKey: hash,
 				hash,
+				...(status === 'uncertain' ? { detail: confirmationUnavailableDetail } : {}),
 			},
 		}
 	}
@@ -86,6 +88,7 @@ export function markTransactionSubmitted(state: TransactionTrayState, hash: Hash
 			hash,
 			operationKey: state.pendingRequestKey ?? state.active?.operationKey ?? hash,
 			...(pendingIntent.submittedDetail === undefined ? {} : { detail: pendingIntent.submittedDetail }),
+			...(status === 'uncertain' ? { detail: confirmationUnavailableDetail } : {}),
 			...(pendingIntent.rows === undefined ? {} : { rows: pendingIntent.rows }),
 			...(pendingIntent.technicalRows === undefined ? {} : { technicalRows: pendingIntent.technicalRows }),
 			title: pendingIntent.submittedTitle,
