@@ -199,21 +199,22 @@ function updatePlanner(): void {
 	updatePeakOptions(peaks)
 	const peakHeight = Number(peakHeightSelect.value)
 	const capacity = 1n << BigInt(peakHeight)
+	const peakStart = (leafCount >> BigInt(peakHeight + 1)) << BigInt(peakHeight + 1)
 	const leafIndex = unsignedInteger(leafIndexInput.value)
 	const validIndex = leafIndex !== undefined && leafIndex < capacity
-	updateInputError(leafIndexInput, leafIndexError, validIndex ? undefined : `Enter an index from 0 through ${capacity - 1n}.`)
+	updateInputError(leafIndexInput, leafIndexError, validIndex ? undefined : `Enter an offset from 0 through ${capacity - 1n}.`)
 	for (const button of peakChoices.querySelectorAll('button')) button.setAttribute('aria-pressed', String(button.dataset['peakHeight'] === peakHeightSelect.value))
 
 	writeOutput('binary', `${leafCount.toString(2)}₂`)
 	writeOutput('peaks', formatHeightRanges(peaks))
-	writeOutput('capacity', `${capacity.toLocaleString()} ${capacity === 1n ? 'leaf' : 'leaves'}; local indexes 0…${(capacity - 1n).toLocaleString()}`)
+	writeOutput('capacity', `${capacity.toLocaleString()} ${capacity === 1n ? 'leaf' : 'leaves'}; global leafIndex ${peakStart.toLocaleString()}…${(peakStart + capacity - 1n).toLocaleString()}`)
 	const mmrSiblings = peakHeight + peaks.length - 1
 	const proofLengthMaximum = Math.max(mmrSiblings, 64)
 	writeOutput('mmrSiblings', String(mmrSiblings))
 	writeOutput('nullifierSiblings', '64')
 	setProofLengthMeter('mmrSiblings', mmrSiblings, proofLengthMaximum)
 	setProofLengthMeter('nullifierSiblings', 64, proofLengthMaximum)
-	writeOutput('selection', validIndex ? 'Valid peak-local index' : `Index must be between 0 and ${capacity - 1n}`)
+	writeOutput('selection', validIndex ? 'Valid in-peak offset' : `Offset must be between 0 and ${capacity - 1n}`)
 	plannerElement.dataset['widgetState'] = validIndex ? 'safe' : 'unsafe'
 }
 

@@ -358,11 +358,11 @@ async function checkMmrProofPlannerStates(): Promise<void> {
 			},
 			{
 				binary: '1101₂',
-				capacity: '4 leaves; local indexes 0…3',
+				capacity: '4 leaves; global leafIndex 8…11',
 				mmrSiblings: '4',
 				nullifierSiblings: '64',
 				peaks: '0, 2, 3',
-				selection: 'Valid peak-local index',
+				selection: 'Valid in-peak offset',
 			},
 			'MMR planner runtime defaults must match the static fallback',
 		)
@@ -380,13 +380,13 @@ async function checkMmrProofPlannerStates(): Promise<void> {
 				mmrSiblings: '0',
 				options: ['0'],
 				peaks: '0',
-				selection: 'Valid peak-local index',
+				selection: 'Valid in-peak offset',
 			},
 			'a one-leaf MMR must have one height-zero peak and no sibling hashes',
 		)
 		setInput(leafIndex, '1')
 		assert.equal(leafIndex.value, '1', 'MMR test harness must update the local leaf index')
-		assert.equal(output('selection'), 'Index must be between 0 and 0', 'a local index equal to peak capacity must be rejected')
+		assert.equal(output('selection'), 'Offset must be between 0 and 0', 'a local index equal to peak capacity must be rejected')
 
 		setInput(leafCount, '21')
 		selectPeak(4)
@@ -402,12 +402,12 @@ async function checkMmrProofPlannerStates(): Promise<void> {
 				mmrSiblings: '6',
 				options: ['0', '2', '4'],
 				peaks: '0, 2, 4',
-				selection: 'Valid peak-local index',
+				selection: 'Valid in-peak offset',
 			},
 			'a 21-leaf MMR must expose the height-four peak and six total MMR siblings',
 		)
 		setInput(leafIndex, '16')
-		assert.equal(output('selection'), 'Index must be between 0 and 15', 'the height-four capacity equality boundary must be rejected')
+		assert.equal(output('selection'), 'Offset must be between 0 and 15', 'the height-four capacity equality boundary must be rejected')
 
 		setInput(leafCount, String((1n << 64n) - 1n))
 		selectPeak(63)
@@ -415,7 +415,7 @@ async function checkMmrProofPlannerStates(): Promise<void> {
 		assert.equal(peakHeight.options.length, 64, 'the maximum uint64 leaf count must occupy all 64 peaks')
 		assert.equal(output('mmrSiblings'), '126', 'the maximum uint64 leaf count at height 63 must require 126 MMR siblings')
 		assert.equal(output('peaks'), '0–63', 'consecutive occupied peak heights must stay compact at the uint64 maximum')
-		assert.equal(output('selection'), 'Valid peak-local index', 'the maximum local index below a height-63 peak capacity must be valid')
+		assert.equal(output('selection'), 'Valid in-peak offset', 'the maximum local index below a height-63 peak capacity must be valid')
 		assert.equal(peakHeight.classList.contains('visually-hidden-control'), false, 'large occupied-peak sets must use the compact native select')
 		assert.equal(peakHeight.tabIndex, 0, 'the large occupied-peak select must remain keyboard accessible')
 		assert.equal(window.document.querySelectorAll('.peak-choice-control button').length, 0, 'large occupied-peak sets must not render a button for every height')
@@ -447,7 +447,7 @@ async function checkMmrProofPlannerStates(): Promise<void> {
 			'a valid leaf count must restore only its occupied peaks after invalid input',
 		)
 		setInput(leafIndex, '0')
-		assert.equal(output('selection'), 'Valid peak-local index', 'MMR planning must recover after invalid leaf-count input')
+		assert.equal(output('selection'), 'Valid in-peak offset', 'MMR planning must recover after invalid leaf-count input')
 	} finally {
 		window.close()
 	}

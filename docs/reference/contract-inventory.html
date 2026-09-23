@@ -97,7 +97,7 @@
 						<tbody>
 							<tr>
 								<td><code>calculateFeeAccrual(settlementCollateralAttoEth, retentionRate, timeDelta, indexRemainder, feeEligibleCapacityOwnershipAttoRep, feesOwedRemainder)</code></td>
-								<td>Applies fixed-point retention over elapsed time to settlement collateral net of the whole attoETH already held in both carries, carries the global index remainder, and returns whole credited fees plus the next fee remainder. Credited fees therefore never exceed settlement collateral. Canonical callers avoid zero eligible capacity ownership before this division.</td>
+								<td>Applies fixed-point retention over elapsed time to settlement collateral net of the already-counted but uncredited decay <code>(indexRemainder + feesOwedRemainder) / 1e18</code>, carries the global index remainder, and returns whole credited fees plus the next fee remainder. Credited fees therefore never exceed settlement collateral. Canonical callers avoid zero eligible capacity ownership before this division.</td>
 								<td><a href="../explanation/fees.html">Fee accrual</a></td>
 							</tr>
 							<tr>

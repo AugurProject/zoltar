@@ -40,7 +40,7 @@
 				</figure>
 				<p>This raw-amount ratio is valid because the configured WETH and REP contracts both use 18 decimals. The coordinator does not normalize token decimals in the settlement callback.</p>
 
-				<p id="integration-terms">An accepted report becomes the coordinator's cached REP/ETH price. Its freshness window is one hour on Sepolia and five minutes on other chains. The window starts when the final report became settleable (its report timestamp plus <code>settlementTime</code>), not when <code>settle</code> is called, and <code>lastSettlementTimestamp</code> records that start. A late settlement therefore cannot extend the life of a price that was frozen earlier. The coordinator does not meter how much operation volume uses that price during the freshness window.</p>
+				<p id="integration-terms">An accepted report becomes the coordinator's cached REP/ETH price. Its freshness window is one hour on Sepolia and five minutes on other chains. The window starts at settlement eligibility (the final report timestamp plus <code>settlementTime</code>), not when <code>settle</code> is called, and <code>lastSettlementTimestamp</code> records that start. A late settlement therefore cannot extend the life of a price that was frozen earlier. The coordinator does not meter how much operation volume uses that price during the freshness window.</p>
 			</section>
 
 			<section id="optional-upstream-capabilities">
@@ -401,7 +401,7 @@
 					<li>the settlement base fee exceeds the request-time cap, which is the base fee implied by the committed bounty scaled by <code>maxSettlementBaseFeeMultiplierBps</code>;</li>
 					<li><code>storedGame(reportId).numReports</code> is saturated at the <code>uint24</code> maximum, reported as <code>Counter saturated</code>;</li>
 					<li>the final history record's WETH amount is too small to support another dispute at that record's base fee plus the configured priority fee, reported as <code>Report uneconomic</code>;</li>
-					<li>settlement happens after the freshness window measured from the final report's settlement eligibility has already closed, reported as <code>Report stale</code>;</li>
+					<li>settlement happens after the freshness window measured from settlement eligibility has already closed, reported as <code>Report stale</code>;</li>
 					<li>either settled token amount is zero; or</li>
 					<li>the integer REP/ETH calculation produces a zero price.</li>
 				</ul>

@@ -537,7 +537,7 @@
 							</tr>
 							<tr>
 								<td>Late settlement</td>
-								<td>OpenOracle allows settlement at any time after the final report's deadline. The coordinator measures freshness from that deadline, the final <code>storedGame(reportId).reportTimestamp</code> plus <code>settlementTime</code>, and rejects a report settled after its freshness window has closed with <code>Report stale</code>. The rejection clears the pending report so a new price can be requested.</td>
+								<td>OpenOracle allows settlement at any time after settlement eligibility. The coordinator measures freshness from settlement eligibility, the final <code>storedGame(reportId).reportTimestamp</code> plus <code>settlementTime</code>, and rejects a report settled after its freshness window has closed with <code>Report stale</code>. The rejection clears the pending report so a new price can be requested.</td>
 								<td><a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/OpenOraclePriceCoordinator.sol">OpenOraclePriceCoordinator.sol</a>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/openOracle/OpenOracle.sol">OpenOracle.sol</a></td>
 							</tr>
 							<tr>

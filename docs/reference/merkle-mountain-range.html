@@ -62,7 +62,7 @@
     parentDepositIndex, cumulativeAmountAttoRep, sourceNodeId))
 parentHash = keccak256(abi.encodePacked(left, right))
 root = bagPeaks(occupiedPeaks, peakCount)</code></pre>
-				<p>Proof verification rejects an empty or out-of-range peak, <code>leafIndex &gt;= 2^peakHeight</code>, a sibling array whose length is not <code>peakHeight + peakCount - 1</code>, a nullifier path whose length is not <code>64</code>, a root mismatch, or an already-consumed nullifier.</p>
+				<p>Proof verification rejects <code>leafIndex &gt;= leafCount</code>, a <code>merkleMountainRangePeakIndex</code> that is not the height of the peak containing <code>leafIndex</code>, a sibling array whose length is not <code>peakHeight + peakCount - 1</code>, a nullifier path whose length is not <code>64</code>, a root mismatch, or an already-consumed nullifier.</p>
 				<h3>Two-leaf conformance vector</h3>
 				<table>
 					<thead>
@@ -149,10 +149,10 @@ root = bagPeaks(occupiedPeaks, peakCount)</code></pre>
 				<p>Nullifier paths are keyed by <code>uint256(keccak256(abi.encode(parentDepositIndex)))</code>, so the stable parent deposit index is the replay-prevention identity.</p>
 				<details class="interactive-example" id="mmr-proof-planner" open>
 					<summary>Plan a carry proof</summary>
-					<p>Choose a snapshot leaf count and one occupied peak. The planner reports the peak-local offset range the verifier derives from a global <code>leafIndex</code> and the exact sibling-array lengths it enforces. It does not construct hashes or replace an off-chain proof builder.</p>
+					<p>Choose a snapshot leaf count and one occupied peak. The planner reports the global <code>leafIndex</code> range of that peak, checks an in-peak offset, and reports the exact sibling-array lengths the verifier enforces. It does not construct hashes or replace an off-chain proof builder.</p>
 					<div class="tool-outcome-strip">
-						<div data-primary-output><span>Selection</span><output data-mmr-output="selection">Valid peak-local index</output></div>
-						<div data-primary-output><span>Selected peak capacity</span><output data-mmr-output="capacity">4 leaves; local indexes 0…3</output></div>
+						<div data-primary-output><span>Selection</span><output data-mmr-output="selection">Valid in-peak offset</output></div>
+						<div data-primary-output><span>Selected peak capacity</span><output data-mmr-output="capacity">4 leaves; global leafIndex 8…11</output></div>
 					</div>
 					<div class="tool-workspace">
 						<div class="tool-control-stack tool-workspace-controls">
@@ -175,7 +175,7 @@ root = bagPeaks(occupiedPeaks, peakCount)</code></pre>
 								<summary>Proof position</summary>
 								<div class="example-grid">
 									<label>
-										Peak-local leaf index
+										In-peak offset (<code>leafIndex - peakStart</code>)
 										<input type="text" inputmode="numeric" pattern="[0-9]+" value="0" data-tool-input="leafIndex" />
 									</label>
 								</div>
