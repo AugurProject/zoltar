@@ -80,19 +80,13 @@ describe('split UI workflow definitions (pending updates when present)', () => {
 		expect(setup?.['with']).toBeUndefined()
 	})
 
-	test('CI requires browser transactions and coverage before allowing publication', async () => {
+	test('CI requires browser transactions before allowing publication', async () => {
 		const jobs = workflowJobs(await readWorkflow(ciWorkflowPath))
 		const required = requireRecord(jobs['required'], 'required CI gate')
-		for (const [name, workflow] of [
-			['browser-workflow', 'browser-workflow.yml'],
-			['coverage', 'coverage.yml'],
-		]) {
-			if (name === undefined) throw new Error('Missing required job name')
-			const job = requireRecord(jobs[name], name)
-			expect(job['uses']).toBe(`./.github/workflows/${workflow}`)
-			expect(job['if']).toBe("needs.changes.outputs.core == 'true'")
-			expect(required['needs']).toContain(name)
-		}
+		const browser = requireRecord(jobs['browser-workflow'], 'browser workflow')
+		expect(browser['uses']).toBe('./.github/workflows/browser-workflow.yml')
+		expect(browser['if']).toBe("needs.changes.outputs.core == 'true'")
+		expect(required['needs']).toContain('browser-workflow')
 		const release = workflowJobs(await readWorkflow(versionDeployWorkflowPath))
 		expect(requireRecord(release['deploy'], 'release deployment')['needs']).toBe('tests')
 		expect(requireRecord(release['tests'], 'release tests')['uses']).toBe('./.github/workflows/ci.yml')
@@ -248,12 +242,17 @@ ${command}`,
 		expect(requireRecord(ciJobs['required'], 'required CI result')['needs']).toContain('browser-smoke')
 	})
 
-	test('automatic coverage publishes and retains the canonical policy report', async () => {
+	test('coverage runs only through direct manual dispatch and retains the canonical policy report', async () => {
 		const workflow = await readWorkflow(coverageWorkflowPath)
 		const triggers = requireRecord(workflow['on'], 'coverage triggers')
-		expect(triggers).toHaveProperty('workflow_dispatch')
-		expect(triggers).toHaveProperty('workflow_call')
-		expect(triggers).not.toHaveProperty('schedule')
+		expect(Object.keys(triggers)).toEqual(['workflow_dispatch'])
+		const ciJobs = workflowJobs(await readWorkflow(ciWorkflowPath))
+		expect(ciJobs).not.toHaveProperty('coverage')
+		const required = requireRecord(ciJobs['required'], 'required CI gate')
+		expect(required['needs']).not.toContain('coverage')
+		const gate = workflowSteps(required)[0]
+		expect(requireRecord(gate?.['env'], 'required CI gate environment')).not.toHaveProperty('COVERAGE_RESULT')
+		expect(gate?.['run']).not.toContain('COVERAGE_RESULT')
 		const steps = Object.values(workflowJobs(workflow)).flatMap(workflowSteps)
 		expect(steps.some(step => step['run'] === 'bun run coverage')).toBe(false)
 		expect(steps.some(step => step['run'] === 'bun run coverage:full')).toBe(true)
@@ -353,7 +352,7 @@ ${command}`,
 				const env = Object.fromEntries(Object.keys(gateEnv).map(key => [key, key.endsWith('_RESULT') ? 'skipped' : 'false']))
 				Object.assign(env, { CHANGES_RESULT: 'success', CORE_SELECTED: String(core), DOCS_SELECTED: String(core), INFRA_SELECTED: String(infrastructure), DOMAIN_TESTS_SELECTED: String(core || infrastructure), INFRA_CHECKS_SELECTED: String(infrastructure && !core) })
 				const selected = ['CHANGES_RESULT']
-				if (core) selected.push('PREPARE_RESULT', 'APPLICATION_TESTS_RESULT', 'DOCS_RESULT', 'BROWSER_SMOKE_RESULT', 'BROWSER_WORKFLOW_RESULT', 'COVERAGE_RESULT', 'CHECKS_RESULT', 'KNIP_RESULT', 'AUDIT_RESULT')
+				if (core) selected.push('PREPARE_RESULT', 'APPLICATION_TESTS_RESULT', 'DOCS_RESULT', 'BROWSER_SMOKE_RESULT', 'BROWSER_WORKFLOW_RESULT', 'CHECKS_RESULT', 'KNIP_RESULT', 'AUDIT_RESULT')
 				if (core || infrastructure) selected.push('DOMAIN_TESTS_RESULT')
 				if (infrastructure && !core) selected.push('INFRA_RESULT')
 				for (const key of selected) env[key] = 'success'
