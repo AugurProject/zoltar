@@ -11,6 +11,7 @@ export const formatMissingSavedStateError = (stateName: CopyTemplateValue) => `S
 export const savedStateUpdateError = 'Failed to update the saved simulation state.'
 export const simulationControlError = 'Failed to update the simulation.'
 export const stateExportError = 'Failed to export the current simulation state.'
+export const plus10Minutes = '+10 min'
 export const plus1Hour = '+1 hour'
 export const plus1Day = '+1 day'
 export const plus1Week = '+1 week'
