@@ -412,6 +412,60 @@ describe('useSecurityPoolCreation', () => {
 		expect(requireState(state).duplicateOriginPoolAddress).toBeUndefined()
 	})
 
+	test('shows the existing pool address when a duplicate appears during submission', async () => {
+		const poolAddress = getAddress('0x0000000000000000000000000000000000000002')
+		let duplicateReads = 0
+		const originSecurityPoolExists = mock(async () => {
+			duplicateReads += 1
+			return duplicateReads > 1
+		})
+		const getOriginSecurityPoolAddress = mock(async () => poolAddress)
+		const createSecurityPool = mock(async () => {
+			throw new Error('createSecurityPool should not run for a duplicate')
+		})
+		await setupContractMocks({ originSecurityPoolExists, getOriginSecurityPoolAddress, createSecurityPool })
+		const { useSecurityPoolCreation } = await import(`@zoltar/ui-statoblast-shared/features/security-pools/hooks/useSecurityPoolCreation.js?case=${crypto.randomUUID()}`)
+		let state: UseSecurityPoolCreationState | undefined
+		const Harness = createHarness(
+			useSecurityPoolCreation,
+			{
+				accountAddress: zeroAddress,
+				deploymentStatuses: [createStatus('securityPoolFactory', true), createStatus('zoltarQuestionData', true)],
+				enabled: true,
+				onTransactionFinished: () => undefined,
+				onTransactionPresented: () => undefined,
+				onTransactionRequested: () => undefined,
+				onTransactionSubmitted: () => undefined,
+				refreshState: async () => undefined,
+				zoltarUniverseHasForked: false,
+			},
+			newState => {
+				state = newState
+			},
+		)
+		const renderedComponent = await renderIntoDocument(<Harness />)
+		cleanupRenderedComponent = renderedComponent.cleanup
+		await act(() => {
+			requireState(state).setSecurityPoolForm(current => ({ ...current, marketId: '11' }))
+		})
+		await waitFor(() => {
+			expect(originSecurityPoolExists).toHaveBeenCalledTimes(1)
+			expect(requireState(state).checkingDuplicateOriginPool).toBe(false)
+			expect(requireState(state).marketDetails?.questionId).toBe('0x0b')
+		})
+		expect(requireState(state).duplicateOriginPoolExists).toBe(false)
+
+		await act(async () => {
+			await requireState(state).createPool()
+		})
+		expect(originSecurityPoolExists).toHaveBeenCalledTimes(2)
+		expect(createSecurityPool).not.toHaveBeenCalled()
+		await waitFor(() => {
+			expect(requireState(state).duplicateOriginPoolExists).toBe(true)
+			expect(requireState(state).duplicateOriginPoolAddress).toBe(poolAddress)
+		})
+	})
+
 	test('ignores stale duplicate-origin responses when market inputs change out of order', async () => {
 		const firstDuplicateCheck = createDeferred<boolean>()
 		const secondDuplicateCheck = createDeferred<boolean>()

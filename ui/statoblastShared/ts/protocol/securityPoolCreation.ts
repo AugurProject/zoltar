@@ -52,14 +52,14 @@ function getQuestionCreatedAtFromReceipt(receipt: TransactionReceipt, questionId
 	throw new Error('Question creation transaction succeeded without a QuestionCreated event')
 }
 
-function getOriginSecurityPoolShareTokenSalt(questionId: bigint, statoblastSecurityMultiplierBps: bigint, initialReportPriorityFeeAttoEthPerGas: bigint) {
+function getOriginSecurityPoolId(questionId: bigint, statoblastSecurityMultiplierBps: bigint, initialReportPriorityFeeAttoEthPerGas: bigint) {
 	return keccak256(encodeAbiParameters([{ type: 'uint256' }, { type: 'uint256' }, { type: 'uint256' }, { type: 'uint248' }], [questionId, statoblastSecurityMultiplierBps, initialReportPriorityFeeAttoEthPerGas, 0n]))
 }
 
 function getOriginSecurityPoolShareTokenAddress(questionId: bigint, statoblastSecurityMultiplierBps: bigint, initialReportPriorityFeeAttoEthPerGas: bigint) {
 	return getCreate2Address({
 		from: getInfraContractAddresses().shareTokenFactory,
-		salt: getOriginSecurityPoolShareTokenSalt(questionId, statoblastSecurityMultiplierBps, initialReportPriorityFeeAttoEthPerGas),
+		salt: getOriginSecurityPoolId(questionId, statoblastSecurityMultiplierBps, initialReportPriorityFeeAttoEthPerGas),
 		bytecode: encodeDeployData({
 			abi: statoblast_tokens_ShareToken_ShareToken.abi,
 			bytecode: `0x${statoblast_tokens_ShareToken_ShareToken.evm.bytecode.object}`,
@@ -169,7 +169,7 @@ export async function originSecurityPoolExists(client: Pick<ReadClient, 'getCode
 }
 
 export async function getOriginSecurityPoolAddress(client: Pick<ReadClient, 'readContract'>, questionId: bigint, statoblastSecurityMultiplierBps: bigint, initialReportPriorityFeeAttoEthPerGas: bigint): Promise<Address | undefined> {
-	const originId = keccak256(encodeAbiParameters([{ type: 'uint256' }, { type: 'uint256' }, { type: 'uint256' }, { type: 'uint248' }], [questionId, statoblastSecurityMultiplierBps, initialReportPriorityFeeAttoEthPerGas, 0n]))
+	const originId = getOriginSecurityPoolId(questionId, statoblastSecurityMultiplierBps, initialReportPriorityFeeAttoEthPerGas)
 	const address = await client.readContract({ abi: statoblast_factories_SecurityPoolFactory_SecurityPoolFactory.abi, address: getInfraContractAddresses().securityPoolFactory, functionName: 'getSecurityPool', args: [originId, 0n] })
 	return address === zeroAddress ? undefined : address
 }

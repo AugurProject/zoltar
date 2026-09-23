@@ -89,6 +89,10 @@ export function useSecurityPoolCreation({
 	const nextExistingQuestionCheck = useRequestGuard()
 	const questionDataDeployed = hasDeployedStep(deploymentStatuses, 'zoltarQuestionData')
 	const isCurrentSubmittedQuestion = (questionId: bigint) => tryParseBigIntInput(securityPoolForm.value.marketId) === questionId
+	const isCurrentSubmittedPool = (parameters: { questionId: bigint; statoblastSecurityMultiplierBps: bigint; initialReportPriorityFeeAttoEthPerGas: bigint }) =>
+		isCurrentSubmittedQuestion(parameters.questionId) &&
+		tryParseStatoblastSecurityMultiplierBpsInput(securityPoolForm.value.statoblastSecurityMultiplierBps) === parameters.statoblastSecurityMultiplierBps &&
+		tryParseDecimalInput(securityPoolForm.value.initialReportPriorityFeeEth, 18) === parameters.initialReportPriorityFeeAttoEthPerGas
 
 	const loadDuplicateOriginPoolState = async () => {
 		const isCurrent = nextDuplicateCheck()
@@ -294,6 +298,17 @@ export function useSecurityPoolCreation({
 					if (await originSecurityPoolExists(createConnectedReadClient(), parameters.questionId, parameters.statoblastSecurityMultiplierBps, parameters.initialReportPriorityFeeAttoEthPerGas)) {
 						if (isCurrentSubmittedQuestion(parameters.questionId)) {
 							marketDetails.value = details
+						}
+						if (isCurrentSubmittedPool(parameters)) {
+							duplicateOriginPoolExists.value = true
+							duplicateOriginPoolAddress.value = undefined
+						}
+						try {
+							const address = await getOriginSecurityPoolAddress(createConnectedReadClient(), parameters.questionId, parameters.statoblastSecurityMultiplierBps, parameters.initialReportPriorityFeeAttoEthPerGas)
+							if (isCurrentSubmittedPool(parameters)) duplicateOriginPoolAddress.value = address
+						} catch (error) {
+							if (!isRecoverableContractReadError(error)) throw error
+							// The duplicate remains blocked when its address lookup fails.
 						}
 						throw new Error('A security pool for this question, Statoblast security multiplier, and priority fee already exists.')
 					}
