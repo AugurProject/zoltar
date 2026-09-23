@@ -13,7 +13,7 @@ import { ToolbarField } from '../../components/ToolbarField.js'
 import { WalletChip, WalletChipLabel } from '../../components/WalletChip.js'
 import { TimestampValue } from '../../components/TimestampValue.js'
 import { WarningSurface } from '../../components/WarningSurface.js'
-import { getChainDisplayLabel, getChainIdDecimalLabel, getKnownChainName, isActiveAppChain } from '../../wallet/network.js'
+import { getChainDisplayLabel, isActiveAppChain } from '../../wallet/network.js'
 import { renderRepPriceSourceLabel, type RepPriceFailure, type RepPriceSource } from '../../lib/repPriceSource.js'
 import type { AccountState } from '../../types/app.js'
 import type { ReadBackendStatus } from '../../wallet/chainBackend.js'
@@ -67,17 +67,6 @@ function omitPresentationActionHint(presentation: UserMessagePresentation) {
 	const { actionHint, ...presentationWithoutActionHint } = presentation
 	void actionHint
 	return presentationWithoutActionHint
-}
-
-function getWalletNetworkLabel(chainId: string | undefined) {
-	if (chainId === undefined) return appCopy.unknownNetwork
-	if (chainId === '0xaa36a7') return appCopy.sepoliaNetwork
-	const chainLabel = getChainDisplayLabel(chainId)
-	if (chainLabel === undefined) return appCopy.unknownNetwork
-	const chainName = getKnownChainName(chainId)
-	if (chainName === undefined) return chainLabel
-	const decimalChainId = getChainIdDecimalLabel(chainId)
-	return decimalChainId === undefined ? chainName : appCopy.formatNetworkWithChainId(chainName, decimalChainId)
 }
 
 function renderRepPriceFailure(failure: RepPriceFailure | undefined) {
@@ -170,11 +159,6 @@ export function OverviewPanels({
 	const wrongNetworkBadge = hasWrongWalletNetwork ? <Badge tone='danger'>{appCopy.formatWrongNetworkBadgeLabel(getChainDisplayLabel(accountState.chainId) ?? appCopy.unknownNetwork)}</Badge> : undefined
 	const environmentBadge = isBrowserSimulationReadBackend ? <Badge tone='warning'>{appCopy.simulation}</Badge> : undefined
 	const activeNetworkBadge = activeNetworkProfile.id === 'simulation' ? undefined : <Badge>{activeNetworkProfile.displayName}</Badge>
-	const walletNetworkLabel = (() => {
-		if (!walletOnActiveNetwork) return getWalletNetworkLabel(accountState.chainId)
-		if (activeNetworkProfile.id === 'sepolia') return appCopy.sepoliaNetwork
-		return appCopy.ethereumMainnet
-	})()
 	const walletControl = (() => {
 		if (accountState.address === undefined) return <WalletConnectionControl onClick={onConnect} pending={isConnectingWallet} pendingLabel={appCopy.connecting} label={commonCopy.connectWallet} />
 		if (isBrowserSimulationReadBackend) {
@@ -193,10 +177,6 @@ export function OverviewPanels({
 				</summary>
 				<div className='account-menu-popover'>
 					<AddressValue address={accountState.address} />
-					<p className='account-menu-network'>
-						<span>{appCopy.currentNetwork}</span>
-						<strong>{walletNetworkLabel}</strong>
-					</p>
 					<WalletConnectionControl className='secondary' onClick={onChangeWallet} disabled={isManagingWallet} label={appCopy.changeWallet} />
 					{hasWrongWalletNetwork ? <WalletNetworkControl className='primary' onClick={onSwitchNetwork} disabled={isManagingWallet} label={switchNetworkLabel} /> : undefined}
 					<WalletConnectionControl className='quiet' onClick={onDisconnectWallet} disabled={isManagingWallet} label={isManagingWallet ? appCopy.managingWallet : appCopy.disconnectWallet} />

@@ -256,7 +256,6 @@ describe('OverviewPanels', () => {
 		})
 
 		openAccountMenu()
-		expect(documentQueries.getByText('Ethereum (1)')).not.toBeNull()
 		expect(documentQueries.queryByRole('button', { name: 'Copy Address' })).toBeNull()
 		expect(documentQueries.queryByRole('button', { name: 'Address Copied' })).toBeNull()
 		fireEvent.click(documentQueries.getByRole('button', { name: 'Change wallet' }))
@@ -316,7 +315,7 @@ describe('OverviewPanels', () => {
 
 		expect(documentQueries.getByText('Wrong Network (52331)')).not.toBeNull()
 		openAccountMenu()
-		expect(document.body.querySelector('.account-menu-network strong')?.textContent).toBe('52331')
+		expect(document.body.querySelector('.account-menu-network')).toBeNull()
 	})
 
 	test('keeps the connect wallet button idle during bootstrap-only loading', async () => {

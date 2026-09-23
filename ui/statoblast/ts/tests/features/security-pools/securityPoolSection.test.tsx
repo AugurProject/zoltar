@@ -75,7 +75,7 @@ describe('SecurityPoolSection', () => {
 		},
 	})
 
-	test('renders the owned transaction review inline instead of the submit button and dismisses it on cancel', async () => {
+	test('renders the owned transaction review inline without a cancel button', async () => {
 		const review = new AbortController()
 		const controller = createTransactionStepController(review.signal)
 		controller.setPlan([{ title: 'Create security pool', description: 'Pool parameters are fixed at deployment.', contractAddress: undefined, contractLabel: undefined, spender: undefined, amount: undefined, ethValueAttoEth: 0n }])
@@ -91,10 +91,8 @@ describe('SecurityPoolSection', () => {
 		expect(queries.queryByRole('button', { name: /Creating pool/ })).toBeNull()
 		expect(document.querySelector('[role=dialog]')).toBeNull()
 		expect(document.activeElement).toBe(confirmButton)
-		await act(() => {
-			fireEvent.click(queries.getByRole('button', { name: 'Cancel' }))
-		})
-		expect(onDismissSecurityPoolReview).toHaveBeenCalledTimes(1)
+		expect(queries.queryByRole('button', { name: 'Cancel' })).toBeNull()
+		review.abort()
 		await expect(pendingReview).rejects.toThrow('Remaining transactions canceled')
 		await act(() => {
 			render(h(SecurityPoolSection, createProps({ onDismissSecurityPoolReview, securityPoolCreating: false, securityPoolReviewSignal: undefined })), renderedComponent.container)
@@ -102,7 +100,7 @@ describe('SecurityPoolSection', () => {
 		expect(document.activeElement).toBe(queries.getByRole('button', { name: 'Create pool' }))
 	})
 
-	test('keeps the form locked while a failed transaction review awaits dismissal', async () => {
+	test('shows a failed transaction review without a close button', async () => {
 		const review = new AbortController()
 		const controller = createTransactionStepController(review.signal)
 		controller.setPlan([{ title: 'Create security pool', description: undefined, contractAddress: undefined, contractLabel: undefined, spender: undefined, amount: undefined, ethValueAttoEth: 0n }])
@@ -113,7 +111,7 @@ describe('SecurityPoolSection', () => {
 
 		const queries = within(document.body)
 		expect(queries.getByRole('alert').textContent).toContain('User rejected the request')
-		expect(queries.getByRole('button', { name: 'Close' })).not.toBeNull()
+		expect(queries.queryByRole('button', { name: 'Close' })).toBeNull()
 		expect(queries.queryByRole('radio', { name: 'Use a question ID' })).toBeNull()
 		expect((queries.getByRole('textbox', { name: 'Statoblast Security Multiplier' }) as HTMLInputElement).disabled).toBe(true)
 		expect(queries.queryByRole('button', { name: 'Create pool' })).toBeNull()
@@ -241,23 +239,25 @@ describe('SecurityPoolSection', () => {
 		expect(document.body.textContent?.includes('Enter the question, choose how much REP coverage the pool should require, then deploy the pool for vaults, reporting, and trading.')).toBe(false)
 	})
 
-	test('asks users to choose an existing or new question before showing the matching workflow', async () => {
-		const renderedComponent = await renderIntoDocument(h(SecurityPoolSection, createProps({ onCreateQuestionAndSecurityPool: () => undefined })))
+	test('defaults to creating a new question and switches to an existing question ID on request', async () => {
+		const renderedComponent = await renderIntoDocument(h(SecurityPoolSection, createProps({ marketDetails: undefined, onCreateQuestionAndSecurityPool: () => undefined, securityPoolForm: { initialReportPriorityFeeEth: '0.00000001', marketId: '', statoblastSecurityMultiplierBps: '2' } })))
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		expect((documentQueries.getByRole('radio', { name: 'Use a question ID' }) as HTMLInputElement).checked).toBe(true)
+		const radios = documentQueries.getAllByRole('radio')
+		expect(radios.map(radio => (radio as HTMLInputElement).value)).toEqual(['new', 'existing'])
+		expect((documentQueries.getByRole('radio', { name: 'Create a new question' }) as HTMLInputElement).checked).toBe(true)
 		expect(documentQueries.queryByRole('combobox')).toBeNull()
-		expect(documentQueries.getByRole('textbox', { name: 'Question ID' })).not.toBeNull()
-		expect(document.querySelector('form[aria-label="Create Question"]')).toBeNull()
-		expect(documentQueries.queryByRole('button', { name: 'Create question and pool' })).toBeNull()
-
-		fireEvent.click(documentQueries.getByRole('radio', { name: 'Create a new question' }))
 		expect(documentQueries.queryByRole('textbox', { name: 'Question ID' })).toBeNull()
 		expect(document.querySelector('form[aria-label="Create Question"]')).not.toBeNull()
 		expect(documentQueries.getByRole('button', { name: 'Create question and pool' })).not.toBeNull()
 		expect(documentQueries.queryByRole('button', { name: 'Create question' })).toBeNull()
 		expect(documentQueries.queryByRole('button', { name: 'Create pool' })).toBeNull()
+
+		fireEvent.click(documentQueries.getByRole('radio', { name: 'Use a question ID' }))
+		expect(documentQueries.getByRole('textbox', { name: 'Question ID' })).not.toBeNull()
+		expect(document.querySelector('form[aria-label="Create Question"]')).toBeNull()
+		expect(documentQueries.queryByRole('button', { name: 'Create question and pool' })).toBeNull()
 	})
 
 	test('keeps the security multiplier field label concise while associating helper text', async () => {

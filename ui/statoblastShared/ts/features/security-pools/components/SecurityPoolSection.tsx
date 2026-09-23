@@ -69,11 +69,12 @@ export function SecurityPoolSection({
 		title: securityPoolCopy.createQuestionForPoolTitle,
 	}
 	const isOnActiveAppChain = isActiveAppChain(accountState.chainId)
-	const [questionSource, setQuestionSource] = useState<'existing' | 'new'>(marketResult === undefined ? 'existing' : 'new')
+	// An unfinished question-and-pool flow keeps its question; otherwise use an explicitly selected ID or start a new question.
+	const [questionSource, setQuestionSource] = useState<'existing' | 'new'>(marketResult !== undefined || (securityPoolForm.marketId.trim() === '' && marketDetails === undefined) ? 'new' : 'existing')
 	const reviewWorkflow = transactionSteps.value
 	const ownsTransactionReview = securityPoolReviewSignal !== undefined && reviewWorkflow?.reviewSignal === securityPoolReviewSignal && reviewWorkflow.steps[reviewWorkflow.activeIndex] !== undefined
 	// The review replaces the submit button so the form stays visible while the user confirms the transaction.
-	const inlineTransactionReview = ownsTransactionReview ? <TransactionStepsContent contextKey='security-pool-creation' focusOnMount heading={transactionReviewCopy.transactionReview} keepActionsVisible onClose={onDismissSecurityPoolReview} /> : undefined
+	const inlineTransactionReview = ownsTransactionReview ? <TransactionStepsContent cancelable={false} contextKey='security-pool-creation' focusOnMount heading={transactionReviewCopy.transactionReview} keepActionsVisible /> : undefined
 	const panelRef = useRef<HTMLDivElement>(null)
 	const returnFocusAfterReview = useRef(false)
 	// Leaving the card (for example through the route tabs) would strand a review that only this card renders.
@@ -90,7 +91,7 @@ export function SecurityPoolSection({
 		returnFocusAfterReview.current = false
 		panelRef.current?.querySelector<HTMLElement>('.actions .tx-action-button:not(:disabled)')?.focus()
 	}, [ownsTransactionReview, securityPoolCreating])
-	// A review that is still showing (including a failed one awaiting Close) keeps the form it summarizes locked.
+	// A review that is still showing keeps the form it summarizes locked; declining happens in the wallet.
 	const questionSourceLocked = questionAndPoolCreating || marketCreating || securityPoolCreating || ownsTransactionReview || marketResult !== undefined
 	const hasSecurityPoolResult = securityPoolResult !== undefined
 	const statoblastSecurityMultiplierValidationMessage = getStatoblastSecurityMultiplierValidationMessage(securityPoolForm.statoblastSecurityMultiplierBps)
@@ -220,7 +221,7 @@ export function SecurityPoolSection({
 								onClick={() => {
 									onResetSecurityPoolCreation()
 									onResetMarket()
-									setQuestionSource('existing')
+									setQuestionSource('new')
 								}}
 							>
 								{securityPoolCopy.createAnotherPool}
@@ -267,17 +268,15 @@ export function SecurityPoolSection({
 				) : (
 					<>
 						{questionSourceLocked ? undefined : (
-							<SectionBlock variant='plain'>
-								<fieldset className='pool-question-source' disabled={questionSourceLocked}>
-									<legend>{securityPoolCopy.questionSourceLegend}</legend>
-									<label>
-										<input checked={questionSource === 'existing'} disabled={questionSourceLocked} name='security-pool-question-source' type='radio' value='existing' onChange={() => setQuestionSource('existing')} /> {securityPoolCopy.useQuestionId}
-									</label>
-									<label>
-										<input checked={questionSource === 'new'} disabled={questionSourceLocked} name='security-pool-question-source' type='radio' value='new' onChange={() => setQuestionSource('new')} /> {securityPoolCopy.createNewQuestion}
-									</label>
-								</fieldset>
-							</SectionBlock>
+							<fieldset className='pool-question-source' disabled={questionSourceLocked}>
+								<legend>{securityPoolCopy.questionSourceLegend}</legend>
+								<label>
+									<input checked={questionSource === 'new'} disabled={questionSourceLocked} name='security-pool-question-source' type='radio' value='new' onChange={() => setQuestionSource('new')} /> {securityPoolCopy.createNewQuestion}
+								</label>
+								<label>
+									<input checked={questionSource === 'existing'} disabled={questionSourceLocked} name='security-pool-question-source' type='radio' value='existing' onChange={() => setQuestionSource('existing')} /> {securityPoolCopy.useQuestionId}
+								</label>
+							</fieldset>
 						)}
 
 						{questionSource === 'existing' ? (

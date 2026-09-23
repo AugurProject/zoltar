@@ -63,6 +63,8 @@ function useTransactionStepsState() {
 }
 
 type TransactionStepsActionsProps = {
+	/** False when the surrounding flow has no way back (the wallet is where the user declines); hides the Cancel/Close control. */
+	cancelable?: boolean
 	contextKey: string
 	/** Move focus into the actions when the review replaced the control the user activated. */
 	focusOnMount?: boolean
@@ -72,7 +74,7 @@ type TransactionStepsActionsProps = {
 }
 
 /** The review's confirm, approval, and cancel controls; a dialog form can host them in its own action row. */
-export function TransactionStepsActions({ contextKey, focusOnMount = false, keepActionsVisible = false, onClose }: TransactionStepsActionsProps) {
+export function TransactionStepsActions({ cancelable = true, contextKey, focusOnMount = false, keepActionsVisible = false, onClose }: TransactionStepsActionsProps) {
 	const { error, failure, pending, presentation, workflow } = useTransactionStepsState()
 	const errorRef = useRef<HTMLDivElement>(null)
 	const actionsRef = useRef<HTMLDivElement>(null)
@@ -160,7 +162,7 @@ export function TransactionStepsActions({ contextKey, focusOnMount = false, keep
 												tone={step.approval === undefined ? 'primary' : 'secondary'}
 											/>
 										)}
-										{final ? (
+										{final && cancelable ? (
 											<div className='actions transaction-step-close'>
 												<button className='secondary' type='button' onClick={onClose ?? workflow.cancel} disabled={pending}>
 													{completed || error !== undefined ? commonCopy.close : commonCopy.cancel}
@@ -185,7 +187,7 @@ type TransactionStepsContentProps = TransactionStepsActionsProps & {
 	heading?: string | undefined
 }
 
-export function TransactionStepsContent({ actions = 'inline', contextKey, focusOnMount = false, heading, keepActionsVisible = false, onClose }: TransactionStepsContentProps) {
+export function TransactionStepsContent({ actions = 'inline', cancelable = true, contextKey, focusOnMount = false, heading, keepActionsVisible = false, onClose }: TransactionStepsContentProps) {
 	const { current, presentation, workflow } = useTransactionStepsState()
 	if (workflow === undefined || current === undefined) return undefined
 	const completed = workflow.steps.every(step => step.phase === 'confirmed' || step.phase === 'skipped')
@@ -203,7 +205,7 @@ export function TransactionStepsContent({ actions = 'inline', contextKey, focusO
 				{funding.length === 0 ? <TransactionStepReview contractAddress={current.contractAddress} contractLabel={current.contractLabel} description={completed ? undefined : current.description} rows={presentation?.rows} /> : <TransactionFundingSummary funding={funding} totalAttoEth={totalEth} outcome={outcome} />}
 				{funding.length === 0 || completed ? undefined : <p className='detail transaction-funding-note'>{copy.fundingDetail}</p>}
 			</div>
-			{actions === 'inline' ? <TransactionStepsActions contextKey={contextKey} focusOnMount={focusOnMount} keepActionsVisible={keepActionsVisible} onClose={onClose} /> : undefined}
+			{actions === 'inline' ? <TransactionStepsActions cancelable={cancelable} contextKey={contextKey} focusOnMount={focusOnMount} keepActionsVisible={keepActionsVisible} onClose={onClose} /> : undefined}
 		</>
 	)
 }

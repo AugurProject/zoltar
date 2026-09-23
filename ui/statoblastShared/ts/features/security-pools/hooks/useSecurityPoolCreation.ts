@@ -8,7 +8,6 @@ import { loadMarketDetails } from '@zoltar/ui-zoltar-shared/protocol/zoltar.js'
 import { useLoadController } from '@zoltar/ui-core-shared/hooks/useLoadController.js'
 import { createConnectedReadClient, createWalletWriteClient } from '@zoltar/ui-core-shared/wallet/clients.js'
 import { embeddedTransactionSteps } from '@zoltar/ui-core-shared/components/TransactionStepsModal.js'
-import { transactionSteps } from '@zoltar/ui-core-shared/transactions/transactionSteps.js'
 import { useRequestGuard } from '@zoltar/ui-core-shared/lib/requestGuard.js'
 import { getErrorMessage, isRecoverableContractReadError } from '@zoltar/ui-core-shared/lib/errors.js'
 import { createErrorActionFeedback, createPendingActionFeedback, createSuccessActionFeedback, createWarningActionFeedback } from '@zoltar/ui-core-shared/transactions/actionFeedback.js'
@@ -168,7 +167,6 @@ export function useSecurityPoolCreation({
 		const review = new AbortController()
 		securityPoolReview.value = review
 		embeddedTransactionSteps.value = review.signal
-		let reviewShowsFailure = false
 		securityPoolCreationFeedback.value = createPendingActionFeedback('createSecurityPool', 'Creating security pool')
 
 		let capturedDetails: MarketDetails | undefined
@@ -197,8 +195,7 @@ export function useSecurityPoolCreation({
 					},
 					onTransactionFailed,
 					onWriteError: message => {
-						// A review that reached the user stays open after a failure so its error and Close control remain visible.
-						reviewShowsFailure = !review.signal.aborted && transactionSteps.peek()?.reviewSignal === review.signal
+						securityPoolError.value = message
 						securityPoolCreationFeedback.value = createErrorActionFeedback('createSecurityPool', 'Security pool creation failed', message)
 					},
 					refreshState,
@@ -234,7 +231,7 @@ export function useSecurityPoolCreation({
 						throw new Error('A security pool for this question, Statoblast security multiplier, and priority fee already exists.')
 					}
 
-					const reviewLabels = { description: securityPoolCopy.createPoolReviewDescription, title: newQuestion === undefined ? securityPoolCopy.createPoolReviewTitle : securityPoolCopy.createQuestionAndPoolReviewTitle }
+					const reviewLabels = { title: newQuestion === undefined ? securityPoolCopy.createPoolReviewTitle : securityPoolCopy.createQuestionAndPoolReviewTitle }
 					const result = await createSecurityPool(createWalletWriteClient(walletAddress, { onTransactionPrepared, onTransactionSubmitted, reviewSignal: review.signal }), parameters, newQuestion?.questionData, reviewLabels)
 					capturedDetails = result.questionCreatedAt === undefined ? details : { ...details, createdAt: result.questionCreatedAt }
 					return { ...result, hash: result.deployPoolHash }
@@ -253,7 +250,7 @@ export function useSecurityPoolCreation({
 				},
 			)
 		} finally {
-			if (!reviewShowsFailure) dismissSecurityPoolReview()
+			dismissSecurityPoolReview()
 			securityPoolSubmissionInProgress.value = false
 		}
 	}
