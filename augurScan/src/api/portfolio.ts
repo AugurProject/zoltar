@@ -1,6 +1,5 @@
 import type { SQL } from 'bun'
 import { encodeOpaqueCursor, parseCursor } from '../cursor-codec.ts'
-import type { JsonValue } from '../ethereum.ts'
 import { addressPortfolioRows, richListRows, type RichListSort } from '../repositories/portfolio.ts'
 import { snapshotBoundary } from './entity-details.ts'
 import { ApiConflictError, ApiRequestError, boundedInteger, evmAddress, integer, isNonNegativeSafeInteger, isPostgresBigint, json, jsonRecord } from './shared.ts'
@@ -65,6 +64,11 @@ const parsePortfolioCursor = (value: string | null, chainId: number, address: st
 
 const portfolioCursorFor = (chainId: number, address: string, kind: PortfolioCollection, asOf: Record<string, unknown>, total: number, offset: number): string => encodeOpaqueCursor([chainId, address, kind, ...snapshotBoundary(asOf), total, offset] satisfies PortfolioCursor)
 
+const balanceAvailability = (sampledCount: number, expectedCount: number) => {
+	if (sampledCount === 0) return 'unavailable'
+	return sampledCount < expectedCount ? 'partial' : 'available'
+}
+
 export const addressPortfolioResponse = async (sql: SQL, url: URL): Promise<Response> => {
 	const chainId = integer(url.searchParams.get('chainId'), 'chainId')
 	if (chainId === undefined) throw new ApiRequestError('chainId is required')
@@ -81,10 +85,7 @@ export const addressPortfolioResponse = async (sql: SQL, url: URL): Promise<Resp
 		[lpPage.cursor, forkPage.cursor, reportPage.cursor].flatMap(cursor => (cursor === undefined ? [] : [{ parts: cursor, offset: 3 }])),
 	)
 	const snapshotBlock = String(asOf['blockNumber'])
-	const requestUrl = new URL(url)
-	requestUrl.pathname = '/api/v1/richlist'
-	requestUrl.search = new URLSearchParams({ chainId: String(chainId), address, limit: '1' }).toString()
-	const portfolioResponsePromise = richList(sql, requestUrl)
+	const portfolioRowsPromise = richListRows(sql, { chainId, address, snapshotBlock, limit: 1, offset: 0, sort: 'transactions' })
 	const { lpRows, forkRows, reportRows } = await addressPortfolioRows(sql, {
 		chainId,
 		address,
@@ -94,10 +95,7 @@ export const addressPortfolioResponse = async (sql: SQL, url: URL): Promise<Resp
 		forkOffset: forkPage.offset,
 		reportOffset: reportPage.offset,
 	})
-	const portfolioResponse = await portfolioResponsePromise
-	const payload: JsonValue = await portfolioResponse.json()
-	const payloadRecord = jsonRecord(payload)
-	const items = Array.isArray(payloadRecord['items']) ? payloadRecord['items'] : []
+	const items = (await portfolioRowsPromise).filter((row: Record<string, unknown>) => row['address'] !== null)
 	const collection = (kind: PortfolioCollection, rows: readonly Record<string, unknown>[], page: { readonly total: number; readonly offset: number }, identityField: string) => {
 		const total = Number(rows[0]?.['total'] ?? 0)
 		if (page.offset > 0 && page.total !== total) throw new ApiConflictError('Portfolio history changed; restart pagination')
@@ -119,11 +117,26 @@ export const addressPortfolioResponse = async (sql: SQL, url: URL): Promise<Resp
 	const forks = collection('forks', forkRows, forkPage, 'universe_identity')
 	const reports = collection('reports', reportRows, reportPage, 'open_oracle_address')
 	const base = items[0]
+	// Omit unknown aggregate balances instead of turning absent historical reads into zero.
+	const balances =
+		base === undefined
+			? {}
+			: {
+					native_balance: Number(base['sampled_native_count']) > 0 ? base['native_balance'] : undefined,
+					weth_balance: Number(base['sampled_weth_token_count']) > 0 ? base['weth_balance'] : undefined,
+					balanceAvailability: {
+						native: Number(base['sampled_native_count']) > 0 ? 'available' : 'unavailable',
+						weth: balanceAvailability(Number(base['sampled_weth_token_count']), Number(base['weth_token_count'])),
+						rep: balanceAvailability(Number(base['sampled_rep_token_count']), Number(base['rep_token_count'])),
+					},
+				}
 	return json({
 		chainId,
 		asOf,
 		data: {
 			...jsonRecord(base),
+			...balances,
+			vaultAvailability: Number(base?.['vault_count'] ?? 0) > 0 ? 'available' : 'unavailable',
 			...(base === undefined ? { address, availability: 'Awaiting indexed evidence' } : {}),
 			lp_positions: lp.items,
 			fork_participation: forks.items,
