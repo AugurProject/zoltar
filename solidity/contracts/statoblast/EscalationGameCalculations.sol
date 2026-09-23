@@ -65,8 +65,18 @@ abstract contract EscalationGameCalculations is EscalationGameState {
 	}
 
 	function getFinalQuestionResolution() public view returns (BinaryOutcomes.BinaryOutcome) {
-		if (block.timestamp <= getEscalationGameEndDate()) return BinaryOutcomes.BinaryOutcome.None;
+		uint256 endDate = getEscalationGameEndDate();
+		if (block.timestamp <= endDate) return BinaryOutcomes.BinaryOutcome.None;
+		// An inherited branch outcome is already fixed, but still observes the fresh response period.
+		if (fixedQuestionOutcome != BinaryOutcomes.BinaryOutcome.None) return fixedQuestionOutcome;
+		// A fork at the deadline interrupts finality, even when migration is initialized later.
+		uint256 forkTime = _getUniverseForkTime();
+		if (forkTime != 0 && forkTime <= endDate) return BinaryOutcomes.BinaryOutcome.None;
 		return getQuestionResolution();
+	}
+
+	function _getUniverseForkTime() private view returns (uint256) {
+		return securityPool.zoltar().getForkTime(securityPool.universeId());
 	}
 
 	function hasReachedNonDecision() public view returns (bool) {
@@ -106,7 +116,7 @@ abstract contract EscalationGameCalculations is EscalationGameState {
 		uint256 bindingCapitalAttoRep = getBindingCapitalAttoRep();
 		uint256 winningOutcomeBalanceAttoRep = outcomeState[outcomeIndex].balanceAttoRep;
 		uint256 actualForkThresholdAttoRep = securityPool.zoltar().getForkThresholdAttoRep(securityPool.universeId());
-		uint256 forkTime = securityPool.zoltar().getForkTime(securityPool.universeId());
+		uint256 forkTime = _getUniverseForkTime();
 		if (forkTime > getEscalationGameEndDate()) {
 			actualForkThresholdAttoRep = nonDecisionThresholdAttoRep;
 		}

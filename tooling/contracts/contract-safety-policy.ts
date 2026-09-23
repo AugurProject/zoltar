@@ -67,8 +67,8 @@ export const contractSafetyPolicy = {
 				sourcePath: 'contracts/statoblast/EscalationGame.sol',
 				contractName: 'EscalationGame',
 			},
-			24_536,
-			'The game adds shared continuation response-period admission while preserving ordinary finality and selector routing; this bug fix uses 108 additional runtime bytes, with no further growth permitted.',
+			24_576,
+			'The merged game preserves continuation response-period admission and fork-aware finality at the EIP-170 limit; the preview reads its outcome balance once, and no further runtime growth is permitted.',
 		),
 		runtimeBudget(
 			{
@@ -83,8 +83,8 @@ export const contractSafetyPolicy = {
 				sourcePath: 'contracts/statoblast/SecurityPoolForker.sol',
 				contractName: 'SecurityPoolForker',
 			},
-			24_505,
-			'The reviewed forker adds understandable revert reasons while retaining size-limited migration guards; no further runtime growth is permitted.',
+			24_135,
+			'The forker now delegates fork-aware finality to the game, reducing runtime size while retaining size-limited migration guards; no further growth is permitted.',
 		),
 	] satisfies readonly BytecodeBudget[],
 	initcodeBudgets: [
@@ -93,16 +93,16 @@ export const contractSafetyPolicy = {
 				sourcePath: 'contracts/statoblast/SecurityPoolForker.sol',
 				contractName: 'SecurityPoolForker',
 			},
-			48_815,
-			'The reviewed forker initcode includes the added revert reasons and minimum constructor arguments; no further growth is permitted.',
+			48_438,
+			'The forker initcode includes delegated fork-aware finality and minimum constructor arguments; no further growth is permitted.',
 		),
 		initcodeBudget(
 			{
 				sourcePath: 'contracts/statoblast/factories/EscalationGameFactory.sol',
 				contractName: 'EscalationGameFactory',
 			},
-			47_027,
-			'The factory embeds the response-period admission fix and inherited settlement token-funding check; these bug fixes use 354 additional initcode bytes, with no further growth permitted.',
+			47_074,
+			'The factory embeds the merged game with continuation response-period admission and fork-aware finality; no further initcode growth is permitted.',
 		),
 	] satisfies readonly BytecodeBudget[],
 	exactLayoutPairs: [
