@@ -1,199 +1,33 @@
-import { TransactionActionButton, TransactionActionButtonLockProvider } from './TransactionActionButton.js'
-import { TokenApprovalControl } from './TokenApprovalControl.js'
-import * as copy from '../copy/transactionSteps.js'
-import * as commonCopy from '../copy/common.js'
-import * as transactionCopy from '../copy/transaction.js'
-import { AddressValue } from './AddressValue.js'
-import { ReadOnlyDetailAccordion } from './ReadOnlyDetailAccordion.js'
-import { TransactionObjectContext } from './TransactionObjectContext.js'
-import type { GlobalTransactionRow } from '../types/components.js'
-import type { Address } from '@zoltar/core-shared/evm/ethereum'
-import { GlobalTransactionPresentationProvider, useGlobalTransactionPresentation } from './GlobalTransactionPresentationContext.js'
-import { useEffect, useRef } from 'preact/hooks'
-import { OperationModal } from './OperationModal.js'
-import { EthAmount, TransactionFundingSummary } from './TransactionFundingSummary.js'
-import { InlineHint } from './InlineHint.js'
-import { TransactionHashLink } from './TransactionHashLink.js'
+import { useEffect } from 'preact/hooks'
 import { signal } from '@preact/signals'
+import { GlobalTransactionPresentationProvider, useGlobalTransactionPresentation } from './GlobalTransactionPresentationContext.js'
+import { OperationModal } from './OperationModal.js'
+import { TransactionStepsContent } from './TransactionStepsContent.js'
 import { transactionSteps } from '../transactions/transactionSteps.js'
+import { isEmbeddedTransactionReview } from '../transactions/transactionReviewScope.js'
 
 export const embeddedTransactionSteps = signal<AbortSignal | undefined>(undefined)
-
-/** Explains a step that has no token funding to summarize, using the enclosing operation's rows for the parameters being submitted. */
-function TransactionStepReview({ contractAddress, contractLabel, description, rows = [] }: { contractAddress: Address | undefined; contractLabel: string | undefined; description: string | undefined; rows?: GlobalTransactionRow[] | undefined }) {
-	return (
-		<>
-			{description === undefined ? undefined : <p className='detail'>{description}</p>}
-			<TransactionObjectContext items={rows} />
-			{contractAddress === undefined ? undefined : (
-				<ReadOnlyDetailAccordion title={commonCopy.technicalDetails}>
-					<dl className='global-transaction-notice-rows'>
-						<div className='global-transaction-notice-row'>
-							<dt>{transactionCopy.contract}</dt>
-							<dd>
-								{contractLabel === undefined ? (
-									<AddressValue address={contractAddress} copyable={false} />
-								) : (
-									<>
-										{contractLabel} <AddressValue address={contractAddress} copyable={false} />
-									</>
-								)}
-							</dd>
-						</div>
-					</dl>
-				</ReadOnlyDetailAccordion>
-			)}
-		</>
-	)
-}
 
 export function TransactionStepsModal({ contextKey }: { contextKey: string }) {
 	useEffect(() => () => transactionSteps.peek()?.cancel(), [contextKey])
 	const presentation = useGlobalTransactionPresentation()
-	useEffect(() => {
-		if (presentation?.tone === 'success') transactionSteps.value?.finish()
-	}, [presentation?.tone, presentation?.hash])
-	if (transactionSteps.value?.reviewSignal?.aborted) return undefined
-	if (embeddedTransactionSteps.value !== undefined && transactionSteps.value?.reviewSignal === embeddedTransactionSteps.value) return undefined
-	return <TransactionStepsContent contextKey={contextKey} />
-}
-
-export function TransactionStepsContent({ contextKey, focusOnMount = false, heading, inline = false, keepActionsVisible = false, onClose }: { contextKey: string; focusOnMount?: boolean; heading?: string | undefined; inline?: boolean; keepActionsVisible?: boolean; onClose?: (() => void) | undefined }) {
-	const presentation = useGlobalTransactionPresentation()
-	const errorRef = useRef<HTMLDivElement>(null)
-	const actionsRef = useRef<HTMLDivElement>(null)
 	const workflow = transactionSteps.value
-	const current = workflow?.steps[workflow.activeIndex]
-	const operationFailed = presentation?.tone === 'error'
-	const operationError = typeof presentation?.detail === 'string' ? presentation.detail : copy.requirementsFailed
-	const error = operationFailed && (current?.error === undefined || current?.error === 'Transaction reverted.') ? operationError : current?.error
-	const pending = error === undefined && (workflow?.steps.some(step => step.phase === 'pending') ?? false)
 	useEffect(() => {
-		if (error !== undefined) errorRef.current?.scrollIntoView?.({ block: 'nearest' })
-	}, [error])
-	// A review in page flow can slip under the fixed transaction tray, so keep its actions clear as they change state.
-	// The tray grows with each presentation update, so wait for that layout and center rather than edge-align.
-	useEffect(() => {
-		if (!keepActionsVisible || typeof requestAnimationFrame !== 'function') return
-		let frame: number | undefined
-		frame = requestAnimationFrame(() => {
-			frame = requestAnimationFrame(() => actionsRef.current?.scrollIntoView?.({ block: 'center' }))
-		})
-		return () => {
-			if (frame !== undefined) cancelAnimationFrame(frame)
-		}
-	}, [keepActionsVisible, pending, presentation])
-	// A review that replaced the control the user activated takes over its focus.
-	useEffect(() => {
-		if (!focusOnMount) return
-		const actions = actionsRef.current
-		if (actions === null || actions.contains(document.activeElement)) return
-		actions.querySelector<HTMLElement>('button:not(:disabled), input:not(:disabled)')?.focus()
-	}, [focusOnMount])
-	if (workflow === undefined || current === undefined) return undefined
-	const completed = workflow.steps.every(step => step.phase === 'confirmed' || step.phase === 'skipped')
-	const funding = workflow.steps.flatMap(step => step.tokenFunding ?? [])
-	const outcome = workflow.steps.find(step => step.oracleOutcome !== undefined)?.oracleOutcome
-	const fundingReason = funding.length > 0 ? copy.fundingRequired : copy.prerequisitesRequired
-	const blockedReason = pending ? copy.transactionPending : fundingReason
-	const totalEth = workflow.steps.reduce((sum, step) => sum + (step.phase === 'skipped' ? 0n : (step.ethValueAttoEth ?? 0n)), 0n)
-	const renderTransactionActions = () => (
-		<div className='tx-action-group'>
-			<div className='tx-action-feedback' ref={errorRef}>
-				{error === undefined ? undefined : <InlineHint message={error} role='alert' />}
-			</div>
-			<div className='actions'>
-				{workflow.steps.map((step, index) => {
-					const active = index === workflow.activeIndex
-					const final = index === workflow.steps.length - 1
-					const ready = step.phase === 'review' && !pending && error === undefined
-					const status = { skipped: copy.skipped, upcoming: step.optional ? copy.ifNeeded : undefined, review: undefined, pending: undefined, confirmed: copy.confirmed, failed: copy.notCompleted }[step.phase]
-					const detail = [step.phase === 'upcoming' || step.approval !== undefined ? undefined : step.amount, status].filter(value => value !== undefined).join(' · ')
-					return (
-						<div key={index} className={`transaction-plan-action${step.approval === undefined || final ? ' transaction-plan-action-wide' : ''}${final ? ' transaction-plan-action-final' : ''}`}>
-							{step.approval !== undefined ? (
-								<TokenApprovalControl
-									compact
-									showRequirementNotice={false}
-									actionLabel={copy.fundReport}
-									allowanceError={undefined}
-									allowanceLoading={false}
-									approvedAmount={step.approval.approvedAmount}
-									guardMessage={undefined}
-									disabled={!ready}
-									onApprove={amount => workflow.confirmStep(index, amount)}
-									pending={step.phase === 'pending'}
-									pendingLabel={commonCopy.formatApprovingToken(step.approval.tokenSymbol)}
-									requiredAmount={step.approval.requiredAmount}
-									resetKey={`${contextKey}:${index}`}
-									tokenSymbol={step.approval.tokenSymbol}
-									tokenUnits={step.approval.tokenUnits}
-								/>
-							) : (
-								<TransactionActionButton
-									idleLabel={
-										<>
-											{step.title}
-											{(step.ethValueAttoEth ?? 0n) === 0n ? undefined : (
-												<>
-													{' '}
-													· <EthAmount value={step.ethValueAttoEth} />
-												</>
-											)}
-											{detail === '' ? undefined : <span className='transaction-action-detail'>{detail}</span>}
-										</>
-									}
-									pendingLabel={copy.formatPendingAction(step.title)}
-									pending={active && pending}
-									onClick={() => {
-										if (ready) workflow.confirmStep(index)
-									}}
-									availability={{ disabled: !ready, reason: step.phase === 'upcoming' ? blockedReason : status }}
-									showDisabledReason={false}
-									tone={step.approval === undefined ? 'primary' : 'secondary'}
-								/>
-							)}
-							{final ? (
-								<div className='actions transaction-step-close'>
-									<button className='secondary' type='button' onClick={onClose ?? workflow.cancel} disabled={pending}>
-										{completed || error !== undefined ? commonCopy.close : commonCopy.cancel}
-									</button>
-								</div>
-							) : undefined}
-							<div className='transaction-step-hash'>{step.hash === undefined ? undefined : <TransactionHashLink hash={step.hash} />}</div>
-						</div>
-					)
-				})}
-			</div>
-		</div>
-	)
-	const content = (
-		<>
-			{heading === undefined ? undefined : (
-				<div className='transaction-review-header'>
-					<h4>{heading}</h4>
-				</div>
-			)}
-			<div className='transaction-step-content'>
-				{funding.length === 0 ? <TransactionStepReview contractAddress={current.contractAddress} contractLabel={current.contractLabel} description={completed ? undefined : current.description} rows={presentation?.rows} /> : <TransactionFundingSummary funding={funding} totalAttoEth={totalEth} outcome={outcome} />}
-				{funding.length === 0 || completed ? undefined : <p className='detail transaction-funding-note'>{copy.fundingDetail}</p>}
-			</div>
-			<div className='transaction-step-actions transaction-approval-editor' ref={actionsRef}>
-				{renderTransactionActions()}
-			</div>
-		</>
-	)
+		if (presentation?.tone === 'success' && presentation.hash !== undefined && workflow?.steps.some(step => step.hash === presentation.hash)) workflow.finish()
+	}, [presentation?.tone, presentation?.hash])
+	if (workflow === undefined || workflow.reviewSignal?.aborted) return undefined
+	if (isEmbeddedTransactionReview(workflow.reviewSignal)) return undefined
+	if (embeddedTransactionSteps.value !== undefined && workflow.reviewSignal === embeddedTransactionSteps.value) return undefined
+	const current = workflow.steps[workflow.activeIndex]
+	if (current === undefined) return undefined
+	const pending = presentation?.tone !== 'error' && workflow.steps.some(step => step.phase === 'pending' && step.error === undefined)
 	return (
 		<GlobalTransactionPresentationProvider transaction={undefined}>
-			<TransactionActionButtonLockProvider locked={false}>
-				{inline ? (
-					content
-				) : (
-					<OperationModal isOpen closeDisabled={pending} title={workflow.steps.at(-1)?.title ?? current.title} onClose={onClose ?? workflow.cancel}>
-						{content}
-					</OperationModal>
-				)}
-			</TransactionActionButtonLockProvider>
+			<OperationModal embedTransactionSteps={false} isOpen closeDisabled={pending} title={workflow.steps.at(-1)?.title ?? current.title} onClose={workflow.cancel}>
+				<GlobalTransactionPresentationProvider transaction={presentation}>
+					<TransactionStepsContent contextKey={contextKey} />
+				</GlobalTransactionPresentationProvider>
+			</OperationModal>
 		</GlobalTransactionPresentationProvider>
 	)
 }

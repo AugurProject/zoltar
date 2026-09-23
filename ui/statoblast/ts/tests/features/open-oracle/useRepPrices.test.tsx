@@ -249,7 +249,7 @@ describe('useRepPrices', () => {
 		resetEnvironment()
 	})
 
-	test('removes expired cached prices while refreshing them in the background', async () => {
+	test('retains expired cached prices while refreshing them in the background', async () => {
 		const profile = createFakeSimulationProfile()
 		const simulationController = createSimulationController()
 		let readDelayMilliseconds = 0
@@ -266,9 +266,13 @@ describe('useRepPrices', () => {
 		readClient.simulateContract = async () => {
 			throw new Error('Simulation mock pricing should not hit the onchain quoter')
 		}
+		let readClientCount = 0
 		const backend: ChainBackend = {
 			...createFakeBackend({ profile }),
-			createReadClient: () => readClient,
+			createReadClient: () => {
+				readClientCount += 1
+				return readClient
+			},
 		}
 
 		const resetEnvironment = installActiveEnvironmentForTesting(backend, simulationController)
@@ -298,9 +302,9 @@ describe('useRepPrices', () => {
 			cleanupRenderedComponent = secondRender.cleanup
 
 			const secondQueries = within(document.body)
-			expect(secondQueries.getByTestId('rep-per-eth').textContent).toBe('-')
-			expect(secondQueries.getByTestId('rep-per-usdc').textContent).toBe('-')
-			expect(secondQueries.getByTestId('rep-loading').textContent).toBe('loading')
+			expect(secondQueries.getByTestId('rep-per-eth').textContent).toBe((10n ** 18n).toString())
+			expect(secondQueries.getByTestId('rep-per-usdc').textContent).toBe((10n ** 6n).toString())
+			expect(secondQueries.getByTestId('rep-loading').textContent).toBe('ready')
 			expect(secondQueries.getByTestId('rep-refreshing').textContent).toBe('refreshing')
 
 			await waitFor(() => {
@@ -308,6 +312,8 @@ describe('useRepPrices', () => {
 				expect(secondQueries.getByTestId('rep-per-usdc').textContent).toBe((2n * 10n ** 6n).toString())
 				expect(secondQueries.getByTestId('rep-refreshing').textContent).toBe('idle')
 			})
+			// The expired cache triggers exactly one background load, not a mount load plus an expiry-timer load.
+			expect(readClientCount).toBe(2)
 		} finally {
 			Reflect.set(Date, 'now', originalDateNow)
 		}
@@ -361,8 +367,8 @@ describe('useRepPrices', () => {
 			await act(() => {
 				runExpiry()
 			})
-			expect(documentQueries.getByTestId('rep-per-eth').textContent).toBe('-')
-			expect(documentQueries.getByTestId('rep-per-usdc').textContent).toBe('-')
+			expect(documentQueries.getByTestId('rep-per-eth').textContent).toBe((10n ** 18n).toString())
+			expect(documentQueries.getByTestId('rep-per-usdc').textContent).toBe((10n ** 6n).toString())
 
 			await waitFor(() => {
 				expect(documentQueries.getByTestId('rep-per-eth').textContent).toBe((2n * 10n ** 18n).toString())

@@ -284,11 +284,12 @@ void describe('quoteBestV3ExactInput', () => {
 			}
 			client.readContract = async args => {
 				captured.factoryAddress = args.address
-				return zeroAddress as never
+				return getAddress('0xF80acA69d89Fe742FC73B87928cd7AbDb6e943Cf') as never
 			}
 
-			await quoteBestV3ExactInputWithSource(client, SEPOLIA_NETWORK_PROFILE.genesisRepTokenAddress, ETH_ADDRESS, 1n, [3000])
+			const quote = await quoteBestV3ExactInputWithSource(client, SEPOLIA_NETWORK_PROFILE.genesisRepTokenAddress, ETH_ADDRESS, 1n, [3000])
 
+			expect(quote.source.poolUrl).toBe('https://app.uniswap.org/explore/pools/ethereum_sepolia/0xF80acA69d89Fe742FC73B87928cd7AbDb6e943Cf')
 			expect(captured).toEqual({
 				factoryAddress: SEPOLIA_NETWORK_PROFILE.uniswapV3FactoryAddress,
 				quoterAddress: SEPOLIA_NETWORK_PROFILE.uniswapV3QuoterAddress,

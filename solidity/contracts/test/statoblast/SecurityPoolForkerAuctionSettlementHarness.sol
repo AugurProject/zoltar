@@ -54,8 +54,8 @@ contract SecurityPoolForkerAuctionSettlementHarness is SecurityPoolForkerAuction
 
 	function creditAuctionProceeds(ISecurityPool securityPool, address vault, uint256 amount, uint256 newCapacityOwnershipAttoRep, uint256 badDebtToAssignAttoEth) external {
 		SecurityPoolForkerForkData storage data = forkDataByPool[securityPool];
-		data.auctionRepBackingUnitsPerAttoRep = 10;
+		data.auctionRepBackingUnits = 10;
 		data.auctionedCapacityOwnershipAttoRep = 3;
-		_creditAuctionProceeds(securityPool, vault, data, amount, newCapacityOwnershipAttoRep, badDebtToAssignAttoEth, 1);
+		_creditAuctionProceeds(securityPool, vault, data, amount, newCapacityOwnershipAttoRep, badDebtToAssignAttoEth, 1, amount == 0 ? 0 : data.auctionRepBackingUnits);
 	}
 }

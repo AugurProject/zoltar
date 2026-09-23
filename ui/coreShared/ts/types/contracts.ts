@@ -236,6 +236,7 @@ export type OracleManagerDetails = {
 	pendingSettlementOperationIds: bigint[]
 	pendingSettlementQueueCapacity: bigint
 	pendingReportId: bigint
+	pendingReportReadyAtTimestamp?: bigint | undefined
 	priceValidUntilTimestamp: bigint | undefined
 	queuedOperationCostAttoEth: bigint
 	requestPriceCostAttoEth: bigint

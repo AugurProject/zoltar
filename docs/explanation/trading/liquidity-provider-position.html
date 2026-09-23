@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<meta name="description" content="How LP supply is scaled, what an LP token claims, and why INVALID stays outside it." />
+		<title>The liquidity-provider position</title>
+		<link rel="stylesheet" href="../../assets/css/shared-docs.css" />
+		<link rel="stylesheet" href="../../assets/css/docsShell.css" />
+	</head>
+	<body class="doc-openoracle">
+		<main id="main-content">
+			<header>
+				<p class="kicker">Explanation</p>
+				<h1>The liquidity-provider position</h1>
+				<p>An LP token is a proportional claim on YES and NO reserves and nothing else. This page explains how that claim is minted and what it does not cover.</p>
+			</header>
+			<section id="supply">
+				<h2>How LP supply is scaled</h2>
+				<p>Initial LP supply uses the smaller reserve as an accounting scale. The pair permanently mints 1,000 units to a locked address, then mints <code>min(YES, NO) − 1,000</code> to the initializer. At very large Zoltar share scales this avoids an overflowing geometric-mean multiplication. The absolute LP supply is arbitrary; <code>wallet LP / total LP</code> defines ownership.</p>
+				<figure class="diagram" id="fig-trading-add-liquidity" aria-labelledby="fig-trading-add-liquidity-caption">
+					<ol class="protocol-flow">
+						<li><strong>LP → Router:</strong> <code>addLiquidityWithEth</code> with ETH</li>
+						<li><strong>Router → SecurityPool:</strong> <code>createCompleteSet()</code></li>
+						<li><strong>SecurityPool → Router:</strong> equal INVALID, YES, NO</li>
+						<li><strong>Router → Pair:</strong> add largest proportional YES + NO</li>
+						<li><strong>Pair → LP:</strong> LP tokens</li>
+						<li><strong>Router → LP:</strong> all INVALID + unused YES/NO</li>
+					</ol>
+					<figcaption id="fig-trading-add-liquidity-caption"><span class="figure-label">Adding liquidity with ETH.</span> The LP token covers only the YES and NO that entered the pair; the INVALID stays with the provider.</figcaption>
+				</figure>
+			</section>
+			<section id="what-it-claims">
+				<h2>What the token claims</h2>
+				<p>Direct valid YES and NO donations are synchronized into the reserves and accrue to existing LPs. Removal returns proportional raw shares even after trading closes. The coverage shown in the portfolio is an estimate comparing separately held wallet INVALID with the LP reserve claim; the LP token itself is never called insured.</p>
+			</section>
+		</main>
+		<script src="../../assets/js/responsiveDocs.js"></script>
+		<script src="../../assets/js/docsData.js"></script>
+		<script src="../../assets/js/docsShell.js"></script>
+	</body>
+</html>

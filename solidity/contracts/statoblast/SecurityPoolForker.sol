@@ -526,36 +526,30 @@ contract SecurityPoolForker is SecurityPoolForkerBase {
 	}
 
 	function _finalizeBackingUnitsAfterAuction(ISecurityPool securityPool, SecurityPoolForkerForkData storage data, SecurityPoolForkerForkData storage parentData, uint256 repPurchasedAttoRep, uint256 disputeStakedRepSoldAttoRep) private {
-		uint256 poolRepBeforeAttoRep = _getPoolAuctionableRepAtFork(parentData);
-		uint256 disputeStakedRepBeforeAttoRep =
-			_getEscalationAuctionableRep(securityPool, parentData) + disputeStakedRepSoldAttoRep;
-		uint256 combinedRepBeforeAttoRep = poolRepBeforeAttoRep + disputeStakedRepBeforeAttoRep;
-		uint256 poolRepAfterAttoRep = poolRepBeforeAttoRep + disputeStakedRepSoldAttoRep;
-		if (poolRepAfterAttoRep == 0 || repPurchasedAttoRep == 0) {
+		uint256 existingPoolBackingUnits = _getPoolAuctionableRepAtFork(parentData);
+		uint256 poolHeldRepAtFinalizationAttoRep = existingPoolBackingUnits + disputeStakedRepSoldAttoRep;
+		if (poolHeldRepAtFinalizationAttoRep == 0 || repPurchasedAttoRep == 0) {
 			data.unassignedRepBackingUnitsAtFinalization = securityPool.totalRepBackingUnits() - data.migratedAttoRep;
 			return;
 		}
-		uint256 incumbentRepAfterAttoRep =
-			combinedRepBeforeAttoRep == 0
-				? 0
-				: Math.mulDiv(poolRepBeforeAttoRep, combinedRepBeforeAttoRep - repPurchasedAttoRep, combinedRepBeforeAttoRep);
-		uint256 auctionRepBackingUnitsPerAttoRep;
+		// Purchases stay pool-held; subtract them after escrow transfers its sold share.
+		uint256 existingOwnersResidualRepAttoRep = poolHeldRepAtFinalizationAttoRep - repPurchasedAttoRep;
+		uint256 auctionRepBackingUnits;
 		uint256 totalRepBackingUnitsAtFinalization;
-		if (incumbentRepAfterAttoRep == 0) {
+		if (existingOwnersResidualRepAttoRep == 0) {
 			// A full-cap auction has no positive REP residue from which to derive a
 			// dilution ratio. Bound auction ownership at the fixed scale while retaining
 			// child-local migrated units so sub-haircut claims cannot resurrect.
-			auctionRepBackingUnitsPerAttoRep = SecurityPoolUtils.PRICE_PRECISION;
-			totalRepBackingUnitsAtFinalization =
-				Math.mulDiv(poolRepAfterAttoRep, auctionRepBackingUnitsPerAttoRep, 1) + data.migratedAttoRep;
+			auctionRepBackingUnits = Math.mulDiv(poolHeldRepAtFinalizationAttoRep, SecurityPoolUtils.PRICE_PRECISION, 1);
+			totalRepBackingUnitsAtFinalization = auctionRepBackingUnits + data.migratedAttoRep;
 		} else {
-			// Child backing units are REP-denominated before finalization, so this bounded
-			// rate preserves the intended haircut without inheriting a parent's unit scale.
-			auctionRepBackingUnitsPerAttoRep = Math.ceilDiv(poolRepAfterAttoRep, incumbentRepAfterAttoRep);
-			totalRepBackingUnitsAtFinalization = Math.mulDiv(poolRepAfterAttoRep, auctionRepBackingUnitsPerAttoRep, 1);
+			// Before the auction, pool-held REP equals backing units for all existing pool owners, including unmigrated vaults.
+			// Round the complete ratio once; an integer units-per-REP rate would over-dilute those owners.
+			totalRepBackingUnitsAtFinalization = Math.mulDiv(existingPoolBackingUnits, poolHeldRepAtFinalizationAttoRep, existingOwnersResidualRepAttoRep, Math.Rounding.Ceil);
+			auctionRepBackingUnits = totalRepBackingUnitsAtFinalization - existingPoolBackingUnits;
 		}
 		securityPool.setTotalRepBackingUnits(totalRepBackingUnitsAtFinalization);
-		data.auctionRepBackingUnitsPerAttoRep = auctionRepBackingUnitsPerAttoRep;
+		data.auctionRepBackingUnits = auctionRepBackingUnits;
 		data.unassignedRepBackingUnitsAtFinalization = totalRepBackingUnitsAtFinalization - data.migratedAttoRep;
 	}
 
@@ -650,8 +644,14 @@ contract SecurityPoolForker is SecurityPoolForkerBase {
 	function _claimAuctionProceeds(ISecurityPool securityPool, address vault, IUniformPriceDualCapBatchAuction.TickIndex[] memory tickIndices) private {
 		SecurityPoolForkerForkData storage data = forkDataByPool[securityPool];
 		require(data.truthAuction.finalized(), 'Not final');
-		(uint256 amountAttoRep, , uint256 newCapacityOwnershipAttoRep, uint256 badDebtToAssignAttoEth) = data.truthAuction.withdrawBids(vault, tickIndices, data.auctionedCapacityOwnershipAttoRep, auctionedBadDebtByPool[securityPool]);
-		_delegateMigrationCall(vaultMigrationDelegate, abi.encodeCall(SecurityPoolForkerVaultMigrationDelegate.creditAuctionProceeds, (securityPool, vault, amountAttoRep, newCapacityOwnershipAttoRep, badDebtToAssignAttoEth, data.truthAuction.totalAttoRepPurchased())));
+		(
+			uint256 amountAttoRep,
+			,
+			uint256 newCapacityOwnershipAttoRep,
+			uint256 badDebtToAssignAttoEth,
+			uint256 auctionRepBackingUnits
+		) = data.truthAuction.withdrawBids(vault, tickIndices, data.auctionedCapacityOwnershipAttoRep, auctionedBadDebtByPool[securityPool], data.auctionRepBackingUnits);
+		_delegateMigrationCall(vaultMigrationDelegate, abi.encodeCall(SecurityPoolForkerVaultMigrationDelegate.creditAuctionProceeds, (securityPool, vault, amountAttoRep, newCapacityOwnershipAttoRep, badDebtToAssignAttoEth, data.truthAuction.totalAttoRepPurchased(), auctionRepBackingUnits)));
 	}
 
 	function _refundLosingAuctionBidsForSettlement(ISecurityPool securityPool, address vault, IUniformPriceDualCapBatchAuction.TickIndex[] calldata tickIndices) private {
@@ -666,12 +666,7 @@ contract SecurityPoolForker is SecurityPoolForkerBase {
 			return BinaryOutcomes.BinaryOutcome(data.fixedQuestionOutcomePlusOne - 1);
 		if (systemState == SystemState.Operational) {
 			EscalationGame escalationGame = securityPool.escalationGame();
-			uint256 forkTime = zoltar.getForkTime(securityPool.universeId());
-			if (address(escalationGame) != address(0x0)) {
-				uint256 escalationEndDate = escalationGame.getEscalationGameEndDate();
-				if (block.timestamp > escalationEndDate && (forkTime == 0 || escalationEndDate < forkTime))
-					return escalationGame.getFinalQuestionResolution();
-			}
+			if (address(escalationGame) != address(0x0)) return escalationGame.getFinalQuestionResolution();
 		}
 		return BinaryOutcomes.BinaryOutcome.None;
 	}

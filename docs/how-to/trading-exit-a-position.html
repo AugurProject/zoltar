@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<meta name="description" content="Find the largest complete-set exit your wallet can insure and simulate the router call before submitting." />
+		<title>Exit an insured position</title>
+		<link rel="stylesheet" href="../assets/css/shared-docs.css" />
+		<link rel="stylesheet" href="../assets/css/docsShell.css" />
+	</head>
+	<body class="doc-openoracle">
+		<main id="main-content">
+			<header>
+				<p class="kicker">How-to guide</p>
+				<h1>Exit an insured position</h1>
+				<p>Use this guide to convert a directional position back into ETH without giving up more INVALID insurance than you hold.</p>
+			</header>
+			<section id="steps">
+				<h2>Find and submit the exit</h2>
+				<ol>
+					<li>Call the SDK's <code>maximumInsuredExit</code> with your current wallet balances and the pair's reserves. It binary-searches for the largest <code>q</code> satisfying the wallet INVALID, wallet long-share, and opposite-reserve bounds. For a YES position, <code>q</code> complete sets require <code>q</code> INVALID, <code>q</code> YES for redemption, and enough additional YES to buy exactly <code>q</code> NO.</li>
+					<li>Set <code>maxLongSharesIn</code>, <code>minEthOut</code>, recipient, and deadline explicitly.</li>
+					<li>Build the exit as a ShareToken <code>safeBatchTransferFrom</code> to the router carrying <code>q</code> INVALID and <code>maxLongSharesIn</code> long shares with the encoded request (the <a href="../reference/trading/router.html#approval-free">router reference</a> lists the payload fields). Simulate it, then simulate again immediately before submission and confirm the result still satisfies the approved <code>maxLongSharesIn</code> and <code>minEthOut</code>. The UI does this for you from <strong>Exit</strong> → <strong>Preview trade</strong> → <strong>Exit insured YES</strong>.</li>
+				</ol>
+				<p>The UI reports whether a request exceeds the wallet's INVALID or the combined long-share and pair-liquidity capacity. In either case the remainder has not been lost; it stays in the wallet as directional shares. Acquiring more INVALID helps only when INVALID is the binding limit. <a href="../explanation/trading/early-exit-limit.html">Why early ETH exits are limited</a> works through the bounds with numbers.</p>
+			</section>
+		</main>
+		<script src="../assets/js/responsiveDocs.js"></script>
+		<script src="../assets/js/docsData.js"></script>
+		<script src="../assets/js/docsShell.js"></script>
+	</body>
+</html>

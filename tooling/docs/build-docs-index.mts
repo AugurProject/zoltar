@@ -8,7 +8,9 @@ const docsDirectory = path.join(repositoryRoot, 'docs')
 const manifestPath = path.join(docsDirectory, 'manifest.json')
 const dataOutputPath = path.join(docsDirectory, 'assets/js/docsData.js')
 const searchDataOutputPath = path.join(docsDirectory, 'assets/js/docsSearchData.js')
-const categoryDirectories = ['reference', 'explanation'] as const
+// Diátaxis reading path: the landing section is followed by learning, task, understanding, and lookup material.
+const readingPathSectionIds = ['start-here', 'tutorials', 'how-to', 'explanation', 'reference'] as const
+const categoryDirectories = ['tutorials', 'how-to', 'explanation', 'reference'] as const
 const searchChunkHeadingSelector = 'h2, h3, details[id] > summary'
 
 type DocsSection = {
@@ -38,14 +40,13 @@ function normalizedText(value: string | null | undefined): string {
 function assertManifest(value: unknown): asserts value is DocsManifest {
 	assert(typeof value === 'object' && value !== null, 'docs/manifest.json must contain an object')
 	const candidate = value as Partial<DocsManifest>
-	assert(Array.isArray(candidate.sections) && candidate.sections.length === 3, 'docs manifest must declare the reading-path sections')
+	assert(Array.isArray(candidate.sections) && candidate.sections.length === readingPathSectionIds.length, 'docs manifest must declare the reading-path sections')
 	assert(Array.isArray(candidate.pages) && candidate.pages.length > 0, 'docs manifest must declare pages')
 	const sectionIds = new Set<string>(candidate.sections.map(section => section.id))
-	assert.deepEqual(sectionIds, new Set<string>(['start-here', ...categoryDirectories]), 'docs manifest sections must be Start here, Explanations, and Reference')
 	assert.deepEqual(
 		candidate.sections.map(section => section.id),
-		['start-here', 'explanation', 'reference'],
-		'docs manifest sections must follow the reading path',
+		[...readingPathSectionIds],
+		'docs manifest sections must be Start here, Tutorials, How-to guides, Explanations, and Reference, in reading-path order',
 	)
 	const paths = new Set<string>()
 	for (const page of candidate.pages) {
@@ -62,7 +63,11 @@ function assertManifest(value: unknown): asserts value is DocsManifest {
 }
 
 async function filesIn(directory: string): Promise<string[]> {
-	const entries = await readdir(path.join(docsDirectory, directory), { recursive: true, withFileTypes: true })
+	// A Diátaxis section may have no pages yet; only existing directories contribute routes.
+	const entries = await readdir(path.join(docsDirectory, directory), { recursive: true, withFileTypes: true }).catch((error: unknown) => {
+		if (error instanceof Error && 'code' in error && error.code === 'ENOENT') return []
+		throw error
+	})
 	return entries.filter(entry => entry.isFile() && entry.name.endsWith('.html')).map(entry => path.posix.join(directory, path.relative(path.join(docsDirectory, directory), path.join(entry.parentPath, entry.name)).split(path.sep).join('/')))
 }
 
@@ -92,7 +97,7 @@ for (const link of Array.from(landingWindow.document.querySelectorAll('a[href]')
 landingWindow.close()
 
 const actualPagePaths = (await Promise.all(categoryDirectories.map(filesIn))).flat().toSorted()
-assert.deepEqual(actualPagePaths, manifest.pages.map(page => page.path).toSorted(), 'docs manifest pages must exactly match HTML pages in the explanation and reference directories')
+assert.deepEqual(actualPagePaths, manifest.pages.map(page => page.path).toSorted(), 'docs manifest pages must exactly match HTML pages in the tutorials, how-to, explanation, and reference directories')
 
 const searchIndex = []
 for (const page of manifest.pages) {

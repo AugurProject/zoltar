@@ -5,26 +5,29 @@ This repository contains two protocol layers:
 - `Zoltar`: the forkable oracle base layer
 - `Augur Statoblast`: the prediction-market application layer built on top of Zoltar
 
-The codebase is split into these main areas:
+## Documentation
 
-- `solidity/` contains contracts, protocol test support, tests, and generated contract artifacts
-- `ui/coreShared/` contains runtime-neutral UI primitives, wallet and chain integration, shared workflows, and the simulation engine used by all three interfaces
-- `ui/zoltarShared/` and `ui/statoblastShared/` expose reusable product libraries without application bootstrap, routing, or pages; Trading-specific capabilities currently live in the Trading application because no implementation is shared with another consumer
-- `ui/zoltar/` contains the Zoltar oracle operations interface (its own package, dev server, and production build)
-- `ui/statoblast/` contains the Augur Statoblast prediction-market operations interface (its own package, dev server, and production build)
-- `ui/trading/` contains the Statoblast Trading interface (its own package, dev server, and production build)
-- `solidity/contracts/trading/` contains the Trading contracts, `shared/trading/ts/trading/` contains reusable AMM math, and contract-facing tooling and tests live under `solidity/ts`
-- [`shared/`](./shared/README.md) contains independently built Core, Zoltar, OpenOracle, Statoblast, and Trading runtime packages used by Solidity tooling and the UI
-- `docs/` contains the published protocol documentation
-- `tooling/` contains typed repository metadata plus CI, contract-safety, documentation, testing, and UI build/development orchestration; `scripts/` retains only the pinned Uniswap deployment artifact
-- `bots/` contains chaos, liquidator, and OpenOracle arbitrager bots
-- [`augurScan/`](./augurScan/README.md) contains the read-only protocol explorer and indexer
-- [`testnetwork/`](./testnetwork/README.md) contains the Docker Compose setup for the repository-pinned local Anvil network
-- [`reth/`](./reth/README.md) contains the Docker Compose setup for a pruned Sepolia Reth and Lighthouse node
+- [Protocol documentation](https://augurproject.github.io/zoltar/docs/documentation.html): start with the [system overview](https://augurproject.github.io/zoltar/docs/explanation/system-overview.html), then follow the tutorials, how-to guides, explanations, and contract reference. Statoblast Trading is documented there too.
+- [Further reading](https://augurproject.github.io/zoltar/docs/reference/further-reading.html): bot operator guides, the augurScan explorer, the security regression suite, and the design-research repository.
+- This README covers developer setup, local development, and repository commands.
 
-The runnable packages (`ui/zoltar`, `ui/statoblast`, and `ui/trading`) are dependency leaves: they own bootstrap, routes, application composition, and tests. Reusable product capabilities live in the matching shared library, while runtime-neutral primitives, hooks, wallet/chain integration, transactions, and simulation infrastructure live in `ui/coreShared/ts`. Package exports and the UI boundary checker prevent shared libraries from importing runnable applications or applications from importing one another.
+## Repository layout
 
-Protocol documentation lives in [docs/documentation.html](https://augurproject.github.io/zoltar/docs/documentation.html). Statoblast Trading has its own tutorials, how-to guides, and reference under [`solidity/docs/trading/`](./solidity/docs/trading/index.md).
+| Directory                                     | Contents                                                                                                                                                                             |
+| --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `solidity/`                                   | Contracts, protocol test support, tests, and generated contract artifacts; Trading contracts live under `solidity/contracts/trading/`                                                |
+| `ui/coreShared/`                              | Runtime-neutral UI primitives, wallet and chain integration, shared workflows, and the simulation engine used by all three interfaces                                                |
+| `ui/zoltarShared/`, `ui/statoblastShared/`    | Reusable product libraries without application bootstrap, routing, or pages                                                                                                          |
+| `ui/zoltar/`, `ui/statoblast/`, `ui/trading/` | The Zoltar oracle, Augur Statoblast market, and Statoblast Trading interfaces; each is its own package with a dev server and production build                                        |
+| [`shared/`](./shared/README.md)               | Independently built Core, Zoltar, OpenOracle, Statoblast, and Trading runtime packages used by Solidity tooling and the UI; `shared/trading/ts/trading/` holds the reusable AMM math |
+| `docs/`                                       | The published protocol documentation                                                                                                                                                 |
+| `tooling/`                                    | Typed repository metadata plus CI, contract-safety, documentation, testing, and UI build orchestration; `scripts/` retains only the pinned Uniswap deployment artifact               |
+| `bots/`                                       | Chaos, liquidator, and OpenOracle arbitrager bots                                                                                                                                    |
+| [`augurScan/`](./augurScan/README.md)         | The read-only protocol explorer and indexer                                                                                                                                          |
+| [`testnetwork/`](./testnetwork/README.md)     | Docker Compose setup for the repository-pinned local Anvil network                                                                                                                   |
+| [`reth/`](./reth/README.md)                   | Docker Compose setup for a pruned Sepolia Reth and Lighthouse node                                                                                                                   |
+
+The runnable packages (`ui/zoltar`, `ui/statoblast`, and `ui/trading`) are dependency leaves: they own bootstrap, routes, application composition, and tests. Reusable product capabilities live in the matching shared library, and runtime-neutral primitives live in `ui/coreShared/ts`. Package exports and the UI boundary checker prevent shared libraries from importing runnable applications or applications from importing one another.
 
 ## Prerequisites
 
@@ -82,132 +85,7 @@ dependent deployment address.
 
 ## Testnet deployment
 
-The testnet deployer installs the complete deterministic infrastructure. It is
-safe to rerun: existing contracts are skipped only when their runtime bytecode
-matches, and an unexpected contract at a target address stops the deployment.
-
-### Before you deploy
-
-- Complete [Setup](#setup).
-- Use a dedicated testnet account and fund it with enough testnet ETH for the
-  remaining steps.
-- Use an HTTPS RPC endpoint. Loopback HTTP endpoints are accepted for local test
-  networks.
-- Ensure the deployer account has no pending transactions.
-
-Sepolia is the default target (chain ID `11155111`). A different testnet must
-support EIP-1559, the Cancun opcodes used by Zoltar and Uniswap V4, and the Osaka
-`CLZ` opcode used by the compiled contracts. The deployer rejects Ethereum
-mainnet (chain ID `1`).
-
-### Deploy with GitHub Actions
-
-Use the [`Deploy Testnet Contracts`](./.github/workflows/deploy-testnet.yml)
-workflow for a deployment from `main`:
-
-1. Create a protected GitHub environment named `testnet-deployment`.
-1. Add the deployer's private key as the environment secret
-   `TESTNET_DEPLOYER_PRIVATE_KEY`.
-1. Open **Actions → Deploy Testnet Contracts → Run workflow**.
-1. Select `main`, complete the inputs, and enter `DEPLOY` as the confirmation.
-1. Review the job summary for each planned deployment's result and address. It
-   includes transaction hashes for contracts deployed during the run.
-
-Use a public RPC URL without credentials. Workflow inputs are stored in GitHub
-metadata and are not secret.
-
-### Deploy locally
-
-Load `PRIVATE_KEY` from a secret manager or hidden prompt. Never paste the key
-into a command because it may be saved in shell history. For example, in Bash:
-
-```bash
-read -rsp 'Testnet deployer private key: ' PRIVATE_KEY && echo && export PRIVATE_KEY
-```
-
-Run the deployer with an explicit RPC endpoint and spending limits:
-
-```bash
-bun run deploy:testnet -- --rpc-url=https://rpc.example --chain-id=11155111 --max-fee-per-gas-nanoeth=100 --max-total-cost-eth=20
-```
-
-Remove the key from the shell when the command finishes:
-
-```bash
-unset PRIVATE_KEY
-```
-
-The deployer reads the exported `PRIVATE_KEY` automatically. You can instead
-pass the key directly, but the complete command—and therefore the key—may be
-saved in shell history:
-
-```bash
-bun run deploy:testnet -- --private-key=0x... --rpc-url=https://rpc.example --chain-id=11155111 --max-fee-per-gas-nanoeth=100 --max-total-cost-eth=20
-```
-
-Run `bun run deploy:testnet -- --help` for all options. Options other than
-`--private-key` also accept uppercase arguments after `--` or environment
-variables.
-
-| Input | Default | Purpose |
-| --- | --- | --- |
-| `RPC_URL` / `--rpc-url` | Required | RPC endpoint for the target network |
-| `CHAIN_ID` / `--chain-id` | `11155111` | Expected decimal chain ID |
-| `MAX_FEE_PER_GAS_NANO_ETH` / `--max-fee-per-gas-nanoeth` | `100` | Rejects higher RPC fee suggestions |
-| `MAX_TOTAL_COST_ETH` / `--max-total-cost-eth` | `20` | Caps the conservative preflight estimate and transaction budget |
-| `PRIVATE_KEY` / `--private-key` | Required | `0x`-prefixed 32-byte deployer key |
-
-The defaults are authorization limits, not a spend forecast or a required
-balance. Before sending a transaction, the command checks the RPC chain ID, EVM
-features, EIP-1559 support, canonical deployer compatibility, expected bytecode,
-and fee limits. It then estimates only the missing deployment steps. If the
-conservative estimate exceeds `MAX_TOTAL_COST_ETH`, it exits before funding or
-deploying anything. Per-transaction checks enforce the same budget while the
-deployment runs.
-
-If a run is interrupted, wait for all pending transactions to settle and rerun
-the same command. The deployer revalidates completed contracts and resumes with
-the first missing step. A testnet that rejects the fixed legacy transactions for
-the canonical deployers must provide both deployers as predeploys.
-
-A successful local run exits with status `0` after logging each planned contract
-as `deployed` or `skip` and verifying the bootstrap support contracts.
-
-### Deployed infrastructure
-
-Every deployment includes:
-
-- deterministic genesis REP
-- the canonical CREATE2 deployer and Permit2
-- a deterministic Uniswap V3 SwapRouter
-- the Zoltar and Augur Statoblast protocol factories and their bootstrap support
-  contracts
-
-Uniswap addresses come from one registry shared by the UI, the bots, and the
-deployer (`shared/core/ts/deployment/uniswapDeployments.ts`).
-
-On Sepolia, WETH, the Uniswap V3 factory, QuoterV2, the V4 PoolManager, and the
-V4 Quoter are Uniswap's published contracts
-([V3](https://developers.uniswap.org/docs/protocols/v3/deployments/v3-ethereum-deployments),
-[V4](https://developers.uniswap.org/docs/protocols/v4/deployments)). The deployer
-verifies that each one carries Uniswap's exact runtime code. An Anvil node with
-the Sepolia chain ID receives them by replaying Uniswap's original creation
-transactions, vendored byte for byte in `scripts/artifacts/uniswap-deployment.json`.
-Uniswap publishes no SwapRouter (v1) on Sepolia, so the deployer installs one
-bound to the published factory.
-
-Any other chain receives deterministic WETH plus a complete Uniswap V3 and V4
-deployment from the pinned bytecode, so deploying to a new testnet needs no
-configuration. Reusing Uniswap's own contracts on another chain additionally
-requires vendoring their creation transactions and runtime hashes in the
-artifact; today only Sepolia has them. The bots read core addresses from the
-tracked Sepolia manifest, so they target Sepolia and Sepolia replays (such as the
-local Anvil network) until a deterministic testnet has a generated manifest.
-
-The command does not create Uniswap pools or add liquidity. Protocol factories
-create market-specific security pools, share tokens, oracle coordinators,
-auctions, escalation games, delegates, and child-universe contracts later, when
-those features are used.
+`bun run deploy:testnet` installs the complete deterministic infrastructure on Sepolia or another compatible testnet and is safe to rerun. The full procedure, including the GitHub Actions workflow, private-key handling, spending limits, and recovery, is in [Deploy testnet contracts](https://augurproject.github.io/zoltar/docs/how-to/deploy-testnet-contracts.html).
 
 ## Browser Simulation
 
@@ -233,11 +111,11 @@ Simulation mode details:
 
 Each serve command first builds the selected app and its dependencies, then serves the app. Watch commands also rebuild the selected app and its dependencies as you edit.
 
-| Application | Serve command | Watch command | Local URL |
-| --- | --- | --- | --- |
-| Zoltar | `bun run app:serve:zoltar` | `bun run app:watch:zoltar` | http://localhost:4153 |
-| Statoblast | `bun run app:serve:statoblast` | `bun run app:watch:statoblast` | http://localhost:12347 |
-| Trading | `bun run app:serve:trading` | `bun run app:watch:trading` | http://localhost:4163 |
+| Application | Serve command                  | Watch command                  | Local URL              |
+| ----------- | ------------------------------ | ------------------------------ | ---------------------- |
+| Zoltar      | `bun run app:serve:zoltar`     | `bun run app:watch:zoltar`     | http://localhost:4153  |
+| Statoblast  | `bun run app:serve:statoblast` | `bun run app:watch:statoblast` | http://localhost:12347 |
+| Trading     | `bun run app:serve:trading`    | `bun run app:watch:trading`    | http://localhost:4163  |
 
 Build all UI apps:
 
