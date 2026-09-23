@@ -485,6 +485,10 @@ describe('Drain & Retire planning', () => {
 		const assessment = assessRetirement({ blockHash: hash(1), blockNumber: 1n, canonicalScanComplete: true, evaluations: [], retirement, snapshot, state: initialDurableState(31337), v3: [], sweepLimits: limits })
 		expect(assessment.status).toBe('drained')
 		expect(assessment.residuals).toEqual([])
+		retirement.policies.sweepAssets = false
+		const withoutConsolidation = assessRetirement({ blockHash: hash(2), blockNumber: 2n, canonicalScanComplete: true, evaluations: [], retirement, snapshot, state: initialDurableState(31337), v3: [], sweepLimits: limits })
+		expect(withoutConsolidation.status).toBe('drained-with-residuals')
+		expect(withoutConsolidation.residuals).toContainEqual(expect.objectContaining({ amount: '12', asset: snapshot.universes[0]?.repToken, category: 'operator-accepted' }))
 	})
 
 	test('does not execute retirement actions until canonical lifecycle discovery is complete', async () => {

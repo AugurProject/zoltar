@@ -138,7 +138,7 @@ export function createRetirementDashboard(options: RetirementDashboardOptions) {
 	return {
 		render(value: RetirementSnapshot) {
 			const retirement = value.retirement
-			destination.textContent = value.wallet === undefined || value.profileId === undefined ? 'Configure a signer wallet before requesting retirement.' : `Recovered ETH and REP stay in signer wallet ${value.wallet}. Type DRAIN ${value.profileId} TO ${value.wallet} to confirm.`
+			destination.textContent = value.wallet === undefined || value.profileId === undefined ? 'Configure a signer wallet before requesting retirement.' : `Recovered ETH and REP go to signer wallet ${value.wallet}. Type DRAIN ${value.profileId} TO ${value.wallet} to confirm.`
 			const status = retirement?.status ?? 'inactive'
 			let tone = 'warning'
 			if (status === 'drained') tone = 'success'
