@@ -177,9 +177,25 @@ export function applyRetirementAssessment(retirement: DurableRetirementState, as
 		const outstanding = assessment.proof.actionableObligations + assessment.proof.claimableAssets + assessment.proof.collectableV3Positions + assessment.proof.knownApprovals + assessment.proof.ownedLiquidityPositions + assessment.proof.partialWorkflows + assessment.proof.pendingTransactions
 		if (outstanding !== 0) throw new Error('Retirement completion requires every canonical proof count to be zero')
 	}
+	const previousEvidence = retirement.completionEvidence
+	const override = retirement.profileReplacementOverride
+	const preserveAcceptedResiduals =
+		retirement.status === 'drained-with-residuals' &&
+		assessment.status === 'drained-with-residuals' &&
+		previousEvidence !== undefined &&
+		override !== undefined &&
+		retirement.recipient !== undefined &&
+		override.sourceProfileId === binding.profileId &&
+		override.recipient.toLowerCase() === retirement.recipient.toLowerCase() &&
+		override.completionBlockHash.toLowerCase() === previousEvidence.blockHash.toLowerCase() &&
+		override.completionBlockNumber === previousEvidence.blockNumber &&
+		previousEvidence.profileId === binding.profileId &&
+		previousEvidence.signerAddress?.toLowerCase() === completionSigner?.toLowerCase() &&
+		JSON.stringify(previousEvidence.residuals) === JSON.stringify(assessment.residuals)
 	retirement.blockers = assessment.blockers
 	retirement.status = assessment.status
 	retirement.updatedAt = now
+	if (preserveAcceptedResiduals) return
 	retirement.profileReplacementOverride = undefined
 	if (!terminal) {
 		retirement.completionEvidence = undefined

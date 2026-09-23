@@ -7,6 +7,7 @@ import { prepareCurrentDeployment, retirementUpgradeStatus } from '../../src/cli
 import { canonicalDeployment } from '../../src/config/canonical-deployment.ts'
 import { executionProfileId } from '../../src/config/execution-profile.ts'
 import { loadSettings, parseSettings, serializedSettings } from '../../src/config/settings.ts'
+import { applyRetirementAssessment } from '../../src/runtime/retirement-assessment.ts'
 import { initialDurableState } from '../../src/state/initial-state.ts'
 import { loadDurableState, saveDurableState } from '../../src/state/operator-state.ts'
 import { acceptResidualProfileReplacement } from '../../src/state/retirement.ts'
@@ -25,7 +26,7 @@ async function fixture(operated: boolean) {
 	const stateFile = join(directory, 'state.json')
 	const settings = parseSettings({
 		...example,
-		connectivity: { publicRpcUrls: ['https://broadcast.example'], quorumRpcUrls: [], readRpcUrl: 'https://read.example', rpcQuorum: 1 },
+		connectivity: { publicRpcUrls: ['https://broadcast.example'], quorumRpcUrls: ['https://second.example'], readRpcUrl: 'https://read.example', rpcQuorum: 1 },
 		networkConfigured: true,
 		paused: false,
 		privateKey: signerKey,
@@ -124,6 +125,26 @@ test('prompts once to retire operated old contracts and keeps the old pin until 
 	expect(await retirementUpgradeStatus(path)).toBe('retiring')
 })
 
+test('rejects a single read origin before prompting for retirement', async () => {
+	const { path, settings, stateFile } = await fixture(true)
+	if (settings.connectivity === undefined) throw new Error('Fixture requires RPC connectivity')
+	const singleReader = { ...settings, connectivity: { ...settings.connectivity, quorumRpcUrls: [] } }
+	await writeFile(path, `${JSON.stringify(serializedSettings(singleReader))}\n`, { mode: 0o600 })
+	const configBefore = await readFile(path)
+	const stateBefore = await readFile(stateFile)
+	await expect(
+		prepareCurrentDeployment({
+			acquireLocks: noLocks,
+			ask: async () => {
+				throw new Error('Unexpected retirement prompt')
+			},
+			path,
+		}),
+	).rejects.toThrow('two independent RPC readers')
+	expect(await readFile(path)).toEqual(configBefore)
+	expect(await readFile(stateFile)).toEqual(stateBefore)
+})
+
 test('uses a fresh state path after verified retirement and preserves the old journal', async () => {
 	const { path, settings, signer, stateFile } = await fixture(true)
 	const state = await loadDurableState(stateFile, settings.network.chainId)
@@ -140,7 +161,7 @@ test('uses a fresh state path after verified retirement and preserves the old jo
 	}
 	await saveDurableState(stateFile, state)
 	const before = await readFile(stateFile)
-	expect(await retirementUpgradeStatus(path)).toBe('ready')
+	expect(await retirementUpgradeStatus(path, async () => undefined)).toBe('ready')
 	let verified = false
 	const result = await prepareCurrentDeployment({
 		acquireLocks: noLocks,
@@ -177,6 +198,11 @@ test('keeps the old deployment when finality verification fails', async () => {
 	await saveDurableState(stateFile, state)
 	const configBefore = await readFile(path)
 	const stateBefore = await readFile(stateFile)
+	await expect(
+		retirementUpgradeStatus(path, async () => {
+			throw new Error('Finalized block mismatch')
+		}),
+	).rejects.toThrow('Finalized block mismatch')
 	await expect(
 		prepareCurrentDeployment({
 			acquireLocks: noLocks,
@@ -260,9 +286,13 @@ test('waits for explicit acceptance of residuals before switching deployments', 
 	).toBe('retiring')
 	expect((await loadSettings(path)).settings.deployment).toEqual(settings.deployment)
 	acceptResidualProfileReplacement(state.retirement, state.profileId, targetProfileId, 'Reviewed retained asset and accepted replacement.', `ACCEPT RESIDUALS FOR ${targetProfileId}`)
+	const completionEvidence = state.retirement.completionEvidence
+	if (completionEvidence === undefined) throw new Error('Missing residual completion evidence')
+	applyRetirementAssessment(state.retirement, { action: undefined, blockers: [], proof: completionEvidence.proof, residuals: completionEvidence.residuals, status: 'drained-with-residuals' }, zeroHash, 43n, { profileId: state.profileId, scannedWallet: signer, signerAddress: signer })
+	expect(state.retirement.completionEvidence).toEqual(completionEvidence)
 	await saveDurableState(stateFile, state)
 	expect((await loadDurableState(stateFile, settings.network.chainId)).retirement.profileReplacementOverride).toMatchObject({ sourceProfileId: state.profileId, targetProfileId })
-	expect(await retirementUpgradeStatus(path)).toBe('ready')
+	expect(await retirementUpgradeStatus(path, async () => undefined)).toBe('ready')
 	expect(
 		(
 			await prepareCurrentDeployment({

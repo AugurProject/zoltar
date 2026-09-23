@@ -600,6 +600,11 @@ describe('Drain & Retire planning', () => {
 		expect(runtime.uniswapV3Factory).toBe(address(50))
 
 		applyRetirementAssessment(retirement, residual, hash(3), 3n, completionBinding, '2026-09-07T00:01:00.000Z')
+		expect(retirement.profileReplacementOverride).toBeDefined()
+		expect(retirement.completionEvidence?.blockHash).toBe(hash(2))
+		const retainedShare = residual.residuals[0]
+		if (retainedShare === undefined) throw new Error('Expected a retirement residual')
+		applyRetirementAssessment(retirement, { ...residual, residuals: [{ ...retainedShare, amount: '5' }] }, hash(4), 4n, completionBinding, '2026-09-07T00:02:00.000Z')
 		expect(retirement.profileReplacementOverride).toBeUndefined()
 	})
 

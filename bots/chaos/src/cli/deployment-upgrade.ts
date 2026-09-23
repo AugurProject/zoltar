@@ -10,6 +10,7 @@ import { assertDurableDeploymentFactory, restoreDeploymentForDurableState } from
 import { executionProfileId } from '../config/execution-profile.ts'
 import { assertSettingsProfileIsolation, loadSettings, saveSettings, type OperatorSettings } from '../config/settings.ts'
 import { CHAOS_PROCESS_LOCK_OPTIONS } from '../core/process-lock-options.ts'
+import { chaosReadEndpoints } from '../runtime/canonical-scan.ts'
 import { resetPristineStateForDeploymentProfile, verifyRetirementCompletionFinality } from '../runtime/deployment-profile.ts'
 import { initialRuntimeState } from '../state/initial-state.ts'
 import { loadDurableState, saveDurableState } from '../state/operator-state.ts'
@@ -101,6 +102,7 @@ async function requestOldProfileRetirement(settings: OperatorSettings, state: Aw
 	if (!settings.runtime.execute || settings.paused || settings.privateKey === undefined || !settings.networkConfigured || settings.connectivity === undefined) {
 		throw new Error('Enable live execution with a configured signer and unpause the old profile before requesting automatic retirement')
 	}
+	if (new Set(chaosReadEndpoints(settings).map(rpcUrl => new URL(rpcUrl).origin)).size < 2) throw new Error('Retirement completion requires at least two independent RPC readers')
 	const recipient = getAddress((await ask('Updated contracts found. Enter the retirement recipient for recovered assets: ')).trim())
 	const wallet = configuredWallet(settings)
 	assertSafeRetirementRecipient(recipient, state.signerAddress ?? wallet)
@@ -164,7 +166,7 @@ export async function prepareCurrentDeployment(options: PreparationOptions = {})
 	}
 }
 
-export async function retirementUpgradeStatus(path?: string): Promise<'ready' | 'retiring'> {
+export async function retirementUpgradeStatus(path?: string, verifyCompletion: typeof verifyRetirementCompletionFinality = verifyRetirementCompletionFinality): Promise<'ready' | 'retiring'> {
 	const loaded = await loadSettings(path)
 	const state = await loadDurableState(loaded.settings.runtime.stateFile, loaded.settings.network.chainId)
 	const active = restoreDeploymentForDurableState(loaded.settings, state, loaded.needsDeploymentPin)
@@ -173,7 +175,7 @@ export async function retirementUpgradeStatus(path?: string): Promise<'ready' | 
 	if (state.retirement.status === 'drained-with-residuals' && state.retirement.profileReplacementOverride?.targetProfileId !== executionProfileId(current)) return 'retiring'
 	const wallet = configuredWallet(active)
 	const checked = initialRuntimeState(active.paused, wallet, active.network.chainId, structuredClone(state))
-	await resetPristineStateForDeploymentProfile(checked, executionProfileId(current), current.deployment.uniswapV3Factory, current.paused, wallet, active.runtime.stateFile, async () => undefined)
+	await resetPristineStateForDeploymentProfile(checked, executionProfileId(current), current.deployment.uniswapV3Factory, current.paused, wallet, active.runtime.stateFile, async evidence => verifyCompletion(current, evidence))
 	return 'ready'
 }
 
