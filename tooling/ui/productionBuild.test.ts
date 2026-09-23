@@ -917,13 +917,13 @@ productionWorkflowTest('production bundle executes deployment, reporting, fork m
 	const baseUrl = server.url.toString().replace(/\/$/, '')
 	const state = JSON.parse(
 		await loadProductionDocumentInChromium(`${baseUrl}/statoblast/#/deploy?simulate=1&simScenario=baseline`, { height: 900, width: 1440 }, async driver => {
-			// Reviews inside a dialog render their actions in the form's own action row, close the dialog on the final success,
-			// and return to the form on failure; the standalone review still offers Close. Handle all of those here.
-			const completeTransactionReview = async (autoCloseSuccessTitle?: string) => {
+			// Reviews inside a dialog render their actions in the form's own action row and return to the form on failure.
+			// The price request keeps its final result in the dialog; other completed reviews can be dismissed here.
+			const completeTransactionReview = async (inDialogSuccessTitle?: string) => {
 				await driver.evaluate('window.__zoltarReviewClicked = false')
 				for (let attempt = 0; attempt < 2400; attempt += 1) {
 					const result = await driver.evaluate(
-						`(() => { const dialog = document.querySelector('[role="dialog"]'); const notice = document.querySelector('.global-transaction-notice'); const badge = notice?.querySelector('.badge')?.textContent?.trim(); const title = notice?.querySelector('strong')?.textContent?.trim(); if (${JSON.stringify(autoCloseSuccessTitle ?? '')} && !dialog && badge === 'Confirmed' && title === ${JSON.stringify(autoCloseSuccessTitle ?? '')}) return 'complete'; if (dialog?.querySelector('.global-transaction-notice .badge')?.textContent?.trim() === 'Failed') return 'complete'; const actions = document.querySelector('.transaction-step-actions'); if (!actions) return window.__zoltarReviewClicked ? 'complete' : 'waiting'; const dismiss = [...actions.querySelectorAll('.transaction-step-close button')].find(candidate => candidate.textContent?.trim() === 'Dismiss'); if (dismiss instanceof HTMLButtonElement && !dismiss.disabled) { dismiss.click(); return 'complete' } const button = [...actions.querySelectorAll('.transaction-plan-action .tx-action-button')].find(candidate => candidate instanceof HTMLButtonElement && !candidate.disabled); if (button instanceof HTMLButtonElement) { button.click(); window.__zoltarReviewClicked = true } return 'waiting' })()`,
+						`(() => { const dialog = document.querySelector('[role="dialog"]'); const result = dialog?.querySelector('.transaction-step-success'); if (${JSON.stringify(inDialogSuccessTitle ?? '')} && result?.querySelector('.badge')?.textContent?.trim() === 'Confirmed' && result.querySelector('strong')?.textContent?.trim() === ${JSON.stringify(inDialogSuccessTitle ?? '')}) return 'complete'; if (dialog?.querySelector('.global-transaction-notice .badge')?.textContent?.trim() === 'Failed') return 'complete'; const actions = document.querySelector('.transaction-step-actions'); if (!actions) return window.__zoltarReviewClicked ? 'complete' : 'waiting'; const dismiss = [...actions.querySelectorAll('.transaction-step-close button')].find(candidate => candidate.textContent?.trim() === 'Dismiss'); if (dismiss instanceof HTMLButtonElement && !dismiss.disabled) { dismiss.click(); return 'complete' } const button = [...actions.querySelectorAll('.transaction-plan-action .tx-action-button')].find(candidate => candidate instanceof HTMLButtonElement && !candidate.disabled); if (button instanceof HTMLButtonElement) { button.click(); window.__zoltarReviewClicked = true } return 'waiting' })()`,
 					)
 					if (result === 'complete') return
 					await Bun.sleep(50)
@@ -1057,7 +1057,11 @@ productionWorkflowTest('production bundle executes deployment, reporting, fork m
 			await driver.waitForBodyWithoutText('Preparing funding and approvals…')
 			await completeTransactionReview('Price Requested')
 			await driver.waitForTransactionStatus('Confirmed', 'Price Requested')
-			expect(await driver.evaluate('document.querySelector(\'[role="dialog"]\') === null')).toBe(true)
+			expect(await driver.evaluate('document.querySelector(\'[role="dialog"] .transaction-step-success\') !== null')).toBe(true)
+			const priceResultDismissed = await driver.evaluate(`(() => { const button = document.querySelector('[role="dialog"] .transaction-step-close button'); if (!(button instanceof HTMLButtonElement) || button.disabled) return false; button.click(); return true })()`)
+			expect(priceResultDismissed).toBe(true)
+			await driver.waitForBodyWithoutText('Price Requested')
+			expect(await driver.evaluate("document.querySelector('[role=\"dialog\"]') === null && document.querySelector('.global-transaction-tray') === null")).toBe(true)
 			await driver.clickButton('+10 min')
 			await driver.waitForBodyText('PENDING REQUEST')
 			const pendingReportOpened = await driver.evaluate(`(() => { const button = [...document.querySelectorAll('button')].find(candidate => candidate.textContent?.trim().startsWith('Report #')); if (!(button instanceof HTMLButtonElement)) return false; button.click(); return true })()`)
