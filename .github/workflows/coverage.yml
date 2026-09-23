@@ -1,8 +1,8 @@
 name: Coverage
 
+# Full coverage is resource-intensive; run this workflow only by manual dispatch.
 on:
   workflow_dispatch:
-  workflow_call:
 
 permissions:
   contents: read
