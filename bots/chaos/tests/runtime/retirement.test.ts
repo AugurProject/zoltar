@@ -462,7 +462,7 @@ describe('Drain & Retire planning', () => {
 		expect(plan?.steps.map(step => step.id)).toEqual(['removeLiquidity'])
 	})
 
-	test('unwraps WETH, sweeps tokens in bounded chunks, and sends native ETH last above reserve', () => {
+	test('unwraps WETH in bounded chunks and keeps ETH and REP with the signer', () => {
 		const snapshot = emptySnapshot()
 		const retirement = request()
 		const limits = { maximumEthAttoEth: 10n, maximumGasCostAttoEth: 1n, maximumRepAttoRep: 5n, minimumEthReserveAttoEth: 3n }

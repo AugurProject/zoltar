@@ -141,7 +141,9 @@ export function createRetirementDashboard(options: RetirementDashboardOptions) {
 			const status = retirement?.status ?? 'inactive'
 			const canCancel = ['requested', 'draining', 'waiting', 'blocked'].includes(status) && retirement?.finalSweepStartedAt === undefined
 			destination.hidden = status !== 'inactive' && !canCancel
-			destination.textContent = status === 'inactive' ? (value.wallet === undefined || value.profileId === undefined ? 'Configure a signer wallet before requesting retirement.' : `Recovered ETH and REP go to the signer wallet. Type DRAIN ${value.profileId} TO ${value.wallet} to confirm.`) : 'Type CANCEL DRAIN to cancel before WETH unwrapping begins.'
+			if (status !== 'inactive') destination.textContent = 'Type CANCEL DRAIN to cancel before WETH unwrapping begins.'
+			else if (value.wallet === undefined || value.profileId === undefined) destination.textContent = 'Configure a signer wallet before requesting retirement.'
+			else destination.textContent = `Recovered ETH and REP go to the signer wallet. Type DRAIN ${value.profileId} TO ${value.wallet} to confirm.`
 			let tone = 'warning'
 			if (status === 'drained') tone = 'success'
 			else if (status === 'blocked') tone = 'error'
