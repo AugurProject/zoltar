@@ -838,7 +838,7 @@ strategyForm.addEventListener('submit', async event => {
 	}
 	try {
 		const changes = strategyReviewRows(savedConfiguration, next)
-		if (changes.length > 0 && !(await confirmOperatorAction({ title: 'Review liquidation strategy', description: 'Changes to amounts and automation apply on the next scan. Amounts use the units shown in the form.', changes, confirmLabel: 'Save strategy' }))) {
+		if (changes.length > 0 && !(await confirmOperatorAction({ title: 'Review liquidation strategy', description: 'Changes to amounts and automation apply on the next scan.', changes, confirmLabel: 'Save strategy' }))) {
 			actionStatus(strategyStatus, '')
 			return
 		}
