@@ -1206,6 +1206,20 @@ describe('liquidator go-live settings', () => {
 		expect(review?.textContent).toContain('historical log recoveryEnabled→Disabled')
 	})
 
+	test('rejects an invalid liquidation limit before opening the strategy review', async () => {
+		const saved = mainnetConfiguration()
+		saved.strategy = { ...example.strategy }
+		const page = await dashboard(saved, state())
+		const form = page.window.document.getElementById('strategy-form')
+		const minimum = page.window.document.querySelector('#strategy-form input[name="minimumLiquidationDebtEth"]')
+		if (!(form instanceof page.window.HTMLFormElement) || !(minimum instanceof page.window.HTMLInputElement)) throw new Error('Expected strategy controls')
+		minimum.value = '26'
+		form.dispatchEvent(new page.window.Event('submit', { bubbles: true, cancelable: true }))
+		await Bun.sleep(20)
+		expect(page.window.document.querySelector('.operator-confirm-dialog')).toBeNull()
+		expect(page.window.document.getElementById('strategy-status')?.textContent).toContain('Minimum liquidation debt cannot exceed the maximum')
+	})
+
 	test('market review omits canonical root identity restored by the server', async () => {
 		const saved = mainnetConfiguration()
 		saved.centralizedMarkets = { ...example.centralizedMarkets, assetAddress: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', assetChainId: 1 }
@@ -1984,4 +1998,13 @@ test('uses informational dry run, warning live and pending, and error failure ba
 		const badge = [...page.window.document.querySelectorAll('.badge')].find(element => element.textContent === status)
 		expect(badge?.className).toBe(`badge ${tone}`)
 	}
+})
+
+test('links confirmed liquidation activity from its durable transaction hash', async () => {
+	const page = await dashboard(mainnetConfiguration(), state())
+	const hash = `0x${'ab'.repeat(32)}`
+	page.setStateResponse({ ...state(), activities: [{ at: '2026-09-17T00:00:00.000Z', hash, message: 'Liquidation confirmed', status: 'confirmed' }] })
+	await page.refresh()
+	const link = page.window.document.querySelector('#activity-list a')
+	expect(link?.getAttribute('href')).toBe(`https://etherscan.io/tx/${hash}`)
 })

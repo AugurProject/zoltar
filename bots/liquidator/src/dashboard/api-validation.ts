@@ -4,6 +4,7 @@ import { array, booleanValue, decode, dictionary, numberValue, object, oneOf, op
 export type Activity = {
 	at: string
 	details?: string
+	hash?: string
 	message: string
 	status: string
 }
@@ -135,7 +136,7 @@ const pool = object<MonitoredPool>({
 	totalPoolHeldRep: stringValue,
 })
 const snapshot = object<Snapshot>({
-	activities: array(object<Activity>({ at: stringValue, details: optionalString, message: stringValue, status: stringValue })),
+	activities: array(object<Activity>({ at: stringValue, details: optionalString, hash: optional((value: unknown): value is string => stringValue(value) && /^0x[0-9a-fA-F]{64}$/.test(value)), message: stringValue, status: stringValue })),
 	alerts: array(object<Snapshot['alerts'][number]>({ message: stringValue, severity: oneOf('error', 'warning') })),
 	centralizedMarket: optional(
 		object<CentralizedMarket>({

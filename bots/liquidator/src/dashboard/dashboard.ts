@@ -1,6 +1,6 @@
 import { renderRepMarketConsensusError, renderRepMarketConsensusPanel } from '@zoltar/bot-shared/dashboard/rep-market-consensus'
-import { decodeConfiguration, decodeSnapshot, decodeMarketProbe, type Configuration, type Snapshot, type MarketSourceRow, type Activity, type Universe } from './api-validation.ts'
-import { activityBadgeClass } from './status-badges.js'
+import { decodeConfiguration, decodeSnapshot, decodeMarketProbe, type Configuration, type Snapshot, type MarketSourceRow, type Universe } from './api-validation.ts'
+import { renderActivities } from './activity-panel.tsx'
 import { cell, publicFailure } from './pool-presentation.ts'
 import { createPoolBrowser } from './pool-browser.ts'
 import { createUniverseExplorer } from '@zoltar/bot-shared/dashboard/universe-explorer'
@@ -17,7 +17,7 @@ import { urlLines } from '@zoltar/bot-shared/dashboard/forms'
 import { registerGoLiveForms } from './go-live-forms.ts'
 import { readMarketConfiguration, renderMarketConfiguration, reviewableRootMarket } from './market-configuration-editor.tsx'
 import { renderOverviewAlerts, renderOverviewHealth, renderOverviewMetrics } from './overview-panels.ts'
-import { strategyReviewRows } from './strategy-review.ts'
+import { strategyReviewRows, validateStrategyReview } from './strategy-review.ts'
 import { element, shorten } from '@zoltar/bot-shared/dashboard/dom'
 
 const networkForm = element('network-form', HTMLFormElement)
@@ -41,7 +41,6 @@ const recoveryList = element('recovery-list', HTMLDivElement)
 const recoveryGuidance = element('recovery-guidance', HTMLParagraphElement)
 const recheckRecovery = element('recheck-recovery', HTMLButtonElement)
 const universeRows = element('universe-rows', HTMLDivElement)
-const activityList = element('activity-list', HTMLOListElement)
 const modeBadge = element('mode-badge', HTMLSpanElement)
 const networkBadge = element('network-badge', HTMLSpanElement)
 const runStatusBadge = element('run-status-badge', HTMLSpanElement)
@@ -367,53 +366,7 @@ function actionStatus(element: HTMLElement, message: string, failed = false) {
 	if (element.classList.contains('error') !== failed) element.classList.toggle('error', failed)
 }
 
-function renderActivities(activities: Activity[]) {
-	const filter = element('activity-filter', HTMLSelectElement).value
-	const visible = filter === 'all' ? activities : activities.filter(activity => activity.status === filter)
-	if (visible.length === 0) {
-		const empty = document.createElement('li')
-		empty.className = 'empty'
-		empty.textContent = activities.length === 0 ? 'No activity yet' : 'No activity matches this filter.'
-		activityList.replaceChildren(empty)
-		return
-	}
-	activityList.replaceChildren(
-		...visible.slice(0, 50).map(activity => {
-			const item = document.createElement('li')
-			item.className = 'activity'
-			const badge = document.createElement('span')
-			badge.className = `badge ${activityBadgeClass(activity.status)}`
-			badge.textContent = activity.status
-			const body = document.createElement('div')
-			const message = document.createElement('p')
-			message.textContent = activity.message
-			const time = document.createElement('time')
-			time.dateTime = activity.at
-			time.textContent = new Date(activity.at).toLocaleString()
-			body.append(message, time)
-			if (activity.details !== undefined) {
-				const details = document.createElement('p')
-				details.className = 'muted mono'
-				details.textContent = activity.details
-				body.append(details)
-				const hash = /0x[0-9a-fA-F]{64}/.exec(activity.details)?.[0]
-				const explorerBase = currentConfiguration?.network?.explorerUrl
-				if (hash !== undefined && explorerBase !== undefined && URL.canParse(explorerBase)) {
-					const link = document.createElement('a')
-					link.href = `${explorerBase.replace(/\/+$/, '')}/tx/${hash}`
-					link.target = '_blank'
-					link.rel = 'noreferrer'
-					link.textContent = 'View transaction in explorer'
-					body.append(link)
-				}
-			}
-			item.append(badge, body)
-			return item
-		}),
-	)
-}
-
-element('activity-filter', HTMLSelectElement).addEventListener('change', () => renderActivities(currentSnapshot?.activities ?? []))
+element('activity-filter', HTMLSelectElement).addEventListener('change', () => renderActivities(currentSnapshot?.activities ?? [], currentConfiguration?.network?.explorerUrl))
 
 function renderRpcEndpointHealth(health: Snapshot['rpcEndpointHealth']) {
 	const container = element('rpc-endpoint-health', HTMLDivElement)
@@ -453,7 +406,7 @@ function render(snapshot: Snapshot) {
 	renderRecovery(snapshot)
 	renderUniverses(snapshot)
 	updatePoolBrowser()
-	renderActivities(snapshot.activities)
+	renderActivities(snapshot.activities, currentConfiguration?.network?.explorerUrl)
 	renderCurrentRpcEndpointHealth(snapshot)
 	if (!initialFragmentApplied) {
 		initialFragmentApplied = true
@@ -877,6 +830,12 @@ strategyForm.addEventListener('submit', async event => {
 	const historicalLogRecovery = strategyForm.elements.namedItem('historicalLogRecovery')
 	next['logLookbackBlocks'] = logLookbackBlocks
 	next['historicalLogRecovery'] = historicalLogRecovery instanceof HTMLInputElement && historicalLogRecovery.checked
+	try {
+		validateStrategyReview(savedConfiguration, next)
+	} catch (error) {
+		actionStatus(strategyStatus, error instanceof Error ? error.message : 'Review the strategy values and retry.', true)
+		return
+	}
 	try {
 		const changes = strategyReviewRows(savedConfiguration, next)
 		if (changes.length > 0 && !(await confirmOperatorAction({ title: 'Review liquidation strategy', description: 'Changes to amounts and automation apply on the next scan. Amounts use the units shown in the form.', changes, confirmLabel: 'Save strategy' }))) {

@@ -3,6 +3,7 @@ import type { PublicOperatorSnapshot, PublicTransactionActivity } from '#state/o
 import { amount, exactAmount, transactionKindLabel } from './dashboard-format.ts'
 import { element, setText, shorten } from './dom.ts'
 import { renderOperatorHealth } from '@zoltar/bot-shared/dashboard/health-panel'
+import { transactionMatchesFilter } from './transaction-filter.ts'
 
 export function renderHealth(snapshot: PublicOperatorSnapshot, scanIntervalMilliseconds: number | undefined, stale: boolean) {
 	renderOperatorHealth(element('operator-health'), {
@@ -38,7 +39,7 @@ const transactionLabels = ['Updated', 'Report', 'Transaction', 'Kind', 'Delivery
 
 export function renderTransactions(transactions: readonly PublicTransactionActivity[], explorerUrl = 'https://etherscan.io') {
 	const filter = element('transaction-filter', HTMLSelectElement).value
-	const visible = filter === 'all' ? transactions : transactions.filter(transaction => transaction.status === filter)
+	const visible = transactions.filter(transaction => transactionMatchesFilter(transaction.status, filter))
 	const rows = visible.map(transaction => {
 		const accepted = transaction.acceptedTargets.map(target => `accepted: ${target}`)
 		const failed = transaction.failedTargets.map(target => `failed: ${target.target}${target.error === undefined ? '' : ` (${target.error})`}`)

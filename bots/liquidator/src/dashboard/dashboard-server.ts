@@ -137,6 +137,8 @@ function publicActivity(value: unknown) {
 	const kind = source['kind']
 	const message = source['message']
 	const status = source['status']
+	const hash = source['hash']
+	if (typeof hash === 'string' && /^0x[0-9a-fA-F]{64}$/.test(hash)) activity['hash'] = hash
 	if (typeof details === 'string') {
 		const safeDetails = publicActivityDetails(kind, status, details)
 		if (safeDetails !== undefined) activity['details'] = safeDetails
