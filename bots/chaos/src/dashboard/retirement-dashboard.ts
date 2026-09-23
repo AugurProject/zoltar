@@ -1,11 +1,16 @@
 import { optionalRecord as retirementRecord } from '@zoltar/bot-shared/infrastructure/json-validation'
 import { getAddress } from '@zoltar/bot-shared/ethereum'
 import { confirmOperatorAction } from '@zoltar/bot-shared/dashboard/confirmation'
+import { formatAmount } from '@zoltar/bot-shared/dashboard/amount'
 
 type RetirementResidual = { amount: string; asset: string; category: string; reason: string }
 type CompletionEvidence = { blockHash: string; blockNumber: string; residuals: RetirementResidual[] }
 type RetirementDetails = { blockers: unknown[]; completionEvidence?: CompletionEvidence | undefined; finalSweepStartedAt?: string | undefined; positions: unknown[]; recipient?: string | undefined; status?: string | undefined }
 type RetirementSnapshot = { profileId?: string | undefined; retirement?: RetirementDetails | undefined; wallet?: string | undefined }
+
+function residualDescription(residual: RetirementResidual) {
+	return `${formatAmount(residual.amount, `${residual.asset} base units`)} · ${residual.category}: ${residual.reason}`
+}
 
 function retirementStringValue(value: unknown) {
 	return typeof value === 'string' ? value : undefined
@@ -169,12 +174,7 @@ export function createRetirementDashboard(options: RetirementDashboardOptions) {
 			const profileId = options.current()?.profileId
 			if (profileId === undefined) return
 			try {
-				const phrase = `REGISTER V3 ${profileId}`
-				if (!(await confirmOperatorAction({ title: 'Register V3 position', description: 'Verify the pool, owner, token addresses, ticks, and workflow evidence.', phrase, confirmLabel: 'Register position' }))) return
-				v3Confirmation.value = phrase
-				await options.put({
-					action: 'register-v3-position',
-					confirmation: v3Confirmation.value,
+				const position = {
 					fee: v3Fee.valueAsNumber,
 					owner: v3Owner.value.trim(),
 					pool: v3Pool.value.trim(),
@@ -184,7 +184,30 @@ export function createRetirementDashboard(options: RetirementDashboardOptions) {
 					token0: v3Token0.value.trim(),
 					token1: v3Token1.value.trim(),
 					workflowId: v3Workflow.value.trim(),
-				})
+				}
+				const phrase = `REGISTER V3 ${profileId}`
+				if (
+					!(await confirmOperatorAction({
+						title: 'Register V3 position',
+						description: 'Verify these position details and workflow evidence before registering.',
+						phrase,
+						confirmLabel: 'Register position',
+						changes: [
+							{ label: 'Profile ID', before: '—', after: position.profileId },
+							{ label: 'Owner', before: '—', after: position.owner },
+							{ label: 'Pool', before: '—', after: position.pool },
+							{ label: 'Token 0', before: '—', after: position.token0 },
+							{ label: 'Token 1', before: '—', after: position.token1 },
+							{ label: 'Fee tier', before: '—', after: position.fee.toString() },
+							{ label: 'Lower tick', before: '—', after: position.tickLower.toString() },
+							{ label: 'Upper tick', before: '—', after: position.tickUpper.toString() },
+							{ label: 'Receipt/workflow reference', before: '—', after: position.workflowId },
+						],
+					}))
+				)
+					return
+				v3Confirmation.value = phrase
+				await options.put({ action: 'register-v3-position', confirmation: v3Confirmation.value, ...position })
 				actionStatus.textContent = 'Legacy V3 position registered for canonical verification.'
 				await options.refresh()
 			} catch (error) {
@@ -196,10 +219,29 @@ export function createRetirementDashboard(options: RetirementDashboardOptions) {
 		event.preventDefault()
 		void (async () => {
 			try {
-				const phrase = `ACCEPT RESIDUALS FOR ${residualTargetProfile.value.trim()}`
-				if (!(await confirmOperatorAction({ title: 'Accept residuals', description: 'Record unresolved assets against the replacement deployment profile.', phrase, confirmLabel: 'Accept residuals' }))) return
+				const targetProfileId = residualTargetProfile.value.trim()
+				const reason = residualReason.value
+				const evidence = options.current()?.retirement?.completionEvidence
+				if (evidence === undefined || evidence.residuals.length === 0) throw new Error('Completion evidence is unavailable. Refresh before accepting residuals.')
+				const phrase = `ACCEPT RESIDUALS FOR ${targetProfileId}`
+				if (
+					!(await confirmOperatorAction({
+						title: 'Accept residuals',
+						description: 'Review unresolved assets and the replacement deployment profile before accepting.',
+						phrase,
+						confirmLabel: 'Accept residuals',
+						changes: [
+							{ label: 'Target deployment ID', before: '—', after: targetProfileId },
+							{ label: 'Review rationale', before: '—', after: reason },
+							{ label: 'Completion block', before: '—', after: evidence.blockNumber },
+							{ label: 'Completion block hash', before: '—', after: evidence.blockHash },
+							...evidence.residuals.map((residual, index) => ({ label: `Residual ${(index + 1).toString()}`, before: '—', after: residualDescription(residual) })),
+						],
+					}))
+				)
+					return
 				residualConfirmation.value = phrase
-				await options.put({ action: 'accept-residuals', confirmation: residualConfirmation.value, reason: residualReason.value, targetProfileId: residualTargetProfile.value.trim() })
+				await options.put({ action: 'accept-residuals', confirmation: residualConfirmation.value, reason, targetProfileId })
 				actionStatus.textContent = 'Residual deployment replacement acceptance saved.'
 				await options.refresh()
 			} catch (error) {
@@ -246,7 +288,7 @@ export function createRetirementDashboard(options: RetirementDashboardOptions) {
 				residualList.replaceChildren(
 					...(evidence?.residuals.map(residual => {
 						const item = document.createElement('li')
-						item.textContent = `${residual.amount} ${residual.asset} base units · ${residual.category}: ${residual.reason}`
+						item.textContent = residualDescription(residual)
 						return item
 					}) ?? []),
 				)
