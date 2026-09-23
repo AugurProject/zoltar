@@ -5,6 +5,7 @@ import { BinaryOutcomes } from './BinaryOutcomes.sol';
 import { Constants } from '../Constants.sol';
 import { EscalationGameCalculations } from './EscalationGameCalculations.sol';
 import { EscalationGameClaimDelegate } from './EscalationGameClaimDelegate.sol';
+import { EscalationGameDepositDelegate } from './EscalationGameDepositDelegate.sol';
 import { MerkleMountainRange } from './MerkleMountainRange.sol';
 import {
 	CarriedDepositProof,
@@ -228,7 +229,7 @@ abstract contract EscalationGameCarry is EscalationGameCalculations {
 	function _verifyAndConsumeCarriedDepositProof(uint8 outcomeIndex, CarriedDepositProof calldata proof) internal {
 		_verifyCarriedDepositMerkleMountainRangeProof(outcomeIndex, proof);
 		_verifyAndAdvanceNullifier(outcomeIndex, proof.parentDepositIndex, proof.nullifierSiblings);
-		_consumeCarriedDeposit(outcomeIndex, proof.parentDepositIndex, proof.amountAttoRep, proof.cumulativeAmountAttoRep);
+		_delegateDepositCall(abi.encodeCall(EscalationGameDepositDelegate.consumeCarriedDeposit, (outcomeIndex, proof.parentDepositIndex, proof.amountAttoRep, proof.cumulativeAmountAttoRep, proof.leafIndex, _getEffectiveInheritedUnresolvedTotalAttoRep(outcomeIndex))));
 	}
 
 	function _consumeLocalDeposit(uint8 outcomeIndex, uint256 depositIndex, CarryConsumptionReason reason) internal returns (Deposit memory deposit) {
@@ -323,28 +324,7 @@ abstract contract EscalationGameCarry is EscalationGameCalculations {
 		state.localUnresolvedTotalAttoRep -= amountAttoRep;
 		uint256 nodeId = state.localNodeIds[depositIndex];
 		_clearLocalCarryLeafFromCurrentSnapshot(state, nodes[nodeId].carryLeafIndex);
-		_consumeUnresolvedRepForClaimOwners(depositor, outcomeIndex, amountAttoRep);
-	}
-
-	function _consumeCarriedDeposit(uint8 outcomeIndex, uint256 parentDepositIndex, uint256 amountAttoRep, uint256 cumulativeAmountAttoRep) private {
-		require(!_isCarriedDepositConsumed(outcomeIndex, parentDepositIndex), 'Deposit settled');
-		OutcomeState storage state = outcomeState[outcomeIndex];
-		uint256 sourceRetainedAmountAttoRep = _applyInheritedSourceRetention(amountAttoRep, parentDepositIndex);
-		require(_getEffectiveInheritedUnresolvedTotalAttoRep(outcomeIndex) + state.localUnresolvedTotalAttoRep >= sourceRetainedAmountAttoRep, 'Carried REP low');
-		state.consumedParentDepositIndexes[parentDepositIndex] = true;
-		uint256 sourceBasisAttoRep = _applyInheritedSourceStorageBasis(amountAttoRep, cumulativeAmountAttoRep, parentDepositIndex);
-		uint256 inheritedAmountToConsume =
-			sourceBasisAttoRep > state.inheritedUnresolvedTotalAttoRep
-				? state.inheritedUnresolvedTotalAttoRep
-				: sourceBasisAttoRep;
-		state.inheritedUnresolvedTotalAttoRep -= inheritedAmountToConsume;
-		if (sourceBasisAttoRep > inheritedAmountToConsume) {
-			state.localUnresolvedTotalAttoRep -= sourceBasisAttoRep - inheritedAmountToConsume;
-		}
-	}
-
-	function _isCarriedDepositConsumed(uint8 outcomeIndex, uint256 parentDepositIndex) private view returns (bool) {
-		return outcomeState[outcomeIndex].consumedParentDepositIndexes[parentDepositIndex];
+		_consumeUnresolvedRepForClaimOwners(depositor, outcomeIndex, amountAttoRep, nodes[nodeId].carryLeafIndex);
 	}
 
 	function _getCurrentCarrySnapshot(uint8 outcomeIndex)
@@ -367,7 +347,8 @@ abstract contract EscalationGameCarry is EscalationGameCalculations {
 
 	function _getEffectiveInheritedUnresolvedTotalAttoRep(uint8 outcomeIndex) internal view returns (uint256) {
 		OutcomeState storage state = outcomeState[outcomeIndex];
-		uint256 inheritedUnresolvedTotalAttoRep = state.inheritedUnresolvedTotalAttoRep;
+		uint256 inheritedUnresolvedTotalAttoRep =
+			state.inheritedUnresolvedTotalAttoRep + state.inheritedConsumedSourceAttoRep;
 		if (forkContinuation) {
 			address parentPoolAddress = address(securityPool.parent());
 			if (parentPoolAddress != address(0x0)) {
@@ -378,6 +359,6 @@ abstract contract EscalationGameCarry is EscalationGameCalculations {
 		}
 		BinaryOutcomes.BinaryOutcome finalResolution = getFinalQuestionResolution();
 		if (finalResolution != BinaryOutcomes.BinaryOutcome.None && uint8(finalResolution) != outcomeIndex) return 0;
-		return _applyTruthAuctionRetention(inheritedUnresolvedTotalAttoRep);
+		return _applyTruthAuctionRetention(inheritedUnresolvedTotalAttoRep) - state.inheritedConsumedRetainedAttoRep;
 	}
 }
