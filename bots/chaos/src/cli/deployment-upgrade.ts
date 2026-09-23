@@ -13,6 +13,7 @@ import { CHAOS_PROCESS_LOCK_OPTIONS } from '../core/process-lock-options.ts'
 import { chaosReadEndpoints } from '../runtime/canonical-scan.ts'
 import { resetPristineStateForDeploymentProfile, verifyRetirementCompletionFinality } from '../runtime/deployment-profile.ts'
 import { initialRuntimeState } from '../state/initial-state.ts'
+import { migrateEmptyBootstrapState } from '../state/bootstrap-migration.ts'
 import { loadDurableState, saveDurableState } from '../state/operator-state.ts'
 import { isPristineBootstrapState } from '../state/pristine.ts'
 import { assertSafeRetirementRecipient, DEFAULT_RETIREMENT_POLICIES, requestRetirement } from '../state/retirement.ts'
@@ -132,6 +133,13 @@ export async function prepareCurrentDeployment(options: PreparationOptions = {})
 		const wallet = configuredWallet(active)
 		if (wallet !== undefined && state.signerAddress !== undefined && wallet.toLowerCase() !== state.signerAddress.toLowerCase()) {
 			throw new Error(`Durable state is scoped to signer ${state.signerAddress}; restore the old signer before retirement`)
+		}
+		const migratedBootstrap = migrateEmptyBootstrapState(state, current)
+		if (migratedBootstrap !== state) {
+			if (migratedBootstrap.uniswapV3Factory !== undefined) assertDurableDeploymentFactory(current, migratedBootstrap, current.runtime.stateFile)
+			await assertSettingsProfileIsolation(loaded.path, current)
+			if (!deploymentIsCurrent(active, current) || loaded.needsDeploymentPin) await saveSettings(loaded.path, current, loaded.revision)
+			return { kind: 'current', message: 'Selected current contracts for the safely migratable zero-root bootstrap. Its journal will be preserved at startup.' }
 		}
 		if (state.profileId === activeProfileId && (state.uniswapV3Factory !== undefined || !pristine)) assertDurableDeploymentFactory(active, state, active.runtime.stateFile)
 		else if (!pristine) throw new Error(`Durable state belongs to profile ${state.profileId}, but the saved configuration selects ${activeProfileId}; restore the old pin before retirement`)

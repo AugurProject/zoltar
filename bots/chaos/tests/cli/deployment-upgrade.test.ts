@@ -1,5 +1,5 @@
 import { afterEach, expect, test } from 'bun:test'
-import { getAddress, privateKeyToAccount, zeroHash } from '@zoltar/bot-shared/ethereum'
+import { getAddress, privateKeyToAccount, zeroAddress, zeroHash } from '@zoltar/bot-shared/ethereum'
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import example from '../../config/operator.example.json'
@@ -101,6 +101,46 @@ test('does not treat a keyless journal with pending work as unoperated', async (
 	).rejects.toThrow('Enable live execution')
 	expect(await readFile(path)).toEqual(configBefore)
 	expect(await readFile(stateFile)).toEqual(stateBefore)
+})
+
+test('selects current contracts for a safely migratable zero-root bootstrap journal', async () => {
+	const { path, settings, signer, stateFile } = await fixture(true)
+	const zeroed = structuredClone(settings)
+	for (const key of Object.keys(zeroed.deployment)) Reflect.set(zeroed.deployment, key, zeroAddress)
+	const state = await loadDurableState(stateFile, settings.network.chainId)
+	state.profileId = executionProfileId(zeroed)
+	state.uniswapV3Factory = undefined
+	state.safetyPaused = true
+	state.activities = [
+		{ at: new Date(0).toISOString(), message: `Operator cycle stopped safely: No contract code on RPC chain ${settings.network.chainId.toString()} at block 100: zoltar (${zeroAddress}). Verify the selected network, RPC synchronization, and deployment addresses before retrying.`, status: 'failed', type: 'error' },
+	]
+	await saveDurableState(stateFile, state)
+	const before = await readFile(stateFile)
+	const result = await prepareCurrentDeployment({
+		acquireLocks: noLocks,
+		ask: async () => {
+			throw new Error('Unexpected retirement prompt')
+		},
+		path,
+	})
+	expect(result.kind).toBe('current')
+	expect((await loadSettings(path)).settings.deployment).toEqual(canonicalDeployment(settings.network.chainId))
+	expect((await loadSettings(path)).settings.runtime.stateFile).toBe(stateFile)
+	expect(await readFile(stateFile)).toEqual(before)
+	expect(state.signerAddress).toBe(signer)
+	state.activities.push({ at: new Date(1).toISOString(), message: 'Operation planned', status: 'dry-run', type: 'operation' })
+	await saveDurableState(stateFile, state)
+	const rejectedBefore = await readFile(stateFile)
+	await expect(
+		prepareCurrentDeployment({
+			acquireLocks: noLocks,
+			ask: async () => {
+				throw new Error('Unexpected retirement prompt')
+			},
+			path,
+		}),
+	).rejects.toThrow('restore the old pin')
+	expect(await readFile(stateFile)).toEqual(rejectedBefore)
 })
 
 test('prompts once to retire operated old contracts and keeps the old pin until completion', async () => {
