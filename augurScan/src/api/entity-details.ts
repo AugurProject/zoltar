@@ -127,10 +127,6 @@ export const parseTimelineCatalogCursor = (value: string | null, chainId: number
 export const timelineCatalogCursorFor = (chainId: number, filterIdentity: string, asOf: Record<string, unknown>, row: Record<string, unknown>): string =>
 	encodeOpaqueCursor([chainId, filterIdentity, ...snapshotBoundary(asOf), String(row['block_number']), Number(row['log_index']), String(row['tx_hash']), String(row['block_hash']), String(row['entity_type']), String(row['entity_identity']), 'v2'] satisfies TimelineCatalogCursor)
 
-const snapshotFor = async (sql: SQL, chainId: number, entityType: string, entityIdentity: string) => {
-	return await latestEntitySnapshot(sql, chainId, entityType, entityIdentity)
-}
-
 export const paged = (rows: readonly Record<string, unknown>[], limit: number, cursor: (row: Record<string, unknown>) => string) => {
 	const hasMore = rows.length > limit
 	const items = rows.slice(0, limit)
@@ -157,6 +153,7 @@ export const reportDetailResponse = async (sql: SQL, parts: readonly string[], u
 		chainId,
 		[cursor, decisionCursor].flatMap(item => (item === undefined ? [] : [{ parts: item, offset: 3 }])),
 	)
+	const snapshotBlock = String(asOf['blockNumber'])
 	const page = detailPage(url, chainId, 'report', identity, asOf, cursor)
 	const decisionPage = detailPage(decisionUrl, chainId, 'report-decisions', identity, asOf, decisionCursor)
 	const cursorBlock = page.cursor?.[9] ?? String(asOf['blockNumber'])
@@ -167,6 +164,7 @@ export const reportDetailResponse = async (sql: SQL, parts: readonly string[], u
 	const decisionCursorLog = decisionPage.cursor?.[11] ?? 2_147_483_647
 	const { rows, current, coordinatorDecisions } = await reportDetailData(sql, {
 		chainId,
+		snapshotBlock,
 		openOracleAddress,
 		reportId,
 		rounds: { block: cursorBlock, log: cursorLog, tx: cursorTx, limit: page.queryLimit },
@@ -191,6 +189,7 @@ export const reportDetailResponse = async (sql: SQL, parts: readonly string[], u
 		asOf,
 		data: {
 			identity: { openOracleAddress, reportId },
+			currentAvailability: current === undefined ? 'unavailable' : 'available',
 			current: current === undefined ? undefined : { ...current, report_data: currentData, lifecycle },
 			rounds: paged(reportRoundChanges(rows), page.limit, row => protocolCursorFor(chainId, 'report', identity, asOf, row)),
 			coordinatorDecisions: paged(coordinatorDecisions, decisionPage.limit, row => protocolCursorFor(chainId, 'report-decisions', identity, asOf, row)),
@@ -204,25 +203,28 @@ export const eventEntityDetailResponse = async (sql: SQL, parts: readonly string
 	if (parts.length !== 2 || chainId === undefined || address === undefined || !/^0x[0-9a-f]{40}$/.test(address)) return json({ error: `Invalid ${domain} identifier` }, 400)
 	const cursor = protocolCursorForRequest(url, chainId, domain, address)
 	const asOf = await operationsAsOfForContinuations(sql, chainId, cursor === undefined ? [] : [{ parts: cursor, offset: 3 }])
+	const snapshotBlock = String(asOf['blockNumber'])
 	const page = detailPage(url, chainId, domain, address, asOf, cursor)
 	const cursorBlock = page.cursor?.[9] ?? String(asOf['blockNumber'])
 	const cursorTx = page.cursor?.[10] ?? `0x${'f'.repeat(64)}`
 	const cursorLog = page.cursor?.[11] ?? 2_147_483_647
 	const rows = await eventEntityRows(sql, {
 		chainId,
+		snapshotBlock,
 		address,
 		domain,
 		page: { block: cursorBlock, log: cursorLog, tx: cursorTx, limit: page.queryLimit },
 	})
 	if (rows.length === 0 && page.cursor === undefined) return json({ error: `${domain === 'auction' ? 'Auction' : 'Escalation game'} not found` }, 404)
-	const snapshot = await snapshotFor(sql, chainId, domain, address)
+	const snapshot = await latestEntitySnapshot(sql, chainId, domain, address, snapshotBlock)
 	const result: Record<string, unknown> = {
 		identity: address,
 		snapshot,
+		snapshotAvailability: snapshot === undefined ? 'unavailable' : snapshot['read_status'],
 		events: paged(rows, page.limit, row => protocolCursorFor(chainId, domain, address, asOf, row)),
 	}
 	if (domain === 'auction') {
-		const { bids, finalization } = await auctionDetailData(sql, chainId, address)
+		const { bids, finalization } = await auctionDetailData(sql, chainId, address, snapshotBlock)
 		result['demandCurve'] = auctionDemandCurve(bids.slice(0, 1000).map((row: Record<string, unknown>) => ({ tick: String(row['tick']), amountAttoEth: String(row['amount_atto_eth']) })))
 		result['demandCurveTruncated'] = bids.length > 1000
 		result['finalization'] = finalization
@@ -239,12 +241,14 @@ export const forkDetailResponse = async (sql: SQL, parts: readonly string[], url
 	if (parts.length !== 2 || chainId === undefined || identity === undefined || identity.length === 0 || identity.length > 128) return json({ error: 'Invalid fork identifier' }, 400)
 	const cursor = protocolCursorForRequest(url, chainId, 'fork', identity)
 	const asOf = await operationsAsOfForContinuations(sql, chainId, cursor === undefined ? [] : [{ parts: cursor, offset: 3 }])
+	const snapshotBlock = String(asOf['blockNumber'])
 	const page = detailPage(url, chainId, 'fork', identity, asOf, cursor)
 	const cursorBlock = page.cursor?.[9] ?? String(asOf['blockNumber'])
 	const cursorTx = page.cursor?.[10] ?? `0x${'f'.repeat(64)}`
 	const cursorLog = page.cursor?.[11] ?? 2_147_483_647
 	const { rows, branches, summary } = await forkDetailData(sql, {
 		chainId,
+		snapshotBlock,
 		identity,
 		page: { block: cursorBlock, log: cursorLog, tx: cursorTx, limit: page.queryLimit },
 	})
