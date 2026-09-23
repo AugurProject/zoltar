@@ -2,7 +2,7 @@ import path from 'node:path'
 import { SQL } from 'bun'
 import { runtimeConfig } from './config.ts'
 import { actualSchemaLayout, expectedSchemaLayout, schemaLayoutDifferences } from './schema-layout.ts'
-import { assertSupportedPostgresVersion, CURRENT_SCHEMA_VERSION, INITIAL_MIGRATABLE_SCHEMA_VERSION, PREVIOUS_SCHEMA_VERSION, runSchemaTransaction, type SupportedSchemaVersion, schemaInitializationAction, UNSUPPORTED_SCHEMA_MESSAGE } from './schema-policy.ts'
+import { assertSupportedPostgresVersion, CURRENT_SCHEMA_VERSION, HISTORICAL_INTEGRITY_SCHEMA_VERSION, INITIAL_MIGRATABLE_SCHEMA_VERSION, PREVIOUS_SCHEMA_VERSION, runSchemaTransaction, type SupportedSchemaVersion, schemaInitializationAction, UNSUPPORTED_SCHEMA_MESSAGE } from './schema-policy.ts'
 
 const assertSchemaLayout = async (connection: Awaited<ReturnType<SQL['reserve']>>, schema: string, version: SupportedSchemaVersion): Promise<void> => {
 	const differences = schemaLayoutDifferences(expectedSchemaLayout(schema, version), await actualSchemaLayout(connection))
@@ -60,10 +60,19 @@ export const initializeSchema = async (sql: SQL): Promise<void> => {
 			await assertSchemaLayout(connection, schema, CURRENT_SCHEMA_VERSION)
 			return
 		}
-		if (action === 'migrate-from-1' || action === 'migrate-from-2') {
-			const startingVersion = action === 'migrate-from-1' ? INITIAL_MIGRATABLE_SCHEMA_VERSION : PREVIOUS_SCHEMA_VERSION
+		if (action === 'migrate-from-1' || action === 'migrate-from-2' || action === 'migrate-from-3') {
+			const migrationVersions: Record<typeof action, SupportedSchemaVersion> = {
+				'migrate-from-1': INITIAL_MIGRATABLE_SCHEMA_VERSION,
+				'migrate-from-2': HISTORICAL_INTEGRITY_SCHEMA_VERSION,
+				'migrate-from-3': PREVIOUS_SCHEMA_VERSION,
+			}
+			const startingVersion = migrationVersions[action]
 			await assertSchemaLayout(connection, schema, startingVersion)
-			const migrations = [...(action === 'migrate-from-1' ? [await Bun.file(path.resolve(import.meta.dir, '../migrations/002-historical-integrity.sql')).text()] : []), await Bun.file(path.resolve(import.meta.dir, '../migrations/003-indexer-ownership.sql')).text()]
+			const migrations = [
+				...(action === 'migrate-from-1' ? [await Bun.file(path.resolve(import.meta.dir, '../migrations/002-historical-integrity.sql')).text()] : []),
+				...(action !== 'migrate-from-3' ? [await Bun.file(path.resolve(import.meta.dir, '../migrations/003-indexer-ownership.sql')).text()] : []),
+				await Bun.file(path.resolve(import.meta.dir, '../migrations/004-question-seconds.sql')).text(),
+			]
 			await runSchemaTransaction(
 				async () => await connection.unsafe('BEGIN'),
 				async () => await connection.unsafe('COMMIT'),
@@ -73,7 +82,7 @@ export const initializeSchema = async (sql: SQL): Promise<void> => {
 					await assertSchemaLayout(connection, schema, CURRENT_SCHEMA_VERSION)
 					await connection`
 						INSERT INTO public.augurscan_schema_migrations (schema_version, description)
-						VALUES (${CURRENT_SCHEMA_VERSION}, ${'Durable, reconciled indexer ownership diagnostics'})
+						VALUES (${CURRENT_SCHEMA_VERSION}, ${'Exact question timestamps in Unix seconds'})
 					`
 					await connection`UPDATE public.augurscan_schema SET schema_version = ${CURRENT_SCHEMA_VERSION} WHERE singleton`
 				},

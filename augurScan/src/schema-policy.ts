@@ -1,11 +1,12 @@
-export const CURRENT_SCHEMA_VERSION = '3'
+export const CURRENT_SCHEMA_VERSION = '4'
 const SUPPORTED_POSTGRES_VERSION = '17.11'
 
 const UNSUPPORTED_POSTGRES_VERSION_MESSAGE = `Unsupported PostgreSQL server version. augurScan requires PostgreSQL ${SUPPORTED_POSTGRES_VERSION} because schema fingerprints are version-specific; the database was not modified.`
 
 export const UNSUPPORTED_SCHEMA_MESSAGE = 'Unsupported augurScan database schema. Restore a compatible backup or upgrade through a supported augurScan release; the database was not modified.'
 
-export const PREVIOUS_SCHEMA_VERSION = '2'
+export const PREVIOUS_SCHEMA_VERSION = '3'
+export const HISTORICAL_INTEGRITY_SCHEMA_VERSION = '2'
 
 export const INITIAL_MIGRATABLE_SCHEMA_VERSION = '1'
 
@@ -17,7 +18,7 @@ const postgresVersionNumber = (release: string): string => {
 
 const SUPPORTED_POSTGRES_VERSION_NUM = postgresVersionNumber(SUPPORTED_POSTGRES_VERSION)
 
-export type SupportedSchemaVersion = typeof INITIAL_MIGRATABLE_SCHEMA_VERSION | typeof PREVIOUS_SCHEMA_VERSION | typeof CURRENT_SCHEMA_VERSION
+export type SupportedSchemaVersion = typeof INITIAL_MIGRATABLE_SCHEMA_VERSION | typeof PREVIOUS_SCHEMA_VERSION | typeof CURRENT_SCHEMA_VERSION | typeof HISTORICAL_INTEGRITY_SCHEMA_VERSION
 
 export const runSchemaTransaction = async <T>(begin: () => Promise<unknown>, commit: () => Promise<unknown>, rollback: () => Promise<unknown>, operation: () => Promise<T>): Promise<T> => {
 	await begin()
@@ -35,9 +36,10 @@ export const runSchemaTransaction = async <T>(begin: () => Promise<unknown>, com
 	}
 }
 
-export const schemaInitializationAction = (markerVersion: string | undefined, publicObjects: readonly string[]): 'initialize' | 'migrate-from-1' | 'migrate-from-2' | 'current' => {
+export const schemaInitializationAction = (markerVersion: string | undefined, publicObjects: readonly string[]): 'initialize' | 'migrate-from-1' | 'migrate-from-2' | 'migrate-from-3' | 'current' => {
 	if (markerVersion === CURRENT_SCHEMA_VERSION) return 'current'
-	if (markerVersion === PREVIOUS_SCHEMA_VERSION) return 'migrate-from-2'
+	if (markerVersion === PREVIOUS_SCHEMA_VERSION) return 'migrate-from-3'
+	if (markerVersion === HISTORICAL_INTEGRITY_SCHEMA_VERSION) return 'migrate-from-2'
 	if (markerVersion === INITIAL_MIGRATABLE_SCHEMA_VERSION) return 'migrate-from-1'
 	if (markerVersion !== undefined || publicObjects.length > 0) throw new Error(UNSUPPORTED_SCHEMA_MESSAGE)
 	return 'initialize'
