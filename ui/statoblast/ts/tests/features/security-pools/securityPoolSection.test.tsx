@@ -117,22 +117,22 @@ describe('SecurityPoolSection', () => {
 		review.abort()
 	})
 
-	test('shows a failed transaction review without a close button', async () => {
+	test('returns a failed transaction review to the pool form and its submit action', async () => {
 		const review = new AbortController()
 		const controller = createTransactionStepController(review.signal)
 		controller.setPlan([{ title: 'Create security pool', description: undefined, contractAddress: undefined, contractLabel: undefined, spender: undefined, amount: undefined, ethValueAttoEth: 0n }])
 		const pendingReview = controller.review()
 		controller.failed('User rejected the request')
-		const renderedComponent = await renderIntoDocument(h(SecurityPoolSection, createProps({ securityPoolCreating: false, securityPoolReviewSignal: review.signal })))
+		const onDismissSecurityPoolReview = mock(() => review.abort())
+		const renderedComponent = await renderIntoDocument(h(SecurityPoolSection, createProps({ onDismissSecurityPoolReview, securityPoolCreating: false, securityPoolError: 'User rejected the request', securityPoolReviewSignal: review.signal })))
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const queries = within(document.body)
-		expect(queries.getByRole('alert').textContent).toContain('User rejected the request')
+		expect(onDismissSecurityPoolReview).toHaveBeenCalledTimes(1)
+		expect(queries.getByText('User rejected the request')).not.toBeNull()
 		expect(queries.queryByRole('button', { name: 'Close' })).toBeNull()
-		expect(queries.queryByRole('radio', { name: 'Use a question ID' })).toBeNull()
-		expect((queries.getByRole('textbox', { name: 'Statoblast Security Multiplier' }) as HTMLInputElement).disabled).toBe(true)
-		expect(queries.queryByRole('button', { name: 'Create pool' })).toBeNull()
-		review.abort()
+		expect((queries.getByRole('textbox', { name: 'Statoblast Security Multiplier' }) as HTMLInputElement).disabled).toBe(false)
+		expect(queries.getByRole('button', { name: 'Create pool' }).hasAttribute('disabled')).toBe(false)
 		await expect(pendingReview).rejects.toThrow('Remaining transactions canceled')
 	})
 

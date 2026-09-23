@@ -16,6 +16,10 @@ import { embeddedTransactionSteps } from '@zoltar/ui-core-shared/components/Tran
 import { PriceRequestPreview } from './PriceRequestPreview.js'
 import { TransactionStepsContent } from '@zoltar/ui-core-shared/components/TransactionStepsContent.js'
 import { transactionSteps } from '@zoltar/ui-core-shared/transactions/transactionSteps.js'
+import { TransactionObjectContext } from '@zoltar/ui-core-shared/components/TransactionObjectContext.js'
+import { AddressValue } from '@zoltar/ui-core-shared/components/AddressValue.js'
+import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
+import type { FailedPricePlan } from './PriceRequestPreview.js'
 
 async function fetchUniswapPrice(review: NonNullable<RequestPriceModalProps['review']>) {
 	return await getCoordinatorInitialReportPrice(createConnectedReadClient(), review.managerAddress)
@@ -27,8 +31,10 @@ export function RequestPriceModal({ review, onConfirm, onClose, canRequest, conf
 	const quoteAttempt = useRef(0)
 	const [price, setPrice] = useState('')
 	const [retry, setRetry] = useState(0)
-	const [reviewAfterFailure, setReviewAfterFailure] = useState(false)
+	const [manualRequestRequired, setManualRequestRequired] = useState(false)
 	const [failureLatched, setFailureLatched] = useState(false)
+	const [failureMessage, setFailureMessage] = useState<string>()
+	const [failedPlan, setFailedPlan] = useState<FailedPricePlan>()
 	const [running, setRunning] = useState(false)
 	const [attempted, setAttempted] = useState<string>()
 	const run = useRef<{ key: string; signal: AbortSignal; cancel: () => void }>()
@@ -48,12 +54,13 @@ export function RequestPriceModal({ review, onConfirm, onClose, canRequest, conf
 	const sending = ownsWorkflow && (workflow?.steps.some(step => step.phase === 'pending') ?? false)
 	const current = valid && run.current?.key === key && run.current?.signal.aborted === false
 	const showSteps = current && ownsWorkflow && workflow?.steps[workflow.activeIndex] !== undefined
-	const error = attempted === key && !running && presentation?.tone === 'error' ? presentation.detail : undefined
+	const currentAttemptError = attempted === key && !running && presentation?.tone === 'error' ? presentation.detail : undefined
+	const error = failureLatched ? failureMessage : currentAttemptError
 	const failedCurrentAttempt = (key !== undefined && attempted === key && !running && presentation?.tone === 'error') || (showSteps && workflow?.steps.some(step => step.phase === 'failed'))
 	const estimatePrompt = validPrice ? priceRequestCopy.preparingPriceRequest : priceRequestCopy.enterPriceEstimate
 	let previewPrompt = estimatePrompt
 	if (fetching) previewPrompt = priceRequestCopy.fetchingUniswapPrice
-	if (reviewAfterFailure) previewPrompt = priceRequestCopy.reviewPriceBeforeRetry
+	if (manualRequestRequired) previewPrompt = priceRequestCopy.checkPriceBeforeRequest
 
 	useLayoutEffect(() => {
 		quoteAttempt.current += 1
@@ -61,18 +68,31 @@ export function RequestPriceModal({ review, onConfirm, onClose, canRequest, conf
 		setQuoteError(undefined)
 		setPrice('')
 		setAttempted(undefined)
-		setReviewAfterFailure(false)
+		setManualRequestRequired(false)
 		setFailureLatched(false)
+		setFailureMessage(undefined)
+		setFailedPlan(undefined)
 	}, [review])
 	useLayoutEffect(() => {
-		if (failedCurrentAttempt) setFailureLatched(true)
+		if (!failedCurrentAttempt) return
+		setFailureLatched(true)
+		setManualRequestRequired(true)
+		setFailureMessage(workflow?.steps.find(step => step.phase === 'failed')?.error ?? (typeof presentation?.detail === 'string' ? presentation.detail : undefined))
+		if (workflow !== undefined) {
+			setFailedPlan({
+				funding: workflow.steps.flatMap(step => step.tokenFunding ?? []),
+				totalAttoEth: workflow.steps.reduce((sum, step) => sum + (step.phase === 'skipped' ? 0n : (step.ethValueAttoEth ?? 0n)), 0n),
+				outcome: workflow.steps.find(step => step.oracleOutcome !== undefined)?.oracleOutcome,
+			})
+		}
+		run.current?.cancel()
 	}, [failedCurrentAttempt])
 	useLayoutEffect(() => {
 		if (!current && !sending) run.current?.cancel()
 	}, [current, sending])
 	useLayoutEffect(() => {
-		if (reviewAfterFailure && !showSteps) priceControlsRef.current?.querySelector<HTMLInputElement>('input:not(:disabled)')?.focus()
-	}, [reviewAfterFailure, showSteps])
+		if (manualRequestRequired && !showSteps) priceControlsRef.current?.querySelector<HTMLInputElement>('input:not(:disabled)')?.focus()
+	}, [manualRequestRequired, showSteps])
 	useEffect(
 		() => () => {
 			mounted.current = false
@@ -82,7 +102,7 @@ export function RequestPriceModal({ review, onConfirm, onClose, canRequest, conf
 		[],
 	)
 	useEffect(() => {
-		if (!valid || review === undefined || key === undefined || running || attempted === key || reviewAfterFailure || failureLatched) return
+		if (!valid || review === undefined || key === undefined || running || attempted === key || manualRequestRequired || failureLatched) return
 		const timer = setTimeout(() => {
 			const cancellation = new AbortController()
 			embeddedTransactionSteps.value = cancellation.signal
@@ -104,7 +124,7 @@ export function RequestPriceModal({ review, onConfirm, onClose, canRequest, conf
 			})
 		}, 300)
 		return () => clearTimeout(timer)
-	}, [valid, review, key, running, attempted, proposedPrice, reviewAfterFailure, failureLatched])
+	}, [valid, review, key, running, attempted, proposedPrice, manualRequestRequired, failureLatched])
 	const close = () => {
 		if (sending) return
 		quoteAttempt.current += 1
@@ -121,7 +141,7 @@ export function RequestPriceModal({ review, onConfirm, onClose, canRequest, conf
 		const attempt = ++quoteAttempt.current
 		setFetching(true)
 		setQuoteError(undefined)
-		if (failureLatched) setReviewAfterFailure(true)
+		if (failureLatched) setManualRequestRequired(true)
 		run.current?.cancel()
 		try {
 			const value = await fetchPrice(review)
@@ -149,7 +169,7 @@ export function RequestPriceModal({ review, onConfirm, onClose, canRequest, conf
 					quoteAttempt.current += 1
 					setFetching(false)
 					setQuoteError(undefined)
-					if (failureLatched) setReviewAfterFailure(true)
+					if (failureLatched) setManualRequestRequired(true)
 					setPrice(value)
 				}}
 				error={priceError ?? quoteError}
@@ -167,38 +187,34 @@ export function RequestPriceModal({ review, onConfirm, onClose, canRequest, conf
 			<TransactionActionButtonLockProvider locked={false}>
 				<OperationModal embedTransactionSteps={false} isOpen={review !== undefined} title={poolCopy.requestNewPriceTitle} onClose={close} closeDisabled={sending}>
 					{priceControls}
+					{failureLatched && review !== undefined ? (
+						<TransactionObjectContext
+							items={[
+								{ label: commonCopy.securityPoolAddress, value: <AddressValue address={review.securityPoolAddress} /> },
+								{ label: commonCopy.oracleManager, value: <AddressValue address={review.managerAddress} /> },
+							]}
+						/>
+					) : undefined}
 					{showSteps ? (
 						<GlobalTransactionPresentationProvider transaction={presentation}>
-							<TransactionStepsContent
-								contextKey={key ?? ''}
-								onClose={close}
-								onRetry={() => {
-									run.current?.cancel()
-									setReviewAfterFailure(true)
-								}}
-							/>
+							<TransactionStepsContent contextKey={key ?? ''} onClose={close} />
 						</GlobalTransactionPresentationProvider>
 					) : (
 						<PriceRequestPreview
 							requestValue={review?.requestValueAttoEth}
+							failedPlan={failedPlan}
 							reason={confirmationGuardMessage ?? priceError ?? (typeof error === 'string' ? error : undefined) ?? previewPrompt}
 							error={confirmationGuardMessage ?? (typeof error === 'string' ? error : undefined)}
-							preparing={valid && !reviewAfterFailure && (running || attempted !== key)}
+							preparing={valid && !manualRequestRequired && (running || attempted !== key)}
 							hideReason={!validPrice || priceError !== undefined || error !== undefined || confirmationGuardMessage !== undefined}
 							onClose={close}
-							onRetry={
-								error === undefined
-									? undefined
-									: () => {
-											run.current?.cancel()
-											setReviewAfterFailure(true)
-										}
-							}
 							onReview={
-								reviewAfterFailure && valid
+								manualRequestRequired && valid
 									? () => {
-											setReviewAfterFailure(false)
+											setManualRequestRequired(false)
 											setFailureLatched(false)
+											setFailureMessage(undefined)
+											setFailedPlan(undefined)
 											setRetry(value => value + 1)
 										}
 									: undefined

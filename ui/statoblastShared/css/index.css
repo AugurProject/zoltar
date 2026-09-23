@@ -2983,8 +2983,41 @@
 	min-inline-size: 12.5rem;
 }
 
+.operation-modal-body:has(> .request-price-fields) .transaction-plan-action:has(.approval-amount-field) .form-grid {
+	--request-price-max-width: 3.25rem;
+	--request-price-approval-gap: 0.5rem;
+	grid-template-columns: minmax(0, 1fr);
+}
+
+.operation-modal-body:has(> .request-price-fields) .approval-amount-controls {
+	gap: var(--request-price-approval-gap);
+}
+
+.operation-modal-body:has(> .request-price-fields) .approval-amount-controls > .field-inline-action {
+	inline-size: var(--request-price-max-width);
+}
+
+.operation-modal-body:has(> .request-price-fields) .transaction-plan-action:has(.approval-amount-field) .form-grid > .actions {
+	display: grid;
+	grid-column: 1;
+	grid-template-columns: minmax(0, 1fr) var(--request-price-max-width);
+	gap: var(--request-price-approval-gap);
+}
+
+.operation-modal-body:has(> .request-price-fields) .transaction-plan-action:has(.approval-amount-field) .form-grid > .actions > .tx-action {
+	grid-column: 1;
+}
+
 .operation-modal-body:has(> .request-price-fields) .transaction-plan-action-final .tx-action-button {
 	min-block-size: 4rem;
+}
+
+.price-request-preview .tx-action-group > .actions {
+	margin-block-start: 0.5rem;
+}
+
+.operation-modal-body:has(> .request-price-fields) .transaction-plan-action-final > .tx-action-feedback {
+	grid-column: 1 / -1;
 }
 
 /* The price-request confirm button is taller than a plain button, so its Cancel neighbour matches that height. */
@@ -2993,13 +3026,13 @@
 	min-block-size: 4rem;
 }
 
-.operation-modal-body:has(> .request-price-fields) .transaction-plan-action-retry .transaction-step-close > button {
-	inline-size: auto;
-}
-
 @media (max-width: 600px) {
 	.modal-panel:has(.request-price-fields) {
 		block-size: calc(100dvh - 2rem);
+	}
+
+	.operation-modal-body:has(> .request-price-fields) .transaction-plan-action:has(.approval-amount-field) .form-grid {
+		--request-price-approval-gap: 0.25rem;
 	}
 
 	.operation-modal-body:has(> .request-price-fields) .workflow-metric-grid > div {

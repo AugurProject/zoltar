@@ -503,12 +503,13 @@ describe('GlobalTransactionTray', () => {
 		})
 
 		expect(document.body.querySelector('.global-transaction-notice-compact')).not.toBeNull()
-		expect(within(document.body).getByRole('button', { name: 'Review and retry' })).not.toBeNull()
+		expect(document.body.querySelector('.global-transaction-compact-details')?.hasAttribute('open')).toBe(true)
+		expect(within(document.body).queryByRole('button', { name: 'Review and retry' })).toBeNull()
 		await act(() => {
-			fireEvent.click(within(document.body).getByRole('button', { name: 'Review and retry' }))
+			fireEvent.click(within(document.body).getByRole('link', { name: 'Back to form' }))
 		})
 		expect(window.location.hash).toBe('#/zoltar?zoltarView=create')
-		expect(renderedComponent.container.textContent).toBe('')
+		expect(renderedComponent.container.textContent).toContain('Creating Question')
 	})
 
 	test('keeps the request route as the origin when the transaction gains a hash after navigation', async () => {

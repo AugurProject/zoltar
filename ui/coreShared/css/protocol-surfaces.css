@@ -1989,10 +1989,6 @@ main.global-transaction-tray-open :is(a, button, input, select, summary, textare
 	gap: 0.5rem;
 }
 
-.transaction-plan-action-retry {
-	grid-template-columns: minmax(0, 1fr);
-}
-
 .transaction-step-close {
 	justify-content: flex-end;
 }

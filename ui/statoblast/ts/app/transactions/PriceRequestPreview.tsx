@@ -3,10 +3,15 @@ import { useId, useEffect, useRef } from 'preact/hooks'
 import { InlineHint } from '@zoltar/ui-core-shared/components/InlineHint.js'
 import { TransactionActionButton } from '@zoltar/ui-core-shared/components/TransactionActionButton.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
-import * as transactionCopy from '@zoltar/ui-core-shared/copy/transaction.js'
 import * as copy from '@zoltar/ui-core-shared/copy/transactionSteps.js'
 import * as priceRequestCopy from '@zoltar/ui-statoblast-shared/copy/priceRequest.js'
 import { EthAmount, TransactionFundingSummary } from '@zoltar/ui-core-shared/components/TransactionFundingSummary.js'
+
+export type FailedPricePlan = {
+	funding: readonly { amount: string }[]
+	totalAttoEth: bigint
+	outcome: { returnToWallet: boolean; settlerRewardAttoEth: bigint | undefined } | undefined
+}
 
 export function PriceRequestPreview({
 	requestValue,
@@ -15,8 +20,8 @@ export function PriceRequestPreview({
 	preparing,
 	hideReason,
 	onClose,
-	onRetry,
 	onReview,
+	failedPlan,
 }: {
 	requestValue: bigint | undefined
 	reason: string
@@ -24,8 +29,8 @@ export function PriceRequestPreview({
 	preparing: boolean
 	hideReason: boolean
 	onClose: () => void
-	onRetry: (() => void) | undefined
 	onReview?: (() => void) | undefined
+	failedPlan?: FailedPricePlan | undefined
 }) {
 	const reasonId = useId()
 	const errorRef = useRef<HTMLDivElement>(null)
@@ -43,10 +48,10 @@ export function PriceRequestPreview({
 	return (
 		<>
 			<div className='transaction-step-content'>
-				<TransactionFundingSummary funding={[commonCopy.rep, commonCopy.weth].map(symbol => ({ amount: `${commonCopy.metricUnavailablePlaceholder} ${symbol}` }))} totalAttoEth={undefined} outcome={{ returnToWallet: true, settlerRewardAttoEth: undefined }} />
+				<TransactionFundingSummary funding={failedPlan?.funding ?? [commonCopy.rep, commonCopy.weth].map(symbol => ({ amount: `${commonCopy.metricUnavailablePlaceholder} ${symbol}` }))} totalAttoEth={failedPlan?.totalAttoEth} outcome={failedPlan?.outcome ?? { returnToWallet: true, settlerRewardAttoEth: undefined }} />
 				<p className='detail transaction-funding-note'>{copy.fundingDetail}</p>
 			</div>
-			<div className='transaction-step-actions transaction-approval-editor'>
+			<div className='transaction-step-actions transaction-approval-editor price-request-preview'>
 				<div className='tx-action-group'>
 					{/* A hidden reason lives outside the feedback container so the empty container collapses instead of reserving space. */}
 					{error === undefined && reasonHidden ? (
@@ -54,9 +59,6 @@ export function PriceRequestPreview({
 							<InlineHint id={reasonId} message={reason} />
 						</div>
 					) : undefined}
-					<div className='tx-action-feedback' ref={errorRef} aria-live='polite'>
-						{visibleFeedback}
-					</div>
 					<div className='actions'>
 						{[commonCopy.rep, commonCopy.weth].map(symbol => (
 							<div className='transaction-plan-action' key={symbol}>
@@ -81,16 +83,17 @@ export function PriceRequestPreview({
 								<div className='transaction-step-hash' />
 							</div>
 						))}
-						<div className={`transaction-plan-action transaction-plan-action-wide transaction-plan-action-final${onRetry === undefined ? '' : ' transaction-plan-action-retry'}`}>
+						<div className='transaction-plan-action transaction-plan-action-wide transaction-plan-action-final'>
+							{visibleFeedback === undefined ? undefined : (
+								<div className='tx-action-feedback' ref={errorRef} aria-live='polite'>
+									{visibleFeedback}
+								</div>
+							)}
 							<TransactionActionButton
 								idleLabel={
-									onReview === undefined ? (
-										<>
-											{priceRequestCopy.requestPrice} · <EthAmount value={requestValue} />
-										</>
-									) : (
-										priceRequestCopy.reviewPriceRequest
-									)
+									<>
+										{priceRequestCopy.requestPrice} · <EthAmount value={requestValue} />
+									</>
 								}
 								pending={preparing}
 								pendingLabel={priceRequestCopy.preparingPriceRequest}
@@ -101,14 +104,9 @@ export function PriceRequestPreview({
 								tone='primary'
 							/>
 							<div className='actions transaction-step-close'>
-								<button className='secondary' type='button' onClick={onRetry ?? onClose}>
-									{onRetry === undefined ? commonCopy.cancel : transactionCopy.reviewAndRetry}
+								<button className='secondary' type='button' onClick={onClose}>
+									{commonCopy.cancel}
 								</button>
-								{onRetry === undefined ? undefined : (
-									<button className='primary' type='button' onClick={onClose}>
-										{transactionCopy.dismiss}
-									</button>
-								)}
 							</div>
 							<div className='transaction-step-hash' />
 						</div>

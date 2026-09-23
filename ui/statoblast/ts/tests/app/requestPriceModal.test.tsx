@@ -168,15 +168,13 @@ test('shows preparation failure with retry and keeps manual entry available', as
 		expect(queries.getByRole('alert').textContent).toContain('Uniswap quote unavailable.')
 		expect(queries.getByRole('alert').closest('.transaction-step-content') === null).toBe(true)
 		expect(queries.queryByRole('status')).toBeNull()
-		expect(queries.getByRole('button', { name: 'Dismiss' }).classList.contains('primary')).toBe(true)
-		await act(() => fireEvent.click(queries.getByRole('button', { name: 'Review and retry' })))
-		await settle()
+		expect(queries.queryByRole('button', { name: 'Review and retry' })).toBeNull()
 		expect(attempts).toBe(1)
 		const priceInput = queries.getByRole('textbox', { name: 'Open Oracle REP/ETH starting price' })
 		expect(inputValue(priceInput)).toBe('2')
 		expect(priceInput.hasAttribute('disabled')).toBe(false)
 		expect(document.activeElement).toBe(priceInput)
-		await act(() => fireEvent.click(queries.getByRole('button', { name: 'Review request' })))
+		await act(() => fireEvent.click(queries.getByRole('button', { name: /^Request price/ })))
 		await settle()
 		expect(attempts).toBe(2)
 	} finally {
@@ -202,22 +200,68 @@ test('allows another price request after a failed transaction step', async () =>
 		const queries = within(document.body)
 		await act(() => fireEvent.click(queries.getByRole('button', { name: 'Fetch from Uniswap' })))
 		await settle()
-		expect(queries.getByRole('button', { name: 'Review and retry' }).classList.contains('secondary')).toBe(true)
-		expect(queries.getByRole('button', { name: 'Dismiss' }).classList.contains('primary')).toBe(true)
-		await act(() => fireEvent.click(queries.getByRole('button', { name: 'Review and retry' })))
+		expect(queries.queryByRole('button', { name: 'Review and retry' })).toBeNull()
+		expect(queries.getByText('Security Pool Address').parentElement?.textContent).toContain(review.securityPoolAddress)
+		expect(queries.getByText('Oracle Manager').parentElement?.textContent).toContain(review.managerAddress)
 		await settle()
 		expect(attempts).toBe(1)
 		const priceInput = queries.getByRole('textbox', { name: 'Open Oracle REP/ETH starting price' })
 		expect(priceInput.hasAttribute('disabled')).toBe(false)
-		expect(document.activeElement).toBe(priceInput)
+		expect(queries.getByRole('button', { name: /^Request price/ }).hasAttribute('disabled')).toBe(false)
 		expect(inputValue(priceInput)).toBe('2')
 		await act(() => fireEvent.input(priceInput, { target: { value: '3' } }))
 		await settle()
 		expect(attempts).toBe(1)
-		await act(() => fireEvent.click(queries.getByRole('button', { name: 'Review request' })))
+		await act(() => fireEvent.click(queries.getByRole('button', { name: /^Request price/ })))
 		await settle()
 		expect(attempts).toBe(2)
 		expect(prices).toEqual([2n * 10n ** 18n, 3n * 10n ** 18n])
+	} finally {
+		await rendered.cleanup()
+		dom.cleanup()
+	}
+})
+
+test('keeps submitted funding and pool details beside the original action after failure', async () => {
+	const dom = installDomEnvironment()
+	const onConfirm = async (_request: RequestPriceReview, signal?: AbortSignal) => {
+		const controller = createTransactionStepController(signal)
+		controller.setPlan([
+			{
+				...step,
+				title: 'Request price',
+				tokenFunding: [
+					{ amount: '2 REP', limit: undefined },
+					{ amount: '1 WETH', limit: undefined },
+				],
+				oracleOutcome: { returnToWallet: true, settlerRewardAttoEth: 12n },
+			},
+		])
+		try {
+			await controller.review()
+			controller.failed('nonce too low')
+		} catch (error) {
+			if (!(error instanceof Error) || !error.message.includes('canceled')) throw error
+		}
+	}
+	const rendered = await renderIntoDocument(
+		<>
+			<RequestPriceModal {...props} onConfirm={onConfirm} />
+			<TransactionStepsModal contextKey='wallet' />
+		</>,
+	)
+	try {
+		const queries = within(document.body)
+		await act(() => fireEvent.click(queries.getByRole('button', { name: 'Fetch from Uniswap' })))
+		await settle()
+		await act(() => fireEvent.click(queries.getByRole('button', { name: /^Request price/ })))
+		await settle()
+		expect(queries.getByRole('alert').textContent).toContain('nonce too low')
+		expect(queries.getByText('2 REP')).not.toBeNull()
+		expect(queries.getByText('1 WETH')).not.toBeNull()
+		expect(queries.getByText('Security Pool Address').parentElement?.textContent).toContain(review.securityPoolAddress)
+		expect(queries.getByText('Oracle Manager').parentElement?.textContent).toContain(review.managerAddress)
+		expect(queries.getByRole('button', { name: /^Request price/ }).hasAttribute('disabled')).toBe(false)
 	} finally {
 		await rendered.cleanup()
 		dom.cleanup()
@@ -255,7 +299,7 @@ test.each(['preparation', 'transaction step'] as const)('does not restart after 
 		await settle()
 		expect(inputValue(queries.getByRole('textbox', { name: 'Open Oracle REP/ETH starting price' }))).toBe('4')
 		expect(attempts).toBe(1)
-		await act(() => fireEvent.click(queries.getByRole('button', { name: 'Review request' })))
+		await act(() => fireEvent.click(queries.getByRole('button', { name: /^Request price/ })))
 		await settle()
 		expect(attempts).toBe(2)
 		expect(prices).toEqual([2n * 10n ** 18n, 4n * 10n ** 18n])

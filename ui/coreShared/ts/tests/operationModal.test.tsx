@@ -452,7 +452,7 @@ describe('OperationModal', () => {
 		expect(documentQueries.queryByRole('dialog', { name: 'Settle Report' })).toBeNull()
 	})
 
-	test('surfaces transaction feedback, filters semantic trading context aliases, and preserves multi-step context', async () => {
+	test('keeps transaction feedback and submitted values beside the original form', async () => {
 		const renderedComponent = await renderIntoDocument(<TransactionFeedbackOperationModalHarness />)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
@@ -479,13 +479,13 @@ describe('OperationModal', () => {
 
 		expect(documentQueries.getByRole('dialog', { name: 'Migrate Shares' })).not.toBeNull()
 		expect(within(dialog).getByRole('status').textContent).toContain('Approval confirmed')
-		expect(within(dialog).getByRole('status').textContent).not.toContain('Pool')
-		expect(within(dialog).getByRole('status').textContent).not.toContain('Share Outcome')
+		expect(within(dialog).getByRole('status').textContent).toContain('Pool')
+		expect(within(dialog).getByRole('status').textContent).toContain('Share Outcome')
 		expect(within(dialog).getByRole('status').textContent).toContain('Approval Amount')
 		expect(within(dialog).queryByText('Technical details')).toBeNull()
 		expect(within(dialog).queryByText('approve')).toBeNull()
 		expect(dialog.textContent?.includes('Security Pool Address')).toBe(false)
-		expect(dialog.textContent?.includes('Outcome')).toBe(false)
+		expect(dialog.textContent?.includes('Outcome')).toBe(true)
 		expect(within(dialog).getByText('Fail transaction')).not.toBeNull()
 		await act(() => {
 			fireEvent.click(documentQueries.getByRole('button', { name: 'Fail transaction' }))

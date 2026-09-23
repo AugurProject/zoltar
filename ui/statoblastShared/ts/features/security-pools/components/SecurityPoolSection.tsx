@@ -76,7 +76,10 @@ export function SecurityPoolSection({
 	// An unfinished question-and-pool flow keeps its question; otherwise use an explicitly selected ID or start a new question.
 	const [questionSource, setQuestionSource] = useState<'existing' | 'new'>(marketResult !== undefined || (securityPoolForm.marketId.trim() === '' && marketDetails === undefined) ? 'new' : 'existing')
 	const reviewWorkflow = transactionSteps.value
-	const ownsTransactionReview = securityPoolReviewSignal !== undefined && reviewWorkflow?.reviewSignal === securityPoolReviewSignal && reviewWorkflow.steps[reviewWorkflow.activeIndex] !== undefined
+	const ownsTransactionReview = securityPoolReviewSignal !== undefined && !securityPoolReviewSignal.aborted && reviewWorkflow?.reviewSignal === securityPoolReviewSignal && reviewWorkflow.steps[reviewWorkflow.activeIndex] !== undefined
+	useEffect(() => {
+		if (ownsTransactionReview && reviewWorkflow?.steps[reviewWorkflow.activeIndex]?.phase === 'failed') (onDismissSecurityPoolReview ?? reviewWorkflow.cancel)()
+	}, [ownsTransactionReview, reviewWorkflow, onDismissSecurityPoolReview])
 	// The wallet confirms normal pool creation. Keep an escape if a pre-wallet review is unexpectedly published.
 	const inlineTransactionReview = ownsTransactionReview ? (
 		<TransactionStepsContent cancelable={reviewWorkflow.steps[reviewWorkflow.activeIndex]?.phase === 'review'} contextKey='security-pool-creation' focusOnMount heading={transactionReviewCopy.transactionReview} keepActionsVisible onClose={onDismissSecurityPoolReview} />

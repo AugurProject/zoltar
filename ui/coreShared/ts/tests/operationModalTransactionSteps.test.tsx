@@ -8,7 +8,6 @@ import { GlobalTransactionPresentationProvider } from '../components/GlobalTrans
 import { OperationModal } from '../components/OperationModal.js'
 import { TransactionActionGroup } from '../components/TransactionActionButton.js'
 import { TransactionStepsModal } from '../components/TransactionStepsModal.js'
-import { TransactionStepsContent } from '../components/TransactionStepsContent.js'
 import { createTransactionStepController, transactionSteps } from '../transactions/transactionSteps.js'
 import type { GlobalTransactionPresentation } from '../types/components.js'
 import { installDomTestLifecycle } from './testUtils/domTestLifecycle.js'
@@ -21,41 +20,6 @@ installDomTestLifecycle()
 
 const hash = '0x1111111111111111111111111111111111111111111111111111111111111111'
 const step = { title: 'Send withdrawal', description: 'Withdraw REP.', contractAddress: undefined, spender: undefined, amount: undefined, ethValueAttoEth: 0n }
-
-for (const outcome of ['confirmed', 'failed'] as const) {
-	test(`offers a primary Dismiss action for a ${outcome} transaction dialog`, async () => {
-		const controller = createTransactionStepController()
-		controller.setPlan([step])
-		controller.startWithoutReview(0)
-		if (outcome === 'confirmed') {
-			controller.submitted(hash)
-			controller.receipt(hash, 'success')
-		} else {
-			controller.failed('Transaction reverted.')
-		}
-		function Harness() {
-			const [open, setOpen] = useState(true)
-			return (
-				<OperationModal embedTransactionSteps={false} isOpen={open} title='Withdrawal status' onClose={() => setOpen(false)}>
-					<TransactionStepsContent contextKey={`withdrawal-${outcome}`} onClose={() => setOpen(false)} />
-				</OperationModal>
-			)
-		}
-		const rendered = await renderIntoDocument(<Harness />)
-		try {
-			const queries = within(document.body)
-			const dialog = queries.getByRole('dialog', { name: 'Withdrawal status' })
-			if (outcome === 'confirmed') expect(dialog.textContent).toContain('Confirmed')
-			const dismiss = within(dialog).getByRole('button', { name: 'Dismiss' })
-			expect(dismiss.classList.contains('primary')).toBe(true)
-			await act(() => fireEvent.click(dismiss))
-			expect(queries.queryByRole('dialog')).toBeNull()
-		} finally {
-			await rendered.cleanup()
-			transactionSteps.value?.cancel()
-		}
-	})
-}
 
 test('returns an embedded failed transaction to its form for review before resubmission', async () => {
 	const presentation = signal<GlobalTransactionPresentation | undefined>(undefined)
@@ -74,7 +38,7 @@ test('returns an embedded failed transaction to its form for review before resub
 							controller.startWithoutReview(0)
 							if (attempts === 1) {
 								controller.failed('nonce too low')
-								presentation.value = { operationKey: 'deposit-1', title: 'Deposit failed', tone: 'error', detail: 'nonce too low' }
+								presentation.value = { operationKey: 'deposit-1', title: 'Deposit failed', tone: 'error', detail: 'nonce too low', rows: [{ label: 'Security Pool Address', value: '0x0000000000000000000000000000000000000002' }] }
 							}
 						}}
 					>
@@ -90,9 +54,9 @@ test('returns an embedded failed transaction to its form for review before resub
 		const submit = queries.getByRole('button', { name: 'Deposit REP' })
 		await act(() => fireEvent.click(submit))
 		expect(queries.getByRole('alert').textContent).toContain('nonce too low')
-		await act(() => fireEvent.click(queries.getByRole('button', { name: 'Review and retry' })))
-		expect(queries.queryByRole('alert')).toBeNull()
-		expect(document.activeElement).toBe(submit)
+		expect(queries.getByRole('alert').textContent).toContain('0x0000000000000000000000000000000000000002')
+		expect(queries.queryByRole('button', { name: 'Review and retry' })).toBeNull()
+		expect(submit.hasAttribute('disabled')).toBe(false)
 		await act(() => fireEvent.click(submit))
 		expect(attempts).toBe(2)
 		expect(transactionSteps.value?.steps[0]?.phase).toBe('pending')
@@ -189,17 +153,16 @@ for (const outcome of ['success', 'failure', 'approval', 'cancel', 'multi-step']
 				expect(queries.queryByRole('dialog')).toBeNull()
 				expect(transactionSteps.value).toBeUndefined()
 			} else {
-				// Both outcomes return to the form on their own and explain themselves through the notice below it.
+				// Both outcomes keep the original form and its full context available.
 				expect(dialog.querySelector('.operation-modal-transaction-notice')?.textContent).toContain(outcome === 'failure' ? 'Transaction reverted' : 'Transaction confirmed')
-				const dismiss = within(dialog).getByRole('button', { name: 'Dismiss' })
-				expect(dismiss.classList.contains('primary')).toBe(true)
+				expect(within(dialog).queryByRole('button', { name: 'Dismiss' })).toBeNull()
 				expect(queries.queryByRole('button', { name: 'Back' })).toBeNull()
 				expect(queries.getByRole('dialog')).toBe(dialog)
 				expect(steps()).toBeNull()
 				expect(form()?.hasAttribute('inert')).toBe(false)
 				expect(queries.getByRole('textbox', { name: 'Amount' }).getAttribute('value')).toBe('42')
 				expect(transactionSteps.value).toBeUndefined()
-				await act(() => fireEvent.click(dismiss))
+				await act(() => fireEvent.click(within(dialog).getByRole('button', { name: 'Close' })))
 				expect(queries.queryByRole('dialog')).toBeNull()
 			}
 		} finally {

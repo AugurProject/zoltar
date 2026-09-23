@@ -13,7 +13,7 @@ type TransactionPresentationNoticeProps = {
 	dismissible?: boolean
 	noticeRef?: RefObject<HTMLDivElement>
 	onDismiss?: () => void
-	onRetry?: (() => void) | undefined
+	returnHref?: string | undefined
 	transaction: GlobalTransactionPresentation
 }
 
@@ -26,7 +26,7 @@ function getTransactionBadge(tone: GlobalTransactionPresentation['tone']): { lab
 	return { tone: 'warning', label: transactionCopy.attention }
 }
 
-export function TransactionPresentationNotice({ className = '', compact = false, contextWarning, dismissible = false, noticeRef, onDismiss, onRetry, transaction }: TransactionPresentationNoticeProps) {
+export function TransactionPresentationNotice({ className = '', compact = false, contextWarning, dismissible = false, noticeRef, onDismiss, returnHref, transaction }: TransactionPresentationNoticeProps) {
 	const badge = getTransactionBadge(transaction.tone)
 	const transactionHash = transaction.hash
 	const rows = transaction.rows ?? []
@@ -76,8 +76,8 @@ export function TransactionPresentationNotice({ className = '', compact = false,
 				</div>
 				{transactionHash === undefined ? undefined : <TransactionHashLink hash={transactionHash} />}
 				{compact ? (
-					<details className='global-transaction-compact-details'>
-						<summary>{transactionCopy.viewTransactionDetails}</summary>
+					<details className='global-transaction-compact-details' open={transaction.tone === 'error'}>
+						<summary>{transaction.tone === 'error' ? transactionCopy.transactionDetails : transactionCopy.viewTransactionDetails}</summary>
 						<div className='global-transaction-compact-details-content'>{transactionDetails}</div>
 					</details>
 				) : (
@@ -86,11 +86,7 @@ export function TransactionPresentationNotice({ className = '', compact = false,
 			</div>
 			{!dismissible || (compact && transaction.tone !== 'error') ? undefined : (
 				<div className='global-transaction-actions'>
-					{transaction.tone !== 'error' || onRetry === undefined ? undefined : (
-						<button className='secondary' type='button' onClick={onRetry}>
-							{transactionCopy.reviewAndRetry}
-						</button>
-					)}
+					{transaction.tone !== 'error' || returnHref === undefined ? undefined : <a href={returnHref}>{transactionCopy.backToForm}</a>}
 					<button className={`${transaction.tone === 'success' || transaction.tone === 'error' ? 'primary' : 'quiet'} global-transaction-dismiss`} type='button' onClick={onDismiss}>
 						{transactionCopy.dismiss}
 					</button>

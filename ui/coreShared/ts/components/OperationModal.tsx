@@ -15,30 +15,24 @@ function getTransactionOperationKey(transaction: ReturnType<typeof useGlobalTran
 
 function getModalTransactionPresentation(transaction: ReturnType<typeof useGlobalTransactionPresentation>, context: NonNullable<OperationModalProps['context']>) {
 	if (transaction === undefined) return undefined
+	// Keep every submitted value with the outcome, even when the initiating form no longer shows that value.
+	const { technicalRows, ...compactTransaction } = transaction
+	if (transaction.tone === 'error') return transaction
+	if (transaction.tone === 'success') return compactTransaction
+	if (transaction.rows === undefined) return compactTransaction
 	const contextIdentityKeys = new Set(context.flatMap(item => (item.identityKey === undefined ? [] : [item.identityKey])))
 	const contextLabels = new Set(context.flatMap(item => (typeof item.label === 'string' ? [item.label] : [])))
-	// Progress notices stay compact, but a failure keeps its technical rows (contract, function, arguments) so the user can debug it.
-	const { technicalRows, ...compactTransaction } = transaction
-	const modalTransaction = transaction.tone === 'error' && technicalRows !== undefined ? { ...compactTransaction, technicalRows } : compactTransaction
-	if (transaction.rows === undefined) return modalTransaction
-	return {
-		...modalTransaction,
-		rows: transaction.rows.filter(row => (row.identityKey === undefined || !contextIdentityKeys.has(row.identityKey)) && !contextLabels.has(row.label)),
-	}
+	return { ...compactTransaction, rows: transaction.rows.filter(row => (row.identityKey === undefined || !contextIdentityKeys.has(row.identityKey)) && !contextLabels.has(row.label)) }
 }
 
 export function OperationModal({ children, closeDisabled = false, closeOnSuccessKey, context = [], description, embedTransactionSteps = true, isOpen, onClose, title }: OperationModalProps) {
 	const dialogRef = useRef<HTMLElement | null>(null)
 	const closeButtonRef = useRef<HTMLButtonElement | null>(null)
-	const noticeRef = useRef<HTMLDivElement | null>(null)
 	const bodyRef = useRef<HTMLDivElement | null>(null)
 	const [reviewActionsSlot, setReviewActionsSlot] = useState<HTMLElement | null>(null)
-	const [dismissedOperationKey, setDismissedOperationKey] = useState<string>()
-	const [focusFormAfterRetry, setFocusFormAfterRetry] = useState(false)
 	const [reviewScope, setReviewScope] = useState<AbortController>()
 	useLayoutEffect(() => {
 		if (!isOpen || !embedTransactionSteps) return
-		setDismissedOperationKey(undefined)
 		const scope = new AbortController()
 		const unregister = registerTransactionReviewScope(scope.signal)
 		setReviewScope(scope)
@@ -140,27 +134,12 @@ export function OperationModal({ children, closeDisabled = false, closeOnSuccess
 		onClose: requestClose,
 	})
 
-	const showNotice = !(showSteps || !wasOpenRef.current || modalTransaction === undefined || activeTransactionOperationKey === undefined || activeTransactionOperationKey === transactionOperationKeyAtOpenRef.current || activeTransactionOperationKey === dismissedOperationKey)
-	useEffect(() => {
-		if (showNotice) noticeRef.current?.scrollIntoView?.({ block: 'nearest' })
-	}, [showNotice, modalTransaction?.tone, modalTransaction?.hash])
-	useLayoutEffect(() => {
-		if (!focusFormAfterRetry || !isOpen || showNotice) return
-		const body = bodyRef.current
-		const action = body?.querySelector<HTMLElement>('.tx-action-button:not(:disabled)') ?? body?.querySelector<HTMLElement>('button[type="submit"]:not(:disabled)') ?? body?.querySelector<HTMLElement>('button:not(:disabled)') ?? body?.querySelector<HTMLElement>('input:not(:disabled)')
-		action?.focus()
-		setFocusFormAfterRetry(false)
-	}, [focusFormAfterRetry, isOpen, showNotice])
+	const showNotice = !(showSteps || !wasOpenRef.current || modalTransaction === undefined || activeTransactionOperationKey === undefined || activeTransactionOperationKey === transactionOperationKeyAtOpenRef.current)
 
 	if (!isOpen) return undefined
 
 	const returnToForm = () => {
-		setDismissedOperationKey(activeTransactionOperationKey)
 		if (ownsWorkflow) workflow.cancel()
-	}
-	const retryFromForm = () => {
-		returnToForm()
-		setFocusFormAfterRetry(true)
 	}
 	const reviewActionsSlotContext = showSteps
 		? {
@@ -193,13 +172,8 @@ export function OperationModal({ children, closeDisabled = false, closeOnSuccess
 					)}
 					<div className='operation-modal-body' inert={(showSteps && reviewActionsSlot === null) || undefined} ref={bodyRef}>
 						<ReviewActionsSlotContext.Provider value={reviewActionsSlotContext}>{children}</ReviewActionsSlotContext.Provider>
+						{showNotice ? <TransactionPresentationNotice className='operation-modal-transaction-notice' transaction={modalTransaction} /> : undefined}
 					</div>
-					{/* Outcome notices sit below the form so its controls never move; the dialog scrolls to them instead. */}
-					{showNotice ? (
-						<div ref={noticeRef}>
-							<TransactionPresentationNotice className='operation-modal-transaction-notice' dismissible={modalTransaction.tone === 'success' || modalTransaction.tone === 'error'} onDismiss={requestClose} onRetry={modalTransaction.tone === 'error' ? retryFromForm : undefined} transaction={modalTransaction} />
-						</div>
-					) : undefined}
 					{showSteps ? (
 						<div className='operation-modal-steps'>
 							{/* The dialog already shows its context rows above the form, so the step review only keeps the rows it does not cover. */}

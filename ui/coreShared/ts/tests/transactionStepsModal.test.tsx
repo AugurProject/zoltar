@@ -32,10 +32,8 @@ test('returns a failed transaction to its action for a fresh submission', async 
 		const submit = queries.getByRole('button', { name: 'Deposit REP into vault' })
 		submit.focus()
 		await act(() => fireEvent.click(submit))
-		expect(queries.getByRole('alert').textContent).toContain('nonce too low')
-		const dismiss = queries.getByRole('button', { name: 'Dismiss' })
-		expect(dismiss.classList.contains('primary')).toBe(true)
-		await act(() => fireEvent.click(queries.getByRole('button', { name: 'Review and retry' })))
+		expect(queries.queryByRole('dialog')).toBeNull()
+		expect(queries.queryByRole('button', { name: 'Review and retry' })).toBeNull()
 		expect(transactionSteps.value).toBeUndefined()
 		expect(document.activeElement).toBe(submit)
 		await act(() => fireEvent.click(submit))
@@ -43,6 +41,24 @@ test('returns a failed transaction to its action for a fresh submission', async 
 		expect(transactionSteps.value?.steps[0]?.phase).toBe('pending')
 	} finally {
 		transactionSteps.value?.cancel()
+		await rendered.cleanup()
+		dom.cleanup()
+	}
+})
+
+test('closes a confirmed transaction review without another dialog', async () => {
+	const dom = installDomEnvironment()
+	const controller = createTransactionStepController()
+	controller.setPlan([{ title: 'Deposit REP', description: 'Deposit REP into the vault.', contractAddress: undefined, contractLabel: undefined, spender: undefined, amount: undefined, ethValueAttoEth: 0n }])
+	controller.startWithoutReview(0)
+	const hash = '0x1111111111111111111111111111111111111111111111111111111111111111'
+	controller.submitted(hash)
+	controller.receipt(hash, 'success')
+	const rendered = await renderIntoDocument(<TransactionStepsModal contextKey='confirmed' />)
+	try {
+		expect(within(rendered.container).queryByRole('dialog')).toBeNull()
+		expect(transactionSteps.value).toBeUndefined()
+	} finally {
 		await rendered.cleanup()
 		dom.cleanup()
 	}
@@ -296,9 +312,8 @@ for (const result of ['success', 'reverted'] as const) {
 				await act(() => fireEvent.click(button('Approve REP')))
 				await secondReview
 			} else {
-				expect(button('Wrap ETH').hasAttribute('disabled')).toBe(true)
-				expect(button('Approve REP').hasAttribute('disabled')).toBe(true)
-				expect(button('Request price').hasAttribute('disabled')).toBe(true)
+				expect(queries.queryByRole('dialog')).toBeNull()
+				expect(transactionSteps.value).toBeUndefined()
 			}
 		} finally {
 			await rendered.cleanup()
@@ -328,7 +343,7 @@ test('both insufficient approvals are enabled independently while the report wai
 	}
 })
 
-test('shows requirement-read failures from the enclosing operation after an approval confirms', async () => {
+test('returns to the original action when requirements fail after an approval confirms', async () => {
 	const dom = installDomEnvironment()
 	const controller = createTransactionStepController()
 	const common = { description: 'Transaction purpose.', contractAddress: undefined, contractLabel: undefined, spender: undefined, amount: undefined, ethValueAttoEth: 0n }
@@ -349,11 +364,8 @@ test('shows requirement-read failures from the enclosing operation after an appr
 	)
 	try {
 		const queries = within(rendered.container)
-		expect(queries.getByRole('alert').textContent).toContain('Could not refresh funding requirements.')
-		expect(queries.getByRole('alert').closest('.transaction-step-content')).toBeNull()
-		expect(queries.getByRole('alert').closest('.transaction-step-actions')).not.toBeNull()
-		expect(queries.getByRole('button', { name: 'Request price' }).hasAttribute('disabled')).toBe(true)
-		expect(queries.getByRole('button', { name: 'Close' }).hasAttribute('disabled')).toBe(false)
+		expect(queries.queryByRole('dialog')).toBeNull()
+		expect(transactionSteps.value).toBeUndefined()
 	} finally {
 		await rendered.cleanup()
 		dom.cleanup()
@@ -361,7 +373,7 @@ test('shows requirement-read failures from the enclosing operation after an appr
 })
 
 for (const phase of ['skipped', 'failed'] as const) {
-	test(`keeps approval fields visible when approval is ${phase}`, async () => {
+	test(`${phase === 'skipped' ? 'keeps approval fields visible when approval is skipped' : 'closes review when approval fails'}`, async () => {
 		const dom = installDomEnvironment()
 		const controller = createTransactionStepController()
 		const common = { description: 'Authorize spending.', contractAddress: undefined, contractLabel: undefined, spender: undefined, amount: undefined, ethValueAttoEth: 0n }
@@ -380,10 +392,15 @@ for (const phase of ['skipped', 'failed'] as const) {
 		const rendered = await renderIntoDocument(<TransactionStepsModal contextKey={phase} />)
 		try {
 			const queries = within(rendered.container)
-			expect(queries.getByRole('textbox').hasAttribute('disabled')).toBe(true)
-			expect(queries.getByText('Required REP')).not.toBeNull()
-			expect(queries.getByText('Approved REP')).not.toBeNull()
-			expect(queries.getByRole('button', { name: 'Approve REP' }).hasAttribute('disabled')).toBe(true)
+			if (phase === 'failed') {
+				expect(queries.queryByRole('dialog')).toBeNull()
+				expect(transactionSteps.value).toBeUndefined()
+			} else {
+				expect(queries.getByRole('textbox').hasAttribute('disabled')).toBe(true)
+				expect(queries.getByText('Required REP')).not.toBeNull()
+				expect(queries.getByText('Approved REP')).not.toBeNull()
+				expect(queries.getByRole('button', { name: 'Approve REP' }).hasAttribute('disabled')).toBe(true)
+			}
 			await act(() => transactionSteps.value?.confirm())
 			await nextReview
 		} finally {
@@ -394,7 +411,7 @@ for (const phase of ['skipped', 'failed'] as const) {
 }
 
 for (const result of ['pending', 'reverted'] as const) {
-	test(`keeps the final query hash accessible beside its action when ${result}`, async () => {
+	test(`${result === 'pending' ? 'keeps the pending query hash beside its action' : 'closes review after the final query reverts'}`, async () => {
 		const dom = installDomEnvironment()
 		const controller = createTransactionStepController()
 		controller.setPlan([{ title: 'Request price', description: 'Fund the report.', contractAddress: undefined, contractLabel: undefined, spender: undefined, amount: undefined, ethValueAttoEth: 0n }])
@@ -414,11 +431,10 @@ for (const result of ['pending', 'reverted'] as const) {
 		)
 		try {
 			const queries = within(rendered.container)
-			expect(queries.getByRole('link', { name: hash }).closest('.transaction-step-actions') !== null).toBe(true)
 			if (result === 'reverted') {
-				expect(queries.getByRole('alert').textContent).toContain('full gas limit')
-				expect(queries.getByRole('alert').closest('.transaction-step-content') === null).toBe(true)
-			}
+				expect(queries.queryByRole('dialog')).toBeNull()
+				expect(transactionSteps.value).toBeUndefined()
+			} else expect(queries.getByRole('link', { name: hash }).closest('.transaction-step-actions') !== null).toBe(true)
 		} finally {
 			await rendered.cleanup()
 			dom.cleanup()

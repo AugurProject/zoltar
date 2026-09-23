@@ -71,11 +71,10 @@ type TransactionStepsActionsProps = {
 	/** Keep the actions scrolled into view as they change state when the review sits in page flow under the transaction tray. */
 	keepActionsVisible?: boolean
 	onClose?: (() => void) | undefined
-	onRetry?: (() => void) | undefined
 }
 
 /** The review's confirm, approval, and cancel controls; a dialog form can host them in its own action row. */
-export function TransactionStepsActions({ cancelable = true, contextKey, focusOnMount = false, keepActionsVisible = false, onClose, onRetry }: TransactionStepsActionsProps) {
+export function TransactionStepsActions({ cancelable = true, contextKey, focusOnMount = false, keepActionsVisible = false, onClose }: TransactionStepsActionsProps) {
 	const { error, failure, pending, presentation, workflow } = useTransactionStepsState()
 	const errorRef = useRef<HTMLDivElement>(null)
 	const actionsRef = useRef<HTMLDivElement>(null)
@@ -121,7 +120,7 @@ export function TransactionStepsActions({ cancelable = true, contextKey, focusOn
 								const status = { skipped: copy.skipped, upcoming: step.optional ? copy.ifNeeded : undefined, review: undefined, pending: undefined, confirmed: transactionCopy.confirmed, failed: copy.notCompleted }[step.phase]
 								const detail = [step.phase === 'upcoming' || step.approval !== undefined ? undefined : step.amount, status].filter(value => value !== undefined).join(' · ')
 								return (
-									<div key={index} className={`transaction-plan-action${step.approval === undefined || final ? ' transaction-plan-action-wide' : ''}${final ? ' transaction-plan-action-final' : ''}${final && error !== undefined && onRetry !== undefined ? ' transaction-plan-action-retry' : ''}`}>
+									<div key={index} className={`transaction-plan-action${step.approval === undefined || final ? ' transaction-plan-action-wide' : ''}${final ? ' transaction-plan-action-final' : ''}`}>
 										{step.approval !== undefined ? (
 											<TokenApprovalControl
 												compact
@@ -166,11 +165,6 @@ export function TransactionStepsActions({ cancelable = true, contextKey, focusOn
 										)}
 										{final && cancelable ? (
 											<div className='actions transaction-step-close'>
-												{error === undefined || onRetry === undefined ? undefined : (
-													<button className='secondary' type='button' onClick={onRetry} disabled={pending}>
-														{transactionCopy.reviewAndRetry}
-													</button>
-												)}
 												<button className={terminal ? 'primary' : 'secondary'} type='button' onClick={onClose ?? workflow.cancel} disabled={pending}>
 													{terminal ? transactionCopy.dismiss : commonCopy.cancel}
 												</button>
@@ -194,7 +188,7 @@ type TransactionStepsContentProps = TransactionStepsActionsProps & {
 	heading?: string | undefined
 }
 
-export function TransactionStepsContent({ actions = 'inline', cancelable = true, contextKey, focusOnMount = false, heading, keepActionsVisible = false, onClose, onRetry }: TransactionStepsContentProps) {
+export function TransactionStepsContent({ actions = 'inline', cancelable = true, contextKey, focusOnMount = false, heading, keepActionsVisible = false, onClose }: TransactionStepsContentProps) {
 	const { current, presentation, workflow } = useTransactionStepsState()
 	if (workflow === undefined || current === undefined) return undefined
 	const completed = workflow.steps.every(step => step.phase === 'confirmed' || step.phase === 'skipped')
@@ -212,7 +206,7 @@ export function TransactionStepsContent({ actions = 'inline', cancelable = true,
 				{funding.length === 0 ? <TransactionStepReview contractAddress={current.contractAddress} contractLabel={current.contractLabel} description={completed ? undefined : current.description} rows={presentation?.rows} /> : <TransactionFundingSummary funding={funding} totalAttoEth={totalEth} outcome={outcome} />}
 				{funding.length === 0 || completed ? undefined : <p className='detail transaction-funding-note'>{copy.fundingDetail}</p>}
 			</div>
-			{actions === 'inline' ? <TransactionStepsActions cancelable={cancelable} contextKey={contextKey} focusOnMount={focusOnMount} keepActionsVisible={keepActionsVisible} onClose={onClose} onRetry={onRetry} /> : undefined}
+			{actions === 'inline' ? <TransactionStepsActions cancelable={cancelable} contextKey={contextKey} focusOnMount={focusOnMount} keepActionsVisible={keepActionsVisible} onClose={onClose} /> : undefined}
 		</>
 	)
 }
