@@ -1,9 +1,9 @@
 import { describe, expect, test } from 'bun:test'
-import { createWalletClient, custom, decodeFunctionData, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
+import { createWalletClient, custom, decodeFunctionData, decodeFunctionResult, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
 import { settlementQuoteCanSubmit, settlementQuoteMatchesInputs } from '../../features/live/settlementQuote.js'
 import { simulateSettlement, submitFreshSettlement, type LiveMarket } from '../../protocol/live.js'
+import { receiveBasedExitArguments } from '../../protocol/authorization.js'
 import type { DeploymentConfiguration } from '../../protocol/config.js'
-import { encodeReceiveBasedRedeemRequest } from '../../protocol/authorization.js'
 
 const account = `0x${'11'.repeat(20)}` as Address
 const shareToken = `0x${'22'.repeat(20)}` as Address
@@ -38,6 +38,38 @@ const shareTransferAbi = [
 		outputs: [],
 	},
 ] as const
+const receiveRequestParameter = {
+	type: 'tuple',
+	components: [
+		{ name: 'version', type: 'uint8' },
+		{ name: 'operation', type: 'uint8' },
+		{ name: 'shareToken', type: 'address' },
+		{ name: 'securityPool', type: 'address' },
+		{ name: 'pair', type: 'address' },
+		{ name: 'universeId', type: 'uint248' },
+		{ name: 'questionId', type: 'uint256' },
+		{ name: 'invalidTokenId', type: 'uint256' },
+		{ name: 'yesTokenId', type: 'uint256' },
+		{ name: 'noTokenId', type: 'uint256' },
+		{ name: 'longOutcome', type: 'uint8' },
+		{ name: 'completeSetShares', type: 'uint256' },
+		{ name: 'maxLongSharesIn', type: 'uint256' },
+		{ name: 'minEthOut', type: 'uint256' },
+		{ name: 'payoutRecipient', type: 'address' },
+		{ name: 'refundRecipient', type: 'address' },
+		{ name: 'deadline', type: 'uint256' },
+	],
+} as const
+
+function decodeReceiveRequest(data: Hex) {
+	// The router request is a static tuple, so its fields decode as flat ABI outputs.
+	return decodeFunctionResult({
+		abi: [{ type: 'function', name: 'receiveRequest', stateMutability: 'view', inputs: [], outputs: receiveRequestParameter.components }],
+		functionName: 'receiveRequest',
+		data,
+	})
+}
+
 const market: LiveMarket = {
 	pool,
 	pair: undefined,
@@ -82,6 +114,20 @@ function isHexValue(value: unknown): value is Hex {
 }
 
 describe('live settlement contract encoding', () => {
+	for (const [side, outcome] of [
+		['YES', 1],
+		['NO', 2],
+	] as const) {
+		test(`keeps ${side} directional exit encoding distinct from redemption`, () => {
+			const pair = `0x${'66'.repeat(20)}` as Address
+			const transfer = receiveBasedExitArguments({ ...market, pair }, side, 10n, 23n, 9n, account, 421n)
+			expect(transfer.ids).toEqual([1792n, 1792n | BigInt(outcome)])
+			expect(transfer.amounts).toEqual([10n, 23n])
+			const request = decodeReceiveRequest(transfer.data)
+			expect(request).toEqual([1n, 0n, shareToken, pool, pair, 7n, 8n, 1792n, 1793n, 1794n, BigInt(outcome), 10n, 23n, 9n, account, account, 421n])
+		})
+	}
+
 	test('encodes and submits ShareToken migration with the ShareToken ABI', async () => {
 		const transactionData: Hex[] = []
 		const client = createWalletClient({
@@ -152,7 +198,11 @@ describe('live settlement contract encoding', () => {
 		expect(transactionData[2]).toBe(transactionData[0])
 		const decodedTransfer = decodeFunctionData({ abi: shareTransferAbi, data: transactionData[0] })
 		if (decodedTransfer.args === undefined) throw new Error('Missing share transfer arguments')
-		expect(decodedTransfer.args[4]).toBe(encodeReceiveBasedRedeemRequest(canonicalMarket, 10n, quote.minimumAttoEth, account, quote.deadline))
+		expect(decodedTransfer.functionName).toBe('safeBatchTransferFrom')
+		expect(decodedTransfer.args.slice(0, 4)).toEqual([account, configuration.router, [1792n, 1793n, 1794n], [10n, 10n, 10n]])
+		// Decode independently from the production encoder and assert the router ABI contract.
+		const request = decodeReceiveRequest(decodedTransfer.args[4])
+		expect(request).toEqual([1n, 1n, shareToken, pool, pair, 7n, 8n, 1792n, 1793n, 1794n, 3n, 10n, 0n, 9n, account, account, 421n])
 	})
 
 	test('rejects complete-set submission when refreshed output falls below the approved minimum', async () => {

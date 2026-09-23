@@ -43,7 +43,8 @@ function encodeReceiveBasedExitRequest(market: ReceiveMarket, side: 'YES' | 'NO'
 export function encodeReceiveBasedRedeemRequest(market: ReceiveMarket, completeSetShares: bigint, minimumEthAttoEth: bigint, recipient: Address, deadline: bigint): Hex {
 	if (market.pair === undefined) throw new Error('Pair is unavailable')
 	const invalidTokenId = market.universeId << 8n
-	return encodeAbiParameters([receiveRequestParameter], [[1, 1, market.shareToken, market.pool, market.pair, market.universeId, market.questionId, invalidTokenId, invalidTokenId | 1n, invalidTokenId | 2n, 0, completeSetShares, 0n, minimumEthAttoEth, recipient, recipient, deadline]])
+	const noLongOutcome = 3 // BinaryOutcomes.BinaryOutcome.None: redemption has no directional leg.
+	return encodeAbiParameters([receiveRequestParameter], [[1, 1, market.shareToken, market.pool, market.pair, market.universeId, market.questionId, invalidTokenId, invalidTokenId | 1n, invalidTokenId | 2n, noLongOutcome, completeSetShares, 0n, minimumEthAttoEth, recipient, recipient, deadline]])
 }
 
 export function receiveBasedExitArguments(market: ReceiveMarket, side: 'YES' | 'NO', completeSetShares: bigint, maximumLongShares: bigint, minimumEthAttoEth: bigint, recipient: Address, deadline: bigint) {
