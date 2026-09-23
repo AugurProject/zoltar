@@ -69,10 +69,11 @@ async function setupContractMocks({ loadMarketDetails, createSecurityPool, origi
 
 	await moduleMocks.mockModule('@zoltar/ui-core-shared/wallet/clients.js', () => ({
 		createConnectedReadClient: mock(() => ({ kind: 'read-client' })),
-		createWalletWriteClient: mock((walletAddress: Address, options: { onTransactionSubmitted: (hash: Hash) => void; reviewSignal?: AbortSignal }) => ({
+		createWalletWriteClient: mock((walletAddress: Address, options: { onTransactionSubmitted: (hash: Hash) => void; reviewSignal?: AbortSignal; skipAppReview?: boolean }) => ({
 			walletAddress,
 			onTransactionSubmitted: options.onTransactionSubmitted,
 			reviewSignal: options.reviewSignal,
+			skipAppReview: options.skipAppReview,
 		})),
 	}))
 }
@@ -469,7 +470,8 @@ describe('useSecurityPoolCreation', () => {
 
 	test('createPool succeeds and refreshes state when all preconditions pass', async () => {
 		const submittedParameters: Array<{ initialReportPriorityFeeAttoEthPerGas: bigint; statoblastSecurityMultiplierBps: bigint }> = []
-		const createSecurityPool = mock(async (client: { onTransactionSubmitted?: (hash: Hash) => void }, parameters: { initialReportPriorityFeeAttoEthPerGas: bigint; statoblastSecurityMultiplierBps: bigint }) => {
+		const createSecurityPool = mock(async (client: { onTransactionSubmitted?: (hash: Hash) => void; skipAppReview?: boolean }, parameters: { initialReportPriorityFeeAttoEthPerGas: bigint; statoblastSecurityMultiplierBps: bigint }) => {
+			expect(client.skipAppReview).toBe(true)
 			submittedParameters.push(parameters)
 			client.onTransactionSubmitted?.('0xabc')
 			return {
@@ -537,17 +539,19 @@ describe('useSecurityPoolCreation', () => {
 		expect(refreshCalls).toBe(1)
 		expect(submittedParameters).toEqual([{ initialReportPriorityFeeAttoEthPerGas: 10_000_000_000n, questionId: 11n, statoblastSecurityMultiplierBps: 20_000n }])
 		expect(createSecurityPool.mock.calls[0]?.[2]).toBeUndefined()
-		expect(createSecurityPool.mock.calls[0]?.[3]).toEqual({ description: 'The security multiplier and initial report priority fee cannot be changed after the pool is deployed.', title: 'Create security pool' })
+		expect(createSecurityPool.mock.calls[0]?.[3]).toEqual({ title: 'Create security pool' })
 	})
 
-	test('createPool keeps a failed transaction review open until it is dismissed', async () => {
+	test('createPool shows write failures in the form and releases the transaction review', async () => {
 		const { embeddedTransactionSteps } = await import('@zoltar/ui-core-shared/components/TransactionStepsModal.js')
 		const { createTransactionStepController, transactionSteps } = await import('@zoltar/ui-core-shared/transactions/transactionSteps.js')
-		const createSecurityPool = mock(async (client: { reviewSignal?: AbortSignal }) => {
-			// Simulate the reviewed client publishing the review, then the wallet rejecting it.
+		const createSecurityPool = mock(async (client: { reviewSignal?: AbortSignal; skipAppReview?: boolean }) => {
+			expect(client.skipAppReview).toBe(true)
+			// Simulate a wallet request that rejects after the pending state is published.
 			const controller = createTransactionStepController(client.reviewSignal)
 			controller.setPlan([{ title: 'Create security pool', description: undefined, contractAddress: undefined, contractLabel: undefined, spender: undefined, amount: undefined, ethValueAttoEth: 0n }])
-			void controller.review().catch(() => undefined)
+			controller.startWithoutReview(0)
+			controller.failed('User rejected the request')
 			throw new Error('User rejected the request')
 		})
 		await setupContractMocks({
@@ -584,18 +588,11 @@ describe('useSecurityPoolCreation', () => {
 			})
 
 			expect(requireState(state).securityPoolCreationFeedback?.status.tone).toBe('error')
+			expect(requireState(state).securityPoolError).toBe('Action canceled in wallet.')
 			const reviewSignal = requireState(state).securityPoolReviewSignal
-			expect(reviewSignal).toBeInstanceOf(AbortSignal)
-			expect(reviewSignal?.aborted).toBe(false)
-			expect(embeddedTransactionSteps.value).toBe(reviewSignal)
-			expect(transactionSteps.value?.reviewSignal).toBe(reviewSignal)
-
-			await act(() => {
-				requireState(state).dismissSecurityPoolReview()
-			})
 			expect(requireState(state).securityPoolReviewSignal).toBeUndefined()
 			expect(embeddedTransactionSteps.value).toBeUndefined()
-			expect(reviewSignal?.aborted).toBe(true)
+			expect(reviewSignal).toBeUndefined()
 		} finally {
 			transactionSteps.value?.cancel()
 		}
@@ -671,7 +668,7 @@ describe('useSecurityPoolCreation', () => {
 		expect(requestedRows.map(rows => rows.map(row => row.label))).toEqual([['Question', 'Statoblast Security Multiplier', 'Initial Report Priority Fee']])
 		expect(requestedRows[0]?.[0]?.value).toBe('Batched question')
 		expect(createSecurityPool.mock.calls[0]?.[2]).toMatchObject({ title: 'Batched question' })
-		expect(createSecurityPool.mock.calls[0]?.[3]).toEqual({ description: 'The security multiplier and initial report priority fee cannot be changed after the pool is deployed.', title: 'Create question and security pool' })
+		expect(createSecurityPool.mock.calls[0]?.[3]).toEqual({ title: 'Create question and security pool' })
 	})
 
 	test('createPool preserves the current market details when a stale duplicate-pool error resolves for an older market', async () => {

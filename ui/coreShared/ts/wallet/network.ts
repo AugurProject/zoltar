@@ -28,22 +28,11 @@ const COMMON_CHAIN_NAMES = new Map<bigint, string>([
 	[534352n, 'Scroll'],
 ])
 
-export function getChainIdDecimalLabel(chainId: string | undefined) {
-	return parseChainId(chainId)?.toString()
-}
-
 export function getChainDisplayLabel(chainId: string | undefined) {
 	if (chainId === undefined) return undefined
 	const numericChainId = parseChainId(chainId)
 	if (numericChainId === undefined) return chainId
 	return COMMON_CHAIN_NAMES.get(numericChainId) ?? numericChainId.toString()
-}
-
-export function getKnownChainName(chainId: string | undefined) {
-	if (chainId === undefined) return undefined
-	const numericChainId = parseChainId(chainId)
-	if (numericChainId === undefined) return undefined
-	return COMMON_CHAIN_NAMES.get(numericChainId)
 }
 
 export function isSupportedAppChain(chainId: string | undefined) {
