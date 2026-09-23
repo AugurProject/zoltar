@@ -910,6 +910,32 @@ describe('OpenOracleSection route create view', () => {
 		expectTransactionButtonDisabled(document.body, 'Settle report')
 	})
 
+	test('keeps the settlement countdown moving above one hour', async () => {
+		cleanupRenderedComponent = (
+			await renderIntoDocument(
+				<OpenOracleSection
+					{...createOpenOracleSectionProps({
+						activeView: 'selected-report',
+						openOracleReportDetails: createOpenOracleReportDetails({
+							currentReporter: '0x3000000000000000000000000000000000000000',
+							currentTime: 100n,
+							disputeDelay: 0n,
+							reportTimestamp: 100n,
+							settlementTime: 3602n,
+							timeType: true,
+						}),
+					})}
+				/>,
+			)
+		).cleanup
+		const page = within(document.body)
+		expect(page.getByText('Settle in 1h 0m 2s')).not.toBeNull()
+		expectTransactionButtonDisabled(document.body, 'Settle report')
+		await act(async () => await new Promise(resolve => setTimeout(resolve, 1150)))
+		expect(page.getByText('Settle in 1h 0m 1s')).not.toBeNull()
+		expectTransactionButtonDisabled(document.body, 'Settle report')
+	})
+
 	test('uses the exact shared live settlement block to switch a selected report into settle mode', async () => {
 		const renderedComponent = await renderIntoDocument(
 			<ChainBlockNumberContext.Provider value={160n}>

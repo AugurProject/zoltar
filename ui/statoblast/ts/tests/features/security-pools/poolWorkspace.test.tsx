@@ -140,6 +140,24 @@ test('shows the pending report countdown in selected pool price fields', async (
 	expect(document.body.textContent).toContain('Available in 53s')
 })
 
+test('keeps the pending price countdown moving above one hour', async () => {
+	const pool = createSelectedPool({ lastOraclePrice: undefined, lastOracleSettlementTimestamp: 0n })
+	setCleanup(
+		(
+			await renderIntoDocument(
+				<ChainTimestampContext.Provider value={100n}>
+					<SecurityPoolWorkflowSection
+						{...createSecurityPoolWorkflowProps({ securityPoolAddress: pool.securityPoolAddress, securityPools: [pool], selectedPoolView: 'price-oracle', poolOracleManagerDetails: createOracleManagerDetails({ lastPrice: 0n, lastSettlementTimestamp: 0n, pendingReportId: 7n, pendingReportReadyAtTimestamp: 3702n }) })}
+					/>
+				</ChainTimestampContext.Provider>,
+			)
+		).cleanup,
+	)
+	expect(document.body.textContent).toContain('Available in 1h 0m 2s')
+	await act(async () => await new Promise(resolve => setTimeout(resolve, 1100)))
+	expect(document.body.textContent).toContain('Available in 1h 0m 1s')
+})
+
 test('keeps the prior price expiry visible while a new report is pending', async () => {
 	const pool = createSelectedPool({ lastOraclePrice: 10n ** 18n, lastOracleSettlementTimestamp: 1n })
 	setCleanup(

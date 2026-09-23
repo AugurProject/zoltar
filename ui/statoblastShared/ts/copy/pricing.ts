@@ -9,5 +9,5 @@ export function formatPendingPriceAvailability(remainingSeconds: bigint, hasSett
 	const prefix = hasSettledPrice ? 'New price available in' : 'Available in'
 	if (remainingSeconds < 60n) return `${prefix} ${remainingSeconds}s`
 	if (remainingSeconds < 3600n) return `${prefix} ${remainingSeconds / 60n}m ${remainingSeconds % 60n}s`
-	return `${prefix} ${remainingSeconds / 3600n}h ${(remainingSeconds % 3600n) / 60n}m`
+	return `${prefix} ${remainingSeconds / 3600n}h ${(remainingSeconds % 3600n) / 60n}m ${remainingSeconds % 60n}s`
 }
