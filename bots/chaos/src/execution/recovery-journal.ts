@@ -1,7 +1,7 @@
 import { recordActivity, saveDurableState, type PendingTransactionIntent } from '../state/operator-state.ts'
 import { observePendingTransaction, type PendingTransactionObservationInput } from '../state/pending-transaction-observation.ts'
 import { TransactionAwaitingRecovery } from './receipt-validation.ts'
-import type { ExecutionEnvironment } from './transaction-executor.ts'
+import type { ExecutionEnvironment } from './execution-context.ts'
 
 export async function persist(environment: ExecutionEnvironment) {
 	if (environment.persistState !== undefined) {
