@@ -41,6 +41,15 @@ test('rejects malformed address filters before querying', async () => {
 	expect(await response?.json()).toEqual({ error: 'chainId is required when filtering by address' })
 })
 
+test('validates search and internal evidence identifiers before querying', async () => {
+	const database = new SQL('postgres://user:unused@127.0.0.1:1/unused', { connectionTimeout: 1 })
+	databases.push(database)
+	for (const path of ['search?q=', 'search?chainId=1&q=', `search?chainId=1&q=${'x'.repeat(129)}`, 'transactions/1/0x123', 'blocks/1/not-a-block', 'state/catalog?chainId=1&selectedType=questions&selectedIdentity=abc', 'state/catalog?chainId=1&selectedType=pools&selectedIdentity=0x123']) {
+		const response = await handleApi(new Request(`http://localhost/api/v1/${path}`), database)
+		expect(response?.status).toBe(400)
+	}
+})
+
 test('requires a network for the contract registry', async () => {
 	const database = new SQL('postgres://user:unused@127.0.0.1:1/unused', { connectionTimeout: 1 })
 	const response = await handleApi(new Request('http://localhost/api/v1/contracts'), database)
@@ -254,7 +263,7 @@ test('rejects unsupported rich-list ordering before querying', async () => {
 	databases.push(database)
 	const response = await handleApi(new Request('http://localhost/api/v1/richlist?sort=private-key'), database)
 	expect(response?.status).toBe(400)
-	expect(await response?.json()).toEqual({ error: 'sort must be eth, weth, or transactions' })
+	expect(await response?.json()).toEqual({ error: 'sort must be eth, weth, rep, or transactions' })
 })
 
 test('rejects empty state chain identifiers before querying', async () => {

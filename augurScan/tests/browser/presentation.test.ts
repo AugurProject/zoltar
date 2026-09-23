@@ -35,7 +35,7 @@ for (const viewport of [
 				await waitFor(`document.querySelectorAll('.event-name').length > 5`)
 				expect(await evaluate(`document.querySelector('.activity-contract-link .contract-name').textContent`)).toBe('OpenOracle')
 				expect(await evaluate(`document.querySelector('.cell-function')?.textContent`)).toBe('checkpoint')
-				expect(await evaluate(`document.querySelectorAll('.log-row a').length`)).toBe(0)
+				expect(await evaluate(`document.querySelectorAll('.log-row a').length > 0`)).toBe(true)
 				for (const selector of ['.chain-block .activity-target', '.activity-contract-link', '.cell-tx', '.cell-origin']) {
 					expect(await evaluate(`document.querySelector('.log-row ${selector}').classList.contains('activity-target')`)).toBe(true)
 				}
@@ -46,7 +46,7 @@ for (const viewport of [
 				await evaluate(`document.querySelector('.event-name').click()`)
 				await waitFor(`!!document.querySelector('.event-detail-content .detail-grid')`)
 				expect(await evaluate(`document.querySelector('.event-name').getAttribute('aria-expanded')`)).toBe('true')
-				await evaluate(`document.querySelectorAll('.log-row')[1].querySelector('.activity-contract-link').click()`)
+				await evaluate(`document.querySelectorAll('.log-row')[1].querySelector('.event-name').click()`)
 				await waitFor(`document.querySelectorAll('.event-detail-content .detail-grid').length === 2`)
 				expect(await evaluate(`document.querySelectorAll('.event-name[aria-expanded="true"]').length`)).toBe(2)
 				expect(await evaluate(`document.querySelector('.event-contract-link').href.includes('/address/')`)).toBe(true)
@@ -90,7 +90,7 @@ for (const viewport of [
 				expect(await evaluate(`document.querySelector('.contract-row .deployment-status').getAttribute('href').includes('/block/')`)).toBe(true)
 				expect(await evaluate(`document.querySelector('.contract-address-link').getAttribute('href').includes('/address/')`)).toBe(true)
 				expect(await evaluate(`(() => { const rows = [...document.querySelectorAll('.contract-row')]; return rows[1].getBoundingClientRect().top >= rows[0].getBoundingClientRect().bottom })()`)).toBe(true)
-				expect(await evaluate(`(() => { const block = document.querySelector('.block-number').getBoundingClientRect(); const badge = document.querySelector('.network-title .badge').getBoundingClientRect(); return badge.top < block.bottom && block.top < badge.bottom })()`)).toBe(true)
+				expect(await evaluate(`document.querySelector('#network-cards').closest('section').hidden`)).toBe(true)
 				expect(await evaluate(`document.documentElement.scrollWidth <= innerWidth`)).toBe(true)
 				await session.send('Page.navigate', { url: `${origin}/?demo=1&detailState=error` })
 				await waitFor(`document.querySelectorAll('.log-row').length > 2`)

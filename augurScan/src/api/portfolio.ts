@@ -14,7 +14,7 @@ export const richList = async (sql: SQL, url: URL): Promise<Response> => {
 	const limit = Math.min(Math.max(requestedLimit, 1), 100)
 	const offset = boundedInteger(url.searchParams.get('offset'), 'offset', 100_000) ?? 0
 	const requestedSort = url.searchParams.get('sort') ?? 'transactions'
-	if (requestedSort !== 'eth' && requestedSort !== 'weth' && requestedSort !== 'transactions') throw new ApiRequestError('sort must be eth, weth, or transactions')
+	if (requestedSort !== 'eth' && requestedSort !== 'weth' && requestedSort !== 'rep' && requestedSort !== 'transactions') throw new ApiRequestError('sort must be eth, weth, rep, or transactions')
 	const sort: RichListSort = requestedSort
 	const rows = await richListRows(sql, { chainId, address, limit, offset, sort })
 	return json({

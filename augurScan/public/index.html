@@ -13,13 +13,14 @@
 	<body>
 		<a class="skip-link" href="#activity">Skip to content</a>
 		<header class="site-header">
-			<div class="brand-block">
+			<a class="brand-block" href="/" aria-label="augurScan home">
 				<img class="mark" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%232dd4bf'/%3E%3Cpath d='M32 13v12M32 25 18 39M32 25l14 14M18 39v12M46 39v12' stroke='%23090d12' stroke-width='7' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E" alt="" width="40" height="40" />
 				<div>
 					<h1>augurScan</h1>
 				</div>
-			</div>
+			</a>
 			<div class="header-actions">
+				<form id="global-search" class="global-search" role="search" autocomplete="off"><label class="sr-only" for="global-search-input">Search address, transaction, block, question, pool, or report</label><input id="global-search-input" type="search" placeholder="Search address, tx, block…  /" aria-controls="global-search-results" /><div id="global-search-results" class="global-search-results" role="status" hidden></div></form>
 				<nav class="product-nav" aria-label="Primary navigation">
 					<a href="/">Activity</a>
 					<a href="/operations">Operations</a>
@@ -41,7 +42,7 @@
 			<div id="freshness-banner" class="freshness-banner" role="alert" hidden>
 				<div><strong id="freshness-title">Indexer data is stale</strong><span id="freshness-detail"></span></div>
 			</div>
-			<section aria-label="Indexer status">
+			<section aria-label="Indexer status" hidden>
 				<div class="section-heading"><p class="eyebrow">Indexer status</p></div>
 				<div id="network-cards" class="network-cards" aria-busy="true"></div>
 			</section>
@@ -166,18 +167,21 @@
 				<div class="section-heading richlist-heading">
 					<h2 id="richlist-heading">Address rich list</h2>
 					<div class="richlist-controls">
+						<button id="rich-view-toggle" class="secondary compact" type="button">Show details</button>
 						<label
 							><span>Rank by</span
 							><select id="rich-sort">
 								<option value="transactions">Transactions</option>
 								<option id="rich-native-sort-option" value="eth">ETH</option>
 								<option value="weth">WETH</option>
+								<option value="rep">REP</option>
 							</select></label
 						>
 					</div>
 				</div>
 				<div id="richlist-status" class="system-status" role="status" aria-live="polite">Loading known addresses…</div>
-				<div class="richlist-shell">
+				<div id="richlist-table"></div>
+				<div id="richlist-shell" class="richlist-shell">
 					<div class="richlist-header" aria-hidden="true"><span>Address</span><span>REP tokens</span><span id="rich-native-heading">ETH / WETH</span><span>Transactions</span><span>Protocol involvement</span></div>
 					<div id="richlist-rows" class="richlist-rows" aria-busy="true"></div>
 				</div>
@@ -210,6 +214,8 @@
 					</div>
 				</div>
 			</section>
+			<section id="explorer" class="explorer" hidden><div id="explorer-content" aria-live="polite"></div></section>
+			<section id="not-found" class="explorer" hidden><h2>Page not found</h2><a href="/">Back to activity</a></section>
 		</main>
 
 		<dialog id="detail-dialog" aria-labelledby="detail-title">

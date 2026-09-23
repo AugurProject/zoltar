@@ -255,7 +255,7 @@ export function createDemoApi(context: DemoContext) {
 	const demoRichList = Array.from({ length: 64 }, (_, index) => {
 		const network = requiredArrayItem(demoNetworks, index % 3 === 0 ? 1 : 0, 'Demo rich-list network')
 		const address = `0x${(BigInt(index + 1) * 0x123456789abcdefn).toString(16).padStart(40, '0')}`
-		const repBalance = BigInt(920 - index * 8) * 10n ** 18n + (index === 0 ? 123_456_789n : 0n)
+		const repBalance = BigInt(920 - index * 8) * 10n ** 18n + (index === 0 ? 123_456_789n : 0n) + (index === 1 ? 1n : 0n)
 		const poolCount = 1 + (index % 4)
 		const vaultCount = (index + 1) % 3
 		return {
@@ -265,6 +265,7 @@ export function createDemoApi(context: DemoContext) {
 			address,
 			label: index === 2 ? 'Price Coordinator' : null,
 			kind: index === 2 ? 'priceCoordinator' : null,
+			rep_balance: (repBalance + (index === 0 ? repBalance / 3n : 0n)).toString(),
 			weth_balance: (BigInt(18 + index) * 10n ** 17n + (index === 0 ? 987_654_321n : 0n)).toString(),
 			native_balance: (BigInt(4 + (index % 5)) * 10n ** 17n + (index === 0 ? 456_789_123n : 0n)).toString(),
 			rep_token_count: index <= 1 ? '2' : '1',
@@ -964,8 +965,8 @@ export function createDemoApi(context: DemoContext) {
 				],
 				totals: { reports: reports.length, escalations: escalations.length, auctions: auctions.length, pools: risk.pools.length, vaults: risk.vaults.length },
 				recentChanges: [
-					{ semantic_event_kind: 'ReportDisputed', entity_identity: '0x529dca…:1842', block_number: asOf.blockNumber },
-					{ semantic_event_kind: 'DepositOnOutcome', entity_identity: '0x777777…', block_number: asOf.blockNumber },
+					{ semantic_event_kind: 'ReportDisputed', entity_type: 'report', entity_identity: '0x529dca…:1842', block_number: asOf.blockNumber, block_timestamp: new Date(Date.now() - 3_600_000).toISOString() },
+					{ semantic_event_kind: 'DepositOnOutcome', entity_type: 'escalation', entity_identity: '0x777777…', block_number: asOf.blockNumber, block_timestamp: new Date().toISOString() },
 				],
 			},
 		}
@@ -1201,6 +1202,44 @@ export function createDemoApi(context: DemoContext) {
 
 	const api = async (path: string, { signal }: { signal?: AbortSignal } = {}): Promise<unknown> => {
 		if (isDemo) {
+			if (path.startsWith('/api/v1/search?')) {
+				const request = new URL(path, location.origin)
+				const query = request.searchParams.get('q')?.toLowerCase() ?? ''
+				const chainId = request.searchParams.get('chainId') ?? '1'
+				const items = [
+					...demoLogs
+						.filter(log => log.chain_id === chainId && log.tx_hash.toLowerCase().includes(query))
+						.slice(0, 1)
+						.map(log => ({ type: 'transaction', label: log.tx_hash, href: `/tx/${log.tx_hash}?chainId=${chainId}` })),
+					...demoLogs
+						.filter(log => log.chain_id === chainId && log.block_number.includes(query))
+						.slice(0, 1)
+						.map(log => ({ type: 'block', label: `Block #${log.block_number}`, href: `/block/${log.block_number}?chainId=${chainId}` })),
+				]
+				return { items, query, chainId }
+			}
+			if (path.startsWith('/api/v1/transactions/')) {
+				const [, , , , chainId, hash] = path.split('/')
+				const log = demoLogs.find(item => item.chain_id === chainId && item.tx_hash === hash)
+				if (log === undefined) throw new Error('Transaction not found')
+				return {
+					transaction: { hash, block_hash: log.block_hash, block_number: log.block_number, block_timestamp: log.block_timestamp, from_address: log.origin_address, to_address: log.emitter_address, status: 'success', gas_used: '184220', action_summary: log.action_summary, explorer_base_url: 'https://etherscan.io' },
+					logs: demoLogs.filter(item => item.tx_hash === hash).map(item => ({ ...item, emitter_address: item.emitter_address })),
+				}
+			}
+			if (path.startsWith('/api/v1/blocks/')) {
+				const [, , , , chainId, number] = path.split('/')
+				const logs = demoLogs.filter(item => item.chain_id === chainId && item.block_number === number)
+				if (logs.length === 0) throw new Error('Block not found')
+				const sample = context.pageUrl.searchParams.get('block251') === '1'
+				const transactions = sample ? Array.from({ length: 250 }, (_, index) => ({ hash: `0x${index.toString(16).padStart(64, '0')}`, action_summary: 'Indexed transaction' })) : logs.map(item => ({ hash: item.tx_hash, action_summary: item.action_summary }))
+				return {
+					block: { number, hash: logs[0]?.block_hash, timestamp: logs[0]?.block_timestamp, parent_hash: '0x' + '0'.repeat(64), finalized: true, explorer_base_url: 'https://etherscan.io' },
+					transactions,
+					hasMore: sample,
+					sampleLimit: 250,
+				}
+			}
 			if (path.startsWith('/api/v1/networks')) {
 				if (networkState === 'error') throw new Error('Network status could not be refreshed')
 				demoNetworkRequests++
@@ -1419,6 +1458,12 @@ export function createDemoApi(context: DemoContext) {
 				if (demoState === 'delayed') await new Promise(resolve => setTimeout(resolve, 300))
 				const request = new URL(path, location.origin)
 				const chainId = request.searchParams.get('chainId')
+				if (context.pageUrl.searchParams.get('entity501') === '1' && chainId === '1') {
+					const template = requiredArrayItem(demoCatalog.questions, 0, 'Demo question')
+					const questions = Array.from({ length: 500 }, (_, index) => ({ ...template, question_id: String(index + 1), title: `Question ${index + 1}` }))
+					if (request.searchParams.get('selectedType') === 'questions' && request.searchParams.get('selectedIdentity') === '501') questions.push({ ...template, question_id: '501', title: 'Question 501' })
+					return { ...demoCatalog, questions, totals: { pools: demoCatalog.pools.length, vaults: demoCatalog.vaults.length, questions: 501, universes: demoCatalog.universes.length }, truncated: { pools: false, vaults: false, questions: true, universes: false } }
+				}
 				return {
 					pools: demoCatalog.pools.filter(item => !chainId || item.chain_id === chainId),
 					vaults: demoCatalog.vaults.filter(item => !chainId || item.chain_id === chainId),

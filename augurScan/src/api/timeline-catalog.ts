@@ -1,8 +1,10 @@
 import type { SQL } from 'bun'
 import { stateCatalogRows, timelineCatalogRows, timelineRows } from '../repositories/timeline.ts'
+import { selectedPoolStateRows, selectedStateEntity } from '../repositories/state-target.ts'
 import { detailPage, paged, parseTimelineCatalogCursor, protocolCursorFor, protocolCursorForRequest, timelineCatalogCursorFor } from './entity-details.ts'
 import { ApiRequestError, canonicalHistoryFilter, evmAddress, integer, json, POSTGRES_BIGINT_MAX, postgresBigint, routeInteger } from './shared.ts'
 import { operationsAsOfForContinuations } from './snapshot.ts'
+import { validateStateIdentity } from './state-target.ts'
 
 export const timelineCatalogResponse = async (sql: SQL, url: URL): Promise<Response> => {
 	const chainId = integer(url.searchParams.get('chainId'), 'chainId')
@@ -76,14 +78,28 @@ export const stateCatalog = async (sql: SQL, url: URL): Promise<Response> => {
 	const requestedLimit = integer(url.searchParams.get('limit'), 'limit') ?? 500
 	const limit = Math.min(Math.max(requestedLimit, 1), 1_000)
 	const queryLimit = limit + 1
+	const selectedType = url.searchParams.get('selectedType')
+	const selectedIdentity = url.searchParams.get('selectedIdentity')
+	if ((selectedType === null) !== (selectedIdentity === null)) throw new ApiRequestError('selectedType and selectedIdentity must be provided together')
+	if (selectedType !== null && selectedType !== 'pools' && selectedType !== 'questions' && selectedType !== 'vaults' && selectedType !== 'universes') throw new ApiRequestError('selectedType is invalid')
+	if (selectedType !== null && selectedIdentity !== null && chainId === undefined) throw new ApiRequestError('chainId is required when selecting an entity')
+	if (selectedType !== null && selectedIdentity !== null) validateStateIdentity(selectedType, selectedIdentity)
 	const { totals, questions, pools, vaults, universes, poolStates } = await stateCatalogRows(sql, chainId, queryLimit)
-	const truncate = (rows: readonly unknown[]): readonly unknown[] => rows.slice(0, limit)
+	const selected = selectedType === null || selectedIdentity === null || chainId === undefined ? undefined : await selectedStateEntity(sql, chainId, selectedType, selectedIdentity)
+	const selectedPoolStates = selectedType === 'pools' && selected !== undefined && chainId !== undefined && selectedIdentity !== null ? await selectedPoolStateRows(sql, chainId, selectedIdentity) : []
+	const withSelected = (kind: 'pools' | 'questions' | 'vaults' | 'universes', rows: readonly Record<string, unknown>[]): readonly Record<string, unknown>[] => {
+		const page = rows.slice(0, limit)
+		if (selected === undefined || selectedType !== kind) return page
+		const identityFields: Record<typeof kind, string> = { pools: 'pool_address', questions: 'question_id', universes: 'universe_id', vaults: 'vault_address' }
+		const identityField = identityFields[kind]
+		return page.some(row => String(row[identityField]) === String(selected[identityField]) && (kind !== 'vaults' || String(row['pool_address']) === String(selected['pool_address']))) ? page : [...page, selected]
+	}
 	return json({
-		questions: truncate(questions),
-		pools: truncate(pools),
-		vaults: truncate(vaults),
-		universes: truncate(universes),
-		poolStates: truncate(poolStates),
+		questions: withSelected('questions', questions),
+		pools: withSelected('pools', pools),
+		vaults: withSelected('vaults', vaults),
+		universes: withSelected('universes', universes),
+		poolStates: [...poolStates.slice(0, limit), ...selectedPoolStates.filter((state: Record<string, unknown>) => !poolStates.slice(0, limit).some((row: Record<string, unknown>) => String(row['pool_address']) === String(state['pool_address']) && String(row['event_name']) === String(state['event_name'])))],
 		limit,
 		totals: totals[0],
 		truncated: {

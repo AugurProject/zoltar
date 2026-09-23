@@ -1,12 +1,13 @@
 import type { SQL } from 'bun'
 
-export type RichListSort = 'eth' | 'weth' | 'transactions'
+export type RichListSort = 'eth' | 'weth' | 'rep' | 'transactions'
 
 export const richListRows = async (sql: SQL, query: { readonly chainId?: number; readonly address?: string; readonly limit: number; readonly offset: number; readonly sort: RichListSort }) => {
 	const { chainId, address, limit, offset } = query
 	const orderBy = {
 		eth: 'native_balance DESC, transaction_count DESC',
 		weth: 'weth_balance DESC, transaction_count DESC',
+		rep: 'rep_balance DESC, transaction_count DESC',
 		transactions: 'transaction_count DESC, interaction_count DESC',
 	}[query.sort]
 	const values: Array<string | number> = []
@@ -41,6 +42,7 @@ export const richListRows = async (sql: SQL, query: { readonly chainId?: number;
 		), balance_summary AS (
 			SELECT chain_id, address,
 				COALESCE(sum(balance) FILTER (WHERE asset_kind = 'weth'), 0) AS weth_balance,
+				COALESCE(sum(balance) FILTER (WHERE asset_kind = 'rep'), 0) AS rep_balance,
 				COALESCE(max(balance) FILTER (WHERE asset_kind = 'native'), 0) AS native_balance,
 				count(*) FILTER (WHERE asset_kind = 'rep') AS sampled_rep_token_count,
 				count(*) FILTER (WHERE asset_kind = 'weth') AS sampled_weth_token_count,
@@ -73,6 +75,7 @@ export const richListRows = async (sql: SQL, query: { readonly chainId?: number;
 		), ranked AS (
 			SELECT activity.*, n.id AS network_id, n.explorer_base_url, c.label, c.kind,
 				COALESCE(balance.weth_balance, 0) AS weth_balance,
+				COALESCE(balance.rep_balance, 0) AS rep_balance,
 				COALESCE(balance.native_balance, 0) AS native_balance,
 				COALESCE(balance.sampled_rep_token_count, 0) AS sampled_rep_token_count,
 				COALESCE(balance.sampled_weth_token_count, 0) AS sampled_weth_token_count,

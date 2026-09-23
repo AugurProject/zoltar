@@ -284,6 +284,7 @@ export const isRichListRecordValue = (value: unknown): boolean =>
 	isString(value['address']) &&
 	isNullableString(value['label']) &&
 	isNullableString(value['kind']) &&
+	isString(value['rep_balance']) &&
 	isStringOrNumber(value['transaction_count']) &&
 	isStringOrNumber(value['interaction_count']) &&
 	isStringOrNumber(value['pool_count']) &&
