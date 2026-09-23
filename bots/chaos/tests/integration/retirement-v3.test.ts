@@ -241,7 +241,27 @@ describe('Drain & Retire on a local chain', () => {
 			const terminal = await loadDurableState(path, 31_337)
 			expect(terminal.retirement.positions[0]?.status).toBe('closed')
 			const terminalAnchor = await currentV3Anchor(owner)
-			expect(await readV3PositionsWithQuorum([async (candidate, anchor) => await readV3Position(owner, candidate, anchor)], 1, terminal.retirement.positions, terminalAnchor)).toEqual([])
+			const readers = [async (candidate: DurableV3Position, anchor: Parameters<typeof readV3Position>[2]) => await readV3Position(owner, candidate, anchor)]
+			expect(await readV3PositionsWithQuorum(readers, 1, terminal.retirement.positions, terminalAnchor)).toMatchObject([{ liquidity: 0n, tokensOwed0: 0n, tokensOwed1: 0n }])
+			const retained = terminal.retirement.positions[0]
+			if (retained === undefined) throw new Error('Closed position missing')
+			await expect(readV3PositionsWithQuorum(readers, 1, [{ ...retained, token0: token1 }], terminalAnchor)).rejects.toThrow('No RPC quorum')
+			await expect(readV3PositionsWithQuorum(readers, 1, terminal.retirement.positions, { ...terminalAnchor, blockHash: `0x${'ff'.repeat(32)}` })).rejects.toThrow('No RPC quorum')
+			const reseedHash = await owner.writeContract({ abi: poolAbi, address: pool, args: [owner.account.address, -120, 120, 12n, 0n, 0n], functionName: 'seed' })
+			await owner.waitForTransactionReceipt({ hash: reseedHash })
+			retained.creationTransactionHash = reseedHash
+			await saveDurableState(path, terminal)
+			const reseeded = await loadDurableState(path, 31_337)
+			const reseedAnchor = await currentV3Anchor(owner)
+			const observations = await readV3PositionsWithQuorum(readers, 1, reseeded.retirement.positions, reseedAnchor)
+			expect(observations).toHaveLength(1)
+			for (const observation of observations) {
+				expect(observation.liquidity).toBe(12n)
+				recordV3ScanSuccess(reseeded, observation, reseedAnchor.blockNumber)
+				expect(observation.position.status).toBe('active')
+				await executePlan(owner, buildV3RetirementPlan(snapshotFixture(), observation, 3))
+			}
+			expect(await readV3PositionsWithQuorum(readers, 1, reseeded.retirement.positions, await currentV3Anchor(owner))).toMatchObject([{ liquidity: 0n, tokensOwed0: 0n, tokensOwed1: 0n }])
 		} finally {
 			await rm(directory, { force: true, recursive: true })
 		}

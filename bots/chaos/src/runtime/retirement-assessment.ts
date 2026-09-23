@@ -134,6 +134,11 @@ export function assessRetirement(parameters: {
 	}
 	for (const position of parameters.retirement.positions.filter(candidate => candidate.status === 'blocked')) blockers.push({ category: 'ambiguous-position', details: `Ownership could not be proven for ${position.pool}`, id: position.id })
 	for (const position of parameters.retirement.positions.filter(candidate => candidate.status === 'pending-confirmation')) blockers.push({ category: 'ambiguous-position', details: `Position ${position.id} is awaiting canonical pool and ownership verification`, id: position.id })
+	for (const position of parameters.retirement.positions) {
+		if (!parameters.v3.some(observation => observation.position.id === position.id) && !blockers.some(blocker => blocker.id === position.id)) {
+			blockers.push({ category: 'ambiguous-position', details: `Position ${position.id} has no canonical balance observation at the retirement scan anchor`, id: position.id })
+		}
+	}
 	const residuals = [...shareClassification.residuals, ...retainedAssetResiduals(parameters.snapshot, parameters.retirement)]
 	const canonicalClaims = canonicalClaimableAssetCount(parameters.snapshot, parameters.retirement)
 	if (canonicalClaims > 0 && claimPlan === undefined && nativeCreditPlan === undefined) blockers.push({ category: 'operator-action', details: 'Canonical claimable assets exist but no safe retirement plan is currently executable', id: 'claimable-assets-without-plan' })
