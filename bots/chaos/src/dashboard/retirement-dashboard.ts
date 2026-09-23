@@ -82,16 +82,22 @@ export function createRetirementDashboard(options: RetirementDashboardOptions) {
 			}
 			try {
 				const normalizedRecipient = getAddress(recipient.value.trim())
+				const maximumExitLossBps = maximumLoss.valueAsNumber
+				if (!Number.isSafeInteger(maximumExitLossBps) || maximumExitLossBps < 0 || maximumExitLossBps > 10_000) throw new Error('Enter a maximum unmatched-share loss from 0 to 10000 bps.')
+				const policies = { exitAfterCompletion: exitAfter.checked, exitUnmatchedShares: exitUnmatched.checked, maximumExitLossBps, migrateExistingClaims: migrateClaims.checked, sweepAssets: true, unwrapWeth: true }
 				const phrase = `DRAIN ${profileId} TO ${normalizedRecipient}`
 				if (
 					!(await confirmOperatorAction({
 						title: 'Drain and retire',
-						description: 'Review the recipient and loss limit before starting recovery.',
+						description: 'Review the recipient, loss limit, and recovery policies before starting recovery.',
 						phrase,
 						confirmLabel: 'Request drain',
 						changes: [
 							{ label: 'Recipient', before: 'Current wallet', after: normalizedRecipient },
-							{ label: 'Maximum unmatched-share loss', before: '0 bps', after: `${maximumLoss.value} bps` },
+							{ label: 'Maximum unmatched-share loss', before: '0 bps', after: `${maximumExitLossBps.toString()} bps` },
+							{ label: 'Exit unmatched shares', before: 'Not requested', after: policies.exitUnmatchedShares ? 'Enabled' : 'Disabled' },
+							{ label: 'Migrate existing claims', before: 'Not requested', after: policies.migrateExistingClaims ? 'Enabled' : 'Disabled' },
+							{ label: 'Exit after completion', before: 'Not requested', after: policies.exitAfterCompletion ? 'Enabled' : 'Disabled' },
 						],
 					}))
 				)
@@ -100,7 +106,7 @@ export function createRetirementDashboard(options: RetirementDashboardOptions) {
 				await options.put({
 					action: 'request',
 					confirmation: confirmation.value,
-					policies: { exitAfterCompletion: exitAfter.checked, exitUnmatchedShares: exitUnmatched.checked, maximumExitLossBps: maximumLoss.valueAsNumber, migrateExistingClaims: migrateClaims.checked, sweepAssets: true, unwrapWeth: true },
+					policies,
 					profileId,
 					recipient: normalizedRecipient,
 				})
