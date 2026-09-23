@@ -2421,5 +2421,5 @@ button.wallet-asset-action-pending:disabled {
 	margin-inline-start: 0.35em;
 	font-family: var(--font-family-sans);
 	font-size: 0.9em;
-	line-height: 1;
+	line-height: var(--line-height-none);
 }
