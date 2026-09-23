@@ -110,7 +110,26 @@ jobs:
           EOF
 
           if gh release view "${GITHUB_REF_NAME}" >/dev/null 2>&1; then
-            gh release edit "${GITHUB_REF_NAME}" --title "${GITHUB_REF_NAME}" --notes-file release-notes.md --latest
+            gh release edit "${GITHUB_REF_NAME}" --title "${GITHUB_REF_NAME}" --notes-file release-notes.md --latest=false
           else
-            gh release create "${GITHUB_REF_NAME}" --title "${GITHUB_REF_NAME}" --notes-file release-notes.md --latest --verify-tag
+            gh release create "${GITHUB_REF_NAME}" --title "${GITHUB_REF_NAME}" --notes-file release-notes.md --latest=false --verify-tag
           fi
+
+  promote-release:
+    name: Promote latest published version
+    needs: deploy
+    runs-on: ubuntu-latest
+    concurrency:
+      group: version-release-latest
+      cancel-in-progress: false
+      queue: max
+    steps:
+      - name: Promote highest published version
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          RELEASE_TAGS=$(gh api --paginate "repos/${GITHUB_REPOSITORY}/releases" --jq '.[] | select(.draft == false and .prerelease == false) | .tag_name')
+          LATEST_TAG=$(printf '%s\n' "${RELEASE_TAGS}" | grep -E '^v[0-9]+$' | sort -Vr | sed -n '1p')
+          # Reconcile published versions even when builds finish out of order.
+          gh release edit "${LATEST_TAG}" --repo "${GITHUB_REPOSITORY}" --latest

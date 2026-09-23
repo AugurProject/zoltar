@@ -2,15 +2,17 @@ name: Production Browser Workflow
 
 on:
   workflow_dispatch:
-  pull_request:
-  push:
-    branches: [main]
+  workflow_call:
+    inputs:
+      prepared:
+        type: boolean
+        default: false
 
 permissions:
   contents: read
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  group: browser-transactions-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 env:
@@ -51,6 +53,16 @@ jobs:
           fi
       - uses: ./.github/actions/setup-ci
         if: steps.scope.outputs.core == 'true'
+      - uses: actions/download-artifact@v5
+        if: inputs.prepared
+        with:
+          name: domain-production-ui
+          path: ui
+      - name: Refresh split UI package installs
+        if: inputs.prepared
+        run: bun ./tooling/repo/run-project-tasks.mts setup --path-prefix ui/
       - name: Run production browser workflow tier
         if: steps.scope.outputs.core == 'true'
         run: bun run test:browser:workflow
+        env:
+          ZOLTAR_USE_EXISTING_PRODUCTION_BUILD: ${{ inputs.prepared && '1' || '0' }}
