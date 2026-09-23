@@ -1,3 +1,4 @@
+import { V3_RETIREMENT_OPERATION } from './retirement-v3-continuation.ts'
 import type { Address } from '@zoltar/bot-shared/ethereum'
 import type { OperatorSettings } from '../config/settings.ts'
 import type { OperationPlan } from '../operations/types.ts'
@@ -8,7 +9,7 @@ import { chaosReadClients, planningOptions, type CanonicalAnchor, type Canonical
 import { applyRetirementAssessment, assessRetirement } from './retirement-assessment.ts'
 import { buildV3RetirementPlan, readV3Position, readV3PositionsWithQuorum, reconcileV3PositionJournal, recordV3ScanFailure, recordV3ScanSuccess } from './retirement-v3-positions.ts'
 import type { V3PositionObservation } from './retirement-types.ts'
-import { retirementCleanupBlocker } from './workflows.ts'
+import { retirementCleanupBlocker, workflowNeedsContinuation } from './workflows.ts'
 
 type RetirementScan = Pick<CanonicalScanResult, 'anchor' | 'executionReady' | 'canonicalLifecyclePresenceComplete' | 'carryProofsComplete' | 'indexComplete' | 'snapshot'>
 
@@ -56,14 +57,21 @@ export function updateRetirementAssessment(scan: RetirementScan, settings: Opera
 export async function retirementPositionsForScan(parameters: { anchor: Pick<CanonicalAnchor, 'blockHash' | 'blockNumber'>; pool: Parameters<typeof chaosReadClients>[1]; profileId: string; settings: OperatorSettings; state: RuntimeState; wallet: Address | undefined }) {
 	const { anchor, pool, profileId, settings, state, wallet } = parameters
 	if (wallet !== undefined) reconcileV3PositionJournal(state.retirement, state.workflows, profileId, wallet)
-	if (state.retirement.status === 'inactive' || state.retirement.positions.length === 0) return []
+	const continuationPositions = new Set(state.workflows.filter(workflow => workflow.operationId === V3_RETIREMENT_OPERATION && workflowNeedsContinuation(workflow)).map(workflow => workflow.metadata['positionId']))
+	const positions = state.retirement.positions.filter(position => state.retirement.status !== 'inactive' || continuationPositions.has(position.id))
+	if (positions.length === 0) return []
 	if (settings.connectivity === undefined) throw new Error('Retirement V3 scan requires configured RPC connectivity')
 	const readers = chaosReadClients(settings, pool).map(candidate => (position: Parameters<typeof readV3Position>[1], positionAnchor: Parameters<typeof readV3Position>[2]) => readV3Position(candidate.client, position, positionAnchor))
 	const observations: V3PositionObservation[] = []
-	for (const position of state.retirement.positions) {
+	for (const position of positions) {
 		try {
-			const positionObservations = await readV3PositionsWithQuorum(readers, settings.connectivity.rpcQuorum, [position], anchor)
-			for (const observation of positionObservations) recordV3ScanSuccess(state, observation, anchor.blockNumber)
+			const needsContinuation = continuationPositions.has(position.id)
+			const scanPosition = position.status === 'closed' && needsContinuation ? { ...position, status: 'active' as const } : position
+			const positionObservations = await readV3PositionsWithQuorum(readers, settings.connectivity.rpcQuorum, [scanPosition], anchor)
+			for (const observation of positionObservations) {
+				observation.position = position
+				recordV3ScanSuccess(state, observation, anchor.blockNumber)
+			}
 			observations.push(...positionObservations)
 		} catch (error) {
 			recordV3ScanFailure(state, position, error)
@@ -83,10 +91,6 @@ export async function processRetirementCycle(parameters: { execute: (plan: Opera
 	}
 	await parameters.prepareExecution()
 	const plan = assessment.action.kind === 'existing-plan' ? assessment.action.plan : buildV3RetirementPlan(scan.snapshot, assessment.action.observation, 0)
-	if (plan.definitionId.startsWith('retirement.sweep.') && state.retirement.finalSweepStartedAt === undefined) {
-		state.retirement.finalSweepStartedAt = new Date().toISOString()
-		await parameters.persist()
-	}
 	await parameters.execute(plan)
 	return settings.runtime.once
 }

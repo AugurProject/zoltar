@@ -1,3 +1,4 @@
+import { reconcileClosedV3RetirementWorkflow, V3_RETIREMENT_OPERATION } from './retirement-v3-continuation.ts'
 import { reconcileIncludedTransactions } from '../execution/inclusion-journal.ts'
 import { createWalletClient, privateKeyToAccount, type Address } from '@zoltar/bot-shared/ethereum'
 import { botDashboardLifecycle, type BotShutdownController } from '@zoltar/bot-shared/execution/bot-process-locks'
@@ -29,7 +30,7 @@ import { createManualOperationController } from './manual-operations.ts'
 import { beginLifecycleObligation, blockNovelEvaluations, completeLifecycleObligation, failLifecycleObligation, lifecyclePresenceBlockerMessage, obligationForPlan, synchronizeLifecycleObligations, waitForCanonicalLifecycleConfirmation } from './obligations.ts'
 import { retirementPlanAllowed } from './retirement-operation-policy.ts'
 import { enforceRetirementContinuation, processRetirementCycle, retirementPositionsForScan, updateRetirementAssessment } from './retirement-runner.ts'
-import { interruptedSchedulerRunNeedsClosure, executeScheduledOperation, recordDryRun, scheduleAfterRecoveredTransaction, schedulerFor } from './scheduled-operation.ts'
+import { closeInterruptedSchedulerRun, executeScheduledOperation, recordDryRun, scheduleAfterRecoveredTransaction, schedulerFor } from './scheduled-operation.ts'
 import { genesisInitializationDefinitionId, genesisInitializationPlan, randomOperationPlans } from './selection.ts'
 import { assertSubmissionPreflightFresh, preflightTransactionSubmissionNetwork, recordEndpointPreflightChecks, refreshSubmissionReadiness, submissionPreflightConfigurationIdentity, type SubmissionPreflightResources } from './submission-preflight.ts'
 import { runtimeTopologySummary } from './topology-summary.ts'
@@ -204,7 +205,7 @@ async function executeLifecyclePlan(configuration: ConfigurationState, state: Ru
 	}
 }
 
-async function executeRandomPlan(configuration: ConfigurationState, state: RuntimeState, resources: RuntimeResources, plan: OperationPlan, executionCancelled: () => boolean, trigger: 'scheduled' | 'manual' = 'scheduled') {
+async function executeRandomPlan(configuration: ConfigurationState, state: RuntimeState, resources: RuntimeResources, plan: OperationPlan, executionCancelled: () => boolean, trigger: 'scheduled' | 'manual' | 'retirement' = 'scheduled') {
 	await executeScheduledOperation(
 		configuration,
 		state,
@@ -256,7 +257,7 @@ async function executeRandomContinuation(configuration: ConfigurationState, stat
 			),
 			plan,
 		)
-		await scheduler.complete(plan.definitionId)
+		await (state.retirement.status === 'inactive' ? scheduler.complete(plan.definitionId) : scheduler.pause())
 	} catch (error) {
 		if (error instanceof TransactionAwaitingRecovery) throw error
 		if (rediscoverableExecutionFailure(state, plan, error)) {
@@ -265,7 +266,7 @@ async function executeRandomContinuation(configuration: ConfigurationState, stat
 			return
 		}
 		if (abandonRetryableSelectableFailure(state, plan)) {
-			await scheduler.complete(plan.definitionId)
+			await (state.retirement.status === 'inactive' ? scheduler.complete(plan.definitionId) : scheduler.pause())
 			return
 		}
 		throw error
@@ -454,17 +455,7 @@ export async function runChaosOperator(loaded: LoadedConfiguration, locks: Chaos
 	} else if (startupFailureRepair.repairedWorkflowIds.length !== 0) {
 		await persistState(configuration, state)
 	}
-	if (interruptedSchedulerRunNeedsClosure(state)) {
-		const scheduler = schedulerFor(configuration, state)
-		await scheduler.complete(state.scheduler.selectedOperationId)
-		if (configuration.settings.paused || state.paused) await scheduler.pause()
-		recordActivity(state, {
-			message: 'Interrupted scheduler run was closed with a fresh randomized wait before any new operation',
-			status: 'info',
-			type: 'recovery',
-		})
-		await persistState(configuration, state)
-	}
+	await closeInterruptedSchedulerRun(configuration, state)
 	let resources: RuntimeResources | undefined
 	if (loaded.settings.networkConfigured) {
 		resources = {
@@ -692,7 +683,7 @@ export async function runChaosOperator(loaded: LoadedConfiguration, locks: Chaos
 						await persistState(configuration, state)
 						return settings.runtime.once
 					}
-					const continuationSelection = evaluatePolicySafeContinuation(scan.snapshot, continuationWorkflow, settings, scan.anchor.blockNumber.toString(), state.retirement.status !== 'inactive' && continuationWorkflow.continuationDisposition === 'cleanup-only')
+					const continuationSelection = evaluatePolicySafeContinuation(scan.snapshot, continuationWorkflow, settings, scan.anchor.blockNumber.toString(), state.retirement.status !== 'inactive' && continuationWorkflow.continuationDisposition === 'cleanup-only', { state, observations: retirementV3 })
 					const continuationEvaluation = continuationSelection.evaluation
 					if (continuationSelection.continuationDisposition !== undefined && continuationWorkflow.continuationDisposition !== continuationSelection.continuationDisposition) {
 						continuationWorkflow.continuationDisposition = continuationSelection.continuationDisposition
@@ -702,6 +693,11 @@ export async function runChaosOperator(loaded: LoadedConfiguration, locks: Chaos
 					if (freshPlan === undefined) {
 						const blockers = continuationEvaluation.eligibility.blockers.join('; ')
 						state.error = `Partial workflow ${continuationWorkflow.label} is waiting for its canonical continuation; novel work remains blocked${blockers === '' ? '' : `: ${blockers}`}`
+						await persistState(configuration, state)
+						return settings.runtime.once
+					}
+					if (continuationWorkflow.operationId === V3_RETIREMENT_OPERATION && freshPlan.steps.length === 0) {
+						reconcileClosedV3RetirementWorkflow(scan.snapshot, continuationWorkflow, { state, observations: retirementV3 })
 						await persistState(configuration, state)
 						return settings.runtime.once
 					}
@@ -779,7 +775,7 @@ export async function runChaosOperator(loaded: LoadedConfiguration, locks: Chaos
 				}
 				const retirementResources = resources
 				const retirementResult = await processRetirementCycle({
-					execute: async plan => await executeRandomPlan(configuration, state, retirementResources, plan, shutdown.isRequested),
+					execute: async plan => await executeRandomPlan(configuration, state, retirementResources, plan, shutdown.isRequested, 'retirement'),
 					persist: async () => await persistState(configuration, state),
 					prepareExecution: async () => {
 						await ensureSubmissionPreflight(retirementResources, settings)

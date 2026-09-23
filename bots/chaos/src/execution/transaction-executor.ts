@@ -1,3 +1,4 @@
+import { requiredExecutionWallet, withRetirementSweepBarrier } from './signing.ts'
 import { assertIncludedTransactionsCanonical } from './inclusion-journal.ts'
 import { commitReceiptDisposition } from './receipt-disposition.ts'
 import { createPublicClient, parseAbiItem, type Account, type Address, type Chain, type Hex, type TransactionReceipt, type Transport, type WalletClient, toHex, zeroAddress } from '@zoltar/bot-shared/ethereum'
@@ -120,15 +121,6 @@ export function executionReadClients(environment: ExecutionEnvironment) {
 			transport,
 		}
 	})
-}
-
-function requiredExecutionWallet(environment: ExecutionEnvironment) {
-	const wallet = environment.wallet
-	if (wallet === undefined) throw new Error('Transaction execution requires the configured signer')
-	if (wallet.account.address.toLowerCase() !== environment.sender.toLowerCase()) {
-		throw new Error('Execution signer does not match the configured transaction sender')
-	}
-	return wallet
 }
 
 export function assertExecutionActive(environment: ExecutionEnvironment) {
@@ -1001,7 +993,7 @@ async function executeStep(environment: ExecutionEnvironment, plan: OperationPla
 		gasEstimate,
 		lastValidBlockNumber,
 		nonce,
-		signTransaction: account.signTransaction,
+		signTransaction: withRetirementSweepBarrier(environment, plan, account.signTransaction),
 		to: step.to,
 		value: unsignedQuantity(step.value, `${step.label} value`),
 	})

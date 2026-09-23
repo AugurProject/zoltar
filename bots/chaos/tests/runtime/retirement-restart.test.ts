@@ -189,7 +189,7 @@ describe('Drain & Retire persisted restart behavior', () => {
 		expect(state.retirement.status).toBe('drained-with-residuals')
 	})
 
-	test('persists the final-sweep boundary before execution and never repeats the sweep after restart', async () => {
+	test('does not accept a sweep before dispatch and does not repeat a canonically emptied sweep', async () => {
 		const path = await statePath()
 		const snapshot = emptySnapshot()
 		snapshot.wallet.tokens = [{ address: address(80), allowances: {}, balance: '7', openOracleCredit: '0', symbol: 'TEST' }]
@@ -198,7 +198,7 @@ describe('Drain & Retire persisted restart behavior', () => {
 		await cycle(path, state, snapshot, executed, async plan => {
 			expect(plan.definitionId).toBe('retirement.sweep.erc20')
 			const persistedBeforeExecution = await loadDurableState(path, snapshot.chainId)
-			expect(persistedBeforeExecution.retirement.finalSweepStartedAt).toBeDefined()
+			expect(persistedBeforeExecution.retirement.finalSweepStartedAt).toBeUndefined()
 			const token = snapshot.wallet.tokens[0]
 			if (token === undefined) throw new Error('Expected sweep fixture')
 			token.balance = '0'
