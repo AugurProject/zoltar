@@ -311,8 +311,8 @@ test('requires complete, renderable state catalog entities', () => {
 		title: 'Question',
 		description: 'Description',
 		created_timestamp: '2026-01-01T00:00:00Z',
-		start_time: '2026-01-01T00:00:00Z',
-		end_time: '2027-01-01T00:00:00Z',
+		start_time: '1767225600',
+		end_time: '1798761600',
 		num_ticks: '0',
 		display_value_min: '0',
 		display_value_max: '0',
@@ -321,6 +321,8 @@ test('requires complete, renderable state catalog entities', () => {
 		pool_count: '1',
 		fork_count: '0',
 	}
+	expect(isQuestionStateEntityValue({ ...question, start_time: '8640000000001', end_time: '281474976710655' })).toBe(true)
+	for (const invalid of ['281474976710656', '-1', '1.5', '2026-01-01T00:00:00Z', '1e3']) expect(isQuestionStateEntityValue({ ...question, end_time: invalid })).toBe(false)
 	const universe = {
 		chain_id: '1',
 		network_id: 'mainnet',

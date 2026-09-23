@@ -149,6 +149,7 @@ export function encodeEventTopics(parameters: { abi: Abi; args?: readonly unknow
 	const decoder = getEventDecoder(eventAbi)
 	const inputs = eventAbi.inputs ?? []
 	const normalizedArgs = normalizeEventTopicArgs(eventAbi, parameters.args)
+	const topicPosition = (inputIndex: number) => inputs.slice(0, inputIndex).filter(input => input.indexed === true).length + (eventAbi.anonymous === true ? 0 : 1)
 	const encodeNormalizedTopics = (values: ReturnType<typeof normalizeEventTopicArgs>) => {
 		const withPlaceholders = Array.isArray(values)
 			? inputs.map((input, index) => (input.indexed === true && values[index] === null ? eventTopicWildcardPlaceholder(input) : values[index]))
@@ -161,14 +162,12 @@ export function encodeEventTopics(parameters: { abi: Abi; args?: readonly unknow
 					}),
 				)
 		const topics = decoder.topics(withPlaceholders) as Array<string | null>
-		let topicIndex = eventAbi.anonymous === true ? 0 : 1
 		for (const [inputIndex, input] of inputs.entries()) {
 			if (input.indexed !== true) continue
 			let value: unknown
 			if (Array.isArray(values)) value = values[inputIndex]
 			else if (input.name !== undefined) value = Reflect.get(values, input.name)
-			if (value === null) topics[topicIndex] = null
-			topicIndex += 1
+			if (value === null) topics[topicPosition(inputIndex)] = null
 		}
 		return topics.map(topic => (topic === null ? null : ensure0x(topic)))
 	}
@@ -195,7 +194,7 @@ export function encodeEventTopics(parameters: { abi: Abi; args?: readonly unknow
 	const defaults = new Map(alternatives.map(({ selectionIndex, values }) => [selectionIndex, values[0]]))
 	const topics: Array<Hex | readonly Hex[] | null> = encodeNormalizedTopics(withAlternatives(defaults))
 	for (const { input, inputIndex, selectionIndex, values } of alternatives) {
-		const topicIndex = inputs.slice(0, inputIndex + 1).filter(candidate => candidate.indexed === true).length
+		const topicIndex = topicPosition(inputIndex)
 		topics[topicIndex] = values.map(value => {
 			const topic = encodeNormalizedTopics(withAlternatives(new Map([...defaults, [selectionIndex, value]])))[topicIndex]
 			if (topic === undefined || topic === null) throw new Error(`Event topic ${topicIndex.toString()} could not be encoded for ${input.name ?? 'indexed input'}`)
