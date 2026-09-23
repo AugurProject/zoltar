@@ -54,10 +54,10 @@
 							<td><code>ForkContinuationResumed</code></td>
 						</tr>
 						<tr>
-							<td><code>applyTruthAuctionHaircut(repToRemove)</code></td>
+							<td><code>applyTruthAuctionHaircut(repToRemoveAttoRep)</code></td>
 							<td>The child pool's <code>SecurityPoolForker</code> only</td>
 							<td>Paused fork continuation; no prior auction haircut; the requested amount is below the game's live REP balance.</td>
-							<td>Transfers sold REP to the pool, proportionally reduces escrow and outcome balances, and rebases curve time. An unfixed inherited tie below the game threshold reopens reporting; fixed outcomes and local non-decisions retain their state. The game stays paused until the pool resumes it.</td>
+							<td>Transfers sold REP to the pool, proportionally reduces escrow and outcome balances, and rebases curve time. If an unfixed continuation inherited two threshold-full outcome balances and the haircut leaves them below the current game threshold, ordinary pool-mediated deposit checks apply after the pool resumes the game. Fixed outcomes and local non-decisions retain their state. The game stays paused until the pool resumes it.</td>
 							<td><code>TruthAuctionHaircutApplied</code> and REP <code>Transfer</code>; <code>InheritedThresholdTieReopened</code> when an unfixed inherited tie reopens</td>
 						</tr>
 						<tr>
