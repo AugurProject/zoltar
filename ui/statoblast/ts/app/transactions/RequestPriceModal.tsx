@@ -83,6 +83,7 @@ export function RequestPriceModal({ review, onConfirm, onClose, canRequest, conf
 				funding: workflow.steps.flatMap(step => step.tokenFunding ?? []),
 				totalAttoEth: workflow.steps.reduce((sum, step) => sum + (step.phase === 'skipped' ? 0n : (step.ethValueAttoEth ?? 0n)), 0n),
 				outcome: workflow.steps.find(step => step.oracleOutcome !== undefined)?.oracleOutcome,
+				technicalRows: presentation?.technicalRows,
 			})
 		}
 		run.current?.cancel()

@@ -3,6 +3,7 @@ import { GlobalTransactionPresentationProvider } from '@zoltar/ui-core-shared/co
 import { afterEach, expect, test } from 'bun:test'
 import { act } from 'preact/test-utils'
 import { render } from 'preact'
+import { signal } from '@preact/signals'
 import { getAddress } from '@zoltar/core-shared/evm/ethereum'
 import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
@@ -11,6 +12,7 @@ import { RequestPriceModal } from '../../app/transactions/RequestPriceModal.js'
 import { TransactionStepsModal, embeddedTransactionSteps } from '@zoltar/ui-core-shared/components/TransactionStepsModal.js'
 import { createTransactionStepController, transactionSteps } from '@zoltar/ui-core-shared/transactions/transactionSteps.js'
 import type { RequestPriceReview } from '@zoltar/ui-statoblast-shared/features/security-pools/components/SecurityPoolOracleSections.js'
+import type { GlobalTransactionPresentation } from '@zoltar/ui-core-shared/types/components.js'
 
 const review: RequestPriceReview = { managerAddress: getAddress('0x0000000000000000000000000000000000000001'), securityPoolAddress: getAddress('0x0000000000000000000000000000000000000002'), universeId: 0n, requestValueAttoEth: 12n }
 const props = { review, canRequest: true, pending: false, confirmationGuardMessage: undefined, closeOnSuccessKey: undefined, onClose: () => undefined, fetchPrice: async () => 2n * 10n ** 18n }
@@ -224,6 +226,7 @@ test('allows another price request after a failed transaction step', async () =>
 
 test('keeps submitted funding and pool details beside the original action after failure', async () => {
 	const dom = installDomEnvironment()
+	const presentation = signal<GlobalTransactionPresentation | undefined>(undefined)
 	const onConfirm = async (_request: RequestPriceReview, signal?: AbortSignal) => {
 		const controller = createTransactionStepController(signal)
 		controller.setPlan([
@@ -240,16 +243,20 @@ test('keeps submitted funding and pool details beside the original action after 
 		try {
 			await controller.review()
 			controller.failed('nonce too low')
+			presentation.value = { tone: 'error', title: 'Requesting Price', detail: 'nonce too low', technicalRows: [{ label: 'Function', value: 'requestPrice' }] }
 		} catch (error) {
 			if (!(error instanceof Error) || !error.message.includes('canceled')) throw error
 		}
 	}
-	const rendered = await renderIntoDocument(
-		<>
-			<RequestPriceModal {...props} onConfirm={onConfirm} />
-			<TransactionStepsModal contextKey='wallet' />
-		</>,
-	)
+	function Harness() {
+		return (
+			<GlobalTransactionPresentationProvider transaction={presentation.value}>
+				<RequestPriceModal {...props} onConfirm={onConfirm} />
+				<TransactionStepsModal contextKey='wallet' />
+			</GlobalTransactionPresentationProvider>
+		)
+	}
+	const rendered = await renderIntoDocument(<Harness />)
 	try {
 		const queries = within(document.body)
 		await act(() => fireEvent.click(queries.getByRole('button', { name: 'Fetch from Uniswap' })))
@@ -261,6 +268,8 @@ test('keeps submitted funding and pool details beside the original action after 
 		expect(queries.getByText('1 WETH')).not.toBeNull()
 		expect(queries.getByText('Security Pool Address').parentElement?.textContent).toContain(review.securityPoolAddress)
 		expect(queries.getByText('Oracle Manager').parentElement?.textContent).toContain(review.managerAddress)
+		expect(queries.getByText('Technical details')).not.toBeNull()
+		expect(queries.getByText('requestPrice')).not.toBeNull()
 		expect(queries.getByRole('button', { name: /^Request price/ }).hasAttribute('disabled')).toBe(false)
 	} finally {
 		await rendered.cleanup()

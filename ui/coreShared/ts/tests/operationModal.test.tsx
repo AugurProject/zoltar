@@ -540,7 +540,9 @@ describe('OperationModal', () => {
 		await act(() => {
 			fireEvent.click(within(dialog).getByRole('button', { name: 'Complete new transaction' }))
 		})
-		expect(within(dialog).getByRole('status').textContent).toContain('New transaction confirmed')
+		const status = within(dialog).getByRole('status')
+		expect(status.querySelector('.badge')?.textContent).toBe('Confirmed')
+		expect(status.querySelector('strong')?.textContent).toBe('New transaction')
 	})
 
 	test('does not close a reopened modal when a transaction from its previous instance succeeds', async () => {

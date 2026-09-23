@@ -26,8 +26,16 @@ function getTransactionBadge(tone: GlobalTransactionPresentation['tone']): { lab
 	return { tone: 'warning', label: transactionCopy.attention }
 }
 
+function getNoticeTitle(transaction: GlobalTransactionPresentation) {
+	if (typeof transaction.title !== 'string') return transaction.title
+	if (transaction.tone === 'error') return transaction.title.replace(/(?:^|\s)failed$/i, '') || undefined
+	if (transaction.tone === 'success') return transaction.title.replace(/(?:^|\s)confirmed$/i, '') || undefined
+	return transaction.title
+}
+
 export function TransactionPresentationNotice({ className = '', compact = false, contextWarning, dismissible = false, noticeRef, onDismiss, returnHref, transaction }: TransactionPresentationNoticeProps) {
 	const badge = getTransactionBadge(transaction.tone)
+	const title = getNoticeTitle(transaction)
 	const transactionHash = transaction.hash
 	const rows = transaction.rows ?? []
 	const technicalRows = transaction.technicalRows ?? []
@@ -72,7 +80,7 @@ export function TransactionPresentationNotice({ className = '', compact = false,
 				<div className='global-transaction-notice-header'>
 					<Badge tone={badge.tone}>{badge.label}</Badge>
 					{transaction.tone === 'awaiting-wallet' ? <span className='spinner global-transaction-spinner' aria-hidden='true' /> : undefined}
-					<strong>{transaction.title}</strong>
+					{title === undefined ? undefined : <strong>{title}</strong>}
 				</div>
 				{transactionHash === undefined ? undefined : <TransactionHashLink hash={transactionHash} />}
 				{compact ? (

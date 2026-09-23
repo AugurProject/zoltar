@@ -6,11 +6,14 @@ import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as copy from '@zoltar/ui-core-shared/copy/transactionSteps.js'
 import * as priceRequestCopy from '@zoltar/ui-statoblast-shared/copy/priceRequest.js'
 import { EthAmount, TransactionFundingSummary } from '@zoltar/ui-core-shared/components/TransactionFundingSummary.js'
+import { ReadOnlyDetailAccordion } from '@zoltar/ui-core-shared/components/ReadOnlyDetailAccordion.js'
+import type { GlobalTransactionRow } from '@zoltar/ui-core-shared/types/components.js'
 
 export type FailedPricePlan = {
 	funding: readonly { amount: string }[]
 	totalAttoEth: bigint
 	outcome: { returnToWallet: boolean; settlerRewardAttoEth: bigint | undefined } | undefined
+	technicalRows: GlobalTransactionRow[] | undefined
 }
 
 export function PriceRequestPreview({
@@ -87,6 +90,18 @@ export function PriceRequestPreview({
 							{visibleFeedback === undefined ? undefined : (
 								<div className='tx-action-feedback' ref={errorRef} aria-live='polite'>
 									{visibleFeedback}
+									{failedPlan?.technicalRows?.length ? (
+										<ReadOnlyDetailAccordion title={commonCopy.technicalDetails}>
+											<dl className='global-transaction-notice-rows'>
+												{failedPlan.technicalRows.map((row, index) => (
+													<div className='global-transaction-notice-row' key={`${row.label}:${index.toString()}`}>
+														<dt>{row.label}</dt>
+														<dd>{row.value}</dd>
+													</div>
+												))}
+											</dl>
+										</ReadOnlyDetailAccordion>
+									) : undefined}
 								</div>
 							)}
 							<TransactionActionButton

@@ -778,6 +778,12 @@ main.global-transaction-tray-open :is(a, button, input, select, summary, textare
 	padding-top: 0.2rem;
 }
 
+.global-transaction-actions a {
+	display: inline-flex;
+	align-items: center;
+	min-height: var(--touch-target-min);
+}
+
 .global-transaction-close {
 	position: absolute;
 	top: 0.65rem;
