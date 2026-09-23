@@ -65,13 +65,8 @@ export async function retirementPositionsForScan(parameters: { anchor: Pick<Cano
 	const observations: V3PositionObservation[] = []
 	for (const position of positions) {
 		try {
-			const needsContinuation = continuationPositions.has(position.id)
-			const scanPosition = position.status === 'closed' && needsContinuation ? { ...position, status: 'active' as const } : position
-			const positionObservations = await readV3PositionsWithQuorum(readers, settings.connectivity.rpcQuorum, [scanPosition], anchor)
-			for (const observation of positionObservations) {
-				observation.position = position
-				recordV3ScanSuccess(state, observation, anchor.blockNumber)
-			}
+			const positionObservations = await readV3PositionsWithQuorum(readers, settings.connectivity.rpcQuorum, [position], anchor)
+			for (const observation of positionObservations) recordV3ScanSuccess(state, observation, anchor.blockNumber)
 			observations.push(...positionObservations)
 		} catch (error) {
 			recordV3ScanFailure(state, position, error)
