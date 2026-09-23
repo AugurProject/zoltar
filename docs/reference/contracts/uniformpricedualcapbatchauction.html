@@ -83,6 +83,18 @@
 						</tr>
 					</tbody>
 				</table>
+				<h2 id="accounting-examples">Accounting examples</h2>
+				<h3 id="tick-pricing">Tick pricing</h3>
+				<p>Bids are placed at integer ticks between <code>MIN_TICK</code> (<code>-524288</code>) and <code>MAX_TICK</code> (<code>524288</code>). <code>tickToPrice(0)</code> is <code>PRICE_PRECISION</code>, one ETH per REP. Each tick above zero multiplies the price by 1.0001 through a binary-exponentiation table of <code>_powerOf1Point0001</code>; negative ticks take the reciprocal. The price at tick <code>t</code> is therefore approximately:</p>
+				<div class="equation" id="eq-auction-tick-price">
+					<math display="block" aria-label="price at tick t is approximately 1.0001 to the power t ETH per REP" data-source="price(t) ≈ 1.0001^t ETH/REP"
+						><mrow
+							><mi>price</mi><mo>(</mo><mi>t</mi><mo>)</mo><mo>≈</mo><msup><mn>1.0001</mn><mi>t</mi></msup
+							><mspace width="0.3em"></mspace><mtext>ETH per REP</mtext></mrow
+						></math
+					>
+				</div>
+				<p>A tick whose price rounds to zero is rejected. Within one tick, the uniform-clearing branch fills bids first in, first out, so earlier same-tick bids are consumed before later ones.</p>
 			</article>
 		</main>
 		<script src="../../assets/js/responsiveDocs.js"></script>

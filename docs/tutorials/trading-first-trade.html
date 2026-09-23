@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<meta name="description" content="Enter a YES or NO position through the Trading router, read the simulation, and exit while keeping INVALID insurance." />
+		<title>Your first trade</title>
+		<link rel="stylesheet" href="../assets/css/shared-docs.css" />
+		<link rel="stylesheet" href="../assets/css/docsShell.css" />
+	</head>
+	<body class="doc-openoracle">
+		<main id="main-content">
+			<header>
+				<p class="kicker">Tutorial</p>
+				<h1>Your first trade</h1>
+				<p>In this tutorial you buy a directional position in an open market and then exit part of it. You will see how one ETH entry becomes a complete set, a swap, and an INVALID share you keep, and how the exit gives that INVALID back in exchange for ETH.</p>
+			</header>
+			<section id="before-you-start">
+				<h2>Before you start</h2>
+				<p>Open the standalone UI on a supported network as described in <a href="../how-to/trading-configure-ui.html">Configure the Trading UI</a>; it derives and verifies the deterministic trading contracts for you. Connect a wallet on that network and select an initialized, open pair. To practise without a wallet, add <code>?simulate=1</code> for the browser-local simulator, which is clearly labeled and never reflects live chain state.</p>
+			</section>
+			<section id="enter">
+				<h2>Enter a position</h2>
+				<ol>
+					<li>Select <strong>Enter</strong>, choose <strong>YES</strong> or <strong>NO</strong>, and enter an ETH amount. Set the slippage tolerance (0% to 5%) and how many whole minutes the transaction stays valid (1 to 1440), then select <strong>Preview trade</strong>. Lower slippage tolerates less adverse movement from the quote; a shorter validity window reduces stale-transaction exposure. Either setting makes reverts more likely.</li>
+					<li>Review the simulation: complete-set shares, opposite shares swapped, additional and total long shares, INVALID insurance, fee, average execution price, conditional price impact, your slippage tolerance, deadline, and minimum received.</li>
+					<li>If the block changes, preview again. Then select <strong>Enter YES</strong> (or <strong>Enter NO</strong>) and confirm the single <code>enterPosition</code> transaction in the wallet.</li>
+					<li>Check the wallet. A YES entry delivers the complete-set YES plus the additional YES from the swap. Its INVALID insurance equals the complete-set quantity, not the larger total YES delivered, and the operation leaves you no NO.</li>
+				</ol>
+			</section>
+			<section id="exit">
+				<h2>Exit a position</h2>
+				<ol>
+					<li>Select <strong>Exit</strong> and the side you hold, then enter the <strong>Complete-set value to redeem</strong>. No approval step is needed: the exit is a single share transfer from your wallet to the router.</li>
+					<li>Select <strong>Preview trade</strong>. The simulation shows the complete sets redeemed, the opposite shares the router buys for you, the INVALID required, the estimated and minimum ETH out, the fee, and the deadline.</li>
+					<li>Select <strong>Exit insured YES</strong> (or <strong>Exit insured NO</strong>) and confirm the wallet transaction. It calls the ShareToken's <code>safeBatchTransferFrom</code> with your INVALID and long shares; the router buys exactly the missing opposite shares, redeems the complete sets at the pool's current collateral rate, and forwards only that operation's ETH to you.</li>
+					<li>Check the wallet: the ETH arrived, the INVALID you redeemed is gone, and any long shares beyond what the exit needed came back.</li>
+				</ol>
+				<p>If your INVALID balance cannot cover the exit you asked for, reduce the amount; directional profit beyond what you can insure stays in your wallet as shares. <a href="../explanation/trading/early-exit-limit.html">Why early ETH exits are limited</a> explains the bound, and <a href="../how-to/trading-exit-a-position.html">Exit an insured position</a> covers the SDK helper that finds the largest exit for you.</p>
+			</section>
+		</main>
+		<script src="../assets/js/responsiveDocs.js"></script>
+		<script src="../assets/js/docsData.js"></script>
+		<script src="../assets/js/docsShell.js"></script>
+	</body>
+</html>
