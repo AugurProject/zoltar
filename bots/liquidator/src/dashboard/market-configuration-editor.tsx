@@ -211,6 +211,13 @@ export function readMarketConfiguration() {
 	}
 }
 
+export function reviewableRootMarket(value: unknown) {
+	const root = { ...record(value) }
+	delete root['assetAddress']
+	delete root['assetChainId']
+	return root
+}
+
 export function renderMarketConfiguration(target: HTMLElement, configuration: { centralizedMarkets: unknown; childMarketConfigurations: unknown[]; desiredPools: unknown[]; network?: { chainId: number } | undefined }) {
 	const initial: Draft = { root: record(configuration.centralizedMarkets), children: records(configuration.childMarketConfigurations), desiredPools: records(configuration.desiredPools) }
 	currentDraft = initial

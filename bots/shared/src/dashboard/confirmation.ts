@@ -7,8 +7,12 @@ export function reviewChangeRows(before: unknown, after: unknown, path = 'Settin
 	const object = (value: unknown): Record<string, unknown> | undefined => (typeof value === 'object' && value !== null && !Array.isArray(value) ? Object.fromEntries(Object.entries(value)) : undefined)
 	const oldObject = object(before)
 	const newObject = object(after)
-	if (oldObject !== undefined && newObject !== undefined) return [...new Set([...Object.keys(oldObject), ...Object.keys(newObject)])].flatMap(key => reviewChangeRows(oldObject[key], newObject[key], `${path} › ${key}`))
-	if (Array.isArray(before) && Array.isArray(after)) return Array.from({ length: Math.max(before.length, after.length) }, (_, index) => reviewChangeRows(before[index], after[index], `${path} › ${index + 1}`)).flat()
+	if (oldObject !== undefined || newObject !== undefined) return [...new Set([...Object.keys(oldObject ?? {}), ...Object.keys(newObject ?? {})])].flatMap(key => reviewChangeRows(oldObject?.[key], newObject?.[key], `${path} › ${key}`))
+	if (Array.isArray(before) || Array.isArray(after)) {
+		const oldArray = Array.isArray(before) ? before : []
+		const newArray = Array.isArray(after) ? after : []
+		return Array.from({ length: Math.max(oldArray.length, newArray.length) }, (_, index) => reviewChangeRows(oldArray[index], newArray[index], `${path} › ${index + 1}`)).flat()
+	}
 	const display = (value: unknown) => {
 		if (value === undefined) return '—'
 		if (value === null) return 'None'

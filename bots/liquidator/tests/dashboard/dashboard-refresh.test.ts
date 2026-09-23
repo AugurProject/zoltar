@@ -3,6 +3,7 @@ import { afterEach, describe, expect, spyOn, test } from 'bun:test'
 import { Browser } from 'happy-dom'
 import type { PoolCatalogPage } from '../../src/monitoring/pool-catalog.ts'
 import { startDashboardServer } from '../../src/dashboard/dashboard-server.ts'
+import example from '../../config/operator.example.json'
 
 const servers: ReturnType<typeof startDashboardServer>[] = []
 const browsers: Browser[] = []
@@ -1173,6 +1174,44 @@ describe('liquidator go-live settings', () => {
 		reserve.dispatchEvent(new page.window.Event('input', { bubbles: true }))
 		expect(strategySave.disabled).toBe(false)
 		expect(Array.from(page.window.document.querySelectorAll('.settings-badges[data-form="strategy-form"] .settings-badge'), badge => badge.textContent)).toEqual(['Unsaved changes'])
+	})
+
+	test('strategy review shows saved runtime values for log recovery controls', async () => {
+		const saved = mainnetConfiguration()
+		saved.runtime.logLookbackBlocks = 48
+		saved.runtime.historicalLogRecovery = true
+		const page = await dashboard(saved, state())
+		const form = page.window.document.getElementById('strategy-form')
+		const lookback = page.window.document.querySelector('#strategy-form input[name="logLookbackBlocks"]')
+		const historical = page.window.document.querySelector('#strategy-form input[name="historicalLogRecovery"]')
+		if (!(form instanceof page.window.HTMLFormElement) || !(lookback instanceof page.window.HTMLInputElement) || !(historical instanceof page.window.HTMLInputElement)) throw new Error('Expected log recovery controls')
+		lookback.value = '64'
+		historical.checked = false
+		form.dispatchEvent(new page.window.Event('submit', { bubbles: true, cancelable: true }))
+		let review = page.window.document.querySelector('.operator-confirm-dialog')
+		for (let attempt = 0; attempt < 100 && review === null; attempt++) {
+			await Bun.sleep(10)
+			review = page.window.document.querySelector('.operator-confirm-dialog')
+		}
+		expect(review?.textContent).toContain('log lookback blocks48 blocks→64 blocks')
+		expect(review?.textContent).toContain('historical log recoveryEnabled→Disabled')
+	})
+
+	test('market review omits canonical root identity restored by the server', async () => {
+		const saved = mainnetConfiguration()
+		saved.centralizedMarkets = { ...example.centralizedMarkets, assetAddress: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', assetChainId: 1 }
+		const page = await dashboard(saved, state())
+		const form = page.window.document.getElementById('market-configuration-form')
+		if (!(form instanceof page.window.HTMLFormElement)) throw new Error('Expected market configuration form')
+		form.dispatchEvent(new page.window.Event('submit', { bubbles: true, cancelable: true }))
+		let review = page.window.document.querySelector('.operator-confirm-dialog')
+		for (let attempt = 0; attempt < 100 && review === null; attempt++) {
+			await Bun.sleep(10)
+			review = page.window.document.querySelector('.operator-confirm-dialog')
+		}
+		expect(review).not.toBeNull()
+		expect(review?.textContent).not.toContain('assetAddress')
+		expect(review?.textContent).not.toContain('assetChainId')
 	})
 
 	test('lists every live-execution prerequisite and locks the switch until they hold', async () => {

@@ -270,6 +270,12 @@ fieldset {
 	.operator-health-grid {
 		grid-template-columns: minmax(0, 1fr);
 	}
+	.operator-review-row {
+		grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+	}
+	.operator-review-row strong {
+		grid-column: 1 / -1;
+	}
 }
 
 .operator-primary {

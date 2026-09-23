@@ -646,6 +646,7 @@ test('lists skipped reports beside priced ones with their scan reason and token'
 
 test('deployment form saves venue switches without configurable Uniswap addresses', async () => {
 	let settings = parseOperatorSettings({ ...example, network: 'sepolia', networkConfigured: true, connectivity: { publicRpcUrls: ['https://rpc.example/'], readRpcUrl: 'https://rpc.example/' } })
+	const venueRequests: unknown[] = []
 	const snapshot = () =>
 		operatorSnapshot(operatorState(), settings.strategy, settings.submission, settings.connectivity, {
 			deployment: settings.deployment,
@@ -668,6 +669,7 @@ test('deployment form saves venue switches without configurable Uniswap addresse
 		setPaused: () => undefined,
 		updateConnectivity: value => value,
 		updateDeployment: value => {
+			venueRequests.push(value)
 			settings = { ...settings, deployment: mergeStoredDeploymentUpdate(settings.deployment, value, 'sepolia') }
 			return settings.deployment
 		},
@@ -679,8 +681,9 @@ test('deployment form saves venue switches without configurable Uniswap addresse
 	const { page, window } = await mountDashboard(server, '/settings')
 	for (let attempt = 0; attempt < 100 && !element(window, 'deployment-v2-enabled', window.HTMLInputElement).checked; attempt++) await Bun.sleep(10)
 	const form = element(window, 'deployment-form', window.HTMLFormElement)
-	const save = async () => {
+	const save = async (review = true) => {
 		form.dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }))
+		if (review) await acceptOperatorDialog(window)
 		await page.waitUntilComplete()
 		for (let attempt = 0; attempt < 100 && element(window, 'deployment-status', window.HTMLElement).textContent === 'Validating venues…'; attempt++) await Bun.sleep(10)
 		expect(element(window, 'deployment-status', window.HTMLElement).textContent).toContain('Venues saved')
@@ -692,7 +695,7 @@ test('deployment form saves venue switches without configurable Uniswap addresse
 	expect(window.document.getElementById('create2-salt')).toBeNull()
 	expect(window.document.getElementById('deployment-quorum-rpcs')).toBeNull()
 	expect(element(window, 'quorum-rpc-urls', window.HTMLTextAreaElement).closest('form')?.id).toBe('connectivity-form')
-	await save()
+	await save(false)
 	const restored = () => parseOperatorSettings({ ...JSON.parse(JSON.stringify(serializeOperatorSettings(settings))), network: 'mainnet' }).deployment
 	expect(settings.deployment.executor).toBe(canonicalExecutorIdentity().address)
 	expect(settings.deployment.uniswapV2Router).toBeUndefined()
@@ -700,7 +703,23 @@ test('deployment form saves venue switches without configurable Uniswap addresse
 	element(window, 'deployment-v2-enabled', window.HTMLInputElement).checked = false
 	element(window, 'deployment-v3-enabled', window.HTMLInputElement).checked = false
 	element(window, 'deployment-v4-enabled', window.HTMLInputElement).checked = true
+	form.dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }))
+	let review = window.document.querySelector('.operator-confirm-dialog')
+	for (let attempt = 0; attempt < 100 && review === null; attempt++) {
+		await Bun.sleep(10)
+		review = window.document.querySelector('.operator-confirm-dialog')
+	}
+	expect(review?.textContent).toContain('Uniswap V2Enabled→Disabled')
+	expect(review?.textContent).toContain('Uniswap V3Enabled→Disabled')
+	expect(review?.textContent).toContain('Uniswap V4Disabled→Enabled')
+	expect(venueRequests).toHaveLength(1)
+	const cancel = review?.querySelector('.dialog-actions button.secondary')
+	if (!(cancel instanceof window.HTMLButtonElement)) throw new Error('Expected venue review cancel control')
+	cancel.click()
+	await page.waitUntilComplete()
+	expect(venueRequests).toHaveLength(1)
 	await save()
+	expect(venueRequests.at(-1)).toEqual({ uniswapV2Enabled: false, uniswapV3Enabled: false, uniswapV4Enabled: true })
 	expect(settings.deployment.uniswapV4PoolManager).toBeDefined()
 	expect(settings.deployment.uniswapV4Quoter).toBeDefined()
 	expect(restored().uniswapV2Router).toBeUndefined()
@@ -945,7 +964,18 @@ test('focused risk, settlement, execution, and market forms load the saved confi
 	rowInput('sourceRepMarket').value = 'REP/USDT'
 	rowInput('sourceEthMarket').value = 'ETH/USDT'
 	marketInput('minimumSourceCount').value = '1'
-	expect(await submit('market-form', 'market-status', 'Validating market sources…')).toBe('Market sources saved.')
+	element(window, 'market-form', window.HTMLFormElement).dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }))
+	let sourceReview = window.document.querySelector('.operator-confirm-dialog')
+	for (let attempt = 0; attempt < 100 && sourceReview === null; attempt++) {
+		await Bun.sleep(10)
+		sourceReview = window.document.querySelector('.operator-confirm-dialog')
+	}
+	expect(sourceReview?.textContent).toContain('Setting › sources › 1 › exchangeId—→kraken')
+	expect(sourceReview?.textContent).toContain('Setting › sources › 1 › repMarket—→REP/USDT')
+	await acceptOperatorDialog(window)
+	await page.waitUntilComplete()
+	for (let attempt = 0; attempt < 100 && element(window, 'market-status', window.HTMLElement).textContent === 'Validating market sources…'; attempt++) await Bun.sleep(10)
+	expect(element(window, 'market-status', window.HTMLElement).textContent).toBe('Market sources saved.')
 	expect(settings.centralizedMarkets.sources).toEqual([{ ethMarket: 'ETH/USDT', exchangeId: 'kraken', repMarket: 'REP/USDT' }])
 	expect(settings.centralizedMarkets.minimumSourceCount).toBe(1)
 	expect(settings.centralizedMarkets.assetAddress).toBe(settings.deployment.rep)
@@ -1107,6 +1137,7 @@ test('go-live checklist unlocks the switch once every prerequisite holds, report
 	await Bun.sleep(30)
 	element(window, 'deployment-v4-enabled', window.HTMLInputElement).checked = true
 	element(window, 'deployment-form', window.HTMLFormElement).dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }))
+	await acceptOperatorDialog(window)
 	await Bun.sleep(30)
 	expect(deploymentRequests.at(-1)).toEqual({ uniswapV2Enabled: true, uniswapV3Enabled: true, uniswapV4Enabled: true })
 	releaseConnectivity?.()

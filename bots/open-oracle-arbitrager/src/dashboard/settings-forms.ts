@@ -306,6 +306,21 @@ export function registerFocusedSettingsForms({ api, refresh, syncControls }: Foc
 				uniswapV3Enabled: element('deployment-v3-enabled', HTMLInputElement).checked,
 				uniswapV4Enabled: element('deployment-v4-enabled', HTMLInputElement).checked,
 			}
+			const savedDeployment = loaded.deployment
+			if (savedDeployment !== undefined) {
+				const changes = (
+					[
+						['uniswapV2Enabled', 'Uniswap V2'],
+						['uniswapV3Enabled', 'Uniswap V3'],
+						['uniswapV4Enabled', 'Uniswap V4'],
+					] as const
+				).map(([field, label]) => ({
+					label,
+					before: savedDeployment[field] ? 'Enabled' : 'Disabled',
+					after: venues[field] ? 'Enabled' : 'Disabled',
+				}))
+				if (changes.some(change => change.before !== change.after) && !(await confirmOperatorAction({ title: 'Review trading venues', description: 'Enabled venues may be used for live execution after the next scan.', changes, confirmLabel: 'Save venues' }))) return 'Save canceled.'
+			}
 			loadDeployment(decodeDeployment(await put('/api/deployment', venues)).deployment, 'deployment-form')
 			return 'Venues saved.'
 		})

@@ -15,8 +15,9 @@ import { createSettingsNavigation } from '@zoltar/bot-shared/dashboard/settings-
 import { markFormClean, trackForm } from '@zoltar/bot-shared/dashboard/form-state'
 import { urlLines } from '@zoltar/bot-shared/dashboard/forms'
 import { registerGoLiveForms } from './go-live-forms.ts'
-import { readMarketConfiguration, renderMarketConfiguration } from './market-configuration-editor.tsx'
+import { readMarketConfiguration, renderMarketConfiguration, reviewableRootMarket } from './market-configuration-editor.tsx'
 import { renderOverviewAlerts, renderOverviewHealth, renderOverviewMetrics } from './overview-panels.ts'
+import { strategyReviewRows } from './strategy-review.ts'
 import { element, shorten } from '@zoltar/bot-shared/dashboard/dom'
 
 const networkForm = element('network-form', HTMLFormElement)
@@ -629,7 +630,7 @@ marketConfigurationForm.addEventListener('submit', async event => {
 				title: 'Review market and pool changes',
 				description: 'Market sources and desired pools can change which assets the bot funds on the next scan.',
 				confirmLabel: 'Save markets',
-				changes: reviewChangeRows({ root: currentConfiguration?.centralizedMarkets, children: currentConfiguration?.childMarketConfigurations, desiredPools: currentConfiguration?.desiredPools }, value),
+				changes: reviewChangeRows({ root: reviewableRootMarket(currentConfiguration?.centralizedMarkets), children: currentConfiguration?.childMarketConfigurations, desiredPools: currentConfiguration?.desiredPools }, value),
 			}))
 		) {
 			actionStatus(marketConfigurationSaveStatus, '')
@@ -877,10 +878,7 @@ strategyForm.addEventListener('submit', async event => {
 	next['logLookbackBlocks'] = logLookbackBlocks
 	next['historicalLogRecovery'] = historicalLogRecovery instanceof HTMLInputElement && historicalLogRecovery.checked
 	try {
-		const changes = Object.entries(next).flatMap(([name, after]) => {
-			const before = savedConfiguration.strategy[name]
-			return String(before) === String(after) ? [] : [{ label: name.replace(/([A-Z])/g, ' $1').toLowerCase(), before: String(before ?? '—'), after: String(after) }]
-		})
+		const changes = strategyReviewRows(savedConfiguration, next)
 		if (changes.length > 0 && !(await confirmOperatorAction({ title: 'Review liquidation strategy', description: 'Changes to amounts and automation apply on the next scan. Amounts use the units shown in the form.', changes, confirmLabel: 'Save strategy' }))) {
 			actionStatus(strategyStatus, '')
 			return

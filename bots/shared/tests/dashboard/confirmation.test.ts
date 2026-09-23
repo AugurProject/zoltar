@@ -7,3 +7,14 @@ test('review shows exact nested before and after settings', () => {
 		{ label: 'Setting › pools › 1 › questionId', before: '1', after: '2' },
 	])
 })
+
+test('review expands added and removed sources into their fields', () => {
+	expect(reviewChangeRows({ sources: [] }, { sources: [{ address: '0xabc', minimumDepthEth: '2' }] })).toEqual([
+		{ label: 'Setting › sources › 1 › address', before: '—', after: '0xabc' },
+		{ label: 'Setting › sources › 1 › minimumDepthEth', before: '—', after: '2' },
+	])
+	expect(reviewChangeRows({ sources: [{ address: '0xabc', minimumDepthEth: '2' }] }, { sources: [] })).toEqual([
+		{ label: 'Setting › sources › 1 › address', before: '0xabc', after: '—' },
+		{ label: 'Setting › sources › 1 › minimumDepthEth', before: '2', after: '—' },
+	])
+})
