@@ -18,7 +18,7 @@ export const sourceSizeAllowances = new Map<string, SourceSizeAllowance>([
 		['bots/chaos/src/monitoring/discovery.ts', 1020],
 		['bots/chaos/src/operations/trading.ts', 1726],
 		['bots/chaos/src/state/operator-state.ts', 1162],
-		['bots/chaos/src/runtime/operator.ts', 899],
+		['bots/chaos/src/runtime/operator.ts', 895],
 		['bots/chaos/src/monitoring/topology-cache.ts', 1043],
 		['bots/chaos/src/dashboard/dashboard-server.ts', 989],
 		['bots/chaos/src/state/protocol-index-store.ts', 1000],

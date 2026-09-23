@@ -1,3 +1,4 @@
+import { withRetirementSweepBarrier } from './signing.ts'
 import { assertIncludedTransactionsCanonical } from './inclusion-journal.ts'
 import { commitReceiptDisposition } from './receipt-disposition.ts'
 import { assertSubmissionWindowOpen, prepareSignedTransaction, submitSignedTransaction } from '@zoltar/bot-shared/execution/transaction-submission'
@@ -159,7 +160,7 @@ async function executeStep(environment: ExecutionEnvironment, plan: OperationPla
 		gasEstimate,
 		lastValidBlockNumber,
 		nonce,
-		signTransaction: account.signTransaction,
+		signTransaction: withRetirementSweepBarrier(environment, plan, account.signTransaction),
 		to: step.to,
 		value: unsignedQuantity(step.value, `${step.label} value`),
 	})
