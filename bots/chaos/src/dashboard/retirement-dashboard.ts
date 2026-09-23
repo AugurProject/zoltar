@@ -189,7 +189,7 @@ export function createRetirementDashboard(options: RetirementDashboardOptions) {
 				if (
 					!(await confirmOperatorAction({
 						title: 'Register V3 position',
-						description: 'Verify these position details and workflow evidence before registering.',
+						description: 'Adds this position to retirement reconciliation; canonical verification follows.',
 						phrase,
 						confirmLabel: 'Register position',
 						changes: [
@@ -227,16 +227,14 @@ export function createRetirementDashboard(options: RetirementDashboardOptions) {
 				if (
 					!(await confirmOperatorAction({
 						title: 'Accept residuals',
-						description: 'Review unresolved assets and the replacement deployment profile before accepting.',
+						description: 'Records acceptance of retained assets for the replacement deployment.',
 						phrase,
 						confirmLabel: 'Accept residuals',
 						changes: [
 							{ label: 'Target deployment ID', before: '—', after: targetProfileId },
 							{ label: 'Review rationale', before: '—', after: reason },
-							{ label: 'Completion block', before: '—', after: evidence.blockNumber },
-							{ label: 'Completion block hash', before: '—', after: evidence.blockHash },
-							...evidence.residuals.map((residual, index) => ({ label: `Residual ${(index + 1).toString()}`, before: '—', after: residualDescription(residual) })),
 						],
+						evidence: [{ label: 'Completion block', value: evidence.blockNumber }, { label: 'Completion block hash', value: evidence.blockHash }, ...evidence.residuals.map((residual, index) => ({ label: `Residual ${(index + 1).toString()}`, value: residualDescription(residual) }))],
 					}))
 				)
 					return

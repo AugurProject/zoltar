@@ -2,6 +2,7 @@ import { h, render } from 'preact'
 import { useEffect, useRef, useState } from 'preact/hooks'
 
 type Change = { label: string; before: string; after: string }
+type Evidence = { label: string; value: string }
 
 function reviewLabel(path: string) {
 	const parts = path.split(' › ').filter(part => part !== 'Setting' && part !== 'root')
@@ -45,6 +46,7 @@ type Confirmation = {
 	description: string
 	phrase?: string | undefined
 	changes?: readonly Change[] | undefined
+	evidence?: readonly Evidence[] | undefined
 	confirmLabel?: string | undefined
 }
 
@@ -90,9 +92,16 @@ export function confirmOperatorAction(options: Confirmation): Promise<boolean> {
 					},
 					h('h2', null, options.title),
 					h('p', null, options.description),
-					options.changes === undefined || options.changes.length === 0
+					(options.changes?.length ?? 0) + (options.evidence?.length ?? 0) === 0
 						? undefined
-						: h('div', { class: 'operator-review-rows' }, ...options.changes.map(change => h('div', { class: 'operator-review-row', key: change.label }, h('strong', null, change.label), h('span', null, change.before), h('span', { 'aria-hidden': true }, '→'), h('span', null, change.after)))),
+						: h(
+								'div',
+								{ class: 'operator-review-rows' },
+								...(options.changes ?? []).map(change => h('div', { class: 'operator-review-row', key: change.label }, h('strong', null, change.label), h('span', null, change.before), h('span', { 'aria-hidden': true }, '→'), h('span', null, change.after))),
+								options.evidence === undefined || options.evidence.length === 0
+									? undefined
+									: h('section', { class: 'operator-evidence', 'aria-label': 'Existing evidence' }, h('h3', null, 'Existing evidence'), h('dl', null, ...options.evidence.map(item => h('div', { class: 'operator-evidence-row', key: item.label }, h('dt', null, item.label), h('dd', null, item.value))))),
+							),
 					options.phrase === undefined
 						? undefined
 						: h(

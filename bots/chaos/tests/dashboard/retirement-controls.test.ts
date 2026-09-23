@@ -238,6 +238,8 @@ browserTest(
 			expect(await review()).toEqual([
 				['Target deployment ID', 'profile:replacement'],
 				['Review rationale', 'Reviewed retained REP and accepted replacement.'],
+			])
+			expect(await evaluate("[...document.querySelectorAll('.operator-evidence-row')].map(row => [row.querySelector('dt')?.textContent, row.querySelector('dd')?.textContent])")).toEqual([
 				['Completion block', '123456'],
 				['Completion block hash', blockHash],
 				['Residual 1', '20000000000000000 REP base units · operator-accepted: Old claim is no longer redeemable'],

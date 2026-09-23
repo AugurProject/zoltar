@@ -260,6 +260,37 @@ fieldset {
 	overflow-wrap: anywhere;
 }
 
+.operator-evidence {
+	padding: 0.6rem 0.4rem 0;
+	border-top: 1px solid var(--operator-border, var(--border-default));
+}
+
+.operator-evidence h3 {
+	margin: 0 0 0.35rem;
+	font-size: 0.9rem;
+}
+
+.operator-evidence dl {
+	margin: 0;
+}
+
+.operator-evidence-row {
+	display: grid;
+	grid-template-columns: minmax(7rem, 1fr) minmax(0, 2fr);
+	gap: 0.5rem;
+	padding: 0.4rem 0;
+	border-bottom: 1px solid var(--operator-border, var(--border-default));
+	overflow-wrap: anywhere;
+}
+
+.operator-evidence-row dt {
+	font-weight: 700;
+}
+
+.operator-evidence-row dd {
+	margin: 0;
+}
+
 @media (max-width: 850px) {
 	.operator-health-grid {
 		grid-template-columns: repeat(2, minmax(0, 1fr));
