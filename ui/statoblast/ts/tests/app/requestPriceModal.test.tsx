@@ -168,6 +168,7 @@ test('shows preparation failure with retry and keeps manual entry available', as
 		await act(() => fireEvent.click(queries.getByRole('button', { name: 'Fetch from Uniswap' })))
 		await settle()
 		expect(queries.getByRole('alert').textContent).toContain('Uniswap quote unavailable.')
+		expect(document.querySelector('.price-request-preview .global-transaction-notice')).not.toBeNull()
 		expect(queries.getByRole('alert').closest('.transaction-step-content') === null).toBe(true)
 		expect(queries.queryByRole('status')).toBeNull()
 		expect(queries.queryByRole('button', { name: 'Review and retry' })).toBeNull()
@@ -227,6 +228,7 @@ test('allows another price request after a failed transaction step', async () =>
 test('keeps submitted funding and pool details beside the original action after failure', async () => {
 	const dom = installDomEnvironment()
 	const presentation = signal<GlobalTransactionPresentation | undefined>(undefined)
+	const guard = signal<string | undefined>(undefined)
 	const onConfirm = async (_request: RequestPriceReview, signal?: AbortSignal) => {
 		const controller = createTransactionStepController(signal)
 		controller.setPlan([
@@ -251,7 +253,7 @@ test('keeps submitted funding and pool details beside the original action after 
 	function Harness() {
 		return (
 			<GlobalTransactionPresentationProvider transaction={presentation.value}>
-				<RequestPriceModal {...props} onConfirm={onConfirm} />
+				<RequestPriceModal {...props} confirmationGuardMessage={guard.value} onConfirm={onConfirm} />
 				<TransactionStepsModal contextKey='wallet' />
 			</GlobalTransactionPresentationProvider>
 		)
@@ -264,6 +266,10 @@ test('keeps submitted funding and pool details beside the original action after 
 		await act(() => fireEvent.click(queries.getByRole('button', { name: /^Request price/ })))
 		await settle()
 		expect(queries.getByRole('alert').textContent).toContain('nonce too low')
+		expect(document.querySelector('.price-request-preview .global-transaction-notice')).not.toBeNull()
+		expect(queries.getByText('Failed')).not.toBeNull()
+		expect(within(queries.getByRole('alert')).getByText('Attempted REP/ETH price')).not.toBeNull()
+		expect(within(queries.getByRole('alert')).getByText('2')).not.toBeNull()
 		expect(queries.getByText('2 REP')).not.toBeNull()
 		expect(queries.getByText('1 WETH')).not.toBeNull()
 		expect(queries.getByText('Security Pool Address').parentElement?.textContent).toContain(review.securityPoolAddress)
@@ -271,6 +277,12 @@ test('keeps submitted funding and pool details beside the original action after 
 		expect(queries.getByText('Technical details')).not.toBeNull()
 		expect(queries.getByText('requestPrice')).not.toBeNull()
 		expect(queries.getByRole('button', { name: /^Request price/ }).hasAttribute('disabled')).toBe(false)
+		await act(() => fireEvent.input(queries.getByRole('textbox', { name: 'Open Oracle REP/ETH starting price' }), { target: { value: '3' } }))
+		expect(within(queries.getByRole('alert')).getByText('2')).not.toBeNull()
+		guard.value = 'A pending report blocks another request.'
+		await settle()
+		expect(queries.getByText('A pending report blocks another request.')).not.toBeNull()
+		expect(queries.getByRole('button', { name: /^Request price/ }).hasAttribute('disabled')).toBe(true)
 	} finally {
 		await rendered.cleanup()
 		dom.cleanup()

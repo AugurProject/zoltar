@@ -1127,11 +1127,15 @@ main.global-transaction-tray-open :is(a, button, input, select, summary, textare
 	padding-top: 0;
 }
 
-.operation-modal-transaction-notice {
+.operation-modal-panel .global-transaction-notice {
 	width: 100%;
 	max-height: none;
-	border-radius: var(--radius-control);
-	box-shadow: var(--glow-inset-subtle);
+	padding: 0.9rem 0 0;
+	border: 0;
+	border-top: 1px solid var(--border-default);
+	border-radius: 0;
+	background: transparent;
+	box-shadow: none;
 }
 
 .workflow-summary-strip-steps {

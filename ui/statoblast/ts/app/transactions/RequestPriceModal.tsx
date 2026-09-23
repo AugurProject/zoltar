@@ -16,9 +16,10 @@ import { embeddedTransactionSteps } from '@zoltar/ui-core-shared/components/Tran
 import { PriceRequestPreview } from './PriceRequestPreview.js'
 import { TransactionStepsContent } from '@zoltar/ui-core-shared/components/TransactionStepsContent.js'
 import { transactionSteps } from '@zoltar/ui-core-shared/transactions/transactionSteps.js'
-import { TransactionObjectContext } from '@zoltar/ui-core-shared/components/TransactionObjectContext.js'
 import { AddressValue } from '@zoltar/ui-core-shared/components/AddressValue.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
+import * as transactionCopy from '@zoltar/ui-core-shared/copy/transaction.js'
+import type { GlobalTransactionPresentation } from '@zoltar/ui-core-shared/types/components.js'
 import type { FailedPricePlan } from './PriceRequestPreview.js'
 
 async function fetchUniswapPrice(review: NonNullable<RequestPriceModalProps['review']>) {
@@ -34,6 +35,7 @@ export function RequestPriceModal({ review, onConfirm, onClose, canRequest, conf
 	const [manualRequestRequired, setManualRequestRequired] = useState(false)
 	const [failureLatched, setFailureLatched] = useState(false)
 	const [failureMessage, setFailureMessage] = useState<string>()
+	const [failedPrice, setFailedPrice] = useState<string>()
 	const [failedPlan, setFailedPlan] = useState<FailedPricePlan>()
 	const [running, setRunning] = useState(false)
 	const [attempted, setAttempted] = useState<string>()
@@ -57,6 +59,27 @@ export function RequestPriceModal({ review, onConfirm, onClose, canRequest, conf
 	const currentAttemptError = attempted === key && !running && presentation?.tone === 'error' ? presentation.detail : undefined
 	const error = failureLatched ? failureMessage : currentAttemptError
 	const failedCurrentAttempt = (key !== undefined && attempted === key && !running && presentation?.tone === 'error') || (showSteps && workflow?.steps.some(step => step.phase === 'failed'))
+	const failedPresentation = presentation?.tone === 'error' ? presentation : undefined
+	const technicalRows = failedPresentation?.technicalRows ?? failedPlan?.technicalRows
+	const failureNotice: GlobalTransactionPresentation | undefined =
+		!failureLatched || typeof error !== 'string'
+			? undefined
+			: {
+					...failedPresentation,
+					tone: 'error',
+					title: failedPresentation?.title ?? transactionCopy.requestingPrice,
+					detail: error,
+					rows: [
+						...(failedPresentation?.rows?.length || review === undefined
+							? (failedPresentation?.rows ?? [])
+							: [
+									{ label: commonCopy.securityPoolAddress, value: <AddressValue address={review.securityPoolAddress} /> },
+									{ label: commonCopy.oracleManager, value: <AddressValue address={review.managerAddress} /> },
+								]),
+						...(failedPrice === undefined ? [] : [{ label: priceRequestCopy.attemptedRepPerEthPrice, value: failedPrice }]),
+					],
+					...(technicalRows === undefined ? {} : { technicalRows }),
+				}
 	const estimatePrompt = validPrice ? priceRequestCopy.preparingPriceRequest : priceRequestCopy.enterPriceEstimate
 	let previewPrompt = estimatePrompt
 	if (fetching) previewPrompt = priceRequestCopy.fetchingUniswapPrice
@@ -71,6 +94,7 @@ export function RequestPriceModal({ review, onConfirm, onClose, canRequest, conf
 		setManualRequestRequired(false)
 		setFailureLatched(false)
 		setFailureMessage(undefined)
+		setFailedPrice(undefined)
 		setFailedPlan(undefined)
 	}, [review])
 	useLayoutEffect(() => {
@@ -78,6 +102,7 @@ export function RequestPriceModal({ review, onConfirm, onClose, canRequest, conf
 		setFailureLatched(true)
 		setManualRequestRequired(true)
 		setFailureMessage(workflow?.steps.find(step => step.phase === 'failed')?.error ?? (typeof presentation?.detail === 'string' ? presentation.detail : undefined))
+		setFailedPrice(price)
 		if (workflow !== undefined) {
 			setFailedPlan({
 				funding: workflow.steps.flatMap(step => step.tokenFunding ?? []),
@@ -188,14 +213,6 @@ export function RequestPriceModal({ review, onConfirm, onClose, canRequest, conf
 			<TransactionActionButtonLockProvider locked={false}>
 				<OperationModal embedTransactionSteps={false} isOpen={review !== undefined} title={poolCopy.requestNewPriceTitle} onClose={close} closeDisabled={sending}>
 					{priceControls}
-					{failureLatched && review !== undefined ? (
-						<TransactionObjectContext
-							items={[
-								{ label: commonCopy.securityPoolAddress, value: <AddressValue address={review.securityPoolAddress} /> },
-								{ label: commonCopy.oracleManager, value: <AddressValue address={review.managerAddress} /> },
-							]}
-						/>
-					) : undefined}
 					{showSteps ? (
 						<GlobalTransactionPresentationProvider transaction={presentation}>
 							<TransactionStepsContent contextKey={key ?? ''} onClose={close} />
@@ -204,8 +221,9 @@ export function RequestPriceModal({ review, onConfirm, onClose, canRequest, conf
 						<PriceRequestPreview
 							requestValue={review?.requestValueAttoEth}
 							failedPlan={failedPlan}
+							failureNotice={failureNotice}
 							reason={confirmationGuardMessage ?? priceError ?? (typeof error === 'string' ? error : undefined) ?? previewPrompt}
-							error={confirmationGuardMessage ?? (typeof error === 'string' ? error : undefined)}
+							error={confirmationGuardMessage ?? (failureNotice === undefined && typeof error === 'string' ? error : undefined)}
 							preparing={valid && !manualRequestRequired && (running || attempted !== key)}
 							hideReason={!validPrice || priceError !== undefined || error !== undefined || confirmationGuardMessage !== undefined}
 							onClose={close}
@@ -215,6 +233,7 @@ export function RequestPriceModal({ review, onConfirm, onClose, canRequest, conf
 											setManualRequestRequired(false)
 											setFailureLatched(false)
 											setFailureMessage(undefined)
+											setFailedPrice(undefined)
 											setFailedPlan(undefined)
 											setRetry(value => value + 1)
 										}
