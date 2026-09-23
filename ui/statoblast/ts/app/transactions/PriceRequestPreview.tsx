@@ -104,6 +104,11 @@ export function PriceRequestPreview({
 								<button className='secondary' type='button' onClick={onRetry ?? onClose}>
 									{onRetry === undefined ? commonCopy.cancel : transactionCopy.reviewAndRetry}
 								</button>
+								{onRetry === undefined ? undefined : (
+									<button className='primary' type='button' onClick={onClose}>
+										{transactionCopy.dismiss}
+									</button>
+								)}
 							</div>
 							<div className='transaction-step-hash' />
 						</div>

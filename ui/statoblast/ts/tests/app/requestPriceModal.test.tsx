@@ -168,6 +168,7 @@ test('shows preparation failure with retry and keeps manual entry available', as
 		expect(queries.getByRole('alert').textContent).toContain('Uniswap quote unavailable.')
 		expect(queries.getByRole('alert').closest('.transaction-step-content') === null).toBe(true)
 		expect(queries.queryByRole('status')).toBeNull()
+		expect(queries.getByRole('button', { name: 'Dismiss' }).classList.contains('primary')).toBe(true)
 		await act(() => fireEvent.click(queries.getByRole('button', { name: 'Review and retry' })))
 		await settle()
 		expect(attempts).toBe(1)
