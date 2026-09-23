@@ -526,27 +526,27 @@ contract SecurityPoolForker is SecurityPoolForkerBase {
 	}
 
 	function _finalizeBackingUnitsAfterAuction(ISecurityPool securityPool, SecurityPoolForkerForkData storage data, SecurityPoolForkerForkData storage parentData, uint256 repPurchasedAttoRep, uint256 disputeStakedRepSoldAttoRep) private {
-		uint256 poolRepBeforeAttoRep = _getPoolAuctionableRepAtFork(parentData);
-		uint256 poolRepAfterAttoRep = poolRepBeforeAttoRep + disputeStakedRepSoldAttoRep;
-		if (poolRepAfterAttoRep == 0 || repPurchasedAttoRep == 0) {
+		uint256 existingPoolBackingUnits = _getPoolAuctionableRepAtFork(parentData);
+		uint256 poolHeldRepAtFinalizationAttoRep = existingPoolBackingUnits + disputeStakedRepSoldAttoRep;
+		if (poolHeldRepAtFinalizationAttoRep == 0 || repPurchasedAttoRep == 0) {
 			data.unassignedRepBackingUnitsAtFinalization = securityPool.totalRepBackingUnits() - data.migratedAttoRep;
 			return;
 		}
 		// Purchases stay pool-held; subtract them after escrow transfers its sold share.
-		uint256 incumbentRepAfterAttoRep = poolRepAfterAttoRep - repPurchasedAttoRep;
+		uint256 existingOwnersResidualRepAttoRep = poolHeldRepAtFinalizationAttoRep - repPurchasedAttoRep;
 		uint256 auctionRepBackingUnits;
 		uint256 totalRepBackingUnitsAtFinalization;
-		if (incumbentRepAfterAttoRep == 0) {
+		if (existingOwnersResidualRepAttoRep == 0) {
 			// A full-cap auction has no positive REP residue from which to derive a
 			// dilution ratio. Bound auction ownership at the fixed scale while retaining
 			// child-local migrated units so sub-haircut claims cannot resurrect.
-			auctionRepBackingUnits = Math.mulDiv(poolRepAfterAttoRep, SecurityPoolUtils.PRICE_PRECISION, 1);
+			auctionRepBackingUnits = Math.mulDiv(poolHeldRepAtFinalizationAttoRep, SecurityPoolUtils.PRICE_PRECISION, 1);
 			totalRepBackingUnitsAtFinalization = auctionRepBackingUnits + data.migratedAttoRep;
 		} else {
-			// Fork-time pool-held REP is the incumbent unit count, including unmigrated ownership but excluding sold escrow REP.
-			// Round the complete ratio once; an integer units-per-REP rate would over-dilute incumbents.
-			totalRepBackingUnitsAtFinalization = Math.mulDiv(poolRepBeforeAttoRep, poolRepAfterAttoRep, incumbentRepAfterAttoRep, Math.Rounding.Ceil);
-			auctionRepBackingUnits = totalRepBackingUnitsAtFinalization - poolRepBeforeAttoRep;
+			// Before the auction, pool-held REP equals backing units for all existing pool owners, including unmigrated vaults.
+			// Round the complete ratio once; an integer units-per-REP rate would over-dilute those owners.
+			totalRepBackingUnitsAtFinalization = Math.mulDiv(existingPoolBackingUnits, poolHeldRepAtFinalizationAttoRep, existingOwnersResidualRepAttoRep, Math.Rounding.Ceil);
+			auctionRepBackingUnits = totalRepBackingUnitsAtFinalization - existingPoolBackingUnits;
 		}
 		securityPool.setTotalRepBackingUnits(totalRepBackingUnitsAtFinalization);
 		data.auctionRepBackingUnits = auctionRepBackingUnits;
