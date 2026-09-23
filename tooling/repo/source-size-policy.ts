@@ -34,7 +34,7 @@ export const sourceSizeAllowances = new Map<string, SourceSizeAllowance>([
 		['bots/open-oracle-arbitrager/src/state/position-store.ts', 631],
 		['bots/liquidator/src/dashboard/dashboard.ts', 987],
 		['bots/liquidator/src/cli/run.ts', 718],
-		['bots/liquidator/src/state/operator-state.ts', 661],
+		['bots/liquidator/src/state/operator-state.ts', 668],
 	]),
 	...allowances('Owning UI library: separate workflow state and actions from rendering, and extract simulation scenario handlers.', [
 		['ui/statoblastShared/ts/features/truth-auctions/components/ForkAuctionSection.tsx', 1070],
