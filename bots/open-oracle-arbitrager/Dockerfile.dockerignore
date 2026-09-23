@@ -66,6 +66,10 @@ shared/*/ts/**/*.d.ts.map
 !ui/coreShared/
 !ui/
 !ui/coreShared/package.json
+!ui/coreShared/ts/
+!ui/coreShared/ts/**
+!ui/coreShared/css/
+!ui/coreShared/css/tokens.css
 !ui/statoblast/
 !ui/statoblast/package.json
 !ui/statoblastShared/
