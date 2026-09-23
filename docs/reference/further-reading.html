@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<meta name="description" content="Where the operator, indexer, test, and research material lives outside this documentation site." />
+		<title>Further reading</title>
+		<link rel="stylesheet" href="../assets/css/shared-docs.css" />
+		<link rel="stylesheet" href="../assets/css/docsShell.css" />
+	</head>
+	<body class="doc-openoracle">
+		<main id="main-content">
+			<header>
+				<p class="kicker">Reference</p>
+				<h1>Further reading</h1>
+				<p>This site covers the protocol. The material below lives next to the code it describes and is not searchable from here. Each link opens the current version on GitHub.</p>
+			</header>
+			<section id="operators">
+				<h2>Run something</h2>
+				<table>
+					<thead>
+						<tr>
+							<th>Document</th>
+							<th>Who it is for</th>
+							<th>What it covers</th>
+						</tr>
+					</thead>
+					<tbody>
+						<tr>
+							<td><a href="https://github.com/AugurProject/zoltar/blob/main/bots/liquidator/README.md">Statoblast liquidator</a></td>
+							<td>Vault operators and keepers</td>
+							<td>Monitoring pool health, staging and executing liquidations, and the bot's dashboard.</td>
+						</tr>
+						<tr>
+							<td><a href="https://github.com/AugurProject/zoltar/blob/main/bots/open-oracle-arbitrager/README.md">OpenOracle arbitrager</a></td>
+							<td>Price correctors</td>
+							<td>Finding mispriced REP/ETH reports, funding disputes against Uniswap quotes, executor deployment, and settlement tracking.</td>
+						</tr>
+						<tr>
+							<td><a href="https://github.com/AugurProject/zoltar/blob/main/bots/chaos/README.md">Chaos bot</a> and its <a href="https://github.com/AugurProject/zoltar/blob/main/bots/chaos/OPERATOR_REFERENCE.md">operator reference</a></td>
+							<td>Testnet operators</td>
+							<td>Exercising every permissionless protocol path with real transactions, safety limits, and runtime controls.</td>
+						</tr>
+						<tr>
+							<td><a href="https://github.com/AugurProject/zoltar/blob/main/augurScan/README.md">augurScan</a>, its <a href="https://github.com/AugurProject/zoltar/blob/main/augurScan/OPERATIONS.md">operations guide</a>, <a href="https://github.com/AugurProject/zoltar/blob/main/augurScan/API_REFERENCE.md">API reference</a>, and <a href="https://github.com/AugurProject/zoltar/blob/main/augurScan/STATE_MODEL.md">state model</a></td>
+							<td>Indexer operators and integrators</td>
+							<td>The read-only protocol explorer: deployment, backup and upgrade, the HTTP API, and how retained evidence differs from the current view.</td>
+						</tr>
+						<tr>
+							<td><a href="https://github.com/AugurProject/zoltar/blob/main/testnetwork/README.md">Local test network</a> and <a href="https://github.com/AugurProject/zoltar/blob/main/reth/README.md">Sepolia Reth node</a></td>
+							<td>Developers and node operators</td>
+							<td>Docker Compose setups for the repository-pinned Anvil chain and a pruned Sepolia execution and consensus pair.</td>
+						</tr>
+					</tbody>
+				</table>
+			</section>
+			<section id="code">
+				<h2>Read the code</h2>
+				<table>
+					<thead>
+						<tr>
+							<th>Document</th>
+							<th>Who it is for</th>
+							<th>What it covers</th>
+						</tr>
+					</thead>
+					<tbody>
+						<tr>
+							<td><a href="https://github.com/AugurProject/zoltar/blob/main/README.md">Repository README</a></td>
+							<td>Contributors</td>
+							<td>Setup, local development, simulation mode, common commands, and validation.</td>
+						</tr>
+						<tr>
+							<td><a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/README.md">Contract layout</a> and the <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/README.md">Statoblast contract directory</a></td>
+							<td>Auditors and contract developers</td>
+							<td>Why source paths are stable, which directory owns which contracts, and the OpenOracle vendoring boundary.</td>
+						</tr>
+						<tr>
+							<td><a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/SECURITY-REGRESSIONS.md">Security regression suite</a></td>
+							<td>Auditors</td>
+							<td>The focused tests that reproduce past security findings and how to add one.</td>
+						</tr>
+						<tr>
+							<td><a href="https://github.com/AugurProject/zoltar/blob/main/shared/README.md">Shared TypeScript packages</a> and <a href="https://github.com/AugurProject/zoltar/blob/main/ui/coreShared/README.md">core UI ownership</a></td>
+							<td>Front-end and tooling contributors</td>
+							<td>Package boundaries, build dependencies, and which layer may import which.</td>
+						</tr>
+						<tr>
+							<td><a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/statoblast/README.md">Statoblast test slices</a></td>
+							<td>Contract developers</td>
+							<td>How the split Statoblast suites are run individually and together.</td>
+						</tr>
+						<tr>
+							<td><a href="https://github.com/AugurProject/zoltar/blob/main/ui/statoblast/ts/tests/features/security-pools/workflow/README.md">Security pool workflow test slices</a></td>
+							<td>Front-end contributors</td>
+							<td>How the split security-pool workflow suites of the Statoblast UI are run individually and together.</td>
+						</tr>
+						<tr>
+							<td><a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/vendor/authorization/README.md">Token authorization provenance</a></td>
+							<td>Auditors</td>
+							<td>Where the EIP-712 and ECDSA signature helpers come from and what was changed.</td>
+						</tr>
+						<tr>
+							<td><a href="https://github.com/AugurProject/zoltar/blob/main/augurScan/src/ARCHITECTURE.md">augurScan backend boundaries</a></td>
+							<td>Indexer contributors</td>
+							<td>Which backend directory owns HTTP, scanning, storage, and evidence types.</td>
+						</tr>
+						<tr>
+							<td><a href="https://github.com/AugurProject/zoltar/blob/main/ui/zoltarShared/ts/features/README.md">UI features</a>, <a href="https://github.com/AugurProject/zoltar/blob/main/ui/zoltarShared/ts/protocol/README.md">UI protocol client</a>, and <a href="https://github.com/AugurProject/zoltar/blob/main/ui/coreShared/ts/copy/README.md">UI copy modules</a></td>
+							<td>UI contributors</td>
+							<td>Where feature components, typed contract reads and writes, and user-facing text live, and which may import which.</td>
+						</tr>
+						<tr>
+							<td><a href="https://github.com/AugurProject/zoltar/blob/main/ui/coreShared/VISUAL_FOUNDATION.md">Visual foundation</a></td>
+							<td>UI contributors</td>
+							<td>The shared design tokens, product accents, and status treatments used by every interface.</td>
+						</tr>
+					</tbody>
+				</table>
+			</section>
+			<section id="research">
+				<h2>Understand the design history</h2>
+				<p>The <a href="https://github.com/AugurProject/oracle-research">oracle-research repository</a> holds the proposals, rejected alternatives, and open questions behind the protocol. It explains why the design looks the way it does; the deployed contracts and this site's reference pages describe what it actually does today.</p>
+			</section>
+		</main>
+		<script src="../assets/js/responsiveDocs.js"></script>
+		<script src="../assets/js/docsData.js"></script>
+		<script src="../assets/js/docsShell.js"></script>
+	</body>
+</html>

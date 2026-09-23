@@ -92,7 +92,7 @@
 						<tr>
 							<td><code>finalizeTruthAuction(securityPool)</code></td>
 							<td>Anyone</td>
-							<td>Truth auction started, its one-week window has passed, and <code>msg.value</code> is zero. Migrated collateral plus accepted bid ETH does not exceed current price-converted minting capacity. Combined pool-held and dispute-staked REP satisfies the associated-REP constraint for that collateral net of aggregate bad debt, while actual pool-held REP alone satisfies the migration-safety constraint. If unresolved escalation existed at fork, the game reported at completion passes the <a href="#child-game-trust-boundary">child-game trust boundary</a>.</td>
+							<td>Truth Auction started, its one-week window has passed, and <code>msg.value</code> is zero. Migrated collateral plus accepted bid ETH does not exceed current price-converted minting capacity. Combined pool-held and dispute-staked REP satisfies the associated-REP constraint for that collateral net of aggregate bad debt, while actual pool-held REP alone satisfies the migration-safety constraint. If unresolved escalation existed at fork, the game reported at completion passes the <a href="#child-game-trust-boundary">child-game trust boundary</a>.</td>
 							<td>Finalizes the ended auction, accounts migration-routed settlement collateral plus accepted bid ETH, and records every unmigrated REP backing unit, capacity unit, and proportional bad debt in an explicit nonwithdrawable unassigned position. It activates the child, fixes bidder REP-backing-unit and capacity-ownership rates, and saves the fee index. Positive-purchase auction ownership becomes fee eligible immediately; after a zero-purchase auction, the unassigned capacity remains outside fee eligibility. A nonzero repair contribution is rejected.</td>
 							<td><code>TruthAuctionFinalized</code>, auction <code>AuctionFinalized</code>, and pool accounting checkpoints; <code>TruthAuctionHaircutApplied</code> when purchased REP removes a positive escalation allocation; <code>ForkContinuationResumed</code> for an unresolved continuation</td>
 						</tr>
@@ -119,7 +119,7 @@
 						</tr>
 						<tr>
 							<td>Direct ETH transfer to <code>receive()</code></td>
-							<td>A child-pool truth auction trusted by this forker during <code>ChildPoolLinked</code></td>
+							<td>A child-pool Truth Auction trusted by this forker during <code>ChildPoolLinked</code></td>
 							<td><code>trustedAuctionAddresses[msg.sender]</code> was set when the forker linked the child and emitted <code>ChildPoolLinked</code>; configured-factory registration determines whether that lineage is canonical.</td>
 							<td>Accepts auction ETH during forker-controlled auction finalization.</td>
 							<td>No dedicated receive event; auction <code>AuctionFinalized</code> is followed by forker <code>TruthAuctionFinalized</code> and pool accounting checkpoints</td>

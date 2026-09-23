@@ -11,7 +11,7 @@ const routingCases: readonly (readonly [readonly string[], readonly CiScope[]])[
 	[['README.md'], ['docs']],
 	[['shared/README.md'], ['docs']],
 	[['ui/AGENTS.md', 'ui/trading/AGENTS.md'], ['docs']],
-	[['solidity/contracts/README.md', 'solidity/docs/trading/README.md'], ['docs']],
+	[['solidity/contracts/README.md', 'docs/how-to/trading-deploy-contracts.html'], ['docs']],
 	[['bots/chaos/README.md', 'bots/open-oracle-arbitrager/README.md', 'bots/liquidator/README.md'], ['docs']],
 	[['augurScan/src/ARCHITECTURE.md'], ['docs']],
 	[['.vscode/settings.json', '.vscode/tasks.json'], ['docs']],

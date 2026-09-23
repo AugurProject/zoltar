@@ -2,13 +2,8 @@ import { readdir, readFile } from 'node:fs/promises'
 import * as path from 'node:path'
 import { repositoryRoot } from './root.mts'
 
-const supportedModelReasoningEfforts = new Map([
-	['gpt-5.5', new Set(['high'])],
-	['gpt-5.6-luna', new Set(['low', 'medium', 'high', 'xhigh', 'max'])],
-	['gpt-5.6-sol', new Set(['low', 'medium', 'high', 'xhigh', 'max', 'ultra'])],
-	['gpt-5.6-terra', new Set(['low', 'medium', 'high', 'xhigh', 'max', 'ultra'])],
-	['gpt-6-astra', new Set(['low'])],
-])
+const requiredModel = 'gpt-6-sol'
+const requiredModelReasoningEffort = 'high'
 const requiredContractHeadings = ['## Handoff', '## Scope', '## Severity', '## Output', '## Scoring', '## Closure']
 const requiredContractOutputFragments = ['`Issues`', '`Total score: <0-100>`', 'nothing else']
 const forbiddenContractOutputFragments = ['`Acceptance criteria assessment`', '`Validation assessment`', '`Review limitations`', 'with a brief rationale', 'Specialized agents may require additional sections']
@@ -74,12 +69,8 @@ function validateAgentConfigSource(filePath: string, source: string): AgentValid
 
 	if (config['sandbox_mode'] !== 'read-only') errors.push(`${filePath}: review agents must use sandbox_mode = 'read-only'`)
 
-	const model = config['model']
-	const supportedReasoningEfforts = typeof model === 'string' ? supportedModelReasoningEfforts.get(model) : undefined
-	if (supportedReasoningEfforts === undefined) errors.push(`${filePath}: model must be one of ${[...supportedModelReasoningEfforts.keys()].join(', ')}`)
-
-	const reasoningEffort = config['model_reasoning_effort']
-	if (typeof reasoningEffort !== 'string' || supportedReasoningEfforts === undefined || !supportedReasoningEfforts.has(reasoningEffort)) errors.push(`${filePath}: model_reasoning_effort is unsupported for the selected model`)
+	if (config['model'] !== requiredModel) errors.push(`${filePath}: review agents must use model = '${requiredModel}'`)
+	if (config['model_reasoning_effort'] !== requiredModelReasoningEffort) errors.push(`${filePath}: review agents must use model_reasoning_effort = '${requiredModelReasoningEffort}'`)
 
 	const nicknames = config['nickname_candidates']
 	if (!Array.isArray(nicknames) || nicknames.length === 0 || nicknames.some(nickname => typeof nickname !== 'string' || nickname.trim() === '' || !/^[A-Za-z0-9 _-]+$/.test(nickname)) || new Set(nicknames).size !== nicknames.length) {
