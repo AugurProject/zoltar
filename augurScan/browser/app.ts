@@ -1,4 +1,5 @@
-import { $, element, number, counted, time, exactTimestamp, questionStatus } from './view-presentation.ts'
+import { $, element, number, counted, time, exactTimestamp } from './view-presentation.ts'
+import { questionStatus } from './question-time.ts'
 import { exactUnit } from './chart-view.ts'
 import { short, shortIdentifier } from './identifier-format.ts'
 

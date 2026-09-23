@@ -1,4 +1,5 @@
-import { $, element, number, counted, operationRow, operationsPanel, stateHeader, historyBlockRangeLabel, yesNoCheckpoint, questionStatus } from './view-presentation.ts'
+import { $, element, number, counted, operationRow, operationsPanel, stateHeader, historyBlockRangeLabel, yesNoCheckpoint } from './view-presentation.ts'
+import { questionDateLabel, questionStatus } from './question-time.ts'
 import { exactUnit, metricCard, chartCard, staticField, chartNumericValue } from './chart-view.ts'
 import { short, shortIdentifier } from './identifier-format.ts'
 import { type EntityHistory, type PoolRecord, type QuestionRecord, type SelectEntityOptions, type StateCatalog, type StateEntity, type StateTab, type UniverseRecord, type VaultRecord } from './browser-types.ts'
@@ -320,11 +321,11 @@ export function createEntityDetailView(context: EntityDetailViewContext) {
 		definition.append(outcomes)
 		const timeline = element('div', 'timeline')
 		for (const [label, value] of [
-			['Created', question.created_timestamp],
-			['Starts', question.start_time],
-			['Ends', question.end_time],
+			['Created', new Date(question.created_timestamp).toLocaleDateString('en-GB')],
+			['Starts', questionDateLabel(question.start_time)],
+			['Ends', questionDateLabel(question.end_time)],
 		] as const)
-			timeline.append(element('div', 'timeline-step', `${label} · ${new Date(value).toLocaleDateString('en-GB')}`))
+			timeline.append(element('div', 'timeline-step', `${label} · ${value}`))
 		definition.append(timeline)
 		fragment.append(definition)
 		const usage = element('section', 'static-card')

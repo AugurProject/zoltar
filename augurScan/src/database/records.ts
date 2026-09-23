@@ -50,6 +50,35 @@ export type IndexedBlock = {
 	readonly logScanCursors: readonly LogScanCursor[]
 }
 
+// Receipt discovery order is not chain order. Validate block-global positions before
+// any causal projections, including callers that bypass RPC ingestion.
+export const canonicalBlockLogs = (block: Pick<IndexedBlock, 'number' | 'hash' | 'logs'>): StoredLog[] => {
+	for (const log of block.logs) {
+		if (log.blockNumber !== block.number || log.blockHash.toLowerCase() !== block.hash.toLowerCase()) throw new DatabaseConsistencyError('Log does not belong to the persisted block')
+		if (!Number.isSafeInteger(log.logIndex) || log.logIndex < 0 || !Number.isSafeInteger(log.transactionIndex) || log.transactionIndex < 0) throw new DatabaseConsistencyError('Log has an invalid canonical position')
+	}
+	const logs = [...block.logs].sort((left, right) => left.logIndex - right.logIndex)
+	let previous: StoredLog | undefined
+	for (const log of logs) {
+		if (previous !== undefined) {
+			if (log.transactionIndex < previous.transactionIndex) throw new DatabaseConsistencyError('Log indexes disagree with transaction order')
+			if (log.transactionIndex === previous.transactionIndex && log.transactionHash.toLowerCase() !== previous.transactionHash.toLowerCase()) throw new DatabaseConsistencyError('Transaction index identifies different transactions')
+			if (
+				log.logIndex === previous.logIndex &&
+				(log.transactionIndex !== previous.transactionIndex ||
+					log.transactionHash.toLowerCase() !== previous.transactionHash.toLowerCase() ||
+					log.address.toLowerCase() !== previous.address.toLowerCase() ||
+					log.data !== previous.data ||
+					log.topics.length !== previous.topics.length ||
+					log.topics.some((topic, index) => topic !== previous?.topics[index]))
+			)
+				throw new DatabaseConsistencyError('Conflicting logs share a block-global log index')
+		}
+		previous = log
+	}
+	return logs
+}
+
 export type ContractDeploymentObservation = {
 	readonly contractAddress: Address
 	readonly checkedBlock: bigint

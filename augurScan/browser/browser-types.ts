@@ -213,7 +213,9 @@ export type QuestionRecord = {
 	title: string
 	description: string
 	created_timestamp: string
+	/** Exact uint48 Unix seconds, serialized as decimal text. */
 	start_time: string
+	/** Exact uint48 Unix seconds, serialized as decimal text. */
 	end_time: string
 	num_ticks: string
 	display_value_min: string

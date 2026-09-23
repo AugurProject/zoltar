@@ -1,6 +1,5 @@
 import { shortIdentifier } from './identifier-format.ts'
 import { requiredElementRole } from './dom-elements.ts'
-import { type QuestionRecord } from './browser-types.ts'
 
 export function $(selector: '#detail-dialog'): HTMLDialogElement
 
@@ -115,11 +114,4 @@ export const stateHeader = (eyebrow: string, title: string, subtitle: string, ki
 export const yesNoCheckpoint = (value: unknown) => {
 	if (value === undefined) return 'No checkpoint'
 	return value ? 'Yes' : 'No'
-}
-
-export const questionStatus = (question: QuestionRecord): string => {
-	const now = Date.now()
-	if (now < new Date(question.start_time).getTime()) return 'Scheduled'
-	if (now < new Date(question.end_time).getTime()) return 'Open'
-	return 'Ended'
 }

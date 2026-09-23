@@ -85,7 +85,7 @@ export const expectedSchemaLayout = (schema: string, version: SupportedSchemaVer
 	}
 	for (const match of normalizedSchema.matchAll(/CREATE TABLE public\.([a-z_][a-z0-9_]*) \(\n([\s\S]*?)\n\);/g)) {
 		const [, table, body] = match
-		if (table === undefined || body === undefined || (version === INITIAL_MIGRATABLE_SCHEMA_VERSION && historicalIntegrityTables.has(table)) || (version !== CURRENT_SCHEMA_VERSION && ownershipTables.has(table))) continue
+		if (table === undefined || body === undefined || (version === INITIAL_MIGRATABLE_SCHEMA_VERSION && historicalIntegrityTables.has(table)) || ((version === '1' || version === '2') && ownershipTables.has(table))) continue
 		relations.add(`table:${table}`)
 		for (const sourceLine of body.split('\n')) {
 			const line = sourceLine.trim().replace(/,$/, '')
@@ -105,7 +105,8 @@ export const expectedSchemaLayout = (schema: string, version: SupportedSchemaVer
 			const defaultMatch = /\bDEFAULT ([\s\S]*?)(?=\s+NOT NULL|\s+GENERATED (?:ALWAYS|BY DEFAULT) AS IDENTITY|$)/.exec(remainder)
 			const identity = identityGeneration(remainder)
 			const defaultExpression = defaultOverrides.get(`${table}.${column}`) ?? defaultMatch?.[1]
-			columns.add(columnSignature(table, column, type, /\bNOT NULL\b/.test(remainder), identity, defaultExpression))
+			const columnType = version !== CURRENT_SCHEMA_VERSION && table === 'questions' && (column === 'start_time' || column === 'end_time') ? 'timestamp with time zone' : type
+			columns.add(columnSignature(table, column, columnType, /\bNOT NULL\b/.test(remainder), identity, defaultExpression))
 			if (identity !== '') relations.add(`sequence:${table}_${column}_seq`)
 		}
 	}
@@ -113,14 +114,14 @@ export const expectedSchemaLayout = (schema: string, version: SupportedSchemaVer
 		const [, table, name, definition] = match
 		if (table === undefined || name === undefined || definition === undefined) continue
 		if (version === INITIAL_MIGRATABLE_SCHEMA_VERSION && historicalIntegrityTables.has(table)) continue
-		if (version !== CURRENT_SCHEMA_VERSION && ownershipTables.has(table)) continue
+		if ((version === '1' || version === '2') && ownershipTables.has(table)) continue
 		constraints.add(`${table}.${name}|${normalizeDefinition(definition)}`)
 	}
 	for (const match of normalizedSchema.matchAll(/CREATE (UNIQUE )?INDEX ([a-z_][a-z0-9_]*)\s+ON public\.([a-z_][a-z0-9_]*)\s+([\s\S]*?);/g)) {
 		const [, unique, name, table, definition] = match
 		if (name === undefined || table === undefined || definition === undefined) continue
 		if (version === INITIAL_MIGRATABLE_SCHEMA_VERSION && (historicalIntegrityTables.has(table) || historicalIntegrityIndexes.has(name))) continue
-		if (version !== CURRENT_SCHEMA_VERSION && (ownershipTables.has(table) || ownershipIndexes.has(name))) continue
+		if ((version === '1' || version === '2') && (ownershipTables.has(table) || ownershipIndexes.has(name))) continue
 		indexes.add(`${name}|${normalizeDefinition(`CREATE ${unique ?? ''}INDEX ${name} ON public.${table} ${definition}`)}`)
 	}
 	for (const match of normalizedSchema.matchAll(/CREATE SEQUENCE public\.([a-z_][a-z0-9_]*)/g)) {
