@@ -90,6 +90,8 @@ test('responsive docs compact equations and label unavoidable equation and table
 				</math>
 			</div>
 			<div class="table-wrap"><table><tr><td>Wide content</td></tr></table></div>
+			<pre class="code-scroll" tabindex="0"><code>bun run deploy:testnet -- --rpc-url=https://rpc.example</code></pre>
+			<pre class="code-scroll" tabindex="0" data-short-command><code>unset PRIVATE_KEY</code></pre>
 			<table class="wide-table invalid-table" aria-label="Deployment mapping">
 				<thead><tr><th>Contract</th><th>Purpose</th></tr></thead>
 				<tbody><tr><td>SecurityPool</td><td>Bare wide content</td></tr></tbody>
@@ -108,6 +110,9 @@ test('responsive docs compact equations and label unavoidable equation and table
 		const piecewiseEquation = document.querySelector('[data-piecewise-equation]')
 		const piecewiseMath = piecewiseEquation?.querySelector('math') ?? null
 		const tableWrap = document.querySelector('.table-wrap')
+		const wideCommand = document.querySelector('pre.code-scroll:not([data-short-command])')
+		const shortCommand = document.querySelector('pre.code-scroll[data-short-command]')
+		if (wideCommand === null || shortCommand === null) throw new Error('Code block fixtures are incomplete')
 		if (equation === null || math === null || regularEquation === null || regularMath === null || matrixEquation === null || matrixMath === null || piecewiseEquation === null || piecewiseMath === null || tableWrap === null) {
 			throw new Error('Responsive documentation fixture is incomplete')
 		}
@@ -122,6 +127,10 @@ test('responsive docs compact equations and label unavoidable equation and table
 		setWidth(piecewiseMath, 'scrollWidth', 600)
 		setWidth(tableWrap, 'clientWidth', 320)
 		setWidth(tableWrap, 'scrollWidth', 560)
+		setWidth(wideCommand, 'clientWidth', 320)
+		setWidth(wideCommand, 'scrollWidth', 760)
+		setWidth(shortCommand, 'clientWidth', 320)
+		setWidth(shortCommand, 'scrollWidth', 320)
 		Object.defineProperty(window, 'matchMedia', {
 			configurable: true,
 			value: (query: string) => ({
@@ -181,6 +190,8 @@ test('responsive docs compact equations and label unavoidable equation and table
 		expect(piecewiseEquation.classList.contains('docs-content-overflows')).toBeFalse()
 		expect(piecewiseEquation.querySelector('.docs-overflow-cue')).toBeNull()
 		expect(tableWrap.querySelector('.docs-overflow-cue')?.textContent).toContain('full table')
+		expect(wideCommand.querySelector('.docs-overflow-cue')?.textContent).toContain('full command')
+		expect(shortCommand.querySelector('.docs-overflow-cue')).toBeNull()
 		expect(bareTableContainer.getAttribute('role')).toBe('region')
 		expect(bareTableContainer.getAttribute('aria-label')).toBe('Deployment mapping')
 		expect(responsiveTable.classList.contains('docs-responsive-table')).toBeTrue()

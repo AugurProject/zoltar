@@ -660,7 +660,7 @@ export const contractReferences: ContractReference[] = [
 	{
 		compiledAbiFingerprint: 'dfa5b4220b8af292e9baab0368a41aa262a096468444fd5b7f2575908a5551e8',
 		name: 'SecurityPoolFactory',
-		purpose: 'Creates and canonically registers origin and child security pools with their share token, oracle coordinator, and optional truth auction.',
+		purpose: 'Creates and canonically registers origin and child security pools with their share token, oracle coordinator, and optional Truth Auction.',
 		readAbiFingerprint: 'ee2532194c63d917a4665729c7456b2905cf62bfd69555cb023d1c7e00566473',
 		readSurface:
 			'Use `minimumSecurityBondDebtAttoEth` and `minimumVaultRepDepositAttoRep` for immutable deployment floors. Each pool derives its effective escalation deposit directly from its REP token at construction as `max(1 REP, theoretical REP supply / 10,000,000)`. A zero configured vault REP floor selects the default `theoretical REP supply / 100,000`; a nonzero constructor value is the exact override. The security-bond debt floor defaults to 1 ETH. Construction rejects a zero or code-less operations delegate. Use `securityPoolDeploymentCount` with the strict `securityPoolDeploymentsRange(startIndex, count)` pager, which reverts rather than truncating when the requested range exceeds the array. Use `getOriginId`, `getPoolId`, `getSecurityPool`, `getSecurityPoolOriginId`, and `getSecurityPoolHasInheritedForkOutcome` for canonical lookup.',
@@ -680,7 +680,7 @@ export const contractReferences: ContractReference[] = [
 			{
 				call: '`deployChildSecurityPool(parent, shareToken, universeId, questionId, statoblastSecurityMultiplierBps, currentRetentionRate, settlementCollateralAttoEth)`',
 				caller: '`SecurityPoolForker` only',
-				effect: 'Creates and registers a canonical child pool with a coordinator that inherits `initialReportPriorityFeeAttoEthPerGas` from the parent coordinator and a forker-owned truth auction, while retaining the parent lineage share token.',
+				effect: 'Creates and registers a canonical child pool with a coordinator that inherits `initialReportPriorityFeeAttoEthPerGas` from the parent coordinator and a forker-owned Truth Auction, while retaining the parent lineage share token.',
 				declarations: [{ name: 'deployChildSecurityPool' }],
 				preconditions: 'Parent is the canonical pool for its lineage; supplied share token equals the parent share token; target origin/universe slot is unclaimed; deployment arguments satisfy downstream constructors and wiring.',
 				signals: '`SecurityPoolRegistered`, then `DeploySecurityPool`',
@@ -1014,7 +1014,7 @@ export const contractReferences: ContractReference[] = [
 			},
 			{
 				call: 'Direct ETH transfer to `receive()`',
-				caller: "Forker, this pool's truth auction, or parent pool only",
+				caller: "Forker, this pool's Truth Auction, or parent pool only",
 				effect: 'Accepts protocol-routed ETH used by migration and auction settlement. Forced ETH remains raw, unaccounted surplus rather than settlement collateral or fees.',
 				declarations: [{ kind: 'receive', name: 'receive' }],
 				preconditions: 'Sender is one of the three authorized protocol addresses. Forced ETH bypasses this ordinary-call guard.',
@@ -1132,7 +1132,7 @@ export const contractReferences: ContractReference[] = [
 					'Finalizes the ended auction, accounts migration-routed settlement collateral plus accepted bid ETH, and records every unmigrated REP backing unit, capacity unit, and proportional bad debt in an explicit nonwithdrawable unassigned position. It activates the child, fixes bidder REP-backing-unit and capacity-ownership budgets, and saves the fee index. Positive-purchase auction ownership becomes fee eligible immediately; after a zero-purchase auction, the unassigned capacity remains outside fee eligibility. A nonzero repair contribution is rejected.',
 				declarations: [{ name: 'finalizeTruthAuction' }],
 				preconditions:
-					'Truth auction started, its one-week window has passed, and `msg.value` is zero. Migrated collateral plus accepted bid ETH does not exceed current price-converted minting capacity. Combined pool-held and dispute-staked REP satisfies the associated-REP constraint for that collateral net of aggregate bad debt, while actual pool-held REP alone satisfies the migration-safety constraint. If unresolved escalation existed at fork, the game reported at completion passes the [child-game trust boundary](#child-game-trust-boundary).',
+					'Truth Auction started, its one-week window has passed, and `msg.value` is zero. Migrated collateral plus accepted bid ETH does not exceed current price-converted minting capacity. Combined pool-held and dispute-staked REP satisfies the associated-REP constraint for that collateral net of aggregate bad debt, while actual pool-held REP alone satisfies the migration-safety constraint. If unresolved escalation existed at fork, the game reported at completion passes the [child-game trust boundary](#child-game-trust-boundary).',
 				signals: '`TruthAuctionFinalized`, auction `AuctionFinalized`, and pool accounting checkpoints; `TruthAuctionHaircutApplied` when purchased REP removes a positive escalation allocation; `ForkContinuationResumed` for an unresolved continuation',
 			},
 			{
@@ -1166,7 +1166,7 @@ export const contractReferences: ContractReference[] = [
 			},
 			{
 				call: 'Direct ETH transfer to `receive()`',
-				caller: 'A child-pool truth auction trusted by this forker during `ChildPoolLinked`',
+				caller: 'A child-pool Truth Auction trusted by this forker during `ChildPoolLinked`',
 				effect: 'Accepts auction ETH during forker-controlled auction finalization.',
 				declarations: [{ kind: 'receive', name: 'receive' }],
 				preconditions: '`trustedAuctionAddresses[msg.sender]` was set when the forker linked the child and emitted `ChildPoolLinked`; configured-factory registration determines whether that lineage is canonical.',

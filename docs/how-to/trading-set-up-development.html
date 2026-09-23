@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<meta name="description" content="Compile, test, build, and serve the Trading subsystem locally, in the browser simulator or against an external Anvil node." />
+		<title>Set up Trading development</title>
+		<link rel="stylesheet" href="../assets/css/shared-docs.css" />
+		<link rel="stylesheet" href="../assets/css/docsShell.css" />
+	</head>
+	<body class="doc-openoracle">
+		<main id="main-content">
+			<header>
+				<p class="kicker">How-to guide</p>
+				<h1>Set up Trading development</h1>
+				<p>Use this guide to get the Trading contracts, SDK, and UI compiled and running on your machine.</p>
+			</header>
+			<section id="where-the-code-lives">
+				<h2>Where the code lives</h2>
+				<table>
+					<thead>
+						<tr>
+							<th>Path</th>
+							<th>Contents</th>
+						</tr>
+					</thead>
+					<tbody>
+						<tr>
+							<td><code>solidity/contracts/trading/</code></td>
+							<td>Immutable-fee factory, ERC-20 LP pair, stateless router, full-precision math, interfaces, and harnesses compiled by the main Solidity pipeline</td>
+						</tr>
+						<tr>
+							<td><code>shared/trading/ts/trading/</code></td>
+							<td>Exact bigint quote math and the maximum insured-exit search; transaction helpers live in <code>ui/trading/ts/protocol/</code></td>
+						</tr>
+						<tr>
+							<td><code>solidity/ts/trading/deploy/</code></td>
+							<td>Deployment from an existing Zoltar core manifest</td>
+						</tr>
+						<tr>
+							<td><code>ui/trading/</code></td>
+							<td>Standalone Preact application and walletless TEVM simulation</td>
+						</tr>
+						<tr>
+							<td><code>solidity/deployments/trading/</code></td>
+							<td>Generated local deployment manifests; no public addresses are invented here</td>
+						</tr>
+					</tbody>
+				</table>
+			</section>
+			<section id="build-and-run">
+				<h2>Build and run</h2>
+				<ol>
+					<li>From the repository root, confirm dependencies with <code>test -d node_modules</code>. If they are missing, run <code>bun install --frozen-lockfile &amp;&amp; bun run setup</code>.</li>
+					<li>Run <code>bun run trading:compile</code>. It compiles the core artifacts and then runs the Trading vendor build, which generates <code>ui/trading/ts/generated/contractArtifact.ts</code>. Never edit generated files.</li>
+					<li>Run <code>bun run trading:test</code> and <code>bun run trading:ui:build</code>.</li>
+					<li>Start <code>bun run app:serve:trading</code>, then open <code>http://localhost:4163/?simulate=1#/market</code> for the shared browser-local TEVM simulator.</li>
+				</ol>
+				<p>To run the standalone UI in Docker instead, complete the repository-root setup first, then from <code>ui/trading</code>:</p>
+				<pre class="code-scroll" tabindex="0"><code>docker network inspect zoltar &gt;/dev/null 2&gt;&amp;1 \
+  || docker network create zoltar
+docker compose up --build --force-recreate</code></pre>
+				<p>Then open <code>http://localhost:4163/#/market</code>. On Windows, <code>ui/trading/start.bat</code> runs the same Compose command. The final image runs as an unprivileged user and exposes a health check at <code>/</code>. The Docker image copies the canonical mainnet and Sepolia core deployment addresses from the root documentation manifests.</p>
+			</section>
+			<section id="external-node">
+				<h2>Test transactions against an external node</h2>
+				<p>Start Anvil and create a complete local Zoltar deployment with an operational binary SecurityPool. Export its manifest path as <code>ZOLTAR_DEPLOYMENT_MANIFEST</code>, then run <code>bun run trading:deploy:local</code> for script and integration testing. <a href="./trading-deploy-contracts.html#use-local-anvil">Deploy the Trading contracts</a> walks through the full Anvil flow. The live UI uses the canonical networks copied from the root deployment manifests; <code>?simulate=1</code> instead boots the same browser-local TEVM environment used by Zoltar and Statoblast.</p>
+			</section>
+			<section id="commands">
+				<h2>Commands</h2>
+				<table>
+					<thead>
+						<tr>
+							<th>Command</th>
+							<th>Purpose</th>
+						</tr>
+					</thead>
+					<tbody>
+						<tr>
+							<td><code>bun run setup</code></td>
+							<td>Frozen install and compile</td>
+						</tr>
+						<tr>
+							<td><code>bun run trading:compile</code></td>
+							<td>Compile contracts and reusable Trading TypeScript through the main pipelines</td>
+						</tr>
+						<tr>
+							<td><code>bun run trading:test</code></td>
+							<td>Run SDK, contract-facing, and UI Trading tests</td>
+						</tr>
+						<tr>
+							<td><code>bun run trading:coverage:contracts</code></td>
+							<td>Trace Solidity execution and require at least 99% production-contract line coverage</td>
+						</tr>
+						<tr>
+							<td><code>bun run trading:check</code></td>
+							<td>Tests plus the bigint-number-cast guard</td>
+						</tr>
+						<tr>
+							<td><code>bun run trading:ui:build</code> / <code>bun run app:serve:trading</code></td>
+							<td>Build or serve <code>ui/trading</code></td>
+						</tr>
+						<tr>
+							<td><code>bun run trading:deploy:local</code></td>
+							<td>Deploy against an existing local Zoltar manifest</td>
+						</tr>
+						<tr>
+							<td><code>cd ui/trading &amp;&amp; bun run docker:build</code> / <code>docker:run</code></td>
+							<td>Build or run the standalone UI container</td>
+						</tr>
+						<tr>
+							<td><code>bun run trading:gas-costs</code></td>
+							<td>Report bytecode sizes and funded-fixture operation gas</td>
+						</tr>
+					</tbody>
+				</table>
+				<p>All root aliases use the <code>trading:*</code> prefix.</p>
+			</section>
+		</main>
+		<script src="../assets/js/responsiveDocs.js"></script>
+		<script src="../assets/js/docsData.js"></script>
+		<script src="../assets/js/docsShell.js"></script>
+	</body>
+</html>
