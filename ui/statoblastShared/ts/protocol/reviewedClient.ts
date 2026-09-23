@@ -99,13 +99,19 @@ export function createReviewedClient(client: WriteClient, validate: () => Promis
 	}
 
 	const send = async (fallback: TransactionRequestPreview, execute: (approvalArgs?: readonly [ReturnType<typeof getAddress>, bigint]) => Promise<`0x${string}`>) => {
-		let transaction = preview ?? fallback
+		const prepared = preview
+		let transaction = prepared ?? fallback
 		preview = undefined
 		try {
 			if (!environment.isCurrent()) throw new Error('The network changed. Review the action again.')
 			controller.assertActive()
 			await validate()
 			plan ??= [transaction]
+			if (skipAppReview) {
+				if (prepared?.data === undefined || fallback.data === undefined) throw new Error('Wallet-only transactions must be prepared.')
+				if (prepared.data !== fallback.data || (prepared.contractAddress ?? prepared.to)?.toLowerCase() !== (fallback.contractAddress ?? fallback.to)?.toLowerCase() || (prepared.value ?? 0n) !== (fallback.value ?? 0n)) throw new Error('The prepared transaction changed.')
+				if (transaction.functionName === 'approve' || transaction.data?.slice(0, 10).toLowerCase() === '0x095ea7b3') throw new Error('Token approvals require app review.')
+			}
 			await initialize()
 			const expected = plan?.[stepIndex]
 			if (expected === undefined || expected.functionName !== transaction.functionName || (expected.value ?? 0n) !== (transaction.value ?? 0n) || (expected.contractAddress ?? expected.to) !== (transaction.contractAddress ?? transaction.to))
@@ -190,7 +196,7 @@ export function createReviewedClient(client: WriteClient, validate: () => Promis
 		},
 		sendTransaction: async parameters =>
 			await send(
-				{ account: client.account, args: undefined, chainName: client.chain.name, functionName: parameters.data === undefined ? 'Transfer ETH' : 'Contract transaction', to: parameters.to ?? undefined, value: parameters.value },
+				{ account: client.account, args: undefined, chainName: client.chain.name, data: parameters.data, functionName: parameters.data === undefined ? 'Transfer ETH' : 'Contract transaction', to: parameters.to ?? undefined, value: parameters.value },
 				async approvalArgs => await client.sendTransaction(approvalArgs === undefined ? parameters : { ...parameters, data: encodeFunctionData({ abi: ABIS.mainnet.erc20, functionName: 'approve', args: approvalArgs }) }),
 			),
 		sendRawTransaction: async parameters => await send({ account: undefined, args: undefined, chainName: client.chain.name, functionName: 'Deploy contract', value: undefined }, async () => await client.sendRawTransaction(parameters)),

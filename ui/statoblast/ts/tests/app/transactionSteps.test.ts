@@ -73,7 +73,8 @@ test('a wallet-only pool action starts the wallet request without a page confirm
 	sendTransaction.mockImplementationOnce(async () => await walletRequest.promise)
 	const backend = withTransactionReviews({ ...createFakeBackend({ accountAddress: account }), createWriteClient: () => ({ ...client, sendTransaction }) })
 	const reviewed = backend.createWriteClient(account, { skipAppReview: true })
-	const sending = reviewed.sendTransaction({ to: account, value: 1n })
+	reviewed.onTransactionPrepared?.({ account, chainName: client.chain.name, functionName: 'aggregate3', contractAddress: account, args: [[]], data: '0x1234', value: 1n })
+	const sending = reviewed.sendTransaction({ to: account, data: '0x1234', value: 1n })
 	await new Promise(resolve => setTimeout(resolve, 10))
 	try {
 		expect(transactionSteps.value?.steps[0]?.phase).toBe('pending')
@@ -90,9 +91,33 @@ test('a wallet-only pool action reports a wallet rejection without waiting for a
 	sendTransaction.mockRejectedValueOnce(new Error('User rejected the request'))
 	const backend = withTransactionReviews({ ...createFakeBackend({ accountAddress: account }), createWriteClient: () => ({ ...client, sendTransaction }) })
 	const reviewed = backend.createWriteClient(account, { skipAppReview: true })
-	await expect(reviewed.sendTransaction({ to: account, value: 1n })).rejects.toThrow('User rejected the request')
+	reviewed.onTransactionPrepared?.({ account, chainName: client.chain.name, functionName: 'aggregate3', contractAddress: account, args: [[]], data: '0x1234', value: 1n })
+	await expect(reviewed.sendTransaction({ to: account, data: '0x1234', value: 1n })).rejects.toThrow('User rejected the request')
 	expect(sendTransaction).toHaveBeenCalledTimes(1)
 	expect(transactionSteps.value?.steps[0]?.phase).toBe('failed')
+})
+
+test('wallet-only mode refuses token approvals before opening the wallet', async () => {
+	const { client, sendTransaction } = setup()
+	const reviewed = createReviewedClient({ ...client, sendTransaction }, undefined, undefined, true)
+	reviewed.onTransactionPrepared?.({ account, chainName: client.chain.name, functionName: 'approve', contractAddress: account, args: [account, 1n], data: '0x095ea7b3', value: undefined })
+	await expect(reviewed.sendTransaction({ to: account, data: '0x095ea7b3' })).rejects.toThrow('Token approvals require app review.')
+	expect(sendTransaction).not.toHaveBeenCalled()
+})
+
+test('wallet-only mode refuses unprepared contract calldata', async () => {
+	const { client, sendTransaction } = setup()
+	const reviewed = createReviewedClient({ ...client, sendTransaction }, undefined, undefined, true)
+	await expect(reviewed.sendTransaction({ to: account, data: '0x095ea7b3' })).rejects.toThrow('Wallet-only transactions must be prepared.')
+	expect(sendTransaction).not.toHaveBeenCalled()
+})
+
+test('wallet-only mode refuses calldata that differs from its prepared transaction', async () => {
+	const { client, sendTransaction } = setup()
+	const reviewed = createReviewedClient({ ...client, sendTransaction }, undefined, undefined, true)
+	reviewed.onTransactionPrepared?.({ account, chainName: client.chain.name, functionName: 'aggregate3', contractAddress: account, args: [[]], data: '0x1234', value: undefined })
+	await expect(reviewed.sendTransaction({ to: account, data: '0x095ea7b3' })).rejects.toThrow('The prepared transaction changed.')
+	expect(sendTransaction).not.toHaveBeenCalled()
 })
 
 test('titles the review from the prepared transaction labels instead of the contract function name', async () => {
