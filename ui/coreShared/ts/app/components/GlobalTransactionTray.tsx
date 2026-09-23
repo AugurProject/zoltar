@@ -53,7 +53,7 @@ export function GlobalTransactionTray({ activeUniverseId, routeKey, transaction 
 		return transactionDismissKey
 	})
 	const dismissKeyRef = useRef(getDismissKey(transaction))
-	const transactionOriginRef = useRef({ routeKey, transactionKey: getTransactionKey(transaction) })
+	const transactionOriginRef = useRef({ routeHash: window.location.hash, routeKey, transactionKey: getTransactionKey(transaction) })
 	const noticeRef = useRef<HTMLDivElement>(null)
 
 	useEffect(() => {
@@ -93,7 +93,7 @@ export function GlobalTransactionTray({ activeUniverseId, routeKey, transaction 
 
 	const transactionDismissKey = getDismissKey(transaction)
 	const transactionKey = getTransactionKey(transaction)
-	if (transactionOriginRef.current.transactionKey !== transactionKey) transactionOriginRef.current = { routeKey, transactionKey }
+	if (transactionOriginRef.current.transactionKey !== transactionKey) transactionOriginRef.current = { routeHash: window.location.hash, routeKey, transactionKey }
 	if (transactionDismissKey !== undefined && transactionDismissKey === dismissedKey) return undefined
 	const canDismiss = transaction.tone !== 'awaiting-wallet' && transaction.tone !== 'preparing' && transactionDismissKey !== undefined
 	const compact = canDismiss && transaction.tone !== 'pending' && routeKey !== undefined && transactionOriginRef.current.routeKey !== undefined && routeKey !== transactionOriginRef.current.routeKey
@@ -101,6 +101,15 @@ export function GlobalTransactionTray({ activeUniverseId, routeKey, transaction 
 		if (transactionDismissKey === undefined) return
 		if (shouldRememberDismissal(transaction)) rememberDismissal(transactionDismissKey)
 		setDismissedKey(transactionDismissKey)
+	}
+	const returnToForm = () => {
+		const originHash = transactionOriginRef.current.routeHash
+		dismiss()
+		if (originHash !== '' && window.location.hash !== originHash) {
+			window.location.hash = originHash
+			return
+		}
+		document.getElementById('app-content')?.focus()
 	}
 	const transactionUniverseId = transaction.universeId
 	const universeWarning =
@@ -113,7 +122,7 @@ export function GlobalTransactionTray({ activeUniverseId, routeKey, transaction 
 
 	return (
 		<div className='global-transaction-tray'>
-			<TransactionPresentationNotice compact={compact} contextWarning={universeWarning} dismissible={canDismiss} noticeRef={noticeRef} onDismiss={dismiss} transaction={transaction} />
+			<TransactionPresentationNotice compact={compact} contextWarning={universeWarning} dismissible={canDismiss} noticeRef={noticeRef} onDismiss={dismiss} onRetry={transaction.tone === 'error' ? returnToForm : undefined} transaction={transaction} />
 		</div>
 	)
 }

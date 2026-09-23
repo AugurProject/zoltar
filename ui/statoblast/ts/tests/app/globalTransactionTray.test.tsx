@@ -488,6 +488,29 @@ describe('GlobalTransactionTray', () => {
 		expect(document.body.querySelector('.global-transaction-notice-compact')).not.toBeNull()
 	})
 
+	test('returns a failed transaction to its submission form after navigation', async () => {
+		const hash = '0xa234000000000000000000000000000000000000000000000000000000000000' as const
+		window.location.hash = '#/zoltar?zoltarView=create'
+		const renderedComponent = await renderIntoDocument(<GlobalTransactionTray routeKey='zoltar:create' transaction={{ hash, title: 'Creating Question', tone: 'pending' }} />)
+		trackRendered(renderedComponent)
+
+		window.location.hash = '#/security-pools?securityPoolsView=browse'
+		await act(() => {
+			render(<GlobalTransactionTray routeKey='security-pools:browse' transaction={{ hash, title: 'Creating Question', tone: 'pending' }} />, renderedComponent.container)
+		})
+		await act(() => {
+			render(<GlobalTransactionTray routeKey='security-pools:browse' transaction={{ detail: 'Transaction reverted', hash, title: 'Creating Question', tone: 'error' }} />, renderedComponent.container)
+		})
+
+		expect(document.body.querySelector('.global-transaction-notice-compact')).not.toBeNull()
+		expect(within(document.body).getByRole('button', { name: 'Review and retry' })).not.toBeNull()
+		await act(() => {
+			fireEvent.click(within(document.body).getByRole('button', { name: 'Review and retry' }))
+		})
+		expect(window.location.hash).toBe('#/zoltar?zoltarView=create')
+		expect(renderedComponent.container.textContent).toBe('')
+	})
+
 	test('keeps the request route as the origin when the transaction gains a hash after navigation', async () => {
 		const operationKey = 'transaction-request-before-navigation'
 		const hash = '0x9234000000000000000000000000000000000000000000000000000000000000' as const

@@ -84,7 +84,7 @@ export function TransactionPresentationNotice({ className = '', compact = false,
 					transactionDetails
 				)}
 			</div>
-			{!dismissible || compact ? undefined : (
+			{!dismissible || (compact && transaction.tone !== 'error') ? undefined : (
 				<div className='global-transaction-actions'>
 					{transaction.tone !== 'error' || onRetry === undefined ? undefined : (
 						<button className='secondary' type='button' onClick={onRetry}>
