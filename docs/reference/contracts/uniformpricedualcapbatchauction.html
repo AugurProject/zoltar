@@ -71,7 +71,7 @@
 							<td><code>withdrawBids(withdrawFor, tickIndices, proRataTotal, secondaryProRataTotal, repBackingUnitsTotal)</code></td>
 							<td>Auction owner only</td>
 							<td>Auction finalized; caller is owner. Nonempty indexes belong to <code>withdrawFor</code> and remain unsettled.</td>
-							<td>Returns filled REP, ETH refund, capacity allocation, bad-debt allocation, and REP backing-unit allocation in ABI order. The forker credits the three allocations to the vault; the auction credits refunds to the beneficiary pull-payment balance without calling recipient code. Capacity and debt use fixed cumulative ETH positions. Backing units use the corresponding cumulative filled-REP positions to exhaust <code>repBackingUnitsTotal</code> without claim-order dependence. An empty list returns five zeros without changing bids or emitting events.</td>
+							<td>Returns filled REP, ETH refund, capacity allocation, bad-debt allocation, and REP backing-unit allocation in ABI order. The forker credits backing and capacity to the bidder vault and credits bad debt only while the recorded auction debt generation is current; the auction credits refunds to the beneficiary pull-payment balance without calling recipient code. Capacity and debt use fixed cumulative ETH positions. Backing units use the corresponding cumulative filled-REP positions to exhaust <code>repBackingUnitsTotal</code> without claim-order dependence. An empty list returns five zeros without changing bids or emitting events.</td>
 							<td><code>BidSettled</code> per processed bid; one <code>EthRefundCredited</code> for the call when aggregate <code>totalRefundAttoEth</code> is positive</td>
 						</tr>
 						<tr>
