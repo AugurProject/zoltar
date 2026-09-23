@@ -10,7 +10,7 @@ import { loadSettings, parseSettings, serializedSettings } from '../../src/confi
 import { applyRetirementAssessment } from '../../src/runtime/retirement-assessment.ts'
 import { initialDurableState } from '../../src/state/initial-state.ts'
 import { loadDurableState, saveDurableState } from '../../src/state/operator-state.ts'
-import { acceptResidualProfileReplacement } from '../../src/state/retirement.ts'
+import { acceptResidualProfileReplacement, DEFAULT_RETIREMENT_POLICIES } from '../../src/state/retirement.ts'
 
 const directories: string[] = []
 const signerKey = `0x${'33'.repeat(32)}` as const
@@ -123,6 +123,29 @@ test('prompts once to retire operated old contracts and keeps the old pin until 
 	expect(state.retirement).toMatchObject({ recipient, status: 'requested' })
 	expect(state.signerAddress).toBe(signer)
 	expect(await retirementUpgradeStatus(path)).toBe('retiring')
+})
+
+test('discloses default retirement policies and replaces policies from a cancelled drain', async () => {
+	const { path, settings, stateFile } = await fixture(true)
+	const state = await loadDurableState(stateFile, settings.network.chainId)
+	state.retirement.cancelledAt = new Date(0).toISOString()
+	state.retirement.policies = { ...DEFAULT_RETIREMENT_POLICIES, exitUnmatchedShares: true, maximumExitLossBps: 1_000, sweepAssets: false }
+	await saveDurableState(stateFile, state)
+	const recipient = getAddress('0x0000000000000000000000000000000000000099')
+	const answers = [recipient, `DRAIN ${state.profileId} TO ${recipient}`]
+	const prompts: string[] = []
+	await prepareCurrentDeployment({
+		acquireLocks: noLocks,
+		ask: async message => {
+			prompts.push(message)
+			const answer = answers.shift()
+			if (answer === undefined) throw new Error('Unexpected retirement prompt')
+			return answer
+		},
+		path,
+	})
+	expect(prompts[1]).toContain('default retirement policies')
+	expect((await loadDurableState(stateFile, settings.network.chainId)).retirement.policies).toEqual(DEFAULT_RETIREMENT_POLICIES)
 })
 
 test('rejects a single read origin before prompting for retirement', async () => {

@@ -107,7 +107,14 @@ async function requestOldProfileRetirement(settings: OperatorSettings, state: Aw
 	const wallet = configuredWallet(settings)
 	assertSafeRetirementRecipient(recipient, state.signerAddress ?? wallet)
 	const confirmation = `DRAIN ${state.profileId} TO ${recipient}`
-	requestRetirement(state.retirement, state.profileId, recipient, DEFAULT_RETIREMENT_POLICIES, await ask(`Type ${confirmation} to retire the old deployment: `), state.signerAddress ?? wallet)
+	requestRetirement(
+		state.retirement,
+		state.profileId,
+		recipient,
+		DEFAULT_RETIREMENT_POLICIES,
+		await ask(`The launcher uses default retirement policies: sweep assets and unwrap WETH; no unmatched-share exit, claim migration, or automatic exit after completion. These replace any policies from a cancelled drain. Type ${confirmation} to continue: `),
+		state.signerAddress ?? wallet,
+	)
 	await saveDurableState(settings.runtime.stateFile, state)
 }
 

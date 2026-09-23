@@ -136,7 +136,7 @@ bun run run -- --drain 0xRecipient --confirm "DRAIN profile:id TO 0xRecipient"
 
 Optional flags are `--migrate-existing-claims`, `--exit-unmatched-shares=<maximum-loss-bps>`, and `--exit-after-completion`. The unmatched-share limit is enforced against the plan's guaranteed minimum ETH output, not merely used as an enable flag. Inspect progress with `bun run run -- --retirement-status`. Cancellation remains available until the first irreversible final sweep with `bun run run -- --cancel-drain --confirm "CANCEL DRAIN"`.
 
-Exact `drained-with-residuals` completion still forbids deployment-profile replacement by default. After reviewing the current block-bound completion evidence, recipient, and residual list, explicitly accept replacement for one target profile in the dashboard or CLI. The acceptance is bound to the source profile, recipient, target profile, and current completion block; any later retirement assessment resets it.
+Exact `drained-with-residuals` completion still forbids deployment-profile replacement by default. After reviewing the current block-bound completion evidence, recipient, and residual list, explicitly accept replacement for one target profile in the dashboard or CLI. The acceptance is bound to the source profile, recipient, target profile, and completion block. Later scans preserve it while the residuals and profile, signer, and recipient bindings remain the same; a changed assessment clears it.
 
 ```sh
 bun run run -- --accept-residuals profile:next --reason "Reviewed current residuals and accepted replacement." --confirm "ACCEPT RESIDUALS FOR profile:next"
@@ -168,7 +168,9 @@ First boot copies the safe paused, dry, keyless template. Stop the service and c
 
 On Windows, `start.bat` checks the built image's current deployment manifest before launch. It updates an unused old profile immediately. For a keyless journal with only dry-run history, it selects a new unused state file and preserves the old journal without retirement.
 
-For an operated old profile, the launcher prompts for a retirement recipient and the exact drain confirmation, then starts the old pinned bot to retire under its saved policy. The old configuration must already permit unpaused live execution with a configured signer and at least two independent read RPC origins; the launcher does not turn execution on. Two readers are required to verify retirement completion even when normal operation uses `rpcQuorum: 1`. The launcher checks retirement every minute and switches to the current addresses only after verifying completion, using a new unused state file and preserving the old one.
+For an operated old profile, the launcher prompts for a retirement recipient and the exact drain confirmation, then starts the old pinned bot with the default retirement policies. Those defaults sweep assets to the recipient and unwrap WETH, but do not exit unmatched shares, migrate claims, or exit automatically after completion. They replace any policies retained from a cancelled drain.
+
+The old configuration must already permit unpaused live execution with a configured signer and at least two independent read RPC origins; the launcher does not turn execution on. Two readers are required to verify retirement completion even when normal operation uses `rpcQuorum: 1`. The launcher checks retirement every minute and switches to the current addresses only after verifying completion, using a new unused state file and preserving the old one.
 
 If retirement has residuals, review and accept replacement for the displayed target profile in the dashboard. Closing the launcher window leaves the retiring Docker service running; rerun `start.bat` to resume the handoff. `start.bat doctor` only checks the saved profile and does not switch it.
 
