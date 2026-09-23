@@ -34,8 +34,7 @@ export function reviewChangeRows(before: unknown, after: unknown, path = 'Settin
 		return Array.from({ length: Math.max(oldArray.length, newArray.length) }, (_, index) => reviewChangeRows(oldArray[index], newArray[index], `${path} › ${index + 1}`)).flat()
 	}
 	const display = (value: unknown) => {
-		if (value === undefined) return '—'
-		if (value === null) return 'None'
+		if (value === undefined || value === null) return '—'
 		return String(value)
 	}
 	return display(before) === display(after) ? [] : [{ label: reviewLabel(path), before: display(before), after: display(after) }]
