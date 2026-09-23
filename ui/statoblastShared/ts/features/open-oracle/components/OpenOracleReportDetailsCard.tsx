@@ -1,4 +1,5 @@
 import type { ComponentChildren } from 'preact'
+import { useEffect, useRef, useState } from 'preact/hooks'
 import { zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import { ActionLauncherCard } from '@zoltar/ui-core-shared/components/ActionLauncherCard.js'
 import { AddressValue } from '@zoltar/ui-core-shared/components/AddressValue.js'
@@ -68,6 +69,31 @@ type OpenOracleReportDetailsCardProps = {
 	selectedReportModal: SelectedReportModal
 }
 
+function useLiveSettlementTime(report: OpenOracleReportDetails | undefined, loading: boolean, onLoadReport: (reportId?: string) => void) {
+	const reportKey = report === undefined ? undefined : `${report.reportId}:${report.reportTimestamp}:${report.settlementTime}:${report.currentTime}:${report.isDistributed}`
+	const [clock, setClock] = useState<{ key: string | undefined; elapsedSeconds: bigint }>({ key: undefined, elapsedSeconds: 0n })
+	const refresh = useRef({ loading, onLoadReport })
+	refresh.current = { loading, onLoadReport }
+	useEffect(() => {
+		setClock(current => (current.key === reportKey && current.elapsedSeconds === 0n ? current : { key: reportKey, elapsedSeconds: 0n }))
+		if (report === undefined || !report.timeType || report.isDistributed || report.reportTimestamp === 0n) return
+		const readyAt = report.reportTimestamp + report.settlementTime
+		if (report.currentTime >= readyAt) return
+		const startedAt = Date.now()
+		let lastRefreshAt = 0
+		const interval = setInterval(() => {
+			const now = Date.now()
+			const elapsedSeconds = BigInt(Math.floor((now - startedAt) / 1000))
+			setClock(current => (current.key === reportKey && current.elapsedSeconds === elapsedSeconds ? current : { key: reportKey, elapsedSeconds }))
+			if (report.currentTime + elapsedSeconds < readyAt || now - lastRefreshAt < 5000 || refresh.current.loading) return
+			lastRefreshAt = now
+			refresh.current.onLoadReport(report.reportId.toString())
+		}, 250)
+		return () => clearInterval(interval)
+	}, [reportKey, report?.timeType])
+	return report !== undefined && report.timeType ? report.currentTime + (clock.key === reportKey ? clock.elapsedSeconds : 0n) : report?.currentTime
+}
+
 export function OpenOracleReportDetailsCard({
 	isConnected,
 	isOnActiveAppChain,
@@ -95,6 +121,7 @@ export function OpenOracleReportDetailsCard({
 	selectedReportModal,
 }: OpenOracleReportDetailsCardProps) {
 	const loadingSelectedReport = openOracleReportLookupState === 'loading'
+	const liveCurrentTime = useLiveSettlementTime(openOracleReportDetails, loadingSelectedReport, onLoadOracleReport)
 	const reportControls = (
 		<div className='form-grid'>
 			<LookupFieldRow
@@ -128,6 +155,7 @@ export function OpenOracleReportDetailsCard({
 			</SectionBlock>
 		)
 	}
+	const liveReportDetails = liveCurrentTime === undefined || liveCurrentTime === openOracleReportDetails.currentTime ? openOracleReportDetails : { ...openOracleReportDetails, currentTime: liveCurrentTime }
 	const status = getOpenOracleReportStatus({
 		currentReporter: openOracleReportDetails.currentReporter,
 		disputeOccurred: openOracleReportDetails.disputeOccurred,
@@ -135,16 +163,21 @@ export function OpenOracleReportDetailsCard({
 		reportTimestamp: openOracleReportDetails.reportTimestamp,
 	})
 	const statusTone = getOpenOracleReportStatusTone(status)
-	const actionMode = getOpenOracleSelectedReportActionMode(openOracleReportDetails)
-	const stage = getOpenOracleStagePresentation(actionMode, openOracleReportDetails)
-	const disputeAvailability = getOpenOracleDisputeAvailability(openOracleReportDetails)
-	const settleAvailability = getOpenOracleSettleAvailability(openOracleReportDetails)
+	const actionMode = getOpenOracleSelectedReportActionMode(liveReportDetails)
+	const stage = getOpenOracleStagePresentation(actionMode, liveReportDetails)
+	const disputeAvailability = getOpenOracleDisputeAvailability(liveReportDetails)
+	const settleAvailability = getOpenOracleSettleAvailability(liveReportDetails)
+	const remainingUntilSettle = liveReportDetails.reportTimestamp + liveReportDetails.settlementTime - (liveReportDetails.timeType ? liveReportDetails.currentTime : liveReportDetails.currentBlockNumber)
+	const settleCountdown = !liveReportDetails.isDistributed && remainingUntilSettle > 0n ? openOracleCopy.formatSettleCountdown(remainingUntilSettle, liveReportDetails.timeType) : undefined
 	const readinessActions = getOpenOracleReadinessActions({
 		actionMode,
 		disputeMessage: disputeAvailability.message,
 		hasReport: true,
 		settleMessage: settleAvailability.message,
 	}).map(action => {
+		if (action.key === 'settle-report' && settleCountdown !== undefined) {
+			return { actionLabel: action.actionLabel, disabledReasonId: 'open-oracle-settle-countdown', key: action.key, readiness: action.readiness, title: action.title }
+		}
 		if (action.blocker !== undefined) return action
 		if (action.key === 'dispute-report') return { ...action, onAction: () => onSelectedReportModalChange(DISPUTE_REPORT_MODAL) }
 		if (action.key === 'settle-report') return { ...action, onAction: () => onSelectedReportModalChange(SETTLE_REPORT_MODAL) }
@@ -201,9 +234,15 @@ export function OpenOracleReportDetailsCard({
 			{stage.label === status ? undefined : <LifecycleStageBanner stage={stage} />}
 			{readinessActions.length > 0 ? (
 				<SectionBlock title={openOracleCopy.reportActions}>
-					<div className='action-readiness-grid'>
+					<div className='action-readiness-grid open-oracle-report-actions'>
 						{readinessActions.map(action => (
-							<ActionLauncherCard key={action.key} action={action} />
+							<ActionLauncherCard key={action.key} action={action}>
+								{action.key === 'settle-report' && settleCountdown !== undefined ? (
+									<p id='open-oracle-settle-countdown' className='detail'>
+										{settleCountdown}
+									</p>
+								) : undefined}
+							</ActionLauncherCard>
 						))}
 					</div>
 				</SectionBlock>
@@ -373,7 +412,7 @@ export function OpenOracleReportDetailsCard({
 					openOracleActiveAction,
 					openOracleForm,
 					openOracleTokenAccessState,
-					openOracleReportDetails,
+					openOracleReportDetails: liveReportDetails,
 					token1Symbol: openOracleReportDetails.token1Symbol,
 					token2Symbol: openOracleReportDetails.token2Symbol,
 				})}
@@ -393,7 +432,7 @@ export function OpenOracleReportDetailsCard({
 					openOracleActiveAction,
 					openOracleForm,
 					openOracleTokenAccessState,
-					openOracleReportDetails,
+					openOracleReportDetails: liveReportDetails,
 					token1Symbol: openOracleReportDetails.token1Symbol,
 					token2Symbol: openOracleReportDetails.token2Symbol,
 				})}

@@ -7,6 +7,7 @@ import { isSelectedPoolForkWorkflowView, type SelectedPoolView, shouldReloadSele
 import type { getLiquidationNoticeState } from '../lib/liquidationStatus.js'
 
 type UseSelectedPoolRefreshEffectsParameters = {
+	currentTimestamp: bigint | undefined
 	currentForkAuctionDetails: ForkAuctionDetails | undefined
 	currentPoolOracleManagerDetails: OracleManagerDetails | undefined
 	currentPoolOracleManagerError: string | undefined
@@ -45,6 +46,7 @@ type UseSelectedPoolRefreshEffectsParameters = {
  * section component only derives state and renders.
  */
 export function useSelectedPoolRefreshEffects({
+	currentTimestamp,
 	currentForkAuctionDetails,
 	currentPoolOracleManagerDetails,
 	currentPoolOracleManagerError,
@@ -88,6 +90,37 @@ export function useSelectedPoolRefreshEffects({
 	const lastLiquidationOutcomeRefreshKey = useRef<string | undefined>(undefined)
 	const lastExecutedOperationRefreshHash = useRef<string | undefined>(undefined)
 	const lastForkAuctionOutcomeRefreshHash = useRef<string | undefined>(undefined)
+	const pendingPriceRefresh = useRef({ loadingPoolOracleManager, onLoadPoolOracleManager })
+	pendingPriceRefresh.current = { loadingPoolOracleManager, onLoadPoolOracleManager }
+	const previousPendingReport = useRef<{ managerAddress: Address; reportId: bigint } | undefined>(undefined)
+	useEffect(() => {
+		if (currentPoolOracleManagerDetails === undefined) return
+		const previous = previousPendingReport.current
+		if (previous !== undefined && sameAddress(previous.managerAddress, currentPoolOracleManagerDetails.managerAddress) && previous.reportId > 0n && currentPoolOracleManagerDetails.pendingReportId === 0n) {
+			onRefreshSelectedPoolData(selectedPool?.securityPoolAddress)
+		}
+		previousPendingReport.current = { managerAddress: currentPoolOracleManagerDetails.managerAddress, reportId: currentPoolOracleManagerDetails.pendingReportId }
+	}, [currentPoolOracleManagerDetails, onRefreshSelectedPoolData, selectedPool?.securityPoolAddress])
+	useEffect(() => {
+		if (currentPoolOracleManagerDetails?.pendingReportId === undefined || currentPoolOracleManagerDetails.pendingReportId === 0n || selectedPoolManagerAddress === undefined) return
+		const readyAt = currentPoolOracleManagerDetails.pendingReportReadyAtTimestamp
+		const secondsUntilReady = readyAt === undefined ? 5n : readyAt - (currentTimestamp ?? BigInt(Math.floor(Date.now() / 1000)))
+		const firstDelay = secondsUntilReady <= 0n ? 0 : Number(secondsUntilReady > 2147483n ? 2147483n : secondsUntilReady) * 1000
+		let interval: ReturnType<typeof setInterval> | undefined
+		const refresh = () => {
+			const state = pendingPriceRefresh.current
+			if (state.loadingPoolOracleManager) return
+			state.onLoadPoolOracleManager(selectedPoolManagerAddress)
+		}
+		const timeout = setTimeout(() => {
+			refresh()
+			interval = setInterval(refresh, 5000)
+		}, firstDelay)
+		return () => {
+			clearTimeout(timeout)
+			if (interval !== undefined) clearInterval(interval)
+		}
+	}, [currentPoolOracleManagerDetails?.pendingReportId, currentPoolOracleManagerDetails?.pendingReportReadyAtTimestamp, currentTimestamp, selectedPoolManagerAddress])
 	useEffect(() => {
 		if (selectedPoolManagerAddress === undefined) return
 		if (sameAddress(poolOracleManagerDetails?.managerAddress, selectedPoolManagerAddress)) return
