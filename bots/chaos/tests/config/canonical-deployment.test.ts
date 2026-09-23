@@ -4,6 +4,7 @@ import sepolia from '../../../../docs/sepolia-deployment-addresses.json'
 import mainnet from '../../../../docs/mainnet-deployment-addresses.json'
 import { parseSettings, serializedSettings } from '../../src/config/settings.ts'
 import { getAddress, zeroAddress } from '@zoltar/bot-shared/ethereum'
+import { createHash } from 'node:crypto'
 
 test('derives canonical addresses without configuration placeholders', () => {
 	for (const manifest of [mainnet, sepolia]) {
@@ -30,6 +31,18 @@ test('rejects a changed address or chain in a pinned deployment', () => {
 	expect(() => parseSettings({ ...stored, deploymentPin: { ...stored.deploymentPin, zoltar: getAddress('0x0000000000000000000000000000000000000001') } })).toThrow('deploymentPin does not match')
 	expect(() => parseSettings({ ...stored, deploymentPin: { ...stored.deploymentPin, uniswapV3Factory: getAddress('0x0000000000000000000000000000000000000001') } })).toThrow('deploymentPin factory does not match')
 	expect(() => parseSettings({ ...stored, network: { ...stored.network, chainId: 1, name: 'mainnet' } })).toThrow('deploymentPin does not match')
+})
+
+test('rejects a deterministic factory in a Sepolia pin even with a matching factory identity', () => {
+	const settings = parseSettings(example)
+	const stored = serializedSettings(settings)
+	const factory = getAddress('0xEf09Be426F8d6D2786cADEA7D3A8b0D09cEB79B4')
+	const profileId = stored.deploymentPin.profileId
+	const factoryId = `factory:v1:${createHash('sha256')
+		.update(JSON.stringify({ profileId, factory: factory.toLowerCase() }))
+		.digest('hex')}`
+	expect(() => parseSettings({ ...stored, deploymentPin: { ...stored.deploymentPin, factoryId, uniswapV3Factory: factory } })).toThrow('Sepolia requires the published Uniswap V3 factory')
+	expect(() => serializedSettings({ ...settings, deployment: { ...settings.deployment, uniswapV3Factory: factory } })).toThrow('Sepolia requires the published Uniswap V3 factory')
 })
 
 test('selects the published Uniswap factory for each network', () => {

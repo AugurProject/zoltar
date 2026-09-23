@@ -75,9 +75,10 @@ function topologyCacheWithVaults(pool: Address, vaults: Address[]): CanonicalImm
 const FIRST_PRIVATE_KEY = `0x${'11'.repeat(32)}` as const
 const SECOND_PRIVATE_KEY = `0x${'22'.repeat(32)}` as const
 
-function restartSettings(stateFile: string, deploymentIdentity: number, privateKey: `0x${string}` | null) {
+function restartSettings(stateFile: string, deploymentIdentity: number, privateKey: `0x${string}` | null, network: unknown = example.network) {
 	const settings = parseSettings({
 		...example,
+		network,
 		privateKey,
 		runtime: {
 			...example.runtime,
@@ -635,10 +636,46 @@ describe('chaos operator runtime', () => {
 		await runChaosOperator(await loadSettings(path), processLocks(), shutdown)
 		const loaded = await loadSettings(path)
 		expect(executionProfileId(loaded.settings)).toBe(profileId)
-		expect(loaded.settings.deployment.uniswapV3Factory).toBe('0xEf09Be426F8d6D2786cADEA7D3A8b0D09cEB79B4')
+		expect(loaded.settings.deployment.uniswapV3Factory).toBe('0x0227628f3F023bb0B980b67D528571c95c6DaC1c')
 		const restarted = await loadDurableState(stateFile, loaded.settings.network.chainId)
 		expect(restarted.profileId).toBe(profileId)
 		expect(restarted.uniswapV3Factory).toBe(loaded.settings.deployment.uniswapV3Factory)
+	})
+
+	test('keeps an existing deployment pin when historical Sepolia state belongs to another profile', async () => {
+		const directory = await mkdtemp('/tmp/zoltar-chaos-operator-pinned-history-')
+		temporaryDirectories.push(directory)
+		const path = join(directory, 'operator.json')
+		const stateFile = join(directory, 'state.json')
+		const settings = parseSettings({ ...example, runtime: { ...example.runtime, once: true, stateFile, ui: false } })
+		await writeFile(path, `${JSON.stringify(serializedSettings(settings))}\n`, { mode: 0o600 })
+		const operated = initialDurableState(11_155_111, true, 'profile:v1:831bd7a49fd68a696ac753b612ce41ec5c50580b093ab8e1e5151a26883e29ae')
+		operated.activities.push({ at: new Date(0).toISOString(), message: 'Existing operation', status: 'info', type: 'configuration' })
+		await saveDurableState(stateFile, operated)
+		const configBefore = await readFile(path)
+		const stateBefore = await readFile(stateFile)
+		using shutdown = createBotShutdownController()
+		await expect(runChaosOperator(await loadSettings(path), processLocks(), shutdown)).rejects.toThrow('configure a distinct state file for the new deployment profile')
+		expect(await readFile(path)).toEqual(configBefore)
+		expect(await readFile(stateFile)).toEqual(stateBefore)
+	})
+
+	test('refuses historical Sepolia state already bound to a different Uniswap factory', async () => {
+		const directory = await mkdtemp('/tmp/zoltar-chaos-operator-wrong-factory-')
+		temporaryDirectories.push(directory)
+		const path = join(directory, 'operator.json')
+		const stateFile = join(directory, 'state.json')
+		await writeFile(path, `${JSON.stringify({ ...example, runtime: { ...example.runtime, once: true, stateFile, ui: false } })}\n`, { mode: 0o600 })
+		const operated = initialDurableState(11_155_111, true, 'profile:v1:831bd7a49fd68a696ac753b612ce41ec5c50580b093ab8e1e5151a26883e29ae')
+		operated.activities.push({ at: new Date(0).toISOString(), message: 'Existing operation', status: 'info', type: 'configuration' })
+		operated.uniswapV3Factory = getAddress('0xEf09Be426F8d6D2786cADEA7D3A8b0D09cEB79B4')
+		await saveDurableState(stateFile, operated)
+		const configBefore = await readFile(path)
+		const stateBefore = await readFile(stateFile)
+		using shutdown = createBotShutdownController()
+		await expect(runChaosOperator(await loadSettings(path), processLocks(), shutdown)).rejects.toThrow('different Uniswap V3 factory')
+		expect(await readFile(path)).toEqual(configBefore)
+		expect(await readFile(stateFile)).toEqual(stateBefore)
 	})
 
 	test('leaves an unrecognized operated profile and its configuration untouched', async () => {
@@ -899,11 +936,12 @@ describe('chaos operator runtime', () => {
 		const directory = await mkdtemp('/tmp/zoltar-chaos-operator-pristine-')
 		temporaryDirectories.push(directory)
 		const stateFile = join(directory, 'state.json')
-		const previousSettings = restartSettings(stateFile, 1, null)
+		const customNetwork = { ...example.network, chainId: 31337, kind: 'custom', name: 'Local test' }
+		const previousSettings = restartSettings(stateFile, 1, null, customNetwork)
 		const previousState = initialDurableState(previousSettings.network.chainId, true, executionProfileId(previousSettings))
 		previousState.uniswapV3Factory = previousSettings.deployment.uniswapV3Factory
 		await saveDurableState(stateFile, previousState)
-		const changedSettings = restartSettings(stateFile, 2, null)
+		const changedSettings = restartSettings(stateFile, 2, null, customNetwork)
 		changedSettings.deployment.uniswapV3Factory = getAddress('0x0000000000000000000000000000000000000001')
 
 		using shutdown = createBotShutdownController()

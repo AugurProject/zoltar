@@ -54,8 +54,9 @@ export async function verifyRetirementCompletionFinality(settings: OperatorSetti
 	if (!finalized) throw new Error('Retirement completion block is not finalized')
 }
 
-export async function resetPristineStateForDeploymentProfile(state: RuntimeState, expectedProfileId: string, paused: boolean, wallet: Address | undefined, stateFile: string, verifyCompletionEvidence: (evidence: BoundRetirementCompletionEvidence) => Promise<void>) {
+export async function resetPristineStateForDeploymentProfile(state: RuntimeState, expectedProfileId: string, factory: Address | undefined, paused: boolean, wallet: Address | undefined, stateFile: string, verifyCompletionEvidence: (evidence: BoundRetirementCompletionEvidence) => Promise<void>) {
 	if (state.profileId === expectedProfileId) return false
+	if (factory === undefined) throw new Error('Configured deployment is missing its Uniswap V3 factory')
 	if (!isPristineBootstrapState(state)) {
 		const evidence = state.retirement.completionEvidence
 		const override = state.retirement.profileReplacementOverride
@@ -74,5 +75,6 @@ export async function resetPristineStateForDeploymentProfile(state: RuntimeState
 		await verifyCompletionEvidence(boundCompletionEvidence(state, wallet))
 	}
 	resetRuntimeStateForProfile(state, expectedProfileId, paused, wallet)
+	state.uniswapV3Factory = factory
 	return true
 }

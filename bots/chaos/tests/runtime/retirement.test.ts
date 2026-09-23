@@ -375,7 +375,7 @@ describe('Drain & Retire planning', () => {
 		applyRetirementAssessment(retirement, assessment, hash(1), 1n, completionBinding, now)
 		expect(retirement.completionEvidence).toBeUndefined()
 		const runtime = initialRuntimeState(true, snapshot.wallet.address, 31_337, durable)
-		await expect(resetPristineStateForDeploymentProfile(runtime, 'profile:replacement', true, snapshot.wallet.address, '/tmp/retirement-state.json', async () => undefined)).rejects.toThrow('drain it first')
+		await expect(resetPristineStateForDeploymentProfile(runtime, 'profile:replacement', address(50), true, snapshot.wallet.address, '/tmp/retirement-state.json', async () => undefined)).rejects.toThrow('drain it first')
 	})
 
 	test('revokes ERC-20, ERC-1155, and LP approvals one deterministic target at a time', () => {
@@ -565,7 +565,7 @@ describe('Drain & Retire planning', () => {
 		const mismatchedRuntime = initialRuntimeState(true, snapshot.wallet.address, 31_337)
 		mismatchedRuntime.profileId = 'profile:other'
 		mismatchedRuntime.retirement = structuredClone(retirement)
-		await expect(resetPristineStateForDeploymentProfile(mismatchedRuntime, 'profile:replacement', true, snapshot.wallet.address, '/tmp/retirement-state.json', async () => undefined)).rejects.toThrow('drain it first')
+		await expect(resetPristineStateForDeploymentProfile(mismatchedRuntime, 'profile:replacement', address(50), true, snapshot.wallet.address, '/tmp/retirement-state.json', async () => undefined)).rejects.toThrow('drain it first')
 
 		const runtime = initialRuntimeState(true, snapshot.wallet.address, 31_337)
 		runtime.profileId = 'profile:test'
@@ -574,13 +574,13 @@ describe('Drain & Retire planning', () => {
 		const mismatchedSigner = structuredClone(runtime)
 		if (mismatchedSigner.retirement.completionEvidence === undefined) throw new Error('Completion evidence fixture is missing')
 		Object.assign(mismatchedSigner.retirement.completionEvidence, { profileId: 'profile:test', signerAddress: address(44) })
-		await expect(resetPristineStateForDeploymentProfile(mismatchedSigner, 'profile:replacement', true, snapshot.wallet.address, '/tmp/retirement-state.json', async () => undefined)).rejects.toThrow('signer')
+		await expect(resetPristineStateForDeploymentProfile(mismatchedSigner, 'profile:replacement', address(50), true, snapshot.wallet.address, '/tmp/retirement-state.json', async () => undefined)).rejects.toThrow('signer')
 		expect(mismatchedSigner.profileId).toBe('profile:test')
 
 		const changedHash = structuredClone(runtime)
 		const beforeRejectedReset = structuredClone(changedHash)
 		await expect(
-			resetPristineStateForDeploymentProfile(changedHash, 'profile:replacement', true, snapshot.wallet.address, '/tmp/retirement-state.json', async () => {
+			resetPristineStateForDeploymentProfile(changedHash, 'profile:replacement', address(50), true, snapshot.wallet.address, '/tmp/retirement-state.json', async () => {
 				throw new Error('Completion block is not finalized or is no longer canonical')
 			}),
 		).rejects.toThrow('not finalized')
@@ -593,10 +593,11 @@ describe('Drain & Retire planning', () => {
 		})
 		const singleReaderReset = structuredClone(runtime)
 		const beforeSingleReaderReset = structuredClone(singleReaderReset)
-		await expect(resetPristineStateForDeploymentProfile(singleReaderReset, 'profile:replacement', true, snapshot.wallet.address, '/tmp/retirement-state.json', async evidence => verifyRetirementCompletionFinality(singleReaderSettings, evidence))).rejects.toThrow('two independent RPC readers')
+		await expect(resetPristineStateForDeploymentProfile(singleReaderReset, 'profile:replacement', address(50), true, snapshot.wallet.address, '/tmp/retirement-state.json', async evidence => verifyRetirementCompletionFinality(singleReaderSettings, evidence))).rejects.toThrow('two independent RPC readers')
 		expect(singleReaderReset).toEqual(beforeSingleReaderReset)
 
-		expect(await resetPristineStateForDeploymentProfile(runtime, 'profile:replacement', true, snapshot.wallet.address, '/tmp/retirement-state.json', async () => undefined)).toBeTrue()
+		expect(await resetPristineStateForDeploymentProfile(runtime, 'profile:replacement', address(50), true, snapshot.wallet.address, '/tmp/retirement-state.json', async () => undefined)).toBeTrue()
+		expect(runtime.uniswapV3Factory).toBe(address(50))
 
 		applyRetirementAssessment(retirement, residual, hash(3), 3n, completionBinding, '2026-09-07T00:01:00.000Z')
 		expect(retirement.profileReplacementOverride).toBeUndefined()

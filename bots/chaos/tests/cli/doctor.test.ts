@@ -417,7 +417,10 @@ describe('chaos launch doctor', () => {
 	})
 
 	test('rejects a changed factory even if its configuration identity is recomputed', async () => {
-		const settings = await settingsFixture('operator.configured-placeholder.json')
+		const base = await settingsFixture('operator.configured-placeholder.json')
+		const unpinned = serializedSettings(base)
+		Reflect.deleteProperty(unpinned, 'deploymentPin')
+		const settings = parseSettings({ ...unpinned, network: { ...base.network, chainId: 31337, kind: 'custom', name: 'Local test' } })
 		const state = initialDurableState(settings.network.chainId, true, executionProfileId(settings))
 		state.activities.push({ at: new Date(0).toISOString(), message: 'existing history', status: 'info', type: 'configuration' })
 		state.uniswapV3Factory = settings.deployment.uniswapV3Factory

@@ -98,7 +98,7 @@ describe('Drain & Retire persisted restart behavior', () => {
 		state = await reload(path, state)
 		expect(state.retirement.status).toBe('known-claims-recovered')
 		expect(state.retirement.completionEvidence).toBeUndefined()
-		await expect(resetPristineStateForDeploymentProfile(state, 'profile:replacement', false, state.wallet, path, async () => {})).rejects.toThrow('drain it first')
+		await expect(resetPristineStateForDeploymentProfile(state, 'profile:replacement', address(50), false, state.wallet, path, async () => {})).rejects.toThrow('drain it first')
 		snapshot.wallet.openOracleEthCredit = '9'
 		let recovered = false
 		await processRetirementCycle({

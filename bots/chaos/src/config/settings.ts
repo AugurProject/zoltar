@@ -13,7 +13,7 @@ import { dirname, resolve } from 'node:path'
 import { CHAOS_OPERATION_CATALOG } from '../operations/catalog.ts'
 import { MINIMUM_WORKFLOW_VALIDITY_BLOCKS } from '../operations/timing.ts'
 import { assertExactKeys as assertExactRequiredAndOptionalKeys, requiredRecord, uint256String } from '../state/validators.ts'
-import { canonicalDeployment } from './canonical-deployment.ts'
+import { assertSepoliaUniswapFactory, canonicalDeployment } from './canonical-deployment.ts'
 import { executionProfileId } from './execution-profile.ts'
 
 const PRESERVE_PRIVATE_KEY = '__PRESERVE_SAVED_PRIVATE_KEY__'
@@ -353,6 +353,7 @@ function parseDeploymentPin(value: unknown, network: OperatorSettings['network']
 	}
 	if (pin['profileId'] !== executionProfileId({ deployment, network })) throw new Error('deploymentPin does not match its chain and deployment addresses')
 	if (pin['factoryId'] !== deploymentFactoryId(pin['profileId'], deployment.uniswapV3Factory)) throw new Error('deploymentPin factory does not match its saved identity')
+	assertSepoliaUniswapFactory(network.chainId, deployment.uniswapV3Factory)
 	return deployment
 }
 
@@ -398,6 +399,7 @@ export function parseSettings(value: unknown, preservedPrivateKey?: Hex): Operat
 export function serializedSettings(settings: OperatorSettings, redactPrivateKey = false) {
 	const factory = settings.deployment.uniswapV3Factory
 	if (factory === undefined) throw new Error('Cannot save a deployment profile without a Uniswap V3 factory')
+	assertSepoliaUniswapFactory(settings.network.chainId, factory)
 	const profileId = executionProfileId(settings)
 	return {
 		connectivity: settings.connectivity === undefined ? null : { ...settings.connectivity },

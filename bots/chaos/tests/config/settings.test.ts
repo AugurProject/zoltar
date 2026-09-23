@@ -81,7 +81,7 @@ describe('chaos-bot settings', () => {
 		const loaded = await loadSettings(path)
 		const restored = restoreDeploymentForDurableState(loaded.settings, state, loaded.needsDeploymentPin)
 		expect(executionProfileId(restored)).toBe(previousProfile)
-		expect(restored.deployment.uniswapV3Factory).toBe('0xEf09Be426F8d6D2786cADEA7D3A8b0D09cEB79B4')
+		expect(restored.deployment.uniswapV3Factory).toBe('0x0227628f3F023bb0B980b67D528571c95c6DaC1c')
 		await saveSettings(path, restored, loaded.revision)
 		const persisted = record(JSON.parse(await readFile(path, 'utf8')))
 		expect(persisted['deploymentPin']).toBeDefined()

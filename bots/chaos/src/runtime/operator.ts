@@ -426,7 +426,7 @@ export async function runChaosOperator(loaded: LoadedConfiguration, locks: Chaos
 	const initialProfileId = executionProfileId(loaded.settings)
 	assertDurableSignerScope(state, initialWallet, loaded.settings.runtime.stateFile)
 	if (state.profileId === initialProfileId && (state.uniswapV3Factory !== undefined || !isPristineBootstrapState(state))) assertDurableDeploymentFactory(loaded.settings, state, loaded.settings.runtime.stateFile)
-	const initialCarryProfileResetAuthorized = await resetPristineStateForDeploymentProfile(state, initialProfileId, loaded.settings.paused, initialWallet, loaded.settings.runtime.stateFile, async evidence => verifyRetirementCompletionFinality(loaded.settings, evidence))
+	const initialCarryProfileResetAuthorized = await resetPristineStateForDeploymentProfile(state, initialProfileId, loaded.settings.deployment.uniswapV3Factory, loaded.settings.paused, initialWallet, loaded.settings.runtime.stateFile, async evidence => verifyRetirementCompletionFinality(loaded.settings, evidence))
 	if (initialCarryProfileResetAuthorized) {
 		recordActivity(state, {
 			message: 'Durable runtime initialized for the configured deployment profile',
@@ -589,7 +589,7 @@ export async function runChaosOperator(loaded: LoadedConfiguration, locks: Chaos
 					if (!configurationIsCurrent()) return 'deferred'
 					const wallet = configuredWallet(settings)
 					assertDurableSignerScope(state, wallet, settings.runtime.stateFile)
-					await resetPristineStateForDeploymentProfile(state, expectedProfileId, settings.paused, wallet, settings.runtime.stateFile, async evidence => verifyRetirementCompletionFinality(settings, evidence))
+					await resetPristineStateForDeploymentProfile(state, expectedProfileId, settings.deployment.uniswapV3Factory, settings.paused, wallet, settings.runtime.stateFile, async evidence => verifyRetirementCompletionFinality(settings, evidence))
 					topologyCache = undefined
 					topologyCacheProfileId = undefined
 					topologyCacheStateFile = undefined
