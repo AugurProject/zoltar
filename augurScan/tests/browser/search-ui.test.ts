@@ -30,11 +30,18 @@ test('Escape discards search results from an in-flight request', async () => {
 		expect(results.hidden).toBe(false)
 		expect(results.textContent).toBe('Searching…')
 		expect(browser.document.activeElement).toBe(input)
-		browser.document.dispatchEvent(new browser.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+		input.value = 'transaction'
+		input.scrollLeft = 100
+		input.dispatchEvent(new browser.Event('input', { bubbles: true }))
 		completeSearch({ items: [{ type: 'block', label: 'Block #1', href: '/block/1?chainId=1' }] })
+		await Bun.sleep(0)
+		expect(results.querySelector('a')).toBeNull()
+		browser.document.dispatchEvent(new browser.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
 		await Bun.sleep(0)
 		expect(results.hidden).toBe(true)
 		expect(results.childElementCount).toBe(0)
+		expect(input.value).toBe('')
+		expect(input.scrollLeft).toBe(0)
 	} finally {
 		if (originalDocument === undefined) Reflect.deleteProperty(globalThis, 'document')
 		else Object.defineProperty(globalThis, 'document', originalDocument)

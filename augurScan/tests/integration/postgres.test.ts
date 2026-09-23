@@ -4631,8 +4631,32 @@ for (const scenario of ['question seconds', 'receipt discovery order'] as const)
 				if (response === undefined) throw new Error('Missing state response')
 				const body: unknown = await response.json()
 				if (!isRecord(body) || !Array.isArray(body['questions'])) throw new Error('Missing questions')
+				const catalogVersion = body['catalogVersion']
+				expect(catalogVersion).toMatch(/^[0-9a-f]{32}$/)
 				expect(body['questions'].every(isQuestionStateEntityValue)).toBe(true)
 				expect(body['questions']).toContainEqual(expect.objectContaining({ start_time: '281474976710655', end_time: '281474976710655' }))
+				await database.sql`UPDATE questions SET title = title || ' revised' WHERE chain_id = ${fixtureChain} AND question_id = 0`
+				const changedResponse = await handleApi(new Request(`http://localhost/api/v1/state/catalog?chainId=${fixtureChain}`), database.sql)
+				if (changedResponse === undefined) throw new Error('Missing changed state response')
+				const changedBody: unknown = await changedResponse.json()
+				if (!isRecord(changedBody)) throw new Error('Missing changed state catalog')
+				expect(changedBody['catalogVersion']).not.toBe(catalogVersion)
+				await database.sql`UPDATE questions SET title = 'Exact_% question' WHERE chain_id = ${fixtureChain} AND question_id = 0`
+				for (const path of ['search', 'state/catalog']) {
+					for (const [query, expected] of [
+						['__', 0],
+						['%%', 0],
+						['_%', 1],
+					] as const) {
+						const filteredResponse = await handleApi(new Request(`http://localhost/api/v1/${path}?chainId=${fixtureChain}&q=${encodeURIComponent(query)}`), database.sql)
+						if (filteredResponse === undefined) throw new Error(`Missing ${path} search response`)
+						const filteredBody: unknown = await filteredResponse.json()
+						if (!isRecord(filteredBody)) throw new Error(`Malformed ${path} search response`)
+						const matches = path === 'search' ? filteredBody['items'] : filteredBody['questions']
+						expect(Array.isArray(matches) ? matches.length : -1).toBe(expected)
+					}
+				}
+				await database.sql`UPDATE questions SET title = 'Exact question' WHERE chain_id = ${fixtureChain} AND question_id = 0`
 				await database.sql`DELETE FROM questions WHERE chain_id = ${fixtureChain} AND question_id <> 0`
 				await database.sql`UPDATE questions SET start_time = 1767225600, end_time = 8640000000000, canonical = false WHERE chain_id = ${fixtureChain}`
 				await database.sql.unsafe('ALTER TABLE questions ALTER COLUMN start_time TYPE timestamptz USING to_timestamp(start_time), ALTER COLUMN end_time TYPE timestamptz USING to_timestamp(end_time)')

@@ -60,14 +60,14 @@ export const renderQuestionDetailPage = async (deps: StateEntityDeps, question: 
 	metrics.append(metricCard('Status', questionStatus(question)), metricCard('Linked pools', number(question.pool_count)), metricCard('Universe forks', number(question.fork_count)), metricCard('Answer type', kind))
 	if (!canonicalQuestionRoute || questionTab === 'overview') fragment.append(metrics)
 	const definition = element('section', 'static-card')
-	definition.append(element('h4', '', 'Question definition — immutable after creation'), element('p', 'question-description', question.description))
+	definition.append(element('h4', '', 'Question definition'), element('p', 'question-description', question.description))
 	const outcomes = element('div', 'outcomes')
 	const labels = question.outcome_options.length > 0 ? ['Invalid', ...question.outcome_options] : [`${exactUnit(question.display_value_min, 18, question.answer_unit)} → ${exactUnit(question.display_value_max, 18, question.answer_unit)}`, `${number(question.num_ticks)} ticks`]
 	for (const label of labels) outcomes.append(element('span', 'outcome', label))
 	definition.append(outcomes)
 	const timeline = element('div', 'timeline')
 	for (const [label, value] of [
-		['Created', new Date(question.created_timestamp).toLocaleDateString('en-GB')],
+		['Created', `${new Date(question.created_timestamp).toLocaleDateString('en-GB', { timeZone: 'UTC' })} UTC`],
 		['Starts', questionDateLabel(question.start_time)],
 		['Ends', questionDateLabel(question.end_time)],
 	] as const)
@@ -78,7 +78,7 @@ export const renderQuestionDetailPage = async (deps: StateEntityDeps, question: 
 	usage.append(element('h4', '', 'Protocol usage'))
 	const grid = element('div', 'static-grid')
 	grid.append(staticField('Pool deployments', number(question.pool_count)), staticField('Universe forks using this question', number(question.fork_count)), staticField('Question ID', question.question_id), staticField('Created block evidence', `#${number(question.block_number)}`))
-	usage.append(grid, element('p', 'data-note', 'Question metadata has no mutable onchain fields. Pool deployments and universe forks are tracked separately as historical usage.'))
+	usage.append(grid)
 	if (!canonicalQuestionRoute || questionTab === 'usage') fragment.append(usage)
 	$('#state-detail').replaceChildren(fragment)
 }

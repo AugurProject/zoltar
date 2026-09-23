@@ -16,7 +16,6 @@ export interface OperationsOverviewDeps {
 	readonly element: <K extends keyof HTMLElementTagNameMap>(tag: K, className?: string, text?: string) => HTMLElementTagNameMap[K]
 	readonly number: (value: string | number | bigint | null | undefined) => string
 	readonly exactTimestamp: (value: string | number | Date | null | undefined) => string
-	readonly counted: (value: string | number | bigint | null | undefined, singular: string, plural?: string) => string
 	readonly operationNumber: (value: unknown) => string
 	readonly operationCounted: (value: unknown, singular: string, plural?: string) => string
 	readonly operationsHref: (pathname: string) => string
@@ -40,7 +39,6 @@ export const renderOperationsOverview = (deps: OperationsOverviewDeps, response:
 		element,
 		number,
 		exactTimestamp,
-		counted,
 		operationNumber,
 		operationCounted,
 		operationsHref,
@@ -85,11 +83,13 @@ export const renderOperationsOverview = (deps: OperationsOverviewDeps, response:
 		operationCard('Block timestamp', asOf['blockTimestamp'] === undefined ? 'Unavailable' : exactTimestamp(Number(asOf['blockTimestamp']) * 1_000).replace('.000Z', 'Z')),
 	)
 	const metrics = element('div', 'operations-metrics')
+	const settleableShown = reports.filter(item => isRecord(item['lifecycle']) && item['lifecycle']['state'] === 'Settleable').length
+	const openAuctionsShown = auctions.filter(item => item['status'] === 'Open').length
 	metrics.append(
 		operationCard(
 			'OpenOracle reports',
 			operationNumber(totals['reports'] ?? reports.length),
-			counted(reports.filter(item => isRecord(item['lifecycle']) && item['lifecycle']['state'] === 'Settleable').length, 'settleable'),
+			`${number(settleableShown)} settleable among ${number(reports.length)} shown`,
 			changes.filter(item => item['entity_type'] === 'report'),
 		),
 		operationCard(
@@ -101,7 +101,7 @@ export const renderOperationsOverview = (deps: OperationsOverviewDeps, response:
 		operationCard(
 			'Truth auctions',
 			operationNumber(totals['auctions'] ?? auctions.length),
-			counted(auctions.filter(item => item['status'] === 'Open').length, 'open'),
+			`${number(openAuctionsShown)} open among ${number(auctions.length)} shown`,
 			changes.filter(item => item['entity_type'] === 'auction'),
 		),
 		operationCard(
@@ -145,7 +145,7 @@ export const renderOperationsOverview = (deps: OperationsOverviewDeps, response:
 		const riskPresentation = operationsRiskPresentation('pool', item['protocol_state'], item['scanner_severity'])
 		return operationRow(
 			'Pool accounting',
-			`${riskPresentation.scannerAssessment} · ${percentFromBps(operationNumber(capacity['utilizationBps']))} utilized · ${String(item['scanner_reason'] ?? '')}`,
+			`${riskPresentation.scannerAssessment} · ${percentFromBps(typeof capacity['utilizationBps'] === 'string' ? capacity['utilizationBps'] : undefined)} utilized · ${String(item['scanner_reason'] ?? '')}`,
 			String(item['pool_address'] ?? ''),
 			item['block_number'],
 			operationsHref(`/operations/risk/pool/${encodeURIComponent(String(item['pool_address'] ?? ''))}`),
@@ -156,7 +156,7 @@ export const renderOperationsOverview = (deps: OperationsOverviewDeps, response:
 		const riskPresentation = operationsRiskPresentation('vault', item['protocol_state'], item['scanner_severity'])
 		return operationRow(
 			'Vault position',
-			`${riskPresentation.scannerAssessment} · health ${percentFromBps(operationNumber(itemRisk['healthFactorBps']))} · ${String(item['scanner_reason'] ?? '')}`,
+			`${riskPresentation.scannerAssessment} · health ${percentFromBps(typeof itemRisk['healthFactorBps'] === 'string' ? itemRisk['healthFactorBps'] : undefined)} · ${String(item['scanner_reason'] ?? '')}`,
 			String(item['vault_address'] ?? ''),
 			item['block_number'],
 			operationsHref(`/operations/risk/vault/${encodeURIComponent(String(item['pool_address'] ?? ''))}/${encodeURIComponent(String(item['vault_address'] ?? ''))}`),
@@ -302,9 +302,9 @@ export const renderOperationsOverview = (deps: OperationsOverviewDeps, response:
 		],
 	])
 	const panels = sectionPanels.get(selected)?.() ?? [
-		operationsPanel('Needs attention · reports', attentionReportRows.slice(0, 5), 'No reports need attention.'),
-		operationsPanel('Active escalations', activeEscalationRows, 'No escalation games are active.'),
-		operationsPanel('Active auctions', activeAuctionRows, 'No auctions are active.'),
+		operationsPanel('Needs attention · reports', attentionReportRows.slice(0, 5), `No reports need attention among ${number(reports.length)} shown.`),
+		operationsPanel('Active escalations', activeEscalationRows, `No active escalation games among ${number(escalations.length)} shown.`),
+		operationsPanel('Active auctions', activeAuctionRows, `No active auctions among ${number(auctions.length)} shown.`),
 		operationsPanel('Pool and vault risk', riskRows, 'No risk snapshots are available.'),
 		operationsPanel('Fork and migration progress', forkRows, 'No forks or migrations match this view.'),
 		operationsPanel('Price provenance', priceRows, 'No accepted coordinator price is available.'),

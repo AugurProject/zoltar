@@ -34,7 +34,8 @@ export const renderActivityRow = (deps: ActivityRowDeps, log: ActivityRecord) =>
 	blockLink.className = 'address-link activity-target'
 	blockLink.href = `/block/${log.block_number}?chainId=${log.chain_id}${isDemo ? '&demo=1' : ''}`
 	chain.append(blockLink, openCue)
-	const timestamp = element('time', 'cell cell-time', `${time(log.block_timestamp)} · ${age(log.block_timestamp)}`)
+	const timestamp = element('time', 'cell cell-time')
+	timestamp.append(element('span', '', time(log.block_timestamp)), element('span', 'activity-age', `· ${age(log.block_timestamp)}`))
 	timestamp.dataset.time = log.block_timestamp
 	timestamp.dateTime = exactTimestamp(log.block_timestamp)
 	timestamp.title = exactTimestamp(log.block_timestamp)

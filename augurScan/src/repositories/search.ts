@@ -1,5 +1,6 @@
 import type { SQL } from 'bun'
 import { blockTransactionLimit, boundBlockTransactions } from './block-transaction-limit.ts'
+import { literalContainsPattern } from './like-pattern.ts'
 
 const addressPattern = /^0x[0-9a-f]{40}$/i
 const hashPattern = /^0x[0-9a-f]{64}$/i
@@ -36,7 +37,7 @@ export const searchItems = async (sql: SQL, chainId: number, query: string, limi
 		for (const report of reports) items.push({ type: 'report', label: `Report #${report['report_id']}`, href: `/report/${report['open_oracle_address']}/${report['report_id']}?chainId=${chainId}`, detail: String(report['open_oracle_address']) })
 	}
 	if (query.length >= 2 && !hashPattern.test(query)) {
-		const pattern = `%${query}%`
+		const pattern = literalContainsPattern(query)
 		const questions = await sql`SELECT question_id::text, title FROM questions WHERE chain_id = ${chainId} AND title ILIKE ${pattern} AND canonical ORDER BY created_timestamp DESC LIMIT ${limit}`
 		for (const question of questions) items.push({ type: 'question', label: String(question['title']), href: `/question/${question['question_id']}?chainId=${chainId}` })
 	}

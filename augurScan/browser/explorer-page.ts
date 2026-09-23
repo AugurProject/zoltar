@@ -104,7 +104,12 @@ export const renderExplorerPage = async (path: string, chainId: string, api: (pa
 		if (live) {
 			content.querySelector('.explorer-refresh-error')?.remove()
 			content.append(node('p', 'system-status error explorer-refresh-error', 'Could not refresh indexed evidence. The prior evidence remains visible.'))
-		} else content.replaceChildren(node('h2', '', error instanceof Error && error.status === 404 ? 'Page not found' : 'Evidence unavailable'), node('p', 'system-status error', error instanceof Error ? error.message : String(error)), link('Back to activity', '/'))
+		} else {
+			const retry = node('button', 'state-retry explorer-retry', 'Retry')
+			retry.type = 'button'
+			retry.addEventListener('click', () => void renderExplorerPage(path, chainId, api))
+			content.replaceChildren(node('h2', '', error instanceof Error && error.status === 404 ? 'Page not found' : 'Evidence unavailable'), node('p', 'system-status error', error instanceof Error ? error.message : String(error)), retry, link('Back to activity', '/'))
+		}
 		content.removeAttribute('aria-busy')
 		return false
 	}

@@ -280,6 +280,8 @@ export interface StateCatalog {
 	}>
 	truncated?: Record<string, boolean>
 	limit?: number
+	offset?: number
+	catalogVersion: string
 	totals?: Record<'pools' | 'questions' | 'vaults' | 'universes', number>
 }
 

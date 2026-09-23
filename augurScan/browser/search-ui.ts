@@ -49,9 +49,13 @@ export const mountSearch = (api: (path: string) => Promise<unknown>, chainId: ()
 			results.hidden = true
 			results.replaceChildren()
 			input.value = ''
+			input.scrollLeft = 0
 		}, 0)
 	})
 	input.addEventListener('input', () => {
+		generation++
+		results.hidden = true
+		results.replaceChildren()
 		window.clearTimeout(Number(input.dataset['searchTimer'] ?? 0))
 		input.dataset['searchTimer'] = String(window.setTimeout(() => void search(), 250))
 	})
@@ -64,6 +68,7 @@ export const mountSearch = (api: (path: string) => Promise<unknown>, chainId: ()
 			generation++
 			window.clearTimeout(Number(input.dataset['searchTimer'] ?? 0))
 			input.value = ''
+			input.scrollLeft = 0
 			results.hidden = true
 			results.replaceChildren()
 			input.blur()

@@ -45,7 +45,7 @@ export const sourceSizeAllowances = new Map<string, SourceSizeAllowance>([
 		['ui/statoblastShared/ts/features/security-pools/hooks/useSecurityPoolsOverview.ts', 659],
 	]),
 	...allowances('The AugurScan browser bundle and its live-update module still need feature-level decomposition.', [
-		['augurScan/browser/app.ts', 1698],
+		['augurScan/browser/app.ts', 1697],
 		['augurScan/browser/live-update.ts', 1096],
 	]),
 	...allowances('Bot QA and documentation capture scripts grew with every dashboard surface they exercise.', [

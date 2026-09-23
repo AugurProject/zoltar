@@ -28,6 +28,7 @@ browserTest(
 			await session.send('Page.navigate', { url: session.pageUrl })
 			await waitFor(`document.querySelector('.log-row .cell-tx') !== null`)
 			await Bun.sleep(300)
+			expect(await evaluate(`document.querySelector('.log-row .cell-time').scrollWidth <= document.querySelector('.log-row .cell-time').clientWidth`)).toBe(true)
 			expect(await evaluate(`document.querySelector('#connection-label')?.textContent`)).toContain('live · #23,184,712')
 			expect(await evaluate(`document.querySelector('.log-row .activity-summary-text')?.textContent.length > 0`)).toBe(true)
 			await evaluate(`document.dispatchEvent(new KeyboardEvent('keydown', { key: '/', bubbles: true }))`)
@@ -59,6 +60,9 @@ browserTest(
 			await session.send('Page.navigate', { url: `${origin}/block/23184711?demo=1&chainId=1&block251=1` })
 			await waitFor(`document.querySelector('#explorer-content h3')?.textContent === 'First 250 transactions'`)
 			expect(await evaluate(`document.querySelector('#explorer-content .data-note')?.textContent`)).toContain('More indexed transactions')
+			await session.send('Page.navigate', { url: `${origin}/operations?demo=1&chainId=1` })
+			await waitFor(`document.querySelector('#operations-content')?.textContent.includes('Vault position')`)
+			expect(await evaluate(`document.querySelector('#operations-content')?.textContent.includes('health 113.5%')`)).toBe(true)
 			await session.send('Page.navigate', { url: `${origin}/richlist?demo=1` })
 			await waitFor(`document.querySelector('.data-table tbody tr') !== null`)
 			expect(await evaluate(`document.querySelector('.data-table tbody tr td:nth-child(2)')?.textContent`)).toBe('912.000000000000000001 REP')
@@ -70,7 +74,8 @@ browserTest(
 			await session.send('Page.navigate', { url: `${origin}/question/501?demo=1&chainId=1&entity501=1` })
 			await waitFor(`document.querySelector('#state-detail')?.textContent.includes('Question 501')`)
 			expect(await evaluate(`document.querySelector('#state-detail .state-detail-title')?.textContent`)).toBe('Question 501')
-			expect(await evaluate(`document.querySelector('#entity-count')?.textContent`)).toContain('of 501')
+			expect(await evaluate(`document.querySelector('#entity-count')?.textContent`)).toBe('501')
+			expect(await evaluate(`document.querySelectorAll('#entity-list .entity-row[data-key="1:501"]').length`)).toBe(1)
 			await session.send('Page.navigate', { url: `${origin}/missing?demo=1` })
 			await waitFor(`document.title === 'Page not found · augurScan'`)
 			expect(await evaluate(`document.querySelector('#not-found').hidden`)).toBe(false)
@@ -132,4 +137,362 @@ browserTest(
 		}
 	},
 	30_000,
+)
+
+browserTest(
+	'the system catalog can load and find questions beyond its initial page',
+	async () => {
+		const session = await createDevToolsSession(process.env['CHROMIUM_PATH'] ?? '/usr/bin/chromium', `${origin}/system?demo=1&chainId=1&tab=questions&entity1201=1`, { width: 1440, height: 900 })
+		const evaluate = async (expression: string): Promise<unknown> => {
+			const response = await session.send('Runtime.evaluate', { expression, returnByValue: true, awaitPromise: true })
+			if (typeof response !== 'object' || response === null || !('result' in response) || typeof response.result !== 'object' || response.result === null || !('value' in response.result)) return undefined
+			return response.result.value
+		}
+		const waitFor = async (expression: string) => {
+			for (let attempt = 0; attempt < 100; attempt++) {
+				if (await evaluate(expression)) return
+				await Bun.sleep(100)
+			}
+			throw new Error(`Timed out: ${expression}`)
+		}
+		try {
+			await session.send('Runtime.enable')
+			await session.send('Page.enable')
+			await session.send('Page.navigate', { url: session.pageUrl })
+			await waitFor(`document.querySelector('#entity-count')?.textContent === '500 of 1,201'`)
+			await evaluate(`document.querySelector('#entity-load-more').click()`)
+			await waitFor(`document.querySelector('#entity-count')?.textContent === '1,000 of 1,201'`)
+			await evaluate(`document.querySelector('#entity-load-more').click()`)
+			await waitFor(`document.querySelector('#entity-list')?.textContent.includes('Question 1201')`)
+			expect(await evaluate(`document.querySelector('#entity-count')?.textContent`)).toContain('1,201')
+			await session.send('Page.navigate', { url: session.pageUrl })
+			await waitFor(`document.querySelector('#entity-count')?.textContent === '500 of 1,201'`)
+			await evaluate(`document.querySelector('#entity-search').value = 'Question 1201'; document.querySelector('#entity-search').dispatchEvent(new Event('input', { bubbles: true }))`)
+			await waitFor(`document.querySelectorAll('#entity-list .entity-row').length === 1 && document.querySelector('#entity-list')?.textContent.includes('Question 1201')`)
+			expect(await evaluate(`document.querySelector('#entity-list .entity-row')?.textContent`)).toContain('Question 1201')
+			await session.send('Page.navigate', { url: `${origin}/question/1201?demo=1&chainId=1&entity1201=1` })
+			await waitFor(`document.querySelector('#state-detail .state-detail-title')?.textContent === 'Question 1201'`)
+			expect(await evaluate(`document.querySelector('#state-detail .state-detail-title')?.textContent`)).toBe('Question 1201')
+		} finally {
+			await session.close()
+		}
+	},
+	30_000,
+)
+
+browserTest(
+	'large catalogs use one catalog request per additional page',
+	async () => {
+		const session = await createDevToolsSession(process.env['CHROMIUM_PATH'] ?? '/usr/bin/chromium', `${origin}/system?demo=1&chainId=1&tab=questions&entity5001=1`, { width: 1440, height: 900 })
+		const evaluate = async (expression: string): Promise<unknown> => {
+			const response = await session.send('Runtime.evaluate', { expression, returnByValue: true, awaitPromise: true })
+			if (typeof response !== 'object' || response === null || !('result' in response) || typeof response.result !== 'object' || response.result === null || !('value' in response.result)) return undefined
+			return response.result.value
+		}
+		const waitFor = async (expression: string) => {
+			for (let attempt = 0; attempt < 100; attempt++) {
+				if (await evaluate(expression)) return
+				await Bun.sleep(100)
+			}
+			throw new Error(`Timed out: ${expression}`)
+		}
+		try {
+			await session.send('Runtime.enable')
+			await session.send('Page.enable')
+			await session.send('Page.navigate', { url: session.pageUrl })
+			await waitFor(`document.querySelector('#entity-count')?.textContent === '500 of 5,001'`)
+			const startedAt = Date.now()
+			for (let page = 2; page <= 6; page++) {
+				const previousRequests = Number(await evaluate(`window.__augurScanCatalogRequests`))
+				await evaluate(`document.querySelector('#entity-load-more').click()`)
+				await waitFor(`document.querySelectorAll('#entity-list .entity-row').length === ${page * 500}`)
+				expect(Number(await evaluate(`window.__augurScanCatalogRequests`)) - previousRequests).toBe(1)
+			}
+			expect(Date.now() - startedAt).toBeLessThan(10_000)
+		} finally {
+			await session.close()
+		}
+	},
+	30_000,
+)
+
+browserTest(
+	'the system catalog restarts pagination when an earlier entity disappears',
+	async () => {
+		const session = await createDevToolsSession(process.env['CHROMIUM_PATH'] ?? '/usr/bin/chromium', `${origin}/system?demo=1&chainId=1&tab=questions&entity1201=1&catalogShiftOnMore=1`, { width: 1440, height: 900 })
+		const evaluate = async (expression: string): Promise<unknown> => {
+			const response = await session.send('Runtime.evaluate', { expression, returnByValue: true, awaitPromise: true })
+			if (typeof response !== 'object' || response === null || !('result' in response) || typeof response.result !== 'object' || response.result === null || !('value' in response.result)) return undefined
+			return response.result.value
+		}
+		const waitFor = async (expression: string) => {
+			for (let attempt = 0; attempt < 100; attempt++) {
+				if (await evaluate(expression)) return
+				await Bun.sleep(100)
+			}
+			throw new Error(`Timed out: ${expression}`)
+		}
+		try {
+			await session.send('Runtime.enable')
+			await session.send('Page.enable')
+			await session.send('Page.navigate', { url: session.pageUrl })
+			await waitFor(`document.querySelector('#entity-count')?.textContent === '500 of 1,201'`)
+			await evaluate(`document.querySelector('#entity-load-more').click()`)
+			await waitFor(`document.querySelector('#entity-count')?.textContent === '500 of 1,200'`)
+			await evaluate(`document.querySelector('#entity-load-more').click()`)
+			await waitFor(`document.querySelector('#entity-count')?.textContent === '1,000 of 1,200'`)
+			await evaluate(`document.querySelector('#entity-load-more').click()`)
+			await waitFor(`document.querySelector('#entity-count')?.textContent === '1,200'`)
+			const identities = await evaluate(`Array.from(document.querySelectorAll('#entity-list .entity-row'), row => row.getAttribute('data-key'))`)
+			expect(identities).toEqual(Array.from({ length: 1_200 }, (_, index) => `1:${index + 2}`))
+		} finally {
+			await session.close()
+		}
+	},
+	30_000,
+)
+
+browserTest(
+	'the system catalog restarts pagination after a same-size reorder',
+	async () => {
+		const session = await createDevToolsSession(process.env['CHROMIUM_PATH'] ?? '/usr/bin/chromium', `${origin}/system?demo=1&chainId=1&tab=questions&entity1201=1&catalogShiftOnMore=replace`, { width: 390, height: 844 })
+		const evaluate = async (expression: string): Promise<unknown> => {
+			const response = await session.send('Runtime.evaluate', { expression, returnByValue: true, awaitPromise: true })
+			if (typeof response !== 'object' || response === null || !('result' in response) || typeof response.result !== 'object' || response.result === null || !('value' in response.result)) return undefined
+			return response.result.value
+		}
+		const waitFor = async (expression: string) => {
+			for (let attempt = 0; attempt < 100; attempt++) {
+				if (await evaluate(expression)) return
+				await Bun.sleep(100)
+			}
+			throw new Error(`Timed out: ${expression}`)
+		}
+		try {
+			await session.send('Runtime.enable')
+			await session.send('Page.enable')
+			await session.send('Page.navigate', { url: session.pageUrl })
+			await waitFor(`document.querySelector('#entity-count')?.textContent === '500 of 1,201'`)
+			await evaluate(`document.querySelector('#entity-load-more').click()`)
+			await waitFor(`document.querySelector('#entity-list .entity-row')?.getAttribute('data-key') === '1:2'`)
+			expect(await evaluate(`document.querySelector('#entity-count')?.textContent`)).toBe('500 of 1,201')
+			expect(await evaluate(`document.querySelectorAll('#entity-list .entity-row').length`)).toBe(500)
+		} finally {
+			await session.close()
+		}
+	},
+	30_000,
+)
+
+browserTest(
+	'loading more restarts when an inactive catalog shifts',
+	async () => {
+		const session = await createDevToolsSession(process.env['CHROMIUM_PATH'] ?? '/usr/bin/chromium', `${origin}/system?demo=1&chainId=1&tab=questions&catalogDual501=1`, { width: 1440, height: 900 })
+		const evaluate = async (expression: string): Promise<unknown> => {
+			const response = await session.send('Runtime.evaluate', { expression, returnByValue: true, awaitPromise: true })
+			if (typeof response !== 'object' || response === null || !('result' in response) || typeof response.result !== 'object' || response.result === null || !('value' in response.result)) return undefined
+			return response.result.value
+		}
+		const waitFor = async (expression: string) => {
+			for (let attempt = 0; attempt < 100; attempt++) {
+				if (await evaluate(expression)) return
+				await Bun.sleep(100)
+			}
+			throw new Error(`Timed out: ${expression}`)
+		}
+		try {
+			await session.send('Runtime.enable')
+			await session.send('Page.enable')
+			await session.send('Page.navigate', { url: session.pageUrl })
+			await waitFor(`document.querySelector('#entity-count')?.textContent === '500 of 501'`)
+			await evaluate(`document.querySelector('#entity-load-more').click()`)
+			await waitFor(`document.querySelector('#entity-load-more')?.disabled === false`)
+			await evaluate(`document.querySelector('#tab-pools').click()`)
+			await waitFor(`document.querySelector('#entity-list .entity-row')?.getAttribute('data-key') === '1:0x0000000000000000000000000000000000000002'`)
+			expect(await evaluate(`document.querySelector('#entity-count')?.textContent`)).toBe('500 of 501')
+		} finally {
+			await session.close()
+		}
+	},
+	30_000,
+)
+
+browserTest(
+	'loading more detects an interior replacement in an inactive catalog',
+	async () => {
+		const session = await createDevToolsSession(process.env['CHROMIUM_PATH'] ?? '/usr/bin/chromium', `${origin}/system?demo=1&chainId=1&tab=questions&catalogDual501=1&catalogInteriorReplace=1`, { width: 1440, height: 900 })
+		const evaluate = async (expression: string): Promise<unknown> => {
+			const response = await session.send('Runtime.evaluate', { expression, returnByValue: true, awaitPromise: true })
+			if (typeof response !== 'object' || response === null || !('result' in response) || typeof response.result !== 'object' || response.result === null || !('value' in response.result)) return undefined
+			return response.result.value
+		}
+		const waitFor = async (expression: string) => {
+			for (let attempt = 0; attempt < 100; attempt++) {
+				if (await evaluate(expression)) return
+				await Bun.sleep(100)
+			}
+			throw new Error(`Timed out: ${expression}`)
+		}
+		try {
+			await session.send('Runtime.enable')
+			await session.send('Page.enable')
+			await session.send('Page.navigate', { url: session.pageUrl })
+			await waitFor(`document.querySelector('#entity-count')?.textContent === '500 of 501'`)
+			await evaluate(`document.querySelector('#entity-load-more').click()`)
+			await waitFor(`document.querySelector('#entity-load-more')?.disabled === false`)
+			await evaluate(`document.querySelector('#tab-pools').click()`)
+			await waitFor(`document.querySelector('#entity-list .entity-row:nth-child(100)')?.getAttribute('data-key') === '1:0x00000000000000000000000000000000000000c9'`)
+			expect(await evaluate(`document.querySelector('#entity-count')?.textContent`)).toBe('500 of 501')
+		} finally {
+			await session.close()
+		}
+	},
+	30_000,
+)
+
+browserTest(
+	'pool lifecycle and checkpoints remain available after loading a later catalog page',
+	async () => {
+		const session = await createDevToolsSession(process.env['CHROMIUM_PATH'] ?? '/usr/bin/chromium', `${origin}/system?demo=1&chainId=1&tab=pools&pool501=1`, { width: 1440, height: 900 })
+		const evaluate = async (expression: string): Promise<unknown> => {
+			const response = await session.send('Runtime.evaluate', { expression, returnByValue: true, awaitPromise: true })
+			if (typeof response !== 'object' || response === null || !('result' in response) || typeof response.result !== 'object' || response.result === null || !('value' in response.result)) return undefined
+			return response.result.value
+		}
+		const waitFor = async (expression: string) => {
+			for (let attempt = 0; attempt < 100; attempt++) {
+				if (await evaluate(expression)) return
+				await Bun.sleep(100)
+			}
+			throw new Error(`Timed out: ${expression}`)
+		}
+		try {
+			await session.send('Runtime.enable')
+			await session.send('Page.enable')
+			await session.send('Page.navigate', { url: session.pageUrl })
+			await waitFor(`document.querySelector('#entity-count')?.textContent === '500 of 501'`)
+			expect(await evaluate(`document.querySelector('#entity-list .entity-row:first-child .entity-row-meta')?.textContent`)).toContain('…000001')
+			expect(await evaluate(`document.querySelector('#entity-list .entity-row:nth-child(2) .entity-row-meta')?.textContent`)).toContain('…000002')
+			await evaluate(`document.querySelector('#entity-load-more').click()`)
+			await waitFor(`document.querySelector('#entity-count')?.textContent === '501'`)
+			await evaluate(`document.querySelector('#entity-list .entity-row:last-child')?.click()`)
+			await waitFor(`document.querySelector('#state-detail')?.getAttribute('aria-busy') === 'false'`)
+			const detail = String(await evaluate(`document.querySelector('#state-detail')?.textContent`))
+			expect(detail).toContain('Fork migration')
+			expect(detail).toContain('42')
+			expect(detail).not.toContain('No lifecycle event yet')
+			expect(detail).not.toContain('No checkpoint')
+		} finally {
+			await session.close()
+		}
+	},
+	30_000,
+)
+
+browserTest(
+	'live refresh reconciles the loaded pool page and its accounting',
+	async () => {
+		const session = await createDevToolsSession(process.env['CHROMIUM_PATH'] ?? '/usr/bin/chromium', `${origin}/system?demo=1&chainId=1&tab=pools&pool501=1&pool501Live=1&streamDemo=1`, { width: 1440, height: 900 })
+		const evaluate = async (expression: string): Promise<unknown> => {
+			const response = await session.send('Runtime.evaluate', { expression, returnByValue: true, awaitPromise: true })
+			if (typeof response !== 'object' || response === null || !('result' in response) || typeof response.result !== 'object' || response.result === null || !('value' in response.result)) return undefined
+			return response.result.value
+		}
+		const waitFor = async (expression: string) => {
+			for (let attempt = 0; attempt < 150; attempt++) {
+				if (await evaluate(expression)) return
+				await Bun.sleep(100)
+			}
+			throw new Error(`Timed out: ${expression}`)
+		}
+		try {
+			await session.send('Runtime.enable')
+			await session.send('Page.enable')
+			await session.send('Page.navigate', { url: session.pageUrl })
+			await waitFor(`document.querySelector('#entity-count')?.textContent === '500 of 501'`)
+			await evaluate(`document.querySelector('#entity-load-more').click()`)
+			await waitFor(`document.querySelector('#entity-count')?.textContent === '501'`)
+			const requestsBeforeLive = Number(await evaluate(`window.__augurScanCatalogRequests`))
+			const sequenceBeforeLive = Number(await evaluate(`window.__augurScanLiveSequence`))
+			await evaluate(`document.querySelector('#entity-list .entity-row:last-child')?.click()`)
+			await waitFor(`document.querySelector('#state-detail')?.textContent.includes('Fork migration')`)
+			await waitFor(`document.querySelector('#state-detail')?.textContent.includes('Fork truth auction')`)
+			const detail = String(await evaluate(`document.querySelector('#state-detail')?.textContent`))
+			expect(detail).toContain('84')
+			expect(detail).not.toContain('No checkpoint')
+			const requestsAfterLive = Number(await evaluate(`window.__augurScanCatalogRequests`))
+			const sequenceAfterLive = Number(await evaluate(`window.__augurScanLiveSequence`))
+			expect(requestsAfterLive - requestsBeforeLive).toBeLessThanOrEqual(2 * (sequenceAfterLive - sequenceBeforeLive))
+		} finally {
+			await session.close()
+		}
+	},
+	25_000,
+)
+
+browserTest(
+	'live refresh restarts loaded catalog pages after a page-boundary shift',
+	async () => {
+		const session = await createDevToolsSession(process.env['CHROMIUM_PATH'] ?? '/usr/bin/chromium', `${origin}/system?demo=1&chainId=1&tab=pools&pool501=1&pool501LiveShift=1&streamDemo=1`, { width: 390, height: 844 })
+		const evaluate = async (expression: string): Promise<unknown> => {
+			const response = await session.send('Runtime.evaluate', { expression, returnByValue: true, awaitPromise: true })
+			if (typeof response !== 'object' || response === null || !('result' in response) || typeof response.result !== 'object' || response.result === null || !('value' in response.result)) return undefined
+			return response.result.value
+		}
+		const waitFor = async (expression: string) => {
+			for (let attempt = 0; attempt < 150; attempt++) {
+				if (await evaluate(expression)) return
+				await Bun.sleep(100)
+			}
+			throw new Error(`Timed out: ${expression}`)
+		}
+		try {
+			await session.send('Runtime.enable')
+			await session.send('Page.enable')
+			await session.send('Page.navigate', { url: session.pageUrl })
+			await waitFor(`document.querySelector('#entity-count')?.textContent === '500 of 501'`)
+			await evaluate(`document.querySelector('#entity-load-more').click()`)
+			await waitFor(`document.querySelector('#entity-count')?.textContent === '501'`)
+			await waitFor(`document.querySelector('#entity-list .entity-row')?.getAttribute('data-key') === '1:0x0000000000000000000000000000000000000002'`)
+			expect(await evaluate(`document.querySelector('#entity-count')?.textContent`)).toBe('500 of 501')
+			await evaluate(`document.querySelector('#entity-load-more').click()`)
+			await waitFor(`document.querySelector('#entity-count')?.textContent === '501'`)
+			expect(await evaluate(`document.querySelector('#entity-list .entity-row:last-child')?.getAttribute('data-key')`)).toBe('1:0x00000000000000000000000000000000000001f6')
+		} finally {
+			await session.close()
+		}
+	},
+	25_000,
+)
+
+browserTest(
+	'live refresh restarts when an interior identity changes between pages',
+	async () => {
+		const session = await createDevToolsSession(process.env['CHROMIUM_PATH'] ?? '/usr/bin/chromium', `${origin}/system?demo=1&chainId=1&tab=pools&pool501=1&pool501LiveInterior=1&streamDemo=1`, { width: 390, height: 844 })
+		const evaluate = async (expression: string): Promise<unknown> => {
+			const response = await session.send('Runtime.evaluate', { expression, returnByValue: true, awaitPromise: true })
+			if (typeof response !== 'object' || response === null || !('result' in response) || typeof response.result !== 'object' || response.result === null || !('value' in response.result)) return undefined
+			return response.result.value
+		}
+		const waitFor = async (expression: string) => {
+			for (let attempt = 0; attempt < 150; attempt++) {
+				if (await evaluate(expression)) return
+				await Bun.sleep(100)
+			}
+			throw new Error(`Timed out: ${expression}`)
+		}
+		try {
+			await session.send('Runtime.enable')
+			await session.send('Page.enable')
+			await session.send('Page.navigate', { url: session.pageUrl })
+			await waitFor(`document.querySelector('#entity-count')?.textContent === '500 of 501'`)
+			await evaluate(`document.querySelector('#entity-load-more').click()`)
+			await waitFor(`document.querySelector('#entity-count')?.textContent === '501'`)
+			await waitFor(`document.querySelector('#entity-count')?.textContent === '500 of 501' && document.querySelector('#entity-list .entity-row:nth-child(100)')?.getAttribute('data-key') === '1:0x00000000000000000000000000000000000000c9'`)
+			expect(await evaluate(`document.querySelectorAll('#entity-list .entity-row').length`)).toBe(500)
+		} finally {
+			await session.close()
+		}
+	},
+	25_000,
 )

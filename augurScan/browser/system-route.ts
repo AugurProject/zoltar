@@ -44,7 +44,7 @@ export const createSystemRoute = (deps: SystemRouteDeps) => {
 	}
 
 	const entityCopy = (type: StateTab, item: StateEntity): [string, string] => {
-		if (type === 'pools' && 'settlement_collateral_atto_eth' in item) return [item.question_title ?? short(item.pool_address), `${counted(item.vault_count, 'vault')} · ${exactUnit(item.settlement_collateral_atto_eth, 18, nativeSymbol(item.chain_id))}`]
+		if (type === 'pools' && 'settlement_collateral_atto_eth' in item) return [item.question_title ?? short(item.pool_address), `${short(item.pool_address, 8, 6)} · ${counted(item.vault_count, 'vault')} · ${exactUnit(item.settlement_collateral_atto_eth, 18, nativeSymbol(item.chain_id))}`]
 		if (type === 'vaults' && 'vault_address' in item) return [short(item.vault_address, 10, 6), `${exactUnit(item.capacity_ownership_atto_rep, 18, 'REP')} capacity`]
 		if (type === 'questions' && 'outcome_options' in item) return [item.title, `${questionStatus(item)} · ${counted(item.pool_count, 'pool')}`]
 		if ('universe_id' in item && 'pool_count' in item) return [item.universe_id === '0' ? 'Genesis universe' : `Universe ${shortIdentifier(item.universe_id, 9, 6)}`, `${counted(item.child_count, 'child', 'children')} · ${counted(item.pool_count, 'pool')}`]
@@ -147,12 +147,19 @@ export const createSystemRoute = (deps: SystemRouteDeps) => {
 		const query = $('#entity-search').value.trim().toLowerCase()
 		if (systemRouteState.data === undefined) throw new Error('System state catalog is unavailable')
 		const catalogItems = stateItems(systemRouteState.data, systemRouteState.activeType)
-		const items = catalogItems.filter(item => !query || entityCopy(systemRouteState.activeType, item).join(' ').toLowerCase().includes(query))
+		const items = catalogItems
 		$('#entity-list-title').textContent = `All ${systemRouteState.activeType}`
 		const total = systemRouteState.data.totals?.[systemRouteState.activeType] ?? items.length
-		$('#entity-count').textContent = systemRouteState.data.truncated?.[systemRouteState.activeType] ? `${number(items.length)} of ${number(total)}` : number(items.length)
-		$('#entity-count').title = systemRouteState.data.truncated?.[systemRouteState.activeType] ? 'Registry list is incomplete; use search for a specific entity.' : ''
-		$('#entity-search').placeholder = `Filter ${systemRouteState.activeType}…`
+		const hasMore = systemRouteState.data.truncated?.[systemRouteState.activeType] === true && (query !== '' || catalogItems.length < total)
+		let countLabel = number(items.length)
+		if (query) countLabel = `${countLabel} shown`
+		else if (hasMore) countLabel = `${countLabel} of ${number(total)}`
+		$('#entity-count').textContent = countLabel
+		$('#entity-count').title = hasMore ? 'More registry entries are available.' : ''
+		$('#entity-search').placeholder = `Search ${systemRouteState.activeType}…`
+		const loadMore = $('#entity-load-more')
+		loadMore.hidden = !hasMore
+		loadMore.textContent = `Show more ${systemRouteState.activeType}`
 		const list = $('#entity-list')
 		const previousRows = liveSnapshot(list, '.entity-row[data-live-key]')
 		list.replaceChildren()

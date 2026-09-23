@@ -1,3 +1,4 @@
+import { bindSystemSearchControls } from './system-search-controls.ts'
 import { createOperationsComponents } from './operations-components.ts'
 import { requiredElementRole } from './dom-elements.ts'
 
@@ -497,7 +498,6 @@ export async function startScanner(demoFactory?: DemoFactory) {
 				element,
 				number,
 				exactTimestamp,
-				counted,
 				operationNumber,
 				operationCounted,
 				operationsHref,
@@ -891,7 +891,7 @@ export async function startScanner(demoFactory?: DemoFactory) {
 
 	const renderUniverseDetail = (universe: UniverseRecord, requestVersion: number, canonicalGeneration: number, suppliedHistory?: EntityHistory): Promise<void> => renderUniverseDetailPage(stateEntityDeps(requestVersion, canonicalGeneration), universe, suppliedHistory)
 
-	const { entityKey, entityCopy, selectEntity, stateItems, renderEntityList, renderStateStats, setSystemControlsDisabled, setStateTab } = createSystemRoute({
+	const { entityKey, selectEntity, stateItems, renderEntityList, renderStateStats, setSystemControlsDisabled, setStateTab } = createSystemRoute({
 		state: systemRouteState,
 		canonicalState,
 		lookup: $,
@@ -937,7 +937,6 @@ export async function startScanner(demoFactory?: DemoFactory) {
 		getStateDetailContextVersion: () => systemRouteState.detailContextVersion,
 		requiredChainId,
 		stateItems,
-		entityCopy,
 		entityKey,
 		fetchEntityHistory,
 		systemDetailRefreshGate,
@@ -949,6 +948,7 @@ export async function startScanner(demoFactory?: DemoFactory) {
 		retryCanonicalViewOr,
 	})
 	const loadSystemState = systemCatalog.loadSystemState
+	document.querySelector<HTMLButtonElement>('#entity-load-more')?.addEventListener('click', () => void systemCatalog.loadMoreSystemState())
 
 	const resetActivityFilterContext = () => {
 		if (document.querySelector('.event-detail-drawer')) closeEventDrawer()
@@ -1111,20 +1111,19 @@ export async function startScanner(demoFactory?: DemoFactory) {
 		})
 	}
 
-	$('#entity-search').addEventListener('input', () => {
-		systemRouteState.detailContextVersion++
-		systemRouteState.detailRequestVersion++
-		if (systemRouteState.data !== undefined) void renderEntityList()
-	})
-
-	$('#entity-search').addEventListener('keydown', event => {
-		const input = event.currentTarget
-		if (!(input instanceof HTMLInputElement) || event.key !== 'Escape' || input.value === '') return
-		event.preventDefault()
-		input.value = ''
-		systemRouteState.detailContextVersion++
-		systemRouteState.detailRequestVersion++
-		if (systemRouteState.data !== undefined) void renderEntityList()
+	bindSystemSearchControls({
+		input: $('#entity-search'),
+		list: $('#entity-list'),
+		count: $('#entity-count'),
+		loadMore: $('#entity-load-more'),
+		invalidate: systemCatalog.invalidate,
+		resetSelection: () => {
+			systemRouteState.detailContextVersion++
+			systemRouteState.detailRequestVersion++
+			systemRouteState.selectedKey = undefined
+			systemRouteState.historyOffset = 0
+		},
+		load: loadSystemState,
 	})
 
 	const resetSelectedNetworkContext = () => {
