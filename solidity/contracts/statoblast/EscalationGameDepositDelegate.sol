@@ -160,7 +160,7 @@ contract EscalationGameDepositDelegate is EscalationGameStorage, IEscalationGame
 	function _validateAcceptedDeposit(BinaryOutcomes.BinaryOutcome outcome, uint8 outcomeIndex, uint256 currentBalanceAttoRep, uint256 attoRepAmount, uint256 expectedCumulativeRepAmountAttoRep) private view {
 		require(nonDecisionState == NonDecisionState.None, 'Non-decision done');
 		require(outcome != BinaryOutcomes.BinaryOutcome.None, 'No outcome');
-		require(IEscalationGameDepositContext(address(this)).getQuestionResolution() == BinaryOutcomes.BinaryOutcome.None, 'Question resolved');
+		require(_isDepositResolutionOpen(IEscalationGameDepositContext(address(this)).getQuestionResolution()), 'Question resolved');
 		require(currentBalanceAttoRep < nonDecisionThresholdAttoRep, 'Outcome full');
 		require(attoRepAmount > 0, 'Deposit zero');
 		require(expectedCumulativeRepAmountAttoRep == currentBalanceAttoRep + attoRepAmount, 'Preview mismatch');
@@ -281,12 +281,15 @@ contract EscalationGameDepositDelegate is EscalationGameStorage, IEscalationGame
 
 	function creditExternalClaimOwners(address, address bundleId, uint256, uint256 amountAttoRep, uint256 burnAmountAttoRep) external {
 		uint256 backingConsumed = amountAttoRep + (winnerHaircutPaidByFork ? 0 : burnAmountAttoRep);
-		require(totalDisputeStakedAttoRep >= backingConsumed, 'Escrow low');
+		IERC20 token = IERC20(IEscalationGameDepositContext(address(this)).repToken());
+		// Losing local principal may already be settled while its tokens still fund
+		// this reward. Check actual expenditure against tokens, not logical escrow.
+		require(token.balanceOf(address(this)) >= backingConsumed, 'Escrow low');
 		uint256 inheritedBackingConsumed =
 			backingConsumed < forkCarryDisputeStakedAttoRep ? backingConsumed : forkCarryDisputeStakedAttoRep;
 		forkCarryDisputeStakedAttoRep -= inheritedBackingConsumed;
-		totalDisputeStakedAttoRep -= backingConsumed;
+		totalDisputeStakedAttoRep -= inheritedBackingConsumed;
 		if (amountAttoRep == 0) return;
-		IERC20(IEscalationGameDepositContext(address(this)).repToken()).safeTransfer(bundleId, amountAttoRep);
+		token.safeTransfer(bundleId, amountAttoRep);
 	}
 }
