@@ -63,7 +63,7 @@ function useTransactionStepsState() {
 }
 
 type TransactionStepsActionsProps = {
-	/** False when the surrounding flow has no way back (the wallet is where the user declines); hides the Cancel/Close control. */
+	/** False when the surrounding flow has no way back (the wallet is where the user declines); hides the Cancel/Dismiss control. */
 	cancelable?: boolean
 	contextKey: string
 	/** Move focus into the actions when the review replaced the control the user activated. */
@@ -100,6 +100,7 @@ export function TransactionStepsActions({ cancelable = true, contextKey, focusOn
 	}, [focusOnMount])
 	if (workflow === undefined || workflow.steps[workflow.activeIndex] === undefined) return undefined
 	const completed = workflow.steps.every(step => step.phase === 'confirmed' || step.phase === 'skipped')
+	const terminal = completed || error !== undefined
 	const funding = workflow.steps.flatMap(step => step.tokenFunding ?? [])
 	const fundingReason = funding.length > 0 ? copy.fundingRequired : copy.prerequisitesRequired
 	const blockedReason = pending ? copy.transactionPending : fundingReason
@@ -116,7 +117,7 @@ export function TransactionStepsActions({ cancelable = true, contextKey, focusOn
 								const active = index === workflow.activeIndex
 								const final = index === workflow.steps.length - 1
 								const ready = step.phase === 'review' && !pending && error === undefined
-								const status = { skipped: copy.skipped, upcoming: step.optional ? copy.ifNeeded : undefined, review: undefined, pending: undefined, confirmed: undefined, failed: copy.notCompleted }[step.phase]
+								const status = { skipped: copy.skipped, upcoming: step.optional ? copy.ifNeeded : undefined, review: undefined, pending: undefined, confirmed: transactionCopy.confirmed, failed: copy.notCompleted }[step.phase]
 								const detail = [step.phase === 'upcoming' || step.approval !== undefined ? undefined : step.amount, status].filter(value => value !== undefined).join(' · ')
 								return (
 									<div key={index} className={`transaction-plan-action${step.approval === undefined || final ? ' transaction-plan-action-wide' : ''}${final ? ' transaction-plan-action-final' : ''}`}>
@@ -164,8 +165,8 @@ export function TransactionStepsActions({ cancelable = true, contextKey, focusOn
 										)}
 										{final && cancelable ? (
 											<div className='actions transaction-step-close'>
-												<button className='secondary' type='button' onClick={onClose ?? workflow.cancel} disabled={pending}>
-													{completed || error !== undefined ? commonCopy.close : commonCopy.cancel}
+												<button className={terminal ? 'primary' : 'secondary'} type='button' onClick={onClose ?? workflow.cancel} disabled={pending}>
+													{terminal ? transactionCopy.dismiss : commonCopy.cancel}
 												</button>
 											</div>
 										) : undefined}

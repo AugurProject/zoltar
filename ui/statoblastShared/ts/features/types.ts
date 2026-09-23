@@ -63,7 +63,10 @@ export type SecurityPoolsView = 'browse' | 'create' | 'operate' | 'universes'
 type SecurityPoolRouteContentProps = {
 	accountState: AccountState
 	checkingDuplicateOriginPool: boolean
+	duplicateOriginPoolAddress?: Address | undefined
 	duplicateOriginPoolExists: boolean
+	existingQuestionCheck?: { status: 'available' | 'checking' | 'error' } | { status: 'existing'; questionId: string; poolAddress?: Address | undefined } | undefined
+	onRetryExistingQuestionCheck?: () => void
 	onCreateSecurityPool: (questionIdOverride?: string) => void
 	onCreateQuestionAndSecurityPool?: () => void
 	questionAndPoolCreating?: boolean

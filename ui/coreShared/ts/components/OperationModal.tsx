@@ -185,7 +185,7 @@ export function OperationModal({ children, closeDisabled = false, closeOnSuccess
 					{/* Outcome notices sit below the form so its controls never move; the dialog scrolls to them instead. */}
 					{showNotice ? (
 						<div ref={noticeRef}>
-							<TransactionPresentationNotice className='operation-modal-transaction-notice' transaction={modalTransaction} />
+							<TransactionPresentationNotice className='operation-modal-transaction-notice' dismissible={modalTransaction.tone === 'success' || modalTransaction.tone === 'error'} onDismiss={requestClose} transaction={modalTransaction} />
 						</div>
 					) : undefined}
 					{showSteps ? (

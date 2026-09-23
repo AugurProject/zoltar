@@ -460,11 +460,11 @@ export function QuestionCreateSection({
 								<TransactionActionButton idleLabel={submitAction.idleLabel} pendingLabel={submitAction.pendingLabel} onClick={() => undefined} pending={submitAction.pending} type='submit' availability={submitAction.availability} />
 							</div>
 						)}
+						<ErrorNotice message={questionError} />
 					</form>
 				</SectionBlock>
 			) : undefined}
-
-			<ErrorNotice message={questionError} />
+			{questionResult === undefined ? undefined : <ErrorNotice message={questionError} />}
 		</>
 	)
 }

@@ -1,4 +1,4 @@
-import { decodeEventLog, encodeFunctionData, encodeAbiParameters, encodeDeployData, getCreate2Address, hexToBytes, keccak256, type Hex, type TransactionReceipt } from '@zoltar/core-shared/evm/ethereum'
+import { decodeEventLog, encodeFunctionData, encodeAbiParameters, encodeDeployData, getCreate2Address, hexToBytes, keccak256, zeroAddress, type Address, type Hex, type TransactionReceipt } from '@zoltar/core-shared/evm/ethereum'
 import { statoblast_factories_SecurityPoolFactory_SecurityPoolFactory, statoblast_tokens_ShareToken_ShareToken } from '../contractArtifact.js'
 import { statoblast_Multicall3_Multicall3, ZoltarQuestionData_ZoltarQuestionData } from '@zoltar/ui-core-shared/contractArtifact.js'
 import { isIgnorableLogDecodeError } from '@zoltar/ui-core-shared/lib/errors.js'
@@ -166,4 +166,10 @@ export async function originSecurityPoolExists(client: Pick<ReadClient, 'getCode
 	const shareTokenAddress = getOriginSecurityPoolShareTokenAddress(questionId, statoblastSecurityMultiplierBps, initialReportPriorityFeeAttoEthPerGas)
 	const code = await client.getCode({ address: shareTokenAddress })
 	return code !== undefined && code !== '0x'
+}
+
+export async function getOriginSecurityPoolAddress(client: Pick<ReadClient, 'readContract'>, questionId: bigint, statoblastSecurityMultiplierBps: bigint, initialReportPriorityFeeAttoEthPerGas: bigint): Promise<Address | undefined> {
+	const originId = keccak256(encodeAbiParameters([{ type: 'uint256' }, { type: 'uint256' }, { type: 'uint256' }, { type: 'uint248' }], [questionId, statoblastSecurityMultiplierBps, initialReportPriorityFeeAttoEthPerGas, 0n]))
+	const address = await client.readContract({ abi: statoblast_factories_SecurityPoolFactory_SecurityPoolFactory.abi, address: getInfraContractAddresses().securityPoolFactory, functionName: 'getSecurityPool', args: [originId, 0n] })
+	return address === zeroAddress ? undefined : address
 }

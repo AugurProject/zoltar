@@ -1,9 +1,10 @@
 import { withReadTimeout } from '@zoltar/ui-core-shared/lib/promise.js'
 import { getQuestionId, getQuestionIdHex } from '@zoltar/ui-zoltar-shared/protocol/helpers.js'
+import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import { useSignal } from '@preact/signals'
 import { useEffect } from 'preact/hooks'
 import * as securityPoolCopy from '../../../copy/securityPool.js'
-import { createSecurityPool, originSecurityPoolExists } from '../../../protocol/securityPools.js'
+import { createSecurityPool, getOriginSecurityPoolAddress, originSecurityPoolExists } from '../../../protocol/securityPools.js'
 import { loadMarketDetails } from '@zoltar/ui-zoltar-shared/protocol/zoltar.js'
 import { useLoadController } from '@zoltar/ui-core-shared/hooks/useLoadController.js'
 import { createConnectedReadClient, createWalletWriteClient } from '@zoltar/ui-core-shared/wallet/clients.js'
@@ -19,6 +20,7 @@ import { hasDeployedStep } from '@zoltar/ui-core-shared/lib/deploymentStatus.js'
 import { tryParseBigIntInput } from '@zoltar/ui-core-shared/forms/integerInput.js'
 import { getDefaultSecurityPoolFormState, tryParseStatoblastSecurityMultiplierBpsInput } from '../../markets/lib/marketForm.js'
 import { tryParseDecimalInput } from '@zoltar/ui-core-shared/forms/decimal.js'
+import { validateMarketForm } from '@zoltar/ui-zoltar-shared/features/questions/lib/questionCreation.js'
 import type { MarketFormState, SecurityPoolFormState, TransactionLifecycleParameters, WriteOperationContext } from '../../../types/app.js'
 import type { DeploymentStatus, MarketDetails, SecurityPoolCreationResult } from '@zoltar/ui-core-shared/types/contracts.js'
 
@@ -27,6 +29,7 @@ type UseSecurityPoolCreationParameters = TransactionLifecycleParameters &
 		activeUniverseId?: bigint | undefined
 		deploymentStatuses: DeploymentStatus[]
 		enabled: boolean
+		newQuestionForm?: MarketFormState | undefined
 		zoltarUniverseHasForked: boolean
 	}
 
@@ -47,6 +50,7 @@ export function useSecurityPoolCreation({
 	activeUniverseId,
 	deploymentStatuses,
 	enabled,
+	newQuestionForm,
 	onTransactionFailed,
 	onTransactionFinished,
 	onTransactionPresented,
@@ -77,8 +81,13 @@ export function useSecurityPoolCreation({
 	const securityPoolCreationFeedback = useSignal<ActionFeedback<'createSecurityPool'> | undefined>(undefined)
 	const securityPoolResult = useSignal<SecurityPoolCreationResult | undefined>(undefined)
 	const duplicateOriginPoolExists = useSignal(false)
+	const duplicateOriginPoolAddress = useSignal<Address | undefined>(undefined)
+	const existingQuestionCheck = useSignal<{ status: 'available' | 'checking' | 'error' } | { status: 'existing'; questionId: string; poolAddress?: Address | undefined } | undefined>(undefined)
+	const existingQuestionCheckRetry = useSignal(0)
 	const nextMarketDetailsLoad = useRequestGuard()
 	const nextDuplicateCheck = useRequestGuard()
+	const nextExistingQuestionCheck = useRequestGuard()
+	const questionDataDeployed = hasDeployedStep(deploymentStatuses, 'zoltarQuestionData')
 	const isCurrentSubmittedQuestion = (questionId: bigint) => tryParseBigIntInput(securityPoolForm.value.marketId) === questionId
 
 	const loadDuplicateOriginPoolState = async () => {
@@ -88,6 +97,7 @@ export function useSecurityPoolCreation({
 		const initialReportPriorityFeeInput = securityPoolForm.value.initialReportPriorityFeeEth.trim()
 		if (marketId === '' || statoblastSecurityMultiplierBpsInput === '' || initialReportPriorityFeeInput === '') {
 			duplicateOriginPoolExists.value = false
+			duplicateOriginPoolAddress.value = undefined
 			return
 		}
 
@@ -96,6 +106,7 @@ export function useSecurityPoolCreation({
 		const initialReportPriorityFeeAttoEthPerGas = tryParseDecimalInput(initialReportPriorityFeeInput, 18)
 		if (questionId === undefined || statoblastSecurityMultiplierBps === undefined || initialReportPriorityFeeAttoEthPerGas === undefined || initialReportPriorityFeeAttoEthPerGas <= 0n) {
 			duplicateOriginPoolExists.value = false
+			duplicateOriginPoolAddress.value = undefined
 			return
 		}
 
@@ -104,13 +115,58 @@ export function useSecurityPoolCreation({
 				const exists = await withReadTimeout(originSecurityPoolExists(createConnectedReadClient(), questionId, statoblastSecurityMultiplierBps, initialReportPriorityFeeAttoEthPerGas))
 				if (!isCurrent()) return
 				duplicateOriginPoolExists.value = exists
+				duplicateOriginPoolAddress.value = undefined
+				if (!exists) return
+				try {
+					const address = await withReadTimeout(getOriginSecurityPoolAddress(createConnectedReadClient(), questionId, statoblastSecurityMultiplierBps, initialReportPriorityFeeAttoEthPerGas))
+					if (isCurrent()) duplicateOriginPoolAddress.value = address
+				} catch (error) {
+					if (!isRecoverableContractReadError(error)) throw error
+					// The existence read already confirmed the duplicate; keep creation blocked.
+				}
 			} catch (error) {
 				if (!isRecoverableContractReadError(error)) throw error
 				if (!isCurrent()) return
 				duplicateOriginPoolExists.value = false
+				duplicateOriginPoolAddress.value = undefined
 			}
 		})
 	}
+
+	useEffect(() => {
+		const isCurrent = nextExistingQuestionCheck()
+		if (!enabled || newQuestionForm === undefined || newQuestionForm.marketType !== 'binary' || !validateMarketForm(newQuestionForm).isValid || !questionDataDeployed) {
+			existingQuestionCheck.value = undefined
+			return
+		}
+		const question = createMarketParameters(newQuestionForm)
+		const questionId = getQuestionId(question.questionData, question.outcomeLabels)
+		existingQuestionCheck.value = { status: 'checking' }
+		void (async () => {
+			try {
+				const details = await withReadTimeout(loadMarketDetails(createConnectedReadClient(), questionId))
+				if (!isCurrent()) return
+				if (!details.exists) {
+					existingQuestionCheck.value = { status: 'available' }
+					return
+				}
+				existingQuestionCheck.value = { status: 'existing', questionId: questionId.toString(), poolAddress: undefined }
+				const multiplier = tryParseStatoblastSecurityMultiplierBpsInput(securityPoolForm.value.statoblastSecurityMultiplierBps)
+				const fee = tryParseDecimalInput(securityPoolForm.value.initialReportPriorityFeeEth, 18)
+				if (multiplier === undefined || fee === undefined) return
+				try {
+					const poolAddress = await withReadTimeout(getOriginSecurityPoolAddress(createConnectedReadClient(), questionId, multiplier, fee))
+					if (isCurrent()) existingQuestionCheck.value = { status: 'existing', questionId: questionId.toString(), poolAddress }
+				} catch (error) {
+					if (!isRecoverableContractReadError(error)) throw error
+					// The question lookup already confirmed that the existing-question path is available.
+				}
+			} catch (error) {
+				if (!isRecoverableContractReadError(error)) throw error
+				if (isCurrent()) existingQuestionCheck.value = { status: 'error' }
+			}
+		})()
+	}, [enabled, newQuestionForm, questionDataDeployed, securityPoolForm.value.statoblastSecurityMultiplierBps, securityPoolForm.value.initialReportPriorityFeeEth, existingQuestionCheckRetry.value])
 
 	const loadMarketById = async (marketId: string, options?: { clearExisting?: boolean; isCurrent?: () => boolean }) => {
 		if (!hasDeployedStep(deploymentStatuses, 'zoltarQuestionData')) {
@@ -211,6 +267,17 @@ export function useSecurityPoolCreation({
 					const newQuestion = newQuestionForm === undefined ? undefined : createMarketParameters(newQuestionForm)
 					const parameters = createSecurityPoolParameters(newQuestion === undefined ? submittedSecurityPoolForm : { ...submittedSecurityPoolForm, marketId: getQuestionId(newQuestion.questionData, newQuestion.outcomeLabels).toString() })
 					capturedQuestionId = parameters.questionId
+					if (newQuestion !== undefined && (await loadMarketDetails(createConnectedReadClient(), parameters.questionId)).exists) {
+						let poolAddress: Address | undefined
+						try {
+							poolAddress = await getOriginSecurityPoolAddress(createConnectedReadClient(), parameters.questionId, parameters.statoblastSecurityMultiplierBps, parameters.initialReportPriorityFeeAttoEthPerGas)
+						} catch (error) {
+							if (!isRecoverableContractReadError(error)) throw error
+							// The question is already known to exist even if the pool lookup fails.
+						}
+						existingQuestionCheck.value = { status: 'existing', questionId: parameters.questionId.toString(), poolAddress }
+						throw new Error('This question already exists. Use its question ID to create a pool instead.')
+					}
 					let details: MarketDetails
 					if (newQuestion === undefined) {
 						details = marketDetails.value?.questionId === parameters.questionId.toString() ? marketDetails.value : await loadMarketDetails(createConnectedReadClient(), parameters.questionId)
@@ -281,7 +348,12 @@ export function useSecurityPoolCreation({
 
 	return {
 		checkingDuplicateOriginPool: duplicateOriginPoolCheckLoad.isLoading.value,
+		duplicateOriginPoolAddress: duplicateOriginPoolAddress.value,
 		duplicateOriginPoolExists: duplicateOriginPoolExists.value,
+		existingQuestionCheck: existingQuestionCheck.value,
+		retryExistingQuestionCheck: () => {
+			existingQuestionCheckRetry.value += 1
+		},
 		loadMarketById,
 		loadingMarketDetails: marketDetailsLoad.isLoading.value,
 		marketDetails: marketDetails.value,

@@ -1917,6 +1917,32 @@ main.global-transaction-tray-open :is(a, button, input, select, summary, textare
 
 .transaction-approval-editor .form-grid {
 	gap: 0.5rem;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.transaction-approval-editor .form-grid > .workflow-metric-grid,
+.transaction-approval-editor .form-grid > .field-error,
+.transaction-approval-editor .form-grid > .notice.error {
+	grid-column: 1 / -1;
+}
+
+.transaction-approval-editor .approval-amount-field {
+	display: grid;
+	gap: 0.4rem;
+}
+
+.transaction-approval-editor .approval-amount-field > .approval-amount-controls {
+	min-width: 0;
+}
+
+.transaction-approval-editor .form-grid > .actions {
+	align-self: end;
+}
+
+@media (max-width: 640px) {
+	.transaction-approval-editor .form-grid {
+		grid-template-columns: minmax(0, 1fr);
+	}
 }
 
 .transaction-approval-editor .workflow-metric-grid {

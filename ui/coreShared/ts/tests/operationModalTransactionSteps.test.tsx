@@ -8,6 +8,7 @@ import { GlobalTransactionPresentationProvider } from '../components/GlobalTrans
 import { OperationModal } from '../components/OperationModal.js'
 import { TransactionActionGroup } from '../components/TransactionActionButton.js'
 import { TransactionStepsModal } from '../components/TransactionStepsModal.js'
+import { TransactionStepsContent } from '../components/TransactionStepsContent.js'
 import { createTransactionStepController, transactionSteps } from '../transactions/transactionSteps.js'
 import type { GlobalTransactionPresentation } from '../types/components.js'
 import { installDomTestLifecycle } from './testUtils/domTestLifecycle.js'
@@ -20,6 +21,41 @@ installDomTestLifecycle()
 
 const hash = '0x1111111111111111111111111111111111111111111111111111111111111111'
 const step = { title: 'Send withdrawal', description: 'Withdraw REP.', contractAddress: undefined, spender: undefined, amount: undefined, ethValueAttoEth: 0n }
+
+for (const outcome of ['confirmed', 'failed'] as const) {
+	test(`offers a primary Dismiss action for a ${outcome} transaction dialog`, async () => {
+		const controller = createTransactionStepController()
+		controller.setPlan([step])
+		controller.startWithoutReview(0)
+		if (outcome === 'confirmed') {
+			controller.submitted(hash)
+			controller.receipt(hash, 'success')
+		} else {
+			controller.failed('Transaction reverted.')
+		}
+		function Harness() {
+			const [open, setOpen] = useState(true)
+			return (
+				<OperationModal embedTransactionSteps={false} isOpen={open} title='Withdrawal status' onClose={() => setOpen(false)}>
+					<TransactionStepsContent contextKey={`withdrawal-${outcome}`} onClose={() => setOpen(false)} />
+				</OperationModal>
+			)
+		}
+		const rendered = await renderIntoDocument(<Harness />)
+		try {
+			const queries = within(document.body)
+			const dialog = queries.getByRole('dialog', { name: 'Withdrawal status' })
+			if (outcome === 'confirmed') expect(dialog.textContent).toContain('Confirmed')
+			const dismiss = within(dialog).getByRole('button', { name: 'Dismiss' })
+			expect(dismiss.classList.contains('primary')).toBe(true)
+			await act(() => fireEvent.click(dismiss))
+			expect(queries.queryByRole('dialog')).toBeNull()
+		} finally {
+			await rendered.cleanup()
+			transactionSteps.value?.cancel()
+		}
+	})
+}
 
 for (const outcome of ['success', 'failure', 'approval', 'cancel', 'multi-step'] as const) {
 	test(`keeps transaction review inside the initiating dialog through ${outcome}`, async () => {
@@ -110,12 +146,16 @@ for (const outcome of ['success', 'failure', 'approval', 'cancel', 'multi-step']
 			} else {
 				// Both outcomes return to the form on their own and explain themselves through the notice below it.
 				expect(dialog.querySelector('.operation-modal-transaction-notice')?.textContent).toContain(outcome === 'failure' ? 'Transaction reverted' : 'Transaction confirmed')
+				const dismiss = within(dialog).getByRole('button', { name: 'Dismiss' })
+				expect(dismiss.classList.contains('primary')).toBe(true)
 				expect(queries.queryByRole('button', { name: 'Back' })).toBeNull()
 				expect(queries.getByRole('dialog')).toBe(dialog)
 				expect(steps()).toBeNull()
 				expect(form()?.hasAttribute('inert')).toBe(false)
 				expect(queries.getByRole('textbox', { name: 'Amount' }).getAttribute('value')).toBe('42')
 				expect(transactionSteps.value).toBeUndefined()
+				await act(() => fireEvent.click(dismiss))
+				expect(queries.queryByRole('dialog')).toBeNull()
 			}
 		} finally {
 			await rendered.cleanup()

@@ -6,3 +6,4 @@ export const uniswapPriceFailed = 'Could not fetch the Uniswap price. Try again 
 
 export const enterPriceEstimate = 'Enter a starting price.'
 export const requestPrice = 'Request price'
+export const retryPriceRequest = 'Retry request'

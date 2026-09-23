@@ -2,7 +2,7 @@ import { createDeferred } from '@zoltar/ui-core-shared/tests/testUtils/deferred.
 import { createMarketDetails as marketDetailsFixture } from '@zoltar/ui-core-shared/tests/testUtils/marketFixtures.js'
 /// <reference types='bun-types' />
 
-import { zeroAddress, type Address, type Hash } from '@zoltar/core-shared/evm/ethereum'
+import { getAddress, zeroAddress, type Address, type Hash } from '@zoltar/core-shared/evm/ethereum'
 import { installActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
 import { createFakeBackend } from '@zoltar/ui-core-shared/tests/testUtils/fakeBackend.js'
@@ -22,6 +22,7 @@ type MarketIdLoadResult = MarketDetails
 type MockContractDeps = {
 	loadMarketDetails: ReturnType<typeof mock>
 	originSecurityPoolExists: ReturnType<typeof mock>
+	getOriginSecurityPoolAddress: ReturnType<typeof mock>
 	createSecurityPool: ReturnType<typeof mock>
 }
 
@@ -45,7 +46,7 @@ function createStatus(id: DeploymentStatus['id'], deployed: boolean, dependencie
 
 const moduleMocks = installModuleMocks(specifier => import.meta.resolve(specifier))
 
-async function setupContractMocks({ loadMarketDetails, createSecurityPool, originSecurityPoolExists }: Partial<MockContractDeps>) {
+async function setupContractMocks({ loadMarketDetails, createSecurityPool, getOriginSecurityPoolAddress, originSecurityPoolExists }: Partial<MockContractDeps>) {
 	await moduleMocks.mockModule('@zoltar/ui-zoltar-shared/protocol/zoltar.js', () => ({
 		loadMarketDetails: loadMarketDetails ?? mock(async () => createMarketDetails()),
 	}))
@@ -65,6 +66,7 @@ async function setupContractMocks({ loadMarketDetails, createSecurityPool, origi
 					}) as SecurityPoolCreationResult,
 			),
 		originSecurityPoolExists: originSecurityPoolExists ?? mock(async () => false),
+		getOriginSecurityPoolAddress: getOriginSecurityPoolAddress ?? mock(async () => undefined),
 	}))
 
 	await moduleMocks.mockModule('@zoltar/ui-core-shared/wallet/clients.js', () => ({
@@ -147,6 +149,67 @@ describe('useSecurityPoolCreation', () => {
 		})
 		expect(requireState(state).securityPoolError).toBe('Deploy ZoltarQuestionData before selecting a question')
 		expect(requireState(state).marketDetails).toBeUndefined()
+	})
+
+	test('finds an already-created question and its matching pool before submission', async () => {
+		const poolAddress = getAddress('0x0000000000000000000000000000000000000002')
+		const getOriginSecurityPoolAddress = mock(async () => poolAddress)
+		await setupContractMocks({ loadMarketDetails: mock(async () => createMarketDetails()), getOriginSecurityPoolAddress })
+		const { useSecurityPoolCreation } = await import(`@zoltar/ui-statoblast-shared/features/security-pools/hooks/useSecurityPoolCreation.js?case=${crypto.randomUUID()}`)
+		let state: UseSecurityPoolCreationState | undefined
+		const Harness = createHarness(
+			useSecurityPoolCreation,
+			{
+				accountAddress: zeroAddress,
+				deploymentStatuses: [createStatus('zoltarQuestionData', true)],
+				enabled: true,
+				newQuestionForm: { answerUnit: '', categoricalOutcomes: ['', ''], description: 'Question', endTime: '1735689600', marketType: 'binary', scalarIncrement: '', scalarMax: '', scalarMin: '', startTime: '', title: 'Will this happen?' },
+				onTransactionFinished: () => undefined,
+				onTransactionPresented: () => undefined,
+				onTransactionRequested: () => undefined,
+				onTransactionSubmitted: () => undefined,
+				refreshState: async () => undefined,
+				zoltarUniverseHasForked: false,
+			},
+			newState => {
+				state = newState
+			},
+		)
+		const renderedComponent = await renderIntoDocument(<Harness />)
+		cleanupRenderedComponent = renderedComponent.cleanup
+		await waitFor(() => expect(requireState(state).existingQuestionCheck).toEqual({ status: 'existing', questionId: expect.any(String), poolAddress }))
+		expect(getOriginSecurityPoolAddress).toHaveBeenCalledTimes(1)
+	})
+
+	test('keeps an existing question usable when its pool address lookup fails', async () => {
+		const getOriginSecurityPoolAddress = mock(async () => {
+			throw new Error('RPC address lookup failed')
+		})
+		await setupContractMocks({ loadMarketDetails: mock(async () => createMarketDetails()), getOriginSecurityPoolAddress })
+		const { useSecurityPoolCreation } = await import(`@zoltar/ui-statoblast-shared/features/security-pools/hooks/useSecurityPoolCreation.js?case=${crypto.randomUUID()}`)
+		let state: UseSecurityPoolCreationState | undefined
+		const Harness = createHarness(
+			useSecurityPoolCreation,
+			{
+				accountAddress: zeroAddress,
+				deploymentStatuses: [createStatus('zoltarQuestionData', true)],
+				enabled: true,
+				newQuestionForm: { answerUnit: '', categoricalOutcomes: ['', ''], description: 'Question', endTime: '1735689600', marketType: 'binary', scalarIncrement: '', scalarMax: '', scalarMin: '', startTime: '', title: 'Will this happen?' },
+				onTransactionFinished: () => undefined,
+				onTransactionPresented: () => undefined,
+				onTransactionRequested: () => undefined,
+				onTransactionSubmitted: () => undefined,
+				refreshState: async () => undefined,
+				zoltarUniverseHasForked: false,
+			},
+			newState => {
+				state = newState
+			},
+		)
+		const renderedComponent = await renderIntoDocument(<Harness />)
+		cleanupRenderedComponent = renderedComponent.cleanup
+		await waitFor(() => expect(getOriginSecurityPoolAddress).toHaveBeenCalledTimes(1))
+		await waitFor(() => expect(requireState(state).existingQuestionCheck).toEqual({ status: 'existing', questionId: expect.any(String), poolAddress: undefined }))
 	})
 
 	test('loadMarketById maps successful and failed market lookups', async () => {
@@ -311,6 +374,42 @@ describe('useSecurityPoolCreation', () => {
 			expect(originSecurityPoolExists).toHaveBeenCalledTimes(1)
 			expect(requireState(state).duplicateOriginPoolExists).toBe(true)
 		})
+	})
+
+	test('keeps a confirmed duplicate blocked when its address lookup fails', async () => {
+		const originSecurityPoolExists = mock(async () => true)
+		const getOriginSecurityPoolAddress = mock(async () => {
+			throw new Error('RPC address lookup failed')
+		})
+		await setupContractMocks({ originSecurityPoolExists, getOriginSecurityPoolAddress })
+		const { useSecurityPoolCreation } = await import(`@zoltar/ui-statoblast-shared/features/security-pools/hooks/useSecurityPoolCreation.js?case=${crypto.randomUUID()}`)
+		let state: UseSecurityPoolCreationState | undefined
+		const Harness = createHarness(
+			useSecurityPoolCreation,
+			{
+				accountAddress: zeroAddress,
+				deploymentStatuses: [createStatus('zoltarQuestionData', true)],
+				enabled: true,
+				onTransactionFinished: () => undefined,
+				onTransactionPresented: () => undefined,
+				onTransactionRequested: () => undefined,
+				onTransactionSubmitted: () => undefined,
+				refreshState: async () => undefined,
+				zoltarUniverseHasForked: false,
+			},
+			newState => {
+				state = newState
+			},
+		)
+		const renderedComponent = await renderIntoDocument(<Harness />)
+		cleanupRenderedComponent = renderedComponent.cleanup
+		await act(() => {
+			requireState(state).setSecurityPoolForm(current => ({ ...current, marketId: '11' }))
+		})
+		await waitFor(() => expect(getOriginSecurityPoolAddress).toHaveBeenCalledTimes(1))
+		await waitFor(() => expect(requireState(state).checkingDuplicateOriginPool).toBe(false))
+		expect(requireState(state).duplicateOriginPoolExists).toBe(true)
+		expect(requireState(state).duplicateOriginPoolAddress).toBeUndefined()
 	})
 
 	test('ignores stale duplicate-origin responses when market inputs change out of order', async () => {
@@ -617,9 +716,7 @@ describe('useSecurityPoolCreation', () => {
 			} as SecurityPoolCreationResult
 		})
 		await setupContractMocks({
-			loadMarketDetails: mock(async () => {
-				throw new Error('loadMarketDetails should not run for a new question')
-			}),
+			loadMarketDetails: mock(async () => createMarketDetails({ exists: false })),
 			originSecurityPoolExists: mock(async () => false),
 			createSecurityPool,
 		})

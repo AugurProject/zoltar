@@ -54,6 +54,7 @@ describe('GlobalTransactionTray', () => {
 		expect(documentQueries.getByText('0x0b')).not.toBeNull()
 		expect(documentQueries.getByRole('link', { name: '0x1234000000000000000000000000000000000000000000000000000000000000' })).not.toBeNull()
 		expect(documentQueries.getByRole('button', { name: 'Dismiss' })).not.toBeNull()
+		expect(documentQueries.getByRole('button', { name: 'Dismiss' }).classList.contains('primary')).toBe(true)
 	})
 
 	test('warns when transaction lifecycle state belongs to a different header universe', async () => {
@@ -260,6 +261,7 @@ describe('GlobalTransactionTray', () => {
 		expect(documentQueries.getByText('Action canceled in wallet.')).not.toBeNull()
 		expect(documentQueries.queryByRole('link')).toBeNull()
 		const dismissButton = documentQueries.getByRole('button', { name: 'Dismiss' })
+		expect(dismissButton.classList.contains('primary')).toBe(true)
 		expect(dismissButton.parentElement?.classList.contains('global-transaction-actions')).toBe(true)
 	})
 

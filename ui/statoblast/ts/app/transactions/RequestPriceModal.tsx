@@ -46,6 +46,7 @@ export function RequestPriceModal({ review, onConfirm, onClose, canRequest, conf
 	const current = valid && run.current?.key === key && run.current?.signal.aborted === false
 	const showSteps = current && ownsWorkflow && workflow?.steps[workflow.activeIndex] !== undefined
 	const error = attempted === key && !running && presentation?.tone === 'error' ? presentation.detail : undefined
+	const failedStep = showSteps && !running && workflow?.steps.some(step => step.phase === 'failed')
 	const estimatePrompt = validPrice ? priceRequestCopy.preparingPriceRequest : priceRequestCopy.enterPriceEstimate
 	const previewPrompt = fetching ? priceRequestCopy.fetchingUniswapPrice : estimatePrompt
 
@@ -154,6 +155,20 @@ export function RequestPriceModal({ review, onConfirm, onClose, canRequest, conf
 					{showSteps ? (
 						<GlobalTransactionPresentationProvider transaction={presentation}>
 							<TransactionStepsContent contextKey={key ?? ''} onClose={close} />
+							{error === undefined && !failedStep ? undefined : (
+								<div className='actions transaction-step-close'>
+									<button
+										className='primary'
+										type='button'
+										onClick={() => {
+											run.current?.cancel()
+											setRetry(value => value + 1)
+										}}
+									>
+										{priceRequestCopy.retryPriceRequest}
+									</button>
+								</div>
+							)}
 						</GlobalTransactionPresentationProvider>
 					) : (
 						<PriceRequestPreview

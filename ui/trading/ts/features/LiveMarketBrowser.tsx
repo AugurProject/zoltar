@@ -143,13 +143,7 @@ export function LiveMarketBrowser({
 				/>
 			}
 		>
-			{/* This disclosure contains an interactive lookup form, rather than read-only reference data. */}
-			<details className='read-only-detail-accordion'>
-				<summary>{liveCopy.openByAddress}</summary>
-				<div className='read-only-detail-accordion-content'>
-					<OpenPoolForm disabled={workflowLocked} target={lookupRoute} />
-				</div>
-			</details>
+			<OpenPoolForm disabled={workflowLocked} target={lookupRoute} />
 			{content}
 		</SectionBlock>
 	)

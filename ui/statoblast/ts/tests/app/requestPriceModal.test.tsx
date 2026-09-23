@@ -179,6 +179,31 @@ test('shows preparation failure with retry and keeps manual entry available', as
 	}
 })
 
+test('allows another price request after a failed transaction step', async () => {
+	const dom = installDomEnvironment()
+	let attempts = 0
+	const onConfirm = async (_request: RequestPriceReview, signal?: AbortSignal) => {
+		attempts += 1
+		const controller = createTransactionStepController(signal)
+		controller.setPlan([{ ...step, title: 'Request price' }])
+		controller.startWithoutReview(0)
+		controller.failed('nonce too low')
+	}
+	const rendered = await renderIntoDocument(<RequestPriceModal {...props} onConfirm={onConfirm} />)
+	try {
+		const queries = within(document.body)
+		await act(() => fireEvent.click(queries.getByRole('button', { name: 'Fetch from Uniswap' })))
+		await settle()
+		expect(queries.getByRole('button', { name: 'Retry request' })).not.toBeNull()
+		await act(() => fireEvent.click(queries.getByRole('button', { name: 'Retry request' })))
+		await settle()
+		expect(attempts).toBe(2)
+	} finally {
+		await rendered.cleanup()
+		dom.cleanup()
+	}
+})
+
 test.each(['automatic', 'manual'] as const)('prepares %s again after visiting an invalid selection', async source => {
 	const dom = installDomEnvironment()
 	const prices: Array<bigint | undefined> = []

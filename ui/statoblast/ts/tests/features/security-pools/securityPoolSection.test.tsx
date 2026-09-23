@@ -414,6 +414,70 @@ describe('SecurityPoolSection', () => {
 		expect(getButtonByText('Create question and pool').disabled).toBe(false)
 	})
 
+	test('blocks a duplicate question and links its existing pool', async () => {
+		const poolAddress = getAddress('0x0000000000000000000000000000000000000002')
+		const renderedComponent = await renderIntoDocument(
+			h(
+				SecurityPoolSection,
+				createProps({
+					existingQuestionCheck: { status: 'existing', questionId: '123', poolAddress },
+					marketForm: {
+						answerUnit: '',
+						categoricalOutcomes: ['', ''],
+						description: 'Pool question',
+						endTime: '1735689600',
+						marketType: 'binary',
+						scalarIncrement: '',
+						scalarMax: '',
+						scalarMin: '',
+						startTime: '',
+						title: 'Will this happen?',
+					},
+					onCreateQuestionAndSecurityPool: () => undefined,
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+		fireEvent.click(within(document.body).getByRole('radio', { name: 'Create a new question' }))
+		expectTransactionButtonDisabled(document.body, 'Create question and pool', 'A pool already exists for this question and configuration.')
+		expect(document.querySelector('.identifier-value')?.textContent).toBe('123')
+		expect(within(document.body).getByText('Pool address:', { exact: false })).not.toBeNull()
+		expect(document.querySelector(`a[href*='${poolAddress}']`)?.textContent).toContain(poolAddress)
+	})
+
+	test('carries an existing question ID into the pool creation flow', async () => {
+		const onSecurityPoolFormChange = mock(() => undefined)
+		const renderedComponent = await renderIntoDocument(
+			h(
+				SecurityPoolSection,
+				createProps({
+					existingQuestionCheck: { status: 'existing', questionId: '123' },
+					marketForm: {
+						answerUnit: '',
+						categoricalOutcomes: ['', ''],
+						description: 'Pool question',
+						endTime: '1735689600',
+						marketType: 'binary',
+						scalarIncrement: '',
+						scalarMax: '',
+						scalarMin: '',
+						startTime: '',
+						title: 'Will this happen?',
+					},
+					onCreateQuestionAndSecurityPool: () => undefined,
+					onSecurityPoolFormChange,
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+		fireEvent.click(within(document.body).getByRole('radio', { name: 'Create a new question' }))
+		expectTransactionButtonDisabled(document.body, 'Create question and pool', 'This question already exists.')
+		expect(document.querySelector('.identifier-value')?.textContent).toBe('123')
+		fireEvent.click(within(document.body).getByRole('button', { name: 'Use existing question' }))
+		expect(onSecurityPoolFormChange).toHaveBeenCalledWith({ marketId: '123' })
+		expect((within(document.body).getByRole('radio', { name: 'Use a question ID' }) as HTMLInputElement).checked).toBe(true)
+	})
+
 	test('keeps combined question-and-pool creation disabled for non-binary question types', async () => {
 		const onCreateQuestionAndSecurityPool = mock(() => undefined)
 		const renderedComponent = await renderIntoDocument(
@@ -648,17 +712,20 @@ describe('SecurityPoolSection', () => {
 	})
 
 	test('renders duplicate and forked branch messaging and button labels', async () => {
+		const duplicatePoolAddress = getAddress('0x0000000000000000000000000000000000000002')
 		const duplicateRender = await renderIntoDocument(
 			h(
 				SecurityPoolSection,
 				createProps({
+					duplicateOriginPoolAddress: duplicatePoolAddress,
 					duplicateOriginPoolExists: true,
 				}),
 			),
 		)
 		cleanupRenderedComponent = duplicateRender.cleanup
 		expectTransactionButtonDisabled(document.body, 'Pool Already Exists', 'A pool for this question, Statoblast security multiplier, and priority fee already exists.')
-		expect(within(document.body).getByText('Change the priority fee or Statoblast security multiplier to create a different origin pool.')).not.toBeNull()
+		expect(document.body.textContent).toContain('Change the priority fee or Statoblast security multiplier to create a different origin pool.')
+		expect(document.querySelector(`a[href*='${duplicatePoolAddress}']`)).not.toBeNull()
 		await cleanupRenderedComponent?.()
 		cleanupRenderedComponent = undefined
 

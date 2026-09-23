@@ -29,12 +29,16 @@ import { formatUniverseIdHex } from '@zoltar/ui-core-shared/lib/universeLabels.j
 import { getWrongNetworkReason } from '@zoltar/ui-core-shared/wallet/network.js'
 import * as marketCopy from '@zoltar/ui-zoltar-shared/copy/market.js'
 import * as transactionReviewCopy from '@zoltar/ui-core-shared/copy/transactionReview.js'
+import { SecurityPoolLink } from './SecurityPoolLink.js'
 
 export function SecurityPoolSection({
 	accountState,
 	activeUniverseId,
 	checkingDuplicateOriginPool,
+	duplicateOriginPoolAddress,
 	duplicateOriginPoolExists,
+	existingQuestionCheck,
+	onRetryExistingQuestionCheck,
 	loadingMarketDetails,
 	marketDetails,
 	marketCreating = false,
@@ -120,6 +124,9 @@ export function SecurityPoolSection({
 		if (zoltarUniverseHasForked) return securityPoolCopy.poolCreationAfterForkReason
 		if (marketForm.marketType !== 'binary') return securityPoolCopy.ineligibleQuestionDetail
 		if (!questionFormValidation.isValid) return questionFormValidation.notice
+		if (existingQuestionCheck?.status === 'checking') return securityPoolCopy.checkingQuestionExists
+		if (existingQuestionCheck?.status === 'error') return securityPoolCopy.questionExistenceUnavailable
+		if (existingQuestionCheck?.status === 'existing') return existingQuestionCheck.poolAddress === undefined ? securityPoolCopy.questionAlreadyExists : securityPoolCopy.questionAlreadyHasPool
 		const multiplierValidationMessage = getStatoblastSecurityMultiplierValidationMessage(securityPoolForm.statoblastSecurityMultiplierBps)
 		if (multiplierValidationMessage !== undefined) return multiplierValidationMessage
 		return getInitialReportPriorityFeeValidationMessage(securityPoolForm.initialReportPriorityFeeEth)
@@ -315,7 +322,11 @@ export function SecurityPoolSection({
 										</div>
 									)}
 								</div>
-								{!duplicateOriginPoolExists ? undefined : <p className='detail'>{securityPoolCopy.duplicatePoolDetail}</p>}
+								{!duplicateOriginPoolExists ? undefined : (
+									<p className='detail'>
+										{securityPoolCopy.duplicatePoolDetail} {duplicateOriginPoolAddress === undefined ? undefined : <SecurityPoolLink securityPoolAddress={duplicateOriginPoolAddress} />}
+									</p>
+								)}
 								{marketDetails !== undefined && marketDetails.marketType !== 'binary' ? <p className='notice error'>{securityPoolCopy.ineligibleQuestionDetail}</p> : undefined}
 								{zoltarUniverseHasForked ? <p className='notice error'>{securityPoolCopy.poolCreationAfterForkReason}</p> : undefined}
 							</SectionBlock>
@@ -352,7 +363,39 @@ export function SecurityPoolSection({
 									onMarketFormChange={onMarketFormChange}
 									onOpenForkTab={() => undefined}
 									onResetMarket={onResetMarket}
-									submitFields={poolConfigurationFields}
+									submitFields={
+										<>
+											{poolConfigurationFields}
+											{existingQuestionCheck?.status === 'error' ? (
+												<button className='secondary' type='button' onClick={onRetryExistingQuestionCheck}>
+													{commonCopy.retry}
+												</button>
+											) : undefined}
+											{existingQuestionCheck?.status === 'existing' ? (
+												<div className='detail'>
+													<p>
+														{commonCopy.questionId}: <span className='identifier-value'>{existingQuestionCheck.questionId}</span>
+													</p>
+													{existingQuestionCheck.poolAddress === undefined ? (
+														<button
+															className='secondary'
+															type='button'
+															onClick={() => {
+																onSecurityPoolFormChange({ marketId: existingQuestionCheck.questionId })
+																setQuestionSource('existing')
+															}}
+														>
+															{securityPoolCopy.useExistingQuestion}
+														</button>
+													) : (
+														<p>
+															{securityPoolCopy.poolAddressLabel}: <SecurityPoolLink securityPoolAddress={existingQuestionCheck.poolAddress} />
+														</p>
+													)}
+												</div>
+											) : undefined}
+										</>
+									}
 									onUseQuestionForFork={() => undefined}
 									onUseQuestionForPool={questionId => onSecurityPoolFormChange({ marketId: questionId })}
 									zoltarQuestions={[]}
