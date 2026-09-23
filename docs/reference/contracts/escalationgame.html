@@ -20,7 +20,7 @@
 
 				<h2 id="interactions">State-changing interactions</h2>
 				<!-- Validated read ABI fingerprint: eef79eba3507015cc5f9bb0198da1e4ba1ebb6be17e9d4d1c536ee681a66e82c -->
-				<!-- Validated complete compiled ABI fingerprint: b5a5cdf236031f69d66662704e6a9f748eee9faf6ef61c8678f5e60b027196ff -->
+				<!-- Validated complete compiled ABI fingerprint: 68a78059fca883d199188c96b3569aa607b94d1c3f28179fa7eba46b33bdf49b -->
 				<table>
 					<thead>
 						<tr>
@@ -54,11 +54,11 @@
 							<td><code>ForkContinuationResumed</code></td>
 						</tr>
 						<tr>
-							<td><code>applyTruthAuctionHaircut(repToRemove)</code></td>
+							<td><code>applyTruthAuctionHaircut(repToRemoveAttoRep)</code></td>
 							<td>The child pool's <code>SecurityPoolForker</code> only</td>
 							<td>Paused fork continuation; no prior auction haircut; the requested amount is below the game's live REP balance.</td>
-							<td>Transfers the sold child REP to the pool, applies one retention ratio to escrow and outcome balances, and rebases elapsed curve time. The fork remains final and the game remains paused until the pool resumes it.</td>
-							<td><code>TruthAuctionHaircutApplied</code> and REP <code>Transfer</code></td>
+							<td>Transfers sold REP to the pool, proportionally reduces escrow and outcome balances, and rebases curve time. If an unfixed continuation inherited two threshold-full outcome balances and the haircut leaves them below the current game threshold, ordinary pool-mediated deposit checks apply after the pool resumes the game. Fixed outcomes and local non-decisions retain their state. The game stays paused until the pool resumes it.</td>
+							<td><code>TruthAuctionHaircutApplied</code> and REP <code>Transfer</code>; <code>InheritedThresholdTieReopened</code> when an unfixed inherited tie reopens</td>
 						</tr>
 						<tr>
 							<td><code>depositRepOnOutcome(outcome, maximumDepositAttoRep)</code></td>

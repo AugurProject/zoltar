@@ -47,7 +47,7 @@ export const contractPagesDirectory = 'docs/reference/contracts'
 export function contractPageOutputPath(contractName: string): string {
 	return `${contractPagesDirectory}/${contractName.toLowerCase()}.html`
 }
-export const expectedProductionSoliditySourceFingerprint = '11566559b5dac1450aa4201c567f4ba0b23653c7bb2f913e15ada1783c8c59a1'
+export const expectedProductionSoliditySourceFingerprint = 'e45f405f621073362cb7d0987f362b08d42e966f5487390928e8bdaa900f7b1f'
 
 export const documentedEventSchemas: Array<{ name: string; parameters: string; sourcePath: string }> = [
 	{
@@ -260,7 +260,7 @@ export const assemblyDelegateCalls: AssemblyDelegateCall[] = [
 	},
 ]
 
-export const referencedEventAbiFingerprint = '1a2499d591379a5c6941dd10ff7a1d0c1c18f0721c6d60d7ca745711402dc87f'
+export const referencedEventAbiFingerprint = '650c3a0559000a51b15f94e0548019673e79cd4c2367cf9371067b1745575df1'
 
 export const entrypointSignaturesBySource: Record<string, Record<string, string[]>> = {
 	'solidity/contracts/ERC20.sol': {
@@ -1175,7 +1175,7 @@ export const contractReferences: ContractReference[] = [
 		],
 	},
 	{
-		compiledAbiFingerprint: 'b5a5cdf236031f69d66662704e6a9f748eee9faf6ef61c8678f5e60b027196ff',
+		compiledAbiFingerprint: '68a78059fca883d199188c96b3569aa607b94d1c3f28179fa7eba46b33bdf49b',
 		name: 'EscalationGame',
 		purpose: 'Escrows outcome REP, raises the running resolution cost, detects non-decision, and settles local or carried deposits.',
 		readAbiFingerprint: 'eef79eba3507015cc5f9bb0198da1e4ba1ebb6be17e9d4d1c536ee681a66e82c',
@@ -1257,12 +1257,13 @@ export const contractReferences: ContractReference[] = [
 				signals: '`ForkContinuationResumed`',
 			},
 			{
-				call: '`applyTruthAuctionHaircut(repToRemove)`',
+				call: '`applyTruthAuctionHaircut(repToRemoveAttoRep)`',
 				caller: "The child pool's `SecurityPoolForker` only",
 				declarations: [{ name: 'applyTruthAuctionHaircut' }],
-				effect: 'Transfers the sold child REP to the pool, applies one retention ratio to escrow and outcome balances, and rebases elapsed curve time. The fork remains final and the game remains paused until the pool resumes it.',
+				effect:
+					'Transfers sold REP to the pool, proportionally reduces escrow and outcome balances, and rebases curve time. If an unfixed continuation inherited two threshold-full outcome balances and the haircut leaves them below the current game threshold, ordinary pool-mediated deposit checks apply after the pool resumes the game. Fixed outcomes and local non-decisions retain their state. The game stays paused until the pool resumes it.',
 				preconditions: "Paused fork continuation; no prior auction haircut; the requested amount is below the game's live REP balance.",
-				signals: '`TruthAuctionHaircutApplied` and REP `Transfer`',
+				signals: '`TruthAuctionHaircutApplied` and REP `Transfer`; `InheritedThresholdTieReopened` when an unfixed inherited tie reopens',
 			},
 			{
 				call: '`depositRepOnOutcome(outcome, maximumDepositAttoRep)`',
