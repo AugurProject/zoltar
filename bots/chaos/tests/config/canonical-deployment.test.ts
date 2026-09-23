@@ -21,7 +21,15 @@ test('ignores obsolete address overrides and omits them from saved configuration
 	const settings = parseSettings({ ...example, deployment: { zoltar: supplied } })
 	expect(settings.deployment.zoltar).not.toBe(supplied)
 	expect(serializedSettings(settings)).not.toHaveProperty('deployment')
+	expect(serializedSettings(settings)).toHaveProperty('deploymentPin')
 	expect(Object.values(parseSettings({ ...example, network: { ...example.network, kind: 'custom', name: 'Local test', chainId: 31337 } }).deployment)).not.toContain(zeroAddress)
+})
+
+test('rejects a changed address or chain in a pinned deployment', () => {
+	const stored = serializedSettings(parseSettings(example))
+	expect(() => parseSettings({ ...stored, deploymentPin: { ...stored.deploymentPin, zoltar: getAddress('0x0000000000000000000000000000000000000001') } })).toThrow('deploymentPin does not match')
+	expect(() => parseSettings({ ...stored, deploymentPin: { ...stored.deploymentPin, uniswapV3Factory: getAddress('0x0000000000000000000000000000000000000001') } })).toThrow('deploymentPin factory does not match')
+	expect(() => parseSettings({ ...stored, network: { ...stored.network, chainId: 1, name: 'mainnet' } })).toThrow('deploymentPin does not match')
 })
 
 test('selects the published Uniswap factory for each network', () => {

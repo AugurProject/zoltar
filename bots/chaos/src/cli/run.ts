@@ -1,4 +1,5 @@
 #!/usr/bin/env bun
+import { assertDurableDeploymentFactory, restoreDeploymentForDurableState } from '../config/deployment-state.ts'
 import { errorMessage } from '@zoltar/bot-shared/infrastructure/error-message'
 
 import { getAddress, privateKeyToAccount } from '@zoltar/bot-shared/ethereum'
@@ -58,8 +59,10 @@ async function applyRetirementCommand(command: Exclude<RunCommand, { kind: 'oper
 		console.log(JSON.stringify(state.retirement, undefined, 2))
 		return
 	}
+	loaded = { ...loaded, settings: restoreDeploymentForDurableState(loaded.settings, state, loaded.needsDeploymentPin) }
 	const profileId = executionProfileId(loaded.settings)
 	if (state.profileId !== profileId) throw new Error(`Durable state belongs to ${state.profileId}, not configured profile ${profileId}`)
+	assertDurableDeploymentFactory(loaded.settings, state, loaded.settings.runtime.stateFile)
 	if (command.kind === 'request-drain') {
 		const recipient = getAddress(command.recipient)
 		const configuredSigner = loaded.settings.privateKey === undefined ? undefined : privateKeyToAccount(loaded.settings.privateKey).address

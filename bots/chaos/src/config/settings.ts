@@ -1,7 +1,7 @@
 import { renameAndSyncDirectory } from '@zoltar/bot-shared/config/durable-replacement'
 import { persistentPathIdentitiesMatch, persistentPathIdentity } from '@zoltar/bot-shared/config/persistent-path'
 import { signerCandidate } from '@zoltar/bot-shared/config/signer'
-import { type Address, type Hex } from '@zoltar/bot-shared/ethereum'
+import { getAddress, zeroAddress, type Address, type Hex } from '@zoltar/bot-shared/ethereum'
 import { validateSubmissionSettings, type SubmissionSettings } from '@zoltar/bot-shared/execution/transaction-submission'
 import { boolean, formatDecimalAmount, integer, nonemptyString, parseDecimalAmount } from '@zoltar/bot-shared/infrastructure/json-validation'
 import { validateConnectivitySettings, validateIndependentReadRpcUrls, type ConnectivitySettings, type NetworkName } from '@zoltar/bot-shared/monitoring/connectivity'
@@ -14,6 +14,7 @@ import { CHAOS_OPERATION_CATALOG } from '../operations/catalog.ts'
 import { MINIMUM_WORKFLOW_VALIDITY_BLOCKS } from '../operations/timing.ts'
 import { assertExactKeys as assertExactRequiredAndOptionalKeys, requiredRecord, uint256String } from '../state/validators.ts'
 import { canonicalDeployment } from './canonical-deployment.ts'
+import { executionProfileId } from './execution-profile.ts'
 
 const PRESERVE_PRIVATE_KEY = '__PRESERVE_SAVED_PRIVATE_KEY__'
 export const CONFIGURATION_REVISION_CONFLICT = 'ConfigurationRevisionConflict'
@@ -322,10 +323,43 @@ function parseStrategy(value: unknown): StrategySettings {
 	}
 }
 
+function deploymentFactoryId(profileId: string, factory: Address) {
+	return `factory:v1:${createHash('sha256')
+		.update(JSON.stringify({ profileId, factory: factory.toLowerCase() }))
+		.digest('hex')}`
+}
+
+function parseDeploymentPin(value: unknown, network: OperatorSettings['network']): DeploymentSettings {
+	const pin = requiredRecord(value, 'deploymentPin')
+	const addressKeys = ['openOracle', 'questionData', 'securityPoolFactory', 'securityPoolForker', 'tradingFactory', 'tradingRouter', 'uniswapV3Factory', 'weth', 'zoltar'] as const
+	assertExactKeys(pin, ['factoryId', 'profileId', ...addressKeys], 'deploymentPin')
+	const address = (key: (typeof addressKeys)[number]) => {
+		const value = pin[key]
+		if (typeof value !== 'string') throw new Error(`deploymentPin.${key} must be an address`)
+		const parsed = getAddress(value)
+		if (parsed === zeroAddress) throw new Error(`deploymentPin.${key} must not be the zero address`)
+		return parsed
+	}
+	const deployment = {
+		openOracle: address('openOracle'),
+		questionData: address('questionData'),
+		securityPoolFactory: address('securityPoolFactory'),
+		securityPoolForker: address('securityPoolForker'),
+		tradingFactory: address('tradingFactory'),
+		tradingRouter: address('tradingRouter'),
+		uniswapV3Factory: address('uniswapV3Factory'),
+		weth: address('weth'),
+		zoltar: address('zoltar'),
+	}
+	if (pin['profileId'] !== executionProfileId({ deployment, network })) throw new Error('deploymentPin does not match its chain and deployment addresses')
+	if (pin['factoryId'] !== deploymentFactoryId(pin['profileId'], deployment.uniswapV3Factory)) throw new Error('deploymentPin factory does not match its saved identity')
+	return deployment
+}
+
 export function parseSettings(value: unknown, preservedPrivateKey?: Hex): OperatorSettings {
 	const root = requiredRecord(value, 'operator settings')
 	// Accept the obsolete field so existing saved configurations can migrate; never use its addresses.
-	assertExactKeys(root, ['connectivity', ...('deployment' in root ? ['deployment'] : []), 'discovery', 'network', 'networkConfigured', 'paused', 'privateKey', 'runtime', 'scheduler', 'strategy', 'submission', 'version'], 'operator settings')
+	assertExactKeys(root, ['connectivity', ...('deployment' in root ? ['deployment'] : []), ...('deploymentPin' in root ? ['deploymentPin'] : []), 'discovery', 'network', 'networkConfigured', 'paused', 'privateKey', 'runtime', 'scheduler', 'strategy', 'submission', 'version'], 'operator settings')
 	if (root['version'] !== 1) throw new Error('operator settings version must be 1')
 	const networkConfigured = boolean(root['networkConfigured'], 'networkConfigured')
 	const connectivity = root['connectivity'] === null ? undefined : parseConnectivity(root['connectivity'])
@@ -336,7 +370,7 @@ export function parseSettings(value: unknown, preservedPrivateKey?: Hex): Operat
 	const network = parseNetwork(root['network'])
 	const settings: OperatorSettings = {
 		connectivity,
-		deployment: canonicalDeployment(network.chainId),
+		deployment: root['deploymentPin'] === undefined ? canonicalDeployment(network.chainId) : parseDeploymentPin(root['deploymentPin'], network),
 		discovery: parseDiscovery(root['discovery']),
 		network,
 		networkConfigured,
@@ -362,8 +396,12 @@ export function parseSettings(value: unknown, preservedPrivateKey?: Hex): Operat
 }
 
 export function serializedSettings(settings: OperatorSettings, redactPrivateKey = false) {
+	const factory = settings.deployment.uniswapV3Factory
+	if (factory === undefined) throw new Error('Cannot save a deployment profile without a Uniswap V3 factory')
+	const profileId = executionProfileId(settings)
 	return {
 		connectivity: settings.connectivity === undefined ? null : { ...settings.connectivity },
+		deploymentPin: { factoryId: deploymentFactoryId(profileId, factory), profileId, ...settings.deployment },
 		discovery: settings.discovery,
 		network: settings.network,
 		networkConfigured: settings.networkConfigured,
@@ -436,7 +474,9 @@ export async function loadSettings(path = resolve(process.env['ZOLTAR_CHAOS_CONF
 		if (error instanceof SyntaxError) throw new Error(`Chaos-bot configuration is not valid JSON: ${error.message}`)
 		throw error
 	}
-	return { path, revision: revision(contents), settings: parseSettings(parsed) }
+	const raw = requiredRecord(parsed, 'operator settings')
+	const settings = parseSettings(raw)
+	return { path, revision: revision(contents), settings, needsDeploymentPin: !('deploymentPin' in raw) }
 }
 
 export async function saveSettings(path: string, settings: OperatorSettings, expectedRevision?: string, filesystem: SettingsFilesystem = settingsFilesystem) {

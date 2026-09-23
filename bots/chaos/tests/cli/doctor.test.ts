@@ -18,7 +18,7 @@ import {
 	type ChaosDoctorDependencies,
 	type ChaosDoctorProbeResult,
 } from '../../src/cli/doctor.ts'
-import { parseSettings } from '../../src/config/settings.ts'
+import { loadSettings, parseSettings, serializedSettings } from '../../src/config/settings.ts'
 import { executionProfileId } from '../../src/config/execution-profile.ts'
 import { MINIMUM_WORKFLOW_VALIDITY_BLOCKS } from '../../src/operations/timing.ts'
 import { immutableTopologySidecarDirectory } from '../support/state-sidecars.ts'
@@ -62,7 +62,7 @@ function passiveDoctorDependencies(settings: Awaited<ReturnType<typeof settingsF
 		deploymentAvailability: async () => undefined,
 		acquireLocks: async () => ({ release: async () => undefined }),
 		assertProfileIsolation: async () => undefined,
-		load: async () => ({ path: '/private/operator.json', revision: 'sha256:test', settings }),
+		load: async () => ({ path: '/private/operator.json', revision: 'sha256:test', settings, needsDeploymentPin: false }),
 		loadState: async (_path, chainId) => initialDurableState(chainId, true, executionProfileId(settings)),
 		preflightSubmission: async () => [],
 		probe: async () => probeResult,
@@ -360,6 +360,27 @@ describe('chaos launch doctor', () => {
 		expect(probed).toBe(false)
 	})
 
+	test('loads real configuration without reading malformed durable state before lock acquisition', async () => {
+		const directory = await mkdtemp(join(tmpdir(), 'zoltar-chaos-doctor-lock-'))
+		temporaryDirectories.push(directory)
+		const path = join(directory, 'operator.json')
+		const stateFile = join(directory, 'state.json')
+		const settings = await settingsFixture('operator.configured-placeholder.json')
+		const stored = serializedSettings(settings)
+		Reflect.deleteProperty(stored, 'deploymentPin')
+		stored.runtime.stateFile = stateFile
+		await writeFile(path, `${JSON.stringify(stored)}\n`, { mode: 0o600 })
+		await writeFile(stateFile, 'malformed state', { mode: 0o600 })
+		const dependencies = passiveDoctorDependencies(settings, {
+			acquireLocks: async () => {
+				throw new Error('Chaos-bot state is already locked by pid 42')
+			},
+			load: async () => loadSettings(path),
+			loadState: loadDurableState,
+		})
+		await expect(runChaosDoctor(dependencies)).rejects.toThrow('already locked')
+	})
+
 	test('validates deployment profile and signer scope without mutating state', async () => {
 		const baseline = await settingsFixture('operator.configured-placeholder.json')
 		const privateKey = `0x${'44'.repeat(32)}` as const
@@ -393,6 +414,46 @@ describe('chaos launch doctor', () => {
 
 		const pristine = initialDurableState(settings.network.chainId)
 		expect(assertDoctorDurableStateScope(settings, pristine, wallet, '/state.json').profile).toBe('pristine-bootstrap')
+	})
+
+	test('rejects a changed factory even if its configuration identity is recomputed', async () => {
+		const settings = await settingsFixture('operator.configured-placeholder.json')
+		const state = initialDurableState(settings.network.chainId, true, executionProfileId(settings))
+		state.activities.push({ at: new Date(0).toISOString(), message: 'existing history', status: 'info', type: 'configuration' })
+		state.uniswapV3Factory = settings.deployment.uniswapV3Factory
+		const changed = { ...settings, deployment: { ...settings.deployment, uniswapV3Factory: getAddress('0x0000000000000000000000000000000000000001') } }
+		const persisted = serializedSettings(changed)
+		const parsed = parseSettings(persisted)
+		expect(executionProfileId(parsed)).toBe(state.profileId)
+		expect(() => assertDoctorDurableStateScope(parsed, state, undefined, '/state.json')).toThrow('different Uniswap V3 factory')
+		state.uniswapV3Factory = undefined
+		expect(() => assertDoctorDurableStateScope(parsed, state, undefined, '/state.json')).toThrow('different Uniswap V3 factory')
+	})
+
+	test('preflights an unpinned operated Sepolia state against its original deployment', async () => {
+		const directory = await mkdtemp(join(tmpdir(), 'zoltar-chaos-doctor-legacy-'))
+		temporaryDirectories.push(directory)
+		const path = join(directory, 'operator.json')
+		const stateFile = join(directory, 'chaos.sepolia.json')
+		const settings = await settingsFixture('operator.configured-placeholder.json')
+		const stored = serializedSettings(settings)
+		Reflect.deleteProperty(stored, 'deploymentPin')
+		stored.runtime.stateFile = stateFile
+		await writeFile(path, `${JSON.stringify(stored)}\n`, { mode: 0o600 })
+		const previousProfile = 'profile:v1:831bd7a49fd68a696ac753b612ce41ec5c50580b093ab8e1e5151a26883e29ae'
+		const state = initialDurableState(11_155_111, true, previousProfile)
+		state.activities.push({ at: new Date(0).toISOString(), message: 'Existing deployment activity', status: 'info', type: 'configuration' })
+		await saveDurableState(stateFile, state)
+		const before = await readFile(path)
+		const result = await runChaosDoctor(
+			passiveDoctorDependencies(settings, {
+				deploymentAvailability: async () => 'Waiting for deployment availability',
+				load: async () => loadSettings(path),
+				loadState: loadDurableState,
+			}),
+		)
+		expect(result.checks.durableState).toBe('passed')
+		expect(await readFile(path)).toEqual(before)
 	})
 
 	test('rejects mismatched-profile retirement state before network probing', async () => {

@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto'
 import type { OperatorSettings } from './settings.ts'
 
-export function executionProfileId(settings: OperatorSettings) {
+export function executionProfileId(settings: Pick<OperatorSettings, 'deployment' | 'network'>) {
 	const deployment = {
 		openOracle: settings.deployment.openOracle.toLowerCase(),
 		questionData: settings.deployment.questionData.toLowerCase(),

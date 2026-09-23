@@ -1,5 +1,6 @@
 #!/usr/bin/env bun
 
+import { assertDurableDeploymentFactory, restoreDeploymentForDurableState } from '../config/deployment-state.ts'
 import { formatDecimalAmount } from '@zoltar/bot-shared/infrastructure/json-validation'
 import { migrateEmptyBootstrapState } from '../state/bootstrap-migration.ts'
 import { requireDeployedContracts } from '@zoltar/bot-shared/monitoring/deployed-contracts'
@@ -427,6 +428,7 @@ export function assertDoctorDurableStateScope(settings: OperatorSettings, state:
 	if (state.profileId !== expectedProfileId && !isPristineBootstrapState(state)) {
 		throw new Error(`Durable state ${stateFile} belongs to deployment profile ${state.profileId}, expected ${expectedProfileId}`)
 	}
+	if (state.profileId === expectedProfileId && (state.uniswapV3Factory !== undefined || !isPristineBootstrapState(state))) assertDurableDeploymentFactory(settings, state, stateFile)
 	if (wallet !== undefined && state.signerAddress !== undefined && state.signerAddress.toLowerCase() !== wallet.toLowerCase()) {
 		throw new Error(`Durable state ${stateFile} is scoped to signer ${state.signerAddress}, not ${wallet}`)
 	}
@@ -460,7 +462,9 @@ async function runChaosDoctorWithLoaded(loaded: LoadedDoctorSettings, dependenci
 	const locks = await dependencies.acquireLocks(loaded.settings)
 	try {
 		const configuredSigner = loaded.settings.privateKey === undefined ? undefined : privateKeyToAccount(loaded.settings.privateKey).address
-		const durableState = migrateEmptyBootstrapState(await dependencies.loadState(loaded.settings.runtime.stateFile, loaded.settings.network.chainId), loaded.settings)
+		const storedState = await dependencies.loadState(loaded.settings.runtime.stateFile, loaded.settings.network.chainId)
+		loaded = { ...loaded, settings: restoreDeploymentForDurableState(loaded.settings, storedState, loaded.needsDeploymentPin) }
+		const durableState = migrateEmptyBootstrapState(storedState, loaded.settings)
 		const durableScope = assertDoctorDurableStateScope(loaded.settings, durableState, configuredSigner)
 		const companionState = await dependencies.validateCompanionState(loaded.settings)
 		const submissionChecks = await dependencies.preflightSubmission(loaded.settings)
