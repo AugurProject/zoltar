@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<meta name="description" content="What the Conditional YES and NO prices mean, why the larger reserve is the one you bet against, and why the spot price is never an oracle." />
+		<title>Conditional pricing</title>
+		<link rel="stylesheet" href="../../assets/css/shared-docs.css" />
+		<link rel="stylesheet" href="../../assets/css/docsShell.css" />
+	</head>
+	<body class="doc-openoracle">
+		<main id="main-content">
+			<header>
+				<p class="kicker">Explanation</p>
+				<h1>Conditional pricing</h1>
+				<p>A two-reserve pair produces exactly two prices, and both are conditional on the market resolving validly.</p>
+			</header>
+			<section id="formula">
+				<h2>What the prices are</h2>
+				<p>The constant-product marginal relationship prices one outcome using the <em>opposite</em> reserve:</p>
+				<div class="equation" id="eq-trading-conditional-yes">
+					<math display="block" aria-label="Conditional YES equals the NO reserve divided by the sum of the YES and NO reserves" data-source="conditionalYes = noReserve / (yesReserve + noReserve)"
+						><mrow
+							><mi>conditionalYes</mi><mo>=</mo
+							><mfrac
+								><mi>noReserve</mi><mrow><mi>yesReserve</mi><mo>+</mo><mi>noReserve</mi></mrow></mfrac
+							></mrow
+						></math
+					>
+				</div>
+				<div class="equation" id="eq-trading-conditional-no">
+					<math display="block" aria-label="Conditional NO equals the YES reserve divided by the sum of the YES and NO reserves" data-source="conditionalNo = yesReserve / (yesReserve + noReserve)"
+						><mrow
+							><mi>conditionalNo</mi><mo>=</mo
+							><mfrac
+								><mi>yesReserve</mi><mrow><mi>yesReserve</mi><mo>+</mo><mi>noReserve</mi></mrow></mfrac
+							></mrow
+						></math
+					>
+				</div>
+				<p>The two values sum to 100% because they partition the valid outcomes only. That does <strong>not</strong> imply INVALID has zero probability; there is no unconditional YES or NO probability in this AMM.</p>
+				<p>At 428.571 YES and 1,000 NO, Conditional YES is about 70% and Conditional NO about 30%. The larger NO reserve makes YES the more expensive side, which is why a “70% YES” initialization deposits more NO than YES.</p>
+			</section>
+			<section id="not-an-oracle">
+				<h2>Not an oracle</h2>
+				<p>The displayed before-and-after price is a trade-impact aid, nothing more. Reserve spot values can be moved within a block, donated to, sandwiched, or go stale before inclusion. Protocol logic must never consume this price as an oracle; Trading includes no TWAP.</p>
+			</section>
+		</main>
+		<script src="../../assets/js/responsiveDocs.js"></script>
+		<script src="../../assets/js/docsData.js"></script>
+		<script src="../../assets/js/docsShell.js"></script>
+	</body>
+</html>

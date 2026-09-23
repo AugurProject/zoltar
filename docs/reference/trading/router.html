@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<meta name="description" content="Entrypoints, custody guarantees, and approval-free share operations of the stateless Trading router." />
+		<title>Trading router</title>
+		<link rel="stylesheet" href="../../assets/css/shared-docs.css" />
+		<link rel="stylesheet" href="../../assets/css/docsShell.css" />
+	</head>
+	<body class="doc-openoracle">
+		<main id="main-content">
+			<header>
+				<p class="kicker">Reference</p>
+				<h1>Trading router</h1>
+				<p>Trading deploys one canonical factory and one canonical router. The router handles entry and liquidity operations, share-transfer exits and complete-set redemption, and permit-assisted LP removal. The configured deterministic addresses and factory relationships are authoritative.</p>
+			</header>
+			<section id="entrypoints">
+				<h2>Entrypoints</h2>
+				<p><code>TwoWayConstantProductRouter(factory)</code> fixes the only eligible factory. All user mutations enforce a deadline and a reentrancy guard. The router's receiver callbacks accept only the active pool's canonical share token and universe IDs. <code>receive()</code> accepts ETH only during redemption and only from the expected SecurityPool.</p>
+				<ul>
+					<li><code>enterPosition(pair, longOutcome, minLongSharesOut, recipient, deadline)</code> is payable. It creates actual complete-set shares from <code>msg.value</code>, verifies equal INVALID/YES/NO deltas, swaps all opposite shares, and delivers long shares plus INVALID. It returns ETH spent, complete sets, swap amounts, fee, and before/after Conditional YES prices.</li>
+					<li><code>createPairAndInitializeWithEth(pool, conditionalYesBps, minLiquidity, recipient, deadline)</code> creates or reuses the deterministic pair and requires it to be uninitialized before atomically seeding it.</li>
+					<li><code>initializeWithEth(pair, conditionalYesBps, minLiquidity, recipient, deadline)</code> initializes an already created canonical pair.</li>
+					<li><code>addLiquidityWithEth(pair, minLiquidity, recipient, deadline)</code> creates complete sets, deposits the authoritative proportional maximum, and returns INVALID and unused shares.</li>
+					<li><code>removeLiquidityWithPermit(pair, liquidity, minYesOut, minNoOut, recipient, deadline, v, r, s)</code> tries the exact-amount ERC-2612 permit, requires an existing allowance if the permit fails, pulls LP, and returns raw YES/NO directly to the recipient.</li>
+					<li><code>factory()</code> exposes the immutable factory.</li>
+					<li><code>onERC1155Received</code>, <code>onERC1155BatchReceived</code>, and <code>supportsInterface</code> exist only for the receive-based operations described below and for the pair callbacks inside an operation.</li>
+				</ul>
+				<p>Successful share-custody operations assert that all three router balances equal their starting values, preserving pre-existing forced shares.</p>
+			</section>
+			<section id="approval-free">
+				<h2>Exits and complete-set redemption by share transfer</h2>
+				<p>The router has no <code>exitPosition</code> or <code>redeemCompleteSet</code> entrypoint. Users exit and redeem by calling the ShareToken's <code>safeBatchTransferFrom</code> with themselves as both caller and owner, the router as recipient, and an encoded request in the data field. No <code>setApprovalForAll</code> is required. The versioned payload binds the operation, ShareToken, canonical SecurityPool and pair, universe, question, exact INVALID/YES/NO token IDs, transferred and maximum input, minimum ETH output, payout and refund recipients, and deadline. The router accepts only owner-initiated top-level transfers (<code>operator == from</code>); internal pair callbacks are distinguished from top-level user callbacks.</p>
+				<ul>
+					<li><strong>Insured exit.</strong> The transfer carries exactly <code>q</code> INVALID and <code>maxLongSharesIn</code> long shares. The router buys exactly <code>q</code> opposite shares with an exact-output swap, redeems <code>q</code> complete sets at the pool, and returns any unused long shares to the bound refund recipient. It emits <code>PositionExitedByTransfer</code>.</li>
+					<li><strong>Complete-set redemption.</strong> The transfer carries exactly ordered, equal INVALID, YES, and NO amounts with no long outcome or maximum input. The router redeems them at the exact canonical SecurityPool and emits <code>CompleteSetRedeemedByTransfer</code>.</li>
+				</ul>
+				<p>Both operations measure the ETH the redemption produced, require that delta to be positive and at least <code>minEthOut</code>, and forward exactly that delta to the payout recipient. Pre-existing forced ETH in the router is never mixed into a payout. Every operation also proves that it leaves the router's share balances unchanged.</p>
+				<p>For LP removal through the router, Safes and integrations without signature support may use ordinary exact allowances instead of a permit. The first-party UI calls the pair directly and needs no router allowance.</p>
+			</section>
+		</main>
+		<script src="../../assets/js/responsiveDocs.js"></script>
+		<script src="../../assets/js/docsData.js"></script>
+		<script src="../../assets/js/docsShell.js"></script>
+	</body>
+</html>
