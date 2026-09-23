@@ -72,11 +72,11 @@ describe('fork-carry proof index', () => {
 		}
 	})
 
-	test('uses a peak-relative leaf index and ascending-height other-peak order', () => {
+	test('uses the global leaf index with its containing peak height and ascending-height other-peak order', () => {
 		const hashes = Array.from({ length: 5 }, (_, index) => hash(`five-${index.toString()}`))
 		const largePeakRoot = hashCarryParent(hashCarryParent(hashes[0] ?? zeroHash, hashes[1] ?? zeroHash), hashCarryParent(hashes[2] ?? zeroHash, hashes[3] ?? zeroHash))
 		const tailProof = createMerkleMountainRangeProof(hashes, 4)
-		expect(tailProof.leafIndex).toBe('0')
+		expect(tailProof.leafIndex).toBe('4')
 		expect(tailProof.merkleMountainRangePeakIndex).toBe('0')
 		expect(tailProof.merkleMountainRangeSiblings).toEqual([largePeakRoot])
 

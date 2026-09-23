@@ -4418,6 +4418,8 @@ export const twoWayConstantProductRouterAbi = [
 		stateMutability: 'payable',
 		inputs: [
 			{ name: 'pair', type: 'address', internalType: 'contract ITwoWayConstantProductPair' },
+			{ name: 'maxYesUsed', type: 'uint256', internalType: 'uint256' },
+			{ name: 'maxNoUsed', type: 'uint256', internalType: 'uint256' },
 			{ name: 'minLiquidity', type: 'uint256', internalType: 'uint256' },
 			{ name: 'recipient', type: 'address', internalType: 'address' },
 			{ name: 'deadline', type: 'uint256', internalType: 'uint256' },

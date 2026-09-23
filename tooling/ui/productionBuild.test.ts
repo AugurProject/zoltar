@@ -1058,7 +1058,7 @@ productionWorkflowTest('production bundle executes deployment, reporting, fork m
 			await completeTransactionReview('Price Requested')
 			await driver.waitForTransactionStatus('Confirmed', 'Price Requested')
 			expect(await driver.evaluate('document.querySelector(\'[role="dialog"]\') === null')).toBe(true)
-			await driver.clickButton('+1 day')
+			await driver.clickButton('+10 min')
 			await driver.waitForBodyText('PENDING REQUEST')
 			const pendingReportOpened = await driver.evaluate(`(() => { const button = [...document.querySelectorAll('button')].find(candidate => candidate.textContent?.trim().startsWith('Report #')); if (!(button instanceof HTMLButtonElement)) return false; button.click(); return true })()`)
 			expect(pendingReportOpened).toBe(true)
