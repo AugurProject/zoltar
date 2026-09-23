@@ -36,7 +36,7 @@ type SecurityPoolObjectHeaderProps = {
 }
 
 function getSummaryPool(props: SecurityPoolObjectHeaderProps) {
-	return { ...props.selectedPoolSummaryPool, lastOracleSettlementTimestamp: props.currentPoolOracleSettlementTimestamp ?? props.selectedPoolSummaryPool.lastOracleSettlementTimestamp }
+	return { ...props.selectedPoolSummaryPool, lastOraclePrice: props.currentPoolOraclePrice ?? props.selectedPoolSummaryPool.lastOraclePrice, lastOracleSettlementTimestamp: props.currentPoolOracleSettlementTimestamp ?? props.selectedPoolSummaryPool.lastOracleSettlementTimestamp }
 }
 
 function getSummaryCalculationPrice(props: SecurityPoolObjectHeaderProps) {
@@ -77,12 +77,18 @@ export function SecurityPoolReferenceDetails(props: SecurityPoolObjectHeaderProp
 		<div className='pool-reference-details'>
 			<ReadOnlyDetailAccordion title={copy.poolDetails}>
 				<Question question={marketDetails} variant='preview' showTitle={false} />
-				<SecurityPoolSummaryMetrics calculationPriceConfigured calculationRepPerEthPrice={getSummaryCalculationPrice(props)} metricVariant='context' pool={summaryPool} omitCapacity showTotalBacking>
+				<SecurityPoolSummaryMetrics calculationPriceConfigured calculationRepPerEthPrice={getSummaryCalculationPrice(props)} metricVariant='context' pendingReportReadyAtTimestamp={currentPoolOracleManagerDetails?.pendingReportReadyAtTimestamp} pool={summaryPool} omitCapacity showTotalBacking>
 					<MetricField label={securityPoolCopy.managerAddress}>
 						<AddressValue address={summaryPool.managerAddress} />
 					</MetricField>
 					<MetricField label={statoblastAppCopy.openOraclePrice}>
-						<OpenOraclePriceValue currentTimestamp={currentTimestamp} lastPrice={currentPoolOraclePrice} lastSettlementTimestamp={currentPoolOracleSettlementTimestamp ?? 0n} priceValidUntilTimestamp={currentPoolOracleManagerDetails?.priceValidUntilTimestamp} />
+						<OpenOraclePriceValue
+							currentTimestamp={currentTimestamp}
+							lastPrice={currentPoolOraclePrice}
+							lastSettlementTimestamp={currentPoolOracleSettlementTimestamp ?? 0n}
+							pendingReportReadyAtTimestamp={currentPoolOracleManagerDetails?.pendingReportReadyAtTimestamp}
+							priceValidUntilTimestamp={currentPoolOracleManagerDetails?.priceValidUntilTimestamp}
+						/>
 					</MetricField>
 					{summaryPool.parent === zeroAddress ? undefined : (
 						<MetricField label={securityPoolCopy.parentPool}>

@@ -1212,6 +1212,16 @@ describe('LiquidationModal', () => {
 		expect(documentQueries.getByText(/^Open Oracle Price$/)).not.toBeNull()
 	})
 
+	test('shows the pending first Open Oracle price in liquidation context', async () => {
+		const renderedComponent = await renderLiquidationModalAt(100n, {
+			currentPoolOracleManagerDetails: createOracleManagerDetails({ isPriceValid: false, lastPrice: 0n, lastSettlementTimestamp: 0n, pendingReportId: 7n, pendingReportReadyAtTimestamp: 154n }),
+			selectedPool: createSelectedPool({ lastOraclePrice: undefined, lastOracleSettlementTimestamp: 0n }),
+		})
+		cleanupRenderedComponent = renderedComponent.cleanup
+		const label = Array.from(document.querySelectorAll('.metric-label')).find(element => element.textContent === 'Open Oracle Price')
+		expect(label?.nextElementSibling?.textContent?.trim()).toBe('Available in 54s')
+	})
+
 	test('keeps protocol liquidation enabled when the configured UI price makes the target appear safe', async () => {
 		const renderedComponent = await renderLiquidationModal({
 			callerVaultSummary: createTargetVaultSummary({
