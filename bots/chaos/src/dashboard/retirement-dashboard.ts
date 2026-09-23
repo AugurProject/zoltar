@@ -1,13 +1,31 @@
 import { optionalRecord as retirementRecord } from '@zoltar/bot-shared/infrastructure/json-validation'
 
-type RetirementSnapshot = {
-	profileId?: string | undefined
-	retirement?: { blockers: unknown[]; finalSweepStartedAt?: string | undefined; positions: unknown[]; recipient?: string | undefined; status?: string | undefined } | undefined
-	wallet?: string | undefined
+type RetirementResidual = { amount: string; asset: string; category: string; reason: string }
+type CompletionEvidence = { blockHash: string; blockNumber: string; residuals: RetirementResidual[] }
+type RetirementDetails = {
+	blockers: unknown[]
+	completionEvidence?: CompletionEvidence | undefined
+	finalSweepStartedAt?: string | undefined
+	positions: unknown[]
+	recipient?: string | undefined
+	status?: string | undefined
 }
+type RetirementSnapshot = { profileId?: string | undefined; retirement?: RetirementDetails | undefined; wallet?: string | undefined }
 
 function retirementStringValue(value: unknown) {
 	return typeof value === 'string' ? value : undefined
+}
+
+function parseCompletionEvidence(value: unknown) {
+	const evidence = retirementRecord(value)
+	if (evidence === undefined || typeof evidence['blockHash'] !== 'string' || typeof evidence['blockNumber'] !== 'string' || !Array.isArray(evidence['residuals'])) return undefined
+	const residuals = evidence['residuals'].map(entry => {
+		const residual = retirementRecord(entry)
+		if (residual === undefined || typeof residual['amount'] !== 'string' || typeof residual['asset'] !== 'string' || typeof residual['category'] !== 'string' || typeof residual['reason'] !== 'string') return undefined
+		return { amount: residual['amount'], asset: residual['asset'], category: residual['category'], reason: residual['reason'] }
+	})
+	if (residuals.some(entry => entry === undefined)) return undefined
+	return { blockHash: evidence['blockHash'], blockNumber: evidence['blockNumber'], residuals: residuals.filter(entry => entry !== undefined) }
 }
 
 export function parsePublicRetirement(value: unknown): RetirementSnapshot['retirement'] {
@@ -16,6 +34,7 @@ export function parsePublicRetirement(value: unknown): RetirementSnapshot['retir
 		? undefined
 		: {
 				blockers: Array.isArray(retirement['blockers']) ? retirement['blockers'] : [],
+				completionEvidence: parseCompletionEvidence(retirement['completionEvidence']),
 				finalSweepStartedAt: retirementStringValue(retirement['finalSweepStartedAt']),
 				positions: Array.isArray(retirement['positions']) ? retirement['positions'] : [],
 				recipient: retirementStringValue(retirement['recipient']),
@@ -62,6 +81,9 @@ export function createRetirementDashboard(options: RetirementDashboardOptions) {
 	const v3Workflow = retirementElement('retirement-v3-workflow', HTMLInputElement)
 	const v3Confirmation = retirementElement('retirement-v3-confirmation', HTMLInputElement)
 	const residualForm = retirementElement('retirement-residual-form', HTMLFormElement)
+	const residualEvidence = retirementElement('retirement-residual-evidence', HTMLDivElement)
+	const residualBlock = retirementElement('retirement-residual-block', HTMLParagraphElement)
+	const residualList = retirementElement('retirement-residual-list', HTMLUListElement)
 	const residualTargetProfile = retirementElement('retirement-residual-target-profile', HTMLInputElement)
 	const residualReason = retirementElement('retirement-residual-reason', HTMLTextAreaElement)
 	const residualConfirmation = retirementElement('retirement-residual-confirmation', HTMLInputElement)
@@ -181,7 +203,19 @@ export function createRetirementDashboard(options: RetirementDashboardOptions) {
 			request.hidden = status !== 'inactive'
 			cancel.hidden = !canCancel
 			actions.hidden = request.hidden && cancel.hidden
-			residualSubmit.disabled = status !== 'drained-with-residuals'
+			const evidence = retirement?.completionEvidence
+			residualEvidence.hidden = status !== 'drained-with-residuals'
+			if (status === 'drained-with-residuals') {
+				residualBlock.textContent = evidence === undefined ? 'Completion evidence is unavailable. Refresh before accepting residuals.' : `Completion block ${evidence.blockNumber} (${evidence.blockHash}). Review each retained asset before accepting replacement.`
+				residualList.replaceChildren(
+					...(evidence?.residuals.map(residual => {
+						const item = document.createElement('li')
+						item.textContent = `${residual.amount} ${residual.asset} base units · ${residual.category}: ${residual.reason}`
+						return item
+					}) ?? []),
+				)
+			}
+			residualSubmit.disabled = status !== 'drained-with-residuals' || evidence === undefined || evidence.residuals.length === 0
 		},
 	}
 }

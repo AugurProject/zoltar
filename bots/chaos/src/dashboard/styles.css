@@ -29,8 +29,22 @@ body {
 }
 
 #retirement-summary,
-#retirement-destination {
+#retirement-destination,
+#retirement-residual-evidence {
 	overflow-wrap: anywhere;
+}
+
+#retirement-residual-evidence[hidden] {
+	display: none;
+}
+
+#retirement-residual-list {
+	display: grid;
+	gap: 0.45rem;
+	margin: 0.65rem 0 1rem;
+	padding-left: 1.3rem;
+	font-size: 0.84rem;
+	line-height: 1.45;
 }
 
 #retirement-form {
