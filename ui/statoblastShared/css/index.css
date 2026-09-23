@@ -3000,12 +3000,12 @@
 .operation-modal-body:has(> .request-price-fields) .transaction-plan-action:has(.approval-amount-field) .form-grid > .actions {
 	display: grid;
 	grid-column: 1;
-	grid-template-columns: minmax(0, 1fr) var(--request-price-max-width);
-	gap: var(--request-price-approval-gap);
+	grid-template-columns: minmax(0, 1fr);
 }
 
 .operation-modal-body:has(> .request-price-fields) .transaction-plan-action:has(.approval-amount-field) .form-grid > .actions > .tx-action {
-	grid-column: 1;
+	width: 100%;
+	max-width: none;
 }
 
 .operation-modal-body:has(> .request-price-fields) .transaction-plan-action-final .tx-action-button {
