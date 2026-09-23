@@ -33,7 +33,7 @@ export const sourceSizeAllowances = new Map<string, SourceSizeAllowance>([
 		['bots/open-oracle-arbitrager/src/state/position-store.ts', 631],
 		['bots/liquidator/src/dashboard/dashboard.ts', 987],
 		['bots/liquidator/src/cli/run.ts', 741],
-		['bots/liquidator/src/state/operator-state.ts', 713],
+		['bots/liquidator/src/state/operator-state.ts', 661],
 	]),
 	...allowances('Owning UI library: separate workflow state and actions from rendering, and extract simulation scenario handlers.', [
 		['ui/coreShared/ts/simulation/tevmEngine.ts', 876],
