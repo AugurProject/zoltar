@@ -25,7 +25,7 @@ for (const viewport of [
 					await session.send('Emulation.setDeviceMetricsOverride', { ...viewport, deviceScaleFactor: 1, mobile: false })
 					await session.send('Page.navigate', { url: route })
 					for (let attempt = 0; attempt < 100; attempt++) {
-						if (await evaluate(`document.querySelector('#state-detail')?.textContent.includes('Question definition')`)) break
+						if (await evaluate(`document.querySelector('#state-detail')?.textContent.includes('Question definition') ?? false`)) break
 						await Bun.sleep(100)
 					}
 					const text = await evaluate(`document.querySelector('#state-detail')?.textContent`)
