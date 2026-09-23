@@ -123,7 +123,7 @@ describe('Recursive truth-auction ownership regression', () => {
 			await finalizeTruthAuction(client, childPool.securityPool)
 			strictEqualTypeSafe(await getTotalRepPurchasedAttoRep(client, childPool.truthAuction), auctionCap, `round ${roundIndex + 1}: one qualifying minimum bid should purchase the full cap`)
 
-			const expectedFinalDenominator = migratedRepHaircut === 0n ? poolRep * PRICE_PRECISION + childMigratedRep : poolRep * ((poolRep - 1n) / migratedRepHaircut + 1n)
+			const expectedFinalDenominator = migratedRepHaircut === 0n ? poolRep * PRICE_PRECISION + childMigratedRep : (poolRep * poolRep + migratedRepHaircut - 1n) / migratedRepHaircut
 			strictEqualTypeSafe(await getTotalRepBackingUnits(client, childPool.securityPool), expectedFinalDenominator, `round ${roundIndex + 1}: finalization should install a bounded child-local auction scale`)
 
 			if (roundIndex === 2) thirdWinningTick = winningTick

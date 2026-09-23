@@ -256,7 +256,6 @@ describe('OverviewPanels', () => {
 		})
 
 		openAccountMenu()
-		expect(documentQueries.getByText('Ethereum (1)')).not.toBeNull()
 		expect(documentQueries.queryByRole('button', { name: 'Copy Address' })).toBeNull()
 		expect(documentQueries.queryByRole('button', { name: 'Address Copied' })).toBeNull()
 		fireEvent.click(documentQueries.getByRole('button', { name: 'Change wallet' }))
@@ -316,7 +315,7 @@ describe('OverviewPanels', () => {
 
 		expect(documentQueries.getByText('Wrong Network (52331)')).not.toBeNull()
 		openAccountMenu()
-		expect(document.body.querySelector('.account-menu-network strong')?.textContent).toBe('52331')
+		expect(document.body.querySelector('.account-menu-network')).toBeNull()
 	})
 
 	test('keeps the connect wallet button idle during bootstrap-only loading', async () => {
@@ -336,6 +335,12 @@ describe('OverviewPanels', () => {
 		})
 		expect(documentQueries.getByTitle('2 439.024390243902439024')).toBeDefined()
 		expect(documentQueries.queryByText(/0\.00041/)).toBeNull()
+	})
+
+	test('keeps existing prices visible while refreshing', async () => {
+		const queries = await renderOverviewPanels({ repPrices: { isLoading: true, isRefreshing: true, repPerEthPrice: 2439024390243902439024n, repUsdcPrice: 1234567n } })
+		expect(queries.getByTitle('2 439.024390243902439024')).toBeDefined()
+		expect(queries.getByTitle('1.234567 USDC')).toBeDefined()
 	})
 
 	test('renders a refresh button for REP prices and wires it to the provided handler', async () => {

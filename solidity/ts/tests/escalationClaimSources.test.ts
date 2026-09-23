@@ -1,62 +1,62 @@
 import { beforeEach, describe, test } from 'bun:test'
-import { encodeDeployData, type Hex, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
-import { AnvilWindowEthereum } from '../testSupport/simulator/AnvilWindowEthereum'
+import { zeroAddress, type Address } from '@zoltar/core-shared/evm/ethereum'
 import { useIsolatedAnvilNode } from '../testSupport/simulator/useIsolatedAnvilNode'
 import { TEST_ADDRESSES } from '../testSupport/simulator/utils/constants'
-import { createWriteClient, type WriteClient } from '../testSupport/simulator/utils/clients'
+import { createWriteClient, writeContractAndWait, type WriteClient } from '../testSupport/simulator/utils/clients'
 import { setupTestAccounts } from '../testSupport/simulator/utils/utilities'
 import assert from '../testSupport/simulator/utils/assert'
-import { test_statoblast_EscalationClaimSourcesHarness_EscalationClaimSourceNode as sourceNodeArtifact, test_statoblast_EscalationClaimSourcesHarness_EscalationClaimSourcesHarness as sourcesHarnessArtifact } from '../types/contractArtifact'
+import { test_statoblast_EscalationClaimSourcesHarness_EscalationClaimSourcesHarness as artifact } from '../types/contractArtifact'
 
-describe('Escalation claim source traversal', () => {
+describe('Escalation claim interval checkpoints', () => {
 	const { getAnvilWindowEthereum } = useIsolatedAnvilNode()
 	let client: WriteClient
 
-	const deploy = async (data: Hex) => {
-		const hash = await client.sendTransaction({ data })
+	const deploy = async (source: Address, before: bigint, remaining: bigint) => {
+		const hash = await client.sendTransaction({ data: `0x${artifact.evm.bytecode.object}` })
 		const receipt = await client.waitForTransactionReceipt({ hash })
-		if (receipt.contractAddress === undefined) {
-			throw new Error('deployment address missing')
-		}
-		return receipt.contractAddress
+		const address = receipt.contractAddress
+		if (address === undefined) throw new Error('Deployment address missing')
+		await writeContractAndWait(client, () => client.writeContract({ abi: artifact.abi, address, functionName: 'configure', args: [source, before, remaining] }))
+		return address
 	}
 
-	const deploySourceNode = async (rootSource: `0x${string}`, retention: bigint, retentionExponent: bigint) =>
-		await deploy(
-			encodeDeployData({
-				abi: sourceNodeArtifact.abi,
-				bytecode: `0x${sourceNodeArtifact.evm.bytecode.object}`,
-				args: [rootSource, retention, retentionExponent],
-			}),
-		)
-
 	beforeEach(async () => {
-		const mockWindow: AnvilWindowEthereum = getAnvilWindowEthereum()
-		client = createWriteClient(mockWindow, TEST_ADDRESSES[0])
-		await setupTestAccounts(mockWindow)
+		const ethereum = getAnvilWindowEthereum()
+		client = createWriteClient(ethereum, TEST_ADDRESSES[0])
+		await setupTestAccounts(ethereum)
 	})
 
-	test('applies a ninth recursive retention checkpoint without ancestry traversal', async () => {
-		const harness = await deploy(
-			encodeDeployData({
-				abi: sourcesHarnessArtifact.abi,
-				bytecode: `0x${sourcesHarnessArtifact.evm.bytecode.object}`,
-			}),
-		)
-		const normalizedMantissa = 1n << 255n
-		const rootSource = await deploySourceNode(zeroAddress, normalizedMantissa, 0n)
-		await client.writeContract({
-			abi: sourcesHarnessArtifact.abi,
-			address: harness,
-			functionName: 'configure',
-			args: [rootSource, normalizedMantissa, 9n],
-		})
-		const retained = await client.readContract({
-			abi: sourcesHarnessArtifact.abi,
-			address: harness,
-			functionName: 'applyRootRetention',
-			args: [10n ** 18n],
-		})
-		assert.strictEqual(retained, (10n ** 18n) >> 9n, 'nine half-retention lineage checkpoints should resolve through one direct index ratio')
+	test('nine successive non-dyadic haircuts telescope exactly at every checkpoint', async () => {
+		let source = await deploy(zeroAddress, 0n, 0n)
+		const firstAmount = 8n * 10n ** 18n + 3n
+		const secondAmount = firstAmount + 2n
+		let firstEnd = firstAmount
+		let totalEnd = firstAmount + secondAmount
+		for (let depth = 0; depth < 9; depth++) {
+			const descendant = await deploy(source, 7n, 5n)
+			firstEnd = (firstEnd * 5n) / 7n
+			totalEnd = (totalEnd * 5n) / 7n
+			const first = await client.readContract({ abi: artifact.abi, address: descendant, functionName: 'getInheritedClaimAllocation', args: [1, firstAmount, firstAmount, 0n] })
+			const second = await client.readContract({ abi: artifact.abi, address: descendant, functionName: 'getInheritedClaimAllocation', args: [1, secondAmount, firstAmount + secondAmount, 1n] })
+			assert.strictEqual(first.retainedAmountAttoRep, firstEnd)
+			assert.strictEqual(second.retainedAmountAttoRep, totalEnd - firstEnd)
+			assert.strictEqual(first.retainedAmountAttoRep + second.retainedAmountAttoRep, totalEnd)
+			source = descendant
+		}
+	})
+
+	test('export compacts a removed prefix before applying the next haircut', async () => {
+		const root = await deploy(zeroAddress, 0n, 0n)
+		const child = await deploy(root, 2n, 1n)
+		const firstAmount = 8n * 10n ** 18n + 3n
+		const secondAmount = firstAmount + 2n
+		const firstRetained = firstAmount / 2n
+		const secondRetained = (firstAmount + secondAmount) / 2n - firstRetained
+		await writeContractAndWait(client, () => client.writeContract({ abi: artifact.abi, address: child, functionName: 'consume', args: [0n, firstRetained] }))
+		const grandchild = await deploy(child, 4n, 3n)
+		const allocation = await client.readContract({ abi: artifact.abi, address: grandchild, functionName: 'getInheritedClaimAllocation', args: [1, secondAmount, firstAmount + secondAmount, 1n] })
+		assert.strictEqual(allocation.sourceAmountAttoRep, secondRetained)
+		assert.strictEqual(allocation.retainedAmountAttoRep, (secondRetained * 3n) / 4n)
+		assert.strictEqual(allocation.retainedCumulativeAttoRep, (((firstAmount + secondAmount) / 2n) * 3n) / 4n, 'removing principal must preserve the original reward position')
 	})
 })

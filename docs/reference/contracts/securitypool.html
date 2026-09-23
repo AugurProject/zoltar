@@ -101,7 +101,7 @@
 							<td><code>withdrawForkedEscalationDeposits(outcome, proofs)</code></td>
 							<td>Anyone; a nonempty list must name one original depositor across all proofs</td>
 							<td>Game configured; operational child pool; valid final outcome. A nonempty list additionally requires an initialized and fully resumed continuation game, valid unconsumed winning proofs, and one common depositor.</td>
-							<td>A nonempty list verifies and consumes carried proofs, then pays winning child REP to the immutable depositor committed in each leaf. Stable continuation identities retain the creating game, and the cumulative retention-index ratio applies every intervening auction haircut in constant ancestry work. An empty list returns after the outer lifecycle checks without proof verification, state change, or event.</td>
+							<td>A nonempty list verifies and consumes carried proofs, then pays winning child REP to the immutable depositor committed in each leaf. Stable continuation identities retain the creating game. Allocations follow the source-game chain and apply each auction haircut through cumulative interval rounding; read cost grows with fork depth. An empty list returns after the outer lifecycle checks without proof verification, state change, or event.</td>
 							<td>Per processed proof, escalation-game <code>CarryDepositConsumed</code> and <code>ClaimDeposit</code>. No event for an empty list</td>
 						</tr>
 						<tr>
@@ -219,7 +219,7 @@
 						<tr>
 							<td><code>setPoolFinancials(newSettlementCollateralAttoEth, newTotalCapacityOwnershipAttoRep, newFeeEligibleCapacityOwnershipAttoRep, newTotalBadDebtAttoEth)</code></td>
 							<td><code>SecurityPoolForker</code> only</td>
-							<td>Fee-eligible capacity ownership does not exceed total capacity ownership. For supplied settlement collateral net of aggregate bad debt, current price-converted capacity is sufficient, combined pool-held and dispute-staked REP satisfies the associated-REP constraint, and pool-held REP alone satisfies the migration-safety constraint; no lifecycle or value-change guard.</td>
+							<td>Fee-eligible capacity ownership does not exceed total capacity ownership. Actual ETH covers the supplied collateral plus all accrued fee liabilities. Installing inherited liabilities does not require current REP solvency.</td>
 							<td>Replaces settlement collateral, both price-independent capacity-ownership totals, and aggregate pool bad debt, resets the fee timestamp to the current block, opens the finalized child fee epoch unless the child has a fixed outcome and no continuation game, and clears fee-index rounding carry.</td>
 							<td><code>PoolAccountingCheckpoint</code>, including for repeated financial values</td>
 						</tr>
@@ -246,13 +246,37 @@
 						</tr>
 						<tr>
 							<td>Direct ETH transfer to <code>receive()</code></td>
-							<td>Forker, this pool's truth auction, or parent pool only</td>
+							<td>Forker, this pool's Truth Auction, or parent pool only</td>
 							<td>Sender is one of the three authorized protocol addresses. Forced ETH bypasses this ordinary-call guard.</td>
 							<td>Accepts protocol-routed ETH used by migration and auction settlement. Forced ETH remains raw, unaccounted surplus rather than settlement collateral or fees.</td>
 							<td>No dedicated receive event; the calling protocol step emits its own event</td>
 						</tr>
 					</tbody>
 				</table>
+				<h2 id="accounting-examples">Accounting examples</h2>
+				<h3 id="retention-rate-and-annualized-fee">Retention rate and annualized fee</h3>
+				<p><code>SecurityPoolUtils.calculateRetentionRate</code> returns a per-second retention factor scaled by <code>PRICE_PRECISION</code> (<code>1e18</code>). It equals <code>MAX_RETENTION_RATE</code> at zero utilization, declines linearly until utilization reaches <code>RETENTION_RATE_DIP</code> (80% of live minting capacity), and stays at <code>MIN_RETENTION_RATE</code> above that. Zero live minting capacity selects <code>MAX_RETENTION_RATE</code>.</p>
+				<ul>
+					<li><code>MAX_RETENTION_RATE = 999_999_996_848_000_000</code>, about a 9.5% yearly fee.</li>
+					<li><code>MIN_RETENTION_RATE = 999_999_977_880_000_000</code>, about a 50.2% yearly fee.</li>
+				</ul>
+				<p>Clients annualize a retention rate for display as follows; the contract never computes this value.</p>
+				<div class="equation" id="eq-securitypool-annual-fee">
+					<math display="block" aria-label="annual fee equals one minus the retention rate divided by price precision, raised to the number of seconds in a year" data-source="annualFee = 1 - (retentionRate / PRICE_PRECISION)^SECONDS_PER_YEAR"
+						><mrow
+							><mi>annualFee</mi><mo>=</mo><mn>1</mn><mo>−</mo
+							><msup
+								><mrow
+									><mo>(</mo><mfrac><mi>retentionRate</mi><mi>PRICE_PRECISION</mi></mfrac
+									><mo>)</mo></mrow
+								><mi>SECONDS_PER_YEAR</mi></msup
+							></mrow
+						></math
+					>
+				</div>
+				<h3 id="liquidation-transfer-rounding">Liquidation transfer rounding</h3>
+				<p>A liquidation request is an ETH-denominated debt amount. Execution caps it at the target vault's live debt and at the largest amount whose complete REP award (<code>LIQUIDATION_REP_BONUS_BPS</code> = 500, so 5%) the target can fund. The proportional capacity ownership that leaves the target is rounded down; the REP backing units that leave it are rounded up. The receiver incurs exactly the reported debt increase and receives those ownership and backing units. Target claims, fees, surplus, and unmatched ownership remain with the target.</p>
+				<p>Only a request covering the target's full position records the untransferable remainder as target-local bad debt. Partial requests leave the remainder as ordinary target debt. After the transfer the receiver must remain healthy and any remaining target position must still meet <code>minimumSecurityBondDebtAttoEth</code> and <code>minimumVaultRepDepositAttoRep</code>, so a liquidation cannot leave unusable dust.</p>
 			</article>
 		</main>
 		<script src="../../assets/js/responsiveDocs.js"></script>

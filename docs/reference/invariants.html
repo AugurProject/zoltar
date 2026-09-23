@@ -418,7 +418,7 @@
 
 			<section class="callout" id="statoblast-invariants">
 				<h2>Augur Statoblast invariants</h2>
-				<p>These properties govern Statoblast deployment, SecurityPool accounting, fork migration, escalation, oracle operations, truth auctions, and the cross-contract lifecycle built on Zoltar universes.</p>
+				<p>These properties govern Statoblast deployment, SecurityPool accounting, fork migration, escalation, oracle operations, Truth Auctions, and the cross-contract lifecycle built on Zoltar universes.</p>
 			</section>
 
 			<section id="authority">
@@ -493,7 +493,7 @@
 								<div>
 									<dt>Primary evidence</dt>
 									<dd>
-										<a href="./operator-guardrails.html#immutable-protocol-release-posture">Immutable release posture</a>
+										<a href="../how-to/launch-a-release.html#immutable-protocol-release-posture">Immutable release posture</a>
 									</dd>
 								</div>
 							</dl>
@@ -591,10 +591,7 @@
 								</div>
 								<div>
 									<dt>Primary evidence</dt>
-									<dd>
-										<a href="https://github.com/AugurProject/zoltar/blob/main/tooling/contracts/deploy-testnet.mts">runtime-code verification in the deployment plan</a>, <a href="https://github.com/AugurProject/zoltar/blob/main/tooling/contracts/deployment-runtime-hashes.test.ts">runtime-hash regression tests</a>,
-										<a href="https://github.com/AugurProject/zoltar/blob/main/tooling/contracts/check-mainnet-deployment.mts">deterministic manifest freshness check</a>, <a href="../mainnet-deployment-addresses.json">mainnet manifest</a>, and <a href="../sepolia-deployment-addresses.json">Sepolia manifest</a>
-									</dd>
+									<dd><a href="https://github.com/AugurProject/zoltar/blob/main/tooling/contracts/deploy-testnet.mts">runtime-code verification in the deployment plan</a>, <a href="https://github.com/AugurProject/zoltar/blob/main/tooling/contracts/deployment-runtime-hashes.test.ts">runtime-hash regression tests</a>, <a href="https://github.com/AugurProject/zoltar/blob/main/tooling/contracts/check-mainnet-deployment.mts">deterministic manifest freshness check</a>, <a href="../mainnet-deployment-addresses.json">mainnet manifest</a>, and <a href="../sepolia-deployment-addresses.json">Sepolia manifest</a></dd>
 								</div>
 							</dl>
 						</div>
@@ -704,7 +701,7 @@
 						<summary><code>BAL-03</code><span class="invariant-title">Collateral capacity and backing</span></summary>
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
-							<div class="invariant-property">At a complete-set mint or fork-finalization boundary, the resulting tracked collateral must fit the current ETH minting capacity derived from total REP-denominated capacity ownership, the live REP-per-ETH price, and the pool security multiplier. The pool must also hold enough actual REP to satisfy both backing constraints for collateral net of recorded bad debt. Dispute-staked REP contributes to the associated-REP constraint but not the migration-safety constraint. Finalized auction ownership enters total ownership, and positive-purchase ownership also enters fee eligibility and accrues fees whether or not a bidder has claimed it. Unassigned auction ownership can provide additional minting headroom only when its explicit position remains healthy after the mint. Existing open interest is not deleted when later repricing lowers live capacity, so these are transaction-boundary checks rather than continuous collateral-below-capacity or live-backing invariants. Once the remaining claim supply reaches zero, aggregate and per-vault bad debt from that exhausted collateral generation cannot offset the backing required by a later generation. Deferred truth-auction debt is tagged with the auction-finalization generation: a late claim may still settle REP, capacity ownership, and fees, but it cannot move expired debt into a later generation. Fee checkpointing and redemption cannot reclassify unsolicited ETH as collateral, and a price change reprices capacity without iterating through vaults.</div>
+							<div class="invariant-property">At a complete-set mint boundary, the resulting tracked collateral must fit the current ETH minting capacity derived from total REP-denominated capacity ownership, the live REP-per-ETH price, and the pool security multiplier. The pool must also hold enough actual REP to satisfy both backing constraints for collateral net of recorded bad debt. Dispute-staked REP contributes to the associated-REP constraint but not the migration-safety constraint. Finalized auction ownership enters total ownership, and positive-purchase ownership also enters fee eligibility and accrues fees whether or not a bidder has claimed it. Unassigned auction ownership can provide additional minting headroom only when its explicit position remains healthy after the mint. Fork finalization installs funded inherited liabilities under the <a href="contracts/securitypool.html#interactions">SecurityPool financial installation rules</a>. Existing open interest is not deleted when later repricing lowers live capacity, so these are transaction-boundary checks rather than continuous collateral-below-capacity or live-backing invariants. Once the remaining claim supply reaches zero, aggregate and per-vault bad debt from that exhausted collateral generation cannot offset the backing required by a later generation. Deferred truth-auction debt is tagged with the auction-finalization generation: a late claim may still settle REP, capacity ownership, and fees, but it cannot move expired debt into a later generation. Fee checkpointing and redemption cannot reclassify unsolicited ETH as collateral, and a price change reprices capacity without iterating through vaults.</div>
 							<p class="invariant-example"><strong>Example:</strong> If current oracle-priced capacity is 10 ETH, a mint that would raise tracked collateral from 9 ETH to 11 ETH reverts even if the raw balance contains surplus ETH. A mint within that 10 ETH capacity also reverts if unresolved escalation has moved too much REP out of the pool to cover the resulting active open interest. A later REP price change can lower capacity or backing below the checked boundary without changing existing open interest or ownership records.</p>
 							<dl class="invariant-metadata">
 								<div>
@@ -719,7 +716,7 @@
 									<dt>Primary evidence</dt>
 									<dd>
 										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPool.sol"><code>createCompleteSet</code>, <code>setPoolFinancials</code>, <code>redeemCompleteSet</code>, and <code>redeemShares</code></a
-										>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPoolOperationsDelegate.sol"><code>redeemCompleteSet</code> and <code>redeemShares</code> claim-exhaustion generation transitions</a>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPoolSettlementDelegate.sol"><code>createCompleteSet</code> and <code>setValidatedSettlementCollateral</code></a
+										>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPoolOperationsDelegate.sol"><code>redeemCompleteSet</code> and <code>redeemShares</code> claim-exhaustion generation transitions</a>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPoolSettlementDelegate.sol"><code>createCompleteSet</code></a
 										>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPoolForkerVaultMigrationDelegate.sol"><code>finalizeTruthAuctionRepair</code></a
 										>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPoolForkerAuctionSettlementBase.sol"><code>_creditAuctionProceeds</code></a
 										>,
@@ -1297,8 +1294,7 @@
 							<p class="invariant-label">Required property</p>
 							<div class="invariant-property">
 								Each selected child initializes the canonical carry snapshot and receives the complete aggregate continuation backing at most once. Optional vault cleanup only clears unresolved parent escalation-deposit accounting; it creates no child escrow and cannot change carried-proof eligibility. The continuation cannot resume until its game balance covers all effective unrelated-fork principal. For an own fork, initial backing must cover
-								<code>sourcePrincipalAtForkAttoRep - ⌊sourcePrincipalAtForkAttoRep / 5⌋</code>, the rounded-up 80% minimum, and the live balance must cover the unexported remainder after valid direct pre-resume claims.
-								<code>sourcePrincipalAtForkAttoRep</code> is the raw aggregate stored by the fork snapshot before effective direct-claim deductions.
+								<code>sourcePrincipalAtForkAttoRep - ⌊sourcePrincipalAtForkAttoRep / 5⌋</code>, the rounded-up 80% minimum, and the live balance must cover the unexported remainder after valid direct pre-resume claims. <code>sourcePrincipalAtForkAttoRep</code> is the raw aggregate stored by the fork snapshot before effective direct-claim deductions.
 							</div>
 							<p class="invariant-example"><strong>Example:</strong> Creating the Yes child installs its snapshot and aggregate backing before Alice acts. Alice may later clear her unresolved parent escalation-deposit accounting, but that cleanup neither funds the child nor enables or disables her winning proof.</p>
 							<dl class="invariant-metadata">
@@ -1437,7 +1433,7 @@
 						<summary><code>ESC-01</code><span class="invariant-title">Total escrow reconciliation</span></summary>
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
-							<div class="invariant-property"><code>totalDisputeStakedAttoRep</code> equals effective live vault-denominated escrow plus effective aggregate continuation backing in <code>forkCarryDisputeStakedAttoRep</code>. Continuation backing is not assigned to child-vault health or migration power, but it must enter the aggregate before the truth auction so physically held REP cannot escape the repair haircut. Auction retention floors the aggregate total and the continuation bucket independently; do not reconstruct either aggregate by summing independently rounded vault views.</div>
+							<div class="invariant-property"><code>totalDisputeStakedAttoRep</code> equals effective live vault-denominated escrow plus effective aggregate continuation backing in <code>forkCarryDisputeStakedAttoRep</code>. Continuation backing is not assigned to child-vault health or migration power, but it must enter the aggregate before the Truth Auction so physically held REP cannot escape the repair haircut. Auction retention floors the aggregate total and the continuation bucket independently; do not reconstruct either aggregate by summing independently rounded vault views.</div>
 							<p class="invariant-example"><strong>Example:</strong> If vault-denominated escrow contributes 4 and 6 REP and an external-fork continuation carries 12 REP of aggregate proof backing, the total is 22 REP, represented as <code>22 × 10^18</code> attoREP in <code>totalDisputeStakedAttoRep</code>, before the auction. A 75% retention records <code>⌊22 × 75%⌋ = 16</code> total effective REP and <code>⌊12 × 75%⌋ = 9</code> aggregate continuation REP. This makes the carried claims absorb the same repair loss without pretending that their backing belongs to a particular child vault.</p>
 							<dl class="invariant-metadata">
 								<div>
@@ -2376,7 +2372,7 @@
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
 							<div class="invariant-property">Once a resolution, migration, auction-completion, or withdrawal function's documented semantic preconditions hold, dust, unsolicited balances, empty collections, or earlier permissionless calls cannot permanently prevent some caller from completing it.</div>
-							<p class="invariant-example"><strong>Example:</strong> Forced ETH and an empty losing-bid list do not prevent a caller from finalizing an otherwise complete truth auction.</p>
+							<p class="invariant-example"><strong>Example:</strong> Forced ETH and an empty losing-bid list do not prevent a caller from finalizing an otherwise complete Truth Auction.</p>
 							<p>The named <code>LIFE-02 fixed-point</code> stateful regressions combine empty zero-demand auctions, unsolicited ETH, repeated migration calls, shuffled partial migration, and bounded continuation progress, then require a reachable terminal child state with tracked accounting unchanged by the forced balance. The wider lifecycle audit also covers empty games and collections, repeated claims, delayed oracle operations, and recovery after failed callbacks. No permanent blocker was identified in those cases.</p>
 							<dl class="invariant-metadata">
 								<div>

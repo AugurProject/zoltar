@@ -8,7 +8,6 @@ import { OpenOraclePriceValue } from '../../open-oracle/components/OpenOraclePri
 import { getQuestionTitle, Question } from '@zoltar/ui-core-shared/components/Question.js'
 import { SecurityPoolSummaryMetrics } from './SecurityPoolSummaryMetrics.js'
 import { SecurityPoolLink } from './SecurityPoolLink.js'
-import type { ComponentChildren } from 'preact'
 import { ReadOnlyDetailAccordion } from '@zoltar/ui-core-shared/components/ReadOnlyDetailAccordion.js'
 import { TimestampValue } from '@zoltar/ui-core-shared/components/TimestampValue.js'
 import { AddressValue } from '@zoltar/ui-core-shared/components/AddressValue.js'
@@ -37,7 +36,7 @@ type SecurityPoolObjectHeaderProps = {
 }
 
 function getSummaryPool(props: SecurityPoolObjectHeaderProps) {
-	return { ...props.selectedPoolSummaryPool, lastOracleSettlementTimestamp: props.currentPoolOracleSettlementTimestamp ?? props.selectedPoolSummaryPool.lastOracleSettlementTimestamp }
+	return { ...props.selectedPoolSummaryPool, lastOraclePrice: props.currentPoolOraclePrice ?? props.selectedPoolSummaryPool.lastOraclePrice, lastOracleSettlementTimestamp: props.currentPoolOracleSettlementTimestamp ?? props.selectedPoolSummaryPool.lastOracleSettlementTimestamp }
 }
 
 function getSummaryCalculationPrice(props: SecurityPoolObjectHeaderProps) {
@@ -47,7 +46,7 @@ function getSummaryCalculationPrice(props: SecurityPoolObjectHeaderProps) {
 	return props.currentTimestamp !== undefined && validUntil !== undefined && props.currentTimestamp < validUntil ? (props.currentPoolOraclePrice ?? pool.lastOraclePrice) : undefined
 }
 
-export function SecurityPoolObjectHeader(props: SecurityPoolObjectHeaderProps & { actions?: ComponentChildren }) {
+export function SecurityPoolObjectHeader(props: SecurityPoolObjectHeaderProps) {
 	const { currentTimestamp, marketDetails, selectedPoolHasActualForkActivity, selectedPoolLifecycleState, selectedPoolQuestionOutcome } = props
 	const summaryPool = getSummaryPool(props)
 	const capacity = calculateMintingCapacityAttoEth(summaryPool.totalCapacityOwnershipAttoRep, getSummaryCalculationPrice(props), summaryPool.statoblastSecurityMultiplierBps)
@@ -65,7 +64,6 @@ export function SecurityPoolObjectHeader(props: SecurityPoolObjectHeaderProps & 
 					</p>
 				</div>
 			</div>
-			{props.actions}
 
 			<PoolCapacitySummary showUnavailableReason={false} capacity={capacity} minted={summaryPool.settlementCollateralAttoEth} />
 		</div>
@@ -79,12 +77,18 @@ export function SecurityPoolReferenceDetails(props: SecurityPoolObjectHeaderProp
 		<div className='pool-reference-details'>
 			<ReadOnlyDetailAccordion title={copy.poolDetails}>
 				<Question question={marketDetails} variant='preview' showTitle={false} />
-				<SecurityPoolSummaryMetrics calculationPriceConfigured calculationRepPerEthPrice={getSummaryCalculationPrice(props)} metricVariant='context' pool={summaryPool} showPoolAddress showTotalBacking>
+				<SecurityPoolSummaryMetrics calculationPriceConfigured calculationRepPerEthPrice={getSummaryCalculationPrice(props)} metricVariant='context' pendingReportReadyAtTimestamp={currentPoolOracleManagerDetails?.pendingReportReadyAtTimestamp} pool={summaryPool} omitCapacity showTotalBacking>
 					<MetricField label={securityPoolCopy.managerAddress}>
 						<AddressValue address={summaryPool.managerAddress} />
 					</MetricField>
 					<MetricField label={statoblastAppCopy.openOraclePrice}>
-						<OpenOraclePriceValue currentTimestamp={currentTimestamp} lastPrice={currentPoolOraclePrice} lastSettlementTimestamp={currentPoolOracleSettlementTimestamp ?? 0n} priceValidUntilTimestamp={currentPoolOracleManagerDetails?.priceValidUntilTimestamp} />
+						<OpenOraclePriceValue
+							currentTimestamp={currentTimestamp}
+							lastPrice={currentPoolOraclePrice}
+							lastSettlementTimestamp={currentPoolOracleSettlementTimestamp ?? 0n}
+							pendingReportReadyAtTimestamp={currentPoolOracleManagerDetails?.pendingReportReadyAtTimestamp}
+							priceValidUntilTimestamp={currentPoolOracleManagerDetails?.priceValidUntilTimestamp}
+						/>
 					</MetricField>
 					{summaryPool.parent === zeroAddress ? undefined : (
 						<MetricField label={securityPoolCopy.parentPool}>

@@ -1,4 +1,4 @@
-import { decodeEventLog, encodeFunctionData, encodeAbiParameters, encodeDeployData, getCreate2Address, keccak256, type TransactionReceipt } from '@zoltar/core-shared/evm/ethereum'
+import { decodeEventLog, encodeFunctionData, encodeAbiParameters, encodeDeployData, getCreate2Address, hexToBytes, keccak256, type Hex, type TransactionReceipt } from '@zoltar/core-shared/evm/ethereum'
 import { statoblast_factories_SecurityPoolFactory_SecurityPoolFactory, statoblast_tokens_ShareToken_ShareToken } from '../contractArtifact.js'
 import { statoblast_Multicall3_Multicall3, ZoltarQuestionData_ZoltarQuestionData } from '@zoltar/ui-core-shared/contractArtifact.js'
 import { isIgnorableLogDecodeError } from '@zoltar/ui-core-shared/lib/errors.js'
@@ -69,8 +69,42 @@ function getOriginSecurityPoolShareTokenAddress(questionId: bigint, statoblastSe
 }
 
 type SecurityPoolCreationReview = {
-	description: string
+	description?: string
 	title: string
+}
+
+const ERROR_STRING_SELECTOR = '0x08c379a0'
+
+function decodeRevertReason(returnData: Hex) {
+	if (!returnData.startsWith(ERROR_STRING_SELECTOR)) return undefined
+	const encoded = returnData.slice(ERROR_STRING_SELECTOR.length)
+	if (encoded.length < 128) return undefined
+	const length = Number.parseInt(encoded.slice(64, 128), 16)
+	if (!Number.isSafeInteger(length) || length === 0 || length > 4096 || encoded.length < 128 + length * 2) return undefined
+	return new TextDecoder().decode(hexToBytes(`0x${encoded.slice(128, 128 + length * 2)}`))
+}
+
+type BatchedCall = { target: `0x${string}`; allowFailure: boolean; callData: Hex }
+
+/**
+ * Multicall3 reports every inner revert as "Multicall3: call failed", which hides the actual reason and leaves the
+ * wallet unable to explain why it refused the transaction. Simulate the batch with failures allowed first so the
+ * failing step and its revert string reach the user before anything is sent.
+ */
+async function assertBatchedCallsSucceed(client: WriteClient, calls: readonly BatchedCall[], labels: readonly string[]) {
+	const { result: results } = await client.simulateContract({
+		abi: statoblast_Multicall3_Multicall3.abi,
+		account: client.account,
+		address: getMulticall3Address(),
+		args: [calls.map(call => ({ ...call, allowFailure: true }))],
+		functionName: 'aggregate3',
+	})
+	for (const [index, result] of results.entries()) {
+		if (result.success) continue
+		const label = labels[index] ?? `Step ${(index + 1).toString()}`
+		const reason = decodeRevertReason(result.returnData)
+		throw new Error(reason === undefined ? `${label} would revert.` : `${label} would revert: ${reason}`)
+	}
 }
 
 export async function createSecurityPool(
@@ -92,29 +126,28 @@ export async function createSecurityPool(
 		args: [0n, parameters.questionId, parameters.statoblastSecurityMultiplierBps, parameters.initialReportPriorityFeeAttoEthPerGas],
 	} as const
 	// The review labels name the whole action so the wallet review does not fall back to the Multicall3 function name.
-	const reviewLabels = review === undefined ? {} : { reviewDescription: review.description, reviewTitle: review.title }
-	const { hash: deployPoolHash, receipt } = await writeContractAndWaitForReceipt(client, () =>
+	const reviewLabels = review === undefined ? {} : { ...(review.description === undefined ? {} : { reviewDescription: review.description }), reviewTitle: review.title }
+	const batchedCalls: BatchedCall[] | undefined =
 		questionData === undefined
+			? undefined
+			: [
+					{
+						target: getDeploymentStepAddress('zoltarQuestionData'),
+						allowFailure: false,
+						callData: encodeFunctionData({ abi: ZoltarQuestionData_ZoltarQuestionData.abi, functionName: 'createQuestion', args: [questionData, ['Yes', 'No']] }),
+					},
+					{ target: poolCall.address, allowFailure: false, callData: encodeFunctionData(poolCall) },
+				]
+	if (batchedCalls !== undefined) await assertBatchedCallsSucceed(client, batchedCalls, ['Question creation', 'Security pool deployment'])
+	const { hash: deployPoolHash, receipt } = await writeContractAndWaitForReceipt(client, () =>
+		batchedCalls === undefined
 			? { ...poolCall, ...reviewLabels }
 			: {
 					...reviewLabels,
 					address: getMulticall3Address(),
 					abi: statoblast_Multicall3_Multicall3.abi,
 					functionName: 'aggregate3',
-					args: [
-						[
-							{
-								target: getDeploymentStepAddress('zoltarQuestionData'),
-								allowFailure: false,
-								callData: encodeFunctionData({ abi: ZoltarQuestionData_ZoltarQuestionData.abi, functionName: 'createQuestion', args: [questionData, ['Yes', 'No']] }),
-							},
-							{
-								target: poolCall.address,
-								allowFailure: false,
-								callData: encodeFunctionData(poolCall),
-							},
-						],
-					],
+					args: [batchedCalls],
 				},
 	)
 

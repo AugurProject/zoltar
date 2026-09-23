@@ -126,6 +126,13 @@ describe('DeploymentRouteContent', () => {
 		expect(document.getElementById(describedById)?.textContent).toBe('Deployment status is unavailable.')
 	})
 
+	test('shows deployment loading status once while the snapshot loads', async () => {
+		const renderedComponent = await renderIntoDocument(h(DeploymentRouteContent, { ...createProps(), deploymentStateReady: false, isLoadingDeploymentStatuses: true }))
+		cleanupRenderedComponent = renderedComponent.cleanup
+		const loadingLabels = document.body.textContent?.match(/Loading deployment status…/g) ?? []
+		expect(loadingLabels).toHaveLength(1)
+	})
+
 	test('shows a completed deployment load failure with retry instead of a loading state', async () => {
 		let retryCalls = 0
 		const renderedComponent = await renderIntoDocument(

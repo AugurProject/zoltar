@@ -23,6 +23,8 @@ import {
 	type AssemblyDelegateCall,
 	type ContractDeclaration,
 } from './contract-reference-metadata.mts'
+import { renderAccountingExamples } from './contract-reference-examples.mts'
+import { escapeHtml, headingId, renderRichText } from './contract-reference-rich-text.mts'
 import { renderReferencePage } from './docs-html-page.mts'
 import { repositorySourceUrl } from './repository-source-links.mts'
 
@@ -210,7 +212,7 @@ async function generateReferencePages(): Promise<GeneratedPage[]> {
 		<tbody>
 ${rows}
 		</tbody>
-	</table>`
+	</table>${renderAccountingExamples(contractReference.name)}`
 		return { content, outputPath: contractPageOutputPath(contractReference.name), title: contractReference.name }
 	})
 
@@ -247,50 +249,11 @@ ${indexRows}
 	return [{ content: indexContent, outputPath, title: 'Contract interactions' }, ...contractPages]
 }
 
-function escapeHtml(value: string): string {
-	return value.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;')
-}
-
-function renderRichText(value: string, pageOutputPath: string = contractPagesDirectory): string {
-	let output = ''
-	let offset = 0
-	for (const match of value.matchAll(/`([^`]+)`|\[([^\]]+)\]\(([^)]+)\)/g)) {
-		const index = match.index
-		output += escapeHtml(value.slice(offset, index))
-		const code = match[1]
-		const label = match[2]
-		const href = match[3]
-		if (code !== undefined) output += `<code>${escapeHtml(code)}</code>`
-		else {
-			assert(label !== undefined && href !== undefined, 'rich-text link must provide a label and destination')
-			output += `<a href="${escapeHtml(resolveRichTextHref(href, pageOutputPath))}">${escapeHtml(label)}</a>`
-		}
-		offset = index + match[0].length
-	}
-	return output + escapeHtml(value.slice(offset))
-}
-
 // The index keeps only the opening sentence of each purpose; the contract page lede carries the full text.
 function indexSummary(purpose: string): string {
 	const [firstSentence] = purpose.split(/(?<=\.)\s+(?=[A-Z])/)
 	assert.ok(firstSentence !== undefined && firstSentence.length > 0, 'Contract purpose must begin with a sentence')
 	return firstSentence
-}
-
-// Metadata links are written relative to docs/reference; deeper pages prefix the extra ancestors, and repository paths render through GitHub.
-function resolveRichTextHref(href: string, pageOutputPath: string): string {
-	if (href.startsWith('#') || /^https?:/.test(href)) return href
-	if (!href.startsWith('./') && !href.startsWith('../')) return repositorySourceUrl(href)
-	const pageDirectory = pageOutputPath.endsWith('.html') ? path.posix.dirname(pageOutputPath) : pageOutputPath
-	const ancestorPrefix = path.posix.relative(pageDirectory, path.posix.dirname(outputPath))
-	return ancestorPrefix.length === 0 ? href : `${ancestorPrefix}/${href.replace(/^\.\//, '')}`
-}
-
-function headingId(value: string): string {
-	return value
-		.toLowerCase()
-		.replaceAll(/[^a-z0-9]+/g, '-')
-		.replaceAll(/^-|-$/g, '')
 }
 
 function assertEntrypointSignatures(source: string, declaration: ContractDeclaration, expectedSignatures: string[], sourceLabel: string): void {

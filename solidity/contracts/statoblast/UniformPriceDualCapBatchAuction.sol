@@ -194,13 +194,14 @@ contract UniformPriceDualCapBatchAuction is IUniformPriceDualCapBatchAuction {
 			UniformPriceDualCapBatchAuctionStorage.computeClearing(nodes, root, UniformPriceDualCapBatchAuctionStorage.ClearingConfig({attoEthRaiseCap: attoEthRaiseCap, maxAttoRepBeingSold: maxAttoRepBeingSold, underfundedThreshold: underfundedThreshold}));
 	}
 
-	function withdrawBids(address withdrawFor, IUniformPriceDualCapBatchAuction.TickIndex[] calldata tickIndices, uint256 proRataTotal, uint256 secondaryProRataTotal)
+	function withdrawBids(address withdrawFor, IUniformPriceDualCapBatchAuction.TickIndex[] calldata tickIndices, uint256 proRataTotal, uint256 secondaryProRataTotal, uint256 repBackingUnitsTotal)
 		external
 		returns (
 			uint256 totalFilledAttoRep,
 			uint256 totalRefundAttoEth,
 			uint256 totalProRataAllocation,
-			uint256 totalSecondaryProRataAllocation
+			uint256 totalSecondaryProRataAllocation,
+			uint256 totalRepBackingUnitsAllocation
 		)
 	{
 		require(finalized, 'Auction must be finalized before withdrawing bids');
@@ -266,6 +267,15 @@ contract UniformPriceDualCapBatchAuction is IUniformPriceDualCapBatchAuction {
 						status = BidSettlementStatus.PartiallyFilled;
 					}
 				}
+			}
+			if (attoRepFilled > 0) {
+				// Use the same REP interval as the fill calculation, fixed by tick and FIFO
+				// position. Cumulative floors telescope to the entire backing-unit budget.
+				uint256 cumulativeRepBeforeAttoRep =
+					underfunded
+						? Math.mulDiv(cumulativeWinningBidBeforeAttoEth, totalAttoRepPurchased, underfundedWinningAttoEth)
+						: Math.mulDiv(cumulativeWinningBidBeforeAttoEth, PRICE_PRECISION, clearingPriceLocal);
+				totalRepBackingUnitsAllocation += UniformPriceDualCapBatchAuctionStorage.allocateFromCumulativePosition(cumulativeRepBeforeAttoRep, attoRepFilled, repBackingUnitsTotal, totalAttoRepPurchased);
 			}
 			totalFilledAttoRep += attoRepFilled;
 			totalProRataAllocation += UniformPriceDualCapBatchAuctionStorage.allocateFromCumulativePosition(cumulativeWinningBidBeforeAttoEth, bidUsedAttoEth, proRataTotal, attoEthRaised);

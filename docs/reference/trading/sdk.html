@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<meta name="description" content="The shared bigint math, exit search, and simulation-pinning helpers used by the Trading UI and its parity tests." />
+		<title>Trading SDK</title>
+		<link rel="stylesheet" href="../../assets/css/shared-docs.css" />
+		<link rel="stylesheet" href="../../assets/css/docsShell.css" />
+	</head>
+	<body class="doc-openoracle">
+		<main id="main-content">
+			<header>
+				<p class="kicker">Reference</p>
+				<h1>Trading SDK</h1>
+				<p>The shared TypeScript package <code>@zoltar/trading-shared</code> holds the pure Trading math that the UI and the Solidity parity tests share. All chain quantities are <code>bigint</code>.</p>
+			</header>
+			<section id="pure-math">
+				<h2>Pure math</h2>
+				<ul>
+					<li><code>quoteExactOutput</code> (<code>trading/math</code>) mirrors the Solidity ceil behavior for an exact-output swap and returns gross input, output, net input, and fee.</li>
+					<li><code>maximumInsuredExit</code> (<code>trading/positions</code>) binary-searches the greatest complete-set amount allowed by INVALID, long balance, opposite reserve, and an optional long-input ceiling.</li>
+				</ul>
+			</section>
+			<section id="transaction-helpers">
+				<h2>Transaction helpers</h2>
+				<p>Transaction-facing helpers live in the Trading UI at <code>ui/trading/ts/protocol/tradeQuote.ts</code>: <code>minimumAfterSlippage</code> and <code>maximumAfterSlippage</code> build conservative bounds, <code>stableSimulation</code> reads the latest canonical block identity (number and hash) and passes it to the simulation callback, whose reads must all use that block hash, <code>retainApprovedMinimum</code> and <code>retainApprovedMaximum</code> keep the approved bounds when the submission-time simulation still satisfies them, and <code>deadlineAtBlock</code> derives router deadlines from the quote block.</p>
+				<p>Pure math is a responsive preview only. Transaction summaries must simulate the actual router call, use its returned values, and revalidate network, account, balances, approvals, reserves, deadline, and simulation immediately before wallet submission.</p>
+			</section>
+		</main>
+		<script src="../../assets/js/responsiveDocs.js"></script>
+		<script src="../../assets/js/docsData.js"></script>
+		<script src="../../assets/js/docsShell.js"></script>
+	</body>
+</html>
