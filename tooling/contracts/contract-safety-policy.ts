@@ -83,8 +83,8 @@ export const contractSafetyPolicy = {
 				sourcePath: 'contracts/statoblast/SecurityPoolForker.sol',
 				contractName: 'SecurityPoolForker',
 			},
-			24_135,
-			'The forker delegates finality to the game, removing duplicated checks while retaining migration guards; no further runtime growth is permitted.',
+			24_046,
+			'The forker delegates finality to the game and preserves fractional truth-auction backing without duplicated checks; no further runtime growth is permitted.',
 		),
 	] satisfies readonly BytecodeBudget[],
 	initcodeBudgets: [
@@ -93,16 +93,16 @@ export const contractSafetyPolicy = {
 				sourcePath: 'contracts/statoblast/SecurityPoolForker.sol',
 				contractName: 'SecurityPoolForker',
 			},
-			48_438,
-			'The forker initcode reflects shared game finality and minimum constructor arguments; no further growth is permitted.',
+			48_298,
+			'The forker initcode reflects shared game finality and proportional auction backing; no further growth is permitted.',
 		),
 		initcodeBudget(
 			{
 				sourcePath: 'contracts/statoblast/factories/EscalationGameFactory.sol',
 				contractName: 'EscalationGameFactory',
 			},
-			47_103,
-			'The factory embeds exact interval consumption, prefix accounting, and fork-aware finality. Combining delayed-migration finality adds 89 bytes to the allocation fix; no further growth is permitted.',
+			47_301,
+			'The factory embeds exact interval consumption, prefix accounting, fork-aware finality, and inherited threshold-tie reconciliation. Tie reconciliation adds 198 bytes to the combined allocation and finality fixes; no further growth is permitted.',
 		),
 	] satisfies readonly BytecodeBudget[],
 	exactLayoutPairs: [

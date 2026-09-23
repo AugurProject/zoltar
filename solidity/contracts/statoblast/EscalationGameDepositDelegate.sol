@@ -221,6 +221,17 @@ contract EscalationGameDepositDelegate is EscalationGameStorage, IEscalationGame
 			outcomeState[outcomeIndex].balanceAttoRep =
 				(outcomeState[outcomeIndex].balanceAttoRep * repRemainingAttoRep) / repBeforeAttoRep;
 		}
+		// An unrelated continuation inherits a balance predicate, not an irrevocable
+		// local fork decision. Auction-weakened ties must admit funded reports again.
+		// Fixed outcomes retain their settlement-only lifecycle.
+		if (
+			nonDecisionState == NonDecisionState.InheritedThresholdTie &&
+			fixedQuestionOutcome == BinaryOutcomes.BinaryOutcome.None &&
+			!game.hasReachedNonDecision()
+		) {
+			nonDecisionState = NonDecisionState.None;
+			emit InheritedThresholdTieReopened();
+		}
 		forkElapsedAtStart = game.computeTimeSinceStartFromAttritionCostAttoRep(game.getBindingCapitalAttoRep());
 		IERC20(game.repToken()).safeTransfer(poolAddress, repToRemoveAttoRep);
 		emit TruthAuctionHaircutApplied(repBeforeAttoRep, repToRemoveAttoRep, repRemainingAttoRep, forkElapsedAtStart);

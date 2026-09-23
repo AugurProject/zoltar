@@ -778,6 +778,9 @@ describe('event-only replay', () => {
 			throw new Error('inherited threshold tie should replay without a local timestamp')
 		}
 		if (continuationLifecycle.inheritedThresholdTieSourceGame !== localGame) throw new Error('inherited threshold tie source game mismatch')
+		const reopened = replayZoltarEvents([...logs, createReplayLog({ emitter: continuationGame, eventName: 'InheritedThresholdTieReopened', logIndex: 5, args: {} })])
+		if (reopened.escalationLifecycles.get(continuationGame)?.nonDecisionState !== 'none') throw new Error('reopened inherited tie must replay as an ordinary dispute')
+		if (reopened.escalationLifecycles.get(localGame)?.nonDecisionState !== 'local') throw new Error('reopening a continuation must preserve the parent local transition')
 	})
 
 	test('inherited threshold tie replay requires a matching preceding fork carry checkpoint', () => {
