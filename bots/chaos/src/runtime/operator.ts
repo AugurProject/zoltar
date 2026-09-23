@@ -1,5 +1,6 @@
 import { reconcileClosedV3RetirementWorkflow, V3_RETIREMENT_OPERATION } from './retirement-v3-continuation.ts'
 import { reconcileIncludedTransactions } from '../execution/inclusion-journal.ts'
+import { assertDurableDeploymentFactory, restoreDeploymentForDurableState } from '../config/deployment-state.ts'
 import { createWalletClient, privateKeyToAccount, type Address } from '@zoltar/bot-shared/ethereum'
 import { botDashboardLifecycle, type BotShutdownController } from '@zoltar/bot-shared/execution/bot-process-locks'
 import { createSignerOperationGate } from '@zoltar/bot-shared/execution/signer-operation-gate'
@@ -21,6 +22,7 @@ import { evaluateSelectableOperationDefinition, operationHasCanonicalContinuatio
 import type { OperationPlan } from '../operations/types.ts'
 import { migrateEmptyBootstrapState } from '../state/bootstrap-migration.ts'
 import { bindRuntimeStateToSigner, loadRuntimeState, recordActivity, saveDurableState, setRuntimeExecutionAddress, type RuntimeState } from '../state/operator-state.ts'
+import { isPristineBootstrapState } from '../state/pristine.ts'
 import { applyExecutionPolicy, blockExecutableEvaluations, chaosChain, createChaosReadPool, performCanonicalScan, planningOptions, unavailableOperationCatalog } from './canonical-scan.ts'
 import { restartSafeSettings } from './configuration-candidates.ts'
 import { createChaosDashboardController, type ChaosProcessLocks, type ConfigurationState } from './dashboard-controller.ts'
@@ -30,7 +32,7 @@ import { actionableUrgentLifecyclePlan, lifecycleObstructions } from './lifecycl
 import { createManualOperationController } from './manual-operations.ts'
 import { beginLifecycleObligation, blockNovelEvaluations, completeLifecycleObligation, failLifecycleObligation, lifecyclePresenceBlockerMessage, obligationForPlan, synchronizeLifecycleObligations, waitForCanonicalLifecycleConfirmation } from './obligations.ts'
 import { retirementPlanAllowed } from './retirement-operation-policy.ts'
-import { enforceRetirementContinuation, processRetirementCycle, retirementPositionsForScan, updateRetirementAssessment } from './retirement-runner.ts'
+import { enforceRetirementContinuation, processRetirementCycle, retirementCompletionEvidenceCanonical, retirementPositionsForScan, updateRetirementAssessment } from './retirement-runner.ts'
 import { closeInterruptedSchedulerRun, executeScheduledOperation, recordDryRun, scheduleAfterRecoveredTransaction, schedulerFor } from './scheduled-operation.ts'
 import { genesisInitializationDefinitionId, genesisInitializationPlan, randomOperationPlans } from './selection.ts'
 import { assertSubmissionPreflightFresh, preflightTransactionSubmissionNetwork, recordEndpointPreflightChecks, refreshSubmissionReadiness, submissionPreflightConfigurationIdentity, type SubmissionPreflightResources } from './submission-preflight.ts'
@@ -39,11 +41,7 @@ import { evaluatePolicySafeContinuation } from './workflow-continuation.ts'
 import { abandonRetryableSelectableFailure, rediscoverableExecutionFailure, repairDurableSelectableFailures, workflowForPlan } from './workflow-repair.ts'
 import { blockInterruptedWorkflows, durableWorkflowPlan, refreshWorkflowContinuation, retryableOnChainWorkflowFailure, workflowNeedsContinuation } from './workflows.ts'
 
-type LoadedConfiguration = {
-	path: string
-	revision: string
-	settings: OperatorSettings
-}
+type LoadedConfiguration = { needsDeploymentPin?: boolean; path: string; revision: string; settings: OperatorSettings }
 
 type RuntimeResources = SubmissionPreflightResources & {
 	pool: ReturnType<typeof createChaosReadPool>
@@ -424,10 +422,13 @@ async function handleCycleFailure(error: unknown, configuration: ConfigurationSt
 
 export async function runChaosOperator(loaded: LoadedConfiguration, locks: ChaosProcessLocks, shutdown: BotShutdownController) {
 	const initialWallet = configuredWallet(loaded.settings)
-	const state = migrateEmptyBootstrapState(await loadRuntimeState(loaded.settings.runtime.stateFile, loaded.settings.paused, initialWallet, loaded.settings.network.chainId), loaded.settings)
+	const storedState = await loadRuntimeState(loaded.settings.runtime.stateFile, loaded.settings.paused, initialWallet, loaded.settings.network.chainId)
+	loaded = { ...loaded, settings: restoreDeploymentForDurableState(loaded.settings, storedState, loaded.needsDeploymentPin) }
+	const state = migrateEmptyBootstrapState(storedState, loaded.settings)
 	const initialProfileId = executionProfileId(loaded.settings)
 	assertDurableSignerScope(state, initialWallet, loaded.settings.runtime.stateFile)
-	const initialCarryProfileResetAuthorized = await resetPristineStateForDeploymentProfile(state, initialProfileId, loaded.settings.paused, initialWallet, loaded.settings.runtime.stateFile, async evidence => verifyRetirementCompletionFinality(loaded.settings, evidence))
+	if (state.profileId === initialProfileId && (state.uniswapV3Factory !== undefined || !isPristineBootstrapState(state))) assertDurableDeploymentFactory(loaded.settings, state, loaded.settings.runtime.stateFile)
+	const initialCarryProfileResetAuthorized = await resetPristineStateForDeploymentProfile(state, initialProfileId, loaded.settings.deployment.uniswapV3Factory, loaded.settings.paused, initialWallet, loaded.settings.runtime.stateFile, async evidence => verifyRetirementCompletionFinality(loaded.settings, evidence))
 	if (initialCarryProfileResetAuthorized) {
 		recordActivity(state, {
 			message: 'Durable runtime initialized for the configured deployment profile',
@@ -448,8 +449,12 @@ export async function runChaosOperator(loaded: LoadedConfiguration, locks: Chaos
 	const configuration: ConfigurationState = {
 		path: loaded.path,
 		rememberSigner: loaded.settings.privateKey !== undefined,
-		revision: loaded.revision,
+		revision: loaded.needsDeploymentPin ? await saveSettings(loaded.path, loaded.settings, loaded.revision) : loaded.revision,
 		settings: loaded.settings,
+	}
+	if (state.uniswapV3Factory === undefined) {
+		state.uniswapV3Factory = loaded.settings.deployment.uniswapV3Factory
+		await persistState(configuration, state)
 	}
 	if (startupFailureRepair.requiresSafetyStop) {
 		await safetyPause(configuration, state)
@@ -576,7 +581,7 @@ export async function runChaosOperator(loaded: LoadedConfiguration, locks: Chaos
 					if (!configurationIsCurrent()) return 'deferred'
 					const wallet = configuredWallet(settings)
 					assertDurableSignerScope(state, wallet, settings.runtime.stateFile)
-					await resetPristineStateForDeploymentProfile(state, expectedProfileId, settings.paused, wallet, settings.runtime.stateFile, async evidence => verifyRetirementCompletionFinality(settings, evidence))
+					await resetPristineStateForDeploymentProfile(state, expectedProfileId, settings.deployment.uniswapV3Factory, settings.paused, wallet, settings.runtime.stateFile, async evidence => verifyRetirementCompletionFinality(settings, evidence))
 					topologyCache = undefined
 					topologyCacheProfileId = undefined
 					topologyCacheStateFile = undefined
@@ -663,7 +668,7 @@ export async function runChaosOperator(loaded: LoadedConfiguration, locks: Chaos
 					state.evaluations = blockNovelEvaluations(state.evaluations, state.lifecyclePresenceBlocker)
 				}
 				const retirementV3 = await retirementPositionsForScan({ anchor: scan.anchor, pool: resources.pool, profileId: expectedProfileId, settings, state, wallet: state.wallet })
-				updateRetirementAssessment(scan, settings, state, retirementV3)
+				updateRetirementAssessment(scan, settings, state, retirementV3, await retirementCompletionEvidenceCanonical(settings, resources.pool, state, scan.anchor))
 				await persistState(configuration, state)
 				if (!scan.executionReady) {
 					backfillIncomplete = true
