@@ -26,7 +26,7 @@ struct SecurityPoolForkerForkData {
 	uint256 migratedRepAllocatedForSettlementCollateralAttoRep;
 	uint256 settlementCollateralTransferredAttoEth;
 	uint256 migratedCapacityOwnershipAttoRep;
-	uint256 auctionRepBackingUnitsPerAttoRep;
+	uint256 auctionRepBackingUnits;
 	uint256 claimedAuctionRepBackingUnits;
 	bytes32 escalationSnapshotId;
 	uint256 forkSettlementCollateralReceivedAttoEth;
