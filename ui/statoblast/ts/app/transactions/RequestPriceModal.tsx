@@ -178,7 +178,14 @@ export function RequestPriceModal({ review, onConfirm, onClose, canRequest, conf
 							preparing={valid && !reviewAfterFailure && (running || attempted !== key)}
 							hideReason={!validPrice || priceError !== undefined || error !== undefined || confirmationGuardMessage !== undefined}
 							onClose={close}
-							onRetry={error === undefined ? undefined : () => setRetry(value => value + 1)}
+							onRetry={
+								error === undefined
+									? undefined
+									: () => {
+											run.current?.cancel()
+											setReviewAfterFailure(true)
+										}
+							}
 							onReview={
 								reviewAfterFailure && valid
 									? () => {

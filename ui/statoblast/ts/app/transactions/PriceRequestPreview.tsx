@@ -3,6 +3,7 @@ import { useId, useEffect, useRef } from 'preact/hooks'
 import { InlineHint } from '@zoltar/ui-core-shared/components/InlineHint.js'
 import { TransactionActionButton } from '@zoltar/ui-core-shared/components/TransactionActionButton.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
+import * as transactionCopy from '@zoltar/ui-core-shared/copy/transaction.js'
 import * as copy from '@zoltar/ui-core-shared/copy/transactionSteps.js'
 import * as priceRequestCopy from '@zoltar/ui-statoblast-shared/copy/priceRequest.js'
 import { EthAmount, TransactionFundingSummary } from '@zoltar/ui-core-shared/components/TransactionFundingSummary.js'
@@ -80,7 +81,7 @@ export function PriceRequestPreview({
 								<div className='transaction-step-hash' />
 							</div>
 						))}
-						<div className='transaction-plan-action transaction-plan-action-wide transaction-plan-action-final'>
+						<div className={`transaction-plan-action transaction-plan-action-wide transaction-plan-action-final${onRetry === undefined ? '' : ' transaction-plan-action-retry'}`}>
 							<TransactionActionButton
 								idleLabel={
 									onReview === undefined ? (
@@ -101,7 +102,7 @@ export function PriceRequestPreview({
 							/>
 							<div className='actions transaction-step-close'>
 								<button className='secondary' type='button' onClick={onRetry ?? onClose}>
-									{onRetry === undefined ? commonCopy.cancel : commonCopy.retry}
+									{onRetry === undefined ? commonCopy.cancel : transactionCopy.reviewAndRetry}
 								</button>
 							</div>
 							<div className='transaction-step-hash' />
