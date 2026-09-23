@@ -112,6 +112,13 @@ browserTest(
 						expect(await evaluate("document.querySelector('#retirement-residual-evidence')?.textContent?.includes('Old claim is no longer redeemable')")).toBeTrue()
 						expect(await evaluate("document.querySelector('#retirement-residual-submit')?.disabled")).toBeFalse()
 						expect(await evaluate('document.body.scrollWidth > innerWidth')).toBeFalse()
+						if (process.env['BOT_DASHBOARD_QA_CAPTURE'] === '1') {
+							await evaluate("(() => { const evidence = document.querySelector('#retirement-residual-evidence'); const details = evidence?.closest('details'); if (details) details.open = true; evidence?.scrollIntoView({ block: 'center' }) })()")
+							const capture = await browser.send('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false })
+							const data = typeof capture === 'object' && capture !== null ? Reflect.get(capture, 'data') : undefined
+							if (typeof data !== 'string') throw new Error('Residual screenshot is missing')
+							await Bun.write(`/tmp/bot-dashboard-qa/chaos-residual-${width.toString()}.png`, Buffer.from(data, 'base64'))
+						}
 					}
 				}
 			}
