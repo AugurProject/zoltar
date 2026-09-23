@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 
-import { privateKeyToAccount } from '@zoltar/bot-shared/ethereum'
+import { privateKeyToAccount, zeroAddress } from '@zoltar/bot-shared/ethereum'
 import { acquireBotProcessLocks } from '@zoltar/bot-shared/execution/bot-process-locks'
 import { createInterface } from 'node:readline/promises'
 import { lstat } from 'node:fs/promises'
@@ -73,10 +73,11 @@ async function assertUnusedStatePath(path: string) {
 	}
 }
 
-function isUnoperatedKeylessState(settings: OperatorSettings, state: Awaited<ReturnType<typeof loadDurableState>>) {
+function isUnoperatedSignerlessState(state: Awaited<ReturnType<typeof loadDurableState>>) {
 	return (
-		settings.privateKey === undefined &&
 		state.signerAddress === undefined &&
+		(state.protocolIndex === undefined || state.protocolIndex.wallet.toLowerCase() === zeroAddress) &&
+		state.activities.every(activity => activity.hash === undefined && activity.type !== 'transaction' && activity.type !== 'recovery' && activity.type !== 'wallet' && (activity.type !== 'operation' || activity.status === 'dry-run' || activity.status === 'skipped')) &&
 		state.pendingTransactions.length === 0 &&
 		state.includedTransactions.length === 0 &&
 		state.rollbackQueue.length === 0 &&
@@ -145,6 +146,11 @@ export async function prepareCurrentDeployment(options: PreparationOptions = {})
 			if (!deploymentIsCurrent(active, current) || loaded.needsDeploymentPin) await saveSettings(loaded.path, current, loaded.revision)
 			return { kind: 'current', message: 'Selected current contracts for the safely migratable zero-root bootstrap. Its journal will be preserved at startup.' }
 		}
+		const unoperatedSignerless = isUnoperatedSignerlessState(state)
+		if (unoperatedSignerless && state.profileId === activeProfileId && state.uniswapV3Factory === undefined) {
+			const nextStateFile = await saveCurrentWithNewState(loaded, current, replacementTargetId)
+			return { kind: 'current', message: `Selected current contracts in new state file ${nextStateFile}. The old signerless journal was preserved.` }
+		}
 		if (state.profileId === activeProfileId && (state.uniswapV3Factory !== undefined || !pristine)) assertDurableDeploymentFactory(active, state, active.runtime.stateFile)
 		else if (!pristine) throw new Error(`Durable state belongs to profile ${state.profileId}, but the saved configuration selects ${activeProfileId}; restore the old pin before retirement`)
 
@@ -162,9 +168,9 @@ export async function prepareCurrentDeployment(options: PreparationOptions = {})
 			await saveSettings(loaded.path, current, loaded.revision)
 			return { kind: 'current', message: 'Selected current contract addresses; the unused state will adopt them at startup.' }
 		}
-		if (isUnoperatedKeylessState(active, state)) {
+		if (unoperatedSignerless) {
 			const nextStateFile = await saveCurrentWithNewState(loaded, current, replacementTargetId)
-			return { kind: 'current', message: `Selected current contracts in new state file ${nextStateFile}. The old keyless journal was preserved.` }
+			return { kind: 'current', message: `Selected current contracts in new state file ${nextStateFile}. The old signerless journal was preserved.` }
 		}
 
 		if (state.retirement.status === 'inactive') {

@@ -94,6 +94,44 @@ test('moves an unoperated keyless journal to a fresh state file without requesti
 	expect(await readFile(stateFile)).toEqual(before)
 })
 
+test('moves an unoperated signerless journal after a signer is configured', async () => {
+	const { path, settings, stateFile } = await fixture(false)
+	const state = await loadDurableState(stateFile, settings.network.chainId)
+	state.uniswapV3Factory = undefined
+	state.activities.push({ at: new Date(0).toISOString(), message: 'Dry-run scan before signer setup', status: 'info', type: 'configuration' })
+	await saveDurableState(stateFile, state)
+	const before = await readFile(stateFile)
+	const result = await prepareCurrentDeployment({
+		acquireLocks: noLocks,
+		ask: async () => {
+			throw new Error('Unexpected retirement prompt')
+		},
+		path,
+	})
+	expect(result.kind).toBe('current')
+	expect((await loadSettings(path)).settings.runtime.stateFile).not.toBe(stateFile)
+	expect(await readFile(stateFile)).toEqual(before)
+})
+
+test('does not infer an operated unpinned journal factory from the current core profile', async () => {
+	const { path, settings, signer, stateFile } = await fixture(false, true)
+	const current = { ...settings, deployment: canonicalDeployment(settings.network.chainId) }
+	const unpinned = serializedSettings(current)
+	Reflect.deleteProperty(unpinned, 'deploymentPin')
+	await writeFile(path, `${JSON.stringify(unpinned)}\n`, { mode: 0o600 })
+	const state = await loadDurableState(stateFile, settings.network.chainId)
+	state.profileId = executionProfileId(current)
+	state.signerAddress = signer
+	state.uniswapV3Factory = undefined
+	state.activities.push({ at: new Date(0).toISOString(), message: 'Earlier V3 operation', status: 'info', type: 'operation' })
+	await saveDurableState(stateFile, state)
+	const configBefore = await readFile(path)
+	const stateBefore = await readFile(stateFile)
+	await expect(prepareCurrentDeployment({ acquireLocks: noLocks, path })).rejects.toThrow('different Uniswap V3 factory')
+	expect(await readFile(path)).toEqual(configBefore)
+	expect(await readFile(stateFile)).toEqual(stateBefore)
+})
+
 test('does not treat a keyless journal with pending work as unoperated', async () => {
 	const { path, settings, stateFile } = await fixture(false)
 	const keyless = { ...settings, paused: true, privateKey: undefined, runtime: { ...settings.runtime, execute: false } }
@@ -112,6 +150,20 @@ test('does not treat a keyless journal with pending work as unoperated', async (
 			path,
 		}),
 	).rejects.toThrow('Enable live execution')
+	expect(await readFile(path)).toEqual(configBefore)
+	expect(await readFile(stateFile)).toEqual(stateBefore)
+})
+
+test('does not discard a signerless journal that records an earlier operation', async () => {
+	const { path, settings, stateFile } = await fixture(false)
+	const keyless = { ...settings, paused: true, privateKey: undefined, runtime: { ...settings.runtime, execute: false } }
+	await writeFile(path, `${JSON.stringify(serializedSettings(keyless))}\n`, { mode: 0o600 })
+	const state = await loadDurableState(stateFile, settings.network.chainId)
+	state.activities.push({ at: new Date(0).toISOString(), message: 'Confirmed prior action', status: 'confirmed', type: 'operation' })
+	await saveDurableState(stateFile, state)
+	const configBefore = await readFile(path)
+	const stateBefore = await readFile(stateFile)
+	await expect(prepareCurrentDeployment({ acquireLocks: noLocks, path })).rejects.toThrow('Enable live execution')
 	expect(await readFile(path)).toEqual(configBefore)
 	expect(await readFile(stateFile)).toEqual(stateBefore)
 })

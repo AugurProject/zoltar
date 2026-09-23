@@ -1,6 +1,5 @@
 import type { DurableState } from '../state/operator-state.ts'
-import { assertSepoliaUniswapFactory, canonicalDeployment, legacyDeploymentForProfile } from './canonical-deployment.ts'
-import { executionProfileId } from './execution-profile.ts'
+import { assertSepoliaUniswapFactory, legacyDeploymentForProfile } from './canonical-deployment.ts'
 import type { OperatorSettings } from './settings.ts'
 
 export function assertSepoliaDurableFactory(chainId: number, state: Pick<DurableState, 'uniswapV3Factory'>) {
@@ -20,8 +19,6 @@ export function assertDurableDeploymentFactory(settings: OperatorSettings, state
 	if (factory === undefined) throw new Error('Configured deployment is missing its Uniswap V3 factory')
 	assertSepoliaUniswapFactory(settings.network.chainId, factory)
 	const previous = legacyDeploymentForProfile(settings.network.chainId, state.profileId)
-	const canonical = canonicalDeployment(settings.network.chainId)
-	const knownFactory = previous?.uniswapV3Factory ?? (executionProfileId({ deployment: canonical, network: settings.network }) === state.profileId ? canonical.uniswapV3Factory : undefined)
-	const boundFactory = state.uniswapV3Factory ?? knownFactory
+	const boundFactory = state.uniswapV3Factory ?? previous?.uniswapV3Factory
 	if (boundFactory === undefined || boundFactory.toLowerCase() !== factory.toLowerCase()) throw new Error(`Durable state ${stateFile} belongs to a different Uniswap V3 factory`)
 }

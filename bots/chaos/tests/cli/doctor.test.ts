@@ -343,6 +343,7 @@ describe('chaos launch doctor', () => {
 		const signer = privateKeyToAccount(privateKey).address
 		const settings = { ...baseline, privateKey, runtime: { ...baseline.runtime, execute: true } }
 		const state = initialDurableState(settings.network.chainId, false, executionProfileId(settings), signer)
+		state.uniswapV3Factory = settings.deployment.uniswapV3Factory
 		requestRetirement(state.retirement, state.profileId, signer, DEFAULT_RETIREMENT_POLICIES, `DRAIN ${state.profileId} TO ${signer}`, signer)
 		state.retirement.status = 'draining'
 		let submissionChecked = false
@@ -417,9 +418,11 @@ describe('chaos launch doctor', () => {
 		expect(() => assertDoctorDurableStateScope(settings, wrongProfile, wallet, '/state.json')).toThrow('belongs to deployment profile')
 
 		const wrongSigner = initialDurableState(settings.network.chainId, true, executionProfileId(settings), privateKeyToAccount(`0x${'55'.repeat(32)}`).address)
+		wrongSigner.uniswapV3Factory = settings.deployment.uniswapV3Factory
 		expect(() => assertDoctorDurableStateScope(settings, wrongSigner, wallet, '/state.json')).toThrow('scoped to signer')
 
 		const wrongIndex = initialDurableState(settings.network.chainId, true, executionProfileId(settings), wallet)
+		wrongIndex.uniswapV3Factory = settings.deployment.uniswapV3Factory
 		wrongIndex.protocolIndex = {
 			auctionBids: {},
 			auctionRefunds: {},

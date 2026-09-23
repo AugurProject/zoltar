@@ -33,6 +33,7 @@ test('restarts an empty bootstrap that recorded the previous zero-address deploy
 		await runChaosOperator({ path: join(directory, 'settings.json'), revision: 'fixture', settings }, { acquireSigner: async () => undefined, commitSigner: async () => undefined, discardSigner: async () => undefined, release: async () => undefined }, shutdown)
 		const migrated = await loadDurableState(stateFile, 11155111)
 		expect(migrated.profileId).toBe(executionProfileId(settings))
+		expect(migrated.uniswapV3Factory).toBe(settings.deployment.uniswapV3Factory)
 		expect(migrated.activities).toEqual(old.activities)
 		expect(migrated.signerAddress).toBe(old.signerAddress)
 		expect(migrated.safetyPaused).toBeFalse()
