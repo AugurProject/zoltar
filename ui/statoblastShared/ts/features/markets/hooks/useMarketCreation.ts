@@ -216,11 +216,12 @@ export function useMarketCreation(
 						marketError.value = { storageKey: submittedMarketActionScopeKey, value: message }
 					},
 				},
-				async walletAddress => {
+				async (walletAddress, context) => {
 					if (!hasDeployedStep(deploymentStatuses, 'zoltarQuestionData')) throw new Error('Deploy ZoltarQuestionData before creating a question')
 					return await dependencies.createMarket(
 						walletAddress,
 						{
+							reviewSignal: context.reviewSignal,
 							onTransactionPrepared: preview => {
 								if (isCurrentMarketActionScope()) onTransactionPrepared?.(preview)
 							},

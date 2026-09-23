@@ -21,7 +21,7 @@ import { requireDefined } from '@zoltar/ui-core-shared/forms/required.js'
 import { useRequestGuard } from '@zoltar/ui-core-shared/lib/requestGuard.js'
 import { createErrorActionFeedback, createPendingActionFeedback, createSuccessActionFeedback, createWarningActionFeedback, type ActionFeedback } from '@zoltar/ui-core-shared/transactions/actionFeedback.js'
 import { createOpenOracleSuccessPresentation, createOpenOracleTransactionIntent, createOpenOracleWarningPresentation, getOpenOracleFailureTitle, getOpenOraclePendingTitle, getOpenOracleSuccessTitle } from '../../reportingTransactionPresentations.js'
-import { buildWriteActionConfig, runWriteAction } from '@zoltar/ui-core-shared/transactions/writeAction.js'
+import { buildWriteActionConfig, runWriteAction, type WriteActionContext } from '@zoltar/ui-core-shared/transactions/writeAction.js'
 import { refreshWalletStateOnly } from '@zoltar/ui-core-shared/lib/refreshState.js'
 import type { OpenOracleCreateFormState, OpenOracleFormState } from '@zoltar/ui-zoltar-shared/types/app.js'
 import type { OpenOracleActionResult, OpenOracleReportDetails, OpenOracleWithdrawableBalances } from '@zoltar/ui-core-shared/types/contracts.js'
@@ -127,7 +127,7 @@ function useOpenOracleOperationsWithDependencies<TWriteClient>(
 
 	const runOracleAction = async (
 		actionName: OpenOracleActionResult['action'],
-		action: (walletAddress: Address) => Promise<OpenOracleActionResult>,
+		action: (walletAddress: Address, context: WriteActionContext) => Promise<OpenOracleActionResult>,
 		errorFallback: string,
 		options?: {
 			formatErrorMessage?: (error: unknown, fallbackMessage: string) => string
@@ -173,6 +173,9 @@ function useOpenOracleOperationsWithDependencies<TWriteClient>(
 						const result = openOracleResult.value
 						if (result !== undefined) onTransactionPresented(createOpenOracleWarningPresentation(result, message, transactionContext))
 					},
+					onWriteCanceled: () => {
+						openOracleFeedback.value = undefined
+					},
 					onWriteError: message => {
 						openOracleFeedback.value = createErrorActionFeedback(actionName, getOpenOracleFailureTitle(actionName), message)
 					},
@@ -181,8 +184,8 @@ function useOpenOracleOperationsWithDependencies<TWriteClient>(
 						await refreshWalletStateOnly(refreshState)
 					},
 				},
-				async walletAddress => {
-					return await action(walletAddress)
+				async (walletAddress, context) => {
+					return await action(walletAddress, context)
 				},
 				errorFallback,
 				async result => {
@@ -215,7 +218,7 @@ function useOpenOracleOperationsWithDependencies<TWriteClient>(
 			const submittedOpenOracleForm = openOracleForm.value
 			return runOracleAction(
 				'approveToken1',
-				async walletAddress => {
+				async (walletAddress, context) => {
 					const cachedReportDetails = requireLoadedCurrentSelectedReport()
 					const cachedDisputeSubmission = getDisputeSubmission(cachedReportDetails, submittedOpenOracleForm)
 					const { details: reportDetails } = await ensureLoadedSelectedReport({
@@ -239,7 +242,7 @@ function useOpenOracleOperationsWithDependencies<TWriteClient>(
 						requirement: disputeSubmission.token1Approval,
 						tokenLabel: 'base token',
 					})
-					return await dependencies.approveErc20(dependencies.createWalletWriteClient(walletAddress, { onTransactionPrepared, onTransactionSubmitted }), reportDetails.token1, getOpenOracleAddress(), approvalAmount, 'approveToken1')
+					return await dependencies.approveErc20(dependencies.createWalletWriteClient(walletAddress, { onTransactionPrepared, onTransactionSubmitted, reviewSignal: context.reviewSignal }), reportDetails.token1, getOpenOracleAddress(), approvalAmount, 'approveToken1')
 				},
 				'Failed to approve base token',
 				{ refreshTokenAccessOnSuccess: true },
@@ -251,7 +254,7 @@ function useOpenOracleOperationsWithDependencies<TWriteClient>(
 			const submittedOpenOracleForm = openOracleForm.value
 			return runOracleAction(
 				'approveToken2',
-				async walletAddress => {
+				async (walletAddress, context) => {
 					const cachedReportDetails = requireLoadedCurrentSelectedReport()
 					const cachedDisputeSubmission = getDisputeSubmission(cachedReportDetails, submittedOpenOracleForm)
 					const { details: reportDetails } = await ensureLoadedSelectedReport({
@@ -275,7 +278,7 @@ function useOpenOracleOperationsWithDependencies<TWriteClient>(
 						requirement: disputeSubmission.token2Approval,
 						tokenLabel: 'quote token',
 					})
-					return await dependencies.approveErc20(dependencies.createWalletWriteClient(walletAddress, { onTransactionPrepared, onTransactionSubmitted }), reportDetails.token2, getOpenOracleAddress(), approvalAmount, 'approveToken2')
+					return await dependencies.approveErc20(dependencies.createWalletWriteClient(walletAddress, { onTransactionPrepared, onTransactionSubmitted, reviewSignal: context.reviewSignal }), reportDetails.token2, getOpenOracleAddress(), approvalAmount, 'approveToken2')
 				},
 				'Failed to approve quote token',
 				{ refreshTokenAccessOnSuccess: true },
@@ -313,7 +316,7 @@ function useOpenOracleOperationsWithDependencies<TWriteClient>(
 			const token2Decimals = token2DecimalsResult.decimals
 			await runOracleAction(
 				'createReportInstance',
-				async walletAddress => {
+				async (walletAddress, context) => {
 					const walletBalanceAttoEth = await readClient.getBalance({ address: walletAddress })
 					const createGuardMessage = getOpenOracleCreateGuardMessage({
 						ethValueInput: submittedOpenOracleCreateForm.ethValue,
@@ -326,7 +329,7 @@ function useOpenOracleOperationsWithDependencies<TWriteClient>(
 					const preciseCreateValidationMessage = getOpenOracleCreateValidationMessage({ form: submittedOpenOracleCreateForm, token1Decimals, token2Decimals })
 					if (preciseCreateValidationMessage !== undefined) throw new Error(preciseCreateValidationMessage)
 
-					return await dependencies.createOpenOracleReportInstance(dependencies.createWalletWriteClient(walletAddress, { onTransactionPrepared, onTransactionSubmitted }), parseOpenOracleCreateFormSubmission({ form: submittedOpenOracleCreateForm, token1Decimals, token2Decimals }))
+					return await dependencies.createOpenOracleReportInstance(dependencies.createWalletWriteClient(walletAddress, { onTransactionPrepared, onTransactionSubmitted, reviewSignal: context.reviewSignal }), parseOpenOracleCreateFormSubmission({ form: submittedOpenOracleCreateForm, token1Decimals, token2Decimals }))
 				},
 				'Failed to create standalone Open Oracle report',
 			)
@@ -338,12 +341,12 @@ function useOpenOracleOperationsWithDependencies<TWriteClient>(
 	const settleReport = async () =>
 		await runOracleAction(
 			'settle',
-			async walletAddress => {
+			async (walletAddress, context) => {
 				const { details } = await ensureLoadedSelectedReport({ forceReload: true, requireCurrentSelection: true })
 				const settleAvailability = getOpenOracleSettleAvailability(details)
 				if (!settleAvailability.canAct) throw new Error(settleAvailability.message ?? 'This report is not ready to settle.')
 
-				return await dependencies.settleOracleReport(dependencies.createWalletWriteClient(walletAddress, { onTransactionPrepared, onTransactionSubmitted }), getOpenOracleAddress(), details.reportId)
+				return await dependencies.settleOracleReport(dependencies.createWalletWriteClient(walletAddress, { onTransactionPrepared, onTransactionSubmitted, reviewSignal: context.reviewSignal }), getOpenOracleAddress(), details.reportId)
 			},
 			'Failed to settle report',
 			{ formatErrorMessage: formatOpenOracleSettleWriteErrorMessage },
@@ -420,7 +423,7 @@ function useOpenOracleOperationsWithDependencies<TWriteClient>(
 		try {
 			await runOracleAction(
 				'withdrawBalance',
-				async walletAddress => await dependencies.withdrawOpenOracleBalance(dependencies.createWalletWriteClient(walletAddress, { onTransactionPrepared, onTransactionSubmitted }), attemptOpenOracleAddress, token, currentAmount, walletAddress),
+				async (walletAddress, context) => await dependencies.withdrawOpenOracleBalance(dependencies.createWalletWriteClient(walletAddress, { onTransactionPrepared, onTransactionSubmitted, reviewSignal: context.reviewSignal }), attemptOpenOracleAddress, token, currentAmount, walletAddress),
 				'Failed to withdraw Open Oracle balance',
 			)
 		} finally {
@@ -433,7 +436,7 @@ function useOpenOracleOperationsWithDependencies<TWriteClient>(
 			const submittedOpenOracleForm = openOracleForm.value
 			return runOracleAction(
 				'dispute',
-				async walletAddress => {
+				async (walletAddress, context) => {
 					const submittedReportIdInput = submittedOpenOracleForm.reportId.trim()
 					const { details } = await ensureLoadedSelectedReport({ forceReload: true, reportIdInput: submittedReportIdInput, requireCurrentSelection: true })
 					const disputeInputPreflight = getDisputeSubmission(details, submittedOpenOracleForm)
@@ -443,7 +446,16 @@ function useOpenOracleOperationsWithDependencies<TWriteClient>(
 					const disputeSubmission = getDisputeSubmission(details, submittedOpenOracleForm)
 					if (!disputeSubmission.canSubmit || disputeSubmission.newAmount1 === undefined || disputeSubmission.newAmount2 === undefined) throw new Error(disputeSubmission.blockMessage?.message ?? 'Invalid dispute submission details.')
 					const tokenToSwap = submittedOpenOracleForm.disputeTokenToSwap === 'token1' ? details.token1 : details.token2
-					return await dependencies.disputeOracleReport(dependencies.createWalletWriteClient(walletAddress, { onTransactionPrepared, onTransactionSubmitted }), getOpenOracleAddress(), details.reportId, tokenToSwap, disputeSubmission.newAmount1, disputeSubmission.newAmount2, details.currentAmount2, details.stateHash)
+					return await dependencies.disputeOracleReport(
+						dependencies.createWalletWriteClient(walletAddress, { onTransactionPrepared, onTransactionSubmitted, reviewSignal: context.reviewSignal }),
+						getOpenOracleAddress(),
+						details.reportId,
+						tokenToSwap,
+						disputeSubmission.newAmount1,
+						disputeSubmission.newAmount2,
+						details.currentAmount2,
+						details.stateHash,
+					)
 				},
 				'Failed to dispute report',
 				{

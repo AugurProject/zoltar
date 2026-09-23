@@ -4,5 +4,5 @@ export const fetchUniswapPrice = 'Fetch from Uniswap'
 export const fetchingUniswapPrice = 'Fetching…'
 export const uniswapPriceFailed = 'Could not fetch the Uniswap price. Try again or enter a price.'
 
-export const enterPriceEstimate = 'Enter an estimated REP per ETH price, or fetch it from Uniswap.'
+export const enterPriceEstimate = 'Enter a starting price.'
 export const requestPrice = 'Request price'

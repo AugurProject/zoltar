@@ -1,11 +1,13 @@
 import * as commonCopy from '../copy/common.js'
 import { createContext } from 'preact'
-import { useContext, useId } from 'preact/hooks'
+import { useContext, useId, useLayoutEffect, useRef } from 'preact/hooks'
+import { ReviewActionsSlotContext } from './reviewActionsSlot.js'
 import type { ComponentChildren } from 'preact'
 import { LoadingText } from './LoadingText.js'
 import { InlineHint } from './InlineHint.js'
 import type { TransactionActionButtonProps } from '../types/components.js'
 import { isPendingGlobalTransactionPresentation, useGlobalTransactionPresentation } from './GlobalTransactionPresentationContext.js'
+import { transactionSteps } from '../transactions/transactionSteps.js'
 
 const TransactionActionGroupContext = createContext<{ noticeId: string; hasNotice: boolean } | undefined>(undefined)
 
@@ -26,6 +28,22 @@ export function TransactionActionGroup({ children, id, loading = false, message 
 	const generatedId = useId()
 	const noticeId = id ?? generatedId
 	const notice = message
+	const reviewSlot = useContext(ReviewActionsSlotContext)
+	const slotRef = useRef<HTMLDivElement>(null)
+	const claimSlot = reviewSlot?.claim
+	const releaseSlot = reviewSlot?.release
+	useLayoutEffect(() => {
+		if (claimSlot === undefined || releaseSlot === undefined || slotRef.current === null) return
+		claimSlot(slotRef.current)
+		return releaseSlot
+	}, [claimSlot, releaseSlot])
+	// While the dialog's transaction review is active it renders its own actions in this row instead of the form's.
+	if (reviewSlot !== undefined)
+		return (
+			<div className='tx-action-group' data-review-actions-slot ref={slotRef}>
+				{reviewSlot.actions}
+			</div>
+		)
 	return (
 		<TransactionActionGroupContext.Provider value={{ noticeId, hasNotice: notice !== undefined }}>
 			<div className='tx-action-group'>
@@ -43,6 +61,9 @@ export function TransactionActionButton({ ariaLabel, availability, className = '
 	const disabledReasonId = useId()
 	const globalTransaction = useGlobalTransactionPresentation()
 	const globallyLocked = useContext(TransactionActionButtonLockContext)
+	// While the transaction review waits for the user's confirmation nothing is in flight yet, so the button rests disabled instead of spinning.
+	const awaitingReview = transactionSteps.value?.steps[transactionSteps.value.activeIndex]?.phase === 'review'
+	const showPending = pending && !awaitingReview
 	const blockedByPendingRequest = globallyLocked && !pending
 	const isDisabled = disabled || pending || availability?.disabled === true || blockedByPendingRequest
 	const disabledReason = isDisabled ? availability?.reason : undefined
@@ -62,11 +83,11 @@ export function TransactionActionButton({ ariaLabel, availability, className = '
 	return (
 		<div className={`tx-action ${className}`.trim()}>
 			<div className='tx-action-row'>
-				<button aria-label={ariaLabel} aria-busy={pending} className={`tx-action-button ${tone}`} type={type} onClick={handleClick} disabled={isDisabled} aria-describedby={describedBy}>
+				<button aria-label={ariaLabel} aria-busy={showPending} className={`tx-action-button ${tone}`} type={type} onClick={handleClick} disabled={isDisabled} aria-describedby={describedBy}>
 					<span className='tx-action-button-labels'>
 						<span aria-hidden='true' className='tx-action-label-placeholder' data-label={typeof idleLabel === 'string' ? idleLabel : undefined} />
 						<span aria-hidden='true' className='tx-action-label-placeholder' data-label={typeof pendingLabel === 'string' ? pendingLabel : undefined} />
-						<span>{pending ? <LoadingText announce={!isPendingGlobalTransactionPresentation(globalTransaction)}>{pendingLabel}</LoadingText> : idleLabel}</span>
+						<span>{showPending ? <LoadingText announce={!isPendingGlobalTransactionPresentation(globalTransaction)}>{pendingLabel}</LoadingText> : idleLabel}</span>
 					</span>
 				</button>
 			</div>

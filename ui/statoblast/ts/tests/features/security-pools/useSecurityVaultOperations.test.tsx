@@ -1,3 +1,4 @@
+import { registerTransactionReviewScope } from '@zoltar/ui-core-shared/transactions/transactionReviewScope.js'
 import { createDeferred } from '@zoltar/ui-core-shared/tests/testUtils/deferred.js'
 /// <reference types='bun-types' />
 
@@ -726,6 +727,61 @@ describe('useSecurityVaultOperations', () => {
 			await requireHookState(hookState).depositRepToVault()
 		})
 		expect(deposit).toHaveBeenCalledWith({ kind: 'injected-write-client' }, SECURITY_POOL_ADDRESS, 10n ** 18n, 30_000n)
+	})
+
+	test('closing during deposit details loading cancels before creating a write client', async () => {
+		const details = createDeferred<SecurityVaultDetails>()
+		const reached = createDeferred<void>()
+		let pause = false
+		const deposit = mock(async () => ({ action: 'depositRepToVault' as const, hash: '0x06' as const }))
+		const dependencies = createSecurityVaultOperationsDependencies({
+			depositRepToVaultToSecurityPool: deposit,
+			loadErc20Balance: mock(async () => 10n ** 18n),
+			loadSecurityVaultDetails: async () => {
+				if (!pause) return createSecurityVaultDetails({ targetBackingFactorBps: 20_000n })
+				reached.resolve()
+				return await details.promise
+			},
+		})
+		const canceled = mock(() => undefined)
+		const failed = mock(() => undefined)
+		let hookState: UseSecurityVaultOperationsState | undefined
+		const Harness = createHarness(
+			dependencies,
+			state => {
+				hookState = state
+			},
+			{ onTransactionCanceled: canceled, onTransactionFailed: failed },
+		)
+		cleanupRenderedComponent = (await renderIntoDocument(h(Harness, {}))).cleanup
+		await act(() => {
+			requireHookState(hookState).setSecurityVaultForm(current => ({ ...current, depositAmount: '1', selectedVaultOwner: WALLET_ADDRESS }))
+		})
+		await act(async () => {
+			await requireHookState(hookState).loadSecurityVault()
+		})
+		const scope = new AbortController()
+		const unregister = registerTransactionReviewScope(scope.signal)
+		try {
+			pause = true
+			const depositing = act(async () => {
+				await requireHookState(hookState).depositRepToVault()
+			})
+			await reached.promise
+			scope.abort()
+			unregister()
+			details.resolve(createSecurityVaultDetails({ targetBackingFactorBps: 20_000n }))
+			await depositing
+			expect(canceled).toHaveBeenCalledTimes(1)
+			expect(failed).not.toHaveBeenCalled()
+			expect(dependencies.createWalletWriteClient).not.toHaveBeenCalled()
+			expect(deposit).not.toHaveBeenCalled()
+			expect(requireHookState(hookState).securityVaultError).toBeUndefined()
+			expect(requireHookState(hookState).securityVaultFeedback).toBeUndefined()
+		} finally {
+			details.resolve(createSecurityVaultDetails())
+			unregister()
+		}
 	})
 
 	test('depositRepToVault revalidates origin admission before broadcasting', async () => {
