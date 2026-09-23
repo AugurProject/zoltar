@@ -615,7 +615,7 @@ describe('liquidator dashboard refresh behavior', () => {
 		await page.refresh()
 		await Bun.sleep(1)
 		expect(page.stateRequestCount()).toBe(before + 2)
-		expect(page.window.document.getElementById('run-status-badge')?.textContent).toBe('Disconnected')
+		expect(page.window.document.getElementById('run-status-badge')?.textContent).toBe('State stale')
 	})
 
 	test('keeps a run-state mutation single-flight across an intervening successful poll', async () => {
@@ -665,7 +665,7 @@ describe('liquidator dashboard refresh behavior', () => {
 		await recovered.refresh()
 		expect(recovered.window.document.getElementById('mode-badge')?.textContent).toBe('Dry run · last known')
 		expect(recovered.window.document.getElementById('network-badge')?.textContent).toBe('Mainnet · chain 1 · last known')
-		expect(recovered.window.document.getElementById('run-status-badge')?.textContent).toBe('Disconnected')
+		expect(recovered.window.document.getElementById('run-status-badge')?.textContent).toBe('State stale')
 		expect(recovered.window.document.getElementById('global-error')?.classList.contains('error')).toBe(true)
 		expect(recovered.window.document.getElementById('capability-badge')?.textContent).toBe('Capability unavailable')
 		expect(recovered.window.document.getElementById('attention-badge')?.getAttribute('data-tone')).toBe('warning')
@@ -981,7 +981,7 @@ describe('liquidator dashboard refresh behavior', () => {
 		const outcome = await Promise.race([page.refresh().then(() => 'completed'), Bun.sleep(1_500).then(() => 'timed-out')])
 
 		expect(outcome).toBe('completed')
-		expect(page.window.document.getElementById('run-status-badge')?.textContent).toBe('Disconnected')
+		expect(page.window.document.getElementById('run-status-badge')?.textContent).toBe('State stale')
 		expect(page.window.document.getElementById('pause-button')?.hasAttribute('disabled')).toBe(false)
 		expect(page.window.document.getElementById('resume-dialog')?.hasAttribute('open')).toBe(false)
 	})
@@ -1102,7 +1102,7 @@ describe('liquidator dashboard refresh behavior', () => {
 		const pauseButton = page.window.document.getElementById('pause-button')
 		if (!(pauseButton instanceof page.window.HTMLButtonElement)) throw new Error('Expected pause button')
 		expect(pauseButton.textContent).toBe('Resume')
-		expect(page.window.document.getElementById('mode-badge')?.textContent).toBe('Live')
+		expect(page.window.document.getElementById('mode-badge')?.textContent).toBe('Live armed')
 		expect(page.pauseRequests).toHaveLength(0)
 		pauseButton.click()
 		await page.waitUntilComplete()
@@ -1261,7 +1261,7 @@ describe('liquidator go-live settings', () => {
 		page.setSnapshot(state(undefined, [], { execute: true, lastScannedBlock: '120', paused: true, wallet: '0xabcdefabcdefabcdefabcdefabcdefabcdefabcd' }))
 		await page.refresh()
 		expect(page.window.document.getElementById('execution-mode-summary')?.textContent).toBe('Live')
-		expect(page.window.document.getElementById('mode-badge')?.textContent).toBe('Live')
+		expect(page.window.document.getElementById('mode-badge')?.textContent).toBe('Live armed')
 	})
 
 	test('keeps a delivery save locked across polls until the bot answers', async () => {
@@ -1834,7 +1834,7 @@ test('rejects malformed successful state responses before rendering and recovers
 	const page = await dashboard(mainnetConfiguration(), state())
 	page.setStateResponse({ ...state(), execute: 'false' })
 	await page.refresh()
-	expect(page.window.document.querySelector('#run-status-badge')?.textContent).toContain('Disconnected')
+	expect(page.window.document.querySelector('#run-status-badge')?.textContent).toContain('State stale')
 	expect(page.window.document.querySelector('#strategy-fields')?.hasAttribute('disabled')).toBe(true)
 	page.setStateResponse(undefined)
 	await page.refresh()

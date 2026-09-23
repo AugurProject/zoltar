@@ -1,5 +1,8 @@
 import { createWorkflowHistory, type Workflow, type WorkflowStep } from './workflow-history.js'
 import { requestWithTimeout } from '@zoltar/bot-shared/dashboard/polling'
+import { formatAtomicAmount } from '@zoltar/bot-shared/dashboard/amount'
+import { renderOperatorHealth } from '@zoltar/bot-shared/dashboard/health-panel'
+import { confirmOperatorAction } from '@zoltar/bot-shared/dashboard/confirmation'
 import { optionalRecord as record } from '@zoltar/bot-shared/infrastructure/json-validation'
 import { createExecutionPolicyDraft } from './execution-policy-draft.js'
 import { createSettingsNavigation } from '@zoltar/bot-shared/dashboard/settings-navigation'
@@ -12,6 +15,7 @@ import { fullIdentifier, formatDate, node, setBadge, statusLabel, statusTone, tr
 import { createRetirementDashboard, parsePublicRetirement } from './retirement-dashboard.js'
 import { createOperationDialog } from './operation-dialog.js'
 import { renderOperatorAlerts } from './operator-alerts.js'
+import { renderRpcHealth, renderSubmissionHealth, renderUnavailableRpcHealth, renderUnavailableSubmissionHealth } from './readiness-panels.ts'
 import { pendingTransactionSummary, type PendingTransactionObservationView } from './pending-transaction-summary.js'
 import { activeSchedulerWorkLabel, createSelectionControls } from './selection-controls.js'
 type RepBalance = {
@@ -99,7 +103,7 @@ type RpcHealth = {
 	status?: 'degraded' | 'not-checked' | 'not-configured' | 'ready' | undefined
 }
 
-type SubmissionHealth = {
+export type SubmissionHealth = {
 	checkedOriginCount?: number | undefined
 	configuredOriginCount?: number | undefined
 	freshOriginCount?: number | undefined
@@ -112,9 +116,9 @@ type SubmissionHealth = {
 	status?: 'degraded' | 'not-checked' | 'not-configured' | 'ready' | 'stale' | undefined
 }
 
-type Snapshot = {
+export type Snapshot = {
 	activities: Activity[]
-	alerts: { message?: string | undefined; severity?: string | undefined }[]
+	alerts: { actionHref?: string | undefined; actionLabel?: string | undefined; message?: string | undefined; severity?: string | undefined }[]
 	chainId?: string | number | undefined
 	currentWorkflow?: Workflow | undefined
 	workflows: Workflow[]
@@ -212,20 +216,7 @@ const balanceEth = element('balance-eth', HTMLElement)
 const balanceWeth = element('balance-weth', HTMLElement)
 const balanceRepTotal = element('balance-rep-total', HTMLElement)
 const repBalances = element('rep-balances', HTMLDivElement)
-const rpcHealthStatus = element('rpc-health-status', HTMLSpanElement)
-const rpcConfiguredTotal = element('rpc-configured-total', HTMLElement)
-const rpcHealthyCount = element('rpc-healthy-count', HTMLElement)
-const rpcRequiredQuorum = element('rpc-required-quorum', HTMLElement)
-const rpcChainReadiness = element('rpc-chain-readiness', HTMLElement)
-const rpcLastCheck = element('rpc-last-check', HTMLElement)
 const rpcHealthRetryButton = element('rpc-health-retry-button', HTMLButtonElement)
-const submissionHealthStatus = element('submission-health-status', HTMLSpanElement)
-const submissionMode = element('submission-mode', HTMLElement)
-const submissionHealthyCount = element('submission-healthy-count', HTMLElement)
-const submissionRequiredThreshold = element('submission-required-threshold', HTMLElement)
-const submissionFreshness = element('submission-freshness', HTMLElement)
-const submissionSignerProof = element('submission-signer-proof', HTMLElement)
-const submissionLastCheck = element('submission-last-check', HTMLElement)
 const currentWorkflow = element('current-workflow', HTMLDivElement)
 const renderWorkflowHistory = createWorkflowHistory(element('workflow-history', HTMLDivElement))
 const coverageSummary = element('coverage-summary', HTMLDivElement)
@@ -263,6 +254,8 @@ const candidateReasonInput = element('candidate-reason', HTMLTextAreaElement)
 const candidateConfirmationInput = element('candidate-confirmation', HTMLInputElement)
 const candidateStatus = element('candidate-status', HTMLSpanElement)
 const candidateRetryButton = element('candidate-retry', HTMLButtonElement)
+const workflowRecoveryPanel = element('workflow-recovery-panel', HTMLElement)
+const workflowRecoverySummary = element('workflow-recovery-summary', HTMLDivElement)
 const workflowForm = element('workflow-form', HTMLFormElement)
 const workflowFields = element('workflow-fields', HTMLFieldSetElement)
 const workflowReasonInput = element('workflow-reason', HTMLTextAreaElement)
@@ -595,7 +588,7 @@ function parseSnapshot(value: unknown): Snapshot {
 			summary: stringValue(entry['summary']),
 			txHash: stringValue(entry['txHash']),
 		})),
-		alerts: list(source['alerts'], entry => ({ message: stringValue(entry['message']), severity: stringValue(entry['severity']) })),
+		alerts: list(source['alerts'], entry => ({ actionHref: stringValue(entry['actionHref']), actionLabel: stringValue(entry['actionLabel']), message: stringValue(entry['message']), severity: stringValue(entry['severity']) })),
 		chainId: scalarValue(source['chainId']),
 		currentWorkflow: parseWorkflow(source['currentWorkflow']),
 		workflows: list(source['workflows'], parseWorkflow).filter(value => value !== undefined),
@@ -921,10 +914,17 @@ function renderHeader(value: Snapshot) {
 	const checkedBlock = value.lastDeploymentCheckedBlock ?? value.lastScannedBlock
 	lastBlock.textContent = checkedBlock === undefined ? 'Block —' : `Block ${String(checkedBlock)}`
 	lastScan.textContent = value.lastDeploymentCheckedBlock === undefined ? formatRelative(value.lastScanAt) : formatRelative(value.lastDeploymentCheckAt).replace('Scanned', 'Deployments checked')
-	if (value.safetyPaused === true) setBadge(modeBadge, 'Safety paused', 'error')
-	else if (value.paused === true) setBadge(modeBadge, 'Paused', 'warning')
-	else if (value.execute === true) setBadge(modeBadge, 'Live execution', 'warning')
+	if (value.execute === true) setBadge(modeBadge, 'Live armed', 'warning')
 	else setBadge(modeBadge, 'Dry run', 'info')
+	renderOperatorHealth(element('operator-health', HTMLDivElement), {
+		mode: value.execute === true ? 'Live armed' : 'Dry run',
+		lastScanAt: value.lastScanAt,
+		capitalAtRisk: configuration?.maximumEthPerOperation === undefined ? 'Unavailable' : `Unknown / ${configuration.maximumEthPerOperation} ETH per operation`,
+		recoveryItems: recoveryItemCount(value),
+		lastAction: value.activities[0]?.label ?? value.activities[0]?.summary ?? 'No action yet',
+		paused: value.paused === true || value.safetyPaused === true,
+		stale: false,
+	})
 	const networkName = value.network ?? configuration?.network ?? 'Network unknown'
 	const chainId = value.chainId ?? configuration?.chainId
 	setBadge(networkBadge, chainId === undefined ? networkName : `${networkName} · ${String(chainId)}`, value.network === undefined && configuration?.network === undefined ? 'warning' : 'neutral')
@@ -953,8 +953,8 @@ function renderOverview(value: Snapshot) {
 	walletShort.replaceChildren(value.wallet === undefined ? document.createTextNode('No execution account configured') : fullIdentifier(value.wallet, 'wallet address'))
 	walletShort.removeAttribute('title')
 	if (value.wallet !== undefined && value.inventoryAvailable === true) {
-		balanceEth.textContent = formatAtomic18(value.inventory.eth)
-		balanceWeth.textContent = formatAtomic18(value.inventory.weth)
+		balanceEth.textContent = formatAtomicAmount(value.inventory.eth, 'ETH')
+		balanceWeth.textContent = formatAtomicAmount(value.inventory.weth, 'WETH')
 		balanceRepTotal.textContent = value.inventory.rep.length === 0 ? '—' : `${value.inventory.rep.length.toString()} token${value.inventory.rep.length === 1 ? '' : 's'}`
 		renderRepBalances(value.inventory.rep)
 	} else {
@@ -972,76 +972,6 @@ function renderOverview(value: Snapshot) {
 	retirementDashboard.render(value)
 }
 
-function renderRpcHealth(value: Snapshot) {
-	rpcHealthRetryButton.classList.add('hidden')
-	const health = value.rpcHealth
-	if (health.status === 'ready') setBadge(rpcHealthStatus, 'Quorum ready', 'success')
-	else if (health.status === 'degraded') setBadge(rpcHealthStatus, 'Quorum blocked', 'error')
-	else if (health.status === 'not-checked') setBadge(rpcHealthStatus, 'Awaiting health check', 'warning')
-	else setBadge(rpcHealthStatus, 'Health unavailable', 'warning')
-	const configured = health.configuredReadEndpointCount
-	rpcConfiguredTotal.textContent = configured === undefined ? '—' : `${configured.toString()} endpoint${configured === 1 ? '' : 's'}`
-	const healthy = health.healthyReadEndpointCount
-	if (healthy === undefined) rpcHealthyCount.textContent = '—'
-	else rpcHealthyCount.textContent = configured === undefined ? healthy.toString() : `${healthy.toString()} of ${configured.toString()}`
-	const quorum = health.requiredReadQuorum
-	rpcRequiredQuorum.textContent = quorum === undefined ? '—' : `${quorum.toString()} endpoint${quorum === 1 ? '' : 's'}`
-	const chain = value.chainId === undefined ? 'configured chain' : `chain ${String(value.chainId)}`
-	if (health.chainReady === true) rpcChainReadiness.textContent = `Ready for ${chain}`
-	else if (health.chainReady === false) rpcChainReadiness.textContent = `Not ready for ${chain}`
-	else rpcChainReadiness.textContent = 'Not yet verified'
-	rpcLastCheck.textContent = health.lastCheckedAt === undefined ? 'No completed check' : formatDate(health.lastCheckedAt)
-}
-
-function renderUnavailableRpcHealth(previousResultIsStale: boolean) {
-	rpcHealthRetryButton.classList.remove('hidden')
-	setBadge(rpcHealthStatus, 'Health unavailable', 'warning')
-	rpcConfiguredTotal.textContent = '—'
-	rpcHealthyCount.textContent = '—'
-	rpcRequiredQuorum.textContent = '—'
-	rpcChainReadiness.textContent = 'Unavailable until state refresh succeeds'
-	rpcLastCheck.textContent = previousResultIsStale ? 'Previous health result is stale' : 'No current health result'
-}
-
-function originCount(value: number | undefined) {
-	return value === undefined ? '—' : `${value.toString()} origin${value === 1 ? '' : 's'}`
-}
-
-function renderSubmissionHealth(health: SubmissionHealth) {
-	if (health.status === 'ready') setBadge(submissionHealthStatus, 'Path ready', 'success')
-	else if (health.status === 'degraded') setBadge(submissionHealthStatus, 'Path blocked', 'error')
-	else if (health.status === 'stale') setBadge(submissionHealthStatus, 'Evidence stale', 'warning')
-	else if (health.status === 'not-checked') setBadge(submissionHealthStatus, 'Awaiting path check', 'warning')
-	else setBadge(submissionHealthStatus, 'Path not configured', 'neutral')
-	if (health.mode === 'private') submissionMode.textContent = 'Private relay'
-	else if (health.mode === 'public') submissionMode.textContent = 'Public RPC'
-	else submissionMode.textContent = '—'
-	const configured = health.configuredOriginCount
-	const healthy = health.healthyOriginCount
-	if (healthy === undefined) submissionHealthyCount.textContent = '—'
-	else if (configured === undefined) submissionHealthyCount.textContent = originCount(healthy)
-	else submissionHealthyCount.textContent = `${healthy.toString()} of ${configured.toString()} origins`
-	submissionRequiredThreshold.textContent = originCount(health.requiredHealthyOriginCount)
-	const checked = health.checkedOriginCount
-	const fresh = health.freshOriginCount
-	submissionFreshness.textContent = checked === undefined || fresh === undefined ? 'Not yet verified' : `${fresh.toString()} fresh of ${checked.toString()} checked`
-	if (health.mode !== 'private') submissionSignerProof.textContent = 'Not required'
-	else if (health.proofMatchesSigner === true) submissionSignerProof.textContent = 'Matches current signer'
-	else if (health.proofMatchesSigner === false) submissionSignerProof.textContent = 'Does not match current signer'
-	else submissionSignerProof.textContent = 'Not yet proven'
-	submissionLastCheck.textContent = health.lastCheckedAt === undefined ? 'No completed check' : formatDate(health.lastCheckedAt)
-}
-
-function renderUnavailableSubmissionHealth(previousResultIsStale: boolean) {
-	setBadge(submissionHealthStatus, 'Path unavailable', 'warning')
-	submissionMode.textContent = '—'
-	submissionHealthyCount.textContent = '—'
-	submissionRequiredThreshold.textContent = '—'
-	submissionFreshness.textContent = previousResultIsStale ? 'Previous readiness is stale' : 'Unavailable until state refresh succeeds'
-	submissionSignerProof.textContent = 'Not yet proven'
-	submissionLastCheck.textContent = 'No current path result'
-}
-
 function renderRepBalances(values: RepBalance[]) {
 	if (values.length === 0) {
 		repBalances.className = 'token-list empty-state'
@@ -1054,7 +984,7 @@ function renderRepBalances(values: RepBalance[]) {
 		const identity = node('div')
 		identity.append(node('strong', undefined, value.symbol ?? 'REP'))
 		identity.append(node('small', 'mono', value.universeId === undefined ? (value.token ?? '—') : `Universe ${value.universeId}`))
-		row.append(identity, node('strong', 'mono', formatAtomic18(value.balance)))
+		row.append(identity, node('strong', 'mono', formatAtomicAmount(value.balance, value.symbol ?? 'REP')))
 		return row
 	})
 	repBalances.replaceChildren(...rows)
@@ -1372,7 +1302,13 @@ function renderRecovery(value: Snapshot) {
 	pendingCount.textContent = value.pendingTransactions.length.toString()
 	obligationCount.textContent = value.obligations.length.toString()
 	obligationFields.disabled = value.paused !== true || value.obligations.length === 0
-	workflowFields.disabled = value.paused !== true || value.currentWorkflow?.classification !== 'selectable' || value.currentWorkflow.status !== 'waiting-continuation'
+	const recoverableWorkflow = value.currentWorkflow?.classification === 'selectable' && value.currentWorkflow.status === 'waiting-continuation' ? value.currentWorkflow : undefined
+	workflowRecoveryPanel.hidden = recoverableWorkflow === undefined
+	workflowFields.disabled = value.paused !== true || recoverableWorkflow === undefined
+	if (recoverableWorkflow !== undefined) {
+		const label = recoverableWorkflow.label ?? recoverableWorkflow.operationId ?? 'Partial workflow'
+		workflowRecoverySummary.replaceChildren(node('strong', undefined, label), node('span', 'badge warning', statusLabel(recoverableWorkflow.status)), node('p', 'muted', `Workflow ${recoverableWorkflow.id ?? 'ID unavailable'} · ${recoverableWorkflow.operationId ?? 'Operation unavailable'}`))
+	}
 	const selectedObligation = obligationIdInput.value
 	obligationIdInput.replaceChildren(
 		...value.obligations.map(obligation => {
@@ -1389,6 +1325,11 @@ function renderRecovery(value: Snapshot) {
 	cancellationFields.disabled = value.paused !== true || value.pendingTransactions.length !== 1 || value.pendingTransactions[0]?.replacementHash !== undefined
 	const queuedCandidate = value.pendingTransactions[0]?.replacementHash ?? value.pendingTransactions[0]?.cancellationHash
 	candidateFields.disabled = value.paused !== true || queuedCandidate === undefined
+	replacementForm.hidden = value.pendingTransactions.length !== 1 || value.pendingTransactions[0]?.cancellationHash !== undefined
+	cancellationForm.hidden = value.pendingTransactions.length !== 1 || value.pendingTransactions[0]?.replacementHash !== undefined
+	candidateForm.hidden = queuedCandidate === undefined
+	workflowForm.hidden = recoverableWorkflow === undefined
+	obligationForm.hidden = value.obligations.length === 0
 	if (value.pendingTransactions.length === 0) {
 		pendingTransactions.className = 'stack-list empty-state'
 		pendingTransactions.textContent = 'No transaction requires confirmation.'
@@ -1622,6 +1563,16 @@ function refresh() {
 			globalError.classList.add('hidden')
 			settleRecoveryContextRefreshes(snapshot)
 		} else {
+			if (snapshot !== undefined)
+				renderOperatorHealth(element('operator-health', HTMLDivElement), {
+					mode: snapshot.execute === true ? 'Live armed' : 'Dry run',
+					lastScanAt: snapshot.lastScanAt,
+					capitalAtRisk: configuration?.maximumEthPerOperation === undefined ? 'Unavailable' : `Unknown / ${configuration.maximumEthPerOperation} ETH per operation`,
+					recoveryItems: recoveryItemCount(snapshot),
+					lastAction: snapshot.activities[0]?.label ?? snapshot.activities[0]?.summary ?? 'No action yet',
+					paused: snapshot.paused === true || snapshot.safetyPaused === true,
+					stale: true,
+				})
 			renderUnavailableRpcHealth(snapshot !== undefined)
 			renderUnavailableSubmissionHealth(snapshot !== undefined)
 			globalError.textContent = stateResult.reason instanceof Error ? stateResult.reason.message : 'Dashboard state is unavailable.'
@@ -2170,6 +2121,15 @@ settingsForm.addEventListener('submit', event => {
 			const minimumEthReserve = parseReserve(reserveEthInput, 'ETH reserve', live ? 'live-reserve' : 'non-negative')
 			const minimumRepReserve = parseReserve(reserveRepInput, 'REP reserve', live ? 'live-reserve' : 'non-negative')
 			if (live && decimalAtto(minimumEthReserve) < decimalAtto(maximumGasCostEth)) throw new Error('ETH reserve must retain at least one maximum-gas-cost-sized safety floor.')
+			const riskChanges = [
+				{ label: 'Maximum ETH / operation', before: `${configuration.maximumEthPerOperation ?? '—'} ETH`, after: `${maximumEthPerOperation} ETH` },
+				{ label: 'Maximum gas cost', before: `${configuration.maximumGasCostEth ?? '—'} ETH`, after: `${maximumGasCostEth} ETH` },
+				{ label: 'Maximum REP / operation', before: `${configuration.maximumRepPerOperation ?? '—'} REP`, after: `${maximumRepPerOperation} REP` },
+				{ label: 'ETH reserve', before: `${configuration.minimumEthReserve ?? '—'} ETH`, after: `${minimumEthReserve} ETH` },
+				{ label: 'REP reserve', before: `${configuration.minimumRepReserve ?? '—'} REP`, after: `${minimumRepReserve} REP` },
+				{ label: 'Irreversible operations', before: configuration.allowIrreversibleOperations === true ? 'Allowed' : 'Blocked', after: irreversibleInput.checked ? 'Allowed' : 'Blocked' },
+			].filter(change => change.before !== change.after)
+			if (riskChanges.length > 0 && !(await confirmOperatorAction({ title: 'Review execution policy', description: 'These limits and permissions apply before the next selection cycle.', changes: riskChanges, confirmLabel: 'Save policy' }))) return
 			await put('/api/settings', {
 				revision: settingsRevision,
 				patch: {
@@ -2247,6 +2207,7 @@ signerForm.addEventListener('submit', event => {
 
 clearSignerButton.addEventListener('click', () => {
 	void (async () => {
+		if (!(await confirmOperatorAction({ title: 'Clear signer', description: 'Remove the active signer and saved private key from this bot.', phrase: 'CLEAR SIGNER', confirmLabel: 'Clear signer' }))) return
 		signerFields.disabled = true
 		signerStatus.textContent = 'Clearing signer…'
 		let mutationReconciled = true

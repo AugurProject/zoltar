@@ -141,7 +141,7 @@ test('serves dashboard state and protects mutable controls with same-origin JSON
 	expect(pageSource).not.toContain('>Starting<')
 	expect(pageSource).toContain('id="mode-badge" class="badge loading">Mode —</span>')
 	expect(pageSource).toContain('id="run-status-badge" class="badge loading">Run —</span>')
-	expect(pageSource).toContain('id="retry-status-badge" class="badge badge-warning" hidden>Retry —</span>')
+	expect(pageSource).toContain('id="retry-status-badge" class="badge warning" hidden>Retry —</span>')
 	expect(pageSource).toContain('id="status-value">—</strong>')
 	expect(pageSource).toContain('id="pause-button" class="button" type="button" disabled')
 	expect(pageSource).toContain('id="resume-dialog"')

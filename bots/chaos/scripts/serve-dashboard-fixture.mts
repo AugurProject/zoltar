@@ -93,7 +93,7 @@ function state() {
 						type: 'discovery',
 					})),
 				],
-		alerts: safetyRecovery ? [{ message: 'Safety pause is latched; review the failure activity and current recovery state before explicitly resuming execution', severity: 'error' }] : [],
+		alerts: safetyRecovery ? [{ message: 'Safety pause is latched; review the failure activity and current recovery state before explicitly resuming execution', severity: 'error', actionHref: '/recovery', actionLabel: 'Review recovery' }] : [],
 		chainId: 11_155_111,
 		error: undefined,
 		evaluations: evaluations(),
@@ -219,7 +219,7 @@ function state() {
 	}
 }
 
-const server = startDashboardServer(4193, {
+const server = startDashboardServer(Number(process.env['DASHBOARD_FIXTURE_PORT'] ?? '4193'), {
 	getConfiguration: () => ({
 		revision: `fixture-${revisionNumber.toString()}`,
 		settings: settings(),

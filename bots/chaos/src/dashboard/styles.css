@@ -1,15 +1,4 @@
 :root {
-	--operator-background: #090b0d;
-	--operator-surface: #111519;
-	--operator-surface-raised: #171c21;
-	--operator-border: #2b3239;
-	--operator-text: #f1f5f4;
-	--operator-muted: #9aa7a5;
-	--operator-accent: #77e0b5;
-	--operator-accent-strong: #31bd89;
-	--operator-warning: #f6be5a;
-	--operator-error: #ff756f;
-	--operator-info: #73b7ff;
 	font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 	color: var(--operator-text);
 	background: var(--operator-background);
@@ -182,47 +171,6 @@ h3 {
 
 .topbar-actions {
 	flex-wrap: wrap;
-}
-
-.badge {
-	display: inline-flex;
-	align-items: center;
-	justify-content: center;
-	min-height: 1.85rem;
-	padding: 0.25rem 0.65rem;
-	border: 1px solid var(--operator-border);
-	border-radius: 99rem;
-	background: var(--operator-surface-raised);
-	color: var(--operator-muted);
-	font-size: 0.76rem;
-	font-weight: 750;
-	line-height: 1.2;
-	text-decoration: none;
-	white-space: nowrap;
-}
-
-.badge.success {
-	border-color: rgb(119 224 181 / 38%);
-	background: rgb(119 224 181 / 10%);
-	color: var(--operator-accent);
-}
-
-.badge.warning {
-	border-color: rgb(246 190 90 / 42%);
-	background: rgb(246 190 90 / 11%);
-	color: var(--operator-warning);
-}
-
-.badge.error {
-	border-color: rgb(255 117 111 / 42%);
-	background: rgb(255 117 111 / 10%);
-	color: var(--operator-error);
-}
-
-.badge.info {
-	border-color: rgb(115 183 255 / 42%);
-	background: rgb(115 183 255 / 10%);
-	color: var(--operator-info);
 }
 
 .action-status {
@@ -522,9 +470,31 @@ dd {
 }
 
 .reconciliation-form {
+	display: grid;
 	margin-top: 1rem;
 	padding-top: 1rem;
 	border-top: 1px solid var(--operator-border);
+}
+
+.reconciliation-form[hidden] {
+	display: none;
+}
+
+.workflow-recovery-panel[hidden] {
+	display: none;
+}
+
+.workflow-recovery-summary {
+	display: flex;
+	align-items: center;
+	flex-wrap: wrap;
+	gap: 0.5rem;
+	overflow-wrap: anywhere;
+}
+
+.workflow-recovery-summary p {
+	flex-basis: 100%;
+	margin: 0;
 }
 
 .reconciliation-form fieldset {

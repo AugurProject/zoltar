@@ -3,6 +3,8 @@ import type { SettlementSettings } from '#state/settlement-store'
 import type { QueuedSettingsSection, StrategySettings } from '#state/operator-state'
 import type { SubmissionSettings } from '#execution/transaction-submission'
 import { urlLines } from '@zoltar/bot-shared/dashboard/forms'
+import { nonnegativeAtomicValue } from '@zoltar/bot-shared/dashboard/amount'
+import { confirmOperatorAction, reviewChangeRows } from '@zoltar/bot-shared/dashboard/confirmation'
 import { decodeCentralizedMarkets, decodeDeployment, decodeExecution, decodeRuntimeLimits, decodeSettings, decodeSettlement, decodeSubmission, type DashboardDeployment } from './api-validation.ts'
 import { element, setText } from './dom.js'
 import { createFocusedFormSubmitter, onFormSubmit } from '@zoltar/bot-shared/dashboard/focused-form'
@@ -25,6 +27,10 @@ const loaded: { deployment: DashboardDeployment | undefined; execute: boolean; r
 	rpcQuorum: 1,
 	submissionMode: 'public',
 }
+let loadedRuntime: StoredRuntimeLimits | undefined
+let loadedStrategy: StrategySettings | undefined
+let loadedSettlement: SettlementSettings | undefined
+let loadedMarkets: Record<string, unknown> | undefined
 
 export function goLiveConfiguration(): GoLiveConfiguration | undefined {
 	if (loaded.deployment === undefined) return undefined
@@ -43,6 +49,7 @@ function input(name: keyof StrategySettings) {
 }
 
 export function loadSettings(settings: StrategySettings) {
+	loadedStrategy = settings
 	input('minimumProfitWeth').value = settings.minimumProfitWeth
 	input('minimumProfitBps').value = settings.minimumProfitBps
 	input('maxSpotTwapTicks').value = settings.maxSpotTwapTicks
@@ -101,6 +108,7 @@ function runtimeInput(name: RuntimeLimitField) {
 }
 
 export function loadRuntimeLimits(runtime: StoredRuntimeLimits) {
+	loadedRuntime = runtime
 	runtimeInput('maxPositionNotionalWeth').value = runtime.riskLimits.maxPositionNotionalWeth
 	runtimeInput('maxTotalLockedWeth').value = runtime.riskLimits.maxTotalLockedWeth
 	runtimeInput('maxConcurrentPositions').value = runtime.riskLimits.maxConcurrentPositions.toString()
@@ -121,6 +129,7 @@ function settlementInput(name: 'settlementMinimumProfitWeth' | 'settlementMaxGas
 export let savedSettlementEnabled = false
 
 export function loadSettlement(settlement: SettlementSettings) {
+	loadedSettlement = settlement
 	savedSettlementEnabled = settlement.enabled
 	element('settlement-enabled', HTMLInputElement).checked = settlement.enabled
 	settlementInput('settlementMinimumProfitWeth').value = settlement.minimumProfitWeth
@@ -137,6 +146,7 @@ export function loadExecutionMode(execute: boolean) {
 }
 
 export function loadCentralizedMarkets(centralizedMarkets: Record<string, unknown>) {
+	loadedMarkets = centralizedMarkets
 	loadMarketSources(centralizedMarkets)
 	markFormClean('market-form')
 }
@@ -176,6 +186,8 @@ export function registerFocusedSettingsForms({ api, refresh, syncControls }: Foc
 				pollMilliseconds: Number(input('pollMilliseconds').value),
 				twapSeconds: Number(input('twapSeconds').value),
 			} satisfies StrategySettings
+			nonnegativeAtomicValue(settings.minimumProfitWeth, 'WETH')
+			if (loadedStrategy !== undefined && !(await confirmOperatorAction({ title: 'Review strategy', description: 'Profit and timing settings change which transactions the bot may submit.', changes: reviewChangeRows(loadedStrategy, settings), confirmLabel: 'Save strategy' }))) return 'Save canceled.'
 			loadSettings(decodeSettings(await put('/api/settings', settings)).settings)
 			return 'Strategy saved.'
 		})
@@ -194,21 +206,38 @@ export function registerFocusedSettingsForms({ api, refresh, syncControls }: Foc
 	})
 
 	onFormSubmit(element('runtime-form', HTMLFormElement), () => {
-		void submitFocusedForm('runtime-form', 'runtime-status', 'Saving risk limits…', async () => {
-			const runtime = {
-				lookbackBlocks: runtimeInput('lookbackBlocks').value,
-				maxHedgeSlippageBps: runtimeInput('maxHedgeSlippageBps').value,
-				riskLimits: {
-					lifecycleGasReserveWeth: runtimeInput('lifecycleGasReserveWeth').value,
-					maxConcurrentPositions: Number(runtimeInput('maxConcurrentPositions').value),
-					maxDailyGasSpendWeth: runtimeInput('maxDailyGasSpendWeth').value,
-					maxPositionNotionalWeth: runtimeInput('maxPositionNotionalWeth').value,
-					maxTotalLockedWeth: runtimeInput('maxTotalLockedWeth').value,
-				},
-			} satisfies StoredRuntimeLimits
-			loadRuntimeLimits(decodeRuntimeLimits(await put('/api/runtime-limits', runtime)).runtime)
-			return 'Risk limits saved.'
-		})
+		void (async () => {
+			const saved = loadedRuntime
+			if (saved === undefined) return
+			const riskFields = ['lifecycleGasReserveWeth', 'maxConcurrentPositions', 'maxDailyGasSpendWeth', 'maxPositionNotionalWeth', 'maxTotalLockedWeth'] as const
+			for (const field of riskFields) {
+				if (field !== 'maxConcurrentPositions') nonnegativeAtomicValue(runtimeInput(field).value, 'WETH')
+			}
+			const positionLimit = nonnegativeAtomicValue(runtimeInput('maxPositionNotionalWeth').value, 'WETH')
+			const totalLimit = nonnegativeAtomicValue(runtimeInput('maxTotalLockedWeth').value, 'WETH')
+			if (positionLimit > totalLimit) throw new Error('Per-position WETH limit cannot exceed the total locked WETH limit.')
+			const changes = riskFields.flatMap(field => {
+				const before = String(saved.riskLimits[field])
+				const after = runtimeInput(field).value
+				return before === after ? [] : [{ label: field.replace(/([A-Z])/g, ' $1'), before: `${before} ${field === 'maxConcurrentPositions' ? 'positions' : 'WETH'}`, after: `${after} ${field === 'maxConcurrentPositions' ? 'positions' : 'WETH'}` }]
+			})
+			if (changes.length > 0 && !(await confirmOperatorAction({ title: 'Review risk limits', description: 'These limits govern the next scan and live execution.', changes, confirmLabel: 'Save risk limits' }))) return
+			await submitFocusedForm('runtime-form', 'runtime-status', 'Saving risk limits…', async () => {
+				const runtime = {
+					lookbackBlocks: runtimeInput('lookbackBlocks').value,
+					maxHedgeSlippageBps: runtimeInput('maxHedgeSlippageBps').value,
+					riskLimits: {
+						lifecycleGasReserveWeth: runtimeInput('lifecycleGasReserveWeth').value,
+						maxConcurrentPositions: Number(runtimeInput('maxConcurrentPositions').value),
+						maxDailyGasSpendWeth: runtimeInput('maxDailyGasSpendWeth').value,
+						maxPositionNotionalWeth: runtimeInput('maxPositionNotionalWeth').value,
+						maxTotalLockedWeth: runtimeInput('maxTotalLockedWeth').value,
+					},
+				} satisfies StoredRuntimeLimits
+				loadRuntimeLimits(decodeRuntimeLimits(await put('/api/runtime-limits', runtime)).runtime)
+				return 'Risk limits saved.'
+			})
+		})().catch(error => setText('runtime-status', error instanceof Error ? error.message : 'Risk limits are invalid.'))
 	})
 
 	onFormSubmit(element('settlement-form', HTMLFormElement), () => {
@@ -219,6 +248,12 @@ export function registerFocusedSettingsForms({ api, refresh, syncControls }: Foc
 				minimumProfitWeth: settlementInput('settlementMinimumProfitWeth').value,
 				rewardWithdrawThresholdEth: settlementInput('settlementRewardWithdrawThresholdEth').value,
 			} satisfies SettlementSettings
+			const threshold = nonnegativeAtomicValue(settlement.rewardWithdrawThresholdEth, 'ETH')
+			if (threshold === 0n || threshold > 100n * 10n ** 18n) throw new Error('Settlement rewardWithdrawThresholdEth must be from 0.000000000000000001 to 100')
+			if (nonnegativeAtomicValue(settlement.minimumProfitWeth, 'WETH') > 10n ** 18n) throw new Error('Settlement minimumProfitWeth must be from 0 to 1')
+			const gasPrice = nonnegativeAtomicValue(settlement.maxGasPriceNanoEth, 'nanoETH', 9)
+			if (gasPrice === 0n || gasPrice > 10000n * 10n ** 9n) throw new Error('Settlement maxGasPriceNanoEth must be from 0.000000001 to 10000')
+			if (loadedSettlement !== undefined && !(await confirmOperatorAction({ title: 'Review settlement', description: 'These thresholds control settlement transactions and reward withdrawals.', changes: reviewChangeRows(loadedSettlement, settlement), confirmLabel: 'Save settlement' }))) return 'Save canceled.'
 			const response = decodeSettlement(await put('/api/settlement', settlement))
 			loadSettlement(response.settlement)
 			return `Settlement ${response.settlement.enabled ? 'enabled' : 'disabled'}.`
@@ -244,7 +279,9 @@ export function registerFocusedSettingsForms({ api, refresh, syncControls }: Foc
 
 	onFormSubmit(element('market-form', HTMLFormElement), () => {
 		void submitFocusedForm('market-form', 'market-status', 'Validating market sources…', async () => {
-			loadCentralizedMarkets(decodeCentralizedMarkets(await put('/api/centralized-markets', marketSourcesDocument())).centralizedMarkets)
+			const markets = marketSourcesDocument()
+			if (loadedMarkets !== undefined && !(await confirmOperatorAction({ title: 'Review market sources', description: 'Source and consensus changes affect which opportunities can authorize execution.', changes: reviewChangeRows(loadedMarkets, markets), confirmLabel: 'Save market sources' }))) return 'Save canceled.'
+			loadCentralizedMarkets(decodeCentralizedMarkets(await put('/api/centralized-markets', markets)).centralizedMarkets)
 			return 'Market sources saved.'
 		})
 	})

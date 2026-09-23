@@ -27,6 +27,7 @@
 						<h2 id="overview-title">Overview</h2>
 					</div>
 				</div>
+				<div id="operator-health"></div>
 
 				<div class="overview-layout">
 					<article class="panel schedule-panel">
@@ -149,42 +150,6 @@
 						<p class="rpc-health-note muted">Only origin counts and proof state are shown. Relay and RPC identities remain in protected bot logs.</p>
 					</article>
 				</div>
-				<article class="panel retirement-panel" aria-labelledby="retirement-title">
-					<div class="panel-heading">
-						<div>
-							<p class="eyebrow">Durable shutdown</p>
-							<h3 id="retirement-title">Drain &amp; Retire</h3>
-						</div>
-						<span id="retirement-status" class="badge neutral">Inactive</span>
-					</div>
-					<p id="retirement-summary" class="muted">No retirement has been requested.</p>
-					<form id="retirement-form">
-						<label>Recipient <input id="retirement-recipient" required autocomplete="off" placeholder="0x…" /></label>
-						<label>Maximum unmatched-share loss (bps) <input id="retirement-max-loss" type="number" min="0" max="10000" value="0" /></label>
-						<label><input id="retirement-exit-unmatched" type="checkbox" /> Exit unmatched shares within the loss limit</label>
-						<label><input id="retirement-migrate-claims" type="checkbox" /> Permit migration required to recover existing claims</label>
-						<label><input id="retirement-exit-after" type="checkbox" /> Exit the process after proven completion</label>
-						<label>Typed confirmation <input id="retirement-confirmation" required autocomplete="off" /></label>
-						<div class="dialog-actions"><button id="retirement-request" type="submit">Request drain</button><button id="retirement-cancel" class="secondary" type="button">Cancel drain</button></div>
-						<span id="retirement-action-status" class="action-status" role="alert"></span>
-					</form>
-					<details>
-						<summary>Register a verified legacy V3 position</summary>
-						<form id="retirement-v3-form" class="reconciliation-form">
-							<label>Owner <input id="retirement-v3-owner" required /></label><label>Pool <input id="retirement-v3-pool" required /></label> <label>Token 0 <input id="retirement-v3-token0" required /></label><label>Token 1 <input id="retirement-v3-token1" required /></label> <label>Fee tier <input id="retirement-v3-fee" type="number" value="3000" required /></label><label>Lower tick <input id="retirement-v3-lower" type="number" required /></label> <label>Upper tick <input id="retirement-v3-upper" type="number" required /></label><label>Receipt/workflow reference <input id="retirement-v3-workflow" required /></label> <label>Typed confirmation <input id="retirement-v3-confirmation" required /></label><button type="submit">Register position</button>
-						</form>
-					</details>
-					<details>
-						<summary>Accept residuals for profile replacement</summary>
-						<form id="retirement-residual-form" class="reconciliation-form">
-							<label>Target deployment profile <input id="retirement-residual-target-profile" required autocomplete="off" /></label>
-							<label>Review rationale <textarea id="retirement-residual-reason" required minlength="12" maxlength="2048"></textarea></label>
-							<label>Typed confirmation <input id="retirement-residual-confirmation" required autocomplete="off" placeholder="ACCEPT RESIDUALS FOR profile:id" /></label>
-							<button id="retirement-residual-submit" type="submit" disabled>Accept residuals</button>
-						</form>
-					</details>
-				</article>
-
 				<div class="two-column">
 					<article class="panel">
 						<div class="panel-heading">
@@ -211,8 +176,9 @@
 					<div class="panel-heading">
 						<div>
 							<p class="eyebrow">Newest first</p>
-							<h3>Recent activity</h3>
-						</div>
+						<h3>Recent activity</h3>
+					</div>
+						<label>Filter <select id="activity-filter"><option value="all">All activity</option><option value="failed">Failures</option><option value="pending">Pending</option><option value="dry-run">Dry run</option><option value="confirmed">Confirmed</option></select></label>
 					</div>
 					<ol id="activity-list" class="timeline">
 						<li class="empty-state">No activity recorded.</li>
@@ -316,9 +282,23 @@
 					<div>
 						<p class="eyebrow">Recovery before novelty</p>
 						<h2 id="recovery-title">Recovery</h2>
-						<p class="lede">Pending nonces and deadline-bound obligations take priority over the random scheduler.</p>
+						<p class="lede">Resolve workflows, pending transactions, and lifecycle obligations before scheduling new work.</p>
 					</div>
 				</div>
+				<article id="workflow-recovery-panel" class="panel workflow-recovery-panel" hidden>
+					<div class="panel-heading"><h3>Current workflow</h3></div>
+					<div id="workflow-recovery-summary" class="workflow-recovery-summary"></div>
+					<form id="workflow-form" class="reconciliation-form" hidden>
+						<fieldset id="workflow-fields" disabled>
+							<p class="muted">If a partial random workflow can no longer produce its exact canonical continuation, abandonment transfers responsibility to the operator and starts a fresh randomized wait.</p>
+							<label>Audit reason<textarea id="workflow-reason" minlength="12" maxlength="2048" required></textarea></label>
+							<label>Typed confirmation<input id="workflow-confirmation" autocomplete="off" spellcheck="false" type="text" placeholder="ABANDON PARTIAL WORKFLOW" /></label>
+							<div class="form-actions"><button type="submit">Abandon partial workflow</button></div>
+						</fieldset>
+						<div class="recovery-status-row"><span id="workflow-status" class="action-status" role="alert"></span><button id="workflow-retry" class="secondary recovery-context-retry hidden" type="button" aria-describedby="workflow-status">Retry</button></div>
+					</form>
+				</article>
+
 				<div class="two-column recovery-columns">
 					<article class="panel">
 						<div class="panel-heading">
@@ -326,7 +306,7 @@
 							<span id="pending-count" class="badge neutral">0</span>
 						</div>
 						<div id="pending-transactions" class="stack-list empty-state">No transaction requires confirmation.</div>
-						<form id="replacement-form" class="reconciliation-form">
+						<form id="replacement-form" class="reconciliation-form" hidden>
 							<fieldset id="replacement-fields" disabled>
 								<label
 									>Verified replacement transaction hash
@@ -337,7 +317,7 @@
 							</fieldset>
 							<div class="recovery-status-row"><span id="replacement-status" class="action-status" role="alert"></span><button id="replacement-retry" class="secondary recovery-context-retry hidden" type="button" aria-describedby="replacement-status">Retry</button></div>
 						</form>
-						<form id="cancellation-form" class="reconciliation-form">
+						<form id="cancellation-form" class="reconciliation-form" hidden>
 							<fieldset id="cancellation-fields" disabled>
 								<p class="muted">Use only after manually sending a zero-value, empty-calldata self-transfer from the recovery signer at the exact pending nonce. The bot requires quorum identity checks and a successful receipt in a canonical block.</p>
 								<label>Nonce cancellation transaction hash<input id="cancellation-hash" autocomplete="off" placeholder="0x…" spellcheck="false" type="text" /></label>
@@ -347,7 +327,7 @@
 							</fieldset>
 							<div class="recovery-status-row"><span id="cancellation-status" class="action-status" role="alert"></span><button id="cancellation-retry" class="secondary recovery-context-retry hidden" type="button" aria-describedby="cancellation-status">Retry</button></div>
 						</form>
-						<form id="candidate-form" class="reconciliation-form">
+						<form id="candidate-form" class="reconciliation-form" hidden>
 							<fieldset id="candidate-fields" disabled>
 								<p class="muted">A mistyped or stale replacement/cancellation hash can be cleared without changing the original signed intent.</p>
 								<label>Audit reason<textarea id="candidate-reason" minlength="12" maxlength="2048" required></textarea></label>
@@ -356,15 +336,6 @@
 							</fieldset>
 							<div class="recovery-status-row"><span id="candidate-status" class="action-status" role="alert"></span><button id="candidate-retry" class="secondary recovery-context-retry hidden" type="button" aria-describedby="candidate-status">Retry</button></div>
 						</form>
-						<form id="workflow-form" class="reconciliation-form">
-							<fieldset id="workflow-fields" disabled>
-								<p class="muted">If a partial random workflow can no longer produce its exact canonical continuation, abandonment transfers responsibility to the operator and starts a fresh randomized wait.</p>
-								<label>Audit reason<textarea id="workflow-reason" minlength="12" maxlength="2048" required></textarea></label>
-								<label>Typed confirmation<input id="workflow-confirmation" autocomplete="off" spellcheck="false" type="text" placeholder="ABANDON PARTIAL WORKFLOW" /></label>
-								<div class="form-actions"><button type="submit">Abandon partial workflow</button></div>
-							</fieldset>
-							<div class="recovery-status-row"><span id="workflow-status" class="action-status" role="alert"></span><button id="workflow-retry" class="secondary recovery-context-retry hidden" type="button" aria-describedby="workflow-status">Retry</button></div>
-						</form>
 					</article>
 					<article class="panel">
 						<div class="panel-heading">
@@ -372,7 +343,7 @@
 							<span id="obligation-count" class="badge neutral">0</span>
 						</div>
 						<div id="obligations" class="stack-list empty-state">No follow-up obligation is due.</div>
-						<form id="obligation-form" class="reconciliation-form">
+						<form id="obligation-form" class="reconciliation-form" hidden>
 							<fieldset id="obligation-fields" disabled>
 								<label>Lifecycle item<select id="obligation-id"></select></label>
 								<label
@@ -391,6 +362,43 @@
 						</form>
 					</article>
 				</div>
+
+				<article class="panel retirement-panel" aria-labelledby="retirement-title">
+					<div class="panel-heading">
+						<div>
+							<p class="eyebrow">Durable shutdown</p>
+							<h3 id="retirement-title">Drain &amp; Retire</h3>
+						</div>
+						<span id="retirement-status" class="badge neutral">Inactive</span>
+						<button id="retirement-start" class="secondary" type="button">Start drain</button>
+					</div>
+					<p id="retirement-summary" class="muted">No retirement has been requested.</p>
+					<form id="retirement-form" hidden>
+						<label>Recipient <input id="retirement-recipient" required autocomplete="off" placeholder="0x…" /></label>
+						<label>Maximum unmatched-share loss (bps) <input id="retirement-max-loss" type="number" min="0" max="10000" value="0" /></label>
+						<label><input id="retirement-exit-unmatched" type="checkbox" /> Exit unmatched shares within the loss limit</label>
+						<label><input id="retirement-migrate-claims" type="checkbox" /> Permit migration required to recover existing claims</label>
+						<label><input id="retirement-exit-after" type="checkbox" /> Exit the process after proven completion</label>
+						<input id="retirement-confirmation" type="hidden" />
+						<div class="dialog-actions"><button id="retirement-request" type="submit">Request drain</button><button id="retirement-cancel" class="secondary" type="button">Cancel drain</button></div>
+						<span id="retirement-action-status" class="action-status" role="alert"></span>
+					</form>
+					<details>
+						<summary>Register a verified legacy V3 position</summary>
+						<form id="retirement-v3-form" class="reconciliation-form">
+							<label>Owner <input id="retirement-v3-owner" required /></label><label>Pool <input id="retirement-v3-pool" required /></label> <label>Token 0 <input id="retirement-v3-token0" required /></label><label>Token 1 <input id="retirement-v3-token1" required /></label> <label>Fee tier <input id="retirement-v3-fee" type="number" value="3000" required /></label><label>Lower tick <input id="retirement-v3-lower" type="number" required /></label> <label>Upper tick <input id="retirement-v3-upper" type="number" required /></label><label>Receipt/workflow reference <input id="retirement-v3-workflow" required /></label> <input id="retirement-v3-confirmation" type="hidden" /><button type="submit">Register position</button>
+						</form>
+					</details>
+					<details>
+						<summary>Accept residuals for profile replacement</summary>
+						<form id="retirement-residual-form" class="reconciliation-form">
+							<label>Target deployment profile <input id="retirement-residual-target-profile" required autocomplete="off" /></label>
+							<label>Review rationale <textarea id="retirement-residual-reason" required minlength="12" maxlength="2048"></textarea></label>
+							<input id="retirement-residual-confirmation" type="hidden" />
+							<button id="retirement-residual-submit" type="submit" disabled>Accept residuals</button>
+						</form>
+					</details>
+				</article>
 			</section>
 
 			<!-- settings-page -->
@@ -409,7 +417,6 @@
 			</div>
 		</dialog>
 
-		<script src="/formatting.js"></script>
 		<script type="module" src="/dashboard.js"></script>
 	</body>
 </html>

@@ -12,7 +12,6 @@ const sourceByPath = new Map([
 	['/dom.js', 'dom.ts'],
 	['/activity-timeline.js', 'activity-timeline.ts'],
 	['/pending-transaction-summary.js', 'pending-transaction-summary.ts'],
-	['/formatting.js', 'formatting.ts'],
 	['/operator-alerts.js', 'operator-alerts.ts'],
 ])
 

@@ -11,6 +11,9 @@
 		"./contracts/abi": "./src/contracts/abi.generated.ts",
 		"./config/signer": "./src/config/signer.ts",
 		"./dashboard/assets": "./src/dashboard/assets.ts",
+		"./dashboard/amount": "./src/dashboard/amount.ts",
+		"./dashboard/health-panel": "./src/dashboard/health-panel.ts",
+		"./dashboard/confirmation": "./src/dashboard/confirmation.ts",
 		"./dashboard/rep-market-consensus": "./src/dashboard/rep-market-consensus.ts",
 		"./dashboard/rpc-connectivity": "./src/dashboard/rpc-connectivity.ts",
 		"./dashboard/components": "./src/dashboard/components.ts",
@@ -65,7 +68,9 @@
 		"typecheck": "bun run ensure-contract-artifacts && bun x tsc --project tsconfig.json --noEmit"
 	},
 	"dependencies": {
-		"@zoltar/core-shared": "workspace:1.0.0"
+		"@zoltar/core-shared": "workspace:1.0.0",
+		"@zoltar/ui-core-shared": "workspace:1.0.0",
+		"preact": "10.26.4"
 	},
 	"devDependencies": {
 		"@biomejs/biome": "2.3.11",

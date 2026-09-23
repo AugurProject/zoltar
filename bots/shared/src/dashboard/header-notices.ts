@@ -4,8 +4,9 @@ function initializeHeaderNotices() {
 	const count = document.getElementById('header-notices-count')
 	const empty = document.getElementById('header-notices-empty')
 	const status = document.getElementById('header-notices-status')
+	const blocking = document.getElementById('blocking-notices')
 	const notices = disclosure?.querySelector('.operator-notices')
-	if (!(disclosure instanceof HTMLDetailsElement) || !(toggle instanceof HTMLElement) || count === null || !(empty instanceof HTMLElement) || status === null || notices === undefined || notices === null) throw new Error('Bot notice controls are missing')
+	if (!(disclosure instanceof HTMLDetailsElement) || !(toggle instanceof HTMLElement) || count === null || !(empty instanceof HTMLElement) || status === null || !(blocking instanceof HTMLElement) || notices === undefined || notices === null) throw new Error('Bot notice controls are missing')
 
 	const update = () => {
 		const visible = [...notices.querySelectorAll<HTMLElement>('.notice')].filter(notice => notice.textContent?.trim() !== '' && notice.closest('[hidden], .hidden') === null)
@@ -16,6 +17,19 @@ function initializeHeaderNotices() {
 		disclosure.classList.toggle('has-errors', errors.length > 0)
 		empty.hidden = visible.length > 0
 		if (status.textContent !== label) status.textContent = label
+		const signature = errors.map(notice => notice.textContent?.trim() ?? '').join('\n')
+		if (blocking.dataset['signature'] !== signature) {
+			blocking.dataset['signature'] = signature
+			blocking.replaceChildren(
+				...errors.map(notice => {
+					const item = document.createElement('p')
+					item.replaceChildren(...Array.from(notice.childNodes, child => child.cloneNode(true)))
+					item.className = notice.matches('.error, [data-tone="danger"]') ? 'blocking-notice-error' : 'blocking-notice-warning'
+					return item
+				}),
+			)
+		}
+		blocking.hidden = errors.length === 0
 	}
 	const dismiss = (restoreFocus: boolean) => {
 		disclosure.open = false

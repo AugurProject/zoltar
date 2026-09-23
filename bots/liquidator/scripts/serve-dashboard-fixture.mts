@@ -147,7 +147,7 @@ const activities = [
 ]
 
 function currentConfiguration() {
-	return { approvedUniverses, centralizedMarkets, childMarketConfigurations, connectivity, desiredPools, network, networkConfigured, runtime: { historicalLogRecovery: false, logLookbackBlocks: 256 }, selectedPools, strategy }
+	return { approvedUniverses, centralizedMarkets, childMarketConfigurations, connectivity, desiredPools, network, networkConfigured, runtime: { execute: false, historicalLogRecovery: false, logLookbackBlocks: 256 }, selectedPools, strategy, submission: { minimumBundleRelaySuccesses: 1, mode: 'public', relayUrls: [] } }
 }
 
 const monitoredPools = () => [
@@ -156,7 +156,7 @@ const monitoredPools = () => [
 	pool('0x3333333333333333333333333333333333333333', '900719925474099312345', true, false, 4, longUniverseId, true),
 ]
 
-const server = startDashboardServer(4183, {
+const server = startDashboardServer(Number(process.env['DASHBOARD_FIXTURE_PORT'] ?? '4183'), {
 	getPoolCatalog: async (page, address, scope) => {
 		await Bun.sleep(500)
 		const monitored = monitoredPools().map(pool => ({ ...pool, deploymentDate: '1789387200', questionDates: { startTime: '1789473600', endTime: '1792065600' }, metrics: { systemState: pool.systemState, totalPoolHeldRep: pool.totalPoolHeldRep, vaultCount: pool.knownVaultCount } }))

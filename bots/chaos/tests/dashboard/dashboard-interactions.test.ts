@@ -342,6 +342,21 @@ browserTest(
 		let browserSession: Awaited<ReturnType<typeof connectToChromium>> | undefined
 		try {
 			const cdp = await connectToChromium()
+			await cdp.command('Page.addScriptToEvaluateOnNewDocument', {
+				source: `document.addEventListener('DOMContentLoaded', () => {
+				const accept = () => {
+					const dialog = document.querySelector('.operator-confirm-dialog')
+					if (!(dialog instanceof HTMLDialogElement)) return
+					const input = dialog.querySelector('input')
+					if (input instanceof HTMLInputElement) {
+						input.value = dialog.querySelector('label strong')?.textContent ?? ''
+						input.dispatchEvent(new Event('input', { bubbles: true }))
+					}
+					setTimeout(() => dialog.querySelector('button[type="submit"]')?.click(), 0)
+				}
+				new MutationObserver(accept).observe(document.body, { childList: true, subtree: true })
+			})`,
+			})
 			browserSession = cdp
 			await cdp.command('Network.enable')
 			const waitFor = async (expression: string, message: string) => {
@@ -481,7 +496,7 @@ browserTest(
 				failSecondStateRead = true
 				stateRequests = 0
 				await cdp.command('Page.navigate', { url: new URL('/recovery', dashboard.url).href })
-				await waitFor("document.querySelector('#mode-badge')?.textContent === 'Paused'", `${scenario.label} fixture did not load`)
+				await waitFor("document.querySelector('#mode-badge')?.textContent === 'Dry run'", `${scenario.label} fixture did not load`)
 				const loading = await cdp.evaluate(`(() => {
 					const form = document.querySelector('#${scenario.formId}')
 					if (!(form instanceof HTMLFormElement)) return undefined
@@ -562,7 +577,7 @@ browserTest(
 			failSecondStateRead = false
 			stateRequests = 0
 			await cdp.command('Page.navigate', { url: new URL('/overview', dashboard.url).href })
-			await waitFor("document.querySelector('#mode-badge')?.textContent === 'Safety paused'", 'Safety-pause fixture did not render its durable latch')
+			await waitFor("document.querySelector('#mode-badge')?.textContent === 'Dry run' && document.querySelector('#operator-health')?.textContent?.includes('Paused')", 'Safety-pause fixture did not render its durable latch')
 			expect(
 				await cdp.evaluate(`(async () => {
  const { renderOperatorAlerts } = await import('/operator-alerts.js')
@@ -571,10 +586,16 @@ browserTest(
  const waiting = { role: container.getAttribute('role'), live: container.getAttribute('aria-live'), style: container.firstElementChild.className, text: container.textContent }
  renderOperatorAlerts(container, [{ message: 'RPC failed', severity: 'error' }, { message: 'Waiting for deployments', severity: 'info' }])
  const mixed = { role: container.getAttribute('role'), live: container.getAttribute('aria-live'), styles: [...container.children].map(item => item.className) }
+ renderOperatorAlerts(container, [{ message: 'Safety pause', severity: 'error', actionHref: '/recovery', actionLabel: 'Review recovery' }])
+ const action = { href: container.querySelector('a')?.getAttribute('href'), label: container.querySelector('a')?.textContent }
+ history.replaceState({}, '', '/recovery')
+ renderOperatorAlerts(container, [{ message: 'Safety pause', severity: 'error', actionHref: '/recovery', actionLabel: 'Review recovery' }])
+ const actionOnRecovery = container.querySelector('a') === null
+ history.replaceState({}, '', '/overview')
  renderOperatorAlerts(container, [])
- return { waiting, mixed, cleared: container.children.length === 0 && container.classList.contains('hidden') }
+ return { waiting, mixed, action, actionOnRecovery, cleared: container.children.length === 0 && container.classList.contains('hidden') }
  })()`),
-			).toEqual({ waiting: { role: 'status', live: 'polite', style: 'notice info', text: 'Waiting for deployments' }, mixed: { role: 'alert', live: 'assertive', styles: ['notice error', 'notice info'] }, cleared: true })
+			).toEqual({ waiting: { role: 'status', live: 'polite', style: 'notice info', text: 'Waiting for deployments' }, mixed: { role: 'alert', live: 'assertive', styles: ['notice error', 'notice info'] }, action: { href: '/recovery', label: 'Review recovery' }, actionOnRecovery: true, cleared: true })
 
 			expect(
 				await cdp.evaluate(`({
@@ -585,6 +606,15 @@ browserTest(
 				})`),
 			).toEqual({ eth: '—', recovery: '1 recovery item', rep: '—', weth: '—' })
 			expect(await cdp.evaluate("document.querySelector('#recovery-badge')?.getClientRects().length")).toBe(1)
+			expect(
+				await cdp.evaluate(`({
+					panelVisible: document.querySelector('#workflow-recovery-panel')?.hidden === false,
+					identity: document.querySelector('#workflow-recovery-summary')?.textContent?.includes('Partial dashboard workflow'),
+					status: document.querySelector('#workflow-recovery-summary')?.textContent?.includes('Waiting continuation'),
+					formInPanel: document.querySelector('#workflow-form')?.parentElement?.id === 'workflow-recovery-panel',
+					pending: document.querySelector('#pending-transactions')?.textContent,
+				})`),
+			).toEqual({ panelVisible: true, identity: true, status: true, formInPanel: true, pending: 'No transaction requires confirmation.' })
 			await cdp.evaluate("document.querySelector('#pause-button')?.click()")
 			await waitFor("document.querySelector('#resume-dialog')?.open === true", 'Safety-pause resume dialog did not open')
 			expect(await cdp.evaluate(`Object.fromEntries([...document.querySelectorAll('#resume-preflight li')].map(row => [row.querySelector('span')?.textContent, row.querySelector('strong')?.textContent]))`)).toMatchObject({ 'Recovery items': '1', 'Safety latch': 'Active' })
@@ -643,7 +673,7 @@ browserTest(
 						rep: document.querySelector('#rep-balances .token-row > strong')?.textContent,
 						weth: document.querySelector('#balance-weth')?.textContent,
 					})`),
-				).toEqual({ eth: '1.000000000000000001', rep: '123.456789012345678901', weth: '0.000000000000000042' })
+				).toEqual({ eth: '1.000000000000000001 ETH', rep: '123.456789012345678901 REP', weth: '0.000000000000000042 WETH' })
 				failSecondStateRead = true
 				await cdp.evaluate("window.dispatchEvent(new Event('focus'))")
 				await waitFor(
@@ -963,6 +993,13 @@ browserTest(
 
 				await cdp.command('Page.navigate', { url: new URL('/recovery', dashboard.url).href })
 				await waitFor("document.querySelector('#pending-transactions .identifier-value') !== null", `${viewport.label} recovery identifiers did not render`)
+				expect(
+					await cdp.evaluate(`({
+						replacement: document.querySelector('#replacement-form')?.hidden,
+						cancellation: document.querySelector('#cancellation-form')?.hidden,
+						candidate: document.querySelector('#candidate-form')?.hidden,
+					})`),
+				).toEqual({ replacement: true, cancellation: true, candidate: false })
 				expect(await cdp.evaluate("document.querySelector('#pending-transactions .transaction-wait strong')?.textContent")).toBe('Verifying the queued replacement')
 				expect(
 					await cdp.evaluate(`(() => {
@@ -1488,7 +1525,7 @@ browserTest(
 				stateRequests = 0
 				selectableOperationAllowlist = ['open-oracle.blocked-sibling', 'trading.position.enter']
 				await cdp.command('Page.navigate', { url: new URL('/overview', dashboard.url).href })
-				await waitFor("document.querySelector('#mode-badge')?.textContent === 'Paused'", `${viewport.label} paused resume fixture did not render`)
+				await waitFor("document.querySelector('#mode-badge')?.textContent === 'Dry run'", `${viewport.label} paused resume fixture did not render`)
 				await cdp.evaluate("document.querySelector('#pause-button')?.click()")
 				await waitFor("document.querySelector('#resume-dialog')?.open === true", `${viewport.label} resume dialog did not open`)
 				expect(await accessibilityIdentity('#resume-dialog')).toEqual({ name: 'Resume chaos scheduling?', role: 'dialog' })
@@ -1505,7 +1542,7 @@ browserTest(
 				await cdp.evaluate("document.querySelector('#cancel-resume')?.click()")
 				selectableOperationAllowlist = null
 				await cdp.command('Page.navigate', { url: new URL('/overview', dashboard.url).href })
-				await waitFor("document.querySelector('#mode-badge')?.textContent === 'Paused'", `${viewport.label} unrestricted resume fixture did not render`)
+				await waitFor("document.querySelector('#mode-badge')?.textContent === 'Dry run'", `${viewport.label} unrestricted resume fixture did not render`)
 				await cdp.evaluate("document.querySelector('#pause-button')?.click()")
 				await waitFor("document.querySelector('#resume-dialog')?.open === true", `${viewport.label} unrestricted resume dialog did not open`)
 				expect(
@@ -1939,7 +1976,7 @@ browserTest(
 						...(mode === 'keyless' ? {} : { wallet: walletAddress }),
 					})
 					await cdp.command('Page.navigate', { url: `http://127.0.0.1:${dashboard.port}/overview` })
-					const expectedEthText = mode === 'keyless' ? '—' : '1.000000000000000000'
+					const expectedEthText = mode === 'keyless' ? '—' : '1 ETH'
 					const expectedBadge = { keyless: 'Signer missing', 'read-only': 'Read-only — signer not loaded', signer: 'Signer ready' }[mode]
 					const ready = `document.getElementById('balance-eth')?.textContent === ${JSON.stringify(expectedEthText)} && document.getElementById('signer-badge')?.textContent === ${JSON.stringify(expectedBadge)}`
 					for (let attempt = 0; attempt < 200; attempt += 1) {

@@ -16,6 +16,23 @@ const servers: ReturnType<typeof startDashboardServer>[] = []
 const browsers: Browser[] = []
 const address = '0x0000000000000000000000000000000000000001' as Address
 
+async function acceptOperatorDialog(window: BrowserWindow, phrase?: string) {
+	let dialog: Element | null = null
+	for (let attempt = 0; attempt < 100 && dialog === null; attempt++) {
+		dialog = window.document.querySelector('.operator-confirm-dialog')
+		if (dialog === null) await Bun.sleep(10)
+	}
+	if (dialog === null) throw new Error('Expected operator confirmation dialog')
+	if (phrase !== undefined) {
+		const input = element(window, 'operator-confirm-phrase', window.HTMLInputElement)
+		input.value = phrase
+		input.dispatchEvent(new window.Event('input', { bubbles: true }))
+	}
+	const confirm = element(window, 'operator-confirm-submit', window.HTMLButtonElement)
+	for (let attempt = 0; attempt < 100 && confirm.disabled; attempt++) await Bun.sleep(10)
+	confirm.click()
+}
+
 afterEach(async () => {
 	for (const server of servers.splice(0)) server.stop(true)
 	for (const browser of browsers.splice(0)) await browser.close()
@@ -472,8 +489,8 @@ test('pending executor deployment recovery owns the overview notice, the executo
 	expect(noticeTitle.textContent).toBe('Unable to change bot state')
 
 	// Deploying from this page clears that refusal even though no poll ever showed the journal, so a later poll cannot revive it.
-	Reflect.set(window, 'confirm', () => true)
 	element(window, 'create2-form', window.HTMLFormElement).dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }))
+	await acceptOperatorDialog(window, 'DEPLOY EXECUTOR')
 	await page.waitUntilComplete()
 	for (let attempt = 0; attempt < 100 && noticeTitle.textContent === 'Unable to change bot state'; attempt++) await Bun.sleep(10)
 	expect(element(window, 'create2-status', window.HTMLElement).textContent).toBe(`Verified existing executor at ${address}.`)
@@ -796,7 +813,8 @@ test('focused risk, settlement, execution, and market forms load the saved confi
 	expect(window.document.querySelector('#settings-nav a[aria-current="true"]')?.getAttribute('data-settings-target')).toBe('settings-connect')
 	expect(marketInput('minimumBidDepthEth').value).toBe('2')
 	expect(element(window, 'market-required', window.HTMLInputElement).checked).toBe(false)
-	expect(JSON.parse(element(window, 'market-venue-consensus-json', window.HTMLTextAreaElement).value)).toEqual(serializeStoredCentralizedMarkets(settings.centralizedMarkets).venueConsensus)
+	expect(element(window, 'venue-consensus-enabled', window.HTMLInputElement).checked).toBe(settings.centralizedMarkets.venueConsensus !== undefined)
+	expect(window.document.querySelectorAll('#venue-dex-source-rows tr')).toHaveLength(settings.centralizedMarkets.venueConsensus?.dexSources.length ?? 0)
 
 	// Save buttons stay disabled until an edit differs from the loaded values; the panel summary shows the unsaved state.
 	const saveButton = (formId: string) => {
@@ -814,6 +832,9 @@ test('focused risk, settlement, execution, and market forms load the saved confi
 
 	const submit = async (formId: string, statusId: string, pendingMessage: string) => {
 		element(window, formId, window.HTMLFormElement).dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }))
+		if (formId === 'runtime-form' && Number(runtimeInput('maxPositionNotionalWeth').value) <= Number(runtimeInput('maxTotalLockedWeth').value)) await acceptOperatorDialog(window)
+		if (formId === 'settlement-form' && settlementInput('settlementRewardWithdrawThresholdEth').value !== '0') await acceptOperatorDialog(window)
+		if (formId === 'market-form') await acceptOperatorDialog(window)
 		await page.waitUntilComplete()
 		for (let attempt = 0; attempt < 100 && element(window, statusId, window.HTMLElement).textContent === pendingMessage; attempt++) await Bun.sleep(10)
 		return element(window, statusId, window.HTMLElement).textContent
@@ -827,6 +848,7 @@ test('focused risk, settlement, execution, and market forms load the saved confi
 		releaseRuntimeSave = resolve
 	})
 	element(window, 'runtime-form', window.HTMLFormElement).dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }))
+	await acceptOperatorDialog(window)
 	await Bun.sleep(30)
 	expect(element(window, 'runtime-status', window.HTMLElement).textContent).toBe('Saving risk limits…')
 	// The whole fieldset locks during the request, so a later edit cannot be replaced silently by the response.
@@ -845,7 +867,8 @@ test('focused risk, settlement, execution, and market forms load the saved confi
 	expect(saveButton('runtime-form').disabled).toBe(true)
 	expect(badges('runtime-form')).toEqual(['Queued · next scan'])
 	runtimeInput('maxPositionNotionalWeth').value = '20'
-	expect(await submit('runtime-form', 'runtime-status', 'Saving risk limits…')).toBe('Runtime maxPositionNotionalAttoWeth cannot exceed maxTotalLockedAttoWeth')
+	runtimeInput('maxPositionNotionalWeth').dispatchEvent(new window.Event('input', { bubbles: true }))
+	expect(await submit('runtime-form', 'runtime-status', 'Saving risk limits…')).toBe('Per-position WETH limit cannot exceed the total locked WETH limit.')
 	expect(settings.runtime.riskLimits.maxPositionNotionalAttoWeth).toBe(5n * 10n ** 18n)
 	expect(saveButton('runtime-form').disabled).toBe(false)
 
@@ -893,8 +916,9 @@ test('focused risk, settlement, execution, and market forms load the saved confi
 	rowInput('sourceEthMarket').value = ''
 	expect(await submit('market-form', 'market-status', 'Validating market sources…')).toBe('centralizedMarkets.sources[0].ethMarket must be ETH/USDT')
 	expect(settings.centralizedMarkets.sources[0]?.ethMarket).toBe('ETH/USDT')
-	element(window, 'market-venue-consensus-json', window.HTMLTextAreaElement).value = '{"dexSources": []'
-	expect(await submit('market-form', 'market-status', 'Validating market sources…')).toContain('JSON')
+	element(window, 'venue-consensus-enabled', window.HTMLInputElement).checked = true
+	element(window, 'venue-consensus-enabled', window.HTMLInputElement).dispatchEvent(new window.Event('change', { bubbles: true }))
+	expect(await submit('market-form', 'market-status', 'Validating market sources…')).not.toBe('Market sources saved.')
 	const removeButton = marketRows()[0]?.querySelector('button')
 	if (!(removeButton instanceof window.HTMLButtonElement)) throw new Error('Missing remove button')
 	removeButton.click()
@@ -998,8 +1022,8 @@ test('go-live checklist unlocks the switch once every prerequisite holds, report
 	expect(Array.from(element(window, 'execution-checklist', window.HTMLUListElement).children, item => item.querySelector('.visually-hidden')?.textContent)).toEqual([' ready', ' ready', ' ready', ' missing', ' missing', ' ready', ' optional'])
 	expect(element(window, 'execution-mode-summary', window.HTMLElement).textContent).toBe('Dry run · prerequisites missing')
 	expect(element(window, 'execution-enabled', window.HTMLInputElement).disabled).toBe(true)
-	Reflect.set(window, 'confirm', () => true)
 	element(window, 'create2-form', window.HTMLFormElement).dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }))
+	await acceptOperatorDialog(window, 'DEPLOY EXECUTOR')
 	await page.waitUntilComplete()
 	for (let attempt = 0; attempt < 100 && !element(window, 'create2-status', window.HTMLElement).textContent.startsWith('Deployed'); attempt++) await Bun.sleep(10)
 	expect(element(window, 'create2-status', window.HTMLElement).textContent).toBe(`Deployed ${executor} in transaction unknown.`)

@@ -126,12 +126,12 @@ describe('dashboard exact ETH formatting', () => {
 	})
 
 	test('renders every operator lifecycle state without conflating failures with running', () => {
-		expect(botStatusLabels({ mode: 'dry-run', paused: false, status: 'syncing' })).toEqual({ mode: 'dry-run', status: 'Syncing' })
-		expect(botStatusLabels({ mode: 'execute', paused: false, status: 'running' })).toEqual({ mode: 'execute', status: 'Running' })
-		expect(botStatusLabels({ mode: 'execute', paused: false, status: 'error' })).toEqual({ mode: 'execute', status: 'Error' })
-		expect(botStatusLabels({ mode: 'execute', paused: false, status: 'stopped' })).toEqual({ mode: 'execute', status: 'Stopped' })
-		expect(botStatusLabels({ mode: 'execute', paused: false, status: 'paused' })).toEqual({ mode: 'execute', status: 'Paused' })
-		expect(botStatusLabels({ mode: 'execute', paused: true, status: 'syncing' })).toEqual({ mode: 'execute', status: 'Paused' })
+		expect(botStatusLabels({ mode: 'dry-run', paused: false, status: 'syncing' })).toEqual({ mode: 'Dry run', status: 'Syncing' })
+		expect(botStatusLabels({ mode: 'execute', paused: false, status: 'running' })).toEqual({ mode: 'Live armed', status: 'Running' })
+		expect(botStatusLabels({ mode: 'execute', paused: false, status: 'error' })).toEqual({ mode: 'Live armed', status: 'Error' })
+		expect(botStatusLabels({ mode: 'execute', paused: false, status: 'stopped' })).toEqual({ mode: 'Live armed', status: 'Stopped' })
+		expect(botStatusLabels({ mode: 'execute', paused: false, status: 'paused' })).toEqual({ mode: 'Live armed', status: 'Paused' })
+		expect(botStatusLabels({ mode: 'execute', paused: true, status: 'syncing' })).toEqual({ mode: 'Live armed', status: 'Paused' })
 	})
 
 	test('uses arbitrary token symbols in inventory and approval labels', () => {

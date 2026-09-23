@@ -196,10 +196,10 @@ export function createPoolBrowser(root: HTMLElement, save: (address: string, sup
 				const monitored = context.monitored.find(observation => observation.address.toLowerCase() === pool.address.toLowerCase())
 				const currentMetrics = monitored === undefined ? pool.metrics : { systemState: monitored.systemState, totalPoolHeldRep: monitored.totalPoolHeldRep, vaultCount: monitored.knownVaultCount }
 				const badges = node('div', '', 'catalog-badges')
-				badges.append(node('span', supported ? 'Supported' : 'Not supported', `badge ${supported ? 'ok' : ''}`))
+				badges.append(node('span', supported ? 'Supported' : 'Not supported', `badge ${supported ? 'success' : ''}`))
 				const operationalStatus = currentMetrics?.systemState === '0' ? 'Operational' : 'Inactive'
 				if (currentMetrics !== undefined) badges.append(node('span', operationalStatus, 'badge'))
-				badges.append(node('span', context.approved.has(pool.universeId) ? 'Universe approved' : 'Universe approval required', `badge ${context.approved.has(pool.universeId) ? 'ok' : 'warning'}`))
+				badges.append(node('span', context.approved.has(pool.universeId) ? 'Universe approved' : 'Universe approval required', `badge ${context.approved.has(pool.universeId) ? 'success' : 'warning'}`))
 				const metrics = node('dl', '', 'catalog-metrics')
 				const multiplier = BigInt(pool.multiplierBps)
 				for (const [label, value] of [

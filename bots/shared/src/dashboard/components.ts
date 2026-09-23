@@ -26,10 +26,10 @@ export function renderDisconnectedHeader(options: {
 	options.capabilityBadge.hidden = false
 	options.capabilityBadge.textContent = 'Capability unavailable'
 	options.capabilityBadge.className = options.capabilityBadgeClassName
-	options.runStatusBadge.textContent = 'Disconnected'
+	options.runStatusBadge.textContent = options.lastKnownModeLabel === undefined ? 'Disconnected' : 'State stale'
 	options.runStatusBadge.className = options.runStatusBadgeClassName
 	setAttentionBadge(options.attentionBadge, options.retainedAttentionCount + 1, options.attentionTarget)
-	options.showNotice('Dashboard disconnected')
+	options.showNotice(options.lastKnownModeLabel === undefined ? 'Dashboard disconnected' : 'Dashboard state stale')
 }
 
 export function endpointHealthDetail(endpoint: { consecutiveFailures: number; error?: string | undefined; latencyMilliseconds?: number | undefined; nextRetryAt?: string | undefined }) {

@@ -45,8 +45,23 @@ const marketThresholds = [
 	numberField('Order book depth (levels)', 'orderBookLimit', 'min="1" max="1000" step="1"'),
 ].join('')
 
+const venueConsensusFields = [
+	['dexProbeDepthEth', 'DEX probe depth (ETH)', '0', 'any'],
+	['maximumGroupDeviationBps', 'Maximum group deviation (bps)', '1', '1'],
+	['minimumDexAskDepthEth', 'Minimum DEX ask depth (ETH)', '0', 'any'],
+	['minimumDexBidDepthEth', 'Minimum DEX bid depth (ETH)', '0', 'any'],
+	['minimumDexSourceCount', 'Minimum DEX sources', '1', '1'],
+	['minimumSourceObservationCount', 'Observations per source', '1', '1'],
+	['minimumSourceObservationSpanMilliseconds', 'Observation span (ms)', '0', '1'],
+	['minimumTotalSourceCount', 'Minimum total sources', '2', '1'],
+]
+	.map(([name, label, min, step]) => `<label><span>${label}</span><input name="venue-${name}" type="number" min="${min}" step="${step}" required /></label>`)
+	.join('')
+
+const venueConsensusForm = `<fieldset class="settings-subpanel"><legend>Venue consensus</legend>${switchField({ id: 'venue-consensus-enabled', label: 'Use DEX venue consensus' })}<div class="field-grid">${venueConsensusFields}</div>${switchField({ id: 'venue-allow-single-group-fallback', label: 'Allow one venue group when the other is unavailable' })}<div class="table-scroll"><table><thead><tr><th>Source ID</th><th>Pair address</th><th>Fee (bps)</th><th>Action</th></tr></thead><tbody id="venue-dex-source-rows"></tbody></table></div><button id="venue-dex-source-add" class="button button-secondary" type="button">Add DEX source</button></fieldset>`
+
 const marketPanel = settingsGroup({
-	body: `<form id="market-form"><fieldset id="market-fieldset" disabled>${marketSourceTable}${switchField({ id: 'market-required', label: 'Require market consensus before execution', leading: true })}<div class="field-grid">${marketThresholds}</div><details class="settings-subpanel"><summary>Venue consensus JSON · DEX sources and temporal quorum</summary><label><span>venueConsensus · leave empty to omit</span><textarea id="market-venue-consensus-json" class="mono" rows="10" spellcheck="false"></textarea></label></details><p class="section-note">Source changes discard prior evidence before a replacement source can authorize execution.</p>${formActions({ statusId: 'market-status', submitLabel: 'Save market sources' })}</fieldset></form>`,
+	body: `<form id="market-form"><fieldset id="market-fieldset" disabled>${marketSourceTable}${switchField({ id: 'market-required', label: 'Require market consensus before execution', leading: true })}<div class="field-grid">${marketThresholds}</div>${venueConsensusForm}<p class="section-note">Source changes discard prior evidence before a replacement source can authorize execution.</p>${formActions({ statusId: 'market-status', submitLabel: 'Save market sources' })}</fieldset></form>`,
 	formId: 'market-form',
 	summary: 'Centralized exchanges and consensus thresholds for the reference price',
 	title: 'REP market sources',
