@@ -1,6 +1,6 @@
 import type { Hex } from '@zoltar/bot-shared/ethereum'
 import type { DurableWorkflow, PendingTransactionIntent } from '../state/operator-state.ts'
-import type { ExecutionEnvironment } from './transaction-executor.ts'
+import type { ExecutionEnvironment } from './execution-context.ts'
 import { assertReceiptStillCanonical, retainIncludedTransaction } from './inclusion-journal.ts'
 import { persist } from './recovery-journal.ts'
 import { TransactionAwaitingRecovery } from './receipt-validation.ts'
