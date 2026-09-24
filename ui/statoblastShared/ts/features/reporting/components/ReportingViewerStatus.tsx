@@ -1,15 +1,16 @@
+import { getDisplayedLeadingEscalationOutcome } from '../lib/reporting.js'
 import { formatCurrencyBalance } from '@zoltar/ui-core-shared/lib/formatters.js'
 import type { ActiveReportingDetails, ReportingOutcomeKey } from '@zoltar/ui-core-shared/types/contracts.js'
 import { NoticeStack } from '@zoltar/ui-core-shared/components/NoticeStack.js'
 import * as copy from '../../../copy/reporting.js'
-import { getStrictLeadingEscalationOutcome, isPoolQuestionFinalized } from '../lib/reportingDomain.js'
+import { isPoolQuestionFinalized } from '../lib/reportingDomain.js'
 import { escalationExplanationHref, formatReportingDeadline, getViewerPositions } from '../lib/reportingViewerStatus.js'
 
 export function ReportingViewerStatus({ details, onTakeLead, disabled }: { details: ActiveReportingDetails; onTakeLead: (side: ReportingOutcomeKey, amount: bigint) => void; disabled: boolean }) {
 	const positions = getViewerPositions(details)
 	if (positions.length === 0 || isPoolQuestionFinalized(details)) return undefined
 	const forked = details.hasReachedNonDecision || details.systemState !== 'operational'
-	const tied = getStrictLeadingEscalationOutcome(details.sides) === undefined
+	const tied = getDisplayedLeadingEscalationOutcome(details.sides) === undefined
 	let detail = (
 		<>
 			{positions.map(position => (
@@ -17,7 +18,7 @@ export function ReportingViewerStatus({ details, onTakeLead, disabled }: { detai
 					<p>
 						<strong>{position.lead}</strong> {position.detail}
 					</p>
-					{position.leading || position.minimum === undefined ? undefined : (
+					{positions.length > 1 || position.leading || position.minimum === undefined ? undefined : (
 						<button
 							className='secondary'
 							type='button'
@@ -43,6 +44,12 @@ export function ReportingViewerStatus({ details, onTakeLead, disabled }: { detai
 				))}
 			</>
 		)
+	else if (details.sides.every(side => side.balance === 0n))
+		detail = (
+			<p>
+				<strong>{copy.tieStatusLead}</strong> {copy.zeroBalanceStatusDetail}
+			</p>
+		)
 	else if (tied)
 		detail = (
 			<p>
@@ -53,5 +60,5 @@ export function ReportingViewerStatus({ details, onTakeLead, disabled }: { detai
 				{copy.tieStatusEnd}
 			</p>
 		)
-	return <NoticeStack items={[{ id: 'reporting-viewer-status', title: copy.yourStatus, tone: !forked && positions.some(position => position.leading) ? 'success' : 'warning', detail }]} />
+	return <NoticeStack items={[{ id: 'reporting-viewer-status', title: copy.yourStatus, tone: !forked && positions.every(position => position.leading) ? 'success' : 'warning', detail }]} />
 }

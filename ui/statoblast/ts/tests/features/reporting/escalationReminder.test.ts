@@ -4,7 +4,7 @@ import { buildEscalationReminder } from '@zoltar/ui-statoblast-shared/features/r
 const input = {
 	securityPoolAddress: '0x123',
 	escalationEndTime: 1767485880n,
-	currentTime: 1767225600n,
+	generatedAt: 1767225600n,
 	questionTitle: 'Will Yes win?',
 	status: "You're winning on Yes.",
 	pageUrl: 'https://example.com/?pool=0x123',

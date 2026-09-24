@@ -14,7 +14,7 @@ import { ReportingSection } from '@zoltar/ui-statoblast-shared/features/reportin
 import { getReportingLockedUntilMessage } from '@zoltar/ui-statoblast-shared/features/reporting/lib/reporting.js'
 import { ESCALATION_GAME_ACTIVATION_DELAY } from '@zoltar/ui-statoblast-shared/features/reporting/lib/reportingDomain.js'
 import type { AccountState, ReportingFormState } from '@zoltar/ui-zoltar-shared/types/app.js'
-import { describe, expect, test } from 'bun:test'
+import { describe, expect, spyOn, test } from 'bun:test'
 import { h, render } from 'preact'
 import { useState } from 'preact/hooks'
 import { act } from 'preact/test-utils'
@@ -2361,6 +2361,8 @@ describe('ReportingSection', () => {
 		cleanupRenderedComponent = rendered.cleanup
 		const text = document.querySelector('.notice-stack-item')?.textContent ?? ''
 		expect(text).toContain("You're winning on No. Your 2 REP would be worth about 2 REP if it ended now.")
+		expect(document.querySelector('.notice-stack-item')?.classList.contains('warning')).toBe(true)
+		expect(within(document.body).queryByRole('button', { name: 'Take the lead…' })).toBeNull()
 		expect(text.indexOf("You're winning on No.")).toBeLessThan(text.indexOf("You're losing on Yes."))
 		expect(document.querySelector('.reporting-position')?.textContent).toContain('No · Winning · worth about 2 REP if it ended now')
 	})
@@ -2385,18 +2387,76 @@ describe('ReportingSection', () => {
 			expect(document.querySelector('.escalation-phase-mobile')?.textContent).toBe(started ? 'Step 2 of 3 · Response window' : 'Step 1 of 3 · Reporting open')
 		})
 	}
-	test('deadline movement remains visible until dismissed and does not reappear on later loads', async () => {
+	test('deadline movement stays dismissed for that deadline and reappears for a later move', async () => {
 		const details = createReportingDetails()
 		const rendered = await renderIntoDocument(h(ReportingSection, createProps({ reportingDetails: details })))
 		cleanupRenderedComponent = rendered.cleanup
 		expect(document.body.textContent).not.toContain('The deadline moved')
 		await act(() => render(h(ReportingSection, createProps({ reportingDetails: { ...details, escalationEndTime: 600n } })), rendered.container))
-		expect(document.body.textContent).toContain(`The deadline moved to ${formatReportingDeadline(600n, 150n)} because someone reported. Your status may have changed.`)
+		expect(document.body.textContent).toContain(`The deadline moved to ${formatReportingDeadline(600n, 150n)} because a new report was added. Your status may have changed.`)
+		expect(within(document.body).queryByRole('button', { name: 'Add reminder (.ics)' })).toBeNull()
+		expect(within(document.body).getByRole('button', { name: 'Update your reminder (.ics)' })).not.toBeNull()
 		await act(() => render(h(ReportingSection, createProps({ reportingDetails: { ...details, escalationEndTime: 600n } })), rendered.container))
 		expect(document.body.textContent).toContain('The deadline moved')
 		await act(() => fireEvent.click(within(document.body).getByRole('button', { name: 'Dismiss deadline notice' })))
-		await act(() => render(h(ReportingSection, createProps({ reportingDetails: { ...details, escalationEndTime: 900n } })), rendered.container))
+		expect(within(document.body).queryByRole('button', { name: 'Update your reminder (.ics)' })).toBeNull()
+		expect(within(document.body).getByRole('button', { name: 'Add reminder (.ics)' })).not.toBeNull()
+		await act(() => render(h(ReportingSection, createProps({ reportingDetails: { ...details, escalationEndTime: 600n } })), rendered.container))
 		expect(document.body.textContent).not.toContain('The deadline moved')
+		await act(() => render(h(ReportingSection, createProps({ reportingDetails: { ...details, escalationEndTime: 900n } })), rendered.container))
+		expect(document.body.textContent).toContain('The deadline moved')
+		expect(within(document.body).getByRole('button', { name: 'Update your reminder (.ics)' })).not.toBeNull()
+	})
+	for (const closed of [{ currentTime: 601n }, { questionOutcome: 'yes', settlementState: 'resolved', parentWithdrawalEnabled: true }, { hasReachedNonDecision: true }] satisfies Partial<ActiveReportingDetails>[]) {
+		test(`clears deadline movement when closed: ${Object.keys(closed).join(', ')}`, async () => {
+			const details = createReportingDetails()
+			const rendered = await renderIntoDocument(h(ReportingSection, createProps({ reportingDetails: details })))
+			cleanupRenderedComponent = rendered.cleanup
+			await act(() => render(h(ReportingSection, createProps({ reportingDetails: { ...details, escalationEndTime: 600n } })), rendered.container))
+			expect(document.body.textContent).toContain('The deadline moved')
+			await act(() => render(h(ReportingSection, createProps({ currentTimestamp: closed.currentTime ?? details.currentTime, reportingDetails: { ...details, escalationEndTime: 600n, ...closed } })), rendered.container))
+			expect(document.body.textContent).not.toContain('The deadline moved')
+			expect(document.body.textContent).not.toContain('Check back before')
+			await act(() => render(h(ReportingSection, createProps({ reportingDetails: { ...details, escalationEndTime: 600n } })), rendered.container))
+			expect(document.body.textContent).not.toContain('The deadline moved')
+		})
+	}
+	test('live zero balances do not display Invalid as leading or predict a tied timeout', async () => {
+		const details = createReportingDetails()
+		details.sides = details.sides.map(side => ({ ...side, balance: 0n }))
+		const rendered = await renderIntoDocument(h(ReportingSection, createProps({ reportingDetails: details })))
+		cleanupRenderedComponent = rendered.cleanup
+		expect(document.body.textContent).not.toContain('Invalid wins')
+		expect(document.body.textContent).not.toContain('Leading')
+		expect(document.body.textContent).not.toContain('no side wins')
+		expect(document.querySelector('.notice-stack-item')?.textContent).toContain('No side leads right now.')
+	})
+	test('calendar downloads use wall time for DTSTAMP and retain the object URL for a second', async () => {
+		const now = spyOn(Date, 'now').mockReturnValue(Date.UTC(2026, 8, 24))
+		let calendarBlob: Blob | undefined
+		const create = spyOn(URL, 'createObjectURL').mockImplementation(blob => {
+			if (blob instanceof Blob) calendarBlob = blob
+			return 'blob:reporting-reminder'
+		})
+		const revoke = spyOn(URL, 'revokeObjectURL').mockImplementation(() => undefined)
+		const timer = spyOn(globalThis, 'setTimeout')
+		try {
+			const rendered = await renderIntoDocument(h(ReportingSection, createProps()))
+			cleanupRenderedComponent = rendered.cleanup
+			await act(() => fireEvent.click(within(document.body).getByRole('button', { name: 'Add reminder (.ics)' })))
+			const calendar = await calendarBlob?.text()
+			expect(calendar).toContain('DTSTAMP:20260924T000000Z\r\n')
+			expect(calendar).toContain('DTSTART:19691231T230500Z\r\n')
+			expect(timer.mock.calls.some(call => call[1] === 1000)).toBe(true)
+			expect(revoke).not.toHaveBeenCalled()
+			await new Promise(resolve => setTimeout(resolve, 1100))
+			expect(revoke).toHaveBeenCalledWith('blob:reporting-reminder')
+		} finally {
+			now.mockRestore()
+			create.mockRestore()
+			revoke.mockRestore()
+			timer.mockRestore()
+		}
 	})
 	test('resolved claims show the amount without a reminder or an invented claim deadline', async () => {
 		const details = createReportingDetails({ questionOutcome: 'yes', settlementState: 'resolved', parentWithdrawalEnabled: true })

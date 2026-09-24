@@ -1,9 +1,9 @@
+import { getDisplayedLeadingEscalationOutcome, deriveReportingStage, getReportingOutcomeLabel } from '../lib/reporting.js'
 import { formatReportingDeadline } from '../lib/reportingViewerStatus.js'
 import * as copy from '../../../copy/reporting.js'
 import type { ReportingDetails } from '@zoltar/ui-core-shared/types/contracts.js'
 import { formatCurrencyBalance } from '@zoltar/ui-core-shared/lib/formatters.js'
-import { deriveReportingStage, getReportingOutcomeLabel } from '../lib/reporting.js'
-import { getEscalationPhase, getStrictLeadingEscalationOutcome } from '../lib/reportingDomain.js'
+import { getEscalationPhase } from '../lib/reportingDomain.js'
 
 export function EscalationPhaseStepper({ details, forkAlreadyTriggered, detailId }: { details: ReportingDetails | undefined; forkAlreadyTriggered: boolean; detailId?: string }) {
 	const stage = deriveReportingStage({ reportingDetails: details, reportingReady: true })
@@ -13,7 +13,7 @@ export function EscalationPhaseStepper({ details, forkAlreadyTriggered, detailId
 	if (details?.status === 'active') index = 1
 	if (stage === 'resolved' || fork) index = 2
 	const completed = (step: number) => step < index
-	const leadingOutcome = details?.status === 'active' ? getStrictLeadingEscalationOutcome(details.sides) : undefined
+	const leadingOutcome = details?.status === 'active' ? getDisplayedLeadingEscalationOutcome(details.sides) : undefined
 	const hasUnsettledDeposits = details?.status === 'active' && details.sides.some(side => side.userDeposits.length > 0 || side.importedUserDeposits.length > 0)
 	const labels = copy.phaseLabels.map((label, i) => (i === 2 && fork ? copy.forkPhase : label))
 	let next = copy.reportingDetailsRequired

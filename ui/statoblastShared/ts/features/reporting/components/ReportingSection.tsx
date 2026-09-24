@@ -1,3 +1,4 @@
+import { getDisplayedLeadingEscalationOutcome, REPORTING_OUTCOME_DROPDOWN_OPTIONS, getReportingLockedUntilMessage, getReportingOutcomeLabel, hasReportingOpened, deriveReportingStage, isReportingOutcomeEnabled, isWithdrawEscalationEnabled } from '../lib/reporting.js'
 import { ReportingViewerStatus } from './ReportingViewerStatus.js'
 import { EscalationReminderLine } from './EscalationReminderLine.js'
 import { EscalationExplainer } from './EscalationExplainer.js'
@@ -26,10 +27,8 @@ import { pickFirstReason } from '@zoltar/ui-core-shared/transactions/actionAvail
 import { formatCurrencyBalance, formatCurrencyInputBalance } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { parseOptionalRepAmountInput } from '@zoltar/ui-core-shared/forms/formInputs.js'
 import { getWrongNetworkReason, isActiveAppChain } from '@zoltar/ui-core-shared/wallet/network.js'
-import { getEscalationPhase, getStrictLeadingEscalationOutcome, getReportingMaxProfitContribution, getReportingMinimumOutcomeChangeContribution, getRemainingSelectedOutcomeContributionCapacity, isPoolQuestionFinalized, previewReportingContribution } from '../lib/reportingDomain.js'
+import { getEscalationPhase, getReportingMaxProfitContribution, getReportingMinimumOutcomeChangeContribution, getRemainingSelectedOutcomeContributionCapacity, isPoolQuestionFinalized, previewReportingContribution } from '../lib/reportingDomain.js'
 import { getReportingReportGuardMessage, getReportingWithdrawGuardMessage } from '../lib/reportingGuards.js'
-import { REPORTING_OUTCOME_DROPDOWN_OPTIONS, getReportingLockedUntilMessage, getReportingOutcomeLabel, hasReportingOpened } from '../lib/reporting.js'
-import { deriveReportingStage, isReportingOutcomeEnabled, isWithdrawEscalationEnabled } from '../lib/reporting.js'
 import { getEffectiveReportingDetails, getEscalationGameStartTimestamp, getReportingStagePresentation } from '../lib/reportingStagePresentation.js'
 import { ReportingSettlementSection } from './ReportingSettlementSection.js'
 import type { ReportingSectionProps } from '../../oracleTypes.js'
@@ -191,7 +190,7 @@ export function ReportingSection({
 	const chartScaleMax = effectiveReportingDetails?.nonDecisionThresholdAttoRep
 	const largestBalance = outcomeSides.reduce((max, side) => ((side.balance ?? 0n) > max ? (side.balance ?? 0n) : max), 0n)
 	const finalized = isPoolQuestionFinalized(effectiveReportingDetails)
-	const leadingOutcome = activeReportingDetails === undefined ? undefined : getStrictLeadingEscalationOutcome(activeReportingDetails.sides)
+	const leadingOutcome = activeReportingDetails === undefined ? undefined : getDisplayedLeadingEscalationOutcome(activeReportingDetails.sides)
 	const reportContributionPreview = effectiveReportingDetails === undefined || selectedAmount === undefined || selectedOutcome === undefined ? undefined : previewReportingContribution(effectiveReportingDetails, selectedOutcome, selectedAmount)
 	const actualReportDepositAmount = reportContributionPreview?.actualDepositAmount
 	const selectedOutcomeLabel = selectedOutcome === undefined ? reportingCopy.selectedSide : (outcomeSides.find(side => side.key === selectedOutcome)?.label ?? getReportingOutcomeLabel(selectedOutcome))

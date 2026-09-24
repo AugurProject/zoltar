@@ -138,11 +138,11 @@ export const tieStatusEnd = ').'
 export const checkBack = (deadline: string) => `Check back before ${deadline}. Any new report can push this deadline later (up to 7 weeks after the game starts).`
 export const addReminder = 'Add reminder (.ics)'
 export const reminderSummary = (title: string) => `Check escalation: ${title}`
-export const deadlineMoved = (deadline: string) => `The deadline moved to ${deadline} because someone reported. Your status may have changed.`
+export const deadlineMoved = (deadline: string) => `The deadline moved to ${deadline} because a new report was added. Your status may have changed.`
 export const explainerTitle = 'How the escalation game works'
 export const explainerFirstReport = (bond: string) => `Put REP behind the outcome you believe is correct. The first report needs at least the start bond (${bond} REP).`
 export const explainerCompetition = 'Other reporters can outbid you. Each new report can move the deadline, up to 7 weeks after the game starts.'
-export const explainerResolution = 'When the deadline passes, the side with the most REP wins. Winning deposits get their REP back plus a reward; losing deposits are lost.'
+export const explainerResolution = 'When the deadline passes, the side with the most REP wins. Winning deposits get their REP back, and eligible early deposits may also earn a reward; losing deposits are lost.'
 export const explainerFork = (threshold: string) => `If two sides both reach ${threshold} REP, the game stops and a universe fork can be triggered. Your REP then follows the outcome you backed through Fork & Migration.`
 export const fullExplanation = 'Read the full explanation'
 export const winningPosition = (worth: string) => `Winning · worth about ${worth} REP if it ended now`
@@ -156,3 +156,6 @@ export const dismissDeadlineNotice = 'Dismiss deadline notice'
 export const resultClaim = (amount: string) => ` You can claim ${amount} REP.`
 
 export const forkViewerStake = (side: string, stake: string) => `You have ${stake} REP on ${side}.`
+
+export const updateReminder = 'Update your reminder (.ics)'
+export const zeroBalanceStatusDetail = 'If all balances stay at zero, the timeout outcome is Invalid.'

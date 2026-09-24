@@ -1,3 +1,4 @@
+import { getDisplayedLeadingEscalationOutcome, getReportingLockedUntilMessage, getReportingOutcomeLabel, hasReportingOpened } from './reporting.js'
 import { formatReportingDeadline } from './reportingViewerStatus.js'
 import { formatCurrencyInputBalance } from '@zoltar/ui-core-shared/lib/formatters.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
@@ -5,8 +6,7 @@ import * as reportingCopy from '../../../copy/reporting.js'
 import { assertNever } from '@zoltar/ui-core-shared/lib/assert.js'
 import type { LifecycleStagePresentation } from '@zoltar/ui-zoltar-shared/features/types.js'
 import type { MarketDetails, ReportingDetails } from '@zoltar/ui-core-shared/types/contracts.js'
-import { ESCALATION_GAME_ACTIVATION_DELAY, getEscalationPhase, getStrictLeadingEscalationOutcome, isPoolQuestionFinalized } from './reportingDomain.js'
-import { getReportingLockedUntilMessage, getReportingOutcomeLabel, hasReportingOpened } from './reporting.js'
+import { ESCALATION_GAME_ACTIVATION_DELAY, getEscalationPhase, isPoolQuestionFinalized } from './reportingDomain.js'
 
 function getResolvedReportingOutcomeLabel(reportingDetails: ReportingDetails) {
 	return reportingDetails.questionOutcome === 'none' ? reportingCopy.pendingFinalization : getReportingOutcomeLabel(reportingDetails.questionOutcome)
@@ -53,7 +53,7 @@ export function getReportingStagePresentation({
 		}
 	if (reportingDetails.status === 'not-started') return { availableActions: [], blockedActions: [], detail: reportingCopy.firstReportNext(formatCurrencyInputBalance(reportingDetails.startBondAttoRep)), key: 'reporting-open', label: reportingCopy.phaseLabels[0] ?? reportingCopy.reportingOpen, tone: 'default' }
 	const escalationPhase = getEscalationPhase(reportingDetails)
-	const leadingOutcome = getStrictLeadingEscalationOutcome(reportingDetails.sides)
+	const leadingOutcome = getDisplayedLeadingEscalationOutcome(reportingDetails.sides)
 	switch (escalationPhase) {
 		case 'Pending Start':
 			return {

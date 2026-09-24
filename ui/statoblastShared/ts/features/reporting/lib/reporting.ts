@@ -1,5 +1,5 @@
-import type { ReportingDetails, ReportingOutcomeKey } from '@zoltar/ui-core-shared/types/contracts.js'
-import { getEscalationPhase, isPoolQuestionFinalized } from './reportingDomain.js'
+import type { EscalationSide, ReportingDetails, ReportingOutcomeKey } from '@zoltar/ui-core-shared/types/contracts.js'
+import { getEscalationPhase, getStrictLeadingEscalationOutcome, isPoolQuestionFinalized } from './reportingDomain.js'
 import { assertNever } from '@zoltar/ui-core-shared/lib/assert.js'
 import { formatTimestampWithRelative } from '@zoltar/ui-core-shared/lib/formatters.js'
 
@@ -13,6 +13,11 @@ export const REPORTING_OUTCOME_DROPDOWN_OPTIONS = REPORTING_OUTCOME_OPTIONS.map(
 	value: option.key,
 	label: option.label,
 }))
+
+// Zero balances resolve as Invalid after timeout, but have no live leader.
+export function getDisplayedLeadingEscalationOutcome(sides: EscalationSide[]) {
+	return sides.some(side => side.balance > 0n) ? getStrictLeadingEscalationOutcome(sides) : undefined
+}
 
 export function getReportingOutcomeLabel(outcome: ReportingOutcomeKey | 'none') {
 	switch (outcome) {

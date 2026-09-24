@@ -1,3 +1,4 @@
+import { getDisplayedLeadingEscalationOutcome } from '@zoltar/ui-statoblast-shared/features/reporting/lib/reporting.js'
 import { formatReportingDeadline } from '@zoltar/ui-statoblast-shared/features/reporting/lib/reportingViewerStatus.js'
 import { getReportingStagePresentation } from '@zoltar/ui-statoblast-shared/features/reporting/lib/reportingStagePresentation.js'
 import { createMarketDetails as marketDetailsFixture } from '@zoltar/ui-core-shared/tests/testUtils/marketFixtures.js'
@@ -559,4 +560,11 @@ test('hypothetical claims reuse local and imported math without requiring finali
 	const tied = { ...details, sides: details.sides.map(side => ({ ...side, balance: rep(8n) })) }
 	expect(getHypotheticalClaimAmount(tied, 'yes', local)).toBeUndefined()
 	expect(details.questionOutcome).toBe('none')
+})
+
+test('display leaders exclude all-zero balances but retain unique positive leaders', () => {
+	const details = createReportingDetails()
+	expect(getDisplayedLeadingEscalationOutcome(details.sides)).toBe('no')
+	expect(getDisplayedLeadingEscalationOutcome(details.sides.map(side => ({ ...side, balance: 0n })))).toBeUndefined()
+	expect(getDisplayedLeadingEscalationOutcome(details.sides.map(side => ({ ...side, balance: rep(8n) })))).toBeUndefined()
 })
