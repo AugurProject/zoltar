@@ -182,6 +182,14 @@ export function createDemoApi(context: DemoContext) {
 		return [...repEthPrices]
 	}
 
+	const demoRetentionRate = (rate: string) => {
+		const scenario = context.pageUrl.searchParams.get('retentionDemo')
+		if (scenario === 'none') return (10n ** 18n).toString()
+		if (scenario === 'full-fee') return '0'
+		if (scenario === 'missing') return null
+		return rate
+	}
+
 	const demoUniswapPrices = () => (priceDemo === 'eight' ? demoDenseUniswapRepEthPriceHistory() : demoUniswapRepEthPriceHistory())
 
 	const DEMO_OPEN_ORACLE_HISTORY = [
@@ -734,7 +742,7 @@ export function createDemoApi(context: DemoContext) {
 						total_claimable_vault_fees_atto_eth: String(BigInt(20 + index * 8) * 10n ** 16n),
 						fee_index: context.pageUrl.searchParams.get('feeSeries') === 'missing' ? undefined : String(BigInt(index + 1) * 10n ** 16n),
 						unallocated_accrued_fees_atto_eth: ['missing', 'partial'].includes(context.pageUrl.searchParams.get('feeSeries') ?? '') ? undefined : String(BigInt(index + 1) * 10n ** 15n),
-						current_retention_rate: context.pageUrl.searchParams.get('retentionDemo') === 'none' ? (10n ** 18n).toString() : poolItem.current_retention_rate,
+						current_retention_rate: demoRetentionRate(poolItem.current_retention_rate),
 					})),
 					events: [],
 					market: hasAmm
@@ -928,16 +936,25 @@ export function createDemoApi(context: DemoContext) {
 		const allReports = cappedKpiCatalog ? [...Array.from({ length: 250 }, (_, index) => ({ ...reportTemplate, report_id: String(10_000 + index), lifecycle: { ...reportTemplate.lifecycle, state: 'Finalized' } })), { ...settleableReport, report_id: '10250' }] : reports
 		const allEscalations = cappedKpiCatalog ? [...Array.from({ length: 250 }, (_, index) => ({ ...escalationTemplate, game_address: `0x${(index + 1).toString(16).padStart(40, '0')}`, event_name: 'NonDecisionReached' })), { ...escalationTemplate, game_address: `0x${(251).toString(16).padStart(40, '0')}` }] : escalations
 		const allAuctions = cappedKpiCatalog ? [...Array.from({ length: 250 }, (_, index) => ({ ...auctionTemplate, auction_address: `0x${(index + 1).toString(16).padStart(40, '0')}`, status: 'Closed' })), { ...auctionTemplate, auction_address: `0x${(251).toString(16).padStart(40, '0')}` }] : auctions
+		const poolMetricsUnavailable = context.pageUrl.searchParams.get('poolMetrics') === 'unavailable'
 		const risk = {
 			pools: [
 				{
 					pool_address: '0x9999999999999999999999999999999999999999',
 					block_number: asOf.blockNumber,
-					read_status: 'success',
+					read_status: poolMetricsUnavailable ? 'failed' : 'success',
 					source_method: 'poolAccountingState()',
-					protocol_state: '0',
-					scanner_severity: 'warning',
-					scanner_reason: 'Pool is above the scanner capacity warning band',
+					protocol_state: poolMetricsUnavailable ? 'unavailable' : '0',
+					scanner_severity: poolMetricsUnavailable ? 'unavailable' : 'warning',
+					scanner_reason: poolMetricsUnavailable ? 'Tagged pool read unavailable' : 'Pool is above the scanner capacity warning band',
+					read_result: {
+						currentRetentionRate: String(999999987000000000n),
+						settlementCollateralAttoEth: String(42n * 10n ** 18n),
+						currentMintingCapacityAttoEth: String(50n * 10n ** 18n),
+						totalPoolHeldAttoRep: String(120n * 10n ** 18n),
+						totalCapacityOwnershipAttoRep: String(100n * 10n ** 18n),
+						securityMultiplierBps: '25000',
+					},
 					capacity: {
 						usedAttoEth: (42n * 10n ** 18n).toString(),
 						capacityAttoEth: (50n * 10n ** 18n).toString(),

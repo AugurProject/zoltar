@@ -138,16 +138,3 @@ export const uniswapLiquidityChartModel = (observations: readonly UniswapPriceOb
 		})),
 	}
 }
-
-// SecurityPoolUtils.MIN_RETENTION_RATE and MAX_RETENTION_RATE (1e18 scale).
-export const protocolRetentionRange = [0.99999997788, 0.999999996848] as const
-
-export const retentionChartBounds = (values: readonly (string | number | bigint | null | undefined)[]) => {
-	const observed = values
-		.filter(value => value !== null && value !== undefined && String(value).trim() !== '')
-		.map(value => chartTokenValue(value))
-		.filter(Number.isFinite)
-	const minimum = Math.min(protocolRetentionRange[0], ...observed)
-	const maximum = Math.max(protocolRetentionRange[1], ...observed)
-	return { sharedRange: [minimum, maximum] as const, expanded: minimum < protocolRetentionRange[0] || maximum > protocolRetentionRange[1] }
-}

@@ -28,3 +28,9 @@ test('reverted ancestors make child ETH movements attempted rather than transfer
 	expect(rows.every(row => row.includes('value not transferred'))).toBe(true)
 	expect(rows[1]).toContain('0.000000000000000001 ETH')
 })
+
+test('presents retention evidence as the annual open-interest fee', () => {
+	expect(semanticFields({ currentRetentionRate: '1000000000000000000' })).toEqual([['Annual open-interest fee', '0 %']])
+	expect(semanticFields({ initial_retention_rate: '0' })).toEqual([['Initial annual open-interest fee', '100 %']])
+	expect(semanticFields({ current_retention_rate: null })).toEqual([['Annual open-interest fee', 'Unavailable']])
+})

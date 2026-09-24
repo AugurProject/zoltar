@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test'
-import { chartValueBounds, chartTokenValue, retentionChartBounds, uniswapLiquidityChartModel, uniswapPriceChartModel, uniswapPriceProvenance } from '../../browser/chart-values.ts'
+import { chartValueBounds, chartTokenValue, uniswapLiquidityChartModel, uniswapPriceChartModel, uniswapPriceProvenance } from '../../browser/chart-values.ts'
 
 test('uses consistent nonnegative bounds for an all-zero price series', () => {
 	expect(chartValueBounds([0], undefined)).toEqual({ minimum: 0, maximum: 1 })
@@ -142,13 +142,4 @@ test('anchors stock and balance charts at zero without imposing an arbitrary max
 	expect(chartValueBounds([100], undefined, true)).toEqual({ minimum: 0, maximum: 100 })
 	expect(chartValueBounds([-1, 20], undefined, true)).toEqual({ minimum: -1, maximum: 20 })
 	expect(chartValueBounds([48, 52], [0, 100], true)).toEqual({ minimum: 0, maximum: 100 })
-})
-
-test('uses the protocol retention limits and expands for out-of-range evidence without clipping it', () => {
-	const limits = [0.99999997788, 0.999999996848] as const
-	expect(retentionChartBounds([])).toEqual({ sharedRange: limits, expanded: false })
-	expect(retentionChartBounds([undefined, null, '', 'invalid', '999999987000000000'])).toEqual({ sharedRange: limits, expanded: false })
-	expect(retentionChartBounds(['999999977880000000', '999999996848000000'])).toEqual({ sharedRange: limits, expanded: false })
-	expect(retentionChartBounds(['1000000000000000000'])).toEqual({ sharedRange: [limits[0], 1], expanded: true })
-	expect(retentionChartBounds(['999999700000000000'])).toEqual({ sharedRange: [0.9999997, limits[1]], expanded: true })
 })

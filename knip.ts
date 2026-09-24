@@ -155,7 +155,6 @@ const config = (options => {
 					'browser/live-app.ts!',
 				],
 				project: ['**/*.{js,cjs,mjs,jsx,ts,cts,mts,tsx}!'],
-				ignoreDependencies: ['@zoltar/core-shared'],
 				paths: {
 					'@zoltar/core-shared/*': ['../shared/core/ts/*'],
 					'@zoltar/zoltar-shared/*': ['../shared/zoltar/ts/*'],

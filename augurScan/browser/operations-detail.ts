@@ -1,3 +1,4 @@
+import { poolSummaryMetrics } from './pool-metrics.ts'
 import { claimProofDisclosure, escalationPayoutSummary, escalationPayoutTitle } from './escalation-payouts.ts'
 import { semanticFields } from './semantic-evidence.ts'
 import { shortIdentifier } from './identifier-format.ts'
@@ -97,6 +98,10 @@ export const renderOperationsDetail = (deps: OperationsDetailDeps, response: Ope
 		snapshotReadStatus: snapshot?.['read_status'],
 	})
 	if (summaryPresentation.label !== 'Evidence state' || summaryPresentation.value !== 'Event-derived') summary.append(operationCard(summaryPresentation.label, summaryPresentation.value))
+	if (route.kind === 'pool') {
+		const state = data['read_status'] === 'success' && isRecord(data['read_result']) ? data['read_result'] : {}
+		for (const [label, value] of poolSummaryMetrics(state)) summary.append(operationCard(label, value))
+	}
 
 	const panels: HTMLElement[] = []
 	let loadedRiskHistoryOffset = 0

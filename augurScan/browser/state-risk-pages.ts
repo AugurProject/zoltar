@@ -1,5 +1,6 @@
+import { annualFeeMillionths, annualFeeText } from './pool-metrics.ts'
 import type { EntityHistory, PoolRecord, StateEntity, StateTab, VaultRecord } from './browser-types.ts'
-import { protocolRetentionRange, retentionChartBounds, uniswapLiquidityChartModel, uniswapPriceChartModel, uniswapPriceProvenance } from './chart-values.ts'
+import { uniswapLiquidityChartModel, uniswapPriceChartModel, uniswapPriceProvenance } from './chart-values.ts'
 import { exactUnit, percentFromBps } from './format.ts'
 import { shortIdentifier } from './identifier-format.ts'
 import type { createOperationsComponents } from './operations-components.ts'
@@ -39,7 +40,7 @@ export const renderPoolDetailPage = async (deps: StateRiskDeps, poolItem: PoolRe
 	const openOracleHistory = history.openOracleHistory ?? []
 	const uniswapChart = uniswapPriceChartModel(uniswapRepEthPrices)
 	const uniswapLiquidity = uniswapLiquidityChartModel(uniswapRepEthPrices)
-	const retentionBounds = retentionChartBounds(history.snapshots.map(row => chartNumericValue(row['current_retention_rate'])))
+	const feeHistory = history.snapshots.map(row => ({ ...row, annual_fee_millionths: annualFeeMillionths(row['current_retention_rate']) }))
 	const latestAmmPrice = ammPrices.at(-1)
 	const latestRepEthPrice = repEthPrices.at(-1)
 	const latestUniswapPrice = uniswapChart.latestObservation
@@ -62,6 +63,7 @@ export const renderPoolDetailPage = async (deps: StateRiskDeps, poolItem: PoolRe
 		metricCard('Capacity ownership', exactUnit(poolItem.total_capacity_ownership_atto_rep, 18, 'REP')),
 		metricCard('Claimable vault fees', exactUnit(poolItem.total_claimable_vault_fees_atto_eth, 18, poolNativeSymbol)),
 		metricCard('Vaults', number(poolItem.vault_count)),
+		metricCard('Annual open-interest fee', annualFeeText(poolItem.current_retention_rate)),
 		metricCard('Conditional YES', latestAmmPrice === undefined ? 'No AMM price' : exactUnit(latestAmmPrice.conditional_yes_bps, 2, '%')),
 		metricCard('Conditional NO', latestAmmPrice === undefined ? 'No AMM price' : exactUnit(latestAmmPrice.conditional_no_bps, 2, '%')),
 		metricCard('REP / ETH', latestRepEthPrice === undefined ? 'No coordinator price' : exactUnit(latestRepEthPrice.rep_per_eth_1e18, 18, 'REP/ETH')),
@@ -91,13 +93,10 @@ export const renderPoolDetailPage = async (deps: StateRiskDeps, poolItem: PoolRe
 			'Checkpoint fee accumulator and unallocated fees; balances may fall when fees are claimed.',
 			{ zeroBaseline: true },
 		),
-		chartCard(
-			'Retention rate history',
-			history.snapshots,
-			[{ key: 'current_retention_rate', label: 'Retention rate', unit: 'ratio' }],
-			`Fraction retained per second. Normal protocol range: ${protocolRetentionRange.join('–')}.${retentionBounds.expanded ? ' Axis expanded to include observations outside this range.' : ''}`,
-			{ sharedRange: retentionBounds.sharedRange },
-		),
+		chartCard('Annual open-interest fee history', feeHistory, [{ key: 'annual_fee_millionths', label: 'Annual open-interest fee', decimals: 6, unit: '%' }], 'Annualized assuming unchanged retention for 365 days. Actual fees vary with utilization.', {
+			sharedRange: [0, 100],
+			axisUnit: '%',
+		}),
 		chartCard(
 			'Uniswap REP price curves',
 			uniswapChart.rows,
@@ -158,7 +157,7 @@ export const renderPoolDetailPage = async (deps: StateRiskDeps, poolItem: PoolRe
 		staticField('Share-token supply', currentState.shareTokenSupplyAttoShares === undefined ? 'No checkpoint' : exactUnit(chartNumericValue(currentState.shareTokenSupplyAttoShares), 18, 'shares')),
 		staticField('Fee-eligible capacity ownership', exactUnit(poolItem.fee_eligible_capacity_ownership_atto_rep, 18, 'REP')),
 		staticField('Unallocated accrued fees', exactUnit(poolItem.unallocated_accrued_fees_atto_eth, 18, poolNativeSymbol)),
-		staticField('Current retention rate', exactUnit(poolItem.current_retention_rate, 18, '')),
+		staticField('Annual open-interest fee', annualFeeText(poolItem.current_retention_rate)),
 		typeof currentState.escalationGame === 'string' && currentState.escalationGame !== '' ? staticAddressField('Escalation game', currentState.escalationGame, poolItem.chain_id) : staticField('Escalation game', 'Not set'),
 	)
 	currentCard.append(currentGrid)
