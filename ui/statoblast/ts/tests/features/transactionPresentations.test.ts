@@ -257,6 +257,7 @@ describe('transaction presentations', () => {
 		}
 		expect(intent.failedTitle).toBe('Price request')
 		expect(failed.active?.title).toBe('Price request')
+		expect(success.title).toBe('Price requested')
 	})
 
 	test('describes truth-auction claim settlement as REP plus auctioned capacity ownership', () => {

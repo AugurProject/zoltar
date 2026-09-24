@@ -23,7 +23,7 @@ async function fetchUniswapPrice(review: NonNullable<RequestPriceModalProps['rev
 	return await getCoordinatorInitialReportPrice(createConnectedReadClient(), review.managerAddress)
 }
 
-export function RequestPriceModal({ review, onConfirm, onClose, canRequest, confirmationGuardMessage, closeOnSuccessKey, fetchPrice = fetchUniswapPrice }: RequestPriceModalProps & { fetchPrice?: typeof fetchUniswapPrice }) {
+export function RequestPriceModal({ review, onConfirm, onClose, canRequest, confirmationGuardMessage, closeOnSuccessKey, getReturnFocusTarget, fetchPrice = fetchUniswapPrice }: RequestPriceModalProps & { fetchPrice?: typeof fetchUniswapPrice }) {
 	const [fetching, setFetching] = useState(false)
 	const [quoteError, setQuoteError] = useState<string>()
 	const quoteAttempt = useRef(0)
@@ -104,8 +104,16 @@ export function RequestPriceModal({ review, onConfirm, onClose, canRequest, conf
 		if (finalSubmittedHash !== undefined && run.current !== undefined) run.current.finalSubmittedHash = finalSubmittedHash
 	}, [finalSubmittedHash])
 	useLayoutEffect(() => {
-		if (completedRequest && review !== undefined) onClose()
-	}, [completedRequest, onClose, review])
+		if (!completedRequest) return
+		const finishedRun = run.current
+		if (ownsWorkflow) workflow?.cancel()
+		if (embeddedTransactionSteps.value === finishedRun?.signal) embeddedTransactionSteps.value = undefined
+		run.current = undefined
+		setAttempted(undefined)
+		setRunning(false)
+		setRetry(value => value + 1)
+		if (review !== undefined) onClose()
+	}, [completedRequest, onClose, review, ownsWorkflow, workflow])
 	useLayoutEffect(() => {
 		if (!current && !sending && !(running && ownsWorkflow && workflow?.steps.some(step => step.hash !== undefined))) run.current?.cancel()
 	}, [current, sending, running, ownsWorkflow, workflow])
@@ -161,7 +169,7 @@ export function RequestPriceModal({ review, onConfirm, onClose, canRequest, conf
 			setAttempted(key)
 			setRunning(true)
 			void Promise.resolve(confirm.current({ ...review, proposedRepPerEthPrice: proposedPrice }, cancellation.signal)).finally(() => {
-				if (mounted.current) setRunning(false)
+				if (mounted.current && run.current?.signal === cancellation.signal) setRunning(false)
 				if (embeddedTransactionSteps.value === cancellation.signal) embeddedTransactionSteps.value = undefined
 			})
 		}, 300)
@@ -225,7 +233,7 @@ export function RequestPriceModal({ review, onConfirm, onClose, canRequest, conf
 	return (
 		<GlobalTransactionPresentationProvider transaction={undefined}>
 			<TransactionActionButtonLockProvider locked={false}>
-				<OperationModal embedTransactionSteps={false} isOpen={review !== undefined} title={poolCopy.requestNewPriceTitle} onClose={close}>
+				<OperationModal embedTransactionSteps={false} getReturnFocusTarget={getReturnFocusTarget} isOpen={review !== undefined} title={poolCopy.requestNewPriceTitle} onClose={close}>
 					{priceControls}
 					{showSteps ? (
 						<GlobalTransactionPresentationProvider transaction={presentation}>

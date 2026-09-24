@@ -222,6 +222,7 @@ export type OperationModalProps = {
 	children: ComponentChildren
 	closeDisabled?: boolean
 	closeOnSuccessKey?: string | undefined
+	getReturnFocusTarget?: (() => HTMLElement | null) | undefined
 	/** Rows the dialog already implies (question, pool, vault); transaction notices inside it omit matching rows. */
 	context?: TransactionContextItem[]
 	description?: ComponentChildren

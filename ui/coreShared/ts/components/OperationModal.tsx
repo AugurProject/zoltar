@@ -24,7 +24,7 @@ function getModalTransactionPresentation(transaction: ReturnType<typeof useGloba
 	return { ...compactTransaction, rows: transaction.rows.filter(row => (row.identityKey === undefined || !contextIdentityKeys.has(row.identityKey)) && !contextLabels.has(row.label)) }
 }
 
-export function OperationModal({ children, closeDisabled = false, closeOnSuccessKey, context = [], description, embedTransactionSteps = true, isOpen, onClose, title }: OperationModalProps) {
+export function OperationModal({ children, closeDisabled = false, closeOnSuccessKey, context = [], description, embedTransactionSteps = true, getReturnFocusTarget, isOpen, onClose, title }: OperationModalProps) {
 	const dialogRef = useRef<HTMLElement | null>(null)
 	const closeButtonRef = useRef<HTMLButtonElement | null>(null)
 	const bodyRef = useRef<HTMLDivElement | null>(null)
@@ -128,6 +128,7 @@ export function OperationModal({ children, closeDisabled = false, closeOnSuccess
 
 	useModalFocusIsolation({
 		dialogRef,
+		getReturnFocusTarget,
 		initialFocusRef: closeButtonRef,
 		isOpen,
 		onClose: requestClose,

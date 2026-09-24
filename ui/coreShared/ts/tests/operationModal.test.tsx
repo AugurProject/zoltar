@@ -1055,6 +1055,35 @@ describe('OperationModal', () => {
 		container.remove()
 	})
 
+	test('returns focus to the current action when the opening control is no longer useful', async () => {
+		const container = document.createElement('div')
+		document.body.appendChild(container)
+		function Harness() {
+			const [open, setOpen] = useState(false)
+			const reportRef = useRef<HTMLButtonElement>(null)
+			return (
+				<>
+					<button type='button' onClick={() => setOpen(true)}>
+						More tools
+					</button>
+					<button ref={reportRef} type='button'>
+						Report #2
+					</button>
+					<OperationModal getReturnFocusTarget={() => reportRef.current} isOpen={open} onClose={() => setOpen(false)} title='Request New Price'>
+						<p>Request details</p>
+					</OperationModal>
+				</>
+			)
+		}
+		await act(() => render(<Harness />, container))
+		const moreTools = within(container).getByRole('button', { name: 'More tools' })
+		await act(() => fireEvent.click(moreTools))
+		await act(() => fireEvent.click(within(container).getByRole('button', { name: 'Close' })))
+		expect(document.activeElement).toBe(within(container).getByRole('button', { name: 'Report #2' }))
+		await act(() => render(null, container))
+		container.remove()
+	})
+
 	test('wraps focus forward and backward inside the modal', async () => {
 		const container = document.createElement('div')
 		document.body.appendChild(container)

@@ -37,7 +37,7 @@ afterEach(() => {
 	embeddedTransactionSteps.value = undefined
 })
 
-test('shows final pending status in the form, then closes it after confirmation', async () => {
+test('closes after confirmation and permits a new request when reopened after status dismissal', async () => {
 	const dom = installDomEnvironment()
 	const presentation = signal<GlobalTransactionPresentation | undefined>(undefined)
 	const completedHash = signal<string | undefined>(undefined)
@@ -47,6 +47,7 @@ test('shows final pending status in the form, then closes it after confirmation'
 	const hash = '0x3333333333333333333333333333333333333333333333333333333333333333'
 	let controller: ReturnType<typeof createTransactionStepController> | undefined
 	let closed = false
+	let attempts = 0
 	function Harness() {
 		return (
 			<GlobalTransactionPresentationProvider transaction={presentation.value}>
@@ -61,6 +62,7 @@ test('shows final pending status in the form, then closes it after confirmation'
 						activeReview.value = undefined
 					}}
 					onConfirm={async (_request, signal) => {
+						attempts += 1
 						controller = createTransactionStepController(signal)
 						controller.setPlan([{ ...step, title: 'Request price' }])
 						controller.startWithoutReview(0)
@@ -97,6 +99,16 @@ test('shows final pending status in the form, then closes it after confirmation'
 		await settle()
 		expect(closed).toBe(true)
 		expect(queries.getByRole('dialog', { name: 'Transaction status' }).textContent).toContain('Price requested')
+		await act(() => fireEvent.click(queries.getByRole('button', { name: 'Dismiss' })))
+		await act(() => {
+			activeReview.value = review
+			requestAllowed.value = true
+			guard.value = undefined
+		})
+		await settle()
+		expect(activeReview.value).toBe(review)
+		expect(queries.getByRole('dialog', { name: 'Request New Price' })).not.toBeNull()
+		expect(attempts).toBe(2)
 	} finally {
 		await rendered.cleanup()
 		dom.cleanup()

@@ -54,7 +54,7 @@ export const executingStagedOperation = 'Executing Staged Operation'
 export const requestingPrice = 'Requesting Price'
 export const priceRequest = 'Price request'
 export const stagedOperationExecuted = 'Staged Operation Executed'
-export const priceRequested = 'Price Requested'
+export const priceRequested = 'Price requested'
 export const formatFinalizedRefundSettlementResultDetail = (capacityOwnershipLabel: CopyTemplateValue) => `Selected finalized truth-auction refund rows were settled. Locked ETH was credited for withdrawal without assigning REP backing units or ${capacityOwnershipLabel}.`
 export const formatWinningBidSettlementResultDetail = (capacityOwnershipLabel: CopyTemplateValue) => `Selected truth-auction winning bids were settled. The selected bids received REP backing units plus ${capacityOwnershipLabel}, assigning the remaining capacity ownership.`
 export const formatMixedBidSettlementResultDetail = (capacityOwnershipLabel: CopyTemplateValue) => `Selected truth-auction bids were settled. Winning bids received REP backing units plus ${capacityOwnershipLabel}, assigning the remaining capacity ownership; refund-only rows credited locked ETH for withdrawal.`

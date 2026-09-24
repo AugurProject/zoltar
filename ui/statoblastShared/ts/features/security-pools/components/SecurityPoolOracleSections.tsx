@@ -42,13 +42,14 @@ export type RequestPriceModalProps = {
 	canRequest: boolean
 	closeOnSuccessKey: string | undefined
 	confirmationGuardMessage: string | undefined
+	getReturnFocusTarget?: () => HTMLElement | null
 	onClose: () => void
 	onConfirm: (review: RequestPriceReview, signal?: AbortSignal) => void | Promise<void>
 	pending: boolean
 	review: RequestPriceReview | undefined
 }
 
-export function SecurityPoolRequestPriceModal({ canRequest, closeOnSuccessKey, confirmationGuardMessage, onClose, onConfirm, pending, review }: RequestPriceModalProps) {
+export function SecurityPoolRequestPriceModal({ canRequest, closeOnSuccessKey, confirmationGuardMessage, getReturnFocusTarget, onClose, onConfirm, pending, review }: RequestPriceModalProps) {
 	const manualPriceFieldId = useId()
 	const [priceSource, setPriceSource] = useState<'automatic' | 'manual'>('automatic')
 	const [manualPrice, setManualPrice] = useState('')
@@ -60,7 +61,7 @@ export function SecurityPoolRequestPriceModal({ canRequest, closeOnSuccessKey, c
 	const proposedRepPerEthPrice = priceSource === 'manual' ? parsedPrice : undefined
 	const manualPriceError = priceSource === 'manual' && (parsedPrice === undefined || parsedPrice <= 0n || parsedPrice >= 2n ** 256n) ? securityPoolCopy.manualInitialPriceError : undefined
 	return (
-		<OperationModal closeOnSuccessKey={closeOnSuccessKey} isOpen={review !== undefined} onClose={onClose} title={securityPoolCopy.requestNewPriceTitle}>
+		<OperationModal closeOnSuccessKey={closeOnSuccessKey} getReturnFocusTarget={getReturnFocusTarget} isOpen={review !== undefined} onClose={onClose} title={securityPoolCopy.requestNewPriceTitle}>
 			<ViewTabs
 				ariaLabel={securityPoolCopy.initialPriceSource}
 				variant='segmented'

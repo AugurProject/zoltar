@@ -555,6 +555,10 @@ export function SecurityPoolWorkflowSection(props: SecurityPoolWorkflowSectionPr
 				canRequest={selectedPoolStateModel.actions.requestPrice.enabled && canUseOracleActions}
 				closeOnSuccessKey={poolPriceOracleResult?.action === 'requestPrice' ? poolPriceOracleResult.hash : undefined}
 				confirmationGuardMessage={requestPriceConfirmationGuardMessage}
+				getReturnFocusTarget={() => {
+					const panel = document.getElementById(SELECTED_POOL_WORKFLOW_PANEL_ID)
+					return panel?.querySelector<HTMLElement>('.oracle-actions .tx-action-button:not(:disabled)') ?? panel?.querySelector<HTMLElement>('.workflow-metric-grid button.link') ?? null
+				}}
 				onClose={() => setRequestPriceReview(undefined)}
 				onConfirm={(review, signal) => onRequestPoolPrice(review.managerAddress, review.securityPoolAddress, review.requestValueAttoEth, review.universeId, review.proposedRepPerEthPrice, signal)}
 				pending={poolOracleActiveAction === 'requestPrice'}

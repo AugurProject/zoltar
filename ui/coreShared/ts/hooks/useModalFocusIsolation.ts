@@ -12,6 +12,7 @@ type ElementRef<T extends HTMLElement> = {
 
 type ModalFocusIsolationOptions<TInitialFocusElement extends HTMLElement> = {
 	dialogRef: ElementRef<HTMLElement>
+	getReturnFocusTarget?: (() => HTMLElement | null) | undefined
 	initialFocusRef: ElementRef<TInitialFocusElement>
 	isOpen: boolean
 	onClose: () => void
@@ -115,8 +116,10 @@ function getFocusableElements(dialogElement: HTMLElement | null) {
 	})
 }
 
-export function useModalFocusIsolation<TInitialFocusElement extends HTMLElement>({ dialogRef, initialFocusRef, isOpen, onClose }: ModalFocusIsolationOptions<TInitialFocusElement>) {
+export function useModalFocusIsolation<TInitialFocusElement extends HTMLElement>({ dialogRef, getReturnFocusTarget, initialFocusRef, isOpen, onClose }: ModalFocusIsolationOptions<TInitialFocusElement>) {
 	const onCloseRef = useRef(onClose)
+	const getReturnFocusTargetRef = useRef(getReturnFocusTarget)
+	getReturnFocusTargetRef.current = getReturnFocusTarget
 
 	useEffect(() => {
 		onCloseRef.current = onClose
@@ -183,7 +186,9 @@ export function useModalFocusIsolation<TInitialFocusElement extends HTMLElement>
 				getFocusableElements(topOtherModalBackdrop)[0]?.focus()
 				return
 			}
-			previouslyFocusedElement?.focus()
+			const returnFocusTarget = getReturnFocusTargetRef.current?.()
+			if (returnFocusTarget?.isConnected && !returnFocusTarget.matches(':disabled')) returnFocusTarget.focus()
+			else previouslyFocusedElement?.focus()
 		}
 	}, [dialogRef, initialFocusRef, isOpen])
 }
