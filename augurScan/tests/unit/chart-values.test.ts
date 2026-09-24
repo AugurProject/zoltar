@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test'
-import { chartValueBounds, uniswapLiquidityChartModel, uniswapPriceChartModel, uniswapPriceProvenance } from '../../browser/chart-values.ts'
+import { chartValueBounds, chartTokenValue, retentionChartBounds, uniswapLiquidityChartModel, uniswapPriceChartModel, uniswapPriceProvenance } from '../../browser/chart-values.ts'
 
 test('uses consistent nonnegative bounds for an all-zero price series', () => {
 	expect(chartValueBounds([0], undefined)).toEqual({ minimum: 0, maximum: 1 })
@@ -89,6 +89,7 @@ test('keeps incompatible Uniswap liquidity measures in provenance-labeled sparse
 		contract_address: '0xcontract',
 		fee_hundredths_bip: '3000',
 		quote_symbol: 'WETH',
+		quote_decimals: 18,
 		event_name: 'Swap',
 		rep_per_eth_1e18: '19000000000000000000',
 	}
@@ -97,8 +98,8 @@ test('keeps incompatible Uniswap liquidity measures in provenance-labeled sparse
 		{ ...common, venue: 'v3', market_id: '0xv3', liquidity_value: '1200' },
 	])
 	expect(model.definitions.map(({ label, unit, decimals }) => ({ label, unit, decimals }))).toEqual([
-		{ label: 'V2 · 0.3% · WETH · 0xv2 liquidity', unit: 'reserve product', decimals: 0 },
-		{ label: 'V3 · 0.3% · WETH · 0xv3 liquidity', unit: 'active liquidity', decimals: 0 },
+		{ label: 'V2 · 0.3% · WETH · 0xv2 liquidity', unit: 'REP × WETH', decimals: 36 },
+		{ label: 'V3 · 0.3% · WETH · 0xv3 liquidity', unit: '√(REP × WETH)', decimals: 18 },
 	])
 	expect(model.rows[0]).toMatchObject({ market_id: '0xv2', uniswap_liquidity_0: '900' })
 	expect(model.rows[0]?.uniswap_liquidity_1).toBeUndefined()
@@ -106,4 +107,48 @@ test('keeps incompatible Uniswap liquidity measures in provenance-labeled sparse
 	const v3Row = model.rows[1]
 	if (v3Row === undefined) throw new Error('Expected a V3 liquidity row')
 	expect(model.definitions[1]?.pointLabel(v3Row)).toContain('V3 Swap')
+})
+
+test('scales liquidity using both token decimals and preserves fractional token values', () => {
+	const common = { timestamp: '2026-08-10T00:00:00.000Z', block_number: '12', contract_address: '0xcontract', fee_hundredths_bip: '500', event_name: 'Swap', rep_per_eth_1e18: '1000000000000000000' }
+	for (const quote_decimals of [6, 18]) {
+		for (const venue of ['v2', 'v3', 'v4']) {
+			const decimals = venue === 'v2' ? 18 + quote_decimals : (18 + quote_decimals) / 2
+			const raw = (125n * 10n ** BigInt(decimals - 2)).toString()
+			const model = uniswapLiquidityChartModel([{ ...common, venue, market_id: '0xpool', quote_symbol: quote_decimals === 6 ? 'USDC' : 'WETH', quote_decimals, liquidity_value: raw }])
+			expect(model.definitions[0]?.decimals).toBe(decimals)
+			expect(model.rows[0]?.liquidity_value).toBe(raw)
+			expect(chartTokenValue(raw, model.definitions[0]?.decimals)).toBeCloseTo(1.25)
+		}
+	}
+	expect(chartTokenValue('1', 36)).toBe(1e-36)
+	expect(chartTokenValue('125', 2)).toBe(1.25)
+	expect(chartTokenValue('7', 0)).toBe(7)
+})
+
+test('does not guess liquidity units from a token symbol when decimals are missing', () => {
+	const model = uniswapLiquidityChartModel([{ timestamp: '2026-08-10T00:00:00Z', block_number: '1', contract_address: '0xcontract', fee_hundredths_bip: '500', event_name: 'Swap', rep_per_eth_1e18: '1', venue: 'v3', market_id: '0xpool', quote_symbol: 'USDC', liquidity_value: '123' }])
+	expect(model.rows).toEqual([])
+	expect(model.unavailableCount).toBe(1)
+})
+
+test('keeps 36-decimal reserve products fractional instead of capping their scale at 18', () => {
+	expect(chartTokenValue('1250000000000000000000000000000000000', 36)).toBeCloseTo(1.25)
+})
+
+test('anchors stock and balance charts at zero without imposing an arbitrary maximum', () => {
+	expect(chartValueBounds([100, 120], undefined, true)).toEqual({ minimum: 0, maximum: 120 })
+	expect(chartValueBounds([0], undefined, true)).toEqual({ minimum: 0, maximum: 1 })
+	expect(chartValueBounds([100], undefined, true)).toEqual({ minimum: 0, maximum: 100 })
+	expect(chartValueBounds([-1, 20], undefined, true)).toEqual({ minimum: -1, maximum: 20 })
+	expect(chartValueBounds([48, 52], [0, 100], true)).toEqual({ minimum: 0, maximum: 100 })
+})
+
+test('uses the protocol retention limits and expands for out-of-range evidence without clipping it', () => {
+	const limits = [0.99999997788, 0.999999996848] as const
+	expect(retentionChartBounds([])).toEqual({ sharedRange: limits, expanded: false })
+	expect(retentionChartBounds([undefined, null, '', 'invalid', '999999987000000000'])).toEqual({ sharedRange: limits, expanded: false })
+	expect(retentionChartBounds(['999999977880000000', '999999996848000000'])).toEqual({ sharedRange: limits, expanded: false })
+	expect(retentionChartBounds(['1000000000000000000'])).toEqual({ sharedRange: [limits[0], 1], expanded: true })
+	expect(retentionChartBounds(['999999700000000000'])).toEqual({ sharedRange: [0.9999997, limits[1]], expanded: true })
 })

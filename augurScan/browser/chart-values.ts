@@ -1,9 +1,17 @@
+export const chartTokenValue = (value: string | number | bigint | null | undefined, decimals = 18): number => {
+	if (value === null || value === undefined) return 0
+	const digits = String(value)
+	const scale = 10 ** decimals
+	return Number(digits) / scale
+}
+
 export interface UniswapPriceObservation {
 	timestamp: string
 	venue: string
 	market_id: string
 	fee_hundredths_bip: string
 	quote_symbol: string
+	quote_decimals?: number | null
 	event_name: string
 	rep_per_eth_1e18: string
 	liquidity_value?: string | null
@@ -27,11 +35,11 @@ export interface ChartDefinition {
 	pointLabel: (row: UniswapChartRow) => string
 }
 
-export const chartValueBounds = (values: readonly number[], sharedRange: readonly [number, number] | undefined): { minimum: number; maximum: number } => {
+export const chartValueBounds = (values: readonly number[], sharedRange: readonly [number, number] | undefined, zeroBaseline = false): { minimum: number; maximum: number } => {
 	if (sharedRange !== undefined) return { minimum: sharedRange[0], maximum: sharedRange[1] }
 	const finiteValues = values.filter(Number.isFinite)
 	if (finiteValues.length === 0) return { minimum: 0, maximum: 1 }
-	const minimum = Math.min(...finiteValues)
+	const minimum = zeroBaseline ? Math.min(0, ...finiteValues) : Math.min(...finiteValues)
 	const maximum = Math.max(...finiteValues)
 	if (maximum !== minimum) return { minimum, maximum }
 	if (maximum === 0) return { minimum: 0, maximum: 1 }
@@ -86,8 +94,17 @@ export const uniswapPriceChartModel = (observations: readonly UniswapPriceObserv
 	}
 }
 
+// REP has 18 decimals. Reserve products multiply both atomic balances;
+// concentrated liquidity has units of the square root of that product.
+const liquidityDecimals = (observation: UniswapPriceObservation): number | undefined => {
+	const quoteDecimals = observation.quote_decimals
+	if (quoteDecimals === undefined || quoteDecimals === null || !Number.isInteger(quoteDecimals) || quoteDecimals < 0 || quoteDecimals > 255) return undefined
+	const decimals = observation.venue === 'v2' ? 18 + quoteDecimals : (18 + quoteDecimals) / 2
+	return Number.isInteger(decimals) ? decimals : undefined
+}
+
 export const uniswapLiquidityChartModel = (observations: readonly UniswapPriceObservation[]) => {
-	const available = observations.filter((observation): observation is UniswapPriceObservation & { liquidity_value: string } => observation.liquidity_value !== undefined && observation.liquidity_value !== null)
+	const available = observations.filter((observation): observation is UniswapPriceObservation & { liquidity_value: string } => observation.liquidity_value !== undefined && observation.liquidity_value !== null && liquidityDecimals(observation) !== undefined)
 	const identities = [
 		...new Map(
 			available.map(observation => {
@@ -106,6 +123,7 @@ export const uniswapLiquidityChartModel = (observations: readonly UniswapPriceOb
 		})
 	return {
 		rows,
+		unavailableCount: observations.filter(observation => observation.liquidity_value != null && liquidityDecimals(observation) === undefined).length,
 		definitions: identities.map(([identity, observation], index) => ({
 			key:
 				keys.get(identity) ??
@@ -113,10 +131,23 @@ export const uniswapLiquidityChartModel = (observations: readonly UniswapPriceOb
 					throw new Error(`Missing liquidity definition for ${identity}`)
 				})(),
 			label: `${uniswapPriceProvenance(observation)} liquidity`,
-			decimals: 0,
-			unit: observation.venue === 'v2' ? 'reserve product' : 'active liquidity',
+			decimals: liquidityDecimals(observation),
+			unit: observation.venue === 'v2' ? `REP × ${observation.quote_symbol}` : `√(REP × ${observation.quote_symbol})`,
 			className: `series-${index % 8}`,
 			pointLabel: (row: UniswapLiquidityChartRow) => `${row.venue.toUpperCase()} ${row.event_name} · ${row.market_id} · ${row.venue === 'v2' ? 'reserve product' : 'active liquidity'}`,
 		})),
 	}
+}
+
+// SecurityPoolUtils.MIN_RETENTION_RATE and MAX_RETENTION_RATE (1e18 scale).
+export const protocolRetentionRange = [0.99999997788, 0.999999996848] as const
+
+export const retentionChartBounds = (values: readonly (string | number | bigint | null | undefined)[]) => {
+	const observed = values
+		.filter(value => value !== null && value !== undefined && String(value).trim() !== '')
+		.map(value => chartTokenValue(value))
+		.filter(Number.isFinite)
+	const minimum = Math.min(protocolRetentionRange[0], ...observed)
+	const maximum = Math.max(protocolRetentionRange[1], ...observed)
+	return { sharedRange: [minimum, maximum] as const, expanded: minimum < protocolRetentionRange[0] || maximum > protocolRetentionRange[1] }
 }

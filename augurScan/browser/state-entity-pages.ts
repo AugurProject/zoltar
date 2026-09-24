@@ -199,6 +199,7 @@ export const renderUniverseDetailPage = async (deps: StateEntityDeps, universe: 
 			history.events.filter(event => event['theoretical_supply_atto_rep'] !== null),
 			[{ key: 'theoretical_supply_atto_rep', label: 'Theoretical REP', unit: 'REP' }],
 			'Supply changes are recorded from initialization, fork, burn, and migration events.',
+			{ zeroBaseline: true },
 		),
 	)
 	const lineage = element('section', 'lineage-card')

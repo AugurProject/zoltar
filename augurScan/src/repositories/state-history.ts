@@ -39,6 +39,7 @@ export const poolStateHistory = async (sql: SQL, address: string, query: StateHi
 				market.token1_address, market.fee_hundredths_bip::text AS fee_hundredths_bip,
 				market.tick_spacing, market.hooks_address,
 				CASE WHEN quote_contract.kind = 'usdc' THEN 'USDC' WHEN observation.venue = 'v4' THEN 'ETH' ELSE COALESCE(quote_metadata.symbol, 'WETH') END AS quote_symbol,
+				COALESCE(quote_metadata.decimals, CASE WHEN quote_contract.kind = 'usdc' THEN ${USDC_QUOTE_DECIMALS} WHEN quote_contract.kind = 'weth' OR market.token0_address = '0x0000000000000000000000000000000000000000' OR market.token1_address = '0x0000000000000000000000000000000000000000' THEN ${ETH_QUOTE_DECIMALS} END)::integer AS quote_decimals,
 				CASE
 					WHEN market.token0_address = universe_rep.reputation_token_address THEN market.token1_address
 					ELSE market.token0_address

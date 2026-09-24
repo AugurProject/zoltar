@@ -43,6 +43,12 @@ const demoPriceEventName = (index: number, venue: string) => {
 	return index === 0 ? 'Initialize' : 'Swap'
 }
 
+const demoLiquidityValue = (venue: string, quote: string | undefined, index: number): string => {
+	const quoteDecimals = quote === 'USDC' ? 6 : 18
+	const decimals = venue === 'v2' ? 18 + quoteDecimals : (18 + quoteDecimals) / 2
+	return ((100n + BigInt(index)) * 10n ** BigInt(decimals)).toString()
+}
+
 const demoUniswapHistory = (markets: readonly DemoUniswapMarket[], now: number): UniswapPriceObservation[] =>
 	markets.flatMap(({ venue, fee, quote }, venueIndex) =>
 		demoRepEthValues.slice(1).map((value, index) => ({
@@ -52,10 +58,11 @@ const demoUniswapHistory = (markets: readonly DemoUniswapMarket[], now: number):
 			market_id: venue === 'v4' ? `0x${(venueIndex + 7).toString(16).repeat(64)}` : `0x${(venueIndex + 7).toString(16).repeat(40)}`,
 			contract_address: `0x${(venueIndex + 4).toString(16).repeat(40)}`,
 			fee_hundredths_bip: fee,
+			quote_decimals: quote === 'USDC' ? 6 : 18,
 			quote_symbol: quote ?? (venue === 'v4' ? 'ETH' : 'WETH'),
 			event_name: demoPriceEventName(index, venue),
 			rep_per_eth_1e18: quote === 'USDC' ? (4_200_000_000_000_000n + BigInt(index) * 90_000_000_000_000n).toString() : (BigInt(value) + (BigInt(venueIndex) - 1n) * 300_000_000_000_000_000n).toString(),
-			liquidity_value: (10n ** 24n + BigInt(venueIndex * 7 + index) * 10n ** 22n).toString(),
+			liquidity_value: demoLiquidityValue(venue, quote, venueIndex * 7 + index),
 		})),
 	)
 

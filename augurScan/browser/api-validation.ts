@@ -176,6 +176,7 @@ export const isUniswapPriceValue = (value: unknown): boolean =>
 	isString(value['quote_symbol']) &&
 	isString(value['event_name']) &&
 	isString(value['rep_per_eth_1e18']) &&
+	(value['quote_decimals'] === undefined || value['quote_decimals'] === null || (typeof value['quote_decimals'] === 'number' && Number.isInteger(value['quote_decimals']) && value['quote_decimals'] >= 0 && value['quote_decimals'] <= 255)) &&
 	(value['liquidity_value'] === undefined || isNullableString(value['liquidity_value']))
 
 const isArgumentDefinition = (value: unknown): boolean => isRecord(value) && typeof value['index'] === 'number' && Number.isInteger(value['index']) && isString(value['name']) && isString(value['type']) && (value['indexed'] === undefined || typeof value['indexed'] === 'boolean')
