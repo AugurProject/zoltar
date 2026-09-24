@@ -1308,6 +1308,10 @@ postgresTest(
 				total: 1,
 				items: [
 					expect.objectContaining({
+						largest_rep_token_address: discoveredAddress.toLowerCase(),
+						largest_rep_balance: '88',
+						largest_rep_decimals: 17,
+						largest_rep_symbol: 'RREP',
 						rep_balances: [expect.objectContaining({ address: discoveredAddress.toLowerCase(), balance: '88', name: 'Replayed REP', symbol: 'RREP', decimals: 17 })],
 					}),
 				],
@@ -3191,6 +3195,8 @@ postgresTest(
 				total: number
 			}
 			expect(richList.total).toBe(2)
+			const otherRichListAddress = richList.items.find(item => item['address'] !== address.toLowerCase())?.['address']
+			if (typeof otherRichListAddress !== 'string') throw new Error('Expected another ranked address')
 			const addressRichList = richList.items.find(item => item['address'] === address.toLowerCase())
 			expect(addressRichList).toMatchObject({
 				address: address.toLowerCase(),
@@ -3251,15 +3257,33 @@ postgresTest(
 					{ owner: address, assetAddress: getAddress('0x0000000000000000000000000000000000000000'), assetKind: 'native', balance: 2_000_000_000_000_000_000n },
 					{ owner: address, assetAddress: rediscoveredAddress, assetKind: 'rep', balance: 3_000_000_000_000_000_000n },
 					{ owner: address, assetAddress: orphanOnlyAddress, assetKind: 'rep', balance: 4_000_000_000_000_000_000n },
+					{ owner: getAddress(otherRichListAddress), assetAddress: orphanOnlyAddress, assetKind: 'rep', balance: 10_000_000_000_000_000_000n },
 				],
 				balanceLease,
 			)
 			await balanceLease.release()
+			const beforeMetadataResponse = await handleApi(new Request(`http://localhost/api/v1/richlist?chainId=${chainId}&sort=rep`), database.sql)
+			if (beforeMetadataResponse === undefined) throw new Error('Pre-metadata REP ranking did not return a response')
+			const beforeMetadata = (await beforeMetadataResponse.json()) as { items: Array<Record<string, unknown>> }
+			expect(beforeMetadata.items[0]).toMatchObject({ address: otherRichListAddress, largest_rep_decimals: 18 })
+			await database.sql`INSERT INTO token_metadata (chain_id, address, block_hash, name, symbol, decimals, read_block, canonical)
+				VALUES (${chainId}, ${orphanOnlyAddress.toLowerCase()}, ${third.hash}, 'Fork REP', 'FREP', 19, 3, true)`
 			const refreshedResponse = await handleApi(new Request(`http://localhost/api/v1/richlist?chainId=${chainId}&address=${address}`), database.sql)
 			if (refreshedResponse === undefined) throw new Error('refreshed rich-list API did not return a response')
 			const refreshed = (await refreshedResponse.json()) as { items: Array<Record<string, unknown>> }
-			expect(refreshed.items[0]).toMatchObject({ rep_token_count: '2', sampled_rep_token_count: '2' })
+			expect(refreshed.items[0]).toMatchObject({
+				rep_token_count: '2',
+				sampled_rep_token_count: '2',
+				largest_rep_token_address: rediscoveredAddress.toLowerCase(),
+				largest_rep_balance: '3000000000000000000',
+				largest_rep_decimals: 18,
+			})
 			expect(refreshed.items[0]).not.toHaveProperty('rep_balance')
+			const repSortedResponse = await handleApi(new Request(`http://localhost/api/v1/richlist?chainId=${chainId}&sort=rep`), database.sql)
+			if (repSortedResponse === undefined) throw new Error('REP-sorted rich list did not return a response')
+			const repSorted = (await repSortedResponse.json()) as { items: Array<Record<string, unknown>> }
+			expect(repSorted.items.map(item => item['address'])).toEqual([address.toLowerCase(), otherRichListAddress])
+			expect(repSorted.items[1]).toMatchObject({ largest_rep_balance: '10000000000000000000', largest_rep_decimals: 19 })
 
 			const extraRepTokens = Array.from({ length: 101 }, (_, index) => getAddress(`0x${(0x7000000000000000000000000000000000000000n + BigInt(index)).toString(16)}`))
 			await database.seedNetwork({

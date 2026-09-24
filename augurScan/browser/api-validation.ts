@@ -284,7 +284,10 @@ export const isRichListRecordValue = (value: unknown): boolean =>
 	isString(value['address']) &&
 	isNullableString(value['label']) &&
 	isNullableString(value['kind']) &&
-	isString(value['rep_balance']) &&
+	isNullableString(value['largest_rep_token_address']) &&
+	isNullableString(value['largest_rep_balance']) &&
+	(value['largest_rep_decimals'] === null || (typeof value['largest_rep_decimals'] === 'number' && Number.isInteger(value['largest_rep_decimals']) && value['largest_rep_decimals'] >= 0 && value['largest_rep_decimals'] <= 255)) &&
+	isNullableString(value['largest_rep_symbol']) &&
 	isStringOrNumber(value['transaction_count']) &&
 	isStringOrNumber(value['interaction_count']) &&
 	isStringOrNumber(value['pool_count']) &&

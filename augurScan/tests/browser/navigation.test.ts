@@ -65,7 +65,7 @@ browserTest(
 			expect(await evaluate(`document.querySelector('#operations-content')?.textContent.includes('health 113.5%')`)).toBe(true)
 			await session.send('Page.navigate', { url: `${origin}/richlist?demo=1` })
 			await waitFor(`document.querySelector('.data-table tbody tr') !== null`)
-			expect(await evaluate(`document.querySelector('.data-table tbody tr td:nth-child(2)')?.textContent`)).toBe('912.000000000000000001 REP')
+			expect(await evaluate(`document.querySelector('.data-table tbody tr td:nth-child(2)')?.textContent`)).toBe('912.000000000000000001 REP · 0x2216…c9bb')
 			await evaluate(`const createObjectURL = URL.createObjectURL.bind(URL); URL.createObjectURL = blob => { window.exportedCsv = blob.text(); return createObjectURL(blob) }; document.querySelector('.data-table-toolbar button').click()`)
 			expect(await evaluate(`window.exportedCsv`)).toContain('912.000000000000000001 REP')
 			expect(await evaluate(`document.querySelector('#richlist-table').hidden === false && document.querySelector('#richlist-shell').hidden === true`)).toBe(true)

@@ -1,7 +1,7 @@
 import type { RichListRecord } from './browser-types.ts'
 import { renderDataTable } from './data-table.ts'
 import { exactNumber, exactUnit } from './format.ts'
-import { richListRepTotal } from './rich-list-rep.ts'
+import { richListLargestRep } from './rich-list-rep.ts'
 
 const nativeSymbol = (chainId: string | number): string => (String(chainId) === '1' ? 'ETH' : 'SepoliaETH')
 
@@ -15,9 +15,9 @@ export const renderRichListTable = (container: HTMLElement, items: readonly Rich
 		columns: [
 			{ label: 'Address', value: item => item.label ?? item.address, href: item => `/address/${item.address}?chainId=${item.chain_id}${options.demo ? '&demo=1' : ''}` },
 			{
-				label: 'Sampled REP',
+				label: 'Largest REP holding',
 				sort: 'rep',
-				value: richListRepTotal,
+				value: richListLargestRep,
 			},
 			{ label: nativeSymbol(options.chainId), sort: 'eth', value: item => exactUnit(item.native_balance ?? '0', 18, nativeSymbol(item.chain_id)) },
 			{ label: 'WETH', sort: 'weth', value: item => exactUnit(item.weth_balance ?? '0', 18, 'WETH') },

@@ -128,7 +128,10 @@ const richListRecord = {
 	address: `0x${'4'.repeat(40)}`,
 	label: null,
 	kind: null,
-	rep_balance: '0',
+	largest_rep_token_address: null,
+	largest_rep_balance: null,
+	largest_rep_decimals: null,
+	largest_rep_symbol: null,
 	transaction_count: '1',
 	interaction_count: '2',
 	pool_count: '0',
@@ -147,7 +150,7 @@ test('accepts production-shaped unknown logs, unknown calldata, partial related 
 	expect(isAccountTransactionValue(accountTransaction)).toBeTrue()
 	expect(isAccountTransactionValue({ ...accountTransaction, roles: ['referenced'], pool_addresses: null })).toBeTrue()
 	expect(isRichListRecordValue(richListRecord)).toBeTrue()
-	expect(isRichListRecordValue({ ...richListRecord, rep_balance: undefined })).toBeFalse()
+	expect(isRichListRecordValue({ ...richListRecord, largest_rep_balance: undefined })).toBeFalse()
 	expect(
 		isLogDetailValue({
 			...activity,

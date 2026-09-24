@@ -7,7 +7,7 @@ export const richListRows = async (sql: SQL, query: { readonly snapshotBlock?: s
 	const orderBy = {
 		eth: 'native_balance DESC, transaction_count DESC',
 		weth: 'weth_balance DESC, transaction_count DESC',
-		rep: 'rep_balance DESC, transaction_count DESC',
+		rep: 'largest_rep_units DESC, transaction_count DESC',
 		transactions: 'transaction_count DESC, interaction_count DESC',
 	}[query.sort]
 	const values: Array<string | number> = []
@@ -33,7 +33,7 @@ export const richListRows = async (sql: SQL, query: { readonly snapshotBlock?: s
 			ORDER BY discovery.chain_id, discovery.address, discovery.block_number DESC, discovery.tx_hash DESC)`
 	const contractTable = snapshotParameter === undefined ? 'contracts' : 'snapshot_contracts'
 	values.push(limit, offset)
-	return await sql.unsafe(
+	const rows = await sql.unsafe(
 		`WITH ${snapshotParameter === undefined ? '' : `snapshot_contracts AS (${contractsAtSnapshot}),`} activity_summary AS (
 			SELECT activity.chain_id, activity.address, min(activity.block_number) AS first_seen_block,
 				max(activity.block_number) AS last_seen_block,
@@ -61,7 +61,6 @@ export const richListRows = async (sql: SQL, query: { readonly snapshotBlock?: s
 		), balance_summary AS (
 			SELECT chain_id, address,
 				COALESCE(sum(balance) FILTER (WHERE asset_kind = 'weth'), 0) AS weth_balance,
-				COALESCE(sum(balance) FILTER (WHERE asset_kind = 'rep'), 0) AS rep_balance,
 				COALESCE(max(balance) FILTER (WHERE asset_kind = 'native'), 0) AS native_balance,
 				count(*) FILTER (WHERE asset_kind = 'rep') AS sampled_rep_token_count,
 				count(*) FILTER (WHERE asset_kind = 'weth') AS sampled_weth_token_count,
@@ -83,6 +82,15 @@ export const richListRows = async (sql: SQL, query: { readonly snapshotBlock?: s
 			JOIN networks observed_network ON observed_network.chain_id = metadata.chain_id
 			WHERE ${snapshotParameter === undefined ? 'metadata.canonical' : 'true'} ${throughSnapshot('observed_block.number')} AND metadata.read_block <= ${snapshotParameter ?? 'observed_network.indexed_block'}
 			ORDER BY metadata.chain_id, metadata.address, metadata.read_block DESC
+		), largest_rep AS (
+			SELECT DISTINCT ON (rep.chain_id, rep.address)
+				rep.chain_id, rep.address, rep.asset_address AS token_address, rep.balance,
+				COALESCE(metadata.decimals, 18) AS decimals, COALESCE(metadata.symbol, 'REP') AS symbol,
+				rep.balance / power(10::numeric, COALESCE(metadata.decimals, 18)) AS units
+			FROM latest_balances rep
+			LEFT JOIN latest_token_metadata metadata ON metadata.chain_id = rep.chain_id AND metadata.address = rep.asset_address
+			WHERE rep.asset_kind = 'rep'
+			ORDER BY rep.chain_id, rep.address, rep.balance / power(10::numeric, COALESCE(metadata.decimals, 18)) DESC, rep.asset_address
 		), latest_vaults AS (
 			SELECT DISTINCT ON (chain_id, pool_address, vault_address) chain_id, pool_address, vault_address,
 				rep_backing_units, capacity_ownership_atto_rep, claimable_fees_atto_eth, block_number
@@ -95,7 +103,11 @@ export const richListRows = async (sql: SQL, query: { readonly snapshotBlock?: s
 		), ranked AS (
 			SELECT activity.*, n.id AS network_id, n.explorer_base_url, c.label, c.kind,
 				COALESCE(balance.weth_balance, 0) AS weth_balance,
-				COALESCE(balance.rep_balance, 0) AS rep_balance,
+				largest_rep.token_address AS largest_rep_token_address,
+				largest_rep.balance AS largest_rep_balance,
+				largest_rep.decimals AS largest_rep_decimals,
+				largest_rep.symbol AS largest_rep_symbol,
+				COALESCE(largest_rep.units, 0) AS largest_rep_units,
 				COALESCE(balance.native_balance, 0) AS native_balance,
 				COALESCE(balance.sampled_rep_token_count, 0) AS sampled_rep_token_count,
 				COALESCE(balance.sampled_weth_token_count, 0) AS sampled_weth_token_count,
@@ -112,6 +124,7 @@ export const richListRows = async (sql: SQL, query: { readonly snapshotBlock?: s
 			JOIN networks n USING (chain_id)
 			LEFT JOIN asset_summary assets USING (chain_id)
 			LEFT JOIN balance_summary balance USING (chain_id, address)
+			LEFT JOIN largest_rep USING (chain_id, address)
 			LEFT JOIN vault_summary vault USING (chain_id, address)
 			LEFT JOIN ${contractTable} c ON c.chain_id = activity.chain_id AND c.address = activity.address AND c.canonical
 		), page AS (
@@ -198,6 +211,10 @@ export const richListRows = async (sql: SQL, query: { readonly snapshotBlock?: s
 		SELECT enriched.*, totals.total FROM totals LEFT JOIN enriched ON true ORDER BY enriched.page_order`,
 		values,
 	)
+	return rows.map((row: Record<string, unknown>) => {
+		const { largest_rep_units: _sortValue, ...publicRow } = row
+		return publicRow
+	})
 }
 
 export const addressPortfolioRows = async (

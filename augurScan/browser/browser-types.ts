@@ -128,7 +128,10 @@ export interface RichListRecord {
 	address: string
 	label: string | null | undefined
 	kind: string | null | undefined
-	rep_balance: string
+	largest_rep_token_address: string | null
+	largest_rep_balance: string | null
+	largest_rep_decimals: number | null
+	largest_rep_symbol: string | null
 	weth_balance?: string
 	native_balance?: string
 	transaction_count: string | number
