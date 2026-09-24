@@ -10,7 +10,7 @@ export function getDefaultReportingWithdrawDepositIndexesByOutcome(): ReportingW
 
 export function getDefaultReportingFormState(): ReportingFormState {
 	return {
-		reportAmount: '0',
+		reportAmount: '',
 		securityPoolAddress: '',
 		selectedOutcome: undefined,
 		selectedWithdrawDepositIndexesByOutcome: getDefaultReportingWithdrawDepositIndexesByOutcome(),

@@ -1,8 +1,7 @@
+import * as reportingCopy from '../../../copy/reporting.js'
 import { getWinningEscalationDepositClaimAmount as computeWinningEscalationDepositClaimAmount, getWinningImportedEscalationDepositClaimAmount as computeWinningImportedEscalationDepositClaimAmount, projectEscalationDeposit, type EscalationBalanceTuple } from '@zoltar/statoblast-shared/escalationGame/escalationMath'
 import type { ActiveReportingDetails, EscalationDeposit, EscalationSide, ImportedEscalationDeposit, ReportingDetails, ReportingOutcomeKey } from '@zoltar/ui-core-shared/types/contracts.js'
 import { formatCurrencyBalanceWithUnit } from '@zoltar/ui-core-shared/lib/formatters.js'
-import { requireDefined } from '@zoltar/ui-core-shared/forms/required.js'
-import { getTimeRemaining } from '@zoltar/ui-core-shared/lib/time.js'
 type ReportingAmountSuggestion = {
 	amountAttoRep: bigint | undefined
 	reason: string | undefined
@@ -10,8 +9,8 @@ type ReportingAmountSuggestion = {
 const REP_UNIT = 10n ** 18n
 export const ESCALATION_GAME_ACTIVATION_DELAY = 3n * 24n * 60n * 60n
 const LOAD_REPORTING_PRESETS_REASON = 'Loading reporting details.'
-const MAX_PROFIT_NOT_STARTED_REASON = 'Max profit becomes available after the escalation game starts.'
-const SELECTED_SIDE_ALREADY_LEADS_REASON = 'Selected side already leads.'
+const MAX_PROFIT_NOT_STARTED_REASON = reportingCopy.maxProfitPrestartReason
+const SELECTED_SIDE_ALREADY_LEADS_REASON = reportingCopy.selectedSideLeadsReason
 const ESCALATION_RESOLVED_REASON = 'Escalation is already resolved.'
 type EscalationPhase = 'Resolved' | 'Fork Triggered' | 'Pending Start' | 'Timed Out' | 'Active'
 function roundUpToRepUnit(value: bigint) {
@@ -31,10 +30,6 @@ function getAvailableRoom(details: ActiveReportingDetails, selectedBalance: bigi
 }
 function isUniqueWinner(selectedBalance: bigint, largestOtherBalance: bigint) {
 	return selectedBalance > largestOtherBalance
-}
-export function getEscalationTimeRemaining(details: ActiveReportingDetails) {
-	if (details.hasReachedNonDecision) return 0n
-	return requireDefined(getTimeRemaining(details.escalationEndTime, details.currentTime), 'Escalation end time is required')
 }
 function hasEscalationTimedOut(details: ActiveReportingDetails) {
 	return details.currentTime > details.escalationEndTime
@@ -98,12 +93,20 @@ export function getRemainingSelectedOutcomeContributionCapacity(details: Reporti
 	if (selectedSide === undefined) return 0n
 	return details.nonDecisionThresholdAttoRep > selectedSide.balance ? details.nonDecisionThresholdAttoRep - selectedSide.balance : 0n
 }
-export function getLeadingEscalationOutcome(sides: EscalationSide[]) {
-	let leadingSide: EscalationSide | undefined
-	for (const side of sides) {
-		if (leadingSide === undefined || side.balance > leadingSide.balance) leadingSide = side
-	}
-	return leadingSide?.key
+export function getStrictLeadingEscalationOutcome(sides: EscalationSide[]) {
+	if (sides.length === 0) return undefined
+	const maximum = sides.reduce((largest, side) => (side.balance > largest ? side.balance : largest), 0n)
+	if (maximum === 0n) return 'invalid'
+	const leaders = sides.filter(side => side.balance === maximum)
+	return leaders.length === 1 ? leaders[0]?.key : undefined
+}
+export function getHypotheticalClaimAmount(details: ActiveReportingDetails, outcome: ReportingOutcomeKey, deposit: EscalationDeposit | ImportedEscalationDeposit) {
+	const leader = getStrictLeadingEscalationOutcome(details.sides)
+	if (leader === undefined) return undefined
+	if (outcome !== leader) return 0n
+	const hypotheticalDetails: ActiveReportingDetails = { ...details, questionOutcome: leader, systemState: 'operational', parentWithdrawalEnabled: true }
+	// Imported cumulative amounts use a different allocation convention.
+	return 'parentDepositIndex' in deposit ? getImportedEscalationDepositClaimAmount(hypotheticalDetails, outcome, deposit) : getEscalationDepositClaimAmount(hypotheticalDetails, outcome, deposit)
 }
 function getMinimumOutcomeChangeContribution(details: ActiveReportingDetails, selectedOutcome: ReportingOutcomeKey): ReportingAmountSuggestion {
 	const { largestOtherBalance, selectedSide } = getSelectedAndOtherSides(details, selectedOutcome)
@@ -157,7 +160,7 @@ function getMaxProfitContribution(details: ActiveReportingDetails, selectedOutco
 	if (minContribution.amountAttoRep === undefined)
 		return {
 			amountAttoRep: undefined,
-			reason: minContribution.reason ?? 'Max profit preset is unavailable.',
+			reason: minContribution.reason ?? 'Max reward preset is unavailable.',
 		}
 	const { largestOtherBalance, selectedSide } = getSelectedAndOtherSides(details, selectedOutcome)
 	if (selectedSide === undefined) return { amountAttoRep: undefined, reason: 'Selected side is unavailable.' }
@@ -166,7 +169,7 @@ function getMaxProfitContribution(details: ActiveReportingDetails, selectedOutco
 	if (isUniqueWinner(selectedSide.balance, largestOtherBalance) && selectedSide.balance >= targetFinalBalance)
 		return {
 			amountAttoRep: undefined,
-			reason: 'Max profit preset unavailable because the reward window is already filled on the selected side.',
+			reason: reportingCopy.maxProfitWindowFilledReason,
 		}
 	const requiredWindowAmount = targetFinalBalance > selectedSide.balance ? targetFinalBalance - selectedSide.balance : 0n
 	const minimumEnteredAmount = minContribution.amountAttoRep > requiredWindowAmount ? minContribution.amountAttoRep : requiredWindowAmount
@@ -177,7 +180,7 @@ function getMaxProfitContribution(details: ActiveReportingDetails, selectedOutco
 	if (selectedSide.balance + effectiveAmount < targetFinalBalance)
 		return {
 			amountAttoRep: undefined,
-			reason: 'Max profit preset unavailable because the selected side cannot fill the reward window within the remaining bond capacity.',
+			reason: 'Max reward preset unavailable because the selected side cannot fill the reward window within the remaining bond capacity.',
 		}
 	return { amountAttoRep, reason: undefined }
 }

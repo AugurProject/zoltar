@@ -27,6 +27,7 @@ export function SelectedPoolTradingPanel({
 }
 
 export function SelectedPoolReportingPanel({
+	oracleBlocker,
 	currentReportingDetails,
 	currentTimestamp,
 	forkAuction,
@@ -39,6 +40,7 @@ export function SelectedPoolReportingPanel({
 	selectedPoolHasActualForkActivity,
 	triggerZoltarForkAvailability,
 }: {
+	oracleBlocker?: import('preact').ComponentChildren
 	currentReportingDetails: ReportingDetails | undefined
 	currentTimestamp: bigint | undefined
 	forkAuction: SecurityPoolWorkflowRouteContentProps['forkAuction']
@@ -54,6 +56,7 @@ export function SelectedPoolReportingPanel({
 	return (
 		<ReportingSection
 			{...reporting}
+			oracleBlocker={oracleBlocker}
 			currentTimestamp={currentTimestamp}
 			embedInCard
 			forkAlreadyTriggered={selectedPoolHasActualForkActivity}

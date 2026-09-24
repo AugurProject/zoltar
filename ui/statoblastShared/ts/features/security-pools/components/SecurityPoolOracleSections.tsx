@@ -31,6 +31,8 @@ export type RequestPriceReview = {
 	universeId: bigint
 }
 
+export const PRICE_ORACLE_HEADING_ID = 'selected-pool-price-oracle-heading'
+
 function getStagedOperationsRefreshLabel({ loadingManager, managerError, managerLoaded }: { loadingManager: boolean; managerError: string | undefined; managerLoaded: boolean }) {
 	if (!managerLoaded && loadingManager && managerError === undefined) return <LoadingText>{securityPoolCopy.loadingStagedOperations}</LoadingText>
 	if (!managerLoaded) return securityPoolCopy.retryStagedOperations
@@ -42,13 +44,14 @@ export type RequestPriceModalProps = {
 	canRequest: boolean
 	closeOnSuccessKey: string | undefined
 	confirmationGuardMessage: string | undefined
+	getReturnFocusTarget?: () => HTMLElement | null
 	onClose: () => void
 	onConfirm: (review: RequestPriceReview, signal?: AbortSignal) => void | Promise<void>
 	pending: boolean
 	review: RequestPriceReview | undefined
 }
 
-export function SecurityPoolRequestPriceModal({ canRequest, closeOnSuccessKey, confirmationGuardMessage, onClose, onConfirm, pending, review }: RequestPriceModalProps) {
+export function SecurityPoolRequestPriceModal({ canRequest, closeOnSuccessKey, confirmationGuardMessage, getReturnFocusTarget, onClose, onConfirm, pending, review }: RequestPriceModalProps) {
 	const manualPriceFieldId = useId()
 	const [priceSource, setPriceSource] = useState<'automatic' | 'manual'>('automatic')
 	const [manualPrice, setManualPrice] = useState('')
@@ -60,7 +63,7 @@ export function SecurityPoolRequestPriceModal({ canRequest, closeOnSuccessKey, c
 	const proposedRepPerEthPrice = priceSource === 'manual' ? parsedPrice : undefined
 	const manualPriceError = priceSource === 'manual' && (parsedPrice === undefined || parsedPrice <= 0n || parsedPrice >= 2n ** 256n) ? securityPoolCopy.manualInitialPriceError : undefined
 	return (
-		<OperationModal closeOnSuccessKey={closeOnSuccessKey} isOpen={review !== undefined} onClose={onClose} title={securityPoolCopy.requestNewPriceTitle}>
+		<OperationModal closeOnSuccessKey={closeOnSuccessKey} getReturnFocusTarget={getReturnFocusTarget} isOpen={review !== undefined} onClose={onClose} title={securityPoolCopy.requestNewPriceTitle}>
 			<ViewTabs
 				ariaLabel={securityPoolCopy.initialPriceSource}
 				variant='segmented'
@@ -245,7 +248,7 @@ export function SecurityPoolPriceOracleSection({
 }) {
 	const priceValues = managerDetails ?? metricValues
 	return (
-		<SectionBlock density='compact' title={securityPoolCopy.poolPriceOracle} variant='plain'>
+		<SectionBlock density='compact' headingId={PRICE_ORACLE_HEADING_ID} title={securityPoolCopy.poolPriceOracle} variant='plain'>
 			<MetricGrid>
 				<MetricField label={statoblastAppCopy.openOraclePrice} valueTagName='span'>
 					<OpenOraclePriceValue currentTimestamp={currentTimestamp} lastPrice={priceValues?.lastPrice} lastSettlementTimestamp={priceValues?.lastSettlementTimestamp ?? 0n} pendingReportReadyAtTimestamp={managerDetails?.pendingReportReadyAtTimestamp} priceValidUntilTimestamp={managerDetails?.priceValidUntilTimestamp} />
@@ -269,7 +272,7 @@ export function SecurityPoolPriceOracleSection({
 			<ErrorNotice message={managerError} />
 			<div className='actions oracle-actions'>
 				<TransactionActionButton
-					idleLabel={securityPoolCopy.requestNewPrice}
+					idleLabel={commonCopy.launchAction(securityPoolCopy.requestNewPrice)}
 					pendingLabel={securityPoolCopy.requestingNewPrice}
 					onClick={onOpenRequestReview}
 					pending={requestPending}

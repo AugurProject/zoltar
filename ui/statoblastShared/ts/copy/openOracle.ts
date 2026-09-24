@@ -1,7 +1,5 @@
 import type { CopyTemplateValue } from '@zoltar/ui-core-shared/copy/types.js'
 
-export const settleReport = 'Settle Report'
-export const settleReportAction = 'Settle report'
 export const disputeAndSwap = 'Dispute & Swap'
 export const disputeAndSwapAction = 'Dispute & swap'
 export const disputeDelay = 'Dispute Delay'
@@ -101,7 +99,7 @@ export function formatSettleCountdown(remaining: bigint, timeType: boolean) {
 export const searchReports = 'Search this page'
 export const settlingReport = 'Settling report…'
 export const settlingReportTitle = 'Settling Report'
-export const reportSettled = 'Report Settled'
+export const reportSettled = 'Settled report'
 export const settlerRewardHelpText = 'ETH paid to the settler.'
 export const settlementSummary = 'Settlement Summary'
 export const settlementTimestamp = 'Settlement Timestamp'
@@ -137,3 +135,9 @@ export const formatNewTokenAmountFieldLabel = (tokenSymbol: string) => `New ${to
 export const reporter = 'Reporter'
 export const parameterDetails = 'Parameter Details'
 export const standaloneParameterDetails = 'Exact report and escalation-halt amounts use base-token decimals. ETH funding must cover required funding and the settler reward. Dispute settings determine escalation timing and economics.'
+
+export const settleReportTitle = (id: bigint) => `Settle report #${id}`
+
+export const settledReportNumber = (id: string) => `Settled report #${id}`
+
+export const settleReport = 'Settle report'

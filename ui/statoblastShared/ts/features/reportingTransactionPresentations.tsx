@@ -1,3 +1,5 @@
+import { formatCurrencyInputBalance } from '@zoltar/ui-core-shared/lib/formatters.js'
+import * as reportingCopy from '../copy/reporting.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as transactionCopy from '@zoltar/ui-core-shared/copy/transaction.js'
 import * as marketCopy from '@zoltar/ui-zoltar-shared/copy/market.js'
@@ -6,9 +8,11 @@ import { AddressValue } from '@zoltar/ui-core-shared/components/AddressValue.js'
 import { IdentifierValue } from '@zoltar/ui-core-shared/components/IdentifierValue.js'
 import { getReportingOutcomeLabel } from './reporting/lib/reporting.js'
 import { getMarketTypeLabel } from '@zoltar/ui-core-shared/lib/marketType.js'
-import { buildIntent, buildPresentation, getPoolUniverseTransactionRows, humanizeTransactionAction, withWarning } from '@zoltar/ui-core-shared/transactions/transactionPresentations.js'
+import { buildIntent, buildPresentation, getPoolUniverseTransactionRows, withWarning } from '@zoltar/ui-core-shared/transactions/transactionPresentations.js'
 import type { PoolUniverseTransactionContext } from '@zoltar/ui-core-shared/transactions/transactionPresentations.js'
 import type { MarketCreationResult, OpenOracleActionResult, ReportingActionResult } from '@zoltar/ui-core-shared/types/contracts.js'
+import { formatUnits } from '@zoltar/core-shared/evm/ethereum'
+import * as priceRequestCopy from '../copy/priceRequest.js'
 
 type MarketCreationTransactionContext = {
 	marketType: MarketCreationResult['marketType']
@@ -23,6 +27,7 @@ function getMarketCreationTransactionRows(context: MarketCreationTransactionCont
 export function createMarketCreationTransactionIntent(context: MarketCreationTransactionContext) {
 	return buildIntent({
 		action: 'createMarket',
+		failedTitle: transactionCopy.questionCreation,
 		rows: getMarketCreationTransactionRows(context),
 		source: 'zoltar',
 		submittedTitle: transactionCopy.creatingQuestion,
@@ -53,16 +58,23 @@ function getReportingTransactionRows(context: ReportingTransactionContext | unde
 }
 
 export function createReportingTransactionIntent(actionName: ReportingActionResult['action'], context?: ReportingTransactionContext) {
+	let submittedTitle = reportingCopy.submittingReport
+	if (actionName === 'approveReportingRep') submittedTitle = reportingCopy.approvingReportingRep
+	if (actionName === 'withdrawEscalation') submittedTitle = transactionCopy.settleEscalationDeposits
 	return buildIntent({
 		action: actionName,
 		rows: getReportingTransactionRows(context),
 		source: 'reporting',
-		submittedTitle: humanizeTransactionAction(actionName),
+		submittedTitle,
 		universeId: context?.universeId,
 	})
 }
 
 export function createReportingSuccessPresentation(result: ReportingActionResult) {
+	let title = transactionCopy.escalationDepositsSettled
+	if (result.amountAttoRep !== undefined) title = result.amountAttoRep === 0n ? reportingCopy.clearedDeposits(getReportingOutcomeLabel(result.outcome)) : reportingCopy.claimedDeposits(getReportingOutcomeLabel(result.outcome), formatCurrencyInputBalance(result.amountAttoRep))
+	if (result.action === 'reportOutcome') title = reportingCopy.reportedAmount(getReportingOutcomeLabel(result.outcome), formatCurrencyInputBalance(result.amountAttoRep ?? 0n))
+	if (result.action === 'approveReportingRep') title = reportingCopy.approvedAmount(formatCurrencyInputBalance(result.amountAttoRep ?? 0n))
 	let detail = transactionCopy.escalationDepositsSettledDetail
 	if (result.action === 'approveReportingRep') detail = transactionCopy.reportingRepApprovalSuccessDetail
 	if (result.action === 'reportOutcome') detail = transactionCopy.reportingContributionSuccessDetail
@@ -73,7 +85,7 @@ export function createReportingSuccessPresentation(result: ReportingActionResult
 			{ label: transactionCopy.pool, value: <AddressValue address={result.securityPoolAddress} /> },
 			{ label: commonCopy.outcome, value: getReportingOutcomeLabel(result.outcome) },
 		],
-		title: humanizeTransactionAction(result.action),
+		title,
 		tone: 'success',
 		universeId: result.universeId,
 	})
@@ -87,11 +99,16 @@ type PoolOracleTransactionContext = {
 	managerAddress: string
 	securityPoolAddress?: string | undefined
 	universeId?: bigint | undefined
+	proposedRepPerEthPrice?: bigint | undefined
 }
 
 function getPoolOracleTransactionRows(context: PoolOracleTransactionContext | undefined) {
 	if (context === undefined) return undefined
-	return [...(context.securityPoolAddress === undefined ? [] : [{ label: commonCopy.securityPoolAddress, value: <AddressValue address={context.securityPoolAddress} /> }]), { label: commonCopy.oracleManager, value: <AddressValue address={context.managerAddress} /> }]
+	return [
+		...(context.securityPoolAddress === undefined ? [] : [{ label: commonCopy.securityPoolAddress, value: context.securityPoolAddress }]),
+		{ label: commonCopy.oracleManager, value: context.managerAddress },
+		...(context.proposedRepPerEthPrice === undefined ? [] : [{ label: priceRequestCopy.attemptedRepPerEthPrice, value: formatUnits(context.proposedRepPerEthPrice, 18) }]),
+	]
 }
 
 export function createPoolOracleTransactionIntent(actionName: 'executeStagedOperation' | 'requestPrice', context?: PoolOracleTransactionContext) {
@@ -102,6 +119,7 @@ export function createPoolOracleTransactionIntent(actionName: 'executeStagedOper
 	return buildIntent({
 		action: actionName,
 		rows: getPoolOracleTransactionRows(context),
+		failedTitle: actionName === 'requestPrice' ? transactionCopy.priceRequest : undefined,
 		source: 'pool-oracle',
 		submittedTitle,
 		universeId: context?.universeId,
@@ -150,16 +168,16 @@ function getOpenOracleSubmittedTitle(actionName: OpenOracleActionResult['action'
 	if (actionName === 'createReportInstance') return openOracleCopy.createReport
 	if (actionName === 'settle') return openOracleCopy.settlingReportTitle
 	if (actionName === 'withdrawBalance') return openOracleCopy.withdrawBalance(context?.withdrawalTokenSymbol ?? openOracleCopy.oracleBalance)
-	return humanizeTransactionAction(actionName)
+	return getOpenOraclePendingTitle(actionName)
 }
 
 function getOpenOracleSuccessPresentationTitle(actionName: OpenOracleActionResult['action'], context: OpenOracleTransactionContext | undefined) {
 	if (actionName === 'approveToken1') return openOracleCopy.formatTokenApproved(context?.token1Symbol ?? openOracleCopy.baseToken)
 	if (actionName === 'approveToken2') return openOracleCopy.formatTokenApproved(context?.token2Symbol ?? openOracleCopy.quoteToken)
 	if (actionName === 'createReportInstance') return openOracleCopy.reportCreated
-	if (actionName === 'settle') return openOracleCopy.reportSettled
+	if (actionName === 'settle') return context?.reportId === undefined ? openOracleCopy.reportSettled : openOracleCopy.settledReportNumber(context.reportId)
 	if (actionName === 'withdrawBalance') return openOracleCopy.formatTokenWithdrawn(context?.withdrawalTokenSymbol ?? openOracleCopy.oracleBalance)
-	return humanizeTransactionAction(actionName)
+	return getOpenOracleSuccessTitle(actionName)
 }
 
 export function createOpenOracleTransactionIntent(actionName: OpenOracleActionResult['action'], context?: OpenOracleTransactionContext) {

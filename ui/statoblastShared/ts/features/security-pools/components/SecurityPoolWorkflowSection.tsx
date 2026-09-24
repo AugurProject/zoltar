@@ -1,3 +1,5 @@
+import { ReportingOracleBlocker } from '../../reporting/components/ReportingOracleBlocker.js'
+import { isPoolQuestionFinalized } from '../../reporting/lib/reportingDomain.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as securityPoolCopy from '../../../copy/securityPool.js'
 import { useState } from 'preact/hooks'
@@ -45,7 +47,7 @@ import { SecurityPoolObjectHeader, SecurityPoolReferenceDetails } from './Securi
 import { PoolSelectionControl } from './PoolSelectionControl.js'
 import { PoolAttention, PoolWorkspaceNavigation } from './PoolWorkspaceNavigation.js'
 import * as workspaceCopy from '../../../copy/poolWorkspace.js'
-import { SecurityPoolRequestPriceModal, type RequestPriceReview } from './SecurityPoolOracleSections.js'
+import { PRICE_ORACLE_HEADING_ID, SecurityPoolRequestPriceModal, type RequestPriceReview } from './SecurityPoolOracleSections.js'
 import { SecurityPoolUniverseMismatchNotice, SecurityPoolWorkflowEmptyState } from './SecurityPoolWorkflowEmptyState.js'
 import { SelectedPoolForkWorkflowPanel, SelectedPoolPriceOraclePanel, SelectedPoolReportingPanel, SelectedPoolStagedOperationsPanel, SelectedPoolTradingPanel } from './SecurityPoolWorkflowTabPanels.js'
 import { SecurityPoolVaultWorkspace } from './SecurityPoolVaultWorkspace.js'
@@ -79,6 +81,7 @@ export function SecurityPoolWorkflowSection(props: SecurityPoolWorkflowSectionPr
 		onRefreshSelectedPoolData,
 		onRequestPoolPrice,
 		onViewPendingReport,
+		inlineOracle,
 		poolOracleActiveAction,
 		poolOracleManagerDetails,
 		poolOracleManagerError,
@@ -418,7 +421,7 @@ export function SecurityPoolWorkflowSection(props: SecurityPoolWorkflowSectionPr
 				<ErrorNotice message={securityPoolOverviewError} />
 				{selectedPool !== undefined ? (
 					<PoolAttention
-						oracleUnavailable={showSelectedPoolWorkflowDetails && (currentPoolOraclePriceUsable === false || currentPoolOracleManagerError !== undefined)}
+						oracleUnavailable={!isPoolQuestionFinalized(currentReportingDetails) && showSelectedPoolWorkflowDetails && (currentPoolOraclePriceUsable === false || currentPoolOracleManagerError !== undefined)}
 						pendingReportId={currentPoolOracleManagerDetails?.pendingReportId}
 						stagedOperationCount={showSelectedPoolWorkflowDetails ? activeStagedOperationCount : 0n}
 						forkAvailable={showSelectedPoolWorkflowDetails && selectedPoolHasForkActivity}
@@ -476,6 +479,23 @@ export function SecurityPoolWorkflowSection(props: SecurityPoolWorkflowSectionPr
 
 						{view === 'reporting' ? (
 							<SelectedPoolReportingPanel
+								oracleBlocker={
+									<ReportingOracleBlocker
+										blocked={reportingOracleGuardMessage !== undefined}
+										manager={currentPoolOracleManagerDetails}
+										now={currentTimestamp}
+										oracle={inlineOracle}
+										onViewReport={onViewPendingReport}
+										onRefresh={() => {
+											if (loadedSelectedPool !== undefined) onLoadPoolOracleManager(loadedSelectedPool.managerAddress)
+										}}
+										requestReason={requestPriceOpenGuardMessage}
+										onRequest={() => {
+											if (loadedSelectedPool !== undefined && requestPriceTransactionValueAttoEth !== undefined)
+												setRequestPriceReview({ requestValueAttoEth: requestPriceTransactionValueAttoEth, managerAddress: loadedSelectedPool.managerAddress, securityPoolAddress: loadedSelectedPool.securityPoolAddress, universeId: loadedSelectedPool.universeId })
+										}}
+									/>
+								}
 								currentReportingDetails={currentReportingDetails}
 								currentTimestamp={currentTimestamp}
 								forkAuction={forkAuction}
@@ -555,6 +575,10 @@ export function SecurityPoolWorkflowSection(props: SecurityPoolWorkflowSectionPr
 				canRequest={selectedPoolStateModel.actions.requestPrice.enabled && canUseOracleActions}
 				closeOnSuccessKey={poolPriceOracleResult?.action === 'requestPrice' ? poolPriceOracleResult.hash : undefined}
 				confirmationGuardMessage={requestPriceConfirmationGuardMessage}
+				getReturnFocusTarget={() => {
+					const panel = document.getElementById(SELECTED_POOL_WORKFLOW_PANEL_ID)
+					return panel?.querySelector<HTMLElement>('.oracle-actions .tx-action-button:not(:disabled)') ?? panel?.querySelector<HTMLElement>('.workflow-metric-grid button.link') ?? document.getElementById(PRICE_ORACLE_HEADING_ID)
+				}}
 				onClose={() => setRequestPriceReview(undefined)}
 				onConfirm={(review, signal) => onRequestPoolPrice(review.managerAddress, review.securityPoolAddress, review.requestValueAttoEth, review.universeId, review.proposedRepPerEthPrice, signal)}
 				pending={poolOracleActiveAction === 'requestPrice'}

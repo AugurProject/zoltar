@@ -82,6 +82,7 @@ function buildHashlessPresentation({
 
 export function buildIntent({
 	action,
+	failedTitle,
 	rows,
 	source,
 	submittedDetail,
@@ -89,6 +90,7 @@ export function buildIntent({
 	universeId,
 }: {
 	action: string
+	failedTitle?: TransactionIntent['failedTitle']
 	rows?: GlobalTransactionRow[] | undefined
 	source: string
 	submittedDetail?: TransactionIntent['submittedDetail']
@@ -97,6 +99,7 @@ export function buildIntent({
 }): TransactionIntent {
 	return {
 		action,
+		...(failedTitle === undefined ? {} : { failedTitle }),
 		...(rows === undefined ? {} : { rows }),
 		source,
 		...(submittedDetail === undefined ? {} : { submittedDetail }),
@@ -183,7 +186,7 @@ export function createTransactionFailurePresentation(intent: TransactionIntent, 
 	return buildHashlessPresentation({
 		detail: message,
 		dismissKey,
-		title: intent.submittedTitle,
+		title: intent.failedTitle ?? intent.submittedTitle,
 		tone: 'error',
 		...(intent.rows === undefined ? {} : { rows: intent.rows }),
 		...(intent.technicalRows === undefined ? {} : { technicalRows: intent.technicalRows }),

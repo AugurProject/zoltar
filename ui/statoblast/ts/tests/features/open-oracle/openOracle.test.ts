@@ -288,6 +288,8 @@ describe('Open Oracle helpers', () => {
 				}
 
 			let plannedFunctions: string[] = []
+			let plannedTokenOrder: Address[] = []
+			let plannedApprovalOrder: Address[] = []
 			const preparedFunctions: string[] = []
 			const createResult1 = await createOpenOracleReportInstance(
 				{
@@ -295,6 +297,8 @@ describe('Open Oracle helpers', () => {
 					onTransactionPlan: steps => {
 						expect(preparedFunctions).toHaveLength(0)
 						plannedFunctions = steps.map(step => step.functionName)
+						plannedTokenOrder = steps.at(-1)?.tokenFunding?.map(token => token.tokenAddress) ?? []
+						plannedApprovalOrder = steps.filter(step => step.functionName === 'approve').map(step => step.contractAddress)
 					},
 					onTransactionPrepared: preview => preparedFunctions.push(preview.functionName),
 				},
@@ -315,8 +319,12 @@ describe('Open Oracle helpers', () => {
 			)
 			expect(createResult1.action).toBe('createReportInstance')
 			expect(plannedFunctions).toEqual(preparedFunctions)
+			expect(plannedTokenOrder.map(address => address.toLowerCase())).toEqual([WETH_ADDRESS, REP_ADDRESS].map(address => address.toLowerCase()))
 			if (preapproved) expect(plannedFunctions).not.toContain('approve')
-			else expect(plannedFunctions.slice(-3)).toEqual(['approve', 'approve', 'report'])
+			else {
+				expect(plannedFunctions.slice(-3)).toEqual(['approve', 'approve', 'report'])
+				expect(plannedApprovalOrder.map(address => address.toLowerCase())).toEqual([WETH_ADDRESS, REP_ADDRESS].map(address => address.toLowerCase()))
+			}
 
 			const createResult2 = await createOpenOracleReportInstance(uiWriteClient, {
 				disputeDelay: 10,
@@ -1005,9 +1013,10 @@ describe('Open Oracle helpers', () => {
 					expect(preparedFunctions).toHaveLength(0)
 					plannedFunctions = steps.map(step => step.functionName)
 					const finalStep = steps.at(-1)
-					expect(finalStep?.tokenFunding?.map(token => token.tokenAddress)).toEqual([getAddress(addressString(GENESIS_REPUTATION_TOKEN)), getAddress(WETH_ADDRESS)])
-					expect(finalStep?.tokenFunding?.[1]?.amount).toBe(minimumToken1ReportAttoEth)
-					expect(finalStep?.tokenFunding?.[0]?.amount).toBe((minimumToken1ReportAttoEth * minimumToken1ReportAttoEth + 10n ** 18n - 1n) / 10n ** 18n)
+					expect(finalStep?.tokenFunding?.map(token => token.tokenAddress)).toEqual([getAddress(WETH_ADDRESS), getAddress(addressString(GENESIS_REPUTATION_TOKEN))])
+					expect(finalStep?.tokenFunding?.[0]?.amount).toBe(minimumToken1ReportAttoEth)
+					expect(finalStep?.tokenFunding?.[1]?.amount).toBe((minimumToken1ReportAttoEth * minimumToken1ReportAttoEth + 10n ** 18n - 1n) / 10n ** 18n)
+					expect(steps.filter(step => step.functionName === 'approve').map(step => step.contractAddress)).toEqual([getAddress(WETH_ADDRESS), getAddress(addressString(GENESIS_REPUTATION_TOKEN))])
 					expect(finalStep?.value).toBe(finalStep?.oracleOutcome?.settlerRewardAttoEth)
 					expect(finalStep?.args?.at(-1)).toBe(finalStep?.value)
 				},

@@ -317,11 +317,12 @@ describe('transactionTray', () => {
 			source: 'zoltar',
 			submittedDetail: 'Question creation transaction submitted.',
 			submittedTitle: 'Creating Question',
+			failedTitle: 'Question creation',
 		})
 		const failed = markTransactionFailed(requested, 'Action canceled in wallet.')
 
 		expect(failed.active?.tone).toBe('error')
-		expect(failed.active?.title).toBe('Creating Question')
+		expect(failed.active?.title).toBe('Question creation')
 		expect(failed.active?.detail).toBe('Action canceled in wallet.')
 		expect(failed.active?.hash).toBeUndefined()
 		expect(failed.active?.dismissKey).toBe('transaction-request-1')
@@ -353,12 +354,13 @@ describe('transactionTray', () => {
 			source: 'zoltar',
 			submittedDetail: 'Question creation transaction submitted.',
 			submittedTitle: 'Creating Question',
+			failedTitle: 'Question creation',
 		})
 		const submitted = markTransactionSubmitted(requested, transactionHash)
 		const failed = markTransactionFailed(submitted, 'Transaction reverted')
 
 		expect(failed.active?.tone).toBe('error')
-		expect(failed.active?.title).toBe('Creating Question')
+		expect(failed.active?.title).toBe('Question creation')
 		expect(failed.active?.detail).toBe('Transaction reverted')
 		expect(failed.active?.hash).toBe(transactionHash)
 		expect(failed.active?.dismissKey).toBe(transactionHash)

@@ -1,3 +1,4 @@
+import * as openOracleCopy from '../../../copy/openOracle.js'
 import type { OpenOracleSelectedReportActionMode } from './openOracle.js'
 import type { ReadinessAction } from '@zoltar/ui-zoltar-shared/features/types.js'
 
@@ -17,20 +18,20 @@ export function getOpenOracleReadinessActions({ actionMode, disputeMessage, hasR
 		})
 		const settleBlocker = baseBlocker ?? settleMessage
 		actions.push({
-			actionLabel: 'Settle report',
+			actionLabel: openOracleCopy.settleReport,
 			key: 'settle-report',
 			readiness: settleBlocker === undefined ? 'ready' : 'blocked',
-			title: 'Settle Report',
+			title: openOracleCopy.settleReport,
 			...(settleBlocker === undefined ? {} : { blocker: settleBlocker }),
 		})
 	}
 	if (actionMode === 'settle') {
 		const settleBlocker = baseBlocker ?? settleMessage
 		actions.push({
-			actionLabel: 'Settle report',
+			actionLabel: openOracleCopy.settleReport,
 			key: 'settle-report',
 			readiness: settleBlocker === undefined ? 'ready' : 'blocked',
-			title: 'Settle Report',
+			title: openOracleCopy.settleReport,
 			...(settleBlocker === undefined ? {} : { blocker: settleBlocker }),
 		})
 	}
