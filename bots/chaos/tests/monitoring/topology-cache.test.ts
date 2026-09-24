@@ -138,6 +138,7 @@ describe('immutable topology sidecar', () => {
 		await writeFile(join(storePath, 'current.json'), `${JSON.stringify({ manifestDigest, schemaVersion: 1 })}\n`, { mode: 0o600 })
 
 		await expect(loadImmutableTopologyCacheWithinLimits({ identity: identity(), limits: generousLimits, statePath })).resolves.toBeUndefined()
+		expect(await validateImmutableTopologySidecarIfPresent(statePath, identity())).toBe('rebuild-required')
 	})
 
 	test('doctor accepts a persisted topology with the full deployment configuration', async () => {
@@ -151,6 +152,25 @@ describe('immutable topology sidecar', () => {
 		const scanIdentity = { chainId: settings.network.chainId, ...settings.deployment }
 		expect(await loadImmutableTopologyCacheWithinLimits({ identity: scanIdentity, limits: generousLimits, statePath })).toEqual(cache())
 		await saveImmutableTopologyCache(statePath, scanIdentity, cache())
+	})
+
+	test.each(['missing-factory', 'changed-factory', 'changed-root'] as const)('doctor leaves a %s topology untouched for the scanner to rebuild', async mismatch => {
+		const statePath = await temporaryStatePath()
+		const settings = parseSettings(await Bun.file(join(import.meta.dir, '../../config/operator.configured-placeholder.json')).json())
+		settings.runtime.stateFile = statePath
+		const expectedIdentity = { chainId: settings.network.chainId, ...settings.deployment }
+		const previousIdentity = { ...expectedIdentity }
+		if (mismatch === 'missing-factory') Reflect.deleteProperty(previousIdentity, 'uniswapV3Factory')
+		else if (mismatch === 'changed-factory') previousIdentity.uniswapV3Factory = address(99)
+		else previousIdentity.zoltar = address(99)
+		await saveImmutableTopologyCache(statePath, previousIdentity, cache())
+		const pointerPath = join(immutableTopologySidecarDirectory(statePath), 'current.json')
+		const before = await readFile(pointerPath)
+		expect(await validateDoctorCompanionState(settings)).toEqual({ immutableTopology: 'rebuild-required' })
+		expect(await readFile(pointerPath)).toEqual(before)
+		expect(await loadImmutableTopologyCacheWithinLimits({ identity: expectedIdentity, limits: generousLimits, statePath })).toBeUndefined()
+		await saveImmutableTopologyCache(statePath, expectedIdentity, cache())
+		expect(await validateDoctorCompanionState(settings)).toEqual({ immutableTopology: 'valid' })
 	})
 
 	test('round-trips more than ten thousand immutable records through checksummed bounded chunks', async () => {
@@ -320,6 +340,8 @@ describe('immutable topology sidecar', () => {
 		contents[0] = first ^ 1
 		await writeFile(chunkPath, contents)
 		await expect(loadImmutableTopologyCacheWithinLimits({ identity: identity(), limits: generousLimits, statePath })).rejects.toThrow('digest')
+		expect(await validateImmutableTopologySidecarIfPresent(statePath, { ...identity(), tradingFactory: address(99) })).toBe('rebuild-required')
+		await expect(validateImmutableTopologySidecarIfPresent(statePath, identity())).rejects.toThrow('digest')
 
 		await saveImmutableTopologyCache(statePath, identity(), cache())
 		const pointerPath = join(storePath, 'current.json')
@@ -327,6 +349,7 @@ describe('immutable topology sidecar', () => {
 		await rename(pointerPath, realPointerPath)
 		await symlink(realPointerPath, pointerPath)
 		await expect(loadImmutableTopologyCacheWithinLimits({ identity: identity(), limits: generousLimits, statePath })).rejects.toThrow('symbolic link')
+		await expect(validateImmutableTopologySidecarIfPresent(statePath, identity())).rejects.toThrow('symbolic link')
 	})
 
 	test('stops streaming a generation after its manifest-declared entry bound', async () => {
@@ -354,7 +377,7 @@ describe('immutable topology sidecar', () => {
 		expect(await loadImmutableTopologyCacheWithinLimits({ identity: { ...identity(), tradingFactory: address(99) }, limits: generousLimits, statePath })).toBeUndefined()
 		expect(await loadImmutableTopologyCacheWithinLimits({ identity: { ...identity(), uniswapV3Factory: address(99) }, limits: generousLimits, statePath })).toBeUndefined()
 		expect(await validateImmutableTopologySidecarIfPresent(statePath, identity())).toBe('valid')
-		await expect(validateImmutableTopologySidecarIfPresent(statePath, { ...identity(), tradingFactory: address(99) })).rejects.toThrow('different deployment identity')
+		expect(await validateImmutableTopologySidecarIfPresent(statePath, { ...identity(), tradingFactory: address(99) })).toBe('rebuild-required')
 	})
 
 	test('prunes abandoned generation and pointer temporary files after the next commit', async () => {

@@ -62,7 +62,7 @@ export type ChaosDoctorDependencies = {
 	loadState: typeof loadDurableState
 	preflightSubmission: typeof preflightTransactionSubmissionNetwork
 	probe: (settings: OperatorSettings, wallet: `0x${string}`) => Promise<ChaosDoctorProbeResult>
-	validateCompanionState: (settings: OperatorSettings) => Promise<{ immutableTopology: 'absent' | 'valid' }>
+	validateCompanionState: typeof validateDoctorCompanionState
 	verifyStateParent: (stateFile: string) => Promise<void>
 }
 
@@ -473,6 +473,7 @@ async function runChaosDoctorWithLoaded(loaded: LoadedDoctorSettings, dependenci
 		if (deploymentNotice !== undefined)
 			return {
 				checks: { configuration: 'passed', durableState: 'passed', companionState: 'passed', submission: 'passed', deploymentCodeAndGraph: 'waiting' },
+				companionState,
 				deploymentNotice,
 				operationsAvailable: false,
 			}
