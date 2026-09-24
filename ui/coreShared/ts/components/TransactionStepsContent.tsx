@@ -14,6 +14,7 @@ import { EthAmount, TransactionFundingSummary } from './TransactionFundingSummar
 import { TransactionHashLink } from './TransactionHashLink.js'
 import { TransactionPresentationNotice } from './TransactionPresentationNotice.js'
 import { transactionSteps } from '../transactions/transactionSteps.js'
+import { isGlobalTransactionDismissed } from '../transactions/globalTransactionDismissal.js'
 
 /** Explains a step that has no token funding to summarize, using the enclosing operation's rows for the parameters being submitted. */
 function TransactionStepReview({ contractAddress, contractLabel, description, rows = [] }: { contractAddress: Address | undefined; contractLabel: string | undefined; description: string | undefined; rows?: GlobalTransactionRow[] | undefined }) {
@@ -129,6 +130,7 @@ export function TransactionStepsActions({ cancelable = true, contextKey, focusOn
 								if (completedIndices.has(index) || step.phase === 'confirmed') return undefined
 								const active = index === workflow.activeIndex
 								const final = index === workflow.steps.length - 1
+								const hashShownInFailureStatus = final && step.hash !== undefined && presentation?.tone === 'error' && presentation.hash === step.hash && !isGlobalTransactionDismissed(presentation)
 								const ready = step.phase === 'review' && !pending && error === undefined
 								const status = { skipped: copy.skipped, upcoming: step.optional ? copy.ifNeeded : undefined, review: undefined, pending: undefined, confirmed: transactionCopy.confirmed, failed: copy.notCompleted }[step.phase]
 								const detail = [step.phase === 'upcoming' || step.approval !== undefined ? undefined : step.amount, status].filter(value => value !== undefined).join(' · ')
@@ -183,7 +185,7 @@ export function TransactionStepsActions({ cancelable = true, contextKey, focusOn
 												</button>
 											</div>
 										) : undefined}
-										<div className='transaction-step-hash'>{step.hash === undefined ? undefined : <TransactionHashLink hash={step.hash} />}</div>
+										<div className='transaction-step-hash'>{step.hash === undefined || hashShownInFailureStatus ? undefined : <TransactionHashLink hash={step.hash} />}</div>
 									</div>
 								)
 							})}

@@ -83,6 +83,7 @@ describe('transaction presentations', () => {
 		})
 
 		expect(intent.rows).toEqual([{ label: 'Statoblast Security Multiplier', value: '2.5x' }])
+		expect(intent.failedTitle).toBe('Security pool creation')
 	})
 
 	test('orders security pool creation rows like the success presentation and leads with a new question title', () => {
@@ -254,6 +255,8 @@ describe('transaction presentations', () => {
 			expect(presentation?.rows?.map(row => row.label)).not.toContain('Universe')
 			expect(presentation?.rows?.find(row => row.label === 'Attempted REP/ETH price')?.value).toBe('3')
 		}
+		expect(intent.failedTitle).toBe('Price request')
+		expect(failed.active?.title).toBe('Price request')
 	})
 
 	test('describes truth-auction claim settlement as REP plus auctioned capacity ownership', () => {

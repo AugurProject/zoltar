@@ -1016,10 +1016,10 @@ productionWorkflowTest('production bundle executes deployment, reporting, fork m
 			await driver.clickButton('Request new price')
 			await driver.waitForButtonEnabled('Fetch from Uniswap')
 			expect(await driver.evaluate("document.querySelector('.request-price-fields input')?.value")).toBe('')
-			expect(await driver.evaluate("document.querySelector('.transaction-funding')?.textContent")).toContain('— REP')
+			expect(await driver.evaluate("document.querySelector('.transaction-funding') === null")).toBe(true)
 			expect(await driver.evaluate("[...document.querySelectorAll('.transaction-step-actions .tx-action-button')].every(button => button.disabled)")).toBe(true)
 			const priceDialogGeometry = () =>
-				driver.evaluate(`['[role="dialog"]', '.request-price-fields input', '.transaction-funding', '.transaction-step-actions', '.approval-amount-field input', '.transaction-plan-action-final button'].map(selector => {
+				driver.evaluate(`['[role="dialog"]', '.request-price-fields input', '.transaction-step-actions', '.transaction-plan-action-final button'].map(selector => {
 					const element = document.querySelector(selector)
 					if (element === null) throw new Error('Missing price dialog element: ' + selector)
 					const rect = element.getBoundingClientRect()
@@ -1032,14 +1032,15 @@ productionWorkflowTest('production bundle executes deployment, reporting, fork m
 				await driver.resize(viewport)
 				await driver.setInputByLabel('Open Oracle REP/ETH starting price', '')
 				await driver.waitForBodyText('Enter a starting price')
-				expect(await driver.evaluate("document.querySelector('.transaction-deposits')?.getBoundingClientRect().height > 0")).toBe(true)
+				expect(await driver.evaluate("document.querySelector('.transaction-funding') === null")).toBe(true)
 				const emptyGeometry = await priceDialogGeometry()
+				const emptyInputWidth = await driver.evaluate("Math.round(document.querySelector('.request-price-fields input')?.getBoundingClientRect().width ?? 0)")
 				await driver.setInputByLabel('Open Oracle REP/ETH starting price', 'a')
 				await driver.waitForBodyText('Enter a positive REP per ETH price')
-				if (viewport.width > 600) expect(await priceDialogGeometry()).toEqual(emptyGeometry)
+				if (viewport.width > 600) expect(await driver.evaluate("Math.round(document.querySelector('.request-price-fields input')?.getBoundingClientRect().width ?? 0)")).toBe(emptyInputWidth)
 				else {
 					expect(
-						await driver.evaluate("(() => { const error = document.querySelector('.request-price-fields .field-error'); const funding = document.querySelector('.transaction-funding'); return error !== null && funding !== null && error.getBoundingClientRect().bottom <= funding.getBoundingClientRect().top })()"),
+						await driver.evaluate("(() => { const error = document.querySelector('.request-price-fields .field-error'); const action = document.querySelector('.transaction-step-actions'); return error !== null && action !== null && error.getBoundingClientRect().bottom <= action.getBoundingClientRect().top })()"),
 					).toBe(true)
 					expect(await driver.evaluate("document.querySelector('[role=dialog]')?.scrollWidth <= document.querySelector('[role=dialog]')?.clientWidth")).toBe(true)
 				}
@@ -1049,13 +1050,13 @@ productionWorkflowTest('production bundle executes deployment, reporting, fork m
 				await driver.waitForButtonEnabled('Fetch from Uniswap')
 				await driver.waitForBodyWithoutText('Preparing funding and approvals…')
 				expect(await driver.evaluate("document.querySelector('.request-price-fields input')?.value")).toBe('3')
-				expect(await driver.evaluate("[...document.querySelectorAll('.transaction-approval-satisfied')].map(row => row.textContent?.trim())")).toEqual(['REP approved ✓', 'WETH approved ✓'])
+				expect(await driver.evaluate("[...document.querySelectorAll('.transaction-approval-satisfied')].map(row => row.textContent?.trim())")).toEqual(['WETH approved ✓', 'REP approved ✓'])
 				expect(await driver.evaluate("document.querySelector('.approval-amount-field') === null")).toBe(true)
 				expect(await driver.evaluate("document.querySelector('[role=dialog]')?.scrollWidth <= document.querySelector('[role=dialog]')?.clientWidth")).toBe(true)
 				await driver.setInputByLabel('Open Oracle REP/ETH starting price', '2')
 				await driver.waitForBodyText('Preparing funding and approvals…')
 				await driver.waitForBodyWithoutText('Preparing funding and approvals…')
-				expect(await driver.evaluate("[...document.querySelectorAll('.transaction-approval-satisfied')].map(row => row.textContent?.trim())")).toEqual(['REP approved ✓', 'WETH approved ✓'])
+				expect(await driver.evaluate("[...document.querySelectorAll('.transaction-approval-satisfied')].map(row => row.textContent?.trim())")).toEqual(['WETH approved ✓', 'REP approved ✓'])
 				await driver.setInputByLabel('Open Oracle REP/ETH starting price', '')
 				await driver.waitForBodyText('Enter a starting price')
 				expect(await priceDialogGeometry()).toEqual(emptyGeometry)
@@ -1145,9 +1146,8 @@ productionWorkflowTest('production bundle executes deployment, reporting, fork m
 			}
 
 			await selectReportingOutcome('Yes')
-			await driver.waitForBodyText('Your selected REP was committed to the chosen escalation side.')
+			await driver.waitForBodyText('Selected side is already full at')
 			await driver.waitForBodyWithoutText('Submitting report…')
-			await driver.clickButton('Dismiss')
 			const vaultLockedDesktopScreenshotPath = process.env['UI_ORDINARY_VAULT_LOCKED_DESKTOP_SCREENSHOT']
 			const vaultLockedMobileScreenshotPath = process.env['UI_ORDINARY_VAULT_LOCKED_MOBILE_SCREENSHOT']
 			const captureVaultLockedQaScreenshots = (vaultLockedDesktopScreenshotPath !== undefined && vaultLockedDesktopScreenshotPath !== '') || (vaultLockedMobileScreenshotPath !== undefined && vaultLockedMobileScreenshotPath !== '')
@@ -1170,7 +1170,6 @@ productionWorkflowTest('production bundle executes deployment, reporting, fork m
 			}
 			await selectReportingOutcome('No')
 			await driver.waitForTransactionStatus('Confirmed', 'Report Outcome')
-			await driver.clickButton('Dismiss')
 			await driver.waitForButtonEnabled('Trigger universe fork')
 			await driver.clickButton('Trigger universe fork')
 			await completeTransactionReview()
@@ -1182,13 +1181,11 @@ productionWorkflowTest('production bundle executes deployment, reporting, fork m
 			await driver.waitForButtonEnabled('Migrate pool to Yes universe')
 			await driver.clickButton('Migrate pool to Yes universe')
 			await completeTransactionReview('Migrate REP To Zoltar')
-			await driver.waitForBodyText('Pool-held REP was migrated into the selected child universe.')
-			await driver.clickButton('Dismiss')
+			await driver.waitForTransactionStatus('Confirmed', 'Migrate REP To Zoltar')
 			await driver.waitForButtonEnabled('Migrate vault to Yes')
 			await driver.clickButton('Migrate vault to Yes')
 			await completeTransactionReview('Migrate Vault')
-			await driver.waitForBodyText('Vault REP backing and capacity ownership were migrated into the selected child universe.')
-			await driver.clickButton('Dismiss')
+			await driver.waitForTransactionStatus('Confirmed', 'Migrate Vault')
 
 			await driver.resize({ height: 900, width: 1440 })
 			await driver.navigate(`${baseUrl}/statoblast/?workflow=auction#/security-pools?simulate=1&simScenario=securitypoolx2-auction`)

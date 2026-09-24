@@ -33,6 +33,7 @@ export type GlobalTransactionRow = {
 
 export type TransactionIntent = {
 	action: string
+	failedTitle?: ComponentChildren
 	requiresWalletConfirmation?: boolean | undefined
 	rows?: GlobalTransactionRow[]
 	technicalRows?: GlobalTransactionRow[]

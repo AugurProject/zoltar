@@ -19,13 +19,12 @@ export function EthAmount({ value }: { value: bigint | undefined }) {
 }
 
 export function TransactionFundingSummary({ funding, totalAttoEth, outcome }: { funding: readonly { amount: string }[]; totalAttoEth: bigint | undefined; outcome?: { returnToWallet: boolean; settlerRewardAttoEth: bigint | undefined } | undefined }) {
-	const orderedFunding = funding.length === 2 && funding.some(token => token.amount.endsWith('WETH')) && funding.some(token => token.amount.endsWith('REP')) ? [...funding].sort((left, right) => Number(right.amount.endsWith('WETH')) - Number(left.amount.endsWith('WETH'))) : funding
 	return (
 		<section className='transaction-funding' aria-label={copy.depositAndReturn}>
 			<div className='transaction-funding-summary'>
 				<h4>{copy.depositAndReturn}</h4>
 				<div className='transaction-deposits'>
-					{orderedFunding.map(token => (
+					{funding.map(token => (
 						<strong key={token.amount} title={token.amount}>
 							{formatFundingAmount(token.amount)}
 						</strong>

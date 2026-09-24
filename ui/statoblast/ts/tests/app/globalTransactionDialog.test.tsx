@@ -1,11 +1,13 @@
 /// <reference types='bun-types' />
 
-import { beforeEach, describe, expect, test } from 'bun:test'
+import { beforeEach, describe, expect, spyOn, test } from 'bun:test'
 import { fireEvent, within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { act } from 'preact/test-utils'
 import { render } from 'preact'
 import { GlobalTransactionDialog } from '@zoltar/ui-core-shared/app/components/GlobalTransactionDialog.js'
 import { OperationModal } from '@zoltar/ui-core-shared/components/OperationModal.js'
+import { GlobalTransactionPresentationProvider } from '@zoltar/ui-core-shared/components/GlobalTransactionPresentationContext.js'
+import { TransactionStepsActions } from '@zoltar/ui-core-shared/components/TransactionStepsContent.js'
 import { createMarketCreationSuccessPresentation, createMarketCreationTransactionIntent } from '@zoltar/ui-statoblast-shared/features/reportingTransactionPresentations.js'
 import { createSecurityPoolCreationWarningPresentation } from '@zoltar/ui-statoblast-shared/features/transactionPresentations.js'
 import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
@@ -49,12 +51,101 @@ describe('GlobalTransactionDialog', () => {
 		expect(
 			within(queries.getByRole('dialog', { name: 'Transaction status' }))
 				.getByRole('button', { name: 'Dismiss' })
-				.classList.contains('primary'),
+				.classList.contains('secondary'),
 		).toBe(true)
 		await act(() => {
 			render(<GlobalTransactionDialog transaction={{ ...pending, detail: 'nonce too low', title: 'Price request failed', tone: 'error' }} />, renderedComponent.container)
 		})
 		expect(within(queries.getByRole('dialog', { name: 'Transaction status' })).getByRole('alert').textContent).toContain('nonce too low')
+	})
+
+	test('automatically clears confirmed status while keeping failures visible', async () => {
+		const originalSetTimeout = globalThis.setTimeout
+		const timer = spyOn(globalThis, 'setTimeout').mockImplementation((handler, delay, ...args) => originalSetTimeout(handler, delay === 8000 ? 10 : delay, ...args))
+		const hash = '0xabcde0000000000000000000000000000000000000000000000000000000001'
+		const success = { hash, title: 'Price requested', tone: 'success' as const }
+		const renderedComponent = await renderIntoDocument(<GlobalTransactionDialog transaction={success} />)
+		trackRendered(renderedComponent)
+		try {
+			expect(within(document.body).getByRole('dialog', { name: 'Transaction status' })).not.toBeNull()
+			await new Promise(resolve => originalSetTimeout(resolve, 30))
+			expect(within(document.body).queryByRole('dialog', { name: 'Transaction status' })).toBeNull()
+			await act(() => render(<GlobalTransactionDialog transaction={{ ...success, detail: 'nonce too low', tone: 'error' }} />, renderedComponent.container))
+			await new Promise(resolve => originalSetTimeout(resolve, 30))
+			expect(within(document.body).getByRole('dialog', { name: 'Transaction status' })).not.toBeNull()
+		} finally {
+			timer.mockRestore()
+		}
+	})
+
+	test('pauses confirmation expiry while hovered, focused, or expanded', async () => {
+		const originalSetTimeout = globalThis.setTimeout
+		const timer = spyOn(globalThis, 'setTimeout').mockImplementation((handler, delay, ...args) => originalSetTimeout(handler, delay !== undefined && delay >= 7000 ? 10 : delay, ...args))
+		const first = { hash: '0xabcde0000000000000000000000000000000000000000000000000000000002', title: 'Price requested', tone: 'success' as const }
+		const renderedComponent = await renderIntoDocument(
+			<>
+				<button type='button'>Other action</button>
+				<GlobalTransactionDialog transaction={first} />
+			</>,
+		)
+		trackRendered(renderedComponent)
+		const wait = () => new Promise(resolve => originalSetTimeout(resolve, 30))
+		try {
+			const queries = within(document.body)
+			const panel = queries.getByRole('dialog', { name: 'Transaction status' })
+			panel.dispatchEvent(new MouseEvent('mouseenter'))
+			await wait()
+			expect(queries.getByRole('dialog', { name: 'Transaction status' })).not.toBeNull()
+			within(panel).getByRole('button', { name: 'Dismiss' }).focus()
+			panel.dispatchEvent(new MouseEvent('mouseleave'))
+			await wait()
+			expect(queries.getByRole('dialog', { name: 'Transaction status' })).not.toBeNull()
+			queries.getByRole('button', { name: 'Other action' }).focus()
+			await wait()
+			expect(queries.queryByRole('dialog', { name: 'Transaction status' })).toBeNull()
+			await act(() => render(<GlobalTransactionDialog transaction={{ ...first, hash: '0xabcde0000000000000000000000000000000000000000000000000000000003', rows: [{ label: 'Pool', value: '0x0000000000000000000000000000000000000001' }] }} />, renderedComponent.container))
+			const details = renderedComponent.container.querySelector('details')
+			expect(details).not.toBeNull()
+			details?.setAttribute('open', '')
+			details?.dispatchEvent(new Event('toggle'))
+			await wait()
+			expect(queries.getByRole('dialog', { name: 'Transaction status' })).not.toBeNull()
+			details?.removeAttribute('open')
+			details?.dispatchEvent(new Event('toggle'))
+			await wait()
+			expect(queries.queryByRole('dialog', { name: 'Transaction status' })).toBeNull()
+		} finally {
+			timer.mockRestore()
+		}
+	})
+
+	test('shows a failed final hash once while its status is visible and restores it after dismissal', async () => {
+		const controller = createTransactionStepController()
+		controller.setPlan([{ title: 'Request price', description: 'Fund the report.', contractAddress: undefined, contractLabel: undefined, spender: undefined, amount: undefined, ethValueAttoEth: 0n }])
+		const review = controller.review()
+		transactionSteps.value?.confirm()
+		await review
+		const hash = '0x1111111111111111111111111111111111111111111111111111111111111112'
+		controller.submitted(hash)
+		controller.receipt(hash, 'reverted')
+		controller.failed('Transaction reverted')
+		const presentation = { hash, title: 'Price request', tone: 'error' as const, detail: 'Transaction reverted' }
+		const renderedComponent = await renderIntoDocument(
+			<GlobalTransactionPresentationProvider transaction={presentation}>
+				<TransactionStepsActions contextKey='failed-hash' />
+				<GlobalTransactionDialog transaction={presentation} />
+			</GlobalTransactionPresentationProvider>,
+		)
+		trackRendered(renderedComponent)
+		try {
+			const status = within(document.body).getByRole('dialog', { name: 'Transaction status' })
+			expect(status.textContent).toContain('Price request')
+			expect(document.querySelector('.transaction-step-hash a')).toBeNull()
+			await act(() => fireEvent.click(within(status).getByRole('button', { name: 'Dismiss' })))
+			expect(document.querySelector('.transaction-step-hash a')).not.toBeNull()
+		} finally {
+			transactionSteps.value?.cancel()
+		}
 	})
 
 	test('keeps intermediate receipts in the form while showing a later warning', async () => {
@@ -182,7 +273,7 @@ describe('GlobalTransactionDialog', () => {
 		expect(documentQueries.getByText('0x0b')).not.toBeNull()
 		expect(documentQueries.getByRole('button', { name: 'Copy address 0x1234000000000000000000000000000000000000000000000000000000000000' })).not.toBeNull()
 		expect(documentQueries.getByRole('button', { name: 'Dismiss' })).not.toBeNull()
-		expect(documentQueries.getByRole('button', { name: 'Dismiss' }).classList.contains('primary')).toBe(true)
+		expect(documentQueries.getByRole('button', { name: 'Dismiss' }).classList.contains('secondary')).toBe(true)
 	})
 
 	test('warns when transaction lifecycle state belongs to a different header universe', async () => {
@@ -579,6 +670,6 @@ describe('GlobalTransactionDialog', () => {
 			fireEvent.click(within(document.body).getByRole('link', { name: 'Back to form' }))
 		})
 		expect(window.location.hash).toBe('#/zoltar?zoltarView=create')
-		expect(renderedComponent.container.textContent).toContain('Question creation')
+		expect(renderedComponent.container.textContent).toContain('Creating Question')
 	})
 })

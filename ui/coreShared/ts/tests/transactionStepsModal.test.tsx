@@ -10,9 +10,9 @@ import { TransactionStepsContent } from '../components/TransactionStepsContent.j
 import { TransactionFundingSummary } from '../components/TransactionFundingSummary.js'
 import { createTransactionStepController, transactionSteps } from '../transactions/transactionSteps.js'
 
-test('shows WETH before REP with readable amounts and exact values available', async () => {
+test('shows funding in plan order with readable amounts and exact values available', async () => {
 	const dom = installDomEnvironment()
-	const rendered = await renderIntoDocument(<TransactionFundingSummary funding={[{ amount: '2.423076924773076927 REP' }, { amount: '1.234567890123456789 WETH' }]} totalAttoEth={137_760_122n} />)
+	const rendered = await renderIntoDocument(<TransactionFundingSummary funding={[{ amount: '1.234567890123456789 WETH' }, { amount: '2.423076924773076927 REP' }]} totalAttoEth={137_760_122n} />)
 	try {
 		const amounts = [...rendered.container.querySelectorAll('.transaction-deposits strong')]
 		expect(amounts.map(amount => amount.textContent)).toEqual(['≈ 1.2346 WETH', '≈ 2.4231 REP'])

@@ -7,23 +7,24 @@ import { CopyErrorMessage } from './CopyErrorMessage.js'
 type AddressValueProps = {
 	address: string | undefined
 	className?: string
+	compactAbbreviation?: boolean
 	copyable?: boolean
 	responsiveAbbreviation?: boolean
 }
 
-function AddressText({ address, responsiveAbbreviation }: { address: string; responsiveAbbreviation: boolean }) {
+function AddressText({ address, compactAbbreviation, responsiveAbbreviation }: { address: string; compactAbbreviation: boolean; responsiveAbbreviation: boolean }) {
 	if (!responsiveAbbreviation) return <>{address}</>
 	return (
 		<>
 			<span className='address-value-full'>{address}</span>
 			<span aria-hidden='true' className='address-value-abbreviated'>
-				{abbreviateAddress(address)}
+				{compactAbbreviation ? abbreviateAddress(address, 6, 4) : abbreviateAddress(address)}
 			</span>
 		</>
 	)
 }
 
-export function ReadOnlyAddressValue({ address, className = '', responsiveAbbreviation = false }: Omit<AddressValueProps, 'copyable'>) {
+export function ReadOnlyAddressValue({ address, className = '', compactAbbreviation = false, responsiveAbbreviation = false }: Omit<AddressValueProps, 'copyable'>) {
 	if (address === undefined) {
 		const placeholder = getMetricPlaceholderPresentation(address)?.placeholder
 		return (
@@ -34,15 +35,15 @@ export function ReadOnlyAddressValue({ address, className = '', responsiveAbbrev
 	}
 	return (
 		<span className={`address-value ${className}`} title={address}>
-			<AddressText address={address} responsiveAbbreviation={responsiveAbbreviation} />
+			<AddressText address={address} compactAbbreviation={compactAbbreviation} responsiveAbbreviation={responsiveAbbreviation} />
 		</span>
 	)
 }
 
-export function AddressValue({ address, className = '', copyable = true, responsiveAbbreviation = false }: AddressValueProps) {
+export function AddressValue({ address, className = '', compactAbbreviation = false, copyable = true, responsiveAbbreviation = false }: AddressValueProps) {
 	const { copied, copyError, copyErrorId, copyText } = useCopyToClipboard(address)
 
-	if (address === undefined || !copyable) return <ReadOnlyAddressValue address={address} className={className} responsiveAbbreviation={responsiveAbbreviation} />
+	if (address === undefined || !copyable) return <ReadOnlyAddressValue address={address} className={className} compactAbbreviation={compactAbbreviation} responsiveAbbreviation={responsiveAbbreviation} />
 
 	return (
 		<span className='copy-value-wrap'>
@@ -52,7 +53,7 @@ export function AddressValue({ address, className = '', copyable = true, respons
 						{commonCopy.copiedAddress}
 					</span>
 				) : (
-					<AddressText address={address} responsiveAbbreviation={responsiveAbbreviation} />
+					<AddressText address={address} compactAbbreviation={compactAbbreviation} responsiveAbbreviation={responsiveAbbreviation} />
 				)}
 			</button>
 			<CopyErrorMessage id={copyErrorId} manualValue={address} message={copyError.value} />

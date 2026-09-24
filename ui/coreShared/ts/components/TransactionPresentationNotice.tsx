@@ -11,6 +11,7 @@ import type { BadgeTone, GlobalTransactionPresentation } from '../types/componen
 type TransactionPresentationNoticeProps = {
 	className?: string
 	collapseDetails?: boolean
+	compactSuccess?: boolean
 	contextWarning?: ComponentChildren
 	transaction: GlobalTransactionPresentation
 }
@@ -22,15 +23,6 @@ function getTransactionBadge(tone: GlobalTransactionPresentation['tone']): { lab
 	if (tone === 'success') return { tone: 'ok', label: transactionCopy.confirmed }
 	if (tone === 'error') return { tone: 'danger', label: commonCopy.failed }
 	return { tone: 'warning', label: transactionCopy.attention }
-}
-
-function getNoticeTitle(transaction: GlobalTransactionPresentation) {
-	if (typeof transaction.title !== 'string') return transaction.title
-	if (transaction.tone === 'error') {
-		const actions: Record<string, string> = { 'Requesting Price': 'Price request', 'Creating Question': 'Question creation', 'Creating Security Pool': 'Security pool creation' }
-		return actions[transaction.title] ?? (transaction.title.replace(/(?:^|\s)failed$/i, '') || undefined)
-	}
-	return transaction.title
 }
 
 function TransactionDetailValue({ value }: { value: ComponentChildren }) {
@@ -48,9 +40,9 @@ function TransactionDetailValue({ value }: { value: ComponentChildren }) {
 	)
 }
 
-export function TransactionPresentationNotice({ className = '', collapseDetails = false, contextWarning, transaction }: TransactionPresentationNoticeProps) {
+export function TransactionPresentationNotice({ className = '', collapseDetails = false, compactSuccess = false, contextWarning, transaction }: TransactionPresentationNoticeProps) {
 	const badge = getTransactionBadge(transaction.tone)
-	const title = getNoticeTitle(transaction)
+	const title = transaction.title
 	const transactionHash = transaction.hash
 	const explorerUrl = transactionHash === undefined ? undefined : buildTransactionExplorerUrl(getActiveNetworkProfile(), transactionHash)
 	const rows = transaction.rows ?? []
@@ -93,6 +85,18 @@ export function TransactionPresentationNotice({ className = '', collapseDetails 
 				))}
 		</>
 	)
+	const hashContent =
+		transactionHash === undefined ? undefined : (
+			<div className='global-transaction-hash'>
+				{compactSuccess ? undefined : <span>{transactionCopy.transactionHash}</span>}
+				<AddressValue address={transactionHash} compactAbbreviation={compactSuccess} responsiveAbbreviation />
+				{explorerUrl === undefined ? undefined : (
+					<a href={explorerUrl} target='_blank' rel='noreferrer' aria-label={transactionCopy.viewTransaction}>
+						{transactionCopy.explorer}
+					</a>
+				)}
+			</div>
+		)
 
 	return (
 		<div className={noticeClassName} role={transaction.tone === 'error' ? 'alert' : 'status'} aria-live={transaction.tone === 'error' ? 'assertive' : 'polite'}>
@@ -102,20 +106,18 @@ export function TransactionPresentationNotice({ className = '', collapseDetails 
 					<Badge tone={badge.tone}>{badge.label}</Badge>
 					{transaction.tone === 'awaiting-wallet' ? <span className='spinner global-transaction-spinner' aria-hidden='true' /> : undefined}
 					{title === undefined ? undefined : <strong>{title}</strong>}
+					{compactSuccess ? hashContent : undefined}
 				</div>
-				{transaction.detail === undefined ? undefined : <div className='global-transaction-notice-detail'>{transaction.detail}</div>}
-				{transactionHash === undefined ? undefined : (
-					<div className='global-transaction-hash'>
-						<span>{transactionCopy.transactionHash}</span>
-						<AddressValue address={transactionHash} responsiveAbbreviation />
-						{explorerUrl === undefined ? undefined : (
-							<a href={explorerUrl} target='_blank' rel='noreferrer' aria-label={transactionCopy.viewTransaction}>
-								{transactionCopy.explorer}
-							</a>
-						)}
-					</div>
+				{!compactSuccess && transaction.detail !== undefined ? <div className='global-transaction-notice-detail'>{transaction.detail}</div> : undefined}
+				{compactSuccess ? undefined : hashContent}
+				{collapseDetails && (rows.length > 0 || technicalRows.length > 0 || (compactSuccess && transaction.detail !== undefined)) ? (
+					<ReadOnlyDetailAccordion title={transactionCopy.transactionDetails}>
+						{compactSuccess && transaction.detail !== undefined ? <div className='global-transaction-notice-detail'>{transaction.detail}</div> : undefined}
+						{detailRows}
+					</ReadOnlyDetailAccordion>
+				) : (
+					detailRows
 				)}
-				{collapseDetails && (rows.length > 0 || technicalRows.length > 0) ? <ReadOnlyDetailAccordion title={transactionCopy.transactionDetails}>{detailRows}</ReadOnlyDetailAccordion> : detailRows}
 			</div>
 		</div>
 	)

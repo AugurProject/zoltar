@@ -79,7 +79,7 @@ export function SecurityPoolSection({
 	// An unfinished question-and-pool flow keeps its question; otherwise use an explicitly selected ID or start a new question.
 	const [questionSource, setQuestionSource] = useState<'existing' | 'new'>(marketResult !== undefined || (securityPoolForm.marketId.trim() === '' && marketDetails === undefined) ? 'new' : 'existing')
 	const transactionPresentation = useGlobalTransactionPresentation()
-	const visibleSecurityPoolError = suppressPresentedTransactionError(securityPoolError, transactionPresentation, transactionCopy.creatingSecurityPool)
+	const visibleSecurityPoolError = suppressPresentedTransactionError(securityPoolError, transactionPresentation, transactionCopy.securityPoolCreation)
 	const reviewWorkflow = transactionSteps.value
 	const ownsTransactionReview = securityPoolReviewSignal !== undefined && !securityPoolReviewSignal.aborted && reviewWorkflow?.reviewSignal === securityPoolReviewSignal && reviewWorkflow.steps[reviewWorkflow.activeIndex] !== undefined
 	useEffect(() => {
@@ -393,12 +393,24 @@ export function SecurityPoolSection({
 											{existingQuestionCheck?.status === 'existing' ? (
 												<div className='detail'>
 													<p>{existingQuestionCheck.poolAddress === undefined ? securityPoolCopy.questionAlreadyExists : securityPoolCopy.questionAlreadyHasPool}</p>
-													<p>
-														{commonCopy.questionId}:{' '}
-														<span className='identifier-value' title={existingQuestionCheck.questionId}>
-															{abbreviateAddress(`0x${BigInt(existingQuestionCheck.questionId).toString(16)}`)}
-														</span>
-													</p>
+													<dl className='existing-pool-identifiers'>
+														<div>
+															<dt>{commonCopy.questionId}</dt>
+															<dd>
+																<span className='identifier-value' title={existingQuestionCheck.questionId}>
+																	{abbreviateAddress(`0x${BigInt(existingQuestionCheck.questionId).toString(16)}`)}
+																</span>
+															</dd>
+														</div>
+														{existingQuestionCheck.poolAddress === undefined ? undefined : (
+															<div>
+																<dt>{securityPoolCopy.poolAddressLabel}</dt>
+																<dd>
+																	<AddressValue address={existingQuestionCheck.poolAddress} responsiveAbbreviation />
+																</dd>
+															</div>
+														)}
+													</dl>
 													{existingQuestionCheck.poolAddress === undefined ? (
 														<button
 															className='secondary'
@@ -410,11 +422,7 @@ export function SecurityPoolSection({
 														>
 															{securityPoolCopy.useExistingQuestion}
 														</button>
-													) : (
-														<p>
-															{securityPoolCopy.poolAddressLabel}: <AddressValue address={existingQuestionCheck.poolAddress} responsiveAbbreviation />
-														</p>
-													)}
+													) : undefined}
 												</div>
 											) : undefined}
 										</>

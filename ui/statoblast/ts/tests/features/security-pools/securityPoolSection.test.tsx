@@ -139,7 +139,7 @@ describe('SecurityPoolSection', () => {
 	})
 
 	test('shows a failed pool write only in the shared transaction dialog', async () => {
-		const transaction = { detail: 'Action canceled in wallet.', dismissKey: 'transaction-request-pool-write', title: 'Creating Security Pool', tone: 'error' as const }
+		const transaction = { detail: 'Action canceled in wallet.', dismissKey: 'transaction-request-pool-write', title: 'Security pool creation', tone: 'error' as const }
 		const renderedComponent = await renderIntoDocument(
 			<GlobalTransactionPresentationProvider transaction={transaction}>
 				<SecurityPoolSection {...createProps({ securityPoolError: 'Action canceled in wallet.' })} />
@@ -466,7 +466,7 @@ describe('SecurityPoolSection', () => {
 		expect(existingPoolLink.classList.contains('existing-pool-action')).toBe(true)
 		expect(document.body.textContent).toContain('A pool already exists for this question and configuration.')
 		expect(document.querySelector('.identifier-value')?.textContent).toBe('0x7b')
-		expect(within(document.body).getByText('Pool address:', { exact: false })).not.toBeNull()
+		expect(within(document.body).getByText('Pool address', { exact: true })).not.toBeNull()
 		expect(document.body.textContent?.split(poolAddress)).toHaveLength(2)
 	})
 

@@ -25,6 +25,7 @@ function getMarketCreationTransactionRows(context: MarketCreationTransactionCont
 export function createMarketCreationTransactionIntent(context: MarketCreationTransactionContext) {
 	return buildIntent({
 		action: 'createMarket',
+		failedTitle: transactionCopy.questionCreation,
 		rows: getMarketCreationTransactionRows(context),
 		source: 'zoltar',
 		submittedTitle: transactionCopy.creatingQuestion,
@@ -109,6 +110,7 @@ export function createPoolOracleTransactionIntent(actionName: 'executeStagedOper
 	return buildIntent({
 		action: actionName,
 		rows: getPoolOracleTransactionRows(context),
+		failedTitle: actionName === 'requestPrice' ? transactionCopy.priceRequest : undefined,
 		source: 'pool-oracle',
 		submittedTitle,
 		universeId: context?.universeId,

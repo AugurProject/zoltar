@@ -76,9 +76,61 @@ export function GlobalTransactionDialog({ activeUniverseId, routeKey, transactio
 		})
 		return () => cancelAnimationFrame(frame)
 	}, [current?.hash, current?.tone, visible])
+	useEffect(() => {
+		const panel = dialogRef.current
+		if (!visible || current?.tone !== 'success' || panel === null) return
+		let remaining = 8000
+		let started = 0
+		let timer: ReturnType<typeof setTimeout> | undefined
+		let hovered = false
+		let disposed = false
+		const pause = () => {
+			if (timer === undefined) return
+			clearTimeout(timer)
+			timer = undefined
+			remaining -= Date.now() - started
+		}
+		const resume = () => {
+			if (disposed || timer !== undefined || hovered || panel.contains(document.activeElement) || panel.querySelector('details[open]') !== null) return
+			started = Date.now()
+			timer = setTimeout(() => dismissGlobalTransaction(current), Math.max(0, remaining))
+		}
+		const onEnter = () => {
+			hovered = true
+			pause()
+		}
+		const onLeave = () => {
+			hovered = false
+			resume()
+		}
+		const onFocus = () => pause()
+		const onBlur = () => queueMicrotask(resume)
+		const onToggle = () => {
+			if (panel.querySelector('details[open]') !== null) pause()
+			else resume()
+		}
+		panel.addEventListener('mouseenter', onEnter)
+		panel.addEventListener('mouseleave', onLeave)
+		panel.addEventListener('focusin', onFocus)
+		panel.addEventListener('focusout', onBlur)
+		panel.addEventListener('toggle', onToggle, true)
+		resume()
+		return () => {
+			disposed = true
+			pause()
+			panel.removeEventListener('mouseenter', onEnter)
+			panel.removeEventListener('mouseleave', onLeave)
+			panel.removeEventListener('focusin', onFocus)
+			panel.removeEventListener('focusout', onBlur)
+			panel.removeEventListener('toggle', onToggle, true)
+		}
+	}, [current?.dismissKey, current?.hash, current?.tone, visible])
 	if (!visible || current === undefined) return undefined
 
 	const transactionUniverseId = current.universeId
+	let dismissLabel = transactionCopy.hide
+	if (current.tone === 'success') dismissLabel = transactionCopy.closeSymbol
+	else if (terminal) dismissLabel = transactionCopy.dismiss
 	const returnHref = current.tone === 'error' && originRef.current.hash !== '' && window.location.hash !== originRef.current.hash ? originRef.current.hash : undefined
 	const universeWarning =
 		transactionUniverseId === undefined || activeUniverseId === undefined || transactionUniverseId === activeUniverseId ? undefined : (
@@ -90,15 +142,15 @@ export function GlobalTransactionDialog({ activeUniverseId, routeKey, transactio
 
 	return (
 		<div className={`modal-backdrop global-transaction-dialog-backdrop global-transaction-dialog-nonblocking${current.tone === 'error' ? ' global-transaction-dialog-error' : ''}`} role='presentation'>
-			<section ref={dialogRef} className='modal-panel global-transaction-dialog' role={terminal ? 'dialog' : 'status'} tabIndex={-1} aria-labelledby={titleId}>
+			<section ref={dialogRef} className={`modal-panel global-transaction-dialog${current.tone === 'success' ? ' global-transaction-dialog-success' : ''}`} role={terminal ? 'dialog' : 'status'} tabIndex={-1} aria-labelledby={titleId}>
 				<h3 id={titleId} className='visually-hidden'>
 					{transactionCopy.transactionStatus}
 				</h3>
-				<TransactionPresentationNotice className='global-transaction-dialog-notice' collapseDetails contextWarning={universeWarning} transaction={current} />
+				<TransactionPresentationNotice className='global-transaction-dialog-notice' collapseDetails compactSuccess={current.tone === 'success'} contextWarning={universeWarning} transaction={current} />
 				<div className='global-transaction-actions'>
 					{returnHref === undefined ? undefined : <a href={returnHref}>{transactionCopy.backToForm}</a>}
-					<button className={`${terminal ? 'primary' : 'secondary'} global-transaction-dismiss`} type='button' onClick={dismiss}>
-						{terminal ? transactionCopy.dismiss : transactionCopy.hide}
+					<button className={`${terminal && current.tone !== 'success' ? 'primary' : 'secondary'} global-transaction-dismiss`} type='button' onClick={dismiss} aria-label={current.tone === 'success' ? transactionCopy.dismiss : undefined}>
+						{dismissLabel}
 					</button>
 				</div>
 			</section>

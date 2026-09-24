@@ -89,7 +89,7 @@ describe('QuestionCreateSection', () => {
 	})
 
 	test('shows a failed question write only in the shared transaction dialog', async () => {
-		const transaction = { detail: 'Action canceled in wallet.', dismissKey: 'transaction-request-question-write', title: 'Creating Question', tone: 'error' as const }
+		const transaction = { detail: 'Action canceled in wallet.', dismissKey: 'transaction-request-question-write', title: 'Question creation', tone: 'error' as const }
 		const renderedComponent = await renderIntoDocument(
 			<GlobalTransactionPresentationProvider transaction={transaction}>
 				<QuestionCreateSection

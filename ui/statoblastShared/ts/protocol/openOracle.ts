@@ -337,10 +337,10 @@ export async function createOpenOracleReportInstance(
 			isRequired: async () => (await client.readContract({ address: getWethAddress(), abi: ABIS.mainnet.erc20, functionName: 'balanceOf', args: [client.account.address] })) < wethFundingAmountAttoEth,
 			execute: async () => await wrapWeth(client, wethShortfallAttoEth),
 		})
-	for (const funding of [
-		{ needed: needsToken1Approval, token: parameters.token1Address, required: parameters.exactToken1Report },
-		{ needed: needsToken2Approval, token: parameters.token2Address, required: parameters.initialToken2Amount },
-	]) {
+	const token1Funding = { needed: needsToken1Approval, token: parameters.token1Address, required: parameters.exactToken1Report }
+	const token2Funding = { needed: needsToken2Approval, token: parameters.token2Address, required: parameters.initialToken2Amount }
+	const fundingOrder = sameAddress(parameters.token2Address, getWethAddress()) ? [token2Funding, token1Funding] : [token1Funding, token2Funding]
+	for (const funding of fundingOrder) {
 		if (funding.needed)
 			actions.push({
 				step: { functionName: 'approve', contractAddress: funding.token, args: [getOpenOracleAddress(), funding.required] },
@@ -353,10 +353,7 @@ export async function createOpenOracleReportInstance(
 		oracleOutcome: { settlerRewardAttoEth: parameters.settlerRewardAttoEth, returnToWallet: false },
 		contractAddress: getOpenOracleAddress(),
 		value: parameters.ethValueAttoEth,
-		tokenFunding: [
-			{ tokenAddress: parameters.token1Address, amount: parameters.exactToken1Report },
-			{ tokenAddress: parameters.token2Address, amount: parameters.initialToken2Amount },
-		],
+		tokenFunding: fundingOrder.map(funding => ({ tokenAddress: funding.token, amount: funding.required })),
 	})
 	const callParams = {
 		address: getOpenOracleAddress(),

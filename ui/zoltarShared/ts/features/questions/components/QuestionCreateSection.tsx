@@ -136,7 +136,7 @@ export function QuestionCreateSection({
 	const [scalarCreatePreviewTick, setScalarCreatePreviewTick] = useState('0')
 	const currentTimestamp = useChainTimestamp()
 	const transactionPresentation = useGlobalTransactionPresentation()
-	const visibleQuestionError = suppressPresentedTransactionError(questionError, transactionPresentation, transactionCopy.creatingQuestion)
+	const visibleQuestionError = suppressPresentedTransactionError(questionError, transactionPresentation, transactionCopy.questionCreation)
 	const [touchedFields, setTouchedFields] = useState<ReadonlySet<MarketFormFieldName>>(new Set())
 	const selectedQuestionDetails = useMemo(() => (questionResult === undefined ? undefined : zoltarQuestions.find(question => question.questionId === questionResult.questionId)), [questionResult?.questionId, zoltarQuestions])
 	const marketTypeOptions = useMemo(() => MARKET_TYPE_OPTIONS.filter(option => allowedMarketTypes.includes(option.value)), [allowedMarketTypes])

@@ -35,6 +35,7 @@ function getSecurityPoolCreationTransactionRows(context: SecurityPoolCreationTra
 export function createSecurityPoolCreationTransactionIntent(context?: SecurityPoolCreationTransactionContext) {
 	return buildIntent({
 		action: 'createSecurityPool',
+		failedTitle: transactionCopy.securityPoolCreation,
 		rows: getSecurityPoolCreationTransactionRows(context),
 		source: 'security-pools',
 		submittedTitle: transactionCopy.creatingSecurityPool,
