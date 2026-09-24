@@ -12,6 +12,8 @@ import { formatOpenInterestFeePerYearPercent, ORIGIN_POOL_INITIAL_RETENTION_RATE
 import type { SecurityPoolSectionProps } from '@zoltar/ui-zoltar-shared/features/types.js'
 import type { AccountState } from '@zoltar/ui-zoltar-shared/types/app.js'
 import { createTransactionStepController } from '@zoltar/ui-core-shared/transactions/transactionSteps.js'
+import { GlobalTransactionPresentationProvider } from '@zoltar/ui-core-shared/components/GlobalTransactionPresentationContext.js'
+import { GlobalTransactionDialog } from '@zoltar/ui-core-shared/app/components/GlobalTransactionDialog.js'
 import { describe, expect, mock, test } from 'bun:test'
 import { h, render } from 'preact'
 import { act } from 'preact/test-utils'
@@ -134,6 +136,25 @@ describe('SecurityPoolSection', () => {
 		expect((queries.getByRole('textbox', { name: 'Statoblast Security Multiplier' }) as HTMLInputElement).disabled).toBe(false)
 		expect(queries.getByRole('button', { name: 'Create pool' }).hasAttribute('disabled')).toBe(false)
 		await expect(pendingReview).rejects.toThrow('Remaining transactions canceled')
+	})
+
+	test('shows a failed pool write only in the shared transaction dialog', async () => {
+		const transaction = { detail: 'Action canceled in wallet.', dismissKey: 'transaction-request-pool-write', title: 'Creating Security Pool', tone: 'error' as const }
+		const renderedComponent = await renderIntoDocument(
+			<GlobalTransactionPresentationProvider transaction={transaction}>
+				<SecurityPoolSection {...createProps({ securityPoolError: 'Action canceled in wallet.' })} />
+				<GlobalTransactionDialog transaction={transaction} />
+			</GlobalTransactionPresentationProvider>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+		const queries = within(document.body)
+		const dialog = queries.getByRole('dialog', { name: 'Transaction status' })
+		expect(within(dialog).getByText('Action canceled in wallet.')).not.toBeNull()
+		expect(document.querySelector('.workflow-stack')?.textContent).not.toContain('Action canceled in wallet.')
+		await act(() => fireEvent.click(within(dialog).getByRole('button', { name: 'Dismiss' })))
+		expect(queries.queryByRole('dialog', { name: 'Transaction status' })).toBeNull()
+		expect(document.querySelector('.workflow-stack')?.textContent).not.toContain('Action canceled in wallet.')
+		expect(queries.getByRole('button', { name: 'Create pool' }).hasAttribute('disabled')).toBe(false)
 	})
 
 	test('dismisses an owned transaction review when the card unmounts', async () => {

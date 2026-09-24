@@ -31,7 +31,6 @@ export function RequestPriceModal({ review, onConfirm, onClose, canRequest, conf
 	const [retry, setRetry] = useState(0)
 	const [manualRequestRequired, setManualRequestRequired] = useState(false)
 	const [failureLatched, setFailureLatched] = useState(false)
-	const [failureMessage, setFailureMessage] = useState<string>()
 	const [failedPlan, setFailedPlan] = useState<FailedPricePlan>()
 	const [running, setRunning] = useState(false)
 	const [attempted, setAttempted] = useState<string>()
@@ -55,8 +54,6 @@ export function RequestPriceModal({ review, onConfirm, onClose, canRequest, conf
 	const awaitingResult = finalReceiptConfirmed && !completedRequest && presentation?.tone !== 'error' && run.current?.key === key && run.current?.signal.aborted === false
 	const current = (valid || completedRequest || awaitingResult) && run.current?.key === key && run.current?.signal.aborted === false
 	const showSteps = current && ownsWorkflow && workflow?.steps[workflow.activeIndex] !== undefined
-	const currentAttemptError = attempted === key && !running && presentation?.tone === 'error' ? presentation.detail : undefined
-	const error = failureLatched ? failureMessage : currentAttemptError
 	const failedCurrentAttempt = (key !== undefined && attempted === key && !running && presentation?.tone === 'error') || (showSteps && workflow?.steps.some(step => step.phase === 'failed'))
 	const resultDismissed = completedRequest && isGlobalTransactionDismissed(presentation)
 	const estimatePrompt = validPrice ? priceRequestCopy.preparingPriceRequest : priceRequestCopy.enterPriceEstimate
@@ -72,14 +69,12 @@ export function RequestPriceModal({ review, onConfirm, onClose, canRequest, conf
 		setAttempted(undefined)
 		setManualRequestRequired(false)
 		setFailureLatched(false)
-		setFailureMessage(undefined)
 		setFailedPlan(undefined)
 	}, [review])
 	useLayoutEffect(() => {
 		if (!failedCurrentAttempt) return
 		setFailureLatched(true)
 		setManualRequestRequired(true)
-		setFailureMessage((typeof presentation?.detail === 'string' ? presentation.detail : undefined) ?? workflow?.steps.find(step => step.phase === 'failed')?.error)
 		if (workflow !== undefined) {
 			setFailedPlan({
 				funding: workflow.steps.flatMap(step => step.tokenFunding ?? []),
@@ -89,9 +84,6 @@ export function RequestPriceModal({ review, onConfirm, onClose, canRequest, conf
 		}
 		run.current?.cancel()
 	}, [failedCurrentAttempt])
-	useLayoutEffect(() => {
-		if (failureLatched && presentation?.tone === 'error' && typeof presentation.detail === 'string') setFailureMessage(presentation.detail)
-	}, [failureLatched, presentation?.tone, presentation?.detail])
 	useLayoutEffect(() => {
 		if (!current && !sending) run.current?.cancel()
 	}, [current, sending])
@@ -200,17 +192,16 @@ export function RequestPriceModal({ review, onConfirm, onClose, canRequest, conf
 						<PriceRequestPreview
 							requestValue={review?.requestValueAttoEth}
 							failedPlan={failedPlan}
-							reason={confirmationGuardMessage ?? priceError ?? (typeof error === 'string' ? error : undefined) ?? previewPrompt}
-							error={confirmationGuardMessage ?? (typeof error === 'string' ? error : undefined)}
+							reason={confirmationGuardMessage ?? priceError ?? previewPrompt}
+							error={confirmationGuardMessage}
 							preparing={valid && !manualRequestRequired && (running || attempted !== key)}
-							hideReason={!validPrice || priceError !== undefined || error !== undefined || confirmationGuardMessage !== undefined}
+							hideReason={!validPrice || priceError !== undefined || confirmationGuardMessage !== undefined}
 							onClose={close}
 							onReview={
 								manualRequestRequired && valid
 									? () => {
 											setManualRequestRequired(false)
 											setFailureLatched(false)
-											setFailureMessage(undefined)
 											setFailedPlan(undefined)
 											setRetry(value => value + 1)
 										}

@@ -234,25 +234,28 @@ test('shows preparation failure with retry and keeps manual entry available', as
 	const onConfirm = async () => {
 		attempts += 1
 	}
+	const preparationFailure: GlobalTransactionPresentation = { tone: 'error', title: 'Price request failed', detail: 'Uniswap quote unavailable.', operationKey: 'price-request-preparation' }
 	const rendered = await renderIntoDocument(
-		<GlobalTransactionPresentationProvider transaction={{ tone: 'error', title: 'Price request failed', detail: 'Uniswap quote unavailable.' }}>
+		<GlobalTransactionPresentationProvider transaction={preparationFailure}>
 			<RequestPriceModal {...props} onConfirm={onConfirm} />
+			<GlobalTransactionDialog transaction={preparationFailure} />
 		</GlobalTransactionPresentationProvider>,
 	)
 	try {
 		const queries = within(document.body)
 		await act(() => fireEvent.click(queries.getByRole('button', { name: 'Fetch from Uniswap' })))
 		await settle()
-		expect(queries.getByRole('alert').textContent).toContain('Uniswap quote unavailable.')
+		const statusDialog = queries.getByRole('dialog', { name: 'Transaction status' })
+		expect(within(statusDialog).getByRole('alert').textContent).toContain('Uniswap quote unavailable.')
 		expect(document.querySelector('.price-request-preview .global-transaction-notice')).toBeNull()
-		expect(queries.getByRole('alert').closest('.transaction-step-content') === null).toBe(true)
-		expect(queries.queryByRole('status')).toBeNull()
+		expect(document.querySelector('.price-request-preview')?.textContent).not.toContain('Uniswap quote unavailable.')
 		expect(queries.queryByRole('button', { name: 'Review and retry' })).toBeNull()
 		expect(attempts).toBe(1)
 		const priceInput = queries.getByRole('textbox', { name: 'Open Oracle REP/ETH starting price' })
 		expect(inputValue(priceInput)).toBe('2')
 		expect(priceInput.hasAttribute('disabled')).toBe(false)
-		expect(document.activeElement).toBe(priceInput)
+		await act(() => fireEvent.click(within(statusDialog).getByRole('button', { name: 'Dismiss' })))
+		expect(queries.queryByRole('dialog', { name: 'Transaction status' })).toBeNull()
 		await act(() => fireEvent.click(queries.getByRole('button', { name: /^Request price/ })))
 		await settle()
 		expect(attempts).toBe(2)
@@ -324,6 +327,7 @@ test('keeps submitted funding and pool details beside the original action after 
 				tone: 'error',
 				title: 'Requesting Price',
 				detail: 'nonce too low',
+				operationKey: 'price-request',
 				rows: [
 					{ label: 'Security Pool Address', value: review.securityPoolAddress },
 					{ label: 'Oracle Manager', value: review.managerAddress },
@@ -364,8 +368,12 @@ test('keeps submitted funding and pool details beside the original action after 
 		expect(within(statusDialog).getByText('Technical details')).not.toBeNull()
 		expect(within(statusDialog).getByText('requestPrice')).not.toBeNull()
 		expect(queries.getByRole('button', { name: /^Request price/ }).hasAttribute('disabled')).toBe(false)
+		await act(() => fireEvent.click(within(statusDialog).getByRole('button', { name: 'Dismiss' })))
+		await settle()
+		expect(queries.queryByRole('dialog', { name: 'Transaction status' })).toBeNull()
+		expect(document.querySelector('.price-request-preview')?.textContent).not.toContain('nonce too low')
 		await act(() => fireEvent.input(queries.getByRole('textbox', { name: 'Open Oracle REP/ETH starting price' }), { target: { value: '3' } }))
-		expect(within(statusDialog).getByText('2')).not.toBeNull()
+		expect(queries.getByRole('button', { name: /^Request price/ }).hasAttribute('disabled')).toBe(false)
 		guard.value = 'A pending report blocks another request.'
 		await settle()
 		expect(queries.getByText('A pending report blocks another request.')).not.toBeNull()

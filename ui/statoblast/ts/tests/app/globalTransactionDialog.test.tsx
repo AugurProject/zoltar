@@ -324,6 +324,8 @@ describe('GlobalTransactionDialog', () => {
 		const dismissButton = documentQueries.getByRole('button', { name: 'Dismiss' })
 		expect(dismissButton.classList.contains('primary')).toBe(true)
 		expect(dismissButton.parentElement?.classList.contains('global-transaction-actions')).toBe(true)
+		await act(() => fireEvent.click(dismissButton))
+		expect(documentQueries.queryByRole('dialog')).toBeNull()
 	})
 
 	test('does not hide a new request-scoped failure after the tray remounts', async () => {

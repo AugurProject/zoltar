@@ -1,4 +1,4 @@
-import { useId, useRef } from 'preact/hooks'
+import { useId, useRef, useState } from 'preact/hooks'
 import * as appCopy from '../../copy/app.js'
 import * as transactionCopy from '../../copy/transaction.js'
 import { TransactionPresentationNotice } from '../../components/TransactionPresentationNotice.js'
@@ -21,6 +21,7 @@ type GlobalTransactionDialogProps = {
 export function GlobalTransactionDialog({ activeUniverseId, routeKey, transaction }: GlobalTransactionDialogProps) {
 	const dialogRef = useRef<HTMLElement | null>(null)
 	const dismissRef = useRef<HTMLButtonElement | null>(null)
+	const [dismissedRequest, setDismissedRequest] = useState<GlobalTransactionPresentation>()
 	const lastSubmittedRef = useRef<GlobalTransactionPresentation>()
 	const originRef = useRef({ hash: window.location.hash, routeKey, key: transaction?.operationKey ?? transaction?.dismissKey ?? transaction?.hash })
 	const titleId = useId()
@@ -45,9 +46,10 @@ export function GlobalTransactionDialog({ activeUniverseId, routeKey, transactio
 	const hiddenAfterOutcome = outcome !== undefined && transaction?.tone === 'pending' && transaction.hash === outcome.hash && isGlobalTransactionDismissed({ hash: outcome.hash, title: outcome.title, tone: outcome.tone })
 	const reviewing = transactionSteps.value?.steps.some(step => step.phase === 'review') ?? false
 	const terminal = current?.tone === 'success' || current?.tone === 'error' || current?.tone === 'warning'
-	const visible = current !== undefined && current.tone !== 'awaiting-wallet' && current.tone !== 'preparing' && (!reviewing || outcomePresentation !== undefined || terminal) && !isGlobalTransactionDismissed(current) && !hiddenAfterOutcome
+	const visible = current !== undefined && current !== dismissedRequest && current.tone !== 'awaiting-wallet' && current.tone !== 'preparing' && (!reviewing || outcomePresentation !== undefined || terminal) && !isGlobalTransactionDismissed(current) && !hiddenAfterOutcome
 	const dismiss = () => {
-		dismissGlobalTransaction(current)
+		if (current?.hash === undefined && (current?.dismissKey ?? current?.operationKey)?.startsWith('transaction-request-')) setDismissedRequest(current)
+		else dismissGlobalTransaction(current)
 	}
 	useModalFocusIsolation({ dialogRef, initialFocusRef: dismissRef, isOpen: visible, onClose: dismiss })
 	if (!visible || current === undefined) return undefined

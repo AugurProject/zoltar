@@ -5,6 +5,8 @@ import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/
 import { fireEvent, within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import { expectTransactionButtonDisabled } from '@zoltar/ui-core-shared/tests/testUtils/transactionActionButton.js'
+import { GlobalTransactionPresentationProvider } from '@zoltar/ui-core-shared/components/GlobalTransactionPresentationContext.js'
+import { GlobalTransactionDialog } from '@zoltar/ui-core-shared/app/components/GlobalTransactionDialog.js'
 import type { MarketCreationResult, MarketDetails } from '@zoltar/ui-core-shared/types/contracts.js'
 import { QuestionCreateSection } from '@zoltar/ui-zoltar-shared/features/questions/components/QuestionCreateSection.js'
 import type { MarketFormState } from '@zoltar/ui-zoltar-shared/types/app.js'
@@ -84,6 +86,40 @@ describe('QuestionCreateSection', () => {
 		expect(documentQueries.getByText('Previous creation failed')).not.toBeNull()
 		expect(documentQueries.getByRole('alert').textContent).toContain('Previous creation failed')
 		expectTransactionButtonDisabled(document.body, 'Create question', 'Connect a wallet before creating a question.')
+	})
+
+	test('shows a failed question write only in the shared transaction dialog', async () => {
+		const transaction = { detail: 'Action canceled in wallet.', dismissKey: 'transaction-request-question-write', title: 'Creating Question', tone: 'error' as const }
+		const renderedComponent = await renderIntoDocument(
+			<GlobalTransactionPresentationProvider transaction={transaction}>
+				<QuestionCreateSection
+					accountAddress={zeroAddress}
+					canUseForFork={false}
+					hasForked={false}
+					isOnActiveAppChain={true}
+					loadingZoltarQuestions={false}
+					onCreateQuestion={() => undefined}
+					onOpenForkTab={() => undefined}
+					onQuestionFormChange={() => undefined}
+					onResetQuestion={() => undefined}
+					onUseQuestionForFork={() => undefined}
+					questionCreating={false}
+					questionError='Action canceled in wallet.'
+					questionForm={createQuestionForm()}
+					questionResult={undefined}
+					zoltarQuestions={[]}
+				/>
+				<GlobalTransactionDialog transaction={transaction} />
+			</GlobalTransactionPresentationProvider>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+		const queries = within(document.body)
+		const dialog = queries.getByRole('dialog', { name: 'Transaction status' })
+		expect(within(dialog).getByText('Action canceled in wallet.')).not.toBeNull()
+		expect(document.querySelector('form')?.textContent).not.toContain('Action canceled in wallet.')
+		await act(() => fireEvent.click(within(dialog).getByRole('button', { name: 'Dismiss' })))
+		expect(queries.queryByRole('dialog', { name: 'Transaction status' })).toBeNull()
+		expect(document.querySelector('form')?.textContent).not.toContain('Action canceled in wallet.')
 	})
 
 	test('renders the inline transaction review in place of the overridden submit button', async () => {

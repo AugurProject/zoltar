@@ -1,11 +1,13 @@
 import { FormField, RequiredFieldLabel } from '@zoltar/ui-core-shared/components/FormField.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
+import * as transactionCopy from '@zoltar/ui-core-shared/copy/transaction.js'
 import * as marketCopy from '../../../copy/market.js'
 import { useEffect, useMemo, useState } from 'preact/hooks'
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import { EnumDropdown, type EnumDropdownOption } from '@zoltar/ui-core-shared/components/EnumDropdown.js'
 import { EntityCard } from '@zoltar/ui-core-shared/components/EntityCard.js'
 import { ErrorNotice } from '@zoltar/ui-core-shared/components/ErrorNotice.js'
+import { suppressPresentedTransactionError, useGlobalTransactionPresentation } from '@zoltar/ui-core-shared/components/GlobalTransactionPresentationContext.js'
 import { FormInput } from '@zoltar/ui-core-shared/components/FormInput.js'
 import { OutcomeChipRow } from '@zoltar/ui-core-shared/components/OutcomeChipRow.js'
 import { Question, getQuestionTitle } from '@zoltar/ui-core-shared/components/Question.js'
@@ -133,6 +135,8 @@ export function QuestionCreateSection({
 }: QuestionCreateSectionProps) {
 	const [scalarCreatePreviewTick, setScalarCreatePreviewTick] = useState('0')
 	const currentTimestamp = useChainTimestamp()
+	const transactionPresentation = useGlobalTransactionPresentation()
+	const visibleQuestionError = suppressPresentedTransactionError(questionError, transactionPresentation, transactionCopy.creatingQuestion)
 	const [touchedFields, setTouchedFields] = useState<ReadonlySet<MarketFormFieldName>>(new Set())
 	const selectedQuestionDetails = useMemo(() => (questionResult === undefined ? undefined : zoltarQuestions.find(question => question.questionId === questionResult.questionId)), [questionResult?.questionId, zoltarQuestions])
 	const marketTypeOptions = useMemo(() => MARKET_TYPE_OPTIONS.filter(option => allowedMarketTypes.includes(option.value)), [allowedMarketTypes])
@@ -460,11 +464,11 @@ export function QuestionCreateSection({
 								<TransactionActionButton idleLabel={submitAction.idleLabel} pendingLabel={submitAction.pendingLabel} onClick={() => undefined} pending={submitAction.pending} type='submit' availability={submitAction.availability} />
 							</div>
 						)}
-						<ErrorNotice message={questionError} />
+						<ErrorNotice message={visibleQuestionError} />
 					</form>
 				</SectionBlock>
 			) : undefined}
-			{questionResult === undefined ? undefined : <ErrorNotice message={questionError} />}
+			{questionResult === undefined ? undefined : <ErrorNotice message={visibleQuestionError} />}
 		</>
 	)
 }

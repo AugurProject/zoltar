@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from 'preact/hooks'
 import { AddressValue } from '@zoltar/ui-core-shared/components/AddressValue.js'
 import { EntityCard } from '@zoltar/ui-core-shared/components/EntityCard.js'
 import { ErrorNotice } from '@zoltar/ui-core-shared/components/ErrorNotice.js'
+import { suppressPresentedTransactionError, useGlobalTransactionPresentation } from '@zoltar/ui-core-shared/components/GlobalTransactionPresentationContext.js'
 import { FormInput } from '@zoltar/ui-core-shared/components/FormInput.js'
 import { LookupFieldRow } from '@zoltar/ui-core-shared/components/LookupFieldRow.js'
 import { LoadingText } from '@zoltar/ui-core-shared/components/LoadingText.js'
@@ -29,6 +30,7 @@ import { formatUniverseIdHex } from '@zoltar/ui-core-shared/lib/universeLabels.j
 import { getWrongNetworkReason } from '@zoltar/ui-core-shared/wallet/network.js'
 import * as marketCopy from '@zoltar/ui-zoltar-shared/copy/market.js'
 import * as transactionReviewCopy from '@zoltar/ui-core-shared/copy/transactionReview.js'
+import * as transactionCopy from '@zoltar/ui-core-shared/copy/transaction.js'
 import { SecurityPoolLink } from './SecurityPoolLink.js'
 
 export function SecurityPoolSection({
@@ -75,6 +77,8 @@ export function SecurityPoolSection({
 	const isOnActiveAppChain = isActiveAppChain(accountState.chainId)
 	// An unfinished question-and-pool flow keeps its question; otherwise use an explicitly selected ID or start a new question.
 	const [questionSource, setQuestionSource] = useState<'existing' | 'new'>(marketResult !== undefined || (securityPoolForm.marketId.trim() === '' && marketDetails === undefined) ? 'new' : 'existing')
+	const transactionPresentation = useGlobalTransactionPresentation()
+	const visibleSecurityPoolError = suppressPresentedTransactionError(securityPoolError, transactionPresentation, transactionCopy.creatingSecurityPool)
 	const reviewWorkflow = transactionSteps.value
 	const ownsTransactionReview = securityPoolReviewSignal !== undefined && !securityPoolReviewSignal.aborted && reviewWorkflow?.reviewSignal === securityPoolReviewSignal && reviewWorkflow.steps[reviewWorkflow.activeIndex] !== undefined
 	useEffect(() => {
@@ -275,7 +279,7 @@ export function SecurityPoolSection({
 				{hasSecurityPoolResult ? (
 					<>
 						{createdPoolResult}
-						<ErrorNotice message={securityPoolError} />
+						<ErrorNotice message={visibleSecurityPoolError} />
 					</>
 				) : (
 					<>
@@ -444,7 +448,7 @@ export function SecurityPoolSection({
 							</EntityCard>
 						) : undefined}
 
-						<ErrorNotice message={securityPoolError} />
+						<ErrorNotice message={visibleSecurityPoolError} />
 					</>
 				)}
 			</div>
