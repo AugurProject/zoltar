@@ -7,7 +7,7 @@ import { trading_TwoWayConstantProductFactory_TwoWayConstantProductFactory, trad
 import { GENESIS_UNISWAP_FEE, GENESIS_UNISWAP_SQRT_PRICE_X96, GENESIS_UNISWAP_TICK_LOWER, GENESIS_UNISWAP_TICK_UPPER, genesisUniswapSeederDeployment } from '../core/genesis-uniswap.ts'
 import { validForkOutcomeRoutes } from './fork-outcomes.ts'
 import { inputInteger, inputMatches, inputSpend } from './input-values.ts'
-import { allowance, amount, cappedSpend, choose, disabled, eligible, encodeStep, erc1155WalletDebit, erc20AllowanceEvidence, erc20WalletDebit, eventEvidence, mixSeed, optionAmount, planBase, randomDeadline, tokenInventory } from './planning.ts'
+import { allowance, amount, cappedSpend, choose, disabled, eligible, encodeStep, erc1155WalletDebit, erc20AllowanceEvidence, erc20WalletDebit, eventEvidence, mixSeed, optionAmount, planBase, planningDeadline, randomDeadline, tokenInventory } from './planning.ts'
 import { canCreateCompleteSet, projectedEthToShares, sharesToProjectedEth } from './pool-economics.ts'
 import { timestampDeadlineHasRequiredSafety } from './timing.ts'
 import type { EcosystemSnapshot, OperationContinuationContext, OperationDefinition, OperationEvidence, OperationPlan, OperationPlanDraft, PairSnapshot, PlanningOptions, PoolSnapshot, ShareInventory } from './types.ts'
@@ -1346,8 +1346,8 @@ export function buildRouterRemovePlan(snapshot: EcosystemSnapshot, options: Plan
 	const quote = removableLiquidityQuote(pair, liquidity)
 	if (inventory === undefined || amount(inventory.balance) < liquidity || quote === undefined || quote.yesOut < minimumYes || quote.noOut < minimumNo) return undefined
 	const steps: OperationPlanDraft['steps'] = []
-	const deadline = randomDeadline(snapshot, mixSeed(options.seed, 'trading.liquidity.remove:deadline'))
-	if (!timestampDeadlineHasRequiredSafety(amount(snapshot.anchor.timestamp), BigInt(deadline), options, 0)) return undefined
+	const deadline = planningDeadline(snapshot, options, mixSeed(options.seed, 'trading.liquidity.remove:deadline'))
+	if (deadline === undefined) return undefined
 	steps.push(
 		encodeStep({
 			abi: twoWayConstantProductPairAbi,
@@ -1380,8 +1380,8 @@ function buildRouterRedeemPlan(snapshot: EcosystemSnapshot, options: PlanningOpt
 	if (pool === undefined || shares === undefined || pool.systemState !== 0 || universe?.forkTime !== '0') return undefined
 	if (amount(shares.invalid) < completeAmount || amount(shares.yes) < completeAmount || amount(shares.no) < completeAmount || sharesToEth(pool, completeAmount) < minimumEthAttoEth) return undefined
 	const steps: OperationPlanDraft['steps'] = []
-	const deadline = randomDeadline(snapshot, mixSeed(options.seed, 'trading.complete-set.redeem:deadline'))
-	if (!timestampDeadlineHasRequiredSafety(amount(snapshot.anchor.timestamp), BigInt(deadline), options, 0)) return undefined
+	const deadline = planningDeadline(snapshot, options, mixSeed(options.seed, 'trading.complete-set.redeem:deadline'))
+	if (deadline === undefined) return undefined
 	const tokenIds = [0, 1, 2].map(outcome => shareTokenId(shares.universeId, outcome))
 	steps.push(
 		encodeStep({
@@ -1416,8 +1416,8 @@ function buildRouterExitPlan(snapshot: EcosystemSnapshot, options: PlanningOptio
 	if (!poolLifecycleOpen(snapshot, pool, options, 0)) return undefined
 	const requiredSwapInput = quoteExactOutput(pair, longOutcome === 1, completeAmount)
 	if (requiredSwapInput === undefined || requiredSwapInput + completeAmount > maximumLong || sharesToEth(pool, completeAmount) < minimumEthAttoEth) return undefined
-	const deadline = questionDeadline(snapshot, pool, mixSeed(options.seed, 'trading.position.exit:deadline'))
-	if (deadline === undefined || !timestampDeadlineHasRequiredSafety(amount(snapshot.anchor.timestamp), BigInt(deadline), options, 0)) return undefined
+	const deadline = planningDeadline(snapshot, options, mixSeed(options.seed, 'trading.position.exit:deadline'), amount(poolQuestion(snapshot, pool)?.endTime ?? '0') - 1n)
+	if (deadline === undefined) return undefined
 	const tokenIds = [shareTokenId(shares.universeId, 0), shareTokenId(shares.universeId, longOutcome)]
 	steps.push(
 		encodeStep({
@@ -1445,7 +1445,8 @@ function buildRouterExitPlan(snapshot: EcosystemSnapshot, options: PlanningOptio
 }
 
 function buildRouterOwnedContinuation(snapshot: EcosystemSnapshot, options: PlanningOptions, context: OperationContinuationContext, kind: 'exit' | 'redeem' | 'remove') {
-	if (context.continuationDisposition === 'cleanup-only') return undefined
+	if (context.continuationDisposition === 'cleanup-only' || context.previousPlan.deadlineTimestamp === undefined) return undefined
+	options = { ...options, reviewedDeadlineTimestamp: context.previousPlan.deadlineTimestamp }
 	const routerAddress = metadataAddress(context.previousPlan.metadata, 'router')
 	const pair = metadataPair(snapshot, context.previousPlan.metadata)
 	if (pair === undefined || (kind !== 'remove' && (routerAddress === undefined || routerAddress.toLowerCase() !== snapshot.deployments.tradingRouter.toLowerCase()))) return undefined
@@ -1472,7 +1473,6 @@ function buildRouterOwnedContinuation(snapshot: EcosystemSnapshot, options: Plan
 			rebuilt = buildRouterExitPlan(snapshot, options, pair, longOutcome, completeAmount, maximumLong, minimumEthAttoEth, context.previousPlan.metadata)
 		}
 	}
-	if (rebuilt === undefined) return undefined
 	return rebuilt
 }
 

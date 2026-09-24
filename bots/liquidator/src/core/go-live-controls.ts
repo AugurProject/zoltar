@@ -6,8 +6,10 @@ import type { Hex } from '@zoltar/bot-shared/ethereum'
 import type { BotProcessLocks } from '@zoltar/bot-shared/execution/bot-process-locks'
 import { validateSubmissionSettings } from '@zoltar/bot-shared/execution/transaction-submission'
 import { checkSubmissionEndpoints } from '@zoltar/bot-shared/monitoring/connectivity'
-import { applyExecutionMode, parseExecutionRequest } from './execution-mode.ts'
+import { applyExecutionMode, assertLiveExecutionReadiness, parseExecutionRequest } from './execution-mode.ts'
 import { commitSignerMutation } from './signer-mutation.ts'
+
+export const PENDING_SIGNER_RECOVERY = 'Resolve pending transaction and staged-operation recovery before changing the signer'
 
 export const PENDING_INTENT_MODE_CHANGE = 'The delivery mode cannot change while a pending transaction sent under the current mode awaits recovery'
 
@@ -17,7 +19,7 @@ type GoLiveContext = {
 	applySigner: (privateKey: Hex | undefined) => void
 	locks: Pick<BotProcessLocks, 'acquireSigner' | 'commitSigner' | 'disableExecution' | 'discardSigner' | 'enableExecution'>
 	persist: (update: (current: OperatorSettings) => OperatorSettings) => Promise<OperatorSettings>
-	/** Serializes dashboard mutations against the scan loop; every control runs inside it. */
+	/** Serializes dashboard mutations against the scan loop; emergency pause takes effect immediately before its queued save. */
 	runMutation: <T>(mutation: () => Promise<T>) => Promise<T>
 	settings: () => OperatorSettings
 	state: RuntimeState
@@ -26,6 +28,30 @@ type GoLiveContext = {
 /** The Go live dashboard controls: the execution signer, transaction delivery, and the readiness-gated execution mode switch. */
 export function createGoLiveControls({ activePrivateKey, applySigner, locks, persist, runMutation, settings, state }: GoLiveContext) {
 	return {
+		setPaused: async (value: unknown) => {
+			if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+				throw new Error('Pause request must be an object')
+			}
+			const paused = Reflect.get(value, 'paused')
+			if (typeof paused !== 'boolean') throw new Error('paused must be a boolean')
+			if (paused) {
+				state.paused = true
+				await runMutation(async () => persist(current => ({ ...current, paused: true })))
+			} else {
+				await runMutation(async () => {
+					if (!settings().networkConfigured) throw new Error('Configure the chain and RPC endpoints before resuming')
+					if (settings().runtime.execute) assertLiveExecutionReadiness(settings(), activePrivateKey())
+					await persist(current => ({ ...current, paused: false }))
+					state.paused = false
+				})
+			}
+			recordActivity(state, {
+				kind: 'configuration',
+				message: paused ? 'Operator paused' : 'Operator resumed',
+				status: 'info',
+			})
+			return { paused }
+		},
 		setSigner: (value: unknown) =>
 			runMutation(async () => {
 				if (typeof value !== 'object' || value === null || Array.isArray(value)) throw new Error('Signer request must be an object')
@@ -33,6 +59,18 @@ export function createGoLiveControls({ activePrivateKey, applySigner, locks, per
 				const rememberSigner = Reflect.get(value, 'rememberSigner')
 				if (typeof rawPrivateKey !== 'string' || typeof rememberSigner !== 'boolean') throw new Error('Signer request requires privateKey and rememberSigner')
 				const candidate = signerCandidate(rawPrivateKey.trim() === '' ? null : rawPrivateKey)
+				const active = activePrivateKey()
+				const current = settings()
+				if (candidate.privateKey?.toLowerCase() !== active?.toLowerCase()) {
+					const activeRecovery = active !== undefined && (state.pendingTransactions.length > 0 || state.pendingStagedOperations.length > 0)
+					const differentPendingSender = state.pendingTransactions.some(intent => intent.sender.toLowerCase() !== candidate.address?.toLowerCase())
+					// The persisted intents authenticate their sender on load. Only that sender can replace a stale
+					// active signer, and live execution must remain paused until the replacement is complete.
+					const restoringPendingSender = state.pendingTransactions.length > 0 && state.pendingStagedOperations.length === 0 && (!current.runtime.execute || (current.paused && state.paused)) && !differentPendingSender
+					if ((activeRecovery && !restoringPendingSender) || differentPendingSender) throw new Error(PENDING_SIGNER_RECOVERY)
+				}
+				// Validate the configuration that would result, before reservations or durable writes.
+				if (current.runtime.execute) assertLiveExecutionReadiness(rememberSigner ? { ...current, privateKey: candidate.privateKey } : current, candidate.privateKey)
 				const nextSignerLock = await locks.acquireSigner(candidate.address)
 				try {
 					await commitSignerMutation(

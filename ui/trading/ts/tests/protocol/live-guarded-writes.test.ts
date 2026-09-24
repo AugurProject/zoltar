@@ -39,6 +39,16 @@ const receiveRequestParameter = {
 const shareTransferAbi = [
 	{
 		type: 'function',
+		name: 'balanceOf',
+		stateMutability: 'view',
+		inputs: [
+			{ name: 'account', type: 'address' },
+			{ name: 'id', type: 'uint256' },
+		],
+		outputs: [{ type: 'uint256' }],
+	},
+	{
+		type: 'function',
 		name: 'safeBatchTransferFrom',
 		stateMutability: 'nonpayable',
 		inputs: [
@@ -104,8 +114,9 @@ test('creates live read clients from the configured active backend', () => {
 })
 
 describe('live guarded transaction writes', () => {
-	test('simulates and submits the exact same final receive-based exit payload', async () => {
+	test('caps the receive-based exit transfer at the wallet balance and preserves its approved payload', async () => {
 		const shareCalls: Hex[] = []
+		let longBalance = 12n
 		const client = createWalletClient({
 			account,
 			transport: custom({
@@ -117,6 +128,9 @@ describe('live guarded transaction writes', () => {
 						if (typeof transaction !== 'object' || transaction === null || !('to' in transaction) || !('data' in transaction) || typeof transaction.to !== 'string' || typeof transaction.data !== 'string') throw new Error('Malformed transaction')
 						if (transaction.to.toLowerCase() === pair.toLowerCase()) return encodeAbiParameters([uint256, uint256], [2n, 1n])
 						if (transaction.to.toLowerCase() !== shareToken.toLowerCase()) throw new Error('Unexpected transaction target')
+						const decoded = decodeFunctionData({ abi: shareTransferAbi, data: transaction.data as Hex })
+						if (decoded.functionName === 'balanceOf') return encodeAbiParameters([uint256], [longBalance])
+						if (decoded.functionName === 'safeBatchTransferFrom' && decoded.args[3][1] > longBalance) throw new Error('ERC1155: insufficient balance for transfer')
 						shareCalls.push(transaction.data as Hex)
 						return method === 'eth_sendTransaction' ? transactionHash : '0x'
 					}
@@ -125,7 +139,7 @@ describe('live guarded transaction writes', () => {
 			}),
 		})
 		const quote = await simulateExit(client, configuration, market, account, 'YES', 10n, 7n, 500n)
-		expect(quote.maximumLongShares).toBe(13n)
+		expect(quote.maximumLongShares).toBe(12n)
 		expect(quote.minimumEth).toBe(9n)
 		expect(await submitFreshExit(client, configuration, account, quote, async write => await write())).toBe(transactionHash)
 		expect(shareCalls).toHaveLength(3)
@@ -134,6 +148,57 @@ describe('live guarded transaction writes', () => {
 		const decodedTransfer = decodeFunctionData({ abi: shareTransferAbi, data: shareCalls[0] })
 		if (decodedTransfer.args === undefined) throw new Error('Missing share transfer arguments')
 		expect(decodedTransfer.args[4]).toBe(encodeAbiParameters([receiveRequestParameter], [[1, 0, shareToken, pool, pair, 1n, 2n, 256n, 257n, 258n, 1, 10n, quote.maximumLongShares, quote.minimumEth, account, account, quote.deadline]]))
+		longBalance = 13n
+		const largerApprovedQuote = await simulateExit(client, configuration, market, account, 'YES', 10n, 7n, 500n)
+		expect(largerApprovedQuote.maximumLongShares).toBe(13n)
+		longBalance = 12n
+		await expect(submitFreshExit(client, configuration, account, largerApprovedQuote, async write => await write())).rejects.toThrow('approved exit transfer')
+		longBalance = 11n
+		await expect(simulateExit(client, configuration, market, account, 'YES', 10n, 7n, 500n)).rejects.toThrow('Insufficient YES balance for this exit')
+	})
+
+	test('accepts improved YES and NO exit prices without relaxing the approved transfer cap', async () => {
+		for (const side of ['YES', 'NO'] as const) {
+			let longSharesSwapped = 2n
+			let longBalance = 13n
+			const simulatedTransfers: Hex[] = []
+			const submittedTransfers: Hex[] = []
+			const client = createWalletClient({
+				account,
+				transport: custom({
+					async request({ method, params }) {
+						if (method === 'eth_blockNumber') return '0x2'
+						if (method === 'eth_getBlockByNumber') return { hash: blockHash, number: '0x2', parentHash: `0x${'aa'.repeat(32)}`, timestamp: '0x1', transactions: [] }
+						if (method !== 'eth_call' && method !== 'eth_sendTransaction') throw new Error(`Unexpected RPC method ${method}`)
+						const transaction = Array.isArray(params) ? params[0] : undefined
+						if (typeof transaction !== 'object' || transaction === null || !('to' in transaction) || !('data' in transaction) || typeof transaction.to !== 'string' || typeof transaction.data !== 'string') throw new Error('Malformed transaction')
+						if (transaction.to.toLowerCase() === pair.toLowerCase()) return encodeAbiParameters([uint256, uint256], [longSharesSwapped, 1n])
+						if (transaction.to.toLowerCase() !== shareToken.toLowerCase()) throw new Error('Unexpected transaction target')
+						const decoded = decodeFunctionData({ abi: shareTransferAbi, data: transaction.data as Hex })
+						if (decoded.functionName === 'balanceOf') return encodeAbiParameters([uint256], [longBalance])
+						if (decoded.functionName !== 'safeBatchTransferFrom') throw new Error('Unexpected share transfer')
+						if (decoded.args[3][1] > longBalance) throw new Error('ERC1155: insufficient balance for transfer')
+						if (method === 'eth_sendTransaction') {
+							submittedTransfers.push(transaction.data as Hex)
+							return transactionHash
+						}
+						simulatedTransfers.push(transaction.data as Hex)
+						return '0x'
+					},
+				}),
+			})
+			const quote = await simulateExit(client, configuration, market, account, side, 10n, 7n, 500n)
+			expect(quote.maximumLongShares).toBe(13n)
+			longSharesSwapped = 1n
+			expect(await submitFreshExit(client, configuration, account, quote, async write => await write())).toBe(transactionHash)
+			expect(submittedTransfers).toEqual([simulatedTransfers[0]])
+			longBalance = 12n
+			await expect(submitFreshExit(client, configuration, account, quote, async write => await write())).rejects.toThrow('approved exit transfer')
+			longBalance = 20n
+			longSharesSwapped = 4n
+			await expect(submitFreshExit(client, configuration, account, quote, async write => await write())).rejects.toThrow('approved maximum long shares')
+			expect(submittedTransfers).toHaveLength(1)
+		}
 	})
 
 	test('uses one approved deadline for liquidity simulation, revalidation, and submission', async () => {
@@ -235,7 +300,10 @@ describe('live guarded transaction writes', () => {
 						const transaction = Array.isArray(params) ? params[0] : undefined
 						const target = typeof transaction === 'object' && transaction !== null && 'to' in transaction && typeof transaction.to === 'string' ? transaction.to.toLowerCase() : ''
 						if (target === pair.toLowerCase()) return encodeAbiParameters([uint256, uint256], [2n, 1n])
-						if (target === shareToken.toLowerCase()) return '0x'
+						if (target === shareToken.toLowerCase()) {
+							const decoded = decodeFunctionData({ abi: shareTransferAbi, data: callData(params) })
+							return decoded.functionName === 'balanceOf' ? encodeAbiParameters([uint256], [13n]) : '0x'
+						}
 						const decoded = decodeFunctionData({ abi: routerAbi, data: callData(params) })
 						if (decoded.functionName === 'enterPosition') return encodeAbiParameters([{ type: 'tuple', components: [uint256, uint256, uint256, uint256, uint256, uint256, uint256, uint256, uint256] }], [[10n, 10n, 1n, 2n, 12n, 10n, 1n, 5_000n, 5_001n]])
 						if (decoded.functionName === 'addLiquidityWithEth') return encodeAbiParameters([{ type: 'tuple', components: [address, uint256, uint256, uint256, uint256, uint256, uint256, uint256] }], [[pair, 10n, 5n, 5n, 5n, 5n, 10n, 10n]])

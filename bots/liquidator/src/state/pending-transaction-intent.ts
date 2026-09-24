@@ -11,8 +11,8 @@ function parseStagedOperation(value: unknown): 0 | 1 {
 function parseReceiptExpectation(rawExpectation: object): ReceiptExpectation {
 	const expectationType = Reflect.get(rawExpectation, 'type')
 	if (expectationType === 'transaction') return { type: 'transaction' }
-	if (expectationType === 'staged-success') {
-		return { coordinator: getAddress(String(Reflect.get(rawExpectation, 'coordinator'))), operation: parseStagedOperation(Reflect.get(rawExpectation, 'operation')), type: 'staged-success' }
+	if (expectationType === 'coordinator-operation' || expectationType === 'staged-success') {
+		return { coordinator: getAddress(String(Reflect.get(rawExpectation, 'coordinator'))), operation: parseStagedOperation(Reflect.get(rawExpectation, 'operation')), type: expectationType }
 	}
 	if (expectationType === 'pending-liquidation') {
 		return {

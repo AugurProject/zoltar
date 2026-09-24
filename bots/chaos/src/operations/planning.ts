@@ -1,3 +1,4 @@
+import { timestampDeadlineHasRequiredSafety } from './timing.ts'
 import { encodeFunctionData, keccak256, toHex, type Abi, type AbiValue, type Address, type Hash, type Hex } from '@zoltar/bot-shared/ethereum'
 import type { EcosystemSnapshot, EligibilityResult, OperationEvidence, OperationPlan, OperationPlanDraft, OperationPreflightCall, OperationStep, OperationWalletAssetDebit, PlanningOptions, TokenInventory } from './types.ts'
 
@@ -197,4 +198,13 @@ export function erc20AllowanceEvidence(token: Address, owner: Address, spender: 
 export function randomDeadline(snapshot: EcosystemSnapshot, seed: number) {
 	const seconds = 1_800n + BigInt(seed % 1_800)
 	return (amount(snapshot.anchor.timestamp) + seconds).toString()
+}
+
+/** Keep reviewed calldata exact; only ordinary planning may generate or clamp a deadline. */
+export function planningDeadline(snapshot: EcosystemSnapshot, options: PlanningOptions, seed: number, protocolMaximum = (1n << 256n) - 1n) {
+	const generated = amount(randomDeadline(snapshot, seed))
+	const bounded = generated < protocolMaximum ? generated : protocolMaximum
+	const deadline = options.reviewedDeadlineTimestamp === undefined ? bounded : amount(options.reviewedDeadlineTimestamp)
+	if (deadline > protocolMaximum || deadline >= 1n << 256n || !timestampDeadlineHasRequiredSafety(amount(snapshot.anchor.timestamp), deadline, options, 0)) return undefined
+	return deadline.toString()
 }

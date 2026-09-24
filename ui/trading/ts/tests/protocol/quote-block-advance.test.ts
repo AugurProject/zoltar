@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import { createWalletClient, custom, decodeFunctionData, encodeAbiParameters, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
 import type { DeploymentConfiguration } from '../../protocol/config.js'
+import { shareTokenAbi } from '../../protocol/authorization.js'
 import { simulateEntry, simulateExit, simulateLiquidity, simulateSettlement, submitFreshEntry, submitFreshExit, submitFreshLiquidity, submitFreshSettlement, type LiveMarket } from '../../protocol/live.js'
 import { tradingContracts } from '../../generated/contractArtifact.js'
 
@@ -72,7 +73,13 @@ function createAdvancingChain() {
 				if (Array.isArray(params)) chain.simulatedBlocks.push(params[1])
 				const transaction = transactionOf(params)
 				if (transaction.to === pair.toLowerCase()) return decodeFunctionData({ abi: pairAbi, data: transaction.data }).functionName === 'removeLiquidity' ? encodeAbiParameters([uint256, uint256], [5n, 5n]) : encodeAbiParameters([uint256, uint256], [2n, 1n])
-				if (transaction.to === shareToken.toLowerCase() || transaction.to === pool.toLowerCase()) return '0x'
+				if (transaction.to === shareToken.toLowerCase()) {
+					const decoded = decodeFunctionData({ abi: shareTokenAbi, data: transaction.data })
+					if (decoded.functionName === 'balanceOf') return encodeAbiParameters([uint256], [100n])
+					if (decoded.functionName === 'safeBatchTransferFrom') return '0x'
+					throw new Error(`Unexpected share token simulation ${decoded.functionName}`)
+				}
+				if (transaction.to === pool.toLowerCase()) return '0x'
 				const decoded = decodeFunctionData({ abi: routerAbi, data: transaction.data })
 				if (decoded.functionName === 'enterPosition') return encodeAbiParameters([{ type: 'tuple', components: [uint256, uint256, uint256, uint256, uint256, uint256, uint256, uint256, uint256] }], [[10n, 10n, 1n, 2n, chain.longSharesOut, 10n, 1n, 5_000n, 5_001n]])
 				if (decoded.functionName === 'addLiquidityWithEth') return encodeAbiParameters([{ type: 'tuple', components: [address, uint256, uint256, uint256, uint256, uint256, uint256, uint256] }], [[pair, 10n, 5n, 5n, 5n, 5n, 10n, 10n]])
