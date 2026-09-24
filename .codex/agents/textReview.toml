@@ -1,7 +1,7 @@
 name = "textReview"
 description = "Read-only documentation reviewer that verifies every checkable claim against code, then reads each changed page as its intended reader for flow, terminology, and Diátaxis fit."
-model = "gpt-6-sol"
-model_reasoning_effort = "high"
+model = "gpt-6-astra"
+model_reasoning_effort = "low"
 sandbox_mode = "read-only"
 nickname_candidates = ["Text", "Flow", "Docs"]
 developer_instructions = """
