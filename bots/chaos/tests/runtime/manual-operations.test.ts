@@ -1,4 +1,4 @@
-import { retainWorkflow, markWorkflowForRediscovery } from '../../src/runtime/workflows.ts'
+import { createDurableWorkflow, durableWorkflowPlan, retainWorkflow, markWorkflowForRediscovery } from '../../src/runtime/workflows.ts'
 import { acquireBotProcessLocks, createBotShutdownController } from '@zoltar/bot-shared/execution/bot-process-locks'
 import { CHAOS_PROCESS_LOCK_OPTIONS } from '../../src/core/process-lock-options.ts'
 import { saveDurableState } from '../../src/state/operator-state.ts'
@@ -7,11 +7,11 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { executeScheduledOperation } from '../../src/runtime/scheduled-operation.ts'
 import { planningOptions } from '../../src/runtime/canonical-scan.ts'
-import { evaluateSelectableOperationDefinition } from '../../src/operations/catalog.ts'
+import { reevaluateOperationContinuation, evaluateSelectableOperationDefinition } from '../../src/operations/catalog.ts'
 import { expect, spyOn, test } from 'bun:test'
 import { TransactionAwaitingRecovery } from '../../src/execution/receipt-validation.ts'
 import { createManualOperationController } from '../../src/runtime/manual-operations.ts'
-import { manualOperationFixture as fixture } from './manual-operation-fixture.ts'
+import { advanceManualSnapshot, manualTradingFixture, manualOperationFixture as fixture } from './manual-operation-fixture.ts'
 
 function object(value: unknown): Record<string, unknown> {
 	if (typeof value !== 'object' || value === null || Array.isArray(value)) throw new Error('Expected response object')
@@ -39,7 +39,7 @@ async function finished(controller: ReturnType<typeof createManualOperationContr
 		const response = object(await controller.handle({ action: 'status', previewId }))
 		const execution = object(response['execution'])
 		if (execution['status'] !== 'pending') return execution
-		await Bun.sleep(1)
+		await Promise.resolve()
 	}
 	throw new Error('Execution did not finish')
 }
@@ -392,3 +392,101 @@ for (const severity of ['pending', 'alarming'] as const) {
 		}
 	})
 }
+
+const deadlineOperations = ['trading.liquidity.remove', 'trading.complete-set.redeem', 'trading.position.exit'] as const
+
+for (const definitionId of deadlineOperations) {
+	test(`manual reviewed deadline survives a new block: ${definitionId}`, async () => {
+		using clock = spyOn(Date, 'now').mockReturnValue(2_000_000_000_000)
+		const { controller, executed, scan, configuration } = manualTradingFixture(definitionId)
+		const reviewed = evaluateSelectableOperationDefinition(definitionId, scan.snapshot, planningOptions(configuration.settings, 7)).plan
+		if (reviewed === undefined) throw new Error('Missing reviewed plan')
+		const preview = object(await controller.handle({ action: 'preview', definitionId, inputs: { seed: { source: 'custom', value: '7' } } }))
+		expect(preview['blockers']).toEqual([])
+		advanceManualSnapshot(scan, BigInt(scan.snapshot.anchor.timestamp) + 12n)
+		clock.mockReturnValue(2_000_000_012_000)
+		await controller.handle({ action: 'execute', previewId: preview['previewId'] })
+		const result = await finished(controller, preview['previewId'])
+		expect(result['message']).not.toContain('Operation inputs or prerequisites changed')
+		expect(result['status']).toBe('completed')
+		expect(executed).toHaveLength(1)
+		expect(executed[0]?.steps).toEqual(reviewed.steps)
+		expect(executed[0]?.deadlineTimestamp).toBe(reviewed.deadlineTimestamp)
+		const dispatched = executed[0]
+		if (dispatched === undefined) throw new Error('Missing dispatched plan')
+		const durable = durableWorkflowPlan(createDurableWorkflow(dispatched))
+		advanceManualSnapshot(scan, BigInt(scan.snapshot.anchor.timestamp) + 12n)
+		const continued = reevaluateOperationContinuation(scan.snapshot, durable, planningOptions(configuration.settings, 7)).plan
+		expect(continued?.steps).toEqual(reviewed.steps)
+		expect(continued?.deadlineTimestamp).toBe(reviewed.deadlineTimestamp)
+		expect(continued?.operationInputs).toEqual(dispatched.operationInputs)
+	})
+}
+
+for (const definitionId of deadlineOperations) {
+	for (const boundary of ['expired deadline', 'safety margin', 'funding', 'quote'] as const) {
+		test(`manual retained deadline rejects ${boundary}: ${definitionId}`, async () => {
+			using _clock = spyOn(Date, 'now').mockReturnValue(2_000_000_000_000)
+			const { controller, executed, scan, configuration } = manualTradingFixture(definitionId)
+			const reviewed = evaluateSelectableOperationDefinition(definitionId, scan.snapshot, planningOptions(configuration.settings, 7)).plan
+			if (reviewed?.deadlineTimestamp === undefined) throw new Error('Missing deadline')
+			const preview = object(await controller.handle({ action: 'preview', definitionId, inputs: { seed: { source: 'custom', value: '7' } } }))
+			expect(preview['blockers']).toEqual([])
+			const pair = scan.snapshot.pairs[0]
+			const pool = scan.snapshot.pools[0]
+			const shares = scan.snapshot.wallet.shares[0]
+			const lp = scan.snapshot.wallet.lpTokens[0]
+			if (pair === undefined || pool === undefined || shares === undefined || lp === undefined) throw new Error('Missing trading inventory')
+			advanceManualSnapshot(scan, BigInt(scan.snapshot.anchor.timestamp) + 12n)
+			if (boundary === 'expired deadline') advanceManualSnapshot(scan, BigInt(reviewed.deadlineTimestamp) + 1n)
+			if (boundary === 'safety margin') advanceManualSnapshot(scan, BigInt(reviewed.deadlineTimestamp) - 60n)
+			if (boundary === 'funding') {
+				lp.balance = '0'
+				shares.invalid = '0'
+			}
+			if (boundary === 'quote') {
+				pair.yesReserve = '1'
+				pair.effectiveYesReserve = '1'
+				pool.projectedSettlementCollateralAttoEth = '1'
+				pool.settlementCollateralAttoEth = '1'
+			}
+			await controller.handle({ action: 'execute', previewId: preview['previewId'] })
+			const result = await finished(controller, preview['previewId'])
+			expect(result['status']).toBe('failed')
+			expect(result['message']).not.toContain('Operation inputs or prerequisites changed')
+			expect(executed).toHaveLength(0)
+		})
+	}
+}
+
+for (const changedBound of [false, true]) {
+	test(`manual exit respects the question-end deadline, changed bound: ${changedBound}`, async () => {
+		using _clock = spyOn(Date, 'now').mockReturnValue(2_000_000_000_000)
+		const definitionId = 'trading.position.exit'
+		const { controller, executed, scan, configuration } = manualTradingFixture(definitionId, 1_000n)
+		const reviewed = evaluateSelectableOperationDefinition(definitionId, scan.snapshot, planningOptions(configuration.settings, 7)).plan
+		const question = scan.snapshot.questions[0]
+		if (reviewed === undefined || question === undefined) throw new Error('Missing exit plan')
+		expect(reviewed.deadlineTimestamp).toBe((BigInt(question.endTime) - 1n).toString())
+		const preview = object(await controller.handle({ action: 'preview', definitionId, inputs: { seed: { source: 'custom', value: '7' } } }))
+		expect(preview['blockers']).toEqual([])
+		advanceManualSnapshot(scan, BigInt(scan.snapshot.anchor.timestamp) + 12n)
+		if (changedBound) question.endTime = '2000000900'
+		await controller.handle({ action: 'execute', previewId: preview['previewId'] })
+		const result = await finished(controller, preview['previewId'])
+		expect(result['status']).toBe(changedBound ? 'failed' : 'completed')
+		expect(result['message']).not.toContain('Operation inputs or prerequisites changed')
+		if (changedBound) expect(executed).toHaveLength(0)
+		else expect(executed[0]?.steps).toEqual(reviewed.steps)
+	})
+}
+
+test('manual trading preview expires independently of its still-valid transaction deadline', async () => {
+	using clock = spyOn(Date, 'now').mockReturnValue(2_000_000_000_000)
+	const { controller, executed } = manualTradingFixture('trading.liquidity.remove')
+	const preview = object(await controller.handle({ action: 'preview', definitionId: 'trading.liquidity.remove' }))
+	expect(preview['blockers']).toEqual([])
+	clock.mockReturnValue(2_000_000_060_001)
+	await expect(controller.handle({ action: 'execute', previewId: preview['previewId'] })).rejects.toThrow('preview expired')
+	expect(executed).toHaveLength(0)
+})

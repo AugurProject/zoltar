@@ -209,7 +209,8 @@ describe('trading exact continuations', () => {
 		const redeemContinuationArgs = decodeFunctionData({ abi: erc1155Abi, data: requiredAction(redeemContinuation).data }).args
 		expect(redeemContinuationArgs[2]).toEqual(redeemArgs[2])
 		expect(redeemContinuationArgs[3]).toEqual(redeemArgs[3])
-		expect(BigInt(redeemContinuation.deadlineTimestamp ?? '0')).toBeGreaterThan(BigInt(redeem.deadlineTimestamp ?? '0'))
+		expect(redeemContinuation.deadlineTimestamp).toBe(redeem.deadlineTimestamp)
+		expect(requiredAction(redeemContinuation).data).toBe(requiredAction(redeem).data)
 
 		const removeSnapshot = openTradingSnapshot()
 		const pair = removeSnapshot.pairs[0]
@@ -318,3 +319,23 @@ describe('trading exact continuations', () => {
 		expect(exactContinuation(lpSnapshot, remove, '')).toBeDefined()
 	})
 })
+
+for (const definitionId of ['trading.liquidity.remove', 'trading.complete-set.redeem', 'trading.position.exit']) {
+	test(`durable ${definitionId} retains its deadline while ordinary planning stays fresh`, () => {
+		const snapshot = openTradingSnapshot()
+		const original = requiredPlan(snapshot, definitionId)
+		const restored = durableWorkflowPlan(createDurableWorkflow(original))
+		const deadline = BigInt(original.deadlineTimestamp ?? '0')
+		expect(deadline).toBeGreaterThan(BigInt(snapshot.anchor.timestamp) + 60n)
+		snapshot.anchor = { ...snapshot.anchor, blockHash: hash(101), blockNumber: '101', timestamp: (BigInt(snapshot.anchor.timestamp) + 12n).toString() }
+		const fresh = requiredPlan(snapshot, definitionId)
+		expect(BigInt(fresh.deadlineTimestamp ?? '0')).toBe(deadline + 12n)
+		const continuation = exactContinuation(snapshot, restored, '')
+		expect(continuation?.deadlineTimestamp).toBe(original.deadlineTimestamp)
+		expect(continuation?.steps).toEqual(original.steps)
+		for (const timestamp of [deadline - 60n, deadline, deadline + 1n]) {
+			snapshot.anchor.timestamp = timestamp.toString()
+			expect(exactContinuation(snapshot, restored, '')).toBeUndefined()
+		}
+	})
+}

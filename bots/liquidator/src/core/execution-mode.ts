@@ -3,17 +3,19 @@ import { privateKeyToAccount, type Address, type Hex } from '@zoltar/bot-shared/
 import type { BotProcessLocks } from '@zoltar/bot-shared/execution/bot-process-locks'
 import { configuredQuorumRpcUrlMinimum } from '@zoltar/bot-shared/monitoring/rpc-quorum-policy'
 
+export const LIVE_SIGNER_MISMATCH = 'The saved key differs from the active signer; return to dry run and save or remove the conflicting saved key before rearming live execution'
+
 export function parseExecutionRequest(value: unknown) {
 	if (typeof value !== 'object' || value === null || Array.isArray(value) || Object.keys(value).length !== 1 || !('execute' in value) || typeof value.execute !== 'boolean') throw new Error('Execution mode updates require execute')
 	return value.execute
 }
 
-/** Everything the operator file rejects for live mode at startup, checked before the signer is reserved. */
-function assertLiveExecutionReadiness(settings: OperatorSettings, activePrivateKey: Hex | undefined): Address {
+/** Shared live-mode prerequisites for arming, signer replacement, and resume; call before side effects. */
+export function assertLiveExecutionReadiness(settings: OperatorSettings, activePrivateKey: Hex | undefined): Address {
 	if (!settings.networkConfigured) throw new Error('Configure the chain and RPC endpoints before enabling live execution')
 	if (activePrivateKey === undefined) throw new Error('Live execution requires an active signer')
 	// The file keeps the saved key; arming with a different memory-only signer would let a restart go live with the saved one.
-	if (settings.privateKey !== undefined && settings.privateKey.toLowerCase() !== activePrivateKey.toLowerCase()) throw new Error('The saved key differs from the active signer; save or remove it before enabling live execution')
+	if (settings.privateKey !== undefined && settings.privateKey.toLowerCase() !== activePrivateKey.toLowerCase()) throw new Error(LIVE_SIGNER_MISMATCH)
 	if (settings.connectivity.quorumRpcUrls.length < configuredQuorumRpcUrlMinimum(settings.connectivity.rpcQuorum)) throw new Error('Live execution with RPC quorum 2 requires at least two independent quorum RPCs (three read endpoints total)')
 	return privateKeyToAccount(activePrivateKey).address
 }
@@ -40,8 +42,8 @@ export async function applyExecutionMode(execute: boolean, { activePrivateKey, l
 		await locks.disableExecution()
 		return { address: undefined, changed: true }
 	}
-	if (settings.runtime.execute) return { address: undefined, changed: false }
 	const address = assertLiveExecutionReadiness(settings, activePrivateKey)
+	if (settings.runtime.execute) return { address: undefined, changed: false }
 	await locks.enableExecution(address)
 	try {
 		await persist(current => ({ ...current, paused: true, runtime: { ...current.runtime, execute: true } }))

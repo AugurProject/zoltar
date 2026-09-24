@@ -300,29 +300,6 @@ async function runOperator(loaded: Awaited<ReturnType<typeof loadSettings>>, pro
 						await saveDurableState(settings.runtime.stateFile, state)
 						return { assets: results, blockNumber: block.number.toString(), observedAt: new Date().toISOString() }
 					}),
-				setPaused: async value => {
-					if (typeof value !== 'object' || value === null || Array.isArray(value)) {
-						throw new Error('Pause request must be an object')
-					}
-					const paused = Reflect.get(value, 'paused')
-					if (typeof paused !== 'boolean') throw new Error('paused must be a boolean')
-					if (!paused && !settings.networkConfigured) throw new Error('Configure the chain and RPC endpoints before resuming')
-					if (paused) {
-						state.paused = true
-						await configurationMutationGate.run(async () => persistSettings(current => ({ ...current, paused: true })))
-					} else {
-						await configurationMutationGate.run(async () => {
-							await persistSettings(current => ({ ...current, paused: false }))
-							state.paused = false
-						})
-					}
-					recordActivity(state, {
-						kind: 'configuration',
-						message: paused ? 'Operator paused' : 'Operator resumed',
-						status: 'info',
-					})
-					return { paused }
-				},
 				setApprovedUniverses: value =>
 					configurationMutationGate.run(async () => {
 						const approvedUniverses = parseApprovedUniverses(value)
