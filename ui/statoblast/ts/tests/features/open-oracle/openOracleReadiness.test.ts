@@ -25,7 +25,7 @@ describe('open oracle readiness actions', () => {
 				blocker: 'Wait until the dispute window closes.',
 				key: 'settle-report',
 				readiness: 'blocked',
-				title: 'Settle Report',
+				title: 'Settle report',
 			},
 		])
 	})
@@ -52,7 +52,7 @@ describe('open oracle readiness actions', () => {
 				blocker: 'Select a report first.',
 				key: 'settle-report',
 				readiness: 'blocked',
-				title: 'Settle Report',
+				title: 'Settle report',
 			},
 		])
 	})
@@ -70,7 +70,7 @@ describe('open oracle readiness actions', () => {
 				actionLabel: 'Settle report',
 				key: 'settle-report',
 				readiness: 'ready',
-				title: 'Settle Report',
+				title: 'Settle report',
 			},
 		])
 

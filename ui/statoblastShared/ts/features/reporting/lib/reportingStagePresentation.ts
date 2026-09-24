@@ -1,3 +1,4 @@
+import { formatCurrencyInputBalance, formatDuration, formatTimestamp } from '@zoltar/ui-core-shared/lib/formatters.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as reportingCopy from '../../../copy/reporting.js'
 import { assertNever } from '@zoltar/ui-core-shared/lib/assert.js'
@@ -49,11 +50,18 @@ export function getReportingStagePresentation({
 			label: reportingCopy.resolved,
 			tone: 'success',
 		}
-	if (reportingDetails.status === 'not-started') return undefined
+	if (reportingDetails.status === 'not-started') return { availableActions: [], blockedActions: [], detail: reportingCopy.firstReportNext(formatCurrencyInputBalance(reportingDetails.startBondAttoRep)), key: 'reporting-open', label: reportingCopy.phaseLabels[0] ?? reportingCopy.reportingOpen, tone: 'default' }
 	const escalationPhase = getEscalationPhase(reportingDetails)
 	switch (escalationPhase) {
 		case 'Pending Start':
-			return undefined
+			return {
+				availableActions: [],
+				blockedActions: [],
+				detail: reportingCopy.pendingStartNext(formatDuration(reportingDetails.activationTime - reportingDetails.currentTime), formatTimestamp(reportingDetails.escalationEndTime)),
+				key: 'escalation-pending',
+				label: reportingCopy.phaseLabels[1] ?? reportingCopy.reportingOpen,
+				tone: 'default',
+			}
 		case 'Active':
 			return {
 				availableActions: [],

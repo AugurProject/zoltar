@@ -13,5 +13,6 @@ export const fundReport = 'funding the report'
 export const fundingRequired = 'Required token balances and approvals must be available.'
 export const transactionPending = 'Wait for the pending transaction to confirm.'
 export const prerequisitesRequired = 'Complete the required setup transactions first.'
-export const formatPendingAction = (title: string) => `${title}…`
+export const formatPendingAction = (title: string) =>
+	`${title.replace(/^(Report|Settle|Approve|Deposit|Claim|Clear|Request|Withdraw|Create|Wrap|Execute)\b/, verb => ({ Report: 'Reporting', Settle: 'Settling', Approve: 'Approving', Deposit: 'Depositing', Claim: 'Claiming', Clear: 'Clearing', Request: 'Requesting', Withdraw: 'Withdrawing', Create: 'Creating', Wrap: 'Wrapping', Execute: 'Executing' })[verb] ?? verb)}…`
 export const requirementsFailed = 'Could not refresh transaction requirements. Close and review the action again.'

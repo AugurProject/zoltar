@@ -27,6 +27,7 @@ export function useSecurityPoolsRoute({
 	deploymentStatuses,
 	marketCreation,
 	onViewPendingReport,
+	inlineOracle,
 	priceOracleManager,
 	repPerEthPrice,
 	repPerEthSource,
@@ -54,6 +55,7 @@ export function useSecurityPoolsRoute({
 	currentTimestamp: bigint | undefined
 	deploymentStatuses: Parameters<typeof useSecurityPoolCreation>[0]['deploymentStatuses']
 	marketCreation: ReturnType<typeof useMarketCreation>
+	inlineOracle?: SecurityPoolsSectionProps['workflow']['inlineOracle']
 	onViewPendingReport: (reportId: bigint) => void
 	priceOracleManager: ReturnType<typeof usePriceOracleManager>
 	repPerEthPrice: bigint | undefined
@@ -442,6 +444,7 @@ export function useSecurityPoolsRoute({
 			onRefreshSelectedPoolData: refreshSelectedPoolData,
 			onSelectedPoolViewChange: setSelectedPoolView,
 			onViewPendingReport,
+			...(inlineOracle === undefined ? {} : { inlineOracle }),
 			securityPoolOverviewActiveAction,
 			securityPoolOverviewError,
 			securityPoolLiquidationError,

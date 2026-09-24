@@ -125,7 +125,7 @@ describe('transaction presentations', () => {
 
 	test('describes Open Oracle settlement as a report lifecycle action', () => {
 		expect(createOpenOracleTransactionIntent('settle').submittedTitle).toBe('Settling Report')
-		expect(createOpenOracleSuccessPresentation({ action: 'settle', hash: '0x1234' }).title).toBe('Report Settled')
+		expect(createOpenOracleSuccessPresentation({ action: 'settle', hash: '0x1234' }).title).toBe('Settled report')
 	})
 
 	test('keeps pool and action context in trading and reporting intents', () => {

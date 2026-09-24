@@ -1,3 +1,4 @@
+import * as reportingCopy from '../../../copy/reporting.js'
 import { useSignal } from '@preact/signals'
 import { useRef } from 'preact/hooks'
 import { useFormState } from '@zoltar/ui-core-shared/hooks/useFormState.js'
@@ -11,7 +12,7 @@ import { getErrorMessage } from '@zoltar/ui-core-shared/lib/errors.js'
 import { parseAddressInput } from '@zoltar/ui-core-shared/forms/inputs.js'
 import { getDefaultReportingFormState, getDefaultReportingWithdrawDepositIndexesByOutcome } from '@zoltar/ui-zoltar-shared/lib/formDefaults.js'
 import { parseRepAmountInput } from '@zoltar/ui-core-shared/forms/formInputs.js'
-import { getRemainingSelectedOutcomeContributionCapacity, previewReportingContribution } from '../lib/reportingDomain.js'
+import { getEscalationDepositClaimAmount, getRemainingSelectedOutcomeContributionCapacity, previewReportingContribution } from '../lib/reportingDomain.js'
 import { useRequestGuard } from '@zoltar/ui-core-shared/lib/requestGuard.js'
 import { createErrorActionFeedback, createPendingActionFeedback, createSuccessActionFeedback, createWarningActionFeedback } from '@zoltar/ui-core-shared/transactions/actionFeedback.js'
 import type { ActionFeedback } from '@zoltar/ui-core-shared/transactions/actionFeedback.js'
@@ -29,15 +30,22 @@ type ResolvedReportingOperationsParameters = UseReportingOperationsParameters & 
 export type UseReportingOperationsDependencies = {
 	approveReportingRep: (accountAddress: Address, callbacks: Parameters<typeof createWalletWriteClient>[1], securityPoolAddress: Address, outcome: Parameters<typeof approveReportingRep>[2], amount: bigint) => ReturnType<typeof approveReportingRep>
 	loadReportingDetails: (securityPoolAddress: Address, accountAddress: Address | undefined) => ReturnType<typeof loadReportingDetails>
-	reportOutcomeInSecurityPool: (accountAddress: Address, callbacks: Parameters<typeof createWalletWriteClient>[1], securityPoolAddress: Address, outcome: Parameters<typeof reportOutcomeInSecurityPool>[2], amount: bigint) => ReturnType<typeof reportOutcomeInSecurityPool>
-	withdrawEscalationFromSecurityPool: (accountAddress: Address, callbacks: Parameters<typeof createWalletWriteClient>[1], securityPoolAddress: Address, outcome: Parameters<typeof withdrawEscalationFromSecurityPool>[2], depositIndexes: bigint[]) => ReturnType<typeof withdrawEscalationFromSecurityPool>
+	reportOutcomeInSecurityPool: (accountAddress: Address, callbacks: Parameters<typeof createWalletWriteClient>[1], securityPoolAddress: Address, outcome: Parameters<typeof reportOutcomeInSecurityPool>[2], amount: bigint, reviewAmount?: bigint) => ReturnType<typeof reportOutcomeInSecurityPool>
+	withdrawEscalationFromSecurityPool: (
+		accountAddress: Address,
+		callbacks: Parameters<typeof createWalletWriteClient>[1],
+		securityPoolAddress: Address,
+		outcome: Parameters<typeof withdrawEscalationFromSecurityPool>[2],
+		depositIndexes: bigint[],
+		claimAmount?: bigint,
+	) => ReturnType<typeof withdrawEscalationFromSecurityPool>
 }
 
 const defaultUseReportingOperationsDependencies: UseReportingOperationsDependencies = {
 	approveReportingRep: async (accountAddress, callbacks, securityPoolAddress, outcome, amount) => await approveReportingRep(createWalletWriteClient(accountAddress, callbacks), securityPoolAddress, outcome, amount),
 	loadReportingDetails: async (securityPoolAddress, accountAddress) => await loadReportingDetails(createConnectedReadClient(), securityPoolAddress, accountAddress),
-	reportOutcomeInSecurityPool: async (accountAddress, callbacks, securityPoolAddress, outcome, amount) => await reportOutcomeInSecurityPool(createWalletWriteClient(accountAddress, callbacks), securityPoolAddress, outcome, amount),
-	withdrawEscalationFromSecurityPool: async (accountAddress, callbacks, securityPoolAddress, outcome, depositIndexes) => await withdrawEscalationFromSecurityPool(createWalletWriteClient(accountAddress, callbacks), securityPoolAddress, outcome, depositIndexes),
+	reportOutcomeInSecurityPool: async (accountAddress, callbacks, securityPoolAddress, outcome, amount, reviewAmount) => await reportOutcomeInSecurityPool(createWalletWriteClient(accountAddress, callbacks), securityPoolAddress, outcome, amount, reviewAmount),
+	withdrawEscalationFromSecurityPool: async (accountAddress, callbacks, securityPoolAddress, outcome, depositIndexes, claimAmount) => await withdrawEscalationFromSecurityPool(createWalletWriteClient(accountAddress, callbacks), securityPoolAddress, outcome, depositIndexes, claimAmount),
 }
 
 function getAvailableWithdrawDepositIndexes(details: ReportingDetails, outcome: ReportingOutcomeKey) {
@@ -231,7 +239,7 @@ export function useReportingOperations(
 				if (preflight === undefined) return undefined
 				if (preflight.latestDetails.contributionFunding !== 'wallet') throw new Error('This escalation contribution uses vault backing and does not require wallet REP approval.')
 				if ((preflight.latestDetails.viewerWalletRepAllowanceAttoRep ?? 0n) >= preflight.actualDepositAmount) throw new Error('The escalation game already has enough REP allowance for this contribution.')
-				return await dependencies.approveReportingRep(walletAddress, { onTransactionPrepared, onTransactionSubmitted, reviewSignal: context.reviewSignal }, securityPoolAddress, preflight.selectedOutcome, preflight.actualDepositAmount)
+				return { ...(await dependencies.approveReportingRep(walletAddress, { onTransactionPrepared, onTransactionSubmitted, reviewSignal: context.reviewSignal }, securityPoolAddress, preflight.selectedOutcome, preflight.actualDepositAmount)), amountAttoRep: preflight.actualDepositAmount }
 			},
 			'Failed to approve REP for reporting',
 		)
@@ -245,7 +253,10 @@ export function useReportingOperations(
 				if (preflight.latestDetails.contributionFunding === 'wallet' && (preflight.latestDetails.viewerWalletRepAllowanceAttoRep ?? 0n) < preflight.actualDepositAmount) {
 					throw new Error('Approve REP for this escalation game before reporting.')
 				}
-				return await dependencies.reportOutcomeInSecurityPool(walletAddress, { onTransactionPrepared, onTransactionSubmitted, reviewSignal: context.reviewSignal }, securityPoolAddress, preflight.selectedOutcome, preflight.reportAmount)
+				return {
+					...(await dependencies.reportOutcomeInSecurityPool(walletAddress, { onTransactionPrepared, onTransactionSubmitted, reviewSignal: context.reviewSignal }, securityPoolAddress, preflight.selectedOutcome, preflight.reportAmount, preflight.actualDepositAmount)),
+					amountAttoRep: preflight.actualDepositAmount,
+				}
 			},
 			'Failed to report on outcome',
 		)
@@ -278,11 +289,12 @@ export function useReportingOperations(
 
 				const depositIndexes = requestedDepositIndexes
 				if (depositIndexes.length === 0) {
-					throw new Error('Select at least one deposit to settle or use Settle all for this side.')
+					throw new Error(reportingCopy.settlementSelectionRequired)
 				}
 				if (!isCurrentSelection()) return undefined
 
-				return await dependencies.withdrawEscalationFromSecurityPool(walletAddress, { onTransactionPrepared, onTransactionSubmitted, reviewSignal: context.reviewSignal }, securityPoolAddress, outcome, depositIndexes)
+				const claimAmount = selectedSide.userDeposits.filter(deposit => depositIndexes.includes(deposit.depositIndex)).reduce((sum, deposit) => sum + (getEscalationDepositClaimAmount(latestDetails, outcome, deposit) ?? 0n), 0n)
+				return { ...(await dependencies.withdrawEscalationFromSecurityPool(walletAddress, { onTransactionPrepared, onTransactionSubmitted, reviewSignal: context.reviewSignal }, securityPoolAddress, outcome, depositIndexes, claimAmount)), amountAttoRep: claimAmount }
 			},
 			'Failed to settle escalation deposits',
 			outcome,

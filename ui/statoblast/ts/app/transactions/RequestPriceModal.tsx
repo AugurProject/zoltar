@@ -98,9 +98,6 @@ export function RequestPriceModal({ review, onConfirm, onClose, canRequest, conf
 		run.current?.cancel()
 		onClose()
 	}
-	useEffect(() => {
-		if (closeOnSuccessKey !== undefined && presentation?.tone === 'success') close()
-	}, [closeOnSuccessKey, presentation?.tone])
 
 	const fetchQuote = async () => {
 		if (review === undefined || sending || fetching) return
@@ -147,9 +144,9 @@ export function RequestPriceModal({ review, onConfirm, onClose, canRequest, conf
 	)
 
 	return (
-		<GlobalTransactionPresentationProvider transaction={undefined}>
+		<GlobalTransactionPresentationProvider transaction={presentation}>
 			<TransactionActionButtonLockProvider locked={false}>
-				<OperationModal embedTransactionSteps={false} isOpen={review !== undefined} title={poolCopy.requestNewPriceTitle} onClose={close} closeDisabled={sending}>
+				<OperationModal closeOnSuccessKey={closeOnSuccessKey} embedTransactionSteps={false} isOpen={review !== undefined} title={poolCopy.requestNewPriceTitle} onClose={close} closeDisabled={sending}>
 					{priceControls}
 					{showSteps ? (
 						<GlobalTransactionPresentationProvider transaction={presentation}>

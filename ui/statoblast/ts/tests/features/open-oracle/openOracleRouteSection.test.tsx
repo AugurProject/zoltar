@@ -838,7 +838,7 @@ describe('OpenOracleSection route create view', () => {
 
 		const documentQueries = within(document.body)
 		expect(documentQueries.queryByRole('button', { name: 'Dispute & swap' })).toBeNull()
-		expect(documentQueries.getByRole('button', { name: 'Settle report' })).not.toBeNull()
+		expect(documentQueries.getByRole('button', { name: 'Settle report…' })).not.toBeNull()
 	})
 
 	test('counts down to settlement and enables the report action at zero', async () => {
@@ -872,11 +872,11 @@ describe('OpenOracleSection route create view', () => {
 		expectTransactionButtonDisabled(document.body, 'Settle report')
 		await act(async () => await new Promise(resolve => setTimeout(resolve, 1150)))
 		expect(page.queryByText('Settle in 1s')).toBeNull()
-		expectTransactionButtonEnabled(document.body, 'Settle report')
+		expectTransactionButtonEnabled(document.body, 'Settle report…')
 		expect(reloads).toContain('report')
-		await act(() => fireEvent.click(page.getByRole('button', { name: 'Settle report' })))
+		await act(() => fireEvent.click(page.getByRole('button', { name: 'Settle report…' })))
 		const dialog = page.getByRole('dialog')
-		expectTransactionButtonEnabled(dialog, 'Settle report')
+		expectTransactionButtonEnabled(dialog, 'Settle report #7')
 	})
 
 	test('starts a new settlement countdown when the deadline refresh finds a dispute', async () => {
@@ -1011,7 +1011,7 @@ describe('OpenOracleSection route create view', () => {
 
 		const documentQueries = within(document.body)
 		expect(documentQueries.queryByRole('button', { name: 'Dispute & swap' })).toBeNull()
-		expect(documentQueries.getByRole('button', { name: 'Settle report' })).not.toBeNull()
+		expect(documentQueries.getByRole('button', { name: 'Settle report…' })).not.toBeNull()
 	})
 
 	test('shows independent credited-balance withdrawals after settlement', async () => {
@@ -1156,7 +1156,7 @@ describe('OpenOracleSection route create view', () => {
 		expect(documentQueries.queryByText(openOracleCopy.loadingOracleBalances)).toBeNull()
 	})
 
-	test('closes the dispute form only after the matching dispute succeeds', async () => {
+	test('replaces the dispute form with success until Done is selected', async () => {
 		const presentation = signal<GlobalTransactionPresentation | undefined>(undefined)
 		const result = signal<OpenOracleSectionProps['openOracleResult']>(undefined)
 		function Harness() {
@@ -1184,6 +1184,9 @@ describe('OpenOracleSection route create view', () => {
 			result.value = { action: 'dispute', hash: '0x01' }
 			presentation.value = { tone: 'success', title: 'Dispute confirmed', operationKey: 'dispute', hash: '0x01' }
 		})
+		const dialog = page.getByRole('dialog', { name: 'Dispute & Swap' })
+		expect(within(dialog).getByText('Dispute confirmed')).not.toBeNull()
+		await act(() => fireEvent.click(within(dialog).getByRole('button', { name: 'Done' })))
 		expect(page.queryByRole('dialog')).toBeNull()
 	})
 })

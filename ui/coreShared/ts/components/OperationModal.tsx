@@ -1,3 +1,4 @@
+import { TransactionHashLink } from './TransactionHashLink.js'
 import { registerTransactionReviewScope } from '../transactions/transactionReviewScope.js'
 import { transactionSteps } from '../transactions/transactionSteps.js'
 import { TransactionStepsActions, TransactionStepsContent } from './TransactionStepsContent.js'
@@ -33,11 +34,14 @@ export function OperationModal({ children, closeDisabled = false, closeOnSuccess
 	const noticeRef = useRef<HTMLDivElement | null>(null)
 	const bodyRef = useRef<HTMLDivElement | null>(null)
 	const [reviewActionsSlot, setReviewActionsSlot] = useState<HTMLElement | null>(null)
+	const [success, setSuccess] = useState<ReturnType<typeof useGlobalTransactionPresentation>>()
 	const [dismissedOperationKey, setDismissedOperationKey] = useState<string>()
 	const [reviewScope, setReviewScope] = useState<AbortController>()
 	useLayoutEffect(() => {
-		if (!isOpen || !embedTransactionSteps) return
+		if (!isOpen) return
 		setDismissedOperationKey(undefined)
+		setSuccess(undefined)
+		if (!embedTransactionSteps) return
 		const scope = new AbortController()
 		const unregister = registerTransactionReviewScope(scope.signal)
 		setReviewScope(scope)
@@ -52,7 +56,8 @@ export function OperationModal({ children, closeDisabled = false, closeOnSuccess
 	const activeStep = ownedWorkflow?.steps[ownedWorkflow.activeIndex]
 	// A workflow made only of approvals was started by the form's own approve control, which already shows the amount and its pending state.
 	const approvalOnly = ownedWorkflow !== undefined && activeStep !== undefined && ownedWorkflow.steps.every(step => step.spender !== undefined)
-	const showSteps = activeStep !== undefined && !approvalOnly
+	const singleFormAction = ownedWorkflow?.steps.length === 1
+	const showSteps = activeStep !== undefined && !approvalOnly && !singleFormAction
 	// Stable handlers keep the form's action group from re-claiming the slot on every render.
 	const reviewActionsSlotHandlers = useMemo(() => ({ claim: (element: HTMLElement) => setReviewActionsSlot(element), release: () => setReviewActionsSlot(null) }), [])
 	// With a claimed action row the rest of the form goes inert around it; without one the whole form does.
@@ -72,9 +77,9 @@ export function OperationModal({ children, closeDisabled = false, closeOnSuccess
 		}
 	}, [showSteps, reviewActionsSlot])
 	useEffect(() => {
-		if (ownedWorkflow === undefined || activeStep === undefined || !approvalOnly || activeStep.phase !== 'review') return
+		if (ownedWorkflow === undefined || activeStep === undefined || (!approvalOnly && !singleFormAction) || activeStep.phase !== 'review') return
 		ownedWorkflow.confirmStep(ownedWorkflow.activeIndex)
-	}, [activeStep, approvalOnly, ownedWorkflow])
+	}, [activeStep, approvalOnly, ownedWorkflow, singleFormAction])
 	// A step that fails after it was sent returns to the form on its own; the outcome notice below the form explains what happened.
 	const activeTransactionTone = useGlobalTransactionPresentation()?.tone
 	useEffect(() => {
@@ -117,8 +122,8 @@ export function OperationModal({ children, closeDisabled = false, closeOnSuccess
 		}
 		const submittedActionSucceeded = activeTransaction?.tone === 'success' && activeTransaction.hash !== undefined && activeTransaction.hash === closeOnSuccessKey && activeTransactionOperationKey !== undefined && modalOperationKeysRef.current.has(activeTransactionOperationKey)
 		if (submittedActionSucceeded) {
+			setSuccess(activeTransaction)
 			if (ownsWorkflow) workflow.cancel()
-			onClose()
 		} else if (ownsWorkflow && activeTransaction?.tone === 'success' && activeTransaction.hash !== undefined && workflow.steps.some(step => step.hash === activeTransaction.hash)) {
 			// A standalone approval completed; keep the form for the actual action.
 			workflow.cancel()
@@ -174,28 +179,42 @@ export function OperationModal({ children, closeDisabled = false, closeOnSuccess
 				</div>
 				{/* Only this region scrolls, so the title and close control stay pinned. */}
 				<div className='operation-modal-scroll'>
-					{description === undefined ? undefined : (
-						<p id={descriptionId} className='detail'>
-							{description}
-						</p>
+					{success === undefined ? (
+						<>
+							{description === undefined ? undefined : (
+								<p id={descriptionId} className='detail'>
+									{description}
+								</p>
+							)}
+							<div className='operation-modal-body' inert={(showSteps && reviewActionsSlot === null) || undefined} ref={bodyRef}>
+								<ReviewActionsSlotContext.Provider value={reviewActionsSlotContext}>{children}</ReviewActionsSlotContext.Provider>
+							</div>
+							{/* Outcome notices sit below the form so its controls never move; the dialog scrolls to them instead. */}
+							{showNotice ? (
+								<div ref={noticeRef}>
+									<TransactionPresentationNotice className='operation-modal-transaction-notice' transaction={modalTransaction} />
+								</div>
+							) : undefined}
+							{showSteps ? (
+								<div className='operation-modal-steps'>
+									{/* The dialog already shows its context rows above the form, so the step review only keeps the rows it does not cover. */}
+									<GlobalTransactionPresentationProvider transaction={modalTransaction}>
+										<TransactionStepsContent actions={reviewActionsSlot === null ? 'inline' : 'external'} contextKey={titleId} focusOnMount keepActionsVisible onClose={returnToForm} />
+									</GlobalTransactionPresentationProvider>
+								</div>
+							) : undefined}
+						</>
+					) : (
+						<div className='operation-modal-body' role='status'>
+							<h4>{success.title}</h4>
+							{success.hash === undefined ? undefined : <TransactionHashLink hash={success.hash} />}
+							<div className='actions'>
+								<button type='button' className='primary' onClick={requestClose}>
+									{commonCopy.done}
+								</button>
+							</div>
+						</div>
 					)}
-					<div className='operation-modal-body' inert={(showSteps && reviewActionsSlot === null) || undefined} ref={bodyRef}>
-						<ReviewActionsSlotContext.Provider value={reviewActionsSlotContext}>{children}</ReviewActionsSlotContext.Provider>
-					</div>
-					{/* Outcome notices sit below the form so its controls never move; the dialog scrolls to them instead. */}
-					{showNotice ? (
-						<div ref={noticeRef}>
-							<TransactionPresentationNotice className='operation-modal-transaction-notice' transaction={modalTransaction} />
-						</div>
-					) : undefined}
-					{showSteps ? (
-						<div className='operation-modal-steps'>
-							{/* The dialog already shows its context rows above the form, so the step review only keeps the rows it does not cover. */}
-							<GlobalTransactionPresentationProvider transaction={modalTransaction}>
-								<TransactionStepsContent actions={reviewActionsSlot === null ? 'inline' : 'external'} contextKey={titleId} focusOnMount keepActionsVisible onClose={returnToForm} />
-							</GlobalTransactionPresentationProvider>
-						</div>
-					) : undefined}
 				</div>
 			</section>
 		</div>

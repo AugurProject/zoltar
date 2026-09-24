@@ -41,7 +41,7 @@ test('prepares approval and request actions alongside editable price controls in
 			{ ...step, title: 'Approve REP spending', approval: { requiredAmount: 3n, approvedAmount: 0n, tokenSymbol: 'REP', tokenUnits: 0 } },
 			{
 				...step,
-				title: 'Request price',
+				title: 'Request new price',
 				proposedRepPerEthPrice: request.proposedRepPerEthPrice ?? 2n * 10n ** 18n,
 				tokenFunding: [
 					{ amount: '2 REP', limit: undefined },
@@ -67,18 +67,18 @@ test('prepares approval and request actions alongside editable price controls in
 		await act(() => fireEvent.click(queries.getByRole('button', { name: 'Fetch from Uniswap' })))
 		await settle()
 		expect(queries.getAllByRole('dialog')).toHaveLength(1)
-		expect(queries.getByRole('button', { name: /Approve REP/ })).not.toBeNull()
-		expect(queries.getByRole('button', { name: /Request price/ })).not.toBeNull()
+		expect(queries.getByRole('button', { name: /Approve.*REP/ })).not.toBeNull()
+		expect(queries.getByRole('button', { name: /Request new price/ })).not.toBeNull()
 		expect(queries.queryByRole('button', { name: 'Review funding and steps' })).toBeNull()
 		expect(submitted).toBe(0)
 		await act(() => fireEvent.input(queries.getByRole('textbox', { name: 'Open Oracle REP/ETH starting price' }), { target: { value: '' } }))
-		expect(queries.getByRole('button', { name: /Approve REP/ }).hasAttribute('disabled')).toBe(true)
+		expect(queries.getByRole('button', { name: /Approve.*REP/ }).hasAttribute('disabled')).toBe(true)
 		expect(document.querySelector('.transaction-funding')?.textContent).toContain('— REP')
 		expect(document.querySelector('.transaction-funding')?.textContent).not.toContain('2 REP')
 		for (const value of ['0', '-1', 'abc', '0.0000000000000000001', (2n ** 256n).toString()]) {
 			await act(() => fireEvent.input(queries.getByRole('textbox', { name: 'Open Oracle REP/ETH starting price' }), { target: { value } }))
 			expect(queries.getByText('Enter a positive REP per ETH price with up to 18 decimal places.')).not.toBeNull()
-			expect(queries.getByRole('button', { name: /Request price/ }).hasAttribute('disabled')).toBe(true)
+			expect(queries.getByRole('button', { name: /Request new price/ }).hasAttribute('disabled')).toBe(true)
 		}
 		const priceInput = queries.getByRole('textbox', { name: 'Open Oracle REP/ETH starting price' })
 		priceInput.focus()
@@ -89,7 +89,7 @@ test('prepares approval and request actions alongside editable price controls in
 		expect(queries.getAllByRole('dialog')).toHaveLength(1)
 		expect(submitted).toBe(0)
 		await act(async () => {
-			fireEvent.click(queries.getByRole('button', { name: /Approve REP/ }))
+			fireEvent.click(queries.getByRole('button', { name: /Approve.*REP/ }))
 			await Promise.resolve()
 		})
 		expect(submitted).toBe(1)
@@ -110,7 +110,7 @@ test('cancels a late preparation after closing without exposing a transaction di
 	const onConfirm = async (_request: RequestPriceReview, signal?: AbortSignal) => {
 		await delayed
 		const controller = createTransactionStepController(signal)
-		controller.setPlan([{ ...step, title: 'Request price' }])
+		controller.setPlan([{ ...step, title: 'Request new price' }])
 		try {
 			await controller.review()
 			submitted = true
@@ -185,7 +185,7 @@ test.each(['automatic', 'manual'] as const)('prepares %s again after visiting an
 	const onConfirm = async (request: RequestPriceReview, signal?: AbortSignal) => {
 		prices.push(request.proposedRepPerEthPrice)
 		const controller = createTransactionStepController(signal)
-		controller.setPlan([{ ...step, title: 'Request price' }])
+		controller.setPlan([{ ...step, title: 'Request new price' }])
 		try {
 			await controller.review()
 		} catch (error) {
@@ -209,7 +209,7 @@ test.each(['automatic', 'manual'] as const)('prepares %s again after visiting an
 		}
 		await settle()
 		expect(prices).toEqual(source === 'manual' ? [2n * 10n ** 18n, 1_250_000_000_000_000_000n, 1_250_000_000_000_000_000n] : [2n * 10n ** 18n, 2n * 10n ** 18n])
-		expect(queries.getByRole('button', { name: /^Request price/ }).hasAttribute('disabled')).toBe(false)
+		expect(queries.getByRole('button', { name: /^Request new price/ }).hasAttribute('disabled')).toBe(false)
 	} finally {
 		await rendered.cleanup()
 		dom.cleanup()
@@ -404,7 +404,7 @@ test('keeps the funding and action layout visible with unknown values until an e
 		expect(queries.getByText('Enter a starting price.')).not.toBeNull()
 		expect(document.querySelector('.transaction-funding')?.textContent).toContain('— REP')
 		expect(queries.getByText('Settler bounty')).not.toBeNull()
-		for (const name of [/Approve REP/, /Approve WETH/, /^Request price/]) {
+		for (const name of [/Approve.*REP/, /Approve.*WETH/, /^Request new price/]) {
 			const button = queries.getByRole('button', { name })
 			expect(button.hasAttribute('disabled')).toBe(true)
 			const reasonId = button.getAttribute('aria-describedby')
@@ -422,7 +422,7 @@ test('keeps the preview while satisfied approvals are skipped before the final r
 	const ready = createDeferred<void>()
 	const onConfirm = async (_request: RequestPriceReview, signal?: AbortSignal) => {
 		const controller = createTransactionStepController(signal)
-		controller.setPlan([...['REP', 'WETH'].map(tokenSymbol => ({ ...step, title: `Approve ${tokenSymbol}`, approval: { requiredAmount: 3n, approvedAmount: 3n, tokenSymbol, tokenUnits: 0 } })), { ...step, title: 'Request price' }])
+		controller.setPlan([...['REP', 'WETH'].map(tokenSymbol => ({ ...step, title: `Approve ${tokenSymbol}`, approval: { requiredAmount: 3n, approvedAmount: 3n, tokenSymbol, tokenUnits: 0 } })), { ...step, title: 'Request new price' }])
 		await controller.chooseFunding([])
 		await ready.promise
 		try {
@@ -439,11 +439,11 @@ test('keeps the preview while satisfied approvals are skipped before the final r
 		expect(transactionSteps.value?.activeIndex).toBe(-1)
 		expect(rendered.container.querySelectorAll('.approval-amount-field')).toHaveLength(2)
 		expect(queries.getByRole('button', { name: /Preparing funding and approvals/ }).hasAttribute('disabled')).toBe(true)
-		expect(queries.queryByRole('button', { name: /Request price/ })).toBeNull()
+		expect(queries.queryByRole('button', { name: /Request new price/ })).toBeNull()
 		ready.resolve()
 		await settle()
-		expect(rendered.container.querySelectorAll('.approval-amount-field')).toHaveLength(2)
-		expect(queries.getByRole('button', { name: /Request price/ }).hasAttribute('disabled')).toBe(false)
+		expect(rendered.container.querySelectorAll('.approval-amount-field')).toHaveLength(0)
+		expect(queries.getByRole('button', { name: /Request new price/ }).hasAttribute('disabled')).toBe(false)
 	} finally {
 		ready.resolve()
 		await rendered.cleanup()

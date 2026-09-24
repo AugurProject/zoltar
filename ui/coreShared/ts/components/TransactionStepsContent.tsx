@@ -15,6 +15,10 @@ import { TransactionPresentationNotice } from './TransactionPresentationNotice.j
 import { TransactionHashLink } from './TransactionHashLink.js'
 import { transactionSteps } from '../transactions/transactionSteps.js'
 
+function currentSuccessTitle(title: string | undefined) {
+	return transactionCopy.completedAction(title ?? transactionCopy.transaction)
+}
+
 /** Explains a step that has no token funding to summarize, using the enclosing operation's rows for the parameters being submitted. */
 function TransactionStepReview({ contractAddress, contractLabel, description, rows = [] }: { contractAddress: Address | undefined; contractLabel: string | undefined; description: string | undefined; rows?: GlobalTransactionRow[] | undefined }) {
 	return (
@@ -100,6 +104,17 @@ export function TransactionStepsActions({ cancelable = true, contextKey, focusOn
 	}, [focusOnMount])
 	if (workflow === undefined || workflow.steps[workflow.activeIndex] === undefined) return undefined
 	const completed = workflow.steps.every(step => step.phase === 'confirmed' || step.phase === 'skipped')
+	const finalHash = workflow.steps.at(-1)?.hash
+	if (completed)
+		return (
+			<div role='status'>
+				<h4>{presentation?.title ?? currentSuccessTitle(workflow.steps.at(-1)?.title)}</h4>
+				{finalHash === undefined ? undefined : <TransactionHashLink hash={finalHash} />}
+				<button type='button' className='primary' onClick={onClose ?? workflow.cancel}>
+					{commonCopy.done}
+				</button>
+			</div>
+		)
 	const funding = workflow.steps.flatMap(step => step.tokenFunding ?? [])
 	const fundingReason = funding.length > 0 ? copy.fundingRequired : copy.prerequisitesRequired
 	const blockedReason = pending ? copy.transactionPending : fundingReason
@@ -117,7 +132,8 @@ export function TransactionStepsActions({ cancelable = true, contextKey, focusOn
 								const final = index === workflow.steps.length - 1
 								const ready = step.phase === 'review' && !pending && error === undefined
 								const status = { skipped: copy.skipped, upcoming: step.optional ? copy.ifNeeded : undefined, review: undefined, pending: undefined, confirmed: undefined, failed: copy.notCompleted }[step.phase]
-								const detail = [step.phase === 'upcoming' || step.approval !== undefined ? undefined : step.amount, status].filter(value => value !== undefined).join(' · ')
+								if (step.approval !== undefined && (step.phase === 'confirmed' || step.phase === 'skipped')) return step.hash === undefined ? undefined : <TransactionHashLink key={index} hash={step.hash} />
+								const detail = [step.phase === 'upcoming' || step.spender !== undefined || step.paidFrom !== undefined || step.approval !== undefined ? undefined : step.amount, status].filter(value => value !== undefined).join(' · ')
 								return (
 									<div key={index} className={`transaction-plan-action${step.approval === undefined || final ? ' transaction-plan-action-wide' : ''}${final ? ' transaction-plan-action-final' : ''}`}>
 										{step.approval !== undefined ? (
@@ -165,7 +181,7 @@ export function TransactionStepsActions({ cancelable = true, contextKey, focusOn
 										{final && cancelable ? (
 											<div className='actions transaction-step-close'>
 												<button className='secondary' type='button' onClick={onClose ?? workflow.cancel} disabled={pending}>
-													{completed || error !== undefined ? commonCopy.close : commonCopy.cancel}
+													{commonCopy.cancel}
 												</button>
 											</div>
 										) : undefined}
@@ -194,6 +210,7 @@ export function TransactionStepsContent({ actions = 'inline', cancelable = true,
 	const funding = workflow.steps.flatMap(step => step.tokenFunding ?? [])
 	const outcome = workflow.steps.find(step => step.oracleOutcome !== undefined)?.oracleOutcome
 	const totalEth = workflow.steps.reduce((sum, step) => sum + (step.phase === 'skipped' ? 0n : (step.ethValueAttoEth ?? 0n)), 0n)
+	if (completed) return <TransactionStepsActions cancelable={cancelable} contextKey={contextKey} onClose={onClose} />
 	return (
 		<>
 			{heading === undefined ? undefined : (
@@ -202,7 +219,24 @@ export function TransactionStepsContent({ actions = 'inline', cancelable = true,
 				</div>
 			)}
 			<div className='transaction-step-content'>
-				{funding.length === 0 ? <TransactionStepReview contractAddress={current.contractAddress} contractLabel={current.contractLabel} description={completed ? undefined : current.description} rows={presentation?.rows} /> : <TransactionFundingSummary funding={funding} totalAttoEth={totalEth} outcome={outcome} />}
+				{funding.length === 0 ? (
+					<TransactionStepReview
+						contractAddress={current.contractAddress}
+						contractLabel={current.contractLabel}
+						description={completed ? undefined : current.description}
+						rows={[
+							...(current.paidFrom === undefined
+								? []
+								: [
+										{ label: transactionCopy.amount, value: current.amount },
+										{ label: transactionCopy.paidFrom, value: current.paidFrom },
+									]),
+							...(presentation?.rows ?? []),
+						]}
+					/>
+				) : (
+					<TransactionFundingSummary funding={funding} totalAttoEth={totalEth} outcome={outcome} />
+				)}
 				{funding.length === 0 || completed ? undefined : <p className='detail transaction-funding-note'>{copy.fundingDetail}</p>}
 			</div>
 			{actions === 'inline' ? <TransactionStepsActions cancelable={cancelable} contextKey={contextKey} focusOnMount={focusOnMount} keepActionsVisible={keepActionsVisible} onClose={onClose} /> : undefined}

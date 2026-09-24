@@ -49,9 +49,9 @@ export const formatQueuedLiquidationAutoExecutionDetail = (operationId: CopyTemp
 export const formatQueuedLiquidationManualExecutionDetail = (operationId: CopyTemplateValue) => `Liquidation staged as operation #${operationId} and must be executed manually after a valid oracle price is available.`
 export const liquidationExecutedImmediatelyDetail = 'The liquidation executed immediately.'
 export const executingStagedOperation = 'Executing Staged Operation'
-export const requestingPrice = 'Requesting Price'
+export const requestingPrice = 'Requesting new price…'
 export const stagedOperationExecuted = 'Staged Operation Executed'
-export const priceRequested = 'Price Requested'
+export const priceRequested = 'Requested new price'
 export const formatFinalizedRefundSettlementResultDetail = (capacityOwnershipLabel: CopyTemplateValue) => `Selected finalized truth-auction refund rows were settled. Locked ETH was credited for withdrawal without assigning REP backing units or ${capacityOwnershipLabel}.`
 export const formatWinningBidSettlementResultDetail = (capacityOwnershipLabel: CopyTemplateValue) => `Selected truth-auction winning bids were settled. The selected bids received REP backing units plus ${capacityOwnershipLabel}, assigning the remaining capacity ownership.`
 export const formatMixedBidSettlementResultDetail = (capacityOwnershipLabel: CopyTemplateValue) => `Selected truth-auction bids were settled. Winning bids received REP backing units plus ${capacityOwnershipLabel}, assigning the remaining capacity ownership; refund-only rows credited locked ETH for withdrawal.`
@@ -79,3 +79,39 @@ export const confirmationUnavailableDetail = 'Confirmation unavailable. Checking
 export const attention = 'Attention'
 export const dismiss = 'Dismiss'
 export const closeStatus = 'Close transaction status'
+
+export const transaction = 'Transaction'
+export const paidFrom = 'Paid from'
+export const walletRep = 'Wallet REP'
+export const vaultBackedRep = 'Vault-backed REP'
+export const completedAction = (title: string) =>
+	title.replace(
+		/^(Report|Settle|Approve|Deposit|Claim|Clear|Request|Withdraw|Create|Wrap|Execute)\b/,
+		verb => ({ Report: 'Reported', Settle: 'Settled', Approve: 'Approved', Deposit: 'Deposited', Claim: 'Claimed', Clear: 'Cleared', Request: 'Requested', Withdraw: 'Withdrew', Create: 'Created', Wrap: 'Wrapped', Execute: 'Executed' })[verb] ?? verb,
+	)
+export const reportingAction = (outcome: string, amount: string) => `Report ${outcome} · ${amount} REP`
+export const settleReportNumber = (id: string) => `Settle report #${id}`
+export const approveTokenAmount = (amount: string) => `Approve ${amount}`
+
+export const amount = 'Amount'
+export const settleEscalationDeposits = 'Settle escalation deposits'
+export const escalationDepositsSettled = 'Settled escalation deposits'
+
+export const reviewedActions: Record<string, { title: string; description?: string }> = {
+	'Transfer ETH': { title: 'Transfer ETH', description: 'Send ETH from your wallet to the recipient below.' },
+	'Fund deterministic proxy deployer signer without surplus': { title: 'Fund proxy deployment', description: 'Provide ETH for deploying the shared proxy. Unused funding is returned in this transaction.' },
+	'Broadcast deterministic proxy deployer transaction': { title: 'Deploy shared proxy', description: 'Broadcast the signed proxy deployment. If the signer needs ETH, this attempt sends nothing; fund it and retry in the following steps.' },
+	deposit: { title: 'Wrap ETH into WETH', description: 'Convert ETH into WETH held in your wallet to fund the oracle report.' },
+	requestPrice: { title: 'Request new price', description: 'Fund and start an oracle price report using your approved REP and WETH.' },
+	approve: { title: 'Approve token spending', description: 'Authorize the listed spending limit; tokens stay in your wallet.' },
+	depositToEscalationGame: { title: 'Report outcome' },
+	depositRepOnOutcome: { title: 'Report outcome' },
+	withdrawFromEscalationGame: { title: 'Settle escalation deposits', description: 'Settle the selected deposits after resolution.' },
+	settle: { title: 'Settle report', description: 'Settle the completed oracle report.' },
+	dispute: { title: 'Dispute report', description: 'Fund the counter-report and swap against the current report.' },
+	withdrawTo: { title: 'Withdraw oracle balance', description: 'Withdraw your available oracle balance to the recipient.' },
+	report: { title: 'Create oracle report', description: 'Deposit the approved tokens and start the oracle report.' },
+	requestPriceIfNeededAndStageLiquidation: { title: 'Queue liquidation', description: 'Queue the liquidation and fund a price report if needed. Settlement may execute the queued liquidation.' },
+	requestPriceIfNeededAndStageOperation: { title: 'Queue vault operation', description: 'Queue the vault change and fund a price report if needed. Settlement may execute the queued change.' },
+	aggregate3: { title: 'Batched transaction', description: 'Run several contract calls in one transaction.' },
+}

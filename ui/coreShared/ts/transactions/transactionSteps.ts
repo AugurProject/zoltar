@@ -11,6 +11,7 @@ export type TransactionStepDetails = {
 	oracleOutcome?: TransactionPlanStep['oracleOutcome']
 	tokenFunding?: readonly { amount: string; limit: string | undefined }[]
 	optional?: boolean
+	paidFrom?: string
 	title: string
 	/** Explains the step when the title alone does not convey its consequence; omitted for self-describing actions. */
 	description: string | undefined

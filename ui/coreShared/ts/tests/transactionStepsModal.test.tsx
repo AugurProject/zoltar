@@ -180,7 +180,6 @@ for (const choice of ['custom', 'max'] as const) {
 		try {
 			const queries = within(rendered.container)
 			const funding = rendered.container.querySelector('.transaction-funding')
-			const approvalInput = queries.getByRole('textbox')
 			if (funding === null) throw new Error('Missing funding summary')
 			expect(funding.textContent).toContain('3 REP')
 			expect(funding.textContent).toContain('1 WETH')
@@ -188,8 +187,8 @@ for (const choice of ['custom', 'max'] as const) {
 			if (choice === 'custom') await act(() => fireEvent.input(queries.getByRole('textbox'), { target: { value: '9' } }))
 			else await act(() => fireEvent.click(queries.getByText('Max')))
 			expect(transactionSteps.value?.steps[0]?.phase).toBe('review')
-			expect(queries.getByRole('button', { name: choice === 'custom' ? /Approve REP/ : /Approve Max/ }).hasAttribute('disabled')).toBe(false)
-			await act(() => fireEvent.click(queries.getByRole('button', { name: choice === 'custom' ? /Approve REP/ : /Approve Max/ })))
+			expect(queries.getByRole('button', { name: choice === 'custom' ? /Approve 9 REP/ : /Approve Max/ }).hasAttribute('disabled')).toBe(false)
+			await act(() => fireEvent.click(queries.getByRole('button', { name: choice === 'custom' ? /Approve 9 REP/ : /Approve Max/ })))
 			expect(await review).toBe(choice === 'custom' ? 9n : 2n ** 256n - 1n)
 			expect(transactionSteps.value?.steps[1]?.phase).toBe('upcoming')
 			expect(rendered.container.querySelector('.transaction-funding')).toBe(funding)
@@ -200,10 +199,8 @@ for (const choice of ['custom', 'max'] as const) {
 				controller.receipt(hash, 'success')
 			})
 			expect(queries.getByRole('link', { name: hash }).closest('.transaction-step-actions')).not.toBeNull()
-			expect(queries.getByRole('textbox')).toBe(approvalInput)
-			expect(approvalInput.hasAttribute('disabled')).toBe(true)
-			expect(queries.getByText('Approved REP')).not.toBeNull()
-			expect(rendered.container.querySelectorAll('.approval-amount-field')).toHaveLength(1)
+			expect(queries.queryByRole('textbox')).toBeNull()
+			expect(rendered.container.querySelectorAll('.approval-amount-field')).toHaveLength(0)
 			const nextReview = controller.review()
 			await act(() => undefined)
 			expect(rendered.container.querySelector('.transaction-funding')).toBe(funding)
@@ -276,11 +273,11 @@ test('both insufficient approvals are enabled independently while the report wai
 	const rendered = await renderIntoDocument(<TransactionStepsModal contextKey='independent' />)
 	try {
 		const queries = within(rendered.container)
-		for (const token of ['REP', 'WETH']) expect(queries.getByRole('button', { name: `Approve ${token}` }).hasAttribute('disabled')).toBe(false)
+		for (const token of ['REP', 'WETH']) expect(queries.getByRole('button', { name: `Approve 3 ${token}` }).hasAttribute('disabled')).toBe(false)
 		expect(queries.getByRole('button', { name: 'Request price' }).hasAttribute('disabled')).toBe(true)
-		await act(() => fireEvent.click(queries.getByRole('button', { name: 'Approve WETH' })))
+		await act(() => fireEvent.click(queries.getByRole('button', { name: 'Approve 3 WETH' })))
 		expect(await choosing).toEqual({ index: 1, amount: 3n })
-		expect(queries.getByRole('button', { name: 'Approve REP' }).hasAttribute('disabled')).toBe(true)
+		expect(queries.getByRole('button', { name: /Approve (3 )?REP/ }).hasAttribute('disabled')).toBe(true)
 		expect(queries.getByRole('button', { name: 'Request price' }).hasAttribute('disabled')).toBe(true)
 	} finally {
 		await rendered.cleanup()
@@ -340,10 +337,15 @@ for (const phase of ['skipped', 'failed'] as const) {
 		const rendered = await renderIntoDocument(<TransactionStepsModal contextKey={phase} />)
 		try {
 			const queries = within(rendered.container)
-			expect(queries.getByRole('textbox').hasAttribute('disabled')).toBe(true)
-			expect(queries.getByText('Required REP')).not.toBeNull()
-			expect(queries.getByText('Approved REP')).not.toBeNull()
-			expect(queries.getByRole('button', { name: 'Approve REP' }).hasAttribute('disabled')).toBe(true)
+			if (phase === 'skipped') {
+				expect(queries.queryByRole('textbox')).toBeNull()
+				expect(queries.queryByRole('button', { name: 'Approve REP' })).toBeNull()
+			} else {
+				expect(queries.getByRole('textbox').hasAttribute('disabled')).toBe(true)
+				expect(queries.getByText('Required REP')).not.toBeNull()
+				expect(queries.getByText('Approved REP')).not.toBeNull()
+				expect(queries.getByRole('button', { name: /Approve (3 )?REP/ }).hasAttribute('disabled')).toBe(true)
+			}
 			await act(() => transactionSteps.value?.confirm())
 			await nextReview
 		} finally {

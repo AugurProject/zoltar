@@ -164,3 +164,7 @@ export const scalarValueInvalid = 'Enter a value between the minimum and maximum
 export const ticks = 'Ticks'
 export const untitledQuestion = 'Untitled question'
 export const oracleManager = 'Oracle Manager'
+
+export const done = 'Done'
+
+export const launchAction = (label: string) => `${label}…`

@@ -340,6 +340,10 @@
 			"bun": "./ts/features/reporting/components/ImportedForkSettlementSection.tsx",
 			"default": "./js/features/reporting/components/ImportedForkSettlementSection.js"
 		},
+		"./features/reporting/components/ReportingOracleBlocker.js": {
+			"bun": "./ts/features/reporting/components/ReportingOracleBlocker.tsx",
+			"default": "./js/features/reporting/components/ReportingOracleBlocker.js"
+		},
 		"./features/reporting/components/ReportingSection.js": {
 			"bun": "./ts/features/reporting/components/ReportingSection.tsx",
 			"default": "./js/features/reporting/components/ReportingSection.js"

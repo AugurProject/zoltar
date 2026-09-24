@@ -181,7 +181,7 @@ export function OpenOracleReportDetailsCard({
 		}
 		if (action.blocker !== undefined) return action
 		if (action.key === 'dispute-report') return { ...action, onAction: () => onSelectedReportModalChange(DISPUTE_REPORT_MODAL) }
-		if (action.key === 'settle-report') return { ...action, onAction: () => onSelectedReportModalChange(SETTLE_REPORT_MODAL) }
+		if (action.key === 'settle-report') return { ...action, actionLabel: commonCopy.launchAction(action.actionLabel), onAction: () => onSelectedReportModalChange(SETTLE_REPORT_MODAL) }
 
 		return action
 	})
@@ -419,7 +419,7 @@ export function OpenOracleReportDetailsCard({
 				})}
 			</OperationModal>
 
-			<OperationModal closeOnSuccessKey={openOracleResult?.action === 'settle' ? openOracleResult.hash : undefined} context={reportTransactionContext} isOpen={selectedReportModal === 'settle'} onClose={() => onSelectedReportModalChange(undefined)} title={openOracleCopy.settleReport}>
+			<OperationModal closeOnSuccessKey={openOracleResult?.action === 'settle' ? openOracleResult.hash : undefined} context={reportTransactionContext} isOpen={selectedReportModal === 'settle'} onClose={() => onSelectedReportModalChange(undefined)} title={openOracleCopy.settleReportTitle(liveReportDetails.reportId)}>
 				{renderSelectedReportActionSection({
 					actionMode: 'settle',
 					disputeSubmission: openOracleDisputeSubmission,

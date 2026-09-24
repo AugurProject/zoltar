@@ -1,3 +1,4 @@
+import { createTransactionStepController, transactionSteps } from '../transactions/transactionSteps.js'
 /// <reference types="bun-types" />
 
 import { installDomTestLifecycle } from './testUtils/domTestLifecycle.js'
@@ -403,6 +404,34 @@ describe('OperationModal', () => {
 		},
 	})
 
+	test('submits a single-step dialog action with one confirmation', async () => {
+		let sent = 0
+		let completion: Promise<void> | undefined
+		const rendered = await renderIntoDocument(
+			<OperationModal isOpen title='Settle report #7' onClose={() => undefined}>
+				<button
+					type='button'
+					onClick={() => {
+						const controller = createTransactionStepController()
+						controller.setPlan([{ title: 'Settle report #7', description: undefined, contractAddress: undefined, contractLabel: undefined, spender: undefined, amount: undefined, ethValueAttoEth: undefined }])
+						completion = controller.review().then(() => {
+							sent++
+						})
+					}}
+				>
+					Settle report #7
+				</button>
+			</OperationModal>,
+		)
+		cleanupRenderedComponent = rendered.cleanup
+		const dialog = within(within(document.body).getByRole('dialog', { name: 'Settle report #7' }))
+		await act(() => fireEvent.click(dialog.getByRole('button', { name: 'Settle report #7' })))
+		await completion
+		expect(sent).toBe(1)
+		expect(dialog.getAllByRole('button', { name: 'Settle report #7' })).toHaveLength(1)
+		transactionSteps.value?.cancel()
+	})
+
 	test('exposes the dialog title and close control accessibly', async () => {
 		const container = document.createElement('div')
 		document.body.appendChild(container)
@@ -421,7 +450,7 @@ describe('OperationModal', () => {
 		container.remove()
 	})
 
-	test('closes an operation dialog when its submitted transaction succeeds', async () => {
+	test('replaces the completed operation with a success panel and Done', async () => {
 		const renderedComponent = await renderIntoDocument(<CompletingOperationModalHarness />)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
@@ -431,6 +460,9 @@ describe('OperationModal', () => {
 			fireEvent.click(documentQueries.getByRole('button', { name: 'Complete transaction' }))
 		})
 
+		const dialog = within(documentQueries.getByRole('dialog', { name: 'Deposit REP' }))
+		expect(dialog.queryByRole('button', { name: 'Complete transaction' })).toBeNull()
+		await act(() => fireEvent.click(dialog.getByRole('button', { name: 'Done' })))
 		expect(documentQueries.queryByRole('dialog', { name: 'Deposit REP' })).toBeNull()
 	})
 
@@ -449,6 +481,7 @@ describe('OperationModal', () => {
 		await act(() => {
 			fireEvent.click(documentQueries.getByRole('button', { name: 'Complete matching transaction' }))
 		})
+		await act(() => fireEvent.click(within(documentQueries.getByRole('dialog', { name: 'Settle Report' })).getByRole('button', { name: 'Done' })))
 		expect(documentQueries.queryByRole('dialog', { name: 'Settle Report' })).toBeNull()
 	})
 
@@ -570,6 +603,7 @@ describe('OperationModal', () => {
 		await act(() => {
 			fireEvent.click(documentQueries.getByRole('button', { name: 'Complete second transaction' }))
 		})
+		await act(() => fireEvent.click(within(documentQueries.getByRole('dialog', { name: 'Submit operation' })).getByRole('button', { name: 'Done' })))
 		expect(documentQueries.queryByRole('dialog', { name: 'Submit operation' })).toBeNull()
 	})
 

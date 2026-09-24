@@ -348,7 +348,7 @@ describe('reportingDomain', () => {
 
 		expect(getReportingMaxProfitContribution(details, 'yes')).toEqual({
 			amountAttoRep: undefined,
-			reason: 'Max profit preset unavailable because the reward window is already filled on the selected side.',
+			reason: 'Max reward preset unavailable because the reward window is already filled on the selected side.',
 		})
 	})
 
@@ -396,7 +396,7 @@ describe('reportingDomain', () => {
 	test('getReportingMaxProfitContribution is unavailable before the escalation game exists', () => {
 		expect(getReportingMaxProfitContribution(createNotStartedReportingDetails(), 'yes')).toEqual({
 			amountAttoRep: undefined,
-			reason: 'Max profit becomes available after the escalation game starts.',
+			reason: 'Max reward becomes available after the escalation game starts.',
 		})
 	})
 

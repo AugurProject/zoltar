@@ -1,3 +1,6 @@
+import { EscalationPhaseStepper } from './EscalationPhaseStepper.js'
+import { ReportingResultCard } from './ReportingResultCard.js'
+import { ReportingSides } from './ReportingSides.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as reportingCopy from '../../../copy/reporting.js'
 import type { ComponentChild } from 'preact'
@@ -5,7 +8,6 @@ import { useEffect, useId, useRef, useState } from 'preact/hooks'
 import { CurrencyValue } from '@zoltar/ui-core-shared/components/CurrencyValue.js'
 import { ErrorNotice } from '@zoltar/ui-core-shared/components/ErrorNotice.js'
 import { FormInput } from '@zoltar/ui-core-shared/components/FormInput.js'
-import { EscalationSide } from './EscalationSide.js'
 import { LifecycleStageBanner } from '@zoltar/ui-core-shared/components/LifecycleStageBanner.js'
 import { LookupFieldRow } from '@zoltar/ui-core-shared/components/LookupFieldRow.js'
 import { LoadingAwareText, LoadingText } from '@zoltar/ui-core-shared/components/LoadingText.js'
@@ -28,6 +30,9 @@ import { getEffectiveReportingDetails, getEscalationGameStartTimestamp, getRepor
 import { ReportingSettlementSection } from './ReportingSettlementSection.js'
 import type { ReportingSectionProps } from '../../oracleTypes.js'
 import type { EscalationDeposit, ReportingDetails, ReportingOutcomeKey } from '@zoltar/ui-core-shared/types/contracts.js'
+function formatKnownAmount(amount: bigint | undefined) {
+	return amount === undefined ? commonCopy.metricUnavailablePlaceholder : formatCurrencyInputBalance(amount)
+}
 type ReportingStatus = 'active' | 'missing' | 'not-started'
 type EscalationSideDisplay = {
 	balance: bigint | undefined
@@ -79,6 +84,7 @@ function getOutcomeSides(reportingDetails: ReportingDetails | undefined) {
 
 export function ReportingSection({
 	accountState,
+	oracleBlocker,
 	currentTimestamp,
 	embedInCard = false,
 	forkAlreadyTriggered = false,
@@ -126,6 +132,7 @@ export function ReportingSection({
 	const usesWalletFunding = effectiveReportingDetails?.contributionFunding === 'wallet'
 	const escalationPhase = activeReportingDetails === undefined ? undefined : getEscalationPhase(activeReportingDetails)
 	const escalationGameStartTimestamp = getEscalationGameStartTimestamp(activeReportingDetails?.activationTime)
+	const inactiveCountdown = effectiveReportingDetails === undefined ? commonCopy.metricUnavailablePlaceholder : reportingCopy.startsWithFirstReport
 	const reportingStatus: ReportingStatus = effectiveReportingDetails === undefined ? 'missing' : effectiveReportingDetails.status
 	const marketDetails = effectiveReportingDetails?.marketDetails ?? previewMarketDetails
 	const showFullReporting = mode === 'full-reporting'
@@ -148,7 +155,7 @@ export function ReportingSection({
 		reportLifecycleReason = reportingCopy.poolFinalizedReason
 	}
 	const fullReportingLoadingReason = showFullReporting && loadingReportingDetails ? reportingCopy.reportingDetailsRequired : undefined
-	const reportControlsLockedReason = showFullReporting ? pickFirstReason(fullReportingLoadingReason, lockedReason, reportingStageKey === 'preOpen' ? preOpenLockedReason : undefined, reportLifecycleReason) : preOpenLockedReason
+	const reportControlsLockedReason = showFullReporting ? pickFirstReason(fullReportingLoadingReason, reportActionGuardMessage, lockedReason, reportingStageKey === 'preOpen' ? preOpenLockedReason : undefined, reportLifecycleReason) : preOpenLockedReason
 	const reportControlsLocked = !reportOutcomeEnabled || reportControlsLockedReason !== undefined
 	let settlementLifecycleReason: string | undefined
 	if (reportingStageKey === 'forkTriggered') {
@@ -180,19 +187,15 @@ export function ReportingSection({
 		displayBindingCapital = effectiveReportingDetails.status === 'not-started' ? 0n : effectiveReportingDetails.bindingCapital
 	}
 	const outcomeSides = getOutcomeSides(effectiveReportingDetails)
-	const chartScaleMax = outcomeSides.reduce(
-		(maxBalance, side) => {
-			if (side.balance === undefined || side.balance <= maxBalance) return maxBalance
-			return side.balance
-		},
-		displayBindingCapital !== undefined && displayBindingCapital > 1n ? displayBindingCapital : 1n,
-	)
+	const chartScaleMax = effectiveReportingDetails?.nonDecisionThresholdAttoRep
+	const largestBalance = outcomeSides.reduce((max, side) => ((side.balance ?? 0n) > max ? (side.balance ?? 0n) : max), 0n)
+	const finalized = isPoolQuestionFinalized(effectiveReportingDetails)
 	const leadingOutcome = activeReportingDetails === undefined ? undefined : getLeadingEscalationOutcome(activeReportingDetails.sides)
 	const reportContributionPreview = effectiveReportingDetails === undefined || selectedAmount === undefined || selectedOutcome === undefined ? undefined : previewReportingContribution(effectiveReportingDetails, selectedOutcome, selectedAmount)
 	const actualReportDepositAmount = reportContributionPreview?.actualDepositAmount
 	const selectedOutcomeLabel = selectedOutcome === undefined ? reportingCopy.selectedSide : (outcomeSides.find(side => side.key === selectedOutcome)?.label ?? getReportingOutcomeLabel(selectedOutcome))
 	const availableReportingRep = usesWalletFunding ? effectiveReportingDetails?.viewerWalletRepBalanceAttoRep : effectiveReportingDetails?.viewerPoolHeldVaultRepBackingAttoRep
-	const reportButtonLabel = selectedOutcome === undefined ? reportingCopy.reportOnSelectedSide : reportingCopy.formatReportSelectedOutcomeButtonLabel(selectedOutcomeLabel)
+	const reportButtonLabel = selectedOutcome === undefined ? reportingCopy.reportOnSelectedSide : commonCopy.launchAction(reportingCopy.reportAmountLabel(selectedOutcomeLabel, formatCurrencyInputBalance(actualReportDepositAmount ?? selectedAmount ?? 0n)))
 	const minimumOutcomeChangeContribution = selectedOutcome === undefined ? { amountAttoRep: undefined, reason: SELECT_OUTCOME_PRESET_REASON } : getReportingMinimumOutcomeChangeContribution(effectiveReportingDetails, selectedOutcome)
 	const maxProfitContribution = selectedOutcome === undefined ? { amountAttoRep: undefined, reason: SELECT_OUTCOME_PRESET_REASON } : getReportingMaxProfitContribution(effectiveReportingDetails, selectedOutcome)
 	const presetBlocker = reportControlsLocked ? undefined : [minimumOutcomeChangeContribution.reason, maxProfitContribution.reason].find(reason => reason !== undefined && !isRedundantPresetReason(reason))
@@ -277,10 +280,6 @@ export function ReportingSection({
 		displayedWithdrawGuardMessage = showFullReporting ? reportingCopy.reportingDetailsRequired : reportingCopy.loadingEscalationDepositsDetail
 	}
 	const reportOutcomeSelectionMessage = showFullReporting && reportingStatus !== 'missing' && selectedOutcome === undefined && !reportControlsLocked ? SELECT_OUTCOME_TO_ENABLE_REPORTING_MESSAGE : undefined
-	let reportingOpenNotice: string | undefined
-	if (showFullReporting && reportingStatus === 'not-started' && effectiveReportingDetails?.questionOutcome === 'none') {
-		reportingOpenNotice = reportingCopy.reportingOpenDetail
-	}
 	const showForkWorkflowAction = reportingStageKey === 'forkTriggered' && forkAlreadyTriggered && onOpenForkWorkflow !== undefined
 	const showTriggerZoltarForkAction = reportingStageKey === 'forkTriggered' && !forkAlreadyTriggered && onTriggerZoltarFork !== undefined
 	const resolvedTriggerZoltarForkAvailability = triggerZoltarForkAvailability ?? { disabled: false, reason: undefined }
@@ -296,17 +295,15 @@ export function ReportingSection({
 			</div>
 		)
 	let reportingRepApprovalAction: ComponentChild
-	if (usesWalletFunding) {
-		reportingRepApprovalAction = reportingRepApprovalRequired ? (
+	if (reportingRepApprovalRequired) {
+		reportingRepApprovalAction = (
 			<TransactionActionButton
-				idleLabel={reportingCopy.approveReportingRep}
-				pendingLabel={reportingCopy.approvingReportingRep}
+				idleLabel={commonCopy.launchAction(reportingCopy.approveAmountLabel(formatCurrencyInputBalance(actualReportDepositAmount ?? 0n)))}
+				pendingLabel={reportingCopy.approvingAmount(formatCurrencyInputBalance(actualReportDepositAmount ?? 0n))}
 				onClick={onApproveReportingRep}
 				pending={reportingActiveAction === 'approveReportingRep'}
 				availability={{ disabled: !isOnActiveAppChain || !reportOutcomeEnabled || reportingApprovalGuardMessage !== undefined, reason: !isOnActiveAppChain ? getWrongNetworkReason() : reportingApprovalGuardMessage }}
 			/>
-		) : (
-			<TransactionActionButton idleLabel={reportingCopy.reportingRepApproved} pendingLabel={reportingCopy.reportingRepApproved} onClick={() => undefined} disabled showDisabledReason={false} tone='secondary' />
 		)
 	}
 
@@ -329,7 +326,7 @@ export function ReportingSection({
 				reportingDetails: effectiveReportingDetails,
 			})
 		: undefined
-	const reportingStageBanner = reportingStage?.key === 'escalation-active' ? undefined : reportingStage
+	const reportingStageBanner = reportingStage
 	const sharedReportSettlementDisabledReason = showFullReporting && reportActionDisabledReason !== undefined && reportActionDisabledReason === displayedWithdrawGuardMessage ? reportActionDisabledReason : undefined
 	let sharedReportSettlementDisabledReasonId: string | undefined
 	if (sharedReportSettlementDisabledReason !== undefined) {
@@ -340,7 +337,30 @@ export function ReportingSection({
 	const standaloneReportDisabledReason = reportDisabledReasonElementId === undefined ? reportActionDisabledReason : undefined
 	const effectiveReportDisabledReasonElementId = reportDisabledReasonElementId ?? (standaloneReportDisabledReason === undefined ? undefined : reportDisabledReasonId)
 	const settlementActionDisabledReasonId = sharedReportSettlementDisabledReasonId ?? settlementDisabledReasonId
-	const showReportingHeaderStack = showFullReporting && (showSecurityPoolAddressInput || reportingStageBanner !== undefined || reportingOpenNotice !== undefined)
+	const showReportingHeaderStack = showFullReporting && (showSecurityPoolAddressInput || reportingStageBanner !== undefined)
+	const settlementSection =
+		showSettlementSection && reportingReady !== false ? (
+			<ReportingSettlementSection
+				activeReportingDetails={activeReportingDetails}
+				displayedWithdrawGuardMessage={displayedWithdrawGuardMessage}
+				effectiveReportingDetails={effectiveReportingDetails}
+				isOnActiveAppChain={isOnActiveAppChain}
+				loadingReportingDetails={loadingReportingDetails}
+				onReportingFormChange={onReportingFormChange}
+				onWithdrawEscalation={handleWithdrawEscalation}
+				pendingWithdrawOutcome={pendingWithdrawOutcome}
+				reportingActiveAction={reportingActiveAction}
+				reportingStatusMissing={reportingStatus === 'missing'}
+				selectedWithdrawDepositIndexesByOutcome={selectedWithdrawDepositIndexesByOutcome}
+				settlementActionDisabledReasonId={settlementActionDisabledReasonId}
+				settlementContextMessage={settlementContextMessage}
+				settlementDisabledReasonId={settlementDisabledReasonId}
+				sharedReportSettlementDisabledReason={sharedReportSettlementDisabledReason}
+				withdrawControlsLocked={withdrawControlsLocked}
+				withdrawEscalationEnabled={withdrawEscalationEnabled}
+				withdrawGuardMessage={withdrawGuardMessage}
+			/>
+		) : undefined
 	const sections = (
 		<>
 			{showReportingHeaderStack ? (
@@ -358,25 +378,40 @@ export function ReportingSection({
 							}
 						/>
 					) : undefined}
-					{reportingOpenNotice === undefined ? <LifecycleStageBanner detailId={reportingStageDetailId} flat stage={reportingStageBanner} /> : <p className='notice success'>{reportingOpenNotice}</p>}
+					{reportingReady === false ? <LifecycleStageBanner detailId={reportingStageDetailId} flat stage={reportingStageBanner} /> : <EscalationPhaseStepper detailId={reportingStageDetailId} details={effectiveReportingDetails} forkAlreadyTriggered={forkAlreadyTriggered} />}
 				</div>
 			) : undefined}
 
+			<ReportingResultCard details={effectiveReportingDetails} />
+			{finalized ? settlementSection : undefined}
 			{showFullReporting && reportingReady !== false ? (
 				<SectionBlock className='reporting-metrics-section' title={reportingCopy.escalationMetrics} variant='embedded'>
 					<div className='escalation-metrics'>
 						<MetricField label={reportingCopy.nonDecisionThresholdAttoRep}>
 							<CurrencyValue precision='exact' value={effectiveReportingDetails?.nonDecisionThresholdAttoRep} suffix={commonCopy.rep} />
 						</MetricField>
-						<MetricField label={reportingCopy.timeLeft}>{activeReportingDetails === undefined ? commonCopy.metricUnavailablePlaceholder : formatDuration(getEscalationTimeRemaining(activeReportingDetails))}</MetricField>
+						<MetricField label={reportingCopy.startBondAttoRep}>
+							<CurrencyValue precision='exact' value={effectiveReportingDetails?.startBondAttoRep} suffix={commonCopy.rep} />
+						</MetricField>
+						{finalized ? undefined : (
+							<MetricField label={escalationPhase === 'Pending Start' ? reportingCopy.gameStartsIn : reportingCopy.endsIn}>
+								{activeReportingDetails === undefined ? (
+									inactiveCountdown
+								) : (
+									<>
+										{formatDuration(escalationPhase === 'Pending Start' ? activeReportingDetails.activationTime - activeReportingDetails.currentTime : getEscalationTimeRemaining(activeReportingDetails))}
+										<span className='detail'>
+											<TimestampValue relative={false} timestamp={escalationPhase === 'Pending Start' ? activeReportingDetails.activationTime : activeReportingDetails.escalationEndTime} />
+										</span>
+									</>
+								)}
+							</MetricField>
+						)}
 					</div>
 					<ReadOnlyDetailAccordion title={reportingCopy.reportingParameters}>
 						<div className='escalation-metrics'>
 							<MetricField label={reportingCopy.escalationStarted}>
 								<TimestampValue {...(effectiveCurrentTimestamp === undefined ? {} : { currentTimestamp: effectiveCurrentTimestamp })} timestamp={escalationGameStartTimestamp} />
-							</MetricField>
-							<MetricField label={reportingCopy.startBondAttoRep}>
-								<CurrencyValue precision='exact' value={effectiveReportingDetails?.startBondAttoRep} suffix={commonCopy.rep} />
 							</MetricField>
 						</div>
 					</ReadOnlyDetailAccordion>
@@ -384,169 +419,134 @@ export function ReportingSection({
 			) : undefined}
 
 			{showFullReporting && reportingReady !== false ? (
-				<SectionBlock className='reporting-outcome-section' title={reportingCopy.reportOutcome} variant='embedded'>
-					{reportActionGuardMessage === undefined ? undefined : (
-						<WarningSurface ariaLive='polite' role='status' surface='flat' variant='compact'>
-							<p>{reportActionGuardMessage}</p>
-							{onOpenPriceOracle === undefined ? undefined : (
-								<div className='actions'>
-									<button className='secondary' type='button' onClick={onOpenPriceOracle}>
-										{reportingCopy.managePoolPrice}
+				<SectionBlock className='reporting-outcome-section' title={finalized ? reportingCopy.results : reportingCopy.reportOutcome} variant='embedded'>
+					{oracleBlocker ??
+						(reportActionGuardMessage === undefined ? undefined : (
+							<WarningSurface ariaLive='polite' role='status' surface='flat' variant='compact'>
+								<p>{reportActionGuardMessage}</p>
+								{onOpenPriceOracle === undefined ? undefined : (
+									<div className='actions'>
+										<button className='secondary' type='button' onClick={onOpenPriceOracle}>
+											{reportingCopy.managePoolPrice}
+										</button>
+									</div>
+								)}
+							</WarningSurface>
+						))}
+					<ReportingSides
+						largestBalance={largestBalance}
+						chartScaleMax={chartScaleMax}
+						displayBindingCapital={displayBindingCapital}
+						finalized={finalized}
+						outcomeSides={outcomeSides}
+						disabled={showWithdrawOnly ? withdrawControlsLocked : reportControlsLocked}
+						questionOutcome={effectiveReportingDetails?.questionOutcome}
+						leadingOutcome={leadingOutcome}
+						selectedOutcome={selectedOutcome}
+						onSelect={outcome => onReportingFormChange({ selectedOutcome: outcome })}
+					/>
+					{finalized ? undefined : (
+						<>
+							{reportOutcomeSelectionMessage === undefined ? undefined : <p className='detail'>{reportOutcomeSelectionMessage}</p>}
+							<div className='field'>
+								<label htmlFor='reporting-contribution-amount'>
+									<span>{reportingCopy.contributionAmountRep}</span>
+								</label>
+								<div className='field-inline'>
+									<FormInput placeholder={reportingCopy.reportAmountPlaceholder} id='reporting-contribution-amount' className='field-inline-input' value={reportingForm.reportAmount} onInput={event => onReportingFormChange({ reportAmount: event.currentTarget.value })} disabled={reportControlsLocked} />
+									<button
+										className='quiet field-inline-action'
+										type='button'
+										onClick={() => {
+											if (maxContributionAmount.amountAttoRep === undefined) return
+											onReportingFormChange({ reportAmount: formatCurrencyInputBalance(maxContributionAmount.amountAttoRep) })
+										}}
+										disabled={reportControlsLocked || maxContributionAmount.amountAttoRep === undefined}
+										title={reportControlsLocked ? reportControlsLockedReason : maxContributionAmount.reason}
+									>
+										{commonCopy.max}
 									</button>
 								</div>
+							</div>
+
+							<div className='actions'>
+								<button
+									className='secondary'
+									type='button'
+									onClick={() => {
+										if (minimumOutcomeChangeContribution.amountAttoRep === undefined) return
+										onReportingFormChange({ reportAmount: formatCurrencyInputBalance(minimumOutcomeChangeContribution.amountAttoRep) })
+									}}
+									disabled={reportControlsLocked || minimumOutcomeChangeContribution.amountAttoRep === undefined}
+									aria-describedby={presetBlocker !== undefined && minimumOutcomeChangeContribution.reason === presetBlocker ? presetBlockerId : undefined}
+									title={reportControlsLocked ? reportControlsLockedReason : minimumOutcomeChangeContribution.reason}
+								>
+									{reportingCopy.minimumPreset(reportingStatus === 'active', formatKnownAmount(minimumOutcomeChangeContribution.amountAttoRep ?? effectiveReportingDetails?.startBondAttoRep))}
+								</button>
+								<button
+									className='secondary'
+									type='button'
+									onClick={() => {
+										if (maxProfitContribution.amountAttoRep === undefined) return
+										onReportingFormChange({ reportAmount: formatCurrencyInputBalance(maxProfitContribution.amountAttoRep) })
+									}}
+									disabled={reportControlsLocked || maxProfitContribution.amountAttoRep === undefined}
+									aria-describedby={presetBlocker !== undefined && maxProfitContribution.reason === presetBlocker ? presetBlockerId : undefined}
+									title={reportControlsLocked ? reportControlsLockedReason : maxProfitContribution.reason}
+								>
+									{reportingCopy.rewardPreset(formatKnownAmount(maxProfitContribution.amountAttoRep))}
+								</button>
+							</div>
+							{presetBlocker === undefined ? undefined : (
+								<p id={presetBlockerId} className='detail'>
+									{presetBlocker}
+								</p>
 							)}
-						</WarningSurface>
-					)}
-					<div className='escalation-sides-shell'>
-						<div className='escalation-sides-legend'>
-							<div className='escalation-sides-legend-item'>
-								<span aria-hidden='true' className='escalation-sides-legend-swatch escalation-sides-legend-swatch-total' />
-								<span className='panel-label'>{reportingCopy.totalSideDisputeStakedRep}</span>
-							</div>
-							<div className='escalation-sides-legend-item'>
-								<span aria-hidden='true' className='escalation-sides-legend-swatch escalation-sides-legend-swatch-user' />
-								<span className='panel-label'>{reportingCopy.yourSideDisputeStakedRep}</span>
-							</div>
-							<div className='escalation-sides-legend-item escalation-sides-legend-item-binding'>
-								<span aria-hidden='true' className='escalation-sides-legend-marker' />
-								<span className='panel-label'>{reportingCopy.leadHoldingCapital}</span>
-								<CurrencyValue copyable={false} value={displayBindingCapital} suffix={commonCopy.rep} />
-							</div>
-						</div>
-						<div className='escalation-sides' role='radiogroup' aria-label={reportingCopy.reportOutcomeAriaLabel}>
-							{outcomeSides.map((side, index) => (
-								<EscalationSide
-									key={side.key}
-									bindingCapital={displayBindingCapital}
-									chartScaleMax={chartScaleMax}
-									disabled={showWithdrawOnly ? withdrawControlsLocked : reportControlsLocked}
-									isLeading={leadingOutcome === side.key}
-									isSelected={selectedOutcome !== undefined && selectedOutcome === side.key}
-									isTabStop={selectedOutcome === undefined ? index === 0 : selectedOutcome === side.key}
-									onSelect={() => onReportingFormChange({ selectedOutcome: side.key })}
-									side={side}
-								/>
-							))}
-						</div>
-					</div>
-					{reportOutcomeSelectionMessage === undefined ? undefined : <p className='detail'>{reportOutcomeSelectionMessage}</p>}
-					{availableReportingRep === undefined ? undefined : (
-						<p className='detail'>
-							{usesWalletFunding ? reportingCopy.availableWalletRepForReporting : reportingCopy.availablePoolHeldVaultRepBackingForReporting} <CurrencyValue value={availableReportingRep} suffix={commonCopy.rep} />.
-						</p>
-					)}
-					<div className='field'>
-						<label htmlFor='reporting-contribution-amount'>
-							<span>{reportingCopy.contributionAmountRep}</span>
-						</label>
-						<div className='field-inline'>
-							<FormInput id='reporting-contribution-amount' className='field-inline-input' value={reportingForm.reportAmount} onInput={event => onReportingFormChange({ reportAmount: event.currentTarget.value })} disabled={reportControlsLocked} />
-							<button
-								className='quiet field-inline-action'
-								type='button'
-								onClick={() => {
-									if (maxContributionAmount.amountAttoRep === undefined) return
-									onReportingFormChange({ reportAmount: formatCurrencyInputBalance(maxContributionAmount.amountAttoRep) })
-								}}
-								disabled={reportControlsLocked || maxContributionAmount.amountAttoRep === undefined}
-								title={reportControlsLocked ? reportControlsLockedReason : maxContributionAmount.reason}
-							>
-								{commonCopy.max}
-							</button>
-						</div>
-					</div>
 
-					<div className='actions'>
-						<button
-							className='secondary'
-							type='button'
-							onClick={() => {
-								if (minimumOutcomeChangeContribution.amountAttoRep === undefined) return
-								onReportingFormChange({ reportAmount: formatCurrencyInputBalance(minimumOutcomeChangeContribution.amountAttoRep) })
-							}}
-							disabled={reportControlsLocked || minimumOutcomeChangeContribution.amountAttoRep === undefined}
-							aria-describedby={presetBlocker !== undefined && minimumOutcomeChangeContribution.reason === presetBlocker ? presetBlockerId : undefined}
-							title={reportControlsLocked ? reportControlsLockedReason : minimumOutcomeChangeContribution.reason}
-						>
-							{reportingCopy.minToTakeTheLead}
-						</button>
-						<button
-							className='secondary'
-							type='button'
-							onClick={() => {
-								if (maxProfitContribution.amountAttoRep === undefined) return
-								onReportingFormChange({ reportAmount: formatCurrencyInputBalance(maxProfitContribution.amountAttoRep) })
-							}}
-							disabled={reportControlsLocked || maxProfitContribution.amountAttoRep === undefined}
-							aria-describedby={presetBlocker !== undefined && maxProfitContribution.reason === presetBlocker ? presetBlockerId : undefined}
-							title={reportControlsLocked ? reportControlsLockedReason : maxProfitContribution.reason}
-						>
-							{reportingCopy.maxProfit}
-						</button>
-					</div>
-					{presetBlocker === undefined ? undefined : (
-						<p id={presetBlockerId} className='detail'>
-							{presetBlocker}
-						</p>
-					)}
-
-					{reportAmountError === undefined ? undefined : <p className='detail'>{reportAmountError}</p>}
-					{actualReportDepositAmount === undefined || selectedAmount === undefined || actualReportDepositAmount === selectedAmount ? undefined : (
-						<p className='detail'>
-							{reportingCopy.currentEscalationDisputeStakeLead}
-							<CurrencyValue value={actualReportDepositAmount} suffix={commonCopy.rep} />
-							{usesWalletFunding ? reportingCopy.acceptedWalletAmountTail : reportingCopy.acceptedAmountTail}
-						</p>
-					)}
-					<div className='reporting-shared-action-region'>
-						{shouldRenderSharedReportSettlementDisabledReason ? (
-							<p className='detail' id={settlementDisabledReasonId}>
-								<LoadingAwareText loading={loadingReportingDetails}>{sharedReportSettlementDisabledReason}</LoadingAwareText>
+							{reportAmountError === undefined ? undefined : <p className='detail'>{reportAmountError}</p>}
+							{actualReportDepositAmount === undefined || selectedAmount === undefined || actualReportDepositAmount === selectedAmount ? undefined : (
+								<p className='detail'>
+									{reportingCopy.currentEscalationDisputeStakeLead}
+									<CurrencyValue value={actualReportDepositAmount} suffix={commonCopy.rep} />
+									{usesWalletFunding ? reportingCopy.acceptedWalletAmountTail : reportingCopy.acceptedAmountTail}
+								</p>
+							)}
+							<p className='detail'>{[minimumOutcomeChangeContribution.reason, maxProfitContribution.reason, maxContributionAmount.reason].filter((reason, index, reasons) => reason !== undefined && reason !== presetBlocker && reasons.indexOf(reason) === index).join(' ')}</p>
+							<p className='detail'>
+								{usesWalletFunding ? reportingCopy.paidFromWallet : reportingCopy.paidFromVault} · {reportingCopy.availableBalance(formatKnownAmount(availableReportingRep))}
 							</p>
-						) : undefined}
-						<div className={`actions${usesWalletFunding ? ' reporting-wallet-action-row' : ''}`}>
-							{reportingRepApprovalAction}
-							<TransactionActionButton
-								idleLabel={reportButtonLabel}
-								pendingLabel={reportingCopy.submittingReport}
-								onClick={onReportOutcome}
-								pending={reportingActiveAction === 'reportOutcome'}
-								availability={{ disabled: !isOnActiveAppChain || !reportOutcomeEnabled || reportButtonGuardMessage !== undefined, loading: fullReportingLoadingReason !== undefined && reportActionDisabledReason === fullReportingLoadingReason, reason: reportActionDisabledReason }}
-								disabledReasonElementId={effectiveReportDisabledReasonElementId}
-								showDisabledReason={false}
-							/>
-						</div>
-						{standaloneReportDisabledReason === undefined ? undefined : (
-							<p className='detail disabled-reason' id={reportDisabledReasonId}>
-								<LoadingAwareText loading={fullReportingLoadingReason !== undefined && reportActionDisabledReason === fullReportingLoadingReason}>{standaloneReportDisabledReason}</LoadingAwareText>
-							</p>
-						)}
-					</div>
+							<p className='detail'>{!usesWalletFunding && reportingStatus === 'active' ? reportingCopy.continuationFundingHelp : reportingCopy.fundingSourceHelp}</p>
+							<div className='reporting-shared-action-region'>
+								{shouldRenderSharedReportSettlementDisabledReason ? (
+									<p className='detail' id={settlementDisabledReasonId}>
+										<LoadingAwareText loading={loadingReportingDetails}>{sharedReportSettlementDisabledReason}</LoadingAwareText>
+									</p>
+								) : undefined}
+								<div className={`actions${usesWalletFunding ? ' reporting-wallet-action-row' : ''}`}>
+									{reportingRepApprovalAction}
+									<TransactionActionButton
+										idleLabel={reportButtonLabel}
+										pendingLabel={reportingCopy.reportingAmount(selectedOutcomeLabel, formatCurrencyInputBalance(actualReportDepositAmount ?? selectedAmount ?? 0n))}
+										onClick={onReportOutcome}
+										pending={reportingActiveAction === 'reportOutcome'}
+										availability={{ disabled: !isOnActiveAppChain || !reportOutcomeEnabled || reportButtonGuardMessage !== undefined, loading: fullReportingLoadingReason !== undefined && reportActionDisabledReason === fullReportingLoadingReason, reason: reportActionDisabledReason }}
+										disabledReasonElementId={effectiveReportDisabledReasonElementId}
+										showDisabledReason={false}
+									/>
+								</div>
+								{standaloneReportDisabledReason === undefined ? undefined : (
+									<p className='detail disabled-reason' id={reportDisabledReasonId}>
+										<LoadingAwareText loading={fullReportingLoadingReason !== undefined && reportActionDisabledReason === fullReportingLoadingReason}>{standaloneReportDisabledReason}</LoadingAwareText>
+									</p>
+								)}
+							</div>
+						</>
+					)}
 				</SectionBlock>
 			) : undefined}
 
-			{showSettlementSection && reportingReady !== false ? (
-				<ReportingSettlementSection
-					activeReportingDetails={activeReportingDetails}
-					displayedWithdrawGuardMessage={displayedWithdrawGuardMessage}
-					effectiveReportingDetails={effectiveReportingDetails}
-					isOnActiveAppChain={isOnActiveAppChain}
-					loadingReportingDetails={loadingReportingDetails}
-					onReportingFormChange={onReportingFormChange}
-					onWithdrawEscalation={handleWithdrawEscalation}
-					pendingWithdrawOutcome={pendingWithdrawOutcome}
-					reportingActiveAction={reportingActiveAction}
-					reportingStatusMissing={reportingStatus === 'missing'}
-					selectedWithdrawDepositIndexesByOutcome={selectedWithdrawDepositIndexesByOutcome}
-					settlementActionDisabledReasonId={settlementActionDisabledReasonId}
-					settlementContextMessage={settlementContextMessage}
-					settlementDisabledReasonId={settlementDisabledReasonId}
-					sharedReportSettlementDisabledReason={sharedReportSettlementDisabledReason}
-					withdrawControlsLocked={withdrawControlsLocked}
-					withdrawEscalationEnabled={withdrawEscalationEnabled}
-					withdrawGuardMessage={withdrawGuardMessage}
-				/>
-			) : undefined}
+			{finalized ? undefined : settlementSection}
+
 			{forkTriggeredActions}
 
 			<ErrorNotice message={reportingError} />

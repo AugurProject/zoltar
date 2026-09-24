@@ -1,3 +1,5 @@
+import { ReportingOracleBlocker } from '../../reporting/components/ReportingOracleBlocker.js'
+import { isPoolQuestionFinalized } from '../../reporting/lib/reportingDomain.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as securityPoolCopy from '../../../copy/securityPool.js'
 import { useState } from 'preact/hooks'
@@ -79,6 +81,7 @@ export function SecurityPoolWorkflowSection(props: SecurityPoolWorkflowSectionPr
 		onRefreshSelectedPoolData,
 		onRequestPoolPrice,
 		onViewPendingReport,
+		inlineOracle,
 		poolOracleActiveAction,
 		poolOracleManagerDetails,
 		poolOracleManagerError,
@@ -418,7 +421,7 @@ export function SecurityPoolWorkflowSection(props: SecurityPoolWorkflowSectionPr
 				<ErrorNotice message={securityPoolOverviewError} />
 				{selectedPool !== undefined ? (
 					<PoolAttention
-						oracleUnavailable={showSelectedPoolWorkflowDetails && (currentPoolOraclePriceUsable === false || currentPoolOracleManagerError !== undefined)}
+						oracleUnavailable={!isPoolQuestionFinalized(currentReportingDetails) && showSelectedPoolWorkflowDetails && (currentPoolOraclePriceUsable === false || currentPoolOracleManagerError !== undefined)}
 						pendingReportId={currentPoolOracleManagerDetails?.pendingReportId}
 						stagedOperationCount={showSelectedPoolWorkflowDetails ? activeStagedOperationCount : 0n}
 						forkAvailable={showSelectedPoolWorkflowDetails && selectedPoolHasForkActivity}
@@ -476,6 +479,23 @@ export function SecurityPoolWorkflowSection(props: SecurityPoolWorkflowSectionPr
 
 						{view === 'reporting' ? (
 							<SelectedPoolReportingPanel
+								oracleBlocker={
+									<ReportingOracleBlocker
+										blocked={reportingOracleGuardMessage !== undefined}
+										manager={currentPoolOracleManagerDetails}
+										now={currentTimestamp}
+										oracle={inlineOracle}
+										onViewReport={onViewPendingReport}
+										onRefresh={() => {
+											if (loadedSelectedPool !== undefined) onLoadPoolOracleManager(loadedSelectedPool.managerAddress)
+										}}
+										requestReason={requestPriceOpenGuardMessage}
+										onRequest={() => {
+											if (loadedSelectedPool !== undefined && requestPriceTransactionValueAttoEth !== undefined)
+												setRequestPriceReview({ requestValueAttoEth: requestPriceTransactionValueAttoEth, managerAddress: loadedSelectedPool.managerAddress, securityPoolAddress: loadedSelectedPool.securityPoolAddress, universeId: loadedSelectedPool.universeId })
+										}}
+									/>
+								}
 								currentReportingDetails={currentReportingDetails}
 								currentTimestamp={currentTimestamp}
 								forkAuction={forkAuction}
