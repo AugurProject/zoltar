@@ -79,3 +79,25 @@ export const escalationPositions = async (sql: SQL, chainId: number, snapshotBlo
 			AND deposit.event_name = 'LocalDepositAppended' AND lower(deposit.event_data->>'depositor') = ${address}
 		ORDER BY deposit.game_address, deposit.block_number DESC, deposit.log_index DESC LIMIT 251
 	`
+
+export const escalationPayouts = async (sql: SQL, chainId: number, snapshotBlock: string, address: string) => {
+	const rows = await sql`
+  WITH latest AS (
+   SELECT DISTINCT ON (entity_identity) entity_identity, block_number, block_hash, read_result
+   FROM entity_state_snapshots WHERE chain_id = ${chainId} AND canonical AND entity_type = 'escalation' AND block_number <= ${snapshotBlock}
+   ORDER BY entity_identity, block_number DESC, observed_at DESC
+  ), positions AS (
+   SELECT latest.entity_identity AS game_address, latest.block_number::text AS snapshot_block, latest.block_hash AS snapshot_block_hash, position
+   FROM latest CROSS JOIN LATERAL jsonb_array_elements(COALESCE(read_result->'claimEvidence'->'positions', '[]'::jsonb)) position
+   WHERE lower(position->>'depositor') = ${address} AND read_result->'claimEvidence'->>'status' = 'available'
+   ORDER BY latest.entity_identity, position->>'outcome', position->>'deposit_index' LIMIT 251
+  )
+  SELECT COALESCE((SELECT jsonb_agg(to_jsonb(positions)) FROM positions), '[]'::jsonb) AS items,
+   count(*) FILTER (WHERE read_result->'claimEvidence'->>'status' IS DISTINCT FROM 'available')::text AS unavailable_games,
+   count(*) FILTER (WHERE read_result->'claimEvidence'->>'truncated' = 'true')::text AS truncated_games,
+   count(*)::text AS sampled_games FROM latest
+ `
+	const row = rows[0]
+	const items: Record<string, unknown>[] = row?.['items'] ?? []
+	return { items: items.slice(0, 250), truncated: items.length > 250, unavailable_games: String(row?.['unavailable_games'] ?? '0'), truncated_games: String(row?.['truncated_games'] ?? '0'), sampled_games: String(row?.['sampled_games'] ?? '0') }
+}

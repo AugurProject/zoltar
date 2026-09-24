@@ -164,6 +164,7 @@ export interface RichListRecord {
 	escalation_positions_truncated?: boolean
 	pending_refunds_truncated?: boolean
 	escalation_positions?: JsonRecord[]
+	escalation_payouts?: JsonRecord
 	pending_refunds?: JsonRecord[]
 	escalation_claims?: JsonRecord[]
 	auction_claims?: JsonRecord[]

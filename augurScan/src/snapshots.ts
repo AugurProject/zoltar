@@ -1,3 +1,4 @@
+import { sampleClaimPositions } from './claim-snapshots.ts'
 import { type Abi, type AbiValue, type Address, getAddress, parseAbi } from './ethereum.ts'
 
 export type StateSnapshotTarget = {
@@ -254,7 +255,15 @@ export const sampleEntityStateWithRead = async (target: StateSnapshotTarget, rea
 		return operation
 	}
 	try {
-		const readResult = await entitySnapshot(target, observedRead)
+		let readResult = await entitySnapshot(target, observedRead)
+		if (target.entityType === 'escalation') {
+			try {
+				readResult = { ...readResult, claimEvidence: await sampleClaimPositions(target.address, read, readResult) }
+			} catch (error) {
+				onFailure(error)
+				readResult = { ...readResult, claimEvidence: { status: 'unavailable', reason: failureReason(error) } }
+			}
+		}
 		return { entityType: target.entityType, entityIdentity: target.entityIdentity, sourceMethod, readStatus: 'success', readResult }
 	} catch (error) {
 		await Promise.allSettled([...pending])

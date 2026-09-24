@@ -1,4 +1,4 @@
-import { escalationPositions, pendingAuctionRefunds, sharePositions } from '../repositories/share-positions.ts'
+import { escalationPayouts, escalationPositions, pendingAuctionRefunds, sharePositions } from '../repositories/share-positions.ts'
 import type { SQL } from 'bun'
 import { encodeOpaqueCursor, parseCursor } from '../cursor-codec.ts'
 import { addressPortfolioRows, richListRows, type RichListSort } from '../repositories/portfolio.ts'
@@ -141,6 +141,7 @@ export const addressPortfolioResponse = async (sql: SQL, url: URL): Promise<Resp
 			vaultAvailability: Number(base?.['vault_count'] ?? 0) > 0 ? 'available' : 'unavailable',
 			...(base === undefined ? { address, availability: 'Awaiting indexed evidence' } : {}),
 			escalation_positions: positions.slice(0, 250),
+			escalation_payouts: await escalationPayouts(sql, chainId, snapshotBlock, address),
 			escalation_positions_truncated: positions.length > 250,
 			share_positions: await sharePositions(sql, chainId, snapshotBlock, { address }),
 			pending_refunds: refunds.slice(0, 250),

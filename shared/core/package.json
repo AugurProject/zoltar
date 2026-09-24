@@ -52,6 +52,11 @@
 			"types": "./ts/evm/address.ts",
 			"bun": "./ts/evm/address.ts",
 			"default": "./js/evm/address.js"
+		},
+		"./evm/carryProof": {
+			"types": "./ts/evm/carryProof.ts",
+			"bun": "./ts/evm/carryProof.ts",
+			"default": "./js/evm/carryProof.js"
 		}
 	},
 	"files": [

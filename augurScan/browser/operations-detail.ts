@@ -1,3 +1,4 @@
+import { claimProofDisclosure, escalationPayoutSummary, escalationPayoutTitle } from './escalation-payouts.ts'
 import { semanticFields } from './semantic-evidence.ts'
 import { shortIdentifier } from './identifier-format.ts'
 import type { OperationsDetailRoute, OperationsRenderContext } from './browser-types.ts'
@@ -116,12 +117,26 @@ export const renderOperationsDetail = (deps: OperationsDetailDeps, response: Ope
 				'Current-state snapshot',
 				[
 					operationRow('Tagged block read', String(snapshot['read_status']), String(snapshot['entity_identity'] ?? ''), snapshot['block_number']),
-					...semanticFields(isRecord(snapshot['read_result']) ? snapshot['read_result'] : {}).map(([label, value]) => operationRow(label, value, undefined, undefined)),
+					...semanticFields(isRecord(snapshot['read_result']) ? Object.fromEntries(Object.entries(snapshot['read_result']).filter(([key]) => key !== 'claimEvidence')) : {}).map(([label, value]) => operationRow(label, value, undefined, undefined)),
 					rawEvidence(snapshot),
 				],
 				'Snapshot unavailable',
 			),
 		)
+	if (route.kind === 'escalation' && snapshot !== undefined) {
+		const result = isRecord(snapshot['read_result']) ? snapshot['read_result'] : {}
+		const claims = isRecord(result['claimEvidence']) ? result['claimEvidence'] : {}
+		const rows = operationRecords(claims['positions']).map(position => {
+			const row = operationRow(escalationPayoutTitle(position), escalationPayoutSummary(position), String(position['depositor']), snapshot['block_number'])
+			row.append(claimProofDisclosure(position, snapshot['block_number'], snapshot['block_hash']))
+			return row
+		})
+		panels.push(
+			operationsPanel('Escalation payouts', rows, claims['status'] === 'available' ? 'No unconsumed deposits at this tagged block.' : `Payout evidence unavailable: ${String(claims['reason'] ?? 'Awaiting claim sampling')}`, {
+				label: `Tagged claim-bundle payouts; proofs must be refreshed after settlement.${claims['truncated'] === true ? ' First 250 positions shown.' : ''}`,
+			}),
+		)
+	}
 	if (current !== undefined) panels.push(operationsPanel('Current report', [operationRow(String(lifecycle?.['state'] ?? current['event_name'] ?? 'Report'), 'Latest canonical report evidence', route.identity.join(':'), current['block_number']), rawEvidence(current)], 'Current report unavailable'))
 	if (route.kind === 'pool' || route.kind === 'vault') {
 		const riskPresentation = operationsRiskPresentation(route.kind, data['protocol_state'], data['scanner_severity'])

@@ -1,7 +1,7 @@
 import { expect, test } from 'bun:test'
 import { SQL } from 'bun'
 import { initializeSchema } from '../../src/schema.ts'
-import { sharePositions, pendingAuctionRefunds, escalationPositions } from '../../src/repositories/share-positions.ts'
+import { sharePositions, pendingAuctionRefunds, escalationPositions, escalationPayouts } from '../../src/repositories/share-positions.ts'
 import { escalationCatalogData } from '../../src/repositories/operations.ts'
 import { protocolFeeEconomics } from '../../src/repositories/fee-economics.ts'
 import { chainDecodeCoverage } from '../../src/abi-coverage-report.ts'
@@ -26,7 +26,7 @@ test.skipIf(url === undefined)('canonical semantic state respects snapshots, mig
 			['TransferBatch', { from: zero, to: owner, ids: ['0', '1', '2'], values: ['10', '20', '30'] }, true],
 			['TransferSingle', { from: owner, to: zero, id: '1', value: '5' }, true],
 			['TransferSingle', { from: zero, to: owner, id: '257', value: '15' }, true],
-			['Migrate', { migrator: owner, fromId: '1', toId: '257', amountAttoShares: '15' }, true],
+			['Migrate', { migrator: owner, fromId: '1', toId: '257', amountAttoShares: String(15n) }, true],
 			['TransferSingle', { from: zero, to: owner, id: '1', value: '999' }, false],
 		] as const
 		for (const [index, [name, data, canonical]] of transfers.entries())
@@ -48,6 +48,16 @@ test.skipIf(url === undefined)('canonical semantic state respects snapshots, mig
 		expect(await escalationPositions(connection, 1, '1', owner)).toEqual([expect.objectContaining({ principal_atto_rep: '200', consumed_block: null, final_resolution: '1' })])
 		await connection`INSERT INTO escalation_game_events (chain_id, game_address, block_number, block_hash, tx_hash, log_index, event_name, event_data, canonical) VALUES (1, ${token}, 2, ${hash}, ${hash}, 2, 'CarryDepositConsumed', ${JSON.stringify({ depositor: owner, outcome: '1', parentDepositIndex: '4', reason: '0' })}::text::jsonb, true)`
 		expect((await escalationPositions(connection, 1, '2', owner))[0]).toMatchObject({ consumed_block: '2', consumption_reason: '0' })
+		const claimEvidence = { status: 'available', truncated: false, positions: [{ depositor: owner, kind: 'inherited', status: 'claimable', payout_atto_rep: '123', proof: { leafIndex: '2', nullifierSiblings: [] } }] }
+		await connection`UPDATE entity_state_snapshots SET read_result = read_result || jsonb_build_object('claimEvidence', ${JSON.stringify(claimEvidence)}::text::jsonb) WHERE entity_type = 'escalation'`
+		const payouts = await escalationPayouts(connection, 1, '1', owner)
+		expect(payouts.items).toEqual([expect.objectContaining({ game_address: token, snapshot_block: '1', position: expect.objectContaining({ kind: 'inherited', payout_atto_rep: '123' }) })])
+		expect((await escalationPayouts(connection, 1, '1', zero)).items).toEqual([])
+		await connection`INSERT INTO entity_state_snapshots (chain_id, entity_type, entity_identity, block_number, block_hash, read_status, read_result, canonical) VALUES (1, 'escalation', ${token}, 2, ${hash}, 'failed', NULL, true)`
+		expect((await escalationPayouts(connection, 1, '2', owner)).items).toEqual([])
+		expect((await escalationPayouts(connection, 1, '2', owner)).unavailable_games).toBe('1')
+		expect((await escalationPayouts(connection, 1, '1', owner)).items).toHaveLength(1)
+
 		for (const [index, [reason, fees]] of [
 			[5, 0],
 			[0, 10],

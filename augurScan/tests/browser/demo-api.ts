@@ -20,6 +20,33 @@ export function createDemoApi(context: DemoContext) {
 	const priceDemo = context.pageUrl.searchParams.get('priceDemo')
 
 	const detailState = context.pageUrl.searchParams.get('detailState')
+	const claimState = context.pageUrl.searchParams.get('claimState')
+	const claimPosition = {
+		depositor: '0xc9b36e44643fc5d882654ffd9791ae7171b0e9db',
+		outcome: '1',
+		deposit_index: '4',
+		kind: 'inherited',
+		status: claimState === 'pending' ? 'pending' : 'claimable',
+		principal_atto_rep: '2000000000000000000',
+		source_principal_atto_rep: '1800000000000000000',
+		retained_principal_atto_rep: '1200000000000000000',
+		auction_haircut_atto_rep: '600000000000000000',
+		reward_amount_atto_rep: '1200000000000000000',
+		reward_cumulative_atto_rep: '5000000000000000000',
+		...(claimState === 'pending' ? {} : { payout_atto_rep: '1440000000000000000', burn_atto_rep: '160000000000000000' }),
+		proof: {
+			depositor: '0xc9b36e44643fc5d882654ffd9791ae7171b0e9db',
+			amountAttoRep: String(2000000000000000000n),
+			cumulativeAmountAttoRep: String(5000000000000000000n),
+			parentDepositIndex: '4',
+			sourceNodeId: '5',
+			leafIndex: '4',
+			merkleMountainRangePeakIndex: '0',
+			merkleMountainRangeSiblings: ['0x' + '12'.repeat(32)],
+			nullifierSiblings: Array.from({ length: 64 }, () => '0x' + '00'.repeat(32)),
+		},
+	}
+	const claimEvidence = claimState === 'unavailable' ? { status: 'unavailable', reason: 'Historical proof state is unavailable on this provider' } : { status: 'available', positions: [claimPosition], truncated: false }
 
 	const deploymentState = context.pageUrl.searchParams.get('deploymentState')
 
@@ -1091,13 +1118,14 @@ export function createDemoApi(context: DemoContext) {
 						read_status: 'success',
 						source_method: 'lifecycle(), balances(), totalCapital()',
 						read_result: {
-							startBondAttoRep: '1000000000000000000',
-							nonDecisionThresholdAttoRep: '500000000000000000000',
+							startBondAttoRep: String(1000000000000000000n),
+							nonDecisionThresholdAttoRep: String(500000000000000000000n),
 							endTimestamp: '1750000000',
-							bindingCapitalAttoRep: '5000000000000000000',
+							bindingCapitalAttoRep: String(5000000000000000000n),
 							outcomeBalancesAttoRep: ['1000000000000000000', '1250000000000000000000', '0'],
 							questionResolution: '1',
-							finalQuestionResolution: '3',
+							finalQuestionResolution: claimState === 'pending' ? '3' : '1',
+							claimEvidence,
 						},
 					},
 					deposits: [event],
@@ -1118,9 +1146,9 @@ export function createDemoApi(context: DemoContext) {
 						block_number: operations.asOf.blockNumber,
 						read_status: 'success',
 						source_method: 'auctionState(), computeClearing()',
-						read_result: { finalized: true, clearingTick: '14', attoEthRaised: '3000000000000000000', totalAttoRepPurchased: '12000000000000000000', computeClearing: { tick: '14', funded: true } },
+						read_result: { finalized: true, clearingTick: '14', attoEthRaised: '3000000000000000000', totalAttoRepPurchased: String(12000000000000000000n), computeClearing: { tick: '14', funded: true } },
 					},
-					finalization: evidence('AuctionFinalized', { clearingTick: '14', grossAcceptedAttoEth: '3000000000000000000', repSoldAttoRep: '12000000000000000000', funded: true }),
+					finalization: evidence('AuctionFinalized', { clearingTick: '14', grossAcceptedAttoEth: String(3000000000000000000n), repSoldAttoRep: String(12000000000000000000n), funded: true }),
 					demandCurveTruncated: context.pageUrl.searchParams.get('demandTruncated') === '1',
 					demandCurve: [{ tick: '14', amountAttoEth: (3n * 10n ** 18n).toString(), cumulativeDemandAttoEth: (3n * 10n ** 18n).toString() }],
 					events: evidencePage(bid),
@@ -1682,6 +1710,13 @@ export function createDemoApi(context: DemoContext) {
 							basis: 'Canonical indexed transfers',
 						},
 						pending_refunds: [{ auction_address: demoAddress('8'), pending_atto_eth: '100000000000000001' }],
+						escalation_payouts: {
+							items: claimState === 'unavailable' ? [] : [{ game_address: demoAddress('7'), snapshot_block: operations.asOf.blockNumber, snapshot_block_hash: demoHash, position: claimPosition }],
+							unavailable_games: claimState === 'unavailable' ? '1' : '0',
+							truncated_games: '0',
+							sampled_games: '1',
+							truncated: false,
+						},
 						escalation_positions: [{ game_address: demoAddress('7'), deposit_index: '4', principal_atto_rep: '2000000000000000000', final_resolution: '1', outcome: '1', resolution_block: operations.asOf.blockNumber }],
 						lp_positions: lpPositions,
 						fork_participation: forkParticipation,
