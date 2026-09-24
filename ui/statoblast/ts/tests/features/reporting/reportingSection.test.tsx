@@ -1,3 +1,4 @@
+import { formatReportingDeadline } from '@zoltar/ui-statoblast-shared/features/reporting/lib/reportingViewerStatus.js'
 import { createMarketDetails as marketDetailsFixture } from '@zoltar/ui-core-shared/tests/testUtils/marketFixtures.js'
 /// <reference types="bun-types" />
 
@@ -294,7 +295,7 @@ describe('ReportingSection', () => {
 			details.sides = details.sides.map(side => ({ ...side, balance: rep(8n) }))
 			const rendered = await renderIntoDocument(h(ReportingSection, createProps({ reportingDetails: details, currentTimestamp: details.currentTime })))
 			cleanupRenderedComponent = rendered.cleanup
-			expect(document.querySelector('.escalation-phase')?.textContent).toContain('No side currently leads.')
+			expect(document.querySelector('.escalation-phase')?.textContent).toContain('No side leads right now.')
 			expect(document.querySelector('.escalation-phase')?.textContent).not.toContain('wins.')
 			expect(within(document.body).queryByText('Leading')).toBeNull()
 		})
@@ -309,27 +310,27 @@ describe('ReportingSection', () => {
 		expect(document.body.textContent).not.toContain('A fork requires two sides')
 	})
 	for (const end of [300n, 600n]) {
-		test(`marks an active phase completed only when it had duration: end ${end}`, async () => {
+		test(`marks the response window completed after resolution: end ${end}`, async () => {
 			const details = createReportingDetails({ currentTime: 700n, activationTime: 300n, escalationEndTime: end, questionOutcome: 'no', settlementState: 'resolved' })
 			const rendered = await renderIntoDocument(h(ReportingSection, createProps({ reportingDetails: details, currentTimestamp: details.currentTime })))
 			cleanupRenderedComponent = rendered.cleanup
-			const activeStep = Array.from(document.querySelectorAll('.escalation-phase-steps li')).find(step => step.textContent?.includes('Escalation active'))
-			expect(activeStep?.classList.contains('completed')).toBe(end > 300n)
-			expect(activeStep?.textContent?.includes('✓')).toBe(end > 300n)
+			const activeStep = Array.from(document.querySelectorAll('.escalation-phase-steps li')).find(step => step.textContent?.includes('Response window'))
+			expect(activeStep?.classList.contains('completed')).toBe(true)
+			expect(activeStep?.textContent?.includes('✓')).toBe(true)
 		})
 	}
 
 	test('describes the response deadline when low stakes end at activation', async () => {
 		const rendered = await renderIntoDocument(h(ReportingSection, createProps({ reportingDetails: createReportingDetails({ currentTime: 150n, activationTime: 300n, escalationEndTime: 300n }) })))
 		cleanupRenderedComponent = rendered.cleanup
-		expect(document.querySelector('.escalation-phase')?.textContent).toContain(`If nobody responds by ${formatTimestamp(300n)}, No wins.`)
+		expect(document.querySelector('.escalation-phase')?.textContent).toContain(`If nobody outbids No by ${formatReportingDeadline(300n, 150n)}, No wins.`)
 		expect(document.querySelector('.escalation-phase')?.textContent).not.toContain('Game starts in')
 	})
 	test('shows only the resolved outcome when no REP is claimable', async () => {
 		const details = createReportingDetails({ questionOutcome: 'no', parentWithdrawalEnabled: true, settlementState: 'resolved' })
 		const rendered = await renderIntoDocument(h(ReportingSection, createProps({ reportingDetails: details })))
 		cleanupRenderedComponent = rendered.cleanup
-		expect(document.querySelector('.notice.success')?.textContent).toBe('Resolved as No.')
+		expect(document.querySelector('.reporting-result.warning')?.textContent).toBe('Resolved as No.')
 	})
 	test('omits empty positions and duplicate outcome-selection hints', async () => {
 		const details = createReportingDetails()
@@ -348,11 +349,11 @@ describe('ReportingSection', () => {
 	test('keeps active phase visible, scales bars to fork threshold and hides premature settlement', async () => {
 		const rendered = await renderIntoDocument(h(ReportingSection, createProps()))
 		cleanupRenderedComponent = rendered.cleanup
-		expect(document.body.textContent).toContain('Escalation active')
+		expect(document.body.textContent).toContain('Response window')
 		expect(document.body.textContent).toContain('Progress to fork: 8 / 20 REP (40%)')
 		expect(document.body.querySelector('.escalation-side')?.getAttribute('style')).toContain('5.00%')
 		expect(within(document.body).queryByRole('checkbox')).toBeNull()
-		expect(document.body.textContent).toContain('Claimable after resolution')
+		expect(document.body.textContent).toContain('Losing · worth 0 REP if it ended now')
 	})
 
 	test('does not present the chart fallback as a real threshold while reporting loads', async () => {
@@ -415,7 +416,7 @@ describe('ReportingSection', () => {
 		const documentQueries = within(document.body)
 		expect(documentQueries.queryByRole('heading', { name: 'Reporting Context' })).toBeNull()
 		expect(documentQueries.queryByRole('heading', { name: 'Active' })).toBeNull()
-		expect(document.body.querySelector('[aria-current=step]')?.textContent).toBe('Escalation active')
+		expect(document.body.querySelector('[aria-current=step]')?.textContent).toBe('Response window')
 		expect(documentQueries.getByRole('button', { name: /^(Min to lead|Start bond)/ })).not.toBeNull()
 		expect(documentQueries.getByRole('button', { name: /^Max reward/ })).not.toBeNull()
 		expect(document.body.textContent?.includes('Selected side currently has')).toBe(false)
@@ -443,7 +444,7 @@ describe('ReportingSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		expect(document.body.querySelector('[aria-current=step]')?.textContent).toBe('Waiting to start')
+		expect(document.body.querySelector('[aria-current=step]')?.textContent).toBe('Response window')
 		expect(documentQueries.getByRole('heading', { name: 'Report Outcome' })).not.toBeNull()
 	})
 
@@ -574,7 +575,7 @@ describe('ReportingSection', () => {
 		const metricsQueries = within(metricsSection)
 		expect(metricsQueries.queryByText('Current Bond')).toBeNull()
 		expect(metricsQueries.getByText('Non-decision threshold')).not.toBeNull()
-		expect(metricsQueries.getByText('Ends in')).not.toBeNull()
+		expect(metricsQueries.getByText('Response window ends')).not.toBeNull()
 		expect(metricsQueries.getByText('Escalation started')).not.toBeNull()
 		expect(metricsQueries.getByText('Start bond')).not.toBeNull()
 	})
@@ -679,7 +680,7 @@ describe('ReportingSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		expectTransactionButtonDisabled(document.body, reportingButtonLabel('No'), 'A current pool oracle price is required before reporting.')
-		expect(within(document.body).getByRole('status').textContent).toContain(reason)
+		expect(within(getReportOutcomeSection()).getByRole('status').textContent).toContain(reason)
 		expect(document.body.textContent?.match(new RegExp(reason.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g')) ?? []).toHaveLength(1)
 		fireEvent.click(within(document.body).getByRole('button', { name: 'Manage pool price' }))
 		expect(openOracleCalls).toBe(1)
@@ -801,7 +802,7 @@ describe('ReportingSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 		expect(within(document.body).queryByRole('checkbox')).toBeNull()
 		expect(within(document.body).queryByRole('button', { name: /Settle|Claim|Clear/ })).toBeNull()
-		expect(document.body.textContent).toContain('Claimable after resolution')
+		expect(document.body.textContent).toContain('Losing · worth 0 REP if it ended now')
 	})
 
 	test('keeps finalized withdrawals enabled in withdraw-only mode after escalation closes', async () => {
@@ -941,7 +942,7 @@ describe('ReportingSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 		expect(within(document.body).queryByRole('checkbox')).toBeNull()
 		expect(within(document.body).queryByRole('button', { name: /Settle|Claim|Clear/ })).toBeNull()
-		expect(document.body.textContent).toContain('Claimable after resolution')
+		expect(document.body.textContent).toContain('Losing · worth 0 REP if it ended now')
 	})
 
 	test('shows the report submission pending label while the report action is in flight', async () => {
@@ -1051,8 +1052,8 @@ describe('ReportingSection', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		expect(document.body.textContent?.includes(formatDuration(300n - 100n))).toBe(false)
-		expect(document.body.textContent?.includes(formatDuration(300n - 200n))).toBe(true)
+		expect(getEscalationMetricsSection().textContent).not.toContain(formatReportingDeadline(300n, 150n))
+		expect(getEscalationMetricsSection().textContent).toContain(formatReportingDeadline(300n, 200n))
 	})
 
 	test('keeps escalation active with zero time left at the exact timeout boundary', async () => {
@@ -1074,7 +1075,7 @@ describe('ReportingSection', () => {
 		const documentQueries = within(document.body)
 		expect(documentQueries.queryByRole('heading', { name: 'Active' })).toBeNull()
 		expect(document.body.textContent?.includes('Escalation ended by timeout. The winner is computed from the current dispute-staked REP totals; refresh reporting if the resolved outcome is not loaded yet.')).toBe(false)
-		expect(document.body.textContent?.includes(formatDuration(0n))).toBe(true)
+		expect(getEscalationMetricsSection().textContent).toContain('· now')
 	})
 
 	test('uses the live chain timestamp to flip the escalation phase only after the timeout boundary passes', async () => {
@@ -1094,7 +1095,7 @@ describe('ReportingSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		expect(document.body.textContent).toContain('Escalation ended by timeout.')
-		expect(document.body.textContent?.includes(formatDuration(0n))).toBe(true)
+		expect(getEscalationMetricsSection().textContent).toContain('ago')
 	})
 
 	test('shares one refresh reason across settlement actions after escalation times out', async () => {
@@ -1120,7 +1121,7 @@ describe('ReportingSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 		expect(within(document.body).queryByRole('checkbox')).toBeNull()
 		expect(within(document.body).queryByRole('button', { name: /Settle|Claim|Clear/ })).toBeNull()
-		expect(document.body.textContent).toContain('Claimable after resolution')
+		expect(document.body.textContent).toContain('Losing · worth 0 REP if it ended now')
 	})
 
 	test('shows the finalized outcome in the resolved banner', async () => {
@@ -1212,6 +1213,9 @@ describe('ReportingSection', () => {
 		if (!(lifecycleBanner instanceof HTMLElement)) throw new Error('Expected phase stepper')
 		const lifecycleBannerQueries = within(lifecycleBanner)
 		expect(document.body.querySelector('[aria-current=step]')?.textContent).toBe('Fork')
+		expect(document.body.textContent).not.toContain('Check back before')
+		expect(getEscalationMetricsSection().textContent).not.toContain('Response window ends')
+		expect(document.querySelector('.notice-stack-item')?.textContent).toContain('You have 1 REP on Yes.')
 		const forkTriggeredReason = 'Escalation reached non-decision. Trigger the universe fork here if this pool should fork.'
 		expect(document.body.textContent?.includes(forkTriggeredReason)).toBe(true)
 		expect(document.body.textContent?.split(forkTriggeredReason)).toHaveLength(2)
@@ -2322,5 +2326,85 @@ describe('ReportingSection', () => {
 		expect(documentQueries.queryByRole('heading', { name: 'Latest Reporting Action' })).toBeNull()
 		expect(documentQueries.queryByText('Escalation Deposits Withdrawn')).toBeNull()
 		expect(documentQueries.queryByText('Eligible escalation deposits were withdrawn for the selected outcome side.')).toBeNull()
+	})
+
+	for (const winning of [true, false]) {
+		test(`shows viewer ${winning ? 'winning' : 'losing'} status and the response reminder`, async () => {
+			const details = createReportingDetails({ bindingCapital: 0n })
+			details.sides = details.sides.map(side => ({ ...side, balance: side.key === (winning ? 'yes' : 'no') ? rep(8n) : rep(1n) }))
+			const rendered = await renderIntoDocument(h(ReportingSectionHarness, { initialProps: createProps({ reportingDetails: details }) }))
+			cleanupRenderedComponent = rendered.cleanup
+			const status = document.querySelector('.notice-stack-item')
+			expect(status?.textContent).toContain(winning ? "You're winning on Yes. Your 1 REP would be worth about 1 REP if it ended now." : `You're losing on Yes. Add at least 8 REP before ${formatReportingDeadline(300n, 150n)} or your 1 REP is lost.`)
+			expect(status?.classList.contains(winning ? 'success' : 'warning')).toBe(true)
+			expect(status?.querySelector('strong:not(.notice-title)')?.textContent).toBe(winning ? "You're winning on Yes." : "You're losing on Yes.")
+			expect(document.body.textContent).toContain(`Check back before ${formatReportingDeadline(300n, 150n)}. Any new report can push this deadline later (up to 7 weeks after the game starts).`)
+			expect(within(document.body).getByRole('button', { name: 'Add reminder (.ics)' })).not.toBeNull()
+			if (!winning) {
+				const input = document.getElementById('reporting-contribution-amount')
+				if (!(input instanceof HTMLInputElement)) throw new Error('Expected report amount input')
+				let scrolled = false
+				input.scrollIntoView = () => {
+					scrolled = true
+				}
+				await act(() => fireEvent.click(within(document.body).getByRole('button', { name: 'Take the lead…' })))
+				expect(input.value).toBe('8')
+				expect(scrolled).toBe(true)
+				expect(within(document.body).getByRole('radio', { name: /^Yes/ }).getAttribute('aria-checked')).toBe('true')
+			}
+		})
+	}
+	test('orders multi-side positions with the winner first and includes imported stake', async () => {
+		const details = createReportingDetails({ bindingCapital: 0n })
+		details.sides = details.sides.map(side => (side.key === 'no' ? { ...side, importedUserDeposits: [{ amountAttoRep: rep(2n), cumulativeAmountAttoRep: rep(2n), parentDepositIndex: 0n, depositor: zeroAddress }] } : side))
+		const rendered = await renderIntoDocument(h(ReportingSection, createProps({ reportingDetails: details })))
+		cleanupRenderedComponent = rendered.cleanup
+		const text = document.querySelector('.notice-stack-item')?.textContent ?? ''
+		expect(text).toContain("You're winning on No. Your 2 REP would be worth about 2 REP if it ended now.")
+		expect(text.indexOf("You're winning on No.")).toBeLessThan(text.indexOf("You're losing on Yes."))
+		expect(document.querySelector('.reporting-position')?.textContent).toContain('No · Winning · worth about 2 REP if it ended now')
+	})
+	test('ties show no winner, link to the explanation, and label positions Tied', async () => {
+		const details = createReportingDetails()
+		details.sides = details.sides.map(side => ({ ...side, balance: rep(8n) }))
+		const rendered = await renderIntoDocument(h(ReportingSection, createProps({ reportingDetails: details })))
+		cleanupRenderedComponent = rendered.cleanup
+		expect(document.querySelector('.notice-stack-item')?.textContent).toContain(`No side leads right now. If this stays tied at ${formatReportingDeadline(300n, 150n)}, no side wins (see how ties resolve).`)
+		expect(within(document.body).getByRole('link', { name: 'see how ties resolve' }).getAttribute('href')).toBe('https://augurproject.github.io/zoltar/docs/explanation/escalation-game.html')
+		expect(document.querySelector('.reporting-position')?.textContent).toContain('Tied')
+		expect(within(document.body).queryByRole('button', { name: 'Take the lead…' })).toBeNull()
+	})
+	for (const started of [false, true]) {
+		test(`explainer defaults ${started ? 'closed' : 'open'} and stepper has three steps`, async () => {
+			const rendered = await renderIntoDocument(h(ReportingSection, createProps({ reportingDetails: started ? createReportingDetails() : createNotStartedReportingDetails() })))
+			cleanupRenderedComponent = rendered.cleanup
+			const explainer = Array.from(document.querySelectorAll('details')).find(element => element.querySelector('summary')?.textContent === 'How the escalation game works')
+			expect(explainer?.open).toBe(!started)
+			expect(explainer?.querySelectorAll('li')).toHaveLength(5)
+			expect(document.querySelectorAll('.escalation-phase-steps li')).toHaveLength(3)
+			expect(document.querySelector('.escalation-phase-mobile')?.textContent).toBe(started ? 'Step 2 of 3 · Response window' : 'Step 1 of 3 · Reporting open')
+		})
+	}
+	test('deadline movement remains visible until dismissed and does not reappear on later loads', async () => {
+		const details = createReportingDetails()
+		const rendered = await renderIntoDocument(h(ReportingSection, createProps({ reportingDetails: details })))
+		cleanupRenderedComponent = rendered.cleanup
+		expect(document.body.textContent).not.toContain('The deadline moved')
+		await act(() => render(h(ReportingSection, createProps({ reportingDetails: { ...details, escalationEndTime: 600n } })), rendered.container))
+		expect(document.body.textContent).toContain(`The deadline moved to ${formatReportingDeadline(600n, 150n)} because someone reported. Your status may have changed.`)
+		await act(() => render(h(ReportingSection, createProps({ reportingDetails: { ...details, escalationEndTime: 600n } })), rendered.container))
+		expect(document.body.textContent).toContain('The deadline moved')
+		await act(() => fireEvent.click(within(document.body).getByRole('button', { name: 'Dismiss deadline notice' })))
+		await act(() => render(h(ReportingSection, createProps({ reportingDetails: { ...details, escalationEndTime: 900n } })), rendered.container))
+		expect(document.body.textContent).not.toContain('The deadline moved')
+	})
+	test('resolved claims show the amount without a reminder or an invented claim deadline', async () => {
+		const details = createReportingDetails({ questionOutcome: 'yes', settlementState: 'resolved', parentWithdrawalEnabled: true })
+		const rendered = await renderIntoDocument(h(ReportingSection, createProps({ reportingDetails: details })))
+		cleanupRenderedComponent = rendered.cleanup
+		expect(document.querySelector('.notice.success')?.textContent).toContain('Resolved as Yes. You can claim')
+		expect(document.body.textContent).not.toContain('Claim before')
+		expect(document.body.textContent).not.toContain('Check back before')
+		expect(document.body.textContent).not.toContain('Progress to fork')
 	})
 })

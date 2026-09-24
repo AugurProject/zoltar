@@ -1,3 +1,7 @@
+import { ReportingViewerStatus } from './ReportingViewerStatus.js'
+import { EscalationReminderLine } from './EscalationReminderLine.js'
+import { EscalationExplainer } from './EscalationExplainer.js'
+import { formatReportingDeadline } from '../lib/reportingViewerStatus.js'
 import { EscalationPhaseStepper } from './EscalationPhaseStepper.js'
 import { ReportingResultCard } from './ReportingResultCard.js'
 import { ReportingSides } from './ReportingSides.js'
@@ -19,10 +23,10 @@ import { TransactionActionButton } from '@zoltar/ui-core-shared/components/Trans
 import { TimestampValue } from '@zoltar/ui-core-shared/components/TimestampValue.js'
 import { WarningSurface } from '@zoltar/ui-core-shared/components/WarningSurface.js'
 import { pickFirstReason } from '@zoltar/ui-core-shared/transactions/actionAvailability.js'
-import { formatCurrencyBalance, formatCurrencyInputBalance, formatDuration } from '@zoltar/ui-core-shared/lib/formatters.js'
+import { formatCurrencyBalance, formatCurrencyInputBalance } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { parseOptionalRepAmountInput } from '@zoltar/ui-core-shared/forms/formInputs.js'
 import { getWrongNetworkReason, isActiveAppChain } from '@zoltar/ui-core-shared/wallet/network.js'
-import { getEscalationPhase, getEscalationTimeRemaining, getLeadingEscalationOutcome, getReportingMaxProfitContribution, getReportingMinimumOutcomeChangeContribution, getRemainingSelectedOutcomeContributionCapacity, isPoolQuestionFinalized, previewReportingContribution } from '../lib/reportingDomain.js'
+import { getEscalationPhase, getStrictLeadingEscalationOutcome, getReportingMaxProfitContribution, getReportingMinimumOutcomeChangeContribution, getRemainingSelectedOutcomeContributionCapacity, isPoolQuestionFinalized, previewReportingContribution } from '../lib/reportingDomain.js'
 import { getReportingReportGuardMessage, getReportingWithdrawGuardMessage } from '../lib/reportingGuards.js'
 import { REPORTING_OUTCOME_DROPDOWN_OPTIONS, getReportingLockedUntilMessage, getReportingOutcomeLabel, hasReportingOpened } from '../lib/reporting.js'
 import { deriveReportingStage, isReportingOutcomeEnabled, isWithdrawEscalationEnabled } from '../lib/reporting.js'
@@ -187,7 +191,7 @@ export function ReportingSection({
 	const chartScaleMax = effectiveReportingDetails?.nonDecisionThresholdAttoRep
 	const largestBalance = outcomeSides.reduce((max, side) => ((side.balance ?? 0n) > max ? (side.balance ?? 0n) : max), 0n)
 	const finalized = isPoolQuestionFinalized(effectiveReportingDetails)
-	const leadingOutcome = activeReportingDetails === undefined ? undefined : getLeadingEscalationOutcome(activeReportingDetails.sides)
+	const leadingOutcome = activeReportingDetails === undefined ? undefined : getStrictLeadingEscalationOutcome(activeReportingDetails.sides)
 	const reportContributionPreview = effectiveReportingDetails === undefined || selectedAmount === undefined || selectedOutcome === undefined ? undefined : previewReportingContribution(effectiveReportingDetails, selectedOutcome, selectedAmount)
 	const actualReportDepositAmount = reportContributionPreview?.actualDepositAmount
 	const selectedOutcomeLabel = selectedOutcome === undefined ? reportingCopy.selectedSide : (outcomeSides.find(side => side.key === selectedOutcome)?.label ?? getReportingOutcomeLabel(selectedOutcome))
@@ -381,6 +385,25 @@ export function ReportingSection({
 				</div>
 			) : undefined}
 
+			{showFullReporting && effectiveReportingDetails !== undefined ? (
+				<>
+					{activeReportingDetails === undefined ? undefined : (
+						<ReportingViewerStatus
+							details={activeReportingDetails}
+							disabled={reportControlsLocked}
+							onTakeLead={(selectedOutcome, amount) => {
+								onReportingFormChange({ selectedOutcome, reportAmount: formatCurrencyInputBalance(amount) })
+								const input = document.getElementById('reporting-contribution-amount')
+								input?.scrollIntoView({ block: 'center' })
+								input?.focus()
+							}}
+						/>
+					)}
+					{activeReportingDetails === undefined ? undefined : <EscalationReminderLine key={activeReportingDetails.securityPoolAddress} details={activeReportingDetails} />}
+					<EscalationExplainer details={effectiveReportingDetails} />
+				</>
+			) : undefined}
+
 			<ReportingResultCard details={effectiveReportingDetails} />
 			{finalized ? settlementSection : undefined}
 			{showFullReporting && reportingReady !== false ? (
@@ -392,23 +415,13 @@ export function ReportingSection({
 						<MetricField label={reportingCopy.startBondAttoRep}>
 							<CurrencyValue precision='exact' value={effectiveReportingDetails?.startBondAttoRep} suffix={commonCopy.rep} />
 						</MetricField>
-						{finalized ? undefined : (
-							<MetricField label={escalationPhase === 'Pending Start' ? reportingCopy.gameStartsIn : reportingCopy.endsIn}>
-								{activeReportingDetails === undefined ? (
-									inactiveCountdown
-								) : (
-									<>
-										{formatDuration(escalationPhase === 'Pending Start' ? activeReportingDetails.activationTime - activeReportingDetails.currentTime : getEscalationTimeRemaining(activeReportingDetails))}
-										<span className='detail'>
-											<TimestampValue relative={false} timestamp={escalationPhase === 'Pending Start' ? activeReportingDetails.activationTime : activeReportingDetails.escalationEndTime} />
-										</span>
-									</>
-								)}
-							</MetricField>
-						)}
+						{finalized || activeReportingDetails?.hasReachedNonDecision ? undefined : <MetricField label={reportingCopy.responseWindowEnds}>{activeReportingDetails === undefined ? inactiveCountdown : formatReportingDeadline(activeReportingDetails.escalationEndTime, activeReportingDetails.currentTime)}</MetricField>}
 					</div>
 					<ReadOnlyDetailAccordion title={reportingCopy.reportingParameters}>
 						<div className='escalation-metrics'>
+							<MetricField label={reportingCopy.attritionStarts}>
+								<TimestampValue {...(effectiveCurrentTimestamp === undefined ? {} : { currentTimestamp: effectiveCurrentTimestamp })} timestamp={activeReportingDetails?.activationTime} />
+							</MetricField>
 							<MetricField label={reportingCopy.escalationStarted}>
 								<TimestampValue {...(effectiveCurrentTimestamp === undefined ? {} : { currentTimestamp: effectiveCurrentTimestamp })} timestamp={escalationGameStartTimestamp} />
 							</MetricField>

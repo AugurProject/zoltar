@@ -13,5 +13,12 @@ export function ReportingResultCard({ details }: { details: ReportingDetails | u
 					0n,
 				)
 			: 0n
-	return <p className='notice success'>{copy.resultSummary(getReportingOutcomeLabel(details.questionOutcome), amount > 0n ? formatCurrencyBalance(amount) : undefined)}</p>
+	const hasPositions = details.status === 'active' && details.sides.some(side => side.userDeposits.length > 0 || side.importedUserDeposits.length > 0)
+	const winning = details.status === 'active' && details.sides.some(side => side.key === details.questionOutcome && (side.userDeposits.length > 0 || side.importedUserDeposits.length > 0))
+	return (
+		<p className={`reporting-result notice notice-stack-item ${!hasPositions || winning ? 'success' : 'warning'}`}>
+			<strong>{copy.resultSummary(getReportingOutcomeLabel(details.questionOutcome))}</strong>
+			{amount > 0n ? copy.resultClaim(formatCurrencyBalance(amount)) : undefined}
+		</p>
+	)
 }

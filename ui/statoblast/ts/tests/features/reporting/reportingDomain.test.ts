@@ -1,5 +1,5 @@
+import { formatReportingDeadline } from '@zoltar/ui-statoblast-shared/features/reporting/lib/reportingViewerStatus.js'
 import { getReportingStagePresentation } from '@zoltar/ui-statoblast-shared/features/reporting/lib/reportingStagePresentation.js'
-import { formatTimestamp } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { createMarketDetails as marketDetailsFixture } from '@zoltar/ui-core-shared/tests/testUtils/marketFixtures.js'
 /// <reference types="bun-types" />
 
@@ -7,9 +7,9 @@ import { zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import type { ActiveReportingDetails, MarketDetails, ReportingDetails } from '@zoltar/ui-core-shared/types/contracts.js'
 import {
 	getEscalationDepositClaimAmount,
+	getHypotheticalClaimAmount,
 	getEscalationPhase,
-	getLeadingEscalationOutcome,
-	getEscalationTimeRemaining,
+	getStrictLeadingEscalationOutcome,
 	getImportedEscalationDepositClaimAmount,
 	getRemainingSelectedOutcomeContributionCapacity,
 	getReportingMaxProfitContribution,
@@ -97,16 +97,6 @@ describe('reportingDomain', () => {
 		})
 
 		expect(getEscalationPhase(details)).toBe('Fork Triggered')
-	})
-
-	test('reports no remaining escalation time after non-decision is reached', () => {
-		const details = createReportingDetails({
-			currentTime: 300n,
-			escalationEndTime: 2n ** 255n,
-			hasReachedNonDecision: true,
-		})
-
-		expect(getEscalationTimeRemaining(details)).toBe(0n)
 	})
 
 	test('getEscalationPhase keeps the exact timeout boundary active and times out one second later', () => {
@@ -432,15 +422,6 @@ describe('reportingDomain', () => {
 		})
 	})
 
-	test('throws a clear error when escalation timing inputs are malformed', () => {
-		expect(() =>
-			getEscalationTimeRemaining({
-				...createReportingDetails(),
-				escalationEndTime: undefined as unknown as bigint,
-			}),
-		).toThrow('Escalation end time is required')
-	})
-
 	test('returns reward-window metadata in no-op forms and missing-side paths', () => {
 		const details = createReportingDetails({
 			sides: [
@@ -532,20 +513,20 @@ for (const end of [300n, 600n]) {
 	test(`pending stage presentation names the actual deadline ${end} and leading outcome`, () => {
 		const details = createReportingDetails({ currentTime: 150n, activationTime: 300n, escalationEndTime: end })
 		const stage = getReportingStagePresentation({ reportingDetails: details, marketDetails: details.marketDetails, effectiveCurrentTimestamp: details.currentTime, forkAlreadyTriggered: false })
-		expect(stage?.label).toBe('Waiting to start')
-		expect(stage?.detail).toBe(`If nobody responds by ${formatTimestamp(end)}, No wins.`)
+		expect(stage?.label).toBe('Response window')
+		expect(stage?.detail).toBe(`If nobody outbids No by ${formatReportingDeadline(end, details.currentTime)}, No wins.`)
 	})
 }
 
 test('only a unique positive balance leads, including auction and threshold ties', () => {
 	const details = createReportingDetails()
-	expect(getLeadingEscalationOutcome(details.sides)).toBe('no')
-	for (const balance of [0n, rep(8n), details.nonDecisionThresholdAttoRep]) {
+	expect(getStrictLeadingEscalationOutcome(details.sides)).toBe('no')
+	for (const balance of [rep(8n), details.nonDecisionThresholdAttoRep]) {
 		const sides = details.sides.map(side => ({ ...side, balance }))
-		expect(getLeadingEscalationOutcome(sides)).toBeUndefined()
+		expect(getStrictLeadingEscalationOutcome(sides)).toBeUndefined()
 	}
 	const sides = details.sides.map(side => ({ ...side, balance: side.key === 'invalid' ? 0n : rep(8n) }))
-	expect(getLeadingEscalationOutcome(sides)).toBeUndefined()
+	expect(getStrictLeadingEscalationOutcome(sides)).toBeUndefined()
 })
 
 test('larger tying reports lose one atto-REP below the threshold but can tie at the fork threshold', () => {
@@ -559,5 +540,23 @@ test('pending stage guidance does not name a tied side as the winner', () => {
 	const details = createReportingDetails({ activationTime: 300n })
 	details.sides = details.sides.map(side => ({ ...side, balance: rep(8n) }))
 	const stage = getReportingStagePresentation({ reportingDetails: details, marketDetails: details.marketDetails, effectiveCurrentTimestamp: details.currentTime, forkAlreadyTriggered: false })
-	expect(stage?.detail).toBe(`No side currently leads. Report before ${formatTimestamp(details.escalationEndTime)} to break the tie.`)
+	expect(stage?.detail).toBe('No side leads right now.')
+})
+
+test('all-zero balances select Invalid, matching post-timeout resolution', () => {
+	const details = createReportingDetails()
+	expect(getStrictLeadingEscalationOutcome(details.sides.map(side => ({ ...side, balance: 0n })))).toBe('invalid')
+})
+
+test('hypothetical claims reuse local and imported math without requiring finalization', () => {
+	const details = createReportingDetails({ bindingCapital: rep(5n) })
+	const local = { amountAttoRep: rep(2n), cumulativeAmountAttoRep: rep(8n), depositIndex: 0n, depositor: zeroAddress }
+	const imported = { amountAttoRep: rep(2n), cumulativeAmountAttoRep: rep(8n), parentDepositIndex: 0n, depositor: zeroAddress }
+	const resolved = createReportingDetails({ ...details, questionOutcome: 'no', parentWithdrawalEnabled: true })
+	expect(getHypotheticalClaimAmount(details, 'no', local)).toBe(getEscalationDepositClaimAmount(resolved, 'no', local))
+	expect(getHypotheticalClaimAmount(details, 'no', imported)).toBe(getImportedEscalationDepositClaimAmount(resolved, 'no', imported))
+	expect(getHypotheticalClaimAmount(details, 'yes', local)).toBe(0n)
+	const tied = { ...details, sides: details.sides.map(side => ({ ...side, balance: rep(8n) })) }
+	expect(getHypotheticalClaimAmount(tied, 'yes', local)).toBeUndefined()
+	expect(details.questionOutcome).toBe('none')
 })

@@ -35,7 +35,6 @@ export const walletRepBalanceEmpty = 'No wallet REP is available for reporting.'
 export const nonDecisionThresholdAttoRep = 'Non-decision threshold'
 export const reportOnSelectedSide = 'Report on selected side'
 export const reportOutcomeAriaLabel = 'Report outcome'
-export const liveEscalationHelpText = 'Escalation is live. Review the bond, side balances, and time remaining before contributing or withdrawing.'
 export const currentEscalationDisputeStakeLead = 'Based on the current escalation state, this action would move '
 export const acceptedAmountTail = ' from pool-held backing into dispute-staked REP instead of the full entered amount.'
 export const acceptedWalletAmountTail = ' from wallet REP into dispute-staked REP instead of the full entered amount.'
@@ -77,17 +76,13 @@ export const forkCarriedSettlementRedirectDetail = 'This pool also has fork-carr
 
 export const reportingParameters = 'Reporting parameters'
 
-export const phaseLabels = ['Reporting open', 'Waiting to start', 'Escalation active', 'Resolved']
+export const phaseLabels = ['Reporting open', 'Response window', 'Resolved']
 export const forkPhase = 'Fork'
-export const phaseProgress = (step: number, label: string) => `Step ${step} of 4 · ${label}`
+export const phaseProgress = (step: number, label: string) => `Step ${step} of 3 · ${label}`
 export const firstReportNext = (bond: string) => `The first report starts the game. Minimum first report: ${bond} REP.`
-export const pendingStartNext = ({ end, outcome }: { end: string; outcome: string }) => `If nobody responds by ${end}, ${outcome} wins.`
-export const activeNext = (end: string, leader: string) => `If nobody outbids the leading side by ${end}, ${leader} wins.`
+export const pendingStartNext = ({ end, outcome }: { end: string; outcome: string }) => `If nobody outbids ${outcome} by ${end}, ${outcome} wins.`
+export const activeNext = (end: string, leader: string) => `If nobody outbids ${leader} by ${end}, ${leader} wins.`
 export const resolvedNext = 'Settle your deposits below.'
-export const reportingComplete = 'Reporting is complete.'
-export const noLeadingSideNext = (end: string) => `No side currently leads. Report before ${end} to break the tie.`
-export const gameStartsIn = 'Game starts in'
-export const endsIn = 'Ends in'
 export const startsWithFirstReport = 'starts with first report'
 export const progressToFork = (largest: string, threshold: string, percent: string) => `Progress to fork: ${largest} / ${threshold} REP (${percent}%)`
 export const forkProgressHelp = 'A fork requires two sides to reach this threshold.'
@@ -103,7 +98,6 @@ export const availableBalance = (amount: string) => `Available: ${amount} REP.`
 export const fundingSourceHelp = 'The first report funds the game from the pool; later reports come from your wallet.'
 export const continuationFundingHelp = 'Fork continuations use vault-backed REP from the pool.'
 export const yourPositions = 'Your positions'
-export const claimableAfterResolution = 'Claimable after resolution'
 export const resultSummary = (outcome: string, amount?: string) => `Resolved as ${outcome}.${amount === undefined ? '' : ` You can claim ${amount} REP.`}`
 export const claimDeposits = (outcome: string, amount: string) => `Claim ${amount} REP from ${outcome}`
 export const clearDeposits = (outcome: string) => `Clear ${outcome} deposits (worth 0 REP)`
@@ -130,3 +124,35 @@ export const claimingDeposits = (outcome: string, amount: string) => `Claiming $
 export const clearingDeposits = (outcome: string) => `Clearing ${outcome} deposits (worth 0 REP)…`
 
 export const progressToForkUnavailable = 'Progress to fork: —'
+
+export const yourStatus = 'Your status'
+export const winningStatusLead = (side: string) => `You're winning on ${side}.`
+export const winningStatusDetail = (stake: string, worth: string) => `Your ${stake} REP would be worth about ${worth} REP if it ended now.`
+export const losingStatusLead = (side: string) => `You're losing on ${side}.`
+export const losingStatusDetail = (minimum: string, deadline: string, stake: string) => `Add at least ${minimum} REP before ${deadline} or your ${stake} REP is lost.`
+export const takeTheLead = 'Take the lead…'
+export const tieStatusLead = 'No side leads right now.'
+export const tieStatusDetail = (deadline: string) => `If this stays tied at ${deadline}, no side wins (`
+export const tiesResolve = 'see how ties resolve'
+export const tieStatusEnd = ').'
+export const checkBack = (deadline: string) => `Check back before ${deadline}. Any new report can push this deadline later (up to 7 weeks after the game starts).`
+export const addReminder = 'Add reminder (.ics)'
+export const reminderSummary = (title: string) => `Check escalation: ${title}`
+export const deadlineMoved = (deadline: string) => `The deadline moved to ${deadline} because someone reported. Your status may have changed.`
+export const explainerTitle = 'How the escalation game works'
+export const explainerFirstReport = (bond: string) => `Put REP behind the outcome you believe is correct. The first report needs at least the start bond (${bond} REP).`
+export const explainerCompetition = 'Other reporters can outbid you. Each new report can move the deadline, up to 7 weeks after the game starts.'
+export const explainerResolution = 'When the deadline passes, the side with the most REP wins. Winning deposits get their REP back plus a reward; losing deposits are lost.'
+export const explainerFork = (threshold: string) => `If two sides both reach ${threshold} REP, the game stops and a universe fork can be triggered. Your REP then follows the outcome you backed through Fork & Migration.`
+export const fullExplanation = 'Read the full explanation'
+export const winningPosition = (worth: string) => `Winning · worth about ${worth} REP if it ended now`
+export const losingPosition = 'Losing · worth 0 REP if it ended now'
+export const tiedPosition = 'Tied'
+export const forkPosition = 'Continue in Fork & Migration'
+export const responseWindowEnds = 'Response window ends'
+export const attritionStarts = 'Attrition starts'
+export const dismissDeadlineNotice = 'Dismiss deadline notice'
+
+export const resultClaim = (amount: string) => ` You can claim ${amount} REP.`
+
+export const forkViewerStake = (side: string, stake: string) => `You have ${stake} REP on ${side}.`
