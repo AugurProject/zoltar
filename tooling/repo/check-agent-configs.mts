@@ -2,8 +2,8 @@ import { readdir, readFile } from 'node:fs/promises'
 import * as path from 'node:path'
 import { repositoryRoot } from './root.mts'
 
-const requiredModel = 'gpt-6-sol'
-const requiredModelReasoningEffort = 'high'
+const requiredModel = 'gpt-6-astra'
+const requiredModelReasoningEffort = 'low'
 const requiredContractHeadings = ['## Handoff', '## Scope', '## Severity', '## Output', '## Scoring', '## Closure']
 const requiredContractOutputFragments = ['`Issues`', '`Total score: <0-100>`', 'nothing else']
 const forbiddenContractOutputFragments = ['`Acceptance criteria assessment`', '`Validation assessment`', '`Review limitations`', 'with a brief rationale', 'Specialized agents may require additional sections']
