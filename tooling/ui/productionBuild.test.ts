@@ -917,7 +917,7 @@ productionWorkflowTest('production bundle executes deployment, reporting, fork m
 	const baseUrl = server.url.toString().replace(/\/$/, '')
 	const state = JSON.parse(
 		await loadProductionDocumentInChromium(`${baseUrl}/statoblast/#/deploy?simulate=1&simScenario=baseline`, { height: 900, width: 1440 }, async driver => {
-			// Intermediate receipts stay in the form; final results and failures use the shared status dialog.
+			// Completed prerequisite labels stay in the form; submitted outcomes use the shared status panel.
 			const completeTransactionReview = async (inDialogSuccessTitle?: string, stopOnInlineText?: string) => {
 				await driver.evaluate('window.__zoltarReviewClicked = false')
 				for (let attempt = 0; attempt < 2400; attempt += 1) {
@@ -1012,8 +1012,8 @@ productionWorkflowTest('production bundle executes deployment, reporting, fork m
 			await driver.clickButton('Dismiss')
 			await driver.clickButton('+1 year')
 			await selectPoolTool('Price Oracle')
-			await driver.waitForButtonEnabled('Request new price')
-			await driver.clickButton('Request new price')
+			await driver.waitForButtonEnabled('Request new price…')
+			await driver.clickButton('Request new price…')
 			await driver.waitForButtonEnabled('Fetch from Uniswap')
 			expect(await driver.evaluate("document.querySelector('.request-price-fields input')?.value")).toBe('')
 			expect(await driver.evaluate("document.querySelector('.transaction-funding') === null")).toBe(true)
@@ -1066,23 +1066,26 @@ productionWorkflowTest('production bundle executes deployment, reporting, fork m
 			await driver.setInputByLabel('Open Oracle REP/ETH starting price', '3')
 			await driver.waitForBodyText('Preparing funding and approvals…')
 			await driver.waitForBodyWithoutText('Preparing funding and approvals…')
-			await completeTransactionReview('Price requested')
-			await driver.waitForTransactionStatus('Confirmed', 'Price requested')
+			await completeTransactionReview('Requested new price')
+			await driver.waitForTransactionStatus('Confirmed', 'Requested new price')
 			expect(await driver.evaluate("document.querySelector('.global-transaction-dialog .global-transaction-notice .badge')?.textContent?.trim()")).toBe('Confirmed')
 			const priceResultDismissed = await driver.evaluate(`(() => { const button = document.querySelector('.global-transaction-dialog .global-transaction-dismiss'); if (!(button instanceof HTMLButtonElement) || button.disabled) return false; button.click(); return true })()`)
 			expect(priceResultDismissed).toBe(true)
-			await driver.waitForBodyWithoutText('Price requested')
+			await driver.waitForBodyWithoutText('Requested new price')
 			expect(await driver.evaluate("document.querySelector('[role=\"dialog\"]') === null && document.querySelector('.global-transaction-dialog') === null")).toBe(true)
 			await driver.clickButton('+10 min')
 			await driver.waitForBodyText('PENDING REQUEST')
 			const pendingReportOpened = await driver.evaluate(`(() => { const button = [...document.querySelectorAll('button')].find(candidate => candidate.textContent?.trim().startsWith('Report #')); if (!(button instanceof HTMLButtonElement)) return false; button.click(); return true })()`)
 			expect(pendingReportOpened).toBe(true)
-			await driver.waitForButtonEnabled('Settle report')
-			await driver.clickButton('Settle report')
-			await driver.waitForButtonEnabled('Settle report', 1)
-			await driver.clickButton('Settle report', 1)
-			await completeTransactionReview('Report Settled')
-			await driver.waitForTransactionStatus('Confirmed', 'Report Settled')
+			await driver.waitForButtonEnabled('Settle report…')
+			await driver.clickButton('Settle report…')
+			const settleLabel = await driver.evaluate("document.querySelector('.operation-modal-panel h3')?.textContent?.trim()")
+			if (typeof settleLabel !== 'string' || !/^Settle report #[0-9]+$/.test(settleLabel)) throw new Error('Missing explicit report settlement title')
+			await driver.waitForButtonEnabled(settleLabel)
+			await driver.clickButton(settleLabel)
+			const settledTitle = settleLabel.replace('Settle', 'Settled')
+			await completeTransactionReview(settledTitle)
+			await driver.waitForTransactionStatus('Confirmed', settledTitle)
 			await driver.clickButton('Dismiss')
 			const reportingPoolsOpened = await driver.evaluate(`(() => { const target = [...document.querySelectorAll('a, button')].find(candidate => candidate.textContent?.trim() === 'Security Pools'); if (!(target instanceof HTMLElement)) return false; target.click(); return true })()`)
 			expect(reportingPoolsOpened).toBe(true)
@@ -1106,7 +1109,12 @@ productionWorkflowTest('production bundle executes deployment, reporting, fork m
 				}
 				await driver.waitForButtonEnabled('Max')
 				await driver.clickButton('Max')
-				const approvalRequired = await driver.evaluate(`[...document.querySelectorAll('button')].some(button => button.textContent?.trim() === 'Approve REP' && !button.disabled)`)
+				const amount = await driver.evaluate("document.querySelector('#reporting-contribution-amount')?.value")
+				if (typeof amount !== 'string' || amount === '') throw new Error('Missing maximum reporting amount')
+				const approvalLabel = `Approve ${amount} REP…`
+				const reportLabel = `Report ${outcome} · ${amount} REP…`
+				const reportedTitle = `Reported ${amount} REP on ${outcome}`
+				const approvalRequired = await driver.evaluate(`[...document.querySelectorAll('button')].some(button => button.textContent?.trim() === ${JSON.stringify(approvalLabel)} && !button.disabled)`)
 				if (approvalRequired === true) {
 					const desktopScreenshotPath = process.env['UI_ORDINARY_REPORTING_DESKTOP_SCREENSHOT']
 					const mobileScreenshotPath = process.env['UI_ORDINARY_REPORTING_MOBILE_SCREENSHOT']
@@ -1114,35 +1122,36 @@ productionWorkflowTest('production bundle executes deployment, reporting, fork m
 					if (captureQaScreenshots) {
 						const dismissAvailable = await driver.evaluate(`[...document.querySelectorAll('button')].some(button => button.textContent?.trim() === 'Dismiss' && !button.disabled)`)
 						if (dismissAvailable === true) await driver.clickButton('Dismiss')
-						await driver.evaluate(`([...document.querySelectorAll('button')].find(button => button.textContent?.trim() === 'Approve REP'))?.scrollIntoView({ block: 'center' })`)
+						await driver.evaluate(`([...document.querySelectorAll('button')].find(button => button.textContent?.trim() === ${JSON.stringify(approvalLabel)}))?.scrollIntoView({ block: 'center' })`)
 					}
 					if (desktopScreenshotPath !== undefined && desktopScreenshotPath !== '') await driver.captureScreenshot(desktopScreenshotPath)
 					if (mobileScreenshotPath !== undefined && mobileScreenshotPath !== '') {
 						await driver.resize({ height: 844, width: 390 })
-						await driver.evaluate(`([...document.querySelectorAll('button')].find(button => button.textContent?.trim() === 'Approve REP'))?.scrollIntoView({ block: 'center' })`)
+						await driver.evaluate(`([...document.querySelectorAll('button')].find(button => button.textContent?.trim() === ${JSON.stringify(approvalLabel)}))?.scrollIntoView({ block: 'center' })`)
 						await driver.captureScreenshot(mobileScreenshotPath)
 						await driver.resize({ height: 900, width: 1440 })
 					}
-					await driver.clickButton('Approve REP')
-					await completeTransactionReview(undefined, 'REP approved')
-					await driver.waitForBodyText('REP approved')
+					await driver.clickButton(approvalLabel)
+					await completeTransactionReview(`Approved ${amount} REP`)
+					await driver.waitForButtonEnabled(reportLabel)
 					const approvedDesktopScreenshotPath = process.env['UI_ORDINARY_REPORTING_APPROVED_DESKTOP_SCREENSHOT']
 					const approvedMobileScreenshotPath = process.env['UI_ORDINARY_REPORTING_APPROVED_MOBILE_SCREENSHOT']
 					const captureApprovedQaScreenshots = (approvedDesktopScreenshotPath !== undefined && approvedDesktopScreenshotPath !== '') || (approvedMobileScreenshotPath !== undefined && approvedMobileScreenshotPath !== '')
 					if (captureApprovedQaScreenshots) {
-						await driver.evaluate(`([...document.querySelectorAll('button')].find(button => button.textContent?.trim() === 'REP approved'))?.scrollIntoView({ block: 'center' })`)
+						await driver.evaluate(`([...document.querySelectorAll('button')].find(button => button.textContent?.trim() === ${JSON.stringify(reportLabel)}))?.scrollIntoView({ block: 'center' })`)
 					}
 					if (approvedDesktopScreenshotPath !== undefined && approvedDesktopScreenshotPath !== '') await driver.captureScreenshot(approvedDesktopScreenshotPath)
 					if (approvedMobileScreenshotPath !== undefined && approvedMobileScreenshotPath !== '') {
 						await driver.resize({ height: 844, width: 390 })
-						await driver.evaluate(`([...document.querySelectorAll('button')].find(button => button.textContent?.trim() === 'REP approved'))?.scrollIntoView({ block: 'center' })`)
+						await driver.evaluate(`([...document.querySelectorAll('button')].find(button => button.textContent?.trim() === ${JSON.stringify(reportLabel)}))?.scrollIntoView({ block: 'center' })`)
 						await driver.captureScreenshot(approvedMobileScreenshotPath)
 						await driver.resize({ height: 900, width: 1440 })
 					}
 				}
-				await driver.waitForButtonEnabled(`Report ${outcome}`)
-				await driver.clickButton(`Report ${outcome}`)
-				await completeTransactionReview('Report Outcome')
+				await driver.waitForButtonEnabled(reportLabel)
+				await driver.clickButton(reportLabel)
+				await completeTransactionReview(reportedTitle)
+				await driver.waitForTransactionStatus('Confirmed', reportedTitle)
 			}
 
 			await selectReportingOutcome('Yes')
@@ -1169,7 +1178,6 @@ productionWorkflowTest('production bundle executes deployment, reporting, fork m
 				await driver.waitForBodyText('Report Outcome')
 			}
 			await selectReportingOutcome('No')
-			await driver.waitForTransactionStatus('Confirmed', 'Report Outcome')
 			await driver.waitForButtonEnabled('Trigger universe fork')
 			await driver.clickButton('Trigger universe fork')
 			await completeTransactionReview()

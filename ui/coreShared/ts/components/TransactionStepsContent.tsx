@@ -221,13 +221,24 @@ export function TransactionStepsContent({ actions = 'inline', cancelable = true,
 				</div>
 			)}
 			<div className='transaction-step-content'>
-				{funding.length === 0 ? <TransactionStepReview contractAddress={current.contractAddress} contractLabel={current.contractLabel} description={completed ? undefined : current.description} rows={[
- ...(current.paidFrom === undefined ? [] : [
- { label: transactionCopy.amount, value: current.amount },
- { label: transactionCopy.paidFrom, value: current.paidFrom },
- ]),
- ...(presentation?.rows ?? []),
- ]} /> : <TransactionFundingSummary funding={funding} totalAttoEth={totalEth} outcome={outcome} />}
+				{funding.length === 0 ? (
+					<TransactionStepReview
+						contractAddress={current.contractAddress}
+						contractLabel={current.contractLabel}
+						description={completed ? undefined : current.description}
+						rows={[
+							...(current.paidFrom === undefined
+								? []
+								: [
+										{ label: transactionCopy.amount, value: current.amount },
+										{ label: transactionCopy.paidFrom, value: current.paidFrom },
+									]),
+							...(presentation?.rows ?? []),
+						]}
+					/>
+				) : (
+					<TransactionFundingSummary funding={funding} totalAttoEth={totalEth} outcome={outcome} />
+				)}
 				{funding.length === 0 || completed ? undefined : <p className='detail transaction-funding-note'>{copy.fundingDetail}</p>}
 			</div>
 			{actions === 'inline' ? <TransactionStepsActions cancelable={cancelable} contextKey={contextKey} focusOnMount={focusOnMount} keepActionsVisible={keepActionsVisible} onClose={onClose} /> : undefined}
