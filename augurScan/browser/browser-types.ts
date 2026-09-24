@@ -128,6 +128,10 @@ export interface RichListRecord {
 	address: string
 	label: string | null | undefined
 	kind: string | null | undefined
+	largest_rep_token_address: string | null
+	largest_rep_balance: string | null
+	largest_rep_decimals: number | null
+	largest_rep_symbol: string | null
 	weth_balance?: string
 	native_balance?: string
 	transaction_count: string | number
@@ -279,6 +283,8 @@ export interface StateCatalog {
 	}>
 	truncated?: Record<string, boolean>
 	limit?: number
+	offset?: number
+	catalogVersion: string
 	totals?: Record<'pools' | 'questions' | 'vaults' | 'universes', number>
 }
 

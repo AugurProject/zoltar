@@ -59,6 +59,16 @@ export function createDemoApi(context: DemoContext) {
 
 	let demoNetworkFallbackErrorConsumed = false
 
+	let demoCatalogShifted = false
+
+	let demoDualCatalogShifted = false
+
+	let demoPoolLiveShifted = false
+
+	let demoCatalogRequests = 0
+
+	Object.defineProperty(window, '__augurScanCatalogRequests', { get: () => demoCatalogRequests })
+
 	let demoRouteRefreshErrorConsumed = false
 
 	let demoRiskHistoryAppendErrorConsumed = false
@@ -255,7 +265,7 @@ export function createDemoApi(context: DemoContext) {
 	const demoRichList = Array.from({ length: 64 }, (_, index) => {
 		const network = requiredArrayItem(demoNetworks, index % 3 === 0 ? 1 : 0, 'Demo rich-list network')
 		const address = `0x${(BigInt(index + 1) * 0x123456789abcdefn).toString(16).padStart(40, '0')}`
-		const repBalance = BigInt(920 - index * 8) * 10n ** 18n + (index === 0 ? 123_456_789n : 0n)
+		const repBalance = BigInt(920 - index * 8) * 10n ** 18n + (index === 0 ? 123_456_789n : 0n) + (index === 1 ? 1n : 0n)
 		const poolCount = 1 + (index % 4)
 		const vaultCount = (index + 1) % 3
 		return {
@@ -265,6 +275,10 @@ export function createDemoApi(context: DemoContext) {
 			address,
 			label: index === 2 ? 'Price Coordinator' : null,
 			kind: index === 2 ? 'priceCoordinator' : null,
+			largest_rep_token_address: requiredArrayItem(demoNetworks, 0, 'Mainnet demo network').chain_id === network.chain_id ? '0x221657776846890989a759ba2973e427dff5c9bb' : '0x754bc4ca2539560f1b48a9c3d2def5b9718f2c82',
+			largest_rep_balance: repBalance.toString(),
+			largest_rep_decimals: 18,
+			largest_rep_symbol: 'REP',
 			weth_balance: (BigInt(18 + index) * 10n ** 17n + (index === 0 ? 987_654_321n : 0n)).toString(),
 			native_balance: (BigInt(4 + (index % 5)) * 10n ** 17n + (index === 0 ? 456_789_123n : 0n)).toString(),
 			rep_token_count: index <= 1 ? '2' : '1',
@@ -613,6 +627,7 @@ export function createDemoApi(context: DemoContext) {
 	]
 
 	const demoCatalog = {
+		catalogVersion: '0'.repeat(32),
 		questions: demoQuestions,
 		pools: demoPools,
 		vaults: demoVaults,
@@ -759,6 +774,7 @@ export function createDemoApi(context: DemoContext) {
 	}
 
 	let demoLiveSequence = 0
+	Object.defineProperty(window, '__augurScanLiveSequence', { get: () => demoLiveSequence })
 
 	const applyDemoBlock = (payload: LiveEventPayload) => {
 		if (!isDemo || context.pageUrl.searchParams.get('streamDemo') !== '1') return
@@ -872,6 +888,14 @@ export function createDemoApi(context: DemoContext) {
 				start_data: { attoEthRaiseCap: String(20_000_000_000_000_000_000n), maxAttoRepBeingSold: String(5_000_000_000_000_000_000_000n) },
 			},
 		]
+		const cappedKpiCatalog = context.pageUrl.searchParams.get('operationsKpiCapped') === '1'
+		const reportTemplate = requiredArrayItem(reports, 0, 'Demo report')
+		const settleableReport = requiredArrayItem(reports, 1, 'Settleable demo report')
+		const escalationTemplate = requiredArrayItem(escalations, 0, 'Demo escalation')
+		const auctionTemplate = requiredArrayItem(auctions, 0, 'Demo auction')
+		const allReports = cappedKpiCatalog ? [...Array.from({ length: 250 }, (_, index) => ({ ...reportTemplate, report_id: String(10_000 + index), lifecycle: { ...reportTemplate.lifecycle, state: 'Finalized' } })), { ...settleableReport, report_id: '10250' }] : reports
+		const allEscalations = cappedKpiCatalog ? [...Array.from({ length: 250 }, (_, index) => ({ ...escalationTemplate, game_address: `0x${(index + 1).toString(16).padStart(40, '0')}`, event_name: 'NonDecisionReached' })), { ...escalationTemplate, game_address: `0x${(251).toString(16).padStart(40, '0')}` }] : escalations
+		const allAuctions = cappedKpiCatalog ? [...Array.from({ length: 250 }, (_, index) => ({ ...auctionTemplate, auction_address: `0x${(index + 1).toString(16).padStart(40, '0')}`, status: 'Closed' })), { ...auctionTemplate, auction_address: `0x${(251).toString(16).padStart(40, '0')}` }] : auctions
 		const risk = {
 			pools: [
 				{
@@ -946,9 +970,9 @@ export function createDemoApi(context: DemoContext) {
 			chainId,
 			asOf,
 			data: {
-				reports,
-				escalations,
-				auctions,
+				reports: allReports.slice(0, 250),
+				escalations: allEscalations.slice(0, 250),
+				auctions: allAuctions.slice(0, 250),
 				risk,
 				prices: [{ source_event: 'PriceReported', value: '233590000000000000000', block_number: asOf.blockNumber }],
 				forks: [
@@ -962,10 +986,10 @@ export function createDemoApi(context: DemoContext) {
 						obligation_events: 3,
 					},
 				],
-				totals: { reports: reports.length, escalations: escalations.length, auctions: auctions.length, pools: risk.pools.length, vaults: risk.vaults.length },
+				totals: { reports: allReports.length, escalations: allEscalations.length, auctions: allAuctions.length, pools: risk.pools.length, vaults: risk.vaults.length },
 				recentChanges: [
-					{ semantic_event_kind: 'ReportDisputed', entity_identity: '0x529dca…:1842', block_number: asOf.blockNumber },
-					{ semantic_event_kind: 'DepositOnOutcome', entity_identity: '0x777777…', block_number: asOf.blockNumber },
+					{ semantic_event_kind: 'ReportDisputed', entity_type: 'report', entity_identity: '0x529dca…:1842', block_number: asOf.blockNumber, block_timestamp: new Date(Date.now() - 3_600_000).toISOString() },
+					{ semantic_event_kind: 'DepositOnOutcome', entity_type: 'escalation', entity_identity: '0x777777…', block_number: asOf.blockNumber, block_timestamp: new Date().toISOString() },
 				],
 			},
 		}
@@ -1201,6 +1225,44 @@ export function createDemoApi(context: DemoContext) {
 
 	const api = async (path: string, { signal }: { signal?: AbortSignal } = {}): Promise<unknown> => {
 		if (isDemo) {
+			if (path.startsWith('/api/v1/search?')) {
+				const request = new URL(path, location.origin)
+				const query = request.searchParams.get('q')?.toLowerCase() ?? ''
+				const chainId = request.searchParams.get('chainId') ?? '1'
+				const items = [
+					...demoLogs
+						.filter(log => log.chain_id === chainId && log.tx_hash.toLowerCase().includes(query))
+						.slice(0, 1)
+						.map(log => ({ type: 'transaction', label: log.tx_hash, href: `/tx/${log.tx_hash}?chainId=${chainId}` })),
+					...demoLogs
+						.filter(log => log.chain_id === chainId && log.block_number.includes(query))
+						.slice(0, 1)
+						.map(log => ({ type: 'block', label: `Block #${log.block_number}`, href: `/block/${log.block_number}?chainId=${chainId}` })),
+				]
+				return { items, query, chainId }
+			}
+			if (path.startsWith('/api/v1/transactions/')) {
+				const [, , , , chainId, hash] = path.split('/')
+				const log = demoLogs.find(item => item.chain_id === chainId && item.tx_hash === hash)
+				if (log === undefined) throw new Error('Transaction not found')
+				return {
+					transaction: { hash, block_hash: log.block_hash, block_number: log.block_number, block_timestamp: log.block_timestamp, from_address: log.origin_address, to_address: log.emitter_address, status: 'success', gas_used: '184220', action_summary: log.action_summary, explorer_base_url: 'https://etherscan.io' },
+					logs: demoLogs.filter(item => item.tx_hash === hash).map(item => ({ ...item, emitter_address: item.emitter_address })),
+				}
+			}
+			if (path.startsWith('/api/v1/blocks/')) {
+				const [, , , , chainId, number] = path.split('/')
+				const logs = demoLogs.filter(item => item.chain_id === chainId && item.block_number === number)
+				if (logs.length === 0) throw new Error('Block not found')
+				const sample = context.pageUrl.searchParams.get('block251') === '1'
+				const transactions = sample ? Array.from({ length: 250 }, (_, index) => ({ hash: `0x${index.toString(16).padStart(64, '0')}`, action_summary: 'Indexed transaction' })) : logs.map(item => ({ hash: item.tx_hash, action_summary: item.action_summary }))
+				return {
+					block: { number, hash: logs[0]?.block_hash, timestamp: logs[0]?.block_timestamp, parent_hash: '0x' + '0'.repeat(64), finalized: true, explorer_base_url: 'https://etherscan.io' },
+					transactions,
+					hasMore: sample,
+					sampleLimit: 250,
+				}
+			}
 			if (path.startsWith('/api/v1/networks')) {
 				if (networkState === 'error') throw new Error('Network status could not be refreshed')
 				demoNetworkRequests++
@@ -1407,6 +1469,7 @@ export function createDemoApi(context: DemoContext) {
 				return demoOperationsDetail(path)
 			}
 			if (path.startsWith('/api/v1/state/catalog')) {
+				demoCatalogRequests++
 				if (demoReorgObserved && context.pageUrl.searchParams.get('canonicalRouteRefreshError') === '1' && !demoCanonicalRouteRefreshErrorConsumed) {
 					demoCanonicalRouteRefreshErrorConsumed = true
 					throw new Error('The system state could not be refreshed')
@@ -1419,7 +1482,104 @@ export function createDemoApi(context: DemoContext) {
 				if (demoState === 'delayed') await new Promise(resolve => setTimeout(resolve, 300))
 				const request = new URL(path, location.origin)
 				const chainId = request.searchParams.get('chainId')
+				let catalogSize: number | undefined
+				if (context.pageUrl.searchParams.get('entity5001') === '1') catalogSize = 5_001
+				else if (context.pageUrl.searchParams.get('entity1201') === '1') catalogSize = 1_201
+				else if (context.pageUrl.searchParams.get('entity501') === '1') catalogSize = 501
+				if (context.pageUrl.searchParams.get('catalogDual501') === '1' && chainId === '1') {
+					const poolTemplate = requiredArrayItem(demoCatalog.pools, 0, 'Demo pool')
+					const questionTemplate = requiredArrayItem(demoCatalog.questions, 0, 'Demo question')
+					const limit = Math.min(Math.max(Number(request.searchParams.get('limit') ?? 500), 1), 1_000)
+					const offset = Number(request.searchParams.get('offset') ?? 0)
+					if (offset > 0) demoDualCatalogShifted = true
+					const interiorReplace = context.pageUrl.searchParams.get('catalogInteriorReplace') === '1'
+					const allPools = Array.from({ length: 501 }, (_, index) => ({ ...poolTemplate, pool_address: `0x${((index + 1) * (interiorReplace ? 2 : 1)).toString(16).padStart(40, '0')}` }))
+					if (demoDualCatalogShifted && interiorReplace) allPools[99] = { ...poolTemplate, pool_address: `0x${(201).toString(16).padStart(40, '0')}` }
+					else if (demoDualCatalogShifted) {
+						allPools.shift()
+						allPools.push({ ...poolTemplate, pool_address: `0x${(502).toString(16).padStart(40, '0')}` })
+					}
+					const allQuestions = Array.from({ length: 501 }, (_, index) => ({ ...questionTemplate, question_id: String(index + 1), title: `Question ${index + 1}` }))
+					return {
+						...demoCatalog,
+						catalogVersion: demoDualCatalogShifted ? '1'.repeat(32) : demoCatalog.catalogVersion,
+						pools: allPools.slice(offset, offset + limit),
+						questions: allQuestions.slice(offset, offset + limit),
+						vaults: demoCatalog.vaults.slice(offset, offset + limit),
+						universes: demoCatalog.universes.slice(offset, offset + limit),
+						poolStates: [],
+						limit,
+						offset,
+						totals: { pools: 501, vaults: demoCatalog.vaults.length, questions: 501, universes: demoCatalog.universes.length },
+						truncated: { pools: offset + limit < 501, vaults: false, questions: offset + limit < 501, universes: false },
+					}
+				}
+				if (context.pageUrl.searchParams.get('pool501') === '1' && chainId === '1') {
+					const template = requiredArrayItem(demoCatalog.pools, 0, 'Demo pool')
+					const limit = 500
+					const offset = Number(request.searchParams.get('offset') ?? 0)
+					const interiorReplace = context.pageUrl.searchParams.get('pool501LiveInterior') === '1'
+					if (offset > 0 && (context.pageUrl.searchParams.get('pool501LiveShift') === '1' || interiorReplace) && demoLiveSequence >= 2) demoPoolLiveShifted = true
+					const allPools = Array.from({ length: 501 }, (_, index) => ({ ...template, pool_address: `0x${((index + 1) * (interiorReplace ? 2 : 1)).toString(16).padStart(40, '0')}` }))
+					if (demoPoolLiveShifted && interiorReplace) allPools[99] = { ...template, pool_address: `0x${(201).toString(16).padStart(40, '0')}` }
+					else if (demoPoolLiveShifted) {
+						allPools.shift()
+						allPools.push({ ...template, pool_address: `0x${(502).toString(16).padStart(40, '0')}` })
+					}
+					const pools = allPools.slice(offset, offset + limit)
+					const refreshedTail = offset > 0 && context.pageUrl.searchParams.get('pool501Live') === '1' && demoLiveSequence >= 2
+					return {
+						...demoCatalog,
+						catalogVersion: demoPoolLiveShifted ? '1'.repeat(32) : demoCatalog.catalogVersion,
+						pools,
+						vaults: demoCatalog.vaults.slice(offset, offset + limit),
+						questions: demoCatalog.questions.slice(offset, offset + limit),
+						universes: demoCatalog.universes.slice(offset, offset + limit),
+						poolStates: pools.map(pool => ({
+							chain_id: pool.chain_id,
+							pool_address: pool.pool_address,
+							event_name: 'CurrentDemoState',
+							state: { systemState: refreshedTail ? '3' : '2', awaitingForkContinuation: false, totalRepBackingUnits: String((refreshedTail ? 84n : 42n) * 10n ** 18n), shareTokenSupplyAttoShares: String(10n * 10n ** 18n) },
+							block_number: '100',
+							log_index: 0,
+						})),
+						limit,
+						offset,
+						totals: { pools: 501, vaults: demoCatalog.vaults.length, questions: demoCatalog.questions.length, universes: demoCatalog.universes.length },
+						truncated: { pools: offset + limit < 501, vaults: false, questions: false, universes: false, poolStates: false },
+					}
+				}
+				if (catalogSize !== undefined && chainId === '1') {
+					const template = requiredArrayItem(demoCatalog.questions, 0, 'Demo question')
+					const limit = Math.min(Math.max(Number(request.searchParams.get('limit') ?? 500), 1), 1_000)
+					const offset = Number(request.searchParams.get('offset') ?? 0)
+					const query = request.searchParams.get('q')?.toLowerCase()
+					const shiftMode = context.pageUrl.searchParams.get('catalogShiftOnMore')
+					if (offset > 0 && (shiftMode === '1' || shiftMode === 'replace')) demoCatalogShifted = true
+					const allQuestions = Array.from({ length: catalogSize }, (_, index) => ({ ...template, question_id: String(index + 1), title: `Question ${index + 1}` })).slice(demoCatalogShifted ? 1 : 0)
+					if (demoCatalogShifted && shiftMode === 'replace') allQuestions.push({ ...template, question_id: String(catalogSize + 1), title: `Question ${catalogSize + 1}` })
+					const matching = query ? allQuestions.filter(item => item.title.toLowerCase().includes(query) || item.question_id.includes(query)) : allQuestions
+					const questions = matching.slice(offset, offset + limit)
+					const selectedIdentity = request.searchParams.get('selectedType') === 'questions' && !query ? request.searchParams.get('selectedIdentity') : null
+					if (selectedIdentity !== null && !questions.some(item => item.question_id === selectedIdentity)) {
+						const selected = allQuestions.find(item => item.question_id === selectedIdentity)
+						if (selected !== undefined) questions.push(selected)
+					}
+					return {
+						...demoCatalog,
+						catalogVersion: demoCatalogShifted ? '1'.repeat(32) : demoCatalog.catalogVersion,
+						pools: demoCatalog.pools.slice(offset, offset + limit),
+						vaults: demoCatalog.vaults.slice(offset, offset + limit),
+						questions,
+						universes: demoCatalog.universes.slice(offset, offset + limit),
+						limit,
+						offset,
+						totals: { pools: demoCatalog.pools.length, vaults: demoCatalog.vaults.length, questions: allQuestions.length, universes: demoCatalog.universes.length },
+						truncated: { pools: false, vaults: false, questions: offset + limit < matching.length, universes: false },
+					}
+				}
 				return {
+					catalogVersion: demoCatalog.catalogVersion,
 					pools: demoCatalog.pools.filter(item => !chainId || item.chain_id === chainId),
 					vaults: demoCatalog.vaults.filter(item => !chainId || item.chain_id === chainId),
 					questions: demoCatalog.questions.filter(item => !chainId || item.chain_id === chainId),

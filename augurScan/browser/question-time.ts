@@ -10,5 +10,5 @@ export const questionStatus = (question: Pick<QuestionRecord, 'start_time' | 'en
 export const questionDateLabel = (seconds: string): string => {
 	const milliseconds = BigInt(seconds) * 1000n
 	if (milliseconds > 8_640_000_000_000_000n || milliseconds < -8_640_000_000_000_000n) return `Date out of range (${seconds} Unix seconds)`
-	return new Date(Number(milliseconds)).toLocaleDateString('en-GB')
+	return `${new Date(Number(milliseconds)).toLocaleDateString('en-GB', { timeZone: 'UTC' })} UTC`
 }
