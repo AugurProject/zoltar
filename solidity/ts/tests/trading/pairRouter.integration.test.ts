@@ -1,3 +1,4 @@
+import { encodeReceiveBasedRedeemRequest } from '../../../../ui/trading/ts/protocol/authorization.js'
 import { beforeAll, describe, expect, test } from 'bun:test'
 import { encodeAbiParameters, encodeDeployData, encodeFunctionData, isHex, privateKeyToAccount, type Abi, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
 import { signTyped } from 'micro-eth-signer'
@@ -588,10 +589,14 @@ describe('factory, pair, and router integration', () => {
 			refundRecipient: Address
 			requestDeadline: bigint
 		}> = {}) => encodeReceiveRequest([version, operation, shareToken, securityPool, configuredPair, universeId, questionId, invalidTokenId, yesTokenId, noTokenId, longOutcome, completeSetShares, maxLongSharesIn, minEthOut, payoutRecipient, refundRecipient, requestDeadline])
-		const requestData = redeemRequest()
+		const requestData = encodeReceiveBasedRedeemRequest({ shareToken: token, pool, pair: currentPair, universeId: universe, questionId: question }, redeemAmount, 1n, recipient, deadline)
+		const sharesBeforeRedeem = await shareBalances(account)
 		expect(await client.readContract({ abi: mocks.TradingMockShareToken.abi, address: token, functionName: 'isApprovedForAll', args: [account, currentRouter] })).toBe(false)
 		await writeContractAndWait(client, () => client.writeContract({ abi: mocks.TradingMockShareToken.abi, address: token, functionName: 'safeBatchTransferFrom', args: [account, currentRouter, ids, [redeemAmount, redeemAmount, redeemAmount], requestData] }))
 		expect((await client.getBalance({ address: recipient })) - recipientEthBefore).toBe(1n)
+		for (const outcome of [0n, 1n, 2n] as const) expect(await tokenBalance(account, outcome)).toBe(sharesBeforeRedeem[Number(outcome)] - redeemAmount)
+		expect(await shareBalances(currentRouter)).toEqual([0n, 0n, 0n])
+		expect(await client.getBalance({ address: currentRouter })).toBe(0n)
 
 		const routerResidue: [bigint, bigint, bigint] = [7n, 11n, 13n]
 		for (const [outcome, amount] of routerResidue.entries()) await writeContractAndWait(client, () => client.writeContract({ abi: mocks.TradingMockShareToken.abi, address: token, functionName: 'forceMintWithoutCallback', args: [currentRouter, ids[outcome], amount] }))
@@ -623,7 +628,7 @@ describe('factory, pair, and router integration', () => {
 			{ name: 'INVALID ID', data: redeemRequest({ invalidTokenId: ids[0] + 3n }) },
 			{ name: 'YES ID', data: redeemRequest({ yesTokenId: ids[2] }) },
 			{ name: 'NO ID', data: redeemRequest({ noTokenId: ids[1] }) },
-			{ name: 'long outcome', data: redeemRequest({ longOutcome: 1 }) },
+			...([0, 1, 2] as const).map(longOutcome => ({ name: `long outcome ${longOutcome}`, data: redeemRequest({ longOutcome }) })),
 			{ name: 'maximum input', data: redeemRequest({ maxLongSharesIn: 1n }) },
 			{ name: 'zero payout', data: redeemRequest({ payoutRecipient: `0x${'00'.repeat(20)}` }) },
 			{ name: 'router payout', data: redeemRequest({ payoutRecipient: currentRouter }) },
@@ -632,8 +637,20 @@ describe('factory, pair, and router integration', () => {
 			{ name: 'deadline', data: redeemRequest({ requestDeadline: 0n }) },
 			{ name: 'slippage', data: redeemRequest({ minEthOut: 2n }) },
 		] as const
+		const redemptionBalances = async () => ({
+			owner: await shareBalances(account),
+			router: await shareBalances(currentRouter),
+			pair: await shareBalances(currentPair),
+			poolEth: await client.getBalance({ address: pool }),
+			routerEth: await client.getBalance({ address: currentRouter }),
+			recipientEth: await client.getBalance({ address: recipient }),
+		})
+		const balancesBeforeRejections = await redemptionBalances()
 		for (const malformed of malformedRequests) {
-			await expect(client.writeContract({ abi: mocks.TradingMockShareToken.abi, address: token, functionName: 'safeBatchTransferFrom', args: [account, currentRouter, ids, [redeemAmount, redeemAmount, redeemAmount], malformed.data] }), malformed.name).rejects.toThrow()
+			await expect(client.writeContract({ abi: mocks.TradingMockShareToken.abi, address: token, functionName: 'safeBatchTransferFrom', args: [account, currentRouter, ids, [redeemAmount, redeemAmount, redeemAmount], malformed.data] }), malformed.name).rejects.toThrow(
+				malformed.name.startsWith('long outcome') ? 'Unexpected redeem fields' : undefined,
+			)
+			expect(await redemptionBalances(), malformed.name).toEqual(balancesBeforeRejections)
 		}
 		for (const malformedTransfer of [
 			{ ids: [ids[1], ids[0], ids[2]], values: [redeemAmount, redeemAmount, redeemAmount] },

@@ -649,23 +649,31 @@ describe('liquidator dashboard server', () => {
 			setExecution: () => {
 				throw new Error(failure)
 			},
-			setPaused: value => value,
+			setPaused: () => {
+				throw new Error(failure)
+			},
 			setSelectedPools: value => value,
-			setSigner: value => value,
+			setSigner: () => {
+				throw new Error(failure)
+			},
 			setStrategy: value => value,
 		})
 		servers.push(server)
-		const request = async () => {
-			const response = await fetch(new URL('/api/execution', server.url), { body: JSON.stringify({ execute: true }), headers: { 'content-type': 'application/json', origin: server.url.origin }, method: 'PUT' })
+		const request = async (endpoint = '/api/execution') => {
+			const response = await fetch(new URL(endpoint, server.url), { body: JSON.stringify({ execute: true }), headers: { 'content-type': 'application/json', origin: server.url.origin }, method: 'PUT' })
 			expect(response.status).toBe(400)
 			return Reflect.get(Object(await response.json()), 'error')
 		}
 		expect(await request()).toBe('Live execution requires an active signer')
-		failure = 'The saved key differs from the active signer; save or remove it before enabling live execution'
+		failure = 'The saved key differs from the active signer; return to dry run and save or remove the conflicting saved key before rearming live execution'
 		expect(await request()).toBe(failure)
+		for (const endpoint of ['/api/signer', '/api/paused']) expect(await request(endpoint)).toBe(failure)
+		failure = 'Resolve pending transaction and staged-operation recovery before changing the signer'
+		expect(await request('/api/signer')).toBe(failure)
 		failure = 'Execution signer 0x1111111111111111111111111111111111111111 on chain 1 is already locked (pid 4242 on host-a). Stop the other process before removing /workspace/.state/locks/signer.lock.'
 		expect(await request()).toBe('The signer is reserved by another liquidator process. Stop it or choose another signer before going live.')
 		failure = 'ENOENT: /workspace/.state/operator.json'
+		for (const endpoint of ['/api/signer', '/api/paused']) expect(await request(endpoint)).not.toContain(failure)
 		expect(await request()).toBe('Execution mode could not be changed. Review the signer, quorum RPCs, and protected bot logs.')
 	})
 

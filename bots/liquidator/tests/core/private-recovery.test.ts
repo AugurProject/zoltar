@@ -1,12 +1,14 @@
 import { expect, test } from 'bun:test'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
-import { createWalletClient, defineChain, encodeAbiParameters, encodeFunctionData, parseTransaction, privateKeyToAccount } from '@zoltar/bot-shared/ethereum'
+import { dirname, join } from 'node:path'
+import { createWalletClient, defineChain, encodeAbiParameters, encodeFunctionData, parseTransaction, privateKeyToAccount, type Hex } from '@zoltar/bot-shared/ethereum'
 import { custom } from '@zoltar/bot-shared/ethereum/rpc-transport'
 import { securityPoolAbi, securityPoolFactoryAbi } from '@zoltar/bot-shared/contracts/abi'
 import { prepareSignedTransaction } from '@zoltar/bot-shared/execution/transaction-submission'
 import { parseSettings } from '#config/settings'
+import { loadSettings, saveSettings } from '#config/settings-store'
+import { createGoLiveControls } from '#core/go-live-controls'
 import { recoverPendingTransactions } from '#execution/recovery'
 import { initialRuntimeState, loadDurableState, saveDurableState } from '#state/operator-state'
 
@@ -240,6 +242,59 @@ test('resolves a canonical finalized receipt before considering an expired windo
 		expect(f.broadcasts).toHaveLength(0)
 		expect(f.state.pendingTransactions).toHaveLength(0)
 		expect((await loadDurableState(f.settings.runtime.stateFile, f.settings.network.chainId)).pendingTransactions).toHaveLength(0)
+	} finally {
+		await f.close()
+	}
+})
+
+test('restores the authenticated pending signer after restarting with a different saved signer', async () => {
+	const f = await fixture()
+	const savedKey = `0x${'11'.repeat(32)}` as const
+	const pendingKey = `0x${'01'.repeat(32)}` as const
+	const unrelatedKey = `0x${'33'.repeat(32)}` as const
+	const path = join(dirname(f.settings.runtime.stateFile), 'operator.json')
+	try {
+		f.settings.connectivity.publicRpcUrls = [f.settings.connectivity.readRpcUrl]
+		await saveSettings(path, { ...f.settings, paused: true, privateKey: savedKey, networkConfigured: true, runtime: { ...f.settings.runtime, execute: true } })
+		let current = (await loadSettings(path)).settings
+		const durable = await loadDurableState(current.runtime.stateFile, current.network.chainId)
+		const state = initialRuntimeState(current.paused, privateKeyToAccount(savedKey).address, current.network.chainId)
+		state.pendingTransactions = durable.pendingTransactions
+		let active: Hex = savedKey
+		const controller = createGoLiveControls({
+			activePrivateKey: () => active,
+			applySigner: key => {
+				if (key === undefined) throw new Error('Recovery signer cannot be cleared')
+				active = key
+				state.wallet = privateKeyToAccount(key).address
+			},
+			locks: {
+				acquireSigner: async () => undefined,
+				commitSigner: async () => undefined,
+				disableExecution: async () => undefined,
+				discardSigner: async () => undefined,
+				enableExecution: async () => undefined,
+			},
+			persist: async update => {
+				current = update(current)
+				await saveSettings(path, current)
+				return current
+			},
+			runMutation: mutation => mutation(),
+			settings: () => current,
+			state,
+		})
+		await expect(controller.setSigner({ privateKey: unrelatedKey, rememberSigner: true })).rejects.toThrow('recovery')
+		await expect(controller.setSigner({ privateKey: pendingKey, rememberSigner: false })).rejects.toThrow('saved key differs')
+		expect((await loadSettings(path)).settings.privateKey).toBe(savedKey)
+		await controller.setSigner({ privateKey: pendingKey, rememberSigner: true })
+		expect(active).toBe(pendingKey)
+		expect((await loadSettings(path)).settings.privateKey).toBe(pendingKey)
+		expect(state.pendingTransactions).toHaveLength(1)
+		f.control.receipt = true
+		expect(await recoverPendingTransactions(current, f.wallet, state)).toBe(false)
+		expect(state.pendingTransactions).toHaveLength(0)
+		expect((await loadDurableState(current.runtime.stateFile, current.network.chainId)).pendingTransactions).toHaveLength(0)
 	} finally {
 		await f.close()
 	}
