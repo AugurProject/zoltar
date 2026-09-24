@@ -2,7 +2,19 @@
 
 import { describe, expect, test } from 'bun:test'
 import { getAddress } from '@zoltar/core-shared/evm/ethereum'
-import { MAINNET_NETWORK_PROFILE, MAINNET_WETH_ADDRESS, SEPOLIA_NETWORK_PROFILE, buildTransactionExplorerUrl, createSimulationProfile, formatTransactionNetworkLabel, getDefaultNetworkProfile, getPublicNetworkProfile, getPublicNetworkProfileForChainId, getRuntimeNetworkProfile } from '../wallet/networkProfile.js'
+import {
+	MAINNET_NETWORK_PROFILE,
+	MAINNET_WETH_ADDRESS,
+	SEPOLIA_NETWORK_PROFILE,
+	buildAddressExplorerUrl,
+	buildTransactionExplorerUrl,
+	createSimulationProfile,
+	formatTransactionNetworkLabel,
+	getDefaultNetworkProfile,
+	getPublicNetworkProfile,
+	getPublicNetworkProfileForChainId,
+	getRuntimeNetworkProfile,
+} from '../wallet/networkProfile.js'
 import { SEPOLIA_GENESIS_REP_ADDRESS } from '../lib/sepoliaDeploymentConfig.js'
 
 describe('network profile helpers', () => {
@@ -25,6 +37,7 @@ describe('network profile helpers', () => {
 		expect(MAINNET_NETWORK_PROFILE.transactionExplorerBaseUrl).toBe('https://etherscan.io/tx/')
 		expect(MAINNET_NETWORK_PROFILE.wethAddress).toBe(getAddress(MAINNET_WETH_ADDRESS))
 		expect(buildTransactionExplorerUrl(MAINNET_NETWORK_PROFILE, '0xabc')).toBe('https://etherscan.io/tx/0xabc')
+		expect(buildAddressExplorerUrl(MAINNET_NETWORK_PROFILE, '0xabc')).toBe('https://etherscan.io/address/0xabc')
 	})
 
 	test('returns undefined explorer url when URL base is not configured', () => {
@@ -34,6 +47,7 @@ describe('network profile helpers', () => {
 		})
 
 		expect(buildTransactionExplorerUrl(profile, '0xabc')).toBeUndefined()
+		expect(buildAddressExplorerUrl(profile, '0xabc')).toBeUndefined()
 	})
 
 	test("defines Sepolia with Uniswap's published WETH and deterministically deployable genesis REP", () => {

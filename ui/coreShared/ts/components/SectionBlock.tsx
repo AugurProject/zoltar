@@ -6,7 +6,7 @@ function getSectionBlockHeadingTag(headingLevel: SectionBlockProps['headingLevel
 	return 'h3'
 }
 
-export function SectionBlock({ actions, badge, busy, children, className = '', description, density = 'balanced', headingLevel = 3, title, tone = 'default', variant = 'default' }: SectionBlockProps) {
+export function SectionBlock({ actions, badge, busy, children, className = '', description, density = 'balanced', headingId, headingLevel = 3, title, tone = 'default', variant = 'default' }: SectionBlockProps) {
 	const HeadingTag = getSectionBlockHeadingTag(headingLevel)
 	const classes = ['section-block', `tone-${tone}`, `density-${density}`, variant, className].filter(Boolean).join(' ')
 
@@ -15,7 +15,13 @@ export function SectionBlock({ actions, badge, busy, children, className = '', d
 			{title === undefined && badge === undefined && actions === undefined && description === undefined ? undefined : (
 				<div className='section-block-header'>
 					<div className='section-block-copy'>
-						<div className='section-block-title-row'>{title === undefined ? undefined : <HeadingTag>{title}</HeadingTag>}</div>
+						<div className='section-block-title-row'>
+							{title === undefined ? undefined : (
+								<HeadingTag id={headingId} tabIndex={headingId === undefined ? undefined : -1}>
+									{title}
+								</HeadingTag>
+							)}
+						</div>
 						{description === undefined ? undefined : <p className='detail'>{description}</p>}
 					</div>
 					{badge === undefined ? undefined : <div className='section-block-badge'>{badge}</div>}

@@ -2,7 +2,7 @@
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { encodeAbiParameters, encodeEventTopics, zeroAddress, type Address } from '@zoltar/core-shared/evm/ethereum'
-import { createSecurityPool } from '@zoltar/ui-statoblast-shared/protocol/securityPools.js'
+import { createSecurityPool, getOriginSecurityPoolAddress } from '@zoltar/ui-statoblast-shared/protocol/securityPools.js'
 import { createWalletWriteClient } from '@zoltar/ui-core-shared/wallet/clients.js'
 import type { WriteClient as UiWriteClient } from '@zoltar/ui-core-shared/types/contracts.js'
 import type { TransactionRequestPreview } from '@zoltar/ui-core-shared/wallet/chainBackend.js'
@@ -58,6 +58,7 @@ describe('security pool creation helper', () => {
 	test('creates a binary question and pool with one atomic transaction', async () => {
 		const questionData = { title: 'Atomic question', description: '', startTime: 0n, endTime: (await mockWindow.getTime()) + DAY, numTicks: 0n, displayValueMin: 0n, displayValueMax: 0n, answerUnit: '' }
 		const questionId = getQuestionId(questionData, ['Yes', 'No'])
+		expect(await getOriginSecurityPoolAddress(createWalletWriteClient(addressString(TEST_ADDRESSES[0])), questionId, 20_000n, 10_000_000_000n)).toBeUndefined()
 		const submittedHashes: string[] = []
 		const preparedPreviews: TransactionRequestPreview[] = []
 		const result = await createSecurityPool(
@@ -78,6 +79,7 @@ describe('security pool creation helper', () => {
 		expect(result.questionCreatedAt).toBeGreaterThan(0n)
 		expect(result.questionId).toBe(`0x${questionId.toString(16).padStart(64, '0')}`)
 		expect(result.securityPoolAddress).toBe(getSecurityPoolAddresses(zeroAddress, 0n, questionId, 20_000n).securityPool)
+		expect(await getOriginSecurityPoolAddress(createWalletWriteClient(addressString(TEST_ADDRESSES[0])), questionId, 20_000n, 10_000_000_000n)).toBe(result.securityPoolAddress)
 	})
 
 	test('rolls back question creation when the pool deployment fails', async () => {

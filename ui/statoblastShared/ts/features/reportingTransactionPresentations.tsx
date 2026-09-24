@@ -11,6 +11,8 @@ import { getMarketTypeLabel } from '@zoltar/ui-core-shared/lib/marketType.js'
 import { buildIntent, buildPresentation, getPoolUniverseTransactionRows, withWarning } from '@zoltar/ui-core-shared/transactions/transactionPresentations.js'
 import type { PoolUniverseTransactionContext } from '@zoltar/ui-core-shared/transactions/transactionPresentations.js'
 import type { MarketCreationResult, OpenOracleActionResult, ReportingActionResult } from '@zoltar/ui-core-shared/types/contracts.js'
+import { formatUnits } from '@zoltar/core-shared/evm/ethereum'
+import * as priceRequestCopy from '../copy/priceRequest.js'
 
 type MarketCreationTransactionContext = {
 	marketType: MarketCreationResult['marketType']
@@ -25,6 +27,7 @@ function getMarketCreationTransactionRows(context: MarketCreationTransactionCont
 export function createMarketCreationTransactionIntent(context: MarketCreationTransactionContext) {
 	return buildIntent({
 		action: 'createMarket',
+		failedTitle: transactionCopy.questionCreation,
 		rows: getMarketCreationTransactionRows(context),
 		source: 'zoltar',
 		submittedTitle: transactionCopy.creatingQuestion,
@@ -96,11 +99,16 @@ type PoolOracleTransactionContext = {
 	managerAddress: string
 	securityPoolAddress?: string | undefined
 	universeId?: bigint | undefined
+	proposedRepPerEthPrice?: bigint | undefined
 }
 
 function getPoolOracleTransactionRows(context: PoolOracleTransactionContext | undefined) {
 	if (context === undefined) return undefined
-	return [...(context.securityPoolAddress === undefined ? [] : [{ label: commonCopy.securityPoolAddress, value: <AddressValue address={context.securityPoolAddress} /> }]), { label: commonCopy.oracleManager, value: <AddressValue address={context.managerAddress} /> }]
+	return [
+		...(context.securityPoolAddress === undefined ? [] : [{ label: commonCopy.securityPoolAddress, value: context.securityPoolAddress }]),
+		{ label: commonCopy.oracleManager, value: context.managerAddress },
+		...(context.proposedRepPerEthPrice === undefined ? [] : [{ label: priceRequestCopy.attemptedRepPerEthPrice, value: formatUnits(context.proposedRepPerEthPrice, 18) }]),
+	]
 }
 
 export function createPoolOracleTransactionIntent(actionName: 'executeStagedOperation' | 'requestPrice', context?: PoolOracleTransactionContext) {
@@ -111,6 +119,7 @@ export function createPoolOracleTransactionIntent(actionName: 'executeStagedOper
 	return buildIntent({
 		action: actionName,
 		rows: getPoolOracleTransactionRows(context),
+		failedTitle: actionName === 'requestPrice' ? transactionCopy.priceRequest : undefined,
 		source: 'pool-oracle',
 		submittedTitle,
 		universeId: context?.universeId,

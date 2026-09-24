@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from 'preact/hooks'
 import { AddressValue } from '@zoltar/ui-core-shared/components/AddressValue.js'
 import { EntityCard } from '@zoltar/ui-core-shared/components/EntityCard.js'
 import { ErrorNotice } from '@zoltar/ui-core-shared/components/ErrorNotice.js'
+import { suppressPresentedTransactionError, useGlobalTransactionPresentation } from '@zoltar/ui-core-shared/components/GlobalTransactionPresentationContext.js'
 import { FormInput } from '@zoltar/ui-core-shared/components/FormInput.js'
 import { LookupFieldRow } from '@zoltar/ui-core-shared/components/LookupFieldRow.js'
 import { LoadingText } from '@zoltar/ui-core-shared/components/LoadingText.js'
@@ -13,12 +14,12 @@ import { Question, getQuestionTitle } from '@zoltar/ui-core-shared/components/Qu
 import { RouteWorkflowPanel } from '@zoltar/ui-core-shared/components/RouteWorkflowPanel.js'
 import { SectionBlock } from '@zoltar/ui-core-shared/components/SectionBlock.js'
 import { TransactionActionButton } from '@zoltar/ui-core-shared/components/TransactionActionButton.js'
-import { TransactionHashLink } from '@zoltar/ui-core-shared/components/TransactionHashLink.js'
 import { TransactionStepsContent } from '@zoltar/ui-core-shared/components/TransactionStepsContent.js'
 import { transactionSteps } from '@zoltar/ui-core-shared/transactions/transactionSteps.js'
 import { isActiveAppChain } from '@zoltar/ui-core-shared/wallet/network.js'
 import { formatOpenInterestFeePerYearPercent, ORIGIN_POOL_INITIAL_RETENTION_RATE } from '../lib/retentionRate.js'
 import { formatCurrencyBalanceWithUnit } from '@zoltar/ui-core-shared/lib/formatters.js'
+import { abbreviateAddress } from '@zoltar/ui-core-shared/lib/address.js'
 import { getInitialReportPriorityFeeValidationMessage, getSecurityPoolCreateDisabledReason, getStatoblastSecurityMultiplierValidationMessage } from '../lib/securityPoolCreationGuards.js'
 import { formatStatoblastSecurityMultiplier } from '../../markets/lib/trading.js'
 import { MarketCreateQuestionSection } from '../../markets/components/MarketCreateQuestionSection.js'
@@ -29,12 +30,17 @@ import { formatUniverseIdHex } from '@zoltar/ui-core-shared/lib/universeLabels.j
 import { getWrongNetworkReason } from '@zoltar/ui-core-shared/wallet/network.js'
 import * as marketCopy from '@zoltar/ui-zoltar-shared/copy/market.js'
 import * as transactionReviewCopy from '@zoltar/ui-core-shared/copy/transactionReview.js'
+import * as transactionCopy from '@zoltar/ui-core-shared/copy/transaction.js'
+import { SecurityPoolLink } from './SecurityPoolLink.js'
 
 export function SecurityPoolSection({
 	accountState,
 	activeUniverseId,
 	checkingDuplicateOriginPool,
+	duplicateOriginPoolAddress,
 	duplicateOriginPoolExists,
+	existingQuestionCheck,
+	onRetryExistingQuestionCheck,
 	loadingMarketDetails,
 	marketDetails,
 	marketCreating = false,
@@ -71,8 +77,13 @@ export function SecurityPoolSection({
 	const isOnActiveAppChain = isActiveAppChain(accountState.chainId)
 	// An unfinished question-and-pool flow keeps its question; otherwise use an explicitly selected ID or start a new question.
 	const [questionSource, setQuestionSource] = useState<'existing' | 'new'>(marketResult !== undefined || (securityPoolForm.marketId.trim() === '' && marketDetails === undefined) ? 'new' : 'existing')
+	const transactionPresentation = useGlobalTransactionPresentation()
+	const visibleSecurityPoolError = suppressPresentedTransactionError(securityPoolError, transactionPresentation, transactionCopy.securityPoolCreation)
 	const reviewWorkflow = transactionSteps.value
-	const ownsTransactionReview = securityPoolReviewSignal !== undefined && reviewWorkflow?.reviewSignal === securityPoolReviewSignal && reviewWorkflow.steps[reviewWorkflow.activeIndex] !== undefined
+	const ownsTransactionReview = securityPoolReviewSignal !== undefined && !securityPoolReviewSignal.aborted && reviewWorkflow?.reviewSignal === securityPoolReviewSignal && reviewWorkflow.steps[reviewWorkflow.activeIndex] !== undefined
+	useEffect(() => {
+		if (ownsTransactionReview && reviewWorkflow?.steps[reviewWorkflow.activeIndex]?.phase === 'failed') (onDismissSecurityPoolReview ?? reviewWorkflow.cancel)()
+	}, [ownsTransactionReview, reviewWorkflow, onDismissSecurityPoolReview])
 	// The wallet confirms normal pool creation. Keep an escape if a pre-wallet review is unexpectedly published.
 	const inlineTransactionReview = ownsTransactionReview ? (
 		<TransactionStepsContent cancelable={reviewWorkflow.steps[reviewWorkflow.activeIndex]?.phase === 'review'} contextKey='security-pool-creation' focusOnMount heading={transactionReviewCopy.transactionReview} keepActionsVisible onClose={onDismissSecurityPoolReview} />
@@ -120,9 +131,23 @@ export function SecurityPoolSection({
 		if (zoltarUniverseHasForked) return securityPoolCopy.poolCreationAfterForkReason
 		if (marketForm.marketType !== 'binary') return securityPoolCopy.ineligibleQuestionDetail
 		if (!questionFormValidation.isValid) return questionFormValidation.notice
+		if (existingQuestionCheck?.status === 'checking') return securityPoolCopy.checkingQuestionExists
+		if (existingQuestionCheck?.status === 'error') return securityPoolCopy.questionExistenceUnavailable
+		if (existingQuestionCheck?.status === 'existing') return existingQuestionCheck.poolAddress === undefined ? securityPoolCopy.questionAlreadyExists : securityPoolCopy.questionAlreadyHasPool
 		const multiplierValidationMessage = getStatoblastSecurityMultiplierValidationMessage(securityPoolForm.statoblastSecurityMultiplierBps)
 		if (multiplierValidationMessage !== undefined) return multiplierValidationMessage
 		return getInitialReportPriorityFeeValidationMessage(securityPoolForm.initialReportPriorityFeeEth)
+	})()
+	const combinedReviewContent = (() => {
+		if (inlineTransactionReview !== undefined) return inlineTransactionReview
+		if (existingQuestionCheck?.status === 'existing' && existingQuestionCheck.poolAddress !== undefined) {
+			return (
+				<SecurityPoolLink className='primary existing-pool-action' securityPoolAddress={existingQuestionCheck.poolAddress}>
+					{securityPoolCopy.openExistingPool}
+				</SecurityPoolLink>
+			)
+		}
+		return undefined
 	})()
 	let visibleFieldErrorId: string | undefined = undefined
 	if (createDisabledReason === statoblastSecurityMultiplierValidationMessage) {
@@ -248,12 +273,6 @@ export function SecurityPoolSection({
 							<span>{securityPoolCopy.initialReportPriorityFeeEthLabel}</span>
 							<strong>{formatCurrencyBalanceWithUnit(securityPoolResult.initialReportPriorityFeeAttoEthPerGas, commonCopy.eth, 18)}</strong>
 						</li>
-						<li>
-							<span>{securityPoolCopy.deploymentTransactionHash}</span>
-							<strong>
-								<TransactionHashLink hash={securityPoolResult.deployPoolHash} />
-							</strong>
-						</li>
 					</ul>
 				</EntityCard>
 			</>
@@ -265,7 +284,7 @@ export function SecurityPoolSection({
 				{hasSecurityPoolResult ? (
 					<>
 						{createdPoolResult}
-						<ErrorNotice message={securityPoolError} />
+						<ErrorNotice message={visibleSecurityPoolError} />
 					</>
 				) : (
 					<>
@@ -315,7 +334,11 @@ export function SecurityPoolSection({
 										</div>
 									)}
 								</div>
-								{!duplicateOriginPoolExists ? undefined : <p className='detail'>{securityPoolCopy.duplicatePoolDetail}</p>}
+								{!duplicateOriginPoolExists ? undefined : (
+									<p className='detail'>
+										{securityPoolCopy.duplicatePoolDetail} {duplicateOriginPoolAddress === undefined ? undefined : <SecurityPoolLink securityPoolAddress={duplicateOriginPoolAddress} />}
+									</p>
+								)}
 								{marketDetails !== undefined && marketDetails.marketType !== 'binary' ? <p className='notice error'>{securityPoolCopy.ineligibleQuestionDetail}</p> : undefined}
 								{zoltarUniverseHasForked ? <p className='notice error'>{securityPoolCopy.poolCreationAfterForkReason}</p> : undefined}
 							</SectionBlock>
@@ -346,13 +369,57 @@ export function SecurityPoolSection({
 													onSubmit: onCreateQuestionAndSecurityPool,
 													pending: questionAndPoolCreating,
 													pendingLabel: securityPoolCopy.creatingQuestionAndPool,
-													...(inlineTransactionReview === undefined ? {} : { reviewContent: inlineTransactionReview }),
+													...(combinedReviewContent === undefined ? {} : { reviewContent: combinedReviewContent }),
 												},
 											})}
 									onMarketFormChange={onMarketFormChange}
 									onOpenForkTab={() => undefined}
 									onResetMarket={onResetMarket}
-									submitFields={poolConfigurationFields}
+									submitFields={
+										<>
+											{poolConfigurationFields}
+											{existingQuestionCheck?.status === 'error' ? (
+												<button className='secondary' type='button' onClick={onRetryExistingQuestionCheck}>
+													{commonCopy.retry}
+												</button>
+											) : undefined}
+											{existingQuestionCheck?.status === 'existing' ? (
+												<div className='detail'>
+													<p>{existingQuestionCheck.poolAddress === undefined ? securityPoolCopy.questionAlreadyExists : securityPoolCopy.questionAlreadyHasPool}</p>
+													<dl className='existing-pool-identifiers'>
+														<div>
+															<dt>{commonCopy.questionId}</dt>
+															<dd>
+																<span className='identifier-value' title={existingQuestionCheck.questionId}>
+																	{abbreviateAddress(`0x${BigInt(existingQuestionCheck.questionId).toString(16)}`)}
+																</span>
+															</dd>
+														</div>
+														{existingQuestionCheck.poolAddress === undefined ? undefined : (
+															<div>
+																<dt>{securityPoolCopy.poolAddressLabel}</dt>
+																<dd>
+																	<AddressValue address={existingQuestionCheck.poolAddress} responsiveAbbreviation />
+																</dd>
+															</div>
+														)}
+													</dl>
+													{existingQuestionCheck.poolAddress === undefined ? (
+														<button
+															className='secondary'
+															type='button'
+															onClick={() => {
+																onSecurityPoolFormChange({ marketId: existingQuestionCheck.questionId })
+																setQuestionSource('existing')
+															}}
+														>
+															{securityPoolCopy.useExistingQuestion}
+														</button>
+													) : undefined}
+												</div>
+											) : undefined}
+										</>
+									}
 									onUseQuestionForFork={() => undefined}
 									onUseQuestionForPool={questionId => onSecurityPoolFormChange({ marketId: questionId })}
 									zoltarQuestions={[]}
@@ -388,17 +455,11 @@ export function SecurityPoolSection({
 										<span>{commonCopy.questionId}</span>
 										<strong>{marketResult.questionId}</strong>
 									</li>
-									<li>
-										<span>{marketCopy.creationTransactionHash}</span>
-										<strong>
-											<TransactionHashLink hash={marketResult.createQuestionHash} />
-										</strong>
-									</li>
 								</ul>
 							</EntityCard>
 						) : undefined}
 
-						<ErrorNotice message={securityPoolError} />
+						<ErrorNotice message={visibleSecurityPoolError} />
 					</>
 				)}
 			</div>

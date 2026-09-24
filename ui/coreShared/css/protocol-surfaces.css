@@ -656,15 +656,273 @@ strong.metric-value-danger {
 	gap: 0.75rem;
 }
 
-.global-transaction-tray {
-	position: fixed;
-	right: 1rem;
-	bottom: calc(1rem + env(safe-area-inset-bottom, 0rem));
-	left: 1rem;
-	z-index: var(--z-tray);
-	display: flex;
-	justify-content: center;
+.global-transaction-dialog-backdrop {
+	z-index: var(--z-transaction-modal);
+	align-items: end;
+	background: color-mix(in srgb, var(--bg-deep) 55%, transparent);
+	backdrop-filter: none;
+	padding-bottom: calc(1rem + env(safe-area-inset-bottom, 0rem));
+}
+
+.global-transaction-dialog-nonblocking {
+	background: transparent;
 	pointer-events: none;
+	justify-items: end;
+	align-items: end;
+}
+
+.global-transaction-dialog-nonblocking .global-transaction-dialog {
+	pointer-events: auto;
+	width: min(35rem, 100%);
+}
+
+main:has(.global-transaction-dialog-nonblocking) #app-content {
+	padding-bottom: min(13rem, 30dvh);
+}
+
+.global-transaction-hash {
+	display: flex;
+	align-items: center;
+	flex-wrap: wrap;
+	gap: 0.4rem;
+	font-size: var(--font-label);
+}
+
+.global-transaction-identifier {
+	display: inline-flex;
+	align-items: center;
+	flex-wrap: wrap;
+	gap: 0.4rem;
+}
+
+.global-transaction-hash > span:first-child {
+	color: var(--muted);
+}
+
+.global-transaction-notice .address-value-full {
+	display: none;
+}
+
+.global-transaction-notice .address-value-abbreviated {
+	display: inline;
+}
+
+.global-transaction-dialog {
+	width: min(56rem, 100%);
+	max-height: min(55dvh, 32rem);
+	grid-template-columns: minmax(0, 1fr) auto;
+	align-items: end;
+	gap: 0.75rem;
+	padding: 0.85rem 1rem;
+	background: var(--surface-modal-opaque);
+}
+
+.global-transaction-dialog .global-transaction-dialog-notice {
+	width: 100%;
+	max-height: none;
+	padding: 0;
+	border: 0;
+	border-radius: 0;
+	background: transparent;
+	box-shadow: none;
+}
+
+.global-transaction-dialog .global-transaction-notice-rows {
+	grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+	gap: 0.35rem 0.9rem;
+}
+
+.global-transaction-dialog .read-only-detail-accordion summary {
+	padding: 0.35rem 0;
+}
+
+.global-transaction-technical-heading {
+	margin: 0.65rem 0 0.35rem;
+	font-size: var(--font-label);
+	color: var(--muted);
+}
+
+.global-transaction-dialog .global-transaction-actions {
+	flex-direction: column;
+	align-items: flex-end;
+	min-width: 7rem;
+	position: sticky;
+	bottom: 0;
+	background: var(--surface-modal-opaque);
+	z-index: var(--z-content);
+}
+
+.global-transaction-dialog-compact {
+	grid-template-columns: minmax(0, 1fr) auto;
+	align-items: start;
+	width: fit-content;
+	max-width: min(42rem, 100%);
+	padding: 0.4rem 0.65rem;
+	gap: 0.2rem;
+}
+
+.global-transaction-dialog-compact .global-transaction-notice-copy {
+	display: flex;
+	align-items: center;
+	flex-wrap: nowrap;
+	gap: 0 0.1rem;
+}
+
+.global-transaction-dialog-compact .global-transaction-notice-header {
+	flex-wrap: nowrap;
+	gap: 0.55rem;
+	min-height: var(--touch-target-min);
+	flex: 1;
+}
+
+.global-transaction-dialog-compact .global-transaction-notice-header strong {
+	white-space: nowrap;
+	font-size: var(--font-label);
+}
+
+.global-transaction-dialog-compact .badge {
+	padding-inline: 0.35rem;
+}
+
+.global-transaction-dialog-compact .global-transaction-hash {
+	flex-wrap: nowrap;
+	white-space: nowrap;
+	font-size: var(--font-label);
+}
+
+.global-transaction-dialog-compact .global-transaction-hash .address-value {
+	white-space: nowrap;
+}
+
+.global-transaction-dialog-compact .global-transaction-hash a {
+	font-size: 0;
+}
+
+.global-transaction-dialog-compact .global-transaction-hash a::after {
+	content: "↗";
+	font-size: var(--font-label);
+}
+
+.global-transaction-dialog-compact .global-transaction-actions {
+	min-width: 0;
+}
+
+.global-transaction-dialog-success .global-transaction-dismiss {
+	width: var(--touch-target-min);
+	min-width: var(--touch-target-min);
+	min-height: var(--touch-target-min);
+	padding: 0;
+	font-size: 1.2rem;
+}
+
+.global-transaction-dialog-nonblocking .global-transaction-dialog-error {
+	width: min(26rem, 100%);
+	grid-template-columns: minmax(0, 1fr);
+	gap: 0.2rem;
+}
+
+.global-transaction-dialog-error .global-transaction-notice-copy {
+	display: grid;
+	gap: 0.25rem;
+}
+
+.global-transaction-dialog-error .global-transaction-notice-header {
+	flex-wrap: wrap;
+}
+
+.global-transaction-dialog-error .global-transaction-actions {
+	justify-content: flex-end;
+}
+
+@media (min-width: 601px) {
+	.global-transaction-dialog-nonblocking .global-transaction-dialog-error {
+		width: min(18.5rem, 100%);
+	}
+}
+
+.global-transaction-dialog-compact .read-only-detail-accordion summary {
+	min-width: 1.5rem;
+	font-size: 0;
+	list-style: none;
+	text-align: center;
+}
+
+.global-transaction-dialog-compact .read-only-detail-accordion summary::after {
+	content: "⋯";
+	font-size: 1rem;
+}
+
+.global-transaction-dialog-compact .read-only-detail-accordion[open] {
+	flex-basis: 100%;
+}
+
+.global-transaction-dialog-compact:has(.read-only-detail-accordion[open]) .global-transaction-notice-copy {
+	flex-wrap: wrap;
+}
+
+@media (max-width: 600px) {
+	.global-transaction-dialog-backdrop {
+		padding: 0.5rem;
+		padding-bottom: calc(0.5rem + env(safe-area-inset-bottom, 0rem));
+	}
+
+	.global-transaction-dialog {
+		width: 100%;
+		max-height: 55dvh;
+		grid-template-columns: minmax(0, 1fr);
+		padding: 0.75rem;
+	}
+
+	.global-transaction-dialog .global-transaction-notice-rows {
+		grid-template-columns: minmax(0, 1fr);
+	}
+
+	.global-transaction-dialog .global-transaction-notice-row {
+		grid-template-columns: minmax(0, 1fr);
+		gap: 0.1rem;
+	}
+
+	.global-transaction-dialog .global-transaction-actions {
+		flex-direction: row;
+		align-items: center;
+		padding-top: 0.5rem;
+	}
+
+	.global-transaction-dialog-compact {
+		grid-template-columns: minmax(0, 1fr) auto;
+		padding: 0.35rem 0.5rem;
+	}
+
+	.global-transaction-dialog-error {
+		grid-template-columns: minmax(0, 1fr);
+	}
+
+	.global-transaction-dialog-backdrop:has(.global-transaction-dialog-compact) {
+		padding-inline: 0;
+	}
+
+	.global-transaction-dialog-success .badge {
+		padding-inline: 0.45rem;
+		font-size: 0;
+	}
+
+	.global-transaction-dialog-success .badge::after {
+		content: "✓";
+		font-size: var(--font-label);
+	}
+
+	.global-transaction-dialog-compact .global-transaction-actions {
+		padding-top: 0;
+	}
+
+	.global-transaction-dialog-compact .global-transaction-notice-header {
+		gap: 0.2rem;
+	}
+
+	.global-transaction-dialog-compact .global-transaction-notice-header strong {
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
 }
 
 .global-transaction-notice {
@@ -690,18 +948,6 @@ strong.metric-value-danger {
 	gap: 0.32rem;
 }
 
-.global-transaction-universe-warning {
-	margin-right: 2.7rem;
-}
-
-main.global-transaction-tray-open {
-	padding-bottom: max(4rem, calc(var(--global-transaction-tray-height) + 2rem + env(safe-area-inset-bottom, 0rem)));
-}
-
-main.global-transaction-tray-open :is(a, button, input, select, summary, textarea) {
-	scroll-margin-bottom: calc(var(--global-transaction-tray-height) + 2rem + env(safe-area-inset-bottom, 0rem));
-}
-
 .global-transaction-notice-header {
 	display: flex;
 	align-items: center;
@@ -721,6 +967,11 @@ main.global-transaction-tray-open :is(a, button, input, select, summary, textare
 	opacity: 0.9;
 }
 
+.global-transaction-notice-recovery {
+	font-size: var(--font-label);
+	line-height: var(--line-height-snug);
+}
+
 .global-transaction-notice-rows {
 	display: grid;
 	gap: 0.38rem;
@@ -730,7 +981,7 @@ main.global-transaction-tray-open :is(a, button, input, select, summary, textare
 
 .global-transaction-notice-row {
 	display: grid;
-	grid-template-columns: minmax(0, 8rem) minmax(0, 1fr);
+	grid-template-columns: minmax(0, 9rem) minmax(0, 1fr);
 	gap: 0.45rem 0.8rem;
 	align-items: start;
 }
@@ -772,64 +1023,16 @@ main.global-transaction-tray-open :is(a, button, input, select, summary, textare
 
 .global-transaction-actions {
 	display: flex;
+	flex-wrap: wrap;
+	gap: 0.5rem;
 	justify-content: flex-end;
 	padding-top: 0.2rem;
 }
 
-.global-transaction-close {
-	position: absolute;
-	top: 0.65rem;
-	right: 0.65rem;
-	z-index: var(--z-content);
-	width: var(--touch-target-min);
-	min-width: var(--touch-target-min);
-	min-height: var(--touch-target-min);
-	padding: 0;
-	border-radius: var(--radius-pill);
-	font-size: 1.35rem;
-	line-height: var(--line-height-none);
-}
-
-.global-transaction-notice-copy:first-of-type {
-	padding-right: 2.7rem;
-}
-
-.global-transaction-notice-compact {
-	width: min(32rem, 100%);
-	gap: 0.55rem;
-	padding: 0.5rem 0.85rem;
-}
-
-.global-transaction-notice-compact .global-transaction-notice-copy {
-	gap: 0;
-}
-
-.global-transaction-compact-details {
-	display: grid;
-	gap: 0.65rem;
-}
-
-.global-transaction-compact-details > summary {
-	display: flex;
+.global-transaction-actions a {
+	display: inline-flex;
 	align-items: center;
-	width: fit-content;
 	min-height: var(--touch-target-min);
-	margin-block: -0.5625rem;
-	cursor: pointer;
-	color: var(--text-secondary);
-	font-size: var(--font-caption);
-	font-weight: 700;
-}
-
-.global-transaction-compact-details > summary:hover,
-.global-transaction-compact-details > summary:focus-visible {
-	color: var(--text);
-}
-
-.global-transaction-compact-details-content {
-	display: grid;
-	gap: 0.65rem;
-	padding-top: 0.35rem;
 }
 
 .global-transaction-spinner {
@@ -1097,12 +1300,6 @@ main.global-transaction-tray-open :is(a, button, input, select, summary, textare
 	gap: 1rem;
 }
 
-.transaction-success-panel {
-	display: grid;
-	justify-items: start;
-	gap: 1rem;
-}
-
 /* The form stays in place, disabled, while its transaction steps are reviewed and sent below it, so nothing moves. */
 .operation-modal-body[inert],
 .operation-modal-body [inert] {
@@ -1125,11 +1322,15 @@ main.global-transaction-tray-open :is(a, button, input, select, summary, textare
 	padding-top: 0;
 }
 
-.operation-modal-transaction-notice {
+.operation-modal-panel .global-transaction-notice {
 	width: 100%;
 	max-height: none;
-	border-radius: var(--radius-control);
-	box-shadow: var(--glow-inset-subtle);
+	padding: 0.9rem 0 0;
+	border: 0;
+	border-top: 1px solid var(--border-default);
+	border-radius: 0;
+	background: transparent;
+	box-shadow: none;
 }
 
 .workflow-summary-strip-steps {
@@ -1245,12 +1446,6 @@ main.global-transaction-tray-open :is(a, button, input, select, summary, textare
 
 	.action-readiness-panel-header {
 		grid-template-columns: 1fr;
-	}
-
-	.global-transaction-tray {
-		right: 0.75rem;
-		bottom: calc(0.75rem + env(safe-area-inset-bottom, 0rem));
-		left: 0.75rem;
 	}
 
 	.global-transaction-notice {
@@ -1868,23 +2063,6 @@ main.global-transaction-tray-open :is(a, button, input, select, summary, textare
 	display: none;
 }
 
-.transaction-step-hash {
-	min-width: 0;
-	min-block-size: 1.5em;
-	font-size: var(--font-caption);
-}
-
-.transaction-step-hash .transaction-hash-link {
-	display: block;
-	overflow: hidden;
-	text-overflow: ellipsis;
-	white-space: nowrap;
-}
-
-.transaction-plan-action-final > .transaction-step-hash {
-	grid-column: 1 / -1;
-}
-
 .transaction-deposits,
 .transaction-action-detail {
 	font-variant-numeric: tabular-nums;
@@ -1923,6 +2101,32 @@ main.global-transaction-tray-open :is(a, button, input, select, summary, textare
 
 .transaction-approval-editor .form-grid {
 	gap: 0.5rem;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.transaction-approval-editor .form-grid > .workflow-metric-grid,
+.transaction-approval-editor .form-grid > .field-error,
+.transaction-approval-editor .form-grid > .notice.error {
+	grid-column: 1 / -1;
+}
+
+.transaction-approval-editor .approval-amount-field {
+	display: grid;
+	gap: 0.4rem;
+}
+
+.transaction-approval-editor .approval-amount-field > .approval-amount-controls {
+	min-width: 0;
+}
+
+.transaction-approval-editor .form-grid > .actions {
+	align-self: end;
+}
+
+@media (max-width: 640px) {
+	.transaction-approval-editor .form-grid {
+		grid-template-columns: minmax(0, 1fr);
+	}
 }
 
 .transaction-approval-editor .workflow-metric-grid {
@@ -1992,6 +2196,44 @@ main.global-transaction-tray-open :is(a, button, input, select, summary, textare
 	min-width: 0;
 }
 
+.transaction-completed-steps {
+	display: grid;
+	gap: 0;
+	margin-bottom: 0.5rem;
+}
+
+.transaction-step-completed {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: baseline;
+	justify-content: space-between;
+	gap: 0.25rem 0.75rem;
+	min-height: 2rem;
+	padding: 0.25rem 0;
+	border-bottom: 1px solid var(--divider-subtle);
+	color: var(--muted);
+	font-size: var(--font-label);
+}
+
+.transaction-step-completed .read-only-detail-accordion {
+	border: 0;
+	padding: 0;
+	font-size: var(--font-label);
+}
+
+.transaction-step-completed .read-only-detail-accordion summary {
+	padding: 0;
+}
+
+.transaction-step-completed .read-only-detail-accordion[open] {
+	flex-basis: 100%;
+	min-width: 0;
+}
+
+.transaction-step-completed .read-only-detail-accordion-content {
+	padding: 0.25rem 0;
+}
+
 .transaction-plan-action .field-inline-input {
 	min-width: 0;
 	width: 100%;
@@ -2013,6 +2255,10 @@ main.global-transaction-tray-open :is(a, button, input, select, summary, textare
 		gap: 0.75rem;
 		margin: 0 -0.75rem -0.75rem;
 		padding: 0 0.75rem 0.75rem;
+	}
+
+	body:has(.global-transaction-dialog-error) .modal-panel:has(.transaction-step-actions) > .operation-modal-scroll {
+		padding-bottom: calc(12rem + env(safe-area-inset-bottom, 0rem));
 	}
 
 	.transaction-funding {
@@ -2056,6 +2302,14 @@ main.global-transaction-tray-open :is(a, button, input, select, summary, textare
 		min-width: 0;
 		font-size: 0.8125rem;
 		padding-inline: 0.65rem;
+	}
+
+	.transaction-plan-action-final {
+		grid-template-columns: minmax(0, 1fr);
+	}
+
+	.transaction-step-close button {
+		flex: 1;
 	}
 
 	.transaction-approval-editor .workflow-metric-grid {

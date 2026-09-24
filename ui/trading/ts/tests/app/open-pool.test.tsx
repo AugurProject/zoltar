@@ -4,6 +4,7 @@ import { render } from 'preact'
 import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import { OpenPoolForm } from '../../features/OpenPoolForm.js'
+import { LiveMarketBrowser } from '../../features/LiveMarketBrowser.js'
 import { tradingRouting } from '../../lib/routing.js'
 
 test('opens an addressed workflow and preserves simulation settings; rejects invalid addresses and locked navigation', async () => {
@@ -41,6 +42,21 @@ test('opens an addressed workflow and preserves simulation settings; rejects inv
 		await act(() => render(<OpenPoolForm disabled={false} target='create-market' />, rendered.container))
 		await act(() => form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })))
 		expect(tradingRouting.resolve(window.location.hash)).toBe(`create-market/${pool}`)
+	} finally {
+		await rendered.cleanup()
+		dom.cleanup()
+	}
+})
+
+test('shows the pool address lookup without a disclosure', async () => {
+	const dom = installDomEnvironment()
+	const rendered = await renderIntoDocument(
+		<LiveMarketBrowser lookupRoute='market' markets={[]} pageMarketCount={0} discoveryState='ready' discoveryError={undefined} marketPage={{ start: 0n, total: 0n, previousStart: undefined, nextStart: undefined }} workflowLocked={false} nowSeconds={0n} retry={() => undefined} loadMarketPage={() => undefined} />,
+	)
+	try {
+		expect(rendered.container.querySelector('input[placeholder]')).not.toBeNull()
+		expect(rendered.container.querySelector('details')).toBeNull()
+		expect(rendered.container.textContent).toContain('Security pool address')
 	} finally {
 		await rendered.cleanup()
 		dom.cleanup()
