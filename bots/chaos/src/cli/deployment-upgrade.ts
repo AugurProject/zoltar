@@ -2,7 +2,6 @@
 
 import { privateKeyToAccount, zeroAddress } from '@zoltar/bot-shared/ethereum'
 import { acquireBotProcessLocks } from '@zoltar/bot-shared/execution/bot-process-locks'
-import { createInterface } from 'node:readline/promises'
 import { lstat } from 'node:fs/promises'
 import { dirname, join, resolve } from 'node:path'
 import { canonicalDeployment } from '../config/canonical-deployment.ts'
@@ -19,7 +18,6 @@ import { assertSafeRetirementRecipient, DEFAULT_RETIREMENT_POLICIES, requestReti
 
 type PreparationOptions = {
 	acquireLocks?: (settings: OperatorSettings) => Promise<{ release: () => Promise<void> }>
-	ask?: (message: string) => Promise<string>
 	path?: string
 	verifyCompletion?: typeof verifyRetirementCompletionFinality
 }
@@ -37,15 +35,6 @@ async function acquireUpgradeLocks(settings: OperatorSettings) {
 		},
 		CHAOS_PROCESS_LOCK_OPTIONS,
 	)
-}
-
-async function askTerminal(message: string) {
-	const input = createInterface({ input: process.stdin, output: process.stdout })
-	try {
-		return await input.question(message)
-	} finally {
-		input.close()
-	}
 }
 
 function configuredWallet(settings: OperatorSettings) {
@@ -99,7 +88,7 @@ async function saveCurrentWithNewState(loaded: Awaited<ReturnType<typeof loadSet
 	return nextStateFile
 }
 
-async function requestOldProfileRetirement(settings: OperatorSettings, state: Awaited<ReturnType<typeof loadDurableState>>, ask: (message: string) => Promise<string>) {
+async function requestOldProfileRetirement(settings: OperatorSettings, state: Awaited<ReturnType<typeof loadDurableState>>) {
 	if (!settings.runtime.execute || settings.paused || settings.privateKey === undefined || !settings.networkConfigured || settings.connectivity === undefined) {
 		throw new Error('Enable live execution with a configured signer and unpause the old profile before requesting automatic retirement')
 	}
@@ -108,14 +97,7 @@ async function requestOldProfileRetirement(settings: OperatorSettings, state: Aw
 	const recipient = wallet
 	assertSafeRetirementRecipient(recipient, state.signerAddress ?? wallet)
 	const confirmation = `DRAIN ${state.profileId} TO ${recipient}`
-	requestRetirement(
-		state.retirement,
-		state.profileId,
-		recipient,
-		DEFAULT_RETIREMENT_POLICIES,
-		await ask(`Updated contracts found. The launcher will recover claimable ETH and REP to signer ${recipient} and unwrap WETH; no unmatched-share exit, claim migration, or automatic exit after completion. These replace any policies from a cancelled drain. Type ${confirmation} to continue: `),
-		state.signerAddress ?? wallet,
-	)
+	requestRetirement(state.retirement, state.profileId, recipient, DEFAULT_RETIREMENT_POLICIES, confirmation, state.signerAddress ?? wallet)
 	await saveDurableState(settings.runtime.stateFile, state)
 }
 
@@ -172,8 +154,11 @@ export async function prepareCurrentDeployment(options: PreparationOptions = {})
 		}
 
 		if (state.retirement.status === 'inactive') {
-			await requestOldProfileRetirement(active, state, options.ask ?? askTerminal)
-			return { kind: 'retiring', message: 'Retirement requested for the old deployment. Its pin and state remain in place until completion.' }
+			await requestOldProfileRetirement(active, state)
+			return {
+				kind: 'retiring',
+				message: `Automatically requested retirement for the old deployment: recover claimable ETH and REP to signer ${wallet} and unwrap WETH; no unmatched-share exit, claim migration, or automatic exit after completion. These defaults replace any policies from a cancelled drain. Its pin and state remain in place until completion.`,
+			}
 		}
 
 		if (state.retirement.status !== 'drained' && state.retirement.status !== 'drained-with-residuals') {
