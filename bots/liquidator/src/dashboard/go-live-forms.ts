@@ -1,4 +1,5 @@
 import { element, shorten } from '@zoltar/bot-shared/dashboard/dom'
+import { confirmOperatorAction } from '@zoltar/bot-shared/dashboard/confirmation'
 import { formIsDirty, formIsSubmitting, markFormClean, refreshAllFormButtons, setFormSubmitting, trackForm } from '@zoltar/bot-shared/dashboard/form-state'
 import { urlLines } from '@zoltar/bot-shared/dashboard/forms'
 import { decodeConfiguration, decodeSigner, type Configuration, type Snapshot } from './api-validation.ts'
@@ -113,7 +114,7 @@ export function registerGoLiveForms({ actionStatus, configuration, populateConfi
 	})
 
 	clearSignerButton.addEventListener('click', async () => {
-		if (!window.confirm('Clear the active signer and remove its saved private key from the local operator file?')) return
+		if (!(await confirmOperatorAction({ title: 'Clear signer', description: 'Remove the active signer and saved private key from the local operator file.', phrase: 'CLEAR SIGNER', confirmLabel: 'Clear signer' }))) return
 		clearSignerButton.disabled = true
 		actionStatus(signerStatus, 'Clearing…')
 		try {

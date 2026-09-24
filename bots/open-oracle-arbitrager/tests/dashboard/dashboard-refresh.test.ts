@@ -16,6 +16,23 @@ const servers: ReturnType<typeof startDashboardServer>[] = []
 const browsers: Browser[] = []
 const address = '0x0000000000000000000000000000000000000001' as Address
 
+async function acceptOperatorDialog(window: BrowserWindow, phrase?: string) {
+	let dialog: Element | null = null
+	for (let attempt = 0; attempt < 100 && dialog === null; attempt++) {
+		dialog = window.document.querySelector('.operator-confirm-dialog')
+		if (dialog === null) await Bun.sleep(10)
+	}
+	if (dialog === null) throw new Error('Expected operator confirmation dialog')
+	if (phrase !== undefined) {
+		const input = element(window, 'operator-confirm-phrase', window.HTMLInputElement)
+		input.value = phrase
+		input.dispatchEvent(new window.Event('input', { bubbles: true }))
+	}
+	const confirm = element(window, 'operator-confirm-submit', window.HTMLButtonElement)
+	for (let attempt = 0; attempt < 100 && confirm.disabled; attempt++) await Bun.sleep(10)
+	confirm.click()
+}
+
 afterEach(async () => {
 	for (const server of servers.splice(0)) server.stop(true)
 	for (const browser of browsers.splice(0)) await browser.close()
@@ -180,10 +197,12 @@ test('keeps all mutations locked and ignores deferred old-chain responses until 
 	const triggerRefresh = stubIntervals(window)
 	const nativeSetTimeout = window.setTimeout.bind(window)
 	window.setTimeout = (handler, timeout, ...arguments_) => nativeSetTimeout(handler, timeout === 500 ? 0 : timeout, ...arguments_)
+	let completeConfigurationWrites = 0
 	window.fetch = async (input, init) => {
 		const inputUrl = typeof input === 'string' || input instanceof window.URL ? input.toString() : Reflect.get(input, 'url')
 		if (typeof inputUrl !== 'string') throw new Error('Unexpected request URL')
 		const url = new URL(inputUrl, server.url)
+		if (url.pathname === '/api/configuration' && init?.method === 'PUT') completeConfigurationWrites += 1
 		const response = init?.method === undefined || init.method === 'GET' ? await fetch(url) : await fetch(url, { body: String(init.body), headers: { 'content-type': 'application/json', origin: server.url.origin }, method: init.method })
 		return new window.Response(await response.text(), { headers: { 'content-type': response.headers.get('content-type') ?? 'application/json' }, status: response.status })
 	}
@@ -197,6 +216,19 @@ test('keeps all mutations locked and ignores deferred old-chain responses until 
 	const initialConfigurationStatus = element(window, 'configuration-status', window.HTMLElement).textContent
 	if (!element(window, 'settings-chain-scope', window.HTMLElement).textContent.includes('Ethereum mainnet')) throw new Error(`Initial configuration did not load: ${initialConfigurationStatus}`)
 	expect(element(window, 'settings-chain-scope', window.HTMLElement).textContent).toContain('Ethereum mainnet')
+	const rawConfiguration = element(window, 'configuration-json', window.HTMLTextAreaElement)
+	const rawConfigurationForm = element(window, 'configuration-form', window.HTMLFormElement)
+	const editedConfiguration: unknown = JSON.parse(rawConfiguration.value)
+	const runtime = typeof editedConfiguration === 'object' && editedConfiguration !== null ? Reflect.get(editedConfiguration, 'runtime') : undefined
+	const riskLimits = typeof runtime === 'object' && runtime !== null ? Reflect.get(runtime, 'riskLimits') : undefined
+	if (typeof riskLimits !== 'object' || riskLimits === null) throw new Error('Missing loaded risk limits')
+	Reflect.set(riskLimits, 'maxTotalLockedWeth', '12')
+	rawConfiguration.value = JSON.stringify(editedConfiguration)
+	rawConfigurationForm.dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }))
+	await Bun.sleep(20)
+	expect(completeConfigurationWrites).toBe(0)
+	expect(rawConfiguration.readOnly).toBe(true)
+	expect(rawConfigurationForm.querySelector('button[type="submit"]')).toBeNull()
 	expect(element(window, 'launch-notice', window.HTMLElement).hidden).toBe(true)
 	expect(element(window, 'capability-badge', window.HTMLElement).textContent).toBe('Capability unavailable')
 	expect(element(window, 'attention-badge', window.HTMLElement).dataset['tone']).toBe('warning')
@@ -211,17 +243,27 @@ test('keeps all mutations locked and ignores deferred old-chain responses until 
 	await page.waitUntilComplete()
 	expect(element(window, 'capability-badge', window.HTMLElement).hidden).toBe(true)
 	expect(element(window, 'attention-badge', window.HTMLElement).dataset['tone']).toBe('ok')
+	configurationGate = new Promise(resolve => (releaseConfiguration = resolve))
+	element(window, 'reload-configuration-button', window.HTMLButtonElement).click()
+	await Bun.sleep(10)
 	stateFailure = true
 	triggerRefresh()
-	await page.waitUntilComplete()
+	for (let attempt = 0; attempt < 100 && !element(window, 'operator-health', window.HTMLElement).textContent.includes('Dashboard state is stale; retrying.'); attempt++) await Bun.sleep(10)
 	expect(element(window, 'launch-notice', window.HTMLElement).hidden).toBe(true)
 	expect(element(window, 'capability-badge', window.HTMLElement).textContent).toBe('Capability unavailable')
 	expect(element(window, 'attention-badge', window.HTMLElement).dataset['tone']).toBe('warning')
+	expect(element(window, 'operator-health', window.HTMLElement).textContent).toContain('Dashboard state is stale; retrying.')
+	releaseConfiguration?.()
+	for (let attempt = 0; attempt < 100 && element(window, 'configuration-status', window.HTMLElement).textContent !== ''; attempt++) await Bun.sleep(10)
+	expect(element(window, 'configuration-status', window.HTMLElement).textContent).toBe('')
+	expect(element(window, 'operator-health', window.HTMLElement).textContent).toContain('Dashboard state is stale; retrying.')
+	configurationGate = undefined
 	stateFailure = false
 	triggerRefresh()
 	await page.waitUntilComplete()
 	expect(element(window, 'capability-badge', window.HTMLElement).hidden).toBe(true)
 	expect(element(window, 'attention-badge', window.HTMLElement).dataset['tone']).toBe('ok')
+	expect(element(window, 'operator-health', window.HTMLElement).textContent).not.toContain('Dashboard state is stale; retrying.')
 
 	capable = false
 	triggerRefresh()
@@ -472,8 +514,8 @@ test('pending executor deployment recovery owns the overview notice, the executo
 	expect(noticeTitle.textContent).toBe('Unable to change bot state')
 
 	// Deploying from this page clears that refusal even though no poll ever showed the journal, so a later poll cannot revive it.
-	Reflect.set(window, 'confirm', () => true)
 	element(window, 'create2-form', window.HTMLFormElement).dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }))
+	await acceptOperatorDialog(window, 'DEPLOY EXECUTOR')
 	await page.waitUntilComplete()
 	for (let attempt = 0; attempt < 100 && noticeTitle.textContent === 'Unable to change bot state'; attempt++) await Bun.sleep(10)
 	expect(element(window, 'create2-status', window.HTMLElement).textContent).toBe(`Verified existing executor at ${address}.`)
@@ -619,6 +661,7 @@ test('lists skipped reports beside priced ones with their scan reason and token'
 
 test('deployment form saves venue switches without configurable Uniswap addresses', async () => {
 	let settings = parseOperatorSettings({ ...example, network: 'sepolia', networkConfigured: true, connectivity: { publicRpcUrls: ['https://rpc.example/'], readRpcUrl: 'https://rpc.example/' } })
+	const venueRequests: unknown[] = []
 	const snapshot = () =>
 		operatorSnapshot(operatorState(), settings.strategy, settings.submission, settings.connectivity, {
 			deployment: settings.deployment,
@@ -641,6 +684,7 @@ test('deployment form saves venue switches without configurable Uniswap addresse
 		setPaused: () => undefined,
 		updateConnectivity: value => value,
 		updateDeployment: value => {
+			venueRequests.push(value)
 			settings = { ...settings, deployment: mergeStoredDeploymentUpdate(settings.deployment, value, 'sepolia') }
 			return settings.deployment
 		},
@@ -652,8 +696,9 @@ test('deployment form saves venue switches without configurable Uniswap addresse
 	const { page, window } = await mountDashboard(server, '/settings')
 	for (let attempt = 0; attempt < 100 && !element(window, 'deployment-v2-enabled', window.HTMLInputElement).checked; attempt++) await Bun.sleep(10)
 	const form = element(window, 'deployment-form', window.HTMLFormElement)
-	const save = async () => {
+	const save = async (review = true) => {
 		form.dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }))
+		if (review) await acceptOperatorDialog(window)
 		await page.waitUntilComplete()
 		for (let attempt = 0; attempt < 100 && element(window, 'deployment-status', window.HTMLElement).textContent === 'Validating venues…'; attempt++) await Bun.sleep(10)
 		expect(element(window, 'deployment-status', window.HTMLElement).textContent).toContain('Venues saved')
@@ -665,7 +710,7 @@ test('deployment form saves venue switches without configurable Uniswap addresse
 	expect(window.document.getElementById('create2-salt')).toBeNull()
 	expect(window.document.getElementById('deployment-quorum-rpcs')).toBeNull()
 	expect(element(window, 'quorum-rpc-urls', window.HTMLTextAreaElement).closest('form')?.id).toBe('connectivity-form')
-	await save()
+	await save(false)
 	const restored = () => parseOperatorSettings({ ...JSON.parse(JSON.stringify(serializeOperatorSettings(settings))), network: 'mainnet' }).deployment
 	expect(settings.deployment.executor).toBe(canonicalExecutorIdentity().address)
 	expect(settings.deployment.uniswapV2Router).toBeUndefined()
@@ -673,7 +718,23 @@ test('deployment form saves venue switches without configurable Uniswap addresse
 	element(window, 'deployment-v2-enabled', window.HTMLInputElement).checked = false
 	element(window, 'deployment-v3-enabled', window.HTMLInputElement).checked = false
 	element(window, 'deployment-v4-enabled', window.HTMLInputElement).checked = true
+	form.dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }))
+	let review = window.document.querySelector('.operator-confirm-dialog')
+	for (let attempt = 0; attempt < 100 && review === null; attempt++) {
+		await Bun.sleep(10)
+		review = window.document.querySelector('.operator-confirm-dialog')
+	}
+	expect(review?.textContent).toContain('Uniswap V2Enabled→Disabled')
+	expect(review?.textContent).toContain('Uniswap V3Enabled→Disabled')
+	expect(review?.textContent).toContain('Uniswap V4Disabled→Enabled')
+	expect(venueRequests).toHaveLength(1)
+	const cancel = review?.querySelector('.dialog-actions button.secondary')
+	if (!(cancel instanceof window.HTMLButtonElement)) throw new Error('Expected venue review cancel control')
+	cancel.click()
+	await page.waitUntilComplete()
+	expect(venueRequests).toHaveLength(1)
 	await save()
+	expect(venueRequests.at(-1)).toEqual({ uniswapV2Enabled: false, uniswapV3Enabled: false, uniswapV4Enabled: true })
 	expect(settings.deployment.uniswapV4PoolManager).toBeDefined()
 	expect(settings.deployment.uniswapV4Quoter).toBeDefined()
 	expect(restored().uniswapV2Router).toBeUndefined()
@@ -795,8 +856,33 @@ test('focused risk, settlement, execution, and market forms load the saved confi
 	expect([marketInput('requestTimeoutMilliseconds').min, marketInput('requestTimeoutMilliseconds').max]).toEqual(['250', '60000'])
 	expect(window.document.querySelector('#settings-nav a[aria-current="true"]')?.getAttribute('data-settings-target')).toBe('settings-connect')
 	expect(marketInput('minimumBidDepthEth').value).toBe('2')
+	const minimumAskDepth = marketInput('minimumAskDepthEth')
+	minimumAskDepth.value = '0.0000000000000000001'
+	minimumAskDepth.dispatchEvent(new window.Event('input', { bubbles: true }))
+	element(window, 'market-form', window.HTMLFormElement).dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }))
+	await Bun.sleep(20)
+	expect(window.document.querySelector('.operator-confirm-dialog') === null).toBe(true)
+	expect(element(window, 'market-status', window.HTMLElement).textContent).toContain('centralizedMarkets.minimumAskDepthEth')
+	minimumAskDepth.value = '2'
+	minimumAskDepth.dispatchEvent(new window.Event('input', { bubbles: true }))
+	const venueEnabled = element(window, 'venue-consensus-enabled', window.HTMLInputElement)
+	const wasVenueEnabled = venueEnabled.checked
+	venueEnabled.checked = true
+	venueEnabled.dispatchEvent(new window.Event('change', { bubbles: true }))
+	const venueDepth = element(window, 'market-form', window.HTMLFormElement).querySelector('[name="venue-dexProbeDepthEth"]')
+	if (!(venueDepth instanceof window.HTMLInputElement)) throw new Error('Expected venue depth input')
+	const savedVenueDepth = venueDepth.value
+	venueDepth.value = '0.0000000000000000001'
+	element(window, 'market-form', window.HTMLFormElement).dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }))
+	await Bun.sleep(20)
+	expect(window.document.querySelector('.operator-confirm-dialog') === null).toBe(true)
+	expect(element(window, 'market-status', window.HTMLElement).textContent).toContain('centralizedMarkets.venueConsensus.dexProbeDepthEth')
+	venueDepth.value = savedVenueDepth
+	venueEnabled.checked = wasVenueEnabled
+	venueEnabled.dispatchEvent(new window.Event('change', { bubbles: true }))
 	expect(element(window, 'market-required', window.HTMLInputElement).checked).toBe(false)
-	expect(JSON.parse(element(window, 'market-venue-consensus-json', window.HTMLTextAreaElement).value)).toEqual(serializeStoredCentralizedMarkets(settings.centralizedMarkets).venueConsensus)
+	expect(element(window, 'venue-consensus-enabled', window.HTMLInputElement).checked).toBe(settings.centralizedMarkets.venueConsensus !== undefined)
+	expect(window.document.querySelectorAll('#venue-dex-source-rows tr')).toHaveLength(settings.centralizedMarkets.venueConsensus?.dexSources.length ?? 0)
 
 	// Save buttons stay disabled until an edit differs from the loaded values; the panel summary shows the unsaved state.
 	const saveButton = (formId: string) => {
@@ -814,6 +900,9 @@ test('focused risk, settlement, execution, and market forms load the saved confi
 
 	const submit = async (formId: string, statusId: string, pendingMessage: string) => {
 		element(window, formId, window.HTMLFormElement).dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }))
+		if (formId === 'runtime-form' && Number(runtimeInput('maxPositionNotionalWeth').value) <= Number(runtimeInput('maxTotalLockedWeth').value)) await acceptOperatorDialog(window)
+		if (formId === 'settlement-form' && settlementInput('settlementRewardWithdrawThresholdEth').value !== '0') await acceptOperatorDialog(window)
+		if (formId === 'market-form') await acceptOperatorDialog(window)
 		await page.waitUntilComplete()
 		for (let attempt = 0; attempt < 100 && element(window, statusId, window.HTMLElement).textContent === pendingMessage; attempt++) await Bun.sleep(10)
 		return element(window, statusId, window.HTMLElement).textContent
@@ -827,6 +916,7 @@ test('focused risk, settlement, execution, and market forms load the saved confi
 		releaseRuntimeSave = resolve
 	})
 	element(window, 'runtime-form', window.HTMLFormElement).dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }))
+	await acceptOperatorDialog(window)
 	await Bun.sleep(30)
 	expect(element(window, 'runtime-status', window.HTMLElement).textContent).toBe('Saving risk limits…')
 	// The whole fieldset locks during the request, so a later edit cannot be replaced silently by the response.
@@ -844,8 +934,37 @@ test('focused risk, settlement, execution, and market forms load the saved confi
 	expect(settings.runtime.execute).toBe(false)
 	expect(saveButton('runtime-form').disabled).toBe(true)
 	expect(badges('runtime-form')).toEqual(['Queued · next scan'])
+	for (const [field, value, label] of [
+		['maxHedgeSlippageBps', '75', 'Maximum hedge slippage'],
+		['lookbackBlocks', '32', 'Lookback period'],
+	] as const) {
+		const previous = settings.runtime[field]
+		runtimeInput(field).value = value
+		runtimeInput(field).dispatchEvent(new window.Event('input', { bubbles: true }))
+		element(window, 'runtime-form', window.HTMLFormElement).dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }))
+		let review = window.document.querySelector('.operator-confirm-dialog')
+		for (let attempt = 0; attempt < 100 && review === null; attempt++) {
+			await Bun.sleep(10)
+			review = window.document.querySelector('.operator-confirm-dialog')
+		}
+		expect(review?.textContent).toContain(label)
+		const unit = field === 'maxHedgeSlippageBps' ? 'bps' : 'blocks'
+		expect(review?.textContent).toContain(`${previous} ${unit}→${value} ${unit}`)
+		expect(settings.runtime[field]).toBe(previous)
+		await acceptOperatorDialog(window)
+		await page.waitUntilComplete()
+		for (let attempt = 0; attempt < 100 && settings.runtime[field] === previous; attempt++) await Bun.sleep(10)
+		expect(settings.runtime[field]).toBe(BigInt(value))
+	}
+	runtimeInput('maxHedgeSlippageBps').value = ''
+	element(window, 'runtime-form', window.HTMLFormElement).dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }))
+	await Bun.sleep(10)
+	expect(element(window, 'runtime-status', window.HTMLElement).textContent).toBe('Maximum hedge slippage must be a whole number from 0 to 1000 bps.')
+	expect(settings.runtime.maxHedgeSlippageBps).toBe(75n)
+	runtimeInput('maxHedgeSlippageBps').value = '75'
 	runtimeInput('maxPositionNotionalWeth').value = '20'
-	expect(await submit('runtime-form', 'runtime-status', 'Saving risk limits…')).toBe('Runtime maxPositionNotionalAttoWeth cannot exceed maxTotalLockedAttoWeth')
+	runtimeInput('maxPositionNotionalWeth').dispatchEvent(new window.Event('input', { bubbles: true }))
+	expect(await submit('runtime-form', 'runtime-status', 'Saving risk limits…')).toBe('Per-position WETH limit cannot exceed the total locked WETH limit.')
 	expect(settings.runtime.riskLimits.maxPositionNotionalAttoWeth).toBe(5n * 10n ** 18n)
 	expect(saveButton('runtime-form').disabled).toBe(false)
 
@@ -884,7 +1003,18 @@ test('focused risk, settlement, execution, and market forms load the saved confi
 	rowInput('sourceRepMarket').value = 'REP/USDT'
 	rowInput('sourceEthMarket').value = 'ETH/USDT'
 	marketInput('minimumSourceCount').value = '1'
-	expect(await submit('market-form', 'market-status', 'Validating market sources…')).toBe('Market sources saved.')
+	element(window, 'market-form', window.HTMLFormElement).dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }))
+	let sourceReview = window.document.querySelector('.operator-confirm-dialog')
+	for (let attempt = 0; attempt < 100 && sourceReview === null; attempt++) {
+		await Bun.sleep(10)
+		sourceReview = window.document.querySelector('.operator-confirm-dialog')
+	}
+	expect(sourceReview?.textContent).toContain('Source 1 · Exchange ID—→kraken')
+	expect(sourceReview?.textContent).toContain('Source 1 · REP market—→REP/USDT')
+	await acceptOperatorDialog(window)
+	await page.waitUntilComplete()
+	for (let attempt = 0; attempt < 100 && element(window, 'market-status', window.HTMLElement).textContent === 'Validating market sources…'; attempt++) await Bun.sleep(10)
+	expect(element(window, 'market-status', window.HTMLElement).textContent).toBe('Market sources saved.')
 	expect(settings.centralizedMarkets.sources).toEqual([{ ethMarket: 'ETH/USDT', exchangeId: 'kraken', repMarket: 'REP/USDT' }])
 	expect(settings.centralizedMarkets.minimumSourceCount).toBe(1)
 	expect(settings.centralizedMarkets.assetAddress).toBe(settings.deployment.rep)
@@ -893,8 +1023,9 @@ test('focused risk, settlement, execution, and market forms load the saved confi
 	rowInput('sourceEthMarket').value = ''
 	expect(await submit('market-form', 'market-status', 'Validating market sources…')).toBe('centralizedMarkets.sources[0].ethMarket must be ETH/USDT')
 	expect(settings.centralizedMarkets.sources[0]?.ethMarket).toBe('ETH/USDT')
-	element(window, 'market-venue-consensus-json', window.HTMLTextAreaElement).value = '{"dexSources": []'
-	expect(await submit('market-form', 'market-status', 'Validating market sources…')).toContain('JSON')
+	element(window, 'venue-consensus-enabled', window.HTMLInputElement).checked = true
+	element(window, 'venue-consensus-enabled', window.HTMLInputElement).dispatchEvent(new window.Event('change', { bubbles: true }))
+	expect(await submit('market-form', 'market-status', 'Validating market sources…')).not.toBe('Market sources saved.')
 	const removeButton = marketRows()[0]?.querySelector('button')
 	if (!(removeButton instanceof window.HTMLButtonElement)) throw new Error('Missing remove button')
 	removeButton.click()
@@ -998,8 +1129,8 @@ test('go-live checklist unlocks the switch once every prerequisite holds, report
 	expect(Array.from(element(window, 'execution-checklist', window.HTMLUListElement).children, item => item.querySelector('.visually-hidden')?.textContent)).toEqual([' ready', ' ready', ' ready', ' missing', ' missing', ' ready', ' optional'])
 	expect(element(window, 'execution-mode-summary', window.HTMLElement).textContent).toBe('Dry run · prerequisites missing')
 	expect(element(window, 'execution-enabled', window.HTMLInputElement).disabled).toBe(true)
-	Reflect.set(window, 'confirm', () => true)
 	element(window, 'create2-form', window.HTMLFormElement).dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }))
+	await acceptOperatorDialog(window, 'DEPLOY EXECUTOR')
 	await page.waitUntilComplete()
 	for (let attempt = 0; attempt < 100 && !element(window, 'create2-status', window.HTMLElement).textContent.startsWith('Deployed'); attempt++) await Bun.sleep(10)
 	expect(element(window, 'create2-status', window.HTMLElement).textContent).toBe(`Deployed ${executor} in transaction unknown.`)
@@ -1045,6 +1176,7 @@ test('go-live checklist unlocks the switch once every prerequisite holds, report
 	await Bun.sleep(30)
 	element(window, 'deployment-v4-enabled', window.HTMLInputElement).checked = true
 	element(window, 'deployment-form', window.HTMLFormElement).dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }))
+	await acceptOperatorDialog(window)
 	await Bun.sleep(30)
 	expect(deploymentRequests.at(-1)).toEqual({ uniswapV2Enabled: true, uniswapV3Enabled: true, uniswapV4Enabled: true })
 	releaseConnectivity?.()

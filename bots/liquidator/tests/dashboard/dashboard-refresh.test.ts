@@ -1,8 +1,9 @@
-import { decodeSnapshot } from '../../src/dashboard/api-validation.ts'
+import { decodeSnapshot, type MarketSourceRow } from '../../src/dashboard/api-validation.ts'
 import { afterEach, describe, expect, spyOn, test } from 'bun:test'
 import { Browser } from 'happy-dom'
 import type { PoolCatalogPage } from '../../src/monitoring/pool-catalog.ts'
 import { startDashboardServer } from '../../src/dashboard/dashboard-server.ts'
+import example from '../../config/operator.example.json'
 
 const servers: ReturnType<typeof startDashboardServer>[] = []
 const browsers: Browser[] = []
@@ -97,6 +98,7 @@ function state(
 		execute?: boolean
 		lastScannedBlock?: string
 		lastScannedTimestamp?: string
+		marketSources?: MarketSourceRow[]
 		network?: 'mainnet' | 'sepolia'
 		paused?: boolean
 		pendingStagedOperations?: { candidateBlock?: string; coordinator: string; historicalRecoveryComplete: boolean; latestRecoveryBlock?: string; nextHistoricalBlock?: string; operationId: string; queuedBlock: string; target: string }[]
@@ -154,7 +156,7 @@ function state(
 		],
 		scanning: false,
 		status: 'running',
-		marketSources: [],
+		marketSources: options.marketSources ?? [],
 		universes: options.universes ?? [universe('1')],
 		wallet: options.wallet,
 	}
@@ -211,6 +213,7 @@ async function dashboard(initialConfiguration = mainnetConfiguration(), initialS
 	let selectionFailure = false
 	const catalogRequests: string[] = []
 	const catalogSearches: (string | null)[] = []
+	const marketConfigurationRequests: unknown[] = []
 	let snapshot = initialState
 	let stateResponseOverride: unknown
 	let currentConfiguration = initialConfiguration
@@ -336,6 +339,13 @@ async function dashboard(initialConfiguration = mainnetConfiguration(), initialS
 			if (releaseMarketSourceRequest !== undefined) await new Promise<void>(resolve => (releaseMarketSourceRequest = resolve))
 			return new window.Response(JSON.stringify({ assets: [{ assetId: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', sources: [{ id: 'uniswap-v2', kind: 'dex', market: '0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb', status: 'observed' }] }], blockNumber: '42' }), { headers: { 'content-type': 'application/json' } })
 		}
+		if (url.pathname === '/api/market-configuration') {
+			const request: unknown = JSON.parse(String(init?.body))
+			marketConfigurationRequests.push(request)
+			if (typeof request !== 'object' || request === null) throw new Error('Unexpected market configuration request')
+			currentConfiguration = { ...currentConfiguration, centralizedMarkets: Reflect.get(request, 'root'), childMarketConfigurations: Reflect.get(request, 'children'), desiredPools: Reflect.get(request, 'desiredPools') }
+			return new window.Response(JSON.stringify(currentConfiguration), { headers: { 'content-type': 'application/json' } })
+		}
 		if (url.pathname === '/api/signer' && rejectSigner !== undefined) return new window.Response(JSON.stringify({ error: rejectSigner }), { headers: { 'content-type': 'application/json' }, status: 400 })
 		if (url.pathname === '/api/paused' && rejectPause) {
 			return new window.Response(JSON.stringify({ error: typeof rejectPause === 'string' ? rejectPause : 'Fixture rejected /api/paused with secret' }), { headers: { 'content-type': 'application/json' }, status: 400 })
@@ -441,6 +451,7 @@ async function dashboard(initialConfiguration = mainnetConfiguration(), initialS
 		},
 		catalogRequests,
 		catalogSearches,
+		marketConfigurationRequests,
 		setCatalogFailure: (failed: boolean) => {
 			catalogFailure = failed
 		},
@@ -620,7 +631,7 @@ describe('liquidator dashboard refresh behavior', () => {
 		await page.refresh()
 		await Bun.sleep(1)
 		expect(page.stateRequestCount()).toBe(before + 2)
-		expect(page.window.document.getElementById('run-status-badge')?.textContent).toBe('Disconnected')
+		expect(page.window.document.getElementById('run-status-badge')?.textContent).toBe('State stale')
 	})
 
 	test('keeps a run-state mutation single-flight across an intervening successful poll', async () => {
@@ -670,7 +681,7 @@ describe('liquidator dashboard refresh behavior', () => {
 		await recovered.refresh()
 		expect(recovered.window.document.getElementById('mode-badge')?.textContent).toBe('Dry run · last known')
 		expect(recovered.window.document.getElementById('network-badge')?.textContent).toBe('Mainnet · chain 1 · last known')
-		expect(recovered.window.document.getElementById('run-status-badge')?.textContent).toBe('Disconnected')
+		expect(recovered.window.document.getElementById('run-status-badge')?.textContent).toBe('State stale')
 		expect(recovered.window.document.getElementById('global-error')?.classList.contains('error')).toBe(true)
 		expect(recovered.window.document.getElementById('capability-badge')?.textContent).toBe('Capability unavailable')
 		expect(recovered.window.document.getElementById('attention-badge')?.getAttribute('data-tone')).toBe('warning')
@@ -691,6 +702,19 @@ describe('liquidator dashboard refresh behavior', () => {
 		expect(recovered.window.document.getElementById('attention-badge')?.getAttribute('data-tone')).toBe('ok')
 		expect(recovered.window.document.getElementById('pause-button')?.hasAttribute('disabled')).toBe(false)
 		expect(recovered.window.document.getElementById('global-error')?.classList.contains('hidden')).toBe(true)
+	})
+
+	test('configuration retry does not refresh retained health after a state failure', async () => {
+		const page = await dashboard(mainnetConfiguration(), state(), false, true)
+		page.setStateRequestFailure(true)
+		await page.refresh()
+		expect(page.window.document.getElementById('operator-health')?.textContent).toContain('Dashboard state is stale; retrying.')
+		page.setConfigurationRequestFailure(false)
+		const retry = page.window.document.querySelector('#configuration-status button')
+		if (!(retry instanceof page.window.HTMLButtonElement)) throw new Error('Expected configuration retry')
+		retry.click()
+		await page.waitUntilComplete()
+		expect(page.window.document.getElementById('operator-health')?.textContent).toContain('Dashboard state is stale; retrying.')
 	})
 
 	test('keeps emergency Pause available while identity-dependent controls fail closed', async () => {
@@ -986,7 +1010,7 @@ describe('liquidator dashboard refresh behavior', () => {
 		const outcome = await Promise.race([page.refresh().then(() => 'completed'), Bun.sleep(1_500).then(() => 'timed-out')])
 
 		expect(outcome).toBe('completed')
-		expect(page.window.document.getElementById('run-status-badge')?.textContent).toBe('Disconnected')
+		expect(page.window.document.getElementById('run-status-badge')?.textContent).toBe('State stale')
 		expect(page.window.document.getElementById('pause-button')?.hasAttribute('disabled')).toBe(false)
 		expect(page.window.document.getElementById('resume-dialog')?.hasAttribute('open')).toBe(false)
 	})
@@ -1008,6 +1032,21 @@ describe('liquidator dashboard refresh behavior', () => {
 		expect(page.window.document.activeElement?.getAttribute('data-record-key')).toBe(recordKey)
 		const refreshedDetails = page.window.document.querySelector('details[data-pool-address]')
 		expect(refreshedDetails instanceof page.window.HTMLDetailsElement && refreshedDetails.open).toBe(true)
+	})
+
+	test('keeps unchanged market-source rows mounted across polls and updates changed evidence', async () => {
+		const source: MarketSourceRow = { assetId: '0x1111111111111111111111111111111111111111', id: 'kraken', kind: 'cex', market: 'REP/USDT', status: 'admitted' }
+		const page = await dashboard(mainnetConfiguration(), state(undefined, [], { marketSources: [source] }))
+		const rows = page.window.document.getElementById('market-source-rows')
+		const first = rows?.querySelector('tr')
+		if (rows === null || first === null || first === undefined) throw new Error('Expected market source row')
+		page.setSnapshot(state(undefined, [], { marketSources: [{ ...source }] }))
+		await page.refresh()
+		expect(rows.querySelector('tr') === first).toBe(true)
+		page.setSnapshot(state(undefined, [], { marketSources: [{ ...source, reason: 'Quorum failed', status: 'failed' }] }))
+		await page.refresh()
+		expect(rows.querySelector('tr') === first).toBe(true)
+		expect(rows.textContent).toContain('Quorum failed')
 	})
 
 	test('does not repeat unchanged alerts and sanitizes mutation failures', async () => {
@@ -1130,7 +1169,7 @@ describe('liquidator dashboard refresh behavior', () => {
 		const pauseButton = page.window.document.getElementById('pause-button')
 		if (!(pauseButton instanceof page.window.HTMLButtonElement)) throw new Error('Expected pause button')
 		expect(pauseButton.textContent).toBe('Resume')
-		expect(page.window.document.getElementById('mode-badge')?.textContent).toBe('Live')
+		expect(page.window.document.getElementById('mode-badge')?.textContent).toBe('Live armed')
 		expect(page.pauseRequests).toHaveLength(0)
 		pauseButton.click()
 		await page.waitUntilComplete()
@@ -1188,6 +1227,146 @@ describe('liquidator go-live settings', () => {
 		reserve.dispatchEvent(new page.window.Event('input', { bubbles: true }))
 		expect(strategySave.disabled).toBe(false)
 		expect(Array.from(page.window.document.querySelectorAll('.settings-badges[data-form="strategy-form"] .settings-badge'), badge => badge.textContent)).toEqual(['Unsaved changes'])
+	})
+
+	test('strategy review shows saved runtime values for log recovery controls', async () => {
+		const saved = mainnetConfiguration()
+		saved.runtime.logLookbackBlocks = 48
+		saved.runtime.historicalLogRecovery = true
+		const page = await dashboard(saved, state())
+		const form = page.window.document.getElementById('strategy-form')
+		const lookback = page.window.document.querySelector('#strategy-form input[name="logLookbackBlocks"]')
+		const historical = page.window.document.querySelector('#strategy-form input[name="historicalLogRecovery"]')
+		if (!(form instanceof page.window.HTMLFormElement) || !(lookback instanceof page.window.HTMLInputElement) || !(historical instanceof page.window.HTMLInputElement)) throw new Error('Expected log recovery controls')
+		lookback.value = '64'
+		historical.checked = false
+		form.dispatchEvent(new page.window.Event('submit', { bubbles: true, cancelable: true }))
+		let review = page.window.document.querySelector('.operator-confirm-dialog')
+		for (let attempt = 0; attempt < 100 && review === null; attempt++) {
+			await Bun.sleep(10)
+			review = page.window.document.querySelector('.operator-confirm-dialog')
+		}
+		expect(review?.textContent).toContain('log lookback blocks48 blocks→64 blocks')
+		expect(review?.textContent).toContain('historical log recoveryEnabled→Disabled')
+	})
+
+	test('rejects an invalid liquidation limit before opening the strategy review', async () => {
+		const saved = mainnetConfiguration()
+		saved.strategy = { ...example.strategy }
+		const page = await dashboard(saved, state())
+		const form = page.window.document.getElementById('strategy-form')
+		const minimum = page.window.document.querySelector('#strategy-form input[name="minimumLiquidationDebtEth"]')
+		if (!(form instanceof page.window.HTMLFormElement) || !(minimum instanceof page.window.HTMLInputElement)) throw new Error('Expected strategy controls')
+		minimum.value = '26'
+		form.dispatchEvent(new page.window.Event('submit', { bubbles: true, cancelable: true }))
+		await Bun.sleep(20)
+		expect(page.window.document.querySelector('.operator-confirm-dialog')).toBeNull()
+		expect(page.window.document.getElementById('strategy-status')?.textContent).toContain('Minimum liquidation debt cannot exceed the maximum')
+	})
+
+	test('strategy review includes units for ETH, REP, and bps changes', async () => {
+		const saved = mainnetConfiguration()
+		saved.strategy = { ...example.strategy }
+		const page = await dashboard(saved, state())
+		const form = page.window.document.getElementById('strategy-form')
+		if (!(form instanceof page.window.HTMLFormElement)) throw new Error('Expected strategy form')
+		for (const [name, value] of [
+			['maximumGasCostEth', '0.03'],
+			['walletReserveRep', '120'],
+			['vaultTargetHealthBps', '13000'],
+		] as const) {
+			const input = form.querySelector(`[name="${name}"]`)
+			if (!(input instanceof page.window.HTMLInputElement)) throw new Error(`Expected ${name} input`)
+			input.value = value
+		}
+		form.dispatchEvent(new page.window.Event('submit', { bubbles: true, cancelable: true }))
+		let review = page.window.document.querySelector('.operator-confirm-dialog')
+		for (let attempt = 0; attempt < 100 && review === null; attempt++) {
+			await Bun.sleep(10)
+			review = page.window.document.querySelector('.operator-confirm-dialog')
+		}
+		expect(review?.textContent).toContain('0.02 ETH→0.03 ETH')
+		expect(review?.textContent).toContain('100 REP→120 REP')
+		expect(review?.textContent).toContain('12500 bps→13000 bps')
+		expect(review?.textContent).not.toContain('decimal places')
+	})
+
+	test('rejects an amount with more than 18 decimal places before opening strategy review', async () => {
+		const saved = mainnetConfiguration()
+		saved.strategy = { ...example.strategy }
+		const page = await dashboard(saved, state())
+		const form = page.window.document.getElementById('strategy-form')
+		const input = form?.querySelector('[name="maximumGasCostEth"]')
+		if (!(form instanceof page.window.HTMLFormElement) || !(input instanceof page.window.HTMLInputElement)) throw new Error('Expected strategy controls')
+		input.value = '0.0000000000000000001'
+		form.dispatchEvent(new page.window.Event('submit', { bubbles: true, cancelable: true }))
+		await Bun.sleep(20)
+		expect(page.window.document.querySelector('.operator-confirm-dialog')).toBeNull()
+		expect(page.window.document.getElementById('strategy-status')?.textContent).toContain('Maximum gas cost (ETH) must be a non-negative decimal with at most 18 places')
+	})
+
+	test('market review omits canonical root identity restored by the server', async () => {
+		const saved = mainnetConfiguration()
+		saved.centralizedMarkets = { ...example.centralizedMarkets, assetAddress: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', assetChainId: 1 }
+		const page = await dashboard(saved, state())
+		const form = page.window.document.getElementById('market-configuration-form')
+		if (!(form instanceof page.window.HTMLFormElement)) throw new Error('Expected market configuration form')
+		form.dispatchEvent(new page.window.Event('submit', { bubbles: true, cancelable: true }))
+		let review = page.window.document.querySelector('.operator-confirm-dialog')
+		for (let attempt = 0; attempt < 100 && review === null; attempt++) {
+			await Bun.sleep(10)
+			review = page.window.document.querySelector('.operator-confirm-dialog')
+		}
+		expect(review).not.toBeNull()
+		expect(review?.textContent).not.toContain('assetAddress')
+		expect(review?.textContent).not.toContain('assetChainId')
+	})
+
+	test('saves a REP/ETH source without an ETH market', async () => {
+		const saved = mainnetConfiguration()
+		saved.centralizedMarkets = { ...example.centralizedMarkets, sources: [{ exchangeId: 'kraken', repMarket: 'REP/ETH', ethMarket: null }] }
+		const page = await dashboard(saved, state())
+		const form = page.window.document.getElementById('market-configuration-form')
+		const minimumSources = page.window.document.querySelector('#market-configuration-editor input[type="number"][min="1"][max="100"]')
+		if (!(form instanceof page.window.HTMLFormElement) || !(minimumSources instanceof page.window.HTMLInputElement)) throw new Error('Expected market configuration controls')
+		minimumSources.value = '1'
+		minimumSources.dispatchEvent(new page.window.Event('input', { bubbles: true }))
+		await Bun.sleep(10)
+		expect(form.checkValidity()).toBe(true)
+		const save = form.querySelector('button[type="submit"]')
+		if (!(save instanceof page.window.HTMLButtonElement)) throw new Error('Expected market save button')
+		expect(save.disabled).toBe(false)
+		save.click()
+		for (let attempt = 0; attempt < 100 && page.window.document.querySelector('.operator-confirm-dialog') === null; attempt++) await Bun.sleep(10)
+		const confirm = page.window.document.getElementById('operator-confirm-submit')
+		if (!(confirm instanceof page.window.HTMLButtonElement)) throw new Error('Expected market review confirmation')
+		confirm.click()
+		for (let attempt = 0; attempt < 100 && page.marketConfigurationRequests.length === 0; attempt++) await Bun.sleep(10)
+		expect(page.marketConfigurationRequests).toHaveLength(1)
+		expect(page.marketConfigurationRequests[0]).toMatchObject({ root: { sources: [{ exchangeId: 'kraken', repMarket: 'REP/ETH', ethMarket: null }] } })
+	})
+
+	test('enables saving when removing a source is the only change', async () => {
+		const saved = mainnetConfiguration()
+		saved.centralizedMarkets = { ...example.centralizedMarkets, sources: [{ exchangeId: 'kraken', repMarket: 'REP/ETH', ethMarket: null }] }
+		const page = await dashboard(saved, state())
+		const form = page.window.document.getElementById('market-configuration-form')
+		const remove = page.window.document.querySelector('#market-configuration-editor section:first-child .market-editor-row button')
+		if (!(form instanceof page.window.HTMLFormElement) || !(remove instanceof page.window.HTMLButtonElement)) throw new Error('Expected source removal controls')
+		const save = form.querySelector('button[type="submit"]')
+		if (!(save instanceof page.window.HTMLButtonElement)) throw new Error('Expected market save button')
+		expect(save.disabled).toBe(true)
+		remove.click()
+		await Bun.sleep(10)
+		expect(save.disabled).toBe(false)
+		save.click()
+		for (let attempt = 0; attempt < 100 && page.window.document.querySelector('.operator-confirm-dialog') === null; attempt++) await Bun.sleep(10)
+		const confirm = page.window.document.getElementById('operator-confirm-submit')
+		if (!(confirm instanceof page.window.HTMLButtonElement)) throw new Error('Expected market review confirmation')
+		confirm.click()
+		for (let attempt = 0; attempt < 100 && page.marketConfigurationRequests.length === 0; attempt++) await Bun.sleep(10)
+		expect(page.marketConfigurationRequests).toHaveLength(1)
+		expect(page.marketConfigurationRequests[0]).toMatchObject({ root: { sources: [] } })
 	})
 
 	test('lists every live-execution prerequisite and locks the switch until they hold', async () => {
@@ -1289,7 +1468,7 @@ describe('liquidator go-live settings', () => {
 		page.setSnapshot(state(undefined, [], { execute: true, lastScannedBlock: '120', paused: true, wallet: '0xabcdefabcdefabcdefabcdefabcdefabcdefabcd' }))
 		await page.refresh()
 		expect(page.window.document.getElementById('execution-mode-summary')?.textContent).toBe('Live')
-		expect(page.window.document.getElementById('mode-badge')?.textContent).toBe('Live')
+		expect(page.window.document.getElementById('mode-badge')?.textContent).toBe('Live armed')
 	})
 
 	test('keeps a delivery save locked across polls until the bot answers', async () => {
@@ -1862,7 +2041,7 @@ test('rejects malformed successful state responses before rendering and recovers
 	const page = await dashboard(mainnetConfiguration(), state())
 	page.setStateResponse({ ...state(), execute: 'false' })
 	await page.refresh()
-	expect(page.window.document.querySelector('#run-status-badge')?.textContent).toContain('Disconnected')
+	expect(page.window.document.querySelector('#run-status-badge')?.textContent).toContain('State stale')
 	expect(page.window.document.querySelector('#strategy-fields')?.hasAttribute('disabled')).toBe(true)
 	page.setStateResponse(undefined)
 	await page.refresh()
@@ -1904,4 +2083,13 @@ test('uses informational dry run, warning live and pending, and error failure ba
 		const badge = [...page.window.document.querySelectorAll('.badge')].find(element => element.textContent === status)
 		expect(badge?.className).toBe(`badge ${tone}`)
 	}
+})
+
+test('links confirmed liquidation activity from its durable transaction hash', async () => {
+	const page = await dashboard(mainnetConfiguration(), state())
+	const hash = `0x${'ab'.repeat(32)}`
+	page.setStateResponse({ ...state(), activities: [{ at: '2026-09-17T00:00:00.000Z', hash, message: 'Liquidation confirmed', status: 'confirmed' }] })
+	await page.refresh()
+	const link = page.window.document.querySelector('#activity-list a')
+	expect(link?.getAttribute('href')).toBe(`https://etherscan.io/tx/${hash}`)
 })

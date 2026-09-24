@@ -65,6 +65,8 @@ export function dashboardState(state: RuntimeState, configuration: Configuration
 						{
 							message: 'Safety pause is latched; review the failure activity and current recovery state before explicitly resuming execution',
 							severity: 'error',
+							actionHref: '/recovery',
+							actionLabel: 'Review recovery',
 						},
 					]
 				: []),

@@ -28,7 +28,7 @@ const universesPanel = settingsGroup({
 })
 
 const marketPanel = settingsGroup({
-	body: `<form id="market-configuration-form"><fieldset id="market-configuration-fields" disabled><label><span>Pool targets and per-universe market JSON</span><textarea id="market-configuration-json" class="configuration-json mono" rows="18" spellcheck="false" required></textarea></label><p class="section-note">Root REP belongs under <code>root</code>; exact child assets belong under <code>children</code>; missing origin pools belong under <code>desiredPools</code>.</p>${formActions({ statusId: 'market-configuration-save-status', submitLabel: 'Validate &amp; save markets' })}</fieldset></form>`,
+	body: `<form id="market-configuration-form"><fieldset id="market-configuration-fields" disabled><div id="market-configuration-editor"></div>${formActions({ statusId: 'market-configuration-save-status', submitLabel: 'Review and save markets' })}</fieldset></form>`,
 	formId: 'market-configuration-form',
 	summary: 'Source policy, child REP markets, and desired pools',
 	title: 'Market and pool configuration',

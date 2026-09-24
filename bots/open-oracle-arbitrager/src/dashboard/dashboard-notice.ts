@@ -16,7 +16,7 @@ export function operatorNoticePresentation(snapshot: PublicOperatorSnapshot) {
 	if (snapshot.execute) {
 		noticeTitle = 'Execution mode is locally armed'
 		noticeCopy = 'The local wallet can submit disputes when every strategy, timing, inventory, state, and delivery guard passes.'
-		noticeTone = 'warning'
+		noticeTone = 'info'
 	}
 	if (!snapshot.operatorCapable) {
 		noticeTitle = 'Operator not ready'

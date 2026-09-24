@@ -13,6 +13,7 @@
 		<!-- operator-header -->
 
 		<main>
+			<div id="operator-health" data-page-content="overview"></div>
 			<section id="overview" class="metric-grid operator-metrics" data-page-content="overview" aria-label="Bot summary">
 				<div class="metric"><span class="metric-label">Status</span><strong id="status-value">—</strong><small id="last-poll-value">No poll completed</small></div>
 				<div class="metric"><span class="metric-label">Active reports</span><strong id="active-report-value">0</strong></div>
@@ -174,8 +175,9 @@
 					<div class="section-heading">
 						<div>
 							<p class="eyebrow">Broadcast lifecycle</p>
-							<h2>Transaction tracking</h2>
+						<h2>Transaction tracking</h2>
 						</div>
+						<label>Filter <select id="transaction-filter"><option value="all">All transactions</option><option value="confirmation-unknown">Recovery required</option><option value="confirmed">Confirmed</option><option value="failed">Failed</option></select></label>
 						<span id="transaction-count" class="muted">0 tracked</span>
 					</div>
 					<div class="table-scroll mobile-record-scroll" tabindex="0" aria-label="Transaction tracking table">
@@ -207,6 +209,7 @@
 						<p class="eyebrow">Decision journal</p>
 						<h2>Operations log</h2>
 					</div>
+					<label>Filter <select id="operation-filter"><option value="all">All decisions</option><option value="error">Errors</option><option value="warning">Warnings</option><option value="info">Information</option></select></label>
 					<span id="operation-count" class="muted">0 entries</span>
 				</div>
 				<div class="table-scroll mobile-record-scroll operation-scroll" tabindex="0" aria-label="Operations log table">

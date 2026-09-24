@@ -19,7 +19,7 @@ const connectivityPanel = settingsGroup({
 
 const policySwitches = [
 	describedSwitch({ description: 'Includes disputes, auction participation, and other economically adversarial workflows.', id: 'allow-high-risk', label: 'Allow high-risk operations', name: 'allowHighRiskOperations' }),
-	describedSwitch({ description: 'Includes forks, REP migration, burns, and global lifecycle transitions.', id: 'allow-irreversible', label: 'Allow irreversible operations', name: 'allowIrreversibleOperations' }),
+	describedSwitch({ danger: true, description: 'Includes forks, REP migration, burns, and global lifecycle transitions.', id: 'allow-irreversible', label: 'Allow irreversible operations', name: 'allowIrreversibleOperations' }),
 	describedSwitch({
 		description:
 			'Continuously completes the exact genesis topology: binary question, origin security pool, wallet vault, external REP/WETH Uniswap pool creation, initialization, and seeding, Statoblast trading roots, canonical trading pair, and initial pair liquidity. Only these initializer operations bypass the selectable allowlist.',

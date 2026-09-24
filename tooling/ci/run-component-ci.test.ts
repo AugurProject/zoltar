@@ -13,6 +13,7 @@ const component = (checkCovers: readonly ('test' | 'lint')[]): Project => ({
 	dependencies: [],
 	tasks: {
 		test: task('test'),
+		lint: task('lint'),
 		check: { ...task('check'), covers: checkCovers },
 		audit: task('audit'),
 	},
@@ -39,6 +40,14 @@ test('component CI does not duplicate tests covered by the check task', () => {
 	])
 })
 
+test('bot component CI builds its shared dashboard UI dependency before checking', () => {
+	for (const packageName of ['bot-shared', 'chaos', 'arbitrager', 'liquidator']) {
+		const plan = createComponentCiPlan(packageName)
+		expect(plan[0]).toMatchObject({ command: ['bun', 'run', 'tsc'], cwd: 'ui/coreShared' })
+	}
+	expect(createComponentCiPlan('augur-scan').some(entry => entry.cwd === 'ui/coreShared')).toBe(false)
+})
+
 test('registered AugurScan CI runs its complete non-database suite while bots avoid duplicate tests', () => {
 	const augurScanPlan = createComponentCiPlan('augur-scan')
 	expect(augurScanPlan[0]?.command).toEqual(['bun', 'run', 'typecheck'])
@@ -50,6 +59,7 @@ test('registered AugurScan CI runs its complete non-database suite while bots av
 		['bun', 'audit'],
 	])
 	expect(createComponentCiPlan('chaos').map(entry => entry.command.slice(0, 3))).toEqual([
+		['bun', 'run', 'tsc'],
 		['bun', 'run', 'check'],
 		['bun', 'audit'],
 	])

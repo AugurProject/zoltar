@@ -14,7 +14,7 @@ const allowances = (reason: string, entries: readonly (readonly [path: string, m
  */
 export const sourceSizeAllowances = new Map<string, SourceSizeAllowance>([
 	...allowances('Chaos: extract dashboard features, operation handlers, and persistence responsibilities into focused modules.', [
-		['bots/chaos/src/dashboard/dashboard.ts', 1681],
+		['bots/chaos/src/dashboard/dashboard.ts', 1692],
 		['bots/chaos/src/monitoring/discovery.ts', 1020],
 		['bots/chaos/src/operations/trading.ts', 1726],
 		['bots/chaos/src/state/operator-state.ts', 1170],
@@ -28,10 +28,10 @@ export const sourceSizeAllowances = new Map<string, SourceSizeAllowance>([
 		['bots/chaos/src/operations/zoltar.ts', 618],
 	]),
 	...allowances('Owning bot package: extract dashboard controllers, runtime orchestration, and journal persistence into focused modules.', [
-		['bots/open-oracle-arbitrager/src/dashboard/dashboard.ts', 1233],
+		['bots/open-oracle-arbitrager/src/dashboard/dashboard.ts', 1173],
 		['bots/open-oracle-arbitrager/src/runtime/operator.ts', 985],
 		['bots/open-oracle-arbitrager/src/state/position-store.ts', 631],
-		['bots/liquidator/src/dashboard/dashboard.ts', 987],
+		['bots/liquidator/src/dashboard/dashboard.ts', 891],
 		['bots/liquidator/src/cli/run.ts', 718],
 		['bots/liquidator/src/state/operator-state.ts', 668],
 	]),

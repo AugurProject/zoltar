@@ -2,12 +2,16 @@ import type { createRetirementDashboard } from './retirement-dashboard.js'
 import { type Workflow } from './workflow-history.js'
 import { fullIdentifier, formatDate, node, setBadge } from './dom.js'
 import { type Snapshot, type Configuration, type OperationEvaluation, type SubmissionHealth, type RepBalance, type PendingTransaction } from './dashboard-data.ts'
+import { formatAtomicAmount } from '@zoltar/bot-shared/dashboard/amount'
+import { renderOperatorHealth } from '@zoltar/bot-shared/dashboard/health-panel'
+import { element } from '@zoltar/bot-shared/dashboard/dom'
 
 type DashboardHealthViewContext = {
 	lastBlock: HTMLSpanElement
 	lastScan: HTMLSpanElement
 	formatRelative: (value: string | undefined) => string
 	modeBadge: HTMLSpanElement
+	snapshotStale: boolean
 	configuration: Configuration | undefined
 	networkBadge: HTMLSpanElement
 	signerBadge: HTMLSpanElement
@@ -54,10 +58,9 @@ export function createDashboardHealthView(context: DashboardHealthViewContext) {
 		const checkedBlock = value.lastDeploymentCheckedBlock ?? value.lastScannedBlock
 		context.lastBlock.textContent = checkedBlock === undefined ? 'Block —' : `Block ${String(checkedBlock)}`
 		context.lastScan.textContent = value.lastDeploymentCheckedBlock === undefined ? context.formatRelative(value.lastScanAt) : context.formatRelative(value.lastDeploymentCheckAt).replace('Scanned', 'Deployments checked')
-		if (value.safetyPaused === true) setBadge(context.modeBadge, 'Safety paused', 'error')
-		else if (value.paused === true) setBadge(context.modeBadge, 'Paused', 'warning')
-		else if (value.execute === true) setBadge(context.modeBadge, 'Live execution', 'warning')
+		if (value.execute === true) setBadge(context.modeBadge, 'Live armed', 'warning')
 		else setBadge(context.modeBadge, 'Dry run', 'info')
+		renderHealth(value)
 		const networkName = value.network ?? context.configuration?.network ?? 'Network unknown'
 		const chainId = value.chainId ?? context.configuration?.chainId
 		setBadge(context.networkBadge, chainId === undefined ? networkName : `${networkName} · ${String(chainId)}`, value.network === undefined && context.configuration?.network === undefined ? 'warning' : 'neutral')
@@ -74,6 +77,18 @@ export function createDashboardHealthView(context: DashboardHealthViewContext) {
 		context.pauseButton.disabled = context.pauseMutationPending || context.pauseMutationUnreconciled || context.configurationCommitIndeterminate
 	}
 
+	function renderHealth(value: Snapshot) {
+		renderOperatorHealth(element('operator-health', HTMLDivElement), {
+			mode: value.execute === true ? 'Live armed' : 'Dry run',
+			lastScanAt: value.lastScanAt,
+			capitalAtRisk: context.configuration?.maximumEthPerOperation === undefined ? 'Unavailable' : `Unknown / ${context.configuration.maximumEthPerOperation} ETH per operation`,
+			recoveryItems: context.recoveryItemCount(value),
+			lastAction: value.activities[0]?.label ?? value.activities[0]?.summary ?? 'No action yet',
+			paused: value.paused === true || value.safetyPaused === true,
+			stale: context.snapshotStale,
+		})
+	}
+
 	function renderOverview(value: Snapshot) {
 		context.nextRun.textContent = formatDate(value.scheduler.nextRunAt)
 		const delay = context.parsePositiveNumber(value.scheduler.lastDelaySeconds)
@@ -86,8 +101,8 @@ export function createDashboardHealthView(context: DashboardHealthViewContext) {
 		context.walletShort.replaceChildren(value.wallet === undefined ? document.createTextNode('No execution account configured') : fullIdentifier(value.wallet, 'wallet address'))
 		context.walletShort.removeAttribute('title')
 		if (value.wallet !== undefined && value.inventoryAvailable === true) {
-			context.balanceEth.textContent = formatAtomic18(value.inventory.eth)
-			context.balanceWeth.textContent = formatAtomic18(value.inventory.weth)
+			context.balanceEth.textContent = formatAtomicAmount(value.inventory.eth, 'ETH')
+			context.balanceWeth.textContent = formatAtomicAmount(value.inventory.weth, 'WETH')
 			context.balanceRepTotal.textContent = value.inventory.rep.length === 0 ? '—' : `${value.inventory.rep.length.toString()} token${value.inventory.rep.length === 1 ? '' : 's'}`
 			renderRepBalances(value.inventory.rep)
 		} else {
@@ -183,7 +198,7 @@ export function createDashboardHealthView(context: DashboardHealthViewContext) {
 			const identity = node('div')
 			identity.append(node('strong', undefined, value.symbol ?? 'REP'))
 			identity.append(node('small', 'mono', value.universeId === undefined ? (value.token ?? '—') : `Universe ${value.universeId}`))
-			row.append(identity, node('strong', 'mono', formatAtomic18(value.balance)))
+			row.append(identity, node('strong', 'mono', formatAtomicAmount(value.balance, value.symbol ?? 'REP')))
 			return row
 		})
 		context.repBalances.replaceChildren(...rows)
@@ -192,5 +207,5 @@ export function createDashboardHealthView(context: DashboardHealthViewContext) {
 	function originCount(value: number | undefined) {
 		return value === undefined ? '—' : `${value.toString()} origin${value === 1 ? '' : 's'}`
 	}
-	return { renderHeader, renderOverview, renderUnavailableRpcHealth, renderUnavailableSubmissionHealth }
+	return { renderHeader, renderHealth, renderOverview, renderUnavailableRpcHealth, renderUnavailableSubmissionHealth }
 }

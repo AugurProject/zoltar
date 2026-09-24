@@ -1,4 +1,4 @@
-import { componentProjects, type Project } from '../repo/projects.ts'
+import { componentProjects, projectDependencyClosure, projects, type Project } from '../repo/projects.ts'
 import { runTaskProcess } from '../repo/task-process.mts'
 
 export type ComponentCiPlanEntry = {
@@ -19,7 +19,8 @@ export function createComponentCiPlan(packageName: string, registry?: readonly P
 				const task = project.tasks[name]
 				return task !== undefined && check.covers?.includes(name) !== true ? [task] : []
 			})
-			const commands: ComponentCiPlanEntry[] = [...independentTasks, check].map(task => ({ command: task.command, cwd: task.cwd }))
+			const sharedUiBuild = projectDependencyClosure([project.id], registry ?? projects).find(dependency => dependency.id === 'ui-core')?.tasks.build
+			const commands: ComponentCiPlanEntry[] = [...(sharedUiBuild === undefined ? [] : [sharedUiBuild]), ...independentTasks, check].map(task => ({ command: task.command, cwd: task.cwd }))
 			commands.push({ command: audit.command, cwd: audit.cwd, retryTransientNetworkErrors: true })
 			return [ci.componentName, commands] as const
 		}),

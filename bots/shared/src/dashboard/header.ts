@@ -36,6 +36,7 @@ export function renderOperatorHeader({ title, eyebrow, blockStatus, network, saf
 			<div class="operator-safety" aria-label="Bot safety status">${safety}</div>
 		</div>
 		<span id="header-notices-status" class="header-notices-status" role="status" aria-live="polite"></span>
+		<div id="blocking-notices" class="blocking-notices" role="alert" aria-live="assertive" hidden></div>
 		<script type="module" src="/header-notices.js"></script>
 		<nav class="section-nav" aria-label="Dashboard sections">${navigation}</nav>
 	</header>`

@@ -1,16 +1,16 @@
 import { optionalRecord as retirementRecord } from '@zoltar/bot-shared/infrastructure/json-validation'
+import { getAddress } from '@zoltar/bot-shared/ethereum'
+import { confirmOperatorAction } from '@zoltar/bot-shared/dashboard/confirmation'
+import { formatAmount } from '@zoltar/bot-shared/dashboard/amount'
 
 type RetirementResidual = { amount: string; asset: string; category: string; reason: string }
 type CompletionEvidence = { blockHash: string; blockNumber: string; residuals: RetirementResidual[] }
-type RetirementDetails = {
-	blockers: unknown[]
-	completionEvidence?: CompletionEvidence | undefined
-	finalSweepStartedAt?: string | undefined
-	positions: unknown[]
-	recipient?: string | undefined
-	status?: string | undefined
-}
+type RetirementDetails = { blockers: unknown[]; completionEvidence?: CompletionEvidence | undefined; finalSweepStartedAt?: string | undefined; positions: unknown[]; recipient?: string | undefined; status?: string | undefined }
 type RetirementSnapshot = { profileId?: string | undefined; retirement?: RetirementDetails | undefined; wallet?: string | undefined }
+
+function residualDescription(residual: RetirementResidual) {
+	return `${formatAmount(residual.amount, `${residual.asset} base units`)} · ${residual.category}: ${residual.reason}`
+}
 
 function retirementStringValue(value: unknown) {
 	return typeof value === 'string' ? value : undefined
@@ -59,12 +59,19 @@ export function createRetirementDashboard(options: RetirementDashboardOptions) {
 	const summary = retirementElement('retirement-summary', HTMLParagraphElement)
 	const destination = retirementElement('retirement-destination', HTMLParagraphElement)
 	const form = retirementElement('retirement-form', HTMLFormElement)
+	const start = retirementElement('retirement-start', HTMLButtonElement)
 	const requestOptions = retirementElement('retirement-request-options', HTMLFieldSetElement)
+	let drainEditorOpen = false
+	start.addEventListener('click', () => {
+		drainEditorOpen = true
+		form.hidden = false
+		start.hidden = true
+		maximumLoss.focus()
+	})
 	const maximumLoss = retirementElement('retirement-max-loss', HTMLInputElement)
 	const exitUnmatched = retirementElement('retirement-exit-unmatched', HTMLInputElement)
 	const migrateClaims = retirementElement('retirement-migrate-claims', HTMLInputElement)
 	const exitAfter = retirementElement('retirement-exit-after', HTMLInputElement)
-	const confirmationLabel = retirementElement('retirement-confirmation-label', HTMLLabelElement)
 	const confirmation = retirementElement('retirement-confirmation', HTMLInputElement)
 	const actions = retirementElement('retirement-actions', HTMLDivElement)
 	const request = retirementElement('retirement-request', HTMLButtonElement)
@@ -94,8 +101,9 @@ export function createRetirementDashboard(options: RetirementDashboardOptions) {
 		event.preventDefault()
 		void (async () => {
 			if (request.disabled || requestInFlight) return
-			const profileId = options.current()?.profileId
-			if (profileId === undefined) {
+			const current = options.current()
+			const profileId = current?.profileId
+			if (profileId === undefined || current?.wallet === undefined) {
 				actionStatus.textContent = 'Wait for the durable deployment profile to load.'
 				return
 			}
@@ -104,10 +112,32 @@ export function createRetirementDashboard(options: RetirementDashboardOptions) {
 			requestOptions.disabled = true
 			let saved = false
 			try {
+				const normalizedRecipient = getAddress(current.wallet)
+				const maximumExitLossBps = maximumLoss.valueAsNumber
+				if (!Number.isSafeInteger(maximumExitLossBps) || maximumExitLossBps < 0 || maximumExitLossBps > 10_000) throw new Error('Enter a maximum unmatched-share loss from 0 to 10000 bps.')
+				const policies = { exitAfterCompletion: exitAfter.checked, exitUnmatchedShares: exitUnmatched.checked, maximumExitLossBps, migrateExistingClaims: migrateClaims.checked, sweepAssets: true, unwrapWeth: true }
+				const phrase = `DRAIN ${profileId} TO ${normalizedRecipient}`
+				if (
+					!(await confirmOperatorAction({
+						title: 'Drain and retire',
+						description: 'Review the recipient, loss limit, and recovery policies before starting recovery.',
+						phrase,
+						confirmLabel: 'Request drain',
+						changes: [
+							{ label: 'Signer destination', before: 'Current signer', after: normalizedRecipient },
+							{ label: 'Maximum unmatched-share loss', before: '0 bps', after: `${maximumExitLossBps.toString()} bps` },
+							{ label: 'Exit unmatched shares', before: 'Not requested', after: policies.exitUnmatchedShares ? 'Enabled' : 'Disabled' },
+							{ label: 'Migrate existing claims', before: 'Not requested', after: policies.migrateExistingClaims ? 'Enabled' : 'Disabled' },
+							{ label: 'Exit after completion', before: 'Not requested', after: policies.exitAfterCompletion ? 'Enabled' : 'Disabled' },
+						],
+					}))
+				)
+					return
+				confirmation.value = phrase
 				await options.put({
 					action: 'request',
 					confirmation: confirmation.value,
-					policies: { exitAfterCompletion: exitAfter.checked, exitUnmatchedShares: exitUnmatched.checked, maximumExitLossBps: maximumLoss.valueAsNumber, migrateExistingClaims: migrateClaims.checked, sweepAssets: true, unwrapWeth: true },
+					policies,
 					profileId,
 				})
 				saved = true
@@ -118,8 +148,8 @@ export function createRetirementDashboard(options: RetirementDashboardOptions) {
 			} finally {
 				requestInFlight = false
 				if (!saved) {
-					const current = options.current()
-					request.disabled = (current?.retirement?.status ?? 'inactive') !== 'inactive' || current?.wallet === undefined || current.profileId === undefined
+					const latest = options.current()
+					request.disabled = (latest?.retirement?.status ?? 'inactive') !== 'inactive' || latest?.wallet === undefined || latest.profileId === undefined
 					requestOptions.disabled = request.disabled
 				}
 			}
@@ -128,6 +158,8 @@ export function createRetirementDashboard(options: RetirementDashboardOptions) {
 	cancel.addEventListener('click', () => {
 		void (async () => {
 			try {
+				if (!(await confirmOperatorAction({ title: 'Cancel drain', description: 'Cancel the pending retirement request before the final sweep starts.', phrase: 'CANCEL DRAIN', confirmLabel: 'Cancel drain' }))) return
+				confirmation.value = 'CANCEL DRAIN'
 				await options.put({ action: 'cancel', confirmation: confirmation.value })
 				actionStatus.textContent = 'Drain request cancelled.'
 				await options.refresh()
@@ -142,9 +174,7 @@ export function createRetirementDashboard(options: RetirementDashboardOptions) {
 			const profileId = options.current()?.profileId
 			if (profileId === undefined) return
 			try {
-				await options.put({
-					action: 'register-v3-position',
-					confirmation: v3Confirmation.value,
+				const position = {
 					fee: v3Fee.valueAsNumber,
 					owner: v3Owner.value.trim(),
 					pool: v3Pool.value.trim(),
@@ -154,7 +184,30 @@ export function createRetirementDashboard(options: RetirementDashboardOptions) {
 					token0: v3Token0.value.trim(),
 					token1: v3Token1.value.trim(),
 					workflowId: v3Workflow.value.trim(),
-				})
+				}
+				const phrase = `REGISTER V3 ${profileId}`
+				if (
+					!(await confirmOperatorAction({
+						title: 'Register V3 position',
+						description: 'Adds this position to retirement reconciliation; canonical verification follows.',
+						phrase,
+						confirmLabel: 'Register position',
+						changes: [
+							{ label: 'Profile ID', before: '—', after: position.profileId },
+							{ label: 'Owner', before: '—', after: position.owner },
+							{ label: 'Pool', before: '—', after: position.pool },
+							{ label: 'Token 0', before: '—', after: position.token0 },
+							{ label: 'Token 1', before: '—', after: position.token1 },
+							{ label: 'Fee tier', before: '—', after: position.fee.toString() },
+							{ label: 'Lower tick', before: '—', after: position.tickLower.toString() },
+							{ label: 'Upper tick', before: '—', after: position.tickUpper.toString() },
+							{ label: 'Receipt/workflow reference', before: '—', after: position.workflowId },
+						],
+					}))
+				)
+					return
+				v3Confirmation.value = phrase
+				await options.put({ action: 'register-v3-position', confirmation: v3Confirmation.value, ...position })
 				actionStatus.textContent = 'Legacy V3 position registered for canonical verification.'
 				await options.refresh()
 			} catch (error) {
@@ -166,7 +219,27 @@ export function createRetirementDashboard(options: RetirementDashboardOptions) {
 		event.preventDefault()
 		void (async () => {
 			try {
-				await options.put({ action: 'accept-residuals', confirmation: residualConfirmation.value, reason: residualReason.value, targetProfileId: residualTargetProfile.value.trim() })
+				const targetProfileId = residualTargetProfile.value.trim()
+				const reason = residualReason.value
+				const evidence = options.current()?.retirement?.completionEvidence
+				if (evidence === undefined || evidence.residuals.length === 0) throw new Error('Completion evidence is unavailable. Refresh before accepting residuals.')
+				const phrase = `ACCEPT RESIDUALS FOR ${targetProfileId}`
+				if (
+					!(await confirmOperatorAction({
+						title: 'Accept residuals',
+						description: 'Records acceptance of retained assets for the replacement deployment.',
+						phrase,
+						confirmLabel: 'Accept residuals',
+						changes: [
+							{ label: 'Target deployment ID', before: '—', after: targetProfileId },
+							{ label: 'Review rationale', before: '—', after: reason },
+						],
+						evidence: [{ label: 'Completion block', value: evidence.blockNumber }, { label: 'Completion block hash', value: evidence.blockHash }, ...evidence.residuals.map((residual, index) => ({ label: `Residual ${(index + 1).toString()}`, value: residualDescription(residual) }))],
+					}))
+				)
+					return
+				residualConfirmation.value = phrase
+				await options.put({ action: 'accept-residuals', confirmation: residualConfirmation.value, reason, targetProfileId })
 				actionStatus.textContent = 'Residual deployment replacement acceptance saved.'
 				await options.refresh()
 			} catch (error) {
@@ -182,9 +255,9 @@ export function createRetirementDashboard(options: RetirementDashboardOptions) {
 			const canCancel = ['requested', 'draining', 'waiting', 'blocked'].includes(status) && retirement?.finalSweepStartedAt === undefined
 			destination.hidden = status !== 'inactive' && !canCancel && status !== 'known-claims-recovered'
 			if (status === 'known-claims-recovered') destination.textContent = `Recovered ETH and REP go to signer wallet ${retirement?.recipient ?? 'not recorded'}.`
-			else if (status !== 'inactive') destination.textContent = 'Type CANCEL DRAIN to cancel before WETH unwrapping begins.'
+			else if (status !== 'inactive') destination.textContent = 'Cancel the drain before WETH unwrapping begins.'
 			else if (value.wallet === undefined || value.profileId === undefined) destination.textContent = 'Configure a signer wallet before requesting retirement.'
-			else destination.textContent = `Recovered ETH and REP go to the signer wallet. Type DRAIN ${value.profileId} TO ${value.wallet} to confirm.`
+			else destination.textContent = `Recovered ETH and REP go to signer wallet ${value.wallet}.`
 			let tone = 'warning'
 			if (status === 'drained') tone = 'success'
 			else if (status === 'blocked') tone = 'error'
@@ -198,11 +271,14 @@ export function createRetirementDashboard(options: RetirementDashboardOptions) {
 			requestOptions.disabled = request.disabled
 			requestOptions.hidden = status !== 'inactive'
 			cancel.disabled = !canCancel
-			confirmationLabel.hidden = status !== 'inactive' && !canCancel
-			confirmation.disabled = confirmationLabel.hidden
-			request.hidden = status !== 'inactive'
 			cancel.hidden = !canCancel
+			request.hidden = status !== 'inactive'
 			actions.hidden = request.hidden && cancel.hidden
+			start.disabled = status !== 'inactive' || value.wallet === undefined || value.profileId === undefined
+			start.hidden = status !== 'inactive' || drainEditorOpen
+			form.hidden = status === 'inactive' ? !drainEditorOpen : !canCancel
+			v3Form.parentElement?.toggleAttribute('hidden', status !== 'blocked' || !retirement?.blockers.some(blocker => typeof blocker === 'object' && blocker !== null && Reflect.get(blocker, 'category') === 'ambiguous-position'))
+			residualForm.parentElement?.toggleAttribute('hidden', status !== 'drained-with-residuals')
 			const evidence = retirement?.completionEvidence
 			residualEvidence.hidden = status !== 'drained-with-residuals'
 			if (status === 'drained-with-residuals') {
@@ -210,7 +286,7 @@ export function createRetirementDashboard(options: RetirementDashboardOptions) {
 				residualList.replaceChildren(
 					...(evidence?.residuals.map(residual => {
 						const item = document.createElement('li')
-						item.textContent = `${residual.amount} ${residual.asset} base units · ${residual.category}: ${residual.reason}`
+						item.textContent = residualDescription(residual)
 						return item
 					}) ?? []),
 				)
