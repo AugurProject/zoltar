@@ -3,8 +3,7 @@ import * as commonCopy from '../copy/common.js'
 import * as copy from '../copy/transactionSteps.js'
 
 export function EthAmount({ value }: { value: bigint | undefined }) {
-	const useNanoEth = value !== undefined && value > 0n && value < 10n ** 15n
-	return <CurrencyValue precision='exact' copyable={false} value={value} units={useNanoEth ? 9 : 18} suffix={useNanoEth ? copy.nanoEth : commonCopy.eth} />
+	return <CurrencyValue precision='exact' copyable={false} value={value} units={18} suffix={commonCopy.eth} />
 }
 
 export function TransactionFundingSummary({ funding, totalAttoEth, outcome }: { funding: readonly { amount: string }[]; totalAttoEth: bigint | undefined; outcome?: { returnToWallet: boolean; settlerRewardAttoEth: bigint | undefined } | undefined }) {

@@ -48,7 +48,7 @@ export function PriceRequestPreview({
 	return (
 		<>
 			<div className='transaction-step-content'>
-				<TransactionFundingSummary funding={failedPlan?.funding ?? [commonCopy.rep, commonCopy.weth].map(symbol => ({ amount: `${commonCopy.metricUnavailablePlaceholder} ${symbol}` }))} totalAttoEth={failedPlan?.totalAttoEth} outcome={failedPlan?.outcome ?? { returnToWallet: true, settlerRewardAttoEth: undefined }} />
+				<TransactionFundingSummary funding={failedPlan?.funding ?? [commonCopy.weth, commonCopy.rep].map(symbol => ({ amount: `${commonCopy.metricUnavailablePlaceholder} ${symbol}` }))} totalAttoEth={failedPlan?.totalAttoEth} outcome={failedPlan?.outcome ?? { returnToWallet: true, settlerRewardAttoEth: undefined }} />
 				<p className='detail transaction-funding-note'>{copy.fundingDetail}</p>
 			</div>
 			<div className='transaction-step-actions transaction-approval-editor price-request-preview'>
@@ -60,7 +60,7 @@ export function PriceRequestPreview({
 						</div>
 					) : undefined}
 					<div className='actions'>
-						{[commonCopy.rep, commonCopy.weth].map(symbol => (
+						{onReview !== undefined && failedPlan !== undefined ? undefined : [commonCopy.weth, commonCopy.rep].map(symbol => (
 							<div className='transaction-plan-action' key={symbol}>
 								<TokenApprovalControl
 									compact

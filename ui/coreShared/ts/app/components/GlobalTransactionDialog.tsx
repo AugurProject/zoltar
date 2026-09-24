@@ -5,7 +5,7 @@ import { TransactionPresentationNotice } from '../../components/TransactionPrese
 import { WarningSurface } from '../../components/WarningSurface.js'
 import { useModalFocusIsolation } from '../../hooks/useModalFocusIsolation.js'
 import type { GlobalTransactionPresentation } from '../../types/components.js'
-import { dismissGlobalTransaction, isGlobalTransactionDismissed } from '../../transactions/globalTransactionDismissal.js'
+import { dismissGlobalTransaction, inlineTransactionStatusHash, isGlobalTransactionDismissed } from '../../transactions/globalTransactionDismissal.js'
 import { transactionStepOutcome, transactionSteps } from '../../transactions/transactionSteps.js'
 
 function formatUniverseIdHex(universeId: bigint) {
@@ -58,13 +58,15 @@ export function GlobalTransactionDialog({ activeUniverseId, routeKey, transactio
 		current.tone !== 'preparing' &&
 		(!intermediateTransaction || current.tone === 'error' || current.tone === 'warning') &&
 		(!reviewing || outcomePresentation !== undefined || terminal) &&
+		(current.hash === undefined || current.hash !== inlineTransactionStatusHash.value || current.tone === 'error') &&
 		!isGlobalTransactionDismissed(current) &&
 		!hiddenAfterOutcome
 	const dismiss = () => {
 		if (current?.hash === undefined && (current?.dismissKey ?? current?.operationKey)?.startsWith('transaction-request-')) setDismissedRequest(current)
 		else dismissGlobalTransaction(current)
 	}
-	useModalFocusIsolation({ dialogRef, initialFocusRef: dismissRef, isOpen: visible, onClose: dismiss })
+	const blocking = visible && current?.tone !== 'pending'
+	useModalFocusIsolation({ dialogRef, initialFocusRef: dismissRef, isOpen: blocking, onClose: dismiss })
 	if (!visible || current === undefined) return undefined
 
 	const transactionUniverseId = current.universeId
@@ -78,16 +80,16 @@ export function GlobalTransactionDialog({ activeUniverseId, routeKey, transactio
 		)
 
 	return (
-		<div className='modal-backdrop global-transaction-dialog-backdrop' role='presentation'>
-			<section ref={dialogRef} className='modal-panel global-transaction-dialog' role='dialog' tabIndex={-1} aria-modal='true' aria-labelledby={titleId}>
+		<div className={`modal-backdrop global-transaction-dialog-backdrop${blocking ? '' : ' global-transaction-dialog-nonblocking'}`} role='presentation'>
+			<section ref={dialogRef} className='modal-panel global-transaction-dialog' role={blocking ? 'dialog' : 'status'} tabIndex={-1} aria-modal={blocking ? 'true' : undefined} aria-labelledby={titleId}>
 				<h3 id={titleId} className='visually-hidden'>
 					{transactionCopy.transactionStatus}
 				</h3>
 				<TransactionPresentationNotice className='global-transaction-dialog-notice' collapseDetails contextWarning={universeWarning} transaction={current} />
 				<div className='global-transaction-actions'>
 					{returnHref === undefined ? undefined : <a href={returnHref}>{transactionCopy.backToForm}</a>}
-					<button ref={dismissRef} className='primary global-transaction-dismiss' type='button' onClick={dismiss}>
-						{transactionCopy.dismiss}
+					<button ref={dismissRef} className={`${blocking ? 'primary' : 'secondary'} global-transaction-dismiss`} type='button' onClick={dismiss}>
+						{blocking ? transactionCopy.dismiss : 'Hide'}
 					</button>
 				</div>
 			</section>

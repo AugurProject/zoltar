@@ -659,9 +659,42 @@ strong.metric-value-danger {
 .global-transaction-dialog-backdrop {
 	z-index: var(--z-transaction-modal);
 	align-items: end;
-	background: color-mix(in srgb, var(--bg-deep) 12%, transparent);
+	background: color-mix(in srgb, var(--bg-deep) 55%, transparent);
 	backdrop-filter: none;
 	padding-bottom: calc(1rem + env(safe-area-inset-bottom, 0rem));
+}
+
+.global-transaction-dialog-nonblocking {
+	background: transparent;
+	pointer-events: none;
+}
+
+.global-transaction-dialog-nonblocking .global-transaction-dialog {
+	pointer-events: auto;
+}
+
+main:has(.global-transaction-dialog-nonblocking) #app-content {
+	padding-bottom: min(13rem, 30dvh);
+}
+
+.global-transaction-hash {
+	display: flex;
+	align-items: center;
+	flex-wrap: wrap;
+	gap: 0.4rem;
+	font-size: var(--font-label);
+}
+
+.global-transaction-hash > span:first-child {
+	color: var(--muted);
+}
+
+.global-transaction-notice .address-value-full {
+	display: none;
+}
+
+.global-transaction-notice .address-value-abbreviated {
+	display: inline;
 }
 
 .global-transaction-dialog {
@@ -784,7 +817,7 @@ strong.metric-value-danger {
 
 .global-transaction-notice-row {
 	display: grid;
-	grid-template-columns: minmax(0, 8rem) minmax(0, 1fr);
+	grid-template-columns: minmax(0, 9rem) minmax(0, 1fr);
 	gap: 0.45rem 0.8rem;
 	align-items: start;
 }
@@ -2016,17 +2049,42 @@ strong.metric-value-danger {
 	min-width: 0;
 }
 
-.transaction-approval-satisfied {
-	margin: 0;
-	padding: 0.45rem 0.65rem;
-	border: 1px solid var(--border-default);
-	border-radius: var(--radius-control);
+.transaction-completed-steps {
+	display: grid;
+	gap: 0;
+	margin-bottom: 0.5rem;
+}
+
+.transaction-step-completed {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: baseline;
+	justify-content: space-between;
+	gap: 0.25rem 0.75rem;
+	min-height: 2rem;
+	padding: 0.25rem 0;
+	border-bottom: 1px solid var(--divider-subtle);
 	color: var(--muted);
 	font-size: 0.8125rem;
 }
 
-.transaction-approval-satisfied .read-only-detail-accordion {
-	margin-top: 0.25rem;
+.transaction-step-completed .read-only-detail-accordion {
+	border: 0;
+	padding: 0;
+	font-size: 0.75rem;
+}
+
+.transaction-step-completed .read-only-detail-accordion summary {
+	padding: 0;
+}
+
+.transaction-step-completed .read-only-detail-accordion[open] {
+	flex-basis: 100%;
+	min-width: 0;
+}
+
+.transaction-step-completed .read-only-detail-accordion-content {
+	padding: 0.25rem 0;
 }
 
 .transaction-plan-action .field-inline-input {

@@ -20,6 +20,7 @@ import { transactionSteps } from '@zoltar/ui-core-shared/transactions/transactio
 import { isActiveAppChain } from '@zoltar/ui-core-shared/wallet/network.js'
 import { formatOpenInterestFeePerYearPercent, ORIGIN_POOL_INITIAL_RETENTION_RATE } from '../lib/retentionRate.js'
 import { formatCurrencyBalanceWithUnit } from '@zoltar/ui-core-shared/lib/formatters.js'
+import { abbreviateAddress } from '@zoltar/ui-core-shared/lib/address.js'
 import { getInitialReportPriorityFeeValidationMessage, getSecurityPoolCreateDisabledReason, getStatoblastSecurityMultiplierValidationMessage } from '../lib/securityPoolCreationGuards.js'
 import { formatStatoblastSecurityMultiplier } from '../../markets/lib/trading.js'
 import { MarketCreateQuestionSection } from '../../markets/components/MarketCreateQuestionSection.js'
@@ -364,7 +365,11 @@ export function SecurityPoolSection({
 													onSubmit: onCreateQuestionAndSecurityPool,
 													pending: questionAndPoolCreating,
 													pendingLabel: securityPoolCopy.creatingQuestionAndPool,
-													...(inlineTransactionReview === undefined ? {} : { reviewContent: inlineTransactionReview }),
+											...(inlineTransactionReview !== undefined
+												? { reviewContent: inlineTransactionReview }
+												: existingQuestionCheck?.status === 'existing' && existingQuestionCheck.poolAddress !== undefined
+													? { reviewContent: <SecurityPoolLink className='primary' securityPoolAddress={existingQuestionCheck.poolAddress}>Open existing pool →</SecurityPoolLink> }
+													: {}),
 												},
 											})}
 									onMarketFormChange={onMarketFormChange}
@@ -381,7 +386,7 @@ export function SecurityPoolSection({
 											{existingQuestionCheck?.status === 'existing' ? (
 												<div className='detail'>
 													<p>
-														{commonCopy.questionId}: <span className='identifier-value'>{existingQuestionCheck.questionId}</span>
+														{commonCopy.questionId}: <span className='identifier-value' title={existingQuestionCheck.questionId}>{abbreviateAddress(`0x${BigInt(existingQuestionCheck.questionId).toString(16)}`)}</span>
 													</p>
 													{existingQuestionCheck.poolAddress === undefined ? (
 														<button

@@ -42,6 +42,15 @@ type TransactionSteps = {
 export const transactionSteps = signal<TransactionSteps | undefined>(undefined)
 export const transactionStepOutcome = signal<{ hash: Hash; title: string; tone: 'success' | 'error'; detail?: string } | undefined>(undefined)
 
+/** Stop future review steps while reporting whether a wallet submission or receipt still needs tracking. */
+export function cancelTransactionReview(reviewSignal: AbortSignal) {
+	const current = transactionSteps.peek()
+	const owned = current?.reviewSignal === reviewSignal ? current : undefined
+	const trackingSubmitted = owned?.steps.some(step => step.phase === 'pending' || step.hash !== undefined) ?? false
+	owned?.cancel()
+	return { trackingSubmitted, steps: owned?.steps }
+}
+
 export function createTransactionStepController(signal = getTransactionReviewSignal()) {
 	transactionStepOutcome.value = undefined
 	let canceled = false

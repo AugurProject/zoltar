@@ -3,7 +3,9 @@ import * as transactionCopy from '../copy/transaction.js'
 import type { ComponentChildren } from 'preact'
 import { Badge } from './Badge.js'
 import { ReadOnlyDetailAccordion } from './ReadOnlyDetailAccordion.js'
-import { TransactionHashLink } from './TransactionHashLink.js'
+import { AddressValue } from './AddressValue.js'
+import { getActiveNetworkProfile } from '../lib/activeEnvironment.js'
+import { buildTransactionExplorerUrl } from '../wallet/networkProfile.js'
 import type { BadgeTone, GlobalTransactionPresentation } from '../types/components.js'
 
 type TransactionPresentationNoticeProps = {
@@ -24,8 +26,10 @@ function getTransactionBadge(tone: GlobalTransactionPresentation['tone']): { lab
 
 function getNoticeTitle(transaction: GlobalTransactionPresentation) {
 	if (typeof transaction.title !== 'string') return transaction.title
-	if (transaction.tone === 'error') return transaction.title.replace(/(?:^|\s)failed$/i, '') || undefined
-	if (transaction.tone === 'success') return transaction.title.replace(/(?:^|\s)confirmed$/i, '') || undefined
+	if (transaction.tone === 'error') {
+		const actions: Record<string, string> = { 'Requesting Price': 'Price request', 'Creating Question': 'Question creation', 'Creating Security Pool': 'Security pool creation' }
+		return actions[transaction.title] ?? (transaction.title.replace(/(?:^|\s)failed$/i, '') || undefined)
+	}
 	return transaction.title
 }
 
@@ -33,6 +37,7 @@ export function TransactionPresentationNotice({ className = '', collapseDetails 
 	const badge = getTransactionBadge(transaction.tone)
 	const title = getNoticeTitle(transaction)
 	const transactionHash = transaction.hash
+	const explorerUrl = transactionHash === undefined ? undefined : buildTransactionExplorerUrl(getActiveNetworkProfile(), transactionHash)
 	const rows = transaction.rows ?? []
 	const technicalRows = transaction.technicalRows ?? []
 	const noticeClassName = ['global-transaction-notice', className].filter(Boolean).join(' ')
@@ -80,7 +85,13 @@ export function TransactionPresentationNotice({ className = '', collapseDetails 
 					{title === undefined ? undefined : <strong>{title}</strong>}
 				</div>
 				{transaction.detail === undefined ? undefined : <div className='global-transaction-notice-detail'>{transaction.detail}</div>}
-				{transactionHash === undefined ? undefined : <TransactionHashLink hash={transactionHash} />}
+				{transactionHash === undefined ? undefined : (
+					<div className='global-transaction-hash'>
+						<span>Transaction hash</span>
+						<AddressValue address={transactionHash} responsiveAbbreviation />
+						{explorerUrl === undefined ? undefined : <a href={explorerUrl} target='_blank' rel='noreferrer' aria-label={transactionCopy.viewTransaction}>Explorer</a>}
+					</div>
+				)}
 				{collapseDetails && (rows.length > 0 || technicalRows.length > 0) ? <ReadOnlyDetailAccordion title={transactionCopy.transactionDetails}>{detailRows}</ReadOnlyDetailAccordion> : detailRows}
 			</div>
 		</div>

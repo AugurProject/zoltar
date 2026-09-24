@@ -2970,10 +2970,8 @@
 	gap: 1rem;
 }
 
-/* The error row keeps its height so the funding summary and actions do not move when a price becomes invalid. */
 .request-price-fields .lookup-field-controls.has-action {
 	grid-template-columns: minmax(0, 1fr) auto;
-	grid-template-rows: auto minmax(3rem, auto);
 	column-gap: 0.75rem;
 	row-gap: 0.25rem;
 }
@@ -3013,22 +3011,44 @@
 }
 
 .price-request-preview .tx-action-group > .actions {
-	margin-block-start: 0.5rem;
+	margin-block-start: 0;
 }
 
 .operation-modal-body:has(> .request-price-fields) .transaction-plan-action-final > .tx-action-feedback {
 	grid-column: 1 / -1;
 }
 
-/* The price-request confirm button is taller than a plain button, so its Cancel neighbour matches that height. */
 .operation-modal-body:has(> .request-price-fields) .transaction-step-close > button {
 	min-inline-size: 6.5rem;
-	min-block-size: 4rem;
+	min-block-size: 2.75rem;
+}
+
+.operation-modal-body:has(> .request-price-fields) {
+	gap: 0.5rem;
+}
+
+.operation-modal-body:has(> .request-price-fields) .transaction-step-actions {
+	padding-top: 0.5rem;
+}
+
+.operation-modal-body:has(> .request-price-fields) .transaction-inline-final-status .global-transaction-notice {
+	width: 100%;
+	max-height: none;
 }
 
 @media (max-width: 600px) {
 	.request-price-fields .lookup-field-controls.has-action {
-		grid-template-rows: auto;
+		grid-template-columns: minmax(0, 1fr);
+	}
+
+	.request-price-fields .lookup-field-controls.has-action > .actions {
+		grid-column: 1;
+		grid-row: 2;
+	}
+
+	.request-price-fetch {
+		inline-size: 100%;
+		min-inline-size: 0;
 	}
 
 	.operation-modal-body:has(> .request-price-fields) .transaction-plan-action:has(.approval-amount-field) .form-grid {
@@ -3044,9 +3064,8 @@
 		min-block-size: 3.625rem;
 	}
 
-	.operation-modal-body:has(> .request-price-fields) .transaction-plan-action-final .tx-action-button,
-	.operation-modal-body:has(> .request-price-fields) .transaction-step-close > button {
-		min-block-size: 4.875rem;
+	.operation-modal-body:has(> .request-price-fields) .transaction-plan-action-final .tx-action-button {
+		min-block-size: 3.625rem;
 	}
 
 	.operation-modal-body:has(> .request-price-fields) .transaction-costs > div {

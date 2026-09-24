@@ -146,7 +146,7 @@ test('keeps confirmed wrap and approval steps visible while the final request aw
 		expect(queries.queryByRole('button', { name: /Wrap ETH into WETH/ })).toBeNull()
 		expect(queries.getByText('ETH wrapped ✓')).not.toBeNull()
 		expect(queries.getByText('WETH approved ✓')).not.toBeNull()
-		expect(rendered.container.querySelectorAll('.transaction-approval-satisfied details')).toHaveLength(2)
+		expect(rendered.container.querySelectorAll('.transaction-completed-steps details')).toHaveLength(2)
 		expect(queries.getByRole('button', { name: 'Request price' }).hasAttribute('disabled')).toBe(false)
 		transactionSteps.value?.cancel()
 		await requestReview?.catch(() => undefined)

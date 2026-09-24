@@ -27,7 +27,7 @@ describe('GlobalTransactionDialog', () => {
 		restoreRouting = installTestRouting()
 	})
 
-	test('shows pending, confirmed, and failed transactions in the same modal', async () => {
+	test('shows a nonblocking pending status and modal confirmed and failed statuses', async () => {
 		const hash = '0xabcd000000000000000000000000000000000000000000000000000000000001'
 		const pending = { hash, title: 'Requesting Price', tone: 'pending' as const, rows: [{ label: 'Security Pool Address', value: '0x0000000000000000000000000000000000000002' }] }
 		const renderedComponent = await renderIntoDocument(
@@ -38,10 +38,11 @@ describe('GlobalTransactionDialog', () => {
 		)
 		trackRendered(renderedComponent)
 		const queries = within(document.body)
-		const dialog = queries.getByRole('dialog', { name: 'Transaction status' })
-		expect(dialog.getAttribute('aria-modal')).toBe('true')
+		const dialog = queries.getByRole('status', { name: 'Transaction status' })
+		expect(dialog.hasAttribute('aria-modal')).toBe(false)
 		expect(within(dialog).getByRole('status').textContent).toContain('Requesting Price')
-		expect(within(dialog).getByRole('button', { name: 'Dismiss' })).not.toBeNull()
+		expect(within(dialog).getByRole('button', { name: 'Hide' }).classList.contains('secondary')).toBe(true)
+		expect(queries.getByRole('button', { name: 'Request price' }).closest('[inert]')).toBeNull()
 		await act(() => {
 			render(<GlobalTransactionDialog transaction={{ ...pending, title: 'Price requested', tone: 'success' }} />, renderedComponent.container)
 		})
@@ -129,7 +130,7 @@ describe('GlobalTransactionDialog', () => {
 		expect(documentQueries.getByText('The new question is now on-chain.')).not.toBeNull()
 		expect(documentQueries.getByText('Question ID')).not.toBeNull()
 		expect(documentQueries.getByText('0x0b')).not.toBeNull()
-		expect(documentQueries.getByRole('link', { name: '0x1234000000000000000000000000000000000000000000000000000000000000' })).not.toBeNull()
+		expect(documentQueries.getByRole('button', { name: 'Copy address 0x1234000000000000000000000000000000000000000000000000000000000000' })).not.toBeNull()
 		expect(documentQueries.getByRole('button', { name: 'Dismiss' })).not.toBeNull()
 		expect(documentQueries.getByRole('button', { name: 'Dismiss' }).classList.contains('primary')).toBe(true)
 	})
@@ -229,11 +230,11 @@ describe('GlobalTransactionDialog', () => {
 		trackRendered(renderedComponent)
 
 		const documentQueries = within(document.body)
-		expect(documentQueries.queryByRole('button', { name: 'Dismiss' }) !== null).toBe(true)
-		expect(documentQueries.getByRole('dialog', { name: 'Transaction status' })).not.toBeNull()
+		expect(documentQueries.queryByRole('button', { name: 'Hide' }) !== null).toBe(true)
+		expect(documentQueries.getByRole('status', { name: 'Transaction status' })).not.toBeNull()
 		expect(documentQueries.getByText('Pending')).not.toBeNull()
 		expect(documentQueries.getByText('Waiting for confirmation.')).not.toBeNull()
-		expect(documentQueries.getByRole('link', { name: '0x2234000000000000000000000000000000000000000000000000000000000000' })).not.toBeNull()
+		expect(documentQueries.getByRole('button', { name: 'Copy address 0x2234000000000000000000000000000000000000000000000000000000000000' })).not.toBeNull()
 	})
 
 	test('renders a concise pending transaction when no extra explanation is needed', async () => {
@@ -368,7 +369,7 @@ describe('GlobalTransactionDialog', () => {
 		const documentQueries = within(document.body)
 		expect(documentQueries.getByText('Failed')).not.toBeNull()
 		expect(documentQueries.getByText('Transaction reverted')).not.toBeNull()
-		expect(documentQueries.getByRole('link', { name: '0x4234000000000000000000000000000000000000000000000000000000000000' })).not.toBeNull()
+		expect(documentQueries.getByRole('button', { name: 'Copy address 0x4234000000000000000000000000000000000000000000000000000000000000' })).not.toBeNull()
 		expect(documentQueries.getByRole('button', { name: 'Dismiss' })).not.toBeNull()
 	})
 
@@ -477,7 +478,7 @@ describe('GlobalTransactionDialog', () => {
 		trackRendered(renderedComponent)
 
 		expect(within(document.body).getByText('Pending')).not.toBeNull()
-		expect(within(document.body).getByRole('link', { name: transaction.hash })).not.toBeNull()
+		expect(within(document.body).getByRole('button', { name: `Copy address ${transaction.hash}` })).not.toBeNull()
 
 		await act(() => {
 			renderedComponent.unmount()
@@ -486,7 +487,7 @@ describe('GlobalTransactionDialog', () => {
 		const rerenderedComponent = await renderIntoDocument(<GlobalTransactionDialog transaction={transaction} />)
 		trackRendered(rerenderedComponent)
 		expect(within(document.body).getByText('Pending')).not.toBeNull()
-		expect(within(document.body).getByRole('link', { name: transaction.hash })).not.toBeNull()
+		expect(within(document.body).getByRole('button', { name: `Copy address ${transaction.hash}` })).not.toBeNull()
 	})
 
 	test('shows terminal success after a pending transaction resolves', async () => {
@@ -495,7 +496,7 @@ describe('GlobalTransactionDialog', () => {
 		trackRendered(renderedComponent)
 
 		await act(() => {
-			fireEvent.click(within(document.body).getByRole('button', { name: 'Dismiss' }))
+			fireEvent.click(within(document.body).getByRole('button', { name: 'Hide' }))
 		})
 		expect(within(document.body).queryByText('Pending')).toBeNull()
 
@@ -528,6 +529,6 @@ describe('GlobalTransactionDialog', () => {
 			fireEvent.click(within(document.body).getByRole('link', { name: 'Back to form' }))
 		})
 		expect(window.location.hash).toBe('#/zoltar?zoltarView=create')
-		expect(renderedComponent.container.textContent).toContain('Creating Question')
+		expect(renderedComponent.container.textContent).toContain('Question creation')
 	})
 })

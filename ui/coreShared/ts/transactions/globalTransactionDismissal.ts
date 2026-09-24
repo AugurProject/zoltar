@@ -3,6 +3,8 @@ import type { GlobalTransactionPresentation } from '../types/components.js'
 
 const MAX_REMEMBERED_DISMISSALS = 100
 const dismissedKeys = signal<ReadonlySet<string>>(new Set())
+/** A form may render its submitted transaction in its own action row. */
+export const inlineTransactionStatusHash = signal<string | undefined>(undefined)
 
 function getDismissalTransactionKey(transaction: GlobalTransactionPresentation | undefined) {
 	const dismissKey = transaction?.dismissKey
