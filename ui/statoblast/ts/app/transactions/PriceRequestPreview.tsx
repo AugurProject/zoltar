@@ -91,7 +91,6 @@ export function PriceRequestPreview({
 									{commonCopy.cancel}
 								</button>
 							</div>
-							<div className='transaction-step-hash' />
 						</div>
 					</div>
 				</div>

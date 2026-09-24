@@ -14,7 +14,6 @@ import { Question, getQuestionTitle } from '@zoltar/ui-core-shared/components/Qu
 import { RouteWorkflowPanel } from '@zoltar/ui-core-shared/components/RouteWorkflowPanel.js'
 import { SectionBlock } from '@zoltar/ui-core-shared/components/SectionBlock.js'
 import { TransactionActionButton } from '@zoltar/ui-core-shared/components/TransactionActionButton.js'
-import { TransactionHashLink } from '@zoltar/ui-core-shared/components/TransactionHashLink.js'
 import { TransactionStepsContent } from '@zoltar/ui-core-shared/components/TransactionStepsContent.js'
 import { transactionSteps } from '@zoltar/ui-core-shared/transactions/transactionSteps.js'
 import { isActiveAppChain } from '@zoltar/ui-core-shared/wallet/network.js'
@@ -274,12 +273,6 @@ export function SecurityPoolSection({
 							<span>{securityPoolCopy.initialReportPriorityFeeEthLabel}</span>
 							<strong>{formatCurrencyBalanceWithUnit(securityPoolResult.initialReportPriorityFeeAttoEthPerGas, commonCopy.eth, 18)}</strong>
 						</li>
-						<li>
-							<span>{securityPoolCopy.deploymentTransactionHash}</span>
-							<strong>
-								<TransactionHashLink hash={securityPoolResult.deployPoolHash} />
-							</strong>
-						</li>
 					</ul>
 				</EntityCard>
 			</>
@@ -461,12 +454,6 @@ export function SecurityPoolSection({
 									<li>
 										<span>{commonCopy.questionId}</span>
 										<strong>{marketResult.questionId}</strong>
-									</li>
-									<li>
-										<span>{marketCopy.creationTransactionHash}</span>
-										<strong>
-											<TransactionHashLink hash={marketResult.createQuestionHash} />
-										</strong>
 									</li>
 								</ul>
 							</EntityCard>

@@ -13,10 +13,8 @@ import { OutcomeChipRow } from '@zoltar/ui-core-shared/components/OutcomeChipRow
 import { Question, getQuestionTitle } from '@zoltar/ui-core-shared/components/Question.js'
 import { SectionBlock } from '@zoltar/ui-core-shared/components/SectionBlock.js'
 import { TransactionActionButton } from '@zoltar/ui-core-shared/components/TransactionActionButton.js'
-import { TransactionHashLink } from '@zoltar/ui-core-shared/components/TransactionHashLink.js'
 import { TimestampValue } from '@zoltar/ui-core-shared/components/TimestampValue.js'
 import { WarningSurface } from '@zoltar/ui-core-shared/components/WarningSurface.js'
-import { MetricField } from '@zoltar/ui-core-shared/components/MetricField.js'
 import { assertNever } from '@zoltar/ui-core-shared/lib/assert.js'
 import { getMarketCreationOutcomeLabels, hasMarketEndTimePassed, validateMarketForm } from '../lib/questionCreation.js'
 import { useChainTimestamp } from '@zoltar/ui-core-shared/wallet/chainTimestamp.js'
@@ -248,9 +246,6 @@ export function QuestionCreateSection({
 
 							return <Question question={selectedQuestionDetails} showTitle={false} />
 						})()}
-						<MetricField label={marketCopy.creationTransactionHash}>
-							<TransactionHashLink hash={questionResult.createQuestionHash} />
-						</MetricField>
 					</div>
 				</EntityCard>
 			)}

@@ -162,7 +162,7 @@ test('keeps confirmed wrap and approval steps visible while the final request aw
 		expect(queries.queryByRole('button', { name: /Wrap ETH into WETH/ })).toBeNull()
 		expect(queries.getByText('ETH wrapped ✓')).not.toBeNull()
 		expect(queries.getByText('WETH approved ✓')).not.toBeNull()
-		expect(rendered.container.querySelectorAll('.transaction-completed-steps details')).toHaveLength(2)
+		expect(rendered.container.querySelectorAll('.transaction-completed-steps details')).toHaveLength(0)
 		expect(queries.getByRole('button', { name: 'Request price' }).hasAttribute('disabled')).toBe(false)
 		transactionSteps.value?.cancel()
 		await requestReview?.catch(() => undefined)
@@ -318,7 +318,7 @@ for (const choice of ['custom', 'max'] as const) {
 				controller.submitted(hash)
 				controller.receipt(hash, 'success')
 			})
-			expect(queries.getByRole('link', { name: hash }).closest('details')?.open).toBe(false)
+			expect(queries.queryByRole('link', { name: hash })).toBeNull()
 			expect(queries.queryByRole('textbox')).toBeNull()
 			expect(approvalInput.isConnected).toBe(false)
 			expect(rendered.container.querySelectorAll('.approval-amount-field')).toHaveLength(0)
@@ -472,7 +472,7 @@ for (const phase of ['skipped', 'failed'] as const) {
 }
 
 for (const result of ['pending', 'reverted'] as const) {
-	test(`${result === 'pending' ? 'keeps the pending query hash beside its action' : 'closes review after the final query reverts'}`, async () => {
+	test(`${result === 'pending' ? 'keeps the pending query hash out of the review' : 'closes review after the final query reverts'}`, async () => {
 		const dom = installDomEnvironment()
 		const controller = createTransactionStepController()
 		controller.setPlan([{ title: 'Request price', description: 'Fund the report.', contractAddress: undefined, contractLabel: undefined, spender: undefined, amount: undefined, ethValueAttoEth: 0n }])
@@ -495,7 +495,7 @@ for (const result of ['pending', 'reverted'] as const) {
 			if (result === 'reverted') {
 				expect(queries.queryByRole('dialog')).toBeNull()
 				expect(transactionSteps.value).toBeUndefined()
-			} else expect(queries.getByRole('link', { name: hash }).closest('.transaction-step-actions') !== null).toBe(true)
+			} else expect(queries.queryByRole('link', { name: hash })).toBeNull()
 		} finally {
 			await rendered.cleanup()
 			dom.cleanup()

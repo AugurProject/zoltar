@@ -11,10 +11,7 @@ import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import { GlobalTransactionPresentationProvider, useGlobalTransactionPresentation } from './GlobalTransactionPresentationContext.js'
 import { useEffect, useLayoutEffect, useRef } from 'preact/hooks'
 import { EthAmount, TransactionFundingSummary } from './TransactionFundingSummary.js'
-import { TransactionHashLink } from './TransactionHashLink.js'
-import { TransactionPresentationNotice } from './TransactionPresentationNotice.js'
 import { transactionSteps } from '../transactions/transactionSteps.js'
-import { isGlobalTransactionDismissed } from '../transactions/globalTransactionDismissal.js'
 
 /** Explains a step that has no token funding to summarize, using the enclosing operation's rows for the parameters being submitted. */
 function TransactionStepReview({ contractAddress, contractLabel, description, rows = [] }: { contractAddress: Address | undefined; contractLabel: string | undefined; description: string | undefined; rows?: GlobalTransactionRow[] | undefined }) {
@@ -64,15 +61,13 @@ type TransactionStepsActionsProps = {
 	/** Keep the actions scrolled into view as they change state when the review sits in page flow under the transaction tray. */
 	keepActionsVisible?: boolean
 	onClose?: (() => void) | undefined
-	inlineFinalStatus?: boolean | undefined
 }
 
 /** The review's confirm, approval, and cancel controls; a dialog form can host them in its own action row. */
-export function TransactionStepsActions({ cancelable = true, contextKey, focusOnMount = false, keepActionsVisible = false, inlineFinalStatus = false, onClose }: TransactionStepsActionsProps) {
+export function TransactionStepsActions({ cancelable = true, contextKey, focusOnMount = false, keepActionsVisible = false, onClose }: TransactionStepsActionsProps) {
 	const { error, pending, presentation, workflow } = useTransactionStepsState()
 	const actionsRef = useRef<HTMLDivElement>(null)
 	const pendingActionRef = useRef<HTMLDivElement>(null)
-	const finalStatusRef = useRef<HTMLDivElement>(null)
 	const focusWasInActions = useRef(false)
 	const completed = workflow?.steps.every(step => step.phase === 'confirmed' || step.phase === 'skipped') ?? false
 	// Wait for the review layout before keeping the next action centered.
@@ -92,15 +87,12 @@ export function TransactionStepsActions({ cancelable = true, contextKey, focusOn
 		if (actions === null || actions.contains(document.activeElement)) return
 		actions.querySelector<HTMLElement>('button:not(:disabled), input:not(:disabled)')?.focus()
 	}, [focusOnMount])
-	const finalStep = workflow?.steps.at(-1)
-	const finalStatus = inlineFinalStatus && finalStep?.hash !== undefined && presentation?.hash === finalStep.hash && (finalStep.phase === 'pending' || finalStep.phase === 'confirmed') ? presentation : undefined
 	useLayoutEffect(() => {
 		if (!focusWasInActions.current) return
 		const active = document.activeElement
 		if (active instanceof HTMLElement && active !== document.body && active.isConnected && !active.matches(':disabled')) return
-		const focusTarget = finalStatusRef.current ?? pendingActionRef.current
-		focusTarget?.focus()
-	}, [finalStatus, pending])
+		pendingActionRef.current?.focus()
+	}, [pending])
 	if (workflow === undefined || workflow.steps[workflow.activeIndex] === undefined) return undefined
 	const terminal = completed || error !== undefined
 	const funding = workflow.steps.flatMap(step => step.tokenFunding ?? [])
@@ -109,8 +101,8 @@ export function TransactionStepsActions({ cancelable = true, contextKey, focusOn
 	const completedSteps = workflow.steps.flatMap((step, index) => {
 		if (index === workflow.steps.length - 1 && step.phase === 'confirmed') return []
 		const approvalSatisfied = step.approval !== undefined && step.approval.approvedAmount !== undefined && step.approval.requiredAmount <= step.approval.approvedAmount
-		if (approvalSatisfied && step.approval !== undefined && (step.phase === 'confirmed' || step.phase === 'skipped')) return [{ index, label: copy.formatTokenApproved(step.approval.tokenSymbol), hash: step.hash, approval: true }]
-		if (step.phase === 'confirmed') return [{ index, label: step.title === copy.wrapEthIntoWeth ? copy.ethWrapped : step.title, hash: step.hash, approval: false }]
+		if (approvalSatisfied && step.approval !== undefined && (step.phase === 'confirmed' || step.phase === 'skipped')) return [{ index, label: copy.formatTokenApproved(step.approval.tokenSymbol), approval: true }]
+		if (step.phase === 'confirmed') return [{ index, label: step.title === copy.wrapEthIntoWeth ? copy.ethWrapped : step.title, approval: false }]
 		return []
 	})
 	const completedIndices = new Set(completedSteps.map(step => step.index))
@@ -134,22 +126,15 @@ export function TransactionStepsActions({ cancelable = true, contextKey, focusOn
 								{completedSteps.map(step => (
 									<div key={step.index} className={`transaction-step-completed${step.approval ? ' transaction-approval-satisfied' : ''}`}>
 										<span>{step.label} ✓</span>
-										{step.hash === undefined ? undefined : (
-											<ReadOnlyDetailAccordion title={transactionCopy.transactionDetails}>
-												<TransactionHashLink hash={step.hash} />
-											</ReadOnlyDetailAccordion>
-										)}
 									</div>
 								))}
 							</div>
 						)}
 						<div className='actions'>
 							{workflow.steps.map((step, index) => {
-								if (finalStatus !== undefined && index === workflow.steps.length - 1) return undefined
 								if (completedIndices.has(index) || step.phase === 'confirmed') return undefined
 								const active = index === workflow.activeIndex
 								const final = index === workflow.steps.length - 1
-								const hashShownInFailureStatus = final && step.hash !== undefined && presentation?.tone === 'error' && presentation.hash === step.hash && !isGlobalTransactionDismissed(presentation)
 								const ready = step.phase === 'review' && !pending && error === undefined
 								const status = { skipped: copy.skipped, upcoming: step.optional ? copy.ifNeeded : undefined, review: undefined, pending: undefined, confirmed: transactionCopy.confirmed, failed: copy.notCompleted }[step.phase]
 								const detail = [step.phase === 'upcoming' || step.approval !== undefined ? undefined : step.amount, status].filter(value => value !== undefined).join(' · ')
@@ -204,20 +189,9 @@ export function TransactionStepsActions({ cancelable = true, contextKey, focusOn
 												</button>
 											</div>
 										) : undefined}
-										<div className='transaction-step-hash'>{step.hash === undefined || hashShownInFailureStatus ? undefined : <TransactionHashLink hash={step.hash} />}</div>
 									</div>
 								)
 							})}
-							{finalStatus === undefined ? undefined : (
-								<div className='transaction-plan-action transaction-plan-action-wide transaction-plan-action-final transaction-inline-final-status' ref={finalStatusRef} tabIndex={-1}>
-									<TransactionPresentationNotice collapseDetails transaction={finalStatus} />
-									{finalStatus.tone === 'success' || finalStatus.tone === 'warning' ? (
-										<button className='primary' type='button' onClick={onClose}>
-											{commonCopy.close}
-										</button>
-									) : undefined}
-								</div>
-							)}
 						</div>
 					</div>
 				</div>
@@ -232,7 +206,7 @@ type TransactionStepsContentProps = TransactionStepsActionsProps & {
 	heading?: string | undefined
 }
 
-export function TransactionStepsContent({ actions = 'inline', cancelable = true, contextKey, focusOnMount = false, heading, inlineFinalStatus = false, keepActionsVisible = false, onClose }: TransactionStepsContentProps) {
+export function TransactionStepsContent({ actions = 'inline', cancelable = true, contextKey, focusOnMount = false, heading, keepActionsVisible = false, onClose }: TransactionStepsContentProps) {
 	const { current, presentation, workflow } = useTransactionStepsState()
 	if (workflow === undefined || current === undefined) return undefined
 	const completed = workflow.steps.every(step => step.phase === 'confirmed' || step.phase === 'skipped')
@@ -250,7 +224,7 @@ export function TransactionStepsContent({ actions = 'inline', cancelable = true,
 				{funding.length === 0 ? <TransactionStepReview contractAddress={current.contractAddress} contractLabel={current.contractLabel} description={completed ? undefined : current.description} rows={presentation?.rows} /> : <TransactionFundingSummary funding={funding} totalAttoEth={totalEth} outcome={outcome} />}
 				{funding.length === 0 || completed ? undefined : <p className='detail transaction-funding-note'>{copy.fundingDetail}</p>}
 			</div>
-			{actions === 'inline' ? <TransactionStepsActions cancelable={cancelable} contextKey={contextKey} focusOnMount={focusOnMount} inlineFinalStatus={inlineFinalStatus} keepActionsVisible={keepActionsVisible} onClose={onClose} /> : undefined}
+			{actions === 'inline' ? <TransactionStepsActions cancelable={cancelable} contextKey={contextKey} focusOnMount={focusOnMount} keepActionsVisible={keepActionsVisible} onClose={onClose} /> : undefined}
 		</>
 	)
 }

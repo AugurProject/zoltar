@@ -143,7 +143,6 @@ export const questionIdFallbackHint = 'Enter an exact binary Yes / No Zoltar que
 export const poolCreationLocked = 'Pool Creation Locked'
 export const poolCreated = 'Pool Created'
 export const poolCreationAfterForkReason = 'Security pools cannot be created after this universe has forked.'
-export const deploymentTransactionHash = 'Deployment transaction hash'
 export const checkingDuplicate = 'Checking duplicate…'
 export const duplicatePoolDetail = 'Change the priority fee or Statoblast security multiplier to create a different origin pool.'
 export const initialOpenInterestFeeYear = 'Starting Annual Fee'

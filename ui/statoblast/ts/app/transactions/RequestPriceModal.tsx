@@ -16,7 +16,7 @@ import { embeddedTransactionSteps } from '@zoltar/ui-core-shared/components/Tran
 import { PriceRequestPreview } from './PriceRequestPreview.js'
 import { TransactionStepsContent } from '@zoltar/ui-core-shared/components/TransactionStepsContent.js'
 import { cancelTransactionReview, transactionSteps } from '@zoltar/ui-core-shared/transactions/transactionSteps.js'
-import { dismissGlobalTransaction, inlineTransactionStatusHash } from '@zoltar/ui-core-shared/transactions/globalTransactionDismissal.js'
+import { dismissGlobalTransaction } from '@zoltar/ui-core-shared/transactions/globalTransactionDismissal.js'
 import type { FailedPricePlan } from './PriceRequestPreview.js'
 
 async function fetchUniswapPrice(review: NonNullable<RequestPriceModalProps['review']>) {
@@ -59,8 +59,6 @@ export function RequestPriceModal({ review, onConfirm, onClose, canRequest, conf
 	const showSteps = current && ownsWorkflow && workflow?.steps[workflow.activeIndex] !== undefined
 	const failedCurrentAttempt =
 		(!running && presentation?.tone === 'error' && ((key !== undefined && attempted === key) || (submittedHash !== undefined && presentation.hash === submittedHash) || (run.current?.submissionOutstanding && presentation.hash !== undefined))) || (showSteps && workflow?.steps.some(step => step.phase === 'failed'))
-	const finalStep = ownsWorkflow ? workflow?.steps.at(-1) : undefined
-	const inlineStatusHash = review !== undefined && finalStep?.hash !== undefined && (finalStep.phase === 'pending' || finalStep.phase === 'confirmed') && presentation?.hash === finalStep.hash && presentation.tone !== 'error' ? finalStep.hash : undefined
 	const estimatePrompt = validPrice ? priceRequestCopy.preparingPriceRequest : priceRequestCopy.enterPriceEstimate
 	let previewPrompt = estimatePrompt
 	if (fetching) previewPrompt = priceRequestCopy.fetchingUniswapPrice
@@ -117,12 +115,6 @@ export function RequestPriceModal({ review, onConfirm, onClose, canRequest, conf
 	useLayoutEffect(() => {
 		if (!current && !sending && !(running && ownsWorkflow && workflow?.steps.some(step => step.hash !== undefined))) run.current?.cancel()
 	}, [current, sending, running, ownsWorkflow, workflow])
-	useLayoutEffect(() => {
-		inlineTransactionStatusHash.value = inlineStatusHash
-		return () => {
-			if (inlineTransactionStatusHash.peek() === inlineStatusHash) inlineTransactionStatusHash.value = undefined
-		}
-	}, [inlineStatusHash])
 	useLayoutEffect(() => {
 		if (manualRequestRequired && !showSteps) priceControlsRef.current?.querySelector<HTMLInputElement>('input:not(:disabled)')?.focus()
 	}, [manualRequestRequired, showSteps])
@@ -237,7 +229,7 @@ export function RequestPriceModal({ review, onConfirm, onClose, canRequest, conf
 					{priceControls}
 					{showSteps ? (
 						<GlobalTransactionPresentationProvider transaction={presentation}>
-							<TransactionStepsContent contextKey={key ?? ''} inlineFinalStatus onClose={close} />
+							<TransactionStepsContent contextKey={key ?? ''} onClose={close} />
 						</GlobalTransactionPresentationProvider>
 					) : (
 						<PriceRequestPreview

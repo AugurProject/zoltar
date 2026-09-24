@@ -11,7 +11,7 @@ import type { BadgeTone, GlobalTransactionPresentation } from '../types/componen
 type TransactionPresentationNoticeProps = {
 	className?: string
 	collapseDetails?: boolean
-	compactSuccess?: boolean
+	compact?: boolean
 	contextWarning?: ComponentChildren
 	transaction: GlobalTransactionPresentation
 }
@@ -40,7 +40,7 @@ function TransactionDetailValue({ value }: { value: ComponentChildren }) {
 	)
 }
 
-export function TransactionPresentationNotice({ className = '', collapseDetails = false, compactSuccess = false, contextWarning, transaction }: TransactionPresentationNoticeProps) {
+export function TransactionPresentationNotice({ className = '', collapseDetails = false, compact = false, contextWarning, transaction }: TransactionPresentationNoticeProps) {
 	const badge = getTransactionBadge(transaction.tone)
 	const title = transaction.title
 	const transactionHash = transaction.hash
@@ -88,8 +88,8 @@ export function TransactionPresentationNotice({ className = '', collapseDetails 
 	const hashContent =
 		transactionHash === undefined ? undefined : (
 			<div className='global-transaction-hash'>
-				{compactSuccess ? undefined : <span>{transactionCopy.transactionHash}</span>}
-				<AddressValue address={transactionHash} compactAbbreviation={compactSuccess} responsiveAbbreviation />
+				{compact ? undefined : <span>{transactionCopy.transactionHash}</span>}
+				<AddressValue address={transactionHash} compactAbbreviation={compact} responsiveAbbreviation />
 				{explorerUrl === undefined ? undefined : (
 					<a href={explorerUrl} target='_blank' rel='noreferrer' aria-label={transactionCopy.viewTransaction}>
 						{transactionCopy.explorer}
@@ -106,13 +106,14 @@ export function TransactionPresentationNotice({ className = '', collapseDetails 
 					<Badge tone={badge.tone}>{badge.label}</Badge>
 					{transaction.tone === 'awaiting-wallet' ? <span className='spinner global-transaction-spinner' aria-hidden='true' /> : undefined}
 					{title === undefined ? undefined : <strong>{title}</strong>}
-					{compactSuccess ? hashContent : undefined}
+					{compact ? hashContent : undefined}
 				</div>
-				{!compactSuccess && transaction.detail !== undefined ? <div className='global-transaction-notice-detail'>{transaction.detail}</div> : undefined}
-				{compactSuccess ? undefined : hashContent}
-				{collapseDetails && (rows.length > 0 || technicalRows.length > 0 || (compactSuccess && transaction.detail !== undefined)) ? (
+				{compact && transaction.tone === 'error' ? <div className='global-transaction-notice-recovery'>{transaction.detail === transactionCopy.revertedCheckingDetails ? transaction.detail : transactionCopy.reviewFailureDetails}</div> : undefined}
+				{!compact && transaction.detail !== undefined ? <div className='global-transaction-notice-detail'>{transaction.detail}</div> : undefined}
+				{compact ? undefined : hashContent}
+				{collapseDetails && (rows.length > 0 || technicalRows.length > 0 || (compact && transaction.detail !== undefined)) ? (
 					<ReadOnlyDetailAccordion title={transactionCopy.transactionDetails}>
-						{compactSuccess && transaction.detail !== undefined ? <div className='global-transaction-notice-detail'>{transaction.detail}</div> : undefined}
+						{compact && transaction.detail !== undefined ? <div className='global-transaction-notice-detail'>{transaction.detail}</div> : undefined}
 						{detailRows}
 					</ReadOnlyDetailAccordion>
 				) : (

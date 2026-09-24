@@ -209,6 +209,7 @@ describe('QuestionCreateSection', () => {
 			/>,
 		)
 		cleanupRenderedComponent = successComponent.cleanup
+		expect(document.body.querySelector('.transaction-hash-link')).toBeNull()
 		await act(() => {
 			fireEvent.click(within(document.body).getByRole('button', { name: `Use for fork: ${question.title} (${question.questionId})` }))
 			fireEvent.click(within(document.body).getByRole('button', { name: 'Create another question' }))

@@ -87,10 +87,10 @@ test('closes after confirmation and permits a new request when reopened after st
 		})
 		await settle()
 		const dialogBeforeResult = queries.getByRole('dialog', { name: 'Request New Price' })
-		expect(within(dialogBeforeResult).getByText('Pending')).not.toBeNull()
-		expect(queries.queryByRole('dialog', { name: 'Transaction status' })).toBeNull()
-		expect(dialogBeforeResult.textContent?.match(new RegExp(hash, 'g')) ?? []).toHaveLength(1)
-		expect(within(dialogBeforeResult).getByRole('button', { name: 'Close' }).hasAttribute('disabled')).toBe(false)
+		const pendingStatus = queries.getByRole('status', { name: 'Transaction status' })
+		expect(pendingStatus.textContent).toContain('Pending')
+		expect(within(pendingStatus).getByText(hash)).not.toBeNull()
+		expect(dialogBeforeResult.textContent).not.toContain(hash)
 		expect(within(dialogBeforeResult).getByRole('textbox', { name: 'Open Oracle REP/ETH starting price' }).hasAttribute('disabled')).toBe(false)
 		await act(() => {
 			completedHash.value = hash
@@ -131,6 +131,7 @@ test('keeps focus inside the price dialog when the request action becomes pendin
 						await controller.review()
 					}}
 				/>
+				<GlobalTransactionDialog transaction={presentation.value} />
 			</GlobalTransactionPresentationProvider>
 		)
 	}
@@ -149,8 +150,9 @@ test('keeps focus inside the price dialog when the request action becomes pendin
 			controller?.submitted(hash)
 			presentation.value = { tone: 'pending', title: 'Requesting Price', hash, operationKey: 'price-request' }
 		})
-		expect(within(dialog).getByText('Pending')).not.toBeNull()
-		expect(document.activeElement?.classList.contains('transaction-inline-final-status')).toBe(true)
+		expect(within(queries.getByRole('status', { name: 'Transaction status' })).getByText('Pending')).not.toBeNull()
+		expect(document.activeElement?.classList.contains('transaction-plan-action')).toBe(true)
+		expect(dialog.textContent).not.toContain(hash)
 		const priceInput = within(dialog).getByRole('textbox', { name: 'Open Oracle REP/ETH starting price' })
 		priceInput.focus()
 		await act(() => {
@@ -511,7 +513,7 @@ test.each(['dismiss', 'fetch', 'close'] as const)('reports a reverted price requ
 		await settle()
 		expect(transactionSteps.value?.steps[0]?.phase).toBe('failed')
 		expect(within(queries.getByRole('dialog', { name: 'Transaction status' })).getByText('Failed')).not.toBeNull()
-		expect(within(queries.getByRole('dialog', { name: 'Transaction status' })).getByText('Transaction reverted; checking details…')).not.toBeNull()
+		expect(queries.getByRole('dialog', { name: 'Transaction status' }).querySelector('.global-transaction-notice-recovery')?.textContent).toBe('Transaction reverted; checking details…')
 		await act(() => fireEvent.click(within(queries.getByRole('dialog', { name: 'Transaction status' })).getByRole('button', { name: 'Dismiss' })))
 		expect(queries.queryByRole('dialog', { name: 'Transaction status' })).toBeNull()
 		if (action !== 'dismiss') {

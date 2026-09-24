@@ -56,7 +56,10 @@ describe('GlobalTransactionDialog', () => {
 		await act(() => {
 			render(<GlobalTransactionDialog transaction={{ ...pending, detail: 'nonce too low', title: 'Price request failed', tone: 'error' }} />, renderedComponent.container)
 		})
-		expect(within(queries.getByRole('dialog', { name: 'Transaction status' })).getByRole('alert').textContent).toContain('nonce too low')
+		const failedDialog = queries.getByRole('dialog', { name: 'Transaction status' })
+		expect(failedDialog.querySelector('.global-transaction-notice-recovery')?.textContent).toBe('Review transaction details before retrying.')
+		expect(within(failedDialog).getByRole('alert').textContent).toContain('nonce too low')
+		expect(failedDialog.querySelector('details')?.open).toBe(false)
 	})
 
 	test('automatically clears confirmed status while keeping failures visible', async () => {
@@ -119,7 +122,7 @@ describe('GlobalTransactionDialog', () => {
 		}
 	})
 
-	test('shows a failed final hash once while its status is visible and restores it after dismissal', async () => {
+	test('keeps the failed transaction hash in the shared dialog only', async () => {
 		const controller = createTransactionStepController()
 		controller.setPlan([{ title: 'Request price', description: 'Fund the report.', contractAddress: undefined, contractLabel: undefined, spender: undefined, amount: undefined, ethValueAttoEth: 0n }])
 		const review = controller.review()
@@ -140,15 +143,16 @@ describe('GlobalTransactionDialog', () => {
 		try {
 			const status = within(document.body).getByRole('dialog', { name: 'Transaction status' })
 			expect(status.textContent).toContain('Price request')
+			expect(within(status).getByText(hash)).not.toBeNull()
 			expect(document.querySelector('.transaction-step-hash a')).toBeNull()
 			await act(() => fireEvent.click(within(status).getByRole('button', { name: 'Dismiss' })))
-			expect(document.querySelector('.transaction-step-hash a')).not.toBeNull()
+			expect(document.querySelector('.transaction-step-hash a')).toBeNull()
 		} finally {
 			transactionSteps.value?.cancel()
 		}
 	})
 
-	test('keeps intermediate receipts in the form while showing a later warning', async () => {
+	test('shows intermediate pending and confirmed receipts in the shared transaction dialog', async () => {
 		const hash = '0xbccd000000000000000000000000000000000000000000000000000000000001'
 		const controller = createTransactionStepController()
 		const step = { description: undefined, contractAddress: undefined, contractLabel: undefined, spender: undefined, amount: undefined, ethValueAttoEth: 0n }
@@ -163,11 +167,16 @@ describe('GlobalTransactionDialog', () => {
 		const renderedComponent = await renderIntoDocument(<GlobalTransactionDialog transaction={pending} />)
 		trackRendered(renderedComponent)
 		await act(() => controller.submitted(hash))
-		expect(within(document.body).queryByRole('dialog')).toBeNull()
+		expect(within(document.body).getByRole('status', { name: 'Transaction status' }).textContent).toContain('Wrap ETH into WETH')
+		expect(within(document.body).getByRole('status', { name: 'Transaction status' }).textContent).toContain('Pending')
 		await act(() => controller.receipt(hash, 'success'))
 		const secondReview = controller.review(1).catch(() => undefined)
 		await act(() => undefined)
-		expect(within(document.body).queryByRole('dialog')).toBeNull()
+		expect(within(document.body).getByRole('dialog', { name: 'Transaction status' }).textContent).toContain('Wrap ETH into WETH')
+		expect(within(document.body).getByRole('dialog', { name: 'Transaction status' }).textContent).toContain('Confirmed')
+		await act(() => fireEvent.click(within(document.body).getByRole('button', { name: 'Dismiss' })))
+		await act(() => render(<GlobalTransactionDialog transaction={{ ...pending, title: 'ETH wrapped', tone: 'success' }} />, renderedComponent.container))
+		expect(within(document.body).queryByRole('dialog', { name: 'Transaction status' })).toBeNull()
 		await act(() => render(<GlobalTransactionDialog transaction={{ ...pending, detail: 'Refresh failed after confirmation.', title: 'Wrap completed', tone: 'warning' }} />, renderedComponent.container))
 		expect(within(within(document.body).getByRole('dialog', { name: 'Transaction status' })).getByText('Refresh failed after confirmation.')).not.toBeNull()
 		await act(() => fireEvent.click(within(document.body).getByRole('button', { name: 'Dismiss' })))

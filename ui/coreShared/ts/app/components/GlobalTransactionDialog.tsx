@@ -4,7 +4,7 @@ import * as transactionCopy from '../../copy/transaction.js'
 import { TransactionPresentationNotice } from '../../components/TransactionPresentationNotice.js'
 import { WarningSurface } from '../../components/WarningSurface.js'
 import type { GlobalTransactionPresentation } from '../../types/components.js'
-import { dismissGlobalTransaction, inlineTransactionStatusHash, isGlobalTransactionDismissed } from '../../transactions/globalTransactionDismissal.js'
+import { dismissGlobalTransaction, isGlobalTransactionDismissed } from '../../transactions/globalTransactionDismissal.js'
 import { transactionStepOutcome, transactionSteps } from '../../transactions/transactionSteps.js'
 
 function formatUniverseIdHex(universeId: bigint) {
@@ -21,7 +21,6 @@ export function GlobalTransactionDialog({ activeUniverseId, routeKey, transactio
 	const dialogRef = useRef<HTMLElement | null>(null)
 	const [dismissedRequest, setDismissedRequest] = useState<GlobalTransactionPresentation>()
 	const lastSubmittedRef = useRef<GlobalTransactionPresentation>()
-	const lastIntermediateHashRef = useRef<string>()
 	const originRef = useRef({ hash: window.location.hash, routeKey, key: transaction?.operationKey ?? transaction?.dismissKey ?? transaction?.hash })
 	const titleId = useId()
 	const outcome = transactionStepOutcome.value
@@ -31,34 +30,23 @@ export function GlobalTransactionDialog({ activeUniverseId, routeKey, transactio
 	const submitted = lastSubmittedRef.current
 	const workflow = transactionSteps.value
 	const activeStep = workflow?.steps.find(step => step.hash !== undefined && step.hash === transaction?.hash)
-	const intermediateStep = activeStep !== undefined && activeStep !== workflow?.steps.at(-1)
-	if (intermediateStep && transaction?.hash !== undefined) lastIntermediateHashRef.current = transaction.hash
-	const intermediateTransaction = intermediateStep || (transaction?.hash !== undefined && lastIntermediateHashRef.current === transaction.hash)
 	const outcomePresentation: GlobalTransactionPresentation | undefined =
-		outcome === undefined || transaction === undefined || submitted?.hash !== outcome.hash || (transaction.hash !== undefined && transaction.hash !== outcome.hash) || transaction.tone === 'success' || transaction.tone === 'error' || transaction.tone === 'warning' || outcome.tone === 'success'
+		outcome === undefined || transaction === undefined || submitted?.hash !== outcome.hash || (transaction.hash !== undefined && transaction.hash !== outcome.hash) || transaction.tone === 'success' || transaction.tone === 'error' || transaction.tone === 'warning'
 			? undefined
 			: {
 					...(submitted?.hash === outcome.hash ? submitted : transaction),
 					detail: outcome.detail,
-					dismissKey: `receipt-diagnostic:${outcome.hash}`,
+					dismissKey: outcome.tone === 'error' ? `receipt-diagnostic:${outcome.hash}` : outcome.hash,
 					hash: outcome.hash,
 					title: outcome.title,
 					tone: outcome.tone,
 				}
 	const current = outcomePresentation ?? (transaction?.tone === 'pending' && activeStep !== undefined ? { ...transaction, title: activeStep.title } : transaction)
-	const hiddenAfterOutcome = outcome !== undefined && transaction?.tone === 'pending' && transaction.hash === outcome.hash && isGlobalTransactionDismissed({ dismissKey: `receipt-diagnostic:${outcome.hash}`, hash: outcome.hash, title: outcome.title, tone: outcome.tone })
+	const hiddenAfterOutcome = outcome !== undefined && transaction?.tone === 'pending' && transaction.hash === outcome.hash && isGlobalTransactionDismissed({ dismissKey: outcome.tone === 'error' ? `receipt-diagnostic:${outcome.hash}` : outcome.hash, hash: outcome.hash, title: outcome.title, tone: outcome.tone })
 	const reviewing = transactionSteps.value?.steps.some(step => step.phase === 'review') ?? false
 	const terminal = current?.tone === 'success' || current?.tone === 'error' || current?.tone === 'warning'
-	const visible =
-		current !== undefined &&
-		current !== dismissedRequest &&
-		current.tone !== 'awaiting-wallet' &&
-		current.tone !== 'preparing' &&
-		(!intermediateTransaction || current.tone === 'error' || current.tone === 'warning') &&
-		(!reviewing || outcomePresentation !== undefined || terminal) &&
-		(current.hash === undefined || current.hash !== inlineTransactionStatusHash.value || current.tone === 'error') &&
-		!isGlobalTransactionDismissed(current) &&
-		!hiddenAfterOutcome
+	const compact = current?.tone === 'success' || current?.tone === 'pending' || current?.tone === 'error'
+	const visible = current !== undefined && current !== dismissedRequest && current.tone !== 'awaiting-wallet' && current.tone !== 'preparing' && (!reviewing || outcomePresentation !== undefined || terminal) && !isGlobalTransactionDismissed(current) && !hiddenAfterOutcome
 	const dismiss = () => {
 		if (current?.hash === undefined && (current?.dismissKey ?? current?.operationKey)?.startsWith('transaction-request-')) setDismissedRequest(current)
 		else dismissGlobalTransaction(current)
@@ -141,12 +129,18 @@ export function GlobalTransactionDialog({ activeUniverseId, routeKey, transactio
 		)
 
 	return (
-		<div className={`modal-backdrop global-transaction-dialog-backdrop global-transaction-dialog-nonblocking${current.tone === 'error' ? ' global-transaction-dialog-error' : ''}`} role='presentation'>
-			<section ref={dialogRef} className={`modal-panel global-transaction-dialog${current.tone === 'success' ? ' global-transaction-dialog-success' : ''}`} role={terminal ? 'dialog' : 'status'} tabIndex={-1} aria-labelledby={titleId}>
+		<div className='modal-backdrop global-transaction-dialog-backdrop global-transaction-dialog-nonblocking' role='presentation'>
+			<section
+				ref={dialogRef}
+				className={`modal-panel global-transaction-dialog${compact ? ' global-transaction-dialog-compact' : ''}${current.tone === 'success' ? ' global-transaction-dialog-success' : ''}${current.tone === 'error' ? ' global-transaction-dialog-error' : ''}`}
+				role={terminal ? 'dialog' : 'status'}
+				tabIndex={-1}
+				aria-labelledby={titleId}
+			>
 				<h3 id={titleId} className='visually-hidden'>
 					{transactionCopy.transactionStatus}
 				</h3>
-				<TransactionPresentationNotice className='global-transaction-dialog-notice' collapseDetails compactSuccess={current.tone === 'success'} contextWarning={universeWarning} transaction={current} />
+				<TransactionPresentationNotice className='global-transaction-dialog-notice' collapseDetails compact={compact} contextWarning={universeWarning} transaction={current} />
 				<div className='global-transaction-actions'>
 					{returnHref === undefined ? undefined : <a href={returnHref}>{transactionCopy.backToForm}</a>}
 					<button className={`${terminal && current.tone !== 'success' ? 'primary' : 'secondary'} global-transaction-dismiss`} type='button' onClick={dismiss} aria-label={current.tone === 'success' ? transactionCopy.dismiss : undefined}>
