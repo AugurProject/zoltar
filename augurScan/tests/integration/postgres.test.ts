@@ -1308,6 +1308,10 @@ postgresTest(
 				total: 1,
 				items: [
 					expect.objectContaining({
+						largest_rep_token_address: discoveredAddress.toLowerCase(),
+						largest_rep_balance: '88',
+						largest_rep_decimals: 17,
+						largest_rep_symbol: 'RREP',
 						rep_balances: [expect.objectContaining({ address: discoveredAddress.toLowerCase(), balance: '88', name: 'Replayed REP', symbol: 'RREP', decimals: 17 })],
 					}),
 				],
@@ -3191,6 +3195,8 @@ postgresTest(
 				total: number
 			}
 			expect(richList.total).toBe(2)
+			const otherRichListAddress = richList.items.find(item => item['address'] !== address.toLowerCase())?.['address']
+			if (typeof otherRichListAddress !== 'string') throw new Error('Expected another ranked address')
 			const addressRichList = richList.items.find(item => item['address'] === address.toLowerCase())
 			expect(addressRichList).toMatchObject({
 				address: address.toLowerCase(),
@@ -3251,15 +3257,33 @@ postgresTest(
 					{ owner: address, assetAddress: getAddress('0x0000000000000000000000000000000000000000'), assetKind: 'native', balance: 2_000_000_000_000_000_000n },
 					{ owner: address, assetAddress: rediscoveredAddress, assetKind: 'rep', balance: 3_000_000_000_000_000_000n },
 					{ owner: address, assetAddress: orphanOnlyAddress, assetKind: 'rep', balance: 4_000_000_000_000_000_000n },
+					{ owner: getAddress(otherRichListAddress), assetAddress: orphanOnlyAddress, assetKind: 'rep', balance: 10_000_000_000_000_000_000n },
 				],
 				balanceLease,
 			)
 			await balanceLease.release()
+			const beforeMetadataResponse = await handleApi(new Request(`http://localhost/api/v1/richlist?chainId=${chainId}&sort=rep`), database.sql)
+			if (beforeMetadataResponse === undefined) throw new Error('Pre-metadata REP ranking did not return a response')
+			const beforeMetadata = (await beforeMetadataResponse.json()) as { items: Array<Record<string, unknown>> }
+			expect(beforeMetadata.items[0]).toMatchObject({ address: otherRichListAddress, largest_rep_decimals: 18 })
+			await database.sql`INSERT INTO token_metadata (chain_id, address, block_hash, name, symbol, decimals, read_block, canonical)
+				VALUES (${chainId}, ${orphanOnlyAddress.toLowerCase()}, ${third.hash}, 'Fork REP', 'FREP', 19, 3, true)`
 			const refreshedResponse = await handleApi(new Request(`http://localhost/api/v1/richlist?chainId=${chainId}&address=${address}`), database.sql)
 			if (refreshedResponse === undefined) throw new Error('refreshed rich-list API did not return a response')
 			const refreshed = (await refreshedResponse.json()) as { items: Array<Record<string, unknown>> }
-			expect(refreshed.items[0]).toMatchObject({ rep_token_count: '2', sampled_rep_token_count: '2' })
+			expect(refreshed.items[0]).toMatchObject({
+				rep_token_count: '2',
+				sampled_rep_token_count: '2',
+				largest_rep_token_address: rediscoveredAddress.toLowerCase(),
+				largest_rep_balance: '3000000000000000000',
+				largest_rep_decimals: 18,
+			})
 			expect(refreshed.items[0]).not.toHaveProperty('rep_balance')
+			const repSortedResponse = await handleApi(new Request(`http://localhost/api/v1/richlist?chainId=${chainId}&sort=rep`), database.sql)
+			if (repSortedResponse === undefined) throw new Error('REP-sorted rich list did not return a response')
+			const repSorted = (await repSortedResponse.json()) as { items: Array<Record<string, unknown>> }
+			expect(repSorted.items.map(item => item['address'])).toEqual([address.toLowerCase(), otherRichListAddress])
+			expect(repSorted.items[1]).toMatchObject({ largest_rep_balance: '10000000000000000000', largest_rep_decimals: 19 })
 
 			const extraRepTokens = Array.from({ length: 101 }, (_, index) => getAddress(`0x${(0x7000000000000000000000000000000000000000n + BigInt(index)).toString(16)}`))
 			await database.seedNetwork({
@@ -4631,8 +4655,32 @@ for (const scenario of ['question seconds', 'receipt discovery order'] as const)
 				if (response === undefined) throw new Error('Missing state response')
 				const body: unknown = await response.json()
 				if (!isRecord(body) || !Array.isArray(body['questions'])) throw new Error('Missing questions')
+				const catalogVersion = body['catalogVersion']
+				expect(catalogVersion).toMatch(/^[0-9a-f]{32}$/)
 				expect(body['questions'].every(isQuestionStateEntityValue)).toBe(true)
 				expect(body['questions']).toContainEqual(expect.objectContaining({ start_time: '281474976710655', end_time: '281474976710655' }))
+				await database.sql`UPDATE questions SET title = title || ' revised' WHERE chain_id = ${fixtureChain} AND question_id = 0`
+				const changedResponse = await handleApi(new Request(`http://localhost/api/v1/state/catalog?chainId=${fixtureChain}`), database.sql)
+				if (changedResponse === undefined) throw new Error('Missing changed state response')
+				const changedBody: unknown = await changedResponse.json()
+				if (!isRecord(changedBody)) throw new Error('Missing changed state catalog')
+				expect(changedBody['catalogVersion']).not.toBe(catalogVersion)
+				await database.sql`UPDATE questions SET title = 'Exact_% question' WHERE chain_id = ${fixtureChain} AND question_id = 0`
+				for (const path of ['search', 'state/catalog']) {
+					for (const [query, expected] of [
+						['__', 0],
+						['%%', 0],
+						['_%', 1],
+					] as const) {
+						const filteredResponse = await handleApi(new Request(`http://localhost/api/v1/${path}?chainId=${fixtureChain}&q=${encodeURIComponent(query)}`), database.sql)
+						if (filteredResponse === undefined) throw new Error(`Missing ${path} search response`)
+						const filteredBody: unknown = await filteredResponse.json()
+						if (!isRecord(filteredBody)) throw new Error(`Malformed ${path} search response`)
+						const matches = path === 'search' ? filteredBody['items'] : filteredBody['questions']
+						expect(Array.isArray(matches) ? matches.length : -1).toBe(expected)
+					}
+				}
+				await database.sql`UPDATE questions SET title = 'Exact question' WHERE chain_id = ${fixtureChain} AND question_id = 0`
 				await database.sql`DELETE FROM questions WHERE chain_id = ${fixtureChain} AND question_id <> 0`
 				await database.sql`UPDATE questions SET start_time = 1767225600, end_time = 8640000000000, canonical = false WHERE chain_id = ${fixtureChain}`
 				await database.sql.unsafe('ALTER TABLE questions ALTER COLUMN start_time TYPE timestamptz USING to_timestamp(start_time), ALTER COLUMN end_time TYPE timestamptz USING to_timestamp(end_time)')

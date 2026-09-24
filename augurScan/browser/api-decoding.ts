@@ -159,9 +159,13 @@ export const decodeStateCatalog = (value: unknown): StateCatalog => {
 	}
 	const truncated = value['truncated']
 	const limit = value['limit']
+	const offset = value['offset']
+	const catalogVersion = value['catalogVersion']
 	const totals = value['totals']
 	if (truncated !== undefined && !isBooleanRecord(truncated)) throw new Error('State catalog truncation metadata is malformed')
 	if (limit !== undefined && typeof limit !== 'number') throw new Error('State catalog limit is malformed')
+	if (offset !== undefined && (typeof offset !== 'number' || !Number.isSafeInteger(offset) || offset < 0)) throw new Error('State catalog offset is malformed')
+	if (typeof catalogVersion !== 'string' || !/^[0-9a-f]{32}$/.test(catalogVersion)) throw new Error('State catalog version is malformed')
 	if (totals !== undefined && (!isRecord(totals) || !['pools', 'questions', 'vaults', 'universes'].every(key => typeof totals[key] === 'number' && Number.isSafeInteger(totals[key]) && Number(totals[key]) >= 0))) throw new Error('State catalog totals are malformed')
 	const decodedTotals =
 		totals === undefined
@@ -180,6 +184,8 @@ export const decodeStateCatalog = (value: unknown): StateCatalog => {
 		...(poolStates === undefined ? {} : { poolStates }),
 		...(truncated === undefined ? {} : { truncated }),
 		...(limit === undefined ? {} : { limit }),
+		...(offset === undefined ? {} : { offset }),
+		catalogVersion,
 		...(decodedTotals === undefined ? {} : { totals: decodedTotals }),
 	}
 }

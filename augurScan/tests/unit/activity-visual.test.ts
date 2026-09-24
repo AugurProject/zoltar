@@ -1,7 +1,7 @@
 import { expect, test } from 'bun:test'
 import { readFile } from 'node:fs/promises'
 
-const appSource = await readFile(new URL('../../browser/app.ts', import.meta.url), 'utf8')
+const activityRouteSource = await readFile(new URL('../../browser/activity-route.ts', import.meta.url), 'utf8')
 const styles = await readFile(new URL('../../public/styles.css', import.meta.url), 'utf8')
 
 const cssRule = (selector: string) => {
@@ -19,9 +19,9 @@ test('activity row fields use full-height compact targets', () => {
 })
 
 test('filtered empty activity keeps only its specific no-match status', () => {
-	expect(appSource).toContain("feedState.textContent = 'No project logs match these filters yet.'")
-	expect(appSource).toContain("$('#activity-summary').textContent = visibleCount === 0 ? ''")
-	expect(appSource).not.toContain("visibleCount === 0 ? 'No logs shown'")
+	expect(activityRouteSource).toContain("feedState.textContent = 'No project logs match these filters yet.'")
+	expect(activityRouteSource).toContain("$('#activity-summary').textContent = visibleCount === 0 ? ''")
+	expect(activityRouteSource).not.toContain("visibleCount === 0 ? 'No logs shown'")
 })
 
 test('activity detail and narrow navigation controls retain full touch targets', () => {

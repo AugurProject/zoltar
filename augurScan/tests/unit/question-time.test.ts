@@ -2,7 +2,7 @@ import { expect, test } from 'bun:test'
 import { questionDateLabel, questionStatus } from '../../browser/question-time.ts'
 
 test('formats representable question dates and retains exact out-of-range values', () => {
-	expect(questionDateLabel('1767225600')).toBe(new Date(1767225600000).toLocaleDateString('en-GB'))
+	expect(questionDateLabel('1767225600')).toBe('01/01/2026 UTC')
 	expect(questionDateLabel('8640000000000')).not.toContain('out of range')
 	for (const seconds of ['8640000000001', '281474976710655']) expect(questionDateLabel(seconds)).toBe(`Date out of range (${seconds} Unix seconds)`)
 })
