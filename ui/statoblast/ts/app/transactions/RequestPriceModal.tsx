@@ -34,7 +34,7 @@ export function RequestPriceModal({ review, onConfirm, onClose, canRequest, conf
 	const [failedPlan, setFailedPlan] = useState<FailedPricePlan>()
 	const [running, setRunning] = useState(false)
 	const [attempted, setAttempted] = useState<string>()
-	const run = useRef<{ key: string; signal: AbortSignal; cancel: () => void; submittedHash?: string; submissionOutstanding?: boolean; plan?: FailedPricePlan }>()
+	const run = useRef<{ key: string; signal: AbortSignal; cancel: () => void; submittedHash?: string; finalSubmittedHash?: string; submissionOutstanding?: boolean; plan?: FailedPricePlan }>()
 	const previousReviewKey = useRef<string>()
 	const priceControlsRef = useRef<HTMLDivElement>(null)
 	const mounted = useRef(true)
@@ -51,14 +51,16 @@ export function RequestPriceModal({ review, onConfirm, onClose, canRequest, conf
 	const ownsWorkflow = run.current !== undefined && workflow?.reviewSignal === run.current.signal
 	const sending = ownsWorkflow && (workflow?.steps.some(step => step.phase === 'pending') ?? false)
 	const finalReceiptConfirmed = ownsWorkflow && workflow?.steps.at(-1)?.hash !== undefined && workflow.steps.every(step => step.phase === 'confirmed' || step.phase === 'skipped')
-	const completedRequest = closeOnSuccessKey !== undefined && (presentation?.tone === 'success' || presentation?.tone === 'warning') && presentation.hash === closeOnSuccessKey && finalReceiptConfirmed && workflow?.steps.at(-1)?.hash === closeOnSuccessKey
-	const awaitingResult = finalReceiptConfirmed && !completedRequest && presentation?.tone !== 'error' && run.current?.key === key && run.current?.signal.aborted === false
+	const finalSubmittedHash = run.current?.finalSubmittedHash ?? (ownsWorkflow ? workflow?.steps.at(-1)?.hash : undefined)
+	const completedRequest = finalSubmittedHash !== undefined && (presentation?.tone === 'success' || presentation?.tone === 'warning') && presentation.hash === finalSubmittedHash && (closeOnSuccessKey === undefined || closeOnSuccessKey === finalSubmittedHash)
+	const awaitingResult = (finalReceiptConfirmed || finalSubmittedHash !== undefined) && !completedRequest && presentation?.tone !== 'error' && run.current?.key === key && run.current?.signal.aborted === false
 	const submittedHash = run.current?.submittedHash ?? (ownsWorkflow ? workflow?.steps.findLast(step => step.hash !== undefined)?.hash : undefined)
 	const current = (valid || completedRequest || awaitingResult) && run.current?.key === key && run.current?.signal.aborted === false
 	const showSteps = current && ownsWorkflow && workflow?.steps[workflow.activeIndex] !== undefined
-	const failedCurrentAttempt = (!running && presentation?.tone === 'error' && ((key !== undefined && attempted === key) || (submittedHash !== undefined && presentation.hash === submittedHash) || (run.current?.submissionOutstanding && presentation.hash !== undefined))) || (showSteps && workflow?.steps.some(step => step.phase === 'failed'))
+	const failedCurrentAttempt =
+		(!running && presentation?.tone === 'error' && ((key !== undefined && attempted === key) || (submittedHash !== undefined && presentation.hash === submittedHash) || (run.current?.submissionOutstanding && presentation.hash !== undefined))) || (showSteps && workflow?.steps.some(step => step.phase === 'failed'))
 	const finalStep = ownsWorkflow ? workflow?.steps.at(-1) : undefined
-	const inlineStatusHash = finalStep?.hash !== undefined && (finalStep.phase === 'pending' || finalStep.phase === 'confirmed') && presentation?.hash === finalStep.hash && presentation.tone !== 'error' ? finalStep.hash : undefined
+	const inlineStatusHash = review !== undefined && finalStep?.hash !== undefined && (finalStep.phase === 'pending' || finalStep.phase === 'confirmed') && presentation?.hash === finalStep.hash && presentation.tone !== 'error' ? finalStep.hash : undefined
 	const estimatePrompt = validPrice ? priceRequestCopy.preparingPriceRequest : priceRequestCopy.enterPriceEstimate
 	let previewPrompt = estimatePrompt
 	if (fetching) previewPrompt = priceRequestCopy.fetchingUniswapPrice
@@ -99,6 +101,12 @@ export function RequestPriceModal({ review, onConfirm, onClose, canRequest, conf
 		if (!running) run.current?.cancel()
 	}, [failedCurrentAttempt, running])
 	useLayoutEffect(() => {
+		if (finalSubmittedHash !== undefined && run.current !== undefined) run.current.finalSubmittedHash = finalSubmittedHash
+	}, [finalSubmittedHash])
+	useLayoutEffect(() => {
+		if (completedRequest && review !== undefined) onClose()
+	}, [completedRequest, onClose, review])
+	useLayoutEffect(() => {
 		if (!current && !sending && !(running && ownsWorkflow && workflow?.steps.some(step => step.hash !== undefined))) run.current?.cancel()
 	}, [current, sending, running, ownsWorkflow, workflow])
 	useLayoutEffect(() => {
@@ -127,15 +135,18 @@ export function RequestPriceModal({ review, onConfirm, onClose, canRequest, conf
 				const firstDetach = run.current?.signal === cancellation.signal && run.current.submissionOutstanding !== true
 				const { trackingSubmitted, steps } = cancelTransactionReview(cancellation.signal)
 				const submittedHash = steps?.findLast(step => step.hash !== undefined)?.hash
+				const finalSubmittedHash = steps?.at(-1)?.hash
 				const submissionOutstanding = trackingSubmitted || (run.current?.signal === cancellation.signal && run.current.submissionOutstanding === true)
 				if (submissionOutstanding && run.current?.signal === cancellation.signal) {
 					run.current.submissionOutstanding = true
 					if (submittedHash !== undefined) run.current.submittedHash = submittedHash
-					if (steps !== undefined) run.current.plan = {
-						funding: steps.flatMap(step => step.tokenFunding ?? []),
-						totalAttoEth: steps.reduce((sum, step) => sum + (step.phase === 'skipped' ? 0n : (step.ethValueAttoEth ?? 0n)), 0n),
-						outcome: steps.find(step => step.oracleOutcome !== undefined)?.oracleOutcome,
-					}
+					if (finalSubmittedHash !== undefined) run.current.finalSubmittedHash = finalSubmittedHash
+					if (steps !== undefined)
+						run.current.plan = {
+							funding: steps.flatMap(step => step.tokenFunding ?? []),
+							totalAttoEth: steps.reduce((sum, step) => sum + (step.phase === 'skipped' ? 0n : (step.ethValueAttoEth ?? 0n)), 0n),
+							outcome: steps.find(step => step.oracleOutcome !== undefined)?.oracleOutcome,
+						}
 					if (firstDetach && mounted.current) setManualRequestRequired(true)
 				}
 				if (!submissionOutstanding) cancellation.abort()

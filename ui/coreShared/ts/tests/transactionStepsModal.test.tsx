@@ -7,7 +7,23 @@ import { renderIntoDocument } from './testUtils/renderIntoDocument.js'
 import { fireEvent, within } from './testUtils/queries.js'
 import { TransactionStepsModal } from '../components/TransactionStepsModal.js'
 import { TransactionStepsContent } from '../components/TransactionStepsContent.js'
+import { TransactionFundingSummary } from '../components/TransactionFundingSummary.js'
 import { createTransactionStepController, transactionSteps } from '../transactions/transactionSteps.js'
+
+test('shows WETH before REP with readable amounts and exact values available', async () => {
+	const dom = installDomEnvironment()
+	const rendered = await renderIntoDocument(<TransactionFundingSummary funding={[{ amount: '2.423076924773076927 REP' }, { amount: '1.234567890123456789 WETH' }]} totalAttoEth={137_760_122n} />)
+	try {
+		const amounts = [...rendered.container.querySelectorAll('.transaction-deposits strong')]
+		expect(amounts.map(amount => amount.textContent)).toEqual(['≈ 1.2346 WETH', '≈ 2.4231 REP'])
+		expect(amounts[1]?.getAttribute('title')).toBe('2.423076924773076927 REP')
+		expect(rendered.container.textContent).toContain('≈ 0.00000000014 ETH')
+		expect(rendered.container.querySelector('.currency-value')?.getAttribute('title')).toBe('0.000000000137760122 ETH')
+	} finally {
+		await rendered.cleanup()
+		dom.cleanup()
+	}
+})
 
 test('returns a failed transaction to its action for a fresh submission', async () => {
 	const dom = installDomEnvironment()

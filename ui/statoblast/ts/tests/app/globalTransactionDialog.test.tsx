@@ -5,7 +5,6 @@ import { fireEvent, within } from '@zoltar/ui-core-shared/tests/testUtils/querie
 import { act } from 'preact/test-utils'
 import { render } from 'preact'
 import { GlobalTransactionDialog } from '@zoltar/ui-core-shared/app/components/GlobalTransactionDialog.js'
-import { OperationModal } from '@zoltar/ui-core-shared/components/OperationModal.js'
 import { createMarketCreationSuccessPresentation, createMarketCreationTransactionIntent } from '@zoltar/ui-statoblast-shared/features/reportingTransactionPresentations.js'
 import { createSecurityPoolCreationWarningPresentation } from '@zoltar/ui-statoblast-shared/features/transactionPresentations.js'
 import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
@@ -85,22 +84,19 @@ describe('GlobalTransactionDialog', () => {
 		await secondReview
 	})
 
-	test('takes focus above an operation form and returns it after dismissal', async () => {
+	test('keeps the failed page action available while status is visible', async () => {
 		const renderedComponent = await renderIntoDocument(
 			<>
-				<OperationModal isOpen title='Request New Price' onClose={() => undefined}>
-					<button type='button'>Request price</button>
-				</OperationModal>
-				<GlobalTransactionDialog transaction={{ dismissKey: 'focus-layer-confirmation', title: 'Price requested', tone: 'success' }} />
+				<button type='button'>Create question</button>
+				<GlobalTransactionDialog transaction={{ dismissKey: 'page-action-failure', title: 'Question creation failed', tone: 'error' }} />
 			</>,
 		)
 		trackRendered(renderedComponent)
 		const status = within(document.body).getByRole('dialog', { name: 'Transaction status' })
-		expect(document.activeElement).toBe(within(status).getByRole('button', { name: 'Dismiss' }))
-		expect(within(document.body).getByRole('dialog', { name: 'Request New Price' }).closest('[inert]')).not.toBeNull()
-		await act(() => fireEvent.keyDown(status, { key: 'Escape' }))
+		expect(status.hasAttribute('aria-modal')).toBe(false)
+		expect(within(document.body).getByRole('button', { name: 'Create question' }).closest('[inert]')).toBeNull()
+		await act(() => fireEvent.click(within(status).getByRole('button', { name: 'Dismiss' })))
 		expect(within(document.body).queryByRole('dialog', { name: 'Transaction status' })).toBeNull()
-		expect(within(document.body).getByRole('dialog', { name: 'Request New Price' }).closest('[inert]')).toBeNull()
 	})
 
 	test('does not render when there is no submitted transaction', async () => {

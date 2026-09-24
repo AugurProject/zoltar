@@ -124,7 +124,7 @@ export function TransactionStepsActions({ cancelable = true, contextKey, focusOn
 							</div>
 						)}
 						<div className='actions'>
-						{workflow.steps.map((step, index) => {
+							{workflow.steps.map((step, index) => {
 								if (finalStatus !== undefined && index === workflow.steps.length - 1) return undefined
 								if (completedIndices.has(index) || step.phase === 'confirmed') return undefined
 								const active = index === workflow.activeIndex
@@ -186,13 +186,17 @@ export function TransactionStepsActions({ cancelable = true, contextKey, focusOn
 										<div className='transaction-step-hash'>{step.hash === undefined ? undefined : <TransactionHashLink hash={step.hash} />}</div>
 									</div>
 								)
-						})}
-						{finalStatus === undefined ? undefined : (
-							<div className='transaction-plan-action transaction-plan-action-wide transaction-plan-action-final transaction-inline-final-status'>
-								<TransactionPresentationNotice collapseDetails transaction={finalStatus} />
-								{finalStatus.tone === 'success' || finalStatus.tone === 'warning' ? <button className='primary' type='button' onClick={onClose}>{commonCopy.close}</button> : undefined}
-							</div>
-						)}
+							})}
+							{finalStatus === undefined ? undefined : (
+								<div className='transaction-plan-action transaction-plan-action-wide transaction-plan-action-final transaction-inline-final-status'>
+									<TransactionPresentationNotice collapseDetails transaction={finalStatus} />
+									{finalStatus.tone === 'success' || finalStatus.tone === 'warning' ? (
+										<button className='primary' type='button' onClick={onClose}>
+											{commonCopy.close}
+										</button>
+									) : undefined}
+								</div>
+							)}
 						</div>
 					</div>
 				</div>

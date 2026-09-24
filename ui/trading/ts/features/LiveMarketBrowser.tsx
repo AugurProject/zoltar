@@ -126,13 +126,7 @@ export function LiveMarketBrowser({
 			</>
 		)
 	return (
-		<SectionBlock
-			className='market-browser'
-			title={listKind === 'security-pools' ? presentation.title : undefined}
-			description={presentation.description}
-			variant='plain'
-			busy={discoveryState === 'loading'}
-		>
+		<SectionBlock className='market-browser' title={listKind === 'security-pools' ? presentation.title : undefined} description={presentation.description} variant='plain' busy={discoveryState === 'loading'}>
 			<OpenPoolForm disabled={workflowLocked} target={lookupRoute} />
 			{content}
 			<PaginationControls

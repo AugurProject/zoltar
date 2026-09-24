@@ -81,3 +81,7 @@ export const backToForm = 'Back to form'
 export const confirmationUnavailableDetail = 'Confirmation unavailable. Checking automatically; do not resubmit.'
 export const attention = 'Attention'
 export const dismiss = 'Dismiss'
+export const hide = 'Hide'
+export const transactionHash = 'Transaction hash'
+export const explorer = 'Explorer'
+export const formatViewAddressOnExplorer = (address: CopyTemplateValue) => `View address ${address} on explorer`

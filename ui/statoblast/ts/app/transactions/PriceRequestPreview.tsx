@@ -1,4 +1,3 @@
-import { TokenApprovalControl } from '@zoltar/ui-core-shared/components/TokenApprovalControl.js'
 import { useId, useEffect, useRef } from 'preact/hooks'
 import { InlineHint } from '@zoltar/ui-core-shared/components/InlineHint.js'
 import { TransactionActionButton } from '@zoltar/ui-core-shared/components/TransactionActionButton.js'
@@ -45,12 +44,19 @@ export function PriceRequestPreview({
 	} else if (!reasonHidden) {
 		visibleFeedback = <InlineHint id={reasonId} message={reason} />
 	}
+	let estimatePrompt = priceRequestCopy.enterPriceEstimate
+	if (preparing) estimatePrompt = priceRequestCopy.preparingPriceRequest
+	else if (onReview !== undefined) estimatePrompt = reason
 	return (
 		<>
-			<div className='transaction-step-content'>
-				<TransactionFundingSummary funding={failedPlan?.funding ?? [commonCopy.weth, commonCopy.rep].map(symbol => ({ amount: `${commonCopy.metricUnavailablePlaceholder} ${symbol}` }))} totalAttoEth={failedPlan?.totalAttoEth} outcome={failedPlan?.outcome ?? { returnToWallet: true, settlerRewardAttoEth: undefined }} />
-				<p className='detail transaction-funding-note'>{copy.fundingDetail}</p>
-			</div>
+			{failedPlan === undefined ? (
+				<p className='detail price-request-estimate-prompt'>{estimatePrompt}</p>
+			) : (
+				<div className='transaction-step-content'>
+					<TransactionFundingSummary funding={failedPlan.funding} totalAttoEth={failedPlan.totalAttoEth} outcome={failedPlan.outcome ?? { returnToWallet: true, settlerRewardAttoEth: undefined }} />
+					<p className='detail transaction-funding-note'>{copy.fundingDetail}</p>
+				</div>
+			)}
 			<div className='transaction-step-actions transaction-approval-editor price-request-preview'>
 				<div className='tx-action-group'>
 					{/* A hidden reason lives outside the feedback container so the empty container collapses instead of reserving space. */}
@@ -60,29 +66,6 @@ export function PriceRequestPreview({
 						</div>
 					) : undefined}
 					<div className='actions'>
-						{onReview !== undefined && failedPlan !== undefined ? undefined : [commonCopy.weth, commonCopy.rep].map(symbol => (
-							<div className='transaction-plan-action' key={symbol}>
-								<TokenApprovalControl
-									compact
-									showRequirementNotice={false}
-									actionLabel={copy.fundReport}
-									allowanceError={undefined}
-									allowanceLoading={false}
-									approvedAmount={undefined}
-									requiredAmount={undefined}
-									disabled
-									guardMessage={reason}
-									guardMessageElementId={reasonId}
-									onApprove={() => undefined}
-									pending={false}
-									pendingLabel={commonCopy.formatApprovingToken(symbol)}
-									resetKey='price-estimate'
-									tokenSymbol={symbol}
-									tokenUnits={18}
-								/>
-								<div className='transaction-step-hash' />
-							</div>
-						))}
 						<div className='transaction-plan-action transaction-plan-action-wide transaction-plan-action-final'>
 							{visibleFeedback === undefined ? undefined : (
 								<div className='tx-action-feedback' ref={errorRef} aria-live='polite'>

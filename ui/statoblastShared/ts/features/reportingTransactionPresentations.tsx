@@ -95,8 +95,8 @@ type PoolOracleTransactionContext = {
 function getPoolOracleTransactionRows(context: PoolOracleTransactionContext | undefined) {
 	if (context === undefined) return undefined
 	return [
-		...(context.securityPoolAddress === undefined ? [] : [{ label: commonCopy.securityPoolAddress, value: <AddressValue address={context.securityPoolAddress} responsiveAbbreviation /> }]),
-		{ label: commonCopy.oracleManager, value: <AddressValue address={context.managerAddress} responsiveAbbreviation /> },
+		...(context.securityPoolAddress === undefined ? [] : [{ label: commonCopy.securityPoolAddress, value: context.securityPoolAddress }]),
+		{ label: commonCopy.oracleManager, value: context.managerAddress },
 		...(context.proposedRepPerEthPrice === undefined ? [] : [{ label: priceRequestCopy.attemptedRepPerEthPrice, value: formatUnits(context.proposedRepPerEthPrice, 18) }]),
 	]
 }

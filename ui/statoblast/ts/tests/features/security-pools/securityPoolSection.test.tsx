@@ -461,10 +461,13 @@ describe('SecurityPoolSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 		fireEvent.click(within(document.body).getByRole('radio', { name: 'Create a new question' }))
 		expect(within(document.body).queryByRole('button', { name: 'Create question and pool' })).toBeNull()
-		expect(within(document.body).getByRole('link', { name: 'Open existing pool →' }).getAttribute('href')).toContain(poolAddress)
+		const existingPoolLink = within(document.body).getByRole('link', { name: 'Open existing pool →' })
+		expect(existingPoolLink.getAttribute('href')).toContain(poolAddress)
+		expect(existingPoolLink.classList.contains('existing-pool-action')).toBe(true)
+		expect(document.body.textContent).toContain('A pool already exists for this question and configuration.')
 		expect(document.querySelector('.identifier-value')?.textContent).toBe('0x7b')
 		expect(within(document.body).getByText('Pool address:', { exact: false })).not.toBeNull()
-		expect(document.querySelector(`a[href*='${poolAddress}']`)?.textContent).toContain(poolAddress)
+		expect(document.body.textContent?.split(poolAddress)).toHaveLength(2)
 	})
 
 	test('carries an existing question ID into the pool creation flow', async () => {

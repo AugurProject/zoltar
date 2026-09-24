@@ -139,6 +139,17 @@ export function SecurityPoolSection({
 		if (multiplierValidationMessage !== undefined) return multiplierValidationMessage
 		return getInitialReportPriorityFeeValidationMessage(securityPoolForm.initialReportPriorityFeeEth)
 	})()
+	const combinedReviewContent = (() => {
+		if (inlineTransactionReview !== undefined) return inlineTransactionReview
+		if (existingQuestionCheck?.status === 'existing' && existingQuestionCheck.poolAddress !== undefined) {
+			return (
+				<SecurityPoolLink className='primary existing-pool-action' securityPoolAddress={existingQuestionCheck.poolAddress}>
+					{securityPoolCopy.openExistingPool}
+				</SecurityPoolLink>
+			)
+		}
+		return undefined
+	})()
 	let visibleFieldErrorId: string | undefined = undefined
 	if (createDisabledReason === statoblastSecurityMultiplierValidationMessage) {
 		visibleFieldErrorId = 'security-pool-security-multiplier-error'
@@ -365,11 +376,7 @@ export function SecurityPoolSection({
 													onSubmit: onCreateQuestionAndSecurityPool,
 													pending: questionAndPoolCreating,
 													pendingLabel: securityPoolCopy.creatingQuestionAndPool,
-											...(inlineTransactionReview !== undefined
-												? { reviewContent: inlineTransactionReview }
-												: existingQuestionCheck?.status === 'existing' && existingQuestionCheck.poolAddress !== undefined
-													? { reviewContent: <SecurityPoolLink className='primary' securityPoolAddress={existingQuestionCheck.poolAddress}>Open existing pool →</SecurityPoolLink> }
-													: {}),
+													...(combinedReviewContent === undefined ? {} : { reviewContent: combinedReviewContent }),
 												},
 											})}
 									onMarketFormChange={onMarketFormChange}
@@ -385,8 +392,12 @@ export function SecurityPoolSection({
 											) : undefined}
 											{existingQuestionCheck?.status === 'existing' ? (
 												<div className='detail'>
+													<p>{existingQuestionCheck.poolAddress === undefined ? securityPoolCopy.questionAlreadyExists : securityPoolCopy.questionAlreadyHasPool}</p>
 													<p>
-														{commonCopy.questionId}: <span className='identifier-value' title={existingQuestionCheck.questionId}>{abbreviateAddress(`0x${BigInt(existingQuestionCheck.questionId).toString(16)}`)}</span>
+														{commonCopy.questionId}:{' '}
+														<span className='identifier-value' title={existingQuestionCheck.questionId}>
+															{abbreviateAddress(`0x${BigInt(existingQuestionCheck.questionId).toString(16)}`)}
+														</span>
 													</p>
 													{existingQuestionCheck.poolAddress === undefined ? (
 														<button
@@ -401,7 +412,7 @@ export function SecurityPoolSection({
 														</button>
 													) : (
 														<p>
-															{securityPoolCopy.poolAddressLabel}: <SecurityPoolLink securityPoolAddress={existingQuestionCheck.poolAddress} />
+															{securityPoolCopy.poolAddressLabel}: <AddressValue address={existingQuestionCheck.poolAddress} responsiveAbbreviation />
 														</p>
 													)}
 												</div>

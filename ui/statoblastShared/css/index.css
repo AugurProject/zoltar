@@ -2970,6 +2970,33 @@
 	gap: 1rem;
 }
 
+.security-pool-link.existing-pool-action {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: fit-content;
+	min-height: 2.75rem;
+	border: 1px solid var(--primary-button-border);
+	border-radius: var(--radius-control);
+	padding: 0.78rem 1rem;
+	background: var(--primary-button-bg);
+	color: var(--primary-button-text);
+	font-weight: 600;
+	text-decoration: none;
+}
+
+.security-pool-link.existing-pool-action:hover,
+.security-pool-link.existing-pool-action:focus-visible {
+	border-color: var(--primary-button-border-hover);
+	background: var(--primary-button-bg-hover);
+	color: var(--primary-button-text);
+	text-decoration: none;
+}
+
+.price-request-estimate-prompt {
+	margin: 0;
+}
+
 .request-price-fields .lookup-field-controls.has-action {
 	grid-template-columns: minmax(0, 1fr) auto;
 	column-gap: 0.75rem;

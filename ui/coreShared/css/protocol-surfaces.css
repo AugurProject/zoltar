@@ -667,10 +667,16 @@ strong.metric-value-danger {
 .global-transaction-dialog-nonblocking {
 	background: transparent;
 	pointer-events: none;
+	justify-items: end;
 }
 
 .global-transaction-dialog-nonblocking .global-transaction-dialog {
 	pointer-events: auto;
+	width: min(35rem, 100%);
+}
+
+.global-transaction-dialog-error {
+	align-items: start;
 }
 
 main:has(.global-transaction-dialog-nonblocking) #app-content {
@@ -683,6 +689,13 @@ main:has(.global-transaction-dialog-nonblocking) #app-content {
 	flex-wrap: wrap;
 	gap: 0.4rem;
 	font-size: var(--font-label);
+}
+
+.global-transaction-identifier {
+	display: inline-flex;
+	align-items: center;
+	flex-wrap: wrap;
+	gap: 0.4rem;
 }
 
 .global-transaction-hash > span:first-child {
@@ -757,6 +770,11 @@ main:has(.global-transaction-dialog-nonblocking) #app-content {
 
 	.global-transaction-dialog .global-transaction-notice-rows {
 		grid-template-columns: minmax(0, 1fr);
+	}
+
+	.global-transaction-dialog .global-transaction-notice-row {
+		grid-template-columns: minmax(0, 1fr);
+		gap: 0.1rem;
 	}
 
 	.global-transaction-dialog .global-transaction-actions {

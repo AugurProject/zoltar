@@ -1,9 +1,8 @@
-import { useId, useRef, useState } from 'preact/hooks'
+import { useEffect, useId, useRef, useState } from 'preact/hooks'
 import * as appCopy from '../../copy/app.js'
 import * as transactionCopy from '../../copy/transaction.js'
 import { TransactionPresentationNotice } from '../../components/TransactionPresentationNotice.js'
 import { WarningSurface } from '../../components/WarningSurface.js'
-import { useModalFocusIsolation } from '../../hooks/useModalFocusIsolation.js'
 import type { GlobalTransactionPresentation } from '../../types/components.js'
 import { dismissGlobalTransaction, inlineTransactionStatusHash, isGlobalTransactionDismissed } from '../../transactions/globalTransactionDismissal.js'
 import { transactionStepOutcome, transactionSteps } from '../../transactions/transactionSteps.js'
@@ -20,7 +19,6 @@ type GlobalTransactionDialogProps = {
 
 export function GlobalTransactionDialog({ activeUniverseId, routeKey, transaction }: GlobalTransactionDialogProps) {
 	const dialogRef = useRef<HTMLElement | null>(null)
-	const dismissRef = useRef<HTMLButtonElement | null>(null)
 	const [dismissedRequest, setDismissedRequest] = useState<GlobalTransactionPresentation>()
 	const lastSubmittedRef = useRef<GlobalTransactionPresentation>()
 	const lastIntermediateHashRef = useRef<string>()
@@ -65,8 +63,19 @@ export function GlobalTransactionDialog({ activeUniverseId, routeKey, transactio
 		if (current?.hash === undefined && (current?.dismissKey ?? current?.operationKey)?.startsWith('transaction-request-')) setDismissedRequest(current)
 		else dismissGlobalTransaction(current)
 	}
-	const blocking = visible && current?.tone !== 'pending'
-	useModalFocusIsolation({ dialogRef, initialFocusRef: dismissRef, isOpen: blocking, onClose: dismiss })
+	useEffect(() => {
+		if (!visible || current?.tone !== 'error' || typeof requestAnimationFrame !== 'function') return
+		const frame = requestAnimationFrame(() => {
+			const panel = dialogRef.current?.getBoundingClientRect()
+			if (panel === undefined) return
+			const obstructed = Array.from(document.querySelectorAll<HTMLElement>('.tx-action-button, .existing-pool-action')).find(action => {
+				const rect = action.getBoundingClientRect()
+				return rect.width > 0 && rect.height > 0 && rect.bottom > panel.top && rect.top < panel.bottom && rect.right > panel.left && rect.left < panel.right
+			})
+			obstructed?.scrollIntoView({ block: 'center' })
+		})
+		return () => cancelAnimationFrame(frame)
+	}, [current?.hash, current?.tone, visible])
 	if (!visible || current === undefined) return undefined
 
 	const transactionUniverseId = current.universeId
@@ -80,16 +89,16 @@ export function GlobalTransactionDialog({ activeUniverseId, routeKey, transactio
 		)
 
 	return (
-		<div className={`modal-backdrop global-transaction-dialog-backdrop${blocking ? '' : ' global-transaction-dialog-nonblocking'}`} role='presentation'>
-			<section ref={dialogRef} className='modal-panel global-transaction-dialog' role={blocking ? 'dialog' : 'status'} tabIndex={-1} aria-modal={blocking ? 'true' : undefined} aria-labelledby={titleId}>
+		<div className={`modal-backdrop global-transaction-dialog-backdrop global-transaction-dialog-nonblocking${current.tone === 'error' ? ' global-transaction-dialog-error' : ''}`} role='presentation'>
+			<section ref={dialogRef} className='modal-panel global-transaction-dialog' role={terminal ? 'dialog' : 'status'} tabIndex={-1} aria-labelledby={titleId}>
 				<h3 id={titleId} className='visually-hidden'>
 					{transactionCopy.transactionStatus}
 				</h3>
 				<TransactionPresentationNotice className='global-transaction-dialog-notice' collapseDetails contextWarning={universeWarning} transaction={current} />
 				<div className='global-transaction-actions'>
 					{returnHref === undefined ? undefined : <a href={returnHref}>{transactionCopy.backToForm}</a>}
-					<button ref={dismissRef} className={`${blocking ? 'primary' : 'secondary'} global-transaction-dismiss`} type='button' onClick={dismiss}>
-						{blocking ? transactionCopy.dismiss : 'Hide'}
+					<button className={`${terminal ? 'primary' : 'secondary'} global-transaction-dismiss`} type='button' onClick={dismiss}>
+						{terminal ? transactionCopy.dismiss : transactionCopy.hide}
 					</button>
 				</div>
 			</section>

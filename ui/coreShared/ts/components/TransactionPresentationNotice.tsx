@@ -5,7 +5,7 @@ import { Badge } from './Badge.js'
 import { ReadOnlyDetailAccordion } from './ReadOnlyDetailAccordion.js'
 import { AddressValue } from './AddressValue.js'
 import { getActiveNetworkProfile } from '../lib/activeEnvironment.js'
-import { buildTransactionExplorerUrl } from '../wallet/networkProfile.js'
+import { buildAddressExplorerUrl, buildTransactionExplorerUrl } from '../wallet/networkProfile.js'
 import type { BadgeTone, GlobalTransactionPresentation } from '../types/components.js'
 
 type TransactionPresentationNoticeProps = {
@@ -33,6 +33,21 @@ function getNoticeTitle(transaction: GlobalTransactionPresentation) {
 	return transaction.title
 }
 
+function TransactionDetailValue({ value }: { value: ComponentChildren }) {
+	if (typeof value !== 'string' || !/^0x[0-9a-fA-F]{40}$/.test(value)) return <>{value}</>
+	const explorerUrl = buildAddressExplorerUrl(getActiveNetworkProfile(), value)
+	return (
+		<span className='global-transaction-identifier'>
+			<AddressValue address={value} responsiveAbbreviation />
+			{explorerUrl === undefined ? undefined : (
+				<a href={explorerUrl} target='_blank' rel='noreferrer' aria-label={transactionCopy.formatViewAddressOnExplorer(value)}>
+					{transactionCopy.explorer}
+				</a>
+			)}
+		</span>
+	)
+}
+
 export function TransactionPresentationNotice({ className = '', collapseDetails = false, contextWarning, transaction }: TransactionPresentationNoticeProps) {
 	const badge = getTransactionBadge(transaction.tone)
 	const title = getNoticeTitle(transaction)
@@ -46,7 +61,9 @@ export function TransactionPresentationNotice({ className = '', collapseDetails 
 			{technicalRows.map((row, rowIndex) => (
 				<div className='global-transaction-notice-row' key={`${row.label}:${rowIndex.toString()}`}>
 					<dt>{row.label}</dt>
-					<dd>{row.value}</dd>
+					<dd>
+						<TransactionDetailValue value={row.value} />
+					</dd>
 				</div>
 			))}
 		</dl>
@@ -58,7 +75,9 @@ export function TransactionPresentationNotice({ className = '', collapseDetails 
 					{rows.map((row, rowIndex) => (
 						<div className='global-transaction-notice-row' key={`${row.label}:${rowIndex.toString()}`}>
 							<dt>{row.label}</dt>
-							<dd>{row.value}</dd>
+							<dd>
+								<TransactionDetailValue value={row.value} />
+							</dd>
 						</div>
 					))}
 				</dl>
@@ -87,9 +106,13 @@ export function TransactionPresentationNotice({ className = '', collapseDetails 
 				{transaction.detail === undefined ? undefined : <div className='global-transaction-notice-detail'>{transaction.detail}</div>}
 				{transactionHash === undefined ? undefined : (
 					<div className='global-transaction-hash'>
-						<span>Transaction hash</span>
+						<span>{transactionCopy.transactionHash}</span>
 						<AddressValue address={transactionHash} responsiveAbbreviation />
-						{explorerUrl === undefined ? undefined : <a href={explorerUrl} target='_blank' rel='noreferrer' aria-label={transactionCopy.viewTransaction}>Explorer</a>}
+						{explorerUrl === undefined ? undefined : (
+							<a href={explorerUrl} target='_blank' rel='noreferrer' aria-label={transactionCopy.viewTransaction}>
+								{transactionCopy.explorer}
+							</a>
+						)}
 					</div>
 				)}
 				{collapseDetails && (rows.length > 0 || technicalRows.length > 0) ? <ReadOnlyDetailAccordion title={transactionCopy.transactionDetails}>{detailRows}</ReadOnlyDetailAccordion> : detailRows}

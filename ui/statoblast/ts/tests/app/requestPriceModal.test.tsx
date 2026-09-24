@@ -37,10 +37,11 @@ afterEach(() => {
 	embeddedTransactionSteps.value = undefined
 })
 
-test('shows final price status in the form without a duplicate panel and closes on its action', async () => {
+test('shows final pending status in the form, then closes it after confirmation', async () => {
 	const dom = installDomEnvironment()
 	const presentation = signal<GlobalTransactionPresentation | undefined>(undefined)
 	const completedHash = signal<string | undefined>(undefined)
+	const activeReview = signal<typeof review | undefined>(review)
 	const requestAllowed = signal(true)
 	const guard = signal<string | undefined>(undefined)
 	const hash = '0x3333333333333333333333333333333333333333333333333333333333333333'
@@ -51,11 +52,13 @@ test('shows final price status in the form without a duplicate panel and closes 
 			<GlobalTransactionPresentationProvider transaction={presentation.value}>
 				<RequestPriceModal
 					{...props}
+					review={activeReview.value}
 					canRequest={requestAllowed.value}
 					confirmationGuardMessage={guard.value}
 					closeOnSuccessKey={completedHash.value}
 					onClose={() => {
 						closed = true
+						activeReview.value = undefined
 					}}
 					onConfirm={async (_request, signal) => {
 						controller = createTransactionStepController(signal)
@@ -92,23 +95,67 @@ test('shows final price status in the form without a duplicate panel and closes 
 			presentation.value = { tone: 'success', title: 'Price requested', hash, operationKey: 'price-request', rows: [{ label: 'Security Pool Address', value: review.securityPoolAddress }] }
 		})
 		await settle()
-		const dialog = queries.getByRole('dialog', { name: 'Request New Price' })
-		expect(closed).toBe(false)
-		expect(within(dialog).getByText('Price requested')).not.toBeNull()
-		expect(queries.queryByRole('dialog', { name: 'Transaction status' })).toBeNull()
-		expect(within(dialog).getByRole('textbox', { name: 'Open Oracle REP/ETH starting price' }).hasAttribute('disabled')).toBe(true)
-		expect(within(dialog).queryByRole('button', { name: /Request price/ })).toBeNull()
-		expect(dialog.textContent?.match(new RegExp(hash, 'g')) ?? []).toHaveLength(1)
+		expect(closed).toBe(true)
+		expect(queries.getByRole('dialog', { name: 'Transaction status' }).textContent).toContain('Price requested')
+	} finally {
+		await rendered.cleanup()
+		dom.cleanup()
+	}
+})
+
+test('closes after a confirmed request when refreshed pool state clears the review before success is presented', async () => {
+	const dom = installDomEnvironment()
+	const presentation = signal<GlobalTransactionPresentation | undefined>(undefined)
+	const successKey = signal<string | undefined>(undefined)
+	const requestAllowed = signal(true)
+	const guard = signal<string | undefined>(undefined)
+	const open = signal(true)
+	const hash = '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
+	let controller: ReturnType<typeof createTransactionStepController> | undefined
+	function Harness() {
+		return (
+			<GlobalTransactionPresentationProvider transaction={presentation.value}>
+				<RequestPriceModal
+					{...props}
+					review={open.value ? review : undefined}
+					canRequest={requestAllowed.value}
+					confirmationGuardMessage={guard.value}
+					closeOnSuccessKey={successKey.value}
+					onClose={() => {
+						open.value = false
+					}}
+					onConfirm={async (_request, signal) => {
+						controller = createTransactionStepController(signal)
+						controller.setPlan([{ ...step, title: 'Request price' }])
+						controller.startWithoutReview(0)
+					}}
+				/>
+				<GlobalTransactionDialog transaction={presentation.value} />
+			</GlobalTransactionPresentationProvider>
+		)
+	}
+	const rendered = await renderIntoDocument(<Harness />)
+	try {
+		const queries = within(document.body)
+		await act(() => fireEvent.input(queries.getByRole('textbox', { name: 'Open Oracle REP/ETH starting price' }), { target: { value: '3' } }))
+		await settle()
+		if (controller === undefined) throw new Error('Missing price request controller')
 		await act(() => {
-			presentation.value = { tone: 'warning', title: 'Price requested', detail: 'Price request succeeded, but refreshing the UI failed', hash, operationKey: 'price-request', rows: [{ label: 'Security Pool Address', value: review.securityPoolAddress }] }
+			controller?.submitted(hash)
+			controller?.receipt(hash, 'success')
+			presentation.value = { hash, title: 'Requesting Price', tone: 'pending' }
+			requestAllowed.value = false
+			guard.value = 'A pending price report already exists for this pool'
 		})
 		await settle()
-		expect(within(queries.getByRole('dialog', { name: 'Request New Price' })).getByText('Price request succeeded, but refreshing the UI failed')).not.toBeNull()
-		const finalClose = within(queries.getByRole('dialog', { name: 'Request New Price' })).getAllByRole('button', { name: 'Close' }).at(-1)
-		if (finalClose === undefined) throw new Error('Missing completed price request close action')
-		await act(() => fireEvent.click(finalClose))
-		expect(closed).toBe(true)
-		expect(queries.queryByRole('dialog', { name: 'Transaction status' })).toBeNull()
+		await act(() => transactionSteps.value?.cancel())
+		await act(() => {
+			successKey.value = hash
+			presentation.value = { hash, title: 'Price requested', tone: 'success' }
+		})
+		await settle()
+		expect(open.value).toBe(false)
+		expect(queries.queryByRole('dialog', { name: 'Request New Price' })).toBeNull()
 	} finally {
 		await rendered.cleanup()
 		dom.cleanup()
@@ -157,9 +204,8 @@ test('prepares approval and request actions alongside editable price controls in
 		expect(queries.queryByRole('button', { name: 'Review funding and steps' })).toBeNull()
 		expect(submitted).toBe(0)
 		await act(() => fireEvent.input(queries.getByRole('textbox', { name: 'Open Oracle REP/ETH starting price' }), { target: { value: '' } }))
-		expect(queries.getByRole('button', { name: /Approve REP/ }).hasAttribute('disabled')).toBe(true)
-		expect(document.querySelector('.transaction-funding')?.textContent).toContain('— REP')
-		expect(document.querySelector('.transaction-funding')?.textContent).not.toContain('2 REP')
+		expect(queries.queryByRole('button', { name: /Approve REP/ })).toBeNull()
+		expect(document.querySelector('.transaction-funding')).toBeNull()
 		for (const value of ['0', '-1', 'abc', '0.0000000000000000001', (2n ** 256n).toString()]) {
 			await act(() => fireEvent.input(queries.getByRole('textbox', { name: 'Open Oracle REP/ETH starting price' }), { target: { value } }))
 			expect(queries.getByText('Enter a positive REP per ETH price with up to 18 decimal places.')).not.toBeNull()
@@ -466,7 +512,11 @@ test.each(['close', 'fetch', 'edit'] as const)('tracks a reverted price request 
 		const client = createWalletClient({
 			account: review.managerAddress,
 			chain: MAINNET_NETWORK_PROFILE.chain,
-			transport: custom({ request: async () => { throw new Error('Unexpected RPC') } }),
+			transport: custom({
+				request: async () => {
+					throw new Error('Unexpected RPC')
+				},
+			}),
 		}).extend(publicActions)
 		const reviewed = createReviewedClient(
 			{
@@ -500,7 +550,9 @@ test.each(['close', 'fetch', 'edit'] as const)('tracks a reverted price request 
 						quoteReads += 1
 						return BigInt(quoteReads + 1) * 10n ** 18n
 					}}
-					onClose={() => { formOpen.value = false }}
+					onClose={() => {
+						formOpen.value = false
+					}}
 					onConfirm={onConfirm}
 				/>
 				<GlobalTransactionDialog transaction={presentation.value} />
@@ -527,7 +579,10 @@ test.each(['close', 'fetch', 'edit'] as const)('tracks a reverted price request 
 		expect(within(status).getByText(hash)).not.toBeNull()
 		expect(within(status).getByText('Attempted REP/ETH price').parentElement?.textContent).toContain('2')
 		await act(() => fireEvent.click(within(status).getByRole('button', { name: 'Dismiss' })))
-		if (action === 'close') await act(() => { formOpen.value = true })
+		if (action === 'close')
+			await act(() => {
+				formOpen.value = true
+			})
 		await settle()
 		const expectedPrices = { close: '2', fetch: '3', edit: '4' }
 		expect(inputValue(queries.getByRole('textbox', { name: 'Open Oracle REP/ETH starting price' }))).toBe(expectedPrices[action])
@@ -871,7 +926,7 @@ test('ignores a quote completed after the dialog closes and reopens', async () =
 	}
 })
 
-test('keeps the funding and action layout visible with unknown values until an estimate is entered', async () => {
+test('keeps the empty price form compact until an estimate is entered', async () => {
 	const dom = installDomEnvironment()
 	let preparations = 0
 	const rendered = await renderIntoDocument(
@@ -886,14 +941,12 @@ test('keeps the funding and action layout visible with unknown values until an e
 		await settle()
 		const queries = within(document.body)
 		expect(queries.getByText('Enter a starting price.')).not.toBeNull()
-		expect(document.querySelector('.transaction-funding')?.textContent).toContain('— REP')
-		expect(queries.getByText('Settler bounty')).not.toBeNull()
-		for (const name of [/Approve REP/, /Approve WETH/, /^Request price/]) {
-			const button = queries.getByRole('button', { name })
-			expect(button.hasAttribute('disabled')).toBe(true)
-			const reasonId = button.getAttribute('aria-describedby')
-			expect(reasonId === null ? undefined : document.getElementById(reasonId)?.textContent).toContain('Enter a starting price.')
-		}
+		expect(document.querySelector('.transaction-funding')).toBeNull()
+		expect(queries.queryByRole('button', { name: /Approve (REP|WETH)/ })).toBeNull()
+		const button = queries.getByRole('button', { name: /^Request price/ })
+		expect(button.hasAttribute('disabled')).toBe(true)
+		const reasonId = button.getAttribute('aria-describedby')
+		expect(reasonId === null ? undefined : document.getElementById(reasonId)?.textContent).toContain('Enter a starting price.')
 		expect(preparations).toBe(0)
 	} finally {
 		await rendered.cleanup()
@@ -921,7 +974,7 @@ test('keeps the preview while satisfied approvals are skipped before the final r
 		await act(() => fireEvent.input(queries.getByRole('textbox', { name: 'Open Oracle REP/ETH starting price' }), { target: { value: '1.25' } }))
 		await settle()
 		expect(transactionSteps.value?.activeIndex).toBe(-1)
-		expect(rendered.container.querySelectorAll('.approval-amount-field')).toHaveLength(2)
+		expect(rendered.container.querySelectorAll('.approval-amount-field')).toHaveLength(0)
 		expect(queries.getByRole('button', { name: /Preparing funding and approvals/ }).hasAttribute('disabled')).toBe(true)
 		expect(queries.queryByRole('button', { name: /Request price/ })).toBeNull()
 		ready.resolve()
