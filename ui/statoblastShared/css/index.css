@@ -2983,6 +2983,7 @@
 	color: var(--primary-button-text);
 	font-weight: 600;
 	text-decoration: none;
+	margin-top: -0.5rem;
 }
 
 .security-pool-link.existing-pool-action:hover,
@@ -2997,7 +2998,7 @@
 	display: grid;
 	grid-template-columns: repeat(2, minmax(0, 1fr));
 	gap: 0.75rem 1rem;
-	margin: 0.5rem 0 0.75rem;
+	margin: 0.5rem 0 0;
 }
 
 .existing-pool-identifiers dt {

@@ -117,6 +117,7 @@ export type SectionBlockProps = {
 	description?: ComponentChildren
 	density?: 'balanced' | 'compact'
 	headingLevel?: 2 | 3 | 4
+	headingId?: string
 	title?: ComponentChildren
 	tone?: 'critical' | 'default' | 'muted'
 	variant?: 'default' | 'embedded' | 'plain' | 'surface'

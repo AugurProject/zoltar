@@ -31,6 +31,8 @@ export type RequestPriceReview = {
 	universeId: bigint
 }
 
+export const PRICE_ORACLE_HEADING_ID = 'selected-pool-price-oracle-heading'
+
 function getStagedOperationsRefreshLabel({ loadingManager, managerError, managerLoaded }: { loadingManager: boolean; managerError: string | undefined; managerLoaded: boolean }) {
 	if (!managerLoaded && loadingManager && managerError === undefined) return <LoadingText>{securityPoolCopy.loadingStagedOperations}</LoadingText>
 	if (!managerLoaded) return securityPoolCopy.retryStagedOperations
@@ -246,7 +248,7 @@ export function SecurityPoolPriceOracleSection({
 }) {
 	const priceValues = managerDetails ?? metricValues
 	return (
-		<SectionBlock density='compact' title={securityPoolCopy.poolPriceOracle} variant='plain'>
+		<SectionBlock density='compact' headingId={PRICE_ORACLE_HEADING_ID} title={securityPoolCopy.poolPriceOracle} variant='plain'>
 			<MetricGrid>
 				<MetricField label={statoblastAppCopy.openOraclePrice} valueTagName='span'>
 					<OpenOraclePriceValue currentTimestamp={currentTimestamp} lastPrice={priceValues?.lastPrice} lastSettlementTimestamp={priceValues?.lastSettlementTimestamp ?? 0n} pendingReportReadyAtTimestamp={managerDetails?.pendingReportReadyAtTimestamp} priceValidUntilTimestamp={managerDetails?.priceValidUntilTimestamp} />
