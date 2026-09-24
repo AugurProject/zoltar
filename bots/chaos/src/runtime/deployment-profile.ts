@@ -40,7 +40,7 @@ function boundCompletionEvidence(state: RuntimeState, wallet: Address | undefine
 export async function verifyRetirementCompletionFinality(settings: OperatorSettings, evidence: BoundRetirementCompletionEvidence) {
 	if (settings.connectivity === undefined) throw new Error('Retirement completion cannot authorize deployment replacement without configured RPC connectivity')
 	const rpcUrls = chaosReadEndpoints(settings)
-	if (new Set(rpcUrls.map(rpcUrl => new URL(rpcUrl).origin)).size < 2) throw new Error('Retirement completion requires at least two independent RPC readers')
+	if (new Set(rpcUrls.map(rpcUrl => new URL(rpcUrl).origin)).size < settings.connectivity.rpcQuorum) throw new Error('Retirement completion requires at least two independent RPC readers')
 	const pool = createChaosReadPool(settings)
 	const observations = chaosReadClients(settings, pool)
 	const finalized = await confirmCanonicalReceiptFinality(
@@ -60,7 +60,7 @@ export async function verifyRetirementCompletionFinality(settings: OperatorSetti
 		{ blockHash: evidence.blockHash, blockNumber: BigInt(evidence.blockNumber) },
 		{ blockTag: 'finalized' },
 		undefined,
-		2,
+		settings.connectivity.rpcQuorum,
 	)
 	if (!finalized) throw new RetirementCompletionPendingError()
 }
