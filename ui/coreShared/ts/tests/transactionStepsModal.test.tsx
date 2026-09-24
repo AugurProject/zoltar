@@ -1,3 +1,5 @@
+import { completedAction, reviewedActions } from '../copy/transaction.js'
+import { formatPendingAction } from '../copy/transactionSteps.js'
 import { GlobalTransactionPresentationProvider } from '../components/GlobalTransactionPresentationContext.js'
 import { TransactionActionButtonLockProvider } from '../components/TransactionActionButton.js'
 import { expect, test } from 'bun:test'
@@ -148,8 +150,8 @@ test('keeps confirmed wrap and approval steps visible while the final request aw
 		await act(() => {
 			approvalReview = controller.review(1)
 		})
-		expect(queries.getByRole('button', { name: 'Approve WETH' }).hasAttribute('disabled')).toBe(false)
-		await act(() => fireEvent.click(queries.getByRole('button', { name: 'Approve WETH' })))
+		expect(queries.getByRole('button', { name: 'Approve 3 WETH' }).hasAttribute('disabled')).toBe(false)
+		await act(() => fireEvent.click(queries.getByRole('button', { name: 'Approve 3 WETH' })))
 		await approvalReview
 		await act(() => {
 			controller.submitted('0x2222222222222222222222222222222222222222222222222222222222222222')
@@ -307,8 +309,8 @@ for (const choice of ['custom', 'max'] as const) {
 			if (choice === 'custom') await act(() => fireEvent.input(queries.getByRole('textbox'), { target: { value: '9' } }))
 			else await act(() => fireEvent.click(queries.getByText('Max')))
 			expect(transactionSteps.value?.steps[0]?.phase).toBe('review')
-			expect(queries.getByRole('button', { name: choice === 'custom' ? /Approve REP/ : /Approve Max/ }).hasAttribute('disabled')).toBe(false)
-			await act(() => fireEvent.click(queries.getByRole('button', { name: choice === 'custom' ? /Approve REP/ : /Approve Max/ })))
+			expect(queries.getByRole('button', { name: choice === 'custom' ? /Approve 9 REP/ : /Approve Max/ }).hasAttribute('disabled')).toBe(false)
+			await act(() => fireEvent.click(queries.getByRole('button', { name: choice === 'custom' ? /Approve 9 REP/ : /Approve Max/ })))
 			expect(await review).toBe(choice === 'custom' ? 9n : 2n ** 256n - 1n)
 			expect(transactionSteps.value?.steps[1]?.phase).toBe('upcoming')
 			expect(rendered.container.querySelector('.transaction-funding')).toBe(funding)
@@ -392,11 +394,11 @@ test('both insufficient approvals are enabled independently while the report wai
 	const rendered = await renderIntoDocument(<TransactionStepsModal contextKey='independent' />)
 	try {
 		const queries = within(rendered.container)
-		for (const token of ['REP', 'WETH']) expect(queries.getByRole('button', { name: `Approve ${token}` }).hasAttribute('disabled')).toBe(false)
+		for (const token of ['REP', 'WETH']) expect(queries.getByRole('button', { name: `Approve 3 ${token}` }).hasAttribute('disabled')).toBe(false)
 		expect(queries.getByRole('button', { name: 'Request price' }).hasAttribute('disabled')).toBe(true)
-		await act(() => fireEvent.click(queries.getByRole('button', { name: 'Approve WETH' })))
+		await act(() => fireEvent.click(queries.getByRole('button', { name: 'Approve 3 WETH' })))
 		expect(await choosing).toEqual({ index: 1, amount: 3n })
-		expect(queries.getByRole('button', { name: 'Approve REP' }).hasAttribute('disabled')).toBe(true)
+		expect(queries.getByRole('button', { name: /Approve (3 )?REP/ }).hasAttribute('disabled')).toBe(true)
 		expect(queries.getByRole('button', { name: 'Request price' }).hasAttribute('disabled')).toBe(true)
 	} finally {
 		await rendered.cleanup()
@@ -502,3 +504,25 @@ for (const result of ['pending', 'reverted'] as const) {
 		}
 	})
 }
+
+test('uses one action vocabulary for queued transaction states', () => {
+	expect(completedAction('Queue liquidation')).toBe('Queued liquidation')
+	expect(formatPendingAction('Queue liquidation')).toBe('Queuing liquidation…')
+	expect(completedAction('Custom operation')).toBe('Completed: Custom operation')
+})
+
+test('uses past tense for shared deployment, transfer and dispute actions', () => {
+	for (const [title, completed, pending] of [
+		['Fund proxy deployment', 'Funded proxy deployment', 'Funding proxy deployment…'],
+		['Deploy shared proxy', 'Deployed shared proxy', 'Deploying shared proxy…'],
+		['Transfer ETH', 'Transferred ETH', 'Transferring ETH…'],
+		['Dispute report', 'Disputed report', 'Disputing report…'],
+	]) {
+		expect(completedAction(title ?? '')).toBe(completed)
+		expect(formatPendingAction(title ?? '')).toBe(pending)
+	}
+})
+
+test('every known reviewed action has an explicit success tense', () => {
+	for (const { title } of Object.values(reviewedActions)) expect(completedAction(title)).not.toStartWith('Completed:')
+})

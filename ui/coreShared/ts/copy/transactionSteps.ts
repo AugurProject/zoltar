@@ -1,3 +1,4 @@
+import { formatActionTense } from './transactionActionTenses.js'
 export const notCompleted = 'Not completed'
 export const skipped = 'Not needed'
 export const ifNeeded = 'If needed'
@@ -12,7 +13,7 @@ export const fundReport = 'funding the report'
 export const fundingRequired = 'Required token balances and approvals must be available.'
 export const transactionPending = 'Wait for the pending transaction to confirm.'
 export const prerequisitesRequired = 'Complete the required setup transactions first.'
-export const formatPendingAction = (title: string) => `${title}…`
+export const formatPendingAction = (title: string) => `${formatActionTense(title, 'pending')}…`
 export const requirementsFailed = 'Could not refresh transaction requirements. Close and review the action again.'
 export const formatTokenApproved = (symbol: string) => `${symbol} approved`
 export const wrapEthIntoWeth = 'Wrap ETH into WETH'

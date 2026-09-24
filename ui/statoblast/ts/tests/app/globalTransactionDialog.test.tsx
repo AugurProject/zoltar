@@ -1,5 +1,8 @@
 /// <reference types='bun-types' />
 
+import { signal } from '@preact/signals'
+import type { GlobalTransactionPresentation } from '@zoltar/ui-core-shared/types/components.js'
+import { TransactionStepsModal } from '@zoltar/ui-core-shared/components/TransactionStepsModal.js'
 import { beforeEach, describe, expect, spyOn, test } from 'bun:test'
 import { fireEvent, within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { act } from 'preact/test-utils'
@@ -27,6 +30,52 @@ describe('GlobalTransactionDialog', () => {
 
 	beforeEach(() => {
 		restoreRouting = installTestRouting()
+	})
+
+	test('keeps the reporting amount and source review then shows one shared success panel', async () => {
+		const hash = '0x3333333333333333333333333333333333333333333333333333333333333333'
+		const presentation = signal<GlobalTransactionPresentation | undefined>(undefined)
+		const controller = createTransactionStepController()
+		controller.setPlan([{ title: 'Report No · 2 REP', description: undefined, contractAddress: undefined, spender: undefined, amount: '2 REP', paidFrom: 'Wallet REP' }])
+		const review = controller.review()
+		function Harness() {
+			return (
+				<GlobalTransactionPresentationProvider transaction={presentation.value}>
+					<TransactionStepsModal contextKey='reporting-merge' />
+					<GlobalTransactionDialog transaction={presentation.value} />
+				</GlobalTransactionPresentationProvider>
+			)
+		}
+		const rendered = await renderIntoDocument(<Harness />)
+		trackRendered(rendered)
+		try {
+			const queries = within(document.body)
+			const reviewDialog = within(queries.getByRole('dialog', { name: 'Report No · 2 REP' }))
+			expect(reviewDialog.getByText('Amount')).not.toBeNull()
+			expect(reviewDialog.getByText('2 REP')).not.toBeNull()
+			expect(reviewDialog.getByText('Paid from')).not.toBeNull()
+			expect(reviewDialog.getByText('Wallet REP')).not.toBeNull()
+			expect(reviewDialog.getAllByRole('button', { name: 'Report No · 2 REP' })).toHaveLength(1)
+			await act(() => fireEvent.click(reviewDialog.getByRole('button', { name: 'Report No · 2 REP' })))
+			await review
+			await act(() => {
+				controller.submitted(hash)
+				presentation.value = { title: 'Reporting No · 2 REP', tone: 'pending', hash }
+			})
+			await act(() => {
+				controller.receipt(hash, 'success')
+				presentation.value = { title: 'Reported No · 2 REP', tone: 'success', hash }
+			})
+			expect(queries.queryByRole('dialog', { name: 'Report No · 2 REP' })).toBeNull()
+			const success = within(queries.getByRole('dialog', { name: 'Transaction status' }))
+			expect(success.getByText('Reported No · 2 REP')).not.toBeNull()
+			expect(queries.getAllByRole('dialog')).toHaveLength(1)
+			expect(document.querySelector('.transaction-success-panel')).toBeNull()
+			await act(() => fireEvent.click(success.getByRole('button', { name: 'Dismiss' })))
+			expect(queries.queryByRole('dialog')).toBeNull()
+		} finally {
+			transactionSteps.value?.cancel()
+		}
 	})
 
 	test('shows a nonblocking pending status and modal confirmed and failed statuses', async () => {
@@ -172,7 +221,7 @@ describe('GlobalTransactionDialog', () => {
 		await act(() => controller.receipt(hash, 'success'))
 		const secondReview = controller.review(1).catch(() => undefined)
 		await act(() => undefined)
-		expect(within(document.body).getByRole('dialog', { name: 'Transaction status' }).textContent).toContain('Wrap ETH into WETH')
+		expect(within(document.body).getByRole('dialog', { name: 'Transaction status' }).textContent).toContain('Wrapped ETH into WETH')
 		expect(within(document.body).getByRole('dialog', { name: 'Transaction status' }).textContent).toContain('Confirmed')
 		await act(() => fireEvent.click(within(document.body).getByRole('button', { name: 'Dismiss' })))
 		await act(() => render(<GlobalTransactionDialog transaction={{ ...pending, title: 'ETH wrapped', tone: 'success' }} />, renderedComponent.container))

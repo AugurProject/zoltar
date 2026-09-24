@@ -24,7 +24,7 @@ function getModalTransactionPresentation(transaction: ReturnType<typeof useGloba
 	return { ...compactTransaction, rows: transaction.rows.filter(row => (row.identityKey === undefined || !contextIdentityKeys.has(row.identityKey)) && !contextLabels.has(row.label)) }
 }
 
-export function OperationModal({ children, closeDisabled = false, closeOnSuccessKey, context = [], description, embedTransactionSteps = true, getReturnFocusTarget, isOpen, onClose, title }: OperationModalProps) {
+export function OperationModal({ children, confirmSingleStepFromForm = false, closeDisabled = false, closeOnSuccessKey, context = [], description, embedTransactionSteps = true, getReturnFocusTarget, isOpen, onClose, title }: OperationModalProps) {
 	const dialogRef = useRef<HTMLElement | null>(null)
 	const closeButtonRef = useRef<HTMLButtonElement | null>(null)
 	const bodyRef = useRef<HTMLDivElement | null>(null)
@@ -46,7 +46,8 @@ export function OperationModal({ children, closeDisabled = false, closeOnSuccess
 	const activeStep = ownedWorkflow?.steps[ownedWorkflow.activeIndex]
 	// A workflow made only of approvals was started by the form's own approve control, which already shows the amount and its pending state.
 	const approvalOnly = ownedWorkflow !== undefined && activeStep !== undefined && ownedWorkflow.steps.every(step => step.spender !== undefined)
-	const showSteps = activeStep !== undefined && !approvalOnly
+	const singleFormAction = confirmSingleStepFromForm && ownedWorkflow?.steps.length === 1
+	const showSteps = activeStep !== undefined && !approvalOnly && !singleFormAction
 	// Stable handlers keep the form's action group from re-claiming the slot on every render.
 	const reviewActionsSlotHandlers = useMemo(() => ({ claim: (element: HTMLElement) => setReviewActionsSlot(element), release: () => setReviewActionsSlot(null) }), [])
 	// With a claimed action row the rest of the form goes inert around it; without one the whole form does.
@@ -66,9 +67,9 @@ export function OperationModal({ children, closeDisabled = false, closeOnSuccess
 		}
 	}, [showSteps, reviewActionsSlot])
 	useEffect(() => {
-		if (ownedWorkflow === undefined || activeStep === undefined || !approvalOnly || activeStep.phase !== 'review') return
+		if (ownedWorkflow === undefined || activeStep === undefined || (!approvalOnly && !singleFormAction) || activeStep.phase !== 'review') return
 		ownedWorkflow.confirmStep(ownedWorkflow.activeIndex)
-	}, [activeStep, approvalOnly, ownedWorkflow])
+	}, [activeStep, approvalOnly, ownedWorkflow, singleFormAction])
 	// A step that fails after it was sent returns to the form on its own; the outcome notice below the form explains what happened.
 	const activeTransactionTone = useGlobalTransactionPresentation()?.tone
 	useEffect(() => {

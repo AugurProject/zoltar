@@ -496,6 +496,7 @@ export type ReportingDetails =
 	| ActiveReportingDetails
 
 export type ReportingActionResult = ActionResult & {
+	amountAttoRep?: bigint
 	action: 'approveReportingRep' | 'reportOutcome' | 'withdrawEscalation'
 	outcome: ReportingOutcomeKey
 	securityPoolAddress: Address

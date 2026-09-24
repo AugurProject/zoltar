@@ -126,7 +126,7 @@ describe('transaction presentations', () => {
 
 	test('describes Open Oracle settlement as a report lifecycle action', () => {
 		expect(createOpenOracleTransactionIntent('settle').submittedTitle).toBe('Settling Report')
-		expect(createOpenOracleSuccessPresentation({ action: 'settle', hash: '0x1234' }).title).toBe('Report Settled')
+		expect(createOpenOracleSuccessPresentation({ action: 'settle', hash: '0x1234' }).title).toBe('Settled report')
 	})
 
 	test('keeps pool and action context in trading and reporting intents', () => {
@@ -257,7 +257,7 @@ describe('transaction presentations', () => {
 		}
 		expect(intent.failedTitle).toBe('Price request')
 		expect(failed.active?.title).toBe('Price request')
-		expect(success.title).toBe('Price requested')
+		expect(success.title).toBe('Requested new price')
 	})
 
 	test('describes truth-auction claim settlement as REP plus auctioned capacity ownership', () => {

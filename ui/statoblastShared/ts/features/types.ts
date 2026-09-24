@@ -160,6 +160,7 @@ export type SecurityPoolsOverviewSectionProps = SecurityPoolsOverviewRouteConten
 
 export type SecurityPoolWorkflowRouteContentProps = LiquidationModalStateProps & {
 	RequestPriceModal?: ComponentType<RequestPriceModalProps>
+	inlineOracle?: import('./oracleTypes.js').OpenOracleSectionProps
 	accountState: AccountState
 	activeUniverseId: bigint
 	checkedSecurityPoolAddress: string | undefined

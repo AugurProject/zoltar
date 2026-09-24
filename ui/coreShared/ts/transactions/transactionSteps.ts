@@ -12,6 +12,7 @@ export type TransactionStepDetails = {
 	oracleOutcome?: TransactionPlanStep['oracleOutcome']
 	tokenFunding?: readonly { amount: string; limit: string | undefined }[]
 	optional?: boolean
+	paidFrom?: string
 	title: string
 	/** Explains the step when the title alone does not convey its consequence; omitted for self-describing actions. */
 	description: string | undefined
@@ -175,7 +176,7 @@ export function createTransactionStepController(signal = getTransactionReviewSig
 			if (step === undefined) return
 			step.phase = status === 'success' ? 'confirmed' : 'failed'
 			if (status !== 'success') transactionStepOutcome.value = { hash, title: step.title, tone: 'error', detail: transactionCopy.revertedCheckingDetails }
-			else if (steps.at(-1) !== step) transactionStepOutcome.value = { hash, title: step.title, tone: 'success' }
+			else if (steps.at(-1) !== step) transactionStepOutcome.value = { hash, title: transactionCopy.completedAction(step.title), tone: 'success' }
 			if (status === 'success' && step.approval !== undefined && step.approvalAmount !== undefined) step.approval = { ...step.approval, approvedAmount: step.approvalAmount }
 			if (status !== 'success') step.error = 'Transaction reverted.'
 			if (!canceled) publish()

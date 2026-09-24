@@ -1,3 +1,4 @@
+import { formatCurrencyBalance } from '@zoltar/ui-core-shared/lib/formatters.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as reportingCopy from '../../../copy/reporting.js'
 import { CurrencyValue } from '@zoltar/ui-core-shared/components/CurrencyValue.js'
@@ -48,6 +49,8 @@ function ReportingSettlementSide({
 	withdrawEscalationEnabled,
 	withdrawGuardMessage,
 }: ReportingSettlementSideProps) {
+	const claimAmount = side.userDeposits.reduce((sum, deposit) => sum + (getEscalationDepositClaimAmount(effectiveReportingDetails, side.key, deposit) ?? 0n), 0n)
+	const winning = effectiveReportingDetails?.questionOutcome === side.key
 	const selectedWithdrawDepositIndexes = selectedWithdrawDepositIndexesByOutcome[side.key]
 	const allWithdrawDepositIndexes = side.userDeposits.map(deposit => deposit.depositIndex)
 	const claimLabel = getWithdrawDepositClaimLabel(effectiveReportingDetails, side.key)
@@ -58,8 +61,9 @@ function ReportingSettlementSide({
 	return (
 		<SectionBlock density='compact' headingLevel={4} title={side.label} variant='embedded'>
 			<div className='field'>
-				<span>{reportingCopy.chooseDepositsToSettle}</span>
+				{side.userDeposits.length > 1 ? <span>{reportingCopy.chooseDepositsToSettle}</span> : undefined}
 				<EscalationDepositSelectionList
+					selectable={side.userDeposits.length > 1}
 					disabled={withdrawControlsLocked || withdrawActionPending}
 					items={side.userDeposits.map(deposit => {
 						const claimAmount = getEscalationDepositClaimAmount(effectiveReportingDetails, side.key, deposit)
@@ -98,25 +102,27 @@ function ReportingSettlementSide({
 			</div>
 
 			<div className='actions'>
+				{side.userDeposits.length > 1 ? (
+					<TransactionActionButton
+						idleLabel={commonCopy.launchAction(reportingCopy.formatSettleSelectedDepositsLabel(side.label))}
+						pendingLabel={reportingCopy.formatSettlingDepositsPendingLabel(side.label)}
+						onClick={() => onWithdraw(side.key, selectedWithdrawDepositIndexes)}
+						pending={isPendingSide}
+						disabled={otherSidePending}
+						disabledReasonElementId={withdrawSelectedUsesSharedReason ? settlementActionDisabledReasonId : undefined}
+						tone='secondary'
+						availability={{ disabled: !isOnActiveAppChain || !withdrawEscalationEnabled || withdrawSelectedGuardMessage !== undefined, loading: loadingReportingDetails, reason: withdrawSelectedGuardMessage }}
+						showDisabledReason={!withdrawSelectedUsesSharedReason}
+					/>
+				) : undefined}
 				<TransactionActionButton
-					idleLabel={reportingCopy.formatSettleSelectedDepositsLabel(side.label)}
-					pendingLabel={reportingCopy.formatSettlingDepositsPendingLabel(side.label)}
-					onClick={() => onWithdraw(side.key, selectedWithdrawDepositIndexes)}
-					pending={isPendingSide}
-					disabled={otherSidePending}
-					disabledReasonElementId={withdrawSelectedUsesSharedReason ? settlementActionDisabledReasonId : undefined}
-					tone='secondary'
-					availability={{ disabled: !isOnActiveAppChain || !withdrawEscalationEnabled || withdrawSelectedGuardMessage !== undefined, loading: loadingReportingDetails, reason: withdrawSelectedGuardMessage }}
-					showDisabledReason={!withdrawSelectedUsesSharedReason}
-				/>
-				<TransactionActionButton
-					idleLabel={reportingCopy.formatSettleAllDepositsLabel(side.label)}
-					pendingLabel={reportingCopy.formatSettlingDepositsPendingLabel(side.label)}
+					idleLabel={commonCopy.launchAction(winning ? reportingCopy.claimDeposits(side.label, formatCurrencyBalance(claimAmount)) : reportingCopy.clearDeposits(side.label))}
+					pendingLabel={winning ? reportingCopy.claimingDeposits(side.label, formatCurrencyBalance(claimAmount)) : reportingCopy.clearingDeposits(side.label)}
 					onClick={() => onWithdraw(side.key, allWithdrawDepositIndexes)}
 					pending={isPendingSide}
 					disabled={otherSidePending}
 					disabledReasonElementId={withdrawAllUsesSharedReason ? settlementActionDisabledReasonId : undefined}
-					tone='secondary'
+					tone={winning ? 'primary' : 'secondary'}
 					availability={{ disabled: !isOnActiveAppChain || !withdrawEscalationEnabled || withdrawGuardMessage !== undefined, loading: loadingReportingDetails, reason: withdrawGuardMessage }}
 					showDisabledReason={!withdrawAllUsesSharedReason}
 				/>
@@ -166,7 +172,23 @@ export function ReportingSettlementSection({
 	withdrawGuardMessage: string | undefined
 }) {
 	const withdrawActionPending = reportingActiveAction === 'withdrawEscalation'
-	const withdrawableSides = activeReportingDetails?.sides.filter(side => side.userDeposits.length > 0) ?? []
+	const withdrawableSides = (activeReportingDetails?.sides.filter(side => side.userDeposits.length > 0) ?? []).sort((left, right) => Number(right.key === effectiveReportingDetails?.questionOutcome) - Number(left.key === effectiveReportingDetails?.questionOutcome))
+	if (!isPoolQuestionFinalized(effectiveReportingDetails) && !activeReportingDetails?.sides.some(side => side.userDeposits.length > 0 || side.importedUserDeposits.length > 0)) return undefined
+	if (!isPoolQuestionFinalized(effectiveReportingDetails))
+		return (
+			<SectionBlock className='reporting-settlement-section' title={reportingCopy.yourPositions} variant='embedded'>
+				{settlementContextMessage === undefined ? undefined : <p className='detail'>{settlementContextMessage}</p>}
+				{activeReportingDetails?.hasReachedNonDecision && displayedWithdrawGuardMessage !== sharedReportSettlementDisabledReason ? <p className='detail'>{displayedWithdrawGuardMessage}</p> : undefined}
+
+				{activeReportingDetails?.sides
+					.filter(side => side.userDeposits.length > 0 || side.importedUserDeposits.length > 0)
+					.map(side => (
+						<p key={side.key} className='reporting-position'>
+							{side.label} · <CurrencyValue value={[...side.userDeposits, ...side.importedUserDeposits].reduce((sum, deposit) => sum + deposit.amountAttoRep, 0n)} suffix={commonCopy.rep} /> · {reportingCopy.claimableAfterResolution}
+						</p>
+					))}
+			</SectionBlock>
+		)
 	const shouldShowWithdrawEmptyState = !loadingReportingDetails && !reportingStatusMissing && withdrawableSides.length === 0
 	const hasImportedForkedDeposits = activeReportingDetails?.sides.some(side => side.importedUserDeposits.length > 0) ?? false
 	const migrationSettlement = activeReportingDetails?.settlementState === 'migration-required' || activeReportingDetails?.settlementState === 'migration-expired'

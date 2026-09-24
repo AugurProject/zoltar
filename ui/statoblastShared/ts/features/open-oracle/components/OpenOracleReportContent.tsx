@@ -433,7 +433,7 @@ export function renderSelectedReportActionSection({
 								])}
 						<div className='actions'>
 							<TransactionActionButton
-								idleLabel={openOracleCopy.settleReportAction}
+								idleLabel={openOracleCopy.settleReportTitle(openOracleReportDetails?.reportId ?? 0n)}
 								pendingLabel={openOracleCopy.settlingReport}
 								onClick={onSettleReport}
 								pending={openOracleActiveAction === 'settle'}

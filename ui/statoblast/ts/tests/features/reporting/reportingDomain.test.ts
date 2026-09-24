@@ -1,3 +1,5 @@
+import { getReportingStagePresentation } from '@zoltar/ui-statoblast-shared/features/reporting/lib/reportingStagePresentation.js'
+import { formatTimestamp } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { createMarketDetails as marketDetailsFixture } from '@zoltar/ui-core-shared/tests/testUtils/marketFixtures.js'
 /// <reference types="bun-types" />
 
@@ -6,6 +8,7 @@ import type { ActiveReportingDetails, MarketDetails, ReportingDetails } from '@z
 import {
 	getEscalationDepositClaimAmount,
 	getEscalationPhase,
+	getLeadingEscalationOutcome,
 	getEscalationTimeRemaining,
 	getImportedEscalationDepositClaimAmount,
 	getRemainingSelectedOutcomeContributionCapacity,
@@ -348,7 +351,7 @@ describe('reportingDomain', () => {
 
 		expect(getReportingMaxProfitContribution(details, 'yes')).toEqual({
 			amountAttoRep: undefined,
-			reason: 'Max profit preset unavailable because the reward window is already filled on the selected side.',
+			reason: 'Max reward preset unavailable because the reward window is already filled on the selected side.',
 		})
 	})
 
@@ -396,7 +399,7 @@ describe('reportingDomain', () => {
 	test('getReportingMaxProfitContribution is unavailable before the escalation game exists', () => {
 		expect(getReportingMaxProfitContribution(createNotStartedReportingDetails(), 'yes')).toEqual({
 			amountAttoRep: undefined,
-			reason: 'Max profit becomes available after the escalation game starts.',
+			reason: 'Max reward becomes available after the escalation game starts.',
 		})
 	})
 
@@ -523,4 +526,38 @@ describe('reportingDomain', () => {
 			reason: 'Select a valid reporting outcome.',
 		})
 	})
+})
+
+for (const end of [300n, 600n]) {
+	test(`pending stage presentation names the actual deadline ${end} and leading outcome`, () => {
+		const details = createReportingDetails({ currentTime: 150n, activationTime: 300n, escalationEndTime: end })
+		const stage = getReportingStagePresentation({ reportingDetails: details, marketDetails: details.marketDetails, effectiveCurrentTimestamp: details.currentTime, forkAlreadyTriggered: false })
+		expect(stage?.label).toBe('Waiting to start')
+		expect(stage?.detail).toBe(`If nobody responds by ${formatTimestamp(end)}, No wins.`)
+	})
+}
+
+test('only a unique positive balance leads, including auction and threshold ties', () => {
+	const details = createReportingDetails()
+	expect(getLeadingEscalationOutcome(details.sides)).toBe('no')
+	for (const balance of [0n, rep(8n), details.nonDecisionThresholdAttoRep]) {
+		const sides = details.sides.map(side => ({ ...side, balance }))
+		expect(getLeadingEscalationOutcome(sides)).toBeUndefined()
+	}
+	const sides = details.sides.map(side => ({ ...side, balance: side.key === 'invalid' ? 0n : rep(8n) }))
+	expect(getLeadingEscalationOutcome(sides)).toBeUndefined()
+})
+
+test('larger tying reports lose one atto-REP below the threshold but can tie at the fork threshold', () => {
+	const details = createReportingDetails()
+	expect(previewReportingContribution(details, 'invalid', rep(7n))).toEqual({ actualDepositAmount: rep(7n) - 1n, reason: undefined })
+	const fullSide = { ...details, sides: details.sides.map(side => ({ ...side, balance: side.key === 'no' ? details.nonDecisionThresholdAttoRep : side.balance })) }
+	expect(previewReportingContribution(fullSide, 'yes', rep(95n))).toEqual({ actualDepositAmount: rep(95n), reason: undefined })
+})
+
+test('pending stage guidance does not name a tied side as the winner', () => {
+	const details = createReportingDetails({ activationTime: 300n })
+	details.sides = details.sides.map(side => ({ ...side, balance: rep(8n) }))
+	const stage = getReportingStagePresentation({ reportingDetails: details, marketDetails: details.marketDetails, effectiveCurrentTimestamp: details.currentTime, forkAlreadyTriggered: false })
+	expect(stage?.detail).toBe(`No side currently leads. Report before ${formatTimestamp(details.escalationEndTime)} to break the tie.`)
 })

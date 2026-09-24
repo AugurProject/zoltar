@@ -1,3 +1,4 @@
+import * as reportingCopy from '../../../copy/reporting.js'
 import { getWinningEscalationDepositClaimAmount as computeWinningEscalationDepositClaimAmount, getWinningImportedEscalationDepositClaimAmount as computeWinningImportedEscalationDepositClaimAmount, projectEscalationDeposit, type EscalationBalanceTuple } from '@zoltar/statoblast-shared/escalationGame/escalationMath'
 import type { ActiveReportingDetails, EscalationDeposit, EscalationSide, ImportedEscalationDeposit, ReportingDetails, ReportingOutcomeKey } from '@zoltar/ui-core-shared/types/contracts.js'
 import { formatCurrencyBalanceWithUnit } from '@zoltar/ui-core-shared/lib/formatters.js'
@@ -10,8 +11,8 @@ type ReportingAmountSuggestion = {
 const REP_UNIT = 10n ** 18n
 export const ESCALATION_GAME_ACTIVATION_DELAY = 3n * 24n * 60n * 60n
 const LOAD_REPORTING_PRESETS_REASON = 'Loading reporting details.'
-const MAX_PROFIT_NOT_STARTED_REASON = 'Max profit becomes available after the escalation game starts.'
-const SELECTED_SIDE_ALREADY_LEADS_REASON = 'Selected side already leads.'
+const MAX_PROFIT_NOT_STARTED_REASON = reportingCopy.maxProfitPrestartReason
+const SELECTED_SIDE_ALREADY_LEADS_REASON = reportingCopy.selectedSideLeadsReason
 const ESCALATION_RESOLVED_REASON = 'Escalation is already resolved.'
 type EscalationPhase = 'Resolved' | 'Fork Triggered' | 'Pending Start' | 'Timed Out' | 'Active'
 function roundUpToRepUnit(value: bigint) {
@@ -103,7 +104,8 @@ export function getLeadingEscalationOutcome(sides: EscalationSide[]) {
 	for (const side of sides) {
 		if (leadingSide === undefined || side.balance > leadingSide.balance) leadingSide = side
 	}
-	return leadingSide?.key
+	if (leadingSide === undefined || leadingSide.balance === 0n) return undefined
+	return sides.filter(side => side.balance === leadingSide.balance).length === 1 ? leadingSide.key : undefined
 }
 function getMinimumOutcomeChangeContribution(details: ActiveReportingDetails, selectedOutcome: ReportingOutcomeKey): ReportingAmountSuggestion {
 	const { largestOtherBalance, selectedSide } = getSelectedAndOtherSides(details, selectedOutcome)
@@ -157,7 +159,7 @@ function getMaxProfitContribution(details: ActiveReportingDetails, selectedOutco
 	if (minContribution.amountAttoRep === undefined)
 		return {
 			amountAttoRep: undefined,
-			reason: minContribution.reason ?? 'Max profit preset is unavailable.',
+			reason: minContribution.reason ?? 'Max reward preset is unavailable.',
 		}
 	const { largestOtherBalance, selectedSide } = getSelectedAndOtherSides(details, selectedOutcome)
 	if (selectedSide === undefined) return { amountAttoRep: undefined, reason: 'Selected side is unavailable.' }
@@ -166,7 +168,7 @@ function getMaxProfitContribution(details: ActiveReportingDetails, selectedOutco
 	if (isUniqueWinner(selectedSide.balance, largestOtherBalance) && selectedSide.balance >= targetFinalBalance)
 		return {
 			amountAttoRep: undefined,
-			reason: 'Max profit preset unavailable because the reward window is already filled on the selected side.',
+			reason: reportingCopy.maxProfitWindowFilledReason,
 		}
 	const requiredWindowAmount = targetFinalBalance > selectedSide.balance ? targetFinalBalance - selectedSide.balance : 0n
 	const minimumEnteredAmount = minContribution.amountAttoRep > requiredWindowAmount ? minContribution.amountAttoRep : requiredWindowAmount
@@ -177,7 +179,7 @@ function getMaxProfitContribution(details: ActiveReportingDetails, selectedOutco
 	if (selectedSide.balance + effectiveAmount < targetFinalBalance)
 		return {
 			amountAttoRep: undefined,
-			reason: 'Max profit preset unavailable because the selected side cannot fill the reward window within the remaining bond capacity.',
+			reason: 'Max reward preset unavailable because the selected side cannot fill the reward window within the remaining bond capacity.',
 		}
 	return { amountAttoRep, reason: undefined }
 }

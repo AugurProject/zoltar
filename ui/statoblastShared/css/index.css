@@ -961,6 +961,53 @@
 	gap: 1rem;
 }
 
+.reporting-position .currency-value-wrap,
+.reporting-position .currency-value {
+	vertical-align: baseline;
+}
+
+.escalation-phase-steps {
+	display: flex;
+	justify-content: space-between;
+	gap: 1rem;
+	list-style: none;
+	padding: 0;
+	color: var(--muted);
+}
+.escalation-phase-steps [aria-current="step"],
+.escalation-phase-mobile {
+	color: var(--accent);
+	font-weight: 600;
+}
+.escalation-phase-mobile {
+	display: none;
+}
+.escalation-phase-steps li {
+	flex: 1;
+}
+.escalation-phase-steps .completed {
+	color: var(--muted);
+}
+.reporting-metrics-section .detail {
+	display: block;
+}
+@media (max-width: 40rem) {
+	.escalation-phase-steps {
+		display: none;
+	}
+	.escalation-phase-mobile {
+		display: block;
+	}
+	.escalation-side-row {
+		grid-template-columns: minmax(0, 1fr);
+	}
+	.reporting-shared-action-region .actions,
+	.reporting-shared-action-region .tx-action,
+	.reporting-shared-action-region button {
+		width: 100%;
+	}
+}
+
 .reporting-wallet-action-row {
 	display: grid;
 	grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -970,6 +1017,19 @@
 
 .reporting-wallet-action-row > .tx-action {
 	min-width: 0;
+}
+
+@media (max-width: 40rem) {
+	.reporting-shared-action-region .reporting-wallet-action-row {
+		grid-template-columns: minmax(0, 1fr);
+		width: 100%;
+	}
+	.reporting-shared-action-region .tx-action-group,
+	.reporting-shared-action-region .tx-action-group > .actions,
+	.reporting-settlement-section .tx-action-group,
+	.reporting-settlement-section .tx-action-button {
+		width: 100%;
+	}
 }
 
 .withdraw-deposit-list {
@@ -1383,15 +1443,22 @@
 
 .escalation-side-values {
 	display: grid;
-	grid-template-columns: repeat(2, minmax(0, 1fr));
-	gap: 0.9rem;
+	grid-template-columns: minmax(0, 1fr);
+	gap: 0.3rem;
 	min-width: 0;
 }
 
 .escalation-side-value {
-	display: grid;
+	display: flex;
+	align-items: baseline;
+	flex-wrap: nowrap;
 	gap: 0.2rem;
 	min-width: 0;
+}
+
+.escalation-side-value.detail > span:first-child {
+	flex-shrink: 0;
+	white-space: nowrap;
 }
 
 .escalation-side-value .currency-value-wrap,
@@ -1549,7 +1616,9 @@
 	}
 
 	.reporting-outcome-section .escalation-side-values {
-		grid-template-columns: repeat(2, minmax(0, 1fr));
+		display: flex;
+		flex-wrap: wrap;
+		justify-content: space-between;
 		gap: var(--space-2);
 	}
 }

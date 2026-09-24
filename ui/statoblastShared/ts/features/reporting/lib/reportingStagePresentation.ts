@@ -1,9 +1,10 @@
+import { formatCurrencyInputBalance, formatTimestamp } from '@zoltar/ui-core-shared/lib/formatters.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as reportingCopy from '../../../copy/reporting.js'
 import { assertNever } from '@zoltar/ui-core-shared/lib/assert.js'
 import type { LifecycleStagePresentation } from '@zoltar/ui-zoltar-shared/features/types.js'
 import type { MarketDetails, ReportingDetails } from '@zoltar/ui-core-shared/types/contracts.js'
-import { ESCALATION_GAME_ACTIVATION_DELAY, getEscalationPhase, isPoolQuestionFinalized } from './reportingDomain.js'
+import { ESCALATION_GAME_ACTIVATION_DELAY, getEscalationPhase, getLeadingEscalationOutcome, isPoolQuestionFinalized } from './reportingDomain.js'
 import { getReportingLockedUntilMessage, getReportingOutcomeLabel, hasReportingOpened } from './reporting.js'
 
 function getResolvedReportingOutcomeLabel(reportingDetails: ReportingDetails) {
@@ -49,11 +50,19 @@ export function getReportingStagePresentation({
 			label: reportingCopy.resolved,
 			tone: 'success',
 		}
-	if (reportingDetails.status === 'not-started') return undefined
+	if (reportingDetails.status === 'not-started') return { availableActions: [], blockedActions: [], detail: reportingCopy.firstReportNext(formatCurrencyInputBalance(reportingDetails.startBondAttoRep)), key: 'reporting-open', label: reportingCopy.phaseLabels[0] ?? reportingCopy.reportingOpen, tone: 'default' }
 	const escalationPhase = getEscalationPhase(reportingDetails)
+	const leadingOutcome = getLeadingEscalationOutcome(reportingDetails.sides)
 	switch (escalationPhase) {
 		case 'Pending Start':
-			return undefined
+			return {
+				availableActions: [],
+				blockedActions: [],
+				detail: leadingOutcome === undefined ? reportingCopy.noLeadingSideNext(formatTimestamp(reportingDetails.escalationEndTime)) : reportingCopy.pendingStartNext({ end: formatTimestamp(reportingDetails.escalationEndTime), outcome: getReportingOutcomeLabel(leadingOutcome) }),
+				key: 'escalation-pending',
+				label: reportingCopy.phaseLabels[1] ?? reportingCopy.reportingOpen,
+				tone: 'default',
+			}
 		case 'Active':
 			return {
 				availableActions: [],

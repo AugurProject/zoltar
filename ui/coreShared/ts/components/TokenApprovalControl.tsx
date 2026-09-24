@@ -144,7 +144,7 @@ export function TokenApprovalControl({
 	})()
 	const approvalButton = (
 		<TransactionActionButton
-			idleLabel={compact && parsedAmount.kind !== 'max' ? commonCopy.formatApproveValue(tokenSymbol) : buttonLabel}
+			idleLabel={buttonLabel}
 			inlineHint={allowanceMessage === undefined && amountValidationMessage === undefined && canApprove ? visibleStatusMessage : undefined}
 			pendingLabel={pendingLabel}
 			onClick={() => onApprove(nextApprovalAmount)}

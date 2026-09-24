@@ -137,7 +137,7 @@ export function TransactionStepsActions({ cancelable = true, contextKey, focusOn
 								const final = index === workflow.steps.length - 1
 								const ready = step.phase === 'review' && !pending && error === undefined
 								const status = { skipped: copy.skipped, upcoming: step.optional ? copy.ifNeeded : undefined, review: undefined, pending: undefined, confirmed: transactionCopy.confirmed, failed: copy.notCompleted }[step.phase]
-								const detail = [step.phase === 'upcoming' || step.approval !== undefined ? undefined : step.amount, status].filter(value => value !== undefined).join(' · ')
+								const detail = [step.phase === 'upcoming' || step.spender !== undefined || step.paidFrom !== undefined || step.approval !== undefined ? undefined : step.amount, status].filter(value => value !== undefined).join(' · ')
 								return (
 									<div key={index} className={`transaction-plan-action${step.approval === undefined || final ? ' transaction-plan-action-wide' : ''}${final ? ' transaction-plan-action-final' : ''}`} {...(active && pending ? { ref: pendingActionRef, tabIndex: -1 } : {})}>
 										{step.approval !== undefined ? (
@@ -221,7 +221,24 @@ export function TransactionStepsContent({ actions = 'inline', cancelable = true,
 				</div>
 			)}
 			<div className='transaction-step-content'>
-				{funding.length === 0 ? <TransactionStepReview contractAddress={current.contractAddress} contractLabel={current.contractLabel} description={completed ? undefined : current.description} rows={presentation?.rows} /> : <TransactionFundingSummary funding={funding} totalAttoEth={totalEth} outcome={outcome} />}
+				{funding.length === 0 ? (
+					<TransactionStepReview
+						contractAddress={current.contractAddress}
+						contractLabel={current.contractLabel}
+						description={completed ? undefined : current.description}
+						rows={[
+							...(current.paidFrom === undefined
+								? []
+								: [
+										{ label: transactionCopy.amount, value: current.amount },
+										{ label: transactionCopy.paidFrom, value: current.paidFrom },
+									]),
+							...(presentation?.rows ?? []),
+						]}
+					/>
+				) : (
+					<TransactionFundingSummary funding={funding} totalAttoEth={totalEth} outcome={outcome} />
+				)}
 				{funding.length === 0 || completed ? undefined : <p className='detail transaction-funding-note'>{copy.fundingDetail}</p>}
 			</div>
 			{actions === 'inline' ? <TransactionStepsActions cancelable={cancelable} contextKey={contextKey} focusOnMount={focusOnMount} keepActionsVisible={keepActionsVisible} onClose={onClose} /> : undefined}

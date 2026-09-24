@@ -6,6 +6,7 @@ import { claimParentEscalationDeposits, migrateVaultWithUnresolvedEscalation } f
 import { loadReportingDetails, reportOutcomeInSecurityPool } from '@zoltar/ui-statoblast-shared/protocol/reporting.js'
 import { buildForkCarriedEscalationProofs, withdrawForkedEscalationDeposits } from '@zoltar/ui-statoblast-shared/protocol/reportingCarryState.js'
 import { statoblast_EscalationGame_EscalationGame, statoblast_SecurityPool_SecurityPool, statoblast_SecurityPoolForker_SecurityPoolForker } from '@zoltar/ui-statoblast-shared/contractArtifact.js'
+import type { TransactionRequestPreview } from '@zoltar/ui-core-shared/wallet/chainBackend.js'
 import type { EscalationSide } from '@zoltar/ui-core-shared/types/contracts.js'
 import { asWriteClient, createBlockWithTimestamp, createMockWriteClient, createMulticallStub, createReadContractStub, getContractFunctionName, mockTransactionHash } from '@zoltar/ui-core-shared/tests/testUtils/protocolTestSupport.js'
 
@@ -123,7 +124,12 @@ describe('reporting protocol client', () => {
 			},
 		)
 
-		const result = await reportOutcomeInSecurityPool(asWriteClient(client), securityPoolAddress, 'yes', 7n)
+		const previews: TransactionRequestPreview[] = []
+		const writeClient = asWriteClient(client)
+		writeClient.onTransactionPrepared = preview => previews.push(preview)
+		const result = await reportOutcomeInSecurityPool(writeClient, securityPoolAddress, 'yes', 7n, 6n)
+		expect(previews[0]?.reviewAmount).toBe('0.000000000000000006 REP')
+		expect(previews[0]?.reviewTitle).toBe('Report Yes · 0.000000000000000006 REP')
 
 		expect(capturedTo).toBe(escalationGameAddress)
 		expect(capturedData).toBeDefined()

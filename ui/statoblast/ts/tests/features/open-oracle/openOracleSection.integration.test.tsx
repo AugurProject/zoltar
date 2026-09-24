@@ -317,13 +317,13 @@ describe.serial('OpenOracleSection integration', () => {
 			expect(getOpenOracleSelectedReportActionMode(refreshedReport)).toBe('settle')
 		})
 
-		await clickElement(within(document.body).getByRole('button', { name: 'Settle report' }))
+		await clickElement(within(document.body).getByRole('button', { name: 'Settle report…' }))
 		await waitFor(() => {
-			const dialog = within(document.body).getByRole('dialog')
-			const settleButton = within(dialog).getByRole('button', { name: 'Settle report' }) as HTMLButtonElement
+			const dialog = within(document.body).getByRole('dialog', { name: `Settle report #${reportId}` })
+			const settleButton = within(dialog).getByRole('button', { name: `Settle report #${reportId}` })
 			expect(within(dialog).queryByText('Transaction Review')).toBeNull()
 			expect(within(document.body).queryByRole('button', { name: 'Dispute & swap' })).toBeNull()
-			expect(settleButton.disabled).toBe(false)
+			expect(settleButton.hasAttribute('disabled')).toBe(false)
 			expect(within(document.body).queryByText('Dispute window closed. Settle report instead.')).toBeNull()
 		})
 	})

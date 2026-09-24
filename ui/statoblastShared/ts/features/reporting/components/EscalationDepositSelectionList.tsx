@@ -16,12 +16,13 @@ type EscalationDepositSelectionItem = {
 
 type EscalationDepositSelectionListProps = {
 	disabled?: boolean
+	selectable?: boolean
 	items: EscalationDepositSelectionItem[]
 	onSelectionChange: (selectedDepositIndexes: bigint[]) => void
 	selectedDepositIndexes: bigint[]
 }
 
-export function EscalationDepositSelectionList({ disabled = false, items, onSelectionChange, selectedDepositIndexes }: EscalationDepositSelectionListProps) {
+export function EscalationDepositSelectionList({ disabled = false, selectable = true, items, onSelectionChange, selectedDepositIndexes }: EscalationDepositSelectionListProps) {
 	const [pageIndex, setPageIndex] = useState(0)
 	const pageCount = getPaginationPageCount(BigInt(items.length), ESCALATION_DEPOSIT_SELECTION_PAGE_SIZE)
 	const resolvedPageIndex = resolvePaginationPageIndex(pageIndex, pageCount)
@@ -44,18 +45,21 @@ export function EscalationDepositSelectionList({ disabled = false, items, onSele
 					const { deposit, details, secondaryDetails = [] } = item
 					const isChecked = selectedDepositIndexes.includes(deposit.depositIndex)
 
+					const Tag = selectable ? 'label' : 'div'
 					return (
 						<div key={deposit.depositIndex.toString()} className='withdraw-deposit-option'>
-							<label className='withdraw-deposit-selection'>
-								<input
-									type='checkbox'
-									checked={isChecked}
-									disabled={disabled}
-									onChange={event => {
-										const nextSelectedDepositIndexes = event.currentTarget.checked ? [...selectedDepositIndexes, deposit.depositIndex] : selectedDepositIndexes.filter(index => index !== deposit.depositIndex)
-										onSelectionChange(nextSelectedDepositIndexes)
-									}}
-								/>
+							<Tag className='withdraw-deposit-selection'>
+								{selectable ? (
+									<input
+										type='checkbox'
+										checked={isChecked}
+										disabled={disabled}
+										onChange={event => {
+											const nextSelectedDepositIndexes = event.currentTarget.checked ? [...selectedDepositIndexes, deposit.depositIndex] : selectedDepositIndexes.filter(index => index !== deposit.depositIndex)
+											onSelectionChange(nextSelectedDepositIndexes)
+										}}
+									/>
+								) : undefined}
 								<span className='withdraw-deposit-copy'>
 									<strong>
 										{forkAuctionCopy.depositNumber}
@@ -65,7 +69,7 @@ export function EscalationDepositSelectionList({ disabled = false, items, onSele
 										<span key={`${deposit.depositIndex.toString()}:${detailIndex.toString()}`}>{detail}</span>
 									))}
 								</span>
-							</label>
+							</Tag>
 							{secondaryDetails.length === 0 ? undefined : (
 								<details className='withdraw-deposit-details'>
 									<summary>{commonCopy.technicalDetails}</summary>

@@ -33,6 +33,7 @@ export type ReportingRouteContentProps = {
 }
 
 export type ReportingSectionProps = ReportingRouteContentProps & {
+	oracleBlocker?: import('preact').ComponentChildren
 	currentTimestamp?: bigint | undefined
 	embedInCard?: boolean
 	forkAlreadyTriggered?: boolean | undefined

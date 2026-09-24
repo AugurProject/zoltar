@@ -31,7 +31,7 @@ export function useOpenOracleRoute({
 	const { loadPoolOracleManager, poolOracleManagerDetails } = priceOracleManager
 	const { approveToken1, approveToken2, cancelWithdrawalBalanceCheck, createOpenOracleGame, disputeReport, loadOracleReport, openOracleSectionState, openOracleForm, setOpenOracleCreateForm, setOpenOracleForm, settleReport, withdrawBalance } = useOpenOracleOperations({
 		...walletScopedHookConfig,
-		enabled: route === 'open-oracle' && canReadOnchainData,
+		enabled: (route === 'open-oracle' || route === 'security-pools') && canReadOnchainData,
 		onReportSettled: async () => {
 			if (poolOracleManagerDetails?.managerAddress !== undefined) await loadPoolOracleManager(poolOracleManagerDetails.managerAddress)
 		},

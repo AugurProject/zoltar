@@ -272,7 +272,7 @@ export function SecurityPoolPriceOracleSection({
 			<ErrorNotice message={managerError} />
 			<div className='actions oracle-actions'>
 				<TransactionActionButton
-					idleLabel={securityPoolCopy.requestNewPrice}
+					idleLabel={commonCopy.launchAction(securityPoolCopy.requestNewPrice)}
 					pendingLabel={securityPoolCopy.requestingNewPrice}
 					onClick={onOpenRequestReview}
 					pending={requestPending}

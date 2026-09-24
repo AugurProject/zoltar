@@ -605,7 +605,7 @@ void describe('OpenOracleSection', () => {
 			}),
 		})
 
-		const settleButton = findButton(section, 'Settle report')
+		const settleButton = findButton(section, 'Settle report #7')
 		if (settleButton === undefined) throw new Error('Expected settle action button to render')
 
 		expect(getButtonDisabled(settleButton)).toBe(false)
@@ -631,7 +631,7 @@ void describe('OpenOracleSection', () => {
 		if (disputeButton === undefined) throw new Error('Expected dispute action button to render')
 
 		expect(getButtonDisabled(disputeButton)).toBe(true)
-		expect(findButton(section, 'Settle report')).toBeUndefined()
+		expect(findButton(section, 'Settle report #7')).toBeUndefined()
 		expect(getButtonDisabledReason(disputeButton)).toBe('This report is not ready to dispute.')
 		expect(getTextContent(section).includes('Blocked:')).toBe(false)
 		expect(getSectionTitles(section)).toContain('Current Report State')
@@ -813,7 +813,7 @@ void describe('OpenOracleSection', () => {
 		expect(disputeButton.props.disabledReasonElementId).toContain('open-oracle-dispute-approval-guard-')
 
 		const settleSection = renderSettleActionSection({ isOnActiveAppChain: false })
-		const settleButton = findButton(settleSection, 'Settle report')
+		const settleButton = findButton(settleSection, 'Settle report #7')
 		if (settleButton === undefined) throw new Error('Expected settle action button to render')
 		expect(getButtonDisabled(settleButton)).toBe(true)
 		expect(getButtonDisabledReason(settleButton)).toBe('Switch to Sepolia.')
@@ -839,7 +839,7 @@ void describe('OpenOracleSection', () => {
 				settlementTime: 60n,
 			}),
 		})
-		const settleButton = findButton(invalidSettleSection, 'Settle report')
+		const settleButton = findButton(invalidSettleSection, 'Settle report #7')
 		if (settleButton === undefined) throw new Error('Expected settle action button to render')
 		expect(getButtonDisabled(settleButton)).toBe(true)
 		expect(getButtonDisabledReason(settleButton)).toBe('Switch to Sepolia.')
@@ -856,7 +856,7 @@ void describe('OpenOracleSection', () => {
 		expect(getButtonDisabledReason(disputeButton)).toBe('Connect a wallet before disputing the report.')
 
 		const settleSection = renderSettleActionSection({ accountState: disconnectedAccount })
-		const settleButton = findButton(settleSection, 'Settle report')
+		const settleButton = findButton(settleSection, 'Settle report #7')
 		if (settleButton === undefined) throw new Error('Expected settle action button to render')
 		expect(getButtonDisabled(settleButton)).toBe(true)
 		expect(getButtonDisabledReason(settleButton)).toBe('Connect a wallet before settling the report.')

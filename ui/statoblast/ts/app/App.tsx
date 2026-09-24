@@ -123,6 +123,7 @@ export function App() {
 		uiUsesOpenOraclePrice,
 		updateReportingForm,
 	} = useSecurityPoolsRoute({
+		inlineOracle: openOracleRouteContentProps,
 		accountState,
 		activeEnvironmentNonce,
 		activeUniverseId,

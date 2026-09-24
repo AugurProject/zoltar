@@ -340,6 +340,10 @@
 			"bun": "./ts/features/reporting/components/ImportedForkSettlementSection.tsx",
 			"default": "./js/features/reporting/components/ImportedForkSettlementSection.js"
 		},
+		"./features/reporting/components/ReportingOracleBlocker.js": {
+			"bun": "./ts/features/reporting/components/ReportingOracleBlocker.tsx",
+			"default": "./js/features/reporting/components/ReportingOracleBlocker.js"
+		},
 		"./features/reporting/components/ReportingSection.js": {
 			"bun": "./ts/features/reporting/components/ReportingSection.tsx",
 			"default": "./js/features/reporting/components/ReportingSection.js"
@@ -351,6 +355,10 @@
 		"./features/reporting/lib/reporting.js": {
 			"bun": "./ts/features/reporting/lib/reporting.ts",
 			"default": "./js/features/reporting/lib/reporting.js"
+		},
+		"./features/reporting/lib/reportingStagePresentation.js": {
+			"bun": "./ts/features/reporting/lib/reportingStagePresentation.ts",
+			"default": "./js/features/reporting/lib/reportingStagePresentation.js"
 		},
 		"./features/reporting/lib/reportingDomain.js": {
 			"bun": "./ts/features/reporting/lib/reportingDomain.ts",

@@ -134,6 +134,26 @@ test('titles the review from the prepared transaction labels instead of the cont
 	await sending
 })
 
+for (const [functionName, title, args] of [
+	['depositToEscalationGame', 'Report No · 2 REP', [2n, 2n * 10n ** 18n]],
+	['depositRepOnOutcome', 'Report No · 2 REP', [2n, 2n * 10n ** 18n]],
+	['settle', 'Settle report #7', [7n]],
+	['withdrawFromEscalationGame', 'Settle escalation deposits', []],
+	['report', 'Create oracle report', []],
+	['dispute', 'Dispute report', []],
+	['withdrawTo', 'Withdraw oracle balance', []],
+] satisfies Array<[string, string, bigint[]]>) {
+	test(`uses explicit reporting copy for ${functionName}`, async () => {
+		const { reviewed, client } = setup()
+		reviewed.onTransactionPrepared?.({ account, chainName: client.chain.name, functionName, contractAddress: account, args, data: '0x', value: undefined })
+		const sending = reviewed.sendTransaction({ to: account, data: '0x' })
+		await waitForReview()
+		expect(transactionSteps.value?.steps[0]?.title).toBe(title)
+		confirm()
+		await sending
+	})
+}
+
 test('leaves the description empty for an unlabeled contract function instead of narrating the submission', async () => {
 	const { reviewed, client } = setup()
 	reviewed.onTransactionPrepared?.({ account, chainName: client.chain.name, functionName: 'depositRepToVault', contractAddress: account, contractLabel: 'Zoltar', args: [1n], data: '0x', value: undefined })
