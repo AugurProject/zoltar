@@ -1582,6 +1582,7 @@ export async function startScanner(demoFactory?: DemoFactory) {
 		await loadVisibleRoute()
 		if (navigation !== navigationGeneration) return
 		if (restoredPosition === undefined) focusNewRoute()
+		await restoreRouteDeepLink()
 	}
 
 	const restoreRouteDeepLink = async () => {
@@ -1687,9 +1688,7 @@ export async function startScanner(demoFactory?: DemoFactory) {
 		})
 	})
 
-	const initialDashboardLoad = loadVisibleRoute()
-
-	await initialDashboardLoad
+	await loadVisibleRoute()
 
 	await restoreRouteDeepLink()
 
