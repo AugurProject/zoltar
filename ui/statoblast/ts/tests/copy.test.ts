@@ -64,5 +64,5 @@ test('liquidation actions and pending labels use sentence case independently of 
 
 test('oracle actions distinguish action labels from review titles', () => {
 	expect(securityPoolCopy.requestNewPrice).toBe('Request new price')
-	expect(securityPoolCopy.requestNewPriceTitle).toBe('Request New Price')
+	expect(securityPoolCopy.requestNewPriceTitle).toBe('Request new price')
 })

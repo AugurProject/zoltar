@@ -27,6 +27,7 @@ type ContractRevertReasonParams = {
 	contractLabel?: string
 	functionName: string
 	gas?: bigint
+	reviewAmount?: string
 	reviewDescription?: string
 	reviewTitle?: string
 	value?: bigint
@@ -117,6 +118,7 @@ export async function writeContractAndWaitForReceipt<TCallParams extends Contrac
 			functionName: callParams.functionName,
 			requiresWalletConfirmation: client.requiresWalletConfirmation,
 			reviewDescription: callParams.reviewDescription,
+			reviewAmount: callParams.reviewAmount,
 			reviewTitle: callParams.reviewTitle,
 			value: callParams.value,
 		})

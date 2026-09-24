@@ -1,3 +1,4 @@
+import * as transactionCopy from '@zoltar/ui-core-shared/copy/transaction.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import { getTransactionReviewSignal } from '@zoltar/ui-core-shared/transactions/transactionReviewScope.js'
 import { formatUnits, getAddress, encodeFunctionData, maxUint256 } from '@zoltar/core-shared/evm/ethereum'
@@ -8,20 +9,8 @@ import { ABIS } from '@zoltar/ui-core-shared/abis.js'
 import { humanizeTransactionAction } from '@zoltar/ui-core-shared/transactions/transactionPresentations.js'
 import { createTransactionStepController, type TransactionStepDetails } from '@zoltar/ui-core-shared/transactions/transactionSteps.js'
 
-const actionDescriptions: Record<string, { title: string; description: string }> = {
-	'Transfer ETH': { title: 'Transfer ETH', description: 'Send ETH from your wallet to the recipient below.' },
-	'Fund deterministic proxy deployer signer without surplus': { title: 'Fund proxy deployment', description: 'Provide ETH for deploying the shared proxy. Unused funding is returned in this transaction.' },
-	'Broadcast deterministic proxy deployer transaction': { title: 'Deploy shared proxy', description: 'Broadcast the signed proxy deployment. If the signer needs ETH, this attempt sends nothing; fund it and retry in the following steps.' },
-	deposit: { title: 'Wrap ETH into WETH', description: 'Convert ETH into WETH held in your wallet to fund the oracle report.' },
-	requestPrice: { title: 'Request price', description: 'Fund and start an oracle price report using your approved REP and WETH.' },
-	report: { title: 'Create oracle report', description: 'Deposit the approved tokens and start the oracle report.' },
-	requestPriceIfNeededAndStageLiquidation: { title: 'Queue liquidation', description: 'Queue the liquidation and fund a price report if needed. Settlement may execute the queued liquidation.' },
-	requestPriceIfNeededAndStageOperation: { title: 'Queue vault operation', description: 'Queue the vault change and fund a price report if needed. Settlement may execute the queued change.' },
-	aggregate3: { title: 'Batched transaction', description: 'Run several contract calls in one transaction.' },
-}
-
 async function describeTransaction(client: WriteClient, preview: TransactionRequestPreview & Pick<TransactionPlanStep, 'optional' | 'tokenFunding' | 'oracleOutcome'>, requiredApprovalAmount?: bigint): Promise<TransactionStepDetails> {
-	const action = actionDescriptions[preview.functionName]
+	const action = transactionCopy.reviewedActions[preview.functionName]
 	const details: TransactionStepDetails = {
 		proposedRepPerEthPrice: preview.functionName === 'requestPrice' && typeof preview.args?.[0] === 'bigint' ? preview.args[0] : undefined,
 		optional: preview.optional ?? false,
@@ -44,6 +33,18 @@ async function describeTransaction(client: WriteClient, preview: TransactionRequ
 		amount: undefined,
 		ethValueAttoEth: preview.value,
 	}
+	if (preview.functionName === 'depositToEscalationGame' || preview.functionName === 'depositRepOnOutcome') {
+		const [outcome, amount] = preview.args ?? []
+		if (typeof amount !== 'bigint' || (outcome !== 0 && outcome !== 1 && outcome !== 2 && outcome !== 0n && outcome !== 1n && outcome !== 2n)) throw new Error('Invalid escalation deposit review')
+		let label = commonCopy.no
+		if (outcome === 0 || outcome === 0n) label = commonCopy.invalid
+		if (outcome === 1 || outcome === 1n) label = commonCopy.yes
+		details.title = preview.reviewTitle ?? transactionCopy.reportingAction(label, formatUnits(amount, 18))
+		details.amount = preview.reviewAmount ?? `${formatUnits(amount, 18)} REP`
+		details.paidFrom = preview.functionName === 'depositRepOnOutcome' ? transactionCopy.walletRep : transactionCopy.vaultBackedRep
+	}
+	if (preview.functionName === 'settle') details.title = transactionCopy.settleReportNumber(String(preview.args?.[0] ?? ''))
+	if (preview.functionName === 'withdrawFromEscalationGame') details.title = preview.reviewTitle ?? transactionCopy.settleEscalationDeposits
 	if (preview.functionName === 'requestPriceIfNeededAndStageOperation') {
 		const operation = preview.args?.[0]
 		if (operation === 1 || operation === 1n) details.title = 'Queue REP withdrawal'
@@ -58,7 +59,7 @@ async function describeTransaction(client: WriteClient, preview: TransactionRequ
 	details.amount = `${amount} token base units`
 	try {
 		const [symbol, decimals] = await Promise.all([client.readContract({ address: preview.contractAddress, abi: ABIS.mainnet.erc20, functionName: 'symbol' }), client.readContract({ address: preview.contractAddress, abi: ABIS.mainnet.erc20, functionName: 'decimals' })])
-		details.title = `Approve ${symbol} spending`
+		details.title = transactionCopy.approveTokenAmount(`${amount === maxUint256 ? commonCopy.max : formatUnits(amount, Number(decimals))} ${symbol}`)
 		details.amount = `${amount === maxUint256 ? commonCopy.max : formatUnits(amount, Number(decimals))} ${symbol}`
 		if (requiredApprovalAmount !== undefined) {
 			const approvedAmount = await client.readContract({ address: preview.contractAddress, abi: ABIS.mainnet.erc20, functionName: 'allowance', args: [client.account.address, details.spender] })

@@ -299,9 +299,9 @@
 			"bun": "./ts/app/components/AppStatusNotices.tsx",
 			"default": "./js/app/components/AppStatusNotices.js"
 		},
-		"./app/components/GlobalTransactionTray.js": {
-			"bun": "./ts/app/components/GlobalTransactionTray.tsx",
-			"default": "./js/app/components/GlobalTransactionTray.js"
+		"./app/components/GlobalTransactionDialog.js": {
+			"bun": "./ts/app/components/GlobalTransactionDialog.tsx",
+			"default": "./js/app/components/GlobalTransactionDialog.js"
 		},
 		"./app/components/NotFoundSection.js": {
 			"bun": "./ts/app/components/NotFoundSection.tsx",

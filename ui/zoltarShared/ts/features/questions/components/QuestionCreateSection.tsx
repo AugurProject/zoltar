@@ -1,20 +1,20 @@
 import { FormField, RequiredFieldLabel } from '@zoltar/ui-core-shared/components/FormField.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
+import * as transactionCopy from '@zoltar/ui-core-shared/copy/transaction.js'
 import * as marketCopy from '../../../copy/market.js'
 import { useEffect, useMemo, useState } from 'preact/hooks'
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import { EnumDropdown, type EnumDropdownOption } from '@zoltar/ui-core-shared/components/EnumDropdown.js'
 import { EntityCard } from '@zoltar/ui-core-shared/components/EntityCard.js'
 import { ErrorNotice } from '@zoltar/ui-core-shared/components/ErrorNotice.js'
+import { suppressPresentedTransactionError, useGlobalTransactionPresentation } from '@zoltar/ui-core-shared/components/GlobalTransactionPresentationContext.js'
 import { FormInput } from '@zoltar/ui-core-shared/components/FormInput.js'
 import { OutcomeChipRow } from '@zoltar/ui-core-shared/components/OutcomeChipRow.js'
 import { Question, getQuestionTitle } from '@zoltar/ui-core-shared/components/Question.js'
 import { SectionBlock } from '@zoltar/ui-core-shared/components/SectionBlock.js'
 import { TransactionActionButton } from '@zoltar/ui-core-shared/components/TransactionActionButton.js'
-import { TransactionHashLink } from '@zoltar/ui-core-shared/components/TransactionHashLink.js'
 import { TimestampValue } from '@zoltar/ui-core-shared/components/TimestampValue.js'
 import { WarningSurface } from '@zoltar/ui-core-shared/components/WarningSurface.js'
-import { MetricField } from '@zoltar/ui-core-shared/components/MetricField.js'
 import { assertNever } from '@zoltar/ui-core-shared/lib/assert.js'
 import { getMarketCreationOutcomeLabels, hasMarketEndTimePassed, validateMarketForm } from '../lib/questionCreation.js'
 import { useChainTimestamp } from '@zoltar/ui-core-shared/wallet/chainTimestamp.js'
@@ -133,6 +133,8 @@ export function QuestionCreateSection({
 }: QuestionCreateSectionProps) {
 	const [scalarCreatePreviewTick, setScalarCreatePreviewTick] = useState('0')
 	const currentTimestamp = useChainTimestamp()
+	const transactionPresentation = useGlobalTransactionPresentation()
+	const visibleQuestionError = suppressPresentedTransactionError(questionError, transactionPresentation, transactionCopy.questionCreation)
 	const [touchedFields, setTouchedFields] = useState<ReadonlySet<MarketFormFieldName>>(new Set())
 	const selectedQuestionDetails = useMemo(() => (questionResult === undefined ? undefined : zoltarQuestions.find(question => question.questionId === questionResult.questionId)), [questionResult?.questionId, zoltarQuestions])
 	const marketTypeOptions = useMemo(() => MARKET_TYPE_OPTIONS.filter(option => allowedMarketTypes.includes(option.value)), [allowedMarketTypes])
@@ -244,9 +246,6 @@ export function QuestionCreateSection({
 
 							return <Question question={selectedQuestionDetails} showTitle={false} />
 						})()}
-						<MetricField label={marketCopy.creationTransactionHash}>
-							<TransactionHashLink hash={questionResult.createQuestionHash} />
-						</MetricField>
 					</div>
 				</EntityCard>
 			)}
@@ -460,11 +459,11 @@ export function QuestionCreateSection({
 								<TransactionActionButton idleLabel={submitAction.idleLabel} pendingLabel={submitAction.pendingLabel} onClick={() => undefined} pending={submitAction.pending} type='submit' availability={submitAction.availability} />
 							</div>
 						)}
+						<ErrorNotice message={visibleQuestionError} />
 					</form>
 				</SectionBlock>
 			) : undefined}
-
-			<ErrorNotice message={questionError} />
+			{questionResult === undefined ? undefined : <ErrorNotice message={visibleQuestionError} />}
 		</>
 	)
 }

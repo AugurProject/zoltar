@@ -640,6 +640,7 @@ describe('useReportingOperations', () => {
 			},
 		])
 		expect(requireHookState(hookState).reportingResult).toEqual({
+			amountAttoRep: 0n,
 			action: 'withdrawEscalation',
 			hash: '0x00000000000000000000000000000000000000000000000000000000000000ef',
 			outcome: 'yes',

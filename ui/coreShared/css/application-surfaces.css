@@ -75,6 +75,11 @@
 	min-width: 0;
 }
 
+.section-block-title-row > [tabindex="-1"] {
+	width: fit-content;
+	max-width: 100%;
+}
+
 .route-header-badge,
 .entity-card-badge,
 .route-header-actions,

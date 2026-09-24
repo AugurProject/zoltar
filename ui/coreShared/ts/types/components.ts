@@ -33,6 +33,7 @@ export type GlobalTransactionRow = {
 
 export type TransactionIntent = {
 	action: string
+	failedTitle?: ComponentChildren
 	requiresWalletConfirmation?: boolean | undefined
 	rows?: GlobalTransactionRow[]
 	technicalRows?: GlobalTransactionRow[]
@@ -116,6 +117,7 @@ export type SectionBlockProps = {
 	description?: ComponentChildren
 	density?: 'balanced' | 'compact'
 	headingLevel?: 2 | 3 | 4
+	headingId?: string
 	title?: ComponentChildren
 	tone?: 'critical' | 'default' | 'muted'
 	variant?: 'default' | 'embedded' | 'plain' | 'surface'
@@ -217,10 +219,13 @@ export type TransactionActionButtonProps = {
 }
 
 export type OperationModalProps = {
+	/** The form already presents the full review and its submit is the final confirmation. */
+	confirmSingleStepFromForm?: boolean
 	embedTransactionSteps?: boolean
 	children: ComponentChildren
 	closeDisabled?: boolean
 	closeOnSuccessKey?: string | undefined
+	getReturnFocusTarget?: (() => HTMLElement | null) | undefined
 	/** Rows the dialog already implies (question, pool, vault); transaction notices inside it omit matching rows. */
 	context?: TransactionContextItem[]
 	description?: ComponentChildren

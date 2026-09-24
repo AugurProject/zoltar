@@ -107,6 +107,7 @@ export function markTransactionFailed(state: TransactionTrayState, message: stri
 				...active,
 				detail: message,
 				dismissKey: active.hash,
+				title: state.pendingIntent?.failedTitle ?? active.title,
 				tone: 'error',
 			},
 			pendingIntent: undefined,

@@ -55,6 +55,7 @@ export type TransactionRequestPreview = {
 	/** User-facing action name shown while the transaction awaits review; falls back to the function name. */
 	reviewTitle?: string | undefined
 	reviewDescription?: string | undefined
+	reviewAmount?: string | undefined
 	to?: Address | undefined
 	toLabel?: string | undefined
 	value: bigint | undefined

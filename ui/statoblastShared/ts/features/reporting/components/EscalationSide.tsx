@@ -17,6 +17,8 @@ type EscalationSideProps = {
 	chartScaleMax: bigint
 	disabled?: boolean
 	isLeading: boolean
+	isWinner?: boolean
+	readOnly?: boolean
 	isSelected: boolean
 	isTabStop: boolean
 	onSelect: () => void
@@ -39,7 +41,7 @@ function getArrowKeyDirection(key: string) {
 	return 0
 }
 
-function moveSelectionWithArrowKey(event: JSX.TargetedKeyboardEvent<HTMLButtonElement>) {
+function moveSelectionWithArrowKey(event: JSX.TargetedKeyboardEvent<HTMLElement>) {
 	const direction = getArrowKeyDirection(event.key)
 	if (direction === 0) return
 	const currentRadio = event.currentTarget
@@ -55,20 +57,21 @@ function moveSelectionWithArrowKey(event: JSX.TargetedKeyboardEvent<HTMLButtonEl
 	nextRadio?.click()
 }
 
-export function EscalationSide({ bindingCapital, chartScaleMax, disabled = false, isLeading, isSelected, isTabStop, onSelect, side }: EscalationSideProps) {
+export function EscalationSide({ bindingCapital, chartScaleMax, disabled = false, isWinner = false, readOnly = false, isLeading, isSelected, isTabStop, onSelect, side }: EscalationSideProps) {
 	const tabIndex = (() => {
 		if (disabled) return undefined
 		return isTabStop ? 0 : -1
 	})()
 
+	const Tag = readOnly ? 'div' : 'button'
 	return (
-		<button
-			aria-checked={isSelected}
+		<Tag
+			aria-checked={readOnly ? undefined : isSelected}
 			className={`escalation-side ${isSelected ? 'selected' : ''} ${isLeading ? 'leading' : ''}`}
 			disabled={disabled}
-			onClick={onSelect}
-			onKeyDown={moveSelectionWithArrowKey}
-			role='radio'
+			onClick={readOnly ? undefined : onSelect}
+			onKeyDown={readOnly ? undefined : moveSelectionWithArrowKey}
+			role={readOnly ? undefined : 'radio'}
 			style={{
 				'--binding-ratio': getChartRatio(bindingCapital, chartScaleMax),
 				'--side-ratio': getChartRatio(side.balance, chartScaleMax),
@@ -81,7 +84,8 @@ export function EscalationSide({ bindingCapital, chartScaleMax, disabled = false
 				<div className='escalation-side-copy'>
 					<div className='escalation-side-title-row'>
 						<span className='panel-label'>{side.label}</span>
-						{isLeading || isSelected ? (
+						{isWinner ? <Badge tone='ok'>{forkAuctionCopy.winner}</Badge> : undefined}
+						{!readOnly && (isLeading || isSelected) ? (
 							<div className='escalation-side-badges'>
 								{isSelected ? <Badge className='escalation-side-selected-badge'>{commonCopy.selected}</Badge> : undefined}
 								{isLeading ? <Badge tone='ok'>{forkAuctionCopy.leading}</Badge> : undefined}
@@ -91,22 +95,23 @@ export function EscalationSide({ bindingCapital, chartScaleMax, disabled = false
 				</div>
 				<div aria-hidden='true' className='escalation-side-chart'>
 					<div className='escalation-side-track'>
-						<div className='escalation-side-total-bar' />
-						<div className='escalation-side-user-bar' />
-						<div className='escalation-side-binding-marker' />
+						<div className='escalation-side-total-bar' style={{ minWidth: (side.balance ?? 0n) > 0n ? '4px' : undefined }} />
+						<div className='escalation-side-user-bar' style={{ minWidth: (side.userStake ?? 0n) > 0n ? '4px' : undefined }} />
+						{(bindingCapital ?? 0n) > 0n && (side.balance ?? 0n) > 0n ? <div className='escalation-side-binding-marker' /> : undefined}
 					</div>
 				</div>
 				<div className='escalation-side-values'>
 					<div className='escalation-side-value'>
-						<span className='metric-label'>{forkAuctionCopy.totalDisputeStakedRep}</span>
 						<CurrencyValue copyable={false} value={side.balance} suffix={commonCopy.rep} />
 					</div>
-					<div className='escalation-side-value'>
-						<span className='metric-label'>{forkAuctionCopy.yourDisputeStakedRep}</span>
-						<CurrencyValue copyable={false} value={side.userStake} suffix={commonCopy.rep} />
-					</div>
+					{(side.userStake ?? 0n) > 0n ? (
+						<div className='escalation-side-value detail'>
+							<span>{forkAuctionCopy.you}</span>
+							<CurrencyValue copyable={false} value={side.userStake} suffix={commonCopy.rep} />
+						</div>
+					) : undefined}
 				</div>
 			</div>
-		</button>
+		</Tag>
 	)
 }

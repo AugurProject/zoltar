@@ -27,6 +27,7 @@ export function useSecurityPoolsRoute({
 	deploymentStatuses,
 	marketCreation,
 	onViewPendingReport,
+	inlineOracle,
 	priceOracleManager,
 	repPerEthPrice,
 	repPerEthSource,
@@ -54,6 +55,7 @@ export function useSecurityPoolsRoute({
 	currentTimestamp: bigint | undefined
 	deploymentStatuses: Parameters<typeof useSecurityPoolCreation>[0]['deploymentStatuses']
 	marketCreation: ReturnType<typeof useMarketCreation>
+	inlineOracle?: SecurityPoolsSectionProps['workflow']['inlineOracle']
 	onViewPendingReport: (reportId: bigint) => void
 	priceOracleManager: ReturnType<typeof usePriceOracleManager>
 	repPerEthPrice: bigint | undefined
@@ -81,9 +83,12 @@ export function useSecurityPoolsRoute({
 	const zoltarUniverseHasForked = zoltarUniverse?.hasForked === true
 	const {
 		checkingDuplicateOriginPool,
+		duplicateOriginPoolAddress,
 		createPool,
 		dismissSecurityPoolReview,
 		duplicateOriginPoolExists,
+		existingQuestionCheck,
+		retryExistingQuestionCheck,
 		loadingMarketDetails,
 		marketDetails,
 		poolCreationMarketDetails,
@@ -99,6 +104,7 @@ export function useSecurityPoolsRoute({
 		activeUniverseId,
 		deploymentStatuses,
 		enabled: route === 'security-pools' && canReadOnchainData,
+		newQuestionForm: marketForm,
 		zoltarUniverseHasForked,
 	})
 	const {
@@ -309,8 +315,11 @@ export function useSecurityPoolsRoute({
 		createPool: {
 			accountState,
 			checkingDuplicateOriginPool,
+			duplicateOriginPoolAddress,
 			questionAndPoolCreating,
 			duplicateOriginPoolExists,
+			existingQuestionCheck,
+			onRetryExistingQuestionCheck: retryExistingQuestionCheck,
 			onCreateQuestionAndSecurityPool: () => void createQuestionAndSecurityPool(),
 			poolCreationMarketDetails,
 			onCreateSecurityPool: questionIdOverride => void createPool(questionIdOverride),
@@ -442,6 +451,7 @@ export function useSecurityPoolsRoute({
 			onRefreshSelectedPoolData: refreshSelectedPoolData,
 			onSelectedPoolViewChange: setSelectedPoolView,
 			onViewPendingReport,
+			...(inlineOracle === undefined ? {} : { inlineOracle }),
 			securityPoolOverviewActiveAction,
 			securityPoolOverviewError,
 			securityPoolLiquidationError,

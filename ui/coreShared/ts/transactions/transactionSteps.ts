@@ -1,5 +1,6 @@
 import { getTransactionReviewSignal } from './transactionReviewScope.js'
 import * as commonCopy from '../copy/common.js'
+import * as transactionCopy from '../copy/transaction.js'
 import { transactionErrorMessages } from '../lib/errors.js'
 import type { TransactionPlanStep } from '../wallet/chainBackend.js'
 import { signal } from '@preact/signals'
@@ -11,6 +12,7 @@ export type TransactionStepDetails = {
 	oracleOutcome?: TransactionPlanStep['oracleOutcome']
 	tokenFunding?: readonly { amount: string; limit: string | undefined }[]
 	optional?: boolean
+	paidFrom?: string
 	title: string
 	/** Explains the step when the title alone does not convey its consequence; omitted for self-describing actions. */
 	description: string | undefined
@@ -39,8 +41,19 @@ type TransactionSteps = {
 }
 
 export const transactionSteps = signal<TransactionSteps | undefined>(undefined)
+export const transactionStepOutcome = signal<{ hash: Hash; title: string; tone: 'success' | 'error'; detail?: string } | undefined>(undefined)
+
+/** Stop future review steps while reporting whether a wallet submission or receipt still needs tracking. */
+export function cancelTransactionReview(reviewSignal: AbortSignal) {
+	const current = transactionSteps.peek()
+	const owned = current?.reviewSignal === reviewSignal ? current : undefined
+	const trackingSubmitted = owned?.steps.some(step => step.phase === 'pending' || step.hash !== undefined) ?? false
+	owned?.cancel()
+	return { trackingSubmitted, steps: owned?.steps }
+}
 
 export function createTransactionStepController(signal = getTransactionReviewSignal()) {
+	transactionStepOutcome.value = undefined
 	let canceled = false
 	let rejectReview: ((reason: Error) => void) | undefined
 	const steps: TransactionStep[] = []
@@ -162,6 +175,8 @@ export function createTransactionStepController(signal = getTransactionReviewSig
 			const step = steps.find(candidate => candidate.hash === hash)
 			if (step === undefined) return
 			step.phase = status === 'success' ? 'confirmed' : 'failed'
+			if (status !== 'success') transactionStepOutcome.value = { hash, title: step.title, tone: 'error', detail: transactionCopy.revertedCheckingDetails }
+			else if (steps.at(-1) !== step) transactionStepOutcome.value = { hash, title: transactionCopy.completedAction(step.title), tone: 'success' }
 			if (status === 'success' && step.approval !== undefined && step.approvalAmount !== undefined) step.approval = { ...step.approval, approvedAmount: step.approvalAmount }
 			if (status !== 'success') step.error = 'Transaction reverted.'
 			if (!canceled) publish()

@@ -164,7 +164,7 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 		const priceOracleRender = await renderOffMainnetOracleView('price-oracle')
 		setCleanup(priceOracleRender.cleanup)
 
-		expect(getTransactionButtonState(document.body, 'Request new price')).toEqual({ disabled: true, reason: 'Switch to Sepolia.' })
+		expect(getTransactionButtonState(document.body, 'Request new price…')).toEqual({ disabled: true, reason: 'Switch to Sepolia.' })
 
 		await priceOracleRender.cleanup()
 

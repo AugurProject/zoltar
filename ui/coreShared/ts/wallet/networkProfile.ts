@@ -154,6 +154,12 @@ export function buildTransactionExplorerUrl(profile: NetworkProfile, hash: Hash)
 	return `${profile.transactionExplorerBaseUrl}${hash}`
 }
 
+export function buildAddressExplorerUrl(profile: NetworkProfile, address: string) {
+	const base = profile.transactionExplorerBaseUrl
+	if (base === undefined || !base.endsWith('/tx/')) return undefined
+	return `${base.slice(0, -4)}/address/${address}`
+}
+
 export function formatTransactionNetworkLabel(profile: NetworkProfile) {
 	return profile.id === 'simulation' ? `${profile.displayName} · local sandbox` : profile.displayName
 }

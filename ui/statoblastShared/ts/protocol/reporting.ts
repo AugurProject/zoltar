@@ -1,4 +1,6 @@
-import { zeroAddress, type Address, type ContractFunctionParameters } from '@zoltar/core-shared/evm/ethereum'
+import * as reportingCopy from '../copy/reporting.js'
+import * as transactionCopy from '@zoltar/ui-core-shared/copy/transaction.js'
+import { formatUnits, zeroAddress, type Address, type ContractFunctionParameters } from '@zoltar/core-shared/evm/ethereum'
 import { ABIS } from '@zoltar/ui-core-shared/abis.js'
 import { Zoltar_Zoltar } from '@zoltar/ui-core-shared/contractArtifact.js'
 import { statoblast_EscalationGame_EscalationGame, statoblast_SecurityPool_SecurityPool } from '../contractArtifact.js'
@@ -422,7 +424,7 @@ export async function loadReportingDetails(client: ReadClient, securityPoolAddre
 	}
 }
 
-export async function reportOutcomeInSecurityPool(client: WriteClient, securityPoolAddress: Address, outcome: ReportingOutcomeKey, amountAttoRep: bigint) {
+export async function reportOutcomeInSecurityPool(client: WriteClient, securityPoolAddress: Address, outcome: ReportingOutcomeKey, amountAttoRep: bigint, reviewAmountAttoRep = amountAttoRep) {
 	const [universeId, escalationGameAddress] = await Promise.all([
 		readSecurityPoolUniverseId(client, securityPoolAddress),
 		client.readContract({
@@ -444,6 +446,8 @@ export async function reportOutcomeInSecurityPool(client: WriteClient, securityP
 		address: useWalletFunding ? escalationGameAddress : securityPoolAddress,
 		abi: useWalletFunding ? statoblast_EscalationGame_EscalationGame.abi : statoblast_SecurityPool_SecurityPool.abi,
 		functionName: useWalletFunding ? 'depositRepOnOutcome' : 'depositToEscalationGame',
+		reviewTitle: transactionCopy.reportingAction(getEscalationSideLabel(outcome), formatUnits(reviewAmountAttoRep, 18)),
+		reviewAmount: `${formatUnits(reviewAmountAttoRep, 18)} REP`,
 		args: [getReportingOutcomeValue(outcome), amountAttoRep],
 	}))
 	return {
@@ -470,12 +474,15 @@ export async function approveReportingRep(client: WriteClient, securityPoolAddre
 	return { action: 'approveReportingRep', hash, outcome, securityPoolAddress, universeId } satisfies ReportingActionResult
 }
 
-export async function withdrawEscalationFromSecurityPool(client: WriteClient, securityPoolAddress: Address, outcome: ReportingOutcomeKey, depositIndexes: bigint[]) {
+export async function withdrawEscalationFromSecurityPool(client: WriteClient, securityPoolAddress: Address, outcome: ReportingOutcomeKey, depositIndexes: bigint[], claimAmountAttoRep?: bigint) {
 	const universeId = await readSecurityPoolUniverseId(client, securityPoolAddress)
+	let reviewTitle = transactionCopy.settleEscalationDeposits
+	if (claimAmountAttoRep !== undefined) reviewTitle = claimAmountAttoRep === 0n ? reportingCopy.clearDeposits(getEscalationSideLabel(outcome)) : reportingCopy.claimDeposits(getEscalationSideLabel(outcome), formatUnits(claimAmountAttoRep, 18))
 	const hash = await writeContractAndWait(client, () => ({
 		address: securityPoolAddress,
 		abi: statoblast_SecurityPool_SecurityPool.abi,
 		functionName: 'withdrawFromEscalationGame',
+		reviewTitle,
 		args: [getReportingOutcomeValue(outcome), depositIndexes],
 	}))
 	return {

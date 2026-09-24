@@ -90,6 +90,17 @@ describe('AddressValue', () => {
 		expect(copyButton.getAttribute('title')).toBe(address)
 	})
 
+	test('uses a shorter visible hash while preserving the complete copy target', async () => {
+		const hash = '0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef'
+		const renderedComponent = await renderIntoDocument(<AddressValue address={hash} responsiveAbbreviation compactAbbreviation />)
+		cleanupRenderedComponent = renderedComponent.cleanup
+		const copyButton = within(document.body).getByRole('button', { name: `Copy address ${hash}` })
+		expect(copyButton.querySelector('.address-value-abbreviated')?.textContent).toBe('0x1234…cdef')
+		expect(copyButton.querySelector('.address-value-full')?.textContent).toBe(hash)
+		await act(() => fireEvent.click(copyButton))
+		await waitFor(() => expect(copyButton.textContent).toBe('Copied address'))
+	})
+
 	test('keeps the address visible and associates an announced clipboard error', async () => {
 		const address = '0x1234567890abcdef1234567890abcdef12345678'
 		const clipboard = {

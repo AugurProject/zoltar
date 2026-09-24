@@ -838,7 +838,7 @@ describe('OpenOracleSection route create view', () => {
 
 		const documentQueries = within(document.body)
 		expect(documentQueries.queryByRole('button', { name: 'Dispute & swap' })).toBeNull()
-		expect(documentQueries.getByRole('button', { name: 'Settle report' })).not.toBeNull()
+		expect(documentQueries.getByRole('button', { name: 'Settle report…' })).not.toBeNull()
 	})
 
 	test('counts down to settlement and enables the report action at zero', async () => {
@@ -872,11 +872,11 @@ describe('OpenOracleSection route create view', () => {
 		expectTransactionButtonDisabled(document.body, 'Settle report')
 		await act(async () => await new Promise(resolve => setTimeout(resolve, 1150)))
 		expect(page.queryByText('Settle in 1s')).toBeNull()
-		expectTransactionButtonEnabled(document.body, 'Settle report')
+		expectTransactionButtonEnabled(document.body, 'Settle report…')
 		expect(reloads).toContain('report')
-		await act(() => fireEvent.click(page.getByRole('button', { name: 'Settle report' })))
+		await act(() => fireEvent.click(page.getByRole('button', { name: 'Settle report…' })))
 		const dialog = page.getByRole('dialog')
-		expectTransactionButtonEnabled(dialog, 'Settle report')
+		expectTransactionButtonEnabled(dialog, 'Settle report #7')
 	})
 
 	test('starts a new settlement countdown when the deadline refresh finds a dispute', async () => {
@@ -1011,7 +1011,7 @@ describe('OpenOracleSection route create view', () => {
 
 		const documentQueries = within(document.body)
 		expect(documentQueries.queryByRole('button', { name: 'Dispute & swap' })).toBeNull()
-		expect(documentQueries.getByRole('button', { name: 'Settle report' })).not.toBeNull()
+		expect(documentQueries.getByRole('button', { name: 'Settle report…' })).not.toBeNull()
 	})
 
 	test('shows independent credited-balance withdrawals after settlement', async () => {
