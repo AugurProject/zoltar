@@ -81,9 +81,12 @@ export function useSecurityPoolsRoute({
 	const zoltarUniverseHasForked = zoltarUniverse?.hasForked === true
 	const {
 		checkingDuplicateOriginPool,
+		duplicateOriginPoolAddress,
 		createPool,
 		dismissSecurityPoolReview,
 		duplicateOriginPoolExists,
+		existingQuestionCheck,
+		retryExistingQuestionCheck,
 		loadingMarketDetails,
 		marketDetails,
 		poolCreationMarketDetails,
@@ -99,6 +102,7 @@ export function useSecurityPoolsRoute({
 		activeUniverseId,
 		deploymentStatuses,
 		enabled: route === 'security-pools' && canReadOnchainData,
+		newQuestionForm: marketForm,
 		zoltarUniverseHasForked,
 	})
 	const {
@@ -309,8 +313,11 @@ export function useSecurityPoolsRoute({
 		createPool: {
 			accountState,
 			checkingDuplicateOriginPool,
+			duplicateOriginPoolAddress,
 			questionAndPoolCreating,
 			duplicateOriginPoolExists,
+			existingQuestionCheck,
+			onRetryExistingQuestionCheck: retryExistingQuestionCheck,
 			onCreateQuestionAndSecurityPool: () => void createQuestionAndSecurityPool(),
 			poolCreationMarketDetails,
 			onCreateSecurityPool: questionIdOverride => void createPool(questionIdOverride),

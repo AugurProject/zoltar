@@ -85,7 +85,7 @@ function usePriceOracleManagerWithDependencies<TWriteClient>(
 	}
 
 	const requestPoolPrice = async (managerAddress: Address, securityPoolAddress: Address, reviewedRequestValueAttoEth: bigint, universeId?: bigint, proposedRepPerEthPrice?: bigint, signal?: AbortSignal) => {
-		const transactionContext = { managerAddress, securityPoolAddress, universeId }
+		const transactionContext = { managerAddress, securityPoolAddress, universeId, proposedRepPerEthPrice }
 		poolPriceOracleResult.value = undefined
 		try {
 			poolOracleActiveAction.value = 'requestPrice'

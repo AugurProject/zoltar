@@ -45,7 +45,7 @@ import { SecurityPoolObjectHeader, SecurityPoolReferenceDetails } from './Securi
 import { PoolSelectionControl } from './PoolSelectionControl.js'
 import { PoolAttention, PoolWorkspaceNavigation } from './PoolWorkspaceNavigation.js'
 import * as workspaceCopy from '../../../copy/poolWorkspace.js'
-import { SecurityPoolRequestPriceModal, type RequestPriceReview } from './SecurityPoolOracleSections.js'
+import { PRICE_ORACLE_HEADING_ID, SecurityPoolRequestPriceModal, type RequestPriceReview } from './SecurityPoolOracleSections.js'
 import { SecurityPoolUniverseMismatchNotice, SecurityPoolWorkflowEmptyState } from './SecurityPoolWorkflowEmptyState.js'
 import { SelectedPoolForkWorkflowPanel, SelectedPoolPriceOraclePanel, SelectedPoolReportingPanel, SelectedPoolStagedOperationsPanel, SelectedPoolTradingPanel } from './SecurityPoolWorkflowTabPanels.js'
 import { SecurityPoolVaultWorkspace } from './SecurityPoolVaultWorkspace.js'
@@ -555,6 +555,10 @@ export function SecurityPoolWorkflowSection(props: SecurityPoolWorkflowSectionPr
 				canRequest={selectedPoolStateModel.actions.requestPrice.enabled && canUseOracleActions}
 				closeOnSuccessKey={poolPriceOracleResult?.action === 'requestPrice' ? poolPriceOracleResult.hash : undefined}
 				confirmationGuardMessage={requestPriceConfirmationGuardMessage}
+				getReturnFocusTarget={() => {
+					const panel = document.getElementById(SELECTED_POOL_WORKFLOW_PANEL_ID)
+					return panel?.querySelector<HTMLElement>('.oracle-actions .tx-action-button:not(:disabled)') ?? panel?.querySelector<HTMLElement>('.workflow-metric-grid button.link') ?? document.getElementById(PRICE_ORACLE_HEADING_ID)
+				}}
 				onClose={() => setRequestPriceReview(undefined)}
 				onConfirm={(review, signal) => onRequestPoolPrice(review.managerAddress, review.securityPoolAddress, review.requestValueAttoEth, review.universeId, review.proposedRepPerEthPrice, signal)}
 				pending={poolOracleActiveAction === 'requestPrice'}

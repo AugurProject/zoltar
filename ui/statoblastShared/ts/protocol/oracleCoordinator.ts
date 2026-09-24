@@ -435,8 +435,8 @@ async function fundCoordinatorInitialReport(client: WriteClient, managerAddress:
 			execute: async () => await wrapWeth(client, fundingRequirement.wethShortfallAttoEth),
 		})
 	for (const funding of [
-		{ token: fundingRequirement.reputationTokenAddress, required: expectedRep, limit: fundingRequirement.initialReportAmount2 },
 		{ token: getWethAddress(), required: expectedWeth, limit: fundingRequirement.maximumInitialAttoWeth },
+		{ token: fundingRequirement.reputationTokenAddress, required: expectedRep, limit: fundingRequirement.initialReportAmount2 },
 	]) {
 		actions.push({
 			step: { functionName: 'approve', contractAddress: funding.token, args: [managerAddress, funding.limit] },
@@ -458,14 +458,14 @@ async function fundCoordinatorInitialReport(client: WriteClient, managerAddress:
 			if (currentCost > (finalStep.value ?? 0n)) throw new Error('The oracle fee increased. Review the request again before sending.')
 			if (currentEth < (finalStep.value ?? 0n)) throw new Error('Insufficient ETH for the oracle fee. Gas is additional.')
 			return [
-				{ tokenAddress: currentFunding.reputationTokenAddress, amount: currentFunding.requiredRepAttoRep },
 				{ tokenAddress: getWethAddress(), amount: currentWeth },
+				{ tokenAddress: currentFunding.reputationTokenAddress, amount: currentFunding.requiredRepAttoRep },
 			]
 		},
 		oracleOutcome: { settlerRewardAttoEth: bountyAttoEth, returnToWallet: true },
 		tokenFunding: [
-			{ tokenAddress: fundingRequirement.reputationTokenAddress, amount: expectedRep, limit: fundingRequirement.initialReportAmount2 },
 			{ tokenAddress: getWethAddress(), amount: expectedWeth, limit: fundingRequirement.maximumInitialAttoWeth },
+			{ tokenAddress: fundingRequirement.reputationTokenAddress, amount: expectedRep, limit: fundingRequirement.initialReportAmount2 },
 		],
 	})
 	return fundingRequirement

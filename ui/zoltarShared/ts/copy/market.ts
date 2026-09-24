@@ -26,7 +26,6 @@ export const questionPageNoMatches = 'No questions on this page match the curren
 export const usd = 'USD'
 export const createAnotherQuestion = 'Create another question'
 export const createQuestionPendingLabel = 'Creating question…'
-export const creationTransactionHash = 'Creation transaction hash'
 export const resolutionSourceHelpText = 'Name the source, invalid conditions, and edge cases.'
 export const description = 'Description'
 export const optionalQuestionContext = 'Optional question context'

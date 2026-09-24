@@ -6,13 +6,11 @@ import * as transactionCopy from '../copy/transaction.js'
 import { AddressValue } from './AddressValue.js'
 import { ReadOnlyDetailAccordion } from './ReadOnlyDetailAccordion.js'
 import { TransactionObjectContext } from './TransactionObjectContext.js'
-import type { GlobalTransactionPresentation, GlobalTransactionRow } from '../types/components.js'
+import type { GlobalTransactionRow } from '../types/components.js'
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import { GlobalTransactionPresentationProvider, useGlobalTransactionPresentation } from './GlobalTransactionPresentationContext.js'
-import { useEffect, useRef } from 'preact/hooks'
+import { useEffect, useLayoutEffect, useRef } from 'preact/hooks'
 import { EthAmount, TransactionFundingSummary } from './TransactionFundingSummary.js'
-import { TransactionPresentationNotice } from './TransactionPresentationNotice.js'
-import { TransactionHashLink } from './TransactionHashLink.js'
 import { transactionSteps } from '../transactions/transactionSteps.js'
 
 /** Explains a step that has no token funding to summarize, using the enclosing operation's rows for the parameters being submitted. */
@@ -43,12 +41,6 @@ function TransactionStepReview({ contractAddress, contractLabel, description, ro
 	)
 }
 
-function getFailurePresentation(error: string | undefined, presentation: GlobalTransactionPresentation | undefined, stepTitle: string | undefined): GlobalTransactionPresentation | undefined {
-	if (error === undefined) return undefined
-	if (presentation !== undefined) return { ...presentation, detail: error }
-	return { detail: error, title: stepTitle ?? error, tone: 'error' }
-}
-
 function useTransactionStepsState() {
 	const presentation = useGlobalTransactionPresentation()
 	const workflow = transactionSteps.value
@@ -56,14 +48,12 @@ function useTransactionStepsState() {
 	const operationFailed = presentation?.tone === 'error'
 	const operationError = typeof presentation?.detail === 'string' ? presentation.detail : copy.requirementsFailed
 	const error = operationFailed && (current?.error === undefined || current?.error === 'Transaction reverted.') ? operationError : current?.error
-	// Failures use the same notice as the transaction tray and dialogs, including the technical rows needed to debug them.
-	const failure = getFailurePresentation(error, operationFailed ? presentation : undefined, current?.title)
 	const pending = error === undefined && (workflow?.steps.some(step => step.phase === 'pending') ?? false)
-	return { current, error, failure, pending, presentation, workflow }
+	return { current, error, pending, presentation, workflow }
 }
 
 type TransactionStepsActionsProps = {
-	/** False when the surrounding flow has no way back (the wallet is where the user declines); hides the Cancel/Close control. */
+	/** False when the surrounding flow has no way back (the wallet is where the user declines); hides the Cancel/Dismiss control. */
 	cancelable?: boolean
 	contextKey: string
 	/** Move focus into the actions when the review replaced the control the user activated. */
@@ -75,13 +65,12 @@ type TransactionStepsActionsProps = {
 
 /** The review's confirm, approval, and cancel controls; a dialog form can host them in its own action row. */
 export function TransactionStepsActions({ cancelable = true, contextKey, focusOnMount = false, keepActionsVisible = false, onClose }: TransactionStepsActionsProps) {
-	const { error, failure, pending, presentation, workflow } = useTransactionStepsState()
-	const errorRef = useRef<HTMLDivElement>(null)
+	const { error, pending, presentation, workflow } = useTransactionStepsState()
 	const actionsRef = useRef<HTMLDivElement>(null)
-	useEffect(() => {
-		if (error !== undefined) errorRef.current?.scrollIntoView?.({ block: 'nearest' })
-	}, [error])
-	// The tray grows with each presentation update, so wait for that layout and center rather than edge-align.
+	const pendingActionRef = useRef<HTMLDivElement>(null)
+	const focusWasInActions = useRef(false)
+	const completed = workflow?.steps.every(step => step.phase === 'confirmed' || step.phase === 'skipped') ?? false
+	// Wait for the review layout before keeping the next action centered.
 	useEffect(() => {
 		if (!keepActionsVisible || typeof requestAnimationFrame !== 'function') return
 		let frame: number | undefined
@@ -98,28 +87,59 @@ export function TransactionStepsActions({ cancelable = true, contextKey, focusOn
 		if (actions === null || actions.contains(document.activeElement)) return
 		actions.querySelector<HTMLElement>('button:not(:disabled), input:not(:disabled)')?.focus()
 	}, [focusOnMount])
+	useLayoutEffect(() => {
+		if (!focusWasInActions.current) return
+		const active = document.activeElement
+		if (active instanceof HTMLElement && active !== document.body && active.isConnected && !active.matches(':disabled')) return
+		pendingActionRef.current?.focus()
+	}, [pending])
 	if (workflow === undefined || workflow.steps[workflow.activeIndex] === undefined) return undefined
-	const completed = workflow.steps.every(step => step.phase === 'confirmed' || step.phase === 'skipped')
+	const terminal = completed || error !== undefined
 	const funding = workflow.steps.flatMap(step => step.tokenFunding ?? [])
 	const fundingReason = funding.length > 0 ? copy.fundingRequired : copy.prerequisitesRequired
 	const blockedReason = pending ? copy.transactionPending : fundingReason
+	const completedSteps = workflow.steps.flatMap((step, index) => {
+		if (index === workflow.steps.length - 1 && step.phase === 'confirmed') return []
+		const approvalSatisfied = step.approval !== undefined && step.approval.approvedAmount !== undefined && step.approval.requiredAmount <= step.approval.approvedAmount
+		if (approvalSatisfied && step.approval !== undefined && (step.phase === 'confirmed' || step.phase === 'skipped')) return [{ index, label: copy.formatTokenApproved(step.approval.tokenSymbol), approval: true }]
+		if (step.phase === 'confirmed') return [{ index, label: step.title === copy.wrapEthIntoWeth ? copy.ethWrapped : step.title, approval: false }]
+		return []
+	})
+	const completedIndices = new Set(completedSteps.map(step => step.index))
 	return (
 		<GlobalTransactionPresentationProvider transaction={undefined}>
 			<TransactionActionButtonLockProvider locked={false}>
-				<div className='transaction-step-actions transaction-approval-editor' ref={actionsRef}>
+				<div
+					className='transaction-step-actions transaction-approval-editor'
+					ref={actionsRef}
+					onFocusIn={() => {
+						focusWasInActions.current = true
+					}}
+					onFocusOut={event => {
+						if (event.relatedTarget instanceof Node && event.relatedTarget !== document.body && !actionsRef.current?.contains(event.relatedTarget)) focusWasInActions.current = false
+					}}
+				>
 					<div className='tx-action-group'>
-						<div className='tx-action-feedback' ref={errorRef}>
-							{failure === undefined ? undefined : <TransactionPresentationNotice className='transaction-step-failure' transaction={failure} />}
-						</div>
+						<div className='tx-action-feedback' />
+						{completedSteps.length === 0 ? undefined : (
+							<div className='transaction-completed-steps' aria-live='polite'>
+								{completedSteps.map(step => (
+									<div key={step.index} className={`transaction-step-completed${step.approval ? ' transaction-approval-satisfied' : ''}`}>
+										<span>{step.label} ✓</span>
+									</div>
+								))}
+							</div>
+						)}
 						<div className='actions'>
 							{workflow.steps.map((step, index) => {
+								if (completedIndices.has(index) || step.phase === 'confirmed') return undefined
 								const active = index === workflow.activeIndex
 								const final = index === workflow.steps.length - 1
 								const ready = step.phase === 'review' && !pending && error === undefined
-								const status = { skipped: copy.skipped, upcoming: step.optional ? copy.ifNeeded : undefined, review: undefined, pending: undefined, confirmed: undefined, failed: copy.notCompleted }[step.phase]
+								const status = { skipped: copy.skipped, upcoming: step.optional ? copy.ifNeeded : undefined, review: undefined, pending: undefined, confirmed: transactionCopy.confirmed, failed: copy.notCompleted }[step.phase]
 								const detail = [step.phase === 'upcoming' || step.approval !== undefined ? undefined : step.amount, status].filter(value => value !== undefined).join(' · ')
 								return (
-									<div key={index} className={`transaction-plan-action${step.approval === undefined || final ? ' transaction-plan-action-wide' : ''}${final ? ' transaction-plan-action-final' : ''}`}>
+									<div key={index} className={`transaction-plan-action${step.approval === undefined || final ? ' transaction-plan-action-wide' : ''}${final ? ' transaction-plan-action-final' : ''}`} {...(active && pending ? { ref: pendingActionRef, tabIndex: -1 } : {})}>
 										{step.approval !== undefined ? (
 											<TokenApprovalControl
 												compact
@@ -162,14 +182,13 @@ export function TransactionStepsActions({ cancelable = true, contextKey, focusOn
 												tone={step.approval === undefined ? 'primary' : 'secondary'}
 											/>
 										)}
-										{final && cancelable ? (
+										{final && cancelable && !terminal ? (
 											<div className='actions transaction-step-close'>
 												<button className='secondary' type='button' onClick={onClose ?? workflow.cancel} disabled={pending}>
-													{completed || error !== undefined ? commonCopy.close : commonCopy.cancel}
+													{commonCopy.cancel}
 												</button>
 											</div>
 										) : undefined}
-										<div className='transaction-step-hash'>{step.hash === undefined ? undefined : <TransactionHashLink hash={step.hash} />}</div>
 									</div>
 								)
 							})}
