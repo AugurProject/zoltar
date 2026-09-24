@@ -52,9 +52,6 @@ test('updates a pristine old pin to the current contracts without changing its s
 	const before = await readFile(stateFile)
 	const result = await prepareCurrentDeployment({
 		acquireLocks: noLocks,
-		ask: async () => {
-			throw new Error('Unexpected retirement prompt')
-		},
 		path,
 	})
 	expect(result.kind).toBe('current')
@@ -83,9 +80,6 @@ test('moves an unoperated keyless journal to a fresh state file without requesti
 	const before = await readFile(stateFile)
 	const result = await prepareCurrentDeployment({
 		acquireLocks: noLocks,
-		ask: async () => {
-			throw new Error('Unexpected retirement prompt')
-		},
 		path,
 	})
 	expect(result.kind).toBe('current')
@@ -104,9 +98,6 @@ test('moves an unoperated signerless journal after a signer is configured', asyn
 	const before = await readFile(stateFile)
 	const result = await prepareCurrentDeployment({
 		acquireLocks: noLocks,
-		ask: async () => {
-			throw new Error('Unexpected retirement prompt')
-		},
 		path,
 	})
 	expect(result.kind).toBe('current')
@@ -145,9 +136,6 @@ test('does not treat a keyless journal with pending work as unoperated', async (
 	await expect(
 		prepareCurrentDeployment({
 			acquireLocks: noLocks,
-			ask: async () => {
-				throw new Error('Unexpected retirement prompt')
-			},
 			path,
 		}),
 	).rejects.toThrow('Enable live execution')
@@ -184,9 +172,6 @@ test('selects current contracts for a safely migratable zero-root bootstrap jour
 	const before = await readFile(stateFile)
 	const result = await prepareCurrentDeployment({
 		acquireLocks: noLocks,
-		ask: async () => {
-			throw new Error('Unexpected retirement prompt')
-		},
 		path,
 	})
 	expect(result.kind).toBe('current')
@@ -200,69 +185,45 @@ test('selects current contracts for a safely migratable zero-root bootstrap jour
 	await expect(
 		prepareCurrentDeployment({
 			acquireLocks: noLocks,
-			ask: async () => {
-				throw new Error('Unexpected retirement prompt')
-			},
 			path,
 		}),
 	).rejects.toThrow('restore the old pin')
 	expect(await readFile(stateFile)).toEqual(rejectedBefore)
 })
 
-test('prompts once to retire operated old contracts and keeps the old pin until completion', async () => {
+test('automatically retires operated old contracts and keeps the old pin until completion', async () => {
 	const { path, settings, signer, stateFile } = await fixture(true)
-	const recipient = signer
-	const answers = [`DRAIN ${executionProfileId(settings)} TO ${recipient}`]
 	const result = await prepareCurrentDeployment({
 		acquireLocks: noLocks,
-		ask: async () => {
-			const answer = answers.shift()
-			if (answer === undefined) throw new Error('Unexpected retirement prompt')
-			return answer
-		},
 		path,
 	})
 	expect(result.kind).toBe('retiring')
-	expect(answers).toEqual([])
 	expect((await loadSettings(path)).settings.deployment).toEqual(settings.deployment)
 	const state = await loadDurableState(stateFile, settings.network.chainId)
-	expect(state.retirement).toMatchObject({ recipient, status: 'requested' })
+	expect(state.retirement).toMatchObject({ recipient: signer, status: 'requested', policies: DEFAULT_RETIREMENT_POLICIES })
 	expect(state.signerAddress).toBe(signer)
 	expect(await retirementUpgradeStatus(path)).toBe('retiring')
 })
 
-test('discloses default retirement policies and replaces policies from a cancelled drain', async () => {
+test('reports automatic recovery policies and replaces policies from a cancelled drain', async () => {
 	const { path, settings, signer, stateFile } = await fixture(true)
 	const state = await loadDurableState(stateFile, settings.network.chainId)
 	state.retirement.cancelledAt = new Date(0).toISOString()
 	state.retirement.policies = { ...DEFAULT_RETIREMENT_POLICIES, exitUnmatchedShares: true, maximumExitLossBps: 1_000, sweepAssets: false }
 	await saveDurableState(stateFile, state)
-	const recipient = signer
-	const answers = [`DRAIN ${state.profileId} TO ${recipient}`]
-	const prompts: string[] = []
-	await prepareCurrentDeployment({
-		acquireLocks: noLocks,
-		ask: async message => {
-			prompts.push(message)
-			const answer = answers.shift()
-			if (answer === undefined) throw new Error('Unexpected retirement prompt')
-			return answer
-		},
-		path,
-	})
-	expect(prompts[0]).toContain('recover claimable ETH and REP to signer')
+	const result = await prepareCurrentDeployment({ acquireLocks: noLocks, path })
+	expect(result.message).toContain(`recover claimable ETH and REP to signer ${signer}`)
 	expect((await loadDurableState(stateFile, settings.network.chainId)).retirement.policies).toEqual(DEFAULT_RETIREMENT_POLICIES)
 })
 
 test('requests retirement with a single reader when rpcQuorum is one', async () => {
-	const { path, settings, signer, state, stateFile } = await fixture(true)
+	const { path, settings, stateFile } = await fixture(true)
 	if (settings.connectivity === undefined) throw new Error('Fixture requires RPC connectivity')
 	const singleReader = { ...settings, connectivity: { ...settings.connectivity, quorumRpcUrls: [], rpcQuorum: 1 as const } }
 	await writeFile(path, `${JSON.stringify(serializedSettings(singleReader))}\n`, { mode: 0o600 })
 	const configBefore = await readFile(path)
 	const result = await prepareCurrentDeployment({
 		acquireLocks: noLocks,
-		ask: async () => `DRAIN ${state.profileId} TO ${signer}`,
 		path,
 	})
 	expect(result.kind).toBe('retiring')
@@ -290,9 +251,6 @@ test('uses a fresh state path after verified retirement and preserves the old jo
 	let verified = false
 	const result = await prepareCurrentDeployment({
 		acquireLocks: noLocks,
-		ask: async () => {
-			throw new Error('Unexpected retirement prompt')
-		},
 		path,
 		verifyCompletion: async () => {
 			verified = true
@@ -311,7 +269,7 @@ test('retires an operated pinned deployment when only its Uniswap factory change
 	const canonical = canonicalDeployment(settings.network.chainId)
 	expect(executionProfileId(settings)).toBe(executionProfileId({ ...settings, deployment: canonical }))
 	expect(settings.deployment.uniswapV3Factory).not.toBe(canonical.uniswapV3Factory)
-	const request = await prepareCurrentDeployment({ acquireLocks: noLocks, ask: async () => `DRAIN ${executionProfileId(settings)} TO ${signer}`, path })
+	const request = await prepareCurrentDeployment({ acquireLocks: noLocks, path })
 	expect(request.kind).toBe('retiring')
 	expect((await loadSettings(path)).settings.deployment.uniswapV3Factory).toBe(settings.deployment.uniswapV3Factory)
 	const state = await loadDurableState(stateFile, settings.network.chainId)
@@ -457,9 +415,6 @@ test('rejects a changed signer before requesting retirement or changing either f
 	await expect(
 		prepareCurrentDeployment({
 			acquireLocks: noLocks,
-			ask: async () => {
-				throw new Error('Unexpected retirement prompt')
-			},
 			path,
 		}),
 	).rejects.toThrow('restore the old signer')
@@ -467,22 +422,27 @@ test('rejects a changed signer before requesting retirement or changing either f
 	expect(await readFile(stateFile)).toEqual(stateBefore)
 })
 
-test('requires the exact retirement confirmation before changing the old state', async () => {
-	const { path, stateFile } = await fixture(true)
+test.each(['paused', 'dry-run'] as const)('does not automatically retire a %s profile', async mode => {
+	const { path, settings, stateFile } = await fixture(true)
+	const disabled = { ...settings, paused: mode === 'paused', runtime: { ...settings.runtime, execute: mode !== 'dry-run' } }
+	await writeFile(path, `${JSON.stringify(serializedSettings(disabled))}\n`, { mode: 0o600 })
 	const configBefore = await readFile(path)
 	const stateBefore = await readFile(stateFile)
-	const answers = ['0x0000000000000000000000000000000000000099', 'DRAIN']
-	await expect(
-		prepareCurrentDeployment({
-			acquireLocks: noLocks,
-			ask: async () => {
-				const answer = answers.shift()
-				if (answer === undefined) throw new Error('Unexpected retirement prompt')
-				return answer
-			},
-			path,
-		}),
-	).rejects.toThrow('Confirmation must exactly match')
+	await expect(prepareCurrentDeployment({ acquireLocks: noLocks, path })).rejects.toThrow('Enable live execution')
+	expect(await readFile(path)).toEqual(configBefore)
+	expect(await readFile(stateFile)).toEqual(stateBefore)
+})
+
+test('resumes an active retirement without resetting its saved policies', async () => {
+	const { path, settings, signer, stateFile } = await fixture(true)
+	const state = await loadDurableState(stateFile, settings.network.chainId)
+	state.retirement.status = 'waiting'
+	state.retirement.recipient = signer
+	state.retirement.policies = { ...DEFAULT_RETIREMENT_POLICIES, unwrapWeth: false, sweepAssets: false }
+	await saveDurableState(stateFile, state)
+	const configBefore = await readFile(path)
+	const stateBefore = await readFile(stateFile)
+	expect((await prepareCurrentDeployment({ acquireLocks: noLocks, path })).kind).toBe('retiring')
 	expect(await readFile(path)).toEqual(configBefore)
 	expect(await readFile(stateFile)).toEqual(stateBefore)
 })
@@ -512,9 +472,6 @@ test('waits for explicit acceptance of residuals before switching deployments', 
 		(
 			await prepareCurrentDeployment({
 				acquireLocks: noLocks,
-				ask: async () => {
-					throw new Error('Unexpected retirement prompt')
-				},
 				path,
 			})
 		).kind,
@@ -532,9 +489,6 @@ test('waits for explicit acceptance of residuals before switching deployments', 
 		(
 			await prepareCurrentDeployment({
 				acquireLocks: noLocks,
-				ask: async () => {
-					throw new Error('Unexpected retirement prompt')
-				},
 				path,
 				verifyCompletion: async () => undefined,
 			})
