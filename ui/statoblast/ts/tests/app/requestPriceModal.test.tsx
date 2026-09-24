@@ -115,6 +115,54 @@ test('closes after confirmation and permits a new request when reopened after st
 	}
 })
 
+test('keeps focus inside the price dialog when the request action becomes pending status', async () => {
+	const dom = installDomEnvironment()
+	const presentation = signal<GlobalTransactionPresentation | undefined>(undefined)
+	let controller: ReturnType<typeof createTransactionStepController> | undefined
+	const hash = '0x4444444444444444444444444444444444444444444444444444444444444444'
+	function Harness() {
+		return (
+			<GlobalTransactionPresentationProvider transaction={presentation.value}>
+				<RequestPriceModal
+					{...props}
+					onConfirm={async (_request, signal) => {
+						controller = createTransactionStepController(signal)
+						controller.setPlan([{ ...step, title: 'Request price' }])
+						await controller.review()
+					}}
+				/>
+			</GlobalTransactionPresentationProvider>
+		)
+	}
+	const rendered = await renderIntoDocument(<Harness />)
+	try {
+		const queries = within(document.body)
+		await act(() => fireEvent.input(queries.getByRole('textbox', { name: 'Open Oracle REP/ETH starting price' }), { target: { value: '3' } }))
+		await settle()
+		const dialog = queries.getByRole('dialog', { name: 'Request New Price' })
+		const requestButton = within(dialog).getByRole('button', { name: /^Request price/ })
+		requestButton.focus()
+		await act(() => fireEvent.click(requestButton))
+		expect(transactionSteps.value?.steps[0]?.phase).toBe('pending')
+		expect(document.activeElement?.classList.contains('transaction-plan-action')).toBe(true)
+		await act(() => {
+			controller?.submitted(hash)
+			presentation.value = { tone: 'pending', title: 'Requesting Price', hash, operationKey: 'price-request' }
+		})
+		expect(within(dialog).getByText('Pending')).not.toBeNull()
+		expect(document.activeElement?.classList.contains('transaction-inline-final-status')).toBe(true)
+		const priceInput = within(dialog).getByRole('textbox', { name: 'Open Oracle REP/ETH starting price' })
+		priceInput.focus()
+		await act(() => {
+			presentation.value = { tone: 'pending', title: 'Still requesting price', hash, operationKey: 'price-request' }
+		})
+		expect(document.activeElement).toBe(priceInput)
+	} finally {
+		await rendered.cleanup()
+		dom.cleanup()
+	}
+})
+
 test('closes after a confirmed request when refreshed pool state clears the review before success is presented', async () => {
 	const dom = installDomEnvironment()
 	const presentation = signal<GlobalTransactionPresentation | undefined>(undefined)

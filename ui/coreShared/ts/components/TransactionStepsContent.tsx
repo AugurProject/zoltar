@@ -9,7 +9,7 @@ import { TransactionObjectContext } from './TransactionObjectContext.js'
 import type { GlobalTransactionRow } from '../types/components.js'
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import { GlobalTransactionPresentationProvider, useGlobalTransactionPresentation } from './GlobalTransactionPresentationContext.js'
-import { useEffect, useRef } from 'preact/hooks'
+import { useEffect, useLayoutEffect, useRef } from 'preact/hooks'
 import { EthAmount, TransactionFundingSummary } from './TransactionFundingSummary.js'
 import { TransactionHashLink } from './TransactionHashLink.js'
 import { TransactionPresentationNotice } from './TransactionPresentationNotice.js'
@@ -71,6 +71,9 @@ type TransactionStepsActionsProps = {
 export function TransactionStepsActions({ cancelable = true, contextKey, focusOnMount = false, keepActionsVisible = false, inlineFinalStatus = false, onClose }: TransactionStepsActionsProps) {
 	const { error, pending, presentation, workflow } = useTransactionStepsState()
 	const actionsRef = useRef<HTMLDivElement>(null)
+	const pendingActionRef = useRef<HTMLDivElement>(null)
+	const finalStatusRef = useRef<HTMLDivElement>(null)
+	const focusWasInActions = useRef(false)
 	const completed = workflow?.steps.every(step => step.phase === 'confirmed' || step.phase === 'skipped') ?? false
 	// Wait for the review layout before keeping the next action centered.
 	useEffect(() => {
@@ -89,6 +92,15 @@ export function TransactionStepsActions({ cancelable = true, contextKey, focusOn
 		if (actions === null || actions.contains(document.activeElement)) return
 		actions.querySelector<HTMLElement>('button:not(:disabled), input:not(:disabled)')?.focus()
 	}, [focusOnMount])
+	const finalStep = workflow?.steps.at(-1)
+	const finalStatus = inlineFinalStatus && finalStep?.hash !== undefined && presentation?.hash === finalStep.hash && (finalStep.phase === 'pending' || finalStep.phase === 'confirmed') ? presentation : undefined
+	useLayoutEffect(() => {
+		if (!focusWasInActions.current) return
+		const active = document.activeElement
+		if (active instanceof HTMLElement && active !== document.body && active.isConnected && !active.matches(':disabled')) return
+		const focusTarget = finalStatusRef.current ?? pendingActionRef.current
+		focusTarget?.focus()
+	}, [finalStatus, pending])
 	if (workflow === undefined || workflow.steps[workflow.activeIndex] === undefined) return undefined
 	const terminal = completed || error !== undefined
 	const funding = workflow.steps.flatMap(step => step.tokenFunding ?? [])
@@ -102,12 +114,19 @@ export function TransactionStepsActions({ cancelable = true, contextKey, focusOn
 		return []
 	})
 	const completedIndices = new Set(completedSteps.map(step => step.index))
-	const finalStep = workflow.steps.at(-1)
-	const finalStatus = inlineFinalStatus && finalStep?.hash !== undefined && presentation?.hash === finalStep.hash && (finalStep.phase === 'pending' || finalStep.phase === 'confirmed') ? presentation : undefined
 	return (
 		<GlobalTransactionPresentationProvider transaction={undefined}>
 			<TransactionActionButtonLockProvider locked={false}>
-				<div className='transaction-step-actions transaction-approval-editor' ref={actionsRef}>
+				<div
+					className='transaction-step-actions transaction-approval-editor'
+					ref={actionsRef}
+					onFocusIn={() => {
+						focusWasInActions.current = true
+					}}
+					onFocusOut={event => {
+						if (event.relatedTarget instanceof Node && event.relatedTarget !== document.body && !actionsRef.current?.contains(event.relatedTarget)) focusWasInActions.current = false
+					}}
+				>
 					<div className='tx-action-group'>
 						<div className='tx-action-feedback' />
 						{completedSteps.length === 0 ? undefined : (
@@ -135,7 +154,7 @@ export function TransactionStepsActions({ cancelable = true, contextKey, focusOn
 								const status = { skipped: copy.skipped, upcoming: step.optional ? copy.ifNeeded : undefined, review: undefined, pending: undefined, confirmed: transactionCopy.confirmed, failed: copy.notCompleted }[step.phase]
 								const detail = [step.phase === 'upcoming' || step.approval !== undefined ? undefined : step.amount, status].filter(value => value !== undefined).join(' · ')
 								return (
-									<div key={index} className={`transaction-plan-action${step.approval === undefined || final ? ' transaction-plan-action-wide' : ''}${final ? ' transaction-plan-action-final' : ''}`}>
+									<div key={index} className={`transaction-plan-action${step.approval === undefined || final ? ' transaction-plan-action-wide' : ''}${final ? ' transaction-plan-action-final' : ''}`} {...(active && pending ? { ref: pendingActionRef, tabIndex: -1 } : {})}>
 										{step.approval !== undefined ? (
 											<TokenApprovalControl
 												compact
@@ -190,7 +209,7 @@ export function TransactionStepsActions({ cancelable = true, contextKey, focusOn
 								)
 							})}
 							{finalStatus === undefined ? undefined : (
-								<div className='transaction-plan-action transaction-plan-action-wide transaction-plan-action-final transaction-inline-final-status'>
+								<div className='transaction-plan-action transaction-plan-action-wide transaction-plan-action-final transaction-inline-final-status' ref={finalStatusRef} tabIndex={-1}>
 									<TransactionPresentationNotice collapseDetails transaction={finalStatus} />
 									{finalStatus.tone === 'success' || finalStatus.tone === 'warning' ? (
 										<button className='primary' type='button' onClick={onClose}>
