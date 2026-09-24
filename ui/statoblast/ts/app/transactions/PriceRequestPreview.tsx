@@ -1,4 +1,3 @@
-import { TokenApprovalControl } from '@zoltar/ui-core-shared/components/TokenApprovalControl.js'
 import { useId, useEffect, useRef } from 'preact/hooks'
 import { InlineHint } from '@zoltar/ui-core-shared/components/InlineHint.js'
 import { TransactionActionButton } from '@zoltar/ui-core-shared/components/TransactionActionButton.js'
@@ -7,7 +6,31 @@ import * as copy from '@zoltar/ui-core-shared/copy/transactionSteps.js'
 import * as priceRequestCopy from '@zoltar/ui-statoblast-shared/copy/priceRequest.js'
 import { EthAmount, TransactionFundingSummary } from '@zoltar/ui-core-shared/components/TransactionFundingSummary.js'
 
-export function PriceRequestPreview({ requestValue, reason, error, preparing, hideReason, onClose, onRetry }: { requestValue: bigint | undefined; reason: string; error: string | undefined; preparing: boolean; hideReason: boolean; onClose: () => void; onRetry: (() => void) | undefined }) {
+export type FailedPricePlan = {
+	funding: readonly { amount: string }[]
+	totalAttoEth: bigint
+	outcome: { returnToWallet: boolean; settlerRewardAttoEth: bigint | undefined } | undefined
+}
+
+export function PriceRequestPreview({
+	requestValue,
+	reason,
+	error,
+	preparing,
+	hideReason,
+	onClose,
+	onReview,
+	failedPlan,
+}: {
+	requestValue: bigint | undefined
+	reason: string
+	error: string | undefined
+	preparing: boolean
+	hideReason: boolean
+	onClose: () => void
+	onReview?: (() => void) | undefined
+	failedPlan?: FailedPricePlan | undefined
+}) {
 	const reasonId = useId()
 	const errorRef = useRef<HTMLDivElement>(null)
 	useEffect(() => {
@@ -21,13 +44,20 @@ export function PriceRequestPreview({ requestValue, reason, error, preparing, hi
 	} else if (!reasonHidden) {
 		visibleFeedback = <InlineHint id={reasonId} message={reason} />
 	}
+	let estimatePrompt = priceRequestCopy.enterPriceEstimate
+	if (preparing) estimatePrompt = priceRequestCopy.preparingPriceRequest
+	else if (onReview !== undefined) estimatePrompt = reason
 	return (
 		<>
-			<div className='transaction-step-content'>
-				<TransactionFundingSummary funding={[commonCopy.rep, commonCopy.weth].map(symbol => ({ amount: `${commonCopy.metricUnavailablePlaceholder} ${symbol}` }))} totalAttoEth={undefined} outcome={{ returnToWallet: true, settlerRewardAttoEth: undefined }} />
-				<p className='detail transaction-funding-note'>{copy.fundingDetail}</p>
-			</div>
-			<div className='transaction-step-actions transaction-approval-editor'>
+			{failedPlan === undefined ? (
+				<p className='detail price-request-estimate-prompt'>{estimatePrompt}</p>
+			) : (
+				<div className='transaction-step-content'>
+					<TransactionFundingSummary funding={failedPlan.funding} totalAttoEth={failedPlan.totalAttoEth} outcome={failedPlan.outcome ?? { returnToWallet: true, settlerRewardAttoEth: undefined }} />
+					<p className='detail transaction-funding-note'>{copy.fundingDetail}</p>
+				</div>
+			)}
+			<div className='transaction-step-actions transaction-approval-editor price-request-preview'>
 				<div className='tx-action-group'>
 					{/* A hidden reason lives outside the feedback container so the empty container collapses instead of reserving space. */}
 					{error === undefined && reasonHidden ? (
@@ -35,34 +65,13 @@ export function PriceRequestPreview({ requestValue, reason, error, preparing, hi
 							<InlineHint id={reasonId} message={reason} />
 						</div>
 					) : undefined}
-					<div className='tx-action-feedback' ref={errorRef} aria-live='polite'>
-						{visibleFeedback}
-					</div>
 					<div className='actions'>
-						{[commonCopy.rep, commonCopy.weth].map(symbol => (
-							<div className='transaction-plan-action' key={symbol}>
-								<TokenApprovalControl
-									compact
-									showRequirementNotice={false}
-									actionLabel={copy.fundReport}
-									allowanceError={undefined}
-									allowanceLoading={false}
-									approvedAmount={undefined}
-									requiredAmount={undefined}
-									disabled
-									guardMessage={reason}
-									guardMessageElementId={reasonId}
-									onApprove={() => undefined}
-									pending={false}
-									pendingLabel={commonCopy.formatApprovingToken(symbol)}
-									resetKey='price-estimate'
-									tokenSymbol={symbol}
-									tokenUnits={18}
-								/>
-								<div className='transaction-step-hash' />
-							</div>
-						))}
 						<div className='transaction-plan-action transaction-plan-action-wide transaction-plan-action-final'>
+							{visibleFeedback === undefined ? undefined : (
+								<div className='tx-action-feedback' ref={errorRef} aria-live='polite'>
+									{visibleFeedback}
+								</div>
+							)}
 							<TransactionActionButton
 								idleLabel={
 									<>
@@ -71,18 +80,17 @@ export function PriceRequestPreview({ requestValue, reason, error, preparing, hi
 								}
 								pending={preparing}
 								pendingLabel={priceRequestCopy.preparingPriceRequest}
-								onClick={() => undefined}
-								availability={{ disabled: true, reason }}
+								onClick={onReview ?? (() => undefined)}
+								availability={{ disabled: onReview === undefined, reason }}
 								disabledReasonElementId={reasonId}
 								showDisabledReason={false}
 								tone='primary'
 							/>
 							<div className='actions transaction-step-close'>
-								<button className='secondary' type='button' onClick={onRetry ?? onClose}>
-									{onRetry === undefined ? commonCopy.cancel : commonCopy.retry}
+								<button className='secondary' type='button' onClick={onClose}>
+									{commonCopy.cancel}
 								</button>
 							</div>
-							<div className='transaction-step-hash' />
 						</div>
 					</div>
 				</div>

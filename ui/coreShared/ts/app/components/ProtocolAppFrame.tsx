@@ -3,7 +3,7 @@ import { ChainBlockNumberContext, ChainTimestampContext } from '../../wallet/cha
 import { isTransactionActionLocked, type TransactionTrayState } from '../../transactions/transactionTray.js'
 import { GlobalTransactionPresentationProvider } from '../../components/GlobalTransactionPresentationContext.js'
 import { TransactionActionButtonLockProvider } from '../../components/TransactionActionButton.js'
-import { GlobalTransactionTray } from './GlobalTransactionTray.js'
+import { GlobalTransactionDialog } from './GlobalTransactionDialog.js'
 
 export function ProtocolAppFrame({
 	actionsLocked = false,
@@ -18,7 +18,7 @@ export function ProtocolAppFrame({
 	transactionRouteKey,
 	transactionState,
 }: {
-	/** Locks transaction actions for a workflow the application tracks outside the shared transaction tray. */
+	/** Locks transaction actions for a workflow the application tracks outside shared transaction status. */
 	actionsLocked?: boolean
 	activeUniverseId?: bigint
 	children: ComponentChildren
@@ -29,7 +29,7 @@ export function ProtocolAppFrame({
 	notices: ComponentChildren
 	routeContentDisabled: boolean
 	transactionRouteKey: string
-	/** The shared transaction tray state; applications with their own transaction presentation omit it. */
+	/** The shared transaction state; applications with their own transaction presentation omit it. */
 	transactionState?: TransactionTrayState | undefined
 }) {
 	const activeTransaction = transactionState?.active
@@ -42,7 +42,6 @@ export function ProtocolAppFrame({
 					{notices}
 					{header}
 					<GlobalTransactionPresentationProvider transaction={activeTransaction}>
-						{transactionState === undefined ? undefined : <GlobalTransactionTray {...(activeUniverseId === undefined ? {} : { activeUniverseId })} routeKey={transactionRouteKey} transaction={activeTransaction} />}
 						<div id='app-content' tabIndex={-1}>
 							<TransactionActionButtonLockProvider locked={locked}>
 								<fieldset className='route-shell' disabled={routeContentDisabled}>
@@ -50,6 +49,7 @@ export function ProtocolAppFrame({
 								</fieldset>
 							</TransactionActionButtonLockProvider>
 						</div>
+						{transactionState === undefined ? undefined : <GlobalTransactionDialog {...(activeUniverseId === undefined ? {} : { activeUniverseId })} routeKey={transactionRouteKey} transaction={activeTransaction} />}
 					</GlobalTransactionPresentationProvider>
 				</main>
 			</ChainTimestampContext.Provider>

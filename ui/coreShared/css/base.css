@@ -2414,3 +2414,12 @@ button.wallet-asset-action-pending:disabled {
 	padding-top: 0;
 	border-top: 0;
 }
+:root[data-product] a[href^="https://"]::after,
+:root[data-product] a[href^="http://"]::after {
+	content: "↗";
+	display: inline-block;
+	margin-inline-start: 0.35em;
+	font-family: var(--font-family-sans);
+	font-size: 0.9em;
+	line-height: var(--line-height-none);
+}

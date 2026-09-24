@@ -1156,7 +1156,7 @@ describe('OpenOracleSection route create view', () => {
 		expect(documentQueries.queryByText(openOracleCopy.loadingOracleBalances)).toBeNull()
 	})
 
-	test('replaces the dispute form with success until Done is selected', async () => {
+	test('closes the dispute form only after the matching dispute succeeds', async () => {
 		const presentation = signal<GlobalTransactionPresentation | undefined>(undefined)
 		const result = signal<OpenOracleSectionProps['openOracleResult']>(undefined)
 		function Harness() {
@@ -1184,9 +1184,6 @@ describe('OpenOracleSection route create view', () => {
 			result.value = { action: 'dispute', hash: '0x01' }
 			presentation.value = { tone: 'success', title: 'Dispute confirmed', operationKey: 'dispute', hash: '0x01' }
 		})
-		const dialog = page.getByRole('dialog', { name: 'Dispute & Swap' })
-		expect(within(dialog).getByText('Dispute confirmed')).not.toBeNull()
-		await act(() => fireEvent.click(within(dialog).getByRole('button', { name: 'Done' })))
 		expect(page.queryByRole('dialog')).toBeNull()
 	})
 })

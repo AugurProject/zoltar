@@ -18,6 +18,7 @@ export const walletConfirmationInstruction = 'Confirm the transaction in your wa
 export const walletConfirmationReviewDetail = 'Review the prepared transaction, then confirm it in your wallet.'
 export const simulationSubmissionReviewDetail = 'Review the prepared transaction before it is submitted.'
 export const creatingQuestion = 'Creating Question'
+export const questionCreation = 'Question creation'
 export const questionCreated = 'Question Created'
 export const approvingForkRep = 'Approving Fork REP'
 export const forkingZoltar = 'Forking Universe'
@@ -33,6 +34,7 @@ export const outcomeIndexes = 'Outcome Indexes'
 export const repPrepared = 'REP Prepared'
 export const repSplit = 'REP Split'
 export const creatingSecurityPool = 'Creating Security Pool'
+export const securityPoolCreation = 'Security pool creation'
 export const securityPoolCreatedDetail = 'The new security pool is now available for shares, reporting, and vault operations.'
 export const securityPoolCreated = 'Security Pool Created'
 export const formatQueuedOperationAutoExecutionDetail = (operationId: CopyTemplateValue) => `Staged operation #${operationId} was queued for the next oracle settlement.`
@@ -53,6 +55,7 @@ export const executingStagedOperation = 'Executing Staged Operation'
 export const requestingPrice = 'Requesting new price…'
 export const stagedOperationExecuted = 'Staged Operation Executed'
 export const priceRequested = 'Requested new price'
+export const priceRequest = 'Price request'
 export const formatFinalizedRefundSettlementResultDetail = (capacityOwnershipLabel: CopyTemplateValue) => `Selected finalized truth-auction refund rows were settled. Locked ETH was credited for withdrawal without assigning REP backing units or ${capacityOwnershipLabel}.`
 export const formatWinningBidSettlementResultDetail = (capacityOwnershipLabel: CopyTemplateValue) => `Selected truth-auction winning bids were settled. The selected bids received REP backing units plus ${capacityOwnershipLabel}, assigning the remaining capacity ownership.`
 export const formatMixedBidSettlementResultDetail = (capacityOwnershipLabel: CopyTemplateValue) => `Selected truth-auction bids were settled. Winning bids received REP backing units plus ${capacityOwnershipLabel}, assigning the remaining capacity ownership; refund-only rows credited locked ETH for withdrawal.`
@@ -72,16 +75,18 @@ export const forkDepositSettlementSuccessDetail = 'Imported fork-carried escalat
 export const truthAuctionStartedSuccessDetail = 'Truth auction state was started for the selected child universe.'
 export const truthAuctionBidSuccessDetail = 'Truth auction bid submitted. Bid ETH stays committed until settlement.'
 export const viewTransaction = 'View transaction'
-export const viewTransactionDetails = 'View transaction details'
+export const transactionStatus = 'Transaction status'
+export const transactionDetails = 'Transaction details'
+export const revertedCheckingDetails = 'Transaction reverted; checking details…'
+export const reviewFailureDetails = 'Review transaction details before retrying.'
 export const preparing = 'Preparing'
 export const awaitingWallet = 'Awaiting Wallet'
 export const confirmed = 'Confirmed'
+export const backToForm = 'Back to form'
 export const confirmationUnavailableDetail = 'Confirmation unavailable. Checking automatically; do not resubmit.'
 export const attention = 'Attention'
 export const dismiss = 'Dismiss'
-export const closeStatus = 'Close transaction status'
 
-export const transaction = 'Transaction'
 export const paidFrom = 'Paid from'
 export const walletRep = 'Wallet REP'
 export const vaultBackedRep = 'Vault-backed REP'
@@ -112,3 +117,8 @@ export const reviewedActions: Record<string, { title: string; description?: stri
 	requestPriceIfNeededAndStageOperation: { title: 'Queue vault operation', description: 'Queue the vault change and fund a price report if needed. Settlement may execute the queued change.' },
 	aggregate3: { title: 'Batched transaction', description: 'Run several contract calls in one transaction.' },
 }
+export const closeSymbol = '×'
+export const hide = 'Hide'
+export const transactionHash = 'Transaction hash'
+export const explorer = 'Explorer'
+export const formatViewAddressOnExplorer = (address: CopyTemplateValue) => `View address ${address} on explorer`

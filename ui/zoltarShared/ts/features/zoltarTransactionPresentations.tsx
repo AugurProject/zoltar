@@ -26,7 +26,7 @@ function getMarketCreationTransactionRows(context: MarketCreationTransactionCont
 }
 
 export function createMarketCreationTransactionIntent(context: MarketCreationTransactionContext) {
-	return buildIntent({ action: 'createMarket', rows: getMarketCreationTransactionRows(context), source: 'zoltar', submittedTitle: transactionCopy.creatingQuestion })
+	return buildIntent({ action: 'createMarket', failedTitle: transactionCopy.questionCreation, rows: getMarketCreationTransactionRows(context), source: 'zoltar', submittedTitle: transactionCopy.creatingQuestion })
 }
 
 export function createMarketCreationSuccessPresentation(result: MarketCreationResult, context?: Omit<MarketCreationTransactionContext, 'marketType'>) {

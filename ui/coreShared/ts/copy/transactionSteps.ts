@@ -9,10 +9,12 @@ export const settlementBounty = 'Settler bounty'
 export const coordinatorReturnDetail = 'Both deposits return in full if undisputed. Disputes can change returns.'
 export const standaloneReturnDetail = 'If undisputed, withdraw both deposits after settlement in separate transactions. Disputes can change returns.'
 export const settlementCostDetail = 'Gas is extra and not refunded.'
-export const nanoEth = 'nanoETH'
 export const fundReport = 'funding the report'
 export const fundingRequired = 'Required token balances and approvals must be available.'
 export const transactionPending = 'Wait for the pending transaction to confirm.'
 export const prerequisitesRequired = 'Complete the required setup transactions first.'
 export const formatPendingAction = (title: string) => `${formatActionTense(title, 'pending')}…`
 export const requirementsFailed = 'Could not refresh transaction requirements. Close and review the action again.'
+export const formatTokenApproved = (symbol: string) => `${symbol} approved`
+export const wrapEthIntoWeth = 'Wrap ETH into WETH'
+export const ethWrapped = 'ETH wrapped'

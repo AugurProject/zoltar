@@ -1344,7 +1344,7 @@ describe('SecurityVaultSection', () => {
 	})
 
 	for (const action of ['queueWithdrawRep', 'redeemFees', 'redeemRepFromVault'] as const) {
-		test(`shows success and Done for a matching ${action} transaction`, async () => {
+		test(`closes the vault dialog for a matching ${action} success`, async () => {
 			const presentation = signal<GlobalTransactionPresentation | undefined>(undefined)
 			const result = signal<SecurityVaultSectionProps['securityVaultResult']>(undefined)
 			function Harness() {
@@ -1373,9 +1373,6 @@ describe('SecurityVaultSection', () => {
 					result.value = { action, hash: '0x01' }
 					presentation.value = { tone: 'success', title: 'Transaction confirmed', operationKey: 'vault-action', hash: '0x01' }
 				})
-				const dialog = page.getByRole('dialog')
-				expect(within(dialog).getByText('Transaction confirmed')).not.toBeNull()
-				await act(() => fireEvent.click(within(dialog).getByRole('button', { name: 'Done' })))
 				expect(page.queryByRole('dialog')).toBeNull()
 			} finally {
 				await rendered.cleanup()

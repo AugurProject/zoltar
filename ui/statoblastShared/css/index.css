@@ -3051,10 +3051,78 @@
 	gap: 1rem;
 }
 
-/* The error row keeps its height so the funding summary and actions do not move when a price becomes invalid. */
+.security-pool-link.existing-pool-action {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: fit-content;
+	min-height: 2.75rem;
+	border: 1px solid var(--primary-button-border);
+	border-radius: var(--radius-control);
+	padding: 0.78rem 1rem;
+	background: var(--primary-button-bg);
+	color: var(--primary-button-text);
+	font-weight: 600;
+	text-decoration: none;
+	margin-top: -0.5rem;
+}
+
+.security-pool-link.existing-pool-action:hover,
+.security-pool-link.existing-pool-action:focus-visible {
+	border-color: var(--primary-button-border-hover);
+	background: var(--primary-button-bg-hover);
+	color: var(--primary-button-text);
+	text-decoration: none;
+}
+
+.existing-pool-identifiers {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: 0.75rem 1rem;
+	margin: 0.5rem 0 0;
+}
+
+.existing-pool-identifiers dt {
+	color: var(--muted);
+	font-size: var(--font-label);
+	letter-spacing: 0.04em;
+	text-transform: uppercase;
+}
+
+.existing-pool-identifiers dd {
+	display: flex;
+	align-items: flex-start;
+	min-width: 0;
+	margin: 0.25rem 0 0;
+}
+
+.existing-pool-identifiers .address-value.copyable {
+	align-items: flex-start;
+	margin: 0;
+	padding: 0;
+	font-family: var(--font-family-mono);
+}
+
+@media (max-width: 600px) {
+	.existing-pool-identifiers {
+		grid-template-columns: minmax(0, 1fr);
+	}
+
+	.existing-pool-identifiers .address-value-full {
+		display: none;
+	}
+
+	.existing-pool-identifiers .address-value-abbreviated {
+		display: inline;
+	}
+}
+
+.price-request-estimate-prompt {
+	margin: 0;
+}
+
 .request-price-fields .lookup-field-controls.has-action {
 	grid-template-columns: minmax(0, 1fr) auto;
-	grid-template-rows: auto minmax(3rem, auto);
 	column-gap: 0.75rem;
 	row-gap: 0.25rem;
 }
@@ -3064,19 +3132,78 @@
 	min-inline-size: 12.5rem;
 }
 
+.operation-modal-body:has(> .request-price-fields) .transaction-plan-action:has(.approval-amount-field) .form-grid {
+	--request-price-max-width: 3.25rem;
+	--request-price-approval-gap: 0.5rem;
+	grid-template-columns: minmax(0, 1fr);
+}
+
+.operation-modal-body:has(> .request-price-fields) .approval-amount-controls {
+	gap: var(--request-price-approval-gap);
+}
+
+.operation-modal-body:has(> .request-price-fields) .approval-amount-controls > .field-inline-action {
+	inline-size: var(--request-price-max-width);
+}
+
+.operation-modal-body:has(> .request-price-fields) .transaction-plan-action:has(.approval-amount-field) .form-grid > .actions {
+	display: grid;
+	grid-column: 1;
+	grid-template-columns: minmax(0, 1fr);
+}
+
+.operation-modal-body:has(> .request-price-fields) .transaction-plan-action:has(.approval-amount-field) .form-grid > .actions > .tx-action {
+	width: 100%;
+	max-width: none;
+}
+
 .operation-modal-body:has(> .request-price-fields) .transaction-plan-action-final .tx-action-button {
 	min-block-size: 4rem;
 }
 
-/* The price-request confirm button is taller than a plain button, so its Cancel neighbour matches that height. */
+.price-request-preview .tx-action-group > .actions {
+	margin-block-start: 0;
+}
+
+.operation-modal-body:has(> .request-price-fields) .transaction-plan-action-final > .tx-action-feedback {
+	grid-column: 1 / -1;
+}
+
 .operation-modal-body:has(> .request-price-fields) .transaction-step-close > button {
-	inline-size: 5rem;
-	min-block-size: 4rem;
+	min-inline-size: 6.5rem;
+	min-block-size: 2.75rem;
+}
+
+.operation-modal-body:has(> .request-price-fields) {
+	gap: 0.5rem;
+}
+
+.operation-modal-body:has(> .request-price-fields) .transaction-step-actions {
+	padding-top: 0.5rem;
+}
+
+.operation-modal-body:has(> .request-price-fields) .transaction-inline-final-status .global-transaction-notice {
+	width: 100%;
+	max-height: none;
 }
 
 @media (max-width: 600px) {
-	.modal-panel:has(.request-price-fields) {
-		block-size: calc(100dvh - 2rem);
+	.request-price-fields .lookup-field-controls.has-action {
+		grid-template-columns: minmax(0, 1fr);
+	}
+
+	.request-price-fields .lookup-field-controls.has-action > .actions {
+		grid-column: 1;
+		grid-row: 2;
+	}
+
+	.request-price-fetch {
+		inline-size: 100%;
+		min-inline-size: 0;
+	}
+
+	.operation-modal-body:has(> .request-price-fields) .transaction-plan-action:has(.approval-amount-field) .form-grid {
+		--request-price-approval-gap: 0.25rem;
 	}
 
 	.operation-modal-body:has(> .request-price-fields) .workflow-metric-grid > div {
@@ -3088,9 +3215,8 @@
 		min-block-size: 3.625rem;
 	}
 
-	.operation-modal-body:has(> .request-price-fields) .transaction-plan-action-final .tx-action-button,
-	.operation-modal-body:has(> .request-price-fields) .transaction-step-close > button {
-		min-block-size: 4.875rem;
+	.operation-modal-body:has(> .request-price-fields) .transaction-plan-action-final .tx-action-button {
+		min-block-size: 3.625rem;
 	}
 
 	.operation-modal-body:has(> .request-price-fields) .transaction-costs > div {

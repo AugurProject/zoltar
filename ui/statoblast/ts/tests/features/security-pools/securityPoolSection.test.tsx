@@ -12,6 +12,8 @@ import { formatOpenInterestFeePerYearPercent, ORIGIN_POOL_INITIAL_RETENTION_RATE
 import type { SecurityPoolSectionProps } from '@zoltar/ui-zoltar-shared/features/types.js'
 import type { AccountState } from '@zoltar/ui-zoltar-shared/types/app.js'
 import { createTransactionStepController } from '@zoltar/ui-core-shared/transactions/transactionSteps.js'
+import { GlobalTransactionPresentationProvider } from '@zoltar/ui-core-shared/components/GlobalTransactionPresentationContext.js'
+import { GlobalTransactionDialog } from '@zoltar/ui-core-shared/app/components/GlobalTransactionDialog.js'
 import { describe, expect, mock, test } from 'bun:test'
 import { h, render } from 'preact'
 import { act } from 'preact/test-utils'
@@ -117,23 +119,42 @@ describe('SecurityPoolSection', () => {
 		review.abort()
 	})
 
-	test('shows a failed transaction review without a close button', async () => {
+	test('returns a failed transaction review to the pool form and its submit action', async () => {
 		const review = new AbortController()
 		const controller = createTransactionStepController(review.signal)
 		controller.setPlan([{ title: 'Create security pool', description: undefined, contractAddress: undefined, contractLabel: undefined, spender: undefined, amount: undefined, ethValueAttoEth: 0n }])
 		const pendingReview = controller.review()
 		controller.failed('User rejected the request')
-		const renderedComponent = await renderIntoDocument(h(SecurityPoolSection, createProps({ securityPoolCreating: false, securityPoolReviewSignal: review.signal })))
+		const onDismissSecurityPoolReview = mock(() => review.abort())
+		const renderedComponent = await renderIntoDocument(h(SecurityPoolSection, createProps({ onDismissSecurityPoolReview, securityPoolCreating: false, securityPoolError: 'User rejected the request', securityPoolReviewSignal: review.signal })))
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const queries = within(document.body)
-		expect(queries.getByRole('alert').textContent).toContain('User rejected the request')
+		expect(onDismissSecurityPoolReview).toHaveBeenCalledTimes(1)
+		expect(queries.getByText('User rejected the request')).not.toBeNull()
 		expect(queries.queryByRole('button', { name: 'Close' })).toBeNull()
-		expect(queries.queryByRole('radio', { name: 'Use a question ID' })).toBeNull()
-		expect((queries.getByRole('textbox', { name: 'Statoblast Security Multiplier' }) as HTMLInputElement).disabled).toBe(true)
-		expect(queries.queryByRole('button', { name: 'Create pool' })).toBeNull()
-		review.abort()
+		expect((queries.getByRole('textbox', { name: 'Statoblast Security Multiplier' }) as HTMLInputElement).disabled).toBe(false)
+		expect(queries.getByRole('button', { name: 'Create pool' }).hasAttribute('disabled')).toBe(false)
 		await expect(pendingReview).rejects.toThrow('Remaining transactions canceled')
+	})
+
+	test('shows a failed pool write only in the shared transaction dialog', async () => {
+		const transaction = { detail: 'Action canceled in wallet.', dismissKey: 'transaction-request-pool-write', title: 'Security pool creation', tone: 'error' as const }
+		const renderedComponent = await renderIntoDocument(
+			<GlobalTransactionPresentationProvider transaction={transaction}>
+				<SecurityPoolSection {...createProps({ securityPoolError: 'Action canceled in wallet.' })} />
+				<GlobalTransactionDialog transaction={transaction} />
+			</GlobalTransactionPresentationProvider>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+		const queries = within(document.body)
+		const dialog = queries.getByRole('dialog', { name: 'Transaction status' })
+		expect(within(dialog).getByText('Action canceled in wallet.')).not.toBeNull()
+		expect(document.querySelector('.workflow-stack')?.textContent).not.toContain('Action canceled in wallet.')
+		await act(() => fireEvent.click(within(dialog).getByRole('button', { name: 'Dismiss' })))
+		expect(queries.queryByRole('dialog', { name: 'Transaction status' })).toBeNull()
+		expect(document.querySelector('.workflow-stack')?.textContent).not.toContain('Action canceled in wallet.')
+		expect(queries.getByRole('button', { name: 'Create pool' }).hasAttribute('disabled')).toBe(false)
 	})
 
 	test('dismisses an owned transaction review when the card unmounts', async () => {
@@ -414,6 +435,74 @@ describe('SecurityPoolSection', () => {
 		expect(getButtonByText('Create question and pool').disabled).toBe(false)
 	})
 
+	test('blocks a duplicate question and links its existing pool', async () => {
+		const poolAddress = getAddress('0x0000000000000000000000000000000000000002')
+		const renderedComponent = await renderIntoDocument(
+			h(
+				SecurityPoolSection,
+				createProps({
+					existingQuestionCheck: { status: 'existing', questionId: '123', poolAddress },
+					marketForm: {
+						answerUnit: '',
+						categoricalOutcomes: ['', ''],
+						description: 'Pool question',
+						endTime: '1735689600',
+						marketType: 'binary',
+						scalarIncrement: '',
+						scalarMax: '',
+						scalarMin: '',
+						startTime: '',
+						title: 'Will this happen?',
+					},
+					onCreateQuestionAndSecurityPool: () => undefined,
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+		fireEvent.click(within(document.body).getByRole('radio', { name: 'Create a new question' }))
+		expect(within(document.body).queryByRole('button', { name: 'Create question and pool' })).toBeNull()
+		const existingPoolLink = within(document.body).getByRole('link', { name: 'Open existing pool →' })
+		expect(existingPoolLink.getAttribute('href')).toContain(poolAddress)
+		expect(existingPoolLink.classList.contains('existing-pool-action')).toBe(true)
+		expect(document.body.textContent).toContain('A pool already exists for this question and configuration.')
+		expect(document.querySelector('.identifier-value')?.textContent).toBe('0x7b')
+		expect(within(document.body).getByText('Pool address', { exact: true })).not.toBeNull()
+		expect(document.body.textContent?.split(poolAddress)).toHaveLength(2)
+	})
+
+	test('carries an existing question ID into the pool creation flow', async () => {
+		const onSecurityPoolFormChange = mock(() => undefined)
+		const renderedComponent = await renderIntoDocument(
+			h(
+				SecurityPoolSection,
+				createProps({
+					existingQuestionCheck: { status: 'existing', questionId: '123' },
+					marketForm: {
+						answerUnit: '',
+						categoricalOutcomes: ['', ''],
+						description: 'Pool question',
+						endTime: '1735689600',
+						marketType: 'binary',
+						scalarIncrement: '',
+						scalarMax: '',
+						scalarMin: '',
+						startTime: '',
+						title: 'Will this happen?',
+					},
+					onCreateQuestionAndSecurityPool: () => undefined,
+					onSecurityPoolFormChange,
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+		fireEvent.click(within(document.body).getByRole('radio', { name: 'Create a new question' }))
+		expectTransactionButtonDisabled(document.body, 'Create question and pool', 'This question already exists.')
+		expect(document.querySelector('.identifier-value')?.textContent).toBe('0x7b')
+		fireEvent.click(within(document.body).getByRole('button', { name: 'Use existing question' }))
+		expect(onSecurityPoolFormChange).toHaveBeenCalledWith({ marketId: '123' })
+		expect((within(document.body).getByRole('radio', { name: 'Use a question ID' }) as HTMLInputElement).checked).toBe(true)
+	})
+
 	test('keeps combined question-and-pool creation disabled for non-binary question types', async () => {
 		const onCreateQuestionAndSecurityPool = mock(() => undefined)
 		const renderedComponent = await renderIntoDocument(
@@ -500,6 +589,7 @@ describe('SecurityPoolSection', () => {
 		expect(documentQueries.queryByRole('radio', { name: 'Use a question ID' }) === null).toBe(true)
 		expect(documentQueries.queryByText('How do you want to choose the pool question?') === null).toBe(true)
 		expect(documentQueries.getByText('Question created. The security pool transaction is next.')).not.toBeNull()
+		expect(document.body.querySelector('.transaction-hash-link')).toBeNull()
 		expect(documentQueries.queryByRole('button', { name: 'Create pool from question' })).toBeNull()
 		expect(documentQueries.queryByRole('button', { name: 'Create another question' })).toBeNull()
 		expectTransactionButtonDisabled(document.body, 'Creating pool…', 'Security pool creation is already in progress.')
@@ -617,6 +707,7 @@ describe('SecurityPoolSection', () => {
 		const documentQueries = within(document.body)
 		expect(documentQueries.getByRole('heading', { name: 'Pool Created' })).not.toBeNull()
 		expect(document.body.querySelector('.workflow-transaction-status')).toBeNull()
+		expect(document.body.querySelector('.transaction-hash-link')).toBeNull()
 		expect(document.body.querySelector('.section-block.surface .entity-card.flat')).not.toBeNull()
 		expect(documentQueries.getByRole('button', { name: `Copy address ${poolAddress}` })).not.toBeNull()
 	})
@@ -648,17 +739,20 @@ describe('SecurityPoolSection', () => {
 	})
 
 	test('renders duplicate and forked branch messaging and button labels', async () => {
+		const duplicatePoolAddress = getAddress('0x0000000000000000000000000000000000000002')
 		const duplicateRender = await renderIntoDocument(
 			h(
 				SecurityPoolSection,
 				createProps({
+					duplicateOriginPoolAddress: duplicatePoolAddress,
 					duplicateOriginPoolExists: true,
 				}),
 			),
 		)
 		cleanupRenderedComponent = duplicateRender.cleanup
 		expectTransactionButtonDisabled(document.body, 'Pool Already Exists', 'A pool for this question, Statoblast security multiplier, and priority fee already exists.')
-		expect(within(document.body).getByText('Change the priority fee or Statoblast security multiplier to create a different origin pool.')).not.toBeNull()
+		expect(document.body.textContent).toContain('Change the priority fee or Statoblast security multiplier to create a different origin pool.')
+		expect(document.querySelector(`a[href*='${duplicatePoolAddress}']`)).not.toBeNull()
 		await cleanupRenderedComponent?.()
 		cleanupRenderedComponent = undefined
 

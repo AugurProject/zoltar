@@ -165,6 +165,4 @@ export const ticks = 'Ticks'
 export const untitledQuestion = 'Untitled question'
 export const oracleManager = 'Oracle Manager'
 
-export const done = 'Done'
-
 export const launchAction = (label: string) => `${label}…`

@@ -15,3 +15,7 @@ export function useGlobalTransactionPresentation() {
 export function isPendingGlobalTransactionPresentation(transaction: GlobalTransactionPresentation | undefined) {
 	return transaction?.tone === 'preparing' || transaction?.tone === 'awaiting-wallet' || transaction?.tone === 'pending'
 }
+
+export function suppressPresentedTransactionError(message: string | undefined, transaction: GlobalTransactionPresentation | undefined, submittedTitle: string) {
+	return transaction?.tone === 'error' && transaction.title === submittedTitle && transaction.detail === message ? undefined : message
+}

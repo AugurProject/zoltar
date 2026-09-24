@@ -643,6 +643,60 @@ describe('SecurityPoolWorkflowSection: reporting and oracle', () => {
 		expect(requests).toEqual([{ managerAddress: pool.managerAddress, reviewedRequestValueAttoEth: 2_400_000_000_000_000_000n, securityPoolAddress: pool.securityPoolAddress, universeId: pool.universeId }])
 	})
 
+	test('returns focus to the pending report when a price request closes after the request action becomes disabled', async () => {
+		const pool = createSelectedPool()
+		const baseProps = createSecurityPoolWorkflowProps({
+			accountState: createAccountState({ ethBalanceAttoEth: 100n * 10n ** 18n }),
+			checkedSecurityPoolAddress: pool.securityPoolAddress,
+			poolOracleManagerDetails: createOracleManagerDetails({ isPriceValid: false, pendingReportId: 0n }),
+			securityPoolAddress: pool.securityPoolAddress,
+			securityPools: [pool],
+			selectedPoolView: 'price-oracle',
+		})
+		const renderedComponent = await renderIntoDocument(<SecurityPoolWorkflowSection {...baseProps} showHeader={false} />)
+		setCleanup(renderedComponent.cleanup)
+		const queries = within(document.body)
+		const priceOracleTab = queries.getByRole('tab', { name: 'Price Oracle' })
+		priceOracleTab.focus()
+		fireEvent.click(queries.getByRole('button', { name: 'Request new price…' }))
+		expect(queries.getByRole('dialog', { name: 'Request new price' })).not.toBeNull()
+		await act(async () => {
+			render(<SecurityPoolWorkflowSection {...baseProps} poolOracleManagerDetails={createOracleManagerDetails({ isPriceValid: false, pendingReportId: 2n })} showHeader={false} />, renderedComponent.container)
+		})
+		expect(queries.getByRole('button', { name: 'Request new price…' }).hasAttribute('disabled')).toBe(true)
+		expect(document.getElementById('selected-pool-workflow-panel')?.querySelector('.workflow-metric-grid button.link')?.textContent?.trim()).toBe('Report #2')
+		await act(() => fireEvent.click(queries.getByRole('button', { name: 'Close' })))
+		expect(queries.queryByRole('dialog', { name: 'Request new price' })).toBeNull()
+		expect(document.activeElement?.textContent?.trim()).toBe('Report #2')
+	})
+
+	test('returns focus to the price oracle heading while the new report is still loading', async () => {
+		const pool = createSelectedPool()
+		const baseProps = createSecurityPoolWorkflowProps({
+			accountState: createAccountState({ ethBalanceAttoEth: 100n * 10n ** 18n }),
+			checkedSecurityPoolAddress: pool.securityPoolAddress,
+			poolOracleManagerDetails: createOracleManagerDetails({ isPriceValid: false, pendingReportId: 0n }),
+			securityPoolAddress: pool.securityPoolAddress,
+			securityPools: [pool],
+			selectedPoolView: 'price-oracle',
+		})
+		const renderedComponent = await renderIntoDocument(<SecurityPoolWorkflowSection {...baseProps} showHeader={false} />)
+		setCleanup(renderedComponent.cleanup)
+		const queries = within(document.body)
+		const requestButton = queries.getByRole('button', { name: 'Request new price…' })
+		requestButton.focus()
+		fireEvent.click(requestButton)
+		expect(queries.getByRole('dialog', { name: 'Request new price' })).not.toBeNull()
+		await act(async () => {
+			render(<SecurityPoolWorkflowSection {...baseProps} poolOracleManagerDetails={undefined} showHeader={false} />, renderedComponent.container)
+		})
+		expect(queries.getByRole('button', { name: 'Request new price…' }).hasAttribute('disabled')).toBe(true)
+		expect(queries.queryByRole('button', { name: /Report #/ })).toBeNull()
+		await act(() => fireEvent.click(queries.getByRole('button', { name: 'Close' })))
+		expect(document.activeElement?.tagName).toBe('H3')
+		expect(document.activeElement?.textContent?.trim()).toBe('Price Oracle')
+	})
+
 	test('accepts a manual REP per ETH price without requiring a Uniswap quote', async () => {
 		const requests: Array<bigint | undefined> = []
 		const pool = createSelectedPool()

@@ -1,10 +1,21 @@
 import { CurrencyValue } from './CurrencyValue.js'
 import * as commonCopy from '../copy/common.js'
 import * as copy from '../copy/transactionSteps.js'
+import { formatCurrencyBalance, formatRoundedCurrencyBalance } from '../lib/formatters.js'
+
+function formatFundingAmount(amount: string) {
+	const match = /^(-?\d+)(?:\.(\d+))?(\s+\S+)$/.exec(amount)
+	if (match === null) return amount
+	const [, whole, fraction, unit] = match
+	if (whole === undefined || fraction === undefined || unit === undefined || fraction.length <= 4) return amount
+	const value = BigInt(`${whole}${fraction}`)
+	return `≈ ${formatRoundedCurrencyBalance(value, fraction.length, 4)}${unit}`
+}
 
 export function EthAmount({ value }: { value: bigint | undefined }) {
-	const useNanoEth = value !== undefined && value > 0n && value < 10n ** 15n
-	return <CurrencyValue precision='exact' copyable={false} value={value} units={useNanoEth ? 9 : 18} suffix={useNanoEth ? copy.nanoEth : commonCopy.eth} />
+	const exact = formatCurrencyBalance(value, 18)
+	const needsRounding = (exact.split('.')[1]?.length ?? 0) > 4
+	return <CurrencyValue precision={needsRounding ? 'rounded' : 'exact'} decimals={4} copyable={false} value={value} units={18} suffix={commonCopy.eth} />
 }
 
 export function TransactionFundingSummary({ funding, totalAttoEth, outcome }: { funding: readonly { amount: string }[]; totalAttoEth: bigint | undefined; outcome?: { returnToWallet: boolean; settlerRewardAttoEth: bigint | undefined } | undefined }) {
@@ -14,7 +25,9 @@ export function TransactionFundingSummary({ funding, totalAttoEth, outcome }: { 
 				<h4>{copy.depositAndReturn}</h4>
 				<div className='transaction-deposits'>
 					{funding.map(token => (
-						<strong key={token.amount}>{token.amount}</strong>
+						<strong key={token.amount} title={token.amount}>
+							{formatFundingAmount(token.amount)}
+						</strong>
 					))}
 				</div>
 				{outcome === undefined ? undefined : <p className='detail'>{outcome.returnToWallet ? copy.coordinatorReturnDetail : copy.standaloneReturnDetail}</p>}

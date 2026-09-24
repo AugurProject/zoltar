@@ -126,31 +126,17 @@ export function LiveMarketBrowser({
 			</>
 		)
 	return (
-		<SectionBlock
-			className='market-browser'
-			title={listKind === 'security-pools' ? presentation.title : undefined}
-			description={presentation.description}
-			variant='plain'
-			busy={discoveryState === 'loading'}
-			actions={
-				<PaginationControls
-					hasNextPage={marketPage.nextStart !== undefined}
-					hasPreviousPage={marketPage.previousStart !== undefined}
-					loading={(discoveryState === 'loading' && pageMarketCount === 0) || workflowLocked}
-					summary={pageMarketCount === 0 ? undefined : liveCopy.poolPageRange(marketPage.start + 1n, marketPage.start + BigInt(pageMarketCount), marketPage.total)}
-					onPreviousPage={() => loadMarketPage(marketPage.previousStart)}
-					onNextPage={() => loadMarketPage(marketPage.nextStart)}
-				/>
-			}
-		>
-			{/* This disclosure contains an interactive lookup form, rather than read-only reference data. */}
-			<details className='read-only-detail-accordion'>
-				<summary>{liveCopy.openByAddress}</summary>
-				<div className='read-only-detail-accordion-content'>
-					<OpenPoolForm disabled={workflowLocked} target={lookupRoute} />
-				</div>
-			</details>
+		<SectionBlock className='market-browser' title={listKind === 'security-pools' ? presentation.title : undefined} description={presentation.description} variant='plain' busy={discoveryState === 'loading'}>
+			<OpenPoolForm disabled={workflowLocked} target={lookupRoute} />
 			{content}
+			<PaginationControls
+				hasNextPage={marketPage.nextStart !== undefined}
+				hasPreviousPage={marketPage.previousStart !== undefined}
+				loading={discoveryState === 'loading' || workflowLocked}
+				summary={pageMarketCount === 0 ? undefined : liveCopy.poolPageRange(marketPage.start + 1n, marketPage.start + BigInt(pageMarketCount), marketPage.total)}
+				onPreviousPage={() => loadMarketPage(marketPage.previousStart)}
+				onNextPage={() => loadMarketPage(marketPage.nextStart)}
+			/>
 		</SectionBlock>
 	)
 }
