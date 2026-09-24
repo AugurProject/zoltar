@@ -743,7 +743,7 @@ function parseChunkRecords(contents: Uint8Array, kind: CollectionKind, ordinal: 
 	return chunk['records']
 }
 
-async function loadGeneration(statePath: string, digest: Hex, expectedIdentity: ImmutableTopologyIdentity, limits?: ImmutableTopologyResidentLimits, requireCompatibleIdentity = false) {
+async function loadGeneration(statePath: string, digest: Hex, expectedIdentity: ImmutableTopologyIdentity, limits?: ImmutableTopologyResidentLimits) {
 	const storePath = immutableTopologySidecarDirectory(statePath)
 	const generationPath = generationDirectory(statePath, digest)
 	await ownerDirectory(storePath, 'Immutable topology store')
@@ -752,15 +752,9 @@ async function loadGeneration(statePath: string, digest: Hex, expectedIdentity: 
 	const manifestRecord = requiredRecord(rawManifest, 'immutable topology manifest')
 	// Older payloads retained unbounded registries or possibly truncated labels.
 	// Discard them before reading any committed payload into the process.
-	if (manifestRecord['payloadSchemaVersion'] !== IMMUTABLE_TOPOLOGY_CACHE_SCHEMA_VERSION) {
-		if (requireCompatibleIdentity) throw new Error('Immutable topology generation uses an incompatible payload schema')
-		return undefined
-	}
+	if (manifestRecord['payloadSchemaVersion'] !== IMMUTABLE_TOPOLOGY_CACHE_SCHEMA_VERSION) return undefined
 	const manifest = parseManifest(manifestRecord, digest)
-	if (!sameIdentity(manifest.identity, expectedIdentity)) {
-		if (requireCompatibleIdentity) throw new Error('Immutable topology generation belongs to a different deployment identity')
-		return undefined
-	}
+	if (!sameIdentity(manifest.identity, expectedIdentity)) return undefined
 	assertManifestResidentBounds(manifest, limits)
 	const files = emptyCollectionFiles()
 	let foundManifest = false
@@ -866,7 +860,7 @@ async function loadImmutableTopologyCache(statePath: string, expectedIdentity: I
 	return await loadGeneration(statePath, pointer.manifestDigest, parseIdentity(expectedIdentity, 'expected immutable topology identity'), limits)
 }
 
-/** Fully authenticates an existing topology pointer and generation without creating or pruning any state. */
+/** Authenticates compatible topology, or reports the same rebuild decision as the scanner, without mutating state. */
 export async function validateImmutableTopologySidecarIfPresent(statePath: string, expectedIdentity: ImmutableTopologyIdentity, limits?: ImmutableTopologyResidentLimits) {
 	const storePath = immutableTopologySidecarDirectory(statePath)
 	try {
@@ -883,9 +877,8 @@ export async function validateImmutableTopologySidecarIfPresent(statePath: strin
 		throw error
 	}
 	const pointer = parsePointer(parseJson(pointerContents, 'Immutable topology pointer'))
-	const loaded = await loadGeneration(statePath, pointer.manifestDigest, parseIdentity(expectedIdentity, 'expected immutable topology identity'), limits, true)
-	if (loaded === undefined) throw new Error('Immutable topology generation is incompatible with the configured deployment')
-	return 'valid' as const
+	const loaded = await loadGeneration(statePath, pointer.manifestDigest, parseIdentity(expectedIdentity, 'expected immutable topology identity'), limits)
+	return loaded === undefined ? ('rebuild-required' as const) : ('valid' as const)
 }
 
 function isExistingTargetError(error: unknown) {
