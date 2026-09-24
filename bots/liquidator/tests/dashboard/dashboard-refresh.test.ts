@@ -222,7 +222,8 @@ async function dashboard(initialConfiguration = mainnetConfiguration(), initialS
 	let configurationRequestFailure = initialConfigurationRequestFailure
 	let hangNextConfigurationRequest = false
 	let hangNextProfileResponse = false
-	let rejectPause = false
+	let rejectPause: boolean | string = false
+	let rejectSigner: string | undefined
 	let networkConnectivityFailureMessage: string | undefined
 	const pauseRequests: unknown[] = []
 	const executionRequests: unknown[] = []
@@ -345,8 +346,9 @@ async function dashboard(initialConfiguration = mainnetConfiguration(), initialS
 			currentConfiguration = { ...currentConfiguration, centralizedMarkets: Reflect.get(request, 'root'), childMarketConfigurations: Reflect.get(request, 'children'), desiredPools: Reflect.get(request, 'desiredPools') }
 			return new window.Response(JSON.stringify(currentConfiguration), { headers: { 'content-type': 'application/json' } })
 		}
+		if (url.pathname === '/api/signer' && rejectSigner !== undefined) return new window.Response(JSON.stringify({ error: rejectSigner }), { headers: { 'content-type': 'application/json' }, status: 400 })
 		if (url.pathname === '/api/paused' && rejectPause) {
-			return new window.Response(JSON.stringify({ error: 'Fixture rejected /api/paused with secret' }), { headers: { 'content-type': 'application/json' }, status: 400 })
+			return new window.Response(JSON.stringify({ error: typeof rejectPause === 'string' ? rejectPause : 'Fixture rejected /api/paused with secret' }), { headers: { 'content-type': 'application/json' }, status: 400 })
 		}
 		if (url.pathname === '/api/approved-universes') {
 			const approved: unknown = JSON.parse(String(init?.body))
@@ -461,7 +463,10 @@ async function dashboard(initialConfiguration = mainnetConfiguration(), initialS
 			await refresh()
 			await page.waitUntilComplete()
 		},
-		rejectPause: (reject: boolean) => {
+		rejectSigner: (message: string) => {
+			rejectSigner = message
+		},
+		rejectPause: (reject: boolean | string) => {
 			rejectPause = reject
 		},
 		setStateResponse: (value: unknown) => {
@@ -1107,6 +1112,29 @@ describe('liquidator dashboard refresh behavior', () => {
 		expect(pauseStatus?.textContent).toContain('Check the bot connection and retry')
 		expect(pauseStatus?.textContent).not.toContain('/api/paused')
 		expect(page.window.document.body.textContent).not.toContain('Fixture rejected')
+	})
+
+	test('shows safe signer and resume recovery guidance in their status areas', async () => {
+		const page = await dashboard(mainnetConfiguration(), state(undefined, [], { execute: true, paused: true }))
+		const message = 'The saved key differs from the active signer; return to dry run and save or remove the conflicting saved key before rearming live execution'
+		page.rejectSigner(message)
+		const input = page.window.document.querySelector('#signer-form input[name="privateKey"]')
+		const form = page.window.document.getElementById('signer-form')
+		if (!(input instanceof page.window.HTMLInputElement) || !(form instanceof page.window.HTMLFormElement)) throw new Error('Expected signer form')
+		input.value = `0x${'22'.repeat(32)}`
+		form.dispatchEvent(new page.window.Event('submit', { bubbles: true, cancelable: true }))
+		await page.waitUntilComplete()
+		expect(page.window.document.getElementById('signer-status')?.textContent).toBe(message)
+		page.rejectPause(message)
+		const pauseButton = page.window.document.getElementById('pause-button')
+		if (!(pauseButton instanceof page.window.HTMLButtonElement)) throw new Error('Expected resume button')
+		pauseButton.click()
+		const confirm = page.window.document.getElementById('confirm-resume')
+		if (!(confirm instanceof page.window.HTMLButtonElement)) throw new Error('Expected resume confirmation')
+		confirm.click()
+		await page.waitUntilComplete()
+		expect(page.window.document.getElementById('resume-dialog')?.hasAttribute('open')).toBe(false)
+		expect(page.window.document.getElementById('pause-status')?.textContent).toBe(message)
 	})
 
 	test('links recovery blockers and confirms before resuming live execution', async () => {

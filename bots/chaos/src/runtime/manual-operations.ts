@@ -91,7 +91,7 @@ export function createManualOperationController(options: Options) {
 		return blockers
 	}
 
-	function plans(scan: ManualScan, id: string, inputs: ManualInputs, selectedSeed: number) {
+	function plans(scan: ManualScan, id: string, inputs: ManualInputs, selectedSeed: number, reviewedDeadlineTimestamp?: string) {
 		const settings = options.configuration.settings
 		const defaults = planningOptions(settings, selectedSeed)
 		let resolved
@@ -101,6 +101,7 @@ export function createManualOperationController(options: Options) {
 			for (const key of Object.keys(inputs)) if (!commonKeys.has(key) && !schema.some(field => field.key === key)) throw new Error(`Unknown operation input: ${key}`)
 			resolved = resolveManualInputs(defaults, Object.fromEntries(Object.entries(inputs).filter(([key]) => commonKeys.has(key))))
 			resolved.operationInputs = resolveOperationInputs(id, inputs, scan.snapshot)
+			resolved.reviewedDeadlineTimestamp = reviewedDeadlineTimestamp
 		} catch (error) {
 			failure(error instanceof Error ? error.message : 'Invalid operation inputs')
 		}
@@ -184,7 +185,7 @@ export function createManualOperationController(options: Options) {
 						if (current.revision !== options.configuration.revision) failure('Configuration changed. Preview the operation again')
 						const frozenInputs = { ...current.inputs }
 						for (const [key, value] of Object.entries(current.plan.operationInputs ?? {})) frozenInputs[key] = { source: 'custom', value }
-						const rebuilt = plans(scan, current.definitionId, frozenInputs, current.seed)
+						const rebuilt = plans(scan, current.definitionId, frozenInputs, current.seed, current.plan.deadlineTimestamp)
 						if (rebuilt.blockers.length !== 0) failure(rebuilt.blockers.join('. '))
 						const plan = rebuilt.candidates.find(item => transactionIdentity(item) === transactionIdentity(current.plan))
 						if (plan === undefined) failure('Operation inputs or prerequisites changed. Preview the operation again')

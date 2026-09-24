@@ -105,7 +105,7 @@ export function registerGoLiveForms({ actionStatus, configuration, populateConfi
 			setSignerButton.disabled = true
 			actionStatus(signerStatus, result.wallet === undefined ? 'Signer cleared' : `Signer active: ${shorten(result.wallet)}`)
 		} catch (error) {
-			actionStatus(signerStatus, publicFailure(error, 'Could not update the signer. Check the bot connection and retry.'), true)
+			actionStatus(signerStatus, publicFailure(error, 'Could not update the signer. Check the bot connection and retry.', true), true)
 		}
 	})
 
@@ -122,7 +122,7 @@ export function registerGoLiveForms({ actionStatus, configuration, populateConfi
 			actionStatus(signerStatus, result.wallet === undefined ? 'Signer cleared' : 'Signer was not cleared', result.wallet !== undefined)
 			await refresh()
 		} catch (error) {
-			actionStatus(signerStatus, publicFailure(error, 'Could not clear the signer. Check the bot connection and retry.'), true)
+			actionStatus(signerStatus, publicFailure(error, 'Could not clear the signer. Check the bot connection and retry.', true), true)
 		} finally {
 			clearSignerButton.disabled = !chainSettingsAvailable
 		}

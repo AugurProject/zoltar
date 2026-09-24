@@ -1,3 +1,4 @@
+import { encodeReceiveBasedRedeemRequest } from '../../../../ui/trading/ts/protocol/authorization.js'
 import { getZoltarAddress, forkUniverse } from '../../testSupport/simulator/utils/contracts/zoltar'
 import { approveToken } from '../../testSupport/simulator/utils/utilities'
 import { getInfraContractAddresses } from '../../testSupport/simulator/utils/contracts/deployStatoblast'
@@ -176,8 +177,17 @@ describe('trading against authoritative Zoltar contracts', () => {
 		await writeContractAndWait(fixture.client, () => fixture.client.writeContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: fixture.securityPoolAddresses.securityPool, functionName: 'createCompleteSet', value: 1n }))
 		const redeemAmount = await fixture.client.readContract({ abi: attoEthToAttoSharesAbi, address: fixture.securityPoolAddresses.securityPool, functionName: 'attoEthToAttoShares', args: [1n] })
 		const redeemEth = await fixture.client.readContract({ abi: attoSharesToAttoEthAbi, address: fixture.securityPoolAddresses.securityPool, functionName: 'attoSharesToAttoEth', args: [redeemAmount] })
-		const redeemData = encodeAbiParameters([receiveRequestParameter], [[1, 1, shareTokenAddress, fixture.securityPoolAddresses.securityPool, pair, universeId, fixture.questionId, ids[0], ids[1], ids[2], 3, redeemAmount, 0n, redeemEth, account, account, deadline]])
+		const recipient = addressString(TEST_ADDRESSES[1])
+		const recipientEthBefore = await fixture.client.getBalance({ address: recipient })
+		const supplies = () => Promise.all(ids.map(id => fixture.client.readContract({ abi: shareTokenAbi, address: shareTokenAddress, functionName: 'totalSupply', args: [id] })))
+		const supplyBefore = await supplies()
+		const sharesBefore = await Promise.all([shareBalance(account, 0n), shareBalance(account, 1n), shareBalance(account, 2n)])
+		const redeemData = encodeReceiveBasedRedeemRequest({ shareToken: shareTokenAddress, pool: fixture.securityPoolAddresses.securityPool, pair, universeId, questionId: fixture.questionId }, redeemAmount, redeemEth, recipient, deadline)
 		await writeContractAndWait(fixture.client, () => fixture.client.writeContract({ abi: shareTokenAbi, address: shareTokenAddress, functionName: 'safeBatchTransferFrom', args: [account, router, ids, [redeemAmount, redeemAmount, redeemAmount], redeemData] }))
 		for (const outcome of [0n, 1n, 2n] as const) expect(await shareBalance(router, outcome)).toBe(0n)
+		for (const outcome of [0n, 1n, 2n] as const) expect(await shareBalance(account, outcome)).toBe(sharesBefore[Number(outcome)] - redeemAmount)
+		expect(await supplies()).toEqual(supplyBefore.map(supply => supply - redeemAmount))
+		expect((await fixture.client.getBalance({ address: recipient })) - recipientEthBefore).toBe(redeemEth)
+		expect(await fixture.client.getBalance({ address: router })).toBe(0n)
 	})
 })

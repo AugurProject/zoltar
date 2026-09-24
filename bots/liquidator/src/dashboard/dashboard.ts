@@ -742,10 +742,10 @@ async function changePaused(paused: boolean) {
 		await put('/api/paused', { paused })
 		await refresh()
 		actionStatus(pauseStatus, '')
-		closeResumePreflight()
 	} catch (error) {
-		actionStatus(pauseStatus, publicFailure(error, 'Could not change bot status. Check the bot connection and retry.'), true)
+		actionStatus(pauseStatus, publicFailure(error, 'Could not change bot status. Check the bot connection and retry.', true), true)
 	} finally {
+		closeResumePreflight()
 		pauseRequestPending = undefined
 		setMutationControlsEnabled(stateConnected)
 	}

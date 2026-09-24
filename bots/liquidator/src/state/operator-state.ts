@@ -111,6 +111,7 @@ export type PendingStagedOperation = {
 	historicalRecoveryComplete?: boolean | undefined
 	latestRecoveryBlock?: bigint | undefined
 	nextHistoricalBlock?: bigint | undefined
+	operation?: 0 | 1
 	operationId: bigint
 	queuedBlock: bigint
 	recoveryAnchorBlock?: bigint | undefined
@@ -129,7 +130,7 @@ export type PendingTransactionIntent = {
 	reconciliationReason?: string | undefined
 	mode: 'private' | 'public'
 	nonce: bigint
-	receiptExpectation: { type: 'transaction' } | { coordinator: Address; operation: 0 | 1; type: 'staged-success' } | { amount: bigint; coordinator: Address; operator: Address; receiver: Address; target: Address; type: 'pending-liquidation' }
+	receiptExpectation: { type: 'transaction' } | { coordinator: Address; operation: 0 | 1; type: 'coordinator-operation' | 'staged-success' } | { amount: bigint; coordinator: Address; operator: Address; receiver: Address; target: Address; type: 'pending-liquidation' }
 	requiresMarketEvidence: boolean
 	sender: Address
 	serializedTransaction: Hex
@@ -162,6 +163,11 @@ function poolCentralizedPriceDeviationBps(pool: { lastPrice: bigint; repToken: A
 	if (settings?.venueConsensus !== undefined) return marketConsensusDeviationBps(pool.lastPrice, marketConsensus, pool.repToken)
 	if (centralizedMarket === undefined || settings === undefined) return undefined
 	return centralizedPriceDeviationBps(pool.lastPrice, centralizedMarket, pool.repToken)
+}
+
+function parseStagedOperation(value: unknown): 0 | 1 {
+	if (value === 0 || value === 1) return value
+	throw new Error('Pending transaction intent has invalid staged operation')
 }
 
 function isHash(value: unknown): value is Hex {
@@ -594,6 +600,7 @@ export async function loadDurableState(path: string, expectedChainId: number): P
 				...(typeof historicalRecoveryComplete === 'boolean' ? { historicalRecoveryComplete } : {}),
 				...(typeof latestRecoveryBlock === 'string' ? { latestRecoveryBlock: BigInt(latestRecoveryBlock) } : {}),
 				...(typeof nextHistoricalBlock === 'string' ? { nextHistoricalBlock: BigInt(nextHistoricalBlock) } : {}),
+				...(Reflect.get(operation, 'operation') === undefined ? {} : { operation: parseStagedOperation(Reflect.get(operation, 'operation')) }),
 				operationId: BigInt(operationId),
 				queuedBlock: BigInt(queuedBlock),
 				...(typeof recoveryAnchorBlock === 'string' && isHash(recoveryAnchorHash) ? { recoveryAnchorBlock: BigInt(recoveryAnchorBlock), recoveryAnchorHash } : {}),
