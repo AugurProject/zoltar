@@ -523,6 +523,14 @@
 		"./copy/priceRequest.js": {
 			"bun": "./ts/copy/priceRequest.ts",
 			"default": "./js/copy/priceRequest.js"
+		},
+		"./features/reporting/lib/escalationReminder.js": {
+			"bun": "./ts/features/reporting/lib/escalationReminder.ts",
+			"default": "./js/features/reporting/lib/escalationReminder.js"
+		},
+		"./features/reporting/lib/reportingViewerStatus.js": {
+			"bun": "./ts/features/reporting/lib/reportingViewerStatus.ts",
+			"default": "./js/features/reporting/lib/reportingViewerStatus.js"
 		}
 	},
 	"version": "1.0.0"

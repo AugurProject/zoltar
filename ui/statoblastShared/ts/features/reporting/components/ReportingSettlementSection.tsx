@@ -1,3 +1,4 @@
+import { getViewerPositions } from '../lib/reportingViewerStatus.js'
 import { formatCurrencyBalance } from '@zoltar/ui-core-shared/lib/formatters.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as reportingCopy from '../../../copy/reporting.js'
@@ -180,13 +181,16 @@ export function ReportingSettlementSection({
 				{settlementContextMessage === undefined ? undefined : <p className='detail'>{settlementContextMessage}</p>}
 				{activeReportingDetails?.hasReachedNonDecision && displayedWithdrawGuardMessage !== sharedReportSettlementDisabledReason ? <p className='detail'>{displayedWithdrawGuardMessage}</p> : undefined}
 
-				{activeReportingDetails?.sides
-					.filter(side => side.userDeposits.length > 0 || side.importedUserDeposits.length > 0)
-					.map(side => (
-						<p key={side.key} className='reporting-position'>
-							{side.label} · <CurrencyValue value={[...side.userDeposits, ...side.importedUserDeposits].reduce((sum, deposit) => sum + deposit.amountAttoRep, 0n)} suffix={commonCopy.rep} /> · {reportingCopy.claimableAfterResolution}
-						</p>
-					))}
+				{activeReportingDetails === undefined
+					? undefined
+					: getViewerPositions(activeReportingDetails).map(position => (
+							<p key={position.side.key} className='reporting-position escalation-side-value'>
+								<span>
+									{position.side.label} · {position.positionStatus}
+								</span>
+								<CurrencyValue value={position.stake} suffix={commonCopy.rep} />
+							</p>
+						))}
 			</SectionBlock>
 		)
 	const shouldShowWithdrawEmptyState = !loadingReportingDetails && !reportingStatusMissing && withdrawableSides.length === 0

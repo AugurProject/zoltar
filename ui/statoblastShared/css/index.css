@@ -961,6 +961,18 @@
 	gap: 1rem;
 }
 
+.reporting-position {
+	justify-content: space-between;
+}
+
+.reporting-position > .currency-value-wrap {
+	flex-shrink: 0;
+}
+
+.reporting-position > span:first-child {
+	min-width: 0;
+}
+
 .reporting-position .currency-value-wrap,
 .reporting-position .currency-value {
 	vertical-align: baseline;

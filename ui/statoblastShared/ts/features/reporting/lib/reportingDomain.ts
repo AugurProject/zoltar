@@ -2,8 +2,6 @@ import * as reportingCopy from '../../../copy/reporting.js'
 import { getWinningEscalationDepositClaimAmount as computeWinningEscalationDepositClaimAmount, getWinningImportedEscalationDepositClaimAmount as computeWinningImportedEscalationDepositClaimAmount, projectEscalationDeposit, type EscalationBalanceTuple } from '@zoltar/statoblast-shared/escalationGame/escalationMath'
 import type { ActiveReportingDetails, EscalationDeposit, EscalationSide, ImportedEscalationDeposit, ReportingDetails, ReportingOutcomeKey } from '@zoltar/ui-core-shared/types/contracts.js'
 import { formatCurrencyBalanceWithUnit } from '@zoltar/ui-core-shared/lib/formatters.js'
-import { requireDefined } from '@zoltar/ui-core-shared/forms/required.js'
-import { getTimeRemaining } from '@zoltar/ui-core-shared/lib/time.js'
 type ReportingAmountSuggestion = {
 	amountAttoRep: bigint | undefined
 	reason: string | undefined
@@ -32,10 +30,6 @@ function getAvailableRoom(details: ActiveReportingDetails, selectedBalance: bigi
 }
 function isUniqueWinner(selectedBalance: bigint, largestOtherBalance: bigint) {
 	return selectedBalance > largestOtherBalance
-}
-export function getEscalationTimeRemaining(details: ActiveReportingDetails) {
-	if (details.hasReachedNonDecision) return 0n
-	return requireDefined(getTimeRemaining(details.escalationEndTime, details.currentTime), 'Escalation end time is required')
 }
 function hasEscalationTimedOut(details: ActiveReportingDetails) {
 	return details.currentTime > details.escalationEndTime
@@ -99,13 +93,20 @@ export function getRemainingSelectedOutcomeContributionCapacity(details: Reporti
 	if (selectedSide === undefined) return 0n
 	return details.nonDecisionThresholdAttoRep > selectedSide.balance ? details.nonDecisionThresholdAttoRep - selectedSide.balance : 0n
 }
-export function getLeadingEscalationOutcome(sides: EscalationSide[]) {
-	let leadingSide: EscalationSide | undefined
-	for (const side of sides) {
-		if (leadingSide === undefined || side.balance > leadingSide.balance) leadingSide = side
-	}
-	if (leadingSide === undefined || leadingSide.balance === 0n) return undefined
-	return sides.filter(side => side.balance === leadingSide.balance).length === 1 ? leadingSide.key : undefined
+export function getStrictLeadingEscalationOutcome(sides: EscalationSide[]) {
+	if (sides.length === 0) return undefined
+	const maximum = sides.reduce((largest, side) => (side.balance > largest ? side.balance : largest), 0n)
+	if (maximum === 0n) return 'invalid'
+	const leaders = sides.filter(side => side.balance === maximum)
+	return leaders.length === 1 ? leaders[0]?.key : undefined
+}
+export function getHypotheticalClaimAmount(details: ActiveReportingDetails, outcome: ReportingOutcomeKey, deposit: EscalationDeposit | ImportedEscalationDeposit) {
+	const leader = getStrictLeadingEscalationOutcome(details.sides)
+	if (leader === undefined) return undefined
+	if (outcome !== leader) return 0n
+	const hypotheticalDetails: ActiveReportingDetails = { ...details, questionOutcome: leader, systemState: 'operational', parentWithdrawalEnabled: true }
+	// Imported cumulative amounts use a different allocation convention.
+	return 'parentDepositIndex' in deposit ? getImportedEscalationDepositClaimAmount(hypotheticalDetails, outcome, deposit) : getEscalationDepositClaimAmount(hypotheticalDetails, outcome, deposit)
 }
 function getMinimumOutcomeChangeContribution(details: ActiveReportingDetails, selectedOutcome: ReportingOutcomeKey): ReportingAmountSuggestion {
 	const { largestOtherBalance, selectedSide } = getSelectedAndOtherSides(details, selectedOutcome)

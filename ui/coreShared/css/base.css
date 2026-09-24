@@ -801,7 +801,7 @@ button.quiet:disabled {
 	margin-top: 0.25rem;
 }
 
-.notice.error.closeable {
+.notice.closeable {
 	position: relative;
 	padding-right: 4.6rem;
 }

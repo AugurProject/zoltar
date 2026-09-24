@@ -508,7 +508,7 @@ for (const result of ['pending', 'reverted'] as const) {
 test('uses one action vocabulary for queued transaction states', () => {
 	expect(completedAction('Queue liquidation')).toBe('Queued liquidation')
 	expect(formatPendingAction('Queue liquidation')).toBe('Queuing liquidation…')
-	expect(completedAction('Custom operation')).toBe('Completed: Custom operation')
+	expect(completedAction('Custom operation')).toBe('Custom operation – done')
 })
 
 test('uses past tense for shared deployment, transfer and dispute actions', () => {

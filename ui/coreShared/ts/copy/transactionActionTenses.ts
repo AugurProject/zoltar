@@ -20,6 +20,6 @@ const actionTenses = [
 
 export function formatActionTense(title: string, tense: 'pending' | 'completed') {
 	const action = actionTenses.find(action => title === action.verb || title.startsWith(`${action.verb} `))
-	if (action === undefined) return tense === 'completed' ? `Completed: ${title}` : title
+	if (action === undefined) return tense === 'completed' ? `${title} – done` : title
 	return `${action[tense]}${title.slice(action.verb.length)}`
 }
