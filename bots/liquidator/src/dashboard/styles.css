@@ -1,21 +1,4 @@
 :root {
-	--bg: #07100e;
-	--surface: #0d1916;
-	--surface-raised: #12231e;
-	--line: #263c35;
-	--text: #edf8f3;
-	--muted: #9db5ab;
-	--accent: #62e6ad;
-	--accent-ink: #062117;
-	--warning: #f2c66d;
-	--error: #ff8e8e;
-	--info: #73b7ff;
-	--operator-accent: var(--accent);
-	--operator-background: var(--bg);
-	--operator-border: var(--line);
-	--operator-muted: var(--muted);
-	--operator-surface: var(--surface);
-	--operator-text: var(--text);
 	font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 	color: var(--text);
 	background: var(--bg);
@@ -221,41 +204,6 @@ section,
 	overflow-wrap: anywhere;
 	font-size: 1.08rem;
 	font-weight: 750;
-}
-
-.badge {
-	display: inline-flex;
-	align-items: center;
-	min-height: 1.75rem;
-	padding: 0.2rem 0.55rem;
-	border: 1px solid var(--line);
-	border-radius: 99rem;
-	color: var(--muted);
-	background: var(--surface-raised);
-	font-size: 0.75rem;
-	font-weight: 700;
-	white-space: nowrap;
-}
-
-.badge.info {
-	border-color: rgb(115 183 255 / 42%);
-	background: rgb(115 183 255 / 10%);
-	color: var(--info);
-}
-
-.badge.error {
-	color: var(--error);
-	border-color: color-mix(in srgb, var(--error), transparent 50%);
-}
-
-.badge.ok {
-	color: var(--accent);
-	border-color: color-mix(in srgb, var(--accent), transparent 50%);
-}
-
-.badge.warning {
-	color: var(--warning);
-	border-color: color-mix(in srgb, var(--warning), transparent 50%);
 }
 
 .notice {

@@ -15,8 +15,9 @@ test('counts active errors and warnings while preserving all notices and collaps
 		const disclosure = window.document.querySelector('details')
 		const count = window.document.getElementById('header-notices-count')
 		const alerts = window.document.getElementById('operator-alerts')
+		const blocking = window.document.getElementById('blocking-notices')
 		const empty = window.document.getElementById('header-notices-empty')
-		if (disclosure === null || alerts === null || !(empty instanceof window.HTMLElement)) throw new Error('Missing notice fixture')
+		if (disclosure === null || alerts === null || !(empty instanceof window.HTMLElement) || !(blocking instanceof window.HTMLElement)) throw new Error('Missing notice fixture')
 		// Mutation observer callbacks can lag waitUntilComplete, so settle on the expected count
 		// against a wall-clock deadline kept below the test timeout so a genuine failure reports the
 		// stale count instead of timing out. Counts that never settled here were happy-dom < 20.14
@@ -39,6 +40,8 @@ test('counts active errors and warnings while preserving all notices and collaps
 			alerts.append(item)
 		}
 		expect(await settledCount('100')).toBe('100')
+		expect(blocking?.hidden).toBe(false)
+		expect(blocking?.querySelectorAll('p')).toHaveLength(100)
 		expect(disclosure.classList.contains('has-errors')).toBe(true)
 		expect(disclosure.open).toBe(false)
 		disclosure.open = true
@@ -47,6 +50,7 @@ test('counts active errors and warnings while preserving all notices and collaps
 		expect(disclosure.open).toBe(true)
 		alerts.classList.add('hidden')
 		expect(await settledCount('0')).toBe('0')
+		expect(blocking?.hidden).toBe(true)
 		expect(disclosure.classList.contains('has-errors')).toBe(false)
 		window.dispatchEvent(new window.PageTransitionEvent('pagehide'))
 		alerts.classList.remove('hidden')

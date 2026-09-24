@@ -45,7 +45,8 @@ function timelineItem(activity: TimelineActivity, explorerUrl: string | undefine
 export function createActivityTimeline() {
 	const list = document.querySelector('#activity-list')
 	const expand = document.querySelector('#activity-expand')
-	if (!(list instanceof HTMLOListElement) || !(expand instanceof HTMLButtonElement)) throw new Error('Activity timeline elements are missing')
+	const filter = document.querySelector('#activity-filter')
+	if (!(list instanceof HTMLOListElement) || !(expand instanceof HTMLButtonElement) || !(filter instanceof HTMLSelectElement)) throw new Error('Activity timeline elements are missing')
 	let expanded = false
 	let rendered: readonly TimelineActivity[] = []
 	// Reusing an unchanged item keeps its expanded details and explorer focus across polls.
@@ -55,13 +56,15 @@ export function createActivityTimeline() {
 	const render = (values: readonly TimelineActivity[], explorerUrl: string | undefined) => {
 		rendered = values
 		renderedExplorerUrl = explorerUrl
-		const expandable = values.length > COLLAPSED_ACTIVITY_COUNT
-		const shown = expandable && !expanded ? values.slice(0, COLLAPSED_ACTIVITY_COUNT) : values
+		const filtered = filter.value === 'all' ? values : values.filter(activity => activity.status === filter.value)
+		const expandable = filtered.length > COLLAPSED_ACTIVITY_COUNT
+		const shown = expandable && !expanded ? filtered.slice(0, COLLAPSED_ACTIVITY_COUNT) : filtered
 		expand.classList.toggle('hidden', !expandable)
 		expand.setAttribute('aria-expanded', expanded ? 'true' : 'false')
-		expand.textContent = expanded ? 'Show fewer' : `Show all ${values.length.toString()} actions`
-		if (values.length === 0) {
+		expand.textContent = expanded ? 'Show fewer' : `Show all ${filtered.length.toString()} actions`
+		if (filtered.length === 0) {
 			cache = new Map()
+			empty.textContent = values.length === 0 ? 'No activity recorded.' : 'No activity matches this filter.'
 			replaceWhenChanged(list, [empty])
 			return
 		}
@@ -80,5 +83,6 @@ export function createActivityTimeline() {
 		expanded = !expanded
 		render(rendered, renderedExplorerUrl)
 	})
+	filter.addEventListener('change', () => render(rendered, renderedExplorerUrl))
 	return render
 }

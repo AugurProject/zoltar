@@ -1,12 +1,14 @@
 import { renderRepMarketConsensusError, renderRepMarketConsensusPanel } from '@zoltar/bot-shared/dashboard/rep-market-consensus'
-import { decodeConfiguration, decodeSnapshot, decodeMarketProbe, type Configuration, type Snapshot, type MarketSourceRow, type Activity, type Universe } from './api-validation.ts'
-import { activityBadgeClass } from './status-badges.js'
-import { cell, publicFailure } from './pool-presentation.ts'
+import { decodeConfiguration, decodeSnapshot, decodeMarketProbe, type Configuration, type Snapshot, type MarketSourceRow, type Universe } from './api-validation.ts'
+import { renderActivities } from './activity-panel.tsx'
+import { renderMarketSources } from './market-source-panel.tsx'
+import { publicFailure } from './pool-presentation.ts'
 import { createPoolBrowser } from './pool-browser.ts'
 import { createUniverseExplorer } from '@zoltar/bot-shared/dashboard/universe-explorer'
 import { readinessGuidance } from './readiness-status.js'
 import { blockStatusText, scanStatusText } from './block-status.js'
-import { createMetric, endpointHealthDetail, endpointRow, renderDisconnectedHeader, setAttentionBadge } from '@zoltar/bot-shared/dashboard/components'
+import { endpointHealthDetail, endpointRow, renderDisconnectedHeader, setAttentionBadge } from '@zoltar/bot-shared/dashboard/components'
+import { confirmOperatorAction, reviewChangeRows } from '@zoltar/bot-shared/dashboard/confirmation'
 import { CONFIGURATION_REQUEST_TIMEOUT_MS, PROFILE_SWITCH_REQUEST_TIMEOUT_MESSAGE, PROFILE_SWITCH_REQUEST_TIMEOUT_MS, requestWithTimeout, singleFlight, STATE_REQUEST_TIMEOUT_MS } from '@zoltar/bot-shared/dashboard/polling'
 import { closeResumePreflight, openResumePreflight } from '@zoltar/bot-shared/dashboard/resume-preflight'
 import { createSectionNavigation } from '@zoltar/bot-shared/dashboard/section-navigation'
@@ -14,9 +16,11 @@ import { createSettingsNavigation } from '@zoltar/bot-shared/dashboard/settings-
 import { markFormClean, trackForm } from '@zoltar/bot-shared/dashboard/form-state'
 import { urlLines } from '@zoltar/bot-shared/dashboard/forms'
 import { registerGoLiveForms } from './go-live-forms.ts'
+import { readMarketConfiguration, renderMarketConfiguration, reviewableRootMarket } from './market-configuration-editor.tsx'
+import { renderOverviewAlerts, renderOverviewHealth, renderOverviewMetrics } from './overview-panels.ts'
+import { strategyReviewRows, validateStrategyReview } from './strategy-review.ts'
 import { element, shorten } from '@zoltar/bot-shared/dashboard/dom'
 
-const metrics = element('metrics', HTMLDivElement)
 const networkForm = element('network-form', HTMLFormElement)
 const networkFields = element('network-fields', HTMLFieldSetElement)
 const networkName = element('network-name', HTMLSelectElement)
@@ -28,19 +32,15 @@ const networkStatus = element('network-status', HTMLSpanElement)
 const networkScopeSummary = element('network-scope-summary', HTMLElement)
 const marketConfigurationForm = element('market-configuration-form', HTMLFormElement)
 const marketConfigurationFields = element('market-configuration-fields', HTMLFieldSetElement)
-const marketConfigurationJson = element('market-configuration-json', HTMLTextAreaElement)
 const marketConfigurationSaveStatus = element('market-configuration-save-status', HTMLSpanElement)
 const testMarketSourcesButton = element('test-market-sources', HTMLButtonElement)
 const showActiveAdmissionButton = element('show-active-admission', HTMLButtonElement)
 const marketSourceCaption = element('market-source-caption', HTMLTableCaptionElement)
 const marketSourceTestStatus = element('market-source-test-status', HTMLSpanElement)
-const marketSourceRows = element('market-source-rows', HTMLTableSectionElement)
-const operatorAlerts = element('operator-alerts', HTMLUListElement)
 const recoveryList = element('recovery-list', HTMLDivElement)
 const recoveryGuidance = element('recovery-guidance', HTMLParagraphElement)
 const recheckRecovery = element('recheck-recovery', HTMLButtonElement)
 const universeRows = element('universe-rows', HTMLDivElement)
-const activityList = element('activity-list', HTMLOListElement)
 const modeBadge = element('mode-badge', HTMLSpanElement)
 const networkBadge = element('network-badge', HTMLSpanElement)
 const runStatusBadge = element('run-status-badge', HTMLSpanElement)
@@ -71,7 +71,6 @@ let selectedPools = new Set<string>()
 let pendingPoolMutations = 0
 let universeExplorer: ReturnType<typeof createUniverseExplorer> | undefined
 const recoveryActionStates = new Map<string, { failed: boolean; message: string }>()
-let renderedAlertKey: string | undefined
 let marketSourceProbeRows: MarketSourceRow[] | undefined
 let initialFragmentApplied = false
 let stateConnected = false
@@ -157,13 +156,6 @@ function put(path: string, value: unknown, timeoutMilliseconds?: number, timeout
 	return requestWithTimeout(signal => api(path, { ...options, signal }), timeoutMilliseconds, timeoutMessage)
 }
 
-const MARKET_SOURCE_STATUS_PRESENTATION: Record<MarketSourceRow['status'], { badgeClass: string; defaultReason: string; label: string }> = {
-	admitted: { badgeClass: 'ok', defaultReason: 'Meets the active admission policy', label: 'Admitted' },
-	excluded: { badgeClass: 'warning', defaultReason: 'Excluded by the active admission policy', label: 'Excluded' },
-	failed: { badgeClass: 'warning', defaultReason: 'Probe did not return usable evidence', label: 'Failed' },
-	observed: { badgeClass: '', defaultReason: 'Probe succeeded; admission still requires the persistence and consensus policy', label: 'Observed' },
-}
-
 const NETWORK_LABELS = new Map<string | undefined, string>([
 	['mainnet', 'Mainnet'],
 	['sepolia', 'Sepolia'],
@@ -199,87 +191,6 @@ function globalErrorPresentation(snapshot: Snapshot): { message: string | undefi
 	}
 	const message = snapshot.status === 'connectivity-degraded' ? 'RPC connectivity is degraded. Execution is blocked and the bot will retry automatically.' : `${scanFailureDetail(snapshot.error)} Automatic retry is active. Check the bot logs if the next cycle also fails.`
 	return { message, title: 'Scan failed', tone: 'error' }
-}
-
-function renderMetrics(snapshot: Snapshot) {
-	metrics.replaceChildren(
-		createMetric('Pools', snapshot.metrics.poolCount.toString()),
-		createMetric('Selected', snapshot.metrics.selectedPoolCount.toString()),
-		createMetric('Approved universes', snapshot.metrics.approvedUniverseCount.toString()),
-		createMetric('Eligible pools', snapshot.metrics.eligiblePoolCount.toString()),
-		createMetric('Candidates', snapshot.metrics.candidateCount.toString()),
-		createMetric('Open interest assumed', `${snapshot.metrics.assumedOpenInterestEth} ETH`),
-	)
-	element('wallet-metrics', HTMLDivElement).replaceChildren(createMetric('Wallet ETH', snapshot.metrics.walletEth), createMetric('Wallet REP', snapshot.metrics.walletRep), createMetric('REP deployed in pools', snapshot.metrics.deployedRep))
-}
-
-function renderAlerts(snapshot: Snapshot) {
-	const alertKey = `${snapshot.pendingTransactions.length.toString()}\n${snapshot.alerts.map(alert => `${alert.severity}:${alert.message}`).join('\n')}`
-	if (renderedAlertKey === alertKey) return
-	renderedAlertKey = alertKey
-	const alerts: { actionHref?: string; actionLabel?: string; message: string; severity: 'error' | 'warning' }[] = snapshot.alerts.map(alert => ({ ...alert }))
-	if (snapshot.pendingTransactions.length > 0) {
-		const recoveryAlert = alerts[0]
-		if (recoveryAlert === undefined) {
-			alerts.unshift({
-				actionHref: '/operations#recovery',
-				actionLabel: 'Review recovery',
-				message: `${snapshot.pendingTransactions.length.toString()} transaction ${snapshot.pendingTransactions.length === 1 ? 'intent requires' : 'intents require'} operator recovery before execution can continue.`,
-				severity: 'warning',
-			})
-		} else {
-			recoveryAlert.actionHref = '/operations#recovery'
-			recoveryAlert.actionLabel = 'Review recovery'
-		}
-	}
-	operatorAlerts.classList.toggle('hidden', alerts.length === 0)
-	operatorAlerts.replaceChildren(
-		...alerts.map(alert => {
-			const item = document.createElement('li')
-			item.className = `notice alert-row ${alert.severity}`
-			const message = document.createElement('span')
-			message.textContent = alert.message
-			item.append(message)
-			if (alert.actionHref !== undefined && alert.actionLabel !== undefined) {
-				const action = document.createElement('a')
-				action.className = 'alert-action'
-				action.href = alert.actionHref
-				action.textContent = alert.actionLabel
-				item.append(action)
-			}
-			return item
-		}),
-	)
-}
-
-function renderMarketSources(sources: MarketSourceRow[]) {
-	if (sources.length === 0) {
-		const row = document.createElement('tr')
-		const empty = cell('No market sources are configured.')
-		empty.colSpan = 6
-		empty.className = 'empty'
-		row.append(empty)
-		marketSourceRows.replaceChildren(row)
-		return
-	}
-	marketSourceRows.replaceChildren(
-		...sources.map(source => {
-			const row = document.createElement('tr')
-			const badge = document.createElement('span')
-			const presentation = MARKET_SOURCE_STATUS_PRESENTATION[source.status]
-			badge.className = `badge ${presentation.badgeClass}`
-			badge.textContent = presentation.label
-			const cells = [cell(source.kind.toUpperCase()), cell(source.id), cell(shorten(source.assetId)), cell(source.market), cell(badge), cell(source.reason ?? presentation.defaultReason)]
-			const labels = ['Venue', 'Source', 'REP asset', 'Market', 'Status', 'Reason']
-			const headings = ['source-kind-heading', 'source-id-heading', 'source-asset-heading', 'source-market-heading', 'source-status-heading', 'source-reason-heading']
-			for (const [index, value] of cells.entries()) {
-				value.dataset['label'] = labels[index]
-				value.headers = headings[index] ?? ''
-			}
-			row.append(...cells)
-			return row
-		}),
-	)
 }
 
 function renderRecovery(snapshot: Snapshot) {
@@ -322,7 +233,7 @@ function renderRecovery(snapshot: Snapshot) {
 		form.append(label, button, status)
 		form.addEventListener('submit', async event => {
 			event.preventDefault()
-			if (!window.confirm('Reconcile only if this finalized transaction intentionally replaced or canceled the pending intent. Continue?')) return
+			if (!(await confirmOperatorAction({ title: 'Reconcile transaction', description: 'Use only a finalized transaction that intentionally replaced or canceled this intent.', phrase: 'RECONCILE', confirmLabel: 'Verify and reconcile' }))) return
 			button.disabled = true
 			actionStatus(status, 'Checking RPC quorum and canonical finality…')
 			try {
@@ -418,39 +329,7 @@ function actionStatus(element: HTMLElement, message: string, failed = false) {
 	if (element.classList.contains('error') !== failed) element.classList.toggle('error', failed)
 }
 
-function renderActivities(activities: Activity[]) {
-	if (activities.length === 0) {
-		const empty = document.createElement('li')
-		empty.className = 'empty'
-		empty.textContent = 'No activity yet'
-		activityList.replaceChildren(empty)
-		return
-	}
-	activityList.replaceChildren(
-		...activities.slice(0, 50).map(activity => {
-			const item = document.createElement('li')
-			item.className = 'activity'
-			const badge = document.createElement('span')
-			badge.className = `badge ${activityBadgeClass(activity.status)}`
-			badge.textContent = activity.status
-			const body = document.createElement('div')
-			const message = document.createElement('p')
-			message.textContent = activity.message
-			const time = document.createElement('time')
-			time.dateTime = activity.at
-			time.textContent = new Date(activity.at).toLocaleString()
-			body.append(message, time)
-			if (activity.details !== undefined) {
-				const details = document.createElement('p')
-				details.className = 'muted mono'
-				details.textContent = activity.details
-				body.append(details)
-			}
-			item.append(badge, body)
-			return item
-		}),
-	)
-}
+element('activity-filter', HTMLSelectElement).addEventListener('change', () => renderActivities(currentSnapshot?.activities ?? [], currentConfiguration?.network?.explorerUrl))
 
 function renderRpcEndpointHealth(health: Snapshot['rpcEndpointHealth']) {
 	const container = element('rpc-endpoint-health', HTMLDivElement)
@@ -470,27 +349,27 @@ function render(snapshot: Snapshot) {
 	pauseButton.dataset['action'] = pauseButtonAction(snapshot)
 	setMutationControlsEnabled(true)
 	renderNetworkBadge()
-	modeBadge.textContent = snapshot.execute ? 'Live' : 'Dry run'
+	modeBadge.textContent = snapshot.execute ? 'Live armed' : 'Dry run'
 	modeBadge.className = `badge ${snapshot.execute ? 'warning' : 'info'}`
 	runStatusBadge.textContent = runStatusLabel(snapshot)
 	if (snapshot.error !== undefined || snapshot.status === 'error') runStatusBadge.className = 'badge error'
-	else runStatusBadge.className = `badge ${snapshot.paused || snapshot.status === 'connectivity-degraded' ? 'warning' : 'ok'}`
+	else runStatusBadge.className = `badge ${snapshot.paused || snapshot.status === 'connectivity-degraded' ? 'warning' : 'success'}`
 	capabilityBadge.hidden = snapshot.operatorCapable
 	capabilityBadge.textContent = snapshot.operatorCapable ? '' : 'Operator blocked'
-	capabilityBadge.className = `badge ${snapshot.operatorCapable ? 'ok' : 'warning'}`
+	capabilityBadge.className = `badge ${snapshot.operatorCapable ? 'success' : 'warning'}`
 	renderAttention(snapshot)
 	recoveryGuidance.hidden = snapshot.paused
 	lastScan.textContent = scanStatusText(snapshot)
 	const globalError = globalErrorPresentation(snapshot)
 	setGlobalError(globalError.message, globalError.title, globalError.tone)
-	renderMetrics(snapshot)
-	renderAlerts(snapshot)
+	renderOverviewMetrics(snapshot, currentConfiguration)
+	renderOverviewAlerts(snapshot)
 	renderCentralizedMarket(snapshot)
 	renderMarketSources(marketSourceProbeRows ?? snapshot.marketSources)
 	renderRecovery(snapshot)
 	renderUniverses(snapshot)
 	updatePoolBrowser()
-	renderActivities(snapshot.activities)
+	renderActivities(snapshot.activities, currentConfiguration?.network?.explorerUrl)
 	renderCurrentRpcEndpointHealth(snapshot)
 	if (!initialFragmentApplied) {
 		initialFragmentApplied = true
@@ -565,7 +444,7 @@ function populateConfiguration(configuration: Configuration) {
 		rpcQuorum.value = '1'
 	}
 	networkFields.disabled = pendingNetworkProfile !== undefined
-	marketConfigurationJson.value = JSON.stringify({ children: configuration.childMarketConfigurations, desiredPools: configuration.desiredPools, root: configuration.centralizedMarkets }, undefined, 2) ?? ''
+	renderMarketConfiguration(element('market-configuration-editor', HTMLDivElement), configuration)
 	marketConfigurationFields.disabled = configuration.networkConfigured !== true
 	strategyFields.disabled = configuration.networkConfigured !== true
 	goLiveForms.load(configuration)
@@ -574,6 +453,7 @@ function populateConfiguration(configuration: Configuration) {
 	updateHealthPolicyPreview()
 	for (const formId of TRACKED_FORMS) markFormClean(formId)
 	if (currentSnapshot !== undefined) {
+		renderOverviewMetrics(currentSnapshot, currentConfiguration, !stateConnected)
 		renderAttention(currentSnapshot)
 		renderUniverses(currentSnapshot)
 		updatePoolBrowser()
@@ -660,7 +540,18 @@ marketConfigurationForm.addEventListener('submit', async event => {
 	marketConfigurationFields.disabled = true
 	actionStatus(marketConfigurationSaveStatus, 'Validating…')
 	try {
-		const value: unknown = JSON.parse(marketConfigurationJson.value)
+		const value = readMarketConfiguration()
+		if (
+			!(await confirmOperatorAction({
+				title: 'Review market and pool changes',
+				description: 'Market sources and desired pools can change which assets the bot funds on the next scan.',
+				confirmLabel: 'Save markets',
+				changes: reviewChangeRows({ root: reviewableRootMarket(currentConfiguration?.centralizedMarkets), children: currentConfiguration?.childMarketConfigurations, desiredPools: currentConfiguration?.desiredPools }, value),
+			}))
+		) {
+			actionStatus(marketConfigurationSaveStatus, '')
+			return
+		}
 		const configuration = decodeConfiguration(await put('/api/market-configuration', value))
 		marketSourceProbeRows = undefined
 		marketSourceCaption.textContent = 'Configured source admission'
@@ -669,7 +560,7 @@ marketConfigurationForm.addEventListener('submit', async event => {
 		populateConfiguration(configuration)
 		actionStatus(marketConfigurationSaveStatus, 'Saved; changes apply on the next scan')
 	} catch (error) {
-		actionStatus(marketConfigurationSaveStatus, publicFailure(error, 'Could not save market configuration. Review the JSON and retry.'), true)
+		actionStatus(marketConfigurationSaveStatus, publicFailure(error, 'Could not save market configuration. Review the fields and retry.'), true)
 	} finally {
 		marketConfigurationFields.disabled = pendingNetworkProfile !== undefined || !stateConnected || currentConfiguration?.networkConfigured !== true
 	}
@@ -786,10 +677,11 @@ function renderNetworkBadge() {
 function renderConnectionFailure(error: unknown) {
 	void error
 	const snapshot = currentSnapshot
+	if (snapshot !== undefined) renderOverviewHealth(snapshot, currentConfiguration, true)
 	stateConnected = false
 	renderNetworkBadge()
 	let lastKnownModeLabel: string | undefined
-	if (snapshot !== undefined) lastKnownModeLabel = snapshot.execute ? 'Live' : 'Dry run'
+	if (snapshot !== undefined) lastKnownModeLabel = snapshot.execute ? 'Live armed' : 'Dry run'
 	renderRepMarketConsensusError(document)
 	renderDisconnectedHeader({
 		attentionBadge,
@@ -884,6 +776,7 @@ const goLiveForms = registerGoLiveForms({ actionStatus, configuration: () => cur
 strategyForm.addEventListener('submit', async event => {
 	event.preventDefault()
 	if (currentConfiguration === undefined) return
+	const savedConfiguration = currentConfiguration
 	strategyStatus.textContent = 'Saving…'
 	const data = new FormData(strategyForm)
 	const next = { ...currentConfiguration.strategy }
@@ -901,6 +794,17 @@ strategyForm.addEventListener('submit', async event => {
 	next['logLookbackBlocks'] = logLookbackBlocks
 	next['historicalLogRecovery'] = historicalLogRecovery instanceof HTMLInputElement && historicalLogRecovery.checked
 	try {
+		validateStrategyReview(savedConfiguration, next)
+	} catch (error) {
+		actionStatus(strategyStatus, error instanceof Error ? error.message : 'Review the strategy values and retry.', true)
+		return
+	}
+	try {
+		const changes = strategyReviewRows(savedConfiguration, next)
+		if (changes.length > 0 && !(await confirmOperatorAction({ title: 'Review liquidation strategy', description: 'Changes to amounts and automation apply on the next scan.', changes, confirmLabel: 'Save strategy' }))) {
+			actionStatus(strategyStatus, '')
+			return
+		}
 		const configuration = decodeConfiguration(await put('/api/strategy', next))
 		populateConfiguration(configuration)
 		actionStatus(strategyStatus, 'Saved')

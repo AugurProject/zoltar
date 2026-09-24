@@ -8,7 +8,7 @@ export const operatorHeader = renderOperatorHeader({
 	safety: `<span id="mode-badge" class="badge loading">Mode —</span>
 					<span id="run-status-badge" class="badge loading">Run —</span>
 					<span id="capability-badge" class="badge" hidden></span>
-					<span id="retry-status-badge" class="badge badge-warning" hidden>Retry —</span>
+					<span id="retry-status-badge" class="badge warning" hidden>Retry —</span>
 					<a id="attention-badge" class="badge attention-badge" hidden></a>
 					<button id="pause-button" class="button" type="button" disabled>Pause bot</button>`,
 	notices: `<section id="launch-notice" class="notice" aria-live="polite">

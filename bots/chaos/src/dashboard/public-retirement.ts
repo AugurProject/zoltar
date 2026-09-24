@@ -49,5 +49,5 @@ export function publicRetirement(value: unknown) {
 export function publicAlert(value: unknown) {
 	const source = record(value)
 	if (source === undefined) return undefined
-	return compact({ message: stringField(source, 'message'), severity: stringField(source, 'severity') })
+	return compact({ actionHref: stringField(source, 'actionHref'), actionLabel: stringField(source, 'actionLabel'), message: stringField(source, 'message'), severity: stringField(source, 'severity') })
 }

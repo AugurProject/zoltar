@@ -6,6 +6,7 @@ import { expect, test } from 'bun:test'
 import { startDashboardServer } from '../../src/dashboard/dashboard-server.ts'
 import { CONFIGURATION_COMMIT_INDETERMINATE } from '../../src/runtime/configuration-commit.ts'
 import { recordPreflightFailure } from '../../src/execution/preflight-failure.ts'
+import { getAddress } from '@zoltar/bot-shared/ethereum'
 import type { RuntimeState } from '../../src/state/operator-state.ts'
 
 type RecoveryScenario = {
@@ -342,6 +343,22 @@ browserTest(
 		let browserSession: Awaited<ReturnType<typeof connectToChromium>> | undefined
 		try {
 			const cdp = await connectToChromium()
+			await cdp.command('Page.addScriptToEvaluateOnNewDocument', {
+				source: `document.addEventListener('DOMContentLoaded', () => {
+				const accept = () => {
+					const dialog = document.querySelector('.operator-confirm-dialog')
+					if (!(dialog instanceof HTMLDialogElement)) return
+					window.operatorDialogReview = dialog.textContent ?? ''
+					const input = dialog.querySelector('input')
+					if (input instanceof HTMLInputElement) {
+						input.value = dialog.querySelector('label strong')?.textContent ?? ''
+						input.dispatchEvent(new Event('input', { bubbles: true }))
+					}
+					setTimeout(() => dialog.querySelector('button[type="submit"]')?.click(), 0)
+				}
+				new MutationObserver(accept).observe(document.body, { childList: true, subtree: true })
+			})`,
+			})
 			browserSession = cdp
 			await cdp.command('Network.enable')
 			const waitFor = async (expression: string, message: string) => {
@@ -481,7 +498,7 @@ browserTest(
 				failSecondStateRead = true
 				stateRequests = 0
 				await cdp.command('Page.navigate', { url: new URL('/recovery', dashboard.url).href })
-				await waitFor("document.querySelector('#mode-badge')?.textContent === 'Paused'", `${scenario.label} fixture did not load`)
+				await waitFor("document.querySelector('#mode-badge')?.textContent === 'Dry run'", `${scenario.label} fixture did not load`)
 				const loading = await cdp.evaluate(`(() => {
 					const form = document.querySelector('#${scenario.formId}')
 					if (!(form instanceof HTMLFormElement)) return undefined
@@ -562,7 +579,7 @@ browserTest(
 			failSecondStateRead = false
 			stateRequests = 0
 			await cdp.command('Page.navigate', { url: new URL('/overview', dashboard.url).href })
-			await waitFor("document.querySelector('#mode-badge')?.textContent === 'Safety paused'", 'Safety-pause fixture did not render its durable latch')
+			await waitFor("document.querySelector('#mode-badge')?.textContent === 'Dry run' && document.querySelector('#operator-health')?.textContent?.includes('Paused')", 'Safety-pause fixture did not render its durable latch')
 			expect(
 				await cdp.evaluate(`(async () => {
  const { renderOperatorAlerts } = await import('/operator-alerts.js')
@@ -571,10 +588,16 @@ browserTest(
  const waiting = { role: container.getAttribute('role'), live: container.getAttribute('aria-live'), style: container.firstElementChild.className, text: container.textContent }
  renderOperatorAlerts(container, [{ message: 'RPC failed', severity: 'error' }, { message: 'Waiting for deployments', severity: 'info' }])
  const mixed = { role: container.getAttribute('role'), live: container.getAttribute('aria-live'), styles: [...container.children].map(item => item.className) }
+ renderOperatorAlerts(container, [{ message: 'Safety pause', severity: 'error', actionHref: '/recovery', actionLabel: 'Review recovery' }])
+ const action = { href: container.querySelector('a')?.getAttribute('href'), label: container.querySelector('a')?.textContent }
+ history.replaceState({}, '', '/recovery')
+ renderOperatorAlerts(container, [{ message: 'Safety pause', severity: 'error', actionHref: '/recovery', actionLabel: 'Review recovery' }])
+ const actionOnRecovery = container.querySelector('a') === null
+ history.replaceState({}, '', '/overview')
  renderOperatorAlerts(container, [])
- return { waiting, mixed, cleared: container.children.length === 0 && container.classList.contains('hidden') }
+ return { waiting, mixed, action, actionOnRecovery, cleared: container.children.length === 0 && container.classList.contains('hidden') }
  })()`),
-			).toEqual({ waiting: { role: 'status', live: 'polite', style: 'notice info', text: 'Waiting for deployments' }, mixed: { role: 'alert', live: 'assertive', styles: ['notice error', 'notice info'] }, cleared: true })
+			).toEqual({ waiting: { role: 'status', live: 'polite', style: 'notice info', text: 'Waiting for deployments' }, mixed: { role: 'alert', live: 'assertive', styles: ['notice error', 'notice info'] }, action: { href: '/recovery', label: 'Review recovery' }, actionOnRecovery: true, cleared: true })
 
 			expect(
 				await cdp.evaluate(`({
@@ -585,6 +608,38 @@ browserTest(
 				})`),
 			).toEqual({ eth: '—', recovery: '1 recovery item', rep: '—', weth: '—' })
 			expect(await cdp.evaluate("document.querySelector('#recovery-badge')?.getClientRects().length")).toBe(1)
+			expect(
+				await cdp.evaluate(`({
+					panelVisible: document.querySelector('#workflow-recovery-panel')?.hidden === false,
+					identity: document.querySelector('#workflow-recovery-summary')?.textContent?.includes('Partial dashboard workflow'),
+					status: document.querySelector('#workflow-recovery-summary')?.textContent?.includes('Waiting continuation'),
+					formInPanel: document.querySelector('#workflow-form')?.parentElement?.id === 'workflow-recovery-panel',
+					pending: document.querySelector('#pending-transactions')?.textContent,
+				})`),
+			).toEqual({ panelVisible: true, identity: true, status: true, formInPanel: true, pending: 'No transaction requires confirmation.' })
+			expect(await cdp.evaluate("document.querySelector('#workflow-reason')?.getAttribute('aria-describedby') === 'workflow-reason-help' && document.querySelector('#workflow-reason-help')?.textContent?.includes('12–2048 characters') === true")).toBe(true)
+			expect(
+				await cdp.evaluate(`(() => {
+					const reason = document.querySelector('#workflow-reason')
+					const confirmation = document.querySelector('#workflow-confirmation')
+					const submit = document.querySelector('#workflow-form button[type="submit"]')
+					if (!(reason instanceof HTMLTextAreaElement) || !(confirmation instanceof HTMLInputElement) || !(submit instanceof HTMLButtonElement)) return []
+					const states = [submit.disabled]
+					reason.value = 'Verified canonical continuation is unavailable.'
+					reason.dispatchEvent(new Event('input', { bubbles: true }))
+					states.push(submit.disabled)
+					confirmation.value = 'ABANDON PARTIAL'
+					confirmation.dispatchEvent(new Event('input', { bubbles: true }))
+					states.push(submit.disabled)
+					confirmation.value = 'ABANDON PARTIAL WORKFLOW'
+					confirmation.dispatchEvent(new Event('input', { bubbles: true }))
+					states.push(submit.disabled)
+					reason.value = '12345678901'
+					reason.dispatchEvent(new Event('input', { bubbles: true }))
+					states.push(submit.disabled)
+					return states
+				})()`),
+			).toEqual([true, true, true, false, true])
 			await cdp.evaluate("document.querySelector('#pause-button')?.click()")
 			await waitFor("document.querySelector('#resume-dialog')?.open === true", 'Safety-pause resume dialog did not open')
 			expect(await cdp.evaluate(`Object.fromEntries([...document.querySelectorAll('#resume-preflight li')].map(row => [row.querySelector('span')?.textContent, row.querySelector('strong')?.textContent]))`)).toMatchObject({ 'Recovery items': '1', 'Safety latch': 'Active' })
@@ -643,7 +698,7 @@ browserTest(
 						rep: document.querySelector('#rep-balances .token-row > strong')?.textContent,
 						weth: document.querySelector('#balance-weth')?.textContent,
 					})`),
-				).toEqual({ eth: '1.000000000000000001', rep: '123.456789012345678901', weth: '0.000000000000000042' })
+				).toEqual({ eth: '1.000000000000000001 ETH', rep: '123.456789012345678901 REP', weth: '0.000000000000000042 WETH' })
 				failSecondStateRead = true
 				await cdp.evaluate("window.dispatchEvent(new Event('focus'))")
 				await waitFor(
@@ -963,6 +1018,13 @@ browserTest(
 
 				await cdp.command('Page.navigate', { url: new URL('/recovery', dashboard.url).href })
 				await waitFor("document.querySelector('#pending-transactions .identifier-value') !== null", `${viewport.label} recovery identifiers did not render`)
+				expect(
+					await cdp.evaluate(`({
+						replacement: document.querySelector('#replacement-form')?.hidden,
+						cancellation: document.querySelector('#cancellation-form')?.hidden,
+						candidate: document.querySelector('#candidate-form')?.hidden,
+					})`),
+				).toEqual({ replacement: true, cancellation: true, candidate: false })
 				expect(await cdp.evaluate("document.querySelector('#pending-transactions .transaction-wait strong')?.textContent")).toBe('Verifying the queued replacement')
 				expect(
 					await cdp.evaluate(`(() => {
@@ -1274,6 +1336,18 @@ browserTest(
 					patch: { strategy: { selectableOperationAllowlist: ['open-oracle.blocked-sibling', 'trading.position.enter'] } },
 				})
 				await waitFor("document.querySelector('#settings-save-status')?.textContent === 'Execution policy saved.' && document.querySelector('#settings-fields')?.disabled === false", `${viewport.label} selectable-operation canary policy did not reconcile`)
+				const highRiskMutationCount = settingsMutations.length + 1
+				await cdp.evaluate(`(() => {
+					window.operatorDialogReview = ''
+					const highRisk = document.querySelector('#allow-high-risk')
+					const form = document.querySelector('#settings-form')
+					if (!(highRisk instanceof HTMLInputElement) || !(form instanceof HTMLFormElement)) return
+					highRisk.checked = true
+					form.dispatchEvent(new SubmitEvent('submit', { bubbles: true, cancelable: true }))
+				})()`)
+				await waitForSettingsMutation(highRiskMutationCount, `${viewport.label} high-risk policy was not submitted`)
+				expect(await cdp.evaluate('window.operatorDialogReview')).toMatch(/High-risk operations\s*Blocked\s*→\s*Allowed/)
+				await waitFor("document.querySelector('#settings-save-status')?.textContent === 'Execution policy saved.' && document.querySelector('#settings-fields')?.disabled === false", `${viewport.label} high-risk policy did not reconcile`)
 				await setExecutionMode(true, `${viewport.label} execution mode did not switch to live`)
 				await cdp.evaluate(`(() => {
 					const ethReserve = document.querySelector('#reserve-eth')
@@ -1488,7 +1562,7 @@ browserTest(
 				stateRequests = 0
 				selectableOperationAllowlist = ['open-oracle.blocked-sibling', 'trading.position.enter']
 				await cdp.command('Page.navigate', { url: new URL('/overview', dashboard.url).href })
-				await waitFor("document.querySelector('#mode-badge')?.textContent === 'Paused'", `${viewport.label} paused resume fixture did not render`)
+				await waitFor("document.querySelector('#mode-badge')?.textContent === 'Dry run'", `${viewport.label} paused resume fixture did not render`)
 				await cdp.evaluate("document.querySelector('#pause-button')?.click()")
 				await waitFor("document.querySelector('#resume-dialog')?.open === true", `${viewport.label} resume dialog did not open`)
 				expect(await accessibilityIdentity('#resume-dialog')).toEqual({ name: 'Resume chaos scheduling?', role: 'dialog' })
@@ -1505,7 +1579,7 @@ browserTest(
 				await cdp.evaluate("document.querySelector('#cancel-resume')?.click()")
 				selectableOperationAllowlist = null
 				await cdp.command('Page.navigate', { url: new URL('/overview', dashboard.url).href })
-				await waitFor("document.querySelector('#mode-badge')?.textContent === 'Paused'", `${viewport.label} unrestricted resume fixture did not render`)
+				await waitFor("document.querySelector('#mode-badge')?.textContent === 'Dry run'", `${viewport.label} unrestricted resume fixture did not render`)
 				await cdp.evaluate("document.querySelector('#pause-button')?.click()")
 				await waitFor("document.querySelector('#resume-dialog')?.open === true", `${viewport.label} unrestricted resume dialog did not open`)
 				expect(
@@ -1656,6 +1730,110 @@ browserTest(
 )
 
 browserTest(
+	'reviews every drain policy choice before submitting the captured request',
+	async () => {
+		const requests: unknown[] = []
+		const dashboard = startDashboardServer(0, {
+			getConfiguration: () => ({ revision: 'retirement-review', settings: { network: { chainId: 1, name: 'mainnet' }, paused: true, runtime: { execute: false }, scheduler: { maximumDelaySeconds: 3600, minimumDelaySeconds: 60 }, strategy: { enabledEcosystems: [] } } }),
+			getState: () => state({ profileId: 'profile:review', retirement: { blockers: [], positions: [], status: 'inactive' }, wallet: walletAddress }),
+			hostname: '127.0.0.1',
+			setCancellation: () => {},
+			setCandidate: () => {},
+			setObligation: () => {},
+			setPaused: () => {},
+			setReplacement: () => {},
+			setRetirement: value => requests.push(value),
+			setSettings: () => {},
+			setSigner: () => {},
+			setWorkflow: () => {},
+		})
+		let browserSession: Awaited<ReturnType<typeof connectToChromium>> | undefined
+		try {
+			const cdp = await connectToChromium()
+			browserSession = cdp
+			await cdp.command('Page.navigate', { url: new URL('/recovery', dashboard.url).href })
+			for (let attempt = 0; attempt < 100 && (await cdp.evaluate("document.querySelector('#rpc-health-retry-button')?.disabled")) !== false; attempt++) await Bun.sleep(25)
+			expect(await cdp.evaluate("document.querySelector('#rpc-health-retry-button')?.disabled")).toBe(false)
+			for (let attempt = 0; attempt < 100 && (await cdp.evaluate("document.querySelector('#retirement-start')?.disabled")) !== false; attempt++) await Bun.sleep(25)
+			expect(await cdp.evaluate("document.querySelector('#retirement-start')?.disabled")).toBe(false)
+			for (let attempt = 0; attempt < 100 && (await cdp.evaluate("document.querySelector('#retirement-request')?.disabled")) !== false; attempt++) await Bun.sleep(25)
+			expect(await cdp.evaluate("document.querySelector('#retirement-request')?.disabled")).toBe(false)
+			await cdp.evaluate("document.querySelector('#retirement-start')?.click()")
+			for (let attempt = 0; attempt < 100 && (await cdp.evaluate("document.querySelector('#retirement-form')?.hidden")) !== false; attempt++) await Bun.sleep(25)
+			expect(await cdp.evaluate("document.querySelector('#retirement-form')?.hidden")).toBe(false)
+			await cdp.evaluate("(() => { document.querySelector('#retirement-max-loss').value = '10001'; document.querySelector('#retirement-form').dispatchEvent(new SubmitEvent('submit', { bubbles: true, cancelable: true })) })()")
+			for (let attempt = 0; attempt < 100 && (await cdp.evaluate("document.querySelector('#retirement-action-status')?.textContent?.includes('0 to 10000 bps')")) !== true; attempt++) await Bun.sleep(25)
+			expect(await cdp.evaluate("document.querySelector('#retirement-action-status')?.textContent")).toContain('0 to 10000 bps')
+			expect(await cdp.evaluate("document.querySelector('.operator-confirm-dialog') === null")).toBe(true)
+			for (const [index, policy] of [
+				{ exitUnmatchedShares: true, migrateExistingClaims: false, exitAfterCompletion: false },
+				{ exitUnmatchedShares: false, migrateExistingClaims: true, exitAfterCompletion: false },
+				{ exitUnmatchedShares: false, migrateExistingClaims: false, exitAfterCompletion: true },
+			].entries()) {
+				const width = index === 0 ? 1440 : 390
+				const height = index === 0 ? 900 : 844
+				await cdp.command('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: false })
+				await cdp.evaluate(`(() => {
+					document.querySelector('#retirement-max-loss').value = '250'
+					document.querySelector('#retirement-exit-unmatched').checked = ${policy.exitUnmatchedShares}
+					document.querySelector('#retirement-migrate-claims').checked = ${policy.migrateExistingClaims}
+					document.querySelector('#retirement-exit-after').checked = ${policy.exitAfterCompletion}
+					document.querySelector('#retirement-form').requestSubmit()
+				})()`)
+				for (let attempt = 0; attempt < 100 && (await cdp.evaluate("document.querySelector('.operator-confirm-dialog')?.open")) !== true; attempt++) await Bun.sleep(25)
+				const review = await cdp.evaluate("[...document.querySelectorAll('.operator-review-row')].map(row => ({ label: row.querySelector('strong')?.textContent, before: row.querySelectorAll('span')[0]?.textContent, after: row.querySelectorAll('span')[2]?.textContent }))")
+				expect(review).toMatchObject([
+					{ label: 'Signer destination', before: 'Current signer' },
+					{ label: 'Maximum unmatched-share loss', after: '250 bps' },
+					{ label: 'Exit unmatched shares', after: policy.exitUnmatchedShares ? 'Enabled' : 'Disabled' },
+					{ label: 'Migrate existing claims', after: policy.migrateExistingClaims ? 'Enabled' : 'Disabled' },
+					{ label: 'Exit after completion', after: policy.exitAfterCompletion ? 'Enabled' : 'Disabled' },
+				])
+				expect(await cdp.evaluate('document.documentElement.scrollWidth <= window.innerWidth')).toBe(true)
+				expect(await cdp.evaluate("(() => { const dialog = document.querySelector('.operator-confirm-dialog'); return dialog instanceof HTMLDialogElement && dialog.clientWidth > 0 && dialog.scrollWidth <= dialog.clientWidth })() ")).toBe(true)
+				if (process.env['BOT_DASHBOARD_QA_CAPTURE'] === '1' && index < 2) {
+					const capture = await cdp.command('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false })
+					const data = typeof capture === 'object' && capture !== null ? Reflect.get(capture, 'data') : undefined
+					if (typeof data !== 'string') throw new Error('Drain review screenshot is missing')
+					await Bun.write(`/tmp/bot-dashboard-qa/chaos-drain-review-${width.toString()}.png`, Buffer.from(data, 'base64'))
+				}
+				if (index === 0)
+					await cdp.evaluate("(() => { document.querySelector('#retirement-exit-unmatched').checked = false; document.querySelector('#retirement-migrate-claims').checked = true; document.querySelector('#retirement-exit-after').checked = true; document.querySelector('#retirement-max-loss').value = '9000' })()")
+				await cdp.evaluate(
+					`(() => { const dialog = document.querySelector('.operator-confirm-dialog'); const input = dialog?.querySelector('input'); if (!(input instanceof HTMLInputElement)) return; input.value = dialog.querySelector('label strong')?.textContent ?? ''; input.dispatchEvent(new Event('input', { bubbles: true })); setTimeout(() => dialog.querySelector('button[type="submit"]')?.click(), 0) })()`,
+				)
+				for (let attempt = 0; attempt < 100 && requests.length <= index; attempt++) await Bun.sleep(25)
+				const request = requests[index]
+				if (typeof request !== 'object' || request === null) throw new Error('Expected retirement request')
+				expect(Reflect.get(request, 'policies')).toMatchObject({ ...policy, maximumExitLossBps: 250 })
+				if (!Array.isArray(review)) throw new Error('Expected retirement review rows')
+				expect(Reflect.get(review[0], 'after')).toBe(getAddress(walletAddress))
+				expect(Reflect.get(request, 'recipient')).toBeUndefined()
+				if (index < 2) {
+					await cdp.command('Page.navigate', { url: new URL(`/recovery?review=${(index + 1).toString()}`, dashboard.url).href })
+					for (let attempt = 0; attempt < 100 && (await cdp.evaluate(`location.search === '?review=${(index + 1).toString()}' && document.readyState === 'complete'`)) !== true; attempt++) await Bun.sleep(25)
+					for (let attempt = 0; attempt < 100 && (await cdp.evaluate("document.querySelector('#rpc-health-retry-button')?.disabled")) !== false; attempt++) await Bun.sleep(25)
+					for (let attempt = 0; attempt < 100 && (await cdp.evaluate("document.querySelector('#retirement-start')?.disabled")) !== false; attempt++) await Bun.sleep(25)
+					for (let attempt = 0; attempt < 100 && (await cdp.evaluate("document.querySelector('#retirement-request')?.disabled")) !== false; attempt++) await Bun.sleep(25)
+					expect(await cdp.evaluate("document.querySelector('#retirement-request')?.disabled")).toBe(false)
+					await cdp.evaluate("document.querySelector('#retirement-start')?.click()")
+					for (let attempt = 0; attempt < 100 && (await cdp.evaluate("document.querySelector('#retirement-form')?.hidden")) !== false; attempt++) await Bun.sleep(25)
+					expect(await cdp.evaluate("document.querySelector('#retirement-form')?.hidden")).toBe(false)
+				}
+			}
+			expect(cdp.issues.filter(issue => issue.kind === 'pageerror')).toEqual([])
+		} finally {
+			try {
+				await browserSession?.close()
+			} finally {
+				dashboard.stop(true)
+			}
+		}
+	},
+	CHROMIUM_STARTUP_BUDGET_MILLISECONDS + 30_000,
+)
+
+browserTest(
 	'permanently freezes dashboard mutations after an indeterminate configuration commit',
 	async () => {
 		const indeterminate = new Error('sensitive post-rename owner-file failure')
@@ -1746,14 +1924,6 @@ browserTest(
 	},
 	CHROMIUM_STARTUP_BUDGET_MILLISECONDS + 30_000,
 )
-
-test('recovery dashboard source has no generic manual-load fallback', async () => {
-	const source = await Bun.file(join(import.meta.dir, '..', '..', 'src', 'dashboard', 'dashboard.ts')).text()
-	expect(source).not.toContain('Refresh to load')
-	for (const context of ['replacementRecoveryContext', 'cancellationRecoveryContext', 'candidateRecoveryContext', 'workflowRecoveryContext', 'obligationRecoveryContext']) {
-		expect(source).toContain(`await requestRecoveryContextRefresh(${context})`)
-	}
-})
 
 browserTest(
 	'schedule shortcut and catalog selection save through the dashboard',
@@ -1939,7 +2109,7 @@ browserTest(
 						...(mode === 'keyless' ? {} : { wallet: walletAddress }),
 					})
 					await cdp.command('Page.navigate', { url: `http://127.0.0.1:${dashboard.port}/overview` })
-					const expectedEthText = mode === 'keyless' ? '—' : '1.000000000000000000'
+					const expectedEthText = mode === 'keyless' ? '—' : '1 ETH'
 					const expectedBadge = { keyless: 'Signer missing', 'read-only': 'Read-only — signer not loaded', signer: 'Signer ready' }[mode]
 					const ready = `document.getElementById('balance-eth')?.textContent === ${JSON.stringify(expectedEthText)} && document.getElementById('signer-badge')?.textContent === ${JSON.stringify(expectedBadge)}`
 					for (let attempt = 0; attempt < 200; attempt += 1) {

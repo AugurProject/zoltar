@@ -24,6 +24,7 @@
 						<p id="last-scan" class="muted">Waiting for first scan</p>
 					</div>
 				</div>
+				<div id="operator-health"></div>
 				<div id="metrics" class="metric-grid operator-metrics"></div>
 			</section>
 
@@ -95,8 +96,9 @@
 					<div class="section-heading">
 						<div>
 							<p class="eyebrow">Latest decisions</p>
-							<h2 id="activity-title">Recent activity</h2>
-						</div>
+						<h2 id="activity-title">Recent activity</h2>
+					</div>
+					<label>Filter <select id="activity-filter"><option value="all">All activity</option><option value="failed">Failures</option><option value="pending">Pending</option><option value="confirmed">Confirmed</option></select></label>
 					</div>
 					<ol id="activity-list" class="activity-list">
 						<li class="empty">No activity yet</li>

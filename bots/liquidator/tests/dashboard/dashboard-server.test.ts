@@ -21,6 +21,7 @@ describe('liquidator dashboard server', () => {
 					{
 						at: '2026-08-13T00:00:00.000Z',
 						details: `to=0x1111111111111111111111111111111111111111 data=${calldataMarker} value=0`,
+						hash: `0x${'12'.repeat(32)}`,
 						internalPath: protectedPath,
 						kind: 'liquidation',
 						message: 'Transaction submitted',
@@ -154,7 +155,7 @@ describe('liquidator dashboard server', () => {
 		expect(body).not.toContain('nested-vault-marker')
 		expect(body).not.toContain('candidate-target-marker')
 		expect(body).not.toContain('vault-address-marker')
-		expect(Reflect.get(snapshot, 'activities')).toEqual([{ at: '2026-08-13T00:00:00.000Z', message: 'Transaction submitted', status: 'pending' }])
+		expect(Reflect.get(snapshot, 'activities')).toEqual([{ at: '2026-08-13T00:00:00.000Z', hash: `0x${'12'.repeat(32)}`, message: 'Transaction submitted', status: 'pending' }])
 		expect(Reflect.get(snapshot, 'pendingStagedOperations')).toEqual([
 			{
 				candidateBlock: '119',
@@ -295,7 +296,7 @@ describe('liquidator dashboard server', () => {
 		expect(pageSource).toContain('id="centralized-market-price"')
 		expect(pageSource).toContain('id="dex-market-price"')
 		expect(pageSource).toContain('id="guarded-market-price"')
-		expect(pageSource).toContain('id="market-configuration-json"')
+		expect(pageSource).toContain('id="market-configuration-editor"')
 		expect(pageSource).toContain('id="network-name"')
 		expect(pageSource).toContain('id="settings-chain-scope"')
 		expect(pageSource).toContain('id="network-scope-summary"')

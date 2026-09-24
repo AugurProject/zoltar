@@ -27,14 +27,6 @@ export type MonitoredPool = {
 	totalPoolHeldRep: string
 }
 
-export function cell(...children: (Node | string)[]) {
-	const value = document.createElement('td')
-	for (const child of children) {
-		value.append(typeof child === 'string' ? document.createTextNode(child) : child)
-	}
-	return value
-}
-
 export function poolStatusText(pool: { approvedUniverse: boolean; centralizedPriceAllowed: boolean; selected: boolean; systemState: string }) {
 	if (!pool.approvedUniverse) return 'Universe not approved'
 	if (pool.systemState !== '0') return 'Pool inactive'

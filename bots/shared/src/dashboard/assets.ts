@@ -13,6 +13,7 @@ export function dashboardHealthResponse() {
 }
 
 export async function sharedDashboardAssetResponse(pathname: string, faviconPath: string) {
+	if (pathname === '/operator-tokens.css') return new Response(Bun.file(join(import.meta.dir, '../../../../ui/coreShared/css/tokens.css')), { headers: dashboardSecurityHeaders('text/css; charset=utf-8') })
 	if (pathname === '/operator-console.css') return new Response(Bun.file(join(import.meta.dir, 'operator-console.css')), { headers: dashboardSecurityHeaders('text/css; charset=utf-8') })
 	if (pathname === '/header-notices.js') return new Response(await buildDashboardScript(join(import.meta.dir, 'header-notices.ts')), { headers: dashboardSecurityHeaders('text/javascript; charset=utf-8') })
 	if (pathname === '/favicon.svg') return new Response(Bun.file(faviconPath), { headers: dashboardSecurityHeaders('image/svg+xml') })

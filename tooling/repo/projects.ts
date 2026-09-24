@@ -257,7 +257,7 @@ export const projects: readonly Project[] = [
 		id: 'bot-shared',
 		path: 'bots/shared',
 		type: 'library',
-		dependencies: ['shared-core', 'contracts'],
+		dependencies: ['shared-core', 'contracts', 'ui-core'],
 		tasks: {
 			setup: packageInstallTask('bots/shared'),
 			test: packageTask('bots/shared', 'test'),

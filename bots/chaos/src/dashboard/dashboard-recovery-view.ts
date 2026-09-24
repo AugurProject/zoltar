@@ -16,6 +16,13 @@ type DashboardRecoveryViewContext = {
 	obligationCount: HTMLSpanElement
 	obligationFields: HTMLFieldSetElement
 	workflowFields: HTMLFieldSetElement
+	workflowRecoveryPanel: HTMLElement
+	workflowRecoverySummary: HTMLDivElement
+	workflowForm: HTMLFormElement
+	obligationForm: HTMLFormElement
+	replacementForm: HTMLFormElement
+	cancellationForm: HTMLFormElement
+	candidateForm: HTMLFormElement
 	obligationIdInput: HTMLSelectElement
 	replacementFields: HTMLFieldSetElement
 	cancellationFields: HTMLFieldSetElement
@@ -89,7 +96,13 @@ export function createDashboardRecoveryView(context: DashboardRecoveryViewContex
 		context.pendingCount.textContent = value.pendingTransactions.length.toString()
 		context.obligationCount.textContent = value.obligations.length.toString()
 		context.obligationFields.disabled = value.paused !== true || value.obligations.length === 0
-		context.workflowFields.disabled = value.paused !== true || value.currentWorkflow?.classification !== 'selectable' || value.currentWorkflow.status !== 'waiting-continuation'
+		const recoverableWorkflow = value.currentWorkflow?.classification === 'selectable' && value.currentWorkflow.status === 'waiting-continuation' ? value.currentWorkflow : undefined
+		context.workflowRecoveryPanel.hidden = recoverableWorkflow === undefined
+		context.workflowFields.disabled = value.paused !== true || recoverableWorkflow === undefined
+		if (recoverableWorkflow !== undefined) {
+			const label = recoverableWorkflow.label ?? recoverableWorkflow.operationId ?? 'Partial workflow'
+			context.workflowRecoverySummary.replaceChildren(node('strong', undefined, label), node('span', 'badge warning', statusLabel(recoverableWorkflow.status)), node('p', 'muted', `Workflow ${recoverableWorkflow.id ?? 'ID unavailable'} · ${recoverableWorkflow.operationId ?? 'Operation unavailable'}`))
+		}
 		const selectedObligation = context.obligationIdInput.value
 		context.obligationIdInput.replaceChildren(
 			...value.obligations.map(obligation => {
@@ -106,6 +119,11 @@ export function createDashboardRecoveryView(context: DashboardRecoveryViewContex
 		context.cancellationFields.disabled = value.paused !== true || value.pendingTransactions.length !== 1 || value.pendingTransactions[0]?.replacementHash !== undefined
 		const queuedCandidate = value.pendingTransactions[0]?.replacementHash ?? value.pendingTransactions[0]?.cancellationHash
 		context.candidateFields.disabled = value.paused !== true || queuedCandidate === undefined
+		context.replacementForm.hidden = value.pendingTransactions.length !== 1 || value.pendingTransactions[0]?.cancellationHash !== undefined
+		context.cancellationForm.hidden = value.pendingTransactions.length !== 1 || value.pendingTransactions[0]?.replacementHash !== undefined
+		context.candidateForm.hidden = queuedCandidate === undefined
+		context.workflowForm.hidden = recoverableWorkflow === undefined
+		context.obligationForm.hidden = value.obligations.length === 0
 		if (value.pendingTransactions.length === 0) {
 			context.pendingTransactions.className = 'stack-list empty-state'
 			context.pendingTransactions.textContent = 'No transaction requires confirmation.'

@@ -1,4 +1,33 @@
-/* Base resets shared by every bot dashboard; the per-bot stylesheets layer their themes on top. */
+@import url("/operator-tokens.css");
+
+/* Operator dashboards use the same semantic palette as ui/coreShared. */
+:root {
+	--accent: var(--success);
+	--bg: var(--surface-page);
+	--surface: var(--surface-section);
+	--line: var(--border-default);
+	--border: var(--border-default);
+	--text: var(--value);
+	--muted: var(--text-secondary);
+	--accent-ink: var(--bg-deep);
+	--error: var(--danger);
+	--info: var(--status-pending);
+	--mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+	--sans: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+	--operator-background: var(--bg-deep);
+	--operator-surface: var(--surface-section);
+	--operator-surface-raised: var(--surface-raised);
+	--operator-border: var(--border-default);
+	--operator-text: var(--text);
+	--operator-muted: var(--muted);
+	--operator-accent: var(--accent);
+	--operator-accent-strong: var(--accent);
+	--operator-warning: var(--warning);
+	--operator-error: var(--danger);
+	--operator-info: var(--info);
+}
+
+/* Base resets shared by every bot dashboard. */
 * {
 	box-sizing: border-box;
 }
@@ -10,6 +39,57 @@ fieldset {
 	border: 0;
 }
 
+.badge {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	min-height: 1.8rem;
+	padding: 0.25rem 0.65rem;
+	border: 1px solid var(--operator-border);
+	border-radius: 99rem;
+	background: var(--operator-surface-raised);
+	color: var(--operator-muted);
+	font-size: 0.76rem;
+	font-weight: 700;
+	line-height: 1.2;
+	text-decoration: none;
+	white-space: nowrap;
+}
+
+.badge.success {
+	border-color: color-mix(in srgb, var(--operator-accent), transparent 55%);
+	background: color-mix(in srgb, var(--operator-accent) 10%, transparent);
+	color: var(--operator-accent);
+}
+
+.badge.warning {
+	border-color: color-mix(in srgb, var(--operator-warning), transparent 55%);
+	background: color-mix(in srgb, var(--operator-warning) 10%, transparent);
+	color: var(--operator-warning);
+}
+
+.badge.error {
+	border-color: color-mix(in srgb, var(--operator-error), transparent 55%);
+	background: color-mix(in srgb, var(--operator-error) 10%, transparent);
+	color: var(--operator-error);
+}
+
+.badge.info {
+	border-color: color-mix(in srgb, var(--operator-info), transparent 55%);
+	background: color-mix(in srgb, var(--operator-info) 10%, transparent);
+	color: var(--operator-info);
+}
+
+.badge[data-mode="dry-run"] {
+	border-color: color-mix(in srgb, var(--operator-info), transparent 55%);
+	color: var(--operator-info);
+}
+
+.badge[data-mode="execute"] {
+	border-color: color-mix(in srgb, var(--operator-warning), transparent 55%);
+	color: var(--operator-warning);
+}
+
 .operator-shell {
 	position: sticky;
 	top: 0;
@@ -18,6 +98,221 @@ fieldset {
 	background: color-mix(in srgb, var(--operator-surface), transparent 18%);
 	backdrop-filter: blur(10px);
 	-webkit-backdrop-filter: blur(10px);
+}
+
+.blocking-notices {
+	display: grid;
+	gap: 0.35rem;
+	padding: 0.55rem clamp(1rem, 3vw, 2rem);
+	border-top: 1px solid var(--operator-border);
+	background: var(--operator-background);
+}
+
+.blocking-notices[hidden] {
+	display: none;
+}
+
+.blocking-notices p {
+	display: flex;
+	align-items: center;
+	flex-wrap: wrap;
+	gap: 0.5rem;
+	margin: 0;
+	padding: 0.45rem 0.7rem;
+	border-left: 3px solid var(--operator-warning, #f6be5a);
+	background: color-mix(in srgb, var(--operator-warning, #f6be5a) 12%, var(--operator-background));
+	color: var(--operator-text);
+}
+
+.blocking-notices .alert-action {
+	display: inline-flex;
+}
+
+.blocking-notices .blocking-notice-error {
+	border-left-color: var(--operator-error, #ff756f);
+	background: color-mix(in srgb, var(--operator-error, #ff756f) 12%, var(--operator-background));
+}
+
+.operator-health {
+	margin-block: 0.75rem 1rem;
+	border: 1px solid var(--operator-border, var(--border-default));
+	border-radius: 0.6rem;
+	background: var(--operator-surface, var(--surface-raised));
+	color: var(--operator-text, var(--text));
+}
+
+.operator-health-grid {
+	display: grid;
+	grid-template-columns: repeat(5, minmax(0, 1fr));
+	gap: 0;
+	margin: 0;
+}
+
+.operator-health-slot {
+	min-width: 0;
+	padding: 0.8rem;
+}
+
+.operator-health-slot + .operator-health-slot {
+	border-left: 1px solid var(--operator-border, var(--border-default));
+}
+
+.operator-health-slot dt {
+	color: var(--operator-muted, var(--muted));
+	font-size: 0.75rem;
+}
+
+.operator-health-slot dd {
+	margin: 0.35rem 0 0;
+	overflow-wrap: anywhere;
+	font-weight: 600;
+}
+
+.operator-health-slot dd .badge + .badge {
+	margin-left: 0.35rem;
+}
+
+.operator-health-stale {
+	margin: 0;
+	padding: 0.55rem 0.8rem;
+	border-top: 1px solid var(--operator-border, var(--border-default));
+	color: var(--operator-warning, var(--warning));
+}
+
+.operator-confirm-dialog {
+	width: min(34rem, calc(100vw - 2rem));
+	max-height: calc(100dvh - 2rem);
+	padding: 1.4rem;
+	border: 1px solid var(--operator-border, var(--border-default));
+	border-radius: 0.7rem;
+	background: var(--operator-surface, var(--surface-raised));
+	color: var(--operator-text, var(--text));
+}
+
+.market-configuration-editor {
+	display: grid;
+	gap: 1rem;
+}
+
+.market-configuration-editor > section,
+.market-configuration-editor article,
+.market-editor-list {
+	min-width: 0;
+	padding: 0.8rem;
+	border: 1px solid var(--operator-border, var(--border-default));
+	border-radius: 0.5rem;
+}
+
+.market-configuration-editor .field-grid,
+.market-editor-row {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(min(13rem, 100%), 1fr));
+	gap: 0.65rem;
+}
+
+.market-editor-row {
+	padding-block: 0.6rem;
+	border-top: 1px solid var(--operator-border, var(--border-default));
+}
+
+.market-editor-row label,
+.market-configuration-editor .field-grid label {
+	min-width: 0;
+}
+
+.market-editor-row input,
+.market-configuration-editor .field-grid input {
+	width: 100%;
+}
+
+.operator-confirm-dialog::backdrop {
+	background: rgba(0, 0, 0, 0.7);
+}
+
+.operator-confirm-dialog h2 {
+	margin-top: 0;
+}
+
+.operator-confirm-dialog label {
+	display: grid;
+	gap: 0.45rem;
+	min-width: 0;
+}
+
+.operator-confirm-dialog label strong {
+	overflow-wrap: anywhere;
+}
+
+.operator-review-rows {
+	display: grid;
+	gap: 0.45rem;
+	max-height: 40dvh;
+	overflow-x: hidden;
+	overflow-y: auto;
+}
+
+.operator-review-row {
+	display: grid;
+	grid-template-columns: minmax(7rem, 1fr) minmax(0, 1fr) auto minmax(0, 1fr);
+	gap: 0.35rem;
+	padding: 0.4rem;
+	border-bottom: 1px solid var(--operator-border, var(--border-default));
+	overflow-wrap: anywhere;
+}
+
+.operator-evidence {
+	padding: 0.6rem 0.4rem 0;
+	border-top: 1px solid var(--operator-border, var(--border-default));
+}
+
+.operator-evidence h3 {
+	margin: 0 0 0.35rem;
+	font-size: 0.9rem;
+}
+
+.operator-evidence dl {
+	margin: 0;
+}
+
+.operator-evidence-row {
+	display: grid;
+	grid-template-columns: minmax(7rem, 1fr) minmax(0, 2fr);
+	gap: 0.5rem;
+	padding: 0.4rem 0;
+	border-bottom: 1px solid var(--operator-border, var(--border-default));
+	overflow-wrap: anywhere;
+}
+
+.operator-evidence-row dt {
+	font-weight: 700;
+}
+
+.operator-evidence-row dd {
+	margin: 0;
+}
+
+@media (max-width: 850px) {
+	.operator-health-grid {
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+	}
+	.operator-health-slot + .operator-health-slot {
+		border-left: 0;
+	}
+	.operator-health-slot {
+		border-bottom: 1px solid var(--operator-border, var(--border-default));
+	}
+}
+
+@media (max-width: 500px) {
+	.operator-health-grid {
+		grid-template-columns: minmax(0, 1fr);
+	}
+	.operator-review-row {
+		grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+	}
+	.operator-review-row strong {
+		grid-column: 1 / -1;
+	}
 }
 
 .operator-primary {
@@ -461,6 +756,10 @@ fieldset {
 	border-color: color-mix(in srgb, var(--operator-error), transparent 72%);
 }
 
+.switch-row.danger-switch input {
+	accent-color: var(--operator-error);
+}
+
 /* A switch that leads its own form sits flush with the heading rule and clears the fields or copy below it. */
 .switch-field.form-switch {
 	margin: 0 0 0.875rem;
@@ -622,7 +921,11 @@ fieldset {
 }
 
 @media (max-width: 42rem) {
-	/* Under the tall narrow header a second sticky bar would halve the reading window; one expanded group keeps jumps short anyway. */
+	/* Let the tall mobile header scroll away so forms retain a useful reading window. */
+	.operator-shell {
+		position: static;
+	}
+
 	.settings-nav {
 		position: static;
 	}
@@ -730,6 +1033,29 @@ fieldset {
 	display: flex;
 	justify-content: flex-end;
 	gap: 0.75rem;
+}
+
+.operator-confirm-dialog .dialog-actions button {
+	min-height: 2.75rem;
+	padding: 0.65rem 0.95rem;
+	border: 1px solid var(--operator-border);
+	border-radius: 0.55rem;
+	background: var(--operator-surface-raised);
+	color: var(--operator-text);
+	font-weight: 700;
+	cursor: pointer;
+}
+
+.operator-confirm-dialog .dialog-actions button[type="submit"] {
+	border-color: var(--operator-accent);
+	background: var(--operator-accent);
+	color: #04120d;
+}
+
+.operator-confirm-dialog .dialog-actions button.danger {
+	border-color: var(--operator-error);
+	background: var(--operator-error);
+	color: #20070b;
 }
 
 .alert-row {
@@ -990,6 +1316,12 @@ body .button:disabled {
 	box-shadow: none;
 	opacity: 1;
 	cursor: not-allowed;
+}
+
+button.danger-action {
+	border-color: var(--operator-error);
+	background: var(--operator-error);
+	color: #20070b;
 }
 
 .operator-shell .eyebrow,

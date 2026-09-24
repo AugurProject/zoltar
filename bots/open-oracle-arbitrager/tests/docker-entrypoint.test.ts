@@ -64,8 +64,10 @@ describe('Docker entrypoint', () => {
 		expect(dockerInstructions(runtime, 'WORKDIR')).toContain('/app/bots/open-oracle-arbitrager')
 		expect(stages.flatMap(stage => dockerInstructions(stage, 'COPY')).some(copy => copy.includes('ui/coreShared/favicon'))).toBe(false)
 		expect(dockerInstructions(runtime, 'COPY')).toContain('bots/open-oracle-arbitrager/src/ ./bots/open-oracle-arbitrager/src/')
+		for (const asset of ['ui/coreShared/ts/ ./ui/coreShared/ts/', 'ui/coreShared/css/tokens.css ./ui/coreShared/css/tokens.css']) expect(dockerInstructions(runtime, 'COPY')).toContain(asset)
 		expect(requireDockerStage(stages, 'shared-builder')).toBeDefined()
 		expect(await readFile(dockerignore, 'utf8')).not.toContain('ui/coreShared/favicon')
+		expect(await readFile(dockerignore, 'utf8')).toContain('!ui/coreShared/css/tokens.css')
 	})
 
 	test('ships the canonical deployment manifests imported by the bot configuration', async () => {
