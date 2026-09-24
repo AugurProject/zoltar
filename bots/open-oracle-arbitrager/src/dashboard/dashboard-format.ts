@@ -1,4 +1,5 @@
 import { shorten } from '@zoltar/bot-shared/dashboard/dom'
+import { formatAmount } from '@zoltar/bot-shared/dashboard/amount'
 import type { PublicOperatorSnapshot, PublicTransactionActivity } from '#state/operator-state'
 import { countOpportunities, type EvaluatedOpportunitySnapshot, type OpportunityDecision, type OpportunitySnapshot, type SkippedOpportunitySnapshot } from '#state/opportunity-snapshot'
 import type { MarketPricePoint } from '#monitoring/market-monitor'
@@ -53,14 +54,11 @@ function decimalFromScaled(value: bigint) {
 }
 
 export function exactAmount(value: string | undefined, symbol: string) {
-	return value === undefined ? 'Unavailable' : `${value} ${symbol}`
+	return formatAmount(value, symbol)
 }
 
 export function amount(value: string | undefined, symbol: string) {
-	if (value === undefined) return 'Unavailable'
-	const numeric = Number(value)
-	if (!Number.isFinite(numeric)) return `${value} ${symbol}`
-	return `${new Intl.NumberFormat('en-US', { maximumFractionDigits: 6 }).format(numeric)} ${symbol}`
+	return formatAmount(value, symbol)
 }
 
 export function isConfigurationEnvelope(value: unknown): value is { configuration: unknown; revision: string } {
@@ -162,7 +160,8 @@ export function blockAgeLabel(blockTimestamp: string | undefined, nowMillisecond
 
 export function botStatusLabels(state: Pick<PublicOperatorSnapshot, 'mode' | 'paused' | 'status' | 'marketAvailability'> | undefined) {
 	if (state === undefined) return { mode: 'Mode —', status: '—' }
-	if (state.paused) return { mode: state.mode, status: 'Paused' }
+	const mode = state.mode === 'execute' ? 'Live armed' : 'Dry run'
+	if (state.paused) return { mode, status: 'Paused' }
 	const statuses: Record<PublicOperatorSnapshot['status'], string> = {
 		'connectivity-degraded': 'Connectivity degraded',
 		error: 'Error',
@@ -171,9 +170,9 @@ export function botStatusLabels(state: Pick<PublicOperatorSnapshot, 'mode' | 'pa
 		stopped: 'Stopped',
 		syncing: 'Syncing',
 	}
-	if (state.status === 'error' && state.marketAvailability?.kind === 'missing-deployment') return { mode: state.mode, status: 'Not deployed' }
-	if (state.status === 'running' && state.marketAvailability?.kind === 'no-execution-pools') return { mode: state.mode, status: 'No execution pools' }
-	return { mode: state.mode, status: statuses[state.status] }
+	if (state.status === 'error' && state.marketAvailability?.kind === 'missing-deployment') return { mode, status: 'Not deployed' }
+	if (state.status === 'running' && state.marketAvailability?.kind === 'no-execution-pools') return { mode, status: 'No execution pools' }
+	return { mode, status: statuses[state.status] }
 }
 
 /** Skipped reports carry the concrete gate that declined them; evaluated decisions map to a fixed explanation. */

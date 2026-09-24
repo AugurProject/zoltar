@@ -103,7 +103,7 @@ export type SubmissionHealth = {
 
 export type Snapshot = {
 	activities: Activity[]
-	alerts: { message?: string | undefined; severity?: string | undefined }[]
+	alerts: { actionHref?: string | undefined; actionLabel?: string | undefined; message?: string | undefined; severity?: string | undefined }[]
 	chainId?: string | number | undefined
 	currentWorkflow?: Workflow | undefined
 	workflows: Workflow[]
@@ -316,7 +316,7 @@ export function parseSnapshot(value: unknown): Snapshot {
 			summary: stringValue(entry['summary']),
 			txHash: stringValue(entry['txHash']),
 		})),
-		alerts: list(source['alerts'], entry => ({ message: stringValue(entry['message']), severity: stringValue(entry['severity']) })),
+		alerts: list(source['alerts'], entry => ({ actionHref: stringValue(entry['actionHref']), actionLabel: stringValue(entry['actionLabel']), message: stringValue(entry['message']), severity: stringValue(entry['severity']) })),
 		chainId: scalarValue(source['chainId']),
 		currentWorkflow: parseWorkflow(source['currentWorkflow']),
 		workflows: list(source['workflows'], parseWorkflow).filter(value => value !== undefined),

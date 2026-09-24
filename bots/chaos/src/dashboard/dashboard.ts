@@ -2,11 +2,14 @@ import { createDashboardHealthView } from './dashboard-health-view.js'
 import { createDashboardCatalogView } from './dashboard-catalog-view.js'
 import { createDashboardTopologyView } from './dashboard-topology-view.js'
 import { createDashboardRecoveryView } from './dashboard-recovery-view.js'
+import { registerWorkflowReconciliation } from './workflow-reconciliation.js'
 import { createDashboardSettingsView } from './dashboard-settings-view.js'
 import { createWorkflowHistory } from './workflow-history.js'
 import { requestWithTimeout } from '@zoltar/bot-shared/dashboard/polling'
+import { confirmOperatorAction } from '@zoltar/bot-shared/dashboard/confirmation'
 import { optionalRecord as record } from '@zoltar/bot-shared/infrastructure/json-validation'
 import { createExecutionPolicyDraft } from './execution-policy-draft.js'
+import { executionPolicyReviewRows, type ExecutionPolicyPatch } from './execution-policy-review.js'
 import { createSettingsNavigation } from '@zoltar/bot-shared/dashboard/settings-navigation'
 import { element, markCurrentPage } from '@zoltar/bot-shared/dashboard/dom'
 import { decimalAtto } from './go-live.js'
@@ -20,7 +23,7 @@ import { renderOperatorAlerts } from './operator-alerts.js'
 import { activeSchedulerWorkLabel, createSelectionControls } from './selection-controls.js'
 import { type Snapshot, type Configuration, stringValue, type OperationEvaluation, type Obligation, parseConfiguration, parseSnapshot } from './dashboard-data.ts'
 
-const { renderHeader, renderOverview, renderUnavailableRpcHealth, renderUnavailableSubmissionHealth } = createDashboardHealthView({
+const { renderHeader, renderHealth, renderOverview, renderUnavailableRpcHealth, renderUnavailableSubmissionHealth } = createDashboardHealthView({
 	get lastBlock() {
 		return lastBlock
 	},
@@ -32,6 +35,9 @@ const { renderHeader, renderOverview, renderUnavailableRpcHealth, renderUnavaila
 	},
 	get modeBadge() {
 		return modeBadge
+	},
+	get snapshotStale() {
+		return snapshotStale
 	},
 	get configuration() {
 		return configuration
@@ -293,6 +299,27 @@ const { renderWorkflow, renderCoverage, renderRecovery } = createDashboardRecove
 	},
 	get workflowFields() {
 		return workflowFields
+	},
+	get workflowRecoveryPanel() {
+		return workflowRecoveryPanel
+	},
+	get workflowRecoverySummary() {
+		return workflowRecoverySummary
+	},
+	get workflowForm() {
+		return workflowForm
+	},
+	get obligationForm() {
+		return obligationForm
+	},
+	get replacementForm() {
+		return replacementForm
+	},
+	get cancellationForm() {
+		return cancellationForm
+	},
+	get candidateForm() {
+		return candidateForm
 	},
 	get obligationIdInput() {
 		return obligationIdInput
@@ -588,10 +615,13 @@ const candidateReasonInput = element('candidate-reason', HTMLTextAreaElement)
 const candidateConfirmationInput = element('candidate-confirmation', HTMLInputElement)
 const candidateStatus = element('candidate-status', HTMLSpanElement)
 const candidateRetryButton = element('candidate-retry', HTMLButtonElement)
+const workflowRecoveryPanel = element('workflow-recovery-panel', HTMLElement)
+const workflowRecoverySummary = element('workflow-recovery-summary', HTMLDivElement)
 const workflowForm = element('workflow-form', HTMLFormElement)
 const workflowFields = element('workflow-fields', HTMLFieldSetElement)
 const workflowReasonInput = element('workflow-reason', HTMLTextAreaElement)
 const workflowConfirmationInput = element('workflow-confirmation', HTMLInputElement)
+const workflowSubmitButton = element('workflow-submit', HTMLButtonElement)
 const workflowStatus = element('workflow-status', HTMLSpanElement)
 const workflowRetryButton = element('workflow-retry', HTMLButtonElement)
 const obligations = element('obligations', HTMLDivElement)
@@ -650,6 +680,7 @@ const cancelResume = element('cancel-resume', HTMLButtonElement)
 const confirmResume = element('confirm-resume', HTMLButtonElement)
 
 let snapshot: Snapshot | undefined
+let snapshotStale = false
 let configuration: Configuration | undefined
 type RefreshResult = { configurationAvailable: boolean; stateAvailable: boolean }
 let refreshPromise: Promise<RefreshResult> | undefined
@@ -968,6 +999,7 @@ function renderSnapshot(value: Snapshot) {
 	renderOperatorAlerts(operatorAlerts, value.alerts)
 	renderCountdown()
 	applyMutationControlLatches()
+	syncWorkflowSubmit()
 }
 
 function markRecoveryContextRefreshesLoading() {
@@ -1023,11 +1055,14 @@ function refresh() {
 		if (parsedConfiguration !== undefined) configuration = parsedConfiguration
 		if (stateResult.status === 'fulfilled') {
 			snapshot = parseSnapshot(stateResult.value)
+			snapshotStale = false
 			renderSnapshot(snapshot)
 			stateAvailable = true
 			globalError.classList.add('hidden')
 			settleRecoveryContextRefreshes(snapshot)
 		} else {
+			snapshotStale = true
+			if (snapshot !== undefined) renderHealth(snapshot)
 			renderUnavailableRpcHealth(snapshot !== undefined)
 			renderUnavailableSubmissionHealth(snapshot !== undefined)
 			globalError.textContent = stateResult.reason instanceof Error ? stateResult.reason.message : 'Dashboard state is unavailable.'
@@ -1355,46 +1390,18 @@ candidateForm.addEventListener('submit', event => {
 	})()
 })
 
-workflowForm.addEventListener('submit', event => {
-	event.preventDefault()
-	void (async () => {
-		const workflow = snapshot?.currentWorkflow
-		if (snapshot?.paused !== true) {
-			workflowStatus.textContent = 'Pause the bot before workflow reconciliation.'
-			return
-		}
-		if (workflow?.status !== 'waiting-continuation' || workflow.id === undefined || workflow.updatedAt === undefined) {
-			await requestRecoveryContextRefresh(workflowRecoveryContext)
-			return
-		}
-		const reason = workflowReasonInput.value.trim()
-		if (reason.length < 12) {
-			workflowStatus.textContent = 'Enter a detailed audit reason (at least 12 characters).'
-			return
-		}
-		workflowFields.disabled = true
-		workflowStatus.textContent = 'Saving reconciliation…'
-		let mutationReconciled = true
-		try {
-			await put('/api/reconciliation/workflow', {
-				action: 'abandon',
-				confirmation: workflowConfirmationInput.value,
-				reason,
-				updatedAt: workflow.updatedAt,
-				workflowId: workflow.id,
-			})
-			workflowReasonInput.value = ''
-			workflowConfirmationInput.value = ''
-			workflowStatus.textContent = 'Partial workflow abandonment saved.'
-			await refresh()
-		} catch (error) {
-			const reconciliation = await reconcileUnknownMutation(error, workflowStatus, 'state')
-			mutationReconciled = !reconciliation.handled || reconciliation.reconciled
-			if (!reconciliation.handled) workflowStatus.textContent = error instanceof Error ? error.message : 'Partial workflow reconciliation failed.'
-		} finally {
-			workflowFields.disabled = !mutationReconciled || snapshot?.paused !== true || snapshot.currentWorkflow?.status !== 'waiting-continuation'
-		}
-	})()
+const syncWorkflowSubmit = registerWorkflowReconciliation({
+	confirmationInput: workflowConfirmationInput,
+	fields: workflowFields,
+	form: workflowForm,
+	getSnapshot: () => snapshot,
+	put,
+	reasonInput: workflowReasonInput,
+	reconcileUnknownMutation: (error, status) => reconcileUnknownMutation(error, status, 'state'),
+	refresh,
+	requestContextRefresh: () => requestRecoveryContextRefresh(workflowRecoveryContext),
+	status: workflowStatus,
+	submitButton: workflowSubmitButton,
 })
 
 function renderObligationConfirmationHelp() {
@@ -1576,25 +1583,28 @@ settingsForm.addEventListener('submit', event => {
 			const minimumEthReserve = parseReserve(reserveEthInput, 'ETH reserve', live ? 'live-reserve' : 'non-negative')
 			const minimumRepReserve = parseReserve(reserveRepInput, 'REP reserve', live ? 'live-reserve' : 'non-negative')
 			if (live && decimalAtto(minimumEthReserve) < decimalAtto(maximumGasCostEth)) throw new Error('ETH reserve must retain at least one maximum-gas-cost-sized safety floor.')
+			const policyPatch: ExecutionPolicyPatch = {
+				runtime: { execute: live },
+				scheduler: { maximumDelaySeconds: maxDelaySeconds, minimumDelaySeconds: minDelaySeconds },
+				strategy: {
+					allowHighRiskOperations: highRiskInput.checked,
+					allowIrreversibleOperations: irreversibleInput.checked,
+					initializeGenesisUniverse: initializeGenesisInput.checked,
+					enabledEcosystems,
+					maximumEthPerOperation,
+					maximumGasCostEth,
+					maximumRepPerOperation,
+					minimumEthReserve,
+					minimumRepReserve,
+					selectableOperationAllowlist,
+					workflowValidForBlocks,
+				},
+			}
+			const policyChanges = executionPolicyReviewRows(configuration, policyPatch)
+			if (policyChanges.length > 0 && !(await confirmOperatorAction({ title: 'Review execution policy', description: 'These limits and permissions apply before the next selection cycle.', changes: policyChanges, confirmLabel: 'Save policy' }))) return
 			await put('/api/settings', {
 				revision: settingsRevision,
-				patch: {
-					runtime: { execute: live },
-					scheduler: { maximumDelaySeconds: maxDelaySeconds, minimumDelaySeconds: minDelaySeconds },
-					strategy: {
-						allowHighRiskOperations: highRiskInput.checked,
-						allowIrreversibleOperations: irreversibleInput.checked,
-						initializeGenesisUniverse: initializeGenesisInput.checked,
-						enabledEcosystems,
-						maximumEthPerOperation,
-						maximumGasCostEth,
-						maximumRepPerOperation,
-						minimumEthReserve,
-						minimumRepReserve,
-						selectableOperationAllowlist,
-						workflowValidForBlocks,
-					},
-				},
+				patch: policyPatch,
 			})
 			settingsDraft.dirty = false
 			settingsDraft.conflict = false
@@ -1653,6 +1663,7 @@ signerForm.addEventListener('submit', event => {
 
 clearSignerButton.addEventListener('click', () => {
 	void (async () => {
+		if (!(await confirmOperatorAction({ title: 'Clear signer', description: 'Remove the active signer and saved private key from this bot.', phrase: 'CLEAR SIGNER', confirmLabel: 'Clear signer' }))) return
 		signerFields.disabled = true
 		signerStatus.textContent = 'Clearing signer…'
 		let mutationReconciled = true

@@ -52,10 +52,13 @@ describe('Docker packaging', () => {
 				'bots/liquidator/src/ ./bots/liquidator/src/',
 				'docs/mainnet-deployment-addresses.json docs/sepolia-deployment-addresses.json ./docs/',
 				'bots/liquidator/scripts/check-process-lock-runtime.mts ./bots/liquidator/scripts/check-process-lock-runtime.mts',
+				'ui/coreShared/ts/ ./ui/coreShared/ts/',
+				'ui/coreShared/css/tokens.css ./ui/coreShared/css/tokens.css',
 			]),
 		)
 		expect(stages.flatMap(stage => dockerInstructions(stage, 'COPY')).some(copy => copy.includes('ui/coreShared/favicon'))).toBe(false)
 		expect(ignoreSource).not.toContain('ui/coreShared/favicon')
+		expect(ignoreSource).toContain('!ui/coreShared/css/tokens.css')
 		expect(ignoreSource).toContain('!docs/mainnet-deployment-addresses.json')
 		expect(ignoreSource).toContain('!docs/sepolia-deployment-addresses.json')
 		const installCommands = dockerInstructions(runtime, 'RUN').flatMap(shellCommandSegments)

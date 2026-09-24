@@ -46,6 +46,8 @@ COPY bots/open-oracle-arbitrager/package.json /app/bots/open-oracle-arbitrager/p
 COPY bots/shared/package.json /app/bots/shared/package.json
 COPY solidity/package.json /app/solidity/package.json
 COPY ui/coreShared/package.json /app/ui/coreShared/package.json
+COPY ui/coreShared/ts/ ./ui/coreShared/ts/
+COPY ui/coreShared/css/tokens.css ./ui/coreShared/css/tokens.css
 COPY ui/statoblast/package.json /app/ui/statoblast/package.json
 COPY ui/statoblastShared/package.json /app/ui/statoblastShared/package.json
 COPY ui/trading/package.json /app/ui/trading/package.json

@@ -70,6 +70,8 @@ describe('chaos Docker packaging', () => {
 		expect(builder.base).toContain('-alpine')
 		expect(dockerInstructions(builder, 'RUN').flatMap(shellCommandSegments)).toContain('bun ./tooling/repo/build-shared.mts')
 		expect(copies).toEqual(expect.arrayContaining(['--from=shared-builder /source/shared/ ./shared/', 'bots/chaos/src/ ./bots/chaos/src/', 'bots/chaos/scripts/check-runtime.mts ./bots/chaos/scripts/check-runtime.mts', 'bots/chaos/scripts/validate-container-paths.mts ./bots/chaos/scripts/validate-container-paths.mts']))
+		for (const asset of ['ui/coreShared/ts/ ./ui/coreShared/ts/', 'ui/coreShared/css/tokens.css ./ui/coreShared/css/tokens.css']) expect(dockerInstructions(runtime, 'COPY')).toContain(asset)
+		for (const path of ['!ui/coreShared/ts/**', '!ui/coreShared/css/tokens.css']) expect(ignoreSource).toContain(path)
 		expect(copies.some(copy => copy.includes('solidity/tsconfig.json') && copy.includes('solidity/tsconfig-compile.json'))).toBe(true)
 		expect(copies.some(copy => copy.includes('ui/coreShared/favicon'))).toBe(false)
 		expect(ignoreSource).toContain('!bots/chaos/scripts/check-runtime.mts')
