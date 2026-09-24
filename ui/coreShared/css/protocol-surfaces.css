@@ -658,13 +658,19 @@ strong.metric-value-danger {
 
 .global-transaction-dialog-backdrop {
 	z-index: var(--z-transaction-modal);
-	background: color-mix(in srgb, var(--bg-deep) 45%, transparent);
-	backdrop-filter: blur(2px);
+	align-items: end;
+	background: color-mix(in srgb, var(--bg-deep) 12%, transparent);
+	backdrop-filter: none;
+	padding-bottom: calc(1rem + env(safe-area-inset-bottom, 0rem));
 }
 
 .global-transaction-dialog {
-	width: min(34rem, 100%);
-	gap: 0.5rem;
+	width: min(56rem, 100%);
+	max-height: min(55dvh, 32rem);
+	grid-template-columns: minmax(0, 1fr) auto;
+	align-items: end;
+	gap: 0.75rem;
+	padding: 0.85rem 1rem;
 }
 
 .global-transaction-dialog .global-transaction-dialog-notice {
@@ -675,6 +681,40 @@ strong.metric-value-danger {
 	border-radius: 0;
 	background: transparent;
 	box-shadow: none;
+}
+
+.global-transaction-dialog .global-transaction-notice-rows {
+	grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+	gap: 0.35rem 0.9rem;
+}
+
+.global-transaction-dialog .global-transaction-actions {
+	flex-direction: column;
+	align-items: flex-end;
+	min-width: 7rem;
+}
+
+@media (max-width: 600px) {
+	.global-transaction-dialog-backdrop {
+		padding: 0.5rem;
+		padding-bottom: calc(0.5rem + env(safe-area-inset-bottom, 0rem));
+	}
+
+	.global-transaction-dialog {
+		width: 100%;
+		max-height: 55dvh;
+		grid-template-columns: minmax(0, 1fr);
+		padding: 0.75rem;
+	}
+
+	.global-transaction-dialog .global-transaction-notice-rows {
+		grid-template-columns: minmax(0, 1fr);
+	}
+
+	.global-transaction-dialog .global-transaction-actions {
+		flex-direction: row;
+		align-items: center;
+	}
 }
 
 .global-transaction-notice {
