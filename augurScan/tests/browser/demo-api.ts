@@ -705,6 +705,8 @@ export function createDemoApi(context: DemoContext) {
 						settlement_collateral_atto_eth: value,
 						total_capacity_ownership_atto_rep: requiredArrayItem(capacity, index, 'Demo capacity point'),
 						total_claimable_vault_fees_atto_eth: String(BigInt(20 + index * 8) * 10n ** 16n),
+						fee_index: context.pageUrl.searchParams.get('feeSeries') === 'missing' ? undefined : String(BigInt(index + 1) * 10n ** 16n),
+						unallocated_accrued_fees_atto_eth: ['missing', 'partial'].includes(context.pageUrl.searchParams.get('feeSeries') ?? '') ? undefined : String(BigInt(index + 1) * 10n ** 15n),
 						current_retention_rate: poolItem.current_retention_rate,
 					})),
 					events: [],
@@ -766,7 +768,9 @@ export function createDemoApi(context: DemoContext) {
 		}
 		return pagedHistory(
 			{
-				pools: demoPools.filter(item => item.question_id === parts[6]).map((item, index) => ({ ...item, timestamp: new Date(Date.now() - (50 - index * 12) * 86_400_000).toISOString() })),
+				pools: demoPools
+					.filter(item => item.question_id === parts[6])
+					.map((item, index) => ({ ...item, escalation_address: demoAddress('7'), resolution_block: item.snapshot_block ?? '23184700', read_result: { questionResolution: '1', finalQuestionResolution: '1' }, timestamp: new Date(Date.now() - (50 - index * 12) * 86_400_000).toISOString() })),
 				forks: [],
 			},
 			['pools', 'forks'],
@@ -874,6 +878,7 @@ export function createDemoApi(context: DemoContext) {
 				event_name: 'DepositOnOutcome',
 				block_number: asOf.blockNumber,
 				invalid_stake_atto_rep: '400000000000000000000',
+				balance_block_number: asOf.blockNumber,
 				no_stake_atto_rep: '900000000000000000000',
 				yes_stake_atto_rep: '1250000000000000000000',
 			},
@@ -1085,7 +1090,15 @@ export function createDemoApi(context: DemoContext) {
 						block_number: operations.asOf.blockNumber,
 						read_status: 'success',
 						source_method: 'lifecycle(), balances(), totalCapital()',
-						read_result: { phase: 'Active', requiredNextDepositAttoRep: (500n * 10n ** 18n).toString() },
+						read_result: {
+							startBondAttoRep: '1000000000000000000',
+							nonDecisionThresholdAttoRep: '500000000000000000000',
+							endTimestamp: '1750000000',
+							bindingCapitalAttoRep: '5000000000000000000',
+							outcomeBalancesAttoRep: ['1000000000000000000', '1250000000000000000000', '0'],
+							questionResolution: '1',
+							finalQuestionResolution: '3',
+						},
 					},
 					deposits: [event],
 					claims: [],
@@ -1105,8 +1118,10 @@ export function createDemoApi(context: DemoContext) {
 						block_number: operations.asOf.blockNumber,
 						read_status: 'success',
 						source_method: 'auctionState(), computeClearing()',
-						read_result: { state: 'Open' },
+						read_result: { finalized: true, clearingTick: '14', attoEthRaised: '3000000000000000000', totalAttoRepPurchased: '12000000000000000000', computeClearing: { tick: '14', funded: true } },
 					},
+					finalization: evidence('AuctionFinalized', { clearingTick: '14', grossAcceptedAttoEth: '3000000000000000000', repSoldAttoRep: '12000000000000000000', funded: true }),
+					demandCurveTruncated: context.pageUrl.searchParams.get('demandTruncated') === '1',
 					demandCurve: [{ tick: '14', amountAttoEth: (3n * 10n ** 18n).toString(), cumulativeDemandAttoEth: (3n * 10n ** 18n).toString() }],
 					events: evidencePage(bid),
 				},
@@ -1246,7 +1261,20 @@ export function createDemoApi(context: DemoContext) {
 				const log = demoLogs.find(item => item.chain_id === chainId && item.tx_hash === hash)
 				if (log === undefined) throw new Error('Transaction not found')
 				return {
-					transaction: { hash, block_hash: log.block_hash, block_number: log.block_number, block_timestamp: log.block_timestamp, from_address: log.origin_address, to_address: log.emitter_address, status: 'success', gas_used: '184220', action_summary: log.action_summary, explorer_base_url: 'https://etherscan.io' },
+					transaction: {
+						hash,
+						block_hash: log.block_hash,
+						block_number: log.block_number,
+						block_timestamp: log.block_timestamp,
+						from_address: log.origin_address,
+						to_address: log.emitter_address,
+						status: 'success',
+						value: '1000000000000000001',
+						receipt: { callTraceStatus: 'available', callTrace: { type: 'CALL', from: log.origin_address, to: log.emitter_address, value: '0xde0b6b3a7640001', calls: [{ type: 'CALL', from: log.emitter_address, to: demoAddress('7'), value: '0x1', error: 'execution reverted' }] } },
+						gas_used: '184220',
+						action_summary: log.action_summary,
+						explorer_base_url: 'https://etherscan.io',
+					},
 					logs: demoLogs.filter(item => item.tx_hash === hash).map(item => ({ ...item, emitter_address: item.emitter_address })),
 				}
 			}
@@ -1648,6 +1676,13 @@ export function createDemoApi(context: DemoContext) {
 							address: address ?? demoAddress('1'),
 							availability: 'Awaiting indexed evidence',
 						}),
+						share_positions: {
+							items: [{ token: demoAddress('2'), universe_id: '0', invalid_atto_shares: '1000000000000000000', yes_atto_shares: '3000000000000000001', no_atto_shares: '2000000000000000000', complete_sets_atto_shares: '1000000000000000000', migration_locked: false }],
+							truncated: false,
+							basis: 'Canonical indexed transfers',
+						},
+						pending_refunds: [{ auction_address: demoAddress('8'), pending_atto_eth: '100000000000000001' }],
+						escalation_positions: [{ game_address: demoAddress('7'), deposit_index: '4', principal_atto_rep: '2000000000000000000', final_resolution: '1', outcome: '1', resolution_block: operations.asOf.blockNumber }],
 						lp_positions: lpPositions,
 						fork_participation: forkParticipation,
 						report_participation: reportParticipation,

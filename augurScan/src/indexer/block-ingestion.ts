@@ -20,6 +20,7 @@ export class NetworkIndexer {
 	stateBoundaryDiscovered = false
 	readonly database: ScannerDatabase
 	readonly providers: readonly IndexerRpcProvider[]
+	readonly traceUnsupportedProviders = new WeakSet<IndexerRpcProvider>()
 	readonly verifiedProviders = new WeakSet<IndexerRpcProvider>()
 	readonly providerStateBoundaries = new WeakMap<IndexerRpcProvider, { readonly startBlock: bigint; readonly discovered: boolean }>()
 	readonly providerHistoricalCodeUnavailable = new WeakMap<IndexerRpcProvider, Set<string>>()

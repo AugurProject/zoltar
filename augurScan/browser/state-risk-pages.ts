@@ -80,6 +80,16 @@ export const renderPoolDetailPage = async (deps: StateRiskDeps, poolItem: PoolRe
 			'Authoritative PoolAccountingCheckpoint results. Collateral and fees use attoETH; capacity ownership uses attoREP.',
 		),
 		chartCard(
+			'Fee accrual history',
+			history.snapshots,
+			[
+				{ key: 'fee_index', label: 'Fee index', unit: 'index' },
+				{ key: 'unallocated_accrued_fees_atto_eth', label: 'Unallocated accrued fees', unit: poolNativeSymbol },
+			],
+			'Checkpoint fee accumulator and unallocated fees; balances may fall when fees are claimed.',
+		),
+		chartCard('Retention rate history', history.snapshots, [{ key: 'current_retention_rate', label: 'Retention rate', unit: 'ratio' }], 'Protocol retention rate at each accounting checkpoint (1e18 denominator).'),
+		chartCard(
 			'Uniswap REP price curves',
 			uniswapChart.rows,
 			uniswapChart.definitions,
@@ -178,6 +188,9 @@ export const renderVaultDetailPage = async (deps: StateRiskDeps, vaultItem: Vaul
 	const vaultNativeSymbol = nativeSymbol(vaultItem.chain_id)
 	const fragment = document.createDocumentFragment()
 	fragment.append(stateHeader('Security vault', vaultItem.vault_address, `Pool ${vaultItem.pool_address}`, 'Latest available'))
+	const riskLink = element('a', 'back-link', 'View vault risk and liquidation history →')
+	riskLink.href = deps.operationsHref(`/vault/${vaultItem.pool_address}/${vaultItem.vault_address}?chainId=${vaultItem.chain_id}`)
+	fragment.append(riskLink)
 	fragment.append(historyCoverageNotice(history, 'vaults', vaultItem))
 	const metrics = element('div', 'metric-grid')
 	metrics.append(

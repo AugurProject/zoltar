@@ -1,9 +1,5 @@
 import { expect, test } from 'bun:test'
-import { auctionDemandCurve, auctionLifecycle, candlestickBuckets, ESCALATION_OUTCOME, fixedWindowTwap, poolCapacity, reportLifecycle, reportRoundChanges, swapAnalytics, vaultRisk } from '../../src/operations.ts'
-
-test('uses Solidity BinaryOutcome ordering for escalation catalog totals', () => {
-	expect(ESCALATION_OUTCOME).toEqual({ invalid: '0', yes: '1', no: '2' })
-})
+import { auctionDemandCurve, auctionLifecycle, candlestickBuckets, fixedWindowTwap, poolCapacity, reportLifecycle, reportRoundChanges, swapAnalytics, vaultRisk } from '../../src/operations.ts'
 
 test('derives OpenOracle boundaries with the report clock selected by flags', () => {
 	expect(

@@ -24,6 +24,7 @@ for (const mode of ['direct', 'registered wrapper', 'unregistered wrapper', 'nes
 			port: 0,
 			async fetch(request) {
 				const body = await request.json()
+				if (body.method === 'debug_traceBlockByHash') return Response.json({ jsonrpc: '2.0', id: body.id, error: { code: -32601, message: 'method not found' } })
 				expect(body.method).toBe('eth_call')
 				expect(body.params[0].to.toLowerCase()).toBe(token.toLowerCase())
 				expect(body.params[1]).toBe('0xa')
@@ -47,7 +48,7 @@ for (const mode of ['direct', 'registered wrapper', 'unregistered wrapper', 'nes
 		if (mode !== 'direct') input = wrap(oracle, input)
 		if (mode === 'nested unregistered wrapper') input = wrap(manager, input)
 		const to = mode === 'direct' ? oracle : manager
-		const block = { number: 10n, hash: toHex(10n, { size: 32 }), parentHash: zeroHash, timestamp: 1_700_000_000n }
+		const block = { number: 10n, hash: toHex(10n, { size: 32 }), parentHash: zeroHash, timestamp: 1_700_000_000n, transactions: [] }
 		const transactionHash = toHex(1n, { size: 32 })
 		// A token-free, unknown protocol log selects the transaction for indexing.
 		// Neither this log nor the receipt can reveal the token address or decimals.
@@ -57,6 +58,7 @@ for (const mode of ['direct', 'registered wrapper', 'unregistered wrapper', 'nes
 		const receipt = spyOn(indexer.client, 'getTransactionReceipt').mockResolvedValue({ blockHash: block.hash, blockNumber: 10n, cumulativeGasUsed: 100_000n, from: sender, gasUsed: 100_000n, logs: [log], status: 'success', to, transactionHash, transactionIndex: 0n })
 		try {
 			const result = await indexer.indexBlock(10n, 10n, contracts, new Map(), undefined, block, [log], async () => [])
+			expect(result.block.transactions[0]?.receipt).toMatchObject({ callTraceStatus: 'unavailable' })
 			expect(reads.sort()).toEqual(['decimals', 'name', 'symbol'])
 			expect(result.block.tokenMetadata).toEqual([{ address: token, decimals: 6, name: 'Unknown Token', symbol: 'TKN', readBlock: 10n }])
 			expect(result.block.transactions[0]?.decoded.summary).toContain('amount=1.500001 TKN')

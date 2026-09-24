@@ -28,7 +28,7 @@ export type StoredTransaction = {
 	readonly to: Address | null
 	readonly value: bigint
 	readonly input: Hex
-	readonly status: 'success'
+	readonly status: 'success' | 'reverted'
 	readonly gasUsed: bigint
 	readonly receipt: unknown
 	readonly decoded: DecodedRecord

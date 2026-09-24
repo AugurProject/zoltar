@@ -98,7 +98,7 @@ export async function persistBlockInTransaction(this: ScannerDatabase, transacti
 		await transaction`
 					INSERT INTO transactions (chain_id, hash, block_hash, block_number, transaction_index, from_address, to_address, value, input, status, gas_used, receipt, canonical)
 					VALUES (${chainId}, ${item.hash}, ${block.hash}, ${block.number.toString()}, ${item.transactionIndex}, ${item.from.toLowerCase()}, ${item.to?.toLowerCase() ?? null}, ${item.value.toString()}, ${item.input}, ${item.status}, ${item.gasUsed.toString()}, (${databaseJsonText(item.receipt)}::text)::jsonb, true)
-					ON CONFLICT (chain_id, block_hash, hash) DO UPDATE SET canonical = true
+					ON CONFLICT (chain_id, block_hash, hash) DO UPDATE SET canonical = true, receipt = EXCLUDED.receipt, status = EXCLUDED.status
 				`
 		await transaction`
 					INSERT INTO actions (chain_id, block_hash, tx_hash, contract_address, function_name, function_signature, arguments, display_arguments, argument_schema, decode_status, decode_error, summary)

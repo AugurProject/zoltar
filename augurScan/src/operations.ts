@@ -2,8 +2,6 @@ import { ceilDiv as divideUp } from '../../shared/core/ts/math/bigint.ts'
 import { compareBigint } from './compare.ts'
 type ReportClock = 'block' | 'timestamp'
 
-// BinaryOutcome in EscalationGame.sol: Invalid = 0, Yes = 1, No = 2.
-export const ESCALATION_OUTCOME = { invalid: '0', yes: '1', no: '2' } as const
 export const ETH_QUOTE_DECIMALS = 18
 export const USDC_QUOTE_DECIMALS = 6
 const VAULT_WARNING_HEALTH_FACTOR_BPS = 12_000n

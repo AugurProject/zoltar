@@ -4,7 +4,7 @@ import { findManifestContractDeployment, type IndexerRpcProvider, type RpcBlockH
 import type { NetworkIndexer } from './block-ingestion.ts'
 
 export async function getBlockHeader(this: NetworkIndexer, blockNumber: bigint): Promise<RpcBlockHeader> {
-	return requireRpcBlockHeader(await this.client.getBlock({ blockNumber }), blockNumber)
+	return requireRpcBlockHeader(await this.client.getBlock({ blockNumber, includeTransactions: true }), blockNumber)
 }
 
 export function historicalCodeUnavailable(this: NetworkIndexer): Set<string> {

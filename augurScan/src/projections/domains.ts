@@ -17,8 +17,11 @@ const definitions = (domain: DomainEventProjection['domain'], entityType: string
 const eventDomains: Readonly<Record<string, EventDomainDefinition>> = {
 	...definitions('system', 'question', ['QuestionCreated'], ['questionId']),
 	...definitions('system', 'deployment', ['DeploymentAddressesSet']),
-	...definitions('system', 'reputation-token', ['TheoreticalSupplySet', 'Mint', 'Burn']),
-	...definitions('system', 'share-token', ['AuthorizationUpdated', 'TransferSingle', 'TransferBatch', 'Migrate']),
+	...definitions('system', 'reputation-token', ['ReputationTokenInitialized', 'TheoreticalSupplySet', 'Mint', 'Burn']),
+	...definitions('system', 'share-token', ['URI', 'ApprovalForAll', 'AuthorizationUpdated', 'TransferSingle', 'TransferBatch', 'Migrate']),
+	...definitions('risk', 'pool', ['CompleteSetRedeemedByTransfer'], ['securityPool']),
+	...definitions('system', 'token-authorization', ['AuthorizationUsed', 'AuthorizationCanceled']),
+	...definitions('system', 'weth', ['Deposit', 'Withdrawal']),
 	...definitions('report', 'open-oracle-report', ['ReportSubmitted', 'ReportDisputed', 'ReportSettled'], ['reportId']),
 	...definitions('oracle', 'price-coordinator', ['CoordinatorStateCheckpoint', 'ExecutedStagedOperation', 'LiquidationRouteStaged', 'PendingReportRecovered', 'PriceReportRejected', 'PriceReported', 'PriceRequested', 'RepEthPriceSet', 'SecurityPoolSet', 'StagedOperationQueued', 'InternalApproval']),
 	...definitions('escalation', 'escalation', [
@@ -48,13 +51,14 @@ const eventDomains: Readonly<Record<string, EventDomainDefinition>> = {
 		['DeploySecurityPool', 'SecurityPoolRegistered', 'AwaitingForkContinuationSet', 'CompleteSetCreated', 'CompleteSetRedeemed', 'EscalationGameSet', 'PoolAccountingCheckpoint', 'PoolForkModeActivated', 'ShareTokenSupplySet', 'SharesRedeemed', 'SystemStateSet', 'TotalRepBackingUnitsSet'],
 		['securityPool'],
 	),
-	...definitions('risk', 'vault', ['DepositToEscalationGame', 'RepDepositedToVault', 'RepRedeemedFromVault', 'RepWithdrawnFromVault', 'VaultAccountingCheckpoint', 'VaultBadDebtRecorded', 'VaultLiquidated', 'VaultDepositTargetHealthFactorRecorded'], ['vault', 'targetVault']),
+	...definitions('risk', 'vault', ['VaultBackingFactorAdjusted', 'DepositToEscalationGame', 'RepDepositedToVault', 'RepRedeemedFromVault', 'RepWithdrawnFromVault', 'VaultAccountingCheckpoint', 'VaultBadDebtRecorded', 'VaultLiquidated', 'VaultDepositTargetHealthFactorRecorded'], ['vault', 'targetVault']),
 	...definitions('approval', 'liquidation-approval', ['LiquidationApprovalSet', 'LiquidationApprovalReserved', 'LiquidationApprovalReleased', 'LiquidationApprovalConsumed', 'LiquidationApprovalRevoked', 'LiquidationApprovalNonceInvalidated'], ['approvalId', 'receiverVault']),
-	...definitions('trading', 'amm', ['PairCreated', 'LiquidityAdded', 'LiquidityInitialized', 'LiquidityRemoved', 'PredeploymentSharesQuarantined', 'Swap', 'Sync', 'Transfer', 'Approval'], ['pair']),
+	...definitions('trading', 'amm', ['PositionExitedByTransfer', 'PairCreated', 'LiquidityAdded', 'LiquidityInitialized', 'LiquidityRemoved', 'PredeploymentSharesQuarantined', 'Swap', 'Sync', 'Transfer', 'Approval'], ['pair']),
 	...definitions(
 		'fork',
 		'fork',
 		[
+			'ChildReputationTokenInitialized',
 			'UniverseInitialized',
 			'UniverseForked',
 			'DeployChild',
@@ -105,6 +109,8 @@ const domainProjectionFrom = (log: StoredLog): DomainEventProjection | undefined
 	if (eventName === undefined || data === undefined || log.decoded.status !== 'decoded') return undefined
 	const definition = eventDomains[eventName]
 	if (definition === undefined) return undefined
+	if ((eventName === 'URI' || eventName === 'ApprovalForAll') && log.contractKind !== 'shareToken') return undefined
+	if ((eventName === 'Deposit' || eventName === 'Withdrawal') && log.contractKind !== 'weth') return undefined
 	if (eventName === 'PairCreated' && log.contractKind !== 'ammFactory') return undefined
 	if ((eventName === 'Transfer' || eventName === 'Approval') && log.contractKind !== 'ammPair') return undefined
 	// Augur's two-way pair emits reserve-oriented Swap evidence. Uniswap V3/V4

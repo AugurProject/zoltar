@@ -1,3 +1,4 @@
+import { semanticSummary } from './semantic-evidence.ts'
 import type { OperationsCatalogSection, OperationsDetailRoute, OperationsRenderContext } from './browser-types.ts'
 import { approvalTransitionFields } from './live-update.ts'
 import { isRecord, operationRecords, type JsonRecord } from './api-validation.ts'
@@ -127,7 +128,7 @@ export const createOperationsRouteView = (deps: OperationsRouteViewDeps) => {
 		items.map(item => {
 			const eventName = String(item['event_name'] ?? item['semantic_event_kind'] ?? 'Protocol evidence')
 			const block = item['block_number']
-			const row = operationRow(eventName, `Canonical event · log ${String(item['log_index'] ?? '—')}`, String(item['tx_hash'] ?? ''), block)
+			const row = operationRow(eventName, semanticSummary(item), String(item['tx_hash'] ?? ''), block)
 			row.append(rawEvidence(item))
 			return row
 		})
@@ -137,7 +138,7 @@ export const createOperationsRouteView = (deps: OperationsRouteViewDeps) => {
 			const eventName = String(item['event_name'] ?? 'AMM event')
 			const data = isRecord(item['event_data']) ? item['event_data'] : {}
 			const analytics = isRecord(item['analytics']) ? item['analytics'] : {}
-			let summary = 'Canonical AMM lifecycle evidence'
+			let summary = semanticSummary(item)
 			if (eventName === 'Swap')
 				summary = `${String(analytics['direction'] ?? 'Swap')} · ${exactUnit(String(analytics['amountIn'] ?? '0'), 18, String(analytics['baseAsset'] ?? 'shares'))} in → ${exactUnit(String(analytics['amountOut'] ?? '0'), 18, String(analytics['quoteAsset'] ?? 'shares'))} out · ${exactUnit(String(analytics['feeAmount'] ?? '0'), 18, 'shares')} fee${isRecord(analytics['priceImpact']) && analytics['priceImpact']['bps'] !== undefined ? ` · ${exactUnit(String(analytics['priceImpact']['bps']), 2, '%')} impact` : ''}`
 			else if (eventName === 'Sync') summary = `${exactUnit(String(data['yesReserve'] ?? '0'), 18, 'YES')} · ${exactUnit(String(data['noReserve'] ?? '0'), 18, 'NO')} reserves`

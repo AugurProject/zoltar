@@ -35,12 +35,16 @@ export const createStateComponents = (element: <K extends keyof HTMLElementTagNa
 		const parsed = /^\d+$/.test(value) ? Number(value) * 1_000 : Date.parse(value)
 		return Number.isFinite(parsed) ? parsed : 0
 	}
+	const hasChartValue = (value: unknown): boolean => {
+		const numeric = chartNumericValue(value)
+		return numeric !== undefined && numeric !== null && String(numeric).trim() !== '' && Number.isFinite(Number(numeric))
+	}
 
 	const lineChart = <T extends { timestamp: string }>(rows: T[], definitions: ChartDefinition<T>[], { sharedRange, axisUnit = '' }: { sharedRange?: readonly [number, number]; axisUnit?: string } = {}) => {
 		const series = definitions.flatMap((definition, index) =>
 			rows.flatMap(row => {
 				const raw = row[definition.key]
-				if (raw === undefined) return []
+				if (!hasChartValue(raw)) return []
 				const value = compactValue(chartNumericValue(raw), definition.decimals ?? 18)
 				const timestamp = chartTimestamp(row.timestamp)
 				return Number.isFinite(value) && timestamp > 0 ? [{ timestamp: new Date(timestamp), value, name: definition.label, color: index === 0 ? '#56d7d0' : '#f0b35d' }] : []
@@ -80,6 +84,8 @@ export const createStateComponents = (element: <K extends keyof HTMLElementTagNa
 			emptyMessage?: string
 		} = {},
 	) => {
+		const availableDefinitions = definitions.filter(definition => rows.some(row => hasChartValue(row[definition.key]) && chartTimestamp(row.timestamp) > 0))
+		const missingDefinitions = definitions.filter(definition => !availableDefinitions.includes(definition))
 		const card = element('section', 'chart-card')
 		const heading = element('div', 'chart-heading')
 		heading.append(element('h4', '', title))
@@ -89,15 +95,17 @@ export const createStateComponents = (element: <K extends keyof HTMLElementTagNa
 			item.append(element('i', className === '' ? '' : `chart-${className}`), document.createTextNode(label))
 			legend.append(item)
 		}
-		if (rows.length > 0) heading.append(legend)
+		if (availableDefinitions.length > 0) heading.append(legend)
 		card.append(heading)
 		if (rows.length === 0) card.append(element('p', 'data-note', emptyMessage))
+		else if (availableDefinitions.length === 0) card.append(element('p', 'data-note', 'Chart values are unavailable in these checkpoints.'))
 		else {
+			if (missingDefinitions.length > 0) card.append(element('p', 'data-note', `Unavailable series: ${missingDefinitions.map(definition => definition.label).join(', ')}.`))
 			const independentlyScaled = definitions.length > 1 && sharedRange === undefined
 			if (independentlyScaled) {
 				const currentValues = element('dl', 'chart-current-values')
-				for (const { key, label, decimals = 18, unit = '' } of definitions) {
-					const latest = rows.findLast(row => row[key] !== undefined)
+				for (const { key, label, decimals = 18, unit = '' } of availableDefinitions) {
+					const latest = rows.findLast(row => hasChartValue(row[key]))
 					if (latest === undefined) continue
 					const item = element('div')
 					item.append(element('dt', '', label), element('dd', '', exactUnit(chartNumericValue(latest[key]), decimals, unit)))
@@ -107,12 +115,12 @@ export const createStateComponents = (element: <K extends keyof HTMLElementTagNa
 			}
 			const viewport = element('div', 'chart-scroll')
 			if (independentlyScaled) {
-				for (const definition of definitions) {
+				for (const definition of availableDefinitions) {
 					const series = element('section', 'chart-series')
 					series.append(element('h5', '', definition.label), lineChart(rows, [definition], { axisUnit: definition.unit }))
 					viewport.append(series)
 				}
-			} else viewport.append(lineChart(rows, definitions, { sharedRange, axisUnit }))
+			} else viewport.append(lineChart(rows, availableDefinitions, { sharedRange, axisUnit }))
 			const dataDisclosure = document.createElement('details')
 			dataDisclosure.className = 'chart-data-disclosure'
 			dataDisclosure.append(element('summary', '', 'View exact chart data'))
@@ -132,7 +140,7 @@ export const createStateComponents = (element: <K extends keyof HTMLElementTagNa
 				tableRow.append(time)
 				for (const { key, decimals = 18, unit = '' } of definitions) {
 					const value = row[key]
-					tableRow.append(element('td', '', value === undefined ? 'Unavailable' : exactUnit(chartNumericValue(value), decimals, unit)))
+					tableRow.append(element('td', '', hasChartValue(value) ? exactUnit(chartNumericValue(value), decimals, unit) : 'Unavailable'))
 				}
 				body.append(tableRow)
 			}

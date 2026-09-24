@@ -1,5 +1,5 @@
 import type { SQL } from 'bun'
-import { auctionLifecycle, ESCALATION_OUTCOME, poolCapacity, reportLifecycle, reportLifecycleEventName, vaultRisk } from '../operations.ts'
+import { auctionLifecycle, poolCapacity, reportLifecycle, reportLifecycleEventName, vaultRisk } from '../operations.ts'
 import { ApiRequestError } from '../query-errors.ts'
 import { jsonRecord } from '../record-serialization.ts'
 
@@ -152,19 +152,17 @@ export const escalationCatalogData = async (sql: SQL, chainId: number, snapshotB
 		)
 		SELECT game.game_address,
 			latest.event_name, latest.event_data, latest.block_number::text AS block_number, latest.block_hash, latest.tx_hash, latest.log_index,
-			COALESCE((SELECT sum((event_data->>'attoRepAmount')::numeric)::text FROM escalation_game_events event
-				WHERE event.chain_id = ${chainId} AND event.game_address = game.game_address AND event.canonical
-				AND event.block_number <= ${snapshotBlock}
-				AND event.event_name = 'DepositOnOutcome' AND event.event_data->>'outcome' = ${ESCALATION_OUTCOME.invalid}), '0') AS invalid_stake_atto_rep,
-			COALESCE((SELECT sum((event_data->>'attoRepAmount')::numeric)::text FROM escalation_game_events event
-				WHERE event.chain_id = ${chainId} AND event.game_address = game.game_address AND event.canonical
-				AND event.block_number <= ${snapshotBlock}
-				AND event.event_name = 'DepositOnOutcome' AND event.event_data->>'outcome' = ${ESCALATION_OUTCOME.no}), '0') AS no_stake_atto_rep,
-			COALESCE((SELECT sum((event_data->>'attoRepAmount')::numeric)::text FROM escalation_game_events event
-				WHERE event.chain_id = ${chainId} AND event.game_address = game.game_address AND event.canonical
-				AND event.block_number <= ${snapshotBlock}
-				AND event.event_name = 'DepositOnOutcome' AND event.event_data->>'outcome' = ${ESCALATION_OUTCOME.yes}), '0') AS yes_stake_atto_rep
-		FROM games game JOIN LATERAL (
+			snapshot.read_result->'outcomeBalancesAttoRep'->>0 AS invalid_stake_atto_rep,
+			snapshot.read_result->'outcomeBalancesAttoRep'->>1 AS yes_stake_atto_rep,
+			snapshot.read_result->'outcomeBalancesAttoRep'->>2 AS no_stake_atto_rep,
+			snapshot.block_number::text AS balance_block_number, snapshot.read_status AS balance_read_status
+		FROM games game LEFT JOIN LATERAL (
+			SELECT state.* FROM entity_state_snapshots state
+			JOIN blocks block ON block.chain_id = state.chain_id AND block.hash = state.block_hash AND block.canonical
+			WHERE state.chain_id = ${chainId} AND state.entity_type = 'escalation' AND state.entity_identity = game.game_address
+				AND state.canonical AND state.block_number <= ${snapshotBlock}
+			ORDER BY state.block_number DESC, state.observed_at DESC LIMIT 1
+		) snapshot ON true JOIN LATERAL (
 			SELECT * FROM escalation_game_events event WHERE event.chain_id = ${chainId} AND event.game_address = game.game_address
 				AND event.canonical AND event.block_number <= ${snapshotBlock}
 			ORDER BY event.block_number DESC, event.log_index DESC, event.tx_hash DESC LIMIT 1

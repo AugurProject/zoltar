@@ -1,3 +1,5 @@
+import { isRecord } from './api-validation.ts'
+import { semanticFields } from './semantic-evidence.ts'
 import type { EntityHistory, QuestionRecord, StateCatalog, StateEntity, StateTab, UniverseRecord } from './browser-types.ts'
 import { exactUnit } from './format.ts'
 import { short, shortIdentifier } from './identifier-format.ts'
@@ -28,9 +30,28 @@ export const renderQuestionDetailPage = async (deps: StateEntityDeps, question: 
 	const { lookup: $, fetchEntityHistory, isCurrent, stateHeader, pageUrl, isDemo, historyCoverageNotice, element, metricCard, number, staticField } = deps
 	const history = suppliedHistory ?? (await fetchEntityHistory('questions', question))
 	if (!isCurrent()) return
+	const resolutionPanel = element('section', 'static-card')
+	resolutionPanel.append(element('h3', '', 'Market resolution by universe'))
+	for (const pool of history.pools) {
+		if (!isRecord(pool)) continue
+		const state = isRecord(pool['read_result']) ? pool['read_result'] : {}
+		const row = element('div', 'static-grid')
+		row.append(
+			staticField('Universe', String(pool['universe_id'])),
+			...semanticFields({ questionResolution: state['questionResolution'], finalQuestionResolution: state['finalQuestionResolution'] }).map(([label, value]) => staticField(label, value)),
+			staticField('Resolution read block', String(pool['resolution_block'] ?? 'Unavailable')),
+		)
+		if (typeof pool['escalation_address'] === 'string') {
+			const link = element('a', 'back-link', 'View escalation game →')
+			link.href = `/escalation/${pool['escalation_address']}?chainId=${question.chain_id}${isDemo ? '&demo=1' : ''}`
+			row.append(link)
+		}
+		resolutionPanel.append(row)
+	}
+	if (history.pools.length === 0) resolutionPanel.append(element('p', 'data-note', 'No linked pool resolution evidence is available.'))
 	const kind = question.outcome_options.length === 0 ? 'Scalar' : 'Categorical'
 	const fragment = document.createDocumentFragment()
-	fragment.append(stateHeader('Immutable question', question.title, `ID ${short(question.question_id, 10, 8)}`, `${kind} · ${questionStatus(question)}`))
+	fragment.append(stateHeader('Immutable question', question.title, `ID ${short(question.question_id, 10, 8)}`, `${kind} · Time window ${questionStatus(question)}`))
 	const canonicalQuestionRoute = location.pathname.startsWith('/question/')
 	const questionTab = pageUrl.searchParams.get('tab') === 'usage' ? 'usage' : 'overview'
 	if (canonicalQuestionRoute) {
@@ -57,8 +78,8 @@ export const renderQuestionDetailPage = async (deps: StateEntityDeps, question: 
 	}
 	if (!canonicalQuestionRoute || questionTab === 'usage') fragment.append(historyCoverageNotice(history, 'questions', question))
 	const metrics = element('div', 'metric-grid')
-	metrics.append(metricCard('Status', questionStatus(question)), metricCard('Linked pools', number(question.pool_count)), metricCard('Universe forks', number(question.fork_count)), metricCard('Answer type', kind))
-	if (!canonicalQuestionRoute || questionTab === 'overview') fragment.append(metrics)
+	metrics.append(metricCard('Time window', questionStatus(question)), metricCard('Linked pools', number(question.pool_count)), metricCard('Universe forks', number(question.fork_count)), metricCard('Answer type', kind))
+	if (!canonicalQuestionRoute || questionTab === 'overview') fragment.append(metrics, resolutionPanel)
 	const definition = element('section', 'static-card')
 	definition.append(element('h4', '', 'Question definition'), element('p', 'question-description', question.description))
 	const outcomes = element('div', 'outcomes')

@@ -1,3 +1,4 @@
+import { semanticSummary, timelineEntityPath } from './semantic-evidence.ts'
 import { shortIdentifier } from './identifier-format.ts'
 import type { NetworkRecord, OperationsCatalogSection, OperationsRenderContext, PagedOperationsCatalogSection } from './browser-types.ts'
 import { isRecord, operationRecords, operationsCatalogRecords, operationsRiskPagination, operationsRiskRecords, type JsonRecord, type OperationsResponse } from './api-validation.ts'
@@ -125,7 +126,7 @@ export const renderOperationsOverview = (deps: OperationsOverviewDeps, response:
 	const escalationRows = escalations.map(item =>
 		operationRow(
 			'Escalation game',
-			`${String(item['event_name'] ?? 'Active')} · INVALID ${exactUnit(String(item['invalid_stake_atto_rep'] ?? '0'), 18, 'REP')} · NO ${exactUnit(String(item['no_stake_atto_rep'] ?? '0'), 18, 'REP')} · YES ${exactUnit(String(item['yes_stake_atto_rep'] ?? '0'), 18, 'REP')}`,
+			`${String(item['event_name'] ?? 'Active')} · INVALID ${item['invalid_stake_atto_rep'] == null ? 'Unavailable' : exactUnit(String(item['invalid_stake_atto_rep']), 18, 'REP')} · NO ${item['no_stake_atto_rep'] == null ? 'Unavailable' : exactUnit(String(item['no_stake_atto_rep']), 18, 'REP')} · YES ${item['yes_stake_atto_rep'] == null ? 'Unavailable' : exactUnit(String(item['yes_stake_atto_rep']), 18, 'REP')} · balances read at block ${String(item['balance_block_number'] ?? 'unavailable')}`,
 			String(item['game_address'] ?? ''),
 			item['block_number'],
 			operationsHref(`/operations/escalation/${encodeURIComponent(String(item['game_address'] ?? ''))}`),
@@ -164,7 +165,7 @@ export const renderOperationsOverview = (deps: OperationsOverviewDeps, response:
 	})
 	const riskRows = [...poolRiskRows, ...vaultRiskRows]
 	const approvalRows = approvals.map(item => operationRow(String(item['event_name'] ?? 'Liquidation approval'), approvalTransitionSummary(item), String(item['approval_identity'] ?? item['receiver_vault'] ?? ''), item['block_number']))
-	const liquidationRows = recentLiquidations.map(item => operationRow('Vault liquidation', 'Canonical liquidation route and resulting debt evidence', String(item['entity_identity'] ?? item['source_contract'] ?? ''), item['block_number']))
+	const liquidationRows = recentLiquidations.map(item => operationRow('Vault liquidation', semanticSummary(item), String(item['entity_identity'] ?? item['source_contract'] ?? ''), item['block_number']))
 	const tradingRows = trading.map(item =>
 		operationRow(
 			String(item['question_title'] ?? 'Augur AMM market'),
@@ -177,12 +178,24 @@ export const renderOperationsOverview = (deps: OperationsOverviewDeps, response:
 	const timelineRows = timeline.map(item => {
 		const rawEvidenceStatus = item['evidence_status'] ?? (item['canonical'] === false ? 'noncanonical' : 'canonical')
 		const invalidation = item['invalidation_reason'] === undefined ? '' : ` · ${historyInvalidationReasonLabel(item['invalidation_reason'])}`
-		return exactEvidenceRow(String(item['semantic_event_kind'] ?? 'Protocol transition'), `${timelineEntityTypeLabel(item['entity_type'])} · ${evidenceStatusLabel(rawEvidenceStatus)}${invalidation}`, [
+		const row = exactEvidenceRow(String(item['semantic_event_kind'] ?? 'Protocol transition'), `${timelineEntityTypeLabel(item['entity_type'])} · ${evidenceStatusLabel(rawEvidenceStatus)}${invalidation}`, [
 			...timelineOccurrenceFields(item),
 			['Evidence status code', rawEvidenceStatus],
 			['Invalidation reason code', item['invalidation_reason']],
+			['Transition', semanticSummary(item)],
+			['Related entities', Array.isArray(item['related_entities']) ? item['related_entities'].join(' · ') : undefined],
 		])
+		const path = timelineEntityPath(item)
+		if (path !== undefined) {
+			const link = document.createElement('a')
+			link.href = operationsHref(path)
+			link.textContent = 'View entity'
+			row.append(link)
+		}
+		return row
 	})
+	const coverage = isRecord(data['decodeCoverage']) ? data['decodeCoverage'] : {}
+	const decodeRows = operationRecords(coverage['groups']).map(item => operationRow(String(item['selector'] ?? 'No selector'), `${String(item['transaction_count'])} calls · ${String(item['decode_status'])}`, String(item['destination'] ?? ''), undefined, operationsHref(`/tx/${item['sample_transaction']}`)))
 	const integrityRows = integrity.map(item => {
 		const evidence = historyInvalidationEvidencePresentation(item['causes'], item['occurrence_counts'])
 		const primaryReason = String(item['reason'] ?? '')
@@ -265,6 +278,21 @@ export const renderOperationsOverview = (deps: OperationsOverviewDeps, response:
 		[
 			'integrity',
 			() => [
+				operationsPanel('Call trace coverage', [operationRow('Selected transaction traces', `${String(coverage['traced_transactions'] ?? 'Unavailable')} traced / ${String(coverage['selected_transactions'] ?? 'Unavailable')} selected transactions`, undefined, undefined)], '', {
+					label: 'Nested calls without logs require provider tracing. These counts do not measure unobserved activity.',
+				}),
+				operationsPanel(
+					'Recent reverted transactions',
+					operationRecords(coverage['reverted']).map(item => operationRow('Reverted protocol transaction', `${exactUnit(String(item['value']), 18, 'ETH')} attempted value`, String(item['to_address'] ?? ''), item['block_number'], operationsHref(`/tx/${item['hash']}`))),
+					'No indexed reverted transactions.',
+					{ label: 'Latest 100 selected reverted transactions.' },
+				),
+				operationsPanel(
+					'Decode coverage',
+					[operationRow('Observed calls', `${String(coverage['decoded_calls'] ?? 'Unavailable')} decoded / ${String(coverage['observed_calls'] ?? 'Unavailable')} observed · ${String(coverage['undecoded_calls'] ?? 'Unavailable')} uninterpreted`, undefined, undefined), ...decodeRows],
+					'No coverage observations.',
+					{ label: coverage['truncated'] === true ? 'Top 100 destination/selector groups; totals include all groups.' : 'Canonical calls through the selected indexed block.' },
+				),
 				operationsPanel('Selected-chain replacements', integrityRows, 'No chain reorganizations have been recorded.', {
 					label: selectedNetworkScope,
 				}),
@@ -301,7 +329,11 @@ export const renderOperationsOverview = (deps: OperationsOverviewDeps, response:
 			],
 		],
 	])
+	const fees = isRecord(data['feeEconomics']) ? data['feeEconomics'] : {}
 	const panels = sectionPanels.get(selected)?.() ?? [
+		operationsPanel('Protocol fee accrual', [operationRow('Accrued vault fees', fees['accrued_atto_eth'] == null ? 'Unavailable' : exactUnit(String(fees['accrued_atto_eth']), 18, 'ETH'), undefined, undefined)], '', {
+			label: `Indexed accrual checkpoints across ${String(fees['pools'] ?? 'unknown')} pools; ${String(fees['missing_baselines'] ?? 'unknown')} missing opening checkpoints. This is accrued vault revenue, before claims.`,
+		}),
 		operationsPanel('Needs attention · reports', attentionReportRows.slice(0, 5), `No reports need attention among ${number(reports.length)} shown.`),
 		operationsPanel('Active escalations', activeEscalationRows, `No active escalation games among ${number(escalations.length)} shown.`),
 		operationsPanel('Active auctions', activeAuctionRows, `No active auctions among ${number(auctions.length)} shown.`),

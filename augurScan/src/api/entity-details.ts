@@ -229,8 +229,8 @@ export const eventEntityDetailResponse = async (sql: SQL, parts: readonly string
 		result['demandCurveTruncated'] = bids.length > 1000
 		result['finalization'] = finalization
 	} else {
-		result['deposits'] = rows.filter((row: Record<string, unknown>) => row['event_name'] === 'DepositOnOutcome' || row['event_name'] === 'LocalDepositAppended')
-		result['claims'] = rows.filter((row: Record<string, unknown>) => String(row['event_name']).includes('Claim'))
+		result['deposits'] = rows.slice(0, page.limit).filter((row: Record<string, unknown>) => row['event_name'] === 'DepositOnOutcome' || row['event_name'] === 'LocalDepositAppended')
+		result['claims'] = rows.slice(0, page.limit).filter((row: Record<string, unknown>) => String(row['event_name']).includes('Claim'))
 	}
 	return json({ chainId, asOf, data: result })
 }
