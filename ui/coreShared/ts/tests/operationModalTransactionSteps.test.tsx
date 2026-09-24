@@ -32,7 +32,7 @@ for (const outcome of ['success', 'failure', 'approval', 'cancel', 'multi-step']
 			const [open, setOpen] = useState(true)
 			return (
 				<GlobalTransactionPresentationProvider transaction={presentation.value}>
-					<OperationModal isOpen={open} title='Withdraw REP' closeOnSuccessKey={completedHash.value} onClose={() => setOpen(false)}>
+					<OperationModal confirmSingleStepFromForm isOpen={open} title='Withdraw REP' closeOnSuccessKey={completedHash.value} onClose={() => setOpen(false)}>
 						<input aria-label='Amount' defaultValue='42' />
 						<button
 							type='button'
@@ -251,7 +251,7 @@ test('closing the dialog during preparation cancels its captured scope before a 
 	function Harness() {
 		const [open, setOpen] = useState(true)
 		return (
-			<OperationModal isOpen={open} title='Withdraw REP' onClose={() => setOpen(false)}>
+			<OperationModal confirmSingleStepFromForm isOpen={open} title='Withdraw REP' onClose={() => setOpen(false)}>
 				<button
 					type='button'
 					onClick={() => {
@@ -282,6 +282,31 @@ test('closing the dialog during preparation cancels its captured scope before a 
 		expect(transactionSteps.value).toBeUndefined()
 	} finally {
 		resume.resolve()
+		await rendered.cleanup()
+	}
+})
+
+test('keeps a single-action review by default for other app dialogs', async () => {
+	const rendered = await renderIntoDocument(
+		<OperationModal isOpen title='Queue liquidation' onClose={() => undefined}>
+			<span>Form</span>
+		</OperationModal>,
+	)
+	let controller: ReturnType<typeof createTransactionStepController> | undefined
+	let review: Promise<bigint | undefined> | undefined
+	try {
+		await act(() => {
+			controller = createTransactionStepController()
+			controller.setPlan([{ ...step, title: 'Queue liquidation', amount: '2 REP', tokenFunding: [{ amount: '2 REP', limit: undefined }] }])
+			review = controller.review().catch(() => undefined)
+		})
+		const dialog = within(document.body).getByRole('dialog', { name: 'Queue liquidation' })
+		expect(transactionSteps.value?.steps[0]?.phase).toBe('review')
+		expect(within(dialog).getByRole('button', { name: /^Queue liquidation/ })).not.toBeNull()
+		expect(within(dialog).getByText('2 REP')).not.toBeNull()
+	} finally {
+		transactionSteps.value?.cancel()
+		await review
 		await rendered.cleanup()
 	}
 })

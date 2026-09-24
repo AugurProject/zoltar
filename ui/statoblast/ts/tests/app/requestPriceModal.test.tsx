@@ -1,3 +1,5 @@
+import { signal } from '@preact/signals'
+import type { GlobalTransactionPresentation } from '@zoltar/ui-core-shared/types/components.js'
 import { createDeferred } from '@zoltar/ui-core-shared/tests/testUtils/deferred.js'
 import { GlobalTransactionPresentationProvider } from '@zoltar/ui-core-shared/components/GlobalTransactionPresentationContext.js'
 import { afterEach, expect, test } from 'bun:test'
@@ -446,6 +448,37 @@ test('keeps the preview while satisfied approvals are skipped before the final r
 		expect(queries.getByRole('button', { name: /Request new price/ }).hasAttribute('disabled')).toBe(false)
 	} finally {
 		ready.resolve()
+		await rendered.cleanup()
+		dom.cleanup()
+	}
+})
+
+test('does not announce submission while preparing an unconfirmed price review', async () => {
+	const dom = installDomEnvironment()
+	const presentation = signal<GlobalTransactionPresentation | undefined>(undefined)
+	function Harness() {
+		return (
+			<GlobalTransactionPresentationProvider transaction={presentation.value}>
+				<RequestPriceModal
+					{...props}
+					onConfirm={async (_request, signal) => {
+						presentation.value = { operationKey: 'price', tone: 'preparing', title: 'Requesting new price…', detail: 'Submitting in browser simulation' }
+						const controller = createTransactionStepController(signal)
+						controller.setPlan([{ ...step, title: 'Request new price' }])
+						await controller.review().catch(() => undefined)
+					}}
+				/>
+			</GlobalTransactionPresentationProvider>
+		)
+	}
+	const rendered = await renderIntoDocument(<Harness />)
+	try {
+		const dialog = within(document.body).getByRole('dialog', { name: 'Request new price' })
+		await act(() => fireEvent.input(within(dialog).getByRole('textbox', { name: 'Open Oracle REP/ETH starting price' }), { target: { value: '3' } }))
+		await settle()
+		expect(dialog.textContent).not.toContain('Submitting in browser simulation')
+		expect(transactionSteps.value?.steps[0]?.phase).toBe('review')
+	} finally {
 		await rendered.cleanup()
 		dom.cleanup()
 	}

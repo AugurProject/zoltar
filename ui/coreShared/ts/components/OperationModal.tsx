@@ -1,3 +1,4 @@
+import { markTransactionSuccessPresented } from '../transactions/transactionSuccess.js'
 import { TransactionHashLink } from './TransactionHashLink.js'
 import { registerTransactionReviewScope } from '../transactions/transactionReviewScope.js'
 import { transactionSteps } from '../transactions/transactionSteps.js'
@@ -28,7 +29,7 @@ function getModalTransactionPresentation(transaction: ReturnType<typeof useGloba
 	}
 }
 
-export function OperationModal({ children, closeDisabled = false, closeOnSuccessKey, context = [], description, embedTransactionSteps = true, isOpen, onClose, title }: OperationModalProps) {
+export function OperationModal({ children, confirmSingleStepFromForm = false, closeDisabled = false, closeOnSuccessKey, context = [], description, embedTransactionSteps = true, isOpen, onClose, title }: OperationModalProps) {
 	const dialogRef = useRef<HTMLElement | null>(null)
 	const closeButtonRef = useRef<HTMLButtonElement | null>(null)
 	const noticeRef = useRef<HTMLDivElement | null>(null)
@@ -56,7 +57,7 @@ export function OperationModal({ children, closeDisabled = false, closeOnSuccess
 	const activeStep = ownedWorkflow?.steps[ownedWorkflow.activeIndex]
 	// A workflow made only of approvals was started by the form's own approve control, which already shows the amount and its pending state.
 	const approvalOnly = ownedWorkflow !== undefined && activeStep !== undefined && ownedWorkflow.steps.every(step => step.spender !== undefined)
-	const singleFormAction = ownedWorkflow?.steps.length === 1
+	const singleFormAction = confirmSingleStepFromForm && ownedWorkflow?.steps.length === 1
 	const showSteps = activeStep !== undefined && !approvalOnly && !singleFormAction
 	// Stable handlers keep the form's action group from re-claiming the slot on every render.
 	const reviewActionsSlotHandlers = useMemo(() => ({ claim: (element: HTMLElement) => setReviewActionsSlot(element), release: () => setReviewActionsSlot(null) }), [])
@@ -123,6 +124,7 @@ export function OperationModal({ children, closeDisabled = false, closeOnSuccess
 		const submittedActionSucceeded = activeTransaction?.tone === 'success' && activeTransaction.hash !== undefined && activeTransaction.hash === closeOnSuccessKey && activeTransactionOperationKey !== undefined && modalOperationKeysRef.current.has(activeTransactionOperationKey)
 		if (submittedActionSucceeded) {
 			setSuccess(activeTransaction)
+			if (activeTransaction.hash !== undefined) markTransactionSuccessPresented(activeTransaction.hash)
 			if (ownsWorkflow) workflow.cancel()
 		} else if (ownsWorkflow && activeTransaction?.tone === 'success' && activeTransaction.hash !== undefined && workflow.steps.some(step => step.hash === activeTransaction.hash)) {
 			// A standalone approval completed; keep the form for the actual action.
@@ -205,7 +207,7 @@ export function OperationModal({ children, closeDisabled = false, closeOnSuccess
 							) : undefined}
 						</>
 					) : (
-						<div className='operation-modal-body' role='status'>
+						<div className='operation-modal-body transaction-success-panel' role='status'>
 							<h4>{success.title}</h4>
 							{success.hash === undefined ? undefined : <TransactionHashLink hash={success.hash} />}
 							<div className='actions'>

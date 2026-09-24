@@ -2,7 +2,7 @@ import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as reportingCopy from '../../../copy/reporting.js'
 import { CurrencyValue } from '@zoltar/ui-core-shared/components/CurrencyValue.js'
 import { ProgressMeter } from '@zoltar/ui-core-shared/components/ProgressMeter.js'
-import { formatCurrencyInputBalance } from '@zoltar/ui-core-shared/lib/formatters.js'
+import { formatCurrencyBalance } from '@zoltar/ui-core-shared/lib/formatters.js'
 import type { ReportingDetails, ReportingOutcomeKey, EscalationDeposit } from '@zoltar/ui-core-shared/types/contracts.js'
 import { EscalationSide } from './EscalationSide.js'
 
@@ -33,7 +33,11 @@ export function ReportingSides({
 		<div className='escalation-sides-shell'>
 			<ProgressMeter
 				valueText={undefined}
-				label={chartScaleMax === undefined ? reportingCopy.progressToForkUnavailable : reportingCopy.progressToFork(formatCurrencyInputBalance(largestBalance), formatCurrencyInputBalance(chartScaleMax), (chartScaleMax > 0n ? (largestBalance * 100n) / chartScaleMax : 0n).toString())}
+				label={
+					chartScaleMax === undefined
+						? reportingCopy.progressToForkUnavailable
+						: reportingCopy.progressToFork(formatCurrencyBalance(largestBalance), formatCurrencyBalance(chartScaleMax), largestBalance > 0n && chartScaleMax > largestBalance * 10000n ? '<0.01' : (chartScaleMax > 0n ? Number((largestBalance * 10000n) / chartScaleMax) / 100 : 0).toString())
+				}
 				value={largestBalance}
 				maxValue={chartScaleMax ?? 0n}
 				detail={reportingCopy.forkProgressHelp}

@@ -19,7 +19,7 @@ import { TransactionActionButton } from '@zoltar/ui-core-shared/components/Trans
 import { TimestampValue } from '@zoltar/ui-core-shared/components/TimestampValue.js'
 import { WarningSurface } from '@zoltar/ui-core-shared/components/WarningSurface.js'
 import { pickFirstReason } from '@zoltar/ui-core-shared/transactions/actionAvailability.js'
-import { formatCurrencyInputBalance, formatDuration } from '@zoltar/ui-core-shared/lib/formatters.js'
+import { formatCurrencyBalance, formatCurrencyInputBalance, formatDuration } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { parseOptionalRepAmountInput } from '@zoltar/ui-core-shared/forms/formInputs.js'
 import { getWrongNetworkReason, isActiveAppChain } from '@zoltar/ui-core-shared/wallet/network.js'
 import { getEscalationPhase, getEscalationTimeRemaining, getLeadingEscalationOutcome, getReportingMaxProfitContribution, getReportingMinimumOutcomeChangeContribution, getRemainingSelectedOutcomeContributionCapacity, isPoolQuestionFinalized, previewReportingContribution } from '../lib/reportingDomain.js'
@@ -31,7 +31,7 @@ import { ReportingSettlementSection } from './ReportingSettlementSection.js'
 import type { ReportingSectionProps } from '../../oracleTypes.js'
 import type { EscalationDeposit, ReportingDetails, ReportingOutcomeKey } from '@zoltar/ui-core-shared/types/contracts.js'
 function formatKnownAmount(amount: bigint | undefined) {
-	return amount === undefined ? commonCopy.metricUnavailablePlaceholder : formatCurrencyInputBalance(amount)
+	return amount === undefined ? commonCopy.metricUnavailablePlaceholder : formatCurrencyBalance(amount)
 }
 type ReportingStatus = 'active' | 'missing' | 'not-started'
 type EscalationSideDisplay = {
@@ -42,10 +42,7 @@ type EscalationSideDisplay = {
 	userStake: bigint | undefined
 }
 const LOAD_REPORTING_PRESETS_REASON = reportingCopy.presetDetailsRequired
-const MAX_PROFIT_NOT_STARTED_REASON = reportingCopy.maxProfitPrestartReason
 const SELECT_OUTCOME_PRESET_REASON = reportingCopy.presetOutcomeSelectionRequired
-const SELECTED_SIDE_ALREADY_LEADS_REASON = reportingCopy.selectedSideLeadsReason
-const MAX_PROFIT_WINDOW_FILLED_REASON = reportingCopy.maxProfitWindowFilledReason
 const SELECT_OUTCOME_TO_ENABLE_REPORTING_MESSAGE = reportingCopy.reportingActivationHint
 const NO_SELECTED_SIDE_CAPACITY_REASON = reportingCopy.selectedSideCapacityEmpty
 const BELOW_MINIMUM_SELECTED_SIDE_CAPACITY_REASON = reportingCopy.selectedSideBelowMinimumReason
@@ -54,7 +51,7 @@ const FORK_TRIGGERED_SETTLEMENT_REASON = reportingCopy.forkRequiredSettlementRea
 const FORK_ALREADY_TRIGGERED_REPORT_REASON = reportingCopy.forkAlreadyTriggeredReportReason
 const FORK_ALREADY_TRIGGERED_SETTLEMENT_REASON = reportingCopy.forkAlreadyTriggeredSettlementReason
 function isRedundantPresetReason(reason: string | undefined) {
-	return reason === LOAD_REPORTING_PRESETS_REASON || reason === MAX_PROFIT_NOT_STARTED_REASON || reason === SELECT_OUTCOME_PRESET_REASON || reason === SELECTED_SIDE_ALREADY_LEADS_REASON || reason === MAX_PROFIT_WINDOW_FILLED_REASON
+	return reason === LOAD_REPORTING_PRESETS_REASON || reason === SELECT_OUTCOME_PRESET_REASON
 }
 function getOutcomeSides(reportingDetails: ReportingDetails | undefined) {
 	if (reportingDetails?.status === 'active')
@@ -197,6 +194,7 @@ export function ReportingSection({
 	const availableReportingRep = usesWalletFunding ? effectiveReportingDetails?.viewerWalletRepBalanceAttoRep : effectiveReportingDetails?.viewerPoolHeldVaultRepBackingAttoRep
 	const reportButtonLabel = selectedOutcome === undefined ? reportingCopy.reportOnSelectedSide : commonCopy.launchAction(reportingCopy.reportAmountLabel(selectedOutcomeLabel, formatCurrencyInputBalance(actualReportDepositAmount ?? selectedAmount ?? 0n)))
 	const minimumOutcomeChangeContribution = selectedOutcome === undefined ? { amountAttoRep: undefined, reason: SELECT_OUTCOME_PRESET_REASON } : getReportingMinimumOutcomeChangeContribution(effectiveReportingDetails, selectedOutcome)
+	const minimumPresetAmount = minimumOutcomeChangeContribution.amountAttoRep ?? (effectiveReportingDetails?.status === 'not-started' ? effectiveReportingDetails.startBondAttoRep : undefined)
 	const maxProfitContribution = selectedOutcome === undefined ? { amountAttoRep: undefined, reason: SELECT_OUTCOME_PRESET_REASON } : getReportingMaxProfitContribution(effectiveReportingDetails, selectedOutcome)
 	const presetBlocker = reportControlsLocked ? undefined : [minimumOutcomeChangeContribution.reason, maxProfitContribution.reason].find(reason => reason !== undefined && !isRedundantPresetReason(reason))
 	const remainingSelectedOutcomeCapacity = effectiveReportingDetails === undefined || selectedOutcome === undefined ? undefined : getRemainingSelectedOutcomeContributionCapacity(effectiveReportingDetails, selectedOutcome)
@@ -227,6 +225,7 @@ export function ReportingSection({
 			reason: undefined,
 		}
 	})()
+	const presetReasons = [minimumOutcomeChangeContribution.reason, maxProfitContribution.reason, maxContributionAmount.reason].filter((reason, index, reasons) => reason !== undefined && !isRedundantPresetReason(reason) && reason !== presetBlocker && reasons.indexOf(reason) === index)
 	const reportAmountError = selectedAmount === undefined && reportingForm.reportAmount.trim() !== '' ? reportingCopy.reportAmountPreviewRequired : undefined
 	const reportGuardMessage =
 		fullReportingLoadingReason ??
@@ -279,7 +278,7 @@ export function ReportingSection({
 	if (loadingReportingDetails) {
 		displayedWithdrawGuardMessage = showFullReporting ? reportingCopy.reportingDetailsRequired : reportingCopy.loadingEscalationDepositsDetail
 	}
-	const reportOutcomeSelectionMessage = showFullReporting && reportingStatus !== 'missing' && selectedOutcome === undefined && !reportControlsLocked ? SELECT_OUTCOME_TO_ENABLE_REPORTING_MESSAGE : undefined
+	const reportOutcomeSelectionMessage = showFullReporting && reportingStatus !== 'missing' && selectedOutcome === undefined && !reportControlsLocked && reportActionDisabledReason === reportingCopy.reportOutcomeSelectionRequired ? SELECT_OUTCOME_TO_ENABLE_REPORTING_MESSAGE : undefined
 	const showForkWorkflowAction = reportingStageKey === 'forkTriggered' && forkAlreadyTriggered && onOpenForkWorkflow !== undefined
 	const showTriggerZoltarForkAction = reportingStageKey === 'forkTriggered' && !forkAlreadyTriggered && onTriggerZoltarFork !== undefined
 	const resolvedTriggerZoltarForkAvailability = triggerZoltarForkAvailability ?? { disabled: false, reason: undefined }
@@ -334,8 +333,8 @@ export function ReportingSection({
 	}
 	const shouldRenderSharedReportSettlementDisabledReason = sharedReportSettlementDisabledReason !== undefined && sharedReportSettlementDisabledReasonId === settlementDisabledReasonId
 	const reportDisabledReasonElementId = sharedReportSettlementDisabledReasonId ?? (reportingStageBanner?.detail === reportActionDisabledReason ? reportingStageDetailId : undefined)
-	const standaloneReportDisabledReason = reportDisabledReasonElementId === undefined ? reportActionDisabledReason : undefined
-	const effectiveReportDisabledReasonElementId = reportDisabledReasonElementId ?? (standaloneReportDisabledReason === undefined ? undefined : reportDisabledReasonId)
+	const standaloneReportDisabledReason = reportOutcomeSelectionMessage === undefined && reportDisabledReasonElementId === undefined ? reportActionDisabledReason : undefined
+	const effectiveReportDisabledReasonElementId = reportDisabledReasonElementId ?? (standaloneReportDisabledReason === undefined && reportOutcomeSelectionMessage === undefined ? undefined : reportDisabledReasonId)
 	const settlementActionDisabledReasonId = sharedReportSettlementDisabledReasonId ?? settlementDisabledReasonId
 	const showReportingHeaderStack = showFullReporting && (showSecurityPoolAddressInput || reportingStageBanner !== undefined)
 	const settlementSection =
@@ -447,7 +446,11 @@ export function ReportingSection({
 					/>
 					{finalized ? undefined : (
 						<>
-							{reportOutcomeSelectionMessage === undefined ? undefined : <p className='detail'>{reportOutcomeSelectionMessage}</p>}
+							{reportOutcomeSelectionMessage === undefined ? undefined : (
+								<p id={reportDisabledReasonId} className='detail'>
+									{reportOutcomeSelectionMessage}
+								</p>
+							)}
 							<div className='field'>
 								<label htmlFor='reporting-contribution-amount'>
 									<span>{reportingCopy.contributionAmountRep}</span>
@@ -481,7 +484,7 @@ export function ReportingSection({
 									aria-describedby={presetBlocker !== undefined && minimumOutcomeChangeContribution.reason === presetBlocker ? presetBlockerId : undefined}
 									title={reportControlsLocked ? reportControlsLockedReason : minimumOutcomeChangeContribution.reason}
 								>
-									{reportingCopy.minimumPreset(reportingStatus === 'active', formatKnownAmount(minimumOutcomeChangeContribution.amountAttoRep ?? effectiveReportingDetails?.startBondAttoRep))}
+									{reportingCopy.minimumPreset(reportingStatus === 'active', minimumPresetAmount === undefined ? undefined : formatKnownAmount(minimumPresetAmount))}
 								</button>
 								<button
 									className='secondary'
@@ -494,7 +497,7 @@ export function ReportingSection({
 									aria-describedby={presetBlocker !== undefined && maxProfitContribution.reason === presetBlocker ? presetBlockerId : undefined}
 									title={reportControlsLocked ? reportControlsLockedReason : maxProfitContribution.reason}
 								>
-									{reportingCopy.rewardPreset(formatKnownAmount(maxProfitContribution.amountAttoRep))}
+									{reportingCopy.rewardPreset(maxProfitContribution.amountAttoRep === undefined ? undefined : formatKnownAmount(maxProfitContribution.amountAttoRep))}
 								</button>
 							</div>
 							{presetBlocker === undefined ? undefined : (
@@ -511,7 +514,7 @@ export function ReportingSection({
 									{usesWalletFunding ? reportingCopy.acceptedWalletAmountTail : reportingCopy.acceptedAmountTail}
 								</p>
 							)}
-							<p className='detail'>{[minimumOutcomeChangeContribution.reason, maxProfitContribution.reason, maxContributionAmount.reason].filter((reason, index, reasons) => reason !== undefined && reason !== presetBlocker && reasons.indexOf(reason) === index).join(' ')}</p>
+							{presetReasons.length === 0 ? undefined : <p className='detail'>{presetReasons.join(' ')}</p>}
 							<p className='detail'>
 								{usesWalletFunding ? reportingCopy.paidFromWallet : reportingCopy.paidFromVault} · {reportingCopy.availableBalance(formatKnownAmount(availableReportingRep))}
 							</p>

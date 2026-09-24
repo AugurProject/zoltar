@@ -1,3 +1,4 @@
+import { presentedSuccessHashes } from '../../transactions/transactionSuccess.js'
 import { useEffect, useRef, useState } from 'preact/hooks'
 import * as appCopy from '../../copy/app.js'
 import { TransactionPresentationNotice } from '../../components/TransactionPresentationNotice.js'
@@ -55,6 +56,7 @@ export function GlobalTransactionTray({ activeUniverseId, routeKey, transaction 
 	const dismissKeyRef = useRef(getDismissKey(transaction))
 	const transactionOriginRef = useRef({ routeKey, transactionKey: getTransactionKey(transaction) })
 	const noticeRef = useRef<HTMLDivElement>(null)
+	const successPresented = transaction?.tone === 'success' && transaction.hash !== undefined && presentedSuccessHashes.value.has(transaction.hash)
 
 	useEffect(() => {
 		const nextDismissKey = getDismissKey(transaction)
@@ -87,9 +89,9 @@ export function GlobalTransactionTray({ activeUniverseId, routeKey, transaction 
 			main.style.removeProperty('--global-transaction-tray-height')
 			document.documentElement.style.removeProperty('scroll-padding-bottom')
 		}
-	}, [transaction, dismissedKey])
+	}, [transaction, dismissedKey, successPresented])
 
-	if (transaction === undefined) return undefined
+	if (transaction === undefined || successPresented) return undefined
 
 	const transactionDismissKey = getDismissKey(transaction)
 	const transactionKey = getTransactionKey(transaction)

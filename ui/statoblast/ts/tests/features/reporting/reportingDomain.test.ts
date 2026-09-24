@@ -1,3 +1,5 @@
+import { getReportingStagePresentation } from '@zoltar/ui-statoblast-shared/features/reporting/lib/reportingStagePresentation.js'
+import { formatTimestamp } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { createMarketDetails as marketDetailsFixture } from '@zoltar/ui-core-shared/tests/testUtils/marketFixtures.js'
 /// <reference types="bun-types" />
 
@@ -524,3 +526,12 @@ describe('reportingDomain', () => {
 		})
 	})
 })
+
+for (const end of [300n, 600n]) {
+	test(`pending stage presentation names the actual deadline ${end} and leading outcome`, () => {
+		const details = createReportingDetails({ currentTime: 150n, activationTime: 300n, escalationEndTime: end })
+		const stage = getReportingStagePresentation({ reportingDetails: details, marketDetails: details.marketDetails, effectiveCurrentTimestamp: details.currentTime, forkAlreadyTriggered: false })
+		expect(stage?.label).toBe('Waiting to start')
+		expect(stage?.detail).toBe(`If nobody responds by ${formatTimestamp(end)}, No wins.`)
+	})
+}

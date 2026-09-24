@@ -12,7 +12,7 @@ const REP_UNIT = 10n ** 18n
 export const ESCALATION_GAME_ACTIVATION_DELAY = 3n * 24n * 60n * 60n
 const LOAD_REPORTING_PRESETS_REASON = 'Loading reporting details.'
 const MAX_PROFIT_NOT_STARTED_REASON = reportingCopy.maxProfitPrestartReason
-const SELECTED_SIDE_ALREADY_LEADS_REASON = 'Selected side already leads.'
+const SELECTED_SIDE_ALREADY_LEADS_REASON = reportingCopy.selectedSideLeadsReason
 const ESCALATION_RESOLVED_REASON = 'Escalation is already resolved.'
 type EscalationPhase = 'Resolved' | 'Fork Triggered' | 'Pending Start' | 'Timed Out' | 'Active'
 function roundUpToRepUnit(value: bigint) {

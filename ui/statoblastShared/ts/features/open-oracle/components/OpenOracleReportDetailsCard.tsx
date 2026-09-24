@@ -419,7 +419,14 @@ export function OpenOracleReportDetailsCard({
 				})}
 			</OperationModal>
 
-			<OperationModal closeOnSuccessKey={openOracleResult?.action === 'settle' ? openOracleResult.hash : undefined} context={reportTransactionContext} isOpen={selectedReportModal === 'settle'} onClose={() => onSelectedReportModalChange(undefined)} title={openOracleCopy.settleReportTitle(liveReportDetails.reportId)}>
+			<OperationModal
+				confirmSingleStepFromForm
+				closeOnSuccessKey={openOracleResult?.action === 'settle' ? openOracleResult.hash : undefined}
+				context={reportTransactionContext}
+				isOpen={selectedReportModal === 'settle'}
+				onClose={() => onSelectedReportModalChange(undefined)}
+				title={openOracleCopy.settleReportTitle(liveReportDetails.reportId)}
+			>
 				{renderSelectedReportActionSection({
 					actionMode: 'settle',
 					disputeSubmission: openOracleDisputeSubmission,

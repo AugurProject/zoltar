@@ -90,7 +90,7 @@ export function ReportingOracleBlocker({
 					{copy.priceUpdated(formatTimestamp(manager.priceValidUntilTimestamp))}
 				</p>
 			) : undefined}
-			<OperationModal isOpen={reportId !== undefined} title={copy.settlePriceReport(reportId ?? 0n)} onClose={() => setReportId(undefined)} closeOnSuccessKey={oracle?.openOracleResult?.action === 'settle' ? oracle.openOracleResult.hash : undefined}>
+			<OperationModal confirmSingleStepFromForm isOpen={reportId !== undefined} title={copy.settlePriceReport(reportId ?? 0n)} onClose={() => setReportId(undefined)} closeOnSuccessKey={oracle?.openOracleResult?.action === 'settle' ? oracle.openOracleResult.hash : undefined}>
 				<ErrorNotice message={oracle?.openOracleError} />
 				<div className='actions'>
 					<TransactionActionButton

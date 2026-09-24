@@ -404,11 +404,11 @@ describe('OperationModal', () => {
 		},
 	})
 
-	test('submits a single-step dialog action with one confirmation', async () => {
+	test('submits an explicitly opted-in single-step dialog action with one confirmation', async () => {
 		let sent = 0
 		let completion: Promise<void> | undefined
 		const rendered = await renderIntoDocument(
-			<OperationModal isOpen title='Settle report #7' onClose={() => undefined}>
+			<OperationModal confirmSingleStepFromForm isOpen title='Settle report #7' onClose={() => undefined}>
 				<button
 					type='button'
 					onClick={() => {

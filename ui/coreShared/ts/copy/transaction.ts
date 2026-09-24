@@ -1,3 +1,4 @@
+import { formatActionTense } from './transactionActionTenses.js'
 import type { CopyTemplateValue } from './types.js'
 
 export const pool = 'Pool'
@@ -84,11 +85,7 @@ export const transaction = 'Transaction'
 export const paidFrom = 'Paid from'
 export const walletRep = 'Wallet REP'
 export const vaultBackedRep = 'Vault-backed REP'
-export const completedAction = (title: string) =>
-	title.replace(
-		/^(Report|Settle|Approve|Deposit|Claim|Clear|Request|Withdraw|Create|Wrap|Execute)\b/,
-		verb => ({ Report: 'Reported', Settle: 'Settled', Approve: 'Approved', Deposit: 'Deposited', Claim: 'Claimed', Clear: 'Cleared', Request: 'Requested', Withdraw: 'Withdrew', Create: 'Created', Wrap: 'Wrapped', Execute: 'Executed' })[verb] ?? verb,
-	)
+export const completedAction = (title: string) => formatActionTense(title, 'completed')
 export const reportingAction = (outcome: string, amount: string) => `Report ${outcome} · ${amount} REP`
 export const settleReportNumber = (id: string) => `Settle report #${id}`
 export const approveTokenAmount = (amount: string) => `Approve ${amount}`

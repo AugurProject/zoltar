@@ -1,4 +1,4 @@
-import { formatCurrencyInputBalance } from '@zoltar/ui-core-shared/lib/formatters.js'
+import { formatCurrencyBalance } from '@zoltar/ui-core-shared/lib/formatters.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as reportingCopy from '../../../copy/reporting.js'
 import { CurrencyValue } from '@zoltar/ui-core-shared/components/CurrencyValue.js'
@@ -61,8 +61,9 @@ function ReportingSettlementSide({
 	return (
 		<SectionBlock density='compact' headingLevel={4} title={side.label} variant='embedded'>
 			<div className='field'>
-				<span>{reportingCopy.chooseDepositsToSettle}</span>
+				{side.userDeposits.length > 1 ? <span>{reportingCopy.chooseDepositsToSettle}</span> : undefined}
 				<EscalationDepositSelectionList
+					selectable={side.userDeposits.length > 1}
 					disabled={withdrawControlsLocked || withdrawActionPending}
 					items={side.userDeposits.map(deposit => {
 						const claimAmount = getEscalationDepositClaimAmount(effectiveReportingDetails, side.key, deposit)
@@ -115,8 +116,8 @@ function ReportingSettlementSide({
 					/>
 				) : undefined}
 				<TransactionActionButton
-					idleLabel={commonCopy.launchAction(winning ? reportingCopy.claimDeposits(side.label, formatCurrencyInputBalance(claimAmount)) : reportingCopy.clearDeposits(side.label))}
-					pendingLabel={winning ? reportingCopy.claimingDeposits(side.label, formatCurrencyInputBalance(claimAmount)) : reportingCopy.clearingDeposits(side.label)}
+					idleLabel={commonCopy.launchAction(winning ? reportingCopy.claimDeposits(side.label, formatCurrencyBalance(claimAmount)) : reportingCopy.clearDeposits(side.label))}
+					pendingLabel={winning ? reportingCopy.claimingDeposits(side.label, formatCurrencyBalance(claimAmount)) : reportingCopy.clearingDeposits(side.label)}
 					onClick={() => onWithdraw(side.key, allWithdrawDepositIndexes)}
 					pending={isPendingSide}
 					disabled={otherSidePending}
@@ -172,11 +173,12 @@ export function ReportingSettlementSection({
 }) {
 	const withdrawActionPending = reportingActiveAction === 'withdrawEscalation'
 	const withdrawableSides = (activeReportingDetails?.sides.filter(side => side.userDeposits.length > 0) ?? []).sort((left, right) => Number(right.key === effectiveReportingDetails?.questionOutcome) - Number(left.key === effectiveReportingDetails?.questionOutcome))
+	if (!isPoolQuestionFinalized(effectiveReportingDetails) && !activeReportingDetails?.sides.some(side => side.userDeposits.length > 0 || side.importedUserDeposits.length > 0)) return undefined
 	if (!isPoolQuestionFinalized(effectiveReportingDetails))
 		return (
 			<SectionBlock className='reporting-settlement-section' title={reportingCopy.yourPositions} variant='embedded'>
 				{settlementContextMessage === undefined ? undefined : <p className='detail'>{settlementContextMessage}</p>}
-				{activeReportingDetails?.hasReachedNonDecision ? <p className='detail'>{displayedWithdrawGuardMessage}</p> : undefined}
+				{activeReportingDetails?.hasReachedNonDecision && displayedWithdrawGuardMessage !== sharedReportSettlementDisabledReason ? <p className='detail'>{displayedWithdrawGuardMessage}</p> : undefined}
 
 				{activeReportingDetails?.sides
 					.filter(side => side.userDeposits.length > 0 || side.importedUserDeposits.length > 0)

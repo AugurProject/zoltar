@@ -1,3 +1,6 @@
+import { TransactionStepsModal } from '@zoltar/ui-core-shared/components/TransactionStepsModal.js'
+import { createTransactionStepController, transactionSteps } from '@zoltar/ui-core-shared/transactions/transactionSteps.js'
+import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
 /// <reference types='bun-types' />
 
 import { beforeEach, describe, expect, test } from 'bun:test'
@@ -551,4 +554,36 @@ describe('GlobalTransactionTray', () => {
 
 		expect(document.body.querySelector('.global-transaction-notice-compact')).not.toBeNull()
 	})
+})
+
+test('does not repeat a dialog success in the page transaction tray', async () => {
+	const dom = installDomEnvironment()
+	const controller = createTransactionStepController()
+	const hash = '0x3333333333333333333333333333333333333333333333333333333333333333'
+	controller.setPlan([{ title: 'Queue liquidation', contractAddress: undefined, spender: undefined, amount: undefined }])
+	const review = controller.review()
+	transactionSteps.value?.confirmStep(0)
+	await review
+	controller.submitted(hash)
+	controller.receipt(hash, 'success')
+	const rendered = await renderIntoDocument(
+		<>
+			<TransactionStepsModal contextKey='success-tray-regression' />
+			<GlobalTransactionTray transaction={{ tone: 'success', title: 'Queued liquidation', hash }} />
+		</>,
+	)
+	try {
+		await act(async () => {
+			await Promise.resolve()
+		})
+		const dialog = within(document.body).getByRole('dialog', { name: 'Queue liquidation' })
+		expect(within(dialog).getByRole('button', { name: 'Done' })).not.toBeNull()
+		expect(document.querySelector('.global-transaction-tray')).toBeNull()
+		await act(() => fireEvent.click(within(dialog).getByRole('button', { name: 'Done' })))
+		expect(document.querySelector('.global-transaction-tray')).toBeNull()
+	} finally {
+		transactionSteps.value?.cancel()
+		await rendered.cleanup()
+		dom.cleanup()
+	}
 })

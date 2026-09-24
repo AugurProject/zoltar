@@ -144,7 +144,7 @@ export function RequestPriceModal({ review, onConfirm, onClose, canRequest, conf
 	)
 
 	return (
-		<GlobalTransactionPresentationProvider transaction={presentation}>
+		<GlobalTransactionPresentationProvider transaction={sending || (ownsWorkflow && workflow?.steps.some(step => step.hash !== undefined)) ? presentation : undefined}>
 			<TransactionActionButtonLockProvider locked={false}>
 				<OperationModal closeOnSuccessKey={closeOnSuccessKey} embedTransactionSteps={false} isOpen={review !== undefined} title={poolCopy.requestNewPriceTitle} onClose={close} closeDisabled={sending}>
 					{priceControls}

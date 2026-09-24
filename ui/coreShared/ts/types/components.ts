@@ -217,6 +217,8 @@ export type TransactionActionButtonProps = {
 }
 
 export type OperationModalProps = {
+	/** The form already presents the full review and its submit is the final confirmation. */
+	confirmSingleStepFromForm?: boolean
 	embedTransactionSteps?: boolean
 	children: ComponentChildren
 	closeDisabled?: boolean

@@ -816,7 +816,7 @@ describe('SecurityPoolWorkflowSection: reporting and oracle', () => {
 		expect(selectedViews).toEqual([])
 	})
 
-	test('shows the shared question card above the reporting tab, including settlement controls', async () => {
+	test('shows the shared question card above reporting without empty positions', async () => {
 		const renderedComponent = await renderIntoDocument(
 			<SecurityPoolWorkflowSection
 				{...createSecurityPoolWorkflowProps({
@@ -836,7 +836,7 @@ describe('SecurityPoolWorkflowSection: reporting and oracle', () => {
 		if (!(objectHeader instanceof HTMLElement)) throw new Error('Expected the selected-pool object header')
 		expect(within(objectHeader).getByRole('heading', { name: 'Will this resolve?' })).not.toBeNull()
 		expect(documentQueries.getAllByText('Question description')).toHaveLength(1)
-		expect(documentQueries.getByRole('heading', { name: 'Your positions' })).not.toBeNull()
+		expect(documentQueries.queryByRole('heading', { name: 'Your positions' })).toBeNull()
 		expect(documentQueries.queryByRole('heading', { name: 'Reporting Context' })).toBeNull()
 		expect(documentQueries.getByRole('heading', { name: 'Report Outcome' })).not.toBeNull()
 	})

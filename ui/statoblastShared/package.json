@@ -356,6 +356,10 @@
 			"bun": "./ts/features/reporting/lib/reporting.ts",
 			"default": "./js/features/reporting/lib/reporting.js"
 		},
+		"./features/reporting/lib/reportingStagePresentation.js": {
+			"bun": "./ts/features/reporting/lib/reportingStagePresentation.ts",
+			"default": "./js/features/reporting/lib/reportingStagePresentation.js"
+		},
 		"./features/reporting/lib/reportingDomain.js": {
 			"bun": "./ts/features/reporting/lib/reportingDomain.ts",
 			"default": "./js/features/reporting/lib/reportingDomain.js"

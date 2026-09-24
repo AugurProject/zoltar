@@ -1,3 +1,5 @@
+import { completedAction } from '../copy/transaction.js'
+import { formatPendingAction } from '../copy/transactionSteps.js'
 import { GlobalTransactionPresentationProvider } from '../components/GlobalTransactionPresentationContext.js'
 import { TransactionActionButtonLockProvider } from '../components/TransactionActionButton.js'
 import { expect, test } from 'bun:test'
@@ -387,3 +389,9 @@ for (const result of ['pending', 'reverted'] as const) {
 		}
 	})
 }
+
+test('uses one action vocabulary for queued transaction states', () => {
+	expect(completedAction('Queue liquidation')).toBe('Queued liquidation')
+	expect(formatPendingAction('Queue liquidation')).toBe('Queuing liquidation…')
+	expect(completedAction('Custom operation')).toBe('Completed: Custom operation')
+})

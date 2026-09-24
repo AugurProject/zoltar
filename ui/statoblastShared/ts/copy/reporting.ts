@@ -3,6 +3,7 @@ export const escalationMetrics = 'Escalation Metrics'
 export const loadingEscalationDeposits = 'Loading escalation deposits.'
 export const reportingWorkflow = 'Reporting Workflow'
 export const reportOutcome = 'Report Outcome'
+export const reportOutcomeSelectionRequired = 'Select an outcome side before reporting on a question.'
 export const reportingActivationHint = 'Select an outcome side above to enable reporting.'
 export const settlementSelectionRequired = 'Select at least one deposit or use the claim or clear action for this side.'
 export const settleEscalationDeposits = 'Settle Escalation Deposits'
@@ -80,7 +81,7 @@ export const phaseLabels = ['Reporting open', 'Waiting to start', 'Escalation ac
 export const forkPhase = 'Fork'
 export const phaseProgress = (step: number, label: string) => `Step ${step} of 4 · ${label}`
 export const firstReportNext = (bond: string) => `The first report starts the game. Minimum first report: ${bond} REP.`
-export const pendingStartNext = (relative: string, end: string) => `Game starts in ${relative}. Other reporters can respond until ${end}.`
+export const pendingStartNext = ({ end, outcome }: { end: string; outcome: string }) => `If nobody responds by ${end}, ${outcome} wins.`
 export const activeNext = (end: string, leader: string) => `If nobody outbids the leading side by ${end}, ${leader} wins.`
 export const resolvedNext = 'Settle your deposits below.'
 export const gameStartsIn = 'Game starts in'
@@ -89,8 +90,8 @@ export const startsWithFirstReport = 'starts with first report'
 export const progressToFork = (largest: string, threshold: string, percent: string) => `Progress to fork: ${largest} / ${threshold} REP (${percent}%)`
 export const forkProgressHelp = 'A fork requires two sides to reach this threshold.'
 export const bindingCapitalHelp = 'The second-largest side balance; exceed it to hold the lead.'
-export const minimumPreset = (started: boolean, amount: string) => `${started ? 'Min to lead' : 'Start bond'} (${amount} REP)`
-export const rewardPreset = (amount: string) => `Max reward (${amount} REP)`
+export const minimumPreset = (started: boolean, amount?: string) => `${started ? 'Min to lead' : 'Start bond'}${amount === undefined ? '' : ` (${amount} REP)`}`
+export const rewardPreset = (amount?: string) => `Max reward${amount === undefined ? '' : ` (${amount} REP)`}`
 export const reportAmountPlaceholder = '0'
 export const reportAmountLabel = (outcome: string, amount: string) => `Report ${outcome} · ${amount} REP`
 export const approveAmountLabel = (amount: string) => `Approve ${amount} REP`
@@ -101,7 +102,7 @@ export const fundingSourceHelp = 'The first report funds the game from the pool;
 export const continuationFundingHelp = 'Fork continuations use vault-backed REP from the pool.'
 export const yourPositions = 'Your positions'
 export const claimableAfterResolution = 'Claimable after resolution'
-export const resultSummary = (outcome: string, amount: string) => `Resolved as ${outcome}. You can claim ${amount} REP.`
+export const resultSummary = (outcome: string, amount?: string) => `Resolved as ${outcome}.${amount === undefined ? '' : ` You can claim ${amount} REP.`}`
 export const claimDeposits = (outcome: string, amount: string) => `Claim ${amount} REP from ${outcome}`
 export const clearDeposits = (outcome: string) => `Clear ${outcome} deposits (worth 0 REP)`
 export const results = 'Results'

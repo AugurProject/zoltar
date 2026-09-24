@@ -1,3 +1,4 @@
+import { markTransactionSuccessPresented } from '../transactions/transactionSuccess.js'
 import { TransactionActionButton, TransactionActionButtonLockProvider } from './TransactionActionButton.js'
 import { TokenApprovalControl } from './TokenApprovalControl.js'
 import * as copy from '../copy/transactionSteps.js'
@@ -102,12 +103,15 @@ export function TransactionStepsActions({ cancelable = true, contextKey, focusOn
 		if (actions === null || actions.contains(document.activeElement)) return
 		actions.querySelector<HTMLElement>('button:not(:disabled), input:not(:disabled)')?.focus()
 	}, [focusOnMount])
+	const completed = workflow !== undefined && workflow.steps.length > 0 && workflow.steps.every(step => step.phase === 'confirmed' || step.phase === 'skipped')
+	const finalHash = workflow?.steps.at(-1)?.hash
+	useEffect(() => {
+		if (completed && finalHash !== undefined) markTransactionSuccessPresented(finalHash)
+	}, [completed, finalHash])
 	if (workflow === undefined || workflow.steps[workflow.activeIndex] === undefined) return undefined
-	const completed = workflow.steps.every(step => step.phase === 'confirmed' || step.phase === 'skipped')
-	const finalHash = workflow.steps.at(-1)?.hash
 	if (completed)
 		return (
-			<div role='status'>
+			<div className='transaction-success-panel' role='status'>
 				<h4>{presentation?.title ?? currentSuccessTitle(workflow.steps.at(-1)?.title)}</h4>
 				{finalHash === undefined ? undefined : <TransactionHashLink hash={finalHash} />}
 				<button type='button' className='primary' onClick={onClose ?? workflow.cancel}>

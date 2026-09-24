@@ -1,6 +1,6 @@
 import * as copy from '../../../copy/reporting.js'
 import type { ReportingDetails } from '@zoltar/ui-core-shared/types/contracts.js'
-import { formatCurrencyInputBalance, formatDuration, formatTimestamp } from '@zoltar/ui-core-shared/lib/formatters.js'
+import { formatCurrencyBalance, formatTimestamp } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { deriveReportingStage, getReportingOutcomeLabel } from '../lib/reporting.js'
 import { getEscalationPhase, getLeadingEscalationOutcome } from '../lib/reportingDomain.js'
 
@@ -17,8 +17,8 @@ export function EscalationPhaseStepper({ details, forkAlreadyTriggered, detailId
 	if (details !== undefined) {
 		if (stage === 'resolved' && details.questionOutcome !== 'none') next = copy.resolvedNext
 		else if (fork) next = forkAlreadyTriggered ? copy.forkAlreadyTriggeredReportReason : copy.forkTriggerInstruction
-		else if (details.status === 'not-started') next = copy.firstReportNext(formatCurrencyInputBalance(details.startBondAttoRep))
-		else if (phase === 'Pending Start') next = copy.pendingStartNext(formatDuration(details.activationTime - details.currentTime), formatTimestamp(details.escalationEndTime))
+		else if (details.status === 'not-started') next = copy.firstReportNext(formatCurrencyBalance(details.startBondAttoRep))
+		else if (phase === 'Pending Start') next = copy.pendingStartNext({ end: formatTimestamp(details.escalationEndTime), outcome: getReportingOutcomeLabel(getLeadingEscalationOutcome(details.sides) ?? 'invalid') })
 		else if (phase === 'Timed Out') next = copy.timeoutResolutionDetail
 		else next = copy.activeNext(formatTimestamp(details.escalationEndTime), getReportingOutcomeLabel(getLeadingEscalationOutcome(details.sides) ?? 'invalid'))
 	}

@@ -1014,6 +1014,19 @@
 	min-width: 0;
 }
 
+@media (max-width: 40rem) {
+	.reporting-shared-action-region .reporting-wallet-action-row {
+		grid-template-columns: minmax(0, 1fr);
+		width: 100%;
+	}
+	.reporting-shared-action-region .tx-action-group,
+	.reporting-shared-action-region .tx-action-group > .actions,
+	.reporting-settlement-section .tx-action-group,
+	.reporting-settlement-section .tx-action-button {
+		width: 100%;
+	}
+}
+
 .withdraw-deposit-list {
 	display: grid;
 	gap: 0.8rem;
@@ -1431,9 +1444,16 @@
 }
 
 .escalation-side-value {
-	display: grid;
+	display: flex;
+	align-items: baseline;
+	flex-wrap: nowrap;
 	gap: 0.2rem;
 	min-width: 0;
+}
+
+.escalation-side-value.detail > span:first-child {
+	flex-shrink: 0;
+	white-space: nowrap;
 }
 
 .escalation-side-value .currency-value-wrap,
@@ -1591,7 +1611,9 @@
 	}
 
 	.reporting-outcome-section .escalation-side-values {
-		grid-template-columns: repeat(2, minmax(0, 1fr));
+		display: flex;
+		flex-wrap: wrap;
+		justify-content: space-between;
 		gap: var(--space-2);
 	}
 }

@@ -1,6 +1,6 @@
 import * as copy from '../../../copy/reporting.js'
 import type { ReportingDetails } from '@zoltar/ui-core-shared/types/contracts.js'
-import { formatCurrencyInputBalance } from '@zoltar/ui-core-shared/lib/formatters.js'
+import { formatCurrencyBalance } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { getEscalationDepositClaimAmount, getImportedEscalationDepositClaimAmount, isPoolQuestionFinalized } from '../lib/reportingDomain.js'
 import { getReportingOutcomeLabel } from '../lib/reporting.js'
 
@@ -13,5 +13,5 @@ export function ReportingResultCard({ details }: { details: ReportingDetails | u
 					0n,
 				)
 			: 0n
-	return <p className='notice success'>{copy.resultSummary(getReportingOutcomeLabel(details.questionOutcome), formatCurrencyInputBalance(amount))}</p>
+	return <p className='notice success'>{copy.resultSummary(getReportingOutcomeLabel(details.questionOutcome), amount > 0n ? formatCurrencyBalance(amount) : undefined)}</p>
 }
