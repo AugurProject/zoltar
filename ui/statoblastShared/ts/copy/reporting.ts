@@ -84,6 +84,8 @@ export const firstReportNext = (bond: string) => `The first report starts the ga
 export const pendingStartNext = ({ end, outcome }: { end: string; outcome: string }) => `If nobody responds by ${end}, ${outcome} wins.`
 export const activeNext = (end: string, leader: string) => `If nobody outbids the leading side by ${end}, ${leader} wins.`
 export const resolvedNext = 'Settle your deposits below.'
+export const reportingComplete = 'Reporting is complete.'
+export const noLeadingSideNext = (end: string) => `No side currently leads. Report before ${end} to break the tie.`
 export const gameStartsIn = 'Game starts in'
 export const endsIn = 'Ends in'
 export const startsWithFirstReport = 'starts with first report'

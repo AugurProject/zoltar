@@ -288,6 +288,37 @@ describe('ReportingSection', () => {
 		},
 	})
 
+	for (const currentTime of [150n, 350n]) {
+		test(`shows no leader or winner prediction for tied balances at time ${currentTime}`, async () => {
+			const details = createReportingDetails({ currentTime, activationTime: 300n, escalationEndTime: 600n })
+			details.sides = details.sides.map(side => ({ ...side, balance: rep(8n) }))
+			const rendered = await renderIntoDocument(h(ReportingSection, createProps({ reportingDetails: details, currentTimestamp: details.currentTime })))
+			cleanupRenderedComponent = rendered.cleanup
+			expect(document.querySelector('.escalation-phase')?.textContent).toContain('No side currently leads.')
+			expect(document.querySelector('.escalation-phase')?.textContent).not.toContain('wins.')
+			expect(within(document.body).queryByText('Leading')).toBeNull()
+		})
+	}
+	test('removes stale settlement guidance and fork progress after all deposits are cleared', async () => {
+		const details = createReportingDetails({ questionOutcome: 'no', parentWithdrawalEnabled: true, settlementState: 'resolved' })
+		details.sides = details.sides.map(side => ({ ...side, userDeposits: [], importedUserDeposits: [] }))
+		const rendered = await renderIntoDocument(h(ReportingSection, createProps({ reportingDetails: details, currentTimestamp: details.currentTime })))
+		cleanupRenderedComponent = rendered.cleanup
+		expect(document.body.textContent).not.toContain('Settle your deposits below.')
+		expect(document.body.textContent).not.toContain('Progress to fork')
+		expect(document.body.textContent).not.toContain('A fork requires two sides')
+	})
+	for (const end of [300n, 600n]) {
+		test(`marks an active phase completed only when it had duration: end ${end}`, async () => {
+			const details = createReportingDetails({ currentTime: 700n, activationTime: 300n, escalationEndTime: end, questionOutcome: 'no', settlementState: 'resolved' })
+			const rendered = await renderIntoDocument(h(ReportingSection, createProps({ reportingDetails: details, currentTimestamp: details.currentTime })))
+			cleanupRenderedComponent = rendered.cleanup
+			const activeStep = Array.from(document.querySelectorAll('.escalation-phase-steps li')).find(step => step.textContent?.includes('Escalation active'))
+			expect(activeStep?.classList.contains('completed')).toBe(end > 300n)
+			expect(activeStep?.textContent?.includes('✓')).toBe(end > 300n)
+		})
+	}
+
 	test('describes the response deadline when low stakes end at activation', async () => {
 		const rendered = await renderIntoDocument(h(ReportingSection, createProps({ reportingDetails: createReportingDetails({ currentTime: 150n, activationTime: 300n, escalationEndTime: 300n }) })))
 		cleanupRenderedComponent = rendered.cleanup

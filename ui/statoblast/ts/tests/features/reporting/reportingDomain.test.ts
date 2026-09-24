@@ -8,6 +8,7 @@ import type { ActiveReportingDetails, MarketDetails, ReportingDetails } from '@z
 import {
 	getEscalationDepositClaimAmount,
 	getEscalationPhase,
+	getLeadingEscalationOutcome,
 	getEscalationTimeRemaining,
 	getImportedEscalationDepositClaimAmount,
 	getRemainingSelectedOutcomeContributionCapacity,
@@ -535,3 +536,28 @@ for (const end of [300n, 600n]) {
 		expect(stage?.detail).toBe(`If nobody responds by ${formatTimestamp(end)}, No wins.`)
 	})
 }
+
+test('only a unique positive balance leads, including auction and threshold ties', () => {
+	const details = createReportingDetails()
+	expect(getLeadingEscalationOutcome(details.sides)).toBe('no')
+	for (const balance of [0n, rep(8n), details.nonDecisionThresholdAttoRep]) {
+		const sides = details.sides.map(side => ({ ...side, balance }))
+		expect(getLeadingEscalationOutcome(sides)).toBeUndefined()
+	}
+	const sides = details.sides.map(side => ({ ...side, balance: side.key === 'invalid' ? 0n : rep(8n) }))
+	expect(getLeadingEscalationOutcome(sides)).toBeUndefined()
+})
+
+test('larger tying reports lose one atto-REP below the threshold but can tie at the fork threshold', () => {
+	const details = createReportingDetails()
+	expect(previewReportingContribution(details, 'invalid', rep(7n))).toEqual({ actualDepositAmount: rep(7n) - 1n, reason: undefined })
+	const fullSide = { ...details, sides: details.sides.map(side => ({ ...side, balance: side.key === 'no' ? details.nonDecisionThresholdAttoRep : side.balance })) }
+	expect(previewReportingContribution(fullSide, 'yes', rep(95n))).toEqual({ actualDepositAmount: rep(95n), reason: undefined })
+})
+
+test('pending stage guidance does not name a tied side as the winner', () => {
+	const details = createReportingDetails({ activationTime: 300n })
+	details.sides = details.sides.map(side => ({ ...side, balance: rep(8n) }))
+	const stage = getReportingStagePresentation({ reportingDetails: details, marketDetails: details.marketDetails, effectiveCurrentTimestamp: details.currentTime, forkAlreadyTriggered: false })
+	expect(stage?.detail).toBe(`No side currently leads. Report before ${formatTimestamp(details.escalationEndTime)} to break the tie.`)
+})

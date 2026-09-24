@@ -961,6 +961,11 @@
 	gap: 1rem;
 }
 
+.reporting-position .currency-value-wrap,
+.reporting-position .currency-value {
+	vertical-align: baseline;
+}
+
 .escalation-phase-steps {
 	display: flex;
 	justify-content: space-between;

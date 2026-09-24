@@ -1,4 +1,9 @@
 const actionTenses = [
+	{ verb: 'Batched transaction', pending: 'Executing batched transaction', completed: 'Completed batched transaction' },
+	{ verb: 'Fund', pending: 'Funding', completed: 'Funded' },
+	{ verb: 'Deploy', pending: 'Deploying', completed: 'Deployed' },
+	{ verb: 'Transfer', pending: 'Transferring', completed: 'Transferred' },
+	{ verb: 'Dispute', pending: 'Disputing', completed: 'Disputed' },
 	{ verb: 'Report', pending: 'Reporting', completed: 'Reported' },
 	{ verb: 'Settle', pending: 'Settling', completed: 'Settled' },
 	{ verb: 'Approve', pending: 'Approving', completed: 'Approved' },

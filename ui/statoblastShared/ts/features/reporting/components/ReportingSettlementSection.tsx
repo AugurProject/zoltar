@@ -183,7 +183,7 @@ export function ReportingSettlementSection({
 				{activeReportingDetails?.sides
 					.filter(side => side.userDeposits.length > 0 || side.importedUserDeposits.length > 0)
 					.map(side => (
-						<p key={side.key}>
+						<p key={side.key} className='reporting-position'>
 							{side.label} · <CurrencyValue value={[...side.userDeposits, ...side.importedUserDeposits].reduce((sum, deposit) => sum + deposit.amountAttoRep, 0n)} suffix={commonCopy.rep} /> · {reportingCopy.claimableAfterResolution}
 						</p>
 					))}

@@ -31,17 +31,19 @@ export function ReportingSides({
 }) {
 	return (
 		<div className='escalation-sides-shell'>
-			<ProgressMeter
-				valueText={undefined}
-				label={
-					chartScaleMax === undefined
-						? reportingCopy.progressToForkUnavailable
-						: reportingCopy.progressToFork(formatCurrencyBalance(largestBalance), formatCurrencyBalance(chartScaleMax), largestBalance > 0n && chartScaleMax > largestBalance * 10000n ? '<0.01' : (chartScaleMax > 0n ? Number((largestBalance * 10000n) / chartScaleMax) / 100 : 0).toString())
-				}
-				value={largestBalance}
-				maxValue={chartScaleMax ?? 0n}
-				detail={reportingCopy.forkProgressHelp}
-			/>
+			{!finalized ? (
+				<ProgressMeter
+					valueText={undefined}
+					label={
+						chartScaleMax === undefined
+							? reportingCopy.progressToForkUnavailable
+							: reportingCopy.progressToFork(formatCurrencyBalance(largestBalance), formatCurrencyBalance(chartScaleMax), largestBalance > 0n && chartScaleMax > largestBalance * 10000n ? '<0.01' : (chartScaleMax > 0n ? Number((largestBalance * 10000n) / chartScaleMax) / 100 : 0).toString())
+					}
+					value={largestBalance}
+					maxValue={chartScaleMax ?? 0n}
+					detail={reportingCopy.forkProgressHelp}
+				/>
+			) : undefined}
 			<div className='escalation-sides-legend'>
 				<div className='escalation-sides-legend-item'>
 					<span aria-hidden='true' className='escalation-sides-legend-swatch escalation-sides-legend-swatch-total' />

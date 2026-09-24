@@ -52,12 +52,13 @@ export function getReportingStagePresentation({
 		}
 	if (reportingDetails.status === 'not-started') return { availableActions: [], blockedActions: [], detail: reportingCopy.firstReportNext(formatCurrencyInputBalance(reportingDetails.startBondAttoRep)), key: 'reporting-open', label: reportingCopy.phaseLabels[0] ?? reportingCopy.reportingOpen, tone: 'default' }
 	const escalationPhase = getEscalationPhase(reportingDetails)
+	const leadingOutcome = getLeadingEscalationOutcome(reportingDetails.sides)
 	switch (escalationPhase) {
 		case 'Pending Start':
 			return {
 				availableActions: [],
 				blockedActions: [],
-				detail: reportingCopy.pendingStartNext({ end: formatTimestamp(reportingDetails.escalationEndTime), outcome: getReportingOutcomeLabel(getLeadingEscalationOutcome(reportingDetails.sides) ?? 'invalid') }),
+				detail: leadingOutcome === undefined ? reportingCopy.noLeadingSideNext(formatTimestamp(reportingDetails.escalationEndTime)) : reportingCopy.pendingStartNext({ end: formatTimestamp(reportingDetails.escalationEndTime), outcome: getReportingOutcomeLabel(leadingOutcome) }),
 				key: 'escalation-pending',
 				label: reportingCopy.phaseLabels[1] ?? reportingCopy.reportingOpen,
 				tone: 'default',

@@ -104,7 +104,8 @@ export function getLeadingEscalationOutcome(sides: EscalationSide[]) {
 	for (const side of sides) {
 		if (leadingSide === undefined || side.balance > leadingSide.balance) leadingSide = side
 	}
-	return leadingSide?.key
+	if (leadingSide === undefined || leadingSide.balance === 0n) return undefined
+	return sides.filter(side => side.balance === leadingSide.balance).length === 1 ? leadingSide.key : undefined
 }
 function getMinimumOutcomeChangeContribution(details: ActiveReportingDetails, selectedOutcome: ReportingOutcomeKey): ReportingAmountSuggestion {
 	const { largestOtherBalance, selectedSide } = getSelectedAndOtherSides(details, selectedOutcome)

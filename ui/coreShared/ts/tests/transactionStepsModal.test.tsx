@@ -1,4 +1,4 @@
-import { completedAction } from '../copy/transaction.js'
+import { completedAction, reviewedActions } from '../copy/transaction.js'
 import { formatPendingAction } from '../copy/transactionSteps.js'
 import { GlobalTransactionPresentationProvider } from '../components/GlobalTransactionPresentationContext.js'
 import { TransactionActionButtonLockProvider } from '../components/TransactionActionButton.js'
@@ -394,4 +394,20 @@ test('uses one action vocabulary for queued transaction states', () => {
 	expect(completedAction('Queue liquidation')).toBe('Queued liquidation')
 	expect(formatPendingAction('Queue liquidation')).toBe('Queuing liquidation…')
 	expect(completedAction('Custom operation')).toBe('Completed: Custom operation')
+})
+
+test('uses past tense for shared deployment, transfer and dispute actions', () => {
+	for (const [title, completed, pending] of [
+		['Fund proxy deployment', 'Funded proxy deployment', 'Funding proxy deployment…'],
+		['Deploy shared proxy', 'Deployed shared proxy', 'Deploying shared proxy…'],
+		['Transfer ETH', 'Transferred ETH', 'Transferring ETH…'],
+		['Dispute report', 'Disputed report', 'Disputing report…'],
+	]) {
+		expect(completedAction(title ?? '')).toBe(completed)
+		expect(formatPendingAction(title ?? '')).toBe(pending)
+	}
+})
+
+test('every known reviewed action has an explicit success tense', () => {
+	for (const { title } of Object.values(reviewedActions)) expect(completedAction(title)).not.toStartWith('Completed:')
 })
