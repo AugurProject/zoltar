@@ -9,6 +9,7 @@ import { listLogs, logDetail, provenanceHistory, reorganizationHistory } from '.
 import { domainCatalogResponse, operationsResponse } from './operations.ts'
 import { addressPortfolioResponse, richList } from './portfolio.ts'
 import { riskDetailResponse } from './risk.ts'
+import { blockResponse, searchResponse, transactionResponse } from './search.ts'
 import { ApiConflictError, ApiRequestError, actionCursorFor, actionJsonColumns, decodedJsonColumns, integer, json, parseActionCursor, routeInteger } from './shared.ts'
 import { operationsAsOfForContinuations } from './snapshot.ts'
 import { stateHistory } from './state-history.ts'
@@ -31,6 +32,9 @@ export const handleApi = async (request: Request, sql: SQL, freshnessThresholdMs
 			return json({ items: rows.map((row: Record<string, unknown>) => decodedJsonColumns(row, actionJsonColumns)) })
 		}
 		if (url.pathname === '/api/v1/logs') return await listLogs(sql, url)
+		if (url.pathname === '/api/v1/search') return await searchResponse(sql, url)
+		if (url.pathname.startsWith('/api/v1/transactions/')) return await transactionResponse(sql, url.pathname.slice('/api/v1/transactions/'.length).split('/'))
+		if (url.pathname.startsWith('/api/v1/blocks/')) return await blockResponse(sql, url.pathname.slice('/api/v1/blocks/'.length).split('/'))
 		if (url.pathname.startsWith('/api/v1/logs/')) return await logDetail(sql, url.pathname.slice('/api/v1/logs/'.length).split('/'), url)
 		if (url.pathname === '/api/v1/reorgs') return await reorganizationHistory(sql, url)
 		if (url.pathname === '/api/v1/provenance') return await provenanceHistory(sql, url)

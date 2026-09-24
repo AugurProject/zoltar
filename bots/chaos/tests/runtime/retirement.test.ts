@@ -680,15 +680,53 @@ describe('Drain & Retire planning', () => {
 		).rejects.toThrow('not finalized')
 		expect(changedHash).toEqual(beforeRejectedReset)
 
-		const singleReaderSettings = parseSettings({
-			...example,
-			connectivity: { publicRpcUrls: ['https://submit.example'], quorumRpcUrls: [], readRpcUrl: 'https://read.example', rpcQuorum: 1 },
-			networkConfigured: true,
+		let finalizedNumber = '0x1'
+		let canonicalHash = hash(2)
+		let chainId = example.network.chainId
+		const server = Bun.serve({
+			hostname: '127.0.0.1',
+			port: 0,
+			async fetch(request) {
+				const body: unknown = await request.json()
+				if (typeof body !== 'object' || body === null || !('id' in body) || !('method' in body) || !('params' in body) || !Array.isArray(body.params)) throw new Error('Expected a JSON-RPC request')
+				if (body.method === 'eth_chainId') return Response.json({ jsonrpc: '2.0', id: body.id, result: `0x${chainId.toString(16)}` })
+				if (body.method !== 'eth_getBlockByNumber') throw new Error(`Unexpected RPC method ${body.method}`)
+				const number = body.params[0] === 'finalized' ? finalizedNumber : body.params[0]
+				return Response.json({ jsonrpc: '2.0', id: body.id, result: { number, hash: canonicalHash, timestamp: '0x1', transactions: [] } })
+			},
 		})
-		const singleReaderReset = structuredClone(runtime)
-		const beforeSingleReaderReset = structuredClone(singleReaderReset)
-		await expect(resetPristineStateForDeploymentProfile(singleReaderReset, 'profile:replacement', address(50), true, snapshot.wallet.address, '/tmp/retirement-state.json', async evidence => verifyRetirementCompletionFinality(singleReaderSettings, evidence))).rejects.toThrow('two independent RPC readers')
-		expect(singleReaderReset).toEqual(beforeSingleReaderReset)
+		try {
+			const singleReaderSettings = parseSettings({
+				...example,
+				connectivity: { publicRpcUrls: [server.url.href], quorumRpcUrls: [], readRpcUrl: server.url.href, rpcQuorum: 1 },
+				networkConfigured: true,
+			})
+			const singleReaderReset = structuredClone(runtime)
+			const beforeSingleReaderReset = structuredClone(singleReaderReset)
+			const reset = () => resetPristineStateForDeploymentProfile(singleReaderReset, 'profile:replacement', address(50), true, snapshot.wallet.address, '/tmp/retirement-state.json', async evidence => verifyRetirementCompletionFinality(singleReaderSettings, evidence))
+			await expect(reset()).rejects.toThrow('not finalized')
+			expect(singleReaderReset).toEqual(beforeSingleReaderReset)
+			finalizedNumber = '0x2'
+			canonicalHash = hash(3)
+			await expect(reset()).rejects.toThrow('no longer canonical')
+			expect(singleReaderReset).toEqual(beforeSingleReaderReset)
+			canonicalHash = hash(2)
+			chainId += 1
+			await expect(reset()).rejects.toThrow('chain ID')
+			expect(singleReaderReset).toEqual(beforeSingleReaderReset)
+			chainId = example.network.chainId
+			if (singleReaderSettings.connectivity === undefined) throw new Error('Expected RPC connectivity')
+			singleReaderSettings.connectivity.rpcQuorum = 2
+			singleReaderSettings.connectivity.quorumRpcUrls = [new URL('/secondary', server.url).href]
+			await expect(reset()).rejects.toThrow('two independent RPC readers')
+			expect(singleReaderReset).toEqual(beforeSingleReaderReset)
+			singleReaderSettings.connectivity.rpcQuorum = 1
+			singleReaderSettings.connectivity.quorumRpcUrls = []
+			expect(await reset()).toBeTrue()
+			expect(singleReaderReset.profileId).toBe('profile:replacement')
+		} finally {
+			await server.stop(true)
+		}
 
 		expect(await resetPristineStateForDeploymentProfile(runtime, 'profile:replacement', address(50), true, snapshot.wallet.address, '/tmp/retirement-state.json', async () => undefined)).toBeTrue()
 		expect(runtime.uniswapV3Factory).toBe(address(50))
