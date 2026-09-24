@@ -73,6 +73,7 @@ export const truthAuctionBidSuccessDetail = 'Truth auction bid submitted. Bid ET
 export const viewTransaction = 'View transaction'
 export const transactionStatus = 'Transaction status'
 export const transactionDetails = 'Transaction details'
+export const revertedCheckingDetails = 'Transaction reverted; checking details…'
 export const preparing = 'Preparing'
 export const awaitingWallet = 'Awaiting Wallet'
 export const confirmed = 'Confirmed'

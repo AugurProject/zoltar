@@ -56,7 +56,7 @@ describe('GlobalTransactionDialog', () => {
 		expect(within(queries.getByRole('dialog', { name: 'Transaction status' })).getByRole('alert').textContent).toContain('nonce too low')
 	})
 
-	test('shows an intermediate receipt above the next review until dismissed', async () => {
+	test('keeps intermediate receipts in the form while showing a later warning', async () => {
 		const hash = '0xbccd000000000000000000000000000000000000000000000000000000000001'
 		const controller = createTransactionStepController()
 		const step = { description: undefined, contractAddress: undefined, contractLabel: undefined, spender: undefined, amount: undefined, ethValueAttoEth: 0n }
@@ -70,17 +70,11 @@ describe('GlobalTransactionDialog', () => {
 		const pending = { hash, title: 'Wrapping ETH', tone: 'pending' as const, rows: [{ label: 'Security Pool Address', value: '0x0000000000000000000000000000000000000002' }] }
 		const renderedComponent = await renderIntoDocument(<GlobalTransactionDialog transaction={pending} />)
 		trackRendered(renderedComponent)
-		await act(() => {
-			controller.submitted(hash)
-			controller.receipt(hash, 'success')
-		})
+		await act(() => controller.submitted(hash))
+		expect(within(document.body).queryByRole('dialog')).toBeNull()
+		await act(() => controller.receipt(hash, 'success'))
 		const secondReview = controller.review(1).catch(() => undefined)
 		await act(() => undefined)
-		const dialog = within(document.body).getByRole('dialog', { name: 'Transaction status' })
-		expect(within(dialog).getByText('Confirmed')).not.toBeNull()
-		expect(within(dialog).getByText('Wrap ETH into WETH')).not.toBeNull()
-		expect(within(dialog).getByText('Security Pool Address')).not.toBeNull()
-		await act(() => fireEvent.click(within(dialog).getByRole('button', { name: 'Dismiss' })))
 		expect(within(document.body).queryByRole('dialog')).toBeNull()
 		await act(() => render(<GlobalTransactionDialog transaction={{ ...pending, detail: 'Refresh failed after confirmation.', title: 'Wrap completed', tone: 'warning' }} />, renderedComponent.container))
 		expect(within(within(document.body).getByRole('dialog', { name: 'Transaction status' })).getByText('Refresh failed after confirmation.')).not.toBeNull()

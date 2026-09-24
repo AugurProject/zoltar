@@ -100,8 +100,28 @@ export function TransactionStepsActions({ cancelable = true, contextKey, focusOn
 						<div className='actions'>
 							{workflow.steps.map((step, index) => {
 								const approvalSatisfied = step.approval !== undefined && step.approval.approvedAmount !== undefined && step.approval.requiredAmount <= step.approval.approvedAmount
-								if (approvalSatisfied && step.approval !== undefined && (step.phase === 'confirmed' || step.phase === 'skipped')) return <p key={index} className='transaction-approval-satisfied'>{copy.formatTokenApproved(step.approval.tokenSymbol)}</p>
-								if (step.phase === 'confirmed') return undefined
+								if (approvalSatisfied && step.approval !== undefined && (step.phase === 'confirmed' || step.phase === 'skipped'))
+									return (
+										<div key={index} className='transaction-approval-satisfied'>
+											<span>{copy.formatTokenApproved(step.approval.tokenSymbol)} ✓</span>
+											{step.hash === undefined ? undefined : (
+												<ReadOnlyDetailAccordion title={transactionCopy.transactionDetails}>
+													<TransactionHashLink hash={step.hash} />
+												</ReadOnlyDetailAccordion>
+											)}
+										</div>
+									)
+								if (step.phase === 'confirmed')
+									return index === workflow.steps.length - 1 ? undefined : (
+										<div key={index} className='transaction-approval-satisfied transaction-step-confirmed'>
+											<span>{step.title === copy.wrapEthIntoWeth ? copy.ethWrapped : step.title} ✓</span>
+											{step.hash === undefined ? undefined : (
+												<ReadOnlyDetailAccordion title={transactionCopy.transactionDetails}>
+													<TransactionHashLink hash={step.hash} />
+												</ReadOnlyDetailAccordion>
+											)}
+										</div>
+									)
 								const active = index === workflow.activeIndex
 								const final = index === workflow.steps.length - 1
 								const ready = step.phase === 'review' && !pending && error === undefined

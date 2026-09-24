@@ -23,6 +23,7 @@ export function GlobalTransactionDialog({ activeUniverseId, routeKey, transactio
 	const dismissRef = useRef<HTMLButtonElement | null>(null)
 	const [dismissedRequest, setDismissedRequest] = useState<GlobalTransactionPresentation>()
 	const lastSubmittedRef = useRef<GlobalTransactionPresentation>()
+	const lastIntermediateHashRef = useRef<string>()
 	const originRef = useRef({ hash: window.location.hash, routeKey, key: transaction?.operationKey ?? transaction?.dismissKey ?? transaction?.hash })
 	const titleId = useId()
 	const outcome = transactionStepOutcome.value
@@ -30,23 +31,35 @@ export function GlobalTransactionDialog({ activeUniverseId, routeKey, transactio
 	if (originRef.current.key !== transactionKey) originRef.current = { hash: window.location.hash, routeKey, key: transactionKey }
 	if (transaction?.hash !== undefined) lastSubmittedRef.current = transaction
 	const submitted = lastSubmittedRef.current
-	const activeStep = transactionSteps.value?.steps.find(step => step.hash !== undefined && step.hash === transaction?.hash)
+	const workflow = transactionSteps.value
+	const activeStep = workflow?.steps.find(step => step.hash !== undefined && step.hash === transaction?.hash)
+	const intermediateStep = activeStep !== undefined && activeStep !== workflow?.steps.at(-1)
+	if (intermediateStep && transaction?.hash !== undefined) lastIntermediateHashRef.current = transaction.hash
+	const intermediateTransaction = intermediateStep || (transaction?.hash !== undefined && lastIntermediateHashRef.current === transaction.hash)
 	const outcomePresentation: GlobalTransactionPresentation | undefined =
-		outcome === undefined || transaction === undefined || submitted?.hash !== outcome.hash || (transaction.hash !== undefined && transaction.hash !== outcome.hash) || transaction.tone === 'success' || transaction.tone === 'error' || transaction.tone === 'warning'
+		outcome === undefined || transaction === undefined || submitted?.hash !== outcome.hash || (transaction.hash !== undefined && transaction.hash !== outcome.hash) || transaction.tone === 'success' || transaction.tone === 'error' || transaction.tone === 'warning' || outcome.tone === 'success'
 			? undefined
 			: {
 					...(submitted?.hash === outcome.hash ? submitted : transaction),
 					detail: outcome.detail,
-					dismissKey: outcome.hash,
+					dismissKey: `receipt-diagnostic:${outcome.hash}`,
 					hash: outcome.hash,
 					title: outcome.title,
 					tone: outcome.tone,
 				}
 	const current = outcomePresentation ?? (transaction?.tone === 'pending' && activeStep !== undefined ? { ...transaction, title: activeStep.title } : transaction)
-	const hiddenAfterOutcome = outcome !== undefined && transaction?.tone === 'pending' && transaction.hash === outcome.hash && isGlobalTransactionDismissed({ hash: outcome.hash, title: outcome.title, tone: outcome.tone })
+	const hiddenAfterOutcome = outcome !== undefined && transaction?.tone === 'pending' && transaction.hash === outcome.hash && isGlobalTransactionDismissed({ dismissKey: `receipt-diagnostic:${outcome.hash}`, hash: outcome.hash, title: outcome.title, tone: outcome.tone })
 	const reviewing = transactionSteps.value?.steps.some(step => step.phase === 'review') ?? false
 	const terminal = current?.tone === 'success' || current?.tone === 'error' || current?.tone === 'warning'
-	const visible = current !== undefined && current !== dismissedRequest && current.tone !== 'awaiting-wallet' && current.tone !== 'preparing' && (!reviewing || outcomePresentation !== undefined || terminal) && !isGlobalTransactionDismissed(current) && !hiddenAfterOutcome
+	const visible =
+		current !== undefined &&
+		current !== dismissedRequest &&
+		current.tone !== 'awaiting-wallet' &&
+		current.tone !== 'preparing' &&
+		(!intermediateTransaction || current.tone === 'error' || current.tone === 'warning') &&
+		(!reviewing || outcomePresentation !== undefined || terminal) &&
+		!isGlobalTransactionDismissed(current) &&
+		!hiddenAfterOutcome
 	const dismiss = () => {
 		if (current?.hash === undefined && (current?.dismissKey ?? current?.operationKey)?.startsWith('transaction-request-')) setDismissedRequest(current)
 		else dismissGlobalTransaction(current)

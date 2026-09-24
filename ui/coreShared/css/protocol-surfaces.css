@@ -2025,6 +2025,10 @@ strong.metric-value-danger {
 	font-size: 0.8125rem;
 }
 
+.transaction-approval-satisfied .read-only-detail-accordion {
+	margin-top: 0.25rem;
+}
+
 .transaction-plan-action .field-inline-input {
 	min-width: 0;
 	width: 100%;

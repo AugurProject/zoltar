@@ -16,3 +16,5 @@ export const prerequisitesRequired = 'Complete the required setup transactions f
 export const formatPendingAction = (title: string) => `${title}…`
 export const requirementsFailed = 'Could not refresh transaction requirements. Close and review the action again.'
 export const formatTokenApproved = (symbol: string) => `${symbol} approved`
+export const wrapEthIntoWeth = 'Wrap ETH into WETH'
+export const ethWrapped = 'ETH wrapped'

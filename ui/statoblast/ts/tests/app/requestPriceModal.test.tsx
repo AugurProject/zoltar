@@ -5,7 +5,7 @@ import { afterEach, expect, test } from 'bun:test'
 import { act } from 'preact/test-utils'
 import { render } from 'preact'
 import { signal } from '@preact/signals'
-import { createWalletClient, custom, getAddress, publicActions, type TransactionReceipt } from '@zoltar/core-shared/evm/ethereum'
+import { createWalletClient, custom, getAddress, publicActions, type Hash, type TransactionReceipt } from '@zoltar/core-shared/evm/ethereum'
 import { installActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { createFakeBackend } from '@zoltar/ui-core-shared/tests/testUtils/fakeBackend.js'
 import { MAINNET_NETWORK_PROFILE } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
@@ -83,8 +83,8 @@ test('shows the final price result in the shared dialog and closes the form afte
 		await settle()
 		const dialogBeforeResult = queries.getByRole('dialog', { name: 'Request New Price' })
 		expect(within(queries.getByRole('dialog', { name: 'Transaction status' })).getByText('Pending')).not.toBeNull()
-		expect(within(dialogBeforeResult).getByRole('button', { name: 'Close' }).hasAttribute('disabled')).toBe(true)
-		expect(within(dialogBeforeResult).getByRole('textbox', { name: 'Open Oracle REP/ETH starting price' }).hasAttribute('disabled')).toBe(true)
+		expect(within(dialogBeforeResult).getByRole('button', { name: 'Close' }).hasAttribute('disabled')).toBe(false)
+		expect(within(dialogBeforeResult).getByRole('textbox', { name: 'Open Oracle REP/ETH starting price' }).hasAttribute('disabled')).toBe(false)
 		await act(() => {
 			completedHash.value = hash
 			presentation.value = { tone: 'success', title: 'Price requested', hash, operationKey: 'price-request', rows: [{ label: 'Security Pool Address', value: review.securityPoolAddress }] }
@@ -175,7 +175,7 @@ test('prepares approval and request actions alongside editable price controls in
 			await Promise.resolve()
 		})
 		expect(submitted).toBe(1)
-		expect(queries.getByRole('textbox', { name: 'Open Oracle REP/ETH starting price' }).hasAttribute('disabled')).toBe(true)
+		expect(queries.getByRole('textbox', { name: 'Open Oracle REP/ETH starting price' }).hasAttribute('disabled')).toBe(false)
 	} finally {
 		await rendered.cleanup()
 		dom.cleanup()
@@ -307,29 +307,51 @@ test('allows another price request after a failed transaction step', async () =>
 	}
 })
 
-test('reports a reverted price request after a delayed receipt diagnostic and allows retry', async () => {
+test.each(['dismiss', 'fetch', 'close'] as const)('reports a reverted price request after %s during delayed receipt diagnostics', async action => {
 	const dom = installDomEnvironment()
 	const restoreEnvironment = installActiveEnvironmentForTesting(createFakeBackend({ accountAddress: review.managerAddress }))
 	const presentation = signal<GlobalTransactionPresentation | undefined>(undefined)
 	const requestAllowed = signal(true)
+	const formOpen = signal(true)
 	const diagnostic = createDeferred<void>()
-	const hash = '0x4444444444444444444444444444444444444444444444444444444444444444'
+	const hashes: Record<typeof action, Hash> = {
+		dismiss: '0x4444444444444444444444444444444444444444444444444444444444444444',
+		fetch: '0x5555555555555555555555555555555555555555555555555555555555555555',
+		close: '0x6666666666666666666666666666666666666666666666666666666666666666',
+	}
+	const hash = hashes[action]
 	const receipt: TransactionReceipt = { blockHash: hash, blockNumber: 1n, cumulativeGasUsed: 21_000n, from: review.managerAddress, gasUsed: 21_000n, logs: [], status: 'reverted', transactionHash: hash, transactionIndex: 0n }
 	let attempts = 0
+	let quoteReads = 0
+	let closed = false
+	let submittedSignal: AbortSignal | undefined
 	const onConfirm = async (request: RequestPriceReview, reviewSignal?: AbortSignal) => {
 		attempts += 1
 		if (attempts > 1) return
-		const client = createWalletClient({ account: review.managerAddress, chain: MAINNET_NETWORK_PROFILE.chain, transport: custom({ request: async () => { throw new Error('Unexpected RPC') } }) }).extend(publicActions)
-		const reviewed = createReviewedClient({
-			...client,
-			estimateGas: async () => 21_000n,
-			getTransaction: async () => {
-				await diagnostic.promise
-				return { hash, from: review.managerAddress, to: review.managerAddress, gas: 22_000n, input: '0x1234', nonce: 0n, value: 0n }
+		submittedSignal = reviewSignal
+		const client = createWalletClient({
+			account: review.managerAddress,
+			chain: MAINNET_NETWORK_PROFILE.chain,
+			transport: custom({
+				request: async () => {
+					throw new Error('Unexpected RPC')
+				},
+			}),
+		}).extend(publicActions)
+		const reviewed = createReviewedClient(
+			{
+				...client,
+				estimateGas: async () => 21_000n,
+				getTransaction: async () => {
+					await diagnostic.promise
+					return { hash, from: review.managerAddress, to: review.managerAddress, gas: 22_000n, input: '0x1234', nonce: 0n, value: 0n }
+				},
+				sendTransaction: async () => hash,
+				waitForTransactionReceipt: async () => receipt,
 			},
-			sendTransaction: async () => hash,
-			waitForTransactionReceipt: async () => receipt,
-		}, async () => undefined, reviewSignal)
+			async () => undefined,
+			reviewSignal,
+		)
 		reviewed.onTransactionPrepared?.({ account: review.managerAddress, chainName: client.chain.name, functionName: 'requestPrice', contractAddress: review.managerAddress, args: [request.proposedRepPerEthPrice], data: '0x1234', value: 12n })
 		const submittedHash = await reviewed.sendTransaction({ to: review.managerAddress, data: '0x1234', value: 12n })
 		presentation.value = { tone: 'pending', title: 'Requesting Price', hash, operationKey: 'price-request' }
@@ -353,7 +375,20 @@ test('reports a reverted price request after a delayed receipt diagnostic and al
 	function Harness() {
 		return (
 			<GlobalTransactionPresentationProvider transaction={presentation.value}>
-				<RequestPriceModal {...props} canRequest={requestAllowed.value} onConfirm={onConfirm} />
+				<RequestPriceModal
+					{...props}
+					review={formOpen.value ? review : undefined}
+					canRequest={requestAllowed.value}
+					fetchPrice={async () => {
+						quoteReads += 1
+						return BigInt(quoteReads + 1) * 10n ** 18n
+					}}
+					onClose={() => {
+						closed = true
+						formOpen.value = false
+					}}
+					onConfirm={onConfirm}
+				/>
 				<GlobalTransactionDialog transaction={presentation.value} />
 			</GlobalTransactionPresentationProvider>
 		)
@@ -366,6 +401,18 @@ test('reports a reverted price request after a delayed receipt diagnostic and al
 		await act(() => fireEvent.click(queries.getByRole('button', { name: /^Request price/ })))
 		await settle()
 		expect(transactionSteps.value?.steps[0]?.phase).toBe('failed')
+		expect(within(queries.getByRole('dialog', { name: 'Transaction status' })).getByText('Failed')).not.toBeNull()
+		expect(within(queries.getByRole('dialog', { name: 'Transaction status' })).getByText('Transaction reverted; checking details…')).not.toBeNull()
+		await act(() => fireEvent.click(within(queries.getByRole('dialog', { name: 'Transaction status' })).getByRole('button', { name: 'Dismiss' })))
+		expect(queries.queryByRole('dialog', { name: 'Transaction status' })).toBeNull()
+		if (action !== 'dismiss') {
+			const availableAction = action === 'fetch' ? queries.getByRole('button', { name: 'Fetch from Uniswap' }) : within(queries.getByRole('dialog', { name: 'Request New Price' })).getByRole('button', { name: 'Close' })
+			expect(availableAction.hasAttribute('disabled')).toBe(false)
+			await act(() => fireEvent.click(availableAction))
+		}
+		expect(submittedSignal?.aborted).toBe(false)
+		expect(quoteReads).toBe(action === 'fetch' ? 2 : 1)
+		expect(closed).toBe(action === 'close')
 		await act(async () => diagnostic.resolve())
 		await settle()
 		const statusDialog = queries.getByRole('dialog', { name: 'Transaction status' })
@@ -373,7 +420,14 @@ test('reports a reverted price request after a delayed receipt diagnostic and al
 		expect(within(statusDialog).getByText(hash)).not.toBeNull()
 		expect(within(statusDialog).getByText('Attempted REP/ETH price').parentElement?.textContent).toContain('2')
 		await act(() => fireEvent.click(within(statusDialog).getByRole('button', { name: 'Dismiss' })))
+		if (action === 'close') {
+			await act(() => {
+				formOpen.value = true
+			})
+			await settle()
+		}
 		expect(queries.getByRole('button', { name: /^Request price/ }).hasAttribute('disabled')).toBe(false)
+		expect(inputValue(queries.getByRole('textbox', { name: 'Open Oracle REP/ETH starting price' }))).toBe(action === 'fetch' ? '3' : '2')
 		await act(() => fireEvent.click(queries.getByRole('button', { name: /^Request price/ })))
 		await settle()
 		expect(attempts).toBe(2)
@@ -771,8 +825,8 @@ test('keeps the preview while satisfied approvals are skipped before the final r
 		ready.resolve()
 		await settle()
 		expect(transactionSteps.value?.activeIndex).toBe(2)
-		expect(queries.getByText('REP approved')).not.toBeNull()
-		expect(queries.getByText('WETH approved')).not.toBeNull()
+		expect(queries.getByText('REP approved ✓')).not.toBeNull()
+		expect(queries.getByText('WETH approved ✓')).not.toBeNull()
 		expect(rendered.container.querySelectorAll('.approval-amount-field')).toHaveLength(0)
 		expect(queries.getByRole('button', { name: /Request price/ }).hasAttribute('disabled')).toBe(false)
 	} finally {

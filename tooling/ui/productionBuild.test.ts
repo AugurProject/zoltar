@@ -917,12 +917,12 @@ productionWorkflowTest('production bundle executes deployment, reporting, fork m
 	const baseUrl = server.url.toString().replace(/\/$/, '')
 	const state = JSON.parse(
 		await loadProductionDocumentInChromium(`${baseUrl}/statoblast/#/deploy?simulate=1&simScenario=baseline`, { height: 900, width: 1440 }, async driver => {
-			// Reviews keep their actions in the form, while every receipt uses the shared status dialog above it.
-			const completeTransactionReview = async (inDialogSuccessTitle?: string) => {
+			// Intermediate receipts stay in the form; final results and failures use the shared status dialog.
+			const completeTransactionReview = async (inDialogSuccessTitle?: string, stopOnInlineText?: string) => {
 				await driver.evaluate('window.__zoltarReviewClicked = false')
 				for (let attempt = 0; attempt < 2400; attempt += 1) {
 					const result = await driver.evaluate(
-						`(() => { const status = document.querySelector('.global-transaction-dialog'); if (status) { const badge = status.querySelector('.badge')?.textContent?.trim(); const title = status.querySelector('.global-transaction-notice-header strong')?.textContent?.trim(); if (badge === 'Failed' || (${JSON.stringify(inDialogSuccessTitle ?? '')} && badge === 'Confirmed' && title === ${JSON.stringify(inDialogSuccessTitle ?? '')})) return 'complete'; if (badge === 'Pending' || badge === 'Awaiting Wallet' || badge === 'Preparing') return 'waiting'; const nextAction = [...document.querySelectorAll('.transaction-step-actions .transaction-plan-action .tx-action-button')].some(candidate => candidate instanceof HTMLButtonElement && !candidate.disabled); const dismiss = status.querySelector('.global-transaction-dismiss'); if (dismiss instanceof HTMLButtonElement) dismiss.click(); return !${JSON.stringify(inDialogSuccessTitle ?? '')} && !nextAction ? 'complete' : 'waiting' } const actions = document.querySelector('.transaction-step-actions'); if (!actions) return window.__zoltarReviewClicked ? 'complete' : 'waiting'; const button = [...actions.querySelectorAll('.transaction-plan-action .tx-action-button')].find(candidate => candidate instanceof HTMLButtonElement && !candidate.disabled); if (button instanceof HTMLButtonElement) { button.click(); window.__zoltarReviewClicked = true } return 'waiting' })()`,
+						`(() => { if (${JSON.stringify(stopOnInlineText ?? '')} && document.body.innerText.includes(${JSON.stringify(stopOnInlineText ?? '')})) return 'complete'; const status = document.querySelector('.global-transaction-dialog'); if (status) { const badge = status.querySelector('.badge')?.textContent?.trim(); const title = status.querySelector('.global-transaction-notice-header strong')?.textContent?.trim(); if (badge === 'Failed' || (${JSON.stringify(inDialogSuccessTitle ?? '')} && badge === 'Confirmed' && title === ${JSON.stringify(inDialogSuccessTitle ?? '')})) return 'complete'; if (badge === 'Pending' || badge === 'Awaiting Wallet' || badge === 'Preparing') return 'waiting'; const nextAction = [...document.querySelectorAll('.transaction-step-actions .transaction-plan-action .tx-action-button')].some(candidate => candidate instanceof HTMLButtonElement && !candidate.disabled); const dismiss = status.querySelector('.global-transaction-dismiss'); if (dismiss instanceof HTMLButtonElement) dismiss.click(); return !${JSON.stringify(inDialogSuccessTitle ?? '')} && !nextAction ? 'complete' : 'waiting' } const actions = document.querySelector('.transaction-step-actions'); if (!actions) return window.__zoltarReviewClicked ? 'complete' : 'waiting'; const button = [...actions.querySelectorAll('.transaction-plan-action .tx-action-button')].find(candidate => candidate instanceof HTMLButtonElement && !candidate.disabled); if (button instanceof HTMLButtonElement) { button.click(); window.__zoltarReviewClicked = true } return 'waiting' })()`,
 					)
 					if (result === 'complete') return
 					await Bun.sleep(50)
@@ -1038,7 +1038,9 @@ productionWorkflowTest('production bundle executes deployment, reporting, fork m
 				await driver.waitForBodyText('Enter a positive REP per ETH price')
 				if (viewport.width > 600) expect(await priceDialogGeometry()).toEqual(emptyGeometry)
 				else {
-					expect(await driver.evaluate("(() => { const error = document.querySelector('.request-price-fields .field-error'); const funding = document.querySelector('.transaction-funding'); return error !== null && funding !== null && error.getBoundingClientRect().bottom <= funding.getBoundingClientRect().top })()" )).toBe(true)
+					expect(
+						await driver.evaluate("(() => { const error = document.querySelector('.request-price-fields .field-error'); const funding = document.querySelector('.transaction-funding'); return error !== null && funding !== null && error.getBoundingClientRect().bottom <= funding.getBoundingClientRect().top })()"),
+					).toBe(true)
 					expect(await driver.evaluate("document.querySelector('[role=dialog]')?.scrollWidth <= document.querySelector('[role=dialog]')?.clientWidth")).toBe(true)
 				}
 				await driver.setInputByLabel('Open Oracle REP/ETH starting price', '')
@@ -1047,13 +1049,13 @@ productionWorkflowTest('production bundle executes deployment, reporting, fork m
 				await driver.waitForButtonEnabled('Fetch from Uniswap')
 				await driver.waitForBodyWithoutText('Preparing funding and approvals…')
 				expect(await driver.evaluate("document.querySelector('.request-price-fields input')?.value")).toBe('3')
-				expect(await driver.evaluate("[...document.querySelectorAll('.transaction-approval-satisfied')].map(row => row.textContent?.trim())")).toEqual(['REP approved', 'WETH approved'])
+				expect(await driver.evaluate("[...document.querySelectorAll('.transaction-approval-satisfied')].map(row => row.textContent?.trim())")).toEqual(['REP approved ✓', 'WETH approved ✓'])
 				expect(await driver.evaluate("document.querySelector('.approval-amount-field') === null")).toBe(true)
 				expect(await driver.evaluate("document.querySelector('[role=dialog]')?.scrollWidth <= document.querySelector('[role=dialog]')?.clientWidth")).toBe(true)
 				await driver.setInputByLabel('Open Oracle REP/ETH starting price', '2')
 				await driver.waitForBodyText('Preparing funding and approvals…')
 				await driver.waitForBodyWithoutText('Preparing funding and approvals…')
-				expect(await driver.evaluate("[...document.querySelectorAll('.transaction-approval-satisfied')].map(row => row.textContent?.trim())")).toEqual(['REP approved', 'WETH approved'])
+				expect(await driver.evaluate("[...document.querySelectorAll('.transaction-approval-satisfied')].map(row => row.textContent?.trim())")).toEqual(['REP approved ✓', 'WETH approved ✓'])
 				await driver.setInputByLabel('Open Oracle REP/ETH starting price', '')
 				await driver.waitForBodyText('Enter a starting price')
 				expect(await priceDialogGeometry()).toEqual(emptyGeometry)
@@ -1121,10 +1123,8 @@ productionWorkflowTest('production bundle executes deployment, reporting, fork m
 						await driver.resize({ height: 900, width: 1440 })
 					}
 					await driver.clickButton('Approve REP')
-					await completeTransactionReview('Approve Reporting REP')
-					await driver.waitForTransactionStatus('Confirmed', 'Approve Reporting REP')
+					await completeTransactionReview(undefined, 'REP approved')
 					await driver.waitForBodyText('REP approved')
-					await driver.clickButton('Dismiss')
 					const approvedDesktopScreenshotPath = process.env['UI_ORDINARY_REPORTING_APPROVED_DESKTOP_SCREENSHOT']
 					const approvedMobileScreenshotPath = process.env['UI_ORDINARY_REPORTING_APPROVED_MOBILE_SCREENSHOT']
 					const captureApprovedQaScreenshots = (approvedDesktopScreenshotPath !== undefined && approvedDesktopScreenshotPath !== '') || (approvedMobileScreenshotPath !== undefined && approvedMobileScreenshotPath !== '')

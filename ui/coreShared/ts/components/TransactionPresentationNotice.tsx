@@ -36,6 +36,16 @@ export function TransactionPresentationNotice({ className = '', collapseDetails 
 	const rows = transaction.rows ?? []
 	const technicalRows = transaction.technicalRows ?? []
 	const noticeClassName = ['global-transaction-notice', className].filter(Boolean).join(' ')
+	const technicalRowsList = (
+		<dl className='global-transaction-notice-rows'>
+			{technicalRows.map((row, rowIndex) => (
+				<div className='global-transaction-notice-row' key={`${row.label}:${rowIndex.toString()}`}>
+					<dt>{row.label}</dt>
+					<dd>{row.value}</dd>
+				</div>
+			))}
+		</dl>
+	)
 	const detailRows = (
 		<>
 			{rows.length === 0 ? undefined : (
@@ -48,30 +58,15 @@ export function TransactionPresentationNotice({ className = '', collapseDetails 
 					))}
 				</dl>
 			)}
-			{technicalRows.length === 0 ? undefined : collapseDetails ? (
-				<section aria-label={commonCopy.technicalDetails}>
-					<h4 className='global-transaction-technical-heading'>{commonCopy.technicalDetails}</h4>
-					<dl className='global-transaction-notice-rows'>
-						{technicalRows.map((row, rowIndex) => (
-							<div className='global-transaction-notice-row' key={`${row.label}:${rowIndex.toString()}`}>
-								<dt>{row.label}</dt>
-								<dd>{row.value}</dd>
-							</div>
-						))}
-					</dl>
-				</section>
-			) : (
-				<ReadOnlyDetailAccordion title={commonCopy.technicalDetails}>
-					<dl className='global-transaction-notice-rows'>
-						{technicalRows.map((row, rowIndex) => (
-							<div className='global-transaction-notice-row' key={`${row.label}:${rowIndex.toString()}`}>
-								<dt>{row.label}</dt>
-								<dd>{row.value}</dd>
-							</div>
-						))}
-					</dl>
-				</ReadOnlyDetailAccordion>
-			)}
+			{technicalRows.length > 0 &&
+				(collapseDetails ? (
+					<section aria-label={commonCopy.technicalDetails}>
+						<h4 className='global-transaction-technical-heading'>{commonCopy.technicalDetails}</h4>
+						{technicalRowsList}
+					</section>
+				) : (
+					<ReadOnlyDetailAccordion title={commonCopy.technicalDetails}>{technicalRowsList}</ReadOnlyDetailAccordion>
+				))}
 		</>
 	)
 
@@ -83,10 +78,10 @@ export function TransactionPresentationNotice({ className = '', collapseDetails 
 					<Badge tone={badge.tone}>{badge.label}</Badge>
 					{transaction.tone === 'awaiting-wallet' ? <span className='spinner global-transaction-spinner' aria-hidden='true' /> : undefined}
 					{title === undefined ? undefined : <strong>{title}</strong>}
-			</div>
-			{transaction.detail === undefined ? undefined : <div className='global-transaction-notice-detail'>{transaction.detail}</div>}
-			{transactionHash === undefined ? undefined : <TransactionHashLink hash={transactionHash} />}
-			{collapseDetails && (rows.length > 0 || technicalRows.length > 0) ? <ReadOnlyDetailAccordion title={transactionCopy.transactionDetails}>{detailRows}</ReadOnlyDetailAccordion> : detailRows}
+				</div>
+				{transaction.detail === undefined ? undefined : <div className='global-transaction-notice-detail'>{transaction.detail}</div>}
+				{transactionHash === undefined ? undefined : <TransactionHashLink hash={transactionHash} />}
+				{collapseDetails && (rows.length > 0 || technicalRows.length > 0) ? <ReadOnlyDetailAccordion title={transactionCopy.transactionDetails}>{detailRows}</ReadOnlyDetailAccordion> : detailRows}
 			</div>
 		</div>
 	)
