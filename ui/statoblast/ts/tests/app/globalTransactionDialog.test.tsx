@@ -169,7 +169,7 @@ describe('GlobalTransactionDialog', () => {
 		}
 	})
 
-	test('keeps semantic object context visible and call data in a technical disclosure after completion', async () => {
+	test('keeps the outcome and hash visible while grouping context and call data in a disclosure', async () => {
 		const renderedComponent = await renderIntoDocument(
 			<GlobalTransactionDialog
 				transaction={{
@@ -188,10 +188,16 @@ describe('GlobalTransactionDialog', () => {
 		trackRendered(renderedComponent)
 
 		const documentQueries = within(document.body)
-		expect(documentQueries.getByText('Security Pool Address')).not.toBeNull()
-		expect(documentQueries.getByText('0xpool')).not.toBeNull()
-		expect(documentQueries.getByText('Technical details', { selector: 'summary' })).not.toBeNull()
-		expect(documentQueries.getByText('Arguments')).not.toBeNull()
+		const details = documentQueries.getByText('Transaction details', { selector: 'summary' }).closest('details')
+		if (details === null) throw new Error('Missing transaction details disclosure')
+		expect(details.open).toBe(false)
+		expect(details.contains(documentQueries.getByText('Security Pool Address'))).toBe(true)
+		expect(details.contains(documentQueries.getByText('0xpool'))).toBe(true)
+		expect(details.contains(documentQueries.getByText('Technical details'))).toBe(true)
+		expect(details.contains(documentQueries.getByText('Arguments'))).toBe(true)
+		expect(details.contains(documentQueries.getByText('0xprepared-price-request'))).toBe(false)
+		await act(() => fireEvent.click(documentQueries.getByText('Transaction details', { selector: 'summary' })))
+		expect(details.open).toBe(true)
 	})
 
 	test('renders complete copyable question identifiers across success notices', async () => {

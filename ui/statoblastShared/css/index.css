@@ -3031,6 +3031,10 @@
 		block-size: calc(100dvh - 2rem);
 	}
 
+	.request-price-fields .lookup-field-controls.has-action {
+		grid-template-rows: auto;
+	}
+
 	.operation-modal-body:has(> .request-price-fields) .transaction-plan-action:has(.approval-amount-field) .form-grid {
 		--request-price-approval-gap: 0.25rem;
 	}
@@ -3052,6 +3056,7 @@
 	.operation-modal-body:has(> .request-price-fields) .transaction-costs > div {
 		column-gap: 0.25rem;
 	}
+
 }
 
 @media (max-height: 650px) {

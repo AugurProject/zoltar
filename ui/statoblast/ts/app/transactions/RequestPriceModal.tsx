@@ -82,11 +82,11 @@ export function RequestPriceModal({ review, onConfirm, onClose, canRequest, conf
 				outcome: workflow.steps.find(step => step.oracleOutcome !== undefined)?.oracleOutcome,
 			})
 		}
-		run.current?.cancel()
-	}, [failedCurrentAttempt])
+		if (!running) run.current?.cancel()
+	}, [failedCurrentAttempt, running])
 	useLayoutEffect(() => {
-		if (!current && !sending) run.current?.cancel()
-	}, [current, sending])
+		if (!current && !sending && !(running && ownsWorkflow && workflow?.steps.some(step => step.hash !== undefined))) run.current?.cancel()
+	}, [current, sending, running, ownsWorkflow, workflow])
 	useLayoutEffect(() => {
 		if (resultDismissed) onClose()
 	}, [resultDismissed, onClose])

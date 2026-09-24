@@ -70,7 +70,7 @@ export function GlobalTransactionDialog({ activeUniverseId, routeKey, transactio
 				<h3 id={titleId} className='visually-hidden'>
 					{transactionCopy.transactionStatus}
 				</h3>
-				<TransactionPresentationNotice className='global-transaction-dialog-notice' contextWarning={universeWarning} transaction={current} />
+				<TransactionPresentationNotice className='global-transaction-dialog-notice' collapseDetails contextWarning={universeWarning} transaction={current} />
 				<div className='global-transaction-actions'>
 					{returnHref === undefined ? undefined : <a href={returnHref}>{transactionCopy.backToForm}</a>}
 					<button ref={dismissRef} className='primary global-transaction-dismiss' type='button' onClick={dismiss}>

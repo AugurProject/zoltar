@@ -99,6 +99,8 @@ export function TransactionStepsActions({ cancelable = true, contextKey, focusOn
 						<div className='tx-action-feedback' />
 						<div className='actions'>
 							{workflow.steps.map((step, index) => {
+								const approvalSatisfied = step.approval !== undefined && step.approval.approvedAmount !== undefined && step.approval.requiredAmount <= step.approval.approvedAmount
+								if (approvalSatisfied && step.approval !== undefined && (step.phase === 'confirmed' || step.phase === 'skipped')) return <p key={index} className='transaction-approval-satisfied'>{copy.formatTokenApproved(step.approval.tokenSymbol)}</p>
 								if (step.phase === 'confirmed') return undefined
 								const active = index === workflow.activeIndex
 								const final = index === workflow.steps.length - 1

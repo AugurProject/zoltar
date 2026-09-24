@@ -5,7 +5,11 @@ import { afterEach, expect, test } from 'bun:test'
 import { act } from 'preact/test-utils'
 import { render } from 'preact'
 import { signal } from '@preact/signals'
-import { getAddress } from '@zoltar/core-shared/evm/ethereum'
+import { createWalletClient, custom, getAddress, publicActions, type TransactionReceipt } from '@zoltar/core-shared/evm/ethereum'
+import { installActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
+import { createFakeBackend } from '@zoltar/ui-core-shared/tests/testUtils/fakeBackend.js'
+import { MAINNET_NETWORK_PROFILE } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
+import { createReviewedClient } from '@zoltar/ui-statoblast-shared/protocol/reviewedClient.js'
 import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import { fireEvent, within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
@@ -299,6 +303,84 @@ test('allows another price request after a failed transaction step', async () =>
 		expect(prices).toEqual([2n * 10n ** 18n, 3n * 10n ** 18n])
 	} finally {
 		await rendered.cleanup()
+		dom.cleanup()
+	}
+})
+
+test('reports a reverted price request after a delayed receipt diagnostic and allows retry', async () => {
+	const dom = installDomEnvironment()
+	const restoreEnvironment = installActiveEnvironmentForTesting(createFakeBackend({ accountAddress: review.managerAddress }))
+	const presentation = signal<GlobalTransactionPresentation | undefined>(undefined)
+	const requestAllowed = signal(true)
+	const diagnostic = createDeferred<void>()
+	const hash = '0x4444444444444444444444444444444444444444444444444444444444444444'
+	const receipt: TransactionReceipt = { blockHash: hash, blockNumber: 1n, cumulativeGasUsed: 21_000n, from: review.managerAddress, gasUsed: 21_000n, logs: [], status: 'reverted', transactionHash: hash, transactionIndex: 0n }
+	let attempts = 0
+	const onConfirm = async (request: RequestPriceReview, reviewSignal?: AbortSignal) => {
+		attempts += 1
+		if (attempts > 1) return
+		const client = createWalletClient({ account: review.managerAddress, chain: MAINNET_NETWORK_PROFILE.chain, transport: custom({ request: async () => { throw new Error('Unexpected RPC') } }) }).extend(publicActions)
+		const reviewed = createReviewedClient({
+			...client,
+			estimateGas: async () => 21_000n,
+			getTransaction: async () => {
+				await diagnostic.promise
+				return { hash, from: review.managerAddress, to: review.managerAddress, gas: 22_000n, input: '0x1234', nonce: 0n, value: 0n }
+			},
+			sendTransaction: async () => hash,
+			waitForTransactionReceipt: async () => receipt,
+		}, async () => undefined, reviewSignal)
+		reviewed.onTransactionPrepared?.({ account: review.managerAddress, chainName: client.chain.name, functionName: 'requestPrice', contractAddress: review.managerAddress, args: [request.proposedRepPerEthPrice], data: '0x1234', value: 12n })
+		const submittedHash = await reviewed.sendTransaction({ to: review.managerAddress, data: '0x1234', value: 12n })
+		presentation.value = { tone: 'pending', title: 'Requesting Price', hash, operationKey: 'price-request' }
+		requestAllowed.value = false
+		const finalReceipt = await reviewed.waitForTransactionReceipt({ hash: submittedHash })
+		if (reviewSignal?.aborted) return
+		if (finalReceipt.status !== 'reverted') throw new Error('Expected a reverted transaction')
+		requestAllowed.value = true
+		presentation.value = {
+			tone: 'error',
+			title: 'Requesting Price',
+			detail: 'Transaction reverted.',
+			hash,
+			operationKey: 'price-request',
+			rows: [
+				{ label: 'Security Pool Address', value: review.securityPoolAddress },
+				{ label: 'Attempted REP/ETH price', value: '2' },
+			],
+		}
+	}
+	function Harness() {
+		return (
+			<GlobalTransactionPresentationProvider transaction={presentation.value}>
+				<RequestPriceModal {...props} canRequest={requestAllowed.value} onConfirm={onConfirm} />
+				<GlobalTransactionDialog transaction={presentation.value} />
+			</GlobalTransactionPresentationProvider>
+		)
+	}
+	const rendered = await renderIntoDocument(<Harness />)
+	try {
+		const queries = within(document.body)
+		await act(() => fireEvent.click(queries.getByRole('button', { name: 'Fetch from Uniswap' })))
+		await settle()
+		await act(() => fireEvent.click(queries.getByRole('button', { name: /^Request price/ })))
+		await settle()
+		expect(transactionSteps.value?.steps[0]?.phase).toBe('failed')
+		await act(async () => diagnostic.resolve())
+		await settle()
+		const statusDialog = queries.getByRole('dialog', { name: 'Transaction status' })
+		expect(within(statusDialog).getByText('Failed')).not.toBeNull()
+		expect(within(statusDialog).getByText(hash)).not.toBeNull()
+		expect(within(statusDialog).getByText('Attempted REP/ETH price').parentElement?.textContent).toContain('2')
+		await act(() => fireEvent.click(within(statusDialog).getByRole('button', { name: 'Dismiss' })))
+		expect(queries.getByRole('button', { name: /^Request price/ }).hasAttribute('disabled')).toBe(false)
+		await act(() => fireEvent.click(queries.getByRole('button', { name: /^Request price/ })))
+		await settle()
+		expect(attempts).toBe(2)
+	} finally {
+		diagnostic.resolve()
+		await rendered.cleanup()
+		restoreEnvironment()
 		dom.cleanup()
 	}
 })
@@ -688,7 +770,10 @@ test('keeps the preview while satisfied approvals are skipped before the final r
 		expect(queries.queryByRole('button', { name: /Request price/ })).toBeNull()
 		ready.resolve()
 		await settle()
-		expect(rendered.container.querySelectorAll('.approval-amount-field')).toHaveLength(2)
+		expect(transactionSteps.value?.activeIndex).toBe(2)
+		expect(queries.getByText('REP approved')).not.toBeNull()
+		expect(queries.getByText('WETH approved')).not.toBeNull()
+		expect(rendered.container.querySelectorAll('.approval-amount-field')).toHaveLength(0)
 		expect(queries.getByRole('button', { name: /Request price/ }).hasAttribute('disabled')).toBe(false)
 	} finally {
 		ready.resolve()

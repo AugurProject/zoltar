@@ -416,7 +416,7 @@ test('returns to the original action when requirements fail after an approval co
 })
 
 for (const phase of ['skipped', 'failed'] as const) {
-	test(`${phase === 'skipped' ? 'keeps approval fields visible when approval is skipped' : 'closes review when approval fails'}`, async () => {
+	test(`${phase === 'skipped' ? 'summarizes a satisfied approval when it is skipped' : 'closes review when approval fails'}`, async () => {
 		const dom = installDomEnvironment()
 		const controller = createTransactionStepController()
 		const common = { description: 'Authorize spending.', contractAddress: undefined, contractLabel: undefined, spender: undefined, amount: undefined, ethValueAttoEth: 0n }
@@ -439,10 +439,10 @@ for (const phase of ['skipped', 'failed'] as const) {
 				expect(queries.queryByRole('dialog')).toBeNull()
 				expect(transactionSteps.value).toBeUndefined()
 			} else {
-				expect(queries.getByRole('textbox').hasAttribute('disabled')).toBe(true)
-				expect(queries.getByText('Required REP')).not.toBeNull()
-				expect(queries.getByText('Approved REP')).not.toBeNull()
-				expect(queries.getByRole('button', { name: 'Approve REP' }).hasAttribute('disabled')).toBe(true)
+				expect(queries.getByText('REP approved')).not.toBeNull()
+				expect(queries.queryByRole('textbox')).toBeNull()
+				expect(queries.queryByRole('button', { name: 'Approve REP' })).toBeNull()
+				expect(queries.getByRole('button', { name: 'Request price' }).hasAttribute('disabled')).toBe(false)
 			}
 			await act(() => transactionSteps.value?.confirm())
 			await nextReview

@@ -72,6 +72,7 @@ export const truthAuctionStartedSuccessDetail = 'Truth auction state was started
 export const truthAuctionBidSuccessDetail = 'Truth auction bid submitted. Bid ETH stays committed until settlement.'
 export const viewTransaction = 'View transaction'
 export const transactionStatus = 'Transaction status'
+export const transactionDetails = 'Transaction details'
 export const preparing = 'Preparing'
 export const awaitingWallet = 'Awaiting Wallet'
 export const confirmed = 'Confirmed'

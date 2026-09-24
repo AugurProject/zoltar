@@ -671,6 +671,7 @@ strong.metric-value-danger {
 	align-items: end;
 	gap: 0.75rem;
 	padding: 0.85rem 1rem;
+	background: var(--surface-modal-opaque);
 }
 
 .global-transaction-dialog .global-transaction-dialog-notice {
@@ -688,10 +689,24 @@ strong.metric-value-danger {
 	gap: 0.35rem 0.9rem;
 }
 
+.global-transaction-dialog .read-only-detail-accordion summary {
+	padding: 0.35rem 0;
+}
+
+.global-transaction-technical-heading {
+	margin: 0.65rem 0 0.35rem;
+	font-size: var(--font-label);
+	color: var(--muted);
+}
+
 .global-transaction-dialog .global-transaction-actions {
 	flex-direction: column;
 	align-items: flex-end;
 	min-width: 7rem;
+	position: sticky;
+	bottom: 0;
+	background: var(--surface-modal-opaque);
+	z-index: 1;
 }
 
 @media (max-width: 600px) {
@@ -714,6 +729,7 @@ strong.metric-value-danger {
 	.global-transaction-dialog .global-transaction-actions {
 		flex-direction: row;
 		align-items: center;
+		padding-top: 0.5rem;
 	}
 }
 
@@ -1998,6 +2014,15 @@ strong.metric-value-danger {
 
 .transaction-plan-action {
 	min-width: 0;
+}
+
+.transaction-approval-satisfied {
+	margin: 0;
+	padding: 0.45rem 0.65rem;
+	border: 1px solid var(--border-default);
+	border-radius: var(--radius-control);
+	color: var(--muted);
+	font-size: 0.8125rem;
 }
 
 .transaction-plan-action .field-inline-input {

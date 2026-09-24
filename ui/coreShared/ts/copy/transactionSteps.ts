@@ -15,3 +15,4 @@ export const transactionPending = 'Wait for the pending transaction to confirm.'
 export const prerequisitesRequired = 'Complete the required setup transactions first.'
 export const formatPendingAction = (title: string) => `${title}…`
 export const requirementsFailed = 'Could not refresh transaction requirements. Close and review the action again.'
+export const formatTokenApproved = (symbol: string) => `${symbol} approved`
