@@ -53,9 +53,8 @@ test('returns an embedded failed transaction to its form for review before resub
 		const queries = within(document.body)
 		const submit = queries.getByRole('button', { name: 'Deposit REP' })
 		await act(() => fireEvent.click(submit))
-		expect(queries.getByRole('alert').textContent).toContain('nonce too low')
-		expect(queries.getByRole('alert').textContent).toContain('0x0000000000000000000000000000000000000002')
-		expect(queries.getByRole('alert').querySelector('strong')?.textContent).toBe('Deposit')
+		expect(queries.queryByRole('alert')).toBeNull()
+		expect(queries.getByRole('dialog', { name: 'Deposit REP' }).querySelector('.operation-modal-transaction-notice')).toBeNull()
 		expect(queries.queryByRole('button', { name: 'Review and retry' })).toBeNull()
 		expect(submit.hasAttribute('disabled')).toBe(false)
 		await act(() => fireEvent.click(submit))
@@ -154,11 +153,8 @@ for (const outcome of ['success', 'failure', 'approval', 'cancel', 'multi-step']
 				expect(queries.queryByRole('dialog')).toBeNull()
 				expect(transactionSteps.value).toBeUndefined()
 			} else {
-				// Both outcomes keep the original form and its full context available.
-				const notice = dialog.querySelector('.operation-modal-transaction-notice')
-				expect(notice?.querySelector('.badge')?.textContent).toBe(outcome === 'failure' ? 'Failed' : 'Confirmed')
-				expect(notice?.querySelector('strong')?.textContent).toBe(outcome === 'failure' ? 'Withdrawal' : 'Transaction')
-				if (outcome === 'failure') expect(notice?.textContent).toContain('Transaction reverted')
+				// The shared transaction dialog owns the outcome; the initiating form stays available.
+				expect(dialog.querySelector('.operation-modal-transaction-notice')).toBeNull()
 				expect(within(dialog).queryByRole('button', { name: 'Dismiss' })).toBeNull()
 				expect(queries.queryByRole('button', { name: 'Back' })).toBeNull()
 				expect(queries.getByRole('dialog')).toBe(dialog)
@@ -214,7 +210,7 @@ test('sends an approval-only workflow from the form control without a separate r
 		expect(dialog.querySelector('.transaction-plan-action')).toBeNull()
 		expect(within(dialog).getAllByRole('button', { name: 'Approve REP' })).toHaveLength(1)
 
-		// A rejected approval surfaces through the dialog notice and leaves the form ready for another attempt.
+		// A rejected approval leaves the form ready for another attempt.
 		const failedWorkflow = transactionSteps.value
 		await act(() => {
 			controller?.failed('Action canceled in wallet.')
@@ -222,7 +218,7 @@ test('sends an approval-only workflow from the form control without a separate r
 		})
 		expect(dialog.querySelector('.operation-modal-steps')).toBeNull()
 		expect(dialog.querySelector('.operation-modal-body')?.hasAttribute('inert')).toBe(false)
-		expect(dialog.querySelector('.operation-modal-transaction-notice')?.textContent).toContain('Action canceled in wallet.')
+		expect(dialog.querySelector('.operation-modal-transaction-notice')).toBeNull()
 		expect(queries.getByRole('button', { name: 'Close' }).hasAttribute('disabled')).toBe(false)
 		await act(() => fireEvent.click(queries.getByRole('button', { name: 'Approve REP' })))
 		expect(await review).toBeUndefined()

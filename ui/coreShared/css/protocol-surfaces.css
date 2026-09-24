@@ -656,15 +656,25 @@ strong.metric-value-danger {
 	gap: 0.75rem;
 }
 
-.global-transaction-tray {
-	position: fixed;
-	right: 1rem;
-	bottom: calc(1rem + env(safe-area-inset-bottom, 0rem));
-	left: 1rem;
-	z-index: var(--z-tray);
-	display: flex;
-	justify-content: center;
-	pointer-events: none;
+.global-transaction-dialog-backdrop {
+	z-index: var(--z-transaction-modal);
+	background: color-mix(in srgb, var(--bg-deep) 45%, transparent);
+	backdrop-filter: blur(2px);
+}
+
+.global-transaction-dialog {
+	width: min(34rem, 100%);
+	gap: 0.5rem;
+}
+
+.global-transaction-dialog .global-transaction-dialog-notice {
+	width: 100%;
+	max-height: none;
+	padding: 0;
+	border: 0;
+	border-radius: 0;
+	background: transparent;
+	box-shadow: none;
 }
 
 .global-transaction-notice {
@@ -688,18 +698,6 @@ strong.metric-value-danger {
 	flex: 1;
 	min-width: 0;
 	gap: 0.32rem;
-}
-
-.global-transaction-universe-warning {
-	margin-right: 2.7rem;
-}
-
-main.global-transaction-tray-open {
-	padding-bottom: max(4rem, calc(var(--global-transaction-tray-height) + 2rem + env(safe-area-inset-bottom, 0rem)));
-}
-
-main.global-transaction-tray-open :is(a, button, input, select, summary, textarea) {
-	scroll-margin-bottom: calc(var(--global-transaction-tray-height) + 2rem + env(safe-area-inset-bottom, 0rem));
 }
 
 .global-transaction-notice-header {
@@ -782,62 +780,6 @@ main.global-transaction-tray-open :is(a, button, input, select, summary, textare
 	display: inline-flex;
 	align-items: center;
 	min-height: var(--touch-target-min);
-}
-
-.global-transaction-close {
-	position: absolute;
-	top: 0.65rem;
-	right: 0.65rem;
-	z-index: var(--z-content);
-	width: var(--touch-target-min);
-	min-width: var(--touch-target-min);
-	min-height: var(--touch-target-min);
-	padding: 0;
-	border-radius: var(--radius-pill);
-	font-size: 1.35rem;
-	line-height: var(--line-height-none);
-}
-
-.global-transaction-notice-copy:first-of-type {
-	padding-right: 2.7rem;
-}
-
-.global-transaction-notice-compact {
-	width: min(32rem, 100%);
-	gap: 0.55rem;
-	padding: 0.5rem 0.85rem;
-}
-
-.global-transaction-notice-compact .global-transaction-notice-copy {
-	gap: 0;
-}
-
-.global-transaction-compact-details {
-	display: grid;
-	gap: 0.65rem;
-}
-
-.global-transaction-compact-details > summary {
-	display: flex;
-	align-items: center;
-	width: fit-content;
-	min-height: var(--touch-target-min);
-	margin-block: -0.5625rem;
-	cursor: pointer;
-	color: var(--text-secondary);
-	font-size: var(--font-caption);
-	font-weight: 700;
-}
-
-.global-transaction-compact-details > summary:hover,
-.global-transaction-compact-details > summary:focus-visible {
-	color: var(--text);
-}
-
-.global-transaction-compact-details-content {
-	display: grid;
-	gap: 0.65rem;
-	padding-top: 0.35rem;
 }
 
 .global-transaction-spinner {
@@ -1251,12 +1193,6 @@ main.global-transaction-tray-open :is(a, button, input, select, summary, textare
 
 	.action-readiness-panel-header {
 		grid-template-columns: 1fr;
-	}
-
-	.global-transaction-tray {
-		right: 0.75rem;
-		bottom: calc(0.75rem + env(safe-area-inset-bottom, 0rem));
-		left: 0.75rem;
 	}
 
 	.global-transaction-notice {
@@ -1880,10 +1816,6 @@ main.global-transaction-tray-open :is(a, button, input, select, summary, textare
 	font-size: var(--font-caption);
 }
 
-.transaction-step-confirmed {
-	margin-block-start: 0.25rem;
-}
-
 .transaction-step-hash .transaction-hash-link {
 	display: block;
 	overflow: hidden;
@@ -2001,18 +1933,6 @@ main.global-transaction-tray-open :is(a, button, input, select, summary, textare
 	grid-template-columns: minmax(0, 1fr) auto;
 	align-items: start;
 	gap: 0.5rem;
-}
-
-.transaction-step-success-feedback {
-	grid-column: 1 / -1;
-}
-
-.transaction-plan-action-complete .transaction-step-close {
-	grid-column: 1 / -1;
-}
-
-.transaction-plan-action-complete .transaction-step-close button {
-	width: 100%;
 }
 
 .transaction-step-close {

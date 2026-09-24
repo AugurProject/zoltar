@@ -1,6 +1,6 @@
 import * as commonCopy from '../copy/common.js'
 import * as transactionCopy from '../copy/transaction.js'
-import type { ComponentChildren, RefObject } from 'preact'
+import type { ComponentChildren } from 'preact'
 import { Badge } from './Badge.js'
 import { ReadOnlyDetailAccordion } from './ReadOnlyDetailAccordion.js'
 import { TransactionHashLink } from './TransactionHashLink.js'
@@ -8,12 +8,7 @@ import type { BadgeTone, GlobalTransactionPresentation } from '../types/componen
 
 type TransactionPresentationNoticeProps = {
 	className?: string
-	compact?: boolean
 	contextWarning?: ComponentChildren
-	dismissible?: boolean
-	noticeRef?: RefObject<HTMLDivElement>
-	onDismiss?: () => void
-	returnHref?: string | undefined
 	transaction: GlobalTransactionPresentation
 }
 
@@ -33,13 +28,13 @@ function getNoticeTitle(transaction: GlobalTransactionPresentation) {
 	return transaction.title
 }
 
-export function TransactionPresentationNotice({ className = '', compact = false, contextWarning, dismissible = false, noticeRef, onDismiss, returnHref, transaction }: TransactionPresentationNoticeProps) {
+export function TransactionPresentationNotice({ className = '', contextWarning, transaction }: TransactionPresentationNoticeProps) {
 	const badge = getTransactionBadge(transaction.tone)
 	const title = getNoticeTitle(transaction)
 	const transactionHash = transaction.hash
 	const rows = transaction.rows ?? []
 	const technicalRows = transaction.technicalRows ?? []
-	const noticeClassName = ['global-transaction-notice', compact ? 'global-transaction-notice-compact' : '', className].filter(Boolean).join(' ')
+	const noticeClassName = ['global-transaction-notice', className].filter(Boolean).join(' ')
 	const transactionDetails = (
 		<>
 			{transaction.detail === undefined ? undefined : <div className='global-transaction-notice-detail'>{transaction.detail}</div>}
@@ -69,13 +64,8 @@ export function TransactionPresentationNotice({ className = '', compact = false,
 	)
 
 	return (
-		<div {...(noticeRef === undefined ? {} : { ref: noticeRef })} className={noticeClassName} role={transaction.tone === 'error' ? 'alert' : 'status'} aria-live={transaction.tone === 'error' ? 'assertive' : 'polite'}>
+		<div className={noticeClassName} role={transaction.tone === 'error' ? 'alert' : 'status'} aria-live={transaction.tone === 'error' ? 'assertive' : 'polite'}>
 			{contextWarning}
-			{!dismissible ? undefined : (
-				<button className='quiet global-transaction-close' type='button' aria-label={transactionCopy.closeStatus} onClick={onDismiss}>
-					<span aria-hidden='true'>×</span>
-				</button>
-			)}
 			<div className='global-transaction-notice-copy'>
 				<div className='global-transaction-notice-header'>
 					<Badge tone={badge.tone}>{badge.label}</Badge>
@@ -83,23 +73,8 @@ export function TransactionPresentationNotice({ className = '', compact = false,
 					{title === undefined ? undefined : <strong>{title}</strong>}
 				</div>
 				{transactionHash === undefined ? undefined : <TransactionHashLink hash={transactionHash} />}
-				{compact ? (
-					<details className='global-transaction-compact-details' open={transaction.tone === 'error'}>
-						<summary>{transaction.tone === 'error' ? transactionCopy.transactionDetails : transactionCopy.viewTransactionDetails}</summary>
-						<div className='global-transaction-compact-details-content'>{transactionDetails}</div>
-					</details>
-				) : (
-					transactionDetails
-				)}
+				{transactionDetails}
 			</div>
-			{!dismissible || (compact && transaction.tone !== 'error') ? undefined : (
-				<div className='global-transaction-actions'>
-					{transaction.tone !== 'error' || returnHref === undefined ? undefined : <a href={returnHref}>{transactionCopy.backToForm}</a>}
-					<button className={`${transaction.tone === 'success' || transaction.tone === 'error' ? 'primary' : 'quiet'} global-transaction-dismiss`} type='button' onClick={onDismiss}>
-						{transactionCopy.dismiss}
-					</button>
-				</div>
-			)}
 		</div>
 	)
 }

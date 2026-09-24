@@ -10,7 +10,7 @@ function getDismissalTransactionKey(transaction: GlobalTransactionPresentation |
 	return transaction?.hash ?? dismissKey ?? transaction?.operationKey
 }
 
-export function getGlobalTransactionDismissKey(transaction: GlobalTransactionPresentation | undefined) {
+function getGlobalTransactionDismissKey(transaction: GlobalTransactionPresentation | undefined) {
 	const transactionKey = getDismissalTransactionKey(transaction)
 	if (transactionKey === undefined || transaction === undefined) return undefined
 	return `${transaction.tone}:${transactionKey}`

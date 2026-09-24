@@ -233,6 +233,7 @@ describe('transaction presentations', () => {
 			managerAddress: '0x0000000000000000000000000000000000000002' as const,
 			securityPoolAddress: '0x0000000000000000000000000000000000000001' as const,
 			universeId: 7n,
+			proposedRepPerEthPrice: 3n * 10n ** 18n,
 		}
 		const intent = createPoolOracleTransactionIntent('requestPrice', context)
 		const requested = markTransactionRequested(createInitialTransactionTrayState(), intent)
@@ -251,6 +252,7 @@ describe('transaction presentations', () => {
 		for (const presentation of [requested.active, prepared.active, submitted.active, failed.active, success]) {
 			expect(presentation?.universeId).toBe(7n)
 			expect(presentation?.rows?.map(row => row.label)).not.toContain('Universe')
+			expect(presentation?.rows?.find(row => row.label === 'Attempted REP/ETH price')?.value).toBe('3')
 		}
 	})
 

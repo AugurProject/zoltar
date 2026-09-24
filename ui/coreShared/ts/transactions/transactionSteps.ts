@@ -39,8 +39,10 @@ type TransactionSteps = {
 }
 
 export const transactionSteps = signal<TransactionSteps | undefined>(undefined)
+export const transactionStepOutcome = signal<{ hash: Hash; title: string; tone: 'success' | 'error'; detail?: string } | undefined>(undefined)
 
 export function createTransactionStepController(signal = getTransactionReviewSignal()) {
+	transactionStepOutcome.value = undefined
 	let canceled = false
 	let rejectReview: ((reason: Error) => void) | undefined
 	const steps: TransactionStep[] = []
@@ -162,6 +164,7 @@ export function createTransactionStepController(signal = getTransactionReviewSig
 			const step = steps.find(candidate => candidate.hash === hash)
 			if (step === undefined) return
 			step.phase = status === 'success' ? 'confirmed' : 'failed'
+			if (steps.at(-1) !== step) transactionStepOutcome.value = { hash, title: step.title, tone: status === 'success' ? 'success' : 'error', ...(status === 'success' ? {} : { detail: 'Transaction reverted.' }) }
 			if (status === 'success' && step.approval !== undefined && step.approvalAmount !== undefined) step.approval = { ...step.approval, approvedAmount: step.approvalAmount }
 			if (status !== 'success') step.error = 'Transaction reverted.'
 			if (!canceled) publish()

@@ -155,8 +155,7 @@
 
 	/*
 	 * Stacking order. Local layers (--z-below, --z-content, --z-content-raised, --z-sticky)
-	 * order children inside one surface; the fixed transaction tray sits above sticky
-	 * navigation and dropdowns but below the modal backdrop and the skip link.
+	 * order children inside one surface; transaction status sits above operation dialogs.
 	 */
 	--z-below: -1;
 	--z-content: 1;
@@ -164,8 +163,8 @@
 	--z-sticky: 3;
 	--z-nav: 10;
 	--z-dropdown: 20;
-	--z-tray: 30;
 	--z-modal: 40;
+	--z-transaction-modal: 50;
 	--z-skip-link: 100;
 
 	/* elevation */

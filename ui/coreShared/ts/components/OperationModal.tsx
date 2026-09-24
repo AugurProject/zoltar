@@ -7,7 +7,6 @@ import { ReviewActionsSlotContext } from './reviewActionsSlot.js'
 import { useModalFocusIsolation } from '../hooks/useModalFocusIsolation.js'
 import type { OperationModalProps } from '../types/components.js'
 import { GlobalTransactionPresentationProvider, useGlobalTransactionPresentation } from './GlobalTransactionPresentationContext.js'
-import { TransactionPresentationNotice } from './TransactionPresentationNotice.js'
 
 function getTransactionOperationKey(transaction: ReturnType<typeof useGlobalTransactionPresentation>) {
 	return transaction?.operationKey ?? transaction?.dismissKey ?? transaction?.hash
@@ -134,8 +133,6 @@ export function OperationModal({ children, closeDisabled = false, closeOnSuccess
 		onClose: requestClose,
 	})
 
-	const showNotice = !(showSteps || !wasOpenRef.current || modalTransaction === undefined || activeTransactionOperationKey === undefined || activeTransactionOperationKey === transactionOperationKeyAtOpenRef.current)
-
 	if (!isOpen) return undefined
 
 	const returnToForm = () => {
@@ -172,7 +169,6 @@ export function OperationModal({ children, closeDisabled = false, closeOnSuccess
 					)}
 					<div className='operation-modal-body' inert={(showSteps && reviewActionsSlot === null) || undefined} ref={bodyRef}>
 						<ReviewActionsSlotContext.Provider value={reviewActionsSlotContext}>{children}</ReviewActionsSlotContext.Provider>
-						{showNotice ? <TransactionPresentationNotice className='operation-modal-transaction-notice' transaction={modalTransaction} /> : undefined}
 					</div>
 					{showSteps ? (
 						<div className='operation-modal-steps'>

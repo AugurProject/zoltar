@@ -917,13 +917,12 @@ productionWorkflowTest('production bundle executes deployment, reporting, fork m
 	const baseUrl = server.url.toString().replace(/\/$/, '')
 	const state = JSON.parse(
 		await loadProductionDocumentInChromium(`${baseUrl}/statoblast/#/deploy?simulate=1&simScenario=baseline`, { height: 900, width: 1440 }, async driver => {
-			// Reviews inside a dialog render their actions in the form's own action row and return to the form on failure.
-			// The price request keeps its final result in the dialog; other completed reviews can be dismissed here.
+			// Reviews keep their actions in the form, while every receipt uses the shared status dialog above it.
 			const completeTransactionReview = async (inDialogSuccessTitle?: string) => {
 				await driver.evaluate('window.__zoltarReviewClicked = false')
 				for (let attempt = 0; attempt < 2400; attempt += 1) {
 					const result = await driver.evaluate(
-						`(() => { const dialog = document.querySelector('[role="dialog"]'); const result = dialog?.querySelector('.transaction-step-success'); if (${JSON.stringify(inDialogSuccessTitle ?? '')} && result?.querySelector('.badge')?.textContent?.trim() === 'Confirmed' && result.querySelector('strong')?.textContent?.trim() === ${JSON.stringify(inDialogSuccessTitle ?? '')}) return 'complete'; if (dialog?.querySelector('.global-transaction-notice .badge')?.textContent?.trim() === 'Failed') return 'complete'; const actions = document.querySelector('.transaction-step-actions'); if (!actions) return window.__zoltarReviewClicked ? 'complete' : 'waiting'; const dismiss = [...actions.querySelectorAll('.transaction-step-close button')].find(candidate => candidate.textContent?.trim() === 'Dismiss'); if (dismiss instanceof HTMLButtonElement && !dismiss.disabled) { dismiss.click(); return 'complete' } const button = [...actions.querySelectorAll('.transaction-plan-action .tx-action-button')].find(candidate => candidate instanceof HTMLButtonElement && !candidate.disabled); if (button instanceof HTMLButtonElement) { button.click(); window.__zoltarReviewClicked = true } return 'waiting' })()`,
+						`(() => { const status = document.querySelector('.global-transaction-dialog'); if (status) { const badge = status.querySelector('.badge')?.textContent?.trim(); const title = status.querySelector('.global-transaction-notice-header strong')?.textContent?.trim(); if (badge === 'Failed' || (${JSON.stringify(inDialogSuccessTitle ?? '')} && badge === 'Confirmed' && title === ${JSON.stringify(inDialogSuccessTitle ?? '')})) return 'complete'; if (badge === 'Pending' || badge === 'Awaiting Wallet' || badge === 'Preparing') return 'waiting'; const nextAction = [...document.querySelectorAll('.transaction-step-actions .transaction-plan-action .tx-action-button')].some(candidate => candidate instanceof HTMLButtonElement && !candidate.disabled); const dismiss = status.querySelector('.global-transaction-dismiss'); if (dismiss instanceof HTMLButtonElement) dismiss.click(); return !${JSON.stringify(inDialogSuccessTitle ?? '')} && !nextAction ? 'complete' : 'waiting' } const actions = document.querySelector('.transaction-step-actions'); if (!actions) return window.__zoltarReviewClicked ? 'complete' : 'waiting'; const button = [...actions.querySelectorAll('.transaction-plan-action .tx-action-button')].find(candidate => candidate instanceof HTMLButtonElement && !candidate.disabled); if (button instanceof HTMLButtonElement) { button.click(); window.__zoltarReviewClicked = true } return 'waiting' })()`,
 					)
 					if (result === 'complete') return
 					await Bun.sleep(50)
@@ -978,11 +977,13 @@ productionWorkflowTest('production bundle executes deployment, reporting, fork m
 			const failedBody = await driver.waitForBodyText('Injected production workflow failure')
 			expect(failedBody).toContain('FAILED')
 			expect(failedBody).toContain('Deposit REP')
+			await driver.clickButton('Dismiss')
 			await driver.waitForButtonEnabled('Deposit REP', 1)
 			await driver.clickButton('Deposit REP', 1)
-			await completeTransactionReview()
+			await completeTransactionReview('Deposit REP')
 			const poolBody = await driver.waitForTransactionStatus('Confirmed', 'Deposit REP')
 			expect(poolBody).toContain('Manage Pool')
+			await driver.clickButton('Dismiss')
 
 			await driver.resize({ height: 900, width: 1440 })
 			await driver.navigate(`${baseUrl}/statoblast/?workflow=reporting#/security-pools?simulate=1&simScenario=securitypoolx2`)
@@ -1006,8 +1007,9 @@ productionWorkflowTest('production bundle executes deployment, reporting, fork m
 			}
 			expect(reportingDepositReady).toBe(true)
 			await driver.clickButton('Deposit REP', 1)
-			await completeTransactionReview()
+			await completeTransactionReview('Deposit REP')
 			await driver.waitForTransactionStatus('Confirmed', 'Deposit REP')
+			await driver.clickButton('Dismiss')
 			await driver.clickButton('+1 year')
 			await selectPoolTool('Price Oracle')
 			await driver.waitForButtonEnabled('Request new price')
@@ -1057,11 +1059,11 @@ productionWorkflowTest('production bundle executes deployment, reporting, fork m
 			await driver.waitForBodyWithoutText('Preparing funding and approvals…')
 			await completeTransactionReview('Price Requested')
 			await driver.waitForTransactionStatus('Confirmed', 'Price Requested')
-			expect(await driver.evaluate('document.querySelector(\'[role="dialog"] .transaction-step-success\') !== null')).toBe(true)
-			const priceResultDismissed = await driver.evaluate(`(() => { const button = document.querySelector('[role="dialog"] .transaction-step-close button'); if (!(button instanceof HTMLButtonElement) || button.disabled) return false; button.click(); return true })()`)
+			expect(await driver.evaluate("document.querySelector('.global-transaction-dialog .global-transaction-notice .badge')?.textContent?.trim()")).toBe('Confirmed')
+			const priceResultDismissed = await driver.evaluate(`(() => { const button = document.querySelector('.global-transaction-dialog .global-transaction-dismiss'); if (!(button instanceof HTMLButtonElement) || button.disabled) return false; button.click(); return true })()`)
 			expect(priceResultDismissed).toBe(true)
 			await driver.waitForBodyWithoutText('Price Requested')
-			expect(await driver.evaluate("document.querySelector('[role=\"dialog\"]') === null && document.querySelector('.global-transaction-tray') === null")).toBe(true)
+			expect(await driver.evaluate("document.querySelector('[role=\"dialog\"]') === null && document.querySelector('.global-transaction-dialog') === null")).toBe(true)
 			await driver.clickButton('+10 min')
 			await driver.waitForBodyText('PENDING REQUEST')
 			const pendingReportOpened = await driver.evaluate(`(() => { const button = [...document.querySelectorAll('button')].find(candidate => candidate.textContent?.trim().startsWith('Report #')); if (!(button instanceof HTMLButtonElement)) return false; button.click(); return true })()`)
@@ -1070,8 +1072,9 @@ productionWorkflowTest('production bundle executes deployment, reporting, fork m
 			await driver.clickButton('Settle report')
 			await driver.waitForButtonEnabled('Settle report', 1)
 			await driver.clickButton('Settle report', 1)
-			await completeTransactionReview()
+			await completeTransactionReview('Report Settled')
 			await driver.waitForTransactionStatus('Confirmed', 'Report Settled')
+			await driver.clickButton('Dismiss')
 			const reportingPoolsOpened = await driver.evaluate(`(() => { const target = [...document.querySelectorAll('a, button')].find(candidate => candidate.textContent?.trim() === 'Security Pools'); if (!(target instanceof HTMLElement)) return false; target.click(); return true })()`)
 			expect(reportingPoolsOpened).toBe(true)
 			await selectPoolTool('Price Oracle')
@@ -1112,14 +1115,14 @@ productionWorkflowTest('production bundle executes deployment, reporting, fork m
 						await driver.resize({ height: 900, width: 1440 })
 					}
 					await driver.clickButton('Approve REP')
-					await completeTransactionReview()
+					await completeTransactionReview('Approve Reporting REP')
 					await driver.waitForTransactionStatus('Confirmed', 'Approve Reporting REP')
 					await driver.waitForBodyText('REP approved')
+					await driver.clickButton('Dismiss')
 					const approvedDesktopScreenshotPath = process.env['UI_ORDINARY_REPORTING_APPROVED_DESKTOP_SCREENSHOT']
 					const approvedMobileScreenshotPath = process.env['UI_ORDINARY_REPORTING_APPROVED_MOBILE_SCREENSHOT']
 					const captureApprovedQaScreenshots = (approvedDesktopScreenshotPath !== undefined && approvedDesktopScreenshotPath !== '') || (approvedMobileScreenshotPath !== undefined && approvedMobileScreenshotPath !== '')
 					if (captureApprovedQaScreenshots) {
-						await driver.clickButton('Dismiss')
 						await driver.evaluate(`([...document.querySelectorAll('button')].find(button => button.textContent?.trim() === 'REP approved'))?.scrollIntoView({ block: 'center' })`)
 					}
 					if (approvedDesktopScreenshotPath !== undefined && approvedDesktopScreenshotPath !== '') await driver.captureScreenshot(approvedDesktopScreenshotPath)
@@ -1132,17 +1135,17 @@ productionWorkflowTest('production bundle executes deployment, reporting, fork m
 				}
 				await driver.waitForButtonEnabled(`Report ${outcome}`)
 				await driver.clickButton(`Report ${outcome}`)
-				await completeTransactionReview()
+				await completeTransactionReview('Report Outcome')
 			}
 
 			await selectReportingOutcome('Yes')
 			await driver.waitForBodyText('Your selected REP was committed to the chosen escalation side.')
 			await driver.waitForBodyWithoutText('Submitting report…')
+			await driver.clickButton('Dismiss')
 			const vaultLockedDesktopScreenshotPath = process.env['UI_ORDINARY_VAULT_LOCKED_DESKTOP_SCREENSHOT']
 			const vaultLockedMobileScreenshotPath = process.env['UI_ORDINARY_VAULT_LOCKED_MOBILE_SCREENSHOT']
 			const captureVaultLockedQaScreenshots = (vaultLockedDesktopScreenshotPath !== undefined && vaultLockedDesktopScreenshotPath !== '') || (vaultLockedMobileScreenshotPath !== undefined && vaultLockedMobileScreenshotPath !== '')
 			if (captureVaultLockedQaScreenshots) {
-				await driver.clickButton('Dismiss')
 				await driver.clickButton('Vaults')
 				await driver.waitForBodyText('New vault REP backing is unavailable after this question ends.')
 				await driver.waitForBodyWithoutText('Loading vault details…')
@@ -1160,6 +1163,8 @@ productionWorkflowTest('production bundle executes deployment, reporting, fork m
 				await driver.waitForBodyText('Report Outcome')
 			}
 			await selectReportingOutcome('No')
+			await driver.waitForTransactionStatus('Confirmed', 'Report Outcome')
+			await driver.clickButton('Dismiss')
 			await driver.waitForButtonEnabled('Trigger universe fork')
 			await driver.clickButton('Trigger universe fork')
 			await completeTransactionReview()
@@ -1170,12 +1175,14 @@ productionWorkflowTest('production bundle executes deployment, reporting, fork m
 			// The fork workflow view now owns the full migration flow; drive it directly.
 			await driver.waitForButtonEnabled('Migrate pool to Yes universe')
 			await driver.clickButton('Migrate pool to Yes universe')
-			await completeTransactionReview()
+			await completeTransactionReview('Migrate REP To Zoltar')
 			await driver.waitForBodyText('Pool-held REP was migrated into the selected child universe.')
+			await driver.clickButton('Dismiss')
 			await driver.waitForButtonEnabled('Migrate vault to Yes')
 			await driver.clickButton('Migrate vault to Yes')
-			await completeTransactionReview()
+			await completeTransactionReview('Migrate Vault')
 			await driver.waitForBodyText('Vault REP backing and capacity ownership were migrated into the selected child universe.')
+			await driver.clickButton('Dismiss')
 
 			await driver.resize({ height: 900, width: 1440 })
 			await driver.navigate(`${baseUrl}/statoblast/?workflow=auction#/security-pools?simulate=1&simScenario=securitypoolx2-auction`)
@@ -1206,7 +1213,7 @@ productionWorkflowTest('production bundle executes deployment, reporting, fork m
 			await selectPoolTool('Fork & Migration')
 			await driver.waitForButtonEnabled('Finalize truth auction')
 			await driver.clickButton('Finalize truth auction')
-			await completeTransactionReview()
+			await completeTransactionReview('Finalize Truth Auction')
 			const finalizedBody = await driver.waitForTransactionStatus('Confirmed', 'Finalize Truth Auction')
 			expect(finalizedBody).toContain('Truth Auction')
 		}),

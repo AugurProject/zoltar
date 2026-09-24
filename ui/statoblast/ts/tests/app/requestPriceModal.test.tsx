@@ -1,6 +1,6 @@
 import { createDeferred } from '@zoltar/ui-core-shared/tests/testUtils/deferred.js'
 import { GlobalTransactionPresentationProvider } from '@zoltar/ui-core-shared/components/GlobalTransactionPresentationContext.js'
-import { GlobalTransactionTray } from '@zoltar/ui-core-shared/app/components/GlobalTransactionTray.js'
+import { GlobalTransactionDialog } from '@zoltar/ui-core-shared/app/components/GlobalTransactionDialog.js'
 import { afterEach, expect, test } from 'bun:test'
 import { act } from 'preact/test-utils'
 import { render } from 'preact'
@@ -33,7 +33,7 @@ afterEach(() => {
 	embeddedTransactionSteps.value = undefined
 })
 
-test('keeps final confirmation with the completed price steps and dismisses the matching tray', async () => {
+test('shows the final price result in the shared dialog and closes the form after dismissal', async () => {
 	const dom = installDomEnvironment()
 	const presentation = signal<GlobalTransactionPresentation | undefined>(undefined)
 	const completedHash = signal<string | undefined>(undefined)
@@ -45,7 +45,6 @@ test('keeps final confirmation with the completed price steps and dismisses the 
 	function Harness() {
 		return (
 			<GlobalTransactionPresentationProvider transaction={presentation.value}>
-				<GlobalTransactionTray routeKey='security-pools' transaction={presentation.value} />
 				<RequestPriceModal
 					{...props}
 					canRequest={requestAllowed.value}
@@ -60,6 +59,7 @@ test('keeps final confirmation with the completed price steps and dismisses the 
 						controller.startWithoutReview(0)
 					}}
 				/>
+				<GlobalTransactionDialog routeKey='security-pools' transaction={presentation.value} />
 			</GlobalTransactionPresentationProvider>
 		)
 	}
@@ -72,12 +72,13 @@ test('keeps final confirmation with the completed price steps and dismisses the 
 		await act(() => {
 			controller?.submitted(hash)
 			controller?.receipt(hash, 'success')
+			presentation.value = { tone: 'pending', title: 'Requesting Price', hash, operationKey: 'price-request' }
 			requestAllowed.value = false
 			guard.value = 'A price request is already pending.'
 		})
 		await settle()
 		const dialogBeforeResult = queries.getByRole('dialog', { name: 'Request New Price' })
-		expect(within(dialogBeforeResult).getByRole('button', { name: 'Dismiss' }).hasAttribute('disabled')).toBe(true)
+		expect(within(queries.getByRole('dialog', { name: 'Transaction status' })).getByText('Pending')).not.toBeNull()
 		expect(within(dialogBeforeResult).getByRole('button', { name: 'Close' }).hasAttribute('disabled')).toBe(true)
 		expect(within(dialogBeforeResult).getByRole('textbox', { name: 'Open Oracle REP/ETH starting price' }).hasAttribute('disabled')).toBe(true)
 		await act(() => {
@@ -87,19 +88,20 @@ test('keeps final confirmation with the completed price steps and dismisses the 
 		await settle()
 		const dialog = queries.getByRole('dialog', { name: 'Request New Price' })
 		expect(closed).toBe(false)
-		expect(dialog.querySelector('.transaction-step-success')?.textContent).toContain('Price requested')
-		expect(dialog.querySelector('.transaction-step-success')?.textContent).toContain(review.securityPoolAddress)
+		expect(dialog.querySelector('.transaction-step-success')).toBeNull()
+		expect(within(queries.getByRole('dialog', { name: 'Transaction status' })).getByText('Price requested')).not.toBeNull()
+		expect(within(queries.getByRole('dialog', { name: 'Transaction status' })).getByText(review.securityPoolAddress)).not.toBeNull()
 		expect(within(dialog).getByRole('textbox', { name: 'Open Oracle REP/ETH starting price' }).hasAttribute('disabled')).toBe(true)
 		expect(within(dialog).queryByRole('button', { name: /Request price/ })).toBeNull()
-		expect(dialog.textContent?.match(new RegExp(hash, 'g')) ?? []).toHaveLength(1)
+		expect(dialog.textContent?.match(new RegExp(hash, 'g')) ?? []).toHaveLength(0)
 		await act(() => {
 			presentation.value = { tone: 'warning', title: 'Price requested', detail: 'Price request succeeded, but refreshing the UI failed', hash, operationKey: 'price-request', rows: [{ label: 'Security Pool Address', value: review.securityPoolAddress }] }
 		})
 		await settle()
-		expect(dialog.querySelector('.transaction-step-success')?.textContent).toContain('Price request succeeded, but refreshing the UI failed')
-		await act(() => fireEvent.click(within(dialog).getByRole('button', { name: 'Dismiss' })))
+		expect(within(queries.getByRole('dialog', { name: 'Transaction status' })).getByText('Price request succeeded, but refreshing the UI failed')).not.toBeNull()
+		await act(() => fireEvent.click(within(queries.getByRole('dialog', { name: 'Transaction status' })).getByRole('button', { name: 'Dismiss' })))
 		expect(closed).toBe(true)
-		expect(document.querySelector('.global-transaction-tray')).toBeNull()
+		expect(queries.queryByRole('dialog', { name: 'Transaction status' })).toBeNull()
 	} finally {
 		await rendered.cleanup()
 		dom.cleanup()
@@ -242,7 +244,7 @@ test('shows preparation failure with retry and keeps manual entry available', as
 		await act(() => fireEvent.click(queries.getByRole('button', { name: 'Fetch from Uniswap' })))
 		await settle()
 		expect(queries.getByRole('alert').textContent).toContain('Uniswap quote unavailable.')
-		expect(document.querySelector('.price-request-preview .global-transaction-notice')).not.toBeNull()
+		expect(document.querySelector('.price-request-preview .global-transaction-notice')).toBeNull()
 		expect(queries.getByRole('alert').closest('.transaction-step-content') === null).toBe(true)
 		expect(queries.queryByRole('status')).toBeNull()
 		expect(queries.queryByRole('button', { name: 'Review and retry' })).toBeNull()
@@ -278,8 +280,7 @@ test('allows another price request after a failed transaction step', async () =>
 		await act(() => fireEvent.click(queries.getByRole('button', { name: 'Fetch from Uniswap' })))
 		await settle()
 		expect(queries.queryByRole('button', { name: 'Review and retry' })).toBeNull()
-		expect(queries.getByText('Security Pool Address').parentElement?.textContent).toContain(review.securityPoolAddress)
-		expect(queries.getByText('Oracle Manager').parentElement?.textContent).toContain(review.managerAddress)
+		expect(document.querySelector('.price-request-preview .global-transaction-notice')).toBeNull()
 		await settle()
 		expect(attempts).toBe(1)
 		const priceInput = queries.getByRole('textbox', { name: 'Open Oracle REP/ETH starting price' })
@@ -319,7 +320,17 @@ test('keeps submitted funding and pool details beside the original action after 
 		try {
 			await controller.review()
 			controller.failed('nonce too low')
-			presentation.value = { tone: 'error', title: 'Requesting Price', detail: 'nonce too low', technicalRows: [{ label: 'Function', value: 'requestPrice' }] }
+			presentation.value = {
+				tone: 'error',
+				title: 'Requesting Price',
+				detail: 'nonce too low',
+				rows: [
+					{ label: 'Security Pool Address', value: review.securityPoolAddress },
+					{ label: 'Oracle Manager', value: review.managerAddress },
+					{ label: 'Attempted REP/ETH price', value: '2' },
+				],
+				technicalRows: [{ label: 'Function', value: 'requestPrice' }],
+			}
 		} catch (error) {
 			if (!(error instanceof Error) || !error.message.includes('canceled')) throw error
 		}
@@ -329,6 +340,7 @@ test('keeps submitted funding and pool details beside the original action after 
 			<GlobalTransactionPresentationProvider transaction={presentation.value}>
 				<RequestPriceModal {...props} confirmationGuardMessage={guard.value} onConfirm={onConfirm} />
 				<TransactionStepsModal contextKey='wallet' />
+				<GlobalTransactionDialog transaction={presentation.value} />
 			</GlobalTransactionPresentationProvider>
 		)
 	}
@@ -340,19 +352,20 @@ test('keeps submitted funding and pool details beside the original action after 
 		await act(() => fireEvent.click(queries.getByRole('button', { name: /^Request price/ })))
 		await settle()
 		expect(queries.getByRole('alert').textContent).toContain('nonce too low')
-		expect(document.querySelector('.price-request-preview .global-transaction-notice')).not.toBeNull()
-		expect(queries.getByText('Failed')).not.toBeNull()
-		expect(within(queries.getByRole('alert')).getByText('Attempted REP/ETH price')).not.toBeNull()
-		expect(within(queries.getByRole('alert')).getByText('2')).not.toBeNull()
+		expect(document.querySelector('.price-request-preview .global-transaction-notice')).toBeNull()
+		const statusDialog = queries.getByRole('dialog', { name: 'Transaction status' })
+		expect(within(statusDialog).getByText('Failed')).not.toBeNull()
+		expect(within(statusDialog).getByText('Attempted REP/ETH price')).not.toBeNull()
+		expect(within(statusDialog).getByText('2')).not.toBeNull()
 		expect(queries.getByText('2 REP')).not.toBeNull()
 		expect(queries.getByText('1 WETH')).not.toBeNull()
-		expect(queries.getByText('Security Pool Address').parentElement?.textContent).toContain(review.securityPoolAddress)
-		expect(queries.getByText('Oracle Manager').parentElement?.textContent).toContain(review.managerAddress)
-		expect(queries.getByText('Technical details')).not.toBeNull()
-		expect(queries.getByText('requestPrice')).not.toBeNull()
+		expect(within(statusDialog).getByText('Security Pool Address').parentElement?.textContent).toContain(review.securityPoolAddress)
+		expect(within(statusDialog).getByText('Oracle Manager').parentElement?.textContent).toContain(review.managerAddress)
+		expect(within(statusDialog).getByText('Technical details')).not.toBeNull()
+		expect(within(statusDialog).getByText('requestPrice')).not.toBeNull()
 		expect(queries.getByRole('button', { name: /^Request price/ }).hasAttribute('disabled')).toBe(false)
 		await act(() => fireEvent.input(queries.getByRole('textbox', { name: 'Open Oracle REP/ETH starting price' }), { target: { value: '3' } }))
-		expect(within(queries.getByRole('alert')).getByText('2')).not.toBeNull()
+		expect(within(statusDialog).getByText('2')).not.toBeNull()
 		guard.value = 'A pending report blocks another request.'
 		await settle()
 		expect(queries.getByText('A pending report blocks another request.')).not.toBeNull()

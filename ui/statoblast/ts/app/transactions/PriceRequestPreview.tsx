@@ -2,25 +2,21 @@ import { TokenApprovalControl } from '@zoltar/ui-core-shared/components/TokenApp
 import { useId, useEffect, useRef } from 'preact/hooks'
 import { InlineHint } from '@zoltar/ui-core-shared/components/InlineHint.js'
 import { TransactionActionButton } from '@zoltar/ui-core-shared/components/TransactionActionButton.js'
-import { TransactionPresentationNotice } from '@zoltar/ui-core-shared/components/TransactionPresentationNotice.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as copy from '@zoltar/ui-core-shared/copy/transactionSteps.js'
 import * as priceRequestCopy from '@zoltar/ui-statoblast-shared/copy/priceRequest.js'
 import { EthAmount, TransactionFundingSummary } from '@zoltar/ui-core-shared/components/TransactionFundingSummary.js'
-import type { GlobalTransactionPresentation, GlobalTransactionRow } from '@zoltar/ui-core-shared/types/components.js'
 
 export type FailedPricePlan = {
 	funding: readonly { amount: string }[]
 	totalAttoEth: bigint
 	outcome: { returnToWallet: boolean; settlerRewardAttoEth: bigint | undefined } | undefined
-	technicalRows: GlobalTransactionRow[] | undefined
 }
 
 export function PriceRequestPreview({
 	requestValue,
 	reason,
 	error,
-	failureNotice,
 	preparing,
 	hideReason,
 	onClose,
@@ -30,7 +26,6 @@ export function PriceRequestPreview({
 	requestValue: bigint | undefined
 	reason: string
 	error: string | undefined
-	failureNotice: GlobalTransactionPresentation | undefined
 	preparing: boolean
 	hideReason: boolean
 	onClose: () => void
@@ -40,19 +35,12 @@ export function PriceRequestPreview({
 	const reasonId = useId()
 	const errorRef = useRef<HTMLDivElement>(null)
 	useEffect(() => {
-		if (error !== undefined || failureNotice !== undefined) errorRef.current?.scrollIntoView?.({ block: 'nearest' })
-	}, [error, failureNotice?.detail])
+		if (error !== undefined) errorRef.current?.scrollIntoView?.({ block: 'nearest' })
+	}, [error])
 	// While preparing, the primary action carries the busy state so the feedback slot stays empty and the actions do not move.
 	const reasonHidden = hideReason || preparing
 	let visibleFeedback = undefined
-	if (failureNotice !== undefined) {
-		visibleFeedback = (
-			<>
-				<TransactionPresentationNotice transaction={failureNotice} />
-				{error === undefined ? undefined : <InlineHint id={reasonId} message={error} role='alert' />}
-			</>
-		)
-	} else if (error !== undefined) {
+	if (error !== undefined) {
 		visibleFeedback = <InlineHint id={reasonId} message={error} role='alert' />
 	} else if (!reasonHidden) {
 		visibleFeedback = <InlineHint id={reasonId} message={reason} />
@@ -97,7 +85,7 @@ export function PriceRequestPreview({
 						))}
 						<div className='transaction-plan-action transaction-plan-action-wide transaction-plan-action-final'>
 							{visibleFeedback === undefined ? undefined : (
-								<div className='tx-action-feedback' ref={errorRef} aria-live={failureNotice === undefined ? 'polite' : undefined}>
+								<div className='tx-action-feedback' ref={errorRef} aria-live='polite'>
 									{visibleFeedback}
 								</div>
 							)}

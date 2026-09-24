@@ -452,7 +452,7 @@ describe('OperationModal', () => {
 		expect(documentQueries.queryByRole('dialog', { name: 'Settle Report' })).toBeNull()
 	})
 
-	test('keeps transaction feedback and submitted values beside the original form', async () => {
+	test('keeps the original form available without duplicating transaction status', async () => {
 		const renderedComponent = await renderIntoDocument(<TransactionFeedbackOperationModalHarness />)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
@@ -465,12 +465,7 @@ describe('OperationModal', () => {
 		})
 
 		expect(documentQueries.getByRole('dialog', { name: 'Migrate Shares' })).not.toBeNull()
-		expect(within(dialog).getByRole('status').textContent).toContain('Approve REP')
-		expect(within(dialog).getByRole('status').textContent).not.toContain('Pool')
-		expect(within(dialog).getByRole('status').textContent).not.toContain('Share Outcome')
-		expect(within(dialog).getByRole('status').textContent).toContain('Approval Amount')
-		expect(within(dialog).queryByText('Technical details')).toBeNull()
-		expect(within(dialog).queryByText('approve')).toBeNull()
+		expect(within(dialog).queryByRole('status')).toBeNull()
 		expect(dialog.textContent?.includes('Security Pool Address')).toBe(false)
 		expect(dialog.textContent?.includes('Outcome')).toBe(false)
 		await act(() => {
@@ -478,27 +473,20 @@ describe('OperationModal', () => {
 		})
 
 		expect(documentQueries.getByRole('dialog', { name: 'Migrate Shares' })).not.toBeNull()
-		expect(within(dialog).getByRole('status').textContent).toContain('Approval confirmed')
-		expect(within(dialog).getByRole('status').textContent).toContain('Pool')
-		expect(within(dialog).getByRole('status').textContent).toContain('Share Outcome')
-		expect(within(dialog).getByRole('status').textContent).toContain('Approval Amount')
-		expect(within(dialog).queryByText('Technical details')).toBeNull()
-		expect(within(dialog).queryByText('approve')).toBeNull()
+		expect(within(dialog).queryByRole('status')).toBeNull()
 		expect(dialog.textContent?.includes('Security Pool Address')).toBe(false)
-		expect(dialog.textContent?.includes('Outcome')).toBe(true)
+		expect(dialog.textContent?.includes('Outcome')).toBe(false)
 		expect(within(dialog).getByText('Fail transaction')).not.toBeNull()
 		await act(() => {
 			fireEvent.click(documentQueries.getByRole('button', { name: 'Fail transaction' }))
 		})
 
 		expect(documentQueries.getByRole('dialog', { name: 'Migrate Shares' })).not.toBeNull()
-		expect(within(dialog).getByRole('alert').textContent).toContain('The share migration transaction failed.')
-		// A failure keeps its technical rows so the user can debug it, unlike the compact progress notices above.
-		expect(within(dialog).getByText('Technical details')).not.toBeNull()
-		expect(within(dialog).getByText('migrateShares')).not.toBeNull()
+		expect(within(dialog).queryByRole('alert')).toBeNull()
+		expect(within(dialog).getByText('Fail transaction')).not.toBeNull()
 	})
 
-	test('keeps a transaction that predates the modal hidden across its lifecycle and surfaces a later operation', async () => {
+	test('keeps transaction status out of the operation form across its lifecycle', async () => {
 		const renderedComponent = await renderIntoDocument(<ExistingTransactionLifecycleOperationModalHarness />)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
@@ -524,25 +512,22 @@ describe('OperationModal', () => {
 		await act(() => {
 			fireEvent.click(within(dialog).getByRole('button', { name: 'Start new transaction' }))
 		})
-		expect(within(dialog).getByRole('status').textContent).toContain('New transaction')
+		expect(within(dialog).queryByRole('status')).toBeNull()
 
 		await act(() => {
 			fireEvent.click(within(dialog).getByRole('button', { name: 'Submit new transaction' }))
 		})
-		expect(within(dialog).getByRole('status').textContent).toContain('New transaction')
-		expect(within(dialog).getByRole('status').textContent).toContain('Pending')
+		expect(within(dialog).queryByRole('status')).toBeNull()
 
 		await act(() => {
 			fireEvent.click(within(dialog).getByRole('button', { name: 'Fail new transaction' }))
 		})
-		expect(within(dialog).getByRole('alert').textContent).toContain('The new transaction failed.')
+		expect(within(dialog).queryByRole('alert')).toBeNull()
 
 		await act(() => {
 			fireEvent.click(within(dialog).getByRole('button', { name: 'Complete new transaction' }))
 		})
-		const status = within(dialog).getByRole('status')
-		expect(status.querySelector('.badge')?.textContent).toBe('Confirmed')
-		expect(status.querySelector('strong')?.textContent).toBe('New transaction')
+		expect(within(dialog).queryByRole('status')).toBeNull()
 	})
 
 	test('does not close a reopened modal when a transaction from its previous instance succeeds', async () => {
