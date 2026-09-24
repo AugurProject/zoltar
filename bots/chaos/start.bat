@@ -6,7 +6,8 @@ pushd "%~dp0" || goto failed
 set "chaos_pushed=1"
 docker network inspect zoltar >nul 2>&1 || docker network create zoltar || goto failed
 if /I "%~1"=="doctor" goto doctor
-docker compose stop || goto failed
+rem Include earlier one-off launcher containers while retaining state volumes.
+docker compose down --remove-orphans --timeout 60 || goto failed
 docker compose build || goto failed
 
 :prepare_current
@@ -46,7 +47,7 @@ if not "%chaos_status_exit%"=="0" (
 	set "chaos_exit_code=%chaos_status_exit%"
 	goto failed
 )
-docker compose stop || goto failed
+docker compose down --remove-orphans --timeout 60 || goto failed
 goto prepare_current
 
 :doctor
