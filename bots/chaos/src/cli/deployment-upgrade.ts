@@ -10,7 +10,6 @@ import { assertDurableDeploymentFactory, restoreDeploymentForDurableState } from
 import { executionProfileId } from '../config/execution-profile.ts'
 import { assertSettingsProfileIsolation, loadSettings, saveSettings, type OperatorSettings } from '../config/settings.ts'
 import { CHAOS_PROCESS_LOCK_OPTIONS } from '../core/process-lock-options.ts'
-import { chaosReadEndpoints } from '../runtime/canonical-scan.ts'
 import { resetPristineStateForDeploymentProfile, retirementReplacementTargetId, RetirementCompletionPendingError, verifyRetirementCompletionFinality } from '../runtime/deployment-profile.ts'
 import { initialRuntimeState } from '../state/initial-state.ts'
 import { migrateEmptyBootstrapState } from '../state/bootstrap-migration.ts'
@@ -104,7 +103,6 @@ async function requestOldProfileRetirement(settings: OperatorSettings, state: Aw
 	if (!settings.runtime.execute || settings.paused || settings.privateKey === undefined || !settings.networkConfigured || settings.connectivity === undefined) {
 		throw new Error('Enable live execution with a configured signer and unpause the old profile before requesting automatic retirement')
 	}
-	if (new Set(chaosReadEndpoints(settings).map(rpcUrl => new URL(rpcUrl).origin)).size < 2) throw new Error('Retirement completion requires at least two independent RPC readers')
 	const wallet = configuredWallet(settings)
 	if (wallet === undefined) throw new Error('Retirement requires a configured signer')
 	const recipient = wallet

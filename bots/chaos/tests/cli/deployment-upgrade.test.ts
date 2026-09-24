@@ -254,24 +254,20 @@ test('discloses default retirement policies and replaces policies from a cancell
 	expect((await loadDurableState(stateFile, settings.network.chainId)).retirement.policies).toEqual(DEFAULT_RETIREMENT_POLICIES)
 })
 
-test('rejects a single read origin before prompting for retirement', async () => {
-	const { path, settings, stateFile } = await fixture(true)
+test('requests retirement with a single reader when rpcQuorum is one', async () => {
+	const { path, settings, signer, state, stateFile } = await fixture(true)
 	if (settings.connectivity === undefined) throw new Error('Fixture requires RPC connectivity')
-	const singleReader = { ...settings, connectivity: { ...settings.connectivity, quorumRpcUrls: [] } }
+	const singleReader = { ...settings, connectivity: { ...settings.connectivity, quorumRpcUrls: [], rpcQuorum: 1 as const } }
 	await writeFile(path, `${JSON.stringify(serializedSettings(singleReader))}\n`, { mode: 0o600 })
 	const configBefore = await readFile(path)
-	const stateBefore = await readFile(stateFile)
-	await expect(
-		prepareCurrentDeployment({
-			acquireLocks: noLocks,
-			ask: async () => {
-				throw new Error('Unexpected retirement prompt')
-			},
-			path,
-		}),
-	).rejects.toThrow('two independent RPC readers')
+	const result = await prepareCurrentDeployment({
+		acquireLocks: noLocks,
+		ask: async () => `DRAIN ${state.profileId} TO ${signer}`,
+		path,
+	})
+	expect(result.kind).toBe('retiring')
 	expect(await readFile(path)).toEqual(configBefore)
-	expect(await readFile(stateFile)).toEqual(stateBefore)
+	expect((await loadDurableState(stateFile, settings.network.chainId)).retirement.status).toBe('requested')
 })
 
 test('uses a fresh state path after verified retirement and preserves the old journal', async () => {
