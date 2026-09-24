@@ -5,6 +5,7 @@ import { fireEvent, within } from '@zoltar/ui-core-shared/tests/testUtils/querie
 import { act } from 'preact/test-utils'
 import { render } from 'preact'
 import { GlobalTransactionDialog } from '@zoltar/ui-core-shared/app/components/GlobalTransactionDialog.js'
+import { OperationModal } from '@zoltar/ui-core-shared/components/OperationModal.js'
 import { createMarketCreationSuccessPresentation, createMarketCreationTransactionIntent } from '@zoltar/ui-statoblast-shared/features/reportingTransactionPresentations.js'
 import { createSecurityPoolCreationWarningPresentation } from '@zoltar/ui-statoblast-shared/features/transactionPresentations.js'
 import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
@@ -97,6 +98,59 @@ describe('GlobalTransactionDialog', () => {
 		expect(within(document.body).getByRole('button', { name: 'Create question' }).closest('[inert]')).toBeNull()
 		await act(() => fireEvent.click(within(status).getByRole('button', { name: 'Dismiss' })))
 		expect(within(document.body).queryByRole('dialog', { name: 'Transaction status' })).toBeNull()
+	})
+
+	test('keeps form focus, Escape, and status dismissal accessible together', async () => {
+		let closed = false
+		const status = { dismissKey: 'form-and-status-failure', title: 'Price request failed', tone: 'error' as const }
+		const renderedComponent = await renderIntoDocument(
+			<>
+				<OperationModal
+					isOpen
+					title='Request New Price'
+					onClose={() => {
+						closed = true
+					}}
+				>
+					<input aria-label='Price' />
+					<button type='button'>Request price</button>
+				</OperationModal>
+				<GlobalTransactionDialog transaction={status} />
+			</>,
+		)
+		trackRendered(renderedComponent)
+		const queries = within(document.body)
+		const form = queries.getByRole('dialog', { name: 'Request New Price' })
+		const dismiss = within(queries.getByRole('dialog', { name: 'Transaction status' })).getByRole('button', { name: 'Dismiss' })
+		expect(form.contains(document.activeElement)).toBe(true)
+		const request = within(form).getByRole('button', { name: 'Request price' })
+		request.focus()
+		await act(() => fireEvent.keyDown(request, { key: 'Tab' }))
+		expect(document.activeElement).toBe(dismiss)
+		await act(() => fireEvent.keyDown(dismiss, { key: 'Escape' }))
+		expect(closed).toBe(true)
+		await act(() => fireEvent.click(dismiss))
+		expect(queries.queryByRole('dialog', { name: 'Transaction status' })).toBeNull()
+	})
+
+	test('focuses a form opened while nonblocking status remains visible', async () => {
+		const status = { dismissKey: 'status-before-form', title: 'Question creation failed', tone: 'error' as const }
+		const renderedComponent = await renderIntoDocument(<GlobalTransactionDialog transaction={status} />)
+		trackRendered(renderedComponent)
+		await act(() => {
+			render(
+				<>
+					<OperationModal isOpen title='Request New Price' onClose={() => undefined}>
+						<input aria-label='Price' />
+					</OperationModal>
+					<GlobalTransactionDialog transaction={status} />
+				</>,
+				renderedComponent.container,
+			)
+		})
+		const queries = within(document.body)
+		expect(queries.getByRole('dialog', { name: 'Request New Price' }).contains(document.activeElement)).toBe(true)
+		expect(queries.getByRole('dialog', { name: 'Transaction status' }).closest('[inert]')).toBeNull()
 	})
 
 	test('does not render when there is no submitted transaction', async () => {

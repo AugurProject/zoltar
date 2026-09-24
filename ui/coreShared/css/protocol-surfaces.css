@@ -752,7 +752,7 @@ main:has(.global-transaction-dialog-nonblocking) #app-content {
 	position: sticky;
 	bottom: 0;
 	background: var(--surface-modal-opaque);
-	z-index: 1;
+	z-index: var(--z-content);
 }
 
 @media (max-width: 600px) {

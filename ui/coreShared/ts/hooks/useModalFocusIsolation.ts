@@ -77,7 +77,7 @@ function getModalIsolationSiblings(backdropElement: HTMLElement) {
 		const parentElement: HTMLElement | null = currentElement.parentElement
 		if (!(parentElement instanceof HTMLElement)) break
 		for (const sibling of Array.from(parentElement.children)) {
-			if (sibling === currentElement || !(sibling instanceof HTMLElement) || seenSiblings.has(sibling)) continue
+			if (sibling === currentElement || !(sibling instanceof HTMLElement) || seenSiblings.has(sibling) || sibling.classList.contains('global-transaction-dialog-nonblocking')) continue
 			if (sibling.classList.contains('modal-backdrop') && (backdropElement.compareDocumentPosition(sibling) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0) continue
 			seenSiblings.add(sibling)
 			siblings.push(sibling)
@@ -88,18 +88,21 @@ function getModalIsolationSiblings(backdropElement: HTMLElement) {
 }
 
 function getTopOtherModalBackdrop(backdropElement: HTMLElement | null | undefined) {
-	const modalBackdrops = Array.from(document.querySelectorAll<HTMLElement>('.modal-backdrop')).filter(modalBackdrop => modalBackdrop !== backdropElement)
+	const modalBackdrops = Array.from(document.querySelectorAll<HTMLElement>('.modal-backdrop')).filter(modalBackdrop => modalBackdrop !== backdropElement && !modalBackdrop.classList.contains('global-transaction-dialog-nonblocking'))
 	return modalBackdrops[modalBackdrops.length - 1]
 }
 
 function isTopModalBackdrop(backdropElement: HTMLElement | null | undefined) {
 	if (!(backdropElement instanceof HTMLElement)) return false
-	const modalBackdrops = Array.from(document.querySelectorAll<HTMLElement>('.modal-backdrop'))
+	const modalBackdrops = Array.from(document.querySelectorAll<HTMLElement>('.modal-backdrop')).filter(modalBackdrop => !modalBackdrop.classList.contains('global-transaction-dialog-nonblocking'))
 	return modalBackdrops[modalBackdrops.length - 1] === backdropElement
 }
 
 function getFocusableElements(dialogElement: HTMLElement | null) {
-	return Array.from(dialogElement?.querySelectorAll<HTMLElement>("button:not([disabled]), input:not([disabled]), [href]:not([tabindex='-1']), select:not([disabled]), summary, textarea:not([disabled]), [tabindex]:not([tabindex='-1'])") ?? []).filter(element => {
+	const selector = "button:not([disabled]), input:not([disabled]), [href]:not([tabindex='-1']), select:not([disabled]), summary, textarea:not([disabled]), [tabindex]:not([tabindex='-1'])"
+	const ownElements = Array.from(dialogElement?.querySelectorAll<HTMLElement>(selector) ?? [])
+	const statusElements = dialogElement?.closest('.global-transaction-dialog-nonblocking') === null ? Array.from(document.querySelectorAll<HTMLElement>('.global-transaction-dialog-nonblocking')).flatMap(backdrop => Array.from(backdrop.querySelectorAll<HTMLElement>(selector))) : []
+	return [...ownElements, ...statusElements].filter(element => {
 		if (element.closest('[hidden], [inert]') !== null) return false
 		let ancestor: HTMLElement | null = element
 		while (ancestor !== null) {
