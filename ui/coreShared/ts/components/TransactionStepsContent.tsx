@@ -9,9 +9,12 @@ import { TransactionObjectContext } from './TransactionObjectContext.js'
 import type { GlobalTransactionRow } from '../types/components.js'
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import { GlobalTransactionPresentationProvider, useGlobalTransactionPresentation } from './GlobalTransactionPresentationContext.js'
-import { useEffect, useLayoutEffect, useRef } from 'preact/hooks'
+import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks'
 import { EthAmount, TransactionFundingSummary } from './TransactionFundingSummary.js'
 import { transactionSteps } from '../transactions/transactionSteps.js'
+import * as reviewCopy from '../copy/transactionReview.js'
+import { isTransactionReviewConfirmed } from '../transactions/transactionReviewSummary.js'
+import { TransactionReviewConfirmationField, TransactionReviewSummaryContent, type TransactionReviewConfirmationInput } from './TransactionReviewSummaryContent.js'
 
 /** Explains a step that has no token funding to summarize, using the enclosing operation's rows for the parameters being submitted. */
 function TransactionStepReview({ contractAddress, contractLabel, description, rows = [] }: { contractAddress: Address | undefined; contractLabel: string | undefined; description: string | undefined; rows?: GlobalTransactionRow[] | undefined }) {
@@ -69,6 +72,13 @@ export function TransactionStepsActions({ cancelable = true, contextKey, focusOn
 	const actionsRef = useRef<HTMLDivElement>(null)
 	const pendingActionRef = useRef<HTMLDivElement>(null)
 	const focusWasInActions = useRef(false)
+	const [confirmationInput, setConfirmationInput] = useState<TransactionReviewConfirmationInput>({ acknowledged: false, typed: '' })
+	const confirmation = presentation?.review?.confirmation
+	// A new review workflow must be confirmed again.
+	useEffect(() => {
+		setConfirmationInput({ acknowledged: false, typed: '' })
+	}, [workflow?.cancel, confirmation])
+	const confirmed = isTransactionReviewConfirmed(confirmation, confirmationInput)
 	const completed = workflow?.steps.every(step => step.phase === 'confirmed' || step.phase === 'skipped') ?? false
 	// Wait for the review layout before keeping the next action centered.
 	useEffect(() => {
@@ -135,11 +145,16 @@ export function TransactionStepsActions({ cancelable = true, contextKey, focusOn
 								if (completedIndices.has(index) || step.phase === 'confirmed') return undefined
 								const active = index === workflow.activeIndex
 								const final = index === workflow.steps.length - 1
-								const ready = step.phase === 'review' && !pending && error === undefined
+								const gated = final && !confirmed
+								const ready = step.phase === 'review' && !pending && error === undefined && !gated
 								const status = { skipped: copy.skipped, upcoming: step.optional ? copy.ifNeeded : undefined, review: undefined, pending: undefined, confirmed: transactionCopy.confirmed, failed: copy.notCompleted }[step.phase]
+								let disabledReason = step.phase === 'upcoming' ? blockedReason : status
+								if (step.phase === 'review' && gated && !pending) disabledReason = reviewCopy.confirmationRequired
 								const detail = [step.phase === 'upcoming' || step.spender !== undefined || step.paidFrom !== undefined || step.approval !== undefined ? undefined : step.amount, status].filter(value => value !== undefined).join(' · ')
+								const confirmationField = final && confirmation !== undefined && step.phase !== 'skipped' ? <TransactionReviewConfirmationField confirmation={confirmation} confirmed={confirmed} disabled={pending || step.phase !== 'review'} input={confirmationInput} onInput={setConfirmationInput} /> : undefined
 								return (
 									<div key={index} className={`transaction-plan-action${step.approval === undefined || final ? ' transaction-plan-action-wide' : ''}${final ? ' transaction-plan-action-final' : ''}`} {...(active && pending ? { ref: pendingActionRef, tabIndex: -1 } : {})}>
+										{confirmationField}
 										{step.approval !== undefined ? (
 											<TokenApprovalControl
 												compact
@@ -177,7 +192,7 @@ export function TransactionStepsActions({ cancelable = true, contextKey, focusOn
 												onClick={() => {
 													if (ready) workflow.confirmStep(index)
 												}}
-												availability={{ disabled: !ready, reason: step.phase === 'upcoming' ? blockedReason : status }}
+												availability={{ disabled: !ready, reason: disabledReason }}
 												showDisabledReason={false}
 												tone={step.approval === undefined ? 'primary' : 'secondary'}
 											/>
@@ -221,6 +236,7 @@ export function TransactionStepsContent({ actions = 'inline', cancelable = true,
 				</div>
 			)}
 			<div className='transaction-step-content'>
+				{presentation?.review === undefined || completed ? undefined : <TransactionReviewSummaryContent summary={presentation.review} />}
 				{funding.length === 0 ? (
 					<TransactionStepReview
 						contractAddress={current.contractAddress}

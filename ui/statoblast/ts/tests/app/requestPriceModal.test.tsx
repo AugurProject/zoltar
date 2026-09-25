@@ -10,7 +10,7 @@ import { createWalletClient, custom, getAddress, publicActions, type Hash, type 
 import { installActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { createFakeBackend } from '@zoltar/ui-core-shared/tests/testUtils/fakeBackend.js'
 import { MAINNET_NETWORK_PROFILE } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
-import { createReviewedClient } from '@zoltar/ui-statoblast-shared/protocol/reviewedClient.js'
+import { createReviewedClient } from '@zoltar/ui-core-shared/transactions/reviewedClient.js'
 import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import { fireEvent, within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'

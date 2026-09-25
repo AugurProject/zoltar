@@ -1,13 +1,13 @@
-import * as transactionCopy from '@zoltar/ui-core-shared/copy/transaction.js'
-import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
-import { getTransactionReviewSignal } from '@zoltar/ui-core-shared/transactions/transactionReviewScope.js'
+import * as transactionCopy from '../copy/transaction.js'
+import * as commonCopy from '../copy/common.js'
+import { getTransactionReviewSignal } from './transactionReviewScope.js'
 import { formatUnits, getAddress, encodeFunctionData, maxUint256 } from '@zoltar/core-shared/evm/ethereum'
-import type { TransactionPlanStep, TransactionRequestPreview, WriteClient } from '@zoltar/ui-core-shared/wallet/chainBackend.js'
-import { createActiveEnvironmentGuard } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
-import { getErrorMessage, isRecoverableContractReadError, transactionErrorMessages } from '@zoltar/ui-core-shared/lib/errors.js'
-import { ABIS } from '@zoltar/ui-core-shared/abis.js'
-import { humanizeTransactionAction } from '@zoltar/ui-core-shared/transactions/transactionPresentations.js'
-import { createTransactionStepController, type TransactionStepDetails } from '@zoltar/ui-core-shared/transactions/transactionSteps.js'
+import type { TransactionPlanStep, TransactionRequestPreview, WriteClient } from '../wallet/chainBackend.js'
+import { createActiveEnvironmentGuard } from '../lib/activeEnvironment.js'
+import { getErrorMessage, isRecoverableContractReadError, transactionErrorMessages } from '../lib/errors.js'
+import { ABIS } from '../abis.js'
+import { humanizeTransactionAction } from './transactionPresentations.js'
+import { createTransactionStepController, type TransactionStepDetails } from './transactionSteps.js'
 
 async function describeTransaction(client: WriteClient, preview: TransactionRequestPreview & Pick<TransactionPlanStep, 'optional' | 'tokenFunding' | 'oracleOutcome'>, requiredApprovalAmount?: bigint): Promise<TransactionStepDetails> {
 	const action = transactionCopy.reviewedActions[preview.functionName]

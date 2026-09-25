@@ -779,6 +779,18 @@
 			"bun": "./ts/transactions/tokenApproval.ts",
 			"default": "./js/transactions/tokenApproval.js"
 		},
+		"./transactions/reviewedBackend.js": {
+			"bun": "./ts/transactions/reviewedBackend.ts",
+			"default": "./js/transactions/reviewedBackend.js"
+		},
+		"./transactions/reviewedClient.js": {
+			"bun": "./ts/transactions/reviewedClient.ts",
+			"default": "./js/transactions/reviewedClient.js"
+		},
+		"./transactions/transactionReviewSummary.js": {
+			"bun": "./ts/transactions/transactionReviewSummary.ts",
+			"default": "./js/transactions/transactionReviewSummary.js"
+		},
 		"./transactions/transactionPresentations.js": {
 			"bun": "./ts/transactions/transactionPresentations.tsx",
 			"default": "./js/transactions/transactionPresentations.js"
@@ -922,6 +934,10 @@
 		"./components/TransactionStepsContent.js": {
 			"bun": "./ts/components/TransactionStepsContent.tsx",
 			"default": "./js/components/TransactionStepsContent.js"
+		},
+		"./components/TransactionReviewSummaryContent.js": {
+			"bun": "./ts/components/TransactionReviewSummaryContent.tsx",
+			"default": "./js/components/TransactionReviewSummaryContent.js"
 		},
 		"./components/TransactionStepsModal.js": {
 			"bun": "./ts/components/TransactionStepsModal.tsx",

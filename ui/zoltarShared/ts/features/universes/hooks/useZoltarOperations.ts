@@ -80,6 +80,7 @@ export function useZoltarOperations({
 		refreshState,
 		refreshZoltarForkAccess,
 		refreshZoltarUniverse,
+		reviewBalances: { migrationRepBalanceAttoRep: fork.zoltarMigrationPreparedRepBalanceAttoRep, repTokenSymbol: universe.zoltarUniverse?.reputationTokenSymbol, walletRepBalanceAttoRep: fork.zoltarForkRepBalanceAttoRep },
 	})
 
 	const createChildUniverse = useCallback(

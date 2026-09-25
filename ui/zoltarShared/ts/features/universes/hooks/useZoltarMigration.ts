@@ -12,6 +12,7 @@ import { assertActiveWallet } from '@zoltar/ui-core-shared/wallet/assertActiveWa
 import { parseBigIntListInput } from '@zoltar/ui-core-shared/forms/inputs.js'
 import { getDefaultZoltarMigrationFormState } from '../../../lib/formDefaults.js'
 import { parseRepAmountInput } from '@zoltar/ui-core-shared/forms/formInputs.js'
+import { tryParseNonNegativeDecimalInput } from '@zoltar/ui-core-shared/forms/decimal.js'
 import { refreshWalletStateOnly } from '@zoltar/ui-core-shared/lib/refreshState.js'
 import type { TransactionLifecycleParameters, WriteOperationContext, ZoltarMigrationFormState } from '../../../types/app.js'
 import type { ZoltarMigrationActionResult, ZoltarUniverseSummary } from '@zoltar/ui-core-shared/types/contracts.js'
@@ -24,6 +25,8 @@ type UseZoltarMigrationParameters = TransactionLifecycleParameters &
 		ensureZoltarUniverse: () => Promise<ZoltarUniverseSummary>
 		refreshZoltarForkAccess: (universe?: ZoltarUniverseSummary) => Promise<void>
 		refreshZoltarUniverse: () => Promise<ZoltarUniverseSummary | undefined>
+		/** Balances shown as before → after in the migration review. */
+		reviewBalances?: { migrationRepBalanceAttoRep: bigint | undefined; repTokenSymbol: string | undefined; walletRepBalanceAttoRep: bigint | undefined }
 	}
 
 export function useZoltarMigration({
@@ -40,6 +43,7 @@ export function useZoltarMigration({
 	refreshState,
 	refreshZoltarForkAccess,
 	refreshZoltarUniverse,
+	reviewBalances,
 }: UseZoltarMigrationParameters) {
 	const zoltarMigrationError = useSignal<string | undefined>(undefined)
 	const zoltarMigrationPending = useSignal(false)
@@ -87,6 +91,13 @@ export function useZoltarMigration({
 						createZoltarMigrationTransactionIntent('split', {
 							amount: submittedForm.amount,
 							outcomeIndexes: submittedForm.outcomeIndexes,
+							review: {
+								amountAttoRep: tryParseNonNegativeDecimalInput(submittedForm.amount),
+								migrationRepBalanceAttoRep: reviewBalances?.migrationRepBalanceAttoRep,
+								preparationAttoRep,
+								repTokenSymbol: reviewBalances?.repTokenSymbol,
+								walletRepBalanceAttoRep: reviewBalances?.walletRepBalanceAttoRep,
+							},
 							universeId: activeUniverseId,
 						}),
 					) === false
@@ -148,6 +159,7 @@ export function useZoltarMigration({
 			refreshState,
 			refreshZoltarForkAccess,
 			refreshZoltarUniverse,
+			reviewBalances,
 			zoltarMigrationError,
 			zoltarMigrationPending,
 			zoltarMigrationResult,

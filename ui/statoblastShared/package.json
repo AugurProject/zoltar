@@ -512,14 +512,6 @@
 			"bun": "./ts/features/security-pools/components/UniversePoolDirectorySection.tsx",
 			"default": "./js/features/security-pools/components/UniversePoolDirectorySection.js"
 		},
-		"./protocol/reviewedClient.js": {
-			"bun": "./ts/protocol/reviewedClient.ts",
-			"default": "./js/protocol/reviewedClient.js"
-		},
-		"./protocol/reviewedBackend.js": {
-			"bun": "./ts/protocol/reviewedBackend.ts",
-			"default": "./js/protocol/reviewedBackend.js"
-		},
 		"./copy/priceRequest.js": {
 			"bun": "./ts/copy/priceRequest.ts",
 			"default": "./js/copy/priceRequest.js"

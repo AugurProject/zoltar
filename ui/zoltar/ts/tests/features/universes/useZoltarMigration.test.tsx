@@ -1,6 +1,7 @@
 /// <reference types='bun-types' />
 
 import { getAddress, type Hash, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
+import type { TransactionIntent } from '@zoltar/ui-core-shared/types/components.js'
 import { installActiveEnvironmentForTesting, resetActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { createDeferred } from '@zoltar/ui-core-shared/tests/testUtils/deferred.js'
 import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
@@ -231,6 +232,7 @@ describe('useZoltarMigration', () => {
 		const refreshZoltarUniverse = mock(async () => refreshedUniverse)
 		const refreshZoltarForkAccess = mock(async () => undefined)
 		const { useZoltarMigration } = await import(`@zoltar/ui-zoltar-shared/features/universes/hooks/useZoltarMigration.js?case=${crypto.randomUUID()}`)
+		const requestedIntents: TransactionIntent[] = []
 		let hookState: UseZoltarMigrationState | undefined
 		const Harness = function ZoltarMigrationHarness() {
 			const state = useZoltarMigration({
@@ -240,11 +242,14 @@ describe('useZoltarMigration', () => {
 				ensureZoltarUniverse: async () => await universeLoad.promise,
 				onTransactionFinished: () => undefined,
 				onTransactionPresented: () => undefined,
-				onTransactionRequested: () => undefined,
+				onTransactionRequested: (intent: TransactionIntent) => {
+					requestedIntents.push(intent)
+				},
 				onTransactionSubmitted: () => undefined,
 				refreshState,
 				refreshZoltarForkAccess,
 				refreshZoltarUniverse,
+				reviewBalances: { migrationRepBalanceAttoRep: 5n * 10n ** 18n, repTokenSymbol: 'REP', walletRepBalanceAttoRep: 100n * 10n ** 18n },
 			})
 
 			hookState = state
@@ -287,5 +292,15 @@ describe('useZoltarMigration', () => {
 		expect(refreshZoltarUniverse).toHaveBeenCalledTimes(1)
 		expect(refreshZoltarForkAccess).toHaveBeenCalledWith(refreshedUniverse)
 		expect(requireHookState(hookState).zoltarMigrationFeedback?.status.tone).toBe('success')
+		const review = requestedIntents[0]?.review
+		expect(review?.amounts.map(row => [row.label, row.value])).toEqual([
+			['REP burned from wallet', '10\u00a0REP'],
+			['Minted in each selected universe', '10\u00a0REP'],
+		])
+		expect(review?.changes.map(change => [change.label, change.before, change.after])).toEqual([
+			['Wallet REP', '100\u00a0REP', '90\u00a0REP'],
+			['Migration REP Balance', '5\u00a0REP', '15\u00a0REP'],
+		])
+		expect(review?.confirmation).toEqual({ kind: 'acknowledge', label: 'I understand this burns 10\u00a0REP from my wallet and cannot be undone.' })
 	})
 })

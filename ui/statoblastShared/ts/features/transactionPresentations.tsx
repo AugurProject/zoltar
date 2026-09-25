@@ -7,6 +7,8 @@ import { IdentifierValue } from '@zoltar/ui-core-shared/components/IdentifierVal
 import { formatCurrencyBalanceWithUnit, formatValueWithUnit } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { getReportingOutcomeLabel } from './reporting/lib/reporting.js'
 import { buildIntent, buildPresentation, getPoolUniverseTransactionRows, humanizeTransactionAction, withWarning } from '@zoltar/ui-core-shared/transactions/transactionPresentations.js'
+import { buildTransactionReviewSummary } from '@zoltar/ui-core-shared/transactions/transactionReviewSummary.js'
+import { tryParseNonNegativeDecimalInput } from '@zoltar/ui-core-shared/forms/decimal.js'
 import type { PoolUniverseTransactionContext } from '@zoltar/ui-core-shared/transactions/transactionPresentations.js'
 import type { TransactionIntent } from '@zoltar/ui-core-shared/types/components.js'
 import type { ForkAuctionActionResult, ReportingActionResult, SecurityPoolCreationResult, SecurityPoolOverviewActionResult, SecurityVaultActionResult, TradingActionResult } from '@zoltar/ui-core-shared/types/contracts.js'
@@ -65,9 +67,36 @@ export function createSecurityPoolCreationWarningPresentation(result: SecurityPo
 
 type SecurityVaultTransactionContext = {
 	repTokenSymbol?: string | undefined
+	review?: SecurityVaultReviewContext | undefined
 	securityPoolAddress?: string | undefined
 	universeId?: bigint | undefined
 	vaultAddress?: string | undefined
+}
+
+type SecurityVaultReviewContext = {
+	depositAmount?: string | undefined
+	repWithdrawAmount?: string | undefined
+	vaultRepBackingAttoRep?: bigint | undefined
+	walletRepBalanceAttoRep?: bigint | undefined
+}
+
+/** Shows the REP that moves and how vault backing and the wallet balance change; other vault actions keep their context rows only. */
+function getSecurityVaultReviewSummary(actionName: SecurityVaultActionResult['action'], context: SecurityVaultTransactionContext | undefined) {
+	const review = context?.review
+	if (review === undefined || (actionName !== 'depositRepToVault' && actionName !== 'queueWithdrawRep')) return undefined
+	const deposit = actionName === 'depositRepToVault'
+	const amount = tryParseNonNegativeDecimalInput((deposit ? review.depositAmount : review.repWithdrawAmount) ?? '')
+	if (amount === undefined || amount === 0n) return undefined
+	const token = { symbol: context?.repTokenSymbol ?? commonCopy.rep, units: 18 }
+	const signed = deposit ? amount : -amount
+	return buildTransactionReviewSummary({
+		amounts: [{ amount, label: deposit ? securityPoolCopy.reviewDepositAmount : securityPoolCopy.reviewWithdrawAmount, token }],
+		changes: [
+			{ before: review.vaultRepBackingAttoRep, delta: signed, label: securityPoolCopy.reviewVaultRepBacking, token },
+			{ before: review.walletRepBalanceAttoRep, delta: -signed, label: securityPoolCopy.walletRep, token },
+		],
+		warnings: [deposit ? { message: securityPoolCopy.reviewDepositRisk, severity: 'caution' } : { message: securityPoolCopy.repWithdrawalDescription, severity: 'info' }],
+	})
 }
 
 function getSecurityVaultTransactionRows(context: SecurityVaultTransactionContext | undefined) {
@@ -89,6 +118,7 @@ function getSecurityVaultActionTitle(actionName: SecurityVaultActionResult['acti
 export function createSecurityVaultTransactionIntent(actionName: SecurityVaultActionResult['action'], context?: SecurityVaultTransactionContext) {
 	return buildIntent({
 		action: actionName,
+		review: getSecurityVaultReviewSummary(actionName, context),
 		rows: getSecurityVaultTransactionRows(context),
 		source: 'security-vault',
 		submittedTitle: getSecurityVaultActionTitle(actionName, context?.repTokenSymbol),

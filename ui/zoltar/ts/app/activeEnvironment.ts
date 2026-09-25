@@ -3,12 +3,13 @@ import { createSimulationBackend } from '@zoltar/ui-core-shared/simulation/tevmB
 import { withTransactionReviews } from '@zoltar/ui-core-shared/transactions/reviewedBackend.js'
 import { initializeActiveEnvironment } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 
-const statoblastActiveEnvironmentDependencies = {
-	appId: 'statoblast',
+// Fork and migration burn REP irreversibly, so every Zoltar write passes through the in-app review first.
+const zoltarActiveEnvironmentDependencies = {
+	appId: 'zoltar',
 	createInjectedBackend: options => withTransactionReviews(createInjectedBackend(options)),
 	createSimulationBackend: async options => withTransactionReviews(await createSimulationBackend(options)),
 } satisfies NonNullable<Parameters<typeof initializeActiveEnvironment>[1]>
 
-export function initializeStatoblastActiveEnvironment(location: Parameters<typeof initializeActiveEnvironment>[0] = window.location, options: Parameters<typeof initializeActiveEnvironment>[2] = {}) {
-	return initializeActiveEnvironment(location, statoblastActiveEnvironmentDependencies, options)
+export function initializeZoltarActiveEnvironment(location: Parameters<typeof initializeActiveEnvironment>[0] = window.location, options: Parameters<typeof initializeActiveEnvironment>[2] = {}) {
+	return initializeActiveEnvironment(location, zoltarActiveEnvironmentDependencies, options)
 }

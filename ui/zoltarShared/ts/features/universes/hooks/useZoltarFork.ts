@@ -283,6 +283,7 @@ export function useZoltarFork(
 					onTransactionRequested(
 						createZoltarForkTransactionIntent(actionName, {
 							questionId: submittedQuestionId,
+							review: zoltarUniverse === undefined ? undefined : { forkBurnDivisor: zoltarUniverse.forkBurnDivisor, forkThresholdAttoRep: zoltarUniverse.forkThresholdAttoRep, repTokenSymbol: zoltarUniverse.reputationTokenSymbol, walletRepBalanceAttoRep: zoltarForkRepBalanceAttoRep.value },
 							universeId: activeUniverseId,
 						}),
 					) === false
