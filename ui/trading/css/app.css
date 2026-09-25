@@ -97,6 +97,256 @@
 	gap: var(--space-2);
 }
 
+/* Market list: filters and search over the loaded page, then a grid of market cards led by their odds. */
+.market-list-controls {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: var(--space-3);
+}
+.market-list-search {
+	flex: 1 1 16rem;
+	min-width: 0;
+	margin: 0;
+}
+.market-list-sort {
+	display: flex;
+	align-items: center;
+	gap: var(--space-2);
+}
+.market-list-count {
+	margin: 0;
+	color: var(--muted);
+	font-family: var(--font-family-mono);
+	font-size: var(--font-label);
+}
+.market-list.entity-card-list {
+	grid-template-columns: repeat(auto-fill, minmax(min(100%, 21rem), 1fr));
+	align-items: stretch;
+}
+.market-card.entity-card {
+	grid-template-rows: auto 1fr auto;
+	align-content: start;
+}
+.market-card .entity-card-copy h3 {
+	font-size: 1.05rem;
+	line-height: var(--line-height-snug);
+	overflow-wrap: anywhere;
+}
+.market-card .entity-card-body {
+	display: grid;
+	align-content: start;
+	gap: var(--space-4);
+	min-width: 0;
+}
+.market-card .entity-card-actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--space-2);
+}
+.market-card__odds {
+	display: grid;
+	gap: var(--space-3);
+}
+.market-card__odds-note {
+	margin: 0;
+}
+.market-card__outcomes {
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	gap: var(--space-2);
+}
+.market-card__end-date {
+	display: block;
+	margin-top: var(--space-1);
+	color: var(--muted);
+	font-size: var(--font-label);
+	font-weight: normal;
+}
+
+/* Compact odds bar: YES fills from the left in its outcome colour over a NO-tinted track. */
+.market-odds__labels {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: baseline;
+	gap: var(--space-1) var(--space-3);
+	margin-bottom: var(--space-2);
+	font-family: var(--font-family-mono);
+	font-size: var(--font-label);
+	font-weight: 600;
+}
+.market-odds__caption {
+	margin-right: auto;
+	color: var(--muted);
+	text-transform: uppercase;
+	letter-spacing: 0.05em;
+}
+.market-odds__yes {
+	color: var(--outcome-yes);
+}
+.market-odds__no {
+	color: var(--outcome-no);
+}
+.market-odds__track {
+	height: 8px;
+	overflow: hidden;
+	border-radius: var(--radius-pill);
+	background: color-mix(in srgb, var(--outcome-no) 42%, var(--surface-raised));
+}
+.market-odds__fill {
+	height: 100%;
+	background: var(--outcome-yes);
+}
+
+/* Outcome buttons carry their outcome colour as border and text; the label names the outcome, so colour is not the only cue. */
+.outcome-button {
+	font-family: var(--font-family-mono);
+	font-weight: 600;
+}
+.outcome-button--yes {
+	border-color: color-mix(in srgb, var(--outcome-yes) 55%, transparent);
+	background: color-mix(in srgb, var(--outcome-yes) 10%, transparent);
+	color: var(--outcome-yes);
+}
+.outcome-button--no {
+	border-color: color-mix(in srgb, var(--outcome-no) 55%, transparent);
+	background: color-mix(in srgb, var(--outcome-no) 10%, transparent);
+	color: var(--outcome-no);
+}
+.outcome-button--yes:hover,
+button.outcome-button--yes:hover:not(:disabled) {
+	border-color: var(--outcome-yes);
+	background: color-mix(in srgb, var(--outcome-yes) 18%, transparent);
+}
+.outcome-button--no:hover,
+button.outcome-button--no:hover:not(:disabled) {
+	border-color: var(--outcome-no);
+	background: color-mix(in srgb, var(--outcome-no) 18%, transparent);
+}
+
+/* Market page: the reading column (question, odds, description, contracts) beside a sticky ticket. */
+.market-layout {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) minmax(22rem, 28rem);
+	align-items: start;
+	gap: var(--space-5);
+}
+.market-overview {
+	display: grid;
+	gap: var(--space-5);
+	min-width: 0;
+}
+.market-description {
+	display: grid;
+	gap: var(--space-2);
+}
+.market-description h4 {
+	margin: 0;
+	color: var(--muted);
+	font-family: var(--font-family-mono);
+	font-size: var(--font-label);
+	text-transform: uppercase;
+	letter-spacing: 0.05em;
+}
+.market-description__text {
+	margin: 0;
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+	line-height: var(--line-height-body);
+}
+/* A ticket taller than the viewport scrolls inside its column so its primary action stays reachable while sticky. */
+.market-ticket {
+	position: sticky;
+	top: var(--space-4);
+	max-height: calc(100dvh - 2 * var(--space-4));
+	overflow-y: auto;
+	min-width: 0;
+}
+.market-ticket__panel {
+	min-width: 0;
+}
+.market-ticket-bar {
+	display: none;
+}
+
+/* Keep in sync with COMPACT_TICKET_QUERY in MarketTicketSheet.tsx. */
+@media (max-width: 56.25rem) {
+	/* The bottom padding leaves room for the collapsed ticket bar so it never covers the end of the page. */
+	.market-layout {
+		grid-template-columns: minmax(0, 1fr);
+		padding-bottom: 5rem;
+	}
+	.market-ticket {
+		position: static;
+		max-height: none;
+		overflow: visible;
+	}
+	/* Inside the sheet the ticket's section surface would draw a second frame; the sheet is the surface. */
+	.market-ticket--sheet .market-ticket__panel > .section-block {
+		border: 0;
+		border-radius: 0;
+		background: transparent;
+	}
+	.market-ticket.market-ticket--sheet {
+		position: fixed;
+		place-items: end stretch;
+		padding: 0;
+	}
+	.market-ticket--sheet .market-ticket__panel {
+		width: 100%;
+		max-height: min(88vh, 100%);
+		overflow-y: auto;
+		overscroll-behavior: contain;
+		border-top: 1px solid var(--border-strong);
+		border-radius: var(--radius-overlay) var(--radius-overlay) 0 0;
+		background: var(--surface-modal-opaque);
+		box-shadow: var(--shadow-overlay);
+	}
+	.market-ticket__sheet-header {
+		position: sticky;
+		top: 0;
+		z-index: var(--z-content-raised);
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: var(--space-3);
+		padding: var(--space-3) var(--space-4);
+		border-bottom: 1px solid var(--border-default);
+		background: var(--surface-modal-opaque);
+	}
+	.market-ticket__sheet-header h2 {
+		margin: 0;
+		font-size: 1rem;
+	}
+	.market-ticket-bar {
+		position: fixed;
+		inset: auto 0 0;
+		z-index: var(--z-nav);
+		display: grid;
+		grid-auto-flow: column;
+		grid-auto-columns: 1fr;
+		gap: var(--space-2);
+		padding: var(--space-3) var(--space-4) calc(var(--space-3) + env(safe-area-inset-bottom, 0px));
+		border-top: 1px solid var(--border-strong);
+		background: var(--surface-modal-opaque);
+		box-shadow: var(--shadow-overlay);
+	}
+	.market-ticket-bar button {
+		min-height: 2.75rem;
+	}
+}
+@media (prefers-reduced-motion: no-preference) and (max-width: 56.25rem) {
+	.market-ticket--sheet .market-ticket__panel {
+		animation: market-ticket-rise 180ms ease-out;
+	}
+}
+@keyframes market-ticket-rise {
+	from {
+		transform: translateY(1.5rem);
+		opacity: 0;
+	}
+}
+
 /* Fork migration targets: the fork question the shared target picker belongs to. */
 .fork-question-summary {
 	display: grid;

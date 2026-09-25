@@ -1,81 +1,53 @@
-import { TimestampValue } from '@zoltar/ui-core-shared/components/TimestampValue.js'
-import { Badge } from '@zoltar/ui-core-shared/components/Badge.js'
-import { DataGrid } from '@zoltar/ui-core-shared/components/DataGrid.js'
+import { useState } from 'preact/hooks'
 import { EmptyState } from '@zoltar/ui-core-shared/components/EmptyState.js'
-import { EntityCard } from '@zoltar/ui-core-shared/components/EntityCard.js'
+import { EnumDropdown } from '@zoltar/ui-core-shared/components/EnumDropdown.js'
+import { FormInput } from '@zoltar/ui-core-shared/components/FormInput.js'
 import { RetryAction, RetryableNotice } from '@zoltar/ui-core-shared/components/RetryableNotice.js'
-import { MetricField } from '@zoltar/ui-core-shared/components/MetricField.js'
 import { PaginationControls } from '@zoltar/ui-core-shared/components/PaginationControls.js'
 import { SectionBlock } from '@zoltar/ui-core-shared/components/SectionBlock.js'
-import { ReadOnlyAddressValue } from '@zoltar/ui-core-shared/components/AddressValue.js'
+import { ViewTabs } from '@zoltar/ui-core-shared/components/ViewTabs.js'
 import { liveCopy } from '../copy/live.js'
-import { formatTrimmedUnits } from '@zoltar/ui-core-shared/lib/formatters.js'
-import { getTradingRouteHref, tradingListKindFor, type TradingListKind, type TradingLookupRoute } from '../lib/routing.js'
-import { marketAcceptsNewRisk, marketNewRiskBlocker, type LiveMarket } from '../protocol/live.js'
-import { livePairInitialized } from './liveTradingControllerHelpers.js'
+import { marketsCopy } from '../copy/markets.js'
+import { arrangeMarkets, type MarketFilter, type MarketListOptions, type MarketSort } from '../lib/marketListing.js'
+import { tradingListKindFor, type TradingListKind, type TradingLookupRoute } from '../lib/routing.js'
+import type { LiveMarket } from '../protocol/live.js'
+import { MarketCard } from './MarketCard.js'
 import { OpenPoolForm } from './OpenPoolForm.js'
 
-export function marketStatusLabel(market: LiveMarket, nowSeconds: bigint) {
-	if (market.loadError !== undefined) return liveCopy.marketDataUnavailable
-	const blocker = marketNewRiskBlocker(market, nowSeconds)
-	if (blocker !== undefined) return blocker
-	if (market.pair === undefined) return liveCopy.pairNotCreated
-	return livePairInitialized(market) ? liveCopy.tradingOpen : liveCopy.pairUninitialized
-}
+const DEFAULT_LIST_OPTIONS: MarketListOptions = { filter: 'all', query: '', sort: 'closing-soon' }
 
-export function marketStatusTone(market: LiveMarket, nowSeconds: bigint) {
-	return market.loadError === undefined && marketAcceptsNewRisk(market, nowSeconds) ? ('ok' as const) : ('warning' as const)
-}
+const FILTER_OPTIONS: readonly { value: MarketFilter; label: string }[] = [
+	{ value: 'all', label: marketsCopy.filterAll },
+	{ value: 'open', label: marketsCopy.filterOpen },
+	{ value: 'closing-soon', label: marketsCopy.filterClosingSoon },
+	{ value: 'resolved', label: marketsCopy.filterResolved },
+]
+
+const SORT_OPTIONS: readonly { value: MarketSort; label: string }[] = [
+	{ value: 'closing-soon', label: marketsCopy.sortClosingSoon },
+	{ value: 'liquidity', label: marketsCopy.sortLiquidity },
+	{ value: 'newest', label: marketsCopy.sortNewest },
+]
 
 function listPresentation(listKind: TradingListKind) {
 	if (listKind === 'security-pools') return { title: liveCopy.securityPoolList, description: liveCopy.securityPoolListDescription, empty: liveCopy.noEligiblePools }
 	return { title: liveCopy.marketList, description: undefined, empty: liveCopy.noMarketsOnPage }
 }
 
-function marketRowActions(listKind: TradingListKind, lookupRoute: TradingLookupRoute, pool: string) {
-	if (listKind === 'security-pools') return { primary: { href: `#/create-market/${pool}`, label: liveCopy.createMarketAction }, secondary: { href: `#/security-pool/${pool}`, label: liveCopy.poolDetails } }
-	const trade = { href: `#/market/${pool}`, label: liveCopy.trade }
-	const liquidity = { href: `#/liquidity/${pool}`, label: liveCopy.manageLiquidity }
-	return lookupRoute === 'liquidity' ? { primary: liquidity, secondary: trade } : { primary: trade, secondary: liquidity }
-}
-
-function MarketRow({ listKind, lookupRoute, market, nowSeconds }: { listKind: TradingListKind; lookupRoute: TradingLookupRoute; market: LiveMarket; nowSeconds: bigint }) {
-	// The primary action follows the workflow the landing names: liquidity lists lead with liquidity, market lists with trading.
-	const actions = marketRowActions(listKind, lookupRoute, market.pool)
-	const primaryHref = actions.primary.href
-	const secondaryHref = actions.secondary.href
-	const primaryLabel = actions.primary.label
-	const secondaryLabel = actions.secondary.label
+function MarketListControls({ options, onChange }: { options: MarketListOptions; onChange(next: MarketListOptions): void }) {
 	return (
-		<EntityCard
-			className='market-record directory-record'
-			surface='flat'
-			variant='compact'
-			title={<a href={getTradingRouteHref(primaryHref)}>{market.title}</a>}
-			badge={listKind === 'markets' ? <Badge tone={marketStatusTone(market, nowSeconds)}>{marketStatusLabel(market, nowSeconds)}</Badge> : undefined}
-			actions={
-				<>
-					<a className='button-link primary' href={getTradingRouteHref(primaryHref)}>
-						{primaryLabel}
-					</a>
-					<a className='button-link' href={getTradingRouteHref(secondaryHref)}>
-						{secondaryLabel}
-					</a>
-				</>
-			}
-		>
-			<DataGrid dense>
-				<MetricField label={liveCopy.securityPoolLabel}>
-					<ReadOnlyAddressValue address={market.pool} responsiveAbbreviation />
-				</MetricField>
-				{market.loadError === undefined ? (
-					<MetricField label={liveCopy.questionEnd}>
-						<TimestampValue timestamp={market.endTime} relative={false} />
-					</MetricField>
-				) : undefined}
-				{market.loadError === undefined && listKind === 'markets' ? <MetricField label={liveCopy.ammFee}>{formatTrimmedUnits(market.feeBps, 2, 2)}%</MetricField> : undefined}
-			</DataGrid>
-		</EntityCard>
+		<div className='market-list-controls' role='group' aria-label={marketsCopy.listControls}>
+			<div className='field market-list-search'>
+				<FormInput type='search' aria-label={marketsCopy.searchLabel} placeholder={marketsCopy.searchPlaceholder} value={options.query} onInput={event => onChange({ ...options, query: event.currentTarget.value })} />
+			</div>
+			<ViewTabs ariaLabel={marketsCopy.filterLabel} className='market-list-filters' semantics='switcher' size='compact' variant='segmented' value={options.filter} onChange={filter => onChange({ ...options, filter })} options={FILTER_OPTIONS.map(option => ({ ...option }))} />
+			<div className='market-list-sort'>
+				<span className='metric-label' aria-hidden='true'>
+					{marketsCopy.sortLabel}
+				</span>
+				<EnumDropdown ariaLabel={marketsCopy.sortLabel} value={options.sort} options={SORT_OPTIONS} onChange={sort => onChange({ ...options, sort })} />
+			</div>
+		</div>
 	)
 }
 
@@ -103,10 +75,35 @@ export function LiveMarketBrowser({
 	retry(): void
 	loadMarketPage(start: bigint | undefined): void
 }) {
+	const [listOptions, setListOptions] = useState(DEFAULT_LIST_OPTIONS)
 	const listKind = tradingListKindFor(lookupRoute) ?? 'markets'
 	const presentation = listPresentation(listKind)
+	// Filters, search, and sort narrow the loaded page only; security-pool candidates are all open by construction.
+	const arrangeable = listKind === 'markets' && markets.length > 0
+	const shownMarkets = arrangeable ? arrangeMarkets(markets, listOptions, nowSeconds) : markets
 	const initialLoad = discoveryState === 'loading' && pageMarketCount === 0
 	const retryAction = <RetryAction label={liveCopy.retryDiscovery} disabled={workflowLocked} onRetry={retry} />
+	let list
+	if (markets.length === 0) list = <EmptyState title={presentation.empty} />
+	else if (shownMarkets.length === 0)
+		list = (
+			<EmptyState
+				title={marketsCopy.noMatches}
+				actions={
+					<button type='button' onClick={() => setListOptions(DEFAULT_LIST_OPTIONS)}>
+						{marketsCopy.clearFilters}
+					</button>
+				}
+			/>
+		)
+	else
+		list = (
+			<div className='entity-card-list market-list'>
+				{shownMarkets.map(market => (
+					<MarketCard key={market.pool} listKind={listKind} lookupRoute={lookupRoute} market={market} nowSeconds={nowSeconds} />
+				))}
+			</div>
+		)
 	let content
 	if (initialLoad) content = <EmptyState live title={liveCopy.discoveringSecurityPoolsFromFactory} />
 	else if (discoveryState === 'error' && pageMarketCount === 0) content = <EmptyState title={liveCopy.securityPoolFactoryDiscoveryFailed(discoveryError)} actions={retryAction} />
@@ -114,15 +111,15 @@ export function LiveMarketBrowser({
 		content = (
 			<>
 				{discoveryState === 'error' ? <RetryableNotice message={liveCopy.securityPoolRefreshFailed(discoveryError ?? liveCopy.unknownDiscovery)} retryLabel={liveCopy.retryDiscovery} disabled={workflowLocked} onRetry={retry} /> : undefined}
-				{markets.length === 0 ? (
-					<EmptyState title={presentation.empty} />
-				) : (
-					<div className='entity-card-list market-list'>
-						{markets.map(market => (
-							<MarketRow key={market.pool} listKind={listKind} lookupRoute={lookupRoute} market={market} nowSeconds={nowSeconds} />
-						))}
-					</div>
-				)}
+				{arrangeable ? (
+					<>
+						<MarketListControls options={listOptions} onChange={setListOptions} />
+						<p className='market-list-count' role='status'>
+							{marketsCopy.resultCount(shownMarkets.length, markets.length)}
+						</p>
+					</>
+				) : undefined}
+				{list}
 			</>
 		)
 	return (

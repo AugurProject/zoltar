@@ -342,12 +342,36 @@ describe('live market refresh', () => {
 			expect(pagedRoutes.at(-1)).toBe(listRoute)
 			expect(rendered.container.querySelector('form.open-pool-form')).not.toBeNull()
 			expect(rendered.container.querySelector(`.market-record a[href="#/${route === 'create-market' ? 'create-market' : 'market'}/${pool}"]`)).not.toBeNull()
-			// The primary row action follows the workflow the landing names.
-			expect(rendered.container.querySelector('.market-record .button-link.primary')?.getAttribute('href')).toBe(`#/${route}/${pool}`)
+			// The primary row action follows the workflow the landing names: the trade landing leads with one-click outcome buttons.
+			if (route === 'market') {
+				expect(rendered.container.querySelector('.market-record .outcome-button--yes')?.getAttribute('href')).toBe(`#/market/${pool}?side=yes`)
+				expect(rendered.container.querySelector('.market-record .outcome-button--no')?.getAttribute('href')).toBe(`#/market/${pool}?side=no`)
+				expect(rendered.container.querySelector('.market-record .button-link.primary')).toBeNull()
+			} else expect(rendered.container.querySelector('.market-record .button-link.primary')?.getAttribute('href')).toBe(`#/${route}/${pool}`)
 			expect(universeDiscoveries).toBe(0)
 			await rendered.cleanup()
 			cleanupRendered = undefined
 			pagedRoutes.length = 0
 		}
+	})
+
+	test('a market-card outcome link opens the ticket on that side and drops the one-shot side from the hash', async () => {
+		window.location.hash = `#/market/${pool}?simulate=1&side=no`
+		const services = {
+			...liveTradingControllerServices,
+			createTradingPublicClient: () => ({}),
+			validateLiveDeployment: async () => undefined,
+			discoverAddressedMarket: async () => ({ start: 0n, count: 1n, total: 1n, previousStart: undefined, nextStart: undefined, markets: [{ ...market, description: 'Resolves YES when the bridge opens.\n<b>not markup</b>' }], universeIds: [1n], selectedUniverseId: 1n }),
+		}
+		const rendered = await renderIntoDocument(<LiveTrading route={`market/${pool}`} configuration={configuration} configurationError={undefined} selectedUniverseId='1' onWorkflowLockChange={() => undefined} controllerServices={services} />)
+		cleanupRendered = rendered.cleanup
+		await waitForDom(() => document.querySelector('.outcome-picker') !== null, 'trade ticket')
+		expect(document.querySelector('.outcome-picker button[aria-pressed="true"]')?.textContent).toBe('NO')
+		expect(window.location.hash).toBe(`#/market/${pool}?simulate=1`)
+		// The reading column carries the question description as text, with contract addresses behind a disclosure.
+		expect(document.querySelector('.market-description__text')?.textContent).toBe('Resolves YES when the bridge opens.\n<b>not markup</b>')
+		expect(document.querySelector('.market-description b')).toBeNull()
+		expect(document.querySelector('details.read-only-detail-accordion')?.textContent).toContain(shareToken)
+		expect(document.querySelector('.market-ticket__panel')?.getAttribute('aria-label')).toBe('Trade ticket')
 	})
 })
