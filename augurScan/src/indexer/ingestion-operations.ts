@@ -3,7 +3,7 @@ import { dependencyDiscoveryKinds } from '../contract-discovery.ts'
 import { canonicalBlockLogs, type IndexedBlock, type RichListBalance, type StoredTransaction } from '../database.ts'
 import { readRichListBalance } from '../direct-observations.ts'
 import { type Address, getAddress, type Hash, type Log, type BlockTransaction, type TransactionReceipt, zeroAddress } from '../ethereum.ts'
-import { addressActivityFrom, ChainContinuityError, commitCanonicalRead, confirmCanonicalBlock, isProtocolEvidenceEmitter, isPrunedHistoricalStateError, jsonEvidence, labelsFrom, readWithPrunedStateFallback, requireLogPosition, requireReceiptPosition } from '../indexer-runtime.ts'
+import { addressActivityFrom, ChainContinuityError, commitCanonicalRead, confirmCanonicalBlock, findEarliestAvailableStateBlock, isProtocolEvidenceEmitter, isPrunedHistoricalStateError, jsonEvidence, labelsFrom, readWithPrunedStateFallback, requireLogPosition, requireReceiptPosition } from '../indexer-runtime.ts'
 import { decodeAction, decodeLogRecord, discoveriesFrom, tokenAddressesFrom } from '../metadata.ts'
 import { sampleEntityState } from '../snapshot-client.ts'
 import { bigintToSafeNumber, unixSecondsToDate } from '../time.ts'
@@ -37,8 +37,9 @@ export async function indexBlock(
 	const blockTransactions = block.transactions ?? (await this.client.getBlock({ blockNumber: number, includeTransactions: true })).transactions
 	const targets = new Set([...contracts.values()].filter(protocolCallDestination).map(contract => contract.address.toLowerCase()))
 	const traces = new Map<string, Record<string, unknown>>()
-	let traceStatus = 'unavailable'
-	if (!this.traceUnsupportedProviders.has(this.activeProvider)) {
+	const traceStartBlock = this.providerTraceStartBlocks.get(this.activeProvider)
+	let traceStatus = traceStartBlock !== undefined && number < traceStartBlock ? 'unavailable-historical-state' : 'unavailable'
+	if (traceStatus !== 'unavailable-historical-state' && !this.traceUnsupportedProviders.has(this.activeProvider)) {
 		try {
 			for (const item of await blockCallTraces(this.client, block.hash)) traces.set(item.hash, item.trace)
 			traceStatus = 'available'
@@ -46,8 +47,20 @@ export async function indexBlock(
 			if (unsupportedTraceError(error)) {
 				this.traceUnsupportedProviders.add(this.activeProvider)
 				console.warn(`[${this.network.id}] Call traces unavailable on this provider; direct calls and log-selected activity remain indexed`)
-			} else if (isPrunedHistoricalStateError(error)) traceStatus = 'unavailable-historical-state'
-			else throw error
+			} else if (isPrunedHistoricalStateError(error)) {
+				// Trace replay needs parent state and may have a different floor from eth_call.
+				const availableStart = await findEarliestAvailableStateBlock(
+					number,
+					observedHead,
+					async candidate => {
+						await blockCallTraces(this.client, (await this.getBlockHeader(candidate)).hash)
+					},
+					true,
+				)
+				this.providerTraceStartBlocks.set(this.activeProvider, availableStart)
+				traceStatus = 'unavailable-historical-state'
+				console.warn(`[${this.network.id}] RPC call traces before block #${availableStart} are pruned; skipping older traces while continuing direct calls and log-selected activity`)
+			} else throw error
 		}
 	}
 	for (const transaction of blockTransactions) {
