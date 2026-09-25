@@ -2,7 +2,7 @@
 
 set -eu
 
-settings_file='.state/operator.json'
+settings_file=${ZOLTAR_CHAOS_CONFIG:-.state/operator.json}
 temporary_file=''
 script_directory=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 
@@ -19,6 +19,11 @@ if [ -L .state ] || [ ! -d .state ]; then
 	exit 1
 fi
 chmod 700 .state
+
+if [ ! -e "$settings_file" ] && [ "$settings_file" != '.state/operator.json' ]; then
+	echo 'Selected chaos configuration does not exist' >&2
+	exit 1
+fi
 
 if [ ! -e "$settings_file" ]; then
 	umask 077
