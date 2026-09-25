@@ -1,13 +1,8 @@
 import { useSignal } from '@preact/signals'
 import { useRef } from 'preact/hooks'
 import type { Address, Hash } from '@zoltar/core-shared/evm/ethereum'
-import { loadLiquidationApproval as loadProtocolLiquidationApproval } from '../../../protocol/liquidationApprovals.js'
-import { loadCoordinatorInitialReportFundingRequirement, loadOracleManagerDetails, loadOracleManagerQueueOperationEthValue, queueSecurityPoolLiquidation } from '../../../protocol/oracleCoordinator.js'
-import { loadSecurityPoolLineage, loadSecurityPoolPage, loadSecurityPoolVaultSummary as loadProtocolSecurityPoolVaultSummary } from '../../../protocol/securityPools.js'
 import { useLoadController } from '@zoltar/ui-core-shared/hooks/useLoadController.js'
 import { normalizeAddress } from '@zoltar/ui-core-shared/lib/address.js'
-import { createConnectedReadClient, createWalletWriteClient } from '@zoltar/ui-core-shared/wallet/clients.js'
-import { getActiveBackend } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { getErrorMessage } from '@zoltar/ui-core-shared/lib/errors.js'
 import { createErrorActionFeedback, createPendingActionFeedback, createSuccessActionFeedback, createWarningActionFeedback } from '@zoltar/ui-core-shared/transactions/actionFeedback.js'
 import type { ActionFeedback } from '@zoltar/ui-core-shared/transactions/actionFeedback.js'
@@ -20,9 +15,15 @@ import { parseEthAmountInput } from '@zoltar/ui-core-shared/forms/formInputs.js'
 import { formatAdditionalCurrencyBalance } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { getLiquidationExecutionFailureDetail } from '../lib/liquidation.js'
 import { useRequestGuard } from '@zoltar/ui-core-shared/lib/requestGuard.js'
+import { useSecurityPoolBrowsePage } from './useSecurityPoolBrowsePage.js'
+import { appQueryCache } from '@zoltar/ui-core-shared/lib/dataRefresh.js'
+import { useQueryState } from '@zoltar/ui-core-shared/hooks/useDataRefresh.js'
 import { DEFAULT_STAGED_OPERATION_TIMEOUT_MINUTES, getStagedOperationTimeoutSeconds, MAX_STAGED_OPERATION_TIMEOUT_MINUTES, MIN_STAGED_OPERATION_TIMEOUT_MINUTES } from '../lib/securityVault.js'
 import type { TransactionCancellationParameters, TransactionLifecycleParameters, WriteOperationContext } from '../../../types/app.js'
-import type { LiquidationApprovalDetails, LiquidationFundingPreview, ListedSecurityPool, SecurityPoolBrowsePage, SecurityPoolOverviewActionResult, SecurityPoolPage, SecurityPoolVaultSummary } from '@zoltar/ui-core-shared/types/contracts.js'
+import type { LiquidationApprovalDetails, LiquidationFundingPreview, ListedSecurityPool, SecurityPoolOverviewActionResult, SecurityPoolVaultSummary } from '@zoltar/ui-core-shared/types/contracts.js'
+import { defaultUseSecurityPoolsOverviewDependencies, type SecurityPoolsOverviewProductionWriteClient, type UseSecurityPoolsOverviewDependencies } from './securityPoolsOverviewDependencies.js'
+
+export type { UseSecurityPoolsOverviewDependencies } from './securityPoolsOverviewDependencies.js'
 
 type UseSecurityPoolsOverviewParameters = TransactionLifecycleParameters &
 	TransactionCancellationParameters &
@@ -30,47 +31,11 @@ type UseSecurityPoolsOverviewParameters = TransactionLifecycleParameters &
 		environmentRefreshKey: number
 	}
 
-type SecurityPoolsOverviewReadClient = {
-	getBalance: (parameters: { address: Address }) => Promise<bigint>
-}
-
-type SecurityPoolsOverviewProductionWriteClient = ReturnType<typeof createWalletWriteClient>
-type SecurityPoolLiquidationQueueResult = Awaited<ReturnType<typeof queueSecurityPoolLiquidation>>
-
-export type UseSecurityPoolsOverviewDependencies<TWriteClient = SecurityPoolsOverviewProductionWriteClient> = {
-	createConnectedReadClient: () => SecurityPoolsOverviewReadClient
-	createWalletWriteClient: (walletAddress: Address, callbacks?: Parameters<typeof createWalletWriteClient>[1]) => TWriteClient
-	loadSecurityPoolLineage: (securityPoolAddress: Address, accountAddress?: Address) => Promise<ListedSecurityPool[]>
-	loadCoordinatorInitialReportFundingRequirement: (client: TWriteClient, managerAddress: Address, walletAddress: Address) => Promise<Awaited<ReturnType<typeof loadCoordinatorInitialReportFundingRequirement>>>
-	loadLiquidationApproval: (managerAddress: Address, approvalId: Hash) => Promise<LiquidationApprovalDetails>
-	loadSecurityPoolVaultSummary: (securityPoolAddress: Address, vaultAddress: Address) => Promise<SecurityPoolVaultSummary>
-	loadOracleManagerDetails: (managerAddress: Address) => Promise<Awaited<ReturnType<typeof loadOracleManagerDetails>>>
-	loadOracleManagerQueueOperationEthValue: (client: TWriteClient, managerAddress: Address) => Promise<bigint>
-	loadSecurityPoolPage: (pageIndex: number, pageSize: number, accountAddress: Address | undefined) => Promise<SecurityPoolPage>
-	queueSecurityPoolLiquidation: (client: TWriteClient, managerAddress: Address, targetVault: Address, amount: bigint, validForSeconds: bigint, requestedInitialAttoWeth?: bigint, receiverVault?: Address, approvalId?: Hash) => Promise<SecurityPoolLiquidationQueueResult>
-	waitForSecurityPoolReadBackend: () => Promise<void>
-}
+/** The selected pool's lineage, refreshed in place on each new block. */
+const securityPoolLineageQueries = appQueryCache.createStore<ListedSecurityPool[]>()
 
 function getLiquidationFundingPreviewRequestKey(managerAddress: Address, walletAddress: Address, environmentRefreshKey: number) {
 	return `${environmentRefreshKey}:${managerAddress.toLowerCase()}:${walletAddress.toLowerCase()}`
-}
-
-async function waitForSecurityPoolReadBackend() {
-	await getActiveBackend().waitUntilReady?.()
-}
-
-const defaultUseSecurityPoolsOverviewDependencies: UseSecurityPoolsOverviewDependencies = {
-	createConnectedReadClient: () => createConnectedReadClient(),
-	createWalletWriteClient,
-	loadSecurityPoolLineage: async (securityPoolAddress, accountAddress) => await loadSecurityPoolLineage(createConnectedReadClient(), securityPoolAddress, accountAddress),
-	loadCoordinatorInitialReportFundingRequirement: async (client, managerAddress, walletAddress) => await loadCoordinatorInitialReportFundingRequirement(client, managerAddress, walletAddress),
-	loadLiquidationApproval: async (managerAddress, approvalId) => await loadProtocolLiquidationApproval(createConnectedReadClient(), managerAddress, approvalId),
-	loadSecurityPoolVaultSummary: async (securityPoolAddress, vaultAddress) => await loadProtocolSecurityPoolVaultSummary(createConnectedReadClient(), securityPoolAddress, vaultAddress),
-	loadOracleManagerDetails: async managerAddress => await loadOracleManagerDetails(createConnectedReadClient(), managerAddress),
-	loadOracleManagerQueueOperationEthValue,
-	loadSecurityPoolPage: async (pageIndex, pageSize, accountAddress) => await loadSecurityPoolPage(createConnectedReadClient(), pageIndex, pageSize, accountAddress),
-	queueSecurityPoolLiquidation,
-	waitForSecurityPoolReadBackend,
 }
 
 function useSecurityPoolsOverviewWithDependencies<TWriteClient>(
@@ -102,18 +67,14 @@ function useSecurityPoolsOverviewWithDependencies<TWriteClient>(
 	const liquidationFundingPreviewResolvedKey = useSignal<string | undefined>(undefined)
 	const liquidationSecurityPoolAddress = useSignal<Address | undefined>(undefined)
 	const liquidationModalOpen = useSignal(false)
-	const securityPoolBrowseCount = useSignal<bigint | undefined>(undefined)
-	const securityPoolPage = useSignal<SecurityPoolBrowsePage | undefined>(undefined)
 	const universeDirectoryPools = useSignal<ListedSecurityPool[] | undefined>(undefined)
 	const securityPoolsLoad = useLoadController()
 	const universeDirectoryLoad = useLoadController()
 	const liquidationFundingPreviewLoad = useLoadController()
 	const liquidationApprovalLoad = useLoadController()
 	const liquidationReceiverVaultSummaryLoad = useLoadController()
-	const securityPoolPageLoad = useLoadController()
 	const securityPoolsLoadedEnvironmentRefreshKey = useSignal<number | undefined>(undefined)
 	const universeDirectoryLoadedEnvironmentRefreshKey = useSignal<number | undefined>(undefined)
-	const hasLoadedSecurityPoolPage = useSignal(false)
 	const checkedSecurityPoolAddress = useSignal<string | undefined>(undefined)
 	const securityPoolOverviewActiveAction = useSignal<SecurityPoolOverviewActionResult['action'] | undefined>(undefined)
 	const securityPoolOverviewFeedback = useSignal<ActionFeedback<SecurityPoolOverviewActionResult['action']> | undefined>(undefined)
@@ -129,8 +90,18 @@ function useSecurityPoolsOverviewWithDependencies<TWriteClient>(
 	const nextLiquidationFundingPreviewLoad = useRequestGuard()
 	const nextLiquidationApprovalLoad = useRequestGuard()
 	const nextLiquidationReceiverVaultSummaryLoad = useRequestGuard()
-	const nextSecurityPoolPageLoad = useRequestGuard()
+	const browsePage = useSecurityPoolBrowsePage({
+		accountAddress,
+		loadSecurityPoolPage: dependencies.loadSecurityPoolPage,
+		setOverviewError: message => {
+			securityPoolOverviewError.value = message
+		},
+		waitForSecurityPoolReadBackend: dependencies.waitForSecurityPoolReadBackend,
+	})
 
+	const securityPoolsCommitVersion = useRef(0)
+	const getLineageQueryKey = (address: string | undefined) => (address === undefined ? undefined : `${environmentRefreshKey}:${address}:${accountAddress?.toLowerCase() ?? 'no-account'}`)
+	const lineageQuery = useQueryState(securityPoolLineageQueries, getLineageQueryKey(checkedSecurityPoolAddress.value))
 	const loadSecurityPools = async (securityPoolAddress?: string) => {
 		const requestedEnvironmentRefreshKey = environmentRefreshKey
 		const normalizedCheckedAddress = normalizeAddress(securityPoolAddress)
@@ -150,6 +121,9 @@ function useSecurityPoolsOverviewWithDependencies<TWriteClient>(
 				return await dependencies.loadSecurityPoolLineage(parseAddressInput(nextCheckedAddress, 'Security pool'), accountAddress)
 			},
 			onSuccess: pools => {
+				securityPoolsCommitVersion.current += 1
+				const queryKey = getLineageQueryKey(nextCheckedAddress)
+				if (queryKey !== undefined) securityPoolLineageQueries.set(queryKey, pools)
 				securityPoolsLoadedEnvironmentRefreshKey.value = requestedEnvironmentRefreshKey
 				checkedSecurityPoolAddress.value = nextCheckedAddress
 				securityPools.value = pools
@@ -164,27 +138,19 @@ function useSecurityPoolsOverviewWithDependencies<TWriteClient>(
 		return result !== undefined
 	}
 
-	const loadBrowseSecurityPoolPage = async (pageIndex: number, pageSize: number, requestKey: string) => {
-		const isCurrent = nextSecurityPoolPageLoad()
-		await securityPoolPageLoad.run({
-			isCurrent,
-			onStart: () => {
-				if (!isCurrent()) return
-				securityPoolOverviewError.value = undefined
-			},
-			waitUntilReady: dependencies.waitForSecurityPoolReadBackend,
-			load: async () => {
-				return await dependencies.loadSecurityPoolPage(pageIndex, pageSize, accountAddress)
-			},
-			onSuccess: page => {
-				hasLoadedSecurityPoolPage.value = true
-				securityPoolBrowseCount.value = page.poolCount
-				securityPoolPage.value = { ...page, requestKey }
-			},
-			onError: error => {
-				securityPoolOverviewError.value = getErrorMessage(error, 'Failed to load security pools')
-			},
-		})
+	/** Re-reads the selected pool's lineage in place, keeping the loaded pools visible until the read lands. */
+	const refreshSecurityPools = async () => {
+		const address = checkedSecurityPoolAddress.value
+		const queryKey = getLineageQueryKey(address)
+		if (address === undefined || queryKey === undefined || securityPoolsLoad.isLoading.peek()) return
+		const commitVersion = securityPoolsCommitVersion.current
+		try {
+			const pools = await securityPoolLineageQueries.fetch(queryKey, async () => await dependencies.loadSecurityPoolLineage(parseAddressInput(address, 'Security pool'), accountAddress))
+			if (securityPoolsCommitVersion.current === commitVersion && !securityPoolsLoad.isLoading.peek() && checkedSecurityPoolAddress.value === address) securityPools.value = pools
+		} catch (error) {
+			// A failed background read keeps the loaded pools; the next block retries.
+			void error
+		}
 	}
 
 	const loadUniverseDirectoryPools = async () => {
@@ -576,6 +542,7 @@ function useSecurityPoolsOverviewWithDependencies<TWriteClient>(
 	const loadingCurrentLiquidationReceiverVaultSummary = currentLiquidationReceiverVaultSummaryRequestKey !== undefined && liquidationReceiverVaultSummaryLoadingKey.value === currentLiquidationReceiverVaultSummaryRequestKey && liquidationReceiverVaultSummaryLoad.isLoading.value
 
 	return {
+		...browsePage,
 		liquidationDebtEthAmount: liquidationDebtEthAmount.value,
 		maximumLiquidationDebtAttoEth: maximumLiquidationDebtAttoEth.value,
 		liquidationManagerAddress: liquidationManagerAddress.value,
@@ -595,16 +562,13 @@ function useSecurityPoolsOverviewWithDependencies<TWriteClient>(
 		hasLoadedSecurityPools: securityPoolsLoadedEnvironmentRefreshKey.value === environmentRefreshKey,
 		hasLoadedUniverseDirectoryPools: universeDirectoryLoadedEnvironmentRefreshKey.value === environmentRefreshKey,
 		securityPoolsLoadedEnvironmentRefreshKey: securityPoolsLoadedEnvironmentRefreshKey.value,
-		hasLoadedSecurityPoolPage: hasLoadedSecurityPoolPage.value,
 		liquidationSecurityPoolAddress: liquidationSecurityPoolAddress.value,
-		loadingSecurityPoolPage: securityPoolPageLoad.isLoading.value,
 		loadingSecurityPools: securityPoolsLoad.isLoading.value,
 		loadingUniverseDirectoryPools: universeDirectoryLoad.isLoading.value,
 		loadingLiquidationFundingPreview: loadingCurrentLiquidationFundingPreview,
 		loadingLiquidationApproval: loadingCurrentLiquidationApproval,
 		loadingLiquidationReceiverVaultSummary: loadingCurrentLiquidationReceiverVaultSummary,
 		closeLiquidationModal,
-		loadBrowseSecurityPoolPage,
 		loadLiquidationFundingPreview,
 		loadLiquidationApproval,
 		loadLiquidationReceiverVaultSummary,
@@ -617,8 +581,6 @@ function useSecurityPoolsOverviewWithDependencies<TWriteClient>(
 		securityPoolLiquidationError: securityPoolLiquidationError.value,
 		securityPoolOverviewFeedback: securityPoolOverviewFeedback.value,
 		securityPoolOverviewResult: securityPoolOverviewResult.value,
-		securityPoolBrowseCount: securityPoolBrowseCount.value,
-		securityPoolPage: securityPoolPage.value,
 		securityPools: securityPools.value,
 		securityPoolUniverseDirectoryError: universeDirectoryError.value,
 		universeDirectoryPools: universeDirectoryLoadedEnvironmentRefreshKey.value === environmentRefreshKey ? universeDirectoryPools.value : undefined,
@@ -648,6 +610,8 @@ function useSecurityPoolsOverviewWithDependencies<TWriteClient>(
 		},
 		loadUniverseDirectoryPools,
 		loadSecurityPools,
+		refreshSecurityPools,
+		securityPoolsFreshness: { refreshing: lineageQuery?.fetching === true, updatedAt: lineageQuery?.updatedAt },
 	}
 }
 

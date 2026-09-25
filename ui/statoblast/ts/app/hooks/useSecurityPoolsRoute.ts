@@ -14,6 +14,7 @@ import { getCurrentPoolOracleManagerDetails } from '@zoltar/ui-statoblast-shared
 import { isUiOpenOraclePriceUsed, resolveUiRepPerEthPrice } from '@zoltar/ui-statoblast-shared/features/security-pools/lib/uiPriceOracle.js'
 import { resolveEnumValue, resolveFirstMatchingValue } from '@zoltar/ui-core-shared/forms/viewState.js'
 import { shouldAutoLoadUniverseDirectory } from '../lib/universeDirectory.js'
+import { useBlockRefresh } from '@zoltar/ui-core-shared/hooks/useDataRefresh.js'
 import { readUiPriceOracle } from '../UiPriceOracleSettings.js'
 import type { ReportingFormState, WriteOperationsParameters } from '@zoltar/ui-zoltar-shared/types/app.js'
 import type { SecurityPoolsSectionProps, SecurityPoolsView } from '@zoltar/ui-statoblast-shared/features/types.js'
@@ -164,6 +165,8 @@ export function useSecurityPoolsRoute({
 		loadingSecurityPoolPage,
 		loadingUniverseDirectoryPools,
 		loadBrowseSecurityPoolPage,
+		refreshBrowseSecurityPoolPage,
+		securityPoolPageFreshness,
 		loadUniverseDirectoryPools,
 		loadSecurityPools,
 		loadLiquidationFundingPreview,
@@ -184,7 +187,11 @@ export function useSecurityPoolsRoute({
 		setLiquidationReceiverVault,
 		setLiquidationApprovalId,
 		setLiquidationTimeoutMinutes,
+		refreshSecurityPools,
+		securityPoolsFreshness,
 	} = useSecurityPoolsOverview({ ...walletScopedHookConfig, environmentRefreshKey: activeEnvironmentNonce })
+	// The open pool's summary re-reads on each new block, so another user's deposit or fork appears without a reload.
+	useBlockRefresh(() => void refreshSecurityPools(), route === 'security-pools' && securityPoolsView === 'operate' && checkedSecurityPoolAddress !== undefined)
 	const selectedPool = securityPools.find(pool => pool.securityPoolAddress.toLowerCase() === securityPoolAddress.toLowerCase())
 	const { createCompleteSet, loadingTradingDetails, loadingTradingForkUniverse, migrateShares, redeemCompleteSet, redeemShares, setTradingForm, tradingActiveAction, tradingDetails, tradingError, tradingForm, tradingForkUniverse, tradingResult } = useTradingOperations({
 		...walletScopedHookConfig,
@@ -359,9 +366,11 @@ export function useSecurityPoolsRoute({
 			hasLoadedSecurityPoolPage,
 			loadingSecurityPoolPage,
 			onLoadSecurityPoolPage: (pageIndex: number, pageSize: number, requestKey: string) => void loadBrowseSecurityPoolPage(pageIndex, pageSize, requestKey),
+			onRefreshSecurityPoolPage: () => void refreshBrowseSecurityPoolPage(),
 			onCreateSecurityPool: () => setSecurityPoolsView('create'),
 			securityPoolBrowseCount,
 			securityPoolPage,
+			securityPoolPageFreshness,
 			securityPoolOverviewError,
 			securityPools,
 			repPerEthPrice,
@@ -449,6 +458,7 @@ export function useSecurityPoolsRoute({
 			onRequestPoolPrice: (managerAddress: Address, securityPoolAddress: Address, reviewedRequestValueAttoEth: bigint, universeId: bigint, proposedRepPerEthPrice?: bigint, signal?: AbortSignal) =>
 				requestPoolPrice(managerAddress, securityPoolAddress, reviewedRequestValueAttoEth, universeId, proposedRepPerEthPrice, signal),
 			onRefreshSelectedPoolData: refreshSelectedPoolData,
+			securityPoolsFreshness,
 			onSelectedPoolViewChange: setSelectedPoolView,
 			onViewPendingReport,
 			...(inlineOracle === undefined ? {} : { inlineOracle }),

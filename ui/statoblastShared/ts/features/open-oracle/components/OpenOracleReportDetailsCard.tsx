@@ -1,5 +1,6 @@
 import type { ComponentChildren } from 'preact'
 import { useEffect, useRef, useState } from 'preact/hooks'
+import { usePageVisible } from '@zoltar/ui-core-shared/hooks/useDataRefresh.js'
 import { zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import { ActionLauncherCard } from '@zoltar/ui-core-shared/components/ActionLauncherCard.js'
 import { AddressValue } from '@zoltar/ui-core-shared/components/AddressValue.js'
@@ -74,24 +75,27 @@ function useLiveSettlementTime(report: OpenOracleReportDetails | undefined, load
 	const [clock, setClock] = useState<{ key: string | undefined; elapsedSeconds: bigint }>({ key: undefined, elapsedSeconds: 0n })
 	const refresh = useRef({ loading, onLoadReport })
 	const lastRefresh = useRef<{ key: string; at: number } | undefined>(undefined)
+	// The clock counts from when this report was read, so pausing it in a hidden tab loses no elapsed time.
+	const startedAt = useRef<{ key: string | undefined; at: number }>({ key: undefined, at: Date.now() })
+	if (startedAt.current.key !== reportKey) startedAt.current = { key: reportKey, at: Date.now() }
+	const visible = usePageVisible()
 	refresh.current = { loading, onLoadReport }
 	useEffect(() => {
-		setClock(current => (current.key === reportKey && current.elapsedSeconds === 0n ? current : { key: reportKey, elapsedSeconds: 0n }))
-		if (report === undefined || !report.timeType || report.isDistributed || report.reportTimestamp === 0n) return
+		if (report === undefined || !report.timeType || report.isDistributed || report.reportTimestamp === 0n || !visible) return
 		const readyAt = report.reportTimestamp + report.settlementTime
 		const refreshKey = `${report.reportId}:${report.reportTimestamp}`
-		const startedAt = Date.now()
-		const interval = setInterval(() => {
+		const tick = () => {
 			const now = Date.now()
-			const elapsedSeconds = BigInt(Math.floor((now - startedAt) / 1000))
+			const elapsedSeconds = BigInt(Math.floor((now - startedAt.current.at) / 1000))
 			setClock(current => (current.key === reportKey && current.elapsedSeconds === elapsedSeconds ? current : { key: reportKey, elapsedSeconds }))
 			if (report.currentTime + elapsedSeconds < readyAt || refresh.current.loading) return
 			if (lastRefresh.current?.key === refreshKey && now - lastRefresh.current.at < 5000) return
 			lastRefresh.current = { key: refreshKey, at: now }
 			refresh.current.onLoadReport(report.reportId.toString())
-		}, 250)
+		}
+		const interval = setInterval(tick, 250)
 		return () => clearInterval(interval)
-	}, [reportKey, report?.timeType])
+	}, [reportKey, report?.timeType, visible])
 	return report !== undefined && report.timeType ? report.currentTime + (clock.key === reportKey ? clock.elapsedSeconds : 0n) : report?.currentTime
 }
 

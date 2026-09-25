@@ -20,6 +20,7 @@ import { resolveInstalledTradingDeployment, type CoreDeployment } from '../proto
 import { createTradingPublicClient, publicErrorMessage, validateRpcChainId, waitForActiveEnvironmentReady } from '../protocol/live.js'
 import { getActiveNetworkProfile, getActiveSimulationController } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { withTimeout } from '@zoltar/ui-core-shared/lib/promise.js'
+import { invalidateAppData } from '@zoltar/ui-core-shared/lib/dataRefresh.js'
 import * as appCopy from '../copy/app.js'
 import * as availabilityCopy from '../copy/availability.js'
 import * as sharedAppCopy from '@zoltar/ui-core-shared/copy/app.js'
@@ -260,7 +261,7 @@ export function App({
 				<AppHeaderShell
 					simulationController={simulationController}
 					onEnvironmentChanged={refreshActiveEnvironment}
-					onRefresh={async () => window.location.reload()}
+					onRefresh={async () => invalidateAppData()}
 					tabNavigation={{
 						route: displayedRoute,
 						showProtocolGuide: false,

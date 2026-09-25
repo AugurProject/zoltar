@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'preact/hooks'
+import { useBlockRefresh } from '@zoltar/ui-core-shared/hooks/useDataRefresh.js'
 import { type Address, getAddress } from '@zoltar/core-shared/evm/ethereum'
 import { normalizeAddress, sameAddress } from '@zoltar/ui-core-shared/lib/address.js'
 import type { ForkAuctionDetails, ListedSecurityPool, OpenOracleActionResult, OracleManagerDetails, ReportingDetails, ReportingOutcomeKey, SecurityPoolOverviewActionResult, SecurityPoolSystemState, StagedOracleOperation } from '@zoltar/ui-core-shared/types/contracts.js'
@@ -101,26 +102,19 @@ export function useSelectedPoolRefreshEffects({
 		}
 		previousPendingReport.current = { managerAddress: currentPoolOracleManagerDetails.managerAddress, reportId: currentPoolOracleManagerDetails.pendingReportId }
 	}, [currentPoolOracleManagerDetails, onRefreshSelectedPoolData, selectedPool?.securityPoolAddress])
+	// A pending price report becomes settleable at its ready time; from then on every new block re-reads the manager until the report settles.
+	const pendingReportId = currentPoolOracleManagerDetails?.pendingReportId
+	const pendingReportReadyAt = currentPoolOracleManagerDetails?.pendingReportReadyAtTimestamp
+	const pendingReportRefreshActive = pendingReportId !== undefined && pendingReportId !== 0n && selectedPoolManagerAddress !== undefined && (pendingReportReadyAt === undefined || currentTimestamp === undefined || currentTimestamp >= pendingReportReadyAt)
+	const refreshPendingReport = () => {
+		const state = pendingPriceRefresh.current
+		if (state.loadingPoolOracleManager || selectedPoolManagerAddress === undefined) return
+		state.onLoadPoolOracleManager(selectedPoolManagerAddress)
+	}
 	useEffect(() => {
-		if (currentPoolOracleManagerDetails?.pendingReportId === undefined || currentPoolOracleManagerDetails.pendingReportId === 0n || selectedPoolManagerAddress === undefined) return
-		const readyAt = currentPoolOracleManagerDetails.pendingReportReadyAtTimestamp
-		const secondsUntilReady = readyAt === undefined ? 5n : readyAt - (currentTimestamp ?? BigInt(Math.floor(Date.now() / 1000)))
-		const firstDelay = secondsUntilReady <= 0n ? 0 : Number(secondsUntilReady > 2147483n ? 2147483n : secondsUntilReady) * 1000
-		let interval: ReturnType<typeof setInterval> | undefined
-		const refresh = () => {
-			const state = pendingPriceRefresh.current
-			if (state.loadingPoolOracleManager) return
-			state.onLoadPoolOracleManager(selectedPoolManagerAddress)
-		}
-		const timeout = setTimeout(() => {
-			refresh()
-			interval = setInterval(refresh, 5000)
-		}, firstDelay)
-		return () => {
-			clearTimeout(timeout)
-			if (interval !== undefined) clearInterval(interval)
-		}
-	}, [currentPoolOracleManagerDetails?.pendingReportId, currentPoolOracleManagerDetails?.pendingReportReadyAtTimestamp, currentTimestamp, selectedPoolManagerAddress])
+		if (pendingReportRefreshActive) refreshPendingReport()
+	}, [pendingReportId, pendingReportRefreshActive, selectedPoolManagerAddress])
+	useBlockRefresh(refreshPendingReport, pendingReportRefreshActive)
 	useEffect(() => {
 		if (selectedPoolManagerAddress === undefined) return
 		if (sameAddress(poolOracleManagerDetails?.managerAddress, selectedPoolManagerAddress)) return

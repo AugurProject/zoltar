@@ -166,3 +166,10 @@ export const untitledQuestion = 'Untitled question'
 export const oracleManager = 'Oracle Manager'
 
 export const launchAction = (label: string) => `${label}…`
+
+export const refreshingData = 'Refreshing…'
+export const updatedJustNow = 'Updated just now'
+export const formatUpdatedSecondsAgo = (seconds: number) => `Updated ${seconds}s ago`
+export const formatUpdatedMinutesAgo = (minutes: number) => `Updated ${minutes}m ago`
+export const formatUpdatedHoursAgo = (hours: number) => `Updated ${hours}h ago`
+export const formatUpdatedAtTitle = (time: string) => `Last read at ${time}. Refreshes on each new block.`

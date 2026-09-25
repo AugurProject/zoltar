@@ -13,6 +13,17 @@ import { useSecurityVaultOperations, type UseSecurityVaultOperationsDependencies
 import { describe, expect, mock, test } from 'bun:test'
 import { h } from 'preact'
 import { act } from 'preact/test-utils'
+import { appBlockWatcher } from '@zoltar/ui-core-shared/lib/dataRefresh.js'
+
+let nextBlockNumber = 5_000n
+// Stands in for the chain producing a block: queued operations are re-read on each new block until they resolve.
+async function announceNewBlock() {
+	await act(() => {
+		appBlockWatcher.reportBlock(nextBlockNumber)
+		appBlockWatcher.reportBlock(nextBlockNumber + 1n)
+		nextBlockNumber += 2n
+	})
+}
 
 type UseSecurityVaultOperationsState = ReturnType<typeof useSecurityVaultOperations>
 type TestSecurityVaultWriteClient = { kind: 'injected-write-client' }
@@ -236,7 +247,8 @@ describe('useSecurityVaultOperations', () => {
 		await act(async () => await requireHookState(state).adjustBackingFactor('2'))
 		await waitFor(() => expect(requireHookState(state).securityVaultResult?.queuedOperationState?.status).toBe('queued'))
 		completed = true
-		await waitFor(() => expect(requireHookState(state).securityVaultResult?.queuedOperationState?.status).toBe('executed'), { timeout: 5_000 })
+		await announceNewBlock()
+		await waitFor(() => expect(requireHookState(state).securityVaultResult?.queuedOperationState?.status).toBe('executed'))
 		await waitFor(() => expect(requireHookState(state).securityVaultDetails?.targetBackingFactorBps).toBe(20_000n))
 		expect(requireHookState(state).securityVaultResult?.hash).toBe('0x01')
 	})
@@ -264,7 +276,8 @@ describe('useSecurityVaultOperations', () => {
 		expect(dependencies.redeemSecurityVaultFees).toHaveBeenCalled()
 		expect(requireHookState(state).securityVaultQueuedOperations?.[0]?.queuedOperation).toEqual(queuedOperation)
 		completed = true
-		await waitFor(() => expect(requireHookState(state).securityVaultQueuedOperations?.[0]?.queuedOperationState?.status).toBe('executed'), { timeout: 5_000 })
+		await announceNewBlock()
+		await waitFor(() => expect(requireHookState(state).securityVaultQueuedOperations?.[0]?.queuedOperationState?.status).toBe('executed'))
 		expect(requireHookState(state).securityVaultQueuedOperations?.[0]?.hash).toBe('0x01')
 		await waitFor(() => expect(requireHookState(state).securityVaultDetails?.targetBackingFactorBps).toBe(20_000n))
 		expect(requireHookState(state).securityVaultResult).toBeUndefined()
@@ -290,7 +303,8 @@ describe('useSecurityVaultOperations', () => {
 		await act(async () => await requireHookState(state).withdrawRep())
 		expect(requireHookState(state).securityVaultQueuedOperations.map(result => result.queuedOperation?.operationId)).toEqual([42n, 43n])
 		targetExecuted = true
-		await waitFor(() => expect(requireHookState(state).securityVaultQueuedOperations[0]?.queuedOperationState?.status).toBe('executed'), { timeout: 5_000 })
+		await announceNewBlock()
+		await waitFor(() => expect(requireHookState(state).securityVaultQueuedOperations[0]?.queuedOperationState?.status).toBe('executed'))
 		expect(requireHookState(state).securityVaultQueuedOperations[1]?.queuedOperationState?.status).toBe('manual-queued')
 		expect(requireHookState(state).securityVaultResult?.hash).toBe('0x02')
 		await waitFor(() => expect(requireHookState(state).securityVaultDetails?.targetBackingFactorBps).toBe(20_000n))
@@ -322,7 +336,8 @@ describe('useSecurityVaultOperations', () => {
 		})
 		await waitFor(() => expect(requireHookState(state).securityVaultResult?.queuedOperationState?.status).toBe('missing'))
 		expect(requireHookState(state).securityVaultResult?.queuedOperation).toEqual(queuedOperation)
-		await waitFor(() => expect(requireHookState(state).securityVaultResult?.queuedOperationState?.status).toBe('manual-queued'), { timeout: 5_000 })
+		await announceNewBlock()
+		await waitFor(() => expect(requireHookState(state).securityVaultResult?.queuedOperationState?.status).toBe('manual-queued'))
 		expect(requireHookState(state).securityVaultResult?.hash).toBe('0x01')
 	})
 

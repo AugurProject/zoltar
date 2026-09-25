@@ -9,6 +9,7 @@ import { waitFor } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import type { DeploymentStatus, MarketDetails } from '@zoltar/ui-core-shared/types/contracts.js'
 import { useZoltarUniverse, type UseZoltarUniverseDependencies } from '@zoltar/ui-zoltar-shared/features/universes/hooks/useZoltarUniverse.js'
+import { appBlockWatcher } from '@zoltar/ui-core-shared/lib/dataRefresh.js'
 import { describe, expect, mock, test } from 'bun:test'
 import { h, render } from 'preact'
 import { act } from 'preact/test-utils'
@@ -689,5 +690,67 @@ describe('useZoltarUniverse', () => {
 
 		expect(requireHookState(hookState).zoltarQuestionsError).toBeUndefined()
 		expect(requireHookState(hookState).zoltarQuestionPage?.questions).toEqual([newQuestion])
+	})
+
+	test('refreshes the universe summary and question page in place on a new block so forks and new questions appear', async () => {
+		const universe = { childUniverses: [], forkQuestionDetails: undefined, forkThresholdAttoRep: 100n, forkTime: 0n, forkingOutcomeIndex: 0n, hasForked: false, parentUniverseId: 0n, reputationToken: zeroAddress, totalTheoreticalSupplyAttoRep: 1000n, universeId: 1n }
+		const forkedUniverse = { ...universe, forkTime: 50n, hasForked: true }
+		const firstPage = { pageIndex: 0, pageSize: 10, questionCount: 1n, questions: [createQuestion('0x01')] }
+		const refreshedPage = { pageIndex: 0, pageSize: 10, questionCount: 2n, questions: [createQuestion('0x01'), createQuestion('0x02')] }
+		const refreshedPageRead = createDeferred<typeof refreshedPage>()
+		let universeReads = 0
+		let pageReads = 0
+		const dependencies = createZoltarUniverseDependencies({
+			loadZoltarQuestionCount: mock(async () => 1n),
+			loadZoltarQuestionPage: mock(async () => (++pageReads === 1 ? firstPage : await refreshedPageRead.promise)),
+			loadZoltarUniverseSummary: mock(async () => (++universeReads === 1 ? universe : forkedUniverse)),
+		})
+		let hookState: UseZoltarUniverseState | undefined
+		function Harness() {
+			hookState = useZoltarUniverse(
+				{
+					accountAddress: WALLET_ADDRESS,
+					activeUniverseId: 1n,
+					autoLoadInitialData: true,
+					deploymentStatuses: [createZoltarDeploymentStatus()],
+					environmentRefreshKey: 41,
+					onTransactionFinished: () => undefined,
+					onTransactionPresented: () => undefined,
+					onTransactionRequested: () => undefined,
+					onTransactionSubmitted: () => undefined,
+				},
+				dependencies,
+			)
+			return <div />
+		}
+		const renderedComponent = await renderIntoDocument(h(Harness, {}))
+		cleanupRenderedComponent = renderedComponent.cleanup
+		await act(async () => {
+			await requireHookState(hookState).loadZoltarQuestionPage(0, 10)
+		})
+		await waitFor(() => expect(requireHookState(hookState).zoltarUniverse?.hasForked).toBe(false))
+		expect(requireHookState(hookState).zoltarQuestionPage).toEqual(firstPage)
+		expect(requireHookState(hookState).zoltarUniverseFreshness.updatedAt).toBeNumber()
+		expect(requireHookState(hookState).zoltarQuestionsFreshness).toMatchObject({ refreshing: false })
+
+		await act(() => {
+			appBlockWatcher.reportBlock(1_000n)
+			appBlockWatcher.reportBlock(1_001n)
+		})
+		await waitFor(() => expect(requireHookState(hookState).zoltarUniverse?.hasForked).toBe(true))
+		// The refresh keeps the loaded page on screen and does not flip the explicit loading state.
+		expect(requireHookState(hookState).zoltarQuestionPage).toEqual(firstPage)
+		expect(requireHookState(hookState).loadingZoltarQuestions).toBe(false)
+		expect(requireHookState(hookState).zoltarQuestionsFreshness.refreshing).toBe(true)
+
+		await act(async () => {
+			refreshedPageRead.resolve(refreshedPage)
+			await refreshedPageRead.promise
+		})
+		await waitFor(() => expect(requireHookState(hookState).zoltarQuestionPage).toEqual(refreshedPage))
+		expect(requireHookState(hookState).zoltarQuestionCount).toBe(2n)
+		expect(requireHookState(hookState).zoltarQuestionsFreshness.refreshing).toBe(false)
+		expect(universeReads).toBe(2)
+		expect(pageReads).toBe(2)
 	})
 })

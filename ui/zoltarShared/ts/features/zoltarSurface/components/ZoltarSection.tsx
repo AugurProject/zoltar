@@ -53,8 +53,10 @@ export function ZoltarSection({
 	zoltarQuestionLookupId,
 	zoltarQuestionPage,
 	zoltarQuestionsError,
+	zoltarQuestionsFreshness,
 	zoltarQuestions,
 	zoltarUniverse,
+	zoltarUniverseFreshness,
 	zoltarUniverseState,
 	questionCreating,
 	questionError,
@@ -98,6 +100,7 @@ export function ZoltarSection({
 			requestContextKey={environmentRefreshKey}
 			zoltarQuestionPage={zoltarQuestionPage}
 			zoltarQuestionsError={zoltarQuestionsError}
+			zoltarQuestionsFreshness={zoltarQuestionsFreshness}
 		/>
 	)
 	if (activeView === 'questions' || zoltarUniverseState === 'missing') return questionsView
@@ -164,7 +167,9 @@ export function ZoltarSection({
 		}
 		return (
 			<>
-				<UniverseDirectorySection zoltarUniverse={zoltarUniverse}>{universeActionContent}</UniverseDirectorySection>
+				<UniverseDirectorySection freshness={zoltarUniverseFreshness} zoltarUniverse={zoltarUniverse}>
+					{universeActionContent}
+				</UniverseDirectorySection>
 				<ErrorNotice message={zoltarChildUniverseError} />
 			</>
 		)

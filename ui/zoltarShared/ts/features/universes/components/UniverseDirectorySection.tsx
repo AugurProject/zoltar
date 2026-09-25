@@ -3,26 +3,30 @@ import type { ComponentChildren } from 'preact'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import { Question } from '@zoltar/ui-core-shared/components/Question.js'
 import { SectionBlock } from '@zoltar/ui-core-shared/components/SectionBlock.js'
-import { StateHint } from '@zoltar/ui-core-shared/components/StateHint.js'
+import { SkeletonList } from '@zoltar/ui-core-shared/components/Skeleton.js'
+import { UpdatedAgo } from '@zoltar/ui-core-shared/components/UpdatedAgo.js'
+import type { DataFreshness } from '@zoltar/ui-core-shared/lib/freshness.js'
 import type { ZoltarUniverseSummary } from '@zoltar/ui-core-shared/types/contracts.js'
 
 type UniverseDirectorySectionProps = {
 	children?: ComponentChildren
+	/** The universe summary's age; omitted where the caller does not refresh it on new blocks. */
+	freshness?: DataFreshness | undefined
 	zoltarUniverse: ZoltarUniverseSummary | undefined
 }
 
-export function UniverseDirectorySection({ children, zoltarUniverse }: UniverseDirectorySectionProps) {
+export function UniverseDirectorySection({ children, freshness, zoltarUniverse }: UniverseDirectorySectionProps) {
 	if (zoltarUniverse === undefined)
 		return (
 			<>
-				<StateHint presentation={{ key: 'loading', badgeLabel: commonCopy.loading, badgeTone: 'loading', detail: commonCopy.loadingUniverseDetails }} />
+				<SkeletonList label={commonCopy.loadingUniverseDetails} rows={2} />
 				{children}
 			</>
 		)
 
 	return (
 		<div className='route-view-flow'>
-			<SectionBlock variant='plain'>
+			<SectionBlock variant='plain' actions={freshness === undefined ? undefined : <UpdatedAgo {...freshness} />}>
 				<UniverseContextSummary universe={zoltarUniverse} />
 				{zoltarUniverse.forkQuestionDetails === undefined ? undefined : (
 					<div className='loaded-question-preview'>

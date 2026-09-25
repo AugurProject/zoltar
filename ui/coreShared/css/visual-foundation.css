@@ -143,3 +143,75 @@ a.secondary-action,
 		transition-duration: 0.01ms !important;
 	}
 }
+
+/* Data freshness: the age of the visible data and its in-place refresh. */
+.freshness-indicator {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--space-2);
+	font-family: var(--font-family-mono);
+	font-size: 0.8125rem;
+	color: var(--muted);
+	white-space: nowrap;
+}
+
+.freshness-indicator-dot {
+	width: 0.45rem;
+	height: 0.45rem;
+	border-radius: var(--radius-circle);
+	background: var(--success);
+	opacity: 0.7;
+}
+
+.freshness-indicator[data-state="refreshing"] .freshness-indicator-dot {
+	background: var(--status-pending);
+	animation: freshness-pulse 1s ease-in-out infinite;
+}
+
+@keyframes freshness-pulse {
+	50% {
+		opacity: 0.25;
+	}
+}
+
+/* Skeleton placeholders hold a list's shape during its first load. */
+.skeleton-list {
+	display: grid;
+	gap: var(--space-2);
+}
+
+.skeleton-row {
+	display: grid;
+	gap: var(--space-2);
+	padding: var(--space-3) var(--space-4);
+	border: 1px solid var(--border-subtle);
+	border-radius: var(--radius-record);
+	background: var(--surface-row);
+}
+
+.skeleton-line {
+	display: block;
+	height: 0.75rem;
+	border-radius: var(--radius-compact);
+	background: linear-gradient(90deg, var(--color-white-04) 0%, var(--color-white-08) 50%, var(--color-white-04) 100%);
+	background-size: 200% 100%;
+	animation: skeleton-shimmer 1.4s ease-in-out infinite;
+}
+
+.skeleton-line-title {
+	width: min(60%, 24rem);
+	height: 0.95rem;
+}
+
+.skeleton-line-detail {
+	width: min(85%, 36rem);
+}
+
+@keyframes skeleton-shimmer {
+	from {
+		background-position: 100% 0;
+	}
+	to {
+		background-position: -100% 0;
+	}
+}

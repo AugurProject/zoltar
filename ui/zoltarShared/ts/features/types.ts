@@ -3,6 +3,7 @@ import type { AccountState, ZoltarMigrationFormState } from '../types/app.js'
 import type { DeploymentStatus, DeploymentStepId, MarketDetails, MarketDetailsPage, MarketCreationResult, ZoltarUniverseSummary } from '@zoltar/ui-core-shared/types/contracts.js'
 
 import type { LoadableValueState } from '@zoltar/ui-core-shared/lib/loadState.js'
+import type { DataFreshness } from '@zoltar/ui-core-shared/lib/freshness.js'
 import type { TokenApprovalState } from '@zoltar/ui-core-shared/transactions/tokenApproval.js'
 
 export type * from '@zoltar/ui-core-shared/types/components.js'
@@ -87,7 +88,9 @@ export type MarketRouteContentProps = {
 	zoltarMigrationPreparedRepBalanceAttoRep: bigint | undefined
 	zoltarQuestions: MarketDetails[]
 	zoltarQuestionsError: string | undefined
+	zoltarQuestionsFreshness: DataFreshness
 	zoltarMigrationActiveAction: 'split' | undefined
 	zoltarUniverse: ZoltarUniverseSummary | undefined
+	zoltarUniverseFreshness: DataFreshness
 	onZoltarForkQuestionIdChange: (questionId: string) => void
 }

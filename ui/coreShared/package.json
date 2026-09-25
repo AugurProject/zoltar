@@ -99,6 +99,10 @@
 			"bun": "./ts/components/SimulationBanner.tsx",
 			"default": "./js/components/SimulationBanner.js"
 		},
+		"./components/Skeleton.js": {
+			"bun": "./ts/components/Skeleton.tsx",
+			"default": "./js/components/Skeleton.js"
+		},
 		"./components/TabNavigation.js": {
 			"bun": "./ts/components/TabNavigation.tsx",
 			"default": "./js/components/TabNavigation.js"
@@ -106,6 +110,10 @@
 		"./components/TransactionPresentationNotice.js": {
 			"bun": "./ts/components/TransactionPresentationNotice.tsx",
 			"default": "./js/components/TransactionPresentationNotice.js"
+		},
+		"./components/UpdatedAgo.js": {
+			"bun": "./ts/components/UpdatedAgo.tsx",
+			"default": "./js/components/UpdatedAgo.js"
 		},
 		"./tests/actionLauncherButton.test.js": {
 			"bun": "./ts/tests/actionLauncherButton.test.tsx",
@@ -174,6 +182,10 @@
 		"./tests/errorNotice.test.js": {
 			"bun": "./ts/tests/errorNotice.test.tsx",
 			"default": "./js/tests/errorNotice.test.js"
+		},
+		"./tests/freshness.test.js": {
+			"bun": "./ts/tests/freshness.test.tsx",
+			"default": "./js/tests/freshness.test.js"
 		},
 		"./tests/headerToolbar.test.js": {
 			"bun": "./ts/tests/headerToolbar.test.tsx",
