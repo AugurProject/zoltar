@@ -247,4 +247,81 @@ describe('QuestionCreateSection', () => {
 		expect(documentQueries.queryByRole('button', { name: `Use for fork: ${question.title} (${question.questionId})` })).toBeNull()
 		expect(documentQueries.getByRole('button', { name: 'Create another question' })).toBeDefined()
 	})
+
+	test('offers question types as a native radio group with descriptions and examples', async () => {
+		const updates: Array<Partial<MarketFormState>> = []
+		const renderedComponent = await renderIntoDocument(
+			<QuestionCreateSection
+				accountAddress={zeroAddress}
+				canUseForFork={false}
+				hasForked={false}
+				isOnActiveAppChain={true}
+				loadingZoltarQuestions={false}
+				onCreateQuestion={() => undefined}
+				onOpenForkTab={() => undefined}
+				onQuestionFormChange={update => updates.push(update)}
+				onResetQuestion={() => undefined}
+				onUseQuestionForFork={() => undefined}
+				questionCreating={false}
+				questionError={undefined}
+				questionForm={createQuestionForm()}
+				questionResult={undefined}
+				zoltarQuestions={[]}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		const group = document.querySelector('fieldset.question-type-options')
+		if (!(group instanceof HTMLElement)) throw new Error('Expected the question type fieldset')
+		expect(group.querySelector('legend')?.textContent).toBe('Question Type')
+		const radios = within(group).getAllByRole('radio') as HTMLInputElement[]
+		expect(radios.map(radio => radio.value)).toEqual(['binary', 'categorical', 'scalar'])
+		expect(new Set(radios.map(radio => radio.name)).size).toBe(1)
+		const binary = documentQueries.getByRole('radio', { name: 'Binary' }) as HTMLInputElement
+		expect(binary.checked).toBe(true)
+		const scalar = documentQueries.getByRole('radio', { name: 'Scalar' }) as HTMLInputElement
+		expect(scalar.checked).toBe(false)
+		const scalarDescription = (scalar.getAttribute('aria-describedby') ?? '').split(' ').map(id => document.getElementById(id)?.textContent)
+		expect(scalarDescription).toEqual(['A number inside a range, with a unit and increment.', 'e.g. What will the ETH price be on 31 Dec, in USD?'])
+		await act(() => fireEvent.click(scalar))
+		expect(updates).toContainEqual({ marketType: 'scalar' })
+	})
+
+	test('labels time inputs with the browser time zone and previews each time locally and in UTC', async () => {
+		const timeZone = new Intl.DateTimeFormat().resolvedOptions().timeZone
+		const renderedComponent = await renderIntoDocument(
+			<QuestionCreateSection
+				accountAddress={zeroAddress}
+				canUseForFork={false}
+				hasForked={false}
+				isOnActiveAppChain={true}
+				loadingZoltarQuestions={false}
+				onCreateQuestion={() => undefined}
+				onOpenForkTab={() => undefined}
+				onQuestionFormChange={() => undefined}
+				onResetQuestion={() => undefined}
+				onUseQuestionForFork={() => undefined}
+				questionCreating={false}
+				questionError={undefined}
+				questionForm={createQuestionForm({ endTime: '1798752600', startTime: '' })}
+				questionResult={undefined}
+				zoltarQuestions={[]}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		const endTimeInput = documentQueries.getByLabelText('End Time')
+		const timeZoneHelp = document.getElementById(endTimeInput.getAttribute('aria-describedby') ?? '')
+		expect(timeZoneHelp?.textContent).toMatch(/^Your time \(.+\)\. Blank start means immediately\.$/)
+		if (timeZone !== 'UTC' && timeZone !== 'Etc/UTC') expect(timeZoneHelp?.textContent).toContain(timeZone)
+		const preview = document.querySelector('aside[aria-label="Question preview"]')
+		if (!(preview instanceof HTMLElement)) throw new Error('Expected the question preview landmark')
+		const summary = within(preview).getByRole('list', { name: 'Draft question summary' })
+		const [starts, ends] = within(summary).getAllByRole('listitem')
+		expect(starts?.textContent).toContain('Immediately after creation')
+		expect(ends?.querySelector('time')?.getAttribute('dateTime')).toBe('2026-12-31T21:30:00.000Z')
+		expect(ends?.textContent).toContain('2026-12-31 21:30 UTC')
+	})
 })

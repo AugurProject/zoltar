@@ -208,7 +208,8 @@ export function useQuestionCreation(
 					refreshState: async () => {
 						if (!isCurrentQuestionActionScope()) return
 						await refreshWalletStateOnly(refreshState)
-						await zoltar.loadZoltarQuestions()
+						const createdQuestionId = getValueForStorageKey(questionResult.value, submittedQuestionActionScopeKey)?.questionId
+						if (createdQuestionId !== undefined) await zoltar.loadCreatedZoltarQuestion(createdQuestionId)
 					},
 					setErrorMessage: message => {
 						questionError.value = { storageKey: submittedQuestionActionScopeKey, value: message }

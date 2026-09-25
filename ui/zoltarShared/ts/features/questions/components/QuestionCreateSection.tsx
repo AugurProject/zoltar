@@ -4,35 +4,29 @@ import * as transactionCopy from '@zoltar/ui-core-shared/copy/transaction.js'
 import * as marketCopy from '../../../copy/market.js'
 import { useEffect, useMemo, useState } from 'preact/hooks'
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
-import { EnumDropdown, type EnumDropdownOption } from '@zoltar/ui-core-shared/components/EnumDropdown.js'
 import { EntityCard } from '@zoltar/ui-core-shared/components/EntityCard.js'
 import { ErrorNotice } from '@zoltar/ui-core-shared/components/ErrorNotice.js'
 import { suppressPresentedTransactionError, useGlobalTransactionPresentation } from '@zoltar/ui-core-shared/components/GlobalTransactionPresentationContext.js'
 import { FormInput } from '@zoltar/ui-core-shared/components/FormInput.js'
-import { OutcomeChipRow } from '@zoltar/ui-core-shared/components/OutcomeChipRow.js'
 import { Question, getQuestionTitle } from '@zoltar/ui-core-shared/components/Question.js'
 import { SectionBlock } from '@zoltar/ui-core-shared/components/SectionBlock.js'
 import { TransactionActionButton } from '@zoltar/ui-core-shared/components/TransactionActionButton.js'
-import { TimestampValue } from '@zoltar/ui-core-shared/components/TimestampValue.js'
 import { WarningSurface } from '@zoltar/ui-core-shared/components/WarningSurface.js'
 import { assertNever } from '@zoltar/ui-core-shared/lib/assert.js'
 import { getMarketCreationOutcomeLabels, hasMarketEndTimePassed, validateMarketForm } from '../lib/questionCreation.js'
 import { useChainTimestamp } from '@zoltar/ui-core-shared/wallet/chainTimestamp.js'
 import { appendInvalidOutcomeLabelIfMissing, isInvalidOutcomeLabel } from '@zoltar/ui-core-shared/lib/outcomeLabels.js'
 import { clampScalarTickIndex, parseScalarFormInputs } from '@zoltar/ui-core-shared/lib/scalarOutcome.js'
-import { getMarketTypeLabel } from '@zoltar/ui-core-shared/lib/marketType.js'
 import type { MarketFormState } from '../../../types/app.js'
 import type { MarketCreationResult, MarketDetails } from '@zoltar/ui-core-shared/types/contracts.js'
 import { ScalarCreatePreview, type ScalarCreatePreviewDetails } from './ScalarCreatePreview.js'
 import { getWrongNetworkReason } from '@zoltar/ui-core-shared/wallet/network.js'
-import { tryParseTimestampInput } from '@zoltar/ui-core-shared/forms/formInputs.js'
 import type { ComponentChildren } from 'preact'
+import { QuestionDraftPreview } from './QuestionDraftPreview.js'
+import { QuestionTypeOptions } from './QuestionTypeOptions.js'
+import { formatTimeZoneLabel, getBrowserTimeZone } from '../lib/questionTimeZone.js'
 
-const MARKET_TYPE_OPTIONS: EnumDropdownOption<MarketFormState['marketType']>[] = [
-	{ value: 'binary', label: marketCopy.binary },
-	{ value: 'categorical', label: marketCopy.categorical },
-	{ value: 'scalar', label: marketCopy.scalar },
-]
+const MARKET_TYPES: readonly MarketFormState['marketType'][] = ['binary', 'categorical', 'scalar']
 type MarketFormFieldName = keyof ReturnType<typeof validateMarketForm>['fieldErrors']
 type QuestionCreateSectionProps = {
 	allowedMarketTypes?: readonly MarketFormState['marketType'][]
@@ -74,19 +68,6 @@ function getScalarCreatePreviewDetails(questionForm: MarketFormState, scalarInpu
 	return {
 		answerUnit: questionForm.answerUnit.trim(),
 		...parseScalarFormInputs(questionForm),
-	}
-}
-
-function getMarketTypeGuidance(marketType: MarketFormState['marketType']) {
-	switch (marketType) {
-		case 'binary':
-			return marketCopy.binaryQuestionDescription
-		case 'categorical':
-			return marketCopy.categoricalOutcomesGuidance
-		case 'scalar':
-			return marketCopy.scalarQuestionDescription
-		default:
-			return assertNever(marketType)
 	}
 }
 
@@ -137,9 +118,9 @@ export function QuestionCreateSection({
 	const visibleQuestionError = suppressPresentedTransactionError(questionError, transactionPresentation, transactionCopy.questionCreation)
 	const [touchedFields, setTouchedFields] = useState<ReadonlySet<MarketFormFieldName>>(new Set())
 	const selectedQuestionDetails = useMemo(() => (questionResult === undefined ? undefined : zoltarQuestions.find(question => question.questionId === questionResult.questionId)), [questionResult?.questionId, zoltarQuestions])
-	const marketTypeOptions = useMemo(() => MARKET_TYPE_OPTIONS.filter(option => allowedMarketTypes.includes(option.value)), [allowedMarketTypes])
+	const marketTypes = useMemo(() => MARKET_TYPES.filter(marketType => allowedMarketTypes.includes(marketType)), [allowedMarketTypes])
+	const timeZone = useMemo(() => getBrowserTimeZone(), [])
 	const questionFormValidation = validateMarketForm(questionForm)
-	const marketTypeGuidance = getMarketTypeGuidance(questionForm.marketType)
 	const scalarInputsValid = questionFormValidation.fieldErrors.scalarIncrement === undefined && questionFormValidation.fieldErrors.scalarMax === undefined && questionFormValidation.fieldErrors.scalarMin === undefined
 	const scalarCreatePreviewDetails = getScalarCreatePreviewDetails(questionForm, scalarInputsValid)
 	const selectedQuestionTitle = selectedQuestionDetails === undefined ? commonCopy.question : getQuestionTitle(selectedQuestionDetails)
@@ -157,6 +138,9 @@ export function QuestionCreateSection({
 	const startTimeError = timingRelationshipError ?? getVisibleFieldError('startTime')
 	const endTimeError = timingRelationshipError ?? getVisibleFieldError('endTime')
 	const timingRelationshipErrorId = 'market-create-timing-error'
+	const timeZoneHelpId = 'market-create-time-zone'
+	const timingDescribedBy = timingRelationshipError === undefined ? timeZoneHelpId : `${timingRelationshipErrorId} ${timeZoneHelpId}`
+	const timeZoneLabel = formatTimeZoneLabel(timeZone, new Date())
 	const canCreateQuestion = accountAddress !== undefined && isOnActiveAppChain && !questionCreating && questionFormValidation.isValid
 	const submitAction =
 		submitActionOverride === undefined
@@ -177,11 +161,6 @@ export function QuestionCreateSection({
 				}
 			: submitActionOverride
 	const showEndedQuestionWarning = questionFormValidation.fieldErrors.endTime === undefined && hasMarketEndTimePassed(questionForm, currentTimestamp)
-	const renderDraftTimestamp = (value: string, emptyValue: string) => {
-		if (value.trim() === '') return emptyValue
-		const timestamp = tryParseTimestampInput(value)
-		return timestamp === undefined ? value : <TimestampValue timestamp={timestamp} />
-	}
 	useEffect(() => {
 		if (scalarCreatePreviewDetails === undefined) return
 		const clampedTick = clampScalarTickIndex(BigInt(scalarCreatePreviewTick), scalarCreatePreviewDetails.numTicks).toString()
@@ -251,10 +230,10 @@ export function QuestionCreateSection({
 			)}
 
 			{questionResult === undefined ? (
-				<SectionBlock variant='plain'>
+				<SectionBlock className='question-create-container' variant='plain'>
 					<form
 						aria-label={commonCopy.createQuestion}
-						className='form-grid'
+						className='form-grid question-create-form'
 						noValidate
 						onSubmit={event => {
 							event.preventDefault()
@@ -263,11 +242,7 @@ export function QuestionCreateSection({
 						}}
 					>
 						<fieldset className='question-create-editor' disabled={formDisabled}>
-							<div className='field'>
-								<span>{marketCopy.questionType}</span>
-								<EnumDropdown disabled={formDisabled || marketTypeOptions.length === 1} ariaLabel={marketCopy.questionType} options={marketTypeOptions} value={questionForm.marketType} onChange={marketType => onQuestionFormChange({ marketType })} />
-								{marketTypeOptions.length === 1 ? undefined : <p className='field-help'>{marketTypeGuidance}</p>}
-							</div>
+							<QuestionTypeOptions allowedMarketTypes={marketTypes} disabled={formDisabled} value={questionForm.marketType} onChange={marketType => onQuestionFormChange({ marketType })} />
 
 							<FormField id='market-create-title' label={marketCopy.title} required>
 								<FormInput
@@ -294,7 +269,7 @@ export function QuestionCreateSection({
 								<FormField id='market-create-startTime' label={marketCopy.startTime}>
 									<FormInput
 										id='market-create-startTime'
-										aria-describedby={timingRelationshipError === undefined ? undefined : timingRelationshipErrorId}
+										aria-describedby={timingDescribedBy}
 										invalid={startTimeError !== undefined}
 										error={timingRelationshipError === undefined ? startTimeError : undefined}
 										type='datetime-local'
@@ -307,7 +282,7 @@ export function QuestionCreateSection({
 									<FormInput
 										id='market-create-endTime'
 										aria-label={marketCopy.endTime}
-										aria-describedby={timingRelationshipError === undefined ? undefined : timingRelationshipErrorId}
+										aria-describedby={timingDescribedBy}
 										invalid={endTimeError !== undefined}
 										error={timingRelationshipError === undefined ? endTimeError : undefined}
 										type='datetime-local'
@@ -323,7 +298,9 @@ export function QuestionCreateSection({
 									{timingRelationshipError}
 								</p>
 							)}
-							<p className='field-help'>{marketCopy.questionTimingHelpText}</p>
+							<p className='field-help' id={timeZoneHelpId}>
+								{marketCopy.formatQuestionTimingHelpText(timeZoneLabel)}
+							</p>
 
 							{questionForm.marketType === 'categorical' ? (
 								<div className='field' role='group' aria-labelledby='market-create-outcomes-label'>
@@ -418,48 +395,23 @@ export function QuestionCreateSection({
 									<p>{marketCopy.endedQuestionWarning}</p>
 								</WarningSurface>
 							) : undefined}
-
-							{(() => {
-								if (questionForm.marketType === 'scalar') {
-									if (scalarCreatePreviewDetails === undefined) return <p className='detail'>{marketCopy.scalarPreviewInputHint}</p>
-
-									return <ScalarCreatePreview details={scalarCreatePreviewDetails} selectedTick={scalarCreatePreviewTick} onSelectedTickChange={setScalarCreatePreviewTick} />
-								}
-
-								return undefined
-							})()}
-
-							<SectionBlock headingLevel={4} title={marketCopy.draftPreview} variant='embedded'>
-								<div className='question-draft-preview'>
-									<div className='question-draft-preview-header'>
-										<div className='question-summary-heading'>
-											<strong>{draftTitle}</strong>
-											{draftDescription === undefined ? undefined : <p className='detail'>{draftDescription}</p>}
-										</div>
-										<span className='question-draft-preview-chip'>{getMarketTypeLabel(questionForm.marketType)}</span>
-									</div>
-									<OutcomeChipRow items={draftOutcomeItems} />
-									<div className='question-draft-preview-meta' role='list' aria-label={marketCopy.draftQuestionSummary}>
-										<div className='question-draft-preview-meta-item' role='listitem'>
-											<span>{commonCopy.starts}</span>
-											<strong>{renderDraftTimestamp(questionForm.startTime, marketCopy.immediatelyAfterCreation)}</strong>
-										</div>
-										<div className='question-draft-preview-meta-item' role='listitem'>
-											<span>{commonCopy.ends}</span>
-											<strong>{renderDraftTimestamp(questionForm.endTime, marketCopy.endTimeRequired)}</strong>
-										</div>
-									</div>
-								</div>
-							</SectionBlock>
 						</fieldset>
-						{submitFields}
-
-						{submitActionOverride?.reviewContent ?? (
-							<div className='actions'>
-								<TransactionActionButton idleLabel={submitAction.idleLabel} pendingLabel={submitAction.pendingLabel} onClick={() => undefined} pending={submitAction.pending} type='submit' availability={submitAction.availability} />
-							</div>
-						)}
-						<ErrorNotice message={visibleQuestionError} />
+						<QuestionDraftPreview currentTimestamp={currentTimestamp} description={draftDescription} endTime={questionForm.endTime} marketType={questionForm.marketType} outcomeItems={draftOutcomeItems} startTime={questionForm.startTime} timeZone={timeZone} title={draftTitle}>
+							{(() => {
+								if (questionForm.marketType !== 'scalar') return undefined
+								if (scalarCreatePreviewDetails === undefined) return <p className='detail'>{marketCopy.scalarPreviewInputHint}</p>
+								return <ScalarCreatePreview details={scalarCreatePreviewDetails} selectedTick={scalarCreatePreviewTick} onSelectedTickChange={setScalarCreatePreviewTick} />
+							})()}
+						</QuestionDraftPreview>
+						<div className='question-create-submit'>
+							{submitFields}
+							{submitActionOverride?.reviewContent ?? (
+								<div className='actions'>
+									<TransactionActionButton idleLabel={submitAction.idleLabel} pendingLabel={submitAction.pendingLabel} onClick={() => undefined} pending={submitAction.pending} type='submit' availability={submitAction.availability} />
+								</div>
+							)}
+							<ErrorNotice message={visibleQuestionError} />
+						</div>
 					</form>
 				</SectionBlock>
 			) : undefined}
