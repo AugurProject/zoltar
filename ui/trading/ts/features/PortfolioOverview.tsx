@@ -30,10 +30,10 @@ export function PortfolioRowValue({ valuation }: { valuation: PortfolioValuation
 	)
 }
 
-function totalValueCaption(overview: PortfolioOverview) {
-	if (overview.unvaluedCount > 0) return portfolioCopy.excludedFromTotal(overview.unvaluedCount)
-	if (overview.pendingResolutionCount > 0) return portfolioCopy.pendingResolutionExcluded
-	return portfolioCopy.totalValueBasis
+/** Every reason the total leaves something out, or the pricing basis when it leaves nothing out. */
+function totalValueCaptions(overview: PortfolioOverview) {
+	const captions = [...(overview.unvaluedCount > 0 ? [portfolioCopy.excludedFromTotal(overview.unvaluedCount)] : []), ...(overview.pendingResolutionCount > 0 ? [portfolioCopy.pendingResolutionExcluded] : [])]
+	return captions.length === 0 ? [portfolioCopy.totalValueBasis] : captions
 }
 
 /** Totals across every listed position; profit and loss stay unavailable because entry costs are not recorded per account. */
@@ -43,7 +43,11 @@ export function PortfolioSummary({ overview }: { overview: PortfolioOverview }) 
 			<DataGrid className='portfolio-summary-grid'>
 				<MetricField label={portfolioCopy.totalValue}>
 					{formatPortfolioEth(overview.totalValueAttoEth)}
-					<small className='payout-caption'>{totalValueCaption(overview)}</small>
+					{totalValueCaptions(overview).map(caption => (
+						<small key={caption} className='payout-caption'>
+							{caption}
+						</small>
+					))}
 				</MetricField>
 				<MetricField label={portfolioCopy.profitLoss}>
 					{portfolioCopy.profitLossUnavailable}

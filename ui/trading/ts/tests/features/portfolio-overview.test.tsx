@@ -102,6 +102,26 @@ describe('portfolio overview', () => {
 		expect(rendered.container.querySelector('.portfolio-action-items a')?.getAttribute('href')).toBe(`#/liquidity/${openPool}`)
 	})
 
+	test('lists every reason the total leaves value out', async () => {
+		const forkedMarket: LiveMarket = { ...openMarket, pool: resolvedPool, title: 'Forked market', universeForkTime: 1n, systemState: 1 }
+		const rendered = await renderIntoDocument(
+			<LivePortfolio
+				entries={[
+					{ market: forkedMarket, balances: { scope: scope(resolvedPool), yes: SET, no: 0n, invalid: SET, lp: 0n }, error: undefined },
+					{ market: openMarket, balances: { scope: scope(openPool), yes: 0n, no: 0n, invalid: 0n, lp: SET }, error: undefined },
+				]}
+				balanceState='ready'
+				balanceError={undefined}
+				retryBalances={async () => undefined}
+				nowSeconds={NOW}
+			/>,
+		)
+		cleanupRendered = rendered.cleanup
+		const summary = rendered.container.querySelector('[aria-label="Portfolio summary"]')?.textContent
+		expect(summary).toContain('Excludes 1 position without a price')
+		expect(summary).toContain('Excludes shares that pay at resolution')
+	})
+
 	test('offers the wallet action inline while disconnected and hides the summary', async () => {
 		let connects = 0
 		const rendered = await renderIntoDocument(<LivePortfolio entries={[]} balanceState='disconnected' balanceError={undefined} retryBalances={async () => undefined} nowSeconds={NOW} walletAction={{ label: 'Connect wallet', disabled: false, onClick: () => (connects += 1) }} />)
