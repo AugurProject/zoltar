@@ -25,6 +25,7 @@ describe('TransactionHashLink', () => {
 
 		const hashValue = document.body.querySelector('.transaction-hash-link')
 		expect(hashValue?.textContent).toBe(hash)
+		expect(hashValue?.getAttribute('title')).toBe(hash)
 	})
 	test('shows the full local hash without an external link when no explorer exists', async () => {
 		const address = '0x0000000000000000000000000000000000000001'
@@ -35,6 +36,7 @@ describe('TransactionHashLink', () => {
 			cleanupRenderedComponent = rendered.cleanup
 			expect(rendered.container.textContent).toBe(hash)
 			expect(rendered.container.querySelector('a')).toBeNull()
+			expect(rendered.container.querySelector('.transaction-hash-link')?.getAttribute('title')).toBe(hash)
 		} finally {
 			restore()
 		}

@@ -1538,7 +1538,6 @@ button.wallet-asset-action-pending:disabled {
 	font-family: var(--font-family-mono);
 	font-size: var(--font-label);
 	text-align: left;
-	overflow-wrap: anywhere;
 }
 
 a.transaction-hash-link {
@@ -1547,6 +1546,9 @@ a.transaction-hash-link {
 
 .transaction-hash-link > span:first-child {
 	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
 }
 
 .transaction-hash-link::after {
