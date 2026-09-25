@@ -439,4 +439,11 @@ test('pins deployment bytecode to the observed block without scanning an undeplo
 	const deploymentCheckIndex = methods.indexOf('eth_getCode')
 	await Bun.sleep(100)
 	expect(methods.slice(deploymentCheckIndex)).toEqual(['eth_getCode'])
+	child.kill()
+	await child.exited
+	const output = await new Response(child.stdout).text()
+	const summaries = output.split('\n').filter(line => line.includes('ProcessedMs='))
+	expect(summaries).toHaveLength(1)
+	expect(summaries[0]).toMatch(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2} Sepolia unknown: ProcessedMs=\d+/)
+	expect(summaries[0]).toContain('status=waiting')
 })

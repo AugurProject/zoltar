@@ -2,15 +2,15 @@
 
 import { privateKeyToAccount, zeroAddress } from '@zoltar/bot-shared/ethereum'
 import { acquireBotProcessLocks } from '@zoltar/bot-shared/execution/bot-process-locks'
-import { lstat } from 'node:fs/promises'
-import { dirname, join, resolve } from 'node:path'
+import { createHash, randomUUID } from 'node:crypto'
+import { lstat, readdir } from 'node:fs/promises'
+import { basename, dirname, join, resolve } from 'node:path'
 import { canonicalDeployment } from '../config/canonical-deployment.ts'
 import { assertDurableDeploymentFactory, restoreDeploymentForDurableState } from '../config/deployment-state.ts'
 import { executionProfileId } from '../config/execution-profile.ts'
-import { assertSettingsProfileIsolation, loadSettings, saveSettings, type OperatorSettings } from '../config/settings.ts'
+import { assertSettingsProfileIsolation, loadSettings, saveSettings, serializedSettings, type OperatorSettings } from '../config/settings.ts'
 import { CHAOS_PROCESS_LOCK_OPTIONS } from '../core/process-lock-options.ts'
-import { resetPristineStateForDeploymentProfile, retirementReplacementTargetId, RetirementCompletionPendingError, verifyRetirementCompletionFinality } from '../runtime/deployment-profile.ts'
-import { initialRuntimeState } from '../state/initial-state.ts'
+import { retirementReplacementTargetId, RetirementCompletionPendingError, verifyRetirementCompletionFinality } from '../runtime/deployment-profile.ts'
 import { migrateEmptyBootstrapState } from '../state/bootstrap-migration.ts'
 import { loadDurableState, saveDurableState } from '../state/operator-state.ts'
 import { isPristineBootstrapState } from '../state/pristine.ts'
@@ -19,7 +19,6 @@ import { assertSafeRetirementRecipient, DEFAULT_RETIREMENT_POLICIES, requestReti
 type PreparationOptions = {
 	acquireLocks?: (settings: OperatorSettings) => Promise<{ release: () => Promise<void> }>
 	path?: string
-	verifyCompletion?: typeof verifyRetirementCompletionFinality
 }
 
 const RETIRING_EXIT_CODE = 10
@@ -45,20 +44,48 @@ function deploymentIsCurrent(settings: OperatorSettings, current: OperatorSettin
 	return executionProfileId(settings) === executionProfileId(current) && settings.deployment.uniswapV3Factory?.toLowerCase() === current.deployment.uniswapV3Factory?.toLowerCase()
 }
 
-function replacementStatePath(previous: string, profileId: string) {
-	return join(dirname(previous), `chaos.${profileId.replaceAll(':', '-')}.json`)
+function archivePath(path: string, id: string) {
+	if (!/^[a-f0-9]{64}$/.test(id)) throw new Error('Archive ID must be the 64-character ID printed by retirement.bat')
+	return `${path}.retired-${id}.json`
 }
 
-async function assertUnusedStatePath(path: string) {
-	for (const candidate of [path, `${path}.protocol-index-v1`, `${path}.immutable-topology-v1`]) {
-		try {
-			await lstat(candidate)
-		} catch (error) {
-			if (typeof error === 'object' && error !== null && 'code' in error && error.code === 'ENOENT') continue
-			throw error
-		}
-		throw new Error(`Current deployment needs a new state file, but ${candidate} already exists; review it before retrying`)
+async function fileExists(path: string) {
+	try {
+		await lstat(path)
+		return true
+	} catch (error) {
+		if (typeof error === 'object' && error !== null && 'code' in error && error.code === 'ENOENT') return false
+		throw error
 	}
+}
+
+async function archiveDeployment(path: string, settings: OperatorSettings) {
+	const id = createHash('sha256')
+		.update(JSON.stringify({ profile: executionProfileId(settings), factory: settings.deployment.uniswapV3Factory, stateFile: resolve(settings.runtime.stateFile) }))
+		.digest('hex')
+	const target = archivePath(path, id)
+	await assertSettingsProfileIsolation(target, settings)
+	if (await fileExists(target)) {
+		const previous = await loadSettings(target)
+		if (JSON.stringify(serializedSettings(previous.settings)) !== JSON.stringify(serializedSettings(settings))) throw new Error(`Archived configuration ${id} already exists with different settings; preserve and review it before retrying`)
+	} else {
+		await saveSettings(target, settings)
+	}
+	return id
+}
+
+export async function listDeploymentArchives(path?: string) {
+	const loaded = await loadSettings(path)
+	const prefix = `${basename(loaded.path)}.retired-`
+	const archives: { id: string; profileId: string; stateFile: string; status: string }[] = []
+	for (const entry of (await readdir(dirname(loaded.path))).sort()) {
+		if (!entry.startsWith(prefix) || !entry.endsWith('.json')) continue
+		const id = entry.slice(prefix.length, -5)
+		const archived = await loadSettings(archivePath(loaded.path, id))
+		const state = await loadDurableState(archived.settings.runtime.stateFile, archived.settings.network.chainId)
+		archives.push({ id, profileId: executionProfileId(archived.settings), stateFile: archived.settings.runtime.stateFile, status: state.retirement.status })
+	}
+	return archives
 }
 
 function isUnoperatedSignerlessState(state: Awaited<ReturnType<typeof loadDurableState>>) {
@@ -78,30 +105,7 @@ function isUnoperatedSignerlessState(state: Awaited<ReturnType<typeof loadDurabl
 	)
 }
 
-async function saveCurrentWithNewState(loaded: Awaited<ReturnType<typeof loadSettings>>, current: OperatorSettings, currentProfileId: string) {
-	const nextStateFile = replacementStatePath(loaded.settings.runtime.stateFile, currentProfileId)
-	if (resolve(nextStateFile) === resolve(loaded.settings.runtime.stateFile)) throw new Error('Current deployment must use a separate state file')
-	await assertUnusedStatePath(nextStateFile)
-	const next: OperatorSettings = { ...current, runtime: { ...current.runtime, stateFile: nextStateFile } }
-	await assertSettingsProfileIsolation(loaded.path, next)
-	await saveSettings(loaded.path, next, loaded.revision)
-	return nextStateFile
-}
-
-async function requestOldProfileRetirement(settings: OperatorSettings, state: Awaited<ReturnType<typeof loadDurableState>>) {
-	if (!settings.runtime.execute || settings.paused || settings.privateKey === undefined || !settings.networkConfigured || settings.connectivity === undefined) {
-		throw new Error('Enable live execution with a configured signer and unpause the old profile before requesting automatic retirement')
-	}
-	const wallet = configuredWallet(settings)
-	if (wallet === undefined) throw new Error('Retirement requires a configured signer')
-	const recipient = wallet
-	assertSafeRetirementRecipient(recipient, state.signerAddress ?? wallet)
-	const confirmation = `DRAIN ${state.profileId} TO ${recipient}`
-	requestRetirement(state.retirement, state.profileId, recipient, DEFAULT_RETIREMENT_POLICIES, confirmation, state.signerAddress ?? wallet)
-	await saveDurableState(settings.runtime.stateFile, state)
-}
-
-export async function prepareCurrentDeployment(options: PreparationOptions = {}): Promise<{ kind: 'current' | 'retiring'; message: string }> {
+export async function prepareCurrentDeployment(options: PreparationOptions = {}) {
 	const loaded = await loadSettings(options.path)
 	await assertSettingsProfileIsolation(loaded.path, loaded.settings)
 	const locks = await (options.acquireLocks ?? acquireUpgradeLocks)(loaded.settings)
@@ -109,74 +113,64 @@ export async function prepareCurrentDeployment(options: PreparationOptions = {})
 		const state = await loadDurableState(loaded.settings.runtime.stateFile, loaded.settings.network.chainId)
 		const active = restoreDeploymentForDurableState(loaded.settings, state, loaded.needsDeploymentPin)
 		const current: OperatorSettings = { ...active, deployment: canonicalDeployment(active.network.chainId) }
-		const activeProfileId = executionProfileId(active)
-		const currentProfileId = executionProfileId(current)
-		const currentFactory = current.deployment.uniswapV3Factory
-		if (currentFactory === undefined) throw new Error('Current deployment is missing its Uniswap V3 factory')
-		const replacementTargetId = retirementReplacementTargetId(currentProfileId, currentFactory)
-		const pristine = isPristineBootstrapState(state)
 		const wallet = configuredWallet(active)
-		if (wallet !== undefined && state.signerAddress !== undefined && wallet.toLowerCase() !== state.signerAddress.toLowerCase()) {
-			throw new Error(`Durable state is scoped to signer ${state.signerAddress}; restore the old signer before retirement`)
-		}
+		if (wallet !== undefined && state.signerAddress !== undefined && wallet.toLowerCase() !== state.signerAddress.toLowerCase()) throw new Error(`Durable state is scoped to signer ${state.signerAddress}; restore the old signer before changing deployments`)
 		const migratedBootstrap = migrateEmptyBootstrapState(state, current)
 		if (migratedBootstrap !== state) {
-			if (migratedBootstrap.uniswapV3Factory !== undefined) assertDurableDeploymentFactory(current, migratedBootstrap, current.runtime.stateFile)
 			await assertSettingsProfileIsolation(loaded.path, current)
-			if (!deploymentIsCurrent(active, current) || loaded.needsDeploymentPin) await saveSettings(loaded.path, current, loaded.revision)
+			await saveSettings(loaded.path, current, loaded.revision)
 			return { kind: 'current', message: 'Selected current contracts for the safely migratable zero-root bootstrap. Its journal will be preserved at startup.' }
 		}
-		const unoperatedSignerless = isUnoperatedSignerlessState(state)
-		if (unoperatedSignerless && state.profileId === activeProfileId && state.uniswapV3Factory === undefined) {
-			const nextStateFile = await saveCurrentWithNewState(loaded, current, replacementTargetId)
-			return { kind: 'current', message: `Selected current contracts in new state file ${nextStateFile}. The old signerless journal was preserved.` }
+		if (!isPristineBootstrapState(state)) {
+			if (state.profileId !== executionProfileId(active)) throw new Error(`Durable state belongs to profile ${state.profileId}; restore the old pin before changing deployments`)
 		}
-		if (state.profileId === activeProfileId && (state.uniswapV3Factory !== undefined || !pristine)) assertDurableDeploymentFactory(active, state, active.runtime.stateFile)
-		else if (!pristine) throw new Error(`Durable state belongs to profile ${state.profileId}, but the saved configuration selects ${activeProfileId}; restore the old pin before retirement`)
-
-		if (deploymentIsCurrent(active, current)) {
+		const unboundUnoperated = state.profileId === executionProfileId(active) && state.uniswapV3Factory === undefined && !isPristineBootstrapState(state) && isUnoperatedSignerlessState(state)
+		if (!unboundUnoperated && state.profileId === executionProfileId(active) && (state.uniswapV3Factory !== undefined || !isPristineBootstrapState(state))) assertDurableDeploymentFactory(active, state, active.runtime.stateFile)
+		if (deploymentIsCurrent(active, current) && !unboundUnoperated) {
 			if (loaded.needsDeploymentPin) await saveSettings(loaded.path, current, loaded.revision)
 			return { kind: 'current', message: 'The saved deployment already matches the current contract manifest.' }
 		}
-
-		if (pristine) {
-			if (activeProfileId === currentProfileId) {
-				const nextStateFile = await saveCurrentWithNewState(loaded, current, replacementTargetId)
-				return { kind: 'current', message: `Selected current factory in new state file ${nextStateFile}. The unused old journal was preserved.` }
-			}
-			await assertSettingsProfileIsolation(loaded.path, current)
-			await saveSettings(loaded.path, current, loaded.revision)
-			return { kind: 'current', message: 'Selected current contract addresses; the unused state will adopt them at startup.' }
+		const nextStateFile = join(dirname(active.runtime.stateFile), `chaos.${randomUUID()}.json`)
+		for (const candidate of [nextStateFile, `${nextStateFile}.protocol-index-v1`, `${nextStateFile}.immutable-topology-v1`]) {
+			if (await fileExists(candidate)) throw new Error(`New deployment state path already exists: ${candidate}`)
 		}
-		if (unoperatedSignerless) {
-			const nextStateFile = await saveCurrentWithNewState(loaded, current, replacementTargetId)
-			return { kind: 'current', message: `Selected current contracts in new state file ${nextStateFile}. The old signerless journal was preserved.` }
-		}
+		const next: OperatorSettings = { ...current, runtime: { ...current.runtime, stateFile: nextStateFile } }
+		await assertSettingsProfileIsolation(loaded.path, next)
+		const id = await archiveDeployment(loaded.path, active)
+		await saveSettings(loaded.path, next, loaded.revision)
+		return { kind: 'current', message: `Selected latest contracts with new state file ${nextStateFile}. Old configuration and state preserved as archive ${id}. Run retirement.bat ${id} to retire it explicitly.` }
+	} finally {
+		await locks.release()
+	}
+}
 
+export async function prepareArchivedRetirement(id: string, options: PreparationOptions = {}) {
+	const current = await loadSettings(options.path)
+	const loaded = await loadSettings(archivePath(current.path, id))
+	await assertSettingsProfileIsolation(loaded.path, loaded.settings)
+	if (resolve(loaded.settings.runtime.stateFile) === resolve(current.settings.runtime.stateFile)) throw new Error('Archived retirement must use a different state file from the current deployment')
+	const locks = await (options.acquireLocks ?? acquireUpgradeLocks)(loaded.settings)
+	try {
+		const settings = loaded.settings
+		const state = await loadDurableState(settings.runtime.stateFile, settings.network.chainId)
+		if (state.profileId !== executionProfileId(settings)) throw new Error('Archived configuration does not match its durable deployment profile')
+		const unboundUnoperated = state.uniswapV3Factory === undefined && isUnoperatedSignerlessState(state)
+		if (!unboundUnoperated) assertDurableDeploymentFactory(settings, state, settings.runtime.stateFile)
+		const wallet = configuredWallet(settings)
+		if (wallet === undefined || !settings.runtime.execute || settings.paused || !settings.networkConfigured || settings.connectivity === undefined) throw new Error('Enable live execution with a configured signer and unpause the archived profile before requesting retirement')
+		if (state.signerAddress !== undefined && wallet.toLowerCase() !== state.signerAddress.toLowerCase()) throw new Error('Restore the archived signer before requesting retirement')
 		if (state.retirement.status === 'inactive') {
-			await requestOldProfileRetirement(active, state)
-			return {
-				kind: 'retiring',
-				message: `Automatically requested retirement for the old deployment: recover claimable ETH and REP to signer ${wallet} and unwrap WETH; no unmatched-share exit, claim migration, or automatic exit after completion. These defaults replace any policies from a cancelled drain. Its pin and state remain in place until completion.`,
+			if (state.signerAddress === undefined) {
+				if (!isUnoperatedSignerlessState(state)) throw new Error('Archived journal contains work without a durable signer; restore its signer before retirement')
+				state.signerAddress = wallet
+				state.protocolIndex = undefined
 			}
+			assertSafeRetirementRecipient(wallet, state.signerAddress)
+			if (unboundUnoperated) state.uniswapV3Factory = settings.deployment.uniswapV3Factory
+			requestRetirement(state.retirement, state.profileId, wallet, DEFAULT_RETIREMENT_POLICIES, `DRAIN ${state.profileId} TO ${wallet}`, state.signerAddress ?? wallet)
+			await saveDurableState(settings.runtime.stateFile, state)
 		}
-
-		if (state.retirement.status !== 'drained' && state.retirement.status !== 'drained-with-residuals') {
-			return { kind: 'retiring', message: `Old deployment retirement is ${state.retirement.status}. Its pin and state remain in place.` }
-		}
-		if (state.retirement.status === 'drained-with-residuals' && state.retirement.profileReplacementOverride?.targetProfileId !== replacementTargetId) {
-			return { kind: 'retiring', message: `Retirement has residuals. Review them and accept replacement for ${replacementTargetId} in the dashboard before switching.` }
-		}
-
-		const checked = initialRuntimeState(active.paused, wallet, active.network.chainId, structuredClone(state))
-		try {
-			await resetPristineStateForDeploymentProfile(checked, currentProfileId, currentFactory, current.paused, wallet, active.runtime.stateFile, async evidence => (options.verifyCompletion ?? verifyRetirementCompletionFinality)(current, evidence))
-		} catch (error) {
-			if (error instanceof RetirementCompletionPendingError) return { kind: 'retiring', message: 'Old deployment retirement is waiting for its completion block to finalize. Its pin and state remain in place.' }
-			throw error
-		}
-		const nextStateFile = await saveCurrentWithNewState(loaded, current, replacementTargetId)
-		return { kind: 'current', message: `Verified retirement and selected current contracts in new state file ${nextStateFile}. The old state was preserved.` }
+		return `Archived retirement is ${state.retirement.status}. Inspect the dashboard Retirement panel for progress and blockers.`
 	} finally {
 		await locks.release()
 	}
@@ -194,9 +188,16 @@ export async function retirementUpgradeStatus(path?: string, verifyCompletion: t
 	const replacementTargetId = retirementReplacementTargetId(currentProfileId, currentFactory)
 	if (state.retirement.status === 'drained-with-residuals' && state.retirement.profileReplacementOverride?.targetProfileId !== replacementTargetId) return 'retiring'
 	const wallet = configuredWallet(active)
-	const checked = initialRuntimeState(active.paused, wallet, active.network.chainId, structuredClone(state))
+	const evidence = state.retirement.completionEvidence
+	if (evidence?.profileId !== state.profileId || evidence?.signerAddress === undefined || state.signerAddress === undefined || wallet === undefined || evidence.signerAddress.toLowerCase() !== state.signerAddress.toLowerCase() || evidence.signerAddress.toLowerCase() !== wallet.toLowerCase())
+		throw new Error('Retirement completion evidence must match the archived deployment and signer')
+	if (state.retirement.status === 'drained-with-residuals') {
+		const override = state.retirement.profileReplacementOverride
+		if (override === undefined || override.sourceProfileId !== state.profileId || override.recipient.toLowerCase() !== state.retirement.recipient?.toLowerCase() || override.completionBlockHash.toLowerCase() !== evidence.blockHash.toLowerCase() || override.completionBlockNumber !== evidence.blockNumber)
+			throw new Error('Residual acceptance does not match the archived retirement evidence')
+	}
 	try {
-		await resetPristineStateForDeploymentProfile(checked, currentProfileId, currentFactory, current.paused, wallet, active.runtime.stateFile, async evidence => verifyCompletion(current, evidence))
+		await verifyCompletion(active, { ...evidence, profileId: state.profileId, signerAddress: evidence.signerAddress })
 	} catch (error) {
 		if (error instanceof RetirementCompletionPendingError) return 'retiring'
 		throw error
@@ -206,10 +207,22 @@ export async function retirementUpgradeStatus(path?: string, verifyCompletion: t
 
 async function main() {
 	const command = process.argv[2]
-	if (process.argv.length !== 3 || (command !== 'prepare' && command !== 'status')) throw new Error('Usage: bun src/cli/deployment-upgrade.ts <prepare|status>')
+	if (command === 'retire' && process.argv.length === 4) {
+		const id = process.argv[3]
+		if (id === undefined) throw new Error('Retirement requires an archive ID')
+		console.log(await prepareArchivedRetirement(id))
+		return
+	}
+	if (process.argv.length !== 3 || (command !== 'prepare' && command !== 'status' && command !== 'archives')) throw new Error('Usage: bun src/cli/deployment-upgrade.ts <prepare|status|archives|retire ARCHIVE_ID>')
+	if (command === 'archives') {
+		const archives = await listDeploymentArchives()
+		if (archives.length === 0) console.log('No archived deployments. Run start.bat to select the latest contracts and archive an older deployment.')
+		for (const archive of archives) console.log(`${archive.id}  ${archive.status}  ${archive.profileId}  ${archive.stateFile}`)
+		return
+	}
 	if (command === 'status') {
 		const status = await retirementUpgradeStatus()
-		if (status === 'ready') console.log('Old deployment retirement is ready for final verification and switch.')
+		if (status === 'ready') console.log('Archived retirement is verified. The current deployment can restart.')
 		else {
 			const loaded = await loadSettings()
 			const state = await loadDurableState(loaded.settings.runtime.stateFile, loaded.settings.network.chainId)
@@ -228,7 +241,6 @@ async function main() {
 	}
 	const result = await prepareCurrentDeployment()
 	console.log(result.message)
-	if (result.kind === 'retiring') process.exitCode = RETIRING_EXIT_CODE
 }
 
 if (import.meta.main) {

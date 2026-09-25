@@ -306,7 +306,8 @@
 	gap: var(--space-4);
 }
 
-/* A nested stack that only groups its parent's children keeps the parent's rhythm. */
+/* Route sections own their spacing; grouping stacks do not need an extra top margin. */
+.route-workflow-stack,
 .route-workflow-stack > .workflow-stack {
 	margin-top: 0;
 }
