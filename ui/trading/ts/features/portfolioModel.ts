@@ -1,3 +1,4 @@
+import { quoteExactOutput } from '@zoltar/trading-shared/trading/math'
 import { maximumInsuredExit } from '@zoltar/trading-shared/trading/positions'
 import { attoSharesToCollateralAttoEth } from '../lib/shareValue.js'
 import { marketAcceptsNewRisk, settlementAvailability, type LiveBalances, type LiveMarket } from '../protocol/live.js'
@@ -6,19 +7,23 @@ import type { PortfolioBalanceEntry } from './live/liveTradingTypes.js'
 /** Open positions whose question ends within this window are listed as needing attention before trading closes. */
 const TRADING_CLOSES_SOON_SECONDS = 7n * 24n * 60n * 60n
 
+/** Leftover shares backed by less than the smallest displayed ETH amount are rounding dust, not a pending payout. */
+const DISPLAY_DUST_ATTO_ETH = 10n ** 14n
+
 type PortfolioRowState = 'open' | 'closed' | 'resolved' | 'settlement-required' | 'unavailable'
 
 /**
  * `exit` marks an open position at what exiting through the pool would return now, after fees and price impact.
  * `complete-sets` values a closed, unresolved position at the complete sets it can redeem now (pool swaps stop when
- * trading closes); `pendingResolution` marks directional shares left out until the question resolves.
+ * trading closes). For both, `pendingResolution` marks shares that neither path can turn into ETH before the question
+ * resolves, such as INVALID left after an exit or a long share without INVALID insurance; they are not in the value.
  * `redemption` values a resolved position at its winning-share payout. Settlement and failed reads have no price.
  */
 export type PortfolioValuation =
-	| Readonly<{ kind: 'exit'; attoEth: bigint }>
-	| Readonly<{ kind: 'redemption'; attoEth: bigint }>
+	| Readonly<{ kind: 'exit'; attoEth: bigint; pendingResolution: boolean }>
 	| Readonly<{ kind: 'complete-sets'; attoEth: bigint; pendingResolution: boolean }>
-	| Readonly<{ kind: 'unavailable'; reason: 'settlement-required' | 'market-unavailable' | 'balance-unavailable' }>
+	| Readonly<{ kind: 'redemption'; attoEth: bigint }>
+	| Readonly<{ kind: 'unavailable'; reason: 'settlement-required' | 'pool-inactive' | 'market-unavailable' | 'balance-unavailable' }>
 
 /** Why the item needs attention, which the list shows as its badge. */
 type PortfolioActionKind = 'redeem' | 'settle' | 'withdraw-liquidity' | 'trading-closes'
@@ -43,7 +48,7 @@ export type PortfolioOverview = Readonly<{
 	totalValueAttoEth: bigint
 	/** Rows left out of the total because they have no trustworthy value yet. */
 	unvaluedCount: number
-	/** Closed rows whose directional shares are left out of the total until the question resolves. */
+	/** Rows with shares left out of the total until the question resolves. */
 	pendingResolutionCount: number
 	/** Every row's action items, dated ones first by deadline, then undated ones in row order. */
 	actionItems: readonly PortfolioActionItem[]
@@ -71,16 +76,28 @@ function completeSetSplit(market: Pick<LiveMarket, 'yesReserve' | 'noReserve' | 
 }
 
 /**
- * Complete-set equivalent the account could redeem by withdrawing its liquidity, redeeming the complete sets it
- * holds, and exiting the remaining insured long position through the pool at the reserves left after withdrawal.
+ * Complete sets the account could redeem by withdrawing its liquidity, redeeming the complete sets it holds, and
+ * exiting the remaining insured long position through the pool at the reserves left after withdrawal, plus the
+ * shares that path leaves behind.
  */
-function exitValueAttoShares(market: Pick<LiveMarket, 'yesReserve' | 'noReserve' | 'lpTotalSupply' | 'feeBps'>, balances: Holdings) {
+function exitPosition(market: Pick<LiveMarket, 'yesReserve' | 'noReserve' | 'lpTotalSupply' | 'feeBps'>, balances: Holdings) {
 	const { claims, completeSets, remainingInvalid, remainingYes, remainingNo } = completeSetSplit(market, balances)
-	if (remainingInvalid === 0n) return completeSets
-	const reserves = { yesReserve: market.yesReserve - claims.yes, noReserve: market.noReserve - claims.no, feeBps: market.feeBps }
-	if (remainingYes > 0n) return completeSets + maximumInsuredExit({ longOutcome: 'YES', longBalance: remainingYes, invalidBalance: remainingInvalid, ...reserves })
-	if (remainingNo > 0n) return completeSets + maximumInsuredExit({ longOutcome: 'NO', longBalance: remainingNo, invalidBalance: remainingInvalid, ...reserves })
-	return completeSets
+	const yesReserve = market.yesReserve - claims.yes
+	const noReserve = market.noReserve - claims.no
+	const longOutcome = remainingYes > 0n ? 'YES' : 'NO'
+	const remainingLong = longOutcome === 'YES' ? remainingYes : remainingNo
+	let exitedSets = 0n
+	let longUsed = 0n
+	if (remainingInvalid > 0n && remainingLong > 0n) {
+		exitedSets = maximumInsuredExit({ longOutcome, longBalance: remainingLong, invalidBalance: remainingInvalid, yesReserve, noReserve, feeBps: market.feeBps })
+		if (exitedSets > 0n) longUsed = exitedSets + (longOutcome === 'YES' ? quoteExactOutput(yesReserve, noReserve, exitedSets, market.feeBps) : quoteExactOutput(noReserve, yesReserve, exitedSets, market.feeBps)).amountIn
+	}
+	const leftover = [remainingInvalid - exitedSets, remainingYes - (longOutcome === 'YES' ? longUsed : 0n), remainingNo - (longOutcome === 'NO' ? longUsed : 0n)]
+	return { sets: completeSets + exitedSets, leftover }
+}
+
+function hasPendingShares(leftover: readonly bigint[], market: Pick<LiveMarket, 'settlementCollateralAttoEth' | 'shareTokenSupplyAttoShares'>) {
+	return leftover.some(amount => amount > 0n && attoSharesToCollateralAttoEth(amount, market) >= DISPLAY_DUST_ATTO_ETH)
 }
 
 /** Winning shares, including the winning side of the account's LP claim, once the question has resolved. */
@@ -104,13 +121,14 @@ function rowValuation(entry: PortfolioBalanceEntry, state: PortfolioRowState): P
 	const { market, balances } = entry
 	if (market.loadError !== undefined) return { kind: 'unavailable', reason: 'market-unavailable' }
 	if (balances === undefined || entry.error !== undefined) return { kind: 'unavailable', reason: 'balance-unavailable' }
-	if (state === 'settlement-required') return { kind: 'unavailable', reason: 'settlement-required' }
+	if (state === 'settlement-required') return { kind: 'unavailable', reason: market.universeForkTime === 0n ? 'pool-inactive' : 'settlement-required' }
 	if (state === 'resolved') return { kind: 'redemption', attoEth: attoSharesToCollateralAttoEth(winningAttoShares(market, balances), market) }
 	if (state === 'closed') {
 		const { completeSets, remainingInvalid, remainingYes, remainingNo } = completeSetSplit(market, balances)
-		return { kind: 'complete-sets', attoEth: attoSharesToCollateralAttoEth(completeSets, market), pendingResolution: remainingInvalid > 0n || remainingYes > 0n || remainingNo > 0n }
+		return { kind: 'complete-sets', attoEth: attoSharesToCollateralAttoEth(completeSets, market), pendingResolution: hasPendingShares([remainingInvalid, remainingYes, remainingNo], market) }
 	}
-	return { kind: 'exit', attoEth: attoSharesToCollateralAttoEth(exitValueAttoShares(market, balances), market) }
+	const exit = exitPosition(market, balances)
+	return { kind: 'exit', attoEth: attoSharesToCollateralAttoEth(exit.sets, market), pendingResolution: hasPendingShares(exit.leftover, market) }
 }
 
 function portfolioRow(entry: PortfolioBalanceEntry, nowSeconds: bigint): PortfolioRow {
@@ -153,7 +171,7 @@ export function portfolioOverview(entries: readonly PortfolioBalanceEntry[], now
 	for (const row of rows) {
 		if (row.valuation.kind === 'unavailable') unvaluedCount += 1
 		else totalValueAttoEth += row.valuation.attoEth
-		if (row.valuation.kind === 'complete-sets' && row.valuation.pendingResolution) pendingResolutionCount += 1
+		if ((row.valuation.kind === 'exit' || row.valuation.kind === 'complete-sets') && row.valuation.pendingResolution) pendingResolutionCount += 1
 	}
 	// Array.prototype.sort is stable, so undated items keep row order.
 	const actionItems = rows.flatMap(row => row.actionItems).sort(compareActionItems)

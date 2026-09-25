@@ -63,22 +63,27 @@ function valueOf(marketOverrides: Partial<LiveMarket>, amounts: Amounts) {
 
 describe('portfolio position value', () => {
 	test('values complete sets at their backing and an insured long at its pool exit', () => {
-		expect(valueOf({}, { yes: 2n * SET, no: 2n * SET, invalid: 2n * SET })).toEqual({ kind: 'exit', attoEth: 2n * ETH })
+		expect(valueOf({}, { yes: 2n * SET, no: 2n * SET, invalid: 2n * SET })).toEqual({ kind: 'exit', attoEth: 2n * ETH, pendingResolution: false })
 		const exitSets = maximumInsuredExit({ longOutcome: 'YES', longBalance: (3n * SET) / 2n, invalidBalance: SET, yesReserve: market.yesReserve, noReserve: market.noReserve, feeBps: market.feeBps })
 		expect(exitSets).toBeGreaterThan(0n)
 		expect(exitSets).toBeLessThan(SET)
-		expect(valueOf({}, { yes: (3n * SET) / 2n, invalid: SET })).toEqual({ kind: 'exit', attoEth: exitSets / ETH })
-		expect(valueOf({}, { no: (3n * SET) / 2n, invalid: SET })).toEqual({ kind: 'exit', attoEth: exitSets / ETH })
+		// The INVALID the exit cannot use only pays if INVALID wins, so it is flagged rather than priced.
+		expect(valueOf({}, { yes: (3n * SET) / 2n, invalid: SET })).toEqual({ kind: 'exit', attoEth: exitSets / ETH, pendingResolution: true })
+		expect(valueOf({}, { no: (3n * SET) / 2n, invalid: SET })).toEqual({ kind: 'exit', attoEth: exitSets / ETH, pendingResolution: true })
 		// A bare long share without INVALID insurance cannot be exited through the pool.
-		expect(valueOf({}, { yes: SET })).toEqual({ kind: 'exit', attoEth: 0n })
+		expect(valueOf({}, { yes: SET })).toEqual({ kind: 'exit', attoEth: 0n, pendingResolution: true })
+		// Rounding leftovers below the displayed precision are not a pending payout.
+		expect(valueOf({}, { yes: SET, no: SET, invalid: SET + 10n ** 30n })).toEqual({ kind: 'exit', attoEth: ETH, pendingResolution: false })
 	})
 
 	test('includes LP reserve claims and exits against the reserves left after withdrawal', () => {
 		expect(lpReserveClaims(market, 5n * SET)).toEqual({ yes: 5n * SET, no: 5n * SET })
 		expect(lpReserveClaims({ ...market, lpTotalSupply: 0n }, 5n * SET)).toEqual({ yes: 0n, no: 0n })
-		expect(valueOf({}, { lp: 5n * SET, invalid: 5n * SET })).toEqual({ kind: 'exit', attoEth: 5n * ETH })
+		expect(valueOf({}, { lp: 5n * SET, invalid: 5n * SET })).toEqual({ kind: 'exit', attoEth: 5n * ETH, pendingResolution: false })
+		// Without INVALID the LP claim cannot become complete sets, so it waits for resolution.
+		expect(valueOf({}, { lp: 5n * SET })).toEqual({ kind: 'exit', attoEth: 0n, pendingResolution: true })
 		// Owning every LP token leaves no reserves to exit against, so only the complete sets count.
-		expect(valueOf({}, { lp: 10n * SET, invalid: 12n * SET, yes: 2n * SET })).toEqual({ kind: 'exit', attoEth: 10n * ETH })
+		expect(valueOf({}, { lp: 10n * SET, invalid: 12n * SET, yes: 2n * SET })).toEqual({ kind: 'exit', attoEth: 10n * ETH, pendingResolution: true })
 	})
 
 	test('counts only winning shares, including the LP claim, after resolution', () => {
@@ -151,6 +156,10 @@ describe('portfolio rows', () => {
 		expect(forked.canSell).toBe(false)
 		expect(forked.canRedeem).toBe(false)
 		expect(forked.actionItems.map(item => item.kind)).toEqual(['settle'])
+		// An inactive pool without a fork has nothing to settle, so it is not told to.
+		const inactive = row(entry({ systemState: 1 }, { yes: SET, invalid: SET }))
+		expect(inactive.valuation).toEqual({ kind: 'unavailable', reason: 'pool-inactive' })
+		expect(inactive.actionItems).toEqual([])
 	})
 
 	test('marks unreadable balances and markets unavailable without actions', () => {
@@ -170,6 +179,8 @@ describe('portfolio overview', () => {
 		expect(overview.positionCount).toBe(3)
 		expect(overview.totalValueAttoEth).toBe(3n * ETH)
 		expect(overview.unvaluedCount).toBe(1)
+		expect(overview.pendingResolutionCount).toBe(0)
+		expect(portfolioOverview([entry({}, { lp: SET })], NOW).pendingResolutionCount).toBe(1)
 		expect(overview.actionItems.map(item => [item.kind, item.title])).toEqual([
 			['trading-closes', 'Closing'],
 			['redeem', 'Resolved'],

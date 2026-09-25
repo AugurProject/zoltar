@@ -92,6 +92,16 @@ describe('portfolio overview', () => {
 		expect(rendered.container.querySelector(`[data-portfolio-pool="${resolvedPool}"]`)?.textContent).toContain('Value now2 ETH')
 	})
 
+	test('says when shares are left out of the total until resolution', async () => {
+		const rendered = await renderIntoDocument(<LivePortfolio entries={[{ market: openMarket, balances: { scope: scope(openPool), yes: 0n, no: 0n, invalid: 0n, lp: SET }, error: undefined }]} balanceState='ready' balanceError={undefined} retryBalances={async () => undefined} nowSeconds={NOW} />)
+		cleanupRendered = rendered.cleanup
+		expect(rendered.container.querySelector('[aria-label="Portfolio summary"]')?.textContent).toContain('Excludes shares that pay at resolution')
+		expect(rendered.container.querySelector(`[data-portfolio-pool="${openPool}"]`)?.textContent).toContain('other shares pay at resolution')
+		// A liquidity provider cannot sell; trading closing soon points at withdrawal instead.
+		expect(rendered.container.querySelector(`[data-portfolio-pool="${openPool}"] a[aria-label^="Sell"]`)).toBeNull()
+		expect(rendered.container.querySelector('.portfolio-action-items a')?.getAttribute('href')).toBe(`#/liquidity/${openPool}`)
+	})
+
 	test('offers the wallet action inline while disconnected and hides the summary', async () => {
 		let connects = 0
 		const rendered = await renderIntoDocument(<LivePortfolio entries={[]} balanceState='disconnected' balanceError={undefined} retryBalances={async () => undefined} nowSeconds={NOW} walletAction={{ label: 'Connect wallet', disabled: false, onClick: () => (connects += 1) }} />)

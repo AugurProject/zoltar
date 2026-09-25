@@ -12,10 +12,11 @@ function formatPortfolioEth(attoEth: bigint) {
 }
 
 function valuationCaption(valuation: PortfolioValuation) {
-	if (valuation.kind === 'exit') return portfolioCopy.exitValueBasis
-	if (valuation.kind === 'redemption') return portfolioCopy.redemptionValueBasis
+	if (valuation.kind === 'exit') return valuation.pendingResolution ? portfolioCopy.exitValuePendingBasis : portfolioCopy.exitValueBasis
 	if (valuation.kind === 'complete-sets') return valuation.pendingResolution ? portfolioCopy.completeSetsPendingBasis : portfolioCopy.completeSetsBasis
+	if (valuation.kind === 'redemption') return portfolioCopy.redemptionValueBasis
 	if (valuation.reason === 'settlement-required') return portfolioCopy.settlementValueReason
+	if (valuation.reason === 'pool-inactive') return portfolioCopy.poolInactiveValueReason
 	return valuation.reason === 'market-unavailable' ? portfolioCopy.marketValueReason : portfolioCopy.balanceValueReason
 }
 
