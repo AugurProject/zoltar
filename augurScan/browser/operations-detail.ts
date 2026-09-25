@@ -1,3 +1,6 @@
+import { poolSummaryMetrics } from './pool-metrics.ts'
+import { claimProofDisclosure, escalationPayoutSummary, escalationPayoutTitle } from './escalation-payouts.ts'
+import { semanticFields } from './semantic-evidence.ts'
 import { shortIdentifier } from './identifier-format.ts'
 import type { OperationsDetailRoute, OperationsRenderContext } from './browser-types.ts'
 import { isRecord, operationRecords, type JsonRecord, type OperationsResponse } from './api-validation.ts'
@@ -95,6 +98,10 @@ export const renderOperationsDetail = (deps: OperationsDetailDeps, response: Ope
 		snapshotReadStatus: snapshot?.['read_status'],
 	})
 	if (summaryPresentation.label !== 'Evidence state' || summaryPresentation.value !== 'Event-derived') summary.append(operationCard(summaryPresentation.label, summaryPresentation.value))
+	if (route.kind === 'pool') {
+		const state = data['read_status'] === 'success' && isRecord(data['read_result']) ? data['read_result'] : {}
+		for (const [label, value] of poolSummaryMetrics(state)) summary.append(operationCard(label, value))
+	}
 
 	const panels: HTMLElement[] = []
 	let loadedRiskHistoryOffset = 0
@@ -109,7 +116,32 @@ export const renderOperationsDetail = (deps: OperationsDetailDeps, response: Ope
 				'No approval transitions are related to this risk entity.',
 			),
 		)
-	if (snapshot !== undefined) panels.push(operationsPanel('Current-state snapshot', [operationRow('Tagged block read', String(snapshot['read_status']), String(snapshot['entity_identity'] ?? ''), snapshot['block_number']), rawEvidence(snapshot)], 'Snapshot unavailable'))
+	if (snapshot !== undefined)
+		panels.push(
+			operationsPanel(
+				'Current-state snapshot',
+				[
+					operationRow('Tagged block read', String(snapshot['read_status']), String(snapshot['entity_identity'] ?? ''), snapshot['block_number']),
+					...semanticFields(isRecord(snapshot['read_result']) ? Object.fromEntries(Object.entries(snapshot['read_result']).filter(([key]) => key !== 'claimEvidence')) : {}).map(([label, value]) => operationRow(label, value, undefined, undefined)),
+					rawEvidence(snapshot),
+				],
+				'Snapshot unavailable',
+			),
+		)
+	if (route.kind === 'escalation' && snapshot !== undefined) {
+		const result = isRecord(snapshot['read_result']) ? snapshot['read_result'] : {}
+		const claims = isRecord(result['claimEvidence']) ? result['claimEvidence'] : {}
+		const rows = operationRecords(claims['positions']).map(position => {
+			const row = operationRow(escalationPayoutTitle(position), escalationPayoutSummary(position), String(position['depositor']), snapshot['block_number'])
+			row.append(claimProofDisclosure(position, snapshot['block_number'], snapshot['block_hash']))
+			return row
+		})
+		panels.push(
+			operationsPanel('Escalation payouts', rows, claims['status'] === 'available' ? 'No unconsumed deposits at this tagged block.' : `Payout evidence unavailable: ${String(claims['reason'] ?? 'Awaiting claim sampling')}`, {
+				label: `Tagged claim-bundle payouts; proofs must be refreshed after settlement.${claims['truncated'] === true ? ' First 250 positions shown.' : ''}`,
+			}),
+		)
+	}
 	if (current !== undefined) panels.push(operationsPanel('Current report', [operationRow(String(lifecycle?.['state'] ?? current['event_name'] ?? 'Report'), 'Latest canonical report evidence', route.identity.join(':'), current['block_number']), rawEvidence(current)], 'Current report unavailable'))
 	if (route.kind === 'pool' || route.kind === 'vault') {
 		const riskPresentation = operationsRiskPresentation(route.kind, data['protocol_state'], data['scanner_severity'])
@@ -117,8 +149,15 @@ export const renderOperationsDetail = (deps: OperationsDetailDeps, response: Ope
 		protocolStateRow.classList.add('operations-risk-protocol')
 		const scannerAssessmentRow = operationRow('Scanner assessment', `${riskPresentation.scannerAssessment} · ${String(data['scanner_reason'] ?? 'Current-state evidence unavailable')}`, undefined, data['block_number'])
 		scannerAssessmentRow.classList.add('operations-risk-assessment', `operations-risk-${riskPresentation.scannerTone}`)
-		panels.push(operationsPanel(headerPresentation.riskPanelTitle, [protocolStateRow, scannerAssessmentRow, rawEvidence(data)], 'Risk state unavailable'))
+		panels.push(
+			operationsPanel(
+				headerPresentation.riskPanelTitle,
+				[protocolStateRow, scannerAssessmentRow, ...semanticFields({ ...(isRecord(data['read_result']) ? data['read_result'] : {}), ...(isRecord(data['risk']) ? data['risk'] : {}) }).map(([label, value]) => operationRow(label, value, undefined, data['block_number'])), rawEvidence(data)],
+				'Risk state unavailable',
+			),
+		)
 	}
+	if (route.kind === 'vault') panels.push(operationsPanel('Accounting', [operationRow('Vault accounting history', 'Backing, capacity ownership and accrued fees', undefined, undefined, operationsHref(`/system?tab=vaults&entity=${requiredChainId()}:${route.identity[0]}:${route.identity[1]}`))], ''))
 	if (route.kind === 'trading') {
 		const tradingSummary = isRecord(data['summary']) ? data['summary'] : {}
 		const twap24h = isRecord(data['twap24h']) ? data['twap24h'] : {}
@@ -133,6 +172,23 @@ export const renderOperationsDetail = (deps: OperationsDetailDeps, response: Ope
 					operationRow('Seven-day TWAP', `${String(twap7d['state'] ?? 'Unavailable')} · ${operationRatio(twap7d['numerator'], twap7d['denominator'])} NO per YES · ${operationNumber(twap7d['coverageSeconds'])} covered seconds`, 'NO per YES', undefined),
 				],
 				'No trading observations are available.',
+			),
+		)
+		const shares = isRecord(data['sharePositions']) ? data['sharePositions'] : {}
+		panels.push(
+			operationsPanel(
+				'Market share holders',
+				operationRecords(shares['items']).map(position =>
+					operationRow(
+						String(position['address']),
+						`${exactUnit(String(position['invalid_atto_shares']), 18, 'INVALID')} · ${exactUnit(String(position['yes_atto_shares']), 18, 'YES')} · ${exactUnit(String(position['no_atto_shares']), 18, 'NO')} · ${exactUnit(String(position['complete_sets_atto_shares']), 18, 'complete sets')}${position['migration_locked'] === true ? ' · Migrated source shares locked' : ''}`,
+						undefined,
+						undefined,
+						operationsHref(`/address/${position['address']}`),
+					),
+				),
+				'No indexed share holders.',
+				{ label: `${String(shares['basis'] ?? 'Indexed transfer history')}${shares['truncated'] === true ? ' First 250 holders shown.' : ''}` },
 			),
 		)
 		const lpPositions = operationRecords(data['lpPositions'])
@@ -280,6 +336,11 @@ export const renderOperationsDetail = (deps: OperationsDetailDeps, response: Ope
 		}
 	}
 
+	if (isRecord(data['finalization'])) panels.push(operationsPanel('Auction finalization', detailEvidenceRows([data['finalization']]), 'Not finalized'))
+	if (route.kind === 'escalation') {
+		for (const key of ['deposits', 'claims']) panels.push(operationsPanel(`Loaded ${key}`, detailEvidenceRows(operationRecords(data[key])), `No ${key} in the loaded event page.`))
+	}
+	if (data['demandCurveTruncated'] === true) panels.push(operationsPanel('Demand curve coverage', [element('p', 'data-note', 'Only the highest 1,000 ticks are shown. Cumulative demand covers these ticks only.')], ''))
 	const demand = operationRecords(data['demandCurve'])
 	if (demand.length > 0) {
 		const demandRows = demand.map(point => operationRow(`Tick ${String(point['tick'])}`, `${exactUnit(String(point['amountAttoEth'] ?? '0'), 18, 'ETH')} · cumulative ${exactUnit(String(point['cumulativeDemandAttoEth'] ?? '0'), 18, 'ETH')}`, String(point['tick']), undefined))

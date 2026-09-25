@@ -1,3 +1,4 @@
+import { blockCallTraces, protocolCallDestination, relevantCallTrace, unsupportedTraceError } from './transaction-selection.ts'
 import { dependencyDiscoveryKinds } from '../contract-discovery.ts'
 import { canonicalBlockLogs, type IndexedBlock, type RichListBalance, type StoredTransaction } from '../database.ts'
 import { readRichListBalance } from '../direct-observations.ts'
@@ -33,6 +34,27 @@ export async function indexBlock(
 	const relevantHashes = new Set<Hash>(knownLogs.map(log => requireLogPosition(log).transactionHash))
 	const transactionByHash = new Map<Hash, { transaction: BlockTransaction; index: number }>()
 
+	const blockTransactions = block.transactions ?? (await this.client.getBlock({ blockNumber: number, includeTransactions: true })).transactions
+	const targets = new Set([...contracts.values()].filter(protocolCallDestination).map(contract => contract.address.toLowerCase()))
+	const traces = new Map<string, Record<string, unknown>>()
+	let traceStatus = 'unavailable'
+	if (!this.traceUnsupportedProviders.has(this.activeProvider)) {
+		try {
+			for (const item of await blockCallTraces(this.client, block.hash)) traces.set(item.hash, item.trace)
+			traceStatus = 'available'
+		} catch (error) {
+			if (unsupportedTraceError(error)) {
+				this.traceUnsupportedProviders.add(this.activeProvider)
+				console.warn(`[${this.network.id}] Call traces unavailable on this provider; direct calls and log-selected activity remain indexed`)
+			} else if (isPrunedHistoricalStateError(error)) traceStatus = 'unavailable-historical-state'
+			else throw error
+		}
+	}
+	for (const transaction of blockTransactions) {
+		if (typeof transaction === 'string') throw new Error('Full block transaction data is required for protocol call selection')
+		if ((transaction.to !== null && transaction.to !== undefined && targets.has(transaction.to.toLowerCase())) || targets.has(transaction.from.toLowerCase()) || relevantCallTrace(traces.get(transaction.hash.toLowerCase()), targets)) relevantHashes.add(transaction.hash)
+	}
+
 	const receipts: TransactionReceipt[] = []
 	const receiptByHash = new Map<Hash, TransactionReceipt>()
 	const fetchMissingEvidence = async (): Promise<void> => {
@@ -42,7 +64,7 @@ export async function indexBlock(
 			return { receipt, transaction }
 		})) {
 			requireReceiptPosition(receipt, block.hash, number)
-			if (receipt.status !== 'success') throw new ChainContinuityError(`Log-selected transaction ${transaction.hash} did not succeed`)
+			if (receipt.status !== 'success' && (receipt.logs.length > 0 || knownLogs.some(log => log.transactionHash === receipt.transactionHash))) throw new ChainContinuityError(`Reverted transaction ${receipt.transactionHash} has inconsistent log evidence`)
 			if (transaction.blockHash !== block.hash || transaction.blockNumber !== number || transaction.transactionIndex === undefined) throw new ChainContinuityError(`BlockTransaction ${transaction.hash} no longer belongs to block ${number}`)
 			const transactionIndex = bigintToSafeNumber(transaction.transactionIndex, `BlockTransaction ${transaction.hash} index`)
 			receipts.push(receipt)
@@ -109,6 +131,11 @@ export async function indexBlock(
 			}
 		}
 		if (discoveredAddresses.length === 0) break
+		for (const contract of contracts.values()) if (protocolCallDestination(contract)) targets.add(contract.address.toLowerCase())
+		for (const transaction of blockTransactions) {
+			if (typeof transaction === 'string') continue
+			if ((transaction.to != null && targets.has(transaction.to.toLowerCase())) || targets.has(transaction.from.toLowerCase()) || relevantCallTrace(traces.get(transaction.hash.toLowerCase()), targets)) relevantHashes.add(transaction.hash)
+		}
 		for (const log of await getDiscoveredLogs(discoveredAddresses, contracts)) {
 			relevantHashes.add(requireLogPosition(log).transactionHash)
 		}
@@ -173,8 +200,9 @@ export async function indexBlock(
 		const pair = transactionByHash.get(hash)
 		const receipt = receiptByHash.get(hash)
 		if (pair === undefined || receipt === undefined) throw new Error(`Block ${number} did not contain relevant transaction ${hash}`)
-		if (receipt.status !== 'success') throw new ChainContinuityError(`Log-selected transaction ${hash} did not succeed`)
 		const to = pair.transaction.to === null || pair.transaction.to === undefined ? null : getAddress(pair.transaction.to)
+		let transactionTraceStatus = traceStatus
+		if (traceStatus === 'available' && !traces.has(hash.toLowerCase())) transactionTraceStatus = 'missing'
 		storedTransactions.push({
 			hash,
 			transactionIndex: pair.index,
@@ -184,7 +212,7 @@ export async function indexBlock(
 			input: pair.transaction.input,
 			status: receipt.status,
 			gasUsed: receipt.gasUsed,
-			receipt: jsonEvidence(receipt),
+			receipt: jsonEvidence({ ...receipt, callTraceStatus: transactionTraceStatus, callTrace: traces.get(hash.toLowerCase()) }),
 			decoded: decodeAction(to === null ? undefined : contracts.get(to.toLowerCase()), pair.transaction.input, displayLabels, tokenMetadata, contractKinds, displayContext),
 		})
 	}

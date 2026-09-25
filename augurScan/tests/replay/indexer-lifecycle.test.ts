@@ -1859,6 +1859,7 @@ describe('network indexer lifecycle', () => {
 		const initialization = rawLog(poolAddress, 10n, '5', 3, topicsFrom(encodeEventTopics({ abi: initializeAbi, eventName: 'Initialize' })), encodeAbiParameters([{ type: 'uint160' }, { type: 'int24' }], [2n ** 96n, 0n]))
 		const trackedLate = { ...deployLog, transactionHash: hash('5'), transactionIndex: '0x3', logIndex: '0x4' }
 		const allLogs = includePool ? [deployLog, poolCreated, { ...sameBlockRepLog, transactionIndex: '0x2', logIndex: '0x2' }, initialization, trackedLate, laterRepLog] : [deployLog, sameBlockRepLog, laterRepLog]
+		const eventless = ['6', '7', '8'].map((digit, index) => ({ ...rawLog(digit === '8' ? holder : zoltarAddress, 11n, digit, index, [], '0x'), from: sender, to: digit === '8' ? holder : zoltarAddress, hash: hash(digit), input: '0x', nonce: '0x0', gas: '0x5208', type: '0x2', value: '0x1' }))
 		const rpcLogQueries: Array<{ readonly addresses: readonly string[]; readonly fromBlock: bigint; readonly toBlock: bigint }> = []
 		const stateQueries: bigint[] = []
 		const metadataQueryBlocks: bigint[] = []
@@ -1892,6 +1893,10 @@ describe('network indexer lifecycle', () => {
 						setTimeout(() => controller.abort(), 10)
 						return blockNumber >= 12n ? '0x01' : '0x'
 					}
+					if (request.method === 'debug_traceBlockByHash')
+						return request.params?.[0] === hash('b')
+							? eventless.map(tx => ({ txHash: tx.hash, result: { type: 'CALL', from: sender, to: tx.to, value: '0x1', ...(tx.hash === hash('6') ? { error: 'execution reverted' } : {}), ...(tx.hash === hash('8') ? { calls: [{ type: 'CALL', from: holder, to: zoltarAddress, value: '0x1' }] } : {}) } }))
+							: []
 					if (request.method === 'eth_getBlockByNumber') {
 						const blockNumber = BigInt(String(request.params?.[0]))
 						headerQueryBlocks.push(blockNumber)
@@ -1902,7 +1907,7 @@ describe('network indexer lifecycle', () => {
 							number: toHex(blockNumber),
 							parentHash: blockNumber === 10n ? hash('9') : blockHashes.get(blockNumber - 1n),
 							timestamp: toHex(1_700_000_000n + blockNumber),
-							transactions: [],
+							transactions: blockNumber === 11n ? eventless : [],
 						}
 					}
 					if (request.method === 'eth_getLogs') {
@@ -1920,7 +1925,7 @@ describe('network indexer lifecycle', () => {
 						)
 					}
 					const transactionHash = String(request.params?.[0])
-					const sourceLog = allLogs.find(log => log.transactionHash === transactionHash)
+					const sourceLog = allLogs.find(log => log.transactionHash === transactionHash) ?? eventless.find(tx => tx.hash === transactionHash)
 					if (sourceLog === undefined) throw new Error(`Unexpected ${request.method} for ${transactionHash}`)
 					if (request.method === 'eth_getTransactionByHash')
 						return {
@@ -1945,7 +1950,7 @@ describe('network indexer lifecycle', () => {
 							from: sender,
 							gasUsed: '0x5208',
 							logs: allLogs.filter(log => log.transactionHash === sourceLog.transactionHash),
-							status: '0x1',
+							status: transactionHash === hash('6') ? '0x0' : '0x1',
 							to: sourceLog.address,
 							transactionHash: sourceLog.transactionHash,
 							transactionIndex: sourceLog.transactionIndex,
@@ -2004,8 +2009,12 @@ describe('network indexer lifecycle', () => {
 			}
 			await Promise.all(startIndexers([network], database, controller.signal))
 			expect(error.mock.calls).toEqual([])
-			expect(storedBlocks.map(block => block.number)).toEqual([10n, 12n])
-			expect(headerQueryBlocks).not.toContain(11n)
+			expect(storedBlocks.map(block => block.number)).toEqual([10n, 11n, 12n])
+			expect(headerQueryBlocks).toContain(11n)
+			expect(storedBlocks[1]?.transactions.map(tx => tx.status)).toEqual(['reverted', 'success', 'success'])
+			expect(storedBlocks[1]?.transactions[2]?.receipt).toMatchObject({ callTraceStatus: 'available', callTrace: { calls: [{ to: zoltarAddress }] } })
+			expect(storedBlocks[1]?.logs).toEqual([])
+			expect(storedBlocks[1]?.addressActivity).toContainEqual(expect.objectContaining({ transactionHash: hash('8'), address: zoltarAddress, role: 'referenced' }))
 			if (includePool)
 				expect(storedBlocks[0]?.logs.map(log => [log.logIndex, log.decoded.name])).toEqual([
 					[0, 'DeployChild'],
@@ -2021,7 +2030,7 @@ describe('network indexer lifecycle', () => {
 			expect(rpcLogQueries.some(query => query.fromBlock === 11n && query.toBlock === 12n && query.addresses.includes(repAddress))).toBe(true)
 			expect(rpcLogQueries.every(query => !query.addresses.includes(wethAddress))).toBe(true)
 			expect(stateQueries).toEqual([10n, 12n, 11n])
-			expect(metadataQueryBlocks).toEqual([12n])
+			expect(metadataQueryBlocks).toEqual([11n])
 			expect(codeQueryBlocks).toEqual([12n, 11n])
 			expect(codeQueryBlocks.every(blockNumber => blockNumber >= 11n)).toBe(true)
 			expect(recordContractDeployment.mock.calls[0]?.[3]).toMatchObject({ block: 12n, exact: true })

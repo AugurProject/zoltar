@@ -1,3 +1,4 @@
+import { sharePositions } from '../repositories/share-positions.ts'
 import type { SQL } from 'bun'
 import { candlestickBuckets, fixedWindowTwap, swapAnalytics } from '../operations.ts'
 import { tradingDetailData } from '../repositories/trading-detail.ts'
@@ -62,6 +63,7 @@ export const tradingDetailResponse = async (sql: SQL, parts: readonly string[], 
 		data: {
 			market,
 			summary: summaries[0],
+			sharePositions: await sharePositions(sql, chainId, String(asOf['blockNumber']), { market }),
 			lpPositions,
 			events: paged(eventRows, page.limit, row => protocolCursorFor(chainId, 'trading', market, asOf, row)),
 			twap24h: fixedWindowTwap(exactObservations, (endValue > 86_400n ? endValue - 86_400n : 0n).toString(), end),

@@ -1,3 +1,4 @@
+import { annualFeeMillionths, annualFeeText } from './pool-metrics.ts'
 import type { EntityHistory, PoolRecord, StateEntity, StateTab, VaultRecord } from './browser-types.ts'
 import { uniswapLiquidityChartModel, uniswapPriceChartModel, uniswapPriceProvenance } from './chart-values.ts'
 import { exactUnit, percentFromBps } from './format.ts'
@@ -39,6 +40,7 @@ export const renderPoolDetailPage = async (deps: StateRiskDeps, poolItem: PoolRe
 	const openOracleHistory = history.openOracleHistory ?? []
 	const uniswapChart = uniswapPriceChartModel(uniswapRepEthPrices)
 	const uniswapLiquidity = uniswapLiquidityChartModel(uniswapRepEthPrices)
+	const feeHistory = history.snapshots.map(row => ({ ...row, annual_fee_millionths: annualFeeMillionths(row['current_retention_rate']) }))
 	const latestAmmPrice = ammPrices.at(-1)
 	const latestRepEthPrice = repEthPrices.at(-1)
 	const latestUniswapPrice = uniswapChart.latestObservation
@@ -61,6 +63,7 @@ export const renderPoolDetailPage = async (deps: StateRiskDeps, poolItem: PoolRe
 		metricCard('Capacity ownership', exactUnit(poolItem.total_capacity_ownership_atto_rep, 18, 'REP')),
 		metricCard('Claimable vault fees', exactUnit(poolItem.total_claimable_vault_fees_atto_eth, 18, poolNativeSymbol)),
 		metricCard('Vaults', number(poolItem.vault_count)),
+		metricCard('Annual open-interest fee', annualFeeText(poolItem.current_retention_rate)),
 		metricCard('Conditional YES', latestAmmPrice === undefined ? 'No AMM price' : exactUnit(latestAmmPrice.conditional_yes_bps, 2, '%')),
 		metricCard('Conditional NO', latestAmmPrice === undefined ? 'No AMM price' : exactUnit(latestAmmPrice.conditional_no_bps, 2, '%')),
 		metricCard('REP / ETH', latestRepEthPrice === undefined ? 'No coordinator price' : exactUnit(latestRepEthPrice.rep_per_eth_1e18, 18, 'REP/ETH')),
@@ -77,8 +80,23 @@ export const renderPoolDetailPage = async (deps: StateRiskDeps, poolItem: PoolRe
 				{ key: 'total_capacity_ownership_atto_rep', label: 'Capacity ownership', unit: 'REP', className: 'secondary' },
 				{ key: 'total_claimable_vault_fees_atto_eth', label: 'Claimable fees', unit: poolNativeSymbol, className: 'tertiary' },
 			],
-			'Authoritative PoolAccountingCheckpoint results. Collateral and fees use attoETH; capacity ownership uses attoREP.',
+			'Authoritative PoolAccountingCheckpoint results. Collateral and fees are shown in whole ETH; capacity ownership is shown in whole REP.',
+			{ zeroBaseline: true },
 		),
+		chartCard(
+			'Fee accrual history',
+			history.snapshots,
+			[
+				{ key: 'fee_index', label: 'Fee index', unit: `${poolNativeSymbol}/REP` },
+				{ key: 'unallocated_accrued_fees_atto_eth', label: 'Unallocated accrued fees', unit: poolNativeSymbol },
+			],
+			'Checkpoint fee accumulator and unallocated fees; balances may fall when fees are claimed.',
+			{ zeroBaseline: true },
+		),
+		chartCard('Annual open-interest fee history', feeHistory, [{ key: 'annual_fee_millionths', label: 'Annual open-interest fee', decimals: 6, unit: '%' }], 'Annualized assuming unchanged retention for 365 days. Actual fees vary with utilization.', {
+			sharedRange: [0, 100],
+			axisUnit: '%',
+		}),
 		chartCard(
 			'Uniswap REP price curves',
 			uniswapChart.rows,
@@ -93,8 +111,8 @@ export const renderPoolDetailPage = async (deps: StateRiskDeps, poolItem: PoolRe
 			'Uniswap liquidity over time',
 			uniswapLiquidity.rows,
 			uniswapLiquidity.definitions,
-			'V2 points preserve the exact reserve product. V3 and V4 points preserve the exact active-liquidity integer emitted by Swap. Each venue is raw protocol evidence and is not silently normalized across token decimal systems.',
-			{ emptyMessage: 'No Uniswap liquidity observations match this view.' },
+			`Values use whole-token units: V2 shows REP × quote-token reserves; V3/V4 show active liquidity in √(REP × quote token). These measures are not directly comparable.${uniswapLiquidity.unavailableCount > 0 ? ` ${uniswapLiquidity.unavailableCount} observations omitted because decimal scaling is unavailable.` : ''}`,
+			{ zeroBaseline: true, emptyMessage: uniswapLiquidity.unavailableCount > 0 ? 'Liquidity decimal scaling is unavailable for these observations.' : 'No Uniswap liquidity observations match this view.' },
 		),
 	)
 	fragment.append(
@@ -139,7 +157,7 @@ export const renderPoolDetailPage = async (deps: StateRiskDeps, poolItem: PoolRe
 		staticField('Share-token supply', currentState.shareTokenSupplyAttoShares === undefined ? 'No checkpoint' : exactUnit(chartNumericValue(currentState.shareTokenSupplyAttoShares), 18, 'shares')),
 		staticField('Fee-eligible capacity ownership', exactUnit(poolItem.fee_eligible_capacity_ownership_atto_rep, 18, 'REP')),
 		staticField('Unallocated accrued fees', exactUnit(poolItem.unallocated_accrued_fees_atto_eth, 18, poolNativeSymbol)),
-		staticField('Current retention rate', exactUnit(poolItem.current_retention_rate, 18, '')),
+		staticField('Annual open-interest fee', annualFeeText(poolItem.current_retention_rate)),
 		typeof currentState.escalationGame === 'string' && currentState.escalationGame !== '' ? staticAddressField('Escalation game', currentState.escalationGame, poolItem.chain_id) : staticField('Escalation game', 'Not set'),
 	)
 	currentCard.append(currentGrid)
@@ -178,6 +196,9 @@ export const renderVaultDetailPage = async (deps: StateRiskDeps, vaultItem: Vaul
 	const vaultNativeSymbol = nativeSymbol(vaultItem.chain_id)
 	const fragment = document.createDocumentFragment()
 	fragment.append(stateHeader('Security vault', vaultItem.vault_address, `Pool ${vaultItem.pool_address}`, 'Latest available'))
+	const riskLink = element('a', 'back-link', 'View vault risk and liquidation history →')
+	riskLink.href = deps.operationsHref(`/vault/${vaultItem.pool_address}/${vaultItem.vault_address}?chainId=${vaultItem.chain_id}`)
+	fragment.append(riskLink)
 	fragment.append(historyCoverageNotice(history, 'vaults', vaultItem))
 	const metrics = element('div', 'metric-grid')
 	metrics.append(
@@ -196,7 +217,8 @@ export const renderVaultDetailPage = async (deps: StateRiskDeps, vaultItem: Vaul
 				{ key: 'capacity_ownership_atto_rep', label: 'Capacity ownership', unit: 'REP', className: 'secondary' },
 				{ key: 'claimable_fees_atto_eth', label: 'Claimable fees', unit: vaultNativeSymbol, className: 'tertiary' },
 			],
-			'VaultAccountingCheckpoint history. REP backing units are protocol accounting units; capacity ownership uses attoREP and fees use attoETH.',
+			'VaultAccountingCheckpoint history. REP backing units are protocol accounting units; capacity ownership and fees are shown in whole REP and ETH.',
+			{ zeroBaseline: true },
 		),
 	)
 	const staticCard = element('section', 'static-card')

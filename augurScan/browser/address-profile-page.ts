@@ -1,5 +1,7 @@
+import { claimProofDisclosure, escalationPayoutSummary, escalationPayoutTitle } from './escalation-payouts.ts'
+import { semanticSummary } from './semantic-evidence.ts'
 import type { AccountTransaction, ArgumentDefinition, LiveChangeOptions, LoadOptions, ProtocolAddressLinkOptions, RichListRecord } from './browser-types.ts'
-import { operationRecords } from './api-validation.ts'
+import { isRecord, operationRecords } from './api-validation.ts'
 import { exactUnit } from './format.ts'
 import { short, shortIdentifier } from './identifier-format.ts'
 import { PORTFOLIO_KIND_LABELS, portfolioItems, portfolioPage } from './portfolio-helpers.ts'
@@ -113,12 +115,61 @@ export const renderAddressProfilePage = (deps: AddressProfileDeps, item: RichLis
 	setLiveRecord(involvement, 'involvement', { pools: item.pool_associations, vaults: item.vault_positions })
 	const escalationClaims = operationsPanel(
 		'Escalation interactions',
-		(item.escalation_claims ?? []).map(claim => operationRow(String(claim['type'] ?? 'Escalation position'), `${String(claim['provenance'] ?? 'historical interaction')} · current claimability is unavailable`, String(claim['entity'] ?? ''), claim['blockNumber'])),
+		(item.escalation_claims ?? []).map(claim => operationRow(String(claim['type'] ?? 'Escalation position'), `${semanticSummary({ event_data: claim['data'] })} · Historical position; winning payout depends on final resolution, carry proofs and haircut allocation`, String(claim['entity'] ?? ''), claim['blockNumber'])),
 		'No escalation interactions are associated with this address.',
+	)
+	const escalationPositions = operationsPanel(
+		'Escalation deposit positions',
+		(item.escalation_positions ?? []).slice(0, 250).map(position => {
+			let state = 'Unconsumed losing principal'
+			if (position['consumed_block'] != null) state = `Consumed at block ${position['consumed_block']} (reason ${position['consumption_reason']})`
+			else if (position['final_resolution'] == null || position['final_resolution'] === '3') state = 'Pending resolution'
+			else if (position['final_resolution'] === position['outcome']) state = 'Unconsumed winning principal; see tagged payout evidence'
+			return operationRow(`Deposit ${position['deposit_index']}`, `${exactUnit(String(position['principal_atto_rep']), 18, 'REP')} principal · ${state}`, String(position['game_address']), position['resolution_block'], operationsHref(`/escalation/${position['game_address']}`))
+		}),
+		'No indexed local deposits.',
+		{ label: `Indexed local deposit history; inherited positions and proofs appear in Escalation payouts.${item.escalation_positions_truncated === true ? ' First 250 positions shown.' : ''}` },
+	)
+	const payouts = item.escalation_payouts ?? {}
+	const payoutPanel = operationsPanel(
+		'Escalation payouts',
+		operationRecords(payouts['items']).map(entry => {
+			const position = isRecord(entry['position']) ? entry['position'] : {}
+			const row = operationRow(escalationPayoutTitle(position), escalationPayoutSummary(position), String(entry['game_address']), entry['snapshot_block'])
+			const gameLink = element('a', 'back-link', 'View escalation game →')
+			gameLink.href = operationsHref(`/escalation/${entry['game_address']}`)
+			row.append(gameLink)
+			row.append(claimProofDisclosure(position, entry['snapshot_block'], entry['snapshot_block_hash']))
+			return row
+		}),
+		'No sampled payout positions for this depositor.',
+		{
+			label: `Tagged claim-bundle amounts, not wallet transfer quotes. Refresh proofs after any settlement. Chain sampling: ${String(payouts['unavailable_games'] ?? '0')} games unavailable; ${String(payouts['truncated_games'] ?? '0')} games truncated.${payouts['truncated'] === true ? ' First 250 address positions shown.' : ''}`,
+		},
+	)
+	const refundPanel = operationsPanel(
+		'Pending auction refunds',
+		(item.pending_refunds ?? []).slice(0, 250).map(refund => operationRow('Pending ETH refund', exactUnit(String(refund['pending_atto_eth']), 18, 'ETH'), String(refund['auction_address']), undefined, operationsHref(`/auction/${refund['auction_address']}`))),
+		'No indexed refund credits remain.',
+		{ label: `Balances cover indexed history.${item.pending_refunds_truncated === true ? ' First 250 auctions shown.' : ''}` },
+	)
+	const shares = item.share_positions ?? {}
+	const sharePanel = operationsPanel(
+		'Share positions',
+		operationRecords(shares['items']).map(position =>
+			operationRow(
+				`Universe ${String(position['universe_id'])}`,
+				`${exactUnit(String(position['invalid_atto_shares']), 18, 'INVALID')} · ${exactUnit(String(position['yes_atto_shares']), 18, 'YES')} · ${exactUnit(String(position['no_atto_shares']), 18, 'NO')} · ${exactUnit(String(position['complete_sets_atto_shares']), 18, 'complete sets')}${position['migration_locked'] === true ? ' · Migrated source shares locked' : ''}`,
+				String(position['token']),
+				undefined,
+			),
+		),
+		'No indexed share positions.',
+		{ label: `${String(shares['basis'] ?? 'Indexed transfer history')}${shares['truncated'] === true ? ' First 250 positions shown.' : ''}` },
 	)
 	const auctionClaims = operationsPanel(
 		'Auction interactions',
-		(item.auction_claims ?? []).map(claim => operationRow(String(claim['type'] ?? 'Auction position'), `${String(claim['provenance'] ?? 'historical interaction')} · current entitlement is unavailable`, String(claim['entity'] ?? ''), claim['blockNumber'])),
+		(item.auction_claims ?? []).map(claim => operationRow(String(claim['type'] ?? 'Auction position'), `${semanticSummary({ event_data: claim['data'] })}`, String(claim['entity'] ?? ''), claim['blockNumber'])),
 		'No truth-auction interactions are associated with this address.',
 	)
 	const lpPositions = operationsPanel(
@@ -263,7 +314,7 @@ export const renderAddressProfilePage = (deps: AddressProfileDeps, item: RichLis
 	interactionPanel.append(interactionList)
 	setLiveRecord(interactionPanel, 'references', interactions)
 	setLiveRecord(activity, 'transactions', transactions)
-	content.replaceChildren(header, metrics, balances, involvement, lpPositions, forkParticipation, reportParticipation, escalationClaims, auctionClaims, interactionPanel, activity)
+	content.replaceChildren(header, metrics, balances, involvement, payoutPanel, escalationPositions, sharePanel, refundPanel, lpPositions, forkParticipation, reportParticipation, escalationClaims, auctionClaims, interactionPanel, activity)
 	applyLiveChanges(content, previousSections, { live })
 	content.setAttribute('aria-busy', 'false')
 }

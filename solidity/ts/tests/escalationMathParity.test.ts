@@ -1,3 +1,5 @@
+import { allocatedWinningPayout } from '../../../augurScan/src/claim-payout'
+import { buildCarryMerkleMountainRangeProof, createSparseNullifier, hashCarryLeaf as hashSharedCarryLeaf } from '@zoltar/core-shared/evm/carryProof'
 import { beforeAll, beforeEach, describe, test } from 'bun:test'
 import { concatHex, encodeAbiParameters, encodeDeployData, keccak256, zeroAddress, type Abi, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
 import assert from '../testSupport/simulator/utils/assert'
@@ -337,6 +339,35 @@ describe('Escalation math parity', () => {
 	beforeEach(() => {
 		mockWindow = getAnvilWindowEthereum()
 		client = createWriteClient(mockWindow, TEST_ADDRESSES[0])
+	})
+
+	test('scanner allocated payouts and shared carry proofs match the deployed Solidity verifier', async () => {
+		const hash = await client.sendTransaction({ data: `0x${statoblast_EscalationGameProofVerifier_EscalationGameProofVerifier.evm.bytecode.object}` })
+		const receipt = await client.waitForTransactionReceipt({ hash })
+		const verifier = requireContractAddress(receipt.contractAddress, 'Proof verifier')
+		const abi = statoblast_EscalationGameProofVerifier_EscalationGameProofVerifier.abi
+		for (const [principal, rewardAmount, rewardCumulative, binding, winningBalance, forkThreshold, nonDecisionThreshold] of [
+			[81n, 33n, 75n, 100n, 160n, 500n, 1000n],
+			[100n, 77n, 160n, 100n, 160n, 1000n, 1000n],
+			[1n, 1n, 1000n, 0n, 1000n, 0n, 1000n],
+			[10n ** 23n + 1n, 7n * 10n ** 18n + 1n, 19n * 10n ** 18n + 3n, 11n * 10n ** 18n, 20n * 10n ** 18n, 713n, 1000n],
+		] as const) {
+			const expected = await client.readContract({ abi, address: verifier, functionName: 'computeAllocatedWinningWithdrawal', args: [principal, rewardAmount, rewardCumulative, binding, winningBalance, forkThreshold, nonDecisionThreshold] })
+			const actual = allocatedWinningPayout({ principal, rewardAmount, rewardCumulative, binding, winningBalance, forkThreshold, nonDecisionThreshold })
+			assert.strictEqual(actual.payout, expected.amountToWithdrawAttoRep)
+			assert.strictEqual(actual.burn, expected.burnAmountAttoRep)
+		}
+		const leaves = Array.from({ length: 6 }, (_, index) => hashSharedCarryLeaf({ depositor: '0x1111111111111111111111111111111111111111', amountAttoRep: 17n, cumulativeAmountAttoRep: BigInt(index + 1) * 17n, parentDepositIndex: BigInt(index), sourceNodeId: BigInt(index + 1) }, 1))
+		for (let index = 0; index < leaves.length; index++) {
+			const leaf = leaves[index]
+			if (leaf === undefined) throw new Error('Missing test leaf')
+			const proof = buildCarryMerkleMountainRangeProof(leaves, index)
+			const root = await client.readContract({ abi, address: verifier, functionName: 'computeMerkleMountainRangeRootFromProof', args: [leaf, 6n, proof.leafIndex, proof.merkleMountainRangePeakIndex, proof.merkleMountainRangeSiblings] })
+			assert.strictEqual(root, proof.root)
+		}
+		const nullifiers = createSparseNullifier([1n, 4n])
+		const root = await client.readContract({ abi, address: verifier, functionName: 'computeNullifierRoot', args: [2n, nullifiers.getProof(2n), ZERO_HASH] })
+		assert.strictEqual(root, nullifiers.getRoot())
 	})
 
 	test('shared attrition-time inversion matches the deployed contract', async () => {

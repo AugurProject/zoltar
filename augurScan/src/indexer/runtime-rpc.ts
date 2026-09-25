@@ -1,6 +1,7 @@
+import { traceParticipants } from './transaction-selection.ts'
 import { errorChain } from '../../../shared/core/ts/errors/errorChain.ts'
 import type { AddressActivity, StoredTransaction } from '../database.ts'
-import { type Address, createPublicClient, type Hash, http, type Log, type PublicClient, type RpcFetchFn, zeroAddress } from '../ethereum.ts'
+import { type Address, createPublicClient, getAddress, type Hash, http, type Log, type PublicClient, type RpcFetchFn, zeroAddress } from '../ethereum.ts'
 import { parseLoggedRpcResponse, safePrunedStateProviderMessage } from '../logging.ts'
 import { RpcRequestMethodError, type RpcRequestQueue, withRpcRequestQueue } from '../rpc-request-queue.ts'
 import { bigintToSafeNumber } from '../time.ts'
@@ -279,7 +280,7 @@ export const addressActivityFrom = (transactions: readonly StoredTransaction[], 
 	const result = new Map<string, AddressActivity>()
 	for (const transaction of transactions) {
 		const transactionLogs = logs.filter(log => log.transactionHash === transaction.hash)
-		const referencedAddresses = [...(transaction.decoded.referencedAddresses ?? []), ...transactionLogs.flatMap(log => log.decoded.referencedAddresses ?? [])]
+		const referencedAddresses = [...traceParticipants(transaction.receipt).map(address => getAddress(address)), ...(transaction.decoded.referencedAddresses ?? []), ...transactionLogs.flatMap(log => log.decoded.referencedAddresses ?? [])]
 		const pools = new Set<Address>()
 		if (transaction.to !== null && contracts.get(transaction.to.toLowerCase())?.kind === 'securityPool') pools.add(transaction.to)
 		for (const log of transactionLogs) if (contracts.get(log.address.toLowerCase())?.kind === 'securityPool') pools.add(log.address)

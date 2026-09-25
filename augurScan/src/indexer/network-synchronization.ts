@@ -1,5 +1,4 @@
 import { type ContractDeploymentObservation, DatabaseConsistencyError, type IndexedBlock, type IndexerLease } from '../database.ts'
-import { compareBigint } from '../compare.ts'
 import { errorChainIncludes } from '../error-chain.ts'
 import type { Hash, Log } from '../ethereum.ts'
 import {
@@ -225,7 +224,7 @@ export async function poll(this: NetworkIndexer): Promise<boolean> {
 		readonly deploymentObservations: readonly ContractDeploymentObservation[]
 	}
 	try {
-		segment = await this.getNextLogSegment(nextBlock, observedHead, initialContracts)
+		segment = await this.getNextLogSegment(nextBlock, nextBlock + 99n < observedHead ? nextBlock + 99n : observedHead, initialContracts)
 		if (segment.endBlockHash !== undefined && segment.endBlockHeader?.hash !== segment.endBlockHash) throw new ChainContinuityError(`Canonical chain changed after querying logs through block ${segment.toBlock}`)
 	} catch (error) {
 		if (error instanceof ChainContinuityError) return false
@@ -265,8 +264,7 @@ export async function poll(this: NetworkIndexer): Promise<boolean> {
 	let previousStoredNumber = checkpoint?.number
 	let previousStoredHash = checkpoint?.hash
 	while (!processedBlocks.has(end) && !this.signal.aborted) {
-		const targetBlock = [...new Set([...logsByBlock.keys(), end])].filter(blockNumber => blockNumber >= batchStart && blockNumber <= end && !processedBlocks.has(blockNumber)).sort(compareBigint)[0]
-		if (targetBlock === undefined) throw new Error(`Sparse log segment did not retain its end checkpoint at block ${end}`)
+		const targetBlock = previousStoredNumber !== undefined && previousStoredNumber >= batchStart ? previousStoredNumber + 1n : batchStart
 		const header = await headerAt(targetBlock)
 		const expectedParentHash = previousStoredNumber !== undefined && targetBlock === previousStoredNumber + 1n ? previousStoredHash : undefined
 		let indexed: { block: IndexedBlock; contracts: Map<string, ContractMetadata>; tokenMetadata: Map<string, TokenMetadata> }

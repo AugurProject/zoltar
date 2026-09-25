@@ -1,3 +1,4 @@
+import { protocolFeeEconomics } from '../repositories/fee-economics.ts'
 import type { SQL } from 'bun'
 import { auctionCatalogData, escalationCatalogData, forkCatalogData, forkCatalogTotal, operationsOverviewSupplement, reportCatalogData, riskCatalogData } from '../repositories/operations.ts'
 import { detailPage, paged, parseRiskCursor, protocolCursorFor, protocolCursorForRequest, riskCursorFor } from './entity-details.ts'
@@ -16,7 +17,7 @@ export const operationsResponse = async (sql: SQL, url: URL): Promise<Response> 
 		operationsOverviewSupplement(sql, chainId, String(asOf['blockNumber'])),
 		forkCatalogData(sql, chainId, String(asOf['blockNumber'])),
 	])
-	return json({ chainId, asOf, data: { reports, escalations, auctions, risk, ...supplement, forks } })
+	return json({ chainId, asOf, data: { reports, escalations, auctions, risk, ...supplement, forks, feeEconomics: await protocolFeeEconomics(sql, chainId, String(asOf['blockNumber'])) } })
 }
 
 const catalogRows = async (sql: SQL, domain: 'reports' | 'escalations' | 'auctions' | 'forks', chainId: number, asOf: Record<string, unknown>, cursor: { block: string; log: number; tx: string }, queryLimit: number) => {

@@ -176,6 +176,7 @@ export const isUniswapPriceValue = (value: unknown): boolean =>
 	isString(value['quote_symbol']) &&
 	isString(value['event_name']) &&
 	isString(value['rep_per_eth_1e18']) &&
+	(value['quote_decimals'] === undefined || value['quote_decimals'] === null || (typeof value['quote_decimals'] === 'number' && Number.isInteger(value['quote_decimals']) && value['quote_decimals'] >= 0 && value['quote_decimals'] <= 255)) &&
 	(value['liquidity_value'] === undefined || isNullableString(value['liquidity_value']))
 
 const isArgumentDefinition = (value: unknown): boolean => isRecord(value) && typeof value['index'] === 'number' && Number.isInteger(value['index']) && isString(value['name']) && isString(value['type']) && (value['indexed'] === undefined || typeof value['indexed'] === 'boolean')
@@ -313,6 +314,12 @@ export const isRichListRecordValue = (value: unknown): boolean =>
 	value['pool_associations'].every(isPoolAssociationValue) &&
 	Array.isArray(value['vault_positions']) &&
 	value['vault_positions'].every(isVaultPositionValue) &&
+	(value['escalation_positions_truncated'] === undefined || typeof value['escalation_positions_truncated'] === 'boolean') &&
+	(value['pending_refunds_truncated'] === undefined || typeof value['pending_refunds_truncated'] === 'boolean') &&
+	(value['share_positions'] === undefined || isJsonRecord(value['share_positions'])) &&
+	(value['pending_refunds'] === undefined || (Array.isArray(value['pending_refunds']) && value['pending_refunds'].every(isJsonRecord))) &&
+	(value['escalation_payouts'] === undefined || isJsonRecord(value['escalation_payouts'])) &&
+	(value['escalation_positions'] === undefined || (Array.isArray(value['escalation_positions']) && value['escalation_positions'].every(isJsonRecord))) &&
 	(value['escalation_claims'] === undefined || (Array.isArray(value['escalation_claims']) && value['escalation_claims'].every(isJsonRecord))) &&
 	(value['auction_claims'] === undefined || (Array.isArray(value['auction_claims']) && value['auction_claims'].every(isJsonRecord)))
 

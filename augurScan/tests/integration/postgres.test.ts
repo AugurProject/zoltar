@@ -2654,6 +2654,7 @@ postgresTest(
 					tick_spacing: null,
 					hooks_address: null,
 					quote_symbol: 'WETH',
+					quote_decimals: 18,
 					quote_token_address: wethAddress.toLowerCase(),
 					rep_per_eth_1e18: '18000000000000000000',
 					liquidity_value: '180000000000000000000000000000000000000000',
@@ -2675,12 +2676,25 @@ postgresTest(
 					tick_spacing: null,
 					hooks_address: null,
 					quote_symbol: 'WETH',
+					quote_decimals: 18,
 					quote_token_address: wethAddress.toLowerCase(),
 					rep_per_eth_1e18: '24000000000000000000',
 					liquidity_value: '240000000000000000000000000000000000000000',
 					timestamp: '2026-01-02T00:00:00.000Z',
 				},
 			])
+			// Decimal metadata, rather than token symbols, controls the liquidity chart scale.
+			await database.sql`UPDATE token_metadata SET decimals = 6 WHERE chain_id = ${chainId} AND address = ${wethAddress.toLowerCase()} AND canonical`
+			try {
+				const decimalResponse = await handleApi(new Request(`http://localhost/api/v1/state/pools/${chainId}/${discoveredAddress.toLowerCase()}`), database.sql)
+				const decimalHistory = await decimalResponse?.json()
+				expect(decimalHistory?.uniswapRepEthPrices).toEqual([
+					expect.objectContaining({ quote_symbol: 'WETH', quote_decimals: 6, liquidity_value: '180000000000000000000000000000000000000000' }),
+					expect.objectContaining({ quote_symbol: 'WETH', quote_decimals: 6, liquidity_value: '240000000000000000000000000000000000000000' }),
+				])
+			} finally {
+				await database.sql`UPDATE token_metadata SET decimals = 18 WHERE chain_id = ${chainId} AND address = ${wethAddress.toLowerCase()} AND canonical`
+			}
 			await database.storeRichListBalances(
 				chainId,
 				2n,
@@ -3542,7 +3556,7 @@ postgresTest(
 				observed_rounds: 1,
 				report_data: { marker: 'historical' },
 			})
-			expect(operations.data.escalations).toEqual([expect.objectContaining({ block_number: '1', event_name: 'DepositOnOutcome', invalid_stake_atto_rep: '10' })])
+			expect(operations.data.escalations).toEqual([expect.objectContaining({ block_number: '1', event_name: 'DepositOnOutcome', invalid_stake_atto_rep: null, balance_read_status: null })])
 			expect(operations.data.auctions).toEqual([expect.objectContaining({ block_number: '1', event_name: 'BidSubmitted', bid_count: 1, bidder_count: 1, settlement_count: 0 })])
 			expect(operations.data.totals).toMatchObject({ reports: 1, escalations: 1, auctions: 1, reorganizations: 1 })
 			const reportCursor = btoa(

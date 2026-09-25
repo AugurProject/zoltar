@@ -236,6 +236,8 @@ test('validates nested state rows and complete specialized price records', () =>
 	expect(isAmmPriceValue(amm)).toBeTrue()
 	expect(isRepEthPriceValue(repEth)).toBeTrue()
 	expect(isUniswapPriceValue(uniswap)).toBeTrue()
+	for (const quote_decimals of [0, 6, 18, 255, null]) expect(isUniswapPriceValue({ ...uniswap, quote_decimals })).toBeTrue()
+	for (const quote_decimals of [-1, 256, 6.5, '18', Number.NaN]) expect(isUniswapPriceValue({ ...uniswap, quote_decimals })).toBeFalse()
 	expect(isAmmPriceValue({ ...amm, yes_reserve_atto_shares: undefined })).toBeFalse()
 	expect(isRepEthPriceValue({ ...repEth, event_name: null })).toBeFalse()
 	expect(isUniswapPriceValue({ ...uniswap, block_number: 12 })).toBeFalse()

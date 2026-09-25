@@ -1,5 +1,6 @@
+import { callTraceRows } from './call-trace.ts'
 import { isRecord } from './api-validation.ts'
-import { exactNumber, utcDateTime } from './format.ts'
+import { exactNumber, exactUnit, utcDateTime } from './format.ts'
 import { short } from './identifier-format.ts'
 
 const node = <K extends keyof HTMLElementTagNameMap>(tag: K, className: string, value?: string): HTMLElementTagNameMap[K] => {
@@ -70,10 +71,20 @@ export const renderExplorerPage = async (path: string, chainId: string, api: (pa
 				field('From', link(string(record, 'from_address'), `/address/${record['from_address']}?chainId=${chainId}`)),
 				field('To', record['to_address'] === null ? 'Contract deployment' : link(string(record, 'to_address'), `/address/${record['to_address']}?chainId=${chainId}`)),
 				field('Status', string(record, 'status')),
+				field('Transaction value', exactUnit(string(record, 'value'), 18, 'ETH')),
 				field('Gas used', exactNumber(string(record, 'gas_used'))),
 			)
 		} else {
 			summary.append(field('Hash', string(record, 'hash')), field('Time', utcDateTime(string(record, 'timestamp'))), field('Parent', string(record, 'parent_hash')), field('Finalized', record['finalized'] === true ? 'Yes' : 'No'))
+		}
+		if (kind === 'tx') {
+			const receipt = isRecord(record['receipt']) ? record['receipt'] : {}
+			const traces = node('section', 'static-card')
+			traces.append(node('h3', '', 'Calls and ETH value flows'))
+			const calls = callTraceRows(receipt['callTrace'])
+			for (const call of calls) traces.append(node('p', 'data-note', call))
+			if (calls.length === 0) traces.append(node('p', 'data-note', 'Call traces unavailable for this transaction. Transaction value is an attempted value for reverted transactions.'))
+			summary.append(traces)
 		}
 		const rows = result[kind === 'tx' ? 'logs' : 'transactions']
 		const section = node('section', 'static-card')

@@ -31,3 +31,22 @@ export const unknownCallReport = async (sql: SQL, limit = 100) => {
 		LIMIT ${limit}
 	`
 }
+
+export const chainDecodeCoverage = async (sql: SQL, chainId: number, snapshotBlock: string) => {
+	const [counts, groups, traces, reverted] = await Promise.all([
+		sql`SELECT count(*)::text AS observed_calls,
+			count(*) FILTER (WHERE a.decode_status = 'decoded')::text AS decoded_calls,
+			count(*) FILTER (WHERE a.decode_status IN ('unknown', 'failed'))::text AS undecoded_calls
+			FROM transactions t JOIN actions a ON a.chain_id = t.chain_id AND a.tx_hash = t.hash AND a.block_hash = t.block_hash
+			WHERE t.chain_id = ${chainId} AND t.canonical AND t.block_number <= ${snapshotBlock} AND t.input <> '0x'`,
+		sql`SELECT t.to_address AS destination, left(lower(t.input), 10) AS selector, a.decode_status,
+			count(*)::text AS transaction_count, min(t.hash) AS sample_transaction
+			FROM transactions t JOIN actions a ON a.chain_id = t.chain_id AND a.tx_hash = t.hash AND a.block_hash = t.block_hash
+			WHERE t.chain_id = ${chainId} AND t.canonical AND t.block_number <= ${snapshotBlock} AND t.input <> '0x'
+				AND a.decode_status IN ('unknown', 'failed')
+			GROUP BY t.to_address, selector, a.decode_status ORDER BY count(*) DESC, t.to_address, selector LIMIT 101`,
+		sql`SELECT count(*)::text AS selected_transactions, count(*) FILTER (WHERE receipt->>'callTraceStatus' = 'available')::text AS traced_transactions FROM transactions WHERE chain_id = ${chainId} AND canonical AND block_number <= ${snapshotBlock}`,
+		sql`SELECT hash, to_address, block_number::text, value::text FROM transactions WHERE chain_id = ${chainId} AND canonical AND block_number <= ${snapshotBlock} AND status = 'reverted' ORDER BY block_number DESC, transaction_index DESC LIMIT 100`,
+	])
+	return { ...counts[0], ...traces[0], reverted, groups: groups.slice(0, 100), truncated: groups.length > 100 }
+}

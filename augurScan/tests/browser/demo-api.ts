@@ -20,6 +20,33 @@ export function createDemoApi(context: DemoContext) {
 	const priceDemo = context.pageUrl.searchParams.get('priceDemo')
 
 	const detailState = context.pageUrl.searchParams.get('detailState')
+	const claimState = context.pageUrl.searchParams.get('claimState')
+	const claimPosition = {
+		depositor: '0xc9b36e44643fc5d882654ffd9791ae7171b0e9db',
+		outcome: '1',
+		deposit_index: '4',
+		kind: 'inherited',
+		status: claimState === 'pending' ? 'pending' : 'claimable',
+		principal_atto_rep: '2000000000000000000',
+		source_principal_atto_rep: '1800000000000000000',
+		retained_principal_atto_rep: '1200000000000000000',
+		auction_haircut_atto_rep: '600000000000000000',
+		reward_amount_atto_rep: '1200000000000000000',
+		reward_cumulative_atto_rep: '5000000000000000000',
+		...(claimState === 'pending' ? {} : { payout_atto_rep: '1440000000000000000', burn_atto_rep: '160000000000000000' }),
+		proof: {
+			depositor: '0xc9b36e44643fc5d882654ffd9791ae7171b0e9db',
+			amountAttoRep: String(2000000000000000000n),
+			cumulativeAmountAttoRep: String(5000000000000000000n),
+			parentDepositIndex: '4',
+			sourceNodeId: '5',
+			leafIndex: '4',
+			merkleMountainRangePeakIndex: '0',
+			merkleMountainRangeSiblings: ['0x' + '12'.repeat(32)],
+			nullifierSiblings: Array.from({ length: 64 }, () => '0x' + '00'.repeat(32)),
+		},
+	}
+	const claimEvidence = claimState === 'unavailable' ? { status: 'unavailable', reason: 'Historical proof state is unavailable on this provider' } : { status: 'available', positions: [claimPosition], truncated: false }
 
 	const deploymentState = context.pageUrl.searchParams.get('deploymentState')
 
@@ -153,6 +180,14 @@ export function createDemoApi(context: DemoContext) {
 		if (priceDemo === 'constant-nonzero') return [firstRepEthPrice]
 		if (priceDemo === 'constant-repeated') return repEthPrices.slice(0, 3).map(price => ({ ...price, rep_per_eth_1e18: firstRepEthPrice.rep_per_eth_1e18 }))
 		return [...repEthPrices]
+	}
+
+	const demoRetentionRate = (rate: string) => {
+		const scenario = context.pageUrl.searchParams.get('retentionDemo')
+		if (scenario === 'none') return (10n ** 18n).toString()
+		if (scenario === 'full-fee') return '0'
+		if (scenario === 'missing') return null
+		return rate
 	}
 
 	const demoUniswapPrices = () => (priceDemo === 'eight' ? demoDenseUniswapRepEthPriceHistory() : demoUniswapRepEthPriceHistory())
@@ -438,7 +473,7 @@ export function createDemoApi(context: DemoContext) {
 			fee_eligible_capacity_ownership_atto_rep: '154200000000000000000',
 			total_claimable_vault_fees_atto_eth: '1280000000000000000',
 			unallocated_accrued_fees_atto_eth: '210000000000000000',
-			current_retention_rate: '999999700000000000',
+			current_retention_rate: '999999987000000000',
 			vault_count: '7',
 			child_count: '2',
 			snapshot_block: '23184712',
@@ -463,7 +498,7 @@ export function createDemoApi(context: DemoContext) {
 			fee_eligible_capacity_ownership_atto_rep: '73900000000000000000',
 			total_claimable_vault_fees_atto_eth: '430000000000000000',
 			unallocated_accrued_fees_atto_eth: '80000000000000000',
-			current_retention_rate: '999999700000000000',
+			current_retention_rate: '999999987000000000',
 			vault_count: '4',
 			child_count: '0',
 			snapshot_block: '23184710',
@@ -488,7 +523,7 @@ export function createDemoApi(context: DemoContext) {
 			fee_eligible_capacity_ownership_atto_rep: '32100000000000000000',
 			total_claimable_vault_fees_atto_eth: '190000000000000000',
 			unallocated_accrued_fees_atto_eth: '40000000000000000',
-			current_retention_rate: '999999400000000000',
+			current_retention_rate: '999999980000000000',
 			vault_count: '3',
 			child_count: '0',
 			snapshot_block: '23184698',
@@ -513,7 +548,7 @@ export function createDemoApi(context: DemoContext) {
 			fee_eligible_capacity_ownership_atto_rep: '8800000000000000000',
 			total_claimable_vault_fees_atto_eth: '70000000000000000',
 			unallocated_accrued_fees_atto_eth: '9000000000000000',
-			current_retention_rate: '999999700000000000',
+			current_retention_rate: '999999987000000000',
 			vault_count: '5',
 			child_count: '1',
 			snapshot_block: '8972451',
@@ -705,7 +740,9 @@ export function createDemoApi(context: DemoContext) {
 						settlement_collateral_atto_eth: value,
 						total_capacity_ownership_atto_rep: requiredArrayItem(capacity, index, 'Demo capacity point'),
 						total_claimable_vault_fees_atto_eth: String(BigInt(20 + index * 8) * 10n ** 16n),
-						current_retention_rate: poolItem.current_retention_rate,
+						fee_index: context.pageUrl.searchParams.get('feeSeries') === 'missing' ? undefined : String(BigInt(index + 1) * 10n ** 16n),
+						unallocated_accrued_fees_atto_eth: ['missing', 'partial'].includes(context.pageUrl.searchParams.get('feeSeries') ?? '') ? undefined : String(BigInt(index + 1) * 10n ** 15n),
+						current_retention_rate: demoRetentionRate(poolItem.current_retention_rate),
 					})),
 					events: [],
 					market: hasAmm
@@ -766,7 +803,9 @@ export function createDemoApi(context: DemoContext) {
 		}
 		return pagedHistory(
 			{
-				pools: demoPools.filter(item => item.question_id === parts[6]).map((item, index) => ({ ...item, timestamp: new Date(Date.now() - (50 - index * 12) * 86_400_000).toISOString() })),
+				pools: demoPools
+					.filter(item => item.question_id === parts[6])
+					.map((item, index) => ({ ...item, escalation_address: demoAddress('7'), resolution_block: item.snapshot_block ?? '23184700', read_result: { questionResolution: '1', finalQuestionResolution: '1' }, timestamp: new Date(Date.now() - (50 - index * 12) * 86_400_000).toISOString() })),
 				forks: [],
 			},
 			['pools', 'forks'],
@@ -874,6 +913,7 @@ export function createDemoApi(context: DemoContext) {
 				event_name: 'DepositOnOutcome',
 				block_number: asOf.blockNumber,
 				invalid_stake_atto_rep: '400000000000000000000',
+				balance_block_number: asOf.blockNumber,
 				no_stake_atto_rep: '900000000000000000000',
 				yes_stake_atto_rep: '1250000000000000000000',
 			},
@@ -896,16 +936,25 @@ export function createDemoApi(context: DemoContext) {
 		const allReports = cappedKpiCatalog ? [...Array.from({ length: 250 }, (_, index) => ({ ...reportTemplate, report_id: String(10_000 + index), lifecycle: { ...reportTemplate.lifecycle, state: 'Finalized' } })), { ...settleableReport, report_id: '10250' }] : reports
 		const allEscalations = cappedKpiCatalog ? [...Array.from({ length: 250 }, (_, index) => ({ ...escalationTemplate, game_address: `0x${(index + 1).toString(16).padStart(40, '0')}`, event_name: 'NonDecisionReached' })), { ...escalationTemplate, game_address: `0x${(251).toString(16).padStart(40, '0')}` }] : escalations
 		const allAuctions = cappedKpiCatalog ? [...Array.from({ length: 250 }, (_, index) => ({ ...auctionTemplate, auction_address: `0x${(index + 1).toString(16).padStart(40, '0')}`, status: 'Closed' })), { ...auctionTemplate, auction_address: `0x${(251).toString(16).padStart(40, '0')}` }] : auctions
+		const poolMetricsUnavailable = context.pageUrl.searchParams.get('poolMetrics') === 'unavailable'
 		const risk = {
 			pools: [
 				{
 					pool_address: '0x9999999999999999999999999999999999999999',
 					block_number: asOf.blockNumber,
-					read_status: 'success',
+					read_status: poolMetricsUnavailable ? 'failed' : 'success',
 					source_method: 'poolAccountingState()',
-					protocol_state: '0',
-					scanner_severity: 'warning',
-					scanner_reason: 'Pool is above the scanner capacity warning band',
+					protocol_state: poolMetricsUnavailable ? 'unavailable' : '0',
+					scanner_severity: poolMetricsUnavailable ? 'unavailable' : 'warning',
+					scanner_reason: poolMetricsUnavailable ? 'Tagged pool read unavailable' : 'Pool is above the scanner capacity warning band',
+					read_result: {
+						currentRetentionRate: String(999999987000000000n),
+						settlementCollateralAttoEth: String(42n * 10n ** 18n),
+						currentMintingCapacityAttoEth: String(50n * 10n ** 18n),
+						totalPoolHeldAttoRep: String(120n * 10n ** 18n),
+						totalCapacityOwnershipAttoRep: String(100n * 10n ** 18n),
+						securityMultiplierBps: '25000',
+					},
 					capacity: {
 						usedAttoEth: (42n * 10n ** 18n).toString(),
 						capacityAttoEth: (50n * 10n ** 18n).toString(),
@@ -1085,7 +1134,16 @@ export function createDemoApi(context: DemoContext) {
 						block_number: operations.asOf.blockNumber,
 						read_status: 'success',
 						source_method: 'lifecycle(), balances(), totalCapital()',
-						read_result: { phase: 'Active', requiredNextDepositAttoRep: (500n * 10n ** 18n).toString() },
+						read_result: {
+							startBondAttoRep: String(1000000000000000000n),
+							nonDecisionThresholdAttoRep: String(500000000000000000000n),
+							endTimestamp: '1750000000',
+							bindingCapitalAttoRep: String(5000000000000000000n),
+							outcomeBalancesAttoRep: ['1000000000000000000', '1250000000000000000000', '0'],
+							questionResolution: '1',
+							finalQuestionResolution: claimState === 'pending' ? '3' : '1',
+							claimEvidence,
+						},
 					},
 					deposits: [event],
 					claims: [],
@@ -1105,8 +1163,10 @@ export function createDemoApi(context: DemoContext) {
 						block_number: operations.asOf.blockNumber,
 						read_status: 'success',
 						source_method: 'auctionState(), computeClearing()',
-						read_result: { state: 'Open' },
+						read_result: { finalized: true, clearingTick: '14', attoEthRaised: '3000000000000000000', totalAttoRepPurchased: String(12000000000000000000n), computeClearing: { tick: '14', funded: true } },
 					},
+					finalization: evidence('AuctionFinalized', { clearingTick: '14', grossAcceptedAttoEth: String(3000000000000000000n), repSoldAttoRep: String(12000000000000000000n), funded: true }),
+					demandCurveTruncated: context.pageUrl.searchParams.get('demandTruncated') === '1',
 					demandCurve: [{ tick: '14', amountAttoEth: (3n * 10n ** 18n).toString(), cumulativeDemandAttoEth: (3n * 10n ** 18n).toString() }],
 					events: evidencePage(bid),
 				},
@@ -1246,7 +1306,20 @@ export function createDemoApi(context: DemoContext) {
 				const log = demoLogs.find(item => item.chain_id === chainId && item.tx_hash === hash)
 				if (log === undefined) throw new Error('Transaction not found')
 				return {
-					transaction: { hash, block_hash: log.block_hash, block_number: log.block_number, block_timestamp: log.block_timestamp, from_address: log.origin_address, to_address: log.emitter_address, status: 'success', gas_used: '184220', action_summary: log.action_summary, explorer_base_url: 'https://etherscan.io' },
+					transaction: {
+						hash,
+						block_hash: log.block_hash,
+						block_number: log.block_number,
+						block_timestamp: log.block_timestamp,
+						from_address: log.origin_address,
+						to_address: log.emitter_address,
+						status: 'success',
+						value: '1000000000000000001',
+						receipt: { callTraceStatus: 'available', callTrace: { type: 'CALL', from: log.origin_address, to: log.emitter_address, value: '0xde0b6b3a7640001', calls: [{ type: 'CALL', from: log.emitter_address, to: demoAddress('7'), value: '0x1', error: 'execution reverted' }] } },
+						gas_used: '184220',
+						action_summary: log.action_summary,
+						explorer_base_url: 'https://etherscan.io',
+					},
 					logs: demoLogs.filter(item => item.tx_hash === hash).map(item => ({ ...item, emitter_address: item.emitter_address })),
 				}
 			}
@@ -1648,6 +1721,20 @@ export function createDemoApi(context: DemoContext) {
 							address: address ?? demoAddress('1'),
 							availability: 'Awaiting indexed evidence',
 						}),
+						share_positions: {
+							items: [{ token: demoAddress('2'), universe_id: '0', invalid_atto_shares: '1000000000000000000', yes_atto_shares: '3000000000000000001', no_atto_shares: '2000000000000000000', complete_sets_atto_shares: '1000000000000000000', migration_locked: false }],
+							truncated: false,
+							basis: 'Canonical indexed transfers',
+						},
+						pending_refunds: [{ auction_address: demoAddress('8'), pending_atto_eth: '100000000000000001' }],
+						escalation_payouts: {
+							items: claimState === 'unavailable' ? [] : [{ game_address: demoAddress('7'), snapshot_block: operations.asOf.blockNumber, snapshot_block_hash: demoHash, position: claimPosition }],
+							unavailable_games: claimState === 'unavailable' ? '1' : '0',
+							truncated_games: '0',
+							sampled_games: '1',
+							truncated: false,
+						},
+						escalation_positions: [{ game_address: demoAddress('7'), deposit_index: '4', principal_atto_rep: '2000000000000000000', final_resolution: '1', outcome: '1', resolution_block: operations.asOf.blockNumber }],
 						lp_positions: lpPositions,
 						fork_participation: forkParticipation,
 						report_participation: reportParticipation,

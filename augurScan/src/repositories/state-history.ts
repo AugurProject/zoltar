@@ -39,6 +39,7 @@ export const poolStateHistory = async (sql: SQL, address: string, query: StateHi
 				market.token1_address, market.fee_hundredths_bip::text AS fee_hundredths_bip,
 				market.tick_spacing, market.hooks_address,
 				CASE WHEN quote_contract.kind = 'usdc' THEN 'USDC' WHEN observation.venue = 'v4' THEN 'ETH' ELSE COALESCE(quote_metadata.symbol, 'WETH') END AS quote_symbol,
+				COALESCE(quote_metadata.decimals, CASE WHEN quote_contract.kind = 'usdc' THEN ${USDC_QUOTE_DECIMALS} WHEN quote_contract.kind = 'weth' OR market.token0_address = '0x0000000000000000000000000000000000000000' OR market.token1_address = '0x0000000000000000000000000000000000000000' THEN ${ETH_QUOTE_DECIMALS} END)::integer AS quote_decimals,
 				CASE
 					WHEN market.token0_address = universe_rep.reputation_token_address THEN market.token1_address
 					ELSE market.token0_address
@@ -107,7 +108,18 @@ export const universeStateHistory = async (sql: SQL, universeId: string, query: 
 
 export const questionStateHistory = async (sql: SQL, questionId: string, query: StateHistoryQuery) => {
 	const [pools, forks] = await Promise.all([
-		sql`SELECT p.pool_address, p.universe_id, p.block_number, p.block_hash, p.tx_hash, p.log_index, b.timestamp FROM pools p JOIN blocks b ON b.chain_id = p.chain_id AND b.hash = p.block_hash WHERE p.chain_id = ${query.chainId} AND p.question_id = ${questionId} AND p.canonical AND p.block_number BETWEEN ${query.fromBlock} AND ${query.toBlock} ORDER BY p.block_number DESC, p.log_index DESC, p.tx_hash DESC, p.block_hash DESC, p.pool_address LIMIT ${query.queryLimit} OFFSET ${query.offset}`,
+		sql`SELECT p.pool_address, p.universe_id, p.block_number, p.block_hash, p.tx_hash, p.log_index, b.timestamp,
+			game.arguments->>'escalationGame' AS escalation_address,
+			snapshot.read_result, snapshot.read_status, snapshot.block_number::text AS resolution_block
+			FROM pools p JOIN blocks b ON b.chain_id = p.chain_id AND b.hash = p.block_hash
+			LEFT JOIN LATERAL (SELECT arguments FROM logs WHERE chain_id = p.chain_id AND emitter_address = p.pool_address
+				AND canonical AND event_name = 'EscalationGameSet' AND block_number <= ${query.toBlock}
+				ORDER BY block_number DESC, log_index DESC LIMIT 1) game ON true
+			LEFT JOIN LATERAL (SELECT state.* FROM entity_state_snapshots state
+				JOIN blocks canonical_block ON canonical_block.chain_id = state.chain_id AND canonical_block.hash = state.block_hash AND canonical_block.canonical
+				WHERE state.chain_id = p.chain_id AND state.entity_type = 'escalation'
+				AND state.entity_identity = lower(game.arguments->>'escalationGame') AND state.canonical AND state.block_number <= ${query.toBlock}
+				ORDER BY state.block_number DESC, state.observed_at DESC LIMIT 1) snapshot ON true WHERE p.chain_id = ${query.chainId} AND p.question_id = ${questionId} AND p.canonical AND p.block_number BETWEEN ${query.fromBlock} AND ${query.toBlock} ORDER BY p.block_number DESC, p.log_index DESC, p.tx_hash DESC, p.block_hash DESC, p.pool_address LIMIT ${query.queryLimit} OFFSET ${query.offset}`,
 		sql`SELECT u.universe_id, u.block_number, u.block_hash, u.tx_hash, u.log_index, u.fork_time AS timestamp FROM universe_events u WHERE u.chain_id = ${query.chainId} AND u.fork_question_id = ${questionId} AND u.event_name = 'UniverseForked' AND u.canonical AND u.block_number BETWEEN ${query.fromBlock} AND ${query.toBlock} ORDER BY u.block_number DESC, u.log_index DESC, u.tx_hash DESC, u.block_hash DESC, u.universe_id LIMIT ${query.queryLimit} OFFSET ${query.offset}`,
 	])
 	return { pools, forks }

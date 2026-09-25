@@ -95,3 +95,14 @@ test('prioritizes delayed pruning over an earlier ordinary snapshot failure', as
 		),
 	).rejects.toBe(pruned)
 })
+
+test('unavailable claim reconstruction preserves the tagged basic escalation state', async () => {
+	const read: StateRead = async (_address, _abi, name) => {
+		if (name === 'securityPool') throw new Error('Claim ancestry unavailable')
+		if (name === 'getOutcomeBalancesAttoRep') return [1n, 2n, 3n]
+		return 1n
+	}
+	const snapshot = await sampleEntityStateWithRead({ entityType: 'escalation', entityIdentity: pool, address: pool }, read)
+	expect(snapshot.readStatus).toBe('success')
+	expect(snapshot.readResult).toMatchObject({ outcomeBalancesAttoRep: ['1', '2', '3'], claimEvidence: { status: 'unavailable', reason: 'Claim ancestry unavailable' } })
+})

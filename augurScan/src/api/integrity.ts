@@ -1,3 +1,4 @@
+import { chainDecodeCoverage } from '../abi-coverage-report.ts'
 import type { SQL } from 'bun'
 import { encodeOpaqueCursor, parseCursor } from '../cursor-codec.ts'
 import { integrityCatalogData, latestInvalidationId } from '../repositories/integrity.ts'
@@ -92,6 +93,7 @@ export const integrityCatalogResponse = async (sql: SQL, url: URL): Promise<Resp
 			offset,
 			hasMore,
 			nextCursor: hasMore && last !== undefined ? integrityCursorFor(chainId, snapshotId, total, asOf, returnedOffset, last) : undefined,
+			decodeCoverage: await chainDecodeCoverage(sql, chainId, String(asOf['blockNumber'])),
 			migrations,
 			runs,
 		},

@@ -160,6 +160,12 @@ export interface RichListRecord {
 		claimableFeesAttoEth: SerializedAtomicInteger
 		blockNumber: string
 	}>
+	share_positions?: JsonRecord
+	escalation_positions_truncated?: boolean
+	pending_refunds_truncated?: boolean
+	escalation_positions?: JsonRecord[]
+	escalation_payouts?: JsonRecord
+	pending_refunds?: JsonRecord[]
 	escalation_claims?: JsonRecord[]
 	auction_claims?: JsonRecord[]
 	lp_positions?: JsonRecord[]
