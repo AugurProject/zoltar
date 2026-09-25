@@ -1,4 +1,4 @@
-import { getReportingContributionFunding } from '../../reporting/lib/reportingFunding.js'
+import { getReportingContributionFunding } from '../../../lib/reportingFunding.js'
 import { ReportingOracleBlocker } from '../../reporting/components/ReportingOracleBlocker.js'
 import { isPoolQuestionFinalized } from '../../reporting/lib/reportingDomain.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
@@ -313,11 +313,11 @@ export function SecurityPoolWorkflowSection(props: SecurityPoolWorkflowSectionPr
 	})
 	const selectedPendingOperationId = currentPoolOracleManagerDetails?.pendingOperationSlotId ?? 0n
 	const reportingOracleGuardMessage = (() => {
-		if (getReportingContributionFunding(currentReportingDetails, reporting.reportingForm.contributionFunding) === 'wallet') return undefined
-		if (currentReportingDetails?.viewerVaultExists === false || currentReportingDetails?.viewerPoolHeldVaultRepBackingAttoRep === 0n) return undefined
+		if (getReportingContributionFunding(currentReportingDetails, reporting.reportingForm.contributionFunding) === 'wallet' && !(currentReportingDetails?.status === 'active' && currentReportingDetails.forkContinuation)) return undefined
+		if (getReportingContributionFunding(currentReportingDetails, reporting.reportingForm.contributionFunding) === 'vault' && (currentReportingDetails?.viewerVaultExists === false || currentReportingDetails?.viewerPoolHeldVaultRepBackingAttoRep === 0n)) return undefined
 		if (reportingLockedReason !== undefined) return undefined
 		if (!selectedPoolStateModel.actions.reportOutcome.enabled) return undefined
-		if ((loadedSelectedPool?.totalCapacityOwnershipAttoRep ?? 0n) === 0n) return undefined
+		if ((loadedSelectedPool?.totalCapacityOwnershipAttoRep ?? 0n) === 0n && !(currentReportingDetails?.status === 'active' && currentReportingDetails.forkContinuation && getReportingContributionFunding(currentReportingDetails, reporting.reportingForm.contributionFunding) === 'wallet')) return undefined
 		if (currentPoolOracleManagerDetails === undefined || currentPoolOraclePriceUsable === true) return undefined
 		return currentPoolOracleManagerDetails.lastSettlementTimestamp > 0n ? securityPoolCopy.reportingOraclePriceExpiredReason : securityPoolCopy.reportingOraclePriceRequiredReason
 	})()

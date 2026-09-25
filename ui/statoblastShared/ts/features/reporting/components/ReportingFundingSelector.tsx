@@ -1,3 +1,4 @@
+import { formatCurrencyBalance } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { ViewTabs } from '@zoltar/ui-core-shared/components/ViewTabs.js'
 import * as reportingCopy from '../../../copy/reporting.js'
 
@@ -15,5 +16,14 @@ export function ReportingFundingSelector({ value, onChange, disabled }: { value:
 				{ value: 'vault', label: reportingCopy.vaultRepSource, disabled },
 			]}
 		/>
+	)
+}
+
+export function ReportingWalletVaultHelp({ depositAmount, reportAmount, remainingAmount }: { remainingAmount: bigint | undefined; depositAmount: bigint | undefined; reportAmount: bigint | undefined }) {
+	return (
+		<p className='detail'>
+			{reportingCopy.continuationFundingHelp}
+			{depositAmount !== undefined && reportAmount !== undefined && remainingAmount !== undefined && depositAmount > reportAmount ? ` ${reportingCopy.continuationMinimumDeposit(formatCurrencyBalance(depositAmount), formatCurrencyBalance(remainingAmount))}` : ''}
+		</p>
 	)
 }

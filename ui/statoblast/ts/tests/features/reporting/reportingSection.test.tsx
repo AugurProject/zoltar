@@ -749,12 +749,39 @@ describe('ReportingSection', () => {
 		expectTransactionButtonDisabled(document.body, reportingButtonLabel('Yes'), 'Approve REP for this escalation game before reporting.')
 	})
 
-	test('keeps fork continuation funding fixed to the pool vault', async () => {
+	test('offers wallet funding through the child vault after a fork', async () => {
 		const rendered = await renderIntoDocument(<ReportingSectionHarness initialProps={{ reportingDetails: createReportingDetails({ forkContinuation: true, contributionFunding: 'vault' }), reportingForm: createReportingForm({ contributionFunding: 'wallet', selectedOutcome: 'yes', reportAmount: '5' }) }} />)
 		cleanupRenderedComponent = rendered.cleanup
-		expect(within(document.body).queryByRole('button', { name: 'Wallet REP' })).toBeNull()
-		expect(document.body.textContent).toContain('Paid from: pool vault REP')
-		expect(document.body.textContent).toContain('Fork continuations use pool vault REP')
+		expect(within(document.body).getByRole('button', { name: 'Wallet REP' }).getAttribute('aria-pressed')).toBe('true')
+		expect(document.body.textContent).toContain('Paid from: wallet REP')
+		expect(document.body.textContent).toContain('Your wallet REP first enters your vault in this pool, then funds your report.')
+	})
+
+	test('discloses the child pool minimum and approves the full wallet deposit', async () => {
+		const rendered = await renderIntoDocument(
+			<ReportingSectionHarness
+				initialProps={{
+					reportingDetails: createReportingDetails({
+						forkContinuation: true,
+						contributionFunding: 'wallet',
+						minimumVaultRepDepositAttoRep: rep(10n),
+						walletVaultFunding: { vaultRepBackingUnits: 0n, totalRepBackingUnits: 0n, totalPoolHeldRepAttoRep: 0n },
+						viewerPoolHeldVaultRepBackingAttoRep: 0n,
+						viewerVaultExists: false,
+						viewerWalletRepBalanceAttoRep: rep(20n),
+						viewerWalletRepAllowanceAttoRep: rep(5n),
+					}),
+					reportingForm: createReportingForm({ contributionFunding: 'wallet', selectedOutcome: 'yes', reportAmount: '5' }),
+				}}
+			/>,
+		)
+		cleanupRenderedComponent = rendered.cleanup
+		expect(document.body.textContent).toContain('15 REP deposit for this report. Your vault will hold 10 REP afterward.')
+		expect(
+			within(document.body)
+				.getByRole('button', { name: /Approve 15 REP/ })
+				.hasAttribute('disabled'),
+		).toBe(false)
 	})
 
 	test('keeps the funding selector available when vault reporting is oracle-blocked', async () => {

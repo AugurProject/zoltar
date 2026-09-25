@@ -467,7 +467,55 @@ describe('useReportingOperations', () => {
 			await requireHookState(hookState).onReportOutcome()
 		})
 		expect(reportOutcomeInSecurityPool).not.toHaveBeenCalled()
-		expect(requireHookState(hookState).reportingFeedback?.status.detail).toContain('The game now requires vault REP')
+		expect(requireHookState(hookState).reportingFeedback?.status.detail).toContain('Reporting now needs a vault deposit first')
+	})
+
+	test.each([false, true])('wallet continuation reporting uses the minimum deposit and recovers funded vaults (failure: %s)', async failReport => {
+		const pool = getAddress('0x00000000000000000000000000000000000000d4')
+		let funded = false
+		let hookState: UseReportingOperationsState | undefined
+		const execute = mock(async (_account, _callbacks, securityPoolAddress, outcome, _amount, depositAmount, onVaultFunded) => {
+			expect(depositAmount).toBe(15n)
+			funded = true
+			onVaultFunded()
+			if (failReport) throw new Error('Your REP was deposited into your vault, but the report did not complete.')
+			return { action: 'reportOutcome' as const, hash: '0x1234' as const, outcome, securityPoolAddress, universeId: 1n }
+		}) satisfies NonNullable<UseReportingOperationsDependencies['reportOutcomeWithWalletViaVault']>
+		const Harness = createHarness(
+			useReportingOperations,
+			state => {
+				hookState = state
+			},
+			createReportingOperationsDependencies({
+				loadReportingDetails: async () =>
+					createReportingDetails(pool, {
+						contributionFunding: 'wallet',
+						forkContinuation: true,
+						minimumVaultRepDepositAttoRep: 10n,
+						walletVaultFunding: { vaultRepBackingUnits: 0n, totalRepBackingUnits: 0n, totalPoolHeldRepAttoRep: 0n },
+						viewerPoolHeldVaultRepBackingAttoRep: funded ? 15n : 0n,
+						viewerWalletRepAllowanceAttoRep: 100n,
+						viewerWalletRepBalanceAttoRep: 100n,
+					}),
+				reportOutcomeWithWalletViaVault: execute,
+			}),
+		)
+		const rendered = await renderIntoDocument(h(Harness, {}))
+		cleanupRenderedComponent = rendered.cleanup
+		await act(async () => {
+			requireHookState(hookState).setReportingForm(current => ({ ...current, securityPoolAddress: pool, selectedOutcome: 'yes', reportAmount: '0.000000000000000005', contributionFunding: 'wallet' }))
+		})
+		await act(async () => {
+			await requireHookState(hookState).loadReporting()
+		})
+		await act(async () => {
+			await requireHookState(hookState).onReportOutcome()
+		})
+		expect(execute).toHaveBeenCalledTimes(1)
+		if (failReport) {
+			expect(requireHookState(hookState).reportingForm.contributionFunding).toBe('vault')
+			expect(requireHookState(hookState).reportingDetails?.viewerPoolHeldVaultRepBackingAttoRep).toBe(15n)
+		} else expect(requireHookState(hookState).reportingResult?.action).toBe('reportOutcome')
 	})
 
 	test('onApproveReportingRep approves the accepted contribution amount for an active ordinary game', async () => {

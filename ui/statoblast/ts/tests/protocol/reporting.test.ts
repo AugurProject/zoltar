@@ -1,3 +1,5 @@
+import { isTransactionReviewCancellation, transactionErrorMessages } from '@zoltar/ui-core-shared/lib/errors.js'
+import { reportOutcomeWithWalletViaVault } from '@zoltar/ui-statoblast-shared/protocol/reportingWalletFunding.js'
 /// <reference types="bun-types" />
 
 import { describe, expect, test } from 'bun:test'
@@ -108,6 +110,63 @@ function createActiveReportingClient(getDepositsByOutcome: (outcomeIndex: number
 }
 
 describe('reporting protocol client', () => {
+	test.each(['none', 'deposit', 'report', 'cancel', 'requirements', 'quote'] as const)('wallet reporting after a fork handles failures at %s', async failure => {
+		const reader = createActiveReportingClient(() => [])
+		const previews: TransactionRequestPreview[] = []
+		let funded = false
+		let submitted = 0
+		const writer = createMockWriteClient(() => {
+			submitted += 1
+			if (failure === 'cancel' && submitted === 2) throw new Error(transactionErrorMessages.reviewCanceled)
+			if ((failure === 'report' && submitted === 2) || (failure === 'deposit' && submitted === 1)) throw new Error('User rejected transaction')
+		})
+		const client = {
+			...asWriteClient(writer),
+			...reader,
+			account: { address: vaultAddress, type: 'json-rpc' as const },
+			onTransactionPrepared: (preview: TransactionRequestPreview) => {
+				previews.push(preview)
+			},
+			readContract: createReadContractStub(async request => {
+				if (request.functionName === 'forkContinuation') return true
+				if (request.functionName === 'previewDepositOnOutcome') return [funded && failure === 'quote' ? 6n : 7n, 10n]
+				if (request.functionName === 'totalRepBackingUnits' || request.functionName === 'getTotalPoolHeldAttoRep') return funded ? 117n : 100n
+				if (request.functionName === 'minimumVaultRepDepositAttoRep') return 10n
+				if (request.functionName === 'securityVaults') return [funded ? 17n : 0n, 0n, 0n, 0n]
+				if (request.functionName === 'backingUnitsToAttoRep') return 17n
+				if (request.functionName === 'getEscalationMigrationEntitlementStatus') return [false, 0n, [false, false, false]]
+				if (request.functionName === 'disputeStakedRepByVaultAttoRep') return 0n
+				if (request.functionName === 'repToken') return repTokenAddress
+				if (request.functionName === 'balanceOf' || request.functionName === 'allowance') return 100n
+				if (request.functionName === 'vaultTargetBackingFactorBps') return failure === 'none' ? 25_000n : 0n
+				if (request.functionName === 'statoblastSecurityMultiplierBps') return 15_000n
+				if (request.functionName === 'hasReachedNonDecision') return false
+				return await reader.readContract(request)
+			}),
+		}
+		const result = reportOutcomeWithWalletViaVault(client, securityPoolAddress, 'no', 7n, failure === 'requirements' ? 16n : 17n, () => {
+			funded = true
+		})
+		if (failure === 'requirements' || failure === 'deposit') {
+			await expect(result).rejects.toThrow(failure === 'requirements' ? 'required vault deposit changed' : 'User rejected transaction')
+			expect(funded).toBe(false)
+			expect(submitted).toBe(failure === 'requirements' ? 0 : 1)
+			return
+		}
+		if (failure === 'report' || failure === 'cancel' || failure === 'quote') {
+			await expect(result).rejects.toThrow('Your REP was deposited into your vault')
+			await result.catch(error => expect(isTransactionReviewCancellation(error)).toBe(false))
+		} else expect((await result).action).toBe('reportOutcome')
+		expect(funded).toBe(true)
+		if (failure === 'quote') {
+			expect(submitted).toBe(1)
+			return
+		}
+		expect(previews.map(preview => preview.functionName)).toEqual(['depositRepToVault', 'depositToEscalationGame'])
+		expect(previews[0]?.args).toEqual([17n, failure === 'none' ? 25_000n : 15_000n])
+		expect(previews[1]?.args).toEqual([2, 7n])
+	})
+
 	test.each([zeroAddress, escalationGameAddress])('wallet reporting approves the pool before and after game startup (%s)', async gameAddress => {
 		const previews: TransactionRequestPreview[] = []
 		const client = asWriteClient(

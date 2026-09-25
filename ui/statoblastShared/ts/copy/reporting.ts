@@ -95,7 +95,8 @@ export const approveAmountLabel = (amount: string) => `Approve ${amount} REP`
 export const paidFromVault = 'Paid from: pool vault REP (no approval needed)'
 export const paidFromWallet = 'Paid from: wallet REP'
 export const availableBalance = (amount: string) => `Available: ${amount} REP.`
-export const continuationFundingHelp = 'Fork continuations use pool vault REP.'
+export const continuationFundingHelp = 'Your wallet REP first enters your vault in this pool, then funds your report.'
+export const continuationMinimumDeposit = (deposit: string, remainder: string) => `This pool requires a ${deposit} REP deposit for this report. Your vault will hold ${remainder} REP afterward.`
 export const yourPositions = 'Your positions'
 export const resultSummary = (outcome: string, amount?: string) => `Resolved as ${outcome}.${amount === undefined ? '' : ` You can claim ${amount} REP.`}`
 export const claimDeposits = (outcome: string, amount: string) => `Claim ${amount} REP from ${outcome}`
@@ -164,3 +165,5 @@ export const walletRepSource = 'Wallet REP'
 export const vaultRepSource = 'Pool vault REP'
 export const noVaultRepSelectWallet = 'No REP is available in your pool vault. Select Wallet REP to report.'
 export const insufficientVaultRepSelectWallet = (balance: string) => `Only ${balance} is available in your pool vault. Reduce the amount or select Wallet REP.`
+
+export const loadingVaultFunding = 'Loading vault funding requirements.'

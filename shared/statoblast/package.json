@@ -13,6 +13,11 @@
 			"bun": "./ts/escalationGame/escalationMath.ts",
 			"default": "./js/escalationGame/escalationMath.js"
 		},
+		"./escalationGame/walletVaultFunding": {
+			"types": "./ts/escalationGame/walletVaultFunding.ts",
+			"bun": "./ts/escalationGame/walletVaultFunding.ts",
+			"default": "./js/escalationGame/walletVaultFunding.js"
+		},
 		"./initialReport/oracleInitialReport": {
 			"types": "./ts/initialReport/oracleInitialReport.ts",
 			"bun": "./ts/initialReport/oracleInitialReport.ts",

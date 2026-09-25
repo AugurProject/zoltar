@@ -126,6 +126,7 @@ async function loadViewerReportingWalletState(client: ReadClient, fundingAddress
 async function loadViewerReportingVaultState(client: ReadClient, securityPoolAddress: Address, accountAddress: Address | undefined) {
 	if (accountAddress === undefined)
 		return {
+			viewerRepBackingUnits: undefined,
 			viewerPoolHeldVaultRepBackingAttoRep: undefined,
 			viewerEscalationMigrationEntitlement: undefined,
 			viewerVaultExists: false,
@@ -176,6 +177,7 @@ async function loadViewerReportingVaultState(client: ReadClient, securityPoolAdd
 	const viewerVaultExists = viewerRepBackingUnits !== 0n || viewerCapacityOwnershipAttoRep !== 0n || viewerClaimableFeesAttoEth !== 0n || viewerFeeIndex !== 0n || viewerVaultDisputeStakedAttoRep !== 0n
 	const viewerPoolHeldVaultRepBackingAttoRep = viewerVaultRepBackingAttoRep
 	return {
+		viewerRepBackingUnits,
 		viewerPoolHeldVaultRepBackingAttoRep,
 		viewerEscalationMigrationEntitlement: {
 			initialized: entitlementInitialized,
@@ -290,7 +292,7 @@ export async function loadReportingDetails(client: ReadClient, securityPoolAddre
 		}
 	}
 	const forkContinuationSnapshot = await readForkContinuation(client, escalationGameAddress)
-	const walletReportingStatePromise = loadViewerReportingWalletState(client, securityPoolAddress, forkContinuationSnapshot ? undefined : accountAddress)
+	const walletReportingStatePromise = loadViewerReportingWalletState(client, securityPoolAddress, accountAddress)
 	const [startBondAttoRep, nonDecisionThresholdAttoRep, activationTime, totalCostAttoRep, bindingCapital, invalidOutcomeState, yesOutcomeState, noOutcomeState, escalationEndTime, _questionOutcome, universeForkTime, hasReachedNonDecision, walletReportingState] = await Promise.all([
 		client.readContract({
 			abi: statoblast_EscalationGame_EscalationGame.abi,
@@ -395,7 +397,15 @@ export async function loadReportingDetails(client: ReadClient, securityPoolAddre
 	}
 	return {
 		bindingCapital,
-		contributionFunding: forkContinuationSnapshot ? 'vault' : 'wallet',
+		contributionFunding: 'wallet',
+		walletVaultFunding: forkContinuationSnapshot
+			? {
+					vaultRepBackingUnits: viewerVaultState.viewerRepBackingUnits ?? 0n,
+					totalRepBackingUnits: await client.readContract({ address: securityPoolAddress, abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'totalRepBackingUnits', args: [] }),
+					totalPoolHeldRepAttoRep: await client.readContract({ address: securityPoolAddress, abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'getTotalPoolHeldAttoRep', args: [] }),
+				}
+			: undefined,
+		minimumVaultRepDepositAttoRep: forkContinuationSnapshot ? await client.readContract({ address: securityPoolAddress, abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'minimumVaultRepDepositAttoRep', args: [] }) : undefined,
 		settlementCollateralAttoEth,
 		currentRequiredBond: totalCostAttoRep === 0n ? startBondAttoRep : totalCostAttoRep,
 		currentTime: block.timestamp,
@@ -461,9 +471,7 @@ export async function reportOutcomeInSecurityPool(client: WriteClient, securityP
 }
 
 export async function approveReportingRep(client: WriteClient, securityPoolAddress: Address, outcome: ReportingOutcomeKey, amountAttoRep: bigint) {
-	const [universeId, escalationGameAddress] = await Promise.all([readSecurityPoolUniverseId(client, securityPoolAddress), client.readContract({ address: securityPoolAddress, abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'escalationGame', args: [] })])
-	const forkContinuation = escalationGameAddress !== zeroAddress && (await client.readContract({ address: escalationGameAddress, abi: statoblast_EscalationGame_EscalationGame.abi, functionName: 'forkContinuation', args: [] }))
-	if (forkContinuation) throw new Error('Fork continuations use vault-funded escalation deposits.')
+	const universeId = await readSecurityPoolUniverseId(client, securityPoolAddress)
 	const fundingAddress = securityPoolAddress
 	const repTokenAddress = await client.readContract({ address: fundingAddress, abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'repToken', args: [] })
 	const hash = await writeContractAndWait(client, () => ({

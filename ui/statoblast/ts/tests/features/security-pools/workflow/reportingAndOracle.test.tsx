@@ -230,13 +230,24 @@ describe('SecurityPoolWorkflowSection: reporting and oracle', () => {
 	})
 
 	test.each([
-		['wallet', false],
-		['vault', true],
-		['vault', false],
-	] as const)('applies the stale-price guard to the selected %s funding source (vault: %s)', async (contributionFunding, viewerVaultExists) => {
+		['wallet', false, false],
+		['vault', true, false],
+		['vault', false, false],
+		['wallet', false, true],
+	] as const)('applies the stale-price guard to the selected %s funding source (vault: %s)', async (contributionFunding, viewerVaultExists, forkContinuation) => {
 		const reporting = createLoadedReportingProps()
 		if (reporting.reportingDetails === undefined) throw new Error('Expected reporting details')
-		reporting.reportingDetails = { ...reporting.reportingDetails, contributionFunding: 'wallet', viewerVaultExists, viewerPoolHeldVaultRepBackingAttoRep: viewerVaultExists ? 10n : 0n, viewerWalletRepAllowanceAttoRep: 10n, viewerWalletRepBalanceAttoRep: 10n }
+		reporting.reportingDetails = {
+			...reporting.reportingDetails,
+			contributionFunding: 'wallet',
+			forkContinuation,
+			minimumVaultRepDepositAttoRep: 1n,
+			walletVaultFunding: { vaultRepBackingUnits: 0n, totalRepBackingUnits: 0n, totalPoolHeldRepAttoRep: 0n },
+			viewerVaultExists,
+			viewerPoolHeldVaultRepBackingAttoRep: viewerVaultExists ? 10n : 0n,
+			viewerWalletRepAllowanceAttoRep: 10n,
+			viewerWalletRepBalanceAttoRep: 10n,
+		}
 		reporting.reportingForm = { ...reporting.reportingForm, contributionFunding }
 		const renderedComponent = await renderIntoDocument(
 			<ChainTimestampContext.Provider value={100n}>
@@ -252,7 +263,7 @@ describe('SecurityPoolWorkflowSection: reporting and oracle', () => {
 						securityPools: [
 							createSelectedPool({
 								marketDetails: createMarketDetails({ endTime: 0n }),
-								totalCapacityOwnershipAttoRep: 10n,
+								totalCapacityOwnershipAttoRep: forkContinuation ? 0n : 10n,
 							}),
 						],
 						selectedPoolView: 'reporting',
@@ -265,7 +276,8 @@ describe('SecurityPoolWorkflowSection: reporting and oracle', () => {
 
 		const reportButton = within(document.body).getByRole('button', { name: /^Report No ·/ })
 		if (!(reportButton instanceof HTMLButtonElement)) throw new Error('Expected report button')
-		expect(reportButton.disabled).toBe(contributionFunding === 'vault')
+		expect(reportButton.disabled).toBe(contributionFunding === 'vault' || forkContinuation)
+		if (forkContinuation) expectTransactionButtonDisabled(document.body, reportButton.textContent ?? '', 'A current pool oracle price is required before reporting.')
 		if (contributionFunding === 'vault') expectTransactionButtonDisabled(document.body, reportButton.textContent ?? '', viewerVaultExists ? 'A current pool oracle price is required before reporting.' : 'No REP is available in your pool vault. Select Wallet REP to report.')
 	})
 

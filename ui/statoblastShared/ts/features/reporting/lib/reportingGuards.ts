@@ -19,6 +19,7 @@ export function getReportingReportGuardMessage({
 	selectedAmount,
 	requireAllowance = true,
 	walletFundingAvailable = false,
+	walletDepositAmount = actualDepositAmount,
 	viewerPoolHeldVaultRepBackingAttoRep,
 	viewerVaultExists,
 	viewerWalletRepAllowanceAttoRep,
@@ -36,6 +37,7 @@ export function getReportingReportGuardMessage({
 	selectedAmount: bigint | undefined
 	requireAllowance?: boolean | undefined
 	walletFundingAvailable?: boolean | undefined
+	walletDepositAmount?: bigint | undefined
 	viewerPoolHeldVaultRepBackingAttoRep: bigint | undefined
 	viewerVaultExists: boolean
 	viewerWalletRepAllowanceAttoRep?: bigint | undefined
@@ -54,11 +56,12 @@ export function getReportingReportGuardMessage({
 		return `Only ${formatCurrencyBalanceWithUnit(remainingSelectedOutcomeCapacity, 'REP')} remains before the selected side reaches the threshold.`
 	}
 	if (contributionFunding === 'wallet') {
+		if (walletDepositAmount === undefined) return 'Loading vault funding requirements.'
 		if (viewerWalletRepBalanceAttoRep === undefined) return 'Loading wallet REP balance.'
-		if (actualDepositAmount > viewerWalletRepBalanceAttoRep) return `Add ${formatAdditionalCurrencyBalance(actualDepositAmount - viewerWalletRepBalanceAttoRep, 'REP')} to this wallet before reporting.`
+		if (walletDepositAmount > viewerWalletRepBalanceAttoRep) return `Add ${formatAdditionalCurrencyBalance(walletDepositAmount - viewerWalletRepBalanceAttoRep, 'REP')} to this wallet before reporting.`
 		if (!requireAllowance) return undefined
 		if (viewerWalletRepAllowanceAttoRep === undefined) return 'Loading escalation-game REP allowance.'
-		if (actualDepositAmount > viewerWalletRepAllowanceAttoRep) return 'Approve REP for this escalation game before reporting.'
+		if (walletDepositAmount > viewerWalletRepAllowanceAttoRep) return 'Approve REP for this escalation game before reporting.'
 		return undefined
 	}
 	if (walletFundingAvailable && (!viewerVaultExists || (viewerPoolHeldVaultRepBackingAttoRep ?? 1n) === 0n)) return reportingCopy.noVaultRepSelectWallet

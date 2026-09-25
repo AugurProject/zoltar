@@ -1,3 +1,4 @@
+import { getWalletVaultFundingQuote } from '@zoltar/statoblast-shared/escalationGame/walletVaultFunding'
 import { statoblast_EscalationGame_EscalationGame } from '../types/contractArtifact'
 import { SystemState } from '../testSupport/simulator/types/statoblastTypes'
 import { QuestionOutcome } from '../testSupport/simulator/types/types'
@@ -16,7 +17,7 @@ import { createWriteClient } from '../testSupport/simulator/utils/clients'
 import { strictEqualTypeSafe } from '../testSupport/simulator/utils/testUtils'
 import assert from '../testSupport/simulator/utils/assert'
 import { beforeEach, describe, test } from 'bun:test'
-import { encodeDeployData, type Address } from '@zoltar/core-shared/evm/ethereum'
+import { encodeDeployData, parseAbi, type Address } from '@zoltar/core-shared/evm/ethereum'
 import { getTotalPoolHeldAttoRep, getTotalRepBackingUnits, redeemRepFromVault } from '../testSupport/simulator/utils/contracts/securityPool'
 import { splitMigrationRep } from '../testSupport/simulator/utils/contracts/zoltar'
 import { useStatoblastEscalationMigrationFixture, type StatoblastEscalationMigrationFixture } from './statoblast/fixture'
@@ -373,7 +374,7 @@ describe('Ordinary escalation vault-deposit freeze', () => {
 		await expectWalletDepositRejectionWithoutStateChange(forkInitiator, securityPoolAddresses.securityPool, escalationGame, repToken, /Pool inactive/)
 	})
 
-	test('rejects continuation wallet deposits while keeping continuation vault deposits available', async () => {
+	test.each([false, true])('rejects continuation wallet deposits and funds below-minimum reports through a vault (rounded backing: %s)', async roundedBacking => {
 		const forkInitiator = createWriteClient(mockWindow, TEST_ADDRESSES[1])
 		const forkThresholdAttoRep = await getZoltarForkThreshold(client, genesisUniverse)
 		const nonDecisionThresholdAttoRep = forkThresholdAttoRep / 2n + (forkThresholdAttoRep % 2n)
@@ -407,20 +408,49 @@ describe('Ordinary escalation vault-deposit freeze', () => {
 			functionName: 'minimumVaultRepDepositAttoRep',
 			args: [],
 		})
-		await splitMigrationRep(forkInitiator, genesisUniverse, seedRepAttoRep, [QuestionOutcome.Yes])
+		await splitMigrationRep(forkInitiator, genesisUniverse, seedRepAttoRep * 100n, [QuestionOutcome.Yes])
 		await approveToken(forkInitiator, childRepToken, childEscalationGame)
 		await approveToken(forkInitiator, childRepToken, childPool.securityPool)
 
 		await mockWindow.advanceTime(8n * 7n * DAY + DAY)
 		await startTruthAuction(client, childPool.securityPool)
 		strictEqualTypeSafe(await getSystemState(client, childPool.securityPool), SystemState.Operational, 'zero auctionable REP must activate the continuation directly')
+		if (roundedBacking) {
+			const transferRep = async (recipient: Address, amount: bigint) => {
+				const hash = await forkInitiator.writeContract({ address: childRepToken, abi: parseAbi(['function transfer(address to, uint256 amount) returns (bool)']), functionName: 'transfer', args: [recipient, amount] })
+				await forkInitiator.waitForTransactionReceipt({ hash })
+			}
+			await transferRep(client.account.address, seedRepAttoRep)
+			await approveToken(client, childRepToken, childPool.securityPool)
+			await depositRepToVault(client, childPool.securityPool, seedRepAttoRep)
+			await transferRep(childPool.securityPool, 1n)
+		}
 		await expectWalletDepositRejectionWithoutStateChange(forkInitiator, childPool.securityPool, childEscalationGame, childRepToken, /Fork game/)
 		await assert.rejects(depositWalletRep(forkInitiator, childPool.securityPool), /Fork game/)
 
+		await manipulatePriceOracle(forkInitiator, mockWindow, childPool.priceOracleManagerAndOperatorQueuer)
+		const [acceptedReport] = await client.readContract({ address: childEscalationGame, abi: statoblast_EscalationGame_EscalationGame.abi, functionName: 'previewDepositOnOutcome', args: [QuestionOutcome.No, reportBond] })
+		const quote = getWalletVaultFundingQuote(
+			{
+				minimumVaultRepDepositAttoRep: seedRepAttoRep,
+				vaultRepBackingUnits: (await getSecurityVault(client, childPool.securityPool, forkInitiator.account.address)).repBackingUnits,
+				totalRepBackingUnits: await getTotalRepBackingUnits(client, childPool.securityPool),
+				totalPoolHeldRepAttoRep: await getTotalPoolHeldAttoRep(client, childPool.securityPool),
+			},
+			acceptedReport,
+		)
+		if (quote === undefined) throw new Error('Expected child vault funding quote')
 		const childGameRepBeforeVaultDeposit = await getERC20Balance(client, childRepToken, childEscalationGame)
-		await depositRepToVault(forkInitiator, childPool.securityPool, seedRepAttoRep)
+		await depositRepToVault(forkInitiator, childPool.securityPool, quote.depositAmount)
 		const childVault = await getSecurityVault(client, childPool.securityPool, forkInitiator.account.address)
-		strictEqualTypeSafe(await backingUnitsToAttoRep(client, childPool.securityPool, childVault.repBackingUnits), seedRepAttoRep, 'continuation initialization must not freeze ordinary vault deposits')
+		assert.ok((await backingUnitsToAttoRep(client, childPool.securityPool, childVault.repBackingUnits)) >= seedRepAttoRep, 'continuation initialization must not freeze vault deposits')
 		strictEqualTypeSafe(await getERC20Balance(client, childRepToken, childEscalationGame), childGameRepBeforeVaultDeposit, 'continuation vault deposit must not enter game escrow')
+		assert.ok(acceptedReport < seedRepAttoRep, 'report must be below the vault minimum')
+		await depositToEscalationGame(forkInitiator, childPool.securityPool, QuestionOutcome.No, reportBond)
+		const fundedVault = await getSecurityVault(client, childPool.securityPool, forkInitiator.account.address)
+		const remainingRep = await backingUnitsToAttoRep(client, childPool.securityPool, fundedVault.repBackingUnits)
+		strictEqualTypeSafe(remainingRep, quote.remainingVaultRepAttoRep)
+		assert.ok(remainingRep >= seedRepAttoRep, 'report must preserve the vault minimum')
+		strictEqualTypeSafe(await getERC20Balance(client, childRepToken, childEscalationGame), childGameRepBeforeVaultDeposit + acceptedReport)
 	})
 })
