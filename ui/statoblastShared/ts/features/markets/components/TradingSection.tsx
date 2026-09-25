@@ -11,6 +11,7 @@ import { ErrorNotice } from '@zoltar/ui-core-shared/components/ErrorNotice.js'
 import { FormInput } from '@zoltar/ui-core-shared/components/FormInput.js'
 import { MetricGrid } from '@zoltar/ui-core-shared/components/MetricGrid.js'
 import { MetricField } from '@zoltar/ui-core-shared/components/MetricField.js'
+import { RepPriceStatusLabel } from '../../security-pools/components/RepPriceStatusLabel.js'
 import { OperationModal } from '@zoltar/ui-core-shared/components/OperationModal.js'
 import { RankedBarList } from '@zoltar/ui-core-shared/components/RankedBarList.js'
 import { RouteWorkflowPanel } from '@zoltar/ui-core-shared/components/RouteWorkflowPanel.js'
@@ -52,7 +53,6 @@ import type { TradingSectionProps } from '../../types.js'
 type TradingActionModal = 'mint' | 'redeem-complete-sets' | 'migrate-shares' | 'redeem-shares' | undefined
 export function TradingSection({
 	accountState,
-	calculationPriceConfigured = false,
 	embedInCard = false,
 	loadingTradingForkUniverse,
 	loadingTradingDetails,
@@ -104,8 +104,7 @@ export function TradingSection({
 	const totalShareCount = displayShareBalances === undefined ? undefined : displayShareBalances.invalid + displayShareBalances.no + displayShareBalances.yes
 	const walletOnWrongNetwork = accountState.address !== undefined && !isOnActiveAppChain
 	const mintAmount = tryParseTradingAmountInput(tradingForm.completeSetAmount)
-	const calculationRepPerEthPrice = calculationPriceConfigured ? repPerEthPrice : (repPerEthPrice ?? selectedPool?.lastOraclePrice)
-	const mintingCapacityAttoEth = calculateMintingCapacityAttoEth(selectedPool?.totalCapacityOwnershipAttoRep, calculationRepPerEthPrice, selectedPool?.statoblastSecurityMultiplierBps)
+	const mintingCapacityAttoEth = calculateMintingCapacityAttoEth(selectedPool?.totalCapacityOwnershipAttoRep, repPerEthPrice, selectedPool?.statoblastSecurityMultiplierBps)
 	const mintCheckpoint = estimateMintCheckpoint({
 		currentRetentionRate: selectedPool?.currentRetentionRate,
 		currentTimestamp,
@@ -136,7 +135,7 @@ export function TradingSection({
 			mintingCapacityAttoEth,
 			hasSelectedPool,
 			isOnActiveAppChain,
-			isPriceValid: calculationRepPerEthPrice !== undefined && calculationRepPerEthPrice > 0n,
+			isPriceValid: repPerEthPrice !== undefined && repPerEthPrice > 0n,
 			mintAmountInput: tradingForm.completeSetAmount,
 			shareTokenSupplyAttoShares: selectedPool?.shareTokenSupplyAttoShares,
 			totalPoolHeldAttoRep: selectedPool?.totalPoolHeldAttoRep,
@@ -176,7 +175,7 @@ export function TradingSection({
 			if (!isOnActiveAppChain) return getWrongNetworkReason()
 			if (selectedPool?.questionOutcome !== 'none') return tradingCopy.marketFinalizedReason
 			if (oraclePriceGuardMessage !== undefined) return oraclePriceGuardMessage
-			if (remainingMintCapacity === undefined) return calculationRepPerEthPrice === undefined || calculationRepPerEthPrice <= 0n ? tradingCopy.mintPriceUnavailable : tradingCopy.mintCapacityUnavailable
+			if (remainingMintCapacity === undefined) return repPerEthPrice === undefined || repPerEthPrice <= 0n ? tradingCopy.mintPriceUnavailable : tradingCopy.mintCapacityUnavailable
 			if (hasUndefinedCompleteSetExchangeRate(selectedPool?.settlementCollateralAttoEth, selectedPool?.shareTokenSupplyAttoShares) === true) return UNDEFINED_COMPLETE_SET_EXCHANGE_RATE_MESSAGE
 
 			return (() => {
@@ -391,6 +390,7 @@ export function TradingSection({
 					</MetricField>
 					<MetricField label={tradingCopy.availableToMint}>
 						<CurrencyValue exactWhenRoundedToZero loading={loadingTradingDetails} value={maximumMintAmount} suffix={commonCopy.eth} />
+						<RepPriceStatusLabel />
 					</MetricField>
 				</MetricGrid>
 				<label className='field'>

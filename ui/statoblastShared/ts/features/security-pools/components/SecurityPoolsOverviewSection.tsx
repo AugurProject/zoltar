@@ -17,7 +17,7 @@ import { deriveSecurityPoolLifecycleState, evaluateSecurityPoolState, type Secur
 import { calculateMintingCapacityAttoEth } from '../../markets/lib/trading.js'
 import { getPoolRegistryPresentation } from '@zoltar/ui-core-shared/lib/userCopy.js'
 import type { SecurityPoolsOverviewSectionProps } from '../../types.js'
-import { resolveUiRepPerEthPrice } from '../lib/uiPriceOracle.js'
+import { resolveRepPrice } from '../lib/uiPriceOracle.js'
 
 export function SecurityPoolsOverviewSection({
 	accountState,
@@ -33,7 +33,7 @@ export function SecurityPoolsOverviewSection({
 	securityPoolPage,
 	securityPoolOverviewError,
 	repPerEthPrice,
-	uiPriceOracle = 'open-oracle',
+	uiPriceOracle,
 }: SecurityPoolsOverviewSectionProps) {
 	const [pageIndex, setPageIndex] = useState(0)
 	const [activePageRequestKey, setActivePageRequestKey] = useState<string | undefined>(undefined)
@@ -186,9 +186,9 @@ export function SecurityPoolsOverviewSection({
 				return (
 					<div className='comparison-record-list'>
 						{filteredSecurityPools.map(({ pool, poolState }) => {
-							const calculationPrice = resolveUiRepPerEthPrice({ currentTimestamp, openOraclePrice: pool.lastOraclePrice, openOracleSettlementTimestamp: pool.lastOracleSettlementTimestamp, priceOracle: uiPriceOracle, uniswapPrice: repPerEthPrice })
-							const capacity = calculateMintingCapacityAttoEth(pool.totalCapacityOwnershipAttoRep, calculationPrice, pool.statoblastSecurityMultiplierBps)
-							return <PoolDirectoryRow key={pool.securityPoolAddress} pool={pool} activeUniverseId={activeUniverseId} lifecycleState={poolState.lifecycleState} capacity={capacity} currentTimestamp={currentTimestamp} onSelect={onSelectSecurityPool} />
+							const repPrice = resolveRepPrice({ now: currentTimestamp, poolOracle: { price: pool.lastOraclePrice, settlementTimestamp: pool.lastOracleSettlementTimestamp }, setting: uiPriceOracle, uniswapPrice: repPerEthPrice })
+							const capacity = calculateMintingCapacityAttoEth(pool.totalCapacityOwnershipAttoRep, repPrice.price, pool.statoblastSecurityMultiplierBps)
+							return <PoolDirectoryRow key={pool.securityPoolAddress} pool={pool} activeUniverseId={activeUniverseId} lifecycleState={poolState.lifecycleState} capacity={capacity} currentTimestamp={currentTimestamp} onSelect={onSelectSecurityPool} repPrice={repPrice} />
 						})}
 					</div>
 				)

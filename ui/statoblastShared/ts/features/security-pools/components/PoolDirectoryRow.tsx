@@ -16,6 +16,7 @@ import { getSecurityPoolStatusBadgeLabel, getSecurityPoolStatusBadgeTone } from 
 import type { SecurityPoolLifecycleState } from '../lib/securityPoolState.js'
 import { getOracleManagerPriceValidUntilTimestamp } from '../../../protocol/oracleTiming.js'
 import { PoolCapacitySummary } from './PoolCapacitySummary.js'
+import type { ResolvedRepPrice } from '../lib/uiPriceOracle.js'
 import * as copy from '../../../copy/poolWorkspace.js'
 import * as securityPoolCopy from '../../../copy/securityPool.js'
 
@@ -26,6 +27,7 @@ export function PoolDirectoryRow({
 	capacity,
 	currentTimestamp,
 	onSelect,
+	repPrice,
 }: {
 	activeUniverseId: bigint
 	pool: ListedSecurityPool
@@ -33,6 +35,7 @@ export function PoolDirectoryRow({
 	capacity: bigint | undefined
 	currentTimestamp: bigint | undefined
 	onSelect: ((address: string, universeId: bigint) => void) | undefined
+	repPrice: ResolvedRepPrice
 }) {
 	const title = getQuestionTitle(pool.marketDetails)
 	const status = getSecurityPoolStatusBadgeLabel({ hasForkActivity: pool.hasForkActivity, questionOutcome: pool.questionOutcome, lifecycleState })
@@ -67,7 +70,7 @@ export function PoolDirectoryRow({
 				{pool.universeId === activeUniverseId ? undefined : <p className='detail'>{securityPoolCopy.formatBrowsePoolUniverseMismatch(formatUniverseIdHex(pool.universeId))}</p>}
 				{oracleExpired || oracleMissing ? <span className='pool-oracle-warning'>{oracleExpired ? copy.poolPriceExpired : copy.poolPriceUnavailable}</span> : undefined}
 			</div>
-			<PoolCapacitySummary capacity={capacity} minted={pool.settlementCollateralAttoEth} />
+			<PoolCapacitySummary capacity={capacity} currentTimestamp={currentTimestamp} minted={pool.settlementCollateralAttoEth} repPrice={repPrice} />
 			<a
 				className='secondary pool-open-link'
 				href={href}

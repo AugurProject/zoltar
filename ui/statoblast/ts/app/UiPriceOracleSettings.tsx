@@ -39,6 +39,7 @@ export function UiPriceOracleSettings({ priceOracle, onPriceOracleChange }: { pr
 	return (
 		<label className='app-settings-price-oracle'>
 			<span>{appCopy.uiPriceOracle}</span>
+			<small>{appCopy.uiPriceOracleScope}</small>
 			<select
 				value={priceOracle}
 				onChange={event => {

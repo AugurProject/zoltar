@@ -1,5 +1,6 @@
 import * as workspaceCopy from '../../../copy/poolWorkspace.js'
 import { VaultExposureValue } from './VaultExposureValue.js'
+import { RepPriceStatusLabel } from './RepPriceStatusLabel.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as securityPoolCopy from '../../../copy/securityPool.js'
 import { CurrencyValue } from '@zoltar/ui-core-shared/components/CurrencyValue.js'
@@ -75,6 +76,7 @@ export function VaultMetricGrid({
 						<strong>
 							<VaultExposureValue capacity={capacityOwnershipAttoRep} multiplierBps={selectedPoolStatoblastSecurityMultiplierBps} repPerEthPrice={repPerEthPrice} />
 						</strong>
+						<RepPriceStatusLabel />
 					</div>
 				</div>
 				<div className='vault-preview-side-metrics'>
@@ -109,6 +111,7 @@ export function VaultMetricGrid({
 					<strong>
 						<VaultExposureValue capacity={capacityOwnershipAttoRep} multiplierBps={selectedPoolStatoblastSecurityMultiplierBps} repPerEthPrice={repPerEthPrice} />
 					</strong>
+					<RepPriceStatusLabel />
 				</div>
 				<div className='vault-detail-hero-secondary'>
 					<VaultPrimaryMetric label={commonCopy.poolHeldVaultRepBackingAttoRep} value={vaultAttoRepBacking} suffix={commonCopy.rep} />

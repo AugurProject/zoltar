@@ -53,6 +53,7 @@ test('applies an oracle choice in memory and reports a storage write failure', a
 		fireEvent.change(priceSelect, { target: { value: 'uniswap' } })
 		expect(onPriceOracleChange).toHaveBeenCalledWith('uniswap')
 		expect(queries.getByRole('alert').textContent).toContain('Storage denied')
+		expect(rendered.container.textContent).toContain('Changes the REP price behind displayed capacity, exposure, and health figures.')
 	} finally {
 		await rendered.cleanup()
 		if (originalDescriptor === undefined) Reflect.deleteProperty(globalThis, 'localStorage')

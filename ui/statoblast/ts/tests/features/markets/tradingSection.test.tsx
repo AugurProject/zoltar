@@ -13,6 +13,8 @@ import { ChainTimestampContext } from '@zoltar/ui-core-shared/wallet/chainTimest
 import { TradingSection } from '@zoltar/ui-statoblast-shared/features/markets/components/TradingSection.js'
 import { NEED_MATCHING_COMPLETE_SET_SHARES_MESSAGE, NO_MINT_CAPACITY_NO_ACTIVE_CAPACITY_OWNERSHIP_MESSAGE, UNDEFINED_COMPLETE_SET_EXCHANGE_RATE_MESSAGE } from '@zoltar/ui-statoblast-shared/features/markets/lib/trading.js'
 import { deriveHasForkActivity } from '@zoltar/ui-statoblast-shared/features/truth-auctions/lib/forkAuction.js'
+import { SelectedPoolRepPriceContext } from '@zoltar/ui-statoblast-shared/features/security-pools/components/RepPriceStatusLabel.js'
+import { resolveRepPrice } from '@zoltar/ui-statoblast-shared/features/security-pools/lib/uiPriceOracle.js'
 import type { TradingSectionProps } from '@zoltar/ui-zoltar-shared/features/types.js'
 import type { AccountState, TradingFormState } from '@zoltar/ui-zoltar-shared/types/app.js'
 import { describe, expect, test } from 'bun:test'
@@ -111,7 +113,7 @@ function createTradingSectionProps(overrides: Partial<TradingSectionProps> = {})
 		onRedeemCompleteSet: () => undefined,
 		onRedeemShares: () => undefined,
 		onTradingFormChange: () => undefined,
-		repPerEthPrice: undefined,
+		repPerEthPrice: 10n ** 18n,
 		repPerEthSource: undefined,
 		repPerEthSourceUrl: undefined,
 		selectedPool: createSelectedPool(),
@@ -510,7 +512,7 @@ void describe('TradingSection', () => {
 	})
 
 	void test('shows unavailable price instead of indefinite mint-capacity loading', async () => {
-		const rendered = await renderIntoDocument(<TradingSection {...createTradingSectionProps({ calculationPriceConfigured: true, repPerEthPrice: undefined })} />)
+		const rendered = await renderIntoDocument(<TradingSection {...createTradingSectionProps({ repPerEthPrice: undefined })} />)
 		cleanupRenderedComponent = rendered.cleanup
 		expect(document.body.textContent).toContain('Unavailable (no price)')
 		expect(document.body.textContent).not.toContain('Loading mint capacity.')
@@ -520,7 +522,7 @@ void describe('TradingSection', () => {
 	})
 
 	void test('shows zero mint capacity without waiting for an unavailable price', async () => {
-		const rendered = await renderIntoDocument(<TradingSection {...createTradingSectionProps({ calculationPriceConfigured: true, repPerEthPrice: undefined, selectedPool: createSelectedPool({ totalCapacityOwnershipAttoRep: 0n, feeEligibleCapacityOwnershipAttoRep: 0n }) })} />)
+		const rendered = await renderIntoDocument(<TradingSection {...createTradingSectionProps({ repPerEthPrice: undefined, selectedPool: createSelectedPool({ totalCapacityOwnershipAttoRep: 0n, feeEligibleCapacityOwnershipAttoRep: 0n }) })} />)
 		cleanupRenderedComponent = rendered.cleanup
 		expect(document.body.textContent).toContain('No mint capacity remaining.')
 		expect(document.body.textContent).not.toContain('Loading mint capacity.')
@@ -536,7 +538,6 @@ void describe('TradingSection', () => {
 						if (completeSetAmount !== undefined) mintedAmount = completeSetAmount
 					},
 					repPerEthPrice: 10n * 10n ** 18n,
-					calculationPriceConfigured: true,
 					selectedPool: createSelectedPool({ lastOraclePrice: 10n ** 18n, settlementCollateralAttoEth: 0n, totalCapacityOwnershipAttoRep: 10n * 10n ** 18n }),
 				})}
 			/>,
@@ -550,6 +551,21 @@ void describe('TradingSection', () => {
 			fireEvent.click(maxButton)
 		})
 		expect(mintedAmount).toBe('0.5')
+	})
+
+	void test('labels the amount available to mint with the selected pool price source', async () => {
+		const repPrice = resolveRepPrice({ now: 10n ** 6n, poolOracle: { price: 10n ** 18n, settlementTimestamp: 1n }, setting: 'open-oracle', uniswapPrice: undefined })
+		const renderedComponent = await renderIntoDocument(
+			<SelectedPoolRepPriceContext.Provider value={repPrice}>
+				<TradingSection {...createTradingSectionProps({ repPerEthPrice: repPrice.price })} />
+			</SelectedPoolRepPriceContext.Provider>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+		const documentQueries = within(document.body)
+		await act(() => fireEvent.click(documentQueries.getByRole('button', { name: 'Mint complete sets' })))
+		const label = documentQueries.getByRole('dialog', { name: 'Mint Complete Sets' }).querySelector('.rep-price-status')
+		expect(label?.classList.contains('stale')).toBe(true)
+		expect(label?.textContent).toContain('Stale')
 	})
 
 	void test('keeps minting disabled off Sepolia and explains how to recover after the modal is already open', async () => {

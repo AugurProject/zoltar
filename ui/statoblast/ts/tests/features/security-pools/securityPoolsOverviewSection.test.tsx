@@ -10,6 +10,7 @@ import { installTestRouting } from '@zoltar/ui-core-shared/tests/testUtils/testR
 import type { ListedSecurityPool, SecurityPoolBrowsePage, SecurityPoolPage } from '@zoltar/ui-core-shared/types/contracts.js'
 import { getWalletScopedAccountAddress } from '@zoltar/ui-core-shared/wallet/network.js'
 import { SecurityPoolsOverviewSection } from '@zoltar/ui-statoblast-shared/features/security-pools/components/SecurityPoolsOverviewSection.js'
+import { getOracleManagerPriceValidUntilTimestamp } from '@zoltar/ui-statoblast-shared/protocol/oracleTiming.js'
 import { deriveHasForkActivity } from '@zoltar/ui-statoblast-shared/features/truth-auctions/lib/forkAuction.js'
 import type { SecurityPoolsOverviewSectionProps } from '@zoltar/ui-zoltar-shared/features/types.js'
 import type { AccountState } from '@zoltar/ui-zoltar-shared/types/app.js'
@@ -107,6 +108,7 @@ function createProps(overrides: SecurityPoolsOverviewSectionTestOverrides = {}):
 		onSelectSecurityPool: () => undefined,
 		repPerEthPrice: undefined,
 		securityPoolOverviewError: undefined,
+		uiPriceOracle: 'open-oracle',
 		...overrides,
 		environmentRefreshKey,
 		securityPoolBrowseCount: securityPoolPage?.poolCount,
@@ -211,6 +213,23 @@ describe('SecurityPoolsOverviewSection', () => {
 		const card = getSecurityPoolCard('Will this resolve?')
 		expect((card.textContent ?? '').replace(/\s+/g, ' ')).toContain('/ ≈ 13.33 ETH')
 		expect((card.textContent ?? '').replace(/\s+/g, ' ')).not.toContain('/ ≈ 80.00 ETH')
+	})
+
+	test('labels browse capacity with the source and staleness of the price it uses', async () => {
+		const pool = createSecurityPool({ lastOraclePrice: 3n * 10n ** 18n, lastOracleSettlementTimestamp: 1n, statoblastSecurityMultiplierBps: 20_000n, totalCapacityOwnershipAttoRep: 80n * 10n ** 18n })
+		const expiredAt = getOracleManagerPriceValidUntilTimestamp(1n) ?? 0n
+		const renderedComponent = await renderIntoDocument(<SecurityPoolsOverviewSection {...createProps({ currentTimestamp: expiredAt + 2n * 60n * 60n, securityPools: [pool] })} />)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const label = getSecurityPoolCard('Will this resolve?').querySelector('.rep-price-status')
+		expect(label?.classList.contains('stale')).toBe(true)
+		expect(label?.textContent).toBe('⚠Stale · Open Oracle price expired 2h 0m ago')
+		await act(async () => {
+			render(<SecurityPoolsOverviewSection {...createProps({ currentTimestamp: expiredAt + 2n * 60n * 60n, repPerEthPrice: 4n * 10n ** 18n, securityPools: [pool], uiPriceOracle: 'open-oracle-fallback' })} />, renderedComponent.container)
+		})
+		const card = getSecurityPoolCard('Will this resolve?')
+		expect(card.querySelector('.rep-price-status')?.textContent).toBe('via Uniswap · Open Oracle expired')
+		expect((card.textContent ?? '').replace(/\s+/g, ' ')).toContain('/ ≈ 10.00 ETH')
 	})
 
 	test('does not price capacity from a never-reported Open Oracle value', async () => {
