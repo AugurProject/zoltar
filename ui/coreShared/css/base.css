@@ -436,8 +436,10 @@ button.destructive-subtle:hover:not(:disabled) {
 	border-color: var(--danger-border-strong);
 }
 
+/* One disabled treatment for every button tone: the dashed border marks it as unavailable, so a disabled primary action never reads as an enabled secondary one. */
 button:disabled {
 	border-color: var(--disabled-control-border);
+	border-style: dashed;
 	background: var(--disabled-control-bg);
 	box-shadow: none;
 	color: var(--disabled-control-text);
@@ -445,9 +447,7 @@ button:disabled {
 }
 
 button.primary:disabled {
-	border-color: var(--disabled-primary-button-border);
-	background: var(--disabled-primary-button-bg);
-	color: var(--disabled-primary-button-text);
+	font-weight: inherit;
 }
 
 button.quiet:disabled {
@@ -1218,8 +1218,10 @@ button.wallet-asset-action:hover:not(:disabled) {
 	line-height: var(--line-height-none);
 }
 
+/* A completed success state, not an unavailable action, so it keeps a solid border. */
 button.wallet-asset-action-accepted:disabled {
 	border-color: var(--success-border);
+	border-style: solid;
 	background: var(--success-soft);
 	color: var(--success);
 	cursor: default;
