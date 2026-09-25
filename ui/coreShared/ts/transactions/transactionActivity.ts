@@ -4,10 +4,13 @@ import type { TransactionScope } from './transactionScope.js'
 
 type TransactionActivityStatus = 'pending' | 'confirmed' | 'failed'
 
+/** Why a stored transaction failed; `dropped` means it was never mined within the tracking window. */
+type TransactionActivityFailureKind = TransactionFailureKind | 'dropped'
+
 /** A broadcast transaction remembered per network and account so its status survives a reload. */
 export type TransactionActivityEntry = Readonly<{
 	chainId: number
-	failureKind?: TransactionFailureKind | undefined
+	failureKind?: TransactionActivityFailureKind | undefined
 	hash: Hash
 	scope: TransactionScope
 	settledAt?: number | undefined
@@ -16,9 +19,12 @@ export type TransactionActivityEntry = Readonly<{
 	title: string
 }>
 
-export type TransactionActivityOutcome = Readonly<{ status: 'confirmed' }> | Readonly<{ status: 'failed'; failureKind: TransactionFailureKind }>
+export type TransactionActivityOutcome = Readonly<{ status: 'confirmed' }> | Readonly<{ status: 'failed'; failureKind: TransactionActivityFailureKind }>
 
 export const MAX_TRANSACTION_ACTIVITY_ENTRIES = 20
+
+/** A transaction still unmined after this long was dropped or replaced outside the app; it stops locking its objects. */
+export const MAX_PENDING_TRANSACTION_AGE_MILLISECONDS = 24 * 60 * 60 * 1000
 
 export function getTransactionActivityStorageKey({ account, backendId, chainId }: { account: string; backendId: string; chainId: number }) {
 	return `zoltar.transactionActivity.v1:${backendId}:${chainId}:${account.toLowerCase()}`
@@ -53,6 +59,16 @@ export function settleTransactionActivity(entries: readonly TransactionActivityE
 	return capActivity(entries.map(entry => (entry.hash === hash ? { ...entry, ...outcome, settledAt } : entry)))
 }
 
+export function dismissTransactionActivity(entries: readonly TransactionActivityEntry[], hash: Hash) {
+	return entries.some(entry => entry.hash === hash) ? entries.filter(entry => entry.hash !== hash) : entries
+}
+
+/** Settles pending transactions older than the tracking window as dropped. */
+export function expireStaleTransactionActivity(entries: readonly TransactionActivityEntry[], now: number) {
+	const stale = entries.filter(entry => entry.status === 'pending' && now - entry.submittedAt > MAX_PENDING_TRANSACTION_AGE_MILLISECONDS)
+	return stale.reduce((current, entry) => settleTransactionActivity(current, entry.hash, { status: 'failed', failureKind: 'dropped' }, now), entries)
+}
+
 export function countPendingTransactionActivity(entries: readonly TransactionActivityEntry[]) {
 	return entries.filter(entry => entry.status === 'pending').length
 }
@@ -65,8 +81,8 @@ function isHash(value: unknown): value is Hash {
 	return typeof value === 'string' && /^0x[0-9a-fA-F]{64}$/.test(value)
 }
 
-function isFailureKind(value: unknown): value is TransactionFailureKind {
-	return value === 'rejected' || value === 'reverted' || value === 'replaced' || value === 'error'
+function isFailureKind(value: unknown): value is TransactionActivityFailureKind {
+	return value === 'rejected' || value === 'reverted' || value === 'replaced' || value === 'error' || value === 'dropped'
 }
 
 function isFiniteTimestamp(value: unknown): value is number {

@@ -3,7 +3,7 @@ import type { WriteClient } from '../wallet/chainBackend.js'
 import { createTransactionFailureError } from './transactionLifecycle.js'
 
 export type SubmittedTransactionClient<TReceipt extends Pick<TransactionReceipt, 'status'> = TransactionReceipt> = {
-	onTransactionSubmitted?: ((hash: Hash) => void) | undefined
+	onTransactionSubmitted?: ((hash: Hash, status?: 'pending', replacedHash?: Hash) => void) | undefined
 	waitForTransactionReceipt: (...args: Parameters<WriteClient['waitForTransactionReceipt']>) => Promise<TReceipt>
 }
 
@@ -28,9 +28,10 @@ export async function waitForSubmittedTransactionReceipt<TReceipt extends Pick<T
 	const receipt = await client.waitForTransactionReceipt({
 		hash,
 		onReplaced: replacement => {
+			const replacedHash = resolvedHash
 			resolvedHash = replacement.transaction.hash
 			replacementReason = replacement.reason
-			client.onTransactionSubmitted?.(resolvedHash)
+			client.onTransactionSubmitted?.(resolvedHash, 'pending', replacedHash)
 			onTransactionReplaced?.(resolvedHash, replacement.reason)
 		},
 	})

@@ -30,7 +30,8 @@ export type WriteOperationsParameters = {
 	onTransactionPresented: (presentation: GlobalTransactionPresentation) => void
 	onTransactionPrepared?: (preview: TransactionRequestPreview) => void
 	onTransactionRequested: (intent: TransactionIntent) => TransactionRequestResult
-	onTransactionSubmitted: (hash: Hash, status?: TransactionSubmissionStatus) => void
+	/** `replacedHash` names the broadcast a wallet speed-up or cancellation replaced, so the right request follows it. */
+	onTransactionSubmitted: (hash: Hash, status?: TransactionSubmissionStatus, replacedHash?: Hash) => void
 	refreshState: RefreshState
 }
 

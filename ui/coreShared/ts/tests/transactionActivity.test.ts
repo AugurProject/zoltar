@@ -5,6 +5,9 @@ import type { Hash } from '@zoltar/core-shared/evm/ethereum'
 import { installDomTestLifecycle } from './testUtils/domTestLifecycle.js'
 import {
 	countPendingTransactionActivity,
+	dismissTransactionActivity,
+	expireStaleTransactionActivity,
+	MAX_PENDING_TRANSACTION_AGE_MILLISECONDS,
 	getPendingTransactionActivityScopes,
 	getTransactionActivityStorageKey,
 	MAX_TRANSACTION_ACTIVITY_ENTRIES,
@@ -18,7 +21,7 @@ import {
 import { createTransactionScope, mergeTransactionScopes, securityPoolTransactionScope, transactionScopesOverlap, universeTransactionScope } from '../transactions/transactionScope.js'
 import { installActiveEnvironmentForTesting, resetActiveEnvironmentForTesting } from '../lib/activeEnvironment.js'
 import { createFakeBackend } from './testUtils/fakeBackend.js'
-import { setTransactionActivityOwner, recordTransactionSettled, recordTransactionSubmitted, transactionActivity } from '../transactions/transactionActivityStore.js'
+import { dismissTransactionActivityEntry, hasPendingTransactionActivity, setTransactionActivityOwner, recordTransactionSettled, recordTransactionSubmitted, transactionActivity } from '../transactions/transactionActivityStore.js'
 
 installDomTestLifecycle()
 
@@ -74,6 +77,21 @@ describe('transaction activity list', () => {
 		expect(entries[0]?.hash).toBe(hashOf(MAX_TRANSACTION_ACTIVITY_ENTRIES + 5))
 	})
 
+	test('expires pending transactions past the tracking window and lets the user dismiss a row', () => {
+		const stale = { ...entry(1, 'pending'), scope: ['market:0x1'], submittedAt: 0 }
+		const fresh = { ...entry(2, 'pending'), submittedAt: MAX_PENDING_TRANSACTION_AGE_MILLISECONDS }
+		const expired = expireStaleTransactionActivity([fresh, stale], MAX_PENDING_TRANSACTION_AGE_MILLISECONDS + 1)
+
+		expect(expired.map(item => [item.hash, item.status, item.failureKind])).toEqual([
+			[hashOf(2), 'pending', undefined],
+			[hashOf(1), 'failed', 'dropped'],
+		])
+		expect(getPendingTransactionActivityScopes(expired)).toEqual([])
+		expect(expireStaleTransactionActivity([fresh], MAX_PENDING_TRANSACTION_AGE_MILLISECONDS + 1)).toEqual([fresh])
+		expect(dismissTransactionActivity(expired, hashOf(2)).map(item => item.hash)).toEqual([hashOf(1)])
+		expect(dismissTransactionActivity(expired, hashOf(9))).toBe(expired)
+	})
+
 	test('exposes the scopes of pending transactions for locking', () => {
 		const pending = { ...entry(1, 'pending'), scope: ['market:0x1'] }
 		const settled = { ...entry(2), scope: ['market:0x2'] }
@@ -100,6 +118,32 @@ describe('transaction activity store', () => {
 	afterEach(() => {
 		resetActiveEnvironmentForTesting()
 		transactionActivity.value = { chainId: undefined, entries: [], ownerKey: undefined, storageKey: undefined }
+	})
+
+	test('keeps one row when a broadcast is replaced and releases a dismissed pending lock', () => {
+		recordTransactionSubmitted({ hash: hashOf(1), scope: ['trading-deployment:factory'], title: 'Deploy factory' })
+		recordTransactionSubmitted({ hash: hashOf(2), previousHash: hashOf(1), scope: ['trading-deployment:factory'], title: 'Deploy factory' })
+		expect(transactionActivity.value.entries.map(item => item.hash)).toEqual([hashOf(2)])
+		expect(hasPendingTransactionActivity(['trading-deployment:factory'])).toBeTrue()
+		dismissTransactionActivityEntry(hashOf(2))
+		expect(transactionActivity.value.entries).toEqual([])
+		expect(hasPendingTransactionActivity(['trading-deployment:factory'])).toBeFalse()
+	})
+
+	test('settles stale pending transactions when the stored list is loaded', () => {
+		const restore = installActiveEnvironmentForTesting(createFakeBackend())
+		try {
+			setTransactionActivityOwner('0x00000000000000000000000000000000000000a1')
+			const storageKey = transactionActivity.value.storageKey
+			if (storageKey === undefined) throw new Error('Expected persisted activity for a connected account')
+			window.localStorage.setItem(storageKey, serializeTransactionActivity([{ ...entry(1, 'pending'), submittedAt: Date.now() - MAX_PENDING_TRANSACTION_AGE_MILLISECONDS - 1 }]))
+			transactionActivity.value = { chainId: undefined, entries: [], ownerKey: undefined, storageKey: undefined }
+			setTransactionActivityOwner('0x00000000000000000000000000000000000000a1')
+			expect(transactionActivity.value.entries[0]).toMatchObject({ status: 'failed', failureKind: 'dropped' })
+			expect(window.localStorage.getItem(storageKey)).toContain('"dropped"')
+		} finally {
+			restore()
+		}
 	})
 
 	test('persists per account and restores the list after a reload', () => {

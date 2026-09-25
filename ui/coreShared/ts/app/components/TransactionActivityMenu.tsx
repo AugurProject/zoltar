@@ -4,7 +4,7 @@ import { Badge } from '../../components/Badge.js'
 import { getActiveNetworkProfile } from '../../lib/activeEnvironment.js'
 import { formatRelativeTimestamp, formatTimestamp, getWallClockTimestamp } from '../../lib/formatters.js'
 import { countPendingTransactionActivity, type TransactionActivityEntry } from '../../transactions/transactionActivity.js'
-import { transactionActivity } from '../../transactions/transactionActivityStore.js'
+import { dismissTransactionActivityEntry, transactionActivity } from '../../transactions/transactionActivityStore.js'
 import { buildTransactionExplorerUrl } from '../../wallet/networkProfile.js'
 import type { BadgeTone } from '../../types/components.js'
 
@@ -18,6 +18,8 @@ function getStatusPresentation(entry: TransactionActivityEntry): { label: string
 			return { label: copy.reverted, tone: 'danger' }
 		case 'replaced':
 			return { label: copy.replaced, tone: 'warning' }
+		case 'dropped':
+			return { label: copy.dropped, tone: 'warning' }
 		default:
 			return { label: copy.failed, tone: 'danger' }
 	}
@@ -49,6 +51,12 @@ function ActivityRow({ entry }: { entry: TransactionActivityEntry }) {
 					</a>
 				)}
 			</div>
+			{/* A transaction replaced or dropped outside the app never gets a receipt; the user can release its lock. */}
+			{entry.status === 'pending' ? (
+				<button className='quiet transaction-activity-dismiss' type='button' aria-label={copy.formatStopTracking(entry.title)} onClick={() => dismissTransactionActivityEntry(entry.hash)}>
+					{copy.stopTracking}
+				</button>
+			) : undefined}
 		</li>
 	)
 }

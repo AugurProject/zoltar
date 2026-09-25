@@ -104,6 +104,22 @@ describe('transactionTray', () => {
 		expect(secondFinished.entries.map(entry => entry.key)).toEqual(['transaction-request-1'])
 	})
 
+	test('routes a wallet replacement to the request whose hash it replaced, never to another pending request', () => {
+		const otherHash = '0x9999000000000000000000000000000000000000000000000000000000000000'
+		const speedUpHash = '0x7777000000000000000000000000000000000000000000000000000000000000'
+		const first = markTransactionSubmitted(markTransactionRequested(createInitialTransactionTrayState(), { action: 'depositRepToVault', scope: ['security-pool:0x1'], source: 'security-vault', submittedTitle: 'Depositing REP' }), transactionHash)
+		const both = markTransactionSubmitted(markTransactionRequested(first, { action: 'depositRepToVault', scope: ['security-pool:0x2'], source: 'security-vault', submittedTitle: 'Depositing REP' }), otherHash)
+		const replaced = markTransactionSubmitted(both, speedUpHash, 'pending', otherHash)
+		const unattributed = markTransactionSubmitted(both, speedUpHash)
+
+		expect(replaced.entries.map(entry => entry.lifecycle)).toEqual([
+			{ phase: 'pending', hash: transactionHash },
+			{ phase: 'pending', hash: speedUpHash },
+		])
+		// Without the replaced hash a new hash cannot be attributed while two broadcasts are pending.
+		expect(unattributed).toBe(both)
+	})
+
 	test('ignores outcomes for an unknown request key', () => {
 		const finished = markTransactionFinished(createInitialTransactionTrayState())
 		const requested = markTransactionRequested(finished, { action: 'createMarket', source: 'zoltar', submittedTitle: 'Creating Question' })

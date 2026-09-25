@@ -5,7 +5,18 @@ import { createActiveEnvironmentGuard, getActiveBackend, getActiveNetworkProfile
 import { getBrowserStorage } from '../lib/browserStorage.js'
 import { createConnectedReadClient } from '../wallet/clients.js'
 import { createRecoveringReceiptWaiter } from './receiptRecovery.js'
-import { getTransactionActivityStorageKey, parseStoredTransactionActivity, recordSubmittedTransactionActivity, replaceTransactionActivityHash, serializeTransactionActivity, settleTransactionActivity, type TransactionActivityEntry, type TransactionActivityOutcome } from './transactionActivity.js'
+import {
+	dismissTransactionActivity,
+	expireStaleTransactionActivity,
+	getTransactionActivityStorageKey,
+	parseStoredTransactionActivity,
+	recordSubmittedTransactionActivity,
+	replaceTransactionActivityHash,
+	serializeTransactionActivity,
+	settleTransactionActivity,
+	type TransactionActivityEntry,
+	type TransactionActivityOutcome,
+} from './transactionActivity.js'
 import { transactionScopesOverlap, type TransactionScope } from './transactionScope.js'
 
 type TransactionActivityState = Readonly<{
@@ -42,6 +53,12 @@ function update(change: (entries: readonly TransactionActivityEntry[]) => readon
 	persist(next)
 }
 
+/** Test isolation: the list and its watch bookkeeping are module state shared by every rendered app. */
+export function resetTransactionActivityForTesting() {
+	watchedHashes.clear()
+	transactionActivity.value = { chainId: undefined, entries: [], ownerKey: undefined, storageKey: undefined }
+}
+
 /**
  * Selects whose activity the list shows. The browser simulation resets on reload, so its activity stays in memory.
  */
@@ -52,7 +69,9 @@ export function setTransactionActivityOwner(account: Address | undefined) {
 	const ownerKey = `${backendId}:${chainId}:${account?.toLowerCase() ?? ''}`
 	if (transactionActivity.peek().ownerKey === ownerKey) return
 	const stored = storageKey === undefined ? [] : parseStoredTransactionActivity(getBrowserStorage('localStorage')?.getItem(storageKey))
-	transactionActivity.value = { chainId, entries: stored, ownerKey, storageKey }
+	const entries = expireStaleTransactionActivity(stored, Date.now())
+	transactionActivity.value = { chainId, entries, ownerKey, storageKey }
+	if (entries !== stored) persist(transactionActivity.value)
 }
 
 export function recordTransactionSubmitted({ hash, previousHash, scope, title }: { hash: Hash; previousHash?: Hash | undefined; scope: TransactionScope | undefined; title: string }) {
@@ -75,6 +94,16 @@ export function releaseTransactionActivityWatch(hash: Hash) {
 	releasedWatches.value += 1
 }
 
+/** Removes an entry the user no longer wants tracked; a stuck pending entry stops locking its objects. */
+export function dismissTransactionActivityEntry(hash: Hash) {
+	watchedHashes.delete(hash)
+	update(entries => dismissTransactionActivity(entries, hash))
+}
+
+function isPendingInActivity(hash: Hash) {
+	return transactionActivity.peek().entries.some(entry => entry.hash === hash && entry.status === 'pending')
+}
+
 export function hasPendingTransactionActivity(scope: TransactionScope) {
 	return transactionActivity.value.entries.some(entry => entry.status === 'pending' && transactionScopesOverlap(entry.scope, scope))
 }
@@ -87,13 +116,32 @@ export function useTransactionActivityReceiptWatcher() {
 		for (const entry of entries) {
 			if (entry.status !== 'pending' || watchedHashes.has(entry.hash)) continue
 			watchedHashes.add(entry.hash)
+			let current = entry.hash
+			let replacedOutsideApp = false
 			const environment = createActiveEnvironmentGuard()
-			const waitForReceipt = createRecoveringReceiptWaiter(createConnectedReadClient(), { isCurrentEnvironment: environment.isCurrent, onTransactionSubmitted: () => undefined })
-			void waitForReceipt({ hash: entry.hash })
-				.then(receipt => recordTransactionSettled(entry.hash, receipt.status === 'success' ? { status: 'confirmed' } : { status: 'failed', failureKind: 'reverted' }))
+			// Stop polling once the network changes or the entry is settled, dismissed, or expired elsewhere.
+			const stillTracked = () => environment.isCurrent() && isPendingInActivity(current)
+			const waitForReceipt = createRecoveringReceiptWaiter(createConnectedReadClient(), { isCurrentEnvironment: stillTracked, onTransactionSubmitted: () => undefined })
+			void waitForReceipt({
+				hash: entry.hash,
+				onReplaced: replacement => {
+					if (replacement.reason === 'repriced') {
+						// A sped-up transaction keeps its row under the new hash.
+						watchedHashes.add(replacement.transaction.hash)
+						update(entries => replaceTransactionActivityHash(entries, current, replacement.transaction.hash))
+						current = replacement.transaction.hash
+						return
+					}
+					replacedOutsideApp = true
+				},
+			})
+				.then(receipt => {
+					if (replacedOutsideApp) recordTransactionSettled(current, { status: 'failed', failureKind: 'replaced' })
+					else recordTransactionSettled(current, receipt.status === 'success' ? { status: 'confirmed' } : { status: 'failed', failureKind: 'reverted' })
+				})
 				.catch(() => {
-					// The network changed; the next owner's list resumes its own pending entries.
-					watchedHashes.delete(entry.hash)
+					// The network changed or the entry stopped being tracked; the next owner's list resumes its own pending entries.
+					watchedHashes.delete(current)
 				})
 		}
 	}, [entries, released])

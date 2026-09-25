@@ -472,8 +472,9 @@ export function TradingDeploymentSetup({
 			const deployStep = services.deployStep ?? defaultServices.deployStep
 			if (deployStep === undefined) throw new Error(deploymentCopy.deploymentServiceUnavailable)
 			await deployStep(publicClient, plan, nextStep, hash => {
+				// A replacement broadcast takes over the row of the transaction it replaced.
+				recordTransactionSubmitted({ hash, previousHash: broadcastHash, scope: tradingDeploymentScope, title: coreAppCopy.formatDeployContract(nextStep.label) })
 				broadcastHash = hash
-				recordTransactionSubmitted({ hash, scope: tradingDeploymentScope, title: coreAppCopy.formatDeployContract(nextStep.label) })
 			})
 			if (broadcastHash !== undefined) recordTransactionSettled(broadcastHash, { status: 'confirmed' })
 			const status = await loadTradingDeploymentStatus(publicClient, plan)

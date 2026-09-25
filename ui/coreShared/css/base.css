@@ -229,6 +229,13 @@ main {
 	overflow-wrap: anywhere;
 }
 
+.transaction-activity-dismiss {
+	justify-self: start;
+	min-height: var(--touch-target-min);
+	padding: 0.35rem 0;
+	font-size: var(--font-label);
+}
+
 .transaction-activity-item-meta {
 	display: flex;
 	flex-wrap: wrap;

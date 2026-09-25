@@ -426,7 +426,7 @@ describe('contract deployment internals', () => {
 		const hash = await oracleStep.deploy(client)
 
 		expect(hash).toBe(replacementHash)
-		expect(onTransactionSubmitted).toHaveBeenCalledWith(replacementHash)
+		expect(onTransactionSubmitted).toHaveBeenCalledWith(replacementHash, 'pending', expect.any(String))
 	})
 
 	test('deployViaProxy-backed steps reject cancelled replacement transactions', async () => {
@@ -452,7 +452,7 @@ describe('contract deployment internals', () => {
 		})
 
 		await expect(oracleStep.deploy(client)).rejects.toThrow('Transaction was cancelled in the wallet before confirmation.')
-		expect(onTransactionSubmitted).toHaveBeenCalledWith(replacementHash)
+		expect(onTransactionSubmitted).toHaveBeenCalledWith(replacementHash, 'pending', expect.any(String))
 	})
 
 	test('simulation deployViaProxy preview keeps the transaction tray in preparing state', async () => {
@@ -1148,7 +1148,7 @@ describe('contract deployment internals', () => {
 		const hash = await proxyStep.deploy(client)
 
 		expect(hash).toBe(replacementHash)
-		expect(onTransactionSubmitted).toHaveBeenCalledWith(replacementHash)
+		expect(onTransactionSubmitted).toHaveBeenCalledWith(replacementHash, 'pending', expect.any(String))
 	})
 
 	test('zoltar deployment step patches the Genesis REP token in simulation mode', async () => {

@@ -109,9 +109,19 @@ export function markTransactionPrepared(state: TransactionTrayState, preview: Tr
 	}
 }
 
-export function markTransactionSubmitted(state: TransactionTrayState, hash: Hash, status: TransactionSubmissionStatus = 'pending'): TransactionTrayState {
-	// A recovered or replaced broadcast reports a hash the tray already tracks; a new hash belongs to the open wallet prompt.
-	const entry = state.entries.find(candidate => getEntryHash(candidate) === hash) ?? getForegroundEntry(state) ?? state.entries.find(candidate => candidate.lifecycle.phase === 'pending')
+function findSubmittedEntry(state: TransactionTrayState, hash: Hash, replacedHash: Hash | undefined) {
+	// A recovered broadcast reports a hash the tray already tracks and a replacement names the hash it replaced.
+	const tracked = state.entries.find(candidate => getEntryHash(candidate) === hash) ?? (replacedHash === undefined ? undefined : state.entries.find(candidate => getEntryHash(candidate) === replacedHash))
+	if (tracked !== undefined) return tracked
+	// A new hash belongs to the open wallet prompt; without one it is only attributed when a single broadcast is pending.
+	const foreground = getForegroundEntry(state)
+	if (foreground !== undefined) return foreground
+	const pending = state.entries.filter(candidate => candidate.lifecycle.phase === 'pending')
+	return pending.length === 1 ? pending[0] : undefined
+}
+
+export function markTransactionSubmitted(state: TransactionTrayState, hash: Hash, status: TransactionSubmissionStatus = 'pending', replacedHash?: Hash): TransactionTrayState {
+	const entry = findSubmittedEntry(state, hash, replacedHash)
 	if (entry === undefined) return state
 	const intent = entry.intent
 	const next = updateEntry(state, entry.key, current => ({ ...current, lifecycle: transitionTransactionLifecycle(transitionTransactionLifecycle(current.lifecycle, { type: 'review-confirmed' }), { type: 'submitted', hash }) }))

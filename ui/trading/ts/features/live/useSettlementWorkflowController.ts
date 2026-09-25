@@ -184,7 +184,7 @@ export function useSettlementWorkflowController({
 				onMigrationConfirmed()
 			}
 		} catch (caught) {
-			if (broadcastHash !== undefined && !receiptKnown) activity.handOff()
+			activity.stopped(caught, receiptKnown)
 			if (!mounted.current) return
 			if (broadcastHash !== undefined && !receiptKnown) {
 				keepLocked = true

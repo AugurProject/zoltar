@@ -131,8 +131,8 @@ export function createPositionTransactionController({
 			dispatchWorkflow({ type: 'confirmed', context })
 			await refresh(configuration, marketPageStart, 'position')
 		} catch (error) {
+			activity.stopped(error, receiptKnown)
 			if (broadcastHash !== undefined && !receiptKnown) {
-				activity.handOff()
 				keepLocked = true
 				dispatchWorkflow({ type: 'uncertain', context, reason: broadcastUncertainMessage('Transaction', broadcastHash) })
 			} else {

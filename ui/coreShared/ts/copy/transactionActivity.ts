@@ -11,4 +11,7 @@ export const failed = 'Failed'
 export const rejected = 'Rejected in wallet'
 export const reverted = 'Reverted'
 export const replaced = 'Replaced'
+export const dropped = 'Not found'
+export const stopTracking = 'Stop tracking'
+export const formatStopTracking = (title: CopyTemplateValue) => `Stop tracking ${title}`
 export const formatViewTransaction = (hash: CopyTemplateValue) => `View transaction ${hash}`

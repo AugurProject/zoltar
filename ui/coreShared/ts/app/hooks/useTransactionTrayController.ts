@@ -87,10 +87,10 @@ export function useTransactionTrayController({ onFinished }: TransactionTrayCont
 			transactionState.value = markTransactionRequested(transactionState.value, intent)
 			return getTransactionRequestKey(transactionState.value) ?? false
 		},
-		onTransactionSubmitted: (hash: Hash, status?: TransactionSubmissionStatus) => {
+		onTransactionSubmitted: (hash: Hash, status?: TransactionSubmissionStatus, replacedHash?: Hash) => {
 			if (!isCurrentGeneration()) return
 			const previous = transactionState.value
-			transactionState.value = markTransactionSubmitted(previous, hash, status)
+			transactionState.value = markTransactionSubmitted(previous, hash, status, replacedHash)
 			const changed = findChangedHash(previous, transactionState.value)
 			if (changed !== undefined) recordTransactionSubmitted({ hash: changed.hash, previousHash: changed.previousHash, scope: changed.entry.intent.scope, title: getActivityTitle(changed.entry.intent) })
 		},
