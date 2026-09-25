@@ -47,7 +47,7 @@ export const contractPagesDirectory = 'docs/reference/contracts'
 export function contractPageOutputPath(contractName: string): string {
 	return `${contractPagesDirectory}/${contractName.toLowerCase()}.html`
 }
-export const expectedProductionSoliditySourceFingerprint = '2b16460f81ba9abea3161a7ec479012a8a6996509dbffa985fc384a1111d24e5'
+export const expectedProductionSoliditySourceFingerprint = 'f9cf02562b3b31742cc2710a005f0522fbeb59f3c7f34258310ba0fe3f6a9d03'
 
 export const documentedEventSchemas: Array<{ name: string; parameters: string; sourcePath: string }> = [
 	{
@@ -784,7 +784,7 @@ export const contractReferences: ContractReference[] = [
 				effect: 'Adds collateral and mints one `Invalid`, `Yes`, and `No` share per complete-set unit, then invokes the ERC-1155 batch-receiver callback for a contract trader. Callback rejection rolls back the ETH, pool accounting, events, and share mint.',
 				declarations: [{ name: 'createCompleteSet' }],
 				preconditions:
-					'Operational and unforked; `isEscalationResolved()` is false; not awaiting continuation; positive ETH converts to at least one complete-set unit; live oracle-priced minting capacity covers the resulting settlement collateral, not merely this deposit; for resulting collateral net of recorded bad debt, combined pool-held and dispute-staked REP satisfies the associated-REP constraint while pool-held REP alone satisfies the migration-safety constraint; any explicit unassigned auction position remains healthy after the mint; under [A22 asset-recipient compatibility](./security-model.html#assumption-a22), a contract trader accepts `onERC1155BatchReceived`.',
+					'Operational and unforked; no escalation game has started, including a fork-continuation game; `isEscalationResolved()` is false; not awaiting continuation; positive ETH converts to at least one complete-set unit; live oracle-priced minting capacity covers the resulting settlement collateral, not merely this deposit; for resulting collateral net of recorded bad debt, pool-held REP satisfies both the associated-REP and migration-safety constraints; any explicit unassigned auction position remains healthy after the mint; under [A22 asset-recipient compatibility](./security-model.html#assumption-a22), a contract trader accepts `onERC1155BatchReceived`.',
 				signals: '`CompleteSetCreated`, `PoolAccountingCheckpoint`, then ERC-1155 `TransferBatch` on a successful callback',
 			},
 			{
@@ -934,7 +934,7 @@ export const contractReferences: ContractReference[] = [
 				call: '`setAwaitingForkContinuation(shouldAwait)`',
 				caller: '`SecurityPoolForker` only',
 				declarations: [{ name: 'setAwaitingForkContinuation' }],
-				effect: 'Stores whether complete-set minting must wait for continuation initialization.',
+				effect: 'Stores the fork-continuation wait flag. Clearing it does not reopen complete-set minting while an escalation game exists.',
 				preconditions: 'No lifecycle or value-change guard.',
 				signals: '`AwaitingForkContinuationSet`, including for a repeated value',
 			},

@@ -223,6 +223,7 @@ export function useTradingOperations(
 							mintingCapacityAttoEth: latestMintCapacity.mintingCapacityAttoEth,
 							isPriceValid: latestMintCapacity.isPriceValid,
 							hasSelectedPool: true,
+							hasEscalationGame: latestMintCapacity.hasEscalationGame,
 							isOnActiveAppChain,
 							mintAmountInput: currentForm.completeSetAmount,
 							shareTokenSupplyAttoShares: latestMintCapacity.shareTokenSupplyAttoShares,

@@ -11,6 +11,10 @@ abstract contract SecurityPoolSettlementDelegate is SecurityPoolStorage {
 	function createCompleteSet() external payable returns (uint256 completeSetsToMintAttoShares) {
 		ISecurityPool pool = ISecurityPool(payable(address(this)));
 		require(!awaitingForkContinuation, 'Fork await');
+		// Escrow preserves capacity ownership while removing REP from a vault's liquid
+		// backing. Aggregate backing cannot establish that every vault remains safe
+		// when new complete sets increase its share of open interest.
+		require(address(escalationGame) == address(0), 'Escalation mint closed');
 		if (msg.value == 0 || pool.isEscalationResolved()) revert('Settlement unavailable');
 		require(pool.priceOracleManagerAndOperatorQueuer().isPriceValid(), 'Stale price');
 		pool.updateSettlementCollateral();

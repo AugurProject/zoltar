@@ -228,6 +228,48 @@ describe('useTradingOperations', () => {
 		expect(createCompleteSetInSecurityPool).not.toHaveBeenCalled()
 	})
 
+	test('blocks a mint write when escalation starts after the pool view loads', async () => {
+		const createCompleteSetInSecurityPool = mock(async () => {
+			throw new Error('Mint write must not run after escalation starts')
+		})
+		const onTransactionFailed = mock(() => undefined)
+		const dependencies = createTradingOperationsDependencies({
+			createCompleteSetInSecurityPool,
+			getWalletEthBalance: mock(async () => 2n * 10n ** 18n),
+			loadSecurityPoolMintCapacity: mock(async () => ({
+				settlementCollateralAttoEth: 0n,
+				feeEligibleCapacityOwnershipAttoRep: 2n * 10n ** 18n,
+				mintingCapacityAttoEth: 2n * 10n ** 18n,
+				shareTokenSupplyAttoShares: 0n,
+				totalPoolHeldAttoRep: 20n * 10n ** 18n,
+				totalCapacityOwnershipAttoRep: 2n * 10n ** 18n,
+				isPriceValid: true,
+				hasEscalationGame: true,
+			})),
+			loadTradingDetails: mock(async () => createTradingDetails()),
+			loadZoltarUniverseSummary: mock(async () => createUniverseSummary()),
+		})
+		let hookState: UseTradingOperationsState | undefined
+		const Harness = createHarness(
+			useTradingOperations,
+			state => {
+				hookState = state
+			},
+			onTransactionFailed,
+			dependencies,
+		)
+		const rendered = await renderIntoDocument(h(Harness, {}))
+		cleanupRenderedComponent = rendered.cleanup
+		await act(async () => {
+			requireHookState(hookState).setTradingForm(current => ({ ...current, completeSetAmount: '1' }))
+		})
+		await act(async () => {
+			await requireHookState(hookState).createCompleteSet()
+		})
+		expect(onTransactionFailed).toHaveBeenCalledWith('Minting closed after escalation starts')
+		expect(createCompleteSetInSecurityPool).not.toHaveBeenCalled()
+	})
+
 	test('blocks complete-set mint writes when total capacity ownership exists but none is fee eligible', async () => {
 		const createCompleteSetInSecurityPool = mock(async () => {
 			throw new Error('createCompleteSetInSecurityPool should not be called against unclaimed auction capacity ownership')

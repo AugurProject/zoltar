@@ -267,6 +267,29 @@ void describe('TradingSection', () => {
 		expect(dialog.textContent).toContain('Request a new price in Price Oracle before minting.')
 	})
 
+	for (const escalationState of [{ ordinaryEscalationGameStarted: true }, { hasForkContinuationEscalationGame: true }]) {
+		test(`disables minting when escalation exists: ${Object.keys(escalationState)[0]}`, async () => {
+			const props = createTradingSectionProps({ tradingForm: createTradingForm({ completeSetAmount: '0.1' }) })
+			const rendered = await renderIntoDocument(<TradingSection {...props} />)
+			cleanupRenderedComponent = rendered.cleanup
+			fireEvent.click(within(document.body).getByRole('button', { name: 'Mint complete sets' }))
+			await act(() => render(<TradingSection {...props} selectedPool={createSelectedPool(escalationState)} />, rendered.container))
+			const dialog = within(document.body).getByRole('dialog')
+			const confirm = within(dialog).getByRole('button', { name: 'Mint complete sets' }) as HTMLButtonElement
+			expect(confirm.disabled).toBe(true)
+			expect(dialog.textContent).toContain('Minting closed after escalation starts.')
+			expect((dialog.querySelector('.field-inline-action') as HTMLButtonElement).disabled).toBe(true)
+		})
+	}
+
+	test('explains on the mint launcher why minting is closed', async () => {
+		const rendered = await renderIntoDocument(<TradingSection {...createTradingSectionProps({ selectedPool: createSelectedPool({ ordinaryEscalationGameStarted: true }) })} />)
+		cleanupRenderedComponent = rendered.cleanup
+		const mintButton = within(document.body).getByRole('button', { name: 'Mint complete sets' }) as HTMLButtonElement
+		expect(mintButton.disabled).toBe(true)
+		expect(getTransactionButtonState(document.body, 'Mint complete sets').reason).toBe('Minting closed after escalation starts.')
+	})
+
 	void test('labels the max complete sets metric as redeemable complete sets', async () => {
 		const renderedComponent = await renderIntoDocument(<TradingSection {...createTradingSectionProps()} />)
 		cleanupRenderedComponent = renderedComponent.cleanup
