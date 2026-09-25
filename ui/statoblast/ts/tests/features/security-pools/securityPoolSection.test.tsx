@@ -592,7 +592,9 @@ describe('SecurityPoolSection', () => {
 		expect(document.body.querySelector('.transaction-hash-link')).toBeNull()
 		expect(documentQueries.queryByRole('button', { name: 'Create pool from question' })).toBeNull()
 		expect(documentQueries.queryByRole('button', { name: 'Create another question' })).toBeNull()
-		expectTransactionButtonDisabled(document.body, 'Creating pool…', 'Security pool creation is already in progress.')
+		expect(getTransactionButtonState(document.body, 'Creating pool…')).toEqual({ disabled: true, reason: undefined })
+		expect(document.body.textContent).not.toContain('Security pool creation is already in progress.')
+		expect(getButtonByText('Creating pool…').getAttribute('aria-busy')).toBe('true')
 
 		await act(() => {
 			render(h(SecurityPoolSection, baseProps), renderedComponent.container)
@@ -735,7 +737,9 @@ describe('SecurityPoolSection', () => {
 			),
 		)
 		cleanupRenderedComponent = creatingRender.cleanup
-		expectTransactionButtonDisabled(document.body, 'Creating pool…', 'Security pool creation is already in progress.')
+		expect(getTransactionButtonState(document.body, 'Creating pool…')).toEqual({ disabled: true, reason: undefined })
+		expect(document.body.textContent).not.toContain('Security pool creation is already in progress.')
+		expect(getButtonByText('Creating pool…').getAttribute('aria-busy')).toBe('true')
 	})
 
 	test('renders duplicate and forked branch messaging and button labels', async () => {
