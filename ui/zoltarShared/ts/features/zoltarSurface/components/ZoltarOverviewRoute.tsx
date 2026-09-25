@@ -48,7 +48,7 @@ type ZoltarOverviewViewProps = {
 	onViewChange: (view: ZoltarView) => void
 }
 
-function NextStepAction({ isConnectingWallet, nextStep, onConnectWallet, onGoToGenesisUniverse, onRetryUniverse, onSwitchNetwork, onViewChange }: Omit<ZoltarOverviewViewProps, 'model'> & { nextStep: ZoltarNextStep }) {
+function NextStepAction({ isConnectingWallet, needsAttention, nextStep, onConnectWallet, onGoToGenesisUniverse, onRetryUniverse, onSwitchNetwork, onViewChange }: Omit<ZoltarOverviewViewProps, 'model'> & { needsAttention: boolean; nextStep: ZoltarNextStep }) {
 	const presentation = getNextStepPresentation(nextStep)
 	const onClick = () => {
 		if (nextStep.kind === 'go-to-genesis') onGoToGenesisUniverse()
@@ -58,7 +58,7 @@ function NextStepAction({ isConnectingWallet, nextStep, onConnectWallet, onGoToG
 		else onViewChange(nextStep.view)
 	}
 	return (
-		<div className={`zoltar-next-step ${nextStep.kind === 'migrate-rep' ? 'needs-attention' : ''}`.trim()}>
+		<div className={`zoltar-next-step ${needsAttention ? 'needs-attention' : ''}`.trim()}>
 			<p className='zoltar-next-step-reason'>{presentation.detail}</p>
 			<button className='primary' type='button' disabled={nextStep.kind === 'connect-wallet' && isConnectingWallet} onClick={onClick}>
 				{presentation.actionLabel}
@@ -110,7 +110,7 @@ function ZoltarOverviewView({ currentTimestamp, model, ...actions }: ZoltarOverv
 			</SectionBlock>
 			{model.nextStep === undefined ? undefined : (
 				<SectionBlock title={zoltarCopy.nextStep} variant='plain'>
-					<NextStepAction {...actions} nextStep={model.nextStep} />
+					<NextStepAction {...actions} needsAttention={model.needsAttention} nextStep={model.nextStep} />
 				</SectionBlock>
 			)}
 			<SectionBlock title={zoltarCopy.howZoltarWorks} variant='plain'>

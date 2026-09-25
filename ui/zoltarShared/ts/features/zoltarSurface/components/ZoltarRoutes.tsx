@@ -14,10 +14,10 @@ import { ZoltarForkRoute, ZoltarMigrateRoute, ZoltarUniversesRoute } from './Zol
 import { useZoltarWorkspace } from './ZoltarWorkspace.js'
 
 /** Explains why a universe-scoped view cannot render and offers the one action that recovers. */
-function ZoltarRouteGateState({ gate, onRetryUniverse, onViewChange, universeError }: { gate: Exclude<ZoltarRouteGate, 'ready'>; onRetryUniverse: () => void; onViewChange: (view: ZoltarView) => void; universeError: string | undefined }) {
+function ZoltarRouteGateState({ gate, onRetryUniverse, onViewChange }: { gate: Exclude<ZoltarRouteGate, 'ready'>; onRetryUniverse: () => void; onViewChange: (view: ZoltarView) => void }) {
 	switch (gate) {
 		case 'universe-unavailable':
-			return <RetryableNotice onRetry={onRetryUniverse} retryLabel={commonCopy.retry} presentation={{ key: 'load_failed', badgeLabel: commonCopy.error, badgeTone: 'blocked', detail: universeError ?? zoltarCopy.universeUnavailableDetail }} />
+			return <RetryableNotice onRetry={onRetryUniverse} retryLabel={commonCopy.retry} presentation={{ key: 'load_failed', badgeLabel: commonCopy.error, badgeTone: 'blocked', detail: zoltarCopy.universeUnavailableDetail }} />
 		case 'loading':
 			return <StateHint presentation={{ key: 'loading', badgeLabel: commonCopy.loading, badgeTone: 'loading', detail: commonCopy.loadingUniverseDetails, detailIsLoading: true }} />
 		case 'universe-missing':
@@ -74,7 +74,7 @@ export function ZoltarRoutes({ view }: { view: ZoltarView }) {
 		return (
 			<>
 				<RouteHeader title={titles[view]} />
-				<ZoltarRouteGateState gate={gate === 'ready' ? 'loading' : gate} onRetryUniverse={onRetryUniverse} onViewChange={onViewChange} universeError={universeError} />
+				<ZoltarRouteGateState gate={gate === 'ready' ? 'loading' : gate} onRetryUniverse={onRetryUniverse} onViewChange={onViewChange} />
 			</>
 		)
 	}

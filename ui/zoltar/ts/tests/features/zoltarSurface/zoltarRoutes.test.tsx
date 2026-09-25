@@ -190,7 +190,8 @@ describe('ZoltarRoutes', () => {
 
 	test('offers a retry instead of an endless loading state when the universe read failed', async () => {
 		const { queries, retries } = await renderRoute('universes', undefined, 'unknown', 'RPC unavailable')
-		expect(queries.getByText('RPC unavailable')).toBeTruthy()
+		expect(queries.getByText('Universe details could not be loaded.')).toBeTruthy()
+		expect(queries.queryByText('RPC unavailable')).toBeNull()
 		expect(queries.queryByText('Loading universe details.')).toBeNull()
 		fireEvent.click(queries.getByRole('button', { name: 'Retry' }))
 		expect(retries).toEqual(['universe'])

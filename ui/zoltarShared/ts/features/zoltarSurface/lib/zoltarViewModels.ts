@@ -98,7 +98,8 @@ function getNextStep(status: ZoltarOverviewModel['status'], wallet: ZoltarOvervi
 	if (status === 'loading') return undefined
 	if (wallet === 'disconnected') return { kind: 'connect-wallet' }
 	if (wallet === 'wrong-network') return { kind: 'switch-network' }
-	if (status === 'forked') return migratableRepAttoRep !== undefined && migratableRepAttoRep > 0n ? { kind: 'migrate-rep', view: 'migrate' } : { kind: 'open-child-universe', view: 'universes' }
+	// Only a known zero sends the user onward; an unknown balance goes to the Migrate route, which loads and retries it.
+	if (status === 'forked') return migratableRepAttoRep === 0n ? { kind: 'open-child-universe', view: 'universes' } : { kind: 'migrate-rep', view: 'migrate' }
 	return { kind: 'browse-questions', view: 'questions' }
 }
 
@@ -109,7 +110,7 @@ export function deriveZoltarOverviewModel({ account, activeUniverseId, universe,
 	const status = getOverviewStatus(loadedUniverse, universeError, universeState)
 	const wallet = getWalletStatus(account)
 	const repBalanceAttoRep = wallet === 'connected' ? account.repBalanceAttoRep : undefined
-	const migratableRepAttoRep = wallet === 'connected' && status === 'forked' ? sumKnown([account.repBalanceAttoRep, account.preparedMigrationRepAttoRep ?? 0n]) : undefined
+	const migratableRepAttoRep = wallet === 'connected' && status === 'forked' ? sumKnown([account.repBalanceAttoRep, account.preparedMigrationRepAttoRep]) : undefined
 	const forkTime = status === 'forked' && loadedUniverse !== undefined && loadedUniverse.forkTime > 0n ? loadedUniverse.forkTime : undefined
 	return {
 		forkTime,

@@ -117,17 +117,20 @@ describe('deriveZoltarOverviewModel', () => {
 		expect(model.nextStep).toEqual({ kind: 'migrate-rep', view: 'migrate' })
 	})
 
-	test('sends a forked universe without REP to its outcome universes', () => {
-		const model = deriveZoltarOverviewModel(createInput({ activeUniverseId: childUniverseId, universe: forkedChild }, { preparedMigrationRepAttoRep: undefined, repBalanceAttoRep: 0n }))
+	test('sends a forked universe with a known zero balance to its outcome universes', () => {
+		const model = deriveZoltarOverviewModel(createInput({ activeUniverseId: childUniverseId, universe: forkedChild }, { preparedMigrationRepAttoRep: 0n, repBalanceAttoRep: 0n }))
 		expect(model.migratableRepAttoRep).toBe(0n)
 		expect(model.needsAttention).toBe(false)
 		expect(model.nextStep).toEqual({ kind: 'open-child-universe', view: 'universes' })
 	})
 
-	test('keeps migration unknown while the wallet balance loads', () => {
-		const model = deriveZoltarOverviewModel(createInput({ activeUniverseId: childUniverseId, universe: forkedChild }, { repBalanceAttoRep: undefined }))
-		expect(model.migratableRepAttoRep).toBeUndefined()
-		expect(model.nextStep).toEqual({ kind: 'open-child-universe', view: 'universes' })
+	test('sends a forked universe to Migrate while a balance is still unknown', () => {
+		for (const account of [{ repBalanceAttoRep: undefined }, { preparedMigrationRepAttoRep: undefined, repBalanceAttoRep: 0n }]) {
+			const model = deriveZoltarOverviewModel(createInput({ activeUniverseId: childUniverseId, universe: forkedChild }, account))
+			expect(model.migratableRepAttoRep).toBeUndefined()
+			expect(model.needsAttention).toBe(false)
+			expect(model.nextStep).toEqual({ kind: 'migrate-rep', view: 'migrate' })
+		}
 	})
 
 	test('offers Genesis for a missing universe and no step while the universe loads', () => {
