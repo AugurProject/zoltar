@@ -974,7 +974,7 @@ describe('OperationModal', () => {
 		container.remove()
 	})
 
-	test('closes on Escape and closes when the backdrop is clicked', async () => {
+	test('closes on Escape but keeps a dialog with form fields open when the backdrop is clicked', async () => {
 		const container = document.createElement('div')
 		document.body.appendChild(container)
 
@@ -993,12 +993,43 @@ describe('OperationModal', () => {
 			render(<DismissibleOperationModalHarness />, container)
 		})
 
-		const backdrop = container.querySelector('.modal-backdrop') as HTMLDivElement
-		if (backdrop === null) throw new Error('Modal backdrop should be visible')
+		const backdrop = container.querySelector('.modal-backdrop')
+		if (!(backdrop instanceof HTMLElement)) throw new Error('Modal backdrop should be visible')
 		await act(() => {
 			fireEvent.click(backdrop)
 		})
+		// A stray click outside must not discard the values entered in the form.
+		const dialogAfterBackdropClick = within(container).getByRole('dialog', { name: 'Edit amount' })
+		await act(() => {
+			fireEvent.click(within(dialogAfterBackdropClick).getByRole('button', { name: 'Close' }))
+		})
 		expect(within(container).queryByRole('dialog', { name: 'Edit amount' })).toBeNull()
+
+		render(null, container)
+		container.remove()
+	})
+
+	test('closes a dialog without form fields when the backdrop is clicked', async () => {
+		const container = document.createElement('div')
+		document.body.appendChild(container)
+		function ConfirmationHarness() {
+			const [isOpen, setIsOpen] = useState(true)
+			return (
+				<OperationModal isOpen={isOpen} onClose={() => setIsOpen(false)} title='Delete saved state'>
+					<button type='button'>Delete</button>
+				</OperationModal>
+			)
+		}
+
+		await act(() => {
+			render(<ConfirmationHarness />, container)
+		})
+		const backdrop = container.querySelector('.modal-backdrop')
+		if (!(backdrop instanceof HTMLElement)) throw new Error('Modal backdrop should be visible')
+		await act(() => {
+			fireEvent.click(backdrop)
+		})
+		expect(within(container).queryByRole('dialog', { name: 'Delete saved state' })).toBeNull()
 
 		render(null, container)
 		container.remove()

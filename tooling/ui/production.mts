@@ -58,6 +58,8 @@ function createBrowserVendorAliasPlugin() {
 export const coreSharedStylesheets = ['index.css', 'tokens.css', 'base.css', 'simulation-banner.css', 'protocol-surfaces.css', 'application-surfaces.css', 'controls-and-responsive.css', 'visual-foundation.css', 'protocol-apps.css'] as const
 
 const featureStylesheetSources: Record<string, (paths: UiAppPaths) => string> = {
+	'zoltar-questions.css': paths => path.join(paths.uiRoot, 'zoltarShared', 'css', 'questions.css'),
+	'zoltar-deployment.css': paths => path.join(paths.uiRoot, 'zoltarShared', 'css', 'deployment.css'),
 	'zoltar-shared.css': paths => path.join(paths.uiRoot, 'zoltarShared', 'css', 'index.css'),
 	'statoblast-shared.css': paths => path.join(paths.uiRoot, 'statoblastShared', 'css', 'index.css'),
 	'app.css': paths => path.join(paths.appRoot, 'css', 'app.css'),

@@ -97,8 +97,7 @@ for (const appId of UI_APP_IDS) {
 			productionCssPath,
 			productionTokensCssPath,
 			...['base.css', 'simulation-banner.css', 'protocol-surfaces.css', 'application-surfaces.css', 'controls-and-responsive.css', 'visual-foundation.css', 'protocol-apps.css'].map(stylesheet => path.join(distRootPath, 'css', stylesheet)),
-			...(appId === 'zoltar' ? [path.join(distRootPath, 'css', 'zoltar-shared.css')] : []),
-			...(appId === 'statoblast' ? [path.join(distRootPath, 'css', 'zoltar-shared.css'), path.join(distRootPath, 'css', 'statoblast-shared.css')] : []),
+			...featureStylesheets[appId].map(stylesheet => path.join(distRootPath, 'css', stylesheet)),
 			path.join(distRootPath, 'vendor', 'fonts', 'ibm-plex-mono-latin-400-normal.woff2'),
 			path.join(distRootPath, 'vendor', 'fonts', 'ibm-plex-mono-latin-600-normal.woff2'),
 			appBundlePath,
@@ -106,7 +105,7 @@ for (const appId of UI_APP_IDS) {
 			workerBundlePath,
 			workerSourceMapPath,
 			...productionFaviconPaths,
-			...(appId === 'trading' ? [path.join(distRootPath, 'css', 'app.css'), path.join(distRootPath, 'core-deployments.json')] : []),
+			...(appId === 'trading' ? [path.join(distRootPath, 'core-deployments.json')] : []),
 		]
 
 		for (const expectedPath of expectedPaths) {

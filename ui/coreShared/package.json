@@ -103,6 +103,10 @@
 			"bun": "./ts/components/TabNavigation.tsx",
 			"default": "./js/components/TabNavigation.js"
 		},
+		"./components/Term.js": {
+			"bun": "./ts/components/Term.tsx",
+			"default": "./js/components/Term.js"
+		},
 		"./components/TransactionPresentationNotice.js": {
 			"bun": "./ts/components/TransactionPresentationNotice.tsx",
 			"default": "./js/components/TransactionPresentationNotice.js"
@@ -242,6 +246,10 @@
 		"./tests/transactionNetworkValue.test.js": {
 			"bun": "./ts/tests/transactionNetworkValue.test.tsx",
 			"default": "./js/tests/transactionNetworkValue.test.js"
+		},
+		"./tests/term.test.js": {
+			"bun": "./ts/tests/term.test.tsx",
+			"default": "./js/tests/term.test.js"
 		},
 		"./tests/transactionPresentationHelpers.test.js": {
 			"bun": "./ts/tests/transactionPresentationHelpers.test.tsx",

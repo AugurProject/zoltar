@@ -1,0 +1,60 @@
+/* Zoltar deployment route styles. Loaded after ui/coreShared/css/index.css by the apps that render the shared deployment route. */
+
+.deployment-contract-details {
+	border-block: 1px solid var(--divider-subtle);
+}
+
+.deployment-contract-details > summary {
+	display: list-item;
+	padding: var(--space-3) 0;
+	cursor: pointer;
+	font-weight: 700;
+}
+
+.deployment-contract-details > summary .detail {
+	font-weight: 400;
+}
+
+.deployment-contract-groups {
+	padding-bottom: var(--space-4);
+}
+
+@media (max-width: 40rem) {
+	.deployment-route-header {
+		grid-template-columns: minmax(0, 1fr);
+		align-items: start;
+	}
+
+	.deployment-route-header .route-header-main {
+		display: contents;
+	}
+
+	.deployment-route-header .route-header-copy {
+		grid-column: 1 / -1;
+	}
+
+	.deployment-route-header .route-description {
+		display: none;
+	}
+
+	.deployment-route-header .route-header-actions {
+		grid-column: 1;
+		justify-self: start;
+	}
+
+	.deployment-route-header .route-summary-strip {
+		grid-column: 1;
+		padding: var(--space-3) 0 0;
+		border-top: 1px solid var(--divider-subtle);
+		border-left: 0;
+	}
+
+	.deployment-route-header .route-summary-strip .data-grid {
+		grid-template-columns: minmax(0, 1fr);
+		gap: var(--space-2);
+	}
+
+	.deployment-route-header .route-summary-strip .data-grid > div {
+		padding-top: var(--space-1);
+	}
+}

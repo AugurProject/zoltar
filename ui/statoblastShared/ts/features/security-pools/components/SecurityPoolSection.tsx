@@ -33,6 +33,7 @@ import * as marketCopy from '@zoltar/ui-zoltar-shared/copy/market.js'
 import * as transactionReviewCopy from '@zoltar/ui-core-shared/copy/transactionReview.js'
 import * as transactionCopy from '@zoltar/ui-core-shared/copy/transaction.js'
 import { SecurityPoolLink } from './SecurityPoolLink.js'
+import { GlossaryTerm } from '../../glossary/components/GlossaryTerm.js'
 
 export function SecurityPoolSection({
 	accountState,
@@ -217,7 +218,9 @@ export function SecurityPoolSection({
 				)}
 			</div>
 			<div className='field'>
-				<span>{securityPoolCopy.initialOpenInterestFeeYear}</span>
+				<span>
+					<GlossaryTerm id='open-interest-fee'>{securityPoolCopy.initialOpenInterestFeeYear}</GlossaryTerm>
+				</span>
 				<strong>{formatOpenInterestFeePerYearPercent(ORIGIN_POOL_INITIAL_RETENTION_RATE)}</strong>
 			</div>
 		</>

@@ -77,7 +77,7 @@ export function SecurityPoolReferenceDetails(props: SecurityPoolObjectHeaderProp
 		<div className='pool-reference-details'>
 			<ReadOnlyDetailAccordion title={copy.poolDetails}>
 				<Question question={marketDetails} variant='preview' showTitle={false} />
-				<SecurityPoolSummaryMetrics calculationPriceConfigured calculationRepPerEthPrice={getSummaryCalculationPrice(props)} metricVariant='context' pendingReportReadyAtTimestamp={currentPoolOracleManagerDetails?.pendingReportReadyAtTimestamp} pool={summaryPool} omitCapacity showTotalBacking>
+				<SecurityPoolSummaryMetrics calculationPriceConfigured calculationRepPerEthPrice={getSummaryCalculationPrice(props)} metricVariant='context' pool={summaryPool} omitCapacity showTotalBacking>
 					<MetricField label={securityPoolCopy.managerAddress}>
 						<AddressValue address={summaryPool.managerAddress} />
 					</MetricField>

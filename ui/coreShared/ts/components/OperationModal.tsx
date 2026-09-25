@@ -5,6 +5,7 @@ import * as commonCopy from '../copy/common.js'
 import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'preact/hooks'
 import { ReviewActionsSlotContext } from './reviewActionsSlot.js'
 import { useModalFocusIsolation } from '../hooks/useModalFocusIsolation.js'
+import { shouldCloseOnBackdropClick } from '../lib/modalBackdrop.js'
 import type { OperationModalProps } from '../types/components.js'
 import { GlobalTransactionPresentationProvider, useGlobalTransactionPresentation } from './GlobalTransactionPresentationContext.js'
 
@@ -152,7 +153,13 @@ export function OperationModal({ children, confirmSingleStepFromForm = false, cl
 		: undefined
 
 	return (
-		<div className='modal-backdrop' role='presentation' onClick={requestClose}>
+		<div
+			className='modal-backdrop'
+			role='presentation'
+			onClick={() => {
+				if (shouldCloseOnBackdropClick(dialogRef.current)) requestClose()
+			}}
+		>
 			<section ref={dialogRef} className='modal-panel operation-modal-panel' role='dialog' tabIndex={-1} aria-busy={cannotClose || undefined} aria-modal='true' aria-labelledby={titleId} aria-describedby={descriptionId} onClick={event => event.stopPropagation()}>
 				<div className='modal-header'>
 					<div className='modal-header-title'>

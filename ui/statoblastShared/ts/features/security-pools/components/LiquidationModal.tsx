@@ -31,6 +31,7 @@ import {
 	isValidLiquidationApprovalId,
 } from '../lib/liquidationModalGuards.js'
 import { useModalFocusIsolation } from '@zoltar/ui-core-shared/hooks/useModalFocusIsolation.js'
+import { shouldCloseOnBackdropClick } from '@zoltar/ui-core-shared/lib/modalBackdrop.js'
 import type { SecurityPoolStateModel } from '../lib/securityPoolState.js'
 import type { LiquidationApprovalDetails, LiquidationFundingPreview, ListedSecurityPool, OracleManagerDetails, SecurityPoolOverviewActionResult, SecurityPoolVaultSummary } from '@zoltar/ui-core-shared/types/contracts.js'
 import { getWrongNetworkReason } from '@zoltar/ui-core-shared/wallet/network.js'
@@ -305,7 +306,13 @@ export function LiquidationModal({
 	const queuedLiquidationOperation = getQueuedLiquidationOperation({ currentPoolOracleManagerDetails, liquidationTargetVault, securityPoolOverviewResult })
 	const queuedLiquidationStatus = getQueuedLiquidationStatus({ currentPoolOracleManagerDetails, currentTimestamp, loadingPoolOracleManager, queuedLiquidationOperation, securityPoolOverviewResult })
 	return (
-		<div className='modal-backdrop' role='presentation' onClick={closeLiquidationModal}>
+		<div
+			className='modal-backdrop'
+			role='presentation'
+			onClick={() => {
+				if (shouldCloseOnBackdropClick(dialogRef.current)) closeLiquidationModal()
+			}}
+		>
 			<section ref={dialogRef} className='modal-panel liquidation-modal-panel' role='dialog' aria-modal='true' aria-labelledby={titleId} onClick={event => event.stopPropagation()}>
 				<div className='modal-header'>
 					<div className='modal-header-title'>

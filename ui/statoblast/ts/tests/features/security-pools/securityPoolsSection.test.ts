@@ -336,6 +336,15 @@ function createCreatePoolProps(overrides: Partial<SecurityPoolRouteContentProps>
 	}
 }
 
+// Glossary definitions stay in the DOM while collapsed, so the sentence text excludes them.
+function getTextWithoutTermDefinitions(element: Element | null) {
+	if (element === null) throw new Error('Expected the element to be rendered')
+	const clone = element.cloneNode(true)
+	if (!(clone instanceof window.Element)) throw new Error('Expected an element clone')
+	for (const popover of Array.from(clone.querySelectorAll('.term-popover'))) popover.remove()
+	return clone.textContent
+}
+
 function createSecurityPoolsSectionProps(overrides: Partial<SecurityPoolsSectionProps> = {}): SecurityPoolsSectionProps {
 	return {
 		activeView: 'browse',
@@ -482,6 +491,47 @@ void describe('SecurityPoolsSection', () => {
 
 		fireEvent.click(within(document.body).getByRole('button', { name: 'Create another pool' }))
 		expect(resetCount).toBe(1)
+	})
+
+	void test('describes the create and universe views with glossary terms', async () => {
+		const createRender = await renderIntoDocument(h(SecurityPoolsSection, createSecurityPoolsSectionProps({ activeView: 'create' })))
+		cleanupRenderedComponent = createRender.cleanup
+		expect(getTextWithoutTermDefinitions(document.body.querySelector('.route-description'))).toBe('Set up a security pool for one question. Vaults secure it with REP; traders mint its shares with ETH.')
+		const securityPoolTerm = within(document.body).getByRole('button', { name: 'security pool' })
+		expect(securityPoolTerm.getAttribute('aria-expanded')).toBe('false')
+		await act(() => {
+			fireEvent.click(securityPoolTerm)
+		})
+		expect(securityPoolTerm.getAttribute('aria-expanded')).toBe('true')
+		expect(within(document.body).getByRole('link', { name: 'Read more in the guide' }).getAttribute('href')).toBe('https://augurproject.github.io/zoltar/docs/reference/glossary.html#security-pool')
+		await cleanupRenderedComponent()
+		cleanupRenderedComponent = undefined
+
+		const universesRender = await renderIntoDocument(h(SecurityPoolsSection, createSecurityPoolsSectionProps({ activeView: 'universes' })))
+		cleanupRenderedComponent = universesRender.cleanup
+		expect(getTextWithoutTermDefinitions(document.body.querySelector('.route-description'))).toBe('Security pools grouped by universe. A fork creates child universes, each with its own REP and pools.')
+		expect(within(document.body).getByRole('button', { name: 'universe' }).getAttribute('aria-expanded')).toBe('false')
+	})
+
+	void test('shows the role guide on the browse view until it is dismissed', async () => {
+		window.localStorage.removeItem('statoblast.firstRunRoleGuideDismissed')
+		const firstRender = await renderIntoDocument(h(SecurityPoolsSection, createSecurityPoolsSectionProps()))
+		cleanupRenderedComponent = firstRender.cleanup
+		const documentQueries = within(document.body)
+		expect(documentQueries.getByRole('heading', { name: 'New here? Start with your role' })).not.toBeNull()
+		for (const guide of ['How vaults work', 'How shares and trading work', 'How reporting works']) expect(documentQueries.getByRole('link', { name: guide }).getAttribute('target')).toBe('_blank')
+		await act(() => {
+			fireEvent.click(documentQueries.getByRole('button', { name: 'Dismiss the role guide' }))
+		})
+		expect(documentQueries.queryByRole('heading', { name: 'New here? Start with your role' })).toBeNull()
+		expect(window.localStorage.getItem('statoblast.firstRunRoleGuideDismissed')).toBe('true')
+		await cleanupRenderedComponent()
+		cleanupRenderedComponent = undefined
+
+		const secondRender = await renderIntoDocument(h(SecurityPoolsSection, createSecurityPoolsSectionProps()))
+		cleanupRenderedComponent = secondRender.cleanup
+		expect(within(document.body).queryByRole('heading', { name: 'New here? Start with your role' })).toBeNull()
+		window.localStorage.removeItem('statoblast.firstRunRoleGuideDismissed')
 	})
 
 	void test('renders one route heading in create and empty manage modes', async () => {

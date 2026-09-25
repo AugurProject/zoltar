@@ -1216,7 +1216,7 @@ describe('ReportingSection', () => {
 		expect(document.body.textContent).not.toContain('Check back before')
 		expect(getEscalationMetricsSection().textContent).not.toContain('Response window ends')
 		expect(document.querySelector('.notice-stack-item')?.textContent).toContain('You have 1 REP on Yes.')
-		const forkTriggeredReason = 'Escalation reached non-decision. Trigger the universe fork here if this pool should fork.'
+		const forkTriggeredReason = 'Escalation ended without a decision. Trigger the universe fork here if this pool should fork.'
 		expect(document.body.textContent?.includes(forkTriggeredReason)).toBe(true)
 		expect(document.body.textContent?.split(forkTriggeredReason)).toHaveLength(2)
 		expect(lifecycleBannerQueries.queryByText('Trigger universe fork')).toBeNull()
@@ -1245,7 +1245,7 @@ describe('ReportingSection', () => {
 		const lifecycleBanner = document.body.querySelector('.escalation-phase')
 		if (!(lifecycleBanner instanceof HTMLElement)) throw new Error('Expected phase stepper')
 		const lifecycleBannerQueries = within(lifecycleBanner)
-		expect(document.body.textContent?.includes('Escalation reached non-decision and the universe fork has already been triggered for this pool. Continue in Fork & Migration.')).toBe(true)
+		expect(document.body.textContent?.includes('Escalation ended without a decision and the universe fork has already been triggered for this pool. Continue in Fork & Migration.')).toBe(true)
 		expect(lifecycleBannerQueries.queryByText('Continue in Fork & Migration')).toBeNull()
 		expect(lifecycleBannerQueries.queryByText('Trigger universe fork')).toBeNull()
 	})
@@ -1730,7 +1730,7 @@ describe('ReportingSection', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		const settlementReason = 'Dispute-staked REP remains in escalation after non-decision. Trigger the universe fork here if this pool should fork.'
+		const settlementReason = 'Dispute-staked REP remains in escalation, which ended without a decision. Trigger the universe fork here if this pool should fork.'
 		expect(document.body.textContent?.includes(settlementReason)).toBe(true)
 		expect(document.body.textContent?.split(settlementReason)).toHaveLength(2)
 		expect(within(document.body).queryByRole('checkbox')).toBeNull()
@@ -1833,7 +1833,7 @@ describe('ReportingSection', () => {
 		const documentQueries = within(document.body)
 		expect(documentQueries.queryByRole('button', { name: 'Trigger universe fork' })).toBeNull()
 		expect(documentQueries.getByRole('button', { name: 'Open fork & migration' })).not.toBeNull()
-		expect(document.body.textContent?.includes('Dispute-staked REP remains in escalation after non-decision. The universe fork has already been triggered for this pool, so continue in Fork & Migration.')).toBe(true)
+		expect(document.body.textContent?.includes('Dispute-staked REP remains in escalation, which ended without a decision. The universe fork has already been triggered for this pool, so continue in Fork & Migration.')).toBe(true)
 	})
 
 	test('shows a Trigger universe fork action when non-decision blocks reporting', async () => {

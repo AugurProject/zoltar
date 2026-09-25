@@ -2,7 +2,7 @@ import { expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 
 const cssRoot = 'ui/coreShared/css'
-const featureStylesheets = { statoblast: 'ui/statoblastShared/css/index.css', zoltar: 'ui/zoltarShared/css/index.css' } as const
+const featureStylesheets = { statoblast: 'ui/statoblastShared/css/index.css', zoltar: 'ui/zoltarShared/css/index.css', zoltarDeployment: 'ui/zoltarShared/css/deployment.css', zoltarQuestions: 'ui/zoltarShared/css/questions.css' } as const
 
 function readStylesheet(name: string) {
 	return readFileSync(`${cssRoot}/${name}`, 'utf8')
@@ -52,32 +52,51 @@ test('core shared stylesheet partitions begin at cohesive ownership boundaries',
 test('feature stylesheets own their product rules and load after the shared sheet on the pages that render them', () => {
 	const statoblast = readFeatureStylesheet('statoblast')
 	const zoltar = readFeatureStylesheet('zoltar')
+	const zoltarQuestions = readFeatureStylesheet('zoltarQuestions')
+	const zoltarDeployment = readFeatureStylesheet('zoltarDeployment')
 	expect(statoblast).toStartWith('/* Statoblast feature styles:')
 	expect(zoltar).toStartWith('/* Zoltar feature styles:')
+	expect(zoltarQuestions).toStartWith('/* Zoltar question styles:')
+	expect(zoltarDeployment).toStartWith('/* Zoltar deployment route styles.')
 	for (const selector of ['.truth-auction-panel', '.escalation-sides', '.security-pool-strip', '.vault-workspace', '.liquidation-modal-actions', '.oracle-actions', '.fork-workflow-stage']) expect(statoblast).toContain(`${selector} {`)
-	for (const selector of ['.question-create-editor', '.question-preview', '.question-draft-preview', '.deployment-contract-details', '.categorical-outcomes']) expect(zoltar).toContain(`${selector} {`)
+	for (const selector of ['.question-create-editor', '.question-preview', '.question-draft-preview']) expect(zoltarQuestions).toContain(`${selector} {`)
+	expect(zoltarDeployment).toContain('.deployment-contract-details {')
+	expect(zoltar).toContain('.categorical-outcomes {')
+	// Statoblast and Trading load only the Zoltar partials they render, so the Zoltar-only sheet must not carry rules they need.
+	for (const selector of ['.question-', '.deployment-']) expect(zoltar).not.toContain(`\n${selector}`)
 	const shared = ['base.css', 'simulation-banner.css', 'protocol-surfaces.css', 'application-surfaces.css', 'controls-and-responsive.css', 'visual-foundation.css', 'protocol-apps.css'].map(readStylesheet).join('\n')
 	for (const selector of ['.truth-auction-', '.escalation-side', '.security-pool-strip', '.vault-workspace', '.question-draft-preview', '.deployment-contract-details']) expect(shared).not.toContain(`\n${selector}`)
 	// Narrow-viewport overrides for feature grids must follow their base rules, so they live in the owning sheet rather than the earlier-loaded shared sheet.
-	for (const selector of ['.security-pool-hero-ribbon', '.security-pool-strip-stats', '.vault-preview-side-metrics', '.vault-detail-hero', '.trading-share-callouts', '.escalation-metrics', '.fork-summary-grid', '.categorical-outcome-row', '.question-preview-meta', '.question-draft-preview-meta'])
+	for (const selector of ['.security-pool-strip-stats', '.vault-preview-side-metrics', '.vault-detail-hero', '.trading-share-callouts', '.escalation-metrics', '.fork-summary-grid', '.categorical-outcome-row', '.question-preview-meta', '.question-draft-preview-meta'])
 		expect(shared).not.toMatch(new RegExp(`\\n\\t?${selector.replaceAll('.', '\\.')}[,\\s{]`))
-	for (const selector of ['.escalation-metrics', '.security-pool-hero-ribbon', '.vault-detail-hero']) expect(statoblast.lastIndexOf(`\t${selector},`)).toBeGreaterThan(statoblast.indexOf(`${selector} {`))
-	for (const selector of ['.categorical-outcome-row', '.question-preview-meta']) expect(zoltar.lastIndexOf(`\t${selector}`)).toBeGreaterThan(zoltar.indexOf(`${selector} {`))
+	for (const selector of ['.escalation-metrics', '.security-pool-strip-stats', '.vault-detail-hero']) expect(statoblast.lastIndexOf(`\t${selector},`)).toBeGreaterThan(statoblast.indexOf(`${selector} {`))
+	expect(zoltar.lastIndexOf('\t.categorical-outcome-row')).toBeGreaterThan(zoltar.indexOf('.categorical-outcome-row {'))
+	expect(zoltarQuestions.lastIndexOf('\t.question-preview-meta')).toBeGreaterThan(zoltarQuestions.indexOf('.question-preview-meta {'))
 	expect(readStylesheet('simulation-banner.css')).toContain('.simulation-banner {')
 	expect(shared.split('\n.simulation-banner {')).toHaveLength(2)
 
 	const sharedLink = '<link rel="stylesheet" href="/ui/coreShared/css/index.css" />'
+	const zoltarQuestionsLink = '<link rel="stylesheet" href="/ui/zoltarShared/css/questions.css" />'
+	const zoltarDeploymentLink = '<link rel="stylesheet" href="/ui/zoltarShared/css/deployment.css" />'
 	const zoltarLink = '<link rel="stylesheet" href="/ui/zoltarShared/css/index.css" />'
 	const statoblastLink = '<link rel="stylesheet" href="/ui/statoblastShared/css/index.css" />'
 	const zoltarPage = readFileSync('ui/zoltar/index.html', 'utf8')
 	const statoblastPage = readFileSync('ui/statoblast/index.html', 'utf8')
 	const tradingPage = readFileSync('ui/trading/index.html', 'utf8')
-	expect(zoltarPage.indexOf(sharedLink)).toBeLessThan(zoltarPage.indexOf(zoltarLink))
+	const expectLinkOrder = (page: string, links: readonly string[]) => {
+		const offsets = links.map(link => page.indexOf(link))
+		expect(offsets.every(offset => offset >= 0)).toBe(true)
+		expect([...offsets].sort((left, right) => left - right)).toEqual(offsets)
+	}
+	expectLinkOrder(zoltarPage, [sharedLink, zoltarQuestionsLink, zoltarDeploymentLink, zoltarLink])
 	expect(zoltarPage).not.toContain(statoblastLink)
-	expect(statoblastPage.indexOf(sharedLink)).toBeLessThan(statoblastPage.indexOf(zoltarLink))
-	expect(statoblastPage.indexOf(zoltarLink)).toBeLessThan(statoblastPage.indexOf(statoblastLink))
-	// Trading renders the shared fork question preview on its universe route, so it loads the Zoltar feature sheet after the shared sheet.
-	expect(tradingPage.indexOf(sharedLink)).toBeLessThan(tradingPage.indexOf(zoltarLink))
+	// Statoblast renders Zoltar question previews, the question create form, and the deployment route, but none of the Zoltar-only rules.
+	expectLinkOrder(statoblastPage, [sharedLink, zoltarQuestionsLink, zoltarDeploymentLink, statoblastLink])
+	expect(statoblastPage).not.toContain(zoltarLink)
+	// Trading renders the shared fork question preview on its universe route, so it loads only the question sheet after the shared sheet.
+	expectLinkOrder(tradingPage, [sharedLink, zoltarQuestionsLink])
+	expect(tradingPage).not.toContain(zoltarDeploymentLink)
+	expect(tradingPage).not.toContain(zoltarLink)
 	expect(tradingPage).not.toContain(statoblastLink)
 })
 
@@ -125,14 +144,36 @@ test('persistent operational text and AugurScan disclosures keep accessible mini
 })
 
 test('production styles reserve sub-13px type for nonessential eyebrows and decorative glyphs', () => {
-	for (const stylesheet of [readStylesheet('base.css'), readStylesheet('simulation-banner.css'), readStylesheet('protocol-surfaces.css'), readFeatureStylesheet('statoblast'), readFeatureStylesheet('zoltar'), readFileSync('ui/trading/css/app.css', 'utf8'), readFileSync('augurScan/public/styles.css', 'utf8')]) {
+	for (const stylesheet of [
+		readStylesheet('base.css'),
+		readStylesheet('simulation-banner.css'),
+		readStylesheet('protocol-surfaces.css'),
+		readFeatureStylesheet('statoblast'),
+		readFeatureStylesheet('zoltar'),
+		readFeatureStylesheet('zoltarQuestions'),
+		readFeatureStylesheet('zoltarDeployment'),
+		readFileSync('ui/trading/css/app.css', 'utf8'),
+		readFileSync('augurScan/public/styles.css', 'utf8'),
+	]) {
 		expect(findSubminimumFontRules(stylesheet)).toEqual([])
 	}
 })
 
 test('product accent hues are only defined in tokens so Statoblast never inherits Zoltar cyan', () => {
 	const productHueLiteral = /rgba?\(\s*(?:56,\s*213,\s*255|124,\s*108,\s*255|160,\s*124,\s*255|183,\s*238,\s*81|85,\s*200,\s*228|42,\s*181,\s*216|22,\s*148,\s*184|19,\s*127,\s*159)\b|#(?:38d5ff|7c6cff|a07cff|b7ee51|55c8e4|2ab5d8|1694b8|137f9f)\b/i
-	for (const name of ['base.css', 'simulation-banner.css', 'protocol-surfaces.css', 'application-surfaces.css', 'controls-and-responsive.css', 'visual-foundation.css', 'protocol-apps.css', featureStylesheets.statoblast, featureStylesheets.zoltar]) {
+	for (const name of [
+		'base.css',
+		'simulation-banner.css',
+		'protocol-surfaces.css',
+		'application-surfaces.css',
+		'controls-and-responsive.css',
+		'visual-foundation.css',
+		'protocol-apps.css',
+		featureStylesheets.statoblast,
+		featureStylesheets.zoltar,
+		featureStylesheets.zoltarQuestions,
+		featureStylesheets.zoltarDeployment,
+	]) {
 		const offendingLines = (name.includes('/') ? readFileSync(name, 'utf8') : readStylesheet(name)).split('\n').filter(line => productHueLiteral.test(line))
 		expect({ name, offendingLines }).toEqual({ name, offendingLines: [] })
 	}

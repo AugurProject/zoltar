@@ -465,13 +465,6 @@ button.quiet:disabled {
 	box-shadow: none;
 }
 
-.hero-status {
-	display: flex;
-	flex-wrap: wrap;
-	gap: 0.5rem;
-	margin-top: 0.25rem;
-}
-
 .status-chip {
 	display: inline-flex;
 	align-items: center;

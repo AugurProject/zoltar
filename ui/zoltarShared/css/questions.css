@@ -1,0 +1,258 @@
+/* Zoltar question styles: question summaries, previews, and the question create form. Loaded after ui/coreShared/css/index.css by every app that shows a Zoltar question. */
+
+.question-summary {
+	display: grid;
+	gap: 0.7rem;
+	min-width: 0;
+}
+
+.question-summary-heading {
+	display: grid;
+	gap: 0.2rem;
+	min-width: 0;
+}
+
+.question-summary-heading strong {
+	display: block;
+	font-size: var(--font-body);
+	line-height: var(--line-height-tight);
+	letter-spacing: -0.02em;
+	overflow-wrap: anywhere;
+}
+
+.question-summary-heading .detail {
+	line-height: var(--line-height-body);
+}
+
+.question-summary-grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+	gap: 0.5rem 1rem;
+}
+
+.question-summary-grid > div {
+	min-width: 0;
+	padding-top: 0.5rem;
+	border-top: 1px solid var(--border-default);
+}
+
+.question-summary-grid strong {
+	display: block;
+	margin-top: 0.15rem;
+	font-family: var(--font-family-mono);
+	font-size: var(--font-value);
+	font-variant-numeric: tabular-nums;
+	color: var(--value);
+	overflow-wrap: anywhere;
+}
+
+.question-preview {
+	min-width: 0;
+	display: grid;
+	gap: 1rem;
+	padding: 1rem 0 0;
+	border-top: 1px solid var(--border-default);
+	background: transparent;
+	border-radius: 0;
+}
+
+.question-preview:first-child {
+	padding-top: 0;
+	border-top: 0;
+}
+
+.question-preview-body {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+	gap: 0.75rem 1rem;
+}
+
+.question-preview-body > div {
+	min-width: 0;
+	padding-top: 0.5rem;
+	border-top: 1px solid var(--border-default);
+}
+
+.question-preview-body strong {
+	display: block;
+	margin-top: 0.15rem;
+	font-family: var(--font-family-mono);
+	font-size: var(--font-value);
+	font-weight: 600;
+	font-variant-numeric: tabular-nums;
+	color: var(--value);
+	overflow-wrap: anywhere;
+}
+
+.question-create-editor {
+	display: contents;
+}
+
+.question-create-editor[hidden] {
+	display: none;
+}
+
+.question-preview-timeline,
+.question-preview-meta {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+	gap: 0.8rem;
+}
+
+.question-preview-timeline {
+	grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+	gap: 0.75rem;
+}
+
+.question-preview-timeline-item {
+	display: grid;
+	gap: 0.35rem;
+	padding: 0.2rem 0 0.2rem 0.8rem;
+	border: 0;
+	border-left: 2px solid var(--divider-subtle);
+	border-radius: 0;
+	background: transparent;
+}
+
+.question-preview-timeline-label,
+.question-preview-meta-label {
+	font-size: var(--font-label);
+	letter-spacing: 0.14em;
+	text-transform: uppercase;
+	color: var(--muted);
+}
+
+.question-preview-timeline-value,
+.question-preview-meta-item strong {
+	font-size: var(--font-caption);
+	font-weight: 600;
+	color: var(--text-secondary);
+}
+
+.question-preview-timeline-value .timestamp-value {
+	display: grid;
+	gap: 0.18rem;
+}
+
+.question-preview-timeline-value .timestamp-value-relative {
+	font-size: var(--font-label);
+	color: var(--muted);
+}
+
+.question-preview-meta {
+	grid-template-columns: repeat(auto-fit, minmax(12rem, max-content));
+	gap: 0.6rem 1.25rem;
+}
+
+.question-preview-meta-item {
+	display: grid;
+	gap: 0.45rem;
+	min-width: 0;
+}
+
+.question-preview-meta-item-primary-id {
+	grid-column: 1 / -1;
+}
+
+.question-preview-meta-item strong {
+	min-width: 0;
+}
+
+.question-preview-meta-item .copy-value-wrap,
+.question-preview-meta-item .identifier-value {
+	max-width: 100%;
+}
+
+.question-preview-meta-item .identifier-value {
+	word-break: break-all;
+}
+
+.question-preview-meta-item-primary-id .identifier-value.copyable {
+	display: block;
+	white-space: normal;
+	word-break: break-all;
+}
+
+.question-draft-preview {
+	display: grid;
+	gap: 1rem;
+}
+
+.question-draft-preview-header {
+	display: grid;
+	gap: 0.8rem;
+}
+
+.question-draft-preview-chip {
+	display: inline-flex;
+	justify-self: start;
+	align-items: center;
+	border: 1px solid var(--border-default);
+	border-radius: var(--radius-pill);
+	padding: 0.38rem 0.7rem;
+	font-size: var(--font-caption);
+	line-height: var(--line-height-tight);
+	text-transform: capitalize;
+	color: var(--text-secondary);
+	background: var(--surface-row);
+}
+
+.question-draft-preview-chip.ok {
+	border-color: var(--success-border);
+	background: var(--success-soft);
+	color: var(--text);
+}
+
+.question-draft-preview-chip.warning {
+	border-color: var(--warning-border);
+	background: var(--warning-soft);
+	color: var(--text);
+}
+
+.question-draft-preview-meta {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+	gap: 0.8rem;
+}
+
+.question-draft-preview-meta-item {
+	display: grid;
+	gap: 0.3rem;
+	padding-top: 0.75rem;
+	border-top: 1px solid var(--border-default);
+}
+
+.question-draft-preview-meta-item span {
+	font-size: var(--font-label);
+	letter-spacing: 0.12em;
+	text-transform: uppercase;
+	color: var(--muted);
+}
+
+.question-draft-preview-meta-item strong {
+	font-size: var(--font-body);
+	line-height: var(--line-height-snug);
+	color: var(--text);
+}
+
+.question-preview-meta {
+	grid-template-columns: repeat(auto-fit, minmax(min(100%, 12rem), 1fr));
+}
+
+.question-summary .question-summary-heading strong,
+.question-summary .detail {
+	max-width: none;
+	white-space: normal;
+	overflow: visible;
+	text-overflow: clip;
+	overflow-wrap: anywhere;
+}
+
+/* Narrow-viewport collapse for grids this sheet owns; kept after the base rules so the override wins at equal specificity. */
+@media (max-width: 40rem) {
+	.question-draft-preview-meta,
+	.question-preview-timeline,
+	.question-preview-meta {
+		grid-template-columns: minmax(0, 1fr);
+	}
+}

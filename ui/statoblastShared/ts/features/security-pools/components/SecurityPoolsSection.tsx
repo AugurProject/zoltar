@@ -7,6 +7,9 @@ import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as securityPoolCopy from '../../../copy/securityPool.js'
 import { RouteHeader } from '@zoltar/ui-core-shared/components/RouteHeader.js'
 import { UniversePoolDirectorySection } from './UniversePoolDirectorySection.js'
+import { FirstRunRoleGuide } from './FirstRunRoleGuide.js'
+import { GlossaryTerm } from '../../glossary/components/GlossaryTerm.js'
+import * as glossaryCopy from '../../../copy/glossary.js'
 
 function shouldRefreshSelectedPoolDataOnViewOpen({ currentSecurityPoolAddress, nextSecurityPoolAddress, nextView, selectedPoolHasLoadedDetails }: { currentSecurityPoolAddress: string; nextSecurityPoolAddress?: string | undefined; nextView: SecurityPoolsView; selectedPoolHasLoadedDetails: boolean }) {
 	if (nextView !== 'operate') return false
@@ -16,8 +19,28 @@ function shouldRefreshSelectedPoolDataOnViewOpen({ currentSecurityPoolAddress, n
 
 function getSecurityPoolsRouteHeader(view: SecurityPoolsView) {
 	if (view === 'browse') return { description: undefined, title: commonCopy.browsePools }
-	if (view === 'create') return { description: securityPoolCopy.createPoolDescription, title: commonCopy.createPool }
-	if (view === 'universes') return { description: securityPoolCopy.universesDescription, title: commonCopy.universe }
+	if (view === 'create')
+		return {
+			description: (
+				<>
+					{securityPoolCopy.createPoolDescriptionLead}
+					<GlossaryTerm id='security-pool'>{glossaryCopy.securityPoolTerm.toLowerCase()}</GlossaryTerm>
+					{securityPoolCopy.createPoolDescriptionTail}
+				</>
+			),
+			title: commonCopy.createPool,
+		}
+	if (view === 'universes')
+		return {
+			description: (
+				<>
+					{securityPoolCopy.universesDescriptionLead}
+					<GlossaryTerm id='universe'>{glossaryCopy.universeTerm.toLowerCase()}</GlossaryTerm>
+					{securityPoolCopy.universesDescriptionTail}
+				</>
+			),
+			title: commonCopy.universe,
+		}
 	return { description: undefined, title: commonCopy.managePool }
 }
 
@@ -38,6 +61,7 @@ export function SecurityPoolsSection({ activeView, createPool, loadingUniverseDi
 	return (
 		<div className='route-view-flow'>
 			{view === 'operate' && hasSelectedPool ? undefined : <RouteHeader description={routeHeader.description} eyebrow={commonCopy.securityPools} title={routeHeader.title} />}
+			{view === 'browse' ? <FirstRunRoleGuide /> : undefined}
 			{view === 'browse' ? (
 				<SecurityPoolsOverviewSection
 					{...overview}

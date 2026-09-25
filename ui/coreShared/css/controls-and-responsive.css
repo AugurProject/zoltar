@@ -370,14 +370,6 @@
 	background: transparent;
 }
 
-.selected-pool-hero-question .question-preview-timeline-item {
-	padding: 0.8rem 0 0;
-	border: 0;
-	border-top: 1px solid var(--divider-subtle);
-	border-radius: 0;
-	background: transparent;
-}
-
 .selected-pool-context-grid .metric-field-value {
 	display: block;
 	min-width: 0;
@@ -1030,4 +1022,94 @@
 
 .application-brand img {
 	flex-shrink: 0;
+}
+
+/* Inline glossary term: a dotted underline marks a definition on demand without breaking the sentence it sits in. */
+.term {
+	position: relative;
+	display: inline;
+}
+
+.term-trigger,
+.term-trigger:hover:not(:disabled) {
+	display: inline;
+	min-height: 0;
+	max-width: none;
+	padding: 0;
+	border: 0;
+	border-radius: var(--radius-compact);
+	background: transparent;
+	font: inherit;
+	letter-spacing: inherit;
+	text-align: inherit;
+	text-transform: inherit;
+	color: inherit;
+	text-decoration: underline dotted;
+	text-decoration-thickness: 1px;
+	text-underline-offset: 0.2em;
+	cursor: help;
+}
+
+.term-trigger:hover:not(:disabled),
+.term-trigger[aria-expanded="true"] {
+	color: var(--text);
+	text-decoration-color: var(--accent);
+}
+
+/* The popover can sit inside labels and metrics that restyle their descendant spans and strongs, so its rules are anchored to the term root to reset that context. */
+.term > .term-popover {
+	position: absolute;
+	top: calc(100% + 0.4rem);
+	left: 0;
+	z-index: var(--z-dropdown);
+	display: grid;
+	gap: 0.4rem;
+	width: max-content;
+	max-width: min(20rem, calc(100vw - 1rem));
+	padding: 0.75rem 0.85rem;
+	border: 1px solid var(--border-strong);
+	border-radius: var(--radius-normal);
+	background: var(--surface-modal-opaque);
+	box-shadow: var(--shadow-overlay);
+	font-family: var(--font-family-sans);
+	font-size: var(--font-caption);
+	font-weight: 400;
+	letter-spacing: normal;
+	line-height: var(--line-height-body);
+	text-align: start;
+	text-transform: none;
+	white-space: normal;
+	color: var(--text-secondary);
+}
+
+.term > .term-popover[hidden] {
+	display: none;
+}
+
+.term > .term-popover:focus {
+	outline: none;
+}
+
+.term > .term-popover > .term-popover-label,
+.term > .term-popover > .term-popover-definition,
+.term > .term-popover > .term-popover-link {
+	font-family: var(--font-family-sans);
+	letter-spacing: normal;
+	text-transform: none;
+}
+
+.term > .term-popover > .term-popover-label {
+	font-size: var(--font-body);
+	font-weight: 700;
+	color: var(--text);
+}
+
+.term > .term-popover > .term-popover-definition {
+	font-size: var(--font-caption);
+	color: var(--text-secondary);
+}
+
+.term > .term-popover > .term-popover-link {
+	justify-self: start;
+	font-size: var(--font-caption);
 }

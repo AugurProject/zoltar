@@ -116,6 +116,10 @@
 			"bun": "./ts/features/security-pools/hooks/useSecurityVaultOperations.ts",
 			"default": "./js/features/security-pools/hooks/useSecurityVaultOperations.js"
 		},
+		"./features/security-pools/lib/firstRunRoles.js": {
+			"bun": "./ts/features/security-pools/lib/firstRunRoles.ts",
+			"default": "./js/features/security-pools/lib/firstRunRoles.js"
+		},
 		"./features/security-pools/lib/liquidation.js": {
 			"bun": "./ts/features/security-pools/lib/liquidation.ts",
 			"default": "./js/features/security-pools/lib/liquidation.js"

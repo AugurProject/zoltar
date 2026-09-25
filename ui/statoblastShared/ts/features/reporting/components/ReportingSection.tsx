@@ -31,6 +31,7 @@ import { getEscalationPhase, getReportingMaxProfitContribution, getReportingMini
 import { getReportingReportGuardMessage, getReportingWithdrawGuardMessage } from '../lib/reportingGuards.js'
 import { getEffectiveReportingDetails, getEscalationGameStartTimestamp, getReportingStagePresentation } from '../lib/reportingStagePresentation.js'
 import { ReportingSettlementSection } from './ReportingSettlementSection.js'
+import { GlossaryTerm } from '../../glossary/components/GlossaryTerm.js'
 import type { ReportingSectionProps } from '../../oracleTypes.js'
 import type { EscalationDeposit, ReportingDetails, ReportingOutcomeKey } from '@zoltar/ui-core-shared/types/contracts.js'
 function formatKnownAmount(amount: bigint | undefined) {
@@ -408,7 +409,7 @@ export function ReportingSection({
 			{showFullReporting && reportingReady !== false ? (
 				<SectionBlock className='reporting-metrics-section' title={reportingCopy.escalationMetrics} variant='embedded'>
 					<div className='escalation-metrics'>
-						<MetricField label={reportingCopy.nonDecisionThresholdAttoRep}>
+						<MetricField label={<GlossaryTerm id='non-decision-threshold'>{reportingCopy.nonDecisionThresholdAttoRep}</GlossaryTerm>}>
 							<CurrencyValue precision='exact' value={effectiveReportingDetails?.nonDecisionThresholdAttoRep} suffix={commonCopy.rep} />
 						</MetricField>
 						<MetricField label={reportingCopy.startBondAttoRep}>

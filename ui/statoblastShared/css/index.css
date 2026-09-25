@@ -1669,8 +1669,6 @@
 
 .security-pool-strip,
 .security-pool-strip-stats,
-.security-pool-hero-ribbon,
-.security-pool-hero-main,
 .vault-preview-strip-head,
 .vault-preview-side-metrics,
 .vault-detail-hero,
@@ -1684,12 +1682,9 @@
 
 .security-pool-strip-stats span,
 .security-pool-strip-price span,
-.security-pool-ribbon-stat span,
-.security-pool-hero-oracle-label,
 .vault-preview-capacity-ownership span,
 .vault-preview-side-metrics span,
 .vault-detail-hero span,
-.selected-pool-hero-kicker,
 .trading-holdings-hero span,
 .trading-share-callouts span {
 	font-size: var(--font-label);
@@ -1700,8 +1695,6 @@
 
 .security-pool-strip-stats strong,
 .security-pool-strip-price strong,
-.security-pool-ribbon-stat strong,
-.security-pool-hero-oracle-value,
 .vault-preview-capacity-ownership strong,
 .vault-preview-side-metrics strong,
 .vault-detail-hero strong,
@@ -1712,7 +1705,6 @@
 }
 
 .security-pool-strip-stats > div,
-.security-pool-ribbon-stat,
 .vault-preview-side-metrics > div,
 .vault-detail-hero-secondary > div,
 .trading-share-callouts > div {
@@ -1763,21 +1755,18 @@
 }
 
 .security-pool-strip-price,
-.security-pool-hero-oracle,
 .trading-holdings-hero {
 	display: grid;
 	gap: 0.45rem;
 	padding: 0 0 0.2rem;
 }
 
-.security-pool-card-progress,
-.security-pool-hero-progress {
+.security-pool-card-progress {
 	display: grid;
 	gap: 0.8rem;
 }
 
-.security-pool-strip-meter,
-.security-pool-hero-meter {
+.security-pool-strip-meter {
 	padding: 0.85rem 0;
 	border-width: 0 0 1px;
 	border-radius: 0;
@@ -1872,76 +1861,9 @@
 	min-width: 0;
 }
 
-.security-pool-hero-metrics,
 .vault-position-list {
 	display: grid;
 	gap: 1rem;
-}
-
-.selected-pool-hero-question .question-preview-meta {
-	display: none;
-}
-
-.selected-pool-hero-lifecycle {
-	display: grid;
-	gap: 0.75rem;
-	padding-top: 0.65rem;
-	border-top: 1px solid var(--color-white-08);
-}
-
-.security-pool-hero-ribbon {
-	grid-template-columns: repeat(4, minmax(0, 1fr));
-	padding: 0.35rem 0 0.2rem;
-	border-bottom: 1px solid var(--color-white-08);
-}
-
-.security-pool-ribbon-stat {
-	display: grid;
-	gap: 0.35rem;
-	padding: 0.8rem 0;
-	border: 0;
-	border-top: 1px solid var(--divider-subtle);
-	border-radius: 0;
-	background: transparent;
-}
-
-.security-pool-ribbon-stat-label {
-	font-size: var(--font-label);
-	letter-spacing: 0.14em;
-	text-transform: uppercase;
-	color: var(--muted);
-}
-
-.security-pool-ribbon-stat-value {
-	display: block;
-	font-size: var(--font-body);
-	line-height: var(--line-height-tight);
-	color: var(--text);
-}
-
-.security-pool-ribbon-stat-value .currency-value-wrap,
-.security-pool-ribbon-stat-value .currency-value {
-	max-width: 100%;
-}
-
-.security-pool-ribbon-stat-value .currency-value {
-	font-size: inherit;
-	font-weight: inherit;
-}
-
-.security-pool-hero-main {
-	display: grid;
-	gap: 1rem;
-	padding-top: 0.75rem;
-}
-
-.security-pool-hero-oracle-value {
-	font-size: clamp(1.4rem, 2vw, 2rem);
-}
-
-.security-pool-secondary-facts {
-	padding-top: 0.3rem;
-	border-top: 1px solid var(--color-white-08);
 }
 
 .vault-position-card .entity-card-content {
@@ -1978,7 +1900,9 @@
 }
 
 .vault-preview-meta {
+	display: grid;
 	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: 0.8rem;
 	align-items: end;
 }
 
@@ -2081,17 +2005,9 @@
 	align-items: start;
 }
 
-.security-pool-secondary-facts .metric-field,
 .vault-preview-meta .metric-field,
 .vault-detail-meta .metric-field {
 	min-width: 0;
-}
-
-.security-pool-secondary-facts .metric-field {
-	padding: 0.8rem 0.9rem;
-	border: 1px solid var(--color-white-08);
-	border-radius: var(--radius-overlay);
-	background: linear-gradient(180deg, var(--color-white-04), transparent);
 }
 
 .trading-holdings-stage {
@@ -2165,7 +2081,6 @@
 		grid-template-columns: minmax(0, 1fr);
 	}
 
-	.security-pool-hero-ribbon,
 	.security-pool-strip-stats,
 	.vault-preview-strip-head,
 	.vault-detail-hero,
@@ -2649,10 +2564,7 @@
 
 @media (max-width: 40rem) {
 	.security-pool-card-progress,
-	.security-pool-hero-progress,
-	.security-pool-secondary-facts,
 	.vault-preview-meta,
-	.security-pool-hero-ribbon,
 	.security-pool-strip-stats,
 	.vault-preview-strip-head,
 	.vault-preview-side-metrics,
@@ -3338,5 +3250,34 @@
 	.pool-selection-control input {
 		font-size: var(--font-label);
 		text-overflow: ellipsis;
+	}
+}
+
+/* First-run role guide on the pool directory: flat role columns divided by rules, stacked on narrow screens. */
+.first-run-roles {
+	display: grid;
+	grid-template-columns: repeat(3, minmax(0, 1fr));
+	gap: var(--space-4);
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+
+.first-run-role {
+	display: grid;
+	align-content: start;
+	gap: var(--space-2);
+	min-width: 0;
+	padding-top: var(--space-3);
+	border-top: 1px solid var(--divider-subtle);
+}
+
+.first-run-role .detail {
+	margin: 0;
+}
+
+@media (max-width: 50rem) {
+	.first-run-roles {
+		grid-template-columns: minmax(0, 1fr);
 	}
 }
