@@ -6,7 +6,6 @@ import { getBrowserStorage } from '../lib/browserStorage.js'
 import { createConnectedReadClient } from '../wallet/clients.js'
 import { createRecoveringReceiptWaiter } from './receiptRecovery.js'
 import {
-	dismissTransactionActivity,
 	mergeStoredTransactionActivity,
 	expireStaleTransactionActivity,
 	getTransactionActivityStorageKey,
@@ -101,10 +100,9 @@ export function releaseTransactionActivityWatch(hash: Hash) {
 	releasedWatches.value += 1
 }
 
-/** Removes an entry the user no longer wants tracked; a stuck pending entry stops locking its objects. */
-export function dismissTransactionActivityEntry(hash: Hash) {
-	watchedHashes.delete(hash)
-	update(entries => dismissTransactionActivity(entries, hash))
+/** Stops tracking a pending transaction the user knows will never confirm; it stops locking its objects. */
+export function stopTrackingTransactionActivity(hash: Hash) {
+	recordTransactionSettled(hash, { status: 'failed', failureKind: 'dropped' })
 }
 
 function isPendingInActivity(hash: Hash) {

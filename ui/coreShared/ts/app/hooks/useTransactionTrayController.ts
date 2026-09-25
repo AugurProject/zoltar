@@ -63,7 +63,10 @@ export function useTransactionTrayController({ onFinished }: TransactionTrayCont
 			const entry = resolveTransactionTrayEntry(previous, details.requestKey)
 			transactionState.value = markTransactionFailed(previous, { kind: details.kind ?? 'error', message }, entry?.key)
 			const hash = entry === undefined ? undefined : getTransactionLifecycleHash(entry.lifecycle)
-			if (hash !== undefined) recordTransactionSettled(hash, { status: 'failed', failureKind: details.kind ?? 'error' })
+			// Only a reverted or replaced broadcast is known to have failed on chain; other failures (such as a check after a
+			// confirmed approval) leave the receipt to the activity watcher.
+			if (hash !== undefined && (details.kind === 'reverted' || details.kind === 'replaced')) recordTransactionSettled(hash, { status: 'failed', failureKind: details.kind })
+			else if (hash !== undefined) releaseTransactionActivityWatch(hash)
 		},
 		onTransactionFinished: (requestKey?: TransactionRequestKey) => {
 			if (!isCurrentGeneration()) return

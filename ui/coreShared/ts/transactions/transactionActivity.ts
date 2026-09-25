@@ -59,15 +59,21 @@ export function settleTransactionActivity(entries: readonly TransactionActivityE
 	return capActivity(entries.map(entry => (entry.hash === hash ? { ...entry, ...outcome, settledAt } : entry)))
 }
 
-/** Adds entries another tab stored for the same account, newest first; this tab's copy of a shared hash wins. */
+/**
+ * Adds entries another tab stored for the same account, newest first. A settled copy of a shared hash wins over a
+ * pending one, so an outcome or a "stop tracking" recorded in either tab is never undone by the other.
+ */
 export function mergeStoredTransactionActivity(entries: readonly TransactionActivityEntry[], stored: readonly TransactionActivityEntry[]) {
+	let changed = false
+	const merged = entries.map(entry => {
+		const other = stored.find(candidate => candidate.hash === entry.hash)
+		if (other === undefined || entry.status !== 'pending' || other.status === 'pending') return entry
+		changed = true
+		return other
+	})
 	const missing = stored.filter(candidate => !entries.some(entry => entry.hash === candidate.hash))
-	if (missing.length === 0) return entries
-	return capActivity([...entries, ...missing].sort((left, right) => right.submittedAt - left.submittedAt))
-}
-
-export function dismissTransactionActivity(entries: readonly TransactionActivityEntry[], hash: Hash) {
-	return entries.some(entry => entry.hash === hash) ? entries.filter(entry => entry.hash !== hash) : entries
+	if (!changed && missing.length === 0) return entries
+	return capActivity([...merged, ...missing].sort((left, right) => right.submittedAt - left.submittedAt))
 }
 
 /** Settles pending transactions older than the tracking window as dropped. */

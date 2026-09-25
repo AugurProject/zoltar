@@ -217,6 +217,29 @@ describe('useTransactionTrayController', () => {
 		})
 	}
 
+	test('leaves a broadcast to the receipt watcher when a later check fails without a known on-chain failure', async () => {
+		let controller: ReturnType<typeof useTransactionTrayController> | undefined
+		function Harness() {
+			controller = useTransactionTrayController()
+			return null
+		}
+		const rendered = await renderIntoDocument(<Harness />)
+		cleanupRendered = rendered.cleanup
+		if (controller === undefined) throw new Error('Transaction tray controller did not initialize')
+		transactionActivity.value = { chainId: 1, entries: [], ownerKey: undefined, storageKey: undefined }
+		const approvalHash = '0x5555000000000000000000000000000000000000000000000000000000000000'
+		await act(() => {
+			const key = controller?.onTransactionRequested({ action: 'depositRepToVault', scope: ['security-pool:0xa'], source: 'security-vault', submittedTitle: 'Depositing REP' })
+			const requestKey = typeof key === 'string' ? key : undefined
+			controller?.onTransactionSubmitted(approvalHash)
+			controller?.onTransactionFailed('Approval confirmed, but it is below the report requirement.', { kind: 'error', requestKey })
+			controller?.onTransactionFinished(requestKey)
+		})
+
+		expect(transactionActivity.value.entries.map(entry => [entry.hash, entry.status])).toEqual([[approvalHash, 'pending']])
+		transactionActivity.value = { chainId: undefined, entries: [], ownerKey: undefined, storageKey: undefined }
+	})
+
 	test('leaves a broadcast whose outcome was never reported to the receipt watcher instead of confirming it', async () => {
 		let controller: ReturnType<typeof useTransactionTrayController> | undefined
 		function Harness() {

@@ -5,7 +5,6 @@ import type { Hash } from '@zoltar/core-shared/evm/ethereum'
 import { installDomTestLifecycle } from './testUtils/domTestLifecycle.js'
 import {
 	countPendingTransactionActivity,
-	dismissTransactionActivity,
 	mergeStoredTransactionActivity,
 	expireStaleTransactionActivity,
 	MAX_PENDING_TRANSACTION_AGE_MILLISECONDS,
@@ -22,7 +21,7 @@ import {
 import { createTransactionScope, mergeTransactionScopes, securityPoolTransactionScope, transactionScopesOverlap, universeTransactionScope } from '../transactions/transactionScope.js'
 import { installActiveEnvironmentForTesting, resetActiveEnvironmentForTesting } from '../lib/activeEnvironment.js'
 import { createFakeBackend } from './testUtils/fakeBackend.js'
-import { dismissTransactionActivityEntry, hasPendingTransactionActivity, setTransactionActivityOwner, recordTransactionSettled, recordTransactionSubmitted, transactionActivity } from '../transactions/transactionActivityStore.js'
+import { hasPendingTransactionActivity, stopTrackingTransactionActivity, setTransactionActivityOwner, recordTransactionSettled, recordTransactionSubmitted, transactionActivity } from '../transactions/transactionActivityStore.js'
 
 installDomTestLifecycle()
 
@@ -89,21 +88,43 @@ describe('transaction activity list', () => {
 		])
 		expect(getPendingTransactionActivityScopes(expired)).toEqual([])
 		expect(expireStaleTransactionActivity([fresh], MAX_PENDING_TRANSACTION_AGE_MILLISECONDS + 1)).toEqual([fresh])
-		expect(dismissTransactionActivity(expired, hashOf(2)).map(item => item.hash)).toEqual([hashOf(1)])
-		expect(dismissTransactionActivity(expired, hashOf(9))).toBe(expired)
 	})
 
-	test("merges entries another tab stored, keeping this tab's copy of a shared hash", () => {
-		const mine = [entry(3, 'pending'), entry(1, 'confirmed')]
-		const stored = [entry(2, 'pending'), { ...entry(1, 'pending') }]
+	test('merges entries another tab stored and never lets a pending copy undo a settled one', () => {
+		const mine = [entry(3, 'pending'), entry(1, 'confirmed'), entry(4, 'pending')]
+		const stored = [entry(2, 'pending'), entry(1, 'pending'), { ...entry(4, 'failed'), failureKind: 'dropped' as const }]
 		const merged = mergeStoredTransactionActivity(mine, stored)
 
 		expect(merged.map(item => [item.hash, item.status])).toEqual([
+			[hashOf(4), 'failed'],
 			[hashOf(3), 'pending'],
 			[hashOf(2), 'pending'],
 			[hashOf(1), 'confirmed'],
 		])
-		expect(mergeStoredTransactionActivity(mine, [entry(1)])).toBe(mine)
+		expect(mergeStoredTransactionActivity(mine, [entry(1), entry(3, 'pending')])).toBe(mine)
+	})
+
+	test('keeps a transaction one tab stopped tracking from coming back through another tab', () => {
+		const restore = installActiveEnvironmentForTesting(createFakeBackend())
+		try {
+			setTransactionActivityOwner('0x00000000000000000000000000000000000000a1')
+			const storageKey = transactionActivity.value.storageKey
+			if (storageKey === undefined) throw new Error('Expected persisted activity for a connected account')
+			recordTransactionSubmitted({ hash: hashOf(5), scope: ['market:0x5'], title: 'Stuck' })
+			const otherTab = transactionActivity.value
+			stopTrackingTransactionActivity(hashOf(5))
+			// The other tab still holds the pending copy in memory and writes again.
+			const thisTab = transactionActivity.value
+			transactionActivity.value = otherTab
+			recordTransactionSubmitted({ hash: hashOf(6), scope: [], title: 'Other tab' })
+			transactionActivity.value = thisTab
+			recordTransactionSubmitted({ hash: hashOf(7), scope: [], title: 'This tab' })
+			expect(transactionActivity.value.entries.find(item => item.hash === hashOf(5))).toMatchObject({ status: 'failed', failureKind: 'dropped' })
+			expect(hasPendingTransactionActivity(['market:0x5'])).toBeFalse()
+			expect(window.localStorage.getItem(storageKey)).toContain(hashOf(6))
+		} finally {
+			restore()
+		}
 	})
 
 	test('exposes the scopes of pending transactions for locking', () => {
@@ -139,8 +160,8 @@ describe('transaction activity store', () => {
 		recordTransactionSubmitted({ hash: hashOf(2), previousHash: hashOf(1), scope: ['trading-deployment:factory'], title: 'Deploy factory' })
 		expect(transactionActivity.value.entries.map(item => item.hash)).toEqual([hashOf(2)])
 		expect(hasPendingTransactionActivity(['trading-deployment:factory'])).toBeTrue()
-		dismissTransactionActivityEntry(hashOf(2))
-		expect(transactionActivity.value.entries).toEqual([])
+		stopTrackingTransactionActivity(hashOf(2))
+		expect(transactionActivity.value.entries[0]).toMatchObject({ hash: hashOf(2), status: 'failed', failureKind: 'dropped' })
 		expect(hasPendingTransactionActivity(['trading-deployment:factory'])).toBeFalse()
 	})
 
