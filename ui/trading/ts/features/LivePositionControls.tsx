@@ -76,6 +76,8 @@ function amountHint(model: TradeTicketModel, mode: TradeMode, side: 'YES' | 'NO'
 	if (mode === 'entry') return walletEthAttoEth === undefined ? undefined : ticketCopy.walletBalance(`${formatTrimmedUnits(walletEthAttoEth)} ${workflowCopy.eth}`)
 	const holding = side === 'YES' ? holdings?.yes : holdings?.no
 	if (holding === undefined || model.sellable === undefined) return undefined
+	// The sellable amount only needs saying when INVALID coverage or pool depth holds it below the holding.
+	if (model.sellable >= holding) return ticketCopy.holdingHint(formatOutcomeQuantity(holding, side))
 	return ticketCopy.sellableHint(formatOutcomeQuantity(holding, side), formatOutcomeQuantity(model.sellable, side, 4, 'down'))
 }
 

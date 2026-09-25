@@ -68,10 +68,7 @@ export function TradeEstimatePanel({
 	const impact = `${formatImpactPercent(estimate.impactBps)}%`
 	const primary =
 		estimate.kind === 'entry'
-			? [
-					{ label: ticketCopy.youPay, value: `${formatRoundedUnits(estimate.payAttoEth)} ETH` },
-					{ label: ticketCopy.youReceiveEstimate, value: formatOutcomeQuantity(estimate.quote.totalLongShares, side, ESTIMATE_DIGITS) },
-				]
+			? [{ label: ticketCopy.youReceiveEstimate, value: formatOutcomeQuantity(estimate.quote.totalLongShares, side, ESTIMATE_DIGITS) }]
 			: [
 					{ label: ticketCopy.youSellEstimate, value: formatOutcomeQuantity(estimate.quote.totalLongShares, side, ESTIMATE_DIGITS) },
 					{ label: ticketCopy.youReceiveEstimate, value: `${formatRoundedUnits(estimate.receiveAttoEth, 18, ESTIMATE_DIGITS)} ETH` },

@@ -45,6 +45,10 @@ export function walletBalance(amount: string) {
 	return `Wallet: ${amount}`
 }
 
+export function holdingHint(holding: string) {
+	return `You hold ${holding}`
+}
+
 export function sellableHint(holding: string, sellable: string) {
 	return `You hold ${holding}; up to ${sellable} can be sold now.`
 }

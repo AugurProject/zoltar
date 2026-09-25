@@ -38,7 +38,7 @@ describe('essential trading copy', () => {
 		const buy = ticketEstimateFor(market, 'entry', '1')
 		const sell = ticketEstimateFor(market, 'exit', '2', { scope: shareBalanceScope(market), yes: 10n * 10n ** 36n, no: 0n, invalid: 10n * 10n ** 36n, lp: 0n })
 		const entry = await renderIntoDocument(<TradeEstimatePanel estimate={buy} market={market} settings={DEFAULT_TRADE_SETTINGS} impactTier='low' impactAcknowledged={false} disabled={false} onAcknowledgeImpact={() => undefined} />)
-		for (const phrase of ['You pay', 'You receive ≈', 'Minimum received', 'Price impact', 'Pool fee', '1.25%', 'INVALID insurance', 'ETH if YES wins', '0 ETH otherwise', 'Slippage 0.5%']) expect(entry.container.textContent).toContain(phrase)
+		for (const phrase of ['You receive ≈', 'Minimum received', 'Price impact', 'Pool fee', '1.25%', 'INVALID insurance', 'ETH if YES wins', '0 ETH otherwise', 'Slippage 0.5%']) expect(entry.container.textContent).toContain(phrase)
 		// The share mechanics stay available behind one disclosure instead of a second always-open breakdown.
 		expect(entry.container.querySelectorAll('details')).toHaveLength(1)
 		await entry.cleanup()

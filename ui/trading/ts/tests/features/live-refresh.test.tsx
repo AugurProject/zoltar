@@ -191,7 +191,7 @@ describe('live market refresh', () => {
 		// Sells are entered in shares, with shortcuts, and priced locally before the chain is asked.
 		await act(async () => button('Sell').click())
 		expect(amountInput.value).toBe('')
-		expect(document.body.textContent).toContain('can be sold now')
+		expect(document.body.textContent).toContain('You hold 3 YES')
 		expect(['25%', '50%', 'Max'].every(label => button(label) instanceof HTMLButtonElement)).toBeTrue()
 		await typeAmount('0.5')
 		await waitForDom(() => document.querySelector('.transaction-review-primary')?.textContent?.includes('You sell') === true, 'exit estimate')
