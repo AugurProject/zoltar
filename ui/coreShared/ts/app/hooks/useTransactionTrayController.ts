@@ -5,6 +5,7 @@ import type { TransactionRequestPreview, TransactionSubmissionStatus } from '../
 import {
 	canRequestTransaction,
 	createInitialTransactionTrayState,
+	getPreparingTransactionEntry,
 	getTransactionRequestKey,
 	markTransactionCanceled,
 	markTransactionFailed,
@@ -75,7 +76,11 @@ export function useTransactionTrayController({ onFinished }: TransactionTrayCont
 		},
 		onTransactionPrepared: (preview: TransactionRequestPreview) => {
 			if (!isCurrentGeneration()) return
-			transactionState.value = markTransactionPrepared(transactionState.value, preview)
+			const previous = transactionState.value
+			// A multi-write action prepares its next transaction only after the previous one confirmed; settle that row.
+			const preparing = getPreparingTransactionEntry(previous)
+			if (preparing?.lifecycle.phase === 'pending') recordTransactionSettled(preparing.lifecycle.hash, { status: 'confirmed' })
+			transactionState.value = markTransactionPrepared(previous, preview)
 		},
 		onTransactionPresented: (presentation: GlobalTransactionPresentation) => {
 			if (!isCurrentGeneration()) return

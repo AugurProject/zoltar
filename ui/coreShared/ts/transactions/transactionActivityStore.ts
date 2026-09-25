@@ -127,6 +127,7 @@ export function useTransactionActivityReceiptWatcher() {
 				onReplaced: replacement => {
 					if (replacement.reason === 'repriced') {
 						// A sped-up transaction keeps its row under the new hash.
+						watchedHashes.delete(current)
 						watchedHashes.add(replacement.transaction.hash)
 						update(entries => replaceTransactionActivityHash(entries, current, replacement.transaction.hash))
 						current = replacement.transaction.hash

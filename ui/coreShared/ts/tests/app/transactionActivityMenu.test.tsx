@@ -104,6 +104,12 @@ test('follows a transaction replaced outside the app after a reload and settles 
 	}
 	expect(transactionActivity.value.entries).toHaveLength(1)
 	expect(transactionActivity.value.entries[0]).toMatchObject({ hash: speedUpHash, status: 'failed', failureKind: 'replaced' })
+	// The original hash is released so a later row with that hash could be watched again.
+	transactionActivity.value = { chainId: 1, entries: [{ chainId: 1, hash: restoredHash, scope: [], status: 'pending', submittedAt: Date.now(), title: 'Again' }], ownerKey: 'restored', storageKey: undefined }
+	for (let attempt = 0; attempt < 50 && transactionActivity.value.entries[0]?.status === 'pending'; attempt += 1) {
+		await act(async () => await Bun.sleep(10))
+	}
+	expect(transactionActivity.value.entries[0]?.status).toBe('failed')
 	await rendered.cleanup()
 })
 

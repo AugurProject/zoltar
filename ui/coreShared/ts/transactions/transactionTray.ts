@@ -90,9 +90,16 @@ export function markTransactionRequested(state: TransactionTrayState, intent: Tr
 	}
 }
 
+/**
+ * The request a prepared transaction belongs to: the open prompt, or the only running action preparing its next
+ * transaction. With several actions running and no prompt open the preview cannot be attributed, so it is ignored.
+ */
+export function getPreparingTransactionEntry(state: TransactionTrayState) {
+	return getForegroundEntry(state) ?? (state.entries.length === 1 ? state.entries[0] : undefined)
+}
+
 export function markTransactionPrepared(state: TransactionTrayState, preview: TransactionRequestPreview): TransactionTrayState {
-	// Without an open prompt, the latest action is preparing its next transaction, which starts at the wallet prompt.
-	const entry = getForegroundEntry(state) ?? state.entries.at(-1)
+	const entry = getPreparingTransactionEntry(state)
 	if (entry === undefined) return state
 	const prepared = createPreparedWalletPresentation(entry.intent, preview, entry.key)
 	return {
