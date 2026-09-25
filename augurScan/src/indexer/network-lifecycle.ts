@@ -172,7 +172,6 @@ export async function advancePastPrunedLogs(this: NetworkIndexer, provider: Inde
 	this.network = { ...this.network, startBlock: availableStart }
 	this.historicalCodeUnavailable().clear()
 	this.indexingStartReported = false
-	this.lastProgressLogAt = undefined
 	this.progressSample = undefined
 	this.lastReportedPhase = undefined
 	this.lastDeploymentScanAt = undefined
