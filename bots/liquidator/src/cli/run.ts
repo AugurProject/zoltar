@@ -1,4 +1,5 @@
 #!/usr/bin/env bun
+import { createLiquidatorScanReport, cycleFailureMessage, runningStatus } from '../monitoring/scan-status.ts'
 import { createPoolDeploymentDateCache } from '../monitoring/pool-deployment-date.ts'
 import { parsePoolSelection, updateSupportedPool } from '#config/pool-selection'
 import { loadPoolCatalog } from '#monitoring/pool-catalog'
@@ -26,7 +27,7 @@ import { OperatorStopping, setExecutionShutdownCheck, TransactionAwaitingCanonic
 import { dryRunCandidate, executeLiquidation, executeOriginPoolDeployment, executeVaultMigration, maintainVault } from '#execution/liquidation-executor'
 import { reconcilePendingStagedOperations, recoverPendingTransactions } from '#execution/recovery'
 import { availableExecutionObservations, liquidationExecutionSnapshotObservation } from '#monitoring/execution-quorum'
-import { canonicalBlockHash, chainFor, desiredPoolStatus } from '#monitoring/operator-chain'
+import { canonicalBlockHash, chainFor, constantProductPairAbi, desiredPoolStatus } from '#monitoring/operator-chain'
 import { scanPools } from '#monitoring/pool-monitor'
 import { createPoolMonitorIndex } from '#monitoring/vault-positions'
 import { assertIntentSender, clearMarketEvidenceForConfigurationChange, commitReconciledIntent, initialRuntimeState, loadDurableState, operatorSnapshot, recordActivity, saveDurableState } from '#state/operator-state'
@@ -43,22 +44,6 @@ const centralizedExchangeFactory = createCentralizedExchangeFactory(exchanges)
 
 /** The liquidator only reserves a signer while live execution is enabled; dry-run processes never hold signer locks. */
 const LIQUIDATOR_PROCESS_LOCK_OPTIONS: BotProcessLockOptions = { label: 'liquidator', signerLocksInDryRun: false }
-
-const constantProductPairAbi = [
-	{ inputs: [], name: 'token0', outputs: [{ type: 'address' }], stateMutability: 'view', type: 'function' },
-	{ inputs: [], name: 'token1', outputs: [{ type: 'address' }], stateMutability: 'view', type: 'function' },
-	{ inputs: [], name: 'getReserves', outputs: [{ type: 'uint112' }, { type: 'uint112' }, { type: 'uint32' }], stateMutability: 'view', type: 'function' },
-] as const
-
-function runningStatus(paused: boolean, execute: boolean): 'dry-run' | 'paused' | 'running' {
-	if (paused) return 'paused'
-	return execute ? 'running' : 'dry-run'
-}
-
-function cycleFailureMessage(disposition: ReturnType<typeof operationalFailureDisposition>, execute: boolean) {
-	if (disposition === 'connectivity-degraded') return 'RPC connectivity degraded; execution remains blocked until recovery'
-	return execute ? 'Live execution paused after a safety fault' : 'Scan cycle failed'
-}
 
 async function preflightNetworkProfile(target: OperatorSettings) {
 	if (target.networkConfigured) {
@@ -451,6 +436,8 @@ async function runOperator(loaded: Awaited<ReturnType<typeof loadSettings>>, pro
 			if (profileSwitchRequested) return true
 			if (configurationMutationGate.isActive()) return false
 			if (!settings.networkConfigured) return false
+			const scanReport = createLiquidatorScanReport(settings.network, () => client.getBlockNumber())
+			let scanCompleted = false
 			state.scanning = true
 			state.error = undefined
 			try {
@@ -459,7 +446,10 @@ async function runOperator(loaded: Awaited<ReturnType<typeof loadSettings>>, pro
 				client = createPrimaryClient()
 				const deploymentStatus = await checkSystemDeployment(client, settings.network.chainId, settings.deployment)
 				missingDeploymentAddress = recordSystemDeploymentCheck(state, deploymentStatus, missingDeploymentAddress)
-				if (!deploymentStatus.deployed) return 'deferred'
+				if (!deploymentStatus.deployed) {
+					scanReport.update({ status: 'waiting' })
+					return 'deferred'
+				}
 				let primary
 				if (settings.runtime.execute) {
 					const endpoints = [settings.connectivity.readRpcUrl, ...settings.connectivity.quorumRpcUrls]
@@ -481,6 +471,7 @@ async function runOperator(loaded: Awaited<ReturnType<typeof loadSettings>>, pro
 				const scannedBlock = primary.block
 				const scannedBlockHash = scannedBlock.hash
 				const scannedBlockNumber = scannedBlock.number
+				scanReport.update({ block: scannedBlockNumber })
 				const replacedMarketHead = await clearOrphanedDexEvidenceForHeadReplacement({ hash: state.lastScannedBlockHash, number: state.lastScannedBlock }, { hash: scannedBlockHash, number: scannedBlockNumber }, state, previousBlockNumber => canonicalBlockHash(settings, previousBlockNumber, readPool))
 				state.lastScannedBlock = scannedBlockNumber
 				state.lastScannedBlockHash = scannedBlockHash
@@ -569,6 +560,7 @@ async function runOperator(loaded: Awaited<ReturnType<typeof loadSettings>>, pro
 					state.walletAttoEth = await client.getBalance({ address: state.wallet })
 				}
 				state.status = runningStatus(state.paused, settings.runtime.execute)
+				scanCompleted = true
 				if (shutdown.isRequested()) {
 					await saveDurableState(settings.runtime.stateFile, state)
 					return true
@@ -647,6 +639,8 @@ async function runOperator(loaded: Awaited<ReturnType<typeof loadSettings>>, pro
 					await saveDurableState(settings.runtime.stateFile, state)
 					return shouldStopAfterSuccessfulCycle(settings.runtime.once)
 				}
+				scanReport.update({ status: 'failed' })
+				scanCompleted = false
 				state.error = errorMessage(error)
 				const disposition = operationalFailureDisposition(error)
 				state.status = disposition === 'connectivity-degraded' ? 'connectivity-degraded' : 'error'
@@ -665,6 +659,8 @@ async function runOperator(loaded: Awaited<ReturnType<typeof loadSettings>>, pro
 				await saveDurableState(settings.runtime.stateFile, state).catch(() => undefined)
 				throw error
 			} finally {
+				if (scanCompleted) scanReport.update({ status: state.paused ? 'paused' : 'live', details: { pools: state.pools.length, candidates: state.pools.reduce((count, pool) => count + pool.candidates.length, 0), pendingTransactions: state.pendingTransactions.length } })
+				await scanReport.finish(shutdown.isRequested() ? 'incomplete' : undefined)
 				state.scanning = false
 			}
 		},
