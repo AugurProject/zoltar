@@ -52,6 +52,11 @@ describe('Ordinary escalation vault-deposit freeze', () => {
 		await depositor.waitForTransactionReceipt({ hash })
 	}
 
+	const depositWalletRep = async (reporter: TestClient, pool: Address, outcome = QuestionOutcome.Yes, amount = reportBond) => {
+		const hash = await reporter.writeContract({ address: pool, abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'depositWalletRepToEscalationGame', args: [outcome, amount] })
+		await reporter.waitForTransactionReceipt({ hash })
+	}
+
 	const readWalletDepositGuardState = async (depositor: TestClient, securityPool: Address, escalationGame: Address, repToken: Address, outcome = QuestionOutcome.No) => {
 		const vault = await getSecurityVault(client, securityPool, depositor.account.address)
 		return {
@@ -106,6 +111,77 @@ describe('Ordinary escalation vault-deposit freeze', () => {
 		await approveToken(forkInitiator, addressString(GENESIS_REPUTATION_TOKEN), getZoltarAddress())
 		await forkUniverse(forkInitiator, genesisUniverse, externalForkQuestionId)
 	}
+
+	test('a wallet without a vault can fund the first report after question end without acquiring pool backing', async () => {
+		const reporter = createWriteClient(mockWindow, TEST_ADDRESSES[1])
+		const pool = securityPoolAddresses.securityPool
+		const repToken = await getRepToken(client, pool)
+		await approveToken(reporter, repToken, pool)
+		const walletBefore = await getERC20Balance(client, repToken, reporter.account.address)
+		const poolBefore = await getTotalPoolHeldAttoRep(client, pool)
+		const backingBefore = await getTotalRepBackingUnits(client, pool)
+		strictEqualTypeSafe((await getSecurityVault(client, pool, reporter.account.address)).repBackingUnits, 0n)
+		await mockWindow.setTime((await getQuestionEndDate(client, questionId)) + 1n)
+		await assert.rejects(depositRepToVault(reporter, pool, repDeposit), /Vault admission closed/)
+		await depositWalletRep(reporter, pool)
+		const game = await getSecurityPoolsEscalationGame(client, pool)
+		const state = await readWalletDepositGuardState(reporter, pool, game, repToken, QuestionOutcome.Yes)
+		strictEqualTypeSafe(state.depositorRep, walletBefore - reportBond)
+		strictEqualTypeSafe(state.gameRep, reportBond)
+		strictEqualTypeSafe(state.poolRep, poolBefore)
+		strictEqualTypeSafe(state.vaultBackingUnits, 0n)
+		strictEqualTypeSafe((await getSecurityVault(client, pool, reporter.account.address)).capacityOwnershipAttoRep, 0n)
+		strictEqualTypeSafe(state.depositorDisputeStake, reportBond)
+		strictEqualTypeSafe(state.totalDisputeStake, reportBond)
+		strictEqualTypeSafe(state.outcomeDepositCount, 1n)
+		strictEqualTypeSafe(await getTotalRepBackingUnits(client, pool), backingBefore)
+		const end = await client.readContract({ address: game, abi: statoblast_EscalationGame_EscalationGame.abi, functionName: 'getEscalationGameEndDate', args: [] })
+		await mockWindow.setTime(end + 1n)
+		await withdrawFromEscalationGame(reporter, pool, QuestionOutcome.Yes, [0n])
+		strictEqualTypeSafe(await getERC20Balance(client, repToken, reporter.account.address), walletBefore)
+		strictEqualTypeSafe((await getSecurityVault(client, pool, reporter.account.address)).repBackingUnits, 0n)
+	})
+
+	test('wallet first reports enforce question end and roll back failed funding', async () => {
+		const reporter = createWriteClient(mockWindow, TEST_ADDRESSES[1])
+		const pool = securityPoolAddresses.securityPool
+		const repToken = await getRepToken(client, pool)
+		const initialGame = await getSecurityPoolsEscalationGame(client, pool)
+		const end = await getQuestionEndDate(client, questionId)
+		await mockWindow.setTime(end - 2n)
+		await assert.rejects(depositWalletRep(reporter, pool), /Question active/)
+		await mockWindow.setTime(end - 1n)
+		await assert.rejects(depositWalletRep(reporter, pool), /Question active/)
+		await mockWindow.setTime(end + 1n)
+		const walletBefore = await getERC20Balance(client, repToken, reporter.account.address)
+		await assert.rejects(depositWalletRep(reporter, pool))
+		strictEqualTypeSafe(await getSecurityPoolsEscalationGame(client, pool), initialGame, 'failed funding must roll back game deployment')
+		strictEqualTypeSafe(await getERC20Balance(client, repToken, reporter.account.address), walletBefore)
+		await approveToken(reporter, repToken, pool)
+		await assert.rejects(depositWalletRep(reporter, pool, QuestionOutcome.None))
+		await assert.rejects(depositWalletRep(reporter, pool, QuestionOutcome.Yes, 0n))
+		strictEqualTypeSafe(await getSecurityPoolsEscalationGame(client, pool), initialGame)
+		await depositWalletRep(reporter, pool)
+	})
+
+	test('a queued wallet first report still works if another reporter starts the game first', async () => {
+		const reporter = createWriteClient(mockWindow, TEST_ADDRESSES[1])
+		const pool = securityPoolAddresses.securityPool
+		const repToken = await getRepToken(client, pool)
+		await approveToken(reporter, repToken, pool)
+		const game = await startOrdinaryGame()
+		const before = await readWalletDepositGuardState(reporter, pool, game, repToken)
+		await depositWalletRep(reporter, pool, QuestionOutcome.No, reportBond * 2n)
+		const after = await readWalletDepositGuardState(reporter, pool, game, repToken)
+		strictEqualTypeSafe(after.poolRep, before.poolRep)
+		strictEqualTypeSafe(after.vaultBackingUnits, 0n)
+		strictEqualTypeSafe(before.depositorRep - after.depositorRep, after.gameRep - before.gameRep)
+		assert.ok(after.depositorDisputeStake > 0n)
+		const end = await client.readContract({ address: game, abi: statoblast_EscalationGame_EscalationGame.abi, functionName: 'getEscalationGameEndDate', args: [] })
+		await mockWindow.setTime(end + 1n)
+		await assert.rejects(depositWalletRep(reporter, pool))
+		assert.deepStrictEqual(await readWalletDepositGuardState(reporter, pool, game, repToken), after)
+	})
 
 	test('rejects late backing-unit minting while preserving wallet-funded escalation', async () => {
 		const attacker = createWriteClient(mockWindow, TEST_ADDRESSES[1])
@@ -290,6 +366,7 @@ describe('Ordinary escalation vault-deposit freeze', () => {
 
 		strictEqualTypeSafe(await getSystemState(client, securityPoolAddresses.securityPool), SystemState.Operational, 'the universe fork must precede the pool state transition')
 		await expectWalletDepositRejectionWithoutStateChange(forkInitiator, securityPoolAddresses.securityPool, escalationGame, repToken, /Forked/)
+		await assert.rejects(depositWalletRep(forkInitiator, securityPoolAddresses.securityPool), /Forked/)
 
 		await initiateSecurityPoolFork(client, securityPoolAddresses.securityPool)
 		strictEqualTypeSafe(await getSystemState(client, securityPoolAddresses.securityPool), SystemState.PoolForked, 'fork initiation must deactivate the parent pool')
@@ -338,6 +415,7 @@ describe('Ordinary escalation vault-deposit freeze', () => {
 		await startTruthAuction(client, childPool.securityPool)
 		strictEqualTypeSafe(await getSystemState(client, childPool.securityPool), SystemState.Operational, 'zero auctionable REP must activate the continuation directly')
 		await expectWalletDepositRejectionWithoutStateChange(forkInitiator, childPool.securityPool, childEscalationGame, childRepToken, /Fork game/)
+		await assert.rejects(depositWalletRep(forkInitiator, childPool.securityPool), /Fork game/)
 
 		const childGameRepBeforeVaultDeposit = await getERC20Balance(client, childRepToken, childEscalationGame)
 		await depositRepToVault(forkInitiator, childPool.securityPool, seedRepAttoRep)

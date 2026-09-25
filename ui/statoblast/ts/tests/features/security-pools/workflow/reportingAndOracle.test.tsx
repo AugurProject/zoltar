@@ -229,6 +229,46 @@ describe('SecurityPoolWorkflowSection: reporting and oracle', () => {
 		expect(document.body.textContent).not.toContain("The pool's oracle price expired.")
 	})
 
+	test.each([
+		['wallet', false],
+		['vault', true],
+		['vault', false],
+	] as const)('applies the stale-price guard to the selected %s funding source (vault: %s)', async (contributionFunding, viewerVaultExists) => {
+		const reporting = createLoadedReportingProps()
+		if (reporting.reportingDetails === undefined) throw new Error('Expected reporting details')
+		reporting.reportingDetails = { ...reporting.reportingDetails, contributionFunding: 'wallet', viewerVaultExists, viewerPoolHeldVaultRepBackingAttoRep: viewerVaultExists ? 10n : 0n, viewerWalletRepAllowanceAttoRep: 10n, viewerWalletRepBalanceAttoRep: 10n }
+		reporting.reportingForm = { ...reporting.reportingForm, contributionFunding }
+		const renderedComponent = await renderIntoDocument(
+			<ChainTimestampContext.Provider value={100n}>
+				<SecurityPoolWorkflowSection
+					{...createSecurityPoolWorkflowProps({
+						checkedSecurityPoolAddress: zeroAddress,
+						poolOracleManagerDetails: createOracleManagerDetails({
+							isPriceValid: false,
+							lastSettlementTimestamp: 1n,
+						}),
+						reporting,
+						securityPoolAddress: zeroAddress,
+						securityPools: [
+							createSelectedPool({
+								marketDetails: createMarketDetails({ endTime: 0n }),
+								totalCapacityOwnershipAttoRep: 10n,
+							}),
+						],
+						selectedPoolView: 'reporting',
+					})}
+					showHeader={false}
+				/>
+			</ChainTimestampContext.Provider>,
+		)
+		setCleanup(renderedComponent.cleanup)
+
+		const reportButton = within(document.body).getByRole('button', { name: /^Report No ·/ })
+		if (!(reportButton instanceof HTMLButtonElement)) throw new Error('Expected report button')
+		expect(reportButton.disabled).toBe(contributionFunding === 'vault')
+		if (contributionFunding === 'vault') expectTransactionButtonDisabled(document.body, reportButton.textContent ?? '', viewerVaultExists ? 'A current pool oracle price is required before reporting.' : 'No REP is available in your pool vault. Select Wallet REP to report.')
+	})
+
 	test('preserves the finalized reporting blocker instead of stale-price recovery', async () => {
 		const renderedComponent = await renderIntoDocument(
 			<ChainTimestampContext.Provider value={100n}>

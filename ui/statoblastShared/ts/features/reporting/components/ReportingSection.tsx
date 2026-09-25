@@ -1,3 +1,5 @@
+import { getReportingContributionFunding } from '../lib/reportingFunding.js'
+import { ReportingFundingSelector } from './ReportingFundingSelector.js'
 import { getDisplayedLeadingEscalationOutcome, REPORTING_OUTCOME_DROPDOWN_OPTIONS, getReportingLockedUntilMessage, getReportingOutcomeLabel, hasReportingOpened, deriveReportingStage, isReportingOutcomeEnabled, isWithdrawEscalationEnabled } from '../lib/reporting.js'
 import { ReportingViewerStatus } from './ReportingViewerStatus.js'
 import { EscalationReminderLine } from './EscalationReminderLine.js'
@@ -129,7 +131,8 @@ export function ReportingSection({
 	const effectiveCurrentTimestamp = currentTimestamp ?? reportingDetails?.currentTime
 	const effectiveReportingDetails = getEffectiveReportingDetails(reportingDetails, effectiveCurrentTimestamp)
 	const activeReportingDetails = effectiveReportingDetails?.status === 'active' ? effectiveReportingDetails : undefined
-	const usesWalletFunding = effectiveReportingDetails?.contributionFunding === 'wallet'
+	const contributionFunding = getReportingContributionFunding(effectiveReportingDetails, reportingForm.contributionFunding)
+	const usesWalletFunding = contributionFunding === 'wallet'
 	const escalationPhase = activeReportingDetails === undefined ? undefined : getEscalationPhase(activeReportingDetails)
 	const escalationGameStartTimestamp = getEscalationGameStartTimestamp(activeReportingDetails?.activationTime)
 	const inactiveCountdown = effectiveReportingDetails === undefined ? commonCopy.metricUnavailablePlaceholder : reportingCopy.startsWithFirstReport
@@ -237,7 +240,8 @@ export function ReportingSection({
 		getReportingReportGuardMessage({
 			actualDepositAmount: actualReportDepositAmount,
 			accountAddress: accountState.address,
-			contributionFunding: effectiveReportingDetails?.contributionFunding,
+			contributionFunding,
+			walletFundingAvailable: !activeReportingDetails?.forkContinuation,
 			contributionPreviewReason: reportContributionPreview?.reason,
 			isOnActiveAppChain,
 			remainingSelectedOutcomeCapacity,
@@ -250,10 +254,12 @@ export function ReportingSection({
 			viewerWalletRepAllowanceAttoRep: effectiveReportingDetails?.viewerWalletRepAllowanceAttoRep,
 			viewerWalletRepBalanceAttoRep: effectiveReportingDetails?.viewerWalletRepBalanceAttoRep,
 		})
+	const visiblePresetReasons = presetReasons.filter(reason => reason !== reportingCopy.poolHeldVaultRepBackingEmpty || reportGuardMessage !== reportingCopy.noVaultRepSelectWallet)
 	const reportingApprovalGuardMessage = getReportingReportGuardMessage({
 		actualDepositAmount: actualReportDepositAmount,
 		accountAddress: accountState.address,
-		contributionFunding: effectiveReportingDetails?.contributionFunding,
+		contributionFunding,
+		walletFundingAvailable: !activeReportingDetails?.forkContinuation,
 		contributionPreviewReason: reportContributionPreview?.reason,
 		isOnActiveAppChain,
 		remainingSelectedOutcomeCapacity,
@@ -431,6 +437,7 @@ export function ReportingSection({
 
 			{showFullReporting && reportingReady !== false ? (
 				<SectionBlock className='reporting-outcome-section' title={finalized ? reportingCopy.results : reportingCopy.reportOutcome} variant='embedded'>
+					{finalized || activeReportingDetails?.forkContinuation ? undefined : <ReportingFundingSelector value={contributionFunding} onChange={contributionFunding => onReportingFormChange({ contributionFunding })} disabled={loadingReportingDetails || reportingActiveAction !== undefined} />}
 					{oracleBlocker ??
 						(reportActionGuardMessage === undefined ? undefined : (
 							<WarningSurface ariaLive='polite' role='status' surface='flat' variant='compact'>
@@ -526,11 +533,11 @@ export function ReportingSection({
 									{usesWalletFunding ? reportingCopy.acceptedWalletAmountTail : reportingCopy.acceptedAmountTail}
 								</p>
 							)}
-							{presetReasons.length === 0 ? undefined : <p className='detail'>{presetReasons.join(' ')}</p>}
+							{visiblePresetReasons.length === 0 ? undefined : <p className='detail'>{visiblePresetReasons.join(' ')}</p>}
 							<p className='detail'>
 								{usesWalletFunding ? reportingCopy.paidFromWallet : reportingCopy.paidFromVault} · {reportingCopy.availableBalance(formatKnownAmount(availableReportingRep))}
 							</p>
-							<p className='detail'>{!usesWalletFunding && reportingStatus === 'active' ? reportingCopy.continuationFundingHelp : reportingCopy.fundingSourceHelp}</p>
+							{activeReportingDetails?.forkContinuation ? <p className='detail'>{reportingCopy.continuationFundingHelp}</p> : undefined}
 							<div className='reporting-shared-action-region'>
 								{shouldRenderSharedReportSettlementDisabledReason ? (
 									<p className='detail' id={settlementDisabledReasonId}>

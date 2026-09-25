@@ -12,7 +12,7 @@ import type { ReportingDetails } from '@zoltar/ui-core-shared/types/contracts.js
 import { useReportingOperations, type UseReportingOperationsDependencies } from '@zoltar/ui-statoblast-shared/features/reporting/hooks/useReportingOperations.js'
 import type { TransactionIntent } from '@zoltar/ui-zoltar-shared/features/types.js'
 import { describe, expect, mock, test } from 'bun:test'
-import { h } from 'preact'
+import { h, render } from 'preact'
 import { act } from 'preact/test-utils'
 
 type UseReportingOperations = typeof useReportingOperations
@@ -82,10 +82,10 @@ function createHarness(
 		onTransactionRequested?: Parameters<UseReportingOperations>[0]['onTransactionRequested']
 	} = {},
 ) {
-	return function ReportingOperationsHarness() {
+	return function ReportingOperationsHarness({ accountAddress = zeroAddress }: { accountAddress?: Address }) {
 		const state = useReportingOperations(
 			{
-				accountAddress: zeroAddress,
+				accountAddress,
 				onTransactionCanceled,
 				onTransactionFinished,
 				onTransactionPresented: () => undefined,
@@ -141,6 +141,52 @@ describe('useReportingOperations', () => {
 			restoreActiveEnvironment = undefined
 			mock.restore()
 		},
+	})
+
+	test.each([false, true])('refreshes balances after an account change and ignores old-account loads (pending: %s)', async pending => {
+		const pool = getAddress('0x00000000000000000000000000000000000000c1')
+		const nextAccount = getAddress('0x00000000000000000000000000000000000000b2')
+		const oldDetails = createReportingDetails(pool, { viewerPoolHeldVaultRepBackingAttoRep: 8n })
+		const nextDetails = createReportingDetails(pool, { viewerVaultExists: false, viewerPoolHeldVaultRepBackingAttoRep: 0n })
+		const oldLoad = createDeferred<ReportingDetails>()
+		const nextLoad = createDeferred<ReportingDetails>()
+		const loadReportingDetails = mock(async (_pool: Address, account: Address | undefined) => {
+			if (account === nextAccount) return await nextLoad.promise
+			return pending ? await oldLoad.promise : oldDetails
+		})
+		let hookState: UseReportingOperationsState | undefined
+		const Harness = createHarness(
+			useReportingOperations,
+			state => {
+				hookState = state
+			},
+			createReportingOperationsDependencies({ loadReportingDetails }),
+		)
+		const rendered = await renderIntoDocument(<Harness />)
+		cleanupRenderedComponent = rendered.cleanup
+		await act(async () => {
+			requireHookState(hookState).setReportingForm(current => ({ ...current, securityPoolAddress: pool }))
+		})
+		let firstLoad: Promise<void> | undefined
+		await act(async () => {
+			firstLoad = requireHookState(hookState).loadReporting()
+			if (!pending) await firstLoad
+		})
+		await act(async () => {
+			render(<Harness accountAddress={nextAccount} />, rendered.container)
+		})
+		expect(loadReportingDetails).toHaveBeenCalledTimes(2)
+		expect(requireHookState(hookState).reportingDetails).toBeUndefined()
+		await act(async () => {
+			nextLoad.resolve(nextDetails)
+		})
+		await act(async () => {
+			oldLoad.resolve(oldDetails)
+			await firstLoad
+		})
+		await waitFor(() => {
+			expect(requireHookState(hookState).reportingDetails?.viewerPoolHeldVaultRepBackingAttoRep).toBe(0n)
+		})
 	})
 
 	test('loadReporting ignores stale results when overlapping requests resolve out of order', async () => {
@@ -342,30 +388,27 @@ describe('useReportingOperations', () => {
 		expect(requireHookState(hookState).reportingFeedback?.status.detail).toBe('Reporting actions are unavailable until this pool is operational')
 	})
 
-	test('reportOutcome lets an active ordinary-game participant report from wallet REP without a vault', async () => {
+	test.each(['wallet', 'vault'] as const)('reportOutcome uses the selected %s balance and passes the funding choice to the transaction', async contributionFunding => {
 		const securityPoolAddress = getAddress('0x00000000000000000000000000000000000000d2')
 		const walletFundingDetails = createReportingDetails(securityPoolAddress, {
-			viewerPoolHeldVaultRepBackingAttoRep: 0n,
-			viewerVaultExists: false,
-			viewerVaultRepBackingAttoRep: 0n,
-		} as Partial<ReportingDetails> & {
-			contributionFunding: 'wallet'
-			viewerWalletRepAllowanceAttoRep: bigint
-			viewerWalletRepBalanceAttoRep: bigint
-		})
-		Object.assign(walletFundingDetails, {
 			contributionFunding: 'wallet',
-			viewerWalletRepAllowanceAttoRep: 10n * ATTO_REP,
-			viewerWalletRepBalanceAttoRep: 10n * ATTO_REP,
+			viewerPoolHeldVaultRepBackingAttoRep: contributionFunding === 'vault' ? 10n * ATTO_REP : 0n,
+			viewerVaultExists: contributionFunding === 'vault',
+			viewerWalletRepAllowanceAttoRep: contributionFunding === 'wallet' ? 10n * ATTO_REP : 0n,
+			viewerWalletRepBalanceAttoRep: contributionFunding === 'wallet' ? 10n * ATTO_REP : 0n,
 		})
+		let submittedFunding: 'wallet' | 'vault' | undefined
 		const loadReportingDetails = mock(async () => walletFundingDetails)
-		const reportOutcomeInSecurityPool = mock(async () => ({
-			action: 'reportOutcome' as const,
-			hash: '0x00000000000000000000000000000000000000000000000000000000000000a1' as const,
-			outcome: 'yes' as const,
-			securityPoolAddress,
-			universeId: 1n,
-		}))
+		const reportOutcomeInSecurityPool = mock(async (...args: Parameters<UseReportingOperationsDependencies['reportOutcomeInSecurityPool']>) => {
+			submittedFunding = args[6]
+			return {
+				action: 'reportOutcome' as const,
+				hash: '0x00000000000000000000000000000000000000000000000000000000000000a1' as const,
+				outcome: 'yes' as const,
+				securityPoolAddress,
+				universeId: 1n,
+			}
+		})
 
 		let hookState: UseReportingOperationsState | undefined
 		const Harness = createHarness(
@@ -381,6 +424,7 @@ describe('useReportingOperations', () => {
 		await act(async () => {
 			requireHookState(hookState).setReportingForm(current => ({
 				...current,
+				contributionFunding,
 				reportAmount: '5',
 				securityPoolAddress,
 				selectedOutcome: 'yes',
@@ -391,7 +435,39 @@ describe('useReportingOperations', () => {
 		})
 
 		expect(reportOutcomeInSecurityPool).toHaveBeenCalledTimes(1)
+		expect(submittedFunding).toBe(contributionFunding)
 		expect(requireHookState(hookState).reportingResult?.action).toBe('reportOutcome')
+	})
+
+	test('does not silently switch a wallet report to vault funding when preflight discovers a continuation', async () => {
+		const securityPoolAddress = getAddress('0x00000000000000000000000000000000000000d2')
+		const ordinary = createReportingDetails(securityPoolAddress, { contributionFunding: 'wallet', viewerWalletRepAllowanceAttoRep: 10n * ATTO_REP, viewerWalletRepBalanceAttoRep: 10n * ATTO_REP })
+		let loadCount = 0
+		const loadReportingDetails = async () => (++loadCount === 1 ? ordinary : createReportingDetails(securityPoolAddress, { contributionFunding: 'vault', forkContinuation: true }))
+		const reportOutcomeInSecurityPool = mock(async () => {
+			throw new Error('Must not change funding source')
+		})
+		let hookState: UseReportingOperationsState | undefined
+		const Harness = createHarness(
+			useReportingOperations,
+			state => {
+				hookState = state
+			},
+			createReportingOperationsDependencies({ loadReportingDetails, reportOutcomeInSecurityPool }),
+		)
+		const rendered = await renderIntoDocument(h(Harness, {}))
+		cleanupRenderedComponent = rendered.cleanup
+		await act(async () => {
+			requireHookState(hookState).setReportingForm(current => ({ ...current, securityPoolAddress, selectedOutcome: 'yes', reportAmount: '5' }))
+		})
+		await act(async () => {
+			await requireHookState(hookState).loadReporting()
+		})
+		await act(async () => {
+			await requireHookState(hookState).onReportOutcome()
+		})
+		expect(reportOutcomeInSecurityPool).not.toHaveBeenCalled()
+		expect(requireHookState(hookState).reportingFeedback?.status.detail).toContain('The game now requires vault REP')
 	})
 
 	test('onApproveReportingRep approves the accepted contribution amount for an active ordinary game', async () => {

@@ -18,6 +18,7 @@ export function getReportingReportGuardMessage({
 	selectedOutcome,
 	selectedAmount,
 	requireAllowance = true,
+	walletFundingAvailable = false,
 	viewerPoolHeldVaultRepBackingAttoRep,
 	viewerVaultExists,
 	viewerWalletRepAllowanceAttoRep,
@@ -34,6 +35,7 @@ export function getReportingReportGuardMessage({
 	selectedOutcome: ReportingOutcomeKey | undefined
 	selectedAmount: bigint | undefined
 	requireAllowance?: boolean | undefined
+	walletFundingAvailable?: boolean | undefined
 	viewerPoolHeldVaultRepBackingAttoRep: bigint | undefined
 	viewerVaultExists: boolean
 	viewerWalletRepAllowanceAttoRep?: bigint | undefined
@@ -59,6 +61,8 @@ export function getReportingReportGuardMessage({
 		if (actualDepositAmount > viewerWalletRepAllowanceAttoRep) return 'Approve REP for this escalation game before reporting.'
 		return undefined
 	}
+	if (walletFundingAvailable && (!viewerVaultExists || (viewerPoolHeldVaultRepBackingAttoRep ?? 1n) === 0n)) return reportingCopy.noVaultRepSelectWallet
+	if (walletFundingAvailable && viewerPoolHeldVaultRepBackingAttoRep !== undefined && actualDepositAmount > viewerPoolHeldVaultRepBackingAttoRep) return reportingCopy.insufficientVaultRepSelectWallet(formatCurrencyBalanceWithUnit(viewerPoolHeldVaultRepBackingAttoRep, 'REP'))
 	if (!viewerVaultExists) return 'This contribution uses pool-held REP backing. Deposit REP into your vault before reporting.'
 	if (viewerPoolHeldVaultRepBackingAttoRep === undefined) return 'Loading pool-held vault REP backing.'
 	if (actualDepositAmount > viewerPoolHeldVaultRepBackingAttoRep) return `Deposit ${formatAdditionalCurrencyBalance(actualDepositAmount - viewerPoolHeldVaultRepBackingAttoRep, 'REP')} into your vault's pool-held backing before reporting.`

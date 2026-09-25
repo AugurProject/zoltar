@@ -1,6 +1,7 @@
+import { getReportingContributionFunding } from '../lib/reportingFunding.js'
 import * as reportingCopy from '../../../copy/reporting.js'
 import { useSignal } from '@preact/signals'
-import { useRef } from 'preact/hooks'
+import { useEffect, useRef } from 'preact/hooks'
 import { useFormState } from '@zoltar/ui-core-shared/hooks/useFormState.js'
 import { useLoadController } from '@zoltar/ui-core-shared/hooks/useLoadController.js'
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
@@ -30,7 +31,15 @@ type ResolvedReportingOperationsParameters = UseReportingOperationsParameters & 
 export type UseReportingOperationsDependencies = {
 	approveReportingRep: (accountAddress: Address, callbacks: Parameters<typeof createWalletWriteClient>[1], securityPoolAddress: Address, outcome: Parameters<typeof approveReportingRep>[2], amount: bigint) => ReturnType<typeof approveReportingRep>
 	loadReportingDetails: (securityPoolAddress: Address, accountAddress: Address | undefined) => ReturnType<typeof loadReportingDetails>
-	reportOutcomeInSecurityPool: (accountAddress: Address, callbacks: Parameters<typeof createWalletWriteClient>[1], securityPoolAddress: Address, outcome: Parameters<typeof reportOutcomeInSecurityPool>[2], amount: bigint, reviewAmount?: bigint) => ReturnType<typeof reportOutcomeInSecurityPool>
+	reportOutcomeInSecurityPool: (
+		accountAddress: Address,
+		callbacks: Parameters<typeof createWalletWriteClient>[1],
+		securityPoolAddress: Address,
+		outcome: Parameters<typeof reportOutcomeInSecurityPool>[2],
+		amount: bigint,
+		reviewAmount?: bigint,
+		contributionFunding?: 'vault' | 'wallet',
+	) => ReturnType<typeof reportOutcomeInSecurityPool>
 	withdrawEscalationFromSecurityPool: (
 		accountAddress: Address,
 		callbacks: Parameters<typeof createWalletWriteClient>[1],
@@ -44,7 +53,7 @@ export type UseReportingOperationsDependencies = {
 const defaultUseReportingOperationsDependencies: UseReportingOperationsDependencies = {
 	approveReportingRep: async (accountAddress, callbacks, securityPoolAddress, outcome, amount) => await approveReportingRep(createWalletWriteClient(accountAddress, callbacks), securityPoolAddress, outcome, amount),
 	loadReportingDetails: async (securityPoolAddress, accountAddress) => await loadReportingDetails(createConnectedReadClient(), securityPoolAddress, accountAddress),
-	reportOutcomeInSecurityPool: async (accountAddress, callbacks, securityPoolAddress, outcome, amount, reviewAmount) => await reportOutcomeInSecurityPool(createWalletWriteClient(accountAddress, callbacks), securityPoolAddress, outcome, amount, reviewAmount),
+	reportOutcomeInSecurityPool: async (accountAddress, callbacks, securityPoolAddress, outcome, amount, reviewAmount, contributionFunding) => await reportOutcomeInSecurityPool(createWalletWriteClient(accountAddress, callbacks), securityPoolAddress, outcome, amount, reviewAmount, contributionFunding),
 	withdrawEscalationFromSecurityPool: async (accountAddress, callbacks, securityPoolAddress, outcome, depositIndexes, claimAmount) => await withdrawEscalationFromSecurityPool(createWalletWriteClient(accountAddress, callbacks), securityPoolAddress, outcome, depositIndexes, claimAmount),
 }
 
@@ -92,6 +101,9 @@ export function useReportingOperations(
 	const currentReportingSelectionKey = normalizeAddress(effectiveReportingPoolAddressInput) ?? ''
 	const currentReportingSelectionKeyRef = useRef(currentReportingSelectionKey)
 	currentReportingSelectionKeyRef.current = currentReportingSelectionKey
+	const currentAccountRef = useRef(accountAddress)
+	currentAccountRef.current = accountAddress
+	const previousAccountRef = useRef(accountAddress)
 
 	const getPendingTitle = (actionName: ReportingActionResult['action']) => {
 		if (actionName === 'approveReportingRep') return 'Approving REP for reporting'
@@ -110,7 +122,7 @@ export function useReportingOperations(
 		if (selectedOutcome !== undefined) return selectedOutcome
 		throw new Error('Select an outcome side before reporting on a question.')
 	}
-	const isReportingSelectionCurrent = (selectionKey: string) => currentReportingSelectionKeyRef.current === selectionKey
+	const isReportingSelectionCurrent = (selectionKey: string) => currentReportingSelectionKeyRef.current === selectionKey && currentAccountRef.current === accountAddress
 
 	const resolveReportingSecurityPoolAddress = () => parseAddressInput(effectiveReportingPoolAddressInput, 'Security pool address')
 
@@ -135,6 +147,16 @@ export function useReportingOperations(
 			},
 		})
 	}
+
+	useEffect(() => {
+		if (previousAccountRef.current === accountAddress) return
+		previousAccountRef.current = accountAddress
+		const hadReportingContext = reportingDetails.value !== undefined || reportingLoad.isLoading.value
+		reportingDetails.value = undefined
+		reportingError.value = undefined
+		reportingLoad.invalidate()
+		if (hadReportingContext) void loadReporting()
+	}, [accountAddress, loadReporting, reportingDetails, reportingError, reportingLoad])
 
 	const runReportingAction = async (
 		actionName: ReportingActionResult['action'],
@@ -209,6 +231,7 @@ export function useReportingOperations(
 	const loadReportingContributionPreflight = async (walletAddress: Address, securityPoolAddress: Address, currentForm: ReportingFormState, isCurrentSelection: () => boolean) => {
 		const selectedOutcome = requireSelectedOutcome(currentForm.selectedOutcome)
 		const reportAmount = parseRepAmountInput(currentForm.reportAmount, 'Report amount')
+		const displayedFunding = reportingDetails.value === undefined ? undefined : getReportingContributionFunding(reportingDetails.value, currentForm.contributionFunding)
 		const latestDetails = await dependencies.loadReportingDetails(securityPoolAddress, walletAddress)
 		if (!isCurrentSelection()) return undefined
 		if (latestDetails.systemState !== 'operational') throw new Error('Reporting actions are unavailable until this pool is operational.')
@@ -219,16 +242,20 @@ export function useReportingOperations(
 			if (remainingSelectedOutcomeCapacity === 0n) throw new Error('No remaining contribution capacity is available on the selected side.')
 			throw new Error(`Only ${formatCurrencyBalanceWithUnit(remainingSelectedOutcomeCapacity, 'REP')} remains before the selected side reaches the threshold.`)
 		}
-		if (latestDetails.contributionFunding === 'wallet') {
+		const contributionFunding = displayedFunding ?? getReportingContributionFunding(latestDetails, currentForm.contributionFunding)
+		if (contributionFunding === 'wallet') {
+			if (latestDetails.status === 'active' && latestDetails.forkContinuation) throw new Error('The game now requires vault REP. Refresh reporting details before submitting.')
 			const walletRepBalanceAttoRep = latestDetails.viewerWalletRepBalanceAttoRep ?? 0n
 			if (contributionPreview.actualDepositAmount > walletRepBalanceAttoRep) throw new Error(`Insufficient wallet REP. Add ${formatAdditionalCurrencyBalance(contributionPreview.actualDepositAmount - walletRepBalanceAttoRep, 'REP')} before reporting.`)
 		} else {
+			if ((!latestDetails.viewerVaultExists || latestDetails.viewerPoolHeldVaultRepBackingAttoRep === 0n) && !(latestDetails.status === 'active' && latestDetails.forkContinuation)) throw new Error(reportingCopy.noVaultRepSelectWallet)
 			if (!latestDetails.viewerVaultExists) throw new Error('This contribution uses pool-held REP backing. Deposit REP into your vault before reporting.')
 			const poolHeldVaultRepBackingAttoRep = latestDetails.viewerPoolHeldVaultRepBackingAttoRep ?? 0n
+			if (contributionPreview.actualDepositAmount > poolHeldVaultRepBackingAttoRep && !(latestDetails.status === 'active' && latestDetails.forkContinuation)) throw new Error(reportingCopy.insufficientVaultRepSelectWallet(formatCurrencyBalanceWithUnit(poolHeldVaultRepBackingAttoRep, 'REP')))
 			if (contributionPreview.actualDepositAmount > poolHeldVaultRepBackingAttoRep) throw new Error(`Insufficient pool-held vault REP backing. Deposit ${formatAdditionalCurrencyBalance(contributionPreview.actualDepositAmount - poolHeldVaultRepBackingAttoRep, 'REP')} into your vault before reporting.`)
 		}
 		if (!isCurrentSelection()) return undefined
-		return { actualDepositAmount: contributionPreview.actualDepositAmount, latestDetails, reportAmount, selectedOutcome }
+		return { actualDepositAmount: contributionPreview.actualDepositAmount, contributionFunding, latestDetails, reportAmount, selectedOutcome }
 	}
 
 	const approveRepForReporting = async () =>
@@ -237,7 +264,7 @@ export function useReportingOperations(
 			async (walletAddress, securityPoolAddress, currentForm, isCurrentSelection, context) => {
 				const preflight = await loadReportingContributionPreflight(walletAddress, securityPoolAddress, currentForm, isCurrentSelection)
 				if (preflight === undefined) return undefined
-				if (preflight.latestDetails.contributionFunding !== 'wallet') throw new Error('This escalation contribution uses vault backing and does not require wallet REP approval.')
+				if (preflight.contributionFunding !== 'wallet') throw new Error('This escalation contribution uses vault backing and does not require wallet REP approval.')
 				if ((preflight.latestDetails.viewerWalletRepAllowanceAttoRep ?? 0n) >= preflight.actualDepositAmount) throw new Error('The escalation game already has enough REP allowance for this contribution.')
 				return { ...(await dependencies.approveReportingRep(walletAddress, { onTransactionPrepared, onTransactionSubmitted, reviewSignal: context.reviewSignal }, securityPoolAddress, preflight.selectedOutcome, preflight.actualDepositAmount)), amountAttoRep: preflight.actualDepositAmount }
 			},
@@ -250,11 +277,11 @@ export function useReportingOperations(
 			async (walletAddress, securityPoolAddress, currentForm, isCurrentSelection, context) => {
 				const preflight = await loadReportingContributionPreflight(walletAddress, securityPoolAddress, currentForm, isCurrentSelection)
 				if (preflight === undefined) return undefined
-				if (preflight.latestDetails.contributionFunding === 'wallet' && (preflight.latestDetails.viewerWalletRepAllowanceAttoRep ?? 0n) < preflight.actualDepositAmount) {
+				if (preflight.contributionFunding === 'wallet' && (preflight.latestDetails.viewerWalletRepAllowanceAttoRep ?? 0n) < preflight.actualDepositAmount) {
 					throw new Error('Approve REP for this escalation game before reporting.')
 				}
 				return {
-					...(await dependencies.reportOutcomeInSecurityPool(walletAddress, { onTransactionPrepared, onTransactionSubmitted, reviewSignal: context.reviewSignal }, securityPoolAddress, preflight.selectedOutcome, preflight.reportAmount, preflight.actualDepositAmount)),
+					...(await dependencies.reportOutcomeInSecurityPool(walletAddress, { onTransactionPrepared, onTransactionSubmitted, reviewSignal: context.reviewSignal }, securityPoolAddress, preflight.selectedOutcome, preflight.reportAmount, preflight.actualDepositAmount, preflight.contributionFunding)),
 					amountAttoRep: preflight.actualDepositAmount,
 				}
 			},

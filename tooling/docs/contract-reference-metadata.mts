@@ -47,7 +47,7 @@ export const contractPagesDirectory = 'docs/reference/contracts'
 export function contractPageOutputPath(contractName: string): string {
 	return `${contractPagesDirectory}/${contractName.toLowerCase()}.html`
 }
-export const expectedProductionSoliditySourceFingerprint = '2b16460f81ba9abea3161a7ec479012a8a6996509dbffa985fc384a1111d24e5'
+export const expectedProductionSoliditySourceFingerprint = '3bafaf4bffeab5f4e2bf28c3e3f4acedea7871936fcf62b3bda91c1150ef2f06'
 
 export const documentedEventSchemas: Array<{ name: string; parameters: string; sourcePath: string }> = [
 	{
@@ -207,6 +207,7 @@ export const documentedEventSchemas: Array<{ name: string; parameters: string; s
 ]
 
 export const delegateEventDeclarationMirrors: Array<{ name: string; sourcePath: string }> = [
+	{ name: 'EscalationGameSet', sourcePath: 'solidity/contracts/statoblast/SecurityPoolOperationsDelegate.sol' },
 	{ name: 'PoolAccountingCheckpoint', sourcePath: 'solidity/contracts/statoblast/SecurityPoolEventEmitter.sol' },
 	{ name: 'VaultAccountingCheckpoint', sourcePath: 'solidity/contracts/statoblast/SecurityPoolEventEmitter.sol' },
 	{ name: 'ChildPoolLinked', sourcePath: 'solidity/contracts/statoblast/SecurityPoolForkerVaultMigrationBase.sol' },
@@ -352,6 +353,7 @@ export const entrypointSignaturesBySource: Record<string, Record<string, string[
 		createCompleteSet: ['external()'],
 		depositRepToVault: ['external(uint256,uint256)'],
 		depositToEscalationGame: ['external(BinaryOutcomes.BinaryOutcome,uint256)'],
+		depositWalletRepToEscalationGame: ['external(BinaryOutcomes.BinaryOutcome,uint256)'],
 		initializeForkCarrySnapshotWithResolutionBalances: ['external(address,bytes32,bytes32[64][3],uint256[3],uint256[3],uint256[3],bytes32[3])'],
 		initializeForkedEscalationGame: ['external(uint256,uint256,uint256,BinaryOutcomes.BinaryOutcome)'],
 		performLiquidation: ['external(LiquidationRequest)'],
@@ -428,7 +430,7 @@ export const stateChangingAbiFingerprintBySource: Record<string, string> = {
 	'solidity/contracts/statoblast/EscalationGameStorage.sol': 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
 	'solidity/contracts/statoblast/OpenOraclePriceCoordinator.sol': 'f9a9beff48fc7d1516b4db58430627a2be805c631b2328a4a8c84fab48a1689f',
 	'solidity/contracts/statoblast/LiquidationApprovalRegistry.sol': '986a20fc0e4cfe0898be8fc91c6b911b93ef0ae1086d4cb1142a93c66f315684',
-	'solidity/contracts/statoblast/SecurityPool.sol': 'a49fd8278be655938e37018391c598f3f8198dd1b6943e938875898596e925e0',
+	'solidity/contracts/statoblast/SecurityPool.sol': 'b841336ad7e583cd0c45d4b1717e2eb1e14fabc8f3cf432e99826d345e46d1a9',
 	'solidity/contracts/statoblast/SecurityPoolForker.sol': '282c464a68623405a6241816a1c5fcef4b80e9db39e42e89d77177d8a4f10eae',
 	'solidity/contracts/statoblast/SecurityPoolForkerBase.sol': 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
 	'solidity/contracts/statoblast/SecurityPoolForkerStorage.sol': 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
@@ -688,7 +690,7 @@ export const contractReferences: ContractReference[] = [
 		],
 	},
 	{
-		compiledAbiFingerprint: '706701fc3a1147becd89319b66f30b16518d8d9be0709aee9f6f4b15e216e629',
+		compiledAbiFingerprint: '36039a88e71ca787a1037ea84a546c7f391657ccb999a7d5783bb96ff98c6a25',
 		name: 'SecurityPool',
 		delegatedInteractions:
 			'Vault owners change their saved target through coordinator operation `AdjustVaultBackingFactor` (2), which executes immediately with a fresh price or remains in the existing on-chain queue. The pool fallback exposes `adjustVaultBackingFactor(vault, backingFactorBps)` through `ISecurityPool` only to its coordinator. Capacity becomes `pool-held vault REP × statoblastSecurityMultiplierBps / backingFactorBps`, rounded down, without transferring REP. The target is an absolute backing ratio in BPS and must be at least `statoblastSecurityMultiplierBps` (equality allowed), leaving positive capacity and a fully collateralized vault at execution. The pool must be operational, unforked, unresolved, and open to vault admission; dispute-staked REP must be zero. Capacity reductions require zero settlement collateral. Successful execution saves the target, checkpoints fees, updates retention, and emits `VaultBackingFactorAdjusted` plus accounting checkpoints. A queued or failed change leaves the saved target unchanged.',
@@ -812,6 +814,15 @@ export const contractReferences: ContractReference[] = [
 				declarations: [{ name: 'redeemRepFromVault' }],
 				preconditions: 'Operational pool with a final outcome; the specified `vault` has no escalation escrow and has redeemable REP.',
 				signals: '`RepRedeemedFromVault`',
+			},
+			{
+				call: '`depositWalletRepToEscalationGame(outcome, maximumDepositAttoRep)`',
+				caller: 'REP holder with a token allowance for the pool',
+				effect: 'Starts an ordinary game if needed and transfers the accepted REP directly from the caller into game escrow. Records the caller as depositor without minting vault backing units or capacity ownership. Also accepts deposits if another reporter has already started the ordinary game.',
+				declarations: [{ name: 'depositWalletRepToEscalationGame' }],
+				preconditions:
+					'Question end has passed before starting a game; pool operational in an unforked universe, without an inherited fixed outcome or pending fork continuation; game is not a fork continuation; outcome and amount accepted; sufficient wallet REP and pool allowance. No existing vault or oracle price is required.',
+				signals: '`EscalationGameSet` on first deposit; game emits `LocalDepositAppended` and `DepositOnOutcome`',
 			},
 			{
 				call: '`depositToEscalationGame(outcome, maxAmount)`',

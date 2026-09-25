@@ -136,6 +136,7 @@ test('titles the review from the prepared transaction labels instead of the cont
 
 for (const [functionName, title, args] of [
 	['depositToEscalationGame', 'Report No · 2 REP', [2n, 2n * 10n ** 18n]],
+	['depositWalletRepToEscalationGame', 'Report No · 2 REP', [2n, 2n * 10n ** 18n]],
 	['depositRepOnOutcome', 'Report No · 2 REP', [2n, 2n * 10n ** 18n]],
 	['settle', 'Settle report #7', [7n]],
 	['withdrawFromEscalationGame', 'Settle escalation deposits', []],
@@ -149,6 +150,8 @@ for (const [functionName, title, args] of [
 		const sending = reviewed.sendTransaction({ to: account, data: '0x' })
 		await waitForReview()
 		expect(transactionSteps.value?.steps[0]?.title).toBe(title)
+		if (functionName === 'depositToEscalationGame') expect(transactionSteps.value?.steps[0]?.paidFrom).toBe('Pool vault REP')
+		if (functionName === 'depositWalletRepToEscalationGame') expect(transactionSteps.value?.steps[0]?.paidFrom).toBe('Wallet REP')
 		confirm()
 		await sending
 	})

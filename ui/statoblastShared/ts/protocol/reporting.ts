@@ -112,6 +112,17 @@ async function loadEscalationDeposits(client: Pick<ReadClient, 'readContract'>, 
 	return deposits
 }
 
+async function loadViewerReportingWalletState(client: ReadClient, fundingAddress: Address, accountAddress: Address | undefined) {
+	if (accountAddress === undefined) return { viewerWalletRepAllowanceAttoRep: undefined, viewerWalletRepBalanceAttoRep: undefined, viewerWalletRepTokenAddress: undefined }
+	// Pools and games expose the same REP getter; the funding address is also the spender.
+	const viewerWalletRepTokenAddress = await client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'repToken', address: fundingAddress, args: [] })
+	const [viewerWalletRepBalanceAttoRep, viewerWalletRepAllowanceAttoRep] = await Promise.all([
+		client.readContract({ abi: ABIS.mainnet.erc20, functionName: 'balanceOf', address: viewerWalletRepTokenAddress, args: [accountAddress] }),
+		client.readContract({ abi: ABIS.mainnet.erc20, functionName: 'allowance', address: viewerWalletRepTokenAddress, args: [accountAddress, fundingAddress] }),
+	])
+	return { viewerWalletRepAllowanceAttoRep, viewerWalletRepBalanceAttoRep, viewerWalletRepTokenAddress }
+}
+
 async function loadViewerReportingVaultState(client: ReadClient, securityPoolAddress: Address, accountAddress: Address | undefined) {
 	if (accountAddress === undefined)
 		return {
@@ -257,7 +268,10 @@ export async function loadReportingDetails(client: ReadClient, securityPoolAddre
 	if (escalationGameAddress === zeroAddress || escalationGameCode === undefined || escalationGameCode === '0x') {
 		const nonDecisionThresholdAttoRep = forkThresholdAttoRep / 2n + (forkThresholdAttoRep % 2n)
 		const startBondAttoRep = nonDecisionThresholdAttoRep > 1n && initialEscalationGameDepositAttoRep >= nonDecisionThresholdAttoRep ? nonDecisionThresholdAttoRep - 1n : initialEscalationGameDepositAttoRep
+		const walletReportingState = await loadViewerReportingWalletState(client, securityPoolAddress, accountAddress)
 		return {
+			contributionFunding: 'wallet',
+			...walletReportingState,
 			settlementCollateralAttoEth,
 			currentTime: block.timestamp,
 			forkThresholdAttoRep,
@@ -276,22 +290,7 @@ export async function loadReportingDetails(client: ReadClient, securityPoolAddre
 		}
 	}
 	const forkContinuationSnapshot = await readForkContinuation(client, escalationGameAddress)
-	const walletReportingStatePromise =
-		accountAddress === undefined || forkContinuationSnapshot
-			? Promise.resolve({ viewerWalletRepAllowanceAttoRep: undefined, viewerWalletRepBalanceAttoRep: undefined, viewerWalletRepTokenAddress: undefined })
-			: (async () => {
-					const viewerWalletRepTokenAddress = await client.readContract({
-						abi: statoblast_EscalationGame_EscalationGame.abi,
-						functionName: 'repToken',
-						address: escalationGameAddress,
-						args: [],
-					})
-					const [viewerWalletRepBalanceAttoRep, viewerWalletRepAllowanceAttoRep] = await Promise.all([
-						client.readContract({ abi: ABIS.mainnet.erc20, functionName: 'balanceOf', address: viewerWalletRepTokenAddress, args: [accountAddress] }),
-						client.readContract({ abi: ABIS.mainnet.erc20, functionName: 'allowance', address: viewerWalletRepTokenAddress, args: [accountAddress, escalationGameAddress] }),
-					])
-					return { viewerWalletRepAllowanceAttoRep, viewerWalletRepBalanceAttoRep, viewerWalletRepTokenAddress }
-				})()
+	const walletReportingStatePromise = loadViewerReportingWalletState(client, securityPoolAddress, forkContinuationSnapshot ? undefined : accountAddress)
 	const [startBondAttoRep, nonDecisionThresholdAttoRep, activationTime, totalCostAttoRep, bindingCapital, invalidOutcomeState, yesOutcomeState, noOutcomeState, escalationEndTime, _questionOutcome, universeForkTime, hasReachedNonDecision, walletReportingState] = await Promise.all([
 		client.readContract({
 			abi: statoblast_EscalationGame_EscalationGame.abi,
@@ -424,7 +423,7 @@ export async function loadReportingDetails(client: ReadClient, securityPoolAddre
 	}
 }
 
-export async function reportOutcomeInSecurityPool(client: WriteClient, securityPoolAddress: Address, outcome: ReportingOutcomeKey, amountAttoRep: bigint, reviewAmountAttoRep = amountAttoRep) {
+export async function reportOutcomeInSecurityPool(client: WriteClient, securityPoolAddress: Address, outcome: ReportingOutcomeKey, amountAttoRep: bigint, reviewAmountAttoRep = amountAttoRep, contributionFunding?: 'vault' | 'wallet') {
 	const [universeId, escalationGameAddress] = await Promise.all([
 		readSecurityPoolUniverseId(client, securityPoolAddress),
 		client.readContract({
@@ -434,18 +433,20 @@ export async function reportOutcomeInSecurityPool(client: WriteClient, securityP
 			args: [],
 		}),
 	])
-	const useWalletFunding =
+	const forkContinuation =
 		escalationGameAddress !== zeroAddress &&
-		!(await client.readContract({
+		(await client.readContract({
 			address: escalationGameAddress,
 			abi: statoblast_EscalationGame_EscalationGame.abi,
 			functionName: 'forkContinuation',
 			args: [],
 		}))
+	const useWalletFunding = (contributionFunding ?? (forkContinuation ? 'vault' : 'wallet')) === 'wallet'
+	if (useWalletFunding && forkContinuation) throw new Error('Fork continuations use vault-funded escalation deposits.')
 	const hash = await writeContractAndWait(client, () => ({
-		address: useWalletFunding ? escalationGameAddress : securityPoolAddress,
-		abi: useWalletFunding ? statoblast_EscalationGame_EscalationGame.abi : statoblast_SecurityPool_SecurityPool.abi,
-		functionName: useWalletFunding ? 'depositRepOnOutcome' : 'depositToEscalationGame',
+		address: securityPoolAddress,
+		abi: statoblast_SecurityPool_SecurityPool.abi,
+		functionName: useWalletFunding ? 'depositWalletRepToEscalationGame' : 'depositToEscalationGame',
 		reviewTitle: transactionCopy.reportingAction(getEscalationSideLabel(outcome), formatUnits(reviewAmountAttoRep, 18)),
 		reviewAmount: `${formatUnits(reviewAmountAttoRep, 18)} REP`,
 		args: [getReportingOutcomeValue(outcome), amountAttoRep],
@@ -461,15 +462,15 @@ export async function reportOutcomeInSecurityPool(client: WriteClient, securityP
 
 export async function approveReportingRep(client: WriteClient, securityPoolAddress: Address, outcome: ReportingOutcomeKey, amountAttoRep: bigint) {
 	const [universeId, escalationGameAddress] = await Promise.all([readSecurityPoolUniverseId(client, securityPoolAddress), client.readContract({ address: securityPoolAddress, abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'escalationGame', args: [] })])
-	if (escalationGameAddress === zeroAddress) throw new Error('REP approval is only available after the ordinary escalation game starts.')
-	const forkContinuation = await client.readContract({ address: escalationGameAddress, abi: statoblast_EscalationGame_EscalationGame.abi, functionName: 'forkContinuation', args: [] })
+	const forkContinuation = escalationGameAddress !== zeroAddress && (await client.readContract({ address: escalationGameAddress, abi: statoblast_EscalationGame_EscalationGame.abi, functionName: 'forkContinuation', args: [] }))
 	if (forkContinuation) throw new Error('Fork continuations use vault-funded escalation deposits.')
-	const repTokenAddress = await client.readContract({ address: escalationGameAddress, abi: statoblast_EscalationGame_EscalationGame.abi, functionName: 'repToken', args: [] })
+	const fundingAddress = securityPoolAddress
+	const repTokenAddress = await client.readContract({ address: fundingAddress, abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'repToken', args: [] })
 	const hash = await writeContractAndWait(client, () => ({
 		address: repTokenAddress,
 		abi: ABIS.mainnet.erc20,
 		functionName: 'approve',
-		args: [escalationGameAddress, amountAttoRep],
+		args: [fundingAddress, amountAttoRep],
 	}))
 	return { action: 'approveReportingRep', hash, outcome, securityPoolAddress, universeId } satisfies ReportingActionResult
 }
