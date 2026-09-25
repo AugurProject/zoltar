@@ -125,6 +125,10 @@ describe('pool action items', () => {
 		expect(derivePoolActionItems(createActionInput({ poolState, step: 'settled' })).map(item => item.id)).toEqual([])
 		const items = derivePoolActionItems(createActionInput({ poolState, shareBalances: { invalidAttoShares: 0n, noAttoShares: 0n, yesAttoShares: 5n }, step: 'settled', vault: { claimableFeesAttoEth: 0n, disputeStakedAttoRep: 0n, repAttoRep: 10n } }))
 		expect(items.map(item => item.id)).toEqual(['redeemShares', 'withdrawVaultRep'])
+		const forkedPoolState = evaluateSecurityPoolState({ lifecycleState: 'operational', universeHasForked: false })
+		expect(derivePoolActionItems(createActionInput({ hasForkActivity: true, poolState: forkedPoolState, step: 'settled' })).map(item => item.id)).toEqual([])
+		expect(derivePoolActionItems(createActionInput({ accountConnected: false, forkClaimAvailable: true, hasForkActivity: true, poolState: forkedPoolState, step: 'settled' })).map(item => item.id)).toEqual(['connectWallet'])
+		expect(derivePoolActionItems(createActionInput({ forkClaimAvailable: true, hasForkActivity: true, poolState: forkedPoolState, step: 'settled' })).map(item => item.id)).toEqual(['claimForkSettlement'])
 	})
 })
 

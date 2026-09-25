@@ -50,6 +50,8 @@ export type PoolActionInput = {
 	accountConnected: boolean
 	auctionEndsAt?: bigint | undefined
 	escalationEndsAt?: bigint | undefined
+	/** The loaded fork details report that auction proceeds or settlements can be claimed now. */
+	forkClaimAvailable?: boolean
 	forkTriggerAvailable?: boolean
 	hasForkActivity: boolean
 	migrationEndsAt?: bigint | undefined
@@ -117,7 +119,7 @@ function getSettledItems(input: PoolActionInput): PoolActionItem[] {
 	if (input.vault !== undefined && input.vault.repAttoRep > 0n && isEnabled(input.poolState, 'redeemRepFromVault')) items.push({ amount: { unit: 'REP', value: input.vault.repAttoRep }, id: 'withdrawVaultRep', tab: 'vaults', tone: 'action' })
 	const stake = input.vault?.disputeStakedAttoRep ?? 0n
 	if (stake > 0n) items.push({ amount: { unit: 'REP', value: stake }, id: 'withdrawEscalation', tab: 'reporting', tone: 'action' })
-	if (input.hasForkActivity) items.push({ id: 'claimForkSettlement', tab: 'fork-workflow', tone: 'action' })
+	if (input.accountConnected && input.hasForkActivity && input.forkClaimAvailable === true) items.push({ id: 'claimForkSettlement', tab: 'fork-workflow', tone: 'action' })
 	return items
 }
 

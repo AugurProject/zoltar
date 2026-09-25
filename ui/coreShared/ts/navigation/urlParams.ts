@@ -1,11 +1,8 @@
 import { tryParseBigIntInput } from '../forms/integerInput.js'
 
 const UNIVERSE_QUERY_PARAM = 'universe'
-const SECURITY_POOL_QUERY_PARAM = 'securityPool'
 const SECURITY_POOL_QUESTION_ID_QUERY_PARAM = 'questionId'
 const ZOLTAR_VIEW_QUERY_PARAM = 'zoltarView'
-const SECURITY_POOLS_VIEW_QUERY_PARAM = 'securityPoolsView'
-const SELECTED_POOL_VIEW_QUERY_PARAM = 'selectedPoolView'
 
 export function readStringQueryParam(search: string, key: string) {
 	const value = new URLSearchParams(search).get(key)
@@ -47,32 +44,8 @@ export function writeUniverseQueryParam(search: string, universeId: bigint | und
 	return writeStringQueryParam(search, UNIVERSE_QUERY_PARAM, universeId?.toString())
 }
 
-export function readSecurityPoolQueryParam(search: string) {
-	return readStringQueryParam(search, SECURITY_POOL_QUERY_PARAM)
-}
-
-export function writeSecurityPoolQueryParam(search: string, securityPoolAddress: string | undefined) {
-	return updateSearchParams(search, params => {
-		if (setOrDeleteSearchParam(params, SECURITY_POOL_QUERY_PARAM, securityPoolAddress) === undefined) {
-			params.delete(SELECTED_POOL_VIEW_QUERY_PARAM)
-			return
-		}
-		params.set(SECURITY_POOLS_VIEW_QUERY_PARAM, 'operate')
-		params.delete(SECURITY_POOL_QUESTION_ID_QUERY_PARAM)
-	})
-}
-
 export function readSecurityPoolQuestionIdQueryParam(search: string) {
 	return readStringQueryParam(search, SECURITY_POOL_QUESTION_ID_QUERY_PARAM)
-}
-
-export function writeSecurityPoolQuestionIdQueryParam(search: string, questionId: string | undefined) {
-	return updateSearchParams(search, params => {
-		if (setOrDeleteSearchParam(params, SECURITY_POOL_QUESTION_ID_QUERY_PARAM, questionId) === undefined) return
-		params.set(SECURITY_POOLS_VIEW_QUERY_PARAM, 'create')
-		params.delete(SECURITY_POOL_QUERY_PARAM)
-		params.delete(SELECTED_POOL_VIEW_QUERY_PARAM)
-	})
 }
 
 export function readZoltarViewQueryParam(search: string) {
@@ -81,28 +54,4 @@ export function readZoltarViewQueryParam(search: string) {
 
 export function writeZoltarViewQueryParam(search: string, view: string | undefined) {
 	return writeStringQueryParam(search, ZOLTAR_VIEW_QUERY_PARAM, view)
-}
-
-export function readSecurityPoolsViewQueryParam(search: string) {
-	return readStringQueryParam(search, SECURITY_POOLS_VIEW_QUERY_PARAM)
-}
-
-export function writeSecurityPoolsViewQueryParam(search: string, view: string | undefined) {
-	view = view?.trim()
-	return updateSearchParams(search, params => {
-		setOrDeleteSearchParam(params, SECURITY_POOLS_VIEW_QUERY_PARAM, view)
-		if (view !== 'create') params.delete(SECURITY_POOL_QUESTION_ID_QUERY_PARAM)
-		if (view !== 'operate') params.delete(SELECTED_POOL_VIEW_QUERY_PARAM)
-	})
-}
-
-export function readSelectedPoolViewQueryParam(search: string) {
-	return readStringQueryParam(search, SELECTED_POOL_VIEW_QUERY_PARAM)
-}
-
-export function writeSelectedPoolViewQueryParam(search: string, view: string | undefined) {
-	return updateSearchParams(search, params => {
-		if (setOrDeleteSearchParam(params, SELECTED_POOL_VIEW_QUERY_PARAM, view) === undefined) return
-		params.set(SECURITY_POOLS_VIEW_QUERY_PARAM, 'operate')
-	})
 }

@@ -178,6 +178,7 @@ export function derivePoolViewModel(input: PoolViewModelInput) {
 					accountConnected: accountState.address !== undefined,
 					auctionEndsAt: currentForkAuctionDetails?.truthAuction?.auctionEndsAt ?? (truthAuctionStartedAt > 0n ? truthAuctionStartedAt + AUCTION_TIME_SECONDS : undefined),
 					escalationEndsAt: currentReportingDetails?.status === 'active' ? currentReportingDetails.escalationEndTime : undefined,
+					forkClaimAvailable: currentForkAuctionDetails?.claimingAvailable === true,
 					forkTriggerAvailable,
 					hasForkActivity: selectedPoolHasActualForkActivity,
 					migrationEndsAt: currentForkAuctionDetails?.migrationEndsAt,

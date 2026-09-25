@@ -23,7 +23,7 @@ type PortfolioActionEntry = {
 }
 
 /** Entries that ask the account to act on a position it holds; stage suggestions such as depositing or minting stay on the pool page. */
-const PORTFOLIO_ACTION_IDS: ReadonlySet<PoolActionId> = new Set(['bidTruthAuction', 'claimFees', 'claimForkSettlement', 'migrateVault', 'redeemShares', 'reportOrEscalate', 'reviewForkMigration', 'submitFirstReport', 'withdrawEscalation', 'withdrawVaultRep'])
+const PORTFOLIO_ACTION_IDS: ReadonlySet<PoolActionId> = new Set(['bidTruthAuction', 'claimFees', 'migrateVault', 'redeemShares', 'reportOrEscalate', 'reviewForkMigration', 'submitFirstReport', 'withdrawEscalation', 'withdrawVaultRep'])
 
 function toAccountVault(pool: ListedSecurityPool, accountAddress: Address): PoolAccountVault | undefined {
 	const vault = pool.vaults.find(candidate => sameAddress(candidate.vaultAddress, accountAddress))
