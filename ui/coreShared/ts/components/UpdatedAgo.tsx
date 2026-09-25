@@ -6,7 +6,7 @@ import { usePageVisible } from '../hooks/useDataRefresh.js'
 type UpdatedAgoProps = {
 	className?: string
 	refreshing?: boolean
-	/** Wall-clock milliseconds of the last successful read; nothing renders before the first one. */
+	/** Wall-clock milliseconds of the last successful read; before the first one an empty placeholder holds the line. */
 	updatedAt: number | undefined
 }
 
@@ -25,7 +25,8 @@ export function UpdatedAgo({ className = '', refreshing = false, updatedAt }: Up
 		const timer = setTimeout(() => setTick(current => current + 1), updatedAgoTickMilliseconds(updatedAt, Date.now()))
 		return () => clearTimeout(timer)
 	}, [tick, updatedAt, visible])
-	if (updatedAt === undefined) return undefined
+	// Reserving the line before the first read keeps the content below from moving when the label appears.
+	if (updatedAt === undefined) return <span className={`freshness-indicator ${className}`.trim()} data-state='pending' aria-hidden='true' />
 	const label = formatUpdatedAgo(updatedAt, Math.max(now, updatedAt))
 	return (
 		<span className={`freshness-indicator ${className}`.trim()} data-state={refreshing ? 'refreshing' : 'idle'} aria-busy={refreshing} title={commonCopy.formatUpdatedAtTitle(new Date(updatedAt).toLocaleTimeString())}>

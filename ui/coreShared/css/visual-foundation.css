@@ -151,6 +151,7 @@ a.secondary-action,
 	gap: var(--space-2);
 	font-family: var(--font-family-mono);
 	font-size: 0.8125rem;
+	min-height: 1.25rem;
 	color: var(--muted);
 	white-space: nowrap;
 }

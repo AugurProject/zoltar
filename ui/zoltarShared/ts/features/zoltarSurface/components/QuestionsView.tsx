@@ -54,7 +54,7 @@ export function QuestionsView({ canFork, hasForked, loadingZoltarQuestions, onAc
 			<SectionBlock
 				actions={
 					<>
-						{currentPage === undefined ? undefined : <UpdatedAgo {...zoltarQuestionsFreshness} />}
+						<UpdatedAgo {...zoltarQuestionsFreshness} />
 						<PaginationControls
 							hasNextPage={getHasNextPaginationPage(resolvedPageIndex, pageCount)}
 							hasPreviousPage={resolvedPageIndex > 0}

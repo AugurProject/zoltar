@@ -756,6 +756,7 @@ describe('SecurityPoolsOverviewSection', () => {
 					hasLoadedSecurityPoolPage: false,
 					loadingSecurityPoolPage: false,
 					securityPoolPage: undefined,
+					securityPoolPageFreshness: { refreshing: false, updatedAt: undefined },
 					securityPools: [],
 				})}
 			/>,
@@ -765,6 +766,9 @@ describe('SecurityPoolsOverviewSection', () => {
 		const documentQueries = within(document.body)
 		expect(documentQueries.getByText('Refreshing pools.')).not.toBeNull()
 		expect(documentQueries.queryByText('None yet')).toBeNull()
+		// Skeleton rows hold the list's shape, and the freshness line is reserved so nothing moves when data arrives.
+		expect(document.querySelector('.skeleton-list[role="status"]')).not.toBeNull()
+		expect(document.querySelector('.freshness-indicator[data-state="pending"]')).not.toBeNull()
 	})
 
 	test('does not show the empty pool-list CTA before the first pool page loads', async () => {

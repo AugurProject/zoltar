@@ -13,6 +13,7 @@ import { useSecurityPoolsOverview, type UseSecurityPoolsOverviewDependencies } f
 import { afterEach, describe, expect, mock, test } from 'bun:test'
 import { h, render, type ComponentChildren } from 'preact'
 import { act } from 'preact/test-utils'
+import { appQueryCache } from '@zoltar/ui-core-shared/lib/dataRefresh.js'
 import { createSecurityPoolPageFromLoadedPools, createSecurityPoolsOverviewDependencies, type TestSecurityPoolsOverviewWriteClient } from './testSupport/securityPoolsOverviewDependencies.js'
 
 type UseSecurityPoolsOverviewState = ReturnType<typeof useSecurityPoolsOverview>
@@ -129,6 +130,55 @@ void describe('useSecurityPoolsOverview helpers', () => {
 
 		expect(loadSecurityPoolLineage).toHaveBeenCalledWith(selectedAddress, zeroAddress)
 		expect(requireHookState(hookState).securityPools.map(pool => pool.questionId)).toEqual(['0x01'])
+	})
+
+	void test('refreshes the loaded pool lineage in place, and a slow refresh never overwrites a newer explicit load', async () => {
+		const selectedAddress = getAddress('0x0000000000000000000000000000000000000001')
+		const staleRefresh = createDeferred<ListedSecurityPool[]>()
+		let lineageReads = 0
+		const loadSecurityPoolLineage = mock(async () => {
+			lineageReads += 1
+			if (lineageReads === 1) return [createListedSecurityPool('0x01', selectedAddress)]
+			if (lineageReads === 2) return [createListedSecurityPool('0x02', selectedAddress)]
+			if (lineageReads === 3) return await staleRefresh.promise
+			return [createListedSecurityPool('0x04', selectedAddress)]
+		})
+		const dependencies = createSecurityPoolsOverviewDependencies({ loadSecurityPoolLineage })
+		const domEnvironment = installDomEnvironment()
+		restoreDomEnvironment = domEnvironment.cleanup
+		let hookState: UseSecurityPoolsOverviewState | undefined
+		const Harness = createHarness(dependencies, state => {
+			hookState = state
+		})
+		const renderedComponent = await renderIntoDocument(h(Harness, {}))
+		cleanupRenderedComponent = renderedComponent.cleanup
+		await act(async () => {
+			await requireHookState(hookState).loadSecurityPools(selectedAddress)
+		})
+		expect(requireHookState(hookState).securityPoolsFreshness.updatedAt).toBeNumber()
+
+		// An in-place refresh replaces the pools without the explicit loading state.
+		await act(async () => {
+			await requireHookState(hookState).refreshSecurityPools()
+		})
+		expect(requireHookState(hookState).securityPools.map(pool => pool.questionId)).toEqual(['0x02'])
+		expect(requireHookState(hookState).loadingSecurityPools).toBe(false)
+
+		// A refresh still in flight when a newer explicit load commits is discarded.
+		let pendingRefresh: Promise<void> | undefined
+		await act(() => {
+			pendingRefresh = requireHookState(hookState).refreshSecurityPools()
+		})
+		await act(async () => {
+			await requireHookState(hookState).loadSecurityPools(selectedAddress)
+		})
+		expect(requireHookState(hookState).securityPools.map(pool => pool.questionId)).toEqual(['0x04'])
+		await act(async () => {
+			staleRefresh.resolve([createListedSecurityPool('0x03', selectedAddress)])
+			await pendingRefresh
+		})
+		expect(requireHookState(hookState).securityPools.map(pool => pool.questionId)).toEqual(['0x04'])
+		appQueryCache.clear()
 	})
 
 	void test('waits for active backend readiness before loading the registry page', async () => {

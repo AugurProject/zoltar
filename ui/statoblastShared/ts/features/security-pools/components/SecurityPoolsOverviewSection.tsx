@@ -131,7 +131,7 @@ export function SecurityPoolsOverviewSection({
 			variant='plain'
 			actions={
 				<>
-					{hasCurrentPageData && securityPoolPageFreshness !== undefined ? <UpdatedAgo {...securityPoolPageFreshness} /> : undefined}
+					{securityPoolPageFreshness === undefined ? undefined : <UpdatedAgo {...(hasCurrentPageData ? securityPoolPageFreshness : { refreshing: false, updatedAt: undefined })} />}
 					<PaginationControls
 						hasNextPage={hasNextPage}
 						hasPreviousPage={hasPreviousPage}
@@ -189,7 +189,7 @@ export function SecurityPoolsOverviewSection({
 					})()
 
 					if (isEmptyRegistry) return <EmptyState title={securityPoolCopy.noSecurityPools} detail={registryPresentation.detail} actions={registryActions} />
-					if (registryPresentation.key === 'loading' && registryPresentation.detail !== undefined) return <SkeletonList label={registryPresentation.detail} />
+					if (registryPresentation.key === 'loading') return <SkeletonList label={registryPresentation.detail ?? commonCopy.loadingWithEllipsis} />
 					return <StateHint presentation={registryPresentation} actions={registryActions} />
 				}
 				if (filteredSecurityPools.length === 0) return <EmptyState title={commonCopy.noMatches} detail={securityPoolCopy.poolFiltersEmpty} />

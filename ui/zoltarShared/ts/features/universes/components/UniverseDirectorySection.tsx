@@ -16,17 +16,20 @@ type UniverseDirectorySectionProps = {
 }
 
 export function UniverseDirectorySection({ children, freshness, zoltarUniverse }: UniverseDirectorySectionProps) {
+	const freshnessIndicator = freshness === undefined ? undefined : <UpdatedAgo {...freshness} />
 	if (zoltarUniverse === undefined)
 		return (
 			<>
-				<SkeletonList label={commonCopy.loadingUniverseDetails} rows={2} />
+				<SectionBlock variant='plain' actions={freshnessIndicator}>
+					<SkeletonList label={commonCopy.loadingUniverseDetails} rows={2} />
+				</SectionBlock>
 				{children}
 			</>
 		)
 
 	return (
 		<div className='route-view-flow'>
-			<SectionBlock variant='plain' actions={freshness === undefined ? undefined : <UpdatedAgo {...freshness} />}>
+			<SectionBlock variant='plain' actions={freshnessIndicator}>
 				<UniverseContextSummary universe={zoltarUniverse} />
 				{zoltarUniverse.forkQuestionDetails === undefined ? undefined : (
 					<div className='loaded-question-preview'>

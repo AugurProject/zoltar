@@ -38,9 +38,10 @@ describe('freshness and skeleton components', () => {
 		},
 	})
 
-	test('renders nothing before the first read and marks an in-place refresh without replacing the age', async () => {
+	test('reserves an empty line before the first read and marks an in-place refresh without replacing the age', async () => {
 		const empty = await renderIntoDocument(<UpdatedAgo updatedAt={undefined} />)
 		expect(empty.container.textContent).toBe('')
+		expect(empty.container.querySelector('.freshness-indicator[aria-hidden="true"]')).not.toBeNull()
 		await empty.cleanup()
 
 		const rendered = await renderIntoDocument(<UpdatedAgo updatedAt={Date.now() - 20_000} refreshing />)

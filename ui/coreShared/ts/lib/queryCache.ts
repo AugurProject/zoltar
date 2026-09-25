@@ -40,10 +40,13 @@ function createStoreFor<T>(now: () => number) {
 			const { data, error, updatedAt, fetching, stale } = read(key)
 			return { data, error, updatedAt, fetching, stale }
 		},
-		/** Reads through the cache: a request already in flight for the key is shared instead of repeated. */
+		/**
+		 * Reads through the cache: a request already in flight for the key is shared instead of repeated, unless an
+		 * invalidation arrived after it began. Then a new read starts and only the newest read may settle.
+		 */
 		fetch(key: string, loader: () => Promise<T>): Promise<T> {
 			const current = read(key)
-			if (current.promise !== undefined && current.generation === generation) return current.promise
+			if (current.promise !== undefined && current.generation === generation && !current.stale) return current.promise
 			const requestGeneration = generation
 			const promise = loader()
 			update(key, { ...current, fetching: true, stale: false, generation: requestGeneration, promise })
@@ -53,16 +56,15 @@ function createStoreFor<T>(now: () => number) {
 				if (latest?.promise !== promise || generation !== requestGeneration) return
 				update(key, { ...latest, ...next, fetching: false, promise: undefined })
 			}
-			// An invalidation that arrives while the read is in flight leaves the entry stale, so subscribers read again.
 			promise.then(
 				data => settle({ data, error: undefined, updatedAt: now() }),
 				(error: unknown) => settle({ error }),
 			)
 			return promise
 		},
-		/** Stores a result read elsewhere, such as the receipt of the transaction that changed it. */
+		/** Stores a result read elsewhere, such as a foreground load; an older read still in flight can no longer overwrite it. */
 		set(key: string, data: T) {
-			update(key, { ...read(key), data, error: undefined, updatedAt: now(), stale: false })
+			update(key, { ...read(key), data, error: undefined, updatedAt: now(), stale: false, fetching: false, promise: undefined })
 		},
 		/** Marks one key, or every key, stale and notifies subscribers so the visible ones refetch. */
 		invalidate(key?: string) {

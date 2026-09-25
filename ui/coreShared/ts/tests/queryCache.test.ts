@@ -78,14 +78,33 @@ describe('query cache', () => {
 		expect(notifications).toEqual(['a', 'b'])
 	})
 
-	test('an invalidation during a read leaves the answer stale so subscribers read again', async () => {
+	test('a read requested after an invalidation starts again instead of sharing the older in-flight read', async () => {
 		const store = createQueryCache().createStore<string>()
-		const read = deferred<string>()
-		void store.fetch('page', async () => await read.promise)
+		const before = deferred<string>()
+		const after = deferred<string>()
+		let loads = 0
+		const loader = async () => (++loads === 1 ? await before.promise : await after.promise)
+		void store.fetch('page', loader)
 		store.invalidate('page')
-		read.resolve('before the new block')
+		expect(store.get('page').stale).toBe(true)
+		const second = store.fetch('page', loader)
+		expect(loads).toBe(2)
+		after.resolve('after the new block')
+		expect(await second).toBe('after the new block')
+		before.resolve('before the new block')
 		await flush()
-		expect(store.get('page')).toMatchObject({ data: 'before the new block', stale: true, fetching: false })
+		expect(store.get('page')).toMatchObject({ data: 'after the new block', stale: false, fetching: false })
+	})
+
+	test('an older in-flight read cannot overwrite a result stored with set', async () => {
+		const store = createQueryCache().createStore<string>()
+		const older = deferred<string>()
+		void store.fetch('summary', async () => await older.promise)
+		store.set('summary', 'foreground')
+		expect(store.get('summary').fetching).toBe(false)
+		older.resolve('stale background')
+		await flush()
+		expect(store.get('summary').data).toBe('foreground')
 	})
 
 	test('clear retires in-flight reads so an answer from a replaced environment is dropped', async () => {
