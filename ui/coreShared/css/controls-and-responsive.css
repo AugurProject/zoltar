@@ -209,10 +209,6 @@ button.tx-action-wallet-fix {
 	font-size: var(--font-caption);
 }
 
-.tx-action-row > .tx-action-wallet-fix {
-	flex: 0 0 auto;
-}
-
 .tx-action-button-labels {
 	display: grid;
 	align-items: center;
