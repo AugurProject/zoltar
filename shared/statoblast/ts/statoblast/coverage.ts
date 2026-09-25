@@ -15,7 +15,7 @@ export function coverageObligation(collateral: bigint, units: bigint, totalUnits
 	return units === 0n ? 0n : (collateral * units + totalUnits - 1n) / totalUnits
 }
 
-export function coverageMintUnits(collateral: bigint, totalUnits: bigint, addedCollateral: bigint) {
+function coverageMintUnits(collateral: bigint, totalUnits: bigint, addedCollateral: bigint) {
 	if (addedCollateral <= 0n) throw new Error('Mint amount must be positive')
 	if (totalUnits === 0n && collateral === 0n) return addedCollateral
 	if (totalUnits <= 0n || collateral <= 0n) throw new Error('Collateral epoch is exhausted')
@@ -44,7 +44,10 @@ export function allocateCoverage(offers: readonly CoverageOfferPosition[], colla
 			budget: (maximumCoveredObligation(offer, price, multiplierBps) * nextUnits) / nextCollateral - offer.obligationUnits,
 		}))
 		.filter(offer => offer.budget > 0n)
-	candidates.sort((a, b) => (a.budget > b.budget ? -1 : a.budget < b.budget ? 1 : a.vault.toLowerCase().localeCompare(b.vault.toLowerCase())))
+	candidates.sort((a, b) => {
+		if (a.budget !== b.budget) return a.budget > b.budget ? -1 : 1
+		return a.vault.toLowerCase().localeCompare(b.vault.toLowerCase())
+	})
 	const selected = candidates.slice(0, 64).sort((a, b) => a.vault.toLowerCase().localeCompare(b.vault.toLowerCase()))
 	const allocations: { vault: Address; collateralAttoEth: bigint }[] = []
 	let cumulative = 0n

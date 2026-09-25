@@ -36,7 +36,6 @@ export const mintCompleteSetsAmount = 'Mint Complete Sets Amount'
 export const mintCompleteSetsActionLabel = 'Mint complete sets'
 export const completeSetMintDescription = 'Lock ETH to mint Yes, No, and Invalid shares. Authorized vault coverage is checked before wallet confirmation.'
 export const mintingCompleteSets = 'Minting complete sets…'
-export const mintCapacityEmpty = 'No mint capacity remaining.'
 export const mintClosedAfterEscalation = 'Minting closed after escalation starts.'
 export const formatNoSharesAvailableToMigrateReason = (outcomeLabel: string) => `No ${outcomeLabel} shares available to migrate.`
 export const redeemCompleteSetsActionLabel = 'Redeem complete sets'

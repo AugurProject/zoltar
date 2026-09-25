@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { allocateCoverage, coverageMintUnits, coverageObligation, maximumCoveredObligation, type CoverageOfferPosition } from './coverage'
+import { allocateCoverage, coverageObligation, maximumCoveredObligation, type CoverageOfferPosition } from './coverage'
 
 const offer: CoverageOfferPosition = { vault: '0x0000000000000000000000000000000000000001', enabled: true, maximumObligationAttoEth: 10_000n, minimumHealthFactorBps: 10_000n, obligationUnits: 0n, poolHeldAttoRep: 20_000n, disputeStakeAttoRep: 0n }
 
@@ -21,7 +21,7 @@ describe('coverage allocation router', () => {
 				{ ...offer, vault: '0x0000000000000000000000000000000000000002' as const, maximumObligationAttoEth: 100n },
 			]
 			const route = allocateCoverage(offers, collateral, total, amount, 10n ** 18n, 20_000n)
-			const minted = coverageMintUnits(collateral, total, amount)
+			const minted = (amount * total + collateral - 1n) / collateral
 			let allocated = 0n
 			let units = 0n
 			for (const allocation of route) {

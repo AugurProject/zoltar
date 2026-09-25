@@ -50,7 +50,10 @@ export async function loadAvailableCoverage(client: Pick<ReadClient, 'readContra
 			const current = coverageObligation(collateral, offer.obligationUnits, units)
 			return maximum > current ? maximum - current : 0n
 		})
-		.sort((a, b) => (a > b ? -1 : a < b ? 1 : 0))
+		.sort((a, b) => {
+			if (a === b) return 0
+			return a > b ? -1 : 1
+		})
 		.slice(0, 64)
 		.reduce((total, amount) => total + amount, 0n)
 }

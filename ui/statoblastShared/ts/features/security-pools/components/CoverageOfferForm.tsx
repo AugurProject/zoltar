@@ -1,5 +1,6 @@
+import { tryParseDecimalInput } from '@zoltar/ui-core-shared/forms/decimal.js'
 import { useState } from 'preact/hooks'
-import { parseUnits, type Address } from '@zoltar/core-shared/evm/ethereum'
+import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import { FormInput } from '@zoltar/ui-core-shared/components/FormInput.js'
 import { TransactionActionButton } from '@zoltar/ui-core-shared/components/TransactionActionButton.js'
 import { ErrorNotice } from '@zoltar/ui-core-shared/components/ErrorNotice.js'
@@ -17,14 +18,8 @@ export function CoverageOfferForm({ details, account, blocker, onSaved }: { deta
 	const [saved, setSaved] = useState(false)
 	const limit = limitInput ?? formatCurrencyInputBalance(details?.coverageOffer?.maximumObligationAttoEth ?? 0n, 18)
 	const health = healthInput ?? formatCurrencyInputBalance(details?.coverageOffer?.minimumHealthFactorBps || 10_000n, 4)
-	let amount = 0n
-	let factor = 0n
-	try {
-		amount = parseUnits(limit, 18)
-		factor = parseUnits(health, 4)
-	} catch {
-		// Invalid fields disable submission while the user edits.
-	}
+	const amount = tryParseDecimalInput(limit, 18) ?? 0n
+	const factor = tryParseDecimalInput(health, 4) ?? 0n
 	const owner = account !== undefined && details?.vaultAddress.toLowerCase() === account.toLowerCase()
 	const prerequisite = blocker ?? (!owner || details?.coverageOffer === undefined ? copy.coverageOfferUnavailable : undefined)
 	const validation = amount <= 0n || factor < 10_000n ? copy.coverageOfferInvalid : undefined

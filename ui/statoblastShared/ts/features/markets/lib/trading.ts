@@ -13,7 +13,7 @@ import type { ReportingOutcomeKey, TradingShareBalances, ZoltarUniverseSummary }
 const PRICE_PRECISION = 10n ** 18n
 const BPS_DENOMINATOR = 10_000n
 
-export const NO_MINT_CAPACITY_NO_ACTIVE_CAPACITY_OWNERSHIP_MESSAGE = 'No authorized coverage is available. Vault owners must enable underwriting offers.'
+const NO_MINT_CAPACITY_NO_ACTIVE_CAPACITY_OWNERSHIP_MESSAGE = 'No authorized coverage is available. Vault owners must enable underwriting offers.'
 export const NEED_MATCHING_COMPLETE_SET_SHARES_MESSAGE = 'Need matching Invalid, Yes, and No shares to redeem complete sets.'
 export const UNDEFINED_COMPLETE_SET_EXCHANGE_RATE_MESSAGE = 'Minting is unavailable because this pool has complete-set shares but no collateral.'
 
@@ -29,7 +29,7 @@ export function calculateMintingCapacityAttoEth(capacityOwnershipAttoRep: bigint
 	return (capacityValueAttoEth * BPS_DENOMINATOR) / statoblastSecurityMultiplierBps
 }
 
-export function getRemainingMintCapacity(mintingCapacityAttoEth: bigint | undefined, settlementCollateralAttoEth: bigint | undefined, shareTokenSupplyAttoShares?: bigint | undefined) {
+function getRemainingMintCapacity(mintingCapacityAttoEth: bigint | undefined, settlementCollateralAttoEth: bigint | undefined, shareTokenSupplyAttoShares?: bigint | undefined) {
 	if (mintingCapacityAttoEth === undefined || settlementCollateralAttoEth === undefined) return undefined
 	if (hasUndefinedCompleteSetExchangeRate(settlementCollateralAttoEth, shareTokenSupplyAttoShares) === true) return 0n
 	return mintingCapacityAttoEth > settlementCollateralAttoEth ? mintingCapacityAttoEth - settlementCollateralAttoEth : 0n
@@ -107,9 +107,6 @@ export function formatStatoblastSecurityMultiplier(statoblastSecurityMultiplierB
 	return fractional === '' ? whole.toString() : `${whole}.${fractional}`
 }
 
-export function hasRepBackedPoolWithNoActiveCapacityOwnership(totalPoolHeldAttoRep: bigint | undefined, activeObligationUnits: bigint | undefined) {
-	return (totalPoolHeldAttoRep ?? 0n) > 0n && (activeObligationUnits ?? 0n) === 0n
-}
 
 function getMaxRedeemableCompleteSets(shareBalances: TradingShareBalances | undefined) {
 	if (shareBalances === undefined) return undefined
