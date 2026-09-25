@@ -484,7 +484,7 @@ void describe('SecurityPoolsSection', () => {
 		expect(resetCount).toBe(1)
 	})
 
-	void test('renders one route heading in create and empty manage modes', async () => {
+	void test('renders one route heading in create and empty pool page modes', async () => {
 		const createRender = await renderIntoDocument(h(SecurityPoolsSection, createSecurityPoolsSectionProps({ activeView: 'create' })))
 		cleanupRenderedComponent = createRender.cleanup
 		expect(within(document.body).getAllByRole('heading', { name: 'Create Pool' })).toHaveLength(1)
@@ -493,7 +493,7 @@ void describe('SecurityPoolsSection', () => {
 
 		const manageRender = await renderIntoDocument(h(SecurityPoolsSection, createSecurityPoolsSectionProps({ activeView: 'operate' })))
 		cleanupRenderedComponent = manageRender.cleanup
-		expect(within(document.body).getAllByRole('heading', { name: 'Manage Pool' })).toHaveLength(1)
+		expect(within(document.body).getAllByRole('heading', { name: 'Security Pool' })).toHaveLength(1)
 	})
 
 	void test('keeps the route summary hidden even when the selected pool is resolved in operate mode', async () => {

@@ -7,12 +7,21 @@ import * as copy from '../../../copy/poolWorkspace.js'
 const primaryViews: readonly SelectedPoolView[] = ['vaults', 'trading', 'reporting']
 const moreViews: readonly SelectedPoolView[] = ['price-oracle', 'staged-operations', 'fork-workflow']
 
-export function PoolWorkspaceNavigation({ view, onChange, panelId }: { view: SelectedPoolView; onChange: (view: SelectedPoolView) => void; panelId: string }) {
+/** Splits the pool tabs: Fork & Migration joins the main tabs once the pool has fork activity or is in a fork stage. */
+function getPoolWorkspaceViews(view: SelectedPoolView, forkWorkflowPrimary: boolean) {
+	const mainViews = forkWorkflowPrimary ? [...primaryViews, 'fork-workflow' as const] : primaryViews
+	return {
+		mainViews: mainViews.includes(view) ? mainViews : [...mainViews, view],
+		toolViews: moreViews.filter(candidate => !mainViews.includes(candidate)),
+	}
+}
+
+export function PoolWorkspaceNavigation({ forkWorkflowPrimary = false, view, onChange, panelId }: { forkWorkflowPrimary?: boolean; view: SelectedPoolView; onChange: (view: SelectedPoolView) => void; panelId: string }) {
 	const menu = useRef<HTMLDetailsElement>(null)
-	const visibleViews = primaryViews.includes(view) ? primaryViews : [...primaryViews, view]
+	const { mainViews, toolViews } = getPoolWorkspaceViews(view, forkWorkflowPrimary)
 	return (
 		<div className='pool-workspace-navigation'>
-			<ViewTabs ariaLabel={securityPoolCopy.selectedPoolViews} className='selected-pool-workspace-tabs' semantics='tabs' size='compact' value={view} onChange={onChange} options={visibleViews.map(value => ({ id: `selected-pool-view-${value}`, label: getSelectedPoolViewLabel(value), panelId, value }))} />
+			<ViewTabs ariaLabel={securityPoolCopy.selectedPoolViews} className='selected-pool-workspace-tabs' semantics='tabs' size='compact' value={view} onChange={onChange} options={mainViews.map(value => ({ id: `selected-pool-view-${value}`, label: getSelectedPoolViewLabel(value), panelId, value }))} />
 			<details
 				className='pool-tools-disclosure'
 				ref={menu}
@@ -25,7 +34,7 @@ export function PoolWorkspaceNavigation({ view, onChange, panelId }: { view: Sel
 			>
 				<summary>{copy.moreTools}</summary>
 				<div className='pool-tools-options'>
-					{moreViews.map(value => (
+					{toolViews.map(value => (
 						<button
 							key={value}
 							type='button'
@@ -44,60 +53,6 @@ export function PoolWorkspaceNavigation({ view, onChange, panelId }: { view: Sel
 					))}
 				</div>
 			</details>
-		</div>
-	)
-}
-
-export function PoolAttention({
-	oracleUnavailable,
-	pendingReportId,
-	stagedOperationCount,
-	forkAvailable,
-	onViewReport,
-	onChange,
-}: {
-	oracleUnavailable: boolean
-	pendingReportId: bigint | undefined
-	stagedOperationCount: bigint
-	forkAvailable: boolean
-	onViewReport: (id: bigint) => void
-	onChange: (view: SelectedPoolView) => void
-}) {
-	const hasPendingReport = pendingReportId !== undefined && pendingReportId > 0n
-	return (
-		<div className='pool-attention' aria-live='polite'>
-			{oracleUnavailable ? (
-				<p className='pool-attention-item warning'>
-					<span>{copy.oracleUnavailable}</span>
-					<button type='button' className='link' onClick={() => onChange('price-oracle')}>
-						{copy.reviewOracle}
-					</button>
-				</p>
-			) : undefined}
-			{hasPendingReport ? (
-				<p className='pool-attention-item'>
-					<span>{copy.pendingReport}</span>
-					<button type='button' className='link' onClick={() => onViewReport(pendingReportId)}>
-						{copy.viewReport}
-					</button>
-				</p>
-			) : undefined}
-			{stagedOperationCount > 0n ? (
-				<p className='pool-attention-item'>
-					<span>{copy.stagedOperationCount(stagedOperationCount)}</span>
-					<button type='button' className='link' onClick={() => onChange('staged-operations')}>
-						{copy.reviewOperations}
-					</button>
-				</p>
-			) : undefined}
-			{forkAvailable ? (
-				<p className='pool-attention-item warning'>
-					<span>{copy.forkAvailable}</span>
-					<button type='button' className='link' onClick={() => onChange('fork-workflow')}>
-						{copy.reviewFork}
-					</button>
-				</p>
-			) : undefined}
 		</div>
 	)
 }

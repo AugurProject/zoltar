@@ -9,7 +9,7 @@ import { formatStatoblastSecurityMultiplier } from '../../markets/lib/trading.js
 import { Badge } from '@zoltar/ui-core-shared/components/Badge.js'
 import { getQuestionTitle, Question } from '@zoltar/ui-core-shared/components/Question.js'
 import { TimestampValue } from '@zoltar/ui-core-shared/components/TimestampValue.js'
-import { buildRouteHref, getRouteHashSearch } from '@zoltar/ui-core-shared/navigation/routing.js'
+import { getSecurityPoolLinkHref } from '../lib/securityPoolNavigation.js'
 import { formatUniverseIdHex } from '@zoltar/ui-core-shared/lib/universeLabels.js'
 import type { ListedSecurityPool } from '@zoltar/ui-core-shared/types/contracts.js'
 import { getSecurityPoolStatusBadgeLabel, getSecurityPoolStatusBadgeTone } from '../lib/securityPoolLabels.js'
@@ -36,11 +36,7 @@ export function PoolDirectoryRow({
 }) {
 	const title = getQuestionTitle(pool.marketDetails)
 	const status = getSecurityPoolStatusBadgeLabel({ hasForkActivity: pool.hasForkActivity, questionOutcome: pool.questionOutcome, lifecycleState })
-	const params = new URLSearchParams(getRouteHashSearch())
-	params.set('securityPool', pool.securityPoolAddress)
-	params.set('universe', formatUniverseIdHex(pool.universeId))
-	params.set('securityPoolsView', 'operate')
-	const href = buildRouteHref('#/security-pools', `?${params.toString()}`)
+	const href = getSecurityPoolLinkHref(pool.securityPoolAddress, '', pool.universeId)
 	const validUntil = getOracleManagerPriceValidUntilTimestamp(pool.lastOracleSettlementTimestamp)
 	const oracleExpired = validUntil !== undefined && currentTimestamp !== undefined && currentTimestamp >= validUntil
 	const oracleMissing = pool.lastOracleSettlementTimestamp === 0n || pool.lastOraclePrice === undefined

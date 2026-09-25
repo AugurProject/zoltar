@@ -14,8 +14,7 @@ import { useRepPrices } from '@zoltar/ui-statoblast-shared/features/open-oracle/
 import { useStatoblastUrlState } from './hooks/useStatoblastUrlState.js'
 import { initializeStatoblastActiveEnvironment } from './activeEnvironment.js'
 import { applicationTitle, formatAppDocumentTitle, getAppPageTitle } from './appPageTitle.js'
-import { buildRouteHref, getRouteHashSearch, parseRouteHash } from '@zoltar/ui-core-shared/navigation/routing.js'
-import { writeSecurityPoolsViewQueryParam } from '@zoltar/ui-core-shared/navigation/urlParams.js'
+import { buildRouteHref, getTopLevelRouteSearch, parseRouteHash } from '@zoltar/ui-core-shared/navigation/routing.js'
 import { resolveEnumValue } from '@zoltar/ui-core-shared/forms/viewState.js'
 import { onchainStateDependencies } from './onchainStateDependencies.js'
 import type { Route } from '@zoltar/ui-statoblast-shared/types/app.js'
@@ -27,6 +26,7 @@ import { renderRepPriceSourceLabel } from '@zoltar/ui-statoblast-shared/features
 import { getRouteSecondaryNavigation, getStatoblastRouteTabs, getTransactionRouteKey } from './lib/appNavigation.js'
 import { useOpenOracleRoute } from './hooks/useOpenOracleRoute.js'
 import { useSecurityPoolsRoute } from './hooks/useSecurityPoolsRoute.js'
+import { usePortfolio } from '@zoltar/ui-statoblast-shared/features/portfolio/hooks/usePortfolio.js'
 
 export function App() {
 	const [uiPriceOracle, setUiPriceOracle] = useState(readUiPriceOracle)
@@ -48,7 +48,7 @@ export function App() {
 		setSelectedPoolView,
 	} = useStatoblastUrlState()
 	const { navigate, route } = useHashRoute()
-	const resolvedRoute = resolveEnumValue<Route>(route, 'not-found', ['deploy', 'security-pools', 'open-oracle', 'not-found'])
+	const resolvedRoute = resolveEnumValue<Route>(route, 'not-found', ['deploy', 'portfolio', 'pools', 'open-oracle', 'not-found'])
 	const { repPerEthFailure, repPerEthPrice, repPerEthSource, repPerEthSourceUrl, repUsdcFailure, repUsdcPrice, repUsdcSource, repUsdcSourceUrl, isLoadingRepPrices, isRefreshingRepPrices, refreshRepPrices } = useRepPrices()
 	const {
 		accountState,
@@ -75,7 +75,7 @@ export function App() {
 		walletScopedHookConfig,
 	} = useProtocolAppShell({
 		deploymentRoute: {
-			deploymentCompleteHref: buildRouteHref(statoblastRouting.getHash('security-pools'), writeSecurityPoolsViewQueryParam(getRouteHashSearch(), 'browse')),
+			deploymentCompleteHref: buildRouteHref(statoblastRouting.getHash('pools'), getTopLevelRouteSearch('pools')),
 			getSections: getStatoblastDeploymentSections,
 		},
 		initializeEnvironment: options => initializeStatoblastActiveEnvironment(window.location, options),
@@ -177,14 +177,21 @@ export function App() {
 		universeRepBalanceAttoRep: zoltarUniverse?.totalTheoreticalSupplyAttoRep,
 	}
 	const invalidRouteState = getInvalidStatoblastRouteState({
-		activeSecurityPoolsView,
 		openOracleView,
 		resolvedRoute,
 		search: parseRouteHash(window.location.hash).search,
-		securityPoolsView,
 		selectedPoolView,
 	})
-	const activeRoute = invalidRouteState.hasInvalidSecurityPoolsView || invalidRouteState.hasInvalidSelectedPoolView || invalidRouteState.hasInvalidOpenOracleView ? 'not-found' : resolvedRoute
+	const activeRoute = invalidRouteState.hasInvalidSelectedPoolView || invalidRouteState.hasInvalidOpenOracleView ? 'not-found' : resolvedRoute
+	const portfolio = usePortfolio({ accountAddress: walletScopedAccountAddress, enabled: activeRoute === 'portfolio' && canReadOnchainData && walletBootstrapComplete, environmentRefreshKey: activeEnvironmentNonce })
+	const portfolioRouteContentProps = {
+		accountAddress: walletScopedAccountAddress,
+		currentTimestamp,
+		isConnectingWallet: overviewWalletProps.isConnectingWallet,
+		onConnect: overviewWalletProps.onConnect,
+		portfolio,
+		walletBootstrapComplete,
+	}
 	const tabNavigationProps = {
 		route,
 		tabs: getStatoblastRouteTabs({ route, showDeployTab }),
@@ -241,7 +248,7 @@ export function App() {
 			transactionRouteKey={transactionRouteKey}
 			transactionState={transactionState.value}
 		>
-			<AppRouteContent deploy={deployRouteContentProps} openOracle={openOracleRouteContentProps} readBackendMessage={readBackendMessage} route={activeRoute} securityPools={securityPoolsRouteContentProps} />
+			<AppRouteContent deploy={deployRouteContentProps} openOracle={openOracleRouteContentProps} portfolio={portfolioRouteContentProps} readBackendMessage={readBackendMessage} route={activeRoute} securityPools={securityPoolsRouteContentProps} />
 			<TransactionStepsModal contextKey={`${activeEnvironmentNonce}:${walletScopedAccountAddress ?? ''}`} />
 		</ProtocolAppFrame>
 	)

@@ -3273,3 +3273,246 @@
 		text-overflow: ellipsis;
 	}
 }
+
+/* Pool page: toolbar, lifecycle stepper, and the "What you can do now" rows. The rows are flat so the pool panel keeps a single card level. */
+.pool-page-toolbar {
+	display: grid;
+	justify-items: start;
+	gap: var(--space-1);
+}
+
+.pool-page-toolbar .pool-selection-control {
+	justify-self: stretch;
+}
+
+.pool-back-link {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--space-1);
+	min-height: var(--touch-target-min);
+	color: var(--text-secondary);
+	font-size: 0.875rem;
+	text-decoration: none;
+}
+
+.pool-back-link:hover {
+	color: var(--text);
+	text-decoration: underline;
+}
+
+.pool-lifecycle-steps {
+	display: grid;
+	grid-template-columns: repeat(5, minmax(0, 1fr));
+	gap: var(--space-2);
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+
+.pool-lifecycle-steps li {
+	display: flex;
+	align-items: center;
+	gap: var(--space-2);
+	min-width: 0;
+	padding-top: var(--space-2);
+	border-top: 3px solid var(--border-default);
+	color: var(--muted);
+	font-size: 0.8125rem;
+}
+
+.pool-lifecycle-steps li.completed {
+	border-top-color: var(--accent-medium);
+	color: var(--text-secondary);
+}
+
+.pool-lifecycle-steps li.current {
+	border-top-color: var(--accent);
+	color: var(--text);
+	font-weight: 600;
+}
+
+.pool-lifecycle-marker {
+	display: inline-grid;
+	flex: none;
+	place-items: center;
+	width: 1.5rem;
+	height: 1.5rem;
+	border: 1px solid var(--border-strong);
+	border-radius: var(--radius-circle);
+	font-family: var(--font-family-mono);
+	font-size: 0.8125rem;
+}
+
+.pool-lifecycle-steps li.completed .pool-lifecycle-marker {
+	border-color: var(--accent-medium);
+	color: var(--accent);
+}
+
+.pool-lifecycle-steps li.current .pool-lifecycle-marker {
+	border-color: var(--accent);
+	background: var(--accent);
+	color: var(--bg-deep);
+}
+
+.pool-lifecycle-label {
+	min-width: 0;
+	overflow-wrap: anywhere;
+}
+
+.pool-lifecycle-mobile {
+	display: none;
+	margin: 0;
+	color: var(--accent);
+	font-weight: 600;
+}
+
+.pool-action-card {
+	display: grid;
+	gap: var(--space-2);
+	padding: var(--space-3) 0 0;
+	border-top: 1px solid var(--border-default);
+}
+
+.pool-action-card h3 {
+	margin: 0;
+	font-size: var(--font-h3-section);
+}
+
+.pool-action-list {
+	display: grid;
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+
+.pool-action-item {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	justify-content: space-between;
+	gap: var(--space-2) var(--space-4);
+	padding: var(--space-2) 0 var(--space-2) var(--space-3);
+	border-left: 3px solid var(--accent-medium);
+}
+
+.pool-action-item + .pool-action-item {
+	margin-top: var(--space-2);
+}
+
+.pool-action-item.attention {
+	border-left-color: var(--warning);
+}
+
+.pool-action-item.info {
+	border-left-color: var(--border-strong);
+}
+
+.pool-action-copy {
+	display: flex;
+	flex: 1 1 18rem;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: var(--space-1) var(--space-3);
+	min-width: 0;
+}
+
+.pool-action-label {
+	font-weight: 600;
+}
+
+.pool-action-item.attention .pool-action-label {
+	color: var(--warning);
+}
+
+.pool-action-item.info .pool-action-label {
+	color: var(--text-secondary);
+	font-weight: 400;
+}
+
+.pool-action-deadline,
+.pool-action-context {
+	color: var(--muted);
+	font-size: 0.8125rem;
+}
+
+.pool-action-context {
+	flex-basis: 100%;
+	overflow-wrap: anywhere;
+}
+
+.pool-action-control {
+	flex: none;
+}
+
+/* Portfolio */
+.portfolio-holding-list {
+	display: grid;
+}
+
+.portfolio-holding {
+	display: grid;
+	grid-template-columns: minmax(0, 1.2fr) minmax(0, 1.5fr) auto;
+	align-items: center;
+	gap: var(--space-4);
+	padding: var(--space-4) 0;
+	border-bottom: 1px solid var(--border-default);
+}
+
+.portfolio-holding:first-child {
+	padding-top: 0;
+}
+
+.portfolio-holding-identity {
+	display: grid;
+	justify-items: start;
+	gap: var(--space-2);
+	min-width: 0;
+}
+
+.portfolio-holding-identity h4 {
+	margin: 0;
+	overflow-wrap: anywhere;
+}
+
+.portfolio-holding-metrics {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+	gap: var(--space-3);
+	min-width: 0;
+}
+
+.portfolio-holding-metrics .metric-label,
+.portfolio-holding-metrics .metric-field-value {
+	display: block;
+}
+
+.portfolio-share-balances {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--space-1) var(--space-3);
+}
+
+@media (max-width: 50rem) {
+	.portfolio-holding {
+		grid-template-columns: minmax(0, 1fr);
+		gap: var(--space-3);
+	}
+
+	.portfolio-holding .pool-open-link {
+		justify-self: start;
+	}
+}
+
+@media (max-width: 40rem) {
+	.pool-lifecycle-steps {
+		display: none;
+	}
+
+	.pool-lifecycle-mobile {
+		display: block;
+	}
+
+	.pool-action-control {
+		flex-basis: 100%;
+	}
+}

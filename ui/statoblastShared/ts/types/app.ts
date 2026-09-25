@@ -3,7 +3,7 @@ import type { ReportingOutcomeKey } from '@zoltar/ui-core-shared/types/contracts
 export type { AccountState, TransactionCancellationParameters, TransactionLifecycleParameters, WriteOperationContext, WriteOperationsParameters } from '@zoltar/ui-core-shared/types/app.js'
 export type { MarketFormState } from '@zoltar/ui-zoltar-shared/types/app.js'
 
-export type Route = 'deploy' | 'security-pools' | 'open-oracle' | 'not-found'
+export type Route = 'deploy' | 'portfolio' | 'pools' | 'open-oracle' | 'not-found'
 
 export type SecurityPoolFormState = {
 	initialReportPriorityFeeEth: string

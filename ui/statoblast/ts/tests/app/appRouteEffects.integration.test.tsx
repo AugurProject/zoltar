@@ -9,7 +9,7 @@ import { useAppRouteEffects } from '../../app/useAppRouteEffects.js'
 import { useStatoblastUrlState } from '../../app/hooks/useStatoblastUrlState.js'
 import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
-import { installTestRouting } from '@zoltar/ui-core-shared/tests/testUtils/testRouting.js'
+import { installStatoblastRouting } from '@zoltar/ui-statoblast-shared/lib/routing.js'
 
 type RouteEffectsProps = Parameters<typeof useAppRouteEffects>[0]
 
@@ -54,7 +54,7 @@ function SecurityPoolQuestionRouteHarness() {
 	useAppRouteEffects(
 		createDefaultProps({
 			resetSecurityPoolCreation: () => setHasCreationResult(false),
-			route: 'security-pools',
+			route: 'pools',
 			securityPoolQuestionId,
 			setSecurityPoolFormMarketId: setMarketId,
 		}),
@@ -93,7 +93,7 @@ function UrlStateHarness() {
 	)
 }
 
-installTestRouting()
+installStatoblastRouting()
 describe('app route effects integration', () => {
 	test('loads linked security pools once while browsing market questions', async () => {
 		const dom = installDomEnvironment('http://localhost/#/zoltar')
@@ -206,19 +206,19 @@ describe('app route effects integration', () => {
 	})
 
 	test('restores and clears the route-backed security pool question across history events', async () => {
-		const dom = installDomEnvironment('http://localhost/#/security-pools?securityPoolsView=create&questionId=question-1')
+		const dom = installDomEnvironment('http://localhost/#/pools/create?questionId=question-1')
 		const { cleanup, container } = await renderIntoDocument(<SecurityPoolQuestionRouteHarness />)
 		expect(container.querySelector('#creation-result')).toBeNull()
 		expect(container.querySelector('#market-id')?.textContent).toBe('question-1')
 
 		await act(() => {
-			window.history.pushState({}, '', '#/security-pools?securityPoolsView=create')
+			window.history.pushState({}, '', '#/pools/create')
 			window.dispatchEvent(new Event('popstate'))
 		})
 		expect(container.querySelector('#market-id')?.textContent).toBe('')
 
 		await act(() => {
-			window.history.pushState({}, '', '#/security-pools?securityPoolsView=create&questionId=question-2')
+			window.history.pushState({}, '', '#/pools/create?questionId=question-2')
 			window.dispatchEvent(new Event('popstate'))
 		})
 		expect(container.querySelector('#market-id')?.textContent).toBe('question-2')
@@ -235,7 +235,7 @@ describe('app route effects integration', () => {
 			loadSecurityPools: async securityPoolAddress => {
 				securityPoolCalls.push(securityPoolAddress ?? '')
 			},
-			route: 'security-pools',
+			route: 'pools',
 			securityPoolAddress: '0x84834d4Dccea071b363e53952BD300F7bf56a009',
 			selectedPoolSecurityPoolAddress: undefined,
 			walletBootstrapComplete: true,
@@ -267,7 +267,7 @@ describe('app route effects integration', () => {
 			loadSecurityPools: async nextSecurityPoolAddress => {
 				securityPoolCalls.push(nextSecurityPoolAddress ?? '')
 			},
-			route: 'security-pools',
+			route: 'pools',
 			securityPoolAddress,
 			selectedPoolSecurityPoolAddress: securityPoolAddress,
 			walletBootstrapComplete: true,
@@ -291,13 +291,13 @@ describe('app route effects integration', () => {
 	})
 
 	test('loads a route security pool only once its address is complete', async () => {
-		const dom = installDomEnvironment('http://localhost/#/security-pools')
+		const dom = installDomEnvironment('http://localhost/#/pools')
 		const calls: string[] = []
 		const initialProps = createDefaultProps({
 			loadSecurityPools: async securityPoolAddress => {
 				calls.push(securityPoolAddress ?? '')
 			},
-			route: 'security-pools',
+			route: 'pools',
 			securityPoolAddress: '0x84834d4D',
 		})
 
@@ -318,13 +318,13 @@ describe('app route effects integration', () => {
 	})
 
 	test('does not repeatedly reload the same unresolved security pool across rerenders', async () => {
-		const dom = installDomEnvironment('http://localhost/#/security-pools')
+		const dom = installDomEnvironment('http://localhost/#/pools')
 		const calls: string[] = []
 		const initialProps = createDefaultProps({
 			loadSecurityPools: async securityPoolAddress => {
 				calls.push(securityPoolAddress ?? '')
 			},
-			route: 'security-pools',
+			route: 'pools',
 			securityPoolAddress: '0x84834d4Dccea071b363e53952BD300F7bf56a009',
 		})
 
@@ -361,7 +361,7 @@ describe('app route effects integration', () => {
 		await act(() => {
 			fireEvent.click(within(document.body).getByRole('button', { name: 'Set Pool' }))
 		})
-		expect(window.location.hash).toContain('securityPool=0x84834d4Dccea071b363e53952BD300F7bf56a009')
+		expect(window.location.hash).toContain('#/pools/0x84834d4Dccea071b363e53952BD300F7bf56a009')
 
 		await act(() => {
 			window.history.back()
@@ -369,7 +369,7 @@ describe('app route effects integration', () => {
 		})
 
 		expect(window.location.hash).toContain('openOracleReportId=42')
-		expect(window.location.hash).not.toContain('securityPool=')
+		expect(window.location.hash).not.toContain('#/pools/')
 		expect(document.getElementById('report-id')?.textContent).toBe('42')
 		expect(document.getElementById('security-pool')?.textContent).toBe('')
 
@@ -378,7 +378,7 @@ describe('app route effects integration', () => {
 	})
 
 	test('replaces history while an address is typed and pushes once it is complete', async () => {
-		const dom = installDomEnvironment('http://localhost/#/security-pools?securityPoolsView=operate')
+		const dom = installDomEnvironment('http://localhost/#/pools')
 		const originalPushState = window.history.pushState.bind(window.history)
 		const originalReplaceState = window.history.replaceState.bind(window.history)
 		let pushes = 0
@@ -401,7 +401,7 @@ describe('app route effects integration', () => {
 			}
 			expect(pushes).toBe(1)
 			expect(replaces).toBe(2)
-			expect(window.location.hash).toContain('securityPool=0x84834d4Dccea071b363e53952BD300F7bf56a00')
+			expect(window.location.hash).toContain('#/pools/0x84834d4Dccea071b363e53952BD300F7bf56a00')
 
 			await act(() => fireEvent.input(input, { target: { value: '0x84834d4Dccea071b363e53952BD300F7bf56a009' } }))
 			expect(pushes).toBe(1)
@@ -430,11 +430,11 @@ describe('app route effects integration', () => {
 	})
 
 	test('refreshes the selected pool with its route address after pool creation succeeds', async () => {
-		const dom = installDomEnvironment('http://localhost/#/security-pools')
+		const dom = installDomEnvironment('http://localhost/#/pools')
 		const calls: Array<string | undefined> = []
 		const securityPoolAddress = '0x84834d4Dccea071b363e53952BD300F7bf56a009'
 		const props = createDefaultProps({
-			route: 'security-pools',
+			route: 'pools',
 			securityPoolAddress,
 			securityPoolResultHash: '0xabc',
 			loadSecurityPools: async nextSecurityPoolAddress => {
@@ -452,7 +452,7 @@ describe('app route effects integration', () => {
 	})
 
 	test('clears route-backed pool forms when the selected pool address is cleared', async () => {
-		const dom = installDomEnvironment('http://localhost/#/security-pools')
+		const dom = installDomEnvironment('http://localhost/#/pools')
 		const securityVaultUpdates: string[] = []
 		const selectedVaultUpdates: string[] = []
 		const tradingUpdates: string[] = []
@@ -462,7 +462,7 @@ describe('app route effects integration', () => {
 		const { cleanup } = await renderIntoDocument(
 			<RouteEffectsHarness
 				{...createDefaultProps({
-					route: 'security-pools',
+					route: 'pools',
 					securityPoolAddress: '',
 					setForkAuctionFormSecurityPoolAddress: value => {
 						forkUpdates.push(value)
@@ -494,11 +494,11 @@ describe('app route effects integration', () => {
 	})
 
 	test('resets the selected vault when the selected pool changes, but not on same-pool rerenders', async () => {
-		const dom = installDomEnvironment('http://localhost/#/security-pools')
+		const dom = installDomEnvironment('http://localhost/#/pools')
 		const selectedVaultUpdates: string[] = []
 		const initialProps = createDefaultProps({
 			accountAddress: '0x84834d4Dccea071b363e53952BD300F7bf56a009',
-			route: 'security-pools',
+			route: 'pools',
 			securityPoolAddress: '0x1111111111111111111111111111111111111111',
 			setSecurityVaultFormSelectedVaultOwner: value => {
 				selectedVaultUpdates.push(value)
