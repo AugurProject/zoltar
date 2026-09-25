@@ -35,7 +35,7 @@ test('returns a failed transaction to its action for a fresh submission', async 
 		const controller = createTransactionStepController()
 		controller.setPlan([{ title: 'Deposit REP', description: 'Deposit REP into the vault.', contractAddress: undefined, contractLabel: undefined, spender: undefined, amount: undefined, ethValueAttoEth: 0n }])
 		controller.startWithoutReview(0)
-		if (attempts === 1) controller.failed('nonce too low')
+		if (attempts === 1) controller.failed({ kind: 'error', message: 'nonce too low' })
 	}
 	const rendered = await renderIntoDocument(
 		<>
@@ -56,7 +56,7 @@ test('returns a failed transaction to its action for a fresh submission', async 
 		expect(document.activeElement).toBe(submit)
 		await act(() => fireEvent.click(submit))
 		expect(attempts).toBe(2)
-		expect(transactionSteps.value?.steps[0]?.phase).toBe('pending')
+		expect(transactionSteps.value?.steps[0]?.phase).toBe('wallet')
 	} finally {
 		transactionSteps.value?.cancel()
 		await rendered.cleanup()
@@ -294,7 +294,7 @@ for (const choice of ['custom', 'max'] as const) {
 		])
 		const review = controller.review()
 		const rendered = await renderIntoDocument(
-			<TransactionActionButtonLockProvider locked>
+			<TransactionActionButtonLockProvider lock={{ lockedScopes: [], promptOpen: true }}>
 				<TransactionStepsModal contextKey='approval' />
 			</TransactionActionButtonLockProvider>,
 		)
@@ -449,7 +449,7 @@ for (const phase of ['skipped', 'failed'] as const) {
 			const review = controller.review()
 			transactionSteps.value?.confirm()
 			await review
-			controller.failed('Approval rejected.')
+			controller.failed({ kind: 'rejected', message: 'Approval rejected.' })
 		}
 		const nextReview = phase === 'skipped' ? controller.review(1) : undefined
 		const rendered = await renderIntoDocument(<TransactionStepsModal contextKey={phase} />)
@@ -485,7 +485,7 @@ for (const result of ['pending', 'reverted'] as const) {
 		controller.submitted(hash)
 		if (result === 'reverted') {
 			controller.receipt(hash, 'reverted')
-			controller.failed('Transaction failed after using its full gas limit. Open the transaction details before retrying.')
+			controller.failed({ kind: 'reverted', message: 'Transaction failed after using its full gas limit. Open the transaction details before retrying.' })
 		}
 		const rendered = await renderIntoDocument(
 			<GlobalTransactionPresentationProvider transaction={result === 'reverted' ? { tone: 'error', title: 'Request failed', detail: 'Transaction reverted' } : undefined}>

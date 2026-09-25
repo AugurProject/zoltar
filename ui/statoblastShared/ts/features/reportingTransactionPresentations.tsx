@@ -1,4 +1,5 @@
 import { formatCurrencyInputBalance } from '@zoltar/ui-core-shared/lib/formatters.js'
+import { createTransactionScope, securityPoolTransactionScope } from '@zoltar/ui-core-shared/transactions/transactionScope.js'
 import * as reportingCopy from '../copy/reporting.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as transactionCopy from '@zoltar/ui-core-shared/copy/transaction.js'
@@ -64,6 +65,7 @@ export function createReportingTransactionIntent(actionName: ReportingActionResu
 	return buildIntent({
 		action: actionName,
 		rows: getReportingTransactionRows(context),
+		scope: securityPoolTransactionScope(context?.securityPoolAddress),
 		source: 'reporting',
 		submittedTitle,
 		universeId: context?.universeId,
@@ -119,6 +121,7 @@ export function createPoolOracleTransactionIntent(actionName: 'executeStagedOper
 	return buildIntent({
 		action: actionName,
 		rows: getPoolOracleTransactionRows(context),
+		scope: securityPoolTransactionScope(context?.securityPoolAddress),
 		failedTitle: actionName === 'requestPrice' ? transactionCopy.priceRequest : undefined,
 		source: 'pool-oracle',
 		submittedTitle,
@@ -184,6 +187,7 @@ export function createOpenOracleTransactionIntent(actionName: OpenOracleActionRe
 	return buildIntent({
 		action: actionName,
 		rows: getOpenOracleTransactionRows(context),
+		scope: createTransactionScope('open-oracle-report', context?.reportId),
 		source: 'open-oracle',
 		submittedTitle: getOpenOracleSubmittedTitle(actionName, context),
 	})

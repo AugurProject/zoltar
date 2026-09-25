@@ -1,5 +1,6 @@
 import type { Hash, ReplacementReason, TransactionReceipt } from '@zoltar/core-shared/evm/ethereum'
 import type { WriteClient } from '../wallet/chainBackend.js'
+import { createTransactionFailureError } from './transactionLifecycle.js'
 
 export type SubmittedTransactionClient<TReceipt extends Pick<TransactionReceipt, 'status'> = TransactionReceipt> = {
 	onTransactionSubmitted?: ((hash: Hash) => void) | undefined
@@ -34,8 +35,8 @@ export async function waitForSubmittedTransactionReceipt<TReceipt extends Pick<T
 		},
 	})
 	onKnownReceipt?.()
-	if (replacementReason === 'cancelled' || replacementReason === 'replaced') throw new Error(replacementFailureMessage(replacementReason))
-	if (!allowRevertedReceipt && receipt.status === 'reverted') throw new Error('Transaction reverted')
+	if (replacementReason === 'cancelled' || replacementReason === 'replaced') throw createTransactionFailureError('replaced', replacementFailureMessage(replacementReason))
+	if (!allowRevertedReceipt && receipt.status === 'reverted') throw createTransactionFailureError('reverted', 'Transaction reverted')
 	return {
 		hash: resolvedHash,
 		receipt,

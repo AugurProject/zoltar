@@ -93,9 +93,11 @@ export function useMarketDiscoveryController({
 	 * loaded balances directly: the balance effects revalidate them from the refreshed market objects and keep the
 	 * previous values visible until the new reads resolve.
 	 */
-	async function refresh(nextConfiguration = configuration, requestedStart = market.marketPage.start, owner: WorkflowOwner | undefined = undefined, options: Readonly<{ background?: boolean }> = {}) {
+	async function refresh(nextConfiguration = configuration, requestedStart = market.marketPage.start, owner: WorkflowOwner | undefined = undefined, options: Readonly<{ background?: boolean; navigation?: boolean }> = {}) {
 		if (nextConfiguration === undefined) return
 		const background = options.background === true
+		// A route change always shows its own data; a pending transaction keeps its captured context and stays in the activity list.
+		const commitAllowed = () => options.navigation === true || discoveryCommitAllowed(owner, transaction.positionWorkflowLockedRef.current, transaction.liquidityWorkflowLockedRef.current)
 		if (background && (market.discoveryState === 'loading' || (backgroundDiscovery.current !== undefined && discoveryRequests.isCurrent(backgroundDiscovery.current)))) return
 		const request = discoveryRequests.begin()
 		// The scope is fixed when the request begins; a request that lands after the URL or route moved on still answers only its own question.
@@ -120,7 +122,7 @@ export function useMarketDiscoveryController({
 		try {
 			const discovered = await withReadTimeout(discover(nextConfiguration, requestedStart, () => discoveryRequests.isCurrent(request)))
 			if (discovered === undefined || !discoveryRequests.isCurrent(request)) return
-			if (!discoveryCommitAllowed(owner, transaction.positionWorkflowLockedRef.current, transaction.liquidityWorkflowLockedRef.current)) {
+			if (!commitAllowed()) {
 				market.setDiscoveryState('ready')
 				return
 			}
@@ -140,7 +142,7 @@ export function useMarketDiscoveryController({
 			market.setDiscoveryState('ready')
 		} catch (error) {
 			if (!discoveryRequests.isCurrent(request)) return
-			if (!discoveryCommitAllowed(owner, transaction.positionWorkflowLockedRef.current, transaction.liquidityWorkflowLockedRef.current)) {
+			if (!commitAllowed()) {
 				market.setDiscoveryState('ready')
 				return
 			}
@@ -182,15 +184,17 @@ export function useMarketDiscoveryController({
 	}, [configuration, market.discoveryState, market.marketPage.start, selected, walletSummaryRetryNonce])
 
 	useEffect(() => {
-		if (transaction.positionWorkflowLockedRef.current) return
-		simulationRequests.invalidate()
-		transaction.setQuote(undefined)
-		transaction.dispatchWorkflow({ type: 'reset' })
+		// Navigation is never blocked; a running trade keeps its workflow state while the new route loads its own data.
+		if (!transaction.positionWorkflowLockedRef.current) {
+			simulationRequests.invalidate()
+			transaction.setQuote(undefined)
+			transaction.dispatchWorkflow({ type: 'reset' })
+		}
 		wallet.setWalletConnectionFeedback(current => (current?.route === route ? current : undefined))
 		if (previousRoute.current !== route) {
 			// Results only carry over between routes that discover the same thing, such as the trade and liquidity views of one pool.
 			if (discoveryScope(previousRoute.current) !== discoveryScope(route)) market.setMarkets([])
-			void refresh(configuration, 0n)
+			void refresh(configuration, 0n, undefined, { navigation: true })
 		}
 		previousRoute.current = route
 	}, [route])

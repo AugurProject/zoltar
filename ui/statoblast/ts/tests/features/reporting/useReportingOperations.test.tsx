@@ -827,7 +827,7 @@ describe('useReportingOperations', () => {
 
 		await waitFor(() => expect(loadReportingDetails).toHaveBeenCalledTimes(1))
 		expect(requireHookState(hookState).reportingFeedback?.status.tone).toBe('pending')
-		expect(transactionState.pendingIntent?.action).toBe('reportOutcome')
+		expect(transactionState.entries[0]?.intent.action).toBe('reportOutcome')
 
 		await act(async () => {
 			requireHookState(hookState).setReportingForm(current => ({
@@ -851,7 +851,7 @@ describe('useReportingOperations', () => {
 		expect(requireHookState(hookState).reportingFeedback).toBeUndefined()
 		expect(reportOutcomeInSecurityPool).not.toHaveBeenCalled()
 		expect(transactionState.active).toBeUndefined()
-		expect(transactionState.pendingIntent).toBeUndefined()
-		expect(transactionState.inFlightCount).toBe(0)
+		expect(transactionState.entries).toEqual([])
+		expect(transactionState.entries.length).toBe(0)
 	})
 })

@@ -2,7 +2,21 @@
 
 import { afterEach, describe, expect, test } from 'bun:test'
 import { installActiveEnvironmentForTesting, resetActiveEnvironmentForTesting } from '../lib/activeEnvironment.js'
-import { createInitialTransactionTrayState, isTransactionActionLocked, markTransactionCanceled, markTransactionFailed, markTransactionFinished, markTransactionPrepared, markTransactionPresented, markTransactionRequested, markTransactionSubmitted } from '../transactions/transactionTray.js'
+import {
+	canRequestTransaction,
+	createInitialTransactionTrayState,
+	getInFlightTransactionCount,
+	isTransactionActionLocked,
+	isTransactionPromptOpen,
+	markTransactionCanceled,
+	markTransactionFailed,
+	markTransactionFinished,
+	markTransactionPrepared,
+	markTransactionPresented,
+	markTransactionRequested,
+	markTransactionSubmitted,
+} from '../transactions/transactionTray.js'
+import { securityPoolTransactionScope } from '../transactions/transactionScope.js'
 import { createFakeBackend, createFakeSimulationProfile } from './testUtils/fakeBackend.js'
 
 const transactionHash = '0x1234000000000000000000000000000000000000000000000000000000000000'
@@ -29,49 +43,74 @@ describe('transactionTray', () => {
 		})
 		const finished = markTransactionFinished(presented)
 
-		expect(requested.inFlightCount).toBe(1)
+		expect(getInFlightTransactionCount(requested)).toBe(1)
+		expect(requested.entries[0]?.lifecycle).toEqual({ phase: 'review' })
 		expect(requested.active?.tone).toBe('awaiting-wallet')
 		expect(requested.active?.title).toBe('Creating Question')
 		expect(requested.active?.hash).toBeUndefined()
 		expect(requested.active?.operationKey).toBe('transaction-request-1')
-		expect(requested.pendingIntent?.submittedTitle).toBe('Creating Question')
+		expect(requested.entries[0]?.intent.submittedTitle).toBe('Creating Question')
 		expect(submitted.active?.tone).toBe('pending')
 		expect(submitted.active?.hash).toBe(transactionHash)
 		expect(submitted.active?.operationKey).toBe(requested.active?.operationKey)
 		expect(submitted.active?.title).toBe('Creating Question')
-		expect(submitted.pendingIntent?.submittedTitle).toBe('Creating Question')
+		expect(submitted.entries[0]?.lifecycle).toEqual({ phase: 'pending', hash: transactionHash })
 		expect(presented.active?.tone).toBe('success')
 		expect(presented.active?.operationKey).toBe(requested.active?.operationKey)
 		expect(presented.active?.title).toBe('Question Created')
-		expect(finished.inFlightCount).toBe(0)
-		expect(finished.pendingIntent).toBeUndefined()
+		expect(getInFlightTransactionCount(finished)).toBe(0)
 	})
 
-	test('keeps transaction actions locked until the current transaction finishes', () => {
-		const requested = markTransactionRequested(createInitialTransactionTrayState(), {
-			action: 'createMarket',
-			source: 'zoltar',
-			submittedDetail: 'Question creation transaction submitted.',
-			submittedTitle: 'Creating Question',
-		})
+	test('locks every action while the prompt is open and only overlapping scopes once the transaction is pending', () => {
+		const poolA = securityPoolTransactionScope('0x00000000000000000000000000000000000000AA')
+		const poolB = securityPoolTransactionScope('0x00000000000000000000000000000000000000bb')
+		const intent = { action: 'depositRepToVault', scope: poolA, source: 'security-vault', submittedTitle: 'Depositing REP' }
+		const requested = markTransactionRequested(createInitialTransactionTrayState(), intent)
 		const submitted = markTransactionSubmitted(requested, transactionHash)
 		const finished = markTransactionFinished(submitted)
 
+		expect(isTransactionPromptOpen(requested)).toBe(true)
+		expect(isTransactionActionLocked(requested, poolB)).toBe(true)
 		expect(isTransactionActionLocked(requested)).toBe(true)
-		expect(requested.inFlightCount).toBe(1)
-		expect(requested.pendingIntent).toBeDefined()
-		expect(isTransactionActionLocked(submitted)).toBe(true)
-		expect(submitted.inFlightCount).toBe(1)
-		expect(submitted.pendingIntent).toBeDefined()
-		expect(isTransactionActionLocked(finished)).toBe(false)
-		expect(finished.inFlightCount).toBe(0)
-		expect(finished.pendingIntent).toBeUndefined()
+		expect(canRequestTransaction(requested, { ...intent, scope: poolB })).toBe(false)
+		expect(isTransactionPromptOpen(submitted)).toBe(false)
+		expect(isTransactionActionLocked(submitted, poolA)).toBe(true)
+		expect(isTransactionActionLocked(submitted, poolB)).toBe(false)
+		expect(isTransactionActionLocked(submitted)).toBe(false)
+		expect(canRequestTransaction(submitted, intent)).toBe(false)
+		expect(canRequestTransaction(submitted, { ...intent, scope: poolB })).toBe(true)
+		expect(isTransactionActionLocked(finished, poolA)).toBe(false)
+		expect(getInFlightTransactionCount(finished)).toBe(0)
 	})
 
-	test('does not underflow the in-flight count', () => {
-		const finished = markTransactionFinished(createInitialTransactionTrayState())
+	test('routes outcomes to their own request while another transaction is pending', () => {
+		const otherHash = '0x9999000000000000000000000000000000000000000000000000000000000000'
+		const first = markTransactionSubmitted(markTransactionRequested(createInitialTransactionTrayState(), { action: 'depositRepToVault', scope: securityPoolTransactionScope('0x01'), source: 'security-vault', submittedTitle: 'Depositing REP' }), transactionHash)
+		const second = markTransactionRequested(first, { action: 'createSecurityPool', source: 'security-pools', submittedTitle: 'Creating Security Pool', failedTitle: 'Security pool creation' })
+		const secondKey = second.entries[1]?.key
+		expect(secondKey).toBe('transaction-request-2')
+		const secondSubmitted = markTransactionSubmitted(second, otherHash)
+		const recovered = markTransactionSubmitted(secondSubmitted, transactionHash, 'uncertain')
+		const secondFailed = markTransactionFailed(recovered, { kind: 'reverted', message: 'Transaction reverted' }, secondKey)
+		const secondFinished = markTransactionFinished(secondFailed, secondKey)
 
-		expect(finished.inFlightCount).toBe(0)
+		expect(secondSubmitted.entries.map(entry => entry.lifecycle)).toEqual([
+			{ phase: 'pending', hash: transactionHash },
+			{ phase: 'pending', hash: otherHash },
+		])
+		expect(recovered.entries[1]?.lifecycle).toEqual({ phase: 'pending', hash: otherHash })
+		expect(secondFailed.entries[1]?.lifecycle).toEqual({ phase: 'failed', failure: { kind: 'reverted', message: 'Transaction reverted' }, hash: otherHash })
+		expect(secondFailed.active?.title).toBe('Security pool creation')
+		expect(secondFinished.entries.map(entry => entry.key)).toEqual(['transaction-request-1'])
+	})
+
+	test('ignores outcomes for an unknown request key', () => {
+		const finished = markTransactionFinished(createInitialTransactionTrayState())
+		const requested = markTransactionRequested(finished, { action: 'createMarket', source: 'zoltar', submittedTitle: 'Creating Question' })
+
+		expect(getInFlightTransactionCount(finished)).toBe(0)
+		expect(markTransactionFinished(requested, 'transaction-request-9')).toBe(requested)
+		expect(markTransactionFailed(requested, { kind: 'error', message: 'x' }, 'transaction-request-9')).toBe(requested)
 	})
 
 	test('keeps an uncertain receipt locked and restores its normal detail when tracking recovers', () => {
@@ -83,14 +122,14 @@ describe('transactionTray', () => {
 		})
 		const submitted = markTransactionSubmitted(requested, transactionHash)
 		const uncertain = markTransactionSubmitted(submitted, transactionHash, 'uncertain')
-		expect(isTransactionActionLocked(uncertain)).toBe(true)
+		expect(getInFlightTransactionCount(uncertain)).toBe(1)
 		expect(uncertain.active?.hash).toBe(transactionHash)
 		expect(uncertain.active?.tone).toBe('pending')
 		expect(uncertain.active?.detail).toBe('Confirmation unavailable. Checking automatically; do not resubmit.')
 		expect(uncertain.active?.operationKey).toBe(submitted.active?.operationKey)
 		const recovered = markTransactionSubmitted(uncertain, transactionHash, 'pending')
 		expect(recovered.active?.detail).toBe('Question creation transaction submitted.')
-		expect(isTransactionActionLocked(recovered)).toBe(true)
+		expect(getInFlightTransactionCount(recovered)).toBe(1)
 	})
 
 	test('ignores submitted hashes when no pending intent exists', () => {
@@ -180,7 +219,7 @@ describe('transactionTray', () => {
 			value: 5n,
 		})
 		const requestSubmitted = markTransactionSubmitted(requestPrepared, requestHash)
-		const requestFailed = markTransactionFailed(requestSubmitted, 'Transaction reverted')
+		const requestFailed = markTransactionFailed(requestSubmitted, { kind: 'reverted', message: 'Transaction reverted' })
 		const requestSucceeded = markTransactionPresented(requestSubmitted, {
 			dismissKey: requestHash,
 			hash: requestHash,
@@ -202,8 +241,8 @@ describe('transactionTray', () => {
 		expect(requestSubmitted.active?.hash).toBe(requestHash)
 		expect(requestFailed.active?.hash).toBe(requestHash)
 		expect(requestSucceeded.active?.hash).toBe(requestHash)
-		expect(finished.pendingIntent).toBeUndefined()
-		expect(finished.pendingRequestKey).toBeUndefined()
+		expect(requestPrepared.entries[0]?.lifecycle).toEqual({ phase: 'wallet' })
+		expect(getInFlightTransactionCount(finished)).toBe(0)
 	})
 
 	test('formats self-referential arrays and mixed object-array cycles safely', () => {
@@ -269,7 +308,7 @@ describe('transactionTray', () => {
 
 		expect(requested.active?.tone).toBe('preparing')
 		expect(requested.active?.detail).toBe('Submitting in browser simulation. No wallet confirmation is required.')
-		expect(requested.pendingIntent?.requiresWalletConfirmation).toBe(false)
+		expect(requested.entries[0]?.intent.requiresWalletConfirmation).toBe(false)
 	})
 
 	test('applies active simulation defaults to undecorated requested transactions', () => {
@@ -284,7 +323,7 @@ describe('transactionTray', () => {
 
 		expect(requested.active?.tone).toBe('preparing')
 		expect(requested.active?.detail).toBe('Submitting in browser simulation. No wallet confirmation is required.')
-		expect(requested.pendingIntent?.requiresWalletConfirmation).toBe(false)
+		expect(requested.entries[0]?.intent.requiresWalletConfirmation).toBe(false)
 	})
 
 	test('uses the defaulted pending intent when prepared previews omit wallet confirmation requirements', () => {
@@ -319,14 +358,14 @@ describe('transactionTray', () => {
 			submittedTitle: 'Creating Question',
 			failedTitle: 'Question creation',
 		})
-		const failed = markTransactionFailed(requested, 'Action canceled in wallet.')
+		const failed = markTransactionFailed(requested, { kind: 'rejected', message: 'Action canceled in wallet.' })
 
 		expect(failed.active?.tone).toBe('error')
 		expect(failed.active?.title).toBe('Question creation')
 		expect(failed.active?.detail).toBe('Action canceled in wallet.')
 		expect(failed.active?.hash).toBeUndefined()
 		expect(failed.active?.dismissKey).toBe('transaction-request-1')
-		expect(failed.pendingIntent).toBeUndefined()
+		expect(failed.entries[0]?.lifecycle).toEqual({ phase: 'failed', failure: { kind: 'rejected', message: 'Action canceled in wallet.' }, hash: undefined })
 	})
 
 	test('clears requested transaction state when a write is canceled before submission', () => {
@@ -337,15 +376,12 @@ describe('transactionTray', () => {
 			submittedTitle: 'Creating Question',
 		})
 		const canceled = markTransactionCanceled(requested)
-		const finished = markTransactionFinished(canceled)
+		const finished = markTransactionFinished(canceled, 'transaction-request-1')
 
 		expect(canceled.active).toBeUndefined()
-		expect(canceled.pendingIntent).toBeUndefined()
-		expect(canceled.pendingRequestKey).toBeUndefined()
-		expect(canceled.inFlightCount).toBe(1)
-		expect(isTransactionActionLocked(canceled)).toBe(true)
-		expect(finished.inFlightCount).toBe(0)
-		expect(isTransactionActionLocked(finished)).toBe(false)
+		expect(getInFlightTransactionCount(canceled)).toBe(0)
+		expect(isTransactionActionLocked(canceled)).toBe(false)
+		expect(finished).toBe(canceled)
 	})
 
 	test('turns a submitted pending transaction into a failed transaction while preserving the hash', () => {
@@ -357,7 +393,7 @@ describe('transactionTray', () => {
 			failedTitle: 'Question creation',
 		})
 		const submitted = markTransactionSubmitted(requested, transactionHash)
-		const failed = markTransactionFailed(submitted, 'Transaction reverted')
+		const failed = markTransactionFailed(submitted, { kind: 'reverted', message: 'Transaction reverted' })
 
 		expect(failed.active?.tone).toBe('error')
 		expect(failed.active?.title).toBe('Question creation')

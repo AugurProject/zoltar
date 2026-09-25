@@ -482,7 +482,7 @@ describe('contract deployment internals', () => {
 
 			expect(transactionState.active?.tone).toBe('preparing')
 			expect(transactionState.active?.detail).toBe('Review the prepared transaction before it is submitted.')
-			expect(transactionState.pendingIntent?.requiresWalletConfirmation).toBe(false)
+			expect(transactionState.entries[0]?.intent.requiresWalletConfirmation).toBe(false)
 		} finally {
 			resetEnvironment()
 		}

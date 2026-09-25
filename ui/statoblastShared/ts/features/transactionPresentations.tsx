@@ -8,6 +8,7 @@ import { formatCurrencyBalanceWithUnit, formatValueWithUnit } from '@zoltar/ui-c
 import { getReportingOutcomeLabel } from './reporting/lib/reporting.js'
 import { buildIntent, buildPresentation, getPoolUniverseTransactionRows, humanizeTransactionAction, withWarning } from '@zoltar/ui-core-shared/transactions/transactionPresentations.js'
 import type { PoolUniverseTransactionContext } from '@zoltar/ui-core-shared/transactions/transactionPresentations.js'
+import { securityPoolTransactionScope } from '@zoltar/ui-core-shared/transactions/transactionScope.js'
 import type { TransactionIntent } from '@zoltar/ui-core-shared/types/components.js'
 import type { ForkAuctionActionResult, ReportingActionResult, SecurityPoolCreationResult, SecurityPoolOverviewActionResult, SecurityVaultActionResult, TradingActionResult } from '@zoltar/ui-core-shared/types/contracts.js'
 import { AUCTIONED_CAPACITY_OWNERSHIP_ATTO_REP_LABEL } from './truth-auctions/lib/forkAuction.js'
@@ -90,6 +91,7 @@ export function createSecurityVaultTransactionIntent(actionName: SecurityVaultAc
 	return buildIntent({
 		action: actionName,
 		rows: getSecurityVaultTransactionRows(context),
+		scope: securityPoolTransactionScope(context?.securityPoolAddress),
 		source: 'security-vault',
 		submittedTitle: getSecurityVaultActionTitle(actionName, context?.repTokenSymbol),
 		universeId: context?.universeId,
@@ -127,6 +129,7 @@ export function createTradingTransactionIntent(actionName: TradingActionResult['
 	return buildIntent({
 		action: actionName,
 		rows: getTradingTransactionRows(context),
+		scope: securityPoolTransactionScope(context?.securityPoolAddress),
 		source: 'trading',
 		submittedTitle: humanizeTransactionAction(actionName),
 		universeId: context?.universeId,
@@ -175,6 +178,7 @@ export function createLiquidationTransactionIntent(context?: LiquidationTransact
 	return buildIntent({
 		action: 'queueLiquidation',
 		rows: getLiquidationTransactionRows(context),
+		scope: securityPoolTransactionScope(context?.securityPoolAddress),
 		source: 'security-pools',
 		submittedTitle: transactionCopy.submittingLiquidation,
 		universeId: context?.universeId,
@@ -224,6 +228,7 @@ export function createForkAuctionTransactionIntent(actionName: ForkAuctionAction
 	return buildIntent({
 		action: actionName,
 		rows: getPoolUniverseTransactionRows(context),
+		scope: securityPoolTransactionScope(context?.securityPoolAddress),
 		source: 'fork-auction',
 		submittedTitle: resolvedSubmittedTitle,
 		universeId: context?.universeId,

@@ -1,5 +1,6 @@
 import type { ComponentChildren } from 'preact'
 import type { Hash } from '@zoltar/core-shared/evm/ethereum'
+import type { TransactionScope } from '../transactions/transactionScope.js'
 
 export type ActionAvailability = {
 	disabled: boolean
@@ -36,6 +37,8 @@ export type TransactionIntent = {
 	failedTitle?: ComponentChildren
 	requiresWalletConfirmation?: boolean | undefined
 	rows?: GlobalTransactionRow[]
+	/** Objects the transaction touches; only actions on these objects wait for it. */
+	scope?: TransactionScope | undefined
 	technicalRows?: GlobalTransactionRow[]
 	source: string
 	submittedDetail?: ComponentChildren
@@ -213,6 +216,8 @@ export type TransactionActionButtonProps = {
 	onClick: () => void
 	pending?: boolean
 	pendingLabel: ComponentChildren
+	/** Objects this action touches; defaults to the nearest `TransactionScopeProvider`. */
+	scope?: TransactionScope | undefined
 	showDisabledReason?: boolean
 	tone?: 'primary' | 'secondary'
 	type?: 'button' | 'submit'
@@ -221,8 +226,11 @@ export type TransactionActionButtonProps = {
 export type OperationModalProps = {
 	/** The form already presents the full review and its submit is the final confirmation. */
 	confirmSingleStepFromForm?: boolean
+	/** False when the dialog renders the review of its own workflow itself. */
 	embedTransactionSteps?: boolean
-	children: ComponentChildren
+	/** Hosts the review of a transaction started outside any dialog instead of reviews started inside this one. */
+	hostsExternalReview?: boolean
+	children?: ComponentChildren
 	closeDisabled?: boolean
 	closeOnSuccessKey?: string | undefined
 	getReturnFocusTarget?: (() => HTMLElement | null) | undefined

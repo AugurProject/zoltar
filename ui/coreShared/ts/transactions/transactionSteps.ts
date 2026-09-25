@@ -3,6 +3,7 @@ import * as commonCopy from '../copy/common.js'
 import * as transactionCopy from '../copy/transaction.js'
 import { transactionErrorMessages } from '../lib/errors.js'
 import type { TransactionPlanStep } from '../wallet/chainBackend.js'
+import { transitionTransactionLifecycle, type TransactionFailure, type TransactionLifecycle, type TransactionLifecycleEvent, type TransactionPhase } from './transactionLifecycle.js'
 import { signal } from '@preact/signals'
 import { formatUnits, maxUint256, type Address, type Hash } from '@zoltar/core-shared/evm/ethereum'
 
@@ -23,11 +24,46 @@ export type TransactionStepDetails = {
 	ethValueAttoEth: bigint | undefined
 }
 
+/** A step waits (`upcoming`), is skipped, or runs through the transaction lifecycle phases. */
+type TransactionStepPhase = 'skipped' | 'upcoming' | TransactionPhase
+
 type TransactionStep = TransactionStepDetails & {
-	phase: 'skipped' | 'upcoming' | 'review' | 'pending' | 'confirmed' | 'failed'
+	phase: TransactionStepPhase
 	hash?: Hash
-	error?: string
+	failure?: TransactionFailure
 	approvalAmount?: bigint | undefined
+}
+
+/** The wallet prompt is open or the broadcast transaction is waiting for its receipt. */
+export function isTransactionStepInFlight(step: Pick<TransactionStep, 'phase'>) {
+	return step.phase === 'wallet' || step.phase === 'pending'
+}
+
+function getStepLifecycle(step: TransactionStep): TransactionLifecycle | undefined {
+	if (step.phase === 'review' || step.phase === 'wallet') return { phase: step.phase }
+	if (step.phase === 'pending' || step.phase === 'confirmed') return step.hash === undefined ? { phase: 'wallet' } : { phase: step.phase, hash: step.hash }
+	if (step.phase === 'failed') return { phase: 'failed', failure: step.failure ?? { kind: 'error', message: transactionErrorMessages.confirmationUnavailable }, hash: step.hash }
+	return undefined
+}
+
+/** Moves a step through the shared lifecycle; a step that never started can still fail before its review. */
+function transitionStep(step: TransactionStep, event: TransactionLifecycleEvent) {
+	const lifecycle = getStepLifecycle(step)
+	// A confirmed step stays confirmed; a failure found afterwards (such as an approval below the requirement) stops the workflow.
+	if (lifecycle?.phase === 'confirmed' && event.type === 'failed') {
+		step.failure = event.failure
+		return
+	}
+	let next: TransactionLifecycle | undefined
+	if (lifecycle !== undefined) next = transitionTransactionLifecycle(lifecycle, event)
+	else if (event.type === 'failed') next = { phase: 'failed', failure: event.failure }
+	if (next === undefined || next === lifecycle) return
+	step.phase = next.phase
+	if (next.phase === 'pending' || next.phase === 'confirmed') step.hash = next.hash
+	if (next.phase === 'failed') {
+		step.failure = next.failure
+		if (next.hash !== undefined) step.hash = next.hash
+	}
 }
 
 type TransactionSteps = {
@@ -47,7 +83,7 @@ export const transactionStepOutcome = signal<{ hash: Hash; title: string; tone: 
 export function cancelTransactionReview(reviewSignal: AbortSignal) {
 	const current = transactionSteps.peek()
 	const owned = current?.reviewSignal === reviewSignal ? current : undefined
-	const trackingSubmitted = owned?.steps.some(step => step.phase === 'pending' || step.hash !== undefined) ?? false
+	const trackingSubmitted = owned?.steps.some(step => isTransactionStepInFlight(step) || step.hash !== undefined) ?? false
 	owned?.cancel()
 	return { trackingSubmitted, steps: owned?.steps }
 }
@@ -99,7 +135,7 @@ export function createTransactionStepController(signal = getTransactionReviewSig
 		assertActive()
 		const current = transactionSteps.peek()
 		if (current !== undefined && current.cancel !== cancel) {
-			if (current.steps.some(step => step.phase === 'review' || step.phase === 'pending')) throw new Error('Finish or cancel the current transaction first.')
+			if (current.steps.some(step => step.phase === 'review' || isTransactionStepInFlight(step))) throw new Error('Finish or cancel the current transaction first.')
 			current.cancel()
 		}
 	}
@@ -120,10 +156,10 @@ export function createTransactionStepController(signal = getTransactionReviewSig
 				if (selected || canceled || !indices.includes(index) || step?.phase !== 'review') return
 				selected = true
 				activeIndex = index
-				for (const other of steps) if (other.phase === 'review') other.phase = 'upcoming'
+				for (const other of steps) if (other !== step && other.phase === 'review') other.phase = 'upcoming'
 				if (amount !== undefined && step.approval !== undefined) step.amount = `${amount === maxUint256 ? commonCopy.max : formatUnits(amount, step.approval.tokenUnits)} ${step.approval.tokenSymbol}`
 				step.approvalAmount = amount ?? step.approval?.requiredAmount
-				step.phase = 'pending'
+				transitionStep(step, { type: 'review-confirmed' })
 				rejectReview = undefined
 				publish()
 				resolve({ index, amount })
@@ -141,7 +177,7 @@ export function createTransactionStepController(signal = getTransactionReviewSig
 			const step = steps[index]
 			if (steps.length !== 1 || index !== 0 || step?.phase !== 'upcoming' || step.approval !== undefined || (step.tokenFunding?.length ?? 0) > 0) throw new Error('Only a single transaction without approvals can skip app review.')
 			activeIndex = index
-			step.phase = 'pending'
+			step.phase = 'wallet'
 			publish()
 			return undefined
 		},
@@ -168,24 +204,22 @@ export function createTransactionStepController(signal = getTransactionReviewSig
 		submitted(hash: Hash) {
 			const step = steps[activeIndex]
 			if (step === undefined) return
-			step.hash = hash
+			transitionStep(step, { type: 'submitted', hash })
 			if (!canceled) publish()
 		},
-		receipt(hash: Hash, status: string) {
+		receipt(hash: Hash, status: 'success' | 'reverted') {
 			const step = steps.find(candidate => candidate.hash === hash)
 			if (step === undefined) return
-			step.phase = status === 'success' ? 'confirmed' : 'failed'
+			transitionStep(step, { type: 'receipt', hash, status })
 			if (status !== 'success') transactionStepOutcome.value = { hash, title: step.title, tone: 'error', detail: transactionCopy.revertedCheckingDetails }
 			else if (steps.at(-1) !== step) transactionStepOutcome.value = { hash, title: transactionCopy.completedAction(step.title), tone: 'success' }
 			if (status === 'success' && step.approval !== undefined && step.approvalAmount !== undefined) step.approval = { ...step.approval, approvedAmount: step.approvalAmount }
-			if (status !== 'success') step.error = 'Transaction reverted.'
 			if (!canceled) publish()
 		},
-		failed(message: string) {
+		failed(failure: TransactionFailure) {
 			const step = steps[activeIndex]
 			if (step === undefined) return
-			if (step.phase !== 'confirmed') step.phase = 'failed'
-			step.error = message
+			transitionStep(step, { type: 'failed', failure })
 			if (!canceled) publish()
 		},
 	}

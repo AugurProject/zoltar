@@ -217,7 +217,7 @@ function ExistingTransactionLifecycleOperationModalHarness() {
 				<button type='button' onClick={() => setTransactionState(state => markTransactionSubmitted(state, existingTransactionHash))}>
 					Submit existing transaction
 				</button>
-				<button type='button' onClick={() => setTransactionState(state => markTransactionFailed(state, 'The existing transaction failed.'))}>
+				<button type='button' onClick={() => setTransactionState(state => markTransactionFailed(state, { kind: 'error', message: 'The existing transaction failed.' }))}>
 					Fail existing transaction
 				</button>
 				<button
@@ -241,7 +241,7 @@ function ExistingTransactionLifecycleOperationModalHarness() {
 				<button type='button' onClick={() => setTransactionState(state => markTransactionSubmitted(state, newTransactionHash))}>
 					Submit new transaction
 				</button>
-				<button type='button' onClick={() => setTransactionState(state => markTransactionFailed(state, 'The new transaction failed.'))}>
+				<button type='button' onClick={() => setTransactionState(state => markTransactionFailed(state, { kind: 'error', message: 'The new transaction failed.' }))}>
 					Fail new transaction
 				</button>
 				<button

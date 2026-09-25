@@ -224,7 +224,7 @@ describe('useTradingOperations', () => {
 			await requireHookState(hookState).createCompleteSet()
 		})
 
-		expect(onTransactionFailed).toHaveBeenCalledWith('Minting is unavailable because this pool has complete-set shares but no collateral')
+		expect(onTransactionFailed).toHaveBeenCalledWith('Minting is unavailable because this pool has complete-set shares but no collateral', expect.objectContaining({ kind: 'error' }))
 		expect(createCompleteSetInSecurityPool).not.toHaveBeenCalled()
 	})
 
@@ -272,7 +272,7 @@ describe('useTradingOperations', () => {
 			await requireHookState(hookState).createCompleteSet()
 		})
 
-		expect(onTransactionFailed).toHaveBeenCalledWith('No mint capacity. No active capacity ownership')
+		expect(onTransactionFailed).toHaveBeenCalledWith('No mint capacity. No active capacity ownership', expect.objectContaining({ kind: 'error' }))
 		expect(createCompleteSetInSecurityPool).not.toHaveBeenCalled()
 	})
 
@@ -613,7 +613,7 @@ describe('useTradingOperations', () => {
 
 		await waitFor(() => expect(loadTradingDetails).toHaveBeenCalled())
 		expect(requireHookState(hookState).tradingFeedback?.status.tone).toBe('pending')
-		expect(transactionState.pendingIntent?.action).toBe('createCompleteSet')
+		expect(transactionState.entries[0]?.intent.action).toBe('createCompleteSet')
 
 		await act(async () => {
 			setSelectedSecurityPoolAddress?.(poolB)
@@ -639,8 +639,8 @@ describe('useTradingOperations', () => {
 		expect(createCompleteSetInSecurityPool).not.toHaveBeenCalled()
 		expect(onTransactionFailed).not.toHaveBeenCalled()
 		expect(transactionState.active).toBeUndefined()
-		expect(transactionState.pendingIntent).toBeUndefined()
-		expect(transactionState.inFlightCount).toBe(0)
+		expect(transactionState.entries).toEqual([])
+		expect(transactionState.entries.length).toBe(0)
 	})
 
 	test('does not request a mint transaction when the active wallet account changed', async () => {

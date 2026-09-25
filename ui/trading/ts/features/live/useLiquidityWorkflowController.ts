@@ -1,4 +1,6 @@
 import { withReadTimeout } from '@zoltar/ui-core-shared/lib/promise.js'
+import * as workflowCopy from '../../copy/workflows.js'
+import { createMarketTransactionActivity } from './marketTransactionActivity.js'
 import type { Address, Hash, WalletClient } from '@zoltar/core-shared/evm/ethereum'
 import { createExclusiveWorkflowGuard, createLatestRequestGuard } from '@zoltar/ui-core-shared/lib/requestGuard.js'
 import { waitForSubmittedTransactionReceipt } from '@zoltar/ui-core-shared/transactions/transactionReceipt.js'
@@ -153,6 +155,7 @@ export function useLiquidityWorkflowController({
 		onWorkflowLockChange(true)
 		dispatchWorkflow({ type: 'operation-preparing', context, operation: 'liquidity' })
 		let broadcastHash: Hash | undefined
+		const activity = createMarketTransactionActivity(market.pool, workflowCopy.formatLiquidityActivity(market.title))
 		let receiptKnown = false
 		let keepLocked = false
 		let signatureRequested = false
@@ -187,7 +190,11 @@ export function useLiquidityWorkflowController({
 						return await write()
 					}),
 			)
-			if (!mounted.current) return
+			activity.broadcast(broadcastHash)
+			if (!mounted.current) {
+				activity.handOff()
+				return
+			}
 			if (!signatureRequested) dispatchWorkflow({ type: 'signature-requested', context, operation: 'liquidity' })
 			dispatchWorkflow({ type: 'broadcast', context, operation: 'liquidity', transactionHash: broadcastHash })
 			const { receipt } = await waitForSubmittedTransactionReceipt(walletClient, broadcastHash, {
@@ -198,9 +205,11 @@ export function useLiquidityWorkflowController({
 				},
 				onTransactionReplaced: replacementHash => {
 					broadcastHash = replacementHash
+					activity.replaced(replacementHash)
 					if (mounted.current) dispatchWorkflow({ type: 'replaced', context, replacementHash })
 				},
 			})
+			activity.receipt(receipt.status)
 			if (!mounted.current) return
 			if (receipt.status === 'reverted') {
 				dispatchWorkflow({ type: 'reverted', context })
@@ -210,6 +219,7 @@ export function useLiquidityWorkflowController({
 			dispatchWorkflow({ type: 'confirmed', context })
 			await refresh()
 		} catch (caught) {
+			if (broadcastHash !== undefined && !receiptKnown) activity.handOff()
 			if (!mounted.current) return
 			if (broadcastHash !== undefined && !receiptKnown) {
 				keepLocked = true

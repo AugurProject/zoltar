@@ -77,7 +77,7 @@ test('a wallet-only pool action starts the wallet request without a page confirm
 	const sending = reviewed.sendTransaction({ to: account, data: '0x1234', value: 1n })
 	await new Promise(resolve => setTimeout(resolve, 10))
 	try {
-		expect(transactionSteps.value?.steps[0]?.phase).toBe('pending')
+		expect(transactionSteps.value?.steps[0]?.phase).toBe('wallet')
 		expect(sendTransaction).toHaveBeenCalledTimes(1)
 	} finally {
 		walletRequest.resolve(hash)
@@ -262,7 +262,7 @@ test('duplicate clicks cannot resubmit a pending wallet request', async () => {
 	confirmStep?.()
 	await new Promise(resolve => setTimeout(resolve, 1))
 	expect(sendTransaction).toHaveBeenCalledTimes(1)
-	expect(transactionSteps.value?.steps.at(-1)?.phase).toBe('pending')
+	expect(transactionSteps.value?.steps.at(-1)?.phase).toBe('wallet')
 	submitted.resolve(hash)
 	await sending
 })
@@ -344,7 +344,7 @@ for (const method of ['sendTransaction', 'writeContract'] as const)
 			if (chosen < 3n) {
 				await expect(reviewed.waitForTransactionReceipt({ hash })).rejects.toThrow('below the report requirement')
 				expect(transactionSteps.value?.steps[0]?.phase).toBe('confirmed')
-				expect(transactionSteps.value?.steps[0]?.error).toContain('below the report requirement')
+				expect(transactionSteps.value?.steps[0]?.failure?.message).toContain('below the report requirement')
 				expect(transactionSteps.value?.steps[1]?.phase).toBe('upcoming')
 			}
 		})
@@ -408,7 +408,7 @@ for (const missing of ['balanceOf', 'allowance'] as const)
 		confirm()
 		expect(await sending).toBeInstanceOf(Error)
 		expect(sendTransaction).not.toHaveBeenCalled()
-		expect(transactionSteps.value?.steps[0]?.error).toContain('Funding requirements changed')
+		expect(transactionSteps.value?.steps[0]?.failure?.message).toContain('Funding requirements changed')
 	})
 
 for (const change of ['minimum', 'fee', 'lower-minimum', 'sufficient-allowance'] as const)
@@ -561,7 +561,7 @@ for (const outcome of ['success', 'reverted'] as const) {
 		if (outcome === 'reverted') {
 			expect(value).toBeInstanceOf(Error)
 			expect(sendTransaction).not.toHaveBeenCalled()
-			expect(transactionSteps.value?.steps[0]?.error).toContain('already pending')
+			expect(transactionSteps.value?.steps[0]?.failure?.message).toContain('already pending')
 		} else {
 			expect(value).toBe(hash)
 			expect(sendTransaction).toHaveBeenCalledWith({ to: account, data: '0x1234', value: 2n })
@@ -578,7 +578,7 @@ test('a reverted final transaction does not claim there are remaining steps', as
 	await review
 	controller.submitted(hash)
 	controller.receipt(hash, 'reverted')
-	expect(transactionSteps.value?.steps[0]?.error).toBe('Transaction reverted.')
+	expect(transactionSteps.value?.steps[0]?.failure?.message).toBe('Transaction reverted.')
 })
 
 for (const diagnostic of ['out-of-gas', 'unavailable'] as const) {
@@ -600,7 +600,7 @@ for (const diagnostic of ['out-of-gas', 'unavailable'] as const) {
 		if (diagnostic === 'out-of-gas') await expect(reviewed.waitForTransactionReceipt({ hash })).rejects.toThrow('full gas limit')
 		else await reviewed.waitForTransactionReceipt({ hash })
 		expect(transactionSteps.value?.steps[0]?.hash).toBe(hash)
-		expect(transactionSteps.value?.steps[0]?.error).toBe(diagnostic === 'out-of-gas' ? 'Transaction failed after using its full gas limit. Open the transaction details before retrying.' : 'Transaction reverted.')
+		expect(transactionSteps.value?.steps[0]?.failure?.message).toBe(diagnostic === 'out-of-gas' ? 'Transaction failed after using its full gas limit. Open the transaction details before retrying.' : 'Transaction reverted.')
 	})
 }
 
@@ -725,7 +725,7 @@ for (const phase of ['before-send', 'validation', 'metadata', 'funding', 'after-
 					},
 					onTransactionFailed: message => {
 						failed()
-						tray = markTransactionFailed(tray, message)
+						tray = markTransactionFailed(tray, { kind: 'error', message })
 					},
 					onWriteCanceled: canceled,
 					setErrorMessage: inlineError,
@@ -760,8 +760,8 @@ for (const phase of ['before-send', 'validation', 'metadata', 'funding', 'after-
 			expect(sendTransaction).not.toHaveBeenCalled()
 			expect(transactionSteps.value).toBeUndefined()
 			expect(tray.active).toBeUndefined()
-			expect(tray.pendingIntent).toBeUndefined()
-			expect(tray.inFlightCount).toBe(0)
+			expect(tray.entries).toEqual([])
+			expect(tray.entries.length).toBe(0)
 		} finally {
 			resume.resolve()
 			scope.abort()

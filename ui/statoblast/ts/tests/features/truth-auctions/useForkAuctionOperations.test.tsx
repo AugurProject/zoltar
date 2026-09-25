@@ -621,7 +621,7 @@ describe('useForkAuctionOperations', () => {
 
 		await waitFor(() => expect(readClient.getBalance).toHaveBeenCalledTimes(1))
 		expect(requireHookState(hookState).forkAuctionFeedback?.status.tone).toBe('pending')
-		expect(transactionState.pendingIntent?.action).toBe('submitBid')
+		expect(transactionState.entries[0]?.intent.action).toBe('submitBid')
 		expect(transactionState.active?.tone).toBe('awaiting-wallet')
 
 		await act(async () => {
@@ -647,8 +647,8 @@ describe('useForkAuctionOperations', () => {
 		expect(submitTruthAuctionBid).not.toHaveBeenCalled()
 		expect(onTransactionFailed).not.toHaveBeenCalled()
 		expect(transactionState.active).toBeUndefined()
-		expect(transactionState.pendingIntent).toBeUndefined()
-		expect(transactionState.inFlightCount).toBe(0)
+		expect(transactionState.entries).toEqual([])
+		expect(transactionState.entries.length).toBe(0)
 	})
 
 	test('submitBid snapshots the submitted form values before the balance preflight resolves', async () => {
@@ -1004,7 +1004,7 @@ describe('useForkAuctionOperations', () => {
 				{
 					accountAddress: WALLET_ADDRESS,
 					onTransactionFailed: message => {
-						transactionState = markTransactionFailed(transactionState, message)
+						transactionState = markTransactionFailed(transactionState, { kind: 'error', message })
 					},
 					onTransactionFinished: () => undefined,
 					onTransactionPresented: () => undefined,
@@ -1040,7 +1040,7 @@ describe('useForkAuctionOperations', () => {
 			value: 0n,
 		})
 		const submitted = markTransactionSubmitted(prepared, zeroHash)
-		const failed = markTransactionFailed(submitted, 'Transaction reverted')
+		const failed = markTransactionFailed(submitted, { kind: 'reverted', message: 'Transaction reverted' })
 
 		for (const state of [requested, prepared, submitted, failed]) {
 			expect(getTransactionRowValueProp(state, 'Pool', 'address')).toBe(childPoolAddress)

@@ -1,4 +1,4 @@
-import { TransactionActionButton, TransactionActionButtonLockProvider } from './TransactionActionButton.js'
+import { TransactionActionButton, TransactionActionButtonLockProvider, unlockedTransactionActions } from './TransactionActionButton.js'
 import { TokenApprovalControl } from './TokenApprovalControl.js'
 import * as copy from '../copy/transactionSteps.js'
 import * as commonCopy from '../copy/common.js'
@@ -11,7 +11,7 @@ import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import { GlobalTransactionPresentationProvider, useGlobalTransactionPresentation } from './GlobalTransactionPresentationContext.js'
 import { useEffect, useLayoutEffect, useRef } from 'preact/hooks'
 import { EthAmount, TransactionFundingSummary } from './TransactionFundingSummary.js'
-import { transactionSteps } from '../transactions/transactionSteps.js'
+import { isTransactionStepInFlight, transactionSteps } from '../transactions/transactionSteps.js'
 
 /** Explains a step that has no token funding to summarize, using the enclosing operation's rows for the parameters being submitted. */
 function TransactionStepReview({ contractAddress, contractLabel, description, rows = [] }: { contractAddress: Address | undefined; contractLabel: string | undefined; description: string | undefined; rows?: GlobalTransactionRow[] | undefined }) {
@@ -47,8 +47,9 @@ function useTransactionStepsState() {
 	const current = workflow?.steps[workflow.activeIndex]
 	const operationFailed = presentation?.tone === 'error'
 	const operationError = typeof presentation?.detail === 'string' ? presentation.detail : copy.requirementsFailed
-	const error = operationFailed && (current?.error === undefined || current?.error === 'Transaction reverted.') ? operationError : current?.error
-	const pending = error === undefined && (workflow?.steps.some(step => step.phase === 'pending') ?? false)
+	// A reverted receipt is explained by the operation's diagnosed failure when there is one.
+	const error = operationFailed && (current?.failure === undefined || current.failure.kind === 'reverted') ? operationError : current?.failure?.message
+	const pending = error === undefined && (workflow?.steps.some(isTransactionStepInFlight) ?? false)
 	return { current, error, pending, presentation, workflow }
 }
 
@@ -63,8 +64,8 @@ type TransactionStepsActionsProps = {
 	onClose?: (() => void) | undefined
 }
 
-/** The review's confirm, approval, and cancel controls; a dialog form can host them in its own action row. */
-export function TransactionStepsActions({ cancelable = true, contextKey, focusOnMount = false, keepActionsVisible = false, onClose }: TransactionStepsActionsProps) {
+/** The review's confirm, approval, and cancel controls. */
+function TransactionStepsActions({ cancelable = true, contextKey, focusOnMount = false, keepActionsVisible = false, onClose }: TransactionStepsActionsProps) {
 	const { error, pending, presentation, workflow } = useTransactionStepsState()
 	const actionsRef = useRef<HTMLDivElement>(null)
 	const pendingActionRef = useRef<HTMLDivElement>(null)
@@ -108,7 +109,7 @@ export function TransactionStepsActions({ cancelable = true, contextKey, focusOn
 	const completedIndices = new Set(completedSteps.map(step => step.index))
 	return (
 		<GlobalTransactionPresentationProvider transaction={undefined}>
-			<TransactionActionButtonLockProvider locked={false}>
+			<TransactionActionButtonLockProvider lock={unlockedTransactionActions}>
 				<div
 					className='transaction-step-actions transaction-approval-editor'
 					ref={actionsRef}
@@ -136,7 +137,7 @@ export function TransactionStepsActions({ cancelable = true, contextKey, focusOn
 								const active = index === workflow.activeIndex
 								const final = index === workflow.steps.length - 1
 								const ready = step.phase === 'review' && !pending && error === undefined
-								const status = { skipped: copy.skipped, upcoming: step.optional ? copy.ifNeeded : undefined, review: undefined, pending: undefined, confirmed: transactionCopy.confirmed, failed: copy.notCompleted }[step.phase]
+								const status = { skipped: copy.skipped, upcoming: step.optional ? copy.ifNeeded : undefined, review: undefined, wallet: undefined, pending: undefined, confirmed: transactionCopy.confirmed, failed: copy.notCompleted }[step.phase]
 								const detail = [step.phase === 'upcoming' || step.spender !== undefined || step.paidFrom !== undefined || step.approval !== undefined ? undefined : step.amount, status].filter(value => value !== undefined).join(' · ')
 								return (
 									<div key={index} className={`transaction-plan-action${step.approval === undefined || final ? ' transaction-plan-action-wide' : ''}${final ? ' transaction-plan-action-final' : ''}`} {...(active && pending ? { ref: pendingActionRef, tabIndex: -1 } : {})}>
@@ -151,7 +152,7 @@ export function TransactionStepsActions({ cancelable = true, contextKey, focusOn
 												guardMessage={undefined}
 												disabled={!ready}
 												onApprove={amount => workflow.confirmStep(index, amount)}
-												pending={step.phase === 'pending'}
+												pending={isTransactionStepInFlight(step)}
 												pendingLabel={commonCopy.formatApprovingToken(step.approval.tokenSymbol)}
 												requiredAmount={step.approval.requiredAmount}
 												resetKey={`${contextKey}:${index}`}
@@ -201,12 +202,10 @@ export function TransactionStepsActions({ cancelable = true, contextKey, focusOn
 }
 
 type TransactionStepsContentProps = TransactionStepsActionsProps & {
-	/** `external` when a dialog form hosts the actions in its own row through `ReviewActionsSlotContext`. */
-	actions?: 'inline' | 'external'
 	heading?: string | undefined
 }
 
-export function TransactionStepsContent({ actions = 'inline', cancelable = true, contextKey, focusOnMount = false, heading, keepActionsVisible = false, onClose }: TransactionStepsContentProps) {
+export function TransactionStepsContent({ cancelable = true, contextKey, focusOnMount = false, heading, keepActionsVisible = false, onClose }: TransactionStepsContentProps) {
 	const { current, presentation, workflow } = useTransactionStepsState()
 	if (workflow === undefined || current === undefined) return undefined
 	const completed = workflow.steps.every(step => step.phase === 'confirmed' || step.phase === 'skipped')
@@ -241,7 +240,7 @@ export function TransactionStepsContent({ actions = 'inline', cancelable = true,
 				)}
 				{funding.length === 0 || completed ? undefined : <p className='detail transaction-funding-note'>{copy.fundingDetail}</p>}
 			</div>
-			{actions === 'inline' ? <TransactionStepsActions cancelable={cancelable} contextKey={contextKey} focusOnMount={focusOnMount} keepActionsVisible={keepActionsVisible} onClose={onClose} /> : undefined}
+			<TransactionStepsActions cancelable={cancelable} contextKey={contextKey} focusOnMount={focusOnMount} keepActionsVisible={keepActionsVisible} onClose={onClose} />
 		</>
 	)
 }

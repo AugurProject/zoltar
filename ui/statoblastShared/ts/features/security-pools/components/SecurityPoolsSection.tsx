@@ -7,6 +7,8 @@ import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as securityPoolCopy from '../../../copy/securityPool.js'
 import { RouteHeader } from '@zoltar/ui-core-shared/components/RouteHeader.js'
 import { UniversePoolDirectorySection } from './UniversePoolDirectorySection.js'
+import { TransactionScopeProvider } from '@zoltar/ui-core-shared/components/TransactionActionButton.js'
+import { securityPoolTransactionScope } from '@zoltar/ui-core-shared/transactions/transactionScope.js'
 
 function shouldRefreshSelectedPoolDataOnViewOpen({ currentSecurityPoolAddress, nextSecurityPoolAddress, nextView, selectedPoolHasLoadedDetails }: { currentSecurityPoolAddress: string; nextSecurityPoolAddress?: string | undefined; nextView: SecurityPoolsView; selectedPoolHasLoadedDetails: boolean }) {
 	if (nextView !== 'operate') return false
@@ -67,7 +69,12 @@ export function SecurityPoolsSection({ activeView, createPool, loadingUniverseDi
 				<UniversePoolDirectorySection activeUniverseId={overview.activeUniverseId} loadingSecurityPools={loadingUniverseDirectoryPools} onRetry={onLoadUniverseDirectoryPools} securityPoolError={securityPoolUniverseDirectoryError} securityPools={universeDirectoryPools} zoltarUniverse={zoltarUniverse} />
 			) : undefined}
 
-			{view === 'operate' ? <SecurityPoolWorkflowSection {...workflow} showHeader={false} /> : undefined}
+			{/* A pending transaction on this pool locks only this pool's actions. */}
+			{view === 'operate' ? (
+				<TransactionScopeProvider scope={securityPoolTransactionScope(workflow.securityPoolAddress)}>
+					<SecurityPoolWorkflowSection {...workflow} showHeader={false} />
+				</TransactionScopeProvider>
+			) : undefined}
 		</div>
 	)
 }

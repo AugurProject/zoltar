@@ -37,7 +37,7 @@ test('returns an embedded failed transaction to its form for review before resub
 							controller.setPlan([step])
 							controller.startWithoutReview(0)
 							if (attempts === 1) {
-								controller.failed('nonce too low')
+								controller.failed({ kind: 'error', message: 'nonce too low' })
 								presentation.value = { operationKey: 'deposit-1', title: 'Deposit failed', tone: 'error', detail: 'nonce too low', rows: [{ label: 'Security Pool Address', value: '0x0000000000000000000000000000000000000002' }] }
 							}
 						}}
@@ -59,7 +59,7 @@ test('returns an embedded failed transaction to its form for review before resub
 		expect(submit.hasAttribute('disabled')).toBe(false)
 		await act(() => fireEvent.click(submit))
 		expect(attempts).toBe(2)
-		expect(transactionSteps.value?.steps[0]?.phase).toBe('pending')
+		expect(transactionSteps.value?.steps[0]?.phase).toBe('wallet')
 	} finally {
 		transactionSteps.value?.cancel()
 		await rendered.cleanup()
@@ -120,15 +120,20 @@ for (const outcome of ['success', 'failure', 'approval', 'cancel', 'multi-step']
 			}
 			if (showsReview) await act(() => fireEvent.click(within(dialog).getByRole('button', { name: 'Approve REP' })))
 			await review
+			// Only the open wallet prompt holds the dialog.
+			expect(transactionSteps.value?.steps[0]?.phase).toBe('wallet')
+			expect(queries.getByRole('button', { name: 'Close' }).hasAttribute('disabled')).toBe(true)
+			await act(() => fireEvent.keyDown(dialog, { key: 'Escape' }))
+			expect(queries.getByRole('dialog')).toBe(dialog)
 			const firstHash = outcome === 'multi-step' ? '0x2222222222222222222222222222222222222222222222222222222222222222' : hash
 			await act(() => {
 				controller?.submitted(firstHash)
 				presentation.value = { operationKey: 'withdrawal', title: 'Withdrawal pending', tone: 'pending', hash: firstHash }
 			})
 			expect(steps() !== null).toBe(showsReview)
-			expect(queries.getByRole('button', { name: 'Close' }).hasAttribute('disabled')).toBe(true)
-			await act(() => fireEvent.keyDown(dialog, { key: 'Escape' }))
-			expect(queries.getByRole('dialog')).toBe(dialog)
+			// A broadcast transaction keeps running after the dialog closes, so the dialog no longer holds the user.
+			expect(transactionSteps.value?.steps[0]?.phase).toBe('pending')
+			expect(queries.getByRole('button', { name: 'Close' }).hasAttribute('disabled')).toBe(false)
 			if (outcome === 'multi-step') {
 				await act(() => {
 					controller?.receipt(firstHash, 'success')
@@ -205,7 +210,7 @@ test('sends an approval-only workflow from the form control without a separate r
 		const dialog = queries.getByRole('dialog', { name: 'Deposit REP' })
 		await act(() => fireEvent.click(queries.getByRole('button', { name: 'Approve REP' })))
 		expect(await review).toBeUndefined()
-		expect(transactionSteps.value?.steps[0]?.phase).toBe('pending')
+		expect(transactionSteps.value?.steps[0]?.phase).toBe('wallet')
 		expect(document.querySelectorAll('[role="dialog"]')).toHaveLength(1)
 		expect(dialog.querySelector('.operation-modal-steps')).toBeNull()
 		expect(dialog.querySelector('.operation-modal-body')?.hasAttribute('inert')).toBe(false)
@@ -215,7 +220,7 @@ test('sends an approval-only workflow from the form control without a separate r
 		// A rejected approval leaves the form ready for another attempt.
 		const failedWorkflow = transactionSteps.value
 		await act(() => {
-			controller?.failed('Action canceled in wallet.')
+			controller?.failed({ kind: 'rejected', message: 'Action canceled in wallet.' })
 			presentation.value = { operationKey: 'approval', title: 'Approval failed', tone: 'error', detail: 'Action canceled in wallet.' }
 		})
 		expect(dialog.querySelector('.operation-modal-steps')).toBeNull()
@@ -225,14 +230,14 @@ test('sends an approval-only workflow from the form control without a separate r
 		await act(() => fireEvent.click(queries.getByRole('button', { name: 'Approve REP' })))
 		expect(await review).toBeUndefined()
 		expect(transactionSteps.value).not.toBe(failedWorkflow)
-		expect(transactionSteps.value?.steps[0]?.phase).toBe('pending')
+		expect(transactionSteps.value?.steps[0]?.phase).toBe('wallet')
 	} finally {
 		await rendered.cleanup()
 		transactionSteps.value?.cancel()
 	}
 })
 
-test("renders the review actions in the form's own action row and isolates the rest of the form", async () => {
+test('shows one action row while the review runs and keeps the form for reference without editing', async () => {
 	const presentation = signal<GlobalTransactionPresentation | undefined>(undefined)
 	let controller: ReturnType<typeof createTransactionStepController> | undefined
 	let review: Promise<bigint | undefined> | undefined
@@ -264,21 +269,22 @@ test("renders the review actions in the form's own action row and isolates the r
 	try {
 		const queries = within(document.body)
 		const dialog = queries.getByRole('dialog', { name: 'Withdraw REP' })
+		const formActions = dialog.querySelector('.operation-modal-body .tx-action-group')
+		if (!(formActions instanceof HTMLElement)) throw new Error('Expected the form action row')
 		await act(() => fireEvent.click(queries.getByRole('button', { name: 'Withdraw' })))
-		const slot = dialog.querySelector('[data-review-actions-slot]')
-		if (!(slot instanceof HTMLElement)) throw new Error('Expected the form action row to host the review')
-		// One action row: the form's own buttons are replaced by the review's confirm and cancel.
-		expect(within(slot).getByRole('button', { name: 'Send withdrawal' })).not.toBeNull()
-		expect(within(slot).getByRole('button', { name: 'Cancel' })).not.toBeNull()
-		expect(queries.queryByRole('button', { name: 'Withdraw' })).toBeNull()
-		expect(within(slot).getAllByRole('button', { name: 'Cancel' })).toHaveLength(1)
-		expect(dialog.querySelector('.operation-modal-steps .transaction-step-actions')).toBeNull()
-		expect(slot.hasAttribute('inert')).toBe(false)
-		expect(dialog.querySelector('.operation-modal-body')?.hasAttribute('inert')).toBe(false)
+		const steps = dialog.querySelector('.operation-modal-steps')
+		if (!(steps instanceof HTMLElement)) throw new Error('Expected the review below the form')
+		// One action row: the form's own buttons step aside for the review's confirm and cancel.
+		expect(formActions.hidden).toBe(true)
+		expect(within(steps).getByRole('button', { name: 'Send withdrawal' })).not.toBeNull()
+		expect(within(steps).getAllByRole('button', { name: 'Cancel' })).toHaveLength(1)
+		// The whole form is inert through its own container; nothing outside the dialog is touched.
+		expect(dialog.querySelector('.operation-modal-body')?.hasAttribute('inert')).toBe(true)
+		expect(dialog.querySelectorAll('[inert]')).toHaveLength(1)
 		expect(queries.getByRole('textbox', { name: 'Amount' }).closest('[inert]')).not.toBeNull()
-		await act(() => fireEvent.click(within(slot).getByRole('button', { name: 'Send withdrawal' })))
+		await act(() => fireEvent.click(within(steps).getByRole('button', { name: 'Send withdrawal' })))
 		await review
-		expect(transactionSteps.value?.steps[0]?.phase).toBe('pending')
+		expect(transactionSteps.value?.steps[0]?.phase).toBe('wallet')
 		await act(() => {
 			controller?.submitted(hash)
 			presentation.value = { operationKey: 'withdrawal', title: 'Transaction confirmed', tone: 'success', hash }

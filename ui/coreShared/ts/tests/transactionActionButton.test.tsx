@@ -5,7 +5,7 @@ import { describe, expect, test } from 'bun:test'
 import { h } from 'preact'
 import { act } from 'preact/test-utils'
 import { GlobalTransactionPresentationProvider } from '../components/GlobalTransactionPresentationContext.js'
-import { TransactionActionButton, TransactionActionButtonLockProvider, TransactionActionGroup } from '../components/TransactionActionButton.js'
+import { TransactionActionButton, TransactionActionButtonLockProvider, TransactionActionGroup, TransactionScopeProvider } from '../components/TransactionActionButton.js'
 import { fireEvent, within } from './testUtils/queries'
 import { renderIntoDocument } from './testUtils/renderIntoDocument.js'
 
@@ -27,9 +27,9 @@ describe('TransactionActionButton', () => {
 		expect(action?.lastElementChild?.className).toBe('tx-action-feedback')
 	})
 
-	test('shares a global transaction blocker while keeping both grouped actions disabled', async () => {
+	test('shares an open wallet prompt blocker while keeping both grouped actions disabled', async () => {
 		const rendered = await renderIntoDocument(
-			<TransactionActionButtonLockProvider locked>
+			<TransactionActionButtonLockProvider lock={{ lockedScopes: [], promptOpen: true }}>
 				<TransactionActionGroup message={undefined}>
 					<TransactionActionButton idleLabel='Approve' pendingLabel='Approving' onClick={() => undefined} />
 					<TransactionActionButton idleLabel='Submit' pendingLabel='Submitting' onClick={() => undefined} />
@@ -143,10 +143,10 @@ describe('TransactionActionButton', () => {
 		expect(notice.textContent).toContain('Confirm the scalar deployment inputs before continuing.')
 	})
 
-	test('blocks new actions while another transaction is still in flight', async () => {
+	test('blocks new actions while a review or wallet prompt is open', async () => {
 		let callCount = 0
 		const renderedComponent = await renderIntoDocument(
-			<TransactionActionButtonLockProvider locked>
+			<TransactionActionButtonLockProvider lock={{ lockedScopes: [], promptOpen: true }}>
 				<TransactionActionButton idleLabel='Create Pool' onClick={() => callCount++} pendingLabel='Submitting...' />
 			</TransactionActionButtonLockProvider>,
 		)
@@ -162,6 +162,37 @@ describe('TransactionActionButton', () => {
 		})
 
 		expect(callCount).toBe(0)
+	})
+
+	test('locks only actions on the object a pending transaction touches and explains why', async () => {
+		let unrelatedClicks = 0
+		const renderedComponent = await renderIntoDocument(
+			<TransactionActionButtonLockProvider lock={{ lockedScopes: [['security-pool:0xa']], promptOpen: false }}>
+				<TransactionScopeProvider scope={['security-pool:0xa']}>
+					<TransactionActionButton idleLabel='Deposit REP' onClick={() => undefined} pendingLabel='Depositing REP' />
+					<TransactionActionButton idleLabel='Depositing now' onClick={() => undefined} pending pendingLabel='Depositing' />
+				</TransactionScopeProvider>
+				<TransactionScopeProvider scope={['security-pool:0xb']}>
+					<TransactionActionButton idleLabel='Deposit other' onClick={() => unrelatedClicks++} pendingLabel='Depositing other' />
+				</TransactionScopeProvider>
+				<TransactionActionButton idleLabel='Create pool' onClick={() => unrelatedClicks++} pendingLabel='Creating pool' />
+				<TransactionActionButton idleLabel='Explicit scope' onClick={() => undefined} pendingLabel='Explicit' scope={['security-pool:0xa']} />
+			</TransactionActionButtonLockProvider>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+		const queries = within(document.body)
+		const locked = queries.getByRole('button', { name: 'Deposit REP' })
+		expect(locked.hasAttribute('disabled')).toBe(true)
+		expect(locked.getAttribute('aria-describedby')).not.toBeNull()
+		expect(document.getElementById(locked.getAttribute('aria-describedby') ?? '')?.textContent).toContain('Wait for the pending transaction to confirm.')
+		expect(queries.getByRole('button', { name: 'Explicit scope' }).hasAttribute('disabled')).toBe(true)
+		// The initiating action keeps its own pending state instead of the lock reason.
+		expect(queries.getByRole('button', { name: 'Depositing' }).getAttribute('aria-busy')).toBe('true')
+		await act(() => {
+			fireEvent.click(queries.getByRole('button', { name: 'Deposit other' }))
+			fireEvent.click(queries.getByRole('button', { name: 'Create pool' }))
+		})
+		expect(unrelatedClicks).toBe(2)
 	})
 
 	test('keeps a local pending announcement when the global tray only shows a terminal transaction', async () => {

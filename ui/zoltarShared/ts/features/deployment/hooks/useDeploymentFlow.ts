@@ -1,4 +1,6 @@
 import { useSignal } from '@preact/signals'
+import type { TransactionRequestKey } from '@zoltar/ui-core-shared/types/app.js'
+import { getTransactionFailureKind } from '@zoltar/ui-core-shared/transactions/transactionLifecycle.js'
 import { useEffect } from 'preact/hooks'
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import { createWalletWriteClient } from '@zoltar/ui-core-shared/wallet/clients.js'
@@ -68,6 +70,7 @@ export function useDeploymentFlow({ accountAddress, deploymentStatuses, environm
 		errorMessage.value = undefined
 		deploymentFeedback.value = createPendingActionFeedback(feedbackAction, `Deploying ${step.label}`)
 		let ownsTransaction = false
+		let requestKey: TransactionRequestKey | undefined
 
 		try {
 			await assertActiveWallet(accountAddress)
@@ -81,12 +84,14 @@ export function useDeploymentFlow({ accountAddress, deploymentStatuses, environm
 				deploymentFeedback.value = undefined
 				return
 			}
-			if (onTransactionRequested(createDeploymentTransactionIntent(step.label)) === false) {
+			const request = onTransactionRequested(createDeploymentTransactionIntent(step.label))
+			if (request === false) {
 				errorMessage.value = undefined
 				deploymentFeedback.value = undefined
 				return
 			}
 			ownsTransaction = true
+			requestKey = typeof request === 'string' ? request : undefined
 			const hash = await step.deploy(client)
 			if (!environmentGuard.isCurrent()) return
 			const code = await readWithRpcStateRetries(
@@ -98,7 +103,7 @@ export function useDeploymentFlow({ accountAddress, deploymentStatuses, environm
 			if (!assertDeploymentStepRuntimeCode(step, code)) {
 				const message = 'Deployment verification failed: no contract code was found at the expected address. Check the selected network and retry.'
 				errorMessage.value = message
-				onTransactionFailed?.(message)
+				onTransactionFailed?.(message, { requestKey })
 				deploymentFeedback.value = createErrorActionFeedback(feedbackAction, 'Deployment failed', message)
 				return
 			}
@@ -109,12 +114,12 @@ export function useDeploymentFlow({ accountAddress, deploymentStatuses, environm
 			if (!environmentGuard.isCurrent()) return
 			const message = formatWriteErrorMessage(error, `Failed to deploy ${step.label}`)
 			errorMessage.value = message
-			if (ownsTransaction) onTransactionFailed?.(message)
+			if (ownsTransaction) onTransactionFailed?.(message, { kind: getTransactionFailureKind(error), requestKey })
 			deploymentFeedback.value = createErrorActionFeedback(feedbackAction, 'Deployment failed', message)
 		} finally {
 			if (environmentGuard.isCurrent()) {
 				busyStepId.value = undefined
-				if (ownsTransaction) onTransactionFinished()
+				if (ownsTransaction) onTransactionFinished(requestKey)
 			}
 		}
 	}

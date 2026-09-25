@@ -1,4 +1,6 @@
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
+import { TransactionScopeProvider } from '@zoltar/ui-core-shared/components/TransactionActionButton.js'
+import { universeTransactionScope } from '@zoltar/ui-core-shared/transactions/transactionScope.js'
 import * as marketCopy from '../../../copy/market.js'
 import * as zoltarCopy from '../../../copy/zoltar.js'
 import { ForkZoltarSection } from '../../universes/components/ForkZoltarSection.js'
@@ -164,7 +166,10 @@ export function ZoltarSection({
 		}
 		return (
 			<>
-				<UniverseDirectorySection zoltarUniverse={zoltarUniverse}>{universeActionContent}</UniverseDirectorySection>
+				<UniverseDirectorySection zoltarUniverse={zoltarUniverse}>
+					{/* A pending fork or migration locks only this universe's actions. */}
+					<TransactionScopeProvider scope={universeTransactionScope(zoltarUniverse?.universeId)}>{universeActionContent}</TransactionScopeProvider>
+				</UniverseDirectorySection>
 				<ErrorNotice message={zoltarChildUniverseError} />
 			</>
 		)
