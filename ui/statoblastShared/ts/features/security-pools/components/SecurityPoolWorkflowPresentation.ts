@@ -1,6 +1,7 @@
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as securityPoolCopy from '../../../copy/securityPool.js'
 import { assertNever } from '@zoltar/ui-core-shared/lib/assert.js'
+import { MULTIPLIER_SIGN } from '@zoltar/ui-core-shared/lib/formatters.js'
 import type { ForkAuctionDetails, ListedSecurityPool, OracleQueueOperation } from '@zoltar/ui-core-shared/types/contracts.js'
 
 export function buildSelectedPoolSummaryPool({ forkAuctionDetails, selectedPool }: { forkAuctionDetails: ForkAuctionDetails | undefined; selectedPool: ListedSecurityPool | undefined }) {
@@ -44,7 +45,7 @@ export function getPendingOperationAmountPresentation(operation: OracleQueueOper
 			// The action heading and REP amount already identify a withdrawal.
 			return { summaryLabel: undefined, suffix: commonCopy.rep, decimals: 18 }
 		case 'adjustVaultBackingFactor':
-			return { summaryLabel: securityPoolCopy.vaultBackingFactor, suffix: '×', decimals: 4 }
+			return { summaryLabel: securityPoolCopy.vaultBackingFactor, suffix: MULTIPLIER_SIGN, decimals: 4 }
 		default:
 			return assertNever(operation)
 	}

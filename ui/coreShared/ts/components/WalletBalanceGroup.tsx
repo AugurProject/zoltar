@@ -20,7 +20,7 @@ export function WalletBalanceGroup({ balances }: { balances: readonly WalletBala
 			{balances.map(balance => (
 				<MetricField key={balance.asset} className={balance.className ?? 'overview-simulation-secondary'} label={balance.asset}>
 					<span data-wallet-asset={balance.asset}>
-						<CurrencyValue value={balance.value} loading={balance.loading} compactWhenOverflow exactWhenRoundedToZero={balance.exactWhenRoundedToZero === true} />
+						<CurrencyValue accessibleUnit={balance.asset} value={balance.value} loading={balance.loading} copyable notation='compact' exactWhenRoundedToZero={balance.exactWhenRoundedToZero === true} />
 					</span>
 				</MetricField>
 			))}

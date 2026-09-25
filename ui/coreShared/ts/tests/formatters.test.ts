@@ -1,7 +1,23 @@
 /// <reference types="bun-types" />
 
 import { describe, expect, test } from 'bun:test'
-import { formatAdditionalCurrencyBalance, formatCompactCurrencyBalance, formatCurrencyBalanceWithUnit, formatCurrencyInputBalance, formatDuration, formatRelativeTimestamp, formatRoundedCurrencyBalance, formatTimestamp, formatTrimmedUnits, formatValueWithUnit } from '../lib/formatters.js'
+import {
+	formatAdditionalCurrencyBalance,
+	formatAmount,
+	formatAmountDisplay,
+	formatCurrencyBalanceWithUnit,
+	formatCurrencyInputBalance,
+	formatDuration,
+	formatMultiplier,
+	formatMultiplierText,
+	formatRelativeTimestamp,
+	formatRoundedCurrencyBalance,
+	formatScaledPercentage,
+	formatTimestamp,
+	formatTrimmedUnits,
+	formatUnitSuffix,
+	formatValueWithUnit,
+} from '../lib/formatters.js'
 
 void describe('formatting helpers', () => {
 	void test('formatRoundedCurrencyBalance rounds positive balances without a decimal part when decimals are zero', () => {
@@ -32,29 +48,92 @@ void describe('formatting helpers', () => {
 		expect(formatAdditionalCurrencyBalance(2n * 10n ** 18n, 'REP')).toBe('2\u00a0more\u00a0REP')
 	})
 
-	void describe('formatCompactCurrencyBalance', () => {
+	void describe('formatAmount compact notation', () => {
+		const compact = (value: bigint, units = 18) => formatAmount(value, { notation: 'compact', units }).text
+
 		void test('formats thousands with SI suffixes', () => {
-			expect(formatCompactCurrencyBalance(10000n * 10n ** 18n)).toBe('10k')
+			expect(compact(10000n * 10n ** 18n)).toBe('10k')
 		})
 
 		void test('formats millions with a single decimal place', () => {
-			expect(formatCompactCurrencyBalance(1234000n * 10n ** 18n)).toBe('1.2M')
+			expect(compact(1234000n * 10n ** 18n)).toBe('1.2M')
 		})
 
 		void test('carries rounded values into the next suffix', () => {
-			expect(formatCompactCurrencyBalance(999999990000n * 10n ** 18n)).toBe('1T')
+			expect(compact(999999990000n * 10n ** 18n)).toBe('1T')
 		})
 
 		void test('preserves the sign for negative values', () => {
-			expect(formatCompactCurrencyBalance(-1250n * 10n ** 18n)).toBe('-1.3k')
+			expect(compact(-1250n * 10n ** 18n)).toBe('-1.3k')
 		})
 
 		void test('supports non-18-decimal token units', () => {
-			expect(formatCompactCurrencyBalance(1234567890000n, 6)).toBe('1.2M')
+			expect(compact(1234567890000n, 6)).toBe('1.2M')
 		})
 
 		void test('falls back to scientific notation beyond yotta', () => {
-			expect(formatCompactCurrencyBalance(1234000000000000000000000000n, 0)).toBe('1.2E27')
+			expect(compact(1234000000000000000000000000n, 0)).toBe('1.2E27')
+		})
+
+		void test('keeps the standard form below one thousand', () => {
+			expect(formatAmount(99999n * 10n ** 16n, { notation: 'compact' })).toEqual({ approximate: false, exact: '999.99', text: '999.99' })
+		})
+	})
+
+	void describe('formatAmount precision detection', () => {
+		void test('does not mark exact values, including zero, as approximate', () => {
+			expect(formatAmount(0n)).toEqual({ approximate: false, exact: '0', text: '0.00' })
+			expect(formatAmount(2n * 10n ** 18n)).toEqual({ approximate: false, exact: '2', text: '2.00' })
+			expect(formatAmount(1_500_000n, { units: 6 })).toEqual({ approximate: false, exact: '1.5', text: '1.50' })
+			expect(formatAmountDisplay(10_000n * 10n ** 18n, { notation: 'compact' })).toBe('10k')
+		})
+
+		void test('marks values whose dropped digits are non-zero', () => {
+			expect(formatAmount(1_234_567n * 10n ** 15n)).toEqual({ approximate: true, exact: '1 234.567', text: '1 234.57' })
+			expect(formatAmountDisplay(999_999_990_000n * 10n ** 18n, { notation: 'compact' })).toBe('≈ 1T')
+			expect(formatAmountDisplay(1_234_000n * 10n ** 18n, { notation: 'compact' })).toBe('≈ 1.2M')
+		})
+
+		void test('keeps two significant digits for tiny values and marks only lossy ones', () => {
+			expect(formatAmountDisplay(137_760_122n)).toBe('≈ 0.00000000014')
+			expect(formatAmountDisplay(410_000_000_000_000n)).toBe('0.00041')
+			expect(formatAmountDisplay(1n)).toBe('0.0000000000000000010')
+		})
+
+		void test('marks negative values symmetrically', () => {
+			expect(formatAmountDisplay(-125n, { decimals: 1, units: 2 })).toBe('≈ -1.3')
+			expect(formatAmountDisplay(-150n, { decimals: 1, units: 2 })).toBe('-1.5')
+		})
+
+		void test('treats more requested decimals than token units as exact', () => {
+			expect(formatAmount(12_345n, { decimals: 4, units: 2 })).toEqual({ approximate: false, exact: '123.45', text: '123.4500' })
+		})
+
+		void test('rejects negative decimals', () => {
+			expect(() => formatAmount(1n, { decimals: -1 })).toThrow(RangeError)
+		})
+	})
+
+	void describe('multiplier, percentage, and unit formatting', () => {
+		void test('formats fixed-point multipliers with the multiplication sign', () => {
+			expect(formatMultiplier(20_000n, 4)).toBe('2×')
+			expect(formatMultiplier(25_000n, 4)).toBe('2.5×')
+			expect(formatMultiplier(1_250_000n, 4)).toBe('125×')
+			expect(formatMultiplier(140n, 2)).toBe('1.4×')
+			expect(formatMultiplier(-5_000n, 4)).toBe('-0.5×')
+			expect(formatMultiplierText('1.75')).toBe('1.75×')
+		})
+
+		void test('formats fixed-point percentages without a space', () => {
+			expect(formatScaledPercentage(30n, 2)).toBe('0.3%')
+			expect(formatScaledPercentage(10_000n, 2)).toBe('100%')
+		})
+
+		void test('attaches percent and multiplier signs but spaces other units', () => {
+			expect(formatUnitSuffix('')).toBe('')
+			expect(formatUnitSuffix('%')).toBe('%')
+			expect(formatUnitSuffix('×')).toBe('×')
+			expect(formatUnitSuffix('ETH')).toBe(' ETH')
 		})
 	})
 

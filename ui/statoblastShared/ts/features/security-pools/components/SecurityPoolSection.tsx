@@ -267,7 +267,7 @@ export function SecurityPoolSection({
 						</li>
 						<li>
 							<span>{statoblastAppCopy.statoblastSecurityMultiplierBps}</span>
-							<strong>{formatStatoblastSecurityMultiplier(securityPoolResult.statoblastSecurityMultiplierBps)}x</strong>
+							<strong>{formatStatoblastSecurityMultiplier(securityPoolResult.statoblastSecurityMultiplierBps)}</strong>
 						</li>
 						<li>
 							<span>{securityPoolCopy.initialReportPriorityFeeEthLabel}</span>

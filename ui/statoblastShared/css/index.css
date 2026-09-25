@@ -2070,7 +2070,8 @@
 	gap: 0.45rem;
 }
 
-.vault-detail-meta .metric-label {
+.vault-detail-meta .metric-label,
+.vault-backing-details > div > .metric-label {
 	display: inline-block;
 	margin-right: 0.45rem;
 }

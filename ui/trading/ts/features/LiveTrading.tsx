@@ -1,7 +1,7 @@
 import { TimestampValue } from '@zoltar/ui-core-shared/components/TimestampValue.js'
 import type { RefObject } from 'preact'
 import { useEffect, useRef, useState } from 'preact/hooks'
-import { formatTrimmedUnits } from '@zoltar/ui-core-shared/lib/formatters.js'
+import { formatScaledPercentage } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { abbreviateAddress } from '@zoltar/ui-core-shared/lib/address.js'
 import { SecurityPoolLink } from '../components/SecurityPoolLink.js'
 import type { DeploymentConfiguration } from '../protocol/config.js'
@@ -56,7 +56,7 @@ function MarketFacts({ market, nowSeconds, workflowLocked, headingRef }: { marke
 				...(market.loadError === undefined
 					? [
 							{ label: liveCopy.questionEnd, value: <TimestampValue timestamp={market.endTime} relative={false} /> },
-							{ label: liveCopy.ammFee, value: `${formatTrimmedUnits(market.feeBps, 2, 2)}%` },
+							{ label: liveCopy.ammFee, value: formatScaledPercentage(market.feeBps, 2) },
 							{ label: liveCopy.pair, value: market.pair === undefined ? liveCopy.notDeployed : <ReadOnlyAddressValue address={market.pair} responsiveAbbreviation /> },
 						]
 					: []),

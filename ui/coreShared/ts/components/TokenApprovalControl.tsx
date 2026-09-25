@@ -159,10 +159,10 @@ export function TokenApprovalControl({
 		<div className='form-grid'>
 			<MetricGrid>
 				<MetricField label={commonCopy.formatRequiredValue(tokenSymbol)}>
-					<CurrencyValue value={requiredAmount} units={tokenUnits} suffix={tokenSymbol} copyable={false} />
+					<CurrencyValue value={requiredAmount} units={tokenUnits} suffix={tokenSymbol} />
 				</MetricField>
 				<MetricField label={commonCopy.formatApprovedValue(tokenSymbol)}>
-					<ApprovedAmountValue loading={allowanceLoading} value={approvedAmount} requiredAmount={requiredAmount} units={tokenUnits} suffix={tokenSymbol} copyable={false} />
+					<ApprovedAmountValue loading={allowanceLoading} value={approvedAmount} requiredAmount={requiredAmount} units={tokenUnits} suffix={tokenSymbol} />
 				</MetricField>
 			</MetricGrid>
 

@@ -82,10 +82,10 @@ export function TruthAuctionMarketViewSection({ clearingTick, hasMoreTickSummari
 										</div>
 										<div className='truth-auction-price-row-meta'>
 											<span>
-												{forkAuctionCopy.currentSize} <CurrencyValue value={point.currentTotalBidAttoEth} suffix={commonCopy.eth} copyable={false} />
+												{forkAuctionCopy.currentSize} <CurrencyValue value={point.currentTotalBidAttoEth} suffix={commonCopy.eth} />
 											</span>
 											<span className='truth-auction-ladder-row-cumulative'>
-												{forkAuctionCopy.loadedDepth} <CurrencyValue value={point.cumulativeBidAttoEth} suffix={commonCopy.eth} copyable={false} />
+												{forkAuctionCopy.loadedDepth} <CurrencyValue value={point.cumulativeBidAttoEth} suffix={commonCopy.eth} />
 											</span>
 											<span>{forkAuctionCopy.formatSubmissionsLabel(point.submissionCount.toString())}</span>
 										</div>

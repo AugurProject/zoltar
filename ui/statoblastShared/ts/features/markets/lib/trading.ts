@@ -2,7 +2,7 @@ import * as tradingCopy from '../../../copy/trading.js'
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import { getWalletActiveAppChainGuardState } from '@zoltar/ui-core-shared/transactions/actionGuards.js'
 import { assertNever } from '@zoltar/ui-core-shared/lib/assert.js'
-import { formatAdditionalCurrencyBalance, formatCurrencyBalance, formatCurrencyBalanceWithUnit } from '@zoltar/ui-core-shared/lib/formatters.js'
+import { formatAdditionalCurrencyBalance, formatCurrencyBalance, formatCurrencyBalanceWithUnit, formatMultiplier } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { tryParseBigIntListInput } from '@zoltar/ui-core-shared/forms/inputs.js'
 import { tryParseTradingAmountInput } from '@zoltar/ui-core-shared/forms/formInputs.js'
 import { getReportingOutcomeLabel } from '../../reporting/lib/reporting.js'
@@ -95,9 +95,7 @@ export function estimateMintCheckpoint({
 }
 
 export function formatStatoblastSecurityMultiplier(statoblastSecurityMultiplierBps: bigint) {
-	const whole = statoblastSecurityMultiplierBps / BPS_DENOMINATOR
-	const fractional = (statoblastSecurityMultiplierBps % BPS_DENOMINATOR).toString().padStart(4, '0').replace(/0+$/, '')
-	return fractional === '' ? whole.toString() : `${whole}.${fractional}`
+	return formatMultiplier(statoblastSecurityMultiplierBps, 4)
 }
 
 export function hasRepBackedPoolWithNoActiveCapacityOwnership(totalPoolHeldAttoRep: bigint | undefined, feeEligibleCapacityOwnershipAttoRep: bigint | undefined) {

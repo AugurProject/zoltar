@@ -3,7 +3,7 @@ import { FormField } from '@zoltar/ui-core-shared/components/FormField.js'
 import { LoadingText } from '@zoltar/ui-core-shared/components/LoadingText.js'
 import { BackingDetails } from './BackingDetails.js'
 import { bigintToSafeNumber, type Hash } from '@zoltar/core-shared/evm/ethereum'
-import { formatTrimmedUnits } from '@zoltar/ui-core-shared/lib/formatters.js'
+import { formatScaledPercentage, formatTrimmedUnits } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { tryParseNonNegativeDecimalInput } from '@zoltar/ui-core-shared/forms/decimal.js'
 import { formatRoundedUnits } from '../lib/format.js'
 import { attoSharesToCollateralAttoEth, averagePriceBps, collateralAttoEthToAttoShares, formatCollateralEth, formatCompleteSetQuantity, formatOutcomeQuantity } from '../lib/shareValue.js'
@@ -226,9 +226,9 @@ export function LivePositionControls({
 						<DataGrid dense>
 							{quote.kind === 'entry' ? (
 								<>
-									<MetricField label={workflowCopy.averageOutcomePrice(side)}>{averagePrice === undefined ? workflowCopy.unavailableMetric : `${formatTrimmedUnits(averagePrice, 2, 2)}%`}</MetricField>
+									<MetricField label={workflowCopy.averageOutcomePrice(side)}>{averagePrice === undefined ? workflowCopy.unavailableMetric : formatScaledPercentage(averagePrice, 2)}</MetricField>
 									<MetricField label={workflowCopy.conditionalYesBeforeAfter}>
-										{formatTrimmedUnits(quote.value.result.conditionalYesBpsBefore, 2, 2)}% / {formatTrimmedUnits(quote.value.result.conditionalYesBpsAfter, 2, 2)}%
+										{formatScaledPercentage(quote.value.result.conditionalYesBpsBefore, 2)} / {formatScaledPercentage(quote.value.result.conditionalYesBpsAfter, 2)}
 									</MetricField>
 									<MetricField label={workflowCopy.conditionalYesPriceImpact}>{entryPriceImpactBps === undefined ? workflowCopy.unavailableMetric : `${entryPriceImpactBps > 0n ? workflowCopy.positiveSign : ''}${formatTrimmedUnits(entryPriceImpactBps, 2, 2)} ${workflowCopy.percentagePoints}`}</MetricField>
 								</>
@@ -248,7 +248,7 @@ export function LivePositionControls({
 							<MetricField label={workflowCopy.deadline}>
 								<TimestampValue timestamp={quote.value.deadline} relative={false} />
 							</MetricField>
-							<MetricField label={workflowCopy.slippageTolerance}>{formatTrimmedUnits(quote.value.slippageBps, 2, 2)}%</MetricField>
+							<MetricField label={workflowCopy.slippageTolerance}>{formatScaledPercentage(quote.value.slippageBps, 2)}</MetricField>
 						</DataGrid>
 					</WorkflowSubsection>
 				</details>

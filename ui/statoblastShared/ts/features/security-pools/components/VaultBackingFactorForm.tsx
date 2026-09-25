@@ -3,7 +3,7 @@ import { OperationModal } from '@zoltar/ui-core-shared/components/OperationModal
 import { ErrorNotice } from '@zoltar/ui-core-shared/components/ErrorNotice.js'
 import type { OperationModalProps } from '@zoltar/ui-core-shared/types/components.js'
 import { useId, useState } from 'preact/hooks'
-import { formatCurrencyInputBalance } from '@zoltar/ui-core-shared/lib/formatters.js'
+import { formatCurrencyInputBalance, formatMultiplier } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { FormInput } from '@zoltar/ui-core-shared/components/FormInput.js'
 import { MetricGrid } from '@zoltar/ui-core-shared/components/MetricGrid.js'
 import { MetricField } from '@zoltar/ui-core-shared/components/MetricField.js'
@@ -60,7 +60,7 @@ export function VaultBackingFactorForm({
 				{error ?? securityPoolCopy.vaultBackingFactorHelp}
 			</p>
 			<MetricGrid>
-				<MetricField label={securityPoolCopy.minimumBackingRatio}>{minimumBps === undefined ? commonCopy.metricUnavailablePlaceholder : `${formatCurrencyInputBalance(minimumBps, 4)}×`}</MetricField>
+				<MetricField label={securityPoolCopy.minimumBackingRatio}>{minimumBps === undefined ? commonCopy.metricUnavailablePlaceholder : formatMultiplier(minimumBps, 4)}</MetricField>
 				<MetricField label={securityPoolCopy.currentExposureSupported}>
 					<VaultExposureValue capacity={details?.capacityOwnershipAttoRep} multiplierBps={minimumBps} repPerEthPrice={repPerEthPrice} />
 				</MetricField>
@@ -101,7 +101,7 @@ export function DepositBackingFactorField({ value, error, disabled, minimumBps, 
 			<span>{securityPoolCopy.targetHealthFactor}</span>
 			<FormInput aria-describedby={descriptionId} value={value} onInput={event => onChange(event.currentTarget.value)} disabled={disabled} invalid={error !== undefined} />
 			<small className='field-help' id={descriptionId}>
-				{error ?? `${securityPoolCopy.targetHealthFactorHelp} ${securityPoolCopy.minimumBackingRatio}: ${minimumBps === undefined ? commonCopy.metricUnavailablePlaceholder : `${formatCurrencyInputBalance(minimumBps, 4)}×`}.`}
+				{error ?? `${securityPoolCopy.targetHealthFactorHelp} ${securityPoolCopy.minimumBackingRatio}: ${minimumBps === undefined ? commonCopy.metricUnavailablePlaceholder : formatMultiplier(minimumBps, 4)}.`}
 			</small>
 		</label>
 	)
