@@ -267,8 +267,16 @@ describe('SecurityVaultSection', () => {
 		if (!(input instanceof HTMLInputElement)) throw new Error('Expected backing factor input')
 		expect(input.value).toBe('2')
 		fireEvent.input(input, { target: { value: '0.9' } })
+		expect(input.getAttribute('aria-invalid')).toBeNull()
 		expect(dialog.getAllByText('Target backing ratio must be at least 2×')).toHaveLength(1)
-		expect(dialog.getByRole('button', { name: 'Adjust backing ratio' }).getAttribute('aria-describedby')).toBe(input.getAttribute('aria-describedby'))
+		await act(() => {
+			input.dispatchEvent(new Event('blur'))
+		})
+		const factorError = dialog.getByText('Target backing ratio must be at least 2×')
+		expect(factorError.classList.contains('field-error')).toBe(true)
+		expect(input.getAttribute('aria-invalid')).toBe('true')
+		expect(input.getAttribute('aria-describedby')?.split(' ')[0]).toBe(factorError.id)
+		expect(dialog.getByRole('button', { name: 'Adjust backing ratio' }).getAttribute('aria-describedby')).toBe(factorError.id)
 		fireEvent.input(input, { target: { value: '2' } })
 		expect(dialog.getByText('Exposure after adjustment')).toBeDefined()
 		expect(dialog.getByText('Technical details').closest('details')?.open).toBe(false)
@@ -344,7 +352,7 @@ describe('SecurityVaultSection', () => {
 		const rendered = await renderIntoDocument(<SecurityVaultSection {...createSecurityVaultSectionProps({ securityVaultDetails: createSecurityVaultDetails({ targetBackingFactorBps: 20_000n }) })} />)
 		cleanupRenderedComponent = rendered.cleanup
 		const page = within(document.body)
-		expect([...document.querySelectorAll('label')].filter(label => label.textContent?.includes('Target backing ratio') && label.querySelector('input') !== null)).toHaveLength(1)
+		expect([...document.querySelectorAll('label')].filter(label => label.textContent?.includes('Target backing ratio') && document.getElementById(label.htmlFor) instanceof HTMLInputElement)).toHaveLength(1)
 		expect(page.getAllByText('Target backing ratio').length).toBeGreaterThan(0)
 		expect(document.body.textContent).toContain('2×')
 	})
@@ -815,7 +823,7 @@ describe('SecurityVaultSection', () => {
 		expectTransactionButtonEnabled(document.body, 'Withdraw REP')
 		fireEvent.click(documentQueries.getByRole('button', { name: 'Withdraw REP' }))
 		const withdrawDialog = documentQueries.getByRole('dialog', { name: 'Withdraw REP' })
-		const withdrawAmountInput = within(withdrawDialog).getByText('REP Withdraw Amount').parentElement?.querySelector('input')
+		const withdrawAmountInput = within(withdrawDialog).getByLabelText('REP Withdraw Amount') as HTMLInputElement
 		const timeoutInput = within(withdrawDialog).getByText('Manual Execution Timeout').parentElement?.querySelector('input')
 		expect(withdrawAmountInput?.disabled).toBe(false)
 		expect(timeoutInput?.disabled).toBe(false)
@@ -977,11 +985,17 @@ describe('SecurityVaultSection', () => {
 			const documentQueries = within(document.body)
 			if (modalFirst) fireEvent.click(documentQueries.getByRole('button', { name: 'Deposit REP' }))
 			const scope = modalFirst ? within(documentQueries.getByRole('dialog', { name: 'Deposit REP' })) : documentQueries
-			const factorInput = document.querySelector('input[aria-invalid="true"]')
-			expect(factorInput).not.toBeNull()
+			// The embedded layout also renders the whole-vault adjustment field with the same label.
+			const factorInputs = scope.getAllByRole('textbox', { name: 'Target backing ratio' })
+			expect(factorInputs.every(input => input.getAttribute('aria-invalid') === null)).toBe(true)
+			await act(() => {
+				for (const input of factorInputs) input.dispatchEvent(new Event('blur'))
+			})
+			const factorInput = factorInputs.find(input => input.getAttribute('aria-invalid') === 'true')
+			if (factorInput === undefined) throw new Error('Expected the deposit backing factor input to be invalid')
 			const factorError = scope.getByText('Target backing ratio must be a number with at most four decimal places')
-			expect(factorInput?.getAttribute('aria-invalid')).toBe('true')
-			expect(factorInput?.getAttribute('aria-describedby')).toBe(factorError.id)
+			expect(factorInput.getAttribute('aria-invalid')).toBe('true')
+			expect(factorInput.getAttribute('aria-describedby')?.split(' ')[0]).toBe(factorError.id)
 			renderedComponent.cleanup()
 		}
 		cleanupRenderedComponent = undefined

@@ -312,7 +312,16 @@ export function SecurityVaultSection({
 		}),
 		...extraReadinessActions,
 	])
-	const depositAmountField = <VaultDepositAmountField disabled={!depositRepToVaultEnabled} onChange={depositAmount => onSecurityVaultFormChange({ depositAmount })} value={normalizedSecurityVaultForm.depositAmount} walletRepBalanceAttoRep={walletRepBalanceAttoRep} />
+	const depositAmountField = (
+		<VaultDepositAmountField
+			disabled={!depositRepToVaultEnabled}
+			onChange={depositAmount => onSecurityVaultFormChange({ depositAmount })}
+			repTokenSymbol={repTokenSymbol}
+			value={normalizedSecurityVaultForm.depositAmount}
+			walletRepBalanceAttoRep={walletRepBalanceAttoRep}
+			walletRepBalanceLoading={walletRepBalanceLoading}
+		/>
+	)
 	const savedBackingFactor = !!currentSelectedVaultDetails?.targetBackingFactorBps
 	const depositBackingFactorField = <DepositBackingFactorField minimumBps={minimumBps} value={depositTargetHealthFactor} error={targetHealthFactorGuardMessage} disabled={!depositRepToVaultEnabled} onChange={targetHealthFactor => onSecurityVaultFormChange({ targetHealthFactor })} />
 	const savedBackingFactorMetric = <MetricField label={securityPoolCopy.vaultBackingFactor}>{depositTargetHealthFactor}×</MetricField>
@@ -334,7 +343,9 @@ export function SecurityVaultSection({
 		securityVaultRepApproval,
 	}
 	const repWithdrawAmountField =
-		effectiveRepExitMode === 'redeem' ? null : <VaultRepWithdrawAmountField disabled={!queueWithdrawRepEnabled} maximumWithdrawableAttoRep={maximumWithdrawableAttoRep} onChange={repWithdrawAmount => onSecurityVaultFormChange({ repWithdrawAmount })} value={normalizedSecurityVaultForm.repWithdrawAmount} />
+		effectiveRepExitMode === 'redeem' ? null : (
+			<VaultRepWithdrawAmountField disabled={!queueWithdrawRepEnabled} maximumWithdrawableAttoRep={maximumWithdrawableAttoRep} onChange={repWithdrawAmount => onSecurityVaultFormChange({ repWithdrawAmount })} repTokenSymbol={repTokenSymbol} value={normalizedSecurityVaultForm.repWithdrawAmount} />
+		)
 	const repExitActionButton = (
 		<VaultRepExitActionButton
 			canUseLoadedVaultActions={canUseLoadedVaultActions}
@@ -374,10 +385,7 @@ export function SecurityVaultSection({
 						)}
 						{depositAmountField}
 						{savedBackingFactor ? undefined : depositBackingFactorField}
-						<MetricGrid>
-							{savedBackingFactor ? savedBackingFactorMetric : undefined}
-							<MetricField label={securityPoolCopy.walletRep}>{walletRepBalanceLoading ? <LoadingText>{commonCopy.loading}</LoadingText> : <CurrencyValue value={walletRepBalanceAttoRep} suffix={repTokenSymbol} />}</MetricField>
-						</MetricGrid>
+						{savedBackingFactor ? <MetricGrid>{savedBackingFactorMetric}</MetricGrid> : undefined}
 						<ErrorNotice message={walletRepBalanceError} />
 						<VaultDepositApprovalControl {...depositApprovalControlProps} onCancel={closeVaultActionModal} />
 					</>

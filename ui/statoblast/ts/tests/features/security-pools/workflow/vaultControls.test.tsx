@@ -108,7 +108,7 @@ describe('SecurityPoolWorkflowSection: vault controls', () => {
 
 		const depositDialog = documentQueries.getByRole('dialog', { name: 'Deposit REP' })
 		const depositQueries = within(depositDialog)
-		const depositAmountInput = depositQueries.getByText('REP backing').parentElement?.querySelector('input')
+		const depositAmountInput = depositQueries.getByLabelText('REP backing') as HTMLInputElement
 		const approvalAmountInput = depositQueries.getByText('REP Approval Amount').parentElement?.querySelector('input')
 		const approvalMaxButton = depositQueries.getByText('REP Approval Amount').parentElement?.querySelector('button')
 		expect(depositAmountInput?.disabled).toBe(true)
@@ -124,7 +124,7 @@ describe('SecurityPoolWorkflowSection: vault controls', () => {
 			fireEvent.click(documentQueries.getByRole('button', { name: 'Withdraw REP' }))
 		})
 		const withdrawDialog = documentQueries.getByRole('dialog', { name: 'Withdraw REP' })
-		expect(within(withdrawDialog).getByText('REP Withdraw Amount').parentElement?.querySelector('input')?.disabled).toBe(false)
+		expect((within(withdrawDialog).getByLabelText('REP Withdraw Amount') as HTMLInputElement).disabled).toBe(false)
 	})
 
 	test('vault dialogs keep a single primary transaction action and end with Cancel', async () => {
@@ -392,7 +392,7 @@ describe('SecurityPoolWorkflowSection: vault controls', () => {
 		expect(modalQueries.queryByText('Review the selected vault, complete REP approval if needed, then deposit REP.')).toBeNull()
 		expect(modalQueries.queryByText('REP approval is sufficient for the deposit amount')).toBeNull()
 		expect(modalQueries.queryByText('Approve REP inside this modal before depositing.')).toBeNull()
-		expect(modalQueries.getByText('Wallet REP')).not.toBeNull()
+		expect(modalQueries.getByText(/^Balance: /, { selector: 'p.field-hint' })).not.toBeNull()
 		expect(modalQueries.getByText('Required REP')).not.toBeNull()
 		expect(modalQueries.getByText('REP Approval Amount')).not.toBeNull()
 	})

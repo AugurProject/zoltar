@@ -304,12 +304,11 @@ describe('SecurityPoolSection', () => {
 
 		const documentQueries = within(document.body)
 		const statoblastSecurityMultiplierBpsInput = documentQueries.getByRole('textbox', { name: 'Statoblast Security Multiplier' })
-		expect(statoblastSecurityMultiplierBpsInput.getAttribute('aria-describedby')).toBe('security-pool-security-multiplier-help')
-		expect(documentQueries.getByText('Multiplier target in x, with up to four decimal places; higher values require more REP.')).not.toBeNull()
-		const priorityFeeInput = documentQueries.getByRole('textbox', { name: 'Initial Report Priority Fee (ETH)' })
-		expect(priorityFeeInput.getAttribute('aria-describedby')).toBe('security-pool-initial-report-priority-fee-help')
+		expect((statoblastSecurityMultiplierBpsInput.getAttribute('aria-describedby') ?? '').split(' ').map(id => document.getElementById(id)?.textContent)).toEqual(['Multiplier target in x, with up to four decimal places; higher values require more REP.', '×'])
+		expect((statoblastSecurityMultiplierBpsInput as HTMLInputElement).inputMode).toBe('decimal')
+		const priorityFeeInput = documentQueries.getByRole('textbox', { name: 'Initial report priority fee' })
+		expect((priorityFeeInput.getAttribute('aria-describedby') ?? '').split(' ').map(id => document.getElementById(id)?.textContent)).toEqual(['Fixed gas-price premium added to Open Oracle report security.', 'ETH'])
 		expect((priorityFeeInput as HTMLInputElement).value).toBe('0.00000001')
-		expect(documentQueries.getByText('Fixed gas-price premium added to Open Oracle report security.')).not.toBeNull()
 	})
 
 	test('associates invalid priority-fee guidance and disables creation', async () => {
@@ -327,11 +326,21 @@ describe('SecurityPoolSection', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		const priorityFeeInput = within(document.body).getByRole('textbox', { name: 'Initial Report Priority Fee (ETH)' })
+		const message = 'Initial-report priority fee must be greater than 0\u00a0ETH.'
+		const priorityFeeInput = within(document.body).getByRole('textbox', { name: 'Initial report priority fee' })
+		expect(priorityFeeInput.getAttribute('aria-invalid')).toBeNull()
+		expect(document.getElementById('security-pool-initial-report-priority-fee-error')).toBeNull()
+		expectTransactionButtonDisabled(document.body, 'Create pool', message)
+
+		await act(() => {
+			priorityFeeInput.dispatchEvent(new Event('blur'))
+		})
 		expect(priorityFeeInput.getAttribute('aria-invalid')).toBe('true')
-		expect(priorityFeeInput.getAttribute('aria-describedby')).toBe('security-pool-initial-report-priority-fee-help security-pool-initial-report-priority-fee-error')
-		expect(within(document.body).getByText('Initial-report priority fee must be greater than 0\u00a0ETH.')).not.toBeNull()
-		expectTransactionButtonDisabled(document.body, 'Create pool', 'Initial-report priority fee must be greater than 0\u00a0ETH.')
+		expect(priorityFeeInput.getAttribute('aria-describedby')?.split(' ')[0]).toBe('security-pool-initial-report-priority-fee-error')
+		expect(document.getElementById('security-pool-initial-report-priority-fee-error')?.textContent).toBe(message)
+		expect(document.getElementById('security-pool-initial-report-priority-fee-error')?.getAttribute('role')).toBeNull()
+		expectTransactionButtonDisabled(document.body, 'Create pool', message)
+		expect(within(document.body).getByRole('button', { name: 'Create pool' }).getAttribute('aria-describedby')).toBe('security-pool-initial-report-priority-fee-error')
 	})
 
 	test('associates invalid multiplier guidance and disables creation', async () => {
@@ -357,9 +366,16 @@ describe('SecurityPoolSection', () => {
 			cleanupRenderedComponent = renderedComponent.cleanup
 
 			const multiplierInput = within(document.body).getByRole('textbox', { name: 'Statoblast Security Multiplier' })
+			expect(multiplierInput.getAttribute('aria-invalid')).toBeNull()
+			expectTransactionButtonDisabled(document.body, 'Create pool', message)
+			expect(document.body.textContent?.split(message).length).toBe(2)
+
+			await act(() => {
+				multiplierInput.dispatchEvent(new Event('blur'))
+			})
 			expect(multiplierInput.getAttribute('aria-invalid')).toBe('true')
-			expect(multiplierInput.getAttribute('aria-describedby')).toBe('security-pool-security-multiplier-help security-pool-security-multiplier-error')
-			expect(within(document.body).getByText(message)).not.toBeNull()
+			expect(multiplierInput.getAttribute('aria-describedby')?.split(' ')[0]).toBe('security-pool-security-multiplier-error')
+			expect(document.getElementById('security-pool-security-multiplier-error')?.textContent).toBe(message)
 			expectTransactionButtonDisabled(document.body, 'Create pool', message)
 			const createButton = within(document.body).getByRole('button', { name: 'Create pool' })
 			expect(createButton.getAttribute('aria-describedby')).toBe('security-pool-security-multiplier-error')
@@ -386,8 +402,11 @@ describe('SecurityPoolSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const multiplierInput = within(document.body).getByRole('textbox', { name: 'Statoblast Security Multiplier' })
+		await act(() => {
+			multiplierInput.dispatchEvent(new Event('blur'))
+		})
 		expect(multiplierInput.getAttribute('aria-invalid')).toBeNull()
-		expect(multiplierInput.getAttribute('aria-describedby')).toBe('security-pool-security-multiplier-help')
+		expect(document.getElementById('security-pool-security-multiplier-error')).toBeNull()
 		expectTransactionButtonEnabled(document.body, 'Create pool')
 	})
 

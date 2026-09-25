@@ -64,15 +64,16 @@ const OPEN_ORACLE_DISPUTE_INPUT_FIELD_ORDER: readonly OpenOracleDisputeInputFiel
 export function getOpenOracleCreateFieldErrorId(field: OpenOracleCreateField) {
 	return OPEN_ORACLE_CREATE_FIELD_ERROR_IDS[field]
 }
-export function getOpenOracleFieldDescribedBy(errorId: string, error: string | undefined, helpId?: string) {
-	return [helpId, error === undefined ? undefined : errorId].filter(value => value !== undefined).join(' ') || undefined
-}
-export function renderOpenOracleFieldError(id: string, message: string | undefined) {
-	if (message === undefined) return undefined
+/** Matches `FormInput` `liveError`: a mounted polite region, so a new error is announced without interrupting input. */
+function renderOpenOracleFieldError(id: string, message: string | undefined) {
 	return (
-		<p className='field-error' id={id} role='alert'>
-			{message}
-		</p>
+		<div aria-live='polite' className='field-error-live-region'>
+			{message === undefined ? undefined : (
+				<p className='field-error' id={id}>
+					{message}
+				</p>
+			)}
+		</div>
 	)
 }
 function getOpenOracleDisputeFieldErrorId(field: OpenOracleDisputeInputField, reportId: string) {
@@ -214,6 +215,8 @@ export function renderSelectedReportActionSection({
 	openOracleForm,
 	openOracleTokenAccessState,
 	openOracleReportDetails,
+	onDisputeFieldRevealChange = () => undefined,
+	revealedDisputeFields = new Set(),
 	token1Symbol,
 	token2Symbol,
 }: {
@@ -230,6 +233,9 @@ export function renderSelectedReportActionSection({
 	openOracleForm: OpenOracleFormState
 	openOracleTokenAccessState: OpenOracleSectionProps['openOracleTokenAccessState']
 	openOracleReportDetails?: OpenOracleReportDetails
+	/** Amount errors stay hidden while typing; a field reveals its error on blur and hides it again on input. */
+	onDisputeFieldRevealChange?: (field: OpenOracleDisputeInputField, revealed: boolean) => void
+	revealedDisputeFields?: ReadonlySet<OpenOracleDisputeInputField>
 	token1Symbol: string
 	token2Symbol: string
 }) {
@@ -273,7 +279,13 @@ export function renderSelectedReportActionSection({
 			})()
 			const disputeReportId = openOracleForm.reportId.trim() || 'unselected'
 			const sharedApprovalGuardMessageId = `open-oracle-dispute-approval-guard-${disputeReportId}`
-			const disputeInputFieldErrors = disputeSubmission?.inputFieldErrors ?? {}
+			const allDisputeInputFieldErrors = disputeSubmission?.inputFieldErrors ?? {}
+			// The token choice is a selection, so its error shows immediately; amount errors wait for blur.
+			const disputeInputFieldErrors = {
+				disputeTokenToSwap: allDisputeInputFieldErrors.disputeTokenToSwap,
+				disputeNewAmount1: revealedDisputeFields.has('disputeNewAmount1') ? allDisputeInputFieldErrors.disputeNewAmount1 : undefined,
+				disputeNewAmount2: revealedDisputeFields.has('disputeNewAmount2') ? allDisputeInputFieldErrors.disputeNewAmount2 : undefined,
+			}
 			const firstDisputeInputErrorField = OPEN_ORACLE_DISPUTE_INPUT_FIELD_ORDER.find(field => disputeInputFieldErrors[field] !== undefined)
 			const disputeInputBlockMessageId = firstDisputeInputErrorField === undefined ? `open-oracle-dispute-input-blocker-${disputeReportId}` : getOpenOracleDisputeFieldErrorId(firstDisputeInputErrorField, disputeReportId)
 			const disputeNewAmount1Error = disputeInputFieldErrors.disputeNewAmount1
@@ -317,26 +329,34 @@ export function renderSelectedReportActionSection({
 							<label className='field'>
 								<span>{openOracleCopy.formatNewTokenAmountFieldLabel(token1Symbol)}</span>
 								<FormInput
-									aria-describedby={disputeNewAmount1Error === undefined ? undefined : getOpenOracleDisputeFieldErrorId('disputeNewAmount1', disputeReportId)}
 									aria-label={openOracleCopy.formatNewTokenAmountFieldLabel(token1Symbol)}
+									error={disputeNewAmount1Error}
+									errorId={getOpenOracleDisputeFieldErrorId('disputeNewAmount1', disputeReportId)}
 									inputMode='decimal'
-									invalid={disputeNewAmount1Error !== undefined}
-									onInput={event => onOpenOracleFormChange({ disputeNewAmount1: event.currentTarget.value })}
+									liveError
+									onBlur={() => onDisputeFieldRevealChange('disputeNewAmount1', true)}
+									onInput={event => {
+										onDisputeFieldRevealChange('disputeNewAmount1', false)
+										onOpenOracleFormChange({ disputeNewAmount1: event.currentTarget.value })
+									}}
 									value={openOracleForm.disputeNewAmount1}
 								/>
-								{renderOpenOracleFieldError(getOpenOracleDisputeFieldErrorId('disputeNewAmount1', disputeReportId), disputeNewAmount1Error)}
 							</label>
 							<label className='field'>
 								<span>{openOracleCopy.formatNewTokenAmountFieldLabel(token2Symbol)}</span>
 								<FormInput
-									aria-describedby={disputeNewAmount2Error === undefined ? undefined : getOpenOracleDisputeFieldErrorId('disputeNewAmount2', disputeReportId)}
 									aria-label={openOracleCopy.formatNewTokenAmountFieldLabel(token2Symbol)}
+									error={disputeNewAmount2Error}
+									errorId={getOpenOracleDisputeFieldErrorId('disputeNewAmount2', disputeReportId)}
 									inputMode='decimal'
-									invalid={disputeNewAmount2Error !== undefined}
-									onInput={event => onOpenOracleFormChange({ disputeNewAmount2: event.currentTarget.value })}
+									liveError
+									onBlur={() => onDisputeFieldRevealChange('disputeNewAmount2', true)}
+									onInput={event => {
+										onDisputeFieldRevealChange('disputeNewAmount2', false)
+										onOpenOracleFormChange({ disputeNewAmount2: event.currentTarget.value })
+									}}
 									value={openOracleForm.disputeNewAmount2}
 								/>
-								{renderOpenOracleFieldError(getOpenOracleDisputeFieldErrorId('disputeNewAmount2', disputeReportId), disputeNewAmount2Error)}
 							</label>
 						</div>
 						{disputeSubmission?.expectedNewAmount1 === undefined || disputeSubmission.token1Decimals === undefined ? undefined : <p className='detail'>{openOracleCopy.formatNewAmountMustBeExactDetail(token1Symbol, formatCurrencyInputBalance(disputeSubmission.expectedNewAmount1, disputeSubmission.token1Decimals))}</p>}

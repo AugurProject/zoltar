@@ -4,59 +4,37 @@ import type { ComponentChildren } from 'preact'
 import { ActionLauncherButton } from '@zoltar/ui-core-shared/components/ActionLauncherButton.js'
 import * as workspaceCopy from '../../../copy/poolWorkspace.js'
 import { ErrorNotice } from '@zoltar/ui-core-shared/components/ErrorNotice.js'
-import { FormInput } from '@zoltar/ui-core-shared/components/FormInput.js'
+import { AmountField } from '@zoltar/ui-core-shared/components/AmountField.js'
+import { LoadingText } from '@zoltar/ui-core-shared/components/LoadingText.js'
 import { SectionBlock } from '@zoltar/ui-core-shared/components/SectionBlock.js'
 import { StateHint } from '@zoltar/ui-core-shared/components/StateHint.js'
 import { TokenApprovalControl } from '@zoltar/ui-core-shared/components/TokenApprovalControl.js'
 import { TransactionActionButton, TransactionActionGroup } from '@zoltar/ui-core-shared/components/TransactionActionButton.js'
-import { formatCurrencyInputBalance } from '@zoltar/ui-core-shared/lib/formatters.js'
 import type { ReadinessAction } from '@zoltar/ui-core-shared/types/components.js'
 import type { SecurityVaultDetails } from '@zoltar/ui-core-shared/types/contracts.js'
 import type { SecurityVaultSectionProps } from '../../types.js'
 import type { VaultRepExitMode } from '../lib/securityVaultAvailability.js'
 
-export function VaultDepositAmountField({ disabled, onChange, value, walletRepBalanceAttoRep }: { disabled: boolean; onChange: (depositAmount: string) => void; value: string; walletRepBalanceAttoRep: bigint | undefined }) {
-	return (
-		<label className='field'>
-			<span>{securityPoolCopy.repBackingLabel}</span>
-			<div className='field-inline'>
-				<FormInput className='field-inline-input' value={value} onInput={event => onChange(event.currentTarget.value)} disabled={disabled} />
-				<button
-					className='quiet field-inline-action'
-					type='button'
-					onClick={() => {
-						if (walletRepBalanceAttoRep === undefined) return
-						onChange(formatCurrencyInputBalance(walletRepBalanceAttoRep))
-					}}
-					disabled={walletRepBalanceAttoRep === undefined || disabled}
-				>
-					{commonCopy.max}
-				</button>
-			</div>
-		</label>
-	)
+export function VaultDepositAmountField({
+	disabled,
+	onChange,
+	repTokenSymbol,
+	value,
+	walletRepBalanceAttoRep,
+	walletRepBalanceLoading,
+}: {
+	disabled: boolean
+	onChange: (depositAmount: string) => void
+	repTokenSymbol: string
+	value: string
+	walletRepBalanceAttoRep: bigint | undefined
+	walletRepBalanceLoading: boolean
+}) {
+	return <AmountField balance={walletRepBalanceAttoRep} disabled={disabled} hint={walletRepBalanceLoading ? <LoadingText>{commonCopy.loading}</LoadingText> : undefined} label={securityPoolCopy.repBackingLabel} fillMax={{ amount: walletRepBalanceAttoRep }} onChange={onChange} unit={repTokenSymbol} value={value} />
 }
 
-export function VaultRepWithdrawAmountField({ disabled, maximumWithdrawableAttoRep, onChange, value }: { disabled: boolean; maximumWithdrawableAttoRep: bigint | undefined; onChange: (repWithdrawAmount: string) => void; value: string }) {
-	return (
-		<label className='field'>
-			<span>{securityPoolCopy.repWithdrawAmount}</span>
-			<div className='field-inline'>
-				<FormInput className='field-inline-input' value={value} onInput={event => onChange(event.currentTarget.value)} disabled={disabled} />
-				<button
-					className='quiet field-inline-action'
-					type='button'
-					onClick={() => {
-						if (maximumWithdrawableAttoRep === undefined) return
-						onChange(formatCurrencyInputBalance(maximumWithdrawableAttoRep))
-					}}
-					disabled={maximumWithdrawableAttoRep === undefined || disabled}
-				>
-					{commonCopy.max}
-				</button>
-			</div>
-		</label>
-	)
+export function VaultRepWithdrawAmountField({ disabled, maximumWithdrawableAttoRep, onChange, repTokenSymbol, value }: { disabled: boolean; maximumWithdrawableAttoRep: bigint | undefined; onChange: (repWithdrawAmount: string) => void; repTokenSymbol: string; value: string }) {
+	return <AmountField disabled={disabled} label={securityPoolCopy.repWithdrawAmount} fillMax={{ amount: maximumWithdrawableAttoRep }} maximum={maximumWithdrawableAttoRep} onChange={onChange} unit={repTokenSymbol} value={value} />
 }
 
 export function VaultRepExitActionButton({

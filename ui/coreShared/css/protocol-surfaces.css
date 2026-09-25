@@ -1569,6 +1569,7 @@ main:has(.global-transaction-dialog-nonblocking) #app-content {
 .form-input-adorned[aria-invalid="true"],
 .form-input-adorned.is-invalid {
 	border-color: var(--danger);
+	box-shadow: inset 0 -2px 0 var(--danger);
 }
 
 .form-input-adorned[aria-invalid="true"]:focus-within,
@@ -1587,6 +1588,23 @@ main:has(.global-transaction-dialog-nonblocking) #app-content {
 	font-size: var(--font-label);
 	letter-spacing: 0.04em;
 	white-space: nowrap;
+}
+
+.field-inline > .form-input-adorned,
+.field-inline > .form-input {
+	flex: 1 1 auto;
+	min-width: 0;
+}
+
+/* Keeps an empty polite live region mounted without adding a flex or grid gap. */
+.field-error-live-region {
+	display: contents;
+}
+
+.amount-field-presets {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--space-2);
 }
 
 .empty-state {
@@ -1799,6 +1817,24 @@ main:has(.global-transaction-dialog-nonblocking) #app-content {
 .form-input[aria-invalid="true"]:focus {
 	border-color: var(--danger);
 	box-shadow: 0 0 0 3px var(--danger-soft);
+}
+
+.field .form-input-adorned {
+	background-color: var(--surface-overlay);
+}
+
+/* The adorned wrapper owns the frame, focus ring, and invalid state; these selectors outrank the generic field input rules above. */
+.form-input-adorned > input.form-input,
+.form-input-adorned > input.form-input:focus,
+.form-input-adorned > input.form-input.is-invalid,
+.form-input-adorned > input.form-input.is-invalid:focus,
+.field .form-input-adorned > input.form-input,
+.field .form-input-adorned > input.form-input:focus,
+.field .form-input-adorned > input.form-input.is-invalid,
+.field .form-input-adorned > input.form-input.is-invalid:focus {
+	border: 0;
+	background: transparent;
+	box-shadow: none;
 }
 
 .field textarea {

@@ -8,6 +8,7 @@ import { AddressValue } from '@zoltar/ui-core-shared/components/AddressValue.js'
 import { CurrencyValue } from '@zoltar/ui-core-shared/components/CurrencyValue.js'
 import { EnumDropdown } from '@zoltar/ui-core-shared/components/EnumDropdown.js'
 import { ErrorNotice } from '@zoltar/ui-core-shared/components/ErrorNotice.js'
+import { AmountField } from '@zoltar/ui-core-shared/components/AmountField.js'
 import { FormInput } from '@zoltar/ui-core-shared/components/FormInput.js'
 import { MetricGrid } from '@zoltar/ui-core-shared/components/MetricGrid.js'
 import { MetricField } from '@zoltar/ui-core-shared/components/MetricField.js'
@@ -19,7 +20,6 @@ import { ShareMigrationTargetsSection } from '../../universes/components/ShareMi
 import { TransactionActionButton } from '@zoltar/ui-core-shared/components/TransactionActionButton.js'
 import { TransactionReview } from '@zoltar/ui-core-shared/components/TransactionReview.js'
 import { useChainTimestamp } from '@zoltar/ui-core-shared/wallet/chainTimestamp.js'
-import { formatCurrencyInputBalance } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { tryParseBigIntListInput } from '@zoltar/ui-core-shared/forms/inputs.js'
 import { getWrongNetworkReason, isActiveAppChain } from '@zoltar/ui-core-shared/wallet/network.js'
 import { getReportingOutcomeLabel, REPORTING_OUTCOME_DROPDOWN_OPTIONS } from '../../reporting/lib/reporting.js'
@@ -393,23 +393,7 @@ export function TradingSection({
 						<CurrencyValue exactWhenRoundedToZero loading={loadingTradingDetails} value={maximumMintAmount} suffix={commonCopy.eth} />
 					</MetricField>
 				</MetricGrid>
-				<label className='field'>
-					<span>{tradingCopy.mintCompleteSetsAmount}</span>
-					<div className='field-inline'>
-						<FormInput className='field-inline-input' value={tradingForm.completeSetAmount} inputMode='decimal' onInput={event => onTradingFormChange({ completeSetAmount: event.currentTarget.value })} />
-						<button
-							className='quiet field-inline-action'
-							type='button'
-							onClick={() => {
-								if (maximumMintAmount === undefined) return
-								onTradingFormChange({ completeSetAmount: formatCurrencyInputBalance(maximumMintAmount) })
-							}}
-							disabled={maximumMintAmount === undefined || maximumMintAmount <= 0n}
-						>
-							{commonCopy.max}
-						</button>
-					</div>
-				</label>
+				<AmountField fillMax={{ amount: maximumMintAmount }} label={tradingCopy.mintCompleteSetsAmount} onChange={completeSetAmount => onTradingFormChange({ completeSetAmount })} unit={commonCopy.eth} value={tradingForm.completeSetAmount} />
 				<TransactionReview
 					variant='inline'
 					primary={[
@@ -462,23 +446,7 @@ export function TradingSection({
 			</OperationModal>
 
 			<OperationModal closeOnSuccessKey={tradingResult?.action === 'redeemCompleteSet' ? tradingResult.hash : undefined} context={getTransactionContext('Complete set · Yes + No + Invalid')} isOpen={activeModal === 'redeem-complete-sets'} onClose={() => setActiveModal(undefined)} title={tradingCopy.redeemCompleteSets}>
-				<label className='field'>
-					<span>{tradingCopy.redeemCompleteSetsAmount}</span>
-					<div className='field-inline'>
-						<FormInput className='field-inline-input' value={tradingForm.redeemAmount} inputMode='decimal' onInput={event => onTradingFormChange({ redeemAmount: event.currentTarget.value })} />
-						<button
-							className='quiet field-inline-action'
-							type='button'
-							onClick={() => {
-								if (displayMaxRedeemableCompleteSets === undefined) return
-								onTradingFormChange({ redeemAmount: formatCurrencyInputBalance(displayMaxRedeemableCompleteSets) })
-							}}
-							disabled={displayMaxRedeemableCompleteSets === undefined || displayMaxRedeemableCompleteSets <= 0n}
-						>
-							{commonCopy.max}
-						</button>
-					</div>
-				</label>
+				<AmountField fillMax={{ amount: displayMaxRedeemableCompleteSets }} label={tradingCopy.redeemCompleteSetsAmount} onChange={redeemAmount => onTradingFormChange({ redeemAmount })} unit={commonCopy.eth} value={tradingForm.redeemAmount} />
 				<TransactionReview
 					primary={[
 						{

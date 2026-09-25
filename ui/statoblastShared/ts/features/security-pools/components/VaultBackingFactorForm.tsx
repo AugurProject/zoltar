@@ -4,7 +4,7 @@ import { ErrorNotice } from '@zoltar/ui-core-shared/components/ErrorNotice.js'
 import type { OperationModalProps } from '@zoltar/ui-core-shared/types/components.js'
 import { useId, useState } from 'preact/hooks'
 import { formatCurrencyInputBalance } from '@zoltar/ui-core-shared/lib/formatters.js'
-import { FormInput } from '@zoltar/ui-core-shared/components/FormInput.js'
+import { AmountField } from '@zoltar/ui-core-shared/components/AmountField.js'
 import { MetricGrid } from '@zoltar/ui-core-shared/components/MetricGrid.js'
 import { MetricField } from '@zoltar/ui-core-shared/components/MetricField.js'
 import { CurrencyValue } from '@zoltar/ui-core-shared/components/CurrencyValue.js'
@@ -37,7 +37,8 @@ export function VaultBackingFactorForm({
 	const minimumBps = poolSecurityMultiplierBps ?? details?.statoblastSecurityMultiplierBps
 	const currentFactorBps = details?.targetBackingFactorBps || minimumBps
 	const factor = factorInput ?? (currentFactorBps !== undefined && currentFactorBps >= 10_000n ? formatCurrencyInputBalance(currentFactorBps, 4) : '2')
-	const descriptionId = useId()
+	const errorId = useId()
+	const [errorRevealed, setErrorRevealed] = useState(false)
 	let nextCapacity: bigint | undefined
 	let factorBps: bigint | undefined
 	let error: string | undefined
@@ -50,15 +51,10 @@ export function VaultBackingFactorForm({
 	}
 	const prerequisite = blocker ?? getVaultBackingFactorAdjustmentGuard(details, factorBps, executionRepPerEthPrice, poolSecurityMultiplierBps)
 	const reason = prerequisite ?? error
+	const fieldErrorShown = prerequisite === undefined && errorRevealed && error !== undefined
 	return (
 		<>
-			<label className='field'>
-				<span>{securityPoolCopy.vaultBackingFactor}</span>
-				<FormInput value={factor} inputMode='decimal' disabled={busy} onInput={event => setFactor(event.currentTarget.value)} invalid={error !== undefined} aria-describedby={descriptionId} />
-			</label>
-			<p className='detail' id={descriptionId}>
-				{error ?? securityPoolCopy.vaultBackingFactorHelp}
-			</p>
+			<AmountField decimals={4} disabled={busy} error={error} errorId={errorId} errorRevealed={errorRevealed} hint={securityPoolCopy.vaultBackingFactorHelp} label={securityPoolCopy.vaultBackingFactor} onChange={setFactor} onErrorRevealedChange={setErrorRevealed} unit={commonCopy.multiplierUnit} value={factor} />
 			<MetricGrid>
 				<MetricField label={securityPoolCopy.minimumBackingRatio}>{minimumBps === undefined ? commonCopy.metricUnavailablePlaceholder : `${formatCurrencyInputBalance(minimumBps, 4)}×`}</MetricField>
 				<MetricField label={securityPoolCopy.currentExposureSupported}>
@@ -84,8 +80,8 @@ export function VaultBackingFactorForm({
 					idleLabel={securityPoolCopy.adjustVaultBackingFactor}
 					pendingLabel={securityPoolCopy.adjustingVaultBackingFactor}
 					pending={pending}
-					showDisabledReason={prerequisite !== undefined}
-					disabledReasonElementId={descriptionId}
+					showDisabledReason={!fieldErrorShown}
+					disabledReasonElementId={fieldErrorShown ? errorId : undefined}
 					onClick={() => onAdjust(factor)}
 					availability={{ disabled: busy || reason !== undefined, reason }}
 				/>
@@ -95,15 +91,17 @@ export function VaultBackingFactorForm({
 }
 
 export function DepositBackingFactorField({ value, error, disabled, minimumBps, onChange }: { value: string; minimumBps?: bigint | undefined; error: string | undefined; disabled: boolean; onChange: (value: string) => void }) {
-	const descriptionId = useId()
 	return (
-		<label className='field'>
-			<span>{securityPoolCopy.targetHealthFactor}</span>
-			<FormInput aria-describedby={descriptionId} value={value} onInput={event => onChange(event.currentTarget.value)} disabled={disabled} invalid={error !== undefined} />
-			<small className='field-help' id={descriptionId}>
-				{error ?? `${securityPoolCopy.targetHealthFactorHelp} ${securityPoolCopy.minimumBackingRatio}: ${minimumBps === undefined ? commonCopy.metricUnavailablePlaceholder : `${formatCurrencyInputBalance(minimumBps, 4)}×`}.`}
-			</small>
-		</label>
+		<AmountField
+			decimals={4}
+			disabled={disabled}
+			error={error}
+			hint={securityPoolCopy.formatTargetHealthFactorHint(minimumBps === undefined ? commonCopy.metricUnavailablePlaceholder : `${formatCurrencyInputBalance(minimumBps, 4)}${commonCopy.multiplierUnit}`)}
+			label={securityPoolCopy.targetHealthFactor}
+			onChange={onChange}
+			unit={commonCopy.multiplierUnit}
+			value={value}
+		/>
 	)
 }
 

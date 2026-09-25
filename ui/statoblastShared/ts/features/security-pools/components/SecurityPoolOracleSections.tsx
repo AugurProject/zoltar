@@ -7,6 +7,7 @@ import { AddressValue } from '@zoltar/ui-core-shared/components/AddressValue.js'
 import { EthAmount } from '@zoltar/ui-core-shared/components/TransactionFundingSummary.js'
 import { CurrencyValue } from '@zoltar/ui-core-shared/components/CurrencyValue.js'
 import { ErrorNotice } from '@zoltar/ui-core-shared/components/ErrorNotice.js'
+import { AmountField } from '@zoltar/ui-core-shared/components/AmountField.js'
 import { FormInput } from '@zoltar/ui-core-shared/components/FormInput.js'
 import { LoadingText } from '@zoltar/ui-core-shared/components/LoadingText.js'
 import { MetricField } from '@zoltar/ui-core-shared/components/MetricField.js'
@@ -57,16 +58,19 @@ export type RequestPriceModalProps = {
 }
 
 export function SecurityPoolRequestPriceModal({ canRequest, closeOnSuccessKey, confirmationGuardMessage, getReturnFocusTarget, onClose, onConfirm, pending, review }: RequestPriceModalProps) {
-	const manualPriceFieldId = useId()
+	const manualPriceErrorId = useId()
 	const [priceSource, setPriceSource] = useState<'automatic' | 'manual'>('automatic')
 	const [manualPrice, setManualPrice] = useState('')
+	const [manualPriceErrorRevealed, setManualPriceErrorRevealed] = useState(false)
 	useLayoutEffect(() => {
 		setPriceSource('automatic')
 		setManualPrice('')
+		setManualPriceErrorRevealed(false)
 	}, [review])
 	const parsedPrice = tryParseDecimalInput(manualPrice)
 	const proposedRepPerEthPrice = priceSource === 'manual' ? parsedPrice : undefined
 	const manualPriceError = priceSource === 'manual' && (parsedPrice === undefined || parsedPrice <= 0n || parsedPrice >= 2n ** 256n) ? securityPoolCopy.manualInitialPriceError : undefined
+	const manualPriceErrorShown = manualPriceErrorRevealed && manualPriceError !== undefined
 	return (
 		<OperationModal closeOnSuccessKey={closeOnSuccessKey} getReturnFocusTarget={getReturnFocusTarget} isOpen={review !== undefined} onClose={onClose} title={securityPoolCopy.requestNewPriceTitle}>
 			<ViewTabs
@@ -80,16 +84,23 @@ export function SecurityPoolRequestPriceModal({ canRequest, closeOnSuccessKey, c
 				]}
 			/>
 			{priceSource === 'manual' ? (
-				<label className='field' id={manualPriceFieldId}>
-					<span>{securityPoolCopy.manualRepPerEth}</span>
-					<FormInput aria-label={securityPoolCopy.manualRepPerEth} value={manualPrice} inputMode='decimal' disabled={pending} onInput={event => setManualPrice(event.currentTarget.value)} error={manualPriceError} hint={securityPoolCopy.manualInitialPriceHint} />
-				</label>
+				<AmountField
+					disabled={pending}
+					error={manualPriceError}
+					errorId={manualPriceErrorId}
+					errorRevealed={manualPriceErrorRevealed}
+					hint={securityPoolCopy.manualInitialPriceHint}
+					label={securityPoolCopy.manualRepPerEth}
+					onChange={setManualPrice}
+					onErrorRevealedChange={setManualPriceErrorRevealed}
+					value={manualPrice}
+				/>
 			) : undefined}
 			<TransactionReview variant='inline' primary={[{ label: transactionReviewCopy.youPay, value: <CurrencyValue precision='exact' value={review?.requestValueAttoEth} suffix={commonCopy.eth} /> }]} risks={[securityPoolCopy.requestPricePendingReportRisk, securityPoolCopy.requestPriceFundingRisk]} />
 			<div className='actions oracle-actions'>
 				<TransactionActionButton
-					disabledReasonElementId={manualPriceError === undefined ? undefined : manualPriceFieldId}
-					showDisabledReason={confirmationGuardMessage !== undefined || manualPriceError === undefined}
+					disabledReasonElementId={confirmationGuardMessage === undefined && manualPriceErrorShown ? manualPriceErrorId : undefined}
+					showDisabledReason={confirmationGuardMessage !== undefined || !manualPriceErrorShown}
 					idleLabel={securityPoolCopy.confirmPriceRequest}
 					pendingLabel={securityPoolCopy.requestingNewPrice}
 					onClick={() => {
