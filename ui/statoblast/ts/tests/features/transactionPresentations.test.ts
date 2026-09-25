@@ -119,13 +119,21 @@ describe('transaction presentations', () => {
 		expect(createOpenOracleSuccessPresentation({ action: 'withdrawBalance', hash: '0x1234' }, context).title).toBe('WETH withdrawn')
 	})
 
+	test('keeps unresolved token outcome titles in sentence case', () => {
+		expect(createOpenOracleTransactionIntent('approveToken1').submittedTitle).toBe('Approving base token')
+		expect(createOpenOracleSuccessPresentation({ action: 'approveToken1', hash: '0x1234' }).title).toBe('Base token approved')
+		expect(createOpenOracleSuccessPresentation({ action: 'approveToken2', hash: '0x1234' }).title).toBe('Quote token approved')
+		expect(createOpenOracleTransactionIntent('withdrawBalance').submittedTitle).toBe('Withdrawing oracle balance')
+		expect(createOpenOracleSuccessPresentation({ action: 'withdrawBalance', hash: '0x1234' }).title).toBe('Oracle balance withdrawn')
+	})
+
 	test('uses the user-facing report name for Open Oracle creation', () => {
-		expect(createOpenOracleTransactionIntent('createReportInstance').submittedTitle).toBe('Create report')
+		expect(createOpenOracleTransactionIntent('createReportInstance').submittedTitle).toBe('Creating standalone oracle report')
 		expect(createOpenOracleSuccessPresentation({ action: 'createReportInstance', hash: '0x1234' }).title).toBe('Report created')
 	})
 
 	test('describes Open Oracle settlement as a report lifecycle action', () => {
-		expect(createOpenOracleTransactionIntent('settle').submittedTitle).toBe('Settling Report')
+		expect(createOpenOracleTransactionIntent('settle').submittedTitle).toBe('Settling report')
 		expect(createOpenOracleSuccessPresentation({ action: 'settle', hash: '0x1234' }).title).toBe('Settled report')
 	})
 

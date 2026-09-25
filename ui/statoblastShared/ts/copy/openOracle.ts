@@ -17,7 +17,6 @@ export const settlerReward = 'Settler Reward'
 export const tokenPair = 'Token Pair'
 export const baseToken = 'Base Token'
 export const quoteToken = 'Quote Token'
-export const oracleBalance = 'Oracle Balance'
 export const openOracleGame = 'Standalone Oracle Report'
 export const formatApprovingTokenPendingLabel = (tokenSymbol: string) => `Approving ${tokenSymbol}…`
 export const formatApproveToken = (tokenSymbol: CopyTemplateValue) => `Approve ${tokenSymbol}`
@@ -37,7 +36,7 @@ export const formatCurrentAmount2Label = (tokenSymbol: string) => `Current Amoun
 export const formatTokenPairSuffix = (token1Symbol: string, token2Symbol: string) => `${token1Symbol} / ${token2Symbol}`
 export const formatReportBrowseTitle = (token1Symbol: string, token2Symbol: string, reportId: string) => `${token1Symbol} / ${token2Symbol} · Report #${reportId}`
 export const createAnother = 'Create another'
-export const createReport = 'Create report'
+export const createReport = 'Create Report'
 export const reportCreated = 'Report created'
 export const createStandaloneOracleGame = 'Create standalone Oracle report'
 export const creating = 'Creating…'
@@ -98,7 +97,7 @@ export function formatSettleCountdown(remaining: bigint, timeType: boolean) {
 }
 export const searchReports = 'Search this page'
 export const settlingReport = 'Settling report…'
-export const settlingReportTitle = 'Settling Report'
+export const settlingReportTitle = 'Settling report'
 export const reportSettled = 'Settled report'
 export const settlerRewardHelpText = 'ETH paid to the settler.'
 export const settlementSummary = 'Settlement Summary'
