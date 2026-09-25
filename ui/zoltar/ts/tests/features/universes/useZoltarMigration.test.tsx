@@ -115,7 +115,7 @@ describe('useZoltarMigration', () => {
 			requireHookState(hookState).setZoltarMigrationForm(current => ({
 				...current,
 				amount: '10',
-				outcomeIndexes: '1',
+				outcomeIndexes: [1n],
 			}))
 		})
 
@@ -137,6 +137,58 @@ describe('useZoltarMigration', () => {
 		expect(refreshState).toHaveBeenCalledTimes(1)
 		expect(refreshZoltarUniverse).toHaveBeenCalledTimes(1)
 		expect(refreshZoltarForkAccess).toHaveBeenCalledTimes(1)
+	})
+
+	test('names outcomes in the transaction dialog and clears the amount after migrating', async () => {
+		const migrateInternalRepInZoltar = mock(async (_client: unknown, universeId: bigint, amountAttoRep: bigint, outcomeIndexes: bigint[]) => ({
+			action: 'splitMigrationRep' as const,
+			amountAttoRep,
+			hash: '0x00000000000000000000000000000000000000000000000000000000000000ab' as Hash,
+			outcomeIndexes,
+			universeId,
+		}))
+		await moduleMocks.mockModule('@zoltar/ui-core-shared/wallet/clients.js', () => ({ createWalletWriteClient: mock(() => ({ kind: 'write-client' })) }))
+		await moduleMocks.mockModule('@zoltar/ui-zoltar-shared/protocol/zoltarForks.js', () => ({ migrateInternalRepInZoltar }))
+		const universe = createUniverse({
+			childUniverses: [
+				{ exists: true, forkTime: 1n, outcomeIndex: 1n, outcomeLabel: 'Yes', parentUniverseId: 1n, reputationToken: zeroAddress, universeId: 2n },
+				{ exists: false, forkTime: 0n, outcomeIndex: 2n, outcomeLabel: 'No', parentUniverseId: 1n, reputationToken: zeroAddress, universeId: 3n },
+			],
+		})
+		const requested: unknown[] = []
+		const presented: unknown[] = []
+		const { useZoltarMigration } = await import(`@zoltar/ui-zoltar-shared/features/universes/hooks/useZoltarMigration.js?case=${crypto.randomUUID()}`)
+		let hookState: UseZoltarMigrationState | undefined
+		const Harness = function ZoltarMigrationHarness() {
+			hookState = useZoltarMigration({
+				accountAddress: WALLET_ADDRESS,
+				activeUniverseId: 1n,
+				environmentRefreshKey: 0,
+				ensureZoltarUniverse: async () => universe,
+				onTransactionFinished: () => undefined,
+				onTransactionPresented: (presentation: unknown) => presented.push(presentation),
+				onTransactionRequested: (intent: unknown) => requested.push(intent),
+				onTransactionSubmitted: () => undefined,
+				refreshState: async () => undefined,
+				refreshZoltarForkAccess: async () => undefined,
+				refreshZoltarUniverse: async () => universe,
+				zoltarUniverse: universe,
+			})
+			return <div />
+		}
+		const renderedComponent = await renderIntoDocument(h(Harness, {}))
+		cleanupRenderedComponent = renderedComponent.cleanup
+		await act(async () => {
+			requireHookState(hookState).setZoltarMigrationForm(current => ({ ...current, amount: '10', outcomeIndexes: [2n, 1n] }))
+		})
+		await act(async () => {
+			await requireHookState(hookState).migrateInternalRep(0n)
+		})
+
+		expect(migrateInternalRepInZoltar.mock.calls[0]?.[3]).toEqual([2n, 1n])
+		expect(requested).toMatchObject([{ rows: [{ label: 'Amount' }, { label: 'Outcomes', value: 'No, Yes' }], submittedTitle: 'Migrating REP' }])
+		expect(presented).toMatchObject([{ rows: [{ label: 'Amount' }, { label: 'Outcomes', value: 'No, Yes' }], title: 'REP Migrated' }])
+		expect(requireHookState(hookState).zoltarMigrationForm).toEqual({ amount: '', outcomeIndexes: [2n, 1n] })
 	})
 
 	test('does not request a migration transaction when the active wallet network changed', async () => {
@@ -258,7 +310,7 @@ describe('useZoltarMigration', () => {
 			requireHookState(hookState).setZoltarMigrationForm(current => ({
 				...current,
 				amount: '10',
-				outcomeIndexes: '1, 2',
+				outcomeIndexes: [1n, 2n],
 			}))
 		})
 
@@ -273,7 +325,7 @@ describe('useZoltarMigration', () => {
 			requireHookState(hookState).setZoltarMigrationForm(current => ({
 				...current,
 				amount: '20',
-				outcomeIndexes: '3, 4',
+				outcomeIndexes: [3n, 4n],
 			}))
 		})
 
