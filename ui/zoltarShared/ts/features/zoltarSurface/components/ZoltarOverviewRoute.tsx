@@ -14,22 +14,22 @@ import { deriveZoltarOverviewModel, type ZoltarNextStep, type ZoltarOverviewMode
 import type { ZoltarView } from '../../types.js'
 import { useZoltarWorkspace } from './ZoltarWorkspace.js'
 
-type NextStepPresentation = { actionLabel: string; detail: string; title: string }
+type NextStepPresentation = { actionLabel: string; detail: string }
 
 function getNextStepPresentation(nextStep: ZoltarNextStep): NextStepPresentation {
 	switch (nextStep.kind) {
 		case 'go-to-genesis':
-			return { actionLabel: commonCopy.goToGenesisUniverse, detail: zoltarCopy.goToGenesisDetail, title: zoltarCopy.goToGenesisTitle }
+			return { actionLabel: commonCopy.goToGenesisUniverse, detail: zoltarCopy.goToGenesisDetail }
 		case 'connect-wallet':
-			return { actionLabel: commonCopy.connectWallet, detail: zoltarCopy.connectWalletDetail, title: zoltarCopy.connectWalletTitle }
+			return { actionLabel: commonCopy.connectWallet, detail: zoltarCopy.connectWalletDetail }
 		case 'switch-network':
-			return { actionLabel: zoltarCopy.switchNetworkTitle, detail: zoltarCopy.switchNetworkDetail, title: zoltarCopy.switchNetworkTitle }
+			return { actionLabel: zoltarCopy.switchNetworkAction, detail: zoltarCopy.switchNetworkDetail }
 		case 'migrate-rep':
-			return { actionLabel: zoltarCopy.migrateRep, detail: zoltarCopy.migrateRepDetail, title: zoltarCopy.migrateRepTitle }
+			return { actionLabel: zoltarCopy.migrateRep, detail: zoltarCopy.migrateRepDetail }
 		case 'open-child-universe':
-			return { actionLabel: zoltarCopy.browseUniversesAction, detail: zoltarCopy.openChildUniverseDetail, title: zoltarCopy.openChildUniverseTitle }
+			return { actionLabel: zoltarCopy.browseUniversesAction, detail: zoltarCopy.openChildUniverseDetail }
 		case 'browse-questions':
-			return { actionLabel: zoltarCopy.browseQuestionsTitle, detail: zoltarCopy.browseQuestionsDetail, title: zoltarCopy.browseQuestionsTitle }
+			return { actionLabel: zoltarCopy.browseQuestionsAction, detail: zoltarCopy.browseQuestionsDetail }
 		default:
 			return assertNever(nextStep)
 	}
@@ -55,10 +55,7 @@ function NextStepAction({ isConnectingWallet, nextStep, onConnectWallet, onGoToG
 	}
 	return (
 		<div className={`zoltar-next-step ${nextStep.kind === 'migrate-rep' ? 'needs-attention' : ''}`.trim()}>
-			<div className='zoltar-next-step-copy'>
-				<strong>{presentation.title}</strong>
-				<p className='detail'>{presentation.detail}</p>
-			</div>
+			<p className='zoltar-next-step-reason'>{presentation.detail}</p>
 			<button className='primary' type='button' disabled={nextStep.kind === 'connect-wallet' && isConnectingWallet} onClick={onClick}>
 				{presentation.actionLabel}
 			</button>
@@ -71,14 +68,15 @@ function renderRepBalance(model: ZoltarOverviewModel) {
 	return <CurrencyValue value={model.repBalanceAttoRep} loading={model.repBalanceAttoRep === undefined} suffix={commonCopy.rep} />
 }
 
-function renderMigrationStatus(model: ZoltarOverviewModel) {
-	if (model.status !== 'forked') return zoltarCopy.migrationAfterFork
-	if (model.migratableRepAttoRep === undefined || model.migratableRepAttoRep === 0n) return zoltarCopy.migrationNoDeadline
+function MigrationStatus({ model }: { model: ZoltarOverviewModel }) {
+	if (model.status !== 'forked') return <MetricField label={zoltarCopy.migrationStatus}>{zoltarCopy.migrationAfterFork}</MetricField>
+	if (model.migratableRepAttoRep === undefined || model.migratableRepAttoRep === 0n) return <MetricField label={zoltarCopy.migrationStatus}>{zoltarCopy.migrationNoDeadline}</MetricField>
+	// Wallet REP plus REP already prepared for migration: everything that still has to move to an outcome universe.
 	return (
-		<>
+		<MetricField label={zoltarCopy.repToMigrate}>
 			<CurrencyValue value={model.migratableRepAttoRep} suffix={commonCopy.rep} />
 			<span className='detail zoltar-migration-deadline'>{zoltarCopy.migrationNoDeadline}</span>
-		</>
+		</MetricField>
 	)
 }
 
@@ -86,7 +84,7 @@ function renderMigrationStatus(model: ZoltarOverviewModel) {
 function ZoltarOverviewView({ currentTimestamp, model, ...actions }: ZoltarOverviewViewProps) {
 	return (
 		<>
-			<RouteHeader description={zoltarCopy.overviewDescription} title={zoltarCopy.overview} />
+			<RouteHeader title={zoltarCopy.overview} />
 			<SectionBlock title={zoltarCopy.yourStatus} variant='plain'>
 				{model.status === 'loading' ? (
 					<StateHint presentation={{ key: 'loading', badgeLabel: commonCopy.loading, badgeTone: 'loading', detail: commonCopy.loadingUniverseDetails, detailIsLoading: true }} />
@@ -97,9 +95,14 @@ function ZoltarOverviewView({ currentTimestamp, model, ...actions }: ZoltarOverv
 								{model.universeLabel} {model.status === 'missing' ? <Badge tone='danger'>{commonCopy.notFound}</Badge> : <Badge tone={model.status === 'forked' ? 'warning' : 'ok'}>{model.status === 'forked' ? commonCopy.forked : commonCopy.operational}</Badge>}
 							</span>
 						</MetricField>
-						<MetricField label={zoltarCopy.forkStatus}>{model.forkTime === undefined ? zoltarCopy.notForked : <TimestampValue timestamp={model.forkTime} {...(currentTimestamp === undefined ? {} : { currentTimestamp })} />}</MetricField>
-						<MetricField label={zoltarCopy.universeRep}>{renderRepBalance(model)}</MetricField>
-						<MetricField label={zoltarCopy.migrationStatus}>{renderMigrationStatus(model)}</MetricField>
+						{/* A universe that does not exist has no fork, REP, or migration to report. */}
+						{model.status === 'missing' ? undefined : (
+							<>
+								<MetricField label={zoltarCopy.forkStatus}>{model.forkTime === undefined ? zoltarCopy.notForked : <TimestampValue timestamp={model.forkTime} {...(currentTimestamp === undefined ? {} : { currentTimestamp })} />}</MetricField>
+								<MetricField label={zoltarCopy.universeRep}>{renderRepBalance(model)}</MetricField>
+								<MigrationStatus model={model} />
+							</>
+						)}
 					</MetricGrid>
 				)}
 			</SectionBlock>

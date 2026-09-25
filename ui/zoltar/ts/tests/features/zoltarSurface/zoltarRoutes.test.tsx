@@ -176,6 +176,15 @@ describe('ZoltarRoutes', () => {
 		}
 	})
 
+	test('reports only the missing universe and the way back to Genesis on the Overview', async () => {
+		const { queries } = await renderRoute('overview', undefined, 'missing')
+		expect(queries.getByText('Not found')).toBeTruthy()
+		expect(queries.queryByText('Not forked')).toBeNull()
+		expect(queries.queryByText('REP in this universe')).toBeNull()
+		expect(queries.queryByText('Migration')).toBeNull()
+		expect(queries.getByRole('button', { name: 'Go to Genesis universe' })).toBeTruthy()
+	})
+
 	test('keeps the global question list available for a missing universe', async () => {
 		const { queries } = await renderRoute('questions', undefined, 'missing')
 		expect(queries.queryByText('Universe not found')).toBeNull()
@@ -186,7 +195,8 @@ describe('ZoltarRoutes', () => {
 		const { queries, viewChanges } = await renderRoute('overview', createUniverse())
 		expect(queries.getByRole('heading', { name: 'Overview' })).toBeTruthy()
 		expect(queries.getByText('Genesis › Alpha')).toBeTruthy()
-		expect(queries.getByText('Migrate your REP')).toBeTruthy()
+		expect(queries.getByText('This universe forked. Move your REP into the outcome universes you back.')).toBeTruthy()
+		expect(queries.getByText('REP to migrate')).toBeTruthy()
 		const nextStep = document.body.querySelector('.zoltar-next-step')
 		if (!(nextStep instanceof HTMLElement)) throw new Error('Expected the next step')
 		const actions = within(nextStep).getAllByRole('button')

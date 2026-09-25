@@ -10,7 +10,7 @@ type UniverseSwitcherProps = {
 	/** Where the full universe browser lives; omitted when the application has no browser route. */
 	browseHref?: string | undefined
 	/** The loaded active universe; its lineage and deployed children are the switch targets. */
-	universe: Pick<ZoltarUniverseSummary, 'childUniverses' | 'lineage' | 'universeId'> | undefined
+	universe: Pick<ZoltarUniverseSummary, 'childUniverses' | 'hasForked' | 'lineage' | 'universeId'> | undefined
 }
 
 /** Every ancestor of the active universe with its own lineage name; without a lineage only Genesis is known. */
@@ -78,7 +78,8 @@ export function UniverseSwitcher({ activeUniverseId, browseHref, universe }: Uni
 						</span>
 					</li>
 				</ul>
-				{loadedUniverse === undefined ? undefined : (
+				{/* Only a forked universe has children to switch to. */}
+				{loadedUniverse === undefined || !loadedUniverse.hasForked ? undefined : (
 					<>
 						<p className='universe-switcher-heading'>{commonCopy.childUniverses}</p>
 						{deployedChildren.length === 0 ? (

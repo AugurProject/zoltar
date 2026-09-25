@@ -109,6 +109,12 @@ describe('UniverseSwitcher', () => {
 		expect(details.hasAttribute('open')).toBe(false)
 	})
 
+	test('omits the child section for a universe that has not forked', async () => {
+		cleanupRenderedComponent = (await renderIntoDocument(<UniverseSwitcher activeUniverseId={yesUniverseId} universe={createUniverse({ childUniverses: [], hasForked: false })} />)).cleanup
+		expect(within(document.body).queryByText('Child universes')).toBeNull()
+		expect(within(document.body).queryByText('No deployed child universes.')).toBeNull()
+	})
+
 	test('falls back to a short id until the active universe summary loads', async () => {
 		cleanupRenderedComponent = (await renderIntoDocument(<UniverseSwitcher activeUniverseId={alphaUniverseId} universe={createUniverse()} />)).cleanup
 		const summary = document.body.querySelector('details.universe-switcher summary')

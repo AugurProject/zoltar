@@ -411,13 +411,8 @@
 	border-left-color: var(--warning);
 }
 
-.zoltar-next-step-copy {
-	display: grid;
-	gap: var(--space-1);
+.zoltar-next-step-reason {
 	min-width: 0;
-}
-
-.zoltar-next-step-copy .detail {
 	margin: 0;
 }
 
