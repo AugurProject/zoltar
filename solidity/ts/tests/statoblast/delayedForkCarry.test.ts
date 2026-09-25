@@ -6,7 +6,7 @@ import { createWriteClient, writeContractAndWait } from '../../testSupport/simul
 import { DAY, TEST_ADDRESSES } from '../../testSupport/simulator/utils/constants'
 import { getInfraContractAddresses, getSecurityPoolAddresses } from '../../testSupport/simulator/utils/contracts/deployStatoblast'
 import { getEscalationGameOutcomeState } from '../../testSupport/simulator/utils/contracts/escalationGame'
-import { depositToEscalationGame, getAwaitingForkContinuation, getRepToken, getSecurityPoolsEscalationGame, getSystemState, depositRepToVault } from '../../testSupport/simulator/utils/contracts/securityPool'
+import { createCompleteSet, depositToEscalationGame, getAwaitingForkContinuation, getRepToken, getSecurityPoolsEscalationGame, getSettlementCollateralAttoEth, getSystemState, depositRepToVault } from '../../testSupport/simulator/utils/contracts/securityPool'
 import { createChildUniverse, finalizeTruthAuction, initiateSecurityPoolFork, migrateRepToZoltar, startTruthAuction } from '../../testSupport/simulator/utils/contracts/securityPoolForker'
 import { approveAndDepositRepToVault, setVaultCapacityFixture } from '../../testSupport/simulator/utils/contracts/statoblastTestUtils'
 import { addRepToMigrationBalance, splitMigrationRep, forkUniverse, getZoltarAddress, getZoltarForkThreshold } from '../../testSupport/simulator/utils/contracts/zoltar'
@@ -76,6 +76,14 @@ describe('Statoblast: delayed repeated-fork carry', () => {
 		await approveToken(noDepositor, repToken, getZoltarAddress())
 		return { noDepositor, pool, game, universe, deadline, proof, secondQuestionId: getQuestionId(secondQuestion, outcomes) }
 	}
+
+	test('a resumed fork continuation cannot mint new obligations against inherited escrow', async () => {
+		const { client } = fixture
+		const { pool } = await setupInheritedDispute()
+		const collateralBefore = await getSettlementCollateralAttoEth(client, pool.securityPool)
+		await assert.rejects(createCompleteSet(client, pool.securityPool, ATTO_REP_PER_REP), /Escalation mint closed/)
+		assert.equal(await getSettlementCollateralAttoEth(client, pool.securityPool), collateralBefore)
+	})
 
 	for (const { offset, name } of [
 		{ offset: -DAY, name: 'a pre-deadline fork preserves the original NO claim through delayed migration and a winner reversal' },

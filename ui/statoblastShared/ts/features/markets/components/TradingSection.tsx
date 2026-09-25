@@ -78,6 +78,7 @@ export function TradingSection({
 	const currentTimestamp = useChainTimestamp()
 	const isOnActiveAppChain = isActiveAppChain(accountState.chainId)
 	const hasSelectedPool = selectedPool !== undefined
+	const hasEscalationGame = selectedPool?.ordinaryEscalationGameStarted === true || selectedPool?.hasForkContinuationEscalationGame === true
 	const poolUniverseHasForked = selectedPool?.universeHasForked === true || tradingForkUniverse?.hasForked === true
 	const resolvedPoolState =
 		poolState ??
@@ -118,7 +119,7 @@ export function TradingSection({
 	})
 	const estimatedSettlementCollateralAttoEth = mintCheckpoint?.settlementCollateralAfterFeesAttoEth ?? selectedPool?.settlementCollateralAttoEth
 	const remainingMintCapacity = getRemainingMintCapacity(mintingCapacityAttoEth, estimatedSettlementCollateralAttoEth, selectedPool?.shareTokenSupplyAttoShares)
-	const maximumMintAmount = getMaximumMintAmount(accountState.ethBalanceAttoEth, remainingMintCapacity)
+	const maximumMintAmount = hasEscalationGame ? 0n : getMaximumMintAmount(accountState.ethBalanceAttoEth, remainingMintCapacity)
 	const mintedAmountAttoShares = mintAmount === undefined ? undefined : convertMintSettlementCollateralAttoEthToAttoShares(mintAmount, estimatedSettlementCollateralAttoEth, selectedPool?.shareTokenSupplyAttoShares)
 	const resultingEthBalance = mintAmount === undefined || accountState.ethBalanceAttoEth === undefined || mintAmount > accountState.ethBalanceAttoEth ? undefined : accountState.ethBalanceAttoEth - mintAmount
 	const redeemAmount = tryParseTradingAmountInput(tradingForm.redeemAmount)
@@ -128,13 +129,14 @@ export function TradingSection({
 	const resolvedWinningPayout = convertAttoSharesToSettlementCollateralAttoEth(resolvedWinningShareBalance, selectedPool?.settlementCollateralAttoEth, selectedPool?.shareTokenSupplyAttoShares)
 	const oraclePriceGuardMessage = getTradingOraclePriceGuardMessage(oraclePriceUsable)
 	const mintGuardMessage =
-		oraclePriceGuardMessage ??
+		(hasEscalationGame ? tradingCopy.mintClosedAfterEscalation : oraclePriceGuardMessage) ??
 		getTradingMintGuardMessage({
 			accountAddress: accountState.address,
 			settlementCollateralAttoEth: estimatedSettlementCollateralAttoEth,
 			ethBalanceAttoEth: accountState.ethBalanceAttoEth,
 			mintingCapacityAttoEth,
 			hasSelectedPool,
+			hasEscalationGame,
 			isOnActiveAppChain,
 			isPriceValid: calculationRepPerEthPrice !== undefined && calculationRepPerEthPrice > 0n,
 			mintAmountInput: tradingForm.completeSetAmount,
@@ -174,6 +176,7 @@ export function TradingSection({
 
 		return (() => {
 			if (!isOnActiveAppChain) return getWrongNetworkReason()
+			if (hasEscalationGame) return tradingCopy.mintClosedAfterEscalation
 			if (selectedPool?.questionOutcome !== 'none') return tradingCopy.marketFinalizedReason
 			if (oraclePriceGuardMessage !== undefined) return oraclePriceGuardMessage
 			if (remainingMintCapacity === undefined) return calculationRepPerEthPrice === undefined || calculationRepPerEthPrice <= 0n ? tradingCopy.mintPriceUnavailable : tradingCopy.mintCapacityUnavailable
@@ -456,7 +459,7 @@ export function TradingSection({
 						pendingLabel={tradingCopy.mintingCompleteSets}
 						onClick={onCreateCompleteSet}
 						pending={tradingActiveAction === 'createCompleteSet'}
-						availability={{ disabled: !isOnActiveAppChain || !mintEnabled || mintGuardMessage !== undefined, reason: getModalActionReason(mintEnabled, mintGuardMessage) }}
+						availability={{ disabled: !isOnActiveAppChain || !mintEnabled || mintGuardMessage !== undefined, reason: getModalActionReason(mintEnabled || hasEscalationGame, mintGuardMessage) }}
 					/>
 				</div>
 			</OperationModal>

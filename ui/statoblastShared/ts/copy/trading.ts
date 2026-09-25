@@ -37,6 +37,7 @@ export const mintCompleteSetsActionLabel = 'Mint complete sets'
 export const completeSetMintDescription = 'Lock collateral to mint a fresh Yes, No, and Invalid share set for this pool.'
 export const mintingCompleteSets = 'Minting complete sets…'
 export const mintCapacityEmpty = 'No mint capacity remaining.'
+export const mintClosedAfterEscalation = 'Minting closed after escalation starts.'
 export const formatNoSharesAvailableToMigrateReason = (outcomeLabel: string) => `No ${outcomeLabel} shares available to migrate.`
 export const redeemCompleteSetsActionLabel = 'Redeem complete sets'
 export const completeSetBurnDescription = 'Burn matching Yes, No, and Invalid shares to recover collateral from the current pool.'

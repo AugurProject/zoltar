@@ -1,4 +1,4 @@
-import { type Address, type TransactionReceipt } from '@zoltar/core-shared/evm/ethereum'
+import { zeroAddress, type Address, type TransactionReceipt } from '@zoltar/core-shared/evm/ethereum'
 import { sortBigIntsAscending } from '@zoltar/core-shared/serialization/bigInt'
 import { assertNever } from '@zoltar/ui-core-shared/lib/assert.js'
 import { statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator, statoblast_SecurityPool_SecurityPool, statoblast_tokens_ShareToken_ShareToken } from '../contractArtifact.js'
@@ -21,10 +21,11 @@ type SecurityPoolMintCapacity = {
 	totalPoolHeldAttoRep: bigint
 	totalCapacityOwnershipAttoRep: bigint
 	isPriceValid: boolean
+	hasEscalationGame: boolean
 	totalFeesOwedRemainder?: bigint
 }
 export async function loadSecurityPoolMintCapacity(client: Pick<ReadClient, 'getBlock' | 'multicall'>, securityPoolAddress: Address): Promise<SecurityPoolMintCapacity> {
-	const [poolAccountingSnapshot, shareTokenSupplyAttoShares, totalPoolHeldAttoRep, mintingCapacityAttoEth, priceOracleManagerAndOperatorQueuer, currentRetentionRate, feeEndTimestamp] = await readRequiredMulticall(client, [
+	const [poolAccountingSnapshot, shareTokenSupplyAttoShares, totalPoolHeldAttoRep, mintingCapacityAttoEth, priceOracleManagerAndOperatorQueuer, currentRetentionRate, feeEndTimestamp, escalationGameAddress] = await readRequiredMulticall(client, [
 		{
 			abi: statoblast_SecurityPool_SecurityPool.abi,
 			functionName: 'getPoolAccountingSnapshot',
@@ -67,6 +68,12 @@ export async function loadSecurityPoolMintCapacity(client: Pick<ReadClient, 'get
 			address: securityPoolAddress,
 			args: [],
 		},
+		{
+			abi: statoblast_SecurityPool_SecurityPool.abi,
+			functionName: 'escalationGame',
+			address: securityPoolAddress,
+			args: [],
+		},
 	])
 	const [priceValidity, currentBlock] = await Promise.all([readRequiredMulticall(client, [{ abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi, functionName: 'isPriceValid', address: priceOracleManagerAndOperatorQueuer, args: [] }]), client.getBlock()])
 	const [isPriceValid] = priceValidity
@@ -83,6 +90,7 @@ export async function loadSecurityPoolMintCapacity(client: Pick<ReadClient, 'get
 		totalPoolHeldAttoRep,
 		totalCapacityOwnershipAttoRep: poolAccountingSnapshot.totalCapacityOwnershipAttoRep,
 		isPriceValid,
+		hasEscalationGame: escalationGameAddress !== zeroAddress,
 		totalFeesOwedRemainder: poolAccountingSnapshot.totalFeesOwedRemainder,
 	}
 }

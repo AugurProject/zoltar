@@ -205,6 +205,7 @@ export function getTradingMintGuardMessage({
 	ethBalanceAttoEth,
 	mintingCapacityAttoEth,
 	hasSelectedPool,
+	hasEscalationGame,
 	isOnActiveAppChain,
 	isPriceValid,
 	mintAmountInput,
@@ -216,6 +217,7 @@ export function getTradingMintGuardMessage({
 	ethBalanceAttoEth: bigint | undefined
 	mintingCapacityAttoEth: bigint | undefined
 	hasSelectedPool: boolean
+	hasEscalationGame?: boolean
 	isOnActiveAppChain: boolean
 	isPriceValid?: boolean
 	mintAmountInput: string
@@ -225,6 +227,7 @@ export function getTradingMintGuardMessage({
 	if (!hasSelectedPool) return 'Select a pool before minting.'
 	const walletGuardState = getWalletActiveAppChainGuardState({ accountAddress, isOnActiveAppChain, walletRequiredReason: 'Connect a wallet before minting complete sets.' })
 	if (walletGuardState.blocked) return walletGuardState.reason
+	if (hasEscalationGame) return tradingCopy.mintClosedAfterEscalation
 	if (isPriceValid === false) return tradingCopy.staleOraclePrice
 
 	const undefinedExchangeRate = hasUndefinedCompleteSetExchangeRate(settlementCollateralAttoEth, shareTokenSupplyAttoShares)
