@@ -83,13 +83,106 @@
 .wallet-balance-grid {
 	margin: 0;
 }
-.trade-breakdown {
-	display: grid;
+/* Trade ticket: direction and outcome switchers share a row; the estimate stays visible under the amount. */
+.trade-ticket-switchers {
+	display: flex;
+	flex-wrap: wrap;
 	gap: var(--space-3);
 }
-.trade-summary {
+.trade-amount-shortcuts {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--space-2);
+	margin-top: calc(-1 * var(--space-2));
+}
+.trade-amount-shortcuts button {
+	min-width: 4.5rem;
+}
+.trade-estimate {
 	display: grid;
 	gap: var(--space-3);
+	min-width: 0;
+}
+.trade-estimate-note {
+	margin: 0;
+	color: var(--muted);
+}
+.trade-impact-value--caution {
+	color: var(--warning);
+}
+.trade-impact-value--warning,
+.trade-impact-value--blocked {
+	color: var(--danger);
+}
+.trade-impact-notice {
+	margin: 0;
+	padding-left: var(--space-3);
+	border-left: 2px solid var(--warning-border-strong);
+	color: var(--warning);
+}
+.warning-surface.trade-impact-warning--blocked {
+	border-color: var(--danger-border-strong);
+}
+.trade-impact-acknowledge {
+	display: flex;
+	align-items: center;
+	gap: var(--space-2);
+	margin-top: var(--space-2);
+	min-height: var(--touch-target-min);
+	cursor: pointer;
+}
+.trade-impact-acknowledge input {
+	width: 1.125rem;
+	height: 1.125rem;
+	accent-color: var(--danger);
+}
+.trade-invalid-coverage {
+	display: grid;
+	gap: var(--space-2);
+	justify-items: start;
+}
+.trade-invalid-coverage p {
+	margin: 0;
+}
+
+/* Trade settings inside the application Settings menu: presets first, a custom value under them. */
+.trade-settings {
+	display: grid;
+	gap: var(--space-3);
+	margin-top: var(--space-4);
+	padding-top: var(--space-4);
+	border-top: 1px solid var(--divider-strong);
+}
+.trade-settings-title {
+	margin: 0;
+	font-size: 1rem;
+}
+.trade-settings-field {
+	display: grid;
+	gap: var(--space-2);
+}
+.trade-settings-label {
+	font-family: var(--font-family-mono);
+	font-size: var(--font-label);
+	color: var(--muted);
+}
+.trade-settings-presets {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--space-2);
+}
+.trade-settings-preset {
+	flex: 1 1 0;
+	min-height: var(--touch-target-min);
+}
+.trade-settings-preset[aria-pressed="true"] {
+	border-color: var(--accent);
+	background: var(--accent-soft);
+	color: var(--text);
+}
+.trade-settings .field-help,
+.trade-settings .field-error {
+	margin: 0;
 }
 .market-record .entity-card-actions {
 	display: flex;

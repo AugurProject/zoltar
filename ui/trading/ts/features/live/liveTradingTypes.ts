@@ -22,7 +22,7 @@ import type { TransactionPhase } from './transactionWorkflow.js'
 type EntryQuote = Awaited<ReturnType<typeof simulateEntry>>
 type ExitQuote = Awaited<ReturnType<typeof simulateExit>>
 
-export type QuoteContext = Readonly<{ account: Address; configuration: DeploymentConfiguration; walletClient: WalletClient }>
+type QuoteContext = Readonly<{ account: Address; configuration: DeploymentConfiguration; walletClient: WalletClient }>
 export type Quote = (Readonly<{ kind: 'entry'; value: EntryQuote }> | Readonly<{ kind: 'exit'; value: ExitQuote }>) & QuoteContext
 export type TransactionState = TransactionPhase
 export type BalanceState = 'disconnected' | 'loading' | 'ready' | 'error'

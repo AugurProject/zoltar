@@ -26,7 +26,7 @@ import { LivePortfolio } from './LivePortfolio.js'
 import { LivePositionControls } from './LivePositionControls.js'
 import { LiveLiquidityControls, liveLiquidityServices, type LiveLiquidityServices } from './LiveLiquidityControls.js'
 import { LiveSettlementControls, liveSettlementServices, type LiveSettlementServices } from './LiveSettlementControls.js'
-import { DEFAULT_SLIPPAGE_PERCENT, DEFAULT_TRANSACTION_VALIDITY_MINUTES } from './LiveTradingTransactionUi.js'
+import { DEFAULT_TRADE_SETTINGS, type TradeSettings } from '../lib/tradeSettings.js'
 import type { WalletSummaryState } from '../lib/walletSummaryState.js'
 import { liveRouteLoadingPresentation, liveWorkflowRoutePresentation } from './live/routePresentation.js'
 import { LiveSecurityPoolDetails, PairInitializationAction, SecurityPoolRouteEmptyState } from './LiveSecurityPoolDetails.js'
@@ -80,6 +80,7 @@ export function LiveTrading({
 	walletSummaryRetryNonce = 0,
 	walletConnectRequestNonce,
 	refreshIntervalMilliseconds,
+	tradeSettings = DEFAULT_TRADE_SETTINGS,
 	controllerServices = liveTradingControllerServices,
 	liquidityServices = liveLiquidityServices,
 	settlementServices = liveSettlementServices,
@@ -102,6 +103,8 @@ export function LiveTrading({
 	walletSummaryRetryNonce?: number
 	walletConnectRequestNonce?: number
 	refreshIntervalMilliseconds?: number | undefined
+	/** Slippage and validity from the application Settings menu; every Trading transaction uses them. */
+	tradeSettings?: TradeSettings
 	controllerServices?: LiveTradingControllerServices
 	liquidityServices?: LiveLiquidityServices
 	settlementServices?: LiveSettlementServices
@@ -116,15 +119,13 @@ export function LiveTrading({
 		onWorkflowLockChange,
 		onWalletSummaryChange,
 		walletSummaryRetryNonce,
-		defaultSlippage: DEFAULT_SLIPPAGE_PERCENT,
-		defaultValidityMinutes: DEFAULT_TRANSACTION_VALIDITY_MINUTES,
+		settings: tradeSettings,
 		refreshIntervalMilliseconds,
 		services: controllerServices,
 	})
 	const { account, walletClient, walletEthAttoEth, networkMismatchReason, connect, connectionMessage, refreshWalletSummaryAfterReceipt, executeWithCurrentWalletContext, createGuardedWalletWrite } = wallet
 	const { balanceError, portfolioBalanceState, portfolioBalanceError, visiblePortfolioEntries, selectedBalances, selectedBalanceState, retryBalances, retryPortfolioBalances } = balances
 	const { visibleMarkets, listedMarkets, selected, selectedPairInitialized, routePool, discoveryState, discoveryError, marketPage, nowSeconds, refresh, refreshFromControl, loadMarketPage } = discovery
-	const { parsedAmount, mode, setMode, side, setSide, amount, setAmount, slippage, setSlippage, transactionValidityMinutes, setTransactionValidityMinutes, quote, state, positionHash, message, positionReceiptWarning, simulate, submit } = position
 	const { workflowLocked, updateLiquidityWorkflowLock } = workflow
 	const workflowRoute = tradingWorkflowRoute(route)
 	const creatingMarket = workflowRoute === 'create-market'
@@ -157,6 +158,15 @@ export function LiveTrading({
 	// Connecting re-requests the deployment chain first, so the same action switches a wallet that is on another network.
 	let walletActionLabel = account === undefined ? appCopy.connectWallet : abbreviateAddress(account, 6, 4)
 	if (account === undefined && networkMismatchReason !== undefined) walletActionLabel = availabilityCopy.formatSwitchNetworkAction(configuration.chainName)
+	// The workflow panels' first step: connect, or switch a connected wallet back to the deployment chain.
+	const ticketWallet = {
+		connected: account !== undefined && walletClient !== undefined,
+		networkMismatchReason,
+		actionLabel: networkMismatchReason === undefined ? appCopy.connectWallet : availabilityCopy.formatSwitchNetworkAction(configuration.chainName),
+		walletEthAttoEth,
+		connect,
+	}
+	const ticketHoldings = { balances: selectedBalances, balanceState: selectedBalanceState, balanceError, retry: retryBalances }
 	const walletAction =
 		walletConnectRequestNonce === undefined ? (
 			<button className='secondary wallet-button' type='button' disabled={workflowLocked} onClick={connect}>
@@ -284,6 +294,8 @@ export function LiveTrading({
 									account={account}
 									walletClient={walletClient}
 									networkMismatchReason={networkMismatchReason}
+									wallet={ticketWallet}
+									settings={tradeSettings}
 									walletEthAttoEth={walletEthAttoEth}
 									externallyLocked={workflowLocked}
 									nowSeconds={nowSeconds}
@@ -315,6 +327,8 @@ export function LiveTrading({
 										account={account}
 										walletClient={walletClient}
 										networkMismatchReason={networkMismatchReason}
+										wallet={ticketWallet}
+										settings={tradeSettings}
 										externallyLocked={workflowLocked}
 										refresh={() => refresh(configuration, marketPage.start, 'liquidity')}
 										onKnownReceipt={refreshWalletSummaryAfterReceipt}
@@ -335,6 +349,8 @@ export function LiveTrading({
 										account={account}
 										walletClient={walletClient}
 										networkMismatchReason={networkMismatchReason}
+										wallet={ticketWallet}
+										settings={tradeSettings}
 										walletEthAttoEth={walletEthAttoEth}
 										externallyLocked={workflowLocked}
 										nowSeconds={nowSeconds}
@@ -348,38 +364,7 @@ export function LiveTrading({
 									/>
 								) : null}
 								{activeView === 'trade' && !selectedPairInitialized ? <PairInitializationAction market={selected} nowSeconds={nowSeconds} /> : null}
-								{activeView === 'trade' && selectedPairInitialized ? (
-									<LivePositionControls
-										market={selected}
-										balances={selectedBalances}
-										balanceState={selectedBalanceState}
-										balanceError={balanceError}
-										walletConnected={account !== undefined && walletClient !== undefined}
-										networkMismatchReason={networkMismatchReason}
-										walletEthAttoEth={walletEthAttoEth}
-										mode={mode}
-										side={side}
-										amount={amount}
-										amountError={parsedAmount.error}
-										slippage={slippage}
-										transactionValidityMinutes={transactionValidityMinutes}
-										quote={quote}
-										state={state}
-										message={message}
-										receiptWarning={positionReceiptWarning}
-										transactionHash={positionHash}
-										externallyLocked={workflowLocked}
-										nowSeconds={nowSeconds}
-										setMode={setMode}
-										setSide={setSide}
-										setAmount={setAmount}
-										setSlippage={setSlippage}
-										setTransactionValidityMinutes={setTransactionValidityMinutes}
-										simulate={simulate}
-										submit={submit}
-										retryBalances={retryBalances}
-									/>
-								) : null}
+								{activeView === 'trade' && selectedPairInitialized ? <LivePositionControls market={selected} nowSeconds={nowSeconds} settings={tradeSettings} ticket={position} wallet={ticketWallet} holdings={ticketHoldings} externallyLocked={workflowLocked} /> : null}
 							</div>
 						</SectionBlock>
 					)

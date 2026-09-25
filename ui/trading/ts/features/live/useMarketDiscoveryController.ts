@@ -4,7 +4,7 @@ import type { createLatestRequestGuard, RequestIdentity } from '@zoltar/ui-core-
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import type { DeploymentConfiguration } from '../../protocol/config.js'
 import { marketAcceptsNewRisk, publicErrorMessage, type LiveMarket } from '../../protocol/live.js'
-import { discoveryCommitAllowed, quoteBasisChanged, securityPoolAddressFromRoute, walletSummaryDiscoveryRetryStart, type WorkflowOwner } from '../liveTradingControllerHelpers.js'
+import { discoveryCommitAllowed, securityPoolAddressFromRoute, walletSummaryDiscoveryRetryStart, type WorkflowOwner } from '../liveTradingControllerHelpers.js'
 import { liveCopy } from '../../copy/live.js'
 import type { UniverseDiscoveryScope } from '../../lib/universeSelection.js'
 import { parsedUniverseId } from './useLiveTradingState.js'
@@ -43,7 +43,6 @@ export function useMarketDiscoveryController({
 	discoveryRequests,
 	balanceRequests,
 	portfolioBalanceRequests,
-	simulationRequests,
 	refreshIntervalMilliseconds = LIVE_REFRESH_INTERVAL_MILLISECONDS,
 }: {
 	route: string
@@ -65,7 +64,6 @@ export function useMarketDiscoveryController({
 	discoveryRequests: RequestGuard
 	balanceRequests: RequestGuard
 	portfolioBalanceRequests: RequestGuard
-	simulationRequests: RequestGuard
 	refreshIntervalMilliseconds?: number | undefined
 }) {
 	const previousRoute = useRef(route)
@@ -89,7 +87,7 @@ export function useMarketDiscoveryController({
 
 	/**
 	 * Explicit refreshes reset transient workflow state and show the discovery loading state. Background refreshes
-	 * keep the last successful result visible and only retire a quote whose market basis changed. Neither touches
+	 * keep the last successful result visible; trade estimates recompute from the refreshed reserves. Neither touches
 	 * loaded balances directly: the balance effects revalidate them from the refreshed market objects and keep the
 	 * previous values visible until the new reads resolve.
 	 */
@@ -103,10 +101,8 @@ export function useMarketDiscoveryController({
 		const scope: UniverseDiscoveryScope = { requestedUniverseId: urlUniverseId, addressedPool: routePool?.toLowerCase() }
 		backgroundDiscovery.current = background ? request : undefined
 		if (!background) {
-			simulationRequests.invalidate()
 			// Retire any in-flight balance read so the effects re-read after this refresh commits, without hiding current values.
 			balanceRequests.invalidate()
-			transaction.setQuote(undefined)
 			if (!transaction.positionWorkflowLockedRef.current && owner !== 'position') transaction.dispatchWorkflow({ type: 'reset' })
 			if (route === 'portfolio') {
 				portfolioBalanceRequests.invalidate()
@@ -123,15 +119,6 @@ export function useMarketDiscoveryController({
 			if (!discoveryCommitAllowed(owner, transaction.positionWorkflowLockedRef.current, transaction.liquidityWorkflowLockedRef.current)) {
 				market.setDiscoveryState('ready')
 				return
-			}
-			const quote = transaction.quote
-			if (background && quote !== undefined && !transaction.positionWorkflowLockedRef.current) {
-				const refreshed = discovered.markets.find(candidate => candidate.pool === quote.value.market.pool)
-				if (refreshed !== undefined && quoteBasisChanged(quote.value.market, refreshed)) {
-					simulationRequests.invalidate()
-					transaction.setQuote(undefined)
-					transaction.dispatchWorkflow({ type: 'reset' })
-				}
 			}
 			market.setMarkets(discovered.markets)
 			onUniversesChange(discovered.universeIds, discovered.selectedUniverseId, scope)
@@ -167,7 +154,6 @@ export function useMarketDiscoveryController({
 		if (configuration === undefined) {
 			discoveryRequests.invalidate()
 			balanceRequests.invalidate()
-			simulationRequests.invalidate()
 			transaction.dispatchWorkflow(configurationError === undefined ? { type: 'reset' } : { type: 'failed', message: configurationError })
 			return
 		}
@@ -183,8 +169,6 @@ export function useMarketDiscoveryController({
 
 	useEffect(() => {
 		if (transaction.positionWorkflowLockedRef.current) return
-		simulationRequests.invalidate()
-		transaction.setQuote(undefined)
 		transaction.dispatchWorkflow({ type: 'reset' })
 		wallet.setWalletConnectionFeedback(current => (current?.route === route ? current : undefined))
 		if (previousRoute.current !== route) {
@@ -197,8 +181,6 @@ export function useMarketDiscoveryController({
 
 	useEffect(() => {
 		if (selected === undefined || marketAcceptsNewRisk(selected, nowSeconds)) return
-		simulationRequests.invalidate()
-		transaction.setQuote(undefined)
 		if (!transaction.positionWorkflowLockedRef.current && !transaction.liquidityWorkflowLockedRef.current) transaction.dispatchWorkflow({ type: 'reset' })
 	}, [nowSeconds, selected])
 

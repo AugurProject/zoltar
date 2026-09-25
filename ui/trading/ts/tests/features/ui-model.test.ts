@@ -4,10 +4,11 @@ import { formatBpsMultiplier, formatCapacityOwnership, formatRoundedUnits } from
 import { parseNonNegativeDecimalInput, tryParseNonNegativeDecimalInput } from '@zoltar/ui-core-shared/forms/decimal.js'
 import { formatTrimmedUnits } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { attoSharesToCollateralAttoEth, averagePriceBps, collateralAttoEthToAttoShares, formatCollateralEth, formatCompleteSetQuantity, formatLpQuantity, formatOutcomeQuantity } from '../../lib/shareValue.js'
-import { forkMigrationBatchBlocker, forkMigrationBatchWarning, insuredExitLimitMessage, migrationSimulationSummary, settlementBalanceLabel, settlementInputBlocker } from '../../features/LiveSettlementModel.js'
+import { forkMigrationBatchBlocker, forkMigrationBatchWarning, migrationSimulationSummary, settlementBalanceLabel, settlementInputBlocker } from '../../features/LiveSettlementModel.js'
 import { createSecurityPoolDeploymentIndex, liveBalancesForMarket, marketAcceptsNewRisk, publicErrorMessage, marketNewRiskBlocker, mapWithConcurrency, refreshSecurityPoolDeploymentIndex, registryBlockAnchorIsCanonical, settlementAvailability, shareBalanceScope, type LiveMarket } from '../../protocol/live.js'
 import { maximumAfterSlippage, minimumAfterSlippage, requireTransactionSlippageBps, requireTransactionValidityMinutes, retainApprovedMaximum, retainApprovedMinimum } from '../../protocol/tradeQuote.js'
-import { broadcastUncertainMessage, discoveryCommitAllowed, failedSubmissionTransition, livePairInitialized, parseSlippageBps, parseTransactionValidityMinutes, positionControlsWorkflowLocked, securityPoolAddressFromRoute } from '../../features/liveTradingControllerHelpers.js'
+import { broadcastUncertainMessage, discoveryCommitAllowed, livePairInitialized, positionControlsWorkflowLocked, securityPoolAddressFromRoute } from '../../features/liveTradingControllerHelpers.js'
+import { parseSlippagePercent, parseValidityMinutes } from '../../lib/tradeSettings.js'
 import { isTradingLookupRoute, tradingListKindFor, tradingRouting } from '../../lib/routing.js'
 import { liveRouteLoadingPresentation, liveWorkflowRoutePresentation } from '../../features/live/routePresentation.js'
 import { liquidityOperationAvailable } from '../../features/live/useLiquidityWorkflowController.js'
@@ -169,15 +170,15 @@ describe('standalone trading UI model', () => {
 	})
 
 	test('validates user-configurable transaction protection settings', () => {
-		expect(parseSlippageBps('0.75')).toBe(75n)
-		expect(parseSlippageBps('5')).toBe(500n)
-		expect(parseSlippageBps('5.01')).toBeUndefined()
-		expect(parseSlippageBps('-1')).toBeUndefined()
-		expect(parseTransactionValidityMinutes('1')).toBe(1n)
-		expect(parseTransactionValidityMinutes('1440')).toBe(1_440n)
-		expect(parseTransactionValidityMinutes('0')).toBeUndefined()
-		expect(parseTransactionValidityMinutes('1441')).toBeUndefined()
-		expect(parseTransactionValidityMinutes('1.5')).toBeUndefined()
+		expect(parseSlippagePercent('0.75')).toBe(75n)
+		expect(parseSlippagePercent('5')).toBe(500n)
+		expect(parseSlippagePercent('5.01')).toBeUndefined()
+		expect(parseSlippagePercent('-1')).toBeUndefined()
+		expect(parseValidityMinutes('1')).toBe(1n)
+		expect(parseValidityMinutes('1440')).toBe(1_440n)
+		expect(parseValidityMinutes('0')).toBeUndefined()
+		expect(parseValidityMinutes('1441')).toBeUndefined()
+		expect(parseValidityMinutes('1.5')).toBeUndefined()
 	})
 
 	test('never replaces user-approved bounds with refreshed quote bounds', () => {
@@ -370,11 +371,6 @@ describe('standalone trading UI model', () => {
 		expect(settlementBalanceLabel('ready', 5n * 10n ** 36n, unit, 'INVALID')).toBe('5 INVALID')
 	})
 
-	test('discards failed submission quotes so every workflow can simulate again', () => {
-		expect(failedSubmissionTransition(new Error('Quote is stale'), 'Transaction failed')).toEqual({ quote: undefined, state: 'error', message: 'Quote is stale' })
-		expect(failedSubmissionTransition('wallet rejected', 'Transaction failed')).toEqual({ quote: undefined, state: 'error', message: 'Transaction failed' })
-	})
-
 	test('blocks duplicate submission when a broadcast receipt is uncertain', () => {
 		const hash = `0x${'55'.repeat(32)}` as const
 		const warning = broadcastUncertainMessage('Settlement transaction', hash)
@@ -398,11 +394,5 @@ describe('standalone trading UI model', () => {
 		const pair = '0x0000000000000000000000000000000000000001' as const
 		expect(livePairInitialized({ pair, lpTotalSupply: 0n, yesReserve: 0n, noReserve: 0n, tradingStatus: 6 })).toBeFalse()
 		expect(livePairInitialized({ pair, lpTotalSupply: 1n, yesReserve: 1n, noReserve: 1n, tradingStatus: 0 })).toBeTrue()
-	})
-
-	test('attributes insured-exit limits to INVALID only when INVALID is insufficient', () => {
-		const unit = { settlementCollateralAttoEth: 10n ** 18n, shareTokenSupplyAttoShares: 10n ** 18n }
-		expect(insuredExitLimitMessage(11n * 10n ** 18n, 5n * 10n ** 18n, 10n * 10n ** 18n, unit)).toContain('insured exit of at most 5 ETH')
-		expect(insuredExitLimitMessage(11n * 10n ** 18n, 4n * 10n ** 18n, 4n * 10n ** 18n, unit)).toContain('INVALID balance covers only 4 ETH of complete sets')
 	})
 })

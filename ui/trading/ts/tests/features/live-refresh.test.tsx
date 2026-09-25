@@ -7,6 +7,7 @@ import type { DeploymentConfiguration } from '../../protocol/config.js'
 import { LiveTrading } from '../../features/LiveTrading.js'
 import { liveTradingControllerServices } from '../../features/liveTradingControllerHelpers.js'
 import { shareBalanceScope, type LiveMarket } from '../../protocol/live.js'
+import { largestExitForLongShares } from '@zoltar/trading-shared/trading/positions'
 
 const account = `0x${'11'.repeat(20)}` as Address
 const pool = `0x${'22'.repeat(20)}` as Address
@@ -84,7 +85,7 @@ describe('live market refresh', () => {
 		url: `http://localhost/?demo=0#/market/${pool}`,
 	})
 
-	test('refreshes market data in the background without hiding loaded balances, retires stale quotes, and prices exits by collateral value', async () => {
+	test('refreshes market data in the background without hiding loaded balances, re-prices the live estimate, and stops a submission the chain prices differently', async () => {
 		let discoveredMarket = market
 		let discoveries = 0
 		let balanceLoads = 0
@@ -169,63 +170,55 @@ describe('live market refresh', () => {
 		expect([...observedBalanceLabels]).toEqual(['3 YES'])
 		expect(document.querySelector('[aria-busy="true"]')).toBeNull()
 
-		// A quote survives refreshes that do not change its basis and is retired when reserves move.
-		await act(async () => button('Preview trade').click())
-		await waitForDom(() => document.querySelector('.transaction-review-primary') !== null, 'entry quote')
-		expect(document.body.textContent).toContain('0.02 YES')
-		await settle(120)
-		expect(document.querySelector('.transaction-review-primary')).not.toBeNull()
-		discoveredMarket = { ...discoveredMarket, yesReserve: 30n * 10n ** 36n }
-		await waitForDom(() => document.querySelector('.transaction-review-primary') === null, 'quote retired after reserve change')
-		expect(document.body.textContent).toContain('Preview trade')
-
-		// Exits are entered as collateral value and converted to the share amount the router redeems.
-		await act(async () => button('Exit').click())
+		// The estimate needs no preview step: it follows the typed amount and re-prices when the reserves move.
 		const amountInput = document.querySelector<HTMLInputElement>('[role="tabpanel"] input[name="amount"]')
 		if (amountInput === null) throw new Error('Amount input is unavailable')
-		await act(() => {
-			amountInput.value = '0.5'
-			amountInput.dispatchEvent(new Event('input', { bubbles: true }))
-		})
-		expect(document.body.textContent).toContain('Maximum insured YES exit')
-		await act(async () => button('Preview trade').click())
-		await waitForDom(() => document.querySelector('.transaction-review-primary') !== null, 'exit quote')
-		expect(exitRequests).toEqual([5n * 10n ** 35n])
-		expect(document.body.textContent).toContain('0.5 complete sets')
-		await act(() => {
-			amountInput.value = '0.0000000000000000001'
-			amountInput.dispatchEvent(new Event('input', { bubbles: true }))
-		})
-		expect(actionFeedback()).toContain('Use no more than 18 decimal places')
-		expect(button('Preview trade').getAttribute('aria-describedby')).toBe(document.querySelector('[role="tabpanel"] .tx-action-notice')?.id ?? null)
-		expect(button('Preview trade').disabled).toBeTrue()
-		// Guards resolve in priority order: an exit above the wallet balance is reported before the tighter insured-exit limit.
-		await act(() => {
-			amountInput.value = '9'
-			amountInput.dispatchEvent(new Event('input', { bubbles: true }))
-		})
+		expect(amountInput.value).toBe('')
+		const typeAmount = async (value: string) => {
+			await act(() => {
+				amountInput.value = value
+				amountInput.dispatchEvent(new Event('input', { bubbles: true }))
+			})
+			await settle(300)
+		}
+		await typeAmount('0.01')
+		await waitForDom(() => document.querySelector('.transaction-review-primary') !== null, 'entry estimate')
+		expect(button('Buy YES').disabled).toBeFalse()
+		const estimateBeforeMove = document.querySelector('.transaction-review-primary')?.textContent
+		discoveredMarket = { ...discoveredMarket, yesReserve: 30n * 10n ** 36n }
+		await waitForDom(() => document.querySelector('.transaction-review-primary')?.textContent !== estimateBeforeMove, 'estimate re-priced after reserve change')
+
+		// Sells are entered in shares, with shortcuts, and priced locally before the chain is asked.
+		await act(async () => button('Sell').click())
+		expect(amountInput.value).toBe('')
+		expect(document.body.textContent).toContain('can be sold now')
+		expect(['25%', '50%', 'Max'].every(label => button(label) instanceof HTMLButtonElement)).toBeTrue()
+		await typeAmount('0.5')
+		await waitForDom(() => document.querySelector('.transaction-review-primary')?.textContent?.includes('You sell ≈') === true, 'exit estimate')
+		const expectedCompleteSets = largestExitForLongShares({ ...discoveredMarket, longOutcome: 'YES', longShares: 5n * 10n ** 35n })
+		// The chain prices this exit well above the estimate, so the submission stops before the wallet opens.
+		const discoveriesBeforeSubmit = discoveries
+		await act(async () => button('Sell YES').click())
+		await waitForDom(() => document.querySelector('[role="tabpanel"] .notice.error') !== null, 'price-moved notice')
+		expect(exitRequests).toEqual([expectedCompleteSets])
+		expect(document.querySelector('[role="tabpanel"] .notice.error')?.textContent).toContain('The price moved since your estimate')
+		expect(discoveries).toBeGreaterThan(discoveriesBeforeSubmit)
+		await typeAmount('0.0000000000000000000000000000000000001')
+		expect(actionFeedback()).toContain('Enter a share amount with at most 36 decimal places.')
+		expect(button('Sell YES').getAttribute('aria-describedby')).toBe(document.querySelector('[role="tabpanel"] .tx-action-notice')?.id ?? null)
+		expect(button('Sell YES').disabled).toBeTrue()
+		await typeAmount('9')
 		expect(actionFeedback()).toContain('Insufficient YES balance.')
-		expect(button('Preview trade').disabled).toBeTrue()
-		await act(() => {
-			amountInput.value = '2.5'
-			amountInput.dispatchEvent(new Event('input', { bubbles: true }))
-		})
-		expect(actionFeedback()).toContain('long-share balance and pair liquidity support an insured exit of at most')
 		expect(document.querySelectorAll('[role="tabpanel"] .tx-action-notice')).toHaveLength(1)
-		expect(button('Preview trade').disabled).toBeTrue()
+		expect(button('Sell YES').disabled).toBeTrue()
 
 		// Simulation failures stay beside the action instead of only at the top of the route.
 		failExitSimulation = true
-		await act(() => {
-			amountInput.value = '0.25'
-			amountInput.dispatchEvent(new Event('input', { bubbles: true }))
-		})
-		await act(async () => button('Preview trade').click())
-		await waitForDom(() => document.querySelector('[role="tabpanel"] .notice.error') !== null, 'simulation failure beside the action')
-		expect(document.querySelector('[role="tabpanel"] .notice.error')?.textContent).toContain('receiver rejected tokens')
+		await typeAmount('0.25')
+		await act(async () => button('Sell YES').click())
+		await waitForDom(() => document.querySelector('[role="tabpanel"] .notice.error')?.textContent?.includes('receiver rejected tokens') === true, 'simulation failure beside the action')
 		// The failure is announced once beside the action; no route-level or status duplicate repeats it.
 		expect(Array.from(document.querySelectorAll('[role="alert"]')).filter(candidate => candidate.textContent?.includes('receiver rejected tokens') === true)).toHaveLength(1)
-		expect(document.body.textContent).not.toContain('Transaction workflow needs attention')
 		yesBalance = 4n * 10n ** 36n
 		await waitForDom(() => walletHolding('Wallet YES') === '4 YES', 'refreshed balance after failure')
 	})

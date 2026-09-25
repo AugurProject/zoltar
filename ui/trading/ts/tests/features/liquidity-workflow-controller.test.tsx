@@ -8,6 +8,9 @@ import type { DeploymentConfiguration } from '../../protocol/config.js'
 import type { LiveMarket } from '../../protocol/live.js'
 import type { LiveLiquidityServices } from '../../features/LiveLiquidityControls.js'
 import { useLiquidityWorkflowController } from '../../features/live/useLiquidityWorkflowController.js'
+// Longer than the automatic quote debounce in useQuotedTransaction.
+const QUOTE_SETTLE_MILLISECONDS = 400
+import { DEFAULT_TRADE_SETTINGS } from '../../lib/tradeSettings.js'
 
 const account = `0x${'11'.repeat(20)}` as Address
 const transactionHash = `0x${'88'.repeat(32)}` as Hash
@@ -94,6 +97,7 @@ function Probe({ walletClient, services, onController, onLockChange, market: pro
 		walletClient,
 		externallyLocked: false,
 		nowSeconds: 1n,
+		settings: DEFAULT_TRADE_SETTINGS,
 		refresh: async () => undefined,
 		onKnownReceipt: () => undefined,
 		executeWithCurrentWalletContext: async (_account, _networkFailure, _accountFailure, action) => await action(),
@@ -116,19 +120,25 @@ async function flush() {
 	})
 }
 
+// Waits past the quote debounce so the automatic quote request starts and settles.
+async function settleQuote() {
+	await act(async () => {
+		await Bun.sleep(QUOTE_SETTLE_MILLISECONDS)
+	})
+	await flush()
+}
+
 describe('liquidity workflow controller state', () => {
 	installDomTestLifecycle()
 
-	test('rejects an overlapping stale simulation result and ignores completion after unmount', async () => {
-		const firstSimulation = deferred<ReturnType<typeof liquidityQuote>>()
-		const thirdSimulation = deferred<ReturnType<typeof liquidityQuote>>()
-		let calls = 0
+	test('quotes automatically after typing settles and never lets an older quote replace a newer one', async () => {
+		const firstQuote = deferred<ReturnType<typeof liquidityQuote>>()
+		const requested: bigint[] = []
 		const services: LiveLiquidityServices = {
 			publicErrorMessage: caught => (caught instanceof Error ? caught.message : 'unknown error'),
 			simulateLiquidity: async (_client, _configuration, _market, _account, _operation, amount) => {
-				calls++
-				if (calls === 1) return await firstSimulation.promise
-				if (calls === 3) return await thirdSimulation.promise
+				requested.push(amount)
+				if (requested.length === 1) return await firstQuote.promise
 				return liquidityQuote(amount)
 			},
 			submitFreshLiquidity: async () => transactionHash,
@@ -143,29 +153,28 @@ describe('liquidity workflow controller state', () => {
 				() => undefined,
 			),
 		)
+		expect(controller?.amount).toBe('')
+		expect(controller?.transaction.quoteState).toBe('idle')
 
-		const staleSimulation = controller?.simulateCurrent()
-		await flush()
-		expect(controller?.state).toBe('simulating')
+		// Rapid typing only quotes the settled amount.
+		await act(() => controller?.updateAmount('0.001'))
+		await act(() => controller?.updateAmount('0.01'))
+		expect(controller?.transaction.quoteState).toBe('loading')
+		await settleQuote()
+		expect(requested).toEqual([10_000_000_000_000_000n])
+		expect(controller?.transaction.quoteState).toBe('loading')
+
 		await act(() => controller?.updateAmount('0.02'))
-		await act(async () => controller?.simulateCurrent())
-		expect(controller?.state).toBe('ready')
-		expect(controller?.quote?.amount).toBe(20_000_000_000_000_000n)
-		firstSimulation.resolve(liquidityQuote(10_000_000_000_000_000n))
-		await staleSimulation
+		await settleQuote()
+		expect(controller?.transaction.quoteState).toBe('ready')
+		expect(controller?.transaction.quote?.amount).toBe(20_000_000_000_000_000n)
+		firstQuote.resolve(liquidityQuote(10_000_000_000_000_000n))
 		await flush()
-		expect(controller?.quote?.amount).toBe(20_000_000_000_000_000n)
-
-		await act(() => controller?.updateAmount('0.03'))
-		const pendingSimulation = controller?.simulateCurrent()
-		await flush()
-		expect(controller?.state).toBe('simulating')
+		expect(controller?.transaction.quote?.amount).toBe(20_000_000_000_000_000n)
 		await rendered.cleanup()
-		thirdSimulation.resolve(liquidityQuote(30_000_000_000_000_000n))
-		await pendingSimulation
 	})
 
-	test('keeps an LP removal quote comparable across rate refreshes and retires it when the pool basis moves', async () => {
+	test('keeps an LP removal quote across identical refreshes and re-quotes when the pool basis moves', async () => {
 		const walletClient = createWalletClient({ account, transport: custom({ request: async () => undefined }) })
 		const removals: bigint[] = []
 		const services: LiveLiquidityServices = {
@@ -189,10 +198,11 @@ describe('liquidity workflow controller state', () => {
 			),
 		)
 		await act(() => controller?.selectOperation('remove'))
-		await act(async () => controller?.simulateCurrent())
+		await act(() => controller?.updateAmount('0.01'))
+		await settleQuote()
 		expect(removals).toEqual([10n ** 34n])
-		expect(controller?.state).toBe('ready')
-		// A background refresh that only rebuilds the market object keeps the quote submittable.
+		expect(controller?.transaction.quoteState).toBe('ready')
+		// A background refresh that only rebuilds the market object keeps the quote.
 		await act(() =>
 			render(
 				controllerProbe(
@@ -205,9 +215,10 @@ describe('liquidity workflow controller state', () => {
 				rendered.container,
 			),
 		)
-		await flush()
-		expect(controller?.quote?.amount).toBe(10n ** 34n)
-		// Moving the pool rate changes what the entered value means, so the quote is retired instead of failing at submit.
+		await settleQuote()
+		expect(removals).toHaveLength(1)
+		expect(controller?.transaction.quote?.amount).toBe(10n ** 34n)
+		// Moving the pool rate retires the quote at once and prices the same LP amount again.
 		await act(() =>
 			render(
 				controllerProbe(
@@ -220,21 +231,30 @@ describe('liquidity workflow controller state', () => {
 				rendered.container,
 			),
 		)
-		await flush()
-		expect(controller?.quote).toBeUndefined()
-		expect(controller?.state).toBe('idle')
-		expect(controller?.parsed).toBe(10n ** 34n)
+		expect(controller?.transaction.quote).toBeUndefined()
+		expect(controller?.transaction.quoteState).toBe('loading')
+		await settleQuote()
+		expect(removals).toEqual([10n ** 34n, 10n ** 34n])
+		expect(controller?.transaction.quoteState).toBe('ready')
 		await rendered.cleanup()
 	})
 
-	test('represents a broadcast with an unknown receipt as one locked uncertain state', async () => {
+	test('simulates again before signing and represents a broadcast with an unknown receipt as one locked uncertain state', async () => {
 		const receiptFailure = deferred<{ status: 'success' | 'reverted' }>()
 		const baseWalletClient = createWalletClient({ account, transport: custom({ request: async () => undefined }) })
 		const walletClient = { ...baseWalletClient, waitForTransactionReceipt: async () => await receiptFailure.promise }
+		let simulations = 0
 		const services: LiveLiquidityServices = {
 			publicErrorMessage: caught => (caught instanceof Error ? caught.message : 'unknown error'),
-			simulateLiquidity: async (_client, _configuration, _market, _account, _operation, amount) => liquidityQuote(amount),
-			submitFreshLiquidity: async (_client, _configuration, _account, _quote, guardedWrite) => await guardedWrite(async () => transactionHash),
+			simulateLiquidity: async (_client, _configuration, _market, _account, _operation, amount) => {
+				simulations++
+				return { ...liquidityQuote(amount), deadline: BigInt(simulations) }
+			},
+			submitFreshLiquidity: async (_client, _configuration, _account, quote, guardedWrite) => {
+				// The submitted quote carries the fresh deadline from the pre-signing simulation.
+				expect(quote.deadline).toBe(2n)
+				return await guardedWrite(async () => transactionHash)
+			},
 		}
 		const locks: boolean[] = []
 		let controller: Controller | undefined
@@ -247,24 +267,27 @@ describe('liquidity workflow controller state', () => {
 			),
 		)
 
-		await act(async () => controller?.simulateCurrent())
+		await act(() => controller?.updateAmount('0.01'))
+		await settleQuote()
 		const submission = controller?.submit()
 		await flush()
 		await act(async () => Bun.sleep(10))
-		expect(controller?.state).toBe('pending')
-		expect(controller?.transactionHash).toBe(transactionHash)
+		expect(simulations).toBe(2)
+		expect(controller?.transaction.state).toBe('pending')
+		expect(controller?.transaction.transactionHash).toBe(transactionHash)
 		receiptFailure.reject(new Error('receipt RPC unavailable'))
 		await submission
 		await flush()
-		expect(controller?.state).toBe('error')
-		expect(controller?.transactionHash).toBe(transactionHash)
-		expect(controller?.receiptWarning).toContain('Do not resubmit')
-		expect(controller?.error).toBeUndefined()
-		expect(controller?.workflowLocked).toBeTrue()
+		expect(controller?.transaction.state).toBe('error')
+		expect(controller?.transaction.transactionHash).toBe(transactionHash)
+		expect(controller?.transaction.receiptWarning).toContain('Do not resubmit')
+		expect(controller?.transaction.error).toBeUndefined()
+		expect(controller?.transaction.workflowLocked).toBeTrue()
 		expect(locks.at(-1)).toBeTrue()
 
-		controller?.updateAmount('0.04')
-		expect(controller?.transactionHash).toBe(transactionHash)
+		await act(() => controller?.updateAmount('0.04'))
+		expect(controller?.amount).toBe('0.01')
+		expect(controller?.transaction.transactionHash).toBe(transactionHash)
 		await rendered.cleanup()
 	})
 })

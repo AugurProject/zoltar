@@ -24,13 +24,15 @@ export const settlementTransaction = 'Settlement transaction'
 export const loadingForkDetailsReason = 'Loading the universe fork question and child branches.'
 export const forkDetailsUnavailableReason = 'Fork question details are unavailable.'
 export const forkDetailsLoadFailed = 'Fork question details failed to load'
-export const slippageRangeReason = 'Enter a slippage tolerance from 0% to 5%.'
-export const validityRangeReason = 'Enter a transaction validity from 1 to 1440 whole minutes.'
+export const transactionFailed = 'Settlement transaction failed'
+export const quoteFailed = 'Settlement quote failed'
+export const quoteUnavailable = 'Settlement quote unavailable'
+export const gettingQuote = 'Getting a quote…'
+export const quoteHeading = 'Redemption quote'
+export const youReceive = 'You receive ≈'
+export const minimumReceived = 'Minimum received'
+export const redeemCompleteSetsAction = 'Redeem complete sets'
 
-export function redemptionSimulationSummary(blockNumber: bigint, expectedEthDisplay: string, minimumEthDisplay: string, slippagePercent: string, deadline: string) {
-	return `Authoritative redemption simulation at block ${blockNumber.toString()}: ${expectedEthDisplay} ETH expected, ${minimumEthDisplay} ETH minimum at ${slippagePercent}% slippage; valid until ${deadline}`
-}
-
-export function settlementSimulationSummary(blockNumber: bigint) {
-	return `Authoritative settlement simulation ready at block ${blockNumber.toString()}`
+export function migrationAction(count: number) {
+	return count === 0 ? 'Migrate shares' : `Migrate to ${count.toString()} ${count === 1 ? 'branch' : 'branches'}`
 }
