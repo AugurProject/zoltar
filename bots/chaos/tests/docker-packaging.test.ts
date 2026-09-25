@@ -2,6 +2,7 @@ import { afterEach, describe, expect, test } from 'bun:test'
 import { chmod, mkdir, mkdtemp, readFile, rm, stat, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { parseSettings, serializedSettings } from '../src/config/settings.ts'
 import { batchCommands, dockerInstructions, parseDockerfile, requireDockerStage, shellCommandSegments } from '../../../tooling/testing/packaging-parsers.ts'
 
 const botDirectory = join(import.meta.dir, '..')
@@ -38,16 +39,13 @@ describe('chaos Docker packaging', () => {
 		expect(commands).toContain('pushd "%~dp0" || goto failed')
 		expect(commands).toContain('if /I "%~1"=="doctor" goto doctor')
 		const stopProject = 'docker compose down --remove-orphans --timeout 60 || goto failed'
-		expect(commands.filter(command => /^docker compose (?:stop|down)\b/u.test(command))).toEqual([stopProject, stopProject])
+		expect(commands.filter(command => /^docker compose (?:stop|down)\b/u.test(command))).toEqual([stopProject])
 		expect(commands.indexOf(stopProject)).toBeGreaterThan(commands.indexOf('if /I "%~1"=="doctor" goto doctor'))
 		expect(commands.indexOf(stopProject)).toBeLessThan(commands.indexOf('docker compose build || goto failed'))
-		expect(commands.lastIndexOf(stopProject)).toBeGreaterThan(commands.indexOf('if "%chaos_status_exit%"=="10" goto wait_retirement'))
-		expect(commands.lastIndexOf(stopProject)).toBeLessThan(commands.indexOf('goto prepare_current'))
-		expect(commands).toContain('docker compose run --rm --no-deps chaos bun src/cli/deployment-upgrade.ts prepare')
-		expect(commands.indexOf('docker compose build || goto failed')).toBeLessThan(commands.indexOf('docker compose run --rm --no-deps chaos bun src/cli/deployment-upgrade.ts prepare'))
-		expect(commands).toContain('docker compose run -T --rm --no-deps chaos bun src/cli/deployment-upgrade.ts status')
-		expect(commands).toContain('if "%chaos_prepare_exit%"=="10" goto start_retirement')
-		expect(commands).toContain('if "%chaos_status_exit%"=="10" goto wait_retirement')
+		const prepare = 'docker compose run --rm --no-deps chaos bun src/cli/deployment-upgrade.ts prepare || goto failed'
+		expect(commands).toContain(prepare)
+		expect(commands.indexOf('docker compose build || goto failed')).toBeLessThan(commands.indexOf(prepare))
+		expect(commands.some(command => command.includes('wait_retirement') || command.includes('deployment-upgrade.ts status'))).toBe(false)
 		for (const command of ['docker compose run --rm --no-deps chaos bun src/cli/doctor.ts --if-live-capable', 'docker compose run --rm --no-deps chaos bun run doctor', 'docker compose up --no-build --force-recreate -d']) expect(commands).toContain(`${command} || goto failed`)
 		expect(commands.indexOf('docker compose run --rm --no-deps chaos bun src/cli/doctor.ts --if-live-capable || goto failed')).toBeLessThan(commands.indexOf('docker compose up --no-build --force-recreate -d || goto failed'))
 		expect(commands.some(command => command.includes('dashboard-password'))).toBe(false)
@@ -59,6 +57,41 @@ describe('chaos Docker packaging', () => {
 		expect(commands.indexOf('if "%chaos_exit_code%"=="0" set "chaos_exit_code=%errorlevel%"')).toBeLessThan(commands.indexOf(':finish'))
 		expect(commands.indexOf(':finish')).toBeLessThan(commands.indexOf('pause'))
 		expect(commands.at(-1)).toBe('exit /b %chaos_exit_code%')
+	})
+
+	test('keeps archived retirement explicit and preserves the active configuration', async () => {
+		const commands = batchCommands(await readFile(join(botDirectory, 'retirement.bat'), 'utf8'))
+		expect(commands).toContain('if "%~1"=="" goto list_archives')
+		expect(commands).toContain('docker compose run --rm --no-deps chaos bun src/cli/deployment-upgrade.ts archives || goto failed')
+		const stop = 'docker compose down --remove-orphans --timeout 60 || goto failed'
+		const prepare = 'docker compose run --rm --no-deps chaos bun src/cli/deployment-upgrade.ts retire "%~1" || goto failed'
+		const run = 'docker compose run -d --name zoltar-chaos-retirement --service-ports --no-deps -e "ZOLTAR_CHAOS_CONFIG=%chaos_retirement_config%" chaos || goto failed'
+		expect(commands.indexOf(stop)).toBeLessThan(commands.indexOf(prepare))
+		expect(commands.indexOf('docker compose build || goto failed')).toBeLessThan(commands.indexOf(prepare))
+		expect(commands.indexOf(prepare)).toBeLessThan(commands.indexOf(run))
+		expect(commands).toContain('docker compose run -T --rm --no-deps -e "ZOLTAR_CHAOS_CONFIG=%chaos_retirement_config%" chaos bun src/cli/deployment-upgrade.ts status')
+		expect(commands).toContain('if "%chaos_status_exit%"=="10" goto wait_retirement')
+		expect(commands.lastIndexOf(stop)).toBeGreaterThan(commands.indexOf('if "%chaos_status_exit%"=="10" goto wait_retirement'))
+		const status = 'docker compose run -T --rm --no-deps -e "ZOLTAR_CHAOS_CONFIG=%chaos_retirement_config%" chaos bun src/cli/deployment-upgrade.ts status'
+		expect(commands.filter(command => command === status)).toHaveLength(2)
+		expect(commands.lastIndexOf(stop)).toBeLessThan(commands.lastIndexOf(status))
+		expect(commands.lastIndexOf(status)).toBeLessThan(commands.indexOf('docker compose run --rm --no-deps chaos bun src/cli/deployment-upgrade.ts prepare || goto failed'))
+		expect(commands).toContain('if "%chaos_status_exit%"=="10" goto start_retirement')
+		expect(commands.indexOf(':start_retirement')).toBeLessThan(commands.indexOf(run))
+		expect(commands.lastIndexOf(stop)).toBeLessThan(commands.indexOf('docker compose up --no-build --force-recreate -d || goto failed'))
+		expect(commands.some(command => command.includes(' down -v'))).toBe(false)
+	})
+
+	test('validates the selected archived configuration before starting its process', async () => {
+		const directory = await fixture()
+		await runEntrypoint(directory)
+		const archived = join(directory, '.state', 'archive.json')
+		const settings = parseSettings(JSON.parse(await readFile(join(directory, '.state', 'operator.json'), 'utf8')))
+		settings.runtime.stateFile = join(directory, 'outside.json')
+		await writeFile(archived, JSON.stringify(serializedSettings(settings)), { mode: 0o600 })
+		const child = Bun.spawn([entrypoint, '/bin/true'], { cwd: directory, env: { ...process.env, ZOLTAR_CHAOS_CONFIG: archived, ZOLTAR_BOT_CONTAINER: 'true', ZOLTAR_BOT_SIGNER_LOCK_ROOT: '.state/process-locks' }, stderr: 'pipe', stdout: 'pipe' })
+		expect(await child.exited).not.toBe(0)
+		expect(await new Response(child.stderr).text()).toContain('runtime.stateFile must be a file or directory below')
 	})
 
 	test('builds shared packages and runs as the non-root Bun user', async () => {
@@ -85,7 +118,9 @@ describe('chaos Docker packaging', () => {
 		expect(ignoreSource).not.toContain('ui/coreShared/favicon')
 		expect(dockerInstructions(runtime, 'USER')).toEqual(['bun'])
 		expect(runtimeRuns).toContain('bun ./scripts/check-runtime.mts')
-		expect(await readFile(join(botDirectory, 'scripts', 'check-runtime.mts'), 'utf8')).toContain("import { main } from '../src/cli/run.ts'")
+		const runtimeCheck = await readFile(join(botDirectory, 'scripts', 'check-runtime.mts'), 'utf8')
+		expect(runtimeCheck).toContain("import { main } from '../src/cli/run.ts'")
+		expect(runtimeCheck).toContain("await buildDashboardScript(join(import.meta.dir, '../src/dashboard/dashboard.ts'))")
 		expect(dockerInstructions(runtime, 'EXPOSE')).toContain('4193')
 		expect(dockerInstructions(runtime, 'VOLUME')).toContain('["/app/bots/chaos/.state"]')
 		const entrypointSource = await readFile(entrypoint, 'utf8')

@@ -1,3 +1,5 @@
+import { buildDashboardScript } from '@zoltar/bot-shared/dashboard/assets'
+import { join } from 'node:path'
 import { publicChaosConfiguration, publicChaosState } from '../src/dashboard/dashboard-server.ts'
 import { main } from '../src/cli/run.ts'
 
@@ -15,3 +17,5 @@ const configuration = publicChaosConfiguration({
 const state = publicChaosState({ inventory: { eth: '0', rep: [], weth: '0' }, paused: true, scheduler: { status: 'paused' } })
 
 if (configuration['paused'] !== true || state['paused'] !== true || typeof main !== 'function') throw new Error('Chaos production runtime smoke check failed')
+
+await buildDashboardScript(join(import.meta.dir, '../src/dashboard/dashboard.ts'))
