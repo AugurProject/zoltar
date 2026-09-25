@@ -436,6 +436,7 @@ describe('useReportingOperations', () => {
 
 		expect(reportOutcomeInSecurityPool).toHaveBeenCalledTimes(1)
 		expect(submittedFunding).toBe(contributionFunding)
+		expect(reportOutcomeInSecurityPool.mock.calls[0]?.[1]?.skipAppReview).toBe(true)
 		expect(requireHookState(hookState).reportingResult?.action).toBe('reportOutcome')
 	})
 
@@ -512,6 +513,7 @@ describe('useReportingOperations', () => {
 			await requireHookState(hookState).onReportOutcome()
 		})
 		expect(execute).toHaveBeenCalledTimes(1)
+		expect(execute.mock.calls[0]?.[1]?.skipAppReview).toBe(true)
 		if (failReport) {
 			expect(requireHookState(hookState).reportingForm.contributionFunding).toBe('vault')
 			expect(requireHookState(hookState).reportingDetails?.viewerPoolHeldVaultRepBackingAttoRep).toBe(15n)

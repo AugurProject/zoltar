@@ -292,7 +292,7 @@ export function useReportingOperations(
 					let funded = false
 					try {
 						return {
-							...(await execute(walletAddress, { onTransactionPrepared, onTransactionSubmitted, reviewSignal: context.reviewSignal }, securityPoolAddress, preflight.selectedOutcome, preflight.reportAmount, preflight.walletDepositAmount, () => {
+							...(await execute(walletAddress, { onTransactionPrepared, onTransactionSubmitted, reviewSignal: context.reviewSignal, skipAppReview: true }, securityPoolAddress, preflight.selectedOutcome, preflight.reportAmount, preflight.walletDepositAmount, () => {
 								funded = true
 							})),
 							amountAttoRep: preflight.actualDepositAmount,
@@ -306,7 +306,7 @@ export function useReportingOperations(
 					}
 				}
 				return {
-					...(await dependencies.reportOutcomeInSecurityPool(walletAddress, { onTransactionPrepared, onTransactionSubmitted, reviewSignal: context.reviewSignal }, securityPoolAddress, preflight.selectedOutcome, preflight.reportAmount, preflight.actualDepositAmount, preflight.contributionFunding)),
+					...(await dependencies.reportOutcomeInSecurityPool(walletAddress, { onTransactionPrepared, onTransactionSubmitted, reviewSignal: context.reviewSignal, skipAppReview: true }, securityPoolAddress, preflight.selectedOutcome, preflight.reportAmount, preflight.actualDepositAmount, preflight.contributionFunding)),
 					amountAttoRep: preflight.actualDepositAmount,
 				}
 			},
