@@ -68,16 +68,9 @@ function renderRepBalance(model: ZoltarOverviewModel) {
 	return <CurrencyValue value={model.repBalanceAttoRep} loading={model.repBalanceAttoRep === undefined} suffix={commonCopy.rep} />
 }
 
-function MigrationStatus({ model }: { model: ZoltarOverviewModel }) {
-	if (model.status !== 'forked') return <MetricField label={zoltarCopy.migrationStatus}>{zoltarCopy.migrationAfterFork}</MetricField>
-	if (model.migratableRepAttoRep === undefined || model.migratableRepAttoRep === 0n) return <MetricField label={zoltarCopy.migrationStatus}>{zoltarCopy.migrationNoDeadline}</MetricField>
-	// Wallet REP plus REP already prepared for migration: everything that still has to move to an outcome universe.
-	return (
-		<MetricField label={zoltarCopy.repToMigrate}>
-			<CurrencyValue value={model.migratableRepAttoRep} suffix={commonCopy.rep} />
-			<span className='detail zoltar-migration-deadline'>{zoltarCopy.migrationNoDeadline}</span>
-		</MetricField>
-	)
+// The amount to migrate depends on the destinations chosen on the Migrate route, so the Overview reports only whether migration is open.
+function renderMigrationStatus(model: ZoltarOverviewModel) {
+	return model.status === 'forked' ? zoltarCopy.migrationNoDeadline : zoltarCopy.migrationAfterFork
 }
 
 /** The Overview route body: the protocol model in three sentences, the user's status, and one next step. */
@@ -100,7 +93,7 @@ function ZoltarOverviewView({ currentTimestamp, model, ...actions }: ZoltarOverv
 							<>
 								<MetricField label={zoltarCopy.forkStatus}>{model.forkTime === undefined ? zoltarCopy.notForked : <TimestampValue timestamp={model.forkTime} {...(currentTimestamp === undefined ? {} : { currentTimestamp })} />}</MetricField>
 								<MetricField label={zoltarCopy.universeRep}>{renderRepBalance(model)}</MetricField>
-								<MigrationStatus model={model} />
+								<MetricField label={zoltarCopy.migrationStatus}>{renderMigrationStatus(model)}</MetricField>
 							</>
 						)}
 					</MetricGrid>

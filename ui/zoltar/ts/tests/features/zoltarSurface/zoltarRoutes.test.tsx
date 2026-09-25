@@ -196,7 +196,7 @@ describe('ZoltarRoutes', () => {
 		expect(queries.getByRole('heading', { name: 'Overview' })).toBeTruthy()
 		expect(queries.getByText('Genesis › Alpha')).toBeTruthy()
 		expect(queries.getByText('This universe forked. Move your REP into the outcome universes you back.')).toBeTruthy()
-		expect(queries.getByText('REP to migrate')).toBeTruthy()
+		expect(queries.getByText('Open, no deadline')).toBeTruthy()
 		const nextStep = document.body.querySelector('.zoltar-next-step')
 		if (!(nextStep instanceof HTMLElement)) throw new Error('Expected the next step')
 		const actions = within(nextStep).getAllByRole('button')

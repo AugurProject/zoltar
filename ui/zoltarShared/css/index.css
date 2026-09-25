@@ -431,10 +431,3 @@
 	padding-left: 1.25rem;
 	color: var(--text-secondary);
 }
-
-.zoltar-migration-deadline {
-	display: block;
-	margin-top: var(--space-1);
-	font-family: var(--font-family-sans);
-	font-weight: 400;
-}
