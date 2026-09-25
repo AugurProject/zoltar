@@ -109,6 +109,9 @@
 	min-width: 0;
 	margin: 0;
 }
+.market-list-controls > .market-list-filters {
+	min-width: 0;
+}
 .market-list-sort {
 	display: flex;
 	align-items: center;
@@ -267,6 +270,28 @@ button.outcome-button--no:hover:not(:disabled) {
 }
 .market-ticket-bar {
 	display: none;
+}
+
+/* On phones the status chips take their own row and share it, so the four labels fit inside the page gutter. */
+@media (max-width: 40rem) {
+	.market-list-controls > .market-list-filters {
+		flex: 1 1 100%;
+		flex-wrap: nowrap;
+		width: 100%;
+	}
+	.market-list-controls .view-tabs.market-list-filters .view-tab {
+		flex: 1 1 auto;
+		min-width: 0;
+		padding-inline: var(--space-1);
+	}
+}
+
+/* The market page's facts share the reading column in columns wide enough to keep the end date on one line. */
+.market-overview .sticky-object-context.context-strip .sticky-object-context-items {
+	grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
+}
+.market-overview .sticky-object-context-item .timestamp-value {
+	white-space: nowrap;
 }
 
 /* Keep in sync with COMPACT_TICKET_QUERY in MarketTicketSheet.tsx. */
