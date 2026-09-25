@@ -32,7 +32,7 @@ export type PositionTicket = Readonly<{
 	mode: TradeMode
 	side: 'YES' | 'NO'
 	amount: string
-	impactAcknowledged: boolean
+	acknowledgedImpactBps: bigint | undefined
 	state: TransactionPhase
 	positionHash: Hash | undefined
 	message: string | undefined
@@ -40,7 +40,7 @@ export type PositionTicket = Readonly<{
 	setMode(value: TradeMode): void
 	setSide(value: 'YES' | 'NO'): void
 	setAmount(value: string): void
-	setImpactAcknowledged(value: boolean): void
+	setAcknowledgedImpactBps(value: bigint | undefined): void
 	submit(estimate: TradeEstimate | undefined): Promise<void>
 }>
 
@@ -118,7 +118,7 @@ export function LivePositionControls({ market, nowSeconds, settings, ticket, wal
 		networkMismatchReason: wallet.networkMismatchReason,
 		walletEthAttoEth: wallet.walletEthAttoEth,
 		marketClosed: closed,
-		impactAcknowledged: ticket.impactAcknowledged,
+		acknowledgedImpactBps: ticket.acknowledgedImpactBps,
 		workflowLocked,
 	})
 	// After a receipt the workflow stays locked until the market and balances have been re-read; say so instead of showing a silent disabled form.
@@ -201,7 +201,9 @@ export function LivePositionControls({ market, nowSeconds, settings, ticket, wal
 			)}
 			<InvalidCoverageExplanation model={model} side={side} disabled={controlsDisabled} onUseSellable={ticket.setAmount} />
 			<QuotedTransactionPanel phase={state} actionLabel={model.actionLabel} availability={model.availability} statusText={confirmedText} transactionHash={ticket.positionHash} receiptWarning={ticket.positionReceiptWarning} error={ticket.message} walletStep={walletStep} onSubmit={() => void ticket.submit(estimate)}>
-				{estimate === undefined || model.impactTier === undefined ? null : <TradeEstimatePanel estimate={estimate} market={market} settings={settings} impactTier={model.impactTier} impactAcknowledged={ticket.impactAcknowledged} disabled={controlsDisabled} onAcknowledgeImpact={ticket.setImpactAcknowledged} />}
+				{estimate === undefined || model.impactTier === undefined ? null : (
+					<TradeEstimatePanel estimate={estimate} market={market} settings={settings} impactTier={model.impactTier} impactAcknowledged={model.impactAcknowledged} disabled={controlsDisabled} onAcknowledgeImpact={checked => ticket.setAcknowledgedImpactBps(checked ? estimate.impactBps : undefined)} />
+				)}
 			</QuotedTransactionPanel>
 		</div>
 	)

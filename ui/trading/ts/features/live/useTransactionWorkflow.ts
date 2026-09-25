@@ -11,7 +11,8 @@ export function useTransactionWorkflow({ onWorkflowLockChange, account, chainId,
 	const [side, setSide] = useState<'YES' | 'NO'>('YES')
 	// Amount fields start empty: a prefilled value reads like a recommendation.
 	const [amount, setAmount] = useState('')
-	const [impactAcknowledged, setImpactAcknowledged] = useState(false)
+	// The impact the user accepted; a later estimate with a higher impact needs a new acknowledgment.
+	const [acknowledgedImpactBps, setAcknowledgedImpactBps] = useState<bigint>()
 	const positionWorkflowLockedRef = useRef(false)
 	const liquidityWorkflowLockedRef = useRef(false)
 	const knownReceiptRef = useRef<() => void>(() => undefined)
@@ -55,8 +56,8 @@ export function useTransactionWorkflow({ onWorkflowLockChange, account, chainId,
 		setSide,
 		amount,
 		setAmount,
-		impactAcknowledged,
-		setImpactAcknowledged,
+		acknowledgedImpactBps,
+		setAcknowledgedImpactBps,
 		transaction,
 		dispatchWorkflow: transaction.dispatchWorkflow,
 		state: transaction.state,

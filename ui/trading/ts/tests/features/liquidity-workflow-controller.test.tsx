@@ -290,4 +290,42 @@ describe('liquidity workflow controller state', () => {
 		expect(controller?.transaction.transactionHash).toBe(transactionHash)
 		await rendered.cleanup()
 	})
+
+	test('prices the pool again after a failed submission instead of resubmitting the stale quote', async () => {
+		const walletClient = createWalletClient({ account, transport: custom({ request: async () => undefined }) })
+		let quotes = 0
+		const services: LiveLiquidityServices = {
+			publicErrorMessage: caught => (caught instanceof Error ? caught.message : 'unknown error'),
+			simulateLiquidity: async (_client, _configuration, _market, _account, _operation, amount) => {
+				quotes++
+				return liquidityQuote(amount)
+			},
+			submitFreshLiquidity: async () => {
+				throw new Error('Refreshed quote no longer satisfies the approved minimum LP tokens')
+			},
+		}
+		let controller: Controller | undefined
+		const rendered = await renderIntoDocument(
+			controllerProbe(
+				walletClient,
+				services,
+				value => (controller = value),
+				() => undefined,
+			),
+		)
+		await act(() => controller?.updateAmount('0.01'))
+		await settleQuote()
+		expect(quotes).toBe(1)
+		await act(async () => controller?.submit())
+		await flush()
+		expect(controller?.transaction.state).toBe('error')
+		expect(controller?.transaction.error).toContain('The price moved past your slippage limit.')
+		// One pre-signing simulation, then a fresh automatic quote for the same inputs.
+		expect(quotes).toBe(2)
+		expect(controller?.transaction.quote).toBeUndefined()
+		await settleQuote()
+		expect(quotes).toBe(3)
+		expect(controller?.transaction.quoteState).toBe('ready')
+		await rendered.cleanup()
+	})
 })

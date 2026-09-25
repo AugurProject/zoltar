@@ -99,6 +99,7 @@ describe('live workflow safety boundary', () => {
 		const childDiscovery = deferred<undefined>()
 		let childBalanceStarted = deferred<undefined>()
 		const discoveredUniverseIds: Array<bigint | undefined> = []
+		const submittedEntries: Array<{ minimumLongShares: bigint; result: { totalLongShares: bigint } }> = []
 		const balancedPools: Address[] = []
 		const walletSummaries: WalletSummaryState[] = []
 		const recordWalletSummary = (summary: WalletSummaryState) => walletSummaries.push(summary)
@@ -224,7 +225,8 @@ describe('live workflow safety boundary', () => {
 				const result = quoteEnterPosition(side, (amount * quotedMarket.shareTokenSupplyAttoShares) / quotedMarket.settlementCollateralAttoEth, quotedMarket)
 				return { blockNumber: 1n, amount, side, market: quotedMarket, deadline: now + 1_200n, slippageBps: 50n, minimumLongShares: 1n, result }
 			},
-			submitFreshEntry: async (_client: unknown, _configuration: unknown, _account: unknown, _quote: unknown, guardedWrite: <T>(write: () => Promise<T>) => Promise<T>) => {
+			submitFreshEntry: async (_client: unknown, _configuration: unknown, _account: unknown, quote: { minimumLongShares: bigint; result: { totalLongShares: bigint } }, guardedWrite: <T>(write: () => Promise<T>) => Promise<T>) => {
+				submittedEntries.push(quote)
 				if (deferPositionBroadcast) await positionBroadcast.promise
 				return await guardedWrite(async () => {
 					if (deferPositionBroadcast) await positionWalletWrite.promise
@@ -443,6 +445,9 @@ describe('live workflow safety boundary', () => {
 		expect(document.body.textContent).toContain('Buy YES sent. Waiting for confirmation')
 		expect(document.querySelector('.transaction-hash')?.textContent).toContain(transactionHash)
 		expect(document.querySelector('.transaction-hash-link')).not.toBeNull()
+		// The wallet is held to the minimum the ticket displayed (0.5% below the estimate), not to the simulation's own bound.
+		expect(submittedEntries).toHaveLength(1)
+		expect(submittedEntries[0]?.minimumLongShares).toBe(((submittedEntries[0]?.result.totalLongShares ?? 0n) * 9_950n) / 10_000n)
 		positionReceipt.resolve({ status: 'success' })
 		await settleAsyncWorkflow()
 		expect(document.body.textContent).toContain('Buy YES confirmed.')

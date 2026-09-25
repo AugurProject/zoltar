@@ -74,7 +74,9 @@ export function useQuotedTransaction<Quote>({
 	const error = transactionWorkflowError(workflowState, formatTransactionFailure(REVERTED_ON_CHAIN))
 	const receiptWarning = transactionWorkflowReceiptWarning(workflowState)
 	const workflowLocked = externallyLocked || positionControlsWorkflowLocked(state, receiptWarning)
-	const quoteKey = quoteSource?.key
+	// A failed submission retires the cached quote, so pressing again prices the pool afresh instead of resubmitting stale bounds.
+	const [failureCount, setFailureCount] = useState(0)
+	const quoteKey = quoteSource?.key === undefined ? undefined : `${quoteSource.key}\u0001${failureCount.toString()}`
 	const loadRef = useRef(quoteSource?.load)
 	loadRef.current = quoteSource?.load
 
@@ -185,6 +187,7 @@ export function useQuotedTransaction<Quote>({
 				dispatchWorkflow({ type: 'uncertain', context, reason: broadcastUncertainMessage(label, broadcastHash) })
 			} else {
 				dispatchWorkflow({ type: 'failed', context, operation, message: describeTransactionFailure(caught, failureFallback) })
+				setFailureCount(count => count + 1)
 			}
 		} finally {
 			workflow.finish()

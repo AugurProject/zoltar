@@ -53,7 +53,7 @@ export function ticketModelFor(market: LiveMarket, mode: TradeMode, amount: stri
 		networkMismatchReason: undefined,
 		walletEthAttoEth: 10n ** 24n,
 		marketClosed: false,
-		impactAcknowledged: false,
+		acknowledgedImpactBps: undefined,
 		workflowLocked: false,
 		...overrides,
 	})

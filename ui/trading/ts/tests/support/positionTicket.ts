@@ -6,7 +6,7 @@ export function positionTicket(overrides: Partial<PositionTicket> = {}): Positio
 		mode: 'entry',
 		side: 'YES',
 		amount: '',
-		impactAcknowledged: false,
+		acknowledgedImpactBps: undefined,
 		state: 'idle',
 		positionHash: undefined,
 		message: undefined,
@@ -14,7 +14,7 @@ export function positionTicket(overrides: Partial<PositionTicket> = {}): Positio
 		setMode: () => undefined,
 		setSide: () => undefined,
 		setAmount: () => undefined,
-		setImpactAcknowledged: () => undefined,
+		setAcknowledgedImpactBps: () => undefined,
 		submit: async () => undefined,
 		...overrides,
 	}

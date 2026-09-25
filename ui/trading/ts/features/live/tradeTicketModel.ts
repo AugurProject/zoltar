@@ -175,7 +175,8 @@ export type TradeTicketInputs = Readonly<{
 	networkMismatchReason: string | undefined
 	walletEthAttoEth: bigint | undefined
 	marketClosed: boolean
-	impactAcknowledged: boolean
+	/** The price impact the user accepted, if any; it covers only estimates at or below that impact. */
+	acknowledgedImpactBps: bigint | undefined
 	workflowLocked: boolean
 }>
 
@@ -190,6 +191,7 @@ export function tradeTicketModel(inputs: TradeTicketInputs) {
 	const impactTier = estimate === undefined ? undefined : priceImpactTier(estimate.impactBps)
 	const shortfall = invalidCoverageShortfall(estimate, balances)
 	const needsAcknowledgment = impactTier === 'warning'
+	const impactAcknowledged = estimate !== undefined && inputs.acknowledgedImpactBps !== undefined && estimate.impactBps <= inputs.acknowledgedImpactBps
 	let insufficient: string | undefined
 	if (mode === 'entry' && parsed.value !== undefined && inputs.walletEthAttoEth !== undefined && parsed.value > inputs.walletEthAttoEth) insufficient = availabilityCopy.insufficientEthReason
 	if (mode === 'exit' && parsed.value !== undefined && longBalance !== undefined && parsed.value > longBalance) insufficient = availabilityCopy.formatInsufficientOutcomeReason(side)
@@ -206,7 +208,7 @@ export function tradeTicketModel(inputs: TradeTicketInputs) {
 		insufficient,
 		shortfall === undefined ? undefined : ticketCopy.invalidCoverageReason,
 		impactTier === 'blocked' ? ticketCopy.priceImpactBlockedReason : undefined,
-		needsAcknowledgment && !inputs.impactAcknowledged ? ticketCopy.acknowledgeImpactReason : undefined,
+		needsAcknowledgment && !impactAcknowledged ? ticketCopy.acknowledgeImpactReason : undefined,
 		inputs.workflowLocked ? availabilityCopy.transactionInProgressReason : undefined,
 	)
 	let primaryStep: 'connect' | 'switch-network' | 'submit' = 'submit'
@@ -220,6 +222,7 @@ export function tradeTicketModel(inputs: TradeTicketInputs) {
 		estimateProblem: problem,
 		impactTier,
 		needsAcknowledgment,
+		impactAcknowledged,
 		shortfall,
 		sellable: mode === 'exit' ? sellableShares(market, side, balances) : undefined,
 		shortcuts: mode === 'exit' ? sellShortcuts(market, side, balances) : [],
@@ -233,6 +236,7 @@ export function tradeTicketModel(inputs: TradeTicketInputs) {
 export type TradeTicketModel = ReturnType<typeof tradeTicketModel>
 
 /** The authoritative simulation may price differently from the local estimate; beyond the slippage bound, stop and show the new price. */
-export function authoritativeQuoteMoved(estimate: TradeEstimate, authoritativeLongShares: bigint) {
-	return estimate.kind === 'entry' ? authoritativeLongShares < estimate.minimumLongShares : authoritativeLongShares > estimate.maximumLongShares
+export function authoritativeQuoteMoved(estimate: TradeEstimate, authoritativeLongShares: bigint, authoritativeEthOut?: bigint) {
+	if (estimate.kind === 'entry') return authoritativeLongShares < estimate.minimumLongShares
+	return authoritativeLongShares > estimate.maximumLongShares || (authoritativeEthOut !== undefined && authoritativeEthOut < estimate.minimumAttoEth)
 }

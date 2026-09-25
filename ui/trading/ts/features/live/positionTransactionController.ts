@@ -18,6 +18,19 @@ function priceMovedDetail(estimate: TradeEstimate, authoritativeLongShares: bigi
 }
 
 /**
+ * The wallet is held to the bounds the ticket displayed, not to fresh slippage around the chain's price: the
+ * minimum received and the most shares sold are the estimate's, which the chain result already satisfies.
+ */
+function withApprovedBounds(quote: Quote, estimate: TradeEstimate): Quote {
+	if (quote.kind === 'entry' && estimate.kind === 'entry') return { ...quote, value: { ...quote.value, minimumLongShares: estimate.minimumLongShares } }
+	if (quote.kind === 'exit' && estimate.kind === 'exit') {
+		const maximumLongShares = estimate.maximumLongShares < quote.value.longBalance ? estimate.maximumLongShares : quote.value.longBalance
+		return { ...quote, value: { ...quote.value, maximumLongShares, minimumEth: estimate.minimumAttoEth } }
+	}
+	return quote
+}
+
+/**
  * Trade actions: one submit that re-simulates against the chain right before the wallet opens, compares the result
  * with the estimate the user saw, and stops with a refreshed estimate if the price moved past the slippage bound.
  */
@@ -46,7 +59,7 @@ export function createPositionTransactionController({
 	refresh: Refresh
 	marketPageStart: bigint
 }) {
-	const { mode, side, transaction, positionWorkflowLockedRef, liquidityWorkflowLockedRef, setMode, setSide, setAmount, setImpactAcknowledged } = workflow
+	const { mode, side, transaction, positionWorkflowLockedRef, liquidityWorkflowLockedRef, setMode, setSide, setAmount, setAcknowledgedImpactBps } = workflow
 
 	async function submit(estimate: TradeEstimate | undefined) {
 		if (configuration === undefined || selected === undefined || account === undefined || walletClient === undefined || estimate === undefined) return
@@ -61,12 +74,12 @@ export function createPositionTransactionController({
 					estimate.kind === 'entry'
 						? { ...quoteContext, kind: 'entry', value: await withReadTimeout(services.simulateEntry(walletClient, configuration, market, account, side, estimate.payAttoEth, validityMinutes, slippageBps)) }
 						: { ...quoteContext, kind: 'exit', value: await withReadTimeout(services.simulateExit(walletClient, configuration, market, account, side, estimate.quote.completeSetShares, validityMinutes, slippageBps)) }
-				if (authoritativeQuoteMoved(estimate, quote.value.result.totalLongShares)) {
+				if (authoritativeQuoteMoved(estimate, quote.value.result.totalLongShares, quote.kind === 'exit' ? quote.value.result.ethOut : undefined)) {
 					// Reload the reserves so the estimate on screen shows the price the chain now quotes.
 					void refresh(configuration, marketPageStart, 'position')
 					throw new Error(ticketCopy.priceMoved(priceMovedDetail(estimate, quote.value.result.totalLongShares)))
 				}
-				return quote
+				return withApprovedBounds(quote, estimate)
 			},
 			send: async (quote, requestSignature) => {
 				const guarded = createGuardedWalletWrite(account, 'Wallet network changed during transaction revalidation; reconnect and try again', 'Wallet account changed during transaction revalidation; reconnect and try again')
@@ -75,7 +88,7 @@ export function createPositionTransactionController({
 			},
 			afterConfirmed: async () => {
 				setAmount('')
-				setImpactAcknowledged(false)
+				setAcknowledgedImpactBps(undefined)
 				await refresh(configuration, marketPageStart, 'position')
 			},
 		})
@@ -84,7 +97,7 @@ export function createPositionTransactionController({
 	function resetPositionInput(update: () => void) {
 		if (positionWorkflowLockedRef.current) return
 		update()
-		setImpactAcknowledged(false)
+		setAcknowledgedImpactBps(undefined)
 		transaction.invalidate()
 	}
 
@@ -98,8 +111,8 @@ export function createPositionTransactionController({
 			}),
 		setSide: (value: 'YES' | 'NO') => resetPositionInput(() => setSide(value)),
 		setAmount: (value: string) => resetPositionInput(() => setAmount(value)),
-		setImpactAcknowledged: (value: boolean) => {
-			if (!positionWorkflowLockedRef.current) setImpactAcknowledged(value)
+		setAcknowledgedImpactBps: (value: bigint | undefined) => {
+			if (!positionWorkflowLockedRef.current) setAcknowledgedImpactBps(value)
 		},
 	}
 }

@@ -61,7 +61,7 @@ export function useLiveTradingController({
 	// Only addressed routes work on a market; list routes show candidates until an address is opened.
 	const selected = routePool === undefined ? undefined : visibleMarkets.find(market => market.pool.toLowerCase() === routePool.toLowerCase())
 	const transactionWorkflow = useTransactionWorkflow({ onWorkflowLockChange, account, chainId: configuration?.chainId, market: selected?.pool, walletClient })
-	const { mode, side, amount, impactAcknowledged, dispatchWorkflow, state, positionHash, message, positionReceiptWarning, positionWorkflowLockedRef, workflowLocked, updateLiquidityWorkflowLock } = transactionWorkflow
+	const { mode, side, amount, acknowledgedImpactBps, dispatchWorkflow, state, positionHash, message, positionReceiptWarning, positionWorkflowLockedRef, workflowLocked, updateLiquidityWorkflowLock } = transactionWorkflow
 	const nowSeconds = useQuestionClock(undefined, configuration, services)
 	const listedMarkets = visibleMarkets.filter(market => (tradingListKindFor(route) === 'security-pools' ? market.pair === undefined && market.loadError === undefined && marketAcceptsNewRisk(market, nowSeconds) : market.pair !== undefined || market.loadError !== undefined))
 	const walletUniverseId = routePool === undefined ? selectedUniverseId : selected?.universeId.toString()
@@ -200,7 +200,7 @@ export function useLiveTradingController({
 			mode,
 			side,
 			amount,
-			impactAcknowledged,
+			acknowledgedImpactBps,
 			state,
 			positionHash,
 			message,

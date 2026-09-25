@@ -27,7 +27,7 @@ const ready: TradeTicketInputs = {
 	networkMismatchReason: undefined,
 	walletEthAttoEth: 5n * eth,
 	marketClosed: false,
-	impactAcknowledged: false,
+	acknowledgedImpactBps: undefined,
 	workflowLocked: false,
 }
 
@@ -130,8 +130,14 @@ describe('trade ticket model', () => {
 		const warning = tradeTicketModel({ ...ready, amount: '20', walletEthAttoEth: 1_000n * eth })
 		expect(warning.impactTier).toBe('warning')
 		expect(warning.availability.reason).toBe(ticketCopy.acknowledgeImpactReason)
-		expect(tradeTicketModel({ ...ready, amount: '20', walletEthAttoEth: 1_000n * eth, impactAcknowledged: true }).availability.disabled).toBeFalse()
-		const blocked = tradeTicketModel({ ...ready, amount: '80', walletEthAttoEth: 1_000n * eth, impactAcknowledged: true })
+		const accepted = warning.estimate?.impactBps
+		expect(tradeTicketModel({ ...ready, amount: '20', walletEthAttoEth: 1_000n * eth, acknowledgedImpactBps: accepted }).availability.disabled).toBeFalse()
+		// An acknowledgment covers only the impact it named: a larger trade or a moved pool asks again.
+		const larger = tradeTicketModel({ ...ready, amount: '25', walletEthAttoEth: 1_000n * eth, acknowledgedImpactBps: accepted })
+		expect(larger.impactTier).toBe('warning')
+		expect(larger.impactAcknowledged).toBeFalse()
+		expect(larger.availability.reason).toBe(ticketCopy.acknowledgeImpactReason)
+		const blocked = tradeTicketModel({ ...ready, amount: '80', walletEthAttoEth: 1_000n * eth, acknowledgedImpactBps: 10_000n })
 		expect(blocked.impactTier).toBe('blocked')
 		expect(blocked.availability.reason).toBe(ticketCopy.priceImpactBlockedReason)
 	})
