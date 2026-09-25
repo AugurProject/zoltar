@@ -89,9 +89,11 @@ export function App() {
 		isConnectingWallet: overviewWalletProps.isConnectingWallet,
 		onConnectWallet: overviewWalletProps.onConnect,
 		onGoToGenesisUniverse: () => setActiveUniverseId(0n),
+		onRetryUniverse: () => void loadZoltarUniverse({ clearCurrentState: false }),
 		onSwitchNetwork: overviewWalletProps.onSwitchNetwork,
 		onViewChange: view => setZoltarView(view),
 		operations,
+		universeError: zoltarUniverseError,
 		universeState: zoltarUniverseState,
 	}
 	const deploymentTab: RouteTabDefinition = { hash: zoltarRouting.getHash('deploy'), label: appCopy.deployContracts, route: 'deploy' }

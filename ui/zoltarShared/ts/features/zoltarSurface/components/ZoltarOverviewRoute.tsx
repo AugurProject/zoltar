@@ -18,6 +18,8 @@ type NextStepPresentation = { actionLabel: string; detail: string }
 
 function getNextStepPresentation(nextStep: ZoltarNextStep): NextStepPresentation {
 	switch (nextStep.kind) {
+		case 'retry-universe':
+			return { actionLabel: commonCopy.retry, detail: zoltarCopy.universeUnavailableDetail }
 		case 'go-to-genesis':
 			return { actionLabel: commonCopy.goToGenesisUniverse, detail: zoltarCopy.goToGenesisDetail }
 		case 'connect-wallet':
@@ -41,14 +43,16 @@ type ZoltarOverviewViewProps = {
 	model: ZoltarOverviewModel
 	onConnectWallet: () => void
 	onGoToGenesisUniverse: () => void
+	onRetryUniverse: () => void
 	onSwitchNetwork: () => void
 	onViewChange: (view: ZoltarView) => void
 }
 
-function NextStepAction({ isConnectingWallet, nextStep, onConnectWallet, onGoToGenesisUniverse, onSwitchNetwork, onViewChange }: Omit<ZoltarOverviewViewProps, 'model'> & { nextStep: ZoltarNextStep }) {
+function NextStepAction({ isConnectingWallet, nextStep, onConnectWallet, onGoToGenesisUniverse, onRetryUniverse, onSwitchNetwork, onViewChange }: Omit<ZoltarOverviewViewProps, 'model'> & { nextStep: ZoltarNextStep }) {
 	const presentation = getNextStepPresentation(nextStep)
 	const onClick = () => {
 		if (nextStep.kind === 'go-to-genesis') onGoToGenesisUniverse()
+		else if (nextStep.kind === 'retry-universe') onRetryUniverse()
 		else if (nextStep.kind === 'connect-wallet') onConnectWallet()
 		else if (nextStep.kind === 'switch-network') onSwitchNetwork()
 		else onViewChange(nextStep.view)
@@ -85,11 +89,16 @@ function ZoltarOverviewView({ currentTimestamp, model, ...actions }: ZoltarOverv
 					<MetricGrid variant='summary'>
 						<MetricField label={commonCopy.universe}>
 							<span className='zoltar-overview-universe'>
-								{model.universeLabel} {model.status === 'missing' ? <Badge tone='danger'>{commonCopy.notFound}</Badge> : <Badge tone={model.status === 'forked' ? 'warning' : 'ok'}>{model.status === 'forked' ? commonCopy.forked : commonCopy.operational}</Badge>}
+								{model.universeLabel}{' '}
+								{model.status === 'missing' || model.status === 'unavailable' ? (
+									<Badge tone='danger'>{model.status === 'missing' ? commonCopy.notFound : commonCopy.unavailable}</Badge>
+								) : (
+									<Badge tone={model.status === 'forked' ? 'warning' : 'ok'}>{model.status === 'forked' ? commonCopy.forked : commonCopy.operational}</Badge>
+								)}
 							</span>
 						</MetricField>
-						{/* A universe that does not exist has no fork, REP, or migration to report. */}
-						{model.status === 'missing' ? undefined : (
+						{/* A universe that does not exist or could not be read has no fork, REP, or migration to report. */}
+						{model.status === 'missing' || model.status === 'unavailable' ? undefined : (
 							<>
 								<MetricField label={zoltarCopy.forkStatus}>{model.forkTime === undefined ? zoltarCopy.notForked : <TimestampValue timestamp={model.forkTime} {...(currentTimestamp === undefined ? {} : { currentTimestamp })} />}</MetricField>
 								<MetricField label={zoltarCopy.universeRep}>{renderRepBalance(model)}</MetricField>
@@ -117,7 +126,7 @@ function ZoltarOverviewView({ currentTimestamp, model, ...actions }: ZoltarOverv
 
 /** Default Zoltar landing: reads the selected universe and wallet from the workspace and derives the overview model. */
 export function ZoltarOverviewRoute() {
-	const { accountState, activeUniverseId, currentTimestamp, isConnectingWallet, onConnectWallet, onGoToGenesisUniverse, onSwitchNetwork, onViewChange, operations, universeState } = useZoltarWorkspace()
+	const { accountState, activeUniverseId, currentTimestamp, isConnectingWallet, onConnectWallet, onGoToGenesisUniverse, onRetryUniverse, onSwitchNetwork, onViewChange, operations, universeError, universeState } = useZoltarWorkspace()
 	const model = deriveZoltarOverviewModel({
 		account: {
 			address: accountState.address,
@@ -127,7 +136,8 @@ export function ZoltarOverviewRoute() {
 		},
 		activeUniverseId,
 		universe: operations.zoltarUniverse,
+		universeError,
 		universeState,
 	})
-	return <ZoltarOverviewView currentTimestamp={currentTimestamp} isConnectingWallet={isConnectingWallet} model={model} onConnectWallet={onConnectWallet} onGoToGenesisUniverse={onGoToGenesisUniverse} onSwitchNetwork={onSwitchNetwork} onViewChange={onViewChange} />
+	return <ZoltarOverviewView currentTimestamp={currentTimestamp} isConnectingWallet={isConnectingWallet} model={model} onConnectWallet={onConnectWallet} onGoToGenesisUniverse={onGoToGenesisUniverse} onRetryUniverse={onRetryUniverse} onSwitchNetwork={onSwitchNetwork} onViewChange={onViewChange} />
 }

@@ -16,23 +16,35 @@ export function getZoltarUniverseActions(universe: Pick<ZoltarUniverseSummary, '
 	}
 }
 
-export type ZoltarRouteGate = 'ready' | 'loading' | 'universe-missing' | 'fork-unavailable' | 'migrate-unavailable'
+export type ZoltarRouteGate = 'ready' | 'loading' | 'universe-unavailable' | 'universe-missing' | 'fork-unavailable' | 'migrate-unavailable'
+
+/** True when the universe read failed: no summary, no read in flight, and an error to report. */
+function isUniverseUnavailable(universeError: string | undefined, universeState: LoadableValueState) {
+	return universeError !== undefined && universeState !== 'loading'
+}
 
 /**
  * Decides whether a Zoltar view can render its workflow. Questions are global protocol objects, so the question
  * views never depend on the selected universe; every other view needs it and explains why when it cannot render.
  */
-export function resolveZoltarRouteGate({ universe, universeState, view }: { universe: Pick<ZoltarUniverseSummary, 'hasForked'> | undefined; universeState: LoadableValueState; view: ZoltarView }): ZoltarRouteGate {
+export function resolveZoltarRouteGate({ universe, universeError, universeState, view }: { universe: Pick<ZoltarUniverseSummary, 'hasForked'> | undefined; universeError: string | undefined; universeState: LoadableValueState; view: ZoltarView }): ZoltarRouteGate {
 	if (view === 'questions' || view === 'create') return 'ready'
 	if (universeState === 'missing') return 'universe-missing'
-	if (universe === undefined) return 'loading'
+	if (universe === undefined) return isUniverseUnavailable(universeError, universeState) ? 'universe-unavailable' : 'loading'
 	const actions = getZoltarUniverseActions(universe)
 	if (view === 'fork' && !actions.canFork) return 'fork-unavailable'
 	if (view === 'migrate' && !actions.canMigrate) return 'migrate-unavailable'
 	return 'ready'
 }
 
-export type ZoltarNextStep = Readonly<{ kind: 'go-to-genesis' }> | Readonly<{ kind: 'connect-wallet' }> | Readonly<{ kind: 'switch-network' }> | Readonly<{ kind: 'migrate-rep'; view: 'migrate' }> | Readonly<{ kind: 'open-child-universe'; view: 'universes' }> | Readonly<{ kind: 'browse-questions'; view: 'questions' }>
+export type ZoltarNextStep =
+	| Readonly<{ kind: 'go-to-genesis' }>
+	| Readonly<{ kind: 'retry-universe' }>
+	| Readonly<{ kind: 'connect-wallet' }>
+	| Readonly<{ kind: 'switch-network' }>
+	| Readonly<{ kind: 'migrate-rep'; view: 'migrate' }>
+	| Readonly<{ kind: 'open-child-universe'; view: 'universes' }>
+	| Readonly<{ kind: 'browse-questions'; view: 'questions' }>
 
 export type ZoltarOverviewInput = {
 	account: {
@@ -45,6 +57,8 @@ export type ZoltarOverviewInput = {
 	}
 	activeUniverseId: bigint
 	universe: ZoltarUniverseSummary | undefined
+	/** The last universe read error, if the read failed. */
+	universeError: string | undefined
 	universeState: LoadableValueState
 }
 
@@ -57,7 +71,7 @@ export type ZoltarOverviewModel = Readonly<{
 	needsAttention: boolean
 	forkTime: bigint | undefined
 	repBalanceAttoRep: bigint | undefined
-	status: 'loading' | 'missing' | 'operational' | 'forked'
+	status: 'loading' | 'unavailable' | 'missing' | 'operational' | 'forked'
 	universeLabel: string
 	wallet: 'disconnected' | 'wrong-network' | 'connected'
 }>
@@ -72,14 +86,15 @@ function getWalletStatus(account: ZoltarOverviewInput['account']): ZoltarOvervie
 	return account.isOnActiveChain ? 'connected' : 'wrong-network'
 }
 
-function getOverviewStatus(universe: ZoltarUniverseSummary | undefined, universeState: LoadableValueState): ZoltarOverviewModel['status'] {
+function getOverviewStatus(universe: ZoltarUniverseSummary | undefined, universeError: string | undefined, universeState: LoadableValueState): ZoltarOverviewModel['status'] {
 	if (universeState === 'missing') return 'missing'
-	if (universe === undefined) return 'loading'
+	if (universe === undefined) return isUniverseUnavailable(universeError, universeState) ? 'unavailable' : 'loading'
 	return universe.hasForked ? 'forked' : 'operational'
 }
 
 function getNextStep(status: ZoltarOverviewModel['status'], wallet: ZoltarOverviewModel['wallet'], migratableRepAttoRep: bigint | undefined): ZoltarNextStep | undefined {
 	if (status === 'missing') return { kind: 'go-to-genesis' }
+	if (status === 'unavailable') return { kind: 'retry-universe' }
 	if (status === 'loading') return undefined
 	if (wallet === 'disconnected') return { kind: 'connect-wallet' }
 	if (wallet === 'wrong-network') return { kind: 'switch-network' }
@@ -88,10 +103,10 @@ function getNextStep(status: ZoltarOverviewModel['status'], wallet: ZoltarOvervi
 }
 
 /** The Overview route's status summary and single next step, derived from the selected universe and the wallet. */
-export function deriveZoltarOverviewModel({ account, activeUniverseId, universe, universeState }: ZoltarOverviewInput): ZoltarOverviewModel {
+export function deriveZoltarOverviewModel({ account, activeUniverseId, universe, universeError, universeState }: ZoltarOverviewInput): ZoltarOverviewModel {
 	// A summary of another universe (left over while the selection changes) must not describe the active one.
 	const loadedUniverse = universe?.universeId === activeUniverseId ? universe : undefined
-	const status = getOverviewStatus(loadedUniverse, universeState)
+	const status = getOverviewStatus(loadedUniverse, universeError, universeState)
 	const wallet = getWalletStatus(account)
 	const repBalanceAttoRep = wallet === 'connected' ? account.repBalanceAttoRep : undefined
 	const migratableRepAttoRep = wallet === 'connected' && status === 'forked' ? sumKnown([account.repBalanceAttoRep, account.preparedMigrationRepAttoRep ?? 0n]) : undefined

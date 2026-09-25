@@ -193,11 +193,6 @@ export async function loadZoltarQuestionPage(client: ReadClient, pageIndex: numb
 	}
 }
 
-/**
- * Reads a universe from Zoltar. Callers with their own deployment configuration pass its Zoltar address so the universe reads
- * target that deployment; the fork question and outcome labels still come from the active profile's question data, so the
- * address must belong to the same canonical deployment as the active network profile.
- */
 const MAX_LINEAGE_DEPTH = 64
 
 /**
@@ -221,6 +216,11 @@ async function loadUniverseLineage(client: ReadClient, universeId: bigint, unive
 	return [{ outcomeLabel: undefined, universeId: 0n }, ...ancestry.reverse()]
 }
 
+/**
+ * Reads a universe from Zoltar. Callers with their own deployment configuration pass its Zoltar address so the universe reads
+ * target that deployment; the fork question, outcome labels, and lineage outcome names still come from the active profile's question data, so the
+ * address must belong to the same canonical deployment as the active network profile.
+ */
 export async function loadZoltarUniverseSummary(client: ReadClient, universeId: bigint, zoltarAddress: Address = getDeploymentStepAddress('zoltar')): Promise<ZoltarUniverseSummary | undefined> {
 	const [repToken, universe, forkTime, forkThresholdAttoRep, forkBurnDivisor] = await readRequiredMulticall(client, [
 		{

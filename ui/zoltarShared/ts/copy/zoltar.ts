@@ -78,6 +78,7 @@ export const universesDescription = 'Browse the universe tree. Every Zoltar view
 export const forkRouteDescription = 'Fork this universe with an ended question. A universe forks only once.'
 export const migrateRouteDescription = 'Split your REP into the outcome universes this fork created.'
 export const universeNotFoundTitle = 'Universe not found'
+export const universeUnavailableDetail = 'Universe details could not be loaded.'
 export const universeNotFoundDetail = 'No universe exists with this ID.'
 export const forkUnavailableTitle = 'Already forked'
 export const forkUnavailableDetail = 'This universe has forked and cannot fork again. Migrate REP instead.'

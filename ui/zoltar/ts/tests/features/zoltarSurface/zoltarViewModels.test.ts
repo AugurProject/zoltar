@@ -29,6 +29,7 @@ function createInput(overrides: Partial<ZoltarOverviewInput> = {}, account: Part
 	return {
 		activeUniverseId: 0n,
 		universe: createUniverse(),
+		universeError: undefined,
 		universeState: 'ready',
 		...overrides,
 		account: { address: walletAddress, isOnActiveChain: true, preparedMigrationRepAttoRep: 0n, repBalanceAttoRep: 10n, ...account },
@@ -57,21 +58,28 @@ describe('getZoltarUniverseActions', () => {
 describe('resolveZoltarRouteGate', () => {
 	test('keeps the global question views available whatever the universe state', () => {
 		for (const view of ['questions', 'create'] as const) {
-			expect(resolveZoltarRouteGate({ universe: undefined, universeState: 'missing', view })).toBe('ready')
-			expect(resolveZoltarRouteGate({ universe: undefined, universeState: 'loading', view })).toBe('ready')
+			expect(resolveZoltarRouteGate({ universeError: undefined, universe: undefined, universeState: 'missing', view })).toBe('ready')
+			expect(resolveZoltarRouteGate({ universeError: undefined, universe: undefined, universeState: 'loading', view })).toBe('ready')
 		}
 	})
 
 	test('reports a missing universe instead of silently showing another view', () => {
-		for (const view of ['overview', 'universes', 'fork', 'migrate'] as const) expect(resolveZoltarRouteGate({ universe: undefined, universeState: 'missing', view })).toBe('universe-missing')
+		for (const view of ['overview', 'universes', 'fork', 'migrate'] as const) expect(resolveZoltarRouteGate({ universeError: undefined, universe: undefined, universeState: 'missing', view })).toBe('universe-missing')
+	})
+
+	test('reports a failed universe read instead of loading forever', () => {
+		for (const view of ['overview', 'universes', 'fork', 'migrate'] as const) expect(resolveZoltarRouteGate({ universe: undefined, universeError: 'RPC unavailable', universeState: 'unknown', view })).toBe('universe-unavailable')
+		expect(resolveZoltarRouteGate({ universe: undefined, universeError: 'RPC unavailable', universeState: 'loading', view: 'universes' })).toBe('loading')
+		expect(resolveZoltarRouteGate({ universe: undefined, universeError: undefined, universeState: 'unknown', view: 'universes' })).toBe('loading')
+		expect(resolveZoltarRouteGate({ universe: undefined, universeError: 'RPC unavailable', universeState: 'unknown', view: 'questions' })).toBe('ready')
 	})
 
 	test('waits for the universe and blocks the workflow that does not apply', () => {
-		expect(resolveZoltarRouteGate({ universe: undefined, universeState: 'loading', view: 'universes' })).toBe('loading')
-		expect(resolveZoltarRouteGate({ universe: { hasForked: true }, universeState: 'ready', view: 'fork' })).toBe('fork-unavailable')
-		expect(resolveZoltarRouteGate({ universe: { hasForked: false }, universeState: 'ready', view: 'migrate' })).toBe('migrate-unavailable')
-		expect(resolveZoltarRouteGate({ universe: { hasForked: false }, universeState: 'ready', view: 'fork' })).toBe('ready')
-		expect(resolveZoltarRouteGate({ universe: { hasForked: true }, universeState: 'ready', view: 'migrate' })).toBe('ready')
+		expect(resolveZoltarRouteGate({ universeError: undefined, universe: undefined, universeState: 'loading', view: 'universes' })).toBe('loading')
+		expect(resolveZoltarRouteGate({ universeError: undefined, universe: { hasForked: true }, universeState: 'ready', view: 'fork' })).toBe('fork-unavailable')
+		expect(resolveZoltarRouteGate({ universeError: undefined, universe: { hasForked: false }, universeState: 'ready', view: 'migrate' })).toBe('migrate-unavailable')
+		expect(resolveZoltarRouteGate({ universeError: undefined, universe: { hasForked: false }, universeState: 'ready', view: 'fork' })).toBe('ready')
+		expect(resolveZoltarRouteGate({ universeError: undefined, universe: { hasForked: true }, universeState: 'ready', view: 'migrate' })).toBe('ready')
 	})
 })
 
@@ -130,6 +138,12 @@ describe('deriveZoltarOverviewModel', () => {
 		const loading = deriveZoltarOverviewModel(createInput({ universe: undefined, universeState: 'loading' }))
 		expect(loading.status).toBe('loading')
 		expect(loading.nextStep).toBeUndefined()
+	})
+
+	test('offers a retry when the universe read failed', () => {
+		const model = deriveZoltarOverviewModel(createInput({ universe: undefined, universeError: 'RPC unavailable', universeState: 'unknown' }))
+		expect(model.status).toBe('unavailable')
+		expect(model.nextStep).toEqual({ kind: 'retry-universe' })
 	})
 
 	test('does not describe the active universe with a stale summary of another universe', () => {

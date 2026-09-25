@@ -17,9 +17,11 @@ export type ZoltarWorkspace = {
 	isConnectingWallet: boolean
 	onConnectWallet: () => void
 	onGoToGenesisUniverse: () => void
+	onRetryUniverse: () => void
 	onSwitchNetwork: () => void
 	onViewChange: (view: ZoltarView) => void
 	operations: ReturnType<typeof useQuestionCreation>
+	universeError: string | undefined
 	universeState: LoadableValueState
 }
 

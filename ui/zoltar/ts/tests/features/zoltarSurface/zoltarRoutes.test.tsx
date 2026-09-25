@@ -94,8 +94,9 @@ describe('ZoltarRoutes', () => {
 		},
 	})
 
-	async function renderRoute(view: ZoltarView, universe: ZoltarUniverseSummary | undefined, universeState: LoadableValueState = 'ready') {
+	async function renderRoute(view: ZoltarView, universe: ZoltarUniverseSummary | undefined, universeState: LoadableValueState = 'ready', universeError: string | undefined = undefined) {
 		const viewChanges: ZoltarView[] = []
+		const retries: string[] = []
 		const workspace = {
 			accountState: { address: zeroAddress, chainId: '0xaa36a7', ethBalanceAttoEth: 0n, wethBalanceAttoEth: 0n },
 			activeUniverseId: universe?.universeId ?? 9n,
@@ -104,9 +105,11 @@ describe('ZoltarRoutes', () => {
 			isConnectingWallet: false,
 			onConnectWallet: () => undefined,
 			onGoToGenesisUniverse: () => undefined,
+			onRetryUniverse: () => retries.push('universe'),
 			onSwitchNetwork: () => undefined,
 			onViewChange: (nextView: ZoltarView) => viewChanges.push(nextView),
 			operations: createOperations(universe),
+			universeError,
 			universeState,
 		}
 		cleanupRenderedComponent = (
@@ -116,7 +119,7 @@ describe('ZoltarRoutes', () => {
 				</ZoltarWorkspaceProvider>,
 			)
 		).cleanup
-		return { queries: within(document.body), viewChanges }
+		return { queries: within(document.body), retries, viewChanges }
 	}
 
 	test('shows Fork, not Migrate, in the Universes browser of an unforked universe', async () => {
@@ -183,6 +186,21 @@ describe('ZoltarRoutes', () => {
 		expect(queries.queryByText('REP in this universe')).toBeNull()
 		expect(queries.queryByText('Migration')).toBeNull()
 		expect(queries.getByRole('button', { name: 'Go to Genesis universe' })).toBeTruthy()
+	})
+
+	test('offers a retry instead of an endless loading state when the universe read failed', async () => {
+		const { queries, retries } = await renderRoute('universes', undefined, 'unknown', 'RPC unavailable')
+		expect(queries.getByText('RPC unavailable')).toBeTruthy()
+		expect(queries.queryByText('Loading universe details.')).toBeNull()
+		fireEvent.click(queries.getByRole('button', { name: 'Retry' }))
+		expect(retries).toEqual(['universe'])
+		await cleanupRenderedComponent?.()
+		cleanupRenderedComponent = undefined
+
+		const overview = await renderRoute('overview', undefined, 'unknown', 'RPC unavailable')
+		expect(overview.queries.getByText('Unavailable')).toBeTruthy()
+		fireEvent.click(overview.queries.getByRole('button', { name: 'Retry' }))
+		expect(overview.retries).toEqual(['universe'])
 	})
 
 	test('keeps the global question list available for a missing universe', async () => {
