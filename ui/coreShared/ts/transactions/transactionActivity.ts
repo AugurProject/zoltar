@@ -12,6 +12,8 @@ export type TransactionActivityEntry = Readonly<{
 	chainId: number
 	failureKind?: TransactionActivityFailureKind | undefined
 	hash: Hash
+	/** Earlier hashes of this transaction (wallet speed-ups), so another tab's stale copy is not merged back. */
+	replacedHashes?: readonly Hash[] | undefined
 	scope: TransactionScope
 	settledAt?: number | undefined
 	status: TransactionActivityStatus
@@ -48,9 +50,11 @@ export function recordSubmittedTransactionActivity(entries: readonly Transaction
 }
 
 /** A replacement transaction takes over the entry of the transaction it replaced. */
-export function replaceTransactionActivityHash(entries: readonly TransactionActivityEntry[], previousHash: Hash, nextHash: Hash) {
-	if (previousHash === nextHash || entries.some(entry => entry.hash === nextHash)) return entries
-	return entries.map(entry => (entry.hash === previousHash ? { ...entry, hash: nextHash } : entry))
+export function replaceTransactionActivityHash(entries: readonly TransactionActivityEntry[], previousHash: Hash, nextHash: Hash, now: number) {
+	if (previousHash === nextHash) return entries
+	// The replacement already has its own row (for example recorded by another tab): the previous hash was replaced.
+	if (entries.some(entry => entry.hash === nextHash)) return settleTransactionActivity(entries, previousHash, { status: 'failed', failureKind: 'replaced' }, now)
+	return entries.map(entry => (entry.hash === previousHash ? { ...entry, hash: nextHash, replacedHashes: [...(entry.replacedHashes ?? []), previousHash] } : entry))
 }
 
 export function settleTransactionActivity(entries: readonly TransactionActivityEntry[], hash: Hash, outcome: TransactionActivityOutcome, settledAt: number) {
@@ -71,7 +75,8 @@ export function mergeStoredTransactionActivity(entries: readonly TransactionActi
 		changed = true
 		return other
 	})
-	const missing = stored.filter(candidate => !entries.some(entry => entry.hash === candidate.hash))
+	const replacedHashes = new Set([...entries, ...stored].flatMap(entry => entry.replacedHashes ?? []))
+	const missing = stored.filter(candidate => !entries.some(entry => entry.hash === candidate.hash) && !replacedHashes.has(candidate.hash))
 	if (!changed && missing.length === 0) return entries
 	return capActivity([...merged, ...missing].sort((left, right) => right.submittedAt - left.submittedAt))
 }
@@ -112,6 +117,7 @@ function parseEntry(value: unknown): TransactionActivityEntry | undefined {
 	const scope = 'scope' in value && Array.isArray(value.scope) ? value.scope.filter(key => typeof key === 'string') : []
 	const failureKind = 'failureKind' in value && isFailureKind(value.failureKind) ? value.failureKind : undefined
 	const settledAt = 'settledAt' in value && isFiniteTimestamp(value.settledAt) ? value.settledAt : undefined
+	const replacedHashes = 'replacedHashes' in value && Array.isArray(value.replacedHashes) ? value.replacedHashes.filter(isHash) : []
 	if (value.status === 'failed' && failureKind === undefined) return undefined
 	return {
 		chainId: value.chainId,
@@ -122,6 +128,7 @@ function parseEntry(value: unknown): TransactionActivityEntry | undefined {
 		title: value.title,
 		...(failureKind === undefined ? {} : { failureKind }),
 		...(settledAt === undefined ? {} : { settledAt }),
+		...(replacedHashes.length === 0 ? {} : { replacedHashes }),
 	}
 }
 

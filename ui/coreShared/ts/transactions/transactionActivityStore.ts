@@ -84,7 +84,7 @@ export function recordTransactionSubmitted({ hash, previousHash, scope, title }:
 	watchedHashes.add(hash)
 	const chainId = transactionActivity.peek().chainId ?? getActiveNetworkProfile().chain.id
 	update(entries => {
-		if (previousHash !== undefined && entries.some(entry => entry.hash === previousHash)) return replaceTransactionActivityHash(entries, previousHash, hash)
+		if (previousHash !== undefined && entries.some(entry => entry.hash === previousHash)) return replaceTransactionActivityHash(entries, previousHash, hash, Date.now())
 		return recordSubmittedTransactionActivity(entries, { chainId, hash, scope: scope ?? [], status: 'pending', submittedAt: Date.now(), title })
 	})
 }
@@ -134,7 +134,7 @@ export function useTransactionActivityReceiptWatcher() {
 						// A sped-up transaction keeps its row under the new hash.
 						watchedHashes.delete(current)
 						watchedHashes.add(replacement.transaction.hash)
-						update(entries => replaceTransactionActivityHash(entries, current, replacement.transaction.hash))
+						update(entries => replaceTransactionActivityHash(entries, current, replacement.transaction.hash, Date.now()))
 						current = replacement.transaction.hash
 						return
 					}

@@ -63,9 +63,17 @@ describe('transaction activity list', () => {
 	})
 
 	test('moves an entry to its replacement hash', () => {
-		const replaced = replaceTransactionActivityHash([entry(1, 'pending')], hashOf(1), hashOf(9))
+		const replaced = replaceTransactionActivityHash([entry(1, 'pending')], hashOf(1), hashOf(9), 5)
 
-		expect(replaced.map(item => [item.hash, item.title])).toEqual([[hashOf(9), 'Transaction 1']])
+		expect(replaced.map(item => [item.hash, item.title, item.replacedHashes])).toEqual([[hashOf(9), 'Transaction 1', [hashOf(1)]]])
+		// A replacement that already has its own row settles the previous hash as replaced.
+		const duplicate = replaceTransactionActivityHash([entry(9, 'pending'), entry(1, 'pending')], hashOf(1), hashOf(9), 5)
+		expect(duplicate.map(item => [item.hash, item.status, item.failureKind])).toEqual([
+			[hashOf(9), 'pending', undefined],
+			[hashOf(1), 'failed', 'replaced'],
+		])
+		// Another tab's stale pending copy of the replaced hash is not merged back.
+		expect(mergeStoredTransactionActivity(replaced, [entry(1, 'pending')])).toBe(replaced)
 	})
 
 	test('caps settled history but never evicts pending transactions', () => {

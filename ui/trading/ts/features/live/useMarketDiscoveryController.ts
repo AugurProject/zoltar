@@ -218,6 +218,8 @@ export function useMarketDiscoveryController({
 
 	return {
 		refresh,
+		/** Refreshes whatever route is on screen when it runs, for work that finishes after the user navigated away. */
+		refreshCurrentRoute: async (...args: Parameters<typeof refresh>) => await refreshRef.current(...args),
 		refreshFromControl: () => {
 			if (!transaction.positionWorkflowLockedRef.current && !transaction.liquidityWorkflowLockedRef.current) void refresh()
 		},

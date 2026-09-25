@@ -457,6 +457,12 @@ describe('live workflow safety boundary', () => {
 		await settleAsyncWorkflow()
 		expect(document.querySelectorAll('[data-portfolio-pool]').length).toBeGreaterThan(0)
 		expect(transactionActivity.value.entries[0]?.status).toBe('pending')
+		// Another market's ticket shows none of this trade's status or hash and stays locked while it runs.
+		await act(() => render(<LiveTrading route={`market/${secondPool}`} configuration={configuration} configurationError={undefined} selectedUniverseId='1' onWorkflowLockChange={locked => workflowLocks.push(locked)} onWalletSummaryChange={recordWalletSummary} />, rendered.container))
+		await waitForDom(() => document.body.textContent?.includes('Second rendered workflow market') === true, 'second market during a pending trade')
+		expect(document.querySelector('.transaction-hash')).toBeNull()
+		expect(document.body.textContent).not.toContain('Enter YES pending on-chain')
+		expect(document.body.textContent).toContain('Transaction in progress.')
 		await act(() => render(<LiveTrading route={marketRoute} configuration={configuration} configurationError={undefined} selectedUniverseId='1' onWorkflowLockChange={locked => workflowLocks.push(locked)} onWalletSummaryChange={recordWalletSummary} />, rendered.container))
 		await settleAsyncWorkflow()
 		expect(document.body.textContent).toContain('Enter YES pending on-chain')
