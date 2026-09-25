@@ -231,10 +231,12 @@ export function useReportingOperations(
 		}
 	}
 
-	const loadReportingContributionPreflight = async (walletAddress: Address, securityPoolAddress: Address, currentForm: ReportingFormState, isCurrentSelection: () => boolean) => {
+	const loadReportingContributionPreflight = async (walletAddress: Address, securityPoolAddress: Address, currentForm: ReportingFormState, isCurrentSelection: () => boolean, displayedDetails: ReportingDetails | undefined) => {
 		const selectedOutcome = requireSelectedOutcome(currentForm.selectedOutcome)
 		const reportAmount = parseRepAmountInput(currentForm.reportAmount, 'Report amount')
-		const displayedFunding = reportingDetails.value === undefined ? undefined : getReportingContributionFunding(reportingDetails.value, currentForm.contributionFunding)
+		const displayedFunding = displayedDetails === undefined ? undefined : getReportingContributionFunding(displayedDetails, currentForm.contributionFunding)
+		const displayedReportAmount = displayedDetails === undefined ? undefined : previewReportingContribution(displayedDetails, selectedOutcome, reportAmount).actualDepositAmount
+		const displayedWalletDepositAmount = getReportingWalletDepositAmount(displayedDetails, displayedReportAmount)
 		const latestDetails = await dependencies.loadReportingDetails(securityPoolAddress, walletAddress)
 		if (!isCurrentSelection()) return undefined
 		if (latestDetails.systemState !== 'operational') throw new Error('Reporting actions are unavailable until this pool is operational.')
@@ -247,9 +249,13 @@ export function useReportingOperations(
 		}
 		const contributionFunding = displayedFunding ?? getReportingContributionFunding(latestDetails, currentForm.contributionFunding)
 		if (contributionFunding === 'wallet') {
-			if (latestDetails.status === 'active' && latestDetails.forkContinuation && !(reportingDetails.value?.status === 'active' && reportingDetails.value.forkContinuation)) throw new Error('Reporting now needs a vault deposit first. Refresh reporting details before submitting.')
+			if (latestDetails.status === 'active' && latestDetails.forkContinuation && !(displayedDetails?.status === 'active' && displayedDetails.forkContinuation)) throw new Error('Reporting now needs a vault deposit first. Refresh reporting details before submitting.')
 			const walletDepositAmount = getReportingWalletDepositAmount(latestDetails, contributionPreview.actualDepositAmount)
 			if (walletDepositAmount === undefined) throw new Error('Loading vault funding requirements.')
+			if (latestDetails.status === 'active' && latestDetails.forkContinuation && walletDepositAmount !== displayedWalletDepositAmount) {
+				reportingDetails.value = latestDetails
+				throw new Error('The required vault deposit changed. Review the updated amount and try again.')
+			}
 			const walletRepBalanceAttoRep = latestDetails.viewerWalletRepBalanceAttoRep ?? 0n
 			if (walletDepositAmount > walletRepBalanceAttoRep) throw new Error(`Insufficient wallet REP. Add ${formatAdditionalCurrencyBalance(walletDepositAmount - walletRepBalanceAttoRep, 'REP')} before reporting.`)
 		} else {
@@ -267,7 +273,7 @@ export function useReportingOperations(
 		await runReportingAction(
 			'approveReportingRep',
 			async (walletAddress, securityPoolAddress, currentForm, isCurrentSelection, context) => {
-				const preflight = await loadReportingContributionPreflight(walletAddress, securityPoolAddress, currentForm, isCurrentSelection)
+				const preflight = await loadReportingContributionPreflight(walletAddress, securityPoolAddress, currentForm, isCurrentSelection, reportingDetails.value)
 				if (preflight === undefined) return undefined
 				if (preflight.walletDepositAmount === undefined) throw new Error('Loading vault funding requirements.')
 				if (preflight.contributionFunding !== 'wallet') throw new Error('This escalation contribution uses vault backing and does not require wallet REP approval.')
@@ -277,11 +283,12 @@ export function useReportingOperations(
 			'Failed to approve REP for reporting',
 		)
 
-	const reportOutcome = async () =>
+	const reportOutcome = async () => {
+		const displayedDetails = reportingDetails.value
 		await runReportingAction(
 			'reportOutcome',
 			async (walletAddress, securityPoolAddress, currentForm, isCurrentSelection, context) => {
-				const preflight = await loadReportingContributionPreflight(walletAddress, securityPoolAddress, currentForm, isCurrentSelection)
+				const preflight = await loadReportingContributionPreflight(walletAddress, securityPoolAddress, currentForm, isCurrentSelection, displayedDetails)
 				if (preflight === undefined) return undefined
 				if (preflight.contributionFunding === 'wallet' && (preflight.latestDetails.viewerWalletRepAllowanceAttoRep ?? 0n) < (preflight.walletDepositAmount ?? preflight.actualDepositAmount)) {
 					throw new Error('Approve REP for this escalation game before reporting.')
@@ -312,6 +319,7 @@ export function useReportingOperations(
 			},
 			'Failed to report on outcome',
 		)
+	}
 
 	const withdrawEscalation = async (outcome: ReportingOutcomeKey, depositIndexesOverride?: bigint[]) =>
 		await runReportingAction(
