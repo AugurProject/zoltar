@@ -69,8 +69,8 @@ test('simulation has no mainnet notice and settings offer only Sepolia and simul
 	expect(rendered.container.textContent).not.toContain('mainnet is disabled')
 	fireEvent.click(within(rendered.container).getByRole('button', { name: 'Settings' }))
 	expect(
-		within(rendered.container)
+		within(within(rendered.container).getByLabelText('RPC network'))
 			.getAllByRole('option')
 			.map(option => option.textContent),
-	).toEqual(['Sepolia', 'Browser Simulation'])
+	).toEqual(['Sepolia', 'Browser simulation'])
 })

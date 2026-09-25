@@ -156,6 +156,11 @@ test('product accent hues are only defined in tokens so Statoblast never inherit
 	}
 	expect(tokens).toContain('--primary-button-text: var(--bg-deep);')
 	const tokenLinesWithProductHues = tokens.split('\n').filter(line => productHueLiteral.test(line))
-	expect(tokenLinesWithProductHues).toEqual(['\t--accent-zoltar: rgba(56, 213, 255, 1);', '\t--accent-statoblast: rgba(160, 124, 255, 1);', '\t--accent-trading: rgba(183, 238, 81, 1);', '\t--accent-strong: rgba(124, 108, 255, 1);'])
+	expect(tokenLinesWithProductHues).toEqual([
+		'\t--accent-zoltar: light-dark(rgba(0, 101, 138, 1), rgba(56, 213, 255, 1));',
+		'\t--accent-statoblast: light-dark(rgba(103, 62, 210, 1), rgba(160, 124, 255, 1));',
+		'\t--accent-trading: light-dark(rgba(60, 104, 0, 1), rgba(183, 238, 81, 1));',
+		'\t--accent-strong: light-dark(rgba(84, 70, 216, 1), rgba(124, 108, 255, 1));',
+	])
 	expect(readStylesheet('base.css')).toMatch(/button\.primary \{[^}]*color: var\(--primary-button-text\);/s)
 })

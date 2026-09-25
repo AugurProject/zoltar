@@ -5,6 +5,7 @@ import { MAINNET_NETWORK_PROFILE, SEPOLIA_NETWORK_PROFILE } from '../../wallet/n
 import { readNetworkRpcUrls, saveNetworkRpcUrl, type RpcNetworkId } from '../../wallet/rpcConfig.js'
 import * as appCopy from '../../copy/app.js'
 import type { ComponentChildren } from 'preact'
+import { ThemeSetting } from './ThemeSetting.js'
 
 export function AppSettingsMenu({ onEnvironmentChanged, settingsContent }: { onEnvironmentChanged: () => Promise<void>; settingsContent?: ComponentChildren }) {
 	const [open, setOpen] = useState(false)
@@ -110,6 +111,7 @@ export function AppSettingsMenu({ onEnvironmentChanged, settingsContent }: { onE
 							{appCopy.rpcSaved}
 						</p>
 					) : undefined}
+					<ThemeSetting />
 					{settingsContent}
 				</div>
 			) : undefined}

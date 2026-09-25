@@ -1,7 +1,12 @@
+/*
+ * Themes. Every color token is a light-dark() pair, so the palette follows the operating system's
+ * color scheme (prefers-color-scheme) unless the theme setting pins it with data-theme on <html>.
+ * The light values keep WCAG AA contrast for text, controls, and status colors on the light surfaces.
+ */
 :root {
-	color-scheme: dark;
-	--bg: rgba(8, 17, 29, 1);
-	--bg-deep: rgba(5, 10, 17, 1);
+	color-scheme: light dark;
+	--bg: light-dark(rgba(244, 247, 251, 1), rgba(8, 17, 29, 1));
+	--bg-deep: light-dark(rgba(236, 241, 247, 1), rgba(5, 10, 17, 1));
 
 	/*
 	 * Text hierarchy.
@@ -10,32 +15,32 @@
 	 * --muted: labels, captions, eyebrows, and other short metadata.
 	 * --value: numeric and tabular values.
 	 */
-	--text: rgba(231, 243, 255, 1);
-	--text-secondary: rgba(207, 221, 238, 0.9);
-	--muted: rgba(160, 181, 207, 0.76);
-	--value: rgba(208, 231, 245, 1);
+	--text: light-dark(rgba(14, 26, 43, 1), rgba(231, 243, 255, 1));
+	--text-secondary: light-dark(rgba(35, 51, 73, 0.94), rgba(207, 221, 238, 0.9));
+	--muted: light-dark(rgba(72, 90, 114, 1), rgba(160, 181, 207, 0.76));
+	--value: light-dark(rgba(16, 35, 56, 1), rgba(208, 231, 245, 1));
 	--color-white: rgba(255, 255, 255, 1);
-	--color-white-04: rgba(255, 255, 255, 0.04);
-	--color-white-08: rgba(255, 255, 255, 0.08);
-	--color-white-16: rgba(255, 255, 255, 0.16);
+	--color-white-04: light-dark(rgba(14, 26, 43, 0.03), rgba(255, 255, 255, 0.04));
+	--color-white-08: light-dark(rgba(14, 26, 43, 0.06), rgba(255, 255, 255, 0.08));
+	--color-white-16: light-dark(rgba(14, 26, 43, 0.12), rgba(255, 255, 255, 0.16));
 	--mask-opaque: rgba(0, 0, 0, 1);
 
 	/* accents */
-	--accent-zoltar: rgba(56, 213, 255, 1);
-	--accent-statoblast: rgba(160, 124, 255, 1);
-	--accent-trading: rgba(183, 238, 81, 1);
+	--accent-zoltar: light-dark(rgba(0, 101, 138, 1), rgba(56, 213, 255, 1));
+	--accent-statoblast: light-dark(rgba(103, 62, 210, 1), rgba(160, 124, 255, 1));
+	--accent-trading: light-dark(rgba(60, 104, 0, 1), rgba(183, 238, 81, 1));
 	--accent: var(--accent-zoltar);
-	--accent-strong: rgba(124, 108, 255, 1);
+	--accent-strong: light-dark(rgba(84, 70, 216, 1), rgba(124, 108, 255, 1));
 	--accent-faint: color-mix(in srgb, var(--accent) 8%, transparent);
 	--accent-soft: color-mix(in srgb, var(--accent) 12%, transparent);
 	--accent-medium: color-mix(in srgb, var(--accent) 16%, transparent);
 	--accent-emphasis-soft: color-mix(in srgb, var(--accent) 18%, transparent);
 
 	/* semantic borders — structural (blue-tinted, passive) */
-	--border-subtle: rgba(159, 180, 207, 0.07);
-	--border-default: rgba(159, 180, 207, 0.14);
-	--border-strong: rgba(159, 180, 207, 0.24);
-	--border-emphasis: rgba(159, 180, 207, 0.28);
+	--border-subtle: light-dark(rgba(30, 50, 80, 0.1), rgba(159, 180, 207, 0.07));
+	--border-default: light-dark(rgba(30, 50, 80, 0.16), rgba(159, 180, 207, 0.14));
+	--border-strong: light-dark(rgba(30, 50, 80, 0.26), rgba(159, 180, 207, 0.24));
+	--border-emphasis: light-dark(rgba(30, 50, 80, 0.3), rgba(159, 180, 207, 0.28));
 
 	/* semantic borders — interactive (accent-tinted, signals clickability) */
 	--interactive-border: color-mix(in srgb, var(--accent) 26%, transparent);
@@ -45,46 +50,46 @@
 	--interactive-bg-active: color-mix(in srgb, var(--accent-strong) 14%, transparent);
 
 	/* surfaces */
-	--surface-raised: rgba(11, 22, 37, 0.9);
-	--surface-overlay: rgba(5, 11, 21, 0.86);
-	--surface-card-end: rgba(8, 16, 27, 0.94);
-	--surface-inset: rgba(9, 18, 31, 0.58);
-	--surface-page: rgba(8, 16, 28, 0.72);
-	--surface-section: rgba(10, 20, 34, 0.82);
-	--surface-section-opaque: rgba(10, 20, 34, 1);
-	--surface-record: rgba(12, 23, 38, 0.88);
-	--surface-row: rgba(8, 16, 28, 0.42);
-	--surface-critical: rgba(61, 14, 25, 0.72);
+	--surface-raised: light-dark(rgba(255, 255, 255, 0.94), rgba(11, 22, 37, 0.9));
+	--surface-overlay: light-dark(rgba(255, 255, 255, 0.92), rgba(5, 11, 21, 0.86));
+	--surface-card-end: light-dark(rgba(248, 250, 253, 0.96), rgba(8, 16, 27, 0.94));
+	--surface-inset: light-dark(rgba(228, 234, 242, 0.7), rgba(9, 18, 31, 0.58));
+	--surface-page: light-dark(rgba(255, 255, 255, 0.72), rgba(8, 16, 28, 0.72));
+	--surface-section: light-dark(rgba(255, 255, 255, 0.88), rgba(10, 20, 34, 0.82));
+	--surface-section-opaque: light-dark(rgba(255, 255, 255, 1), rgba(10, 20, 34, 1));
+	--surface-record: light-dark(rgba(255, 255, 255, 0.94), rgba(12, 23, 38, 0.88));
+	--surface-row: light-dark(rgba(236, 241, 247, 0.6), rgba(8, 16, 28, 0.42));
+	--surface-critical: light-dark(rgba(255, 228, 234, 0.9), rgba(61, 14, 25, 0.72));
 
 	/* status */
-	--success: rgba(66, 232, 194, 1);
-	--success-soft: rgba(66, 232, 194, 0.12);
-	--success-border: rgba(66, 232, 194, 0.24);
-	--success-surface-gradient: linear-gradient(180deg, rgba(11, 51, 43, 0.92) 0%, rgba(8, 34, 29, 0.92) 100%);
-	--warning: rgba(245, 200, 106, 1);
-	--warning-soft: rgba(245, 200, 106, 0.12);
-	--warning-border: rgba(245, 200, 106, 0.24);
-	--warning-border-strong: rgba(245, 200, 106, 0.52);
-	--danger: rgba(255, 112, 143, 1);
-	--danger-soft: rgba(255, 112, 143, 0.12);
-	--danger-medium: rgba(255, 112, 143, 0.2);
-	--danger-border: rgba(255, 112, 143, 0.28);
-	--danger-border-strong: rgba(255, 112, 143, 0.56);
-	--status-pending: rgba(104, 190, 255, 1);
-	--status-pending-soft: rgba(104, 190, 255, 0.12);
-	--status-pending-border: rgba(104, 190, 255, 0.28);
+	--success: light-dark(rgba(8, 118, 90, 1), rgba(66, 232, 194, 1));
+	--success-soft: light-dark(rgba(8, 118, 90, 0.1), rgba(66, 232, 194, 0.12));
+	--success-border: light-dark(rgba(8, 118, 90, 0.3), rgba(66, 232, 194, 0.24));
+	--success-surface-gradient: linear-gradient(180deg, light-dark(rgba(222, 245, 237, 0.96), rgba(11, 51, 43, 0.92)) 0%, light-dark(rgba(233, 249, 243, 0.96), rgba(8, 34, 29, 0.92)) 100%);
+	--warning: light-dark(rgba(135, 88, 0, 1), rgba(245, 200, 106, 1));
+	--warning-soft: light-dark(rgba(196, 136, 0, 0.12), rgba(245, 200, 106, 0.12));
+	--warning-border: light-dark(rgba(160, 108, 0, 0.32), rgba(245, 200, 106, 0.24));
+	--warning-border-strong: light-dark(rgba(160, 108, 0, 0.6), rgba(245, 200, 106, 0.52));
+	--danger: light-dark(rgba(186, 30, 68, 1), rgba(255, 112, 143, 1));
+	--danger-soft: light-dark(rgba(186, 30, 68, 0.08), rgba(255, 112, 143, 0.12));
+	--danger-medium: light-dark(rgba(186, 30, 68, 0.14), rgba(255, 112, 143, 0.2));
+	--danger-border: light-dark(rgba(186, 30, 68, 0.3), rgba(255, 112, 143, 0.28));
+	--danger-border-strong: light-dark(rgba(186, 30, 68, 0.6), rgba(255, 112, 143, 0.56));
+	--status-pending: light-dark(rgba(18, 94, 170, 1), rgba(104, 190, 255, 1));
+	--status-pending-soft: light-dark(rgba(18, 94, 170, 0.1), rgba(104, 190, 255, 0.12));
+	--status-pending-border: light-dark(rgba(18, 94, 170, 0.3), rgba(104, 190, 255, 0.28));
 	--status-pending-surface-gradient: linear-gradient(180deg, color-mix(in srgb, var(--status-pending) 16%, var(--surface-section-opaque)) 0%, color-mix(in srgb, var(--status-pending) 8%, var(--surface-section-opaque)) 100%);
-	--status-loading: rgba(145, 170, 199, 1);
-	--status-loading-soft: rgba(145, 170, 199, 0.12);
-	--status-loading-border: rgba(145, 170, 199, 0.28);
-	--outcome-yes: rgba(91, 214, 168, 1);
-	--outcome-no: rgba(241, 130, 151, 1);
-	--outcome-invalid: rgba(191, 159, 255, 1);
+	--status-loading: light-dark(rgba(78, 96, 120, 1), rgba(145, 170, 199, 1));
+	--status-loading-soft: light-dark(rgba(78, 96, 120, 0.1), rgba(145, 170, 199, 0.12));
+	--status-loading-border: light-dark(rgba(78, 96, 120, 0.3), rgba(145, 170, 199, 0.28));
+	--outcome-yes: light-dark(rgba(10, 118, 80, 1), rgba(91, 214, 168, 1));
+	--outcome-no: light-dark(rgba(180, 40, 74, 1), rgba(241, 130, 151, 1));
+	--outcome-invalid: light-dark(rgba(104, 70, 196, 1), rgba(191, 159, 255, 1));
 
 	/* controls */
-	--control-bg: rgba(10, 20, 36, 0.18);
-	--control-border: rgba(154, 179, 211, 0.28);
-	--input-border: rgba(154, 179, 211, 0.3);
+	--control-bg: light-dark(rgba(255, 255, 255, 0.72), rgba(10, 20, 36, 0.18));
+	--control-border: light-dark(rgba(40, 62, 94, 0.32), rgba(154, 179, 211, 0.28));
+	--input-border: light-dark(rgba(40, 62, 94, 0.62), rgba(154, 179, 211, 0.52));
 	--focus: color-mix(in srgb, var(--accent) 48%, transparent);
 	--focus-ring: 0 0 0 3px color-mix(in srgb, var(--accent) 38%, transparent);
 	--primary-button-bg: color-mix(in srgb, var(--accent) 88%, #123046);
@@ -93,9 +98,9 @@
 	--primary-button-border-hover: color-mix(in srgb, var(--accent) 78%, var(--color-white));
 	--primary-button-text: var(--bg-deep);
 	--primary-button-shadow: var(--color-white-08);
-	--disabled-control-bg: rgba(12, 28, 43, 1);
-	--disabled-control-border: rgba(154, 179, 211, 0.22);
-	--disabled-control-text: rgba(138, 156, 178, 1);
+	--disabled-control-bg: light-dark(rgba(229, 234, 241, 1), rgba(12, 28, 43, 1));
+	--disabled-control-border: light-dark(rgba(40, 62, 94, 0.22), rgba(154, 179, 211, 0.22));
+	--disabled-control-text: light-dark(rgba(88, 104, 126, 1), rgba(138, 156, 178, 1));
 	--touch-target-min: 2.75rem;
 	--scrollbar-thumb: color-mix(in srgb, var(--accent) 18%, transparent);
 	--scrollbar-thumb-hover: color-mix(in srgb, var(--accent) 32%, transparent);
@@ -109,8 +114,8 @@
 
 	/*
 	 * Font families. Only system fonts are declared because no web font is loaded;
-	 * each stack renders the intended role (sans for copy and controls, serif for
-	 * route and hero headings, mono for labels, addresses, hashes, and numbers).
+	 * each stack renders the intended role (sans for copy, labels, and controls, serif for
+	 * route and hero headings, mono for addresses, hashes, and numbers).
 	 */
 	--font-family-sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
 	--font-family-serif: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, "Times New Roman", serif;
@@ -165,8 +170,8 @@
 	--z-skip-link: 100;
 
 	/* elevation */
-	--shadow-color-soft: rgba(0, 0, 0, 0.12);
-	--shadow-color-strong: rgba(0, 0, 0, 0.35);
+	--shadow-color-soft: light-dark(rgba(20, 35, 60, 0.08), rgba(0, 0, 0, 0.12));
+	--shadow-color-strong: light-dark(rgba(20, 35, 60, 0.18), rgba(0, 0, 0, 0.35));
 	--shadow-control: 0 5px 12px var(--shadow-color-soft);
 	--shadow-raised: 0 10px 24px var(--shadow-color-soft);
 	--shadow-overlay: 0 20px 40px var(--shadow-color-strong);
@@ -174,17 +179,17 @@
 
 	/* decorative */
 	--divider: linear-gradient(90deg, color-mix(in srgb, var(--accent) 24%, transparent), var(--border-subtle) 50%, color-mix(in srgb, var(--accent-strong) 20%, transparent));
-	--slider-thumb-border: rgba(231, 243, 255, 0.8);
+	--slider-thumb-border: light-dark(rgba(14, 26, 43, 0.6), rgba(231, 243, 255, 0.8));
 
 	/* notice error */
-	--danger-text: rgba(255, 229, 235, 1);
-	--notice-warning-gradient: linear-gradient(180deg, rgba(99, 77, 18, 0.96) 0%, rgba(66, 48, 11, 0.96) 100%);
-	--notice-error-gradient: linear-gradient(180deg, rgba(87, 18, 33, 0.94) 0%, rgba(59, 11, 22, 0.94) 100%);
+	--danger-text: light-dark(rgba(104, 12, 34, 1), rgba(255, 229, 235, 1));
+	--notice-warning-gradient: linear-gradient(180deg, light-dark(rgba(255, 243, 212, 0.98), rgba(99, 77, 18, 0.96)) 0%, light-dark(rgba(255, 237, 194, 0.98), rgba(66, 48, 11, 0.96)) 100%);
+	--notice-error-gradient: linear-gradient(180deg, light-dark(rgba(255, 233, 238, 0.98), rgba(87, 18, 33, 0.94)) 0%, light-dark(rgba(255, 222, 230, 0.98), rgba(59, 11, 22, 0.94)) 100%);
 
 	/* elevated surfaces */
-	--surface-dropdown: rgba(5, 11, 21, 0.97);
-	--surface-modal: rgba(7, 17, 31, 0.96);
-	--surface-modal-opaque: rgba(7, 17, 31, 1);
+	--surface-dropdown: light-dark(rgba(255, 255, 255, 0.98), rgba(5, 11, 21, 0.97));
+	--surface-modal: light-dark(rgba(251, 252, 254, 0.98), rgba(7, 17, 31, 0.96));
+	--surface-modal-opaque: light-dark(rgba(251, 252, 254, 1), rgba(7, 17, 31, 1));
 
 	/* simulation banner (amber, product-independent) */
 	--simulation-accent: rgba(255, 227, 145, 1);
@@ -201,11 +206,11 @@
 	--simulation-focus-ring: 0 0 0 3px color-mix(in srgb, var(--simulation-accent) 14%, transparent);
 
 	/* truth auction */
-	--truth-auction-track: rgba(8, 18, 31, 1);
-	--truth-auction-eth: rgba(232, 166, 68, 1);
-	--truth-auction-eth-highlight: rgba(243, 209, 123, 1);
-	--truth-auction-rep: rgba(62, 159, 120, 1);
-	--truth-auction-rep-highlight: rgba(137, 208, 168, 1);
+	--truth-auction-track: light-dark(rgba(226, 232, 240, 1), rgba(8, 18, 31, 1));
+	--truth-auction-eth: light-dark(rgba(196, 122, 20, 1), rgba(232, 166, 68, 1));
+	--truth-auction-eth-highlight: light-dark(rgba(150, 90, 8, 1), rgba(243, 209, 123, 1));
+	--truth-auction-rep: light-dark(rgba(40, 136, 98, 1), rgba(62, 159, 120, 1));
+	--truth-auction-rep-highlight: light-dark(rgba(20, 100, 70, 1), rgba(137, 208, 168, 1));
 
 	/* component hierarchy */
 	--radius-compact: 0.25rem;
@@ -218,15 +223,34 @@
 	--radius-panel: var(--radius-normal);
 	--radius-record: var(--radius-normal);
 	--radius-control: var(--radius-compact);
-	--divider-subtle: rgba(159, 180, 207, 0.1);
-	--divider-strong: rgba(159, 180, 207, 0.18);
+	--divider-subtle: light-dark(rgba(30, 50, 80, 0.1), rgba(159, 180, 207, 0.1));
+	--divider-strong: light-dark(rgba(30, 50, 80, 0.18), rgba(159, 180, 207, 0.18));
 	--border-active: color-mix(in srgb, var(--accent) 58%, transparent);
+
+	/*
+	 * Breakpoints. Media queries cannot read custom properties, so every width or height media condition
+	 * uses one of these literal values; ui/coreShared/ts/tests/breakpoints.test.ts rejects any other value.
+	 * compact: phones; medium: tablets and narrow windows; wide: small laptops.
+	 */
+	--breakpoint-compact: 40rem;
+	--breakpoint-medium: 50rem;
+	--breakpoint-wide: 64rem;
 
 	/* Shared layout contracts; each application retains its own shell. */
 	--content-max: 90rem;
+	/* Single-column forms and lookup fields stop at a readable line length; dashboards and tables keep the full content width. */
+	--form-max: 48rem;
 	--gutter-desktop: 2rem;
 	--gutter-tablet: 1.5rem;
 	--gutter-mobile: 1rem;
+}
+
+:root[data-theme="light"] {
+	color-scheme: light;
+}
+
+:root[data-theme="dark"] {
+	color-scheme: dark;
 }
 
 :root[data-product="zoltar"] {

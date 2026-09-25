@@ -35,8 +35,6 @@
 .question-summary-id {
 	font-family: var(--font-family-mono);
 	font-size: var(--font-xs);
-	letter-spacing: 0.08em;
-	text-transform: uppercase;
 	color: var(--muted);
 	overflow-wrap: anywhere;
 }
@@ -198,8 +196,6 @@
 .question-preview-timeline-label,
 .question-preview-meta-label {
 	font-size: var(--font-label);
-	letter-spacing: 0.14em;
-	text-transform: uppercase;
 	color: var(--muted);
 }
 
@@ -311,8 +307,6 @@
 
 .question-draft-preview-meta-item span {
 	font-size: var(--font-label);
-	letter-spacing: 0.12em;
-	text-transform: uppercase;
 	color: var(--muted);
 }
 
