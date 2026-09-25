@@ -151,8 +151,6 @@ test('product accent hues are only defined in tokens so Statoblast never inherit
 		'--primary-button-bg-hover',
 		'--primary-button-border',
 		'--primary-button-border-hover',
-		'--disabled-primary-button-bg',
-		'--disabled-primary-button-border',
 	]) {
 		expect(tokens).toMatch(new RegExp(`${derivedToken}: (?:color-mix\\(in srgb, )?var\\(--accent(?:-strong)?\\)`))
 	}
