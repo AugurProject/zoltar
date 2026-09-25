@@ -175,7 +175,7 @@ export function resolveMigrationWizardStep(requested: MigrationWizardStepId, rea
 	return migrationWizardStepIds.indexOf(requested) <= migrationWizardStepIds.indexOf(reachable) ? requested : reachable
 }
 
-/** Keeps only selected outcomes that exist in the universe, so a selection from another universe is never submitted. */
+/** Keeps only selected outcome indexes that the loaded universe has. Selections are also reset when the active universe changes. */
 export function getSubmittableOutcomeIndexes(childUniverses: readonly ZoltarChildUniverseSummary[], selected: readonly bigint[]) {
 	return selected.filter(outcomeIndex => childUniverses.some(child => child.outcomeIndex === outcomeIndex))
 }

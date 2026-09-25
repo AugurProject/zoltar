@@ -386,7 +386,7 @@ export function useZoltarUniverse(
 			try {
 				await assertActiveWallet(accountAddress)
 				if (!environmentGuard.isCurrent()) return
-				if (onTransactionRequested(createChildUniverseTransactionIntent('zoltar', { outcomeLabel: getOutcomeLabelForIndex(zoltarUniverse.value?.childUniverses, outcomeIndex), universeId: activeUniverseId })) === false) {
+				if (onTransactionRequested(createChildUniverseTransactionIntent('zoltar', { outcomeLabel, universeId: activeUniverseId })) === false) {
 					zoltarChildUniverseFeedback.value = undefined
 					return
 				}
