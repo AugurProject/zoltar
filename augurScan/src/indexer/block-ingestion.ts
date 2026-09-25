@@ -30,7 +30,6 @@ export class NetworkIndexer {
 	logClient: PublicClient
 	readonly rpcDiagnostics: ReturnType<typeof createRpcDiagnosticContext>
 	indexingStartReported = false
-	lastProgressLogAt: number | undefined
 	progressSample: { block: bigint; sampledAt: number; blocksPerSecond?: number } | undefined
 	lastReportedPhase: 'backfilling' | 'degraded' | 'live' | undefined
 	lastDeploymentScanAt: number | undefined
