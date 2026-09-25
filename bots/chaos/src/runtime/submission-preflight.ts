@@ -1,5 +1,5 @@
 import { privateKeyToAccount } from '@zoltar/bot-shared/ethereum'
-import { checkPrivateTransactionSubmissionEndpoints, checkPublicTransactionSubmissionEndpoints, EndpointCheckFailure, type EndpointCheck } from '@zoltar/bot-shared/monitoring/connectivity'
+import { checkRpcEndpoint, checkPrivateTransactionSubmissionEndpoints, checkPublicTransactionSubmissionEndpoints, EndpointCheckFailure, type EndpointCheck } from '@zoltar/bot-shared/monitoring/connectivity'
 import type { OperatorSettings } from '../config/settings.ts'
 
 function submissionSigner(settings: OperatorSettings) {
@@ -136,4 +136,30 @@ export async function refreshSubmissionReadiness(resources: SubmissionPreflightR
 	}
 	resources.submissionPreflightFailedAt = undefined
 	return 'refreshed'
+}
+
+async function preflightRpcSet(rpcUrls: readonly string[], expectedChainId: number, kind: 'public-rpc' | 'read-rpc', requiredHealthy: number) {
+	const checks = await Promise.all(rpcUrls.map(rpcUrl => checkRpcEndpoint(rpcUrl, expectedChainId, kind)))
+	const failed = checks.filter(check => check.status === 'failed')
+	const safetyFailure = failed.find(check => check.failureDisposition !== 'connectivity-degraded')
+	const healthyCount = checks.length - failed.length
+	if (safetyFailure !== undefined || healthyCount < requiredHealthy) {
+		throw new EndpointCheckFailure(failed.map(check => (check.error?.includes(check.target) ? check.error : `${check.target}: ${check.error ?? 'endpoint check failed'}`)).join('; '), checks)
+	}
+	return checks
+}
+
+async function preflightReadNetwork(settings: OperatorSettings) {
+	const connectivity = settings.connectivity
+	if (connectivity === undefined) throw new Error('Network preflight requires configured connectivity')
+	return await preflightRpcSet([connectivity.readRpcUrl, ...connectivity.quorumRpcUrls], settings.network.chainId, 'read-rpc', connectivity.rpcQuorum)
+}
+
+export async function ensureReadPreflight(resources: { readPreflightChecks: readonly EndpointCheck[] }, settings: OperatorSettings) {
+	await recordEndpointPreflightChecks(
+		async () => await preflightReadNetwork(settings),
+		checks => {
+			resources.readPreflightChecks = checks
+		},
+	)
 }

@@ -1,3 +1,4 @@
+import { scanBlockTimeMs, startScanReport } from '@zoltar/core-shared/monitoring/scanStatus'
 import { reconcileClosedV3RetirementWorkflow, V3_RETIREMENT_OPERATION } from './retirement-v3-continuation.ts'
 import { reconcileIncludedTransactions } from '../execution/inclusion-journal.ts'
 import { assertDurableDeploymentFactory, restoreDeploymentForDurableState } from '../config/deployment-state.ts'
@@ -5,7 +6,7 @@ import { createWalletClient, privateKeyToAccount, type Address } from '@zoltar/b
 import { botDashboardLifecycle, type BotShutdownController } from '@zoltar/bot-shared/execution/bot-process-locks'
 import { createSignerOperationGate } from '@zoltar/bot-shared/execution/signer-operation-gate'
 import { errorMessage as formatErrorMessage } from '@zoltar/bot-shared/infrastructure/error-message'
-import { checkRpcEndpoint, EndpointCheckFailure, type EndpointCheck } from '@zoltar/bot-shared/monitoring/connectivity'
+import { type EndpointCheck } from '@zoltar/bot-shared/monitoring/connectivity'
 import { operationalFailureDisposition, pollUntilStopped, retryDelayMilliseconds } from '@zoltar/bot-shared/monitoring/resilience'
 import { executionProfileId } from '../config/execution-profile.ts'
 import { saveSettings, type OperatorSettings } from '../config/settings.ts'
@@ -23,7 +24,7 @@ import type { OperationPlan } from '../operations/types.ts'
 import { migrateEmptyBootstrapState } from '../state/bootstrap-migration.ts'
 import { bindRuntimeStateToSigner, loadRuntimeState, recordActivity, saveDurableState, setRuntimeExecutionAddress, type RuntimeState } from '../state/operator-state.ts'
 import { isPristineBootstrapState } from '../state/pristine.ts'
-import { applyExecutionPolicy, blockExecutableEvaluations, chaosChain, createChaosReadPool, performCanonicalScan, planningOptions, unavailableOperationCatalog } from './canonical-scan.ts'
+import { applyExecutionPolicy, blockExecutableEvaluations, chaosChain, chaosReadClients, createChaosReadPool, performCanonicalScan, planningOptions, unavailableOperationCatalog } from './canonical-scan.ts'
 import { restartSafeSettings } from './configuration-candidates.ts'
 import { createChaosDashboardController, type ChaosProcessLocks, type ConfigurationState } from './dashboard-controller.ts'
 import { checkDeploymentAvailability, recordUnavailableDeploymentScan, tradingDeploymentNotice } from './deployment-availability.ts'
@@ -35,7 +36,7 @@ import { retirementPlanAllowed } from './retirement-operation-policy.ts'
 import { enforceRetirementContinuation, processRetirementCycle, retirementCompletionEvidenceCanonical, retirementPositionsForScan, updateRetirementAssessment } from './retirement-runner.ts'
 import { closeInterruptedSchedulerRun, executeScheduledOperation, recordDryRun, scheduleAfterRecoveredTransaction, schedulerFor } from './scheduled-operation.ts'
 import { genesisInitializationDefinitionId, genesisInitializationPlan, randomOperationPlans } from './selection.ts'
-import { assertSubmissionPreflightFresh, preflightTransactionSubmissionNetwork, recordEndpointPreflightChecks, refreshSubmissionReadiness, submissionPreflightConfigurationIdentity, type SubmissionPreflightResources } from './submission-preflight.ts'
+import { assertSubmissionPreflightFresh, ensureReadPreflight, preflightTransactionSubmissionNetwork, recordEndpointPreflightChecks, refreshSubmissionReadiness, submissionPreflightConfigurationIdentity, type SubmissionPreflightResources } from './submission-preflight.ts'
 import { runtimeTopologySummary } from './topology-summary.ts'
 import { evaluatePolicySafeContinuation } from './workflow-continuation.ts'
 import { abandonRetryableSelectableFailure, rediscoverableExecutionFailure, repairDurableSelectableFailures, workflowForPlan } from './workflow-repair.ts'
@@ -71,23 +72,6 @@ async function persistState(configuration: ConfigurationState, state: RuntimeSta
 	await saveDurableState(configuration.settings.runtime.stateFile, state)
 }
 
-async function preflightRpcSet(rpcUrls: readonly string[], expectedChainId: number, kind: 'public-rpc' | 'read-rpc', requiredHealthy: number) {
-	const checks = await Promise.all(rpcUrls.map(rpcUrl => checkRpcEndpoint(rpcUrl, expectedChainId, kind)))
-	const failed = checks.filter(check => check.status === 'failed')
-	const safetyFailure = failed.find(check => check.failureDisposition !== 'connectivity-degraded')
-	const healthyCount = checks.length - failed.length
-	if (safetyFailure !== undefined || healthyCount < requiredHealthy) {
-		throw new EndpointCheckFailure(failed.map(check => (check.error?.includes(check.target) ? check.error : `${check.target}: ${check.error ?? 'endpoint check failed'}`)).join('; '), checks)
-	}
-	return checks
-}
-
-async function preflightReadNetwork(settings: OperatorSettings) {
-	const connectivity = settings.connectivity
-	if (connectivity === undefined) throw new Error('Network preflight requires configured connectivity')
-	return await preflightRpcSet([connectivity.readRpcUrl, ...connectivity.quorumRpcUrls], settings.network.chainId, 'read-rpc', connectivity.rpcQuorum)
-}
-
 async function ensureSubmissionPreflight(resources: RuntimeResources, settings: OperatorSettings) {
 	const configurationIdentity = submissionPreflightConfigurationIdentity(settings)
 	await recordEndpointPreflightChecks(
@@ -95,15 +79,6 @@ async function ensureSubmissionPreflight(resources: RuntimeResources, settings: 
 		checks => {
 			resources.submissionPreflightConfigurationIdentity = configurationIdentity
 			resources.submissionPreflightChecks = checks
-		},
-	)
-}
-
-async function ensureReadPreflight(resources: RuntimeResources, settings: OperatorSettings) {
-	await recordEndpointPreflightChecks(
-		async () => await preflightReadNetwork(settings),
-		checks => {
-			resources.readPreflightChecks = checks
 		},
 	)
 }
@@ -566,6 +541,12 @@ export async function runChaosOperator(loaded: LoadedConfiguration, locks: Chaos
 			if (shutdown.isRequested()) return true
 			const cycleRevision = configuration.revision
 			const settings = configuration.settings
+			const scanReport = startScanReport({
+				network: settings.network,
+				blockTimeMs: scanBlockTimeMs(settings.network.chainId, process.env['SCAN_BLOCK_TIME_MS']),
+				readHead: async () => (resources === undefined || settings.connectivity === undefined ? undefined : await chaosReadClients(settings, resources.pool)[0]?.client.getBlockNumber()),
+			})
+			let scanCompleted = false
 			let gateHeld = false
 			const acquireCycleGate = () => {
 				if (gateHeld) return true
@@ -603,6 +584,7 @@ export async function runChaosOperator(loaded: LoadedConfiguration, locks: Chaos
 					if (!configurationIsCurrent()) return 'deferred'
 					state.evaluations = unavailableOperationCatalog('Configure and authenticate the network deployment before discovery')
 					state.error = 'Network deployment and RPC connectivity are not configured'
+					scanReport.update({ status: 'paused' })
 					state.status = 'paused'
 					if (state.scheduler.status !== 'paused') {
 						await schedulerFor(configuration, state).pause()
@@ -627,6 +609,7 @@ export async function runChaosOperator(loaded: LoadedConfiguration, locks: Chaos
 				if (deploymentCheck.blocking && deploymentNotice !== undefined) {
 					if (!acquireCycleGate() || !configurationIsCurrent()) return 'deferred'
 					recordUnavailableDeploymentScan(state, deploymentNotice, deploymentCheck)
+					scanReport.update({ status: 'waiting' })
 					await schedulerFor(configuration, state).pause()
 					await persistState(configuration, state)
 					return settings.runtime.once
@@ -646,6 +629,7 @@ export async function runChaosOperator(loaded: LoadedConfiguration, locks: Chaos
 				state.topology = runtimeTopologySummary(scan)
 				state.lastScanAt = new Date().toISOString()
 				state.lastScannedBlock = scan.anchor.blockNumber
+				scanReport.update({ block: scan.anchor.blockNumber })
 				state.deploymentNotice = tradingDeploymentNotice(scan.snapshot)
 				state.lastDeploymentCheckedBlock = undefined
 				state.lastDeploymentCheckAt = undefined
@@ -670,6 +654,7 @@ export async function runChaosOperator(loaded: LoadedConfiguration, locks: Chaos
 				const retirementV3 = await retirementPositionsForScan({ anchor: scan.anchor, pool: resources.pool, profileId: expectedProfileId, settings, state, wallet: state.wallet })
 				updateRetirementAssessment(scan, settings, state, retirementV3, await retirementCompletionEvidenceCanonical(settings, resources.pool, state, scan.anchor))
 				await persistState(configuration, state)
+				scanCompleted = true
 				if (!scan.executionReady) {
 					backfillIncomplete = true
 					return settings.runtime.once
@@ -868,12 +853,20 @@ export async function runChaosOperator(loaded: LoadedConfiguration, locks: Chaos
 				await executeRandomPlan(configuration, state, resources, plan, shutdown.isRequested)
 				return settings.runtime.once
 			} catch (error) {
+				scanCompleted = false
+				scanReport.update({ status: 'failed' })
 				if (!acquireCycleGate()) return 'deferred'
 				if (!configurationIsCurrent()) return 'deferred'
 				if (resources !== undefined) state.rpcEndpointHealth = resourceHealth(resources)
 				await handleCycleFailure(error, configuration, state)
 				throw error
 			} finally {
+				if (scanCompleted && configurationIsCurrent()) {
+					const eligible = state.evaluations.filter(evaluation => evaluation.eligibility.eligible).length
+					const scanStatus = state.paused ? 'paused' : 'live'
+					scanReport.update({ status: backfillIncomplete ? 'backfilling' : scanStatus, details: { evaluated: state.evaluations.length, eligible, skipped: state.evaluations.length - eligible } })
+				}
+				await scanReport.finish(shutdown.isRequested() || !configurationIsCurrent() ? 'incomplete' : undefined)
 				state.scanning = false
 				if (resources !== undefined) {
 					state.rpcEndpointHealth = resourceHealth(resources)
