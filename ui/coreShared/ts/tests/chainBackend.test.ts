@@ -508,7 +508,7 @@ for (const receiptStatus of ['0x1', '0x0']) {
 				accountAddress: zeroAddress,
 				missingWalletMessage: 'Connect wallet',
 				onTransactionRequested: () => {
-					state = markTransactionRequested(state, { action: 'createMarket', source: 'zoltar', submittedTitle: 'Creating Question' })
+					state = markTransactionRequested(state, { action: 'createMarket', source: 'zoltar', submittedTitle: 'Creating question' })
 					return true
 				},
 				onTransactionFailed: failed,

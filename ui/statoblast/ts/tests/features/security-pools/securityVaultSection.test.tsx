@@ -211,7 +211,7 @@ describe('SecurityVaultSection', () => {
 		expect(within(document.body).getByText('#42')).toBeDefined()
 		expect(document.body.textContent).toContain('execute it manually')
 		expect(within(document.body).getByRole('button', { name: 'View in staged operations' })).toBeDefined()
-		expect(within(document.body).queryByText('REP Withdrawal Executed')).toBeNull()
+		expect(within(document.body).queryByText('REP withdrawal executed')).toBeNull()
 	})
 
 	test.each([
@@ -1168,8 +1168,8 @@ describe('SecurityVaultSection', () => {
 
 		fireEvent.click(within(document.body).getByRole('button', { name: 'Withdraw REP' }))
 
-		expect(within(document.body).getByRole('heading', { name: 'REP Withdrawal Submitted' })).not.toBeNull()
-		expect(within(document.body).queryByRole('heading', { name: 'REP Withdrawal Executed' })).toBeNull()
+		expect(within(document.body).getByRole('heading', { name: 'REP withdrawal submitted' })).not.toBeNull()
+		expect(within(document.body).queryByRole('heading', { name: 'REP withdrawal executed' })).toBeNull()
 	})
 
 	test('defaults queued self-service timeout copy to 5 minutes when the form has no explicit timeout', async () => {

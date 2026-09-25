@@ -1,3 +1,4 @@
+import * as transactionCopy from '@zoltar/ui-core-shared/copy/transaction.js'
 import { useSignal } from '@preact/signals'
 import { useRef } from 'preact/hooks'
 import { useFormState } from '@zoltar/ui-core-shared/hooks/useFormState.js'
@@ -416,7 +417,7 @@ function useForkAuctionOperationsWithDependencies<TWriteClient>(
 		)
 
 	const claimAuctionProceeds = async (securityPoolAddressOverride?: Address, selectedClaimBids?: readonly SettlementSelectedBid[], selectedRefundBids?: readonly SettlementSelectedBid[], universeIdOverride?: bigint) => {
-		const displayTitleOverride = selectedClaimBids !== undefined && selectedRefundBids !== undefined && selectedClaimBids.length === 0 && selectedRefundBids.length > 0 ? 'Settle Finalized Refunds' : undefined
+		const displayTitleOverride = selectedClaimBids !== undefined && selectedRefundBids !== undefined && selectedClaimBids.length === 0 && selectedRefundBids.length > 0 ? transactionCopy.settleFinalizedRefunds : undefined
 
 		return await (() => {
 			const submittedSettlementAddress = forkAuctionForm.value.settlementAddress
