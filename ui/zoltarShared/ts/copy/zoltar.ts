@@ -27,7 +27,6 @@ export const migrationStepChooseOutcomes = 'Choose outcomes'
 export const migrationStepAmount = 'Amount'
 export const migrationStepApprove = 'Approve'
 export const migrationStepReview = 'Review'
-export const formatMigrationStepPosition = (position: CopyTemplateValue, total: CopyTemplateValue, title: CopyTemplateValue) => `Step ${position} of ${total}: ${title}`
 export const migrationStepDone = 'Done'
 export const migrationStepNotNeeded = 'Not needed'
 export const migrationStepReady = 'Ready'
@@ -37,13 +36,12 @@ export const migrationStepBlocked = 'Blocked'
 export const migrationBack = 'Back'
 export const migrationContinue = 'Continue'
 
-export const chooseOutcomesDetail = 'Pick every outcome universe that should receive your REP.'
+export const chooseOutcomesDetail = 'Pick every outcome universe that should receive your REP. Universes that do not exist yet are created when you migrate.'
 export const outcomeUniverseStatus = 'Universe'
 export const outcomeUniverseCreated = 'Created'
-export const outcomeUniverseCreatedOnMigration = 'Created when you migrate'
+export const outcomeUniverseNotCreated = 'Not created yet'
 export const outcomeHeldRep = 'You hold'
 export const outcomeAlreadyMigrated = 'Already migrated'
-export const outcomeFullyMigrated = 'Migration balance fully sent'
 export const formatOpenOutcomeUniverse = (outcome: CopyTemplateValue) => `Open ${outcome} universe`
 export const outcomeSelectionRequired = 'Select at least one outcome.'
 
@@ -66,7 +64,6 @@ export const formatMigrationApprovalRequired = (amount: CopyTemplateValue) => `A
 export const migrationApprovalActionLabel = 'migrating REP'
 
 export const formatMigrationSummary = (amount: CopyTemplateValue, outcomes: CopyTemplateValue) => `Migrate ${amount}\u00a0REP to: ${outcomes}`
-export const migrationOutcomes = 'Outcomes'
 export const migrationIrreversible = 'Burned REP cannot be returned to this universe.'
 export const migrationMintsPerOutcome = 'Every selected outcome universe mints the full amount to your wallet.'
 export const migrateRepAction = 'Migrate REP'

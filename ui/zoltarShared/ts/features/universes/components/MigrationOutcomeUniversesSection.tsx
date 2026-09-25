@@ -12,7 +12,6 @@ type MigrationOutcomeUniversesSectionProps = {
 	deploymentDisabledReason: (outcome: MigrationWizardOutcome) => string | undefined
 	disabled: boolean
 	loadingBalances: boolean
-	migrationBalance: bigint | undefined
 	onDeployChildUniverse: (outcomeIndex: bigint) => void
 	onToggleOutcomeIndex: (outcomeIndex: bigint) => void
 	outcomes: readonly MigrationWizardOutcome[]
@@ -29,7 +28,7 @@ function OutcomeMetric({ label, children }: { label: string; children: Component
 }
 
 /** The "choose outcomes" step: one checkbox card per outcome universe, named by its outcome. */
-export function MigrationOutcomeUniversesSection({ deploymentDisabledReason, disabled, loadingBalances, migrationBalance, onDeployChildUniverse, onToggleOutcomeIndex, outcomes, pendingOutcomeIndex }: MigrationOutcomeUniversesSectionProps) {
+export function MigrationOutcomeUniversesSection({ deploymentDisabledReason, disabled, loadingBalances, onDeployChildUniverse, onToggleOutcomeIndex, outcomes, pendingOutcomeIndex }: MigrationOutcomeUniversesSectionProps) {
 	return (
 		<OutcomeSelectionList
 			className='migration-outcome-section'
@@ -54,24 +53,12 @@ export function MigrationOutcomeUniversesSection({ deploymentDisabledReason, dis
 					),
 					details: (
 						<>
-							<OutcomeMetric label={zoltarCopy.outcomeUniverseStatus}>{outcome.exists ? zoltarCopy.outcomeUniverseCreated : zoltarCopy.outcomeUniverseCreatedOnMigration}</OutcomeMetric>
+							<OutcomeMetric label={zoltarCopy.outcomeUniverseStatus}>{outcome.exists ? zoltarCopy.outcomeUniverseCreated : zoltarCopy.outcomeUniverseNotCreated}</OutcomeMetric>
 							<OutcomeMetric label={zoltarCopy.outcomeHeldRep}>
 								<CurrencyValue copyable={false} loading={loadingBalances && outcome.heldAttoRep === undefined} value={outcome.heldAttoRep} suffix={commonCopy.rep} />
 							</OutcomeMetric>
 							<OutcomeMetric label={zoltarCopy.outcomeAlreadyMigrated}>
-								{outcome.fullyMigrated ? (
-									zoltarCopy.outcomeFullyMigrated
-								) : (
-									<>
-										<CurrencyValue copyable={false} loading={loadingBalances && outcome.alreadyMigratedAttoRep === undefined} value={outcome.alreadyMigratedAttoRep} suffix={commonCopy.rep} />
-										{migrationBalance === undefined || migrationBalance === 0n ? undefined : (
-											<>
-												{' / '}
-												<CurrencyValue copyable={false} value={migrationBalance} suffix={commonCopy.rep} />
-											</>
-										)}
-									</>
-								)}
+								<CurrencyValue copyable={false} loading={loadingBalances && outcome.alreadyMigratedAttoRep === undefined} value={outcome.alreadyMigratedAttoRep} suffix={commonCopy.rep} />
 							</OutcomeMetric>
 						</>
 					),

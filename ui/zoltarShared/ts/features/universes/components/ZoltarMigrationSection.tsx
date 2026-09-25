@@ -13,7 +13,7 @@ import { ReadOnlyDetailAccordion } from '@zoltar/ui-core-shared/components/ReadO
 import { SectionBlock } from '@zoltar/ui-core-shared/components/SectionBlock.js'
 import { StateHint } from '@zoltar/ui-core-shared/components/StateHint.js'
 import { TokenApprovalControl } from '@zoltar/ui-core-shared/components/TokenApprovalControl.js'
-import { TransactionActionButton, TransactionActionGroup } from '@zoltar/ui-core-shared/components/TransactionActionButton.js'
+import { TransactionActionButton } from '@zoltar/ui-core-shared/components/TransactionActionButton.js'
 import { TransactionReview } from '@zoltar/ui-core-shared/components/TransactionReview.js'
 import { WorkflowSubsection } from '@zoltar/ui-core-shared/components/WorkflowSubsection.js'
 import { WalletAssetControl } from '@zoltar/ui-core-shared/components/WalletAssetControl.js'
@@ -176,7 +176,14 @@ export function ZoltarMigrationSection({
 		if (loadingZoltarUniverse || loadingZoltarForkAccess) return zoltarCopy.outcomeBalancesLoading
 		return wizard.steps[3]?.reason
 	})()
-	const canMigrate = migrateReason === undefined && wizard.steps[3]?.status === 'ready' && !zoltarMigrationPending && wizard.walletRepToBurnAttoRep !== undefined
+	const canMigrate = migrateReason === undefined && isOnActiveAppChain && wizard.steps[3]?.status === 'ready' && !zoltarMigrationPending && wizard.walletRepToBurnAttoRep !== undefined
+	const migrateHint = isOnActiveAppChain ? migrateReason : getWrongNetworkReason()
+	// One reason line beside the forward action. The approval control states its own requirement, so the approve step does not repeat it.
+	const navigationHint = (() => {
+		if (currentStepId === 'review') return migrateHint
+		if (currentStepSatisfied || (currentStepId === 'approve' && currentStep?.status === 'incomplete')) return undefined
+		return currentStep?.reason
+	})()
 	const heldOutcomes = wizard.outcomes.filter(outcome => outcome.exists && (outcome.heldAttoRep ?? 0n) > 0n)
 	const deploymentDisabledReason = (outcome: MigrationWizardOutcome) => getChildDeploymentAvailabilityReason({ accountAddress, exists: outcome.exists, hasForked, isOnActiveAppChain })
 	const retryButton = showRetry ? (
@@ -195,7 +202,6 @@ export function ZoltarMigrationSection({
 							deploymentDisabledReason={deploymentDisabledReason}
 							disabled={zoltarMigrationPending}
 							loadingBalances={loadingZoltarForkAccess}
-							migrationBalance={zoltarMigrationPreparedRepBalanceAttoRep}
 							onDeployChildUniverse={onDeployChildUniverse}
 							onToggleOutcomeIndex={outcomeIndex => onZoltarMigrationFormChange({ outcomeIndexes: toggleMigrationOutcome(zoltarMigrationForm.outcomeIndexes, outcomeIndex) })}
 							outcomes={wizard.outcomes}
@@ -274,23 +280,11 @@ export function ZoltarMigrationSection({
 							variant='inline'
 							primary={[
 								{ label: commonCopy.question, value: rootUniverse?.forkQuestionDetails?.title ?? commonCopy.unavailable },
-								{ label: zoltarCopy.migrationOutcomes, value: selectedOutcomeNames },
-								{ label: zoltarCopy.migrationEachOutcomeReceives, value: <CurrencyValue value={amount} suffix={commonCopy.rep} /> },
 								{ label: zoltarCopy.migrationFromWallet, value: <CurrencyValue value={wizard.walletRepToBurnAttoRep} suffix={commonCopy.rep} /> },
 								{ label: zoltarCopy.migrationFromBalance, value: <CurrencyValue value={wizard.fromMigrationBalanceAttoRep} suffix={commonCopy.rep} /> },
 							]}
 							risks={[zoltarCopy.migrationIrreversible, zoltarCopy.migrationMintsPerOutcome]}
 						/>
-						<TransactionActionGroup message={isOnActiveAppChain ? migrateReason : getWrongNetworkReason()}>
-							{retryButton}
-							<TransactionActionButton
-								idleLabel={zoltarCopy.migrateRepAction}
-								pendingLabel={zoltarCopy.migratingRepPending}
-								onClick={() => onMigrateInternalRep(wizard.walletRepToBurnAttoRep ?? 0n)}
-								pending={zoltarMigrationActiveAction === 'split'}
-								availability={{ disabled: !canMigrate, reason: isOnActiveAppChain ? migrateReason : getWrongNetworkReason() }}
-							/>
-						</TransactionActionGroup>
 					</>
 				)
 			default:
@@ -315,7 +309,7 @@ export function ZoltarMigrationSection({
 				) : (
 					<div className='migration-wizard'>
 						<MigrationWizardProgress currentStepId={currentStepId} disabled={zoltarMigrationPending} onSelectStep={setRequestedStepId} reachableStepId={wizard.reachableStepId} steps={wizard.steps} summaries={summaries} />
-						<WorkflowSubsection className='migration-wizard-panel' title={zoltarCopy.formatMigrationStepPosition(currentStepIndex + 1, migrationWizardStepIds.length, getMigrationStepTitle(currentStepId))}>
+						<WorkflowSubsection className='migration-wizard-panel' title={getMigrationStepTitle(currentStepId)}>
 							{renderStepBody()}
 							<div className='migration-wizard-nav'>
 								{previousStepId === undefined ? undefined : (
@@ -323,16 +317,24 @@ export function ZoltarMigrationSection({
 										{zoltarCopy.migrationBack}
 									</button>
 								)}
-								{nextStepId === undefined ? undefined : (
-									<>
-										{retryButton}
-										<p aria-live='polite' className='detail migration-wizard-nav-hint' id={navigationHintId}>
-											{currentStepSatisfied ? undefined : currentStep?.reason}
-										</p>
-										<button aria-describedby={currentStepSatisfied ? undefined : navigationHintId} className='primary' type='button' onClick={() => setRequestedStepId(nextStepId)} disabled={zoltarMigrationPending || !currentStepSatisfied}>
-											{zoltarCopy.migrationContinue}
-										</button>
-									</>
+								{retryButton}
+								<p aria-live='polite' className='detail migration-wizard-nav-hint' id={navigationHintId}>
+									{navigationHint}
+								</p>
+								{nextStepId === undefined ? (
+									<TransactionActionButton
+										idleLabel={zoltarCopy.migrateRepAction}
+										pendingLabel={zoltarCopy.migratingRepPending}
+										onClick={() => onMigrateInternalRep(wizard.walletRepToBurnAttoRep ?? 0n)}
+										pending={zoltarMigrationActiveAction === 'split'}
+										availability={{ disabled: !canMigrate, reason: migrateHint }}
+										disabledReasonElementId={navigationHintId}
+										showDisabledReason={false}
+									/>
+								) : (
+									<button aria-describedby={currentStepSatisfied || navigationHint === undefined ? undefined : navigationHintId} className='primary' type='button' onClick={() => setRequestedStepId(nextStepId)} disabled={zoltarMigrationPending || !currentStepSatisfied}>
+										{zoltarCopy.migrationContinue}
+									</button>
 								)}
 							</div>
 						</WorkflowSubsection>

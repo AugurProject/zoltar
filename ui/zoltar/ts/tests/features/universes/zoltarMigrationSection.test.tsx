@@ -106,7 +106,7 @@ describe('ZoltarMigrationSection', () => {
 		const queries = within(document.body)
 
 		expect(getCurrentStepTitle()).toBe('Choose outcomes')
-		expect(document.body.textContent).toContain('Created when you migrate')
+		expect(document.body.textContent).toContain('Not created yet')
 		expect(document.body.textContent).not.toContain('0x2')
 		expect(document.body.textContent).not.toContain('Split REP')
 		expect(document.body.textContent).not.toContain('prepared REP')
@@ -218,6 +218,13 @@ describe('ZoltarMigrationSection', () => {
 		expect(document.body.textContent).toContain('Burned REP cannot be returned to this universe.')
 		expect(document.body.textContent).not.toContain('Outcome index')
 		expectTransactionButtonEnabled(document.body, 'Migrate REP')
+		const navigation = document.body.querySelector<HTMLElement>('.migration-wizard-nav')
+		if (navigation === null) throw new Error('Missing wizard navigation')
+		expect(
+			within(navigation)
+				.getAllByRole('button')
+				.map(button => button.textContent),
+		).toEqual(['Back', 'Migrate REP'])
 		within(document.body).getByRole('button', { name: 'Migrate REP' }).click()
 		expect(preparations).toEqual([7n * ATTO_REP])
 	})

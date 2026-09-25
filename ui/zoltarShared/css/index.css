@@ -479,7 +479,7 @@
 	white-space: nowrap;
 }
 
-.migration-wizard-step.is-blocked .migration-wizard-step-status {
+.migration-wizard-step.is-blocked:not(.is-current) .migration-wizard-step-status {
 	color: var(--warning);
 }
 
