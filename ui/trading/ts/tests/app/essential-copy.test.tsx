@@ -44,7 +44,7 @@ describe('essential trading copy', () => {
 		await entry.cleanup()
 		const exit = await renderIntoDocument(<TradeEstimatePanel estimate={sell} market={market} settings={DEFAULT_TRADE_SETTINGS} impactTier='low' impactAcknowledged={false} disabled={false} onAcknowledgeImpact={() => undefined} />)
 		cleanupRendered = exit.cleanup
-		for (const phrase of ['You sell ≈', 'You receive ≈', 'Minimum received', 'INVALID used', 'Pool fee']) expect(exit.container.textContent).toContain(phrase)
+		for (const phrase of ['You sell', 'You receive ≈', 'Minimum received', 'INVALID used', 'Pool fee']) expect(exit.container.textContent).toContain(phrase)
 		expect(exit.container.textContent).not.toContain('if YES wins')
 	})
 

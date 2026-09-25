@@ -83,6 +83,26 @@
 .wallet-balance-grid {
 	margin: 0;
 }
+/* The outcome block of every quoted-transaction panel: hash, failure, and the primary action. It takes focus
+   programmatically on confirmation, so it has no outline of its own; the announcement comes from its live region. */
+.transaction-outcome {
+	display: grid;
+	gap: var(--space-3);
+	min-width: 0;
+}
+.transaction-outcome:focus {
+	outline: none;
+	box-shadow: none;
+}
+.transaction-outcome .transaction-hash {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--space-2);
+	margin: 0;
+	min-width: 0;
+	overflow-wrap: anywhere;
+}
+
 /* Trade ticket: direction and outcome switchers share a row; the estimate stays visible under the amount. */
 .trade-ticket-switchers {
 	display: flex;
@@ -110,7 +130,9 @@
 .trade-impact-value--caution {
 	color: var(--warning);
 }
-.trade-impact-value--warning,
+.trade-impact-value--warning {
+	color: var(--warning);
+}
 .trade-impact-value--blocked {
 	color: var(--danger);
 }
@@ -134,7 +156,7 @@
 .trade-impact-acknowledge input {
 	width: 1.125rem;
 	height: 1.125rem;
-	accent-color: var(--danger);
+	accent-color: var(--warning);
 }
 .trade-invalid-coverage {
 	display: grid;

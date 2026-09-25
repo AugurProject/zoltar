@@ -194,7 +194,7 @@ describe('live market refresh', () => {
 		expect(document.body.textContent).toContain('can be sold now')
 		expect(['25%', '50%', 'Max'].every(label => button(label) instanceof HTMLButtonElement)).toBeTrue()
 		await typeAmount('0.5')
-		await waitForDom(() => document.querySelector('.transaction-review-primary')?.textContent?.includes('You sell ≈') === true, 'exit estimate')
+		await waitForDom(() => document.querySelector('.transaction-review-primary')?.textContent?.includes('You sell') === true, 'exit estimate')
 		const expectedCompleteSets = largestExitForLongShares({ ...discoveredMarket, longOutcome: 'YES', longShares: 5n * 10n ** 35n })
 		// The chain prices this exit well above the estimate, so the submission stops before the wallet opens.
 		const discoveriesBeforeSubmit = discoveries

@@ -11,7 +11,7 @@ export const sellShortcutsLabel = 'Sell amount shortcuts'
 export const estimateHeading = 'Estimate'
 export const estimateNote = 'Estimated from current pool reserves. The price is checked again before your wallet opens.'
 export const youReceiveEstimate = 'You receive ≈'
-export const youSellEstimate = 'You sell ≈'
+export const youSellEstimate = 'You sell'
 export const minimumReceived = 'Minimum received'
 export const priceImpact = 'Price impact'
 export const averagePrice = 'Average price'
@@ -26,7 +26,7 @@ export const amountTooSmall = 'Amount too small to trade.'
 export const invalidEthAmount = 'Enter an ETH amount with at most 18 decimal places.'
 export const invalidShareAmount = 'Enter a share amount with at most 36 decimal places.'
 export const invalidCoverageReason = 'Not enough INVALID to insure this sale.'
-export const priceImpactBlockedReason = 'Price impact above 15%. Trade a smaller amount.'
+export const priceImpactBlockedReason = 'Trade a smaller amount.'
 export const acknowledgeImpactReason = 'Confirm the price impact first.'
 
 export function buyOutcome(outcome: 'YES' | 'NO') {
@@ -58,7 +58,7 @@ export function priceImpactWarning(percent: string) {
 }
 
 export function priceImpactBlocked(percent: string) {
-	return `Price impact ${percent}% is above the 15% limit. This pool is too thin for this size; trade a smaller amount.`
+	return `Price impact ${percent}% is above the 15% limit: this pool is too thin for a trade this size.`
 }
 
 export function acknowledgeImpact(percent: string) {

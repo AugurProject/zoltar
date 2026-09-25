@@ -1,4 +1,5 @@
 import { useId, useState } from 'preact/hooks'
+import { FormInput } from '@zoltar/ui-core-shared/components/FormInput.js'
 import { formatSlippagePercent, parseSlippagePercent, parseValidityMinutes, SLIPPAGE_PRESETS_BPS, VALIDITY_PRESETS_MINUTES, type TradeSettings } from '../lib/tradeSettings.js'
 import * as settingsCopy from '../copy/tradeSettings.js'
 
@@ -37,12 +38,12 @@ export function TradeSettingsPanel({ settings, onChange }: { settings: TradeSett
 			<div className='trade-settings-field'>
 				<span className='trade-settings-label'>{settingsCopy.slippageTolerance}</span>
 				<PresetRow label={settingsCopy.slippagePresets} presets={SLIPPAGE_PRESETS_BPS} value={settings.slippageBps} format={value => `${formatSlippagePercent(value)}%`} onSelect={selectSlippage} />
-				<input
+				<FormInput
 					id={`${id}-slippage`}
 					inputMode='decimal'
 					aria-label={settingsCopy.customSlippage}
-					aria-invalid={slippageInvalid ? true : undefined}
-					aria-describedby={slippageInvalid ? `${id}-slippage-error` : undefined}
+					adornment={settingsCopy.percent}
+					error={slippageInvalid ? settingsCopy.slippageValidation : undefined}
 					value={slippageText}
 					onInput={event => {
 						const text = event.currentTarget.value
@@ -52,20 +53,15 @@ export function TradeSettingsPanel({ settings, onChange }: { settings: TradeSett
 					}}
 				/>
 			</div>
-			{slippageInvalid ? (
-				<p id={`${id}-slippage-error`} className='field-error' role='alert'>
-					{settingsCopy.slippageValidation}
-				</p>
-			) : undefined}
 			<div className='trade-settings-field'>
 				<span className='trade-settings-label'>{settingsCopy.transactionValidFor}</span>
 				<PresetRow label={settingsCopy.validityPresets} presets={VALIDITY_PRESETS_MINUTES} value={settings.validityMinutes} format={settingsCopy.minutesLabel} onSelect={selectValidity} />
-				<input
+				<FormInput
 					id={`${id}-validity`}
 					inputMode='numeric'
 					aria-label={settingsCopy.customValidity}
-					aria-invalid={validityInvalid ? true : undefined}
-					aria-describedby={validityInvalid ? `${id}-validity-error` : undefined}
+					adornment={settingsCopy.minutes}
+					error={validityInvalid ? settingsCopy.validityValidation : undefined}
 					value={validityText}
 					onInput={event => {
 						const text = event.currentTarget.value
@@ -75,11 +71,6 @@ export function TradeSettingsPanel({ settings, onChange }: { settings: TradeSett
 					}}
 				/>
 			</div>
-			{validityInvalid ? (
-				<p id={`${id}-validity-error`} className='field-error' role='alert'>
-					{settingsCopy.validityValidation}
-				</p>
-			) : undefined}
 			<p className='field-help'>{settingsCopy.settingsHelp}</p>
 		</section>
 	)
