@@ -1,5 +1,4 @@
 const MILLISECONDS_PER_SECOND = 1000n
-const MILLISECONDS_PER_MINUTE = 60_000
 // ECMAScript Date supports +/- 8.64e15 ms around the epoch.
 const MAX_DATE_TIMESTAMP_SECONDS = 8_640_000_000_000n
 
@@ -39,7 +38,8 @@ function getZonedDateTimeParts(date: Date, timeZone: string): DateTimeParts & { 
 }
 
 function toDate(timestamp: bigint) {
-	if (timestamp < -MAX_DATE_TIMESTAMP_SECONDS || timestamp > MAX_DATE_TIMESTAMP_SECONDS) return undefined
+	// Question times are Unix timestamps, so instants before the epoch are never valid question times.
+	if (timestamp < 0n || timestamp > MAX_DATE_TIMESTAMP_SECONDS) return undefined
 	const date = new Date(Number(timestamp * MILLISECONDS_PER_SECOND))
 	return Number.isNaN(date.getTime()) ? undefined : date
 }
@@ -49,12 +49,15 @@ export function getBrowserTimeZone() {
 	return new Intl.DateTimeFormat().resolvedOptions().timeZone
 }
 
-/** Minutes the zone is ahead of UTC at the given instant (negative when behind). */
+/** Minutes the zone is ahead of UTC at the given instant (negative when behind), read from Intl's `GMT+03:00` offset name. */
 function getTimeZoneOffsetMinutes(date: Date, timeZone: string) {
-	const { day, hour, minute, month, second, year } = getZonedDateTimeParts(date, timeZone)
-	const zonedAsUtcMilliseconds = Date.UTC(year, month - 1, day, hour, minute, second)
-	const instantMilliseconds = date.getTime() - date.getUTCMilliseconds()
-	return Math.round((zonedAsUtcMilliseconds - instantMilliseconds) / MILLISECONDS_PER_MINUTE)
+	const offsetName = new Intl.DateTimeFormat('en-US', { timeZone, timeZoneName: 'longOffset' }).formatToParts(date).find(part => part.type === 'timeZoneName')?.value
+	if (offsetName === undefined) throw new Error(`Time zone formatting omitted the offset of ${timeZone}`)
+	if (offsetName === 'GMT') return 0
+	const match = /^GMT([+-])(\d{1,2})(?::(\d{2}))?$/.exec(offsetName)
+	if (match === null) throw new Error(`Unrecognized time zone offset ${offsetName}`)
+	const minutes = Number(match[2]) * 60 + Number(match[3] ?? '0')
+	return match[1] === '-' ? -minutes : minutes
 }
 
 function formatUtcOffset(offsetMinutes: number) {

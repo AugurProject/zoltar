@@ -31,8 +31,14 @@ describe('questionTimeZone', () => {
 		expect(formatLocalAndUtcTimestamp(WINTER_TIMESTAMP, 'UTC')).toEqual({ local: '2026-12-31 21:30', utc: '2026-12-31 21:30 UTC', zoneLabel: 'UTC' })
 	})
 
-	test('rejects timestamps outside the supported date range', () => {
+	test('keeps far-future years and their offsets well formed', () => {
+		// 9999-12-31 23:00:00 UTC
+		expect(formatLocalAndUtcTimestamp(253_402_297_200n, 'Europe/Helsinki')).toEqual({ local: '10000-01-01 01:00', utc: '9999-12-31 23:00 UTC', zoneLabel: 'Europe/Helsinki, UTC+2' })
+	})
+
+	test('rejects timestamps before the epoch or outside the supported date range', () => {
 		expect(formatLocalAndUtcTimestamp(8_640_000_000_001n, 'UTC')).toBeUndefined()
-		expect(formatLocalAndUtcTimestamp(-8_640_000_000_001n, 'UTC')).toBeUndefined()
+		expect(formatLocalAndUtcTimestamp(-1n, 'Europe/Helsinki')).toBeUndefined()
+		expect(formatLocalAndUtcTimestamp(-60_589_000_000n, 'Europe/Helsinki')).toBeUndefined()
 	})
 })

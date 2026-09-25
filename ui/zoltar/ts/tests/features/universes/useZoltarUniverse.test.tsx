@@ -773,4 +773,59 @@ describe('useZoltarUniverse', () => {
 		expect(failure).toBeInstanceOf(Error)
 		expect(requireHookState(hookState).zoltarQuestions).toEqual([])
 	})
+
+	test('keeps the created question when an older page read resolves after it', async () => {
+		const existingQuestion = createQuestion('0x01')
+		const createdQuestion = createQuestion('0x02')
+		const stalePage = createDeferred<{ pageIndex: number; pageSize: number; questionCount: bigint; questions: MarketDetails[] }>()
+		let pageRequests = 0
+		const dependencies = createZoltarUniverseDependencies({
+			loadMarketDetails: async () => createdQuestion,
+			loadZoltarQuestionCount: async () => 2n,
+			loadZoltarQuestionPage: async () => {
+				pageRequests += 1
+				if (pageRequests === 1) return { pageIndex: 0, pageSize: 10, questionCount: 1n, questions: [existingQuestion] }
+				return await stalePage.promise
+			},
+		})
+		let hookState: UseZoltarUniverseState | undefined
+		function Harness() {
+			hookState = useZoltarUniverse(
+				{
+					accountAddress: WALLET_ADDRESS,
+					activeUniverseId: 1n,
+					autoLoadInitialData: false,
+					deploymentStatuses: [createZoltarDeploymentStatus()],
+					environmentRefreshKey: 0,
+					onTransactionFinished: () => undefined,
+					onTransactionPresented: () => undefined,
+					onTransactionRequested: () => undefined,
+					onTransactionSubmitted: () => undefined,
+				},
+				dependencies,
+			)
+			return <div />
+		}
+		const renderedComponent = await renderIntoDocument(<Harness />)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		await act(async () => {
+			await requireHookState(hookState).loadZoltarQuestionPage(0, 10)
+		})
+		let stalePageRequest: Promise<void> | undefined
+		await act(async () => {
+			stalePageRequest = requireHookState(hookState).loadZoltarQuestionPage(0, 10)
+			await Promise.resolve()
+		})
+		await act(async () => {
+			await requireHookState(hookState).loadCreatedZoltarQuestion('0x2')
+		})
+		await act(async () => {
+			stalePage.resolve({ pageIndex: 0, pageSize: 10, questionCount: 1n, questions: [existingQuestion] })
+			await stalePageRequest
+		})
+
+		expect(requireHookState(hookState).zoltarQuestionPage?.questions).toEqual([existingQuestion, createdQuestion])
+		expect(requireHookState(hookState).zoltarQuestionCount).toBe(2n)
+	})
 })

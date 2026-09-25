@@ -364,7 +364,10 @@ export function useZoltarUniverse(
 		const questionLoadContext = { environmentRefreshKey, zoltarDeployed }
 		const readClient = dependencies.createConnectedReadClient()
 		let loadError: unknown
-		// Track on the list controller so list and create-result loading states cover this read, without superseding a page load.
+		// Page and count reads that started before the creation would otherwise land later with pre-creation data; reads started after this one still win.
+		nextQuestionCountLoad()
+		nextQuestionsLoad()
+		// Track on the list controller so list and create-result loading states cover this read.
 		await questionsLoad.run({
 			load: async () => await Promise.all([dependencies.loadMarketDetails(readClient, BigInt(normalizedQuestionId)), dependencies.loadZoltarQuestionCount(readClient)]),
 			onSuccess: ([question, questionCount]) => {
