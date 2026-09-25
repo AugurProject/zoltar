@@ -69,8 +69,13 @@ export function useTransactionTrayController({ onFinished }: TransactionTrayCont
 			if (!isCurrentGeneration()) return
 			const previous = transactionState.value
 			const entry = resolveTransactionTrayEntry(previous, requestKey)
-			// An action that finished after its broadcast without reporting a failure was confirmed.
-			if (entry?.lifecycle.phase === 'pending') recordTransactionSettled(entry.lifecycle.hash, { status: 'confirmed' })
+			if (entry?.lifecycle.phase === 'pending') {
+				// Only a presented success confirms the row; otherwise the activity watcher settles it from the receipt.
+				const hash = entry.lifecycle.hash
+				const succeeded = previous.active?.hash === hash && (previous.active.tone === 'success' || previous.active.tone === 'warning')
+				if (succeeded) recordTransactionSettled(hash, { status: 'confirmed' })
+				else releaseTransactionActivityWatch(hash)
+			}
 			transactionState.value = markTransactionFinished(previous, entry?.key)
 			void onFinished?.()
 		},

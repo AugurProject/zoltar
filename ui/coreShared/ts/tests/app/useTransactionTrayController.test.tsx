@@ -162,6 +162,7 @@ describe('useTransactionTrayController', () => {
 			otherObject = controller?.onTransactionRequested(poolB)
 			controller?.onTransactionSubmitted(secondHash)
 			controller?.onTransactionFailed('Transaction reverted', { kind: 'reverted', requestKey: typeof otherObject === 'string' ? otherObject : undefined })
+			controller?.onTransactionPresented({ hash: firstHash, title: 'REP deposited', tone: 'success' })
 			controller?.onTransactionFinished(typeof first === 'string' ? first : undefined)
 		})
 
@@ -196,8 +197,10 @@ describe('useTransactionTrayController', () => {
 				controller?.onTransactionPrepared(preview)
 				controller?.onTransactionSubmitted(approvalHash)
 				controller?.onTransactionPrepared({ ...preview, functionName: 'depositRepToVault' })
-				if (outcome === 'confirmed') controller?.onTransactionSubmitted(depositHash)
-				else controller?.onTransactionFailed('Action canceled in wallet.', { kind: 'rejected', requestKey })
+				if (outcome === 'confirmed') {
+					controller?.onTransactionSubmitted(depositHash)
+					controller?.onTransactionPresented({ hash: depositHash, title: 'REP deposited', tone: 'success' })
+				} else controller?.onTransactionFailed('Action canceled in wallet.', { kind: 'rejected', requestKey })
 				controller?.onTransactionFinished(requestKey)
 			})
 
@@ -213,6 +216,28 @@ describe('useTransactionTrayController', () => {
 			transactionActivity.value = { chainId: undefined, entries: [], ownerKey: undefined, storageKey: undefined }
 		})
 	}
+
+	test('leaves a broadcast whose outcome was never reported to the receipt watcher instead of confirming it', async () => {
+		let controller: ReturnType<typeof useTransactionTrayController> | undefined
+		function Harness() {
+			controller = useTransactionTrayController()
+			return null
+		}
+		const rendered = await renderIntoDocument(<Harness />)
+		cleanupRendered = rendered.cleanup
+		if (controller === undefined) throw new Error('Transaction tray controller did not initialize')
+		transactionActivity.value = { chainId: 1, entries: [], ownerKey: undefined, storageKey: undefined }
+		const hash = '0x4444000000000000000000000000000000000000000000000000000000000000'
+		await act(() => {
+			// A question creation whose scope changed drops its failure callback, but the action still finishes.
+			const key = controller?.onTransactionRequested({ action: 'createMarket', source: 'zoltar', submittedTitle: 'Creating Question' })
+			controller?.onTransactionSubmitted(hash)
+			controller?.onTransactionFinished(typeof key === 'string' ? key : undefined)
+		})
+
+		expect(transactionActivity.value.entries.map(entry => [entry.hash, entry.status])).toEqual([[hash, 'pending']])
+		transactionActivity.value = { chainId: undefined, entries: [], ownerKey: undefined, storageKey: undefined }
+	})
 
 	test('does not attribute a later step of one action to another running action', async () => {
 		let controller: ReturnType<typeof useTransactionTrayController> | undefined
@@ -243,7 +268,7 @@ describe('useTransactionTrayController', () => {
 		const state = controller.transactionState.value
 		expect(state.entries.map(entry => [entry.key, entry.lifecycle])).toEqual([[firstKey, { phase: 'pending', hash: firstHash }]])
 		expect(transactionActivity.value.entries.map(entry => [entry.hash, entry.status])).toEqual([
-			[secondHash, 'confirmed'],
+			[secondHash, 'pending'],
 			[firstHash, 'pending'],
 		])
 		transactionActivity.value = { chainId: undefined, entries: [], ownerKey: undefined, storageKey: undefined }

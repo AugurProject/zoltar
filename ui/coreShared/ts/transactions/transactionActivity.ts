@@ -59,6 +59,13 @@ export function settleTransactionActivity(entries: readonly TransactionActivityE
 	return capActivity(entries.map(entry => (entry.hash === hash ? { ...entry, ...outcome, settledAt } : entry)))
 }
 
+/** Adds entries another tab stored for the same account, newest first; this tab's copy of a shared hash wins. */
+export function mergeStoredTransactionActivity(entries: readonly TransactionActivityEntry[], stored: readonly TransactionActivityEntry[]) {
+	const missing = stored.filter(candidate => !entries.some(entry => entry.hash === candidate.hash))
+	if (missing.length === 0) return entries
+	return capActivity([...entries, ...missing].sort((left, right) => right.submittedAt - left.submittedAt))
+}
+
 export function dismissTransactionActivity(entries: readonly TransactionActivityEntry[], hash: Hash) {
 	return entries.some(entry => entry.hash === hash) ? entries.filter(entry => entry.hash !== hash) : entries
 }

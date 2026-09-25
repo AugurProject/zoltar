@@ -7,6 +7,7 @@ import { createConnectedReadClient } from '../wallet/clients.js'
 import { createRecoveringReceiptWaiter } from './receiptRecovery.js'
 import {
 	dismissTransactionActivity,
+	mergeStoredTransactionActivity,
 	expireStaleTransactionActivity,
 	getTransactionActivityStorageKey,
 	parseStoredTransactionActivity,
@@ -44,9 +45,15 @@ function persist(state: TransactionActivityState) {
 	}
 }
 
+function readStored(storageKey: string | undefined) {
+	return storageKey === undefined ? [] : parseStoredTransactionActivity(getBrowserStorage('localStorage')?.getItem(storageKey))
+}
+
 function update(change: (entries: readonly TransactionActivityEntry[]) => readonly TransactionActivityEntry[]) {
 	const current = transactionActivity.peek()
-	const entries = change(current.entries)
+	// Another tab on the same account may have stored entries since this tab loaded; keep them instead of overwriting.
+	const merged = mergeStoredTransactionActivity(current.entries, readStored(current.storageKey))
+	const entries = change(merged)
 	if (entries === current.entries) return
 	const next = { ...current, entries }
 	transactionActivity.value = next
@@ -68,7 +75,7 @@ export function setTransactionActivityOwner(account: Address | undefined) {
 	const storageKey = account === undefined || backendId === 'simulation' ? undefined : getTransactionActivityStorageKey({ account, backendId, chainId })
 	const ownerKey = `${backendId}:${chainId}:${account?.toLowerCase() ?? ''}`
 	if (transactionActivity.peek().ownerKey === ownerKey) return
-	const stored = storageKey === undefined ? [] : parseStoredTransactionActivity(getBrowserStorage('localStorage')?.getItem(storageKey))
+	const stored = readStored(storageKey)
 	const entries = expireStaleTransactionActivity(stored, Date.now())
 	transactionActivity.value = { chainId, entries, ownerKey, storageKey }
 	if (entries !== stored) persist(transactionActivity.value)

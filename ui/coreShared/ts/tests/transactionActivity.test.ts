@@ -6,6 +6,7 @@ import { installDomTestLifecycle } from './testUtils/domTestLifecycle.js'
 import {
 	countPendingTransactionActivity,
 	dismissTransactionActivity,
+	mergeStoredTransactionActivity,
 	expireStaleTransactionActivity,
 	MAX_PENDING_TRANSACTION_AGE_MILLISECONDS,
 	getPendingTransactionActivityScopes,
@@ -92,6 +93,19 @@ describe('transaction activity list', () => {
 		expect(dismissTransactionActivity(expired, hashOf(9))).toBe(expired)
 	})
 
+	test("merges entries another tab stored, keeping this tab's copy of a shared hash", () => {
+		const mine = [entry(3, 'pending'), entry(1, 'confirmed')]
+		const stored = [entry(2, 'pending'), { ...entry(1, 'pending') }]
+		const merged = mergeStoredTransactionActivity(mine, stored)
+
+		expect(merged.map(item => [item.hash, item.status])).toEqual([
+			[hashOf(3), 'pending'],
+			[hashOf(2), 'pending'],
+			[hashOf(1), 'confirmed'],
+		])
+		expect(mergeStoredTransactionActivity(mine, [entry(1)])).toBe(mine)
+	})
+
 	test('exposes the scopes of pending transactions for locking', () => {
 		const pending = { ...entry(1, 'pending'), scope: ['market:0x1'] }
 		const settled = { ...entry(2), scope: ['market:0x2'] }
@@ -141,6 +155,23 @@ describe('transaction activity store', () => {
 			setTransactionActivityOwner('0x00000000000000000000000000000000000000a1')
 			expect(transactionActivity.value.entries[0]).toMatchObject({ status: 'failed', failureKind: 'dropped' })
 			expect(window.localStorage.getItem(storageKey)).toContain('"dropped"')
+		} finally {
+			restore()
+		}
+	})
+
+	test('keeps pending transactions another tab recorded for the same account', () => {
+		const restore = installActiveEnvironmentForTesting(createFakeBackend())
+		try {
+			setTransactionActivityOwner('0x00000000000000000000000000000000000000a1')
+			const storageKey = transactionActivity.value.storageKey
+			if (storageKey === undefined) throw new Error('Expected persisted activity for a connected account')
+			// The other tab stored its pending transaction after this tab loaded the list.
+			window.localStorage.setItem(storageKey, serializeTransactionActivity([{ ...entry(7, 'pending'), submittedAt: Date.now() - 1 }]))
+			recordTransactionSubmitted({ hash: hashOf(8), scope: [], title: 'Mine' })
+			transactionActivity.value = { chainId: undefined, entries: [], ownerKey: undefined, storageKey: undefined }
+			setTransactionActivityOwner('0x00000000000000000000000000000000000000a1')
+			expect(transactionActivity.value.entries.map(item => item.hash).sort()).toEqual([hashOf(7), hashOf(8)])
 		} finally {
 			restore()
 		}
