@@ -18,7 +18,7 @@ export const sourceSizeAllowances = new Map<string, SourceSizeAllowance>([
 		['bots/chaos/src/monitoring/discovery.ts', 1020],
 		['bots/chaos/src/operations/trading.ts', 1726],
 		['bots/chaos/src/state/operator-state.ts', 1170],
-		['bots/chaos/src/runtime/operator.ts', 900],
+		['bots/chaos/src/runtime/operator.ts', 893],
 		['bots/chaos/src/monitoring/topology-cache.ts', 1036],
 		['bots/chaos/src/dashboard/dashboard-server.ts', 989],
 		['bots/chaos/src/state/protocol-index-store.ts', 1000],
@@ -29,10 +29,10 @@ export const sourceSizeAllowances = new Map<string, SourceSizeAllowance>([
 	]),
 	...allowances('Owning bot package: extract dashboard controllers, runtime orchestration, and journal persistence into focused modules.', [
 		['bots/open-oracle-arbitrager/src/dashboard/dashboard.ts', 1173],
-		['bots/open-oracle-arbitrager/src/runtime/operator.ts', 985],
+		['bots/open-oracle-arbitrager/src/runtime/operator.ts', 979],
 		['bots/open-oracle-arbitrager/src/state/position-store.ts', 631],
 		['bots/liquidator/src/dashboard/dashboard.ts', 891],
-		['bots/liquidator/src/cli/run.ts', 718],
+		['bots/liquidator/src/cli/run.ts', 714],
 		['bots/liquidator/src/state/operator-state.ts', 668],
 	]),
 	...allowances('Owning UI library: separate workflow state and actions from rendering, and extract simulation scenario handlers.', [

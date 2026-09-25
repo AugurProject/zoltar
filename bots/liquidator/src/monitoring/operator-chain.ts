@@ -69,3 +69,9 @@ export async function desiredPoolStatus(settings: OperatorSettings, desired: Des
 	)
 	return { address, desired }
 }
+
+export const constantProductPairAbi = [
+	{ inputs: [], name: 'token0', outputs: [{ type: 'address' }], stateMutability: 'view', type: 'function' },
+	{ inputs: [], name: 'token1', outputs: [{ type: 'address' }], stateMutability: 'view', type: 'function' },
+	{ inputs: [], name: 'getReserves', outputs: [{ type: 'uint112' }, { type: 'uint112' }, { type: 'uint32' }], stateMutability: 'view', type: 'function' },
+] as const

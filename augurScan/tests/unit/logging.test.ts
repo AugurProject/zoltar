@@ -176,6 +176,32 @@ describe('AugurScan runtime logging', () => {
 		}
 	})
 
+	test('coalesces wrapped Reth trace pruning errors while retaining every exchange', async () => {
+		const directory = await temporaryDirectory()
+		const filename = path.join(directory, 'rpc.jsonl')
+		const consoleError = spyOn(console, 'error').mockImplementation(() => {})
+		const consoleWarn = spyOn(console, 'warn').mockImplementation(() => {})
+		try {
+			const loggingFetch = createRpcLoggingFetch('http://reth:8545', '#1 http://reth:8545', filename, new RotatingJsonLog(filename), async (_input, init) => {
+				const request: unknown = JSON.parse(String(init?.body))
+				if (typeof request !== 'object' || request === null || Array.isArray(request) || !('id' in request) || typeof request.id !== 'number') throw new Error('Expected a numeric JSON-RPC request identifier')
+				return Response.json({ error: { code: -32603, message: `failed to apply blockhash contract call: database error: Database error: state at block #${request.id} is pruned` }, id: request.id, jsonrpc: '2.0' })
+			})
+			for (const id of [1, 2, 3]) {
+				await loggingFetch('http://reth:8545', {
+					body: JSON.stringify({ id, jsonrpc: '2.0', method: 'debug_traceBlockByHash', params: ['0x1234', `0x${id.toString(16)}`] }),
+					method: 'POST',
+				})
+			}
+			expect(consoleWarn).toHaveBeenCalledTimes(1)
+			expect(consoleError).not.toHaveBeenCalled()
+			expect((await readFile(filename, 'utf8')).trim().split('\n')).toHaveLength(3)
+		} finally {
+			consoleError.mockRestore()
+			consoleWarn.mockRestore()
+		}
+	})
+
 	test('coalesces missing-trie-node state probes while retaining every exchange', async () => {
 		const directory = await temporaryDirectory()
 		const filename = path.join(directory, 'rpc.jsonl')
