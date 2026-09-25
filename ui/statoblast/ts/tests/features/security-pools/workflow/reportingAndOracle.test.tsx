@@ -633,7 +633,7 @@ describe('SecurityPoolWorkflowSection: reporting and oracle', () => {
 						pendingReportId: 12n,
 						priceValidUntilTimestamp: 1000n,
 						queuedOperationCostAttoEth: 1n,
-						requestPriceCostAttoEth: 1n,
+						requestPriceCostAttoEth: 114_800_101n,
 						token1: zeroAddress,
 						token2: zeroAddress,
 					},
@@ -653,6 +653,7 @@ describe('SecurityPoolWorkflowSection: reporting and oracle', () => {
 		const sectionQueries = within(priceOracleSection)
 		expect(sectionQueries.getByRole('heading', { name: 'Price Oracle' })).not.toBeNull()
 		expect(sectionQueries.getByText('Open Oracle Price')).not.toBeNull()
+		expect(sectionQueries.getByText('≈ 0.00000000011 ETH').closest('[title]')?.getAttribute('title')).toBe('0.000000000114800101 ETH')
 		expect(sectionQueries.queryByText('Price Window')).toBeNull()
 		expect(sectionQueries.queryByText('Last Settlement')).toBeNull()
 		expect(documentQueries.getByRole('button', { name: 'Request new price…' })).not.toBeNull()

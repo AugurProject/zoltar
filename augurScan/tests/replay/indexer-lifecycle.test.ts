@@ -36,7 +36,7 @@ import {
 	findSparseCanonicalAncestor,
 	indexerLogSources,
 	indexerOperationFailureReason,
-	indexerProgressMessage,
+	indexerProgressDetails,
 	indexerWaitingMessage,
 	indexingCompletion,
 	isLocalIndexerFailure,
@@ -1052,9 +1052,9 @@ describe('network indexer lifecycle', () => {
 		expect(indexingCompletion(100n, 99n, 99n)).toEqual({ completedBlocks: 0n, percentage: '100.00', remainingBlocks: 0n, totalBlocks: 0n })
 		expect(indexerWaitingMessage('mainnet', 100n, 99n)).toBe('[mainnet] indexer state: live; observed head #99; 100.00% complete; caught up; waiting for configured start block #100')
 		expect(indexingCompletion(0n, 99_998n, 99_999n).percentage).toBe('99.99')
-		expect(indexerProgressMessage('mainnet', 100n, 119n, 1_000n, 0n, 10)).toBe('[mainnet] indexer state: backfilling; indexed blocks #100–#119; observed head #1000; 11.99% complete; 881 blocks behind; ETA 1m 29s')
-		expect(indexerProgressMessage('mainnet', 100n, 119n, 1_000n, 0n)).toEndWith('11.99% complete; 881 blocks behind; estimating ETA')
-		expect(indexerProgressMessage('sepolia', 1_000n, 1_000n, 1_000n, 0n)).toBe('[sepolia] indexer state: live; indexed block #1000; observed head #1000; 100.00% complete; caught up')
+		expect(indexerProgressDetails(100n, 119n, 1_000n, 0n, 10)).toEqual({ fromBlock: 100n, blocksScanned: 20n, progress: '11.99%', etaSeconds: 89 })
+		expect(indexerProgressDetails(100n, 119n, 1_000n, 0n).etaSeconds).toBe('unknown')
+		expect(indexerProgressDetails(1_000n, 1_000n, 1_000n, 0n)).toEqual({ fromBlock: 1_000n, blocksScanned: 1n, progress: '100.00%', etaSeconds: 0 })
 	})
 
 	test('finds the first block containing contract code and distinguishes a bounded result', async () => {

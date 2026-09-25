@@ -3,10 +3,13 @@
 import { signal } from '@preact/signals'
 import type { GlobalTransactionPresentation } from '@zoltar/ui-core-shared/types/components.js'
 import { TransactionStepsModal } from '@zoltar/ui-core-shared/components/TransactionStepsModal.js'
-import { beforeEach, describe, expect, spyOn, test } from 'bun:test'
+import { beforeEach, describe, expect, jest, test } from 'bun:test'
 import { fireEvent, within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { act } from 'preact/test-utils'
 import { render } from 'preact'
+import { installActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
+import { createInjectedBackend } from '@zoltar/ui-core-shared/wallet/chainBackend.js'
+import { MAINNET_NETWORK_PROFILE, SEPOLIA_NETWORK_PROFILE } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
 import { GlobalTransactionDialog } from '@zoltar/ui-core-shared/app/components/GlobalTransactionDialog.js'
 import { OperationModal } from '@zoltar/ui-core-shared/components/OperationModal.js'
 import { GlobalTransactionPresentationProvider } from '@zoltar/ui-core-shared/components/GlobalTransactionPresentationContext.js'
@@ -30,6 +33,23 @@ describe('GlobalTransactionDialog', () => {
 
 	beforeEach(() => {
 		restoreRouting = installTestRouting()
+	})
+
+	test.each([MAINNET_NETWORK_PROFILE, SEPOLIA_NETWORK_PROFILE])('links the full hash to the active explorer: $id', async profile => {
+		const restore = installActiveEnvironmentForTesting(createInjectedBackend({ profile }))
+		const hash = '0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef12'
+		try {
+			const rendered = await renderIntoDocument(<GlobalTransactionDialog transaction={{ hash, title: 'Price requested', tone: 'success' }} />)
+			trackRendered(rendered)
+			const link = within(document.body).getByRole('link', { name: `View transaction ${hash} on explorer (opens in a new tab)` })
+			expect(link.getAttribute('href')).toBe(`${profile.transactionExplorerBaseUrl}${hash}`)
+			expect(link.getAttribute('target')).toBe('_blank')
+			expect(link.getAttribute('rel')).toContain('noreferrer')
+			expect(link.textContent).toContain(hash)
+			expect(link.querySelector('.address-value-abbreviated')).toBeNull()
+		} finally {
+			restore()
+		}
 	})
 
 	test('keeps the reporting amount and source review then shows one shared success panel', async () => {
@@ -106,68 +126,51 @@ describe('GlobalTransactionDialog', () => {
 			render(<GlobalTransactionDialog transaction={{ ...pending, detail: 'nonce too low', title: 'Price request failed', tone: 'error' }} />, renderedComponent.container)
 		})
 		const failedDialog = queries.getByRole('dialog', { name: 'Transaction status' })
-		expect(failedDialog.querySelector('.global-transaction-notice-recovery')?.textContent).toBe('Review transaction details before retrying.')
+		expect(failedDialog.querySelector('.global-transaction-notice-recovery')?.textContent).toBe('nonce too low')
+		expect(within(failedDialog).getByText('nonce too low').closest('details')).toBeNull()
 		expect(within(failedDialog).getByRole('alert').textContent).toContain('nonce too low')
 		expect(failedDialog.querySelector('details')?.open).toBe(false)
 	})
 
-	test('automatically clears confirmed status while keeping failures visible', async () => {
-		const originalSetTimeout = globalThis.setTimeout
-		const timer = spyOn(globalThis, 'setTimeout').mockImplementation((handler, delay, ...args) => originalSetTimeout(handler, delay === 8000 ? 10 : delay, ...args))
-		const hash = '0xabcde0000000000000000000000000000000000000000000000000000000001'
-		const success = { hash, title: 'Price requested', tone: 'success' as const }
-		const renderedComponent = await renderIntoDocument(<GlobalTransactionDialog transaction={success} />)
-		trackRendered(renderedComponent)
-		try {
-			expect(within(document.body).getByRole('dialog', { name: 'Transaction status' })).not.toBeNull()
-			await new Promise(resolve => originalSetTimeout(resolve, 30))
-			expect(within(document.body).queryByRole('dialog', { name: 'Transaction status' })).toBeNull()
-			await act(() => render(<GlobalTransactionDialog transaction={{ ...success, detail: 'nonce too low', tone: 'error' }} />, renderedComponent.container))
-			await new Promise(resolve => originalSetTimeout(resolve, 30))
-			expect(within(document.body).getByRole('dialog', { name: 'Transaction status' })).not.toBeNull()
-		} finally {
-			timer.mockRestore()
-		}
+	test.each(['Action canceled in wallet.', "The pool's oracle price expired. Request a new price in Price Oracle, then retry.", 'Transaction reverted; checking details…'])('shows the failure reason before expanding details: %s', async detail => {
+		const rendered = await renderIntoDocument(<GlobalTransactionDialog transaction={{ dismissKey: `visible-failure-${detail}`, title: 'Price request failed', tone: 'error', detail, technicalRows: [{ label: 'Function', value: 'requestPrice' }] }} />)
+		trackRendered(rendered)
+		const panel = within(document.body).getByRole('dialog', { name: 'Transaction status' })
+		expect(within(panel).getByText(detail).closest('details')).toBeNull()
+		expect(panel.querySelector('details')?.open).toBe(false)
+		expect(panel.querySelector('summary')?.textContent).toBe('Transaction details')
 	})
 
-	test('pauses confirmation expiry while hovered, focused, or expanded', async () => {
-		const originalSetTimeout = globalThis.setTimeout
-		const timer = spyOn(globalThis, 'setTimeout').mockImplementation((handler, delay, ...args) => originalSetTimeout(handler, delay !== undefined && delay >= 7000 ? 10 : delay, ...args))
-		const first = { hash: '0xabcde0000000000000000000000000000000000000000000000000000000002', title: 'Price requested', tone: 'success' as const }
-		const renderedComponent = await renderIntoDocument(
-			<>
-				<button type='button'>Other action</button>
-				<GlobalTransactionDialog transaction={first} />
-			</>,
-		)
-		trackRendered(renderedComponent)
-		const wait = () => new Promise(resolve => originalSetTimeout(resolve, 30))
+	test('explains a missing failure reason without an empty disclosure', async () => {
+		const rendered = await renderIntoDocument(<GlobalTransactionDialog transaction={{ dismissKey: 'unknown-failure-reason', title: 'Price request failed', tone: 'error' }} />)
+		trackRendered(rendered)
+		const panel = within(document.body).getByRole('dialog', { name: 'Transaction status' })
+		expect(within(panel).getByText('No failure reason was returned.')).not.toBeNull()
+		expect(panel.querySelector('details')).toBeNull()
+	})
+
+	test('keeps confirmed status and its hash until explicitly dismissed, even after a minute', async () => {
+		const hash = '0xabcde0000000000000000000000000000000000000000000000000000000001'
+		const success = { hash, title: 'Price requested', tone: 'success' as const }
+		jest.useFakeTimers()
 		try {
+			const renderedComponent = await renderIntoDocument(<GlobalTransactionDialog transaction={success} />)
+			trackRendered(renderedComponent)
 			const queries = within(document.body)
+			await act(() => {
+				jest.advanceTimersByTime(60000)
+			})
 			const panel = queries.getByRole('dialog', { name: 'Transaction status' })
-			panel.dispatchEvent(new MouseEvent('mouseenter'))
-			await wait()
-			expect(queries.getByRole('dialog', { name: 'Transaction status' })).not.toBeNull()
-			within(panel).getByRole('button', { name: 'Dismiss' }).focus()
-			panel.dispatchEvent(new MouseEvent('mouseleave'))
-			await wait()
-			expect(queries.getByRole('dialog', { name: 'Transaction status' })).not.toBeNull()
-			queries.getByRole('button', { name: 'Other action' }).focus()
-			await wait()
+			expect(within(panel).getByText(hash)).not.toBeNull()
+			await act(() => fireEvent.click(within(panel).getByRole('button', { name: 'Dismiss' })))
 			expect(queries.queryByRole('dialog', { name: 'Transaction status' })).toBeNull()
-			await act(() => render(<GlobalTransactionDialog transaction={{ ...first, hash: '0xabcde0000000000000000000000000000000000000000000000000000000003', rows: [{ label: 'Pool', value: '0x0000000000000000000000000000000000000001' }] }} />, renderedComponent.container))
-			const details = renderedComponent.container.querySelector('details')
-			expect(details).not.toBeNull()
-			details?.setAttribute('open', '')
-			details?.dispatchEvent(new Event('toggle'))
-			await wait()
+			await act(() => render(<GlobalTransactionDialog transaction={{ ...success, detail: 'nonce too low', tone: 'error' }} />, renderedComponent.container))
+			await act(() => {
+				jest.advanceTimersByTime(60000)
+			})
 			expect(queries.getByRole('dialog', { name: 'Transaction status' })).not.toBeNull()
-			details?.removeAttribute('open')
-			details?.dispatchEvent(new Event('toggle'))
-			await wait()
-			expect(queries.queryByRole('dialog', { name: 'Transaction status' })).toBeNull()
 		} finally {
-			timer.mockRestore()
+			jest.useRealTimers()
 		}
 	})
 
@@ -316,7 +319,7 @@ describe('GlobalTransactionDialog', () => {
 					detail: 'The new question is now on-chain.',
 					hash: '0x1234000000000000000000000000000000000000000000000000000000000000',
 					rows: [{ label: 'Question ID', value: '0x0b' }],
-					title: 'Question Created',
+					title: 'Question created',
 					tone: 'success',
 				}}
 			/>,
@@ -325,11 +328,11 @@ describe('GlobalTransactionDialog', () => {
 
 		const documentQueries = within(document.body)
 		expect(documentQueries.getByRole('status')).not.toBeNull()
-		expect(documentQueries.getByText('Question Created')).not.toBeNull()
+		expect(documentQueries.getByText('Question created')).not.toBeNull()
 		expect(documentQueries.getByText('The new question is now on-chain.')).not.toBeNull()
 		expect(documentQueries.getByText('Question ID')).not.toBeNull()
 		expect(documentQueries.getByText('0x0b')).not.toBeNull()
-		expect(documentQueries.getByRole('button', { name: 'Copy address 0x1234000000000000000000000000000000000000000000000000000000000000' })).not.toBeNull()
+		expect(documentQueries.getByText('0x1234000000000000000000000000000000000000000000000000000000000000')).not.toBeNull()
 		expect(documentQueries.getByRole('button', { name: 'Dismiss' })).not.toBeNull()
 		expect(documentQueries.getByRole('button', { name: 'Dismiss' }).classList.contains('secondary')).toBe(true)
 	})
@@ -421,7 +424,7 @@ describe('GlobalTransactionDialog', () => {
 					detail: 'Waiting for confirmation.',
 					dismissKey: 'pending-question-creation',
 					hash: '0x2234000000000000000000000000000000000000000000000000000000000000',
-					title: 'Creating Question',
+					title: 'Creating question',
 					tone: 'pending',
 				}}
 			/>,
@@ -433,7 +436,7 @@ describe('GlobalTransactionDialog', () => {
 		expect(documentQueries.getByRole('status', { name: 'Transaction status' })).not.toBeNull()
 		expect(documentQueries.getByText('Pending')).not.toBeNull()
 		expect(documentQueries.getByText('Waiting for confirmation.')).not.toBeNull()
-		expect(documentQueries.getByRole('button', { name: 'Copy address 0x2234000000000000000000000000000000000000000000000000000000000000' })).not.toBeNull()
+		expect(documentQueries.getByText('0x2234000000000000000000000000000000000000000000000000000000000000')).not.toBeNull()
 	})
 
 	test('renders a concise pending transaction when no extra explanation is needed', async () => {
@@ -441,7 +444,7 @@ describe('GlobalTransactionDialog', () => {
 			<GlobalTransactionDialog
 				transaction={{
 					hash: '0x2234000000000000000000000000000000000000000000000000000000000001',
-					title: 'Creating Question',
+					title: 'Creating question',
 					tone: 'pending',
 				}}
 			/>,
@@ -449,7 +452,7 @@ describe('GlobalTransactionDialog', () => {
 		trackRendered(renderedComponent)
 
 		const documentQueries = within(document.body)
-		expect(documentQueries.getByText('Creating Question')).not.toBeNull()
+		expect(documentQueries.getByText('Creating question')).not.toBeNull()
 		expect(documentQueries.getByText('Pending')).not.toBeNull()
 		expect(document.body.querySelector('.global-transaction-notice-detail')).toBeNull()
 	})
@@ -460,7 +463,7 @@ describe('GlobalTransactionDialog', () => {
 				transaction={{
 					detail: 'Confirm the transaction in your wallet.',
 					dismissKey: 'transaction-request-wallet-close',
-					title: 'Creating Question',
+					title: 'Creating question',
 					tone: 'awaiting-wallet',
 				}}
 			/>,
@@ -473,13 +476,13 @@ describe('GlobalTransactionDialog', () => {
 
 	test('shows a terminal failure after a wallet-awaiting transaction resolves', async () => {
 		const dismissKey = 'transaction-request-wallet-terminal'
-		const renderedComponent = await renderIntoDocument(<GlobalTransactionDialog transaction={{ dismissKey, title: 'Creating Question', tone: 'awaiting-wallet' }} />)
+		const renderedComponent = await renderIntoDocument(<GlobalTransactionDialog transaction={{ dismissKey, title: 'Creating question', tone: 'awaiting-wallet' }} />)
 		trackRendered(renderedComponent)
 
 		expect(within(document.body).queryByRole('dialog')).toBeNull()
 
 		await act(() => {
-			render(<GlobalTransactionDialog transaction={{ detail: 'Action canceled in wallet.', dismissKey, title: 'Creating Question', tone: 'error' }} />, renderedComponent.container)
+			render(<GlobalTransactionDialog transaction={{ detail: 'Action canceled in wallet.', dismissKey, title: 'Creating question', tone: 'error' }} />, renderedComponent.container)
 		})
 
 		expect(within(document.body).getByText('Failed')).not.toBeNull()
@@ -492,7 +495,7 @@ describe('GlobalTransactionDialog', () => {
 				transaction={{
 					detail: 'Submitting in browser simulation. No wallet confirmation is required.',
 					dismissKey: 'transaction-request-1',
-					title: 'Creating Question',
+					title: 'Creating question',
 					tone: 'preparing',
 				}}
 			/>,
@@ -509,7 +512,7 @@ describe('GlobalTransactionDialog', () => {
 				transaction={{
 					detail: 'Action canceled in wallet.',
 					dismissKey: 'transaction-request-2',
-					title: 'Creating Question',
+					title: 'Creating question',
 					tone: 'error',
 				}}
 			/>,
@@ -532,7 +535,7 @@ describe('GlobalTransactionDialog', () => {
 		const transaction = {
 			detail: 'Action canceled in wallet.',
 			dismissKey: 'transaction-request-remount-collision',
-			title: 'Creating Question',
+			title: 'Creating question',
 			tone: 'error' as const,
 		}
 		const renderedComponent = await renderIntoDocument(<GlobalTransactionDialog transaction={transaction} />)
@@ -558,7 +561,7 @@ describe('GlobalTransactionDialog', () => {
 					detail: 'Transaction reverted',
 					dismissKey: '0x4234000000000000000000000000000000000000000000000000000000000000',
 					hash: '0x4234000000000000000000000000000000000000000000000000000000000000',
-					title: 'Creating Question',
+					title: 'Creating question',
 					tone: 'error',
 				}}
 			/>,
@@ -568,7 +571,7 @@ describe('GlobalTransactionDialog', () => {
 		const documentQueries = within(document.body)
 		expect(documentQueries.getByText('Failed')).not.toBeNull()
 		expect(documentQueries.getByText('Transaction reverted')).not.toBeNull()
-		expect(documentQueries.getByRole('button', { name: 'Copy address 0x4234000000000000000000000000000000000000000000000000000000000000' })).not.toBeNull()
+		expect(documentQueries.getByText('0x4234000000000000000000000000000000000000000000000000000000000000')).not.toBeNull()
 		expect(documentQueries.getByRole('button', { name: 'Dismiss' })).not.toBeNull()
 	})
 
@@ -603,7 +606,7 @@ describe('GlobalTransactionDialog', () => {
 			action: 'createMarket',
 			requiresWalletConfirmation: false,
 			source: 'zoltar',
-			submittedTitle: 'Creating Question',
+			submittedTitle: 'Creating question',
 		}
 		const hash = '0xa234000000000000000000000000000000000000000000000000000000000000' as const
 		let transactionState = markTransactionRequested(createInitialTransactionTrayState(), intent)
@@ -611,7 +614,7 @@ describe('GlobalTransactionDialog', () => {
 		transactionState = markTransactionPresented(transactionState, {
 			dismissKey: hash,
 			hash,
-			title: 'Question Created',
+			title: 'Question created',
 			tone: 'success',
 		})
 		const completedTransaction = transactionState.active
@@ -670,14 +673,14 @@ describe('GlobalTransactionDialog', () => {
 		const transaction = {
 			detail: 'Waiting for confirmation.',
 			hash: '0x5234000000000000000000000000000000000000000000000000000000000000' as const,
-			title: 'Creating Question',
+			title: 'Creating question',
 			tone: 'pending' as const,
 		}
 		const renderedComponent = await renderIntoDocument(<GlobalTransactionDialog transaction={transaction} />)
 		trackRendered(renderedComponent)
 
 		expect(within(document.body).getByText('Pending')).not.toBeNull()
-		expect(within(document.body).getByRole('button', { name: `Copy address ${transaction.hash}` })).not.toBeNull()
+		expect(within(document.body).getByText(transaction.hash)).not.toBeNull()
 
 		await act(() => {
 			renderedComponent.unmount()
@@ -686,12 +689,12 @@ describe('GlobalTransactionDialog', () => {
 		const rerenderedComponent = await renderIntoDocument(<GlobalTransactionDialog transaction={transaction} />)
 		trackRendered(rerenderedComponent)
 		expect(within(document.body).getByText('Pending')).not.toBeNull()
-		expect(within(document.body).getByRole('button', { name: `Copy address ${transaction.hash}` })).not.toBeNull()
+		expect(within(document.body).getByText(transaction.hash)).not.toBeNull()
 	})
 
 	test('shows terminal success after a pending transaction resolves', async () => {
 		const hash = '0x6234000000000000000000000000000000000000000000000000000000000000' as const
-		const renderedComponent = await renderIntoDocument(<GlobalTransactionDialog transaction={{ hash, title: 'Creating Question', tone: 'pending' }} />)
+		const renderedComponent = await renderIntoDocument(<GlobalTransactionDialog transaction={{ hash, title: 'Creating question', tone: 'pending' }} />)
 		trackRendered(renderedComponent)
 
 		await act(() => {
@@ -700,25 +703,25 @@ describe('GlobalTransactionDialog', () => {
 		expect(within(document.body).queryByText('Pending')).toBeNull()
 
 		await act(() => {
-			render(<GlobalTransactionDialog transaction={{ hash, title: 'Question Created', tone: 'success' }} />, renderedComponent.container)
+			render(<GlobalTransactionDialog transaction={{ hash, title: 'Question created', tone: 'success' }} />, renderedComponent.container)
 		})
 
 		expect(within(document.body).getByText('Confirmed')).not.toBeNull()
-		expect(within(document.body).getByText('Question Created')).not.toBeNull()
+		expect(within(document.body).getByText('Question created')).not.toBeNull()
 	})
 
 	test('returns a failed transaction to its submission form after navigation', async () => {
 		const hash = '0xa234000000000000000000000000000000000000000000000000000000000000' as const
 		window.location.hash = '#/zoltar?zoltarView=create'
-		const renderedComponent = await renderIntoDocument(<GlobalTransactionDialog routeKey='zoltar:create' transaction={{ hash, title: 'Creating Question', tone: 'pending' }} />)
+		const renderedComponent = await renderIntoDocument(<GlobalTransactionDialog routeKey='zoltar:create' transaction={{ hash, title: 'Creating question', tone: 'pending' }} />)
 		trackRendered(renderedComponent)
 
 		window.location.hash = '#/security-pools?securityPoolsView=browse'
 		await act(() => {
-			render(<GlobalTransactionDialog routeKey='security-pools:browse' transaction={{ hash, title: 'Creating Question', tone: 'pending' }} />, renderedComponent.container)
+			render(<GlobalTransactionDialog routeKey='security-pools:browse' transaction={{ hash, title: 'Creating question', tone: 'pending' }} />, renderedComponent.container)
 		})
 		await act(() => {
-			render(<GlobalTransactionDialog routeKey='security-pools:browse' transaction={{ detail: 'Transaction reverted', hash, title: 'Creating Question', tone: 'error' }} />, renderedComponent.container)
+			render(<GlobalTransactionDialog routeKey='security-pools:browse' transaction={{ detail: 'Transaction reverted', hash, title: 'Creating question', tone: 'error' }} />, renderedComponent.container)
 		})
 
 		expect(within(document.body).getByRole('dialog', { name: 'Transaction status' })).not.toBeNull()
@@ -728,6 +731,6 @@ describe('GlobalTransactionDialog', () => {
 			fireEvent.click(within(document.body).getByRole('link', { name: 'Back to form' }))
 		})
 		expect(window.location.hash).toBe('#/zoltar?zoltarView=create')
-		expect(renderedComponent.container.textContent).toContain('Creating Question')
+		expect(renderedComponent.container.textContent).toContain('Creating question')
 	})
 })

@@ -1,5 +1,5 @@
 import { getAddress } from '@zoltar/bot-shared/ethereum'
-import { afterEach, describe, expect, test } from 'bun:test'
+import { afterEach, describe, expect, spyOn, test } from 'bun:test'
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import example from '../../config/operator.example.json'
@@ -596,7 +596,15 @@ describe('chaos operator runtime', () => {
 			},
 		})
 		using shutdown = createBotShutdownController()
-		await runChaosOperator({ path: join(directory, 'operator.json'), revision: 'test-revision', settings }, processLocks(), shutdown)
+		const lines: string[] = []
+		const output = spyOn(console, 'info').mockImplementation(line => lines.push(String(line)))
+		try {
+			await runChaosOperator({ path: join(directory, 'operator.json'), revision: 'test-revision', settings }, processLocks(), shutdown)
+		} finally {
+			output.mockRestore()
+		}
+		expect(lines.filter(line => line.includes('ProcessedMs='))).toHaveLength(1)
+		expect(lines.join('\n')).toContain('status=paused')
 		const durable = await loadDurableState(stateFile, settings.network.chainId)
 		expect(durable.scheduler.status).toBe('paused')
 		expect(durable.pendingTransactions).toHaveLength(0)

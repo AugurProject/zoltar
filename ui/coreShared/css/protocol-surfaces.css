@@ -667,13 +667,13 @@ strong.metric-value-danger {
 .global-transaction-dialog-nonblocking {
 	background: transparent;
 	pointer-events: none;
-	justify-items: end;
+	justify-items: center;
 	align-items: end;
 }
 
 .global-transaction-dialog-nonblocking .global-transaction-dialog {
 	pointer-events: auto;
-	width: min(35rem, 100%);
+	width: min(72rem, 100%);
 }
 
 main:has(.global-transaction-dialog-nonblocking) #app-content {
@@ -685,6 +685,8 @@ main:has(.global-transaction-dialog-nonblocking) #app-content {
 	align-items: center;
 	flex-wrap: wrap;
 	gap: 0.4rem;
+	min-width: 0;
+	max-width: 100%;
 	font-size: var(--font-label);
 }
 
@@ -755,52 +757,29 @@ main:has(.global-transaction-dialog-nonblocking) #app-content {
 .global-transaction-dialog-compact {
 	grid-template-columns: minmax(0, 1fr) auto;
 	align-items: start;
-	width: fit-content;
-	max-width: min(42rem, 100%);
-	padding: 0.4rem 0.65rem;
-	gap: 0.2rem;
+	padding: 0.85rem 1rem;
+	gap: 0.75rem;
 }
 
 .global-transaction-dialog-compact .global-transaction-notice-copy {
-	display: flex;
-	align-items: center;
-	flex-wrap: nowrap;
-	gap: 0 0.1rem;
+	display: grid;
+	gap: 0.5rem;
 }
 
 .global-transaction-dialog-compact .global-transaction-notice-header {
-	flex-wrap: nowrap;
-	gap: 0.55rem;
+	gap: 0.75rem;
 	min-height: var(--touch-target-min);
-	flex: 1;
 }
 
 .global-transaction-dialog-compact .global-transaction-notice-header strong {
-	white-space: nowrap;
-	font-size: var(--font-label);
-}
-
-.global-transaction-dialog-compact .badge {
-	padding-inline: 0.35rem;
+	flex: 1 1 18rem;
+	min-width: 0;
+	font-size: var(--font-body);
+	overflow-wrap: anywhere;
 }
 
 .global-transaction-dialog-compact .global-transaction-hash {
-	flex-wrap: nowrap;
-	white-space: nowrap;
-	font-size: var(--font-label);
-}
-
-.global-transaction-dialog-compact .global-transaction-hash .address-value {
-	white-space: nowrap;
-}
-
-.global-transaction-dialog-compact .global-transaction-hash a {
-	font-size: 0;
-}
-
-.global-transaction-dialog-compact .global-transaction-hash a::after {
-	content: "↗";
-	font-size: var(--font-label);
+	font-size: var(--font-caption);
 }
 
 .global-transaction-dialog-compact .global-transaction-actions {
@@ -815,49 +794,10 @@ main:has(.global-transaction-dialog-nonblocking) #app-content {
 	font-size: 1.2rem;
 }
 
-.global-transaction-dialog-nonblocking .global-transaction-dialog-error {
-	width: min(26rem, 100%);
-	grid-template-columns: minmax(0, 1fr);
-	gap: 0.2rem;
-}
-
-.global-transaction-dialog-error .global-transaction-notice-copy {
-	display: grid;
-	gap: 0.25rem;
-}
-
-.global-transaction-dialog-error .global-transaction-notice-header {
-	flex-wrap: wrap;
-}
-
-.global-transaction-dialog-error .global-transaction-actions {
-	justify-content: flex-end;
-}
-
-@media (min-width: 601px) {
-	.global-transaction-dialog-nonblocking .global-transaction-dialog-error {
-		width: min(18.5rem, 100%);
-	}
-}
-
 .global-transaction-dialog-compact .read-only-detail-accordion summary {
-	min-width: 1.5rem;
-	font-size: 0;
-	list-style: none;
-	text-align: center;
-}
-
-.global-transaction-dialog-compact .read-only-detail-accordion summary::after {
-	content: "⋯";
-	font-size: 1rem;
-}
-
-.global-transaction-dialog-compact .read-only-detail-accordion[open] {
-	flex-basis: 100%;
-}
-
-.global-transaction-dialog-compact:has(.read-only-detail-accordion[open]) .global-transaction-notice-copy {
-	flex-wrap: wrap;
+	min-height: var(--touch-target-min);
+	align-content: center;
+	font-size: var(--font-caption);
 }
 
 @media (max-width: 600px) {
@@ -888,40 +828,12 @@ main:has(.global-transaction-dialog-nonblocking) #app-content {
 		padding-top: 0.5rem;
 	}
 
-	.global-transaction-dialog-compact {
-		grid-template-columns: minmax(0, 1fr) auto;
-		padding: 0.35rem 0.5rem;
-	}
-
-	.global-transaction-dialog-error {
-		grid-template-columns: minmax(0, 1fr);
-	}
-
-	.global-transaction-dialog-backdrop:has(.global-transaction-dialog-compact) {
-		padding-inline: 0;
-	}
-
-	.global-transaction-dialog-success .badge {
-		padding-inline: 0.45rem;
-		font-size: 0;
-	}
-
-	.global-transaction-dialog-success .badge::after {
-		content: "✓";
-		font-size: var(--font-label);
-	}
-
-	.global-transaction-dialog-compact .global-transaction-actions {
-		padding-top: 0;
-	}
-
 	.global-transaction-dialog-compact .global-transaction-notice-header {
-		gap: 0.2rem;
+		gap: 0.5rem;
 	}
 
 	.global-transaction-dialog-compact .global-transaction-notice-header strong {
-		overflow: hidden;
-		text-overflow: ellipsis;
+		flex-basis: calc(100% - 7rem);
 	}
 }
 
@@ -968,8 +880,9 @@ main:has(.global-transaction-dialog-nonblocking) #app-content {
 }
 
 .global-transaction-notice-recovery {
-	font-size: var(--font-label);
+	font-size: var(--font-body);
 	line-height: var(--line-height-snug);
+	overflow-wrap: anywhere;
 }
 
 .global-transaction-notice-rows {
@@ -1570,6 +1483,11 @@ main:has(.global-transaction-dialog-nonblocking) #app-content {
 	background: var(--control-bg);
 }
 
+.field-inline > button.field-inline-action:disabled {
+	border: 1px dashed var(--disabled-control-border);
+	background: var(--disabled-control-bg);
+}
+
 .approval-amount-field {
 	display: flex;
 	flex-wrap: wrap;
@@ -1807,13 +1725,12 @@ main:has(.global-transaction-dialog-nonblocking) #app-content {
 	color: var(--text);
 }
 
-/* Locked text controls stay readable but visibly differ from editable ones, matching disabled buttons. */
+/* Locked text controls keep the normal field frame and only dim their text, so a locked value still reads as a field rather than a disabled button. */
 .field input:disabled:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
 .field select:disabled,
 .field textarea:disabled {
-	border-color: var(--disabled-control-border);
-	background-color: var(--disabled-control-bg);
 	color: var(--disabled-control-text);
+	-webkit-text-fill-color: var(--disabled-control-text);
 	cursor: not-allowed;
 }
 
@@ -2194,44 +2111,6 @@ main:has(.global-transaction-dialog-nonblocking) #app-content {
 
 .transaction-plan-action {
 	min-width: 0;
-}
-
-.transaction-completed-steps {
-	display: grid;
-	gap: 0;
-	margin-bottom: 0.5rem;
-}
-
-.transaction-step-completed {
-	display: flex;
-	flex-wrap: wrap;
-	align-items: baseline;
-	justify-content: space-between;
-	gap: 0.25rem 0.75rem;
-	min-height: 2rem;
-	padding: 0.25rem 0;
-	border-bottom: 1px solid var(--divider-subtle);
-	color: var(--muted);
-	font-size: var(--font-label);
-}
-
-.transaction-step-completed .read-only-detail-accordion {
-	border: 0;
-	padding: 0;
-	font-size: var(--font-label);
-}
-
-.transaction-step-completed .read-only-detail-accordion summary {
-	padding: 0;
-}
-
-.transaction-step-completed .read-only-detail-accordion[open] {
-	flex-basis: 100%;
-	min-width: 0;
-}
-
-.transaction-step-completed .read-only-detail-accordion-content {
-	padding: 0.25rem 0;
 }
 
 .transaction-plan-action .field-inline-input {

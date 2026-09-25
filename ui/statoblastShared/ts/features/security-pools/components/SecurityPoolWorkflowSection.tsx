@@ -48,7 +48,7 @@ import { SecurityPoolObjectHeader, SecurityPoolReferenceDetails } from './Securi
 import { PoolSelectionControl } from './PoolSelectionControl.js'
 import { PoolAttention, PoolWorkspaceNavigation } from './PoolWorkspaceNavigation.js'
 import * as workspaceCopy from '../../../copy/poolWorkspace.js'
-import { PRICE_ORACLE_HEADING_ID, SecurityPoolRequestPriceModal, type RequestPriceReview } from './SecurityPoolOracleSections.js'
+import { createRequestPriceReview, PRICE_ORACLE_HEADING_ID, SecurityPoolRequestPriceModal, type RequestPriceReview } from './SecurityPoolOracleSections.js'
 import { SecurityPoolUniverseMismatchNotice, SecurityPoolWorkflowEmptyState } from './SecurityPoolWorkflowEmptyState.js'
 import { SelectedPoolForkWorkflowPanel, SelectedPoolPriceOraclePanel, SelectedPoolReportingPanel, SelectedPoolStagedOperationsPanel, SelectedPoolTradingPanel } from './SecurityPoolWorkflowTabPanels.js'
 import { SecurityPoolVaultWorkspace } from './SecurityPoolVaultWorkspace.js'
@@ -424,8 +424,13 @@ export function SecurityPoolWorkflowSection(props: SecurityPoolWorkflowSectionPr
 				<ErrorNotice message={securityPoolOverviewError} />
 				{selectedPool !== undefined ? (
 					<PoolAttention
-						oracleUnavailable={!isPoolQuestionFinalized(currentReportingDetails) && showSelectedPoolWorkflowDetails && (currentPoolOraclePriceUsable === false || currentPoolOracleManagerError !== undefined)}
-						pendingReportId={currentPoolOracleManagerDetails?.pendingReportId}
+						oracle={
+							showSelectedPoolWorkflowDetails || (currentPoolOracleManagerDetails?.pendingReportId ?? 0n) > 0n
+								? { ...currentPoolOracleManagerDetails, currentTimestamp, lastPrice: currentPoolOraclePrice, lastSettlementTimestamp: currentPoolOracleSettlementTimestamp ?? 0n, requestDisabledReason: requestPriceOpenGuardMessage, requestPending: poolOracleActiveAction === 'requestPrice' }
+								: undefined
+						}
+						needsPrice={!isPoolQuestionFinalized(currentReportingDetails) && showSelectedPoolWorkflowDetails && selectedPoolStateModel.actions.requestPrice.enabled && (currentPoolOraclePriceUsable === false || currentPoolOracleManagerError !== undefined)}
+						onRequestPrice={() => loadedSelectedPool !== undefined && requestPriceTransactionValueAttoEth !== undefined && setRequestPriceReview(createRequestPriceReview(loadedSelectedPool, requestPriceTransactionValueAttoEth))}
 						stagedOperationCount={showSelectedPoolWorkflowDetails ? activeStagedOperationCount : 0n}
 						forkAvailable={showSelectedPoolWorkflowDetails && selectedPoolHasForkActivity}
 						onViewReport={onViewPendingReport}
@@ -494,8 +499,7 @@ export function SecurityPoolWorkflowSection(props: SecurityPoolWorkflowSectionPr
 										}}
 										requestReason={requestPriceOpenGuardMessage}
 										onRequest={() => {
-											if (loadedSelectedPool !== undefined && requestPriceTransactionValueAttoEth !== undefined)
-												setRequestPriceReview({ requestValueAttoEth: requestPriceTransactionValueAttoEth, managerAddress: loadedSelectedPool.managerAddress, securityPoolAddress: loadedSelectedPool.securityPoolAddress, universeId: loadedSelectedPool.universeId })
+											if (loadedSelectedPool !== undefined && requestPriceTransactionValueAttoEth !== undefined) setRequestPriceReview(createRequestPriceReview(loadedSelectedPool, requestPriceTransactionValueAttoEth))
 										}}
 									/>
 								}
@@ -580,7 +584,7 @@ export function SecurityPoolWorkflowSection(props: SecurityPoolWorkflowSectionPr
 				confirmationGuardMessage={requestPriceConfirmationGuardMessage}
 				getReturnFocusTarget={() => {
 					const panel = document.getElementById(SELECTED_POOL_WORKFLOW_PANEL_ID)
-					return panel?.querySelector<HTMLElement>('.oracle-actions .tx-action-button:not(:disabled)') ?? panel?.querySelector<HTMLElement>('.workflow-metric-grid button.link') ?? document.getElementById(PRICE_ORACLE_HEADING_ID)
+					return panel?.querySelector<HTMLElement>('.oracle-actions .tx-action-button:not(:disabled)') ?? panel?.querySelector<HTMLElement>('.workflow-metric-grid button.link') ?? document.getElementById(PRICE_ORACLE_HEADING_ID) ?? document.querySelector<HTMLElement>('.pool-oracle-status button:not(:disabled)')
 				}}
 				onClose={() => setRequestPriceReview(undefined)}
 				onConfirm={(review, signal) => onRequestPoolPrice(review.managerAddress, review.securityPoolAddress, review.requestValueAttoEth, review.universeId, review.proposedRepPerEthPrice, signal)}

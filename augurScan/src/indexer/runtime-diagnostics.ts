@@ -36,28 +36,17 @@ export const indexingCompletion = (configuredStartBlock: bigint, indexedBlock: b
 	}
 }
 
-const compactIndexerDuration = (seconds: number): string => {
-	const rounded = Math.max(1, Math.ceil(seconds))
-	if (rounded < 60) return `${rounded}s`
-	if (rounded < 3_600) return `${Math.floor(rounded / 60)}m ${rounded % 60}s`
-	const totalHours = Math.ceil(rounded / 3_600)
-	if (totalHours < 24) {
-		const totalMinutes = Math.ceil(rounded / 60)
-		const minutes = totalMinutes % 60
-		return `${Math.floor(totalMinutes / 60)}h${minutes === 0 ? '' : ` ${minutes}m`}`
-	}
-	const hours = totalHours % 24
-	return `${Math.floor(totalHours / 24)}d${hours === 0 ? '' : ` ${hours}h`}`
-}
-
 export const indexerWaitingMessage = (networkId: string, configuredStartBlock: bigint, observedHead: bigint): string => `[${networkId}] indexer state: live; observed head #${observedHead}; 100.00% complete; caught up; waiting for configured start block #${configuredStartBlock}`
 
-export const indexerProgressMessage = (networkId: string, startBlock: bigint, endBlock: bigint, observedHead: bigint, configuredStartBlock: bigint, blocksPerSecond?: number): string => {
-	const state = endBlock >= observedHead ? 'live' : 'backfilling'
-	const indexed = startBlock === endBlock ? `indexed block #${endBlock}` : `indexed blocks #${startBlock}–#${endBlock}`
+export const indexerProgressDetails = (startBlock: bigint, endBlock: bigint, observedHead: bigint, configuredStartBlock: bigint, blocksPerSecond?: number) => {
 	const completion = indexingCompletion(configuredStartBlock, endBlock, observedHead)
-	const progress = state === 'live' ? 'caught up' : `${completion.remainingBlocks} blocks behind; ${blocksPerSecond === undefined ? 'estimating ETA' : `ETA ${compactIndexerDuration(bigintToSafeNumber(completion.remainingBlocks, 'Remaining block count') / blocksPerSecond)}`}`
-	return `[${networkId}] indexer state: ${state}; ${indexed}; observed head #${observedHead}; ${completion.percentage}% complete; ${progress}`
+	const etaSeconds = blocksPerSecond === undefined || blocksPerSecond <= 0 ? 'unknown' : Math.ceil(bigintToSafeNumber(completion.remainingBlocks, 'Remaining block count') / blocksPerSecond)
+	return {
+		fromBlock: startBlock,
+		blocksScanned: endBlock - startBlock + 1n,
+		progress: `${completion.percentage}%`,
+		etaSeconds: completion.remainingBlocks === 0n ? 0 : etaSeconds,
+	}
 }
 
 export const safeIndexerFailure = (error: unknown): string => {

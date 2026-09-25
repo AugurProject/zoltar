@@ -57,6 +57,11 @@
 			"types": "./ts/evm/carryProof.ts",
 			"bun": "./ts/evm/carryProof.ts",
 			"default": "./js/evm/carryProof.js"
+		},
+		"./monitoring/scanStatus": {
+			"types": "./ts/monitoring/scanStatus.ts",
+			"bun": "./ts/monitoring/scanStatus.ts",
+			"default": "./js/monitoring/scanStatus.js"
 		}
 	},
 	"files": [

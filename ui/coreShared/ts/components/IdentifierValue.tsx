@@ -1,20 +1,23 @@
+import { abbreviateAddress } from '../lib/address.js'
 import * as commonCopy from '../copy/common.js'
 import { useCopyToClipboard } from '../hooks/useCopyToClipboard.js'
 import { CopyErrorMessage } from './CopyErrorMessage.js'
 
 type IdentifierValueProps = {
 	className?: string
+	abbreviated?: boolean
 	value: string
 }
 
-export function IdentifierValue({ className = '', value }: IdentifierValueProps) {
+export function IdentifierValue({ className = '', value, abbreviated = false }: IdentifierValueProps) {
 	const { copied, copyError, copyErrorId, copyText } = useCopyToClipboard(value)
+	const displayValue = abbreviated ? abbreviateAddress(value) : value
 	const classes = ['identifier-value', 'copyable', className].filter(Boolean).join(' ')
 
 	return (
 		<span className='copy-value-wrap'>
 			<button className={classes} type='button' title={value} aria-label={commonCopy.formatCopyIdentifierValue(value)} aria-describedby={copyError.value === undefined ? undefined : copyErrorId} onClick={() => copyText(value)}>
-				{copied.value ? commonCopy.copied : value}
+				{copied.value ? commonCopy.copied : displayValue}
 			</button>
 			<CopyErrorMessage id={copyErrorId} manualValue={value} message={copyError.value} />
 		</span>

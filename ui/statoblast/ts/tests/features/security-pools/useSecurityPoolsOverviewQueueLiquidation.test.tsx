@@ -601,7 +601,7 @@ describe('useSecurityPoolsOverview queueLiquidation', () => {
 		expect(requireHookState(hookState).securityPoolOverviewFeedback?.status.detail).toBe('The target vault would fall below the minimum security-bond debt after liquidation.')
 		expect(presentedTransactions).toHaveLength(1)
 		expect(presentedTransactions[0]?.tone).toBe('error')
-		expect(presentedTransactions[0]?.title).toBe('Liquidation Failed')
+		expect(presentedTransactions[0]?.title).toBe('Liquidation failed')
 		expect(presentedTransactions[0]?.detail).toBe('The target vault would fall below the minimum security-bond debt after liquidation.')
 	})
 
