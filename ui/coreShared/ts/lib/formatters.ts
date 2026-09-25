@@ -181,7 +181,7 @@ function formatCompactScaledValue(value: bigint, units: number, decimals: number
 	const absoluteValue = isNegative ? -value : value
 	const unitBase = 10n ** BigInt(units)
 	const wholeUnits = absoluteValue / unitBase
-	let suffixIndex = Math.floor((wholeUnits.toString().length - 1) / 3) - 1
+	let suffixIndex = Math.max(Math.floor((wholeUnits.toString().length - 1) / 3) - 1, 0)
 
 	while (suffixIndex < SI_SUFFIXES.length) {
 		const divisor = 1000n ** BigInt(suffixIndex + 1) * unitBase
@@ -212,13 +212,16 @@ export function formatAmount(value: bigint, { decimals = 2, notation = 'standard
 	const absoluteValue = value < 0n ? -value : value
 	const base = 10n ** BigInt(units)
 
-	if (notation === 'compact' && absoluteValue >= COMPACT_NOTATION_THRESHOLD_UNITS * base) {
+	const effectiveDecimals = getEffectiveRoundedDecimals(absoluteValue, units, decimals)
+	const scale = 10n ** BigInt(effectiveDecimals)
+	// Decide on the rounded value so 999.996 reads `≈ 1k`, never `≈ 1 000.00`.
+	const roundsToCompactThreshold = (absoluteValue * scale + base / 2n) / base >= COMPACT_NOTATION_THRESHOLD_UNITS * scale
+	if (notation === 'compact' && roundsToCompactThreshold) {
 		const compact = formatCompactScaledValue(value, units, COMPACT_NOTATION_DECIMALS)
 		return { approximate: compact.approximate, exact, text: compact.text }
 	}
 
-	const effectiveDecimals = getEffectiveRoundedDecimals(absoluteValue, units, decimals)
-	return { approximate: (absoluteValue * 10n ** BigInt(effectiveDecimals)) % base !== 0n, exact, text: formatRoundedCurrencyBalance(value, units, decimals) }
+	return { approximate: (absoluteValue * scale) % base !== 0n, exact, text: formatRoundedCurrencyBalance(value, units, decimals) }
 }
 
 /** Marks rounded text with `≈ ` only when rounding dropped digits. */

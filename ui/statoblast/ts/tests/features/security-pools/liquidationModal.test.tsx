@@ -1986,7 +1986,7 @@ describe('LiquidationModal', () => {
 		const documentQueries = within(document.body)
 		expect(documentQueries.getByText('Pending')).not.toBeNull()
 		expect(documentQueries.getByText('275760-09-13 00:00:00 UTC')).not.toBeNull()
-		expect(documentQueries.getByText('12345678901234567890.1234× protocol minimum')).not.toBeNull()
+		expect(documentQueries.getByText('12 345 678 901 234 567 890.1234× protocol minimum')).not.toBeNull()
 	})
 
 	test('shows expired approval status from the shared chain timestamp', async () => {

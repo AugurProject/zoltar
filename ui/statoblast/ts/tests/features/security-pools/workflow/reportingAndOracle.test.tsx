@@ -380,7 +380,7 @@ describe('SecurityPoolWorkflowSection: reporting and oracle', () => {
 					selectedPoolView: 'staged-operations',
 					poolOracleManagerDetails: createOracleManagerDetails({
 						managerAddress: zeroAddress,
-						pendingOperation: { amount: 20_000n, operator: zeroAddress, operation: 'adjustVaultBackingFactor', operationId: 7n, targetVault: zeroAddress },
+						pendingOperation: { amount: 15_000n, operator: zeroAddress, operation: 'adjustVaultBackingFactor', operationId: 7n, targetVault: zeroAddress },
 						pendingOperationSlotId: 7n,
 						pendingSettlementOperationIds: [7n],
 					}),
@@ -391,7 +391,7 @@ describe('SecurityPoolWorkflowSection: reporting and oracle', () => {
 		const page = within(document.body)
 		expect(page.getByText('Target backing ratio')).not.toBeNull()
 		expect(page.getByText('Adjust backing ratio')).not.toBeNull()
-		expect(page.getByText('Target backing ratio').parentElement?.textContent).toMatch(/2(?:\.0+)?\s*×/)
+		expect(page.getByText('Target backing ratio').parentElement?.querySelector('.decision-amount')?.textContent).toBe('1.5×')
 	})
 
 	test('lists staged operations in the staged operations tab', async () => {

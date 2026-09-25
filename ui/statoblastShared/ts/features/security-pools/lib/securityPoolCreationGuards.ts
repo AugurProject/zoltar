@@ -3,14 +3,17 @@ import { MAX_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS } from '@zoltar
 import type { MarketDetails } from '@zoltar/ui-core-shared/types/contracts.js'
 import { getWalletActiveAppChainGuardState } from '@zoltar/ui-core-shared/transactions/actionGuards.js'
 import { tryParseDecimalInput } from '@zoltar/ui-core-shared/forms/decimal.js'
+import { formatMultiplier } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { tryParseStatoblastSecurityMultiplierBpsInput } from '../../markets/lib/marketForm.js'
+
+const MINIMUM_STATOBLAST_SECURITY_MULTIPLIER_BPS = 10_002n
 
 export function getStatoblastSecurityMultiplierValidationMessage(statoblastSecurityMultiplier: string) {
 	const input = statoblastSecurityMultiplier.trim()
-	if (input === '') return 'Enter a Statoblast security multiplier of at least 1.0002x.'
+	if (input === '') return `Enter a Statoblast security multiplier of at least ${formatMultiplier(MINIMUM_STATOBLAST_SECURITY_MULTIPLIER_BPS, 4)}.`
 	const statoblastSecurityMultiplierBps = tryParseStatoblastSecurityMultiplierBpsInput(input)
-	if (statoblastSecurityMultiplierBps === undefined) return 'Enter a multiplier in x with at most 4 decimal places.'
-	if (statoblastSecurityMultiplierBps <= 10_001n) return 'Statoblast security multiplier must be at least 1.0002x.'
+	if (statoblastSecurityMultiplierBps === undefined) return 'Enter a multiplier with at most 4 decimal places.'
+	if (statoblastSecurityMultiplierBps < MINIMUM_STATOBLAST_SECURITY_MULTIPLIER_BPS) return `Statoblast security multiplier must be at least ${formatMultiplier(MINIMUM_STATOBLAST_SECURITY_MULTIPLIER_BPS, 4)}.`
 	return undefined
 }
 

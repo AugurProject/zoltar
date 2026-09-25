@@ -75,6 +75,11 @@ void describe('formatting helpers', () => {
 			expect(compact(1234000000000000000000000000n, 0)).toBe('1.2E27')
 		})
 
+		void test('switches to compact notation when rounding carries into the threshold or the next suffix', () => {
+			expect(formatAmount(999_996n * 10n ** 15n, { notation: 'compact' })).toEqual({ approximate: true, exact: '999.996', text: '1k' })
+			expect(formatAmount(999_950n * 10n ** 18n, { notation: 'compact' })).toEqual({ approximate: true, exact: '999 950', text: '1M' })
+		})
+
 		void test('keeps the standard form below one thousand', () => {
 			expect(formatAmount(99999n * 10n ** 16n, { notation: 'compact' })).toEqual({ approximate: false, exact: '999.99', text: '999.99' })
 		})
