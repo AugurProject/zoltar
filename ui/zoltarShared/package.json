@@ -110,6 +110,10 @@
 			"bun": "./ts/features/universes/hooks/useZoltarUniverse.ts",
 			"default": "./js/features/universes/hooks/useZoltarUniverse.js"
 		},
+		"./features/universes/lib/forkChecklist.js": {
+			"bun": "./ts/features/universes/lib/forkChecklist.ts",
+			"default": "./js/features/universes/lib/forkChecklist.js"
+		},
 		"./features/universes/lib/universe.js": {
 			"bun": "./ts/features/universes/lib/universe.ts",
 			"default": "./js/features/universes/lib/universe.js"

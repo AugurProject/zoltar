@@ -16,6 +16,8 @@ import { SectionBlock } from '@zoltar/ui-core-shared/components/SectionBlock.js'
 import type { MarketRouteContentProps } from '../../types.js'
 import { QUESTION_PAGE_SIZE, formatPaginationSummary, getHasNextPaginationPage, getPaginationPageCount, resolvePaginationPageIndex } from '@zoltar/ui-core-shared/lib/pagination.js'
 import { getMarketTypeLabel } from '@zoltar/ui-core-shared/lib/marketType.js'
+import { useChainTimestamp } from '@zoltar/ui-core-shared/wallet/chainTimestamp.js'
+import { resolveUseForForkAction } from '../../universes/lib/forkChecklist.js'
 
 type QuestionsViewProps = Pick<MarketRouteContentProps, 'loadingZoltarQuestions' | 'onActiveViewChange' | 'onLoadZoltarQuestionPage' | 'onZoltarForkQuestionIdChange' | 'zoltarQuestionPage' | 'zoltarQuestionsError'> & {
 	canFork: boolean
@@ -24,6 +26,7 @@ type QuestionsViewProps = Pick<MarketRouteContentProps, 'loadingZoltarQuestions'
 }
 
 export function QuestionsView({ canFork, hasForked, loadingZoltarQuestions, onActiveViewChange, onLoadZoltarQuestionPage, onZoltarForkQuestionIdChange, requestContextKey, zoltarQuestionPage, zoltarQuestionsError }: QuestionsViewProps) {
+	const currentTimestamp = useChainTimestamp()
 	const [pageIndex, setPageIndex] = useState(0)
 	const [retryRequestNonce, setRetryRequestNonce] = useState(0)
 	const [searchText, setSearchText] = useState('')
@@ -96,16 +99,13 @@ export function QuestionsView({ canFork, hasForked, loadingZoltarQuestions, onAc
 							className='directory-record'
 							actions={
 								canFork ? (
-									<button
-										className='secondary'
-										disabled={hasForked}
+									<UseForForkButton
+										action={resolveUseForForkAction(hasForked, question, currentTimestamp)}
 										onClick={() => {
 											onZoltarForkQuestionIdChange(question.questionId)
 											onActiveViewChange('universes')
 										}}
-									>
-										{hasForked ? marketCopy.alreadyForked : marketCopy.useForFork}
-									</button>
+									/>
 								) : undefined
 							}
 							badge={<Badge tone='muted'>{getMarketTypeLabel(question.marketType)}</Badge>}
@@ -124,5 +124,13 @@ export function QuestionsView({ canFork, hasForked, loadingZoltarQuestions, onAc
 				</div>
 			</SectionBlock>
 		</div>
+	)
+}
+
+function UseForForkButton({ action, onClick }: { action: ReturnType<typeof resolveUseForForkAction>; onClick: () => void }) {
+	return (
+		<button className='secondary fork-shortcut' disabled={action.disabled} onClick={onClick} type='button'>
+			{action.label}
+		</button>
 	)
 }

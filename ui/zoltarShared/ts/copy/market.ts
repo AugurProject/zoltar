@@ -54,6 +54,10 @@ export const endedQuestionWarning = 'This question will be created already ended
 export const questionTitlePlaceholder = 'Will event X happen?'
 export const title = 'Title'
 export const useForFork = 'Use for fork'
+export const forkAfterEnd = 'Fork after it ends'
+export const forkEligibilityUnknown = 'End time unknown'
+export const formatForkEligibilityUnknownLabel = (questionTitle: string, questionId: string) => `End time unknown, cannot use for fork yet: ${questionTitle} (${questionId})`
+export const formatForkAfterEndLabel = (questionTitle: string, questionId: string) => `Fork after it ends: ${questionTitle} (${questionId})`
 export const formatUseForForkLabel = (questionTitle: string, questionId: string) => `Use for fork: ${questionTitle} (${questionId})`
 export const questionCreationWalletRequired = 'Connect a wallet before creating a question.'
 export const binary = 'Binary'

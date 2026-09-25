@@ -8,6 +8,7 @@ import { expectTransactionButtonDisabled } from '@zoltar/ui-core-shared/tests/te
 import { GlobalTransactionPresentationProvider } from '@zoltar/ui-core-shared/components/GlobalTransactionPresentationContext.js'
 import { GlobalTransactionDialog } from '@zoltar/ui-core-shared/app/components/GlobalTransactionDialog.js'
 import type { MarketCreationResult, MarketDetails } from '@zoltar/ui-core-shared/types/contracts.js'
+import { ChainTimestampContext } from '@zoltar/ui-core-shared/wallet/chainTimestamp.js'
 import { QuestionCreateSection } from '@zoltar/ui-zoltar-shared/features/questions/components/QuestionCreateSection.js'
 import type { MarketFormState } from '@zoltar/ui-zoltar-shared/types/app.js'
 import { describe, expect, test } from 'bun:test'
@@ -188,25 +189,27 @@ describe('QuestionCreateSection', () => {
 		await renderedComponent.cleanup()
 		cleanupRenderedComponent = undefined
 		const successComponent = await renderIntoDocument(
-			<QuestionCreateSection
-				accountAddress={zeroAddress}
-				canUseForFork={true}
-				hasForked={false}
-				isOnActiveAppChain={true}
-				loadingZoltarQuestions={false}
-				onCreateQuestion={() => undefined}
-				onOpenForkTab={() => openedViews.push('fork')}
-				onQuestionFormChange={() => undefined}
-				onResetQuestion={() => {
-					resetCount += 1
-				}}
-				onUseQuestionForFork={questionId => selectedQuestionIds.push(questionId)}
-				questionCreating={false}
-				questionError={undefined}
-				questionForm={createQuestionForm()}
-				questionResult={result}
-				zoltarQuestions={[question]}
-			/>,
+			<ChainTimestampContext.Provider value={question.endTime}>
+				<QuestionCreateSection
+					accountAddress={zeroAddress}
+					canUseForFork={true}
+					hasForked={false}
+					isOnActiveAppChain={true}
+					loadingZoltarQuestions={false}
+					onCreateQuestion={() => undefined}
+					onOpenForkTab={() => openedViews.push('fork')}
+					onQuestionFormChange={() => undefined}
+					onResetQuestion={() => {
+						resetCount += 1
+					}}
+					onUseQuestionForFork={questionId => selectedQuestionIds.push(questionId)}
+					questionCreating={false}
+					questionError={undefined}
+					questionForm={createQuestionForm()}
+					questionResult={result}
+					zoltarQuestions={[question]}
+				/>
+			</ChainTimestampContext.Provider>,
 		)
 		cleanupRenderedComponent = successComponent.cleanup
 		expect(document.body.querySelector('.transaction-hash-link')).toBeNull()
@@ -218,6 +221,70 @@ describe('QuestionCreateSection', () => {
 		expect(openedViews).toEqual(['fork'])
 		expect(resetCount).toBe(1)
 		expect(document.body.textContent).not.toContain('Security Pool')
+	})
+
+	test('keeps the post-create fork handoff disabled until the question ends', async () => {
+		const selectedQuestionIds: string[] = []
+		const result: MarketCreationResult = { createQuestionHash: `0x${'1'.repeat(64)}`, marketType: 'binary', questionId: question.questionId }
+		const renderedComponent = await renderIntoDocument(
+			<ChainTimestampContext.Provider value={question.endTime - 1n}>
+				<QuestionCreateSection
+					accountAddress={zeroAddress}
+					canUseForFork={true}
+					hasForked={false}
+					isOnActiveAppChain={true}
+					loadingZoltarQuestions={false}
+					onCreateQuestion={() => undefined}
+					onOpenForkTab={() => undefined}
+					onQuestionFormChange={() => undefined}
+					onResetQuestion={() => undefined}
+					onUseQuestionForFork={questionId => selectedQuestionIds.push(questionId)}
+					questionCreating={false}
+					questionError={undefined}
+					questionForm={createQuestionForm()}
+					questionResult={result}
+					zoltarQuestions={[question]}
+				/>
+			</ChainTimestampContext.Provider>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		expect(documentQueries.queryByRole('button', { name: `Use for fork: ${question.title} (${question.questionId})` })).toBeNull()
+		const pendingButton = documentQueries.getByRole('button', { name: `Fork after it ends: ${question.title} (${question.questionId})` })
+		expect(pendingButton.hasAttribute('disabled')).toBe(true)
+		await act(() => fireEvent.click(pendingButton))
+		expect(selectedQuestionIds).toEqual([])
+	})
+
+	test('explains a disabled fork handoff while the created question is not loaded', async () => {
+		const result: MarketCreationResult = { createQuestionHash: `0x${'1'.repeat(64)}`, marketType: 'binary', questionId: question.questionId }
+		const renderedComponent = await renderIntoDocument(
+			<ChainTimestampContext.Provider value={question.endTime}>
+				<QuestionCreateSection
+					accountAddress={zeroAddress}
+					canUseForFork={true}
+					hasForked={false}
+					isOnActiveAppChain={true}
+					loadingZoltarQuestions={false}
+					onCreateQuestion={() => undefined}
+					onOpenForkTab={() => undefined}
+					onQuestionFormChange={() => undefined}
+					onResetQuestion={() => undefined}
+					onUseQuestionForFork={() => undefined}
+					questionCreating={false}
+					questionError={undefined}
+					questionForm={createQuestionForm()}
+					questionResult={result}
+					zoltarQuestions={[]}
+				/>
+			</ChainTimestampContext.Provider>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const button = within(document.body).getByRole('button', { name: `End time unknown, cannot use for fork yet: Question (${question.questionId})` })
+		expect(button.hasAttribute('disabled')).toBe(true)
+		expect(button.textContent).toBe('End time unknown')
 	})
 
 	test('omits the post-create fork handoff when no universe is available', async () => {

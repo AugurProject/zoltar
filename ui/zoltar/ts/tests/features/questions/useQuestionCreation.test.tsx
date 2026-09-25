@@ -150,13 +150,13 @@ describe('useQuestionCreation', () => {
 		}
 	}
 
-	test('records a successful creation, selects it for a fork, and refreshes state', async () => {
+	test('records a successful creation without prefilling the fork form, and refreshes state', async () => {
 		const harness = await renderHook()
 		await act(async () => await harness.hookState().createQuestion())
 		expect(harness.createQuestion).toHaveBeenCalledTimes(1)
 		expect(harness.hookState().questionResult).toEqual(CREATION_RESULT)
 		expect(harness.hookState().questionFeedback?.status.tone).toBe('success')
-		expect(harness.setZoltarForkQuestionId).toHaveBeenCalledWith(QUESTION_ID)
+		expect(harness.setZoltarForkQuestionId).not.toHaveBeenCalled()
 		expect(harness.refreshState).toHaveBeenCalledTimes(1)
 		expect(harness.loadZoltarQuestions).toHaveBeenCalledTimes(1)
 		expect(harness.onTransactionPresented).toHaveBeenCalledTimes(1)

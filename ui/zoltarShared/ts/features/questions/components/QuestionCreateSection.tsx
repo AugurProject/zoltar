@@ -27,6 +27,7 @@ import { ScalarCreatePreview, type ScalarCreatePreviewDetails } from './ScalarCr
 import { getWrongNetworkReason } from '@zoltar/ui-core-shared/wallet/network.js'
 import { tryParseTimestampInput } from '@zoltar/ui-core-shared/forms/formInputs.js'
 import type { ComponentChildren } from 'preact'
+import { resolveUseForForkAction } from '../../universes/lib/forkChecklist.js'
 
 const MARKET_TYPE_OPTIONS: EnumDropdownOption<MarketFormState['marketType']>[] = [
 	{ value: 'binary', label: marketCopy.binary },
@@ -143,6 +144,7 @@ export function QuestionCreateSection({
 	const scalarInputsValid = questionFormValidation.fieldErrors.scalarIncrement === undefined && questionFormValidation.fieldErrors.scalarMax === undefined && questionFormValidation.fieldErrors.scalarMin === undefined
 	const scalarCreatePreviewDetails = getScalarCreatePreviewDetails(questionForm, scalarInputsValid)
 	const selectedQuestionTitle = selectedQuestionDetails === undefined ? commonCopy.question : getQuestionTitle(selectedQuestionDetails)
+	const useForForkAction = resolveUseForForkAction(hasForked, selectedQuestionDetails, currentTimestamp)
 	const draftOutcomeItems = getDraftOutcomeLabels(questionForm, questionFormValidation.fieldErrors.categoricalOutcomes).map((outcome, outcomeIndex) => ({
 		key: `${outcomeIndex}-${outcome}`,
 		label: outcome,
@@ -212,16 +214,16 @@ export function QuestionCreateSection({
 						<div className='actions'>
 							{canUseForFork ? (
 								<button
-									aria-label={hasForked ? marketCopy.formatAlreadyForkedLabel(selectedQuestionTitle, questionResult.questionId) : marketCopy.formatUseForForkLabel(selectedQuestionTitle, questionResult.questionId)}
+									aria-label={formatUseForForkAriaLabel(useForForkAction.kind, selectedQuestionTitle, questionResult.questionId)}
 									className='secondary'
-									disabled={hasForked}
+									disabled={useForForkAction.disabled}
 									onClick={() => {
-										if (hasForked) return
+										if (useForForkAction.disabled) return
 										onUseQuestionForFork(questionResult.questionId)
 										onOpenForkTab()
 									}}
 								>
-									{hasForked ? marketCopy.alreadyForked : marketCopy.useForFork}
+									{useForForkAction.label}
 								</button>
 							) : undefined}
 							{renderResultActions?.({ marketType: questionResult.marketType, questionId: questionResult.questionId, questionTitle: selectedQuestionTitle })}
@@ -466,4 +468,19 @@ export function QuestionCreateSection({
 			{questionResult === undefined ? undefined : <ErrorNotice message={visibleQuestionError} />}
 		</>
 	)
+}
+
+function formatUseForForkAriaLabel(kind: ReturnType<typeof resolveUseForForkAction>['kind'], questionTitle: string, questionId: string) {
+	switch (kind) {
+		case 'forked':
+			return marketCopy.formatAlreadyForkedLabel(questionTitle, questionId)
+		case 'notEnded':
+			return marketCopy.formatForkAfterEndLabel(questionTitle, questionId)
+		case 'unknown':
+			return marketCopy.formatForkEligibilityUnknownLabel(questionTitle, questionId)
+		case 'available':
+			return marketCopy.formatUseForForkLabel(questionTitle, questionId)
+		default:
+			return assertNever(kind)
+	}
 }

@@ -28,6 +28,7 @@ export function ZoltarSection({
 	onForkZoltar,
 	onLoadZoltarQuestion,
 	onLoadZoltarQuestionPage,
+	onLoadZoltarQuestions,
 	onRetryMigrationBalances,
 	onMigrateInternalRep,
 	onQuestionFormChange,
@@ -145,6 +146,7 @@ export function ZoltarSection({
 						loadingZoltarQuestions={loadingZoltarQuestions}
 						onApproveZoltarForkRep={amount => onApproveZoltarForkRep(amount)}
 						onForkZoltar={onForkZoltar}
+						onLoadZoltarQuestions={onLoadZoltarQuestions}
 						onRetryZoltarQuestion={zoltarForkQuestionId.trim() === '' ? undefined : () => void onLoadZoltarQuestion(zoltarForkQuestionId.trim())}
 						onZoltarForkQuestionIdChange={onZoltarForkQuestionIdChange}
 						zoltarForkActiveAction={zoltarForkActiveAction}
@@ -156,6 +158,7 @@ export function ZoltarSection({
 						zoltarQuestionLookupError={zoltarQuestionLookupError}
 						zoltarQuestionLookupId={zoltarQuestionLookupId}
 						zoltarQuestions={zoltarQuestions}
+						zoltarQuestionsError={zoltarQuestionsError}
 						zoltarUniverse={zoltarUniverse}
 						zoltarUniverseState={zoltarUniverseState}
 					/>
