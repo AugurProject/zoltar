@@ -2,15 +2,13 @@ import type { ComponentChildren } from 'preact'
 import { WalletConnectionControl, WalletNetworkControl } from '../../components/WalletConnectionControl.js'
 import * as appCopy from '../../copy/app.js'
 import * as commonCopy from '../../copy/common.js'
-import { AddressValue } from '../../components/AddressValue.js'
 import { Badge } from '../../components/Badge.js'
 import { CurrencyValue } from '../../components/CurrencyValue.js'
 import { HeaderMetricGroup } from '../../components/HeaderMetricStrip.js'
-import { WalletBalanceGroup } from '../../components/WalletBalanceGroup.js'
+import { WalletBalanceGroup, type WalletBalanceMetric } from '../../components/WalletBalanceGroup.js'
 import { MetricField } from '../../components/MetricField.js'
 import { StateHint } from '../../components/StateHint.js'
 import { ToolbarField } from '../../components/ToolbarField.js'
-import { WalletChip, WalletChipLabel } from '../../components/WalletChip.js'
 import { TimestampValue } from '../../components/TimestampValue.js'
 import { WarningSurface } from '../../components/WarningSurface.js'
 import { getChainDisplayLabel, isActiveAppChain } from '../../wallet/network.js'
@@ -19,12 +17,12 @@ import type { AccountState } from '../../types/app.js'
 import type { ReadBackendStatus } from '../../wallet/chainBackend.js'
 import { getActiveNetworkProfile } from '../../lib/activeEnvironment.js'
 import { getNetworkSwitchTarget } from '../../wallet/networkProfile.js'
-import { abbreviateAddress } from '../../lib/address.js'
 import { formatUniverseDisplayLabel, formatUniverseLabel } from '../../lib/universeLabels.js'
 import type { UserMessagePresentation } from '../../lib/userCopy.js'
+import { AccountMenu, AccountMenuNetworkFact } from './AccountMenu.js'
 import { OverviewHeaderPanel } from './OverviewHeaderPanel.js'
 
-/** The REP price group of the header strip; applications without price quotes omit it. */
+/** The REP price group of the account popover; applications without price quotes omit it. */
 export type OverviewRepPricesProps = {
 	isLoading: boolean
 	isRefreshing: boolean
@@ -42,16 +40,21 @@ export type OverviewRepPricesProps = {
 
 export type OverviewPanelsProps = {
 	settingsMenu?: ComponentChildren
+	/** Primary navigation for the top bar, supplied by `AppHeaderShell`. */
+	navigation?: ComponentChildren
 	applicationTitle: string
 	activeUniverseId: bigint
 	accountState: AccountState
 	isConnectingWallet: boolean
 	isManagingWallet: boolean
 	walletBootstrapComplete: boolean
+	/** The connected account's REP balance in the active universe. */
 	universeRepBalanceAttoRep: bigint | undefined
 	isLoadingUniverseRepBalance: boolean
 	universeForkTime?: bigint | undefined
 	universeHasForked?: boolean | undefined
+	/** Where the fork notice's "Migrate REP" action leads; each application links to its own migration flow. */
+	migrateRepHref?: string | undefined
 	universePresentation: UserMessagePresentation | undefined
 	isRefreshing: boolean
 	onConnect: () => void
@@ -61,6 +64,8 @@ export type OverviewPanelsProps = {
 	onSwitchNetwork: () => void
 	readBackendStatus?: ReadBackendStatus
 	repPrices?: OverviewRepPricesProps | undefined
+	/** Lists the wallet's WETH balance; only applications that use WETH set it. */
+	showWethBalance?: boolean
 }
 
 function omitPresentationActionHint(presentation: UserMessagePresentation) {
@@ -85,7 +90,6 @@ function RepPriceGroup({ isLoading, isRefreshing, onRefresh, repPerEthFailure, r
 	return (
 		<HeaderMetricGroup
 			label={commonCopy.prices}
-			secondary
 			action={
 				isRepPricingUnavailable ? undefined : (
 					<button type='button' className='quiet metric-label-refresh' onClick={onRefresh} disabled={isRefreshing} aria-label={appCopy.refreshRepPrices} title={isRefreshing ? appCopy.refreshingRepPrices : appCopy.refreshRepPrices}>
@@ -95,7 +99,6 @@ function RepPriceGroup({ isLoading, isRefreshing, onRefresh, repPerEthFailure, r
 			}
 		>
 			<MetricField
-				className='overview-metric-secondary'
 				label={
 					<>
 						{appCopy.repPerEthCompact} {repPerEthSourceLabel ?? renderRepPriceSourceLabel(repPerEthSource, repPerEthSourceUrl)}
@@ -105,7 +108,6 @@ function RepPriceGroup({ isLoading, isRefreshing, onRefresh, repPerEthFailure, r
 				{isRepPricingUnavailable ? repPricingUnavailableLabel : (renderRepPriceFailure(repPerEthPrice === undefined && !isLoading ? repPerEthFailure : undefined) ?? <CurrencyValue value={repPerEthPrice} loading={isLoading && repPerEthPrice === undefined} copyable={false} compactWhenOverflow />)}
 			</MetricField>
 			<MetricField
-				className='overview-metric-secondary'
 				label={
 					<>
 						{appCopy.repUsdc} {renderRepPriceSourceLabel(repUsdcSource, repUsdcSourceUrl)}
@@ -118,15 +120,43 @@ function RepPriceGroup({ isLoading, isRefreshing, onRefresh, repPerEthFailure, r
 	)
 }
 
-/** The protocol application header: wallet session, active universe, balances, optional REP prices, and universe state. */
+/** The forked-universe notice: when the universe forked and a direct action to migrate REP. */
+function UniverseForkNotice({ forkTime, migrateRepHref }: { forkTime: bigint | undefined; migrateRepHref: string | undefined }) {
+	return (
+		<WarningSurface role='status' surface='flat' className='universe-fork-notice'>
+			<p>
+				<strong>
+					{appCopy.universeForkedLead}
+					{forkTime === undefined ? undefined : (
+						<>
+							{' '}
+							{appCopy.forkedOnConnector} <TimestampValue timestamp={forkTime} />
+						</>
+					)}
+					.
+				</strong>{' '}
+				{appCopy.migrateRepToChildUniverse}
+			</p>
+			{migrateRepHref === undefined ? undefined : (
+				<a className='button-link secondary-link' href={migrateRepHref}>
+					{appCopy.migrateRep}
+				</a>
+			)}
+		</WarningSurface>
+	)
+}
+
+/** The protocol application top bar: brand, navigation, active universe, the account popover with balances and optional REP prices, and universe state. */
 export function OverviewPanels({
 	settingsMenu,
+	navigation,
 	applicationTitle,
 	activeUniverseId,
 	accountState,
 	isConnectingWallet,
 	isManagingWallet,
 	isLoadingUniverseRepBalance,
+	migrateRepHref,
 	onConnect,
 	onChangeWallet,
 	onDisconnectWallet,
@@ -134,6 +164,7 @@ export function OverviewPanels({
 	onSwitchNetwork,
 	readBackendStatus,
 	repPrices,
+	showWethBalance = false,
 	universeForkTime,
 	universeHasForked,
 	universePresentation,
@@ -141,99 +172,75 @@ export function OverviewPanels({
 	isRefreshing,
 	walletBootstrapComplete,
 }: OverviewPanelsProps) {
-	const effectiveReadBackendStatus = readBackendStatus ?? {
-		blockNumber: undefined,
-		blockTimestamp: undefined,
-		rpcSource: 'default' as const,
-		rpcUrl: 'Unavailable',
-		transportMode: 'provider' as const,
-	}
-	const isWalletBootstrapLoading = !walletBootstrapComplete && accountState.address === undefined
-	const isWalletAddressLoading = isConnectingWallet || isWalletBootstrapLoading
-	const isBrowserSimulationReadBackend = effectiveReadBackendStatus.rpcUrl === 'browser-simulation'
+	const isBrowserSimulationReadBackend = readBackendStatus?.rpcUrl === 'browser-simulation'
 	const activeNetworkProfile = getActiveNetworkProfile()
 	const walletOnActiveNetwork = isActiveAppChain(accountState.chainId)
 	const hasWrongWalletNetwork = accountState.address !== undefined && !walletOnActiveNetwork
 	const showAccountBalances = walletBootstrapComplete && accountState.address !== undefined && !hasWrongWalletNetwork
 	const switchNetworkLabel = appCopy.formatSwitchToNetwork(getNetworkSwitchTarget(activeNetworkProfile))
 	const wrongNetworkBadge = hasWrongWalletNetwork ? <Badge tone='danger'>{appCopy.formatWrongNetworkBadgeLabel(getChainDisplayLabel(accountState.chainId) ?? appCopy.unknownNetwork)}</Badge> : undefined
-	const environmentBadge = isBrowserSimulationReadBackend ? <Badge tone='warning'>{appCopy.simulation}</Badge> : undefined
+	// The simulation strip already names the simulated network, so only a public network earns a badge.
 	const activeNetworkBadge = activeNetworkProfile.id === 'simulation' ? undefined : <Badge>{activeNetworkProfile.displayName}</Badge>
-	const walletControl = (() => {
+	const balances: WalletBalanceMetric[] = [
+		{ asset: commonCopy.eth, loading: showAccountBalances && isRefreshing && accountState.ethBalanceAttoEth === undefined, value: showAccountBalances ? accountState.ethBalanceAttoEth : undefined },
+		...(showWethBalance ? [{ asset: commonCopy.weth, loading: showAccountBalances && isRefreshing && accountState.wethBalanceAttoEth === undefined, value: showAccountBalances ? accountState.wethBalanceAttoEth : undefined }] : []),
+		{ asset: commonCopy.rep, loading: showAccountBalances && isLoadingUniverseRepBalance, value: showAccountBalances ? universeRepBalanceAttoRep : undefined },
+	]
+	const accountControl = (() => {
 		if (accountState.address === undefined) return <WalletConnectionControl onClick={onConnect} pending={isConnectingWallet} pendingLabel={appCopy.connecting} label={commonCopy.connectWallet} />
-		if (isBrowserSimulationReadBackend) {
-			if (!hasWrongWalletNetwork) return <WalletChip address={accountState.address} />
-			return (
-				<>
-					<WalletChip address={accountState.address} tone='danger' />
-					<WalletNetworkControl className='secondary wallet-button' onClick={onSwitchNetwork} disabled={isManagingWallet} label={switchNetworkLabel} />
-				</>
-			)
-		}
+		// The simulation harness owns the simulated wallet session, so its popover lists balances without wallet actions.
+		const actions = isBrowserSimulationReadBackend ? undefined : (
+			<>
+				<WalletConnectionControl className='secondary' onClick={onChangeWallet} disabled={isManagingWallet} label={appCopy.changeWallet} />
+				<WalletConnectionControl className='quiet' onClick={onDisconnectWallet} disabled={isManagingWallet} label={isManagingWallet ? appCopy.managingWallet : appCopy.disconnectWallet} />
+			</>
+		)
 		return (
-			<details className='account-menu'>
-				<summary aria-label={appCopy.formatAccountMenuLabel(abbreviateAddress(accountState.address))}>
-					<WalletChipLabel address={accountState.address} tone={hasWrongWalletNetwork ? 'danger' : 'ok'} />
-				</summary>
-				<div className='account-menu-popover'>
-					<AddressValue address={accountState.address} />
-					<WalletConnectionControl className='secondary' onClick={onChangeWallet} disabled={isManagingWallet} label={appCopy.changeWallet} />
-					{hasWrongWalletNetwork ? <WalletNetworkControl className='primary' onClick={onSwitchNetwork} disabled={isManagingWallet} label={switchNetworkLabel} /> : undefined}
-					<WalletConnectionControl className='quiet' onClick={onDisconnectWallet} disabled={isManagingWallet} label={isManagingWallet ? appCopy.managingWallet : appCopy.disconnectWallet} />
-				</div>
-			</details>
+			<>
+				{/* Network recovery stays on the bar: a wallet on the wrong network blocks every action until it switches. */}
+				{hasWrongWalletNetwork ? <WalletNetworkControl className='primary wallet-button' onClick={onSwitchNetwork} disabled={isManagingWallet} label={switchNetworkLabel} /> : undefined}
+				<AccountMenu
+					address={accountState.address}
+					tone={hasWrongWalletNetwork ? 'danger' : 'ok'}
+					network={
+						<>
+							<AccountMenuNetworkFact label={appCopy.network}>{activeNetworkProfile.displayName}</AccountMenuNetworkFact>
+							{readBackendStatus?.blockNumber === undefined ? undefined : <AccountMenuNetworkFact label={appCopy.latestBlock}>{readBackendStatus.blockNumber.toString()}</AccountMenuNetworkFact>}
+						</>
+					}
+					metrics={
+						<>
+							<WalletBalanceGroup balances={balances} />
+							{repPrices === undefined ? undefined : <RepPriceGroup {...repPrices} />}
+						</>
+					}
+					actions={actions}
+				/>
+			</>
 		)
 	})()
 	return (
 		<OverviewHeaderPanel
 			applicationTitle={applicationTitle}
-			simulation={isBrowserSimulationReadBackend}
 			settingsMenu={settingsMenu}
+			navigation={navigation}
 			badges={
-				activeNetworkBadge === undefined && environmentBadge === undefined && wrongNetworkBadge === undefined ? undefined : (
+				activeNetworkBadge === undefined && wrongNetworkBadge === undefined ? undefined : (
 					<>
 						{activeNetworkBadge}
-						{environmentBadge}
 						{wrongNetworkBadge}
 					</>
 				)
 			}
 			controls={
 				<>
-					{walletControl}
 					<ToolbarField label={commonCopy.universe}>
 						<span title={formatUniverseLabel(activeUniverseId)}>{formatUniverseDisplayLabel(activeUniverseId)}</span>
 					</ToolbarField>
+					{accountControl}
 				</>
 			}
-			notices={
-				universeHasForked ? (
-					<WarningSurface role='alert' surface='flat' variant='prominent' className='universe-fork-notice'>
-						<strong className='notice-title'>
-							{appCopy.universeForkNoticeLead}
-							{universeForkTime === undefined ? undefined : (
-								<>
-									{' '}
-									{appCopy.forkedOnConnector} <TimestampValue timestamp={universeForkTime} />
-								</>
-							)}
-						</strong>
-						<p>{appCopy.migrateRepToContinueUsingAugur}</p>
-					</WarningSurface>
-				) : undefined
-			}
-			metrics={
-				<>
-					<WalletBalanceGroup
-						balances={[
-							{ asset: commonCopy.eth, loading: isWalletAddressLoading || (showAccountBalances && isRefreshing && accountState.ethBalanceAttoEth === undefined), value: showAccountBalances ? accountState.ethBalanceAttoEth : undefined },
-							{ asset: commonCopy.weth, className: 'overview-metric-secondary', loading: isWalletAddressLoading || (showAccountBalances && isRefreshing && accountState.wethBalanceAttoEth === undefined), value: showAccountBalances ? accountState.wethBalanceAttoEth : undefined },
-							{ asset: commonCopy.rep, loading: isWalletAddressLoading || (showAccountBalances && isLoadingUniverseRepBalance), value: showAccountBalances ? universeRepBalanceAttoRep : undefined },
-						]}
-					/>
-					{repPrices === undefined ? undefined : <RepPriceGroup {...repPrices} />}
-				</>
-			}
+			notices={universeHasForked ? <UniverseForkNotice forkTime={universeForkTime} migrateRepHref={migrateRepHref} /> : undefined}
 			footer={
 				universePresentation === undefined ? undefined : (
 					<StateHint

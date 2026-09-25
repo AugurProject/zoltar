@@ -74,12 +74,6 @@ main {
 	border: 0;
 }
 
-.top-shell-settings-row {
-	display: flex;
-	justify-content: flex-end;
-	padding: 0.75rem 0.75rem 0;
-}
-
 .app-settings {
 	position: relative;
 	z-index: var(--z-dropdown);
@@ -134,57 +128,6 @@ main {
 	gap: 0.75rem;
 }
 
-.top-shell {
-	position: relative;
-	z-index: var(--z-content-raised);
-	display: grid;
-	gap: 0;
-	overflow: visible;
-	isolation: isolate;
-	border: 1px solid var(--divider-strong);
-	border-radius: var(--radius-shell);
-	background: linear-gradient(180deg, var(--surface-raised) 0%, var(--surface-page) 100%);
-	box-shadow: var(--shadow-raised);
-}
-
-.top-shell-content {
-	display: grid;
-	gap: 0;
-}
-
-.top-shell-content > .notice {
-	margin: 0 1.1rem;
-}
-
-.app-nav-stack {
-	display: grid;
-	grid-template-columns: minmax(0, 1fr) auto;
-	align-items: center;
-	gap: 0.2rem var(--space-3);
-	padding: 0.5rem 0.8rem 0.4rem;
-	border-top: 1px solid var(--color-white-04);
-}
-
-.app-nav-stack > .tab-nav {
-	grid-column: 1;
-	min-width: 0;
-}
-
-.app-nav-stack > .protocol-guide-link {
-	grid-column: 2;
-	grid-row: 1;
-	justify-self: end;
-}
-
-.app-nav-stack > .route-subnav-region {
-	grid-column: 1 / -1;
-}
-
-.route-subnav-shell {
-	display: flex;
-	padding: 0 0 0 0.35rem;
-}
-
 .route-subnav-region {
 	display: grid;
 	gap: var(--space-1);
@@ -205,10 +148,6 @@ main {
 .route-subnav-unavailable strong,
 .tab-nav-unavailable strong {
 	color: var(--text);
-}
-
-.route-subnav-overflow-control {
-	display: none;
 }
 
 h1 {
@@ -531,57 +470,14 @@ button.quiet:disabled {
 	position: relative;
 }
 
-.account-menu[open] {
-	z-index: var(--z-dropdown);
-}
-
-.account-menu > summary {
-	display: inline-flex;
-	align-items: center;
-	padding: 0;
-	border: 0;
-	background: transparent;
-	color: var(--text);
-	font: inherit;
-	cursor: pointer;
-	list-style: none;
-}
-
-.account-menu > summary:hover .wallet-chip,
-.account-menu[open] > summary .wallet-chip {
-	border-color: var(--interactive-border-hover);
-	background: var(--interactive-bg-active);
-}
-
-.account-menu > summary:focus-visible {
-	outline: 2px solid var(--focus);
-	outline-offset: 2px;
-	border-radius: var(--radius-pill);
-}
-
-/* The popover is the only place the full account is shown, so it grows to fit one line of address. */
-.account-menu-popover {
-	width: max-content;
-	max-width: min(28rem, calc(100vw - 3rem));
-}
-
+/* The popover is the only place the full account is shown; it wraps at a deterministic point instead of overflowing. */
 .account-menu-popover .address-value,
 .account-menu-popover .address-value.copyable {
 	font-family: var(--font-family-mono);
 	font-size: var(--font-caption);
-	white-space: nowrap;
-}
-
-/* Narrow screens cannot fit one line of address, so it wraps at a deterministic point instead of overflowing. */
-@media (max-width: 26rem) {
-	.account-menu-popover {
-		width: calc(100vw - 3rem);
-	}
-
-	.account-menu-popover .address-value {
-		white-space: normal;
-		word-break: break-all;
-	}
+	white-space: normal;
+	word-break: break-all;
+	text-align: left;
 }
 
 /* Toolbar wallet identity: abbreviated account with a copy affordance and a live-connection dot. */
@@ -664,10 +560,6 @@ button.quiet:disabled {
 	overflow-wrap: anywhere;
 }
 
-.account-menu > summary::-webkit-details-marker {
-	display: none;
-}
-
 .account-menu-popover {
 	position: absolute;
 	z-index: var(--z-dropdown);
@@ -681,21 +573,6 @@ button.quiet:disabled {
 	border-radius: var(--radius-overlay);
 	background: var(--bg);
 	box-shadow: var(--shadow-overlay);
-}
-
-.account-menu-popover > button {
-	width: 100%;
-}
-
-.account-menu-network {
-	display: grid;
-	gap: 0.2rem;
-	margin: 0 0 0.25rem;
-}
-
-.account-menu-network span {
-	color: var(--muted);
-	font-size: var(--font-label);
 }
 
 .detail {
@@ -1267,20 +1144,8 @@ button.wallet-asset-action-pending:disabled {
 	}
 }
 
-.overview-shell {
-	display: grid;
-	gap: 0.5rem;
-}
-
 .overview-panel {
 	padding: 1rem 0 0.5rem;
-}
-
-.overview-wallet-panel {
-	padding: 0;
-	border: 0;
-	background: transparent;
-	box-shadow: none;
 }
 
 .grid {
@@ -1357,126 +1222,6 @@ button.wallet-asset-action-pending:disabled {
 	justify-content: flex-end;
 	align-content: start;
 	padding-top: 0.2rem;
-}
-
-/* Toolbar stat strip: captioned groups of inline metrics sharing one row (see HeaderMetricStrip). */
-.overview-inline-metrics {
-	display: flex;
-	flex-wrap: wrap;
-	align-items: center;
-	gap: var(--space-2) var(--space-4);
-	min-width: 0;
-	margin-top: var(--space-2);
-}
-
-/* The primary group takes the row and keeps an equal track per metric; a secondary group hugs its content so its values are never squeezed. */
-.overview-metric-group {
-	display: flex;
-	align-items: center;
-	flex: 1 1 0;
-	gap: var(--space-3);
-	min-width: 0;
-}
-
-.overview-metric-group.is-secondary {
-	flex: 0 0 auto;
-}
-
-.overview-metric-group.is-secondary .overview-metric-group-items {
-	grid-auto-flow: column;
-	grid-auto-columns: max-content;
-	grid-template-columns: none;
-	gap: var(--space-4);
-}
-
-.overview-metric-group-caption {
-	display: inline-flex;
-	align-items: center;
-	flex-shrink: 0;
-	gap: 0.25rem;
-}
-
-.overview-metric-group + .overview-metric-group {
-	padding-left: var(--space-4);
-	border-left: 1px solid var(--divider-subtle);
-}
-
-/* Captions are bolder and brighter than the metric labels they introduce. */
-.overview-metric-group-label {
-	flex-shrink: 0;
-	font-family: var(--font-family-mono);
-	font-size: var(--font-xs);
-	font-weight: 700;
-	letter-spacing: 0.1em;
-	text-transform: uppercase;
-	white-space: nowrap;
-	color: var(--muted);
-}
-
-.overview-metric-group-items {
-	display: grid;
-	grid-template-columns: repeat(var(--overview-metric-columns, 1), minmax(0, 18rem));
-	gap: var(--space-2);
-	flex: 1 1 0;
-	min-width: 0;
-}
-
-.overview-metric-group-items > div {
-	display: flex;
-	align-items: center;
-	gap: 0 0.4rem;
-	min-width: 0;
-	min-height: 1.75rem;
-}
-
-.overview-inline-metrics .metric-label {
-	flex-shrink: 0;
-	font-size: var(--font-xs);
-	letter-spacing: 0.06em;
-	white-space: nowrap;
-}
-
-.overview-inline-metrics .metric-label-refresh {
-	min-width: 1.6rem;
-	min-height: 1.6rem;
-	margin: -0.3rem 0;
-	padding: 0.15rem;
-}
-
-.overview-inline-metrics strong {
-	display: block;
-	font-family: var(--font-family-mono);
-	font-size: var(--font-value);
-	font-weight: 600;
-	font-variant-numeric: tabular-nums;
-	line-height: var(--line-height-tight);
-	color: var(--value);
-	overflow-wrap: anywhere;
-}
-
-/* The value fills the rest of its track so overflow compaction measures the track, in both directions, as it resizes. */
-.overview-inline-metrics .metric-field-value {
-	display: flex;
-	align-items: center;
-	flex: 1 1 0;
-	min-width: 0;
-	min-height: 1.75rem;
-}
-
-/* Any wrapper between the slot and the value fills the track too, so the value's measured room is the track. */
-.overview-inline-metrics .metric-field-value > * {
-	flex: 1 1 0;
-	min-width: 0;
-	max-width: 100%;
-}
-
-.overview-inline-metrics .currency-value.copyable {
-	min-height: 1.75rem;
-	margin: 0;
-}
-
-.overview-details-toggle {
-	display: none;
 }
 
 .address-value {

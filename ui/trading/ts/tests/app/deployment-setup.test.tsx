@@ -7,7 +7,7 @@ import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/
 import { App } from '../../app/App.js'
 import { TradingDeploymentSetup, type TradingDeploymentSetupServices } from '../../features/TradingDeploymentSetup.js'
 import { PROXY_DEPLOYER_RUNTIME_CODE } from '@zoltar/core-shared/deployment/deploymentAddresses'
-import { deploymentConfigurationForPlan, getTradingDeploymentPlan } from '../../protocol/deployment.js'
+import { deploymentConfigurationForPlan, getTradingDeploymentPlan, tradingDeploymentMissingError } from '../../protocol/deployment.js'
 import type { InjectedEthereum } from '../../protocol/injected.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import { installActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
@@ -345,8 +345,10 @@ describe('trading deployment setup', () => {
 		try {
 			const mismatched = await renderIntoDocument(<App deploymentSetupServices={services} initializeEnvironment={async () => undefined} />)
 			cleanupRendered = mismatched.cleanup
-			await waitForText('Network unavailable')
-			expect(mismatched.container.querySelector('.deployment-setup')).not.toBeNull()
+			// A chain mismatch is a connection problem, not missing contracts: the route offers a retry instead of the wizard.
+			await waitForText('Deployment unverified')
+			expect(mismatched.container.querySelector('.deployment-setup')).toBeNull()
+			expect(mismatched.container.querySelector('.trading-connection-error')?.textContent).toContain('does not match deployment chain')
 			await mismatched.cleanup()
 			cleanupRendered = undefined
 
@@ -355,7 +357,7 @@ describe('trading deployment setup', () => {
 			const verified = await renderIntoDocument(<App deploymentSetupServices={services} initializeEnvironment={async () => undefined} />)
 			cleanupRendered = verified.cleanup
 			await waitForText('Sepolia')
-			expect(verified.container.textContent).not.toContain('Network unavailable')
+			expect(verified.container.textContent).not.toContain('Deployment unverified')
 			expect(verified.container.querySelector('.deployment-setup')).toBeNull()
 		} finally {
 			restoreFetch()
@@ -414,8 +416,8 @@ describe('trading deployment setup', () => {
 		window.location.hash = '#/market'
 		const rendered = await renderIntoDocument(<App loadLiveDeployment={async () => await new Promise<never>(() => undefined)} />)
 		cleanupRendered = rendered.cleanup
-		expect(rendered.container.querySelector('nav a[aria-current="page"]')?.textContent?.trim()).toBe('Market')
-		expect(document.title).toBe('Market · Statoblast trading')
+		expect(rendered.container.querySelector('nav a[aria-current="page"]')?.textContent?.trim()).toBe('Markets')
+		expect(document.title).toBe('Market · Augur Trading')
 		expect(rendered.container.querySelector('.site-header--deployment')).toBeNull()
 		expect(rendered.container.querySelector('.deployment-setup')).toBeNull()
 	})
@@ -434,7 +436,7 @@ describe('trading deployment setup', () => {
 			<App
 				deploymentSetupServices={services}
 				loadLiveDeployment={async () => {
-					throw new Error('No deployment configured')
+					throw tradingDeploymentMissingError('No deployment configured')
 				}}
 			/>,
 		)
@@ -443,7 +445,7 @@ describe('trading deployment setup', () => {
 		const navigationLabels = Array.from(rendered.container.querySelectorAll('nav a')).map(link => link.textContent?.trim())
 		expect(navigationLabels[0]).toBe('Deploy')
 		expect(rendered.container.querySelector('nav a[aria-current="page"]')?.textContent?.trim()).toBe('Deploy')
-		await waitFor(() => expect(document.title).toBe('Deploy · Statoblast trading'))
+		await waitFor(() => expect(document.title).toBe('Deploy · Augur Trading'))
 		expect(rendered.container.querySelector('.site-header .deployment-settings')).toBeNull()
 		expect(rendered.container.querySelector('.deployment-setup input[type="url"]')).toBeNull()
 		const walletButton = rendered.container.querySelector<HTMLButtonElement>('.trading-wallet-actions .wallet-button')
@@ -635,7 +637,7 @@ describe('trading deployment setup', () => {
 		await waitForText('Deploy Trading factory')
 		await connectDeploymentWallet(rendered.container)
 		await waitForConnectedWallet(rendered.container)
-		expect(rendered.container.querySelector('.overview-wallet-panel .badge')?.textContent).toContain(core.chainName)
+		expect(rendered.container.querySelector('.header-toolbar .badge')?.textContent).toContain(core.chainName)
 		expect(rendered.container.querySelector('.trading-wallet-actions .wallet-button')?.textContent).toContain(testWalletAccount)
 		for (let attempt = 0; attempt < 30; attempt++) {
 			if (rendered.container.querySelector('.trading-wallet-actions .wallet-button')?.getAttribute('aria-label') === `Disconnect wallet ${testWalletAccount}`) break

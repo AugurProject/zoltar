@@ -1,6 +1,6 @@
 import * as appCopy from '../../copy/app.js'
 import { SimulationBanner } from '../../components/SimulationBanner.js'
-import { TabNavigation } from '../../components/TabNavigation.js'
+import { NavigationBar, TabNavigation, TabNavigationUnavailableReasons } from '../../components/TabNavigation.js'
 import type { SimulationController } from '../../simulation/controller.js'
 import type { RouteTabDefinition } from '../../types/components.js'
 import type { SecondaryNavigation } from '../../navigation/appNavigation.js'
@@ -8,18 +8,27 @@ import type { ComponentChildren } from 'preact'
 import { AppSettingsMenu } from './AppSettingsMenu.js'
 import { RouteSubNavigation } from './RouteSubNavigation.js'
 
+/** The shared pieces an application places in its top bar. */
+type AppChromeSlots = {
+	/** Primary navigation: top-bar tabs on wide screens, a fixed bottom tab bar on narrow screens. */
+	navigation: ComponentChildren
+	settingsMenu: ComponentChildren
+}
+
 type AppHeaderShellProps = {
 	mainElementId?: string
 	header?: ComponentChildren
 	renderHeader?: (simulationBanner: ComponentChildren, settingsMenu: ComponentChildren) => ComponentChildren
 	overview?: ComponentChildren
-	renderOverview?: (settingsMenu: ComponentChildren) => ComponentChildren
+	renderOverview?: (chrome: AppChromeSlots) => ComponentChildren
 	simulationController: SimulationController | undefined
 	/** Secondary views of the current primary route. Rendered only while the current route is one of the primary tabs. */
 	secondaryNavigation?: SecondaryNavigation | undefined
 	tabNavigation?: {
 		route: string
 		tabs: readonly RouteTabDefinition[]
+		/** Sections listed under "More" so the tab bar keeps at most a handful of items. */
+		moreTabs?: readonly RouteTabDefinition[]
 		onRouteChange: (route: string) => void
 		showProtocolGuide?: boolean
 	}
@@ -37,29 +46,50 @@ export function AppHeaderShell({ mainElementId = 'app-content', header, renderHe
 	}
 
 	const simulationBanner = simulationController === undefined ? undefined : <SimulationBanner controller={simulationController} onEnvironmentChanged={onEnvironmentChanged} onRefresh={onRefresh} />
-	const settingsMenu = <AppSettingsMenu onEnvironmentChanged={onEnvironmentChanged} settingsContent={settingsContent} />
-	const currentRouteIsPrimaryTab = tabNavigation !== undefined && tabNavigation.tabs.some(tab => tab.route === tabNavigation.route)
-	const secondaryTabs = secondaryNavigation !== undefined && currentRouteIsPrimaryTab ? <RouteSubNavigation ariaLabel={secondaryNavigation.ariaLabel} value={secondaryNavigation.value} onChange={secondaryNavigation.onChange} options={secondaryNavigation.options} /> : undefined
 	const showProtocolGuide = tabNavigation !== undefined && tabNavigation.showProtocolGuide !== false
-	const showPrimaryTabs = tabNavigation !== undefined && tabNavigation.tabs.length > 1
-	const navigationStack =
-		!showPrimaryTabs && secondaryTabs === undefined && !showProtocolGuide ? undefined : (
-			<div className='app-nav-stack'>
-				{tabNavigation === undefined ? undefined : <TabNavigation {...tabNavigation} showProtocolGuide={false} />}
-				{secondaryTabs}
-				{showProtocolGuide ? (
-					<a className='protocol-guide-link' href={appCopy.protocolGuideHref} target='_blank' rel='noreferrer'>
-						{appCopy.protocolGuide}
-					</a>
-				) : undefined}
-			</div>
-		)
+	const settingsMenu = (
+		<AppSettingsMenu
+			onEnvironmentChanged={onEnvironmentChanged}
+			settingsContent={
+				<>
+					{settingsContent}
+					{showProtocolGuide ? (
+						<a className='protocol-guide-link' href={appCopy.protocolGuideHref} target='_blank' rel='noreferrer'>
+							{appCopy.protocolGuide}
+						</a>
+					) : undefined}
+				</>
+			}
+		/>
+	)
+	const allTabs = tabNavigation === undefined ? [] : [...tabNavigation.tabs, ...(tabNavigation.moreTabs ?? [])]
+	const currentRouteIsPrimaryTab = tabNavigation !== undefined && allTabs.some(tab => tab.route === tabNavigation.route)
+	const activeSecondaryNavigation = secondaryNavigation !== undefined && currentRouteIsPrimaryTab ? secondaryNavigation : undefined
+	const showPrimaryTabs = allTabs.length > 1
+	// A single-section application promotes that section's views into the tab bar instead of stacking a second row.
+	const promoteSecondaryNavigation = !showPrimaryTabs && activeSecondaryNavigation !== undefined
+	const navigation = (() => {
+		if (promoteSecondaryNavigation) return <NavigationBar ariaLabel={activeSecondaryNavigation.ariaLabel} options={activeSecondaryNavigation.options} value={activeSecondaryNavigation.value} onChange={activeSecondaryNavigation.onChange} />
+		if (tabNavigation === undefined || !showPrimaryTabs) return undefined
+		return <TabNavigation route={tabNavigation.route} tabs={tabNavigation.tabs} onRouteChange={tabNavigation.onRouteChange} {...(tabNavigation.moreTabs === undefined ? {} : { moreTabs: tabNavigation.moreTabs })} />
+	})()
+	const routeViews = activeSecondaryNavigation === undefined || promoteSecondaryNavigation ? undefined : <RouteSubNavigation ariaLabel={activeSecondaryNavigation.ariaLabel} value={activeSecondaryNavigation.value} onChange={activeSecondaryNavigation.onChange} options={activeSecondaryNavigation.options} />
 	const shellHeader = header ?? (
-		<div className='top-shell'>
-			{renderOverview === undefined ? <div className='top-shell-settings-row'>{settingsMenu}</div> : undefined}
-			<div className='top-shell-content'>{renderOverview === undefined ? overview : renderOverview(settingsMenu)}</div>
-			{navigationStack}
-		</div>
+		<>
+			<div className='app-chrome'>
+				{renderOverview === undefined ? (
+					<div className='header-toolbar'>
+						{overview}
+						{navigation === undefined ? undefined : <div className='header-toolbar-navigation'>{navigation}</div>}
+						<div className='header-toolbar-settings'>{settingsMenu}</div>
+					</div>
+				) : (
+					renderOverview({ navigation, settingsMenu })
+				)}
+				<TabNavigationUnavailableReasons tabs={allTabs} />
+			</div>
+			{routeViews}
+		</>
 	)
 
 	return (

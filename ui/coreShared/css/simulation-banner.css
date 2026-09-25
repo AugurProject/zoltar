@@ -1,15 +1,8 @@
 /* Browser simulation banner. Shared by every app that mounts the simulation harness; imported from index.css after base.css so it keeps its original cascade position. */
 
-.simulation-progress-track {
-	margin-top: 0.6rem;
-}
-
-.simulation-progress-fill {
-	background: linear-gradient(90deg, color-mix(in srgb, var(--success) 70%, var(--color-white) 30%), color-mix(in srgb, var(--focus) 68%, var(--color-white) 32%));
-}
-
 .simulation-banner {
-	padding: 0.65rem 0.75rem;
+	margin-top: 0;
+	padding: 0.1rem 0.6rem;
 	border: 1px solid var(--simulation-border);
 	background: var(--simulation-surface);
 	box-shadow: var(--shadow-raised);
@@ -44,50 +37,108 @@
 	margin-top: 0.65rem;
 }
 
+/* The strip: one line that names the simulator, its state, and scenario, and shows boot progress inline. */
 .simulation-banner-details > summary {
 	display: block;
 	cursor: pointer;
-	padding: 0.25rem 0.15rem;
+	padding: 0.05rem 0.1rem;
 	color: var(--simulation-text);
+	list-style: none;
 }
 
-.simulation-banner-compact-summary,
-.simulation-banner-compact-heading,
-.simulation-banner-compact-state {
+.simulation-banner-details > summary::-webkit-details-marker {
+	display: none;
+}
+
+.simulation-banner-details > summary {
+	min-height: 1.75rem;
+}
+
+.simulation-strip {
+	display: flex;
 	align-items: center;
-	gap: 0.5rem;
-}
-
-.simulation-banner-compact-summary {
-	display: flex;
-	justify-content: space-between;
-}
-
-.simulation-banner-compact-heading {
-	display: flex;
+	gap: var(--space-2);
 	min-width: 0;
-	flex-wrap: wrap;
-}
-
-.simulation-banner-compact-heading h2 {
-	font-size: var(--font-title);
-}
-
-.simulation-banner-compact-state {
-	display: flex;
-	min-width: 0;
-	flex-wrap: wrap;
-}
-
-.simulation-banner-compact-account {
+	min-height: 1.5rem;
 	white-space: nowrap;
 }
 
+.simulation-strip-title {
+	font-family: var(--font-family-sans);
+	font-size: var(--font-caption);
+	font-weight: 700;
+	letter-spacing: 0;
+}
+
+.simulation-strip .badge {
+	padding-block: 0.05rem;
+	font-size: var(--font-xs);
+}
+
+.simulation-strip-scenario {
+	font-size: var(--font-caption);
+}
+
+.simulation-strip-scenario,
+.simulation-banner-compact-account,
+.simulation-strip-progress-label {
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.simulation-banner-compact-account,
+.simulation-strip-progress-label {
+	color: var(--simulation-text-secondary);
+	font-size: var(--font-caption);
+}
+
+.simulation-strip-progress {
+	display: flex;
+	flex: 1 1 auto;
+	align-items: center;
+	gap: var(--space-2);
+	min-width: 0;
+}
+
+.simulation-strip-progress-track {
+	flex: 0 1 8rem;
+	min-width: 3rem;
+	height: 0.3rem;
+	overflow: hidden;
+	border-radius: var(--radius-pill);
+	background: var(--simulation-border-subtle);
+}
+
+.simulation-strip-progress-fill {
+	display: block;
+	height: 100%;
+	border-radius: inherit;
+	background: linear-gradient(90deg, color-mix(in srgb, var(--success) 70%, var(--color-white) 30%), color-mix(in srgb, var(--focus) 68%, var(--color-white) 32%));
+	transition: width var(--transition-standard);
+}
+
 .simulation-banner-compact-action {
+	margin-left: auto;
 	color: var(--simulation-text-secondary);
 	font-size: var(--font-caption);
 	font-weight: 700;
 	white-space: nowrap;
+}
+
+.simulation-strip-caret {
+	display: none;
+	flex-shrink: 0;
+	width: 0.45rem;
+	height: 0.45rem;
+	margin-left: auto;
+	border-right: 1.5px solid currentColor;
+	border-bottom: 1.5px solid currentColor;
+	transform: translateY(-0.1rem) rotate(45deg);
+}
+
+.simulation-banner-details[open] .simulation-strip-caret {
+	transform: translateY(0.1rem) rotate(225deg);
 }
 
 .simulation-banner-row {
@@ -305,7 +356,7 @@
 	}
 
 	.simulation-banner {
-		padding: 0.55rem;
+		padding: 0.1rem 0.5rem;
 	}
 
 	.simulation-banner > .contract-panel-header:first-child {
@@ -313,11 +364,50 @@
 		padding: 0.55rem 0.55rem 0;
 	}
 
-	.simulation-banner-details > summary {
+	/* Narrow strips drop the account and trade the "Show details" text for a caret; the scenario and boot step truncate instead of wrapping. */
+	.simulation-strip .simulation-banner-compact-action {
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		margin: -1px;
+		overflow: hidden;
+		clip: rect(0 0 0 0);
+		white-space: nowrap;
+	}
+
+	.simulation-strip-caret {
 		display: block;
-		cursor: pointer;
-		padding: 0.6rem 0.15rem 0.1rem;
-		color: var(--simulation-text);
+	}
+
+	.simulation-strip .simulation-banner-compact-account {
+		display: none;
+	}
+
+	/* While booting, the current step replaces the title and scenario name so the progress stays readable beside the caret. */
+	.simulation-strip:has(.simulation-strip-progress) .simulation-strip-scenario {
+		display: none;
+	}
+
+	.simulation-strip:has(.simulation-strip-progress) .simulation-strip-title {
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		margin: -1px;
+		overflow: hidden;
+		clip: rect(0 0 0 0);
+		white-space: nowrap;
+	}
+
+	.simulation-strip {
+		overflow: hidden;
+	}
+
+	.simulation-strip-progress-label {
+		flex: 1 1 auto;
+	}
+
+	.simulation-strip-progress-track {
+		flex: 0 0 3rem;
 	}
 
 	.simulation-banner-details > summary:focus-visible {

@@ -4,7 +4,8 @@ import { act } from 'preact/test-utils'
 import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
 import { App } from '../../app/App.js'
 import * as appCopy from '../../copy/app.js'
-import { TradingOverviewPanel } from '../../components/TradingOverviewPanel.js'
+import { TradingBalanceGroup, TradingOverviewPanel } from '../../components/TradingOverviewPanel.js'
+import { tradingDeploymentMissingError } from '../../protocol/deployment.js'
 import { hasTradingWalletControls, TradingWalletControls } from '../../components/TradingWalletControls.js'
 import { routeOwnsLiveWallet, walletSummaryAfterRouteChange, walletSummaryForUniverse } from '../../lib/walletSummaryState.js'
 import { filterMarketsByUniverse, walletSummaryAvailability, walletSummaryDiscoveryRetryStart, walletSummaryRefreshState } from '../../features/liveTradingControllerHelpers.js'
@@ -38,8 +39,13 @@ describe('trading header', () => {
 		expect(rendered.container.textContent).not.toContain('not deployed')
 		expect(rendered.container.querySelector('#app-content .route-header')?.textContent).toContain('Universe')
 		expect(rendered.container.querySelector('.header-toolbar-controls select')).toBeNull()
-		const universeTab = Array.from(rendered.container.querySelectorAll<HTMLAnchorElement>('.tab-nav a')).find(anchor => anchor.textContent === 'Universe')
+		const moreButton = Array.from(rendered.container.querySelectorAll<HTMLButtonElement>('.tab-nav button')).find(button => button.textContent === 'More')
+		if (moreButton === undefined) throw new Error('The More menu is missing')
+		expect(moreButton.classList.contains('active')).toBe(true)
+		await act(() => moreButton.click())
+		const universeTab = Array.from(rendered.container.querySelectorAll<HTMLAnchorElement>('.tab-nav-more-menu a')).find(anchor => anchor.textContent === 'Universe')
 		expect(universeTab?.getAttribute('href')).toBe('#/universe?universe=2')
+		expect(universeTab?.getAttribute('aria-current')).toBe('page')
 	})
 
 	test('rewrites an unknown universe request to the discovered universe so the URL, header, and routes agree', async () => {
@@ -220,7 +226,7 @@ describe('trading header', () => {
 		expect(document.activeElement?.querySelector('.tab-nav')).toBeNull()
 		expect(document.activeElement?.textContent).toContain('Page Not Found')
 		expect(document.title).toBe(appCopy.documentTitle(appCopy.notFound))
-		expect(document.title).toBe('Not found · Statoblast trading')
+		expect(document.title).toBe('Not found · Augur Trading')
 	})
 
 	test('accepts only addressed security-pool routes', () => {
@@ -238,10 +244,10 @@ describe('trading header', () => {
 		expect(tradingRouting.resolve(window.location.hash)).toBe('market')
 	})
 
-	test('uses Statoblast branding without the removed footer disclaimers', async () => {
+	test('uses Augur Trading branding without the removed footer disclaimers', async () => {
 		const rendered = await renderIntoDocument(<App />)
 		cleanupRendered = rendered.cleanup
-		expect(rendered.container.querySelector('.application-brand')?.textContent).toContain('Statoblast trading')
+		expect(rendered.container.querySelector('.application-brand')?.textContent).toContain('Augur Trading')
 		expect(rendered.container.querySelector('footer')).toBeNull()
 		expect(rendered.container.textContent).not.toContain('unaudited MVP')
 		expect(rendered.container.textContent).not.toContain('Spot prices are not manipulation-resistant oracles.')
@@ -296,24 +302,32 @@ describe('trading header', () => {
 		expect(rendered.container.querySelector('.trading-wallet-actions .wallet-button')?.textContent).toBe('Connect wallet')
 	})
 
-	test('renders the live account chip with its change action outside simulation', async () => {
+	test('renders the live account chip behind a balances popover with its change action outside simulation', async () => {
 		const account = '0x8ba1f109551bD432803012645Ac136ddd64DBA72'
 		const deploymentWalletState = { account: undefined, connecting: false, networkName: undefined, ready: true }
 		let connectRequests = 0
 		const baseProps = { deploymentSetupActive: false, deploymentWalletState, liveDeploymentStatus: 'verified' as const, onDeploymentWalletRequest: () => undefined, onWalletConnectRequest: () => connectRequests++, routeOwnsLiveWallet: true, workflowLocked: false }
-		const live = await renderIntoDocument(<TradingWalletControls {...baseProps} account={account} simulation={false} />)
+		const balances = <TradingBalanceGroup walletSummary={{ account, ethAttoEth: 10n ** 18n, repAttoRep: 2n * 10n ** 18n, status: 'ready', error: undefined, errorLabel: undefined, universeId: '1' }} />
+		const live = await renderIntoDocument(<TradingWalletControls {...baseProps} account={account} accountMetrics={balances} networkName='Local' simulation={false} />)
 		cleanupRendered = live.cleanup
-		expect(live.container.querySelector('.wallet-chip .address-value-abbreviated')?.textContent).toBe('0x8ba1f1…4DBA72')
-		expect(live.container.querySelector('.wallet-chip button.address-value')?.getAttribute('title')).toBe(account)
-		const changeButton = live.container.querySelector<HTMLButtonElement>('.wallet-button')
+		expect(live.container.querySelector('.account-menu-trigger .wallet-chip .address-value-abbreviated')?.textContent).toBe('0x8ba1f1…4DBA72')
+		expect(live.container.querySelector('.wallet-button')).toBeNull()
+		await act(() => live.container.querySelector<HTMLButtonElement>('.account-menu-trigger')?.click())
+		expect(live.container.querySelector('.account-menu-popover button.address-value')?.getAttribute('title')).toBe(account)
+		expect(live.container.querySelector('.account-menu-network')?.textContent).toContain('Local')
+		expect(live.container.querySelector('.account-menu-popover [data-wallet-asset="ETH"]')?.textContent).toContain('1.00')
+		expect(live.container.querySelector('.account-menu-popover [data-wallet-asset="REP"]')).toBeNull()
+		const changeButton = live.container.querySelector<HTMLButtonElement>('.account-menu-popover .wallet-button')
 		expect(changeButton?.textContent).toBe('Change wallet')
 		await act(() => changeButton?.click())
 		expect(connectRequests).toBe(1)
 		await live.cleanup()
 
-		const simulated = await renderIntoDocument(<TradingWalletControls {...baseProps} account={account} simulation />)
+		const simulated = await renderIntoDocument(<TradingWalletControls {...baseProps} account={account} accountMetrics={balances} simulation />)
 		cleanupRendered = simulated.cleanup
-		expect(simulated.container.querySelector('.wallet-chip .address-value-abbreviated')?.textContent).toBe('0x8ba1f1…4DBA72')
+		expect(simulated.container.querySelector('.account-menu-trigger .wallet-chip .address-value-abbreviated')?.textContent).toBe('0x8ba1f1…4DBA72')
+		await act(() => simulated.container.querySelector<HTMLButtonElement>('.account-menu-trigger')?.click())
+		expect(simulated.container.querySelector('.account-menu-popover [data-wallet-asset="ETH"]')).not.toBeNull()
 		expect(simulated.container.querySelector('.wallet-button')).toBeNull()
 		await simulated.cleanup()
 
@@ -327,9 +341,10 @@ describe('trading header', () => {
 		expect(switchRequests).toBe(1)
 		await wrongChain.cleanup()
 
-		expect(hasTradingWalletControls({ deploymentSetupActive: false, liveDeploymentStatus: 'unavailable', routeOwnsLiveWallet: true })).toBe(false)
+		expect(hasTradingWalletControls({ deploymentSetupActive: false, liveDeploymentStatus: 'unreachable', routeOwnsLiveWallet: true })).toBe(false)
+		expect(hasTradingWalletControls({ deploymentSetupActive: false, liveDeploymentStatus: 'missing', routeOwnsLiveWallet: true })).toBe(false)
 		expect(hasTradingWalletControls({ deploymentSetupActive: false, liveDeploymentStatus: 'verified', routeOwnsLiveWallet: false })).toBe(false)
-		expect(hasTradingWalletControls({ deploymentSetupActive: true, liveDeploymentStatus: 'unavailable', routeOwnsLiveWallet: false })).toBe(true)
+		expect(hasTradingWalletControls({ deploymentSetupActive: true, liveDeploymentStatus: 'missing', routeOwnsLiveWallet: false })).toBe(true)
 	})
 
 	test('omits the toolbar controls slot on routes without wallet or universe context', async () => {
@@ -349,13 +364,19 @@ describe('trading header', () => {
 		expect(rendered.container.querySelector('.header-toolbar-settings')).not.toBeNull()
 	})
 
-	test('uses shared overview and navigation with linked route tabs and no duplicate route selector', async () => {
+	test('uses the shared top bar with three trader tabs and secondary sections under More', async () => {
 		const rendered = await renderIntoDocument(<App />)
 		cleanupRendered = rendered.cleanup
-		expect(rendered.container.querySelector('.top-shell-content .header-toolbar .application-brand')?.textContent).toBe('Statoblast trading')
-		expect(rendered.container.querySelector('.app-nav-stack .tab-nav')).not.toBeNull()
-		expect(rendered.container.querySelector('.app-nav-stack select')).toBeNull()
-		const helpLink = Array.from(rendered.container.querySelectorAll<HTMLAnchorElement>('.tab-nav a')).find(anchor => anchor.textContent === 'Help')
+		expect(rendered.container.querySelector('.app-chrome .header-toolbar .application-brand')?.textContent).toBe('Augur Trading')
+		expect(rendered.container.querySelector('.header-toolbar-navigation .tab-nav')).not.toBeNull()
+		expect(rendered.container.querySelector('.header-toolbar-navigation select')).toBeNull()
+		expect(Array.from(rendered.container.querySelectorAll('.tab-nav .view-tabs a')).map(anchor => anchor.textContent)).toEqual(['Markets', 'Portfolio', 'Create'])
+		expect(rendered.container.querySelector('.tab-nav a[aria-current="page"]')?.textContent).toBe('Markets')
+		const moreButton = Array.from(rendered.container.querySelectorAll<HTMLButtonElement>('.tab-nav button')).find(button => button.textContent === 'More')
+		if (moreButton === undefined) throw new Error('The More menu is missing')
+		await act(() => moreButton.click())
+		expect(Array.from(rendered.container.querySelectorAll('.tab-nav-more-menu a')).map(anchor => anchor.textContent)).toEqual(['Liquidity', 'Universe', 'Help'])
+		const helpLink = Array.from(rendered.container.querySelectorAll<HTMLAnchorElement>('.tab-nav-more-menu a')).find(anchor => anchor.textContent === 'Help')
 		if (helpLink === undefined) throw new Error('Shared route navigation is missing')
 		await act(() => {
 			helpLink.click()
@@ -401,34 +422,26 @@ describe('trading header', () => {
 		expect(filterMarketsByUniverse([first, second], undefined)).toEqual([])
 	})
 
-	test('keeps the balance slots in place while the wallet is disconnected or loading', async () => {
-		const disconnected = await renderIntoDocument(<TradingOverviewPanel simulation={false} walletSummary={{ account: undefined, ethAttoEth: undefined, repAttoRep: undefined, status: 'disconnected', error: undefined, errorLabel: undefined, universeId: '1' }} />)
+	test('keeps the ETH balance row in place while the wallet is disconnected or loading and leaves REP out', async () => {
+		const disconnected = await renderIntoDocument(<TradingBalanceGroup walletSummary={{ account: undefined, ethAttoEth: undefined, repAttoRep: undefined, status: 'disconnected', error: undefined, errorLabel: undefined, universeId: '1' }} />)
 		cleanupRendered = disconnected.cleanup
-		const disconnectedCells = [...disconnected.container.querySelectorAll('.overview-inline-metrics .overview-metric-group-items > div')].map(cell => cell.className)
-		expect(disconnectedCells).toEqual(['overview-simulation-secondary', 'overview-simulation-secondary'])
-		const group = disconnected.container.querySelector('.overview-inline-metrics > .overview-metric-group')
+		const group = disconnected.container.querySelector('.overview-metric-group')
 		if (!(group instanceof HTMLElement)) throw new Error('Expected the balances group')
 		expect(group.getAttribute('aria-label')).toBe('Balances')
-		expect(group.style.getPropertyValue('--overview-metric-columns')).toBe('2')
 		expect(disconnected.container.querySelector('[data-wallet-asset="ETH"]')?.textContent).toContain('—')
-		expect(disconnected.container.querySelector('[data-wallet-asset="REP"]')?.textContent).toContain('—')
+		expect(disconnected.container.querySelector('[data-wallet-asset="REP"]')).toBeNull()
 		await disconnected.cleanup()
 
-		const loading = await renderIntoDocument(<TradingOverviewPanel simulation={false} walletSummary={{ account: '0x8ba1f109551bD432803012645Ac136ddd64DBA72', ethAttoEth: undefined, repAttoRep: undefined, status: 'loading', error: undefined, errorLabel: undefined, universeId: '1' }} />)
+		const loading = await renderIntoDocument(<TradingBalanceGroup walletSummary={{ account: '0x8ba1f109551bD432803012645Ac136ddd64DBA72', ethAttoEth: undefined, repAttoRep: undefined, status: 'loading', error: undefined, errorLabel: undefined, universeId: '1' }} />)
 		cleanupRendered = loading.cleanup
-		const loadingCells = [...loading.container.querySelectorAll('.overview-inline-metrics .overview-metric-group-items > div')].map(cell => cell.className)
-		expect(loadingCells).toEqual(disconnectedCells)
 		expect(loading.container.querySelector('[data-wallet-asset="ETH"]')?.textContent).toContain('Loading')
-		expect(loading.container.querySelector('[data-wallet-asset="REP"]')?.textContent).toContain('Loading')
 	})
 
 	test('keeps wallet balance failures visible with a retry', async () => {
 		const account = '0x8ba1f109551bD432803012645Ac136ddd64DBA72'
 		let retries = 0
-		const rendered = await renderIntoDocument(<TradingOverviewPanel simulation={false} walletSummary={{ account, ethAttoEth: undefined, repAttoRep: undefined, status: 'error', error: 'REP balance RPC failed', errorLabel: 'Wallet balance read failed', universeId: '1' }} onRetryWalletSummary={() => retries++} />)
+		const rendered = await renderIntoDocument(<TradingOverviewPanel walletSummary={{ account, ethAttoEth: undefined, repAttoRep: undefined, status: 'error', error: 'REP balance RPC failed', errorLabel: 'Wallet balance read failed', universeId: '1' }} onRetryWalletSummary={() => retries++} />)
 		cleanupRendered = rendered.cleanup
-		expect(rendered.container.querySelector('[data-wallet-asset="ETH"]')?.textContent).toContain('—')
-		expect(rendered.container.querySelector('[data-wallet-asset="REP"]')?.textContent).toContain('—')
 		expect(rendered.container.querySelector('[role="alert"]')?.textContent).toBe('Wallet balance read failed')
 		expect(rendered.container.querySelector('[role="alert"]')?.getAttribute('aria-label')).toContain('REP balance RPC failed')
 		await act(() => rendered.container.querySelector<HTMLButtonElement>('.trading-wallet-error button')?.click())
@@ -442,30 +455,17 @@ describe('trading header', () => {
 		expect(walletSummaryAvailability(true, undefined, 'error', 'Universe discovery failed', true, 'Universe discovery failed')?.error).toBe('Universe discovery failed')
 		const availability = walletSummaryAvailability(true, undefined, 'error', 'RPC request failed', true, 'Security pool discovery failed')
 		if (availability === undefined) throw new Error('A discovery failure must make wallet balances unavailable')
-		const rendered = await renderIntoDocument(<TradingOverviewPanel simulation={false} walletSummary={{ account: '0x8ba1f109551bD432803012645Ac136ddd64DBA72', ethAttoEth: undefined, repAttoRep: undefined, status: availability.status, error: availability.error, errorLabel: availability.errorLabel, universeId: '1' }} />)
+		const rendered = await renderIntoDocument(<TradingOverviewPanel walletSummary={{ account: '0x8ba1f109551bD432803012645Ac136ddd64DBA72', ethAttoEth: undefined, repAttoRep: undefined, status: availability.status, error: availability.error, errorLabel: availability.errorLabel, universeId: '1' }} />)
 		cleanupRendered = rendered.cleanup
 		expect(rendered.container.querySelector('[role="status"]')).toBeNull()
 		expect(rendered.container.querySelector('[role="alert"]')?.getAttribute('aria-label')).toContain('Security pool discovery failed: RPC request failed')
 	})
 
-	test('discloses simulation balances through the shared overview control', async () => {
-		const rendered = await renderIntoDocument(<TradingOverviewPanel simulation walletSummary={{ account: '0x00000000000000000000000000000000000000A1', ethAttoEth: 1n, repAttoRep: 2n, status: 'ready', error: undefined, errorLabel: undefined, universeId: '0' }} />)
-		cleanupRendered = rendered.cleanup
-		const toggle = rendered.container.querySelector<HTMLButtonElement>('.overview-details-toggle')
-		expect(toggle?.getAttribute('aria-expanded')).toBe('false')
-		expect(rendered.container.querySelector('.mobile-expanded')).toBeNull()
-		await act(() => toggle?.click())
-		expect(toggle?.getAttribute('aria-expanded')).toBe('true')
-		expect(rendered.container.querySelector('.overview-inline-metrics.mobile-expanded')).not.toBeNull()
-		await act(() => toggle?.click())
-		expect(toggle?.getAttribute('aria-expanded')).toBe('false')
-	})
-
-	test('preserves all 18 decimals in authoritative wallet balances', async () => {
-		const rendered = await renderIntoDocument(<TradingOverviewPanel simulation={false} walletSummary={{ account: '0x8ba1f109551bD432803012645Ac136ddd64DBA72', ethAttoEth: 1n, repAttoRep: 2n ** 256n - 1n, status: 'ready', error: undefined, errorLabel: undefined, universeId: '1' }} />)
+	test('preserves all 18 decimals in the authoritative wallet ETH balance', async () => {
+		const rendered = await renderIntoDocument(<TradingBalanceGroup walletSummary={{ account: '0x8ba1f109551bD432803012645Ac136ddd64DBA72', ethAttoEth: 1n, repAttoRep: 2n ** 256n - 1n, status: 'ready', error: undefined, errorLabel: undefined, universeId: '1' }} />)
 		cleanupRendered = rendered.cleanup
 		expect(rendered.container.querySelector('[data-wallet-asset="ETH"] button')?.getAttribute('title')).toBe('0.000000000000000001')
-		expect(rendered.container.querySelector('[data-wallet-asset="REP"] button')?.getAttribute('title')).toEndWith('.584007913129639935')
+		expect(rendered.container.querySelector('[data-wallet-asset="REP"]')).toBeNull()
 	})
 
 	test('hides retained balances synchronously when the selected universe changes', () => {
@@ -508,7 +508,7 @@ describe('trading header', () => {
 				}}
 				loadLiveDeployment={async () => {
 					attempts++
-					throw new Error('stored deployment unavailable')
+					throw tradingDeploymentMissingError('stored deployment unavailable')
 				}}
 			/>,
 		)
@@ -522,5 +522,68 @@ describe('trading header', () => {
 		expect(rendered.container.querySelector('.trading-wallet-actions .wallet-button')).not.toBeNull()
 		expect(rendered.container.querySelector('main .route-header .wallet-button')).toBeNull()
 		expect(attempts).toBe(1)
+	})
+
+	test('keeps the route and offers a retry instead of the deployment wizard when the RPC cannot be reached', async () => {
+		window.history.replaceState(undefined, '', '/#/portfolio')
+		let attempts = 0
+		const rendered = await renderIntoDocument(
+			<App
+				loadLiveDeployment={async () => {
+					attempts++
+					throw new Error('Trading RPC chain verification timed out')
+				}}
+			/>,
+		)
+		cleanupRendered = rendered.cleanup
+		await waitFor(() => expect(rendered.container.querySelector('.trading-connection-error')).not.toBeNull())
+		expect(rendered.container.querySelector('.deployment-setup')).toBeNull()
+		expect(rendered.container.querySelector('#app-content .route-header')?.textContent).toContain('Portfolio')
+		expect(rendered.container.querySelector('.trading-connection-error')?.textContent).toContain('Trading RPC chain verification timed out')
+		expect(rendered.container.querySelector('.header-toolbar .badge')?.textContent).toBe('Deployment unverified')
+		expect(Array.from(rendered.container.querySelectorAll('.tab-nav .view-tabs a')).map(anchor => anchor.textContent)).toEqual(['Markets', 'Portfolio', 'Create'])
+		const retryButton = Array.from(rendered.container.querySelectorAll<HTMLButtonElement>('.trading-connection-error button')).find(button => button.textContent === 'Retry')
+		if (retryButton === undefined) throw new Error('The retry action is missing')
+		await act(async () => {
+			retryButton.click()
+			await Bun.sleep(0)
+		})
+		await waitFor(() => expect(attempts).toBe(2))
+	})
+
+	test('retries a failed environment switch instead of rechecking the previous environment', async () => {
+		window.history.replaceState(undefined, '', '/#/portfolio')
+		let initializations = 0
+		let deploymentLoads = 0
+		const rendered = await renderIntoDocument(
+			<App
+				initializeEnvironment={async () => {
+					initializations++
+					if (initializations === 1) throw new Error('Sepolia RPC did not respond')
+				}}
+				loadLiveDeployment={() => {
+					deploymentLoads++
+					return new Promise<DeploymentConfiguration>(() => undefined)
+				}}
+			/>,
+		)
+		cleanupRendered = rendered.cleanup
+		await act(async () => {
+			window.history.pushState(undefined, '', '/?network=sepolia#/portfolio')
+			window.dispatchEvent(new Event('popstate'))
+			await Bun.sleep(0)
+		})
+		await waitFor(() => expect(rendered.container.querySelector('.trading-connection-error')?.textContent).toContain('Sepolia RPC did not respond'))
+		expect(initializations).toBe(1)
+		const loadsBeforeRetry = deploymentLoads
+		const retryButton = Array.from(rendered.container.querySelectorAll<HTMLButtonElement>('.trading-connection-error button')).find(button => button.textContent === 'Retry')
+		if (retryButton === undefined) throw new Error('The retry action is missing')
+		await act(async () => {
+			retryButton.click()
+			await Bun.sleep(0)
+		})
+		await waitFor(() => expect(initializations).toBe(2))
+		await waitFor(() => expect(deploymentLoads).toBeGreaterThan(loadsBeforeRetry))
+		expect(rendered.container.querySelector('.trading-connection-error')).toBeNull()
 	})
 })

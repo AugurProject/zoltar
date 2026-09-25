@@ -25,6 +25,7 @@ import { getInvalidStatoblastRouteState } from './lib/routeValidation.js'
 import { readUiPriceOracle, UiPriceOracleSettings } from './UiPriceOracleSettings.js'
 import { renderRepPriceSourceLabel } from '@zoltar/ui-statoblast-shared/features/security-pools/lib/repPriceSource.js'
 import { getRouteSecondaryNavigation, getStatoblastRouteTabs, getTransactionRouteKey } from './lib/appNavigation.js'
+import { getStatoblastOverviewUniverse } from './lib/overviewUniverse.js'
 import { useOpenOracleRoute } from './hooks/useOpenOracleRoute.js'
 import { useSecurityPoolsRoute } from './hooks/useSecurityPoolsRoute.js'
 
@@ -92,7 +93,7 @@ export function App() {
 		deploymentStatuses,
 		environmentRefreshKey: activeEnvironmentNonce,
 	})
-	const { loadingZoltarForkAccess, zoltarUniverse, zoltarUniverseError } = marketCreation
+	const { zoltarUniverseError } = marketCreation
 	const { activeOpenOracleView, loadOracleReport, onViewPendingReport, openOracleRouteContentProps, priceOracleManager, setOpenOracleForm } = useOpenOracleRoute({
 		accountState,
 		activeEnvironmentNonce,
@@ -155,7 +156,7 @@ export function App() {
 	const overviewProps = {
 		...overviewWalletProps,
 		activeUniverseId,
-		isLoadingUniverseRepBalance: loadingZoltarForkAccess,
+		...getStatoblastOverviewUniverse(marketCreation),
 		onGoToGenesisUniverse: () => setActiveUniverseId(0n),
 		repPrices: {
 			isLoading: isLoadingRepPrices,
@@ -171,10 +172,8 @@ export function App() {
 			repUsdcSource,
 			repUsdcSourceUrl,
 		},
-		universeForkTime: zoltarUniverse?.forkTime,
-		universeHasForked: zoltarUniverse?.hasForked,
 		universePresentation: undefined,
-		universeRepBalanceAttoRep: zoltarUniverse?.totalTheoreticalSupplyAttoRep,
+		showWethBalance: true,
 	}
 	const invalidRouteState = getInvalidStatoblastRouteState({
 		activeSecurityPoolsView,
@@ -226,7 +225,7 @@ export function App() {
 			currentTimestamp={currentTimestamp}
 			header={
 				<AppHeaderShell
-					renderOverview={settingsMenu => <OverviewPanels {...overviewProps} applicationTitle={applicationTitle} settingsMenu={settingsMenu} />}
+					renderOverview={({ navigation, settingsMenu }) => <OverviewPanels {...overviewProps} applicationTitle={applicationTitle} navigation={navigation} settingsMenu={settingsMenu} />}
 					simulationController={simulationController}
 					secondaryNavigation={secondaryNavigation}
 					tabNavigation={tabNavigationProps}

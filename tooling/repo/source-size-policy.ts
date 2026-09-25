@@ -38,7 +38,7 @@ export const sourceSizeAllowances = new Map<string, SourceSizeAllowance>([
 	...allowances('Owning UI library: separate workflow state and actions from rendering, and extract simulation scenario handlers.', [
 		['ui/coreShared/ts/simulation/tevmEngine.ts', 876],
 		['ui/statoblastShared/ts/protocol/securityPools.ts', 726],
-		['ui/coreShared/ts/components/SimulationBanner.tsx', 680],
+		['ui/coreShared/ts/components/SimulationBanner.tsx', 646],
 		['ui/coreShared/ts/app/hooks/useOnchainState.ts', 609],
 		['ui/statoblastShared/ts/features/open-oracle/lib/openOracle.ts', 682],
 		['ui/statoblastShared/ts/simulation/statoblastScenarios.ts', 638],

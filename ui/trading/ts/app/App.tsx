@@ -7,7 +7,8 @@ import type { LiveTradingControllerServices } from '../features/live/liveTrading
 import type { ComponentChildren } from 'preact'
 import { Help } from '../features/Help.js'
 import { LiveTrading } from '../features/LiveTrading.js'
-import { TradingOverviewPanel } from '../components/TradingOverviewPanel.js'
+import { TradingBalanceGroup, TradingOverviewPanel } from '../components/TradingOverviewPanel.js'
+import { TradingConnectionError } from '../features/TradingConnectionError.js'
 import { useUrlSearchState } from '@zoltar/ui-core-shared/app/hooks/useUrlSearchState.js'
 import { readStringQueryParam, readUniverseQueryParam, writeUniverseQueryParam } from '@zoltar/ui-core-shared/navigation/urlParams.js'
 import { resolveUniverseSelection, type LiveUniverses, type UniverseDiscoveryScope } from '../lib/universeSelection.js'
@@ -16,13 +17,11 @@ import { routeOwnsLiveWallet, walletSummaryAfterRouteChange, walletSummaryForUni
 import { TradingDeploymentSetup, type DeploymentWalletState, type TradingDeploymentSetupServices } from '../features/TradingDeploymentSetup.js'
 import type { DeploymentConfiguration } from '../protocol/config.js'
 import { loadCoreDeployments } from '../protocol/coreDeployments.js'
-import { resolveInstalledTradingDeployment, type CoreDeployment } from '../protocol/deployment.js'
+import { isTradingDeploymentMissingError, resolveInstalledTradingDeployment, tradingDeploymentMissingError, type CoreDeployment } from '../protocol/deployment.js'
 import { createTradingPublicClient, publicErrorMessage, validateRpcChainId, waitForActiveEnvironmentReady } from '../protocol/live.js'
 import { getActiveNetworkProfile, getActiveSimulationController } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { withTimeout } from '@zoltar/ui-core-shared/lib/promise.js'
 import * as appCopy from '../copy/app.js'
-import * as availabilityCopy from '../copy/availability.js'
-import * as sharedAppCopy from '@zoltar/ui-core-shared/copy/app.js'
 import { Badge } from '@zoltar/ui-core-shared/components/Badge.js'
 import { LoadingText } from '@zoltar/ui-core-shared/components/LoadingText.js'
 import { AppHeaderShell } from '@zoltar/ui-core-shared/app/components/AppHeaderShell.js'
@@ -33,7 +32,7 @@ import { ToolbarField } from '@zoltar/ui-core-shared/components/ToolbarField.js'
 import { hasTradingWalletControls, TradingWalletControls } from '../components/TradingWalletControls.js'
 import { initializeTradingActiveEnvironment } from './activeEnvironment.js'
 import { getTradingEnvironmentLocationKey, getTradingRouteHref, tradingRouting, tradingWorkflowRoute, type TradingRoute } from '../lib/routing.js'
-import { withDeploymentTab } from '@zoltar/ui-core-shared/navigation/appNavigation.js'
+import { tradingNavigationTabs } from '../lib/tradingNavigation.js'
 
 type ResolvedTradingRoute = TradingRoute | 'not-found'
 
@@ -56,12 +55,17 @@ function tradingPageTitle(route: ResolvedTradingRoute) {
 }
 
 const TRADING_NOT_FOUND_LINKS = [
-	{ href: '#/market', label: appCopy.market },
+	{ href: '#/market', label: appCopy.markets },
 	{ href: '#/portfolio', label: appCopy.portfolio },
 	{ href: '#/help', label: appCopy.help },
 ]
 
-type LiveDeploymentStatus = 'loading' | 'verified' | 'unavailable'
+/** `missing`: the chain answered and the trading contracts are not installed. `unreachable`: the check itself failed, so a retry may succeed. */
+type LiveDeploymentStatus = 'loading' | 'verified' | 'missing' | 'unreachable'
+
+function failedDeploymentStatus(error: unknown): LiveDeploymentStatus {
+	return isTradingDeploymentMissingError(error) ? 'missing' : 'unreachable'
+}
 
 function readTradingUrlState(search: string) {
 	return { universeId: readUniverseQueryParam(search), present: readStringQueryParam(search, 'universe') !== undefined }
@@ -70,7 +74,7 @@ function readTradingUrlState(search: string) {
 async function resolveCanonicalLiveDeployment(coreDeployments: readonly CoreDeployment[], createPublicClient: (configuration: DeploymentConfiguration) => PublicClient = createTradingPublicClient) {
 	const activeChainId = getActiveNetworkProfile().chain.id
 	const core = coreDeployments.find(deployment => deployment.chainId === activeChainId)
-	if (core === undefined) throw new Error('No canonical deployment is available for the active network')
+	if (core === undefined) throw tradingDeploymentMissingError('No canonical deployment is available for the active network')
 	const bootstrapConfiguration: DeploymentConfiguration = { chainId: core.chainId, chainName: core.chainName, factory: core.securityPoolFactory, feeBps: 30, router: core.securityPoolFactory, rpcUrl: core.defaultRpcUrl, securityPoolFactory: core.securityPoolFactory, zoltar: core.zoltar }
 	const client = createPublicClient(bootstrapConfiguration)
 	validateRpcChainId(await withTimeout(client.getChainId(), 15_000, 'Trading RPC chain verification timed out'), core.chainId)
@@ -85,7 +89,8 @@ async function resolveLiveDeployment() {
 function tradingNetworkLabel(liveDeploymentStatus: LiveDeploymentStatus, liveConfiguration: DeploymentConfiguration | undefined, deploymentWalletState: DeploymentWalletState) {
 	const networkName = deploymentWalletState.networkName ?? liveConfiguration?.chainName
 	if (networkName !== undefined) return networkName
-	if (liveDeploymentStatus === 'unavailable') return appCopy.networkUnavailable
+	if (liveDeploymentStatus === 'unreachable') return appCopy.deploymentUnverified
+	if (liveDeploymentStatus === 'missing') return appCopy.contractsNotDeployed
 	return appCopy.checkingDeployment
 }
 
@@ -105,6 +110,9 @@ export function App({
 	const [liveConfiguration, setLiveConfiguration] = useState<DeploymentConfiguration>()
 	const [liveConfigurationError, setLiveConfigurationError] = useState<string>()
 	const [workflowLocked, setWorkflowLocked] = useState(false)
+	const [deploymentCheckNonce, setDeploymentCheckNonce] = useState(0)
+	// Set when switching to another environment failed, so Retry repeats the switch instead of rechecking the previous environment.
+	const [environmentSwitchFailed, setEnvironmentSwitchFailed] = useState(false)
 	// The universe is chosen on the universe route through the shared `universe` query parameter; discovery confirms it exists.
 	const { applyUrlStateUpdate, getOwnedSearch, state: urlState } = useUrlSearchState(readTradingUrlState)
 	const [liveUniverses, setLiveUniverses] = useState<LiveUniverses>({ ids: [], selected: undefined, forRequest: undefined, forPool: undefined })
@@ -140,7 +148,8 @@ export function App({
 		setWorkflowLocked(locked)
 	}, [])
 	const updateLiveUniverses = useCallback((universeIds: readonly bigint[], authoritativeSelection: bigint | undefined, scope: UniverseDiscoveryScope) => setLiveUniverses({ ids: universeIds, selected: authoritativeSelection, forRequest: scope.requestedUniverseId, forPool: scope.addressedPool }), [])
-	const showUniverseField = routeOwnsLiveWallet(route) && liveDeploymentStatus !== 'unavailable'
+	const liveDeploymentUsable = liveDeploymentStatus === 'loading' || liveDeploymentStatus === 'verified'
+	const showUniverseField = routeOwnsLiveWallet(route) && liveDeploymentUsable
 	// The header names the universe the routes follow, like the other applications; it is chosen on the universe route and shown once discovery confirms it.
 	let universeValue: ComponentChildren = <LoadingText announce={false}>{appCopy.loadingWithEllipsis}</LoadingText>
 	if (confirmedUniverseId !== undefined) universeValue = <span title={formatUniverseLabel(BigInt(confirmedUniverseId))}>{formatUniverseDisplayLabel(BigInt(confirmedUniverseId))}</span>
@@ -156,7 +165,9 @@ export function App({
 		setLiveDeploymentStatus('verified')
 	}, [])
 	const updateDeploymentWalletState = useCallback((state: DeploymentWalletState) => setDeploymentWalletState(state), [])
-	const deploymentSetupActive = route !== 'not-found' && route !== 'help' && (route === 'deploy' || liveDeploymentStatus === 'unavailable')
+	// Only confirmed-missing contracts open the deployment wizard; an unreachable RPC keeps the route and offers a retry.
+	const deploymentSetupActive = route !== 'not-found' && route !== 'help' && (route === 'deploy' || liveDeploymentStatus === 'missing')
+	const connectionErrorActive = route !== 'not-found' && route !== 'help' && !deploymentSetupActive && liveDeploymentStatus === 'unreachable'
 	const workflowRoute = tradingWorkflowRoute(route)
 	const displayedRoute = deploymentSetupActive ? 'deploy' : workflowRoute
 	const refreshActiveEnvironment = useCallback(async () => {
@@ -178,20 +189,28 @@ export function App({
 		environment.setRevision(current => current + 1)
 	}, [initializeEnvironment])
 
+	const switchActiveEnvironment = useCallback(async () => {
+		setEnvironmentSwitchFailed(false)
+		try {
+			await refreshActiveEnvironment()
+		} catch (error) {
+			setEnvironmentSwitchFailed(true)
+			setLiveConfiguration(undefined)
+			setLiveConfigurationError(publicErrorMessage(error, 'Unable to load the trading environment'))
+			setLiveDeploymentStatus(failedDeploymentStatus(error))
+		}
+	}, [refreshActiveEnvironment])
+
 	useEffect(() => {
 		const synchronizeEnvironment = () => {
 			queueMicrotask(() => {
 				if (getTradingEnvironmentLocationKey() === activeEnvironmentLocationRef.current) return
-				void refreshActiveEnvironment().catch(error => {
-					setLiveConfiguration(undefined)
-					setLiveConfigurationError(publicErrorMessage(error, 'Unable to load the trading environment'))
-					setLiveDeploymentStatus('unavailable')
-				})
+				void switchActiveEnvironment()
 			})
 		}
 		window.addEventListener('popstate', synchronizeEnvironment)
 		return () => window.removeEventListener('popstate', synchronizeEnvironment)
-	}, [refreshActiveEnvironment])
+	}, [switchActiveEnvironment])
 	useEffect(() => {
 		let active = true
 		setLiveDeploymentStatus('loading')
@@ -206,16 +225,17 @@ export function App({
 				if (!active) return
 				setLiveConfiguration(undefined)
 				setLiveConfigurationError(publicErrorMessage(error, 'Unable to load the trading deployment'))
-				setLiveDeploymentStatus('unavailable')
+				setLiveDeploymentStatus(failedDeploymentStatus(error))
 			}
 		})()
 		return () => {
 			active = false
 		}
-	}, [activeEnvironmentNonce, loadLiveDeployment])
+	}, [activeEnvironmentNonce, deploymentCheckNonce, loadLiveDeployment])
 	let content
 	if (route === 'not-found') content = <NotFoundSection links={TRADING_NOT_FOUND_LINKS.map(link => ({ ...link, href: getTradingRouteHref(link.href) }))} />
 	else if (route === 'help') content = <Help />
+	else if (connectionErrorActive) content = <TradingConnectionError message={liveConfigurationError} route={route} onRetry={() => (environmentSwitchFailed ? void switchActiveEnvironment() : setDeploymentCheckNonce(current => current + 1))} />
 	else if (deploymentSetupActive)
 		content = (
 			<TradingDeploymentSetup
@@ -264,37 +284,28 @@ export function App({
 					tabNavigation={{
 						route: displayedRoute,
 						showProtocolGuide: false,
-						tabs: withDeploymentTab({
-							deploymentTab: { route: 'deploy', hash: '#/deploy', label: appCopy.deploy },
-							deploymentIncomplete: liveDeploymentStatus === 'unavailable',
-							route: displayedRoute,
-							tabs: [
-								{ route: 'market', hash: addressedPool === undefined ? '#/market' : `#/market/${addressedPool}`, label: appCopy.market },
-								{ route: 'liquidity', hash: addressedPool === undefined ? '#/liquidity' : `#/liquidity/${addressedPool}`, label: appCopy.liquidity },
-								{ route: 'portfolio', hash: '#/portfolio', label: appCopy.portfolio },
-								{ route: 'universe', hash: '#/universe', label: appCopy.universe },
-								{ route: 'create-market', hash: '#/create-market', label: appCopy.createMarket },
-								{ route: 'help', hash: '#/help', label: appCopy.help },
-							],
-						}).map(tab => (workflowLocked ? { ...tab, disabled: true, disabledReason: availabilityCopy.transactionInProgressReason } : tab)),
+						...tradingNavigationTabs({ addressedPool, displayedRoute, liveDeploymentStatus, workflowLocked }),
 						onRouteChange: nextRoute => {
 							if (workflowLocked) return
 							const hash = (nextRoute === 'liquidity' || nextRoute === 'market') && addressedPool !== undefined ? `#/${nextRoute}/${addressedPool}` : `#/${nextRoute}`
 							window.location.hash = getTradingRouteHref(hash)
 						},
 					}}
-					renderOverview={settingsMenu => (
+					renderOverview={({ navigation, settingsMenu }) => (
 						<TradingOverviewPanel
+							navigation={navigation}
 							settingsMenu={settingsMenu}
-							simulation={simulationController !== undefined}
-							badges={simulationController === undefined ? <Badge tone={liveDeploymentStatus === 'unavailable' ? 'warning' : 'muted'}>{tradingNetworkLabel(liveDeploymentStatus, liveConfiguration, deploymentWalletState)}</Badge> : <Badge tone='warning'>{sharedAppCopy.simulation}</Badge>}
+							badges={simulationController === undefined ? <Badge tone={liveDeploymentUsable ? 'muted' : 'warning'}>{tradingNetworkLabel(liveDeploymentStatus, liveConfiguration, deploymentWalletState)}</Badge> : undefined}
 							controls={
 								!showWalletControls && !showUniverseField ? undefined : (
 									<>
+										{showUniverseField ? <ToolbarField label={appCopy.universe}>{universeValue}</ToolbarField> : undefined}
 										{showWalletControls ? (
 											<TradingWalletControls
 												{...walletSlot}
 												account={walletSummary.account}
+												accountMetrics={showUniverseField ? <TradingBalanceGroup walletSummary={walletSummary} /> : undefined}
+												networkName={liveConfiguration?.chainName}
 												deploymentWalletState={deploymentWalletState}
 												onDeploymentWalletRequest={() => setDeploymentWalletRequestNonce(current => current + 1)}
 												onWalletConnectRequest={() => setWalletConnectRequestNonce(current => current + 1)}
@@ -305,7 +316,6 @@ export function App({
 												onSwitchNetwork={() => setWalletConnectRequestNonce(current => current + 1)}
 											/>
 										) : undefined}
-										{showUniverseField ? <ToolbarField label={appCopy.universe}>{universeValue}</ToolbarField> : undefined}
 									</>
 								)
 							}

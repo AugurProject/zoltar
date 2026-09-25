@@ -71,6 +71,10 @@
 			"bun": "./ts/tests/testUtils/transactionActionButton.ts",
 			"default": "./js/tests/testUtils/transactionActionButton.js"
 		},
+		"./app/components/AccountMenu.js": {
+			"bun": "./ts/app/components/AccountMenu.tsx",
+			"default": "./js/app/components/AccountMenu.js"
+		},
 		"./app/components/AppSettingsMenu.js": {
 			"bun": "./ts/app/components/AppSettingsMenu.tsx",
 			"default": "./js/app/components/AppSettingsMenu.js"
@@ -94,6 +98,10 @@
 		"./components/NoticeStack.js": {
 			"bun": "./ts/components/NoticeStack.tsx",
 			"default": "./js/components/NoticeStack.js"
+		},
+		"./components/SimulationStripSummary.js": {
+			"bun": "./ts/components/SimulationStripSummary.tsx",
+			"default": "./js/components/SimulationStripSummary.js"
 		},
 		"./components/SimulationBanner.js": {
 			"bun": "./ts/components/SimulationBanner.tsx",
