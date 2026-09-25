@@ -181,6 +181,33 @@ describe('file-only startup configuration', () => {
 		expect(result.output).toContain('config/operator.example.json')
 	})
 
+	test('reports a failed scan with UTC time and network when the RPC serves the wrong chain', async () => {
+		const directory = await temporaryDirectory()
+		const rpc = Bun.serve({
+			port: 0,
+			async fetch(request) {
+				const body = await request.json()
+				return Response.json({ jsonrpc: '2.0', id: body.id, result: '0xaa36a7' })
+			},
+		})
+		servers.push(rpc)
+		const saved = settings(rpc.url.href, 4173)
+		saved.runtime.once = true
+		saved.runtime.ui = false
+		saved.runtime.positionFile = join(directory, 'positions.json')
+		saved.runtime.historyFile = join(directory, 'history.jsonl')
+		saved.runtime.priceHistoryFile = join(directory, 'prices.jsonl')
+		const path = join(directory, 'operator.json')
+		await saveOperatorSettings(path, saved)
+		const result = await runToExit(path)
+		expect(result.exitCode).toBe(1)
+		const summaries = result.output.split('\n').filter(line => line.includes('ProcessedMs='))
+		expect(summaries).toHaveLength(1)
+		expect(summaries[0]).toMatch(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2} Mainnet unknown: ProcessedMs=\d+/)
+		expect(summaries[0]).toContain('status=failed')
+		expect(summaries[0]).not.toContain('activeReports=')
+	})
+
 	test('starts from saved RPC settings without an operational environment', async () => {
 		const directory = await temporaryDirectory()
 		const path = join(directory, 'operator.json')
