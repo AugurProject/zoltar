@@ -29,14 +29,26 @@ library SecurityPoolUtils {
 		return configuredMinimumAttoRep == 0 ? theoreticalSupplyAttoRep / 100_000 : configuredMinimumAttoRep;
 	}
 
+	function initializeChildCoverage(ISecurityPool child, uint256 migratedUnits) external returns (uint256 unassignedUnits) {
+		ISecurityPool parent = child.parent();
+		uint256 totalUnits = parent.totalObligationUnits();
+		uint256 writtenOffUnits = parent.writtenOffObligationUnits();
+		unassignedUnits = totalUnits - writtenOffUnits - migratedUnits;
+		child.setCoverageFinancials(totalUnits, writtenOffUnits, unassignedUnits);
+	}
+
 	function configureForkMigratedVault(ISecurityPool parent, ISecurityPool child, address vault, uint256 childRepBackingUnits, uint256 childCapacityOwnershipAttoRep, uint256 childFeeIndex, uint256 parentFeeIndex)
 		external
 		returns (
 			uint256 migratedBadDebtAttoEth,
 			uint256 resultingParentTotalBadDebtAttoEth,
-			uint256 resultingChildTotalBadDebtAttoEth
+			uint256 resultingChildTotalBadDebtAttoEth,
+			uint256 migratedUnits
 		)
 	{
+		migratedUnits = parent.getVaultObligationUnits(vault);
+		child.configureCoverageVault(vault, child.getVaultObligationUnits(vault) + migratedUnits);
+		parent.configureCoverageVault(vault, 0);
 		migratedBadDebtAttoEth = parent.vaultBadDebtAttoEth(vault);
 		resultingParentTotalBadDebtAttoEth = parent.totalBadDebtAttoEth() - migratedBadDebtAttoEth;
 		resultingChildTotalBadDebtAttoEth = child.totalBadDebtAttoEth() + migratedBadDebtAttoEth;
@@ -57,8 +69,8 @@ library SecurityPoolUtils {
 			auctionBadDebtGeneration == securityPool.getPoolAccountingSnapshot().badDebtGeneration
 				? badDebtToAssignAttoEth
 				: 0;
-		securityPool.configureFinalizedAuctionVault(vault, currentVaultRepBackingUnits + auctionRepBackingUnits, currentCapacityOwnershipAttoRep + newCapacityOwnershipAttoRep, currentFeeIndex, securityPool.vaultBadDebtAttoEth(vault) + currentBadDebtToAssignAttoEth, securityPool.totalBadDebtAttoEth());
-		securityPool.assignFinalizedAuctionFees(vault, newCapacityOwnershipAttoRep, auctionFeeIndexAtFinalization);
+		securityPool.configureFinalizedAuctionVault(vault, currentVaultRepBackingUnits + auctionRepBackingUnits, currentCapacityOwnershipAttoRep, currentFeeIndex, securityPool.vaultBadDebtAttoEth(vault) + currentBadDebtToAssignAttoEth, securityPool.totalBadDebtAttoEth());
+		securityPool.creditFinalizedAuctionCoverage(vault, newCapacityOwnershipAttoRep, auctionBadDebtGeneration, auctionFeeIndexAtFinalization);
 		return securityPool.totalRepBackingUnits();
 	}
 
@@ -72,7 +84,7 @@ library SecurityPoolUtils {
 		}
 	}
 
-	function calculateFeeAccrual(uint256 settlementCollateralAttoEth, uint256 retentionRate, uint256 timeDelta, uint256 indexRemainder, uint256 feeEligibleCapacityOwnershipAttoRep, uint256 feesOwedRemainder)
+	function calculateFeeAccrual(uint256 settlementCollateralAttoEth, uint256 retentionRate, uint256 timeDelta, uint256 indexRemainder, uint256 activeObligationUnits, uint256 feesOwedRemainder)
 		external
 		pure
 		returns (
@@ -91,9 +103,9 @@ library SecurityPoolUtils {
 			(decayingCollateralAttoEth * _rpow(retentionRate, timeDelta, PRICE_PRECISION)) / PRICE_PRECISION;
 		uint256 scaledFeeDelta =
 			(decayingCollateralAttoEth - resultingCollateralAttoEth) * PRICE_PRECISION + indexRemainder;
-		feeIndexDelta = scaledFeeDelta / feeEligibleCapacityOwnershipAttoRep;
-		nextIndexRemainder = scaledFeeDelta % feeEligibleCapacityOwnershipAttoRep;
-		uint256 feesOwedDelta = feeIndexDelta * feeEligibleCapacityOwnershipAttoRep + feesOwedRemainder;
+		feeIndexDelta = scaledFeeDelta / activeObligationUnits;
+		nextIndexRemainder = scaledFeeDelta % activeObligationUnits;
+		uint256 feesOwedDelta = feeIndexDelta * activeObligationUnits + feesOwedRemainder;
 		creditedFeesAttoEth = feesOwedDelta / PRICE_PRECISION;
 		nextFeesOwedRemainder = feesOwedDelta % PRICE_PRECISION;
 	}
@@ -111,7 +123,12 @@ library SecurityPoolUtils {
 		address truthAuction = securityPool.truthAuction();
 		if (truthAuction == address(0) || IUniformPriceDualCapBatchAuction(truthAuction).totalAttoRepPurchased() == 0)
 			return (feeIndexAtFinalization, 0);
-		claimableFeesAttoEth = Math.mulDiv(capacityOwnershipAttoRep, securityPool.feeIndex() - feeIndexAtFinalization, PRICE_PRECISION);
+		(, , , uint256 epoch, ) = forker.getUnassignedPosition(securityPool);
+		uint256 finalIndex =
+			epoch == securityPool.getPoolAccountingSnapshot().badDebtGeneration
+				? securityPool.feeIndex()
+				: securityPool.finalFeeIndexByEpoch(epoch);
+		claimableFeesAttoEth = Math.mulDiv(capacityOwnershipAttoRep, finalIndex - feeIndexAtFinalization, PRICE_PRECISION);
 	}
 
 	function getBadDebtGeneration(ISecurityPool securityPool) external view returns (uint256) {
@@ -130,10 +147,10 @@ library SecurityPoolUtils {
 			Math.mulDiv(activeOpenInterestAttoEth, vaultCapacityOwnershipAttoRep, totalCapacityOwnershipAttoRep, Math.Rounding.Ceil);
 	}
 
-	function calculateUnassignedPositionHealth(ISecurityPool securityPool, uint256 settlementCollateralAttoEth, uint256 repBackingUnits, uint256 capacityOwnershipAttoRep, uint256 badDebtAttoEth) private view returns (uint256 openInterestAttoEth, bool healthy) {
+	function calculateUnassignedPositionHealth(ISecurityPool securityPool, uint256 settlementCollateralAttoEth, uint256 repBackingUnits, uint256 capacityOwnershipAttoRep, uint256) private view returns (uint256 openInterestAttoEth, bool healthy) {
 		if (capacityOwnershipAttoRep == 0) return (0, true);
-		uint256 grossOpenInterestAttoEth = Math.mulDiv(settlementCollateralAttoEth, capacityOwnershipAttoRep, securityPool.totalCapacityOwnershipAttoRep(), Math.Rounding.Ceil);
-		openInterestAttoEth = grossOpenInterestAttoEth > badDebtAttoEth ? grossOpenInterestAttoEth - badDebtAttoEth : 0;
+		uint256 grossOpenInterestAttoEth = Math.mulDiv(settlementCollateralAttoEth, capacityOwnershipAttoRep, securityPool.totalObligationUnits(), Math.Rounding.Ceil);
+		openInterestAttoEth = grossOpenInterestAttoEth;
 		healthy = isVaultHealthyAtFactor(securityPool.backingUnitsToAttoRep(repBackingUnits), 0, openInterestAttoEth, securityPool.priceOracleManagerAndOperatorQueuer().lastPrice(), securityPool.statoblastSecurityMultiplierBps(), BPS_DENOMINATOR);
 	}
 
@@ -143,7 +160,7 @@ library SecurityPoolUtils {
 		uint256 badDebtAttoEth;
 		uint256 debtGeneration;
 		(repBackingUnits, capacityOwnershipAttoRep, badDebtAttoEth, debtGeneration, ) = ISecurityPoolForker(securityPoolForker).getUnassignedPosition(securityPool);
-		if (debtGeneration != securityPool.getPoolAccountingSnapshot().badDebtGeneration) badDebtAttoEth = 0;
+		if (debtGeneration != securityPool.getPoolAccountingSnapshot().badDebtGeneration) return true;
 		(, bool healthy) = calculateUnassignedPositionHealth(securityPool, settlementCollateralAttoEth, repBackingUnits, capacityOwnershipAttoRep, badDebtAttoEth);
 		return healthy;
 	}
@@ -152,18 +169,18 @@ library SecurityPoolUtils {
 		require(_isUnassignedPositionHealthy(securityPool, securityPoolForker, settlementCollateralAttoEth), 'Unassigned position unhealthy');
 	}
 
-	function calculateBundledLiquidationTransfer(uint256 targetBackingUnits, uint256 targetCapacityOwnershipAttoRep, uint256 targetOpenInterestAttoEth, uint256 requestedDebtAttoEth, uint256 repEthPrice, uint256 currentPoolHeldAttoRepBalance, uint256 currentTotalRepBackingUnits, uint256 minimumRemainingAttoRep)
+	function calculateBundledLiquidationTransfer(uint256 targetBackingUnits, uint256 targetObligationUnits, uint256 targetOpenInterestAttoEth, uint256 requestedDebtAttoEth, uint256 repEthPrice, uint256 currentPoolHeldAttoRepBalance, uint256 currentTotalRepBackingUnits, uint256 minimumRemainingAttoRep)
 		external
 		pure
 		returns (
 			uint256 debtToMoveAttoEth,
-			uint256 capacityOwnershipToMoveAttoRep,
+			uint256 obligationUnitsToMove,
 			uint256 vaultAttoRepBackingToTransfer,
 			uint256 backingUnitsToTransfer
 		)
 	{
 		if (
-			targetCapacityOwnershipAttoRep == 0 ||
+			targetObligationUnits == 0 ||
 			targetOpenInterestAttoEth == 0 ||
 			requestedDebtAttoEth == 0 ||
 			repEthPrice == 0
@@ -190,13 +207,12 @@ library SecurityPoolUtils {
 				? boundedRequestedDebtAttoEth
 				: maximumFundedDebtAttoEth;
 		if (debtToMoveAttoEth == 0) return (0, 0, 0, 0);
-		capacityOwnershipToMoveAttoRep =
+		obligationUnitsToMove =
 			debtToMoveAttoEth == targetOpenInterestAttoEth
-				? targetCapacityOwnershipAttoRep
-				: Math.mulDiv(targetCapacityOwnershipAttoRep, debtToMoveAttoEth, targetOpenInterestAttoEth);
-		if (capacityOwnershipToMoveAttoRep == 0) return (0, 0, 0, 0);
-		if (capacityOwnershipToMoveAttoRep > targetCapacityOwnershipAttoRep)
-			capacityOwnershipToMoveAttoRep = targetCapacityOwnershipAttoRep;
+				? targetObligationUnits
+				: Math.mulDiv(targetObligationUnits, debtToMoveAttoEth, targetOpenInterestAttoEth);
+		if (obligationUnitsToMove == 0) return (0, 0, 0, 0);
+		if (obligationUnitsToMove > targetObligationUnits) obligationUnitsToMove = targetObligationUnits;
 		backingUnitsToTransfer = calculateLiquidationBackingUnitsAward(debtToMoveAttoEth, repEthPrice, currentPoolHeldAttoRepBalance, currentTotalRepBackingUnits);
 		require(backingUnitsToTransfer <= transferableBackingUnits, 'Award unfunded');
 		vaultAttoRepBackingToTransfer =

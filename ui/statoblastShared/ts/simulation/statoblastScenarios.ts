@@ -28,7 +28,7 @@ export function getStatoblastScenarioLabel(scenario: StatoblastScenario) {
 export function getStatoblastScenarioDescription(scenario: StatoblastScenario) {
 	switch (scenario) {
 		case 'security-pool':
-			return 'One seeded question, one security pool, and one funded vault with an active capacity ownership. Use it to test pool actions and liquidation paths.'
+			return 'One seeded question, one security pool, and one funded vault with an enabled underwriting offer. Use it to test pool actions and liquidation paths.'
 		case 'securitypoolx2':
 			return 'Two seeded questions with two security pools and two funded vaults in each pool. Use it to test multi-pool selection and repeated pool actions.'
 		case 'securitypoolx2-auction':
@@ -263,6 +263,7 @@ async function seedSecurityPool({
 		const writeClient = createWriteClient(vaultSpec.accountAddress)
 		await getScenarioProtocol().approveErc20(writeClient, profile.genesisRepTokenAddress, poolResult.securityPoolAddress, vaultSpec.vaultRepBackingDepositAttoRep, 'approveRep')
 		await getScenarioProtocol().depositRepToVaultToSecurityPool(writeClient, poolResult.securityPoolAddress, vaultSpec.vaultRepBackingDepositAttoRep, getSeededVaultDepositTargetFactorBps(vaultSpec, STATOBLAST_SECURITY_MULTIPLIER_BPS))
+		await getScenarioProtocol().setCoverageOffer(writeClient, poolResult.securityPoolAddress, true, 1_000n * 10n ** 18n, 10_000n)
 		const seededVault = await loadRequiredSecurityVault(readClient, poolResult.securityPoolAddress, vaultSpec.accountAddress, vaultSpec.accountAddress)
 		if (seededVault.vaultAttoRepBacking !== vaultSpec.vaultRepBackingDepositAttoRep) throw new Error(`Expected seeded REP deposit for ${vaultSpec.accountAddress} in ${poolSpec.poolLabel}, got ${seededVault.vaultAttoRepBacking.toString()}`)
 		await reportStep(`Funding seeded security vault ${index + 1} of ${poolSpec.vaults.length} for ${poolSpec.poolLabel}`)
@@ -417,6 +418,7 @@ async function seedSecurityPoolX2Scenario({
 			const writeClient = createWriteClient(vaultSpec.accountAddress)
 			await getScenarioProtocol().approveErc20(writeClient, profile.genesisRepTokenAddress, poolResult.securityPoolAddress, vaultSpec.vaultRepBackingDepositAttoRep, 'approveRep')
 			await getScenarioProtocol().depositRepToVaultToSecurityPool(writeClient, poolResult.securityPoolAddress, vaultSpec.vaultRepBackingDepositAttoRep, getSeededVaultDepositTargetFactorBps(vaultSpec, STATOBLAST_SECURITY_MULTIPLIER_BPS))
+			await getScenarioProtocol().setCoverageOffer(writeClient, poolResult.securityPoolAddress, true, 1_000n * 10n ** 18n, 10_000n)
 			const seededVault = await loadRequiredSecurityVault(readClient, poolResult.securityPoolAddress, vaultSpec.accountAddress, vaultSpec.accountAddress)
 			if (seededVault.vaultAttoRepBacking !== vaultSpec.vaultRepBackingDepositAttoRep) throw new Error(`Expected seeded REP deposit for ${vaultSpec.accountAddress} in ${seededPool.poolLabel}, got ${seededVault.vaultAttoRepBacking.toString()}`)
 			await reportStep(`Funding seeded security vault ${index + 1} of ${seededPool.vaults.length} for ${seededPool.poolLabel}`)

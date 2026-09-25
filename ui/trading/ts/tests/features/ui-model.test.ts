@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { getAddress } from '@zoltar/core-shared/evm/ethereum'
-import { formatBpsMultiplier, formatCapacityOwnership, formatRoundedUnits } from '../../lib/format.js'
+import { formatBpsMultiplier, formatRoundedUnits } from '../../lib/format.js'
 import { parseNonNegativeDecimalInput, tryParseNonNegativeDecimalInput } from '@zoltar/ui-core-shared/forms/decimal.js'
 import { formatTrimmedUnits } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { attoSharesToCollateralAttoEth, averagePriceBps, collateralAttoEthToAttoShares, formatCollateralEth, formatCompleteSetQuantity, formatLpQuantity, formatOutcomeQuantity } from '../../lib/shareValue.js'
@@ -114,7 +114,6 @@ describe('standalone trading UI model', () => {
 
 	test('formats Statoblast settings for display', () => {
 		expect(formatBpsMultiplier(25_000n)).toBe('2.5×')
-		expect(formatCapacityOwnership(10_000n * 10n ** 18n, 9_500n * 10n ** 18n)).toBe('10 000 / 9 500 REP')
 		expect(formatTrimmedUnits(999_999_996_848_000_000n, 18, 12)).toBe('0.999999996848')
 		expect(formatTrimmedUnits(999_999_977_880_000_000n, 18, 12)).toBe('0.99999997788')
 		expect(formatRoundedUnits(999_999_996_848_000_000n)).toBe('1')

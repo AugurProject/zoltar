@@ -52,7 +52,7 @@ export function isSecurityVaultDepositBelowMinimum(currentVaultRepBackingAttoRep
 
 export function doesSecurityVaultExistOnchain(securityVaultDetails: SecurityVaultDetails | undefined) {
 	if (securityVaultDetails === undefined) return false
-	return securityVaultDetails.vaultAttoRepBacking > 0n || securityVaultDetails.capacityOwnershipAttoRep > 0n || securityVaultDetails.claimableFeesAttoEth > 0n || securityVaultDetails.disputeStakedAttoRep > 0n || securityVaultDetails.badDebtAttoEth > 0n
+	return (securityVaultDetails.obligationUnits ?? 0n) > 0n || securityVaultDetails.vaultAttoRepBacking > 0n || securityVaultDetails.capacityOwnershipAttoRep > 0n || securityVaultDetails.claimableFeesAttoEth > 0n || securityVaultDetails.disputeStakedAttoRep > 0n || securityVaultDetails.badDebtAttoEth > 0n
 }
 
 function divideBigintRoundUp(value: bigint, divisor: bigint) {
@@ -60,56 +60,29 @@ function divideBigintRoundUp(value: bigint, divisor: bigint) {
 	return (value + divisor - 1n) / divisor
 }
 
-function getCapacityOwnershipBackedRepFloor(capacityOwnershipAttoRep: bigint | undefined, repPerEthPrice: bigint | undefined, statoblastSecurityMultiplierBps: bigint | undefined) {
-	if (capacityOwnershipAttoRep === undefined || capacityOwnershipAttoRep <= 0n) return 0n
-	if (repPerEthPrice === undefined || repPerEthPrice <= 0n) return undefined
-	if (statoblastSecurityMultiplierBps === undefined || statoblastSecurityMultiplierBps <= 0n) return undefined
-	return divideBigintRoundUp(capacityOwnershipAttoRep * repPerEthPrice * statoblastSecurityMultiplierBps, PRICE_PRECISION * BPS_DENOMINATOR)
-}
-
-function getStrictCapacityOwnershipBackedRepMinimum(capacityOwnershipAttoRep: bigint | undefined, repPerEthPrice: bigint | undefined, multiplierBps: bigint | undefined) {
-	if (capacityOwnershipAttoRep === undefined || capacityOwnershipAttoRep <= 0n) return 0n
-	if (repPerEthPrice === undefined || repPerEthPrice <= 0n) return undefined
-	if (multiplierBps === undefined || multiplierBps <= 0n) return undefined
-	return (capacityOwnershipAttoRep * repPerEthPrice * multiplierBps) / (PRICE_PRECISION * BPS_DENOMINATOR) + 1n
-}
-
 export function getSecurityVaultWithdrawableRepAmount({
 	disputeStakedAttoRep = 0n,
 	vaultAttoRepBacking,
 	repPerEthPrice,
-	capacityOwnershipAttoRep,
+	openInterestAttoEth,
 	statoblastSecurityMultiplierBps,
-	totalPoolHeldAttoRep,
-	totalCapacityOwnershipAttoRep,
 }: {
 	vaultAttoRepBacking: bigint | undefined
 	disputeStakedAttoRep?: bigint | undefined
 	repPerEthPrice: bigint | undefined
-	capacityOwnershipAttoRep: bigint | undefined
+	openInterestAttoEth: bigint | undefined
 	statoblastSecurityMultiplierBps: bigint | undefined
-	totalPoolHeldAttoRep?: bigint | undefined
-	totalCapacityOwnershipAttoRep?: bigint | undefined
 }) {
-	if (vaultAttoRepBacking === undefined) return undefined
+	if (vaultAttoRepBacking === undefined || openInterestAttoEth === undefined) return undefined
 	if (disputeStakedAttoRep > 0n) return 0n
-	const requiredVaultAttoRep = getCapacityOwnershipBackedRepFloor(capacityOwnershipAttoRep, repPerEthPrice, statoblastSecurityMultiplierBps)
-	if (requiredVaultAttoRep === undefined) return undefined
-	const associatedAttoRep = vaultAttoRepBacking + disputeStakedAttoRep
-	const ordinaryHeadroom = associatedAttoRep > requiredVaultAttoRep ? associatedAttoRep - requiredVaultAttoRep : 0n
-	const migrationRequiredRep = getStrictCapacityOwnershipBackedRepMinimum(capacityOwnershipAttoRep, repPerEthPrice, statoblastSecurityMultiplierBps === undefined ? undefined : getMigrationSecurityMultiplierBps(statoblastSecurityMultiplierBps))
-	if (migrationRequiredRep === undefined) return undefined
-	const migrationHeadroom = vaultAttoRepBacking > migrationRequiredRep ? vaultAttoRepBacking - migrationRequiredRep : 0n
-	const maxLocalWithdrawal = vaultAttoRepBacking < ordinaryHeadroom ? vaultAttoRepBacking : ordinaryHeadroom
-	let maxWithdrawableAttoRep = maxLocalWithdrawal
-	if (migrationHeadroom < maxWithdrawableAttoRep) maxWithdrawableAttoRep = migrationHeadroom
-	if (totalPoolHeldAttoRep !== undefined && totalPoolHeldAttoRep > 0n) {
-		const requiredPoolRep = getCapacityOwnershipBackedRepFloor(totalCapacityOwnershipAttoRep, repPerEthPrice, statoblastSecurityMultiplierBps)
-		if (requiredPoolRep === undefined) return undefined
-		const maxGlobalWithdrawal = totalPoolHeldAttoRep > requiredPoolRep ? totalPoolHeldAttoRep - requiredPoolRep : 0n
-		maxWithdrawableAttoRep = maxWithdrawableAttoRep < maxGlobalWithdrawal ? maxWithdrawableAttoRep : maxGlobalWithdrawal
-	}
-	return maxWithdrawableAttoRep
+	if (openInterestAttoEth === 0n) return vaultAttoRepBacking
+	if (repPerEthPrice === undefined || repPerEthPrice <= 0n || statoblastSecurityMultiplierBps === undefined) return undefined
+	const base = divideBigintRoundUp(openInterestAttoEth * repPerEthPrice, PRICE_PRECISION)
+	const associated = divideBigintRoundUp(base * statoblastSecurityMultiplierBps, BPS_DENOMINATOR)
+	const migration = getMigrationSecurityMultiplierBps(statoblastSecurityMultiplierBps)
+	const liquid = divideBigintRoundUp(base * (migration < 10_500n ? 10_500n : migration), BPS_DENOMINATOR)
+	const required = associated > liquid ? associated : liquid
+	return vaultAttoRepBacking > required ? vaultAttoRepBacking - required : 0n
 }
 
 export function getStagedOperationTimeoutSeconds(timeoutMinutes: bigint | undefined) {
@@ -136,13 +109,10 @@ export function getVaultBackingFactorAdjustmentGuard(details: SecurityVaultDetai
 	if (minimum === undefined) return 'Pool minimum backing ratio is unavailable.'
 	if (factorBps !== undefined && factorBps < minimum) return `Target backing ratio must be at least ${formatCurrencyInputBalance(minimum, 4)}×`
 	if (details.vaultAttoRepBacking <= 0n) return 'Deposit REP to create a vault first.'
-	if (details.settlementCollateralAttoEth > 0n && factorBps !== undefined && factorBps > 0n && (details.vaultAttoRepBacking * minimum) / factorBps < details.capacityOwnershipAttoRep) return 'Capacity cannot be reduced while the pool has committed settlement collateral.'
 	if (details.disputeStakedAttoRep > 0n) return 'Backing factor changes are unavailable while vault REP is in a dispute.'
 	if (factorBps !== undefined && factorBps > 0n && repPerEthPrice !== undefined && poolSecurityMultiplierBps !== undefined) {
-		const capacity = (details.vaultAttoRepBacking * minimum) / factorBps
-		const totalCapacity = details.totalCapacityOwnershipAttoRep - details.capacityOwnershipAttoRep + capacity
-		const grossInterest = totalCapacity > 0n ? (details.settlementCollateralAttoEth * capacity + totalCapacity - 1n) / totalCapacity : 0n
-		const openInterestAttoEth = grossInterest > details.badDebtAttoEth ? grossInterest - details.badDebtAttoEth : 0n
+		const openInterestAttoEth = details.openInterestAttoEth
+		if (openInterestAttoEth === undefined) return 'Refresh vault obligations before adjusting the backing factor.'
 		if (!isVaultHealthyAtFactor({ healthFactorBps: 10_000n, openInterestAttoEth, poolHeldVaultRepBackingAttoRep: details.vaultAttoRepBacking, repPerEthPrice, poolSecurityMultiplierBps })) return 'This target would leave the vault undercollateralized.'
 	}
 	return undefined

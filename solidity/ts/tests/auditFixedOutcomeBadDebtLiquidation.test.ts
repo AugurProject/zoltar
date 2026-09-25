@@ -40,7 +40,18 @@ describe('Audit PoC: fixed-outcome child synthetic bad debt', () => {
 		const questionEnd = await getQuestionEndDate(client, questionId)
 		await mockWindow.setTime(questionEnd + 1n)
 		await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, PRICE_PRECISION)
-		await createCompleteSet(client, securityPoolAddresses.securityPool, repDeposit - repDeposit / 10n)
+		await attacker.writeContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: securityPoolAddresses.securityPool, functionName: 'setCoverageOffer', args: [true, (1n << 256n) - 1n, 10_000n] })
+		const assigned = (repDeposit - repDeposit / 10n) / 2n
+		await createCompleteSet(
+			client,
+			securityPoolAddresses.securityPool,
+			assigned * 2n,
+			false,
+			[
+				{ vault: client.account.address, collateralAttoEth: assigned },
+				{ vault: attacker.account.address, collateralAttoEth: assigned },
+			].sort((a, b) => a.vault.toLowerCase().localeCompare(b.vault.toLowerCase())),
+		)
 
 		await approveToken(client, addressString(GENESIS_REPUTATION_TOKEN), getZoltarAddress())
 		await forkUniverse(client, genesisUniverse, questionId)

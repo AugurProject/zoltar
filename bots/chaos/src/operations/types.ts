@@ -226,7 +226,7 @@ export interface StagedOperationSnapshot {
 	liquidationMinimumReceiverHealthFactorBps: string
 	liquidationMinPriceDistanceBps: string
 	snapshotTargetBackingUnits: string
-	snapshotTargetCapacityOwnershipAttoRep: CanonicalUintString
+	snapshotTargetObligationUnits: CanonicalUintString
 	snapshotTargetOpenInterestAttoEth: CanonicalUintString
 	snapshotTargetDisputeStakedAttoRep: CanonicalUintString
 	snapshotTotalPoolHeldAttoRep: CanonicalUintString

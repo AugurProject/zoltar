@@ -265,7 +265,7 @@ export function useForkAuctionSectionState(props: ForkAuctionSectionProps) {
 	const settlementSelectionHasClaims = settlementSelectionState.selectionHasClaims
 	const settlementSelectionHasRefunds = settlementSelectionState.selectionHasRefunds
 	const settlementSelectionEstimate = getTruthAuctionSettlementSelectionEstimate({
-		auctionedCapacityOwnershipAttoRep: context.selectedAuctionContext?.auctionedCapacityOwnershipAttoRep,
+		auctionObligationUnits: context.selectedAuctionContext?.auctionObligationUnits,
 		selectedRows: selectedSettlementBidRows,
 		truthAuction: truthAuctionStatus,
 	})

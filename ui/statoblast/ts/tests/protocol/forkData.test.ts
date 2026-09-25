@@ -12,7 +12,7 @@ describe('fork data decoder', () => {
 			truthAuctionAddress,
 			truthAuctionStartedAt: 2n,
 			migratedAttoRep: 3n,
-			auctionedCapacityOwnershipAttoRep: 4n,
+			auctionObligationUnits: 4n,
 			escalationElapsedAtFork: 5n,
 			escalationStartBondAtForkAttoRep: 6n,
 			escalationNonDecisionThresholdAtForkAttoRep: 7n,

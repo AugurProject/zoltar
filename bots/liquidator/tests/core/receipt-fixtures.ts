@@ -65,7 +65,7 @@ export function queuedLiquidationReceipt(isPendingSlot: boolean, operator = getA
 						{ name: 'queuedAt', type: 'uint256' },
 						{ name: 'validForSeconds', type: 'uint256' },
 						{ name: 'snapshotTargetBackingUnits', type: 'uint256' },
-						{ name: 'snapshotTargetCapacityOwnershipAttoRep', type: 'uint256' },
+						{ name: 'snapshotTargetObligationUnits', type: 'uint256' },
 						{ name: 'snapshotTargetOpenInterestAttoEth', type: 'uint256' },
 						{ name: 'snapshotTargetDisputeStakedAttoRep', type: 'uint256' },
 						{ name: 'snapshotTotalPoolHeldAttoRep', type: 'uint256' },

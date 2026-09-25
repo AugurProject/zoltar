@@ -1,8 +1,10 @@
+import { dirname } from 'node:path'
+import { getContractOutput, loadContractsJson, normalizeStorageLayout } from '../contractArtifactHelpers'
 import { encodeReceiveBasedRedeemRequest } from '../../../../ui/trading/ts/protocol/authorization.js'
 import { getZoltarAddress, forkUniverse } from '../../testSupport/simulator/utils/contracts/zoltar'
 import { approveToken } from '../../testSupport/simulator/utils/utilities'
 import { getInfraContractAddresses } from '../../testSupport/simulator/utils/contracts/deployStatoblast'
-import { setVaultCapacityFixture } from '../../testSupport/simulator/utils/contracts/statoblastTestUtils'
+import { setCoverageOfferFixture } from '../../testSupport/simulator/utils/contracts/statoblastTestUtils'
 import { TEST_ADDRESSES, GENESIS_REPUTATION_TOKEN } from '../../testSupport/simulator/utils/constants'
 import { addressString } from '../../testSupport/simulator/utils/bigint'
 import { statoblast_tokens_ShareToken_ShareToken } from '../../types/contractArtifact'
@@ -79,7 +81,8 @@ describe('trading against authoritative Zoltar contracts', () => {
 
 	beforeEach(async () => {
 		account = addressString(TEST_ADDRESSES[0])
-		await setVaultCapacityFixture(fixture.client, fixture.mockWindow, fixture.securityPoolAddresses.priceOracleManagerAndOperatorQueuer, fixture.client.account.address, fixture.repDeposit / 4n)
+		await writeContractAndWait(fixture.client, () => fixture.client.writeContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: fixture.securityPoolAddresses.securityPool, functionName: 'setCoverageOffer', args: [true, 10n ** 30n, 10_000n] }))
+		await setCoverageOfferFixture(fixture.client, fixture.mockWindow, fixture.securityPoolAddresses.priceOracleManagerAndOperatorQueuer, fixture.client.account.address, fixture.repDeposit / 4n)
 		factory = await deploy(factoryArtifact, [getInfraContractAddresses().securityPoolFactory, 30n])
 		router = await deploy(routerArtifact, [factory])
 		await writeContractAndWait(fixture.client, () => fixture.client.writeContract({ abi: factoryArtifact.abi, address: factory, functionName: 'createPair', args: [fixture.securityPoolAddresses.securityPool] }))
@@ -89,18 +92,19 @@ describe('trading against authoritative Zoltar contracts', () => {
 
 	test('uses the real dynamic complete-set scale and leaves no INVALID or router residue', async () => {
 		const deadline = fixture.questionData.endTime - 1n
-		await writeContractAndWait(fixture.client, () => fixture.client.writeContract({ abi: routerArtifact.abi, address: router, functionName: 'initializeWithEth', args: [pair, 7_000n, 1n, account, deadline], value: 1n }))
+		await writeContractAndWait(fixture.client, () => fixture.client.writeContract({ abi: routerArtifact.abi, address: router, functionName: 'initializeWithEth', args: [pair, 7_000n, 1n, account, deadline, [{ vault: account, collateralAttoEth: 10n ** 15n }]], value: 10n ** 15n }))
 		const poolSettings = await loadPoolAccounting()
 		expect(poolSettings.shareTokenSupplyAttoShares).toBeGreaterThan(0n)
-		expect(poolSettings.accounting.settlementCollateralAttoEth).toBe(1n)
+		expect(poolSettings.accounting.settlementCollateralAttoEth).toBe(10n ** 15n)
 		expect(poolSettings.accounting.totalCapacityOwnershipAttoRep).toBeGreaterThan(0n)
-		expect(poolSettings.accounting.feeEligibleCapacityOwnershipAttoRep).toBeGreaterThan(0n)
+		expect(poolSettings.accounting.activeObligationUnits).toBeGreaterThan(0n)
 		expect(poolSettings.mintingCapacityCeilingAttoEth).toBeGreaterThan(0n)
 		expect(poolSettings.mintingCapacityCeilingAttoEth - poolSettings.accounting.settlementCollateralAttoEth).toBeGreaterThan(0n)
 		expect(await shareBalance(pair, 0n)).toBe(0n)
 		const invalidBefore = await shareBalance(account, 0n)
-		const expectedMint = await fixture.client.readContract({ abi: attoEthToAttoSharesAbi, address: fixture.securityPoolAddresses.securityPool, functionName: 'attoEthToAttoShares', args: [1n] })
-		await writeContractAndWait(fixture.client, () => fixture.client.writeContract({ abi: routerArtifact.abi, address: router, functionName: 'enterPosition', args: [pair, 1, 1n, account, deadline], value: 1n }))
+		await writeContractAndWait(fixture.client, () => fixture.client.writeContract({ abi: routerArtifact.abi, address: router, functionName: 'enterPosition', args: [pair, 1, 1n, account, deadline, [{ vault: account, collateralAttoEth: 10n ** 15n }]], value: 10n ** 15n }))
+		const after = await loadPoolAccounting()
+		const expectedMint = (10n ** 15n * poolSettings.shareTokenSupplyAttoShares) / (after.accounting.settlementCollateralAttoEth - 10n ** 15n)
 		expect((await shareBalance(account, 0n)) - invalidBefore).toBe(expectedMint)
 		expect(await shareBalance(pair, 0n)).toBe(0n)
 		expect(await shareBalance(router, 0n)).toBe(0n)
@@ -110,7 +114,7 @@ describe('trading against authoritative Zoltar contracts', () => {
 
 	test('keeps LP removal open after the real question end time', async () => {
 		const deadline = fixture.questionData.endTime - 1n
-		await writeContractAndWait(fixture.client, () => fixture.client.writeContract({ abi: routerArtifact.abi, address: router, functionName: 'initializeWithEth', args: [pair, 5_000n, 1n, account, deadline], value: 1n }))
+		await writeContractAndWait(fixture.client, () => fixture.client.writeContract({ abi: routerArtifact.abi, address: router, functionName: 'initializeWithEth', args: [pair, 5_000n, 1n, account, deadline, [{ vault: account, collateralAttoEth: 1n }]], value: 1n }))
 		await fixture.mockWindow.setTime(fixture.questionData.endTime + 1n)
 		await expect(fixture.client.writeContract({ abi: pairArtifact.abi, address: pair, functionName: 'swapExactInput', args: [true, 1n, 0n, account] })).rejects.toThrow('Question ended')
 		const liquidity = await fixture.client.readContract({ abi: pairArtifact.abi, address: pair, functionName: 'balanceOf', args: [account] })
@@ -121,7 +125,7 @@ describe('trading against authoritative Zoltar contracts', () => {
 
 	test('reports the real finalized outcome and keeps raw LP removal available', async () => {
 		const deadline = fixture.questionData.endTime - 1n
-		await writeContractAndWait(fixture.client, () => fixture.client.writeContract({ abi: routerArtifact.abi, address: router, functionName: 'initializeWithEth', args: [pair, 5_000n, 1n, account, deadline], value: 1n }))
+		await writeContractAndWait(fixture.client, () => fixture.client.writeContract({ abi: routerArtifact.abi, address: router, functionName: 'initializeWithEth', args: [pair, 5_000n, 1n, account, deadline, [{ vault: account, collateralAttoEth: 1n }]], value: 1n }))
 		await fixture.finalizeQuestionAsYesWithoutFork()
 		expect(await fixture.client.readContract({ abi: pairArtifact.abi, address: pair, functionName: 'tradingStatus' })).toBe(5n)
 		const liquidity = await fixture.client.readContract({ abi: pairArtifact.abi, address: pair, functionName: 'balanceOf', args: [account] })
@@ -130,7 +134,7 @@ describe('trading against authoritative Zoltar contracts', () => {
 
 	test('stops parent trading after a real universe fork while preserving LP removal', async () => {
 		const deadline = fixture.questionData.endTime - 1n
-		await writeContractAndWait(fixture.client, () => fixture.client.writeContract({ abi: routerArtifact.abi, address: router, functionName: 'initializeWithEth', args: [pair, 5_000n, 1n, account, deadline], value: 1n }))
+		await writeContractAndWait(fixture.client, () => fixture.client.writeContract({ abi: routerArtifact.abi, address: router, functionName: 'initializeWithEth', args: [pair, 5_000n, 1n, account, deadline, [{ vault: account, collateralAttoEth: 1n }]], value: 1n }))
 		await fixture.mockWindow.setTime(fixture.questionData.endTime + 1n)
 		await approveToken(fixture.client, addressString(GENESIS_REPUTATION_TOKEN), getZoltarAddress())
 		await forkUniverse(fixture.client, fixture.genesisUniverse, fixture.questionId)
@@ -140,15 +144,20 @@ describe('trading against authoritative Zoltar contracts', () => {
 	})
 
 	test('exits and redeems against the real SecurityPool with zero operator approval and exact slippage bounds', async () => {
+		// Isolate exact router slippage from clock-dependent retention fees. The
+		// preceding dynamic-scale test and assigned-coverage suite exercise fees.
+		const horizon = normalizeStorageLayout(getContractOutput(loadContractsJson(dirname(import.meta.dir)), 'contracts/statoblast/SecurityPool.sol', 'SecurityPool')).find(field => field.label === 'feeEpochEndTime')
+		if (horizon === undefined) throw new Error('Missing fee horizon storage')
+		await fixture.mockWindow.addStateOverrides({ [fixture.securityPoolAddresses.securityPool]: { stateDiff: { [`0x${BigInt(horizon.slot).toString(16).padStart(64, '0')}`]: (await fixture.client.getBlock()).timestamp } } })
 		expect(await fixture.client.readContract({ abi: factoryArtifact.abi, address: factory, functionName: 'predictPair', args: [fixture.securityPoolAddresses.securityPool] })).toBe(pair)
 		expect(await fixture.client.readContract({ abi: pairArtifact.abi, address: pair, functionName: 'factory' })).toBe(factory)
 		const deadline = fixture.questionData.endTime - 1n
 		const shareTokenAddress = fixture.securityPoolAddresses.shareToken
 		const shareTokenAbi = statoblast_tokens_ShareToken_ShareToken.abi
-		await writeContractAndWait(fixture.client, () => fixture.client.writeContract({ abi: routerArtifact.abi, address: router, functionName: 'initializeWithEth', args: [pair, 5_000n, 1n, account, deadline], value: 10n }))
+		await writeContractAndWait(fixture.client, () => fixture.client.writeContract({ abi: routerArtifact.abi, address: router, functionName: 'initializeWithEth', args: [pair, 5_000n, 1n, account, deadline, [{ vault: account, collateralAttoEth: 10n }]], value: 10n }))
 
-		const entry = await fixture.client.simulateContract({ abi: routerArtifact.abi, address: router, functionName: 'enterPosition', args: [pair, 1, 1n, account, deadline], value: 2n })
-		await writeContractAndWait(fixture.client, () => fixture.client.writeContract({ abi: routerArtifact.abi, address: router, functionName: 'enterPosition', args: [pair, 1, 1n, account, deadline], value: 2n }))
+		const entry = await fixture.client.simulateContract({ abi: routerArtifact.abi, address: router, functionName: 'enterPosition', args: [pair, 1, 1n, account, deadline, [{ vault: account, collateralAttoEth: 2n }]], value: 2n })
+		await writeContractAndWait(fixture.client, () => fixture.client.writeContract({ abi: routerArtifact.abi, address: router, functionName: 'enterPosition', args: [pair, 1, 1n, account, deadline, [{ vault: account, collateralAttoEth: 2n }]], value: 2n }))
 		await writeContractAndWait(fixture.client, () => fixture.client.writeContract({ abi: shareTokenAbi, address: shareTokenAddress, functionName: 'setApprovalForAll', args: [router, false] }))
 		expect(await fixture.client.readContract({ abi: shareTokenAbi, address: shareTokenAddress, functionName: 'isApprovedForAll', args: [account, router] })).toBe(false)
 

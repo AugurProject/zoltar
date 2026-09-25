@@ -1,3 +1,4 @@
+import { createWriteClient } from '../../../../solidity/ts/testSupport/simulator/utils/clients.ts'
 import { createManualOperationController } from '../../src/runtime/manual-operations.ts'
 import { createSignerOperationGate } from '@zoltar/bot-shared/execution/signer-operation-gate'
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
@@ -384,6 +385,9 @@ describe('real ecosystem workflows through the production chaos runtime', () => 
 			const depositedVault = scan.snapshot.pools.find(pool => pool.address.toLowerCase() === current.pool.toLowerCase())?.vaults.find(vault => vault.address.toLowerCase() === context.account.address.toLowerCase())
 			if (depositedVault === undefined) throw new Error('Statoblast deposit did not create a discoverable wallet vault')
 			expect(BigInt(depositedVault.repBackingAttoRep)).toBeGreaterThan(0n)
+			// Owner authorization is a separate fixture action; depositing REP grants no offer.
+			await createWriteClient(current.node.anvilWindowEthereum, BigInt(current.signer)).writeContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: current.pool, functionName: 'setCoverageOffer', args: [true, 1_000n * ONE_TOKEN, 10_000n] })
+			scan = await canonicalRescan(context)
 			await execute('statoblast.complete-set.create')
 			const mintedShares = scan.snapshot.wallet.shares.find(shares => shares.universeId === '0')
 			expect(BigInt(mintedShares?.invalid ?? '0')).toBeGreaterThan(0n)

@@ -82,7 +82,7 @@ export const distinctTargetVaultRequired = 'Select a target vault that is differ
 export const targetVaultRequired = 'Select a target vault first.'
 export const targetVaultRepBackingAttoRep = 'Target vault REP backing'
 export const targetDisputeStakedAttoRep = 'Target dispute-staked REP'
-export const targetCapacityOwnershipAttoRep = 'Target capacity ownership'
+export const targetObligationUnits = 'Target capacity ownership'
 export const stagedOperationTimeoutHelpText = 'Whole minutes; at least 1 minute after oracle settlement.'
 export const formatTimeoutHelpTextResolved = (duration: string) => `Expires ${duration} after oracle settlement.`
 export const immediateLiquidationSuccessDetail = 'A valid oracle price was already available, so the liquidation executed immediately and no staged operation was created.'

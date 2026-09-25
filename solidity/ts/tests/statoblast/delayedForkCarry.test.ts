@@ -8,7 +8,7 @@ import { getInfraContractAddresses, getSecurityPoolAddresses } from '../../testS
 import { getEscalationGameOutcomeState } from '../../testSupport/simulator/utils/contracts/escalationGame'
 import { depositToEscalationGame, getAwaitingForkContinuation, getRepToken, getSecurityPoolsEscalationGame, getSystemState, depositRepToVault } from '../../testSupport/simulator/utils/contracts/securityPool'
 import { createChildUniverse, finalizeTruthAuction, initiateSecurityPoolFork, migrateRepToZoltar, startTruthAuction } from '../../testSupport/simulator/utils/contracts/securityPoolForker'
-import { approveAndDepositRepToVault, setVaultCapacityFixture } from '../../testSupport/simulator/utils/contracts/statoblastTestUtils'
+import { approveAndDepositRepToVault, setCoverageOfferFixture } from '../../testSupport/simulator/utils/contracts/statoblastTestUtils'
 import { addRepToMigrationBalance, splitMigrationRep, forkUniverse, getZoltarAddress, getZoltarForkThreshold } from '../../testSupport/simulator/utils/contracts/zoltar'
 import { createQuestion, getQuestionId } from '../../testSupport/simulator/utils/contracts/zoltarQuestionData'
 import { approveToken, getChildUniverseId, getERC20Balance } from '../../testSupport/simulator/utils/utilities'
@@ -39,7 +39,7 @@ describe('Statoblast: delayed repeated-fork carry', () => {
 		const noDepositor = createWriteClient(mockWindow, TEST_ADDRESSES[1])
 		await approveAndDepositRepToVault(noDepositor, fixture.repDeposit, questionId)
 		await mockWindow.setTime(questionData.endTime + 10000n)
-		await setVaultCapacityFixture(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, client.account.address, 0n)
+		await setCoverageOfferFixture(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, client.account.address, 0n)
 		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, 100n * ATTO_REP_PER_REP)
 		await depositToEscalationGame(noDepositor, securityPoolAddresses.securityPool, QuestionOutcome.No, 80n * ATTO_REP_PER_REP)
 		const parentGame = await getSecurityPoolsEscalationGame(client, securityPoolAddresses.securityPool)
@@ -156,7 +156,7 @@ describe('Statoblast: delayed repeated-fork carry', () => {
 			await splitMigrationRep(noDepositor, universe, 2n * fixture.repDeposit, [QuestionOutcome.Yes])
 			await approveToken(noDepositor, nextRep, nextPool.securityPool)
 			await depositRepToVault(noDepositor, nextPool.securityPool, fixture.repDeposit)
-			await setVaultCapacityFixture(noDepositor, mockWindow, nextPool.priceOracleManagerAndOperatorQueuer, noDepositor.account.address, 0n)
+			await setCoverageOfferFixture(noDepositor, mockWindow, nextPool.priceOracleManagerAndOperatorQueuer, noDepositor.account.address, 0n)
 			await depositToEscalationGame(noDepositor, nextPool.securityPool, QuestionOutcome.No, 30n * ATTO_REP_PER_REP)
 			assert.equal((await getEscalationGameOutcomeState(client, nextGame, QuestionOutcome.No)).balanceAttoRep, 110n * ATTO_REP_PER_REP)
 			const finalDeadline = await client.readContract({ abi: statoblast_EscalationGame_EscalationGame.abi, address: nextGame, functionName: 'getEscalationGameEndDate' })

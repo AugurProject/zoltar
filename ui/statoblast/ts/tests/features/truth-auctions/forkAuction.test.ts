@@ -627,7 +627,7 @@ void describe('fork auction helpers', () => {
 
 		expect(
 			getTruthAuctionSettlementSelectionEstimate({
-				auctionedCapacityOwnershipAttoRep: 8n * ONE_UNIT,
+				auctionObligationUnits: 8n * ONE_UNIT,
 				selectedRows: settlementRows,
 				truthAuction: underfundedAuction,
 			}),
@@ -680,7 +680,7 @@ void describe('fork auction helpers', () => {
 
 		expect(
 			getTruthAuctionSettlementSelectionEstimate({
-				auctionedCapacityOwnershipAttoRep: undefined,
+				auctionObligationUnits: undefined,
 				selectedRows: settlementRows,
 				truthAuction: underfundedAuction,
 			}),
@@ -787,7 +787,7 @@ void describe('fork auction helpers', () => {
 
 		expect(
 			getTruthAuctionSettlementSelectionEstimate({
-				auctionedCapacityOwnershipAttoRep: 8n * ONE_UNIT,
+				auctionObligationUnits: 8n * ONE_UNIT,
 				selectedRows: settlementRows,
 				truthAuction: finalizedAuction,
 			}),
@@ -814,7 +814,7 @@ void describe('fork auction helpers', () => {
 
 		expect(
 			getTruthAuctionSettlementSelectionEstimate({
-				auctionedCapacityOwnershipAttoRep: 8n * ONE_UNIT,
+				auctionObligationUnits: 8n * ONE_UNIT,
 				selectedRows: settlementRows,
 				truthAuction: finalizedAuction,
 			}),

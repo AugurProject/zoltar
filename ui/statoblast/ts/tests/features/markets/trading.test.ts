@@ -142,7 +142,8 @@ void describe('trading helpers', () => {
 			estimateMintCheckpoint({
 				currentRetentionRate: 900_000_000_000_000_000n,
 				currentTimestamp: 2n,
-				feeEligibleCapacityOwnershipAttoRep: 5n * TOKEN_PRECISION,
+				activeObligationUnits: 5n * TOKEN_PRECISION,
+				totalObligationUnits: 5n * TOKEN_PRECISION,
 				feeEndTimestamp: 10n,
 				feeIndexRemainder: 0n,
 				lastUpdatedFeeAccumulator: 1n,
@@ -288,7 +289,7 @@ void describe('trading helpers', () => {
 				totalPoolHeldAttoRep: 20n * 10n ** 18n,
 				mintingCapacityAttoEth: 0n,
 			}),
-		).toBe('No mint capacity. No active capacity ownership.')
+		).toBe('No authorized coverage is available. Vault owners must enable underwriting offers.')
 
 		expect(
 			getTradingMintGuardMessage({

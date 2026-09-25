@@ -84,6 +84,7 @@ describe('Child-pool fee epoch regression', () => {
 		await updateSettlementCollateral(client, child.securityPool)
 		strictEqualTypeSafe(await client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: child.securityPool, functionName: 'getFeeEpochEndTime' }), 2n ** 256n - 1n, 'unresolved child horizon must remain open beyond question end')
 		const mintedShares = 2n * 10n ** 18n
+		await client.writeContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: child.securityPool, functionName: 'setCoverageOffer', args: [true, (1n << 256n) - 1n, 10_000n] })
 		await createCompleteSet(client, child.securityPool, mintedShares)
 		const collateralBefore = await getSettlementCollateralAttoEth(client, child.securityPool)
 		await mockWindow.advanceTime(DAY)

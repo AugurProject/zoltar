@@ -130,7 +130,7 @@ export async function discoverStagedOperations(client: ChaosReadClient, pool: Po
 							requestedDebtAttoEth: hasApproval ? operation.reservedLiquidationDebtAttoEth : operation.operationValue,
 							snapshot: {
 								targetBackingUnits: operation.snapshotTargetBackingUnits,
-								targetCapacityOwnershipAttoRep: operation.snapshotTargetCapacityOwnershipAttoRep,
+								targetObligationUnits: operation.snapshotTargetObligationUnits,
 							},
 							targetVault: operation.targetVault,
 						},
@@ -180,7 +180,7 @@ export async function discoverStagedOperations(client: ChaosReadClient, pool: Po
 			receiverVault: getAddress(operation.receiverVault),
 			reservedLiquidationDebtAttoEth: operation.reservedLiquidationDebtAttoEth.toString(),
 			snapshotTargetBackingUnits: operation.snapshotTargetBackingUnits.toString(),
-			snapshotTargetCapacityOwnershipAttoRep: operation.snapshotTargetCapacityOwnershipAttoRep.toString(),
+			snapshotTargetObligationUnits: operation.snapshotTargetObligationUnits.toString(),
 			snapshotTargetDisputeStakedAttoRep: targetVault.disputeStakedAttoRep,
 			snapshotTargetOpenInterestAttoEth: targetVault.openInterestAttoEth,
 			snapshotTotalPoolHeldAttoRep: pool.totalPoolHeldAttoRep,

@@ -13,7 +13,7 @@ import type { ReportingOutcomeKey, TradingShareBalances, ZoltarUniverseSummary }
 const PRICE_PRECISION = 10n ** 18n
 const BPS_DENOMINATOR = 10_000n
 
-export const NO_MINT_CAPACITY_NO_ACTIVE_CAPACITY_OWNERSHIP_MESSAGE = 'No mint capacity. No active capacity ownership.'
+export const NO_MINT_CAPACITY_NO_ACTIVE_CAPACITY_OWNERSHIP_MESSAGE = 'No authorized coverage is available. Vault owners must enable underwriting offers.'
 export const NEED_MATCHING_COMPLETE_SET_SHARES_MESSAGE = 'Need matching Invalid, Yes, and No shares to redeem complete sets.'
 export const UNDEFINED_COMPLETE_SET_EXCHANGE_RATE_MESSAGE = 'Minting is unavailable because this pool has complete-set shares but no collateral.'
 
@@ -51,18 +51,20 @@ function rpow(value: bigint, exponent: bigint, baseUnit: bigint) {
 }
 
 export function estimateMintCheckpoint({
+	totalObligationUnits,
 	currentRetentionRate,
 	currentTimestamp,
-	feeEligibleCapacityOwnershipAttoRep,
+	activeObligationUnits,
 	feeEndTimestamp,
 	feeIndexRemainder,
 	lastUpdatedFeeAccumulator,
 	settlementCollateralAttoEth,
 	totalFeesOwedRemainder,
 }: {
+	totalObligationUnits?: bigint | undefined
 	currentRetentionRate: bigint | undefined
 	currentTimestamp: bigint | undefined
-	feeEligibleCapacityOwnershipAttoRep: bigint | undefined
+	activeObligationUnits: bigint | undefined
 	feeEndTimestamp: bigint | undefined
 	feeIndexRemainder: bigint | undefined
 	lastUpdatedFeeAccumulator: bigint | undefined
@@ -70,9 +72,10 @@ export function estimateMintCheckpoint({
 	totalFeesOwedRemainder: bigint | undefined
 }) {
 	if (
+		totalObligationUnits === undefined ||
 		currentRetentionRate === undefined ||
 		currentTimestamp === undefined ||
-		feeEligibleCapacityOwnershipAttoRep === undefined ||
+		activeObligationUnits === undefined ||
 		feeEndTimestamp === undefined ||
 		feeIndexRemainder === undefined ||
 		lastUpdatedFeeAccumulator === undefined ||
@@ -81,12 +84,16 @@ export function estimateMintCheckpoint({
 	)
 		return undefined
 	const checkpointTimestamp = currentTimestamp < feeEndTimestamp ? currentTimestamp : feeEndTimestamp
-	if (lastUpdatedFeeAccumulator >= checkpointTimestamp || feeEligibleCapacityOwnershipAttoRep === 0n) return { estimatedRetentionFeeAttoEth: 0n, settlementCollateralAfterFeesAttoEth: settlementCollateralAttoEth }
+	if (lastUpdatedFeeAccumulator >= checkpointTimestamp || activeObligationUnits === 0n) return { estimatedRetentionFeeAttoEth: 0n, settlementCollateralAfterFeesAttoEth: settlementCollateralAttoEth }
 	const timeDelta = checkpointTimestamp - lastUpdatedFeeAccumulator
-	const retainedCollateralAttoEth = (settlementCollateralAttoEth * rpow(currentRetentionRate, timeDelta, PRICE_PRECISION)) / PRICE_PRECISION
-	const scaledFeeDelta = (settlementCollateralAttoEth - retainedCollateralAttoEth) * PRICE_PRECISION + feeIndexRemainder
-	const feeIndexDelta = scaledFeeDelta / feeEligibleCapacityOwnershipAttoRep
-	const feesOwedDelta = feeIndexDelta * feeEligibleCapacityOwnershipAttoRep + totalFeesOwedRemainder
+	if (totalObligationUnits === 0n || activeObligationUnits > totalObligationUnits) return undefined
+	const feeBase = (settlementCollateralAttoEth * activeObligationUnits) / totalObligationUnits
+	const pending = (feeIndexRemainder + totalFeesOwedRemainder) / PRICE_PRECISION
+	const decaying = feeBase > pending ? feeBase - pending : 0n
+	const retainedCollateralAttoEth = (decaying * rpow(currentRetentionRate, timeDelta, PRICE_PRECISION)) / PRICE_PRECISION
+	const scaledFeeDelta = (decaying - retainedCollateralAttoEth) * PRICE_PRECISION + feeIndexRemainder
+	const feeIndexDelta = scaledFeeDelta / activeObligationUnits
+	const feesOwedDelta = feeIndexDelta * activeObligationUnits + totalFeesOwedRemainder
 	const estimatedRetentionFeeAttoEth = feesOwedDelta / PRICE_PRECISION
 	return {
 		estimatedRetentionFeeAttoEth,
@@ -100,8 +107,8 @@ export function formatStatoblastSecurityMultiplier(statoblastSecurityMultiplierB
 	return fractional === '' ? whole.toString() : `${whole}.${fractional}`
 }
 
-export function hasRepBackedPoolWithNoActiveCapacityOwnership(totalPoolHeldAttoRep: bigint | undefined, feeEligibleCapacityOwnershipAttoRep: bigint | undefined) {
-	return (totalPoolHeldAttoRep ?? 0n) > 0n && (feeEligibleCapacityOwnershipAttoRep ?? 0n) === 0n
+export function hasRepBackedPoolWithNoActiveCapacityOwnership(totalPoolHeldAttoRep: bigint | undefined, activeObligationUnits: bigint | undefined) {
+	return (totalPoolHeldAttoRep ?? 0n) > 0n && (activeObligationUnits ?? 0n) === 0n
 }
 
 function getMaxRedeemableCompleteSets(shareBalances: TradingShareBalances | undefined) {
@@ -205,6 +212,7 @@ export function getTradingMintGuardMessage({
 	ethBalanceAttoEth,
 	mintingCapacityAttoEth,
 	hasSelectedPool,
+	hasEscalationGame,
 	isOnActiveAppChain,
 	isPriceValid,
 	mintAmountInput,
@@ -216,6 +224,7 @@ export function getTradingMintGuardMessage({
 	ethBalanceAttoEth: bigint | undefined
 	mintingCapacityAttoEth: bigint | undefined
 	hasSelectedPool: boolean
+	hasEscalationGame?: boolean | undefined
 	isOnActiveAppChain: boolean
 	isPriceValid?: boolean
 	mintAmountInput: string
@@ -225,6 +234,7 @@ export function getTradingMintGuardMessage({
 	if (!hasSelectedPool) return 'Select a pool before minting.'
 	const walletGuardState = getWalletActiveAppChainGuardState({ accountAddress, isOnActiveAppChain, walletRequiredReason: 'Connect a wallet before minting complete sets.' })
 	if (walletGuardState.blocked) return walletGuardState.reason
+	if (hasEscalationGame) return tradingCopy.mintClosedAfterEscalation
 	if (isPriceValid === false) return tradingCopy.staleOraclePrice
 
 	const undefinedExchangeRate = hasUndefinedCompleteSetExchangeRate(settlementCollateralAttoEth, shareTokenSupplyAttoShares)
@@ -232,7 +242,6 @@ export function getTradingMintGuardMessage({
 	if (undefinedExchangeRate) return UNDEFINED_COMPLETE_SET_EXCHANGE_RATE_MESSAGE
 
 	const remainingCapacity = getRemainingMintCapacity(mintingCapacityAttoEth, settlementCollateralAttoEth, shareTokenSupplyAttoShares)
-	if (remainingCapacity === undefined) return 'Loading mint capacity.'
 	if (remainingCapacity === 0n) {
 		if ((totalPoolHeldAttoRep ?? 0n) > 0n && mintingCapacityAttoEth === 0n) return NO_MINT_CAPACITY_NO_ACTIVE_CAPACITY_OWNERSHIP_MESSAGE
 
@@ -245,7 +254,7 @@ export function getTradingMintGuardMessage({
 	if (mintAmount === undefined) return 'Enter a valid mint amount.'
 
 	if (mintAmount <= 0n) return 'Enter a mint amount greater than zero.'
-	if (mintAmount > remainingCapacity) return `Max mint capacity is ${formatCurrencyBalanceWithUnit(remainingCapacity, 'ETH')}.`
+	if (remainingCapacity !== undefined && mintAmount > remainingCapacity) return `Max mint capacity is ${formatCurrencyBalanceWithUnit(remainingCapacity, 'ETH')}.`
 	if (ethBalanceAttoEth === undefined) return 'Loading wallet ETH balance.'
 	if (mintAmount > ethBalanceAttoEth) return `Need ${formatAdditionalCurrencyBalance(mintAmount - ethBalanceAttoEth, 'ETH')} in this wallet to mint the selected amount.`
 	return undefined

@@ -115,7 +115,7 @@ function createTruthAuction(overrides: Partial<TruthAuctionMetrics> = {}): Truth
 
 function createForkAuctionDetails(overrides: Partial<ForkAuctionDetails> = {}): ForkAuctionDetails {
 	return {
-		auctionedCapacityOwnershipAttoRep: 8n * ONE_UNIT,
+		auctionObligationUnits: 8n * ONE_UNIT,
 		claimingAvailable: true,
 		settlementCollateralAttoEth: 0n,
 		currentTime: 700_000n,
@@ -142,7 +142,7 @@ function createChildPool(overrides: Partial<ListedSecurityPool> = {}): ListedSec
 	return {
 		settlementCollateralAttoEth: 0n,
 		currentRetentionRate: 10n,
-		feeEligibleCapacityOwnershipAttoRep: 0n,
+		activeObligationUnits: 0n,
 		hasForkActivity: true,
 		forkOutcome: 'yes',
 		forkOwnSecurityPool: false,

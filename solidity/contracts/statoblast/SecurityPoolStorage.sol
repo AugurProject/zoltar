@@ -22,15 +22,16 @@ abstract contract SecurityPoolStorage {
 	uint256 internal feeIndexRemainder;
 	uint256 internal totalFeesOwedRemainder;
 	uint256 internal unallocatedAccruedFeesAttoEth;
-	uint256 internal feeEligibleCapacityOwnershipAttoRep;
-	uint256 internal uncheckpointedFeeEligibleCapacityOwnershipAttoRep;
+	uint256 internal activeObligationUnits;
+	uint256 internal uncheckpointedActiveObligationUnits;
 	uint256 public currentRetentionRate;
 	bool public awaitingForkContinuation;
 	mapping(address => SecurityVault) public securityVaults;
-	mapping(address => uint256) internal vaultFeeRemainders;
+	mapping(uint256 => mapping(address => uint256)) internal vaultFeeRemainders;
 	address[] internal vaultAddresses;
 	mapping(address => bool) internal isKnownVault;
 	SystemState public systemState;
+	/// @dev Historical ETH written off, not a liability offset. writtenOffObligationUnits is authoritative.
 	uint256 public totalBadDebtAttoEth;
 	mapping(address => VaultBadDebt) internal vaultBadDebtByVault;
 	// Appended for delegatecall compatibility. Never reorder fields above this line.
@@ -42,6 +43,46 @@ abstract contract SecurityPoolStorage {
 	/// @dev Initial pools use the question end; an activated child uses max until resolution or its next fork fixes the cutoff.
 	uint256 internal feeEpochEndTime;
 	mapping(address => uint256) public vaultTargetBackingFactorBps;
+
+	struct CoverageOffer {
+		bool enabled;
+		uint256 maximumObligationAttoEth;
+		uint256 minimumHealthFactorBps;
+	}
+
+	struct CoveragePosition {
+		uint256 units;
+		uint256 epoch;
+	}
+
+	uint256 public totalObligationUnits;
+	uint256 public writtenOffObligationUnits;
+	uint256 public unassignedObligationUnits;
+	/// @dev Frozen parent positions moved into a child. Kept in the parent denominator.
+	uint256 public migratedOutObligationUnits;
+	mapping(address => CoverageOffer) public coverageOffers;
+	mapping(address => CoveragePosition) internal coveragePositions;
+	mapping(uint256 => uint256) public finalFeeIndexByEpoch;
+
+	function getVaultObligationUnits(address vault) public view returns (uint256) {
+		CoveragePosition storage position = coveragePositions[vault];
+		return position.epoch == badDebtGeneration ? position.units : 0;
+	}
+
+	function _closeCoverageEpoch() internal {
+		require(shareTokenSupplyAttoShares == 0 && settlementCollateralAttoEth == 0, 'Economic claims remain');
+		finalFeeIndexByEpoch[badDebtGeneration] = feeIndex;
+		totalObligationUnits = 0;
+		writtenOffObligationUnits = 0;
+		unassignedObligationUnits = 0;
+		migratedOutObligationUnits = 0;
+		activeObligationUnits = 0;
+		uncheckpointedActiveObligationUnits = 0;
+		feeIndexRemainder = 0;
+		totalFeesOwedRemainder = 0;
+		totalBadDebtAttoEth = 0;
+		badDebtGeneration++;
+	}
 
 	function _getVaultBadDebtAttoEth(address vault) internal view returns (uint256 badDebtAttoEth) {
 		VaultBadDebt storage vaultBadDebt = vaultBadDebtByVault[vault];

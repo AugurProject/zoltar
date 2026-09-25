@@ -1,3 +1,4 @@
+import { coverageReadResult } from './coverageRpc'
 import { describe, expect, test } from 'bun:test'
 import { createPublicClient, createWalletClient, custom, decodeFunctionData, encodeAbiParameters, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
 import { installActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
@@ -81,7 +82,7 @@ const market: LiveMarket = {
 	settlementCollateralAttoEth: 100n,
 	currentRetentionRate: 10n ** 18n,
 	totalCapacityOwnershipAttoRep: 1n,
-	feeEligibleCapacityOwnershipAttoRep: 1n,
+	activeObligationUnits: 1n,
 	mintingCapacityCeilingAttoEth: 100n,
 	availableMintingCapacityAttoEth: 100n,
 	feeBps: 30n,
@@ -121,6 +122,10 @@ describe('live guarded transaction writes', () => {
 			account,
 			transport: custom({
 				async request({ method, params }) {
+					if (method === 'eth_call') {
+						const coverageResult = coverageReadResult(callData(params), account)
+						if (coverageResult !== undefined) return coverageResult
+					}
 					if (method === 'eth_blockNumber') return '0x2'
 					if (method === 'eth_getBlockByNumber') return { hash: blockHash, number: '0x2', parentHash: `0x${'aa'.repeat(32)}`, timestamp: '0x1', transactions: [] }
 					if ((method === 'eth_call' || method === 'eth_sendTransaction') && Array.isArray(params)) {
@@ -167,6 +172,10 @@ describe('live guarded transaction writes', () => {
 				account,
 				transport: custom({
 					async request({ method, params }) {
+						if (method === 'eth_call') {
+							const coverageResult = coverageReadResult(callData(params), account)
+							if (coverageResult !== undefined) return coverageResult
+						}
 						if (method === 'eth_blockNumber') return '0x2'
 						if (method === 'eth_getBlockByNumber') return { hash: blockHash, number: '0x2', parentHash: `0x${'aa'.repeat(32)}`, timestamp: '0x1', transactions: [] }
 						if (method !== 'eth_call' && method !== 'eth_sendTransaction') throw new Error(`Unexpected RPC method ${method}`)
@@ -207,6 +216,10 @@ describe('live guarded transaction writes', () => {
 			account,
 			transport: custom({
 				async request({ method, params }) {
+					if (method === 'eth_call') {
+						const coverageResult = coverageReadResult(callData(params), account)
+						if (coverageResult !== undefined) return coverageResult
+					}
 					if (method === 'eth_blockNumber') return '0x2'
 					if (method === 'eth_getBlockByNumber') return { hash: blockHash, number: '0x2', parentHash: `0x${'aa'.repeat(32)}`, timestamp: '0x1', transactions: [] }
 					if (method === 'eth_call' || method === 'eth_sendTransaction') {
@@ -239,14 +252,14 @@ describe('live guarded transaction writes', () => {
 		expect(calls).toHaveLength(12)
 		for (const call of calls) {
 			if (call.args === undefined) throw new Error('Expected decoded liquidity arguments')
-			expect(call.args.at(-1)).toBe(deadline)
+			expect(call.args.at(call.functionName === 'removeLiquidity' ? -1 : -2)).toBe(deadline)
 		}
 		for (const call of calls.filter((_, index) => index % 3 === 2)) {
 			if (call.args === undefined) throw new Error('Expected decoded submitted liquidity arguments')
 			if (call.functionName === 'removeLiquidity') {
 				expect(call.args[1]).toBe(4n)
 				expect(call.args[2]).toBe(4n)
-			} else expect(call.args.at(-3)).toBe(9n)
+			} else expect(call.args.at(-4)).toBe(9n)
 			if (call.functionName === 'addLiquidityWithEth') expect(call.args.slice(1, 3)).toEqual([6n, 6n])
 		}
 		const chainTimedQuote = await simulateLiquidity(client, configuration, market, account, 'add', 10n, 5_000n, 1_440n, slippageBps)
@@ -254,7 +267,7 @@ describe('live guarded transaction writes', () => {
 		expect(await submitFreshLiquidity(client, configuration, account, chainTimedQuote, async write => await write())).toBe(transactionHash)
 		for (const call of calls.slice(-3)) {
 			if (call.args === undefined) throw new Error('Expected decoded chain-timed liquidity arguments')
-			expect(call.args.at(-1)).toBe(86_401n)
+			expect(call.args.at(-2)).toBe(86_401n)
 		}
 		const callsBeforeRejectedSlippage = calls.length
 		await expect(simulateLiquidity(client, configuration, market, account, 'add', 10n, 5_000n, validityMinutes, 501n)).rejects.toThrow('between 0% and 5%')
@@ -269,6 +282,10 @@ describe('live guarded transaction writes', () => {
 			account,
 			transport: custom({
 				async request({ method, params }) {
+					if (method === 'eth_call') {
+						const coverageResult = coverageReadResult(callData(params), account)
+						if (coverageResult !== undefined) return coverageResult
+					}
 					if (method === 'eth_blockNumber') return '0x2'
 					if (method === 'eth_getBlockByNumber') return { hash: blockHash, number: '0x2', parentHash: `0x${'aa'.repeat(32)}`, timestamp: '0x1', transactions: [] }
 					if (method === 'eth_sendTransaction') {
@@ -276,6 +293,8 @@ describe('live guarded transaction writes', () => {
 						return transactionHash
 					}
 					if (method !== 'eth_call') throw new Error(`Unexpected RPC method ${method}`)
+					const coverageResult = coverageReadResult(callData(params), account)
+					if (coverageResult !== undefined) return coverageResult
 					const decoded = decodeFunctionData({ abi: routerAbi, data: callData(params) })
 					if (decoded.functionName !== 'addLiquidityWithEth') throw new Error(`Unexpected simulation ${decoded.functionName}`)
 					return encodeAbiParameters([{ type: 'tuple', components: [address, uint256, uint256, uint256, uint256, uint256, uint256, uint256] }], [[pair, 20n, 20n, chain.noUsed, 0n, 20n - chain.noUsed, 20n, 10n]])
@@ -294,6 +313,10 @@ describe('live guarded transaction writes', () => {
 			account,
 			transport: custom({
 				async request({ method, params }) {
+					if (method === 'eth_call') {
+						const coverageResult = coverageReadResult(callData(params), account)
+						if (coverageResult !== undefined) return coverageResult
+					}
 					if (method === 'eth_blockNumber') return '0x2'
 					if (method === 'eth_getBlockByNumber') return { hash: blockHash, number: '0x2', parentHash: `0x${'aa'.repeat(32)}`, timestamp: '0x1', transactions: [] }
 					if (method === 'eth_call') {

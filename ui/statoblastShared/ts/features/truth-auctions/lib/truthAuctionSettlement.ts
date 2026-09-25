@@ -83,7 +83,7 @@ export function getTruthAuctionSettlementSelectionState({ selectedBidKeys, settl
 	}
 }
 
-export function getTruthAuctionSettlementSelectionEstimate({ auctionedCapacityOwnershipAttoRep, selectedRows, truthAuction }: { auctionedCapacityOwnershipAttoRep: bigint | undefined; selectedRows: TruthAuctionSettlementBidRow[]; truthAuction: TruthAuctionMetrics | undefined }): TruthAuctionSettlementSelectionEstimate {
+export function getTruthAuctionSettlementSelectionEstimate({ auctionObligationUnits, selectedRows, truthAuction }: { auctionObligationUnits: bigint | undefined; selectedRows: TruthAuctionSettlementBidRow[]; truthAuction: TruthAuctionMetrics | undefined }): TruthAuctionSettlementSelectionEstimate {
 	let estimatedRefundedAttoEth = 0n
 	let estimatedVaultRepBackingAttoRep = 0n
 	const winningThresholdPrice = getTruthAuctionWinningThresholdPrice(truthAuction)
@@ -104,10 +104,10 @@ export function getTruthAuctionSettlementSelectionEstimate({ auctionedCapacityOw
 
 	let estimatedAssignedCapacityOwnershipAttoRep: bigint | undefined = 0n
 	if (estimatedVaultRepBackingAttoRep > 0n) {
-		if (truthAuction === undefined || truthAuction.totalAttoRepPurchased === 0n || auctionedCapacityOwnershipAttoRep === undefined) {
+		if (truthAuction === undefined || truthAuction.totalAttoRepPurchased === 0n || auctionObligationUnits === undefined) {
 			estimatedAssignedCapacityOwnershipAttoRep = undefined
 		} else {
-			estimatedAssignedCapacityOwnershipAttoRep = (auctionedCapacityOwnershipAttoRep * estimatedVaultRepBackingAttoRep) / truthAuction.totalAttoRepPurchased
+			estimatedAssignedCapacityOwnershipAttoRep = (auctionObligationUnits * estimatedVaultRepBackingAttoRep) / truthAuction.totalAttoRepPurchased
 		}
 	}
 

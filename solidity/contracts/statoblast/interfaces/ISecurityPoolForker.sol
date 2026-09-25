@@ -7,7 +7,7 @@ import { IUniformPriceDualCapBatchAuction } from './IUniformPriceDualCapBatchAuc
 
 interface ISecurityPoolForkerEvents {
 	event VaultBadDebtMigrated(ISecurityPool indexed parentPool, ISecurityPool indexed childPool, address indexed vault, uint256 migratedBadDebtAttoEth, uint256 resultingParentTotalBadDebtAttoEth, uint256 resultingChildTotalBadDebtAttoEth);
-	event ClaimAuctionProceeds(ISecurityPool indexed securityPool, address indexed vault, uint256 amountAttoRep, uint256 repBackingUnits, uint256 totalRepBackingUnits, uint256 claimedAuctionRepPurchasedAttoRep, uint256 claimedAuctionedCapacityOwnershipAttoRep, uint256 claimedAuctionedBadDebtAttoEth, uint256 auctionedBadDebtAttoEth);
+	event ClaimAuctionProceeds(ISecurityPool indexed securityPool, address indexed vault, uint256 amountAttoRep, uint256 repBackingUnits, uint256 totalRepBackingUnits, uint256 claimedAuctionRepPurchasedAttoRep, uint256 claimedAuctionObligationUnits, uint256 claimedAuctionedBadDebtAttoEth, uint256 auctionedBadDebtAttoEth);
 	/// @notice Immutable fork-time pool and escalation accounting. Collateral uses attoETH, REP fields use
 	/// attoREP, elapsed time uses seconds, and `escalationSnapshotId` commits to the carry state.
 	event SecurityPoolForkSnapshot(ISecurityPool indexed parentPool, address indexed migrationProxy, bool ownFork, bool unresolvedEscalation, uint256 settlementCollateralAtForkAttoEth, uint256 totalPoolHeldRepAtForkAttoRep, uint256 auctionableAttoRepAtFork, uint256 escalationSourceRepAtForkAttoRep, uint256 escalationChildRepAtForkAttoRep, uint256 escalationStartBondAtForkAttoRep, uint256 escalationNonDecisionThresholdAtForkAttoRep, uint256 escalationElapsedAtFork, bytes32 escalationSnapshotId);

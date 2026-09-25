@@ -13,17 +13,18 @@ const MULTICALL3_ADDRESS = getAddress('0xB657B12CD9d80421DBC2bc70c43d6b2ff940910
 
 export type PoolMonitorIndex = {
 	operatorVaultsByPool: Map<string, VaultPosition>
+	coverageEpochsByPool: Map<string, bigint>
 	vaultsByPool: Map<string, VaultStateIndex<VaultPosition>>
 }
 
 export function createPoolMonitorIndex(): PoolMonitorIndex {
-	return { operatorVaultsByPool: new Map(), vaultsByPool: new Map() }
+	return { coverageEpochsByPool: new Map(), operatorVaultsByPool: new Map(), vaultsByPool: new Map() }
 }
 
 function emptyVault(address: Address): VaultPosition {
 	return {
 		address,
-		capacityOwnershipAttoRep: 0n,
+		obligationUnits: 0n,
 		badDebtAttoEth: 0n,
 		openInterestAttoEth: 0n,
 		backingUnits: 0n,
@@ -44,23 +45,24 @@ function requireVaultPositionTuple(value: unknown) {
 }
 
 export async function loadVaultPage(client: ReadClient, pool: Address, escalationGame: Address, vaultAddresses: readonly Address[], blockNumber: bigint) {
-	const [rawVaults, badDebt, disputeStake] = await Promise.all([
+	const [rawVaults, badDebt, disputeStake, coverageUnits] = await Promise.all([
 		client.multicall({ allowFailure: false, blockNumber, contracts: vaultAddresses.map(vault => ({ abi: securityPoolAbi, address: pool, args: [vault], functionName: 'securityVaults' as const })), multicallAddress: MULTICALL3_ADDRESS }),
 		client.multicall({ allowFailure: false, blockNumber, contracts: vaultAddresses.map(vault => ({ abi: securityPoolAbi, address: pool, args: [vault], functionName: 'vaultBadDebtAttoEth' as const })), multicallAddress: MULTICALL3_ADDRESS }),
 		escalationGame === zeroAddress
 			? vaultAddresses.map(() => 0n)
 			: client.multicall({ allowFailure: false, blockNumber, contracts: vaultAddresses.map(vault => ({ abi: escalationGameAbi, address: escalationGame, args: [vault], functionName: 'disputeStakedRepByVaultAttoRep' as const })), multicallAddress: MULTICALL3_ADDRESS }),
+		client.multicall({ allowFailure: false, blockNumber, contracts: vaultAddresses.map(vault => ({ abi: securityPoolAbi, address: pool, args: [vault], functionName: 'getVaultObligationUnits' as const })), multicallAddress: MULTICALL3_ADDRESS }),
 	])
 	return vaultAddresses.map((address, index) => {
 		const raw = rawVaults[index]
 		const badDebtAttoEth = badDebt[index]
 		const disputeStakedAttoRep = disputeStake[index]
 		if (raw === undefined || badDebtAttoEth === undefined || disputeStakedAttoRep === undefined) throw new Error('Security pool returned incomplete vault state')
-		const [repBackingUnits, capacityOwnershipAttoRep, claimableFeesAttoEth] = requireVaultPositionTuple(raw)
+		const [repBackingUnits, , claimableFeesAttoEth] = requireVaultPositionTuple(raw)
 		return {
 			address,
 			badDebtAttoEth: requireBigint(badDebtAttoEth, 'vault bad debt'),
-			capacityOwnershipAttoRep,
+			obligationUnits: requireBigint(coverageUnits[index], 'vault obligation units'),
 			openInterestAttoEth: 0n,
 			backingUnits: repBackingUnits,
 			vaultAttoRepBacking: 0n,
@@ -71,14 +73,14 @@ export async function loadVaultPage(client: ReadClient, pool: Address, escalatio
 }
 
 function hasVaultRep(vault: VaultPosition) {
-	return vault.backingUnits > 0n || vault.disputeStakedAttoRep > 0n
+	return vault.backingUnits > 0n || vault.disputeStakedAttoRep > 0n || vault.obligationUnits > 0n
 }
 
-export function currentVaultPositionForPoolAccounting(vault: VaultPosition, totalAttoRep: bigint, denominator: bigint, settlementCollateralAttoEth: bigint, totalCapacityOwnershipAttoRep: bigint): VaultPosition {
-	const grossOpenInterestAttoEth = vault.capacityOwnershipAttoRep === 0n || totalCapacityOwnershipAttoRep === 0n ? 0n : (settlementCollateralAttoEth * vault.capacityOwnershipAttoRep + totalCapacityOwnershipAttoRep - 1n) / totalCapacityOwnershipAttoRep
+export function currentVaultPositionForPoolAccounting(vault: VaultPosition, totalAttoRep: bigint, denominator: bigint, settlementCollateralAttoEth: bigint, totalObligationUnits: bigint): VaultPosition {
+	const grossOpenInterestAttoEth = vault.obligationUnits === 0n || totalObligationUnits === 0n ? 0n : (settlementCollateralAttoEth * vault.obligationUnits + totalObligationUnits - 1n) / totalObligationUnits
 	return {
 		...vault,
-		openInterestAttoEth: grossOpenInterestAttoEth > vault.badDebtAttoEth ? grossOpenInterestAttoEth - vault.badDebtAttoEth : 0n,
+		openInterestAttoEth: grossOpenInterestAttoEth,
 		vaultAttoRepBacking: repForBackingUnits(vault.backingUnits, totalAttoRep, denominator),
 	}
 }
@@ -92,7 +94,7 @@ export async function loadCurrentVaults(
 	totalAttoRep: bigint,
 	denominator: bigint,
 	settlementCollateralAttoEth: bigint,
-	totalCapacityOwnershipAttoRep: bigint,
+	totalObligationUnits: bigint,
 	block: Readonly<{ hash: `0x${string}`; number: bigint }>,
 ) {
 	const refresh = await refreshVaultStateIndex(index, {
@@ -116,12 +118,12 @@ export async function loadCurrentVaults(
 	})
 	index.activeVaults = new Map(
 		refresh.activeVaults.map(vault => {
-			const current = currentVaultPositionForPoolAccounting(vault, totalAttoRep, denominator, settlementCollateralAttoEth, totalCapacityOwnershipAttoRep)
+			const current = currentVaultPositionForPoolAccounting(vault, totalAttoRep, denominator, settlementCollateralAttoEth, totalObligationUnits)
 			return [current.address.toLowerCase(), current]
 		}),
 	)
 	return {
-		refreshedVaults: refresh.refreshedVaults.map(vault => currentVaultPositionForPoolAccounting(vault, totalAttoRep, denominator, settlementCollateralAttoEth, totalCapacityOwnershipAttoRep)),
+		refreshedVaults: refresh.refreshedVaults.map(vault => currentVaultPositionForPoolAccounting(vault, totalAttoRep, denominator, settlementCollateralAttoEth, totalObligationUnits)),
 		reset: refresh.reset,
 		vaults: [...index.activeVaults.values()],
 	}
@@ -132,7 +134,7 @@ export async function resolveOperatorVault(
 	pool: Address,
 	wallet: Address | undefined,
 	refresh: Awaited<ReturnType<typeof loadCurrentVaults>>,
-	accounting: Readonly<{ denominator: bigint; settlementCollateralAttoEth: bigint; totalAttoRep: bigint; totalCapacityOwnershipAttoRep: bigint }>,
+	accounting: Readonly<{ denominator: bigint; settlementCollateralAttoEth: bigint; totalAttoRep: bigint; totalObligationUnits: bigint }>,
 	loadPosition: (wallet: Address) => Promise<VaultPosition>,
 ) {
 	const poolKey = pool.toLowerCase()
@@ -149,7 +151,7 @@ export async function resolveOperatorVault(
 		else if (cached !== undefined && sameAddress(cached.address, wallet)) position = cached
 		else position = await loadPosition(wallet)
 	}
-	const current = currentVaultPositionForPoolAccounting(position, accounting.totalAttoRep, accounting.denominator, accounting.settlementCollateralAttoEth, accounting.totalCapacityOwnershipAttoRep)
+	const current = currentVaultPositionForPoolAccounting(position, accounting.totalAttoRep, accounting.denominator, accounting.settlementCollateralAttoEth, accounting.totalObligationUnits)
 	monitorIndex.operatorVaultsByPool.set(poolKey, current)
 	return current
 }

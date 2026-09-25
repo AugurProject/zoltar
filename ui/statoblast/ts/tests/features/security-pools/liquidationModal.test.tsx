@@ -44,13 +44,14 @@ function createOracleManagerDetails(overrides: Partial<OracleManagerDetails> = {
 }
 
 function createTargetVaultSummary(overrides: Partial<SecurityPoolVaultSummary> = {}): SecurityPoolVaultSummary {
-	const capacityOwnershipAttoRep = overrides.capacityOwnershipAttoRep ?? 2n * 10n ** 18n
+	const obligationUnits = overrides.obligationUnits ?? 2n * 10n ** 18n
 	return {
 		badDebtAttoEth: 0n,
 		disputeStakedAttoRep: 0n,
 		vaultAttoRepBacking: 5n * 10n ** 18n,
-		capacityOwnershipAttoRep,
-		openInterestAttoEth: capacityOwnershipAttoRep,
+		obligationUnits,
+		capacityOwnershipAttoRep: 0n,
+		openInterestAttoEth: obligationUnits,
 		claimableFeesAttoEth: 0n,
 		vaultAddress: zeroAddress,
 		...overrides,
@@ -59,9 +60,10 @@ function createTargetVaultSummary(overrides: Partial<SecurityPoolVaultSummary> =
 
 function createSelectedPool(overrides: Partial<ListedSecurityPool> = {}): ListedSecurityPool {
 	const selectedPool: ListedSecurityPool = {
-		settlementCollateralAttoEth: 4n * 10n ** 18n,
+		totalCapacityOwnershipAttoRep: 0n,
+		settlementCollateralAttoEth: 1_000n * 10n ** 18n,
 		currentRetentionRate: 10n,
-		totalCapacityOwnershipAttoRep: 4n * 10n ** 18n,
+		totalObligationUnits: 1_000n * 10n ** 18n,
 		hasForkActivity: false,
 		forkOutcome: 'none',
 		forkOwnSecurityPool: false,
@@ -81,7 +83,7 @@ function createSelectedPool(overrides: Partial<ListedSecurityPool> = {}): Listed
 		shareTokenSupplyAttoShares: 0n,
 		systemState: 'operational',
 		totalPoolHeldAttoRep: 5n * 10n ** 18n,
-		feeEligibleCapacityOwnershipAttoRep: 2n * 10n ** 18n,
+		activeObligationUnits: 2n * 10n ** 18n,
 		truthAuctionAddress: zeroAddress,
 		truthAuctionStartedAt: 0n,
 		universeHasForked: false,
@@ -734,7 +736,7 @@ describe('LiquidationModal', () => {
 		const renderedComponent = await renderLiquidationModal({
 			callerVaultSummary: createTargetVaultSummary({
 				vaultAttoRepBacking: 100n * 10n ** 18n,
-				capacityOwnershipAttoRep: 0n,
+				obligationUnits: 0n,
 				vaultAddress: defaultCallerVaultAddress,
 			}),
 			currentPoolOracleManagerDetails: createOracleManagerDetails({
@@ -752,7 +754,7 @@ describe('LiquidationModal', () => {
 			},
 			targetVaultSummary: createTargetVaultSummary({
 				vaultAttoRepBacking: 100n * 10n ** 18n,
-				capacityOwnershipAttoRep: 100n * 10n ** 18n,
+				obligationUnits: 100n * 10n ** 18n,
 			}),
 			walletBalanceAttoEth: 5n * ATTO_ETH_PER_ETH,
 		})
@@ -784,12 +786,12 @@ describe('LiquidationModal', () => {
 			}),
 			callerVaultSummary: createTargetVaultSummary({
 				vaultAttoRepBacking: 2_000n * 10n ** 18n,
-				capacityOwnershipAttoRep: 0n,
+				obligationUnits: 0n,
 				vaultAddress: callerVaultAddress,
 			}),
 			targetVaultSummary: createTargetVaultSummary({
 				vaultAttoRepBacking: 100n * 10n ** 18n,
-				capacityOwnershipAttoRep: 100n * 10n ** 18n,
+				obligationUnits: 100n * 10n ** 18n,
 			}),
 			walletBalanceAttoEth: 100n * ATTO_ETH_PER_ETH,
 		})
@@ -817,7 +819,7 @@ describe('LiquidationModal', () => {
 			}),
 			targetVaultSummary: createTargetVaultSummary({
 				vaultAttoRepBacking: 100n * 10n ** 18n,
-				capacityOwnershipAttoRep: 100n * 10n ** 18n,
+				obligationUnits: 100n * 10n ** 18n,
 				vaultAddress: defaultTargetVaultAddress,
 			}),
 		})
@@ -971,12 +973,12 @@ describe('LiquidationModal', () => {
 					securityPoolOverviewResult={securityPoolOverviewResult}
 					callerVaultSummary={createTargetVaultSummary({
 						vaultAttoRepBacking: 20n * 10n ** 18n,
-						capacityOwnershipAttoRep: 1n * 10n ** 18n,
+						obligationUnits: 1n * 10n ** 18n,
 						vaultAddress: defaultCallerVaultAddress,
 					})}
 					targetVaultSummary={createTargetVaultSummary({
 						vaultAttoRepBacking: 12n * 10n ** 18n,
-						capacityOwnershipAttoRep: 11n * 10n ** 18n,
+						obligationUnits: 11n * 10n ** 18n,
 						vaultAddress: defaultTargetVaultAddress,
 					})}
 				/>
@@ -1053,12 +1055,12 @@ describe('LiquidationModal', () => {
 					securityPoolOverviewResult={undefined}
 					callerVaultSummary={createTargetVaultSummary({
 						vaultAttoRepBacking: 20n * 10n ** 18n,
-						capacityOwnershipAttoRep: 1n * 10n ** 18n,
+						obligationUnits: 1n * 10n ** 18n,
 						vaultAddress: defaultCallerVaultAddress,
 					})}
 					targetVaultSummary={createTargetVaultSummary({
 						vaultAttoRepBacking: 12n * 10n ** 18n,
-						capacityOwnershipAttoRep: 11n * 10n ** 18n,
+						obligationUnits: 11n * 10n ** 18n,
 						vaultAddress: defaultTargetVaultAddress,
 					})}
 				/>
@@ -1098,7 +1100,7 @@ describe('LiquidationModal', () => {
 			},
 			targetVaultSummary: createTargetVaultSummary({
 				vaultAttoRepBacking: 73n * 10n ** 18n,
-				capacityOwnershipAttoRep: 50n * 10n ** 18n,
+				obligationUnits: 50n * 10n ** 18n,
 				vaultAddress: defaultTargetVaultAddress,
 			}),
 		})
@@ -1122,7 +1124,7 @@ describe('LiquidationModal', () => {
 			repPerEthPrice: 3n * 10n ** 18n,
 			targetVaultSummary: createTargetVaultSummary({
 				vaultAttoRepBacking: 73n * 10n ** 18n,
-				capacityOwnershipAttoRep: 50n * 10n ** 18n,
+				obligationUnits: 50n * 10n ** 18n,
 				vaultAddress: defaultTargetVaultAddress,
 			}),
 			uiPriceOracle: 'uniswap',
@@ -1169,7 +1171,7 @@ describe('LiquidationModal', () => {
 			}),
 			targetVaultSummary: createTargetVaultSummary({
 				vaultAttoRepBacking: 1000n * 10n ** 18n,
-				capacityOwnershipAttoRep: 14n * 10n ** 17n,
+				obligationUnits: 14n * 10n ** 17n,
 				vaultAddress: defaultTargetVaultAddress,
 			}),
 		})
@@ -1188,7 +1190,7 @@ describe('LiquidationModal', () => {
 		const renderedComponent = await renderLiquidationModal({
 			callerVaultSummary: createTargetVaultSummary({
 				vaultAttoRepBacking: 100n * 10n ** 18n,
-				capacityOwnershipAttoRep: 0n,
+				obligationUnits: 0n,
 				vaultAddress: defaultCallerVaultAddress,
 			}),
 			currentPoolOracleManagerDetails: createOracleManagerDetails({
@@ -1200,7 +1202,7 @@ describe('LiquidationModal', () => {
 			}),
 			targetVaultSummary: createTargetVaultSummary({
 				vaultAttoRepBacking: 100n * 10n ** 18n,
-				capacityOwnershipAttoRep: 2n * 10n ** 18n,
+				obligationUnits: 2n * 10n ** 18n,
 			}),
 		})
 		cleanupRenderedComponent = renderedComponent.cleanup
@@ -1226,7 +1228,7 @@ describe('LiquidationModal', () => {
 		const renderedComponent = await renderLiquidationModal({
 			callerVaultSummary: createTargetVaultSummary({
 				vaultAttoRepBacking: 100n * 10n ** 18n,
-				capacityOwnershipAttoRep: 0n,
+				obligationUnits: 0n,
 				vaultAddress: defaultCallerVaultAddress,
 			}),
 			currentPoolOracleManagerDetails: createOracleManagerDetails({
@@ -1238,7 +1240,7 @@ describe('LiquidationModal', () => {
 			selectedPool: createSelectedPool({ minimumSecurityBondDebtAttoEth: 0n, minimumVaultRepDepositAttoRep: 0n, statoblastSecurityMultiplierBps: 20_000n }),
 			targetVaultSummary: createTargetVaultSummary({
 				vaultAttoRepBacking: 100n * 10n ** 18n,
-				capacityOwnershipAttoRep: 2n * 10n ** 18n,
+				obligationUnits: 2n * 10n ** 18n,
 			}),
 			uiPriceOracle: 'uniswap',
 		})
@@ -1254,7 +1256,7 @@ describe('LiquidationModal', () => {
 		const renderedComponent = await renderLiquidationModal({
 			callerVaultSummary: createTargetVaultSummary({
 				vaultAttoRepBacking: 100n * 10n ** 18n,
-				capacityOwnershipAttoRep: 0n,
+				obligationUnits: 0n,
 				vaultAddress: defaultCallerVaultAddress,
 			}),
 			currentPoolOracleManagerDetails: createOracleManagerDetails({
@@ -1267,7 +1269,7 @@ describe('LiquidationModal', () => {
 			}),
 			targetVaultSummary: createTargetVaultSummary({
 				vaultAttoRepBacking: 11n * 10n ** 18n,
-				capacityOwnershipAttoRep: 1n * 10n ** 18n,
+				obligationUnits: 1n * 10n ** 18n,
 			}),
 		})
 		cleanupRenderedComponent = renderedComponent.cleanup
@@ -1283,7 +1285,7 @@ describe('LiquidationModal', () => {
 		const renderedComponent = await renderLiquidationModal({
 			callerVaultSummary: createTargetVaultSummary({
 				vaultAttoRepBacking: 100n * 10n ** 18n,
-				capacityOwnershipAttoRep: 0n,
+				obligationUnits: 0n,
 				vaultAddress: defaultCallerVaultAddress,
 			}),
 			currentPoolOracleManagerDetails: createOracleManagerDetails({
@@ -1296,7 +1298,7 @@ describe('LiquidationModal', () => {
 			}),
 			targetVaultSummary: createTargetVaultSummary({
 				vaultAttoRepBacking: 10n * 10n ** 18n,
-				capacityOwnershipAttoRep: 1n * 10n ** 18n,
+				obligationUnits: 1n * 10n ** 18n,
 			}),
 		})
 		cleanupRenderedComponent = renderedComponent.cleanup
@@ -1312,7 +1314,7 @@ describe('LiquidationModal', () => {
 		const renderedComponent = await renderLiquidationModal({
 			callerVaultSummary: createTargetVaultSummary({
 				vaultAttoRepBacking: 100n * 10n ** 18n,
-				capacityOwnershipAttoRep: 0n,
+				obligationUnits: 0n,
 				vaultAddress: defaultCallerVaultAddress,
 			}),
 			currentPoolOracleManagerDetails: createOracleManagerDetails({
@@ -1325,7 +1327,7 @@ describe('LiquidationModal', () => {
 			}),
 			targetVaultSummary: createTargetVaultSummary({
 				vaultAttoRepBacking: 10n * 10n ** 18n,
-				capacityOwnershipAttoRep: 1n * 10n ** 18n,
+				obligationUnits: 1n * 10n ** 18n,
 			}),
 		})
 		cleanupRenderedComponent = renderedComponent.cleanup
@@ -1342,7 +1344,7 @@ describe('LiquidationModal', () => {
 		const renderedComponent = await renderLiquidationModal({
 			callerVaultSummary: createTargetVaultSummary({
 				vaultAttoRepBacking: 100n * 10n ** 18n,
-				capacityOwnershipAttoRep: 0n,
+				obligationUnits: 0n,
 				vaultAddress: defaultCallerVaultAddress,
 			}),
 			currentPoolOracleManagerDetails: createOracleManagerDetails({
@@ -1355,7 +1357,7 @@ describe('LiquidationModal', () => {
 			}),
 			targetVaultSummary: createTargetVaultSummary({
 				vaultAttoRepBacking: 100n * 10n ** 18n,
-				capacityOwnershipAttoRep: 2n * 10n ** 18n,
+				obligationUnits: 2n * 10n ** 18n,
 			}),
 		})
 		cleanupRenderedComponent = renderedComponent.cleanup
@@ -1375,7 +1377,7 @@ describe('LiquidationModal', () => {
 		const renderedComponent = await renderLiquidationModal({
 			callerVaultSummary: createTargetVaultSummary({
 				vaultAttoRepBacking: 100n * 10n ** 18n,
-				capacityOwnershipAttoRep: 1n * 10n ** 18n,
+				obligationUnits: 1n * 10n ** 18n,
 				vaultAddress: defaultCallerVaultAddress,
 			}),
 			currentPoolOracleManagerDetails: createOracleManagerDetails({
@@ -1388,7 +1390,7 @@ describe('LiquidationModal', () => {
 			}),
 			targetVaultSummary: createTargetVaultSummary({
 				vaultAttoRepBacking: 100n * 10n ** 18n,
-				capacityOwnershipAttoRep: 130n * 10n ** 18n,
+				obligationUnits: 130n * 10n ** 18n,
 			}),
 		})
 		cleanupRenderedComponent = renderedComponent.cleanup
@@ -1407,13 +1409,13 @@ describe('LiquidationModal', () => {
 			repBackingUnits: 100n * ATTO_ETH_PER_ETH * ATTO_ETH_PER_ETH,
 			totalRepBackingUnits,
 			vaultAttoRepBacking: 100n * ATTO_ETH_PER_ETH,
-			capacityOwnershipAttoRep: 100n * ATTO_ETH_PER_ETH,
+			obligationUnits: 100n * ATTO_ETH_PER_ETH,
 			totalPoolHeldRepBalanceAttoRep,
 		})
 		const simulation = simulateLiquidation({
 			callerVaultSummary: createTargetVaultSummary({ vaultAttoRepBacking: 100n * ATTO_ETH_PER_ETH }),
 			requestedDebtAttoEth: 1n * ATTO_ETH_PER_ETH,
-			totalCapacityOwnershipAttoRep: 102n * ATTO_ETH_PER_ETH,
+			totalObligationUnits: 102n * ATTO_ETH_PER_ETH,
 			repPerEthPrice: 1n * ATTO_ETH_PER_ETH,
 			settlementCollateralAttoEth: 102n * ATTO_ETH_PER_ETH,
 			statoblastSecurityMultiplierBps: 20_000n,
@@ -1435,14 +1437,14 @@ describe('LiquidationModal', () => {
 			repBackingUnits,
 			totalRepBackingUnits,
 			vaultAttoRepBacking: 20n * ATTO_ETH_PER_ETH,
-			capacityOwnershipAttoRep: 20n * ATTO_ETH_PER_ETH,
+			obligationUnits: 20n * ATTO_ETH_PER_ETH,
 			totalPoolHeldRepBalanceAttoRep,
 		})
 		const simulation = simulateLiquidation({
 			callerVaultSummary: createTargetVaultSummary({ vaultAttoRepBacking: 100n * ATTO_ETH_PER_ETH }),
 			minimumVaultRepDepositAttoRep: 10n * ATTO_ETH_PER_ETH,
 			requestedDebtAttoEth: 10n * ATTO_ETH_PER_ETH,
-			totalCapacityOwnershipAttoRep: 22n * ATTO_ETH_PER_ETH,
+			totalObligationUnits: 22n * ATTO_ETH_PER_ETH,
 			repPerEthPrice: ATTO_ETH_PER_ETH,
 			settlementCollateralAttoEth: 22n * ATTO_ETH_PER_ETH,
 			statoblastSecurityMultiplierBps: 20_000n,
@@ -1461,12 +1463,12 @@ describe('LiquidationModal', () => {
 		const targetVaultSummary = createTargetVaultSummary({
 			disputeStakedAttoRep: 900n * ATTO_ETH_PER_ETH,
 			vaultAttoRepBacking: 100n * ATTO_ETH_PER_ETH,
-			capacityOwnershipAttoRep: 900n * ATTO_ETH_PER_ETH,
+			obligationUnits: 900n * ATTO_ETH_PER_ETH,
 		})
 		const simulation = simulateLiquidation({
 			callerVaultSummary: createTargetVaultSummary({ vaultAttoRepBacking: 1000n * ATTO_ETH_PER_ETH }),
 			requestedDebtAttoEth: 900n * ATTO_ETH_PER_ETH,
-			totalCapacityOwnershipAttoRep: 902n * ATTO_ETH_PER_ETH,
+			totalObligationUnits: 902n * ATTO_ETH_PER_ETH,
 			repPerEthPrice: 2n * ATTO_ETH_PER_ETH,
 			settlementCollateralAttoEth: 902n * ATTO_ETH_PER_ETH,
 			statoblastSecurityMultiplierBps: 10_002n,
@@ -1478,13 +1480,13 @@ describe('LiquidationModal', () => {
 		expect(simulation.vaultAttoRepBackingToTransfer).toBe(100n * ATTO_ETH_PER_ETH - 1n)
 		expect(simulation.badDebtAttoEth).toBe(900n * ATTO_ETH_PER_ETH - expectedDebtMovedAttoEth)
 		expect(simulation.targetAfter.disputeStakedAttoRep).toBe(900n * ATTO_ETH_PER_ETH)
-		expect(simulation.targetAfter.capacityOwnershipAttoRep).toBe(900n * ATTO_ETH_PER_ETH - expectedDebtMovedAttoEth)
+		expect(simulation.targetAfter.obligationUnits).toBe(0n)
 	})
 
 	test('previews the exact receiver debt delta when vault allocations round asymmetrically', () => {
 		const targetVaultSummary = createTargetVaultSummary({
 			vaultAttoRepBacking: 3n,
-			capacityOwnershipAttoRep: 1n,
+			obligationUnits: 1n,
 			openInterestAttoEth: 2n,
 			repBackingUnits: 3n,
 			totalRepBackingUnits: 13n,
@@ -1492,7 +1494,7 @@ describe('LiquidationModal', () => {
 		})
 		const receiverVaultSummary = createTargetVaultSummary({
 			vaultAttoRepBacking: 10n,
-			capacityOwnershipAttoRep: 1n,
+			obligationUnits: 1n,
 			openInterestAttoEth: 2n,
 			repBackingUnits: 10n,
 			totalRepBackingUnits: 13n,
@@ -1501,7 +1503,7 @@ describe('LiquidationModal', () => {
 		const simulation = simulateLiquidation({
 			callerVaultSummary: receiverVaultSummary,
 			requestedDebtAttoEth: 2n,
-			totalCapacityOwnershipAttoRep: 3n,
+			totalObligationUnits: 3n,
 			minimumVaultRepDepositAttoRep: 1n,
 			repPerEthPrice: ATTO_ETH_PER_ETH,
 			settlementCollateralAttoEth: 4n,
@@ -1510,36 +1512,36 @@ describe('LiquidationModal', () => {
 		})
 
 		expect(simulation.debtMovedAttoEth).toBe(1n)
-		expect(simulation.capacityOwnershipMovedAttoRep).toBe(1n)
-		expect(simulation.badDebtAttoEth).toBe(1n)
+		expect(simulation.obligationUnitsMoved).toBe(1n)
+		expect(simulation.badDebtAttoEth).toBe(0n)
 		expect(simulation.grossRepAwardAttoRep).toBe(2n)
-		expect(simulation.callerAfter.capacityOwnershipAttoRep).toBe(2n)
-		expect(simulation.targetAfter.capacityOwnershipAttoRep).toBe(0n)
+		expect(simulation.callerAfter.obligationUnits).toBe(2n)
+		expect(simulation.targetAfter.obligationUnits).toBe(0n)
 	})
 
 	test('uses exact receiver bad debt when it exceeds current gross open interest', () => {
 		const simulation = simulateLiquidation({
 			callerVaultSummary: createTargetVaultSummary({
 				badDebtAttoEth: 2n,
-				capacityOwnershipAttoRep: 1n,
+				obligationUnits: 1n,
 				openInterestAttoEth: 0n,
 				vaultAttoRepBacking: 10n,
 			}),
 			requestedDebtAttoEth: 2n,
-			totalCapacityOwnershipAttoRep: 4n,
+			totalObligationUnits: 4n,
 			minimumVaultRepDepositAttoRep: 1n,
 			repPerEthPrice: ATTO_ETH_PER_ETH,
 			settlementCollateralAttoEth: 4n,
 			statoblastSecurityMultiplierBps: 20_000n,
 			targetVaultSummary: createTargetVaultSummary({
-				capacityOwnershipAttoRep: 2n,
+				obligationUnits: 2n,
 				openInterestAttoEth: 2n,
 				vaultAttoRepBacking: 10n,
 			}),
 		})
 
 		expect(simulation.debtMovedAttoEth).toBe(0n)
-		expect(simulation.capacityOwnershipMovedAttoRep).toBe(0n)
+		expect(simulation.obligationUnitsMoved).toBe(0n)
 	})
 
 	test('does not substitute REP capacity ownership when live ETH open interest is missing', () => {
@@ -1549,7 +1551,7 @@ describe('LiquidationModal', () => {
 			simulateLiquidation({
 				callerVaultSummary: createTargetVaultSummary(),
 				requestedDebtAttoEth: 1n,
-				totalCapacityOwnershipAttoRep: 4n * ATTO_ETH_PER_ETH,
+				totalObligationUnits: 4n * ATTO_ETH_PER_ETH,
 				repPerEthPrice: ATTO_ETH_PER_ETH,
 				settlementCollateralAttoEth: 4n * ATTO_ETH_PER_ETH,
 				statoblastSecurityMultiplierBps: 20_000n,
@@ -1561,13 +1563,13 @@ describe('LiquidationModal', () => {
 	test('partial liquidation moves proportional capacity ownership and caps debt at funded backing', () => {
 		const targetVaultSummary = createTargetVaultSummary({
 			vaultAttoRepBacking: 100n * ATTO_ETH_PER_ETH,
-			capacityOwnershipAttoRep: ATTO_ETH_PER_ETH / 2n,
+			obligationUnits: ATTO_ETH_PER_ETH / 2n,
 		})
-		const callerVaultSummary = createTargetVaultSummary({ vaultAttoRepBacking: 100n * ATTO_ETH_PER_ETH, capacityOwnershipAttoRep: 0n })
+		const callerVaultSummary = createTargetVaultSummary({ vaultAttoRepBacking: 100n * ATTO_ETH_PER_ETH, obligationUnits: 0n })
 		const partial = simulateLiquidation({
 			callerVaultSummary,
 			requestedDebtAttoEth: ATTO_ETH_PER_ETH / 4n,
-			totalCapacityOwnershipAttoRep: ATTO_ETH_PER_ETH / 2n,
+			totalObligationUnits: ATTO_ETH_PER_ETH / 2n,
 			repPerEthPrice: 300n * ATTO_ETH_PER_ETH,
 			settlementCollateralAttoEth: ATTO_ETH_PER_ETH / 2n,
 			statoblastSecurityMultiplierBps: 20_000n,
@@ -1576,7 +1578,7 @@ describe('LiquidationModal', () => {
 		const maximum = simulateLiquidation({
 			callerVaultSummary,
 			requestedDebtAttoEth: ATTO_ETH_PER_ETH / 2n,
-			totalCapacityOwnershipAttoRep: ATTO_ETH_PER_ETH / 2n,
+			totalObligationUnits: ATTO_ETH_PER_ETH / 2n,
 			repPerEthPrice: 300n * ATTO_ETH_PER_ETH,
 			settlementCollateralAttoEth: ATTO_ETH_PER_ETH / 2n,
 			statoblastSecurityMultiplierBps: 20_000n,
@@ -1585,22 +1587,22 @@ describe('LiquidationModal', () => {
 
 		expect(partial.debtMovedAttoEth).toBe(ATTO_ETH_PER_ETH / 4n)
 		expect(partial.badDebtAttoEth).toBe(0n)
-		expect(partial.targetAfter.capacityOwnershipAttoRep).toBe(ATTO_ETH_PER_ETH / 4n)
+		expect(partial.targetAfter.obligationUnits).toBe(ATTO_ETH_PER_ETH / 4n)
 		expect(maximum.debtMovedAttoEth).toBe((100n * ATTO_ETH_PER_ETH * ATTO_ETH_PER_ETH * 10_000n) / (300n * ATTO_ETH_PER_ETH * 10_500n))
 		expect(maximum.badDebtAttoEth).toBe(ATTO_ETH_PER_ETH / 2n - maximum.debtMovedAttoEth)
-		expect(maximum.targetAfter.capacityOwnershipAttoRep).toBe(ATTO_ETH_PER_ETH / 2n - maximum.capacityOwnershipMovedAttoRep)
+		expect(maximum.targetAfter.obligationUnits).toBe(0n)
 	})
 
 	test('leaves dispute-staked REP with the target during liquidation', () => {
 		const targetVaultSummary = createTargetVaultSummary({
 			disputeStakedAttoRep: 11n * ATTO_ETH_PER_ETH,
 			vaultAttoRepBacking: 100n * ATTO_ETH_PER_ETH,
-			capacityOwnershipAttoRep: 100n * ATTO_ETH_PER_ETH,
+			obligationUnits: 100n * ATTO_ETH_PER_ETH,
 		})
 		const simulation = simulateLiquidation({
 			callerVaultSummary: createTargetVaultSummary({ vaultAttoRepBacking: 100n * ATTO_ETH_PER_ETH }),
 			requestedDebtAttoEth: 50n * ATTO_ETH_PER_ETH,
-			totalCapacityOwnershipAttoRep: 102n * ATTO_ETH_PER_ETH,
+			totalObligationUnits: 102n * ATTO_ETH_PER_ETH,
 			repPerEthPrice: ATTO_ETH_PER_ETH,
 			settlementCollateralAttoEth: 102n * ATTO_ETH_PER_ETH,
 			statoblastSecurityMultiplierBps: 20_000n,
@@ -1621,7 +1623,7 @@ describe('LiquidationModal', () => {
 			targetVaultSummary: createTargetVaultSummary({
 				disputeStakedAttoRep: 11n * ATTO_ETH_PER_ETH,
 				vaultAttoRepBacking: 100n * ATTO_ETH_PER_ETH,
-				capacityOwnershipAttoRep: 100n * ATTO_ETH_PER_ETH,
+				obligationUnits: 100n * ATTO_ETH_PER_ETH,
 				claimableFeesAttoEth: 7n * ATTO_ETH_PER_ETH,
 			}),
 		})
@@ -1641,7 +1643,7 @@ describe('LiquidationModal', () => {
 			targetVaultSummary: createTargetVaultSummary({
 				disputeStakedAttoRep: 300n * ATTO_ETH_PER_ETH,
 				vaultAttoRepBacking: 300n * ATTO_ETH_PER_ETH,
-				capacityOwnershipAttoRep: 100n * ATTO_ETH_PER_ETH,
+				obligationUnits: 100n * ATTO_ETH_PER_ETH,
 			}),
 		})
 		cleanupRenderedComponent = renderedComponent.cleanup
@@ -1724,12 +1726,12 @@ describe('LiquidationModal', () => {
 			}),
 			callerVaultSummary: createTargetVaultSummary({
 				vaultAttoRepBacking: 20n * 10n ** 18n,
-				capacityOwnershipAttoRep: 1n * 10n ** 18n,
+				obligationUnits: 1n * 10n ** 18n,
 				vaultAddress: getAddress('0x0000000000000000000000000000000000000001'),
 			}),
 			targetVaultSummary: createTargetVaultSummary({
 				vaultAttoRepBacking: 30n * 10n ** 18n,
-				capacityOwnershipAttoRep: 2n * 10n ** 18n,
+				obligationUnits: 2n * 10n ** 18n,
 			}),
 		})
 		cleanupRenderedComponent = renderedComponent.cleanup
@@ -1758,12 +1760,12 @@ describe('LiquidationModal', () => {
 			}),
 			callerVaultSummary: createTargetVaultSummary({
 				vaultAttoRepBacking: 20n * 10n ** 18n,
-				capacityOwnershipAttoRep: 2n * 10n ** 18n,
+				obligationUnits: 2n * 10n ** 18n,
 				vaultAddress: getAddress('0x0000000000000000000000000000000000000001'),
 			}),
 			targetVaultSummary: createTargetVaultSummary({
 				vaultAttoRepBacking: 30n * 10n ** 18n,
-				capacityOwnershipAttoRep: 2n * 10n ** 18n,
+				obligationUnits: 2n * 10n ** 18n,
 			}),
 		})
 		cleanupRenderedComponent = renderedComponent.cleanup
@@ -1780,7 +1782,7 @@ describe('LiquidationModal', () => {
 			callerVaultSummary: createTargetVaultSummary({
 				disputeStakedAttoRep: 0n,
 				vaultAttoRepBacking: 23n * ATTO_ETH_PER_ETH,
-				capacityOwnershipAttoRep: 0n,
+				obligationUnits: 0n,
 				vaultAddress: defaultCallerVaultAddress,
 			}),
 			currentPoolOracleManagerDetails: createOracleManagerDetails({ isPriceValid: true, lastPrice: ATTO_ETH_PER_ETH }),
@@ -1789,7 +1791,7 @@ describe('LiquidationModal', () => {
 			targetVaultSummary: createTargetVaultSummary({
 				disputeStakedAttoRep: 100n * ATTO_ETH_PER_ETH,
 				vaultAttoRepBacking: 100n * ATTO_ETH_PER_ETH,
-				capacityOwnershipAttoRep: 100n * ATTO_ETH_PER_ETH,
+				obligationUnits: 100n * ATTO_ETH_PER_ETH,
 				vaultAddress: defaultTargetVaultAddress,
 			}),
 		})
@@ -1839,12 +1841,12 @@ describe('LiquidationModal', () => {
 			}),
 			callerVaultSummary: createTargetVaultSummary({
 				vaultAttoRepBacking: 100n * 10n ** 18n,
-				capacityOwnershipAttoRep: 2n * 10n ** 18n,
+				obligationUnits: 2n * 10n ** 18n,
 				vaultAddress,
 			}),
 			targetVaultSummary: createTargetVaultSummary({
 				vaultAttoRepBacking: 5n * 10n ** 18n,
-				capacityOwnershipAttoRep: 2n * 10n ** 18n,
+				obligationUnits: 2n * 10n ** 18n,
 				vaultAddress,
 			}),
 		})
@@ -1873,12 +1875,12 @@ describe('LiquidationModal', () => {
 			}),
 			callerVaultSummary: createTargetVaultSummary({
 				vaultAttoRepBacking: 100n * 10n ** 18n,
-				capacityOwnershipAttoRep: 2n * 10n ** 18n,
+				obligationUnits: 2n * 10n ** 18n,
 				vaultAddress: callerVaultAddress,
 			}),
 			targetVaultSummary: createTargetVaultSummary({
 				vaultAttoRepBacking: 5n * 10n ** 18n,
-				capacityOwnershipAttoRep: 2n * 10n ** 18n,
+				obligationUnits: 2n * 10n ** 18n,
 			}),
 		})
 		cleanupRenderedComponent = renderedComponent.cleanup
@@ -2105,12 +2107,12 @@ describe('LiquidationModal', () => {
 			}),
 			callerVaultSummary: createTargetVaultSummary({
 				vaultAttoRepBacking: 100n * 10n ** 18n,
-				capacityOwnershipAttoRep: 2n * 10n ** 18n,
+				obligationUnits: 2n * 10n ** 18n,
 				vaultAddress: callerVaultAddress,
 			}),
 			targetVaultSummary: createTargetVaultSummary({
 				vaultAttoRepBacking: 2n * 10n ** 18n,
-				capacityOwnershipAttoRep: 2n * 10n ** 18n,
+				obligationUnits: 2n * 10n ** 18n,
 				claimableFeesAttoEth: 25n * 10n ** 16n,
 			}),
 		})
@@ -2142,17 +2144,17 @@ describe('LiquidationModal', () => {
 			liquidationDebtEthAmount: '100',
 			selectedPool: createSelectedPool({
 				settlementCollateralAttoEth: 100n * ATTO_ETH_PER_ETH,
-				totalCapacityOwnershipAttoRep: 100n * ATTO_ETH_PER_ETH,
+				totalObligationUnits: 100n * ATTO_ETH_PER_ETH,
 				statoblastSecurityMultiplierBps: 20_000n,
 			}),
 			callerVaultSummary: createTargetVaultSummary({
 				vaultAttoRepBacking: 2_000n * 10n ** 18n,
-				capacityOwnershipAttoRep: 0n,
+				obligationUnits: 0n,
 				vaultAddress: callerVaultAddress,
 			}),
 			targetVaultSummary: createTargetVaultSummary({
 				vaultAttoRepBacking: 100n * 10n ** 18n,
-				capacityOwnershipAttoRep: 100n * 10n ** 18n,
+				obligationUnits: 100n * 10n ** 18n,
 			}),
 		})
 		cleanupRenderedComponent = renderedComponent.cleanup
@@ -2176,12 +2178,12 @@ describe('LiquidationModal', () => {
 			}),
 			callerVaultSummary: createTargetVaultSummary({
 				vaultAttoRepBacking: 2_000n * 10n ** 18n,
-				capacityOwnershipAttoRep: 0n,
+				obligationUnits: 0n,
 				vaultAddress: callerVaultAddress,
 			}),
 			targetVaultSummary: createTargetVaultSummary({
 				vaultAttoRepBacking: 100n * 10n ** 18n,
-				capacityOwnershipAttoRep: 100n * 10n ** 18n,
+				obligationUnits: 100n * 10n ** 18n,
 			}),
 		})
 		cleanupRenderedComponent = renderedComponent.cleanup
@@ -2225,7 +2227,7 @@ describe('LiquidationModal', () => {
 					repPerEthSourceUrl={undefined}
 					selectedPool={createSelectedPool({
 						settlementCollateralAttoEth: 3_500n * ATTO_ETH_PER_ETH,
-						totalCapacityOwnershipAttoRep: 3_500n * ATTO_ETH_PER_ETH,
+						totalObligationUnits: 3_500n * ATTO_ETH_PER_ETH,
 						lastOraclePrice: 3n * 10n ** 18n,
 						statoblastSecurityMultiplierBps: 20_000n,
 					})}
@@ -2234,12 +2236,12 @@ describe('LiquidationModal', () => {
 					securityPoolOverviewResult={undefined}
 					callerVaultSummary={createTargetVaultSummary({
 						vaultAttoRepBacking: 30_000n * 10n ** 18n,
-						capacityOwnershipAttoRep: 1_000n * 10n ** 18n,
+						obligationUnits: 1_000n * 10n ** 18n,
 						vaultAddress: defaultCallerVaultAddress,
 					})}
 					targetVaultSummary={createTargetVaultSummary({
 						vaultAttoRepBacking: 1840n * 10n ** 18n,
-						capacityOwnershipAttoRep: 2_500n * 10n ** 18n,
+						obligationUnits: 2_500n * 10n ** 18n,
 						vaultAddress: defaultTargetVaultAddress,
 					})}
 				/>
@@ -2320,7 +2322,7 @@ describe('LiquidationModal', () => {
 			targetVaultSummary: createTargetVaultSummary({
 				disputeStakedAttoRep: 4n * 10n ** 18n,
 				vaultAttoRepBacking: 16n * 10n ** 18n,
-				capacityOwnershipAttoRep: 10n * 10n ** 18n,
+				obligationUnits: 10n * 10n ** 18n,
 			}),
 		})
 		cleanupRenderedComponent = renderedComponent.cleanup

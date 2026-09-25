@@ -1,106 +1,37 @@
 import { OperationType, requestPriceIfNeededAndStageOperation } from '../testSupport/simulator/utils/contracts/statoblast'
 import { GENESIS_REPUTATION_TOKEN, TEST_ADDRESSES } from '../testSupport/simulator/utils/constants'
-import { depositRepToVault } from '../testSupport/simulator/utils/contracts/securityPool'
-import { decodeEventLog } from '@zoltar/core-shared/evm/ethereum'
+import { createCompleteSet, depositRepToVault, getSecurityVault, getSettlementCollateralAttoEth, getShareTokenSupplyAttoShares, redeemCompleteSet } from '../testSupport/simulator/utils/contracts/securityPool'
 import { createWriteClient } from '../testSupport/simulator/utils/clients'
 import { approveToken, getERC20Balance } from '../testSupport/simulator/utils/utilities'
 import { addressString } from '../testSupport/simulator/utils/bigint'
 import assert from '../testSupport/simulator/utils/assert'
 import { describe, test } from 'bun:test'
-import { statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator, statoblast_SecurityPool_SecurityPool } from '../types/contractArtifact'
-import { createCompleteSet, getSecurityVault, getSettlementCollateralAttoEth, getShareTokenSupplyAttoShares, redeemCompleteSet } from '../testSupport/simulator/utils/contracts/securityPool'
+import { statoblast_SecurityPool_SecurityPool } from '../types/contractArtifact'
 import { useStatoblastVaultAccountingFixture } from './statoblast/fixture'
 
-const BPS_DENOMINATOR = 10_000n
-
-describe('Audit PoC: capacity-exit liquidation', () => {
+describe('Assigned coverage during an unrelated vault exit', () => {
 	const fixture = useStatoblastVaultAccountingFixture()
-	const { getVaultRepClaim, repDeposit, statoblastSecurityMultiplierBps, transferRepToAddress } = fixture
-
-	test('a capacity provider cannot exit while doing so would reassign live open interest to another vault', async () => {
-		const { client, mockWindow, securityPoolAddresses } = fixture
-		const securityPool = securityPoolAddresses.securityPool
-		const coordinator = securityPoolAddresses.priceOracleManagerAndOperatorQueuer
-		const exitVault = createWriteClient(mockWindow, TEST_ADDRESSES[1])
-		const receiverVault = createWriteClient(mockWindow, TEST_ADDRESSES[2])
-		const receiverBacking = repDeposit * 10n
-		const exitWalletBeforeSetup = await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), exitVault.account.address)
-
-		await transferRepToAddress(client, exitVault.account.address, repDeposit)
-		await transferRepToAddress(client, receiverVault.account.address, receiverBacking)
-		for (const vaultClient of [exitVault, receiverVault]) {
-			await approveToken(vaultClient, addressString(GENESIS_REPUTATION_TOKEN), securityPool)
-		}
-		await depositRepToVault(exitVault, securityPool, repDeposit)
-		await depositRepToVault(receiverVault, securityPool, receiverBacking, (receiverBacking * statoblastSecurityMultiplierBps) / 2n)
-
-		const victimBefore = await getSecurityVault(client, securityPool, client.account.address)
-		const exitBefore = await getSecurityVault(client, securityPool, exitVault.account.address)
-		const receiverBefore = await getSecurityVault(client, securityPool, receiverVault.account.address)
-		assert.strictEqual(await getVaultRepClaim(client.account.address), repDeposit, 'victim should begin with its full REP deposit')
-		assert.strictEqual(victimBefore.capacityOwnershipAttoRep, repDeposit, 'victim should use the minimum permitted deposit health factor')
-		assert.strictEqual(exitBefore.capacityOwnershipAttoRep, repDeposit, 'exit vault should initially provide half of the live capacity')
-		assert.strictEqual(receiverBefore.capacityOwnershipAttoRep, 2n, 'receiver has the smallest capacity supporting a nonzero attoETH exposure')
-
-		const temporaryOpenInterest = repDeposit + 1n
-		const receiverEthBeforeAttack = await receiverVault.getBalance({ address: receiverVault.account.address })
-		await createCompleteSet(receiverVault, securityPool, temporaryOpenInterest)
-		const mintingCapacity = await client.readContract({
-			abi: statoblast_SecurityPool_SecurityPool.abi,
-			address: securityPool,
-			functionName: 'getCurrentMintingCapacityAttoEth',
-		})
-		assert.strictEqual(mintingCapacity, temporaryOpenInterest, 'the attack should mint exactly the aggregate capacity')
-		const victimOpenInterestBeforeExit = await client.readContract({
-			abi: statoblast_SecurityPool_SecurityPool.abi,
-			address: securityPool,
-			functionName: 'getVaultOpenInterestAttoEth',
-			args: [client.account.address],
-		})
-		assert.strictEqual(victimOpenInterestBeforeExit * statoblastSecurityMultiplierBps, repDeposit * BPS_DENOMINATOR, 'victim should be exactly healthy before the attacker removes capacity')
-
-		const withdrawalLogStartBlock = (await client.getBlockNumber()) + 1n
-		await requestPriceIfNeededAndStageOperation(exitVault, coordinator, OperationType.WithdrawRep, exitVault.account.address, repDeposit)
-		const withdrawalExecution = (await client.getLogs({ address: coordinator, fromBlock: withdrawalLogStartBlock })).map(log => decodeEventLog({ abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi, data: log.data, topics: log.topics })).find(log => log.eventName === 'ExecutedStagedOperation')
-		if (withdrawalExecution === undefined) throw new Error('missing withdrawal execution event')
-		assert.strictEqual(withdrawalExecution.args.success, false, 'capacity exit should fail while its capacity secures live open interest')
-		assert.strictEqual(withdrawalExecution.args.errorMessage, 'Capacity committed', 'capacity exit should expose the live-open-interest invariant')
-		assert.strictEqual(await getVaultRepClaim(exitVault.account.address), repDeposit, 'failed capacity exit should retain its REP commitment')
-		assert.strictEqual((await getSecurityVault(client, securityPool, exitVault.account.address)).capacityOwnershipAttoRep, repDeposit, 'failed capacity exit should retain its capacity commitment')
-
-		const victimOpenInterestAfterExit = await client.readContract({
-			abi: statoblast_SecurityPool_SecurityPool.abi,
-			address: securityPool,
-			functionName: 'getVaultOpenInterestAttoEth',
-			args: [client.account.address],
-		})
-		assert.strictEqual(victimOpenInterestAfterExit, victimOpenInterestBeforeExit, 'failed capacity exit should not reassign any open interest')
-		assert.strictEqual(victimOpenInterestAfterExit * statoblastSecurityMultiplierBps, repDeposit * BPS_DENOMINATOR, 'victim should remain healthy after the rejected exit')
-
-		const receiverWalletBeforeLiquidation = await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), receiverVault.account.address)
-		const liquidationLogStartBlock = (await client.getBlockNumber()) + 1n
-		await requestPriceIfNeededAndStageOperation(receiverVault, coordinator, OperationType.Liquidation, client.account.address, victimOpenInterestAfterExit)
-		const liquidationExecution = (await client.getLogs({ address: coordinator, fromBlock: liquidationLogStartBlock })).map(log => decodeEventLog({ abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi, data: log.data, topics: log.topics })).find(log => log.eventName === 'ExecutedStagedOperation')
-		if (liquidationExecution === undefined) throw new Error('missing liquidation execution event')
-		assert.strictEqual(liquidationExecution.args.success, false, 'the unchanged healthy victim should not be liquidatable')
-		const victimClaimAfterLiquidation = await getVaultRepClaim(client.account.address)
-		const receiverClaimAfterLiquidation = await getVaultRepClaim(receiverVault.account.address)
-		assert.strictEqual(victimClaimAfterLiquidation, repDeposit, 'rejected liquidation should preserve every victim REP')
-		assert.strictEqual(receiverClaimAfterLiquidation, receiverBacking, 'rejected liquidation should not award victim REP to the receiver')
-
-		const completeSetShares = await getShareTokenSupplyAttoShares(client, securityPool)
-		await redeemCompleteSet(receiverVault, securityPool, completeSetShares)
-		assert.strictEqual(await getSettlementCollateralAttoEth(client, securityPool), 0n, 'attacker should recover all temporary complete-set collateral')
-		const receiverEthAfterRedemption = await receiverVault.getBalance({ address: receiverVault.account.address })
-		assert.ok(receiverEthAfterRedemption > receiverEthBeforeAttack - temporaryOpenInterest / 100n, 'attacker should recover over 99% of temporary ETH despite normal retention and transaction fees')
-
-		await requestPriceIfNeededAndStageOperation(exitVault, coordinator, OperationType.WithdrawRep, exitVault.account.address, repDeposit)
-		assert.strictEqual(await getVaultRepClaim(exitVault.account.address), 0n, 'capacity provider should be able to exit after open interest is removed')
-		assert.strictEqual(await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), exitVault.account.address), exitWalletBeforeSetup + repDeposit, 'capacity provider should recover its full REP principal after open interest is removed')
-
-		await requestPriceIfNeededAndStageOperation(receiverVault, coordinator, OperationType.WithdrawRep, receiverVault.account.address, receiverClaimAfterLiquidation)
-		const receiverWalletAfterAttack = await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), receiverVault.account.address)
-		assert.strictEqual(await getVaultRepClaim(receiverVault.account.address), 0n, 'receiver should be able to exit after open interest is removed')
-		assert.strictEqual(receiverWalletAfterAttack, receiverWalletBeforeLiquidation + receiverBacking, 'rejected attack should return only the receiver principal and no victim REP')
+	test('an unallocated vault can withdraw without moving the underwriting vault obligation', async () => {
+		const { client, mockWindow, securityPoolAddresses, repDeposit, transferRepToAddress, getVaultRepClaim } = fixture
+		const pool = securityPoolAddresses.securityPool
+		const exiting = createWriteClient(mockWindow, TEST_ADDRESSES[1])
+		await transferRepToAddress(client, exiting.account.address, repDeposit)
+		await approveToken(exiting, addressString(GENESIS_REPUTATION_TOKEN), pool)
+		await depositRepToVault(exiting, pool, repDeposit)
+		await client.writeContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: pool, functionName: 'setCoverageOffer', args: [true, repDeposit, 10_000n] })
+		await createCompleteSet(client, pool, repDeposit / 4n)
+		const before = await getSecurityVault(client, pool, client.account.address)
+		const obligation = () => client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: pool, functionName: 'getVaultOpenInterestAttoEth', args: [client.account.address] })
+		const beforeDebt = await obligation()
+		const walletBefore = await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), exiting.account.address)
+		assert.strictEqual((await getSecurityVault(client, pool, exiting.account.address)).obligationUnits, 0n)
+		await requestPriceIfNeededAndStageOperation(exiting, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.WithdrawRep, exiting.account.address, repDeposit)
+		assert.strictEqual(await getVaultRepClaim(exiting.account.address), 0n)
+		assert.strictEqual(await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), exiting.account.address), walletBefore + repDeposit)
+		assert.strictEqual((await getSecurityVault(client, pool, client.account.address)).obligationUnits, before.obligationUnits)
+		assert.ok((await obligation()) <= beforeDebt, 'withdrawing unrelated REP cannot increase assigned obligation')
+		assert.strictEqual(await getVaultRepClaim(client.account.address), repDeposit)
+		await redeemCompleteSet(client, pool, await getShareTokenSupplyAttoShares(client, pool))
+		assert.strictEqual(await getSettlementCollateralAttoEth(client, pool), 0n)
 	})
 })

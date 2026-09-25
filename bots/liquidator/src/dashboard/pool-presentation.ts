@@ -1,5 +1,5 @@
 type Vault = {
-	capacityOwnershipRep: string
+	obligationUnitsDisplay: string
 	openInterestDisplay: string
 	healthBps?: string
 	vaultRepBacking: string
@@ -23,7 +23,7 @@ export type MonitoredPool = {
 	questionId: string
 	selected: boolean
 	systemState: string
-	totalCapacityOwnershipRep: string
+	totalObligationUnitsDisplay: string
 	totalPoolHeldRep: string
 }
 

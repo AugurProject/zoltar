@@ -3,7 +3,7 @@ pragma solidity 0.8.35;
 
 import { BinaryOutcomes } from '../../statoblast/BinaryOutcomes.sol';
 import { IERC1155Receiver } from '../../statoblast/interfaces/IERC1155Receiver.sol';
-import { ISecurityPool, SystemState } from '../../statoblast/interfaces/ISecurityPool.sol';
+import { ISecurityPool, SystemState, CoverageAllocation } from '../../statoblast/interfaces/ISecurityPool.sol';
 
 contract TradingMockZoltar {
 	mapping(uint248 => uint256) public forkTime;
@@ -193,7 +193,11 @@ contract TradingMockSecurityPool {
 		return amountAttoShares / sharesPerEth;
 	}
 
-	function createCompleteSet() external payable {
+	function createCompleteSet(CoverageAllocation[] calldata) external payable {
+		createCompleteSet();
+	}
+
+	function createCompleteSet() public payable {
 		uint256 amount = attoEthToAttoShares(msg.value);
 		require(amount > 0, 'Mint is zero');
 		shareTokenSupplyAttoShares += amount;

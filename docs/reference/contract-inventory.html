@@ -59,8 +59,8 @@
 								<td>Its deterministic per-parent address is exposed by <code>getMigrationProxyAddress</code> and recorded in fork snapshot events; users do not call it.</td>
 							</tr>
 							<tr>
-								<td><code>EscalationGameDepositDelegate</code>, <code>EscalationGameClaimDelegate</code>, <code>EscalationGameForker</code>, <code>SecurityPoolForkerVaultMigrationDelegate</code>, <code>SecurityPoolSettlementDelegate</code>, and <code>SecurityPoolOperationsDelegate</code></td>
-								<td>Their public methods are delegatecall implementations. The deposit delegate implements <code>recordDeposit</code>, <code>recordForkedEscrowForOutcome</code>, <code>applyTruthAuctionHaircut</code>, funding-gated <code>resumeFromFork</code>, <code>consumeEscrowedRepForOwner</code>, <code>consumeUnresolvedRepForClaimOwners</code>, <code>creditClaimOwners</code>, and <code>creditExternalClaimOwners</code>. The shared claim delegate handles retention checkpoint reads and initialization; it has no ownership or import surface. The forker delegates implement escalation and vault migration. <code>SecurityPoolSettlementDelegate</code> is abstract and contributes complete-set minting validation and funded inherited-collateral installation to the single deployed <code>SecurityPoolOperationsDelegate</code>. That operations delegate implements <code>setVaultCapacity</code>, funded REP-backing-unit, capacity-ownership, receiver-debt, and full-request bad-debt liquidation accounting while isolating fees and claims, plus permissionless continuation resume. A direct call may revert against uninitialized state or may mutate only the helper's isolated storage; it is not a protocol action.</td>
+								<td><code>EscalationGameDepositDelegate</code>, <code>EscalationGameClaimDelegate</code>, <code>EscalationGameForker</code>, <code>SecurityPoolForkerVaultMigrationDelegate</code>, <code>SecurityPoolCoverageDelegate</code>, <code>SecurityPoolSettlementDelegate</code>, <code>SecurityPoolLiquidationDelegate</code>, and <code>SecurityPoolOperationsDelegate</code></td>
+								<td>Their public methods are delegatecall implementations. The deposit delegate implements <code>recordDeposit</code>, <code>recordForkedEscrowForOutcome</code>, <code>applyTruthAuctionHaircut</code>, funding-gated <code>resumeFromFork</code>, <code>consumeEscrowedRepForOwner</code>, <code>consumeUnresolvedRepForClaimOwners</code>, <code>creditClaimOwners</code>, and <code>creditExternalClaimOwners</code>. The shared claim delegate handles retention checkpoint reads and initialization; it has no ownership or import surface. The forker delegates implement escalation and vault migration. <code>SecurityPoolSettlementDelegate</code> is abstract and contributes complete-set minting validation and funded inherited-collateral installation to the single deployed <code>SecurityPoolOperationsDelegate</code>. The abstract coverage delegate handles obligation migration and auction assignments, and the abstract liquidation delegate transfers assigned units and funded REP awards while retaining written-off units in the denominator. The deployed operations delegate combines these implementations with withdrawals, fee accounting, and continuation resume. <code>CoverageObligationMath</code> supplies internal rounded obligation, issuance, and active-fee-base arithmetic. A direct call may revert against uninitialized state or may mutate only the helper's isolated storage; it is not a protocol action.</td>
 								<td>Accept resulting state and logs only when the recognized game, pool, or forker executes the matching wrapper through <code>delegatecall</code>. State changes and events then occur in that recognized contract's context. Canonical liquidation enters through <code>SecurityPool.performLiquidation</code>; continuation progress enters through <code>SecurityPool.resumeForkedEscalationGame</code>.</td>
 							</tr>
 							<tr>
@@ -96,14 +96,14 @@
 						</thead>
 						<tbody>
 							<tr>
-								<td><code>calculateFeeAccrual(settlementCollateralAttoEth, retentionRate, timeDelta, indexRemainder, feeEligibleCapacityOwnershipAttoRep, feesOwedRemainder)</code></td>
-								<td>Applies fixed-point retention over elapsed time to settlement collateral net of the already-counted but uncredited decay <code>(indexRemainder + feesOwedRemainder) / 1e18</code>, carries the global index remainder, and returns whole credited fees plus the next fee remainder. Credited fees therefore never exceed settlement collateral. Canonical callers avoid zero eligible capacity ownership before this division.</td>
-								<td><a href="../explanation/fees.html">Fee accrual</a></td>
+								<td><code>calculateFeeAccrual(settlementCollateralAttoEth, retentionRate, timeDelta, indexRemainder, activeObligationUnits, feesOwedRemainder)</code></td>
+								<td>Applies fixed-point retention over elapsed time to settlement collateral net of the already-counted but uncredited decay <code>(indexRemainder + feesOwedRemainder) / 1e18</code>, carries the global index remainder, and returns whole credited fees plus the next fee remainder. Credited fees therefore never exceed settlement collateral. Canonical callers pass only the actively secured collateral fraction and avoid zero active obligation units before this division.</td>
+								<td><a href="./contracts/securitypool.html">SecurityPool fee accounting</a></td>
 							</tr>
 							<tr>
 								<td><code>calculateVaultFee(capacityOwnershipAttoRep, feeIndexDelta, remainder)</code></td>
 								<td>Floors the vault's whole fee credit and returns the remaining fixed-point numerator for its next checkpoint.</td>
-								<td><a href="../explanation/fees.html">Fee accrual</a></td>
+								<td><a href="./contracts/securitypool.html">SecurityPool fee accounting</a></td>
 							</tr>
 							<tr>
 								<td><code>calculateMintingCapacityAttoEth(capacityOwnershipAttoRep, repEthPrice, securityMultiplierBps)</code></td>
@@ -112,13 +112,13 @@
 							</tr>
 							<tr>
 								<td><code>calculateVaultOpenInterestAttoEth(activeOpenInterestAttoEth, vaultCapacityOwnershipAttoRep, totalCapacityOwnershipAttoRep)</code></td>
-								<td>Attributes live pool open interest pro rata to capacity ownership, rounding a positive vault share upward. Zero vault or total ownership returns zero.</td>
+								<td>Computes an upward-rounded proportional share using the supplied numerator and denominator. Production vault obligations use the separate <code>CoverageObligationMath.obligation</code> ledger; this helper remains in liquidation test fixtures.</td>
 								<td><a href="../explanation/liquidations.html#capacity-and-health">Dynamic capacity</a></td>
 							</tr>
 							<tr>
-								<td><code>calculateBundledLiquidationTransfer(targetBackingUnits, targetCapacityOwnershipAttoRep, targetOpenInterestAttoEth, requestedDebtAttoEth, repEthPrice, currentPoolHeldAttoRepBalance, currentTotalRepBackingUnits, minimumRemainingAttoRep)</code></td>
-								<td>Returns zero when the request, target open interest, capacity ownership, or price is zero. Caps a nominal debt quote by target open interest and by the complete 5%-bonus award fundable from target pool-held REP, then rounds proportional capacity ownership downward. Execution derives moved debt separately from the receiver's exact live open-interest increase. Partial requests preserve the configured REP minimum. On a full-target request, bad debt is target open interest minus exact moved debt and can include both an award-unfunded slice and integer-allocation residue.</td>
-								<td><a href="../explanation/liquidations.html#punitive-liquidation">Vault liquidation</a></td>
+								<td><code>calculateBundledLiquidationTransfer(targetBackingUnits, targetObligationUnits, targetOpenInterestAttoEth, requestedDebtAttoEth, repEthPrice, currentPoolHeldAttoRepBalance, currentTotalRepBackingUnits, minimumRemainingAttoRep)</code></td>
+								<td>Returns zero when the request, target open interest, assigned obligation units, or price is zero. Caps a nominal debt quote by target open interest and the complete 5%-bonus REP award, then rounds the proportional obligation-unit transfer downward. Execution derives moved debt from the receiver's exact rounded obligation increase. Partial requests preserve the configured REP minimum. On a full-target request, residual target units move into the written-off bucket without changing the denominator. Their independently rounded ETH value is diagnostic bad debt; it need not equal target open interest minus moved debt.</td>
+								<td><a href="./contracts/securitypool.html">SecurityPool liquidation</a></td>
 							</tr>
 							<tr>
 								<td><code>isVaultHealthy(poolHeldVaultRepBackingAttoRep, disputeStakedAttoRep, openInterestAttoEth, repEthPrice, poolSecurityMultiplierBps)</code></td>
@@ -219,7 +219,7 @@
 								<td>
 									<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPoolStorage.sol"><code>SecurityPoolStorage.sol</code></a
 									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/DelegateCallForwarder.sol"><code>DelegateCallForwarder.sol</code></a
-									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPoolSettlementDelegate.sol"><code>SecurityPoolSettlementDelegate.sol</code></a
+									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/CoverageObligationMath.sol"><code>CoverageObligationMath.sol</code></a>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPoolCoverageDelegate.sol"><code>SecurityPoolCoverageDelegate.sol</code></a>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPoolLiquidationDelegate.sol"><code>SecurityPoolLiquidationDelegate.sol</code></a>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPoolSettlementDelegate.sol"><code>SecurityPoolSettlementDelegate.sol</code></a
 									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPoolOperationsDelegate.sol"><code>SecurityPoolOperationsDelegate.sol</code></a
 									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPoolMigrationProxy.sol"><code>SecurityPoolMigrationProxy.sol</code></a
 									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPoolForker.sol"><code>SecurityPoolForker.sol</code></a

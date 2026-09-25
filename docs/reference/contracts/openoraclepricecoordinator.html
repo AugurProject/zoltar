@@ -21,7 +21,7 @@
 				<p>Report and staged-operation liveness depends on <a href="../security-model.html#assumption-a16">A16 timely inclusion</a>, <a href="../security-model.html#assumption-a17">A17 corrector capability</a>, <a href="../security-model.html#assumption-a18">A18 independent correction incentive</a>, <a href="../security-model.html#assumption-a19">A19 observable correctable price</a>, and <a href="../security-model.html#assumption-a06">A06 lifecycle executors</a>. When <code>lastPrice</code> is zero, the official client currently needs an offchain market quote to propose the first report; quote availability is a client limitation rather than a protocol security assumption. Proposals copied from a nonzero cached price do not use that quote path.</p>
 				<h2 id="interactions">State-changing interactions</h2>
 				<!-- Validated read ABI fingerprint: 288a73d13de5a0f593226105eb11eb177bf085ac2ee708a31645c3d7c4eb7237 -->
-				<!-- Validated complete compiled ABI fingerprint: 0865b4246bf31091c80235a8a48cbaf5af5716ff2f0e292bad2a8d78a5eab9a2 -->
+				<!-- Validated complete compiled ABI fingerprint: af1fa7904dac0ac4fb94b9a59bd6373098bfc2e73d3500614425421d310b169b -->
 				<table>
 					<thead>
 						<tr>
@@ -37,7 +37,7 @@
 							<td><code>requestPriceIfNeededAndStageLiquidation(targetVault, receiverVault, requestedDebtAttoEth, approvalId, ..., bountyAttoEth)</code></td>
 							<td>Liquidation operator; a delegated receiver must have approved this exact operator</td>
 							<td>Receiver differs from target; delegated approval matches pool, receiver, operator, and target scope, has available cumulative and per-operation quota, and remains valid through latest execution.</td>
-							<td>Stages explicit operator, receiver, target backing, and target capacity ownership and reserves bounded receiver quota before any oracle work. The queue event retains the full historical observation for indexing, while live execution inputs are not duplicated in persistent operation storage. The self-receiving operator path uses a zero approval ID.</td>
+							<td>Stages explicit operator, receiver, target backing, and target assigned obligation units, and coverage epoch and reserves bounded receiver quota before any oracle work. The queue event retains the full historical observation for indexing, while live execution inputs are not duplicated in persistent operation storage. The self-receiving operator path uses a zero approval ID.</td>
 							<td><code>LiquidationRouteStaged</code>; <code>LiquidationApprovalReserved</code> on a delegated route; staged-operation lifecycle events</td>
 						</tr>
 						<tr>

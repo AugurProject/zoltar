@@ -336,7 +336,7 @@ describe('contract operation classification', () => {
 				{ indexed: true, name: 'receiverVault', type: 'address' },
 				{ indexed: true, name: 'targetVault', type: 'address' },
 				{ indexed: false, name: 'securityBondDebtMovedAttoEth', type: 'uint256' },
-				{ indexed: false, name: 'capacityOwnershipMovedAttoRep', type: 'uint256' },
+				{ indexed: false, name: 'obligationUnitsMoved', type: 'uint256' },
 				{ indexed: false, name: 'badDebtAttoEth', type: 'uint256' },
 			],
 		})

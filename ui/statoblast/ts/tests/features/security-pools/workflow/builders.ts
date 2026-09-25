@@ -212,7 +212,7 @@ export function createForkAuctionProps(overrides: Partial<ForkAuctionRouteConten
 
 export function createForkAuctionDetails(overrides: Partial<ForkAuctionDetails> = {}): ForkAuctionDetails {
 	const forkAuctionDetails: ForkAuctionDetails = {
-		auctionedCapacityOwnershipAttoRep: 0n,
+		auctionObligationUnits: 0n,
 		auctionableAttoRepAtFork: 0n,
 		claimingAvailable: false,
 		settlementCollateralAttoEth: 0n,
@@ -243,7 +243,7 @@ export function createSelectedPool(overrides: Partial<ListedSecurityPool> = {}):
 	const selectedPool: ListedSecurityPool = {
 		settlementCollateralAttoEth: 0n,
 		currentRetentionRate: 10n,
-		feeEligibleCapacityOwnershipAttoRep: 5n * 10n ** 18n,
+		activeObligationUnits: 5n * 10n ** 18n,
 		forkOutcome: 'none',
 		forkOwnSecurityPool: false,
 		hasForkActivity: false,

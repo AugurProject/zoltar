@@ -43,7 +43,7 @@ export type PoolObservation = {
 	securityPoolForker: Address
 	stagedOperations: StagedOperationObservation[]
 	systemState: bigint
-	totalCapacityOwnershipAttoRep: bigint
+	totalObligationUnits: bigint
 	totalAttoRep: bigint
 	universeId: bigint
 	vaults: VaultPosition[]
@@ -70,7 +70,7 @@ export type StagedOperationObservation = {
 	receiverVault: Address
 	reservedLiquidationDebtAttoEth: bigint
 	snapshotTotalRepBackingUnits: bigint
-	snapshotTargetCapacityOwnershipAttoRep: bigint
+	snapshotTargetObligationUnits: bigint
 	snapshotTargetDisputeStakedAttoRep: bigint
 	snapshotTargetOpenInterestAttoEth: bigint
 	snapshotTargetBackingUnits: bigint
@@ -259,7 +259,7 @@ function vaultView(vault: VaultPosition, multiplierBps?: bigint, price?: bigint)
 	const healthBps = multiplierBps === undefined || price === undefined ? undefined : vaultHealthBps(vault.vaultAttoRepBacking, vault.openInterestAttoEth, multiplierBps, price, vault.disputeStakedAttoRep)
 	return {
 		address: vault.address,
-		capacityOwnershipRep: formatDecimalAmount(vault.capacityOwnershipAttoRep),
+		obligationUnitsDisplay: vault.obligationUnits.toString(),
 		openInterestDisplay: formatDecimalAmount(vault.openInterestAttoEth),
 		healthBps: healthBps?.toString(),
 		backingUnits: vault.backingUnits.toString(),
@@ -452,7 +452,7 @@ export function operatorSnapshot(state: RuntimeState, execute: boolean, marketCo
 				selected: pool.selected,
 				securityPoolForker: pool.securityPoolForker,
 				systemState: pool.systemState.toString(),
-				totalCapacityOwnershipRep: formatDecimalAmount(pool.totalCapacityOwnershipAttoRep),
+				totalObligationUnitsDisplay: formatDecimalAmount(pool.totalObligationUnits),
 				totalPoolHeldRep: formatDecimalAmount(pool.totalAttoRep),
 				universeId: pool.universeId.toString(),
 				vaults: pool.vaults.map(vault => vaultView(vault)),

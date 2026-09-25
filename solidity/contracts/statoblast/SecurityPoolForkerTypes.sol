@@ -8,9 +8,9 @@ struct SecurityPoolForkerForkData {
 	UniformPriceDualCapBatchAuction truthAuction;
 	uint256 truthAuctionStarted;
 	uint256 migratedAttoRep;
-	uint256 auctionedCapacityOwnershipAttoRep;
+	uint256 auctionObligationUnits;
 	uint256 claimedAuctionRepPurchasedAttoRep;
-	uint256 claimedAuctionedCapacityOwnershipAttoRep;
+	uint256 claimedAuctionObligationUnits;
 	uint256 escalationElapsedAtFork;
 	uint256 escalationStartBondAtForkAttoRep;
 	uint256 escalationNonDecisionThresholdAtForkAttoRep;
@@ -35,6 +35,7 @@ struct SecurityPoolForkerForkData {
 	uint256 auctionFeeIndexAtFinalization;
 	uint256 unassignedRepBackingUnitsAtFinalization;
 	uint256 auctionBadDebtGeneration;
+	uint256 migratedObligationUnits;
 }
 
 struct OwnForkChildRepAllocation {

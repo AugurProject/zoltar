@@ -85,7 +85,7 @@ const vaultCheckpoint = (hash: ReturnType<typeof blockHash>): StoredLog => ({
 			feeIndex: '1',
 			vaultFeeRemainder: '0',
 			resultingTotalRepBackingUnits: '120000000000000000000',
-			resultingFeeEligibleCapacityOwnershipAttoRep: 85_000_000_000_000_000_000n.toString(),
+			resultingActiveObligationUnits: 85_000_000_000_000_000_000n.toString(),
 		},
 	},
 })

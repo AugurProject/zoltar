@@ -231,7 +231,7 @@ export const renderVaultDetailPage = async (deps: StateRiskDeps, vaultItem: Vaul
 		staticField('Last block', `#${number(vaultItem.block_number)}`),
 		staticField('Fee remainder (1e18 denominator)', vaultItem.vault_fee_remainder),
 		staticField('Resulting pool-held REP backing units', exactUnit(vaultItem.resulting_total_rep_backing_units, 18, '')),
-		staticField('Resulting fee-eligible capacity', exactUnit(vaultItem.resulting_fee_eligible_capacity_ownership_atto_rep, 18, 'REP')),
+		staticField('Resulting active obligation units', vaultItem.resulting_fee_eligible_capacity_ownership_atto_rep),
 		staticField('Fee index', exactUnit(vaultItem.fee_index, 18, '')),
 	)
 	staticCard.append(grid)

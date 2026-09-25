@@ -6,7 +6,7 @@ import {
 	LiquidationApprovalRegistry
 } from '../../statoblast/LiquidationApprovalRegistry.sol';
 import { IERC1271 } from '../../statoblast/SignatureValidation.sol';
-import { SecurityPoolOperationsDelegate } from '../../statoblast/SecurityPoolOperationsDelegate.sol';
+import { SecurityPoolLiquidationDelegate } from '../../statoblast/SecurityPoolLiquidationDelegate.sol';
 import { SecurityPoolUtils } from '../../statoblast/SecurityPoolUtils.sol';
 
 contract LiquidationApprovalCoordinatorMock {
@@ -51,19 +51,19 @@ contract Erc1271LiquidationReceiverMock is IERC1271 {
 	}
 }
 
-contract CoarseLiquidationRoundingHarness is SecurityPoolOperationsDelegate {
+contract CoarseLiquidationRoundingHarness is SecurityPoolLiquidationDelegate {
 	function configureBadDebtParticipants(address targetVault, address receiverVault, uint256 targetBadDebtAttoEth, uint256 receiverBadDebtAttoEth) external {
 		settlementCollateralAttoEth = 100;
-		feeEligibleCapacityOwnershipAttoRep = 100;
-		totalCapacityOwnershipAttoRep = 100;
+		activeObligationUnits = 100;
+		totalObligationUnits = 100;
 		totalRepBackingUnits = 1_010;
 		statoblastSecurityMultiplierBps = 20_000;
 		minimumSecurityBondDebtAttoEth = 1;
 		minimumVaultRepDepositAttoRep = 1;
 		securityVaults[targetVault].repBackingUnits = 10;
-		securityVaults[targetVault].capacityOwnershipAttoRep = 50;
+		coveragePositions[targetVault].units = 50;
 		securityVaults[receiverVault].repBackingUnits = 1_000;
-		securityVaults[receiverVault].capacityOwnershipAttoRep = 50;
+		coveragePositions[receiverVault].units = 50;
 		_setVaultBadDebtAttoEth(targetVault, targetBadDebtAttoEth);
 		_setVaultBadDebtAttoEth(receiverVault, receiverBadDebtAttoEth);
 		totalBadDebtAttoEth = targetBadDebtAttoEth + receiverBadDebtAttoEth;
@@ -76,48 +76,48 @@ contract CoarseLiquidationRoundingHarness is SecurityPoolOperationsDelegate {
 
 	function configure(address targetVault, address receiverVault) external {
 		settlementCollateralAttoEth = 1;
-		feeEligibleCapacityOwnershipAttoRep = 2;
-		totalCapacityOwnershipAttoRep = 2;
+		activeObligationUnits = 2;
+		totalObligationUnits = 2;
 		totalRepBackingUnits = 2;
 		statoblastSecurityMultiplierBps = 30_000;
 		securityVaults[targetVault].repBackingUnits = 2;
-		securityVaults[targetVault].capacityOwnershipAttoRep = 1;
-		securityVaults[receiverVault].capacityOwnershipAttoRep = 1;
+		coveragePositions[targetVault].units = 1;
+		coveragePositions[receiverVault].units = 1;
 	}
 
 	function configurePositiveResidual(address targetVault, address receiverVault) external {
 		settlementCollateralAttoEth = 4;
-		feeEligibleCapacityOwnershipAttoRep = 3;
-		totalCapacityOwnershipAttoRep = 3;
+		activeObligationUnits = 3;
+		totalObligationUnits = 3;
 		totalRepBackingUnits = 13;
 		statoblastSecurityMultiplierBps = 20_000;
 		securityVaults[targetVault].repBackingUnits = 3;
-		securityVaults[targetVault].capacityOwnershipAttoRep = 1;
+		coveragePositions[targetVault].units = 1;
 		securityVaults[receiverVault].repBackingUnits = 10;
-		securityVaults[receiverVault].capacityOwnershipAttoRep = 1;
+		coveragePositions[receiverVault].units = 1;
 	}
 
 	function configureLiveLiquidationDistance(address targetVault, address receiverVault) external {
 		settlementCollateralAttoEth = 5;
-		feeEligibleCapacityOwnershipAttoRep = 10;
-		totalCapacityOwnershipAttoRep = 10;
+		activeObligationUnits = 10;
+		totalObligationUnits = 10;
 		totalRepBackingUnits = 107;
 		statoblastSecurityMultiplierBps = 20_000;
 		securityVaults[targetVault].repBackingUnits = 7;
-		securityVaults[targetVault].capacityOwnershipAttoRep = 10;
+		coveragePositions[targetVault].units = 10;
 		securityVaults[receiverVault].repBackingUnits = 100;
 	}
 
 	function configureUnclaimedCapacity(address targetVault, address receiverVault) external {
 		settlementCollateralAttoEth = 8;
-		feeEligibleCapacityOwnershipAttoRep = 2;
-		totalCapacityOwnershipAttoRep = 4;
+		activeObligationUnits = 2;
+		totalObligationUnits = 4;
 		totalRepBackingUnits = 107;
 		statoblastSecurityMultiplierBps = 20_000;
 		securityVaults[targetVault].repBackingUnits = 7;
-		securityVaults[targetVault].capacityOwnershipAttoRep = 2;
+		coveragePositions[targetVault].units = 2;
 		securityVaults[receiverVault].repBackingUnits = 100;
-		securityVaults[receiverVault].capacityOwnershipAttoRep = 1;
+		coveragePositions[receiverVault].units = 1;
 	}
 
 	function setSettlementCollateralAttoEth(uint256 nextSettlementCollateralAttoEth) external {
@@ -133,16 +133,11 @@ contract CoarseLiquidationRoundingHarness is SecurityPoolOperationsDelegate {
 	}
 
 	function getVaultOpenInterestAttoEth(address vault) external view returns (uint256) {
-		uint256 grossOpenInterestAttoEth = SecurityPoolUtils.calculateVaultOpenInterestAttoEth(settlementCollateralAttoEth, securityVaults[vault].capacityOwnershipAttoRep, totalCapacityOwnershipAttoRep);
-		uint256 vaultBadDebtAttoEth = _getVaultBadDebtAttoEth(vault);
-		return grossOpenInterestAttoEth > vaultBadDebtAttoEth ? grossOpenInterestAttoEth - vaultBadDebtAttoEth : 0;
+		return
+			SecurityPoolUtils.calculateVaultOpenInterestAttoEth(settlementCollateralAttoEth, getVaultObligationUnits(vault), totalObligationUnits);
 	}
 
 	function vaultState(address vault) external view returns (uint256 repBackingUnits, uint256 capacityOwnershipAttoRep, uint256 badDebtAttoEth) {
-		return (
-			securityVaults[vault].repBackingUnits,
-			securityVaults[vault].capacityOwnershipAttoRep,
-			_getVaultBadDebtAttoEth(vault)
-		);
+		return (securityVaults[vault].repBackingUnits, getVaultObligationUnits(vault), _getVaultBadDebtAttoEth(vault));
 	}
 }

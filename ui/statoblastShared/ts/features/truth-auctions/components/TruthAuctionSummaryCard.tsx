@@ -8,7 +8,7 @@ import { SectionBlock } from '@zoltar/ui-core-shared/components/SectionBlock.js'
 import { AUCTIONED_CAPACITY_OWNERSHIP_ATTO_REP_LABEL } from '../lib/forkAuction.js'
 
 type TruthAuctionSummaryCardProps = {
-	auctionedCapacityOwnershipAttoRepDisplay?: ComponentChildren | undefined
+	auctionObligationUnitsDisplay?: ComponentChildren | undefined
 	badge: ComponentChildren
 	clearingPriceDisplay: ComponentChildren
 	displayedEthRaisedAttoEth: bigint
@@ -25,7 +25,7 @@ type TruthAuctionSummaryCardProps = {
 }
 
 export function TruthAuctionSummaryCard({
-	auctionedCapacityOwnershipAttoRepDisplay,
+	auctionObligationUnitsDisplay,
 	badge,
 	clearingPriceDisplay,
 	displayedEthRaisedAttoEth,
@@ -76,9 +76,9 @@ export function TruthAuctionSummaryCard({
 					{winningThresholdPriceDisplay === undefined ? undefined : <MetricField label={forkAuctionCopy.winningThreshold}>{winningThresholdPriceDisplay}</MetricField>}
 				</div>
 			</div>
-			{auctionedCapacityOwnershipAttoRepDisplay === undefined ? undefined : (
+			{auctionObligationUnitsDisplay === undefined ? undefined : (
 				<ReadOnlyDetailAccordion title={forkAuctionCopy.auctionDetails}>
-					<MetricField label={AUCTIONED_CAPACITY_OWNERSHIP_ATTO_REP_LABEL}>{auctionedCapacityOwnershipAttoRepDisplay}</MetricField>
+					<MetricField label={AUCTIONED_CAPACITY_OWNERSHIP_ATTO_REP_LABEL}>{auctionObligationUnitsDisplay}</MetricField>
 				</ReadOnlyDetailAccordion>
 			)}
 		</SectionBlock>

@@ -51,14 +51,15 @@ struct StagedOperation {
 	uint256 queuedAt;
 	uint256 validForSeconds;
 	uint256 snapshotTargetBackingUnits;
-	uint256 snapshotTargetCapacityOwnershipAttoRep;
+	uint256 snapshotTargetObligationUnits;
 	bytes32 liquidationApprovalId;
 	uint256 reservedLiquidationDebtAttoEth;
 }
 
 struct HistoricalQueueSnapshot {
+	uint256 coverageEpoch;
 	uint256 targetBackingUnits;
-	uint256 targetCapacityOwnershipAttoRep;
+	uint256 targetObligationUnits;
 	uint256 targetOpenInterestAttoEth;
 	uint256 targetDisputeStakedAttoRep;
 	uint256 totalPoolHeldAttoRep;

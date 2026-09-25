@@ -71,13 +71,13 @@ describe('state projections', () => {
 				vault,
 				settlementCollateralAttoEth: atomic(12_000_000_000_000_000_000n),
 				totalCapacityOwnershipAttoRep: atomic(9_000_000_000_000_000_000n),
-				feeEligibleCapacityOwnershipAttoRep: atomic(8_000_000_000_000_000_000n),
+				activeObligationUnits: atomic(8_000_000_000_000_000_000n),
 				totalClaimableVaultFeesAttoEth: atomic(40n),
 				unallocatedAccruedFeesAttoEth: atomic(3n),
 				feeIndex: '10',
 				feeIndexRemainder: '1',
 				totalFeesOwedRemainder: '2',
-				uncheckpointedFeeEligibleCapacityOwnershipAttoRep: atomic(4n),
+				uncheckpointedActiveObligationUnits: atomic(4n),
 				lastUpdatedFeeAccumulator: '2000',
 				currentRetentionRate: '999999000000000000',
 			}),
@@ -86,7 +86,7 @@ describe('state projections', () => {
 		if (poolProjection?.type !== 'poolSnapshot') throw new Error('pool projection missing')
 		expect(poolProjection.settlementCollateralAttoEth).toBe('12000000000000000000')
 		expect(poolProjection.totalCapacityOwnershipAttoRep).toBe('9000000000000000000')
-		expect(poolProjection.feeEligibleCapacityOwnershipAttoRep).toBe('8000000000000000000')
+		expect(poolProjection.activeObligationUnits).toBe('8000000000000000000')
 
 		const [vaultProjection, resultingPoolState] = projectionsFrom(
 			log('VaultAccountingCheckpoint', {
@@ -97,7 +97,7 @@ describe('state projections', () => {
 				feeIndex: '80',
 				vaultFeeRemainder: '90',
 				resultingTotalRepBackingUnits: '100',
-				resultingFeeEligibleCapacityOwnershipAttoRep: atomic(110n),
+				resultingActiveObligationUnits: atomic(110n),
 			}),
 		)
 		expect(vaultProjection?.type).toBe('vaultSnapshot')

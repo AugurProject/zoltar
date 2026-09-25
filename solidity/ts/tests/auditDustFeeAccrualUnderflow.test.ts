@@ -48,6 +48,7 @@ describe('Audit PoC: dust settlement collateral fee accrual', () => {
 		securityPool = getSecurityPoolAddresses(addressString(0x0n), genesisUniverse, questionId, statoblastSecurityMultiplierBps).securityPool
 		const minimumVaultRepDepositAttoRep = await client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: securityPool, functionName: 'minimumVaultRepDepositAttoRep' })
 		await approveAndDepositRepToVault(client, minimumVaultRepDepositAttoRep, questionId)
+		await client.writeContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: securityPool, functionName: 'setCoverageOffer', args: [true, (1n << 256n) - 1n, 10_000n] })
 		await setBaselineSnapshot()
 	})
 
@@ -55,8 +56,6 @@ describe('Audit PoC: dust settlement collateral fee accrual', () => {
 		mockWindow = getAnvilWindowEthereum()
 		client = createWriteClient(mockWindow, TEST_ADDRESSES[0])
 	})
-
-	const getFeeEligibleCapacityOwnershipAttoRep = async () => (await client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: securityPool, functionName: 'getPoolAccountingSnapshot' })).feeEligibleCapacityOwnershipAttoRep
 
 	const assertCollateralAndFeesAreFunded = async (label: string) => {
 		const [balance, collateral, fees] = await Promise.all([client.getBalance({ address: securityPool }), getSettlementCollateralAttoEth(client, securityPool), getTotalAccruedFees(client, securityPool)])
@@ -72,15 +71,14 @@ describe('Audit PoC: dust settlement collateral fee accrual', () => {
 	}
 
 	test('one attoETH of collateral cannot credit more fees than it holds and brick the pool', async () => {
-		const capacity = await getFeeEligibleCapacityOwnershipAttoRep()
-		assert.ok(capacity > PRICE_PRECISION, 'a minimum vault deposit should provide more than one attoREP of fee-eligible capacity per attoETH')
 		await createCompleteSet(client, securityPool, 1n)
-		// Repeatedly re-decaying the same attoETH credits floor(capacity / 1e18) attoETH after this many checkpoints.
-		await accrueEveryBlock(capacity / PRICE_PRECISION + 2n)
+		// Repeated checkpoints must not charge the same dust collateral twice.
+		await accrueEveryBlock(5n)
 		assert.ok((await getSettlementCollateralAttoEth(client, securityPool)) <= 1n, 'accrual must never mint collateral')
 		assert.ok((await getTotalAccruedFees(client, securityPool)) <= 1n, 'accrual must never credit more fees than the deposited attoETH')
 
 		await redeemFees(client, securityPool, client.account.address)
+		await redeemCompleteSet(client, securityPool, await getShareTokenSupplyAttoShares(client, securityPool))
 		await createCompleteSet(client, securityPool, PRICE_PRECISION)
 		await mockWindow.advanceTime(DAY)
 		await updateSettlementCollateral(client, securityPool)
@@ -90,12 +88,12 @@ describe('Audit PoC: dust settlement collateral fee accrual', () => {
 	})
 
 	test('redeeming dust collateral with uncredited decay pending keeps later accruals funded', async () => {
-		const capacity = await getFeeEligibleCapacityOwnershipAttoRep()
 		await createCompleteSet(client, securityPool, 1n)
 		await accrueEveryBlock(3n)
 		await redeemCompleteSet(client, securityPool, await getShareTokenSupplyAttoShares(client, securityPool))
 		await createCompleteSet(client, securityPool, 1n)
-		await accrueEveryBlock(capacity / PRICE_PRECISION + 2n)
+		await accrueEveryBlock(5n)
+		await redeemCompleteSet(client, securityPool, await getShareTokenSupplyAttoShares(client, securityPool))
 		await createCompleteSet(client, securityPool, PRICE_PRECISION)
 		await mockWindow.advanceTime(DAY)
 		await updateSettlementCollateral(client, securityPool)

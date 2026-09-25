@@ -1,3 +1,4 @@
+import { loadCoverageAllocations } from '@zoltar/ui-statoblast-shared/protocol/coverage.js'
 import { estimateMintCheckpoint } from '@zoltar/ui-statoblast-shared/features/markets/lib/trading.js'
 import { bigintToSafeNumber, getAddress, zeroAddress, type Address, type Hash, type PublicClient, type WalletClient } from '@zoltar/core-shared/evm/ethereum'
 import { tradingContracts } from '../generated/contractArtifact.js'
@@ -27,20 +28,21 @@ const router = tradingContracts['contracts/trading/TwoWayConstantProductRouter.s
 async function loadLiveSecurityPoolSettings(client: PublicClient, pool: Address) {
 	const block = await client.getBlock()
 	const blockNumber = block.number
-	const [questionData, zoltar, parent, shareTokenSupplyAttoShares, mintingCapacityCeilingAttoEth, accounting, feeEndTime, systemState, awaitingForkContinuation, vaultCount, forker] = await Promise.all([
+	const [questionData, zoltar, parent, shareTokenSupplyAttoShares, mintingCapacityCeilingAttoEth, accounting, totalObligationUnits, feeEndTime, systemState, awaitingForkContinuation, vaultCount, forker] = await Promise.all([
 		client.readContract({ abi: securityPoolAbi, address: pool, blockNumber, functionName: 'questionData' }),
 		client.readContract({ abi: securityPoolAbi, address: pool, blockNumber, functionName: 'zoltar' }),
 		client.readContract({ abi: securityPoolAbi, address: pool, blockNumber, functionName: 'parent' }),
 		client.readContract({ abi: securityPoolAbi, address: pool, blockNumber, functionName: 'shareTokenSupplyAttoShares' }),
 		client.readContract({ abi: securityPoolAbi, address: pool, blockNumber, functionName: 'getCurrentMintingCapacityAttoEth' }),
 		client.readContract({ abi: securityPoolAbi, address: pool, blockNumber, functionName: 'getPoolAccountingSnapshot' }),
+		client.readContract({ abi: securityPoolAbi, address: pool, blockNumber, functionName: 'totalObligationUnits' }),
 		client.readContract({ abi: securityPoolAbi, address: pool, blockNumber, functionName: 'getFeeEpochEndTime' }),
 		client.readContract({ abi: securityPoolAbi, address: pool, blockNumber, functionName: 'systemState' }),
 		client.readContract({ abi: securityPoolAbi, address: pool, blockNumber, functionName: 'awaitingForkContinuation' }),
 		client.readContract({ abi: securityPoolAbi, address: pool, blockNumber, functionName: 'getVaultCount' }),
 		client.readContract({ abi: securityPoolAbi, address: pool, blockNumber, functionName: 'securityPoolForker' }),
 	])
-	const checkpoint = (timestamp: bigint) => estimateMintCheckpoint({ ...accounting, currentTimestamp: timestamp, feeEndTimestamp: feeEndTime })
+	const checkpoint = (timestamp: bigint) => estimateMintCheckpoint({ ...accounting, totalObligationUnits, currentTimestamp: timestamp, feeEndTimestamp: feeEndTime })
 	const current = checkpoint(block.timestamp)
 	const projected = checkpoint(block.timestamp + 30n * 24n * 60n * 60n)
 	if (current === undefined || projected === undefined) throw new Error('Pool fee accounting unavailable')
@@ -53,7 +55,7 @@ async function loadLiveSecurityPoolSettings(client: PublicClient, pool: Address)
 		valuation: { timestamp: block.timestamp, feeEndTime, projectedCollateralAttoEth: projected.settlementCollateralAfterFeesAttoEth },
 		currentRetentionRate: accounting.currentRetentionRate,
 		totalCapacityOwnershipAttoRep: accounting.totalCapacityOwnershipAttoRep,
-		feeEligibleCapacityOwnershipAttoRep: accounting.feeEligibleCapacityOwnershipAttoRep,
+		activeObligationUnits: accounting.activeObligationUnits,
 		mintingCapacityCeilingAttoEth,
 		availableMintingCapacityAttoEth: mintingCapacityCeilingAttoEth > current.settlementCollateralAfterFeesAttoEth ? mintingCapacityCeilingAttoEth - current.settlementCollateralAfterFeesAttoEth : 0n,
 		systemState,
@@ -151,7 +153,7 @@ export function unavailableMarket(deployment: SecurityPoolDeployment, error: unk
 		settlementCollateralAttoEth: 0n,
 		currentRetentionRate: 0n,
 		totalCapacityOwnershipAttoRep: 0n,
-		feeEligibleCapacityOwnershipAttoRep: 0n,
+		activeObligationUnits: 0n,
 		mintingCapacityCeilingAttoEth: 0n,
 		availableMintingCapacityAttoEth: 0n,
 		feeBps: BigInt(feeBps),
@@ -178,8 +180,7 @@ export async function loadLiveMarket(client: PublicClient, configuration: Deploy
 	const shareToken = getAddress(shareTokenAddress)
 	const factoryArtifact = tradingContracts['contracts/trading/TwoWayConstantProductFactory.sol'].TwoWayConstantProductFactory
 	const [poolSettings, pairAddress] = await Promise.all([loadLiveSecurityPoolSettings(client, pool), client.readContract({ abi: factoryArtifact.abi, address: configuration.factory, functionName: 'getPair', args: [pool] })])
-	const { questionData, zoltar, parent, shareTokenSupplyAttoShares, settlementCollateralAttoEth, currentRetentionRate, totalCapacityOwnershipAttoRep, feeEligibleCapacityOwnershipAttoRep, mintingCapacityCeilingAttoEth, availableMintingCapacityAttoEth, systemState, awaitingForkContinuation, vaultCount, forker } =
-		poolSettings
+	const { questionData, zoltar, parent, shareTokenSupplyAttoShares, settlementCollateralAttoEth, currentRetentionRate, totalCapacityOwnershipAttoRep, activeObligationUnits, mintingCapacityCeilingAttoEth, availableMintingCapacityAttoEth, systemState, awaitingForkContinuation, vaultCount, forker } = poolSettings
 	const [question, questionOutcome, universeForkTime, originUniverseId] = await Promise.all([
 		client.readContract({ abi: questionDataAbi, address: getAddress(questionData), functionName: 'questions', args: [questionId] }),
 		client.readContract({ abi: SECURITY_POOL_QUESTION_OUTCOME_ABI, address: getAddress(forker), functionName: 'getQuestionOutcome', args: [pool] }),
@@ -227,7 +228,7 @@ export async function loadLiveMarket(client: PublicClient, configuration: Deploy
 		valuation: poolSettings.valuation,
 		currentRetentionRate,
 		totalCapacityOwnershipAttoRep,
-		feeEligibleCapacityOwnershipAttoRep,
+		activeObligationUnits,
 		mintingCapacityCeilingAttoEth,
 		availableMintingCapacityAttoEth,
 		feeBps,
@@ -383,6 +384,7 @@ export async function loadLiveBalances(client: PublicClient, market: LiveMarket,
 }
 
 async function simulateEntryWithExpiry(client: WalletClient, configuration: DeploymentConfiguration, market: LiveMarket, account: Address, side: 'YES' | 'NO', amount: bigint, expiry: TransactionExpiry, slippageBps: bigint) {
+	const allocations = await loadCoverageAllocations(client, market.pool, amount)
 	requireTransactionSlippageBps(slippageBps)
 	const pairAddress = market.pair
 	if (pairAddress === undefined) throw new Error('Create and initialize the pair before trading')
@@ -392,10 +394,10 @@ async function simulateEntryWithExpiry(client: WalletClient, configuration: Depl
 		result: { simulation, deadline },
 	} = await stableSimulation(client, async block => {
 		const deadline = deadlineAtBlock(expiry, block.blockTimestamp)
-		const simulation = await client.simulateContract({ abi: router.abi, address: configuration.router, functionName: 'enterPosition', account, args: [pairAddress, side === 'YES' ? 1 : 2, 0n, account, deadline], value: amount, blockHash: block.blockHash })
+		const simulation = await client.simulateContract({ abi: router.abi, address: configuration.router, functionName: 'enterPosition', account, args: [pairAddress, side === 'YES' ? 1 : 2, 0n, account, deadline, allocations], value: amount, blockHash: block.blockHash })
 		return { simulation, deadline }
 	})
-	return { blockNumber, blockHash, result: simulation.result, amount, side, market, deadline, slippageBps, minimumLongShares: minimumAfterSlippage(simulation.result.totalLongShares, slippageBps) }
+	return { allocations, blockNumber, blockHash, result: simulation.result, amount, side, market, deadline, slippageBps, minimumLongShares: minimumAfterSlippage(simulation.result.totalLongShares, slippageBps) }
 }
 
 export async function simulateEntry(client: WalletClient, configuration: DeploymentConfiguration, market: LiveMarket, account: Address, side: 'YES' | 'NO', amount: bigint, validityMinutes = 20n, slippageBps = UI_SLIPPAGE_BPS) {
@@ -410,7 +412,7 @@ export async function submitFreshEntry(client: WalletClient, configuration: Depl
 	const pairAddress = quote.market.pair
 	if (pairAddress === undefined) throw new Error('Pair disappeared from the simulated market')
 	const minimumLongShares = retainApprovedMinimum(quote.minimumLongShares, refreshed.result.totalLongShares, 'long shares')
-	return await guardedWrite(async () => await client.writeContract({ abi: router.abi, address: configuration.router, functionName: 'enterPosition', account, args: [pairAddress, quote.side === 'YES' ? 1 : 2, minimumLongShares, account, quote.deadline], value: quote.amount }))
+	return await guardedWrite(async () => await client.writeContract({ abi: router.abi, address: configuration.router, functionName: 'enterPosition', account, args: [pairAddress, quote.side === 'YES' ? 1 : 2, minimumLongShares, account, quote.deadline, refreshed.allocations], value: quote.amount }))
 }
 
 async function simulateExitWithExpiry(client: WalletClient, configuration: DeploymentConfiguration, market: LiveMarket, account: Address, side: 'YES' | 'NO', completeSets: bigint, expiry: TransactionExpiry, slippageBps: bigint) {

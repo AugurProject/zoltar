@@ -6,7 +6,7 @@ import { useIsolatedAnvilNode } from '../testSupport/simulator/useIsolatedAnvilN
 import { createWriteClient, writeContractAndWait, WriteClient } from '../testSupport/simulator/utils/clients'
 import { BURN_ADDRESS, DAY, GENESIS_REPUTATION_TOKEN, TEST_ADDRESSES } from '../testSupport/simulator/utils/constants'
 import { addressString } from '../testSupport/simulator/utils/bigint'
-import { approveAndDepositRepToVault, handleOracleReporting, manipulatePriceOracle, manipulatePriceOracleAndPerformOperation, triggerOwnGameFork, setVaultCapacityFixture } from '../testSupport/simulator/utils/contracts/statoblastTestUtils'
+import { approveAndDepositRepToVault, handleOracleReporting, manipulatePriceOracle, manipulatePriceOracleAndPerformOperation, triggerOwnGameFork, setCoverageOfferFixture } from '../testSupport/simulator/utils/contracts/statoblastTestUtils'
 import { deployOriginSecurityPool, ensureInfraDeployed, getSecurityPoolAddresses } from '../testSupport/simulator/utils/contracts/deployStatoblast'
 import {
 	executeStagedOperation,
@@ -63,6 +63,7 @@ import {
 	getTotalClaimableVaultFeesAttoEth,
 	getTotalPoolHeldAttoRep,
 	getTotalCapacityOwnershipAttoRep,
+	getTotalObligationUnits,
 	backingUnitsToAttoRep,
 	redeemRepFromVault,
 	updateVaultFees,
@@ -232,10 +233,17 @@ describe('Statoblast invariant harness', () => {
 		await approveAndDepositRepToVault(attackerClient, repDeposit, context.questionId)
 		await mockWindow.setTime(endTime + 10000n)
 		const securityPoolCapacityOwnershipAttoRep = repDeposit / 4n
-		await setVaultCapacityFixture(client, mockWindow, getSecurityPoolAddresses(addressString(0x0n), genesisUniverse, context.questionId, statoblastSecurityMultiplierBps).priceOracleManagerAndOperatorQueuer, client.account.address, securityPoolCapacityOwnershipAttoRep)
+		await setCoverageOfferFixture(client, mockWindow, getSecurityPoolAddresses(addressString(0x0n), genesisUniverse, context.questionId, statoblastSecurityMultiplierBps).priceOracleManagerAndOperatorQueuer, client.account.address, securityPoolCapacityOwnershipAttoRep)
 		const openInterestAmount = 10n * 10n ** 18n
 		const openInterestHolder = createClient(2)
-		await createCompleteSet(openInterestHolder, context.securityPool, openInterestAmount)
+		await writeContractAndWait(attackerClient, () => attackerClient.writeContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: context.securityPool, functionName: 'setCoverageOffer', args: [true, (1n << 256n) - 1n, 10_000n] }))
+		await createCompleteSet(
+			openInterestHolder,
+			context.securityPool,
+			openInterestAmount,
+			false,
+			[client.account.address, attackerClient.account.address].sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase())).map(vault => ({ vault, collateralAttoEth: openInterestAmount / 2n })),
+		)
 		await triggerExternalForkForSecurityPool(undefined, 'mixed bids fork source')
 		await migrateRepToZoltar(client, context.securityPool, [QuestionOutcome.Yes])
 		await migrateRepToZoltar(client, context.securityPool, [QuestionOutcome.Yes])
@@ -335,7 +343,17 @@ describe('Statoblast invariant harness', () => {
 					args: [],
 				})
 				const aggregateClaimableFeesAttoEth = vaults.reduce((sum, vault) => sum + vault.claimableFeesAttoEth, 0n)
-				const uncheckpointedCapacityOwnershipAttoRep = vaults.reduce((sum, vault) => sum + (vault.feeIndex === accountingSnapshot.feeIndex ? 0n : vault.capacityOwnershipAttoRep), 0n)
+				const assignedUnits = vaults.reduce((sum, vault) => sum + vault.obligationUnits, 0n)
+				const [totalUnits, writtenOff, unassigned, migratedOut] = await Promise.all([
+					client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: securityPool, functionName: 'totalObligationUnits' }),
+					client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: securityPool, functionName: 'writtenOffObligationUnits' }),
+					client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: securityPool, functionName: 'unassignedObligationUnits' }),
+					client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: securityPool, functionName: 'migratedOutObligationUnits' }),
+				])
+				strictEqualTypeSafe(assignedUnits + writtenOff + unassigned + migratedOut, totalUnits, `${label}: every obligation unit must retain an explicit owner or bucket`)
+				assert.ok(assignedUnits <= accountingSnapshot.activeObligationUnits && accountingSnapshot.activeObligationUnits <= assignedUnits + unassigned, `${label}: only assigned and sold auction units can earn underwriting fees`)
+
+				const uncheckpointedCapacityOwnershipAttoRep = vaults.reduce((sum, vault) => sum + (vault.feeIndex === accountingSnapshot.feeIndex ? 0n : vault.obligationUnits), 0n)
 
 				strictEqualTypeSafe(BigInt(vaultAddresses.length), vaultCount, `${label}: vault count should match its page`)
 				assert.strictEqual(new Set(vaultAddresses).size, vaultAddresses.length, `${label}: vault page should not duplicate actors`)
@@ -343,12 +361,10 @@ describe('Statoblast invariant harness', () => {
 				strictEqualTypeSafe(totalCapacityOwnershipAttoRepFromVaults, await getTotalCapacityOwnershipAttoRep(client, securityPool), `${label}: aggregate capacityOwnershipAttoRep should equal the sum of vault withdrawalAmountsAttoRep`)
 				strictEqualTypeSafe(totalBackingUnitsFromVaults, await getTotalRepBackingUnits(client, securityPool), `${label}: backingUnits denominator should equal registered vault backingUnits`)
 				strictEqualTypeSafe(aggregateClaimableFeesAttoEth, accountingSnapshot.totalClaimableVaultFeesAttoEth, `${label}: aggregate claimable vault fees should equal the pool claimable-fee ledger`)
-				strictEqualTypeSafe(totalCapacityOwnershipAttoRepFromVaults, accountingSnapshot.feeEligibleCapacityOwnershipAttoRep, `${label}: operational vault withdrawalAmountsAttoRep should equal the fee-eligible capacityOwnershipAttoRep ledger`)
-				strictEqualTypeSafe(uncheckpointedCapacityOwnershipAttoRep, accountingSnapshot.uncheckpointedFeeEligibleCapacityOwnershipAttoRep, `${label}: uncheckpointed capacityOwnershipAttoRep should equal vault withdrawalAmountsAttoRep behind the global fee index`)
+				strictEqualTypeSafe(uncheckpointedCapacityOwnershipAttoRep, accountingSnapshot.uncheckpointedActiveObligationUnits, `${label}: uncheckpointed capacityOwnershipAttoRep should equal vault withdrawalAmountsAttoRep behind the global fee index`)
 				assert.ok(totalClaims <= totalAttoRep, `${label}: rounded vault claims must not exceed pool-held REP`)
 				assert.ok(totalAttoRep - totalClaims <= repBackingVaultCount, `${label}: aggregate REP rounding dust should be bounded by REP-backed vault count`)
 				strictEqualTypeSafe(ethBalanceAttoEth, collateral + accountingSnapshot.unallocatedAccruedFeesAttoEth + accountingSnapshot.totalClaimableVaultFeesAttoEth, `${label}: pool ETH should equal collateral plus named fee liabilities when no surplus was injected`)
-				assert.ok((await getTotalCapacityOwnershipAttoRep(client, securityPool)) >= collateral, `${label}: open interest must remain backed by aggregate capacityOwnershipAttoRep`)
 			}
 
 			const parentSupplyBeforeActions = await getUniverseTheoreticalSupplyAttoRep(client, genesisUniverse)
@@ -415,19 +431,19 @@ describe('Statoblast invariant harness', () => {
 				[
 					{
 						name: 'capacity ownership',
-						execute: async () => await setVaultCapacityFixture(client, mockWindow, firstPoolAddresses.priceOracleManagerAndOperatorQueuer, client.account.address, repDeposit / 3n),
+						execute: async () => await setCoverageOfferFixture(client, mockWindow, firstPoolAddresses.priceOracleManagerAndOperatorQueuer, client.account.address, repDeposit / 3n),
 					},
 					{
 						name: 'capacity ownership',
-						execute: async () => await setVaultCapacityFixture(actorA, mockWindow, firstPoolAddresses.priceOracleManagerAndOperatorQueuer, actorA.account.address, repDeposit / 5n),
+						execute: async () => await setCoverageOfferFixture(actorA, mockWindow, firstPoolAddresses.priceOracleManagerAndOperatorQueuer, actorA.account.address, repDeposit / 5n),
 					},
 					{
 						name: 'capacity ownership',
-						execute: async () => await setVaultCapacityFixture(client, mockWindow, secondPoolAddresses.priceOracleManagerAndOperatorQueuer, client.account.address, repDeposit / 4n),
+						execute: async () => await setCoverageOfferFixture(client, mockWindow, secondPoolAddresses.priceOracleManagerAndOperatorQueuer, client.account.address, repDeposit / 4n),
 					},
 					{
 						name: 'capacity ownership',
-						execute: async () => await setVaultCapacityFixture(actorB, mockWindow, secondPoolAddresses.priceOracleManagerAndOperatorQueuer, actorB.account.address, repDeposit / 6n),
+						execute: async () => await setCoverageOfferFixture(actorB, mockWindow, secondPoolAddresses.priceOracleManagerAndOperatorQueuer, actorB.account.address, repDeposit / 6n),
 					},
 				],
 				seed ^ 0xa110aacen,
@@ -456,7 +472,7 @@ describe('Statoblast invariant harness', () => {
 			}
 
 			await runAction('advance target question to reporting', async () => await mockWindow.setTime(context.questionEndDate + 1n))
-			await runAction('refresh first-pool price for escalation', async () => await setVaultCapacityFixture(client, mockWindow, firstPoolAddresses.priceOracleManagerAndOperatorQueuer, client.account.address, repDeposit / 3n))
+			await runAction('refresh first-pool price for escalation', async () => await setCoverageOfferFixture(client, mockWindow, firstPoolAddresses.priceOracleManagerAndOperatorQueuer, client.account.address, repDeposit / 3n))
 			const escalationActions = shuffle(
 				[
 					{ name: 'actor A escrows first-pool REP on yes', execute: async () => await depositToEscalationGame(actorA, firstPoolAddresses.securityPool, QuestionOutcome.Yes, repDeposit / 10n) },
@@ -652,13 +668,22 @@ describe('Statoblast invariant harness', () => {
 					args: [],
 				})
 				const aggregateClaimableFeesAttoEth = vaults.reduce((sum, vault) => sum + vault.claimableFeesAttoEth, 0n)
+				const assignedUnits = vaults.reduce((sum, vault) => sum + vault.obligationUnits, 0n)
+				const [totalUnits, writtenOff, unassigned, migratedOut] = await Promise.all([
+					client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: securityPool, functionName: 'totalObligationUnits' }),
+					client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: securityPool, functionName: 'writtenOffObligationUnits' }),
+					client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: securityPool, functionName: 'unassignedObligationUnits' }),
+					client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: securityPool, functionName: 'migratedOutObligationUnits' }),
+				])
+				strictEqualTypeSafe(assignedUnits + writtenOff + unassigned + migratedOut, totalUnits, `${label}: every obligation unit must retain an explicit owner or bucket`)
+				assert.ok(assignedUnits <= accountingSnapshot.activeObligationUnits && accountingSnapshot.activeObligationUnits <= assignedUnits + unassigned, `${label}: only assigned and sold auction units can earn underwriting fees`)
+
 				strictEqualTypeSafe(BigInt(vaultAddresses.length), vaultCount, `${label}: vault page should match count`)
 				assert.strictEqual(new Set(vaultAddresses).size, vaultAddresses.length, `${label}: vault ids should be unique`)
 				const totalCapacityOwnershipAttoRep = await getTotalCapacityOwnershipAttoRep(client, securityPool)
 				if (systemState === SystemState.PoolForked) assert.ok(aggregateCapacityOwnershipAttoRep <= totalCapacityOwnershipAttoRep, `${label}: consumed fork withdrawalAmountsAttoRep cannot exceed the frozen capacityOwnershipAttoRep snapshot`)
 				else {
 					strictEqualTypeSafe(aggregateCapacityOwnershipAttoRep, totalCapacityOwnershipAttoRep, `${label}: withdrawalAmountsAttoRep should reconcile`)
-					strictEqualTypeSafe(aggregateCapacityOwnershipAttoRep, accountingSnapshot.feeEligibleCapacityOwnershipAttoRep, `${label}: live withdrawalAmountsAttoRep should reconcile to the fee-eligible ledger`)
 				}
 				const backingUnitsDenominator = await getTotalRepBackingUnits(client, securityPool)
 				if (systemState === SystemState.PoolForked) assert.ok(aggregateBackingUnits <= backingUnitsDenominator, `${label}: consumed fork entitlements cannot exceed the frozen backingUnits snapshot`)
@@ -668,7 +693,6 @@ describe('Statoblast invariant harness', () => {
 				assert.ok(roundedClaims <= totalAttoRep, `${label}: rounded claims cannot exceed pool-held REP`)
 				assert.ok(totalAttoRep - roundedClaims <= repBackingVaultCount, `${label}: REP rounding dust should be bounded by REP-backed vault count`)
 				strictEqualTypeSafe(ethBalanceAttoEth, collateral + accountingSnapshot.unallocatedAccruedFeesAttoEth + accountingSnapshot.totalClaimableVaultFeesAttoEth, `${label}: pool ETH should equal collateral plus named fee liabilities when no surplus was injected`)
-				assert.ok(totalCapacityOwnershipAttoRep >= collateral, `${label}: open interest should remain capacityOwnershipAttoRep-backed`)
 			}
 
 			const readModelSnapshot = async () => ({
@@ -750,7 +774,7 @@ describe('Statoblast invariant harness', () => {
 				{
 					name: 'capacity ownership',
 					enabled: () => completed.has('actor A deposits first pool'),
-					execute: async () => await setVaultCapacityFixture(actorA, mockWindow, firstPool.priceOracleManagerAndOperatorQueuer, actorA.account.address, 75n * 10n ** 18n),
+					execute: async () => await setCoverageOfferFixture(actorA, mockWindow, firstPool.priceOracleManagerAndOperatorQueuer, actorA.account.address, 75n * 10n ** 18n),
 				},
 				{
 					name: 'actor B opens first-pool interest',
@@ -803,7 +827,7 @@ describe('Statoblast invariant harness', () => {
 					enabled: () => completed.has('advance into reporting'),
 					execute: async () => {
 						const actorAVault = await getSecurityVault(client, firstPool.securityPool, actorA.account.address)
-						await setVaultCapacityFixture(actorA, mockWindow, firstPool.priceOracleManagerAndOperatorQueuer, actorA.account.address, actorAVault.capacityOwnershipAttoRep)
+						await setCoverageOfferFixture(actorA, mockWindow, firstPool.priceOracleManagerAndOperatorQueuer, actorA.account.address, actorAVault.capacityOwnershipAttoRep)
 					},
 				},
 				{
@@ -956,7 +980,7 @@ describe('Statoblast invariant harness', () => {
 
 	test('positive-value mint fuzzing always returns shares and preserves unsolicited ETH surplus', async () => {
 		const priceOracle = getSecurityPoolAddresses(addressString(0x0n), genesisUniverse, context.questionId, statoblastSecurityMultiplierBps).priceOracleManagerAndOperatorQueuer
-		await setVaultCapacityFixture(client, mockWindow, priceOracle, client.account.address, repDeposit / 4n)
+		await setCoverageOfferFixture(client, mockWindow, priceOracle, client.account.address, repDeposit / 4n)
 		const forcedSurplus = 17n * 10n ** 18n + 3n
 		await mockWindow.setBalance(context.securityPool, (await getETHBalance(client, context.securityPool)) + forcedSurplus)
 
@@ -969,6 +993,7 @@ describe('Statoblast invariant harness', () => {
 		const minter = createClient(2)
 
 		for (const mintAmount of mintAmounts) {
+			const mintSnapshot = await mockWindow.anvilSnapshot()
 			const nominalSupplyBefore = await getShareTokenSupplyAttoShares(client, context.securityPool)
 			await createCompleteSet(minter, context.securityPool, mintAmount)
 			const nominalSupplyAfter = await getShareTokenSupplyAttoShares(client, context.securityPool)
@@ -976,6 +1001,7 @@ describe('Statoblast invariant harness', () => {
 
 			const accountedEth = (await getSettlementCollateralAttoEth(client, context.securityPool)) + (await getTotalAccruedFees(client, context.securityPool))
 			strictEqualTypeSafe((await getETHBalance(client, context.securityPool)) - accountedEth, forcedSurplus, 'mint and fee accounting must leave unsolicited ETH in a separate invariant surplus bucket')
+			await mockWindow.anvilRevert(mintSnapshot)
 		}
 	})
 
@@ -985,7 +1011,7 @@ describe('Statoblast invariant harness', () => {
 	] as const)('LIFE-02 fixed-point: stateful $path-fork progress survives forced balances, empty auctions, and repeated calls', async ({ path, seed }) => {
 		const parentAddresses = getSecurityPoolAddresses(addressString(0x0n), genesisUniverse, context.questionId, statoblastSecurityMultiplierBps)
 		const capacityOwnershipAttoRep = repDeposit / 4n
-		await setVaultCapacityFixture(client, mockWindow, parentAddresses.priceOracleManagerAndOperatorQueuer, client.account.address, capacityOwnershipAttoRep)
+		await setCoverageOfferFixture(client, mockWindow, parentAddresses.priceOracleManagerAndOperatorQueuer, client.account.address, capacityOwnershipAttoRep)
 		const shareHolder = createClient(2)
 		const mintAmount = (seed % (5n * 10n ** 18n)) + 1n * 10n ** 18n
 		await createCompleteSet(shareHolder, context.securityPool, mintAmount)
@@ -1049,6 +1075,7 @@ describe('Statoblast invariant harness', () => {
 		strictEqualTypeSafe(await getAwaitingForkContinuation(client, yesAddresses.securityPool), false, 'bounded continuation progress should complete before reactivated child operations')
 		const supplyBeforeReactivatedMint = await getShareTokenSupplyAttoShares(client, yesAddresses.securityPool)
 		if (path === 'external') {
+			await writeContractAndWait(client, () => client.writeContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: yesAddresses.securityPool, functionName: 'setCoverageOffer', args: [true, (1n << 256n) - 1n, 10_000n] }))
 			await createCompleteSet(createClient(4), yesAddresses.securityPool, 1n * 10n ** 18n)
 			assert.ok((await getShareTokenSupplyAttoShares(client, yesAddresses.securityPool)) > supplyBeforeReactivatedMint, 'reactivated unresolved child should accept a positive complete-set mint')
 		} else {
@@ -1175,10 +1202,16 @@ describe('Statoblast invariant harness', () => {
 				args: [],
 			})
 
-		await setVaultCapacityFixture(client, mockWindow, parentAddresses.priceOracleManagerAndOperatorQueuer, client.account.address, capacityOwnershipAttoRep)
+		await setCoverageOfferFixture(client, mockWindow, parentAddresses.priceOracleManagerAndOperatorQueuer, client.account.address, capacityOwnershipAttoRep)
 		await approveAndDepositRepToVault(unmigratedCapacityOwnershipAttoRepHolder, repDeposit, context.questionId)
-		await setVaultCapacityFixture(unmigratedCapacityOwnershipAttoRepHolder, mockWindow, parentAddresses.priceOracleManagerAndOperatorQueuer, unmigratedCapacityOwnershipAttoRepHolder.account.address, capacityOwnershipAttoRep)
-		await createCompleteSet(openInterestHolder, context.securityPool, 10n * 10n ** 18n)
+		await setCoverageOfferFixture(unmigratedCapacityOwnershipAttoRepHolder, mockWindow, parentAddresses.priceOracleManagerAndOperatorQueuer, unmigratedCapacityOwnershipAttoRepHolder.account.address, capacityOwnershipAttoRep)
+		await createCompleteSet(
+			openInterestHolder,
+			context.securityPool,
+			10n * 10n ** 18n,
+			false,
+			[client.account.address, unmigratedCapacityOwnershipAttoRepHolder.account.address].sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase())).map(vault => ({ vault, collateralAttoEth: 5n * 10n ** 18n })),
+		)
 		const operationalAccounting = await readAccounting(context.securityPool)
 		const operationalVault = await getSecurityVault(client, context.securityPool, client.account.address)
 		const unmigratedOperationalVault = await getSecurityVault(client, context.securityPool, unmigratedCapacityOwnershipAttoRepHolder.account.address)
@@ -1186,7 +1219,7 @@ describe('Statoblast invariant harness', () => {
 		strictEqualTypeSafe(operationalVault.capacityOwnershipAttoRep, capacityOwnershipAttoRep, 'capacity ownership')
 		strictEqualTypeSafe(unmigratedOperationalVault.capacityOwnershipAttoRep, capacityOwnershipAttoRep, 'capacity ownership')
 		strictEqualTypeSafe(operationalAccounting.totalCapacityOwnershipAttoRep, 2n * capacityOwnershipAttoRep, 'capacity ownership')
-		strictEqualTypeSafe(operationalAccounting.feeEligibleCapacityOwnershipAttoRep, 2n * capacityOwnershipAttoRep, 'capacity ownership')
+		strictEqualTypeSafe(operationalAccounting.activeObligationUnits, operationalVault.obligationUnits + unmigratedOperationalVault.obligationUnits, 'capacity ownership')
 
 		await triggerExternalForkForSecurityPool(undefined, 'capacity ownership')
 		await createChildUniverse(client, context.securityPool, QuestionOutcome.Yes)
@@ -1199,12 +1232,12 @@ describe('Statoblast invariant harness', () => {
 		strictEqualTypeSafe(await getSystemState(client, context.securityPool), SystemState.PoolForked, 'the parent should retain frozen fork accounting')
 		strictEqualTypeSafe(frozenParentVault.capacityOwnershipAttoRep, 0n, 'capacity ownership')
 		strictEqualTypeSafe(frozenParentAccounting.totalCapacityOwnershipAttoRep, operationalAccounting.totalCapacityOwnershipAttoRep, 'capacity ownership')
-		strictEqualTypeSafe(frozenParentAccounting.feeEligibleCapacityOwnershipAttoRep, operationalAccounting.feeEligibleCapacityOwnershipAttoRep, 'capacity ownership')
+		strictEqualTypeSafe(frozenParentAccounting.activeObligationUnits, unmigratedOperationalVault.obligationUnits, 'capacity ownership')
 
 		strictEqualTypeSafe(await getSystemState(client, childPool), SystemState.ForkMigration, 'the child should remain in migration before repair finalization')
 		strictEqualTypeSafe(migrationChildVault.capacityOwnershipAttoRep, capacityOwnershipAttoRep, 'capacity ownership')
 		strictEqualTypeSafe(migrationChildAccounting.totalCapacityOwnershipAttoRep, 0n, 'capacity ownership')
-		strictEqualTypeSafe(migrationChildAccounting.feeEligibleCapacityOwnershipAttoRep, 0n, 'capacity ownership')
+		strictEqualTypeSafe(migrationChildAccounting.activeObligationUnits, operationalVault.obligationUnits, 'capacity ownership')
 
 		await mockWindow.advanceTime(8n * 7n * DAY + DAY)
 		await startTruthAuction(client, childPool)
@@ -1214,10 +1247,10 @@ describe('Statoblast invariant harness', () => {
 		const [activatedChildAccounting, activatedChildForkData, totalAttoRepPurchased] = await Promise.all([readAccounting(childPool), getSecurityPoolForkerForkData(client, childPool), getTotalRepPurchasedAttoRep(client, childAddresses.truthAuction)])
 		strictEqualTypeSafe(await getSystemState(client, childPool), SystemState.Operational, 'zero-demand finalization should activate the child')
 		strictEqualTypeSafe(totalAttoRepPurchased, 0n, 'zero-demand finalization should purchase no REP')
-		strictEqualTypeSafe(activatedChildForkData.auctionedCapacityOwnershipAttoRep, capacityOwnershipAttoRep, 'unclaimed zero-demand capacity should remain assigned to the unassigned position')
+		strictEqualTypeSafe(activatedChildForkData.auctionObligationUnits, unmigratedOperationalVault.obligationUnits, 'unclaimed zero-demand capacity should remain assigned to the unassigned position')
 		strictEqualTypeSafe(activatedChildAccounting.totalCapacityOwnershipAttoRep, operationalAccounting.totalCapacityOwnershipAttoRep, 'capacity ownership')
-		strictEqualTypeSafe(activatedChildAccounting.feeEligibleCapacityOwnershipAttoRep, capacityOwnershipAttoRep, 'capacity ownership')
-		strictEqualTypeSafe(activatedChildAccounting.totalCapacityOwnershipAttoRep - activatedChildAccounting.feeEligibleCapacityOwnershipAttoRep, capacityOwnershipAttoRep, 'capacity ownership')
+		strictEqualTypeSafe(activatedChildAccounting.activeObligationUnits, operationalVault.obligationUnits, 'capacity ownership')
+		strictEqualTypeSafe((await getTotalObligationUnits(client, childPool)) - activatedChildAccounting.activeObligationUnits, unmigratedOperationalVault.obligationUnits, 'capacity ownership')
 	})
 
 	test('claimAuctionProceeds keeps REP and ETH reconciliation stable across claim orderings', async () => {
@@ -1231,11 +1264,11 @@ describe('Statoblast invariant harness', () => {
 			address: yesSecurityPool.securityPool,
 			args: [],
 		})
-		const auctionedCapacityOwnershipAttoRep = (await getSecurityPoolForkerForkData(client, yesSecurityPool.securityPool)).auctionedCapacityOwnershipAttoRep
+		const auctionObligationUnits = (await getSecurityPoolForkerForkData(client, yesSecurityPool.securityPool)).auctionObligationUnits
 		const initialVaultCount = await getVaultCount(client, yesSecurityPool.securityPool)
 		const initialVaultAddresses = await getVaults(client, yesSecurityPool.securityPool, 0n, initialVaultCount + 1n)
 		const initialVaults = await Promise.all(initialVaultAddresses.map(vault => getSecurityVault(client, yesSecurityPool.securityPool, vault)))
-		const initialAssignedCapacityOwnershipAttoRep = initialVaults.reduce((sum, vault) => sum + vault.capacityOwnershipAttoRep, 0n)
+		const initialAssignedCapacityOwnershipAttoRep = initialVaults.reduce((sum, vault) => sum + vault.obligationUnits, 0n)
 
 		const assertTruthAuctionAccounting = async (label: string) => {
 			const accounting = await client.readContract({
@@ -1247,16 +1280,16 @@ describe('Statoblast invariant harness', () => {
 			const vaultCount = await getVaultCount(client, yesSecurityPool.securityPool)
 			const vaultAddresses = await getVaults(client, yesSecurityPool.securityPool, 0n, vaultCount + 1n)
 			const vaults = await Promise.all(vaultAddresses.map(vault => getSecurityVault(client, yesSecurityPool.securityPool, vault)))
-			const aggregateCapacityOwnershipAttoRep = vaults.reduce((sum, vault) => sum + vault.capacityOwnershipAttoRep, 0n)
+			const aggregateCapacityOwnershipAttoRep = vaults.reduce((sum, vault) => sum + vault.obligationUnits, 0n)
 			const aggregateClaimableFeesAttoEth = vaults.reduce((sum, vault) => sum + vault.claimableFeesAttoEth, 0n)
 			const claimedAuctionCapacityOwnershipAttoRep = aggregateCapacityOwnershipAttoRep - initialAssignedCapacityOwnershipAttoRep
 
 			strictEqualTypeSafe(await getSystemState(client, yesSecurityPool.securityPool), SystemState.Operational, `${label}: finalized truth-auction accounting should be operational`)
-			strictEqualTypeSafe(accounting.feeEligibleCapacityOwnershipAttoRep, initialChildAccounting.feeEligibleCapacityOwnershipAttoRep, `${label}: claims should not change the finalization-time fee-eligible ledger`)
+			strictEqualTypeSafe(accounting.activeObligationUnits, initialChildAccounting.activeObligationUnits, `${label}: claims should not change the finalization-time fee-eligible ledger`)
 			strictEqualTypeSafe(aggregateClaimableFeesAttoEth, accounting.totalClaimableVaultFeesAttoEth, `${label}: claimable vault fees should equal the pool claimable-fee ledger`)
-			strictEqualTypeSafe(accounting.totalCapacityOwnershipAttoRep, initialAssignedCapacityOwnershipAttoRep + auctionedCapacityOwnershipAttoRep, `${label}: total capacityOwnershipAttoRep should equal migrated capacityOwnershipAttoRep plus the frozen auction allocation`)
-			assert.ok(claimedAuctionCapacityOwnershipAttoRep <= auctionedCapacityOwnershipAttoRep, `${label}: claimed auction capacityOwnershipAttoRep cannot exceed the frozen auction allocation`)
-			strictEqualTypeSafe(accounting.feeEligibleCapacityOwnershipAttoRep - aggregateCapacityOwnershipAttoRep, auctionedCapacityOwnershipAttoRep - claimedAuctionCapacityOwnershipAttoRep, `${label}: unassigned fee-eligible auction capacityOwnershipAttoRep should reconcile exactly`)
+			strictEqualTypeSafe(await getTotalObligationUnits(client, yesSecurityPool.securityPool), initialAssignedCapacityOwnershipAttoRep + auctionObligationUnits, `${label}: total capacityOwnershipAttoRep should equal migrated capacityOwnershipAttoRep plus the frozen auction allocation`)
+			assert.ok(claimedAuctionCapacityOwnershipAttoRep <= auctionObligationUnits, `${label}: claimed auction capacityOwnershipAttoRep cannot exceed the frozen auction allocation`)
+			strictEqualTypeSafe(accounting.activeObligationUnits - aggregateCapacityOwnershipAttoRep, auctionObligationUnits - claimedAuctionCapacityOwnershipAttoRep, `${label}: unassigned fee-eligible auction capacityOwnershipAttoRep should reconcile exactly`)
 			strictEqualTypeSafe(await getETHBalance(client, yesSecurityPool.securityPool), accounting.settlementCollateralAttoEth + accounting.unallocatedAccruedFeesAttoEth + accounting.totalClaimableVaultFeesAttoEth, `${label}: child pool ETH should equal collateral plus named fee liabilities`)
 		}
 		await assertTruthAuctionAccounting('before claims')
@@ -1321,10 +1354,10 @@ describe('Statoblast invariant harness', () => {
 
 		strictEqualTypeSafe(refundFirst.losingBidderBalance, claimFirst.losingBidderBalance, 'losing bidder ETH balance should not depend on claim order')
 		strictEqualTypeSafe(refundFirst.winningVault.repBackingUnits, claimFirst.winningVault.repBackingUnits, 'winning vault backingUnits should not depend on claim order')
-		strictEqualTypeSafe(refundFirst.winningVault.capacityOwnershipAttoRep, claimFirst.winningVault.capacityOwnershipAttoRep, 'capacity ownership')
+		strictEqualTypeSafe(refundFirst.winningVault.obligationUnits, claimFirst.winningVault.obligationUnits, 'capacity ownership')
 		strictEqualTypeSafe(refundFirst.winningVault.feeIndex, claimFirst.winningVault.feeIndex, 'winning vault fee accounting should not depend on claim order')
 		strictEqualTypeSafe(refundFirst.winningRep, claimFirst.winningRep, 'winning REP claim should not depend on claim order')
-		strictEqualTypeSafe(refundFirst.forkData.auctionedCapacityOwnershipAttoRep, claimFirst.forkData.auctionedCapacityOwnershipAttoRep, 'capacity ownership')
+		strictEqualTypeSafe(refundFirst.forkData.auctionObligationUnits, claimFirst.forkData.auctionObligationUnits, 'capacity ownership')
 		strictEqualTypeSafe(refundFirst.forkData.migratedAttoRep, claimFirst.forkData.migratedAttoRep, 'migrated REP should not depend on claim order')
 		strictEqualTypeSafe(refundFirst.ethBalanceAttoEth, claimFirst.ethBalanceAttoEth, 'child pool ETH balance should not depend on claim order')
 		assert.deepStrictEqual(refundFirst.parentAccounting, parentAccountingBeforeClaims, 'refund-first child auction claims must not mutate parent-pool accounting')
@@ -1496,10 +1529,10 @@ describe('Statoblast invariant harness', () => {
 		const vaultBeforeOverflow = await getSecurityVault(client, context.securityPool, client.account.address)
 		const repBeforeOverflow = await backingUnitsToAttoRep(client, context.securityPool, vaultBeforeOverflow.repBackingUnits)
 		const overflowWithdrawal = ensureDefined(withdrawalAmountsAttoRep[4], 'overflow withdrawal is undefined')
-		const expectedCapacityOwnership = (vaultBeforeOverflow.capacityOwnershipAttoRep * (repBeforeOverflow - overflowWithdrawal)) / repBeforeOverflow
+		const expectedCapacityOwnership = (vaultBeforeOverflow.obligationUnits * (repBeforeOverflow - overflowWithdrawal)) / repBeforeOverflow
 		await executeStagedOperation(client, priceOracle, 5n)
 		const finalVault = await getSecurityVault(client, context.securityPool, client.account.address)
-		strictEqualTypeSafe(finalVault.capacityOwnershipAttoRep, expectedCapacityOwnership, 'a staged REP withdrawal should reduce price-independent capacity ownership proportionally')
+		strictEqualTypeSafe(finalVault.obligationUnits, expectedCapacityOwnership, 'a staged REP withdrawal should reduce price-independent capacity ownership proportionally')
 		strictEqualTypeSafe(await getActiveStagedOperationCount(client, priceOracle), 0n, 'manual execution should consume the final active operation')
 		strictEqualTypeSafe(await getStagedOperationCounter(client, priceOracle), 5n, 'executing staged operations must not rewrite the append-only counter')
 		await assertQueueIndexCoherence('after manual overflow execution')
@@ -1515,7 +1548,7 @@ describe('Statoblast invariant harness', () => {
 		await approveAndDepositRepToVault(vaultC, repDeposit, context.questionId)
 
 		const priceOracle = getSecurityPoolAddresses(addressString(0x0n), genesisUniverse, context.questionId, statoblastSecurityMultiplierBps).priceOracleManagerAndOperatorQueuer
-		await setVaultCapacityFixture(vaultA, mockWindow, priceOracle, vaultA.account.address, repDeposit / 20n)
+		await setCoverageOfferFixture(vaultA, mockWindow, priceOracle, vaultA.account.address, repDeposit / 20n)
 		const vaultBBeforeExit = await getSecurityVault(client, context.securityPool, vaultB.account.address)
 		const vaultBRepClaim = await backingUnitsToAttoRep(client, context.securityPool, vaultBBeforeExit.repBackingUnits)
 		for (let withdrawalIndex = 0n; withdrawalIndex < 5n; withdrawalIndex++) {
@@ -1547,7 +1580,7 @@ describe('Statoblast invariant harness', () => {
 		await mockWindow.setTime(context.questionEndDate + 10n * DAY)
 		const winningRep = await backingUnitsToAttoRep(client, context.securityPool, (await getSecurityVault(client, context.securityPool, winningVault.account.address)).repBackingUnits)
 		const losingRep = await backingUnitsToAttoRep(client, context.securityPool, (await getSecurityVault(client, context.securityPool, losingVault.account.address)).repBackingUnits)
-		const winningCapacityOwnershipBeforeClaim = (await getSecurityVault(client, context.securityPool, winningVault.account.address)).capacityOwnershipAttoRep
+		const winningCapacityOwnershipBeforeClaim = (await getSecurityVault(client, context.securityPool, winningVault.account.address)).obligationUnits
 		assert.ok(winningRep >= forkThresholdAttoRep, 'the winning vault should fund the own-fork threshold')
 		assert.ok(losingRep >= forkThresholdAttoRep, 'the losing vault should fund the opposing own-fork threshold')
 		await manipulatePriceOracle(client, mockWindow, getSecurityPoolAddresses(addressString(0n), genesisUniverse, context.questionId, statoblastSecurityMultiplierBps).priceOracleManagerAndOperatorQueuer)
@@ -1566,7 +1599,7 @@ describe('Statoblast invariant harness', () => {
 
 		const winningVaultAfterClaim = await getSecurityVault(client, context.securityPool, winningVault.account.address)
 		strictEqualTypeSafe(winningVaultAfterClaim.repBackingUnits, 0n, 'the claimed vault should have no parent backingUnits')
-		strictEqualTypeSafe(winningVaultAfterClaim.capacityOwnershipAttoRep, winningCapacityOwnershipBeforeClaim, 'a direct escalation claim should not implicitly migrate the separate parent vault capacity position')
+		strictEqualTypeSafe(winningVaultAfterClaim.obligationUnits, winningCapacityOwnershipBeforeClaim, 'a direct escalation claim should not implicitly migrate the separate parent vault capacity position')
 		strictEqualTypeSafe(winningVaultAfterClaim.claimableFeesAttoEth, 0n, 'the claimed vault should have no parent claimable fees')
 		strictEqualTypeSafe(winningVaultAfterClaim.disputeStakedAttoRep, 0n, 'the direct claim should consume the vault final escalation escrow')
 

@@ -248,6 +248,10 @@
 			"bun": "./ts/protocol/securityVault.ts",
 			"default": "./js/protocol/securityVault.js"
 		},
+		"./protocol/coverage.js": {
+			"bun": "./ts/protocol/coverage.ts",
+			"default": "./js/protocol/coverage.js"
+		},
 		"./protocol/trading.js": {
 			"bun": "./ts/protocol/trading.ts",
 			"default": "./js/protocol/trading.js"

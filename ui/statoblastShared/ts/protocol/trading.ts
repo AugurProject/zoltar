@@ -1,4 +1,5 @@
-import { type Address, type TransactionReceipt } from '@zoltar/core-shared/evm/ethereum'
+import { loadAvailableCoverage, loadCoverageAllocations } from './coverage.js'
+import { zeroAddress, type Address, type TransactionReceipt } from '@zoltar/core-shared/evm/ethereum'
 import { sortBigIntsAscending } from '@zoltar/core-shared/serialization/bigInt'
 import { assertNever } from '@zoltar/ui-core-shared/lib/assert.js'
 import { statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator, statoblast_SecurityPool_SecurityPool, statoblast_tokens_ShareToken_ShareToken } from '../contractArtifact.js'
@@ -9,22 +10,24 @@ import { readSecurityPoolUniverseId } from './securityPoolActions.js'
 
 type ReadWriteContractClient<TReceipt extends Pick<TransactionReceipt, 'status'> = TransactionReceipt> = Pick<ReadClient, 'readContract'> & WriteContractClient<TReceipt>
 type SecurityPoolMintCapacity = {
+	totalObligationUnits?: bigint
 	currentRetentionRate?: bigint
 	currentTimestamp?: bigint
 	feeEndTimestamp?: bigint
 	feeIndexRemainder?: bigint
 	lastUpdatedFeeAccumulator?: bigint
 	settlementCollateralAttoEth: bigint
-	feeEligibleCapacityOwnershipAttoRep: bigint
+	activeObligationUnits: bigint
 	mintingCapacityAttoEth: bigint
 	shareTokenSupplyAttoShares: bigint
 	totalPoolHeldAttoRep: bigint
 	totalCapacityOwnershipAttoRep: bigint
+	hasEscalationGame?: boolean
 	isPriceValid: boolean
 	totalFeesOwedRemainder?: bigint
 }
-export async function loadSecurityPoolMintCapacity(client: Pick<ReadClient, 'getBlock' | 'multicall'>, securityPoolAddress: Address): Promise<SecurityPoolMintCapacity> {
-	const [poolAccountingSnapshot, shareTokenSupplyAttoShares, totalPoolHeldAttoRep, mintingCapacityAttoEth, priceOracleManagerAndOperatorQueuer, currentRetentionRate, feeEndTimestamp] = await readRequiredMulticall(client, [
+export async function loadSecurityPoolMintCapacity(client: Pick<ReadClient, 'getBlock' | 'multicall' | 'readContract'>, securityPoolAddress: Address): Promise<SecurityPoolMintCapacity> {
+	const [poolAccountingSnapshot, shareTokenSupplyAttoShares, totalPoolHeldAttoRep, , priceOracleManagerAndOperatorQueuer, currentRetentionRate, feeEndTimestamp] = await readRequiredMulticall(client, [
 		{
 			abi: statoblast_SecurityPool_SecurityPool.abi,
 			functionName: 'getPoolAccountingSnapshot',
@@ -71,17 +74,19 @@ export async function loadSecurityPoolMintCapacity(client: Pick<ReadClient, 'get
 	const [priceValidity, currentBlock] = await Promise.all([readRequiredMulticall(client, [{ abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi, functionName: 'isPriceValid', address: priceOracleManagerAndOperatorQueuer, args: [] }]), client.getBlock()])
 	const [isPriceValid] = priceValidity
 	return {
+		totalObligationUnits: (await readRequiredMulticall(client, [{ abi: statoblast_SecurityPool_SecurityPool.abi, address: securityPoolAddress, functionName: 'totalObligationUnits' }]))[0],
 		currentRetentionRate,
 		currentTimestamp: currentBlock.timestamp,
 		feeEndTimestamp,
 		feeIndexRemainder: poolAccountingSnapshot.feeIndexRemainder,
 		lastUpdatedFeeAccumulator: poolAccountingSnapshot.lastUpdatedFeeAccumulator,
 		settlementCollateralAttoEth: poolAccountingSnapshot.settlementCollateralAttoEth,
-		feeEligibleCapacityOwnershipAttoRep: poolAccountingSnapshot.feeEligibleCapacityOwnershipAttoRep,
-		mintingCapacityAttoEth,
+		activeObligationUnits: poolAccountingSnapshot.activeObligationUnits,
+		mintingCapacityAttoEth: poolAccountingSnapshot.settlementCollateralAttoEth + (await loadAvailableCoverage(client, securityPoolAddress)),
 		shareTokenSupplyAttoShares,
 		totalPoolHeldAttoRep,
 		totalCapacityOwnershipAttoRep: poolAccountingSnapshot.totalCapacityOwnershipAttoRep,
+		hasEscalationGame: (await readRequiredMulticall(client, [{ abi: statoblast_SecurityPool_SecurityPool.abi, address: securityPoolAddress, functionName: 'escalationGame' }]))[0] !== zeroAddress,
 		isPriceValid,
 		totalFeesOwedRemainder: poolAccountingSnapshot.totalFeesOwedRemainder,
 	}
@@ -185,12 +190,13 @@ export async function migrateSharesFromUniverse<TReceipt extends Pick<Transactio
 	} satisfies TradingActionResult
 }
 export async function createCompleteSetInSecurityPool(client: WriteClient, securityPoolAddress: Address, amount: bigint) {
+	const allocations = await loadCoverageAllocations(client, securityPoolAddress, amount)
 	const universeId = await readSecurityPoolUniverseId(client, securityPoolAddress)
 	const callParams = {
 		address: securityPoolAddress,
 		abi: statoblast_SecurityPool_SecurityPool.abi,
 		functionName: 'createCompleteSet',
-		args: [],
+		args: [allocations],
 		value: amount,
 	}
 	const hash = await writeContractAndWait(client, () => callParams)

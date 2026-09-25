@@ -17,7 +17,7 @@ contract AuctionSettlementPoolHarness {
 	mapping(address vault => Vault) public securityVaults;
 	mapping(address vault => uint256 badDebtAttoEth) public vaultBadDebtAttoEth;
 	uint256 public totalRepBackingUnits = 1e18;
-	uint256 public feeEligibleCapacityOwnershipAttoRep;
+	uint256 public activeObligationUnits;
 	uint256 public totalBadDebtAttoEth;
 	uint256 public badDebtGeneration;
 
@@ -40,7 +40,11 @@ contract AuctionSettlementPoolHarness {
 		totalBadDebtAttoEth = newTotalBadDebtAttoEth;
 	}
 
-	function assignFinalizedAuctionFees(address, uint256, uint256) external {}
+	mapping(address => uint256) public getVaultObligationUnits;
+
+	function creditFinalizedAuctionCoverage(address vault, uint256 units, uint256, uint256) external {
+		getVaultObligationUnits[vault] += units;
+	}
 }
 
 contract SecurityPoolForkerAuctionSettlementHarness is SecurityPoolForkerAuctionSettlementBase {
@@ -55,7 +59,7 @@ contract SecurityPoolForkerAuctionSettlementHarness is SecurityPoolForkerAuction
 	function creditAuctionProceeds(ISecurityPool securityPool, address vault, uint256 amount, uint256 newCapacityOwnershipAttoRep, uint256 badDebtToAssignAttoEth) external {
 		SecurityPoolForkerForkData storage data = forkDataByPool[securityPool];
 		data.auctionRepBackingUnits = 10;
-		data.auctionedCapacityOwnershipAttoRep = 3;
+		data.auctionObligationUnits = 3;
 		_creditAuctionProceeds(securityPool, vault, data, amount, newCapacityOwnershipAttoRep, badDebtToAssignAttoEth, 1, amount == 0 ? 0 : data.auctionRepBackingUnits);
 	}
 }

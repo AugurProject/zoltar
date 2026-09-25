@@ -1,3 +1,4 @@
+import { loadCoverageAllocations } from '@zoltar/ui-statoblast-shared/protocol/coverage.js'
 import { statoblast_SecurityPool_SecurityPool } from '@zoltar/ui-statoblast-shared/contractArtifact.js'
 import { tradingContracts } from '../generated/contractArtifact.js'
 import { discoverLiveUniverseMarketPage } from '../protocol/live.js'
@@ -41,7 +42,8 @@ export async function applyTradingScenario(parameters: BootstrapScenarioApplyPar
 		if (market === undefined || market.loadError !== undefined) throw new Error('Trading simulation could not discover its seeded SecurityPool')
 		const router = tradingContracts['contracts/trading/TwoWayConstantProductRouter.sol'].TwoWayConstantProductRouter
 		const block = await readClient.getBlock()
-		const liquidityHash = await writeClient.writeContract({ abi: router.abi, address: plan.router.address, functionName: 'createPairAndInitializeWithEth', args: [market.pool, 5_000n, 0n, account, block.timestamp + 1_200n], value: 10n ** 16n })
+		const allocations = await loadCoverageAllocations(readClient, market.pool, 10n ** 16n)
+		const liquidityHash = await writeClient.writeContract({ abi: router.abi, address: plan.router.address, functionName: 'createPairAndInitializeWithEth', args: [market.pool, 5_000n, 0n, account, block.timestamp + 1_200n, allocations], value: 10n ** 16n })
 		const liquidityReceipt = await readClient.waitForTransactionReceipt({ hash: liquidityHash })
 		if (liquidityReceipt.status !== 'success') throw new Error('Trading simulation liquidity initialization reverted')
 		const sharesHash = await writeClient.writeContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: market.pool, functionName: 'createCompleteSet', value: 5n * 10n ** 15n })

@@ -78,7 +78,7 @@ describe('Audit PoC: stale bad debt survives a collateral reset', () => {
 			functionName: 'getCurrentMintingCapacityAttoEth',
 		})
 		assert.ok(staleMintingCapacityAttoEth >= 1n * 10n ** 18n, 'the regression should retain enough nominal stale capacity to attempt a significant mint')
-		await assert.rejects(createCompleteSet(victim, securityPool, 1n * 10n ** 18n, true), /Pool backing insufficient/)
+		await assert.rejects(createCompleteSet(victim, securityPool, 1n * 10n ** 18n, true, [{ vault: client.account.address, collateralAttoEth: 1n * 10n ** 18n }]), /Vault backing insufficient/)
 		strictEqualTypeSafe(await getSettlementCollateralAttoEth(client, securityPool), 0n, 'the rejected fresh mint should not start a new undercollateralized generation')
 	})
 })

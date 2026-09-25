@@ -463,7 +463,7 @@ describe('chaos operation catalog', () => {
 			receiverVault: snapshot.wallet.address,
 			reservedLiquidationDebtAttoEth: 0n.toString(),
 			snapshotTargetBackingUnits: '1000000000000000000',
-			snapshotTargetCapacityOwnershipAttoRep: (10n ** 18n).toString(),
+			snapshotTargetObligationUnits: (10n ** 18n).toString(),
 			snapshotTargetDisputeStakedAttoRep: 0n.toString(),
 			snapshotTargetOpenInterestAttoEth: 0n.toString(),
 			snapshotTotalPoolHeldAttoRep: (10n ** 18n).toString(),

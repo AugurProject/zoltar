@@ -293,6 +293,7 @@ function createMockedBootstrapDependencies({ accounts, scenario, profile }: { ac
 					universeId: 1n,
 				}) as never,
 		),
+		setCoverageOffer: mock(async () => '0x01'),
 		depositRepToVaultToSecurityPool: mock(async (client: { account?: Address }, poolAddress: Address, amount: bigint, targetHealthFactorBps = 20_000n) => {
 			state.callLog.depositRepToVaultToSecurityPool += 1
 			const vaultAddress = vaultAddressByPool[poolAddress]?.find((vaultAddressCandidate: Address) => vaultAddressCandidate === client.account) ?? vaultAddressByPool[poolAddress]?.[0]

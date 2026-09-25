@@ -38,7 +38,7 @@ function vault(address: typeof callerAddress, vaultAttoRepBacking: bigint, openI
 		address,
 		backingUnits: vaultAttoRepBacking * PRICE_PRECISION,
 		badDebtAttoEth: 0n,
-		capacityOwnershipAttoRep: openInterestAttoEth * 10n,
+		obligationUnits: openInterestAttoEth * 10n,
 		claimableFeesAttoEth: 0n,
 		disputeStakedAttoRep: 0n,
 		openInterestAttoEth,
@@ -50,7 +50,7 @@ function pool(): PoolRiskContext {
 	return {
 		address: poolAddress,
 		denominator: 1_000n * PRICE_PRECISION,
-		feeEligibleCapacityOwnershipAttoRep: 1_000n * PRICE_PRECISION,
+		activeObligationUnits: 1_000n * PRICE_PRECISION,
 		manager: managerAddress,
 		minimumSecurityBondDebtAttoEth: PRICE_PRECISION,
 		minimumVaultRepDepositAttoRep: 10n * PRICE_PRECISION,
@@ -59,7 +59,7 @@ function pool(): PoolRiskContext {
 		price: 10n * PRICE_PRECISION,
 		settlementCollateralAttoEth: 100n * PRICE_PRECISION,
 		totalAttoRep: 1_000n * PRICE_PRECISION,
-		totalCapacityOwnershipAttoRep: 1_000n * PRICE_PRECISION,
+		totalObligationUnits: 1_000n * PRICE_PRECISION,
 	}
 }
 
@@ -69,7 +69,7 @@ describe('dynamic-capacity liquidation strategy', () => {
 		settings.maximumLiquidationDebtAttoEth = 75n * PRICE_PRECISION
 		const candidate = evaluateCandidate(pool(), vault(targetAddress, 1_000n * PRICE_PRECISION, 75n * PRICE_PRECISION), vault(callerAddress, 0n, 0n), settings)
 		expect(candidate?.debtToMoveAttoEth).toBe(75n * PRICE_PRECISION)
-		expect(candidate?.capacityOwnershipToMoveAttoRep).toBe(750n * PRICE_PRECISION)
+		expect(candidate?.obligationUnitsToMove).toBe(750n * PRICE_PRECISION)
 		expect(candidate?.vaultAttoRepBackingToTransfer).toBe(787_500000000000000000n)
 	})
 
@@ -77,18 +77,18 @@ describe('dynamic-capacity liquidation strategy', () => {
 		const candidate = evaluateCandidate(pool(), vault(targetAddress, 1_000n * PRICE_PRECISION, 75n * PRICE_PRECISION), vault(callerAddress, 0n, 0n), strategy())
 		expect(candidate?.requestedDebtAttoEth).toBe(25n * PRICE_PRECISION)
 		expect(candidate?.debtToMoveAttoEth).toBe(25n * PRICE_PRECISION)
-		expect(candidate?.capacityOwnershipToMoveAttoRep).toBe(250n * PRICE_PRECISION)
+		expect(candidate?.obligationUnitsToMove).toBe(250n * PRICE_PRECISION)
 		expect(candidate?.vaultAttoRepBackingToTransfer).toBe(262_500000000000000000n)
 		expect(candidate?.topUpAttoRep).toBe(362_500000000000000000n)
 		expect(candidate?.resultingHealthBps).toBe(12_500n)
 	})
 
-	test('rejects a receiver whose exact bad debt absorbs the moved ownership gross open interest', () => {
+	test('historical write-off diagnostics do not absorb newly assigned obligations', () => {
 		const receiver = vault(callerAddress, 100n * PRICE_PRECISION, 0n)
 		receiver.badDebtAttoEth = 30n * PRICE_PRECISION
 		const candidate = evaluateCandidate(pool(), vault(targetAddress, 1_000n * PRICE_PRECISION, 75n * PRICE_PRECISION), receiver, strategy())
 
-		expect(candidate).toBeUndefined()
+		expect(candidate?.debtToMoveAttoEth).toBe(25n * PRICE_PRECISION)
 	})
 
 	test('accepts a healthy liquidation award bundle in a low-multiplier pool', () => {
@@ -102,22 +102,22 @@ describe('dynamic-capacity liquidation strategy', () => {
 		const unclaimedPool = {
 			...pool(),
 			denominator: 107n * PRICE_PRECISION,
-			feeEligibleCapacityOwnershipAttoRep: 2n * PRICE_PRECISION,
+			activeObligationUnits: 2n * PRICE_PRECISION,
 			minimumSecurityBondDebtAttoEth: 1n,
 			minimumVaultRepDepositAttoRep: 1n,
 			multiplierBps: 20_000n,
 			price: PRICE_PRECISION,
 			settlementCollateralAttoEth: 8n * PRICE_PRECISION,
 			totalAttoRep: 107n * PRICE_PRECISION,
-			totalCapacityOwnershipAttoRep: 4n * PRICE_PRECISION,
+			totalObligationUnits: 4n * PRICE_PRECISION,
 		}
 		const target = {
 			...vault(targetAddress, 7n * PRICE_PRECISION, 4n * PRICE_PRECISION),
-			capacityOwnershipAttoRep: 2n * PRICE_PRECISION,
+			obligationUnits: 2n * PRICE_PRECISION,
 		}
 		const receiver = {
 			...vault(callerAddress, 100n * PRICE_PRECISION, 2n * PRICE_PRECISION),
-			capacityOwnershipAttoRep: PRICE_PRECISION,
+			obligationUnits: PRICE_PRECISION,
 		}
 		const settings = strategy()
 		settings.maximumLiquidationDebtAttoEth = 4n * PRICE_PRECISION
@@ -127,7 +127,7 @@ describe('dynamic-capacity liquidation strategy', () => {
 		const candidate = evaluateCandidate(unclaimedPool, target, receiver, settings)
 
 		expect(candidate?.debtToMoveAttoEth).toBe(4n * PRICE_PRECISION)
-		expect(candidate?.capacityOwnershipToMoveAttoRep).toBe(2n * PRICE_PRECISION)
+		expect(candidate?.obligationUnitsToMove).toBe(2n * PRICE_PRECISION)
 	})
 
 	test('prefunds at least the standalone minimum for an empty receiver vault', () => {

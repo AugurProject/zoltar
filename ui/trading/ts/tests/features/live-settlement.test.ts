@@ -89,7 +89,7 @@ const market: LiveMarket = {
 	settlementCollateralAttoEth: 0n,
 	currentRetentionRate: 0n,
 	totalCapacityOwnershipAttoRep: 0n,
-	feeEligibleCapacityOwnershipAttoRep: 0n,
+	activeObligationUnits: 0n,
 	mintingCapacityCeilingAttoEth: 0n,
 	availableMintingCapacityAttoEth: 0n,
 	feeBps: 30n,

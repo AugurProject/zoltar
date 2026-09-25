@@ -6,7 +6,7 @@ import { AnvilWindowEthereum } from '../../testSupport/simulator/AnvilWindowEthe
 import { useIsolatedAnvilNode } from '../../testSupport/simulator/useIsolatedAnvilNode'
 
 import { pickFixtureProperties } from '../../testSupport/pickFixtureProperties'
-import { createWriteClient, WriteClient } from '../../testSupport/simulator/utils/clients'
+import { createWriteClient, WriteClient, writeContractAndWait } from '../../testSupport/simulator/utils/clients'
 import { DAY, TEST_ADDRESSES } from '../../testSupport/simulator/utils/constants'
 import { setupTestAccounts } from '../../testSupport/simulator/utils/utilities'
 import { addressString } from '../../testSupport/simulator/utils/bigint'
@@ -18,7 +18,7 @@ import { ensureZoltarDeployed, getRepTokenAddress } from '../../testSupport/simu
 
 import { createStatoblastTruthAuctionScenarioHelpers } from './truthAuctionScenarioHelpers'
 import { getSecurityVault, backingUnitsToAttoRep } from '../../testSupport/simulator/utils/contracts/securityPool'
-import { statoblast_factories_SecurityPoolFactory_SecurityPoolFactory, test_statoblast_OwnForkEscalationClaimHarness_OwnForkEscalationClaimHarness } from '../../types/contractArtifact'
+import { statoblast_SecurityPool_SecurityPool, statoblast_factories_SecurityPoolFactory_SecurityPoolFactory, test_statoblast_OwnForkEscalationClaimHarness_OwnForkEscalationClaimHarness } from '../../types/contractArtifact'
 
 const getMigrationProxyAddressAbi = [
 	{
@@ -50,7 +50,7 @@ function getMappingStorageSlot(key: Address, mappingSlot: bigint) {
 	return BigInt(keccak256(encodeAbiParameters([{ type: 'address' }, { type: 'uint256' }], [key, mappingSlot])))
 }
 
-function useStatoblastTestFixture() {
+function useStatoblastTestFixture(authorizeCoverage = true) {
 	const { getAnvilWindowEthereum, setBaselineSnapshot } = useIsolatedAnvilNode()
 	let mockWindow: AnvilWindowEthereum
 	let client: WriteClient
@@ -186,6 +186,7 @@ function useStatoblastTestFixture() {
 		assert.strictEqual(registeredPool, expectedPool, 'origin security pool address derivation should match the lineage registry')
 		await approveAndDepositRepToVault(client, repDeposit, questionId)
 		securityPoolAddresses = getSecurityPoolAddresses(addressString(0x0n), genesisUniverse, questionId, statoblastSecurityMultiplierBps)
+		if (authorizeCoverage) await writeContractAndWait(client, () => client.writeContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: securityPoolAddresses.securityPool, functionName: 'setCoverageOffer', args: [true, 2n ** 256n - 1n, 10_000n] }))
 	}
 
 	beforeAll(async () => {
@@ -341,8 +342,8 @@ export function useStatoblastTruthAuctionFixture() {
 
 export type StatoblastTruthAuctionFixture = ReturnType<typeof useStatoblastTruthAuctionFixture>
 
-export function useStatoblastVaultAccountingFixture() {
-	const fixture = useStatoblastTestFixture()
+export function useStatoblastVaultAccountingFixture(authorizeCoverage = true) {
+	const fixture = useStatoblastTestFixture(authorizeCoverage)
 	return pickFixtureProperties(fixture, [
 		'getAnvilWindowEthereum',
 		'setBaselineSnapshot',

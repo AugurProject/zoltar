@@ -17,13 +17,13 @@ export type PoolAccountingReplay = {
 	vault: Address
 	settlementCollateralAttoEth: bigint
 	totalCapacityOwnershipAttoRep: bigint
-	feeEligibleCapacityOwnershipAttoRep: bigint
+	activeObligationUnits: bigint
 	totalClaimableVaultFeesAttoEth: bigint
 	unallocatedAccruedFeesAttoEth: bigint
 	feeIndex: bigint
 	feeIndexRemainder: bigint
 	totalFeesOwedRemainder: bigint
-	uncheckpointedFeeEligibleCapacityOwnershipAttoRep: bigint
+	uncheckpointedActiveObligationUnits: bigint
 	lastUpdatedFeeAccumulator: bigint
 	currentRetentionRate: bigint
 }
@@ -35,7 +35,7 @@ export type VaultAccountingReplay = {
 	feeIndex: bigint
 	vaultFeeRemainder: bigint
 	resultingTotalRepBackingUnits: bigint
-	resultingFeeEligibleCapacityOwnershipAttoRep: bigint
+	resultingActiveObligationUnits: bigint
 }
 
 export type PoolStateReplay = {
@@ -124,7 +124,7 @@ export type CoordinatorOperationReplay = {
 	queuedAt: bigint
 	validForSeconds: bigint
 	snapshotTargetBackingUnits: bigint
-	snapshotTargetCapacityOwnershipAttoRep: bigint
+	snapshotTargetObligationUnits: bigint
 	snapshotTargetDisputeStakedAttoRep: bigint
 	snapshotTotalPoolHeldAttoRep: bigint
 	snapshotTotalRepBackingUnits: bigint
@@ -852,13 +852,13 @@ export function reduceSecurityPoolEvent(state: ReplayState, log: ReplayLog) {
 			vault: requireAddress(log.args, 'vault'),
 			settlementCollateralAttoEth: requireBigInt(log.args, 'settlementCollateralAttoEth'),
 			totalCapacityOwnershipAttoRep: requireBigInt(log.args, 'totalCapacityOwnershipAttoRep'),
-			feeEligibleCapacityOwnershipAttoRep: requireBigInt(log.args, 'feeEligibleCapacityOwnershipAttoRep'),
+			activeObligationUnits: requireBigInt(log.args, 'activeObligationUnits'),
 			totalClaimableVaultFeesAttoEth: requireBigInt(log.args, 'totalClaimableVaultFeesAttoEth'),
 			unallocatedAccruedFeesAttoEth: requireBigInt(log.args, 'unallocatedAccruedFeesAttoEth'),
 			feeIndex: requireBigInt(log.args, 'feeIndex'),
 			feeIndexRemainder: requireBigInt(log.args, 'feeIndexRemainder'),
 			totalFeesOwedRemainder: requireBigInt(log.args, 'totalFeesOwedRemainder'),
-			uncheckpointedFeeEligibleCapacityOwnershipAttoRep: requireBigInt(log.args, 'uncheckpointedFeeEligibleCapacityOwnershipAttoRep'),
+			uncheckpointedActiveObligationUnits: requireBigInt(log.args, 'uncheckpointedActiveObligationUnits'),
 			lastUpdatedFeeAccumulator: requireBigInt(log.args, 'lastUpdatedFeeAccumulator'),
 			currentRetentionRate: requireBigInt(log.args, 'currentRetentionRate'),
 		})
@@ -921,7 +921,7 @@ export function reduceSecurityPoolEvent(state: ReplayState, log: ReplayLog) {
 			feeIndex: requireBigInt(log.args, 'feeIndex'),
 			vaultFeeRemainder: requireBigInt(log.args, 'vaultFeeRemainder'),
 			resultingTotalRepBackingUnits: requireBigInt(log.args, 'resultingTotalRepBackingUnits'),
-			resultingFeeEligibleCapacityOwnershipAttoRep: requireBigInt(log.args, 'resultingFeeEligibleCapacityOwnershipAttoRep'),
+			resultingActiveObligationUnits: requireBigInt(log.args, 'resultingActiveObligationUnits'),
 		})
 		poolState.totalRepBackingUnits = requireBigInt(log.args, 'resultingTotalRepBackingUnits')
 		state.poolStates.set(log.emitter, poolState)
@@ -1468,7 +1468,7 @@ export function reduceCoordinatorEvent(state: ReplayState, log: ReplayLog) {
 			queuedAt: requireBigInt(log.args, 'queuedAt'),
 			validForSeconds: requireBigInt(log.args, 'validForSeconds'),
 			snapshotTargetBackingUnits: requireBigInt(log.args, 'snapshotTargetBackingUnits'),
-			snapshotTargetCapacityOwnershipAttoRep: requireBigInt(log.args, 'snapshotTargetCapacityOwnershipAttoRep'),
+			snapshotTargetObligationUnits: requireBigInt(log.args, 'snapshotTargetObligationUnits'),
 			snapshotTargetDisputeStakedAttoRep: 0n,
 			snapshotTotalPoolHeldAttoRep: requireBigInt(log.args, 'snapshotTotalPoolHeldAttoRep'),
 			snapshotTotalRepBackingUnits: requireBigInt(log.args, 'snapshotTotalRepBackingUnits'),

@@ -10,6 +10,7 @@ import { OpenOraclePriceCoordinator } from './OpenOraclePriceCoordinator.sol';
 import {
 	ISecurityPool,
 	SecurityVault,
+	CoverageAllocation,
 	PoolAccountingSnapshot,
 	AccountingReason,
 	SystemState,
@@ -28,10 +29,13 @@ import { SecurityPoolForker } from './SecurityPoolForker.sol';
 import { ISecurityPoolForker } from './interfaces/ISecurityPoolForker.sol';
 import { BinaryOutcomes } from './BinaryOutcomes.sol';
 import { SecurityPoolEventEmitter } from './SecurityPoolEventEmitter.sol';
+import { SecurityPoolLiquidationDelegate } from './SecurityPoolLiquidationDelegate.sol';
+import { SecurityPoolCoverageDelegate } from './SecurityPoolCoverageDelegate.sol';
 import { SecurityPoolStorage } from './SecurityPoolStorage.sol';
 import { SecurityPoolOperationsDelegate } from './SecurityPoolOperationsDelegate.sol';
 import { SecurityPoolSettlementDelegate } from './SecurityPoolSettlementDelegate.sol';
 import { DelegateCallForwarder } from './DelegateCallForwarder.sol';
+import { CoverageObligationMath } from './CoverageObligationMath.sol';
 import { Math } from './openOracle/openzeppelin/contracts/utils/math/Math.sol';
 
 interface ISecurityPoolDeploymentWorkerConfiguration {
@@ -43,8 +47,11 @@ interface ISecurityPoolDeploymentWorkerConfiguration {
 // Security pool for one question, one universe, one denomination (ETH)
 contract SecurityPool is SecurityPoolStorage {
 	using SafeERC20Ops for IERC20;
-	event PoolAccountingCheckpoint(AccountingReason reason, address indexed vault, uint256 settlementCollateralAttoEth, uint256 totalCapacityOwnershipAttoRep, uint256 feeEligibleCapacityOwnershipAttoRep, uint256 totalClaimableVaultFeesAttoEth, uint256 unallocatedAccruedFeesAttoEth, uint256 feeIndex, uint256 feeIndexRemainder, uint256 totalFeesOwedRemainder, uint256 uncheckpointedFeeEligibleCapacityOwnershipAttoRep, uint256 lastUpdatedFeeAccumulator, uint256 currentRetentionRate);
-	event VaultAccountingCheckpoint(address indexed vault, uint256 repBackingUnits, uint256 capacityOwnershipAttoRep, uint256 claimableFeesAttoEth, uint256 feeIndex, uint256 vaultFeeRemainder, uint256 resultingTotalRepBackingUnits, uint256 resultingFeeEligibleCapacityOwnershipAttoRep);
+	event PoolCoverageCheckpoint(uint256 indexed epoch, uint256 totalUnits, uint256 activeUnits, uint256 writtenOffUnits, uint256 unassignedUnits, uint256 migratedOutUnits);
+	event VaultCoverageCheckpoint(address indexed vault, uint256 indexed epoch, uint256 obligationUnits);
+	event CoverageAllocated(address indexed vault, uint256 addedUnits, uint256 resultingVaultUnits, uint256 resultingTotalUnits, uint256 epoch);
+	event PoolAccountingCheckpoint(AccountingReason reason, address indexed vault, uint256 settlementCollateralAttoEth, uint256 totalCapacityOwnershipAttoRep, uint256 activeObligationUnits, uint256 totalClaimableVaultFeesAttoEth, uint256 unallocatedAccruedFeesAttoEth, uint256 feeIndex, uint256 feeIndexRemainder, uint256 totalFeesOwedRemainder, uint256 uncheckpointedActiveObligationUnits, uint256 lastUpdatedFeeAccumulator, uint256 currentRetentionRate);
+	event VaultAccountingCheckpoint(address indexed vault, uint256 repBackingUnits, uint256 capacityOwnershipAttoRep, uint256 claimableFeesAttoEth, uint256 feeIndex, uint256 vaultFeeRemainder, uint256 resultingTotalRepBackingUnits, uint256 resultingActiveObligationUnits);
 
 	uint256 public immutable questionId;
 	uint248 public immutable universeId;
@@ -78,7 +85,7 @@ contract SecurityPool is SecurityPoolStorage {
 	event RepWithdrawnFromVault(address indexed vault, uint256 amountAttoRep, uint256 repBackingUnits, uint256 totalRepBackingUnits);
 	event RepDepositedToVault(address indexed vault, uint256 attoRepAmount, uint256 repBackingUnits, uint256 totalRepBackingUnits);
 	event VaultDepositTargetHealthFactorRecorded(address indexed vault, uint256 depositTargetHealthFactorBps, uint256 capacityOwnershipAttoRep, uint256 resultingTotalCapacityOwnershipAttoRep);
-	event VaultLiquidated(uint256 indexed operationId, address operator, address indexed receiverVault, address indexed targetVault, uint256 securityBondDebtMovedAttoEth, uint256 capacityOwnershipMovedAttoRep, uint256 badDebtAttoEth);
+	event VaultLiquidated(uint256 indexed operationId, address operator, address indexed receiverVault, address indexed targetVault, uint256 securityBondDebtMovedAttoEth, uint256 obligationUnitsMoved, uint256 badDebtAttoEth);
 	event VaultBadDebtRecorded(address indexed targetVault, uint256 badDebtAttoEth, uint256 resultingVaultBadDebtAttoEth, uint256 resultingTotalBadDebtAttoEth);
 	event RepRedeemedFromVault(address indexed caller, address indexed vault, uint256 attoRepAmount, uint256 repBackingUnits, uint256 totalRepBackingUnits);
 	event DepositToEscalationGame(address indexed vault, BinaryOutcomes.BinaryOutcome indexed outcome, uint256 depositedAmountAttoRep, uint256 backingUnitsEscrowed, uint256 repBackingUnits, uint256 totalRepBackingUnits, EscalationGame escalationGame);
@@ -147,6 +154,14 @@ contract SecurityPool is SecurityPoolStorage {
 		minimumVaultRepDepositAttoRep = SecurityPoolUtils.calculateMinimumVaultRepDepositAttoRep(universeTheoreticalSupplyAttoRep, securityPoolFactory.minimumVaultRepDepositAttoRep());
 	}
 
+	function getVaultCoverageSnapshot(address vault) external view returns (uint256 backingUnits, uint256 obligationUnits, uint256 epoch) {
+		return (securityVaults[vault].repBackingUnits, getVaultObligationUnits(vault), badDebtGeneration);
+	}
+
+	function coverageEpoch() external view returns (uint256) {
+		return badDebtGeneration;
+	}
+
 	function getVaultCount() external view returns (uint256) {
 		return vaultAddresses.length;
 	}
@@ -199,7 +214,7 @@ contract SecurityPool is SecurityPoolStorage {
 		if (lastUpdatedFeeAccumulator > clampedCurrentTimestamp) return;
 		uint256 timeDelta = clampedCurrentTimestamp - lastUpdatedFeeAccumulator;
 		if (timeDelta == 0) return;
-		if (feeEligibleCapacityOwnershipAttoRep == 0) {
+		if (activeObligationUnits == 0) {
 			_clearFeeIndexRemainder();
 			lastUpdatedFeeAccumulator = clampedCurrentTimestamp;
 			_emitPoolAccountingCheckpoint(AccountingReason.Accrual, address(0x0));
@@ -208,9 +223,9 @@ contract SecurityPool is SecurityPoolStorage {
 
 		uint256 feeIndexDelta;
 		uint256 creditedFeesAttoEth;
-		(feeIndexDelta, feeIndexRemainder, creditedFeesAttoEth, totalFeesOwedRemainder) = SecurityPoolUtils.calculateFeeAccrual(settlementCollateralAttoEth, currentRetentionRate, timeDelta, feeIndexRemainder, feeEligibleCapacityOwnershipAttoRep, totalFeesOwedRemainder);
+		(feeIndexDelta, feeIndexRemainder, creditedFeesAttoEth, totalFeesOwedRemainder) = SecurityPoolUtils.calculateFeeAccrual(CoverageObligationMath.feeBase(settlementCollateralAttoEth, activeObligationUnits, totalObligationUnits), currentRetentionRate, timeDelta, feeIndexRemainder, activeObligationUnits, totalFeesOwedRemainder);
 		feeIndex += feeIndexDelta;
-		if (feeIndexDelta > 0) uncheckpointedFeeEligibleCapacityOwnershipAttoRep = feeEligibleCapacityOwnershipAttoRep;
+		if (feeIndexDelta > 0) uncheckpointedActiveObligationUnits = activeObligationUnits;
 		unallocatedAccruedFeesAttoEth += creditedFeesAttoEth;
 		settlementCollateralAttoEth -= creditedFeesAttoEth;
 		lastUpdatedFeeAccumulator = clampedCurrentTimestamp;
@@ -247,11 +262,11 @@ contract SecurityPool is SecurityPoolStorage {
 
 	function getPoolAccountingSnapshot() external view returns (PoolAccountingSnapshot memory) {
 		return
-			PoolAccountingSnapshot({settlementCollateralAttoEth: settlementCollateralAttoEth, totalCapacityOwnershipAttoRep: totalCapacityOwnershipAttoRep, feeEligibleCapacityOwnershipAttoRep: feeEligibleCapacityOwnershipAttoRep, totalClaimableVaultFeesAttoEth: totalClaimableVaultFeesAttoEth, unallocatedAccruedFeesAttoEth: unallocatedAccruedFeesAttoEth, feeIndex: feeIndex, feeIndexRemainder: feeIndexRemainder, totalFeesOwedRemainder: totalFeesOwedRemainder, uncheckpointedFeeEligibleCapacityOwnershipAttoRep: uncheckpointedFeeEligibleCapacityOwnershipAttoRep, lastUpdatedFeeAccumulator: lastUpdatedFeeAccumulator, currentRetentionRate: currentRetentionRate, badDebtGeneration: badDebtGeneration});
+			PoolAccountingSnapshot({settlementCollateralAttoEth: settlementCollateralAttoEth, totalCapacityOwnershipAttoRep: totalCapacityOwnershipAttoRep, activeObligationUnits: activeObligationUnits, totalClaimableVaultFeesAttoEth: totalClaimableVaultFeesAttoEth, unallocatedAccruedFeesAttoEth: unallocatedAccruedFeesAttoEth, feeIndex: feeIndex, feeIndexRemainder: feeIndexRemainder, totalFeesOwedRemainder: totalFeesOwedRemainder, uncheckpointedActiveObligationUnits: uncheckpointedActiveObligationUnits, lastUpdatedFeeAccumulator: lastUpdatedFeeAccumulator, currentRetentionRate: currentRetentionRate, badDebtGeneration: badDebtGeneration});
 	}
 
 	function getVaultFeeRemainder(address vault) external view returns (uint256) {
-		return vaultFeeRemainders[vault];
+		return vaultFeeRemainders[badDebtGeneration][vault];
 	}
 
 	function _emitPoolAccountingCheckpoint(AccountingReason reason, address vault) private {
@@ -295,37 +310,7 @@ contract SecurityPool is SecurityPoolStorage {
 	////////////////////////////////////////
 
 	function withdrawRepFromVault(address vault, uint256 attoRepAmount) external isOperational onlyValidOracle {
-		if (isEscalationResolved()) revert('Escalation resolved');
-		updateVaultFees(vault);
-		if (address(escalationGame) != address(0x0)) {
-			require(escalationGame.disputeStakedRepByVaultAttoRep(vault) == 0, 'Escrow');
-		}
-		uint256 backingUnitsToWithdraw = attoRepToBackingUnits(attoRepAmount);
-		uint256 withdrawBackingUnits =
-			backingUnitsToWithdraw + attoRepToBackingUnits(minimumVaultRepDepositAttoRep) >
-				securityVaults[vault].repBackingUnits
-				? securityVaults[vault].repBackingUnits
-				: backingUnitsToWithdraw;
-		uint256 withdrawRepAmountAttoRep = backingUnitsToAttoRep(withdrawBackingUnits);
-		uint256 totalPoolHeldRepBalanceAttoRep = getTotalPoolHeldAttoRep();
-
-		uint256 previousVaultRepBackingAttoRep = backingUnitsToAttoRep(securityVaults[vault].repBackingUnits);
-		require(previousVaultRepBackingAttoRep >= withdrawRepAmountAttoRep, 'Withdraw REP');
-		uint256 repEthPrice = priceOracleManagerAndOperatorQueuer.lastPrice();
-		uint256 vaultDisputeStakedAttoRep =
-			address(escalationGame) == address(0x0) ? 0 : escalationGame.disputeStakedRepByVaultAttoRep(vault);
-		securityVaults[vault].repBackingUnits -= withdrawBackingUnits;
-		totalRepBackingUnits -= withdrawBackingUnits;
-		uint256 previousAssociatedRepAttoRep = previousVaultRepBackingAttoRep + vaultDisputeStakedAttoRep;
-		uint256 nextCapacityOwnershipAttoRep = Math.mulDiv(securityVaults[vault].capacityOwnershipAttoRep, previousAssociatedRepAttoRep - withdrawRepAmountAttoRep, previousAssociatedRepAttoRep);
-		_setVaultCapacity(vault, nextCapacityOwnershipAttoRep, 0);
-		updateRetentionRate();
-		_requireVaultCoverage(previousVaultRepBackingAttoRep - withdrawRepAmountAttoRep, vaultDisputeStakedAttoRep, getVaultOpenInterestAttoEth(vault), repEthPrice);
-		_requirePoolCoverage(totalPoolHeldRepBalanceAttoRep - withdrawRepAmountAttoRep, _getTotalDisputeStakedRep(), _getActiveOpenInterestAttoEth(), repEthPrice);
-		_registerVault(vault);
-		IERC20(address(repToken)).safeTransfer(vault, withdrawRepAmountAttoRep);
-		emit RepWithdrawnFromVault(vault, withdrawRepAmountAttoRep, securityVaults[vault].repBackingUnits, totalRepBackingUnits);
-		_emitVaultAccountingCheckpoint(vault);
+		DelegateCallForwarder.invoke(operationsDelegate, abi.encodeCall(SecurityPoolOperationsDelegate.withdrawRepFromVault, (vault, attoRepAmount)));
 	}
 
 	function attoRepToBackingUnits(uint256 attoRepAmount) public view returns (uint256) {
@@ -357,11 +342,8 @@ contract SecurityPool is SecurityPoolStorage {
 	}
 
 	function getVaultOpenInterestAttoEth(address vault) public view returns (uint256) {
-		uint256 vaultCapacityOwnershipAttoRep = securityVaults[vault].capacityOwnershipAttoRep;
-		if (totalCapacityOwnershipAttoRep == 0 || vaultCapacityOwnershipAttoRep == 0) return 0;
-		uint256 grossOpenInterestAttoEth = SecurityPoolUtils.calculateVaultOpenInterestAttoEth(settlementCollateralAttoEth, vaultCapacityOwnershipAttoRep, totalCapacityOwnershipAttoRep);
-		uint256 vaultBadDebt = _getVaultBadDebtAttoEth(vault);
-		return grossOpenInterestAttoEth > vaultBadDebt ? grossOpenInterestAttoEth - vaultBadDebt : 0;
+		return
+			CoverageObligationMath.obligation(settlementCollateralAttoEth, getVaultObligationUnits(vault), totalObligationUnits);
 	}
 
 	function vaultBadDebtAttoEth(address vault) external view returns (uint256) {
@@ -380,23 +362,8 @@ contract SecurityPool is SecurityPoolStorage {
 		poolHeldRepPerCapacityBps = Math.mulDiv(poolHeldRepAttoRep, SecurityPoolUtils.BPS_DENOMINATOR, capacityOwnershipAttoRep);
 	}
 
-	function _getActiveOpenInterestAttoEth() private view returns (uint256) {
-		return
-			settlementCollateralAttoEth > totalBadDebtAttoEth ? settlementCollateralAttoEth - totalBadDebtAttoEth : 0;
-	}
-
-	function _getTotalDisputeStakedRep() private view returns (uint256) {
-		return address(escalationGame) == address(0x0) ? 0 : escalationGame.totalDisputeStakedAttoRep();
-	}
-
 	function _requireVaultCoverage(uint256 poolHeldVaultRepBackingAttoRep, uint256 disputeStakedRepAmountAttoRep, uint256 openInterestAttoEth, uint256 repEthPrice) private view {
 		require(SecurityPoolUtils.isVaultHealthy(poolHeldVaultRepBackingAttoRep, disputeStakedRepAmountAttoRep, openInterestAttoEth, repEthPrice, statoblastSecurityMultiplierBps), 'Vault backing insufficient');
-	}
-
-	function _requirePoolCoverage(uint256 totalPoolHeldAttoRep, uint256 totalDisputeStakedAttoRep, uint256 totalOpenInterestAttoEth, uint256 repEthPrice) private view {
-		if (
-			!SecurityPoolUtils.isVaultHealthy(totalPoolHeldAttoRep, totalDisputeStakedAttoRep, totalOpenInterestAttoEth, repEthPrice, statoblastSecurityMultiplierBps)
-		) revert('Pool backing insufficient');
 	}
 
 	function _requireMinimumVaultRep(uint256 attoRepAmount, bool allowZeroBalance, string memory errorMessage) private view {
@@ -428,10 +395,6 @@ contract SecurityPool is SecurityPoolStorage {
 		DelegateCallForwarder.invoke(operationsDelegate, abi.encodeCall(SecurityPoolOperationsDelegate.depositRepToVault, (attoRepAmount, targetHealthFactorBps)));
 	}
 
-	function _setVaultCapacity(address vault, uint256 nextCapacityOwnershipAttoRep, uint256 depositTargetHealthFactorBps) private {
-		DelegateCallForwarder.invoke(operationsDelegate, abi.encodeCall(SecurityPoolOperationsDelegate.setVaultCapacity, (vault, nextCapacityOwnershipAttoRep, depositTargetHealthFactorBps)));
-	}
-
 	////////////////////////////////////////
 	// liquidating vault
 	////////////////////////////////////////
@@ -445,7 +408,7 @@ contract SecurityPool is SecurityPoolStorage {
 		external
 		isOperational
 		onlyValidOracle
-		returns (uint256 debtMovedAttoEth, uint256 capacityOwnershipMovedAttoRep, uint256 badDebtAttoEth)
+		returns (uint256 debtMovedAttoEth, uint256 obligationUnitsMoved, uint256 badDebtAttoEth)
 	{
 		// Pool execution uses the live backing rate; historical pool totals are emitted
 		// by the coordinator at queue time and are not persisted as execution inputs.
@@ -454,15 +417,15 @@ contract SecurityPool is SecurityPoolStorage {
 		updateVaultFees(request.receiverVault);
 
 		uint256 repEthPrice = priceOracleManagerAndOperatorQueuer.lastPrice();
-		LiquidationExecutionRequest memory executionRequest = LiquidationExecutionRequest({receiverVault: request.receiverVault, targetVault: request.targetVault, requestedDebtAttoEth: request.requestedDebtAttoEth, snapshotTargetBackingUnits: request.snapshot.targetBackingUnits, snapshotTargetCapacityOwnershipAttoRep: request.snapshot.targetCapacityOwnershipAttoRep, repEthPrice: repEthPrice, minimumReceiverHealthFactorBps: request.minimumReceiverHealthFactorBps, minLiquidationPriceDistanceBps: request.minLiquidationPriceDistanceBps});
-		bytes memory result = DelegateCallForwarder.invoke(operationsDelegate, abi.encodeCall(SecurityPoolOperationsDelegate.performBundledLiquidation, (executionRequest)));
-		(debtMovedAttoEth, capacityOwnershipMovedAttoRep, badDebtAttoEth) = abi.decode(result, (uint256, uint256, uint256));
+		LiquidationExecutionRequest memory executionRequest = LiquidationExecutionRequest({receiverVault: request.receiverVault, targetVault: request.targetVault, requestedDebtAttoEth: request.requestedDebtAttoEth, snapshotTargetBackingUnits: request.snapshot.targetBackingUnits, snapshotTargetObligationUnits: request.snapshot.targetObligationUnits, repEthPrice: repEthPrice, minimumReceiverHealthFactorBps: request.minimumReceiverHealthFactorBps, minLiquidationPriceDistanceBps: request.minLiquidationPriceDistanceBps});
+		bytes memory result = DelegateCallForwarder.invoke(operationsDelegate, abi.encodeCall(SecurityPoolLiquidationDelegate.performBundledLiquidation, (executionRequest)));
+		(debtMovedAttoEth, obligationUnitsMoved, badDebtAttoEth) = abi.decode(result, (uint256, uint256, uint256));
 
 		_registerVault(request.targetVault);
 		if (debtMovedAttoEth != 0) _registerVault(request.receiverVault);
 
 		if (debtMovedAttoEth != 0 || badDebtAttoEth != 0)
-			emit VaultLiquidated(request.operationId, request.operator, request.receiverVault, request.targetVault, debtMovedAttoEth, capacityOwnershipMovedAttoRep, badDebtAttoEth);
+			emit VaultLiquidated(request.operationId, request.operator, request.receiverVault, request.targetVault, debtMovedAttoEth, obligationUnitsMoved, badDebtAttoEth);
 		_emitVaultAccountingCheckpoint(request.targetVault);
 		if (debtMovedAttoEth != 0) _emitVaultAccountingCheckpoint(request.receiverVault);
 		_emitPoolAccountingCheckpoint(AccountingReason.CapacityOwnershipChange, request.receiverVault);
@@ -471,12 +434,27 @@ contract SecurityPool is SecurityPoolStorage {
 	////////////////////////////////////////
 	// Complete Sets
 	////////////////////////////////////////
-	function createCompleteSet() external payable isOperational {
-		bytes memory result = DelegateCallForwarder.invoke(operationsDelegate, abi.encodeCall(SecurityPoolSettlementDelegate.createCompleteSet, ()));
+	event CoverageOfferSet(address indexed vault, bool enabled, uint256 maximumObligationAttoEth, uint256 minimumHealthFactorBps);
+
+	function setCoverageOffer(bool enabled, uint256 maximumObligationAttoEth, uint256 minimumHealthFactorBps) external isOperational {
+		require(minimumHealthFactorBps >= SecurityPoolUtils.BPS_DENOMINATOR, 'Coverage factor below minimum');
+		coverageOffers[msg.sender] = CoverageOffer(enabled, maximumObligationAttoEth, minimumHealthFactorBps);
+		emit CoverageOfferSet(msg.sender, enabled, maximumObligationAttoEth, minimumHealthFactorBps);
+	}
+
+	function createCompleteSet(CoverageAllocation[] memory allocations) public payable isOperational {
+		bytes memory result = DelegateCallForwarder.invoke(operationsDelegate, abi.encodeCall(SecurityPoolSettlementDelegate.createCompleteSet, (allocations)));
 		uint256 completeSetsToMintAttoShares = abi.decode(result, (uint256));
 		_emitPoolAccountingCheckpoint(AccountingReason.CollateralReconciliation, address(0x0));
 		shareToken.mintCompleteSets(universeId, msg.sender, completeSetsToMintAttoShares);
 		updateRetentionRate();
+	}
+
+	/// @notice Mint using only the caller's previously authorized underwriting offer.
+	function createCompleteSet() external payable {
+		CoverageAllocation[] memory allocations = new CoverageAllocation[](1);
+		allocations[0] = CoverageAllocation(msg.sender, msg.value);
+		createCompleteSet(allocations);
 	}
 
 	function redeemCompleteSet(uint256 amountAttoShares) external isOperational {
@@ -502,22 +480,7 @@ contract SecurityPool is SecurityPoolStorage {
 	}
 
 	function redeemRepFromVault(address vault) external {
-		require(msg.sender == vault, 'Unauthorized');
-		require(systemState == SystemState.Operational, 'Pool inactive');
-		require(ISecurityPoolForker(securityPoolForker).getQuestionOutcome(ISecurityPool(payable(address(this)))) != BinaryOutcomes.BinaryOutcome.None, 'Question open');
-		uint256 disputeStakedAttoRep =
-			address(escalationGame) == address(0x0) ? 0 : escalationGame.disputeStakedRepByVaultAttoRep(vault);
-		require(disputeStakedAttoRep == 0, 'Escrow locked');
-		updateVaultFees(vault);
-		uint256 backingUnitsToRedeem = securityVaults[vault].repBackingUnits;
-		uint256 attoRepAmount = backingUnitsToAttoRep(backingUnitsToRedeem);
-		require(attoRepAmount > 0, 'No redeemable REP');
-		securityVaults[vault].repBackingUnits = 0;
-		totalRepBackingUnits -= backingUnitsToRedeem;
-		// A positive claim was registered when its backing units were created or transferred.
-		IERC20(address(repToken)).safeTransfer(vault, attoRepAmount);
-		emit RepRedeemedFromVault(msg.sender, vault, attoRepAmount, 0, totalRepBackingUnits);
-		_emitVaultAccountingCheckpoint(vault);
+		DelegateCallForwarder.invoke(operationsDelegate, abi.encodeCall(SecurityPoolOperationsDelegate.redeemRepFromVault, (vault)));
 	}
 
 	function withdrawForkedEscalationDeposits(QuestionOutcome outcome, CarriedDepositProof[] calldata proofs) external {
@@ -577,9 +540,7 @@ contract SecurityPool is SecurityPoolStorage {
 				: Math.mulDiv(updatedRepBackingUnits, postTransferPoolHeldRepBalanceAttoRep, postTransferTotalRepBackingUnits);
 		uint256 vaultDisputeStakedAttoRep =
 			escalationGame.disputeStakedRepByVaultAttoRep(msg.sender) + depositedAttoRep;
-		uint256 totalDisputeStakedAttoRep = escalationGame.totalDisputeStakedAttoRep() + depositedAttoRep;
 		_requireVaultCoverage(remainingAttoRep, vaultDisputeStakedAttoRep, getVaultOpenInterestAttoEth(msg.sender), repEthPrice);
-		_requirePoolCoverage(postTransferPoolHeldRepBalanceAttoRep, totalDisputeStakedAttoRep, _getActiveOpenInterestAttoEth(), repEthPrice);
 		_requireMinimumVaultRep(remainingAttoRep, updatedRepBackingUnits == 0, 'Vault REP below minimum');
 		securityVaults[msg.sender].repBackingUnits = updatedRepBackingUnits;
 		totalRepBackingUnits = postTransferTotalRepBackingUnits;
@@ -682,21 +643,6 @@ contract SecurityPool is SecurityPoolStorage {
 		_emitPoolAccountingCheckpoint(AccountingReason.CapacityOwnershipChange, vault);
 	}
 
-	function assignFinalizedAuctionFees(address vault, uint256 amountAttoRep, uint256 auctionFeeIndexAtFinalization) external onlyForker {
-		require(auctionFeeIndexAtFinalization <= feeIndex, 'Fee index');
-		uint256 previousVaultFeeRemainder = vaultFeeRemainders[vault];
-		(uint256 fees, uint256 nextRemainder) = SecurityPoolUtils.calculateVaultFee(amountAttoRep, feeIndex - auctionFeeIndexAtFinalization, previousVaultFeeRemainder);
-		vaultFeeRemainders[vault] = nextRemainder;
-		unallocatedAccruedFeesAttoEth -= fees;
-		totalClaimableVaultFeesAttoEth += fees;
-		securityVaults[vault].claimableFeesAttoEth += fees;
-		if (auctionFeeIndexAtFinalization != feeIndex) {
-			uncheckpointedFeeEligibleCapacityOwnershipAttoRep -= amountAttoRep;
-		}
-		_emitVaultAccountingCheckpoint(vault);
-		_emitPoolAccountingCheckpoint(AccountingReason.AuctionClaim, vault);
-	}
-
 	function _registerVault(address vault) private {
 		if (vault == address(0x0) || isKnownVault[vault]) return;
 		isKnownVault[vault] = true;
@@ -713,12 +659,23 @@ contract SecurityPool is SecurityPoolStorage {
 		emit ShareTokenSupplySet(shareTokenSupplyAttoShares);
 	}
 
-	function setPoolFinancials(uint256 newSettlementCollateralAttoEth, uint256 newTotalCapacityOwnershipAttoRep, uint256 newFeeEligibleCapacityOwnershipAttoRep, uint256 newTotalBadDebtAttoEth) external onlyForker {
+	function configureCoverageVault(address vault, uint256 units) external onlyForker {
+		DelegateCallForwarder.invoke(operationsDelegate, abi.encodeCall(SecurityPoolCoverageDelegate.configureCoverageVault, (vault, units)));
+	}
+
+	function setCoverageFinancials(uint256 totalUnits, uint256 writtenOffUnits, uint256 unassignedUnits) external onlyForker {
+		DelegateCallForwarder.invoke(operationsDelegate, abi.encodeCall(SecurityPoolCoverageDelegate.setCoverageFinancials, (totalUnits, writtenOffUnits, unassignedUnits)));
+	}
+
+	function creditFinalizedAuctionCoverage(address vault, uint256 units, uint256 epoch, uint256 initialFeeIndex) external onlyForker {
+		DelegateCallForwarder.invoke(operationsDelegate, abi.encodeCall(SecurityPoolCoverageDelegate.creditFinalizedAuctionCoverage, (vault, units, epoch, initialFeeIndex)));
+	}
+	function setPoolFinancials(uint256 newSettlementCollateralAttoEth, uint256 newTotalCapacityOwnershipAttoRep, uint256 newActiveObligationUnits, uint256 newTotalBadDebtAttoEth) external onlyForker {
 		// Fee-eligible capacity is a subset of total capacity.
-		if (newFeeEligibleCapacityOwnershipAttoRep > newTotalCapacityOwnershipAttoRep)
+		if (newActiveObligationUnits > totalObligationUnits - writtenOffObligationUnits)
 			revert('Fee ownership exceeds capacity');
 		totalCapacityOwnershipAttoRep = newTotalCapacityOwnershipAttoRep;
-		feeEligibleCapacityOwnershipAttoRep = newFeeEligibleCapacityOwnershipAttoRep;
+		activeObligationUnits = newActiveObligationUnits;
 		totalBadDebtAttoEth = newTotalBadDebtAttoEth;
 		DelegateCallForwarder.invoke(operationsDelegate, abi.encodeCall(SecurityPoolSettlementDelegate.setFundedSettlementCollateral, (newSettlementCollateralAttoEth)));
 		lastUpdatedFeeAccumulator = block.timestamp;

@@ -34,7 +34,7 @@ import { QuestionOutcome } from '../../testSupport/simulator/types/types'
 import { getQuestionEndDate } from '../../testSupport/simulator/utils/contracts/statoblast'
 import { createQuestion, getQuestionId } from '../../testSupport/simulator/utils/contracts/zoltarQuestionData'
 import { getInfraContractAddresses, getSecurityPoolAddresses } from '../../testSupport/simulator/utils/contracts/deployStatoblast'
-import { approveAndDepositRepToVault, triggerOwnGameFork, setVaultCapacityFixture } from '../../testSupport/simulator/utils/contracts/statoblastTestUtils'
+import { approveAndDepositRepToVault, triggerOwnGameFork, setCoverageOfferFixture } from '../../testSupport/simulator/utils/contracts/statoblastTestUtils'
 import { addressString } from '../../testSupport/simulator/utils/bigint'
 import { approveToken, contractExists, getChildUniverseId, getERC20Balance } from '../../testSupport/simulator/utils/utilities'
 import { DAY, GENESIS_REPUTATION_TOKEN, TEST_ADDRESSES } from '../../testSupport/simulator/utils/constants'
@@ -101,13 +101,13 @@ describe('Statoblast: escalation migration', () => {
 	}
 
 	async function refreshCurrentPrice() {
-		await setVaultCapacityFixture(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, client.account.address, 0n)
+		await setCoverageOfferFixture(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, client.account.address, 0n)
 	}
 
 	test('unfunded vault escalation deposit exposes REP too low and rolls back game deployment and pool state', async () => {
 		const endTime = await getQuestionEndDate(client, questionId)
 		await mockWindow.setTime(endTime + 10000n)
-		await setVaultCapacityFixture(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, client.account.address, 0n)
+		await setCoverageOfferFixture(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, client.account.address, 0n)
 		const unfundedVault = createWriteClient(mockWindow, TEST_ADDRESSES[3])
 		const repToken = await getRepToken(client, securityPoolAddresses.securityPool)
 		const readDepositGuardState = async () => ({
@@ -159,7 +159,7 @@ describe('Statoblast: escalation migration', () => {
 		const forkThresholdAttoRep = (((await getTotalTheoreticalSupply(client, repToken)) / 20n) * 10_000n) / statoblastSecurityMultiplierBps
 		await approveAndDepositRepToVault(client, 3n * forkThresholdAttoRep, questionId)
 		await mockWindow.setTime(endTime + 10000n)
-		await setVaultCapacityFixture(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, client.account.address, 0n)
+		await setCoverageOfferFixture(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, client.account.address, 0n)
 		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, forkThresholdAttoRep)
 		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.No, forkThresholdAttoRep)
 
@@ -195,7 +195,7 @@ describe('Statoblast: escalation migration', () => {
 		const forkThresholdAttoRep = (((await getTotalTheoreticalSupply(client, repToken)) / 20n) * 10_000n) / statoblastSecurityMultiplierBps
 		await approveAndDepositRepToVault(client, 3n * forkThresholdAttoRep, questionId)
 		await mockWindow.setTime(endTime + 10000n)
-		await setVaultCapacityFixture(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, client.account.address, 0n)
+		await setCoverageOfferFixture(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, client.account.address, 0n)
 		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, reportBond)
 		await triggerOwnGameFork(client, securityPoolAddresses.securityPool)
 		await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
@@ -235,7 +235,7 @@ describe('Statoblast: escalation migration', () => {
 		await approveAndDepositRepToVault(otherVault, repDeposit, questionId)
 		await approveAndDepositRepToVault(client, 3n * forkThresholdAttoRep, questionId)
 		await mockWindow.setTime(endTime + 10000n)
-		await setVaultCapacityFixture(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, client.account.address, 0n)
+		await setCoverageOfferFixture(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, client.account.address, 0n)
 		await depositToEscalationGame(otherVault, securityPoolAddresses.securityPool, QuestionOutcome.Yes, reportBond)
 		await triggerOwnGameFork(client, securityPoolAddresses.securityPool)
 
@@ -293,7 +293,7 @@ describe('Statoblast: escalation migration', () => {
 		await mockWindow.setTime(endTime + 10000n)
 		await refreshCurrentPrice()
 		const securityPoolCapacityOwnershipAttoRep = reportBond * 2n
-		await setVaultCapacityFixture(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, client.account.address, securityPoolCapacityOwnershipAttoRep)
+		await setCoverageOfferFixture(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, client.account.address, securityPoolCapacityOwnershipAttoRep)
 		await createCompleteSet(client, securityPoolAddresses.securityPool, 1n * 10n ** 18n)
 
 		const unresolvedDeposit = reportBond
@@ -447,7 +447,7 @@ describe('Statoblast: escalation migration', () => {
 		}
 		await mockWindow.setTime(endTime + 10000n)
 		await refreshCurrentPrice()
-		await setVaultCapacityFixture(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, client.account.address, securityPoolCapacityOwnershipAttoRep)
+		await setCoverageOfferFixture(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, client.account.address, securityPoolCapacityOwnershipAttoRep)
 		await createCompleteSet(client, securityPoolAddresses.securityPool, 1n * 10n ** 18n)
 		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, reportBond)
 
@@ -469,7 +469,7 @@ describe('Statoblast: escalation migration', () => {
 		await mockWindow.setTime(endTime + 10000n)
 		await refreshCurrentPrice()
 		const securityPoolCapacityOwnershipAttoRep = reportBond * 2n
-		await setVaultCapacityFixture(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, client.account.address, securityPoolCapacityOwnershipAttoRep)
+		await setCoverageOfferFixture(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, client.account.address, securityPoolCapacityOwnershipAttoRep)
 		await createCompleteSet(client, securityPoolAddresses.securityPool, 1n * 10n ** 18n)
 		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, reportBond)
 
@@ -703,7 +703,7 @@ describe('Statoblast: escalation migration', () => {
 		await startTruthAuction(client, pool.securityPool)
 		if ((await getSystemState(client, pool.securityPool)) === SystemState.ForkTruthAuction) await finalizeTruthAuction(client, pool.securityPool)
 		await completeForkContinuation(pool.securityPool)
-		await setVaultCapacityFixture(client, mockWindow, pool.priceOracleManagerAndOperatorQueuer, client.account.address, 0n)
+		await setCoverageOfferFixture(client, mockWindow, pool.priceOracleManagerAndOperatorQueuer, client.account.address, 0n)
 		strictEqualTypeSafe(await client.readContract({ abi: statoblast_EscalationGame_EscalationGame.abi, address: game, functionName: 'truthAuctionRepBeforeAttoRep' }), 0n, 'fixture must not apply an auction haircut')
 		return { pool, game, token: getRepTokenAddress(universe) }
 	}
@@ -1676,7 +1676,7 @@ describe('Statoblast: escalation migration', () => {
 		})
 		await approveToken(client, childRepToken, yesSecurityPool.securityPool)
 		await depositRepToVault(client, yesSecurityPool.securityPool, childForkThreshold * 3n)
-		await setVaultCapacityFixture(client, mockWindow, yesSecurityPool.priceOracleManagerAndOperatorQueuer, client.account.address, 0n)
+		await setCoverageOfferFixture(client, mockWindow, yesSecurityPool.priceOracleManagerAndOperatorQueuer, client.account.address, 0n)
 		await depositToEscalationGame(client, yesSecurityPool.securityPool, QuestionOutcome.Yes, childForkThreshold)
 		await depositToEscalationGame(client, yesSecurityPool.securityPool, QuestionOutcome.No, childForkThreshold)
 		await forkZoltarWithOwnEscalationGame(client, yesSecurityPool.securityPool)

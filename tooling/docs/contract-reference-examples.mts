@@ -96,10 +96,10 @@ const accountingExamplesByContract: ReadonlyMap<string, readonly AccountingExamp
 				heading: 'Liquidation transfer rounding',
 				blocks: [
 					paragraph(
-						`A liquidation request is an ETH-denominated debt amount. Execution caps it at the target vault's live debt and at the largest amount whose complete REP award (\`LIQUIDATION_REP_BONUS_BPS\` = ${liquidationRules.repBonusBps}, so ${formatBps(liquidationRules.repBonusBps)}) the target can fund. The proportional capacity ownership that leaves the target is ${rounded(liquidationRules.capacityOwnershipRounding)}; the REP backing units that leave it are ${rounded(liquidationRules.repBackingUnitsRounding)}. The receiver incurs exactly the reported debt increase and receives those ownership and backing units. Target claims, fees, surplus, and unmatched ownership remain with the target.`,
+						`A liquidation request is an ETH-denominated debt amount. Execution caps it at the target vault's live debt and at the largest amount whose complete REP award (\`LIQUIDATION_REP_BONUS_BPS\` = ${liquidationRules.repBonusBps}, so ${formatBps(liquidationRules.repBonusBps)}) the target can fund. The proportional assigned obligation units that leave the target is ${rounded(liquidationRules.capacityOwnershipRounding)}; the REP backing units that leave it are ${rounded(liquidationRules.repBackingUnitsRounding)}. The receiver incurs exactly the reported debt increase and receives those ownership and backing units. Target claims, fees, surplus, and unmatched ownership remain with the target.`,
 					),
 					paragraph(
-						"Only a request covering the target's full position records the untransferable remainder as target-local bad debt. Partial requests leave the remainder as ordinary target debt. After the transfer the receiver must remain healthy and any remaining target position must still meet `minimumSecurityBondDebtAttoEth` and `minimumVaultRepDepositAttoRep`, so a liquidation cannot leave unusable dust.",
+						"Only a request covering the target's full position moves untransferable obligation units into the written-off bucket without changing the denominator. Partial requests leave the remainder as ordinary target debt. After the transfer the receiver must remain healthy and any remaining target position must still meet `minimumSecurityBondDebtAttoEth` and `minimumVaultRepDepositAttoRep`, so a liquidation cannot leave unusable dust.",
 					),
 				],
 			},
