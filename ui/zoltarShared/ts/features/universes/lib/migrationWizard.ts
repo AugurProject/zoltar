@@ -93,7 +93,8 @@ export function formatOutcomeList(outcomes: readonly Pick<MigrationWizardOutcome
 	return outcomes.map(outcome => outcome.label).join(', ')
 }
 
-function deriveAmountStep(input: MigrationWizardInput, amountAttoRep: bigint | undefined, reusable: bigint | undefined, walletRepToBurn: bigint | undefined, maxAmount: bigint | undefined): Omit<MigrationWizardStep, 'id'> {
+function deriveAmountStep(input: MigrationWizardInput, hasSelection: boolean, amountAttoRep: bigint | undefined, reusable: bigint | undefined, walletRepToBurn: bigint | undefined, maxAmount: bigint | undefined): Omit<MigrationWizardStep, 'id'> {
+	if (!hasSelection) return { reason: zoltarCopy.outcomeSelectionRequired, status: 'incomplete' }
 	if (input.amountInput.trim() === '') return { reason: commonCopy.positiveAmountRequired, status: 'incomplete' }
 	if (amountAttoRep === undefined) return { reason: zoltarCopy.migrationAmountInvalid, status: 'incomplete' }
 	if (amountAttoRep <= 0n) return { reason: commonCopy.positiveAmountRequired, status: 'incomplete' }
@@ -146,7 +147,7 @@ export function deriveMigrationWizard(input: MigrationWizardInput): MigrationWiz
 	const maxAmount = reusable === undefined ? undefined : reusable + (input.walletRepAttoRep ?? 0n)
 
 	const outcomesStep: MigrationWizardStep = selectedOutcomes.length === 0 ? { id: 'outcomes', reason: zoltarCopy.outcomeSelectionRequired, status: 'incomplete' } : { id: 'outcomes', reason: undefined, status: 'complete' }
-	const amountStep: MigrationWizardStep = { id: 'amount', ...deriveAmountStep(input, parsedAmount, reusable, walletRepToBurn, maxAmount) }
+	const amountStep: MigrationWizardStep = { id: 'amount', ...deriveAmountStep(input, selectedOutcomes.length > 0, parsedAmount, reusable, walletRepToBurn, maxAmount) }
 	const approveStep: MigrationWizardStep = { id: 'approve', ...deriveApproveStep(input, amountStep.status, walletRepToBurn) }
 	const earlierSteps = [outcomesStep, amountStep, approveStep]
 	const firstUnfinished = earlierSteps.find(step => !isStepSatisfied(step))
@@ -172,6 +173,11 @@ export function deriveMigrationWizard(input: MigrationWizardInput): MigrationWiz
 /** Clamps a requested step to the furthest step the wizard currently allows. */
 export function resolveMigrationWizardStep(requested: MigrationWizardStepId, reachable: MigrationWizardStepId): MigrationWizardStepId {
 	return migrationWizardStepIds.indexOf(requested) <= migrationWizardStepIds.indexOf(reachable) ? requested : reachable
+}
+
+/** Keeps only selected outcomes that exist in the universe, so a selection from another universe is never submitted. */
+export function getSubmittableOutcomeIndexes(childUniverses: readonly ZoltarChildUniverseSummary[], selected: readonly bigint[]) {
+	return selected.filter(outcomeIndex => childUniverses.some(child => child.outcomeIndex === outcomeIndex))
 }
 
 /** Names an outcome for transaction dialogs, falling back to its position when the universe summary is unavailable. */

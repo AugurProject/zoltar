@@ -244,9 +244,6 @@ export function ZoltarMigrationSection({
 							<MetricField label={zoltarCopy.migrationFromWallet}>
 								<CurrencyValue value={showBreakdown ? wizard.walletRepToBurnAttoRep : undefined} suffix={commonCopy.rep} />
 							</MetricField>
-							<MetricField label={zoltarCopy.migrationEachOutcomeReceives}>
-								<CurrencyValue value={showBreakdown ? amount : undefined} suffix={commonCopy.rep} />
-							</MetricField>
 						</DataGrid>
 					</>
 				)
@@ -279,9 +276,8 @@ export function ZoltarMigrationSection({
 						<TransactionReview
 							variant='inline'
 							primary={[
-								{ label: commonCopy.question, value: rootUniverse?.forkQuestionDetails?.title ?? commonCopy.unavailable },
-								{ label: zoltarCopy.migrationFromWallet, value: <CurrencyValue value={wizard.walletRepToBurnAttoRep} suffix={commonCopy.rep} /> },
 								{ label: zoltarCopy.migrationFromBalance, value: <CurrencyValue value={wizard.fromMigrationBalanceAttoRep} suffix={commonCopy.rep} /> },
+								{ label: zoltarCopy.migrationFromWallet, value: <CurrencyValue value={wizard.walletRepToBurnAttoRep} suffix={commonCopy.rep} /> },
 							]}
 							risks={[zoltarCopy.migrationIrreversible, zoltarCopy.migrationMintsPerOutcome]}
 						/>

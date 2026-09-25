@@ -4,7 +4,7 @@ import { describe, expect, test } from 'bun:test'
 import { zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import { formatCurrencyBalance } from '@zoltar/ui-core-shared/lib/formatters.js'
 import type { ZoltarChildUniverseSummary } from '@zoltar/ui-core-shared/types/contracts.js'
-import { deriveMigrationWizard, getOutcomeLabelForIndex, resolveMigrationWizardStep, toggleMigrationOutcome, type MigrationWizardInput } from '@zoltar/ui-zoltar-shared/features/universes/lib/migrationWizard.js'
+import { deriveMigrationWizard, getOutcomeLabelForIndex, getSubmittableOutcomeIndexes, resolveMigrationWizardStep, toggleMigrationOutcome, type MigrationWizardInput } from '@zoltar/ui-zoltar-shared/features/universes/lib/migrationWizard.js'
 
 const REP = 10n ** 18n
 const CHILD_REP = '0x00000000000000000000000000000000000000b2' as const
@@ -133,6 +133,14 @@ describe('migration wizard helpers', () => {
 	test('toggleMigrationOutcome keeps pick order', () => {
 		expect(toggleMigrationOutcome([2n], 1n)).toEqual([2n, 1n])
 		expect(toggleMigrationOutcome([2n, 1n], 2n)).toEqual([1n])
+	})
+
+	test('asks for outcomes, not balances, on the amount step when nothing is selected', () => {
+		expect(deriveMigrationWizard(input({ amountInput: '10' })).steps[1]).toEqual({ id: 'amount', reason: 'Select at least one outcome.', status: 'incomplete' })
+	})
+
+	test('getSubmittableOutcomeIndexes drops outcomes that are not in the universe', () => {
+		expect(getSubmittableOutcomeIndexes(childUniverses, [2n, 7n, 1n])).toEqual([2n, 1n])
 	})
 
 	test('getOutcomeLabelForIndex names outcomes and falls back to a position', () => {

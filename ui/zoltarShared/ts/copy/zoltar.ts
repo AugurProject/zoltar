@@ -51,8 +51,7 @@ export const migrationAmountInvalid = 'Enter a valid REP amount.'
 export const formatMigrationAmountExceeded = (maxAmount: CopyTemplateValue) => `You can migrate at most ${maxAmount}\u00a0REP to these outcomes.`
 export const migrationFromBalance = 'From your migration balance'
 export const migrationFromWallet = 'Burned from your wallet'
-export const migrationEachOutcomeReceives = 'Each outcome universe receives'
-export const migrationBalanceExplainer = 'Your migration balance is REP you already burned here. Each outcome universe can receive up to that amount without using more wallet REP.'
+export const migrationBalanceExplainer = 'Your migration balance (REP already burned here) is used before wallet REP.'
 export const outcomeBalancesLoading = 'Loading migration balances…'
 export const migrationBalancesReadFailed = 'Could not read migration balances. Retry to continue.'
 

@@ -263,6 +263,20 @@ describe('ZoltarMigrationSection', () => {
 		expect(rendered.container.querySelectorAll('.migration-outcome-metric .loading').length).toBe(0)
 	})
 
+	test('falls back to the first unfinished step and stays there once it is fixed', async () => {
+		let form = createForm()
+		const Harness = () => h(ZoltarMigrationSection, createProps({ zoltarMigrationForm: form }))
+		const rendered = await renderIntoDocument(h(Harness, {}))
+		cleanupRenderedComponent = rendered.cleanup
+		await openStep('Review')
+		form = createForm({ amount: '' })
+		await act(() => render(h(Harness, {}), rendered.container))
+		expect(getCurrentStepTitle()).toBe('Amount')
+		form = createForm()
+		await act(() => render(h(Harness, {}), rendered.container))
+		expect(getCurrentStepTitle()).toBe('Amount')
+	})
+
 	test('recovers from a failed wallet balance read with Retry', async () => {
 		let walletBalance: bigint | undefined
 		const Harness = () =>
