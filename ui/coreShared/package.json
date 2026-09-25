@@ -235,6 +235,10 @@
 			"bun": "./ts/tests/transactionActionButton.test.tsx",
 			"default": "./js/tests/transactionActionButton.test.js"
 		},
+		"./tests/walletActionFix.test.js": {
+			"bun": "./ts/tests/walletActionFix.test.tsx",
+			"default": "./js/tests/walletActionFix.test.js"
+		},
 		"./tests/transactionHashLink.test.js": {
 			"bun": "./ts/tests/transactionHashLink.test.tsx",
 			"default": "./js/tests/transactionHashLink.test.js"
@@ -514,6 +518,10 @@
 		"./components/TransactionActionButton.js": {
 			"bun": "./ts/components/TransactionActionButton.tsx",
 			"default": "./js/components/TransactionActionButton.js"
+		},
+		"./components/WalletActionFix.js": {
+			"bun": "./ts/components/WalletActionFix.tsx",
+			"default": "./js/components/WalletActionFix.js"
 		},
 		"./components/TransactionHashLink.js": {
 			"bun": "./ts/components/TransactionHashLink.tsx",

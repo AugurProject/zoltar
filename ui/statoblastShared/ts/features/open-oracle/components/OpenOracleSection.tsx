@@ -1,4 +1,5 @@
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
+import { withActiveAppChainWalletBlocker } from '@zoltar/ui-core-shared/transactions/actionGuards.js'
 import * as openOracleCopy from '../../../copy/openOracle.js'
 import { useEffect, useState } from 'preact/hooks'
 import { AddressValue } from '@zoltar/ui-core-shared/components/AddressValue.js'
@@ -537,7 +538,7 @@ export function OpenOracleSection({
 										pendingLabel={openOracleCopy.creating}
 										onClick={onCreateOpenOracleGame}
 										pending={loadingOpenOracleCreate}
-										availability={{ disabled: !isOnActiveAppChain || createGuardMessage !== undefined || !createValidation.isValid || hasCreateContractFieldErrors, reason: createAvailabilityMessage }}
+										availability={withActiveAppChainWalletBlocker({ disabled: !isOnActiveAppChain || createGuardMessage !== undefined || !createValidation.isValid || hasCreateContractFieldErrors, reason: createAvailabilityMessage }, { accountAddress: accountState.address, isOnActiveAppChain })}
 										disabledReasonElementId={createDisabledReasonElementId}
 										showDisabledReason={createDisabledReasonElementId === undefined}
 									/>

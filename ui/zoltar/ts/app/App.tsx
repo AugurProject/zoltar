@@ -249,6 +249,7 @@ export function App() {
 			routeContentDisabled={isRouteContentDisabled}
 			transactionRouteKey={transactionRouteKey}
 			transactionState={transactionState.value}
+			walletActions={overviewWalletProps}
 		>
 			<AppRouteContent deploy={deployRouteContentProps} zoltar={zoltarRouteContentProps} readBackendMessage={readBackendMessage} route={activeRoute} />
 		</ProtocolAppFrame>

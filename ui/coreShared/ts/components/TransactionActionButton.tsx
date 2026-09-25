@@ -8,6 +8,7 @@ import { InlineHint } from './InlineHint.js'
 import type { TransactionActionButtonProps } from '../types/components.js'
 import { isPendingGlobalTransactionPresentation, useGlobalTransactionPresentation } from './GlobalTransactionPresentationContext.js'
 import { transactionSteps } from '../transactions/transactionSteps.js'
+import { useWalletActionFix } from './WalletActionFix.js'
 
 const TransactionActionGroupContext = createContext<{ noticeId: string; hasNotice: boolean } | undefined>(undefined)
 
@@ -67,13 +68,18 @@ export function TransactionActionButton({ ariaLabel, availability, className = '
 	const blockedByPendingRequest = globallyLocked && !pending
 	const isDisabled = disabled || pending || availability?.disabled === true || blockedByPendingRequest
 	const disabledReason = isDisabled ? availability?.reason : undefined
+	const actionButtonRef = useRef<HTMLButtonElement>(null)
+	// A disconnected wallet or wrong network offers its connect or switch fix where the reason would be.
+	const renderWalletFix = useWalletActionFix({ actionButtonRef, actionDisabled: isDisabled, availability })
+	const walletFixId = renderWalletFix !== undefined && (group !== undefined || showDisabledReason) ? disabledReasonId : undefined
+	const walletFix = walletFixId === undefined ? undefined : renderWalletFix?.(walletFixId)
 	const shouldShowDisabledReason = showDisabledReason && isDisabled && disabledReason !== undefined
 	const resolvedInlineHint = shouldShowDisabledReason ? disabledReason : inlineHint
 	const resolvedInlineHintAriaLabel = getInlineHintAriaLabel(ariaLabel, inlineHintAriaLabel, idleLabel)
 	const externalReasonId = isDisabled ? disabledReasonElementId : undefined
 	const describedBy = (() => {
-		if (group !== undefined) return group.hasNotice ? group.noticeId : undefined
-		const ids = [externalReasonId, resolvedInlineHint === undefined ? undefined : disabledReasonId].filter(id => id !== undefined)
+		if (group !== undefined) return [group.hasNotice ? group.noticeId : undefined, walletFixId].filter(id => id !== undefined).join(' ') || undefined
+		const ids = [externalReasonId, resolvedInlineHint === undefined && walletFixId === undefined ? undefined : disabledReasonId].filter(id => id !== undefined)
 		return ids.length === 0 ? undefined : ids.join(' ')
 	})()
 	const handleClick = () => {
@@ -83,7 +89,7 @@ export function TransactionActionButton({ ariaLabel, availability, className = '
 	return (
 		<div className={`tx-action ${className}`.trim()}>
 			<div className='tx-action-row'>
-				<button aria-label={ariaLabel} aria-busy={showPending} className={`tx-action-button ${tone}`} type={type} onClick={handleClick} disabled={isDisabled} aria-describedby={describedBy}>
+				<button ref={actionButtonRef} aria-label={ariaLabel} aria-busy={showPending} className={`tx-action-button ${tone}`} type={type} onClick={handleClick} disabled={isDisabled} aria-describedby={describedBy}>
 					<span className='tx-action-button-labels'>
 						<span aria-hidden='true' className='tx-action-label-placeholder' data-label={typeof idleLabel === 'string' ? idleLabel : undefined} />
 						<span aria-hidden='true' className='tx-action-label-placeholder' data-label={typeof pendingLabel === 'string' ? pendingLabel : undefined} />
@@ -93,9 +99,10 @@ export function TransactionActionButton({ ariaLabel, availability, className = '
 			</div>
 			{group === undefined && (showDisabledReason || resolvedInlineHint !== undefined) ? (
 				<div className='tx-action-feedback'>
-					{resolvedInlineHint === undefined ? undefined : <InlineHint {...(resolvedInlineHintAriaLabel === undefined ? {} : { ariaLabel: resolvedInlineHintAriaLabel })} id={disabledReasonId} loading={shouldShowDisabledReason && availability?.loading === true} message={resolvedInlineHint} />}
+					{walletFix ?? (resolvedInlineHint === undefined ? undefined : <InlineHint {...(resolvedInlineHintAriaLabel === undefined ? {} : { ariaLabel: resolvedInlineHintAriaLabel })} id={disabledReasonId} loading={shouldShowDisabledReason && availability?.loading === true} message={resolvedInlineHint} />)}
 				</div>
 			) : undefined}
+			{group !== undefined && walletFix !== undefined ? <div className='tx-action-feedback'>{walletFix}</div> : undefined}
 		</div>
 	)
 }

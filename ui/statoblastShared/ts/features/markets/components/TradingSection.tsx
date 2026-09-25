@@ -4,6 +4,7 @@ import * as transactionReviewCopy from '@zoltar/ui-core-shared/copy/transactionR
 import { useState } from 'preact/hooks'
 import { zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import { ActionLauncherCard } from '@zoltar/ui-core-shared/components/ActionLauncherCard.js'
+import { getActiveAppChainWalletBlocker } from '@zoltar/ui-core-shared/transactions/actionGuards.js'
 import { AddressValue } from '@zoltar/ui-core-shared/components/AddressValue.js'
 import { CurrencyValue } from '@zoltar/ui-core-shared/components/CurrencyValue.js'
 import { EnumDropdown } from '@zoltar/ui-core-shared/components/EnumDropdown.js'
@@ -281,7 +282,9 @@ export function TradingSection({
 		})
 	}
 	const renderShareMetricValue = (value: bigint | undefined) => <CurrencyValue loading={loadingTradingDetails} value={value} />
-	const tradingLaunchers: ReadinessAction[] = [
+	// Every launcher checks its pool and then the wallet first, so with a pool selected a wallet prerequisite is the reason behind each blocker.
+	const launcherWalletBlocker = hasSelectedPool ? getActiveAppChainWalletBlocker({ accountAddress: accountState.address, isOnActiveAppChain }) : undefined
+	const launcherActions: ReadinessAction[] = [
 		{
 			actionLabel: tradingCopy.mintCompleteSetsActionLabel,
 			description: tradingCopy.completeSetMintDescription,
@@ -319,6 +322,7 @@ export function TradingSection({
 			...(effectiveRedeemSharesLauncherBlocker === undefined ? {} : { blocker: effectiveRedeemSharesLauncherBlocker }),
 		},
 	]
+	const tradingLaunchers = launcherActions.map(action => (launcherWalletBlocker === undefined || action.blocker === undefined ? action : { ...action, walletBlocker: launcherWalletBlocker }))
 	const sections = (
 		<>
 			{!showSecurityPoolAddressInput ? undefined : (

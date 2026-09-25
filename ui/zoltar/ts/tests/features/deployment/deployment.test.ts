@@ -79,7 +79,7 @@ void describe('deployment helpers', () => {
 				isOnActiveAppChain: true,
 				nextMissingStep,
 			}),
-		).toEqual({ disabled: true, reason: 'Connect wallet to continue.' })
+		).toEqual({ disabled: true, reason: 'Connect wallet to continue.', walletBlocker: { kind: 'wallet-disconnected' } })
 
 		expect(
 			getDeployNextMissingAvailability({
@@ -89,7 +89,7 @@ void describe('deployment helpers', () => {
 				isOnActiveAppChain: false,
 				nextMissingStep,
 			}),
-		).toEqual({ disabled: true, reason: 'Switch to Sepolia.' })
+		).toEqual({ disabled: true, reason: 'Switch to Sepolia.', walletBlocker: { kind: 'wrong-network', targetChainName: 'Sepolia' } })
 	})
 
 	void test('getDeploymentStepAvailability blocks undeployed steps behind prerequisites and allows ready steps', () => {

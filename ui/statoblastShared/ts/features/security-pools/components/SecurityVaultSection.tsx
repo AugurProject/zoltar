@@ -42,6 +42,7 @@ import {
 } from '../lib/securityVaultAvailability.js'
 import { deriveTokenApprovalRequirement } from '@zoltar/ui-core-shared/transactions/tokenApproval.js'
 import { useChainTimestamp } from '@zoltar/ui-core-shared/wallet/chainTimestamp.js'
+import { getActiveAppChainWalletBlocker } from '@zoltar/ui-core-shared/transactions/actionGuards.js'
 import {
 	DEFAULT_STAGED_OPERATION_TIMEOUT_MINUTES,
 	doesSecurityVaultExistOnchain,
@@ -309,6 +310,7 @@ export function SecurityVaultSection({
 			vaultExistsOnchain,
 			visibleDepositLauncherBlocker,
 			visibleRepExitLauncherBlocker,
+			walletBlocker: getActiveAppChainWalletBlocker({ accountAddress: accountState.address, isOnActiveAppChain }),
 		}),
 		...extraReadinessActions,
 	])

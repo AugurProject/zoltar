@@ -27,6 +27,7 @@ import { getMigrationGuardMessage } from '../lib/zoltarMigrationGuards.js'
 import type { ZoltarMigrationFormState } from '../../../types/app.js'
 import type { ZoltarChildUniverseSummary, ZoltarUniverseSummary } from '@zoltar/ui-core-shared/types/contracts.js'
 import { getWrongNetworkReason } from '@zoltar/ui-core-shared/wallet/network.js'
+import { withActiveAppChainWalletBlocker } from '@zoltar/ui-core-shared/transactions/actionGuards.js'
 
 function getChildDeploymentAvailabilityReason({ accountAddress, exists, hasForked, isOnActiveAppChain }: { accountAddress: Address | undefined; exists?: boolean | undefined; hasForked: boolean; isOnActiveAppChain: boolean }) {
 	if (accountAddress === undefined) return marketCopy.childDeploymentWalletRequiredReason
@@ -183,7 +184,7 @@ export function ZoltarMigrationSection({
 				pendingLabel={zoltarCopy.splittingRepPending}
 				onClick={() => onMigrateInternalRep(missingPreparationAmount)}
 				pending={zoltarMigrationActiveAction === 'split'}
-				availability={{ disabled: !canSplit, reason: isOnActiveAppChain ? splitHintMessage : getWrongNetworkReason() }}
+				availability={withActiveAppChainWalletBlocker({ disabled: !canSplit, reason: isOnActiveAppChain ? splitHintMessage : getWrongNetworkReason() }, { accountAddress, isOnActiveAppChain })}
 			/>
 		</TransactionActionGroup>
 	)

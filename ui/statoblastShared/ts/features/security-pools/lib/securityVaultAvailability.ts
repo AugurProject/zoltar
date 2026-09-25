@@ -3,7 +3,7 @@ import * as securityPoolCopy from '../../../copy/securityPool.js'
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import { formatCurrencyBalance } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { getWalletActiveAppChainGuardState } from '@zoltar/ui-core-shared/transactions/actionGuards.js'
-import type { ReadinessAction } from '@zoltar/ui-core-shared/types/components.js'
+import type { ReadinessAction, WalletActionBlocker } from '@zoltar/ui-core-shared/types/components.js'
 import { getVaultLauncherVaultOwnerReason, getVaultLauncherWalletReason, type VaultLauncherAction, type VaultRepExitMode } from './securityPoolLabels.js'
 import type { SecurityPoolStateModel } from './securityPoolState.js'
 import { getVaultDepositGuardMessage } from './securityVaultGuards.js'
@@ -109,6 +109,8 @@ export type VaultReadinessActionInput = {
 	vaultExistsOnchain: boolean
 	visibleDepositLauncherBlocker: string | undefined
 	visibleRepExitLauncherBlocker: string | undefined
+	/** The wallet prerequisite behind the launcher blockers, which the launchers offer to fix in place. */
+	walletBlocker: WalletActionBlocker | undefined
 }
 
 export function buildVaultReadinessActions({
@@ -131,7 +133,10 @@ export function buildVaultReadinessActions({
 	vaultExistsOnchain,
 	visibleDepositLauncherBlocker,
 	visibleRepExitLauncherBlocker,
+	walletBlocker,
 }: VaultReadinessActionInput): Omit<ReadinessAction, 'title'>[] {
+	// Every launcher checks the wallet before anything else, so a wallet prerequisite is the reason behind each shown blocker.
+	const withBlocker = (blocker: string | undefined) => (blocker === undefined ? {} : { blocker, ...(walletBlocker === undefined ? {} : { walletBlocker }) })
 	const depositReady = depositRepToVaultEnabled && canUseLoadedVaultActions
 	const repExitReady = repExitEnabled && vaultExistsOnchain && canUseLoadedVaultActions
 	const claimFeesReady = claimFeesEnabled && hasClaimableFees && claimFeesLauncherBlocker === undefined && vaultExistsOnchain && canUseLoadedVaultActions
@@ -144,7 +149,7 @@ export function buildVaultReadinessActions({
 			...(depositReady ? { onAction: () => onOpenModal('deposit-rep') } : {}),
 			readiness: depositReady ? 'ready' : 'blocked',
 			...(depositDisabledReasonId === undefined ? {} : { disabledReasonId: depositDisabledReasonId }),
-			...(visibleDepositLauncherBlocker === undefined || !depositRepToVaultEnabled ? {} : { blocker: visibleDepositLauncherBlocker }),
+			...(depositRepToVaultEnabled ? withBlocker(visibleDepositLauncherBlocker) : {}),
 		},
 		{
 			actionLabel: repExitActionLabel,
@@ -153,7 +158,7 @@ export function buildVaultReadinessActions({
 			...(repExitReady ? { onAction: () => onOpenModal('withdraw-rep') } : {}),
 			readiness: repExitReady ? 'ready' : 'blocked',
 			...(repExitDisabledReasonId === undefined ? {} : { disabledReasonId: repExitDisabledReasonId }),
-			...(visibleRepExitLauncherBlocker === undefined || !repExitEnabled ? {} : { blocker: visibleRepExitLauncherBlocker }),
+			...(repExitEnabled ? withBlocker(visibleRepExitLauncherBlocker) : {}),
 		},
 		{
 			actionLabel: securityPoolCopy.claimFees,
@@ -162,7 +167,7 @@ export function buildVaultReadinessActions({
 			...(claimFeesReady ? { onAction: () => onOpenModal('claim-fees') } : {}),
 			readiness: claimFeesReady ? 'ready' : 'blocked',
 			...(claimFeesDisabledReasonId === undefined ? {} : { disabledReasonId: claimFeesDisabledReasonId }),
-			...(claimFeesAvailabilityBlocker === undefined ? {} : { blocker: claimFeesAvailabilityBlocker }),
+			...withBlocker(claimFeesAvailabilityBlocker),
 		},
 		{
 			actionLabel: securityPoolCopy.adjustVaultBackingFactor,
@@ -171,7 +176,7 @@ export function buildVaultReadinessActions({
 			...(adjustmentReady ? { onAction: () => onOpenModal('adjust-backing') } : {}),
 			readiness: adjustmentReady ? 'ready' : 'blocked',
 			...(depositDisabledReasonId === undefined ? {} : { disabledReasonId: depositDisabledReasonId }),
-			...(showSharedRefreshVaultBlocker || adjustmentBlocker === undefined ? {} : { blocker: adjustmentBlocker }),
+			...(showSharedRefreshVaultBlocker ? {} : withBlocker(adjustmentBlocker)),
 		},
 	]
 }
