@@ -114,14 +114,14 @@ describe('transaction presentations', () => {
 		}
 
 		expect(createOpenOracleTransactionIntent('approveToken1', context).submittedTitle).toBe('Approve WETH')
-		expect(createOpenOracleSuccessPresentation({ action: 'approveToken1', hash: '0x1234' }, context).title).toBe('WETH Approved')
+		expect(createOpenOracleSuccessPresentation({ action: 'approveToken1', hash: '0x1234' }, context).title).toBe('WETH approved')
 		expect(createOpenOracleTransactionIntent('withdrawBalance', context).submittedTitle).toBe('Withdraw WETH')
-		expect(createOpenOracleSuccessPresentation({ action: 'withdrawBalance', hash: '0x1234' }, context).title).toBe('WETH Withdrawn')
+		expect(createOpenOracleSuccessPresentation({ action: 'withdrawBalance', hash: '0x1234' }, context).title).toBe('WETH withdrawn')
 	})
 
 	test('uses the user-facing report name for Open Oracle creation', () => {
-		expect(createOpenOracleTransactionIntent('createReportInstance').submittedTitle).toBe('Create Report')
-		expect(createOpenOracleSuccessPresentation({ action: 'createReportInstance', hash: '0x1234' }).title).toBe('Report Created')
+		expect(createOpenOracleTransactionIntent('createReportInstance').submittedTitle).toBe('Create report')
+		expect(createOpenOracleSuccessPresentation({ action: 'createReportInstance', hash: '0x1234' }).title).toBe('Report created')
 	})
 
 	test('describes Open Oracle settlement as a report lifecycle action', () => {
@@ -267,27 +267,27 @@ describe('transaction presentations', () => {
 
 	test('describes finalized refund-only settlement without capacity ownership assignment', () => {
 		const presentation = createForkAuctionSuccessPresentation(createForkAuctionResult('claimAuctionProceeds', { settlementMode: 'refund' }))
-		expect(presentation.title).toBe('Settle Finalized Refunds')
+		expect(presentation.title).toBe('Settle finalized refunds')
 		expect(presentation.detail).toBe('Selected finalized truth-auction refund rows were settled. Locked ETH was credited for withdrawal without assigning REP backing units or Auctioned capacity ownership.')
 	})
 
 	test('uses refund-only transaction intent copy for finalized refund settlement submissions', () => {
-		const intent = createForkAuctionTransactionIntent('claimAuctionProceeds', { submittedTitle: 'Settle Finalized Refunds' })
-		expect(intent.submittedTitle).toBe('Settle Finalized Refunds')
+		const intent = createForkAuctionTransactionIntent('claimAuctionProceeds', { submittedTitle: 'Settle finalized refunds' })
+		expect(intent.submittedTitle).toBe('Settle finalized refunds')
 		expect(intent.submittedDetail).toBeUndefined()
 	})
 
 	test('describes unresolved escalation migration as optional parent escalation-deposit accounting cleanup', () => {
 		const presentation = createForkAuctionSuccessPresentation(createForkAuctionResult('migrateUnresolvedEscalation'))
-		expect(presentation.title).toBe('Clear Unresolved Parent Escalation-Deposit Accounting')
+		expect(presentation.title).toBe('Clear unresolved parent escalation-deposit accounting')
 		expect(presentation.detail).toBe('The wallet’s unresolved parent escalation-deposit accounting was cleared in constant-size work. Child backing and proof eligibility were already available and are unchanged.')
 	})
 
 	test('describes direct parent escalation claims without calling them migration', () => {
 		const intent = createForkAuctionTransactionIntent('claimParentEscalationDeposits')
 		const presentation = createForkAuctionSuccessPresentation(createForkAuctionResult('claimParentEscalationDeposits'))
-		expect(intent.submittedTitle).toBe('Claim Parent Escalation Deposits')
-		expect(presentation.title).toBe('Claim Parent Escalation Deposits')
+		expect(intent.submittedTitle).toBe('Claim parent escalation deposits')
+		expect(presentation.title).toBe('Claim parent escalation deposits')
 		expect(presentation.detail).toBe('Selected winning parent deposits were paid directly in child REP. Their carried proofs are now spent in current and later descendants.')
 	})
 })

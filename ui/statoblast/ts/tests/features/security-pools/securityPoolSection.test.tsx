@@ -705,11 +705,13 @@ describe('SecurityPoolSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		expect(documentQueries.getByRole('heading', { name: 'Pool Created' })).not.toBeNull()
+		expect(documentQueries.getByRole('heading', { name: 'Pool created' })).not.toBeNull()
 		expect(document.body.querySelector('.workflow-transaction-status')).toBeNull()
 		expect(document.body.querySelector('.transaction-hash-link')).toBeNull()
 		expect(document.body.querySelector('.section-block.surface .entity-card.flat')).not.toBeNull()
 		expect(documentQueries.getByRole('button', { name: `Copy address ${poolAddress}` })).not.toBeNull()
+		expect(documentQueries.getByRole('button', { name: `Copy address ${poolAddress}` }).closest('.question-summary-grid')).not.toBeNull()
+		expect(documentQueries.getByText('Pool address').classList.contains('metric-label')).toBe(true)
 	})
 
 	test('renders loading create labels and reasons while pool duplicate checks run', async () => {
@@ -870,7 +872,7 @@ describe('SecurityPoolSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		expect(documentQueries.getByText('Pool Created')).not.toBeNull()
+		expect(documentQueries.getByText('Pool created')).not.toBeNull()
 		expect(documentQueries.getByText('Fallback question')).not.toBeNull()
 		expect(documentQueries.getByText('Fallback description')).not.toBeNull()
 		expect(documentQueries.queryByText('Loaded question')).toBeNull()

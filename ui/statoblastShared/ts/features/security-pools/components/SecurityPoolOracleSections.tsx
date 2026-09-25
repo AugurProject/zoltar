@@ -4,6 +4,7 @@ import { tryParseDecimalInput } from '@zoltar/ui-core-shared/forms/decimal.js'
 import { ReadOnlyDetailAccordion } from '@zoltar/ui-core-shared/components/ReadOnlyDetailAccordion.js'
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import { AddressValue } from '@zoltar/ui-core-shared/components/AddressValue.js'
+import { EthAmount } from '@zoltar/ui-core-shared/components/TransactionFundingSummary.js'
 import { CurrencyValue } from '@zoltar/ui-core-shared/components/CurrencyValue.js'
 import { ErrorNotice } from '@zoltar/ui-core-shared/components/ErrorNotice.js'
 import { FormInput } from '@zoltar/ui-core-shared/components/FormInput.js'
@@ -258,7 +259,7 @@ export function SecurityPoolPriceOracleSection({
 				</MetricField>
 				{managerDetails === undefined ? undefined : (
 					<MetricField label={securityPoolCopy.requestCost}>
-						<CurrencyValue exactWhenRoundedToZero value={managerDetails.requestPriceCostAttoEth} suffix={commonCopy.eth} />
+						<EthAmount value={managerDetails.requestPriceCostAttoEth} />
 					</MetricField>
 				)}
 				{managerDetails?.pendingReportId === undefined || managerDetails.pendingReportId === 0n ? undefined : (

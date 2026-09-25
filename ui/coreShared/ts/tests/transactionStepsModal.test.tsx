@@ -186,7 +186,7 @@ test('explains a step without token funding using its description, the operation
 		<GlobalTransactionPresentationProvider
 			transaction={{
 				tone: 'awaiting-wallet',
-				title: 'Creating Security Pool',
+				title: 'Creating security pool',
 				rows: [
 					{ label: 'Question ID', value: '123' },
 					{ label: 'Statoblast security multiplier', value: '2x' },

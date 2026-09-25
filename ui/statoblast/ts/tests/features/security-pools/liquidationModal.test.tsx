@@ -280,7 +280,7 @@ describe('LiquidationModal', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		expect(documentQueries.getByRole('heading', { name: 'Liquidation Submitted' })).not.toBeNull()
+		expect(documentQueries.getByRole('heading', { name: 'Liquidation submitted' })).not.toBeNull()
 		expect(documentQueries.getByText('The transaction succeeded, but the latest manager state is not available.')).not.toBeNull()
 		expect(documentQueries.queryByText('Refresh staged operations to confirm the latest manager state.')).toBeNull()
 	})
@@ -704,7 +704,7 @@ describe('LiquidationModal', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		expect(documentQueries.getByRole('heading', { name: 'Liquidation Executed' })).not.toBeNull()
+		expect(documentQueries.getByRole('heading', { name: 'Liquidation executed' })).not.toBeNull()
 		expect(documentQueries.getByText('A valid oracle price was already available, so the liquidation executed immediately and no staged operation was created.')).not.toBeNull()
 		expect(documentQueries.getByRole('heading', { name: 'Execute Vault Liquidation' })).not.toBeNull()
 		expect(documentQueries.queryByRole('heading', { name: 'Queue Vault Liquidation' })).toBeNull()
@@ -856,7 +856,7 @@ describe('LiquidationModal', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		expect(documentQueries.getByRole('heading', { name: 'Liquidation Failed' })).not.toBeNull()
+		expect(documentQueries.getByRole('heading', { name: 'Liquidation failed' })).not.toBeNull()
 		expect(documentQueries.getByText('Local Capacity ownership broken')).not.toBeNull()
 		expect(documentQueries.queryByRole('button', { name: 'View in staged operations' })).toBeNull()
 	})
@@ -996,7 +996,7 @@ describe('LiquidationModal', () => {
 		})
 
 		expect(documentQueries.getByRole('dialog', { name: 'Execute Vault Liquidation' })).not.toBeNull()
-		expect(documentQueries.getByRole('heading', { name: 'Liquidation Executed' })).not.toBeNull()
+		expect(documentQueries.getByRole('heading', { name: 'Liquidation executed' })).not.toBeNull()
 		expect(documentQueries.getByText('A valid oracle price was already available, so the liquidation executed immediately and no staged operation was created.')).not.toBeNull()
 
 		await act(() => {
