@@ -9,11 +9,17 @@ type TransactionHashLinkProps = {
 
 export function TransactionHashLink({ hash }: TransactionHashLinkProps) {
 	const transactionUrl = buildTransactionExplorerUrl(getActiveNetworkProfile(), hash)
-	if (transactionUrl === undefined) return <span className='transaction-hash-link'>{hash}</span>
+	if (transactionUrl === undefined) {
+		return (
+			<span className='transaction-hash-link' title={hash}>
+				<span>{hash}</span>
+			</span>
+		)
+	}
 
 	return (
-		<a className='transaction-hash-link' href={transactionUrl} target='_blank' rel='noreferrer' title={transactionCopy.viewTransaction}>
-			{hash}
+		<a className='transaction-hash-link' title={hash} href={transactionUrl} target='_blank' rel='noreferrer' aria-label={transactionCopy.formatViewTransactionOnExplorer(hash)}>
+			<span>{hash}</span>
 		</a>
 	)
 }

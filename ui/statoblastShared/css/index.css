@@ -3134,6 +3134,14 @@
 	text-decoration: none;
 }
 
+.created-pool-summary .address-value-full {
+	display: none;
+}
+
+.created-pool-summary .address-value-abbreviated {
+	display: inline;
+}
+
 .existing-pool-identifiers {
 	display: grid;
 	grid-template-columns: repeat(2, minmax(0, 1fr));
