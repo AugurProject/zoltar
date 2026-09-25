@@ -40,6 +40,7 @@ function getNextStepPresentation(nextStep: ZoltarNextStep): NextStepPresentation
 type ZoltarOverviewViewProps = {
 	currentTimestamp?: bigint | undefined
 	isConnectingWallet: boolean
+	loadingRepBalance: boolean
 	model: ZoltarOverviewModel
 	onConnectWallet: () => void
 	onGoToGenesisUniverse: () => void
@@ -48,7 +49,7 @@ type ZoltarOverviewViewProps = {
 	onViewChange: (view: ZoltarView) => void
 }
 
-function NextStepAction({ isConnectingWallet, needsAttention, nextStep, onConnectWallet, onGoToGenesisUniverse, onRetryUniverse, onSwitchNetwork, onViewChange }: Omit<ZoltarOverviewViewProps, 'model'> & { needsAttention: boolean; nextStep: ZoltarNextStep }) {
+function NextStepAction({ isConnectingWallet, needsAttention, nextStep, onConnectWallet, onGoToGenesisUniverse, onRetryUniverse, onSwitchNetwork, onViewChange }: Omit<ZoltarOverviewViewProps, 'loadingRepBalance' | 'model'> & { needsAttention: boolean; nextStep: ZoltarNextStep }) {
 	const presentation = getNextStepPresentation(nextStep)
 	const onClick = () => {
 		if (nextStep.kind === 'go-to-genesis') onGoToGenesisUniverse()
@@ -67,8 +68,10 @@ function NextStepAction({ isConnectingWallet, needsAttention, nextStep, onConnec
 	)
 }
 
-function renderRepBalance(model: ZoltarOverviewModel) {
+function renderRepBalance(model: ZoltarOverviewModel, loadingRepBalance: boolean) {
 	if (model.wallet !== 'connected') return zoltarCopy.connectToSeeRep
+	// A balance that is absent after its read finished could not be read; it must not look like it is still loading.
+	if (model.repBalanceAttoRep === undefined && !loadingRepBalance) return commonCopy.unavailable
 	return <CurrencyValue value={model.repBalanceAttoRep} loading={model.repBalanceAttoRep === undefined} suffix={commonCopy.rep} />
 }
 
@@ -78,7 +81,7 @@ function renderMigrationStatus(model: ZoltarOverviewModel) {
 }
 
 /** The Overview route body: the protocol model in three sentences, the user's status, and one next step. */
-function ZoltarOverviewView({ currentTimestamp, model, ...actions }: ZoltarOverviewViewProps) {
+function ZoltarOverviewView({ currentTimestamp, loadingRepBalance, model, ...actions }: ZoltarOverviewViewProps) {
 	return (
 		<>
 			<RouteHeader title={zoltarCopy.overview} />
@@ -101,7 +104,7 @@ function ZoltarOverviewView({ currentTimestamp, model, ...actions }: ZoltarOverv
 						{model.status === 'missing' || model.status === 'unavailable' ? undefined : (
 							<>
 								<MetricField label={zoltarCopy.forkStatus}>{model.forkTime === undefined ? zoltarCopy.notForked : <TimestampValue timestamp={model.forkTime} {...(currentTimestamp === undefined ? {} : { currentTimestamp })} />}</MetricField>
-								<MetricField label={zoltarCopy.universeRep}>{renderRepBalance(model)}</MetricField>
+								<MetricField label={zoltarCopy.universeRep}>{renderRepBalance(model, loadingRepBalance)}</MetricField>
 								<MetricField label={zoltarCopy.migrationStatus}>{renderMigrationStatus(model)}</MetricField>
 							</>
 						)}
@@ -139,5 +142,17 @@ export function ZoltarOverviewRoute() {
 		universeError,
 		universeState,
 	})
-	return <ZoltarOverviewView currentTimestamp={currentTimestamp} isConnectingWallet={isConnectingWallet} model={model} onConnectWallet={onConnectWallet} onGoToGenesisUniverse={onGoToGenesisUniverse} onRetryUniverse={onRetryUniverse} onSwitchNetwork={onSwitchNetwork} onViewChange={onViewChange} />
+	return (
+		<ZoltarOverviewView
+			currentTimestamp={currentTimestamp}
+			isConnectingWallet={isConnectingWallet}
+			loadingRepBalance={operations.loadingZoltarForkAccess}
+			model={model}
+			onConnectWallet={onConnectWallet}
+			onGoToGenesisUniverse={onGoToGenesisUniverse}
+			onRetryUniverse={onRetryUniverse}
+			onSwitchNetwork={onSwitchNetwork}
+			onViewChange={onViewChange}
+		/>
+	)
 }

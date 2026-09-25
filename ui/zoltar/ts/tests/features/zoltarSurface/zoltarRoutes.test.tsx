@@ -204,6 +204,36 @@ describe('ZoltarRoutes', () => {
 		expect(overview.retries).toEqual(['universe'])
 	})
 
+	test('shows an unreadable REP balance as unavailable instead of loading', async () => {
+		const universe = createUniverse()
+		const viewChanges: ZoltarView[] = []
+		const workspace = {
+			accountState: { address: zeroAddress, chainId: '0xaa36a7', ethBalanceAttoEth: 0n, wethBalanceAttoEth: 0n },
+			activeUniverseId: universe.universeId,
+			currentTimestamp: 10n,
+			environmentRefreshKey: 0,
+			isConnectingWallet: false,
+			onConnectWallet: () => undefined,
+			onGoToGenesisUniverse: () => undefined,
+			onRetryUniverse: () => undefined,
+			onSwitchNetwork: () => undefined,
+			onViewChange: (nextView: ZoltarView) => viewChanges.push(nextView),
+			operations: { ...createOperations(universe), zoltarForkRepBalanceAttoRep: undefined },
+			universeError: undefined,
+			universeState: 'ready' as const,
+		}
+		cleanupRenderedComponent = (
+			await renderIntoDocument(
+				<ZoltarWorkspaceProvider workspace={workspace}>
+					<ZoltarRoutes view='overview' />
+				</ZoltarWorkspaceProvider>,
+			)
+		).cleanup
+		const repField = within(document.body).getByText('REP in this universe').parentElement
+		expect(repField?.textContent).toContain('Unavailable')
+		expect(repField?.querySelector('.loading-text, [aria-busy="true"]')).toBeNull()
+	})
+
 	test('keeps the global question list available for a missing universe', async () => {
 		const { queries } = await renderRoute('questions', undefined, 'missing')
 		expect(queries.queryByText('Universe not found')).toBeNull()
