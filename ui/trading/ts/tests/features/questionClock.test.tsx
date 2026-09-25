@@ -19,8 +19,8 @@ const configuration: DeploymentConfiguration = {
 	feeBps: 30,
 }
 
-function QuestionClockProbe({ endTime, services }: { endTime: bigint | undefined; services: LiveTradingControllerServices }) {
-	const nowSeconds = useQuestionClock(endTime, configuration, services)
+function QuestionClockProbe({ services }: { services: LiveTradingControllerServices }) {
+	const nowSeconds = useQuestionClock(configuration, services)
 	return h('output', null, nowSeconds.toString())
 }
 
@@ -37,7 +37,7 @@ function servicesWithBlockTimestamp(timestamp: bigint, calls: { count: number })
 	return { ...liveTradingControllerServices, createTradingPublicClient: () => client }
 }
 
-// Records the 12-second chain polls the clock schedules without ever firing them.
+// Records the 12-second block polls the shared watcher schedules without ever firing them.
 function trackQuestionClockTimers(scheduled: number[]) {
 	const originalSetTimeout = globalThis.setTimeout
 	return spyOn(globalThis, 'setTimeout').mockImplementation((handler, delay, ...parameters) => {
@@ -52,13 +52,13 @@ function trackQuestionClockTimers(scheduled: number[]) {
 describe('question clock', () => {
 	const lifecycle = installDomTestLifecycle()
 
-	test('starts from the wall clock and keeps polling while the question is still open', async () => {
+	test('starts from the wall clock, reads the block, and schedules the next block poll', async () => {
 		const before = BigInt(Math.floor(Date.now() / 1_000))
 		const calls = { count: 0 }
 		const scheduled: number[] = []
 		const timers = trackQuestionClockTimers(scheduled)
 		try {
-			const rendered = lifecycle.trackRendered(await renderIntoDocument(h(QuestionClockProbe, { endTime: 200n, services: servicesWithBlockTimestamp(150n, calls) })))
+			const rendered = lifecycle.trackRendered(await renderIntoDocument(h(QuestionClockProbe, { services: servicesWithBlockTimestamp(150n, calls) })))
 			const initial = BigInt(rendered.container.textContent ?? '')
 			expect(initial).toBeGreaterThanOrEqual(before)
 			await waitFor(() => expect(rendered.container.textContent).toBe('150'))
@@ -69,16 +69,25 @@ describe('question clock', () => {
 		}
 	})
 
-	test('stops polling the chain clock once the block timestamp reaches the question end', async () => {
+	test('pauses the block poll while the page is hidden and reads the block as soon as it is visible again', async () => {
 		const calls = { count: 0 }
 		const scheduled: number[] = []
 		const timers = trackQuestionClockTimers(scheduled)
+		let hidden = false
+		Object.defineProperty(document, 'hidden', { configurable: true, get: () => hidden })
 		try {
-			const rendered = lifecycle.trackRendered(await renderIntoDocument(h(QuestionClockProbe, { endTime: 200n, services: servicesWithBlockTimestamp(200n, calls) })))
+			const rendered = lifecycle.trackRendered(await renderIntoDocument(h(QuestionClockProbe, { services: servicesWithBlockTimestamp(200n, calls) })))
 			await waitFor(() => expect(rendered.container.textContent).toBe('200'))
 			expect(calls.count).toBe(1)
-			expect(scheduled).toEqual([])
+			hidden = true
+			document.dispatchEvent(new Event('visibilitychange'))
+			hidden = false
+			document.dispatchEvent(new Event('visibilitychange'))
+			// Hiding cancelled the pending poll; becoming visible read the block immediately and scheduled the next poll.
+			await waitFor(() => expect(calls.count).toBe(2))
+			await waitFor(() => expect(scheduled).toEqual([12_000, 12_000]))
 		} finally {
+			Reflect.deleteProperty(document, 'hidden')
 			timers.mockRestore()
 		}
 	})

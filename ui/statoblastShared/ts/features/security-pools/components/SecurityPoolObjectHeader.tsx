@@ -10,6 +10,8 @@ import { SecurityPoolSummaryMetrics } from './SecurityPoolSummaryMetrics.js'
 import { SecurityPoolLink } from './SecurityPoolLink.js'
 import { ReadOnlyDetailAccordion } from '@zoltar/ui-core-shared/components/ReadOnlyDetailAccordion.js'
 import { TimestampValue } from '@zoltar/ui-core-shared/components/TimestampValue.js'
+import { UpdatedAgo } from '@zoltar/ui-core-shared/components/UpdatedAgo.js'
+import type { DataFreshness } from '@zoltar/ui-core-shared/lib/freshness.js'
 import { AddressValue } from '@zoltar/ui-core-shared/components/AddressValue.js'
 import { PoolCapacitySummary } from './PoolCapacitySummary.js'
 import * as copy from '../../../copy/poolWorkspace.js'
@@ -25,6 +27,8 @@ type SecurityPoolObjectHeaderProps = {
 	currentPoolOraclePrice: bigint | undefined
 	currentPoolOracleSettlementTimestamp: bigint | undefined
 	currentTimestamp: bigint | undefined
+	/** The pool summary's age; it refreshes in place on each new block. */
+	freshness?: DataFreshness | undefined
 	marketDetails: MarketDetails
 	repPerEthPrice: bigint | undefined
 	selectedPoolHasActualForkActivity: boolean
@@ -47,7 +51,7 @@ function getSummaryCalculationPrice(props: SecurityPoolObjectHeaderProps) {
 }
 
 export function SecurityPoolObjectHeader(props: SecurityPoolObjectHeaderProps) {
-	const { currentTimestamp, marketDetails, selectedPoolHasActualForkActivity, selectedPoolLifecycleState, selectedPoolQuestionOutcome } = props
+	const { currentTimestamp, freshness, marketDetails, selectedPoolHasActualForkActivity, selectedPoolLifecycleState, selectedPoolQuestionOutcome } = props
 	const summaryPool = getSummaryPool(props)
 	const capacity = calculateMintingCapacityAttoEth(summaryPool.totalCapacityOwnershipAttoRep, getSummaryCalculationPrice(props), summaryPool.statoblastSecurityMultiplierBps)
 	const statusBadgeLabel = getSecurityPoolStatusBadgeLabel({ hasForkActivity: selectedPoolHasActualForkActivity, lifecycleState: selectedPoolLifecycleState, ...(selectedPoolQuestionOutcome === undefined ? {} : { questionOutcome: selectedPoolQuestionOutcome }) })
@@ -62,6 +66,7 @@ export function SecurityPoolObjectHeader(props: SecurityPoolObjectHeaderProps) {
 					<p className='pool-deadline'>
 						<span>{currentTimestamp !== undefined && currentTimestamp >= marketDetails.endTime ? securityPoolCopy.ended : commonCopy.ends}</span> <TimestampValue timestamp={marketDetails.endTime} {...(currentTimestamp === undefined ? {} : { currentTimestamp })} />
 					</p>
+					{freshness === undefined ? undefined : <UpdatedAgo {...freshness} />}
 				</div>
 			</div>
 

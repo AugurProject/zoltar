@@ -110,8 +110,10 @@ export function App() {
 		zoltarQuestionPage,
 		zoltarQuestions,
 		zoltarQuestionsError,
+		zoltarQuestionsFreshness,
 		zoltarUniverse,
 		zoltarUniverseError,
+		zoltarUniverseFreshness,
 		zoltarUniverseMissing,
 	} = useQuestionCreation({ ...walletScopedHookConfig, activeUniverseId, autoLoadInitialData: walletBootstrapComplete && canReadOnchainData, deploymentStatuses, environmentRefreshKey: activeEnvironmentNonce })
 	const zoltarUniverseState = resolveLoadableValueState({
@@ -179,7 +181,9 @@ export function App() {
 		zoltarQuestionPage,
 		zoltarQuestions,
 		zoltarQuestionsError,
+		zoltarQuestionsFreshness,
 		zoltarUniverse,
+		zoltarUniverseFreshness,
 		zoltarUniverseState,
 		questionCreating,
 		questionError,

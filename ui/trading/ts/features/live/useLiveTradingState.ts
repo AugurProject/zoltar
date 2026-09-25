@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'preact/hooks'
 import { getActiveSimulationController } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
+import { appBlockWatcher, blockPollIntervalMilliseconds } from '@zoltar/ui-core-shared/lib/dataRefresh.js'
 import type { DeploymentConfiguration } from '../../protocol/config.js'
 import type { LiveTradingControllerServices } from './liveTradingTypes.js'
 
@@ -17,44 +18,35 @@ function initialQuestionClockTimestamp(simulationTimestamp: bigint | undefined, 
 	return simulationTimestamp ?? BigInt(Math.floor(currentWallMilliseconds / 1_000))
 }
 
-function questionClockShouldPollAgain(endTime: bigint | undefined, currentTimestamp: bigint) {
-	return endTime === undefined || currentTimestamp < endTime
-}
-
-export function useQuestionClock(endTime: bigint | undefined, configuration: DeploymentConfiguration | undefined, services: LiveTradingControllerServices) {
+/**
+ * The chain clock of the live routes. Its block read is the application's block poller: it pauses in a hidden tab, and
+ * each new block refreshes the visible markets. The simulation announces its own changes, which poll immediately.
+ */
+export function useQuestionClock(configuration: DeploymentConfiguration | undefined, services: LiveTradingControllerServices) {
 	const [nowSeconds, setNowSeconds] = useState(() => initialQuestionClockTimestamp(getActiveSimulationController()?.currentTimestamp))
 
 	useEffect(() => {
 		const simulationController = getActiveSimulationController()
-		if (simulationController !== undefined) {
-			const update = () => setNowSeconds(simulationController.currentTimestamp)
-			update()
-			return simulationController.subscribe(update)
-		}
-		if (configuration === undefined) return
+		const unsubscribeSimulation = simulationController?.subscribe(() => {
+			setNowSeconds(simulationController.currentTimestamp)
+			void appBlockWatcher.refresh()
+		})
+		if (simulationController !== undefined) setNowSeconds(simulationController.currentTimestamp)
+		if (configuration === undefined) return unsubscribeSimulation
 		const client = services.createTradingPublicClient(configuration)
-		let timeout: ReturnType<typeof setTimeout> | undefined
-		let active = true
-		const updateFromChain = async () => {
-			if (!active) return
-			let pollAgain = true
-			try {
+		const stopWatcher = appBlockWatcher.start(
+			async () => {
 				const block = await client.getBlock()
-				if (!active) return
-				setNowSeconds(block.timestamp)
-				pollAgain = questionClockShouldPollAgain(endTime, block.timestamp)
-			} catch (error) {
-				void error
-			} finally {
-				if (active && pollAgain) timeout = setTimeout(() => void updateFromChain(), 12_000)
-			}
-		}
-		void updateFromChain()
+				if (simulationController === undefined) setNowSeconds(block.timestamp)
+				return block.number ?? undefined
+			},
+			blockPollIntervalMilliseconds(simulationController !== undefined),
+		)
 		return () => {
-			active = false
-			if (timeout !== undefined) clearTimeout(timeout)
+			stopWatcher()
+			unsubscribeSimulation?.()
 		}
-	}, [configuration, endTime, services])
+	}, [configuration, services])
 
 	return nowSeconds
 }

@@ -7,6 +7,7 @@ import type { DeploymentConfiguration } from '../../protocol/config.js'
 import { LiveTrading } from '../../features/LiveTrading.js'
 import { liveTradingControllerServices } from '../../features/liveTradingControllerHelpers.js'
 import { shareBalanceScope, type LiveMarket } from '../../protocol/live.js'
+import { appBlockWatcher } from '@zoltar/ui-core-shared/lib/dataRefresh.js'
 
 const account = `0x${'11'.repeat(20)}` as Address
 const pool = `0x${'22'.repeat(20)}` as Address
@@ -45,6 +46,17 @@ const market: LiveMarket = {
 	lpTotalSupply: 50n * 10n ** 36n,
 }
 
+// Stands in for the chain: reports a new block every interval so the block-driven background refresh runs.
+function produceBlocks(milliseconds: number) {
+	let block = (appBlockWatcher.getLatestBlockNumber() ?? 0n) + 1n
+	appBlockWatcher.reportBlock(block)
+	const timer = setInterval(() => {
+		block += 1n
+		appBlockWatcher.reportBlock(block)
+	}, milliseconds)
+	return () => clearInterval(timer)
+}
+
 async function settle(milliseconds = 10) {
 	await act(async () => {
 		await Bun.sleep(milliseconds)
@@ -75,9 +87,12 @@ function walletHolding(label: string) {
 
 describe('live market refresh', () => {
 	let cleanupRendered: (() => Promise<void>) | undefined
+	let stopBlocks: (() => void) | undefined
 
 	installDomTestLifecycle({
 		afterTest: async () => {
+			stopBlocks?.()
+			stopBlocks = undefined
 			await cleanupRendered?.()
 			cleanupRendered = undefined
 		},
@@ -144,7 +159,9 @@ describe('live market refresh', () => {
 				}
 			},
 		}
-		const rendered = await renderIntoDocument(<LiveTrading route={`market/${pool}`} configuration={configuration} configurationError={undefined} selectedUniverseId='1' refreshIntervalMilliseconds={40} onWorkflowLockChange={() => undefined} controllerServices={services} />)
+		stopBlocks?.()
+		stopBlocks = produceBlocks(40)
+		const rendered = await renderIntoDocument(<LiveTrading route={`market/${pool}`} configuration={configuration} configurationError={undefined} selectedUniverseId='1' onWorkflowLockChange={() => undefined} controllerServices={services} />)
 		cleanupRendered = rendered.cleanup
 		await act(async () => button('Connect wallet').click())
 		await waitForDom(() => walletHolding('Wallet YES') === '3 YES', 'wallet balances shown as collateral value')
@@ -230,7 +247,7 @@ describe('live market refresh', () => {
 		await waitForDom(() => walletHolding('Wallet YES') === '4 YES', 'refreshed balance after failure')
 	})
 
-	test('lets a balance read slower than the refresh interval finish instead of restarting it every cycle', async () => {
+	test('lets a balance read slower than the block interval finish instead of restarting it every cycle', async () => {
 		let balanceLoads = 0
 		let releaseBalances: () => void = () => undefined
 		const gate = new Promise<void>(resolve => {
@@ -252,7 +269,9 @@ describe('live market refresh', () => {
 				return { scope: shareBalanceScope(selected), invalid: 2n * 10n ** 36n, yes: 2n * 10n ** 36n, no: 2n * 10n ** 36n, lp: 0n }
 			},
 		}
-		const rendered = await renderIntoDocument(<LiveTrading route={`market/${pool}`} configuration={configuration} configurationError={undefined} selectedUniverseId='1' refreshIntervalMilliseconds={30} onWorkflowLockChange={() => undefined} controllerServices={services} />)
+		stopBlocks?.()
+		stopBlocks = produceBlocks(30)
+		const rendered = await renderIntoDocument(<LiveTrading route={`market/${pool}`} configuration={configuration} configurationError={undefined} selectedUniverseId='1' onWorkflowLockChange={() => undefined} controllerServices={services} />)
 		cleanupRendered = rendered.cleanup
 		await act(async () => button('Connect wallet').click())
 		await waitForDom(() => walletHolding('Wallet YES') === 'Loading balances…' && balanceLoads > 0, 'first balance read in flight')
@@ -264,7 +283,7 @@ describe('live market refresh', () => {
 		expect(walletHolding('Wallet YES')).toBe('2 YES')
 	})
 
-	test('lets a background discovery slower than the refresh interval finish instead of starting another each tick', async () => {
+	test('lets a background discovery slower than the block interval finish instead of starting another on each block', async () => {
 		let discoveries = 0
 		let releaseDiscovery: () => void = () => undefined
 		let gate: Promise<void> | undefined
@@ -282,7 +301,9 @@ describe('live market refresh', () => {
 		gate = new Promise<void>(resolve => {
 			releaseDiscovery = resolve
 		})
-		const rendered = await renderIntoDocument(<LiveTrading route='portfolio' configuration={configuration} configurationError={undefined} selectedUniverseId='1' refreshIntervalMilliseconds={30} onWorkflowLockChange={() => undefined} controllerServices={services} />)
+		stopBlocks?.()
+		stopBlocks = produceBlocks(30)
+		const rendered = await renderIntoDocument(<LiveTrading route='portfolio' configuration={configuration} configurationError={undefined} selectedUniverseId='1' onWorkflowLockChange={() => undefined} controllerServices={services} />)
 		cleanupRendered = rendered.cleanup
 		// While discovery is still running the route shows one live loading state and no terminal empty state.
 		await waitForDom(() => document.body.textContent?.includes('Discovering security pools…') === true, 'portfolio discovery status')
@@ -335,7 +356,9 @@ describe('live market refresh', () => {
 			['create-market', 'security-pools'],
 		] as const) {
 			const universes: Array<readonly bigint[]> = []
-			const rendered = await renderIntoDocument(<LiveTrading route={route} configuration={configuration} configurationError={undefined} selectedUniverseId='1' onWorkflowLockChange={() => undefined} onUniversesChange={ids => universes.push(ids)} controllerServices={services} refreshIntervalMilliseconds={20} />)
+			stopBlocks?.()
+			stopBlocks = produceBlocks(20)
+			const rendered = await renderIntoDocument(<LiveTrading route={route} configuration={configuration} configurationError={undefined} selectedUniverseId='1' onWorkflowLockChange={() => undefined} onUniversesChange={ids => universes.push(ids)} controllerServices={services} />)
 			cleanupRendered = rendered.cleanup
 			await waitForDom(() => rendered.container.querySelectorAll('.market-record').length === 1, `${route} candidate list`)
 			expect(universes.length).toBeGreaterThan(0)

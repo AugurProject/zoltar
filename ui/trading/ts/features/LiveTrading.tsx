@@ -79,7 +79,6 @@ export function LiveTrading({
 	onWalletSummaryChange = ignoreWalletSummaryChange,
 	walletSummaryRetryNonce = 0,
 	walletConnectRequestNonce,
-	refreshIntervalMilliseconds,
 	controllerServices = liveTradingControllerServices,
 	liquidityServices = liveLiquidityServices,
 	settlementServices = liveSettlementServices,
@@ -101,7 +100,6 @@ export function LiveTrading({
 	onWalletSummaryChange?(summary: WalletSummaryState): void
 	walletSummaryRetryNonce?: number
 	walletConnectRequestNonce?: number
-	refreshIntervalMilliseconds?: number | undefined
 	controllerServices?: LiveTradingControllerServices
 	liquidityServices?: LiveLiquidityServices
 	settlementServices?: LiveSettlementServices
@@ -118,12 +116,11 @@ export function LiveTrading({
 		walletSummaryRetryNonce,
 		defaultSlippage: DEFAULT_SLIPPAGE_PERCENT,
 		defaultValidityMinutes: DEFAULT_TRANSACTION_VALIDITY_MINUTES,
-		refreshIntervalMilliseconds,
 		services: controllerServices,
 	})
 	const { account, walletClient, walletEthAttoEth, networkMismatchReason, connect, connectionMessage, refreshWalletSummaryAfterReceipt, executeWithCurrentWalletContext, createGuardedWalletWrite } = wallet
 	const { balanceError, portfolioBalanceState, portfolioBalanceError, visiblePortfolioEntries, selectedBalances, selectedBalanceState, retryBalances, retryPortfolioBalances } = balances
-	const { visibleMarkets, listedMarkets, selected, selectedPairInitialized, routePool, discoveryState, discoveryError, marketPage, nowSeconds, refresh, refreshFromControl, loadMarketPage } = discovery
+	const { visibleMarkets, listedMarkets, selected, selectedPairInitialized, routePool, discoveryState, discoveryError, discoveryFreshness, marketPage, nowSeconds, refresh, refreshFromControl, loadMarketPage } = discovery
 	const { parsedAmount, mode, setMode, side, setSide, amount, setAmount, slippage, setSlippage, transactionValidityMinutes, setTransactionValidityMinutes, quote, state, positionHash, message, positionReceiptWarning, simulate, submit } = position
 	const { workflowLocked, updateLiquidityWorkflowLock } = workflow
 	const workflowRoute = tradingWorkflowRoute(route)
@@ -185,7 +182,19 @@ export function LiveTrading({
 			<div className='route-view-flow'>
 				<RouteHeader title={routePresentation.title} description={routePresentation.description} actions={walletAction} />
 				<ErrorNotice message={connectionMessage} />
-				<LiveMarketBrowser lookupRoute={route} markets={listedMarkets} pageMarketCount={visibleMarkets.length} discoveryState={discoveryState} discoveryError={discoveryError} marketPage={marketPage} workflowLocked={workflowLocked} nowSeconds={nowSeconds} retry={refreshFromControl} loadMarketPage={loadMarketPage} />
+				<LiveMarketBrowser
+					lookupRoute={route}
+					markets={listedMarkets}
+					pageMarketCount={visibleMarkets.length}
+					discoveryState={discoveryState}
+					discoveryError={discoveryError}
+					freshness={discoveryFreshness}
+					marketPage={marketPage}
+					workflowLocked={workflowLocked}
+					nowSeconds={nowSeconds}
+					retry={refreshFromControl}
+					loadMarketPage={loadMarketPage}
+				/>
 			</div>
 		)
 	}

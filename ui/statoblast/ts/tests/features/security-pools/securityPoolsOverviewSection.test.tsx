@@ -10,6 +10,7 @@ import { installTestRouting } from '@zoltar/ui-core-shared/tests/testUtils/testR
 import type { ListedSecurityPool, SecurityPoolBrowsePage, SecurityPoolPage } from '@zoltar/ui-core-shared/types/contracts.js'
 import { getWalletScopedAccountAddress } from '@zoltar/ui-core-shared/wallet/network.js'
 import { SecurityPoolsOverviewSection } from '@zoltar/ui-statoblast-shared/features/security-pools/components/SecurityPoolsOverviewSection.js'
+import { appBlockWatcher } from '@zoltar/ui-core-shared/lib/dataRefresh.js'
 import { deriveHasForkActivity } from '@zoltar/ui-statoblast-shared/features/truth-auctions/lib/forkAuction.js'
 import type { SecurityPoolsOverviewSectionProps } from '@zoltar/ui-zoltar-shared/features/types.js'
 import type { AccountState } from '@zoltar/ui-zoltar-shared/types/app.js'
@@ -405,6 +406,33 @@ describe('SecurityPoolsOverviewSection', () => {
 		})
 	})
 
+	test('re-reads the visible page in place on each new block and shows its age', async () => {
+		const onLoadSecurityPoolPage = mock(() => undefined)
+		const onRefreshSecurityPoolPage = mock(() => undefined)
+		const renderedComponent = await renderIntoDocument(
+			<SecurityPoolsOverviewSection
+				{...createProps({
+					onLoadSecurityPoolPage,
+					onRefreshSecurityPoolPage,
+					securityPoolPageFreshness: { refreshing: false, updatedAt: Date.now() - 15_000 },
+					securityPools: [createSecurityPool({ marketDetails: createMarketDetails({ title: 'Live pool' }) })],
+				})}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+		await waitFor(() => expect(onLoadSecurityPoolPage).toHaveBeenCalledTimes(1))
+		expect(document.querySelector('.freshness-indicator')?.textContent).toContain('Updated 15s ago')
+
+		await act(() => {
+			appBlockWatcher.reportBlock(2_000n)
+			appBlockWatcher.reportBlock(2_001n)
+		})
+		expect(onRefreshSecurityPoolPage).toHaveBeenCalled()
+		// The in-place refresh does not repeat the explicit page load that owns the loading state.
+		expect(onLoadSecurityPoolPage).toHaveBeenCalledTimes(1)
+		expect(within(document.body).getByText('Live pool')).not.toBeNull()
+	})
+
 	test('hides stale pool page data while an account-specific reload is pending', async () => {
 		const accountA = '0x00000000000000000000000000000000000000a1'
 		const accountB = '0x00000000000000000000000000000000000000b2'
@@ -728,6 +756,7 @@ describe('SecurityPoolsOverviewSection', () => {
 					hasLoadedSecurityPoolPage: false,
 					loadingSecurityPoolPage: false,
 					securityPoolPage: undefined,
+					securityPoolPageFreshness: { refreshing: false, updatedAt: undefined },
 					securityPools: [],
 				})}
 			/>,
@@ -737,6 +766,9 @@ describe('SecurityPoolsOverviewSection', () => {
 		const documentQueries = within(document.body)
 		expect(documentQueries.getByText('Refreshing pools.')).not.toBeNull()
 		expect(documentQueries.queryByText('None yet')).toBeNull()
+		// Skeleton rows hold the list's shape, and the freshness line is reserved so nothing moves when data arrives.
+		expect(document.querySelector('.skeleton-list[role="status"]')).not.toBeNull()
+		expect(document.querySelector('.freshness-indicator[data-state="pending"]')).not.toBeNull()
 	})
 
 	test('does not show the empty pool-list CTA before the first pool page loads', async () => {

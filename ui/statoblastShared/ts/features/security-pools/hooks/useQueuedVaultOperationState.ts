@@ -1,5 +1,6 @@
 import { useSignal } from '@preact/signals'
 import { useEffect, useRef } from 'preact/hooks'
+import { useBlockRefresh } from '@zoltar/ui-core-shared/hooks/useDataRefresh.js'
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import type { QueuedVaultOperationState, SecurityVaultActionResult } from '@zoltar/ui-core-shared/types/contracts.js'
 
@@ -56,21 +57,16 @@ export function useQueuedVaultOperationState({ enabled, selectionKey, loadState,
 		.map(([key]) => key)
 		.sort()
 		.join('|')
+	const reconcileActive = enabled && pendingKeys !== ''
 	useEffect(() => {
-		if (!enabled || pendingKeys === '') return
-		let canceled = false
-		let timer: ReturnType<typeof setTimeout> | undefined
-		const refresh = async () => {
-			const terminal = await reconcile()
-			if (!canceled && !terminal) timer = setTimeout(() => void refresh(), 3_000)
-		}
-		void refresh()
+		if (!reconcileActive) return
+		void reconcile()
 		return () => {
-			canceled = true
 			epoch.current++
-			if (timer !== undefined) clearTimeout(timer)
 		}
-	}, [enabled, selectionKey, pendingKeys])
+	}, [reconcileActive, selectionKey, pendingKeys])
+	// A queued operation settles in a later block, so each new block re-reads the unresolved ones until they resolve.
+	useBlockRefresh(() => void reconcile(), reconcileActive)
 
 	return {
 		track,

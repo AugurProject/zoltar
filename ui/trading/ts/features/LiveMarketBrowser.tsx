@@ -7,6 +7,9 @@ import { RetryAction, RetryableNotice } from '@zoltar/ui-core-shared/components/
 import { MetricField } from '@zoltar/ui-core-shared/components/MetricField.js'
 import { PaginationControls } from '@zoltar/ui-core-shared/components/PaginationControls.js'
 import { SectionBlock } from '@zoltar/ui-core-shared/components/SectionBlock.js'
+import { SkeletonList } from '@zoltar/ui-core-shared/components/Skeleton.js'
+import { UpdatedAgo } from '@zoltar/ui-core-shared/components/UpdatedAgo.js'
+import type { DataFreshness } from '@zoltar/ui-core-shared/lib/freshness.js'
 import { ReadOnlyAddressValue } from '@zoltar/ui-core-shared/components/AddressValue.js'
 import { liveCopy } from '../copy/live.js'
 import { formatTrimmedUnits } from '@zoltar/ui-core-shared/lib/formatters.js'
@@ -86,6 +89,7 @@ export function LiveMarketBrowser({
 	pageMarketCount,
 	discoveryState,
 	discoveryError,
+	freshness,
 	marketPage,
 	workflowLocked,
 	nowSeconds,
@@ -97,6 +101,7 @@ export function LiveMarketBrowser({
 	pageMarketCount: number
 	discoveryState: 'loading' | 'ready' | 'error'
 	discoveryError: string | undefined
+	freshness: DataFreshness
 	marketPage: Readonly<{ start: bigint; total: bigint; previousStart: bigint | undefined; nextStart: bigint | undefined }>
 	workflowLocked: boolean
 	nowSeconds: bigint
@@ -108,7 +113,7 @@ export function LiveMarketBrowser({
 	const initialLoad = discoveryState === 'loading' && pageMarketCount === 0
 	const retryAction = <RetryAction label={liveCopy.retryDiscovery} disabled={workflowLocked} onRetry={retry} />
 	let content
-	if (initialLoad) content = <EmptyState live title={liveCopy.discoveringSecurityPoolsFromFactory} />
+	if (initialLoad) content = <SkeletonList label={liveCopy.discoveringSecurityPoolsFromFactory} />
 	else if (discoveryState === 'error' && pageMarketCount === 0) content = <EmptyState title={liveCopy.securityPoolFactoryDiscoveryFailed(discoveryError)} actions={retryAction} />
 	else
 		content = (
@@ -126,7 +131,7 @@ export function LiveMarketBrowser({
 			</>
 		)
 	return (
-		<SectionBlock className='market-browser' title={listKind === 'security-pools' ? presentation.title : undefined} description={presentation.description} variant='plain' busy={discoveryState === 'loading'}>
+		<SectionBlock className='market-browser' title={listKind === 'security-pools' ? presentation.title : undefined} description={presentation.description} variant='plain' busy={discoveryState === 'loading'} actions={<UpdatedAgo {...freshness} />}>
 			<OpenPoolForm disabled={workflowLocked} target={lookupRoute} />
 			{content}
 			<PaginationControls
