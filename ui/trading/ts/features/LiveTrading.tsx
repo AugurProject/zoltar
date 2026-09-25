@@ -116,6 +116,8 @@ export function LiveTrading({
 	const positionInputRef = useRef({ setMode, setSide })
 	positionInputRef.current = { setMode, setSide }
 	useEffect(() => {
+		// A request left unconsumed by a market that never loaded must not open the sheet on the next market.
+		setTicketOpenRequested(false)
 		if (routePool === undefined || workflowRoute !== 'market') return
 		const requestedSide = readTicketSideParam(parseRouteHash(window.location.hash).search)
 		if (requestedSide === undefined) return

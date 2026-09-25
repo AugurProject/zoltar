@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { act } from 'preact/test-utils'
+import { render } from 'preact'
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
@@ -373,5 +374,31 @@ describe('live market refresh', () => {
 		expect(document.querySelector('.market-description b')).toBeNull()
 		expect(document.querySelector('details.read-only-detail-accordion')?.textContent).toContain(shareToken)
 		expect(document.querySelector('.market-ticket__panel')?.getAttribute('aria-label')).toBe('Trade ticket')
+	})
+
+	test('a side request for a market that never loads does not open the sheet on the next market', async () => {
+		const originalMatchMedia = window.matchMedia
+		Reflect.set(window, 'matchMedia', (query: string) => ({ matches: true, media: query, addEventListener: () => undefined, removeEventListener: () => undefined }))
+		try {
+			const unavailablePool = `0x${'88'.repeat(20)}` as Address
+			window.location.hash = `#/market/${unavailablePool}?side=yes`
+			const addressedMarket = (address: Address) => (address.toLowerCase() === unavailablePool ? { ...market, pool: unavailablePool, loadError: 'market RPC unavailable' } : { ...market })
+			const services = {
+				...liveTradingControllerServices,
+				createTradingPublicClient: () => ({}),
+				validateLiveDeployment: async () => undefined,
+				discoverAddressedMarket: async (_client: unknown, _configuration: unknown, address: Address) => ({ start: 0n, count: 1n, total: 1n, previousStart: undefined, nextStart: undefined, markets: [addressedMarket(address)], universeIds: [1n], selectedUniverseId: 1n }),
+			}
+			const rendered = await renderIntoDocument(<LiveTrading route={`market/${unavailablePool}`} configuration={configuration} configurationError={undefined} selectedUniverseId='1' onWorkflowLockChange={() => undefined} controllerServices={services} />)
+			cleanupRendered = rendered.cleanup
+			await waitForDom(() => document.body.textContent?.includes('This security pool could not be loaded') === true, 'unavailable market')
+			window.location.hash = `#/market/${pool}`
+			await act(() => render(<LiveTrading route={`market/${pool}`} configuration={configuration} configurationError={undefined} selectedUniverseId='1' onWorkflowLockChange={() => undefined} controllerServices={services} />, rendered.container))
+			await waitForDom(() => document.querySelector('.market-ticket-bar') !== null, 'collapsed ticket bar')
+			expect(document.querySelector('.market-ticket__panel')?.hasAttribute('hidden')).toBe(true)
+			expect(document.querySelector('[role="dialog"]')).toBeNull()
+		} finally {
+			Reflect.set(window, 'matchMedia', originalMatchMedia)
+		}
 	})
 })
