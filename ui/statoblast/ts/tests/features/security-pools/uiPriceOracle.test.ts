@@ -40,7 +40,8 @@ describe('resolveRepPrice', () => {
 		expect(resolve('open-oracle-fallback')).toMatchObject({ price: 20n, reason: 'selected', source: 'open-oracle', stale: false })
 		expect(resolve('open-oracle-fallback', { oracleManager: { isPriceValid: false, price: 20n, settlementTimestamp } })).toMatchObject({ price: 10n, reason: 'oracle-expired', source: 'uniswap' })
 		expect(resolve('open-oracle-fallback', { poolOracle: undefined })).toMatchObject({ price: 10n, reason: 'oracle-missing' })
-		expect(resolve('open-oracle-fallback', { now: undefined })).toMatchObject({ price: 10n, source: 'uniswap' })
+		expect(resolve('open-oracle-fallback', { now: undefined })).toMatchObject({ price: 10n, reason: 'oracle-unverified', source: 'uniswap' })
+		expect(describeRepPriceStatus(resolve('open-oracle-fallback', { now: undefined }), undefined)).toEqual({ detail: undefined, state: 'fresh', title: 'via Uniswap' })
 		expect(resolve('open-oracle-fallback', { now: validUntil, uniswapPrice: undefined })).toMatchObject({ price: undefined, reason: 'unavailable' })
 	})
 

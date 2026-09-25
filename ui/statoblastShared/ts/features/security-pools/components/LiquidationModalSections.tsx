@@ -17,6 +17,7 @@ import { TransactionStatusCard } from '@zoltar/ui-core-shared/components/Transac
 import { getLiquidationExecutionFailureDetail, type simulateLiquidation } from '../lib/liquidation.js'
 import { formatHealthFactorBps, getApprovalStatus, type LiquidationExecutionMode, type QueuedLiquidationOperationView, type QueuedLiquidationStatus } from '../lib/liquidationModalGuards.js'
 import { getRepPriceSourceCopy, renderRepPriceSourceLabel, type UiRepPriceSource } from '../lib/repPriceSource.js'
+import { RepPriceStatusLabel } from './RepPriceStatusLabel.js'
 import { formatStatoblastSecurityMultiplier } from '../../markets/lib/trading.js'
 import type { LiquidationApprovalDetails, LiquidationFundingPreview, ListedSecurityPool, OracleManagerDetails, SecurityPoolOverviewActionResult, SecurityPoolVaultSummary } from '@zoltar/ui-core-shared/types/contracts.js'
 
@@ -152,6 +153,7 @@ export function LiquidationContextSummary({
 						}
 					>
 						{repPerEthPrice === undefined ? commonCopy.unavailable : <CurrencyValue value={repPerEthPrice} suffix={commonCopy.repPerEth} copyable={false} />}
+						<RepPriceStatusLabel />
 					</MetricField>
 					<MetricField label={liquidationCopy.callerCapacityOwnershipAttoRep}>
 						<CurrencyValue value={receiverVaultSummary?.capacityOwnershipAttoRep} suffix={commonCopy.rep} />

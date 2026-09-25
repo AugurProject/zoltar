@@ -10,9 +10,10 @@ type RepPriceSource = 'uniswap' | 'open-oracle'
  * Why the resolved price came from its source:
  * - `selected`: the setting's own source supplied the price.
  * - `oracle-expired` / `oracle-missing`: the fallback setting used Uniswap because the pool Open Oracle price expired or was never reported.
+ * - `oracle-unverified`: the fallback setting used Uniswap because chain time is not known yet, so the Open Oracle price cannot be proven fresh.
  * - `unavailable`: no price is available for the setting, so derived figures are unavailable.
  */
-type RepPriceReason = 'selected' | 'oracle-expired' | 'oracle-missing' | 'unavailable'
+type RepPriceReason = 'selected' | 'oracle-expired' | 'oracle-missing' | 'oracle-unverified' | 'unavailable'
 
 export type ResolvedRepPrice = {
 	price: bigint | undefined
@@ -51,7 +52,8 @@ export function resolveRepPrice({ now, oracleManager, poolOracle, setting, unisw
 	if (setting === 'uniswap') return fromUniswap('selected')
 	if (setting === 'open-oracle') return hasOracleReport ? fromOracle : unavailable
 	if (hasOracleReport && oracleProvablyFresh) return fromOracle
-	return fromUniswap(hasOracleReport ? 'oracle-expired' : 'oracle-missing')
+	if (!hasOracleReport) return fromUniswap('oracle-missing')
+	return fromUniswap(oracleStale ? 'oracle-expired' : 'oracle-unverified')
 }
 
 type RepPriceStatus = { detail: string | undefined; state: 'fresh' | 'stale' | 'unavailable'; title: string }
@@ -68,6 +70,7 @@ export function describeRepPriceStatus(repPrice: ResolvedRepPrice, now: bigint |
 	if (repPrice.source === 'uniswap') {
 		if (repPrice.reason === 'oracle-expired') return { detail: pricingCopy.openOracleExpiredFallback, state: 'fresh', title: pricingCopy.viaUniswap }
 		if (repPrice.reason === 'oracle-missing') return { detail: pricingCopy.openOracleMissingFallback, state: 'fresh', title: pricingCopy.viaUniswap }
+		if (repPrice.reason === 'oracle-unverified') return { detail: undefined, state: 'fresh', title: pricingCopy.viaUniswap }
 		return { detail: pricingCopy.liveQuote, state: 'fresh', title: pricingCopy.viaUniswap }
 	}
 	if (repPrice.stale) {
