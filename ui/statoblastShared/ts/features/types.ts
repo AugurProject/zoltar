@@ -143,7 +143,6 @@ type SecurityPoolsOverviewRouteContentProps = {
 	activeUniverseId: bigint
 	currentTimestamp: bigint | undefined
 	environmentRefreshKey: number
-	hasLoadedSecurityPoolPage: boolean
 	loadingSecurityPoolPage: boolean
 	onCreateSecurityPool?: () => void
 	onLoadSecurityPoolPage: (pageIndex: number, pageSize: number, requestKey: string) => void
@@ -151,7 +150,6 @@ type SecurityPoolsOverviewRouteContentProps = {
 	repPerEthPrice: bigint | undefined
 	uiPriceOracle: import('./security-pools/lib/uiPriceOracle.js').UiPriceOracle
 	securityPoolOverviewError: string | undefined
-	securityPoolBrowseCount: bigint | undefined
 	securityPoolPage: SecurityPoolBrowsePage | undefined
 	securityPools: ListedSecurityPool[]
 }

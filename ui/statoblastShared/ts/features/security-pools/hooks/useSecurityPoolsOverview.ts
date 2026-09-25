@@ -102,7 +102,6 @@ function useSecurityPoolsOverviewWithDependencies<TWriteClient>(
 	const liquidationFundingPreviewResolvedKey = useSignal<string | undefined>(undefined)
 	const liquidationSecurityPoolAddress = useSignal<Address | undefined>(undefined)
 	const liquidationModalOpen = useSignal(false)
-	const securityPoolBrowseCount = useSignal<bigint | undefined>(undefined)
 	const securityPoolPage = useSignal<SecurityPoolBrowsePage | undefined>(undefined)
 	const universeDirectoryPools = useSignal<ListedSecurityPool[] | undefined>(undefined)
 	const securityPoolsLoad = useLoadController()
@@ -113,7 +112,6 @@ function useSecurityPoolsOverviewWithDependencies<TWriteClient>(
 	const securityPoolPageLoad = useLoadController()
 	const securityPoolsLoadedEnvironmentRefreshKey = useSignal<number | undefined>(undefined)
 	const universeDirectoryLoadedEnvironmentRefreshKey = useSignal<number | undefined>(undefined)
-	const hasLoadedSecurityPoolPage = useSignal(false)
 	const checkedSecurityPoolAddress = useSignal<string | undefined>(undefined)
 	const securityPoolOverviewActiveAction = useSignal<SecurityPoolOverviewActionResult['action'] | undefined>(undefined)
 	const securityPoolOverviewFeedback = useSignal<ActionFeedback<SecurityPoolOverviewActionResult['action']> | undefined>(undefined)
@@ -177,8 +175,6 @@ function useSecurityPoolsOverviewWithDependencies<TWriteClient>(
 				return await dependencies.loadSecurityPoolPage(pageIndex, pageSize, accountAddress)
 			},
 			onSuccess: page => {
-				hasLoadedSecurityPoolPage.value = true
-				securityPoolBrowseCount.value = page.poolCount
 				securityPoolPage.value = { ...page, requestKey }
 			},
 			onError: error => {
@@ -595,7 +591,6 @@ function useSecurityPoolsOverviewWithDependencies<TWriteClient>(
 		hasLoadedSecurityPools: securityPoolsLoadedEnvironmentRefreshKey.value === environmentRefreshKey,
 		hasLoadedUniverseDirectoryPools: universeDirectoryLoadedEnvironmentRefreshKey.value === environmentRefreshKey,
 		securityPoolsLoadedEnvironmentRefreshKey: securityPoolsLoadedEnvironmentRefreshKey.value,
-		hasLoadedSecurityPoolPage: hasLoadedSecurityPoolPage.value,
 		liquidationSecurityPoolAddress: liquidationSecurityPoolAddress.value,
 		loadingSecurityPoolPage: securityPoolPageLoad.isLoading.value,
 		loadingSecurityPools: securityPoolsLoad.isLoading.value,
@@ -617,7 +612,6 @@ function useSecurityPoolsOverviewWithDependencies<TWriteClient>(
 		securityPoolLiquidationError: securityPoolLiquidationError.value,
 		securityPoolOverviewFeedback: securityPoolOverviewFeedback.value,
 		securityPoolOverviewResult: securityPoolOverviewResult.value,
-		securityPoolBrowseCount: securityPoolBrowseCount.value,
 		securityPoolPage: securityPoolPage.value,
 		securityPools: securityPools.value,
 		securityPoolUniverseDirectoryError: universeDirectoryError.value,

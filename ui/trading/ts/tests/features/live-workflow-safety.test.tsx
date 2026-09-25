@@ -305,7 +305,9 @@ describe('live workflow safety boundary', () => {
 		await act(() => render(<LiveTrading route={poolRoute} configuration={configuration} configurationError={undefined} selectedUniverseId='1' onWorkflowLockChange={locked => workflowLocks.push(locked)} walletConnectRequestNonce={1} />, rendered.container))
 		await walletChainReadStarted.promise
 		await act(() => render(<LiveTrading route='market' configuration={configuration} configurationError={undefined} selectedUniverseId='1' onWorkflowLockChange={locked => workflowLocks.push(locked)} walletConnectRequestNonce={1} />, rendered.container))
-		await waitForDom(() => document.querySelectorAll('.market-record').length === 2, 'browse rows')
+		// The market opened earlier in this test is pinned as a favorite above the two discovered rows.
+		await waitForDom(() => document.querySelectorAll('.market-record').length === 3, 'browse rows')
+		expect([...document.querySelectorAll('.market-list-heading')].map(heading => heading.textContent)).toEqual(['Favorites', 'All markets'])
 		expect(document.querySelector(`.market-record a[href="#/market/${pool}"]`)).not.toBeNull()
 		expect(document.querySelector(`.market-record a[href="#/liquidity/${pool}"]`)).not.toBeNull()
 		deferredWalletChainRead.reject(new Error('Wallet request rejected after navigation'))
@@ -321,7 +323,7 @@ describe('live workflow safety boundary', () => {
 		await flush()
 		// The lookup route is list-first: the address form sits above the same rows the browse alias shows.
 		expect(document.querySelector('.open-pool-form')).not.toBeNull()
-		await waitForDom(() => document.querySelectorAll('.market-record').length === 2, 'lookup route rows')
+		await waitForDom(() => document.querySelectorAll('.market-record').length === 3, 'lookup route rows')
 		deferredWalletChainRead = deferred<number>()
 		walletChainReadStarted = deferred<undefined>()
 		const discoveriesBeforeMidConnectUniverseChange = discoveredUniverseIds.length

@@ -475,6 +475,14 @@
 			"bun": "./ts/components/ReadOnlyDetailAccordion.tsx",
 			"default": "./js/components/ReadOnlyDetailAccordion.js"
 		},
+		"./components/FavoriteToggle.js": {
+			"bun": "./ts/components/FavoriteToggle.tsx",
+			"default": "./js/components/FavoriteToggle.js"
+		},
+		"./components/LocalBrowseControls.js": {
+			"bun": "./ts/components/LocalBrowseControls.tsx",
+			"default": "./js/components/LocalBrowseControls.js"
+		},
 		"./components/RouteHeader.js": {
 			"bun": "./ts/components/RouteHeader.tsx",
 			"default": "./js/components/RouteHeader.js"
@@ -854,6 +862,14 @@
 		"./tests/emptyState.test.js": {
 			"bun": "./ts/tests/emptyState.test.tsx",
 			"default": "./js/tests/emptyState.test.js"
+		},
+		"./tests/favoriteToggle.test.js": {
+			"bun": "./ts/tests/favoriteToggle.test.tsx",
+			"default": "./js/tests/favoriteToggle.test.js"
+		},
+		"./tests/useRememberOpenedEntity.test.js": {
+			"bun": "./ts/tests/useRememberOpenedEntity.test.tsx",
+			"default": "./js/tests/useRememberOpenedEntity.test.js"
 		},
 		"./components/SimulationWalletControls.js": {
 			"bun": "./ts/components/SimulationWalletControls.tsx",

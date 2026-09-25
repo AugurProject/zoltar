@@ -36,6 +36,9 @@ import { LiveMarketBrowser, marketStatusLabel, marketStatusTone } from './LiveMa
 import { liveCopy } from '../copy/live.js'
 import * as availabilityCopy from '../copy/availability.js'
 import { useFocusOnKeyChange } from './live/useFocusOnKeyChange.js'
+import { FavoriteToggle } from '@zoltar/ui-core-shared/components/FavoriteToggle.js'
+import { useDownloadedEntities, useFavorites, useRememberOpenedEntity } from '@zoltar/ui-core-shared/hooks/useLocalEntities.js'
+import { getRememberableMarket, marketDownloadStore, selectFavoriteMarketUpdates, selectFavoriteMarkets } from '../lib/favoriteMarkets.js'
 
 const ignoreWalletSummaryChange = () => undefined
 
@@ -50,7 +53,12 @@ function MarketFacts({ market, nowSeconds, workflowLocked, headingRef }: { marke
 			sticky={false}
 			title={market.title}
 			titleRef={headingRef}
-			badge={<Badge tone={marketStatusTone(market, nowSeconds)}>{marketStatusLabel(market, nowSeconds)}</Badge>}
+			badge={
+				<>
+					{market.loadError === undefined ? <FavoriteToggle app='trading' entityLabel={market.title} id={market.pool} kind='market' /> : undefined}
+					<Badge tone={marketStatusTone(market, nowSeconds)}>{marketStatusLabel(market, nowSeconds)}</Badge>
+				</>
+			}
 			items={[
 				{ label: liveCopy.securityPoolLabel, value: <SecurityPoolLink value={market.pool} disabled={workflowLocked} /> },
 				...(market.loadError === undefined
@@ -135,6 +143,19 @@ export function LiveTrading({
 	useEffect(() => setClosedMarketView('settlement'), [routePool])
 	// Moving between addressed markets keeps the same page title, so focus the new market heading here instead of relying on the app heading.
 	const marketHeadingRef = useFocusOnKeyChange<HTMLHeadingElement>(selected?.pool, false)
+	const favoriteMarketIds = useFavorites('trading', 'market')
+	const downloadedMarkets = useDownloadedEntities('trading', 'market', marketDownloadStore)
+	const favoriteMarkets = selectFavoriteMarkets(downloadedMarkets.entries, favoriteMarketIds.entries, selectedUniverseId)
+	// Only the market workflows (trade and liquidity) count as opening a market; pool details and market creation do not.
+	const rememberedMarket = route.startsWith('market/') || route.startsWith('liquidity/') ? getRememberableMarket(selected) : undefined
+	useRememberOpenedEntity('trading', 'market', marketDownloadStore, rememberedMarket?.pool, rememberedMarket)
+	const recordedFavoriteMarkets = useRef(new Map<string, LiveMarket>())
+	const favoriteMarketUpdates = selectFavoriteMarketUpdates(listedMarkets, recordedFavoriteMarkets.current, favoriteMarketIds.entries)
+	useEffect(() => {
+		if (favoriteMarketUpdates.length === 0) return
+		for (const update of favoriteMarketUpdates) recordedFavoriteMarkets.current.set(update.id, update.data)
+		downloadedMarkets.record(favoriteMarketUpdates)
+	})
 	const previousWalletConnectRequestNonce = useRef(walletConnectRequestNonce)
 	useEffect(() => onDiscoveryStateChange?.(discoveryState), [discoveryState, onDiscoveryStateChange])
 	useEffect(() => {
@@ -185,7 +206,19 @@ export function LiveTrading({
 			<div className='route-view-flow'>
 				<RouteHeader title={routePresentation.title} description={routePresentation.description} actions={walletAction} />
 				<ErrorNotice message={connectionMessage} />
-				<LiveMarketBrowser lookupRoute={route} markets={listedMarkets} pageMarketCount={visibleMarkets.length} discoveryState={discoveryState} discoveryError={discoveryError} marketPage={marketPage} workflowLocked={workflowLocked} nowSeconds={nowSeconds} retry={refreshFromControl} loadMarketPage={loadMarketPage} />
+				<LiveMarketBrowser
+					lookupRoute={route}
+					markets={listedMarkets}
+					favoriteMarkets={favoriteMarkets}
+					pageMarketCount={visibleMarkets.length}
+					discoveryState={discoveryState}
+					discoveryError={discoveryError}
+					marketPage={marketPage}
+					workflowLocked={workflowLocked}
+					nowSeconds={nowSeconds}
+					retry={refreshFromControl}
+					loadMarketPage={loadMarketPage}
+				/>
 			</div>
 		)
 	}

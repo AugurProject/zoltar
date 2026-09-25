@@ -3,6 +3,7 @@ import { Badge } from '@zoltar/ui-core-shared/components/Badge.js'
 import { DataGrid } from '@zoltar/ui-core-shared/components/DataGrid.js'
 import { EmptyState } from '@zoltar/ui-core-shared/components/EmptyState.js'
 import { EntityCard } from '@zoltar/ui-core-shared/components/EntityCard.js'
+import { FavoriteToggle } from '@zoltar/ui-core-shared/components/FavoriteToggle.js'
 import { RetryAction, RetryableNotice } from '@zoltar/ui-core-shared/components/RetryableNotice.js'
 import { MetricField } from '@zoltar/ui-core-shared/components/MetricField.js'
 import { PaginationControls } from '@zoltar/ui-core-shared/components/PaginationControls.js'
@@ -52,7 +53,14 @@ function MarketRow({ listKind, lookupRoute, market, nowSeconds }: { listKind: Tr
 			surface='flat'
 			variant='compact'
 			title={<a href={getTradingRouteHref(primaryHref)}>{market.title}</a>}
-			badge={listKind === 'markets' ? <Badge tone={marketStatusTone(market, nowSeconds)}>{marketStatusLabel(market, nowSeconds)}</Badge> : undefined}
+			badge={
+				listKind === 'markets' ? (
+					<>
+						<Badge tone={marketStatusTone(market, nowSeconds)}>{marketStatusLabel(market, nowSeconds)}</Badge>
+						{market.loadError === undefined ? <FavoriteToggle app='trading' entityLabel={market.title} id={market.pool} kind='market' /> : undefined}
+					</>
+				) : undefined
+			}
 			actions={
 				<>
 					<a className='button-link primary' href={getTradingRouteHref(primaryHref)}>
@@ -83,6 +91,7 @@ function MarketRow({ listKind, lookupRoute, market, nowSeconds }: { listKind: Tr
 export function LiveMarketBrowser({
 	lookupRoute,
 	markets,
+	favoriteMarkets = [],
 	pageMarketCount,
 	discoveryState,
 	discoveryError,
@@ -94,6 +103,8 @@ export function LiveMarketBrowser({
 }: {
 	lookupRoute: TradingLookupRoute
 	markets: readonly LiveMarket[]
+	/** Favorites come from the browser cache, so they show before (and independently of) the paged chain scan. */
+	favoriteMarkets?: readonly LiveMarket[]
 	pageMarketCount: number
 	discoveryState: 'loading' | 'ready' | 'error'
 	discoveryError: string | undefined
@@ -128,6 +139,17 @@ export function LiveMarketBrowser({
 	return (
 		<SectionBlock className='market-browser' title={listKind === 'security-pools' ? presentation.title : undefined} description={presentation.description} variant='plain' busy={discoveryState === 'loading'}>
 			<OpenPoolForm disabled={workflowLocked} target={lookupRoute} />
+			{listKind === 'markets' && favoriteMarkets.length > 0 ? (
+				<>
+					<h3 className='eyebrow market-list-heading'>{liveCopy.favoriteMarkets}</h3>
+					<div className='entity-card-list market-list'>
+						{favoriteMarkets.map(market => (
+							<MarketRow key={market.pool} listKind={listKind} lookupRoute={lookupRoute} market={market} nowSeconds={nowSeconds} />
+						))}
+					</div>
+					<h3 className='eyebrow market-list-heading'>{liveCopy.discoveredMarkets}</h3>
+				</>
+			) : undefined}
 			{content}
 			<PaginationControls
 				hasNextPage={marketPage.nextStart !== undefined}

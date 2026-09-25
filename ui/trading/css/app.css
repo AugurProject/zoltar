@@ -221,3 +221,7 @@
 	font-size: 1.5rem;
 	opacity: 1;
 }
+
+.market-list-heading {
+	margin: var(--space-3) 0 0;
+}

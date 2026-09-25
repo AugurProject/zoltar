@@ -92,6 +92,10 @@
 			"bun": "./ts/features/security-pools/components/SecurityPoolsOverviewSection.tsx",
 			"default": "./js/features/security-pools/components/SecurityPoolsOverviewSection.js"
 		},
+		"./features/security-pools/components/PoolCapacitySummary.js": {
+			"bun": "./ts/features/security-pools/components/PoolCapacitySummary.tsx",
+			"default": "./js/features/security-pools/components/PoolCapacitySummary.js"
+		},
 		"./features/security-pools/components/SecurityPoolsSection.js": {
 			"bun": "./ts/features/security-pools/components/SecurityPoolsSection.tsx",
 			"default": "./js/features/security-pools/components/SecurityPoolsSection.js"
@@ -123,6 +127,10 @@
 		"./features/security-pools/lib/liquidationStatus.js": {
 			"bun": "./ts/features/security-pools/lib/liquidationStatus.ts",
 			"default": "./js/features/security-pools/lib/liquidationStatus.js"
+		},
+		"./features/security-pools/lib/poolBrowse.js": {
+			"bun": "./ts/features/security-pools/lib/poolBrowse.ts",
+			"default": "./js/features/security-pools/lib/poolBrowse.js"
 		},
 		"./features/security-pools/lib/repPriceSource.js": {
 			"bun": "./ts/features/security-pools/lib/repPriceSource.tsx",
