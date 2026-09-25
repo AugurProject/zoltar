@@ -226,7 +226,7 @@ Skip this gate for read-only analysis, exploration, or when the user asks not to
 When creating a pull request:
 
 - Write a pull request description that explains what changed and why.
-- For UI changes, include images that show the resulting UI changes. Do not commit these images to the repository; upload them to Sharey and embed them in the pull request description instead. Select the longest practical expiry.
+- For UI changes, include images that show the resulting UI changes. Do not commit these images to the repository; upload them to Sharey and embed them in the pull request description instead. If Sharey is unavailable or rejects uploads, use Catbox as the fallback. Select the longest practical expiry supported by the service.
 
 ## Review gates
 

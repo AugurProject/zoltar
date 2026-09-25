@@ -1,3 +1,6 @@
+import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
+import * as transactionCopy from '@zoltar/ui-core-shared/copy/transaction.js'
+import * as openOracleCopy from '@zoltar/ui-statoblast-shared/copy/openOracle.js'
 import { expect, test } from 'bun:test'
 import * as forkAuctionCopy from '@zoltar/ui-statoblast-shared/copy/forkAuction.js'
 import * as liquidationCopy from '@zoltar/ui-statoblast-shared/copy/liquidation.js'
@@ -65,4 +68,18 @@ test('liquidation actions and pending labels use sentence case independently of 
 test('oracle actions distinguish action labels from review titles', () => {
 	expect(securityPoolCopy.requestNewPrice).toBe('Request new price')
 	expect(securityPoolCopy.requestNewPriceTitle).toBe('Request new price')
+})
+
+test('price launchers share their idle and pending labels', () => {
+	expect(commonCopy.launchAction(securityPoolCopy.requestNewPrice)).toBe('Request new price…')
+	expect(securityPoolCopy.requestingNewPrice).toBe('Requesting new price…')
+})
+
+test('creation outcomes use sentence case', () => {
+	expect(transactionCopy.creatingQuestion).toBe('Creating question')
+	expect(transactionCopy.questionCreated).toBe('Question created')
+	expect(transactionCopy.creatingSecurityPool).toBe('Creating security pool')
+	expect(transactionCopy.securityPoolCreated).toBe('Security pool created')
+	expect(securityPoolCopy.poolCreated).toBe('Pool created')
+	expect(openOracleCopy.reportCreated).toBe('Report created')
 })
