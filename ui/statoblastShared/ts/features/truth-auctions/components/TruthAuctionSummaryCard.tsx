@@ -3,9 +3,10 @@ import * as forkAuctionCopy from '../../../copy/forkAuction.js'
 import type { ComponentChildren } from 'preact'
 import { CurrencyValue } from '@zoltar/ui-core-shared/components/CurrencyValue.js'
 import { ReadOnlyDetailAccordion } from '@zoltar/ui-core-shared/components/ReadOnlyDetailAccordion.js'
+import { MetricGrid } from '@zoltar/ui-core-shared/components/MetricGrid.js'
 import { MetricField } from '@zoltar/ui-core-shared/components/MetricField.js'
 import { SectionBlock } from '@zoltar/ui-core-shared/components/SectionBlock.js'
-import { AUCTIONED_CAPACITY_OWNERSHIP_ATTO_REP_LABEL } from '../lib/forkAuction.js'
+import { AUCTIONED_OBLIGATION_UNITS_LABEL } from '../lib/forkAuction.js'
 
 type TruthAuctionSummaryCardProps = {
 	auctionObligationUnitsDisplay?: ComponentChildren | undefined
@@ -78,7 +79,9 @@ export function TruthAuctionSummaryCard({
 			</div>
 			{auctionObligationUnitsDisplay === undefined ? undefined : (
 				<ReadOnlyDetailAccordion title={forkAuctionCopy.auctionDetails}>
-					<MetricField label={AUCTIONED_CAPACITY_OWNERSHIP_ATTO_REP_LABEL}>{auctionObligationUnitsDisplay}</MetricField>
+					<MetricGrid>
+						<MetricField label={AUCTIONED_OBLIGATION_UNITS_LABEL}>{auctionObligationUnitsDisplay}</MetricField>
+					</MetricGrid>
 				</ReadOnlyDetailAccordion>
 			)}
 		</SectionBlock>

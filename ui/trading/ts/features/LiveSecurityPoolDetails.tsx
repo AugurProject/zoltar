@@ -1,3 +1,4 @@
+import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import { TimestampValue } from '@zoltar/ui-core-shared/components/TimestampValue.js'
 import { BackingDetails } from './BackingDetails.js'
 import { formatTrimmedUnits } from '@zoltar/ui-core-shared/lib/formatters.js'
@@ -143,7 +144,9 @@ export function LiveSecurityPoolDetails({
 									<MetricField label={liveCopy.initialReportPriorityFee}>{liveCopy.priorityFeePerGas(formatTrimmedUnits(market.initialReportPriorityFeeAttoEthPerGas, 9))}</MetricField>
 									<MetricField label={liveCopy.registeredVaults}>{market.vaultCount.toString()}</MetricField>
 									<MetricField label={liveCopy.perSecondRetentionMultiplier}>{formatTrimmedUnits(market.currentRetentionRate, 18, 12)}×</MetricField>
-									<MetricField label={liveCopy.nominalCapacity}>{formatTrimmedUnits(market.totalCapacityOwnershipAttoRep)} REP</MetricField>
+									<MetricField label={liveCopy.nominalCapacity}>
+										{formatTrimmedUnits(market.totalCapacityOwnershipAttoRep)} {commonCopy.rep}
+									</MetricField>
 									<MetricField label={liveCopy.activeObligationUnits}>{market.activeObligationUnits.toString()}</MetricField>
 								</DataGrid>
 							</ReadOnlyDetailAccordion>

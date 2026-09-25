@@ -22,7 +22,7 @@ import { formatCurrencyInputBalance } from '@zoltar/ui-core-shared/lib/formatter
 import { balanceShortage } from '@zoltar/ui-core-shared/forms/inputs.js'
 import { tryParseBigIntInput } from '@zoltar/ui-core-shared/forms/integerInput.js'
 import { tryParseRepAmountInput } from '@zoltar/ui-core-shared/forms/formInputs.js'
-import { isActiveAppChain } from '@zoltar/ui-core-shared/wallet/network.js'
+import { getWrongNetworkReason, isActiveAppChain } from '@zoltar/ui-core-shared/wallet/network.js'
 import { getOracleRequestEthGuardMessage, resolveOracleOperationEthFunding } from '../../open-oracle/lib/oracleRequestEth.js'
 import { getSecurityPoolVaultReadinessActions } from '../lib/securityPoolReadiness.js'
 import { isVaultHealthyAtFactor } from '../lib/liquidation.js'
@@ -264,13 +264,17 @@ export function SecurityVaultSection({
 	const claimFeesAvailabilityBlocker = visibleClaimFeesLauncherBlocker ?? (hasLoadedSelectedVaultDetails && claimFeesEnabled && !hasClaimableFees ? securityPoolCopy.noClaimableFeesReason : undefined)
 	useEffect(() => {
 		if (!autoLoadVault) return
+		if (!isOnActiveAppChain) {
+			lastAutoLoadKey.current = undefined
+			return
+		}
 		if (normalizedSecurityVaultForm.securityPoolAddress.trim() === '') return
 		if (selectedVaultOwner === undefined || selectedVaultOwner === '') return
 		if (hasLoadedCurrentVault || loadingSecurityVault) return
 		if (lastAutoLoadKey.current === autoLoadKey) return
 		lastAutoLoadKey.current = autoLoadKey
 		void onLoadSecurityVault()
-	}, [autoLoadKey, autoLoadVault, hasLoadedCurrentVault, loadingSecurityVault, normalizedSecurityVaultForm.securityPoolAddress, onLoadSecurityVault, selectedVaultOwner])
+	}, [autoLoadKey, autoLoadVault, hasLoadedCurrentVault, isOnActiveAppChain, loadingSecurityVault, normalizedSecurityVaultForm.securityPoolAddress, onLoadSecurityVault, selectedVaultOwner])
 	const adjustmentBlocker = repExitLauncherBlocker ?? vaultLifecycleBlocker ?? (!depositRepToVaultEnabled ? securityPoolCopy.vaultDepositAdmissionClosedDetail : undefined)
 	const adjustmentForm = (
 		<>
@@ -541,7 +545,7 @@ export function SecurityVaultSection({
 			{actionSections}
 			{selectedVaultIsOwnedByAccount && currentSelectedVaultDetails !== undefined ? (
 				<SectionBlock title={securityPoolCopy.coverageOfferTitle} variant='embedded'>
-					<CoverageOfferForm key={`${autoLoadKey}:coverage`} details={currentSelectedVaultDetails} account={accountState.address} blocker={!isOnActiveAppChain ? securityPoolCopy.coverageOfferUnavailable : vaultLifecycleBlocker} onSaved={() => void onLoadSecurityVault()} />
+					<CoverageOfferForm key={`${autoLoadKey}:coverage`} details={currentSelectedVaultDetails} account={accountState.address} blocker={!isOnActiveAppChain ? getWrongNetworkReason() : vaultLifecycleBlocker} onSaved={() => void onLoadSecurityVault()} />
 				</SectionBlock>
 			) : undefined}
 		</>

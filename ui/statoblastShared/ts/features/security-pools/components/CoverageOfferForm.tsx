@@ -44,11 +44,29 @@ export function CoverageOfferForm({ details, account, blocker, onSaved }: { deta
 			<p className='detail'>{copy.coverageOfferHelp}</p>
 			<label className='field'>
 				<span>{copy.coverageOfferLimit}</span>
-				<FormInput inputMode='decimal' value={limit} disabled={pending} onInput={event => setLimitInput(event.currentTarget.value)} />
+				<FormInput
+					inputMode='decimal'
+					value={limit}
+					disabled={pending}
+					onInput={event => {
+						setLimitInput(event.currentTarget.value)
+						setSaved(false)
+						setError(undefined)
+					}}
+				/>
 			</label>
 			<label className='field'>
 				<span>{copy.coverageOfferHealth}</span>
-				<FormInput inputMode='decimal' value={health} disabled={pending} onInput={event => setHealthInput(event.currentTarget.value)} />
+				<FormInput
+					inputMode='decimal'
+					value={health}
+					disabled={pending}
+					onInput={event => {
+						setHealthInput(event.currentTarget.value)
+						setSaved(false)
+						setError(undefined)
+					}}
+				/>
 			</label>
 			<div className='actions'>
 				<TransactionActionButton

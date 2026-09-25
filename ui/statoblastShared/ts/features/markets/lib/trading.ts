@@ -107,7 +107,6 @@ export function formatStatoblastSecurityMultiplier(statoblastSecurityMultiplierB
 	return fractional === '' ? whole.toString() : `${whole}.${fractional}`
 }
 
-
 function getMaxRedeemableCompleteSets(shareBalances: TradingShareBalances | undefined) {
 	if (shareBalances === undefined) return undefined
 	if (shareBalances.invalidAttoShares <= shareBalances.yesAttoShares && shareBalances.invalidAttoShares <= shareBalances.noAttoShares) return shareBalances.invalidAttoShares

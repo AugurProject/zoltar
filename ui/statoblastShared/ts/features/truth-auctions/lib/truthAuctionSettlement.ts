@@ -26,7 +26,7 @@ type TruthAuctionSettlementSelectionState = {
 }
 
 type TruthAuctionSettlementSelectionEstimate = {
-	estimatedAssignedCapacityOwnershipAttoRep: bigint | undefined
+	estimatedAssignedObligationUnits: bigint | undefined
 	estimatedRefundedAttoEth: bigint
 	// Keep this concrete so the UI never needs a legacy underfunded fallback branch.
 	estimatedVaultRepBackingAttoRep: bigint
@@ -102,17 +102,17 @@ export function getTruthAuctionSettlementSelectionEstimate({ auctionObligationUn
 		}
 	}
 
-	let estimatedAssignedCapacityOwnershipAttoRep: bigint | undefined = 0n
+	let estimatedAssignedObligationUnits: bigint | undefined = 0n
 	if (estimatedVaultRepBackingAttoRep > 0n) {
 		if (truthAuction === undefined || truthAuction.totalAttoRepPurchased === 0n || auctionObligationUnits === undefined) {
-			estimatedAssignedCapacityOwnershipAttoRep = undefined
+			estimatedAssignedObligationUnits = undefined
 		} else {
-			estimatedAssignedCapacityOwnershipAttoRep = (auctionObligationUnits * estimatedVaultRepBackingAttoRep) / truthAuction.totalAttoRepPurchased
+			estimatedAssignedObligationUnits = (auctionObligationUnits * estimatedVaultRepBackingAttoRep) / truthAuction.totalAttoRepPurchased
 		}
 	}
 
 	return {
-		estimatedAssignedCapacityOwnershipAttoRep,
+		estimatedAssignedObligationUnits,
 		estimatedRefundedAttoEth,
 		estimatedVaultRepBackingAttoRep,
 	}

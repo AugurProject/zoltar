@@ -48,10 +48,15 @@ const eventDomains: Readonly<Record<string, EventDomainDefinition>> = {
 	...definitions(
 		'risk',
 		'pool',
-		['DeploySecurityPool', 'SecurityPoolRegistered', 'AwaitingForkContinuationSet', 'CompleteSetCreated', 'CompleteSetRedeemed', 'EscalationGameSet', 'PoolAccountingCheckpoint', 'PoolForkModeActivated', 'ShareTokenSupplySet', 'SharesRedeemed', 'SystemStateSet', 'TotalRepBackingUnitsSet'],
+		['DeploySecurityPool', 'SecurityPoolRegistered', 'AwaitingForkContinuationSet', 'CompleteSetCreated', 'CompleteSetRedeemed', 'EscalationGameSet', 'PoolAccountingCheckpoint', 'PoolCoverageCheckpoint', 'PoolForkModeActivated', 'ShareTokenSupplySet', 'SharesRedeemed', 'SystemStateSet', 'TotalRepBackingUnitsSet'],
 		['securityPool'],
 	),
-	...definitions('risk', 'vault', ['VaultBackingFactorAdjusted', 'DepositToEscalationGame', 'RepDepositedToVault', 'RepRedeemedFromVault', 'RepWithdrawnFromVault', 'VaultAccountingCheckpoint', 'VaultBadDebtRecorded', 'VaultLiquidated', 'VaultDepositTargetHealthFactorRecorded'], ['vault', 'targetVault']),
+	...definitions(
+		'risk',
+		'vault',
+		['VaultBackingFactorAdjusted', 'DepositToEscalationGame', 'RepDepositedToVault', 'RepRedeemedFromVault', 'RepWithdrawnFromVault', 'VaultAccountingCheckpoint', 'CoverageOfferSet', 'CoverageAllocated', 'VaultCoverageCheckpoint', 'VaultBadDebtRecorded', 'VaultLiquidated', 'VaultDepositTargetHealthFactorRecorded'],
+		['vault', 'targetVault'],
+	),
 	...definitions('approval', 'liquidation-approval', ['LiquidationApprovalSet', 'LiquidationApprovalReserved', 'LiquidationApprovalReleased', 'LiquidationApprovalConsumed', 'LiquidationApprovalRevoked', 'LiquidationApprovalNonceInvalidated'], ['approvalId', 'receiverVault']),
 	...definitions('trading', 'amm', ['PositionExitedByTransfer', 'PairCreated', 'LiquidityAdded', 'LiquidityInitialized', 'LiquidityRemoved', 'PredeploymentSharesQuarantined', 'Swap', 'Sync', 'Transfer', 'Approval'], ['pair']),
 	...definitions(

@@ -108,7 +108,11 @@ async function executeStep(environment: ExecutionEnvironment, plan: OperationPla
 	const beforeBalances = await captureBalanceEvidence(environment, step.evidence, block.number)
 	const beforeStorage = await captureStorageEvidence(environment, step.evidence, block.number)
 	await assertStepPreflightCalls(environment, step, block)
-	const gasEstimate = await rediscoverableSimulationAndGas(environment, step, block)
+	// A block-pinned estimate can skip fee/epoch checkpoint writes that become
+	// necessary when the inclusion timestamp advances. Reserve 150k gas for these
+	// paths before applying the usual padding and enforcing the operator's budgets.
+	const checkpointGasReserve = (plan.ecosystem === 'statoblast' || plan.ecosystem === 'trading') && ['createCompleteSet', 'redeemCompleteSet', 'createPairAndInitializeWithEth', 'initializeWithEth', 'addLiquidityWithEth', 'enterPosition', 'exitPosition'].includes(step.id) ? 150_000n : 0n
+	const gasEstimate = (await rediscoverableSimulationAndGas(environment, step, block)) + checkpointGasReserve
 	try {
 		assertStepSafety({
 			baseFeePerGas: block.baseFeePerGas,

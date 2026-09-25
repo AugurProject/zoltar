@@ -316,7 +316,7 @@ export function getDeterministicLiquidationFailureReason({
 	if (remainingTargetDebtAttoEth !== 0n && remainingTargetDebtAttoEth < minimumSecurityBondDebtAttoEth) return 'The target vault would fall below the minimum security-bond debt after liquidation.'
 	if (debtMovedAttoEth !== 0n && callerAfterRepDeposit < minimumVaultRepDepositAttoRep) return 'The receiver vault would remain below the minimum REP backing after liquidation.'
 	if (debtMovedAttoEth !== 0n && resultingReceiverDebtAttoEth < minimumSecurityBondDebtAttoEth) return 'The selected receiver would remain below the minimum security-bond debt after liquidation.'
-	if (debtMovedAttoEth !== 0n && resultingCallerCapacityOwnershipAttoRep === 0n) return 'No capacity ownership would move with the liquidation debt.'
+	if (debtMovedAttoEth !== 0n && resultingCallerCapacityOwnershipAttoRep === 0n) return 'No obligation units would move with the liquidation debt.'
 	return undefined
 }
 

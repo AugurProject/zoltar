@@ -394,6 +394,8 @@ describe('real ecosystem workflows through the production chaos runtime', () => 
 			expect(BigInt(mintedShares?.yes ?? '0')).toBeGreaterThan(0n)
 			expect(BigInt(mintedShares?.no ?? '0')).toBeGreaterThan(0n)
 
+			// Estimation is anchored before the next block's first fee checkpoint.
+			await current.node.anvilWindowEthereum.requestRaw({ method: 'evm_increaseTime', params: [12] })
 			await execute('statoblast.complete-set.redeem')
 			const redeemedShares = scan.snapshot.wallet.shares.find(shares => shares.universeId === '0')
 			expect(redeemedShares).toMatchObject({ invalid: '0', no: '0', yes: '0' })
@@ -409,6 +411,7 @@ describe('real ecosystem workflows through the production chaos runtime', () => 
 			expect(BigInt(initializedPair?.walletLiquidity ?? '0')).toBeGreaterThan(0n)
 
 			const liquidityBeforeAdd = BigInt(initializedPair?.walletLiquidity ?? '0')
+			await current.node.anvilWindowEthereum.requestRaw({ method: 'evm_increaseTime', params: [12] })
 			await execute('trading.liquidity.add-eth')
 			const pairAfterAdd = scan.snapshot.pairs.find(pair => pair.pool.toLowerCase() === current.pool.toLowerCase())
 			expect(BigInt(pairAfterAdd?.walletLiquidity ?? '0')).toBeGreaterThan(liquidityBeforeAdd)

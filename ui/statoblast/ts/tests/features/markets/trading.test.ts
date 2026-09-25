@@ -121,8 +121,6 @@ void describe('trading helpers', () => {
 		universeId: 0n,
 	} satisfies ZoltarUniverseSummary
 
-
-
 	void test('limits the maximum mint amount by both wallet ETH and remaining capacity', () => {
 		expect(getMaximumMintAmount(3n, 5n)).toBe(3n)
 		expect(getMaximumMintAmount(7n, 5n)).toBe(5n)
@@ -165,8 +163,6 @@ void describe('trading helpers', () => {
 		expect(formatStatoblastSecurityMultiplier(25_000n)).toBe('2.5')
 		expect(formatStatoblastSecurityMultiplier(20_001n)).toBe('2.0001')
 	})
-
-
 
 	void test('reads outcome share balances and default migration targets', () => {
 		expect(getSelectedOutcomeShareBalance(shareBalances, 'yes')).toBe(3n * 10n ** 18n)

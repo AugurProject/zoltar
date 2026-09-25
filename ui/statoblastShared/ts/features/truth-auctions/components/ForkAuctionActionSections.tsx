@@ -15,7 +15,7 @@ import * as forkAuctionCopy from '../../../copy/forkAuction.js'
 import { renderTruthAuctionCapacityOwnershipNotice, renderTruthAuctionPriceValue } from './ForkAuctionPresentation.js'
 import type { ForkAuctionSectionProps } from '../../types.js'
 import type { SecurityPoolStateModel } from '../../security-pools/lib/securityPoolState.js'
-import { AUCTIONED_CAPACITY_OWNERSHIP_ATTO_REP_LABEL } from '../lib/forkAuction.js'
+import { AUCTIONED_OBLIGATION_UNITS_LABEL } from '../lib/forkAuction.js'
 
 export type ForkAuctionActionOptions = {
 	action: NonNullable<ForkAuctionSectionProps['forkAuctionActiveAction']>
@@ -89,7 +89,7 @@ export function ForkAuctionEndedNotice({ actionButton, currentTimestamp, finaliz
 	return (
 		<div className='notice success'>
 			<p>
-				<strong>{forkAuctionCopy.auctionEndedStatus}</strong> {finalized ? forkAuctionCopy.formatFinalizedSettlementDetail(AUCTIONED_CAPACITY_OWNERSHIP_ATTO_REP_LABEL) : forkAuctionCopy.truthAuctionFinalizationRequiredDetail}{' '}
+				<strong>{forkAuctionCopy.auctionEndedStatus}</strong> {finalized ? forkAuctionCopy.formatFinalizedSettlementDetail(AUCTIONED_OBLIGATION_UNITS_LABEL) : forkAuctionCopy.truthAuctionFinalizationRequiredDetail}{' '}
 				{truthAuctionEndsAt === undefined ? undefined : (
 					<>
 						{forkAuctionCopy.endedAtLead}
@@ -105,7 +105,7 @@ export function ForkAuctionEndedNotice({ actionButton, currentTimestamp, finaliz
 export function ForkAuctionStartSection({ actionButton, bypassReason, readyInText }: { actionButton: ComponentChildren; bypassReason: string | undefined; readyInText: string | undefined }) {
 	return (
 		<SectionBlock title={forkAuctionCopy.startTruthAuctionTitle} variant='embedded'>
-			<p className='detail'>{forkAuctionCopy.formatStartTruthAuctionDetail(AUCTIONED_CAPACITY_OWNERSHIP_ATTO_REP_LABEL)}</p>
+			<p className='detail'>{forkAuctionCopy.formatStartTruthAuctionDetail(AUCTIONED_OBLIGATION_UNITS_LABEL)}</p>
 			{readyInText === undefined ? undefined : <p className='detail'>{readyInText}</p>}
 			{bypassReason === undefined ? undefined : <p className='detail'>{bypassReason}</p>}
 			<div className='actions'>{actionButton}</div>

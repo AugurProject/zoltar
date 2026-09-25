@@ -118,6 +118,7 @@ const poolSnapshot = async (target: StateSnapshotTarget, read: StateRead): Promi
 		read(address, poolAbi, 'totalObligationUnits'),
 		read(address, poolAbi, 'writtenOffObligationUnits'),
 		read(address, poolAbi, 'unassignedObligationUnits'),
+		read(address, poolAbi, 'coverageEpoch'),
 	])
 	const result: Record<string, unknown> = {
 		settlementCollateralAttoEth: exact(values[0], 'settlementCollateralAttoEth'),
@@ -137,6 +138,7 @@ const poolSnapshot = async (target: StateSnapshotTarget, read: StateRead): Promi
 		totalObligationUnits: exact(values[14], 'totalObligationUnits'),
 		writtenOffObligationUnits: exact(values[15], 'writtenOffObligationUnits'),
 		unassignedObligationUnits: exact(values[16], 'unassignedObligationUnits'),
+		coverageEpoch: exact(values[17], 'coverageEpoch'),
 	}
 	if (target.coordinatorAddress !== undefined) {
 		const coordinator = target.coordinatorAddress
@@ -163,6 +165,7 @@ const vaultSnapshot = async (target: StateSnapshotTarget, read: StateRead): Prom
 		read(pool, poolAbi, 'statoblastSecurityMultiplierBps'),
 		read(pool, poolAbi, 'getVaultObligationUnits', [vault]),
 		read(pool, poolAbi, 'coverageOffers', [vault]),
+		read(pool, poolAbi, 'coverageEpoch'),
 	])
 	const state = tuple(values[0], 4, 'securityVaults')
 	const repBackingUnits = exact(state[0], 'securityVaults.repBackingUnits')
@@ -182,6 +185,7 @@ const vaultSnapshot = async (target: StateSnapshotTarget, read: StateRead): Prom
 		badDebtAttoEth: exact(values[3], 'vaultBadDebtAttoEth'),
 		securityMultiplierBps: exact(values[4], 'statoblastSecurityMultiplierBps'),
 		obligationUnits: exact(values[5], 'getVaultObligationUnits'),
+		coverageEpoch: exact(values[7], 'coverageEpoch'),
 		coverageOffer: (() => {
 			const offer = tuple(values[6], 3, 'coverageOffers')
 			return { enabled: flag(offer[0], 'coverageOffers.enabled'), maximumObligationAttoEth: exact(offer[1], 'coverageOffers.maximumObligationAttoEth'), minimumHealthFactorBps: exact(offer[2], 'coverageOffers.minimumHealthFactorBps') }

@@ -271,7 +271,7 @@ export const enableCoverageOffer = 'Enable offer'
 export const disableCoverageOffer = 'Disable offer'
 export const savingCoverageOffer = 'Saving offer…'
 export const coverageOfferSaved = 'Offer saved'
-export const coverageOfferUnavailable = 'Load your vault on the active network'
+export const coverageOfferUnavailable = 'Underwriting offer details are unavailable for this vault.'
 export const coverageOfferInvalid = 'Enter a positive ETH limit and a health factor of at least 1'
 
 export const coverageOfferEnabled = 'Offer enabled'

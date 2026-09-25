@@ -1333,6 +1333,50 @@ describe('SecurityVaultSection', () => {
 		expect(getTransactionButtonState(document.body, 'Deposit REP').reason).toBe('Switch to Sepolia.')
 	})
 
+	test('automatically reloads the owned vault after returning to the active network', async () => {
+		const chainId = signal('0xaa36a7')
+		let loads = 0
+		function Harness() {
+			return (
+				<SecurityVaultSection
+					{...createSecurityVaultSectionProps({
+						accountState: createAccountState({ chainId: chainId.value }),
+						autoLoadVault: true,
+						securityVaultDetails: undefined,
+						onLoadSecurityVault: () => {
+							loads += 1
+						},
+					})}
+				/>
+			)
+		}
+		const renderedComponent = await renderIntoDocument(<Harness />)
+		cleanupRenderedComponent = renderedComponent.cleanup
+		expect(loads).toBe(1)
+		await act(() => {
+			chainId.value = '0x2105'
+		})
+		expect(loads).toBe(1)
+		await act(() => {
+			chainId.value = '0xaa36a7'
+		})
+		expect(loads).toBe(2)
+	})
+
+	test('offers network recovery for underwriting controls without asking to load the vault', async () => {
+		const renderedComponent = await renderIntoDocument(
+			<SecurityVaultSection
+				{...createSecurityVaultSectionProps({
+					accountState: createAccountState({ chainId: '0x2105' }),
+					securityVaultDetails: createSecurityVaultDetails({ coverageOffer: { enabled: true, maximumObligationAttoEth: 10n ** 18n, minimumHealthFactorBps: 10_000n } }),
+				})}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+		expect(getTransactionButtonState(document.body, 'Save offer').reason).toBe('Switch to Sepolia.')
+		expect(getTransactionButtonState(document.body, 'Disable offer').reason).toBe('Switch to Sepolia.')
+	})
+
 	test('prioritizes wrong-network recovery before selected vault details load', async () => {
 		const renderedComponent = await renderIntoDocument(
 			<SecurityVaultSection

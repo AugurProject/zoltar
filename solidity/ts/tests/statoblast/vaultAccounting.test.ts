@@ -156,6 +156,7 @@ describe('Statoblast: vault accounting', () => {
 			fromBlock: receipt.blockNumber,
 			toBlock: receipt.blockNumber,
 		})
+		strictEqualTypeSafe(preferenceLogs.filter(log => log.transactionHash === depositHash).length, 1, 'positive deposit must emit exactly one preference event')
 		const preferenceLog = ensureDefined(
 			preferenceLogs.find(log => log.transactionHash === depositHash),
 			'VaultDepositTargetHealthFactorRecorded log missing from positive deposit transaction',
