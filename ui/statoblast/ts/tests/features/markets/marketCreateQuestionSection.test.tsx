@@ -85,12 +85,12 @@ describe('MarketCreateQuestionSection', () => {
 
 		const documentQueries = within(document.body)
 		expect(documentQueries.queryByText('Ask a yes-or-no question that can be resolved from one public source of truth.')).toBeNull()
-		expect(documentQueries.getByRole('button', { name: 'Question Type: Binary' }).hasAttribute('disabled')).toBe(true)
+		expect(documentQueries.getByRole('button', { name: 'Question type: Binary' }).hasAttribute('disabled')).toBe(true)
 		await act(() => {
 			fireEvent.input(documentQueries.getByLabelText('Title') as HTMLInputElement, { target: { value: 'Updated title' } })
 		})
 		await act(() => {
-			fireEvent.input(documentQueries.getByLabelText('Start Time') as HTMLInputElement, { target: { value: '1200' } })
+			fireEvent.input(documentQueries.getByLabelText('Start time') as HTMLInputElement, { target: { value: '1200' } })
 		})
 		expectTransactionButtonDisabled(document.body, 'Create question', 'Connect a wallet before creating a question.')
 		expect(updates.length).toBeGreaterThan(0)
@@ -121,16 +121,16 @@ describe('MarketCreateQuestionSection', () => {
 		const documentQueries = within(document.body)
 		const titleInput = documentQueries.getByLabelText('Title') as HTMLInputElement
 		expect(titleInput.required).toBe(true)
-		expect((documentQueries.getByLabelText('End Time') as HTMLInputElement).required).toBe(true)
+		expect((documentQueries.getByLabelText('End time') as HTMLInputElement).required).toBe(true)
 		expect(documentQueries.queryByText('Required fields are marked with an asterisk (*).')).toBeNull()
 		expect(documentQueries.getByText('Local time; blank start means immediately.')).not.toBeNull()
 		expect(documentQueries.queryByText('Use a short question that clearly distinguishes the possible outcomes.')).toBeNull()
 		expect(document.body.querySelector('.workflow-summary-strip')).toBeNull()
-		expect(documentQueries.queryByRole('heading', { name: 'Question Type Guidance' })).toBeNull()
+		expect(documentQueries.queryByRole('heading', { name: 'Question type Guidance' })).toBeNull()
 		expect(documentQueries.queryByText('Ask a yes-or-no question that can be resolved from one public source of truth.')).toBeNull()
-		expect(documentQueries.getByRole('button', { name: 'Question Type: Binary' }).hasAttribute('disabled')).toBe(true)
-		expect(documentQueries.getByRole('heading', { name: 'Draft Preview' })).not.toBeNull()
-		const draftPreview = documentQueries.getByRole('heading', { name: 'Draft Preview' }).closest('section')
+		expect(documentQueries.getByRole('button', { name: 'Question type: Binary' }).hasAttribute('disabled')).toBe(true)
+		expect(documentQueries.getByRole('heading', { name: 'Draft preview' })).not.toBeNull()
+		const draftPreview = documentQueries.getByRole('heading', { name: 'Draft preview' }).closest('section')
 		if (!(draftPreview instanceof HTMLElement)) throw new Error('Expected draft preview section')
 		expect(within(draftPreview).getByText('Untitled question')).not.toBeNull()
 		expect(within(draftPreview).getByText('Binary')).not.toBeNull()
@@ -174,8 +174,8 @@ describe('MarketCreateQuestionSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		const startTimeInput = documentQueries.getByLabelText('Start Time')
-		const endTimeInput = documentQueries.getByLabelText('End Time')
+		const startTimeInput = documentQueries.getByLabelText('Start time')
+		const endTimeInput = documentQueries.getByLabelText('End time')
 		await act(() => {
 			startTimeInput.dispatchEvent(new Event('blur'))
 		})
@@ -228,10 +228,10 @@ describe('MarketCreateQuestionSection', () => {
 		expect(documentQueries.getByText('This question will be created already ended. Reporting and resolution may be available immediately.')).not.toBeNull()
 		const createButton = documentQueries.getByRole('button', { name: 'Create question' }) as HTMLButtonElement
 		expect(createButton.disabled).toBe(false)
-		expect((documentQueries.getByLabelText('Scalar Min') as HTMLInputElement).value).toBe(scalarForm.scalarMin)
-		expect((documentQueries.getByLabelText('Scalar Max') as HTMLInputElement).value).toBe(scalarForm.scalarMax)
-		expect((documentQueries.getByLabelText('Scalar Increment') as HTMLInputElement).value).toBe(scalarForm.scalarIncrement)
-		expect((documentQueries.getByLabelText('Answer Unit') as HTMLInputElement).value).toBe(scalarForm.answerUnit)
+		expect((documentQueries.getByLabelText('Scalar min') as HTMLInputElement).value).toBe(scalarForm.scalarMin)
+		expect((documentQueries.getByLabelText('Scalar max') as HTMLInputElement).value).toBe(scalarForm.scalarMax)
+		expect((documentQueries.getByLabelText('Scalar increment') as HTMLInputElement).value).toBe(scalarForm.scalarIncrement)
+		expect((documentQueries.getByLabelText('Answer unit') as HTMLInputElement).value).toBe(scalarForm.answerUnit)
 
 		await act(() => {
 			fireEvent.click(createButton)
@@ -261,7 +261,7 @@ describe('MarketCreateQuestionSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		const draftPreview = documentQueries.getByRole('heading', { name: 'Draft Preview' }).closest('section')
+		const draftPreview = documentQueries.getByRole('heading', { name: 'Draft preview' }).closest('section')
 		if (!(draftPreview instanceof HTMLElement)) throw new Error('Expected draft preview section')
 		expect(within(draftPreview).getByText('Categorical')).not.toBeNull()
 		expect(documentQueries.queryByText(/Augur Statoblast origin security pools/)).toBeNull()
@@ -436,7 +436,7 @@ describe('MarketCreateQuestionSection', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		const draftPreviewHeading = within(document.body).getByRole('heading', { name: 'Draft Preview' })
+		const draftPreviewHeading = within(document.body).getByRole('heading', { name: 'Draft preview' })
 		const draftPreviewSection = draftPreviewHeading.closest('section')
 		if (!(draftPreviewSection instanceof HTMLElement)) throw new Error('Expected draft preview section')
 		const renderedOutcomeLabels = Array.from(draftPreviewSection.querySelectorAll('.outcome-chip')).map(element => element.textContent?.trim() ?? '')
@@ -469,7 +469,7 @@ describe('MarketCreateQuestionSection', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		const draftPreviewHeading = within(document.body).getByRole('heading', { name: 'Draft Preview' })
+		const draftPreviewHeading = within(document.body).getByRole('heading', { name: 'Draft preview' })
 		const draftPreviewSection = draftPreviewHeading.closest('section')
 		if (!(draftPreviewSection instanceof HTMLElement)) throw new Error('Expected draft preview section')
 		const renderedOutcomeLabels = Array.from(draftPreviewSection.querySelectorAll('.outcome-chip')).map(element => element.textContent?.trim() ?? '')
@@ -502,7 +502,7 @@ describe('MarketCreateQuestionSection', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		const draftPreviewHeading = within(document.body).getByRole('heading', { name: 'Draft Preview' })
+		const draftPreviewHeading = within(document.body).getByRole('heading', { name: 'Draft preview' })
 		const draftPreviewSection = draftPreviewHeading.closest('section')
 		if (!(draftPreviewSection instanceof HTMLElement)) throw new Error('Expected draft preview section')
 		const renderedOutcomeLabels = Array.from(draftPreviewSection.querySelectorAll('.outcome-chip')).map(element => element.textContent?.trim() ?? '')
@@ -536,7 +536,7 @@ describe('MarketCreateQuestionSection', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		const draftPreviewHeading = within(document.body).getByRole('heading', { name: 'Draft Preview' })
+		const draftPreviewHeading = within(document.body).getByRole('heading', { name: 'Draft preview' })
 		const draftPreviewSection = draftPreviewHeading.closest('section')
 		if (!(draftPreviewSection instanceof HTMLElement)) throw new Error('Expected draft preview section')
 		const renderedOutcomeLabels = Array.from(draftPreviewSection.querySelectorAll('.outcome-chip')).map(element => element.textContent?.trim() ?? '')
@@ -599,9 +599,9 @@ describe('MarketCreateQuestionSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		const scalarMin = documentQueries.getByLabelText('Scalar Min') as HTMLInputElement
-		const scalarIncrement = documentQueries.getByLabelText('Scalar Increment') as HTMLInputElement
-		const scalarMax = documentQueries.getByLabelText('Scalar Max') as HTMLInputElement
+		const scalarMin = documentQueries.getByLabelText('Scalar min') as HTMLInputElement
+		const scalarIncrement = documentQueries.getByLabelText('Scalar increment') as HTMLInputElement
+		const scalarMax = documentQueries.getByLabelText('Scalar max') as HTMLInputElement
 		for (const input of [scalarMin, scalarIncrement, scalarMax]) {
 			expect(input.required).toBe(true)
 			expect(document.querySelector(`label[for="${input.id}"] .required-field-indicator`)).not.toBeNull()
@@ -613,12 +613,12 @@ describe('MarketCreateQuestionSection', () => {
 			scalarMax.dispatchEvent(new Event('blur'))
 		})
 
-		expect(documentQueries.getByText('Scalar Min is required')).not.toBeNull()
-		expect(documentQueries.getByText('Scalar Increment is required')).not.toBeNull()
-		expect(documentQueries.getByText('Scalar Max is required')).not.toBeNull()
-		expect(document.getElementById(scalarMin.getAttribute('aria-describedby') ?? '')?.textContent).toBe('Scalar Min is required')
-		expect(document.getElementById(scalarIncrement.getAttribute('aria-describedby') ?? '')?.textContent).toBe('Scalar Increment is required')
-		expect(document.getElementById(scalarMax.getAttribute('aria-describedby') ?? '')?.textContent).toBe('Scalar Max is required')
+		expect(documentQueries.getByText('Scalar min is required')).not.toBeNull()
+		expect(documentQueries.getByText('Scalar increment is required')).not.toBeNull()
+		expect(documentQueries.getByText('Scalar max is required')).not.toBeNull()
+		expect(document.getElementById(scalarMin.getAttribute('aria-describedby') ?? '')?.textContent).toBe('Scalar min is required')
+		expect(document.getElementById(scalarIncrement.getAttribute('aria-describedby') ?? '')?.textContent).toBe('Scalar increment is required')
+		expect(document.getElementById(scalarMax.getAttribute('aria-describedby') ?? '')?.textContent).toBe('Scalar max is required')
 	})
 
 	test('calls create market handler when validation passes', async () => {
@@ -689,10 +689,10 @@ describe('MarketCreateQuestionSection', () => {
 
 		await act(() => {
 			fireEvent.input(documentQueries.getByLabelText('Description') as HTMLTextAreaElement, { target: { value: 'A scoped scalar description' } })
-			fireEvent.input(documentQueries.getByLabelText('Scalar Min') as HTMLInputElement, { target: { value: '1' } })
-			fireEvent.input(documentQueries.getByLabelText('Answer Unit') as HTMLInputElement, { target: { value: 'USD' } })
-			fireEvent.input(documentQueries.getByLabelText('Scalar Increment') as HTMLInputElement, { target: { value: '1' } })
-			fireEvent.input(documentQueries.getByLabelText('Scalar Max') as HTMLInputElement, { target: { value: '1000' } })
+			fireEvent.input(documentQueries.getByLabelText('Scalar min') as HTMLInputElement, { target: { value: '1' } })
+			fireEvent.input(documentQueries.getByLabelText('Answer unit') as HTMLInputElement, { target: { value: 'USD' } })
+			fireEvent.input(documentQueries.getByLabelText('Scalar increment') as HTMLInputElement, { target: { value: '1' } })
+			fireEvent.input(documentQueries.getByLabelText('Scalar max') as HTMLInputElement, { target: { value: '1000' } })
 		})
 
 		expect(updates.some(update => update.description === 'A scoped scalar description')).toBe(true)
@@ -730,7 +730,7 @@ describe('MarketCreateQuestionSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		expect(documentQueries.getByText('Try a Scalar Answer')).not.toBeNull()
+		expect(documentQueries.getByText('Try a scalar answer')).not.toBeNull()
 
 		const slider = document.querySelector('input[type="range"]')
 		if (slider === null) throw new Error('Expected scalar slider')

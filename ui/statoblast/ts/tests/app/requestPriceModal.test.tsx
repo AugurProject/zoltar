@@ -94,7 +94,7 @@ test('closes after confirmation and permits a new request when reopened after st
 		expect(within(dialogBeforeResult).getByRole('textbox', { name: 'Open Oracle REP/ETH starting price' }).hasAttribute('disabled')).toBe(false)
 		await act(() => {
 			completedHash.value = hash
-			presentation.value = { tone: 'success', title: 'Price requested', hash, operationKey: 'price-request', rows: [{ label: 'Security Pool Address', value: review.securityPoolAddress }] }
+			presentation.value = { tone: 'success', title: 'Price requested', hash, operationKey: 'price-request', rows: [{ label: 'Security pool address', value: review.securityPoolAddress }] }
 		})
 		await settle()
 		expect(closed).toBe(true)
@@ -478,7 +478,7 @@ test.each(['dismiss', 'fetch', 'close'] as const)('reports a reverted price requ
 			hash,
 			operationKey: 'price-request',
 			rows: [
-				{ label: 'Security Pool Address', value: review.securityPoolAddress },
+				{ label: 'Security pool address', value: review.securityPoolAddress },
 				{ label: 'Attempted REP/ETH price', value: '2' },
 			],
 		}
@@ -683,8 +683,8 @@ test('keeps submitted funding and pool details beside the original action after 
 				detail: 'nonce too low',
 				operationKey: 'price-request',
 				rows: [
-					{ label: 'Security Pool Address', value: review.securityPoolAddress },
-					{ label: 'Oracle Manager', value: review.managerAddress },
+					{ label: 'Security pool address', value: review.securityPoolAddress },
+					{ label: 'Oracle manager', value: review.managerAddress },
 					{ label: 'Attempted REP/ETH price', value: '2' },
 				],
 				technicalRows: [{ label: 'Function', value: 'requestPrice' }],
@@ -718,8 +718,8 @@ test('keeps submitted funding and pool details beside the original action after 
 		expect(queries.getByText('2 REP')).not.toBeNull()
 		expect(queries.getByText('1 WETH')).not.toBeNull()
 		expect(within(queries.getByRole('dialog', { name: 'Request new price' })).queryByRole('button', { name: /Approve.*(REP|WETH)/ })).toBeNull()
-		expect(within(statusDialog).getByText('Security Pool Address').parentElement?.textContent).toContain(review.securityPoolAddress)
-		expect(within(statusDialog).getByText('Oracle Manager').parentElement?.textContent).toContain(review.managerAddress)
+		expect(within(statusDialog).getByText('Security pool address').parentElement?.textContent).toContain(review.securityPoolAddress)
+		expect(within(statusDialog).getByText('Oracle manager').parentElement?.textContent).toContain(review.managerAddress)
 		expect(within(statusDialog).getByText('Technical details')).not.toBeNull()
 		expect(within(statusDialog).getByText('requestPrice')).not.toBeNull()
 		expect(queries.getByRole('button', { name: /^Request new price/ }).hasAttribute('disabled')).toBe(false)

@@ -30,13 +30,13 @@ export function getVaultLauncherVaultOwnerReason(action: VaultLauncherAction, re
 
 export function getSecurityPoolStatusBadgeLabel({ hasForkActivity, questionOutcome, lifecycleState }: { hasForkActivity: boolean; questionOutcome?: ReportingOutcomeKey | 'none'; lifecycleState: SecurityPoolLifecycleState | undefined }) {
 	if (lifecycleState === undefined) return 'Unknown'
-	if (lifecycleState === 'poolForked' || lifecycleState === 'forkMigration') return 'Fork Migration'
-	if (lifecycleState === 'forkTruthAuction') return 'Truth Auction'
+	if (lifecycleState === 'poolForked' || lifecycleState === 'forkMigration') return 'Fork migration'
+	if (lifecycleState === 'forkTruthAuction') return 'Truth auction'
 	if (lifecycleState === 'ended') {
 		if (questionOutcome === undefined || questionOutcome === 'none') return 'Finalized'
 		return `Finalized as ${getReportingOutcomeLabel(questionOutcome)}`
 	}
-	if (lifecycleState === 'operational') return hasForkActivity ? 'Fork Finalized' : 'Operational'
+	if (lifecycleState === 'operational') return hasForkActivity ? 'Fork finalized' : 'Operational'
 	return assertNever(lifecycleState)
 }
 

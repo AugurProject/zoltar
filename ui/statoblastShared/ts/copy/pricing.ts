@@ -1,7 +1,7 @@
 export const openOracleBadgeLabel = 'Open Oracle'
 export const openOraclePriceSourceDetail = 'Uses the latest price reported by the selected pool Open Oracle.'
 export const priceFromOpenOracle = 'Price from the selected pool Open Oracle'
-export const targetCollateralizationAtOpenOraclePrice = 'Target Collateralization @ Open Oracle Price'
+export const targetCollateralizationAtOpenOraclePrice = 'Target collateralization @ Open Oracle price'
 export const openOracleRepEth = 'Open Oracle REP / ETH'
 
 export function formatPendingPriceAvailability(remainingSeconds: bigint, hasSettledPrice = false) {

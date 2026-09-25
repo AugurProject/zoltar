@@ -317,7 +317,7 @@ describe('trading deployment setup', () => {
 
 	test('verifies the canonical deployment against the active network RPC chain and falls back to setup on a mismatch', async () => {
 		const plan = getTradingDeploymentPlan(core, 30)
-		const mainnetCore = { ...core, chainId: 1, chainName: 'Ethereum Mainnet', id: 'mainnet' }
+		const mainnetCore = { ...core, chainId: 1, chainName: 'Ethereum mainnet', id: 'mainnet' }
 		let rpcChainId = '0x1'
 		let contractReadCount = 0
 		const client = createPublicClient({

@@ -175,7 +175,7 @@ describe('ZoltarMigrationSection', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		expect(within(document.body).getByLabelText('Migration Amount')).not.toBeNull()
+		expect(within(document.body).getByLabelText('Migration amount')).not.toBeNull()
 		expect(document.body.querySelector('[aria-pressed="true"]')).toBeNull()
 		expectTransactionButtonDisabled(document.body, 'Split REP', 'Select at least one outcome universe.')
 	})
@@ -300,10 +300,10 @@ describe('ZoltarMigrationSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const outcomes = document.body.querySelector('.migration-outcome-section')
-		expect(outcomes?.nextElementSibling?.textContent).toContain('Migration Amount')
-		expect(outcomes?.nextElementSibling?.nextElementSibling?.textContent).toContain('Selected Destinations')
+		expect(outcomes?.nextElementSibling?.textContent).toContain('Migration amount')
+		expect(outcomes?.nextElementSibling?.nextElementSibling?.textContent).toContain('Selected destinations')
 		expect(outcomes?.nextElementSibling?.nextElementSibling?.closest('details')).toBeNull()
-		expect(outcomes?.nextElementSibling?.nextElementSibling?.nextElementSibling?.textContent).toContain('Approval Amount')
+		expect(outcomes?.nextElementSibling?.nextElementSibling?.nextElementSibling?.textContent).toContain('approval amount')
 		expect(document.body.textContent?.includes('Ready to split.')).toBe(false)
 	})
 
@@ -313,9 +313,9 @@ describe('ZoltarMigrationSection', () => {
 
 		expect(document.body.textContent).toContain('Yes')
 		expect(document.body.textContent).toContain('0x2')
-		expect(document.body.textContent).toContain('Child-Universe REP Received')
+		expect(document.body.textContent).toContain('Child-Universe REP received')
 		expect(document.body.textContent).not.toContain('Technical Details')
-		expect(document.body.textContent?.match(/Selected Destinations/g)).toHaveLength(1)
+		expect(document.body.textContent?.match(/Selected destinations/g)).toHaveLength(1)
 		expect(document.body.textContent).not.toContain('Balance Changes')
 		expect(within(document.body).queryByRole('button', { name: 'Prepare REP' })).toBeNull()
 		expect(within(document.body).getByRole('button', { name: 'Split REP' })).not.toBeNull()
@@ -365,7 +365,7 @@ describe('ZoltarMigrationSection', () => {
 		)
 		cleanupRenderedComponent = rendered.cleanup
 		expect(within(document.body).queryByRole('button', { name: /^Approve [0-9]/ })).toBeNull()
-		expect(document.body.textContent).toContain('Wallet REP Used—')
+		expect(document.body.textContent).toContain('Wallet REP used—')
 		expectTransactionButtonDisabled(document.body, 'Split REP', 'Could not read migration balances. Retry to continue.')
 		within(document.body).getByRole('button', { name: 'Retry' }).click()
 		expect(retries).toBe(1)
@@ -434,7 +434,7 @@ describe('ZoltarMigrationSection', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		const walletTokensSection = Array.from(document.querySelectorAll('details')).find(details => details.querySelector('summary')?.textContent === 'Wallet REP Tokens')
+		const walletTokensSection = Array.from(document.querySelectorAll('details')).find(details => details.querySelector('summary')?.textContent === 'Wallet REP tokens')
 		expect(walletTokensSection?.open).toBe(false)
 		if (walletTokensSection === undefined) throw new Error('Expected wallet REP tokens section')
 		expect(walletTokensSection.textContent).toContain('Yes')
@@ -453,6 +453,6 @@ describe('ZoltarMigrationSection', () => {
 			),
 		)
 		cleanupRenderedComponent = withoutHeldTokens.cleanup
-		expect(Array.from(document.querySelectorAll('summary')).some(summary => summary.textContent === 'Wallet REP Tokens')).toBe(false)
+		expect(Array.from(document.querySelectorAll('summary')).some(summary => summary.textContent === 'Wallet REP tokens')).toBe(false)
 	})
 })

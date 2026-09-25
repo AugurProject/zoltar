@@ -275,11 +275,11 @@ describe('ForkAuctionSection', () => {
 		const tablist = documentQueries.getByRole('tablist', { name: 'Fork lifecycle stages' })
 		expect(tablist).not.toBeNull()
 		expect(documentQueries.queryByRole('heading', { name: 'Fork Workflow' })).toBeNull()
-		expect(documentQueries.getByRole('heading', { name: 'Migration Status' })).not.toBeNull()
+		expect(documentQueries.getByRole('heading', { name: 'Migration status' })).not.toBeNull()
 
-		const forkTriggeredTab = documentQueries.getByRole('tab', { name: 'Fork Readiness' })
+		const forkTriggeredTab = documentQueries.getByRole('tab', { name: 'Fork readiness' })
 		const migrationTab = documentQueries.getByRole('tab', { name: 'Migration' })
-		const auctionTab = documentQueries.getByRole('tab', { name: 'Truth Auction' })
+		const auctionTab = documentQueries.getByRole('tab', { name: 'Truth auction' })
 		const settlementTab = documentQueries.getByRole('tab', { name: 'Settlement' })
 
 		expect(documentQueries.queryByText('View stage')).toBeNull()
@@ -292,7 +292,7 @@ describe('ForkAuctionSection', () => {
 		expect(auctionTab.getAttribute('aria-current')).toBe('step')
 		expect(auctionTab.className.includes('is-current')).toBe(true)
 		expect(settlementTab.className.includes('is-upcoming')).toBe(true)
-		expect(documentQueries.queryByRole('tab', { name: 'New Security Pools' })).toBeNull()
+		expect(documentQueries.queryByRole('tab', { name: 'New Security pools' })).toBeNull()
 		const separators = Array.from(document.body.querySelectorAll('.fork-workflow-stage-separator'))
 		expect(separators).toHaveLength(3)
 		expect(separators[0]?.className.includes('is-complete')).toBe(true)
@@ -364,7 +364,7 @@ describe('ForkAuctionSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		expect(documentQueries.getByRole('heading', { name: 'Fork Not Triggered' })).not.toBeNull()
+		expect(documentQueries.getByRole('heading', { name: 'Fork not triggered' })).not.toBeNull()
 		expect(documentQueries.queryByText('The system is not forking.')).toBeNull()
 		expect(documentQueries.queryByText('System is forking')).toBeNull()
 	})
@@ -406,7 +406,7 @@ describe('ForkAuctionSection', () => {
 
 		const documentQueries = within(document.body)
 		expect(documentQueries.getByRole('tab', { name: 'Settlement' }).className.includes('is-current')).toBe(true)
-		expect(documentQueries.queryByRole('tab', { name: 'New Security Pools' })).toBeNull()
+		expect(documentQueries.queryByRole('tab', { name: 'New Security pools' })).toBeNull()
 		expect(documentQueries.getByRole('tabpanel', { name: 'Settlement' })).not.toBeNull()
 	})
 
@@ -428,7 +428,7 @@ describe('ForkAuctionSection', () => {
 		const childPoolLink = documentQueries.getByRole('link', { name: 'Child pool' })
 		expect(childPoolLink).not.toBeNull()
 		expect(childPoolLink.closest('.fork-workflow-outcome-selector-row')).not.toBeNull()
-		expect(documentQueries.getByRole('heading', { name: 'Child Security Pools' })).not.toBeNull()
+		expect(documentQueries.getByRole('heading', { name: 'Child security pools' })).not.toBeNull()
 		const listedChildPoolLink = documentQueries.getByRole('link', { name: 'Open security pool' })
 		for (const link of [childPoolLink, listedChildPoolLink]) {
 			const href = link.getAttribute('href') ?? ''
@@ -463,7 +463,7 @@ describe('ForkAuctionSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		expect(documentQueries.getByRole('heading', { name: 'Optional: Claim Parent Escalation Deposits' })).not.toBeNull()
+		expect(documentQueries.getByRole('heading', { name: 'Optional: Claim parent escalation deposits' })).not.toBeNull()
 		expect(documentQueries.getByText('This fast path pays selected winning parent deposits directly in child REP and marks their carried proofs spent. Unclaimed winners can instead settle from aggregate child backing with a proof.')).not.toBeNull()
 		expect(documentQueries.getByRole('button', { name: 'Claim selected Yes deposits' })).not.toBeNull()
 		expect(documentQueries.queryByText('Selected deposits leave the parent pool and reappear on the chosen child universe for later settlement.')).toBeNull()
@@ -496,7 +496,7 @@ describe('ForkAuctionSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		let documentQueries = within(document.body)
-		expect(documentQueries.getByText('Advanced Diagnostics')).not.toBeNull()
+		expect(documentQueries.getByText('Advanced diagnostics')).not.toBeNull()
 		expect(documentQueries.getByText('Pool-held REP at fork')).not.toBeNull()
 		expect(documentQueries.getByText('Dispute-staked REP per selected outcome')).not.toBeNull()
 		expect(documentQueries.getByText('Dispute-staked REP source at fork')).not.toBeNull()
@@ -523,7 +523,7 @@ describe('ForkAuctionSection', () => {
 		cleanupRenderedComponent = rerenderedComponent.cleanup
 
 		documentQueries = within(document.body)
-		expect(documentQueries.queryByText('Advanced Diagnostics')).toBeNull()
+		expect(documentQueries.queryByText('Advanced diagnostics')).toBeNull()
 		expect(documentQueries.queryByText('Pool-held REP at fork')).toBeNull()
 		expect(documentQueries.queryByText('Dispute-staked REP per selected outcome')).toBeNull()
 		expect(documentQueries.queryByText('Dispute-staked REP source at fork')).toBeNull()
@@ -737,8 +737,8 @@ describe('ForkAuctionSection', () => {
 
 		const documentQueries = within(document.body)
 		expect(documentQueries.getByText('The optional unresolved parent escalation-deposit accounting cleanup window has closed. Child backing and winning-proof eligibility are unchanged.')).not.toBeNull()
-		expect(documentQueries.getByRole('heading', { name: 'Optional: Clear Unresolved Parent Escalation-Deposit Accounting' })).not.toBeNull()
-		expect(documentQueries.queryByRole('heading', { name: 'Optional: Claim Parent Escalation Deposits' })).toBeNull()
+		expect(documentQueries.getByRole('heading', { name: 'Optional: Clear unresolved parent escalation-deposit accounting' })).not.toBeNull()
+		expect(documentQueries.queryByRole('heading', { name: 'Optional: Claim parent escalation deposits' })).toBeNull()
 		expect(documentQueries.queryByRole('button', { name: 'Clear unresolved parent escalation-deposit accounting for Yes' })).toBeNull()
 		expect(documentQueries.queryByRole('button', { name: 'Claim selected Yes deposits' })).toBeNull()
 	})
@@ -947,13 +947,13 @@ describe('ForkAuctionSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		const statusHeading = documentQueries.getByRole('heading', { name: 'Truth Auction Status' })
+		const statusHeading = documentQueries.getByRole('heading', { name: 'Truth auction status' })
 		const statusHeader = statusHeading.closest('.section-block-header')
 		if (!(statusHeader instanceof HTMLElement)) throw new Error('Expected truth auction status header')
 		expect(statusHeader.querySelector('.section-block-badge .badge')?.textContent?.trim()).toBe('Started')
 		expect(documentQueries.getByText('1970-01-01 00:00:10 UTC')).not.toBeNull()
 		expect(documentQueries.queryByText('Inactive')).toBeNull()
-		expect(documentQueries.queryByRole('heading', { name: 'Start Truth Auction' })).toBeNull()
+		expect(documentQueries.queryByRole('heading', { name: 'Start truth auction' })).toBeNull()
 		expect(documentQueries.queryByRole('button', { name: 'Start truth auction' })).toBeNull()
 		expect(documentQueries.queryByText('Truth auction already started.')).toBeNull()
 	})
@@ -1015,12 +1015,12 @@ describe('ForkAuctionSection', () => {
 		expect(documentQueries.getByText('Ends')).not.toBeNull()
 		expect(documentQueries.getByText('1970-01-08 00:00:01 UTC')).not.toBeNull()
 		expect(documentQueries.getByText('(in 6d 23h 59m)')).not.toBeNull()
-		const truthAuctionHeading = documentQueries.getByRole('heading', { name: 'Truth Auction' })
+		const truthAuctionHeading = documentQueries.getByRole('heading', { name: 'Truth auction' })
 		const truthAuctionCard = truthAuctionHeading.closest('.section-block')
 		if (!(truthAuctionCard instanceof HTMLElement)) throw new Error('Expected truth auction summary card')
 		expect(truthAuctionCard.querySelector('.section-block-badge .badge')?.textContent?.trim()).toBe('Open')
 		expect(truthAuctionCard.querySelector('.fork-workflow-summary')).not.toBeNull()
-		expect(within(truthAuctionCard).getByText('Pending Refund')).not.toBeNull()
+		expect(within(truthAuctionCard).getByText('Pending refund')).not.toBeNull()
 	})
 
 	test('keeps refund withdrawal disabled while loading, then shows the credited amount beside an enabled action', async () => {
@@ -1058,7 +1058,7 @@ describe('ForkAuctionSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		const refundHeading = documentQueries.getByRole('heading', { name: 'Refund Withdrawal' })
+		const refundHeading = documentQueries.getByRole('heading', { name: 'Refund withdrawal' })
 		const refundSection = refundHeading.closest('.section-block')
 		if (!(refundSection instanceof HTMLElement)) throw new Error('Expected refund withdrawal section')
 		const refundQueries = within(refundSection)
@@ -1245,11 +1245,11 @@ describe('ForkAuctionSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		const currentBidsHeading = documentQueries.getByRole('heading', { name: 'Current Bids' })
-		const myBidsHeading = documentQueries.getByRole('heading', { name: 'My Bids' })
-		const submitBidHeading = documentQueries.getByRole('heading', { name: 'Submit Bid' })
-		expect(documentQueries.getByText('Market Depth')).not.toBeNull()
-		expect(documentQueries.queryByText('Market Depth & Bid History')).toBeNull()
+		const currentBidsHeading = documentQueries.getByRole('heading', { name: 'Current bids' })
+		const myBidsHeading = documentQueries.getByRole('heading', { name: 'My bids' })
+		const submitBidHeading = documentQueries.getByRole('heading', { name: 'Submit bid' })
+		expect(documentQueries.getByText('Market depth')).not.toBeNull()
+		expect(documentQueries.queryByText('Market depth & Bid History')).toBeNull()
 		expect(submitBidHeading.compareDocumentPosition(currentBidsHeading) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0)
 		expect(myBidsHeading.compareDocumentPosition(currentBidsHeading) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0)
 		expect(currentBidsHeading.closest('details')).toBeNull()
@@ -1321,7 +1321,7 @@ describe('ForkAuctionSection', () => {
 			expect(documentQueries.getByText('Failed to load truth auction price levels. Reason: Bidbook RPC unavailable')).not.toBeNull()
 		})
 		expect(documentQueries.queryByText('No active prices are currently visible for this auction.')).toBeNull()
-		fireEvent.click(documentQueries.getByText('Market Depth'))
+		fireEvent.click(documentQueries.getByText('Market depth'))
 		expect(documentQueries.queryByText('No live price levels are currently active for this auction.')).toBeNull()
 		expect(documentQueries.queryByText('No active levels are visible.')).toBeNull()
 		fireEvent.click(documentQueries.getByRole('button', { name: 'Retry current bids' }))
@@ -1455,8 +1455,8 @@ describe('ForkAuctionSection', () => {
 		const documentQueries = within(document.body)
 		const submitBidButton = documentQueries.getByRole('button', { name: 'Submit bid' })
 		if (!(submitBidButton instanceof HTMLButtonElement)) throw new Error('Expected Submit bid button to be a button element')
-		const youPayRow = documentQueries.getByText('You Pay').closest('.transaction-review-row')
-		const resultingEthBalanceRow = documentQueries.getByText('Resulting ETH Balance').closest('.transaction-review-detail-row')
+		const youPayRow = documentQueries.getByText('You pay').closest('.transaction-review-row')
+		const resultingEthBalanceRow = documentQueries.getByText('Resulting ETH balance').closest('.transaction-review-detail-row')
 		if (!(youPayRow instanceof HTMLElement) || !(resultingEthBalanceRow instanceof HTMLElement)) throw new Error('Expected ETH bid review rows')
 		expect(youPayRow.textContent).toContain('ETH')
 		expect(youPayRow.textContent).not.toContain('REP')
@@ -1661,16 +1661,16 @@ describe('ForkAuctionSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		const migrationStartedLabel = documentQueries.getByText('Migration Started')
+		const migrationStartedLabel = documentQueries.getByText('Migration started')
 		const migrationStartedMetric = migrationStartedLabel.closest('div')
 		if (!(migrationStartedMetric instanceof HTMLElement)) throw new Error('Expected migration started metric')
 		expect(within(migrationStartedMetric).getByText('1970-01-01 00:00:02 UTC')).not.toBeNull()
 		expect(within(migrationStartedMetric).getByText('(less than a minute ago)')).not.toBeNull()
-		const migrationHeading = documentQueries.getByRole('heading', { name: 'Migration Status' })
+		const migrationHeading = documentQueries.getByRole('heading', { name: 'Migration status' })
 		const migrationCard = migrationHeading.closest('.section-block')
 		if (!(migrationCard instanceof HTMLElement)) throw new Error('Expected migration summary card')
 		expect(migrationCard.querySelector('.fork-workflow-summary')).not.toBeNull()
-		expect(within(migrationCard).getByText('REP At Fork')).not.toBeNull()
+		expect(within(migrationCard).getByText('REP at fork')).not.toBeNull()
 		expect(within(migrationCard).getByText('Migrated REP')).not.toBeNull()
 		expect(within(migrationCard).getByText('Settlement collateral')).not.toBeNull()
 	})
@@ -1752,6 +1752,6 @@ describe('ForkAuctionSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		expect(documentQueries.getByText('Not Started')).not.toBeNull()
+		expect(documentQueries.getByText('Not started')).not.toBeNull()
 	})
 })

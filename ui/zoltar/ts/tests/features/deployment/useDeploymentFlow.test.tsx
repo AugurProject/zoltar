@@ -176,7 +176,7 @@ describe('useDeploymentFlow', () => {
 		expect(onTransactionRequested).not.toHaveBeenCalled()
 		expect(deploy).not.toHaveBeenCalled()
 		expect(onTransactionFailed).not.toHaveBeenCalled()
-		expect(requireHookState(hookState).errorMessage).toBe('Transaction failed while attempting to deploy Zoltar. Reason: Wallet network changed. Switch to Ethereum Mainnet and try again')
+		expect(requireHookState(hookState).errorMessage).toBe('Transaction failed while attempting to deploy Zoltar. Reason: Wallet network changed. Switch to Ethereum mainnet and try again')
 	})
 
 	test('does not mark a deployment successful when the target code remains absent', async () => {

@@ -852,7 +852,7 @@ const productionBrowserScenarios = [
 	{
 		appId: 'zoltar',
 		hash: '#/deploy?simulate=1&simScenario=baseline',
-		expected: 'Deploy Contracts',
+		expected: 'Deploy contracts',
 		workflow: false,
 		name: 'zoltar baseline deployment',
 		viewport: { height: 900, width: 1440 },
@@ -868,7 +868,7 @@ const productionBrowserScenarios = [
 	{
 		appId: 'statoblast',
 		hash: '#/deploy?simulate=1&simScenario=baseline',
-		expected: 'Deploy Contracts',
+		expected: 'Deploy contracts',
 		workflow: false,
 		name: 'statoblast baseline deployment',
 		viewport: { height: 900, width: 1440 },
@@ -876,7 +876,7 @@ const productionBrowserScenarios = [
 	{
 		appId: 'statoblast',
 		hash: '#/security-pools?simulate=1&simScenario=security-pool',
-		expected: 'Security Pools',
+		expected: 'Security pools',
 		workflow: false,
 		name: 'statoblast seeded pool at narrow width',
 		viewport: { height: 844, width: 390 },
@@ -884,7 +884,7 @@ const productionBrowserScenarios = [
 	{
 		appId: 'statoblast',
 		hash: '#/security-pools?simulate=1&simScenario=securitypoolx2-auction',
-		expected: 'Truth Auction',
+		expected: 'Truth auction',
 		workflow: true,
 		name: 'statoblast fork and auction',
 		viewport: { height: 900, width: 1440 },
@@ -929,7 +929,7 @@ productionWorkflowTest('production bundle executes deployment, reporting, fork m
 				}
 				throw new Error(`Transaction review did not finish: ${String(await driver.evaluate('document.body.innerText'))}`)
 			}
-			const selectPoolTool = async (label: 'Price Oracle' | 'Fork & Migration') => {
+			const selectPoolTool = async (label: 'Price oracle' | 'Fork & migration') => {
 				let selected = false
 				for (let attempt = 0; attempt < 600 && !selected; attempt += 1) {
 					selected =
@@ -982,7 +982,7 @@ productionWorkflowTest('production bundle executes deployment, reporting, fork m
 			await driver.clickButton('Deposit REP', 1)
 			await completeTransactionReview('Deposit REP')
 			const poolBody = await driver.waitForTransactionStatus('Confirmed', 'Deposit REP')
-			expect(poolBody).toContain('Manage Pool')
+			expect(poolBody).toContain('Manage pool')
 			await driver.clickButton('Dismiss')
 
 			await driver.resize({ height: 900, width: 1440 })
@@ -1011,7 +1011,7 @@ productionWorkflowTest('production bundle executes deployment, reporting, fork m
 			await driver.waitForTransactionStatus('Confirmed', 'Deposit REP')
 			await driver.clickButton('Dismiss')
 			await driver.clickButton('+1 year')
-			await selectPoolTool('Price Oracle')
+			await selectPoolTool('Price oracle')
 			await driver.waitForButtonEnabled('Request new price…')
 			await driver.clickButton('Request new price…')
 			await driver.waitForButtonEnabled('Fetch from Uniswap')
@@ -1087,12 +1087,12 @@ productionWorkflowTest('production bundle executes deployment, reporting, fork m
 			await completeTransactionReview(settledTitle)
 			await driver.waitForTransactionStatus('Confirmed', settledTitle)
 			await driver.clickButton('Dismiss')
-			const reportingPoolsOpened = await driver.evaluate(`(() => { const target = [...document.querySelectorAll('a, button')].find(candidate => candidate.textContent?.trim() === 'Security Pools'); if (!(target instanceof HTMLElement)) return false; target.click(); return true })()`)
+			const reportingPoolsOpened = await driver.evaluate(`(() => { const target = [...document.querySelectorAll('a, button')].find(candidate => candidate.textContent?.trim() === 'Security pools'); if (!(target instanceof HTMLElement)) return false; target.click(); return true })()`)
 			expect(reportingPoolsOpened).toBe(true)
-			await selectPoolTool('Price Oracle')
+			await selectPoolTool('Price oracle')
 			await driver.waitForButtonEnabled('Reporting')
 			await driver.clickButton('Reporting')
-			await driver.waitForBodyText('Report Outcome')
+			await driver.waitForBodyText('Report outcome')
 
 			const selectReportingOutcome = async (outcome: 'Yes' | 'No') => {
 				let selected = false
@@ -1175,7 +1175,7 @@ productionWorkflowTest('production bundle executes deployment, reporting, fork m
 					await driver.resize({ height: 900, width: 1440 })
 				}
 				await driver.clickButton('Reporting')
-				await driver.waitForBodyText('Report Outcome')
+				await driver.waitForBodyText('Report outcome')
 			}
 			await selectReportingOutcome('No')
 			await driver.waitForButtonEnabled('Trigger universe fork')
@@ -1183,7 +1183,7 @@ productionWorkflowTest('production bundle executes deployment, reporting, fork m
 			await completeTransactionReview()
 			await driver.waitForButtonEnabled('Open fork & migration')
 			await driver.clickButton('Open fork & migration')
-			await driver.waitForBodyText('Fork & Migration')
+			await driver.waitForBodyText('Fork & migration')
 
 			// The fork workflow view now owns the full migration flow; drive it directly.
 			await driver.waitForButtonEnabled('Migrate pool to Yes universe')
@@ -1192,8 +1192,8 @@ productionWorkflowTest('production bundle executes deployment, reporting, fork m
 			await driver.waitForTransactionStatus('Confirmed', 'Migrate REP To Zoltar')
 			await driver.waitForButtonEnabled('Migrate vault to Yes')
 			await driver.clickButton('Migrate vault to Yes')
-			await completeTransactionReview('Migrate Vault')
-			await driver.waitForTransactionStatus('Confirmed', 'Migrate Vault')
+			await completeTransactionReview('Migrate vault')
+			await driver.waitForTransactionStatus('Confirmed', 'Migrate vault')
 
 			await driver.resize({ height: 900, width: 1440 })
 			await driver.navigate(`${baseUrl}/statoblast/?workflow=auction#/security-pools?simulate=1&simScenario=securitypoolx2-auction`)
@@ -1207,7 +1207,7 @@ productionWorkflowTest('production bundle executes deployment, reporting, fork m
 				`(() => { const record = [...document.querySelectorAll('article.entity-card')].find(candidate => candidate.querySelector('h3')?.textContent?.trim() === 'Yes'); const link = record?.querySelector('a.universe-link'); if (!(link instanceof HTMLAnchorElement)) return false; link.click(); return true })()`,
 			)
 			expect(yesUniverseSelected).toBe(true)
-			const childPoolBrowserOpened = await driver.evaluate(`(() => { const link = [...document.querySelectorAll('a')].find(candidate => candidate.textContent?.trim() === 'Browse Pools'); if (!(link instanceof HTMLAnchorElement)) return false; link.click(); return true })()`)
+			const childPoolBrowserOpened = await driver.evaluate(`(() => { const link = [...document.querySelectorAll('a')].find(candidate => candidate.textContent?.trim() === 'Browse pools'); if (!(link instanceof HTMLAnchorElement)) return false; link.click(); return true })()`)
 			expect(childPoolBrowserOpened).toBe(true)
 			await driver.waitForBodyText('Will this resolve?')
 			await driver.clickButton('+1 month')
@@ -1215,22 +1215,22 @@ productionWorkflowTest('production bundle executes deployment, reporting, fork m
 				`(() => { const record = [...document.querySelectorAll('article')].find(candidate => candidate.textContent?.toLowerCase().includes('truth auction')); const link = record?.querySelector('a[aria-label^="Open pool:"]'); if (!(link instanceof HTMLAnchorElement)) return false; link.click(); return true })()`,
 			)
 			expect(auctionPoolOpened).toBe(true)
-			const auctionPoolBody = await driver.waitForBodyText('Manage Pool')
-			if (auctionPoolBody.includes('Universe Mismatch')) {
+			const auctionPoolBody = await driver.waitForBodyText('Manage pool')
+			if (auctionPoolBody.includes('Universe mismatch')) {
 				const childUniverseOpened = await driver.evaluate(`(() => { const link = document.querySelector('section.tone-critical a.universe-link'); if (!(link instanceof HTMLAnchorElement)) return false; link.click(); return true })()`)
 				expect(childUniverseOpened).toBe(true)
 			}
-			await driver.waitForBodyWithoutText('Universe Mismatch')
-			await selectPoolTool('Fork & Migration')
+			await driver.waitForBodyWithoutText('Universe mismatch')
+			await selectPoolTool('Fork & migration')
 			await driver.waitForButtonEnabled('Finalize truth auction')
 			await driver.clickButton('Finalize truth auction')
-			await completeTransactionReview('Finalize Truth Auction')
-			const finalizedBody = await driver.waitForTransactionStatus('Confirmed', 'Finalize Truth Auction')
-			expect(finalizedBody).toContain('Truth Auction')
+			await completeTransactionReview('Finalize Truth auction')
+			const finalizedBody = await driver.waitForTransactionStatus('Confirmed', 'Finalize Truth auction')
+			expect(finalizedBody).toContain('Truth auction')
 		}),
 	)
 	if (typeof state !== 'object' || state === null || !('body' in state) || typeof state.body !== 'string') throw new Error('Production workflow returned invalid document state')
-	expect(state.body).toContain('Finalize Truth Auction')
+	expect(state.body).toContain('Finalize Truth auction')
 	expect(state.height).toBe(900)
 	expect(state.width).toBe(1440)
 })

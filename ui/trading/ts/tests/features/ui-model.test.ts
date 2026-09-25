@@ -14,8 +14,8 @@ import { liquidityOperationAvailable } from '../../features/live/useLiquidityWor
 
 describe('standalone trading UI model', () => {
 	test('keeps the header badge as the only network disclosure on route headers', () => {
-		expect(liveWorkflowRoutePresentation('market').description).not.toContain('Browser Simulation')
-		expect(liveWorkflowRoutePresentation('market').description).not.toContain('Ethereum Mainnet')
+		expect(liveWorkflowRoutePresentation('market').description).not.toContain('Browser simulation')
+		expect(liveWorkflowRoutePresentation('market').description).not.toContain('Ethereum mainnet')
 	})
 
 	test('names the route the user is on while contracts load so the header does not change once they resolve', () => {

@@ -105,7 +105,7 @@ function useForkAuctionOperationsWithDependencies<TWriteClient>(
 	currentForkAuctionSelectionKeyRef.current = currentForkAuctionSelectionKey
 	const getPendingTitle = (actionName: ForkAuctionActionResult['action'], displayTitleOverride?: string) => {
 		if (displayTitleOverride !== undefined) return displayTitleOverride
-		if (actionName === 'claimAuctionProceeds') return 'Settle Finalized Bid'
+		if (actionName === 'claimAuctionProceeds') return 'Settle finalized bid'
 		return actionName.replace(/([A-Z])/g, ' $1').replace(/^./, value => value.toUpperCase())
 	}
 	const getSuccessTitle = (actionName: ForkAuctionActionResult['action'], displayTitleOverride?: string) => `${getPendingTitle(actionName, displayTitleOverride)} submitted`

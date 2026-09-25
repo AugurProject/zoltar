@@ -87,7 +87,7 @@ describe('SecurityPoolSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const queries = within(document.body)
-		expect(queries.getByText('Transaction Review')).not.toBeNull()
+		expect(queries.getByText('Transaction review')).not.toBeNull()
 		expect(queries.getByText('Pool parameters are fixed at deployment.')).not.toBeNull()
 		const confirmButton = queries.getByRole('button', { name: 'Create security pool' })
 		expect(queries.queryByRole('button', { name: /Creating pool/ })).toBeNull()
@@ -101,7 +101,7 @@ describe('SecurityPoolSection', () => {
 			render(h(SecurityPoolSection, createProps({ onDismissSecurityPoolReview, securityPoolCreating: false, securityPoolReviewSignal: undefined })), renderedComponent.container)
 		})
 		expect(document.activeElement).toBe(queries.getByRole('button', { name: 'Create pool' }))
-		expect((queries.getByRole('textbox', { name: 'Statoblast Security Multiplier' }) as HTMLInputElement).disabled).toBe(false)
+		expect((queries.getByRole('textbox', { name: 'Statoblast security multiplier' }) as HTMLInputElement).disabled).toBe(false)
 	})
 
 	test('shows wallet-pending pool creation without an app cancel action', async () => {
@@ -113,7 +113,7 @@ describe('SecurityPoolSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const queries = within(document.body)
-		expect(queries.getByText('Transaction Review')).not.toBeNull()
+		expect(queries.getByText('Transaction review')).not.toBeNull()
 		expect(queries.queryByRole('button', { name: 'Cancel' })).toBeNull()
 		expect(queries.queryByRole('button', { name: 'Create pool' })).toBeNull()
 		review.abort()
@@ -133,7 +133,7 @@ describe('SecurityPoolSection', () => {
 		expect(onDismissSecurityPoolReview).toHaveBeenCalledTimes(1)
 		expect(queries.getByText('User rejected the request')).not.toBeNull()
 		expect(queries.queryByRole('button', { name: 'Close' })).toBeNull()
-		expect((queries.getByRole('textbox', { name: 'Statoblast Security Multiplier' }) as HTMLInputElement).disabled).toBe(false)
+		expect((queries.getByRole('textbox', { name: 'Statoblast security multiplier' }) as HTMLInputElement).disabled).toBe(false)
 		expect(queries.getByRole('button', { name: 'Create pool' }).hasAttribute('disabled')).toBe(false)
 		await expect(pendingReview).rejects.toThrow('Remaining transactions canceled')
 	})
@@ -265,13 +265,13 @@ describe('SecurityPoolSection', () => {
 		const documentQueries = within(document.body)
 		const headings = Array.from(document.querySelectorAll('h3')).map(heading => heading.textContent?.trim())
 
-		expect(headings).not.toContain('Create Pool')
+		expect(headings).not.toContain('Create pool')
 		expect(headings).not.toContain('Question Context')
 		expect(headings).not.toContain('Requirements')
 		expect(headings).not.toContain('Existing Pools')
-		expect(documentQueries.getByText('Starting Annual Fee')).not.toBeNull()
+		expect(documentQueries.getByText('Starting annual fee')).not.toBeNull()
 		expect(documentQueries.getByText(formatOpenInterestFeePerYearPercent(ORIGIN_POOL_INITIAL_RETENTION_RATE))).not.toBeNull()
-		expect(documentQueries.queryByRole('textbox', { name: 'Open Interest Fee / Year (%)' })).toBeNull()
+		expect(documentQueries.queryByRole('textbox', { name: 'Open interest fee / year (%)' })).toBeNull()
 		expect(documentQueries.queryByRole('heading', { name: 'Before You Deploy' })).toBeNull()
 		expect(document.body.textContent?.includes('Pool creation turns a binary question into a collateralized trading surface.')).toBe(false)
 		expect(document.body.textContent?.includes('Enter the question, choose how much REP coverage the pool should require, then deploy the pool for vaults, reporting, and trading.')).toBe(false)
@@ -287,14 +287,14 @@ describe('SecurityPoolSection', () => {
 		expect((documentQueries.getByRole('radio', { name: 'Create a new question' }) as HTMLInputElement).checked).toBe(true)
 		expect(documentQueries.queryByRole('combobox')).toBeNull()
 		expect(documentQueries.queryByRole('textbox', { name: 'Question ID' })).toBeNull()
-		expect(document.querySelector('form[aria-label="Create Question"]')).not.toBeNull()
+		expect(document.querySelector('form[aria-label="Create question"]')).not.toBeNull()
 		expect(documentQueries.getByRole('button', { name: 'Create question and pool' })).not.toBeNull()
 		expect(documentQueries.queryByRole('button', { name: 'Create question' })).toBeNull()
 		expect(documentQueries.queryByRole('button', { name: 'Create pool' })).toBeNull()
 
 		fireEvent.click(documentQueries.getByRole('radio', { name: 'Use a question ID' }))
 		expect(documentQueries.getByRole('textbox', { name: 'Question ID' })).not.toBeNull()
-		expect(document.querySelector('form[aria-label="Create Question"]')).toBeNull()
+		expect(document.querySelector('form[aria-label="Create question"]')).toBeNull()
 		expect(documentQueries.queryByRole('button', { name: 'Create question and pool' })).toBeNull()
 	})
 
@@ -303,10 +303,10 @@ describe('SecurityPoolSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		const statoblastSecurityMultiplierBpsInput = documentQueries.getByRole('textbox', { name: 'Statoblast Security Multiplier' })
+		const statoblastSecurityMultiplierBpsInput = documentQueries.getByRole('textbox', { name: 'Statoblast security multiplier' })
 		expect(statoblastSecurityMultiplierBpsInput.getAttribute('aria-describedby')).toBe('security-pool-security-multiplier-help')
 		expect(documentQueries.getByText('Multiplier target in x, with up to four decimal places; higher values require more REP.')).not.toBeNull()
-		const priorityFeeInput = documentQueries.getByRole('textbox', { name: 'Initial Report Priority Fee (ETH)' })
+		const priorityFeeInput = documentQueries.getByRole('textbox', { name: 'Initial report priority fee (ETH)' })
 		expect(priorityFeeInput.getAttribute('aria-describedby')).toBe('security-pool-initial-report-priority-fee-help')
 		expect((priorityFeeInput as HTMLInputElement).value).toBe('0.00000001')
 		expect(documentQueries.getByText('Fixed gas-price premium added to Open Oracle report security.')).not.toBeNull()
@@ -327,7 +327,7 @@ describe('SecurityPoolSection', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		const priorityFeeInput = within(document.body).getByRole('textbox', { name: 'Initial Report Priority Fee (ETH)' })
+		const priorityFeeInput = within(document.body).getByRole('textbox', { name: 'Initial report priority fee (ETH)' })
 		expect(priorityFeeInput.getAttribute('aria-invalid')).toBe('true')
 		expect(priorityFeeInput.getAttribute('aria-describedby')).toBe('security-pool-initial-report-priority-fee-help security-pool-initial-report-priority-fee-error')
 		expect(within(document.body).getByText('Initial-report priority fee must be greater than 0\u00a0ETH.')).not.toBeNull()
@@ -356,7 +356,7 @@ describe('SecurityPoolSection', () => {
 			)
 			cleanupRenderedComponent = renderedComponent.cleanup
 
-			const multiplierInput = within(document.body).getByRole('textbox', { name: 'Statoblast Security Multiplier' })
+			const multiplierInput = within(document.body).getByRole('textbox', { name: 'Statoblast security multiplier' })
 			expect(multiplierInput.getAttribute('aria-invalid')).toBe('true')
 			expect(multiplierInput.getAttribute('aria-describedby')).toBe('security-pool-security-multiplier-help security-pool-security-multiplier-error')
 			expect(within(document.body).getByText(message)).not.toBeNull()
@@ -385,7 +385,7 @@ describe('SecurityPoolSection', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		const multiplierInput = within(document.body).getByRole('textbox', { name: 'Statoblast Security Multiplier' })
+		const multiplierInput = within(document.body).getByRole('textbox', { name: 'Statoblast security multiplier' })
 		expect(multiplierInput.getAttribute('aria-invalid')).toBeNull()
 		expect(multiplierInput.getAttribute('aria-describedby')).toBe('security-pool-security-multiplier-help')
 		expectTransactionButtonEnabled(document.body, 'Create pool')
@@ -405,7 +405,7 @@ describe('SecurityPoolSection', () => {
 
 		const button = getButtonByText('Create question and pool')
 		expect(button.disabled).toBe(true)
-		expect(getTransactionButtonState(document.body, 'Create question and pool').reason).toBe('Missing required fields: Title, End Time')
+		expect(getTransactionButtonState(document.body, 'Create question and pool').reason).toBe('Missing required fields: Title, End time')
 	})
 
 	test('enables combined question-and-pool creation when both forms are ready', async () => {
@@ -533,7 +533,7 @@ describe('SecurityPoolSection', () => {
 		expect(getTransactionButtonState(document.body, 'Create question and pool').reason).toBe('Security pools can only be created for exact binary Yes / No questions. Enter an eligible question to proceed.')
 		fireEvent.click(button)
 		expect(onCreateQuestionAndSecurityPool).toHaveBeenCalledTimes(0)
-		const marketTypeTrigger = within(document.body).getByRole('button', { name: /Question Type/ })
+		const marketTypeTrigger = within(document.body).getByRole('button', { name: /Question type/ })
 		fireEvent.click(marketTypeTrigger)
 		expect(marketTypeTrigger.hasAttribute('disabled')).toBe(true)
 		expect(within(document.body).queryByRole('listbox', { name: 'Dropdown options' }) === null).toBe(true)
@@ -621,7 +621,7 @@ describe('SecurityPoolSection', () => {
 			render(h(SecurityPoolSection, { ...baseProps, questionAndPoolCreating: true }), renderedComponent.container)
 		})
 		expect((documentQueries.getByRole('textbox', { name: 'Title' }).closest('fieldset') as HTMLFieldSetElement | null)?.disabled).toBe(true)
-		expect((documentQueries.getByRole('textbox', { name: 'Statoblast Security Multiplier' }) as HTMLInputElement).disabled).toBe(true)
+		expect((documentQueries.getByRole('textbox', { name: 'Statoblast security multiplier' }) as HTMLInputElement).disabled).toBe(true)
 	})
 
 	test('applies the normal pool guards to partial-success retries', async () => {
@@ -756,7 +756,7 @@ describe('SecurityPoolSection', () => {
 			),
 		)
 		cleanupRenderedComponent = duplicateRender.cleanup
-		expectTransactionButtonDisabled(document.body, 'Pool Already Exists', 'A pool for this question, Statoblast security multiplier, and priority fee already exists.')
+		expectTransactionButtonDisabled(document.body, 'Pool already exists', 'A pool for this question, Statoblast security multiplier, and priority fee already exists.')
 		expect(document.body.textContent).toContain('Change the priority fee or Statoblast security multiplier to create a different origin pool.')
 		expect(document.querySelector(`a[href*='${duplicatePoolAddress}']`)).not.toBeNull()
 		await cleanupRenderedComponent?.()
@@ -771,7 +771,7 @@ describe('SecurityPoolSection', () => {
 			),
 		)
 		cleanupRenderedComponent = forkedRender.cleanup
-		expectTransactionButtonDisabled(document.body, 'Pool Creation Locked', 'Security pools cannot be created after this universe has forked.')
+		expectTransactionButtonDisabled(document.body, 'Pool creation locked', 'Security pools cannot be created after this universe has forked.')
 		expect(within(document.body).getByText('Security pools cannot be created after this universe has forked.')).not.toBeNull()
 	})
 
@@ -835,14 +835,14 @@ describe('SecurityPoolSection', () => {
 		const renderedComponent = await renderIntoDocument(h(SecurityPoolSection, initialProps))
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		expect(within(document.body).queryByText('Universe Mismatch')).toBeNull()
+		expect(within(document.body).queryByText('Universe mismatch')).toBeNull()
 		await act(() => {
 			render(h(SecurityPoolSection, { ...initialProps, activeUniverseId: 2n }), renderedComponent.container)
 		})
 
 		const warning = within(document.body).getByText('This pool belongs to universe 0x1')
 		expect(warning.closest('.entity-card') !== null).toBe(true)
-		expect(within(document.body).queryByText('Universe Mismatch') === null).toBe(true)
+		expect(within(document.body).queryByText('Universe mismatch') === null).toBe(true)
 	})
 
 	test('uses carried market details when created market does not match loaded market details', async () => {

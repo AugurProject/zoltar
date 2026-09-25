@@ -121,7 +121,7 @@ describe('ForkZoltarSection', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		const forkButton = within(document.body).getByRole('button', { name: 'Fork Universe' })
+		const forkButton = within(document.body).getByRole('button', { name: 'Fork universe' })
 		expect(forkButton.hasAttribute('disabled')).toBe(true)
 		expect(document.body.textContent).toContain('Loading universe details.')
 		expect(document.body.textContent).not.toContain('Refresh universe data')
@@ -194,12 +194,12 @@ describe('ForkZoltarSection', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		expect(document.body.textContent).toContain('Fork Threshold≈ 100.00 REP')
-		expect(document.body.textContent).toContain('Permanent REP Burn≈ 20.00 REP')
+		expect(document.body.textContent).toContain('Fork threshold≈ 100.00 REP')
+		expect(document.body.textContent).toContain('Permanent REP burn≈ 20.00 REP')
 		expect(document.body.textContent).not.toContain('Migration Custody Credit')
 		expect(document.body.textContent).not.toContain('Resulting REP Balance')
 		expect(document.body.textContent).not.toContain('Technical Details')
-		expect(document.body.textContent).not.toContain('Protocol FeeNone')
+		expect(document.body.textContent).not.toContain('Protocol feeNone')
 	})
 
 	test('allows direct fork submission once the selected question has ended', async () => {
@@ -229,7 +229,7 @@ describe('ForkZoltarSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		const forkButton = documentQueries.getByRole('button', { name: 'Fork Universe' })
+		const forkButton = documentQueries.getByRole('button', { name: 'Fork universe' })
 		expect(forkButton.hasAttribute('disabled')).toBe(false)
 		fireEvent.click(forkButton)
 		expect(onForkZoltar).toHaveBeenCalledTimes(1)
@@ -260,7 +260,7 @@ describe('ForkZoltarSection', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 		expect(within(document.body).queryByRole('button', { name: /Approve/ })).toBeNull()
-		expect(within(document.body).getByRole('button', { name: 'Fork Universe' }).hasAttribute('disabled')).toBe(false)
+		expect(within(document.body).getByRole('button', { name: 'Fork universe' }).hasAttribute('disabled')).toBe(false)
 	})
 
 	test('keeps direct fork submission available when the selected fork question changes', async () => {
@@ -294,13 +294,13 @@ describe('ForkZoltarSection', () => {
 		const renderedComponent = await renderIntoDocument(h(ForkZoltarSection, createProps('0x01')))
 		cleanupRenderedComponent = renderedComponent.cleanup
 		const componentQueries = within(renderedComponent.container)
-		const forkButton = componentQueries.getByRole('button', { name: 'Fork Universe' })
+		const forkButton = componentQueries.getByRole('button', { name: 'Fork universe' })
 
 		expect(forkButton.hasAttribute('disabled')).toBe(false)
 
 		render(h(ForkZoltarSection, createProps('0x02')), renderedComponent.container)
 
-		expect(componentQueries.getByRole('button', { name: 'Fork Universe' }).hasAttribute('disabled')).toBe(false)
+		expect(componentQueries.getByRole('button', { name: 'Fork universe' }).hasAttribute('disabled')).toBe(false)
 	})
 
 	test('gives direct recovery when the fork question ID is missing', async () => {
@@ -328,7 +328,7 @@ describe('ForkZoltarSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		const questionIdInput = documentQueries.getByLabelText('Fork Question ID')
+		const questionIdInput = documentQueries.getByLabelText('Fork question ID')
 		const questionError = document.getElementById('fork-zoltar-question-state')
 		if (questionError === null) throw new Error('Expected question ID error notice')
 		expect(questionError.textContent).toContain('No question matches this ID. Try another question ID.')
@@ -364,9 +364,9 @@ describe('ForkZoltarSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		const forkButton = documentQueries.getByRole('button', { name: 'Fork Universe' })
+		const forkButton = documentQueries.getByRole('button', { name: 'Fork universe' })
 		expect(forkButton.hasAttribute('disabled')).toBe(true)
-		expect(getTransactionButtonState(document.body, 'Fork Universe').reason).toContain('The selected question must end before the universe can fork.')
+		expect(getTransactionButtonState(document.body, 'Fork universe').reason).toContain('The selected question must end before the universe can fork.')
 		fireEvent.click(forkButton)
 		expect(onForkZoltar).not.toHaveBeenCalled()
 	})
@@ -400,9 +400,9 @@ describe('ForkZoltarSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		let forkButton = documentQueries.getByRole('button', { name: 'Fork Universe' })
+		let forkButton = documentQueries.getByRole('button', { name: 'Fork universe' })
 		expect((forkButton as HTMLButtonElement).disabled).toBe(true)
-		expect(getTransactionButtonState(document.body, 'Fork Universe').reason).toBe('Loading current chain time before checking whether the selected question has ended.')
+		expect(getTransactionButtonState(document.body, 'Fork universe').reason).toBe('Loading current chain time before checking whether the selected question has ended.')
 
 		render(
 			<ChainTimestampContext.Provider value={1n}>
@@ -410,10 +410,10 @@ describe('ForkZoltarSection', () => {
 			</ChainTimestampContext.Provider>,
 			renderedComponent.container,
 		)
-		forkButton = documentQueries.getByRole('button', { name: 'Fork Universe' })
+		forkButton = documentQueries.getByRole('button', { name: 'Fork universe' })
 		const expectedActiveReason = `The selected question must end before the universe can fork. It ends ${formatTimestamp(2n)} (${formatRelativeTimestamp(2n, 1n)}).`
 		expect((forkButton as HTMLButtonElement).disabled).toBe(true)
-		expect(getTransactionButtonState(document.body, 'Fork Universe').reason).toBe(expectedActiveReason)
+		expect(getTransactionButtonState(document.body, 'Fork universe').reason).toBe(expectedActiveReason)
 
 		render(
 			<ChainTimestampContext.Provider value={2n}>
@@ -421,7 +421,7 @@ describe('ForkZoltarSection', () => {
 			</ChainTimestampContext.Provider>,
 			renderedComponent.container,
 		)
-		forkButton = documentQueries.getByRole('button', { name: 'Fork Universe' })
+		forkButton = documentQueries.getByRole('button', { name: 'Fork universe' })
 		expect((forkButton as HTMLButtonElement).disabled).toBe(false)
 
 		render(
@@ -430,7 +430,7 @@ describe('ForkZoltarSection', () => {
 			</ChainTimestampContext.Provider>,
 			renderedComponent.container,
 		)
-		forkButton = documentQueries.getByRole('button', { name: 'Fork Universe' })
+		forkButton = documentQueries.getByRole('button', { name: 'Fork universe' })
 		expect((forkButton as HTMLButtonElement).disabled).toBe(false)
 		fireEvent.click(forkButton)
 		expect(onForkZoltar).toHaveBeenCalledTimes(1)

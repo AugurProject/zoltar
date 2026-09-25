@@ -47,7 +47,7 @@ describe('transaction presentations', () => {
 			['categorical', 'Categorical'],
 			['scalar', 'Scalar'],
 		] as const) {
-			const questionTypeRow = createMarketCreationSuccessPresentation({ createQuestionHash: '0x1234', marketType, questionId: '0x01' }).rows?.find(row => row.label === 'Question Type')
+			const questionTypeRow = createMarketCreationSuccessPresentation({ createQuestionHash: '0x1234', marketType, questionId: '0x01' }).rows?.find(row => row.label === 'Question type')
 			expect(questionTypeRow?.value).toBe(expectedLabel)
 		}
 	})
@@ -74,7 +74,7 @@ describe('transaction presentations', () => {
 			securityPoolAddress: '0x0000000000000000000000000000000000000001',
 			vaultAddress: '0x0000000000000000000000000000000000000002',
 		})
-		expect(intent.rows?.map(row => row.label)).toEqual(['Security Pool Address', 'Vault'])
+		expect(intent.rows?.map(row => row.label)).toEqual(['Security pool address', 'Vault'])
 	})
 
 	test('normalizes the Statoblast security multiplier in security pool creation intents', () => {
@@ -82,7 +82,7 @@ describe('transaction presentations', () => {
 			statoblastSecurityMultiplierBps: 25_000n,
 		})
 
-		expect(intent.rows).toEqual([{ label: 'Statoblast Security Multiplier', value: '2.5x' }])
+		expect(intent.rows).toEqual([{ label: 'Statoblast security multiplier', value: '2.5x' }])
 		expect(intent.failedTitle).toBe('Security pool creation')
 	})
 
@@ -102,8 +102,8 @@ describe('transaction presentations', () => {
 		})
 
 		expect(intent.rows?.[0]).toEqual({ label: 'Question', value: 'Will it rain?' })
-		expect(intent.rows?.slice(1).map(row => row.label)).toEqual(['Statoblast Security Multiplier', 'Initial Report Priority Fee'])
-		expect(success.rows?.map(row => row.label)).toEqual(['Pool', 'Question ID', 'Statoblast Security Multiplier', 'Initial Report Priority Fee'])
+		expect(intent.rows?.slice(1).map(row => row.label)).toEqual(['Statoblast security multiplier', 'Initial report priority fee'])
+		expect(success.rows?.map(row => row.label)).toEqual(['Pool', 'Question ID', 'Statoblast security multiplier', 'Initial report priority fee'])
 	})
 
 	test('uses resolved token symbols in Open Oracle approval and withdrawal titles', () => {
@@ -152,7 +152,7 @@ describe('transaction presentations', () => {
 		})
 		const reportingIntent = createReportingTransactionIntent('reportOutcome', { ...context, outcome: 'no' })
 
-		expect(tradingIntent.rows?.map(row => row.label)).toEqual(['Pool', 'Share Outcome'])
+		expect(tradingIntent.rows?.map(row => row.label)).toEqual(['Pool', 'Share outcome'])
 		expect(tradingIntent.rows?.map(row => row.identityKey)).toEqual(['security-pool', 'outcome'])
 		expect(tradingPresentation.rows?.map(row => row.identityKey)).toEqual(['security-pool', 'outcome'])
 		expect(reportingIntent.rows?.map(row => row.label)).toEqual(['Pool', 'Outcome'])
@@ -175,8 +175,8 @@ describe('transaction presentations', () => {
 			context,
 		)
 
-		expect(intent.rows?.map(row => row.label)).toEqual(['Pool', 'Target Vault', 'Requested liquidation debt'])
-		expect(presentation.rows?.map(row => row.label)).toEqual(['Pool', 'Target Vault', 'Requested liquidation debt'])
+		expect(intent.rows?.map(row => row.label)).toEqual(['Pool', 'Target vault', 'Requested liquidation debt'])
+		expect(presentation.rows?.map(row => row.label)).toEqual(['Pool', 'Target vault', 'Requested liquidation debt'])
 		expect(intent.rows?.at(-1)).toMatchObject({ label: 'Requested liquidation debt', value: '4.5\u00a0ETH' })
 		expect(presentation.rows?.at(-1)).toMatchObject({ label: 'Requested liquidation debt', value: '4.5\u00a0ETH' })
 	})

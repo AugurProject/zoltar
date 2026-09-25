@@ -21,8 +21,8 @@ test('updates pool selection immediately and never shows contents for a differen
 	}
 	setCleanup((await renderIntoDocument(<Harness />)).cleanup)
 	const page = within(document.body)
-	expect(page.queryByRole('textbox', { name: 'Security Pool Address' }) !== null).toBe(true)
-	const input = page.getByRole('textbox', { name: 'Security Pool Address' })
+	expect(page.queryByRole('textbox', { name: 'Security pool address' }) !== null).toBe(true)
+	const input = page.getByRole('textbox', { name: 'Security pool address' })
 	expect(page.queryByRole('button', { name: 'Change pool' }) === null).toBe(true)
 	expect(page.queryByRole('button', { name: 'Open pool' }) === null).toBe(true)
 	await act(() => fireEvent.input(input, { target: { value: '0x123' } }))
@@ -52,11 +52,11 @@ test('shows the refresh busy label only while a shown pool reloads', async () =>
 test('keeps a directly opened advanced view visible and returns to the three primary tabs', async () => {
 	setCleanup((await renderIntoDocument(<NavigationHarness />)).cleanup)
 	const page = within(document.body)
-	expect(page.getByRole('tab', { name: 'Staged Operations' }).getAttribute('aria-selected')).toBe('true')
+	expect(page.getByRole('tab', { name: 'Staged operations' }).getAttribute('aria-selected')).toBe('true')
 	await act(() => fireEvent.click(page.getByRole('tab', { name: 'Vaults' })))
 	expect(page.getAllByRole('tab').map(tab => tab.textContent)).toEqual(['Vaults', 'Shares', 'Reporting'])
-	await act(() => fireEvent.click(page.getByRole('button', { name: 'Price Oracle' })))
-	expect(page.getByRole('tab', { name: 'Price Oracle' }).getAttribute('aria-selected')).toBe('true')
+	await act(() => fireEvent.click(page.getByRole('button', { name: 'Price oracle' })))
+	expect(page.getByRole('tab', { name: 'Price oracle' }).getAttribute('aria-selected')).toBe('true')
 })
 
 test('surfaces actionable pool exceptions independently of the selected tab', async () => {
@@ -78,7 +78,7 @@ test('shows one oracle price row that counts down a pending report instead of an
 	await renderLoadedPool({ poolOracleManagerDetails: createOracleManagerDetails({ isPriceValid: false, lastPrice: 0n, lastSettlementTimestamp: 0n, pendingReportId: 7n, pendingReportReadyAtTimestamp: 10n ** 12n }) })
 	const rows = document.body.querySelectorAll('.pool-oracle-status')
 	expect(rows).toHaveLength(1)
-	expect(rows[0]?.textContent).toContain('Open Oracle Price')
+	expect(rows[0]?.textContent).toContain('Open Oracle price')
 	expect(rows[0]?.textContent).toContain('Available in')
 	expect(document.body.textContent).not.toContain('Oracle price unavailable')
 	expect(within(document.body).queryByRole('button', { name: 'Request new price' })).toBeNull()
@@ -181,7 +181,7 @@ test('shows the pending report countdown in selected pool price fields', async (
 	expect(document.body.textContent).toContain('Available in 54s')
 	expect(document.body.textContent).not.toContain('Unavailable ↻')
 	const shownOraclePrices = Array.from(document.querySelectorAll('.metric-label'))
-		.filter(label => label.textContent === 'Open Oracle Price')
+		.filter(label => label.textContent === 'Open Oracle price')
 		.map(label => label.nextElementSibling?.textContent?.trim())
 	expect(shownOraclePrices).toEqual(['Available in 54s', 'Available in 54s↻'])
 	await act(async () => await new Promise(resolve => setTimeout(resolve, 1100)))

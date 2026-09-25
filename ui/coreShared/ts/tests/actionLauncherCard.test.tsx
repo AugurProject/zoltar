@@ -46,12 +46,12 @@ describe('ActionLauncherCard', () => {
 	})
 
 	test('does not repeat a case-equivalent action label as a heading', async () => {
-		const renderedComponent = await renderIntoDocument(<ActionLauncherCard action={{ actionLabel: 'Mint complete sets', description: 'Lock collateral to mint one share for each outcome.', key: 'mint', onAction: () => undefined, readiness: 'ready', title: 'Mint Complete Sets' }} />)
+		const renderedComponent = await renderIntoDocument(<ActionLauncherCard action={{ actionLabel: 'Mint complete sets', description: 'Lock collateral to mint one share for each outcome.', key: 'mint', onAction: () => undefined, readiness: 'ready', title: 'Mint complete sets' }} />)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const card = within(document.body).getByRole('button', { name: 'Mint complete sets' }).closest('.action-launcher-card')
 		if (!(card instanceof HTMLElement)) throw new Error('Expected an action launcher card')
-		expect(within(card).queryByRole('heading', { name: 'Mint Complete Sets' })).toBeNull()
+		expect(within(card).queryByRole('heading', { name: 'Mint complete sets' })).toBeNull()
 		expect(within(card).getByText('Lock collateral to mint one share for each outcome.')).not.toBeNull()
 	})
 

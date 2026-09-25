@@ -119,7 +119,7 @@ describe('SimulationBanner', () => {
 
 		try {
 			const documentQueries = within(renderedComponent.container)
-			expect(documentQueries.getByRole('heading', { name: 'Browser Simulation' })).not.toBeNull()
+			expect(documentQueries.getByRole('heading', { name: 'Browser simulation' })).not.toBeNull()
 			expect(documentQueries.queryByText('Simulation Mode')).toBeNull()
 			expect(documentQueries.getByText('One seeded question, one security pool, and one funded vault with an active capacity ownership. Use it to test pool actions and liquidation paths.')).not.toBeNull()
 		} finally {
@@ -657,7 +657,7 @@ describe('SimulationBanner', () => {
 			const documentQueries = within(renderedComponent.container)
 			const advancedControls = openAdvancedControls(renderedComponent.container)
 			fireEvent.click(within(advancedControls).getByRole('button', { name: 'Remove corrupted saves' }))
-			const cleanupDialog = await waitFor(() => documentQueries.getByRole('dialog', { name: 'Remove Corrupted Saved States' }))
+			const cleanupDialog = await waitFor(() => documentQueries.getByRole('dialog', { name: 'Remove corrupted saved states' }))
 			expect(within(cleanupDialog).getByRole('button', { name: 'Remove corrupted saves' })).toBeTruthy()
 			fireEvent.click(within(cleanupDialog).getByRole('button', { name: 'Remove corrupted saves' }))
 
@@ -989,7 +989,7 @@ describe('SimulationBanner', () => {
 			const documentQueries = within(renderedComponent.container)
 			const advancedControls = openAdvancedControls(renderedComponent.container)
 			fireEvent.click(within(advancedControls).getByRole('button', { name: 'Remove corrupted saves' }))
-			const cleanupDialog = await waitFor(() => documentQueries.getByRole('dialog', { name: 'Remove Corrupted Saved States' }))
+			const cleanupDialog = await waitFor(() => documentQueries.getByRole('dialog', { name: 'Remove corrupted saved states' }))
 			fireEvent.click(within(cleanupDialog).getByRole('button', { name: 'Remove corrupted saves' }))
 
 			const error = await waitFor(() => documentQueries.getByRole('alert'))

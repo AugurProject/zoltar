@@ -12,7 +12,7 @@ import { installTestRouting } from './testUtils/testRouting.js'
 const DEFAULT_TABS: readonly RouteTabDefinition[] = [
 	{ hash: '#/deploy', label: 'Deploy', route: 'deploy' },
 	{ hash: '#/zoltar', label: 'Zoltar', route: 'zoltar' },
-	{ hash: '#/security-pools', label: 'Security Pools', route: 'security-pools' },
+	{ hash: '#/security-pools', label: 'Security pools', route: 'security-pools' },
 	{ hash: '#/open-oracle', label: 'Open Oracle', route: 'open-oracle' },
 ]
 
@@ -50,10 +50,10 @@ describe('TabNavigation', () => {
 		expect(documentQueries.getByRole('link', { name: 'Deploy' }).getAttribute('href')).toBe('#/deploy?universe=7&simulate=1')
 		expect(documentQueries.getByRole('link', { name: 'Zoltar' }).getAttribute('href')).toBe('#/zoltar?universe=7&simulate=1')
 		expect(documentQueries.getByRole('link', { name: 'Zoltar' }).getAttribute('aria-current')).toBe('page')
-		expect(documentQueries.getByRole('link', { name: 'Security Pools' }).getAttribute('href')).toBe('#/security-pools?universe=7&simulate=1')
+		expect(documentQueries.getByRole('link', { name: 'Security pools' }).getAttribute('href')).toBe('#/security-pools?universe=7&simulate=1')
 		expect(documentQueries.getByRole('link', { name: 'Open Oracle' }).getAttribute('href')).toBe('#/open-oracle?universe=7&simulate=1')
 		expect(documentQueries.queryByRole('combobox')).toBeNull()
-		expect(documentQueries.getByRole('link', { name: 'Protocol Guide' }).getAttribute('href')).toBe('https://augurproject.github.io/zoltar/docs/documentation.html')
+		expect(documentQueries.getByRole('link', { name: 'Protocol guide' }).getAttribute('href')).toBe('https://augurproject.github.io/zoltar/docs/documentation.html')
 	})
 
 	test('omits route controls when only one application section is available', async () => {
@@ -69,14 +69,14 @@ describe('TabNavigation', () => {
 
 		const documentQueries = within(document.body)
 		expect(documentQueries.queryByRole('link', { name: 'Questions' })).toBeNull()
-		expect(documentQueries.getByRole('link', { name: 'Protocol Guide' })).not.toBeNull()
+		expect(documentQueries.getByRole('link', { name: 'Protocol guide' })).not.toBeNull()
 	})
 
 	test('omits the shared protocol guide when the application does not own that documentation', async () => {
 		const rendered = await renderIntoDocument(h(TabNavigation, createProps({ showProtocolGuide: false })))
 		cleanupRenderedComponent = rendered.cleanup
 
-		expect(within(document.body).queryByRole('link', { name: 'Protocol Guide' })).toBeNull()
+		expect(within(document.body).queryByRole('link', { name: 'Protocol guide' })).toBeNull()
 	})
 
 	test('omits an empty navigation landmark when no route chooser or guide is available', async () => {
@@ -141,7 +141,7 @@ describe('TabNavigation', () => {
 		const documentQueries = within(document.body)
 		expect(documentQueries.getByRole('link', { name: 'Deploy' }).getAttribute('href')).toBe('#/deploy?universe=7&simulate=1')
 		expect(documentQueries.getByRole('link', { name: 'Zoltar' }).getAttribute('href')).toBe('#/zoltar?universe=7&simulate=1')
-		expect(documentQueries.getByRole('link', { name: 'Security Pools' }).getAttribute('href')).toBe('#/security-pools?universe=7&simulate=1')
+		expect(documentQueries.getByRole('link', { name: 'Security pools' }).getAttribute('href')).toBe('#/security-pools?universe=7&simulate=1')
 		expect(documentQueries.getByRole('link', { name: 'Open Oracle' }).getAttribute('href')).toBe('#/open-oracle?universe=7&simulate=1')
 	})
 
@@ -159,7 +159,7 @@ describe('TabNavigation', () => {
 		)
 		cleanupRenderedComponent = rendered.cleanup
 
-		const securityPoolsLink = within(document.body).getByRole('link', { name: 'Security Pools' })
+		const securityPoolsLink = within(document.body).getByRole('link', { name: 'Security pools' })
 		const locationBeforeClicks = window.location.href
 		const preventNativeNavigation = (event: Event) => event.preventDefault()
 		document.body.addEventListener('click', preventNativeNavigation)

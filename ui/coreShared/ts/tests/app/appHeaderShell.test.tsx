@@ -96,7 +96,7 @@ describe('AppHeaderShell', () => {
 			{ hash: '#/deploy', label: 'Deploy', route: 'deploy' },
 			{ hash: '#/zoltar', label: 'Zoltar', route: 'zoltar' },
 		]
-		const secondaryNavigation = { ariaLabel: 'Zoltar views', onChange: () => undefined, options: [{ href: '#/zoltar?zoltarView=questions', label: 'Browse Questions', value: 'questions' }], value: 'questions' }
+		const secondaryNavigation = { ariaLabel: 'Zoltar views', onChange: () => undefined, options: [{ href: '#/zoltar?zoltarView=questions', label: 'Browse questions', value: 'questions' }], value: 'questions' }
 		for (const [route, expectSecondary] of [
 			['zoltar', true],
 			['deploy', true],
@@ -123,7 +123,7 @@ describe('AppHeaderShell', () => {
 		} finally {
 			await singleTab.cleanup()
 		}
-		const secondaryNavigation = { ariaLabel: 'Security Pools views', onChange: () => undefined, options: [{ href: '#/security-pools', label: 'Browse Pools', value: 'browse' }], value: 'browse' }
+		const secondaryNavigation = { ariaLabel: 'Security pools views', onChange: () => undefined, options: [{ href: '#/security-pools', label: 'Browse pools', value: 'browse' }], value: 'browse' }
 		const withGuide = await renderIntoDocument(
 			<AppHeaderShell
 				overview={<div>Overview</div>}
@@ -133,7 +133,7 @@ describe('AppHeaderShell', () => {
 					onRouteChange: () => undefined,
 					route: 'security-pools',
 					tabs: [
-						{ hash: '#/security-pools', label: 'Security Pools', route: 'security-pools' },
+						{ hash: '#/security-pools', label: 'Security pools', route: 'security-pools' },
 						{ hash: '#/open-oracle', label: 'Open Oracle', route: 'open-oracle' },
 					],
 				}}

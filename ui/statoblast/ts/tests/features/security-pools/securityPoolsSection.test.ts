@@ -363,8 +363,8 @@ void describe('SecurityPoolsSection', () => {
 
 		const documentQueries = within(document.body)
 		expect(documentQueries.queryByRole('tab', { name: 'Browse' })).toBeNull()
-		expect(documentQueries.queryByRole('tab', { name: 'Create Pool' })).toBeNull()
-		expect(documentQueries.queryByRole('tab', { name: 'Manage Pool' })).toBeNull()
+		expect(documentQueries.queryByRole('tab', { name: 'Create pool' })).toBeNull()
+		expect(documentQueries.queryByRole('tab', { name: 'Manage pool' })).toBeNull()
 		expect(documentQueries.queryByText('Mode')).toBeNull()
 		expect(document.body.querySelector('.route-summary-strip')).toBeNull()
 		expect(documentQueries.queryByText('Loaded pools')).toBeNull()
@@ -487,13 +487,13 @@ void describe('SecurityPoolsSection', () => {
 	void test('renders one route heading in create and empty manage modes', async () => {
 		const createRender = await renderIntoDocument(h(SecurityPoolsSection, createSecurityPoolsSectionProps({ activeView: 'create' })))
 		cleanupRenderedComponent = createRender.cleanup
-		expect(within(document.body).getAllByRole('heading', { name: 'Create Pool' })).toHaveLength(1)
+		expect(within(document.body).getAllByRole('heading', { name: 'Create pool' })).toHaveLength(1)
 		await cleanupRenderedComponent()
 		cleanupRenderedComponent = undefined
 
 		const manageRender = await renderIntoDocument(h(SecurityPoolsSection, createSecurityPoolsSectionProps({ activeView: 'operate' })))
 		cleanupRenderedComponent = manageRender.cleanup
-		expect(within(document.body).getAllByRole('heading', { name: 'Manage Pool' })).toHaveLength(1)
+		expect(within(document.body).getAllByRole('heading', { name: 'Manage pool' })).toHaveLength(1)
 	})
 
 	void test('keeps the route summary hidden even when the selected pool is resolved in operate mode', async () => {
@@ -522,7 +522,7 @@ void describe('SecurityPoolsSection', () => {
 		expect(documentQueries.queryByText('Selected pool')).toBeNull()
 		expect(documentQueries.queryByText('Pool status')).toBeNull()
 		expect(documentQueries.queryByText('Next step')).toBeNull()
-		expect(documentQueries.queryByRole('textbox', { name: 'Security Pool Address' }) !== null).toBe(true)
+		expect(documentQueries.queryByRole('textbox', { name: 'Security pool address' }) !== null).toBe(true)
 		expect(document.body.querySelector('.selected-pool-context-details')).toBeNull()
 		const objectHeader = document.body.querySelector('.selected-pool-object-header')
 		if (!(objectHeader instanceof HTMLElement)) throw new Error('Expected the selected-pool object header')
@@ -563,7 +563,7 @@ void describe('SecurityPoolsSection', () => {
 
 		const metricLabels = Array.from(document.body.querySelectorAll('.metric-label')).map(element => element.textContent?.trim() ?? '')
 		expect(metricLabels.includes('Manager')).toBe(false)
-		expect(metricLabels.includes('Truth Auction')).toBe(false)
+		expect(metricLabels.includes('Truth auction')).toBe(false)
 	})
 
 	void test('filters the browse registry by search text and the derived ended state', async () => {
@@ -608,7 +608,7 @@ void describe('SecurityPoolsSection', () => {
 			searchInput.dispatchEvent(new window.Event('input', { bubbles: true }))
 		})
 
-		const systemStateSelect = documentQueries.getByLabelText('System State')
+		const systemStateSelect = documentQueries.getByLabelText('System state')
 		if (!(systemStateSelect instanceof window.HTMLSelectElement)) throw new Error('Expected system state filter')
 		systemStateSelect.value = 'ended'
 		await act(() => {

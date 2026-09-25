@@ -175,7 +175,7 @@ describe('SecurityPoolWorkflowSection: staged operations', () => {
 
 			const documentQueries = within(document.body)
 			expect(documentQueries.queryByText('A REP withdrawal was queued for the selected vault.')).toBeNull()
-			expect(documentQueries.queryByText('Next: Review the queued entry in Staged Operations and execute it when the oracle price is valid.')).toBeNull()
+			expect(documentQueries.queryByText('Next: Review the queued entry in Staged operations and execute it when the oracle price is valid.')).toBeNull()
 
 			await act(() => {
 				fireEvent.click(documentQueries.getAllByRole('button', { name: 'Withdraw REP' })[0] as HTMLElement)
@@ -278,9 +278,9 @@ describe('SecurityPoolWorkflowSection: staged operations', () => {
 			setCleanup(renderedComponent.cleanup)
 
 			const executeButton = within(document.body).getByRole('button', { name: 'Execute staged operation' })
-			if (!(executeButton instanceof HTMLButtonElement)) throw new Error('Expected Execute Staged Operation button')
+			if (!(executeButton instanceof HTMLButtonElement)) throw new Error('Expected Execute Staged operation button')
 			expect(executeButton.disabled).toBe(true)
-			expect(document.body.textContent).toContain('Request a new price in Price Oracle before executing this operation.')
+			expect(document.body.textContent).toContain('Request a new price in price oracle before executing this operation.')
 		})
 
 		test('shows immediate execution when a withdraw uses an already valid oracle price', async () => {
@@ -409,7 +409,7 @@ describe('SecurityPoolWorkflowSection: staged operations', () => {
 			)
 			setCleanup(renderedComponent.cleanup)
 
-			const dialog = within(document.body).getByRole('dialog', { name: 'Execute Vault Liquidation' })
+			const dialog = within(document.body).getByRole('dialog', { name: 'Execute vault liquidation' })
 			const dialogQueries = within(dialog)
 			expect(dialogQueries.getByRole('heading', { name: 'Liquidation executed' })).not.toBeNull()
 			expect(dialogQueries.getByText('A valid oracle price was already available, so the liquidation executed immediately and no staged operation was created.')).not.toBeNull()
@@ -448,7 +448,7 @@ describe('SecurityPoolWorkflowSection: staged operations', () => {
 			)
 			setCleanup(renderedComponent.cleanup)
 
-			const dialog = within(document.body).getByRole('dialog', { name: 'Execute Vault Liquidation' })
+			const dialog = within(document.body).getByRole('dialog', { name: 'Execute vault liquidation' })
 			const dialogQueries = within(dialog)
 			expect(dialogQueries.getByRole('heading', { name: 'Liquidation failed' })).not.toBeNull()
 			expect(dialogQueries.getByText('Local Capacity ownership broken')).not.toBeNull()

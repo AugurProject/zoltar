@@ -160,7 +160,7 @@ describe('EnumDropdown', () => {
 	test('includes the selected value in the trigger accessible name when labeled', async () => {
 		const renderedComponent = await renderIntoDocument(
 			<EnumDropdown
-				ariaLabel='Question Type'
+				ariaLabel='Question type'
 				options={[
 					{ label: 'Binary', value: 'binary' },
 					{ label: 'Categorical', value: 'categorical' },
@@ -171,7 +171,7 @@ describe('EnumDropdown', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		expect(within(document.body).getByRole('button', { name: 'Question Type: Binary' })).not.toBeNull()
+		expect(within(document.body).getByRole('button', { name: 'Question type: Binary' })).not.toBeNull()
 	})
 
 	test('handles Escape and reverse-arrow navigation across dropdown options', async () => {

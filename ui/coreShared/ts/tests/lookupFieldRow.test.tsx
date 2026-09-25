@@ -70,11 +70,11 @@ describe('LookupFieldRow', () => {
 
 	test('shows a copyable resolved address separately from the editable lookup value', async () => {
 		const address = '0x00000000000000000000000000000000000000A1'
-		const renderedComponent = await renderIntoDocument(<LookupFieldRow label='Pool Address' onInput={() => undefined} resolvedValue={<AddressValue address={address} />} resolvedValueLabel='Selected Pool' value={address} />)
+		const renderedComponent = await renderIntoDocument(<LookupFieldRow label='Pool Address' onInput={() => undefined} resolvedValue={<AddressValue address={address} />} resolvedValueLabel='Selected pool' value={address} />)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		expect(documentQueries.getByText('Selected Pool')).not.toBeNull()
+		expect(documentQueries.getByText('Selected pool')).not.toBeNull()
 		expect(documentQueries.getByRole('button', { name: `Copy address ${address}` }).textContent).toBe(address)
 	})
 })

@@ -28,7 +28,7 @@ describe('RouteSubNavigation', () => {
 				},
 				options: [
 					{ href: '#/zoltar?zoltarView=questions', label: 'Questions', value: 'questions' },
-					{ href: '#/zoltar?zoltarView=create', label: 'Create Question', value: 'create' },
+					{ href: '#/zoltar?zoltarView=create', label: 'Create question', value: 'create' },
 					{ disabled: true, label: 'Migrate REP', value: 'migrate' },
 				],
 				value: 'questions',
@@ -55,7 +55,7 @@ describe('RouteSubNavigation', () => {
 		expect(migrateRepTab.getAttribute('aria-description')).toBeNull()
 		expect(documentQueries.queryByText('Available after this universe forks.')).toBeNull()
 
-		const createQuestionTab = documentQueries.getByRole('link', { name: 'Create Question' })
+		const createQuestionTab = documentQueries.getByRole('link', { name: 'Create question' })
 		const locationBeforeClicks = window.location.href
 		const preventNativeNavigation = (event: Event) => event.preventDefault()
 		document.body.addEventListener('click', preventNativeNavigation)

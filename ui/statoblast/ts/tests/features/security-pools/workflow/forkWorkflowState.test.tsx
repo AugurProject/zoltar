@@ -163,7 +163,7 @@ describe('SecurityPoolWorkflowSection: fork workflow state', () => {
 
 			const documentQueries = within(document.body)
 			await act(() => {
-				fireEvent.click(documentQueries.getByRole('button', { name: 'Fork & Migration' }))
+				fireEvent.click(documentQueries.getByRole('button', { name: 'Fork & migration' }))
 			})
 
 			expect(selectedViews).toEqual(['fork-workflow'])
@@ -206,9 +206,9 @@ describe('SecurityPoolWorkflowSection: fork workflow state', () => {
 			setCleanup(renderedComponent.cleanup)
 
 			const documentQueries = within(document.body)
-			expect(documentQueries.getByRole('heading', { name: 'Truth Auction Status' })).not.toBeNull()
-			expect(documentQueries.queryByRole('heading', { name: 'Fork Triggered' })).toBeNull()
-			expect(documentQueries.getByRole('tab', { name: 'Truth Auction' }).className.includes('is-selected')).toBe(true)
+			expect(documentQueries.getByRole('heading', { name: 'Truth auction status' })).not.toBeNull()
+			expect(documentQueries.queryByRole('heading', { name: 'Fork triggered' })).toBeNull()
+			expect(documentQueries.getByRole('tab', { name: 'Truth auction' }).className.includes('is-selected')).toBe(true)
 
 			await act(() => {
 				fireEvent.click(documentQueries.getByRole('tab', { name: 'Migration' }))
@@ -242,9 +242,9 @@ describe('SecurityPoolWorkflowSection: fork workflow state', () => {
 
 			await waitFor(() => {
 				const documentQueries = within(document.body)
-				expect(documentQueries.getByRole('tab', { name: 'Truth Auction' }).getAttribute('aria-selected')).toBe('true')
-				expect(documentQueries.getByRole('heading', { name: 'Truth Auction Status' })).not.toBeNull()
-				expect(documentQueries.queryByRole('heading', { name: 'Migration Status' })).toBeNull()
+				expect(documentQueries.getByRole('tab', { name: 'Truth auction' }).getAttribute('aria-selected')).toBe('true')
+				expect(documentQueries.getByRole('heading', { name: 'Truth auction status' })).not.toBeNull()
+				expect(documentQueries.queryByRole('heading', { name: 'Migration status' })).toBeNull()
 			})
 		})
 
@@ -273,7 +273,7 @@ describe('SecurityPoolWorkflowSection: fork workflow state', () => {
 
 			let documentQueries = within(document.body)
 			expect(documentQueries.getByRole('tab', { name: 'Migration' }).getAttribute('aria-selected')).toBe('true')
-			expect(documentQueries.getByRole('heading', { name: 'Migration Status' })).not.toBeNull()
+			expect(documentQueries.getByRole('heading', { name: 'Migration status' })).not.toBeNull()
 
 			await act(async () => {
 				render(
@@ -326,7 +326,7 @@ describe('SecurityPoolWorkflowSection: fork workflow state', () => {
 
 			documentQueries = within(document.body)
 			expect(documentQueries.getByRole('tab', { name: 'Settlement' }).getAttribute('aria-selected')).toBe('true')
-			expect(documentQueries.getByRole('heading', { name: 'Settlement Status' })).not.toBeNull()
+			expect(documentQueries.getByRole('heading', { name: 'Settlement status' })).not.toBeNull()
 		})
 
 		test('keeps Fork Triggered selected when its user action changes a stage-specific route to the generic workflow', async () => {
@@ -353,18 +353,18 @@ describe('SecurityPoolWorkflowSection: fork workflow state', () => {
 			setCleanup(renderedComponent.cleanup)
 
 			await act(() => {
-				fireEvent.click(within(document.body).getByRole('tab', { name: 'Fork Readiness' }))
+				fireEvent.click(within(document.body).getByRole('tab', { name: 'Fork readiness' }))
 			})
 
 			await waitFor(() => {
 				const documentQueries = within(document.body)
-				expect(documentQueries.getByRole('tab', { name: 'Fork Readiness' }).getAttribute('aria-selected')).toBe('true')
-				expect(documentQueries.getByRole('heading', { name: 'Fork Triggered' })).not.toBeNull()
-				expect(documentQueries.queryByRole('heading', { name: 'Migration Status' })).toBeNull()
+				expect(documentQueries.getByRole('tab', { name: 'Fork readiness' }).getAttribute('aria-selected')).toBe('true')
+				expect(documentQueries.getByRole('heading', { name: 'Fork triggered' })).not.toBeNull()
+				expect(documentQueries.queryByRole('heading', { name: 'Migration status' })).toBeNull()
 			})
 		})
 
-		test('opens the migration step for root-universe pools that present as Fork Migration after universe fork', async () => {
+		test('opens the migration step for root-universe pools that present as Fork migration after universe fork', async () => {
 			const selectedPoolAddress = zeroAddress
 			const renderedComponent = await renderIntoDocument(
 				<SecurityPoolWorkflowSection
@@ -386,7 +386,7 @@ describe('SecurityPoolWorkflowSection: fork workflow state', () => {
 			setCleanup(renderedComponent.cleanup)
 
 			const documentQueries = within(document.body)
-			expect(documentQueries.getByRole('heading', { name: 'Migration Status' })).not.toBeNull()
+			expect(documentQueries.getByRole('heading', { name: 'Migration status' })).not.toBeNull()
 			expect(documentQueries.getByRole('tab', { name: 'Migration' }).className.includes('is-selected')).toBe(true)
 			expect(document.body.textContent?.includes('This step becomes active once the fork has been triggered.')).toBe(false)
 		})
@@ -412,7 +412,7 @@ describe('SecurityPoolWorkflowSection: fork workflow state', () => {
 			setCleanup(renderedComponent.cleanup)
 
 			let documentQueries = within(document.body)
-			expect(documentQueries.getByRole('heading', { name: 'Settlement Status' })).not.toBeNull()
+			expect(documentQueries.getByRole('heading', { name: 'Settlement status' })).not.toBeNull()
 			expect(documentQueries.getByRole('tab', { name: 'Settlement' }).className.includes('is-selected')).toBe(true)
 
 			await act(async () => {
@@ -455,10 +455,10 @@ describe('SecurityPoolWorkflowSection: fork workflow state', () => {
 			})
 
 			documentQueries = within(document.body)
-			expect(documentQueries.getByRole('heading', { name: 'Settlement Status' })).not.toBeNull()
-			expect(documentQueries.getByRole('heading', { name: 'Child Security Pools' })).not.toBeNull()
+			expect(documentQueries.getByRole('heading', { name: 'Settlement status' })).not.toBeNull()
+			expect(documentQueries.getByRole('heading', { name: 'Child security pools' })).not.toBeNull()
 			expect(documentQueries.getByRole('tab', { name: 'Settlement' }).className.includes('is-selected')).toBe(true)
-			expect(documentQueries.queryByRole('tab', { name: 'New Security Pools' })).toBeNull()
+			expect(documentQueries.queryByRole('tab', { name: 'New Security pools' })).toBeNull()
 		})
 	})
 
@@ -588,7 +588,7 @@ describe('SecurityPoolWorkflowSection: fork workflow state', () => {
 
 			const documentQueries = within(document.body)
 			expect(documentQueries.queryByRole('button', { name: 'Trigger universe fork' })).toBeNull()
-			expect(documentQueries.getByRole('button', { name: 'Fork & Migration' })).not.toBeNull()
+			expect(documentQueries.getByRole('button', { name: 'Fork & migration' })).not.toBeNull()
 		})
 
 		test('prefers fresh fork-auction activity over stale pool-list state on the fork tab', async () => {

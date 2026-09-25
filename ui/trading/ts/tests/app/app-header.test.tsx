@@ -210,7 +210,7 @@ describe('trading header', () => {
 		expect(tradingRouting.resolve(window.location.hash)).toBe('not-found')
 		const rendered = await renderIntoDocument(<App />)
 		cleanupRendered = rendered.cleanup
-		expect(rendered.container.querySelector('main')?.textContent).toContain('Page Not Found')
+		expect(rendered.container.querySelector('main')?.textContent).toContain('Page not found')
 		expect(rendered.container.querySelector('h1.visually-hidden')?.textContent).toBe('Not found')
 		const skipButton = Array.from(rendered.container.querySelectorAll('button')).find(button => button.textContent === 'Skip to main content')
 		if (skipButton === undefined) throw new Error('Shared application skip control is unavailable')
@@ -218,7 +218,7 @@ describe('trading header', () => {
 		expect(document.activeElement).toBe(rendered.container.querySelector('#app-content'))
 		// The shared frame focuses the route content only, so skipping lands past the header and tab navigation.
 		expect(document.activeElement?.querySelector('.tab-nav')).toBeNull()
-		expect(document.activeElement?.textContent).toContain('Page Not Found')
+		expect(document.activeElement?.textContent).toContain('Page not found')
 		expect(document.title).toBe(appCopy.documentTitle(appCopy.notFound))
 		expect(document.title).toBe('Not found · Statoblast trading')
 	})
@@ -320,7 +320,7 @@ describe('trading header', () => {
 		let switchRequests = 0
 		const wrongChain = await renderIntoDocument(<TradingWalletControls {...baseProps} account={undefined} simulation requiredNetworkName='Local' walletChainId={1} onSwitchNetwork={() => switchRequests++} />)
 		cleanupRendered = wrongChain.cleanup
-		expect(wrongChain.container.querySelector('.badge')?.textContent).toBe('Wrong Network (Ethereum)')
+		expect(wrongChain.container.querySelector('.badge')?.textContent).toBe('Wrong network (Ethereum)')
 		const switchButton = wrongChain.container.querySelector<HTMLButtonElement>('.wallet-button')
 		expect(switchButton?.textContent).toBe('Switch to Local')
 		await act(() => switchButton?.click())
