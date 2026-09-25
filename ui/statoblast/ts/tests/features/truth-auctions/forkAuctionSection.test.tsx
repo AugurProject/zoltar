@@ -411,7 +411,7 @@ describe('ForkAuctionSection', () => {
 	})
 
 	test('shows the selected outcome field and child-pool link in the settlement child pools section', async () => {
-		window.history.replaceState({}, '', 'http://localhost/#/security-pools?simulate=1&simScenario=securitypoolx2&selectedPoolView=reporting&universe=1')
+		window.history.replaceState({}, '', 'http://localhost/#/pools/0x00000000000000000000000000000000000000a1/reporting?simulate=1&simScenario=securitypoolx2&universe=1')
 		const renderedComponent = await renderIntoDocument(
 			h(
 				ForkAuctionSection,
@@ -434,7 +434,8 @@ describe('ForkAuctionSection', () => {
 			const href = link.getAttribute('href') ?? ''
 			expect(href).toContain('simulate=1')
 			expect(href).toContain('simScenario=securitypoolx2')
-			expect(href).toContain('selectedPoolView=reporting')
+			expect(href).toMatch(/^#\/pools\/0x[0-9a-fA-F]{40}\/reporting\?/)
+			expect(href).not.toContain('selectedPoolView=')
 			expect(href).toContain('universe=11')
 		}
 	})
