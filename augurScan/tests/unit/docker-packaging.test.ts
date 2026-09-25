@@ -14,6 +14,43 @@ const schemaFile = join(import.meta.dir, '..', '..', 'schema.sql')
 const rootGitIgnore = join(import.meta.dir, '..', '..', '..', '.gitignore')
 
 describe('Docker packaging', () => {
+	test('builds the browser bundle from only the image source copies', async () => {
+		const repositoryRoot = join(import.meta.dir, '..', '..', '..')
+		const stages = parseDockerfile(await readFile(dockerfile, 'utf8'))
+		const workspace = await mkdtemp(join(tmpdir(), 'augurscan-browser-'))
+		try {
+			let cwd = workspace
+			for (const stageName of ['workspace', 'browser-build']) {
+				for (const instruction of requireDockerStage(stages, stageName).instructions) {
+					if (instruction.keyword === 'WORKDIR') {
+						cwd = join(workspace, relative('/workspace', instruction.value))
+						await mkdir(cwd, { recursive: true })
+					} else if (instruction.keyword === 'COPY') {
+						const parts = instruction.value.split(/\s+/u)
+						const destination = parts.pop()
+						if (destination === undefined || parts.length === 0) throw new Error(`Invalid browser COPY: ${instruction.value}`)
+						for (const source of parts) {
+							const target = join(cwd, destination, destination.endsWith('/') ? basename(source) : '')
+							await mkdir(dirname(target), { recursive: true })
+							await cp(join(repositoryRoot, source), target, { recursive: true })
+						}
+					} else if (instruction.keyword === 'RUN') {
+						const command = instruction.value.split(/\s+/u)
+						// Use the cache populated by repository setup, without network access
+						// or links to local workspace sources and generated output.
+						if (instruction.value.startsWith('bun install ')) command.push('--offline')
+						const build = Bun.spawn(command, { cwd, stdout: 'pipe', stderr: 'pipe' })
+						const [status, output, errors] = await Promise.all([build.exited, new Response(build.stdout).text(), new Response(build.stderr).text()])
+						expect(status, `${instruction.value}\n${output}\n${errors}`).toBe(0)
+					}
+				}
+			}
+			expect((await readFile(join(workspace, 'augurScan/public/app.js'), 'utf8')).length).toBeGreaterThan(0)
+		} finally {
+			await rm(workspace, { recursive: true, force: true })
+		}
+	}, 120_000)
+
 	test('loads shared helper consumers from the runtime image source copies', async () => {
 		const repositoryRoot = join(import.meta.dir, '..', '..', '..')
 		const stages = parseDockerfile(await readFile(dockerfile, 'utf8'))
