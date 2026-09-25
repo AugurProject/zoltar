@@ -229,10 +229,10 @@ main {
 	overflow-wrap: anywhere;
 }
 
-.transaction-activity-dismiss {
+button.quiet.transaction-activity-dismiss {
 	justify-self: start;
 	min-height: var(--touch-target-min);
-	padding: 0.35rem 0;
+	margin-inline-start: -0.45rem;
 	font-size: var(--font-label);
 }
 
