@@ -1,8 +1,22 @@
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { dashboardSecurityHeaders } from './security.ts'
 
 export async function buildDashboardScript(entrypoint: string) {
-	const result = await Bun.build({ entrypoints: [entrypoint], target: 'browser' })
+	const result = await Bun.build({
+		entrypoints: [entrypoint],
+		target: 'browser',
+		jsx: { runtime: 'automatic', importSource: 'preact' },
+		plugins: [
+			{
+				name: 'dashboard-ui-sources',
+				setup(build) {
+					// Bot images ship UI TypeScript sources, not the generated browser exports.
+					// Resolve only this workspace package through its Bun source exports.
+					build.onResolve({ filter: /^@zoltar\/ui-core-shared\// }, args => ({ path: Bun.resolveSync(args.path, dirname(args.importer)) }))
+				},
+			},
+		],
+	})
 	const output = result.outputs[0]
 	if (!result.success || output === undefined) throw new Error(`Unable to build dashboard: ${result.logs.map(log => log.message).join('; ')}`)
 	return await output.text()
