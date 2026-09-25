@@ -132,6 +132,7 @@
 }
 
 .question-create-editor,
+.question-create-extra-fields,
 .question-create-submit {
 	display: grid;
 	gap: 1.1rem;
@@ -158,14 +159,11 @@
 		column-gap: var(--space-5);
 	}
 
-	.question-create-editor {
-		grid-column: 1;
-		grid-row: 1;
-	}
-
+	/* Input blocks fill the first column in order; the preview spans every row beside them. */
+	.question-create-editor,
+	.question-create-extra-fields,
 	.question-create-submit {
 		grid-column: 1;
-		grid-row: 2;
 	}
 
 	.question-create-preview {
@@ -177,6 +175,10 @@
 		padding-left: var(--space-5);
 		border-top: 0;
 		border-left: 1px solid var(--divider-subtle);
+	}
+
+	.question-create-form.has-extra-fields .question-create-preview {
+		grid-row: 1 / span 3;
 	}
 }
 

@@ -25,14 +25,14 @@ function getQuestionTypeCopy(marketType: MarketType) {
 	}
 }
 
-function QuestionTypeCopy({ marketType }: { marketType: MarketType }) {
+function QuestionTypeCopy({ marketType, showExample }: { marketType: MarketType; showExample: boolean }) {
 	const { description, example } = getQuestionTypeCopy(marketType)
 	const optionId = `market-create-type-${marketType}`
 	return (
 		<span className='question-type-option-copy'>
 			<strong id={`${optionId}-label`}>{getMarketTypeLabel(marketType)}</strong>
 			<span id={`${optionId}-description`}>{description}</span>
-			<em id={`${optionId}-example`}>{example}</em>
+			{showExample ? <em id={`${optionId}-example`}>{example}</em> : undefined}
 		</span>
 	)
 }
@@ -46,7 +46,7 @@ export function QuestionTypeOptions({ allowedMarketTypes, disabled, onChange, va
 			<div className='question-type-options'>
 				<span className='question-type-options-label'>{marketCopy.questionType}</span>
 				<div className='question-type-fixed'>
-					<QuestionTypeCopy marketType={onlyType} />
+					<QuestionTypeCopy marketType={onlyType} showExample={false} />
 				</div>
 			</div>
 		)
@@ -59,7 +59,7 @@ export function QuestionTypeOptions({ allowedMarketTypes, disabled, onChange, va
 					return (
 						<label className='question-type-option' key={marketType}>
 							<input aria-describedby={`${optionId}-description ${optionId}-example`} aria-labelledby={`${optionId}-label`} checked={value === marketType} disabled={disabled} name='market-create-type' onChange={() => onChange(marketType)} type='radio' value={marketType} />
-							<QuestionTypeCopy marketType={marketType} />
+							<QuestionTypeCopy marketType={marketType} showExample />
 						</label>
 					)
 				})}

@@ -324,4 +324,40 @@ describe('QuestionCreateSection', () => {
 		expect(ends?.querySelector('time')?.getAttribute('dateTime')).toBe('2026-12-31T21:30:00.000Z')
 		expect(ends?.textContent).toContain('2026-12-31 21:30 UTC')
 	})
+
+	test('keeps extra submit fields with the inputs, before the preview, and states a single allowed type without an example', async () => {
+		const renderedComponent = await renderIntoDocument(
+			<QuestionCreateSection
+				accountAddress={zeroAddress}
+				allowedMarketTypes={['binary']}
+				canUseForFork={false}
+				hasForked={false}
+				isOnActiveAppChain={true}
+				loadingZoltarQuestions={false}
+				onCreateQuestion={() => undefined}
+				onOpenForkTab={() => undefined}
+				onQuestionFormChange={() => undefined}
+				onResetQuestion={() => undefined}
+				onUseQuestionForFork={() => undefined}
+				questionCreating={false}
+				questionError={undefined}
+				questionForm={createQuestionForm()}
+				questionResult={undefined}
+				submitFields={<input aria-label='Pool multiplier' />}
+				zoltarQuestions={[]}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const extraField = within(document.body).getByLabelText('Pool multiplier')
+		const preview = document.querySelector('aside[aria-label="Question preview"]')
+		const submitButton = within(document.body).getByRole('button', { name: 'Create question' })
+		if (preview === null) throw new Error('Expected the question preview landmark')
+		expect(extraField.compareDocumentPosition(preview) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+		expect(preview.compareDocumentPosition(submitButton) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+		expect(document.querySelectorAll('input[name="market-create-type"]')).toHaveLength(0)
+		const fixedType = document.querySelector('.question-type-fixed')
+		expect(fixedType?.textContent).toContain('Binary')
+		expect(fixedType?.textContent).not.toContain('e.g.')
+	})
 })

@@ -233,7 +233,7 @@ export function QuestionCreateSection({
 				<SectionBlock className='question-create-container' variant='plain'>
 					<form
 						aria-label={commonCopy.createQuestion}
-						className='form-grid question-create-form'
+						className={submitFields === undefined ? 'form-grid question-create-form' : 'form-grid question-create-form has-extra-fields'}
 						noValidate
 						onSubmit={event => {
 							event.preventDefault()
@@ -396,6 +396,7 @@ export function QuestionCreateSection({
 								</WarningSurface>
 							) : undefined}
 						</fieldset>
+						{submitFields === undefined ? undefined : <div className='question-create-extra-fields'>{submitFields}</div>}
 						<QuestionDraftPreview currentTimestamp={currentTimestamp} description={draftDescription} endTime={questionForm.endTime} marketType={questionForm.marketType} outcomeItems={draftOutcomeItems} startTime={questionForm.startTime} timeZone={timeZone} title={draftTitle}>
 							{(() => {
 								if (questionForm.marketType !== 'scalar') return undefined
@@ -404,7 +405,6 @@ export function QuestionCreateSection({
 							})()}
 						</QuestionDraftPreview>
 						<div className='question-create-submit'>
-							{submitFields}
 							{submitActionOverride?.reviewContent ?? (
 								<div className='actions'>
 									<TransactionActionButton idleLabel={submitAction.idleLabel} pendingLabel={submitAction.pendingLabel} onClick={() => undefined} pending={submitAction.pending} type='submit' availability={submitAction.availability} />
