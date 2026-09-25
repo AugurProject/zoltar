@@ -10,7 +10,7 @@ import { MetricGrid } from './MetricGrid.js'
 import { MetricField } from './MetricField.js'
 import { TransactionActionButton } from './TransactionActionButton.js'
 import { formatCurrencyBalance } from '../lib/formatters.js'
-import { deriveTokenApprovalRequirement, formatTokenApprovalUnavailableMessage, parseTokenApprovalAmountInput, resolveTokenApprovalStatusMessage } from '../transactions/tokenApproval.js'
+import { deriveTokenApprovalRequirement, formatTokenApprovalUnavailableMessage, parseTokenApprovalAmountInput, resolveTokenApprovalStatusMessage, shouldDisplayMaxTokenApprovalAmount } from '../transactions/tokenApproval.js'
 type TokenApprovalControlProps = {
 	compact?: boolean
 	/** Keeps a finished approval in place, disabled, labelled with its result instead of removing the control. */
@@ -146,10 +146,13 @@ export function TokenApprovalControl({
 		if (amountValidationMessage !== undefined) return amountValidationMessageId
 		return guardMessageElementId
 	})()
-	// A finished approval keeps its field for context, without hints that ask for more input.
+	// A finished approval keeps its field for context, showing the approved amount instead of hints that ask for more input.
 	let amountPlaceholder: string | undefined = commonCopy.leaveBlankForRequiredTotal
-	if (completedLabel !== undefined) amountPlaceholder = undefined
-	else if (compact) amountPlaceholder = commonCopy.requiredTotalPlaceholder
+	let amountValue = draftAmount
+	if (completedLabel !== undefined) {
+		amountPlaceholder = undefined
+		if (approvedAmount !== undefined) amountValue = shouldDisplayMaxTokenApprovalAmount(approvedAmount) ? commonCopy.max : formatCurrencyBalance(approvedAmount, tokenUnits)
+	} else if (compact) amountPlaceholder = commonCopy.requiredTotalPlaceholder
 	const approvalButton = (
 		<TransactionActionButton
 			className={completedLabel === undefined ? '' : 'tx-action-completed'}
@@ -181,7 +184,7 @@ export function TokenApprovalControl({
 					<FormInput
 						aria-describedby={amountValidationMessage === undefined ? undefined : amountValidationMessageId}
 						className='field-inline-input'
-						value={draftAmount}
+						value={amountValue}
 						onInput={event => setDraftAmount(event.currentTarget.value)}
 						placeholder={amountPlaceholder}
 						title={completedLabel === undefined ? commonCopy.leaveBlankForRequiredTotal : undefined}

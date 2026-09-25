@@ -1817,6 +1817,7 @@ main:has(.global-transaction-dialog-nonblocking) #app-content {
 .field select:disabled,
 .field textarea:disabled {
 	border-color: var(--disabled-control-border);
+	border-style: dashed;
 	background-color: var(--disabled-control-bg);
 	color: var(--disabled-control-text);
 	cursor: not-allowed;

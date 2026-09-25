@@ -166,6 +166,7 @@ test('keeps confirmed wrap and approval steps visible while the final request aw
 		expect(queries.getByRole('button', { name: 'WETH approved ✓' }).hasAttribute('disabled')).toBe(true)
 		expect(queries.getByRole('textbox').hasAttribute('disabled')).toBe(true)
 		expect(queries.getByRole('textbox').getAttribute('placeholder') ?? '').toBe('')
+		expect(rendered.container.querySelector<HTMLInputElement>('.approval-amount-field input')?.value).toBe('3')
 		expect(queries.getByRole('button', { name: 'Request price' }).hasAttribute('disabled')).toBe(false)
 		transactionSteps.value?.cancel()
 		await requestReview?.catch(() => undefined)
