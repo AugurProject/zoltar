@@ -99,14 +99,14 @@ function TransactionStepsActions({ cancelable = true, contextKey, focusOnMount =
 	const funding = workflow.steps.flatMap(step => step.tokenFunding ?? [])
 	const fundingReason = funding.length > 0 ? copy.fundingRequired : copy.prerequisitesRequired
 	const blockedReason = pending ? copy.transactionPending : fundingReason
-	const completedSteps = workflow.steps.flatMap((step, index) => {
-		if (index === workflow.steps.length - 1 && step.phase === 'confirmed') return []
+	const prerequisiteReason = pending ? copy.transactionPending : copy.prerequisitesRequired
+	// Finished steps stay in place, disabled and labelled with their result, so the plan never loses a row as it advances.
+	const getCompletedLabel = (step: (typeof workflow.steps)[number]) => {
 		const approvalSatisfied = step.approval !== undefined && step.approval.approvedAmount !== undefined && step.approval.requiredAmount <= step.approval.approvedAmount
-		if (approvalSatisfied && step.approval !== undefined && (step.phase === 'confirmed' || step.phase === 'skipped')) return [{ index, label: copy.formatTokenApproved(step.approval.tokenSymbol), approval: true }]
-		if (step.phase === 'confirmed') return [{ index, label: step.title === copy.wrapEthIntoWeth ? copy.ethWrapped : step.title, approval: false }]
-		return []
-	})
-	const completedIndices = new Set(completedSteps.map(step => step.index))
+		if (approvalSatisfied && step.approval !== undefined && (step.phase === 'confirmed' || step.phase === 'skipped')) return copy.formatStepCompleted(copy.formatTokenApproved(step.approval.tokenSymbol))
+		if (step.phase === 'confirmed') return copy.formatStepCompleted(step.title === copy.wrapEthIntoWeth ? copy.ethWrapped : step.title)
+		return undefined
+	}
 	return (
 		<GlobalTransactionPresentationProvider transaction={undefined}>
 			<TransactionActionButtonLockProvider lock={unlockedTransactionActions}>
@@ -122,18 +122,9 @@ function TransactionStepsActions({ cancelable = true, contextKey, focusOnMount =
 				>
 					<div className='tx-action-group'>
 						<div className='tx-action-feedback' />
-						{completedSteps.length === 0 ? undefined : (
-							<div className='transaction-completed-steps' aria-live='polite'>
-								{completedSteps.map(step => (
-									<div key={step.index} className={`transaction-step-completed${step.approval ? ' transaction-approval-satisfied' : ''}`}>
-										<span>{step.label} ✓</span>
-									</div>
-								))}
-							</div>
-						)}
-						<div className='actions'>
+						<div className='actions' aria-live='polite'>
 							{workflow.steps.map((step, index) => {
-								if (completedIndices.has(index) || step.phase === 'confirmed') return undefined
+								const completedLabel = getCompletedLabel(step)
 								const active = index === workflow.activeIndex
 								const final = index === workflow.steps.length - 1
 								const ready = step.phase === 'review' && !pending && error === undefined
@@ -144,12 +135,13 @@ function TransactionStepsActions({ cancelable = true, contextKey, focusOnMount =
 										{step.approval !== undefined ? (
 											<TokenApprovalControl
 												compact
+												completedLabel={completedLabel}
 												showRequirementNotice={false}
 												actionLabel={copy.fundReport}
 												allowanceError={undefined}
 												allowanceLoading={false}
 												approvedAmount={step.approval.approvedAmount}
-												guardMessage={undefined}
+												guardMessage={step.phase === 'upcoming' && completedLabel === undefined ? prerequisiteReason : undefined}
 												disabled={!ready}
 												onApprove={amount => workflow.confirmStep(index, amount)}
 												pending={isTransactionStepInFlight(step)}
@@ -161,25 +153,28 @@ function TransactionStepsActions({ cancelable = true, contextKey, focusOnMount =
 											/>
 										) : (
 											<TransactionActionButton
+												className={completedLabel === undefined ? '' : 'tx-action-completed'}
 												idleLabel={
-													<>
-														{step.title}
-														{(step.ethValueAttoEth ?? 0n) === 0n ? undefined : (
-															<>
-																{' '}
-																· <EthAmount value={step.ethValueAttoEth} />
-															</>
-														)}
-														{detail === '' ? undefined : <span className='transaction-action-detail'>{detail}</span>}
-													</>
+													completedLabel ?? (
+														<>
+															{step.title}
+															{(step.ethValueAttoEth ?? 0n) === 0n ? undefined : (
+																<>
+																	{' '}
+																	· <EthAmount value={step.ethValueAttoEth} />
+																</>
+															)}
+															{detail === '' ? undefined : <span className='transaction-action-detail'>{detail}</span>}
+														</>
+													)
 												}
 												pendingLabel={copy.formatPendingAction(step.title)}
 												pending={active && pending}
 												onClick={() => {
 													if (ready) workflow.confirmStep(index)
 												}}
-												availability={{ disabled: !ready, reason: step.phase === 'upcoming' ? blockedReason : status }}
-												showDisabledReason={false}
+												availability={{ disabled: !ready, reason: completedLabel ?? (step.phase === 'upcoming' ? blockedReason : status) }}
+												showDisabledReason={final && step.phase === 'upcoming'}
 												tone={step.approval === undefined ? 'primary' : 'secondary'}
 											/>
 										)}

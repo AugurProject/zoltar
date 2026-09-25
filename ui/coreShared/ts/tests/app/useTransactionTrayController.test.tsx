@@ -40,7 +40,7 @@ describe('useTransactionTrayController', () => {
 		if (controller === undefined) throw new Error('Transaction tray controller did not initialize')
 
 		await act(() => {
-			controller?.onTransactionRequested({ action: 'createMarket', source: 'zoltar', submittedTitle: 'Creating Question' })
+			controller?.onTransactionRequested({ action: 'createMarket', source: 'zoltar', submittedTitle: 'Creating question' })
 		})
 		expect(getInFlightTransactionCount(controller.transactionState.value)).toBe(1)
 		expect(controller.transactionState.value.active?.tone).toBe('awaiting-wallet')
@@ -62,7 +62,7 @@ describe('useTransactionTrayController', () => {
 		const rendered = await renderIntoDocument(<Harness />)
 		cleanupRendered = rendered.cleanup
 		if (controller === undefined) throw new Error('Transaction tray controller did not initialize')
-		const intent = { action: 'createMarket' as const, source: 'zoltar' as const, submittedTitle: 'Creating Question' }
+		const intent = { action: 'createMarket' as const, source: 'zoltar' as const, submittedTitle: 'Creating question' }
 		await act(() => {
 			expect(controller?.onTransactionRequested(intent)).toBe('transaction-request-1')
 			controller?.onTransactionFailed('nonce too low')
@@ -91,7 +91,7 @@ describe('useTransactionTrayController', () => {
 		const previousGeneration = controller
 
 		await act(() => {
-			previousGeneration.onTransactionRequested({ action: 'createMarket', source: 'zoltar', submittedTitle: 'Creating Question' })
+			previousGeneration.onTransactionRequested({ action: 'createMarket', source: 'zoltar', submittedTitle: 'Creating question' })
 			previousGeneration.onTransactionPresented({ action: 'createMarket', source: 'zoltar', status: { badgeLabel: 'Created', badgeTone: 'success', detail: 'Created', key: 'created' }, submittedTitle: 'Question created' })
 			previousGeneration.resetForEnvironment()
 		})
@@ -128,7 +128,7 @@ describe('useTransactionTrayController', () => {
 		let firstAccepted: string | false | undefined
 		let secondAccepted: string | false | undefined
 		await act(() => {
-			firstAccepted = controller?.onTransactionRequested({ action: 'createMarket', source: 'zoltar', submittedTitle: 'Creating Question' })
+			firstAccepted = controller?.onTransactionRequested({ action: 'createMarket', source: 'zoltar', submittedTitle: 'Creating question' })
 			secondAccepted = controller?.onTransactionRequested({ action: 'deploy', source: 'zoltar', submittedTitle: 'Deploying contracts' })
 		})
 

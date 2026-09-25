@@ -31,14 +31,14 @@ describe('transactionTray', () => {
 			action: 'createMarket',
 			source: 'zoltar',
 			submittedDetail: 'Question creation transaction submitted.',
-			submittedTitle: 'Creating Question',
+			submittedTitle: 'Creating question',
 		})
 		const submitted = markTransactionSubmitted(requested, transactionHash)
 		const presented = markTransactionPresented(submitted, {
 			detail: 'The new question is now on-chain.',
 			dismissKey: transactionHash,
 			hash: transactionHash,
-			title: 'Question Created',
+			title: 'Question created',
 			tone: 'success',
 		})
 		const finished = markTransactionFinished(presented)
@@ -46,18 +46,18 @@ describe('transactionTray', () => {
 		expect(getInFlightTransactionCount(requested)).toBe(1)
 		expect(requested.entries[0]?.lifecycle).toEqual({ phase: 'review' })
 		expect(requested.active?.tone).toBe('awaiting-wallet')
-		expect(requested.active?.title).toBe('Creating Question')
+		expect(requested.active?.title).toBe('Creating question')
 		expect(requested.active?.hash).toBeUndefined()
 		expect(requested.active?.operationKey).toBe('transaction-request-1')
-		expect(requested.entries[0]?.intent.submittedTitle).toBe('Creating Question')
+		expect(requested.entries[0]?.intent.submittedTitle).toBe('Creating question')
 		expect(submitted.active?.tone).toBe('pending')
 		expect(submitted.active?.hash).toBe(transactionHash)
 		expect(submitted.active?.operationKey).toBe(requested.active?.operationKey)
-		expect(submitted.active?.title).toBe('Creating Question')
+		expect(submitted.active?.title).toBe('Creating question')
 		expect(submitted.entries[0]?.lifecycle).toEqual({ phase: 'pending', hash: transactionHash })
 		expect(presented.active?.tone).toBe('success')
 		expect(presented.active?.operationKey).toBe(requested.active?.operationKey)
-		expect(presented.active?.title).toBe('Question Created')
+		expect(presented.active?.title).toBe('Question created')
 		expect(getInFlightTransactionCount(finished)).toBe(0)
 	})
 
@@ -122,7 +122,7 @@ describe('transactionTray', () => {
 
 	test('ignores outcomes for an unknown request key', () => {
 		const finished = markTransactionFinished(createInitialTransactionTrayState())
-		const requested = markTransactionRequested(finished, { action: 'createMarket', source: 'zoltar', submittedTitle: 'Creating Question' })
+		const requested = markTransactionRequested(finished, { action: 'createMarket', source: 'zoltar', submittedTitle: 'Creating question' })
 
 		expect(getInFlightTransactionCount(finished)).toBe(0)
 		expect(markTransactionFinished(requested, 'transaction-request-9')).toBe(requested)
@@ -134,7 +134,7 @@ describe('transactionTray', () => {
 			action: 'createMarket',
 			source: 'zoltar',
 			submittedDetail: 'Question creation transaction submitted.',
-			submittedTitle: 'Creating Question',
+			submittedTitle: 'Creating question',
 		})
 		const submitted = markTransactionSubmitted(requested, transactionHash)
 		const uncertain = markTransactionSubmitted(submitted, transactionHash, 'uncertain')
@@ -160,7 +160,7 @@ describe('transactionTray', () => {
 			action: 'createMarket',
 			source: 'zoltar',
 			submittedDetail: 'Question creation transaction submitted.',
-			submittedTitle: 'Creating Question',
+			submittedTitle: 'Creating question',
 		})
 		const submitted = markTransactionSubmitted(requested, transactionHash)
 		const replaced = markTransactionSubmitted(submitted, replacementHash)
@@ -168,7 +168,7 @@ describe('transactionTray', () => {
 		expect(replaced.active?.tone).toBe('pending')
 		expect(replaced.active?.hash).toBe(replacementHash)
 		expect(replaced.active?.dismissKey).toBe(replacementHash)
-		expect(replaced.active?.title).toBe('Creating Question')
+		expect(replaced.active?.title).toBe('Creating question')
 	})
 
 	test('adds prepared transaction call details before submission', () => {
@@ -176,7 +176,7 @@ describe('transactionTray', () => {
 			action: 'createMarket',
 			source: 'zoltar',
 			submittedDetail: 'Question creation transaction submitted.',
-			submittedTitle: 'Creating Question',
+			submittedTitle: 'Creating question',
 		})
 		const prepared = markTransactionPrepared(requested, {
 			account: '0x00000000000000000000000000000000000000a1',
@@ -191,7 +191,7 @@ describe('transactionTray', () => {
 			dismissKey: transactionHash,
 			hash: transactionHash,
 			rows: [{ label: 'Question ID', value: '0x01' }],
-			title: 'Question Created',
+			title: 'Question created',
 			tone: 'success',
 		})
 
@@ -270,7 +270,7 @@ describe('transactionTray', () => {
 			action: 'createMarket',
 			source: 'zoltar',
 			submittedDetail: 'Question creation transaction submitted.',
-			submittedTitle: 'Creating Question',
+			submittedTitle: 'Creating question',
 		})
 
 		const prepared = markTransactionPrepared(requested, {
@@ -319,7 +319,7 @@ describe('transactionTray', () => {
 			requiresWalletConfirmation: false,
 			source: 'zoltar',
 			submittedDetail: 'Question creation transaction submitted.',
-			submittedTitle: 'Creating Question',
+			submittedTitle: 'Creating question',
 		})
 
 		expect(requested.active?.tone).toBe('preparing')
@@ -333,7 +333,7 @@ describe('transactionTray', () => {
 			action: 'createMarket',
 			source: 'zoltar',
 			submittedDetail: 'Question creation transaction submitted.',
-			submittedTitle: 'Creating Question',
+			submittedTitle: 'Creating question',
 		})
 		resetEnvironment()
 
@@ -348,7 +348,7 @@ describe('transactionTray', () => {
 			action: 'createMarket',
 			source: 'zoltar',
 			submittedDetail: 'Question creation transaction submitted.',
-			submittedTitle: 'Creating Question',
+			submittedTitle: 'Creating question',
 		})
 		resetEnvironment()
 
@@ -371,7 +371,7 @@ describe('transactionTray', () => {
 			action: 'createMarket',
 			source: 'zoltar',
 			submittedDetail: 'Question creation transaction submitted.',
-			submittedTitle: 'Creating Question',
+			submittedTitle: 'Creating question',
 			failedTitle: 'Question creation',
 		})
 		const failed = markTransactionFailed(requested, { kind: 'rejected', message: 'Action canceled in wallet.' })
@@ -389,7 +389,7 @@ describe('transactionTray', () => {
 			action: 'createMarket',
 			source: 'zoltar',
 			submittedDetail: 'Question creation transaction submitted.',
-			submittedTitle: 'Creating Question',
+			submittedTitle: 'Creating question',
 		})
 		const canceled = markTransactionCanceled(requested)
 		const finished = markTransactionFinished(canceled, 'transaction-request-1')
@@ -405,7 +405,7 @@ describe('transactionTray', () => {
 			action: 'createMarket',
 			source: 'zoltar',
 			submittedDetail: 'Question creation transaction submitted.',
-			submittedTitle: 'Creating Question',
+			submittedTitle: 'Creating question',
 			failedTitle: 'Question creation',
 		})
 		const submitted = markTransactionSubmitted(requested, transactionHash)
