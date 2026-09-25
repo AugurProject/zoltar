@@ -1812,14 +1812,12 @@ main:has(.global-transaction-dialog-nonblocking) #app-content {
 	color: var(--text);
 }
 
-/* Locked text controls stay readable but visibly differ from editable ones, matching disabled buttons. */
+/* Locked text controls keep the normal field frame and only dim their text, so a locked value still reads as a field rather than a disabled button. */
 .field input:disabled:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
 .field select:disabled,
 .field textarea:disabled {
-	border-color: var(--disabled-control-border);
-	border-style: dashed;
-	background-color: var(--disabled-control-bg);
 	color: var(--disabled-control-text);
+	-webkit-text-fill-color: var(--disabled-control-text);
 	cursor: not-allowed;
 }
 
