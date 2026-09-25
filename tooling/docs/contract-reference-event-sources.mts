@@ -1,4 +1,8 @@
 export const eventSourceByName: Record<string, string> = {
+	CoverageOfferSet: 'solidity/contracts/statoblast/SecurityPool.sol',
+	CoverageAllocated: 'solidity/contracts/statoblast/SecurityPoolSettlementDelegate.sol',
+	PoolCoverageCheckpoint: 'solidity/contracts/statoblast/SecurityPoolEventEmitter.sol',
+	VaultCoverageCheckpoint: 'solidity/contracts/statoblast/SecurityPoolEventEmitter.sol',
 	VaultBackingFactorAdjusted: 'solidity/contracts/statoblast/SecurityPoolOperationsDelegate.sol',
 	VaultBadDebtMigrated: 'solidity/contracts/statoblast/interfaces/ISecurityPoolForker.sol',
 	Approval: 'solidity/contracts/IERC20.sol',

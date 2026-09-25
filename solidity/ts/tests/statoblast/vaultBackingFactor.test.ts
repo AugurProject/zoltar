@@ -130,20 +130,23 @@ describe('Vault backing factor adjustment', () => {
 		assert.strictEqual((await getSecurityVault(client, pool, client.account.address)).capacityOwnershipAttoRep, repDeposit / 2n)
 	})
 
-	test('rejects a capacity increase that would make a previously healthy vault undercollateralized', async () => {
+	test('changing nominal capacity cannot reassign existing obligations', async () => {
 		await adjust(40_000n)
 		const { client, securityPoolAddresses, mockWindow, repDeposit } = fixture
 		const otherVault = createWriteClient(mockWindow, TEST_ADDRESSES[2])
 		await fixture.transferRepToAddress(client, otherVault.account.address, repDeposit)
 		await approveToken(otherVault, addressString(GENESIS_REPUTATION_TOKEN), securityPoolAddresses.securityPool)
 		await depositRepToVault(otherVault, securityPoolAddresses.securityPool, repDeposit)
-		await createCompleteSet(client, securityPoolAddresses.securityPool, (repDeposit * 7n) / 10n)
+		await createCompleteSet(client, securityPoolAddresses.securityPool, repDeposit / 5n)
 		await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, 2n * 10n ** 18n)
 		const oldOpenInterest = await client.readContract({ address: securityPoolAddresses.securityPool, abi: statoblast_interfaces_ISecurityPool_ISecurityPool.abi, functionName: 'getVaultOpenInterestAttoEth', args: [client.account.address] })
 		assert.ok(oldOpenInterest * 4n <= repDeposit, 'the current vault remains healthy before reallocating open interest')
-		await assert.rejects(adjust(20_000n), /Vault backing insufficient/)
-		assert.strictEqual(await client.readContract({ address: securityPoolAddresses.securityPool, abi: statoblast_interfaces_ISecurityPool_ISecurityPool.abi, functionName: 'vaultTargetBackingFactorBps', args: [client.account.address] }), 40_000n)
-		assert.strictEqual((await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)).capacityOwnershipAttoRep, repDeposit / 2n)
+		const unitsBefore = (await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)).obligationUnits
+		await adjust(20_000n)
+		assert.strictEqual((await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)).obligationUnits, unitsBefore)
+		assert.strictEqual((await getSecurityVault(client, securityPoolAddresses.securityPool, otherVault.account.address)).obligationUnits, 0n)
+		assert.strictEqual(await client.readContract({ address: securityPoolAddresses.securityPool, abi: statoblast_interfaces_ISecurityPool_ISecurityPool.abi, functionName: 'vaultTargetBackingFactorBps', args: [client.account.address] }), 20_000n)
+		assert.strictEqual((await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)).capacityOwnershipAttoRep, repDeposit)
 	})
 
 	test('allows a fully collateralized capacity increase with settlement collateral committed', async () => {
@@ -209,12 +212,14 @@ describe('Vault backing factor adjustment', () => {
 		assert.strictEqual(await client.readContract({ address: manager, abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi, functionName: 'getActiveStagedOperationCount' }), 0n)
 	})
 
-	test('rejects committed capacity reductions without changing the saved target', async () => {
+	test('permits nominal capacity reductions while preserving assigned obligations', async () => {
 		await adjust(40_000n)
 		const { client, securityPoolAddresses, repDeposit } = fixture
 		await createCompleteSet(client, securityPoolAddresses.securityPool, repDeposit / 10n)
-		await assert.rejects(adjust(60_000n), /Capacity committed/)
-		assert.strictEqual((await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)).capacityOwnershipAttoRep, repDeposit / 2n)
+		const unitsBefore = (await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)).obligationUnits
+		await adjust(60_000n)
+		assert.strictEqual((await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)).capacityOwnershipAttoRep, repDeposit / 3n)
+		assert.strictEqual((await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)).obligationUnits, unitsBefore)
 		await redeemCompleteSet(client, securityPoolAddresses.securityPool, await getShareTokenSupplyAttoShares(client, securityPoolAddresses.securityPool))
 		const feesBefore = (await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)).claimableFeesAttoEth
 		await adjust(20_000n)

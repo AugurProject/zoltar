@@ -71,13 +71,13 @@ describe('state projections', () => {
 				vault,
 				settlementCollateralAttoEth: atomic(12_000_000_000_000_000_000n),
 				totalCapacityOwnershipAttoRep: atomic(9_000_000_000_000_000_000n),
-				feeEligibleCapacityOwnershipAttoRep: atomic(8_000_000_000_000_000_000n),
+				activeObligationUnits: atomic(8_000_000_000_000_000_000n),
 				totalClaimableVaultFeesAttoEth: atomic(40n),
 				unallocatedAccruedFeesAttoEth: atomic(3n),
 				feeIndex: '10',
 				feeIndexRemainder: '1',
 				totalFeesOwedRemainder: '2',
-				uncheckpointedFeeEligibleCapacityOwnershipAttoRep: atomic(4n),
+				uncheckpointedActiveObligationUnits: atomic(4n),
 				lastUpdatedFeeAccumulator: '2000',
 				currentRetentionRate: '999999000000000000',
 			}),
@@ -86,7 +86,7 @@ describe('state projections', () => {
 		if (poolProjection?.type !== 'poolSnapshot') throw new Error('pool projection missing')
 		expect(poolProjection.settlementCollateralAttoEth).toBe('12000000000000000000')
 		expect(poolProjection.totalCapacityOwnershipAttoRep).toBe('9000000000000000000')
-		expect(poolProjection.feeEligibleCapacityOwnershipAttoRep).toBe('8000000000000000000')
+		expect(poolProjection.activeObligationUnits).toBe('8000000000000000000')
 
 		const [vaultProjection, resultingPoolState] = projectionsFrom(
 			log('VaultAccountingCheckpoint', {
@@ -97,7 +97,7 @@ describe('state projections', () => {
 				feeIndex: '80',
 				vaultFeeRemainder: '90',
 				resultingTotalRepBackingUnits: '100',
-				resultingFeeEligibleCapacityOwnershipAttoRep: atomic(110n),
+				resultingActiveObligationUnits: atomic(110n),
 			}),
 		)
 		expect(vaultProjection?.type).toBe('vaultSnapshot')
@@ -473,5 +473,16 @@ describe('previously raw-only lifecycle evidence', () => {
 		test(`projects ${name} with its owning entity`, () => {
 			expect(projectionsFrom(log(name, data, pool, kind))).toContainEqual(expect.objectContaining({ type: 'domainEvent', semanticEventKind: name, entityType, entityIdentity: identity }))
 		})
+	}
+})
+
+test('projects coverage offers, allocations and epoch checkpoints into risk histories', () => {
+	for (const [name, entityType, data] of [
+		['CoverageOfferSet', 'vault', { vault, enabled: true, maximumObligationAttoEth: 100n.toString(), minimumHealthFactorBps: '10000' }],
+		['CoverageAllocated', 'vault', { vault, addedUnits: '7', resultingVaultUnits: '7', resultingTotalUnits: '7', epoch: '2' }],
+		['VaultCoverageCheckpoint', 'vault', { vault, epoch: '3', obligationUnits: '0' }],
+		['PoolCoverageCheckpoint', 'pool', { epoch: '3', totalUnits: '0', activeUnits: '0', writtenOffUnits: '0', unassignedUnits: '0', migratedOutUnits: '0' }],
+	] as const) {
+		expect(projectionsFrom(log(name, data, pool, 'securityPool'))).toContainEqual(expect.objectContaining({ type: 'domainEvent', domain: 'risk', entityType, semanticEventKind: name, entityIdentity: entityType === 'vault' ? `${pool.toLowerCase()}:${vault.toLowerCase()}` : pool.toLowerCase() }))
 	}
 })

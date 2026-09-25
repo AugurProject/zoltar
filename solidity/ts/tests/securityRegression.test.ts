@@ -1,3 +1,4 @@
+import { getContractOutput, loadContractsJson, normalizeStorageLayout } from './contractArtifactHelpers'
 import { beforeAll, beforeEach, describe, test } from 'bun:test'
 import assert from '../testSupport/simulator/utils/assert'
 import { decodeEventLog, encodeAbiParameters, encodeDeployData, getCreate2Address, keccak256, type Address, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
@@ -18,7 +19,7 @@ import {
 	requestPriceIfNeededAndStageOperation,
 	requestPriceIfNeededAndStageOperationWithInitialReportPrice,
 } from '../testSupport/simulator/utils/contracts/statoblast'
-import { approveAndDepositRepToVault, handleOracleReporting, manipulatePriceOracle, triggerOwnGameFork, setVaultCapacityFixture } from '../testSupport/simulator/utils/contracts/statoblastTestUtils'
+import { approveAndDepositRepToVault, handleOracleReporting, manipulatePriceOracle, triggerOwnGameFork, setCoverageOfferFixture } from '../testSupport/simulator/utils/contracts/statoblastTestUtils'
 import { createCompleteSet, depositRepToVault, depositToEscalationGame, getSettlementCollateralAttoEth, getRepToken, getSecurityVault, getTotalCapacityOwnershipAttoRep } from '../testSupport/simulator/utils/contracts/securityPool'
 import { createChildUniverse, getMigratedAttoRep, getOwnForkRepBuckets, initiateSecurityPoolFork, migrateRepToZoltar, migrateVault } from '../testSupport/simulator/utils/contracts/securityPoolForker'
 import { getScalarOutcomeIndex } from '../testSupport/simulator/utils/contracts/scalarOutcome'
@@ -111,9 +112,38 @@ describe('security regression coverage', () => {
 		return contractAddress
 	}
 
+	// Seed a funded, explicitly authorized contract-owned vault; callback behavior is unchanged.
+	const seedReceiverCoverage = async (receiver: Address, maximumObligation: bigint) => {
+		const layout = normalizeStorageLayout(getContractOutput(loadContractsJson(import.meta.dir), 'contracts/statoblast/SecurityPool.sol', 'SecurityPool'))
+		const slot = (name: string) => {
+			const field = layout.find(field => field.label === name)
+			if (field === undefined) throw new Error(`Missing ${name}`)
+			return BigInt(field.slot)
+		}
+		const mapping = (address: Address, name: string) => BigInt(keccak256(encodeAbiParameters([{ type: 'address' }, { type: 'uint256' }], [address, slot(name)])))
+		const hex = (value: bigint): `0x${string}` => `0x${value.toString(16).padStart(64, '0')}`
+		const ownerVault = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
+		const owner = mapping(client.account.address, 'securityVaults')
+		const recipient = mapping(receiver, 'securityVaults')
+		const offer = mapping(receiver, 'coverageOffers')
+		await getAnvilWindowEthereum().addStateOverrides({
+			[securityPoolAddresses.securityPool]: {
+				stateDiff: {
+					[hex(owner)]: 0n,
+					[hex(owner + 1n)]: 0n,
+					[hex(recipient)]: ownerVault.repBackingUnits,
+					[hex(recipient + 1n)]: ownerVault.capacityOwnershipAttoRep,
+					[hex(offer)]: 1n,
+					[hex(offer + 1n)]: maximumObligation,
+					[hex(offer + 2n)]: 10_000n,
+				},
+			},
+		})
+	}
+
 	test('complete-set minting rejects an expired cached REP price', async () => {
 		const mockWindow = getAnvilWindowEthereum()
-		await setVaultCapacityFixture(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, client.account.address, 30n * 10n ** 18n)
+		await setCoverageOfferFixture(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, client.account.address, 30n * 10n ** 18n)
 		await mockWindow.advanceTime(5n * 60n)
 
 		await assert.rejects(createCompleteSet(client, securityPoolAddresses.securityPool, 1n, true), /Stale price/)
@@ -123,8 +153,9 @@ describe('security regression coverage', () => {
 		const mockWindow = getAnvilWindowEthereum()
 		const initialValue = 6n * 10n ** 18n
 		const reentrantValue = 6n * 10n ** 18n
-		await setVaultCapacityFixture(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, client.account.address, 30n * 10n ** 18n)
+		await setCoverageOfferFixture(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, client.account.address, 30n * 10n ** 18n)
 		const receiver = await deployCompleteSetReentrantReceiver(securityPoolAddresses.securityPool)
+		await seedReceiverCoverage(receiver, 15n * 10n ** 18n)
 		assert.equal(
 			await client.readContract({
 				abi: statoblast_tokens_ShareToken_ShareToken.abi,
@@ -179,8 +210,9 @@ describe('security regression coverage', () => {
 	test('complete-set capacity is enforced across ERC1155 receiver reentrancy', async () => {
 		const mockWindow = getAnvilWindowEthereum()
 		const capacity = 20n * 10n ** 18n
-		await setVaultCapacityFixture(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, client.account.address, capacity)
+		await setCoverageOfferFixture(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, client.account.address, capacity)
 		const receiver = await deployCompleteSetReentrantReceiver(securityPoolAddresses.securityPool)
+		await seedReceiverCoverage(receiver, 10n * 10n ** 18n)
 		const blockBeforeAttack = await client.getBlockNumber()
 
 		await assert.rejects(
@@ -215,8 +247,8 @@ describe('security regression coverage', () => {
 		const forkThresholdAttoRep = (((await getTotalTheoreticalSupply(client, repToken)) / 20n) * 10_000n) / statoblastSecurityMultiplierBps
 		await depositRepToVault(client, securityPoolAddresses.securityPool, 2n * forkThresholdAttoRep)
 		await mockWindow.setTime(questionEndDate + 10n * DAY)
-		await setVaultCapacityFixture(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, client.account.address, 0n)
-		await setVaultCapacityFixture(attacker, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, attacker.account.address, 0n)
+		await setCoverageOfferFixture(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, client.account.address, 0n)
+		await setCoverageOfferFixture(attacker, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, attacker.account.address, 0n)
 		await triggerOwnGameFork(client, securityPoolAddresses.securityPool)
 		const { vaultRepAtForkAttoRep } = await getOwnForkRepBuckets(client, securityPoolAddresses.securityPool)
 
@@ -346,9 +378,9 @@ describe('security regression coverage', () => {
 		const liquidator = createWriteClient(mockWindow, TEST_ADDRESSES[1])
 		await approveAndDepositRepToVault(liquidator, repDeposit * 10n, questionId)
 		await mockWindow.setTime(questionEndDate + 10n * DAY)
-		const targetCapacityOwnershipAttoRep = repDeposit / 4n
+		const targetObligationUnits = repDeposit / 4n
 		const forcedLiquidationPrice = 10n * 10n ** 18n
-		await setVaultCapacityFixture(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, client.account.address, targetCapacityOwnershipAttoRep)
+		await setCoverageOfferFixture(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, client.account.address, targetObligationUnits)
 
 		await mockWindow.advanceTime(2n * 60n * 60n)
 
@@ -365,7 +397,7 @@ describe('security regression coverage', () => {
 		for (let index = 1; index < 4; index++) {
 			await requestPriceIfNeededAndStageOperation(liquidator, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.WithdrawRep, liquidator.account.address, BigInt(index + 1) * 10n ** 18n)
 		}
-		await requestPriceIfNeededAndStageOperation(liquidator, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.Liquidation, client.account.address, targetCapacityOwnershipAttoRep)
+		await requestPriceIfNeededAndStageOperation(liquidator, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.Liquidation, client.account.address, targetObligationUnits)
 		const liquidationOperationId = await getStagedOperationCounter(client, securityPoolAddresses.priceOracleManagerAndOperatorQueuer)
 
 		await handleOracleReporting(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, forcedLiquidationPrice)
@@ -409,7 +441,7 @@ describe('security regression coverage', () => {
 	test('first escalation deposits reject stale oracle prices while capacity ownership is active', async () => {
 		const mockWindow = getAnvilWindowEthereum()
 		const capacityOwnershipAttoRep = 100n * 10n ** 18n
-		await setVaultCapacityFixture(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, client.account.address, capacityOwnershipAttoRep)
+		await setCoverageOfferFixture(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, client.account.address, capacityOwnershipAttoRep)
 		assert.equal(await getIsPriceValid(client, securityPoolAddresses.priceOracleManagerAndOperatorQueuer), true)
 
 		await mockWindow.setTime(questionEndDate + 1n)
@@ -421,7 +453,7 @@ describe('security regression coverage', () => {
 	test('large escalation deposits reject stale oracle prices while capacity ownership is active', async () => {
 		const mockWindow = getAnvilWindowEthereum()
 		const capacityOwnershipAttoRep = 100n * 10n ** 18n
-		await setVaultCapacityFixture(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, client.account.address, capacityOwnershipAttoRep)
+		await setCoverageOfferFixture(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, client.account.address, capacityOwnershipAttoRep)
 		assert.equal(await getIsPriceValid(client, securityPoolAddresses.priceOracleManagerAndOperatorQueuer), true)
 
 		await mockWindow.setTime(questionEndDate + 1n)

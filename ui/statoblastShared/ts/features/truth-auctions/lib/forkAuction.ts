@@ -7,7 +7,7 @@ export { deriveHasForkActivity }
 const SECONDS_PER_WEEK = 7n * 24n * 60n * 60n
 
 export const AUCTION_TIME_SECONDS = SECONDS_PER_WEEK
-export const AUCTIONED_CAPACITY_OWNERSHIP_ATTO_REP_LABEL = 'Auctioned capacity ownership'
+export const AUCTIONED_OBLIGATION_UNITS_LABEL = 'Auctioned obligation units'
 
 export type ForkAuctionStageView = 'initiate' | 'migration' | 'auction' | 'settlement'
 

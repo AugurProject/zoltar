@@ -89,7 +89,7 @@ function createForkAuctionForm(overrides: Partial<ForkAuctionFormState> = {}): F
 
 function createParentDetails(): ForkAuctionDetails {
 	return {
-		auctionedCapacityOwnershipAttoRep: 0n,
+		auctionObligationUnits: 0n,
 		claimingAvailable: false,
 		settlementCollateralAttoEth: 1n,
 		currentTime: 250n,
@@ -115,7 +115,7 @@ function createChildPool(overrides: Partial<ListedSecurityPool> = {}): ListedSec
 	return {
 		settlementCollateralAttoEth: 1n,
 		currentRetentionRate: 10n,
-		feeEligibleCapacityOwnershipAttoRep: 0n,
+		activeObligationUnits: 0n,
 		forkOutcome: 'none',
 		forkOwnSecurityPool: false,
 		hasForkActivity: false,
@@ -148,7 +148,7 @@ function createChildPool(overrides: Partial<ListedSecurityPool> = {}): ListedSec
 
 function createChildAuctionDetails(securityPoolAddress: Address): ForkAuctionDetails {
 	return {
-		auctionedCapacityOwnershipAttoRep: 0n,
+		auctionObligationUnits: 0n,
 		claimingAvailable: false,
 		settlementCollateralAttoEth: 1n,
 		currentTime: 250n,

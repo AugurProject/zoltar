@@ -1,15 +1,17 @@
+import { dirname } from 'node:path'
+import { getContractOutput, loadContractsJson, normalizeStorageLayout } from '../contractArtifactHelpers'
 import { getZoltarAddress } from '../../testSupport/simulator/utils/contracts/zoltar'
 import { getChildUniverseId } from '../../testSupport/simulator/utils/utilities'
 import { migrateRepToZoltar, createChildUniverse, claimAuctionProceeds } from '../../testSupport/simulator/utils/contracts/securityPoolForker'
 import { QuestionOutcome } from '../../testSupport/simulator/types/types'
 import { depositToEscalationGame, updateSettlementCollateral, updateVaultFees, redeemFees, getSecurityVault, getTotalPoolHeldAttoRep, getSettlementCollateralAttoEth } from '../../testSupport/simulator/utils/contracts/securityPool'
-import { setVaultCapacityFixture } from '../../testSupport/simulator/utils/contracts/statoblastTestUtils'
+import { setCoverageOfferFixture } from '../../testSupport/simulator/utils/contracts/statoblastTestUtils'
 import { requestPriceIfNeededAndStageOperation, OperationType } from '../../testSupport/simulator/utils/contracts/statoblast'
 import { getInfraContractAddresses, getSecurityPoolAddresses } from '../../testSupport/simulator/utils/contracts/deployStatoblast'
 import { getQuestionId, createQuestion } from '../../testSupport/simulator/utils/contracts/zoltarQuestionData'
 import { strictEqualTypeSafe } from '../../testSupport/simulator/utils/testUtils'
 import { beforeEach, describe, expect, test } from 'bun:test'
-import { decodeEventLog, zeroAddress, type Abi, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
+import { decodeEventLog, encodeAbiParameters, keccak256, zeroAddress, type Abi, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
 import {
 	statoblast_EscalationGame_EscalationGame,
 	statoblast_factories_SecurityPoolFactory_SecurityPoolFactory,
@@ -33,13 +35,13 @@ const poolAccountingCheckpointEvent = {
 		{ name: 'vault', type: 'address', indexed: true },
 		{ name: 'settlementCollateralAttoEth', type: 'uint256', indexed: false },
 		{ name: 'totalCapacityOwnershipAttoRep', type: 'uint256', indexed: false },
-		{ name: 'feeEligibleCapacityOwnershipAttoRep', type: 'uint256', indexed: false },
+		{ name: 'activeObligationUnits', type: 'uint256', indexed: false },
 		{ name: 'totalClaimableVaultFeesAttoEth', type: 'uint256', indexed: false },
 		{ name: 'unallocatedAccruedFeesAttoEth', type: 'uint256', indexed: false },
 		{ name: 'feeIndex', type: 'uint256', indexed: false },
 		{ name: 'feeIndexRemainder', type: 'uint256', indexed: false },
 		{ name: 'totalFeesOwedRemainder', type: 'uint256', indexed: false },
-		{ name: 'uncheckpointedFeeEligibleCapacityOwnershipAttoRep', type: 'uint256', indexed: false },
+		{ name: 'uncheckpointedActiveObligationUnits', type: 'uint256', indexed: false },
 		{ name: 'lastUpdatedFeeAccumulator', type: 'uint256', indexed: false },
 		{ name: 'currentRetentionRate', type: 'uint256', indexed: false },
 	],
@@ -58,13 +60,13 @@ const poolAccountingSnapshotAbi = [
 				components: [
 					{ name: 'settlementCollateralAttoEth', type: 'uint256' },
 					{ name: 'totalCapacityOwnershipAttoRep', type: 'uint256' },
-					{ name: 'feeEligibleCapacityOwnershipAttoRep', type: 'uint256' },
+					{ name: 'activeObligationUnits', type: 'uint256' },
 					{ name: 'totalClaimableVaultFeesAttoEth', type: 'uint256' },
 					{ name: 'unallocatedAccruedFeesAttoEth', type: 'uint256' },
 					{ name: 'feeIndex', type: 'uint256' },
 					{ name: 'feeIndexRemainder', type: 'uint256' },
 					{ name: 'totalFeesOwedRemainder', type: 'uint256' },
-					{ name: 'uncheckpointedFeeEligibleCapacityOwnershipAttoRep', type: 'uint256' },
+					{ name: 'uncheckpointedActiveObligationUnits', type: 'uint256' },
 					{ name: 'lastUpdatedFeeAccumulator', type: 'uint256' },
 					{ name: 'currentRetentionRate', type: 'uint256' },
 					{ name: 'badDebtGeneration', type: 'uint256' },
@@ -111,13 +113,13 @@ function createReplayLog(overrides: Partial<ReplayLog> = {}): ReplayLog {
 			vault: zeroAddress,
 			settlementCollateralAttoEth: 1n,
 			totalCapacityOwnershipAttoRep: 2n,
-			feeEligibleCapacityOwnershipAttoRep: 2n,
+			activeObligationUnits: 2n,
 			totalClaimableVaultFeesAttoEth: 0n,
 			unallocatedAccruedFeesAttoEth: 0n,
 			feeIndex: 0n,
 			feeIndexRemainder: 0n,
 			totalFeesOwedRemainder: 0n,
-			uncheckpointedFeeEligibleCapacityOwnershipAttoRep: 0n,
+			uncheckpointedActiveObligationUnits: 0n,
 			lastUpdatedFeeAccumulator: 1n,
 			currentRetentionRate: 1n,
 		},
@@ -185,7 +187,7 @@ describe('event-only replay', () => {
 					feeIndex: 4n,
 					vaultFeeRemainder: 7n,
 					resultingTotalRepBackingUnits: 10n,
-					resultingFeeEligibleCapacityOwnershipAttoRep: 3n,
+					resultingActiveObligationUnits: 3n,
 				},
 			}),
 		])
@@ -502,7 +504,7 @@ describe('event-only replay', () => {
 					queuedAt: 27n,
 					validForSeconds: 300n,
 					snapshotTargetBackingUnits: 11n,
-					snapshotTargetCapacityOwnershipAttoRep: 12n,
+					snapshotTargetObligationUnits: 12n,
 					snapshotTotalPoolHeldAttoRep: 13n,
 					snapshotTotalRepBackingUnits: 14n,
 					isPendingSlot: true,
@@ -572,7 +574,7 @@ describe('event-only replay', () => {
 					queuedAt: 10n,
 					validForSeconds: 300n,
 					snapshotTargetBackingUnits: 5n,
-					snapshotTargetCapacityOwnershipAttoRep: 6n,
+					snapshotTargetObligationUnits: 6n,
 					snapshotTotalPoolHeldAttoRep: 7n,
 					snapshotTotalRepBackingUnits: 8n,
 					isPendingSlot: true,
@@ -591,7 +593,7 @@ describe('event-only replay', () => {
 					queuedAt: 11n,
 					validForSeconds: 600n,
 					snapshotTargetBackingUnits: 9n,
-					snapshotTargetCapacityOwnershipAttoRep: 10n,
+					snapshotTargetObligationUnits: 10n,
 					snapshotTotalPoolHeldAttoRep: 11n,
 					snapshotTotalRepBackingUnits: 12n,
 					isPendingSlot: false,
@@ -1316,7 +1318,7 @@ describe('event-only replay', () => {
 					queuedAt: 21n,
 					validForSeconds: 300n,
 					snapshotTargetBackingUnits: 5n,
-					snapshotTargetCapacityOwnershipAttoRep: 6n,
+					snapshotTargetObligationUnits: 6n,
 					snapshotTotalPoolHeldAttoRep: 7n,
 					snapshotTotalRepBackingUnits: 8n,
 					isPendingSlot: true,
@@ -1480,7 +1482,7 @@ describe('event-only replay', () => {
 		strictEqualTypeSafe(operation.queuedAt, storedOperation[5], 'queued timestamp replay mismatch')
 		strictEqualTypeSafe(operation.validForSeconds, storedOperation[6], 'queued validity replay mismatch')
 		strictEqualTypeSafe(operation.snapshotTargetBackingUnits, storedOperation[7], 'queued backingUnits snapshot replay mismatch')
-		strictEqualTypeSafe(operation.snapshotTargetCapacityOwnershipAttoRep, storedOperation[8], 'capacity ownership')
+		strictEqualTypeSafe(operation.snapshotTargetObligationUnits, storedOperation[8], 'capacity ownership')
 		const pendingOperationIds = await client.readContract({
 			address: coordinator,
 			abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
@@ -1493,7 +1495,7 @@ describe('event-only replay', () => {
 
 	test('actual first escalation deposit pre-discovers the game before its lifecycle event', async () => {
 		await mockWindow.setTime(fixture.questionData.endTime + 1n)
-		await setVaultCapacityFixture(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, client.account.address, 0n)
+		await setCoverageOfferFixture(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, client.account.address, 0n)
 		const depositHash = await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, fixture.reportBond)
 		const receipt = await client.getTransactionReceipt({ hash: depositHash })
 		const factory = getInfraContractAddresses().securityPoolFactory
@@ -1524,7 +1526,7 @@ describe('event-only replay', () => {
 	test('actual child continuation replays its inherited carry checkpoint and storage', async () => {
 		const fromBlock = (await client.getBlockNumber()) + 1n
 		await mockWindow.setTime(fixture.questionData.endTime + 1n)
-		await setVaultCapacityFixture(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, client.account.address, 0n)
+		await setCoverageOfferFixture(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, client.account.address, 0n)
 		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, fixture.reportBond)
 		await fixture.triggerExternalForkForSecurityPool(undefined, 'event replay child continuation')
 		await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
@@ -1694,13 +1696,13 @@ describe('event-only replay', () => {
 		const snapshot = await client.readContract({ address: scenario.yesSecurityPool.securityPool, abi: poolAccountingSnapshotAbi, functionName: 'getPoolAccountingSnapshot', args: [] })
 		strictEqualTypeSafe(replayedPool.settlementCollateralAttoEth, snapshot.settlementCollateralAttoEth, 'seeded collateral replay mismatch')
 		strictEqualTypeSafe(replayedPool.totalCapacityOwnershipAttoRep, snapshot.totalCapacityOwnershipAttoRep, 'capacity ownership')
-		strictEqualTypeSafe(replayedPool.feeEligibleCapacityOwnershipAttoRep, snapshot.feeEligibleCapacityOwnershipAttoRep, 'capacity ownership')
+		strictEqualTypeSafe(replayedPool.activeObligationUnits, snapshot.activeObligationUnits, 'capacity ownership')
 		strictEqualTypeSafe(replayedPool.totalClaimableVaultFeesAttoEth, snapshot.totalClaimableVaultFeesAttoEth, 'seeded fee liability replay mismatch')
 		strictEqualTypeSafe(replayedPool.unallocatedAccruedFeesAttoEth, snapshot.unallocatedAccruedFeesAttoEth, 'seeded fee reserve replay mismatch')
 		strictEqualTypeSafe(replayedPool.feeIndex, snapshot.feeIndex, 'seeded fee-index replay mismatch')
 		strictEqualTypeSafe(replayedPool.feeIndexRemainder, snapshot.feeIndexRemainder, 'seeded fee-index remainder replay mismatch')
 		strictEqualTypeSafe(replayedPool.totalFeesOwedRemainder, snapshot.totalFeesOwedRemainder, 'seeded total-fee remainder replay mismatch')
-		strictEqualTypeSafe(replayedPool.uncheckpointedFeeEligibleCapacityOwnershipAttoRep, snapshot.uncheckpointedFeeEligibleCapacityOwnershipAttoRep, 'capacity ownership')
+		strictEqualTypeSafe(replayedPool.uncheckpointedActiveObligationUnits, snapshot.uncheckpointedActiveObligationUnits, 'capacity ownership')
 		strictEqualTypeSafe(replayedPool.lastUpdatedFeeAccumulator, snapshot.lastUpdatedFeeAccumulator, 'seeded accumulator replay mismatch')
 		strictEqualTypeSafe(replayedPool.currentRetentionRate, snapshot.currentRetentionRate, 'seeded retention-rate replay mismatch')
 
@@ -1741,7 +1743,15 @@ describe('event-only replay', () => {
 		const backing = await client.readContract({ address: pool, abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'backingUnitsToAttoRep', args: [storedVaultBefore.repBackingUnits] })
 		const targetSlot = fixture.getMappingStorageSlot(vault, 28n)
 		const vaultSlot = fixture.getMappingStorageSlot(vault, 16n)
-		const vaultFeeRemainderSlot = fixture.getMappingStorageSlot(vault, 17n)
+		const epoch = await client.readContract({ address: pool, abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'coverageEpoch' })
+		const vaultFeeRemainderSlot = fixture.getMappingStorageSlot(vault, BigInt(keccak256(encodeAbiParameters([{ type: 'uint256' }, { type: 'uint256' }], [epoch, 17n]))))
+		const layout = normalizeStorageLayout(getContractOutput(loadContractsJson(dirname(import.meta.dir)), 'contracts/statoblast/SecurityPool.sol', 'SecurityPool'))
+		const slot = (name: string) => {
+			const field = layout.find(field => field.label === name)
+			if (field === undefined) throw new Error(`Missing ${name}`)
+			return BigInt(field.slot)
+		}
+		const position = fixture.getMappingStorageSlot(vault, slot('coveragePositions'))
 		const firstFeeIndex = storedVaultBefore.feeIndex + 1n
 		const maxUint256 = (1n << 256n) - 1n
 		await mockWindow.addStateOverrides({
@@ -1756,6 +1766,9 @@ describe('event-only replay', () => {
 					[fixture.formatStorageSlot(13n)]: 1n,
 					[fixture.formatStorageSlot(vaultSlot + 1n)]: 1n,
 					[fixture.formatStorageSlot(vaultFeeRemainderSlot)]: fixture.PRICE_PRECISION - 2n,
+					[fixture.formatStorageSlot(position)]: 1n,
+					[fixture.formatStorageSlot(position + 1n)]: epoch,
+					[fixture.formatStorageSlot(slot('totalObligationUnits'))]: 1n,
 				},
 			},
 		})
@@ -1840,13 +1853,13 @@ describe('event-only replay', () => {
 				vault: checkpointLog.args.vault,
 				settlementCollateralAttoEth: checkpointLog.args.settlementCollateralAttoEth,
 				totalCapacityOwnershipAttoRep: checkpointLog.args.totalCapacityOwnershipAttoRep,
-				feeEligibleCapacityOwnershipAttoRep: checkpointLog.args.feeEligibleCapacityOwnershipAttoRep,
+				activeObligationUnits: checkpointLog.args.activeObligationUnits,
 				totalClaimableVaultFeesAttoEth: checkpointLog.args.totalClaimableVaultFeesAttoEth,
 				unallocatedAccruedFeesAttoEth: checkpointLog.args.unallocatedAccruedFeesAttoEth,
 				feeIndex: checkpointLog.args.feeIndex,
 				feeIndexRemainder: checkpointLog.args.feeIndexRemainder,
 				totalFeesOwedRemainder: checkpointLog.args.totalFeesOwedRemainder,
-				uncheckpointedFeeEligibleCapacityOwnershipAttoRep: checkpointLog.args.uncheckpointedFeeEligibleCapacityOwnershipAttoRep,
+				uncheckpointedActiveObligationUnits: checkpointLog.args.uncheckpointedActiveObligationUnits,
 				lastUpdatedFeeAccumulator: checkpointLog.args.lastUpdatedFeeAccumulator,
 				currentRetentionRate: checkpointLog.args.currentRetentionRate,
 			},
@@ -1861,13 +1874,13 @@ describe('event-only replay', () => {
 		})
 		strictEqualTypeSafe(replayed.settlementCollateralAttoEth, snapshot.settlementCollateralAttoEth, 'collateral checkpoint mismatch')
 		strictEqualTypeSafe(replayed.totalCapacityOwnershipAttoRep, snapshot.totalCapacityOwnershipAttoRep, 'capacity ownership')
-		strictEqualTypeSafe(replayed.feeEligibleCapacityOwnershipAttoRep, snapshot.feeEligibleCapacityOwnershipAttoRep, 'capacity ownership')
+		strictEqualTypeSafe(replayed.activeObligationUnits, snapshot.activeObligationUnits, 'capacity ownership')
 		strictEqualTypeSafe(replayed.totalClaimableVaultFeesAttoEth, snapshot.totalClaimableVaultFeesAttoEth, 'vault fee liability checkpoint mismatch')
 		strictEqualTypeSafe(replayed.unallocatedAccruedFeesAttoEth, snapshot.unallocatedAccruedFeesAttoEth, 'unallocated reserve checkpoint mismatch')
 		strictEqualTypeSafe(replayed.feeIndex, snapshot.feeIndex, 'fee-index checkpoint mismatch')
 		strictEqualTypeSafe(replayed.feeIndexRemainder, snapshot.feeIndexRemainder, 'fee-index remainder checkpoint mismatch')
 		strictEqualTypeSafe(replayed.totalFeesOwedRemainder, snapshot.totalFeesOwedRemainder, 'total fee remainder checkpoint mismatch')
-		strictEqualTypeSafe(replayed.uncheckpointedFeeEligibleCapacityOwnershipAttoRep, snapshot.uncheckpointedFeeEligibleCapacityOwnershipAttoRep, 'uncheckpointed eligibility checkpoint mismatch')
+		strictEqualTypeSafe(replayed.uncheckpointedActiveObligationUnits, snapshot.uncheckpointedActiveObligationUnits, 'uncheckpointed eligibility checkpoint mismatch')
 		strictEqualTypeSafe(replayed.lastUpdatedFeeAccumulator, snapshot.lastUpdatedFeeAccumulator, 'fee accumulator checkpoint mismatch')
 		strictEqualTypeSafe(replayed.currentRetentionRate, snapshot.currentRetentionRate, 'retention-rate checkpoint mismatch')
 		strictEqualTypeSafe(replayed.vault, zeroAddress, 'accrual checkpoint should not attribute a vault')

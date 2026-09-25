@@ -418,7 +418,7 @@ function refundBackfillClient(pendingRefundAttoEth: bigint, walletVaultRegistere
 					return {
 						badDebtGeneration: overrides.badDebtGeneration ?? 0n,
 						currentRetentionRate: 10n ** 18n,
-						feeEligibleCapacityOwnershipAttoRep: 0n,
+						activeObligationUnits: 0n,
 						feeIndex: 0n,
 						feeIndexRemainder: 0n,
 						lastUpdatedFeeAccumulator: 0n,
@@ -427,7 +427,7 @@ function refundBackfillClient(pendingRefundAttoEth: bigint, walletVaultRegistere
 						totalClaimableVaultFeesAttoEth: 0n,
 						totalFeesOwedRemainder: 0n,
 						unallocatedAccruedFeesAttoEth: 0n,
-						uncheckpointedFeeEligibleCapacityOwnershipAttoRep: 0n,
+						uncheckpointedActiveObligationUnits: 0n,
 					}
 				case 'shareTokenSupplyAttoShares':
 				case 'totalRepBackingUnits':
@@ -1503,7 +1503,7 @@ describe('anchored ecosystem discovery', () => {
 									receiverVault: address(87),
 									reservedLiquidationDebtAttoEth: 80n,
 									snapshotTargetBackingUnits: 10n,
-									snapshotTargetCapacityOwnershipAttoRep: 20n,
+									snapshotTargetObligationUnits: 20n,
 									targetVault: address(88),
 									validForSeconds: 3_600n,
 								},
@@ -1629,7 +1629,7 @@ describe('anchored ecosystem discovery', () => {
 			receiverVault: receiver,
 			reservedLiquidationDebtAttoEth: 0n,
 			snapshotTargetBackingUnits: 10n,
-			snapshotTargetCapacityOwnershipAttoRep: 20n,
+			snapshotTargetObligationUnits: 20n,
 			snapshotTargetDisputeStakedAttoRep: 0n,
 			snapshotTargetOpenInterestAttoEth: 0n,
 			snapshotTotalPoolHeldAttoRep: 1_000n,

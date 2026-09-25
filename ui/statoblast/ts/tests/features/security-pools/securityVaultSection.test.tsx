@@ -277,14 +277,14 @@ describe('SecurityVaultSection', () => {
 		expect(submitted).toBe('2')
 	})
 
-	test('blocks a capacity reduction while settlement collateral is committed', async () => {
+	test('allows a nominal capacity reduction while assigned obligations remain covered', async () => {
 		const rendered = await renderIntoDocument(<SecurityVaultSection {...createSecurityVaultSectionProps({ modalFirst: true, securityVaultDetails: createSecurityVaultDetails({ settlementCollateralAttoEth: 1n, disputeStakedAttoRep: 0n }) })} />)
 		cleanupRenderedComponent = rendered.cleanup
 		const page = within(document.body)
 		fireEvent.click(page.getByRole('button', { name: 'Adjust backing ratio' }))
 		const dialog = within(page.getByRole('dialog', { name: 'Adjust backing ratio' }))
 		fireEvent.input(dialog.getByLabelText('Target backing ratio'), { target: { value: '100' } })
-		expectTransactionButtonDisabled(page.getByRole('dialog'), 'Adjust backing ratio')
+		expectTransactionButtonEnabled(page.getByRole('dialog'), 'Adjust backing ratio')
 	})
 
 	test('blocks adjustment while dispute REP is committed', async () => {
@@ -293,7 +293,7 @@ describe('SecurityVaultSection', () => {
 		expectTransactionButtonDisabled(document.body, 'Adjust backing ratio')
 	})
 
-	test('rejects an input whose resulting capacity leaves the vault undercollateralized', async () => {
+	test('blocks a backing adjustment while existing assigned obligations are undercollateralized', async () => {
 		const rendered = await renderIntoDocument(
 			<SecurityVaultSection
 				{...createSecurityVaultSectionProps({
@@ -301,7 +301,16 @@ describe('SecurityVaultSection', () => {
 					oracleManagerDetails: createOracleManagerDetails(),
 					selectedPoolStatoblastSecurityMultiplierBps: 20_000n,
 					repPerEthPrice: 3n * 10n ** 18n,
-					securityVaultDetails: createSecurityVaultDetails({ targetBackingFactorBps: 20_000n, vaultAttoRepBacking: 12n * 10n ** 18n, capacityOwnershipAttoRep: 6n * 10n ** 18n, totalCapacityOwnershipAttoRep: 6n * 10n ** 18n, settlementCollateralAttoEth: 3n * 10n ** 18n, disputeStakedAttoRep: 0n, badDebtAttoEth: 0n }),
+					securityVaultDetails: createSecurityVaultDetails({
+						openInterestAttoEth: 3n * 10n ** 18n,
+						targetBackingFactorBps: 20_000n,
+						vaultAttoRepBacking: 12n * 10n ** 18n,
+						capacityOwnershipAttoRep: 6n * 10n ** 18n,
+						totalCapacityOwnershipAttoRep: 6n * 10n ** 18n,
+						settlementCollateralAttoEth: 3n * 10n ** 18n,
+						disputeStakedAttoRep: 0n,
+						badDebtAttoEth: 0n,
+					}),
 				})}
 			/>,
 		)
@@ -327,7 +336,16 @@ describe('SecurityVaultSection', () => {
 						repPerEthPrice: displayPrice * 10n ** 18n,
 						repPerEthSource: timestamp === 10n ? 'open-oracle' : 'v3',
 						oracleManagerDetails: createOracleManagerDetails({ lastPrice: coordinatorPrice * 10n ** 18n }),
-						securityVaultDetails: createSecurityVaultDetails({ targetBackingFactorBps: 20_000n, vaultAttoRepBacking: 12n * 10n ** 18n, capacityOwnershipAttoRep: 6n * 10n ** 18n, totalCapacityOwnershipAttoRep: 6n * 10n ** 18n, settlementCollateralAttoEth: 3n * 10n ** 18n, disputeStakedAttoRep: 0n, badDebtAttoEth: 0n }),
+						securityVaultDetails: createSecurityVaultDetails({
+							openInterestAttoEth: 3n * 10n ** 18n,
+							targetBackingFactorBps: 20_000n,
+							vaultAttoRepBacking: 12n * 10n ** 18n,
+							capacityOwnershipAttoRep: 6n * 10n ** 18n,
+							totalCapacityOwnershipAttoRep: 6n * 10n ** 18n,
+							settlementCollateralAttoEth: 3n * 10n ** 18n,
+							disputeStakedAttoRep: 0n,
+							badDebtAttoEth: 0n,
+						}),
 					})}
 				/>
 			</ChainTimestampContext.Provider>,
@@ -1313,6 +1331,50 @@ describe('SecurityVaultSection', () => {
 		if (!(depositLauncher instanceof HTMLButtonElement)) throw new Error('Expected a deposit launcher button')
 		expect(depositLauncher.disabled).toBe(true)
 		expect(getTransactionButtonState(document.body, 'Deposit REP').reason).toBe('Switch to Sepolia.')
+	})
+
+	test('automatically reloads the owned vault after returning to the active network', async () => {
+		const chainId = signal('0xaa36a7')
+		let loads = 0
+		function Harness() {
+			return (
+				<SecurityVaultSection
+					{...createSecurityVaultSectionProps({
+						accountState: createAccountState({ chainId: chainId.value }),
+						autoLoadVault: true,
+						securityVaultDetails: undefined,
+						onLoadSecurityVault: () => {
+							loads += 1
+						},
+					})}
+				/>
+			)
+		}
+		const renderedComponent = await renderIntoDocument(<Harness />)
+		cleanupRenderedComponent = renderedComponent.cleanup
+		expect(loads).toBe(1)
+		await act(() => {
+			chainId.value = '0x2105'
+		})
+		expect(loads).toBe(1)
+		await act(() => {
+			chainId.value = '0xaa36a7'
+		})
+		expect(loads).toBe(2)
+	})
+
+	test('offers network recovery for underwriting controls without asking to load the vault', async () => {
+		const renderedComponent = await renderIntoDocument(
+			<SecurityVaultSection
+				{...createSecurityVaultSectionProps({
+					accountState: createAccountState({ chainId: '0x2105' }),
+					securityVaultDetails: createSecurityVaultDetails({ coverageOffer: { enabled: true, maximumObligationAttoEth: 10n ** 18n, minimumHealthFactorBps: 10_000n } }),
+				})}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+		expect(getTransactionButtonState(document.body, 'Save offer').reason).toBe('Switch to Sepolia.')
+		expect(getTransactionButtonState(document.body, 'Disable offer').reason).toBe('Switch to Sepolia.')
 	})
 
 	test('prioritizes wrong-network recovery before selected vault details load', async () => {

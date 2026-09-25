@@ -27,7 +27,7 @@ const TRUTH_AUCTION_ADDRESS = getAddress('0x000000000000000000000000000000000000
 
 function createForkAuctionDetails(overrides: Partial<ForkAuctionDetails> = {}): ForkAuctionDetails {
 	return {
-		auctionedCapacityOwnershipAttoRep: 0n,
+		auctionObligationUnits: 0n,
 		claimingAvailable: true,
 		settlementCollateralAttoEth: 1n,
 		currentTime: 250n,

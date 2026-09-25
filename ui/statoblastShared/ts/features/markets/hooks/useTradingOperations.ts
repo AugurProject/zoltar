@@ -207,9 +207,10 @@ export function useTradingOperations(
 						const latestMintCapacity = await dependencies.loadSecurityPoolMintCapacity(securityPoolAddress)
 						const walletBalanceAttoEth = await dependencies.getWalletEthBalance(walletAddress)
 						const mintCheckpoint = estimateMintCheckpoint({
+							totalObligationUnits: latestMintCapacity.totalObligationUnits,
 							currentRetentionRate: latestMintCapacity.currentRetentionRate,
 							currentTimestamp: latestMintCapacity.currentTimestamp,
-							feeEligibleCapacityOwnershipAttoRep: latestMintCapacity.feeEligibleCapacityOwnershipAttoRep,
+							activeObligationUnits: latestMintCapacity.activeObligationUnits,
 							feeEndTimestamp: latestMintCapacity.feeEndTimestamp,
 							feeIndexRemainder: latestMintCapacity.feeIndexRemainder,
 							lastUpdatedFeeAccumulator: latestMintCapacity.lastUpdatedFeeAccumulator,
@@ -223,6 +224,7 @@ export function useTradingOperations(
 							mintingCapacityAttoEth: latestMintCapacity.mintingCapacityAttoEth,
 							isPriceValid: latestMintCapacity.isPriceValid,
 							hasSelectedPool: true,
+							hasEscalationGame: latestMintCapacity.hasEscalationGame,
 							isOnActiveAppChain,
 							mintAmountInput: currentForm.completeSetAmount,
 							shareTokenSupplyAttoShares: latestMintCapacity.shareTokenSupplyAttoShares,

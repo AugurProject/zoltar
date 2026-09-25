@@ -1,3 +1,4 @@
+import { allocateCoverage } from '@zoltar/statoblast-shared/statoblast/coverage'
 import { statoblast_EscalationGame_EscalationGame, statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator, statoblast_SecurityPool_SecurityPool } from '../../../../types/contractArtifact'
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import { SystemState } from '../../types/statoblastTypes'
@@ -17,6 +18,7 @@ const getAwaitingForkContinuationAbi = [
 ] as const
 
 type SecurityVault = {
+	obligationUnits: bigint
 	repBackingUnits: bigint
 	capacityOwnershipAttoRep: bigint
 	claimableFeesAttoEth: bigint
@@ -80,7 +82,7 @@ export const depositRepToVault = async (client: WriteClient, securityPoolAddress
 		}),
 	)
 
-export const createCompleteSet = async (client: WriteClient, securityPoolAddress: Address, settlementCollateralAttoEth: bigint, preserveStalePriceForTest = false) => {
+export const createCompleteSet = async (client: WriteClient, securityPoolAddress: Address, settlementCollateralAttoEth: bigint, preserveStalePriceForTest = false, explicitAllocations?: { vault: Address; collateralAttoEth: bigint }[]) => {
 	if (!preserveStalePriceForTest) {
 		const priceOracleManagerAndOperatorQueuer = requireAddress(
 			await client.readContract({
@@ -133,12 +135,47 @@ export const createCompleteSet = async (client: WriteClient, securityPoolAddress
 			if (!refreshedPriceIsValid) throw new Error('Test oracle timestamp override did not refresh the cached price')
 		}
 	}
+	let allocations = explicitAllocations
+	const abi = statoblast_SecurityPool_SecurityPool.abi
+	if (allocations === undefined && settlementCollateralAttoEth > 0n) {
+		const ownOffer = await client.readContract({ abi, address: securityPoolAddress, functionName: 'coverageOffers', args: [client.account.address] })
+		if (ownOffer[0]) allocations = [{ vault: client.account.address, collateralAttoEth: settlementCollateralAttoEth }]
+		else {
+			const count = await client.readContract({ abi, address: securityPoolAddress, functionName: 'getVaultCount' })
+			const vaults = await client.readContract({ abi, address: securityPoolAddress, functionName: 'getVaults', args: [0n, count] })
+			const offers = await Promise.all(
+				vaults.map(async vault => {
+					const offer = await client.readContract({ abi, address: securityPoolAddress, functionName: 'coverageOffers', args: [vault] })
+					const state = await client.readContract({ abi, address: securityPoolAddress, functionName: 'securityVaults', args: [vault] })
+					return {
+						vault,
+						enabled: offer[0],
+						maximumObligationAttoEth: offer[1],
+						minimumHealthFactorBps: offer[2],
+						obligationUnits: await client.readContract({ abi, address: securityPoolAddress, functionName: 'getVaultObligationUnits', args: [vault] }),
+						poolHeldAttoRep: await client.readContract({ abi, address: securityPoolAddress, functionName: 'backingUnitsToAttoRep', args: [state[0]] }),
+						disputeStakeAttoRep: 0n,
+					}
+				}),
+			)
+			const manager = await client.readContract({ abi, address: securityPoolAddress, functionName: 'priceOracleManagerAndOperatorQueuer' })
+			allocations = allocateCoverage(
+				offers,
+				await client.readContract({ abi, address: securityPoolAddress, functionName: 'settlementCollateralAttoEth' }),
+				await client.readContract({ abi, address: securityPoolAddress, functionName: 'totalObligationUnits' }),
+				settlementCollateralAttoEth,
+				await client.readContract({ abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi, address: manager, functionName: 'lastPrice' }),
+				await client.readContract({ abi, address: securityPoolAddress, functionName: 'statoblastSecurityMultiplierBps' }),
+			)
+		}
+	}
+	const resolvedAllocations = allocations ?? [{ vault: client.account.address, collateralAttoEth: settlementCollateralAttoEth }]
 	return await writeContractAndWait(client, () =>
 		client.writeContract({
 			abi: statoblast_SecurityPool_SecurityPool.abi,
 			functionName: 'createCompleteSet',
 			address: securityPoolAddress,
-			args: [],
+			args: [resolvedAllocations],
 			value: settlementCollateralAttoEth,
 			gas: HIGH_GAS_SIMULATOR_WRITE_GAS,
 		}),
@@ -267,7 +304,7 @@ export const getSecurityVault = async (client: ReadClient, securityPoolAddress: 
 					}),
 					'Dispute-staked REP by vault',
 				)
-	return { repBackingUnits, capacityOwnershipAttoRep, claimableFeesAttoEth, feeIndex, disputeStakedAttoRep }
+	return { obligationUnits: await client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: securityPoolAddress, functionName: 'getVaultObligationUnits', args: [securityVault] }), repBackingUnits, capacityOwnershipAttoRep, claimableFeesAttoEth, feeIndex, disputeStakedAttoRep }
 }
 
 export const getVaultCount = async (client: ReadClient, securityPoolAddress: Address): Promise<bigint> =>
@@ -428,3 +465,5 @@ export const getTotalPoolHeldAttoRep = async (client: ReadClient, securityPoolAd
 		}),
 		'Total REP balance',
 	)
+
+export const getTotalObligationUnits = async (client: ReadClient, securityPoolAddress: Address) => await client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: securityPoolAddress, functionName: 'totalObligationUnits' })

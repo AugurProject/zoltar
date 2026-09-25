@@ -341,7 +341,7 @@ describe('ABI metadata', () => {
 		expect(decodeLogRecord('reputationToken', transferTopics, '0x', new Map()).status).toBe('failed')
 
 		const checkpointAbi = parseAbi([
-			'event PoolAccountingCheckpoint(uint8 reason,address indexed vault,uint256 settlementCollateralAttoEth,uint256 totalCapacityOwnershipAttoRep,uint256 feeEligibleCapacityOwnershipAttoRep,uint256 totalClaimableVaultFeesAttoEth,uint256 unallocatedAccruedFeesAttoEth,uint256 feeIndex,uint256 feeIndexRemainder,uint256 totalFeesOwedRemainder,uint256 uncheckpointedFeeEligibleCapacityOwnershipAttoRep,uint256 lastUpdatedFeeAccumulator,uint256 currentRetentionRate)',
+			'event PoolAccountingCheckpoint(uint8 reason,address indexed vault,uint256 settlementCollateralAttoEth,uint256 totalCapacityOwnershipAttoRep,uint256 activeObligationUnits,uint256 totalClaimableVaultFeesAttoEth,uint256 unallocatedAccruedFeesAttoEth,uint256 feeIndex,uint256 feeIndexRemainder,uint256 totalFeesOwedRemainder,uint256 uncheckpointedActiveObligationUnits,uint256 lastUpdatedFeeAccumulator,uint256 currentRetentionRate)',
 		])
 		const checkpointTopics = requireTopics(encodeEventTopics({ abi: checkpointAbi, eventName: 'PoolAccountingCheckpoint', args: { vault: childToken } }))
 		const decoded = decodeLogRecord('securityPool', checkpointTopics, '0x', new Map())

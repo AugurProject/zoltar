@@ -26,7 +26,7 @@ type TruthAuctionSettlementSelectionState = {
 }
 
 type TruthAuctionSettlementSelectionEstimate = {
-	estimatedAssignedCapacityOwnershipAttoRep: bigint | undefined
+	estimatedAssignedObligationUnits: bigint | undefined
 	estimatedRefundedAttoEth: bigint
 	// Keep this concrete so the UI never needs a legacy underfunded fallback branch.
 	estimatedVaultRepBackingAttoRep: bigint
@@ -83,7 +83,7 @@ export function getTruthAuctionSettlementSelectionState({ selectedBidKeys, settl
 	}
 }
 
-export function getTruthAuctionSettlementSelectionEstimate({ auctionedCapacityOwnershipAttoRep, selectedRows, truthAuction }: { auctionedCapacityOwnershipAttoRep: bigint | undefined; selectedRows: TruthAuctionSettlementBidRow[]; truthAuction: TruthAuctionMetrics | undefined }): TruthAuctionSettlementSelectionEstimate {
+export function getTruthAuctionSettlementSelectionEstimate({ auctionObligationUnits, selectedRows, truthAuction }: { auctionObligationUnits: bigint | undefined; selectedRows: TruthAuctionSettlementBidRow[]; truthAuction: TruthAuctionMetrics | undefined }): TruthAuctionSettlementSelectionEstimate {
 	let estimatedRefundedAttoEth = 0n
 	let estimatedVaultRepBackingAttoRep = 0n
 	const winningThresholdPrice = getTruthAuctionWinningThresholdPrice(truthAuction)
@@ -102,17 +102,17 @@ export function getTruthAuctionSettlementSelectionEstimate({ auctionedCapacityOw
 		}
 	}
 
-	let estimatedAssignedCapacityOwnershipAttoRep: bigint | undefined = 0n
+	let estimatedAssignedObligationUnits: bigint | undefined = 0n
 	if (estimatedVaultRepBackingAttoRep > 0n) {
-		if (truthAuction === undefined || truthAuction.totalAttoRepPurchased === 0n || auctionedCapacityOwnershipAttoRep === undefined) {
-			estimatedAssignedCapacityOwnershipAttoRep = undefined
+		if (truthAuction === undefined || truthAuction.totalAttoRepPurchased === 0n || auctionObligationUnits === undefined) {
+			estimatedAssignedObligationUnits = undefined
 		} else {
-			estimatedAssignedCapacityOwnershipAttoRep = (auctionedCapacityOwnershipAttoRep * estimatedVaultRepBackingAttoRep) / truthAuction.totalAttoRepPurchased
+			estimatedAssignedObligationUnits = (auctionObligationUnits * estimatedVaultRepBackingAttoRep) / truthAuction.totalAttoRepPurchased
 		}
 	}
 
 	return {
-		estimatedAssignedCapacityOwnershipAttoRep,
+		estimatedAssignedObligationUnits,
 		estimatedRefundedAttoEth,
 		estimatedVaultRepBackingAttoRep,
 	}

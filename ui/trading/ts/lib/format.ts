@@ -15,10 +15,6 @@ export function formatBpsMultiplier(value: bigint) {
 	return `${whole}${fraction.length > 0 ? `.${fraction}` : ''}×`
 }
 
-export function formatCapacityOwnership(totalAttoRep: bigint, feeEligibleAttoRep: bigint) {
-	return `${formatTrimmedUnits(totalAttoRep)} / ${formatTrimmedUnits(feeEligibleAttoRep)} REP`
-}
-
 export function formatMintingCapacity(mintedAttoEth: bigint, maximumAttoEth: bigint) {
 	return `${formatTrimmedUnits(mintedAttoEth)} / ${formatTrimmedUnits(maximumAttoEth)} ETH`
 }

@@ -48,7 +48,7 @@ contract SecurityPoolForker is SecurityPoolForkerBase {
 			UniformPriceDualCapBatchAuction truthAuction,
 			uint256 truthAuctionStarted,
 			uint256 migratedAttoRep,
-			uint256 auctionedCapacityOwnershipAttoRep,
+			uint256 auctionObligationUnits,
 			uint256 escalationElapsedAtFork,
 			uint256 escalationStartBondAtForkAttoRep,
 			uint256 escalationNonDecisionThresholdAtForkAttoRep,
@@ -64,7 +64,7 @@ contract SecurityPoolForker is SecurityPoolForkerBase {
 			data.truthAuction,
 			data.truthAuctionStarted,
 			data.migratedAttoRep,
-			data.auctionedCapacityOwnershipAttoRep,
+			data.auctionObligationUnits,
 			data.escalationElapsedAtFork,
 			data.escalationStartBondAtForkAttoRep,
 			data.escalationNonDecisionThresholdAtForkAttoRep,
@@ -79,7 +79,7 @@ contract SecurityPoolForker is SecurityPoolForkerBase {
 		SecurityPoolForkerForkData storage data = forkDataByPool[securityPool];
 		return (
 			data.unassignedRepBackingUnitsAtFinalization - data.claimedAuctionRepBackingUnits,
-			data.auctionedCapacityOwnershipAttoRep - data.claimedAuctionedCapacityOwnershipAttoRep,
+			data.auctionObligationUnits - data.claimedAuctionObligationUnits,
 			auctionedBadDebtByPool[securityPool] - claimedAuctionedBadDebtByPool[securityPool],
 			data.auctionBadDebtGeneration,
 			data.auctionFeeIndexAtFinalization
@@ -650,7 +650,7 @@ contract SecurityPoolForker is SecurityPoolForkerBase {
 			uint256 newCapacityOwnershipAttoRep,
 			uint256 badDebtToAssignAttoEth,
 			uint256 auctionRepBackingUnits
-		) = data.truthAuction.withdrawBids(vault, tickIndices, data.auctionedCapacityOwnershipAttoRep, auctionedBadDebtByPool[securityPool], data.auctionRepBackingUnits);
+		) = data.truthAuction.withdrawBids(vault, tickIndices, data.auctionObligationUnits, auctionedBadDebtByPool[securityPool], data.auctionRepBackingUnits);
 		_delegateMigrationCall(vaultMigrationDelegate, abi.encodeCall(SecurityPoolForkerVaultMigrationDelegate.creditAuctionProceeds, (securityPool, vault, amountAttoRep, newCapacityOwnershipAttoRep, badDebtToAssignAttoEth, data.truthAuction.totalAttoRepPurchased(), auctionRepBackingUnits)));
 	}
 

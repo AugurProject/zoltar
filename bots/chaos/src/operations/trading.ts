@@ -1299,6 +1299,8 @@ function routerEthDefinition(kind: 'create-and-initialize' | 'initialize' | 'add
 				args = [target, longOutcome, inputInteger(options, 'minimumOutput', minimumAfterSlippage(minted + additionalLong), 1n, minted + additionalLong), snapshot.wallet.address, BigInt(deadline)]
 				evidence = [eventEvidence(target, 'Swap(address,address,bool,bool,uint256,uint256,uint256,uint256,uint256)')]
 			}
+			// The pool validates the execution wallet's live underwriting offer and backing.
+			args = [...args, [[snapshot.wallet.address, spend]]]
 			return planBase({
 				deadlineTimestamp: deadline,
 				definitionId: id,

@@ -2,7 +2,7 @@ import { describe, test } from 'bun:test'
 import { encodeAbiParameters, getAddress, isHex, keccak256, parseAbiItem, toFunctionSelector, toHex } from '@zoltar/core-shared/evm/ethereum'
 import assert from '../../testSupport/simulator/utils/assert'
 import { useStatoblastVaultAccountingFixture } from './fixture'
-import { ReputationToken_ReputationToken, statoblast_interfaces_ISecurityPool_ISecurityPool } from '../../types/contractArtifact'
+import { ReputationToken_ReputationToken, statoblast_SecurityPool_SecurityPool, statoblast_interfaces_ISecurityPool_ISecurityPool } from '../../types/contractArtifact'
 import { approveToken, getChildUniverseId } from '../../testSupport/simulator/utils/utilities'
 import { addRepToMigrationBalance, forkUniverse, getRepTokenAddress, getZoltarAddress, splitMigrationRep } from '../../testSupport/simulator/utils/contracts/zoltar'
 import { depositRepToVault, createCompleteSet, getSecurityVault, backingUnitsToAttoRep } from '../../testSupport/simulator/utils/contracts/securityPool'
@@ -48,8 +48,10 @@ describe('Vault authorization deposit accounting', () => {
 			await depositRepToVault(ownerClient, pool, amount, target)
 		}
 		if (committed) {
+			const underwriter = existingOwner ? createWriteClient(mockWindow, BigInt(owner)) : client
+			await underwriter.waitForTransactionReceipt({ hash: await underwriter.writeContract({ address: pool, abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'setCoverageOffer', args: [true, (1n << 256n) - 1n, 10_000n] }) })
 			await manipulatePriceOracle(client, mockWindow, addresses.priceOracleManagerAndOperatorQueuer, 10n ** 18n)
-			await createCompleteSet(client, pool, 10n ** 18n)
+			await createCompleteSet(underwriter, pool, 10n ** 18n)
 		}
 		const nonce = toHex(1n, { size: 32 })
 		const operationHash = keccak256(

@@ -27,6 +27,11 @@
 			"types": "./ts/statoblast/truthAuctionTickMath.ts",
 			"bun": "./ts/statoblast/truthAuctionTickMath.ts",
 			"default": "./js/statoblast/truthAuctionTickMath.js"
+		},
+		"./statoblast/coverage": {
+			"types": "./ts/statoblast/coverage.ts",
+			"bun": "./ts/statoblast/coverage.ts",
+			"default": "./js/statoblast/coverage.js"
 		}
 	},
 	"files": [

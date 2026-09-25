@@ -7,7 +7,7 @@ import { getChildUniverseId, getERC20Balance } from '../../testSupport/simulator
 import { DAY, GENESIS_REPUTATION_TOKEN, TEST_ADDRESSES } from '../../testSupport/simulator/utils/constants'
 import { createWriteClient } from '../../testSupport/simulator/utils/clients'
 import { createCompleteSet, getSettlementCollateralAttoEth, getSecurityVault, getSystemState, backingUnitsToAttoRep } from '../../testSupport/simulator/utils/contracts/securityPool'
-import { approveAndDepositRepToVault, setVaultCapacityFixture } from '../../testSupport/simulator/utils/contracts/statoblastTestUtils'
+import { approveAndDepositRepToVault, setCoverageOfferFixture } from '../../testSupport/simulator/utils/contracts/statoblastTestUtils'
 import { addressString } from '../../testSupport/simulator/utils/bigint'
 import { strictEqualTypeSafe } from '../../testSupport/simulator/utils/testUtils'
 import { beforeEach, describe, test } from 'bun:test'
@@ -51,7 +51,7 @@ describe('Truth-auction REP donation rounding regression', () => {
 
 		const capacityOwnershipAttoRepPerVault = repDeposit / 2n
 		for (const vaultClient of vaultClients) {
-			await setVaultCapacityFixture(vaultClient, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, vaultClient.account.address, capacityOwnershipAttoRepPerVault)
+			await setCoverageOfferFixture(vaultClient, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, vaultClient.account.address, capacityOwnershipAttoRepPerVault)
 		}
 
 		const totalVaultRep = repDeposit * BigInt(vaultClients.length)

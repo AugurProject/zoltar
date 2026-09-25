@@ -14,10 +14,11 @@ test('holding fees change backing without changing displayed token quantities', 
 })
 
 test('fee valuation stops at the epoch end and skips pools without fee-eligible capacity', () => {
-	const accounting = { currentRetentionRate: 900_000_000_000_000_000n, feeEligibleCapacityOwnershipAttoRep: 10n ** 18n, feeEndTimestamp: 2n, feeIndexRemainder: 0n, lastUpdatedFeeAccumulator: 1n, settlementCollateralAttoEth: 10n ** 18n, totalFeesOwedRemainder: 0n }
+	const accounting = { totalObligationUnits: 10n ** 18n, currentRetentionRate: 900_000_000_000_000_000n, activeObligationUnits: 10n ** 18n, feeEndTimestamp: 2n, feeIndexRemainder: 0n, lastUpdatedFeeAccumulator: 1n, settlementCollateralAttoEth: 10n ** 18n, totalFeesOwedRemainder: 0n }
 	expect(estimateMintCheckpoint({ ...accounting, currentTimestamp: 100n })?.settlementCollateralAfterFeesAttoEth).toBe(900_000_000_000_000_000n)
-	expect(estimateMintCheckpoint({ ...accounting, currentTimestamp: 100n, feeEligibleCapacityOwnershipAttoRep: 0n })?.settlementCollateralAfterFeesAttoEth).toBe(10n ** 18n)
+	expect(estimateMintCheckpoint({ ...accounting, currentTimestamp: 100n, activeObligationUnits: 0n })?.settlementCollateralAfterFeesAttoEth).toBe(10n ** 18n)
 	expect(estimateMintCheckpoint({ ...accounting, currentTimestamp: 1n })?.estimatedRetentionFeeAttoEth).toBe(0n)
+	expect(estimateMintCheckpoint({ ...accounting, totalObligationUnits: 2n * 10n ** 18n, currentTimestamp: 100n })?.settlementCollateralAfterFeesAttoEth).toBe(950_000_000_000_000_000n)
 })
 
 test('does not label a nonzero token balance as zero at display precision', () => {

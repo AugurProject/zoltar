@@ -1,3 +1,4 @@
+import { CoverageOfferForm } from './CoverageOfferForm.js'
 import { ErrorNotice } from '@zoltar/ui-core-shared/components/ErrorNotice.js'
 import { VaultOperationTimeoutField } from './VaultOperationTimeoutField.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
@@ -21,7 +22,7 @@ import { formatCurrencyInputBalance } from '@zoltar/ui-core-shared/lib/formatter
 import { balanceShortage } from '@zoltar/ui-core-shared/forms/inputs.js'
 import { tryParseBigIntInput } from '@zoltar/ui-core-shared/forms/integerInput.js'
 import { tryParseRepAmountInput } from '@zoltar/ui-core-shared/forms/formInputs.js'
-import { isActiveAppChain } from '@zoltar/ui-core-shared/wallet/network.js'
+import { getWrongNetworkReason, isActiveAppChain } from '@zoltar/ui-core-shared/wallet/network.js'
 import { getOracleRequestEthGuardMessage, resolveOracleOperationEthFunding } from '../../open-oracle/lib/oracleRequestEth.js'
 import { getSecurityPoolVaultReadinessActions } from '../lib/securityPoolReadiness.js'
 import { isVaultHealthyAtFactor } from '../lib/liquidation.js'
@@ -92,8 +93,6 @@ export function SecurityVaultSection({
 	securityVaultQueuedOperations = [],
 	selectedPoolStatoblastSecurityMultiplierBps,
 	selectedMarketTitle,
-	selectedPoolTotalPoolHeldAttoRep,
-	selectedPoolTotalCapacityOwnershipAttoRep,
 	showHeader = true,
 	showLookupSection = true,
 	showSecurityPoolAddressInput = true,
@@ -157,10 +156,8 @@ export function SecurityVaultSection({
 		disputeStakedAttoRep: currentSelectedVaultDetails?.disputeStakedAttoRep,
 		vaultAttoRepBacking: currentSelectedVaultDetails?.vaultAttoRepBacking,
 		repPerEthPrice,
-		capacityOwnershipAttoRep: currentSelectedVaultDetails?.capacityOwnershipAttoRep,
+		openInterestAttoEth: currentSelectedVaultDetails?.openInterestAttoEth,
 		statoblastSecurityMultiplierBps: selectedPoolStatoblastSecurityMultiplierBps,
-		totalPoolHeldAttoRep: selectedPoolTotalPoolHeldAttoRep,
-		totalCapacityOwnershipAttoRep: selectedPoolTotalCapacityOwnershipAttoRep,
 	})
 	const maximumWithdrawableAttoRep = getMaximumWithdrawableAttoRep({
 		disputeStakedAttoRep: currentSelectedVaultDetails?.disputeStakedAttoRep,
@@ -267,26 +264,32 @@ export function SecurityVaultSection({
 	const claimFeesAvailabilityBlocker = visibleClaimFeesLauncherBlocker ?? (hasLoadedSelectedVaultDetails && claimFeesEnabled && !hasClaimableFees ? securityPoolCopy.noClaimableFeesReason : undefined)
 	useEffect(() => {
 		if (!autoLoadVault) return
+		if (!isOnActiveAppChain) {
+			lastAutoLoadKey.current = undefined
+			return
+		}
 		if (normalizedSecurityVaultForm.securityPoolAddress.trim() === '') return
 		if (selectedVaultOwner === undefined || selectedVaultOwner === '') return
 		if (hasLoadedCurrentVault || loadingSecurityVault) return
 		if (lastAutoLoadKey.current === autoLoadKey) return
 		lastAutoLoadKey.current = autoLoadKey
 		void onLoadSecurityVault()
-	}, [autoLoadKey, autoLoadVault, hasLoadedCurrentVault, loadingSecurityVault, normalizedSecurityVaultForm.securityPoolAddress, onLoadSecurityVault, selectedVaultOwner])
+	}, [autoLoadKey, autoLoadVault, hasLoadedCurrentVault, isOnActiveAppChain, loadingSecurityVault, normalizedSecurityVaultForm.securityPoolAddress, onLoadSecurityVault, selectedVaultOwner])
 	const adjustmentBlocker = repExitLauncherBlocker ?? vaultLifecycleBlocker ?? (!depositRepToVaultEnabled ? securityPoolCopy.vaultDepositAdmissionClosedDetail : undefined)
 	const adjustmentForm = (
-		<VaultBackingFactorForm
-			executionRepPerEthPrice={hasValidOraclePrice ? oracleManagerDetails?.lastPrice : undefined}
-			repPerEthPrice={repPerEthPrice}
-			poolSecurityMultiplierBps={selectedPoolStatoblastSecurityMultiplierBps}
-			key={autoLoadKey}
-			details={currentSelectedVaultDetails}
-			blocker={adjustmentBlocker ?? getOracleRequestEthGuardMessage({ actionLabel: securityPoolCopy.queueTargetChangeFundingAction, includeBuffer: withdrawRepFunding?.includeBuffer === true, requiredCostAttoEth: withdrawRepFunding?.costAttoEth, walletBalanceAttoEth: accountState.ethBalanceAttoEth })}
-			busy={securityVaultActiveAction !== undefined}
-			pending={securityVaultActiveAction === 'adjustVaultBackingFactor'}
-			onAdjust={onAdjustVaultBackingFactor}
-		/>
+		<>
+			<VaultBackingFactorForm
+				executionRepPerEthPrice={hasValidOraclePrice ? oracleManagerDetails?.lastPrice : undefined}
+				repPerEthPrice={repPerEthPrice}
+				poolSecurityMultiplierBps={selectedPoolStatoblastSecurityMultiplierBps}
+				key={autoLoadKey}
+				details={currentSelectedVaultDetails}
+				blocker={adjustmentBlocker ?? getOracleRequestEthGuardMessage({ actionLabel: securityPoolCopy.queueTargetChangeFundingAction, includeBuffer: withdrawRepFunding?.includeBuffer === true, requiredCostAttoEth: withdrawRepFunding?.costAttoEth, walletBalanceAttoEth: accountState.ethBalanceAttoEth })}
+				busy={securityVaultActiveAction !== undefined}
+				pending={securityVaultActiveAction === 'adjustVaultBackingFactor'}
+				onAdjust={onAdjustVaultBackingFactor}
+			/>
+		</>
 	)
 	const vaultReadinessActions = getSecurityPoolVaultReadinessActions([
 		...buildVaultReadinessActions({
@@ -540,6 +543,11 @@ export function SecurityVaultSection({
 			<VaultQueuedOperationStatusCards {...operationStatusProps} operation='adjustVaultBackingFactor' />
 
 			{actionSections}
+			{selectedVaultIsOwnedByAccount && currentSelectedVaultDetails !== undefined ? (
+				<SectionBlock title={securityPoolCopy.coverageOfferTitle} variant='embedded'>
+					<CoverageOfferForm key={`${autoLoadKey}:coverage`} details={currentSelectedVaultDetails} account={accountState.address} blocker={!isOnActiveAppChain ? getWrongNetworkReason() : vaultLifecycleBlocker} onSaved={() => void onLoadSecurityVault()} />
+				</SectionBlock>
+			) : undefined}
 		</>
 	)
 	if (compactLayout) return sections

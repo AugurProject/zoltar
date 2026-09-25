@@ -32,7 +32,7 @@ function createUniverse(overrides: Partial<ZoltarUniverseSummary> = {}): ZoltarU
 function createSecurityPool(overrides: Partial<ListedSecurityPool> = {}): ListedSecurityPool {
 	return {
 		currentRetentionRate: 10n,
-		feeEligibleCapacityOwnershipAttoRep: 1n,
+		activeObligationUnits: 1n,
 		forkOutcome: 'none',
 		forkOwnSecurityPool: false,
 		hasForkActivity: false,

@@ -32,6 +32,21 @@ export const contractSafetyPolicy = {
 	excludedSourcePrefixes: ['contracts/test/', 'contracts/trading/test/'],
 	exactLayoutPairs: [
 		{
+			host: { sourcePath: 'contracts/statoblast/SecurityPool.sol', contractName: 'SecurityPool' },
+			delegate: { sourcePath: 'contracts/statoblast/SecurityPoolCoverageDelegate.sol', contractName: 'SecurityPoolCoverageDelegate' },
+			reason: 'Assigned coverage operations share the pool ledger through delegatecall.',
+		},
+		{
+			host: { sourcePath: 'contracts/statoblast/SecurityPool.sol', contractName: 'SecurityPool' },
+			delegate: { sourcePath: 'contracts/statoblast/SecurityPoolLiquidationDelegate.sol', contractName: 'SecurityPoolLiquidationDelegate' },
+			reason: 'Assigned coverage operations share the pool ledger through delegatecall.',
+		},
+		{
+			host: { sourcePath: 'contracts/statoblast/SecurityPool.sol', contractName: 'SecurityPool' },
+			delegate: { sourcePath: 'contracts/statoblast/SecurityPoolEventEmitter.sol', contractName: 'SecurityPoolEventEmitter' },
+			reason: 'Assigned coverage operations share the pool ledger through delegatecall.',
+		},
+		{
 			host: { sourcePath: 'contracts/statoblast/EscalationGame.sol', contractName: 'EscalationGame' },
 			delegate: { sourcePath: 'contracts/statoblast/EscalationGameDepositDelegate.sol', contractName: 'EscalationGameDepositDelegate' },
 			reason: 'Deposits mutate EscalationGame storage through delegatecall.',
@@ -85,11 +100,11 @@ export const contractSafetyPolicy = {
 				{ label: 'feeIndexRemainder', slot: '9', offset: 0, typeLabel: 'uint256' },
 				{ label: 'totalFeesOwedRemainder', slot: '10', offset: 0, typeLabel: 'uint256' },
 				{ label: 'unallocatedAccruedFeesAttoEth', slot: '11', offset: 0, typeLabel: 'uint256' },
-				{ label: 'feeEligibleCapacityOwnershipAttoRep', slot: '12', offset: 0, typeLabel: 'uint256' },
-				{ label: 'uncheckpointedFeeEligibleCapacityOwnershipAttoRep', slot: '13', offset: 0, typeLabel: 'uint256' },
+				{ label: 'activeObligationUnits', slot: '12', offset: 0, typeLabel: 'uint256' },
+				{ label: 'uncheckpointedActiveObligationUnits', slot: '13', offset: 0, typeLabel: 'uint256' },
 				{ label: 'currentRetentionRate', slot: '14', offset: 0, typeLabel: 'uint256' },
 				{ label: 'securityVaults', slot: '16', offset: 0, typeLabel: 'mapping(address => struct SecurityVault)' },
-				{ label: 'vaultFeeRemainders', slot: '17', offset: 0, typeLabel: 'mapping(address => uint256)' },
+				{ label: 'vaultFeeRemainders', slot: '17', offset: 0, typeLabel: 'mapping(uint256 => mapping(address => uint256))' },
 			],
 		},
 	] satisfies readonly AnchoredLayout[],

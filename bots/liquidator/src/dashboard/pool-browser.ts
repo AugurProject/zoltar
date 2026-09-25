@@ -248,10 +248,10 @@ export function createPoolBrowser(root: HTMLElement, save: (address: string, sup
 					for (const [label, value] of [
 						['Eligibility', poolStatusText({ ...monitored, selected: supported }) || 'Not supported'],
 						['Oracle', `${monitored.isPriceValid ? 'Fresh' : 'Stale'} · ${monitored.lastPrice} REP / ETH${monitored.centralizedPriceDeviationBps === undefined ? '' : ` · ${monitored.centralizedPriceDeviationBps} bps from reference`}`],
-						['Capacity ownership', `${monitored.totalCapacityOwnershipRep} REP`],
+						['Obligation units', monitored.totalObligationUnitsDisplay],
 						['Bot vault', botVaultState(monitored.botVault)],
 						['Vault backing', `${monitored.botVault.vaultRepBacking} REP`],
-						['Vault capacity ownership', `${monitored.botVault.capacityOwnershipRep} REP`],
+						['Vault obligation units', monitored.botVault.obligationUnitsDisplay],
 						['Open interest', `${monitored.botVault.openInterestDisplay} ETH`],
 						['Claimable fees', `${monitored.botVault.claimableFeesEth} ETH`],
 						['Targets', `${monitored.candidateCount}${monitored.bestCandidateBonusValueEth === undefined ? ' · No executable target' : ` · ${monitored.bestCandidateBonusValueEth} ETH best bonus`}`],

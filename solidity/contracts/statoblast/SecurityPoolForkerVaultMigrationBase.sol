@@ -53,6 +53,7 @@ abstract contract SecurityPoolForkerVaultMigrationBase is SecurityPoolForkerBase
 					? forkDataByPool[parent].vaultRepAtForkAttoRep
 					: forkDataByPool[parent].auctionableAttoRepAtFork;
 			child.setTotalRepBackingUnits(childPoolHeldRepAtForkAttoRep);
+			SecurityPoolUtils.initializeChildCoverage(child, 0);
 			if (forkDataByPool[parent].unresolvedEscalationAtFork) {
 				child.setAwaitingForkContinuation(true);
 			}
@@ -180,7 +181,8 @@ abstract contract SecurityPoolForkerVaultMigrationBase is SecurityPoolForkerBase
 		}
 		uint256 vaultRepBackingUnits = childCurrentRepBackingUnits + migratedAttoRep;
 
-		(uint256 parentVaultBadDebtAttoEth, , ) = SecurityPoolUtils.configureForkMigratedVault(parent, child, vault, vaultRepBackingUnits, childCurrentCapacityOwnershipAttoRep + parentCapacityOwnershipAttoRep, vaultFeeIndex, parentVaultFeeIndex);
+		(uint256 parentVaultBadDebtAttoEth, , , uint256 migratedUnits) = SecurityPoolUtils.configureForkMigratedVault(parent, child, vault, vaultRepBackingUnits, childCurrentCapacityOwnershipAttoRep + parentCapacityOwnershipAttoRep, vaultFeeIndex, parentVaultFeeIndex);
+		forkDataByPool[child].migratedObligationUnits += migratedUnits;
 		migratedBadDebtByPool[child] += parentVaultBadDebtAttoEth;
 		_emitVaultMigrationCheckpoint(parent, child, vault, migratedAttoRep, settlementCollateralTransferredAttoEthBefore);
 	}

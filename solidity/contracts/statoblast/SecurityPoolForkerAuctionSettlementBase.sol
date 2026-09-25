@@ -22,17 +22,16 @@ abstract contract SecurityPoolForkerAuctionSettlementBase is SecurityPoolForkerB
 		require(nextClaimedAuctionRepPurchasedAttoRep <= totalAttoRepPurchased, 'REP');
 		uint256 nextClaimedAuctionRepBackingUnits = data.claimedAuctionRepBackingUnits + auctionRepBackingUnits;
 		require(nextClaimedAuctionRepBackingUnits <= data.auctionRepBackingUnits, 'Backing units');
-		uint256 nextClaimedAuctionedCapacityOwnershipAttoRep =
-			data.claimedAuctionedCapacityOwnershipAttoRep + newCapacityOwnershipAttoRep;
-		require(nextClaimedAuctionedCapacityOwnershipAttoRep <= data.auctionedCapacityOwnershipAttoRep, 'Commitment');
+		uint256 nextClaimedAuctionObligationUnits = data.claimedAuctionObligationUnits + newCapacityOwnershipAttoRep;
+		require(nextClaimedAuctionObligationUnits <= data.auctionObligationUnits, 'Commitment');
 		data.claimedAuctionRepPurchasedAttoRep = nextClaimedAuctionRepPurchasedAttoRep;
-		data.claimedAuctionedCapacityOwnershipAttoRep = nextClaimedAuctionedCapacityOwnershipAttoRep;
+		data.claimedAuctionObligationUnits = nextClaimedAuctionObligationUnits;
 		data.claimedAuctionRepBackingUnits = nextClaimedAuctionRepBackingUnits;
 		uint256 nextClaimedAuctionedBadDebtAttoEth =
 			claimedAuctionedBadDebtByPool[securityPool] + badDebtToAssignAttoEth;
 		require(nextClaimedAuctionedBadDebtAttoEth <= auctionedBadDebtByPool[securityPool], 'Bad debt');
 		claimedAuctionedBadDebtByPool[securityPool] = nextClaimedAuctionedBadDebtAttoEth;
 		uint256 resultingTotalRepBackingUnits = SecurityPoolUtils.creditForkAuctionVault(securityPool, vault, auctionRepBackingUnits, newCapacityOwnershipAttoRep, badDebtToAssignAttoEth, data.auctionBadDebtGeneration, data.auctionFeeIndexAtFinalization);
-		emit ClaimAuctionProceeds(securityPool, vault, amountAttoRep, auctionRepBackingUnits, resultingTotalRepBackingUnits, data.claimedAuctionRepPurchasedAttoRep, data.claimedAuctionedCapacityOwnershipAttoRep, claimedAuctionedBadDebtByPool[securityPool], auctionedBadDebtByPool[securityPool]);
+		emit ClaimAuctionProceeds(securityPool, vault, amountAttoRep, auctionRepBackingUnits, resultingTotalRepBackingUnits, data.claimedAuctionRepPurchasedAttoRep, data.claimedAuctionObligationUnits, claimedAuctionedBadDebtByPool[securityPool], auctionedBadDebtByPool[securityPool]);
 	}
 }

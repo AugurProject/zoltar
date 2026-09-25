@@ -20,7 +20,7 @@ function fixedPointPower(value: bigint, exponent: bigint) {
 export function projectSettlementCollateral(
 	accounting: {
 		settlementCollateralAttoEth: bigint
-		feeEligibleCapacityOwnershipAttoRep: bigint
+		activeObligationUnits: bigint
 		feeIndexRemainder: bigint
 		totalFeesOwedRemainder: bigint
 		lastUpdatedFeeAccumulator: bigint
@@ -31,12 +31,12 @@ export function projectSettlementCollateral(
 ) {
 	if (feeEndTimestamp === undefined) return 0n
 	const clamped = anchorTimestamp < feeEndTimestamp ? anchorTimestamp : feeEndTimestamp
-	if (accounting.lastUpdatedFeeAccumulator >= clamped || accounting.feeEligibleCapacityOwnershipAttoRep === 0n) return accounting.settlementCollateralAttoEth
+	if (accounting.lastUpdatedFeeAccumulator >= clamped || accounting.activeObligationUnits === 0n) return accounting.settlementCollateralAttoEth
 	const timeDelta = clamped - accounting.lastUpdatedFeeAccumulator
 	const resultingCollateral = (accounting.settlementCollateralAttoEth * fixedPointPower(accounting.currentRetentionRate, timeDelta)) / 10n ** 18n
 	const scaledFeeDelta = (accounting.settlementCollateralAttoEth - resultingCollateral) * 10n ** 18n + accounting.feeIndexRemainder
-	const feeIndexDelta = scaledFeeDelta / accounting.feeEligibleCapacityOwnershipAttoRep
-	const feesOwedDelta = feeIndexDelta * accounting.feeEligibleCapacityOwnershipAttoRep + accounting.totalFeesOwedRemainder
+	const feeIndexDelta = scaledFeeDelta / accounting.activeObligationUnits
+	const feesOwedDelta = feeIndexDelta * accounting.activeObligationUnits + accounting.totalFeesOwedRemainder
 	const creditedFees = feesOwedDelta / 10n ** 18n
 	return creditedFees > accounting.settlementCollateralAttoEth ? 0n : accounting.settlementCollateralAttoEth - creditedFees
 }

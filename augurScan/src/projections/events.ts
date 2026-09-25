@@ -41,13 +41,13 @@ type PoolSnapshotProjection = {
 	vaultAddress: string
 	settlementCollateralAttoEth: AtomicValue
 	totalCapacityOwnershipAttoRep: AtomicValue
-	feeEligibleCapacityOwnershipAttoRep: AtomicValue
+	activeObligationUnits: AtomicValue
 	totalClaimableVaultFeesAttoEth: AtomicValue
 	unallocatedAccruedFeesAttoEth: AtomicValue
 	feeIndex: string
 	feeIndexRemainder: string
 	totalFeesOwedRemainder: string
-	uncheckpointedFeeEligibleCapacityOwnershipAttoRep: AtomicValue
+	uncheckpointedActiveObligationUnits: AtomicValue
 	lastUpdatedFeeAccumulator: Date
 	currentRetentionRate: string
 }
@@ -62,7 +62,7 @@ type VaultSnapshotProjection = {
 	feeIndex: string
 	vaultFeeRemainder: string
 	resultingTotalRepBackingUnits: string
-	resultingFeeEligibleCapacityOwnershipAttoRep: AtomicValue
+	resultingActiveObligationUnits: AtomicValue
 }
 
 type PoolStateProjection = { type: 'poolState'; poolAddress: string; eventName: string; state: Readonly<Record<string, unknown>> }
@@ -375,13 +375,13 @@ export const eventProjectionsFrom = (log: StoredLog): readonly Projection[] => {
 				vaultAddress: address(args['vault'], 'vault'),
 				settlementCollateralAttoEth: integerString(args['settlementCollateralAttoEth'], 'settlementCollateralAttoEth'),
 				totalCapacityOwnershipAttoRep: integerString(args['totalCapacityOwnershipAttoRep'], 'totalCapacityOwnershipAttoRep'),
-				feeEligibleCapacityOwnershipAttoRep: integerString(args['feeEligibleCapacityOwnershipAttoRep'], 'feeEligibleCapacityOwnershipAttoRep'),
+				activeObligationUnits: integerString(args['activeObligationUnits'], 'activeObligationUnits'),
 				totalClaimableVaultFeesAttoEth: integerString(args['totalClaimableVaultFeesAttoEth'], 'totalClaimableVaultFeesAttoEth'),
 				unallocatedAccruedFeesAttoEth: integerString(args['unallocatedAccruedFeesAttoEth'], 'unallocatedAccruedFeesAttoEth'),
 				feeIndex: integerString(args['feeIndex'], 'feeIndex'),
 				feeIndexRemainder: integerString(args['feeIndexRemainder'], 'feeIndexRemainder'),
 				totalFeesOwedRemainder: integerString(args['totalFeesOwedRemainder'], 'totalFeesOwedRemainder'),
-				uncheckpointedFeeEligibleCapacityOwnershipAttoRep: integerString(args['uncheckpointedFeeEligibleCapacityOwnershipAttoRep'], 'uncheckpointedFeeEligibleCapacityOwnershipAttoRep'),
+				uncheckpointedActiveObligationUnits: integerString(args['uncheckpointedActiveObligationUnits'], 'uncheckpointedActiveObligationUnits'),
 				lastUpdatedFeeAccumulator: timestamp(args['lastUpdatedFeeAccumulator'], 'lastUpdatedFeeAccumulator'),
 				currentRetentionRate: integerString(args['currentRetentionRate'], 'currentRetentionRate'),
 			},
@@ -398,7 +398,7 @@ export const eventProjectionsFrom = (log: StoredLog): readonly Projection[] => {
 				feeIndex: integerString(args['feeIndex'], 'feeIndex'),
 				vaultFeeRemainder: integerString(args['vaultFeeRemainder'], 'vaultFeeRemainder'),
 				resultingTotalRepBackingUnits: integerString(args['resultingTotalRepBackingUnits'], 'resultingTotalRepBackingUnits'),
-				resultingFeeEligibleCapacityOwnershipAttoRep: integerString(args['resultingFeeEligibleCapacityOwnershipAttoRep'], 'resultingFeeEligibleCapacityOwnershipAttoRep'),
+				resultingActiveObligationUnits: integerString(args['resultingActiveObligationUnits'], 'resultingActiveObligationUnits'),
 			},
 			{
 				type: 'poolState',

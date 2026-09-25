@@ -106,3 +106,43 @@ test('unavailable claim reconstruction preserves the tagged basic escalation sta
 	expect(snapshot.readStatus).toBe('success')
 	expect(snapshot.readResult).toMatchObject({ outcomeBalancesAttoRep: ['1', '2', '3'], claimEvidence: { status: 'unavailable', reason: 'Claim ancestry unavailable' } })
 })
+
+test('records the current coverage epoch beside pool and vault obligation units across resets', async () => {
+	for (const epoch of [2n, 3n]) {
+		const values: Readonly<Record<string, unknown>> = {
+			settlementCollateralAttoEth: 1n,
+			totalCapacityOwnershipAttoRep: 1n,
+			totalRepBackingUnits: 1n,
+			totalClaimableVaultFeesAttoEth: 0n,
+			totalAccruedFeesAttoEth: 0n,
+			getTotalPoolHeldAttoRep: 1n,
+			getCurrentMintingCapacityAttoEth: 1n,
+			totalBadDebtAttoEth: 0n,
+			systemState: 0n,
+			awaitingForkContinuation: false,
+			isEscalationResolved: true,
+			shareTokenSupplyAttoShares: 1n,
+			currentRetentionRate: 1n,
+			statoblastSecurityMultiplierBps: 10000n,
+			totalObligationUnits: epoch === 2n ? 7n : 0n,
+			writtenOffObligationUnits: 0n,
+			unassignedObligationUnits: 0n,
+			coverageEpoch: epoch,
+			securityVaults: [1n, 1n, 0n, 0n],
+			vaultTargetBackingFactorBps: 10000n,
+			getVaultOpenInterestAttoEth: 1n,
+			vaultBadDebtAttoEth: 0n,
+			getVaultObligationUnits: epoch === 2n ? 7n : 0n,
+			coverageOffers: [true, 100n, 10000n],
+			backingUnitsToAttoRep: 1n,
+		}
+		const read: StateRead = async (_address, _abi, name) => {
+			if (!(name in values)) throw new Error(`Unexpected read ${name}`)
+			return values[name]
+		}
+		for (const entityType of ['pool', 'vault'] as const) {
+			const snapshot = await sampleEntityStateWithRead({ entityType, entityIdentity: pool.toLowerCase(), address: pool, poolAddress: pool }, read)
+			expect(snapshot).toMatchObject({ readStatus: 'success', readResult: { coverageEpoch: epoch.toString(), [entityType === 'pool' ? 'totalObligationUnits' : 'obligationUnits']: epoch === 2n ? '7' : '0' } })
+		}
+	}
+})

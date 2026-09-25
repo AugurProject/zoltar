@@ -199,12 +199,18 @@ export function LiquidationModal({
 		loadingLiquidationApproval,
 	})
 	const liquidationSimulation =
-		targetVaultSummary === undefined || uiCalculationPrice === undefined || selectedPool?.statoblastSecurityMultiplierBps === undefined || liquidationAmountValue === undefined
+		targetVaultSummary === undefined ||
+		targetVaultSummary.obligationUnits === undefined ||
+		(receiverVaultSummary !== undefined && receiverVaultSummary.obligationUnits === undefined) ||
+		selectedPool?.totalObligationUnits === undefined ||
+		uiCalculationPrice === undefined ||
+		selectedPool.statoblastSecurityMultiplierBps === undefined ||
+		liquidationAmountValue === undefined
 			? undefined
 			: simulateLiquidation({
 					callerVaultSummary: receiverVaultSummary,
 					requestedDebtAttoEth: liquidationAmountValue,
-					totalCapacityOwnershipAttoRep: selectedPool.totalCapacityOwnershipAttoRep,
+					totalObligationUnits: selectedPool.totalObligationUnits,
 					minimumVaultRepDepositAttoRep: selectedPool.minimumVaultRepDepositAttoRep,
 					repPerEthPrice: uiCalculationPrice,
 					settlementCollateralAttoEth: selectedPool.settlementCollateralAttoEth,
@@ -239,7 +245,7 @@ export function LiquidationModal({
 	const deterministicLiquidationReason = getDeterministicLiquidationFailureReason({
 		callerVaultSummary: receiverVaultSummary,
 		requestedDebtAttoEth: liquidationAmountValue,
-		totalCapacityOwnershipAttoRep: selectedPool?.totalCapacityOwnershipAttoRep,
+		totalObligationUnits: selectedPool?.totalObligationUnits,
 		maxLiquidationDebtAttoEth: protocolLiquidationMaxAmount,
 		minimumSecurityBondDebtAttoEth: selectedPool?.minimumSecurityBondDebtAttoEth,
 		minimumVaultRepDepositAttoRep: selectedPool?.minimumVaultRepDepositAttoRep,
@@ -250,12 +256,12 @@ export function LiquidationModal({
 	})
 	const directLiquidationReason = (() => {
 		if (liquidationExecutionMode !== 'execute') return undefined
-		if (selectedPool?.statoblastSecurityMultiplierBps === undefined) return liquidationCopy.selectedPoolReloadRequired
+		if (selectedPool?.statoblastSecurityMultiplierBps === undefined || selectedPool.totalObligationUnits === undefined) return liquidationCopy.selectedPoolReloadRequired
 
 		return getLiquidationFailureReason({
 			callerVaultSummary: receiverVaultSummary,
 			requestedDebtAttoEth: liquidationAmountValue,
-			totalCapacityOwnershipAttoRep: selectedPool.totalCapacityOwnershipAttoRep,
+			totalObligationUnits: selectedPool.totalObligationUnits,
 			minimumReceiverHealthFactorBps: delegatedReceiver ? liquidationApprovalDetails?.params.minPostLiquidationHealthFactorBps : undefined,
 			minimumSecurityBondDebtAttoEth: selectedPool.minimumSecurityBondDebtAttoEth,
 			minimumVaultRepDepositAttoRep: selectedPool.minimumVaultRepDepositAttoRep,

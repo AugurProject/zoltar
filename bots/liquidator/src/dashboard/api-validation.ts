@@ -120,7 +120,7 @@ const pool = object<MonitoredPool>({
 	address: stringValue,
 	approvedUniverse: booleanValue,
 	bestCandidateBonusValueEth: optionalString,
-	botVault: object<MonitoredPool['botVault']>({ capacityOwnershipRep: stringValue, openInterestDisplay: stringValue, healthBps: optional(unsignedInteger), vaultRepBacking: stringValue, claimableFeesEth: stringValue }),
+	botVault: object<MonitoredPool['botVault']>({ obligationUnitsDisplay: stringValue, openInterestDisplay: stringValue, healthBps: optional(unsignedInteger), vaultRepBacking: stringValue, claimableFeesEth: stringValue }),
 	candidateCount: numberValue,
 	centralizedPriceAllowed: booleanValue,
 	centralizedPriceDeviationBps: optionalString,
@@ -132,7 +132,7 @@ const pool = object<MonitoredPool>({
 	questionId: stringValue,
 	selected: booleanValue,
 	systemState: stringValue,
-	totalCapacityOwnershipRep: stringValue,
+	totalObligationUnitsDisplay: stringValue,
 	totalPoolHeldRep: stringValue,
 })
 const snapshot = object<Snapshot>({

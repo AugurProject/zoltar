@@ -1,3 +1,4 @@
+import { coverageReadResult } from './coverageRpc'
 import { describe, expect, test } from 'bun:test'
 import { createWalletClient, custom, decodeFunctionData, encodeAbiParameters, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
 import type { DeploymentConfiguration } from '../../protocol/config.js'
@@ -32,7 +33,7 @@ const market: LiveMarket = {
 	settlementCollateralAttoEth: 100n,
 	currentRetentionRate: 10n ** 18n,
 	totalCapacityOwnershipAttoRep: 1n,
-	feeEligibleCapacityOwnershipAttoRep: 1n,
+	activeObligationUnits: 1n,
 	mintingCapacityCeilingAttoEth: 100n,
 	availableMintingCapacityAttoEth: 100n,
 	feeBps: 30n,
@@ -70,8 +71,10 @@ function createAdvancingChain() {
 					return transactionHash
 				}
 				if (method !== 'eth_call') throw new Error(`Unexpected RPC method ${method}`)
-				if (Array.isArray(params)) chain.simulatedBlocks.push(params[1])
 				const transaction = transactionOf(params)
+				const coverageResult = coverageReadResult(transaction.data, account)
+				if (coverageResult !== undefined) return coverageResult
+				if (Array.isArray(params)) chain.simulatedBlocks.push(params[1])
 				if (transaction.to === pair.toLowerCase()) return decodeFunctionData({ abi: pairAbi, data: transaction.data }).functionName === 'removeLiquidity' ? encodeAbiParameters([uint256, uint256], [5n, 5n]) : encodeAbiParameters([uint256, uint256], [2n, 1n])
 				if (transaction.to === shareToken.toLowerCase()) {
 					const decoded = decodeFunctionData({ abi: shareTokenAbi, data: transaction.data })
@@ -124,7 +127,7 @@ describe('submitting a quote after the chain advances', () => {
 		expect(chain.sends).toHaveLength(1)
 		const submitted = decodeFunctionData({ abi: routerAbi, data: chain.sends[0] ?? '0x' })
 		expect(submitted.functionName).toBe('enterPosition')
-		expect(submitted.args).toEqual([pair, 1n, 9n, account, 2n + 7n * 60n])
+		expect(submitted.args).toEqual([pair, 1n, 9n, account, 2n + 7n * 60n, [{ vault: account, collateralAttoEth: 10n }]])
 	})
 
 	test('rejects a later-block quote that falls below the approved minimum without broadcasting', async () => {

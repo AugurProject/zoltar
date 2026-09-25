@@ -85,7 +85,7 @@ const vaultCheckpoint = (hash: ReturnType<typeof blockHash>): StoredLog => ({
 			feeIndex: '1',
 			vaultFeeRemainder: '0',
 			resultingTotalRepBackingUnits: '120000000000000000000',
-			resultingFeeEligibleCapacityOwnershipAttoRep: 85_000_000_000_000_000_000n.toString(),
+			resultingActiveObligationUnits: 85_000_000_000_000_000_000n.toString(),
 		},
 	},
 })
@@ -3647,6 +3647,13 @@ postgresTest(
 					...decodedLog(hash, index + 2, oracle, name, argumentsValue),
 					blockNumber: 1n,
 				}))
+				const coverageEvidence: Array<{ name: string; data: Record<string, unknown> }> = [
+					{ name: 'CoverageOfferSet', data: { vault: promotedAddress, enabled: true, maximumObligationAttoEth: 100n.toString(), minimumHealthFactorBps: '10000' } },
+					{ name: 'CoverageAllocated', data: { vault: promotedAddress, addedUnits: '7', resultingVaultUnits: '7', resultingTotalUnits: '7', epoch: '2' } },
+					{ name: 'PoolCoverageCheckpoint', data: { epoch: '2', totalUnits: '7', activeUnits: '7', writtenOffUnits: '0', unassignedUnits: '0', migratedOutUnits: '0' } },
+					{ name: 'VaultCoverageCheckpoint', data: { vault: promotedAddress, epoch: '2', obligationUnits: '7' } },
+				]
+				const coverageEvents = coverageEvidence.map(({ name, data }, index) => ({ ...decodedLog(hash, index + 8, promotedAddress, name, data), blockNumber: 1n }))
 				await database.storeBlock(
 					operationsChainId,
 					{
@@ -3659,13 +3666,37 @@ postgresTest(
 						contracts: [],
 						tokenMetadata: [],
 						transactions: [storedTransaction],
-						logs: [submitted, disputed, ...approvalEvents],
+						logs: [submitted, disputed, ...approvalEvents, ...coverageEvents],
 						addressActivity: [],
 						contractDeploymentObservations: [],
 						logScanCursors: [],
 					},
 					lease,
 				)
+				const coverageHistory = await database.sql`
+					SELECT semantic_event_kind, summary_data FROM protocol_timeline_entries
+					WHERE chain_id = ${operationsChainId} AND source_contract = ${promotedAddress.toLowerCase()} AND canonical ORDER BY log_index
+				`
+				expect(coverageHistory.map((row: Record<string, unknown>) => ({ name: row['semantic_event_kind'], data: row['summary_data'] }))).toEqual(coverageEvidence)
+				await database.storeEntityStateSnapshots(
+					operationsChainId,
+					1n,
+					hash,
+					new Date('2026-01-01T00:00:20Z'),
+					[
+						{ entityType: 'pool', entityIdentity: promotedAddress.toLowerCase(), sourceMethod: 'augurscan.pool-state.v1', readStatus: 'success', readResult: { coverageEpoch: '2', totalObligationUnits: '7' } },
+						{ entityType: 'vault', entityIdentity: `${promotedAddress.toLowerCase()}:${promotedAddress.toLowerCase()}`, sourceMethod: 'augurscan.vault-state.v1', readStatus: 'success', readResult: { coverageEpoch: '2', obligationUnits: '7' } },
+					],
+					lease,
+				)
+				const coverageSnapshots = await database.sql`
+					SELECT entity_type, read_result FROM entity_state_snapshots
+					WHERE chain_id = ${operationsChainId} AND entity_identity LIKE ${`${promotedAddress.toLowerCase()}%`} AND canonical ORDER BY entity_type
+				`
+				expect(coverageSnapshots).toEqual([
+					{ entity_type: 'pool', read_result: { coverageEpoch: '2', totalObligationUnits: '7' } },
+					{ entity_type: 'vault', read_result: { coverageEpoch: '2', obligationUnits: '7' } },
+				])
 				const storedApprovalEvents = await database.sql`
 					SELECT event_name FROM liquidation_approval_events
 					WHERE chain_id = ${operationsChainId} AND canonical ORDER BY log_index
@@ -3729,6 +3760,33 @@ postgresTest(
 				timestamptz '2026-01-01 00:00:20+00' + make_interval(secs => item), true, true
 			FROM generate_series(2, 10003) item
 		`
+			const epochLease = await database.tryAcquireIndexerLock(operationsChainId)
+			if (epochLease === undefined) throw new Error('coverage epoch writer did not acquire its lock')
+			try {
+				await database.storeEntityStateSnapshots(
+					operationsChainId,
+					2n,
+					`0x${'2'.padStart(64, '0')}`,
+					new Date('2026-01-01T00:00:22Z'),
+					[
+						{ entityType: 'pool', entityIdentity: promotedAddress.toLowerCase(), sourceMethod: 'augurscan.pool-state.v1', readStatus: 'success', readResult: { coverageEpoch: '3', totalObligationUnits: '0' } },
+						{ entityType: 'vault', entityIdentity: `${promotedAddress.toLowerCase()}:${promotedAddress.toLowerCase()}`, sourceMethod: 'augurscan.vault-state.v1', readStatus: 'success', readResult: { coverageEpoch: '3', obligationUnits: '0' } },
+					],
+					epochLease,
+				)
+			} finally {
+				await epochLease.release()
+			}
+			const epochHistory = await database.sql`
+				SELECT entity_type, read_result FROM entity_state_observations
+				WHERE chain_id = ${operationsChainId} AND entity_identity LIKE ${`${promotedAddress.toLowerCase()}%`} AND canonical ORDER BY block_number, entity_type
+			`
+			expect(epochHistory).toEqual([
+				{ entity_type: 'pool', read_result: { coverageEpoch: '2', totalObligationUnits: '7' } },
+				{ entity_type: 'vault', read_result: { coverageEpoch: '2', obligationUnits: '7' } },
+				{ entity_type: 'pool', read_result: { coverageEpoch: '3', totalObligationUnits: '0' } },
+				{ entity_type: 'vault', read_result: { coverageEpoch: '3', obligationUnits: '0' } },
+			])
 			await database.sql`
 			INSERT INTO transactions (
 				chain_id, hash, block_hash, block_number, transaction_index,
@@ -3847,6 +3905,7 @@ postgresTest(
 					indexer_run_id, abi_source_hash, application_source_hash, projection_source_hash
 				FROM entity_state_snapshots
 				WHERE chain_id = ${operationsChainId} AND entity_type IN ('pool', 'vault')
+					AND entity_identity IN (${oracle.toLowerCase()}, ${`${oracle.toLowerCase()}:${address.toLowerCase()}`})
 			`
 			await database.sql`
 				INSERT INTO logs (
@@ -4423,7 +4482,7 @@ postgresTest(
 					'augurscan.vault-risk.cursor-test', read_status, read_result, canonical,
 					indexer_run_id, abi_source_hash, application_source_hash, projection_source_hash
 				FROM entity_state_observations
-				WHERE chain_id = ${operationsChainId} AND entity_type = 'vault'
+				WHERE chain_id = ${operationsChainId} AND entity_type = 'vault' AND entity_identity = ${`${oracle.toLowerCase()}:${address.toLowerCase()}`}
 				LIMIT 1
 			`
 			const firstRiskHistoryResponse = await handleApi(new Request(`http://localhost/api/v1/state/risk/vaults/${operationsChainId}/${oracle.toLowerCase()}/${address.toLowerCase()}?limit=1`), database.sql)
@@ -4454,11 +4513,11 @@ postgresTest(
 			await database.sql`
 				UPDATE entity_state_snapshots SET
 					block_number = 1, block_hash = ${hash}, block_timestamp = timestamptz '2026-01-01 00:00:20+00'
-				WHERE chain_id = ${operationsChainId} AND entity_type = 'vault'
+				WHERE chain_id = ${operationsChainId} AND entity_type = 'vault' AND entity_identity = ${`${oracle.toLowerCase()}:${address.toLowerCase()}`}
 			`
 			await database.sql`
 				UPDATE entity_state_snapshots SET read_result = jsonb_set(read_result, '{price,protocolValid}', 'false'::jsonb, true)
-				WHERE chain_id = ${operationsChainId} AND entity_type = 'pool'
+				WHERE chain_id = ${operationsChainId} AND entity_type = 'pool' AND entity_identity = ${oracle.toLowerCase()}
 			`
 			const invalidPriceResponse = await handleApi(new Request(`http://localhost/api/v1/state/risk/vaults/${operationsChainId}/${oracle.toLowerCase()}/${address.toLowerCase()}`), database.sql)
 			if (invalidPriceResponse === undefined) throw new Error('invalid-price risk endpoint did not return a response')
@@ -4473,6 +4532,7 @@ postgresTest(
 						ELSE jsonb_set(read_result, '{badDebtAttoEth}', '"9"'::jsonb, true)
 					END
 				WHERE chain_id = ${operationsChainId} AND entity_type IN ('pool', 'vault')
+					AND entity_identity IN (${oracle.toLowerCase()}, ${`${oracle.toLowerCase()}:${address.toLowerCase()}`})
 			`
 			const badDebtPoolResponse = await handleApi(new Request(`http://localhost/api/v1/state/risk/pools/${operationsChainId}/${oracle.toLowerCase()}`), database.sql)
 			const badDebtVaultResponse = await handleApi(new Request(`http://localhost/api/v1/state/risk/vaults/${operationsChainId}/${oracle.toLowerCase()}/${address.toLowerCase()}`), database.sql)

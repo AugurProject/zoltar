@@ -627,12 +627,12 @@ void describe('fork auction helpers', () => {
 
 		expect(
 			getTruthAuctionSettlementSelectionEstimate({
-				auctionedCapacityOwnershipAttoRep: 8n * ONE_UNIT,
+				auctionObligationUnits: 8n * ONE_UNIT,
 				selectedRows: settlementRows,
 				truthAuction: underfundedAuction,
 			}),
 		).toEqual({
-			estimatedAssignedCapacityOwnershipAttoRep: 2n * ONE_UNIT,
+			estimatedAssignedObligationUnits: 2n * ONE_UNIT,
 			estimatedRefundedAttoEth: ONE_UNIT,
 			estimatedVaultRepBackingAttoRep: 2n * ONE_UNIT,
 		})
@@ -680,12 +680,12 @@ void describe('fork auction helpers', () => {
 
 		expect(
 			getTruthAuctionSettlementSelectionEstimate({
-				auctionedCapacityOwnershipAttoRep: undefined,
+				auctionObligationUnits: undefined,
 				selectedRows: settlementRows,
 				truthAuction: underfundedAuction,
 			}),
 		).toEqual({
-			estimatedAssignedCapacityOwnershipAttoRep: undefined,
+			estimatedAssignedObligationUnits: undefined,
 			estimatedRefundedAttoEth: 0n,
 			estimatedVaultRepBackingAttoRep: 10n,
 		})
@@ -761,7 +761,7 @@ void describe('fork auction helpers', () => {
 		})
 	})
 
-	void test('summarizes selected settlement claims and refunds with estimated assigned capacity ownership', () => {
+	void test('summarizes selected settlement claims and refunds with estimated assigned obligation units', () => {
 		const finalizedAuction = createTruthAuction({
 			clearingPrice: TRUTH_AUCTION_PRICE_PRECISION,
 			clearingTick: 10n,
@@ -787,12 +787,12 @@ void describe('fork auction helpers', () => {
 
 		expect(
 			getTruthAuctionSettlementSelectionEstimate({
-				auctionedCapacityOwnershipAttoRep: 8n * ONE_UNIT,
+				auctionObligationUnits: 8n * ONE_UNIT,
 				selectedRows: settlementRows,
 				truthAuction: finalizedAuction,
 			}),
 		).toEqual({
-			estimatedAssignedCapacityOwnershipAttoRep: 3n * ONE_UNIT,
+			estimatedAssignedObligationUnits: 3n * ONE_UNIT,
 			estimatedRefundedAttoEth: ONE_UNIT + HALF_UNIT,
 			estimatedVaultRepBackingAttoRep: ONE_UNIT + HALF_UNIT,
 		})
@@ -814,12 +814,12 @@ void describe('fork auction helpers', () => {
 
 		expect(
 			getTruthAuctionSettlementSelectionEstimate({
-				auctionedCapacityOwnershipAttoRep: 8n * ONE_UNIT,
+				auctionObligationUnits: 8n * ONE_UNIT,
 				selectedRows: settlementRows,
 				truthAuction: finalizedAuction,
 			}),
 		).toEqual({
-			estimatedAssignedCapacityOwnershipAttoRep: 0n,
+			estimatedAssignedObligationUnits: 0n,
 			estimatedRefundedAttoEth: ONE_UNIT,
 			estimatedVaultRepBackingAttoRep: 0n,
 		})

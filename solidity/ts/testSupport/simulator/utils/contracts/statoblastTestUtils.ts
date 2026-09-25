@@ -72,7 +72,7 @@ export const handleOracleReporting = async (client: WriteClient, mockWindow: Anv
 	assert.strictEqual(await getLastPrice(client, priceOracleManagerAndOperatorQueuer), expectedSettledPrice, 'settled coordinator price should match the encoded pending report price')
 }
 
-export const setVaultCapacityFixture = async (client: WriteClient, mockWindow: AnvilWindowEthereum, priceOracleManagerAndOperatorQueuer: Address, targetVault: Address, amount: bigint, forceRepEthPriceTo: bigint = PRICE_PRECISION) => {
+export const setCoverageOfferFixture = async (client: WriteClient, mockWindow: AnvilWindowEthereum, priceOracleManagerAndOperatorQueuer: Address, targetVault: Address, amount: bigint, forceRepEthPriceTo: bigint = PRICE_PRECISION) => {
 	await manipulatePriceOracle(client, mockWindow, priceOracleManagerAndOperatorQueuer, forceRepEthPriceTo)
 	assert.strictEqual(targetVault, client.account.address, 'capacity target must be the caller vault')
 	const securityPool = requireAddress(
@@ -92,11 +92,7 @@ export const setVaultCapacityFixture = async (client: WriteClient, mockWindow: A
 			args: [targetVault],
 		}),
 	)
-	const [vault, totalCapacityOwnershipAttoRep, poolAccounting] = await Promise.all([
-		getSecurityVault(client, securityPool, targetVault),
-		client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: securityPool, functionName: 'totalCapacityOwnershipAttoRep', args: [] }),
-		client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: securityPool, functionName: 'getPoolAccountingSnapshot', args: [] }),
-	])
+	const [vault, totalCapacityOwnershipAttoRep] = await Promise.all([getSecurityVault(client, securityPool, targetVault), client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: securityPool, functionName: 'totalCapacityOwnershipAttoRep', args: [] })])
 	// Synthetic capacity setup, not a protocol operation. Clear the saved target so fee
 	// checkpoints preserve this exact capacity, including values no whole-BPS target can express.
 	const mappingSlot = (slot: bigint) => BigInt(keccak256(encodeAbiParameters([{ type: 'address' }, { type: 'uint256' }], [targetVault, slot])))
@@ -105,12 +101,13 @@ export const setVaultCapacityFixture = async (client: WriteClient, mockWindow: A
 		[securityPool]: {
 			stateDiff: {
 				[storageHex(1n)]: totalCapacityOwnershipAttoRep - vault.capacityOwnershipAttoRep + amount,
-				[storageHex(12n)]: poolAccounting.feeEligibleCapacityOwnershipAttoRep - vault.capacityOwnershipAttoRep + amount,
 				[storageHex(mappingSlot(16n) + 1n)]: amount,
 				[storageHex(mappingSlot(28n))]: 0n, // SecurityPoolStorage.vaultTargetBackingFactorBps
 			},
 		},
 	})
+	// The fixture owner explicitly authorizes future allocations; deposits themselves do not.
+	await writeContractAndWait(client, () => client.writeContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: securityPool, functionName: 'setCoverageOffer', args: [amount > 0n, amount > 0n ? (1n << 256n) - 1n : 0n, 10_000n] }))
 }
 
 export const manipulatePriceOracleAndPerformOperation = async (client: WriteClient, mockWindow: AnvilWindowEthereum, priceOracleManagerAndOperatorQueuer: Address, operation: Exclude<OperationType, OperationType.PriceRefresh>, targetVault: Address, amount: bigint, forceRepEthPriceTo: bigint = PRICE_PRECISION) => {

@@ -186,6 +186,9 @@ export type SecurityPoolCreationResult = {
 	universeId: bigint
 }
 export type SecurityVaultDetails = {
+	obligationUnits?: bigint
+	totalObligationUnits?: bigint
+	coverageOffer?: { enabled: boolean; maximumObligationAttoEth: bigint; minimumHealthFactorBps: bigint }
 	statoblastSecurityMultiplierBps?: bigint
 	targetBackingFactorBps?: bigint
 	settlementCollateralAttoEth?: bigint
@@ -310,6 +313,7 @@ export type OpenOracleReportDetails = OpenOracleReportSummary & {
 }
 
 export type ListedSecurityPool = {
+	totalObligationUnits?: bigint
 	settlementCollateralAttoEth: bigint
 	currentRetentionRate: bigint
 	feeAccrualState?: {
@@ -318,7 +322,7 @@ export type ListedSecurityPool = {
 		lastUpdatedFeeAccumulator: bigint
 		totalFeesOwedRemainder: bigint
 	}
-	feeEligibleCapacityOwnershipAttoRep: bigint
+	activeObligationUnits: bigint
 	hasForkActivity: boolean
 	hasForkContinuationEscalationGame: boolean
 	initialReportPriorityFeeAttoEthPerGas: bigint
@@ -363,6 +367,7 @@ export type SecurityPoolBrowsePage = SecurityPoolPage & {
 }
 
 export type SecurityPoolVaultSummary = {
+	obligationUnits?: bigint
 	badDebtAttoEth?: bigint
 	openInterestAttoEth?: bigint
 	disputeStakedAttoRep: bigint
@@ -566,7 +571,7 @@ export type TruthAuctionBidderBidPage = {
 }
 
 export type ForkAuctionDetails = {
-	auctionedCapacityOwnershipAttoRep: bigint
+	auctionObligationUnits: bigint
 	claimingAvailable: boolean
 	settlementCollateralAttoEth: bigint
 	currentTime: bigint

@@ -1,3 +1,5 @@
+import { getContractOutput, loadContractsJson, normalizeStorageLayout } from './contractArtifactHelpers'
+import { statoblast_SecurityPool_SecurityPool } from '../types/contractArtifact'
 import { manipulatePriceOracle } from '../testSupport/simulator/utils/contracts/statoblastTestUtils'
 import { getSecurityPoolAddresses } from '../testSupport/simulator/utils/contracts/deployStatoblast'
 import { getEthRaiseCapAttoEth, participateAuction } from '../testSupport/simulator/utils/contracts/statoblast'
@@ -54,11 +56,21 @@ describe('Audit regression: post-escrow complete-set mint fork loss', () => {
 		await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, 10n * PRICE_PRECISION)
 		await createCompleteSet(client, securityPoolAddresses.securityPool, settlementCollateralAttoEth)
 
-		// Reconstruct the full-bad-debt accounting boundary so this regression isolates
+		// Reconstruct a fully written-off obligation bucket so this regression isolates
 		// fork finalization from the independent liquidation setup.
+		const layout = normalizeStorageLayout(getContractOutput(loadContractsJson(import.meta.dir), 'contracts/statoblast/SecurityPool.sol', 'SecurityPool'))
+		const slot = (name: string) => {
+			const field = layout.find(field => field.label === name)
+			if (field === undefined) throw new Error(`Missing ${name}`)
+			return BigInt(field.slot)
+		}
+		const units = await client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: securityPoolAddresses.securityPool, functionName: 'totalObligationUnits' })
 		await mockWindow.addStateOverrides({
 			[securityPoolAddresses.securityPool]: {
 				stateDiff: {
+					[formatStorageSlot(slot('writtenOffObligationUnits'))]: units,
+					[formatStorageSlot(slot('activeObligationUnits'))]: 0n,
+					[formatStorageSlot(getMappingStorageSlot(client.account.address, slot('coveragePositions')))]: 0n,
 					[formatStorageSlot(21n)]: settlementCollateralAttoEth,
 					[formatStorageSlot(getMappingStorageSlot(client.account.address, 22n))]: settlementCollateralAttoEth,
 				},

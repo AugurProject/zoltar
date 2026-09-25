@@ -83,6 +83,7 @@ test('binds the complete pool scan to one canonical block', async () => {
 					return Promise.resolve(
 						parameters.contracts.map(contract => {
 							if (contract.functionName === 'securityVaults') return [1n, 1n, 0n, 0n]
+							if (contract.functionName === 'getVaultObligationUnits') return 1n
 							if (contract.functionName === 'vaultBadDebtAttoEth') return 0n
 							throw new Error(`Unexpected multicall read: ${contract.functionName}`)
 						}),
@@ -96,6 +97,7 @@ test('binds the complete pool scan to one canonical block', async () => {
 						return Promise.resolve({ forkQuestionId: 0n, forkTime: 0n, forkingOutcomeIndex: 0n, parentUniverseId: 0n, reputationToken: repToken })
 					}
 					if (parameters.functionName === 'getDeployedChildUniverses') return Promise.resolve([[], [], []])
+					if (parameters.functionName === 'totalObligationUnits') return Promise.resolve(1n)
 					if (parameters.functionName === 'getVaultCount') return Promise.resolve(1n)
 					if (parameters.functionName === 'currentRetentionRate') return Promise.resolve(1n)
 					if (parameters.functionName === 'totalRepBackingUnits') return Promise.resolve(1n)
@@ -108,7 +110,7 @@ test('binds the complete pool scan to one canonical block', async () => {
 					if (parameters.functionName === 'minimumToken1ReportAttoEth') return Promise.resolve(1n)
 					if (parameters.functionName === 'minimumVaultRepDepositAttoRep') return Promise.resolve(1n)
 					if (parameters.functionName === 'getPoolAccountingSnapshot') {
-						return Promise.resolve({ feeEligibleCapacityOwnershipAttoRep: 1n, settlementCollateralAttoEth: 10n, totalCapacityOwnershipAttoRep: 1n })
+						return Promise.resolve({ activeObligationUnits: 1n, settlementCollateralAttoEth: 10n, totalCapacityOwnershipAttoRep: 1n, badDebtGeneration: 0n })
 					}
 					if (parameters.functionName === 'pendingReportId') return Promise.resolve(0n)
 					if (parameters.functionName === 'pendingReportSponsor') return Promise.resolve(getAddress('0x0000000000000000000000000000000000000000'))
@@ -133,7 +135,7 @@ test('binds the complete pool scan to one canonical block', async () => {
 									receiverVault: operator,
 									reservedLiquidationDebtAttoEth: 0n,
 									snapshotTargetBackingUnits: 0n,
-									snapshotTargetCapacityOwnershipAttoRep: 0n,
+									snapshotTargetObligationUnits: 0n,
 									targetVault: unregisteredTarget,
 									validForSeconds: 60n,
 								},
@@ -153,6 +155,7 @@ test('binds the complete pool scan to one canonical block', async () => {
 	vaultIndex.blockNumber = 1n
 	vaultIndex.knownVaultCount = 1n
 	monitorIndex.vaultsByPool.set(pool.toLowerCase(), vaultIndex)
+	monitorIndex.coverageEpochsByPool.set(pool.toLowerCase(), 0n)
 
 	const snapshot = await scanPools(client, settings, operator, monitorIndex)
 
@@ -161,7 +164,7 @@ test('binds the complete pool scan to one canonical block', async () => {
 	expect(snapshot.pools[0]?.stagedOperations[0]).toMatchObject({ snapshotTargetDisputeStakedAttoRep: 0n, snapshotTargetOpenInterestAttoEth: 10n, targetVault: unregisteredTarget })
 	expect(contractReads.length).toBeGreaterThan(20)
 	expect(contractReads.every(read => read.blockNumber === 2n)).toBeTrue()
-	expect(multicalls.length).toBe(4)
+	expect(multicalls.length).toBe(6)
 	expect(multicalls.every(read => read.blockNumber === 2n)).toBeTrue()
 	expect(logReads.find(read => read.event?.name === 'DeploySecurityPool')).toMatchObject({ fromBlock: 0n, toBlock: 2n })
 	expect(logReads.find(read => read.event?.name === 'VaultAccountingCheckpoint')).toMatchObject({ fromBlock: 2n, toBlock: 2n })
@@ -202,7 +205,7 @@ test('a truth-auction haircut globally dirties every retained dispute-staked vau
 		address,
 		backingUnits: backing,
 		badDebtAttoEth: 0n,
-		capacityOwnershipAttoRep: PRICE_PRECISION,
+		obligationUnits: PRICE_PRECISION,
 		claimableFeesAttoEth: 0n,
 		disputeStakedAttoRep,
 		openInterestAttoEth: PRICE_PRECISION,
@@ -254,15 +257,15 @@ test('cached raw vault state recomputes backing and open interest from current p
 		address: vault,
 		backingUnits: 2n,
 		badDebtAttoEth: 1n,
-		capacityOwnershipAttoRep: 3n,
+		obligationUnits: 3n,
 		claimableFeesAttoEth: 4n,
 		disputeStakedAttoRep: 5n,
 		openInterestAttoEth: 0n,
 		vaultAttoRepBacking: 0n,
 	}
 
-	expect(currentVaultPositionForPoolAccounting(raw, 100n, 10n, 101n, 10n)).toMatchObject({ openInterestAttoEth: 30n, vaultAttoRepBacking: 20n })
-	expect(currentVaultPositionForPoolAccounting(raw, 200n, 10n, 201n, 10n)).toMatchObject({ openInterestAttoEth: 60n, vaultAttoRepBacking: 40n })
+	expect(currentVaultPositionForPoolAccounting(raw, 100n, 10n, 101n, 10n)).toMatchObject({ openInterestAttoEth: 31n, vaultAttoRepBacking: 20n })
+	expect(currentVaultPositionForPoolAccounting(raw, 200n, 10n, 201n, 10n)).toMatchObject({ openInterestAttoEth: 61n, vaultAttoRepBacking: 40n })
 })
 
 test('unchanged empty operator vaults are read once and then served from the event-aware cache', async () => {
@@ -273,14 +276,14 @@ test('unchanged empty operator vaults are read once and then served from the eve
 		address: operator,
 		backingUnits: 0n,
 		badDebtAttoEth: 0n,
-		capacityOwnershipAttoRep: 0n,
+		obligationUnits: 0n,
 		claimableFeesAttoEth: 0n,
 		disputeStakedAttoRep: 0n,
 		openInterestAttoEth: 0n,
 		vaultAttoRepBacking: 0n,
 	}
 	const refresh = { refreshedVaults: [], reset: false, vaults: [] }
-	const accounting = { denominator: 10n, settlementCollateralAttoEth: 100n, totalAttoRep: 100n, totalCapacityOwnershipAttoRep: 10n }
+	const accounting = { denominator: 10n, settlementCollateralAttoEth: 100n, totalAttoRep: 100n, totalObligationUnits: 10n }
 	let positionReads = 0
 	const loadPosition = async () => {
 		positionReads += 1
@@ -318,6 +321,7 @@ test('retains only vaults backed by pool-held REP or dispute-staked REP in the a
 							const vault = getAddress(contract.args[0])
 							if (contract.functionName === 'securityVaults') return [vault === backed ? 7n : 0n, 0n, vault === feesOnly ? 5n : 0n, 0n]
 							if (contract.functionName === 'vaultBadDebtAttoEth') return vault === badDebtOnly ? 3n : 0n
+							if (contract.functionName === 'getVaultObligationUnits') return 0n
 							if (contract.functionName === 'disputeStakedRepByVaultAttoRep') return vault === disputeStakedOnly ? 9n : 0n
 							throw new Error(`Unexpected multicall read: ${contract.functionName}`)
 						}),

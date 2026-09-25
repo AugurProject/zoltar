@@ -1,13 +1,14 @@
+import { statoblast_SecurityPool_SecurityPool } from '../../types/contractArtifact'
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import { AnvilWindowEthereum } from '../../testSupport/simulator/AnvilWindowEthereum'
 import { approveToken, getChildUniverseId, getERC20Balance } from '../../testSupport/simulator/utils/utilities'
 import { addressString } from '../../testSupport/simulator/utils/bigint'
-import { approveAndDepositRepToVault, manipulatePriceOracle, triggerOwnGameFork, setVaultCapacityFixture } from '../../testSupport/simulator/utils/contracts/statoblastTestUtils'
+import { approveAndDepositRepToVault, manipulatePriceOracle, triggerOwnGameFork, setCoverageOfferFixture } from '../../testSupport/simulator/utils/contracts/statoblastTestUtils'
 import { getInfraContractAddresses, getSecurityPoolAddresses } from '../../testSupport/simulator/utils/contracts/deployStatoblast'
 import { createQuestion, getQuestionId as buildQuestionId } from '../../testSupport/simulator/utils/contracts/zoltarQuestionData'
 import { createCompleteSet, depositRepToVault, depositToEscalationGame, getRepToken, getTotalCapacityOwnershipAttoRep } from '../../testSupport/simulator/utils/contracts/securityPool'
 import { DAY, GENESIS_REPUTATION_TOKEN, TEST_ADDRESSES } from '../../testSupport/simulator/utils/constants'
-import { createWriteClient, WriteClient } from '../../testSupport/simulator/utils/clients'
+import { createWriteClient, WriteClient, writeContractAndWait } from '../../testSupport/simulator/utils/clients'
 import { getEthRaiseCapAttoEth, getQuestionEndDate, participateAuction } from '../../testSupport/simulator/utils/contracts/statoblast'
 import { QuestionOutcome } from '../../testSupport/simulator/types/types'
 import { strictEqualTypeSafe } from '../../testSupport/simulator/utils/testUtils'
@@ -107,11 +108,13 @@ export function createStatoblastTruthAuctionScenarioHelpers({
 		await approveAndDepositRepToVault(passiveRepHolder, 2n * forkThresholdAttoRep, questionId)
 		await mockWindow.setTime(endTime + 10000n)
 		const securityPoolCapacityOwnershipAttoRep = repDeposit / 4n
-		await setVaultCapacityFixture(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, client.account.address, securityPoolCapacityOwnershipAttoRep)
+		await setCoverageOfferFixture(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, client.account.address, securityPoolCapacityOwnershipAttoRep)
 
 		const openInterestAmount = 10n * 10n ** 18n
 		const openInterestHolder = createWriteClient(mockWindow, TEST_ADDRESSES[1])
-		await createCompleteSet(openInterestHolder, securityPoolAddresses.securityPool, openInterestAmount)
+		await writeContractAndWait(passiveRepHolder, () => passiveRepHolder.writeContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: securityPoolAddresses.securityPool, functionName: 'setCoverageOffer', args: [true, 100n * 10n ** 18n, 10_000n] }))
+		const allocations = [client.account.address, passiveRepHolder.account.address].sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase())).map(vault => ({ vault, collateralAttoEth: openInterestAmount / 2n }))
+		await createCompleteSet(openInterestHolder, securityPoolAddresses.securityPool, openInterestAmount, false, allocations)
 
 		await triggerExternalForkForSecurityPool(undefined, titlePrefix)
 		await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])

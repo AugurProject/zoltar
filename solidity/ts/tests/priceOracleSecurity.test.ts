@@ -281,6 +281,7 @@ describe('Price Oracle Refund Security Tests', () => {
 		const addresses = getSecurityPoolAddresses(addressString(0x0n), genesisUniverse, questionId, statoblastSecurityMultiplierBps)
 		priceOracle = addresses.priceOracleManagerAndOperatorQueuer
 		securityPool = addresses.securityPool
+		await client.writeContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: securityPool, functionName: 'setCoverageOffer', args: [true, (1n << 256n) - 1n, 10_000n] })
 	})
 
 	const queueStagedOperation = async (operation: OperationType, targetVault: Address, amount: bigint, validForSeconds: bigint, value = 0n) => await requestPriceIfNeededAndStageOperationWithValue(client, priceOracle, operation, targetVault, amount, validForSeconds, value)
@@ -526,6 +527,7 @@ describe('Price Oracle Refund Security Tests', () => {
 		const expectedOpenInterestMinimum = (openInterest + 99n) / 100n
 		await requestPrice(client, priceOracle)
 		await handleOracleReporting(client, mockWindow, priceOracle, 10n ** 18n)
+		await client.writeContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: securityPool, functionName: 'setCoverageOffer', args: [true, (1n << 256n) - 1n, 10_000n] })
 		await createCompleteSet(client, securityPool, openInterest)
 
 		const minimumToken1ReportAttoEth = await client.readContract({
@@ -1764,6 +1766,7 @@ describe('Price Oracle Refund Security Tests', () => {
 			args: [],
 		})
 
+		await client.writeContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: securityPool, functionName: 'setCoverageOffer', args: [true, mintingCapacityAttoEth, 10_000n] })
 		await assert.rejects(
 			client.writeContract({
 				abi: statoblast_SecurityPool_SecurityPool.abi,
@@ -1772,7 +1775,7 @@ describe('Price Oracle Refund Security Tests', () => {
 				args: [],
 				value: mintingCapacityAttoEth + 1n,
 			}),
-			/Over capacity/,
+			/Coverage offer limit/,
 		)
 		assert.deepStrictEqual(await readGuardState(), stateBefore, 'over-capacity mint must not retain ETH, mint shares, or change pool and vault accounting')
 
@@ -1853,7 +1856,7 @@ describe('Price Oracle Refund Security Tests', () => {
 			encodeFunctionData({
 				abi: statoblast_SecurityPool_SecurityPool.abi,
 				functionName: 'createCompleteSet',
-				args: [],
+				args: [[{ vault: client.account.address, collateralAttoEth: collateral }]],
 			}),
 			collateral,
 		)

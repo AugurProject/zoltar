@@ -1,5 +1,5 @@
 import { QuestionOutcome } from '../testSupport/simulator/types/types'
-import { manipulatePriceOracle, setVaultCapacityFixture } from '../testSupport/simulator/utils/contracts/statoblastTestUtils'
+import { manipulatePriceOracle, setCoverageOfferFixture } from '../testSupport/simulator/utils/contracts/statoblastTestUtils'
 import { getZoltarAddress } from '../testSupport/simulator/utils/contracts/zoltar'
 import { getSecurityPoolsEscalationGame, redeemRepFromVault, withdrawFromEscalationGame, depositToEscalationGame } from '../testSupport/simulator/utils/contracts/securityPool'
 import { getQuestionOutcome } from '../testSupport/simulator/utils/contracts/securityPoolForker'
@@ -22,7 +22,7 @@ describe('Audit PoC: escalation logarithm precision liveness', () => {
 	test('a funded game with a power-of-two threshold ratio resolves and releases its assets', async () => {
 		const { client, genesisUniverse, mockWindow, questionData, securityPoolAddresses } = fixture
 		const capacityOwnershipAttoRep = 25n * 10n ** 18n
-		await setVaultCapacityFixture(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, client.account.address, capacityOwnershipAttoRep, reportedRepEthPrice)
+		await setCoverageOfferFixture(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, client.account.address, capacityOwnershipAttoRep, reportedRepEthPrice)
 		await createCompleteSet(client, securityPoolAddresses.securityPool, 1n * 10n ** 18n)
 		assert.ok((await getSettlementCollateralAttoEth(client, securityPoolAddresses.securityPool)) > 0n, 'PoC pool must hold redeemable ETH collateral')
 

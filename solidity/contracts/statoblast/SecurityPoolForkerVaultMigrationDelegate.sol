@@ -50,17 +50,15 @@ contract SecurityPoolForkerVaultMigrationDelegate is
 			data.forkSettlementCollateralReceivedAttoEth + auctionSettlementCollateralReceivedAttoEth;
 		require(settlementCollateralAttoEth <= parentSettlementCollateralAtForkAttoEth, 'Repair');
 		uint256 parentTotalCapacityOwnershipAttoRep = securityPool.parent().totalCapacityOwnershipAttoRep();
-		uint256 unmigratedCapacityOwnershipAttoRep =
-			parentTotalCapacityOwnershipAttoRep - data.migratedCapacityOwnershipAttoRep;
-		data.auctionedCapacityOwnershipAttoRep = unmigratedCapacityOwnershipAttoRep;
+		uint256 unmigratedCapacityOwnershipAttoRep = SecurityPoolUtils.initializeChildCoverage(securityPool, data.migratedObligationUnits);
+		data.auctionObligationUnits = unmigratedCapacityOwnershipAttoRep;
 		uint256 totalAttoRepPurchased = data.truthAuction.totalAttoRepPurchased();
 		uint256 parentBadDebtAtForkAttoEth = badDebtAtForkByPool[securityPool.parent()];
 		uint256 migratedBadDebtAttoEth = migratedBadDebtByPool[securityPool];
 		require(migratedBadDebtAttoEth <= parentBadDebtAtForkAttoEth, 'Bad debt high');
 		auctionedBadDebtByPool[securityPool] = parentBadDebtAtForkAttoEth - migratedBadDebtAttoEth;
-		uint256 feeEligibleAuctionCapacityOwnershipAttoRep =
-			totalAttoRepPurchased == 0 ? 0 : data.auctionedCapacityOwnershipAttoRep;
-		securityPool.setPoolFinancials(settlementCollateralAttoEth, parentTotalCapacityOwnershipAttoRep, data.migratedCapacityOwnershipAttoRep + feeEligibleAuctionCapacityOwnershipAttoRep, parentBadDebtAtForkAttoEth);
+		uint256 activeAuctionObligationUnits = totalAttoRepPurchased == 0 ? 0 : data.auctionObligationUnits;
+		securityPool.setPoolFinancials(settlementCollateralAttoEth, parentTotalCapacityOwnershipAttoRep, data.migratedObligationUnits + activeAuctionObligationUnits, parentBadDebtAtForkAttoEth);
 		data.auctionBadDebtGeneration = SecurityPoolUtils.getBadDebtGeneration(securityPool);
 		data.auctionFeeIndexAtFinalization = securityPool.feeIndex();
 		securityPool.setSystemState(SystemState.Operational);

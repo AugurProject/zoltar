@@ -32,7 +32,7 @@ type SecurityPoolForkerForkData = {
 	truthAuction: Address
 	truthAuctionStarted: bigint
 	migratedAttoRep: bigint
-	auctionedCapacityOwnershipAttoRep: bigint
+	auctionObligationUnits: bigint
 	escalationElapsedAtFork: bigint
 	escalationStartBondAtForkAttoRep: bigint
 	escalationNonDecisionThresholdAtForkAttoRep: bigint
@@ -216,7 +216,7 @@ export const getSecurityPoolForkerForkData = async (client: ReadClient, security
 		truthAuction: requireAddress(data[1], 'Security pool fork data truth auction'),
 		truthAuctionStarted: requireBigInt(data[2], 'Security pool fork data truth auction started'),
 		migratedAttoRep: requireBigInt(data[3], 'Security pool fork data migrated REP'),
-		auctionedCapacityOwnershipAttoRep: requireBigInt(data[4], 'Security pool fork data auctioned capacity ownership'),
+		auctionObligationUnits: requireBigInt(data[4], 'Security pool fork data auctioned capacity ownership'),
 		escalationElapsedAtFork: requireBigInt(data[5], 'Security pool fork data escalation elapsed'),
 		escalationStartBondAtForkAttoRep: requireBigInt(data[6], 'Security pool fork data escalation start bond'),
 		escalationNonDecisionThresholdAtForkAttoRep: requireBigInt(data[7], 'Security pool fork data non-decision threshold'),

@@ -38,7 +38,7 @@ function stagedFixture(operation: 0 | 1 | 2): { pool: ReturnType<typeof snapshot
 		receiverVault: snapshot.wallet.address,
 		reservedLiquidationDebtAttoEth: 0n.toString(),
 		snapshotTargetBackingUnits: '10',
-		snapshotTargetCapacityOwnershipAttoRep: 20n.toString(),
+		snapshotTargetObligationUnits: 20n.toString(),
 		snapshotTargetDisputeStakedAttoRep: 0n.toString(),
 		snapshotTargetOpenInterestAttoEth: operation === 0 ? '100' : '0',
 		snapshotTotalPoolHeldAttoRep: 1_000n.toString(),

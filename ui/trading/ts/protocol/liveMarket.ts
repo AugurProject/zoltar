@@ -24,7 +24,7 @@ export type LiveMarket = Readonly<{
 	valuation?: Readonly<{ timestamp: bigint; feeEndTime: bigint; projectedCollateralAttoEth: bigint }>
 	currentRetentionRate: bigint
 	totalCapacityOwnershipAttoRep: bigint
-	feeEligibleCapacityOwnershipAttoRep: bigint
+	activeObligationUnits: bigint
 	mintingCapacityCeilingAttoEth: bigint
 	availableMintingCapacityAttoEth: bigint
 	feeBps: bigint

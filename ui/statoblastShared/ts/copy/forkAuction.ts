@@ -18,7 +18,7 @@ export const loadingCurrentChainTime = 'Loading current chain time.'
 export const migrateVaultTitle = 'Migrate Vault'
 export const migratingVault = 'Migrating vault…'
 export const migrationTimingIsUnavailable = 'Migration timing is unavailable.'
-export const poolMigrationCapacityEmpty = 'No REP backing or capacity ownership remains to migrate for the connected wallet.'
+export const poolMigrationCapacityEmpty = 'No REP backing or obligation units remains to migrate for the connected wallet.'
 export const notStarted = 'Not started'
 export const walletUnresolvedDepositsEmpty = 'No unresolved parent escalation deposits remain for the connected wallet.'
 export const open = 'Open'
@@ -58,7 +58,7 @@ export const noPendingRefund = 'No credited refund is available to withdraw.'
 export const formatFinalizedRefundOnlySettlementNotice = (capacityOwnershipLabel: CopyTemplateValue) => `Finalized refund-only settlement uses the child-pool settlement path to unlock ETH, and it does not assign REP backing units or ${capacityOwnershipLabel}.`
 export const formatWinningClaimCapacityOwnershipHeadline = (capacityOwnershipLabel: CopyTemplateValue) => `Winning claims add REP backing units and ${capacityOwnershipLabel}.`
 export const formatWinningClaimSettlementNotice = (capacityOwnershipLabel: CopyTemplateValue) =>
-	`Claiming a winning bid adds REP backing units and a pro-rata share of the ${capacityOwnershipLabel} to the bidder vault. That capacity ownership is the remaining capacity ownership being assigned during settlement. Refund-only bids credit locked ETH for a separate withdrawal.`
+	`Claiming a winning bid adds REP backing units and a pro-rata share of the ${capacityOwnershipLabel} to the bidder vault. These units were reserved for auction settlement. Refund-only bids credit locked ETH for a separate withdrawal.`
 export const formatMixedSettlementPreviewDetail = (capacityOwnershipLabel: CopyTemplateValue) => `Winning rows receive estimated REP backing units plus estimated ${capacityOwnershipLabel}, while refund rows credit locked ETH for withdrawal.`
 export const formatWinningSettlementPreviewDetail = (capacityOwnershipLabel: CopyTemplateValue) => `Winning rows receive estimated REP backing units plus estimated ${capacityOwnershipLabel}.`
 export const formatRefundSettlementPreviewDetail = (capacityOwnershipLabel: CopyTemplateValue) => `Refund-only settlement credits locked ETH for withdrawal and does not assign ${capacityOwnershipLabel}.`
@@ -97,7 +97,7 @@ export const parentBalancesWalletRequired = 'Connect wallet to inspect your pare
 export const parentVaultBalancesUnavailableDetail = 'Parent-pool vault balances are unavailable for the connected wallet. You can still use the migration actions below if this wallet has parent-pool state to move.'
 export const migratedBalancesForThisOutcome = 'Migrated balances for this outcome:'
 export const selectedOutcomeRepCollateral = 'Selected Outcome REP backing'
-export const selectedOutcomeCapacityOwnershipAttoRep = 'Selected Outcome Capacity ownership'
+export const selectedOutcomeCapacityOwnershipAttoRep = 'Selected Outcome Obligation units'
 export const walletDisputeStakedRepEmpty = 'No parent dispute-staked REP remains available for a direct branch claim by the connected wallet.'
 export const startingTruncated = 'Starting…'
 export const formatStartsInValue = (duration: CopyTemplateValue) => `Starts in ${duration}`
@@ -126,7 +126,7 @@ export const unresolvedDepositsLoading = 'Loading unresolved escalation deposits
 export const formatPoolRepAlreadyMigrated = (outcomeLabel: CopyTemplateValue) => `Pool-held REP has already been migrated to the ${outcomeLabel} universe.`
 export const formatPoolMigrationRequiredForVault = (outcomeLabel: CopyTemplateValue) => `Migrate pool to the ${outcomeLabel} universe before moving vault balances.`
 export const vaultMigrationCompleteReason = 'Vault migration is already complete for this wallet.'
-export const combinedUnresolvedMigrationDetail = 'Optionally clear unresolved parent escalation-deposit accounting while migrating remaining REP backing units and capacity ownership.'
+export const combinedUnresolvedMigrationDetail = 'Optionally clear unresolved parent escalation-deposit accounting while migrating remaining REP backing units and obligation units.'
 export const selectedLadderPriceLead = 'Selected ladder price: '
 export const bidPriceEthRep = 'Bid Price (ETH / REP)'
 export const submittingBidTruncated = 'Submitting bid…'
@@ -157,7 +157,7 @@ export const parentWalletBalancesDescription = 'Wallet-level balances in the par
 export const clearUnresolvedParentEscalationDepositAccounting = 'Optional: Clear Unresolved Parent Escalation-Deposit Accounting'
 export const unresolvedMigrationExpiredDetail = 'The optional unresolved parent escalation-deposit accounting cleanup window has closed. Child backing and winning-proof eligibility are unchanged.'
 export const unresolvedEscalationMigrationWithVaultDetail =
-	'First transfers this wallet’s REP backing units and capacity ownership to the selected child, checkpoints but retains claimable fees in the parent vault, and separately routes proportional pool-level settlement collateral. It then clears the three parent outcome totals in constant-size work. This is not required to fund dispute-staked REP backing or claim a winning carried proof; inherited losers require no claim transaction.'
+	'First transfers this wallet’s REP backing units and obligation units to the selected child, checkpoints but retains claimable fees in the parent vault, and separately routes proportional pool-level settlement collateral. It then clears the three parent outcome totals in constant-size work. This is not required to fund dispute-staked REP backing or claim a winning carried proof; inherited losers require no claim transaction.'
 export const walletUnresolvedDepositsLoading = 'Loading unresolved parent escalation-deposit accounting for the connected wallet…'
 export const capturedEntitlementDetail = 'Unresolved parent escalation-deposit accounting was already cleared. Child proof eligibility is unchanged.'
 export const formatEntitlementAlreadyMaterialized = (outcomeLabel: CopyTemplateValue) => `This wallet’s optional unresolved parent escalation-deposit accounting cleanup is already recorded for the ${outcomeLabel} child universe.`
@@ -178,7 +178,7 @@ export const poolRepAlreadyMigratedDetail = 'Pool-held REP has already been migr
 export const poolRepStagedForVaultMigrationDetail = 'Pool-held REP for this outcome is already staged and will sweep into the child universe during vault migration.'
 export const formatMigratePoolToValueUniverse = (outcomeLabel: CopyTemplateValue) => `Migrate pool to ${outcomeLabel} universe`
 export const migratingPoolToUniverseTruncated = 'Migrating pool to universe…'
-export const vaultMigrationDetail = 'This moves all remaining pool-held vault REP backing migration power and capacity ownership from your parent vault into the selected child pool. Escalation claims have zero parent-OI migration power and follow their separate claim path.'
+export const vaultMigrationDetail = 'This moves all remaining pool-held vault REP backing migration power and obligation units from your parent vault into the selected child pool. Escalation claims have zero parent-OI migration power and follow their separate claim path.'
 export const formatMigrateVaultToValue = (outcomeLabel: CopyTemplateValue) => `Migrate vault to ${outcomeLabel}`
 export const alreadyMigratedStatus = 'Already migrated'
 export const truthAuctionStatus = 'Truth Auction Status'
@@ -230,7 +230,7 @@ export const enteredBidPrice = 'Entered Bid Price'
 export const submittedTickPrice = 'Submitted Tick Price'
 export const bidEscrowRisk = 'Bid ETH remains locked until settlement; losing and unfilled amounts require a later refund settlement.'
 export const bidFillRisk = 'The clearing result can change before the auction ends, so estimated REP is not guaranteed.'
-export const winningBidCapacityOwnershipRisk = 'Winning settlement can also assign a pro-rata share of the pool capacity ownership.'
+export const winningBidCapacityOwnershipRisk = 'Winning settlement can also assign a pro-rata share of the pool obligation units.'
 export const visibleAuctionLevelsEmpty = 'No active levels are visible.'
 export const auctionLiveLevelsEmpty = 'No live price levels are currently active for this auction.'
 export const priceLadder = 'Price Ladder'

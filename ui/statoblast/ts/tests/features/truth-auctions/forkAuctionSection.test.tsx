@@ -108,7 +108,7 @@ function createActiveReportingDetails(overrides: Partial<ReportingDetails> = {})
 
 function createForkAuctionDetails(overrides: Partial<ForkAuctionDetails> = {}): ForkAuctionDetails {
 	return {
-		auctionedCapacityOwnershipAttoRep: 0n,
+		auctionObligationUnits: 0n,
 		claimingAvailable: false,
 		settlementCollateralAttoEth: 0n,
 		currentTime: 3n,
@@ -135,7 +135,7 @@ function createChildPool(overrides: Partial<ListedSecurityPool> = {}): ListedSec
 	return {
 		settlementCollateralAttoEth: 0n,
 		currentRetentionRate: 10n,
-		feeEligibleCapacityOwnershipAttoRep: 0n,
+		activeObligationUnits: 0n,
 		hasForkActivity: true,
 		forkOutcome: 'yes',
 		forkOwnSecurityPool: false,
@@ -578,7 +578,7 @@ describe('ForkAuctionSection', () => {
 		const documentQueries = within(document.body)
 		expect(
 			documentQueries.getByText(
-				'First transfers this wallet’s REP backing units and capacity ownership to the selected child, checkpoints but retains claimable fees in the parent vault, and separately routes proportional pool-level settlement collateral. It then clears the three parent outcome totals in constant-size work. This is not required to fund dispute-staked REP backing or claim a winning carried proof; inherited losers require no claim transaction.',
+				'First transfers this wallet’s REP backing units and obligation units to the selected child, checkpoints but retains claimable fees in the parent vault, and separately routes proportional pool-level settlement collateral. It then clears the three parent outcome totals in constant-size work. This is not required to fund dispute-staked REP backing or claim a winning carried proof; inherited losers require no claim transaction.',
 			),
 		).not.toBeNull()
 		const button = documentQueries.getByRole('button', { name: 'Clear unresolved parent escalation-deposit accounting for Yes' })
@@ -1333,7 +1333,7 @@ describe('ForkAuctionSection', () => {
 		})
 	})
 
-	test('makes the auctioned capacity ownership transfer explicit during bidding', async () => {
+	test('makes the auctioned obligation units transfer explicit during bidding', async () => {
 		const currentChildPool = createChildPool({
 			securityPoolAddress: '0x00000000000000000000000000000000000000f7',
 			systemState: 'forkTruthAuction',
@@ -1351,7 +1351,7 @@ describe('ForkAuctionSection', () => {
 					currentStageView: 'auction',
 					currentTimestamp: 5n,
 					forkAuctionDetails: createForkAuctionDetails({
-						auctionedCapacityOwnershipAttoRep: 7n,
+						auctionObligationUnits: 7n,
 						currentTime: 5n,
 						parentSecurityPoolAddress: PARENT_POOL_ADDRESS,
 						questionOutcome: 'yes',
@@ -1389,9 +1389,9 @@ describe('ForkAuctionSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		expect(documentQueries.getByText('Auctioned capacity ownership')).not.toBeNull()
+		expect(documentQueries.getByText('Auctioned obligation units')).not.toBeNull()
 		expect(documentQueries.queryByText('Winning bids buy more than REP.')).toBeNull()
-		expect(documentQueries.getByText('Winning settlement can also assign a pro-rata share of the pool capacity ownership.')).not.toBeNull()
+		expect(documentQueries.getByText('Winning settlement can also assign a pro-rata share of the pool obligation units.')).not.toBeNull()
 	})
 
 	test('disables bid submission when the entered bid price is an oversized out-of-range value', async () => {

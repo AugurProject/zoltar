@@ -184,14 +184,17 @@ async function loadSecurityPoolVaultSummaries(
 			address: securityPoolAddress,
 			args: [vaultAddress],
 		}))
-		const [vaultData, vaultOpenInterest, vaultBadDebt, [totalPoolHeldRepBalanceAttoRep, totalRepBackingUnits], escalationVaultData] = await Promise.all([
+		const [vaultData, vaultOpenInterest, vaultBadDebt, [totalPoolHeldRepBalanceAttoRep, totalRepBackingUnits], escalationVaultData, obligationUnits] = await Promise.all([
 			readRequiredMulticall(client, securityVaultSummaryContracts, blockNumber).then(result => requireSecurityVaultTupleArray(result, 'security vault tuple')),
 			readRequiredMulticall(client, vaultOpenInterestContracts, blockNumber),
 			readRequiredMulticall(client, vaultBadDebtContracts, blockNumber),
 			poolRepBackingTotalsPromise,
 			loadEscalationVaultData(client, securityPoolAddress, vaultAddresses, blockNumber),
+			Promise.all(vaultAddresses.map(vault => client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: securityPoolAddress, functionName: 'getVaultObligationUnits', args: [vault], blockNumber }))),
 		])
 		return vaultAddresses.flatMap((vaultAddress, index) => {
+			const currentObligationUnits = obligationUnits[index]
+			if (currentObligationUnits === undefined) throw new Error('Unexpected vault obligation units response')
 			const currentVaultData = vaultData[index]
 			if (currentVaultData === undefined) throw new Error('Unexpected vault data response')
 			const currentEscalationData = escalationVaultData[index]
@@ -200,10 +203,11 @@ async function loadSecurityPoolVaultSummaries(
 			if (typeof badDebtAttoEth !== 'bigint') throw new Error('Unexpected vault bad debt response')
 			const openInterestAttoEth = vaultOpenInterest[index]
 			if (typeof openInterestAttoEth !== 'bigint') throw new Error('Unexpected vault open interest response')
-			if (!hasCurrentSecurityVaultState(currentVaultData) && currentEscalationData.disputeStakedAttoRep === 0n && badDebtAttoEth === 0n && openInterestAttoEth === 0n) return []
+			if (!hasCurrentSecurityVaultState(currentVaultData) && currentEscalationData.disputeStakedAttoRep === 0n && badDebtAttoEth === 0n && openInterestAttoEth === 0n && currentObligationUnits === 0n) return []
 			const [repBackingUnits, capacityOwnershipAttoRep, claimableFeesAttoEth] = currentVaultData
 			return [
 				{
+					obligationUnits: currentObligationUnits,
 					badDebtAttoEth,
 					openInterestAttoEth,
 					disputeStakedAttoRep: currentEscalationData.disputeStakedAttoRep,
@@ -456,7 +460,7 @@ async function loadSecurityPoolDetails(
 			lastUpdatedFeeAccumulator: poolAccountingSnapshot.lastUpdatedFeeAccumulator,
 			totalFeesOwedRemainder: poolAccountingSnapshot.totalFeesOwedRemainder,
 		},
-		feeEligibleCapacityOwnershipAttoRep: poolAccountingSnapshot.feeEligibleCapacityOwnershipAttoRep,
+		activeObligationUnits: poolAccountingSnapshot.activeObligationUnits,
 		forkOutcome,
 		forkOwnSecurityPool,
 		hasForkActivity: deriveHasForkActivity({ forkOutcome, migratedAttoRep, systemState, truthAuctionStartedAt }),
@@ -479,6 +483,7 @@ async function loadSecurityPoolDetails(
 		systemState,
 		totalPoolHeldAttoRep,
 		totalCapacityOwnershipAttoRep: poolAccountingSnapshot.totalCapacityOwnershipAttoRep,
+		totalObligationUnits: await client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: securityPoolAddress, functionName: 'totalObligationUnits' }),
 		truthAuctionAddress,
 		truthAuctionStartedAt,
 		universeHasForked: universeForkTime > 0n,
@@ -671,6 +676,9 @@ export async function loadSecurityVaultDetails(client: ReadClient, securityPoolA
 		statoblastSecurityMultiplierBps,
 		targetBackingFactorBps,
 		settlementCollateralAttoEth,
+		obligationUnits,
+		totalObligationUnits,
+		coverageOffer,
 	] = await Promise.all([
 		client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'vaultBadDebtAttoEth', address: securityPoolAddress, args: [vaultAddress] }),
 		client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'currentRetentionRate', address: securityPoolAddress, args: [] }),
@@ -689,6 +697,9 @@ export async function loadSecurityVaultDetails(client: ReadClient, securityPoolA
 		client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'statoblastSecurityMultiplierBps', address: securityPoolAddress, args: [] }),
 		client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'vaultTargetBackingFactorBps', address: securityPoolAddress, args: [vaultAddress] }),
 		client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'settlementCollateralAttoEth', address: securityPoolAddress, args: [] }),
+		client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'getVaultObligationUnits', address: securityPoolAddress, args: [vaultAddress] }),
+		client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'totalObligationUnits', address: securityPoolAddress }),
+		client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'coverageOffers', address: securityPoolAddress, args: [vaultAddress] }),
 	])
 	const repTokenSymbol = await client.readContract({ abi: ReputationToken_ReputationToken.abi, functionName: 'symbol', address: repToken, args: [] })
 
@@ -700,6 +711,9 @@ export async function loadSecurityVaultDetails(client: ReadClient, securityPoolA
 	})
 
 	return {
+		obligationUnits,
+		totalObligationUnits,
+		coverageOffer: { enabled: coverageOffer[0], maximumObligationAttoEth: coverageOffer[1], minimumHealthFactorBps: coverageOffer[2] },
 		statoblastSecurityMultiplierBps,
 		targetBackingFactorBps,
 		settlementCollateralAttoEth,

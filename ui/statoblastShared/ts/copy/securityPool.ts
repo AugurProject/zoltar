@@ -261,3 +261,21 @@ export const manualInitialPrice = 'Manual price'
 export const manualRepPerEth = 'Open Oracle REP/ETH starting price'
 export const manualInitialPriceHint = 'Initial report price; subject to Open Oracle disputes and settlement.'
 export const manualInitialPriceError = 'Enter a positive REP per ETH price with up to 18 decimal places.'
+
+export const coverageOfferTitle = 'Underwriting offer'
+export const coverageOfferLimit = 'Maximum obligation (ETH)'
+export const coverageOfferHealth = 'Minimum health factor'
+export const coverageOfferHelp = 'Authorize new allocations within these limits. Disabling preserves existing obligations.'
+export const saveCoverageOffer = 'Save offer'
+export const enableCoverageOffer = 'Enable offer'
+export const disableCoverageOffer = 'Disable offer'
+export const savingCoverageOffer = 'Saving offer…'
+export const coverageOfferSaved = 'Offer saved'
+export const coverageOfferUnavailable = 'Underwriting offer details are unavailable for this vault.'
+export const coverageOfferInvalid = 'Enter a positive ETH limit and a health factor of at least 1'
+
+export const coverageOfferEnabled = 'Offer enabled'
+export const coverageOfferDisabled = 'Offer disabled'
+
+export const coverageOfferReview = (limit: string, health: string) => `Authorize new allocations up to ${limit} ETH of total obligation at a minimum health factor of ${health}.`
+export const disableCoverageOfferReview = 'Stop accepting new allocations. Existing obligations and their backing requirements remain.'

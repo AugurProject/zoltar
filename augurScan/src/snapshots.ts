@@ -22,6 +22,11 @@ export type EntityStateSnapshot = {
 const poolAbi = parseAbi([
 	'function settlementCollateralAttoEth() view returns (uint256)',
 	'function totalCapacityOwnershipAttoRep() view returns (uint256)',
+	'function totalObligationUnits() view returns (uint256)',
+	'function writtenOffObligationUnits() view returns (uint256)',
+	'function unassignedObligationUnits() view returns (uint256)',
+	'function getVaultObligationUnits(address vault) view returns (uint256)',
+	'function coverageOffers(address vault) view returns (bool enabled, uint256 maximumObligationAttoEth, uint256 minimumHealthFactorBps)',
 	'function totalRepBackingUnits() view returns (uint256)',
 	'function totalClaimableVaultFeesAttoEth() view returns (uint256)',
 	'function totalAccruedFeesAttoEth() view returns (uint256)',
@@ -35,7 +40,7 @@ const poolAbi = parseAbi([
 	'function currentRetentionRate() view returns (uint256)',
 	'function statoblastSecurityMultiplierBps() view returns (uint256)',
 	'function securityVaults(address vault) view returns (uint256 repBackingUnits, uint256 capacityOwnershipAttoRep, uint256 claimableFeesAttoEth, uint256 feeIndex)',
-	'function vaultTargetHealthFactorBps(address vault) view returns (uint256)',
+	'function vaultTargetBackingFactorBps(address vault) view returns (uint256)',
 	'function getVaultOpenInterestAttoEth(address vault) view returns (uint256)',
 	'function vaultBadDebtAttoEth(address vault) view returns (uint256)',
 	'function backingUnitsToAttoRep(uint256 repBackingUnits) view returns (uint256)',
@@ -110,6 +115,10 @@ const poolSnapshot = async (target: StateSnapshotTarget, read: StateRead): Promi
 		read(address, poolAbi, 'shareTokenSupplyAttoShares'),
 		read(address, poolAbi, 'currentRetentionRate'),
 		read(address, poolAbi, 'statoblastSecurityMultiplierBps'),
+		read(address, poolAbi, 'totalObligationUnits'),
+		read(address, poolAbi, 'writtenOffObligationUnits'),
+		read(address, poolAbi, 'unassignedObligationUnits'),
+		read(address, poolAbi, 'coverageEpoch'),
 	])
 	const result: Record<string, unknown> = {
 		settlementCollateralAttoEth: exact(values[0], 'settlementCollateralAttoEth'),
@@ -126,6 +135,10 @@ const poolSnapshot = async (target: StateSnapshotTarget, read: StateRead): Promi
 		shareTokenSupplyAttoShares: exact(values[11], 'shareTokenSupplyAttoShares'),
 		currentRetentionRate: exact(values[12], 'currentRetentionRate'),
 		securityMultiplierBps: exact(values[13], 'statoblastSecurityMultiplierBps'),
+		totalObligationUnits: exact(values[14], 'totalObligationUnits'),
+		writtenOffObligationUnits: exact(values[15], 'writtenOffObligationUnits'),
+		unassignedObligationUnits: exact(values[16], 'unassignedObligationUnits'),
+		coverageEpoch: exact(values[17], 'coverageEpoch'),
 	}
 	if (target.coordinatorAddress !== undefined) {
 		const coordinator = target.coordinatorAddress
@@ -144,7 +157,16 @@ const vaultSnapshot = async (target: StateSnapshotTarget, read: StateRead): Prom
 	if (target.poolAddress === undefined) throw new Error('Vault snapshot target is missing its pool')
 	const pool = target.poolAddress
 	const vault = target.address
-	const values = await Promise.all([read(pool, poolAbi, 'securityVaults', [vault]), read(pool, poolAbi, 'vaultTargetHealthFactorBps', [vault]), read(pool, poolAbi, 'getVaultOpenInterestAttoEth', [vault]), read(pool, poolAbi, 'vaultBadDebtAttoEth', [vault]), read(pool, poolAbi, 'statoblastSecurityMultiplierBps')])
+	const values = await Promise.all([
+		read(pool, poolAbi, 'securityVaults', [vault]),
+		read(pool, poolAbi, 'vaultTargetBackingFactorBps', [vault]),
+		read(pool, poolAbi, 'getVaultOpenInterestAttoEth', [vault]),
+		read(pool, poolAbi, 'vaultBadDebtAttoEth', [vault]),
+		read(pool, poolAbi, 'statoblastSecurityMultiplierBps'),
+		read(pool, poolAbi, 'getVaultObligationUnits', [vault]),
+		read(pool, poolAbi, 'coverageOffers', [vault]),
+		read(pool, poolAbi, 'coverageEpoch'),
+	])
 	const state = tuple(values[0], 4, 'securityVaults')
 	const repBackingUnits = exact(state[0], 'securityVaults.repBackingUnits')
 	const backingAttoRep = await read(pool, poolAbi, 'backingUnitsToAttoRep', [BigInt(repBackingUnits)])
@@ -158,10 +180,16 @@ const vaultSnapshot = async (target: StateSnapshotTarget, read: StateRead): Prom
 		capacityOwnershipAttoRep: exact(state[1], 'securityVaults.capacityOwnershipAttoRep'),
 		claimableFeesAttoEth: exact(state[2], 'securityVaults.claimableFeesAttoEth'),
 		feeIndex: exact(state[3], 'securityVaults.feeIndex'),
-		targetHealthFactorBps: exact(values[1], 'vaultTargetHealthFactorBps'),
+		targetHealthFactorBps: exact(values[1], 'vaultTargetBackingFactorBps'),
 		openInterestAttoEth: exact(values[2], 'getVaultOpenInterestAttoEth'),
 		badDebtAttoEth: exact(values[3], 'vaultBadDebtAttoEth'),
 		securityMultiplierBps: exact(values[4], 'statoblastSecurityMultiplierBps'),
+		obligationUnits: exact(values[5], 'getVaultObligationUnits'),
+		coverageEpoch: exact(values[7], 'coverageEpoch'),
+		coverageOffer: (() => {
+			const offer = tuple(values[6], 3, 'coverageOffers')
+			return { enabled: flag(offer[0], 'coverageOffers.enabled'), maximumObligationAttoEth: exact(offer[1], 'coverageOffers.maximumObligationAttoEth'), minimumHealthFactorBps: exact(offer[2], 'coverageOffers.minimumHealthFactorBps') }
+		})(),
 		disputeStakedAttoRep,
 	}
 }

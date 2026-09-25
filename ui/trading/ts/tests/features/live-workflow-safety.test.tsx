@@ -148,7 +148,7 @@ describe('live workflow safety boundary', () => {
 			settlementCollateralAttoEth: 100n * 10n ** 18n,
 			currentRetentionRate: 10n ** 18n,
 			totalCapacityOwnershipAttoRep: 1n,
-			feeEligibleCapacityOwnershipAttoRep: 1n,
+			activeObligationUnits: 1n,
 			mintingCapacityCeilingAttoEth: 2n,
 			availableMintingCapacityAttoEth: 1n,
 			feeBps: 30n,

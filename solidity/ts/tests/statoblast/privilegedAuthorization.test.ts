@@ -1,7 +1,7 @@
 import { getEscalationGameDeposits } from '../../testSupport/simulator/utils/contracts/escalationGame'
 import { depositToEscalationGame, getRepToken } from '../../testSupport/simulator/utils/contracts/securityPool'
 import { QuestionOutcome } from '../../testSupport/simulator/types/types'
-import { manipulatePriceOracle, setVaultCapacityFixture } from '../../testSupport/simulator/utils/contracts/statoblastTestUtils'
+import { manipulatePriceOracle, setCoverageOfferFixture } from '../../testSupport/simulator/utils/contracts/statoblastTestUtils'
 import { addressString } from '../../testSupport/simulator/utils/bigint'
 import { TEST_ADDRESSES } from '../../testSupport/simulator/utils/constants'
 import assert from '../../testSupport/simulator/utils/assert'
@@ -48,6 +48,7 @@ describe('Statoblast: privileged authorization matrix', () => {
 		)
 
 		const readSnapshot = async () => ({
+			totalObligationUnits: await client.readContract({ address: securityPool, abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'totalObligationUnits' }),
 			attackerBalance: await getERC20Balance(client, reputationToken, attacker.account.address),
 			ownerBalance: await getERC20Balance(client, reputationToken, client.account.address),
 			theoreticalSupply: await client.readContract({
@@ -125,6 +126,7 @@ describe('Statoblast: privileged authorization matrix', () => {
 	test('factory and oracle-only pool selectors reject attackers with full accounting unchanged', async () => {
 		const attacker = createWriteClient(mockWindow, TEST_ADDRESSES[1])
 		const readSnapshot = async () => ({
+			totalObligationUnits: await client.readContract({ address: securityPool, abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'totalObligationUnits' }),
 			attackerVault: await getSecurityVault(client, securityPool, attacker.account.address),
 			collateral: await getSettlementCollateralAttoEth(client, securityPool),
 			ethBalanceAttoEth: await getETHBalance(client, securityPool),
@@ -178,7 +180,7 @@ describe('Statoblast: privileged authorization matrix', () => {
 								receiverVault: attacker.account.address,
 								targetVault: client.account.address,
 								requestedDebtAttoEth: 1n,
-								snapshot: { targetBackingUnits: 0n, targetCapacityOwnershipAttoRep: 0n },
+								snapshot: { targetBackingUnits: 0n, targetObligationUnits: 0n },
 								minimumReceiverHealthFactorBps: 10_000n,
 								minLiquidationPriceDistanceBps: 0n,
 							},
@@ -189,7 +191,7 @@ describe('Statoblast: privileged authorization matrix', () => {
 		)
 
 		const authorizedCapacityOwnershipAttoRep = repDeposit / 5n
-		await setVaultCapacityFixture(client, mockWindow, fixture.securityPoolAddresses.priceOracleManagerAndOperatorQueuer, client.account.address, authorizedCapacityOwnershipAttoRep)
+		await setCoverageOfferFixture(client, mockWindow, fixture.securityPoolAddresses.priceOracleManagerAndOperatorQueuer, client.account.address, authorizedCapacityOwnershipAttoRep)
 		assert.strictEqual(await getTotalCapacityOwnershipAttoRep(client, securityPool), authorizedCapacityOwnershipAttoRep)
 
 		const rawFactory = await client.readContract({
@@ -219,6 +221,7 @@ describe('Statoblast: privileged authorization matrix', () => {
 		const attacker = createWriteClient(mockWindow, TEST_ADDRESSES[1])
 		const poolAbi = statoblast_SecurityPool_SecurityPool.abi
 		const readSnapshot = async () => ({
+			totalObligationUnits: await client.readContract({ address: securityPool, abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'totalObligationUnits' }),
 			settlementCollateralAttoEth: await getSettlementCollateralAttoEth(client, securityPool),
 			totalRepBackingUnits: await getTotalRepBackingUnits(client, securityPool),
 			poolHeldRepBalanceAttoRep: await getTotalPoolHeldAttoRep(client, securityPool),
@@ -230,9 +233,11 @@ describe('Statoblast: privileged authorization matrix', () => {
 			{ name: 'initializeForkedEscalationGame', data: encodeFunctionData({ abi: poolAbi, functionName: 'initializeForkedEscalationGame', args: [1n, 2n, 0n, QuestionOutcome.None] }) },
 			{ name: 'setAwaitingForkContinuation', data: encodeFunctionData({ abi: poolAbi, functionName: 'setAwaitingForkContinuation', args: [true] }) },
 			{ name: 'setSystemState', data: encodeFunctionData({ abi: poolAbi, functionName: 'setSystemState', args: [1] }) },
-			{ name: 'configureVault', data: encodeFunctionData({ abi: poolAbi, functionName: 'configureVault', args: [attacker.account.address, 1n, 1n, 1n, 10_000n, 0n, 0n] }) },
-			{ name: 'configureFinalizedAuctionVault', data: encodeFunctionData({ abi: poolAbi, functionName: 'configureFinalizedAuctionVault', args: [attacker.account.address, 1n, 1n, 1n, 10_000n, 0n, 0n] }) },
-			{ name: 'assignFinalizedAuctionFees', data: encodeFunctionData({ abi: poolAbi, functionName: 'assignFinalizedAuctionFees', args: [attacker.account.address, 1n, 0n] }) },
+			{ name: 'configureVault', data: encodeFunctionData({ abi: poolAbi, functionName: 'configureVault', args: [attacker.account.address, 1n, 1n, 1n, 0n, 0n] }) },
+			{ name: 'configureFinalizedAuctionVault', data: encodeFunctionData({ abi: poolAbi, functionName: 'configureFinalizedAuctionVault', args: [attacker.account.address, 1n, 1n, 1n, 0n, 0n] }) },
+			{ name: 'creditFinalizedAuctionCoverage', data: encodeFunctionData({ abi: poolAbi, functionName: 'creditFinalizedAuctionCoverage', args: [attacker.account.address, 1n, 0n, 0n] }) },
+			{ name: 'configureCoverageVault', data: encodeFunctionData({ abi: poolAbi, functionName: 'configureCoverageVault', args: [attacker.account.address, 1n] }) },
+			{ name: 'setCoverageFinancials', data: encodeFunctionData({ abi: poolAbi, functionName: 'setCoverageFinancials', args: [1n, 0n, 1n] }) },
 			{ name: 'setTotalRepBackingUnits', data: encodeFunctionData({ abi: poolAbi, functionName: 'setTotalRepBackingUnits', args: [1n] }) },
 			{ name: 'setTotalSharesAttoShares', data: encodeFunctionData({ abi: poolAbi, functionName: 'setTotalSharesAttoShares', args: [1n] }) },
 			{ name: 'setPoolFinancials', data: encodeFunctionData({ abi: poolAbi, functionName: 'setPoolFinancials', args: [0n, 0n, 0n, 0n] }) },
@@ -259,6 +264,7 @@ describe('Statoblast: privileged authorization matrix', () => {
 		const repToken = await getRepToken(client, securityPool)
 
 		const readSnapshot = async () => ({
+			totalObligationUnits: await client.readContract({ address: securityPool, abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'totalObligationUnits' }),
 			attackerEscrow: await client.readContract({
 				abi: statoblast_EscalationGame_EscalationGame.abi,
 				address: escalationGame,

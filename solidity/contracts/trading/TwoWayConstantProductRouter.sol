@@ -2,7 +2,7 @@
 pragma solidity 0.8.35;
 
 import { BinaryOutcomes } from '../statoblast/BinaryOutcomes.sol';
-import { ISecurityPool, ISecurityPoolFactory } from '../statoblast/interfaces/ISecurityPool.sol';
+import { ISecurityPool, ISecurityPoolFactory, CoverageAllocation } from '../statoblast/interfaces/ISecurityPool.sol';
 import { IERC1155Receiver } from '../statoblast/interfaces/IERC1155Receiver.sol';
 import { ITwoWayConstantProductFactory } from './interfaces/ITwoWayConstantProductFactory.sol';
 import { ITwoWayConstantProductPair } from './interfaces/ITwoWayConstantProductPair.sol';
@@ -85,7 +85,7 @@ contract TwoWayConstantProductRouter is IERC1155Receiver {
 		factory = _factory;
 	}
 
-	function enterPosition(ITwoWayConstantProductPair pair, BinaryOutcomes.BinaryOutcome longOutcome, uint256 minLongSharesOut, address recipient, uint256 deadline) external payable nonReentrant beforeDeadline(deadline) returns (EnterResult memory result) {
+	function enterPosition(ITwoWayConstantProductPair pair, BinaryOutcomes.BinaryOutcome longOutcome, uint256 minLongSharesOut, address recipient, uint256 deadline, CoverageAllocation[] calldata allocations) external payable nonReentrant beforeDeadline(deadline) returns (EnterResult memory result) {
 		_validatePair(pair);
 		bool longYes = _isDirectionalOutcome(longOutcome);
 		require(recipient != address(0) && recipient != address(this), 'Invalid recipient');
@@ -93,7 +93,7 @@ contract TwoWayConstantProductRouter is IERC1155Receiver {
 		ISecurityPool pool = pair.securityPool();
 		(uint256 startInvalid, uint256 startYes, uint256 startNo) = _beginShareOperation(pool);
 		(uint256 yesBefore, uint256 noBefore) = pair.getEffectiveReserves();
-		pool.createCompleteSet{value: msg.value}();
+		pool.createCompleteSet{value: msg.value}(allocations);
 		(uint256 mintedInvalid, uint256 mintedYes, uint256 mintedNo) = _balanceDeltas(pool, startInvalid, startYes, startNo);
 		require(mintedInvalid > 0 && mintedInvalid == mintedYes && mintedYes == mintedNo, 'Unequal complete set');
 		_approvePair(pair);
@@ -106,25 +106,25 @@ contract TwoWayConstantProductRouter is IERC1155Receiver {
 		result = EnterResult(msg.value, mintedInvalid, mintedInvalid, additionalLong, totalLong, mintedInvalid, feeAmount, TwoWayConstantProductMath.conditionalYesBps(yesBefore, noBefore), TwoWayConstantProductMath.conditionalYesBps(yesAfter, noAfter));
 	}
 
-	function createPairAndInitializeWithEth(ISecurityPool pool, uint256 conditionalYesBpsValue, uint256 minLiquidity, address recipient, uint256 deadline) external payable nonReentrant beforeDeadline(deadline) returns (LiquidityResult memory result) {
+	function createPairAndInitializeWithEth(ISecurityPool pool, uint256 conditionalYesBpsValue, uint256 minLiquidity, address recipient, uint256 deadline, CoverageAllocation[] calldata allocations) external payable nonReentrant beforeDeadline(deadline) returns (LiquidityResult memory result) {
 		ITwoWayConstantProductPair pair = factory.createPair(pool);
 		require(pair.totalSupply() == 0, 'Pair already initialized');
-		result = _initializeWithEth(pair, conditionalYesBpsValue, minLiquidity, recipient);
+		result = _initializeWithEth(pair, conditionalYesBpsValue, minLiquidity, recipient, allocations);
 	}
 
-	function initializeWithEth(ITwoWayConstantProductPair pair, uint256 conditionalYesBpsValue, uint256 minLiquidity, address recipient, uint256 deadline) external payable nonReentrant beforeDeadline(deadline) returns (LiquidityResult memory result) {
+	function initializeWithEth(ITwoWayConstantProductPair pair, uint256 conditionalYesBpsValue, uint256 minLiquidity, address recipient, uint256 deadline, CoverageAllocation[] calldata allocations) external payable nonReentrant beforeDeadline(deadline) returns (LiquidityResult memory result) {
 		_validatePair(pair);
 		require(pair.totalSupply() == 0, 'Pair already initialized');
-		result = _initializeWithEth(pair, conditionalYesBpsValue, minLiquidity, recipient);
+		result = _initializeWithEth(pair, conditionalYesBpsValue, minLiquidity, recipient, allocations);
 	}
 
-	function addLiquidityWithEth(ITwoWayConstantProductPair pair, uint256 maxYesUsed, uint256 maxNoUsed, uint256 minLiquidity, address recipient, uint256 deadline) external payable nonReentrant beforeDeadline(deadline) returns (LiquidityResult memory result) {
+	function addLiquidityWithEth(ITwoWayConstantProductPair pair, uint256 maxYesUsed, uint256 maxNoUsed, uint256 minLiquidity, address recipient, uint256 deadline, CoverageAllocation[] calldata allocations) external payable nonReentrant beforeDeadline(deadline) returns (LiquidityResult memory result) {
 		_validatePair(pair);
 		require(msg.value > 0, 'ETH input is zero');
 		require(recipient != address(0) && recipient != address(this), 'Invalid recipient');
 		ISecurityPool pool = pair.securityPool();
 		(uint256 startInvalid, uint256 startYes, uint256 startNo) = _beginShareOperation(pool);
-		pool.createCompleteSet{value: msg.value}();
+		pool.createCompleteSet{value: msg.value}(allocations);
 		(uint256 mintedInvalid, uint256 mintedYes, uint256 mintedNo) = _balanceDeltas(pool, startInvalid, startYes, startNo);
 		require(mintedInvalid > 0 && mintedInvalid == mintedYes && mintedYes == mintedNo, 'Unequal complete set');
 		_approvePair(pair);
@@ -277,12 +277,12 @@ contract TwoWayConstantProductRouter is IERC1155Receiver {
 		require(callbackShareToken.balanceOf(address(this), callbackShareToken.getTokenId(callbackPool.universeId(), BinaryOutcomes.BinaryOutcome.No)) == expected[2], 'Router NO residue');
 	}
 
-	function _initializeWithEth(ITwoWayConstantProductPair pair, uint256 conditionalYesBpsValue, uint256 minLiquidity, address recipient) private returns (LiquidityResult memory result) {
+	function _initializeWithEth(ITwoWayConstantProductPair pair, uint256 conditionalYesBpsValue, uint256 minLiquidity, address recipient, CoverageAllocation[] calldata allocations) private returns (LiquidityResult memory result) {
 		require(msg.value > 0, 'ETH input is zero');
 		require(recipient != address(0) && recipient != address(this), 'Invalid recipient');
 		ISecurityPool pool = pair.securityPool();
 		(uint256 startInvalid, uint256 startYes, uint256 startNo) = _beginShareOperation(pool);
-		pool.createCompleteSet{value: msg.value}();
+		pool.createCompleteSet{value: msg.value}(allocations);
 		(uint256 mintedInvalid, uint256 mintedYes, uint256 mintedNo) = _balanceDeltas(pool, startInvalid, startYes, startNo);
 		require(mintedInvalid > 0 && mintedInvalid == mintedYes && mintedYes == mintedNo, 'Unequal complete set');
 		(uint256 yesUsed, uint256 noUsed) = TwoWayConstantProductMath.initialLiquidityAmounts(mintedInvalid, conditionalYesBpsValue);

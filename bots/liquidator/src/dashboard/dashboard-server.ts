@@ -179,10 +179,10 @@ function publicMarketConsensus(value: unknown) {
 }
 
 function publicPool(value: unknown) {
-	const pool = publicFields(value, ['address', 'approvedUniverse', 'centralizedPriceAllowed', 'centralizedPriceDeviationBps', 'isPriceValid', 'knownVaultCount', 'lastPrice', 'multiplierBps', 'parent', 'universeId', 'questionId', 'selected', 'systemState', 'totalCapacityOwnershipRep', 'totalPoolHeldRep'])
+	const pool = publicFields(value, ['address', 'approvedUniverse', 'centralizedPriceAllowed', 'centralizedPriceDeviationBps', 'isPriceValid', 'knownVaultCount', 'lastPrice', 'multiplierBps', 'parent', 'universeId', 'questionId', 'selected', 'systemState', 'totalObligationUnitsDisplay', 'totalPoolHeldRep'])
 	const source = record(value)
 	if (source === undefined) return pool
-	if (record(source['botVault']) !== undefined) pool['botVault'] = publicFields(source['botVault'], ['capacityOwnershipRep', 'claimableFeesEth', 'healthBps', 'openInterestDisplay', 'vaultRepBacking'])
+	if (record(source['botVault']) !== undefined) pool['botVault'] = publicFields(source['botVault'], ['obligationUnitsDisplay', 'claimableFeesEth', 'healthBps', 'openInterestDisplay', 'vaultRepBacking'])
 	const candidates = source['candidates']
 	pool['candidateCount'] = Array.isArray(candidates) ? candidates.length : 0
 	const bestCandidate = Array.isArray(candidates) ? record(candidates[0]) : undefined

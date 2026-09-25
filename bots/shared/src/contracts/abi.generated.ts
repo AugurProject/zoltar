@@ -720,6 +720,29 @@ export const securityPoolAbi = [
 	},
 	{
 		type: 'event',
+		name: 'CoverageAllocated',
+		anonymous: false,
+		inputs: [
+			{ name: 'vault', type: 'address', internalType: 'address', indexed: true },
+			{ name: 'addedUnits', type: 'uint256', internalType: 'uint256', indexed: false },
+			{ name: 'resultingVaultUnits', type: 'uint256', internalType: 'uint256', indexed: false },
+			{ name: 'resultingTotalUnits', type: 'uint256', internalType: 'uint256', indexed: false },
+			{ name: 'epoch', type: 'uint256', internalType: 'uint256', indexed: false },
+		],
+	},
+	{
+		type: 'event',
+		name: 'CoverageOfferSet',
+		anonymous: false,
+		inputs: [
+			{ name: 'vault', type: 'address', internalType: 'address', indexed: true },
+			{ name: 'enabled', type: 'bool', internalType: 'bool', indexed: false },
+			{ name: 'maximumObligationAttoEth', type: 'uint256', internalType: 'uint256', indexed: false },
+			{ name: 'minimumHealthFactorBps', type: 'uint256', internalType: 'uint256', indexed: false },
+		],
+	},
+	{
+		type: 'event',
 		name: 'DepositToEscalationGame',
 		anonymous: false,
 		inputs: [
@@ -742,15 +765,28 @@ export const securityPoolAbi = [
 			{ name: 'vault', type: 'address', internalType: 'address', indexed: true },
 			{ name: 'settlementCollateralAttoEth', type: 'uint256', internalType: 'uint256', indexed: false },
 			{ name: 'totalCapacityOwnershipAttoRep', type: 'uint256', internalType: 'uint256', indexed: false },
-			{ name: 'feeEligibleCapacityOwnershipAttoRep', type: 'uint256', internalType: 'uint256', indexed: false },
+			{ name: 'activeObligationUnits', type: 'uint256', internalType: 'uint256', indexed: false },
 			{ name: 'totalClaimableVaultFeesAttoEth', type: 'uint256', internalType: 'uint256', indexed: false },
 			{ name: 'unallocatedAccruedFeesAttoEth', type: 'uint256', internalType: 'uint256', indexed: false },
 			{ name: 'feeIndex', type: 'uint256', internalType: 'uint256', indexed: false },
 			{ name: 'feeIndexRemainder', type: 'uint256', internalType: 'uint256', indexed: false },
 			{ name: 'totalFeesOwedRemainder', type: 'uint256', internalType: 'uint256', indexed: false },
-			{ name: 'uncheckpointedFeeEligibleCapacityOwnershipAttoRep', type: 'uint256', internalType: 'uint256', indexed: false },
+			{ name: 'uncheckpointedActiveObligationUnits', type: 'uint256', internalType: 'uint256', indexed: false },
 			{ name: 'lastUpdatedFeeAccumulator', type: 'uint256', internalType: 'uint256', indexed: false },
 			{ name: 'currentRetentionRate', type: 'uint256', internalType: 'uint256', indexed: false },
+		],
+	},
+	{
+		type: 'event',
+		name: 'PoolCoverageCheckpoint',
+		anonymous: false,
+		inputs: [
+			{ name: 'epoch', type: 'uint256', internalType: 'uint256', indexed: true },
+			{ name: 'totalUnits', type: 'uint256', internalType: 'uint256', indexed: false },
+			{ name: 'activeUnits', type: 'uint256', internalType: 'uint256', indexed: false },
+			{ name: 'writtenOffUnits', type: 'uint256', internalType: 'uint256', indexed: false },
+			{ name: 'unassignedUnits', type: 'uint256', internalType: 'uint256', indexed: false },
+			{ name: 'migratedOutUnits', type: 'uint256', internalType: 'uint256', indexed: false },
 		],
 	},
 	{
@@ -824,7 +860,7 @@ export const securityPoolAbi = [
 			{ name: 'feeIndex', type: 'uint256', internalType: 'uint256', indexed: false },
 			{ name: 'vaultFeeRemainder', type: 'uint256', internalType: 'uint256', indexed: false },
 			{ name: 'resultingTotalRepBackingUnits', type: 'uint256', internalType: 'uint256', indexed: false },
-			{ name: 'resultingFeeEligibleCapacityOwnershipAttoRep', type: 'uint256', internalType: 'uint256', indexed: false },
+			{ name: 'resultingActiveObligationUnits', type: 'uint256', internalType: 'uint256', indexed: false },
 		],
 	},
 	{
@@ -850,6 +886,16 @@ export const securityPoolAbi = [
 	},
 	{
 		type: 'event',
+		name: 'VaultCoverageCheckpoint',
+		anonymous: false,
+		inputs: [
+			{ name: 'vault', type: 'address', internalType: 'address', indexed: true },
+			{ name: 'epoch', type: 'uint256', internalType: 'uint256', indexed: true },
+			{ name: 'obligationUnits', type: 'uint256', internalType: 'uint256', indexed: false },
+		],
+	},
+	{
+		type: 'event',
 		name: 'VaultDepositTargetHealthFactorRecorded',
 		anonymous: false,
 		inputs: [
@@ -869,23 +915,12 @@ export const securityPoolAbi = [
 			{ name: 'receiverVault', type: 'address', internalType: 'address', indexed: true },
 			{ name: 'targetVault', type: 'address', internalType: 'address', indexed: true },
 			{ name: 'securityBondDebtMovedAttoEth', type: 'uint256', internalType: 'uint256', indexed: false },
-			{ name: 'capacityOwnershipMovedAttoRep', type: 'uint256', internalType: 'uint256', indexed: false },
+			{ name: 'obligationUnitsMoved', type: 'uint256', internalType: 'uint256', indexed: false },
 			{ name: 'badDebtAttoEth', type: 'uint256', internalType: 'uint256', indexed: false },
 		],
 	},
 	{ type: 'fallback', stateMutability: 'nonpayable' },
 	{ type: 'function', name: 'activateForkMode', stateMutability: 'nonpayable', inputs: [], outputs: [] },
-	{
-		type: 'function',
-		name: 'assignFinalizedAuctionFees',
-		stateMutability: 'nonpayable',
-		inputs: [
-			{ name: 'vault', type: 'address', internalType: 'address' },
-			{ name: 'amountAttoRep', type: 'uint256', internalType: 'uint256' },
-			{ name: 'auctionFeeIndexAtFinalization', type: 'uint256', internalType: 'uint256' },
-		],
-		outputs: [],
-	},
 	{ type: 'function', name: 'attoEthToAttoShares', stateMutability: 'view', inputs: [{ name: 'amountAttoEth', type: 'uint256', internalType: 'uint256' }], outputs: [{ name: '', type: 'uint256', internalType: 'uint256' }] },
 	{ type: 'function', name: 'attoRepToBackingUnits', stateMutability: 'view', inputs: [{ name: 'attoRepAmount', type: 'uint256', internalType: 'uint256' }], outputs: [{ name: '', type: 'uint256', internalType: 'uint256' }] },
 	{ type: 'function', name: 'attoSharesToAttoEth', stateMutability: 'view', inputs: [{ name: 'amountAttoShares', type: 'uint256', internalType: 'uint256' }], outputs: [{ name: '', type: 'uint256', internalType: 'uint256' }] },
@@ -893,6 +928,16 @@ export const securityPoolAbi = [
 	{ type: 'function', name: 'awaitingForkContinuation', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'bool', internalType: 'bool' }] },
 	{ type: 'function', name: 'backingUnitsToAttoRep', stateMutability: 'view', inputs: [{ name: 'repBackingUnits', type: 'uint256', internalType: 'uint256' }], outputs: [{ name: '', type: 'uint256', internalType: 'uint256' }] },
 	{ type: 'function', name: 'burnEscalationWinnerHaircut', stateMutability: 'nonpayable', inputs: [{ name: 'amountAttoRep', type: 'uint256', internalType: 'uint256' }], outputs: [] },
+	{
+		type: 'function',
+		name: 'configureCoverageVault',
+		stateMutability: 'nonpayable',
+		inputs: [
+			{ name: 'vault', type: 'address', internalType: 'address' },
+			{ name: 'units', type: 'uint256', internalType: 'uint256' },
+		],
+		outputs: [],
+	},
 	{
 		type: 'function',
 		name: 'configureFinalizedAuctionVault',
@@ -921,7 +966,48 @@ export const securityPoolAbi = [
 		],
 		outputs: [],
 	},
+	{ type: 'function', name: 'coverageEpoch', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'uint256', internalType: 'uint256' }] },
+	{
+		type: 'function',
+		name: 'coverageOffers',
+		stateMutability: 'view',
+		inputs: [{ name: '', type: 'address', internalType: 'address' }],
+		outputs: [
+			{ name: 'enabled', type: 'bool', internalType: 'bool' },
+			{ name: 'maximumObligationAttoEth', type: 'uint256', internalType: 'uint256' },
+			{ name: 'minimumHealthFactorBps', type: 'uint256', internalType: 'uint256' },
+		],
+	},
+	{
+		type: 'function',
+		name: 'createCompleteSet',
+		stateMutability: 'payable',
+		inputs: [
+			{
+				name: 'allocations',
+				type: 'tuple[]',
+				internalType: 'struct CoverageAllocation[]',
+				components: [
+					{ name: 'vault', type: 'address', internalType: 'address' },
+					{ name: 'collateralAttoEth', type: 'uint256', internalType: 'uint256' },
+				],
+			},
+		],
+		outputs: [],
+	},
 	{ type: 'function', name: 'createCompleteSet', stateMutability: 'payable', inputs: [], outputs: [] },
+	{
+		type: 'function',
+		name: 'creditFinalizedAuctionCoverage',
+		stateMutability: 'nonpayable',
+		inputs: [
+			{ name: 'vault', type: 'address', internalType: 'address' },
+			{ name: 'units', type: 'uint256', internalType: 'uint256' },
+			{ name: 'epoch', type: 'uint256', internalType: 'uint256' },
+			{ name: 'initialFeeIndex', type: 'uint256', internalType: 'uint256' },
+		],
+		outputs: [],
+	},
 	{ type: 'function', name: 'currentRetentionRate', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'uint256', internalType: 'uint256' }] },
 	{
 		type: 'function',
@@ -947,6 +1033,7 @@ export const securityPoolAbi = [
 	{ type: 'function', name: 'escalationGameFactory', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'address', internalType: 'contract EscalationGameFactory' }] },
 	{ type: 'function', name: 'eventEmitter', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'address', internalType: 'contract SecurityPoolEventEmitter' }] },
 	{ type: 'function', name: 'feeIndex', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'uint256', internalType: 'uint256' }] },
+	{ type: 'function', name: 'finalFeeIndexByEpoch', stateMutability: 'view', inputs: [{ name: '', type: 'uint256', internalType: 'uint256' }], outputs: [{ name: '', type: 'uint256', internalType: 'uint256' }] },
 	{ type: 'function', name: 'getCurrentMintingCapacityAttoEth', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'uint256', internalType: 'uint256' }] },
 	{ type: 'function', name: 'getFeeEpochEndTime', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'uint256', internalType: 'uint256' }] },
 	{
@@ -962,13 +1049,13 @@ export const securityPoolAbi = [
 				components: [
 					{ name: 'settlementCollateralAttoEth', type: 'uint256', internalType: 'uint256' },
 					{ name: 'totalCapacityOwnershipAttoRep', type: 'uint256', internalType: 'uint256' },
-					{ name: 'feeEligibleCapacityOwnershipAttoRep', type: 'uint256', internalType: 'uint256' },
+					{ name: 'activeObligationUnits', type: 'uint256', internalType: 'uint256' },
 					{ name: 'totalClaimableVaultFeesAttoEth', type: 'uint256', internalType: 'uint256' },
 					{ name: 'unallocatedAccruedFeesAttoEth', type: 'uint256', internalType: 'uint256' },
 					{ name: 'feeIndex', type: 'uint256', internalType: 'uint256' },
 					{ name: 'feeIndexRemainder', type: 'uint256', internalType: 'uint256' },
 					{ name: 'totalFeesOwedRemainder', type: 'uint256', internalType: 'uint256' },
-					{ name: 'uncheckpointedFeeEligibleCapacityOwnershipAttoRep', type: 'uint256', internalType: 'uint256' },
+					{ name: 'uncheckpointedActiveObligationUnits', type: 'uint256', internalType: 'uint256' },
 					{ name: 'lastUpdatedFeeAccumulator', type: 'uint256', internalType: 'uint256' },
 					{ name: 'currentRetentionRate', type: 'uint256', internalType: 'uint256' },
 					{ name: 'badDebtGeneration', type: 'uint256', internalType: 'uint256' },
@@ -988,7 +1075,19 @@ export const securityPoolAbi = [
 		],
 	},
 	{ type: 'function', name: 'getVaultCount', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'uint256', internalType: 'uint256' }] },
+	{
+		type: 'function',
+		name: 'getVaultCoverageSnapshot',
+		stateMutability: 'view',
+		inputs: [{ name: 'vault', type: 'address', internalType: 'address' }],
+		outputs: [
+			{ name: 'backingUnits', type: 'uint256', internalType: 'uint256' },
+			{ name: 'obligationUnits', type: 'uint256', internalType: 'uint256' },
+			{ name: 'epoch', type: 'uint256', internalType: 'uint256' },
+		],
+	},
 	{ type: 'function', name: 'getVaultFeeRemainder', stateMutability: 'view', inputs: [{ name: 'vault', type: 'address', internalType: 'address' }], outputs: [{ name: '', type: 'uint256', internalType: 'uint256' }] },
+	{ type: 'function', name: 'getVaultObligationUnits', stateMutability: 'view', inputs: [{ name: 'vault', type: 'address', internalType: 'address' }], outputs: [{ name: '', type: 'uint256', internalType: 'uint256' }] },
 	{ type: 'function', name: 'getVaultOpenInterestAttoEth', stateMutability: 'view', inputs: [{ name: 'vault', type: 'address', internalType: 'address' }], outputs: [{ name: '', type: 'uint256', internalType: 'uint256' }] },
 	{
 		type: 'function',
@@ -1030,6 +1129,7 @@ export const securityPoolAbi = [
 	},
 	{ type: 'function', name: 'isEscalationResolved', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'bool', internalType: 'bool' }] },
 	{ type: 'function', name: 'lastUpdatedFeeAccumulator', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'uint256', internalType: 'uint256' }] },
+	{ type: 'function', name: 'migratedOutObligationUnits', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'uint256', internalType: 'uint256' }] },
 	{ type: 'function', name: 'minimumSecurityBondDebtAttoEth', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'uint256', internalType: 'uint256' }] },
 	{ type: 'function', name: 'minimumVaultRepDepositAttoRep', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'uint256', internalType: 'uint256' }] },
 	{ type: 'function', name: 'openOracle', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'address', internalType: 'contract OpenOracle' }] },
@@ -1055,7 +1155,7 @@ export const securityPoolAbi = [
 						internalType: 'struct LiquidationSnapshot',
 						components: [
 							{ name: 'targetBackingUnits', type: 'uint256', internalType: 'uint256' },
-							{ name: 'targetCapacityOwnershipAttoRep', type: 'uint256', internalType: 'uint256' },
+							{ name: 'targetObligationUnits', type: 'uint256', internalType: 'uint256' },
 						],
 					},
 					{ name: 'minimumReceiverHealthFactorBps', type: 'uint256', internalType: 'uint256' },
@@ -1065,7 +1165,7 @@ export const securityPoolAbi = [
 		],
 		outputs: [
 			{ name: 'debtMovedAttoEth', type: 'uint256', internalType: 'uint256' },
-			{ name: 'capacityOwnershipMovedAttoRep', type: 'uint256', internalType: 'uint256' },
+			{ name: 'obligationUnitsMoved', type: 'uint256', internalType: 'uint256' },
 			{ name: 'badDebtAttoEth', type: 'uint256', internalType: 'uint256' },
 		],
 	},
@@ -1095,12 +1195,34 @@ export const securityPoolAbi = [
 	{ type: 'function', name: 'setAwaitingForkContinuation', stateMutability: 'nonpayable', inputs: [{ name: 'shouldAwait', type: 'bool', internalType: 'bool' }], outputs: [] },
 	{
 		type: 'function',
+		name: 'setCoverageFinancials',
+		stateMutability: 'nonpayable',
+		inputs: [
+			{ name: 'totalUnits', type: 'uint256', internalType: 'uint256' },
+			{ name: 'writtenOffUnits', type: 'uint256', internalType: 'uint256' },
+			{ name: 'unassignedUnits', type: 'uint256', internalType: 'uint256' },
+		],
+		outputs: [],
+	},
+	{
+		type: 'function',
+		name: 'setCoverageOffer',
+		stateMutability: 'nonpayable',
+		inputs: [
+			{ name: 'enabled', type: 'bool', internalType: 'bool' },
+			{ name: 'maximumObligationAttoEth', type: 'uint256', internalType: 'uint256' },
+			{ name: 'minimumHealthFactorBps', type: 'uint256', internalType: 'uint256' },
+		],
+		outputs: [],
+	},
+	{
+		type: 'function',
 		name: 'setPoolFinancials',
 		stateMutability: 'nonpayable',
 		inputs: [
 			{ name: 'newSettlementCollateralAttoEth', type: 'uint256', internalType: 'uint256' },
 			{ name: 'newTotalCapacityOwnershipAttoRep', type: 'uint256', internalType: 'uint256' },
-			{ name: 'newFeeEligibleCapacityOwnershipAttoRep', type: 'uint256', internalType: 'uint256' },
+			{ name: 'newActiveObligationUnits', type: 'uint256', internalType: 'uint256' },
 			{ name: 'newTotalBadDebtAttoEth', type: 'uint256', internalType: 'uint256' },
 		],
 		outputs: [],
@@ -1127,6 +1249,7 @@ export const securityPoolAbi = [
 	{ type: 'function', name: 'totalBadDebtAttoEth', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'uint256', internalType: 'uint256' }] },
 	{ type: 'function', name: 'totalCapacityOwnershipAttoRep', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'uint256', internalType: 'uint256' }] },
 	{ type: 'function', name: 'totalClaimableVaultFeesAttoEth', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'uint256', internalType: 'uint256' }] },
+	{ type: 'function', name: 'totalObligationUnits', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'uint256', internalType: 'uint256' }] },
 	{ type: 'function', name: 'totalRepBackingUnits', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'uint256', internalType: 'uint256' }] },
 	{
 		type: 'function',
@@ -1139,6 +1262,7 @@ export const securityPoolAbi = [
 		outputs: [],
 	},
 	{ type: 'function', name: 'truthAuction', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'address', internalType: 'address' }] },
+	{ type: 'function', name: 'unassignedObligationUnits', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'uint256', internalType: 'uint256' }] },
 	{ type: 'function', name: 'universeId', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'uint248', internalType: 'uint248' }] },
 	{ type: 'function', name: 'updateRetentionRate', stateMutability: 'nonpayable', inputs: [], outputs: [] },
 	{ type: 'function', name: 'updateSettlementCollateral', stateMutability: 'nonpayable', inputs: [], outputs: [] },
@@ -1190,6 +1314,7 @@ export const securityPoolAbi = [
 		],
 		outputs: [],
 	},
+	{ type: 'function', name: 'writtenOffObligationUnits', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'uint256', internalType: 'uint256' }] },
 	{ type: 'function', name: 'zoltar', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'address', internalType: 'contract Zoltar' }] },
 	{ type: 'receive', stateMutability: 'payable' },
 	{
@@ -1574,7 +1699,7 @@ export const openOraclePriceCoordinatorAbi = [
 			{ name: 'queuedAt', type: 'uint256', internalType: 'uint256', indexed: false },
 			{ name: 'validForSeconds', type: 'uint256', internalType: 'uint256', indexed: false },
 			{ name: 'snapshotTargetBackingUnits', type: 'uint256', internalType: 'uint256', indexed: false },
-			{ name: 'snapshotTargetCapacityOwnershipAttoRep', type: 'uint256', internalType: 'uint256', indexed: false },
+			{ name: 'snapshotTargetObligationUnits', type: 'uint256', internalType: 'uint256', indexed: false },
 			{ name: 'snapshotTargetOpenInterestAttoEth', type: 'uint256', internalType: 'uint256', indexed: false },
 			{ name: 'snapshotTargetDisputeStakedAttoRep', type: 'uint256', internalType: 'uint256', indexed: false },
 			{ name: 'snapshotTotalPoolHeldAttoRep', type: 'uint256', internalType: 'uint256', indexed: false },
@@ -1616,7 +1741,7 @@ export const openOraclePriceCoordinatorAbi = [
 					{ name: 'queuedAt', type: 'uint256', internalType: 'uint256' },
 					{ name: 'validForSeconds', type: 'uint256', internalType: 'uint256' },
 					{ name: 'snapshotTargetBackingUnits', type: 'uint256', internalType: 'uint256' },
-					{ name: 'snapshotTargetCapacityOwnershipAttoRep', type: 'uint256', internalType: 'uint256' },
+					{ name: 'snapshotTargetObligationUnits', type: 'uint256', internalType: 'uint256' },
 					{ name: 'liquidationApprovalId', type: 'bytes32', internalType: 'bytes32' },
 					{ name: 'reservedLiquidationDebtAttoEth', type: 'uint256', internalType: 'uint256' },
 				],
@@ -1642,7 +1767,7 @@ export const openOraclePriceCoordinatorAbi = [
 					{ name: 'queuedAt', type: 'uint256', internalType: 'uint256' },
 					{ name: 'validForSeconds', type: 'uint256', internalType: 'uint256' },
 					{ name: 'snapshotTargetBackingUnits', type: 'uint256', internalType: 'uint256' },
-					{ name: 'snapshotTargetCapacityOwnershipAttoRep', type: 'uint256', internalType: 'uint256' },
+					{ name: 'snapshotTargetObligationUnits', type: 'uint256', internalType: 'uint256' },
 					{ name: 'liquidationApprovalId', type: 'bytes32', internalType: 'bytes32' },
 					{ name: 'reservedLiquidationDebtAttoEth', type: 'uint256', internalType: 'uint256' },
 				],
@@ -1749,7 +1874,7 @@ export const openOraclePriceCoordinatorAbi = [
 			{ name: 'queuedAt', type: 'uint256', internalType: 'uint256' },
 			{ name: 'validForSeconds', type: 'uint256', internalType: 'uint256' },
 			{ name: 'snapshotTargetBackingUnits', type: 'uint256', internalType: 'uint256' },
-			{ name: 'snapshotTargetCapacityOwnershipAttoRep', type: 'uint256', internalType: 'uint256' },
+			{ name: 'snapshotTargetObligationUnits', type: 'uint256', internalType: 'uint256' },
 			{ name: 'liquidationApprovalId', type: 'bytes32', internalType: 'bytes32' },
 			{ name: 'reservedLiquidationDebtAttoEth', type: 'uint256', internalType: 'uint256' },
 		],
@@ -1808,7 +1933,7 @@ export const securityPoolForkerAbi = [
 			{ name: 'repBackingUnits', type: 'uint256', internalType: 'uint256', indexed: false },
 			{ name: 'totalRepBackingUnits', type: 'uint256', internalType: 'uint256', indexed: false },
 			{ name: 'claimedAuctionRepPurchasedAttoRep', type: 'uint256', internalType: 'uint256', indexed: false },
-			{ name: 'claimedAuctionedCapacityOwnershipAttoRep', type: 'uint256', internalType: 'uint256', indexed: false },
+			{ name: 'claimedAuctionObligationUnits', type: 'uint256', internalType: 'uint256', indexed: false },
 			{ name: 'claimedAuctionedBadDebtAttoEth', type: 'uint256', internalType: 'uint256', indexed: false },
 			{ name: 'auctionedBadDebtAttoEth', type: 'uint256', internalType: 'uint256', indexed: false },
 		],
@@ -2001,7 +2126,7 @@ export const securityPoolForkerAbi = [
 			{ name: 'truthAuction', type: 'address', internalType: 'contract UniformPriceDualCapBatchAuction' },
 			{ name: 'truthAuctionStarted', type: 'uint256', internalType: 'uint256' },
 			{ name: 'migratedAttoRep', type: 'uint256', internalType: 'uint256' },
-			{ name: 'auctionedCapacityOwnershipAttoRep', type: 'uint256', internalType: 'uint256' },
+			{ name: 'auctionObligationUnits', type: 'uint256', internalType: 'uint256' },
 			{ name: 'escalationElapsedAtFork', type: 'uint256', internalType: 'uint256' },
 			{ name: 'escalationStartBondAtForkAttoRep', type: 'uint256', internalType: 'uint256' },
 			{ name: 'escalationNonDecisionThresholdAtForkAttoRep', type: 'uint256', internalType: 'uint256' },
@@ -4423,6 +4548,15 @@ export const twoWayConstantProductRouterAbi = [
 			{ name: 'minLiquidity', type: 'uint256', internalType: 'uint256' },
 			{ name: 'recipient', type: 'address', internalType: 'address' },
 			{ name: 'deadline', type: 'uint256', internalType: 'uint256' },
+			{
+				name: 'allocations',
+				type: 'tuple[]',
+				internalType: 'struct CoverageAllocation[]',
+				components: [
+					{ name: 'vault', type: 'address', internalType: 'address' },
+					{ name: 'collateralAttoEth', type: 'uint256', internalType: 'uint256' },
+				],
+			},
 		],
 		outputs: [
 			{
@@ -4452,6 +4586,15 @@ export const twoWayConstantProductRouterAbi = [
 			{ name: 'minLiquidity', type: 'uint256', internalType: 'uint256' },
 			{ name: 'recipient', type: 'address', internalType: 'address' },
 			{ name: 'deadline', type: 'uint256', internalType: 'uint256' },
+			{
+				name: 'allocations',
+				type: 'tuple[]',
+				internalType: 'struct CoverageAllocation[]',
+				components: [
+					{ name: 'vault', type: 'address', internalType: 'address' },
+					{ name: 'collateralAttoEth', type: 'uint256', internalType: 'uint256' },
+				],
+			},
 		],
 		outputs: [
 			{
@@ -4481,6 +4624,15 @@ export const twoWayConstantProductRouterAbi = [
 			{ name: 'minLongSharesOut', type: 'uint256', internalType: 'uint256' },
 			{ name: 'recipient', type: 'address', internalType: 'address' },
 			{ name: 'deadline', type: 'uint256', internalType: 'uint256' },
+			{
+				name: 'allocations',
+				type: 'tuple[]',
+				internalType: 'struct CoverageAllocation[]',
+				components: [
+					{ name: 'vault', type: 'address', internalType: 'address' },
+					{ name: 'collateralAttoEth', type: 'uint256', internalType: 'uint256' },
+				],
+			},
 		],
 		outputs: [
 			{
@@ -4512,6 +4664,15 @@ export const twoWayConstantProductRouterAbi = [
 			{ name: 'minLiquidity', type: 'uint256', internalType: 'uint256' },
 			{ name: 'recipient', type: 'address', internalType: 'address' },
 			{ name: 'deadline', type: 'uint256', internalType: 'uint256' },
+			{
+				name: 'allocations',
+				type: 'tuple[]',
+				internalType: 'struct CoverageAllocation[]',
+				components: [
+					{ name: 'vault', type: 'address', internalType: 'address' },
+					{ name: 'collateralAttoEth', type: 'uint256', internalType: 'uint256' },
+				],
+			},
 		],
 		outputs: [
 			{
@@ -4695,7 +4856,7 @@ export const vaultAccountingCheckpointEvent = {
 		{ name: 'feeIndex', type: 'uint256', internalType: 'uint256', indexed: false },
 		{ name: 'vaultFeeRemainder', type: 'uint256', internalType: 'uint256', indexed: false },
 		{ name: 'resultingTotalRepBackingUnits', type: 'uint256', internalType: 'uint256', indexed: false },
-		{ name: 'resultingFeeEligibleCapacityOwnershipAttoRep', type: 'uint256', internalType: 'uint256', indexed: false },
+		{ name: 'resultingActiveObligationUnits', type: 'uint256', internalType: 'uint256', indexed: false },
 	],
 } as const
 

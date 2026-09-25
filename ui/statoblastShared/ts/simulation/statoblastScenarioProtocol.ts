@@ -1,3 +1,4 @@
+import { setCoverageOffer } from '../protocol/coverage.js'
 import { approveErc20 } from '@zoltar/ui-zoltar-shared/protocol/tokenActions.js'
 import { createChildUniverseFromSecurityPool, forkZoltarWithOwnEscalation, loadForkAuctionDetails, migrateRepToZoltarFromSecurityPool } from '../protocol/forks.js'
 import { loadOpenOracleReportDetails, settleOracleReport } from '../protocol/openOracle.js'
@@ -11,6 +12,7 @@ import { createCompleteSetInSecurityPool } from '../protocol/trading.js'
 import { startTruthAuctionForSecurityPool, submitTruthAuctionBid } from '../protocol/truthAuctionActions.js'
 
 const defaultScenarioProtocol = {
+	setCoverageOffer,
 	approveErc20,
 	createChildUniverseFromSecurityPool,
 	createCompleteSetInSecurityPool,

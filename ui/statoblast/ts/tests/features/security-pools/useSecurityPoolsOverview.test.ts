@@ -29,7 +29,7 @@ function createListedSecurityPool(questionId: string, securityPoolAddress: Addre
 	return {
 		settlementCollateralAttoEth: 0n,
 		currentRetentionRate: 0n,
-		feeEligibleCapacityOwnershipAttoRep: 0n,
+		activeObligationUnits: 0n,
 		forkOutcome: 'none',
 		forkOwnSecurityPool: false,
 		hasForkActivity: false,

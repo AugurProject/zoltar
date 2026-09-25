@@ -110,8 +110,8 @@ async function assertLiquidationRulesMatchContracts(): Promise<void> {
 	assert.equal(solidityConstant(securityPoolUtils, 'LIQUIDATION_REP_BONUS_BPS', 'SecurityPoolUtils.sol'), liquidationRules.repBonusBps)
 	assert.equal(solidityConstant(securityPoolUtils, 'BPS_DENOMINATOR', 'SecurityPoolUtils.sol'), liquidationRules.bpsDenominator)
 	const transfer = solidityFunction(securityPoolUtils, 'calculateBundledLiquidationTransfer', 'SecurityPoolUtils.sol')
-	const capacityStatement = transfer.match(/capacityOwnershipToMoveAttoRep =[\s\S]*?;/)?.[0]
-	assert.ok(capacityStatement !== undefined, 'calculateBundledLiquidationTransfer must compute capacityOwnershipToMoveAttoRep')
+	const capacityStatement = transfer.match(/obligationUnitsToMove =[\s\S]*?;/)?.[0]
+	assert.ok(capacityStatement !== undefined, 'calculateBundledLiquidationTransfer must compute obligationUnitsToMove')
 	assert.equal(roundingDirectionOf(capacityStatement, 'capacity ownership to move'), liquidationRules.capacityOwnershipRounding, 'published capacity-ownership rounding must match the contract')
 	const award = solidityFunction(securityPoolUtils, 'calculateLiquidationBackingUnitsAward', 'SecurityPoolUtils.sol')
 	const grossAwardStatement = award.match(/grossRepAwardAttoRep = Math\.mulDiv\([\s\S]*?\);/)?.[0]

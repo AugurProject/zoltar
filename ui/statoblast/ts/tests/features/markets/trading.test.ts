@@ -11,13 +11,11 @@ import {
 	formatStatoblastSecurityMultiplier,
 	getDefaultShareMigrationTargetOutcomeIndexes,
 	getMaximumMintAmount,
-	getRemainingMintCapacity,
 	getSelectedOutcomeShareBalance,
 	getTradingMigrateSharesGuardMessage,
 	getTradingMintGuardMessage,
 	getTradingRedeemCompleteSetGuardMessage,
 	getTradingRedeemSharesGuardMessage,
-	hasRepBackedPoolWithNoActiveCapacityOwnership,
 	isTradingSystemDeployed,
 } from '@zoltar/ui-statoblast-shared/features/markets/lib/trading.js'
 import { getScalarOutcomeIndex } from '@zoltar/ui-core-shared/lib/scalarOutcome.js'
@@ -123,13 +121,6 @@ void describe('trading helpers', () => {
 		universeId: 0n,
 	} satisfies ZoltarUniverseSummary
 
-	void test('computes remaining mint capacity from live ETH capacity and minted open interest', () => {
-		expect(getRemainingMintCapacity(10n, 4n)).toBe(6n)
-		expect(getRemainingMintCapacity(10n, 10n)).toBe(0n)
-		expect(getRemainingMintCapacity(10n, 12n)).toBe(0n)
-		expect(getRemainingMintCapacity(undefined, 12n)).toBeUndefined()
-	})
-
 	void test('limits the maximum mint amount by both wallet ETH and remaining capacity', () => {
 		expect(getMaximumMintAmount(3n, 5n)).toBe(3n)
 		expect(getMaximumMintAmount(7n, 5n)).toBe(5n)
@@ -142,7 +133,8 @@ void describe('trading helpers', () => {
 			estimateMintCheckpoint({
 				currentRetentionRate: 900_000_000_000_000_000n,
 				currentTimestamp: 2n,
-				feeEligibleCapacityOwnershipAttoRep: 5n * TOKEN_PRECISION,
+				activeObligationUnits: 5n * TOKEN_PRECISION,
+				totalObligationUnits: 5n * TOKEN_PRECISION,
 				feeEndTimestamp: 10n,
 				feeIndexRemainder: 0n,
 				lastUpdatedFeeAccumulator: 1n,
@@ -170,12 +162,6 @@ void describe('trading helpers', () => {
 		expect(formatStatoblastSecurityMultiplier(20_000n)).toBe('2')
 		expect(formatStatoblastSecurityMultiplier(25_000n)).toBe('2.5')
 		expect(formatStatoblastSecurityMultiplier(20_001n)).toBe('2.0001')
-	})
-
-	void test('detects pools that have REP backing but no active capacity ownership', () => {
-		expect(hasRepBackedPoolWithNoActiveCapacityOwnership(20n * 10n ** 18n, 0n)).toBe(true)
-		expect(hasRepBackedPoolWithNoActiveCapacityOwnership(20n * 10n ** 18n, 1n)).toBe(false)
-		expect(hasRepBackedPoolWithNoActiveCapacityOwnership(0n, 0n)).toBe(false)
 	})
 
 	void test('reads outcome share balances and default migration targets', () => {
@@ -288,7 +274,7 @@ void describe('trading helpers', () => {
 				totalPoolHeldAttoRep: 20n * 10n ** 18n,
 				mintingCapacityAttoEth: 0n,
 			}),
-		).toBe('No mint capacity. No active capacity ownership.')
+		).toBe('No authorized coverage is available. Vault owners must enable underwriting offers.')
 
 		expect(
 			getTradingMintGuardMessage({
