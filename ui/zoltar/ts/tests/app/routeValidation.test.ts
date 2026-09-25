@@ -7,6 +7,7 @@ describe('zoltar route validation', () => {
 	test('accepts known zoltar views', () => {
 		expect(hasInvalidZoltarView({ resolvedRoute: 'zoltar', search: '?zoltarView=questions', zoltarView: 'questions' })).toBe(false)
 		expect(hasInvalidZoltarView({ resolvedRoute: 'zoltar', search: '', zoltarView: '' })).toBe(false)
+		for (const view of ['overview', 'universes', 'fork', 'migrate']) expect(hasInvalidZoltarView({ resolvedRoute: 'zoltar', search: `?zoltarView=${view}`, zoltarView: view })).toBe(false)
 	})
 
 	test('rejects empty and unknown zoltar views', () => {

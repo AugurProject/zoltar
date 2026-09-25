@@ -54,9 +54,11 @@ describe('trading header', () => {
 		const rendered = await renderIntoDocument(<App initializeEnvironment={async () => undefined} loadLiveDeployment={async () => configuration} liveTradingServices={services} />)
 		cleanupRendered = rendered.cleanup
 		await waitFor(() => expect(window.location.hash).toBe('#/universe?universe=0&simulate=1'))
-		const universeField = rendered.container.querySelector('.header-toolbar-controls .toolbar-field-value')
-		expect(universeField?.textContent).toBe('Genesis (0x0)')
-		expect(universeField?.querySelector('span')?.getAttribute('title')).toBe('Genesis (0x0)')
+		// The header names the universe with the shared switcher, which links back to the universe browser.
+		const universeSwitcher = rendered.container.querySelector('.header-toolbar-controls .toolbar-field-value .universe-switcher')
+		expect(universeSwitcher?.querySelector('.universe-switcher-label')?.textContent).toBe('Genesis')
+		expect(universeSwitcher?.querySelector('summary')?.getAttribute('aria-label')).toBe('Universe: Genesis. Switch universe')
+		expect(universeSwitcher?.querySelector('.universe-switcher-browse')?.getAttribute('href')).toContain('#/universe')
 	})
 
 	test('follows an addressed market into its universe and rewrites a disagreeing parameter', async () => {
@@ -101,7 +103,7 @@ describe('trading header', () => {
 		const rendered = await renderIntoDocument(<App initializeEnvironment={async () => undefined} loadLiveDeployment={async () => configuration} liveTradingServices={services} />)
 		cleanupRendered = rendered.cleanup
 		await waitFor(() => expect(window.location.hash).toBe(`#/market/${pool}?universe=5`))
-		await waitFor(() => expect(rendered.container.querySelector('.header-toolbar-controls .toolbar-field-value')?.textContent).toBe('Universe 0x5'))
+		await waitFor(() => expect(rendered.container.querySelector('.header-toolbar-controls .universe-switcher-label')?.textContent).toBe('Universe 0x5'))
 	})
 
 	test('a request superseded while in flight settles nothing; only the answer to the current universe request does', async () => {
@@ -140,7 +142,7 @@ describe('trading header', () => {
 			await Bun.sleep(20)
 		})
 		await waitFor(() => expect(window.location.hash).toBe('#/universe?universe=0'))
-		await waitFor(() => expect(rendered.container.querySelector('.header-toolbar-controls .toolbar-field-value')?.textContent).toBe('Genesis (0x0)'))
+		await waitFor(() => expect(rendered.container.querySelector('.header-toolbar-controls .universe-switcher-label')?.textContent).toBe('Genesis'))
 	})
 
 	test('settles on the discovered universe without re-discovering in a loop', async () => {
@@ -158,11 +160,11 @@ describe('trading header', () => {
 		}
 		const rendered = await renderIntoDocument(<App initializeEnvironment={async () => undefined} loadLiveDeployment={async () => configuration} liveTradingServices={services} />)
 		cleanupRendered = rendered.cleanup
-		await waitFor(() => expect(rendered.container.querySelector('.header-toolbar-controls .toolbar-field-value')?.textContent).toBe('Genesis (0x0)'))
+		await waitFor(() => expect(rendered.container.querySelector('.header-toolbar-controls .universe-switcher-label')?.textContent).toBe('Genesis'))
 		// The confirmed universe is re-requested once; a confirmed answer must not read as foreign and restart discovery.
 		await act(async () => await Bun.sleep(300))
 		expect(discoveries).toBeLessThanOrEqual(2)
-		expect(rendered.container.querySelector('.header-toolbar-controls .toolbar-field-value')?.textContent).toBe('Genesis (0x0)')
+		expect(rendered.container.querySelector('.header-toolbar-controls .universe-switcher-label')?.textContent).toBe('Genesis')
 		expect(window.location.hash).toBe('#/market')
 	})
 
@@ -195,7 +197,7 @@ describe('trading header', () => {
 		}
 		const rendered = await renderIntoDocument(<App initializeEnvironment={async () => undefined} loadLiveDeployment={async () => configuration} liveTradingServices={services} />)
 		cleanupRendered = rendered.cleanup
-		await waitFor(() => expect(rendered.container.querySelector('.header-toolbar-controls .toolbar-field-value')?.textContent).toBe('Genesis (0x0)'))
+		await waitFor(() => expect(rendered.container.querySelector('.header-toolbar-controls .universe-switcher-label')?.textContent).toBe('Genesis'))
 		const walletButton = rendered.container.querySelector<HTMLButtonElement>('.trading-wallet-actions .wallet-button')
 		expect(walletButton?.textContent).toBe('Connect wallet')
 		await act(async () => {

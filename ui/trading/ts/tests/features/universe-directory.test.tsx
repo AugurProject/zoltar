@@ -55,7 +55,7 @@ describe('universe directory', () => {
 		expect(rendered.container.textContent).toContain('Yes')
 		expect(rendered.container.textContent).toContain('Not deployed')
 		// Only an existing child can be opened; the link carries the universe parameter every route reads.
-		const selectLinks = Array.from(rendered.container.querySelectorAll<HTMLAnchorElement>('.entity-card .universe-link')).filter(link => link.textContent === 'Select')
+		const selectLinks = Array.from(rendered.container.querySelectorAll<HTMLAnchorElement>('.entity-card .universe-link')).filter(link => link.textContent === 'Open')
 		expect(selectLinks).toHaveLength(1)
 		expect(selectLinks[0]?.getAttribute('href')).toBe('#/universe?universe=2')
 		expect(queries.getByRole('link', { name: 'Go to Genesis universe' }).getAttribute('href')).toBe('#/universe?universe=0')

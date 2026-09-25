@@ -1,5 +1,6 @@
 import type { Address, Hash, Hex } from '@zoltar/core-shared/evm/ethereum'
 import type { ReputationTokenMetadata } from './reputation.js'
+import type { UniverseLineageStep } from '../lib/universeLineage.js'
 import type { WriteClient as ClientsWriteClient } from '../wallet/clients.js'
 export type { ReadClient, WriteClient } from '../wallet/clients.js'
 
@@ -99,6 +100,8 @@ export type ZoltarUniverseSummary = {
 	forkTime: bigint
 	forkingOutcomeIndex: bigint
 	hasForked: boolean
+	/** Genesis-first ancestry naming this universe by the fork outcomes that created it. */
+	lineage?: readonly UniverseLineageStep[] | undefined
 	parentUniverseId: bigint
 	reputationToken: Address
 	totalTheoreticalSupplyAttoRep: bigint

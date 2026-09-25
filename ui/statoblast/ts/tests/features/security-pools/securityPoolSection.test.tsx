@@ -834,7 +834,7 @@ describe('SecurityPoolSection', () => {
 			render(h(SecurityPoolSection, { ...initialProps, activeUniverseId: 2n }), renderedComponent.container)
 		})
 
-		const warning = within(document.body).getByText('This pool belongs to universe 0x1')
+		const warning = within(document.body).getByText('This pool belongs to Universe 0x1')
 		expect(warning.closest('.entity-card') !== null).toBe(true)
 		expect(within(document.body).queryByText('Universe Mismatch') === null).toBe(true)
 	})

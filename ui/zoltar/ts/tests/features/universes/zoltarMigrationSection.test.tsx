@@ -8,7 +8,7 @@ import { installTestRouting } from '@zoltar/ui-core-shared/tests/testUtils/testR
 import { expectTransactionButtonDisabled, expectTransactionButtonEnabled } from '@zoltar/ui-core-shared/tests/testUtils/transactionActionButton.js'
 import type { ZoltarUniverseSummary } from '@zoltar/ui-core-shared/types/contracts.js'
 import { ZoltarMigrationSection } from '@zoltar/ui-zoltar-shared/features/universes/components/ZoltarMigrationSection.js'
-import { getUniverseLinkHref } from '@zoltar/ui-zoltar-shared/features/universes/lib/universe.js'
+import { getUniverseLinkHref } from '@zoltar/ui-core-shared/navigation/universeNavigation.js'
 import type { ZoltarMigrationFormState } from '@zoltar/ui-zoltar-shared/types/app.js'
 import { describe, expect, test } from 'bun:test'
 import { h, render } from 'preact'

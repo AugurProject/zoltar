@@ -938,6 +938,26 @@
 		"./tests/app/overviewPanels.test.js": {
 			"bun": "./ts/tests/app/overviewPanels.test.tsx",
 			"default": "./js/tests/app/overviewPanels.test.js"
+		},
+		"./components/UniverseLink.js": {
+			"bun": "./ts/components/UniverseLink.tsx",
+			"default": "./js/components/UniverseLink.js"
+		},
+		"./components/UniverseNames.js": {
+			"bun": "./ts/components/UniverseNames.tsx",
+			"default": "./js/components/UniverseNames.js"
+		},
+		"./components/UniverseBrowser.js": {
+			"bun": "./ts/components/UniverseBrowser.tsx",
+			"default": "./js/components/UniverseBrowser.js"
+		},
+		"./components/UniverseSwitcher.js": {
+			"bun": "./ts/components/UniverseSwitcher.tsx",
+			"default": "./js/components/UniverseSwitcher.js"
+		},
+		"./tests/components/universeBrowser.test.js": {
+			"bun": "./ts/tests/components/universeBrowser.test.tsx",
+			"default": "./js/tests/components/universeBrowser.test.js"
 		}
 	},
 	"version": "1.0.0"

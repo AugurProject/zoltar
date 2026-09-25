@@ -1,4 +1,5 @@
 import * as appCopy from '@zoltar/ui-core-shared/copy/app.js'
+import { assertNever } from '@zoltar/ui-core-shared/lib/assert.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as marketCopy from '@zoltar/ui-zoltar-shared/copy/market.js'
 import * as zoltarCopy from '@zoltar/ui-zoltar-shared/copy/zoltar.js'
@@ -11,13 +12,28 @@ export type AppPageTitleInput = {
 	route: Route
 }
 
+function getZoltarViewTitle(view: ZoltarView) {
+	switch (view) {
+		case 'overview':
+			return zoltarCopy.overview
+		case 'questions':
+			return marketCopy.questions
+		case 'create':
+			return commonCopy.createQuestion
+		case 'universes':
+			return zoltarCopy.universesTitle
+		case 'fork':
+			return zoltarCopy.forkZoltar
+		case 'migrate':
+			return zoltarCopy.migrateRep
+		default:
+			return assertNever(view)
+	}
+}
+
 export function getAppPageTitle({ activeZoltarView, route }: AppPageTitleInput) {
 	if (route === 'deploy') return appCopy.deployContracts
-	if (route === 'zoltar') {
-		if (activeZoltarView === 'create') return commonCopy.createQuestion
-		if (activeZoltarView === 'universes') return commonCopy.universe
-		return marketCopy.questions
-	}
+	if (route === 'zoltar') return getZoltarViewTitle(activeZoltarView)
 	return appCopy.pageNotFoundTitle
 }
 

@@ -1,11 +1,9 @@
 import { RetryableNotice } from '@zoltar/ui-core-shared/components/RetryableNotice.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as securityPoolCopy from '../../../copy/securityPool.js'
-import { ChildUniverseList } from '@zoltar/ui-zoltar-shared/features/universes/components/ChildUniverseList.js'
-import { UniverseContextSummary } from '@zoltar/ui-zoltar-shared/features/universes/components/UniverseContextSummary.js'
 import { CurrencyValue } from '@zoltar/ui-core-shared/components/CurrencyValue.js'
-import { SectionBlock } from '@zoltar/ui-core-shared/components/SectionBlock.js'
 import { StateHint } from '@zoltar/ui-core-shared/components/StateHint.js'
+import { UniverseBrowser } from '@zoltar/ui-core-shared/components/UniverseBrowser.js'
 import type { ListedSecurityPool, ZoltarUniverseSummary } from '@zoltar/ui-core-shared/types/contracts.js'
 
 type UniversePoolDirectorySectionProps = {
@@ -31,47 +29,31 @@ function getUniversePoolMetrics(universeId: bigint, securityPools: ListedSecurit
 	)
 }
 
+function UniversePoolMetrics({ securityPools, universeId }: { securityPools: ListedSecurityPool[]; universeId: bigint }) {
+	const metrics = getUniversePoolMetrics(universeId, securityPools)
+	return (
+		<>
+			<p className='decision-amount'>
+				<CurrencyValue value={metrics.totalPoolHeldAttoRep} suffix={commonCopy.rep} />
+			</p>
+			<p className='detail'>{securityPoolCopy.totalPoolHeldAttoRep}</p>
+			<p className='inline-facts'>
+				<span>{securityPoolCopy.universePoolCount(metrics.poolCount)}</span>
+				<span>{securityPoolCopy.universeVaultCount(metrics.vaultCount)}</span>
+			</p>
+		</>
+	)
+}
+
+/** Statoblast's universe browser: the shared lineage tree with pool-held REP and pool counts for each universe. */
 export function UniversePoolDirectorySection({ activeUniverseId, loadingSecurityPools = false, onRetry, securityPoolError, securityPools, zoltarUniverse }: UniversePoolDirectorySectionProps) {
 	if (zoltarUniverse === undefined) return <StateHint presentation={{ key: 'loading', badgeLabel: commonCopy.loading, badgeTone: 'loading', detail: commonCopy.loadingUniverseDetails }} />
 	if (securityPoolError !== undefined && securityPools === undefined) return <RetryableNotice onRetry={onRetry} retryLabel={securityPoolCopy.retryLoadingPools} disabled={loadingSecurityPools} presentation={{ key: 'load_failed', badgeLabel: commonCopy.error, badgeTone: 'blocked', detail: securityPoolError }} />
 	if (loadingSecurityPools || securityPools === undefined) return <StateHint presentation={{ key: 'loading', badgeLabel: commonCopy.loading, badgeTone: 'loading', detail: securityPoolCopy.loadingSecurityPools }} />
 
-	const activeUniversePoolMetrics = getUniversePoolMetrics(zoltarUniverse.universeId, securityPools)
-
 	return (
-		<div className='route-view-flow'>
-			<SectionBlock variant='plain'>
-				<UniverseContextSummary universe={zoltarUniverse}>
-					<p className='decision-amount'>
-						<CurrencyValue value={activeUniversePoolMetrics.totalPoolHeldAttoRep} suffix={commonCopy.rep} />
-					</p>
-					<p className='detail'>{securityPoolCopy.totalPoolHeldAttoRep}</p>
-					<p className='inline-facts'>
-						<span>{securityPoolCopy.universePoolCount(activeUniversePoolMetrics.poolCount)}</span>
-						<span>{securityPoolCopy.universeVaultCount(activeUniversePoolMetrics.vaultCount)}</span>
-					</p>
-				</UniverseContextSummary>
-			</SectionBlock>
-
-			<ChildUniverseList
-				activeUniverseId={activeUniverseId}
-				childUniverses={zoltarUniverse.childUniverses}
-				renderSummary={childUniverse => {
-					const childUniversePoolMetrics = getUniversePoolMetrics(childUniverse.universeId, securityPools)
-					return (
-						<>
-							<p className='decision-amount'>
-								<CurrencyValue value={childUniversePoolMetrics.totalPoolHeldAttoRep} suffix={commonCopy.rep} />
-							</p>
-							<p className='detail'>{securityPoolCopy.totalPoolHeldAttoRep}</p>
-							<p className='inline-facts'>
-								<span>{securityPoolCopy.universePoolCount(childUniversePoolMetrics.poolCount)}</span>
-								<span>{securityPoolCopy.universeVaultCount(childUniversePoolMetrics.vaultCount)}</span>
-							</p>
-						</>
-					)
-				}}
-			/>
-		</div>
+		<UniverseBrowser activeUniverseId={activeUniverseId} universe={zoltarUniverse} renderChildSummary={childUniverse => <UniversePoolMetrics securityPools={securityPools} universeId={childUniverse.universeId} />}>
+			<UniversePoolMetrics securityPools={securityPools} universeId={zoltarUniverse.universeId} />
+		</UniverseBrowser>
 	)
 }

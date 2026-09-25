@@ -4,8 +4,8 @@ import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/
 import { fireEvent, within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import { installTestRouting } from '@zoltar/ui-core-shared/tests/testUtils/testRouting.js'
-import { UniverseLink } from '@zoltar/ui-zoltar-shared/features/universes/components/UniverseLink.js'
-import { getUniverseLinkHref } from '@zoltar/ui-zoltar-shared/features/universes/lib/universe.js'
+import { UniverseLink } from '@zoltar/ui-core-shared/components/UniverseLink.js'
+import { getUniverseLinkHref } from '@zoltar/ui-core-shared/navigation/universeNavigation.js'
 import { describe, expect, test } from 'bun:test'
 import { act } from 'preact/test-utils'
 
@@ -91,7 +91,7 @@ describe('UniverseLink', () => {
 
 		const fullLabel = `Universe 0x${universeId.toString(16)}`
 		const link = within(document.body).getByRole('link', { name: fullLabel }) as HTMLAnchorElement
-		expect(link.textContent).toBe('Universe 0x12345678…abcdef')
+		expect(link.textContent).toBe('Universe 0x123456…cdef')
 		expect(link.title).toBe(fullLabel)
 	})
 })

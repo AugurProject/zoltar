@@ -2391,3 +2391,164 @@ main:has(.global-transaction-dialog-nonblocking) #app-content {
 	border-color: var(--accent);
 	color: var(--accent);
 }
+
+/* Universe lineage trail: the ancestors of the browsed universe from Genesis, separated like a breadcrumb. */
+.universe-lineage ol {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: var(--space-1);
+	margin: 0;
+	padding: 0;
+	list-style: none;
+	font-family: var(--font-family-mono);
+	font-size: var(--font-caption);
+	color: var(--muted);
+}
+
+.universe-lineage li {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--space-1);
+	min-width: 0;
+	overflow-wrap: anywhere;
+}
+
+.universe-lineage li + li::before {
+	content: "›";
+	color: var(--muted);
+}
+
+.universe-lineage [aria-current] {
+	color: var(--value);
+	font-weight: 600;
+}
+
+.universe-id-value {
+	font-family: var(--font-family-mono);
+	overflow-wrap: anywhere;
+}
+
+/* Header universe switcher: one compact control naming the active universe by lineage, with a menu of nearby universes. */
+.universe-switcher {
+	position: relative;
+	min-width: 0;
+}
+
+.universe-switcher[open] {
+	z-index: var(--z-dropdown);
+}
+
+.universe-switcher > summary {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--space-1);
+	max-width: min(22rem, 60vw);
+	min-height: var(--touch-target-min);
+	padding: 0 var(--space-2);
+	border: 1px solid var(--interactive-border);
+	border-radius: var(--radius-control);
+	background: var(--interactive-bg);
+	color: var(--value);
+	cursor: pointer;
+	list-style: none;
+}
+
+.universe-switcher > summary::-webkit-details-marker {
+	display: none;
+}
+
+.universe-switcher > summary:hover,
+.universe-switcher[open] > summary {
+	border-color: var(--interactive-border-hover);
+	background: var(--interactive-bg-active);
+}
+
+.universe-switcher > summary:focus-visible {
+	outline: 2px solid var(--focus);
+	outline-offset: 2px;
+}
+
+.universe-switcher-label {
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.universe-switcher-caret {
+	color: var(--muted);
+	transition: transform var(--transition-fast);
+}
+
+.universe-switcher[open] .universe-switcher-caret {
+	transform: rotate(180deg);
+}
+
+.universe-switcher-popover {
+	position: absolute;
+	z-index: var(--z-dropdown);
+	top: calc(100% + 0.5rem);
+	right: 0;
+	display: grid;
+	gap: var(--space-2);
+	width: max-content;
+	min-width: min(16rem, calc(100vw - 3rem));
+	max-width: min(26rem, calc(100vw - 3rem));
+	max-height: min(28rem, 70vh);
+	overflow-y: auto;
+	padding: 0.75rem;
+	border: 1px solid var(--border-strong);
+	border-radius: var(--radius-overlay);
+	background: var(--bg);
+	box-shadow: var(--shadow-overlay);
+	font-family: var(--font-family-sans);
+	font-size: var(--font-body);
+	font-weight: 400;
+	white-space: normal;
+}
+
+.universe-switcher-heading {
+	margin: 0;
+	font-family: var(--font-family-mono);
+	font-size: var(--font-xs);
+	letter-spacing: 0.08em;
+	text-transform: uppercase;
+	color: var(--muted);
+}
+
+.universe-switcher-list {
+	display: grid;
+	gap: var(--space-1);
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+
+.universe-switcher-list .universe-link,
+.universe-switcher-current {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: var(--space-2);
+	min-height: var(--touch-target-min);
+	overflow-wrap: anywhere;
+}
+
+.universe-switcher-current {
+	color: var(--value);
+	font-weight: 600;
+}
+
+.universe-switcher-current-tag {
+	font-family: var(--font-family-mono);
+	font-size: var(--font-xs);
+	letter-spacing: 0.08em;
+	text-transform: uppercase;
+	color: var(--muted);
+}
+
+.universe-switcher-browse {
+	justify-self: stretch;
+	text-align: center;
+}

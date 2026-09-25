@@ -26,7 +26,7 @@ import { MarketCreateQuestionSection } from '../../markets/components/MarketCrea
 import { getDefaultMarketFormState } from '../../markets/lib/marketForm.js'
 import { validateMarketForm } from '@zoltar/ui-zoltar-shared/features/questions/lib/questionCreation.js'
 import type { SecurityPoolSectionProps } from '../../types.js'
-import { formatUniverseIdHex } from '@zoltar/ui-core-shared/lib/universeLabels.js'
+import { useUniverseName } from '@zoltar/ui-core-shared/components/UniverseNames.js'
 import { getWrongNetworkReason } from '@zoltar/ui-core-shared/wallet/network.js'
 import * as marketCopy from '@zoltar/ui-zoltar-shared/copy/market.js'
 import * as transactionReviewCopy from '@zoltar/ui-core-shared/copy/transactionReview.js'
@@ -78,6 +78,7 @@ export function SecurityPoolSection({
 	// An unfinished question-and-pool flow keeps its question; otherwise use an explicitly selected ID or start a new question.
 	const [questionSource, setQuestionSource] = useState<'existing' | 'new'>(marketResult !== undefined || (securityPoolForm.marketId.trim() === '' && marketDetails === undefined) ? 'new' : 'existing')
 	const transactionPresentation = useGlobalTransactionPresentation()
+	const createdPoolUniverseName = useUniverseName(securityPoolResult?.universeId ?? activeUniverseId)
 	const visibleSecurityPoolError = suppressPresentedTransactionError(securityPoolError, transactionPresentation, transactionCopy.securityPoolCreation)
 	const reviewWorkflow = transactionSteps.value
 	const ownsTransactionReview = securityPoolReviewSignal !== undefined && !securityPoolReviewSignal.aborted && reviewWorkflow?.reviewSignal === securityPoolReviewSignal && reviewWorkflow.steps[reviewWorkflow.activeIndex] !== undefined
@@ -256,7 +257,7 @@ export function SecurityPoolSection({
 						</div>
 					}
 				>
-					{securityPoolResult.universeId === activeUniverseId ? undefined : <p className='detail'>{securityPoolCopy.formatBrowsePoolUniverseMismatch(formatUniverseIdHex(securityPoolResult.universeId))}</p>}
+					{securityPoolResult.universeId === activeUniverseId ? undefined : <p className='detail'>{securityPoolCopy.formatBrowsePoolUniverseMismatch(createdPoolUniverseName)}</p>}
 					<Question question={createdQuestionDetails} loading={createdQuestionDetails === undefined} />
 					<ul className='status-list hashes'>
 						<li>

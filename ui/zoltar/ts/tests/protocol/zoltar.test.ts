@@ -10,6 +10,21 @@ const EMPTY_QUESTION = ['', '', 0n, 0n, 0n, 0n, 0n, '']
 const REP_TOKEN = getAddress('0x00000000000000000000000000000000000000f1')
 
 type MockReadClient = Parameters<typeof loadMarketDetails>[0]
+
+// Ancestor records the lineage walk reads: universe 123 is the "2" outcome of genesis, 77 its "1" outcome; genesis forked on question 41, 123 and 77 on question 42.
+const LINEAGE_UNIVERSES: Record<string, readonly unknown[]> = {
+	'0': [1n, 41n, 0n, REP_TOKEN, 0n],
+	'77': [1n, 42n, 1n, REP_TOKEN, 0n],
+	'123': [1n, 42n, 2n, REP_TOKEN, 0n],
+}
+const lineageHandlers = {
+	getAnswerOptionName: async (request: { args?: readonly unknown[] | undefined }) => `answer ${String(request.args?.[0])}:${String(request.args?.[1])}`,
+	universes: async (request: { args?: readonly unknown[] | undefined }) => {
+		const universe = LINEAGE_UNIVERSES[String(request.args?.[0])]
+		if (universe === undefined) throw new Error('Child universe tuples should be resolved via multicall in this test')
+		return universe
+	},
+}
 type MockReadContractRequest = Parameters<MockReadClient['readContract']>[0]
 
 function createReadClient({ multicallResponses, readContractHandlers }: { multicallResponses: unknown[]; readContractHandlers: Record<string, (request: MockReadContractRequest) => Promise<unknown>> }): MockReadClient {
@@ -126,6 +141,7 @@ describe('zoltar contract helpers', () => {
 			readContractHandlers: {
 				getUniverseTheoreticalSupplyAttoRep: async () => 111n,
 				getOutcomeLabels: async () => ['Yes', 'No'],
+				...lineageHandlers,
 			},
 		})
 
@@ -138,6 +154,12 @@ describe('zoltar contract helpers', () => {
 		expect(summary?.totalTheoreticalSupplyAttoRep).toBe(111n)
 		expect(summary?.forkBurnDivisor).toBe(5n)
 		expect(summary?.zoltarAddress).toBeDefined()
+		// Each generation is named by its outcome of the parent's fork question: 123 is outcome 2 of genesis question 41, 5 is outcome 0 of question 42.
+		expect(summary?.lineage).toEqual([
+			{ outcomeLabel: undefined, universeId: 0n },
+			{ outcomeLabel: 'answer 41:2', universeId: 123n },
+			{ outcomeLabel: 'answer 42:0', universeId: 5n },
+		])
 	})
 
 	test('loadZoltarUniverseSummary handles forked scalar details and an empty child-universe page', async () => {
@@ -151,6 +173,7 @@ describe('zoltar contract helpers', () => {
 				getUniverseTheoreticalSupplyAttoRep: async () => 222n,
 				getOutcomeLabels: async () => [],
 				getDeployedChildUniverses: async () => [[], [], []],
+				...lineageHandlers,
 			},
 		})
 
@@ -160,6 +183,11 @@ describe('zoltar contract helpers', () => {
 		expect(summary?.forkQuestionDetails?.marketType).toBe('scalar')
 		expect(summary?.hasForked).toBe(true)
 		expect(summary?.childUniverses).toEqual([])
+		expect(summary?.lineage).toEqual([
+			{ outcomeLabel: undefined, universeId: 0n },
+			{ outcomeLabel: 'answer 41:1', universeId: 77n },
+			{ outcomeLabel: 'answer 42:2', universeId: 8n },
+		])
 	})
 
 	test('loadZoltarUniverseSummary builds categorical child universes from fork question outcome ids', async () => {
@@ -184,9 +212,7 @@ describe('zoltar contract helpers', () => {
 				getChildUniverseId: async () => {
 					throw new Error('getChildUniverseId should be resolved via multicall in this test')
 				},
-				universes: async () => {
-					throw new Error('universes should be resolved via multicall in this test')
-				},
+				...lineageHandlers,
 			},
 		})
 
