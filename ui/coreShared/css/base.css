@@ -1523,14 +1523,23 @@ button.wallet-asset-action-pending:disabled {
 }
 
 .transaction-hash-link {
-	display: inline-block;
+	display: inline-flex;
+	align-items: center;
+	gap: 0.5rem;
 	max-width: 100%;
 	min-width: 0;
-	color: inherit;
-	text-decoration: underline;
-	text-decoration-color: var(--accent);
-	text-underline-offset: 0.14em;
-	word-break: break-all;
+	font-family: var(--font-family-mono);
+	font-size: var(--font-label);
+	text-align: left;
+	overflow-wrap: anywhere;
+}
+
+.transaction-hash-link > span:first-child {
+	min-width: 0;
+}
+
+.transaction-hash-link::after {
+	flex-shrink: 0;
 }
 
 .metric-field-value {

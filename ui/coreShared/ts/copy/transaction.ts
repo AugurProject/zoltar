@@ -74,7 +74,6 @@ export const auctionRefundWithdrawnDetail = 'The connected wallet withdrew its c
 export const forkDepositSettlementSuccessDetail = 'Imported fork-carried escalation deposits were settled.'
 export const truthAuctionStartedSuccessDetail = 'Truth auction state was started for the selected child universe.'
 export const truthAuctionBidSuccessDetail = 'Truth auction bid submitted. Bid ETH stays committed until settlement.'
-export const viewTransaction = 'View transaction'
 export const transactionStatus = 'Transaction status'
 export const transactionDetails = 'Transaction details'
 export const revertedCheckingDetails = 'Transaction reverted; checking details…'
@@ -122,3 +121,5 @@ export const hide = 'Hide'
 export const transactionHash = 'Transaction hash'
 export const explorer = 'Explorer'
 export const formatViewAddressOnExplorer = (address: CopyTemplateValue) => `View address ${address} on explorer`
+
+export const formatViewTransactionOnExplorer = (hash: CopyTemplateValue) => `View transaction ${hash} on explorer (opens in a new tab)`

@@ -3,9 +3,10 @@ import * as transactionCopy from '../copy/transaction.js'
 import type { ComponentChildren } from 'preact'
 import { Badge } from './Badge.js'
 import { ReadOnlyDetailAccordion } from './ReadOnlyDetailAccordion.js'
+import { TransactionHashLink } from './TransactionHashLink.js'
 import { AddressValue } from './AddressValue.js'
 import { getActiveNetworkProfile } from '../lib/activeEnvironment.js'
-import { buildAddressExplorerUrl, buildTransactionExplorerUrl } from '../wallet/networkProfile.js'
+import { buildAddressExplorerUrl } from '../wallet/networkProfile.js'
 import type { BadgeTone, GlobalTransactionPresentation } from '../types/components.js'
 
 type TransactionPresentationNoticeProps = {
@@ -45,7 +46,6 @@ export function TransactionPresentationNotice({ className = '', collapseDetails 
 	const title = transaction.title
 	const collapsedDetail = compact && transaction.tone !== 'error' ? transaction.detail : undefined
 	const transactionHash = transaction.hash
-	const explorerUrl = transactionHash === undefined ? undefined : buildTransactionExplorerUrl(getActiveNetworkProfile(), transactionHash)
 	const rows = transaction.rows ?? []
 	const technicalRows = transaction.technicalRows ?? []
 	const noticeClassName = ['global-transaction-notice', className].filter(Boolean).join(' ')
@@ -90,12 +90,7 @@ export function TransactionPresentationNotice({ className = '', collapseDetails 
 		transactionHash === undefined ? undefined : (
 			<div className='global-transaction-hash'>
 				{compact ? undefined : <span>{transactionCopy.transactionHash}</span>}
-				<AddressValue address={transactionHash} compactAbbreviation={compact} responsiveAbbreviation />
-				{explorerUrl === undefined ? undefined : (
-					<a href={explorerUrl} target='_blank' rel='noreferrer' aria-label={transactionCopy.viewTransaction}>
-						{transactionCopy.explorer}
-					</a>
-				)}
+				<TransactionHashLink hash={transactionHash} />
 			</div>
 		)
 

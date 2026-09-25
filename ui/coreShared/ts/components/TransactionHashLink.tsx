@@ -12,8 +12,8 @@ export function TransactionHashLink({ hash }: TransactionHashLinkProps) {
 	if (transactionUrl === undefined) return <span className='transaction-hash-link'>{hash}</span>
 
 	return (
-		<a className='transaction-hash-link' href={transactionUrl} target='_blank' rel='noreferrer' title={transactionCopy.viewTransaction}>
-			{hash}
+		<a className='button-link secondary-link transaction-hash-link' href={transactionUrl} target='_blank' rel='noreferrer' aria-label={transactionCopy.formatViewTransactionOnExplorer(hash)}>
+			<span>{hash}</span>
 		</a>
 	)
 }

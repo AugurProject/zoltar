@@ -7,6 +7,9 @@ import { beforeEach, describe, expect, jest, test } from 'bun:test'
 import { fireEvent, within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { act } from 'preact/test-utils'
 import { render } from 'preact'
+import { installActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
+import { createInjectedBackend } from '@zoltar/ui-core-shared/wallet/chainBackend.js'
+import { MAINNET_NETWORK_PROFILE, SEPOLIA_NETWORK_PROFILE } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
 import { GlobalTransactionDialog } from '@zoltar/ui-core-shared/app/components/GlobalTransactionDialog.js'
 import { OperationModal } from '@zoltar/ui-core-shared/components/OperationModal.js'
 import { GlobalTransactionPresentationProvider } from '@zoltar/ui-core-shared/components/GlobalTransactionPresentationContext.js'
@@ -30,6 +33,23 @@ describe('GlobalTransactionDialog', () => {
 
 	beforeEach(() => {
 		restoreRouting = installTestRouting()
+	})
+
+	test.each([MAINNET_NETWORK_PROFILE, SEPOLIA_NETWORK_PROFILE])('links the full hash to the active explorer: $id', async profile => {
+		const restore = installActiveEnvironmentForTesting(createInjectedBackend({ profile }))
+		const hash = '0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef12'
+		try {
+			const rendered = await renderIntoDocument(<GlobalTransactionDialog transaction={{ hash, title: 'Price requested', tone: 'success' }} />)
+			trackRendered(rendered)
+			const link = within(document.body).getByRole('link', { name: `View transaction ${hash} on explorer (opens in a new tab)` })
+			expect(link.getAttribute('href')).toBe(`${profile.transactionExplorerBaseUrl}${hash}`)
+			expect(link.getAttribute('target')).toBe('_blank')
+			expect(link.getAttribute('rel')).toContain('noreferrer')
+			expect(link.textContent).toContain(hash)
+			expect(link.querySelector('.address-value-abbreviated')).toBeNull()
+		} finally {
+			restore()
+		}
 	})
 
 	test('keeps the reporting amount and source review then shows one shared success panel', async () => {
@@ -312,7 +332,7 @@ describe('GlobalTransactionDialog', () => {
 		expect(documentQueries.getByText('The new question is now on-chain.')).not.toBeNull()
 		expect(documentQueries.getByText('Question ID')).not.toBeNull()
 		expect(documentQueries.getByText('0x0b')).not.toBeNull()
-		expect(documentQueries.getByRole('button', { name: 'Copy address 0x1234000000000000000000000000000000000000000000000000000000000000' })).not.toBeNull()
+		expect(documentQueries.getByText('0x1234000000000000000000000000000000000000000000000000000000000000')).not.toBeNull()
 		expect(documentQueries.getByRole('button', { name: 'Dismiss' })).not.toBeNull()
 		expect(documentQueries.getByRole('button', { name: 'Dismiss' }).classList.contains('secondary')).toBe(true)
 	})
@@ -416,7 +436,7 @@ describe('GlobalTransactionDialog', () => {
 		expect(documentQueries.getByRole('status', { name: 'Transaction status' })).not.toBeNull()
 		expect(documentQueries.getByText('Pending')).not.toBeNull()
 		expect(documentQueries.getByText('Waiting for confirmation.')).not.toBeNull()
-		expect(documentQueries.getByRole('button', { name: 'Copy address 0x2234000000000000000000000000000000000000000000000000000000000000' })).not.toBeNull()
+		expect(documentQueries.getByText('0x2234000000000000000000000000000000000000000000000000000000000000')).not.toBeNull()
 	})
 
 	test('renders a concise pending transaction when no extra explanation is needed', async () => {
@@ -551,7 +571,7 @@ describe('GlobalTransactionDialog', () => {
 		const documentQueries = within(document.body)
 		expect(documentQueries.getByText('Failed')).not.toBeNull()
 		expect(documentQueries.getByText('Transaction reverted')).not.toBeNull()
-		expect(documentQueries.getByRole('button', { name: 'Copy address 0x4234000000000000000000000000000000000000000000000000000000000000' })).not.toBeNull()
+		expect(documentQueries.getByText('0x4234000000000000000000000000000000000000000000000000000000000000')).not.toBeNull()
 		expect(documentQueries.getByRole('button', { name: 'Dismiss' })).not.toBeNull()
 	})
 
@@ -660,7 +680,7 @@ describe('GlobalTransactionDialog', () => {
 		trackRendered(renderedComponent)
 
 		expect(within(document.body).getByText('Pending')).not.toBeNull()
-		expect(within(document.body).getByRole('button', { name: `Copy address ${transaction.hash}` })).not.toBeNull()
+		expect(within(document.body).getByText(transaction.hash)).not.toBeNull()
 
 		await act(() => {
 			renderedComponent.unmount()
@@ -669,7 +689,7 @@ describe('GlobalTransactionDialog', () => {
 		const rerenderedComponent = await renderIntoDocument(<GlobalTransactionDialog transaction={transaction} />)
 		trackRendered(rerenderedComponent)
 		expect(within(document.body).getByText('Pending')).not.toBeNull()
-		expect(within(document.body).getByRole('button', { name: `Copy address ${transaction.hash}` })).not.toBeNull()
+		expect(within(document.body).getByText(transaction.hash)).not.toBeNull()
 	})
 
 	test('shows terminal success after a pending transaction resolves', async () => {

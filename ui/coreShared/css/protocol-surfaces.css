@@ -685,6 +685,8 @@ main:has(.global-transaction-dialog-nonblocking) #app-content {
 	align-items: center;
 	flex-wrap: wrap;
 	gap: 0.4rem;
+	min-width: 0;
+	max-width: 100%;
 	font-size: var(--font-label);
 }
 
@@ -778,10 +780,6 @@ main:has(.global-transaction-dialog-nonblocking) #app-content {
 
 .global-transaction-dialog-compact .global-transaction-hash {
 	font-size: var(--font-caption);
-}
-
-.global-transaction-dialog-compact .global-transaction-hash .address-value {
-	white-space: nowrap;
 }
 
 .global-transaction-dialog-compact .global-transaction-actions {
