@@ -1534,6 +1534,10 @@ button.wallet-asset-action-pending:disabled {
 	overflow-wrap: anywhere;
 }
 
+a.transaction-hash-link {
+	min-height: var(--touch-target-min);
+}
+
 .transaction-hash-link > span:first-child {
 	min-width: 0;
 }
