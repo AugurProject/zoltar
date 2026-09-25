@@ -18,11 +18,12 @@ import type { BalanceState, PortfolioBalanceEntry } from './live/liveTradingType
 import { liveCopy } from '../copy/live.js'
 import { BalanceLoadError } from './LiveTradingTransactionUi.js'
 import * as portfolioCopy from '../copy/portfolio.js'
+import { lpReserveClaims, portfolioOverview, type PortfolioValuation } from './portfolioModel.js'
+import { PortfolioActionItems, PortfolioRowActions, PortfolioRowValue, PortfolioSummary } from './PortfolioOverview.js'
 
-function LivePortfolioBalanceMetrics({ market, balances }: { market: LiveMarket; balances: LiveBalances }) {
+function LivePortfolioBalanceMetrics({ market, balances, valuation }: { market: LiveMarket; balances: LiveBalances; valuation: PortfolioValuation }) {
 	const availability = settlementAvailability(market, balances)
-	const yesClaim = market.lpTotalSupply === 0n ? 0n : (market.yesReserve * balances.lp) / market.lpTotalSupply
-	const noClaim = market.lpTotalSupply === 0n ? 0n : (market.noReserve * balances.lp) / market.lpTotalSupply
+	const { yes: yesClaim, no: noClaim } = lpReserveClaims(market, balances.lp)
 	let coveredSets = balances.invalid
 	if (yesClaim < coveredSets) coveredSets = yesClaim
 	if (noClaim < coveredSets) coveredSets = noClaim
@@ -31,13 +32,16 @@ function LivePortfolioBalanceMetrics({ market, balances }: { market: LiveMarket;
 	return (
 		<>
 			<div className='portfolio-position-summary'>
-				{availability.completeSets === 0n ? undefined : (
-					<div className='portfolio-position-value'>
-						<span className='metric-label'>{availability.canRedeemCompleteSets ? payoutCopy.redemptionValue : payoutCopy.backingValue}</span>
-						<strong>{market.loadError === undefined ? formatCollateralEth(availability.completeSets, market) : payoutCopy.unavailable}</strong>
-						<small className='payout-caption'>{formatCompleteSetQuantity(availability.completeSets)}</small>
-					</div>
-				)}
+				<div className='portfolio-position-values'>
+					<PortfolioRowValue valuation={valuation} />
+					{availability.completeSets === 0n ? undefined : (
+						<div className='portfolio-position-value is-secondary'>
+							<span className='metric-label'>{availability.canRedeemCompleteSets ? payoutCopy.redemptionValue : payoutCopy.backingValue}</span>
+							<strong>{market.loadError === undefined ? formatCollateralEth(availability.completeSets, market) : payoutCopy.unavailable}</strong>
+							<small className='payout-caption'>{formatCompleteSetQuantity(availability.completeSets)}</small>
+						</div>
+					)}
+				</div>
 				<ul className='portfolio-holdings'>
 					{balances.yes === 0n ? undefined : (
 						<li className='portfolio-holding-yes'>
@@ -96,38 +100,66 @@ function hasPortfolioBalance(balances: LiveBalances) {
 	return balances.yes > 0n || balances.no > 0n || balances.invalid > 0n || balances.lp > 0n
 }
 
-export function LivePortfolio({ entries, balanceState, balanceError, retryBalances }: { entries: readonly PortfolioBalanceEntry[]; balanceState: BalanceState; balanceError: string | undefined; retryBalances(): Promise<void> }) {
+type PortfolioWalletAction = Readonly<{ label: string; disabled: boolean; onClick(): void }>
+
+export function LivePortfolio({
+	entries,
+	balanceState,
+	balanceError,
+	retryBalances,
+	nowSeconds,
+	walletAction,
+}: {
+	entries: readonly PortfolioBalanceEntry[]
+	balanceState: BalanceState
+	balanceError: string | undefined
+	retryBalances(): Promise<void>
+	nowSeconds: bigint
+	/** Inline connect or switch-network control for the disconnected state. */
+	walletAction?: PortfolioWalletAction | undefined
+}) {
 	const visibleEntries = balanceState === 'ready' ? entries.filter(entry => entry.error !== undefined || (entry.balances !== undefined && hasPortfolioBalance(entry.balances))) : entries
+	const overview = portfolioOverview(visibleEntries, nowSeconds)
+	const showSummary = balanceState === 'ready' && visibleEntries.length > 0
 	return (
 		<div className='portfolio-positions' aria-busy={balanceState === 'loading'}>
-			{balanceState === 'disconnected' ? <EmptyState title={portfolioCopy.disconnectedGuidance} /> : null}
+			{balanceState === 'disconnected' ? (
+				<EmptyState
+					title={portfolioCopy.disconnectedGuidance}
+					actions={
+						walletAction === undefined ? undefined : (
+							<button className='primary' type='button' disabled={walletAction.disabled} onClick={walletAction.onClick}>
+								{walletAction.label}
+							</button>
+						)
+					}
+				/>
+			) : null}
 			{balanceState === 'loading' ? <EmptyState live title={portfolioCopy.loadingPoolBalances} /> : null}
 			{balanceState === 'error' ? <BalanceLoadError message={balanceError ?? portfolioCopy.portfolioBalancesUnavailable} retry={retryBalances} /> : null}
 			{balanceState === 'ready' && visibleEntries.length === 0 ? <EmptyState title={portfolioCopy.noPortfolioBalances} /> : null}
+			{showSummary ? <PortfolioSummary overview={overview} /> : null}
+			{showSummary ? <PortfolioActionItems items={overview.actionItems} nowSeconds={nowSeconds} /> : null}
 			{visibleEntries.length === 0 ? null : (
 				<div className='entity-card-list'>
-					{visibleEntries.map(entry => (
+					{overview.rows.map(row => (
 						<EntityCard
 							surface='card'
 							className='portfolio-record'
-							headerActions={
-								<a className='button-link primary' href={getTradingRouteHref(`#/market/${entry.market.pool}`)}>
-									{portfolioCopy.openPosition}
-								</a>
-							}
-							key={entry.market.pool}
-							dataAttributes={{ 'data-portfolio-pool': entry.market.pool }}
-							title={entry.market.title}
+							headerActions={row.canSell || row.canRedeem ? <PortfolioRowActions row={row} /> : undefined}
+							key={row.entry.market.pool}
+							dataAttributes={{ 'data-portfolio-pool': row.entry.market.pool }}
+							title={<a href={getTradingRouteHref(`#/market/${row.entry.market.pool}`)}>{row.entry.market.title}</a>}
 						>
-							{renderPortfolioStatus(entry)}
-							{entry.market.loadError === undefined ? (
+							{renderPortfolioStatus(row.entry)}
+							{row.entry.market.loadError === undefined ? (
 								<p className='detail'>
-									{liveCopy.questionEnd}: <TimestampValue timestamp={entry.market.endTime} relative={false} />
+									{liveCopy.questionEnd}: <TimestampValue timestamp={row.entry.market.endTime} relative={false} />
 								</p>
 							) : undefined}
-							{entry.balances === undefined ? <SecurityPoolLink value={entry.market.pool} /> : undefined}
-							{entry.error === undefined ? null : <BalanceLoadError message={portfolioCopy.poolBalancesUnavailable(entry.error)} retry={retryBalances} />}
-							{entry.balances === undefined ? null : <LivePortfolioBalanceMetrics market={entry.market} balances={entry.balances} />}
+							{row.entry.balances === undefined ? <SecurityPoolLink value={row.entry.market.pool} /> : undefined}
+							{row.entry.error === undefined ? null : <BalanceLoadError message={portfolioCopy.poolBalancesUnavailable(row.entry.error)} retry={retryBalances} />}
+							{row.entry.balances === undefined ? null : <LivePortfolioBalanceMetrics market={row.entry.market} balances={row.entry.balances} valuation={row.valuation} />}
 						</EntityCard>
 					))}
 				</div>
