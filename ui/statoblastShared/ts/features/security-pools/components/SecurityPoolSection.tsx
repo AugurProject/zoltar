@@ -328,7 +328,7 @@ export function SecurityPoolSection({
 												pending={securityPoolCreating}
 												availability={{ disabled: isCreateDisabled, loading: createDisabledReasonLoading, reason: createDisabledReason }}
 												disabledReasonElementId={visibleFieldErrorId}
-												showDisabledReason={visibleFieldErrorId === undefined}
+												showDisabledReason={!securityPoolCreating && visibleFieldErrorId === undefined}
 											/>
 										</div>
 									)}
@@ -438,6 +438,7 @@ export function SecurityPoolSection({
 												pendingLabel={securityPoolCopy.creatingPool}
 												onClick={() => onCreateSecurityPool(marketResult.questionId)}
 												pending={questionAndPoolCreating || securityPoolCreating}
+												showDisabledReason={!questionAndPoolCreating && !securityPoolCreating}
 												availability={{
 													disabled: questionAndPoolCreating || securityPoolCreating || createDisabledReason !== undefined,
 													loading: questionAndPoolCreating || securityPoolCreating,
