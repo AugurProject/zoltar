@@ -30,7 +30,7 @@ export const safeRpcProviderMessage = (value: unknown): string | undefined => {
 export const safePrunedStateProviderMessage = (value: unknown): string | undefined => {
 	if (typeof value !== 'string' || value.length > 4096) return undefined
 	const normalized = value.replace(/\s+/gu, ' ').trim().toLowerCase()
-	if (/^state at block (?:#[0-9]+|0x[0-9a-f]+|[0-9]+) is pruned[.!]?$/u.test(normalized)) return 'state at requested block is pruned'
+	if (/(?:^|: )state at block (?:#[0-9]+|0x[0-9a-f]+|[0-9]+) is pruned[.!]?$/u.test(normalized)) return 'state at requested block is pruned'
 	if (normalized.includes('missing trie node')) return 'missing trie node'
 	if (normalized.includes('pruned historical state')) return 'pruned historical state'
 	if (normalized.includes('historical state pruned')) return 'historical state pruned'
@@ -148,7 +148,7 @@ const appendRpcRecord = async (log: RotatingJsonLog, logPath: string, record: un
 	}
 }
 
-const historicalStateMethods = new Set(['eth_call', 'eth_getBalance', 'eth_getCode', 'eth_getProof', 'eth_getStorageAt', 'eth_getTransactionCount'])
+const historicalStateMethods = new Set(['debug_traceBlockByHash', 'eth_call', 'eth_getBalance', 'eth_getCode', 'eth_getProof', 'eth_getStorageAt', 'eth_getTransactionCount'])
 
 export const createRpcLoggingFetch = (rpcUrl: string, consoleEndpoint: string, logPath: string, log: RotatingJsonLog, fetchFn: RpcFetchFn = fetch): RpcFetchFn => {
 	let reportedPrunedState = false
