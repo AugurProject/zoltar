@@ -98,11 +98,15 @@ describe('portfolio rows', () => {
 		expect(open.actionItems).toEqual([])
 		expect(row(entry({ pair: undefined }, { yes: 2n * SET, invalid: SET })).canSell).toBe(false)
 		expect(row(entry({}, { invalid: SET, lp: SET })).canSell).toBe(false)
+		// Exits need INVALID insurance, so a bare long share has nothing the ticket can sell.
+		expect(row(entry({}, { yes: SET })).canSell).toBe(false)
 	})
 
 	test('flags open positions whose trading closes within a week, with the question end as the deadline', () => {
 		const endTime = NOW + WEEK
-		expect(row(entry({ endTime }, { no: SET, invalid: SET })).actionItems).toEqual([{ kind: 'trading-closes', pool, title: market.title, deadline: endTime }])
+		expect(row(entry({ endTime }, { no: SET, invalid: SET })).actionItems).toEqual([{ kind: 'trading-closes', action: 'sell', pool, title: market.title, deadline: endTime }])
+		// Liquidity providers are pointed at withdrawal rather than a sale they cannot make.
+		expect(row(entry({ endTime }, { lp: SET })).actionItems).toEqual([{ kind: 'trading-closes', action: 'withdraw-liquidity', pool, title: market.title, deadline: endTime }])
 		expect(row(entry({ endTime: endTime + 1n }, { no: SET, invalid: SET })).actionItems).toEqual([])
 		// INVALID alone cannot be sold, so its closing is not an action.
 		expect(row(entry({ endTime }, { invalid: SET })).actionItems).toEqual([])
@@ -126,8 +130,18 @@ describe('portfolio rows', () => {
 		expect(closed.state).toBe('closed')
 		expect(closed.canSell).toBe(false)
 		expect(closed.canRedeem).toBe(true)
-		expect(closed.valuation).toEqual({ kind: 'exit', attoEth: ETH })
+		expect(closed.valuation).toEqual({ kind: 'complete-sets', attoEth: ETH, pendingResolution: false })
 		expect(closed.actionItems.map(item => item.kind)).toEqual(['redeem'])
+	})
+
+	test('does not price a closed market at pool exits, which stop when trading closes', () => {
+		const insured = row(entry({ endTime: NOW - 1n }, { yes: (3n * SET) / 2n, invalid: SET }))
+		expect(insured.valuation).toEqual({ kind: 'complete-sets', attoEth: 0n, pendingResolution: true })
+		expect(insured.canRedeem).toBe(false)
+		expect(insured.actionItems).toEqual([])
+		const overview = portfolioOverview([entry({ endTime: NOW - 1n }, { yes: (3n * SET) / 2n, no: SET / 2n, invalid: SET })], NOW)
+		expect(overview.totalValueAttoEth).toBe(ETH / 2n)
+		expect(overview.pendingResolutionCount).toBe(1)
 	})
 
 	test('asks for settlement after a fork and leaves the position unvalued', () => {
@@ -161,6 +175,6 @@ describe('portfolio overview', () => {
 			['redeem', 'Resolved'],
 			['settle', 'Forked'],
 		])
-		expect(portfolioOverview([], NOW)).toEqual({ rows: [], positionCount: 0, totalValueAttoEth: 0n, unvaluedCount: 0, actionItems: [] })
+		expect(portfolioOverview([], NOW)).toEqual({ rows: [], positionCount: 0, totalValueAttoEth: 0n, unvaluedCount: 0, pendingResolutionCount: 0, actionItems: [] })
 	})
 })

@@ -12,7 +12,9 @@ function formatPortfolioEth(attoEth: bigint) {
 }
 
 function valuationCaption(valuation: PortfolioValuation) {
-	if (valuation.kind !== 'unavailable') return valuation.kind === 'exit' ? portfolioCopy.exitValueBasis : portfolioCopy.redemptionValueBasis
+	if (valuation.kind === 'exit') return portfolioCopy.exitValueBasis
+	if (valuation.kind === 'redemption') return portfolioCopy.redemptionValueBasis
+	if (valuation.kind === 'complete-sets') return valuation.pendingResolution ? portfolioCopy.completeSetsPendingBasis : portfolioCopy.completeSetsBasis
 	if (valuation.reason === 'settlement-required') return portfolioCopy.settlementValueReason
 	return valuation.reason === 'market-unavailable' ? portfolioCopy.marketValueReason : portfolioCopy.balanceValueReason
 }
@@ -27,6 +29,12 @@ export function PortfolioRowValue({ valuation }: { valuation: PortfolioValuation
 	)
 }
 
+function totalValueCaption(overview: PortfolioOverview) {
+	if (overview.unvaluedCount > 0) return portfolioCopy.excludedFromTotal(overview.unvaluedCount)
+	if (overview.pendingResolutionCount > 0) return portfolioCopy.pendingResolutionExcluded
+	return portfolioCopy.totalValueBasis
+}
+
 /** Totals across every listed position; profit and loss stay unavailable because entry costs are not recorded per account. */
 export function PortfolioSummary({ overview }: { overview: PortfolioOverview }) {
 	return (
@@ -34,7 +42,7 @@ export function PortfolioSummary({ overview }: { overview: PortfolioOverview }) 
 			<DataGrid className='portfolio-summary-grid'>
 				<MetricField label={portfolioCopy.totalValue}>
 					{formatPortfolioEth(overview.totalValueAttoEth)}
-					<small className='payout-caption'>{overview.unvaluedCount === 0 ? portfolioCopy.totalValueBasis : portfolioCopy.excludedFromTotal(overview.unvaluedCount)}</small>
+					<small className='payout-caption'>{totalValueCaption(overview)}</small>
 				</MetricField>
 				<MetricField label={portfolioCopy.profitLoss}>
 					{portfolioCopy.profitLossUnavailable}
@@ -47,11 +55,22 @@ export function PortfolioSummary({ overview }: { overview: PortfolioOverview }) 
 	)
 }
 
+function actionBadge(item: PortfolioActionItem) {
+	if (item.kind === 'redeem') return { label: portfolioCopy.actionRedeem, tone: 'ok' as const }
+	if (item.kind === 'settle') return { label: portfolioCopy.actionSettle, tone: 'warning' as const }
+	if (item.kind === 'withdraw-liquidity') return { label: portfolioCopy.actionWithdrawLiquidity, tone: 'muted' as const }
+	return { label: portfolioCopy.actionTradingCloses, tone: 'warning' as const }
+}
+
+function actionLink(item: PortfolioActionItem) {
+	if (item.action === 'withdraw-liquidity') return { action: portfolioCopy.withdrawLiquidity, href: `#/liquidity/${item.pool}` }
+	if (item.action === 'redeem') return { action: portfolioCopy.redeem, href: `#/market/${item.pool}` }
+	if (item.action === 'settle') return { action: portfolioCopy.settle, href: `#/market/${item.pool}` }
+	return { action: portfolioCopy.sell, href: `#/market/${item.pool}` }
+}
+
 function actionItemPresentation(item: PortfolioActionItem) {
-	if (item.kind === 'redeem') return { label: portfolioCopy.actionRedeem, tone: 'ok' as const, action: portfolioCopy.redeem, href: `#/market/${item.pool}` }
-	if (item.kind === 'settle') return { label: portfolioCopy.actionSettle, tone: 'warning' as const, action: portfolioCopy.settle, href: `#/market/${item.pool}` }
-	if (item.kind === 'withdraw-liquidity') return { label: portfolioCopy.actionWithdrawLiquidity, tone: 'muted' as const, action: portfolioCopy.withdrawLiquidity, href: `#/liquidity/${item.pool}` }
-	return { label: portfolioCopy.actionTradingCloses, tone: 'warning' as const, action: portfolioCopy.sell, href: `#/market/${item.pool}` }
+	return { ...actionBadge(item), ...actionLink(item) }
 }
 
 /** What needs the account's attention, soonest deadline first, each with the action that resolves it. */
