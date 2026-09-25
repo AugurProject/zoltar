@@ -1483,6 +1483,11 @@ main:has(.global-transaction-dialog-nonblocking) #app-content {
 	background: var(--control-bg);
 }
 
+.field-inline > button.field-inline-action:disabled {
+	border: 1px dashed var(--disabled-control-border);
+	background: var(--disabled-control-bg);
+}
+
 .approval-amount-field {
 	display: flex;
 	flex-wrap: wrap;
@@ -1720,13 +1725,12 @@ main:has(.global-transaction-dialog-nonblocking) #app-content {
 	color: var(--text);
 }
 
-/* Locked text controls stay readable but visibly differ from editable ones, matching disabled buttons. */
+/* Locked text controls keep the normal field frame and only dim their text, so a locked value still reads as a field rather than a disabled button. */
 .field input:disabled:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
 .field select:disabled,
 .field textarea:disabled {
-	border-color: var(--disabled-control-border);
-	background-color: var(--disabled-control-bg);
 	color: var(--disabled-control-text);
+	-webkit-text-fill-color: var(--disabled-control-text);
 	cursor: not-allowed;
 }
 
@@ -2107,44 +2111,6 @@ main:has(.global-transaction-dialog-nonblocking) #app-content {
 
 .transaction-plan-action {
 	min-width: 0;
-}
-
-.transaction-completed-steps {
-	display: grid;
-	gap: 0;
-	margin-bottom: 0.5rem;
-}
-
-.transaction-step-completed {
-	display: flex;
-	flex-wrap: wrap;
-	align-items: baseline;
-	justify-content: space-between;
-	gap: 0.25rem 0.75rem;
-	min-height: 2rem;
-	padding: 0.25rem 0;
-	border-bottom: 1px solid var(--divider-subtle);
-	color: var(--muted);
-	font-size: var(--font-label);
-}
-
-.transaction-step-completed .read-only-detail-accordion {
-	border: 0;
-	padding: 0;
-	font-size: var(--font-label);
-}
-
-.transaction-step-completed .read-only-detail-accordion summary {
-	padding: 0;
-}
-
-.transaction-step-completed .read-only-detail-accordion[open] {
-	flex-basis: 100%;
-	min-width: 0;
-}
-
-.transaction-step-completed .read-only-detail-accordion-content {
-	padding: 0.25rem 0;
 }
 
 .transaction-plan-action .field-inline-input {

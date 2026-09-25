@@ -19,7 +19,7 @@ import { TransactionReview } from '@zoltar/ui-core-shared/components/Transaction
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as statoblastAppCopy from '../../../copy/app.js'
 import * as transactionReviewCopy from '@zoltar/ui-core-shared/copy/transactionReview.js'
-import type { OracleManagerDetails, StagedOracleOperation } from '@zoltar/ui-core-shared/types/contracts.js'
+import type { ListedSecurityPool, OracleManagerDetails, StagedOracleOperation } from '@zoltar/ui-core-shared/types/contracts.js'
 import { OpenOraclePriceValue } from '../../open-oracle/components/OpenOraclePriceValue.js'
 import * as securityPoolCopy from '../../../copy/securityPool.js'
 import { getPendingOperationAmountPresentation, getPendingOperationLabel, getStagedOperationExecutionModeLabel } from './SecurityPoolWorkflowPresentation.js'
@@ -30,6 +30,10 @@ export type RequestPriceReview = {
 	managerAddress: Address
 	securityPoolAddress: Address
 	universeId: bigint
+}
+
+export function createRequestPriceReview(pool: Pick<ListedSecurityPool, 'managerAddress' | 'securityPoolAddress' | 'universeId'>, requestValueAttoEth: bigint): RequestPriceReview {
+	return { requestValueAttoEth, managerAddress: pool.managerAddress, securityPoolAddress: pool.securityPoolAddress, universeId: pool.universeId }
 }
 
 export const PRICE_ORACLE_HEADING_ID = 'selected-pool-price-oracle-heading'
