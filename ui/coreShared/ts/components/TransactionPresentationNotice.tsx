@@ -43,6 +43,7 @@ function TransactionDetailValue({ value }: { value: ComponentChildren }) {
 export function TransactionPresentationNotice({ className = '', collapseDetails = false, compact = false, contextWarning, transaction }: TransactionPresentationNoticeProps) {
 	const badge = getTransactionBadge(transaction.tone)
 	const title = transaction.title
+	const collapsedDetail = compact && transaction.tone !== 'error' ? transaction.detail : undefined
 	const transactionHash = transaction.hash
 	const explorerUrl = transactionHash === undefined ? undefined : buildTransactionExplorerUrl(getActiveNetworkProfile(), transactionHash)
 	const rows = transaction.rows ?? []
@@ -108,12 +109,12 @@ export function TransactionPresentationNotice({ className = '', collapseDetails 
 					{title === undefined ? undefined : <strong>{title}</strong>}
 					{compact ? hashContent : undefined}
 				</div>
-				{compact && transaction.tone === 'error' ? <div className='global-transaction-notice-recovery'>{transaction.detail === transactionCopy.revertedCheckingDetails ? transaction.detail : transactionCopy.reviewFailureDetails}</div> : undefined}
+				{compact && transaction.tone === 'error' ? <div className='global-transaction-notice-recovery'>{transaction.detail ?? transactionCopy.failureReasonUnavailable}</div> : undefined}
 				{!compact && transaction.detail !== undefined ? <div className='global-transaction-notice-detail'>{transaction.detail}</div> : undefined}
 				{compact ? undefined : hashContent}
-				{collapseDetails && (rows.length > 0 || technicalRows.length > 0 || (compact && transaction.detail !== undefined)) ? (
+				{collapseDetails && (rows.length > 0 || technicalRows.length > 0 || collapsedDetail !== undefined) ? (
 					<ReadOnlyDetailAccordion title={transactionCopy.transactionDetails}>
-						{compact && transaction.detail !== undefined ? <div className='global-transaction-notice-detail'>{transaction.detail}</div> : undefined}
+						{collapsedDetail === undefined ? undefined : <div className='global-transaction-notice-detail'>{collapsedDetail}</div>}
 						{detailRows}
 					</ReadOnlyDetailAccordion>
 				) : (

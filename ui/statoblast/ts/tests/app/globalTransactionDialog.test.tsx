@@ -106,9 +106,27 @@ describe('GlobalTransactionDialog', () => {
 			render(<GlobalTransactionDialog transaction={{ ...pending, detail: 'nonce too low', title: 'Price request failed', tone: 'error' }} />, renderedComponent.container)
 		})
 		const failedDialog = queries.getByRole('dialog', { name: 'Transaction status' })
-		expect(failedDialog.querySelector('.global-transaction-notice-recovery')?.textContent).toBe('Review transaction details before retrying.')
+		expect(failedDialog.querySelector('.global-transaction-notice-recovery')?.textContent).toBe('nonce too low')
+		expect(within(failedDialog).getByText('nonce too low').closest('details')).toBeNull()
 		expect(within(failedDialog).getByRole('alert').textContent).toContain('nonce too low')
 		expect(failedDialog.querySelector('details')?.open).toBe(false)
+	})
+
+	test.each(['Action canceled in wallet.', "The pool's oracle price expired. Request a new price in Price Oracle, then retry.", 'Transaction reverted; checking details…'])('shows the failure reason before expanding details: %s', async detail => {
+		const rendered = await renderIntoDocument(<GlobalTransactionDialog transaction={{ dismissKey: `visible-failure-${detail}`, title: 'Price request failed', tone: 'error', detail, technicalRows: [{ label: 'Function', value: 'requestPrice' }] }} />)
+		trackRendered(rendered)
+		const panel = within(document.body).getByRole('dialog', { name: 'Transaction status' })
+		expect(within(panel).getByText(detail).closest('details')).toBeNull()
+		expect(panel.querySelector('details')?.open).toBe(false)
+		expect(panel.querySelector('summary')?.textContent).toBe('Transaction details')
+	})
+
+	test('explains a missing failure reason without an empty disclosure', async () => {
+		const rendered = await renderIntoDocument(<GlobalTransactionDialog transaction={{ dismissKey: 'unknown-failure-reason', title: 'Price request failed', tone: 'error' }} />)
+		trackRendered(rendered)
+		const panel = within(document.body).getByRole('dialog', { name: 'Transaction status' })
+		expect(within(panel).getByText('No failure reason was returned.')).not.toBeNull()
+		expect(panel.querySelector('details')).toBeNull()
 	})
 
 	test('keeps confirmed status and its hash until explicitly dismissed, even after a minute', async () => {
