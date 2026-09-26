@@ -25,7 +25,13 @@ FROM workspace AS dependencies
 RUN bun install --frozen-lockfile --production --filter augur-scan
 
 FROM workspace AS browser-build
-RUN bun install --frozen-lockfile --filter augur-scan
+# Shared TypeScript compilation also needs the root workspace's type dependencies.
+RUN bun install --frozen-lockfile
+# Browser exports resolve to JavaScript; build the shared package from tracked source.
+COPY shared/tsconfig.base.json shared/tsconfig.strict.json ./shared/
+COPY shared/core/tsconfig.json ./shared/core/tsconfig.json
+COPY shared/core/ts ./shared/core/ts
+RUN bun run --cwd shared/core build
 WORKDIR /workspace/augurScan
 COPY augurScan/browser ./browser
 COPY augurScan/scripts/build-browser.ts ./scripts/build-browser.ts
@@ -65,6 +71,7 @@ COPY augurScan/src ./augurScan/src
 COPY shared/core/ts/evm/ ./shared/core/ts/evm/
 COPY shared/core/ts/errors/ ./shared/core/ts/errors/
 COPY shared/core/ts/math/ ./shared/core/ts/math/
+COPY shared/core/ts/monitoring/ ./shared/core/ts/monitoring/
 RUN mkdir -p /workspace/augurScan/logs /var/log/augurscan && chown -R bun:bun /workspace/augurScan/logs /var/log/augurscan
 USER bun
 EXPOSE 3000

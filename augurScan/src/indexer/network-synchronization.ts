@@ -1,3 +1,4 @@
+import { scanBlockTimeMs, startScanReport } from '@zoltar/core-shared/monitoring/scanStatus'
 import { type ContractDeploymentObservation, DatabaseConsistencyError, type IndexedBlock, type IndexerLease } from '../database.ts'
 import { errorChainIncludes } from '../error-chain.ts'
 import type { Hash, Log } from '../ethereum.ts'
@@ -10,7 +11,7 @@ import {
 	findSparseCanonicalAncestor,
 	indexerLogSources,
 	indexerOperationFailureReason,
-	indexerProgressMessage,
+	indexerProgressDetails,
 	indexerWaitingMessage,
 	indexingCompletion,
 	isPrunedHistoricalStateError,
@@ -25,7 +26,7 @@ import type { ContractMetadata, TokenMetadata } from '../types.ts'
 import { findContractDeploymentBlock, type LogScanInput, logScanCursorUpdates, manifestReplayAncestor, planManifestBackfill, type RpcBlockHeader, reorgSearchFloor } from './planning.ts'
 import type { NetworkIndexer } from './block-ingestion.ts'
 
-export function reportProgress(this: NetworkIndexer, startBlock: bigint, endBlock: bigint, observedHead: bigint): void {
+export function reportProgress(this: NetworkIndexer, startBlock: bigint, endBlock: bigint, observedHead: bigint, scanReport: ReturnType<typeof startScanReport>, logsAdded: number): void {
 	const phase = endBlock >= observedHead ? 'live' : 'backfilling'
 	const now = Date.now()
 	const previousSample = this.progressSample
@@ -37,16 +38,13 @@ export function reportProgress(this: NetworkIndexer, startBlock: bigint, endBloc
 	} else if (previousSample === undefined || endBlock < previousSample.block) {
 		this.progressSample = { block: endBlock, sampledAt: now }
 	}
-	if (phase === 'backfilling' && this.lastReportedPhase === phase && this.lastProgressLogAt !== undefined && now - this.lastProgressLogAt < 30_000) return
 	this.lastReportedPhase = phase
-	this.lastProgressLogAt = now
-	console.info(indexerProgressMessage(this.network.id, startBlock, endBlock, observedHead, this.network.startBlock, blocksPerSecond))
+	scanReport.update({ block: endBlock, fromBlock: startBlock, observedHead, status: phase, details: { ...indexerProgressDetails(startBlock, endBlock, observedHead, this.network.startBlock, blocksPerSecond), logsAdded } })
 }
 
 export function reportWaitingForStart(this: NetworkIndexer, observedHead: bigint): void {
 	if (this.lastReportedPhase === 'live') return
 	this.lastReportedPhase = 'live'
-	this.lastProgressLogAt = Date.now()
 	console.info(indexerWaitingMessage(this.network.id, this.network.startBlock, observedHead))
 }
 
@@ -179,10 +177,27 @@ export async function refreshContractDeployment(this: NetworkIndexer, indexedBou
 }
 
 export async function poll(this: NetworkIndexer): Promise<boolean> {
+	const scanReport = startScanReport({
+		network: this.network,
+		blockTimeMs: scanBlockTimeMs(this.network.chainId, process.env['SCAN_BLOCK_TIME_MS']),
+		readHead: () => this.client.getBlockNumber(),
+	})
+	try {
+		return await pollWithReport.call(this, scanReport)
+	} catch (error) {
+		scanReport.update({ status: 'failed' })
+		throw error
+	} finally {
+		await scanReport.finish(this.signal.aborted ? 'incomplete' : undefined)
+	}
+}
+
+async function pollWithReport(this: NetworkIndexer, scanReport: ReturnType<typeof startScanReport>): Promise<boolean> {
 	await this.assertLease()
 	await this.database.recordIndexerOwnership(this.network.chainId, this.network.id, 'owned', this.requireLease().backendPid, this.provenance?.indexerRunId, this.requireLease().connection)
 	await this.reconcileReorg()
 	const observedHead = await this.client.getBlockNumber()
+	scanReport.update({ observedHead })
 	if (!this.stateBoundaryDiscovered && observedHead >= this.network.startBlock) await this.discoverStateStartBlock(observedHead)
 	const checkpoint = await this.database.checkpoint(this.network.chainId, this.requireLease())
 	const nextBlock = checkpoint === undefined ? this.network.startBlock : checkpoint.number + 1n
@@ -194,7 +209,7 @@ export async function poll(this: NetworkIndexer): Promise<boolean> {
 		await this.assertLease()
 		await this.database.updateObservedHead(this.network.chainId, observedHead, 'live', this.requireLease())
 		if (checkpoint === undefined) this.reportWaitingForStart(observedHead)
-		else if (this.lastReportedPhase !== 'live') this.reportProgress(observedHead, observedHead, observedHead)
+		scanReport.update({ block: checkpoint?.number, status: checkpoint === undefined ? 'waiting' : 'live', details: { blocksScanned: 0, logsAdded: 0 } })
 		if (checkpoint !== undefined) await this.refreshContractDeployment(checkpoint.number)
 		return true
 	}
@@ -206,6 +221,7 @@ export async function poll(this: NetworkIndexer): Promise<boolean> {
 		this.indexingStartReported = true
 	}
 	const batchStart = nextBlock
+	scanReport.update({ fromBlock: batchStart, block: nextBlock + 99n < observedHead ? nextBlock + 99n : observedHead, status: 'incomplete' })
 	let contracts = this.withManifestDeploymentBlocks(await this.database.contracts(this.network.chainId, this.requireLease()))
 	let tokenMetadata = await this.database.tokenMetadata(this.network.chainId, this.requireLease())
 	const storedCursors = await this.database.logScanCursors(this.network.chainId, this.requireLease())
@@ -231,6 +247,7 @@ export async function poll(this: NetworkIndexer): Promise<boolean> {
 		throw error
 	}
 	const end = segment.toBlock
+	scanReport.update({ block: end })
 	for (const observation of segment.deploymentObservations) {
 		const key = observation.contractAddress.toLowerCase()
 		const contract = contracts.get(key)
@@ -247,7 +264,6 @@ export async function poll(this: NetworkIndexer): Promise<boolean> {
 					}),
 		})
 	}
-	console.info(`[${this.network.id}] fetched ${segment.logs.length} protocol log${segment.logs.length === 1 ? '' : 's'} for blocks #${nextBlock}-#${end}`)
 	const logsByBlock = new Map<bigint, Log[]>()
 	this.mergeLogs(logsByBlock, segment.logs)
 	const headerPromises = new Map<bigint, Promise<RpcBlockHeader>>()
@@ -331,7 +347,13 @@ export async function poll(this: NetworkIndexer): Promise<boolean> {
 			return false
 		}
 		const indexedThrough = end
-		this.reportProgress(batchStart, indexedThrough, observedHead)
+		this.reportProgress(
+			batchStart,
+			indexedThrough,
+			observedHead,
+			scanReport,
+			blocksToStore.reduce((total, block) => total + block.logs.length, 0),
+		)
 		await this.refreshContractDeployment(indexedThrough)
 	}
 	return end >= observedHead

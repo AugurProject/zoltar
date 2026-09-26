@@ -49,7 +49,6 @@ export function TransactionFundingSummary({ funding, totalAttoEth, outcome }: { 
 						</div>
 					)}
 				</dl>
-				{outcome === undefined ? undefined : <p className='detail'>{copy.settlementCostDetail}</p>}
 			</div>
 		</section>
 	)

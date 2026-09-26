@@ -72,7 +72,8 @@ Keep cleanup bounded to the edited component, route, and directly shared primiti
 ## Interaction and transaction states
 
 - Active tabs and selected views must be immediately distinguishable.
-- Keep disabled controls legible and explain why the primary expected action is unavailable.
+- Disable unavailable functionality instead of hiding it. Keep every step, section, and button of a workflow in place as its state changes (for example, an approval step stays visible after the approval succeeds or when the existing allowance already covers it), mark it disabled, and show why: done, not needed, blocked by an earlier step, or which prerequisite is missing. Remove a control only when it can never apply to the current object.
+- Keep disabled controls legible and explain why the primary expected action is unavailable. Every disabled button uses the single shared disabled treatment regardless of tone, so disabled primary, secondary, and approval actions look identical and never resemble an enabled secondary button. Disabled text fields keep the normal field frame and dim only their text.
 - Disable a transaction action when known local state proves it will fail, using direct reasons such as `Insufficient balance`, `Switch to Ethereum mainnet`, or `Approval required`.
 - Revalidate transaction prerequisites immediately before submission when wallet, network, allowance, balance, or contract state may have changed.
 - Keep pending feedback inside the initiating button, keep the button disabled, and prevent duplicate submission until the action resolves.

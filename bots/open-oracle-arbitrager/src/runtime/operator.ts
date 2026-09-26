@@ -1,3 +1,5 @@
+import { reportCompletedScan, reportOperatorStarted } from './operator-reporting.ts'
+import { scanBlockTimeMs, startScanReport } from '@zoltar/core-shared/monitoring/scanStatus'
 import { discoverCoordinatorPolicies } from '#monitoring/coordinator-discovery'
 import type { Configuration } from '#config/configuration'
 import type { DeploymentSettings } from '#config/deployment-settings'
@@ -14,7 +16,7 @@ import { processPositionLifecycle, reconcileExpiredAttemptsWithQuorum } from '#e
 import { dateFromBlockTimestamp, pendingCoordinatorReports, pendingCoordinatorReportsWithQuorum } from '#execution/recovery-support'
 import { transactionLogLevel, type TrackTransaction } from '#execution/transaction-tracker'
 import { loadApprovedUniverses } from '#monitoring/approved-universes'
-import { checkConnectivity, checkSubmissionEndpoints, endpointLabel } from '#monitoring/connectivity'
+import { checkConnectivity, checkSubmissionEndpoints } from '#monitoring/connectivity'
 import { logMarketDiscoveryFailure, recordMarketDiscoveryFailure, recordObservedHead } from '#monitoring/market-discovery-status'
 import { appendPriceHistory, createTokenCatalogTracker, createTokenMetadataCache, discoverAugurRepTokens, discoverTokenPools, loadPriceHistory, loadTokenMarkets, missingPricePoints, pricePoints } from '#monitoring/market-monitor'
 import { candidateRiskMismatch } from '#monitoring/opportunity-evaluation'
@@ -241,19 +243,7 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 	let cachedLogs: TransactionLog[] = []
 	let tokenMetadataCache = createTokenMetadataCache()
 	let catalogForScan = createTokenCatalogTracker((configured, observed) => discoverAugurRepTokens(client, config.network.multicall3, config.network.chain.id, configured, observed))
-	recordOperation(state, {
-		category: 'scan',
-		details: config.coordinatorAddresses.length === 0 ? undefined : `Approved coordinators: ${config.coordinatorAddresses.join(', ')}`,
-		level: 'info',
-		message: config.networkConfigured ? 'Operator started' : 'Operator waiting for network configuration',
-		reason: config.networkConfigured ? `${config.network.name} chain ${config.network.chain.id.toString()}` : 'Set the chain and RPC endpoints in the dashboard',
-		reportId: undefined,
-	})
-	console.log(
-		config.networkConfigured
-			? `network=${config.network.name} chain=${config.network.chain.id.toString()} mode=${config.execute ? 'execute' : 'dry-run'} submission=${config.submission.mode} oracle=${config.openOracle} coordinators=${config.coordinatorAddresses.join(',') || 'none'} rpc=${endpointLabel(config.connectivity.readRpcUrl)}`
-			: 'network=unconfigured mode=paused configure the chain and RPC endpoints in the dashboard',
-	)
+	reportOperatorStarted(config, state)
 	headWatcher.start()
 	const centralizedMarketSampler = startCentralizedMarketSampler({ config, isStopping: stopping, state, wait: shutdown?.wait })
 	wakeCentralizedMarketSampler = centralizedMarketSampler.wake
@@ -267,6 +257,7 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 				if (scanIntentLock === undefined) return 'deferred'
 				state.nextRetryAt = undefined
 				state.retryInProgress = consecutiveFailures > 0
+				let scanReport: ReturnType<typeof startScanReport> | undefined
 				if (state.retryInProgress) state.lastRetryAt = new Date().toISOString()
 				try {
 					let executionActivationPending = false
@@ -382,6 +373,11 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 						resetReadClients()
 					}
 					if (!config.networkConfigured) return completeUnconfiguredPoll(state)
+					scanReport = startScanReport({
+						network: { chainId: config.network.chain.id, name: config.network.name },
+						blockTimeMs: scanBlockTimeMs(config.network.chain.id, process.env['SCAN_BLOCK_TIME_MS']),
+						readHead: () => client.getBlockNumber(),
+					})
 					if (!startupValidated) {
 						if (config.execute) {
 							const selected = await selectQuorumChainClient(readClients, [config.connectivity.readRpcUrl, ...config.quorumRpcUrls], config.network, contextualRpcRead)
@@ -412,7 +408,6 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 							console.error(`historyPersistenceFailed=${message}`)
 						}
 					}
-					const scanStartedAt = Date.now()
 					let quorumHead: Awaited<ReturnType<typeof selectQuorumHead>>['block'] | undefined
 					if (config.execute) {
 						const selected = await selectQuorumHead(readClients, [config.connectivity.readRpcUrl, ...config.quorumRpcUrls], contextualRpcRead)
@@ -429,6 +424,7 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 							return { ...value, hash: value.hash, number: value.number }
 						}))
 					const blockNumber = block.number
+					scanReport.update({ block: blockNumber })
 					recordObservedHead(state, block)
 					const blockHash = block.hash
 					scanWakeGate.headScanned({ hash: blockHash, number: blockNumber })
@@ -583,6 +579,7 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 					)
 					const scanCursor = cursorForHeadScan(cursor, blockNumber, blockHash, REORG_OVERLAP_BLOCKS)
 					if (scanCursor === undefined) {
+						scanReport.update({ status: 'waiting' })
 						state.blockNumber = blockNumber.toString()
 						state.blockTimestamp = block.timestamp.toString()
 						return completeSuccessfulPoll(state, nextError, config.once)
@@ -942,17 +939,14 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 						for (const id of settledReportIds) reports.delete(id)
 						cachedLogs = cachedLogs.filter(log => !settledReportIds.has(reportId(log)))
 					}
-					console.log(`scanBlock=${blockNumber.toString()} durationMs=${(Date.now() - scanStartedAt).toString()} activeReports=${state.activeReportCount.toString()} opportunities=${completedScan.evaluated.toString()} skipped=${completedScan.skipped.toString()}`)
-					recordOperation(state, {
-						category: 'scan',
-						details: `${state.activeReportCount.toString()} active reports; ${completedScan.evaluated.toString()} opportunities; ${completedScan.skipped.toString()} skipped`,
-						level: nextError === undefined ? 'info' : 'warning',
-						message: 'Scan completed',
-						reason: `Block ${blockNumber.toString()}`,
-						reportId: undefined,
-					})
+					scanReport.update({ status: state.paused ? 'paused' : 'live', details: { activeReports: state.activeReportCount, opportunities: completedScan.evaluated, skipped: completedScan.skipped } })
+					reportCompletedScan(state, blockNumber, completedScan, nextError)
 					return completeSuccessfulPoll(state, nextError, config.once)
+				} catch (error) {
+					scanReport?.update({ status: 'failed' })
+					throw error
 				} finally {
+					await scanReport?.finish(shutdown?.isRequested() ? 'incomplete' : undefined)
 					try {
 						signerOperationGate.release('scan')
 					} finally {

@@ -163,20 +163,19 @@ function getOpenOracleTransactionRows(context: OpenOracleTransactionContext | un
 }
 
 function getOpenOracleSubmittedTitle(actionName: OpenOracleActionResult['action'], context: OpenOracleTransactionContext | undefined) {
-	if (actionName === 'approveToken1') return openOracleCopy.formatApproveToken(context?.token1Symbol ?? openOracleCopy.baseToken)
-	if (actionName === 'approveToken2') return openOracleCopy.formatApproveToken(context?.token2Symbol ?? openOracleCopy.quoteToken)
-	if (actionName === 'createReportInstance') return openOracleCopy.createReport
+	if (actionName === 'approveToken1' && context?.token1Symbol !== undefined) return openOracleCopy.formatApproveToken(context.token1Symbol)
+	if (actionName === 'approveToken2' && context?.token2Symbol !== undefined) return openOracleCopy.formatApproveToken(context.token2Symbol)
 	if (actionName === 'settle') return openOracleCopy.settlingReportTitle
-	if (actionName === 'withdrawBalance') return openOracleCopy.withdrawBalance(context?.withdrawalTokenSymbol ?? openOracleCopy.oracleBalance)
+	if (actionName === 'withdrawBalance' && context?.withdrawalTokenSymbol !== undefined) return openOracleCopy.withdrawBalance(context.withdrawalTokenSymbol)
 	return getOpenOraclePendingTitle(actionName)
 }
 
 function getOpenOracleSuccessPresentationTitle(actionName: OpenOracleActionResult['action'], context: OpenOracleTransactionContext | undefined) {
-	if (actionName === 'approveToken1') return openOracleCopy.formatTokenApproved(context?.token1Symbol ?? openOracleCopy.baseToken)
-	if (actionName === 'approveToken2') return openOracleCopy.formatTokenApproved(context?.token2Symbol ?? openOracleCopy.quoteToken)
+	if (actionName === 'approveToken1' && context?.token1Symbol !== undefined) return openOracleCopy.formatTokenApproved(context.token1Symbol)
+	if (actionName === 'approveToken2' && context?.token2Symbol !== undefined) return openOracleCopy.formatTokenApproved(context.token2Symbol)
 	if (actionName === 'createReportInstance') return openOracleCopy.reportCreated
 	if (actionName === 'settle') return context?.reportId === undefined ? openOracleCopy.reportSettled : openOracleCopy.settledReportNumber(context.reportId)
-	if (actionName === 'withdrawBalance') return openOracleCopy.formatTokenWithdrawn(context?.withdrawalTokenSymbol ?? openOracleCopy.oracleBalance)
+	if (actionName === 'withdrawBalance' && context?.withdrawalTokenSymbol !== undefined) return openOracleCopy.formatTokenWithdrawn(context.withdrawalTokenSymbol)
 	return getOpenOracleSuccessTitle(actionName)
 }
 
@@ -214,7 +213,7 @@ const OPEN_ORACLE_ACTION_TITLES = {
 	queueOperation: { failure: 'Queue operation failed', pending: 'Queueing operation', success: 'Operation queued' },
 	requestPrice: { failure: 'Price request failed', pending: 'Requesting price', success: 'Price requested' },
 	settle: { failure: 'Settlement failed', pending: 'Settling report', success: 'Report settled' },
-	withdrawBalance: { failure: 'Oracle balance withdrawal failed', pending: 'Withdrawing Oracle balance', success: 'Oracle balance withdrawn' },
+	withdrawBalance: { failure: 'Oracle balance withdrawal failed', pending: 'Withdrawing oracle balance', success: 'Oracle balance withdrawn' },
 	wrapWeth: { failure: 'ETH wrap failed', pending: 'Wrapping ETH to WETH', success: 'ETH wrapped to WETH' },
 } satisfies Record<OpenOracleAction, OpenOracleActionTitles>
 
