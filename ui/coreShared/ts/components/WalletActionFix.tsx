@@ -40,8 +40,12 @@ export function useWalletActionFix({ actionButtonRef, actionDisabled, availabili
 	const blockerKind = blocker?.kind
 	useLayoutEffect(() => {
 		// The fix button is disabled while the wallet request is pending, so focus falls back to the page; return it to the next control once the request settles.
-		// An unblocked action may still wait for data that loads after connecting, so focus waits until it is enabled.
-		if (pending || !restoreFocus.current || (blockerKind === undefined && actionDisabled)) return
+		if (pending || !restoreFocus.current) return
+		// A resolved blocker whose action stays disabled for another reason ends the request without moving focus later.
+		if (blockerKind === undefined && actionDisabled) {
+			restoreFocus.current = false
+			return
+		}
 		restoreFocus.current = false
 		if (document.activeElement !== null && document.activeElement !== document.body) return
 		const nextFocus = blockerKind === undefined ? actionButtonRef.current : fixButtonRef.current

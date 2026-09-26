@@ -134,6 +134,44 @@ describe('wallet action fix', () => {
 		expect(document.activeElement).toBe(action)
 	})
 
+	test('does not move focus later when the connected action stays disabled for another reason', async () => {
+		const state = signal<{ availability: ActionAvailability; connecting: boolean }>({ availability: disconnectedAvailability, connecting: false })
+		const Harness = () => (
+			<WalletActionsProvider
+				walletActions={{
+					isConnectingWallet: state.value.connecting,
+					isManagingWallet: false,
+					onConnect: () => {
+						state.value = { ...state.value, connecting: true }
+					},
+					onSwitchNetwork: () => undefined,
+				}}
+			>
+				<TransactionActionButton availability={state.value.availability} idleLabel='Create question' onClick={() => undefined} pendingLabel='Creating…' />
+			</WalletActionsProvider>
+		)
+		const rendered = await renderIntoDocument(<Harness />)
+		cleanupRenderedComponent = rendered.cleanup
+		const page = within(document.body)
+		const fix = page.getByRole('button', { name: 'Connect wallet' })
+		fix.focus()
+		await act(() => fireEvent.click(fix))
+		fix.blur()
+		await act(() => {
+			state.value = { availability: { disabled: true, reason: 'Enter a title.' }, connecting: false }
+		})
+		expect(document.activeElement).toBe(document.body)
+		// Disconnecting later from elsewhere brings the fix back without taking focus.
+		await act(() => {
+			state.value = { availability: disconnectedAvailability, connecting: false }
+		})
+		expect(document.activeElement).toBe(document.body)
+		await act(() => {
+			state.value = { availability: { disabled: false, reason: undefined }, connecting: false }
+		})
+		expect(document.activeElement).toBe(document.body)
+	})
+
 	test('places the fix under a grouped action and describes the action by the group notice and the fix', async () => {
 		const { walletActions } = createWalletActions()
 		const rendered = await renderIntoDocument(

@@ -116,6 +116,18 @@ void describe('deployment helpers', () => {
 		).toEqual({ disabled: false, reason: undefined })
 	})
 
+	void test('getDeploymentStepAvailability keeps the wallet reason as text so only the route-level deploy action offers the wallet fix', () => {
+		expect(
+			getDeploymentStepAvailability({
+				accountAddress: undefined,
+				busyStepId: undefined,
+				isOnActiveAppChain: true,
+				prerequisiteLabel: 'Zoltar Question Data',
+				step: createStep('zoltar', false, ['zoltarQuestionData']),
+			}),
+		).toEqual({ disabled: true, reason: 'Connect wallet to deploy this contract.' })
+	})
+
 	void test('getDeploymentSteps includes the deployment status oracle as a proxy deployer step', () => {
 		const deploymentSteps = getDeploymentSteps()
 		const deploymentStatusOracleStep = deploymentSteps.find(step => step.id === 'deploymentStatusOracle')
