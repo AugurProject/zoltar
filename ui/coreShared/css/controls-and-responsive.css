@@ -279,13 +279,6 @@
 	box-shadow: none;
 }
 
-.overview-wallet-panel {
-	padding: var(--space-3) var(--space-4);
-	border: 0;
-	background: transparent;
-	box-shadow: none;
-}
-
 .overview-panel .route-header {
 	padding: 0 0 var(--space-2);
 	border: 0;
@@ -597,11 +590,6 @@
 		grid-template-columns: 1fr;
 	}
 
-	.account-menu-popover {
-		right: auto;
-		left: 0;
-	}
-
 	.section-block,
 	.overview-panel {
 		padding: var(--space-4);
@@ -619,37 +607,6 @@
 		padding: var(--space-3) 0 0;
 	}
 
-	.route-subnav-shell {
-		display: grid;
-		grid-template-columns: minmax(0, 1fr);
-		align-items: center;
-		padding: 0;
-	}
-
-	.route-subnav-shell.has-overflow-start {
-		grid-template-columns: var(--touch-target-min) minmax(0, 1fr);
-	}
-
-	.route-subnav-shell.has-overflow-end {
-		grid-template-columns: minmax(0, 1fr) var(--touch-target-min);
-	}
-
-	.route-subnav-shell.has-overflow-start.has-overflow-end {
-		grid-template-columns: var(--touch-target-min) minmax(0, 1fr) var(--touch-target-min);
-	}
-
-	.route-subnav-overflow-control {
-		display: inline-flex;
-		align-items: center;
-		justify-content: center;
-		min-width: var(--touch-target-min);
-		min-height: var(--touch-target-min);
-		padding: 0;
-		border-radius: var(--radius-control);
-		font-size: 1.35rem;
-		color: var(--text-secondary);
-	}
-
 	.data-grid[data-columns="2"],
 	.data-grid[data-columns="3"],
 	.data-grid[data-columns="4"] {
@@ -661,95 +618,6 @@
 	.entity-card-header {
 		display: flex;
 		flex-direction: column;
-	}
-
-	.route-subtab-nav {
-		justify-content: flex-start;
-		flex-wrap: nowrap;
-		gap: 0.45rem;
-		width: 100%;
-		min-width: 0;
-		overflow-x: auto;
-		overflow-y: hidden;
-	}
-
-	.route-subtab-nav.view-tabs.subroute .view-tab {
-		flex: 0 0 auto;
-		padding-right: 0;
-		padding-left: 0;
-		font-size: var(--font-label);
-	}
-
-	/* Groups stack, each with its caption above two metric columns. */
-	.overview-metric-group,
-	.overview-metric-group.is-secondary {
-		flex: 1 1 100%;
-		flex-direction: column;
-		align-items: stretch;
-		gap: var(--space-1);
-	}
-
-	.overview-metric-group + .overview-metric-group {
-		padding-top: var(--space-2);
-		padding-left: 0;
-		border-top: 1px solid var(--divider-subtle);
-		border-left: 0;
-	}
-
-	.overview-metric-group-items,
-	.overview-metric-group.is-secondary .overview-metric-group-items {
-		grid-auto-flow: row;
-		grid-template-columns: repeat(2, minmax(0, 1fr));
-		gap: var(--space-1) var(--space-3);
-	}
-
-	/* Narrow tracks stack every label above its value so rows stay even; the tap-target slack sits below the value text. */
-	.overview-metric-group-items > div {
-		flex-direction: column;
-		align-items: stretch;
-		gap: 0.1rem;
-	}
-
-	.overview-inline-metrics .metric-field-value {
-		flex: 0 0 auto;
-		align-items: flex-start;
-	}
-
-	/* Copyable and plain values start at the same line so a mobile row reads level. */
-	.overview-inline-metrics .currency-value.copyable {
-		align-items: flex-start;
-		padding-top: 0;
-	}
-
-	.overview-metric-group-caption {
-		margin-bottom: var(--space-1);
-	}
-
-	.overview-inline-metrics .metric-field-value,
-	.overview-inline-metrics .currency-value.copyable,
-	.wallet-chip .address-value.copyable {
-		min-height: var(--touch-target-min);
-	}
-
-	.overview-inline-metrics:not(.mobile-expanded) .overview-metric-secondary,
-	.overview-inline-metrics:not(.mobile-expanded) .overview-metric-group.is-secondary {
-		display: none;
-	}
-
-	.overview-details-toggle {
-		display: inline-flex;
-		align-items: center;
-		justify-content: center;
-		min-height: var(--touch-target-min);
-		width: fit-content;
-		margin-top: var(--space-2);
-	}
-
-	/* Keep the touch target while the visible chip label row stays compact. */
-	.overview-inline-metrics .metric-label-refresh {
-		min-width: var(--touch-target-min);
-		min-height: var(--touch-target-min);
-		margin: -0.85rem -0.6rem -0.85rem 0;
 	}
 
 	.address-value.copyable,
@@ -770,10 +638,6 @@
 @media (max-width: 40rem) {
 	main {
 		padding: 0.75rem 0.65rem 2.5rem;
-	}
-
-	.app-nav-stack {
-		padding: 0.5rem 0.55rem;
 	}
 
 	.market-task-context {
@@ -797,41 +661,6 @@
 		font-size: var(--font-caption);
 	}
 
-	.route-subnav-shell {
-		display: grid;
-		padding: 0;
-	}
-
-	/* Narrow screens stack the tiers and put the guide link after them so the route tabs keep the full width. */
-	.app-nav-stack {
-		grid-template-columns: minmax(0, 1fr);
-	}
-
-	.app-nav-stack > .protocol-guide-link {
-		grid-column: 1;
-		grid-row: auto;
-		justify-self: start;
-	}
-
-	.protocol-guide-link {
-		flex: 0 0 auto;
-		margin-left: 0;
-	}
-
-	/* A simulation strip collapses entirely until the details toggle reveals it. */
-	.overview-wallet-panel.is-simulation .overview-inline-metrics:not(.mobile-expanded) .overview-simulation-secondary,
-	.overview-wallet-panel.is-simulation .overview-inline-metrics:not(.mobile-expanded) .overview-metric-group {
-		display: none;
-	}
-
-	.overview-wallet-panel.is-simulation .overview-inline-metrics:not(.mobile-expanded) {
-		margin-top: 0;
-	}
-
-	.overview-wallet-panel.is-simulation {
-		padding: var(--space-2) var(--space-3);
-	}
-
 	.section-block,
 	.overview-panel {
 		padding: var(--space-3);
@@ -839,146 +668,6 @@
 
 	.route-header {
 		padding: var(--space-2) 0 var(--space-1);
-	}
-
-	.route-subnav-shell {
-		min-width: 0;
-		overflow: visible;
-	}
-
-	.route-subtab-nav {
-		width: 100%;
-		min-width: 0;
-	}
-}
-
-/* Application toolbar: brand and badges lead, wallet and universe controls sit right, settings closes the row. */
-.header-toolbar {
-	display: grid;
-	grid-template-columns: auto minmax(0, 1fr) auto;
-	align-items: center;
-	gap: var(--space-2) var(--space-3);
-}
-
-.header-toolbar-brand {
-	display: flex;
-	align-items: center;
-	flex-wrap: wrap;
-	gap: var(--space-2) var(--space-3);
-	min-width: 0;
-}
-
-.header-toolbar .application-brand {
-	margin: 0;
-	font-size: 1.25rem;
-	font-weight: 650;
-	line-height: var(--line-height-tight);
-	letter-spacing: -0.01em;
-	white-space: nowrap;
-	overflow-wrap: normal;
-}
-
-.header-toolbar .environment-badge-row {
-	justify-content: flex-start;
-}
-
-.header-toolbar-controls {
-	display: flex;
-	align-items: center;
-	flex-wrap: wrap;
-	justify-content: flex-end;
-	gap: var(--space-2) var(--space-3);
-	min-width: 0;
-}
-
-.header-toolbar-settings {
-	display: flex;
-	align-items: center;
-}
-
-/* The details toggle only appears when the strip has something to reveal: secondary metrics at the tablet breakpoint or a collapsed simulation strip on phones. */
-.overview-wallet-panel:not(.is-simulation):not(:has(.overview-metric-secondary, .overview-metric-group.is-secondary)) .overview-details-toggle {
-	display: none;
-}
-
-@media (min-width: 40.0625rem) {
-	.overview-wallet-panel:not(:has(.overview-metric-secondary, .overview-metric-group.is-secondary)) .overview-details-toggle {
-		display: none;
-	}
-}
-
-/* Until both groups fit on one row, the balance and price groups take one row each, sized to their content with a shared caption column. */
-@media (min-width: 50.0625rem) and (max-width: 75rem) {
-	.overview-metric-group,
-	.overview-metric-group.is-secondary {
-		flex: 0 1 100%;
-	}
-
-	.overview-metric-group-caption {
-		min-width: 6.5rem;
-	}
-
-	.overview-metric-group + .overview-metric-group {
-		padding-left: 0;
-		border-left: 0;
-	}
-}
-
-/* Once the controls no longer fit beside the brand, brand and settings share row one and the wallet and universe controls take row two. */
-@media (max-width: 56rem) {
-	.header-toolbar {
-		grid-template-columns: minmax(0, 1fr) auto;
-	}
-
-	.header-toolbar-controls {
-		grid-column: 1 / -1;
-		grid-row: 2;
-		justify-content: flex-start;
-	}
-
-	/* The wallet chip now sits at the left edge, so its popover opens rightwards instead of off-screen. */
-	.header-toolbar-controls .account-menu-popover {
-		right: auto;
-		left: 0;
-	}
-}
-
-@media (max-width: 42rem) {
-	/* The brand keeps one line beside the settings control; it steps down a size instead of wrapping and only wraps on the narrowest phones. */
-	.header-toolbar .application-brand {
-		font-size: 1.125rem;
-	}
-
-	/* Wallet chip and universe share one toolbar row when they fit, with the universe caption stacked over its value; otherwise the field takes its own row. */
-	.header-toolbar-controls {
-		justify-content: space-between;
-	}
-
-	/* The field is left-aligned internally so it reads the same whether it ends the chip row or takes its own. */
-	.header-toolbar-controls .toolbar-field {
-		flex-direction: column;
-		align-items: flex-start;
-		gap: 0.1rem;
-	}
-
-	.header-toolbar-controls .toolbar-field-value {
-		white-space: nowrap;
-	}
-
-	.header-toolbar .environment-badge-row .badge {
-		padding-inline: 0.3rem;
-		letter-spacing: 0.02em;
-	}
-}
-
-@media (max-width: 22.4375rem) {
-	.header-toolbar .application-brand {
-		white-space: normal;
-	}
-
-	.overview-metric-group-items,
-	.overview-metric-group.is-secondary .overview-metric-group-items {
-		grid-template-columns: minmax(0, 1fr);
 	}
 }
 
@@ -1030,4 +719,594 @@
 
 .application-brand img {
 	flex-shrink: 0;
+}
+
+/*
+ * Application chrome: a thin simulation strip, then one top-bar row with brand, primary navigation, universe,
+ * the account popover, and settings. Narrow screens move the primary navigation into a fixed bottom tab bar.
+ */
+/* The chrome stacks above sticky route content so its popovers and the fixed bottom tab bar are never covered. */
+.app-chrome {
+	position: relative;
+	z-index: var(--z-nav);
+	display: grid;
+	grid-template-columns: minmax(0, 1fr);
+	gap: var(--space-2);
+}
+
+/* The forked-universe notice: one line of state and the action that resolves it. */
+.universe-fork-notice {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	justify-content: space-between;
+	gap: var(--space-2) var(--space-4);
+	padding-right: var(--space-3);
+}
+
+.universe-fork-notice p {
+	flex: 1 1 20rem;
+	margin: 0;
+}
+
+.universe-fork-notice strong {
+	color: var(--warning);
+}
+
+.universe-fork-notice .button-link {
+	flex: 0 0 auto;
+}
+
+.app-chrome > .warning-surface,
+.app-chrome > .state-hint {
+	margin: 0;
+}
+
+.header-toolbar {
+	display: flex;
+	align-items: center;
+	gap: var(--space-3);
+	min-height: 3.5rem;
+	padding: 0.3rem 0.5rem 0.3rem 0.75rem;
+	border: 1px solid var(--divider-strong);
+	border-radius: var(--radius-shell);
+	background: color-mix(in srgb, var(--surface-section-opaque) 94%, var(--accent) 6%);
+}
+
+.header-toolbar-brand {
+	display: flex;
+	flex: 0 0 auto;
+	align-items: center;
+	gap: var(--space-2);
+	min-width: 0;
+}
+
+.header-toolbar .application-brand {
+	margin: 0;
+	font-family: var(--font-family-sans);
+	font-size: var(--font-title);
+	font-weight: 650;
+	line-height: var(--line-height-tight);
+	letter-spacing: -0.01em;
+	white-space: nowrap;
+	overflow-wrap: normal;
+}
+
+.header-toolbar .environment-badge-row {
+	flex-wrap: nowrap;
+	justify-content: flex-start;
+}
+
+.header-toolbar-navigation {
+	flex: 1 1 auto;
+	min-width: 0;
+}
+
+.header-toolbar-navigation .tab-nav {
+	gap: var(--space-1);
+}
+
+.header-toolbar-navigation .view-tabs.route {
+	gap: var(--space-1);
+	border-bottom: 0;
+	overflow: visible;
+}
+
+.header-toolbar-navigation .view-tabs.route .view-tab,
+.tab-nav-more-trigger.view-tab {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: 0.35rem;
+	min-height: 2.5rem;
+	padding: 0.45rem 0.75rem;
+	border: 0;
+	border-radius: var(--radius-control);
+	background: transparent;
+	box-shadow: none;
+	color: var(--text-secondary);
+	font-size: var(--font-caption);
+	font-weight: 600;
+	letter-spacing: 0;
+	text-decoration: none;
+	text-transform: none;
+	white-space: nowrap;
+}
+
+.header-toolbar-navigation .view-tabs.route .view-tab:hover:not(:disabled):not([aria-disabled="true"]),
+.tab-nav-more-trigger.view-tab:hover {
+	background: var(--interactive-bg-hover);
+	color: var(--text);
+}
+
+/* The active section reads by fill, weight, and an underline, so selection never relies on color alone. */
+.header-toolbar-navigation .view-tabs.route .view-tab.active,
+.tab-nav-more-trigger.view-tab.active {
+	background: var(--accent-soft);
+	box-shadow: inset 0 -2px 0 var(--accent);
+	color: var(--text);
+	font-weight: 700;
+}
+
+.header-toolbar-navigation .view-tabs.route .view-tab[aria-disabled="true"] {
+	background: transparent;
+	color: var(--disabled-control-text);
+}
+
+.tab-nav-more {
+	position: relative;
+}
+
+.tab-nav-more-caret,
+.account-menu-caret {
+	flex-shrink: 0;
+	width: 0.4rem;
+	height: 0.4rem;
+	border-right: 1.5px solid currentColor;
+	border-bottom: 1.5px solid currentColor;
+	transform: translateY(-0.1rem) rotate(45deg);
+}
+
+.tab-nav-more-trigger[aria-expanded="true"] .tab-nav-more-caret,
+.account-menu-trigger[aria-expanded="true"] .account-menu-caret {
+	transform: translateY(0.1rem) rotate(225deg);
+}
+
+.tab-nav-more-menu {
+	position: absolute;
+	z-index: var(--z-dropdown);
+	top: calc(100% + 0.4rem);
+	left: 0;
+	display: grid;
+	min-width: 12rem;
+	margin: 0;
+	padding: var(--space-1);
+	border: 1px solid var(--border-strong);
+	border-radius: var(--radius-overlay);
+	background: var(--surface-modal-opaque);
+	box-shadow: var(--shadow-overlay);
+	list-style: none;
+}
+
+.tab-nav-more-menu a {
+	display: flex;
+	align-items: center;
+	min-height: var(--touch-target-min);
+	padding: 0 var(--space-3);
+	border-radius: var(--radius-control);
+	color: var(--text-secondary);
+	font-size: var(--font-caption);
+	font-weight: 600;
+	text-decoration: none;
+}
+
+.tab-nav-more-menu a:hover {
+	background: var(--interactive-bg-hover);
+	color: var(--text);
+}
+
+.tab-nav-more-menu a.active {
+	background: var(--accent-soft);
+	box-shadow: inset 2px 0 0 var(--accent);
+	color: var(--text);
+	font-weight: 700;
+}
+
+.tab-nav-more-menu a[aria-disabled="true"] {
+	color: var(--disabled-control-text);
+	cursor: not-allowed;
+}
+
+.header-toolbar-controls {
+	display: flex;
+	flex: 0 1 auto;
+	align-items: center;
+	justify-content: flex-end;
+	gap: var(--space-3);
+	min-width: 0;
+	margin-left: auto;
+}
+
+.header-toolbar-settings {
+	display: flex;
+	flex: 0 0 auto;
+	align-items: center;
+	margin-left: auto;
+}
+
+.header-toolbar-controls + .header-toolbar-settings {
+	margin-left: 0;
+}
+
+.app-settings-trigger {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.4rem;
+}
+
+.app-settings-icon {
+	flex-shrink: 0;
+}
+
+.header-toolbar-settings .app-settings-trigger,
+.header-toolbar-controls .wallet-button {
+	min-height: 2.5rem;
+	padding: 0.4rem 0.75rem;
+	font-size: var(--font-caption);
+}
+
+.header-toolbar-controls .toolbar-field {
+	min-height: 2.5rem;
+}
+
+.header-toolbar-controls .toolbar-field-value {
+	white-space: nowrap;
+}
+
+.app-settings-menu .protocol-guide-link {
+	width: 100%;
+	margin-top: var(--space-3);
+}
+
+.tab-nav-unavailable {
+	padding: 0 var(--space-3);
+}
+
+/* Section views: a segmented control above the route content that wraps rather than scrolling sideways. */
+.route-subnav-shell {
+	display: flex;
+	min-width: 0;
+}
+
+.route-subnav-shell .route-subtab-nav.view-tabs.segmented {
+	flex-wrap: wrap;
+	width: auto;
+	max-width: 100%;
+	overflow: visible;
+}
+
+.route-subnav-shell .route-subtab-nav.view-tabs.segmented .view-tab {
+	display: inline-flex;
+	align-items: center;
+	min-height: 2.5rem;
+	padding: 0.4rem 0.8rem;
+	text-decoration: none;
+	white-space: nowrap;
+}
+
+/* Account popover: the full address, network facts, balances, prices, and wallet actions. */
+.account-menu-trigger {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.4rem;
+	min-height: 2.5rem;
+	padding: 0 0.7rem 0 0;
+	border: 1px solid var(--control-border);
+	border-radius: var(--radius-pill);
+	background: var(--surface-row);
+	color: var(--text-secondary);
+}
+
+.account-menu-trigger .wallet-chip {
+	min-height: 2.4rem;
+	border: 0;
+	background: transparent;
+}
+
+.account-menu-trigger:hover,
+.account-menu-trigger[aria-expanded="true"] {
+	border-color: var(--interactive-border-hover);
+	background: var(--interactive-bg-active);
+	color: var(--text);
+}
+
+.account-menu-popover {
+	width: 20rem;
+	max-width: calc(100vw - 1.5rem);
+	gap: var(--space-3);
+}
+
+.account-menu-network {
+	display: grid;
+	gap: var(--space-1);
+	margin: 0;
+}
+
+.account-menu-network > div,
+.account-menu-metrics .overview-metric-group-items > div {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: var(--space-3);
+	min-width: 0;
+}
+
+.account-menu-network dt,
+.account-menu-metrics .metric-label {
+	color: var(--muted);
+	font-family: var(--font-family-mono);
+	font-size: var(--font-label);
+	letter-spacing: 0.06em;
+	white-space: nowrap;
+}
+
+.account-menu-network dd {
+	margin: 0;
+	font-family: var(--font-family-mono);
+	font-size: var(--font-caption);
+	text-align: right;
+}
+
+.account-menu-metrics {
+	display: grid;
+	gap: var(--space-3);
+}
+
+.overview-metric-group {
+	display: grid;
+	gap: var(--space-1);
+	min-width: 0;
+}
+
+.account-menu-metrics .overview-metric-group + .overview-metric-group {
+	padding-top: var(--space-3);
+	border-top: 1px solid var(--divider-subtle);
+}
+
+.overview-metric-group-caption {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: var(--space-2);
+}
+
+.overview-metric-group-label {
+	color: var(--muted);
+	font-family: var(--font-family-mono);
+	font-size: var(--font-xs);
+	font-weight: 700;
+	letter-spacing: 0.1em;
+	text-transform: uppercase;
+	white-space: nowrap;
+}
+
+.overview-metric-group-items {
+	display: grid;
+	gap: var(--space-1);
+	min-width: 0;
+}
+
+.account-menu-metrics .metric-field-value {
+	min-width: 0;
+	font-family: var(--font-family-mono);
+	font-size: var(--font-value);
+	font-weight: 600;
+	font-variant-numeric: tabular-nums;
+	color: var(--value);
+	text-align: right;
+}
+
+.account-menu-metrics .metric-label-refresh {
+	min-width: var(--touch-target-min);
+	min-height: 2rem;
+	padding: 0.15rem;
+}
+
+.account-menu-actions {
+	display: grid;
+	gap: var(--space-2);
+}
+
+.account-menu-actions > button {
+	width: 100%;
+}
+
+/* Below wide desktops the brand keeps its mark and settings keeps its icon, so the navigation has room on one row. */
+@media (max-width: 80rem) {
+	.header-toolbar .application-brand-name {
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		margin: -1px;
+		overflow: hidden;
+		clip: rect(0 0 0 0);
+		white-space: nowrap;
+	}
+
+	.header-toolbar-settings .app-settings-trigger {
+		min-width: 2.5rem;
+		padding-inline: 0.6rem;
+	}
+
+	.header-toolbar .app-settings-label {
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		margin: -1px;
+		overflow: hidden;
+		clip: rect(0 0 0 0);
+		white-space: nowrap;
+	}
+}
+
+/* Mid widths drop the universe caption; the universe keeps its value. */
+@media (max-width: 72rem) {
+	.header-toolbar-controls .toolbar-field-label {
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		margin: -1px;
+		overflow: hidden;
+		clip: rect(0 0 0 0);
+		white-space: nowrap;
+	}
+}
+
+@media (max-width: 60rem) {
+	.header-toolbar .environment-badge-row {
+		display: none;
+	}
+}
+
+/* Tablets and phones: the primary navigation becomes a fixed bottom tab bar, so the top bar keeps brand, universe, account, and settings. */
+@media (max-width: 64rem) {
+	main {
+		padding-bottom: calc(5rem + env(safe-area-inset-bottom));
+	}
+
+	.header-toolbar-navigation {
+		position: fixed;
+		right: 0;
+		bottom: 0;
+		left: 0;
+		z-index: var(--z-nav);
+		padding: 0.25rem 0.35rem calc(0.25rem + env(safe-area-inset-bottom));
+		border-top: 1px solid var(--border-default);
+		background: var(--surface-modal-opaque);
+		box-shadow: var(--shadow-overlay);
+	}
+
+	/* Every destination, including More, gets an equal cell. */
+	.header-toolbar-navigation .tab-nav {
+		display: grid;
+		grid-auto-columns: minmax(0, 1fr);
+		grid-auto-flow: column;
+		gap: 0.15rem;
+	}
+
+	.header-toolbar-navigation .view-tabs.route {
+		display: contents;
+	}
+
+	.header-toolbar-navigation .view-tabs.route .view-tab,
+	.header-toolbar-navigation .tab-nav-more {
+		min-width: 0;
+	}
+
+	.header-toolbar-navigation .view-tabs.route .view-tab,
+	.header-toolbar-navigation .tab-nav-more-trigger.view-tab {
+		min-height: 3rem;
+		padding: 0.3rem 0.25rem;
+		font-size: var(--font-label);
+		line-height: var(--line-height-tight);
+		text-align: center;
+		white-space: normal;
+	}
+
+	.header-toolbar-navigation .tab-nav-more-trigger.view-tab {
+		width: 100%;
+	}
+
+	.header-toolbar-navigation .view-tabs.route .view-tab.active,
+	.header-toolbar-navigation .tab-nav-more-trigger.view-tab.active {
+		box-shadow: inset 0 2px 0 var(--accent);
+	}
+
+	.header-toolbar-navigation .tab-nav-more-menu {
+		top: auto;
+		right: 0;
+		bottom: calc(100% + 0.4rem);
+		left: auto;
+	}
+}
+
+/* Phones: a denser top bar, section views in a two-column grid, and a full-width account popover. */
+@media (max-width: 48rem) {
+	.header-toolbar {
+		gap: var(--space-2);
+		padding: 0.25rem 0.35rem 0.25rem 0.5rem;
+		border-radius: var(--radius-control);
+	}
+
+	/* A network-switch action is the only control that can push the bar to a second row. */
+	.header-toolbar-controls {
+		flex-wrap: wrap;
+		gap: var(--space-2);
+	}
+
+	.header-toolbar-controls .toolbar-field-value,
+	.header-toolbar-controls .wallet-chip {
+		font-size: var(--font-label);
+	}
+
+	.header-toolbar-controls .wallet-chip {
+		gap: 0.35rem;
+		padding-inline: 0.55rem 0.6rem;
+	}
+
+	.header-toolbar-controls .wallet-chip.is-placeholder {
+		min-width: 7.5rem;
+	}
+
+	/* Views share a two-column grid so a wrapped row reads as one control instead of a stray tab. */
+	.route-subnav-shell .route-subtab-nav.view-tabs.segmented {
+		display: grid;
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+		width: 100%;
+	}
+
+	.route-subnav-shell .route-subtab-nav.view-tabs.segmented .view-tab {
+		justify-content: center;
+		padding-inline: 0.5rem;
+		font-size: var(--font-label);
+	}
+
+	.account-menu-trigger {
+		padding-right: 0;
+	}
+
+	.account-menu-caret {
+		display: none;
+	}
+
+	/* The popover spans the viewport under its trigger instead of overflowing the left edge. */
+	.account-menu-popover {
+		position: fixed;
+		top: auto;
+		right: 0.75rem;
+		left: 0.75rem;
+		width: auto;
+		margin-top: 0.5rem;
+	}
+}
+
+/* The narrowest phones tighten spacing so universe, account, and settings still share one row. */
+@media (max-width: 24rem) {
+	main {
+		padding-inline: 0.4rem;
+	}
+
+	.header-toolbar {
+		padding-inline: 0.3rem;
+	}
+
+	.header-toolbar,
+	.header-toolbar-controls {
+		gap: 0.3rem;
+	}
+
+	.header-toolbar-controls .wallet-chip {
+		gap: 0.25rem;
+		padding-inline: 0.4rem 0.45rem;
+	}
 }

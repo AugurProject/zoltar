@@ -154,7 +154,7 @@
 	align-items: center;
 	flex-wrap: wrap;
 	gap: var(--space-3);
-	margin-top: var(--space-3);
+	padding: 0 var(--space-3);
 }
 .portfolio-record .entity-card-copy h3 {
 	font-size: 1.25rem;

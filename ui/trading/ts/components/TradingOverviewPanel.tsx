@@ -8,34 +8,27 @@ import * as copy from '../copy/app.js'
 type TradingOverviewPanelProps = {
 	badges?: ComponentChildren
 	controls?: ComponentChildren
+	navigation?: ComponentChildren
 	onRetryWalletSummary?: () => void
 	settingsMenu?: ComponentChildren
-	simulation: boolean
 	/** The connected wallet's balances for the selected universe; omitted on routes without a live wallet. */
 	walletSummary?: WalletSummaryState | undefined
 }
 
-/** Trading's header on the shared overview panel: the live wallet balance strip and its read failures sit under the toolbar. */
-export function TradingOverviewPanel({ badges, controls, onRetryWalletSummary, settingsMenu, simulation, walletSummary }: TradingOverviewPanelProps) {
-	const loading = walletSummary?.status === 'loading'
-	const ready = walletSummary?.status === 'ready'
+/** The wallet's ETH balance for the account popover. Trading settles in ETH, so REP stays out of its header. */
+export function TradingBalanceGroup({ walletSummary }: { walletSummary: WalletSummaryState }) {
+	return <WalletBalanceGroup balances={[{ asset: commonCopy.eth, exactWhenRoundedToZero: true, loading: walletSummary.status === 'loading', value: walletSummary.status === 'ready' ? walletSummary.ethAttoEth : undefined }]} />
+}
+
+/** Trading's top bar on the shared header panel; wallet balance read failures sit under the bar. */
+export function TradingOverviewPanel({ badges, controls, navigation, onRetryWalletSummary, settingsMenu, walletSummary }: TradingOverviewPanelProps) {
 	return (
 		<OverviewHeaderPanel
 			applicationTitle={copy.appName}
 			badges={badges}
 			controls={controls}
+			navigation={navigation}
 			settingsMenu={settingsMenu}
-			simulation={simulation}
-			metrics={
-				walletSummary === undefined ? undefined : (
-					<WalletBalanceGroup
-						balances={[
-							{ asset: commonCopy.eth, exactWhenRoundedToZero: true, loading, value: ready ? walletSummary.ethAttoEth : undefined },
-							{ asset: commonCopy.rep, exactWhenRoundedToZero: true, loading, value: ready ? walletSummary.repAttoRep : undefined },
-						]}
-					/>
-				)
-			}
 			footer={
 				walletSummary === undefined ? undefined : (
 					<>
@@ -51,7 +44,7 @@ export function TradingOverviewPanel({ badges, controls, onRetryWalletSummary, s
 								)}
 							</div>
 						) : undefined}
-						{loading ? (
+						{walletSummary.status === 'loading' ? (
 							<span className='visually-hidden' role='status'>
 								{copy.loadingWalletBalances}
 							</span>

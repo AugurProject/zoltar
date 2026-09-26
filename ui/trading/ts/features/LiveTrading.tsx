@@ -143,8 +143,8 @@ export function LiveTrading({
 		previousWalletConnectRequestNonce.current = walletConnectRequestNonce
 		void connect()
 	}, [connect, walletConnectRequestNonce])
-	// A failed deployment lookup switches the application to the deployment setup route, which owns the
-	// error surface, so this route only ever renders while the deployment is still resolving.
+	// A failed deployment lookup switches the application to the deployment setup or the connection error,
+	// which own the error surface, so this route only ever renders while the deployment is still resolving.
 	if (configuration === undefined) {
 		const loadingPresentation = liveRouteLoadingPresentation(route)
 		return (

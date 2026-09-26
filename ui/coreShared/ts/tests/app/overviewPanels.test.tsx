@@ -9,6 +9,7 @@ import { renderIntoDocument } from '../testUtils/renderIntoDocument.js'
 import { installTestRouting } from '../testUtils/testRouting.js'
 import { SEPOLIA_NETWORK_PROFILE } from '../../wallet/networkProfile.js'
 import { OverviewPanels, type OverviewRepPricesProps } from '../../app/components/OverviewPanels.js'
+import type { AccountState } from '../../types/app.js'
 import { describe, expect, mock, test } from 'bun:test'
 import { act } from 'preact/test-utils'
 
@@ -29,11 +30,22 @@ describe('OverviewPanels', () => {
 	let setMeasureWidthResolver = (_resolver: (element: MetricElement) => number) => undefined
 	let triggerResizeObservers = () => undefined
 
+	const connectedAccount: AccountState = {
+		address: '0x1234567890123456789012345678901234567890',
+		chainId: '0xaa36a7',
+		ethBalanceAttoEth: undefined,
+		wethBalanceAttoEth: undefined,
+	}
+
+	function getAccountMenuTrigger() {
+		const trigger = document.body.querySelector('.account-menu > .account-menu-trigger')
+		if (!(trigger instanceof HTMLElement)) throw new Error('Expected the account menu trigger')
+		expect(trigger.getAttribute('aria-label')).toBe('Account Menu 0x123456…567890')
+		return trigger
+	}
+
 	function openAccountMenu() {
-		const summary = document.body.querySelector('.account-menu > summary')
-		if (!(summary instanceof HTMLElement)) throw new Error('Expected the account menu summary')
-		expect(summary.getAttribute('aria-label')).toBe('Account Menu 0x123456…567890')
-		fireEvent.click(summary)
+		fireEvent.click(getAccountMenuTrigger())
 	}
 
 	type OverviewPanelsOverrides = Partial<Omit<Parameters<typeof OverviewPanels>[0], 'repPrices'>> & { repPrices?: Partial<OverviewRepPricesProps> | undefined }
@@ -202,7 +214,7 @@ describe('OverviewPanels', () => {
 			expect(documentQueries.getByText('Sepolia')).not.toBeNull()
 			expect(documentQueries.queryByText('Read-only')).toBeNull()
 			expect(documentQueries.queryByText('Not configured on Sepolia')).toBeNull()
-			expect(documentQueries.getByRole('button', { name: 'Refresh REP prices' })).not.toBeNull()
+			expect(documentQueries.getByRole('button', { name: 'Connect wallet' })).not.toBeNull()
 		} finally {
 			resetEnvironment()
 		}
@@ -210,8 +222,10 @@ describe('OverviewPanels', () => {
 
 	test('distinguishes missing liquidity from a failed REP price request', async () => {
 		const documentQueries = await renderOverviewPanels({
+			accountState: connectedAccount,
 			repPrices: { repPerEthFailure: 'no-liquidity', repUsdcFailure: 'rpc-error' },
 		})
+		openAccountMenu()
 
 		expect(documentQueries.getByText('No liquidity available')).not.toBeNull()
 		expect(documentQueries.getByText('Quote failed')).not.toBeNull()
@@ -223,8 +237,10 @@ describe('OverviewPanels', () => {
 
 	test('renders an application-provided REP per ETH source label', async () => {
 		const documentQueries = await renderOverviewPanels({
+			accountState: connectedAccount,
 			repPrices: { repPerEthPrice: 2n * 10n ** 18n, repPerEthSourceLabel: <span>Custom oracle</span> },
 		})
+		openAccountMenu()
 
 		expect(documentQueries.getByText('Custom oracle')).not.toBeNull()
 	})
@@ -244,12 +260,7 @@ describe('OverviewPanels', () => {
 		const onDisconnectWallet = mock(() => undefined)
 		const onSwitchNetwork = mock(() => undefined)
 		const documentQueries = await renderOverviewPanels({
-			accountState: {
-				address: '0x1234567890123456789012345678901234567890',
-				chainId: '0x1',
-				ethBalanceAttoEth: undefined,
-				wethBalanceAttoEth: undefined,
-			},
+			accountState: { ...connectedAccount, chainId: '0x1' },
 			onChangeWallet,
 			onDisconnectWallet,
 			onSwitchNetwork,
@@ -267,23 +278,31 @@ describe('OverviewPanels', () => {
 		expect(onDisconnectWallet).toHaveBeenCalledTimes(1)
 	})
 
+	test('discloses the account popover with keyboard-dismissable disclosure semantics', async () => {
+		const documentQueries = await renderOverviewPanels({ accountState: connectedAccount })
+		const trigger = getAccountMenuTrigger()
+		expect(trigger.getAttribute('aria-expanded')).toBe('false')
+		expect(document.body.querySelector('.account-menu-popover')).toBeNull()
+
+		fireEvent.click(trigger)
+		const popover = document.body.querySelector('.account-menu-popover')
+		if (!(popover instanceof HTMLElement)) throw new Error('Expected the account popover')
+		expect(trigger.getAttribute('aria-expanded')).toBe('true')
+		expect(trigger.getAttribute('aria-controls')).toBe(popover.id)
+		expect(documentQueries.getByRole('group', { name: 'Account details' })).toBe(popover)
+
+		fireEvent.keyDown(document, { key: 'Escape' })
+		await waitFor(() => expect(document.body.querySelector('.account-menu-popover')).toBeNull())
+		expect(document.activeElement).toBe(trigger)
+	})
+
 	test('provides the responsive account-address presentation for a normal provider wallet', async () => {
 		const address = '0x1234567890123456789012345678901234567890'
-		const documentQueries = await renderOverviewPanels({
-			accountState: {
-				address,
-				chainId: '0xaa36a7',
-				ethBalanceAttoEth: undefined,
-				wethBalanceAttoEth: undefined,
-			},
-		})
+		const documentQueries = await renderOverviewPanels({ accountState: connectedAccount })
 
-		const walletPanel = document.body.querySelector('.overview-wallet-panel')
-		if (!(walletPanel instanceof HTMLElement)) throw new Error('Expected wallet overview panel')
-		expect(walletPanel.classList.contains('is-simulation')).toBe(false)
-
-		expect(document.body.querySelector('.account-menu > summary .wallet-chip .address-value-abbreviated')?.textContent).toBe('0x123456…567890')
-		expect(document.body.querySelector('.account-menu > summary .wallet-chip .address-value')?.getAttribute('title')).toBe(address)
+		expect(document.body.querySelector('.account-menu-trigger .wallet-chip .address-value-abbreviated')?.textContent).toBe('0x123456…567890')
+		expect(document.body.querySelector('.account-menu-trigger .wallet-chip .address-value')?.getAttribute('title')).toBe(address)
+		openAccountMenu()
 		const addressButton = documentQueries.getByRole('button', { name: `Copy address ${address}` })
 		expect(addressButton.closest('.account-menu-popover')).not.toBeNull()
 		expect(addressButton.textContent).toBe(address)
@@ -291,31 +310,22 @@ describe('OverviewPanels', () => {
 
 	test('identifies recognized and unknown wrong networks in the environment badge', async () => {
 		let documentQueries = await renderOverviewPanels({
-			accountState: {
-				address: '0x1234567890123456789012345678901234567890',
-				chainId: '0x2105',
-				ethBalanceAttoEth: undefined,
-				wethBalanceAttoEth: undefined,
-			},
+			accountState: { ...connectedAccount, chainId: '0x2105' },
 		})
 
 		expect(documentQueries.getByText('Wrong Network (Base)')).not.toBeNull()
-		expect(document.body.querySelector('.account-menu > summary .wallet-chip.is-danger')).not.toBeNull()
+		expect(document.body.querySelector('.account-menu-trigger .wallet-chip.is-danger')).not.toBeNull()
 
 		await cleanupRenderedComponent?.()
 		cleanupRenderedComponent = undefined
 		documentQueries = await renderOverviewPanels({
-			accountState: {
-				address: '0x1234567890123456789012345678901234567890',
-				chainId: '0xcc6b',
-				ethBalanceAttoEth: undefined,
-				wethBalanceAttoEth: undefined,
-			},
+			accountState: { ...connectedAccount, chainId: '0xcc6b' },
 		})
 
 		expect(documentQueries.getByText('Wrong Network (52331)')).not.toBeNull()
 		openAccountMenu()
-		expect(document.body.querySelector('.account-menu-network')).toBeNull()
+		expect(document.body.querySelector('.account-menu-network dt')?.textContent).toBe('Network')
+		expect(document.body.querySelector('.account-menu-metrics [data-wallet-asset="ETH"]')?.textContent).toBe('—')
 	})
 
 	test('keeps the connect wallet button idle during bootstrap-only loading', async () => {
@@ -326,19 +336,22 @@ describe('OverviewPanels', () => {
 
 		if (!(connectButton instanceof HTMLButtonElement)) throw new Error('Expected connect button')
 		expect(connectButton.disabled).toBe(false)
-		expect([...document.body.querySelectorAll('.overview-inline-metrics .metric-field-value')].slice(0, 3).map(value => value.textContent?.trim())).toEqual(['Loading…', 'Loading…', 'Loading…'])
+		expect(document.body.querySelector('.account-menu')).toBeNull()
 	})
 
 	test('renders the REP/ETH panel from the canonical REP per ETH quote', async () => {
 		const documentQueries = await renderOverviewPanels({
+			accountState: connectedAccount,
 			repPrices: { repPerEthPrice: 2439024390243902439024n },
 		})
+		openAccountMenu()
 		expect(documentQueries.getByTitle('2 439.024390243902439024')).toBeDefined()
 		expect(documentQueries.queryByText(/0\.00041/)).toBeNull()
 	})
 
 	test('keeps existing prices visible while refreshing', async () => {
-		const queries = await renderOverviewPanels({ repPrices: { isLoading: true, isRefreshing: true, repPerEthPrice: 2439024390243902439024n, repUsdcPrice: 1234567n } })
+		const queries = await renderOverviewPanels({ accountState: connectedAccount, repPrices: { isLoading: true, isRefreshing: true, repPerEthPrice: 2439024390243902439024n, repUsdcPrice: 1234567n } })
+		openAccountMenu()
 		expect(queries.getByTitle('2 439.024390243902439024')).toBeDefined()
 		expect(queries.getByTitle('1.234567 USDC')).toBeDefined()
 	})
@@ -346,34 +359,34 @@ describe('OverviewPanels', () => {
 	test('renders a refresh button for REP prices and wires it to the provided handler', async () => {
 		const onRefreshRepPrices = mock(() => undefined)
 		const documentQueries = await renderOverviewPanels({
+			accountState: connectedAccount,
 			repPrices: { onRefresh: onRefreshRepPrices },
 		})
+		openAccountMenu()
 		const refreshButton = documentQueries.getByRole('button', { name: 'Refresh REP prices' })
 		fireEvent.click(refreshButton)
 
 		expect(onRefreshRepPrices).toHaveBeenCalledTimes(1)
 	})
 
-	test('keeps secondary environment metrics behind a mobile details disclosure', async () => {
-		const documentQueries = await renderOverviewPanels()
-		const detailsButton = documentQueries.getByRole('button', { name: 'Show environment details' })
-		const metrics = document.body.querySelector('.overview-inline-metrics')
-		if (!(metrics instanceof HTMLElement)) throw new Error('Expected overview metrics')
+	test('lists WETH only for applications that use it', async () => {
+		await renderOverviewPanels({ accountState: connectedAccount })
+		openAccountMenu()
+		expect([...document.body.querySelectorAll('.account-menu-metrics [data-wallet-asset]')].map(asset => asset.getAttribute('data-wallet-asset'))).toEqual(['ETH', 'REP'])
+		await cleanupRenderedComponent?.()
+		cleanupRenderedComponent = undefined
 
-		expect(detailsButton.getAttribute('aria-expanded')).toBe('false')
-		expect(metrics.classList.contains('mobile-expanded')).toBe(false)
-		expect(metrics.querySelectorAll('.overview-metric-secondary').length).toBeGreaterThan(0)
-
-		fireEvent.click(detailsButton)
-
-		expect(documentQueries.getByRole('button', { name: 'Hide environment details' }).getAttribute('aria-expanded')).toBe('true')
-		expect(metrics.classList.contains('mobile-expanded')).toBe(true)
+		await renderOverviewPanels({ accountState: connectedAccount, showWethBalance: true })
+		openAccountMenu()
+		expect([...document.body.querySelectorAll('.account-menu-metrics [data-wallet-asset]')].map(asset => asset.getAttribute('data-wallet-asset'))).toEqual(['ETH', 'WETH', 'REP'])
 	})
 
 	test('keeps stale REP prices visible while the refresh control shows an in-flight refresh', async () => {
 		const documentQueries = await renderOverviewPanels({
+			accountState: connectedAccount,
 			repPrices: { isLoading: false, isRefreshing: true, repPerEthPrice: 2439024390243902439024n, repUsdcPrice: 1234567n },
 		})
+		openAccountMenu()
 
 		const refreshButton = documentQueries.getByRole('button', { name: 'Refresh REP prices' })
 		if (!(refreshButton instanceof HTMLButtonElement)) throw new Error('Expected refresh button')
@@ -384,18 +397,24 @@ describe('OverviewPanels', () => {
 		expect(documentQueries.getByTitle('1.234567 USDC')).toBeDefined()
 	})
 
-	test('surfaces a prominent fork migration notice without a redundant badge', async () => {
+	test('explains a forked universe politely and links to the application migration flow', async () => {
 		const documentQueries = await renderOverviewPanels({
+			migrateRepHref: '#/zoltar?zoltarView=universes',
 			universeForkTime: 123n,
 			universeHasForked: true,
 		})
 
-		expect(documentQueries.getByText(/This Universe has forked on/)).toBeDefined()
-		expect(document.body.textContent).toContain('Please migrate your REP to continue to use Augur')
+		const notice = document.body.querySelector('.universe-fork-notice')
+		if (!(notice instanceof HTMLElement)) throw new Error('Expected the fork notice')
+		expect(notice.getAttribute('role')).toBe('status')
+		expect(documentQueries.getByText(/This universe forked on/)).toBeDefined()
+		expect(notice.textContent).toContain('Migrate your REP to a child universe.')
+		expect(document.body.textContent).not.toContain('continue to use Augur')
 		expect(document.body.textContent).not.toContain('Migration required')
+		expect(documentQueries.getByRole('link', { name: 'Migrate REP' }).getAttribute('href')).toBe('#/zoltar?zoltarView=universes')
 	})
 
-	test('places both critical notices below the wallet and before balances', async () => {
+	test('places both critical notices directly below the top bar', async () => {
 		const backend = createFakeBackend({ accountAddress: '0x1234567890123456789012345678901234567890' })
 		backend.getChainId = async () => '0x1'
 		const restore = installActiveEnvironmentForTesting(backend)
@@ -407,9 +426,8 @@ describe('OverviewPanels', () => {
 			const fork = document.body.querySelector('.universe-fork-notice')
 			expect(toolbar?.nextElementSibling).toBe(mainnet)
 			expect(mainnet?.nextElementSibling).toBe(fork)
-			expect(fork?.nextElementSibling?.classList.contains('overview-inline-metrics')).toBe(true)
 			expect(mainnet?.getAttribute('role')).toBe('alert')
-			expect(fork?.getAttribute('role')).toBe('alert')
+			expect(fork?.getAttribute('role')).toBe('status')
 		} finally {
 			restore()
 		}
@@ -433,22 +451,27 @@ describe('OverviewPanels', () => {
 		expect(badgeSlot.textContent).not.toContain('Forked')
 	})
 
-	test('distinguishes browser simulation from public network state', async () => {
-		const documentQueries = await renderOverviewPanels({
-			readBackendStatus: {
-				blockNumber: 12n,
-				blockTimestamp: undefined,
-				rpcSource: 'default',
-				rpcUrl: 'browser-simulation',
-				transportMode: 'provider',
-			},
-		})
+	test('leaves the simulation label to the simulation strip', async () => {
+		const resetEnvironment = installActiveEnvironmentForTesting(createFakeBackend({ profile: createFakeSimulationProfile() }))
+		try {
+			const documentQueries = await renderOverviewPanels({
+				readBackendStatus: {
+					blockNumber: 12n,
+					blockTimestamp: undefined,
+					rpcSource: 'default',
+					rpcUrl: 'browser-simulation',
+					transportMode: 'provider',
+				},
+			})
 
-		expect(documentQueries.getByText('Simulation')).toBeDefined()
-		expect(documentQueries.queryByText('Write Network')).toBeNull()
-		expect(documentQueries.queryByText('Read Source')).toBeNull()
-		expect(documentQueries.queryByText('Browser simulation')).toBeNull()
-		expect(documentQueries.queryByText('browser simulation · provider via default @ 12')).toBeNull()
+			expect(documentQueries.queryByText('Simulation')).toBeNull()
+			expect(document.body.querySelector('.environment-badge-row')).toBeNull()
+			expect(documentQueries.queryByText('Write Network')).toBeNull()
+			expect(documentQueries.queryByText('Read Source')).toBeNull()
+			expect(documentQueries.queryByText('browser simulation · provider via default @ 12')).toBeNull()
+		} finally {
+			resetEnvironment()
+		}
 	})
 
 	test('offers a wrong-network badge and switch action for a simulated wallet on another chain', async () => {
@@ -472,12 +495,14 @@ describe('OverviewPanels', () => {
 				},
 			})
 
-			expect(documentQueries.getByText('Simulation')).not.toBeNull()
 			expect(documentQueries.getByText('Wrong Network (31337)')).not.toBeNull()
-			expect(document.body.querySelector('.overview-wallet-panel .wallet-chip.is-danger')).not.toBeNull()
-			expect(document.body.querySelector('.account-menu')).toBeNull()
-			fireEvent.click(documentQueries.getByRole('button', { name: 'Switch to Browser Simulation' }))
+			expect(document.body.querySelector('.account-menu-trigger .wallet-chip.is-danger')).not.toBeNull()
+			const switchButton = documentQueries.getByRole('button', { name: 'Switch to Browser Simulation' })
+			expect(switchButton.closest('.header-toolbar-controls')).not.toBeNull()
+			fireEvent.click(switchButton)
 			expect(onSwitchNetwork).toHaveBeenCalledTimes(1)
+			openAccountMenu()
+			expect(documentQueries.queryByRole('button', { name: 'Change wallet' })).toBeNull()
 		} finally {
 			resetEnvironment()
 		}
@@ -487,12 +512,7 @@ describe('OverviewPanels', () => {
 		const resetEnvironment = installActiveEnvironmentForTesting(createFakeBackend({ profile: createFakeSimulationProfile() }))
 		try {
 			const documentQueries = await renderOverviewPanels({
-				accountState: {
-					address: '0x1234567890123456789012345678901234567890',
-					chainId: '0x539',
-					ethBalanceAttoEth: undefined,
-					wethBalanceAttoEth: undefined,
-				},
+				accountState: { ...connectedAccount, chainId: '0x539' },
 				readBackendStatus: {
 					blockNumber: 12n,
 					blockTimestamp: undefined,
@@ -503,8 +523,11 @@ describe('OverviewPanels', () => {
 			})
 
 			expect(documentQueries.queryByText(/Wrong Network/)).toBeNull()
-			expect(document.body.querySelector('.overview-wallet-panel .wallet-chip.is-danger')).toBeNull()
+			expect(document.body.querySelector('.account-menu-trigger .wallet-chip.is-danger')).toBeNull()
+			openAccountMenu()
 			expect(documentQueries.queryByRole('button', { name: 'Switch to Browser Simulation' })).toBeNull()
+			expect(documentQueries.queryByRole('button', { name: 'Disconnect' })).toBeNull()
+			expect(document.body.querySelector('.account-menu-network')?.textContent).toContain('12')
 		} finally {
 			resetEnvironment()
 		}
@@ -518,31 +541,14 @@ describe('OverviewPanels', () => {
 		expect(documentQueries.queryByText('Parent Universe')).toBeNull()
 	})
 
-	test('keeps every header metric slot rendered while the wallet bootstraps or stays disconnected', async () => {
-		const expectedSlots = ['overview-simulation-secondary', 'overview-metric-secondary', 'overview-simulation-secondary', 'overview-metric-secondary', 'overview-metric-secondary']
-		const readSlots = () => [...document.body.querySelectorAll('.overview-inline-metrics .overview-metric-group-items > div')].map(cell => cell.className)
-		const readMetricValues = () => [...document.body.querySelectorAll('.overview-inline-metrics .metric-field-value')].map(value => value.textContent?.trim())
-		const readGroups = () =>
-			[...document.body.querySelectorAll('.overview-inline-metrics > .overview-metric-group')].map(group => {
-				if (!(group instanceof HTMLElement)) throw new Error('Expected a header metric group')
-				return { label: group.getAttribute('aria-label'), columns: group.style.getPropertyValue('--overview-metric-columns'), secondary: group.classList.contains('is-secondary') }
-			})
+	test('keeps the universe in the top bar and every balance row in the popover', async () => {
+		const readMetricValues = () => [...document.body.querySelectorAll('.account-menu-metrics .metric-field-value')].map(value => value.textContent?.trim())
+		const readGroups = () => [...document.body.querySelectorAll('.account-menu-metrics .overview-metric-group')].map(group => group.getAttribute('aria-label'))
 
 		await renderOverviewPanels({ walletBootstrapComplete: false })
-		expect(readSlots()).toEqual(expectedSlots)
-		expect(readMetricValues().slice(0, 3)).toEqual(['Loading…', 'Loading…', 'Loading…'])
-		expect(readGroups()).toEqual([
-			{ label: 'Balances', columns: '3', secondary: false },
-			{ label: 'Prices', columns: '2', secondary: true },
-		])
-		expect(document.body.querySelector('.overview-metric-group.is-secondary .overview-metric-group-caption button')?.getAttribute('aria-label')).toBe('Refresh REP prices')
 		expect(document.body.querySelector('.header-toolbar-controls .toolbar-field-value')?.textContent).toBe('Genesis (0x0)')
 		expect(document.body.querySelector('.header-toolbar-controls .toolbar-field-value > span')?.getAttribute('title')).toBe('Genesis (0x0)')
-		await cleanupRenderedComponent?.()
-
-		await renderOverviewPanels({ walletBootstrapComplete: false, repPrices: undefined })
-		expect(readSlots()).toEqual(['overview-simulation-secondary', 'overview-metric-secondary', 'overview-simulation-secondary'])
-		expect(readGroups()).toEqual([{ label: 'Balances', columns: '3', secondary: false }])
+		expect(document.body.querySelector('.header-toolbar-controls .wallet-button')?.textContent).toBe('Connect wallet')
 		await cleanupRenderedComponent?.()
 
 		const childUniverseId = 0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdn
@@ -551,19 +557,16 @@ describe('OverviewPanels', () => {
 		expect(document.body.querySelector('.header-toolbar-controls .toolbar-field-value > span')?.getAttribute('title')).toBe(`Universe 0x${childUniverseId.toString(16)}`)
 		await cleanupRenderedComponent?.()
 
-		await renderOverviewPanels({ walletBootstrapComplete: true })
-		expect(readSlots()).toEqual(expectedSlots)
-		expect(readMetricValues().slice(0, 3)).toEqual(['—', '—', '—'])
-		expect(document.body.querySelector('.header-toolbar-controls .wallet-button')?.textContent).toBe('Connect wallet')
-		await cleanupRenderedComponent?.()
-
 		await renderOverviewPanels({
-			accountState: { address: '0x1234567890123456789012345678901234567890', chainId: '0xaa36a7', ethBalanceAttoEth: 2n * 10n ** 18n, wethBalanceAttoEth: 10n ** 18n },
+			accountState: { ...connectedAccount, ethBalanceAttoEth: 2n * 10n ** 18n, wethBalanceAttoEth: 10n ** 18n },
+			showWethBalance: true,
 			universeRepBalanceAttoRep: 5n * 10n ** 18n,
 		})
-		expect(readSlots()).toEqual(expectedSlots)
+		expect(document.body.querySelector('.header-toolbar-controls .account-menu-trigger .wallet-chip .address-value-abbreviated')?.textContent).toBe('0x123456…567890')
+		openAccountMenu()
+		expect(readGroups()).toEqual(['Balances', 'Prices'])
 		expect(readMetricValues().slice(0, 3)).toEqual(['≈ 2.00', '≈ 1.00', '≈ 5.00'])
-		expect(document.body.querySelector('.header-toolbar-controls .wallet-chip .address-value-abbreviated')?.textContent).toBe('0x123456…567890')
+		expect(document.body.querySelector('.account-menu-metrics .overview-metric-group-caption button')?.getAttribute('aria-label')).toBe('Refresh REP prices')
 	})
 
 	test('compacts a large ETH balance without affecting the adjacent WETH metric', async () => {
@@ -584,14 +587,11 @@ describe('OverviewPanels', () => {
 		})
 
 		const documentQueries = await renderOverviewPanels({
-			accountState: {
-				address: '0x1234567890123456789012345678901234567890',
-				chainId: '0xaa36a7',
-				ethBalanceAttoEth: 999999990000n * 10n ** 18n,
-				wethBalanceAttoEth: 10000n * 10n ** 18n,
-			},
+			accountState: { ...connectedAccount, ethBalanceAttoEth: 999999990000n * 10n ** 18n, wethBalanceAttoEth: 10000n * 10n ** 18n },
+			showWethBalance: true,
 			universeRepBalanceAttoRep: 5n * 10n ** 18n,
 		})
+		openAccountMenu()
 
 		await act(() => {
 			triggerResizeObservers()

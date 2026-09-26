@@ -85,9 +85,9 @@ for (const appId of UI_APP_IDS) {
 	const productionCssPath = path.join(distRootPath, 'css', 'index.css')
 	const productionTokensCssPath = path.join(distRootPath, 'css', 'tokens.css')
 	const productionFaviconPaths = [path.join(distRootPath, 'favicon.svg')]
-	const expectedTitles: Record<UiAppId, string> = { statoblast: 'Augur Statoblast', trading: 'Statoblast trading', zoltar: 'Zoltar' }
+	const expectedTitles: Record<UiAppId, string> = { statoblast: 'Augur Statoblast', trading: 'Augur Trading', zoltar: 'Zoltar' }
 	const expectedTitle = expectedTitles[appId]
-	const otherTitles = ['Zoltar', 'Augur Statoblast', 'Statoblast trading'].filter(title => title !== expectedTitle)
+	const otherTitles = ['Zoltar', 'Augur Statoblast', 'Augur Trading'].filter(title => title !== expectedTitle)
 	const expectedRoutes: Record<UiAppId, string> = { statoblast: '#/security-pools', trading: '#/markets', zoltar: '#/zoltar' }
 	const expectedRoute = expectedRoutes[appId]
 

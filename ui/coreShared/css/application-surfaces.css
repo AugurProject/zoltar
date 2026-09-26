@@ -7,14 +7,6 @@
 	min-inline-size: 0;
 }
 
-.top-shell {
-	gap: var(--space-1);
-	padding-bottom: var(--space-1);
-	border-color: var(--divider-strong);
-	background: color-mix(in srgb, var(--bg) 90%, transparent);
-	box-shadow: var(--shadow-raised);
-}
-
 /* The route header is a flat heading band: the active tab already names the route, so it keeps only a compact title stack and its actions. */
 .route-header {
 	display: grid;
@@ -508,13 +500,6 @@
 
 	.overview-actions {
 		justify-content: flex-start;
-	}
-
-	.tab-nav {
-		top: auto;
-		width: 100%;
-		min-width: 0;
-		padding: 0;
 	}
 
 	.contract-row {

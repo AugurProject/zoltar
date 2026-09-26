@@ -26,7 +26,7 @@ export type UseOnchainStateOptions = {
 
 export type UseOnchainStateDependencies = {
 	getDeploymentSteps: () => ReadonlyArray<DeploymentStep>
-	getWethAddress: () => Address
+	getWethAddress?: () => Address
 	loadDeploymentStatusOracleSnapshot: (readClient: ReadClient) => Promise<{ applicationDeploymentComplete: boolean; deploymentStatuses: DeploymentStatus[] }>
 	loadErc20Balance: (readClient: ReadClient, tokenAddress: Address, accountAddress: Address) => Promise<bigint>
 }
@@ -357,7 +357,7 @@ export function useOnchainState({ activeEnvironmentNonce = 0, enableChainClock =
 				if (connectedAddress !== undefined && walletOnExpectedChain) {
 					const readClient = createConnectedReadClient()
 					const ethBalanceAttoEthPromise = readClient.getBalance({ address: connectedAddress })
-					const wethBalanceAttoEthPromise = dependencies.loadErc20Balance(readClient, dependencies.getWethAddress(), connectedAddress)
+					const wethBalanceAttoEthPromise = dependencies.getWethAddress === undefined ? undefined : dependencies.loadErc20Balance(readClient, dependencies.getWethAddress(), connectedAddress)
 					void loadWalletState({
 						chainIdPromise: Promise.resolve(connectedChainId ?? backend.profile.chainIdHex),
 						connectedAddress,

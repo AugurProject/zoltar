@@ -18,8 +18,8 @@ import { Badge } from './Badge.js'
 import { getSimulationAccountOptionLabel, SimulationAccountControls, SimulationWalletControls } from './SimulationWalletControls.js'
 import { ErrorNotice } from './ErrorNotice.js'
 import { CopyErrorMessage } from './CopyErrorMessage.js'
-import type { BadgeTone } from '../types/components.js'
 import { SIMULATION_TIME_PRESETS } from '../simulation/timePresets.js'
+import { getScenarioStatus, SimulationStripSummary } from './SimulationStripSummary.js'
 
 const SIMULATION_REP_MINT_AMOUNT = 1_000_000n * 10n ** 18n
 type SimulationBannerProps = {
@@ -30,25 +30,6 @@ type SimulationBannerProps = {
 
 type SimulationModal = 'cleanup' | 'delete' | 'export' | 'import' | 'save' | undefined
 type NavigationOperation = 'cleanup' | 'delete' | 'import' | 'navigation' | 'save'
-
-function getScenarioStatus(parameters: { bootstrapError: string | undefined; isBootstrapped: boolean }): { badgeTone: BadgeTone; label: string } {
-	if (parameters.bootstrapError !== undefined) {
-		return {
-			badgeTone: 'blocked',
-			label: commonCopy.error,
-		}
-	}
-	if (parameters.isBootstrapped) {
-		return {
-			badgeTone: 'ok',
-			label: simulationCopy.ready,
-		}
-	}
-	return {
-		badgeTone: 'pending',
-		label: simulationCopy.bootstrapping,
-	}
-}
 
 export function SimulationBanner({ controller, onEnvironmentChanged = async () => undefined, onRefresh }: SimulationBannerProps) {
 	const busy = useSignal(false)
@@ -75,7 +56,7 @@ export function SimulationBanner({ controller, onEnvironmentChanged = async () =
 	const { copied, copyError, copyErrorId, copyText } = useCopyToClipboard(exportStateText.value)
 	const importStateText = useSignal('')
 	const selectedAccount = useSignal(controller.selectedAccount)
-	const simulationDetailsOpen = useSignal(!controller.isBootstrapped)
+	const simulationDetailsOpen = useSignal(controller.bootstrapError !== undefined)
 	const bootstrapError = useSignal(controller.bootstrapError)
 	const bootstrapLabel = useSignal(controller.bootstrapLabel)
 	const bootstrapProgress = useSignal(controller.bootstrapProgress)
@@ -166,10 +147,10 @@ export function SimulationBanner({ controller, onEnvironmentChanged = async () =
 		previousController.current = controller
 		if (controllerChanged) controlError.value = undefined
 		const handleControllerState = () => {
-			const wasBootstrapped = isBootstrapped.value
 			syncControllerState()
-			if (!controller.isBootstrapped || controller.isBootstrapping) simulationDetailsOpen.value = true
-			else if (controllerChanged || !wasBootstrapped) simulationDetailsOpen.value = false
+			// The strip shows boot progress inline, so the details panel stays collapsed unless the scenario fails to boot.
+			if (controller.bootstrapError !== undefined) simulationDetailsOpen.value = true
+			else if (controllerChanged) simulationDetailsOpen.value = false
 			controllerChanged = false
 		}
 		handleControllerState()
@@ -291,19 +272,15 @@ export function SimulationBanner({ controller, onEnvironmentChanged = async () =
 					simulationDetailsOpen.value = event.currentTarget.open
 				}}
 			>
-				<summary>
-					<span className='simulation-banner-compact-summary'>
-						<span className='simulation-banner-compact-heading'>
-							<h2>{simulationCopy.browserSimulation}</h2>
-							<span className='simulation-banner-compact-state'>
-								<Badge tone={scenarioStatus.badgeTone}>{scenarioStatus.label}</Badge>
-								<strong>{getSimulationScenarioLabel(currentScenario.value)}</strong>
-								<span className='simulation-banner-compact-account'>{selectedAccountLabel}</span>
-							</span>
-						</span>
-						<span className='simulation-banner-compact-action'>{simulationDetailsOpen.value ? simulationCopy.hideSimulationDetails : simulationCopy.showSimulationDetails}</span>
-					</span>
-				</summary>
+				<SimulationStripSummary
+					accountLabel={selectedAccountLabel}
+					bootstrapLabel={bootstrapLabel.value}
+					bootstrapProgress={bootstrapProgress.value}
+					bootstrapping={bootstrapError.value === undefined && isBootstrapping.value}
+					detailsOpen={simulationDetailsOpen.value}
+					scenarioLabel={getSimulationScenarioLabel(currentScenario.value)}
+					status={scenarioStatus}
+				/>
 				<div className='contract-list simulation-banner-list'>
 					<div className='contract-row simulation-banner-row'>
 						<div className='contract-copy'>
@@ -314,17 +291,6 @@ export function SimulationBanner({ controller, onEnvironmentChanged = async () =
 							<p className='detail'>{scenarioDetail}</p>
 							{savedStateStorageWarning.value === undefined ? undefined : <p className='detail'>{savedStateStorageWarning.value}</p>}
 							{modal.value === undefined ? <ErrorNotice message={savedStateError.value} /> : undefined}
-							{bootstrapError.value === undefined && isBootstrapping.value ? (
-								<p className='detail'>
-									<span className='spinner' aria-hidden='true' />
-									{bootstrapLabel.value ?? simulationCopy.scenarioPreparationDetail}
-								</p>
-							) : undefined}
-							{isBootstrapping.value ? (
-								<div className='notice-progress-track simulation-progress-track' aria-hidden='true'>
-									<div className='notice-progress-fill simulation-progress-fill' style={{ width: `${Math.round((bootstrapProgress.value ?? 0.08) * 100)}%` }} />
-								</div>
-							) : undefined}
 						</div>
 						<select
 							className='simulation-control-select'

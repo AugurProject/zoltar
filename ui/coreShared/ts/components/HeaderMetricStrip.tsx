@@ -1,34 +1,20 @@
 import { toChildArray, type ComponentChildren } from 'preact'
-import * as appCopy from '../copy/app.js'
-
-type HeaderMetricStripProps = {
-	children: ComponentChildren
-	expanded?: boolean
-}
 
 type HeaderMetricGroupProps = {
 	/** Optional control that acts on the whole group, such as a refresh button. */
 	action?: ComponentChildren
 	children: ComponentChildren
 	label: string
-	/** Secondary groups collapse behind the details toggle on narrow screens. */
-	secondary?: boolean
-}
-
-/** Toolbar stat strip: labelled groups of inline metrics that share one row on wide screens. */
-export function HeaderMetricStrip({ children, expanded = false }: HeaderMetricStripProps) {
-	return <div className={`overview-inline-metrics${expanded ? ' mobile-expanded' : ''}`}>{children}</div>
 }
 
 /**
- * One captioned group of metrics on fixed equal tracks, so every metric keeps its place while
- * values load, fail, or stay disconnected. The track count is derived from the metric cells.
+ * One captioned group of metrics, such as balances or REP prices, in the account popover. Every metric keeps a
+ * fixed row while values load, fail, or stay disconnected.
  */
-export function HeaderMetricGroup({ action, children, label, secondary = false }: HeaderMetricGroupProps) {
-	const metricColumns = toChildArray(children).length
-	if (metricColumns < 1) throw new Error(`Header metric group ${label} needs at least one metric cell`)
+export function HeaderMetricGroup({ action, children, label }: HeaderMetricGroupProps) {
+	if (toChildArray(children).length < 1) throw new Error(`Header metric group ${label} needs at least one metric cell`)
 	return (
-		<div role='group' className={`overview-metric-group${secondary ? ' is-secondary' : ''}`} aria-label={label} style={{ '--overview-metric-columns': metricColumns.toString() }}>
+		<div role='group' className='overview-metric-group' aria-label={label}>
 			<span className='overview-metric-group-caption'>
 				<span className='overview-metric-group-label' aria-hidden='true'>
 					{label}
@@ -37,14 +23,5 @@ export function HeaderMetricGroup({ action, children, label, secondary = false }
 			</span>
 			<div className='overview-metric-group-items'>{children}</div>
 		</div>
-	)
-}
-
-/** Reveals the strip's secondary metrics on narrow screens, where they collapse behind this toggle. */
-export function EnvironmentDetailsToggle({ expanded, onToggle }: { expanded: boolean; onToggle: () => void }) {
-	return (
-		<button className='overview-details-toggle secondary' type='button' aria-expanded={expanded} onClick={onToggle}>
-			{expanded ? appCopy.hideEnvironmentDetails : appCopy.showEnvironmentDetails}
-		</button>
 	)
 }

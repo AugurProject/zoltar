@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import { createPublicClient, custom, decodeFunctionData, encodeAbiParameters, getAddress } from '@zoltar/core-shared/evm/ethereum'
 import { PROXY_DEPLOYER_RUNTIME_CODE } from '@zoltar/core-shared/deployment/deploymentAddresses'
-import { getTradingDeploymentPlan, loadTradingDeploymentStatus, nextTradingDeploymentStep, resolveInstalledTradingDeployment } from '../../protocol/deployment.js'
+import { getTradingDeploymentPlan, isTradingDeploymentMissingError, loadTradingDeploymentStatus, nextTradingDeploymentStep, resolveInstalledTradingDeployment, tradingDeploymentMissingError } from '../../protocol/deployment.js'
 import { tradingContracts } from '../../generated/contractArtifact.js'
 
 function examplePlan() {
@@ -82,6 +82,18 @@ describe('wallet trading deployment plan', () => {
 		await expect(resolveInstalledTradingDeployment(installedDeploymentClient(plan.core, 'factory-only'), plan.core, 30, plan.core.defaultRpcUrl)).rejects.toThrow('trading deployment is incomplete')
 		await expect(resolveInstalledTradingDeployment(installedDeploymentClient(plan.core, 'missing'), plan.core, 30, plan.core.defaultRpcUrl)).rejects.toThrow('Trading contracts have not been deployed')
 		await expect(resolveInstalledTradingDeployment(installedDeploymentClient(plan.core, 'complete', true), plan.core, 30, plan.core.defaultRpcUrl)).rejects.toThrow('different factory')
+	})
+
+	test('marks only confirmed-missing contracts as a missing deployment', async () => {
+		const plan = examplePlan()
+		const missingFailure = await resolveInstalledTradingDeployment(installedDeploymentClient(plan.core, 'missing'), plan.core, 30, plan.core.defaultRpcUrl).catch((error: unknown) => error)
+		const incompleteFailure = await resolveInstalledTradingDeployment(installedDeploymentClient(plan.core, 'factory-only'), plan.core, 30, plan.core.defaultRpcUrl).catch((error: unknown) => error)
+		const mismatchFailure = await resolveInstalledTradingDeployment(installedDeploymentClient(plan.core, 'complete', true), plan.core, 30, plan.core.defaultRpcUrl).catch((error: unknown) => error)
+		expect(isTradingDeploymentMissingError(missingFailure)).toBe(true)
+		expect(isTradingDeploymentMissingError(incompleteFailure)).toBe(true)
+		expect(isTradingDeploymentMissingError(mismatchFailure)).toBe(false)
+		expect(isTradingDeploymentMissingError(new Error('Trading RPC chain verification timed out'))).toBe(false)
+		expect(isTradingDeploymentMissingError(tradingDeploymentMissingError('No canonical deployment is available for the active network'))).toBe(true)
 	})
 
 	test('rejects a network without the exact canonical proxy runtime', async () => {
