@@ -27,19 +27,34 @@ export function getTermPopoverShift(popoverLeft: number, popoverWidth: number, v
 export function Term({ children, definition, href, label }: TermProps) {
 	const [open, setOpen] = useState(false)
 	const [shift, setShift] = useState(0)
+	const shiftRef = useRef(0)
 	const rootRef = useRef<HTMLSpanElement>(null)
 	const buttonRef = useRef<HTMLButtonElement>(null)
 	const popoverRef = useRef<HTMLSpanElement>(null)
 	const popoverId = useId()
 
+	// A reused instance that now describes another term starts closed, so a definition never carries over to a different sentence or route.
+	useLayoutEffect(() => {
+		setOpen(false)
+	}, [href, label])
+
 	useLayoutEffect(() => {
 		const popover = popoverRef.current
 		if (!open || popover === null) {
+			shiftRef.current = 0
 			setShift(0)
 			return
 		}
-		const bounds = popover.getBoundingClientRect()
-		setShift(getTermPopoverShift(bounds.left, bounds.width, document.documentElement.clientWidth))
+		const keepInViewport = () => {
+			const bounds = popover.getBoundingClientRect()
+			// Measure from the unshifted position so repeated measurements (for example after a resize) do not compound.
+			const nextShift = getTermPopoverShift(bounds.left - shiftRef.current, bounds.width, document.documentElement.clientWidth)
+			shiftRef.current = nextShift
+			setShift(nextShift)
+		}
+		keepInViewport()
+		window.addEventListener('resize', keepInViewport)
+		return () => window.removeEventListener('resize', keepInViewport)
 	}, [open])
 
 	useEffect(() => {

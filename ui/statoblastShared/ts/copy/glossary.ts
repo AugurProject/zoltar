@@ -9,4 +9,4 @@ export const nonDecisionThresholdDefinition = 'The most REP one outcome can hold
 export const universeForkTerm = 'Universe fork'
 export const universeForkDefinition = 'The last resort when escalation cannot decide: the universe splits into one child universe per outcome, and REP holders move their REP to the child they believe is true.'
 export const universeTerm = 'Universe'
-export const universeDefinition = 'A separate REP ledger with its own questions and pools. A fork creates child universes; REP and pools in one universe do not carry value in another.'
+export const universeDefinition = 'A separate REP ledger with its own questions and pools. REP and pools in one universe carry no value in another.'

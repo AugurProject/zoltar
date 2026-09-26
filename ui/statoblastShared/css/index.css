@@ -3279,5 +3279,18 @@
 @media (max-width: 50rem) {
 	.first-run-roles {
 		grid-template-columns: minmax(0, 1fr);
+		gap: var(--space-3);
+	}
+
+	/* Keep Dismiss beside the title so the guide stays short above the pool list on narrow screens. */
+	.first-run-role-guide > .section-block-header {
+		flex-direction: row;
+		align-items: start;
+		justify-content: space-between;
+	}
+
+	.first-run-role {
+		gap: var(--space-1);
+		padding-top: var(--space-2);
 	}
 }

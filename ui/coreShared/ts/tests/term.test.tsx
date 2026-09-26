@@ -2,6 +2,7 @@
 
 import { installDomTestLifecycle } from './testUtils/domTestLifecycle.js'
 import { describe, expect, test } from 'bun:test'
+import { render } from 'preact'
 import { act } from 'preact/test-utils'
 import { getTermPopoverShift, Term } from '../components/Term.js'
 import { fireEvent, within } from './testUtils/queries'
@@ -100,6 +101,23 @@ describe('Term', () => {
 				.dispatchEvent(new Event('pointerdown', { bubbles: true }))
 		})
 		expect(trigger.getAttribute('aria-expanded')).toBe('false')
+	})
+
+	test('closes when a reused instance starts describing another term', async () => {
+		const renderedComponent = await renderIntoDocument(<Term {...definition} />)
+		cleanupRenderedComponent = renderedComponent.cleanup
+		const trigger = within(document.body).getByRole('button', { name: 'Non-decision threshold' })
+		await act(() => {
+			fireEvent.click(trigger)
+		})
+		expect(trigger.getAttribute('aria-expanded')).toBe('true')
+
+		await act(() => {
+			render(<Term definition='A separate REP ledger.' href='https://example.test/docs/reference/glossary.html#universe' label='Universe' />, renderedComponent.container)
+		})
+		const nextTrigger = within(document.body).getByRole('button', { name: 'Universe' })
+		expect(nextTrigger.getAttribute('aria-expanded')).toBe('false')
+		expect(getPopover(nextTrigger).hidden).toBe(true)
 	})
 
 	test('keeps the popover inside the viewport', () => {
