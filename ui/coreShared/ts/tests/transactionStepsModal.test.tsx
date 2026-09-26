@@ -11,6 +11,7 @@ import { TransactionStepsModal } from '../components/TransactionStepsModal.js'
 import { TransactionStepsContent } from '../components/TransactionStepsContent.js'
 import { TransactionFundingSummary } from '../components/TransactionFundingSummary.js'
 import { createTransactionStepController, transactionSteps } from '../transactions/transactionSteps.js'
+import { buildTransactionReviewSummary, resolveBurnConfirmation } from '../transactions/transactionReviewSummary.js'
 
 test('shows funding in plan order with readable amounts and exact values available', async () => {
 	const dom = installDomEnvironment()
@@ -164,9 +165,8 @@ test('keeps confirmed wrap and approval steps visible while the final request aw
 		expect(queries.queryByRole('button', { name: /Wrap ETH into WETH/ })).toBeNull()
 		expect(queries.getByRole('button', { name: 'ETH wrapped ✓' }).hasAttribute('disabled')).toBe(true)
 		expect(queries.getByRole('button', { name: 'WETH approved ✓' }).hasAttribute('disabled')).toBe(true)
-		expect(queries.getByRole('textbox').hasAttribute('disabled')).toBe(true)
-		expect(queries.getByRole('textbox').getAttribute('placeholder') ?? '').toBe('')
-		expect(rendered.container.querySelector<HTMLInputElement>('.approval-amount-field input')?.value).toBe('3')
+		expect(queries.queryByRole('textbox')).toBeNull()
+		expect(rendered.container.querySelector('.approval-advanced')).toBeNull()
 		expect(queries.getByRole('button', { name: 'Request price' }).hasAttribute('disabled')).toBe(false)
 		transactionSteps.value?.cancel()
 		await requestReview?.catch(() => undefined)
@@ -309,10 +309,10 @@ for (const choice of ['custom', 'max'] as const) {
 			expect(funding.textContent).toContain('1 WETH')
 			expect(queries.getByRole('button', { name: /Request price/ }).hasAttribute('disabled')).toBe(true)
 			if (choice === 'custom') await act(() => fireEvent.input(queries.getByRole('textbox'), { target: { value: '9' } }))
-			else await act(() => fireEvent.click(queries.getByText('Max')))
+			else await act(() => fireEvent.click(queries.getByRole('checkbox', { name: 'Unlimited approval' })))
 			expect(transactionSteps.value?.steps[0]?.phase).toBe('review')
-			expect(queries.getByRole('button', { name: choice === 'custom' ? /Approve 9 REP/ : /Approve Max/ }).hasAttribute('disabled')).toBe(false)
-			await act(() => fireEvent.click(queries.getByRole('button', { name: choice === 'custom' ? /Approve 9 REP/ : /Approve Max/ })))
+			expect(queries.getByRole('button', { name: choice === 'custom' ? /Approve 9 REP/ : /Approve unlimited REP/ }).hasAttribute('disabled')).toBe(false)
+			await act(() => fireEvent.click(queries.getByRole('button', { name: choice === 'custom' ? /Approve 9 REP/ : /Approve unlimited REP/ })))
 			expect(await review).toBe(choice === 'custom' ? 9n : 2n ** 256n - 1n)
 			expect(transactionSteps.value?.steps[1]?.phase).toBe('upcoming')
 			expect(rendered.container.querySelector('.transaction-funding')).toBe(funding)
@@ -323,9 +323,9 @@ for (const choice of ['custom', 'max'] as const) {
 				controller.receipt(hash, 'success')
 			})
 			expect(queries.queryByRole('link', { name: hash })).toBeNull()
-			expect(approvalInput.isConnected).toBe(true)
-			expect(approvalInput.hasAttribute('disabled')).toBe(true)
-			expect(rendered.container.querySelectorAll('.approval-amount-field')).toHaveLength(1)
+			expect(approvalInput.isConnected).toBe(false)
+			expect(queries.getByRole('button', { name: 'REP approved ✓' }).hasAttribute('disabled')).toBe(true)
+			expect(rendered.container.querySelectorAll('.approval-amount-field')).toHaveLength(0)
 			const nextReview = controller.review()
 			await act(() => undefined)
 			expect(rendered.container.querySelector('.transaction-funding')).toBe(funding)
@@ -462,7 +462,7 @@ for (const phase of ['skipped', 'failed'] as const) {
 				expect(transactionSteps.value).toBeUndefined()
 			} else {
 				expect(queries.getByRole('button', { name: 'REP approved ✓' }).hasAttribute('disabled')).toBe(true)
-				expect(queries.getByRole('textbox').hasAttribute('disabled')).toBe(true)
+				expect(queries.queryByRole('textbox')).toBeNull()
 				expect(queries.queryByRole('button', { name: 'Approve REP' })).toBeNull()
 				expect(queries.getByRole('button', { name: 'Request price' }).hasAttribute('disabled')).toBe(false)
 			}
@@ -528,3 +528,49 @@ test('uses past tense for shared deployment, transfer and dispute actions', () =
 test('every known reviewed action has an explicit success tense', () => {
 	for (const { title } of Object.values(reviewedActions)) expect(completedAction(title)).not.toStartWith('Completed:')
 })
+
+for (const walletBalance of [undefined, 100n * 10n ** 18n] as const) {
+	test(`blocks an irreversible burn until the proportional confirmation is given (wallet ${walletBalance === undefined ? 'unknown' : 'known'})`, async () => {
+		const dom = installDomEnvironment()
+		const rep = { symbol: 'REP', units: 18 }
+		const burn = 10n * 10n ** 18n
+		const review = buildTransactionReviewSummary({
+			amounts: [{ amount: burn, label: 'REP burned from wallet', token: rep }],
+			changes: [{ before: walletBalance, delta: -burn, label: 'Wallet REP', token: rep }],
+			confirmation: resolveBurnConfirmation({ amount: burn, token: rep, walletBalance }),
+			warnings: [{ message: 'Burned REP cannot be returned.', severity: 'danger' }],
+		})
+		const controller = createTransactionStepController()
+		controller.setPlan([{ title: 'Migrate REP', description: undefined, contractAddress: undefined, contractLabel: undefined, spender: undefined, amount: undefined, ethValueAttoEth: 0n }])
+		const confirmed = controller.review()
+		const rendered = await renderIntoDocument(
+			<GlobalTransactionPresentationProvider transaction={{ review, title: 'Splitting REP', tone: 'awaiting-wallet' }}>
+				<TransactionStepsContent contextKey='burn' />
+			</GlobalTransactionPresentationProvider>,
+		)
+		try {
+			const queries = within(rendered.container)
+			expect(rendered.container.querySelector('.transaction-review-summary')?.textContent).toContain('10\u00a0REP')
+			expect(queries.getByText('High risk').closest('.transaction-review-risk')?.textContent).toContain('Burned REP cannot be returned.')
+			const submit = queries.getByRole('button', { name: /Migrate REP/ })
+			expect(submit.hasAttribute('disabled')).toBe(true)
+			if (walletBalance === undefined) {
+				const typed = queries.getByRole('textbox', { name: 'Type 10 REP to confirm the irreversible burn' })
+				await act(() => fireEvent.input(typed, { target: { value: '9' } }))
+				expect(submit.hasAttribute('disabled')).toBe(true)
+				await act(() => fireEvent.input(typed, { target: { value: '10' } }))
+			} else {
+				expect(rendered.container.querySelector('.transaction-review-summary')?.textContent).toContain('90\u00a0REP')
+				await act(() => fireEvent.click(queries.getByRole('checkbox', { name: 'I understand this burns 10\u00a0REP from my wallet and cannot be undone.' })))
+			}
+			expect(submit.hasAttribute('disabled')).toBe(false)
+			await act(() => fireEvent.click(submit))
+			expect(await confirmed).toBeUndefined()
+			expect(transactionSteps.value?.steps[0]?.phase).toBe('pending')
+		} finally {
+			transactionSteps.value?.cancel()
+			await rendered.cleanup()
+			dom.cleanup()
+		}
+	})
+}

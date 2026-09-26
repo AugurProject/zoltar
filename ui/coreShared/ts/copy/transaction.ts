@@ -115,6 +115,10 @@ export const reviewedActions: Record<string, { title: string; description?: stri
 	requestPriceIfNeededAndStageLiquidation: { title: 'Queue liquidation', description: 'Queue the liquidation and fund a price report if needed. Settlement may execute the queued liquidation.' },
 	requestPriceIfNeededAndStageOperation: { title: 'Queue vault operation', description: 'Queue the vault change and fund a price report if needed. Settlement may execute the queued change.' },
 	aggregate3: { title: 'Batched transaction', description: 'Run several contract calls in one transaction.' },
+	depositRepToVault: { title: 'Deposit REP' },
+	forkUniverse: { title: 'Fork universe' },
+	prepareAndSplitMigrationRep: { title: 'Migrate REP' },
+	deployChild: { title: 'Deploy child universe' },
 }
 export const closeSymbol = '×'
 export const hide = 'Hide'

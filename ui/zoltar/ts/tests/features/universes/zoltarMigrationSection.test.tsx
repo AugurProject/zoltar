@@ -303,7 +303,7 @@ describe('ZoltarMigrationSection', () => {
 		expect(outcomes?.nextElementSibling?.textContent).toContain('Migration Amount')
 		expect(outcomes?.nextElementSibling?.nextElementSibling?.textContent).toContain('Selected Destinations')
 		expect(outcomes?.nextElementSibling?.nextElementSibling?.closest('details')).toBeNull()
-		expect(outcomes?.nextElementSibling?.nextElementSibling?.nextElementSibling?.textContent).toContain('Approval Amount')
+		expect(outcomes?.nextElementSibling?.nextElementSibling?.nextElementSibling?.classList.contains('token-approval-control')).toBe(true)
 		expect(document.body.textContent?.includes('Ready to split.')).toBe(false)
 	})
 

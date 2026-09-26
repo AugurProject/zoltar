@@ -9,6 +9,7 @@ import { createMockLoaderClient, getContractFunctionName } from '@zoltar/ui-core
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import { createInitialTransactionTrayState, markTransactionFailed, markTransactionRequested } from '@zoltar/ui-core-shared/transactions/transactionTray.js'
 import type { MarketDetails, ZoltarUniverseSummary } from '@zoltar/ui-core-shared/types/contracts.js'
+import type { TransactionIntent } from '@zoltar/ui-core-shared/types/components.js'
 import { useZoltarFork, type UseZoltarForkDependencies } from '@zoltar/ui-zoltar-shared/features/universes/hooks/useZoltarFork.js'
 import { describe, expect, mock, test } from 'bun:test'
 import { h, render } from 'preact'
@@ -320,6 +321,7 @@ describe('useZoltarFork', () => {
 		resetEnvironment?.()
 		resetEnvironment = installActiveEnvironmentForTesting(createFakeBackend({ accountAddress: WALLET_ADDRESS }))
 
+		const requestedIntents: TransactionIntent[] = []
 		let hookState: UseZoltarForkState | undefined
 		const Harness = function ZoltarForkHarness() {
 			hookState = useZoltarFork(
@@ -331,12 +333,14 @@ describe('useZoltarFork', () => {
 					onTransactionFailed: () => undefined,
 					onTransactionFinished: () => undefined,
 					onTransactionPresented: () => undefined,
-					onTransactionRequested: () => undefined,
+					onTransactionRequested: intent => {
+						requestedIntents.push(intent)
+					},
 					onTransactionSubmitted: () => undefined,
 					refreshState: async () => undefined,
 					refreshZoltarUniverse: async () => undefined,
 					shouldAutoLoadForkAccess: false,
-					zoltarUniverse: createUniverse({ reputationToken: REPUTATION_TOKEN_ADDRESS }),
+					zoltarUniverse: createUniverse({ forkBurnDivisor: 5n, forkThresholdAttoRep: 450_000n * 10n ** 18n, reputationToken: REPUTATION_TOKEN_ADDRESS }),
 				},
 				dependencies,
 			)
@@ -368,6 +372,14 @@ describe('useZoltarFork', () => {
 		expect(loadZoltarForkAccess).toHaveBeenCalledTimes(1)
 		expect(requireHookState(hookState).zoltarForkFeedback?.status.tone).toBe('success')
 		expect(requireHookState(hookState).zoltarForkResult?.questionId).toBe('0xb')
+		const review = requestedIntents[0]?.review
+		expect(review?.amounts.map(row => [row.label, row.value])).toEqual([
+			['REP burned from wallet', '450 000\u00a0REP'],
+			['Permanently lost', '90 000\u00a0REP'],
+			['Migration credit', '360 000\u00a0REP'],
+		])
+		expect(review?.warnings.map(warning => warning.severity)).toEqual(['danger', 'caution'])
+		expect(review?.confirmation).toMatchObject({ kind: 'typed', expectedAmount: 450_000n * 10n ** 18n, expectedText: '450 000' })
 	})
 
 	test('an earlier environment fork rejection cannot clear replacement environment feedback', async () => {

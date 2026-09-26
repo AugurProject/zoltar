@@ -1051,7 +1051,7 @@ productionWorkflowTest('production bundle executes deployment, reporting, fork m
 				await driver.waitForBodyWithoutText('Preparing funding and approvals…')
 				expect(await driver.evaluate("document.querySelector('.request-price-fields input')?.value")).toBe('3')
 				expect(await driver.evaluate("[...document.querySelectorAll('.transaction-plan-action .tx-action-completed button:disabled')].map(button => button.textContent?.trim())")).toEqual(['WETH approved ✓', 'REP approved ✓'])
-				expect(await driver.evaluate("document.querySelectorAll('.approval-amount-field input:disabled').length")).toBe(2)
+				expect(await driver.evaluate("document.querySelectorAll('.approval-amount-field').length")).toBe(0)
 				expect(await driver.evaluate("document.querySelector('[role=dialog]')?.scrollWidth <= document.querySelector('[role=dialog]')?.clientWidth")).toBe(true)
 				await driver.setInputByLabel('Open Oracle REP/ETH starting price', '2')
 				await driver.waitForBodyText('Preparing funding and approvals…')

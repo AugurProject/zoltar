@@ -49,11 +49,13 @@ describe('TokenApprovalControl', () => {
 		await act(() => fireEvent.input(input, { target: { value: '0.5' } }))
 		expect(rendered.container.querySelector('.tx-action-notice')?.textContent).toContain('will still leave')
 		await act(() => fireEvent.input(input, { target: { value: 'invalid' } }))
-		const notices = rendered.container.querySelectorAll('.tx-action-notice')
-		expect(notices.length).toBe(1)
-		expect(input.getAttribute('aria-describedby')).toBe(notices[0]?.id)
-		expect(notices[0]?.textContent).toBe('Approval amount must be a decimal number.')
-		expect(rendered.container.querySelectorAll('.field-error').length).toBe(0)
+		// The validation error belongs to the field, not the shared action notice, and is not announced as an alert while typing.
+		expect(rendered.container.querySelectorAll('.tx-action-notice').length).toBe(0)
+		const fieldErrors = rendered.container.querySelectorAll('.field-error')
+		expect(fieldErrors.length).toBe(1)
+		expect(fieldErrors[0]?.textContent).toBe('Approval amount must be a decimal number.')
+		expect(input.getAttribute('aria-describedby')?.split(' ')).toContain(fieldErrors[0]?.id)
+		expect(within(rendered.container).queryByRole('alert')).toBeNull()
 		expect(within(rendered.container).getByRole('button', { name: 'Approve REP' }).hasAttribute('disabled')).toBe(true)
 	})
 
@@ -208,8 +210,102 @@ describe('TokenApprovalControl', () => {
 		const validationMessage = documentQueries.getByText('Approval amount must be a decimal number.')
 		expect(approveButton.disabled).toBe(true)
 		expect(approveButton.getAttribute('title')).toBeNull()
-		expect(amountInput.getAttribute('aria-describedby')).toBe(validationMessage.id)
+		expect(amountInput.getAttribute('aria-describedby')?.split(' ')).toContain(validationMessage.id)
 		expect(approveButton.getAttribute('aria-describedby')).toBe(validationMessage.id)
 		expect(document.body.querySelectorAll('.field-error')).toHaveLength(1)
+		expect(validationMessage.getAttribute('role')).toBeNull()
+	})
+
+	test('offers only the exact required approval until Advanced is opened', async () => {
+		const approvals: (bigint | undefined)[] = []
+		const renderedComponent = await renderIntoDocument(
+			<TokenApprovalControl
+				actionLabel='depositing REP'
+				allowanceError={undefined}
+				allowanceLoading={false}
+				approvedAmount={0n}
+				guardMessage={undefined}
+				onApprove={amount => {
+					approvals.push(amount)
+				}}
+				pending={false}
+				pendingLabel='Approving REP…'
+				requiredAmount={450_000n * 10n ** 18n}
+				resetKey='exact-approval'
+				tokenSymbol='REP'
+				tokenUnits={18}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		expect(documentQueries.queryByText('Required REP')).toBeNull()
+		expect(documentQueries.queryByText('Approved REP')).toBeNull()
+		const advanced = documentQueries.getByText('Advanced').closest('details')
+		expect(advanced?.open).toBe(false)
+		expect(documentQueries.getAllByRole('button').map(button => button.textContent)).toEqual(['Approve 450 000\u00a0REP'])
+		await act(() => fireEvent.click(documentQueries.getByRole('button', { name: 'Approve 450 000\u00a0REP' })))
+		expect(approvals).toEqual([450_000n * 10n ** 18n])
+	})
+
+	test('shows a satisfied state instead of an approval button once the allowance covers the requirement', async () => {
+		const renderedComponent = await renderIntoDocument(
+			<TokenApprovalControl
+				actionLabel='depositing REP'
+				allowanceError={undefined}
+				allowanceLoading={false}
+				approvedAmount={5n * 10n ** 18n}
+				guardMessage={undefined}
+				onApprove={() => undefined}
+				pending={false}
+				pendingLabel='Approving REP…'
+				requiredAmount={5n * 10n ** 18n}
+				resetKey='approved'
+				tokenSymbol='REP'
+				tokenUnits={18}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		const approved = documentQueries.getByRole('button', { name: 'REP approved ✓' })
+		expect(approved.hasAttribute('disabled')).toBe(true)
+		expect(approved.closest('.tx-action-completed')).not.toBeNull()
+		expect(document.body.querySelector('.approval-status')).toBeNull()
+		expect(documentQueries.queryByText('Advanced')).toBeNull()
+	})
+
+	test('keeps unlimited approval behind Advanced with an explicit warning', async () => {
+		const approvals: (bigint | undefined)[] = []
+		const renderedComponent = await renderIntoDocument(
+			<TokenApprovalControl
+				actionLabel='depositing REP'
+				allowanceError={undefined}
+				allowanceLoading={false}
+				approvedAmount={0n}
+				guardMessage={undefined}
+				onApprove={amount => {
+					approvals.push(amount)
+				}}
+				pending={false}
+				pendingLabel='Approving REP…'
+				requiredAmount={10n ** 18n}
+				resetKey='unlimited'
+				tokenSymbol='REP'
+				tokenUnits={18}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		const unlimited = documentQueries.getByRole('checkbox', { name: 'Unlimited approval' })
+		const warning = document.getElementById(unlimited.getAttribute('aria-describedby') ?? '')
+		expect(warning?.textContent).toBe('Unlimited approval lets this contract spend all of your REP, now and later, until you revoke it.')
+		expect(warning?.classList.contains('active')).toBe(false)
+		await act(() => fireEvent.click(unlimited))
+		expect(warning?.classList.contains('active')).toBe(true)
+		expect(documentQueries.getByText('Custom approval amount').parentElement?.querySelector('input')?.disabled).toBe(true)
+		await act(() => fireEvent.click(documentQueries.getByRole('button', { name: 'Approve unlimited REP' })))
+		expect(approvals).toEqual([2n ** 256n - 1n])
 	})
 })

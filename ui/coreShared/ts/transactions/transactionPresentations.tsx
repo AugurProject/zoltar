@@ -55,6 +55,7 @@ export function buildPresentation({
 function buildHashlessPresentation({
 	detail,
 	dismissKey,
+	review,
 	rows,
 	technicalRows,
 	title,
@@ -63,6 +64,7 @@ function buildHashlessPresentation({
 }: {
 	detail: ComponentChildren
 	dismissKey: string
+	review?: GlobalTransactionPresentation['review']
 	rows?: GlobalTransactionRow[]
 	technicalRows?: GlobalTransactionRow[]
 	title: GlobalTransactionPresentation['title']
@@ -74,6 +76,7 @@ function buildHashlessPresentation({
 		dismissKey,
 		title,
 		tone,
+		...(review === undefined ? {} : { review }),
 		...(rows === undefined ? {} : { rows }),
 		...(technicalRows === undefined ? {} : { technicalRows }),
 		...(universeId === undefined ? {} : { universeId }),
@@ -83,6 +86,7 @@ function buildHashlessPresentation({
 export function buildIntent({
 	action,
 	failedTitle,
+	review,
 	rows,
 	source,
 	submittedDetail,
@@ -91,6 +95,7 @@ export function buildIntent({
 }: {
 	action: string
 	failedTitle?: TransactionIntent['failedTitle']
+	review?: TransactionIntent['review'] | undefined
 	rows?: GlobalTransactionRow[] | undefined
 	source: string
 	submittedDetail?: TransactionIntent['submittedDetail']
@@ -100,6 +105,7 @@ export function buildIntent({
 	return {
 		action,
 		...(failedTitle === undefined ? {} : { failedTitle }),
+		...(review === undefined ? {} : { review }),
 		...(rows === undefined ? {} : { rows }),
 		source,
 		...(submittedDetail === undefined ? {} : { submittedDetail }),
@@ -155,6 +161,7 @@ export function createAwaitingWalletPresentation(intent: TransactionIntent, dism
 			dismissKey,
 			title: intent.submittedTitle,
 			tone: 'preparing',
+			...(intent.review === undefined ? {} : { review: intent.review }),
 			...(intent.rows === undefined ? {} : { rows: intent.rows }),
 			...(intent.universeId === undefined ? {} : { universeId: intent.universeId }),
 		})
@@ -164,6 +171,7 @@ export function createAwaitingWalletPresentation(intent: TransactionIntent, dism
 		dismissKey,
 		title: intent.submittedTitle,
 		tone: 'awaiting-wallet',
+		...(intent.review === undefined ? {} : { review: intent.review }),
 		...(intent.rows === undefined ? {} : { rows: intent.rows }),
 		...(intent.universeId === undefined ? {} : { universeId: intent.universeId }),
 	})
@@ -174,6 +182,7 @@ export function createPreparedWalletPresentation(intent: TransactionIntent, prev
 	return buildHashlessPresentation({
 		detail: requiresWalletConfirmation ? transactionCopy.walletConfirmationReviewDetail : transactionCopy.simulationSubmissionReviewDetail,
 		dismissKey,
+		...(intent.review === undefined ? {} : { review: intent.review }),
 		...(intent.rows === undefined ? {} : { rows: intent.rows }),
 		technicalRows: getPreparedTransactionTechnicalRows(preview),
 		title: intent.submittedTitle,

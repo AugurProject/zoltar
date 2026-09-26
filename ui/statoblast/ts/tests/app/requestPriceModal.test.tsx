@@ -10,7 +10,7 @@ import { createWalletClient, custom, getAddress, publicActions, type Hash, type 
 import { installActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { createFakeBackend } from '@zoltar/ui-core-shared/tests/testUtils/fakeBackend.js'
 import { MAINNET_NETWORK_PROFILE } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
-import { createReviewedClient } from '@zoltar/ui-statoblast-shared/protocol/reviewedClient.js'
+import { createReviewedClient } from '@zoltar/ui-core-shared/transactions/reviewedClient.js'
 import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import { fireEvent, within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
@@ -1044,7 +1044,7 @@ test('keeps the preview while satisfied approvals are skipped before the final r
 		expect(transactionSteps.value?.activeIndex).toBe(2)
 		expect(queries.getByRole('button', { name: 'REP approved ✓' }).hasAttribute('disabled')).toBe(true)
 		expect(queries.getByRole('button', { name: 'WETH approved ✓' }).hasAttribute('disabled')).toBe(true)
-		expect(rendered.container.querySelectorAll('.approval-amount-field')).toHaveLength(2)
+		expect(rendered.container.querySelectorAll('.approval-amount-field')).toHaveLength(0)
 		expect(queries.getByRole('button', { name: /Request new price/ }).hasAttribute('disabled')).toBe(false)
 	} finally {
 		ready.resolve()

@@ -6,6 +6,8 @@ import { IdentifierValue } from '@zoltar/ui-core-shared/components/IdentifierVal
 import { formatCurrencyBalanceWithUnit, formatValueWithUnit } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { getMarketTypeLabel } from '@zoltar/ui-core-shared/lib/marketType.js'
 import { buildIntent, buildPresentation, withWarning } from '@zoltar/ui-core-shared/transactions/transactionPresentations.js'
+import { buildTransactionReviewSummary, resolveBurnConfirmation } from '@zoltar/ui-core-shared/transactions/transactionReviewSummary.js'
+import * as zoltarCopy from '../copy/zoltar.js'
 import type { MarketCreationResult, ZoltarChildUniverseActionResult, ZoltarForkActionResult, ZoltarMigrationActionResult } from '@zoltar/ui-core-shared/types/contracts.js'
 
 export function createDeploymentTransactionIntent(stepLabel: string) {
@@ -42,7 +44,32 @@ export function createMarketCreationWarningPresentation(result: MarketCreationRe
 	return withWarning(createMarketCreationSuccessPresentation(result, context), message)
 }
 
-type QuestionUniverseTransactionContext = { questionId?: string | undefined; universeId?: bigint | undefined }
+type QuestionUniverseTransactionContext = { questionId?: string | undefined; review?: ZoltarForkReviewContext | undefined; universeId?: bigint | undefined }
+
+type ZoltarForkReviewContext = { forkBurnDivisor: bigint | undefined; forkThresholdAttoRep: bigint; repTokenSymbol: string | undefined; walletRepBalanceAttoRep: bigint | undefined }
+
+/** Forking burns the threshold from the wallet for the whole universe, so it always needs the typed-amount confirmation. */
+function getZoltarForkReviewSummary(review: ZoltarForkReviewContext) {
+	const token = { symbol: review.repTokenSymbol ?? commonCopy.rep, units: 18 }
+	const permanentBurn = review.forkBurnDivisor === undefined || review.forkBurnDivisor <= 1n ? undefined : review.forkThresholdAttoRep / review.forkBurnDivisor
+	return buildTransactionReviewSummary({
+		amounts: [
+			{ amount: review.forkThresholdAttoRep, label: zoltarCopy.reviewRepBurned, token },
+			...(permanentBurn === undefined
+				? []
+				: [
+						{ amount: permanentBurn, label: zoltarCopy.reviewRepPermanentlyLost, token },
+						{ amount: review.forkThresholdAttoRep - permanentBurn, label: zoltarCopy.reviewMigrationCredit, token },
+					]),
+		],
+		changes: [{ before: review.walletRepBalanceAttoRep, delta: -review.forkThresholdAttoRep, label: transactionCopy.walletRep, token }],
+		confirmation: resolveBurnConfirmation({ amount: review.forkThresholdAttoRep, token, universeWide: true, walletBalance: review.walletRepBalanceAttoRep }),
+		warnings: [
+			{ message: zoltarCopy.reviewForkIrreversible, severity: 'danger' },
+			{ message: zoltarCopy.reviewForkUniverseWide, severity: 'caution' },
+		],
+	})
+}
 
 function getQuestionUniverseTransactionRows(context: QuestionUniverseTransactionContext | undefined) {
 	if (context === undefined) return undefined
@@ -50,7 +77,14 @@ function getQuestionUniverseTransactionRows(context: QuestionUniverseTransaction
 }
 
 export function createZoltarForkTransactionIntent(actionName: 'approve' | 'fork', context?: QuestionUniverseTransactionContext) {
-	return buildIntent({ action: actionName, rows: getQuestionUniverseTransactionRows(context), source: 'zoltar', submittedTitle: actionName === 'approve' ? transactionCopy.approvingForkRep : transactionCopy.forkingZoltar, universeId: context?.universeId })
+	return buildIntent({
+		action: actionName,
+		review: actionName === 'fork' && context?.review !== undefined ? getZoltarForkReviewSummary(context.review) : undefined,
+		rows: getQuestionUniverseTransactionRows(context),
+		source: 'zoltar',
+		submittedTitle: actionName === 'approve' ? transactionCopy.approvingForkRep : transactionCopy.forkingZoltar,
+		universeId: context?.universeId,
+	})
 }
 
 export function createZoltarForkSuccessPresentation(result: ZoltarForkActionResult) {
@@ -86,7 +120,26 @@ export function createChildUniverseWarningPresentation(result: ZoltarChildUniver
 	return withWarning(createChildUniverseSuccessPresentation(result), message)
 }
 
-type ZoltarMigrationTransactionContext = { amount?: string | undefined; outcomeIndexes?: string | undefined; universeId?: bigint | undefined }
+type ZoltarMigrationTransactionContext = { amount?: string | undefined; outcomeIndexes?: string | undefined; review?: ZoltarMigrationReviewContext | undefined; universeId?: bigint | undefined }
+
+type ZoltarMigrationReviewContext = { amountAttoRep: bigint | undefined; migrationRepBalanceAttoRep: bigint | undefined; preparationAttoRep: bigint; repTokenSymbol: string | undefined; walletRepBalanceAttoRep: bigint | undefined }
+
+/** Only the wallet REP burned into the migration balance is at risk, so the confirmation scales with that burn. */
+function getZoltarMigrationReviewSummary(review: ZoltarMigrationReviewContext) {
+	const token = { symbol: review.repTokenSymbol ?? commonCopy.rep, units: 18 }
+	const burns = review.preparationAttoRep > 0n
+	return buildTransactionReviewSummary({
+		amounts: [...(burns ? [{ amount: review.preparationAttoRep, label: zoltarCopy.reviewRepBurned, token }] : []), ...(review.amountAttoRep === undefined ? [] : [{ amount: review.amountAttoRep, label: zoltarCopy.reviewChildRepMinted, token }])],
+		changes: burns
+			? [
+					{ before: review.walletRepBalanceAttoRep, delta: -review.preparationAttoRep, label: transactionCopy.walletRep, token },
+					{ before: review.migrationRepBalanceAttoRep, delta: review.preparationAttoRep, label: zoltarCopy.migrationRepBalance, token },
+				]
+			: [],
+		confirmation: resolveBurnConfirmation({ amount: review.preparationAttoRep, token, walletBalance: review.walletRepBalanceAttoRep }),
+		warnings: burns ? [{ message: zoltarCopy.reviewMigrationBurnIrreversible, severity: 'danger' }] : [],
+	})
+}
 
 function getZoltarMigrationTransactionRows(context: ZoltarMigrationTransactionContext | undefined) {
 	if (context === undefined) return undefined
@@ -97,7 +150,14 @@ function getZoltarMigrationTransactionRows(context: ZoltarMigrationTransactionCo
 }
 
 export function createZoltarMigrationTransactionIntent(actionName: 'prepare' | 'split', context?: ZoltarMigrationTransactionContext) {
-	return buildIntent({ action: actionName, rows: getZoltarMigrationTransactionRows(context), source: 'zoltar', submittedTitle: actionName === 'prepare' ? transactionCopy.preparingRep : transactionCopy.splittingRep, universeId: context?.universeId })
+	return buildIntent({
+		action: actionName,
+		review: context?.review === undefined ? undefined : getZoltarMigrationReviewSummary(context.review),
+		rows: getZoltarMigrationTransactionRows(context),
+		source: 'zoltar',
+		submittedTitle: actionName === 'prepare' ? transactionCopy.preparingRep : transactionCopy.splittingRep,
+		universeId: context?.universeId,
+	})
 }
 
 export function createZoltarMigrationSuccessPresentation(result: ZoltarMigrationActionResult) {

@@ -84,6 +84,7 @@ type SecurityVaultActionSnapshot = {
 	effectiveSecurityPoolAddressInput: string | undefined
 	effectiveVaultSelectionKey: string
 	form: SecurityVaultFormState
+	balances: { vaultRepBackingAttoRep: bigint | undefined; walletRepBalanceAttoRep: bigint | undefined }
 	repTokenSymbol?: string | undefined
 	universeId?: bigint | undefined
 }
@@ -136,6 +137,7 @@ function useSecurityVaultOperationsWithDependencies<TWriteClient>(
 		effectiveSecurityPoolAddressInput,
 		effectiveVaultSelectionKey,
 		form: { ...securityVaultForm.value },
+		balances: { vaultRepBackingAttoRep: securityVaultDetails.value?.vaultAttoRepBacking, walletRepBalanceAttoRep: repBalanceLoader.signal.value.value },
 		repTokenSymbol: securityVaultDetails.value?.repTokenSymbol,
 		universeId: securityVaultDetails.value?.universeId,
 	})
@@ -283,6 +285,7 @@ function useSecurityVaultOperationsWithDependencies<TWriteClient>(
 		const isCurrentSelection = () => isVaultSelectionCurrent(actionSelectionKey)
 		const transactionContext = {
 			repTokenSymbol: snapshot.repTokenSymbol,
+			review: { ...snapshot.balances, depositAmount: snapshot.form.depositAmount, repWithdrawAmount: snapshot.form.repWithdrawAmount },
 			securityPoolAddress: snapshot.effectiveSecurityPoolAddressInput,
 			universeId: snapshot.universeId,
 			vaultAddress: getSelectedVaultOwner(snapshot.form.selectedVaultOwner, accountAddress),

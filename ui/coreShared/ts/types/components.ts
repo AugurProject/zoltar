@@ -1,5 +1,6 @@
 import type { ComponentChildren } from 'preact'
 import type { Hash } from '@zoltar/core-shared/evm/ethereum'
+import type { TransactionReviewSummary } from '../transactions/transactionReviewSummary.js'
 
 export type ActionAvailability = {
 	disabled: boolean
@@ -35,6 +36,8 @@ export type TransactionIntent = {
 	action: string
 	failedTitle?: ComponentChildren
 	requiresWalletConfirmation?: boolean | undefined
+	/** Amounts, before → after balances, risk warnings, and any required confirmation shown in the in-app review. */
+	review?: TransactionReviewSummary
 	rows?: GlobalTransactionRow[]
 	technicalRows?: GlobalTransactionRow[]
 	source: string
@@ -48,6 +51,7 @@ export type GlobalTransactionPresentation = {
 	dismissKey?: string
 	hash?: Hash
 	operationKey?: string
+	review?: TransactionReviewSummary
 	rows?: GlobalTransactionRow[]
 	technicalRows?: GlobalTransactionRow[]
 	title: ComponentChildren

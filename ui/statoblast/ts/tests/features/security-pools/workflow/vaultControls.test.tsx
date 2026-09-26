@@ -109,11 +109,11 @@ describe('SecurityPoolWorkflowSection: vault controls', () => {
 		const depositDialog = documentQueries.getByRole('dialog', { name: 'Deposit REP' })
 		const depositQueries = within(depositDialog)
 		const depositAmountInput = depositQueries.getByText('REP backing').parentElement?.querySelector('input')
-		const approvalAmountInput = depositQueries.getByText('REP Approval Amount').parentElement?.querySelector('input')
-		const approvalMaxButton = depositQueries.getByText('REP Approval Amount').parentElement?.querySelector('button')
+		const approvalAmountInput = depositQueries.getByText('Custom approval amount').parentElement?.querySelector('input')
+		const unlimitedApprovalOption = depositQueries.getByRole('checkbox', { name: 'Unlimited approval' })
 		expect(depositAmountInput?.disabled).toBe(true)
 		expect(approvalAmountInput?.disabled).toBe(true)
-		expect(approvalMaxButton?.disabled).toBe(true)
+		expect(unlimitedApprovalOption.hasAttribute('disabled')).toBe(true)
 		expectTransactionButtonDisabled(depositDialog, 'Approve 1 REP')
 
 		await act(() => {
@@ -393,8 +393,8 @@ describe('SecurityPoolWorkflowSection: vault controls', () => {
 		expect(modalQueries.queryByText('REP approval is sufficient for the deposit amount')).toBeNull()
 		expect(modalQueries.queryByText('Approve REP inside this modal before depositing.')).toBeNull()
 		expect(modalQueries.getByText('Wallet REP')).not.toBeNull()
-		expect(modalQueries.getByText('Required REP')).not.toBeNull()
-		expect(modalQueries.getByText('REP Approval Amount')).not.toBeNull()
+		expect(modalQueries.queryByText('Required REP')).toBeNull()
+		expect(modalQueries.getByText('Advanced').closest('details')?.open).toBe(false)
 	})
 
 	test('caps REP withdrawals to the multiplier-adjusted oracle-backed amount', async () => {

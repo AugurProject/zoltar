@@ -7,8 +7,8 @@ import { MAINNET_NETWORK_PROFILE } from '@zoltar/ui-core-shared/wallet/networkPr
 import { createDeferred } from '@zoltar/ui-core-shared/tests/testUtils/deferred.js'
 import { installActiveEnvironmentForTesting, resetActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { createFakeBackend } from '@zoltar/ui-core-shared/tests/testUtils/fakeBackend.js'
-import { createReviewedClient } from '@zoltar/ui-statoblast-shared/protocol/reviewedClient.js'
-import { withTransactionReviews } from '@zoltar/ui-statoblast-shared/protocol/reviewedBackend.js'
+import { createReviewedClient } from '@zoltar/ui-core-shared/transactions/reviewedClient.js'
+import { withTransactionReviews } from '@zoltar/ui-core-shared/transactions/reviewedBackend.js'
 import { runWriteAction } from '@zoltar/ui-core-shared/transactions/writeAction.js'
 import { createInitialTransactionTrayState, markTransactionCanceled, markTransactionFailed, markTransactionFinished, markTransactionRequested } from '@zoltar/ui-core-shared/transactions/transactionTray.js'
 import { registerTransactionReviewScope } from '@zoltar/ui-core-shared/transactions/transactionReviewScope.js'
@@ -156,10 +156,10 @@ for (const [functionName, title, args] of [
 
 test('leaves the description empty for an unlabeled contract function instead of narrating the submission', async () => {
 	const { reviewed, client } = setup()
-	reviewed.onTransactionPrepared?.({ account, chainName: client.chain.name, functionName: 'depositRepToVault', contractAddress: account, contractLabel: 'Zoltar', args: [1n], data: '0x', value: undefined })
+	reviewed.onTransactionPrepared?.({ account, chainName: client.chain.name, functionName: 'redeemFees', contractAddress: account, contractLabel: 'Zoltar', args: [1n], data: '0x', value: undefined })
 	const sending = reviewed.sendTransaction({ to: account, data: '0x' })
 	await waitForReview()
-	expect(transactionSteps.value?.steps[0]?.title).toBe('Deposit REP To Vault')
+	expect(transactionSteps.value?.steps[0]?.title).toBe('Redeem Fees')
 	expect(transactionSteps.value?.steps[0]?.description).toBeUndefined()
 	confirm()
 	await sending

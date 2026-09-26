@@ -119,12 +119,11 @@ export const approvalAmountInvalidError = 'Approval amount must be a decimal num
 export const approvalAmount = 'Approval amount'
 export const formatApproveValue = (tokenLabel: CopyTemplateValue) => `Approve ${tokenLabel}`
 export const formatApprovingToken = (tokenLabel: CopyTemplateValue) => `Approving ${tokenLabel}…`
-export const approvalSatisfied = 'Approval Satisfied'
-export const formatApproveMaxValue = (tokenLabel: CopyTemplateValue) => `Approve Max ${tokenLabel}`
+export const formatApproveMaxValue = (tokenLabel: CopyTemplateValue) => `Approve unlimited ${tokenLabel}`
 export const formatApproveTokenAmount = (amountLabel: CopyTemplateValue, tokenSymbol: CopyTemplateValue) => `Approve ${amountLabel}\u00a0${tokenSymbol}`
-export const formatRequiredValue = (amount: CopyTemplateValue) => `Required ${amount}`
-export const formatApprovedValue = (amount: CopyTemplateValue) => `Approved ${amount}`
-export const formatValueApprovalAmount = (tokenLabel: CopyTemplateValue) => `${tokenLabel} Approval Amount`
+export const advancedApproval = 'Advanced'
+export const customApprovalAmount = 'Custom approval amount'
+export const formatUnlimitedApprovalWarning = (tokenLabel: CopyTemplateValue) => `Unlimited approval lets this contract spend all of your ${tokenLabel}, now and later, until you revoke it.`
 export const requiredTotalPlaceholder = 'Required'
 export const leaveBlankForRequiredTotal = 'Leave blank for required total'
 export const emptyStateDetail = 'Nothing to show.'

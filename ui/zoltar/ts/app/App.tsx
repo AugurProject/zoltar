@@ -14,7 +14,8 @@ import { useProtocolAppShell } from '@zoltar/ui-zoltar-shared/features/appShell/
 import { useHashRoute } from '@zoltar/ui-core-shared/app/hooks/useHashRoute.js'
 import { useQuestionCreation } from '@zoltar/ui-zoltar-shared/features/questions/hooks/useQuestionCreation.js'
 import { useZoltarUrlState } from './hooks/useZoltarUrlState.js'
-import { initializeActiveEnvironment } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
+import { TransactionStepsModal } from '@zoltar/ui-core-shared/components/TransactionStepsModal.js'
+import { initializeZoltarActiveEnvironment } from './activeEnvironment.js'
 import { formatAppDocumentTitle, getAppPageTitle } from './lib/appPageTitle.js'
 import { onchainStateDependencies } from './onchainStateDependencies.js'
 import { resolveLoadableValueState } from '@zoltar/ui-core-shared/lib/loadState.js'
@@ -59,7 +60,7 @@ export function App() {
 		walletBootstrapComplete,
 		walletScopedHookConfig,
 	} = useProtocolAppShell({
-		initializeEnvironment: options => initializeActiveEnvironment(window.location, undefined, options),
+		initializeEnvironment: options => initializeZoltarActiveEnvironment(window.location, options),
 		isDeploymentRoute: route === 'deploy',
 		onchainStateDependencies,
 	})
@@ -251,6 +252,7 @@ export function App() {
 			transactionState={transactionState.value}
 		>
 			<AppRouteContent deploy={deployRouteContentProps} zoltar={zoltarRouteContentProps} readBackendMessage={readBackendMessage} route={activeRoute} />
+			<TransactionStepsModal contextKey={`${activeEnvironmentNonce}:${walletScopedHookConfig.accountAddress ?? ''}`} />
 		</ProtocolAppFrame>
 	)
 }

@@ -69,6 +69,27 @@ describe('transaction presentations', () => {
 		expect(createSecurityVaultSuccessPresentation({ action: 'redeemRepFromVault', hash: '0x1234' }, context).title).toBe('Redeem REP2')
 	})
 
+	test('reviews vault deposits and withdrawals with the REP amount and before → after balances', () => {
+		const review = { depositAmount: '1000', repWithdrawAmount: '250', vaultRepBackingAttoRep: 10_000n * 10n ** 18n, walletRepBalanceAttoRep: 2_000n * 10n ** 18n }
+		const deposit = createSecurityVaultTransactionIntent('depositRepToVault', { repTokenSymbol: 'REP', review }).review
+		expect(deposit?.amounts).toEqual([{ label: 'Deposit', value: '1 000\u00a0REP' }])
+		expect(deposit?.changes.map(change => [change.label, change.before, change.after])).toEqual([
+			['Vault REP backing', '10 000\u00a0REP', '11 000\u00a0REP'],
+			['Wallet REP', '2 000\u00a0REP', '1 000\u00a0REP'],
+		])
+		expect(deposit?.warnings.map(warning => warning.severity)).toEqual(['caution'])
+		expect(deposit?.confirmation).toBeUndefined()
+		const withdrawal = createSecurityVaultTransactionIntent('queueWithdrawRep', { repTokenSymbol: 'REP', review }).review
+		expect(withdrawal?.amounts).toEqual([{ label: 'Withdraw', value: '250\u00a0REP' }])
+		expect(withdrawal?.changes.map(change => change.after)).toEqual(['9 750\u00a0REP', '2 250\u00a0REP'])
+		expect(withdrawal?.warnings).toEqual([{ message: 'Executes immediately with a valid oracle price; otherwise queued.', severity: 'info' }])
+	})
+
+	test('omits the review summary for vault actions without a positive amount', () => {
+		expect(createSecurityVaultTransactionIntent('depositRepToVault', { review: { depositAmount: '' } }).review).toBeUndefined()
+		expect(createSecurityVaultTransactionIntent('redeemFees', { review: { depositAmount: '5' } }).review).toBeUndefined()
+	})
+
 	test('keeps vault identity in transaction intent rows', () => {
 		const intent = createSecurityVaultTransactionIntent('depositRepToVault', {
 			securityPoolAddress: '0x0000000000000000000000000000000000000001',

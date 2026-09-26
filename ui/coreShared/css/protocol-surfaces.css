@@ -427,8 +427,108 @@ strong.metric-value-danger {
 	margin-top: 0.3rem;
 }
 
+.transaction-review-summary {
+	display: grid;
+	gap: 0.75rem;
+}
+
+.transaction-review-summary .transaction-review-primary {
+	grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+}
+
+.transaction-review-summary .transaction-review-primary:empty,
+.transaction-review-summary .transaction-review-details:empty {
+	display: none;
+}
+
+.transaction-review-change {
+	display: inline-flex;
+	flex-wrap: wrap;
+	align-items: baseline;
+	gap: 0 0.35rem;
+}
+
+.transaction-review-change-before {
+	color: var(--muted);
+	font-weight: 500;
+}
+
+.transaction-review-change-after.increase {
+	color: var(--success);
+}
+
+.transaction-review-change-after.decrease {
+	color: var(--warning);
+}
+
+.transaction-review-risk.danger > strong {
+	color: var(--danger);
+}
+
+.transaction-review-risk.caution > strong {
+	color: var(--warning);
+}
+
+.transaction-review-risk > strong {
+	margin-right: 0.25rem;
+	font-family: var(--font-family-mono);
+	font-size: var(--font-label);
+	letter-spacing: 0.08em;
+	text-transform: uppercase;
+}
+
+.transaction-review-summary:has(.transaction-review-risk.danger) .transaction-review-risks {
+	border-left-color: var(--danger);
+	background: var(--danger-soft);
+}
+
+.transaction-review-confirmation {
+	grid-column: 1 / -1;
+	margin: 0;
+}
+
+.transaction-review-confirmation.acknowledge {
+	display: flex;
+	align-items: flex-start;
+	gap: var(--space-2);
+	padding: var(--space-2) var(--space-3);
+	border-left: 3px solid var(--danger);
+	background: var(--danger-soft);
+	cursor: pointer;
+	line-height: var(--line-height-body);
+}
+
+.transaction-review-confirmation.acknowledge > input {
+	flex: none;
+	width: 1.1rem;
+	height: 1.1rem;
+	/* Center the box on the first text line whether or not the label wraps. */
+	margin: calc((1lh - 1.1rem) / 2) 0 0;
+}
+
+.transaction-review-confirmation.typed {
+	display: grid;
+	gap: var(--space-1);
+	padding: var(--space-2) var(--space-3);
+	border-left: 3px solid var(--danger);
+	background: var(--danger-soft);
+}
+
+.transaction-review-confirmation.typed .field {
+	margin: 0;
+}
+
+.transaction-review-confirmation.typed .field > span {
+	color: var(--text);
+	text-transform: none;
+	letter-spacing: 0;
+	font-family: inherit;
+	font-size: 0.875rem;
+}
+
 @media (max-width: 40rem) {
-	.transaction-review-primary {
+	.transaction-review-primary,
+	.transaction-review-summary .transaction-review-primary {
 		grid-template-columns: minmax(0, 1fr);
 	}
 
@@ -1507,6 +1607,54 @@ main:has(.global-transaction-dialog-nonblocking) #app-content {
 
 .approval-amount-controls > .field-inline-input {
 	min-width: 0;
+}
+
+.approval-advanced {
+	grid-column: 1 / -1;
+	min-width: 0;
+}
+
+.approval-advanced > summary {
+	width: fit-content;
+	min-height: var(--touch-target-min);
+	cursor: pointer;
+	padding: 0.7rem 0;
+	color: var(--text-secondary);
+	font-size: 0.8125rem;
+}
+
+.approval-advanced-body {
+	display: grid;
+	gap: var(--space-2);
+	padding: var(--space-2) 0 var(--space-1) var(--space-3);
+	border-left: 1px solid var(--divider-subtle);
+}
+
+.approval-advanced-body > .approval-amount-field {
+	display: grid;
+	gap: var(--space-1);
+}
+
+.approval-unlimited-option {
+	display: flex;
+	align-items: center;
+	gap: var(--space-2);
+	min-height: var(--touch-target-min);
+	cursor: pointer;
+}
+
+.approval-unlimited-warning {
+	margin: 0;
+	color: var(--muted);
+	font-size: 0.8125rem;
+	line-height: var(--line-height-body);
+}
+
+.approval-unlimited-warning.active {
+	padding: var(--space-2) var(--space-3);
+	border-left: 3px solid var(--warning-border-strong);
+	background: var(--warning-soft);
+	color: var(--text);
 }
 
 .field span {
