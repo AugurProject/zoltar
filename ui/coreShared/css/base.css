@@ -144,7 +144,7 @@ main {
 	height: 1.35rem;
 	padding: 0 0.3rem;
 	border: 1px solid var(--status-pending-border);
-	border-radius: 999px;
+	border-radius: var(--radius-pill);
 	background: var(--status-pending-soft);
 	color: var(--status-pending);
 	font-family: var(--font-family-mono);
