@@ -362,7 +362,7 @@ button.outcome-button--no:hover:not(:disabled) {
 }
 @media (prefers-reduced-motion: no-preference) and (max-width: 56.25rem) {
 	.market-ticket--sheet .market-ticket__panel {
-		animation: market-ticket-rise 180ms ease-out;
+		animation: market-ticket-rise var(--transition-standard);
 	}
 }
 @keyframes market-ticket-rise {
