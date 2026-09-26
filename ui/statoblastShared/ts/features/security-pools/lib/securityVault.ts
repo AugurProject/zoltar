@@ -1,5 +1,6 @@
 import { formatCurrencyInputBalance } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { isVaultHealthyAtFactor } from './liquidation.js'
+import { calculateMintingCapacityAttoEth } from '../../markets/lib/trading.js'
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import type { OracleManagerDetails } from '@zoltar/ui-core-shared/types/contracts.js'
 import type { SecurityVaultDetails } from '@zoltar/ui-core-shared/types/contracts.js'
@@ -148,9 +149,10 @@ export function getVaultBackingFactorAdjustmentGuard(details: SecurityVaultDetai
 	return undefined
 }
 
-// Match SecurityPoolUtils.calculateMintingCapacityAttoEth, including its rounding order.
+// Priced exposure is the pool minting-capacity formula applied to one vault; unpriced exposure stays in REP.
 export function getVaultExposure(capacity: bigint | undefined, multiplierBps: bigint | undefined, repPerEthPrice: bigint | undefined) {
 	if (capacity === undefined || multiplierBps === undefined || multiplierBps <= 0n) return undefined
-	if (repPerEthPrice !== undefined && repPerEthPrice > 0n) return { amount: (((capacity * PRICE_PRECISION) / repPerEthPrice) * BPS_DENOMINATOR) / multiplierBps, priced: true }
+	const pricedAmount = repPerEthPrice !== undefined && repPerEthPrice > 0n ? calculateMintingCapacityAttoEth(capacity, repPerEthPrice, multiplierBps) : undefined
+	if (pricedAmount !== undefined) return { amount: pricedAmount, priced: true }
 	return { amount: (capacity * BPS_DENOMINATOR) / multiplierBps, priced: false }
 }

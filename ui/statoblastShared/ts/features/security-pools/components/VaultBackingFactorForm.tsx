@@ -1,4 +1,5 @@
 import { VaultExposureValue } from './VaultExposureValue.js'
+import { RepPriceStatusLabel } from './RepPriceStatusLabel.js'
 import { OperationModal } from '@zoltar/ui-core-shared/components/OperationModal.js'
 import { ErrorNotice } from '@zoltar/ui-core-shared/components/ErrorNotice.js'
 import type { OperationModalProps } from '@zoltar/ui-core-shared/types/components.js'
@@ -68,6 +69,7 @@ export function VaultBackingFactorForm({
 					<VaultExposureValue capacity={nextCapacity} multiplierBps={minimumBps} repPerEthPrice={repPerEthPrice} />
 				</MetricField>
 			</MetricGrid>
+			<RepPriceStatusLabel />
 			<details>
 				<summary>{commonCopy.technicalDetails}</summary>
 				<MetricGrid>

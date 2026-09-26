@@ -2709,7 +2709,40 @@
 }
 
 .pool-capacity-summary {
+	display: grid;
+	gap: var(--space-2);
 	min-width: 0;
+}
+
+/* Source and staleness of the REP price behind a derived figure; stale adds an icon and the word "Stale", not only color.
+   The element selectors outrank the uppercase label rules of the metric containers the label sits in. */
+span.rep-price-status {
+	display: block;
+	overflow-wrap: anywhere;
+}
+
+.rep-price-status > .rep-price-status-icon {
+	margin-inline-end: 0.25rem;
+}
+
+span.rep-price-status,
+.rep-price-status > span {
+	color: var(--muted);
+	font-family: var(--font-family-sans);
+	font-size: 0.8125rem;
+	font-weight: 400;
+	letter-spacing: normal;
+	line-height: var(--line-height-snug);
+	text-transform: none;
+}
+
+span.rep-price-status.stale,
+.rep-price-status.stale > span {
+	color: var(--warning);
+}
+
+.rep-price-status.stale > .rep-price-status-title {
+	font-weight: 600;
 }
 
 .pool-capacity-summary .progress-meter-header {
@@ -3313,12 +3346,6 @@
 .pool-selection-control input {
 	font-family: var(--font-family-mono);
 	font-size: clamp(0.8125rem, 2.35vw, 0.9rem);
-}
-.pool-capacity-values {
-	display: flex;
-	align-items: baseline;
-	flex-wrap: wrap;
-	gap: var(--space-2);
 }
 /* Reserve the busy label width so the address input does not shrink while a refresh runs. */
 .pool-selection-control .lookup-field-controls > .actions {

@@ -7,6 +7,7 @@ import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as securityPoolCopy from '../../../copy/securityPool.js'
 import { RouteHeader } from '@zoltar/ui-core-shared/components/RouteHeader.js'
 import { UniversePoolDirectorySection } from './UniversePoolDirectorySection.js'
+import { SelectedPoolRepPriceContext } from './RepPriceStatusLabel.js'
 
 function shouldRefreshSelectedPoolDataOnViewOpen({ currentSecurityPoolAddress, nextSecurityPoolAddress, nextView, selectedPoolHasLoadedDetails }: { currentSecurityPoolAddress: string; nextSecurityPoolAddress?: string | undefined; nextView: SecurityPoolsView; selectedPoolHasLoadedDetails: boolean }) {
 	if (nextView !== 'operate') return false
@@ -21,7 +22,7 @@ function getSecurityPoolsRouteHeader(view: SecurityPoolsView) {
 	return { description: undefined, title: commonCopy.managePool }
 }
 
-export function SecurityPoolsSection({ activeView, createPool, loadingUniverseDirectoryPools, onActiveUniverseChange, onActiveViewChange, onLoadUniverseDirectoryPools, overview, securityPoolUniverseDirectoryError, universeDirectoryPools, workflow, zoltarUniverse }: SecurityPoolsSectionProps) {
+export function SecurityPoolsSection({ activeView, createPool, loadingUniverseDirectoryPools, onActiveUniverseChange, onActiveViewChange, onLoadUniverseDirectoryPools, overview, securityPoolUniverseDirectoryError, selectedPoolRepPrice, universeDirectoryPools, workflow, zoltarUniverse }: SecurityPoolsSectionProps) {
 	const view = activeView
 	const routeHeader = getSecurityPoolsRouteHeader(view)
 	const hasSelectedPool = workflow.securityPools.some(pool => sameCaseInsensitiveText(pool.securityPoolAddress, workflow.securityPoolAddress))
@@ -67,7 +68,11 @@ export function SecurityPoolsSection({ activeView, createPool, loadingUniverseDi
 				<UniversePoolDirectorySection activeUniverseId={overview.activeUniverseId} loadingSecurityPools={loadingUniverseDirectoryPools} onRetry={onLoadUniverseDirectoryPools} securityPoolError={securityPoolUniverseDirectoryError} securityPools={universeDirectoryPools} zoltarUniverse={zoltarUniverse} />
 			) : undefined}
 
-			{view === 'operate' ? <SecurityPoolWorkflowSection {...workflow} showHeader={false} /> : undefined}
+			{view === 'operate' ? (
+				<SelectedPoolRepPriceContext.Provider value={selectedPoolRepPrice}>
+					<SecurityPoolWorkflowSection {...workflow} showHeader={false} />
+				</SelectedPoolRepPriceContext.Provider>
+			) : undefined}
 		</div>
 	)
 }

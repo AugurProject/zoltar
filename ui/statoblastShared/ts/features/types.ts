@@ -205,6 +205,8 @@ export type SecurityPoolsSectionProps = {
 	overview: SecurityPoolsOverviewRouteContentProps
 	securityPools: ListedSecurityPool[]
 	securityPoolUniverseDirectoryError?: string | undefined
+	/** The one REP price every capacity, exposure, and health figure of the selected pool uses. */
+	selectedPoolRepPrice?: import('./security-pools/lib/uiPriceOracle.js').ResolvedRepPrice | undefined
 	universeDirectoryPools?: ListedSecurityPool[] | undefined
 	workflow: SecurityPoolWorkflowRouteContentProps
 	zoltarUniverse: ZoltarUniverseSummary | undefined
@@ -279,7 +281,6 @@ type TradingRouteContentProps = {
 
 export type TradingSectionProps = TradingRouteContentProps & {
 	oraclePriceUsable: boolean | undefined
-	calculationPriceConfigured?: boolean
 	embedInCard?: boolean
 	poolState?: SecurityPoolStateModel | undefined
 	showSecurityPoolAddressInput?: boolean

@@ -1,6 +1,5 @@
 import type { CopyTemplateValue } from '@zoltar/ui-core-shared/copy/types.js'
 
-export const annualFee = 'Annual Fee'
 export const createPoolDescription = undefined
 export const createQuestionForPoolDetail = undefined
 export const createQuestionForPoolTitle = 'Create a pool question'
@@ -28,8 +27,6 @@ export const formatDepositRepToVault = (tokenSymbol: CopyTemplateValue) => `Depo
 export const formatDepositingRep = (tokenSymbol: CopyTemplateValue) => `Depositing ${tokenSymbol}…`
 export const depositRepToVaultDescription = 'Increase the vault’s collateral.'
 export const loadingVault = 'Loading vault details…'
-export const maxLead = 'Max '
-export const openInterestMinted = 'Open Interest Minted'
 export const openPool = 'Open pool'
 export const formatOpenPoolLabel = (questionTitle: string, securityPoolAddress: string) => `Open pool: ${questionTitle} (${securityPoolAddress})`
 export const priceValidUntil = 'Price Valid Until'
@@ -48,7 +45,6 @@ export const escalationWithdrawalRequiredDetail = 'Withdraw escalation deposits 
 export const openInterestFeeYear = 'Open Interest Fee / Year'
 export const totalPoolHeldAttoRep = 'Pool-held REP'
 export const vaultCount = 'Known Vaults'
-export const currentOraclePrice = 'Current Oracle Price'
 export const loadingSecurityPools = 'Loading security pools…'
 export const retryingSecurityPoolsTruncated = 'Retrying security pools…'
 export const retryLoadingPools = 'Retry'

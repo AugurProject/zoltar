@@ -93,7 +93,6 @@ export function SecurityPoolWorkflowSection(props: SecurityPoolWorkflowSectionPr
 		repPerEthPrice,
 		repPerEthSource,
 		repPerEthSourceUrl,
-		uiPriceOracle,
 		reporting,
 		selectedPoolView,
 		securityPoolOverviewError,
@@ -398,7 +397,6 @@ export function SecurityPoolWorkflowSection(props: SecurityPoolWorkflowSectionPr
 		selectedPoolSummaryPool === undefined || marketDetails === undefined
 			? undefined
 			: {
-					calculationPriceConfigured: uiPriceOracle !== undefined,
 					currentPoolOracleManagerDetails,
 					currentPoolOraclePrice,
 					currentPoolOracleSettlementTimestamp,
@@ -480,7 +478,7 @@ export function SecurityPoolWorkflowSection(props: SecurityPoolWorkflowSectionPr
 							/>
 						) : undefined}
 
-						{view === 'trading' ? <SelectedPoolTradingPanel calculationPriceConfigured={uiPriceOracle !== undefined} currentPoolOraclePriceUsable={currentPoolOraclePriceUsable} poolState={selectedPoolStateModel} selectedPool={effectiveSelectedPool} trading={trading} /> : undefined}
+						{view === 'trading' ? <SelectedPoolTradingPanel currentPoolOraclePriceUsable={currentPoolOraclePriceUsable} poolState={selectedPoolStateModel} selectedPool={effectiveSelectedPool} trading={trading} /> : undefined}
 
 						{view === 'reporting' ? (
 							<SelectedPoolReportingPanel

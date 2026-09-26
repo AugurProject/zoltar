@@ -1,5 +1,6 @@
 import * as workspaceCopy from '../../../copy/poolWorkspace.js'
 import { VaultExposureValue } from './VaultExposureValue.js'
+import { RepPriceStatusLabel } from './RepPriceStatusLabel.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as securityPoolCopy from '../../../copy/securityPool.js'
 import { AddressValue } from '@zoltar/ui-core-shared/components/AddressValue.js'
@@ -36,6 +37,7 @@ export function SelectedVaultSummarySection({ repPerEthPrice, repPerEthSource, r
 						<strong>
 							<VaultExposureValue capacity={capacityOwnershipAttoRep} multiplierBps={selectedPoolStatoblastSecurityMultiplierBps} repPerEthPrice={repPerEthPrice} />
 						</strong>
+						<RepPriceStatusLabel />
 					</div>
 					<div className='security-pool-browse-vault-row-kpi'>
 						<span>{commonCopy.poolHeldVaultRepBackingAttoRep}</span>

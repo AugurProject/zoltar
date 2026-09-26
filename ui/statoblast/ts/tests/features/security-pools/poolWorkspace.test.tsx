@@ -6,6 +6,9 @@ import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/rende
 import { fireEvent, within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { SecurityPoolWorkflowSection } from '@zoltar/ui-statoblast-shared/features/security-pools/components/SecurityPoolWorkflowSection.js'
 import type { SelectedPoolView } from '@zoltar/ui-statoblast-shared/features/security-pools/lib/securityPoolWorkflow.js'
+import { SelectedPoolRepPriceContext } from '@zoltar/ui-statoblast-shared/features/security-pools/components/RepPriceStatusLabel.js'
+import { resolveRepPrice } from '@zoltar/ui-statoblast-shared/features/security-pools/lib/uiPriceOracle.js'
+import { getOracleManagerPriceValidUntilTimestamp } from '@zoltar/ui-statoblast-shared/protocol/oracleTiming.js'
 import { createAccountState, createOracleManagerDetails, createSelectedPool, createSecurityPoolWorkflowProps } from './workflow/builders.js'
 import { useSecurityPoolWorkflowSectionTestDom } from './workflow/testDom.js'
 import { installTestRouting } from '@zoltar/ui-core-shared/tests/testUtils/testRouting.js'
@@ -150,20 +153,37 @@ test('keeps the pending report reachable while the pool universe differs', async
 	expect(within(document.body).queryByRole('button', { name: 'Request new price' })).toBeNull()
 })
 
-test('uses the refreshed manager price for the single capacity summary', async () => {
-	const pool = createSelectedPool({ lastOraclePrice: 10n ** 18n, lastOracleSettlementTimestamp: 1n })
-	setCleanup(
-		(
-			await renderIntoDocument(
-				<ChainTimestampContext.Provider value={2n}>
-					<SecurityPoolWorkflowSection {...createSecurityPoolWorkflowProps({ securityPoolAddress: pool.securityPoolAddress, securityPools: [pool], poolOracleManagerDetails: createOracleManagerDetails({ lastPrice: 2n * 10n ** 18n, lastSettlementTimestamp: 1n }) })} />
-				</ChainTimestampContext.Provider>,
-			)
-		).cleanup,
-	)
-	expect(document.querySelector('.pool-overview-header .pool-capacity-limit')?.textContent).toContain('1.25 ETH')
-	expect(document.querySelectorAll('.pool-capacity-summary')).toHaveLength(1)
-})
+const settledPriceValidUntil = getOracleManagerPriceValidUntilTimestamp(1n) ?? 0n
+for (const { now, label } of [
+	{ now: 2n, label: 'via Open Oracle · less than a minute ago' },
+	{ now: settledPriceValidUntil + 660n, label: '⚠Stale · Open Oracle price expired 11m ago' },
+]) {
+	test(`labels the single capacity summary with the resolved price source at chain time ${now.toString()}`, async () => {
+		const pool = createSelectedPool({ lastOraclePrice: 10n ** 18n, lastOracleSettlementTimestamp: 1n })
+		const oracleManager = createOracleManagerDetails({ lastPrice: 2n * 10n ** 18n, lastSettlementTimestamp: 1n })
+		const repPrice = resolveRepPrice({
+			now,
+			oracleManager: { isPriceValid: oracleManager.isPriceValid, price: oracleManager.lastPrice, settlementTimestamp: oracleManager.lastSettlementTimestamp },
+			poolOracle: { price: pool.lastOraclePrice, settlementTimestamp: pool.lastOracleSettlementTimestamp },
+			setting: 'open-oracle',
+			uniswapPrice: undefined,
+		})
+		setCleanup(
+			(
+				await renderIntoDocument(
+					<ChainTimestampContext.Provider value={now}>
+						<SelectedPoolRepPriceContext.Provider value={repPrice}>
+							<SecurityPoolWorkflowSection {...createSecurityPoolWorkflowProps({ securityPoolAddress: pool.securityPoolAddress, securityPools: [pool], poolOracleManagerDetails: oracleManager, repPerEthPrice: repPrice.price })} />
+						</SelectedPoolRepPriceContext.Provider>
+					</ChainTimestampContext.Provider>,
+				)
+			).cleanup,
+		)
+		expect(document.querySelector('.pool-overview-header .pool-capacity-limit')?.textContent).toContain('1.25 ETH')
+		expect(document.querySelectorAll('.pool-capacity-summary')).toHaveLength(1)
+		expect(document.querySelector('.pool-overview-header .rep-price-status')?.textContent).toBe(label)
+	})
+}
 
 test('shows the pending report countdown in selected pool price fields', async () => {
 	const pool = createSelectedPool({ lastOraclePrice: undefined, lastOracleSettlementTimestamp: 0n })

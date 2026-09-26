@@ -76,6 +76,10 @@
 			"bun": "./ts/features/security-pools/components/LiquidationModal.tsx",
 			"default": "./js/features/security-pools/components/LiquidationModal.js"
 		},
+		"./features/security-pools/components/RepPriceStatusLabel.js": {
+			"bun": "./ts/features/security-pools/components/RepPriceStatusLabel.tsx",
+			"default": "./js/features/security-pools/components/RepPriceStatusLabel.js"
+		},
 		"./features/security-pools/components/SecurityPoolLink.js": {
 			"bun": "./ts/features/security-pools/components/SecurityPoolLink.tsx",
 			"default": "./js/features/security-pools/components/SecurityPoolLink.js"
