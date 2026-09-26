@@ -53,7 +53,7 @@ export const sourceSizeAllowances = new Map<string, SourceSizeAllowance>([
 		['bots/chaos/scripts/capture-dashboard-qa.mts', 947],
 	]),
 	...allowances('Repository tooling modules accumulated responsibilities that belong in separate modules.', [
-		['tooling/docs/contract-reference-metadata.mts', 1495],
+		['tooling/docs/contract-reference-metadata.mts', 1496],
 		['tooling/ui/dev-server.ts', 1116],
 		['tooling/docs/check-docs-examples.mts', 1076],
 		['tooling/testing/coverage-report.mts', 940],
@@ -71,7 +71,7 @@ export const sourceSizeAllowances = new Map<string, SourceSizeAllowance>([
 	]),
 	...allowances('The arbitrage executor contract bundles routing, settlement, and recovery paths that belong in libraries.', [['bots/open-oracle-arbitrager/contracts/OpenOracleArbitrageExecutor.sol', 771]]),
 	...allowances('SecurityPool delegate extraction is ongoing and bytecode-sensitive.', [
-		['solidity/contracts/statoblast/SecurityPool.sol', 762],
+		['solidity/contracts/statoblast/SecurityPool.sol', 761],
 		['solidity/contracts/statoblast/SecurityPoolForker.sol', 677],
 		['solidity/contracts/statoblast/OpenOraclePriceCoordinator.sol', 643],
 	]),

@@ -246,7 +246,7 @@ void describe('security vault helpers', () => {
 		).toBe(2_000_000_000_000_000_000n)
 	})
 
-	void test('withdrawable REP retains the backing required by active capacity ownership', () => {
+	void test('withdrawable REP retains the backing required by active underwriting commitments', () => {
 		expect(
 			getSecurityVaultWithdrawableRepAmount({
 				vaultAttoRepBacking: 10n * 10n ** 18n,

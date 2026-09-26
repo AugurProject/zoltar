@@ -18,7 +18,7 @@ import { ForkAuctionMigrationStage } from './ForkAuctionMigrationStage.js'
 import { ForkAuctionWorkflowShell, ForkTriggeredStage } from './ForkAuctionWorkflowShell.js'
 import { ForkAuctionBidsStatusSection, ForkAuctionSettlementActionSection, ForkAuctionStartSection, ForkAuctionSubmitBidSection } from './ForkAuctionActionSections.js'
 import { createActionAvailability } from '@zoltar/ui-core-shared/transactions/actionAvailability.js'
-import { AUCTIONED_CAPACITY_OWNERSHIP_ATTO_REP_LABEL } from '../lib/forkAuction.js'
+import { AUCTIONED_UNDERWRITING_LIMIT_ATTO_ETH_LABEL } from '../lib/forkAuction.js'
 import { REPORTING_OUTCOME_DROPDOWN_OPTIONS } from '../../reporting/lib/reporting.js'
 import type { ForkAuctionSectionProps } from '../../types.js'
 import { type DisplayMetric, ForkAuctionOutcomeStage, ForkAuctionMigrationSummaryCard, FORK_MIGRATION_DURATION, ForkWorkflowStageNavigator, renderAddress, renderMetricValue, renderTruthAuctionPriceValue, renderTruthAuctionSettlementSelectionSummary, sameBigIntRecord } from './ForkAuctionPresentation.js'
@@ -113,13 +113,13 @@ export function ForkAuctionSection(props: ForkAuctionSectionProps) {
 		{ label: forkAuctionCopy.ethRaisedPerCap, value: model.ethRaisedCapDisplay },
 		{ label: forkAuctionCopy.repPurchasedAttoRep, value: model.truthAuctionStatus === undefined ? model.truthAuctionFallback : <CurrencyValue value={model.displayedRepSoldAttoRep} suffix={commonCopy.rep} /> },
 		{ label: forkAuctionCopy.clearingPrice, value: model.clearingPriceDisplay },
-		{ label: AUCTIONED_CAPACITY_OWNERSHIP_ATTO_REP_LABEL, value: model.selectedAuctionContext === undefined ? model.truthAuctionFallback : <CurrencyValue value={model.selectedAuctionContext.auctionedUnderwritingLimitAttoEth} suffix={commonCopy.rep} /> },
+		{ label: AUCTIONED_UNDERWRITING_LIMIT_ATTO_ETH_LABEL, value: model.selectedAuctionContext === undefined ? model.truthAuctionFallback : <CurrencyValue value={model.selectedAuctionContext.auctionedUnderwritingLimitAttoEth} suffix={commonCopy.eth} /> },
 		{ label: forkAuctionCopy.pendingRefund, value: pendingRefundDisplay },
 		{ label: forkAuctionCopy.minBidSizeAttoEth, value: model.truthAuctionStatus === undefined ? model.truthAuctionFallback : <CurrencyValue value={model.truthAuctionStatus.minBidSizeAttoEth} suffix={commonCopy.eth} /> },
 		{ label: forkAuctionCopy.maxAttoRepBeingSold, value: model.truthAuctionStatus === undefined ? model.truthAuctionFallback : <CurrencyValue value={model.truthAuctionStatus.maxAttoRepBeingSold} suffix={commonCopy.rep} /> },
 	]
 	const settlementStatusMetrics: DisplayMetric[] = [
-		{ label: AUCTIONED_CAPACITY_OWNERSHIP_ATTO_REP_LABEL, value: model.selectedAuctionContext === undefined ? model.truthAuctionFallback : <CurrencyValue value={model.selectedAuctionContext.auctionedUnderwritingLimitAttoEth} suffix={commonCopy.rep} /> },
+		{ label: AUCTIONED_UNDERWRITING_LIMIT_ATTO_ETH_LABEL, value: model.selectedAuctionContext === undefined ? model.truthAuctionFallback : <CurrencyValue value={model.selectedAuctionContext.auctionedUnderwritingLimitAttoEth} suffix={commonCopy.eth} /> },
 		{ label: forkAuctionCopy.settlementAvailable, value: model.settlementAvailableDisplay },
 		{ label: forkAuctionCopy.ethRaisedPerCap, value: model.ethRaisedCapDisplay },
 		{ label: forkAuctionCopy.repPurchasedAttoRep, value: model.truthAuctionStatus === undefined ? model.truthAuctionFallback : <CurrencyValue value={model.displayedRepSoldAttoRep} suffix={commonCopy.rep} /> },
@@ -140,7 +140,7 @@ export function ForkAuctionSection(props: ForkAuctionSectionProps) {
 		if (!model.shouldShowTruthAuctionVisualization || model.truthAuctionStatus === undefined) return undefined
 		return (
 			<TruthAuctionSummaryCard
-				auctionedUnderwritingLimitAttoEthDisplay={model.selectedAuctionContext === undefined ? commonCopy.metricUnavailablePlaceholder : <CurrencyValue value={model.selectedAuctionContext.auctionedUnderwritingLimitAttoEth} suffix={commonCopy.rep} />}
+				auctionedUnderwritingLimitAttoEthDisplay={model.selectedAuctionContext === undefined ? commonCopy.metricUnavailablePlaceholder : <CurrencyValue value={model.selectedAuctionContext.auctionedUnderwritingLimitAttoEth} suffix={commonCopy.eth} />}
 				badge={truthAuctionStateBadgeElement}
 				clearingPriceDisplay={renderTruthAuctionPriceValue(model.truthAuctionStatus.clearingPrice)}
 				displayedEthRaisedAttoEth={model.displayedEthRaisedAttoEth}

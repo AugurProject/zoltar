@@ -108,13 +108,13 @@ async function validateSeededSecurityPool({ expectedVaults, poolLabel, readClien
 
 	if (seededPool.vaultCount !== expectedVaultCount) throw new Error(`Expected ${poolLabel} to have ${expectedVaultCount.toString()} seeded vaults`)
 	if (seededPool.totalPoolHeldAttoRep !== expectedRepDeposit) throw new Error(`Expected ${poolLabel} to have ${expectedRepDeposit.toString()} seeded REP`)
-	if (seededPool.totalUnderwritingLimitAttoEth !== expectedUnderwritingLimitAttoEth) throw new Error(`Expected ${poolLabel} to have ${expectedUnderwritingLimitAttoEth.toString()} seeded capacity ownership`)
+	if (seededPool.totalUnderwritingLimitAttoEth !== expectedUnderwritingLimitAttoEth) throw new Error(`Expected ${poolLabel} to have ${expectedUnderwritingLimitAttoEth.toString()} seeded underwriting commitments`)
 
 	for (const expectedVault of expectedVaults) {
 		const vault = seededPool.vaults.find(candidate => candidate.vaultAddress === expectedVault.accountAddress)
 		if (vault === undefined) throw new Error(`Expected ${poolLabel} to include seeded vault ${expectedVault.accountAddress}`)
 		if (vault.vaultAttoRepBacking !== expectedVault.vaultRepBackingDepositAttoRep) throw new Error(`Expected ${poolLabel} vault ${expectedVault.accountAddress} to hold ${expectedVault.vaultRepBackingDepositAttoRep.toString()} seeded REP`)
-		if (vault.underwritingLimitAttoEth !== expectedVault.underwritingLimitAttoEth) throw new Error(`Expected ${poolLabel} vault ${expectedVault.accountAddress} to hold ${expectedVault.underwritingLimitAttoEth.toString()} seeded capacity ownership`)
+		if (vault.underwritingLimitAttoEth !== expectedVault.underwritingLimitAttoEth) throw new Error(`Expected ${poolLabel} vault ${expectedVault.accountAddress} to hold ${expectedVault.underwritingLimitAttoEth.toString()} seeded underwriting commitments`)
 	}
 }
 
@@ -265,7 +265,7 @@ async function seedSecurityPool({
 
 	const primaryVaultAfterSettlement = await loadRequiredSecurityVault(readClient, poolResult.securityPoolAddress, primaryVaultAccount, primaryVaultAccount)
 	if (primaryVaultAfterSettlement.underwritingLimitAttoEth !== primaryVaultSpec.underwritingLimitAttoEth) {
-		throw new Error(`Expected seeded capacity ownership ${primaryVaultSpec.underwritingLimitAttoEth.toString()} for ${primaryVaultAccount}`)
+		throw new Error(`Expected seeded underwriting commitments ${primaryVaultSpec.underwritingLimitAttoEth.toString()} for ${primaryVaultAccount}`)
 	}
 
 	for (const index of additionalVaults.keys()) {
@@ -437,7 +437,7 @@ async function seedSecurityPoolX2Scenario({
 
 		const primaryVaultAfterSettlement = await loadRequiredSecurityVault(readClient, preparedPool.securityPoolAddress, primaryAccount, primaryAccount)
 		if (primaryVaultAfterSettlement.underwritingLimitAttoEth !== preparedPool.primaryVault.underwritingLimitAttoEth) {
-			throw new Error(`Expected seeded capacity ownership ${preparedPool.primaryVault.underwritingLimitAttoEth.toString()} for ${primaryAccount}`)
+			throw new Error(`Expected seeded underwriting commitments ${preparedPool.primaryVault.underwritingLimitAttoEth.toString()} for ${primaryAccount}`)
 		}
 	}
 

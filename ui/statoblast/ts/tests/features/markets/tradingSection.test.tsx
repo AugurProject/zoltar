@@ -432,7 +432,7 @@ void describe('TradingSection', () => {
 		expect(document.body.textContent?.includes('1 000 000 000 000 000 000')).toBe(false)
 	})
 
-	void test('shows the minting disabled reason when total capacity ownership remains unclaimed and none is fee eligible', async () => {
+	void test('shows the minting disabled reason when total underwriting commitments remain unclaimed and none is fee eligible', async () => {
 		const renderedComponent = await renderIntoDocument(
 			<TradingSection
 				{...createTradingSectionProps({

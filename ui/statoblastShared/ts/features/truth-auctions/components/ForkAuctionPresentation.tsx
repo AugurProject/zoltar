@@ -11,7 +11,7 @@ import { SecurityPoolLink } from '../../security-pools/components/SecurityPoolLi
 import { TimestampValue } from '@zoltar/ui-core-shared/components/TimestampValue.js'
 import { WarningSurface } from '@zoltar/ui-core-shared/components/WarningSurface.js'
 import { assertNever } from '@zoltar/ui-core-shared/lib/assert.js'
-import { AUCTIONED_CAPACITY_OWNERSHIP_ATTO_REP_LABEL, AUCTION_TIME_SECONDS, getForkAuctionStageLabel, getForkAuctionStageView } from '../lib/forkAuction.js'
+import { AUCTIONED_UNDERWRITING_LIMIT_ATTO_ETH_LABEL, AUCTION_TIME_SECONDS, getForkAuctionStageLabel, getForkAuctionStageView } from '../lib/forkAuction.js'
 import { formatCurrencyInputBalance, formatRoundedCurrencyBalance } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { getReportingOutcomeLabel } from '../../reporting/lib/reporting.js'
 import { type ForkWorkflowSelectionStage } from '../../security-pools/lib/securityPoolWorkflow.js'
@@ -102,7 +102,7 @@ export function renderTruthAuctionCapacityOwnershipNotice(showRefundOnlySettleme
 		return (
 			<WarningSurface as='section' surface='flat' variant='compact'>
 				<p className='detail'>
-					<strong>{forkAuctionCopy.refundSettlementDetail}</strong> {forkAuctionCopy.formatFinalizedRefundOnlySettlementNotice(AUCTIONED_CAPACITY_OWNERSHIP_ATTO_REP_LABEL)}
+					<strong>{forkAuctionCopy.refundSettlementDetail}</strong> {forkAuctionCopy.formatFinalizedRefundOnlySettlementNotice(AUCTIONED_UNDERWRITING_LIMIT_ATTO_ETH_LABEL)}
 				</p>
 			</WarningSurface>
 		)
@@ -111,7 +111,7 @@ export function renderTruthAuctionCapacityOwnershipNotice(showRefundOnlySettleme
 	return (
 		<WarningSurface as='section' surface='flat' variant='compact'>
 			<p className='detail'>
-				<strong>{forkAuctionCopy.formatWinningClaimCapacityOwnershipHeadline(AUCTIONED_CAPACITY_OWNERSHIP_ATTO_REP_LABEL)}</strong> {forkAuctionCopy.formatWinningClaimSettlementNotice(AUCTIONED_CAPACITY_OWNERSHIP_ATTO_REP_LABEL)}
+				<strong>{forkAuctionCopy.formatWinningClaimCapacityOwnershipHeadline(AUCTIONED_UNDERWRITING_LIMIT_ATTO_ETH_LABEL)}</strong> {forkAuctionCopy.formatWinningClaimSettlementNotice(AUCTIONED_UNDERWRITING_LIMIT_ATTO_ETH_LABEL)}
 			</p>
 		</WarningSurface>
 	)
@@ -136,12 +136,12 @@ export function renderTruthAuctionSettlementSelectionSummary({
 
 	const summaryDescription = (() => {
 		if (selectedClaimCount > 0 && selectedRefundCount > 0) {
-			return forkAuctionCopy.formatMixedSettlementPreviewDetail(AUCTIONED_CAPACITY_OWNERSHIP_ATTO_REP_LABEL)
+			return forkAuctionCopy.formatMixedSettlementPreviewDetail(AUCTIONED_UNDERWRITING_LIMIT_ATTO_ETH_LABEL)
 		}
 		if (selectedClaimCount > 0) {
-			return forkAuctionCopy.formatWinningSettlementPreviewDetail(AUCTIONED_CAPACITY_OWNERSHIP_ATTO_REP_LABEL)
+			return forkAuctionCopy.formatWinningSettlementPreviewDetail(AUCTIONED_UNDERWRITING_LIMIT_ATTO_ETH_LABEL)
 		}
-		return forkAuctionCopy.formatRefundSettlementPreviewDetail(AUCTIONED_CAPACITY_OWNERSHIP_ATTO_REP_LABEL)
+		return forkAuctionCopy.formatRefundSettlementPreviewDetail(AUCTIONED_UNDERWRITING_LIMIT_ATTO_ETH_LABEL)
 	})()
 
 	const refundDescription = estimatedRefundedAttoEth > 0n ? forkAuctionCopy.truthAuctionRefundEstimateDetail : undefined
@@ -164,7 +164,7 @@ export function renderTruthAuctionSettlementSelectionSummary({
 				{ label: forkAuctionCopy.selectedWinningBids, value: selectedClaimCount.toString() },
 				{ label: forkAuctionCopy.selectedRefundRows, value: selectedRefundCount.toString() },
 				{ label: forkAuctionCopy.estimatedVaultRepBackingAttoRep, value: estimatedVaultRepBackingAttoRep === undefined ? commonCopy.metricUnavailablePlaceholder : <CurrencyValue value={estimatedVaultRepBackingAttoRep} suffix={commonCopy.rep} /> },
-				{ label: forkAuctionCopy.formatEstimatedValue(AUCTIONED_CAPACITY_OWNERSHIP_ATTO_REP_LABEL), value: estimatedAssignedUnderwritingLimitAttoEth === undefined ? commonCopy.metricUnavailablePlaceholder : <CurrencyValue value={estimatedAssignedUnderwritingLimitAttoEth} suffix={commonCopy.rep} /> },
+				{ label: forkAuctionCopy.formatEstimatedValue(AUCTIONED_UNDERWRITING_LIMIT_ATTO_ETH_LABEL), value: estimatedAssignedUnderwritingLimitAttoEth === undefined ? commonCopy.metricUnavailablePlaceholder : <CurrencyValue value={estimatedAssignedUnderwritingLimitAttoEth} suffix={commonCopy.eth} /> },
 				{ label: forkAuctionCopy.estimatedRefundedAttoEth, value: <CurrencyValue value={estimatedRefundedAttoEth} suffix={commonCopy.eth} /> },
 			])}
 			{roundingDescription === undefined ? undefined : <p className='detail'>{roundingDescription}</p>}

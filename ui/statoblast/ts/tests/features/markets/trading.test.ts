@@ -173,7 +173,7 @@ void describe('trading helpers', () => {
 		expect(formatStatoblastSecurityMultiplier(20_001n)).toBe('2.0001')
 	})
 
-	void test('detects pools that have REP backing but no active capacity ownership', () => {
+	void test('detects pools that have REP backing but no active underwriting commitments', () => {
 		expect(hasRepBackedPoolWithNoActiveCapacityOwnership(20n * 10n ** 18n, 0n)).toBe(true)
 		expect(hasRepBackedPoolWithNoActiveCapacityOwnership(20n * 10n ** 18n, 1n)).toBe(false)
 		expect(hasRepBackedPoolWithNoActiveCapacityOwnership(0n, 0n)).toBe(false)
@@ -289,7 +289,7 @@ void describe('trading helpers', () => {
 				totalPoolHeldAttoRep: 20n * 10n ** 18n,
 				mintingCapacityAttoEth: 0n,
 			}),
-		).toBe('No mint capacity. No active capacity ownership.')
+		).toBe('No mint capacity. No active underwriting commitments.')
 
 		expect(
 			getTradingMintGuardMessage({

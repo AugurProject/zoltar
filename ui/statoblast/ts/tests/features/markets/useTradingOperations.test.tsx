@@ -228,9 +228,9 @@ describe('useTradingOperations', () => {
 		expect(createCompleteSetInSecurityPool).not.toHaveBeenCalled()
 	})
 
-	test('blocks complete-set mint writes when total capacity ownership exists but none is fee eligible', async () => {
+	test('blocks complete-set mint writes when total underwriting commitments exists but none is fee eligible', async () => {
 		const createCompleteSetInSecurityPool = mock(async () => {
-			throw new Error('createCompleteSetInSecurityPool should not be called against unclaimed auction capacity ownership')
+			throw new Error('createCompleteSetInSecurityPool should not be called against unclaimed auction underwriting commitments')
 		})
 		const onTransactionFailed = mock(() => undefined)
 		const dependencies = createTradingOperationsDependencies({
@@ -272,7 +272,7 @@ describe('useTradingOperations', () => {
 			await requireHookState(hookState).createCompleteSet()
 		})
 
-		expect(onTransactionFailed).toHaveBeenCalledWith('No mint capacity. No active capacity ownership')
+		expect(onTransactionFailed).toHaveBeenCalledWith('No mint capacity. No active underwriting commitments')
 		expect(createCompleteSetInSecurityPool).not.toHaveBeenCalled()
 	})
 

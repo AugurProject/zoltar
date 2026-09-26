@@ -279,7 +279,6 @@ contract SecurityPool is SecurityPoolStorage {
 		feeIndexRemainder = 0;
 	}
 
-
 	function withdrawRepFromVault(address vault, uint256 attoRepAmount) external isOperational onlyValidOracle {
 		if (isEscalationResolved()) revert('Escalation resolved');
 		updateVaultFees(vault);
@@ -345,10 +344,10 @@ contract SecurityPool is SecurityPoolStorage {
 	}
 
 	function isVaultCoverageCertified(address vault) external view returns (bool) {
+		// Limit changes invalidate the snapshot; certification only records positive limits.
 		return
-			securityVaults[vault].underwritingLimitAttoEth != 0 &&
-			certifiedCoverageSnapshot == SecurityPoolUtils.coverageSnapshot(ISecurityPool(payable(address(this)))) &&
-			vaultCoverageCertificateGeneration[vault] == coverageCertificateGeneration;
+			vaultCoverageCertificateGeneration[vault] == coverageCertificateGeneration &&
+			getCertifiedUnderwritingLimitAttoEth() != 0;
 	}
 
 	function getVaultOpenInterestAttoEth(address vault) public view returns (uint256) {

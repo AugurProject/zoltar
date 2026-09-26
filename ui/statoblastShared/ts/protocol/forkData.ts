@@ -36,7 +36,7 @@ export function requireForkDataView(value: unknown): ForkDataView {
 		truthAuctionAddress: requireAddressValue(truthAuctionAddress, 'security pool fork data truth auction address'),
 		truthAuctionStartedAt: requireBigintValue(truthAuctionStartedAt, 'security pool fork data truth auction start time'),
 		migratedAttoRep: requireBigintValue(migratedAttoRep, 'security pool fork data migrated REP'),
-		auctionedUnderwritingLimitAttoEth: requireBigintValue(auctionedUnderwritingLimitAttoEth, 'security pool fork data auctioned capacity ownership'),
+		auctionedUnderwritingLimitAttoEth: requireBigintValue(auctionedUnderwritingLimitAttoEth, 'security pool fork data auctioned underwriting commitments'),
 		escalationElapsedAtFork: requireBigintValue(escalationElapsedAtFork, 'security pool fork data escalation elapsed at fork'),
 		escalationStartBondAtForkAttoRep: requireBigintValue(escalationStartBondAtForkAttoRep, 'security pool fork data escalation start bond at fork'),
 		escalationNonDecisionThresholdAtForkAttoRep: requireBigintValue(escalationNonDecisionThresholdAtForkAttoRep, 'security pool fork data escalation non-decision threshold at fork'),

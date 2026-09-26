@@ -34,7 +34,7 @@ type SecurityPoolSummaryMetricsProps = {
 function formatRepPerCapacityBps(value: bigint) {
 	const whole = value / 10_000n
 	const fraction = (value % 10_000n).toString().padStart(4, '0').replace(/0+$/, '')
-	return `${whole.toString()}${fraction === '' ? '' : `.${fraction}`}×`
+	return `${whole.toString()}${fraction === '' ? '' : `.${fraction}`} REP/ETH`
 }
 
 export function SecurityPoolSummaryMetrics({

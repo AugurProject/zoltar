@@ -1,10 +1,11 @@
+import { approveToken } from '../../testSupport/simulator/utils/utilities'
 import { describe, expect, test } from 'bun:test'
 import { useStatoblastVaultAccountingFixture } from './fixture'
 import { createWriteClient, writeContractAndWait } from '../../testSupport/simulator/utils/clients'
 import { TEST_ADDRESSES } from '../../testSupport/simulator/utils/constants'
 import { approveAndDepositRepToVault, manipulatePriceOracle, manipulatePriceOracleAndPerformOperation } from '../../testSupport/simulator/utils/contracts/statoblastTestUtils'
 import { OperationType } from '../../testSupport/simulator/utils/contracts/statoblast'
-import { createCompleteSet, getSecurityVault, redeemCompleteSet } from '../../testSupport/simulator/utils/contracts/securityPool'
+import { createCompleteSet, getRepToken, getSecurityVault, redeemCompleteSet } from '../../testSupport/simulator/utils/contracts/securityPool'
 import { statoblast_SecurityPool_SecurityPool } from '../../types/contractArtifact'
 
 const unit = 10n ** 18n
@@ -19,6 +20,17 @@ describe('Statoblast: continuous proportional commitments', () => {
 	const obligation = async (vault = fixture.client.account.address) => fixture.client.readContract({ abi, address: pool(), functionName: 'getVaultOpenInterestAttoEth', args: [vault] })
 	const total = async () => fixture.client.readContract({ abi, address: pool(), functionName: 'totalUnderwritingLimitAttoEth' })
 	const certified = async () => fixture.client.readContract({ abi, address: pool(), functionName: 'getCertifiedUnderwritingLimitAttoEth' })
+
+	test('wallet-funded escalation closes minting without changing standing commitments', async () => {
+		await freshPrice()
+		await setLimit(10n * unit)
+		await certify()
+		await approveToken(fixture.client, await getRepToken(fixture.client, pool()), pool())
+		await fixture.mockWindow.setTime(fixture.questionData.endTime + 1n)
+		await writeContractAndWait(fixture.client, () => fixture.client.writeContract({ abi, address: pool(), functionName: 'depositWalletRepToEscalationGame', args: [1, unit * 100n] }))
+		expect(await total()).toBe(10n * unit)
+		await expect(createCompleteSet(fixture.client, pool(), unit)).rejects.toThrow('Escalation mint closed')
+	})
 
 	test('depositing REP does not create a commitment', async () => {
 		expect((await getSecurityVault(fixture.client, pool(), fixture.client.account.address)).underwritingLimitAttoEth).toBe(0n)
@@ -50,6 +62,9 @@ describe('Statoblast: continuous proportional commitments', () => {
 		await certify()
 		expect(await status()).toBe(true)
 		await setLimit(11n * unit)
+		expect(await status()).toBe(false)
+		await certify()
+		await setLimit(0n)
 		expect(await status()).toBe(false)
 	})
 

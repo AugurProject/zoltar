@@ -246,15 +246,15 @@ describe('SecurityVaultSection', () => {
 		if (status === 'manual-queued') expect(within(document.body).getByText('#42')).toBeDefined()
 	})
 
-	test('previews a separate whole-vault adjustment and submits its factor', async () => {
+	test('previews a standing ETH commitment and submits its limit', async () => {
 		let submitted: string | undefined
 		const rendered = await renderIntoDocument(
 			<SecurityVaultSection
 				{...createSecurityVaultSectionProps({
 					modalFirst: true,
 					securityVaultDetails: createSecurityVaultDetails({ disputeStakedAttoRep: 0n, settlementCollateralAttoEth: 0n }),
-					onSetVaultUnderwritingLimit: factor => {
-						submitted = factor
+					onSetVaultUnderwritingLimit: limit => {
+						submitted = limit
 					},
 				})}
 			/>,
@@ -264,14 +264,14 @@ describe('SecurityVaultSection', () => {
 		fireEvent.click(page.getByRole('button', { name: 'Set commitment limit' }))
 		const dialog = within(page.getByRole('dialog', { name: 'Set commitment limit' }))
 		const input = dialog.getByLabelText('Commitment limit (ETH)')
-		if (!(input instanceof HTMLInputElement)) throw new Error('Expected backing factor input')
+		if (!(input instanceof HTMLInputElement)) throw new Error('Expected commitment limit input')
 		expect(input.value).toBe('2')
 		fireEvent.input(input, { target: { value: 'invalid' } })
 		expectTransactionButtonDisabled(page.getByRole('dialog'), 'Set commitment limit')
 		expect(dialog.getByRole('button', { name: 'Set commitment limit' }).getAttribute('aria-describedby')).toBe(input.getAttribute('aria-describedby'))
 		fireEvent.input(input, { target: { value: '2' } })
-		expect(dialog.getByText('Exposure after adjustment')).toBeDefined()
-		expect(dialog.getByText('Technical details').closest('details')?.open).toBe(false)
+		expect(dialog.getByText('Current commitment')).toBeDefined()
+		expect(dialog.getByText('Resulting commitment')).toBeDefined()
 		expect(page.getByRole('dialog', { name: 'Set commitment limit' }).textContent?.replaceAll('\u00a0', ' ')).toMatch(/2(?:\.0+)?\s+ETH/)
 		fireEvent.click(dialog.getByRole('button', { name: 'Set commitment limit' }))
 		expect(submitted).toBe('2')
@@ -378,9 +378,9 @@ describe('SecurityVaultSection', () => {
 		expect(selectedVaultQueries.getByText('Vault REP backing')).not.toBeNull()
 		expect(selectedVaultQueries.queryByText('Approved REP')).toBeNull()
 		expect(selectedVaultQueries.getByText('Dispute-staked REP')).not.toBeNull()
-		expect(selectedVaultQueries.getByText('Associated REP per capacity')).not.toBeNull()
+		expect(selectedVaultQueries.getByText('Associated backing ratio')).not.toBeNull()
 		expect(selectedVaultQueries.getByText('7.5×')).not.toBeNull()
-		expect(selectedVaultQueries.queryByText('Pool-held REP per capacity')).toBeNull()
+		expect(selectedVaultQueries.queryByText('Pool-held REP per committed ETH')).toBeNull()
 	})
 
 	test('colors associated REP per capacity green when the vault remains comfortably above the security multiplier', async () => {
@@ -589,7 +589,7 @@ describe('SecurityVaultSection', () => {
 		expect(documentQueries.queryByText('Selected Vault')).toBeNull()
 		expect(documentQueries.getAllByText('Selected vault details are unavailable.').length).toBeGreaterThan(0)
 		expect(documentQueries.queryByText('Refresh the vault to inspect claimable fees.')).toBeNull()
-		expect(documentQueries.queryByText('Refresh the vault before setting a capacity ownership.')).toBeNull()
+		expect(documentQueries.queryByText('Refresh the vault before setting a underwriting commitments.')).toBeNull()
 		expectTransactionButtonDisabled(document.body, 'Claim fees')
 	})
 

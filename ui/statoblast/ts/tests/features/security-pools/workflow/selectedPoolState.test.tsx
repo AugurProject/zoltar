@@ -324,7 +324,7 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 		expect(documentQueries.getByText('Question description')).not.toBeNull()
 		expect(documentQueries.getByText('Settlement collateral / standing commitments')).not.toBeNull()
 		expect(documentQueries.getByText('Pool-held REP')).not.toBeNull()
-		expect(documentQueries.queryByText('Total Capacity ownership')).toBeNull()
+		expect(documentQueries.queryByText('Total Underwriting commitments')).toBeNull()
 		expect(documentQueries.getByText('Open Oracle Price')).not.toBeNull()
 		expect(documentQueries.queryByText('Current Oracle Price')).toBeNull()
 		expect(documentQueries.queryByText('Oracle Expires In')).toBeNull()

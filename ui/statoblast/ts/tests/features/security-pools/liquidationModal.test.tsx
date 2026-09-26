@@ -197,6 +197,16 @@ describe('LiquidationModal', () => {
 		}
 	}
 
+	test('renders target and receiver commitments in ETH separately from REP backing', async () => {
+		const renderedComponent = await renderLiquidationModal()
+		cleanupRenderedComponent = renderedComponent.cleanup
+		const metrics = Array.from(renderedComponent.container.querySelectorAll('.metric-label'))
+		for (const prefix of ['Target', 'Receiver']) {
+			const label = metrics.find(element => element.textContent?.startsWith(prefix) && /underwriting commitments|commitment/i.test(element.textContent))
+			expect(label?.parentElement?.querySelector('.metric-field-value')?.textContent).toMatch(/ETH/)
+		}
+	})
+
 	test('disables execute liquidation when the selected pool has ended', async () => {
 		const renderedComponent = await renderLiquidationModal({
 			currentPoolOracleManagerDetails: createOracleManagerDetails({
@@ -601,7 +611,7 @@ describe('LiquidationModal', () => {
 		const documentQueries = within(document.body)
 		expect(documentQueries.getByRole('heading', { name: 'Liquidation Queued' })).not.toBeNull()
 		expect(documentQueries.getByText('#9')).not.toBeNull()
-		expect(documentQueries.getByText('Requested liquidation debt')).not.toBeNull()
+		expect(documentQueries.getByText('Commitment to transfer')).not.toBeNull()
 		expect(documentQueries.getByText('5 ETH')).not.toBeNull()
 		expect(documentQueries.queryByText('Reserved approval')).toBeNull()
 		expect(documentQueries.getByRole('heading', { name: 'Liquidation Queued' }).closest('.liquidation-modal-actions')).toBeNull()
@@ -639,7 +649,7 @@ describe('LiquidationModal', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		expect(documentQueries.getByText('Requested liquidation debt')).not.toBeNull()
+		expect(documentQueries.getByText('Commitment to transfer')).not.toBeNull()
 		expect(documentQueries.getByText('5 ETH')).not.toBeNull()
 		const reservedApprovalLabel = documentQueries.getByText('Reserved approval')
 		expect(reservedApprovalLabel.parentElement?.textContent).toContain('3.00 ETH')
@@ -846,7 +856,7 @@ describe('LiquidationModal', () => {
 				hash: '0x00000000000000000000000000000000000000000000000000000000000000ab',
 				securityPoolAddress: zeroAddress,
 				stagedExecution: {
-					errorMessage: 'Local Capacity ownership broken',
+					errorMessage: 'Local Underwriting commitments broken',
 					operation: 'liquidation',
 					operationId: 4n,
 					success: false,
@@ -857,7 +867,7 @@ describe('LiquidationModal', () => {
 
 		const documentQueries = within(document.body)
 		expect(documentQueries.getByRole('heading', { name: 'Liquidation failed' })).not.toBeNull()
-		expect(documentQueries.getByText('Local Capacity ownership broken')).not.toBeNull()
+		expect(documentQueries.getByText('Local Underwriting commitments broken')).not.toBeNull()
 		expect(documentQueries.queryByRole('button', { name: 'View in staged operations' })).toBeNull()
 	})
 
@@ -885,7 +895,7 @@ describe('LiquidationModal', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		expect(documentQueries.getByText('The target vault would fall below the minimum security-bond debt after liquidation.')).not.toBeNull()
+		expect(documentQueries.getByText('The target vault would fall below the minimum commitment after liquidation.')).not.toBeNull()
 
 		renderedComponent.cleanup()
 		cleanupRenderedComponent = undefined
@@ -912,7 +922,7 @@ describe('LiquidationModal', () => {
 		})
 		cleanupRenderedComponent = receiverDebtRenderedComponent.cleanup
 
-		expect(within(document.body).getByText('The receiver vault would remain below the minimum debt after liquidation.')).not.toBeNull()
+		expect(within(document.body).getByText('The receiver vault would remain below the minimum commitment after liquidation.')).not.toBeNull()
 	})
 
 	test('keeps the dialog open and shows execution results when the parent closes it after submit', async () => {
@@ -1304,11 +1314,11 @@ describe('LiquidationModal', () => {
 		const documentQueries = within(document.body)
 		const button = documentQueries.getByRole('button', { name: 'Execute vault liquidation' }) as HTMLButtonElement
 		expect(button.disabled).toBe(false)
-		expect(documentQueries.queryByText('No capacity ownership is transferable at the current target-side bounds.')).toBeNull()
+		expect(documentQueries.queryByText('No commitment is transferable at the current target-side bounds.')).toBeNull()
 		expect(documentQueries.queryByText('The target vault would fall below the minimum REP backing after liquidation.')).toBeNull()
 	})
 
-	test('rejects a funded slice that would leave an empty receiver below minimum debt', async () => {
+	test('rejects a funded slice that would leave an empty receiver below minimum commitment', async () => {
 		const renderedComponent = await renderLiquidationModal({
 			callerVaultSummary: createTargetVaultSummary({
 				vaultAttoRepBacking: 100n * 10n ** 18n,
@@ -1334,8 +1344,8 @@ describe('LiquidationModal', () => {
 		const documentQueries = within(document.body)
 		const button = documentQueries.getByRole('button', { name: 'Execute vault liquidation' }) as HTMLButtonElement
 		expect(button.disabled).toBe(true)
-		expect(documentQueries.getByText('The selected receiver would remain below the minimum security-bond debt after liquidation.')).not.toBeNull()
-		expect(documentQueries.queryByText('No capacity ownership is transferable at the current target-side bounds.')).toBeNull()
+		expect(documentQueries.getByText('The selected receiver would remain below the minimum commitment after liquidation.')).not.toBeNull()
+		expect(documentQueries.queryByText('No commitment is transferable at the current target-side bounds.')).toBeNull()
 		expect(documentQueries.queryByText('The target vault would fall below the minimum REP backing after liquidation.')).toBeNull()
 	})
 
@@ -1397,8 +1407,8 @@ describe('LiquidationModal', () => {
 		const documentQueries = within(document.body)
 		const button = documentQueries.getByRole('button', { name: 'Execute vault liquidation' }) as HTMLButtonElement
 		expect(button.disabled).toBe(false)
-		expect(documentQueries.getByText(/Escalation claims, surplus REP, and accrued fees stay with the target/)).not.toBeNull()
-		expect(documentQueries.getByText(/on a full-target request, debt excluded by the award-funding cap and any ownership\/open-interest rounding residue become target-local bad debt/)).not.toBeNull()
+		expect(documentQueries.getByText(/Residual commitments, escalation claims, and previously earned fees stay with the target/)).not.toBeNull()
+		expect(documentQueries.getByText(/no commitment is written off/)).not.toBeNull()
 	})
 
 	test('previews the exact post-backingUnits-conversion REP amount after a pool donation', () => {
@@ -1629,7 +1639,7 @@ describe('LiquidationModal', () => {
 		})
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		expect(getTransactionReviewValue('Gross REP Award (Includes 5%)')).toBe('≈ 52.50 REP')
+		expect(getTransactionReviewValue('Nominal REP award (before cap)')).toBe('≈ 52.50 REP')
 		expect(getTransactionReviewValue('REP backing transferred')).toBe('≈ 52.50 REP')
 		expect(getTransactionReviewValue('Target Accrued Fees Retained')).toBe('≈ 7.00 ETH')
 	})
@@ -1648,7 +1658,7 @@ describe('LiquidationModal', () => {
 		})
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		expect(getTransactionReviewValue('Gross REP Award (Includes 5%)')).toBe('≈ 0.00 REP')
+		expect(getTransactionReviewValue('Nominal REP award (before cap)')).toBe('≈ 0.00 REP')
 		expect(getTransactionReviewValue('REP backing transferred')).toBe('≈ 0.00 REP')
 	})
 
@@ -1890,7 +1900,7 @@ describe('LiquidationModal', () => {
 		expect(documentQueries.getByRole('button', { name: `Copy address ${callerVaultAddress}` })).not.toBeNull()
 		expect(documentQueries.queryByRole('heading', { name: 'Caller Vault After Liquidation' })).toBeNull()
 		expect(documentQueries.getByText('Receiver vault REP backing after')).not.toBeNull()
-		expect(documentQueries.getByText('Resulting receiver capacity ownership')).not.toBeNull()
+		expect(documentQueries.getByText('Resulting receiver underwriting commitments')).not.toBeNull()
 		expect(documentQueries.getByText('REP backing transferred')).not.toBeNull()
 	})
 
@@ -1915,10 +1925,10 @@ describe('LiquidationModal', () => {
 		expect(documentQueries.getByText('Approval expiration')).not.toBeNull()
 		expect(documentQueries.getByText('1.25× protocol minimum')).not.toBeNull()
 		expect(documentQueries.getByText('Active')).not.toBeNull()
-		expect(documentQueries.getByText('The operator pays gas and oracle costs; the receiver receives REP backing units and capacity ownership.')).not.toBeNull()
+		expect(documentQueries.getByText('The operator pays gas and oracle costs; the receiver receives REP backing units and underwriting commitments.')).not.toBeNull()
 		expect(
 			documentQueries.getByText(
-				'The staged liquidation debt is reserved against the approval’s cumulative ETH quota and cannot exceed its per-liquidation limit. Existing reservations survive revocation. The receiver’s live balances, minimum debt, and signed minimum health factor are checked again at execution, so a queue-time estimate does not guarantee execution.',
+				'The staged commitment transfer is reserved against the approval’s cumulative ETH quota and cannot exceed its per-liquidation limit. Existing reservations survive revocation. The receiver’s live balances, minimum commitment, and signed minimum health factor are checked again at execution, so a queue-time estimate does not guarantee execution.',
 			),
 		).not.toBeNull()
 	})
@@ -2124,9 +2134,9 @@ describe('LiquidationModal', () => {
 		if (!(repMovedValue instanceof HTMLElement)) throw new Error('Expected Rep Moved value')
 
 		expect(repMovedValue.textContent).toBe('≈ 2.00 REP')
-		expect(getTransactionReviewValue('Gross REP Award (Includes 5%)')).toBe('≈ 21.00 REP')
+		expect(getTransactionReviewValue('Nominal REP award (before cap)')).toBe('≈ 21.00 REP')
 		expect(within(document.body).queryByText('Residual Bad Debt Recorded')).toBeNull()
-		expect(getTransactionReviewValue('Security-bond debt moved')).toBe('≈ 2.00 ETH')
+		expect(getTransactionReviewValue('Commitment transferred')).toBe('≈ 2.00 ETH')
 		const accounting = within(document.body).getByText('Accounting breakdown').closest('details')
 		expect(accounting?.open).toBe(false)
 		expect(getTransactionReviewValue('Target Accrued Fees Retained')).toBe('≈ 0.25 ETH')
@@ -2190,8 +2200,8 @@ describe('LiquidationModal', () => {
 
 		const executeButton = within(document.body).getByRole('button', { name: 'Execute vault liquidation' }) as HTMLButtonElement
 		expect(executeButton.disabled).toBe(true)
-		expect(document.body.textContent?.includes('The target vault would fall below the minimum capacity ownership after liquidation.')).toBe(false)
-		const capacityOwnershipAssumedLabel = Array.from(document.body.querySelectorAll('.transaction-review-row > span, .transaction-review-detail-row > span')).find(element => element.textContent === 'Security-bond debt moved')
+		expect(document.body.textContent?.includes('The target vault would fall below the minimum underwriting commitments after liquidation.')).toBe(false)
+		const capacityOwnershipAssumedLabel = Array.from(document.body.querySelectorAll('.transaction-review-row > span, .transaction-review-detail-row > span')).find(element => element.textContent === 'Commitment transferred')
 		if (!(capacityOwnershipAssumedLabel instanceof HTMLElement)) throw new Error('Expected security-bond debt moved label')
 		expect(capacityOwnershipAssumedLabel.nextElementSibling?.textContent).toBe('≈ 99.60 ETH')
 	})
@@ -2267,10 +2277,10 @@ describe('LiquidationModal', () => {
 		const repMovedValueBefore = repMovedLabel.nextElementSibling
 		if (!(repMovedValueBefore instanceof HTMLElement)) throw new Error('Expected Rep Moved value')
 		const clampedPreviewText = repMovedValueBefore.textContent
-		const capacityOwnershipAssumedLabel = Array.from(document.body.querySelectorAll('.transaction-review-row > span, .transaction-review-detail-row > span')).find(element => element.textContent === 'Security-bond debt moved')
+		const capacityOwnershipAssumedLabel = Array.from(document.body.querySelectorAll('.transaction-review-row > span, .transaction-review-detail-row > span')).find(element => element.textContent === 'Commitment transferred')
 		if (!(capacityOwnershipAssumedLabel instanceof HTMLElement)) throw new Error('Expected security-bond debt moved label')
 		const capacityOwnershipAssumedValue = capacityOwnershipAssumedLabel.nextElementSibling
-		if (!(capacityOwnershipAssumedValue instanceof HTMLElement)) throw new Error('Expected Capacity ownership assumed value')
+		if (!(capacityOwnershipAssumedValue instanceof HTMLElement)) throw new Error('Expected Underwriting commitments assumed value')
 		expect(capacityOwnershipAssumedValue.textContent).toBe('≈ 2 500.00 ETH')
 
 		await act(() => {
@@ -2309,7 +2319,7 @@ describe('LiquidationModal', () => {
 		expect(documentQueries.getByText(/Uniswap V3 REP \/ ETH/)).not.toBeNull()
 	})
 
-	test('healthy vault details distinguish capacity ownership, REP backing, and dispute stake', async () => {
+	test('healthy vault details distinguish underwriting commitments, REP backing, and dispute stake', async () => {
 		const renderedComponent = await renderLiquidationModal({
 			currentPoolOracleManagerDetails: createOracleManagerDetails({
 				isPriceValid: true,
@@ -2330,7 +2340,7 @@ describe('LiquidationModal', () => {
 		const documentQueries = within(document.body)
 		expect((documentQueries.getByRole('button', { name: 'Execute vault liquidation' }) as HTMLButtonElement).disabled).toBe(true)
 		expect(documentQueries.getByText('This vault is not undercollateralized at the current Open Oracle price.')).not.toBeNull()
-		expect(documentQueries.getByText('Target capacity ownership')).not.toBeNull()
+		expect(documentQueries.getByText('Target underwriting commitments')).not.toBeNull()
 		expect(documentQueries.getByText('Target vault REP backing')).not.toBeNull()
 		expect(documentQueries.getByText('Target dispute-staked REP')).not.toBeNull()
 		expect(documentQueries.queryByText(/Collateralization/)).toBeNull()

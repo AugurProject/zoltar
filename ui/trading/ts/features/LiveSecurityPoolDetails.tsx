@@ -1,7 +1,7 @@
 import { TimestampValue } from '@zoltar/ui-core-shared/components/TimestampValue.js'
 import { BackingDetails } from './BackingDetails.js'
 import { formatTrimmedUnits } from '@zoltar/ui-core-shared/lib/formatters.js'
-import { formatBpsMultiplier, formatCapacityOwnership, formatMintingCapacity } from '../lib/format.js'
+import { formatBpsMultiplier, formatUnderwritingLimits, formatMintingCapacity } from '../lib/format.js'
 import { Badge } from '@zoltar/ui-core-shared/components/Badge.js'
 import { DataGrid } from '@zoltar/ui-core-shared/components/DataGrid.js'
 import { EmptyState } from '@zoltar/ui-core-shared/components/EmptyState.js'
@@ -143,7 +143,7 @@ export function LiveSecurityPoolDetails({
 									<MetricField label={liveCopy.initialReportPriorityFee}>{liveCopy.priorityFeePerGas(formatTrimmedUnits(market.initialReportPriorityFeeAttoEthPerGas, 9))}</MetricField>
 									<MetricField label={liveCopy.registeredVaults}>{market.vaultCount.toString()}</MetricField>
 									<MetricField label={liveCopy.perSecondRetentionMultiplier}>{formatTrimmedUnits(market.currentRetentionRate, 18, 12)}×</MetricField>
-									<MetricField label={liveCopy.totalAndFeeEligibleCapacityOwnership}>{formatCapacityOwnership(market.totalUnderwritingLimitAttoEth, market.feeEligibleUnderwritingLimitAttoEth)}</MetricField>
+									<MetricField label={liveCopy.totalAndFeeEligibleUnderwritingLimits}>{formatUnderwritingLimits(market.totalUnderwritingLimitAttoEth, market.feeEligibleUnderwritingLimitAttoEth)}</MetricField>
 								</DataGrid>
 							</ReadOnlyDetailAccordion>
 							<BackingDetails market={market} />

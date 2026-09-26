@@ -197,7 +197,7 @@ describe('SecurityPoolWorkflowSection: reporting and oracle', () => {
 		expect(document.body.textContent).not.toContain("The pool's oracle price expired.")
 	})
 
-	test('allows reporting with a stale oracle price when the pool has no capacity ownership', async () => {
+	test('allows reporting with a stale oracle price when the pool has no underwriting commitments', async () => {
 		const renderedComponent = await renderIntoDocument(
 			<ChainTimestampContext.Provider value={100n}>
 				<SecurityPoolWorkflowSection
@@ -263,7 +263,7 @@ describe('SecurityPoolWorkflowSection: reporting and oracle', () => {
 						securityPools: [
 							createSelectedPool({
 								marketDetails: createMarketDetails({ endTime: 0n }),
-								totalCapacityOwnershipAttoRep: forkContinuation ? 0n : 10n,
+								totalUnderwritingLimitAttoEth: forkContinuation ? 0n : 10n,
 							}),
 						],
 						selectedPoolView: 'reporting',
@@ -504,7 +504,7 @@ describe('SecurityPoolWorkflowSection: reporting and oracle', () => {
 	})
 
 	test('labels liquidation amounts by accounting role', async () => {
-		for (const stagedCase of [{ amountLabel: 'Requested liquidation debt', operation: 'liquidation' as const }]) {
+		for (const stagedCase of [{ amountLabel: 'Commitment to transfer', operation: 'liquidation' as const }]) {
 			const renderedComponent = await renderIntoDocument(
 				<SecurityPoolWorkflowSection
 					{...createSecurityPoolWorkflowProps({

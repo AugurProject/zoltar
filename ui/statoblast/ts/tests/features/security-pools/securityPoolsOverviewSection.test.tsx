@@ -1,3 +1,4 @@
+import { SecurityPoolSummaryMetrics } from '@zoltar/ui-statoblast-shared/features/security-pools/components/SecurityPoolSummaryMetrics.js'
 import { createDeferred } from '@zoltar/ui-core-shared/tests/testUtils/deferred.js'
 import { createMarketDetails } from '@zoltar/ui-core-shared/tests/testUtils/marketFixtures.js'
 /// <reference types="bun-types" />
@@ -195,6 +196,14 @@ describe('SecurityPoolsOverviewSection', () => {
 		})
 		expect(within(document.body).queryByText('Same universe pool')).toBeNull()
 		expect(getSecurityPoolCard('Other universe pool')).toBeDefined()
+	})
+
+	test('labels the pool backing per ETH commitment with REP/ETH units', async () => {
+		const pool = createSecurityPool({ totalPoolHeldAttoRep: 60n * 10n ** 18n, totalUnderwritingLimitAttoEth: 10n * 10n ** 18n })
+		const renderedComponent = await renderIntoDocument(<SecurityPoolSummaryMetrics pool={pool} />)
+		cleanupRenderedComponent = renderedComponent.cleanup
+		const label = within(document.body).getByText('Pool-held REP per committed ETH')
+		expect(label.parentElement?.querySelector('.metric-field-value')?.textContent).toBe('6 REP/ETH')
 	})
 
 	test('renders standing ETH commitments separately from REP backing', async () => {

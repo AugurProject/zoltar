@@ -1043,7 +1043,7 @@ describe('simulation bootstrap', () => {
 		expect(writeCalls.length).toBeGreaterThan(0)
 	})
 
-	test('boots the securitypoolx2 simulation path with secondary vault capacity ownership execution', async () => {
+	test('boots the securitypoolx2 simulation path with secondary vault underwriting commitments execution', async () => {
 		const profile = createBaselineProfile()
 		const { applyScenario, createWriteClient, getDeploymentSteps, memoryClient, state, writeCalls } = createMockedBootstrapDependencies({
 			accounts: [MOCK_PRIMARY_ACCOUNT, MOCK_SECONDARY_ACCOUNT],

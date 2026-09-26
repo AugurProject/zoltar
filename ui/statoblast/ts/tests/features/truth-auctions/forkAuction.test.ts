@@ -761,7 +761,7 @@ void describe('fork auction helpers', () => {
 		})
 	})
 
-	void test('summarizes selected settlement claims and refunds with estimated assigned capacity ownership', () => {
+	void test('summarizes selected settlement claims and refunds with estimated assigned underwriting commitments', () => {
 		const finalizedAuction = createTruthAuction({
 			clearingPrice: TRUTH_AUCTION_PRICE_PRECISION,
 			clearingTick: 10n,

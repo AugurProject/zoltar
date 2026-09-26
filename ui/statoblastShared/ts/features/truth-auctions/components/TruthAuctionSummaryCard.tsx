@@ -5,7 +5,7 @@ import { CurrencyValue } from '@zoltar/ui-core-shared/components/CurrencyValue.j
 import { ReadOnlyDetailAccordion } from '@zoltar/ui-core-shared/components/ReadOnlyDetailAccordion.js'
 import { MetricField } from '@zoltar/ui-core-shared/components/MetricField.js'
 import { SectionBlock } from '@zoltar/ui-core-shared/components/SectionBlock.js'
-import { AUCTIONED_CAPACITY_OWNERSHIP_ATTO_REP_LABEL } from '../lib/forkAuction.js'
+import { AUCTIONED_UNDERWRITING_LIMIT_ATTO_ETH_LABEL } from '../lib/forkAuction.js'
 
 type TruthAuctionSummaryCardProps = {
 	auctionedUnderwritingLimitAttoEthDisplay?: ComponentChildren | undefined
@@ -78,7 +78,7 @@ export function TruthAuctionSummaryCard({
 			</div>
 			{auctionedUnderwritingLimitAttoEthDisplay === undefined ? undefined : (
 				<ReadOnlyDetailAccordion title={forkAuctionCopy.auctionDetails}>
-					<MetricField label={AUCTIONED_CAPACITY_OWNERSHIP_ATTO_REP_LABEL}>{auctionedUnderwritingLimitAttoEthDisplay}</MetricField>
+					<MetricField label={AUCTIONED_UNDERWRITING_LIMIT_ATTO_ETH_LABEL}>{auctionedUnderwritingLimitAttoEthDisplay}</MetricField>
 				</ReadOnlyDetailAccordion>
 			)}
 		</SectionBlock>

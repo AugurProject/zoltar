@@ -13,7 +13,7 @@ import type { ReportingOutcomeKey, TradingShareBalances, ZoltarUniverseSummary }
 const PRICE_PRECISION = 10n ** 18n
 const BPS_DENOMINATOR = 10_000n
 
-export const NO_MINT_CAPACITY_NO_ACTIVE_CAPACITY_OWNERSHIP_MESSAGE = 'No mint capacity. No active capacity ownership.'
+export const NO_MINT_CAPACITY_NO_ACTIVE_CAPACITY_OWNERSHIP_MESSAGE = 'No mint capacity. No active underwriting commitments.'
 export const NEED_MATCHING_COMPLETE_SET_SHARES_MESSAGE = 'Need matching Invalid, Yes, and No shares to redeem complete sets.'
 export const UNDEFINED_COMPLETE_SET_EXCHANGE_RATE_MESSAGE = 'Minting is unavailable because this pool has complete-set shares but no collateral.'
 
