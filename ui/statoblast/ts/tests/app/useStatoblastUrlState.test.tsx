@@ -4,7 +4,8 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { act } from 'preact/test-utils'
 import { useStatoblastUrlState } from '../../app/hooks/useStatoblastUrlState.js'
 import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
-import { installTestRouting } from '@zoltar/ui-core-shared/tests/testUtils/testRouting.js'
+import { resetRoutingForTesting } from '@zoltar/ui-core-shared/navigation/routing.js'
+import { installStatoblastRouting } from '@zoltar/ui-statoblast-shared/lib/routing.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 
 type UseUrlState = typeof useStatoblastUrlState
@@ -26,13 +27,17 @@ function requireState(state: UseUrlStateState | undefined) {
 	return state
 }
 
+const POOL_A = '0x1111111111111111111111111111111111111111'
+const POOL_B = '0x2222222222222222222222222222222222222222'
+const POOL_C = '0x3333333333333333333333333333333333333333'
+
 describe('useStatoblastUrlState', () => {
 	let cleanupDom: (() => void) | undefined
 	let cleanupRenderedComponent: (() => Promise<void>) | undefined
 
 	beforeEach(() => {
-		installTestRouting()
-		cleanupDom = installDomEnvironment('http://localhost/#/open-oracle?universe=1&openOracleView=selected-report&openOracleReportId=101&securityPool=0x1111111111111111111111111111111111111111&securityPoolsView=operate&selectedPoolView=positions&zoltarView=trading&questionId=0x42').cleanup
+		installStatoblastRouting()
+		cleanupDom = installDomEnvironment(`http://localhost/#/pools/${POOL_A}/vaults?universe=1`).cleanup
 	})
 
 	afterEach(async () => {
@@ -40,106 +45,83 @@ describe('useStatoblastUrlState', () => {
 		cleanupRenderedComponent = undefined
 		cleanupDom?.()
 		cleanupDom = undefined
+		resetRoutingForTesting()
 	})
 
-	test('loads initial URL query state from the route hash', async () => {
+	async function renderHarness() {
 		let hookState: UseUrlStateState | undefined
 		const Harness = createHarness(state => {
 			hookState = state
 		})
-
 		const rendered = await renderIntoDocument(<Harness />)
 		cleanupRenderedComponent = rendered.cleanup
+		return () => requireState(hookState)
+	}
 
-		expect(requireState(hookState).activeUniverseId).toBe(1n)
-		expect(requireState(hookState).openOracleView).toBe('selected-report')
-		expect(requireState(hookState).openOracleReportId).toBe('101')
-		expect(requireState(hookState).securityPoolsView).toBe('operate')
-		expect(requireState(hookState).selectedPoolView).toBe('positions')
-		expect(requireState(hookState).securityPoolAddress).toBe('0x1111111111111111111111111111111111111111')
-		expect(requireState(hookState).securityPoolQuestionId).toBe('0x42')
+	test('loads the initial pool page from the route hash', async () => {
+		const state = await renderHarness()
+		expect(state().activeUniverseId).toBe(1n)
+		expect(state().securityPoolsView).toBe('operate')
+		expect(state().securityPoolAddress).toBe(POOL_A)
+		expect(state().selectedPoolView).toBe('vaults')
 	})
 
-	test('synchronizes hook state with hashchange and popstate events', async () => {
-		let hookState: UseUrlStateState | undefined
-		const Harness = createHarness(state => {
-			hookState = state
-		})
-
-		const rendered = await renderIntoDocument(<Harness />)
-		cleanupRenderedComponent = rendered.cleanup
-
+	test('rewrites legacy security pool links onto the pool path', async () => {
+		const state = await renderHarness()
 		await act(() => {
-			window.location.hash = '#/security-pools?securityPool=0x2222222222222222222222222222222222222222&openOracleReportId=202'
+			window.location.hash = `#/security-pools?securityPool=${POOL_B}&securityPoolsView=operate&selectedPoolView=reporting&universe=2`
 			window.dispatchEvent(new Event('hashchange'))
 		})
-
-		expect(requireState(hookState).activeUniverseId).toBe(0n)
-		expect(requireState(hookState).securityPoolAddress).toBe('0x2222222222222222222222222222222222222222')
-		expect(requireState(hookState).openOracleReportId).toBe('202')
+		expect(window.location.hash).toBe(`#/pools/${POOL_B}/reporting?universe=2`)
+		expect(state().securityPoolAddress).toBe(POOL_B)
+		expect(state().selectedPoolView).toBe('reporting')
+		expect(state().activeUniverseId).toBe(2n)
 	})
 
-	test('updates route-backed params through setter callbacks', async () => {
-		let hookState: UseUrlStateState | undefined
-		const Harness = createHarness(state => {
-			hookState = state
-		})
+	test('updates the pool path and query through setter callbacks', async () => {
+		const state = await renderHarness()
 
-		const rendered = await renderIntoDocument(<Harness />)
-		cleanupRenderedComponent = rendered.cleanup
+		await act(() => state().setActiveUniverseId(7n))
+		expect(window.location.hash).toBe(`#/pools/${POOL_A}/vaults?universe=7`)
 
-		await act(() => {
-			requireState(hookState).setActiveUniverseId(7n)
-		})
-		expect(window.location.hash.includes('universe=7')).toBe(true)
-		expect(requireState(hookState).activeUniverseId).toBe(7n)
+		await act(() => state().setSelectedPoolView('trading'))
+		expect(window.location.hash).toBe(`#/pools/${POOL_A}/trading?universe=7`)
+		expect(state().selectedPoolView).toBe('trading')
 
-		await act(() => {
-			requireState(hookState).setActiveUniverseId(undefined)
-		})
-		expect(window.location.hash.includes('universe=')).toBe(false)
+		await act(() => state().setSecurityPoolAddress(POOL_C))
+		expect(window.location.hash).toBe(`#/pools/${POOL_C}?universe=7`)
+		expect(state().securityPoolAddress).toBe(POOL_C)
+		expect(state().selectedPoolView).toBe('')
 
-		await act(() => {
-			requireState(hookState).setSecurityPoolAddress('0x3333333333333333333333333333333333333333')
-		})
-		expect(window.location.hash.includes('securityPool=0x3333333333333333333333333333333333333333')).toBe(true)
-		expect(window.location.hash.includes('securityPoolsView=operate')).toBe(true)
+		await act(() => state().setSecurityPoolsView('operate'))
+		expect(state().securityPoolAddress).toBe(POOL_C)
 
-		await act(() => {
-			requireState(hookState).setSecurityPoolsView('universes')
-		})
-		expect(window.location.hash.includes('securityPoolsView=universes')).toBe(true)
-		expect(window.location.hash.includes('securityPool=')).toBe(true)
-		expect(window.location.hash.includes('selectedPoolView=')).toBe(false)
-		await act(() => requireState(hookState).setSecurityPoolsView('operate'))
-		expect(requireState(hookState).securityPoolAddress).toBe('0x3333333333333333333333333333333333333333')
-		expect(requireState(hookState).selectedPoolView).toBe('')
+		await act(() => state().setSecurityPoolsView('universes'))
+		expect(window.location.hash).toBe('#/pools/universes?universe=7')
+		expect(state().securityPoolAddress).toBe('')
 
-		await act(() => {
-			requireState(hookState).setSecurityPoolQuestionId('0x99')
-		})
-		expect(window.location.hash.includes('questionId=0x99')).toBe(true)
-		expect(window.location.hash.includes('securityPoolsView=create')).toBe(true)
-		expect(requireState(hookState).securityPoolQuestionId).toBe('0x99')
+		await act(() => state().setSecurityPoolQuestionId('0x99'))
+		expect(window.location.hash).toBe('#/pools/create?universe=7&questionId=0x99')
+		expect(state().securityPoolQuestionId).toBe('0x99')
 
-		await act(() => {
-			requireState(hookState).setSelectedPoolView('positions')
-		})
-		expect(window.location.hash.includes('selectedPoolView=positions')).toBe(true)
-		expect(window.location.hash.includes('securityPoolsView=operate')).toBe(true)
+		await act(() => state().setSecurityPoolsView('browse'))
+		expect(window.location.hash).toBe('#/pools?universe=7')
 
-		await act(() => {
-			requireState(hookState).setOpenOracleView('trading')
-		})
-		expect(window.location.hash.includes('openOracleView=trading')).toBe(true)
-		expect(window.location.hash.includes('openOracleReportId')).toBe(false)
-		expect(requireState(hookState).openOracleView).toBe('trading')
+		await act(() => state().setSecurityPoolAddress(''))
+		expect(window.location.hash).toBe('#/pools?universe=7')
+	})
 
-		await act(() => {
-			requireState(hookState).setOpenOracleReport('555')
-		})
-		expect(window.location.hash.includes('openOracleReportId=555')).toBe(true)
-		expect(window.location.hash.includes('openOracleView=selected-report')).toBe(true)
-		expect(requireState(hookState).openOracleReportId).toBe('555')
+	test('keeps Open Oracle state in the query of the current route', async () => {
+		const state = await renderHarness()
+		window.location.hash = '#/open-oracle'
+		await act(() => window.dispatchEvent(new Event('hashchange')))
+
+		await act(() => state().setOpenOracleView('create'))
+		expect(window.location.hash).toBe('#/open-oracle?openOracleView=create')
+		expect(state().openOracleView).toBe('create')
+
+		await act(() => state().setOpenOracleReport('555', 'replace'))
+		expect(window.location.hash).toBe('#/open-oracle?openOracleView=selected-report&openOracleReportId=555')
+		expect(state().openOracleReportId).toBe('555')
 	})
 })

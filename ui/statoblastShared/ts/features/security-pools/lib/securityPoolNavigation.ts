@@ -1,14 +1,15 @@
-import { buildRouteHref, getRouteHash, getRouteHashSearch } from '@zoltar/ui-core-shared/navigation/routing.js'
-import { readSelectedPoolViewQueryParam, readUniverseQueryParam, writeSecurityPoolQueryParam, writeSelectedPoolViewQueryParam, writeUniverseQueryParam } from '@zoltar/ui-core-shared/navigation/urlParams.js'
+import { buildRouteHref, getCurrentRouteHash, getRouteHashSearch } from '@zoltar/ui-core-shared/navigation/routing.js'
+import { readUniverseQueryParam, updateSearchParams, writeUniverseQueryParam } from '@zoltar/ui-core-shared/navigation/urlParams.js'
+import { buildPoolPageRouteHash, parsePoolsRouteHash } from '../../../lib/statoblastLocation.js'
 
+/** Links to `#/pools/<address>/<tab>`, keeping the current pool tab unless one is given and carrying the pool's universe. */
 export function getSecurityPoolLinkHref(securityPoolAddress: string, selectedPoolView?: string, universeId?: bigint) {
 	const currentSearch = getRouteHashSearch()
-	const nextSelectedPoolView = selectedPoolView ?? readSelectedPoolViewQueryParam(currentSearch)
+	const currentLocation = parsePoolsRouteHash(getCurrentRouteHash())
+	const nextSelectedPoolView = selectedPoolView ?? (currentLocation?.view === 'operate' ? currentLocation.tab : '')
 	const nextUniverseId = universeId ?? readUniverseQueryParam(currentSearch)
-	const securityPoolSearch = writeSecurityPoolQueryParam(currentSearch, securityPoolAddress)
-	const selectedPoolViewSearch = writeSelectedPoolViewQueryParam(securityPoolSearch, nextSelectedPoolView)
-	const nextSearch = writeUniverseQueryParam(selectedPoolViewSearch, nextUniverseId)
-	return buildRouteHref(getRouteHash('security-pools'), nextSearch)
+	const poolSearch = updateSearchParams(currentSearch, params => params.delete('questionId'))
+	return buildRouteHref(buildPoolPageRouteHash(securityPoolAddress, nextSelectedPoolView), writeUniverseQueryParam(poolSearch, nextUniverseId))
 }
 
 export function navigateToSecurityPool(securityPoolAddress: string, selectedPoolView?: string, universeId?: bigint) {

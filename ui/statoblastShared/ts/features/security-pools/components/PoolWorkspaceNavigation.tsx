@@ -10,12 +10,21 @@ import { OpenOraclePriceValue } from '../../open-oracle/components/OpenOraclePri
 const primaryViews: readonly SelectedPoolView[] = ['vaults', 'trading', 'reporting']
 const moreViews: readonly SelectedPoolView[] = ['price-oracle', 'staged-operations', 'fork-workflow']
 
-export function PoolWorkspaceNavigation({ view, onChange, panelId }: { view: SelectedPoolView; onChange: (view: SelectedPoolView) => void; panelId: string }) {
+/** Splits the pool tabs: Fork & Migration joins the main tabs once the pool has fork activity or is in a fork stage. */
+function getPoolWorkspaceViews(view: SelectedPoolView, forkWorkflowPrimary: boolean) {
+	const mainViews = forkWorkflowPrimary ? [...primaryViews, 'fork-workflow' as const] : primaryViews
+	return {
+		mainViews: mainViews.includes(view) ? mainViews : [...mainViews, view],
+		toolViews: moreViews.filter(candidate => !mainViews.includes(candidate)),
+	}
+}
+
+export function PoolWorkspaceNavigation({ forkWorkflowPrimary = false, view, onChange, panelId }: { forkWorkflowPrimary?: boolean; view: SelectedPoolView; onChange: (view: SelectedPoolView) => void; panelId: string }) {
 	const menu = useRef<HTMLDetailsElement>(null)
-	const visibleViews = primaryViews.includes(view) ? primaryViews : [...primaryViews, view]
+	const { mainViews, toolViews } = getPoolWorkspaceViews(view, forkWorkflowPrimary)
 	return (
 		<div className='pool-workspace-navigation'>
-			<ViewTabs ariaLabel={securityPoolCopy.selectedPoolViews} className='selected-pool-workspace-tabs' semantics='tabs' size='compact' value={view} onChange={onChange} options={visibleViews.map(value => ({ id: `selected-pool-view-${value}`, label: getSelectedPoolViewLabel(value), panelId, value }))} />
+			<ViewTabs ariaLabel={securityPoolCopy.selectedPoolViews} className='selected-pool-workspace-tabs' semantics='tabs' size='compact' value={view} onChange={onChange} options={mainViews.map(value => ({ id: `selected-pool-view-${value}`, label: getSelectedPoolViewLabel(value), panelId, value }))} />
 			<details
 				className='pool-tools-disclosure'
 				ref={menu}
@@ -28,7 +37,7 @@ export function PoolWorkspaceNavigation({ view, onChange, panelId }: { view: Sel
 			>
 				<summary>{copy.moreTools}</summary>
 				<div className='pool-tools-options'>
-					{moreViews.map(value => (
+					{toolViews.map(value => (
 						<button
 							key={value}
 							type='button'
@@ -51,7 +60,7 @@ export function PoolWorkspaceNavigation({ view, onChange, panelId }: { view: Sel
 	)
 }
 
-type PoolOracleStatus = {
+export type PoolOracleStatus = {
 	currentTimestamp: bigint | undefined
 	lastPrice: bigint | undefined
 	lastSettlementTimestamp: bigint
@@ -62,7 +71,8 @@ type PoolOracleStatus = {
 	requestPending: boolean
 }
 
-function PoolOracleStatusRow({ needsPrice, oracle, onRequestPrice, onViewReport }: { needsPrice: boolean; oracle: PoolOracleStatus; onRequestPrice: () => void; onViewReport: (id: bigint) => void }) {
+/** The pool's Open Oracle price with its validity or pending countdown, and the one action that moves it forward: view the pending report or request a new price. */
+export function PoolOracleStatusRow({ needsPrice, oracle, onRequestPrice, onViewReport }: { needsPrice: boolean; oracle: PoolOracleStatus; onRequestPrice: () => void; onViewReport: (id: bigint) => void }) {
 	const pendingReportId = oracle.pendingReportId !== undefined && oracle.pendingReportId > 0n ? oracle.pendingReportId : undefined
 	let action = undefined
 	if (pendingReportId !== undefined)
@@ -86,50 +96,6 @@ function PoolOracleStatusRow({ needsPrice, oracle, onRequestPrice, onViewReport 
 				/>
 			</div>
 			{action}
-		</div>
-	)
-}
-
-export function PoolAttention({
-	needsPrice,
-	oracle,
-	stagedOperationCount,
-	forkAvailable,
-	onRequestPrice,
-	onViewReport,
-	onChange,
-}: {
-	/** True when the pool needs a fresh price that a new request can supply. */
-	needsPrice: boolean
-	oracle: PoolOracleStatus | undefined
-	stagedOperationCount: bigint
-	forkAvailable: boolean
-	onRequestPrice: () => void
-	onViewReport: (id: bigint) => void
-	onChange: (view: SelectedPoolView) => void
-}) {
-	return (
-		<div className='pool-attention'>
-			{/* The price row ticks down every second, so it stays outside the live region that announces new exceptions. */}
-			{oracle === undefined ? undefined : <PoolOracleStatusRow needsPrice={needsPrice} oracle={oracle} onRequestPrice={onRequestPrice} onViewReport={onViewReport} />}
-			<div className='pool-attention-alerts' aria-live='polite'>
-				{stagedOperationCount > 0n ? (
-					<p className='pool-attention-item'>
-						<span>{copy.stagedOperationCount(stagedOperationCount)}</span>
-						<button type='button' className='link' onClick={() => onChange('staged-operations')}>
-							{copy.reviewOperations}
-						</button>
-					</p>
-				) : undefined}
-				{forkAvailable ? (
-					<p className='pool-attention-item warning'>
-						<span>{copy.forkAvailable}</span>
-						<button type='button' className='link' onClick={() => onChange('fork-workflow')}>
-							{copy.reviewFork}
-						</button>
-					</p>
-				) : undefined}
-			</div>
 		</div>
 	)
 }

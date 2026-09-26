@@ -12,7 +12,7 @@ type Props = {
 	environmentReady: boolean
 	loadOracleReport: (reportId: string) => Promise<void>
 	loadSecurityPools: (securityPoolAddress?: string) => Promise<boolean | void>
-	navigate: (route: 'deploy' | 'open-oracle' | 'security-pools') => void
+	navigate: (route: 'deploy' | 'open-oracle' | 'pools' | 'portfolio') => void
 	resetSecurityPoolCreation: () => void
 	route: Route
 	securityPoolAddress: string
@@ -32,15 +32,15 @@ type Props = {
 }
 
 function shouldRefreshSelectedPoolForRoute({ environmentReady, route, securityPoolAddress, selectedPoolSecurityPoolAddress, walletBootstrapComplete }: { environmentReady: boolean; route: Route; securityPoolAddress: string; selectedPoolSecurityPoolAddress: string | undefined; walletBootstrapComplete: boolean }) {
-	return environmentReady && route === 'security-pools' && walletBootstrapComplete && isHexAddressInput(securityPoolAddress) && selectedPoolSecurityPoolAddress === undefined
+	return environmentReady && route === 'pools' && walletBootstrapComplete && isHexAddressInput(securityPoolAddress) && selectedPoolSecurityPoolAddress === undefined
 }
 
 function shouldSyncSecurityPoolAddressToRouteForms({ route }: { route: Route; securityPoolAddress: string }) {
-	return route === 'security-pools'
+	return route === 'pools'
 }
 
 function getSelectedVaultOwnerForRoutePoolChange({ accountAddress, lastSecurityPoolAddress, route, securityPoolAddress }: { accountAddress: Address | undefined; lastSecurityPoolAddress: string | undefined; route: Route; securityPoolAddress: string }) {
-	if (route !== 'security-pools') return undefined
+	if (route !== 'pools') return undefined
 	const normalizedSecurityPoolAddress = normalizeAddress(securityPoolAddress) ?? ''
 	const normalizedLastSecurityPoolAddress = normalizeAddress(lastSecurityPoolAddress)
 	if (normalizedSecurityPoolAddress === normalizedLastSecurityPoolAddress) return undefined
@@ -84,7 +84,7 @@ export function useAppRouteEffects({
 	useMissingDeploymentRedirect({ isDeploymentRoute: route === 'deploy', missing: applicationDeploymentMissing, navigateToDeployment: () => navigate('deploy') })
 
 	useEffect(() => {
-		if (route !== 'security-pools') {
+		if (route !== 'pools') {
 			lastSyncedSecurityPoolQuestionId.current = undefined
 			return
 		}
@@ -110,7 +110,7 @@ export function useAppRouteEffects({
 			securityPoolAddress,
 		})
 		if (nextSelectedVaultOwner !== undefined) setSecurityVaultFormSelectedVaultOwner(nextSelectedVaultOwner)
-		if (route !== 'security-pools') {
+		if (route !== 'pools') {
 			lastSelectedSecurityPoolAddress.current = undefined
 			return
 		}
@@ -131,10 +131,10 @@ export function useAppRouteEffects({
 				walletBootstrapComplete,
 			})
 		) {
-			if (route !== 'security-pools' || securityPoolAddress === '' || selectedPoolSecurityPoolAddress !== undefined || !environmentReady || !walletBootstrapComplete) lastRequestedSecurityPoolAddress.current = undefined
+			if (route !== 'pools' || securityPoolAddress === '' || selectedPoolSecurityPoolAddress !== undefined || !environmentReady || !walletBootstrapComplete) lastRequestedSecurityPoolAddress.current = undefined
 			return
 		}
-		if (!environmentReady || route !== 'security-pools' || !isHexAddressInput(securityPoolAddress) || !walletBootstrapComplete) return
+		if (!environmentReady || route !== 'pools' || !isHexAddressInput(securityPoolAddress) || !walletBootstrapComplete) return
 		const requestKey = `${activeEnvironmentNonce}:${securityPoolAddress}`
 		if (lastRequestedSecurityPoolAddress.current === requestKey) return
 		lastRequestedSecurityPoolAddress.current = requestKey
@@ -144,14 +144,14 @@ export function useAppRouteEffects({
 
 	useEffect(() => {
 		if (!environmentReady) return
-		if (route !== 'security-pools') return
+		if (route !== 'pools') return
 		if (securityPoolResultHash === undefined) return
 		void loadSecurityPoolsRef.current(securityPoolAddress === '' ? undefined : securityPoolAddress)
 	}, [environmentReady, route, securityPoolAddress, securityPoolResultHash])
 
 	useEffect(() => {
 		if (!environmentReady) return
-		if (route !== 'security-pools') return
+		if (route !== 'pools') return
 		if (tradingResultHash === undefined) return
 		void loadSecurityPoolsRef.current(securityPoolAddress)
 	}, [environmentReady, route, securityPoolAddress, tradingResultHash])

@@ -19,10 +19,10 @@ export function useOpenOracleRoute({
 	accountState: OpenOracleSectionProps['accountState']
 	activeEnvironmentNonce: number
 	canReadOnchainData: boolean
-	navigate: (route: 'deploy' | 'open-oracle' | 'security-pools', preservedParams?: Set<string>) => void
+	navigate: (route: 'deploy' | 'open-oracle' | 'pools' | 'portfolio') => void
 	openOracleView: string
 	route: string
-	setOpenOracleReport: (reportId: string) => void
+	setOpenOracleReport: (reportId: string, historyMode?: 'push' | 'replace') => void
 	setOpenOracleView: (view: OpenOracleView) => void
 	urlOpenOracleReportId: string
 	walletScopedHookConfig: WriteOperationsParameters
@@ -31,7 +31,7 @@ export function useOpenOracleRoute({
 	const { loadPoolOracleManager, poolOracleManagerDetails } = priceOracleManager
 	const { approveToken1, approveToken2, cancelWithdrawalBalanceCheck, createOpenOracleGame, disputeReport, loadOracleReport, openOracleSectionState, openOracleForm, setOpenOracleCreateForm, setOpenOracleForm, settleReport, withdrawBalance } = useOpenOracleOperations({
 		...walletScopedHookConfig,
-		enabled: (route === 'open-oracle' || route === 'security-pools') && canReadOnchainData,
+		enabled: (route === 'open-oracle' || route === 'pools') && canReadOnchainData,
 		onReportSettled: async () => {
 			if (poolOracleManagerDetails?.managerAddress !== undefined) await loadPoolOracleManager(poolOracleManagerDetails.managerAddress)
 		},
@@ -40,9 +40,10 @@ export function useOpenOracleRoute({
 	const derivedOpenOracleView = resolveFirstMatchingValue<OpenOracleView>([[urlOpenOracleReportId !== '' || openOracleForm.reportId !== '', 'selected-report']], 'browse')
 	const activeOpenOracleView = resolveEnumValue<OpenOracleView>(openOracleView, derivedOpenOracleView, openOracleViews)
 	const onViewPendingReport = (reportId: bigint) => {
-		setOpenOracleReport(reportId.toString())
+		// Open the Advanced route first, then record the report on that entry, so Back returns to the pool page that linked here.
+		navigate('open-oracle')
+		setOpenOracleReport(reportId.toString(), 'replace')
 		setOpenOracleForm(current => ({ ...current, reportId: reportId.toString() }))
-		navigate('open-oracle', new Set(['securityPool', 'securityPoolsView', 'selectedPoolView']))
 		void loadOracleReport(reportId.toString())
 	}
 	const openOracleRouteContentProps: OpenOracleSectionProps = {

@@ -13,7 +13,7 @@ import { executeForkAuctionAction } from './securityPoolActions.js'
 import { SECURITY_POOL_QUESTION_OUTCOME_ABI } from './securityPoolAbi.js'
 import { loadMarketDetails } from '@zoltar/ui-zoltar-shared/protocol/zoltar.js'
 
-const MIGRATION_TIME_LENGTH = 4838400n
+export const MIGRATION_TIME_LENGTH = 4838400n
 const TRUTH_AUCTION_TIME_LENGTH = 604800n
 type AuctionClearingTuple = readonly [boolean, bigint, bigint, bigint]
 export async function loadForkOutcomeMigrationSeedStatus(

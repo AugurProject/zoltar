@@ -531,6 +531,38 @@
 		"./features/reporting/lib/reportingViewerStatus.js": {
 			"bun": "./ts/features/reporting/lib/reportingViewerStatus.ts",
 			"default": "./js/features/reporting/lib/reportingViewerStatus.js"
+		},
+		"./lib/statoblastLocation.js": {
+			"bun": "./ts/lib/statoblastLocation.ts",
+			"default": "./js/lib/statoblastLocation.js"
+		},
+		"./features/portfolio/components/PortfolioSection.js": {
+			"bun": "./ts/features/portfolio/components/PortfolioSection.tsx",
+			"default": "./js/features/portfolio/components/PortfolioSection.js"
+		},
+		"./features/portfolio/hooks/usePortfolio.js": {
+			"bun": "./ts/features/portfolio/hooks/usePortfolio.ts",
+			"default": "./js/features/portfolio/hooks/usePortfolio.js"
+		},
+		"./features/portfolio/lib/portfolioViewModel.js": {
+			"bun": "./ts/features/portfolio/lib/portfolioViewModel.ts",
+			"default": "./js/features/portfolio/lib/portfolioViewModel.js"
+		},
+		"./features/security-pools/components/PoolStagePanel.js": {
+			"bun": "./ts/features/security-pools/components/PoolStagePanel.tsx",
+			"default": "./js/features/security-pools/components/PoolStagePanel.js"
+		},
+		"./features/security-pools/lib/poolActions.js": {
+			"bun": "./ts/features/security-pools/lib/poolActions.ts",
+			"default": "./js/features/security-pools/lib/poolActions.js"
+		},
+		"./features/security-pools/lib/poolLifecycle.js": {
+			"bun": "./ts/features/security-pools/lib/poolLifecycle.ts",
+			"default": "./js/features/security-pools/lib/poolLifecycle.js"
+		},
+		"./features/security-pools/lib/poolViewModel.js": {
+			"bun": "./ts/features/security-pools/lib/poolViewModel.ts",
+			"default": "./js/features/security-pools/lib/poolViewModel.js"
 		}
 	},
 	"version": "1.0.0"

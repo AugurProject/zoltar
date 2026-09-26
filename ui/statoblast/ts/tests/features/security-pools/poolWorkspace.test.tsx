@@ -8,16 +8,28 @@ import { SecurityPoolWorkflowSection } from '@zoltar/ui-statoblast-shared/featur
 import type { SelectedPoolView } from '@zoltar/ui-statoblast-shared/features/security-pools/lib/securityPoolWorkflow.js'
 import { createAccountState, createOracleManagerDetails, createSelectedPool, createSecurityPoolWorkflowProps } from './workflow/builders.js'
 import { useSecurityPoolWorkflowSectionTestDom } from './workflow/testDom.js'
-import { installTestRouting } from '@zoltar/ui-core-shared/tests/testUtils/testRouting.js'
+import { installStatoblastRouting } from '@zoltar/ui-statoblast-shared/lib/routing.js'
 
-installTestRouting()
+installStatoblastRouting()
 const { renderLoadedPool, setCleanup } = useSecurityPoolWorkflowSectionTestDom()
 
-test('updates pool selection immediately and never shows contents for a different address', async () => {
+test('opens a typed pool once its address is complete and never shows contents for a different address', async () => {
 	const pool = createSelectedPool()
+	const addressChanges: string[] = []
 	function Harness() {
 		const [address, setAddress] = useState(pool.securityPoolAddress.toString())
-		return <SecurityPoolWorkflowSection {...createSecurityPoolWorkflowProps({ securityPoolAddress: address, securityPools: [pool], onSecurityPoolAddressChange: setAddress })} />
+		return (
+			<SecurityPoolWorkflowSection
+				{...createSecurityPoolWorkflowProps({
+					securityPoolAddress: address,
+					securityPools: [pool],
+					onSecurityPoolAddressChange: nextAddress => {
+						addressChanges.push(nextAddress)
+						setAddress(nextAddress)
+					},
+				})}
+			/>
+		)
 	}
 	setCleanup((await renderIntoDocument(<Harness />)).cleanup)
 	const page = within(document.body)
@@ -25,9 +37,12 @@ test('updates pool selection immediately and never shows contents for a differen
 	const input = page.getByRole('textbox', { name: 'Security Pool Address' })
 	expect(page.queryByRole('button', { name: 'Change pool' }) === null).toBe(true)
 	expect(page.queryByRole('button', { name: 'Open pool' }) === null).toBe(true)
+	// A partial address stays in the field without leaving the current pool page.
 	await act(() => fireEvent.input(input, { target: { value: '0x123' } }))
-	expect(document.querySelector('.pool-object-identity') === null).toBe(true)
+	expect(addressChanges).toEqual([])
+	expect(document.querySelector('.pool-object-identity') !== null).toBe(true)
 	await act(() => fireEvent.input(input, { target: { value: '0x1111111111111111111111111111111111111111' } }))
+	expect(addressChanges).toEqual(['0x1111111111111111111111111111111111111111'])
 	expect(document.querySelector('.pool-object-identity') === null).toBe(true)
 	await act(() => fireEvent.input(input, { target: { value: pool.securityPoolAddress } }))
 	expect(document.querySelector('.pool-object-identity') !== null).toBe(true)
@@ -67,9 +82,10 @@ test('surfaces actionable pool exceptions independently of the selected tab', as
 		poolOracleManagerDetails: createOracleManagerDetails({ isPriceValid: false, pendingReportId: 7n, activeStagedOperationCount: 2n }),
 		onViewPendingReport: id => reports.push(id),
 		onSelectedPoolViewChange: view => views.push(view),
+		selectedPoolView: 'vaults',
 	})
 	const page = within(document.body)
-	for (const name of ['View report', 'Review operations', 'Review fork & migration']) await act(() => fireEvent.click(page.getByRole('button', { name })))
+	for (const name of ['View report', 'Review operations', 'Open fork & migration']) await act(() => fireEvent.click(page.getByRole('button', { name })))
 	expect(reports).toEqual([7n])
 	expect(views).toEqual(['staged-operations', 'fork-workflow'])
 })
@@ -116,6 +132,17 @@ test('requests a new price straight from the pool oracle row', async () => {
 	expect(row?.classList.contains('warning')).toBe(true)
 	await act(() => fireEvent.click(within(document.body).getByRole('button', { name: 'Request new price' })))
 	expect(opened.length > 0).toBe(true)
+})
+
+test('shows the stage and offers only controls that leave the open tab', async () => {
+	const views: SelectedPoolView[] = []
+	await renderLoadedPool({ onSelectedPoolViewChange: view => views.push(view) })
+	const card = document.querySelector('.pool-action-card')
+	if (!(card instanceof HTMLElement)) throw new Error('Expected the action card')
+	expect(document.querySelector('.pool-lifecycle [aria-current="step"]')?.textContent).toContain('Operational')
+	expect(within(card).queryByRole('button', { name: 'Open vaults' })).toBeNull()
+	await act(() => fireEvent.click(within(card).getByRole('button', { name: 'Open shares' })))
+	expect(views).toEqual(['trading'])
 })
 
 test('shows unknown capacity without a progress gauge or implied zero capacity', async () => {
