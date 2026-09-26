@@ -35,6 +35,34 @@ describe('GlobalTransactionDialog', () => {
 		restoreRouting = installTestRouting()
 	})
 
+	test('wallet-only workflows keep the shared pending status without a step dialog', async () => {
+		const controller = createTransactionStepController(undefined, false)
+		const step = { title: 'Report Yes · 5 REP', description: undefined, contractAddress: undefined, contractLabel: undefined, spender: undefined, amount: undefined, ethValueAttoEth: undefined }
+		controller.setPlan([step, step])
+		controller.startWithoutReview(0)
+		const rendered = await renderIntoDocument(
+			<>
+				<TransactionStepsModal contextKey='wallet-report' />
+				<GlobalTransactionDialog transaction={{ hash: '0x1111111111111111111111111111111111111111111111111111111111111111', title: 'Submitting report', tone: 'pending' }} />
+			</>,
+		)
+		try {
+			expect(rendered.container.querySelector('.operation-modal-panel')).toBeNull()
+			expect(rendered.container.querySelector('.global-transaction-dialog')?.textContent).toContain('Submitting report')
+			const hash = '0x1111111111111111111111111111111111111111111111111111111111111111'
+			await act(() => {
+				controller.submitted(hash)
+				controller.receipt(hash, 'success')
+				controller.startWithoutReview(1)
+			})
+			expect(transactionSteps.value?.steps.map(step => step.phase)).toEqual(['confirmed', 'pending'])
+			expect(rendered.container.querySelector('.operation-modal-panel')).toBeNull()
+		} finally {
+			transactionSteps.value?.cancel()
+			await rendered.cleanup()
+		}
+	})
+
 	test.each([MAINNET_NETWORK_PROFILE, SEPOLIA_NETWORK_PROFILE])('links the full hash to the active explorer: $id', async profile => {
 		const restore = installActiveEnvironmentForTesting(createInjectedBackend({ profile }))
 		const hash = '0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef12'

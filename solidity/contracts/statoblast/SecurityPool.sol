@@ -545,6 +545,11 @@ contract SecurityPool is SecurityPoolStorage {
 	// Escalation Game (migrate vault (oi+rep), truth truthAuction)
 	////////////////////////////////////////
 
+	function depositWalletRepToEscalationGame(BinaryOutcomes.BinaryOutcome outcome, uint256 maximumDepositAttoRep) external {
+		if (hasInheritedForkOutcome) revert('Forked');
+		DelegateCallForwarder.invoke(operationsDelegate, abi.encodeCall(SecurityPoolOperationsDelegate.depositWalletRepToEscalationGame, (outcome, maximumDepositAttoRep)));
+	}
+
 	function depositToEscalationGame(BinaryOutcomes.BinaryOutcome outcome, uint256 maximumDepositAttoRep) external isOperational {
 		if (hasInheritedForkOutcome) revert('Forked');
 		require(!awaitingForkContinuation, 'Fork await');

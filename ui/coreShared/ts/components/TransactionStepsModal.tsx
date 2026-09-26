@@ -23,7 +23,7 @@ export function TransactionStepsModal({ contextKey }: { contextKey: string }) {
 		if (active?.phase === 'failed' || presentation?.tone === 'error' || completed) workflow.cancel()
 	}, [workflow, embedded, presentation?.tone])
 	if (workflow === undefined || workflow.reviewSignal?.aborted) return undefined
-	if (embedded) return undefined
+	if (embedded || !workflow.showReviewDialog) return undefined
 	const current = workflow.steps[workflow.activeIndex]
 	if (current === undefined) return undefined
 	const pending = presentation?.tone !== 'error' && workflow.steps.some(step => step.phase === 'pending' && step.error === undefined)

@@ -943,6 +943,16 @@ export const securityPoolAbi = [
 		],
 		outputs: [],
 	},
+	{
+		type: 'function',
+		name: 'depositWalletRepToEscalationGame',
+		stateMutability: 'nonpayable',
+		inputs: [
+			{ name: 'outcome', type: 'uint8', internalType: 'enum BinaryOutcomes.BinaryOutcome' },
+			{ name: 'maximumDepositAttoRep', type: 'uint256', internalType: 'uint256' },
+		],
+		outputs: [],
+	},
 	{ type: 'function', name: 'escalationGame', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'address', internalType: 'contract EscalationGame' }] },
 	{ type: 'function', name: 'escalationGameFactory', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'address', internalType: 'contract EscalationGameFactory' }] },
 	{ type: 'function', name: 'eventEmitter', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'address', internalType: 'contract SecurityPoolEventEmitter' }] },

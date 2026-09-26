@@ -22,7 +22,7 @@
 				<h2 id="interactions">State-changing interactions</h2>
 				<p>Vault owners change their saved target through coordinator operation <code>AdjustVaultBackingFactor</code> (2), which executes immediately with a fresh price or remains in the existing on-chain queue. The pool fallback exposes <code>adjustVaultBackingFactor(vault, backingFactorBps)</code> through <code>ISecurityPool</code> only to its coordinator. Capacity becomes <code>pool-held vault REP × statoblastSecurityMultiplierBps / backingFactorBps</code>, rounded down, without transferring REP. The target is an absolute backing ratio in BPS and must be at least <code>statoblastSecurityMultiplierBps</code> (equality allowed), leaving positive capacity and a fully collateralized vault at execution. The pool must be operational, unforked, unresolved, and open to vault admission; dispute-staked REP must be zero. Capacity reductions require zero settlement collateral. Successful execution saves the target, checkpoints fees, updates retention, and emits <code>VaultBackingFactorAdjusted</code> plus accounting checkpoints. A queued or failed change leaves the saved target unchanged.</p>
 				<!-- Validated read ABI fingerprint: f030ef34eddbe062230fb4d75f91f1c469b81d35796eeaf980f6b3027970891b -->
-				<!-- Validated complete compiled ABI fingerprint: 706701fc3a1147becd89319b66f30b16518d8d9be0709aee9f6f4b15e216e629 -->
+				<!-- Validated complete compiled ABI fingerprint: 36039a88e71ca787a1037ea84a546c7f391657ccb999a7d5783bb96ff98c6a25 -->
 				<table>
 					<thead>
 						<tr>
@@ -82,6 +82,13 @@
 							<td>Operational pool with a final outcome; the specified <code>vault</code> has no escalation escrow and has redeemable REP.</td>
 							<td>Burns the vault's REP backing units and returns its proportional vault REP backing.</td>
 							<td><code>RepRedeemedFromVault</code></td>
+						</tr>
+						<tr>
+							<td><code>depositWalletRepToEscalationGame(outcome, maximumDepositAttoRep)</code></td>
+							<td>REP holder with a token allowance for the pool</td>
+							<td>Question end has passed before starting a game; pool operational in an unforked universe, without an inherited fixed outcome or pending fork continuation; game is not a fork continuation; outcome and amount accepted; sufficient wallet REP and pool allowance. No existing vault or oracle price is required.</td>
+							<td>Starts an ordinary game if needed and transfers the accepted REP directly from the caller into game escrow. Records the caller as depositor without minting vault backing units or capacity ownership. Also accepts deposits if another reporter has already started the ordinary game.</td>
+							<td><code>EscalationGameSet</code> on first deposit; game emits <code>LocalDepositAppended</code> and <code>DepositOnOutcome</code></td>
 						</tr>
 						<tr>
 							<td><code>depositToEscalationGame(outcome, maxAmount)</code></td>

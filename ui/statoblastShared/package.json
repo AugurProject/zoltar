@@ -416,6 +416,10 @@
 			"bun": "./ts/protocol/oracleTiming.ts",
 			"default": "./js/protocol/oracleTiming.js"
 		},
+		"./protocol/reportingWalletFunding.js": {
+			"bun": "./ts/protocol/reportingWalletFunding.ts",
+			"default": "./js/protocol/reportingWalletFunding.js"
+		},
 		"./protocol/reporting.js": {
 			"bun": "./ts/protocol/reporting.ts",
 			"default": "./js/protocol/reporting.js"
