@@ -1,4 +1,4 @@
-import { formatCurrencyInputBalance } from '@zoltar/ui-core-shared/lib/formatters.js'
+import { formatMultiplier } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { isVaultHealthyAtFactor } from './liquidation.js'
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import type { OracleManagerDetails } from '@zoltar/ui-core-shared/types/contracts.js'
@@ -18,7 +18,7 @@ export function parseTargetHealthFactorBps(value: string, label = 'Target backin
 	if (!/^\d+(?:\.\d{1,4})?$/.test(trimmed)) throw new Error(`${label} must be a number with at most four decimal places`)
 	const [whole = '', fraction = ''] = trimmed.split('.')
 	const factorBps = BigInt(whole) * BPS_DENOMINATOR + BigInt(fraction.padEnd(4, '0'))
-	if (factorBps < minimumBps) throw new Error(`${label} must be at least ${formatCurrencyInputBalance(minimumBps, 4)}×`)
+	if (factorBps < minimumBps) throw new Error(`${label} must be at least ${formatMultiplier(minimumBps, 4)}`)
 	return factorBps
 }
 

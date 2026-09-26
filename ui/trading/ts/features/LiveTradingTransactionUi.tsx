@@ -6,7 +6,7 @@ import { RetryableNotice } from '@zoltar/ui-core-shared/components/RetryableNoti
 import { FormInput } from '@zoltar/ui-core-shared/components/FormInput.js'
 import { WorkflowSubsection } from '@zoltar/ui-core-shared/components/WorkflowSubsection.js'
 import type { Hash } from '@zoltar/core-shared/evm/ethereum'
-import { formatTrimmedUnits } from '@zoltar/ui-core-shared/lib/formatters.js'
+import { formatScaledPercentage } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { formatRoundedUnits } from '../lib/format.js'
 import { formatCollateralEth, formatOutcomeQuantity, type ShareValueRate } from '../lib/shareValue.js'
 import * as workflowCopy from '../copy/workflows.js'
@@ -59,7 +59,7 @@ export function renderLiveTradeSummary(quote: LiveTradeSummaryQuote, side: 'YES'
 				primary={primary}
 				details={[
 					{ label: quote.kind === 'entry' ? workflowCopy.invalidReceived : workflowCopy.invalidRequired, value: formatOutcomeQuantity(quote.value.result.invalidInsurance, 'INVALID') },
-					{ label: workflowCopy.tradingFee, value: `${formatTrimmedUnits(quote.value.market.feeBps, 2, 2)}%` },
+					{ label: workflowCopy.tradingFee, value: formatScaledPercentage(quote.value.market.feeBps, 2) },
 				]}
 			/>
 			{quote.kind === 'entry' ? (

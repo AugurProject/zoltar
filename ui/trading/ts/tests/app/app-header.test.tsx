@@ -464,8 +464,8 @@ describe('trading header', () => {
 	test('preserves all 18 decimals in authoritative wallet balances', async () => {
 		const rendered = await renderIntoDocument(<TradingOverviewPanel simulation={false} walletSummary={{ account: '0x8ba1f109551bD432803012645Ac136ddd64DBA72', ethAttoEth: 1n, repAttoRep: 2n ** 256n - 1n, status: 'ready', error: undefined, errorLabel: undefined, universeId: '1' }} />)
 		cleanupRendered = rendered.cleanup
-		expect(rendered.container.querySelector('[data-wallet-asset="ETH"] button')?.getAttribute('title')).toBe('0.000000000000000001')
-		expect(rendered.container.querySelector('[data-wallet-asset="REP"] button')?.getAttribute('title')).toEndWith('.584007913129639935')
+		expect(rendered.container.querySelector('[data-wallet-asset="ETH"] button')?.getAttribute('title')).toBe('0.000000000000000001 ETH')
+		expect(rendered.container.querySelector('[data-wallet-asset="REP"] button')?.getAttribute('title')).toEndWith('.584007913129639935 REP')
 	})
 
 	test('hides retained balances synchronously when the selected universe changes', () => {

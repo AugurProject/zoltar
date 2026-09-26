@@ -177,7 +177,7 @@ export function SecurityPoolStagedOperationsSection({
 								</div>
 								<div className='decision-summary'>
 									<p className='decision-amount'>
-										<CurrencyValue precision='exact' value={operation.amount} decimals={amount.decimals} suffix={amount.suffix} />
+										<CurrencyValue precision='exact' value={operation.amount} units={amount.units} suffix={amount.suffix} />
 									</p>
 									{amount.summaryLabel === undefined ? undefined : <p className='detail'>{amount.summaryLabel}</p>}
 									<div className='inline-facts'>

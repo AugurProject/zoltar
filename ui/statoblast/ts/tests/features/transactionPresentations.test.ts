@@ -82,7 +82,7 @@ describe('transaction presentations', () => {
 			statoblastSecurityMultiplierBps: 25_000n,
 		})
 
-		expect(intent.rows).toEqual([{ label: 'Statoblast Security Multiplier', value: '2.5x' }])
+		expect(intent.rows).toEqual([{ label: 'Statoblast Security Multiplier', value: '2.5×' }])
 		expect(intent.failedTitle).toBe('Security pool creation')
 	})
 

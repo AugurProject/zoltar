@@ -114,14 +114,14 @@ export function MigrationOutcomeUniversesSection({
 									<span className='migration-outcome-metric'>
 										<span className='migration-outcome-metric-label'>{zoltarCopy.walletBalanceLabel}</span>
 										<strong>
-											<CurrencyValue copyable={false} loading={isHeldBalanceLoading} value={heldBalance} suffix={commonCopy.rep} />
+											<CurrencyValue loading={isHeldBalanceLoading} value={heldBalance} suffix={commonCopy.rep} />
 										</strong>
 									</span>
 									<span className='migration-outcome-metric'>
 										<span className='migration-outcome-metric-label'>{zoltarCopy.migratedBalanceLabel}</span>
 										<strong>
-											<CurrencyValue copyable={false} loading={loadingBalances && child.exists && childUniverseSplitAmounts[child.universeId.toString()] === undefined} value={child.exists ? childUniverseSplitAmounts[child.universeId.toString()] : 0n} suffix={commonCopy.rep} /> /{' '}
-											<CurrencyValue copyable={false} loading={loadingBalances && migrationBalance === undefined} value={migrationBalance} suffix={commonCopy.rep} />
+											<CurrencyValue loading={loadingBalances && child.exists && childUniverseSplitAmounts[child.universeId.toString()] === undefined} value={child.exists ? childUniverseSplitAmounts[child.universeId.toString()] : 0n} suffix={commonCopy.rep} /> /{' '}
+											<CurrencyValue loading={loadingBalances && migrationBalance === undefined} value={migrationBalance} suffix={commonCopy.rep} />
 										</strong>
 									</span>
 								</>
