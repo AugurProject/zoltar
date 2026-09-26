@@ -2,6 +2,7 @@ import * as workspaceCopy from '../../../copy/poolWorkspace.js'
 import { VaultExposureValue } from './VaultExposureValue.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as securityPoolCopy from '../../../copy/securityPool.js'
+import { formatMultiplier } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { CurrencyValue } from '@zoltar/ui-core-shared/components/CurrencyValue.js'
 import { MetricField } from '@zoltar/ui-core-shared/components/MetricField.js'
 import { TimestampValue } from '@zoltar/ui-core-shared/components/TimestampValue.js'
@@ -16,12 +17,6 @@ function VaultPrimaryMetric({ className, label, suffix, value }: { className?: s
 			</strong>
 		</div>
 	)
-}
-
-function formatRepPerCapacityBps(value: bigint) {
-	const whole = value / 10_000n
-	const fraction = (value % 10_000n).toString().padStart(4, '0').replace(/0+$/, '')
-	return `${whole.toString()}${fraction === '' ? '' : `.${fraction}`}×`
 }
 
 function getAssociatedRepToneClass({ associatedRepPerCapacityBps, isCurrentlyHealthy, selectedPoolStatoblastSecurityMultiplierBps }: { associatedRepPerCapacityBps: bigint | undefined; isCurrentlyHealthy: boolean | undefined; selectedPoolStatoblastSecurityMultiplierBps: bigint | undefined }) {
@@ -132,11 +127,11 @@ export function VaultMetricGrid({
 					<CurrencyValue value={capacityOwnershipAttoRep} suffix={securityPoolCopy.capacityUnits} />
 				</MetricField>
 				<div className='vault-detail-meta'>
-					{targetBackingFactorBps === undefined || targetBackingFactorBps === 0n ? undefined : <MetricField label={securityPoolCopy.vaultBackingFactor}>{formatRepPerCapacityBps(targetBackingFactorBps)}</MetricField>}
+					{targetBackingFactorBps === undefined || targetBackingFactorBps === 0n ? undefined : <MetricField label={securityPoolCopy.vaultBackingFactor}>{formatMultiplier(targetBackingFactorBps, 4)}</MetricField>}
 					{associatedRepPerCapacityBps === undefined ? undefined : (
 						<MetricField label={securityPoolCopy.associatedRepPerCapacity} valueClassName={associatedRepToneClass}>
 							<span className='metric-inline-value'>
-								<span>{formatRepPerCapacityBps(associatedRepPerCapacityBps)}</span>
+								<span>{formatMultiplier(associatedRepPerCapacityBps, 4)}</span>
 								{associatedRepStatusLabel === undefined ? undefined : <span className='metric-inline-status'>{associatedRepStatusLabel}</span>}
 							</span>
 						</MetricField>

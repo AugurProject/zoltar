@@ -1,11 +1,13 @@
+import { isTransactionReviewCancellation, transactionErrorMessages } from '@zoltar/ui-core-shared/lib/errors.js'
+import { reportOutcomeWithWalletViaVault } from '@zoltar/ui-statoblast-shared/protocol/reportingWalletFunding.js'
 /// <reference types="bun-types" />
 
 import { describe, expect, test } from 'bun:test'
 import { concatHex, decodeFunctionData, encodeAbiParameters, getAddress, keccak256, parseAbiParameters, zeroAddress, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
 import { claimParentEscalationDeposits, migrateVaultWithUnresolvedEscalation } from '@zoltar/ui-statoblast-shared/protocol/forks.js'
-import { loadReportingDetails, reportOutcomeInSecurityPool } from '@zoltar/ui-statoblast-shared/protocol/reporting.js'
+import { approveReportingRep, loadReportingDetails, reportOutcomeInSecurityPool } from '@zoltar/ui-statoblast-shared/protocol/reporting.js'
 import { buildForkCarriedEscalationProofs, withdrawForkedEscalationDeposits } from '@zoltar/ui-statoblast-shared/protocol/reportingCarryState.js'
-import { statoblast_EscalationGame_EscalationGame, statoblast_SecurityPool_SecurityPool, statoblast_SecurityPoolForker_SecurityPoolForker } from '@zoltar/ui-statoblast-shared/contractArtifact.js'
+import { statoblast_SecurityPool_SecurityPool, statoblast_SecurityPoolForker_SecurityPoolForker } from '@zoltar/ui-statoblast-shared/contractArtifact.js'
 import type { TransactionRequestPreview } from '@zoltar/ui-core-shared/wallet/chainBackend.js'
 import type { EscalationSide } from '@zoltar/ui-core-shared/types/contracts.js'
 import { asWriteClient, createBlockWithTimestamp, createMockWriteClient, createMulticallStub, createReadContractStub, getContractFunctionName, mockTransactionHash } from '@zoltar/ui-core-shared/tests/testUtils/protocolTestSupport.js'
@@ -108,7 +110,123 @@ function createActiveReportingClient(getDepositsByOutcome: (outcomeIndex: number
 }
 
 describe('reporting protocol client', () => {
-	test('reportOutcomeInSecurityPool sends active ordinary-game contributions from the wallet directly to game escrow', async () => {
+	test.each(['none', 'deposit', 'report', 'cancel', 'requirements', 'quote'] as const)('wallet reporting after a fork handles failures at %s', async failure => {
+		const reader = createActiveReportingClient(() => [])
+		const previews: TransactionRequestPreview[] = []
+		let funded = false
+		let submitted = 0
+		const writer = createMockWriteClient(() => {
+			submitted += 1
+			if (failure === 'cancel' && submitted === 2) throw new Error(transactionErrorMessages.reviewCanceled)
+			if ((failure === 'report' && submitted === 2) || (failure === 'deposit' && submitted === 1)) throw new Error('User rejected transaction')
+		})
+		const client = {
+			...asWriteClient(writer),
+			...reader,
+			account: { address: vaultAddress, type: 'json-rpc' as const },
+			onTransactionPrepared: (preview: TransactionRequestPreview) => {
+				previews.push(preview)
+			},
+			readContract: createReadContractStub(async request => {
+				if (request.functionName === 'forkContinuation') return true
+				if (request.functionName === 'previewDepositOnOutcome') return [funded && failure === 'quote' ? 6n : 7n, 10n]
+				if (request.functionName === 'totalRepBackingUnits' || request.functionName === 'getTotalPoolHeldAttoRep') return funded ? 117n : 100n
+				if (request.functionName === 'minimumVaultRepDepositAttoRep') return 10n
+				if (request.functionName === 'securityVaults') return [funded ? 17n : 0n, 0n, 0n, 0n]
+				if (request.functionName === 'backingUnitsToAttoRep') return 17n
+				if (request.functionName === 'getEscalationMigrationEntitlementStatus') return [false, 0n, [false, false, false]]
+				if (request.functionName === 'disputeStakedRepByVaultAttoRep') return 0n
+				if (request.functionName === 'repToken') return repTokenAddress
+				if (request.functionName === 'balanceOf' || request.functionName === 'allowance') return 100n
+				if (request.functionName === 'vaultTargetBackingFactorBps') return failure === 'none' ? 25_000n : 0n
+				if (request.functionName === 'statoblastSecurityMultiplierBps') return 15_000n
+				if (request.functionName === 'hasReachedNonDecision') return false
+				return await reader.readContract(request)
+			}),
+		}
+		const result = reportOutcomeWithWalletViaVault(client, securityPoolAddress, 'no', 7n, failure === 'requirements' ? 16n : 17n, () => {
+			funded = true
+		})
+		if (failure === 'requirements' || failure === 'deposit') {
+			await expect(result).rejects.toThrow(failure === 'requirements' ? 'required vault deposit changed' : 'User rejected transaction')
+			expect(funded).toBe(false)
+			expect(submitted).toBe(failure === 'requirements' ? 0 : 1)
+			return
+		}
+		if (failure === 'report' || failure === 'cancel' || failure === 'quote') {
+			await expect(result).rejects.toThrow('Your REP was deposited into your vault')
+			await result.catch(error => expect(isTransactionReviewCancellation(error)).toBe(false))
+		} else expect((await result).action).toBe('reportOutcome')
+		expect(funded).toBe(true)
+		if (failure === 'quote') {
+			expect(submitted).toBe(1)
+			return
+		}
+		expect(previews.map(preview => preview.functionName)).toEqual(['depositRepToVault', 'depositToEscalationGame'])
+		expect(previews[0]?.args).toEqual([17n, failure === 'none' ? 25_000n : 15_000n])
+		expect(previews[1]?.args).toEqual([2, 7n])
+	})
+
+	test.each([zeroAddress, escalationGameAddress])('wallet reporting approves the pool before and after game startup (%s)', async gameAddress => {
+		const previews: TransactionRequestPreview[] = []
+		const client = asWriteClient(
+			createMockWriteClient(
+				() => undefined,
+				async request => {
+					if (request.functionName === 'universeId') return 9n
+					if (request.functionName === 'escalationGame') return gameAddress
+					if (request.functionName === 'forkContinuation') return false
+					if (request.functionName === 'repToken') return repTokenAddress
+					throw new Error(`Unexpected readContract function: ${request.functionName}`)
+				},
+			),
+		)
+		client.onTransactionPrepared = preview => previews.push(preview)
+		await approveReportingRep(client, securityPoolAddress, 'yes', 7n)
+		expect(previews[0]?.functionName).toBe('approve')
+		expect(previews[0]?.args).toEqual([securityPoolAddress, 7n])
+		await reportOutcomeInSecurityPool(client, securityPoolAddress, 'yes', 7n)
+		expect(previews[1]?.functionName).toBe('depositWalletRepToEscalationGame')
+		expect(previews[1]?.args).toEqual([1, 7n])
+	})
+
+	test.each([zeroAddress, escalationGameAddress])('honors vault funding for an ordinary game (%s)', async gameAddress => {
+		const client = asWriteClient(
+			createMockWriteClient(
+				() => undefined,
+				async request => {
+					if (request.functionName === 'universeId') return 9n
+					if (request.functionName === 'escalationGame') return gameAddress
+					if (request.functionName === 'forkContinuation') return false
+					throw new Error(`Unexpected read: ${request.functionName}`)
+				},
+			),
+		)
+		const previews: TransactionRequestPreview[] = []
+		client.onTransactionPrepared = preview => previews.push(preview)
+		await reportOutcomeInSecurityPool(client, securityPoolAddress, 'yes', 7n, 7n, 'vault')
+		expect(previews[0]?.functionName).toBe('depositToEscalationGame')
+		expect(previews[0]?.args).toEqual([1, 7n])
+	})
+
+	test('rejects explicit wallet funding if the game has become a fork continuation', async () => {
+		const client = asWriteClient(
+			createMockWriteClient(
+				() => {
+					throw new Error('Must not submit')
+				},
+				async request => {
+					if (request.functionName === 'universeId') return 9n
+					if (request.functionName === 'escalationGame') return escalationGameAddress
+					if (request.functionName === 'forkContinuation') return true
+					throw new Error(`Unexpected read: ${request.functionName}`)
+				},
+			),
+		)
+		await expect(reportOutcomeInSecurityPool(client, securityPoolAddress, 'yes', 7n, 7n, 'wallet')).rejects.toThrow('Fork continuations use vault-funded escalation deposits.')
+	})
+
+	test('reportOutcomeInSecurityPool routes active ordinary-game wallet contributions through the pool to game escrow', async () => {
 		let capturedData: Hex | undefined
 		let capturedTo: Address | null | undefined
 		const client = createMockWriteClient(
@@ -131,13 +249,13 @@ describe('reporting protocol client', () => {
 		expect(previews[0]?.reviewAmount).toBe('0.000000000000000006 REP')
 		expect(previews[0]?.reviewTitle).toBe('Report Yes · 0.000000000000000006 REP')
 
-		expect(capturedTo).toBe(escalationGameAddress)
+		expect(capturedTo).toBe(securityPoolAddress)
 		expect(capturedData).toBeDefined()
 		const decodedCall = decodeFunctionData({
-			abi: statoblast_EscalationGame_EscalationGame.abi,
+			abi: statoblast_SecurityPool_SecurityPool.abi,
 			data: capturedData ?? ('0x' satisfies Hex),
 		})
-		expect(decodedCall.functionName).toBe('depositRepOnOutcome')
+		expect(decodedCall.functionName).toBe('depositWalletRepToEscalationGame')
 		expect(decodedCall.args).toEqual([1n, 7n])
 		expect(result).toMatchObject({ action: 'reportOutcome', securityPoolAddress, universeId: 9n })
 	})
@@ -382,15 +500,27 @@ describe('reporting protocol client', () => {
 			}),
 			readContract: createReadContractStub(async request => {
 				if (request.functionName === 'getForkThresholdAttoRep') return 9n
+				if (request.functionName === 'escalationGame') return zeroAddress
+				if (request.functionName === 'getEscalationMigrationEntitlementStatus') return [false, 0n, [false, false, false]]
 				if (request.functionName === 'securityVaults') return [0n, 0n, 0n, 0n, 0n]
+				if (request.functionName === 'repToken') return repTokenAddress
+				if (request.functionName === 'balanceOf') return 100n
+				if (request.functionName === 'allowance') {
+					expect(request.args).toEqual([vaultAddress, securityPoolAddress])
+					return 0n
+				}
 				if (request.functionName === 'getOutcomeLabels') return ['Yes', 'No']
 				throw new Error(`Unexpected readContract function: ${request.functionName}`)
 			}),
 		} as unknown as Parameters<typeof loadReportingDetails>[0]
 
-		const details = await loadReportingDetails(client, securityPoolAddress, undefined)
+		const details = await loadReportingDetails(client, securityPoolAddress, vaultAddress)
 
 		expect(details.status).toBe('not-started')
+		expect(details.contributionFunding).toBe('wallet')
+		expect(details.viewerVaultExists).toBe(false)
+		expect(details.viewerWalletRepBalanceAttoRep).toBe(100n)
+		expect(details.viewerWalletRepAllowanceAttoRep).toBe(0n)
 		expect(details.questionOutcome).toBe('yes')
 		expect(details.settlementState).toBe('resolved')
 		expect(details.parentWithdrawalEnabled).toBe(false)

@@ -27,7 +27,7 @@ function getSecurityPoolCreationTransactionRows(context: SecurityPoolCreationTra
 	return [
 		...(context.questionTitle === undefined || context.questionTitle.trim() === '' ? [] : [{ label: commonCopy.question, value: context.questionTitle.trim() }]),
 		...(context.questionId === undefined || context.questionId.trim() === '' ? [] : [{ label: commonCopy.questionId, value: <IdentifierValue value={context.questionId.trim()} /> }]),
-		...(context.statoblastSecurityMultiplierBps === undefined ? [] : [{ label: statoblastAppCopy.statoblastSecurityMultiplierBps, value: `${formatStatoblastSecurityMultiplier(context.statoblastSecurityMultiplierBps)}x` }]),
+		...(context.statoblastSecurityMultiplierBps === undefined ? [] : [{ label: statoblastAppCopy.statoblastSecurityMultiplierBps, value: formatStatoblastSecurityMultiplier(context.statoblastSecurityMultiplierBps) }]),
 		...(context.initialReportPriorityFeeEth === undefined || context.initialReportPriorityFeeEth.trim() === '' ? [] : [{ label: commonCopy.initialReportPriorityFee, value: formatValueWithUnit(context.initialReportPriorityFeeEth.trim(), commonCopy.eth) }]),
 	]
 }
@@ -50,7 +50,7 @@ export function createSecurityPoolCreationSuccessPresentation(result: SecurityPo
 		rows: [
 			{ label: transactionCopy.pool, value: <AddressValue address={result.securityPoolAddress} /> },
 			{ label: commonCopy.questionId, value: <IdentifierValue value={result.questionId} /> },
-			{ label: statoblastAppCopy.statoblastSecurityMultiplierBps, value: `${formatStatoblastSecurityMultiplier(result.statoblastSecurityMultiplierBps)}x` },
+			{ label: statoblastAppCopy.statoblastSecurityMultiplierBps, value: formatStatoblastSecurityMultiplier(result.statoblastSecurityMultiplierBps) },
 			{ label: commonCopy.initialReportPriorityFee, value: formatCurrencyBalanceWithUnit(result.initialReportPriorityFeeAttoEthPerGas, commonCopy.eth, 18) },
 		],
 		title: transactionCopy.securityPoolCreated,

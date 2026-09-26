@@ -4,7 +4,6 @@ import { CurrencyValue } from './CurrencyValue.js'
 
 type ApprovedAmountValueProps = {
 	className?: string
-	copyable?: boolean
 	decimals?: number
 	loading?: boolean
 	requiredAmount?: bigint | undefined
@@ -18,7 +17,7 @@ function getApprovedAmountTone(value: bigint | undefined, requiredAmount: bigint
 	return value >= requiredAmount ? 'sufficient' : 'insufficient'
 }
 
-export function ApprovedAmountValue({ className = '', copyable = true, decimals = 2, loading = false, requiredAmount, suffix = '', units = 18, value }: ApprovedAmountValueProps) {
+export function ApprovedAmountValue({ className = '', decimals = 2, loading = false, requiredAmount, suffix = '', units = 18, value }: ApprovedAmountValueProps) {
 	const toneClassName = getApprovedAmountTone(value, requiredAmount)
 
 	if (shouldDisplayMaxTokenApprovalAmount(value))
@@ -28,5 +27,5 @@ export function ApprovedAmountValue({ className = '', copyable = true, decimals 
 			</span>
 		)
 
-	return <CurrencyValue className={[toneClassName === undefined ? '' : `approval-${toneClassName}`, className].filter(Boolean).join(' ')} copyable={copyable} decimals={decimals} loading={loading} suffix={suffix} units={units} value={value} />
+	return <CurrencyValue className={[toneClassName === undefined ? '' : `approval-${toneClassName}`, className].filter(Boolean).join(' ')} decimals={decimals} loading={loading} suffix={suffix} units={units} value={value} />
 }

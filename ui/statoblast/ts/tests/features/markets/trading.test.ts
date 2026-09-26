@@ -166,10 +166,10 @@ void describe('trading helpers', () => {
 		expect(isTradingSystemDeployed([createDeploymentStep('proxyDeployer', true), createDeploymentStep('zoltar', true), createDeploymentStep('securityPoolFactory', false)])).toBe(false)
 	})
 
-	void test('formats Statoblast security multiplier basis points as fractional x values', () => {
-		expect(formatStatoblastSecurityMultiplier(20_000n)).toBe('2')
-		expect(formatStatoblastSecurityMultiplier(25_000n)).toBe('2.5')
-		expect(formatStatoblastSecurityMultiplier(20_001n)).toBe('2.0001')
+	void test('formats Statoblast security multiplier basis points with the multiplication sign', () => {
+		expect(formatStatoblastSecurityMultiplier(20_000n)).toBe('2×')
+		expect(formatStatoblastSecurityMultiplier(25_000n)).toBe('2.5×')
+		expect(formatStatoblastSecurityMultiplier(20_001n)).toBe('2.0001×')
 	})
 
 	void test('detects pools that have REP backing but no active capacity ownership', () => {

@@ -25,11 +25,12 @@ describe('ApprovedAmountValue', () => {
 		trackRendered(await renderIntoDocument(<ApprovedAmountValue value={2n * 10n ** 18n} requiredAmount={1n} suffix='REP' units={18} />))
 
 		const documentQueries = within(document.body)
-		const currencyOutput = document.body.querySelector('button[type="button"]')
-		if (currencyOutput === null) throw new Error('Expected currency value button')
+		const currencyOutput = document.body.querySelector('.currency-value')
+		if (currencyOutput === null) throw new Error('Expected currency value')
 
+		expect(document.body.querySelector('button')).toBeNull()
 		expect(currencyOutput.className).toContain('approval-sufficient')
-		expect(documentQueries.getByText(/≈ 2\.00 REP/)).not.toBeNull()
+		expect(documentQueries.getByText('2.00 REP')).not.toBeNull()
 	})
 
 	test('renders placeholder while value is unavailable', async () => {

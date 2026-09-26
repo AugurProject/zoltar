@@ -10,24 +10,10 @@ import { installTestRouting } from '../testUtils/testRouting.js'
 import { SEPOLIA_NETWORK_PROFILE } from '../../wallet/networkProfile.js'
 import { OverviewPanels, type OverviewRepPricesProps } from '../../app/components/OverviewPanels.js'
 import { describe, expect, mock, test } from 'bun:test'
-import { act } from 'preact/test-utils'
 
 installTestRouting()
 describe('OverviewPanels', () => {
-	type MetricElement = {
-		classList: {
-			contains: (token: string) => boolean
-		}
-		firstElementChild: MetricElement | null
-		getAttribute: (name: string) => string | null
-		parentElement: MetricElement | null
-		querySelector: (selector: string) => MetricElement | null
-	}
-
 	let cleanupRenderedComponent: (() => Promise<void>) | undefined
-	let setClientWidthResolver = (_resolver: (element: MetricElement) => number) => undefined
-	let setMeasureWidthResolver = (_resolver: (element: MetricElement) => number) => undefined
-	let triggerResizeObservers = () => undefined
 
 	function openAccountMenu() {
 		const summary = document.body.querySelector('.account-menu > summary')
@@ -95,60 +81,9 @@ describe('OverviewPanels', () => {
 	}
 
 	installDomTestLifecycle({
-		beforeTest: domEnvironment => {
-			let resolveClientWidth = (_element: MetricElement) => 0
-			let resolveMeasureWidth = (_element: MetricElement) => 0
-			const resizeObservers: MockResizeObserver[] = []
-			const originalGetBoundingClientRect = domEnvironment.window.HTMLElement.prototype.getBoundingClientRect
-
-			Object.defineProperty(domEnvironment.window.HTMLElement.prototype, 'clientWidth', {
-				configurable: true,
-				get() {
-					return resolveClientWidth(this)
-				},
-			})
-
-			domEnvironment.window.HTMLElement.prototype.getBoundingClientRect = function () {
-				if (this.classList.contains('currency-value-measure')) return new domEnvironment.window.DOMRect(0, 0, resolveMeasureWidth(this), 0)
-				return originalGetBoundingClientRect.call(this)
-			}
-
-			class MockResizeObserver implements ResizeObserver {
-				callback: ResizeObserverCallback
-
-				constructor(callback: ResizeObserverCallback) {
-					this.callback = callback
-					resizeObservers.push(this)
-				}
-
-				disconnect() {}
-
-				observe(_target: Element, _options?: ResizeObserverOptions) {}
-
-				unobserve(_target: Element) {}
-			}
-
-			Reflect.set(globalThis, 'ResizeObserver', MockResizeObserver)
-			setClientWidthResolver = nextResolver => {
-				resolveClientWidth = nextResolver
-			}
-			setMeasureWidthResolver = nextResolver => {
-				resolveMeasureWidth = nextResolver
-			}
-
-			triggerResizeObservers = () => {
-				for (const observer of resizeObservers) {
-					observer.callback([], observer)
-				}
-			}
-		},
 		afterTest: async () => {
 			await cleanupRenderedComponent?.()
 			cleanupRenderedComponent = undefined
-			Reflect.deleteProperty(globalThis, 'ResizeObserver')
-			setClientWidthResolver = (_resolver: (element: MetricElement) => number) => undefined
-			setMeasureWidthResolver = (_resolver: (element: MetricElement) => number) => undefined
-			triggerResizeObservers = () => undefined
 		},
 	})
 
@@ -562,27 +497,11 @@ describe('OverviewPanels', () => {
 			universeRepBalanceAttoRep: 5n * 10n ** 18n,
 		})
 		expect(readSlots()).toEqual(expectedSlots)
-		expect(readMetricValues().slice(0, 3)).toEqual(['≈ 2.00', '≈ 1.00', '≈ 5.00'])
+		expect(readMetricValues().slice(0, 3)).toEqual(['2.00', '1.00', '5.00'])
 		expect(document.body.querySelector('.header-toolbar-controls .wallet-chip .address-value-abbreviated')?.textContent).toBe('0x123456…567890')
 	})
 
-	test('compacts a large ETH balance without affecting the adjacent WETH metric', async () => {
-		// Widths belong to the metric cell around each shrink-to-fit value.
-		setClientWidthResolver(element => {
-			if (element.classList.contains('currency-value') || element.classList.contains('currency-value-wrap')) return 0
-			const title = element.querySelector('.currency-value')?.getAttribute('title')
-			if (title === '999 999 990 000') return 80
-			if (title === '10 000') return 160
-			return 160
-		})
-
-		setMeasureWidthResolver(element => {
-			const parentTitle = element.parentElement?.firstElementChild?.getAttribute('title')
-			if (parentTitle === '999 999 990 000') return 180
-			if (parentTitle === '10 000') return 110
-			return 80
-		})
-
+	test('renders header balances in deterministic compact notation with unit-named copy buttons', async () => {
 		const documentQueries = await renderOverviewPanels({
 			accountState: {
 				address: '0x1234567890123456789012345678901234567890',
@@ -593,14 +512,10 @@ describe('OverviewPanels', () => {
 			universeRepBalanceAttoRep: 5n * 10n ** 18n,
 		})
 
-		await act(() => {
-			triggerResizeObservers()
-		})
-
-		const ethButton = documentQueries.getByRole('button', { name: 'Copy exact value 999 999 990 000' })
-		const wethButton = documentQueries.getByRole('button', { name: 'Copy exact value 10 000' })
+		const ethButton = documentQueries.getByRole('button', { name: 'Copy exact value 999 999 990 000 ETH' })
+		const wethButton = documentQueries.getByRole('button', { name: 'Copy exact value 10 000 WETH' })
 
 		expect(ethButton.textContent).toBe('≈ 1T')
-		expect(wethButton.textContent).toBe('≈ 10 000.00')
+		expect(wethButton.textContent).toBe('10k')
 	})
 })

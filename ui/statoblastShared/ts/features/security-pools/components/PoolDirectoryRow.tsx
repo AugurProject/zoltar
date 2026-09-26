@@ -57,7 +57,7 @@ export function PoolDirectoryRow({
 				<div className='pool-directory-meta'>
 					<AddressValue address={pool.securityPoolAddress} responsiveAbbreviation />
 					<span>
-						{appCopy.statoblastSecurityMultiplierBps}: {formatStatoblastSecurityMultiplier(pool.statoblastSecurityMultiplierBps)}×
+						{appCopy.statoblastSecurityMultiplierBps}: {formatStatoblastSecurityMultiplier(pool.statoblastSecurityMultiplierBps)}
 					</span>
 				</div>
 				<div className='pool-directory-meta'>

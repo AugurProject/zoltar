@@ -57,6 +57,7 @@ describe('Audit PoC: fixed-outcome child synthetic bad debt', () => {
 		await startTruthAuction(attacker, child.securityPool)
 
 		strictEqualTypeSafe(await getSystemState(client, child.securityPool), SystemState.Operational, 'all pool-held REP migrated, so the fixed-outcome child should finalize without an auction')
+		await assert.rejects(client.writeContract({ address: child.securityPool, abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'depositWalletRepToEscalationGame', args: [QuestionOutcome.Yes, 10n ** 18n] }), /Forked/)
 		strictEqualTypeSafe(await getQuestionOutcome(client, child.securityPool), QuestionOutcome.Yes, 'the matching fork should make the child question final')
 
 		const victimVaultBefore = await getSecurityVault(client, child.securityPool, client.account.address)

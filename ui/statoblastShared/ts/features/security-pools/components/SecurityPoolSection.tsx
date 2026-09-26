@@ -269,7 +269,7 @@ export function SecurityPoolSection({
 								<MetricField label={securityPoolCopy.poolAddressLabel}>
 									<AddressValue address={securityPoolResult.securityPoolAddress} responsiveAbbreviation />
 								</MetricField>
-								<MetricField label={statoblastAppCopy.statoblastSecurityMultiplierBps}>{formatStatoblastSecurityMultiplier(securityPoolResult.statoblastSecurityMultiplierBps)}x</MetricField>
+								<MetricField label={statoblastAppCopy.statoblastSecurityMultiplierBps}>{formatStatoblastSecurityMultiplier(securityPoolResult.statoblastSecurityMultiplierBps)}</MetricField>
 								<MetricField label={securityPoolCopy.initialReportPriorityFeeEthLabel}>{formatCurrencyBalanceWithUnit(securityPoolResult.initialReportPriorityFeeAttoEthPerGas, commonCopy.eth, 18)}</MetricField>
 							</>
 						}

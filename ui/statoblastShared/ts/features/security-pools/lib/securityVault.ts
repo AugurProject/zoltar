@@ -1,4 +1,4 @@
-import { formatCurrencyInputBalance } from '@zoltar/ui-core-shared/lib/formatters.js'
+import { formatMultiplier } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { isVaultHealthyAtFactor } from './liquidation.js'
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import type { OracleManagerDetails } from '@zoltar/ui-core-shared/types/contracts.js'
@@ -18,7 +18,7 @@ export function parseTargetHealthFactorBps(value: string, label = 'Target backin
 	if (!/^\d+(?:\.\d{1,4})?$/.test(trimmed)) throw new Error(`${label} must be a number with at most four decimal places`)
 	const [whole = '', fraction = ''] = trimmed.split('.')
 	const factorBps = BigInt(whole) * BPS_DENOMINATOR + BigInt(fraction.padEnd(4, '0'))
-	if (factorBps < minimumBps) throw new Error(`${label} must be at least ${formatCurrencyInputBalance(minimumBps, 4)}×`)
+	if (factorBps < minimumBps) throw new Error(`${label} must be at least ${formatMultiplier(minimumBps, 4)}`)
 	return factorBps
 }
 
@@ -134,7 +134,7 @@ export function getVaultBackingFactorAdjustmentGuard(details: SecurityVaultDetai
 	if (details === undefined || details.settlementCollateralAttoEth === undefined) return 'Refresh vault details before adjusting the backing factor.'
 	const minimum = poolSecurityMultiplierBps ?? details.statoblastSecurityMultiplierBps
 	if (minimum === undefined) return 'Pool minimum backing ratio is unavailable.'
-	if (factorBps !== undefined && factorBps < minimum) return `Target backing ratio must be at least ${formatCurrencyInputBalance(minimum, 4)}×`
+	if (factorBps !== undefined && factorBps < minimum) return `Target backing ratio must be at least ${formatMultiplier(minimum, 4)}`
 	if (details.vaultAttoRepBacking <= 0n) return 'Deposit REP to create a vault first.'
 	if (details.settlementCollateralAttoEth > 0n && factorBps !== undefined && factorBps > 0n && (details.vaultAttoRepBacking * minimum) / factorBps < details.capacityOwnershipAttoRep) return 'Capacity cannot be reduced while the pool has committed settlement collateral.'
 	if (details.disputeStakedAttoRep > 0n) return 'Backing factor changes are unavailable while vault REP is in a dispute.'

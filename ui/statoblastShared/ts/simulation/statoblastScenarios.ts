@@ -542,10 +542,11 @@ async function seedSecurityPoolX2AuctionScenario({
 		readClient,
 	})
 	await reportBootstrapProgress(onProgress, 'Triggering own-escalation fork', 0.988)
+	await getScenarioProtocol().approveErc20(writeClient, profile.genesisRepTokenAddress, parentPool.securityPoolAddress, ownForkDepositAmount, 'approveRep')
 	await getScenarioProtocol().reportOutcomeInSecurityPool(writeClient, parentPool.securityPoolAddress, 'yes', ownForkDepositAmount)
 	const activeReportingDetails = await getScenarioProtocol().loadReportingDetails(readClient, parentPool.securityPoolAddress, primaryAccount)
 	if (activeReportingDetails.status !== 'active') throw new Error('Expected the seeded ordinary escalation game to be active')
-	await getScenarioProtocol().approveErc20(writeClient, profile.genesisRepTokenAddress, activeReportingDetails.escalationGameAddress, ownForkDepositAmount, 'approveRep')
+	await getScenarioProtocol().approveErc20(writeClient, profile.genesisRepTokenAddress, parentPool.securityPoolAddress, ownForkDepositAmount, 'approveRep')
 	await getScenarioProtocol().reportOutcomeInSecurityPool(writeClient, parentPool.securityPoolAddress, 'no', ownForkDepositAmount)
 	await getScenarioProtocol().forkZoltarWithOwnEscalation(writeClient, parentPool.securityPoolAddress, parentPool.universeId)
 

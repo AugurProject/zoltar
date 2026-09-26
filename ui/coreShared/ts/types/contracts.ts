@@ -455,6 +455,8 @@ type EscalationMigrationEntitlementStatus = {
 }
 
 type ReportingDetailsBase = {
+	walletVaultFunding?: { vaultRepBackingUnits: bigint; totalRepBackingUnits: bigint; totalPoolHeldRepAttoRep: bigint } | undefined
+	minimumVaultRepDepositAttoRep?: bigint | undefined
 	contributionFunding?: 'vault' | 'wallet' | undefined
 	settlementCollateralAttoEth: bigint
 	currentTime: bigint

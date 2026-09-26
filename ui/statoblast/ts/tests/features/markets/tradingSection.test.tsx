@@ -20,6 +20,14 @@ import { render } from 'preact'
 import { useEffect, useState } from 'preact/hooks'
 import { act } from 'preact/test-utils'
 
+/** Amounts are plain text by default; their exact value (plus any unit) lives in the title. */
+function getExactValueTitles(root: ParentNode, exactValue: string) {
+	return Array.from(root.querySelectorAll('.currency-value')).filter(element => {
+		const title = element.getAttribute('title')
+		return title === exactValue || title?.startsWith(`${exactValue} `) === true
+	})
+}
+
 function createSelectedPool(overrides: Partial<ListedSecurityPool> = {}): ListedSecurityPool {
 	const selectedPool: ListedSecurityPool = {
 		settlementCollateralAttoEth: 0n,
@@ -374,7 +382,7 @@ void describe('TradingSection', () => {
 		expect(documentQueries.getByRole('dialog', { name: 'Mint Complete Sets' })).not.toBeNull()
 	})
 
-	void test('renders your share metrics using rounded values with exact copy affordances', async () => {
+	void test('renders your share metrics using rounded values with exact value titles', async () => {
 		const renderedComponent = await renderIntoDocument(
 			<TradingSection
 				{...createTradingSectionProps({
@@ -393,11 +401,11 @@ void describe('TradingSection', () => {
 
 		const documentQueries = within(document.body)
 		expect(documentQueries.getAllByText('≈ 1.23').length).toBeGreaterThan(0)
-		expect(documentQueries.getAllByText('≈ 0.023').length).toBeGreaterThan(0)
-		expect(documentQueries.getAllByText('≈ 0.00041').length).toBeGreaterThanOrEqual(2)
-		expect(documentQueries.getAllByRole('button', { name: 'Copy exact value 1.234' }).length).toBeGreaterThan(0)
-		expect(documentQueries.getAllByRole('button', { name: 'Copy exact value 0.023' }).length).toBeGreaterThan(0)
-		expect(documentQueries.getAllByRole('button', { name: 'Copy exact value 0.00041' }).length).toBeGreaterThanOrEqual(2)
+		expect(documentQueries.getAllByText('0.023').length).toBeGreaterThan(0)
+		expect(documentQueries.getAllByText('0.00041').length).toBeGreaterThanOrEqual(2)
+		expect(getExactValueTitles(document.body, '1.234').length).toBeGreaterThan(0)
+		expect(getExactValueTitles(document.body, '0.023').length).toBeGreaterThan(0)
+		expect(getExactValueTitles(document.body, '0.00041').length).toBeGreaterThanOrEqual(2)
 	})
 
 	void test('renders first-mint share balances as complete-set collateral amounts', async () => {
@@ -426,8 +434,8 @@ void describe('TradingSection', () => {
 		expect(documentQueries.getByText('Total Across Outcomes')).not.toBeNull()
 		expect(documentQueries.queryByText('Total Collateral Equivalent')).toBeNull()
 		expect(documentQueries.queryByText('Total Shares')).toBeNull()
-		expect(documentQueries.getAllByText('≈ 1.00').length).toBeGreaterThanOrEqual(4)
-		expect(documentQueries.getAllByRole('button', { name: 'Copy exact value 1' }).length).toBeGreaterThanOrEqual(4)
+		expect(documentQueries.getAllByText('1.00').length).toBeGreaterThanOrEqual(4)
+		expect(getExactValueTitles(document.body, '1').length).toBeGreaterThanOrEqual(4)
 		expect(document.body.textContent?.includes('1 000 000 000 000 000 000')).toBe(false)
 	})
 
@@ -477,8 +485,8 @@ void describe('TradingSection', () => {
 		const walletMetric = modalQueries.getByText('Wallet ETH').parentElement
 		const mintableMetric = modalQueries.getByText('Available to Mint').parentElement
 		if (walletMetric === null || mintableMetric === null) throw new Error('Expected mint balance metrics')
-		expect(within(walletMetric).getByRole('button', { name: 'Copy exact value 1.25' })).not.toBeNull()
-		expect(within(mintableMetric).getByRole('button', { name: 'Copy exact value 1.25' })).not.toBeNull()
+		expect(getExactValueTitles(walletMetric, '1.25')).toHaveLength(1)
+		expect(getExactValueTitles(mintableMetric, '1.25')).toHaveLength(1)
 	})
 
 	void test('fills the mint amount with the lesser of wallet ETH and remaining capacity', async () => {
@@ -602,7 +610,8 @@ void describe('TradingSection', () => {
 			fireEvent.click(within(document.body).getByRole('button', { name: 'Mint complete sets' }))
 		})
 
-		const dialog = within(within(document.body).getByRole('dialog', { name: 'Mint Complete Sets' }))
+		const dialogElement = within(document.body).getByRole('dialog', { name: 'Mint Complete Sets' })
+		const dialog = within(dialogElement)
 		expect(dialog.queryByRole('heading', { name: 'Transaction Review' })).toBeNull()
 		expect(document.body.querySelector('.transaction-review')).toBeNull()
 		expect(dialog.getByText('You Pay')).not.toBeNull()
@@ -612,8 +621,8 @@ void describe('TradingSection', () => {
 		expect(dialog.getByText('Resulting ETH Balance')).not.toBeNull()
 		const estimatedFeeRow = dialog.getByText('Estimated Retention Fee').parentElement
 		if (estimatedFeeRow === null) throw new Error('Expected estimated retention fee row')
-		expect(within(estimatedFeeRow).getByRole('button', { name: 'Copy exact value 1' })).not.toBeNull()
-		expect(dialog.getAllByRole('button', { name: 'Copy exact value 1.111111111111111111' })).toHaveLength(3)
+		expect(getExactValueTitles(estimatedFeeRow, '1')).toHaveLength(1)
+		expect(getExactValueTitles(dialogElement, '1.111111111111111111')).toHaveLength(3)
 		expect(dialog.queryByText('Technical Details')).toBeNull()
 		expect(document.body.textContent?.includes('Yes +')).toBe(true)
 		expect(document.body.textContent?.includes('No +')).toBe(true)

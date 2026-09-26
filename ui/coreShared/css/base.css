@@ -1112,18 +1112,6 @@ button.currency-value.copyable:hover:not(:disabled) {
 	color: var(--danger);
 }
 
-.currency-value.currency-value-measure {
-	position: absolute;
-	top: 0;
-	left: 0;
-	max-width: none;
-	overflow: visible;
-	text-overflow: clip;
-	visibility: hidden;
-	white-space: nowrap;
-	pointer-events: none;
-}
-
 .timestamp-value {
 	font: inherit;
 	color: inherit;

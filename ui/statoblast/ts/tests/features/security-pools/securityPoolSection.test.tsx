@@ -336,11 +336,11 @@ describe('SecurityPoolSection', () => {
 
 	test('associates invalid multiplier guidance and disables creation', async () => {
 		for (const [value, message] of [
-			['', 'Enter a Statoblast security multiplier of at least 1.0002x.'],
-			['1', 'Statoblast security multiplier must be at least 1.0002x.'],
-			['1.0001', 'Statoblast security multiplier must be at least 1.0002x.'],
-			['bad', 'Enter a multiplier in x with at most 4 decimal places.'],
-			['2.00001', 'Enter a multiplier in x with at most 4 decimal places.'],
+			['', 'Enter a Statoblast security multiplier of at least 1.0002×.'],
+			['1', 'Statoblast security multiplier must be at least 1.0002×.'],
+			['1.0001', 'Statoblast security multiplier must be at least 1.0002×.'],
+			['bad', 'Enter a multiplier with at most 4 decimal places.'],
+			['2.00001', 'Enter a multiplier with at most 4 decimal places.'],
 		] as const) {
 			const renderedComponent = await renderIntoDocument(
 				h(
