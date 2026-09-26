@@ -24,7 +24,7 @@ describe('TransactionNetworkValue', () => {
 		const renderedComponent = await renderIntoDocument(<TransactionNetworkValue />)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		expect(within(document.body).getByText('Ethereum Mainnet')).not.toBeNull()
+		expect(within(document.body).getByText('Ethereum mainnet')).not.toBeNull()
 	})
 
 	test('makes the local simulation profile explicit', async () => {
@@ -32,6 +32,6 @@ describe('TransactionNetworkValue', () => {
 		const renderedComponent = await renderIntoDocument(<TransactionNetworkValue />)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		expect(within(document.body).getByText('Browser Simulation · local sandbox')).not.toBeNull()
+		expect(within(document.body).getByText('Browser simulation · local sandbox')).not.toBeNull()
 	})
 })

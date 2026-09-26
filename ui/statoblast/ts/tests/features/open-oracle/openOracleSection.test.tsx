@@ -375,8 +375,8 @@ void describe('OpenOracleSection', () => {
 
 		try {
 			const documentQueries = within(document.body)
-			expect(documentQueries.getByText('Report Block')).not.toBeNull()
-			expect(documentQueries.getByText('Settlement Block')).not.toBeNull()
+			expect(documentQueries.getByText('Report block')).not.toBeNull()
+			expect(documentQueries.getByText('Settlement block')).not.toBeNull()
 			expect(documentQueries.getByText('123 blocks')).not.toBeNull()
 			expect(documentQueries.getByText('234 blocks')).not.toBeNull()
 		} finally {
@@ -427,8 +427,8 @@ void describe('OpenOracleSection', () => {
 			const documentQueries = within(document.body)
 			const searchInput = documentQueries.getByRole('textbox', { name: 'Search this page' }) as HTMLInputElement
 			expect(searchInput.placeholder).toBe('Filter this page by report ID, token symbol, or token address')
-			expect(documentQueries.getByText('Report Block')).not.toBeNull()
-			expect(documentQueries.getByText('Settlement Block')).not.toBeNull()
+			expect(documentQueries.getByText('Report block')).not.toBeNull()
+			expect(documentQueries.getByText('Settlement block')).not.toBeNull()
 			expect(documentQueries.getByText('123 blocks')).not.toBeNull()
 			expect(documentQueries.getByText('234 blocks')).not.toBeNull()
 		} finally {
@@ -610,7 +610,7 @@ void describe('OpenOracleSection', () => {
 
 		expect(getButtonDisabled(settleButton)).toBe(false)
 		expect(findButton(section, 'Dispute & swap')).toBeUndefined()
-		expect(getSectionTitles(section)).toContain('Settlement Summary')
+		expect(getSectionTitles(section)).toContain('Settlement summary')
 		expect(getSectionTitles(section)).not.toContain('Settle report')
 		expect(getSectionTitles(section)).not.toContain('Dispute Report')
 		expect(getButtonDisabledReason(settleButton)).toBeUndefined()
@@ -634,7 +634,7 @@ void describe('OpenOracleSection', () => {
 		expect(findButton(section, 'Settle report #7')).toBeUndefined()
 		expect(getButtonDisabledReason(disputeButton)).toBe('This report is not ready to dispute.')
 		expect(getTextContent(section).includes('Blocked:')).toBe(false)
-		expect(getSectionTitles(section)).toContain('Current Report State')
+		expect(getSectionTitles(section)).toContain('Current report state')
 		expect(getSectionTitles(section)).not.toContain('Dispute Report')
 	})
 
@@ -675,8 +675,8 @@ void describe('OpenOracleSection', () => {
 			openOracleReportDetails,
 		})
 
-		expect(getSectionTitles(section)).toContain('REPv2 Approval')
-		expect(getSectionTitles(section)).toContain('WETH Approval')
+		expect(getSectionTitles(section)).toContain('REPv2 approval')
+		expect(getSectionTitles(section)).toContain('WETH approval')
 		expect(getTextContent(section)).toContain('REPv2 approval required')
 		const disputeButton = findButton(section, 'Dispute & swap')
 		if (disputeButton === undefined) throw new Error('Expected dispute action button to render')
@@ -707,8 +707,8 @@ void describe('OpenOracleSection', () => {
 
 		const directionMessage = 'These amounts would swap out REPv2, not WETH. Select REPv2 or change the proposed price.'
 		expect(getTextContent(section).split(directionMessage)).toHaveLength(2)
-		expect(getSectionTitles(section)).not.toContain('REPv2 Approval')
-		expect(getSectionTitles(section)).not.toContain('WETH Approval')
+		expect(getSectionTitles(section)).not.toContain('REPv2 approval')
+		expect(getSectionTitles(section)).not.toContain('WETH approval')
 		const disputeButton = findButton(section, 'Dispute & swap')
 		if (disputeButton === undefined) throw new Error('Expected dispute action button to render')
 		expect(getButtonDisabledReason(disputeButton)).toBe(directionMessage)

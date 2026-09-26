@@ -69,7 +69,7 @@ void describe('error helpers', () => {
 			message: 'An unknown RPC error occurred. Details: execution reverted: Stale price Version: viem@2.53.1',
 			shortMessage: 'An unknown RPC error occurred.',
 		}
-		expect(formatWriteErrorMessage(error, 'Failed to report on outcome')).toBe("The pool's oracle price expired. Request a new price in Price Oracle, then retry.")
+		expect(formatWriteErrorMessage(error, 'Failed to report on outcome')).toBe("The pool's oracle price expired. Request a new price in Price oracle, then retry.")
 	})
 
 	void test('formats refresh failures with appended reasons', () => {

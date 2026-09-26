@@ -26,11 +26,11 @@ export function getSelectedPoolViewLabel(view: SelectedPoolView) {
 		case 'reporting':
 			return 'Reporting'
 		case 'fork-workflow':
-			return 'Fork & Migration'
+			return 'Fork & migration'
 		case 'staged-operations':
-			return 'Staged Operations'
+			return 'Staged operations'
 		case 'price-oracle':
-			return 'Price Oracle'
+			return 'Price oracle'
 		default:
 			return assertNever(view)
 	}

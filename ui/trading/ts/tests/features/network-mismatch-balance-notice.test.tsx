@@ -80,10 +80,10 @@ describe('trading balance notices during a network mismatch', () => {
 	installDomTestLifecycle({ afterTest: async () => cleanup?.(), url: 'http://localhost/#/market' })
 
 	test('hides the balance failure while the wallet is on another chain and restores the retry once it is back', async () => {
-		const rendered = await renderIntoDocument(positionControls('Switch to Browser Simulation.'))
+		const rendered = await renderIntoDocument(positionControls('Switch to Browser simulation.'))
 		cleanup = rendered.cleanup
 
-		expect(rendered.container.textContent).toContain('Switch to Browser Simulation.')
+		expect(rendered.container.textContent).toContain('Switch to Browser simulation.')
 		expect(rendered.container.textContent).not.toContain('Balance refresh failed.')
 		expect(rendered.container.textContent).not.toContain('Retry balances')
 

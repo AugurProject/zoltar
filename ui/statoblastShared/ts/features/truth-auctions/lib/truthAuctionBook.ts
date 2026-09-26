@@ -97,10 +97,10 @@ function getTruthAuctionTickDisposition(tickSummary: TruthAuctionTickSummary, tr
 	const winningThresholdPrice = getTruthAuctionWinningThresholdPrice(truthAuction)
 	if (winningThresholdPrice !== undefined) return isUnderfundedWinningTick(tickSummary.tick, truthAuction) ? { label: 'Winning', tone: 'success' } : { label: 'Out', tone: 'danger' }
 	if (isFinalizedUnderfundedWithoutWinningPrefix(truthAuction)) return { label: 'Out', tone: 'danger' }
-	if (!truthAuction.hitCap || truthAuction.clearingTick === undefined || truthAuction.clearingPrice === undefined) return truthAuction.finalized ? { label: 'Winning', tone: 'success' } : { label: 'In Book', tone: 'default' }
-	if (tickSummary.tick > truthAuction.clearingTick) return { label: truthAuction.finalized ? 'Winning' : 'Above Clearing', tone: 'success' }
-	if (tickSummary.tick < truthAuction.clearingTick) return { label: truthAuction.finalized ? 'Out' : 'Below Clearing', tone: 'danger' }
-	return { label: truthAuction.finalized ? 'Clearing' : 'At Clearing', tone: 'warning' }
+	if (!truthAuction.hitCap || truthAuction.clearingTick === undefined || truthAuction.clearingPrice === undefined) return truthAuction.finalized ? { label: 'Winning', tone: 'success' } : { label: 'In book', tone: 'default' }
+	if (tickSummary.tick > truthAuction.clearingTick) return { label: truthAuction.finalized ? 'Winning' : 'Above clearing', tone: 'success' }
+	if (tickSummary.tick < truthAuction.clearingTick) return { label: truthAuction.finalized ? 'Out' : 'Below clearing', tone: 'danger' }
+	return { label: truthAuction.finalized ? 'Clearing' : 'At clearing', tone: 'warning' }
 }
 
 export function getTruthAuctionBidDisposition(bid: TruthAuctionBidView, truthAuction: TruthAuctionMetrics | undefined): TruthAuctionBidDisposition {
@@ -131,7 +131,7 @@ export function getTruthAuctionBidDisposition(bid: TruthAuctionBidView, truthAuc
 			return { label: 'Refundable', tone: 'danger', canPrefillRefund: true, canPrefillSettle: false, settlementKind: 'ethRefund', summaryKind: 'refundable' }
 		}
 		return {
-			label: 'In Book',
+			label: 'In book',
 			tone: 'default',
 			canPrefillRefund: false,
 			canPrefillSettle: false,
@@ -151,7 +151,7 @@ export function getTruthAuctionBidDisposition(bid: TruthAuctionBidView, truthAuc
 			return { label: 'Winning', tone: 'success', canPrefillRefund: false, canPrefillSettle: true, settlementKind: 'repClaim', summaryKind: 'winning' }
 		}
 		return {
-			label: 'In Book',
+			label: 'In book',
 			tone: 'default',
 			canPrefillRefund: false,
 			canPrefillSettle: false,
@@ -166,7 +166,7 @@ export function getTruthAuctionBidDisposition(bid: TruthAuctionBidView, truthAuc
 			return { label: 'Winning', tone: 'success', canPrefillRefund: false, canPrefillSettle: true, settlementKind: 'repClaim', summaryKind: 'winning' }
 		}
 		return {
-			label: 'Above Clearing',
+			label: 'Above clearing',
 			tone: 'warning',
 			canPrefillRefund: false,
 			canPrefillSettle: false,
@@ -180,7 +180,7 @@ export function getTruthAuctionBidDisposition(bid: TruthAuctionBidView, truthAuc
 			return { label: 'Refundable', tone: 'danger', canPrefillRefund: true, canPrefillSettle: false, settlementKind: 'ethRefund', summaryKind: 'refundable' }
 		}
 		return {
-			label: 'Below Clearing',
+			label: 'Below clearing',
 			tone: 'danger',
 			canPrefillRefund: !truthAuction.finalized,
 			canPrefillSettle: false,
@@ -197,7 +197,7 @@ export function getTruthAuctionBidDisposition(bid: TruthAuctionBidView, truthAuc
 			return { label: 'Refundable', tone: 'danger', canPrefillRefund: true, canPrefillSettle: false, settlementKind: 'ethRefund', summaryKind: 'refundable' }
 		}
 		return {
-			label: 'Below Clearing',
+			label: 'Below clearing',
 			tone: 'danger',
 			canPrefillRefund: true,
 			canPrefillSettle: false,
@@ -211,7 +211,7 @@ export function getTruthAuctionBidDisposition(bid: TruthAuctionBidView, truthAuc
 			return { label: 'Winning', tone: 'success', canPrefillRefund: false, canPrefillSettle: true, settlementKind: 'repClaim', summaryKind: 'winning' }
 		}
 		return {
-			label: 'At Clearing',
+			label: 'At clearing',
 			tone: 'warning',
 			canPrefillRefund: false,
 			canPrefillSettle: false,
@@ -224,7 +224,7 @@ export function getTruthAuctionBidDisposition(bid: TruthAuctionBidView, truthAuc
 		return { label: 'Partial', tone: 'warning', canPrefillRefund: false, canPrefillSettle: true, settlementKind: 'repClaim', summaryKind: 'partial' }
 	}
 	return {
-		label: 'At Clearing',
+		label: 'At clearing',
 		tone: 'warning',
 		canPrefillRefund: false,
 		canPrefillSettle: false,

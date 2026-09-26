@@ -32,7 +32,7 @@ describe('OverviewPanels', () => {
 	function openAccountMenu() {
 		const summary = document.body.querySelector('.account-menu > summary')
 		if (!(summary instanceof HTMLElement)) throw new Error('Expected the account menu summary')
-		expect(summary.getAttribute('aria-label')).toBe('Account Menu 0x123456…567890')
+		expect(summary.getAttribute('aria-label')).toBe('Account menu 0x123456…567890')
 		fireEvent.click(summary)
 	}
 
@@ -299,7 +299,7 @@ describe('OverviewPanels', () => {
 			},
 		})
 
-		expect(documentQueries.getByText('Wrong Network (Base)')).not.toBeNull()
+		expect(documentQueries.getByText('Wrong network (Base)')).not.toBeNull()
 		expect(document.body.querySelector('.account-menu > summary .wallet-chip.is-danger')).not.toBeNull()
 
 		await cleanupRenderedComponent?.()
@@ -313,7 +313,7 @@ describe('OverviewPanels', () => {
 			},
 		})
 
-		expect(documentQueries.getByText('Wrong Network (52331)')).not.toBeNull()
+		expect(documentQueries.getByText('Wrong network (52331)')).not.toBeNull()
 		openAccountMenu()
 		expect(document.body.querySelector('.account-menu-network')).toBeNull()
 	})
@@ -390,7 +390,7 @@ describe('OverviewPanels', () => {
 			universeHasForked: true,
 		})
 
-		expect(documentQueries.getByText(/This Universe has forked on/)).toBeDefined()
+		expect(documentQueries.getByText(/This universe has forked on/)).toBeDefined()
 		expect(document.body.textContent).toContain('Please migrate your REP to continue to use Augur')
 		expect(document.body.textContent).not.toContain('Migration required')
 	})
@@ -473,10 +473,10 @@ describe('OverviewPanels', () => {
 			})
 
 			expect(documentQueries.getByText('Simulation')).not.toBeNull()
-			expect(documentQueries.getByText('Wrong Network (31337)')).not.toBeNull()
+			expect(documentQueries.getByText('Wrong network (31337)')).not.toBeNull()
 			expect(document.body.querySelector('.overview-wallet-panel .wallet-chip.is-danger')).not.toBeNull()
 			expect(document.body.querySelector('.account-menu')).toBeNull()
-			fireEvent.click(documentQueries.getByRole('button', { name: 'Switch to Browser Simulation' }))
+			fireEvent.click(documentQueries.getByRole('button', { name: 'Switch to Browser simulation' }))
 			expect(onSwitchNetwork).toHaveBeenCalledTimes(1)
 		} finally {
 			resetEnvironment()
@@ -504,7 +504,7 @@ describe('OverviewPanels', () => {
 
 			expect(documentQueries.queryByText(/Wrong Network/)).toBeNull()
 			expect(document.body.querySelector('.overview-wallet-panel .wallet-chip.is-danger')).toBeNull()
-			expect(documentQueries.queryByRole('button', { name: 'Switch to Browser Simulation' })).toBeNull()
+			expect(documentQueries.queryByRole('button', { name: 'Switch to Browser simulation' })).toBeNull()
 		} finally {
 			resetEnvironment()
 		}

@@ -127,9 +127,9 @@ describe('UniverseDirectorySection', () => {
 				expect(queries.getByRole('heading', { name: 'Choose destinations' })).toBeTruthy()
 				expect(queries.getByRole('button', { name: 'Deploy universe' })).toBeTruthy()
 				expect(queries.getByRole('button', { name: 'Split REP' })).toBeTruthy()
-				expect(queries.queryByRole('button', { name: 'Fork Universe' })).toBeNull()
+				expect(queries.queryByRole('button', { name: 'Fork universe' })).toBeNull()
 			} else {
-				expect(queries.getByRole('button', { name: 'Fork Universe' })).toBeTruthy()
+				expect(queries.getByRole('button', { name: 'Fork universe' })).toBeTruthy()
 				expect(queries.queryByRole('button', { name: 'Prepare REP' })).toBeNull()
 			}
 		})

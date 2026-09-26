@@ -114,7 +114,7 @@ export function validateMarketForm(form: MarketFormState): MarketFormValidation 
 		}
 	if (endTime === '') {
 		setFieldError(fieldErrors, 'endTime', 'End time is required')
-		missingFields.push('End Time')
+		missingFields.push('End time')
 	} else {
 		try {
 			parsedEndTime = parseTimestampInput(form.endTime, 'End time')
@@ -150,9 +150,9 @@ export function validateMarketForm(form: MarketFormState): MarketFormValidation 
 			key: 'scalarMin' | 'scalarMax' | 'scalarIncrement'
 			label: string
 		}> = [
-			{ key: 'scalarMin', label: 'Scalar Min' },
-			{ key: 'scalarMax', label: 'Scalar Max' },
-			{ key: 'scalarIncrement', label: 'Scalar Increment' },
+			{ key: 'scalarMin', label: 'Scalar min' },
+			{ key: 'scalarMax', label: 'Scalar max' },
+			{ key: 'scalarIncrement', label: 'Scalar increment' },
 		]
 		const missingScalarFields = scalarFields.filter(field => form[field.key].trim() === '')
 		for (const field of missingScalarFields) {

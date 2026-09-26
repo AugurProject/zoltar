@@ -55,10 +55,10 @@ describe('QuestionsView', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		expect(renderedComponent.container.querySelector('details')?.open).toBe(false)
-		expect(renderedComponent.container.textContent?.match(/End Time/g)).toHaveLength(1)
+		expect(renderedComponent.container.textContent?.match(/End time/g)).toHaveLength(1)
 		expect(renderedComponent.container.querySelector('.entity-card-actions')?.closest('details')).toBeNull()
 		const documentQueries = within(document.body)
-		expect(documentQueries.getByRole('heading', { name: 'Browse Questions' })).not.toBeNull()
+		expect(documentQueries.getByRole('heading', { name: 'Browse questions' })).not.toBeNull()
 		expect(documentQueries.getByText(/reusable questions in the global registry/)).not.toBeNull()
 		expect(document.body.textContent).not.toContain('UNIVERSE')
 		expect(document.body.textContent).not.toContain('questions in the active universe')

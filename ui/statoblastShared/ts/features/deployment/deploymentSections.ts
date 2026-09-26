@@ -5,5 +5,5 @@ const ZOLTAR_STEP_IDS = new Set(['proxyDeployer', 'deploymentStatusOracle', 'mul
 
 export function getStatoblastDeploymentSections(steps: DeploymentStatus[]) {
 	const securityPoolSteps = steps.filter(step => !ZOLTAR_STEP_IDS.has(step.id))
-	return [...getZoltarDeploymentSections(steps), ...(securityPoolSteps.length === 0 ? [] : [{ title: 'Security Pools', steps: securityPoolSteps }])]
+	return [...getZoltarDeploymentSections(steps), ...(securityPoolSteps.length === 0 ? [] : [{ title: 'Security pools', steps: securityPoolSteps }])]
 }

@@ -438,7 +438,7 @@ describe('useOnchainState (integration)', () => {
 		const renderedComponent = await renderIntoDocument(h(Harness, {}))
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		await waitFor(() => expect(requireHookState(hookState).readBackendMessage).toBe('Configured read RPC reports chain 11155111, but this app requires Ethereum Mainnet (1).'))
+		await waitFor(() => expect(requireHookState(hookState).readBackendMessage).toBe('Configured read RPC reports chain 11155111, but this app requires Ethereum mainnet (1).'))
 		expect(requireHookState(hookState).currentBlockNumber).toBeUndefined()
 		expect(requireHookState(hookState).currentTimestamp).toBeUndefined()
 		expect(subscriptionState.readTransportModes).toEqual(['rpc'])
@@ -504,7 +504,7 @@ describe('useOnchainState (integration)', () => {
 			await requireHookState(hookState).refreshState()
 		})
 
-		expect(requireHookState(hookState).readBackendMessage).toBe('Configured read RPC reports chain 11155111, but this app requires Ethereum Mainnet (1).')
+		expect(requireHookState(hookState).readBackendMessage).toBe('Configured read RPC reports chain 11155111, but this app requires Ethereum mainnet (1).')
 		expect(requireHookState(hookState).deploymentStatusError).toBe('Deployment status could not be refreshed because read RPC validation failed.')
 		expect(requireHookState(hookState).hasLoadedDeploymentStatuses).toBe(false)
 		expect(requireHookState(hookState).applicationDeploymentComplete).toBeUndefined()
@@ -658,7 +658,7 @@ describe('useOnchainState (integration)', () => {
 		const renderedComponent = await renderIntoDocument(h(Harness, {}))
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		await waitFor(() => expect(requireHookState(hookState).readBackendMessage).toBe('Configured read RPC reports chain 11155111, but this app requires Browser Simulation (1337).'))
+		await waitFor(() => expect(requireHookState(hookState).readBackendMessage).toBe('Configured read RPC reports chain 11155111, but this app requires Browser simulation (1337).'))
 		expect(loadDeploymentStatusOracleSnapshot).not.toHaveBeenCalled()
 
 		resetEnvironment()

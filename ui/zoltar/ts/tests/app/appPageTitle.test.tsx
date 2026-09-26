@@ -26,11 +26,11 @@ describe('app page titles', () => {
 
 	test('maps routes and active views to user-facing page titles', () => {
 		const cases: Array<{ input: AppPageTitleInput; title: ReturnType<typeof getAppPageTitle> }> = [
-			{ input: { ...baseInput, route: 'deploy' }, title: 'Deploy Contracts' },
+			{ input: { ...baseInput, route: 'deploy' }, title: 'Deploy contracts' },
 			{ input: { ...baseInput, route: 'zoltar', activeZoltarView: 'questions' }, title: 'Questions' },
-			{ input: { ...baseInput, route: 'zoltar', activeZoltarView: 'create' }, title: 'Create Question' },
+			{ input: { ...baseInput, route: 'zoltar', activeZoltarView: 'create' }, title: 'Create question' },
 			{ input: { ...baseInput, route: 'zoltar', activeZoltarView: 'universes' }, title: 'Universe' },
-			{ input: { ...baseInput, route: 'not-found' }, title: 'Page Not Found' },
+			{ input: { ...baseInput, route: 'not-found' }, title: 'Page not found' },
 		]
 
 		for (const { input, title } of cases) {
@@ -67,14 +67,14 @@ describe('app page titles', () => {
 			await act(() => {
 				render(
 					<>
-						<AppPageHeading formatDocumentTitle={formatAppDocumentTitle} pageTitle='Create Question' />
+						<AppPageHeading formatDocumentTitle={formatAppDocumentTitle} pageTitle='Create question' />
 						<div id='app-content'>Create question content</div>
 					</>,
 					renderedComponent.container,
 				)
 			})
 
-			const heading = within(document.body).getByRole('heading', { level: 1, name: 'Create Question' })
+			const heading = within(document.body).getByRole('heading', { level: 1, name: 'Create question' })
 			expect(document.activeElement).toBe(heading)
 			expect(heading.getAttribute('tabindex')).toBe('-1')
 			expect(scrollIntoViewCalls).toBe(1)

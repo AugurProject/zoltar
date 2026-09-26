@@ -104,10 +104,7 @@
 }
 .fork-question-summary span {
 	color: var(--muted);
-	font-family: var(--font-family-mono);
 	font-size: var(--font-label);
-	text-transform: uppercase;
-	letter-spacing: 0.05em;
 }
 
 /* Deployment setup. */

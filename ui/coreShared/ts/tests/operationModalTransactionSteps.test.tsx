@@ -38,7 +38,7 @@ test('returns an embedded failed transaction to its form for review before resub
 							controller.startWithoutReview(0)
 							if (attempts === 1) {
 								controller.failed('nonce too low')
-								presentation.value = { operationKey: 'deposit-1', title: 'Deposit failed', tone: 'error', detail: 'nonce too low', rows: [{ label: 'Security Pool Address', value: '0x0000000000000000000000000000000000000002' }] }
+								presentation.value = { operationKey: 'deposit-1', title: 'Deposit failed', tone: 'error', detail: 'nonce too low', rows: [{ label: 'Security pool address', value: '0x0000000000000000000000000000000000000002' }] }
 							}
 						}}
 					>

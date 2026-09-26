@@ -109,7 +109,6 @@ main {
 }
 
 .app-settings-menu label > span {
-	font-family: var(--font-family-mono);
 	font-size: var(--font-label);
 	color: var(--muted);
 }
@@ -127,6 +126,12 @@ main {
 
 .app-settings-menu input[aria-invalid="true"] {
 	border-color: var(--danger-border);
+}
+
+.app-settings-menu .app-settings-theme {
+	margin-top: var(--space-3);
+	padding-top: var(--space-3);
+	border-top: 1px solid var(--divider-subtle);
 }
 
 .page-notices {
@@ -501,9 +506,6 @@ button.quiet:disabled {
 .panel-label,
 .metric-label,
 .workflow-section-label {
-	font-family: var(--font-family-mono);
-	text-transform: uppercase;
-	letter-spacing: 0.07em;
 	font-size: var(--font-label);
 	opacity: 1;
 	color: var(--muted);
@@ -1748,7 +1750,7 @@ a.transaction-hash-link {
 	min-height: 4rem;
 }
 
-@media (max-width: 37.5rem) {
+@media (max-width: 40rem) {
 	.migration-amount-hint {
 		min-block-size: 2.9em;
 	}
@@ -1796,17 +1798,15 @@ a.transaction-hash-link {
 	color: var(--muted);
 	font-size: var(--font-xs);
 	font-weight: 600;
-	letter-spacing: 0.06em;
-	text-transform: uppercase;
 }
 
-@media (max-width: 56.25rem) {
+@media (max-width: 50rem) {
 	.migration-outcome-metrics {
 		grid-template-columns: repeat(2, minmax(0, 1fr));
 	}
 }
 
-@media (max-width: 32.5rem) {
+@media (max-width: 40rem) {
 	.migration-outcome-metrics {
 		grid-template-columns: minmax(0, 1fr);
 	}

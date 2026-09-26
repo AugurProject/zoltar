@@ -88,7 +88,7 @@ function UrlStateHarness() {
 			<button type='button' onClick={() => setSecurityPoolAddress('0x84834d4Dccea071b363e53952BD300F7bf56a009')}>
 				Set Pool
 			</button>
-			<input aria-label='Security Pool Address' value={securityPoolAddress} onInput={event => setSecurityPoolAddress(event.currentTarget.value)} />
+			<input aria-label='Security pool address' value={securityPoolAddress} onInput={event => setSecurityPoolAddress(event.currentTarget.value)} />
 		</div>
 	)
 }
@@ -395,7 +395,7 @@ describe('app route effects integration', () => {
 		try {
 			pushes = 0
 			replaces = 0
-			const input = within(document.body).getByRole('textbox', { name: 'Security Pool Address' })
+			const input = within(document.body).getByRole('textbox', { name: 'Security pool address' })
 			for (const value of ['0x8', '0x84834d4D', '0x84834d4Dccea071b363e53952BD300F7bf56a00']) {
 				await act(() => fireEvent.input(input, { target: { value } }))
 			}

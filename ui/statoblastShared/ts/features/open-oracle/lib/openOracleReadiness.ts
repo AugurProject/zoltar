@@ -13,7 +13,7 @@ export function getOpenOracleReadinessActions({ actionMode, disputeMessage, hasR
 			description: 'Challenge the current report and provide the replacement swap amounts.',
 			key: 'dispute-report',
 			readiness: disputeBlocker === undefined ? 'ready' : 'blocked',
-			title: 'Dispute & Swap',
+			title: 'Dispute & swap',
 			...(disputeBlocker === undefined ? {} : { blocker: disputeBlocker }),
 		})
 		const settleBlocker = baseBlocker ?? settleMessage

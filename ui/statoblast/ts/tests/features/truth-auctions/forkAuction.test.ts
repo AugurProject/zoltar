@@ -158,7 +158,7 @@ void describe('fork auction helpers', () => {
 	void test('maps stage labels and order values', () => {
 		expect(getForkAuctionStageLabel('initiate')).toBe('Trigger')
 		expect(getForkAuctionStageLabel('migration')).toBe('Migration')
-		expect(getForkAuctionStageLabel('auction')).toBe('Truth Auction')
+		expect(getForkAuctionStageLabel('auction')).toBe('Truth auction')
 		expect(getForkAuctionStageLabel('settlement')).toBe('Settlement')
 	})
 
@@ -394,7 +394,7 @@ void describe('fork auction helpers', () => {
 
 		expect(depthPoints.map(point => point.tick)).toEqual([3n, 2n, 1n])
 		expect(depthPoints.map(point => point.cumulativeBidAttoEth)).toEqual([3n * 10n ** 18n, 3n * 10n ** 18n, 5n * 10n ** 18n])
-		expect(depthPoints.map(point => point.disposition.label)).toEqual(['Above Clearing', 'Historical', 'Below Clearing'])
+		expect(depthPoints.map(point => point.disposition.label)).toEqual(['Above clearing', 'Historical', 'Below clearing'])
 		expect(depthPoints.map(point => point.isSelected)).toEqual([true, false, false])
 		expect(depthPoints.map(point => point.isPreviewTick)).toEqual([false, false, true])
 		expect(depthPoints.map(point => point.submissionCount)).toEqual([3n, 1n, 2n])

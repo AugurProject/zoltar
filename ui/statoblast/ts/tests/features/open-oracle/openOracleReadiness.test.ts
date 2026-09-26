@@ -18,7 +18,7 @@ describe('open oracle readiness actions', () => {
 				description: 'Challenge the current report and provide the replacement swap amounts.',
 				key: 'dispute-report',
 				readiness: 'ready',
-				title: 'Dispute & Swap',
+				title: 'Dispute & swap',
 			},
 			{
 				actionLabel: 'Settle report',
@@ -45,7 +45,7 @@ describe('open oracle readiness actions', () => {
 				description: 'Challenge the current report and provide the replacement swap amounts.',
 				key: 'dispute-report',
 				readiness: 'blocked',
-				title: 'Dispute & Swap',
+				title: 'Dispute & swap',
 			},
 			{
 				actionLabel: 'Settle report',

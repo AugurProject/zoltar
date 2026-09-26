@@ -425,7 +425,7 @@ describe('ForkAuctionSection settlement summary', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		expect(documentQueries.queryByText('Winning Threshold')).toBeNull()
+		expect(documentQueries.queryByText('Winning threshold')).toBeNull()
 	})
 
 	test('does not render the legacy per-tick-denominator warning when synthetic underfunded estimates are available', async () => {

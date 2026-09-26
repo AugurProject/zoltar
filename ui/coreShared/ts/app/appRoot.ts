@@ -2,6 +2,7 @@ import { createElement, render, type ComponentChildren } from 'preact'
 import * as appCopy from '../copy/app.js'
 import { getErrorMessage } from '../lib/errors.js'
 import { initializeActiveEnvironment } from '../lib/activeEnvironment.js'
+import { applyThemePreference, readThemePreference } from '../lib/themePreference.js'
 import { ApplicationErrorNotice } from './components/ApplicationErrorNotice.js'
 
 type MountAppOptions = {
@@ -16,6 +17,7 @@ export async function mountApp(options: MountAppOptions) {
 	if (rootOption === undefined) throw new Error('mountApp requires a root component factory')
 	const root = rootOption
 	const target = options.target ?? document.body
+	applyThemePreference(readThemePreference())
 	try {
 		await initialize()
 		render(root(), target)

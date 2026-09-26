@@ -93,13 +93,13 @@ describe('ScalarOutcomePicker', () => {
 		expect(invalidToggle.checked).toBe(true)
 		expect(slider.disabled).toBe(true)
 		expect(documentQueries.getAllByText('Invalid').length).toBeGreaterThan(0)
-		expect(documentQueries.queryByRole('textbox', { name: 'Scalar Value' })).toBeNull()
+		expect(documentQueries.queryByRole('textbox', { name: 'Scalar value' })).toBeNull()
 
 		await act(() => {
 			fireEvent.click(invalidToggle)
 		})
 
-		expect((documentQueries.getByRole('textbox', { name: 'Scalar Value' }) as HTMLInputElement).value).toBe('70')
+		expect((documentQueries.getByRole('textbox', { name: 'Scalar value' }) as HTMLInputElement).value).toBe('70')
 	})
 
 	test('keeps direct scalar value entry synchronized with the slider', async () => {
@@ -108,7 +108,7 @@ describe('ScalarOutcomePicker', () => {
 
 		const documentQueries = within(document.body)
 		const slider = documentQueries.getByRole('slider', { name: 'Select scalar target' }) as HTMLInputElement
-		const scalarValueInput = documentQueries.getByRole('textbox', { name: 'Scalar Value' }) as HTMLInputElement
+		const scalarValueInput = documentQueries.getByRole('textbox', { name: 'Scalar value' }) as HTMLInputElement
 		expect(scalarValueInput.value).toBe('20')
 		expect(scalarValueInput.closest('strong')).toBeNull()
 		expect(documentQueries.getByText('Enter a value on an increment.')).not.toBeNull()
@@ -132,7 +132,7 @@ describe('ScalarOutcomePicker', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		const scalarValueInput = documentQueries.getByRole('textbox', { name: 'Scalar Value' }) as HTMLInputElement
+		const scalarValueInput = documentQueries.getByRole('textbox', { name: 'Scalar value' }) as HTMLInputElement
 		const invalidToggle = documentQueries.getByRole('checkbox', { name: 'Invalid' }) as HTMLInputElement
 		await act(() => {
 			fireEvent.input(scalarValueInput, { target: { value: '75' } })
@@ -146,7 +146,7 @@ describe('ScalarOutcomePicker', () => {
 			fireEvent.click(invalidToggle)
 		})
 
-		const restoredScalarValueInput = documentQueries.getByRole('textbox', { name: 'Scalar Value' }) as HTMLInputElement
+		const restoredScalarValueInput = documentQueries.getByRole('textbox', { name: 'Scalar value' }) as HTMLInputElement
 		expect(restoredScalarValueInput.value).toBe('20')
 		expect(restoredScalarValueInput.getAttribute('aria-invalid')).not.toBe('true')
 		expect(documentQueries.queryByText('Enter a value between the minimum and maximum that falls on an increment.')).toBeNull()
@@ -157,7 +157,7 @@ describe('ScalarOutcomePicker', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const exactInput = within(document.body).getByRole('textbox', { name: 'Select exact scalar target' }) as HTMLInputElement
-		const scalarValueInput = within(document.body).getByRole('textbox', { name: 'Scalar Value' }) as HTMLInputElement
+		const scalarValueInput = within(document.body).getByRole('textbox', { name: 'Scalar value' }) as HTMLInputElement
 		expect(within(document.body).queryByRole('slider')).toBeNull()
 		expect(exactInput.value).toBe(UNSAFE_TICK_COUNT.toString())
 		expect(scalarValueInput.value).toBe('0.000000000000000001')
@@ -196,7 +196,7 @@ describe('ScalarOutcomePicker', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 		const documentQueries = within(document.body)
 		const slider = documentQueries.getByRole('slider', { name: 'Select non-divisible scalar target' }) as HTMLInputElement
-		const scalarValueInput = documentQueries.getByRole('textbox', { name: 'Scalar Value' }) as HTMLInputElement
+		const scalarValueInput = documentQueries.getByRole('textbox', { name: 'Scalar value' }) as HTMLInputElement
 
 		await act(() => {
 			fireEvent.input(scalarValueInput, { target: { value: '10' } })

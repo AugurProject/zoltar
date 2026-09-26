@@ -100,7 +100,7 @@ describe('GlobalTransactionDialog', () => {
 
 	test('shows a nonblocking pending status and modal confirmed and failed statuses', async () => {
 		const hash = '0xabcd000000000000000000000000000000000000000000000000000000000001'
-		const pending = { hash, title: 'Requesting Price', tone: 'pending' as const, rows: [{ label: 'Security Pool Address', value: '0x0000000000000000000000000000000000000002' }] }
+		const pending = { hash, title: 'Requesting Price', tone: 'pending' as const, rows: [{ label: 'Security pool address', value: '0x0000000000000000000000000000000000000002' }] }
 		const renderedComponent = await renderIntoDocument(
 			<>
 				<button type='button'>Request price</button>
@@ -132,7 +132,7 @@ describe('GlobalTransactionDialog', () => {
 		expect(failedDialog.querySelector('details')?.open).toBe(false)
 	})
 
-	test.each(['Action canceled in wallet.', "The pool's oracle price expired. Request a new price in Price Oracle, then retry.", 'Transaction reverted; checking details…'])('shows the failure reason before expanding details: %s', async detail => {
+	test.each(['Action canceled in wallet.', "The pool's oracle price expired. Request a new price in Price oracle, then retry.", 'Transaction reverted; checking details…'])('shows the failure reason before expanding details: %s', async detail => {
 		const rendered = await renderIntoDocument(<GlobalTransactionDialog transaction={{ dismissKey: `visible-failure-${detail}`, title: 'Price request failed', tone: 'error', detail, technicalRows: [{ label: 'Function', value: 'requestPrice' }] }} />)
 		trackRendered(rendered)
 		const panel = within(document.body).getByRole('dialog', { name: 'Transaction status' })
@@ -215,7 +215,7 @@ describe('GlobalTransactionDialog', () => {
 		const firstReview = controller.review(0)
 		await act(() => transactionSteps.value?.confirmStep(0))
 		await firstReview
-		const pending = { hash, title: 'Wrapping ETH', tone: 'pending' as const, rows: [{ label: 'Security Pool Address', value: '0x0000000000000000000000000000000000000002' }] }
+		const pending = { hash, title: 'Wrapping ETH', tone: 'pending' as const, rows: [{ label: 'Security pool address', value: '0x0000000000000000000000000000000000000002' }] }
 		const renderedComponent = await renderIntoDocument(<GlobalTransactionDialog transaction={pending} />)
 		trackRendered(renderedComponent)
 		await act(() => controller.submitted(hash))
@@ -372,7 +372,7 @@ describe('GlobalTransactionDialog', () => {
 				transaction={{
 					dismissKey: '0xprepared-price-request',
 					hash: '0xprepared-price-request',
-					rows: [{ label: 'Security Pool Address', value: '0xpool' }],
+					rows: [{ label: 'Security pool address', value: '0xpool' }],
 					technicalRows: [
 						{ label: 'Function', value: 'requestPrice' },
 						{ label: 'Arguments', value: '0xpool, 1000000000000000000' },
@@ -388,7 +388,7 @@ describe('GlobalTransactionDialog', () => {
 		const details = documentQueries.getByText('Transaction details', { selector: 'summary' }).closest('details')
 		if (details === null) throw new Error('Missing transaction details disclosure')
 		expect(details.open).toBe(false)
-		expect(details.contains(documentQueries.getByText('Security Pool Address'))).toBe(true)
+		expect(details.contains(documentQueries.getByText('Security pool address'))).toBe(true)
 		expect(details.contains(documentQueries.getByText('0xpool'))).toBe(true)
 		expect(details.contains(documentQueries.getByText('Technical details'))).toBe(true)
 		expect(details.contains(documentQueries.getByText('Arguments'))).toBe(true)

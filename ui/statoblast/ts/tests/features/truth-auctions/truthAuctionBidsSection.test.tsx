@@ -29,7 +29,7 @@ describe('TruthAuctionBidsSection', () => {
 		const rendered = await renderIntoDocument(<TruthAuctionBidsSection aggregatedAuctionBidCountForLoadedTicks={0n} hasMoreAggregatedAuctionBids={false} loadedTickCount={0} loadingAggregatedAuctionBids={true} onLoadNextAuctionBidPage={() => undefined} renderPriceValue={renderPriceValue} rows={[]} />)
 		cleanupRendered = rendered.cleanup
 
-		expect(within(document.body).getByRole('heading', { name: 'Current Bids' })).not.toBeNull()
+		expect(within(document.body).getByRole('heading', { name: 'Current bids' })).not.toBeNull()
 		expect(within(document.body).getByText(/Loading auction bids/)).not.toBeNull()
 
 		await rendered.unmount()
@@ -116,7 +116,7 @@ describe('TruthAuctionBidsSection', () => {
 		const documentQueries = within(document.body)
 		expect(documentQueries.getByText('Failed to load truth auction bidbook')).not.toBeNull()
 		expect(documentQueries.queryByText('No active prices are currently visible for this auction.')).toBeNull()
-		expect(documentQueries.queryByText('Visible Levels')).toBeNull()
+		expect(documentQueries.queryByText('Visible levels')).toBeNull()
 		fireEvent.click(documentQueries.getByRole('button', { name: 'Retry current bids' }))
 		expect(retryCalls).toBe(1)
 
@@ -214,7 +214,7 @@ describe('ViewerTruthAuctionBidsSection', () => {
 		expect(loadMoreButton.disabled).toBe(true)
 	})
 
-	test('shows bid-book recovery instead of a false empty My Bids state', async () => {
+	test('shows bid-book recovery instead of a false empty My bids state', async () => {
 		let retryCalls = 0
 		const rendered = await renderIntoDocument(
 			<ViewerTruthAuctionBidsSection

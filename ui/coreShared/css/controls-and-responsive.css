@@ -245,8 +245,6 @@
 
 .transaction-action-status-title {
 	font-size: var(--font-caption);
-	letter-spacing: 0.04em;
-	text-transform: uppercase;
 }
 
 .transaction-action-status-detail {

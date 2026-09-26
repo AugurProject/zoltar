@@ -87,6 +87,11 @@ a.secondary-action,
 	box-shadow: inset 0 0 0 2px var(--accent);
 }
 
+/* Plain links use the product accent in both themes instead of the user agent's link blue. */
+:where(a) {
+	color: var(--accent);
+}
+
 :where(address, code, pre, .address, .hash, .transaction-hash, .identifier-value) {
 	font-family: var(--font-family-mono);
 	overflow-wrap: anywhere;
@@ -127,7 +132,7 @@ a.secondary-action,
 	}
 }
 
-@media (max-width: 48rem) {
+@media (max-width: 50rem) {
 	:where(main, .app-shell) {
 		padding-inline: var(--gutter-mobile);
 	}

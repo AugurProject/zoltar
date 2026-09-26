@@ -69,7 +69,7 @@ describe('AppStatusNotices', () => {
 		const renderedComponent = await renderIntoDocument(
 			h(AppStatusNotices, {
 				errorMessage: undefined,
-				readBackendMessage: 'Configured read RPC reports chain 11155111, but this app requires Ethereum Mainnet (1).',
+				readBackendMessage: 'Configured read RPC reports chain 11155111, but this app requires Ethereum mainnet (1).',
 				showApplicationDeploymentWarning: false,
 				simulationBootstrapError: undefined,
 			}),
@@ -78,7 +78,7 @@ describe('AppStatusNotices', () => {
 
 		const documentQueries = within(document.body)
 		expect(documentQueries.getByText('Read RPC mismatch')).not.toBeNull()
-		expect(documentQueries.getByText('Configured read RPC reports chain 11155111, but this app requires Ethereum Mainnet (1). Displayed onchain state may not match the network this interface writes to.')).not.toBeNull()
+		expect(documentQueries.getByText('Configured read RPC reports chain 11155111, but this app requires Ethereum mainnet (1). Displayed onchain state may not match the network this interface writes to.')).not.toBeNull()
 	})
 
 	test('warns when the read RPC comes from the page URL', async () => {

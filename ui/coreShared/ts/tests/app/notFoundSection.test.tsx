@@ -29,7 +29,7 @@ describe('NotFoundSection', () => {
 
 		const documentQueries = within(document.body)
 		expect(documentQueries.getAllByRole('heading')).toHaveLength(1)
-		expect(documentQueries.getByRole('heading', { name: 'Page Not Found' })).not.toBeNull()
+		expect(documentQueries.getByRole('heading', { name: 'Page not found' })).not.toBeNull()
 		expect(documentQueries.getByRole('link', { name: 'Deploy' }).getAttribute('href')).toBe('#/deploy')
 		expect(documentQueries.getByRole('link', { name: 'Local Surface' }).getAttribute('href')).toBe('#/local')
 		expect(documentQueries.getAllByRole('link')).toHaveLength(2)

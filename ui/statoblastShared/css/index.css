@@ -1,8 +1,8 @@
 /* Statoblast feature styles: truth auction, escalation and reporting visualisations, security pool workspace, vaults, liquidation, staged operations, and the open oracle. Loaded after ui/coreShared/css/index.css by the pages that render these features. */
 
 .app-settings-price-oracle {
-	margin-top: 1rem;
-	padding-top: 1rem;
+	margin-top: var(--space-4);
+	padding-top: var(--space-4);
 	border-top: 1px solid var(--border-strong);
 }
 
@@ -11,22 +11,22 @@
 }
 
 .pool-registry-recovery-actions {
-	margin: 0.25rem 0 1rem;
+	margin: var(--space-1) 0 var(--space-4);
 }
 
 .status-list {
 	list-style: none;
 	padding: 0;
-	margin: 0.75rem 0 0;
+	margin: var(--space-3) 0 0;
 	display: grid;
-	gap: 0.75rem;
+	gap: var(--space-3);
 }
 
 .status-list li {
 	display: grid;
-	gap: 0.1rem;
+	gap: 0;
 	min-width: 0;
-	padding-top: 0.75rem;
+	padding-top: var(--space-3);
 	border-top: 1px solid var(--border-default);
 }
 
@@ -38,7 +38,7 @@
 .fork-workflow-outcome-selector-row {
 	display: flex;
 	align-items: center;
-	gap: 0.85rem;
+	gap: var(--space-3);
 	flex-wrap: wrap;
 }
 
@@ -59,7 +59,7 @@
 	display: inline-flex;
 	flex-direction: column;
 	align-items: flex-start;
-	gap: 0.18rem;
+	gap: var(--space-1);
 	font-family: var(--font-family-mono);
 	font-size: var(--font-value);
 	font-weight: 600;
@@ -155,10 +155,7 @@
 
 .comparison-record-metrics dt {
 	color: var(--muted);
-	font-family: var(--font-family-mono);
 	font-size: var(--font-label);
-	letter-spacing: 0.06em;
-	text-transform: uppercase;
 }
 
 .comparison-record-metrics dd {
@@ -212,24 +209,24 @@
 
 .security-pool-card-title-row {
 	display: grid;
-	gap: 0.28rem;
+	gap: var(--space-1);
 	grid-template-columns: auto minmax(0, 1fr);
 	align-items: center;
 	padding: 0;
 }
 
 .security-pool-card {
-	padding: 0.68rem 0.95rem 0.9rem;
-	gap: 0.45rem;
+	padding: var(--space-3) var(--space-4) var(--space-4);
+	gap: var(--space-2);
 }
 
 .security-pool-card .entity-card-body {
-	gap: 0.58rem;
+	gap: var(--space-2);
 }
 
 .security-pool-card .entity-card-header {
-	gap: 0.3rem;
-	padding: 0 0.1rem;
+	gap: var(--space-1);
+	padding: 0;
 }
 
 .security-pool-card-title-copy {
@@ -244,7 +241,7 @@
 
 .fork-auction-controls {
 	display: grid;
-	gap: 0.85rem;
+	gap: var(--space-3);
 	margin: 0;
 	padding: 0;
 	border: 0;
@@ -257,18 +254,18 @@
 .fork-summary-grid {
 	display: grid;
 	grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
-	gap: 0.95rem 1.2rem;
+	gap: var(--space-4);
 }
 
 .fork-stage-nav {
-	margin-top: 0.15rem;
+	margin-top: var(--space-1);
 	padding-bottom: 0;
 	border-bottom: 0;
 }
 
 .fork-stage-panel {
 	display: grid;
-	gap: 0.85rem;
+	gap: var(--space-3);
 	margin: 0;
 	padding: 0;
 	border: 0;
@@ -279,9 +276,9 @@
 }
 
 .fork-stage-panel .entity-card-subsection {
-	gap: 0.95rem;
+	gap: var(--space-4);
 	margin: 0;
-	padding: 0.95rem 0 1rem;
+	padding: var(--space-4) 0;
 	border: 0;
 	border-bottom: 1px solid var(--divider-subtle);
 	background: transparent;
@@ -289,7 +286,7 @@
 }
 
 .fork-stage-panel .entity-card-subsection-header {
-	margin-bottom: -0.15rem;
+	margin-bottom: calc(-1 * var(--space-1));
 }
 
 .fork-stage-panel .entity-card-subsection-header h4 {
@@ -315,7 +312,7 @@
 
 .fork-workflow-summary {
 	grid-template-columns: minmax(0, 1.3fr) minmax(16rem, 1fr);
-	gap: 1rem 1.25rem;
+	gap: var(--space-4);
 }
 
 .fork-workflow-summary-primary,
@@ -337,19 +334,19 @@
 .truth-auction-price-row-copy,
 .truth-auction-bid-row-actions {
 	display: grid;
-	gap: 0.75rem;
+	gap: var(--space-3);
 }
 
 .truth-auction-market-section,
 .truth-auction-level-detail {
 	display: grid;
-	gap: 0.75rem;
+	gap: var(--space-3);
 	align-content: start;
 	min-width: 0;
 }
 
 .truth-auction-market-section {
-	padding-top: 0.85rem;
+	padding-top: var(--space-3);
 	border-top: 1px solid var(--divider-subtle);
 }
 
@@ -363,13 +360,13 @@
 .fork-workflow-summary-metrics {
 	display: grid;
 	grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
-	gap: 0.9rem 1rem;
+	gap: var(--space-4);
 	align-content: start;
 }
 
 .fork-workflow-summary-metrics .metric-label {
 	display: block;
-	margin-bottom: 0.28rem;
+	margin-bottom: var(--space-1);
 }
 
 .fork-workflow-summary-metrics .metric-field-value {
@@ -391,7 +388,7 @@
 	display: flex;
 	justify-content: space-between;
 	align-items: baseline;
-	gap: 0.75rem;
+	gap: var(--space-3);
 	font-family: var(--font-family-sans);
 }
 
@@ -412,7 +409,7 @@
 }
 
 .migration-summary-primary .fork-workflow-summary-stat-group {
-	padding-bottom: 0.9rem;
+	padding-bottom: var(--space-4);
 	border-bottom: 1px solid var(--divider-subtle);
 }
 
@@ -444,7 +441,7 @@
 
 .truth-auction-market-board {
 	grid-template-columns: minmax(0, 1fr);
-	gap: 1rem 1.25rem;
+	gap: var(--space-4);
 }
 
 .truth-auction-market-detail-grid,
@@ -453,7 +450,7 @@
 .truth-auction-manual-tools,
 .truth-auction-stage-actions,
 .truth-auction-settlement-grid {
-	gap: 0.75rem;
+	gap: var(--space-3);
 }
 
 .truth-auction-market-detail-grid {
@@ -472,13 +469,13 @@
 .truth-auction-selected-bid-summary {
 	display: grid;
 	grid-template-columns: repeat(auto-fit, minmax(8rem, 1fr));
-	gap: 0.9rem 1rem;
+	gap: var(--space-4);
 }
 
 .truth-auction-wallet-summary > div,
 .truth-auction-bid-coverage-summary > div,
 .truth-auction-selected-bid-summary > div {
-	padding-top: 0.65rem;
+	padding-top: var(--space-3);
 	border-top: 1px solid var(--divider-subtle);
 }
 
@@ -486,7 +483,7 @@
 .truth-auction-bid-coverage-summary .metric-label,
 .truth-auction-selected-bid-summary .metric-label {
 	display: block;
-	margin-bottom: 0.2rem;
+	margin-bottom: var(--space-1);
 }
 
 .truth-auction-panel-header,
@@ -498,7 +495,7 @@
 	flex-wrap: wrap;
 	align-items: center;
 	justify-content: space-between;
-	gap: 0.5rem 0.75rem;
+	gap: var(--space-2) var(--space-3);
 }
 
 .truth-auction-panel-header h4,
@@ -607,7 +604,7 @@
 .truth-auction-depth-frame {
 	display: grid;
 	grid-template-columns: minmax(4.4rem, auto) minmax(0, 1fr);
-	gap: 0.65rem;
+	gap: var(--space-3);
 	align-items: stretch;
 }
 
@@ -615,7 +612,7 @@
 	position: relative;
 	display: flex;
 	align-items: stretch;
-	gap: 0.3rem;
+	gap: var(--space-1);
 	min-width: 0;
 	min-height: 13rem;
 }
@@ -623,8 +620,8 @@
 .truth-auction-depth-x-axis {
 	display: grid;
 	grid-template-columns: repeat(3, minmax(0, 1fr));
-	gap: 0.75rem;
-	margin-top: 0.6rem;
+	gap: var(--space-3);
+	margin-top: var(--space-2);
 }
 
 .truth-auction-depth-x-axis.no-midpoint {
@@ -634,8 +631,6 @@
 .truth-auction-depth-axis-title {
 	font-size: var(--font-label);
 	font-weight: 600;
-	letter-spacing: 0.04em;
-	text-transform: uppercase;
 }
 
 .truth-auction-depth-axis-title-y {
@@ -648,7 +643,7 @@
 }
 
 .truth-auction-depth-axis-title-x {
-	margin-top: 0.3rem;
+	margin-top: var(--space-1);
 	color: var(--muted);
 	text-align: center;
 }
@@ -713,7 +708,7 @@
 
 .truth-auction-price-row-copy {
 	position: relative;
-	padding: 0.95rem 1rem;
+	padding: var(--space-4);
 }
 
 .truth-auction-price-value {
@@ -743,7 +738,7 @@
 .truth-auction-price-row-meta {
 	display: grid;
 	grid-template-columns: repeat(3, minmax(0, 1fr));
-	gap: 0.45rem 0.75rem;
+	gap: var(--space-2) var(--space-3);
 }
 
 .truth-auction-level-detail {
@@ -754,7 +749,7 @@
 .truth-auction-status-pill {
 	display: inline-flex;
 	align-items: center;
-	padding: 0.24rem 0.6rem;
+	padding: var(--space-1) var(--space-2);
 	border: 1px solid var(--border-default);
 	border-radius: var(--radius-pill);
 	font-size: var(--font-label);
@@ -817,21 +812,19 @@
 	flex-wrap: wrap;
 	align-items: center;
 	justify-content: flex-end;
-	gap: 0.35rem 0.5rem;
+	gap: var(--space-1) var(--space-2);
 }
 
 .truth-auction-ladder-helper {
 	display: inline-flex;
 	align-items: center;
-	padding: 0.24rem 0.55rem;
+	padding: var(--space-1) var(--space-2);
 	border: 1px solid color-mix(in srgb, var(--truth-auction-eth) 24%, transparent);
 	border-radius: var(--radius-pill);
 	background: color-mix(in srgb, var(--truth-auction-eth) 8%, transparent);
 	color: var(--truth-auction-eth-highlight);
 	font-size: var(--font-label);
 	font-weight: 600;
-	letter-spacing: 0.02em;
-	text-transform: uppercase;
 }
 
 .truth-auction-ladder-row-cumulative {
@@ -840,7 +833,7 @@
 
 .truth-auction-bid-table {
 	display: grid;
-	gap: 0.6rem;
+	gap: var(--space-2);
 }
 
 .truth-auction-bid-table-scroll {
@@ -857,7 +850,7 @@
 	display: grid;
 	grid-template-columns: minmax(0, 0.72fr) minmax(0, 1.2fr) minmax(0, 0.85fr) minmax(0, 0.9fr) auto minmax(0, 1.15fr);
 	align-items: center;
-	padding: 0.72rem 0.85rem;
+	padding: var(--space-3);
 	border: 1px solid var(--border-default);
 	border-radius: var(--radius-overlay);
 	background: color-mix(in srgb, var(--surface-raised) 86%, transparent 14%);
@@ -889,7 +882,7 @@
 
 .truth-auction-bid-row-label {
 	display: grid;
-	gap: 0.15rem;
+	gap: var(--space-1);
 	min-width: 0;
 	color: var(--text);
 	font-weight: 600;
@@ -915,7 +908,7 @@
 	flex-wrap: wrap;
 	align-items: center;
 	justify-content: flex-start;
-	gap: 0.45rem;
+	gap: var(--space-2);
 	min-width: 0;
 }
 
@@ -936,18 +929,18 @@
 .modal-summary-grid {
 	display: grid;
 	grid-template-columns: repeat(2, minmax(0, 1fr));
-	gap: 0.75rem 1rem;
+	gap: var(--space-3) var(--space-4);
 }
 
 .modal-summary-grid > div {
 	min-width: 0;
-	padding-top: 0.75rem;
+	padding-top: var(--space-3);
 	border-top: 1px solid var(--border-default);
 }
 
 .modal-summary-grid strong {
 	display: block;
-	margin-top: 0.15rem;
+	margin-top: var(--space-1);
 	font-family: var(--font-family-mono);
 	font-size: var(--font-value);
 	font-weight: 600;
@@ -958,7 +951,7 @@
 
 .reporting-header-stack {
 	display: grid;
-	gap: 1rem;
+	gap: var(--space-4);
 }
 
 .reporting-position {
@@ -981,7 +974,7 @@
 .escalation-phase-steps {
 	display: flex;
 	justify-content: space-between;
-	gap: 1rem;
+	gap: var(--space-4);
 	list-style: none;
 	padding: 0;
 	color: var(--muted);
@@ -1046,13 +1039,13 @@
 
 .withdraw-deposit-list {
 	display: grid;
-	gap: 0.8rem;
+	gap: var(--space-3);
 }
 
 .withdraw-deposit-option {
 	display: grid;
-	gap: 0.55rem;
-	padding: 0.9rem 1rem;
+	gap: var(--space-2);
+	padding: var(--space-4);
 	border: 1px solid var(--border-subtle);
 	border-radius: var(--radius-control);
 	background: var(--surface-inset);
@@ -1063,17 +1056,17 @@
 	display: grid;
 	grid-template-columns: auto minmax(0, 1fr);
 	align-items: start;
-	gap: 0.8rem;
+	gap: var(--space-3);
 }
 
 .withdraw-deposit-selection input,
 .escalation-selection-control input {
-	margin: 0.2rem 0 0;
+	margin: var(--space-1) 0 0;
 }
 
 .withdraw-deposit-copy {
 	display: grid;
-	gap: 0.2rem;
+	gap: var(--space-1);
 	min-width: 0;
 }
 
@@ -1083,25 +1076,25 @@
 
 .withdraw-deposit-details,
 .escalation-selection-details {
-	margin-left: 1.65rem;
+	margin-left: var(--space-5);
 }
 
 .withdraw-deposit-details > div,
 .escalation-selection-details > span {
 	display: grid;
-	gap: 0.2rem;
-	padding-top: 0.35rem;
+	gap: var(--space-1);
+	padding-top: var(--space-1);
 }
 
 .escalation-selection-list {
 	display: grid;
-	gap: 0.8rem;
+	gap: var(--space-3);
 }
 
 .escalation-selection-item {
 	display: grid;
-	gap: 0.55rem;
-	padding: 0.9rem 1rem;
+	gap: var(--space-2);
+	padding: var(--space-4);
 	border: 1px solid var(--border-subtle);
 	border-radius: var(--radius-control);
 	background: var(--surface-inset);
@@ -1109,7 +1102,7 @@
 
 .escalation-selection-item-copy {
 	display: grid;
-	gap: 0.2rem;
+	gap: var(--space-1);
 	min-width: 0;
 }
 
@@ -1125,7 +1118,7 @@
 .vault-action-launcher-grid .action-launcher-card {
 	grid-template-columns: minmax(0, 1fr) minmax(15rem, 22rem);
 	align-items: start;
-	gap: 1.25rem;
+	gap: var(--space-4);
 }
 
 .vault-action-launcher-grid .action-launcher-card.compact {
@@ -1136,8 +1129,8 @@
 .action-launcher-card {
 	display: grid;
 	align-content: start;
-	gap: 0.65rem;
-	padding: 0.75rem 0;
+	gap: var(--space-3);
+	padding: var(--space-3) 0;
 	border-width: 0 0 1px;
 	border-radius: 0;
 	background: transparent;
@@ -1170,7 +1163,7 @@
 }
 
 .action-launcher-card.compact {
-	padding-block: 0.55rem;
+	padding-block: var(--space-2);
 }
 
 .open-oracle-report-actions .action-launcher-card {
@@ -1230,18 +1223,18 @@
 .escalation-metrics {
 	display: grid;
 	grid-template-columns: repeat(2, minmax(0, 1fr));
-	gap: 0.75rem 1rem;
+	gap: var(--space-3) var(--space-4);
 }
 
 .escalation-metrics > div {
 	min-width: 0;
-	padding-top: 0.5rem;
+	padding-top: var(--space-2);
 	border-top: 1px solid var(--border-default);
 }
 
 .escalation-metrics strong {
 	display: block;
-	margin-top: 0.15rem;
+	margin-top: var(--space-1);
 	font-family: var(--font-family-mono);
 	font-size: var(--font-value);
 	font-weight: 600;
@@ -1262,16 +1255,16 @@
 
 .escalation-sides-shell {
 	display: grid;
-	gap: 1rem;
-	margin-top: 1rem;
+	gap: var(--space-4);
+	margin-top: var(--space-4);
 }
 
 .escalation-sides-legend {
 	display: flex;
 	flex-wrap: wrap;
 	align-items: center;
-	gap: 0.75rem 1.25rem;
-	padding: 0.9rem 1rem;
+	gap: var(--space-3) var(--space-4);
+	padding: var(--space-4);
 	border: 1px solid var(--border-default);
 	border-radius: var(--radius-control);
 	background: var(--surface-row);
@@ -1280,7 +1273,7 @@
 .escalation-sides-legend-item {
 	display: inline-flex;
 	align-items: center;
-	gap: 0.55rem;
+	gap: var(--space-2);
 	min-width: 0;
 }
 
@@ -1328,7 +1321,7 @@
 	display: block;
 	width: 100%;
 	min-width: 0;
-	padding: 1rem;
+	padding: var(--space-4);
 	border: 0;
 	border-top: 1px solid var(--border-default);
 	background: transparent;
@@ -1377,7 +1370,7 @@
 	display: grid;
 	grid-template-columns: minmax(0, 12rem) minmax(0, 1fr) minmax(0, 15rem);
 	align-items: center;
-	gap: 1rem;
+	gap: var(--space-4);
 }
 
 .escalation-side-copy {
@@ -1388,13 +1381,13 @@
 	display: flex;
 	flex-wrap: wrap;
 	align-items: center;
-	gap: 0.5rem;
+	gap: var(--space-2);
 }
 
 .escalation-side-badges {
 	display: inline-flex;
 	flex-wrap: wrap;
-	gap: 0.45rem;
+	gap: var(--space-2);
 }
 
 .escalation-side-selected-badge {
@@ -1457,7 +1450,7 @@
 .escalation-side-values {
 	display: grid;
 	grid-template-columns: minmax(0, 1fr);
-	gap: 0.3rem;
+	gap: var(--space-1);
 	min-width: 0;
 }
 
@@ -1465,7 +1458,7 @@
 	display: flex;
 	align-items: baseline;
 	flex-wrap: nowrap;
-	gap: 0.2rem;
+	gap: var(--space-1);
 	min-width: 0;
 }
 
@@ -1541,7 +1534,7 @@
 	}
 
 	.truth-auction-depth-x-axis {
-		gap: 0.45rem;
+		gap: var(--space-2);
 	}
 
 	.truth-auction-depth-x-axis .truth-auction-depth-axis-tick.is-mid {
@@ -1574,7 +1567,7 @@
 	}
 
 	.truth-auction-bid-row {
-		padding: 0.62rem 0.7rem;
+		padding: var(--space-2) var(--space-3);
 	}
 
 	.escalation-sides-legend {
@@ -1587,12 +1580,12 @@
 
 	.escalation-side-row {
 		grid-template-columns: 1fr;
-		gap: 0.85rem;
+		gap: var(--space-3);
 	}
 
 	.escalation-side-values {
 		grid-template-columns: 1fr;
-		gap: 0.7rem;
+		gap: var(--space-3);
 	}
 
 	.reporting-metrics-section .escalation-metrics {
@@ -1639,21 +1632,19 @@
 .selected-vault-summary-title {
 	display: flex;
 	align-items: flex-start;
-	gap: 0.8rem;
+	gap: var(--space-3);
 }
 
 .selected-vault-summary-title-copy {
 	display: grid;
-	gap: 0.2rem;
+	gap: var(--space-1);
 	min-width: 0;
 	align-self: flex-start;
-	padding-top: 0.18rem;
+	padding-top: var(--space-1);
 }
 
 .selected-vault-summary-title-copy span {
 	font-size: var(--font-label);
-	letter-spacing: 0.14em;
-	text-transform: uppercase;
 	color: var(--text-secondary);
 }
 
@@ -1679,7 +1670,7 @@
 .trading-holdings-layout,
 .trading-share-callouts {
 	display: grid;
-	gap: 1rem;
+	gap: var(--space-4);
 }
 
 .security-pool-strip-stats span,
@@ -1693,8 +1684,6 @@
 .trading-holdings-hero span,
 .trading-share-callouts span {
 	font-size: var(--font-label);
-	letter-spacing: 0.12em;
-	text-transform: uppercase;
 	color: var(--muted);
 }
 
@@ -1717,24 +1706,24 @@
 .vault-detail-hero-secondary > div,
 .trading-share-callouts > div {
 	display: grid;
-	gap: 0.35rem;
+	gap: var(--space-1);
 }
 
 .security-pool-card-surface {
 	display: grid;
-	gap: 1.2rem;
+	gap: var(--space-4);
 }
 
 .security-pool-strip {
 	grid-template-columns: minmax(0, 1.2fr) minmax(18rem, 0.95fr);
 	align-items: start;
-	gap: 1.6rem;
+	gap: var(--space-5);
 }
 
 .security-pool-strip-story,
 .security-pool-strip-signal {
 	display: grid;
-	gap: 1rem;
+	gap: var(--space-4);
 	min-width: 0;
 }
 
@@ -1743,7 +1732,7 @@
 }
 
 .security-pool-strip-question .question-preview-timeline-item {
-	padding: 0.6rem 0 0;
+	padding: var(--space-2) 0 0;
 	border: 0;
 	border-top: 1px solid var(--divider-subtle);
 	border-radius: 0;
@@ -1752,8 +1741,8 @@
 
 .security-pool-strip-stats {
 	grid-template-columns: repeat(3, minmax(0, 1fr));
-	padding-top: 0.15rem;
-	padding-bottom: 0.15rem;
+	padding-top: var(--space-1);
+	padding-bottom: var(--space-1);
 	border-top: 1px solid var(--color-white-08);
 }
 
@@ -1766,19 +1755,19 @@
 .security-pool-hero-oracle,
 .trading-holdings-hero {
 	display: grid;
-	gap: 0.45rem;
-	padding: 0 0 0.2rem;
+	gap: var(--space-2);
+	padding: 0 0 var(--space-1);
 }
 
 .security-pool-card-progress,
 .security-pool-hero-progress {
 	display: grid;
-	gap: 0.8rem;
+	gap: var(--space-3);
 }
 
 .security-pool-strip-meter,
 .security-pool-hero-meter {
-	padding: 0.85rem 0;
+	padding: var(--space-3) 0;
 	border-width: 0 0 1px;
 	border-radius: 0;
 	background: transparent;
@@ -1787,7 +1776,7 @@
 .security-pool-detail-rail {
 	display: grid;
 	grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
-	gap: 0.8rem;
+	gap: var(--space-3);
 }
 
 .security-pool-detail-rail > div {
@@ -1795,7 +1784,7 @@
 }
 
 .security-pool-card-inline-details {
-	padding-top: 0.1rem;
+	padding-top: 0;
 	border-top: 1px solid var(--color-white-08);
 }
 
@@ -1813,13 +1802,13 @@
 
 .security-pool-browse-vault-list {
 	display: grid;
-	gap: 0.58rem;
+	gap: var(--space-2);
 }
 
 .security-pool-browse-vault-row {
 	display: grid;
-	gap: 0.45rem;
-	padding: 0.28rem 0;
+	gap: var(--space-2);
+	padding: var(--space-1) 0;
 	border-bottom: 1px solid var(--border-subtle);
 }
 
@@ -1831,7 +1820,7 @@
 .security-pool-browse-vault-row-top {
 	display: grid;
 	grid-template-columns: minmax(0, 1.35fr) minmax(10.5rem, 0.72fr) minmax(10.5rem, 0.72fr) minmax(8.3rem, 0.52fr);
-	gap: 0.7rem;
+	gap: var(--space-3);
 	align-items: start;
 }
 
@@ -1847,15 +1836,13 @@
 .security-pool-browse-vault-row-id,
 .security-pool-browse-vault-row-kpi {
 	display: grid;
-	gap: 0.2rem;
+	gap: var(--space-1);
 	min-width: 0;
 }
 
 .security-pool-browse-vault-row-id span,
 .security-pool-browse-vault-row-kpi span {
 	font-size: var(--font-label);
-	letter-spacing: 0.14em;
-	text-transform: uppercase;
 	color: var(--muted);
 }
 
@@ -1875,7 +1862,7 @@
 .security-pool-hero-metrics,
 .vault-position-list {
 	display: grid;
-	gap: 1rem;
+	gap: var(--space-4);
 }
 
 .selected-pool-hero-question .question-preview-meta {
@@ -1884,21 +1871,21 @@
 
 .selected-pool-hero-lifecycle {
 	display: grid;
-	gap: 0.75rem;
-	padding-top: 0.65rem;
+	gap: var(--space-3);
+	padding-top: var(--space-3);
 	border-top: 1px solid var(--color-white-08);
 }
 
 .security-pool-hero-ribbon {
 	grid-template-columns: repeat(4, minmax(0, 1fr));
-	padding: 0.35rem 0 0.2rem;
+	padding: var(--space-1) 0;
 	border-bottom: 1px solid var(--color-white-08);
 }
 
 .security-pool-ribbon-stat {
 	display: grid;
-	gap: 0.35rem;
-	padding: 0.8rem 0;
+	gap: var(--space-1);
+	padding: var(--space-3) 0;
 	border: 0;
 	border-top: 1px solid var(--divider-subtle);
 	border-radius: 0;
@@ -1907,8 +1894,6 @@
 
 .security-pool-ribbon-stat-label {
 	font-size: var(--font-label);
-	letter-spacing: 0.14em;
-	text-transform: uppercase;
 	color: var(--muted);
 }
 
@@ -1931,8 +1916,8 @@
 
 .security-pool-hero-main {
 	display: grid;
-	gap: 1rem;
-	padding-top: 0.75rem;
+	gap: var(--space-4);
+	padding-top: var(--space-3);
 }
 
 .security-pool-hero-oracle-value {
@@ -1940,13 +1925,13 @@
 }
 
 .security-pool-secondary-facts {
-	padding-top: 0.3rem;
+	padding-top: var(--space-1);
 	border-top: 1px solid var(--color-white-08);
 }
 
 .vault-position-card .entity-card-content {
 	display: grid;
-	gap: 0.85rem;
+	gap: var(--space-3);
 }
 
 .vault-position-card {
@@ -1955,13 +1940,13 @@
 
 .vault-position-card .entity-card-header,
 .vault-position-card .entity-card-actions {
-	padding-left: 0.25rem;
-	padding-right: 0.25rem;
+	padding-left: var(--space-1);
+	padding-right: var(--space-1);
 }
 
 .vault-preview-strip {
 	display: grid;
-	gap: 0.9rem;
+	gap: var(--space-4);
 }
 
 .vault-preview-strip-head {
@@ -1984,13 +1969,13 @@
 
 .vault-position-list {
 	display: grid;
-	gap: 0.75rem;
+	gap: var(--space-3);
 }
 
 .vault-position-strip {
 	display: grid;
-	gap: 0.9rem;
-	padding: 0.95rem 0;
+	gap: var(--space-4);
+	padding: var(--space-4) 0;
 	border-bottom: 1px solid var(--divider-subtle);
 }
 
@@ -2008,21 +1993,21 @@
 	flex-wrap: wrap;
 	align-items: center;
 	justify-content: space-between;
-	gap: 0.4rem;
+	gap: var(--space-2);
 }
 
 .vault-position-strip-title {
 	display: flex;
 	flex-direction: row;
 	align-items: flex-start;
-	gap: 0.45rem;
+	gap: var(--space-2);
 	flex: 1 1 auto;
 	min-width: 0;
 }
 
 .vault-position-title-copy {
 	display: grid;
-	gap: 0.1rem;
+	gap: 0;
 	flex: 1 1 auto;
 	min-width: 0;
 	align-self: center;
@@ -2031,7 +2016,7 @@
 .security-pool-browse-vault-row-title {
 	display: grid;
 	grid-template-columns: minmax(0, 1fr);
-	gap: 0.55rem;
+	gap: var(--space-2);
 	align-items: start;
 	min-width: 0;
 }
@@ -2057,7 +2042,7 @@
 
 .vault-detail-stage {
 	display: grid;
-	gap: 1rem;
+	gap: var(--space-4);
 }
 
 .vault-detail-hero {
@@ -2068,12 +2053,12 @@
 .vault-detail-hero-primary,
 .vault-detail-meta {
 	display: grid;
-	gap: 0.45rem;
+	gap: var(--space-2);
 }
 
 .vault-detail-meta .metric-label {
 	display: inline-block;
-	margin-right: 0.45rem;
+	margin-right: var(--space-2);
 }
 
 .vault-detail-health {
@@ -2088,7 +2073,7 @@
 }
 
 .security-pool-secondary-facts .metric-field {
-	padding: 0.8rem 0.9rem;
+	padding: var(--space-3) var(--space-4);
 	border: 1px solid var(--color-white-08);
 	border-radius: var(--radius-overlay);
 	background: linear-gradient(180deg, var(--color-white-04), transparent);
@@ -2096,7 +2081,7 @@
 
 .trading-holdings-stage {
 	display: grid;
-	gap: 1rem;
+	gap: var(--space-4);
 }
 
 .trading-holdings-layout {
@@ -2105,7 +2090,7 @@
 }
 
 .trading-share-distribution .ranked-bar-item {
-	padding: 0.65rem 0;
+	padding: var(--space-3) 0;
 	border-width: 0 0 1px;
 	border-radius: 0;
 	background: transparent;
@@ -2125,16 +2110,16 @@
 
 .trading-share-callouts {
 	grid-template-columns: minmax(0, 1fr);
-	gap: 0.75rem;
+	gap: var(--space-3);
 }
 
 .trading-share-callouts-total {
 	display: grid;
 	grid-template-columns: minmax(0, 1fr) auto;
 	align-items: baseline;
-	gap: 1rem;
+	gap: var(--space-4);
 	margin-top: 0;
-	padding-top: 0.5rem;
+	padding-top: var(--space-2);
 	border-top: 1px dashed var(--color-white-08);
 }
 
@@ -2155,10 +2140,10 @@
 }
 
 .security-pool-strip-meter.status-compact {
-	padding-top: 0.35rem;
+	padding-top: var(--space-1);
 }
 
-@media (max-width: 56.25rem) {
+@media (max-width: 50rem) {
 	.security-pool-strip,
 	.trading-holdings-layout,
 	.vault-detail-health {
@@ -2238,7 +2223,7 @@
 	align-items: center;
 	gap: var(--space-2);
 	min-width: 11rem;
-	padding: 0.8rem 1rem;
+	padding: var(--space-3) var(--space-4);
 	border: 1px solid var(--divider-subtle);
 	border-radius: var(--radius-panel);
 	background: var(--surface-row);
@@ -2275,13 +2260,13 @@
 	display: flex;
 	flex-direction: column;
 	align-items: flex-start;
-	gap: 0.25rem;
+	gap: var(--space-1);
 }
 
 .fork-workflow-stage-indicator {
 	display: inline-flex;
 	align-items: center;
-	padding: 0.12rem 0.45rem;
+	padding: 0 var(--space-2);
 	border: 1px solid color-mix(in srgb, var(--accent) 28%, transparent);
 	border-radius: var(--radius-pill);
 	background: var(--accent-soft);
@@ -2425,7 +2410,7 @@
 .fork-workflow-child-pool-card {
 	display: grid;
 	gap: var(--space-2);
-	padding: 0.9rem 0;
+	padding: var(--space-4) 0;
 	border: 0;
 	border-bottom: 1px solid var(--divider-subtle);
 	border-radius: 0;
@@ -2494,7 +2479,7 @@
 }
 
 .vault-content-switch .view-tab {
-	padding: 0.42rem 0.68rem;
+	padding: var(--space-2) var(--space-3);
 	border-color: transparent;
 	background: transparent;
 	font-size: var(--font-caption);
@@ -2600,7 +2585,7 @@
 	.security-pool-browse-vault-row-title {
 		align-items: flex-start;
 		flex-direction: column;
-		gap: 0.65rem;
+		gap: var(--space-3);
 	}
 
 	.security-pool-browse-vault-row-title .security-pool-browse-vault-row-id {
@@ -2616,20 +2601,20 @@
 .pool-question-source {
 	display: flex;
 	flex-wrap: wrap;
-	gap: 1rem;
+	gap: var(--space-4);
 	border: 0;
 	padding: 0;
 	margin: 0;
 }
 
 .pool-question-source legend {
-	margin-bottom: 0.75rem;
+	margin-bottom: var(--space-3);
 }
 
 .pool-question-source label {
 	display: flex;
 	align-items: center;
-	gap: 0.5rem;
+	gap: var(--space-2);
 	min-height: 2.75rem;
 	margin: 0;
 }
@@ -3049,7 +3034,7 @@
 .liquidation-modal-content {
 	display: contents;
 }
-@media (max-width: 640px) {
+@media (max-width: 40rem) {
 	.liquidation-modal-panel {
 		height: 90dvh;
 		max-height: 90dvh;
@@ -3107,7 +3092,7 @@
 
 .request-price-fields {
 	display: grid;
-	gap: 1rem;
+	gap: var(--space-4);
 }
 
 .security-pool-link.existing-pool-action {
@@ -3118,12 +3103,12 @@
 	min-height: 2.75rem;
 	border: 1px solid var(--primary-button-border);
 	border-radius: var(--radius-control);
-	padding: 0.78rem 1rem;
+	padding: var(--space-3) var(--space-4);
 	background: var(--primary-button-bg);
 	color: var(--primary-button-text);
 	font-weight: 600;
 	text-decoration: none;
-	margin-top: -0.5rem;
+	margin-top: calc(-1 * var(--space-2));
 }
 
 .security-pool-link.existing-pool-action:hover,
@@ -3145,22 +3130,20 @@
 .existing-pool-identifiers {
 	display: grid;
 	grid-template-columns: repeat(2, minmax(0, 1fr));
-	gap: 0.75rem 1rem;
-	margin: 0.5rem 0 0;
+	gap: var(--space-3) var(--space-4);
+	margin: var(--space-2) 0 0;
 }
 
 .existing-pool-identifiers dt {
 	color: var(--muted);
 	font-size: var(--font-label);
-	letter-spacing: 0.04em;
-	text-transform: uppercase;
 }
 
 .existing-pool-identifiers dd {
 	display: flex;
 	align-items: flex-start;
 	min-width: 0;
-	margin: 0.25rem 0 0;
+	margin: var(--space-1) 0 0;
 }
 
 .existing-pool-identifiers .address-value.copyable {
@@ -3170,7 +3153,7 @@
 	font-family: var(--font-family-mono);
 }
 
-@media (max-width: 600px) {
+@media (max-width: 40rem) {
 	.existing-pool-identifiers {
 		grid-template-columns: minmax(0, 1fr);
 	}
@@ -3190,8 +3173,8 @@
 
 .request-price-fields .lookup-field-controls.has-action {
 	grid-template-columns: minmax(0, 1fr) auto;
-	column-gap: 0.75rem;
-	row-gap: 0.25rem;
+	column-gap: var(--space-3);
+	row-gap: var(--space-1);
 }
 
 .request-price-fetch {
@@ -3242,11 +3225,11 @@
 }
 
 .operation-modal-body:has(> .request-price-fields) {
-	gap: 0.5rem;
+	gap: var(--space-2);
 }
 
 .operation-modal-body:has(> .request-price-fields) .transaction-step-actions {
-	padding-top: 0.5rem;
+	padding-top: var(--space-2);
 }
 
 .operation-modal-body:has(> .request-price-fields) .transaction-inline-final-status .global-transaction-notice {
@@ -3254,7 +3237,7 @@
 	max-height: none;
 }
 
-@media (max-width: 600px) {
+@media (max-width: 40rem) {
 	.request-price-fields .lookup-field-controls.has-action {
 		grid-template-columns: minmax(0, 1fr);
 	}
@@ -3287,11 +3270,11 @@
 	}
 
 	.operation-modal-body:has(> .request-price-fields) .transaction-costs > div {
-		column-gap: 0.25rem;
+		column-gap: var(--space-1);
 	}
 }
 
-@media (max-height: 650px) {
+@media (max-height: 40rem) {
 	.operation-modal-body:has(> .request-price-fields) {
 		display: flex;
 		flex-direction: column;
@@ -3324,7 +3307,7 @@
 .pool-selection-control .lookup-field-controls > .actions {
 	min-inline-size: 11.75rem;
 }
-@media (max-width: 600px) {
+@media (max-width: 40rem) {
 	.pool-selection-control .lookup-field-controls {
 		grid-template-columns: minmax(0, 1fr);
 	}

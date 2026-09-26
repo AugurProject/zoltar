@@ -138,7 +138,7 @@ describe('SecurityPoolsOverviewSection', () => {
 			if (!(row instanceof HTMLElement)) throw new Error('Expected pool row')
 			expect(within(row).getByRole('button', { name: 'Copy address ' + pool.securityPoolAddress })).not.toBeNull()
 			expect(row.textContent).toContain(index === 0 ? '2×' : '3×')
-			expect(row.querySelector('details')?.textContent).toContain('Initial Report Priority Fee')
+			expect(row.querySelector('details')?.textContent).toContain('Initial report priority fee')
 			const link = within(row).getByRole('link', { name: new RegExp(pool.securityPoolAddress) })
 			expect(link.getAttribute('href')).toContain(pool.securityPoolAddress)
 			fireEvent.click(link)
@@ -504,7 +504,7 @@ describe('SecurityPoolsOverviewSection', () => {
 			await new Promise(resolve => setTimeout(resolve, 0))
 		})
 		expect(document.body.textContent).not.toContain('Loading security pools')
-		expect(documentQueries.queryByRole('dialog', { name: 'Liquidate Vault' })).toBeNull()
+		expect(documentQueries.queryByRole('dialog', { name: 'Liquidate vault' })).toBeNull()
 	})
 
 	test('shows Finalized as Yes for resolved operational pools', async () => {
@@ -525,7 +525,7 @@ describe('SecurityPoolsOverviewSection', () => {
 		expect(badgeTexts).toContain('Finalized as Yes')
 	})
 
-	test('shows Fork Migration for parent pools with child pools even when the loaded parent outcome is resolved', async () => {
+	test('shows Fork migration for parent pools with child pools even when the loaded parent outcome is resolved', async () => {
 		const parentPoolTitle = 'Parent pool'
 		const parentPool = createSecurityPool({
 			hasForkActivity: false,
@@ -551,11 +551,11 @@ describe('SecurityPoolsOverviewSection', () => {
 
 		const parentCard = getSecurityPoolCard(parentPoolTitle)
 		const parentCardQueries = within(parentCard)
-		expect(parentCardQueries.getByText('Fork Migration')).not.toBeNull()
+		expect(parentCardQueries.getByText('Fork migration')).not.toBeNull()
 		expect(parentCardQueries.queryByText('Finalized as Yes')).toBeNull()
 	})
 
-	test('shows Fork Migration for pools already in fork migration flow', async () => {
+	test('shows Fork migration for pools already in fork migration flow', async () => {
 		const renderedComponent = await renderIntoDocument(
 			<SecurityPoolsOverviewSection
 				{...createProps({
@@ -572,10 +572,10 @@ describe('SecurityPoolsOverviewSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const badgeTexts = Array.from(document.body.querySelectorAll('.pool-directory-row .badge')).map(element => element.textContent?.trim() ?? '')
-		expect(badgeTexts).toContain('Fork Migration')
+		expect(badgeTexts).toContain('Fork migration')
 	})
 
-	test('describes Fork Finalized auction-state guidance without implying the truth auction is already complete', async () => {
+	test('describes Fork finalized auction-state guidance without implying the truth auction is already complete', async () => {
 		const auctionPoolTitle = 'Truth auction pool'
 		const renderedComponent = await renderIntoDocument(
 			<SecurityPoolsOverviewSection
@@ -602,12 +602,12 @@ describe('SecurityPoolsOverviewSection', () => {
 		const auctionPoolCardQueries = within(auctionPoolCard)
 		expect(auctionPoolCardQueries.queryByText('Migration has moved into the truth-auction phase, where bidding and settlement determine the child-universe recovery path.')).toBeNull()
 		expect(auctionPoolCardQueries.queryByText('Migration has moved into the truth-auction phase, where the child universe is finalized.')).toBeNull()
-		const truthAuctionBadge = auctionPoolCardQueries.getByText('Truth Auction')
-		expect(truthAuctionBadge.getAttribute('aria-label')).toBe('Truth Auction')
+		const truthAuctionBadge = auctionPoolCardQueries.getByText('Truth auction')
+		expect(truthAuctionBadge.getAttribute('aria-label')).toBe('Truth auction')
 		expect(truthAuctionBadge.parentElement?.getAttribute('aria-describedby')).toBeNull()
 	})
 
-	test('shows Fork Finalized for child pools with completed fork history', async () => {
+	test('shows Fork finalized for child pools with completed fork history', async () => {
 		const childPoolTitle = 'Finalized child pool'
 		const renderedComponent = await renderIntoDocument(
 			<SecurityPoolsOverviewSection
@@ -631,16 +631,16 @@ describe('SecurityPoolsOverviewSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const badgeTexts = Array.from(document.body.querySelectorAll('.pool-directory-row .badge')).map(element => element.textContent?.trim() ?? '')
-		expect(badgeTexts).toContain('Fork Finalized')
+		expect(badgeTexts).toContain('Fork finalized')
 		const childPoolCard = getSecurityPoolCard(childPoolTitle)
 		const childPoolCardQueries = within(childPoolCard)
-		const forkFinalizedBadge = childPoolCardQueries.getByText('Fork Finalized')
-		expect(forkFinalizedBadge.getAttribute('aria-label')).toBe('Fork Finalized')
+		const forkFinalizedBadge = childPoolCardQueries.getByText('Fork finalized')
+		expect(forkFinalizedBadge.getAttribute('aria-label')).toBe('Fork finalized')
 		expect(forkFinalizedBadge.parentElement?.getAttribute('aria-describedby')).toBeNull()
 		expect(childPoolCardQueries.queryByText('This parent pool has already gone through a fork lifecycle and now acts as a historical reference point.')).toBeNull()
 	})
 
-	test('shows Fork Migration instead of Operational for root-universe pools after Zoltar has forked', async () => {
+	test('shows Fork migration instead of Operational for root-universe pools after Zoltar has forked', async () => {
 		const rootPoolTitle = 'Forked root-universe pool'
 
 		const renderedComponent = await renderIntoDocument(
@@ -662,7 +662,7 @@ describe('SecurityPoolsOverviewSection', () => {
 
 		const poolCard = getSecurityPoolCard(rootPoolTitle)
 		const poolCardQueries = within(poolCard)
-		expect(poolCardQueries.getByText('Fork Migration')).not.toBeNull()
+		expect(poolCardQueries.getByText('Fork migration')).not.toBeNull()
 		expect(poolCardQueries.queryByText('Operational')).toBeNull()
 	})
 
@@ -786,7 +786,7 @@ describe('SecurityPoolsOverviewSection', () => {
 			expect(documentQueries.getByRole('button', { name: 'Retry' })).not.toBeNull()
 		})
 		const retryButton = documentQueries.getByRole('button', { name: 'Retry' })
-		expect(within(document.body).queryByRole('button', { name: 'Load Security Pools' })).toBeNull()
+		expect(within(document.body).queryByRole('button', { name: 'Load Security pools' })).toBeNull()
 		await act(() => {
 			fireEvent.click(retryButton)
 		})
@@ -849,7 +849,7 @@ describe('SecurityPoolsOverviewSection', () => {
 		const searchInput = documentQueries.getByLabelText('Search this page')
 		expect(searchInput.getAttribute('placeholder')).toBe('Address, question ID, or text')
 		expect(documentQueries.queryByText(/pools? match/)).toBeNull()
-		const systemStateSelect = documentQueries.getByLabelText('System State')
+		const systemStateSelect = documentQueries.getByLabelText('System state')
 		if (!(systemStateSelect instanceof window.HTMLSelectElement)) throw new Error('Expected system state filter')
 		systemStateSelect.value = 'ended'
 		await act(() => {
