@@ -27,6 +27,8 @@ import { ScalarCreatePreview, type ScalarCreatePreviewDetails } from './ScalarCr
 import { getWrongNetworkReason } from '@zoltar/ui-core-shared/wallet/network.js'
 import { tryParseTimestampInput } from '@zoltar/ui-core-shared/forms/formInputs.js'
 import type { ComponentChildren } from 'preact'
+import type { ActionAvailability } from '@zoltar/ui-core-shared/types/components.js'
+import { withActiveAppChainWalletBlocker } from '@zoltar/ui-core-shared/transactions/actionGuards.js'
 
 const MARKET_TYPE_OPTIONS: EnumDropdownOption<MarketFormState['marketType']>[] = [
 	{ value: 'binary', label: marketCopy.binary },
@@ -54,10 +56,7 @@ type QuestionCreateSectionProps = {
 	renderResultActions?: (result: { marketType: MarketCreationResult['marketType']; questionId: string; questionTitle: string }) => ComponentChildren
 	submitFields?: ComponentChildren
 	submitActionOverride?: {
-		availability: {
-			disabled: boolean
-			reason: string | undefined
-		}
+		availability: ActionAvailability
 		idleLabel: ComponentChildren
 		onSubmit: () => void
 		pending: boolean
@@ -161,15 +160,18 @@ export function QuestionCreateSection({
 	const submitAction =
 		submitActionOverride === undefined
 			? {
-					availability: {
-						disabled: !canCreateQuestion,
-						reason: (() => {
-							if (accountAddress === undefined) return marketCopy.questionCreationWalletRequired
-							if (!isOnActiveAppChain) return getWrongNetworkReason()
-							if (questionFormValidation.isValid) return undefined
-							return questionFormValidation.notice
-						})(),
-					},
+					availability: withActiveAppChainWalletBlocker(
+						{
+							disabled: !canCreateQuestion,
+							reason: (() => {
+								if (accountAddress === undefined) return marketCopy.questionCreationWalletRequired
+								if (!isOnActiveAppChain) return getWrongNetworkReason()
+								if (questionFormValidation.isValid) return undefined
+								return questionFormValidation.notice
+							})(),
+						},
+						{ accountAddress, isOnActiveAppChain },
+					),
 					idleLabel: commonCopy.createQuestionAction,
 					onSubmit: onCreateQuestion,
 					pending: questionCreating,

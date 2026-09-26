@@ -240,6 +240,7 @@ export function App() {
 			routeContentDisabled={routeContentBlocked}
 			transactionRouteKey={transactionRouteKey}
 			transactionState={transactionState.value}
+			walletActions={overviewWalletProps}
 		>
 			<AppRouteContent deploy={deployRouteContentProps} openOracle={openOracleRouteContentProps} readBackendMessage={readBackendMessage} route={activeRoute} securityPools={securityPoolsRouteContentProps} />
 			<TransactionStepsModal contextKey={`${activeEnvironmentNonce}:${walletScopedAccountAddress ?? ''}`} />

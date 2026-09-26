@@ -1,4 +1,5 @@
 import type { ComponentChildren } from 'preact'
+import { withActiveAppChainWalletBlocker } from '@zoltar/ui-core-shared/transactions/actionGuards.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as zoltarCopy from '../../../copy/zoltar.js'
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
@@ -142,7 +143,7 @@ export function ForkZoltarSection({
 					onForkZoltar()
 				}}
 				pending={zoltarForkActiveAction === 'fork'}
-				availability={{ disabled: !canFork, reason: forkGuardMessage }}
+				availability={withActiveAppChainWalletBlocker({ disabled: !canFork, reason: forkGuardMessage }, { accountAddress, isOnActiveAppChain })}
 			/>
 		</TransactionActionGroup>
 	)

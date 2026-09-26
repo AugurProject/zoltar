@@ -1,11 +1,19 @@
 import type { ComponentChildren } from 'preact'
 import type { Hash } from '@zoltar/core-shared/evm/ethereum'
 
+/** A wallet prerequisite the user can resolve from the blocked action itself by connecting or switching the wallet. */
+export type WalletActionBlocker = { kind: 'wallet-disconnected' } | { kind: 'wrong-network'; targetChainName: string }
+
+/** Why an action is unavailable: a wallet prerequisite with an inline fix, or any other reason shown as text. */
+export type ActionAvailabilityReason = WalletActionBlocker | { kind: 'other'; message: string }
+
 export type ActionAvailability = {
 	disabled: boolean
 	/** Marks the reason as an in-progress state so it renders with loading feedback. */
 	loading?: boolean
 	reason: string | undefined
+	/** Set when the wallet connection or network blocks the action, so the action offers the connect or switch fix in place of its reason. */
+	walletBlocker?: WalletActionBlocker | undefined
 }
 
 /** Shared status vocabulary for badges and user-message presentations. */
@@ -78,6 +86,8 @@ export type LifecycleStagePresentation = {
 export type ReadinessAction = {
 	actionLabel: string
 	blocker?: string
+	/** The wallet prerequisite behind `blocker`, so the launcher offers the connect or switch fix. */
+	walletBlocker?: WalletActionBlocker | undefined
 	description?: string
 	disabledReasonId?: string
 	onAction?: () => void

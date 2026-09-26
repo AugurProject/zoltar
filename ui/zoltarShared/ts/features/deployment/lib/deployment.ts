@@ -54,7 +54,8 @@ export function getDeploymentStepAvailability({
 	if (step.deployed) return { disabled: true, reason: 'Already deployed.' }
 	if (busyStepId !== undefined) return { disabled: true, reason: busyStepId === step.id ? 'Deployment in progress.' : 'Another deployment is already in progress.' }
 	const walletAvailability = getWalletActiveAppChainActionAvailability({ accountAddress, isOnActiveAppChain, walletRequiredReason: 'Connect wallet to deploy this contract.' })
-	if (walletAvailability !== undefined) return walletAvailability
+	// Per-step rows keep the text reason: many rows stay blocked by prerequisites after connecting, so the route-level deploy action offers the wallet fix instead.
+	if (walletAvailability !== undefined) return { disabled: true, reason: walletAvailability.reason }
 	if (prerequisiteLabel !== undefined) return { disabled: true, reason: deploymentCopy.formatPrerequisiteDetail(prerequisiteLabel) }
 	return { disabled: false, reason: undefined }
 }

@@ -202,6 +202,13 @@
 	font-size: var(--font-caption);
 }
 
+/* The connect or switch fix a wallet-blocked action offers where its reason would be. */
+button.tx-action-wallet-fix {
+	min-block-size: 2.5rem;
+	padding: 0.45rem 0.9rem;
+	font-size: var(--font-caption);
+}
+
 .tx-action-button-labels {
 	display: grid;
 	align-items: center;

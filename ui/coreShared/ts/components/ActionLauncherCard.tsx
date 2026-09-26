@@ -2,6 +2,7 @@ import * as commonCopy from '../copy/common.js'
 import type { ComponentChildren } from 'preact'
 import { ActionLauncherButton } from './ActionLauncherButton.js'
 import type { ReadinessAction } from '../types/components.js'
+import { withWalletBlocker } from '../transactions/actionGuards.js'
 
 type ActionLauncherCardProps = {
 	action: ReadinessAction
@@ -33,7 +34,7 @@ export function ActionLauncherCard({ action, children, pending = false, pendingL
 					onClick={() => action.onAction?.()}
 					pending={pending}
 					tone={tone}
-					availability={{ disabled, reason: action.blocker }}
+					availability={withWalletBlocker({ disabled, reason: action.blocker }, action.walletBlocker)}
 					showDisabledReason
 				/>
 			</div>
