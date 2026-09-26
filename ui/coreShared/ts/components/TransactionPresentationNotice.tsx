@@ -3,9 +3,10 @@ import * as transactionCopy from '../copy/transaction.js'
 import type { ComponentChildren } from 'preact'
 import { Badge } from './Badge.js'
 import { ReadOnlyDetailAccordion } from './ReadOnlyDetailAccordion.js'
+import { TransactionHashLink } from './TransactionHashLink.js'
 import { AddressValue } from './AddressValue.js'
 import { getActiveNetworkProfile } from '../lib/activeEnvironment.js'
-import { buildAddressExplorerUrl, buildTransactionExplorerUrl } from '../wallet/networkProfile.js'
+import { buildAddressExplorerUrl } from '../wallet/networkProfile.js'
 import type { BadgeTone, GlobalTransactionPresentation } from '../types/components.js'
 
 type TransactionPresentationNoticeProps = {
@@ -43,8 +44,8 @@ function TransactionDetailValue({ value }: { value: ComponentChildren }) {
 export function TransactionPresentationNotice({ className = '', collapseDetails = false, compact = false, contextWarning, transaction }: TransactionPresentationNoticeProps) {
 	const badge = getTransactionBadge(transaction.tone)
 	const title = transaction.title
+	const collapsedDetail = compact && transaction.tone !== 'error' ? transaction.detail : undefined
 	const transactionHash = transaction.hash
-	const explorerUrl = transactionHash === undefined ? undefined : buildTransactionExplorerUrl(getActiveNetworkProfile(), transactionHash)
 	const rows = transaction.rows ?? []
 	const technicalRows = transaction.technicalRows ?? []
 	const noticeClassName = ['global-transaction-notice', className].filter(Boolean).join(' ')
@@ -89,12 +90,7 @@ export function TransactionPresentationNotice({ className = '', collapseDetails 
 		transactionHash === undefined ? undefined : (
 			<div className='global-transaction-hash'>
 				{compact ? undefined : <span>{transactionCopy.transactionHash}</span>}
-				<AddressValue address={transactionHash} compactAbbreviation={compact} responsiveAbbreviation />
-				{explorerUrl === undefined ? undefined : (
-					<a href={explorerUrl} target='_blank' rel='noreferrer' aria-label={transactionCopy.viewTransaction}>
-						{transactionCopy.explorer}
-					</a>
-				)}
+				<TransactionHashLink hash={transactionHash} />
 			</div>
 		)
 
@@ -108,12 +104,12 @@ export function TransactionPresentationNotice({ className = '', collapseDetails 
 					{title === undefined ? undefined : <strong>{title}</strong>}
 					{compact ? hashContent : undefined}
 				</div>
-				{compact && transaction.tone === 'error' ? <div className='global-transaction-notice-recovery'>{transaction.detail === transactionCopy.revertedCheckingDetails ? transaction.detail : transactionCopy.reviewFailureDetails}</div> : undefined}
+				{compact && transaction.tone === 'error' ? <div className='global-transaction-notice-recovery'>{transaction.detail ?? transactionCopy.failureReasonUnavailable}</div> : undefined}
 				{!compact && transaction.detail !== undefined ? <div className='global-transaction-notice-detail'>{transaction.detail}</div> : undefined}
 				{compact ? undefined : hashContent}
-				{collapseDetails && (rows.length > 0 || technicalRows.length > 0 || (compact && transaction.detail !== undefined)) ? (
+				{collapseDetails && (rows.length > 0 || technicalRows.length > 0 || collapsedDetail !== undefined) ? (
 					<ReadOnlyDetailAccordion title={transactionCopy.transactionDetails}>
-						{compact && transaction.detail !== undefined ? <div className='global-transaction-notice-detail'>{transaction.detail}</div> : undefined}
+						{collapsedDetail === undefined ? undefined : <div className='global-transaction-notice-detail'>{collapsedDetail}</div>}
 						{detailRows}
 					</ReadOnlyDetailAccordion>
 				) : (

@@ -9,6 +9,8 @@ import { formatCurrencyBalance } from '../lib/formatters.js'
 import { deriveTokenApprovalRequirement, formatTokenApprovalUnavailableMessage, parseTokenApprovalAmountInput, resolveTokenApprovalStatusMessage } from '../transactions/tokenApproval.js'
 type TokenApprovalControlProps = {
 	compact?: boolean
+	/** Keeps a finished approval in place, disabled, labelled with its result instead of removing the control. */
+	completedLabel?: string | undefined
 	showRequirementNotice?: boolean
 	renderActions?: (approval: { button: ComponentChildren; notice: string | undefined; noticeId: string }) => ComponentChildren
 	actionLabel: string
@@ -39,6 +41,7 @@ function resolveApprovalButtonLabel({ guardMessage, isMaxAmount, nextApprovalAmo
  */
 export function TokenApprovalControl({
 	compact = false,
+	completedLabel,
 	showRequirementNotice = true,
 	renderActions,
 	guardMessageElementId,
@@ -97,14 +100,13 @@ export function TokenApprovalControl({
 		tokenLabel: tokenSymbol,
 		tokenUnits,
 	})
-	const visibleStatusMessage = disabled || hasNonIncreasingCustomApproval || amountValidationMessage !== undefined || (!showRequirementNotice && parsedAmount.kind === 'default' && guardMessage === undefined) ? undefined : statusMessage
+	const visibleStatusMessage = disabled || completedLabel !== undefined || hasNonIncreasingCustomApproval || amountValidationMessage !== undefined || (!showRequirementNotice && parsedAmount.kind === 'default' && guardMessage === undefined) ? undefined : statusMessage
 	const allowanceMessage = allowanceError === undefined ? undefined : formatTokenApprovalUnavailableMessage({ actionLabel, reason: allowanceError, tokenLabel: tokenSymbol })
-	const controlsDisabled = pending || disabled
+	const controlsDisabled = pending || disabled || completedLabel !== undefined
 	// A guard (for example a missing amount) means the requirement is not known yet, so it cannot read as approved.
-	const approved = !pending && !allowanceLoading && allowanceMessage === undefined && guardMessage === undefined && requiredAmount !== undefined && requirement.hasSufficientApproval && parsedAmount.kind === 'default'
+	const approved = completedLabel === undefined && !pending && !allowanceLoading && allowanceMessage === undefined && guardMessage === undefined && requiredAmount !== undefined && requirement.hasSufficientApproval && parsedAmount.kind === 'default'
 	const canApprove =
-		!pending &&
-		!disabled &&
+		!controlsDisabled &&
 		guardMessage === undefined &&
 		allowanceMessage === undefined &&
 		!allowanceLoading &&
@@ -113,15 +115,17 @@ export function TokenApprovalControl({
 		!hasNonIncreasingCustomApproval &&
 		nextApprovalAmount !== undefined &&
 		(parsedAmount.kind !== 'default' || !requirement.hasSufficientApproval)
-	const buttonLabel = resolveApprovalButtonLabel({
-		guardMessage,
-		isMaxAmount: unlimited,
-		nextApprovalAmount,
-		pending,
-		pendingLabel,
-		tokenSymbol,
-		tokenUnits,
-	})
+	const buttonLabel =
+		completedLabel ??
+		resolveApprovalButtonLabel({
+			guardMessage,
+			isMaxAmount: unlimited,
+			nextApprovalAmount,
+			pending,
+			pendingLabel,
+			tokenSymbol,
+			tokenUnits,
+		})
 	const disabledReasonElementId = (() => {
 		if (allowanceMessage !== undefined) return renderActions === undefined ? allowanceMessageId : noticeId
 		if (amountValidationMessage !== undefined) return amountValidationMessageId
@@ -133,18 +137,19 @@ export function TokenApprovalControl({
 		</p>
 	) : (
 		<TransactionActionButton
+			className={completedLabel === undefined ? '' : 'tx-action-completed'}
 			idleLabel={buttonLabel}
 			inlineHint={allowanceMessage === undefined && amountValidationMessage === undefined && canApprove ? visibleStatusMessage : undefined}
 			pendingLabel={pendingLabel}
 			onClick={() => onApprove(nextApprovalAmount)}
 			pending={pending}
 			tone='secondary'
-			availability={{ disabled: !canApprove, reason: allowanceMessage ?? visibleStatusMessage ?? guardMessage }}
+			availability={{ disabled: !canApprove, reason: completedLabel ?? allowanceMessage ?? visibleStatusMessage ?? guardMessage }}
 			disabledReasonElementId={disabledReasonElementId}
-			showDisabledReason={allowanceMessage === undefined && amountValidationMessage === undefined && (guardMessage === undefined || guardMessageElementId === undefined)}
+			showDisabledReason={completedLabel === undefined && allowanceMessage === undefined && amountValidationMessage === undefined && (guardMessage === undefined || guardMessageElementId === undefined)}
 		/>
 	)
-	const showAdvanced = requiredAmount !== undefined && requiredAmount > 0n && !approved
+	const showAdvanced = completedLabel === undefined && requiredAmount !== undefined && requiredAmount > 0n && !approved
 	const advancedAmountValue = unlimited ? '' : draftAmount
 	let customAmountPlaceholder: string | undefined = compact ? commonCopy.requiredTotalPlaceholder : commonCopy.leaveBlankForRequiredTotal
 	if (unlimited) customAmountPlaceholder = undefined

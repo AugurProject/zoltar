@@ -1042,8 +1042,8 @@ test('keeps the preview while satisfied approvals are skipped before the final r
 		ready.resolve()
 		await settle()
 		expect(transactionSteps.value?.activeIndex).toBe(2)
-		expect(queries.getByText('REP approved ✓')).not.toBeNull()
-		expect(queries.getByText('WETH approved ✓')).not.toBeNull()
+		expect(queries.getByRole('button', { name: 'REP approved ✓' }).hasAttribute('disabled')).toBe(true)
+		expect(queries.getByRole('button', { name: 'WETH approved ✓' }).hasAttribute('disabled')).toBe(true)
 		expect(rendered.container.querySelectorAll('.approval-amount-field')).toHaveLength(0)
 		expect(queries.getByRole('button', { name: /Request new price/ }).hasAttribute('disabled')).toBe(false)
 	} finally {

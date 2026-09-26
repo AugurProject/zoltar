@@ -163,9 +163,10 @@ test('keeps confirmed wrap and approval steps visible while the final request aw
 			requestReview = controller.review(2)
 		})
 		expect(queries.queryByRole('button', { name: /Wrap ETH into WETH/ })).toBeNull()
-		expect(queries.getByText('ETH wrapped ✓')).not.toBeNull()
-		expect(queries.getByText('WETH approved ✓')).not.toBeNull()
-		expect(rendered.container.querySelectorAll('.transaction-completed-steps details')).toHaveLength(0)
+		expect(queries.getByRole('button', { name: 'ETH wrapped ✓' }).hasAttribute('disabled')).toBe(true)
+		expect(queries.getByRole('button', { name: 'WETH approved ✓' }).hasAttribute('disabled')).toBe(true)
+		expect(queries.queryByRole('textbox')).toBeNull()
+		expect(rendered.container.querySelector('.approval-advanced')).toBeNull()
 		expect(queries.getByRole('button', { name: 'Request price' }).hasAttribute('disabled')).toBe(false)
 		transactionSteps.value?.cancel()
 		await requestReview?.catch(() => undefined)
@@ -187,7 +188,7 @@ test('explains a step without token funding using its description, the operation
 		<GlobalTransactionPresentationProvider
 			transaction={{
 				tone: 'awaiting-wallet',
-				title: 'Creating Security Pool',
+				title: 'Creating security pool',
 				rows: [
 					{ label: 'Question ID', value: '123' },
 					{ label: 'Statoblast security multiplier', value: '2x' },
@@ -322,8 +323,8 @@ for (const choice of ['custom', 'max'] as const) {
 				controller.receipt(hash, 'success')
 			})
 			expect(queries.queryByRole('link', { name: hash })).toBeNull()
-			expect(queries.queryByRole('textbox')).toBeNull()
 			expect(approvalInput.isConnected).toBe(false)
+			expect(queries.getByRole('button', { name: 'REP approved ✓' }).hasAttribute('disabled')).toBe(true)
 			expect(rendered.container.querySelectorAll('.approval-amount-field')).toHaveLength(0)
 			const nextReview = controller.review()
 			await act(() => undefined)
@@ -370,7 +371,7 @@ for (const result of ['success', 'reverted'] as const) {
 			if (result === 'success') {
 				const secondReview = controller.review()
 				await act(() => undefined)
-				expect(queries.queryByRole('button', { name: /Wrap ETH/ })).toBeNull()
+				expect(button('Wrap ETH ✓').hasAttribute('disabled')).toBe(true)
 				expect(button('Approve REP').hasAttribute('disabled')).toBe(false)
 				expect(button('Request price').hasAttribute('disabled')).toBe(true)
 				await act(() => fireEvent.click(button('Approve REP')))
@@ -460,7 +461,7 @@ for (const phase of ['skipped', 'failed'] as const) {
 				expect(queries.queryByRole('dialog')).toBeNull()
 				expect(transactionSteps.value).toBeUndefined()
 			} else {
-				expect(queries.getByText('REP approved ✓')).not.toBeNull()
+				expect(queries.getByRole('button', { name: 'REP approved ✓' }).hasAttribute('disabled')).toBe(true)
 				expect(queries.queryByRole('textbox')).toBeNull()
 				expect(queries.queryByRole('button', { name: 'Approve REP' })).toBeNull()
 				expect(queries.getByRole('button', { name: 'Request price' }).hasAttribute('disabled')).toBe(false)
