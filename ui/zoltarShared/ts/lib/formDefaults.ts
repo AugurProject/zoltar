@@ -19,7 +19,7 @@ export function getDefaultReportingFormState(): ReportingFormState {
 
 export function getDefaultZoltarMigrationFormState(): ZoltarMigrationFormState {
 	return {
-		amount: '0.0',
-		outcomeIndexes: '',
+		amount: '',
+		outcomeIndexes: [],
 	}
 }

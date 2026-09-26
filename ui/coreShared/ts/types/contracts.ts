@@ -146,7 +146,7 @@ export type ZoltarChildUniverseActionResult = ActionResult & {
 }
 
 export type ZoltarMigrationActionResult = ActionResult & {
-	action: 'addRepToMigrationBalance' | 'splitMigrationRep'
+	action: 'splitMigrationRep'
 	amountAttoRep: bigint
 	outcomeIndexes: bigint[]
 	universeId: bigint

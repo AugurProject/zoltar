@@ -67,53 +67,57 @@ export function createZoltarForkWarningPresentation(result: ZoltarForkActionResu
 	return withWarning(createZoltarForkSuccessPresentation(result), message)
 }
 
-type ChildUniverseTransactionContext = { outcomeIndex?: bigint | undefined; universeId?: bigint | undefined }
+type ChildUniverseTransactionContext = { outcomeLabel?: string | undefined; universeId?: bigint | undefined }
 
 function getChildUniverseTransactionRows(context: ChildUniverseTransactionContext | undefined) {
 	if (context === undefined) return undefined
-	return context.outcomeIndex === undefined ? [] : [{ label: commonCopy.outcomeIndex, value: context.outcomeIndex.toString() }]
+	return context.outcomeLabel === undefined ? [] : [{ label: commonCopy.outcome, value: context.outcomeLabel }]
 }
 
 export function createChildUniverseTransactionIntent(source: 'fork-auction' | 'zoltar', context?: ChildUniverseTransactionContext) {
 	return buildIntent({ action: 'createChildUniverse', rows: getChildUniverseTransactionRows(context), source, submittedTitle: transactionCopy.deployingChildUniverse, universeId: context?.universeId })
 }
 
-export function createChildUniverseSuccessPresentation(result: ZoltarChildUniverseActionResult) {
-	return buildPresentation({ hash: result.hash, rows: [{ label: commonCopy.outcomeIndex, value: result.outcomeIndex.toString() }], title: transactionCopy.childUniverseDeployed, tone: 'success', universeId: result.universeId })
+export function createChildUniverseSuccessPresentation(result: ZoltarChildUniverseActionResult, outcomeLabel: string) {
+	return buildPresentation({ hash: result.hash, rows: [{ label: commonCopy.outcome, value: outcomeLabel }], title: transactionCopy.childUniverseDeployed, tone: 'success', universeId: result.universeId })
 }
 
-export function createChildUniverseWarningPresentation(result: ZoltarChildUniverseActionResult, message: string) {
-	return withWarning(createChildUniverseSuccessPresentation(result), message)
+export function createChildUniverseWarningPresentation(result: ZoltarChildUniverseActionResult, outcomeLabel: string, message: string) {
+	return withWarning(createChildUniverseSuccessPresentation(result, outcomeLabel), message)
 }
 
-type ZoltarMigrationTransactionContext = { amount?: string | undefined; outcomeIndexes?: string | undefined; universeId?: bigint | undefined }
+type ZoltarMigrationTransactionContext = { amount?: string | undefined; outcomeLabels?: readonly string[] | undefined; universeId?: bigint | undefined }
+
+function formatOutcomeLabels(outcomeLabels: readonly string[]) {
+	return outcomeLabels.length === 0 ? commonCopy.none : outcomeLabels.join(', ')
+}
 
 function getZoltarMigrationTransactionRows(context: ZoltarMigrationTransactionContext | undefined) {
 	if (context === undefined) return undefined
 	return [
 		...(context.amount === undefined || context.amount.trim() === '' ? [] : [{ label: commonCopy.amount, value: formatValueWithUnit(context.amount.trim(), commonCopy.rep) }]),
-		...(context.outcomeIndexes === undefined || context.outcomeIndexes.trim() === '' ? [] : [{ label: transactionCopy.outcomeIndexes, value: context.outcomeIndexes.trim() }]),
+		...(context.outcomeLabels === undefined || context.outcomeLabels.length === 0 ? [] : [{ label: transactionCopy.migrationOutcomes, value: formatOutcomeLabels(context.outcomeLabels) }]),
 	]
 }
 
-export function createZoltarMigrationTransactionIntent(actionName: 'prepare' | 'split', context?: ZoltarMigrationTransactionContext) {
-	return buildIntent({ action: actionName, rows: getZoltarMigrationTransactionRows(context), source: 'zoltar', submittedTitle: actionName === 'prepare' ? transactionCopy.preparingRep : transactionCopy.splittingRep, universeId: context?.universeId })
+export function createZoltarMigrationTransactionIntent(context?: ZoltarMigrationTransactionContext) {
+	return buildIntent({ action: 'split', rows: getZoltarMigrationTransactionRows(context), source: 'zoltar', submittedTitle: transactionCopy.migratingRep, universeId: context?.universeId })
 }
 
-export function createZoltarMigrationSuccessPresentation(result: ZoltarMigrationActionResult) {
+export function createZoltarMigrationSuccessPresentation(result: ZoltarMigrationActionResult, outcomeLabels: readonly string[]) {
 	return buildPresentation({
-		detail: result.action === 'addRepToMigrationBalance' ? transactionCopy.migrationRepPreparationSuccessDetail : transactionCopy.repSplitSuccessDetail,
+		detail: transactionCopy.repMigratedSuccessDetail,
 		hash: result.hash,
 		rows: [
 			{ label: commonCopy.amount, value: formatCurrencyBalanceWithUnit(result.amountAttoRep, commonCopy.rep) },
-			{ label: transactionCopy.outcomeIndexes, value: result.outcomeIndexes.length === 0 ? commonCopy.none : result.outcomeIndexes.join(', ') },
+			{ label: transactionCopy.migrationOutcomes, value: formatOutcomeLabels(outcomeLabels) },
 		],
-		title: result.action === 'addRepToMigrationBalance' ? transactionCopy.repPrepared : transactionCopy.repSplit,
+		title: transactionCopy.repMigrated,
 		tone: 'success',
 		universeId: result.universeId,
 	})
 }
 
-export function createZoltarMigrationWarningPresentation(result: ZoltarMigrationActionResult, message: string) {
-	return withWarning(createZoltarMigrationSuccessPresentation(result), message)
+export function createZoltarMigrationWarningPresentation(result: ZoltarMigrationActionResult, outcomeLabels: readonly string[], message: string) {
+	return withWarning(createZoltarMigrationSuccessPresentation(result, outcomeLabels), message)
 }

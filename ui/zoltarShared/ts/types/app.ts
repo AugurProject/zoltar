@@ -57,5 +57,6 @@ export type ReportingFormState = {
 
 export type ZoltarMigrationFormState = {
 	amount: string
-	outcomeIndexes: string
+	/** Selected outcome indexes in the order the user picked them. */
+	outcomeIndexes: readonly bigint[]
 }

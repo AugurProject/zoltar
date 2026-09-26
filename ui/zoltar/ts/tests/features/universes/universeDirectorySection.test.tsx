@@ -72,7 +72,7 @@ describe('UniverseDirectorySection', () => {
 				questionForm: { answerUnit: '', categoricalOutcomes: [], description: '', scalarIncrement: '', scalarMax: '', scalarMin: '', title: '', endTime: '', marketType: 'binary', startTime: '' },
 				zoltarForkApproval: { error: undefined, loading: false, value: 0n },
 				zoltarForkQuestionId: '',
-				zoltarMigrationForm: { amount: '', outcomeIndexes: '' },
+				zoltarMigrationForm: { amount: '', outcomeIndexes: [] },
 				zoltarMigrationChildRepBalancesAttoRep: {},
 				zoltarMigrationChildSplitAmountsAttoRep: {},
 				zoltarQuestions: [],
@@ -124,9 +124,10 @@ describe('UniverseDirectorySection', () => {
 				expect(queries.queryByRole('button', { name: 'Prepare REP' })).toBeNull()
 				expect(document.querySelectorAll('.migration-outcome-list')).toHaveLength(1)
 				expect(queries.queryByRole('heading', { name: 'Child Universes' })).toBeNull()
-				expect(queries.getByRole('heading', { name: 'Choose destinations' })).toBeTruthy()
+				expect(queries.getByRole('heading', { name: 'Choose outcomes' })).toBeTruthy()
 				expect(queries.getByRole('button', { name: 'Deploy universe' })).toBeTruthy()
-				expect(queries.getByRole('button', { name: 'Split REP' })).toBeTruthy()
+				expect(queries.getByRole('button', { name: 'Continue' })).toBeTruthy()
+				expect(queries.queryByRole('button', { name: 'Split REP' })).toBeNull()
 				expect(queries.queryByRole('button', { name: 'Fork Universe' })).toBeNull()
 			} else {
 				expect(queries.getByRole('button', { name: 'Fork Universe' })).toBeTruthy()
