@@ -234,10 +234,8 @@ export function useQuestionCreation(
 					clearQuestionDraftIfUnchanged(submittedQuestionDraftStorageKey, submittedMarketForm)
 					questionResult.value = { storageKey: submittedQuestionActionScopeKey, value: result }
 					questionFeedback.value = { storageKey: submittedQuestionActionScopeKey, value: createSuccessActionFeedback('createMarket', 'Question created', result.hash) }
-					if (isCurrentQuestionActionScope()) {
-						onTransactionPresented(createMarketCreationSuccessPresentation(result, transactionContext))
-						zoltar.setZoltarForkQuestionId(result.questionId)
-					}
+					// The fork form is not prefilled: a new question is usually still open, and the result card's Use for fork selects it once it has ended.
+					if (isCurrentQuestionActionScope()) onTransactionPresented(createMarketCreationSuccessPresentation(result, transactionContext))
 				},
 			)
 		} finally {

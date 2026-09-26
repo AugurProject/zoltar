@@ -392,3 +392,124 @@
 		grid-template-columns: minmax(0, 1fr);
 	}
 }
+
+/* Keeps the question rows aligned whether the fork shortcut reads "Use for fork" or "Fork after it ends". */
+.fork-shortcut {
+	min-inline-size: 11rem;
+}
+
+/* Fork checklist: numbered prerequisite rows with a status marker, badge, reason, and the controls that complete each step. */
+.fork-checklist {
+	display: grid;
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+
+.fork-checklist-step {
+	display: grid;
+	grid-template-columns: 2rem minmax(0, 1fr);
+	gap: var(--space-3);
+	padding: var(--space-4) 0;
+	border-top: 1px solid var(--divider-subtle);
+}
+
+.fork-checklist-step:first-child {
+	border-top: 0;
+	padding-top: 0;
+}
+
+.fork-checklist-marker {
+	display: inline-grid;
+	place-items: center;
+	width: 2rem;
+	height: 2rem;
+	border: 1px solid var(--border-strong);
+	border-radius: var(--radius-pill);
+	color: var(--muted);
+	font-family: var(--font-family-mono);
+	font-size: var(--font-label);
+	font-weight: 600;
+}
+
+.fork-checklist-step.done .fork-checklist-marker {
+	border-color: var(--success-border);
+	background: var(--success-soft);
+	color: var(--success);
+}
+
+.fork-checklist-step.blocked .fork-checklist-marker {
+	border-color: var(--danger-border);
+	background: var(--danger-soft);
+	color: var(--danger);
+}
+
+.fork-checklist-step[aria-current="step"].pending .fork-checklist-marker {
+	border-color: var(--status-pending-border);
+	background: var(--status-pending-soft);
+	color: var(--status-pending);
+}
+
+.fork-checklist-body,
+.fork-checklist-content,
+.fork-question-picker,
+.fork-selected-question {
+	display: grid;
+	gap: var(--space-3);
+	min-width: 0;
+}
+
+.fork-checklist-body {
+	gap: var(--space-2);
+}
+
+.fork-checklist-content {
+	margin-top: var(--space-1);
+}
+
+.fork-checklist-heading {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: var(--space-2) var(--space-3);
+	min-height: 2rem;
+}
+
+.fork-checklist-heading h3 {
+	margin: 0;
+	font-size: var(--font-body);
+}
+
+.fork-checklist-reason {
+	margin: 0;
+	overflow-wrap: anywhere;
+}
+
+.fork-question-picker-list .migration-outcome-metrics {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+}
+
+.fork-question-id-fallback > summary {
+	cursor: pointer;
+	color: var(--text-secondary);
+	font-size: var(--font-caption);
+}
+
+.fork-question-id-fallback[open] {
+	display: grid;
+	gap: var(--space-3);
+}
+
+@media (max-width: 40rem) {
+	.fork-checklist-step {
+		grid-template-columns: 1.75rem minmax(0, 1fr);
+		gap: var(--space-2);
+	}
+
+	.fork-checklist-marker {
+		width: 1.75rem;
+		height: 1.75rem;
+	}
+}

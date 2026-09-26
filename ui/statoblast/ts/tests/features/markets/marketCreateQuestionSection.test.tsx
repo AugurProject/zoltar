@@ -280,31 +280,33 @@ describe('MarketCreateQuestionSection', () => {
 		}
 
 		const renderedComponent = await renderIntoDocument(
-			<MarketCreateQuestionSection
-				accountAddress={zeroAddress}
-				hasForked={false}
-				isOnActiveAppChain={true}
-				marketCreating={false}
-				marketError={undefined}
-				marketForm={marketForm}
-				marketResult={marketResult}
-				loadingZoltarQuestions={false}
-				onCreateMarket={() => undefined}
-				onMarketFormChange={() => undefined}
-				onOpenForkTab={() => {
-					openForkTabCount += 1
-				}}
-				onResetMarket={() => {
-					resetCount += 1
-				}}
-				onUseQuestionForFork={() => {
-					useForForkCount += 1
-				}}
-				onUseQuestionForPool={questionId => {
-					useForPoolQuestionId = questionId
-				}}
-				zoltarQuestions={[question]}
-			/>,
+			<ChainTimestampContext.Provider value={question.endTime}>
+				<MarketCreateQuestionSection
+					accountAddress={zeroAddress}
+					hasForked={false}
+					isOnActiveAppChain={true}
+					marketCreating={false}
+					marketError={undefined}
+					marketForm={marketForm}
+					marketResult={marketResult}
+					loadingZoltarQuestions={false}
+					onCreateMarket={() => undefined}
+					onMarketFormChange={() => undefined}
+					onOpenForkTab={() => {
+						openForkTabCount += 1
+					}}
+					onResetMarket={() => {
+						resetCount += 1
+					}}
+					onUseQuestionForFork={() => {
+						useForForkCount += 1
+					}}
+					onUseQuestionForPool={questionId => {
+						useForPoolQuestionId = questionId
+					}}
+					zoltarQuestions={[question]}
+				/>
+			</ChainTimestampContext.Provider>,
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 

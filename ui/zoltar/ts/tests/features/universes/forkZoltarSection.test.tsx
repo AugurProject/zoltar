@@ -93,8 +93,9 @@ describe('ForkZoltarSection', () => {
 			.find(button => button.textContent?.startsWith('Approve ') === true)
 		if (approveButton === undefined) throw new Error('Expected approval button')
 		expect(approveButton.hasAttribute('disabled')).toBe(true)
-		expect(document.body.textContent?.match(/Switch to Sepolia/g)?.length).toBe(1)
-		expect(document.body.querySelectorAll('.tx-action-group .tx-action-notice').length).toBe(1)
+		const forkState = getTransactionButtonState(document.body, 'Fork Universe')
+		expect(forkState.disabled).toBe(true)
+		expect(forkState.reason).toContain('Switch to Sepolia')
 	})
 
 	test('describes automatically loading fork data without asking for a manual refresh', async () => {
@@ -156,7 +157,8 @@ describe('ForkZoltarSection', () => {
 				.find(button => button.textContent?.startsWith('Approve ') === true)
 			if (approveButton === undefined) throw new Error('Expected approval button')
 			expect(approveButton.hasAttribute('disabled')).toBe(true)
-			expect(renderedComponent.container.textContent).toContain('Select a valid fork question to continue.')
+			expect(approveButton.getAttribute('aria-describedby')).toBe('fork-checklist-question-reason')
+			if (questionId === '') expect(document.getElementById('fork-checklist-question-reason')?.textContent).toBe('Select an ended question to continue.')
 			await renderedComponent.cleanup()
 		}
 
@@ -328,7 +330,7 @@ describe('ForkZoltarSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		const questionIdInput = documentQueries.getByLabelText('Fork Question ID')
+		const questionIdInput = documentQueries.getByLabelText('Question ID')
 		const questionError = document.getElementById('fork-zoltar-question-state')
 		if (questionError === null) throw new Error('Expected question ID error notice')
 		expect(questionError.textContent).toContain('No question matches this ID. Try another question ID.')

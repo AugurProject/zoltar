@@ -4,6 +4,7 @@ import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/
 import { fireEvent, within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import type { MarketDetails } from '@zoltar/ui-core-shared/types/contracts.js'
+import { ChainTimestampContext } from '@zoltar/ui-core-shared/wallet/chainTimestamp.js'
 import { QuestionsView } from '@zoltar/ui-zoltar-shared/features/zoltarSurface/components/QuestionsView.js'
 import { describe, expect, mock, test } from 'bun:test'
 import { render } from 'preact'
@@ -40,17 +41,19 @@ describe('QuestionsView', () => {
 		const activeViews: string[] = []
 		const selectedQuestionIds: string[] = []
 		const renderedComponent = await renderIntoDocument(
-			<QuestionsView
-				canFork={true}
-				hasForked={false}
-				loadingZoltarQuestions={false}
-				onActiveViewChange={view => activeViews.push(view)}
-				onLoadZoltarQuestionPage={loadPage}
-				onZoltarForkQuestionIdChange={questionId => selectedQuestionIds.push(questionId)}
-				requestContextKey={0}
-				zoltarQuestionPage={{ pageIndex: 0, pageSize: 10, questionCount: 1n, questions: [question] }}
-				zoltarQuestionsError={undefined}
-			/>,
+			<ChainTimestampContext.Provider value={question.endTime}>
+				<QuestionsView
+					canFork={true}
+					hasForked={false}
+					loadingZoltarQuestions={false}
+					onActiveViewChange={view => activeViews.push(view)}
+					onLoadZoltarQuestionPage={loadPage}
+					onZoltarForkQuestionIdChange={questionId => selectedQuestionIds.push(questionId)}
+					requestContextKey={0}
+					zoltarQuestionPage={{ pageIndex: 0, pageSize: 10, questionCount: 1n, questions: [question] }}
+					zoltarQuestionsError={undefined}
+				/>
+			</ChainTimestampContext.Provider>,
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
@@ -73,6 +76,35 @@ describe('QuestionsView', () => {
 		expect(selectedQuestionIds).toEqual([question.questionId])
 		expect(activeViews).toEqual(['universes'])
 		expect(loadPage).toHaveBeenCalledWith(0, 10)
+	})
+
+	test('offers a question for forking only once it has ended', async () => {
+		const selectedQuestionIds: string[] = []
+		const renderedComponent = await renderIntoDocument(
+			<ChainTimestampContext.Provider value={question.endTime - 1n}>
+				<QuestionsView
+					canFork={true}
+					hasForked={false}
+					loadingZoltarQuestions={false}
+					onActiveViewChange={() => undefined}
+					onLoadZoltarQuestionPage={async () => undefined}
+					onZoltarForkQuestionIdChange={questionId => selectedQuestionIds.push(questionId)}
+					requestContextKey={0}
+					zoltarQuestionPage={{ pageIndex: 0, pageSize: 10, questionCount: 1n, questions: [question] }}
+					zoltarQuestionsError={undefined}
+				/>
+			</ChainTimestampContext.Provider>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		expect(documentQueries.queryByRole('button', { name: 'Use for fork' })).toBeNull()
+		const pendingButton = documentQueries.getByRole('button', { name: 'Fork after it ends' })
+		expect(pendingButton.hasAttribute('disabled')).toBe(true)
+		await act(() => {
+			fireEvent.click(pendingButton)
+		})
+		expect(selectedQuestionIds).toEqual([])
 	})
 
 	test('retries a failed automatic page load without leaking its rejection', async () => {
