@@ -1,23 +1,17 @@
-import { TimestampValue } from '@zoltar/ui-core-shared/components/TimestampValue.js'
-import type { RefObject } from 'preact'
-import { useEffect, useRef, useState } from 'preact/hooks'
-import { formatTrimmedUnits } from '@zoltar/ui-core-shared/lib/formatters.js'
+import { useCallback, useEffect, useRef, useState } from 'preact/hooks'
+import { parseRouteHash } from '@zoltar/ui-core-shared/navigation/routing.js'
 import { abbreviateAddress } from '@zoltar/ui-core-shared/lib/address.js'
-import { SecurityPoolLink } from '../components/SecurityPoolLink.js'
 import type { DeploymentConfiguration } from '../protocol/config.js'
-import { marketAcceptsNewRisk, type LiveMarket } from '../protocol/live.js'
+import { marketAcceptsNewRisk } from '../protocol/live.js'
 import * as appCopy from '../copy/app.js'
 import { getTradingRouteHref, isTradingLookupRoute, tradingWorkflowRoute, type TradingRoute } from '../lib/routing.js'
-import { Badge } from '@zoltar/ui-core-shared/components/Badge.js'
 import { EmptyState } from '@zoltar/ui-core-shared/components/EmptyState.js'
 import { ErrorNotice } from '@zoltar/ui-core-shared/components/ErrorNotice.js'
-import { ReadOnlyAddressValue } from '@zoltar/ui-core-shared/components/AddressValue.js'
 import { RetryableNotice } from '@zoltar/ui-core-shared/components/RetryableNotice.js'
 import { RouteHeader } from '@zoltar/ui-core-shared/components/RouteHeader.js'
 import { StateHint } from '@zoltar/ui-core-shared/components/StateHint.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import { SectionBlock } from '@zoltar/ui-core-shared/components/SectionBlock.js'
-import { StickyObjectContext } from '@zoltar/ui-core-shared/components/StickyObjectContext.js'
 import { ViewTabs } from '@zoltar/ui-core-shared/components/ViewTabs.js'
 import { useLiveTradingController } from './liveTradingController.js'
 import { liveTradingControllerServices } from './liveTradingControllerHelpers.js'
@@ -32,7 +26,11 @@ import { liveRouteLoadingPresentation, liveWorkflowRoutePresentation } from './l
 import { LiveSecurityPoolDetails, PairInitializationAction, SecurityPoolRouteEmptyState } from './LiveSecurityPoolDetails.js'
 import { UniverseDirectory, type LoadUniverseSummary } from './UniverseDirectory.js'
 import type { UniverseDiscoveryScope } from '../lib/universeSelection.js'
-import { LiveMarketBrowser, marketStatusLabel, marketStatusTone } from './LiveMarketBrowser.js'
+import { LiveMarketBrowser } from './LiveMarketBrowser.js'
+import { MarketContracts, MarketFacts, MarketOverview } from './MarketOverview.js'
+import { MarketTicketSheet } from './MarketTicketSheet.js'
+import { marketOddsPercent } from '../lib/marketListing.js'
+import { hashWithoutTicketSide, readTicketSideParam } from '../lib/ticketSide.js'
 import { liveCopy } from '../copy/live.js'
 import * as availabilityCopy from '../copy/availability.js'
 import { useFocusOnKeyChange } from './live/useFocusOnKeyChange.js'
@@ -42,28 +40,6 @@ const ignoreWalletSummaryChange = () => undefined
 type MarketWorkspaceView = 'trade' | 'liquidity' | 'settlement'
 
 const MARKET_WORKSPACE_PANEL_ID = 'market-workspace-panel'
-
-function MarketFacts({ market, nowSeconds, workflowLocked, headingRef }: { market: LiveMarket; nowSeconds: bigint; workflowLocked: boolean; headingRef: RefObject<HTMLHeadingElement> }) {
-	return (
-		<StickyObjectContext
-			variant='embedded-context-strip'
-			sticky={false}
-			title={market.title}
-			titleRef={headingRef}
-			badge={<Badge tone={marketStatusTone(market, nowSeconds)}>{marketStatusLabel(market, nowSeconds)}</Badge>}
-			items={[
-				{ label: liveCopy.securityPoolLabel, value: <SecurityPoolLink value={market.pool} disabled={workflowLocked} /> },
-				...(market.loadError === undefined
-					? [
-							{ label: liveCopy.questionEnd, value: <TimestampValue timestamp={market.endTime} relative={false} /> },
-							{ label: liveCopy.ammFee, value: `${formatTrimmedUnits(market.feeBps, 2, 2)}%` },
-							{ label: liveCopy.pair, value: market.pair === undefined ? liveCopy.notDeployed : <ReadOnlyAddressValue address={market.pair} responsiveAbbreviation /> },
-						]
-					: []),
-			]}
-		/>
-	)
-}
 
 export function LiveTrading({
 	route,
@@ -135,6 +111,22 @@ export function LiveTrading({
 	useEffect(() => setClosedMarketView('settlement'), [routePool])
 	// Moving between addressed markets keeps the same page title, so focus the new market heading here instead of relying on the app heading.
 	const marketHeadingRef = useFocusOnKeyChange<HTMLHeadingElement>(selected?.pool, false)
+	// A market-card outcome button opens the ticket on that side once; the parameter is then dropped from the hash so later navigation does not carry it.
+	const [ticketOpenRequested, setTicketOpenRequested] = useState(false)
+	const positionInputRef = useRef({ setMode, setSide })
+	positionInputRef.current = { setMode, setSide }
+	useEffect(() => {
+		// A request left unconsumed by a market that never loaded must not open the sheet on the next market.
+		setTicketOpenRequested(false)
+		if (routePool === undefined || workflowRoute !== 'market') return
+		const requestedSide = readTicketSideParam(parseRouteHash(window.location.hash).search)
+		if (requestedSide === undefined) return
+		positionInputRef.current.setMode('entry')
+		positionInputRef.current.setSide(requestedSide)
+		window.history.replaceState(window.history.state, '', hashWithoutTicketSide(window.location.hash))
+		setTicketOpenRequested(true)
+	}, [routePool, workflowRoute])
+	const handleTicketOpenRequest = useCallback(() => setTicketOpenRequested(false), [])
 	const previousWalletConnectRequestNonce = useRef(walletConnectRequestNonce)
 	useEffect(() => onDiscoveryStateChange?.(discoveryState), [discoveryState, onDiscoveryStateChange])
 	useEffect(() => {
@@ -235,6 +227,19 @@ export function LiveTrading({
 		{ value: 'liquidity' as const, id: viewTabId('liquidity'), panelId: MARKET_WORKSPACE_PANEL_ID, label: appCopy.liquidity, disabled: workflowLocked },
 		...(marketOpen ? [] : [{ value: 'settlement' as const, id: viewTabId('settlement'), panelId: MARKET_WORKSPACE_PANEL_ID, label: appCopy.settlement, disabled: workflowLocked }]),
 	]
+	const odds = selected === undefined ? undefined : marketOddsPercent(selected)
+	// On narrow screens the collapsed ticket offers one-tap YES / NO entry while the trade view can take a new position.
+	const quickPick =
+		odds !== undefined && marketOpen && activeView === 'trade' && selectedPairInitialized
+			? {
+					yesPercent: odds.yes,
+					noPercent: odds.no,
+					pick: (pickedSide: 'YES' | 'NO') => {
+						setMode('entry')
+						setSide(pickedSide)
+					},
+				}
+			: undefined
 	// The route header names the workflow; the object header below carries the market question, status, and facts, so
 	// neither repeats the other. Focus lands on the object header when the addressed market changes.
 	return (
@@ -262,6 +267,7 @@ export function LiveTrading({
 								<p className='detail'>
 									{liveCopy.poolAlreadyExists} <a href={getTradingRouteHref(`#/liquidity/${selected.pool}`)}>{appCopy.liquidity}</a>
 								</p>
+								<MarketContracts market={selected} workflowLocked={workflowLocked} />
 							</SectionBlock>
 						)
 					if (selected.loadError !== undefined)
@@ -300,9 +306,8 @@ export function LiveTrading({
 								/>
 							</SectionBlock>
 						)
-					return (
-						<SectionBlock key={selected.pool} className='market-workspace'>
-							<MarketFacts market={selected} nowSeconds={nowSeconds} workflowLocked={workflowLocked} headingRef={marketHeadingRef} />
+					const ticket = (
+						<SectionBlock className='market-workspace'>
 							<ViewTabs ariaLabel={appCopy.marketWorkspaceViews} semantics='tabs' size='compact' value={activeView} onChange={openView} options={viewOptions} />
 							<div className='market-workspace-panel' role='tabpanel' id={MARKET_WORKSPACE_PANEL_ID} aria-labelledby={viewTabId(activeView)}>
 								{activeView === 'settlement' ? (
@@ -382,6 +387,16 @@ export function LiveTrading({
 								) : null}
 							</div>
 						</SectionBlock>
+					)
+					return (
+						<div key={selected.pool} className='market-layout'>
+							<SectionBlock className='market-layout__main' variant='plain'>
+								<MarketOverview market={selected} nowSeconds={nowSeconds} workflowLocked={workflowLocked} headingRef={marketHeadingRef} />
+							</SectionBlock>
+							<MarketTicketSheet viewLabel={viewOptions.find(option => option.value === activeView)?.label ?? appCopy.trade} quickPick={quickPick} openRequested={ticketOpenRequested} onOpenRequestHandled={handleTicketOpenRequest}>
+								{ticket}
+							</MarketTicketSheet>
+						</div>
 					)
 				})()}
 			</div>
