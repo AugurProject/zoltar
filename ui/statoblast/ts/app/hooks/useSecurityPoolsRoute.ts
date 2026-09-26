@@ -1,5 +1,5 @@
 import { RequestPriceModal } from '../transactions/RequestPriceModal.js'
-import { useEffect, useRef, useState } from 'preact/hooks'
+import { useEffect, useMemo, useRef, useState } from 'preact/hooks'
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import { useForkAuctionOperations } from '@zoltar/ui-statoblast-shared/features/truth-auctions/hooks/useForkAuctionOperations.js'
 import { useMarketCreation } from '@zoltar/ui-statoblast-shared/features/markets/hooks/useMarketCreation.js'
@@ -13,6 +13,8 @@ import { applyReportingFormUpdate } from '@zoltar/ui-statoblast-shared/features/
 import { getCurrentPoolOracleManagerDetails } from '@zoltar/ui-statoblast-shared/features/security-pools/lib/securityPoolWorkflow.js'
 import { isUiOpenOraclePriceUsed, resolveUiRepPerEthPrice } from '@zoltar/ui-statoblast-shared/features/security-pools/lib/uiPriceOracle.js'
 import { resolveEnumValue, resolveFirstMatchingValue } from '@zoltar/ui-core-shared/forms/viewState.js'
+import { useRememberOpenedEntity } from '@zoltar/ui-core-shared/hooks/useLocalEntities.js'
+import { securityPoolDownloadStore, toCachedSecurityPool } from '@zoltar/ui-statoblast-shared/features/security-pools/lib/poolBrowse.js'
 import { shouldAutoLoadUniverseDirectory } from '../lib/universeDirectory.js'
 import { readUiPriceOracle } from '../UiPriceOracleSettings.js'
 import type { ReportingFormState, WriteOperationsParameters } from '@zoltar/ui-zoltar-shared/types/app.js'
@@ -139,7 +141,6 @@ export function useSecurityPoolsRoute({
 	const {
 		checkedSecurityPoolAddress,
 		closeLiquidationModal,
-		hasLoadedSecurityPoolPage,
 		hasLoadedUniverseDirectoryPools,
 		liquidationDebtEthAmount,
 		maximumLiquidationDebtAttoEth,
@@ -175,7 +176,6 @@ export function useSecurityPoolsRoute({
 		securityPoolOverviewError,
 		securityPoolLiquidationError,
 		securityPoolOverviewResult,
-		securityPoolBrowseCount,
 		securityPoolPage,
 		securityPools,
 		securityPoolUniverseDirectoryError,
@@ -186,6 +186,8 @@ export function useSecurityPoolsRoute({
 		setLiquidationTimeoutMinutes,
 	} = useSecurityPoolsOverview({ ...walletScopedHookConfig, environmentRefreshKey: activeEnvironmentNonce })
 	const selectedPool = securityPools.find(pool => pool.securityPoolAddress.toLowerCase() === securityPoolAddress.toLowerCase())
+	const openedPoolSummary = useMemo(() => (selectedPool === undefined ? undefined : toCachedSecurityPool(selectedPool)), [selectedPool])
+	useRememberOpenedEntity('statoblast', 'pool', securityPoolDownloadStore, selectedPool?.securityPoolAddress, openedPoolSummary)
 	const { createCompleteSet, loadingTradingDetails, loadingTradingForkUniverse, migrateShares, redeemCompleteSet, redeemShares, setTradingForm, tradingActiveAction, tradingDetails, tradingError, tradingForm, tradingForkUniverse, tradingResult } = useTradingOperations({
 		...walletScopedHookConfig,
 		deploymentStatuses,
@@ -356,11 +358,9 @@ export function useSecurityPoolsRoute({
 			activeUniverseId,
 			currentTimestamp,
 			environmentRefreshKey: activeEnvironmentNonce,
-			hasLoadedSecurityPoolPage,
 			loadingSecurityPoolPage,
 			onLoadSecurityPoolPage: (pageIndex: number, pageSize: number, requestKey: string) => void loadBrowseSecurityPoolPage(pageIndex, pageSize, requestKey),
 			onCreateSecurityPool: () => setSecurityPoolsView('create'),
-			securityPoolBrowseCount,
 			securityPoolPage,
 			securityPoolOverviewError,
 			securityPools,

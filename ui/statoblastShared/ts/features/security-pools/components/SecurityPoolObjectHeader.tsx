@@ -11,6 +11,7 @@ import { SecurityPoolLink } from './SecurityPoolLink.js'
 import { ReadOnlyDetailAccordion } from '@zoltar/ui-core-shared/components/ReadOnlyDetailAccordion.js'
 import { TimestampValue } from '@zoltar/ui-core-shared/components/TimestampValue.js'
 import { AddressValue } from '@zoltar/ui-core-shared/components/AddressValue.js'
+import { FavoriteToggle } from '@zoltar/ui-core-shared/components/FavoriteToggle.js'
 import { PoolCapacitySummary } from './PoolCapacitySummary.js'
 import * as copy from '../../../copy/poolWorkspace.js'
 import { getOracleManagerPriceValidUntilTimestamp } from '../../../protocol/oracleTiming.js'
@@ -54,7 +55,10 @@ export function SecurityPoolObjectHeader(props: SecurityPoolObjectHeaderProps) {
 	return (
 		<div className='selected-pool-object-header pool-overview-header'>
 			<div className='pool-object-identity'>
-				<h2>{getQuestionTitle(marketDetails)}</h2>
+				<div className='pool-object-title'>
+					<FavoriteToggle app='statoblast' entityLabel={getQuestionTitle(marketDetails)} id={summaryPool.securityPoolAddress} kind='pool' />
+					<h2>{getQuestionTitle(marketDetails)}</h2>
+				</div>
 				<div className='pool-object-meta'>
 					<Badge ariaLabel={statusBadgeLabel} tone={getSecurityPoolStatusBadgeTone(selectedPoolLifecycleState)}>
 						{statusBadgeLabel}

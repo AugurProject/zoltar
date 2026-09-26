@@ -6,6 +6,9 @@ import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/
 import { fireEvent, within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import { installTestRouting } from '@zoltar/ui-core-shared/tests/testUtils/testRouting.js'
+import { getLocalEntityScope } from '@zoltar/ui-core-shared/hooks/useLocalEntities.js'
+import { resetLocalEntityStoreForTesting, setEntityFavorite } from '@zoltar/ui-core-shared/lib/localEntityStore.js'
+import { securityPoolDownloadStore, toCachedSecurityPool } from '@zoltar/ui-statoblast-shared/features/security-pools/lib/poolBrowse.js'
 import type { ListedSecurityPool, SecurityPoolBrowsePage, SecurityPoolPage } from '@zoltar/ui-core-shared/types/contracts.js'
 import type { ReportingRouteContentProps } from '@zoltar/ui-statoblast-shared/features/oracleTypes.js'
 import { SecurityPoolsSection } from '@zoltar/ui-statoblast-shared/features/security-pools/components/SecurityPoolsSection.js'
@@ -13,7 +16,7 @@ import { deriveHasForkActivity } from '@zoltar/ui-statoblast-shared/features/tru
 import type { ForkAuctionRouteContentProps, SecurityPoolRouteContentProps, SecurityPoolsOverviewRouteContentProps, SecurityPoolsSectionProps, SecurityPoolWorkflowRouteContentProps, SecurityVaultRouteContentProps, TradingRouteContentProps } from '@zoltar/ui-zoltar-shared/features/types.js'
 import type { AccountState } from '@zoltar/ui-zoltar-shared/types/app.js'
 import { describe, expect, test } from 'bun:test'
-import { h, render } from 'preact'
+import { h } from 'preact'
 import { act } from 'preact/test-utils'
 installTestRouting()
 
@@ -295,14 +298,12 @@ function createOverviewProps(overrides: SecurityPoolsOverviewRouteTestOverrides 
 	return {
 		accountState,
 		activeUniverseId: 1n,
-		hasLoadedSecurityPoolPage: securityPoolPage !== undefined,
 		loadingSecurityPoolPage: false,
 		onLoadSecurityPoolPage: () => undefined,
 		repPerEthPrice: undefined,
 		securityPoolOverviewError: undefined,
 		...overrides,
 		environmentRefreshKey,
-		securityPoolBrowseCount: securityPoolPage?.poolCount,
 		securityPoolPage,
 		securityPools,
 	}
@@ -354,6 +355,10 @@ void describe('SecurityPoolsSection', () => {
 		afterTest: async () => {
 			await cleanupRenderedComponent?.()
 			cleanupRenderedComponent = undefined
+			resetLocalEntityStoreForTesting()
+		},
+		beforeTest: () => {
+			resetLocalEntityStoreForTesting()
 		},
 	})
 
@@ -375,39 +380,25 @@ void describe('SecurityPoolsSection', () => {
 		expect(document.body.textContent?.includes('Filters apply only to the currently loaded page. Use pagination to inspect other pools.')).toBe(false)
 	})
 
-	void test('auto-loads pool browse data once when opening the browse view without loaded pools', async () => {
+	void test('opens the browse view from local favorites without scanning the chain', async () => {
 		const calls: string[] = []
-		const initialProps = createSecurityPoolsSectionProps({
-			overview: createOverviewProps({
-				hasLoadedSecurityPoolPage: false,
-				loadingSecurityPoolPage: false,
-				onLoadSecurityPoolPage: (pageIndex, pageSize) => {
-					calls.push(`${pageIndex}:${pageSize}`)
-				},
-			}),
-		})
-
-		const renderedComponent = await renderIntoDocument(h(SecurityPoolsSection, initialProps))
-		cleanupRenderedComponent = renderedComponent.cleanup
-		expect(calls).toEqual(['0:6'])
-
-		await act(() => {
-			render(
-				h(SecurityPoolsSection, {
-					...initialProps,
+		const renderedComponent = await renderIntoDocument(
+			h(
+				SecurityPoolsSection,
+				createSecurityPoolsSectionProps({
 					overview: createOverviewProps({
-						hasLoadedSecurityPoolPage: false,
 						loadingSecurityPoolPage: false,
 						onLoadSecurityPoolPage: (pageIndex, pageSize) => {
-							calls.push(`rerender:${pageIndex}:${pageSize}`)
+							calls.push(`${pageIndex}:${pageSize}`)
 						},
 					}),
 				}),
-				renderedComponent.container,
-			)
-		})
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
 
-		expect(calls).toEqual(['0:6'])
+		expect(calls).toEqual([])
+		expect(within(document.body).getByRole('button', { name: 'Discover pools' })).not.toBeNull()
 	})
 
 	void test('openView opens and refreshes selected pool data when navigating from create mode', async () => {
@@ -581,6 +572,12 @@ void describe('SecurityPoolsSection', () => {
 			securityPoolAddress: '0x0000000000000000000000000000000000000002',
 			systemState: 'operational',
 		})
+		const scope = getLocalEntityScope('statoblast', 'pool')
+		securityPoolDownloadStore.record(
+			scope,
+			[operationalPool, endedPool].map(pool => ({ data: toCachedSecurityPool(pool), id: pool.securityPoolAddress })),
+		)
+		for (const pool of [operationalPool, endedPool]) setEntityFavorite(scope, pool.securityPoolAddress, true)
 		const renderedComponent = await renderIntoDocument(
 			h(
 				SecurityPoolsSection,

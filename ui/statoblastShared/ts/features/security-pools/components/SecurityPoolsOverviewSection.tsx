@@ -1,198 +1,202 @@
 import { formatSecurityPoolPageSummary } from '../lib/securityPoolLabels.js'
 import { PoolDirectoryRow } from './PoolDirectoryRow.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
+import * as favoritesCopy from '@zoltar/ui-core-shared/copy/favorites.js'
 import * as securityPoolCopy from '../../../copy/securityPool.js'
-import { useEffect, useRef, useState } from 'preact/hooks'
-import { zeroAddress } from '@zoltar/core-shared/evm/ethereum'
+import { useMemo, useState } from 'preact/hooks'
 import { ErrorNotice } from '@zoltar/ui-core-shared/components/ErrorNotice.js'
 import { FormInput } from '@zoltar/ui-core-shared/components/FormInput.js'
 import { LoadingText } from '@zoltar/ui-core-shared/components/LoadingText.js'
-import { PaginationControls } from '@zoltar/ui-core-shared/components/PaginationControls.js'
 import { SectionBlock } from '@zoltar/ui-core-shared/components/SectionBlock.js'
 import { EmptyState } from '@zoltar/ui-core-shared/components/EmptyState.js'
-import { StateHint } from '@zoltar/ui-core-shared/components/StateHint.js'
+import { DiscoveryControl, LocalCollectionSwitcher } from '@zoltar/ui-core-shared/components/LocalBrowseControls.js'
+import { useDownloadedEntities, useFavorites } from '@zoltar/ui-core-shared/hooks/useLocalEntities.js'
+import { usePagedDiscovery, type DiscoveredPage } from '@zoltar/ui-core-shared/hooks/usePagedDiscovery.js'
+import { isHexAddressInput } from '@zoltar/ui-core-shared/lib/address.js'
+import { buildLocalBrowseEntries, normalizeLocalSearchText, type LocalBrowseCollection } from '@zoltar/ui-core-shared/lib/localEntityBrowse.js'
 import { getWalletScopedAccountAddress } from '@zoltar/ui-core-shared/wallet/network.js'
-import { formatPaginationSummary, getHasNextPaginationPage, getPaginationPageCount, resolvePaginationPageIndex, SECURITY_POOL_PAGE_SIZE } from '@zoltar/ui-core-shared/lib/pagination.js'
-import { deriveSecurityPoolLifecycleState, evaluateSecurityPoolState, type SecurityPoolLifecycleState } from '../lib/securityPoolState.js'
-import { calculateMintingCapacityAttoEth } from '../../markets/lib/trading.js'
-import { getPoolRegistryPresentation } from '@zoltar/ui-core-shared/lib/userCopy.js'
+import { SECURITY_POOL_PAGE_SIZE } from '@zoltar/ui-core-shared/lib/pagination.js'
+import type { ListedSecurityPool } from '@zoltar/ui-core-shared/types/contracts.js'
+import { derivePoolBrowseRows, filterPoolBrowseRows, securityPoolDownloadStore, sortPoolBrowseRows, toCachedSecurityPool, type PoolSortKey, type PoolStateFilter } from '../lib/poolBrowse.js'
 import type { SecurityPoolsOverviewSectionProps } from '../../types.js'
-import { resolveUiRepPerEthPrice } from '../lib/uiPriceOracle.js'
 
+const STATE_FILTER_OPTIONS: readonly PoolStateFilter[] = ['all', 'operational', 'ended', 'poolForked', 'forkMigration', 'forkTruthAuction']
+const SORT_OPTIONS: readonly PoolSortKey[] = ['recent', 'remainingCapacity', 'endTime', 'state']
+
+function getStateFilterLabel(filter: PoolStateFilter) {
+	if (filter === 'all') return securityPoolCopy.allStates
+	if (filter === 'operational') return commonCopy.operational
+	if (filter === 'ended') return securityPoolCopy.ended
+	if (filter === 'poolForked') return securityPoolCopy.poolForked
+	if (filter === 'forkMigration') return securityPoolCopy.forkMigration
+	return commonCopy.truthAuction
+}
+
+function getSortLabel(sortKey: PoolSortKey) {
+	if (sortKey === 'recent') return favoritesCopy.recentlySaved
+	if (sortKey === 'remainingCapacity') return securityPoolCopy.remainingCapacity
+	if (sortKey === 'endTime') return favoritesCopy.endTime
+	return securityPoolCopy.systemState
+}
+
+function parseOption<TValue extends string>(options: readonly TValue[], value: string) {
+	return options.find(option => option === value)
+}
+
+/**
+ * Pool browsing runs over pools already downloaded to this browser: favorites by default, every downloaded summary
+ * on request. Scanning the chain is an explicit, paged action whose results join the downloaded cache.
+ */
 export function SecurityPoolsOverviewSection({
 	accountState,
 	activeUniverseId,
 	currentTimestamp,
 	environmentRefreshKey,
-	hasLoadedSecurityPoolPage,
 	loadingSecurityPoolPage,
 	onCreateSecurityPool,
 	onLoadSecurityPoolPage,
 	onSelectSecurityPool,
-	securityPoolBrowseCount,
 	securityPoolPage,
 	securityPoolOverviewError,
 	repPerEthPrice,
 	uiPriceOracle = 'open-oracle',
 }: SecurityPoolsOverviewSectionProps) {
-	const [pageIndex, setPageIndex] = useState(0)
-	const [activePageRequestKey, setActivePageRequestKey] = useState<string | undefined>(undefined)
-	const [pageLoadError, setPageLoadError] = useState<string | undefined>(undefined)
+	const [collection, setCollection] = useState<LocalBrowseCollection>('favorites')
 	const [searchText, setSearchText] = useState('')
-	const [systemStateFilter, setSystemStateFilter] = useState<'all' | SecurityPoolLifecycleState>('all')
-	const loadSecurityPoolPageRef = useRef(onLoadSecurityPoolPage)
-	loadSecurityPoolPageRef.current = onLoadSecurityPoolPage
-	const requestedPoolCount = securityPoolPage?.poolCount ?? securityPoolBrowseCount
-	const requestedPoolPageCount = getPaginationPageCount(requestedPoolCount, SECURITY_POOL_PAGE_SIZE)
-	const resolvedPageIndex = resolvePaginationPageIndex(pageIndex, requestedPoolPageCount)
+	const [stateFilter, setStateFilter] = useState<PoolStateFilter>('all')
+	const [sortKey, setSortKey] = useState<PoolSortKey>('recent')
+	const favorites = useFavorites('statoblast', 'pool')
+	const downloaded = useDownloadedEntities('statoblast', 'pool', securityPoolDownloadStore)
 	const scopedAccountAddress = getWalletScopedAccountAddress(accountState.address, accountState.chainId)
-	const accountRequestKey = scopedAccountAddress?.toLowerCase() ?? 'no-account'
-	const currentPageRequestKey = `${environmentRefreshKey}:${resolvedPageIndex}:${SECURITY_POOL_PAGE_SIZE}:${accountRequestKey}`
-	const hasCurrentPageData = securityPoolPage?.requestKey === currentPageRequestKey && securityPoolPage.pageIndex === resolvedPageIndex && securityPoolPage.pageSize === SECURITY_POOL_PAGE_SIZE
-	const currentPoolCount = hasCurrentPageData ? securityPoolPage.poolCount : undefined
-	const poolPageCount = getPaginationPageCount(currentPoolCount, SECURITY_POOL_PAGE_SIZE)
-	const pagedSecurityPools = hasCurrentPageData ? securityPoolPage.pools : []
-	const isWaitingForPageData = activePageRequestKey === currentPageRequestKey
-	const hasLoadedCurrentPage = hasLoadedSecurityPoolPage && hasCurrentPageData
-	const effectiveSecurityPoolOverviewError = securityPoolOverviewError ?? pageLoadError
-	const loadingCurrentPage = loadingSecurityPoolPage || isWaitingForPageData || (!hasLoadedCurrentPage && effectiveSecurityPoolOverviewError === undefined)
-	const registryPresentation = getPoolRegistryPresentation({
-		hasLoaded: hasLoadedCurrentPage,
-		isLoading: loadingCurrentPage && !hasLoadedCurrentPage,
-		mode: 'collection',
-		poolCount: pagedSecurityPools.length,
+	const receivedPage = useMemo((): DiscoveredPage<ListedSecurityPool> | undefined => {
+		if (securityPoolPage === undefined) return undefined
+		return { items: securityPoolPage.pools, pageIndex: securityPoolPage.pageIndex, pageSize: securityPoolPage.pageSize, requestKey: securityPoolPage.requestKey, totalCount: securityPoolPage.poolCount }
+	}, [securityPoolPage])
+	const discovery = usePagedDiscovery({
+		contextKey: `${environmentRefreshKey.toString()}:${scopedAccountAddress?.toLowerCase() ?? 'no-account'}`,
+		loadPage: (pageIndex, requestKey) => onLoadSecurityPoolPage(pageIndex, SECURITY_POOL_PAGE_SIZE, requestKey),
+		onItems: pools => downloaded.record(pools.map(pool => ({ data: toCachedSecurityPool(pool), id: pool.securityPoolAddress }))),
+		pageSize: SECURITY_POOL_PAGE_SIZE,
+		receivedPage,
 	})
-	const securityPoolsWithState = pagedSecurityPools.map(pool => ({
-		pool,
-		poolState: evaluateSecurityPoolState({
-			lifecycleState: deriveSecurityPoolLifecycleState({
-				hasForkActivity: pool.hasForkActivity,
-				isChildPool: pool.parent !== zeroAddress,
-				questionOutcome: pool.questionOutcome,
-				systemState: pool.systemState,
-				universeHasForked: pool.universeHasForked,
-			}),
-			universeHasForked: pool.universeHasForked,
-		}),
-	}))
-	const normalizedSearchText = searchText.trim().toLowerCase()
-	const hasPreviousPage = resolvedPageIndex > 0
-	const hasNextPage = hasCurrentPageData && getHasNextPaginationPage(resolvedPageIndex, poolPageCount)
-	const retryPoolRegistryLoad = () => {
-		setPageLoadError(undefined)
-		setActivePageRequestKey(currentPageRequestKey)
-		void Promise.resolve(onLoadSecurityPoolPage(resolvedPageIndex, SECURITY_POOL_PAGE_SIZE, currentPageRequestKey))
-			.catch(() => {
-				setPageLoadError(securityPoolCopy.poolPageLoadError)
-			})
-			.finally(() => {
-				setActivePageRequestKey(current => (current === currentPageRequestKey ? undefined : current))
-			})
+	const discoveryLoading = discovery.loading || loadingSecurityPoolPage
+	const discover = () => {
+		setCollection('downloaded')
+		discovery.discoverNext()
 	}
-	useEffect(() => {
-		if (resolvedPageIndex === pageIndex) return
-		setPageIndex(resolvedPageIndex)
-	}, [pageIndex, resolvedPageIndex])
-	useEffect(() => {
-		let cancelled = false
-		setPageLoadError(undefined)
-		setActivePageRequestKey(currentPageRequestKey)
-		void Promise.resolve(loadSecurityPoolPageRef.current(resolvedPageIndex, SECURITY_POOL_PAGE_SIZE, currentPageRequestKey))
-			.catch(() => {
-				if (cancelled) return
-				setPageLoadError(securityPoolCopy.poolPageLoadError)
-			})
-			.finally(() => {
-				if (cancelled) return
-				setActivePageRequestKey(current => (current === currentPageRequestKey ? undefined : current))
-			})
-		return () => {
-			cancelled = true
+	const favoriteEntries = buildLocalBrowseEntries(downloaded.entries, favorites.entries, 'favorites')
+	const collectionEntries = collection === 'favorites' ? favoriteEntries : buildLocalBrowseEntries(downloaded.entries, favorites.entries, 'downloaded')
+	const rows = derivePoolBrowseRows(collectionEntries, { currentTimestamp, repPerEthPrice, uiPriceOracle })
+	const normalizedSearchText = normalizeLocalSearchText(searchText)
+	const universeRows = rows.filter(row => row.pool.universeId === activeUniverseId)
+	const visibleRows = sortPoolBrowseRows(filterPoolBrowseRows(rows, { activeUniverseId, normalizedSearchText, stateFilter }), sortKey, currentTimestamp)
+	const otherUniverseCount = rows.length - universeRows.length
+	const searchedAddress = isHexAddressInput(searchText.trim()) ? searchText.trim() : undefined
+	// A pasted address that is not listed (not downloaded, in the other collection, or filtered out) can still be opened directly.
+	const searchedAddressIsListed = searchedAddress !== undefined && visibleRows.some(row => row.pool.securityPoolAddress.toLowerCase() === searchedAddress.toLowerCase())
+	// A downloaded pool opens in its own universe, like its directory row.
+	const searchedDownloadedPool = searchedAddress === undefined ? undefined : downloaded.entries.find(entry => entry.id === searchedAddress.toLowerCase())
+	const openSearchedAddress =
+		searchedAddress === undefined || searchedAddressIsListed || onSelectSecurityPool === undefined ? undefined : (
+			<button className='primary' type='button' onClick={() => onSelectSecurityPool(searchedAddress, searchedDownloadedPool?.data.universeId ?? activeUniverseId)}>
+				{securityPoolCopy.openPoolAtAddress}
+			</button>
+		)
+
+	const content = (() => {
+		if (rows.length === 0) {
+			if (collection === 'favorites' && downloaded.entries.length > 0)
+				return (
+					<EmptyState
+						title={securityPoolCopy.noFavoritePools}
+						detail={securityPoolCopy.noFavoritePoolsWithDownloadsDetail}
+						actions={
+							<>
+								{openSearchedAddress}
+								<button className='secondary' type='button' onClick={() => setCollection('downloaded')}>
+									{securityPoolCopy.showDownloadedPools}
+								</button>
+							</>
+						}
+					/>
+				)
+			if (discovery.hasScanned && discovery.totalCount === 0n)
+				return (
+					<EmptyState
+						title={securityPoolCopy.noSecurityPools}
+						actions={
+							<>
+								{openSearchedAddress}
+								{onCreateSecurityPool === undefined ? undefined : (
+									<button className={openSearchedAddress === undefined ? 'primary' : 'secondary'} type='button' onClick={onCreateSecurityPool}>
+										{commonCopy.createSecurityPoolAction}
+									</button>
+								)}
+							</>
+						}
+					/>
+				)
+			if (collection === 'favorites') return <EmptyState title={securityPoolCopy.noFavoritePools} detail={securityPoolCopy.noFavoritePoolsDetail} actions={openSearchedAddress} />
+			return <EmptyState title={securityPoolCopy.noDownloadedPools} detail={securityPoolCopy.noDownloadedPoolsDetail} actions={openSearchedAddress} />
 		}
-	}, [currentPageRequestKey, environmentRefreshKey, resolvedPageIndex])
-	const filteredSecurityPools = securityPoolsWithState.filter(({ pool, poolState }) => {
-		const displayState = poolState.lifecycleState
-		if (pool.universeId !== activeUniverseId) return false
-		if (systemStateFilter !== 'all' && displayState !== systemStateFilter) return false
-		if (normalizedSearchText === '') return true
-		return pool.securityPoolAddress.toLowerCase().includes(normalizedSearchText) || pool.questionId.toLowerCase().includes(normalizedSearchText) || pool.marketDetails.title.toLowerCase().includes(normalizedSearchText) || pool.marketDetails.description.toLowerCase().includes(normalizedSearchText)
-	})
-	const hasActiveFilters = normalizedSearchText !== '' || systemStateFilter !== 'all' || filteredSecurityPools.length !== pagedSecurityPools.length
+		if (visibleRows.length === 0) return <EmptyState title={commonCopy.noMatches} detail={securityPoolCopy.poolFiltersEmpty} actions={openSearchedAddress} />
+		return (
+			<div className='comparison-record-list'>
+				{visibleRows.map(row => (
+					<PoolDirectoryRow key={row.pool.securityPoolAddress} pool={row.pool} lifecycleState={row.lifecycleState} capacity={row.capacity} currentTimestamp={currentTimestamp} fetchedAt={row.fetchedAt} onSelect={onSelectSecurityPool} />
+				))}
+			</div>
+		)
+	})()
+	const summary = (() => {
+		const parts: string[] = []
+		if (universeRows.length > 0 && visibleRows.length !== universeRows.length) parts.push(formatSecurityPoolPageSummary(visibleRows.length, universeRows.length))
+		if (otherUniverseCount > 0) parts.push(securityPoolCopy.formatOtherUniversePoolsHidden(otherUniverseCount))
+		return parts.length === 0 ? undefined : parts.join(' ')
+	})()
+
 	return (
-		<SectionBlock
-			density='compact'
-			variant='plain'
-			actions={
-				<PaginationControls
-					hasNextPage={hasNextPage}
-					hasPreviousPage={hasPreviousPage}
-					loading={loadingCurrentPage}
-					onNextPage={() => {
-						setPageIndex(current => current + 1)
-					}}
-					onPreviousPage={() => {
-						setPageIndex(current => Math.max(0, current - 1))
-					}}
-					summary={hasCurrentPageData ? formatPaginationSummary(resolvedPageIndex, poolPageCount) : undefined}
-				/>
-			}
-		>
-			<ErrorNotice message={effectiveSecurityPoolOverviewError} />
-			{effectiveSecurityPoolOverviewError === undefined ? undefined : (
+		<SectionBlock density='compact' variant='plain'>
+			<ErrorNotice message={securityPoolOverviewError ?? (discovery.loadFailed ? securityPoolCopy.poolPageLoadError : undefined)} />
+			{securityPoolOverviewError === undefined && !discovery.loadFailed ? undefined : (
 				<div className='actions pool-registry-recovery-actions'>
-					<button className='secondary' type='button' onClick={retryPoolRegistryLoad} disabled={loadingCurrentPage}>
-						{loadingCurrentPage ? <LoadingText>{securityPoolCopy.retryingSecurityPoolsTruncated}</LoadingText> : securityPoolCopy.retryLoadingPools}
+					<button className='secondary' type='button' onClick={discovery.retry} disabled={discoveryLoading}>
+						{discoveryLoading ? <LoadingText>{securityPoolCopy.retryingSecurityPoolsTruncated}</LoadingText> : securityPoolCopy.retryLoadingPools}
 					</button>
 				</div>
 			)}
-			<div className='filter-toolbar'>
+			<div className='local-browse-bar'>
+				<LocalCollectionSwitcher collection={collection} downloadedCount={downloaded.entries.length} favoritesCount={favoriteEntries.length} onChange={setCollection} />
+				<DiscoveryControl discovery={{ ...discovery, discoverNext: discover, loading: discoveryLoading }} discoverLabel={securityPoolCopy.discoverPools} emphasize={downloaded.entries.length === 0} nounPlural={securityPoolCopy.poolCountPlural} />
+			</div>
+			<div className='filter-toolbar pool-browse-toolbar'>
 				<label className='field'>
-					<span>{securityPoolCopy.searchLoadedPage}</span>
+					<span>{securityPoolCopy.searchDownloadedPools}</span>
 					<FormInput value={searchText} onInput={event => setSearchText(event.currentTarget.value)} placeholder={securityPoolCopy.poolSearchPlaceholder} />
 				</label>
 				<label className='field'>
 					<span>{securityPoolCopy.systemState}</span>
-					<select value={systemStateFilter} onChange={event => setSystemStateFilter(event.currentTarget.value as 'all' | SecurityPoolLifecycleState)}>
-						<option value='all'>{securityPoolCopy.allStates}</option>
-						<option value='operational'>{commonCopy.operational}</option>
-						<option value='ended'>{securityPoolCopy.ended}</option>
-						<option value='poolForked'>{securityPoolCopy.poolForked}</option>
-						<option value='forkMigration'>{securityPoolCopy.forkMigration}</option>
-						<option value='forkTruthAuction'>{commonCopy.truthAuction}</option>
+					<select value={stateFilter} onChange={event => setStateFilter(parseOption(STATE_FILTER_OPTIONS, event.currentTarget.value) ?? 'all')}>
+						{STATE_FILTER_OPTIONS.map(option => (
+							<option key={option} value={option}>
+								{getStateFilterLabel(option)}
+							</option>
+						))}
+					</select>
+				</label>
+				<label className='field'>
+					<span>{securityPoolCopy.sortPools}</span>
+					<select value={sortKey} onChange={event => setSortKey(parseOption(SORT_OPTIONS, event.currentTarget.value) ?? 'recent')}>
+						{SORT_OPTIONS.map(option => (
+							<option key={option} value={option}>
+								{getSortLabel(option)}
+							</option>
+						))}
 					</select>
 				</label>
 			</div>
-			{hasActiveFilters && pagedSecurityPools.length > 0 ? <p className='detail'>{formatSecurityPoolPageSummary(filteredSecurityPools.length, pagedSecurityPools.length)}</p> : undefined}
-
-			{(() => {
-				if (pagedSecurityPools.length === 0) {
-					if (registryPresentation === undefined || (effectiveSecurityPoolOverviewError !== undefined && !loadingCurrentPage)) return undefined
-					const isEmptyRegistry = registryPresentation.key === 'empty'
-					const registryActions = (() => {
-						if (isEmptyRegistry && onCreateSecurityPool !== undefined)
-							return (
-								<button className='primary' type='button' onClick={onCreateSecurityPool}>
-									{commonCopy.createSecurityPoolAction}
-								</button>
-							)
-						return undefined
-					})()
-
-					if (isEmptyRegistry) return <EmptyState title={securityPoolCopy.noSecurityPools} detail={registryPresentation.detail} actions={registryActions} />
-					return <StateHint presentation={registryPresentation} actions={registryActions} />
-				}
-				if (filteredSecurityPools.length === 0) return <EmptyState title={commonCopy.noMatches} detail={securityPoolCopy.poolFiltersEmpty} />
-
-				return (
-					<div className='comparison-record-list'>
-						{filteredSecurityPools.map(({ pool, poolState }) => {
-							const calculationPrice = resolveUiRepPerEthPrice({ currentTimestamp, openOraclePrice: pool.lastOraclePrice, openOracleSettlementTimestamp: pool.lastOracleSettlementTimestamp, priceOracle: uiPriceOracle, uniswapPrice: repPerEthPrice })
-							const capacity = calculateMintingCapacityAttoEth(pool.totalCapacityOwnershipAttoRep, calculationPrice, pool.statoblastSecurityMultiplierBps)
-							return <PoolDirectoryRow key={pool.securityPoolAddress} pool={pool} activeUniverseId={activeUniverseId} lifecycleState={poolState.lifecycleState} capacity={capacity} currentTimestamp={currentTimestamp} onSelect={onSelectSecurityPool} />
-						})}
-					</div>
-				)
-			})()}
+			{summary === undefined ? undefined : <p className='detail'>{summary}</p>}
+			{content}
 		</SectionBlock>
 	)
 }

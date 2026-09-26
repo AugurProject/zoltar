@@ -1031,3 +1031,92 @@
 .application-brand img {
 	flex-shrink: 0;
 }
+
+/* Favorite star: bright and filled when favorited, a dim outline otherwise. The pressed state is also exposed through aria-pressed. */
+.favorite-toggle {
+	display: inline-grid;
+	place-items: center;
+	flex: 0 0 auto;
+	width: 2.25rem;
+	height: 2.25rem;
+	min-height: 0;
+	padding: 0;
+	border: 1px solid transparent;
+	border-radius: var(--radius-control);
+	background: transparent;
+	color: var(--muted);
+	box-shadow: none;
+}
+
+.favorite-toggle svg {
+	width: 1.25rem;
+	height: 1.25rem;
+	fill: none;
+	stroke: currentColor;
+	stroke-width: 1.6;
+	stroke-linejoin: round;
+	opacity: 0.7;
+	transition:
+		opacity var(--transition-fast),
+		transform var(--transition-fast);
+}
+
+.favorite-toggle:hover:not(:disabled) {
+	border-color: var(--border-default);
+	background: var(--color-white-04);
+	color: var(--favorite);
+}
+
+.favorite-toggle:hover:not(:disabled) svg {
+	opacity: 1;
+}
+
+.favorite-toggle.is-favorite {
+	color: var(--favorite);
+}
+
+.favorite-toggle.is-favorite svg {
+	fill: currentColor;
+	opacity: 1;
+}
+
+.favorite-toggle:active:not(:disabled) svg {
+	transform: scale(0.88);
+}
+
+/* Beside a status badge the star centers on the badge instead of stretching the header row. */
+.entity-card-badge .favorite-toggle {
+	margin-block: calc(var(--space-1) * -1);
+}
+
+.discovery-control {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	justify-content: flex-end;
+	gap: var(--space-2) var(--space-3);
+}
+
+.discovery-control .detail {
+	margin: 0;
+}
+
+.local-browse-bar {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	justify-content: space-between;
+	gap: var(--space-3);
+	margin-bottom: var(--space-4);
+}
+
+.local-browse-bar .discovery-control {
+	margin-left: auto;
+}
+
+@media (pointer: coarse) {
+	.favorite-toggle {
+		width: var(--touch-target-min);
+		height: var(--touch-target-min);
+	}
+}

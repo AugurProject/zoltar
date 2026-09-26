@@ -130,6 +130,10 @@
 			"bun": "./ts/lib/routing.ts",
 			"default": "./js/lib/routing.js"
 		},
+		"./lib/questionBrowse.js": {
+			"bun": "./ts/lib/questionBrowse.ts",
+			"default": "./js/lib/questionBrowse.js"
+		},
 		"./protocol/activeProtocolAddresses.js": {
 			"bun": "./ts/protocol/activeProtocolAddresses.ts",
 			"default": "./js/protocol/activeProtocolAddresses.js"

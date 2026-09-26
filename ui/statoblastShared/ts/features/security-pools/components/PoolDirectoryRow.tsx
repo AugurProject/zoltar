@@ -11,6 +11,8 @@ import { getQuestionTitle, Question } from '@zoltar/ui-core-shared/components/Qu
 import { TimestampValue } from '@zoltar/ui-core-shared/components/TimestampValue.js'
 import { buildRouteHref, getRouteHashSearch } from '@zoltar/ui-core-shared/navigation/routing.js'
 import { formatUniverseIdHex } from '@zoltar/ui-core-shared/lib/universeLabels.js'
+import { FavoriteToggle } from '@zoltar/ui-core-shared/components/FavoriteToggle.js'
+import { formatRelativeTimestamp, getWallClockTimestamp } from '@zoltar/ui-core-shared/lib/formatters.js'
 import type { ListedSecurityPool } from '@zoltar/ui-core-shared/types/contracts.js'
 import { getSecurityPoolStatusBadgeLabel, getSecurityPoolStatusBadgeTone } from '../lib/securityPoolLabels.js'
 import type { SecurityPoolLifecycleState } from '../lib/securityPoolState.js'
@@ -21,13 +23,13 @@ import * as securityPoolCopy from '../../../copy/securityPool.js'
 
 export function PoolDirectoryRow({
 	pool,
-	activeUniverseId,
 	lifecycleState,
 	capacity,
 	currentTimestamp,
+	fetchedAt,
 	onSelect,
 }: {
-	activeUniverseId: bigint
+	fetchedAt: number
 	pool: ListedSecurityPool
 	lifecycleState: SecurityPoolLifecycleState | undefined
 	capacity: bigint | undefined
@@ -48,9 +50,12 @@ export function PoolDirectoryRow({
 	return (
 		<article className='security-pool-overview-record pool-directory-row'>
 			<div className='pool-directory-identity'>
-				<Badge ariaLabel={status} tone={getSecurityPoolStatusBadgeTone(lifecycleState)}>
-					{status}
-				</Badge>
+				<div className='pool-directory-heading'>
+					<FavoriteToggle app='statoblast' entityLabel={title} id={pool.securityPoolAddress} kind='pool' />
+					<Badge ariaLabel={status} tone={getSecurityPoolStatusBadgeTone(lifecycleState)}>
+						{status}
+					</Badge>
+				</div>
 				<h3>{title}</h3>
 				<div className='pool-directory-meta'>
 					<AddressValue address={pool.securityPoolAddress} responsiveAbbreviation />
@@ -63,11 +68,11 @@ export function PoolDirectoryRow({
 						{currentTimestamp !== undefined && currentTimestamp >= pool.marketDetails.endTime ? securityPoolCopy.ended : commonCopy.ends} <TimestampValue timestamp={pool.marketDetails.endTime} {...(currentTimestamp === undefined ? {} : { currentTimestamp })} />
 					</span>
 					<span>{copy.vaults(pool.vaultCount)}</span>
+					<span>{securityPoolCopy.formatPoolUpdated(formatRelativeTimestamp(BigInt(Math.floor(fetchedAt / 1000)), getWallClockTimestamp()))}</span>
 				</div>
-				{pool.universeId === activeUniverseId ? undefined : <p className='detail'>{securityPoolCopy.formatBrowsePoolUniverseMismatch(formatUniverseIdHex(pool.universeId))}</p>}
 				{oracleExpired || oracleMissing ? <span className='pool-oracle-warning'>{oracleExpired ? copy.poolPriceExpired : copy.poolPriceUnavailable}</span> : undefined}
 			</div>
-			<PoolCapacitySummary capacity={capacity} minted={pool.settlementCollateralAttoEth} />
+			<PoolCapacitySummary capacity={capacity} minted={pool.settlementCollateralAttoEth} shareTokenSupplyAttoShares={pool.shareTokenSupplyAttoShares} showUsage />
 			<a
 				className='secondary pool-open-link'
 				href={href}
