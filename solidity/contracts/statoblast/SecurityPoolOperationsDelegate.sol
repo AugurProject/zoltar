@@ -49,24 +49,24 @@ contract SecurityPoolOperationsDelegate is SecurityPoolSettlementDelegate {
 	event RepDepositedToVault(address indexed vault, uint256 attoRepAmount, uint256 repBackingUnits, uint256 totalRepBackingUnits);
 	event AwaitingForkContinuationSet(bool awaitingForkContinuation);
 	event VaultBadDebtRecorded(address indexed targetVault, uint256 badDebtAttoEth, uint256 resultingVaultBadDebtAttoEth, uint256 resultingTotalBadDebtAttoEth);
-	event VaultDepositTargetHealthFactorRecorded(address indexed vault, uint256 depositTargetHealthFactorBps, uint256 capacityOwnershipAttoRep, uint256 resultingTotalCapacityOwnershipAttoRep);
+	event VaultDepositTargetHealthFactorRecorded(address indexed vault, uint256 depositTargetHealthFactorBps, uint256 underwritingLimitAttoEth, uint256 resultingTotalUnderwritingLimitAttoEth);
 
 	function updateVaultFees(address vault) external {
 		ISecurityPoolRepDepositContext pool = ISecurityPoolRepDepositContext(address(this));
 		pool.updateSettlementCollateral();
-		bool hadUncheckpointedFeeEligibleCapacity = uncheckpointedFeeEligibleCapacityOwnershipAttoRep != 0;
+		bool hadUncheckpointedFeeEligibleCapacity = uncheckpointedFeeEligibleUnderwritingLimitAttoEth != 0;
 		uint256 previousVaultFeeIndex = securityVaults[vault].feeIndex;
 		uint256 previousVaultFeeRemainder = vaultFeeRemainders[vault];
-		(uint256 fees, uint256 nextRemainder) = SecurityPoolUtils.calculateVaultFee(securityVaults[vault].capacityOwnershipAttoRep, feeIndex - securityVaults[vault].feeIndex, previousVaultFeeRemainder);
+		(uint256 fees, uint256 nextRemainder) = SecurityPoolUtils.calculateVaultFee(securityVaults[vault].underwritingLimitAttoEth, feeIndex - securityVaults[vault].feeIndex, previousVaultFeeRemainder);
 		bool vaultAccountingChanged =
 			previousVaultFeeIndex != feeIndex || previousVaultFeeRemainder != nextRemainder || fees != 0;
 		bool poolAccountingChanged = fees != 0;
 		vaultFeeRemainders[vault] = nextRemainder;
 		securityVaults[vault].feeIndex = feeIndex;
 		if (previousVaultFeeIndex != feeIndex) {
-			uint256 capacityOwnershipAttoRep = securityVaults[vault].capacityOwnershipAttoRep;
-			uncheckpointedFeeEligibleCapacityOwnershipAttoRep -= capacityOwnershipAttoRep;
-			if (capacityOwnershipAttoRep != 0) poolAccountingChanged = true;
+			uint256 underwritingLimitAttoEth = securityVaults[vault].underwritingLimitAttoEth;
+			uncheckpointedFeeEligibleUnderwritingLimitAttoEth -= underwritingLimitAttoEth;
+			if (underwritingLimitAttoEth != 0) poolAccountingChanged = true;
 		}
 		unallocatedAccruedFeesAttoEth -= fees;
 		totalClaimableVaultFeesAttoEth += fees;
@@ -81,7 +81,6 @@ contract SecurityPoolOperationsDelegate is SecurityPoolSettlementDelegate {
 			_delegateEvent(address(pool.eventEmitter()), abi.encodeCall(SecurityPoolEventEmitter.emitVaultAccountingCheckpoint, (vault)));
 		if (poolAccountingChanged)
 			_delegateEvent(address(pool.eventEmitter()), abi.encodeCall(SecurityPoolEventEmitter.emitPoolAccountingCheckpoint, (AccountingReason.VaultCheckpoint, vault)));
-		_synchronizeVaultTarget(pool, vault);
 	}
 
 	function _releaseUnassignableFeeReserveIfComplete() private returns (bool released) {
@@ -90,7 +89,7 @@ contract SecurityPoolOperationsDelegate is SecurityPoolSettlementDelegate {
 		// aggregate division residue. Their count has no safe protocol-wide bound, so release the
 		// terminal reserve only after every capacity unit behind the final fee index is reconciled.
 		if (
-			uncheckpointedFeeEligibleCapacityOwnershipAttoRep != 0 ||
+			uncheckpointedFeeEligibleUnderwritingLimitAttoEth != 0 ||
 			systemState != SystemState.PoolForked ||
 			unallocatedAccruedFeesAttoEth == 0
 		) return false;
@@ -105,72 +104,84 @@ contract SecurityPoolOperationsDelegate is SecurityPoolSettlementDelegate {
 		return abi.decode(result[4:], (string));
 	}
 
-	function setVaultCapacity(address vault, uint256 nextCapacityOwnershipAttoRep, uint256 depositTargetHealthFactorBps) external {
-		_setVaultCapacity(vault, nextCapacityOwnershipAttoRep, depositTargetHealthFactorBps);
+	function setUnderwritingLimit(uint256 limitAttoEth) external {
+		_setUnderwritingLimit(msg.sender, limitAttoEth);
 	}
 
-	function _setVaultCapacity(address vault, uint256 nextCapacityOwnershipAttoRep, uint256 depositTargetHealthFactorBps) private {
-		uint256 previousCapacityOwnershipAttoRep = securityVaults[vault].capacityOwnershipAttoRep;
-		// Reducing the denominator would reallocate live settlement collateral to every remaining vault.
-		if (nextCapacityOwnershipAttoRep < previousCapacityOwnershipAttoRep)
-			require(settlementCollateralAttoEth == 0, 'Capacity committed');
-		feeIndexRemainder = 0;
-		totalCapacityOwnershipAttoRep =
-			totalCapacityOwnershipAttoRep -
-			previousCapacityOwnershipAttoRep +
-			nextCapacityOwnershipAttoRep;
-		feeEligibleCapacityOwnershipAttoRep =
-			feeEligibleCapacityOwnershipAttoRep -
-			previousCapacityOwnershipAttoRep +
-			nextCapacityOwnershipAttoRep;
-		securityVaults[vault].capacityOwnershipAttoRep = nextCapacityOwnershipAttoRep;
-		if (depositTargetHealthFactorBps != 0) {
-			emit VaultDepositTargetHealthFactorRecorded(vault, depositTargetHealthFactorBps, nextCapacityOwnershipAttoRep, totalCapacityOwnershipAttoRep);
+	function setVaultUnderwritingLimit(address vault, uint256 limitAttoEth) external {
+		ISecurityPool pool = ISecurityPool(payable(address(this)));
+		require(msg.sender == address(pool.priceOracleManagerAndOperatorQueuer()), 'Unauthorized');
+		_setUnderwritingLimit(vault, limitAttoEth);
+	}
+
+	function _setUnderwritingLimit(address vault, uint256 limitAttoEth) private {
+		ISecurityPoolRepDepositContext context = ISecurityPoolRepDepositContext(address(this));
+		require(systemState == SystemState.Operational, 'Pool inactive');
+		require(IZoltarForkState(context.zoltar()).getForkTime(context.universeId()) == 0 || (ISecurityPool(payable(address(this))).isEscalationResolved() && limitAttoEth <= securityVaults[vault].underwritingLimitAttoEth), 'Forked');
+		uint256 oldLimitAttoEth = securityVaults[vault].underwritingLimitAttoEth;
+		if (limitAttoEth == oldLimitAttoEth) return;
+		if (limitAttoEth > oldLimitAttoEth) _requireVaultAdmissionOpen(context);
+		ISecurityPool pool = ISecurityPool(payable(address(this)));
+		context.updateVaultFees(vault);
+		uint256 nextTotalAttoEth = totalUnderwritingLimitAttoEth - oldLimitAttoEth + limitAttoEth;
+		if (limitAttoEth < oldLimitAttoEth)
+			require(nextTotalAttoEth >= settlementCollateralAttoEth, 'Commitments below collateral');
+		if (limitAttoEth > oldLimitAttoEth) {
+			require(pool.priceOracleManagerAndOperatorQueuer().isPriceValid(), 'Stale price');
+			_requireLimitBacked(pool, vault, limitAttoEth);
 		}
+		feeIndexRemainder = 0;
+		feeEligibleUnderwritingLimitAttoEth = feeEligibleUnderwritingLimitAttoEth - oldLimitAttoEth + limitAttoEth;
+		totalUnderwritingLimitAttoEth = nextTotalAttoEth;
+		securityVaults[vault].underwritingLimitAttoEth = limitAttoEth;
+		_invalidateCoverage();
+		context.updateRetentionRate();
+		emit UnderwritingLimitSet(vault, limitAttoEth, nextTotalAttoEth);
+		_delegateEvent(address(context.eventEmitter()), abi.encodeCall(SecurityPoolEventEmitter.emitVaultAccountingCheckpoint, (vault)));
+		_delegateEvent(address(context.eventEmitter()), abi.encodeCall(SecurityPoolEventEmitter.emitPoolAccountingCheckpoint, (AccountingReason.CapacityOwnershipChange, vault)));
 	}
 
-	event VaultBackingFactorAdjusted(address indexed vault, uint256 backingFactorBps, uint256 capacityOwnershipAttoRep);
-
-	function adjustVaultBackingFactor(address vault, uint256 backingFactorBps) external {
-		ISecurityPoolRepDepositContext pool = ISecurityPoolRepDepositContext(address(this));
-		ISecurityPool securityPool = ISecurityPool(payable(address(this)));
-		require(msg.sender == address(securityPool.priceOracleManagerAndOperatorQueuer()), 'Unauthorized');
-		require(securityPool.priceOracleManagerAndOperatorQueuer().isPriceValid(), 'Stale price');
-		_requireVaultAdmissionOpen(pool);
-		require(backingFactorBps >= statoblastSecurityMultiplierBps, 'Backing factor below minimum');
-		require(address(escalationGame) == address(0) || escalationGame.disputeStakedRepByVaultAttoRep(vault) == 0, 'Vault REP in dispute');
-		pool.updateVaultFees(vault);
-		uint256 backing = pool.backingUnitsToAttoRep(securityVaults[vault].repBackingUnits);
-		require(backing > 0, 'Vault has no REP backing');
-		vaultTargetBackingFactorBps[vault] = backingFactorBps;
-		_applyVaultTarget(pool, vault, backing, backingFactorBps);
-		require(SecurityPoolUtils.isVaultHealthy(backing, 0, securityPool.getVaultOpenInterestAttoEth(vault), securityPool.priceOracleManagerAndOperatorQueuer().lastPrice(), statoblastSecurityMultiplierBps), 'Vault backing insufficient');
+	function _requireLimitBacked(ISecurityPool pool, address vault, uint256 limitAttoEth) private view {
+		uint256 disputeStakedAttoRep =
+			address(escalationGame) == address(0) ? 0 : escalationGame.disputeStakedRepByVaultAttoRep(vault);
+		require(SecurityPoolUtils.isVaultHealthy(pool.backingUnitsToAttoRep(securityVaults[vault].repBackingUnits), disputeStakedAttoRep, limitAttoEth, pool.priceOracleManagerAndOperatorQueuer().lastPrice(), statoblastSecurityMultiplierBps), 'Vault backing insufficient');
 	}
 
-	function _applyVaultTarget(ISecurityPoolRepDepositContext pool, address vault, uint256 backing, uint256 factor) private {
-		uint256 capacity = Math.mulDiv(backing, statoblastSecurityMultiplierBps, factor);
-		require(capacity > 0, 'Capacity must be positive');
-		_setVaultCapacity(vault, capacity, 0);
-		pool.updateRetentionRate();
-		emit VaultBackingFactorAdjusted(vault, factor, capacity);
-		SecurityPoolEventEmitter emitter = pool.eventEmitter();
-		_delegateEvent(address(emitter), abi.encodeCall(SecurityPoolEventEmitter.emitVaultAccountingCheckpoint, (vault)));
-		_delegateEvent(address(emitter), abi.encodeCall(SecurityPoolEventEmitter.emitPoolAccountingCheckpoint, (AccountingReason.CapacityOwnershipChange, vault)));
+	function activateRecoveredCommitment(address vault, uint256 commitmentAttoEth) external {
+		ISecurityPool pool = ISecurityPool(payable(address(this)));
+		require(msg.sender == pool.securityPoolForker(), 'Only forker');
+		require(systemState == SystemState.Operational, 'Pool inactive');
+		ISecurityPoolRepDepositContext context = ISecurityPoolRepDepositContext(address(this));
+		require(IZoltarForkState(context.zoltar()).getForkTime(context.universeId()) == 0, 'Forked');
+		require(pool.priceOracleManagerAndOperatorQueuer().isPriceValid(), 'Stale price');
+		_requireLimitBacked(pool, vault, securityVaults[vault].underwritingLimitAttoEth);
+		// The forker checkpointed the recipient before assigning the previously ineligible weight.
+		feeIndexRemainder = 0;
+		feeEligibleUnderwritingLimitAttoEth += commitmentAttoEth;
+		require(feeEligibleUnderwritingLimitAttoEth <= totalUnderwritingLimitAttoEth, 'Fee ownership exceeds capacity');
+		_invalidateCoverage();
+		context.updateRetentionRate();
+		_delegateEvent(address(context.eventEmitter()), abi.encodeCall(SecurityPoolEventEmitter.emitPoolAccountingCheckpoint, (AccountingReason.CapacityOwnershipChange, vault)));
 	}
 
-	function _synchronizeVaultTarget(ISecurityPoolRepDepositContext pool, address vault) private {
-		uint256 factor = vaultTargetBackingFactorBps[vault];
-		if (factor == 0 || settlementCollateralAttoEth != 0 || systemState != SystemState.Operational) return;
-		if (IZoltarForkState(pool.zoltar()).getForkTime(pool.universeId()) != 0 || pool.isEscalationResolved()) return;
-		if (
-			block.timestamp >= IQuestionEndTime(pool.questionData()).getQuestionEndDate(pool.questionId()) &&
-			!postEndVaultAdmissionAllowed
-		) return;
-		if (address(escalationGame) != address(0) && escalationGame.disputeStakedRepByVaultAttoRep(vault) != 0) return;
-		uint256 backing = pool.backingUnitsToAttoRep(securityVaults[vault].repBackingUnits);
-		uint256 capacity = Math.mulDiv(backing, statoblastSecurityMultiplierBps, factor);
-		if (capacity == 0 || capacity == securityVaults[vault].capacityOwnershipAttoRep) return;
-		_applyVaultTarget(pool, vault, backing, factor);
+	function certifyVaultCoverage(address vault) external {
+		ISecurityPool pool = ISecurityPool(payable(address(this)));
+		require(pool.priceOracleManagerAndOperatorQueuer().isPriceValid(), 'Stale price');
+		require(address(escalationGame) == address(0), 'Escalation mint closed');
+		uint256 limitAttoEth = securityVaults[vault].underwritingLimitAttoEth;
+		require(vault != address(0) && limitAttoEth != 0, 'No commitment');
+		_requireLimitBacked(pool, vault, limitAttoEth);
+		bytes32 snapshot = SecurityPoolUtils.coverageSnapshot(pool);
+		if (snapshot != certifiedCoverageSnapshot) {
+			certifiedCoverageSnapshot = snapshot;
+			coverageCertificateGeneration++;
+			certifiedUnderwritingLimitAttoEth = 0;
+		}
+		if (vaultCoverageCertificateGeneration[vault] == coverageCertificateGeneration) return;
+		vaultCoverageCertificateGeneration[vault] = coverageCertificateGeneration;
+		certifiedUnderwritingLimitAttoEth += limitAttoEth;
+		require(certifiedUnderwritingLimitAttoEth <= totalUnderwritingLimitAttoEth, 'Certified commitments exceed total');
+		emit VaultCoverageCertified(vault, limitAttoEth, snapshot, certifiedUnderwritingLimitAttoEth);
 	}
 
 	event EscalationGameSet(EscalationGame escalationGame);
@@ -216,13 +227,13 @@ contract SecurityPoolOperationsDelegate is SecurityPoolSettlementDelegate {
 		bytes32 operationHash = keccak256(abi.encode(this.depositRepToVaultWithAuthorization.selector, owner, pool.universeId(), pool.questionId(), attoRepAmount, targetHealthFactorBps));
 		uint256 repBackingUnits = _prepareRepDeposit(owner, attoRepAmount, targetHealthFactorBps);
 		IERC3009Authorization(pool.repToken()).receiveWithAuthorization(owner, address(this), attoRepAmount, validAfter, validBefore, keccak256(abi.encode(nonce, operationHash, owner)), v, r, s);
-		_creditRepDeposit(owner, attoRepAmount, targetHealthFactorBps, repBackingUnits);
+		_creditRepDeposit(owner, attoRepAmount, repBackingUnits);
 	}
 
 	function _depositRepToVault(address vault, uint256 attoRepAmount, uint256 targetHealthFactorBps) private {
 		uint256 repBackingUnits = _prepareRepDeposit(vault, attoRepAmount, targetHealthFactorBps);
 		IERC20(ISecurityPoolRepDepositContext(address(this)).repToken()).safeTransferFrom(vault, address(this), attoRepAmount);
-		_creditRepDeposit(vault, attoRepAmount, targetHealthFactorBps, repBackingUnits);
+		_creditRepDeposit(vault, attoRepAmount, repBackingUnits);
 	}
 
 	function _prepareRepDeposit(address vault, uint256 attoRepAmount, uint256 targetHealthFactorBps) private returns (uint256) {
@@ -230,26 +241,16 @@ contract SecurityPoolOperationsDelegate is SecurityPoolSettlementDelegate {
 		_requireVaultAdmissionOpen(pool);
 		require(attoRepAmount > 0, 'Zero REP');
 		require(targetHealthFactorBps >= statoblastSecurityMultiplierBps, 'Target below pool minimum');
-		uint256 savedTarget = vaultTargetBackingFactorBps[vault];
-		require(savedTarget == 0 || savedTarget == targetHealthFactorBps, 'Use saved vault target');
-		if (savedTarget == 0) vaultTargetBackingFactorBps[vault] = targetHealthFactorBps;
 		pool.updateVaultFees(vault);
 		return pool.attoRepToBackingUnits(attoRepAmount);
 	}
 
-	function _creditRepDeposit(address vault, uint256 attoRepAmount, uint256 targetHealthFactorBps, uint256 repBackingUnits) private {
+	function _creditRepDeposit(address vault, uint256 attoRepAmount, uint256 repBackingUnits) private {
 		ISecurityPoolRepDepositContext pool = ISecurityPoolRepDepositContext(address(this));
 		securityVaults[vault].repBackingUnits += repBackingUnits;
 		totalRepBackingUnits += repBackingUnits;
 		require(pool.backingUnitsToAttoRep(securityVaults[vault].repBackingUnits) >= minimumVaultRepDepositAttoRep, 'Vault REP below minimum');
-		uint256 capacityOwnershipAddedAttoRep = Math.mulDiv(attoRepAmount, statoblastSecurityMultiplierBps, targetHealthFactorBps);
-		uint256 nextCapacity =
-			settlementCollateralAttoEth == 0
-				? Math.mulDiv(pool.backingUnitsToAttoRep(securityVaults[vault].repBackingUnits), statoblastSecurityMultiplierBps, targetHealthFactorBps)
-				: securityVaults[vault].capacityOwnershipAttoRep + capacityOwnershipAddedAttoRep;
-		require(nextCapacity > 0, 'Capacity must be positive');
-		_setVaultCapacity(vault, nextCapacity, targetHealthFactorBps);
-		pool.updateRetentionRate();
+		_invalidateCoverage();
 		if (!isKnownVault[vault]) {
 			isKnownVault[vault] = true;
 			vaultAddresses.push(vault);
@@ -325,73 +326,42 @@ contract SecurityPoolOperationsDelegate is SecurityPoolSettlementDelegate {
 		}
 	}
 
-	function performBundledLiquidation(LiquidationExecutionRequest calldata request) external returns (uint256 debtToMoveAttoEth, uint256 capacityOwnershipToMoveAttoRep, uint256 badDebtAttoEth) {
+	function performBundledLiquidation(LiquidationExecutionRequest calldata request) external returns (uint256 debtToMoveAttoEth, uint256 underwritingLimitToMoveAttoEth, uint256 badDebtAttoEth) {
 		ISecurityPool pool = ISecurityPool(payable(address(this)));
-		require(request.receiverVault != request.targetVault, 'Receiver bad');
+		require(request.receiverVault != request.targetVault && request.receiverVault != address(0), 'Receiver bad');
 		require(_getVaultBadDebtAttoEth(request.targetVault) == 0, 'Target bad debt');
 		require(_getVaultBadDebtAttoEth(request.receiverVault) == 0, 'Receiver bad debt');
 		require(securityVaults[request.targetVault].repBackingUnits == request.snapshotTargetBackingUnits, 'Target backingUnits changed');
-		require(securityVaults[request.targetVault].capacityOwnershipAttoRep == request.snapshotTargetCapacityOwnershipAttoRep, 'Target commitment changed');
-		uint256 targetVaultRepBackingAttoRep = pool.backingUnitsToAttoRep(request.snapshotTargetBackingUnits);
-		uint256 targetDisputeStakedAttoRep =
-			address(escalationGame) == address(0x0)
+		require(securityVaults[request.targetVault].underwritingLimitAttoEth == request.snapshotTargetUnderwritingLimitAttoEth, 'Target commitment changed');
+		uint256 targetLimitAttoEth = request.snapshotTargetUnderwritingLimitAttoEth;
+		uint256 targetBackingAttoRep = pool.backingUnitsToAttoRep(request.snapshotTargetBackingUnits);
+		uint256 targetDisputeAttoRep =
+			address(escalationGame) == address(0)
 				? 0
 				: escalationGame.disputeStakedRepByVaultAttoRep(request.targetVault);
-		uint256 targetOpenInterestAttoEth = pool.getVaultOpenInterestAttoEth(request.targetVault);
-		uint256 receiverOpenInterestBeforeAttoEth = pool.getVaultOpenInterestAttoEth(request.receiverVault);
-		require(SecurityPoolUtils._isLiquidationBeyondMinPriceDistance(targetVaultRepBackingAttoRep, targetDisputeStakedAttoRep, targetOpenInterestAttoEth, statoblastSecurityMultiplierBps, request.repEthPrice, request.minLiquidationPriceDistanceBps), 'Liquidation distance too low');
-		require(!SecurityPoolUtils.isVaultHealthy(targetVaultRepBackingAttoRep, targetDisputeStakedAttoRep, targetOpenInterestAttoEth, request.repEthPrice, statoblastSecurityMultiplierBps), 'Target safe');
-		uint256 nominalDebtToMoveAttoEth;
-		uint256 maximumBackingUnitsToTransfer;
-		uint256 minimumRemainingAttoRep =
-			request.requestedDebtAttoEth >= targetOpenInterestAttoEth ? 0 : minimumVaultRepDepositAttoRep;
-		(nominalDebtToMoveAttoEth, capacityOwnershipToMoveAttoRep, , maximumBackingUnitsToTransfer) = SecurityPoolUtils.calculateBundledLiquidationTransfer(securityVaults[request.targetVault].repBackingUnits, request.snapshotTargetCapacityOwnershipAttoRep, targetOpenInterestAttoEth, request.requestedDebtAttoEth, request.repEthPrice, pool.getTotalPoolHeldAttoRep(), totalRepBackingUnits, minimumRemainingAttoRep);
-		uint256 receiverGrossOpenInterestAfterAttoEth = SecurityPoolUtils.calculateVaultOpenInterestAttoEth(settlementCollateralAttoEth, securityVaults[request.receiverVault].capacityOwnershipAttoRep + capacityOwnershipToMoveAttoRep, totalCapacityOwnershipAttoRep);
-		uint256 receiverBadDebtAttoEth = _getVaultBadDebtAttoEth(request.receiverVault);
-		uint256 receiverOpenInterestAfterAttoEth =
-			receiverGrossOpenInterestAfterAttoEth > receiverBadDebtAttoEth
-				? receiverGrossOpenInterestAfterAttoEth - receiverBadDebtAttoEth
-				: 0;
-		require(receiverOpenInterestAfterAttoEth >= receiverOpenInterestBeforeAttoEth, 'Receiver debt decreased');
-		debtToMoveAttoEth = receiverOpenInterestAfterAttoEth - receiverOpenInterestBeforeAttoEth;
-		require(debtToMoveAttoEth <= nominalDebtToMoveAttoEth && debtToMoveAttoEth <= request.requestedDebtAttoEth, 'Debt exceeds request');
-		if (nominalDebtToMoveAttoEth != 0 && debtToMoveAttoEth == 0) revert('Receiver debt below minimum');
-		uint256 backingUnitsToTransfer = SecurityPoolUtils.calculateLiquidationBackingUnitsAward(debtToMoveAttoEth, request.repEthPrice, pool.getTotalPoolHeldAttoRep(), totalRepBackingUnits);
-		require(backingUnitsToTransfer <= maximumBackingUnitsToTransfer, 'Award exceeds funded quote');
-		if (request.requestedDebtAttoEth >= targetOpenInterestAttoEth) {
-			badDebtAttoEth = targetOpenInterestAttoEth - debtToMoveAttoEth;
-			if (badDebtAttoEth != 0) {
-				totalBadDebtAttoEth += badDebtAttoEth;
-				uint256 resultingVaultBadDebtAttoEth = _getVaultBadDebtAttoEth(request.targetVault) + badDebtAttoEth;
-				_setVaultBadDebtAttoEth(request.targetVault, resultingVaultBadDebtAttoEth);
-				emit VaultBadDebtRecorded(request.targetVault, badDebtAttoEth, resultingVaultBadDebtAttoEth, totalBadDebtAttoEth);
-			}
-		}
-		require(debtToMoveAttoEth > 0 || badDebtAttoEth > 0, 'No liq');
-
+		require(SecurityPoolUtils._isLiquidationBeyondMinPriceDistance(targetBackingAttoRep, targetDisputeAttoRep, targetLimitAttoEth, statoblastSecurityMultiplierBps, request.repEthPrice, request.minLiquidationPriceDistanceBps), 'Liquidation distance too low');
+		require(!SecurityPoolUtils.isVaultHealthy(targetBackingAttoRep, targetDisputeAttoRep, targetLimitAttoEth, request.repEthPrice, statoblastSecurityMultiplierBps), 'Target safe');
+		uint256 backingUnitsToTransfer;
+		(debtToMoveAttoEth, underwritingLimitToMoveAttoEth, , backingUnitsToTransfer) = SecurityPoolUtils.calculateBundledLiquidationTransfer(request.snapshotTargetBackingUnits, targetLimitAttoEth, targetLimitAttoEth, request.requestedDebtAttoEth, request.repEthPrice, pool.getTotalPoolHeldAttoRep(), totalRepBackingUnits, request.requestedDebtAttoEth >= targetLimitAttoEth ? 0 : minimumVaultRepDepositAttoRep);
+		require(debtToMoveAttoEth != 0, 'No liq');
 		feeIndexRemainder = 0;
-		securityVaults[request.targetVault].capacityOwnershipAttoRep =
-			request.snapshotTargetCapacityOwnershipAttoRep - capacityOwnershipToMoveAttoRep;
+		securityVaults[request.targetVault].underwritingLimitAttoEth -= debtToMoveAttoEth;
+		securityVaults[request.receiverVault].underwritingLimitAttoEth += debtToMoveAttoEth;
 		securityVaults[request.targetVault].repBackingUnits -= backingUnitsToTransfer;
-		if (debtToMoveAttoEth == 0) return (debtToMoveAttoEth, capacityOwnershipToMoveAttoRep, badDebtAttoEth);
-		securityVaults[request.receiverVault].capacityOwnershipAttoRep += capacityOwnershipToMoveAttoRep;
 		securityVaults[request.receiverVault].repBackingUnits += backingUnitsToTransfer;
-		uint256 receiverOpenInterestAttoEth = pool.getVaultOpenInterestAttoEth(request.receiverVault);
-		require(receiverOpenInterestAttoEth - receiverOpenInterestBeforeAttoEth == debtToMoveAttoEth, 'Debt settlement mismatch');
-		if (receiverOpenInterestAttoEth < minimumSecurityBondDebtAttoEth) revert('Receiver debt below minimum');
-		uint256 receiverDisputeStakedAttoRep;
-		if (address(escalationGame) != address(0x0)) {
-			try escalationGame.disputeStakedRepByVaultAttoRep(request.receiverVault) returns (uint256 claimRep) {
-				receiverDisputeStakedAttoRep = claimRep;
-			} catch {
-				revert('Claim balance failed');
-			}
-		}
-		require(SecurityPoolUtils.isVaultHealthyAtFactor(pool.backingUnitsToAttoRep(securityVaults[request.receiverVault].repBackingUnits), receiverDisputeStakedAttoRep, receiverOpenInterestAttoEth, request.repEthPrice, statoblastSecurityMultiplierBps, request.minimumReceiverHealthFactorBps), 'Receiver bad');
-		uint256 targetOpenInterestAttoEthAfter = pool.getVaultOpenInterestAttoEth(request.targetVault);
-		uint256 targetVaultRepBackingAfterAttoRep = pool.backingUnitsToAttoRep(securityVaults[request.targetVault].repBackingUnits);
-		require(targetOpenInterestAttoEthAfter == 0 || targetOpenInterestAttoEthAfter >= minimumSecurityBondDebtAttoEth, 'Target debt');
-		require(targetOpenInterestAttoEthAfter == 0 || targetVaultRepBackingAfterAttoRep >= minimumVaultRepDepositAttoRep, 'Target REP');
+		_invalidateCoverage();
+		uint256 receiverLimitAttoEth = securityVaults[request.receiverVault].underwritingLimitAttoEth;
+		uint256 receiverDisputeAttoRep =
+			address(escalationGame) == address(0)
+				? 0
+				: escalationGame.disputeStakedRepByVaultAttoRep(request.receiverVault);
+		require(SecurityPoolUtils.isVaultHealthyAtFactor(pool.backingUnitsToAttoRep(securityVaults[request.receiverVault].repBackingUnits), receiverDisputeAttoRep, receiverLimitAttoEth, request.repEthPrice, statoblastSecurityMultiplierBps, request.minimumReceiverHealthFactorBps), 'Receiver bad');
+		require(receiverLimitAttoEth >= minimumSecurityBondDebtAttoEth, 'Receiver commitment below minimum');
 		require(pool.backingUnitsToAttoRep(securityVaults[request.receiverVault].repBackingUnits) >= minimumVaultRepDepositAttoRep, 'Receiver REP');
+		uint256 remainingLimitAttoEth = securityVaults[request.targetVault].underwritingLimitAttoEth;
+		require(remainingLimitAttoEth == 0 || remainingLimitAttoEth >= minimumSecurityBondDebtAttoEth, 'Target commitment');
+		// A partially transferred commitment remains authorized, visible, and eligible for takeover.
+		// No commitment or settlement collateral is written off by liquidation.
+		badDebtAttoEth = 0;
 	}
 }

@@ -18,15 +18,14 @@ export async function reportOutcomeWithWalletViaVault(client: WriteClient, secur
 	const depositAmount = fundingQuote?.depositAmount
 	if (fundingQuote === undefined || depositAmount === undefined || depositAmount !== expectedDepositAmount) throw new Error('The required vault deposit changed. Review the amount again.')
 	if ((details.viewerWalletRepBalanceAttoRep ?? 0n) < depositAmount || (details.viewerWalletRepAllowanceAttoRep ?? 0n) < depositAmount) throw new Error('Check your wallet REP balance and approval before reporting.')
-	const savedTarget = await client.readContract({ address: securityPoolAddress, abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'vaultTargetBackingFactorBps', args: [client.account.address] })
-	const target = savedTarget === 0n ? await client.readContract({ address: securityPoolAddress, abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'statoblastSecurityMultiplierBps', args: [] }) : savedTarget
+	const target = await client.readContract({ address: securityPoolAddress, abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'statoblastSecurityMultiplierBps', args: [] })
 	const deposit = {
 		address: securityPoolAddress,
 		abi: statoblast_SecurityPool_SecurityPool.abi,
 		functionName: 'depositRepToVault',
 		args: [depositAmount, target],
 		reviewTitle: `Deposit ${formatUnits(depositAmount, 18)} REP into this pool`,
-		reviewDescription: `Paid from your wallet. Next, ${formatUnits(actualReportAmount, 18)} REP from this vault funds your report. Your vault will hold ${formatUnits(fundingQuote.remainingVaultRepAttoRep, 18)} REP after reporting. Vault target backing ratio: ${formatUnits(target, 4)}×.`,
+		reviewDescription: `Paid from your wallet. Next, ${formatUnits(actualReportAmount, 18)} REP from this vault funds your report. Your vault will hold ${formatUnits(fundingQuote.remainingVaultRepAttoRep, 18)} REP after reporting. Depositing REP does not change your standing ETH commitment.`,
 	} as const
 	const report = {
 		address: securityPoolAddress,

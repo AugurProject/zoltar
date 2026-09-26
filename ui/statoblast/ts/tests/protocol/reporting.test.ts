@@ -138,7 +138,6 @@ describe('reporting protocol client', () => {
 				if (request.functionName === 'disputeStakedRepByVaultAttoRep') return 0n
 				if (request.functionName === 'repToken') return repTokenAddress
 				if (request.functionName === 'balanceOf' || request.functionName === 'allowance') return 100n
-				if (request.functionName === 'vaultTargetBackingFactorBps') return failure === 'none' ? 25_000n : 0n
 				if (request.functionName === 'statoblastSecurityMultiplierBps') return 15_000n
 				if (request.functionName === 'hasReachedNonDecision') return false
 				return await reader.readContract(request)
@@ -163,7 +162,7 @@ describe('reporting protocol client', () => {
 			return
 		}
 		expect(previews.map(preview => preview.functionName)).toEqual(['depositRepToVault', 'depositToEscalationGame'])
-		expect(previews[0]?.args).toEqual([17n, failure === 'none' ? 25_000n : 15_000n])
+		expect(previews[0]?.args).toEqual([17n, 15_000n])
 		expect(previews[1]?.args).toEqual([2, 7n])
 	})
 

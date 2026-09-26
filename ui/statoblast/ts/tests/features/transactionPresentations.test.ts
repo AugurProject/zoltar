@@ -54,10 +54,10 @@ describe('transaction presentations', () => {
 
 	test('does not describe an immediately executed target change as still queued', () => {
 		const presentation = createSecurityVaultSuccessPresentation({
-			action: 'adjustVaultBackingFactor',
+			action: 'setVaultUnderwritingLimit',
 			hash: transactionHash,
-			queuedOperation: { operation: 'adjustVaultBackingFactor', operationId: 1n, isPendingSlot: false },
-			stagedExecution: { operation: 'adjustVaultBackingFactor', operationId: 1n, success: true, errorMessage: undefined },
+			queuedOperation: { operation: 'setVaultUnderwritingLimit', operationId: 1n, isPendingSlot: false },
+			stagedExecution: { operation: 'setVaultUnderwritingLimit', operationId: 1n, success: true, errorMessage: undefined },
 		})
 		expect(presentation.detail).toBeUndefined()
 	})
@@ -175,10 +175,10 @@ describe('transaction presentations', () => {
 			context,
 		)
 
-		expect(intent.rows?.map(row => row.label)).toEqual(['Pool', 'Target Vault', 'Requested liquidation debt'])
-		expect(presentation.rows?.map(row => row.label)).toEqual(['Pool', 'Target Vault', 'Requested liquidation debt'])
-		expect(intent.rows?.at(-1)).toMatchObject({ label: 'Requested liquidation debt', value: '4.5\u00a0ETH' })
-		expect(presentation.rows?.at(-1)).toMatchObject({ label: 'Requested liquidation debt', value: '4.5\u00a0ETH' })
+		expect(intent.rows?.map(row => row.label)).toEqual(['Pool', 'Target Vault', 'Commitment to transfer'])
+		expect(presentation.rows?.map(row => row.label)).toEqual(['Pool', 'Target Vault', 'Commitment to transfer'])
+		expect(intent.rows?.at(-1)).toMatchObject({ label: 'Commitment to transfer', value: '4.5\u00a0ETH' })
+		expect(presentation.rows?.at(-1)).toMatchObject({ label: 'Commitment to transfer', value: '4.5\u00a0ETH' })
 	})
 
 	test('uses the same pool grammar without redundant universe rows in intent and success presentations', () => {
@@ -268,15 +268,15 @@ describe('transaction presentations', () => {
 		expect(success.title).toBe('Requested new price')
 	})
 
-	test('describes truth-auction claim settlement as REP plus auctioned capacity ownership', () => {
+	test('describes truth-auction claim settlement as REP plus auctioned underwriting commitments', () => {
 		const presentation = createForkAuctionSuccessPresentation(createForkAuctionResult('claimAuctionProceeds'))
-		expect(presentation.detail).toBe('Selected truth-auction bids were settled. Winning bids received REP backing units plus Auctioned capacity ownership, assigning the remaining capacity ownership; refund-only rows credited locked ETH for withdrawal.')
+		expect(presentation.detail).toBe('Selected truth-auction bids were settled. Winning bids received REP backing units plus Auctioned underwriting commitments, assigning the remaining underwriting commitments; refund-only rows credited locked ETH for withdrawal.')
 	})
 
-	test('describes finalized refund-only settlement without capacity ownership assignment', () => {
+	test('describes finalized refund-only settlement without underwriting commitments assignment', () => {
 		const presentation = createForkAuctionSuccessPresentation(createForkAuctionResult('claimAuctionProceeds', { settlementMode: 'refund' }))
 		expect(presentation.title).toBe('Settle finalized refunds')
-		expect(presentation.detail).toBe('Selected finalized truth-auction refund rows were settled. Locked ETH was credited for withdrawal without assigning REP backing units or Auctioned capacity ownership.')
+		expect(presentation.detail).toBe('Selected finalized truth-auction refund rows were settled. Locked ETH was credited for withdrawal without assigning REP backing units or Auctioned underwriting commitments.')
 	})
 
 	test('uses refund-only transaction intent copy for finalized refund settlement submissions', () => {

@@ -32,7 +32,7 @@ function createSelectedPool(overrides: Partial<ListedSecurityPool> = {}): Listed
 	const selectedPool: ListedSecurityPool = {
 		settlementCollateralAttoEth: 0n,
 		currentRetentionRate: 10n,
-		feeEligibleCapacityOwnershipAttoRep: 5n * 10n ** 18n,
+		feeEligibleUnderwritingLimitAttoEth: overrides.totalUnderwritingLimitAttoEth ?? 5n * 10n ** 18n,
 		hasForkActivity: false,
 		forkOutcome: 'none',
 		forkOwnSecurityPool: false,
@@ -52,7 +52,8 @@ function createSelectedPool(overrides: Partial<ListedSecurityPool> = {}): Listed
 		shareTokenSupplyAttoShares: 0n,
 		systemState: 'operational',
 		totalPoolHeldAttoRep: 0n,
-		totalCapacityOwnershipAttoRep: 5n * 10n ** 18n,
+		certifiedUnderwritingLimitAttoEth: overrides.totalUnderwritingLimitAttoEth ?? 5n * 10n ** 18n,
+		totalUnderwritingLimitAttoEth: 5n * 10n ** 18n,
 		truthAuctionAddress: zeroAddress,
 		truthAuctionStartedAt: 0n,
 		universeHasForked: false,
@@ -439,15 +440,15 @@ void describe('TradingSection', () => {
 		expect(document.body.textContent?.includes('1 000 000 000 000 000 000')).toBe(false)
 	})
 
-	void test('shows the minting disabled reason when total capacity ownership remains unclaimed and none is fee eligible', async () => {
+	void test('shows the minting disabled reason when total underwriting commitments remain unclaimed and none is fee eligible', async () => {
 		const renderedComponent = await renderIntoDocument(
 			<TradingSection
 				{...createTradingSectionProps({
 					selectedPool: createSelectedPool({
 						settlementCollateralAttoEth: 0n,
-						feeEligibleCapacityOwnershipAttoRep: 0n,
+						feeEligibleUnderwritingLimitAttoEth: 0n,
 						totalPoolHeldAttoRep: 20n * 10n ** 18n,
-						totalCapacityOwnershipAttoRep: 0n,
+						totalUnderwritingLimitAttoEth: 0n,
 						universeHasForked: false,
 					}),
 					tradingForm: createTradingForm({ completeSetAmount: '100' }),
@@ -469,7 +470,7 @@ void describe('TradingSection', () => {
 					accountState: createAccountState({ ethBalanceAttoEth: 1_250_000_000_000_000_000n }),
 					selectedPool: createSelectedPool({
 						settlementCollateralAttoEth: 0n,
-						totalCapacityOwnershipAttoRep: 5n * 10n ** 18n,
+						totalUnderwritingLimitAttoEth: 5n * 10n ** 18n,
 					}),
 				})}
 			/>,
@@ -498,7 +499,7 @@ void describe('TradingSection', () => {
 					onTradingFormChange: ({ completeSetAmount }) => {
 						if (completeSetAmount !== undefined) mintedAmount = completeSetAmount
 					},
-					selectedPool: createSelectedPool({ settlementCollateralAttoEth: 0n, totalCapacityOwnershipAttoRep: 5n * 10n ** 18n }),
+					selectedPool: createSelectedPool({ settlementCollateralAttoEth: 0n, totalUnderwritingLimitAttoEth: 5n * 10n ** 18n }),
 				})}
 			/>,
 		)
@@ -517,24 +518,24 @@ void describe('TradingSection', () => {
 		expect(mintedAmount).toBe('1.25')
 	})
 
-	void test('shows unavailable price instead of indefinite mint-capacity loading', async () => {
+	void test('uses certified commitments when the optional UI price is unavailable', async () => {
 		const rendered = await renderIntoDocument(<TradingSection {...createTradingSectionProps({ calculationPriceConfigured: true, repPerEthPrice: undefined })} />)
 		cleanupRenderedComponent = rendered.cleanup
-		expect(document.body.textContent).toContain('Unavailable (no price)')
+		expect(document.body.textContent).not.toContain('Unavailable (no price)')
 		expect(document.body.textContent).not.toContain('Loading mint capacity.')
 		const button = within(document.body).getByRole('button', { name: 'Mint complete sets' })
 		if (!(button instanceof HTMLButtonElement)) throw new Error('Expected mint button')
-		expect(button.disabled).toBe(true)
+		expect(button.disabled).toBe(false)
 	})
 
 	void test('shows zero mint capacity without waiting for an unavailable price', async () => {
-		const rendered = await renderIntoDocument(<TradingSection {...createTradingSectionProps({ calculationPriceConfigured: true, repPerEthPrice: undefined, selectedPool: createSelectedPool({ totalCapacityOwnershipAttoRep: 0n, feeEligibleCapacityOwnershipAttoRep: 0n }) })} />)
+		const rendered = await renderIntoDocument(<TradingSection {...createTradingSectionProps({ calculationPriceConfigured: true, repPerEthPrice: undefined, selectedPool: createSelectedPool({ totalUnderwritingLimitAttoEth: 0n, feeEligibleUnderwritingLimitAttoEth: 0n }) })} />)
 		cleanupRenderedComponent = rendered.cleanup
 		expect(document.body.textContent).toContain('No mint capacity remaining.')
 		expect(document.body.textContent).not.toContain('Loading mint capacity.')
 	})
 
-	void test('uses the configured UI price for mint capacity and maximum mint amount', async () => {
+	void test('uses certified ETH limits independently of the configured UI price', async () => {
 		let mintedAmount: string | undefined
 		const renderedComponent = await renderIntoDocument(
 			<TradingSection
@@ -545,7 +546,7 @@ void describe('TradingSection', () => {
 					},
 					repPerEthPrice: 10n * 10n ** 18n,
 					calculationPriceConfigured: true,
-					selectedPool: createSelectedPool({ lastOraclePrice: 10n ** 18n, settlementCollateralAttoEth: 0n, totalCapacityOwnershipAttoRep: 10n * 10n ** 18n }),
+					selectedPool: createSelectedPool({ lastOraclePrice: 10n ** 18n, settlementCollateralAttoEth: 0n, totalUnderwritingLimitAttoEth: 10n * 10n ** 18n }),
 				})}
 			/>,
 		)
@@ -557,7 +558,7 @@ void describe('TradingSection', () => {
 			if (!(maxButton instanceof HTMLButtonElement)) throw new Error('Expected mint max button')
 			fireEvent.click(maxButton)
 		})
-		expect(mintedAmount).toBe('0.5')
+		expect(mintedAmount).toBe('10')
 	})
 
 	void test('keeps minting disabled off Sepolia and explains how to recover after the modal is already open', async () => {
@@ -597,7 +598,7 @@ void describe('TradingSection', () => {
 							feeAccrualState: { feeEndTimestamp: 200n, feeIndexRemainder: 0n, lastUpdatedFeeAccumulator: 1n, totalFeesOwedRemainder: 0n },
 							settlementCollateralAttoEth: 10n * 10n ** 18n,
 							shareTokenSupplyAttoShares: 10n * 10n ** 18n,
-							totalCapacityOwnershipAttoRep: 50n * 10n ** 18n,
+							totalUnderwritingLimitAttoEth: 50n * 10n ** 18n,
 						}),
 						tradingForm: createTradingForm({ completeSetAmount: '1' }),
 					})}
@@ -636,7 +637,7 @@ void describe('TradingSection', () => {
 					selectedPool: createSelectedPool({
 						settlementCollateralAttoEth: 0n,
 						shareTokenSupplyAttoShares: 10n * 10n ** 18n,
-						totalCapacityOwnershipAttoRep: 5n * 10n ** 18n,
+						totalUnderwritingLimitAttoEth: 5n * 10n ** 18n,
 						universeHasForked: false,
 					}),
 					tradingForm: createTradingForm({ completeSetAmount: '1' }),

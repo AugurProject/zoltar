@@ -1,7 +1,6 @@
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as securityPoolCopy from '../../../copy/securityPool.js'
 import { assertNever } from '@zoltar/ui-core-shared/lib/assert.js'
-import { MULTIPLIER_SIGN } from '@zoltar/ui-core-shared/lib/formatters.js'
 import type { ForkAuctionDetails, ListedSecurityPool, OracleQueueOperation } from '@zoltar/ui-core-shared/types/contracts.js'
 
 export function buildSelectedPoolSummaryPool({ forkAuctionDetails, selectedPool }: { forkAuctionDetails: ForkAuctionDetails | undefined; selectedPool: ListedSecurityPool | undefined }) {
@@ -28,8 +27,8 @@ export function getPendingOperationLabel(operation: OracleQueueOperation) {
 	switch (operation) {
 		case 'liquidation':
 			return securityPoolCopy.liquidation
-		case 'adjustVaultBackingFactor':
-			return securityPoolCopy.adjustVaultBackingFactor
+		case 'setVaultUnderwritingLimit':
+			return securityPoolCopy.setVaultUnderwritingLimit
 		case 'withdrawRep':
 			return securityPoolCopy.withdrawRep
 		default:
@@ -44,8 +43,8 @@ export function getPendingOperationAmountPresentation(operation: OracleQueueOper
 		case 'withdrawRep':
 			// The action heading and REP amount already identify a withdrawal.
 			return { summaryLabel: undefined, suffix: commonCopy.rep, units: 18 }
-		case 'adjustVaultBackingFactor':
-			return { summaryLabel: securityPoolCopy.vaultBackingFactor, suffix: MULTIPLIER_SIGN, units: 4 }
+		case 'setVaultUnderwritingLimit':
+			return { summaryLabel: securityPoolCopy.vaultBackingFactor, suffix: commonCopy.eth, units: 18 }
 		default:
 			return assertNever(operation)
 	}

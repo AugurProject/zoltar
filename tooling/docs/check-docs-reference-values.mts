@@ -20,7 +20,7 @@ const coordinatorData = await readFile('docs/data/open-oracle-coordinator.json',
 const compiledContractArtifacts: unknown = JSON.parse(await readFile('solidity/artifacts/Contracts.json', 'utf8'))
 const operatorReference = (await Promise.all(['docs/reference/operator-guardrails.html', 'docs/reference/contract-inventory.html'].map(async pagePath => htmlToDocumentationText(await readFile(pagePath, 'utf8'))))).join('\n')
 const contractInteractionReference = (await Promise.all(['docs/reference/contracts.html', ...[...new Bun.Glob('docs/reference/contracts/*.html').scanSync('.')].toSorted()].map(async pagePath => htmlToDocumentationText(await readFile(pagePath, 'utf8'))))).join('\n')
-const contractReferenceGenerator = `${await readFile('tooling/docs/generate-contract-interaction-reference.mts', 'utf8')}\n${await readFile('tooling/docs/contract-reference-metadata.mts', 'utf8')}`
+const contractReferenceGenerator = `${await readFile('tooling/docs/generate-contract-interaction-reference.mts', 'utf8')}\n${await readFile('tooling/docs/contract-reference-metadata.mts', 'utf8')}\n${await readFile('tooling/docs/security-pool-contract-reference.mts', 'utf8')}`
 const escalationGame = await readFile('solidity/contracts/statoblast/EscalationGame.sol', 'utf8')
 const escalationGameClaimDelegate = await readFile('solidity/contracts/statoblast/EscalationGameClaimDelegate.sol', 'utf8')
 const escalationGameDepositDelegate = await readFile('solidity/contracts/statoblast/EscalationGameDepositDelegate.sol', 'utf8')
@@ -183,27 +183,26 @@ function assertTruthAuctionCombinedRepCapDocs(): void {
 }
 
 function assertMigrationSecurityCoverageCommitmentDocs(): void {
-	assert.match(securityPoolUtils, /function calculateMintingCapacityAttoEth\([\s\S]*Math\.mulDiv\(capacityOwnershipAttoRep, PRICE_PRECISION, repEthPrice\)[\s\S]*Math\.mulDiv\(capacityValueAttoEth, BPS_DENOMINATOR, securityMultiplierBps\)/)
-	const calculateCapacity = (capacityOwnershipAttoRep: bigint, repPerEth: bigint, securityMultiplierBps: bigint) => ((capacityOwnershipAttoRep * 10n ** 18n) / repPerEth / securityMultiplierBps) * 10_000n
-	assert.ok(calculateCapacity(100n * 10n ** 18n, 4n * 10n ** 18n, 20_000n) < calculateCapacity(100n * 10n ** 18n, 2n * 10n ** 18n, 20_000n), 'A higher REP-per-ETH quote must lower live ETH minting capacity')
+	assert.match(securityPoolUtils, /function calculateBackingSupportedLimitAttoEth\([\s\S]*Math\.max\(securityMultiplierBps, BPS_DENOMINATOR \+ LIQUIDATION_REP_BONUS_BPS\)/)
 	assert.match(whitepaperStatoblast, /id="fees-capacity-liquidations"/)
-	assert.match(securityPoolOperationsDelegate, /uint256 capacityOwnershipAddedAttoRep = Math\.mulDiv\(\s*attoRepAmount,\s*statoblastSecurityMultiplierBps,\s*targetHealthFactorBps\s*\)/)
-	assert.equal((11n * 20_000n) / 30_000n, 7n, 'capacity ownership must round a nonzero remainder downward')
-	assert.equal((1n * 20_000n) / 20_001n, 0n, 'an extreme deposit target factor may round capacity ownership to zero')
+	assert.match(securityPoolOperationsDelegate, /nextTotalAttoEth >= settlementCollateralAttoEth/)
+	assert.match(securityPoolOperationsDelegate, /_requireLimitBacked\(pool, vault, limitAttoEth\)/)
+	assert.match(securityPoolSettlementDelegate, /getCertifiedUnderwritingLimitAttoEth\(\) == totalUnderwritingLimitAttoEth/)
 	assert.match(securityPoolUtils, /function isVaultHealthyAtFactor\([\s\S]*Math\.Rounding\.Ceil[\s\S]*poolHeldVaultRepBackingAttoRep \+ disputeStakedAttoRep < associatedRequiredRepAttoRep[\s\S]*return poolHeldVaultRepBackingAttoRep >= freeRequiredRepAttoRep/)
 	assert.match(liquidationHtml, /id="capacity-and-health"/)
 	assert.doesNotMatch(securityPoolUtils, /function calculateLiquidationTransfer\(/, 'the obsolete bonus-priced liquidation preview must not remain externally callable')
 	const externalPureFunctions = [...securityPoolUtils.matchAll(/function\s+(\w+)\([^{}]*?\)\s+external\s+pure/g)].map(match => match[1])
 	assert.deepEqual(
 		externalPureFunctions,
-		['calculateFeeAccrual', 'calculateVaultFee', 'calculateMintingCapacityAttoEth', 'calculateVaultOpenInterestAttoEth', 'calculateBundledLiquidationTransfer', 'isVaultHealthy', 'calculateRetentionRate'],
+		['calculateFeeAccrual', 'calculateVaultFee', 'calculateBackingSupportedLimitAttoEth', 'calculateVaultOpenInterestAttoEth', 'calculateBundledLiquidationTransfer', 'isVaultHealthy', 'calculateRetentionRate'],
 		'SecurityPoolUtils external pure surface changed; document every preview and reject obsolete selectors',
 	)
 	for (const functionName of externalPureFunctions) {
 		assert.ok(operatorReference.includes(`${functionName}(`), `operator reference must document SecurityPoolUtils.${functionName}`)
 	}
-	assert.match(priceCoordinatorTypes, /uint256 constant REQUEST_BOUNTY_OFFSET_ATTO_ETH = 101;[\s\S]*enum OperationType \{\s*Liquidation,\s*WithdrawRep,\s*AdjustVaultBackingFactor\s*\}/, 'coordinator types must pin the documented 101 attoETH bounty offset and the operation enum')
-	assert.match(coordinatorData, /"OperationType": \{ "0": "Liquidation", "1": "WithdrawRep", "2": "AdjustVaultBackingFactor" \}/)
+	assert.match(priceCoordinatorTypes, /uint256 constant REQUEST_BOUNTY_OFFSET_ATTO_ETH = 101;[\s\S]*enum OperationType \{\s*Liquidation,\s*WithdrawRep,\s*SetVaultUnderwritingLimit\s*\}/, 'coordinator types must pin the documented 101 attoETH bounty offset and the operation enum')
+	assert.match(priceCoordinator, /operationValue > 0 \|\| operation == OperationType.SetVaultUnderwritingLimit/, 'zero is a valid absolute underwriting-limit exit; other staged operations require a positive amount')
+	assert.match(coordinatorData, /"OperationType": \{ "0": "Liquidation", "1": "WithdrawRep", "2": "SetVaultUnderwritingLimit" \}/)
 	assert.doesNotMatch(coordinatorData, /StagedOperationDisputeStakedRepSnapshotted|initiatorVault/)
 	assert.doesNotMatch(priceCoordinator, /event PendingOperationRecoveryConsumed/)
 	assert.match(coordinatorData, /LiquidationRouteStaged\(uint256 indexed operationId, address indexed operator, address indexed receiverVault, address targetVault, bytes32 approvalId, uint256 requestedDebtAttoEth, uint256 reservedDebtAttoEth\)/)
@@ -211,14 +210,10 @@ function assertMigrationSecurityCoverageCommitmentDocs(): void {
 	assert.match(coordinatorData, /"trigger": "executeStagedOperation",\s*"preconditions": \["operation exists", "operation is expired", "cache may be stale"\],[\s\S]*?"operation is consumed without requiring a valid price"/)
 	assert.match(priceCoordinator, /event LiquidationRouteStaged\([\s\S]*address indexed operator,[\s\S]*address indexed receiverVault,[\s\S]*uint256 reservedDebtAttoEth[\s\S]*\);/)
 	assert.match(liquidationApprovalRegistry, /EIP712Domain\(string name,string version,uint256 chainId,address verifyingContract\)/)
-	assert.match(
-		securityPoolOperationsDelegate,
-		/receiverOpenInterestAttoEth < minimumSecurityBondDebtAttoEth[\s\S]*targetOpenInterestAttoEthAfter == 0 \|\| targetOpenInterestAttoEthAfter >= minimumSecurityBondDebtAttoEth[\s\S]*targetOpenInterestAttoEthAfter == 0 \|\| targetVaultRepBackingAfterAttoRep >= minimumVaultRepDepositAttoRep[\s\S]*securityVaults\[request\.receiverVault\][\s\S]*minimumVaultRepDepositAttoRep/,
-	)
-	assert.match(
-		securityPoolOperationsDelegate,
-		/debtToMoveAttoEth = receiverOpenInterestAfterAttoEth - receiverOpenInterestBeforeAttoEth;[\s\S]*debtToMoveAttoEth <= nominalDebtToMoveAttoEth && debtToMoveAttoEth <= request\.requestedDebtAttoEth[\s\S]*nominalDebtToMoveAttoEth != 0 && debtToMoveAttoEth == 0[\s\S]*badDebtAttoEth = targetOpenInterestAttoEth - debtToMoveAttoEth/,
-	)
+	assert.match(securityPoolOperationsDelegate, /receiverLimitAttoEth >= minimumSecurityBondDebtAttoEth/)
+	assert.match(securityPoolOperationsDelegate, /remainingLimitAttoEth == 0 \|\| remainingLimitAttoEth >= minimumSecurityBondDebtAttoEth/)
+	assert.match(securityPoolOperationsDelegate, /securityVaults\[request\.targetVault\]\.underwritingLimitAttoEth -= debtToMoveAttoEth;[\s\S]*securityVaults\[request\.receiverVault\]\.underwritingLimitAttoEth \+= debtToMoveAttoEth/)
+	assert.match(securityPoolOperationsDelegate, /badDebtAttoEth = 0;/)
 	assert.match(securityPoolOperationsDelegate, /_getVaultBadDebtAttoEth\(request\.targetVault\) == 0[\s\S]*_getVaultBadDebtAttoEth\(request\.receiverVault\) == 0/)
 	assertCoordinatorDataFunctionInventory()
 }
@@ -228,10 +223,10 @@ function assertRepricingBoundaryDocs(): void {
 	assert.match(invariantsHtml, /id="vault-02"/)
 	assert.match(securityPool, /function createCompleteSet\(\) external payable isOperational \{[\s\S]*SecurityPoolSettlementDelegate\.createCompleteSet/)
 	assert.match(securityPoolSettlementDelegate, /function createCompleteSet\([\s\S]*uint256 nextSettlementCollateralAttoEth = settlementCollateralAttoEth \+ msg\.value;[\s\S]*_validateSettlementCollateral\(pool, nextSettlementCollateralAttoEth\)/)
-	assert.match(securityPool, /function getCurrentMintingCapacityAttoEth\(\)[\s\S]*SecurityPoolUtils\.calculateMintingCapacityAttoEth\(\s*totalCapacityOwnershipAttoRep,/)
+	assert.match(securityPool, /function getCurrentMintingCapacityAttoEth\(\)[\s\S]*return totalUnderwritingLimitAttoEth;/)
 	const vaultOpenInterestBody = readSolidityFunctionBody(securityPool, 'function getVaultOpenInterestAttoEth(')
-	assert.match(vaultOpenInterestBody, /SecurityPoolUtils\.calculateVaultOpenInterestAttoEth\([\s\S]*totalCapacityOwnershipAttoRep/)
-	assert.doesNotMatch(vaultOpenInterestBody, /feeEligibleCapacityOwnershipAttoRep/)
+	assert.match(vaultOpenInterestBody, /SecurityPoolUtils\.calculateVaultOpenInterestAttoEth\([\s\S]*totalUnderwritingLimitAttoEth/)
+	assert.doesNotMatch(vaultOpenInterestBody, /feeEligibleUnderwritingLimitAttoEth/)
 	assert.match(securityPoolOperationsDelegate, /SecurityPoolUtils\.isVaultHealthyAtFactor\([\s\S]*minimumReceiverHealthFactorBps/)
 }
 
@@ -504,8 +499,8 @@ function assertContractInteractionDistinctions(): void {
 	assert.match(securityPoolForker, /securityPool\.setTotalSharesAttoShares\(parent\.shareTokenSupplyAttoShares\(\)\)/)
 	assert.match(diagramModelsSource, /withdraw REP or liquidation/)
 	assert.doesNotMatch(diagramModelsSource, /withdraw, capacity ownership/)
-	assert.match(securityPoolUtils, /capacityOwnershipToMoveAttoRep =[\s\S]*Math\.mulDiv\(targetCapacityOwnershipAttoRep, debtToMoveAttoEth, targetOpenInterestAttoEth\)/)
-	assert.match(securityPoolOperationsDelegate, /request\.receiverVault != request\.targetVault[\s\S]*receiverOpenInterestAttoEth < minimumSecurityBondDebtAttoEth[\s\S]*revert\('Receiver debt below minimum'\)/)
+	assert.match(securityPoolUtils, /underwritingLimitToMoveAttoEth = debtToMoveAttoEth;/)
+	assert.match(securityPoolOperationsDelegate, /require\(receiverLimitAttoEth >= minimumSecurityBondDebtAttoEth, 'Receiver commitment below minimum'\)/)
 	assert.match(securityPoolOperationsDelegate, /SecurityPoolUtils\.isVaultHealthyAtFactor\([\s\S]*minimumReceiverHealthFactorBps[\s\S]*'Receiver bad'/)
 	assert.match(securityPool, /function _requireVaultCoverage\([\s\S]*uint256 openInterestAttoEth[\s\S]*SecurityPoolUtils\.isVaultHealthy/)
 	assert.match(securityPool, /function _requirePoolCoverage\([\s\S]*uint256 totalOpenInterestAttoEth[\s\S]*SecurityPoolUtils\.isVaultHealthy/)
@@ -574,7 +569,7 @@ function assertContractInteractionDistinctions(): void {
 	assert.match(securityPoolForkerBase, /function _finalizeEscalationStateAfterAuction\([\s\S]*childEscalationGame = child\.escalationGame\(\);\s*_validateChildEscalationGame\(child, childEscalationGame\);[\s\S]*_finalizeAwaitingForkContinuationIfReady\(child, childEscalationGame\)/)
 	assert.match(securityPoolForker, /if \(!parentForkData\.unresolvedEscalationAtFork\) return childEscalationGame;\s*if \(address\(childEscalationGame\) == address\(0x0\)\)/)
 	assert.match(securityPool, /updateVaultFees\(request\.targetVault\);\s*updateVaultFees\(request\.receiverVault\);[\s\S]*abi\.encodeCall\(SecurityPoolOperationsDelegate\.performBundledLiquidation, \(executionRequest\)\)/)
-	assert.match(securityPoolOperationsDelegate, /securityVaults\[request\.receiverVault\]\.capacityOwnershipAttoRep \+= capacityOwnershipToMoveAttoRep/)
+	assert.match(securityPoolOperationsDelegate, /securityVaults\[request\.receiverVault\]\.underwritingLimitAttoEth \+= debtToMoveAttoEth/)
 	assert.doesNotMatch(escalationGameClaimDelegate, /function moveEscalationClaim|payoutClaimBundle|forkCarryPayoutClaimImportCursor/)
 	assert.doesNotMatch(securityPoolOperationsDelegate, /_moveEscalationClaim|previewLiquidationClaimRep|moveEscalationClaim/)
 	assert.match(escalationGameSettlement, /_claimDepositForWinning\(depositIndex, outcome, false\)/)
@@ -607,7 +602,7 @@ function assertContractInteractionDistinctions(): void {
 	assert.match(securityPool, /function setSystemState\(SystemState newState\) external onlyForker \{\s*systemState = newState;\s*emit SystemStateSet\(systemState\)/)
 	assert.match(securityPool, /function configureVault\([\s\S]*?\) external onlyForker \{[\s\S]*?_emitPoolAccountingCheckpoint\(AccountingReason\.CapacityOwnershipChange, vault\)/)
 	assert.doesNotMatch(securityPool, /lastDepositTargetHealthFactorBpsByVault/, 'Deposit targets must remain event history rather than persistent pool storage')
-	assert.match(securityPool, /function setTotalRepBackingUnits\(uint256 newDenominator\) external onlyForker \{\s*totalRepBackingUnits = newDenominator;\s*emit TotalRepBackingUnitsSet\(totalRepBackingUnits\)/)
+	assert.match(securityPool, /function setTotalRepBackingUnits\(uint256 newDenominator\) external onlyForker \{\s*_invalidateCoverage\(\);\s*totalRepBackingUnits = newDenominator;\s*emit TotalRepBackingUnitsSet\(totalRepBackingUnits\)/)
 	assert.match(securityPool, /function setTotalSharesAttoShares\(uint256 newTotalSharesAttoShares\) external onlyForker \{\s*shareTokenSupplyAttoShares = newTotalSharesAttoShares;\s*emit ShareTokenSupplySet\(shareTokenSupplyAttoShares\)/)
 	assert.match(securityPool, /function setPoolFinancials\([\s\S]*?lastUpdatedFeeAccumulator = block\.timestamp;[\s\S]*?_emitPoolAccountingCheckpoint\(AccountingReason\.ForkFinalization, address\(0x0\)\)/)
 	assert.match(securityPool, /function assignFinalizedAuctionFees\(address vault, uint256 amountAttoRep, uint256 auctionFeeIndexAtFinalization\) external onlyForker \{[\s\S]*?_emitVaultAccountingCheckpoint\(vault\);\s*_emitPoolAccountingCheckpoint\(AccountingReason\.AuctionClaim, vault\)/)

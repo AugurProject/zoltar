@@ -27,7 +27,7 @@ const SI_SUFFIXES = ['k', 'M', 'G', 'T', 'P', 'E', 'Z', 'Y'] as const
 const COMPACT_NOTATION_THRESHOLD_UNITS = 1000n
 const COMPACT_NOTATION_DECIMALS = 1
 const APPROXIMATE_MARKER = '≈ '
-export const MULTIPLIER_SIGN = '×'
+const MULTIPLIER_SIGN = '×'
 
 function formatGroupedInteger(value: bigint) {
 	return value.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ' ')

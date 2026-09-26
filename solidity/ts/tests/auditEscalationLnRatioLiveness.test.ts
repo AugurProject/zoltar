@@ -1,3 +1,4 @@
+import { setUnderwritingLimit } from '../testSupport/simulator/utils/contracts/securityPool'
 import { QuestionOutcome } from '../testSupport/simulator/types/types'
 import { manipulatePriceOracle, setVaultCapacityFixture } from '../testSupport/simulator/utils/contracts/statoblastTestUtils'
 import { getZoltarAddress } from '../testSupport/simulator/utils/contracts/zoltar'
@@ -8,7 +9,7 @@ import { describe, test } from 'bun:test'
 import { encodeAbiParameters, keccak256 } from '@zoltar/core-shared/evm/ethereum'
 import { DEFAULT_PROTOCOL_CONFIG } from '@zoltar/core-shared/deployment/protocolConfig'
 import { useStatoblastVaultAccountingFixture } from './statoblast/fixture'
-import { createCompleteSet, getSettlementCollateralAttoEth, redeemShares } from '../testSupport/simulator/utils/contracts/securityPool'
+import { createCertifiedCompleteSetFixture, getSettlementCollateralAttoEth, redeemShares } from '../testSupport/simulator/utils/contracts/securityPool'
 import { statoblast_EscalationGame_EscalationGame } from '../types/contractArtifact'
 
 const ZOLTAR_UNIVERSE_THEORETICAL_SUPPLIES_SLOT = 2n
@@ -21,9 +22,9 @@ describe('Audit PoC: escalation logarithm precision liveness', () => {
 
 	test('a funded game with a power-of-two threshold ratio resolves and releases its assets', async () => {
 		const { client, genesisUniverse, mockWindow, questionData, securityPoolAddresses } = fixture
-		const capacityOwnershipAttoRep = 25n * 10n ** 18n
-		await setVaultCapacityFixture(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, client.account.address, capacityOwnershipAttoRep, reportedRepEthPrice)
-		await createCompleteSet(client, securityPoolAddresses.securityPool, 1n * 10n ** 18n)
+		const underwritingLimitAttoEth = 25n * 10n ** 18n
+		await setVaultCapacityFixture(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, client.account.address, underwritingLimitAttoEth, reportedRepEthPrice)
+		await createCertifiedCompleteSetFixture(client, securityPoolAddresses.securityPool, 1n * 10n ** 18n)
 		assert.ok((await getSettlementCollateralAttoEth(client, securityPoolAddresses.securityPool)) > 0n, 'PoC pool must hold redeemable ETH collateral')
 
 		const nonDecisionThresholdAttoRep = reportBond * 2n
@@ -70,6 +71,7 @@ describe('Audit PoC: escalation logarithm precision liveness', () => {
 		await withdrawFromEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, [0n])
 		await withdrawFromEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.No, [0n])
 		await redeemShares(client, securityPoolAddresses.securityPool)
+		await setUnderwritingLimit(client, securityPoolAddresses.securityPool, 0n)
 		await redeemRepFromVault(client, securityPoolAddresses.securityPool, client.account.address)
 	})
 })
