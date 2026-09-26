@@ -77,6 +77,7 @@ export const MUTATING_CONTRACT_SURFACE: readonly ContractMethodClassification[] 
 	entry('SecurityPool', 'redeemShares', 'selectable', 'statoblast.shares.redeem-winning'),
 	entry('SecurityPool', 'redeemRepFromVault', 'selectable', 'statoblast.vault.redeem-rep'),
 	entry('SecurityPool', 'withdrawForkedEscalationDeposits', 'lifecycle-obligation', 'statoblast.escalation.withdraw-forked'),
+	entry('SecurityPool', 'depositWalletRepToEscalationGame', 'excluded-dangerous', undefined, 'Wallet-funded startup requires pool allowance and an anchored first-report quote; the current chaos planner only budgets existing-game wallet deposits with game allowance.'),
 	entry('SecurityPool', 'depositToEscalationGame', 'selectable', 'statoblast.escalation.deposit'),
 	entry('SecurityPool', 'withdrawFromEscalationGame', 'lifecycle-obligation', 'statoblast.escalation.withdraw'),
 	entry('SecurityPool', 'resumeForkedEscalationGame', 'lifecycle-obligation', 'statoblast.escalation.resume'),
@@ -102,6 +103,8 @@ export const MUTATING_CONTRACT_SURFACE: readonly ContractMethodClassification[] 
 	entry('SecurityPoolOperationsDelegate', 'setUnderwritingLimit', 'excluded-dangerous', undefined, 'Execute in the pool storage context through its owner-authorized wrapper.'),
 	entry('SecurityPoolOperationsDelegate', 'certifyVaultCoverage', 'excluded-dangerous', undefined, 'Execute in the pool storage context through its certification wrapper.'),
 	entry('SecurityPoolOperationsDelegate', 'setVaultUnderwritingLimit', 'excluded-dangerous', undefined, 'This storage-coupled module is valid only through SecurityPool fallback and requires an explicit vault-owner capacity decision.'),
+	entry('SecurityPoolOperationsDelegate', 'depositWalletRepToEscalationGame', 'excluded-dangerous', undefined, 'Wallet reporting must use the SecurityPool host, which checks inherited outcomes before delegating; direct calls use isolated delegate storage.'),
+
 	entry('SecurityPoolOperationsDelegate', 'depositRepToVault', 'excluded-dangerous', undefined, 'This storage-coupled module is valid only through SecurityPool delegatecall during a checked vault deposit.'),
 	entry('SecurityPoolOperationsDelegate', 'depositRepToVaultWithPermit', 'excluded-dangerous', undefined, 'This signed entrypoint is meaningful only through SecurityPool fallback and requires explicit wallet intent.'),
 	entry('SecurityPoolOperationsDelegate', 'depositRepToVaultWithAuthorization', 'excluded-dangerous', undefined, 'This relayed signed entrypoint is meaningful only through SecurityPool fallback and requires durable authorization provenance.'),

@@ -145,6 +145,15 @@ export const securityPoolContractReference: ContractReference = {
 			signals: '`RepRedeemedFromVault`',
 		},
 		{
+			call: '`depositWalletRepToEscalationGame(outcome, maximumDepositAttoRep)`',
+			caller: 'REP holder with a token allowance for the pool',
+			effect: 'Starts an ordinary game if needed and transfers the accepted REP directly from the caller into game escrow. Records the caller as depositor without minting vault backing units or standing ETH commitments. Also accepts deposits if another reporter has already started the ordinary game.',
+			declarations: [{ name: 'depositWalletRepToEscalationGame' }],
+			preconditions:
+				'Question end has passed before starting a game; pool operational in an unforked universe, without an inherited fixed outcome or pending fork continuation; game is not a fork continuation; outcome and amount accepted; sufficient wallet REP and pool allowance. No existing vault or oracle price is required.',
+			signals: '`EscalationGameSet` on first deposit; game emits `LocalDepositAppended` and `DepositOnOutcome`',
+		},
+		{
 			call: '`depositToEscalationGame(outcome, maxAmount)`',
 			caller: 'Vault owner',
 			effect:
