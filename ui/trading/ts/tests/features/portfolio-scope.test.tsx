@@ -57,7 +57,7 @@ describe('live portfolio scope', () => {
 
 	for (const state of ['disconnected', 'loading', 'error'] as const) {
 		test(`links to pool details without exposing token identity while balances are ${state}`, async () => {
-			const rendered = await renderIntoDocument(<LivePortfolio entries={[{ market, balances: undefined, error: state === 'error' ? 'RPC unavailable' : undefined }]} balanceState={state} balanceError={state === 'error' ? 'RPC unavailable' : undefined} retryBalances={async () => undefined} />)
+			const rendered = await renderIntoDocument(<LivePortfolio entries={[{ market, balances: undefined, error: state === 'error' ? 'RPC unavailable' : undefined }]} balanceState={state} balanceError={state === 'error' ? 'RPC unavailable' : undefined} retryBalances={async () => undefined} nowSeconds={0n} />)
 			cleanupRendered = rendered.cleanup
 			expect(rendered.container.textContent).toContain(pool)
 			expect(rendered.container.querySelector(`a[href="#/security-pool/${pool}"]`)).not.toBeNull()
@@ -82,6 +82,7 @@ describe('live portfolio scope', () => {
 				balanceState='ready'
 				balanceError={undefined}
 				retryBalances={async () => undefined}
+				nowSeconds={0n}
 			/>,
 		)
 		cleanupRendered = rendered.cleanup
@@ -93,7 +94,7 @@ describe('live portfolio scope', () => {
 		expect(rendered.container.textContent).toContain('1 YES')
 		expect(rendered.container.textContent).toContain('4 YES')
 		expect(rendered.container.textContent).not.toContain('LP claims')
-		expect(rendered.container.querySelector(`a[href="#/market/${pool}"]`)?.textContent).toBe('Open position')
+		expect(rendered.container.querySelector(`a[href="#/market/${pool}"]`)?.textContent).toBe('Scoped portfolio')
 		const redemption = Array.from(rendered.container.querySelectorAll('.metric-label')).find(field => field.textContent?.includes('redemption value'))
 		expect(redemption).toBeDefined()
 		expect(redemption?.closest('details')).toBeNull()

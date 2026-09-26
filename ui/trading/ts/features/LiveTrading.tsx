@@ -215,7 +215,9 @@ export function LiveTrading({
 					{discovering ? <EmptyState live title={liveCopy.discoveringSecurityPools} /> : null}
 					<ErrorNotice message={discoveryState === 'error' ? liveCopy.securityPoolFactoryDiscoveryFailed(discoveryError) : undefined} />
 					{discoveryState === 'ready' && visibleMarkets.length === 0 ? <EmptyState title={liveCopy.noSecurityPoolsInUniverse} /> : null}
-					{discoveryState === 'error' || discovering || (discoveryState === 'ready' && visibleMarkets.length === 0) ? null : <LivePortfolio entries={visiblePortfolioEntries} balanceState={portfolioBalanceState} balanceError={portfolioBalanceError} retryBalances={retryPortfolioBalances} />}
+					{discoveryState === 'error' || discovering || (discoveryState === 'ready' && visibleMarkets.length === 0) ? null : (
+						<LivePortfolio entries={visiblePortfolioEntries} balanceState={portfolioBalanceState} balanceError={portfolioBalanceError} retryBalances={retryPortfolioBalances} nowSeconds={nowSeconds} walletAction={{ label: walletActionLabel, disabled: workflowLocked, onClick: () => void connect() }} />
+					)}
 				</SectionBlock>
 			</div>
 		)
