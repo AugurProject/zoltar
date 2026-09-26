@@ -236,7 +236,7 @@ export function tradeTicketModel(inputs: TradeTicketInputs) {
 export type TradeTicketModel = ReturnType<typeof tradeTicketModel>
 
 /** The authoritative simulation may price differently from the local estimate; beyond the slippage bound, stop and show the new price. */
-export function authoritativeQuoteMoved(estimate: TradeEstimate, authoritativeLongShares: bigint, authoritativeEthOut?: bigint) {
+export function authoritativeQuoteMoved(estimate: TradeEstimate, authoritativeLongShares: bigint, authoritativeAttoEthOut?: bigint) {
 	if (estimate.kind === 'entry') return authoritativeLongShares < estimate.minimumLongShares
-	return authoritativeLongShares > estimate.maximumLongShares || (authoritativeEthOut !== undefined && authoritativeEthOut < estimate.minimumAttoEth)
+	return authoritativeLongShares > estimate.maximumLongShares || (authoritativeAttoEthOut !== undefined && authoritativeAttoEthOut < estimate.minimumAttoEth)
 }
