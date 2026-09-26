@@ -180,6 +180,33 @@ describe('useSecurityVaultOperations', () => {
 		expect(requireHookState(hookState).securityVaultError).toContain('Total commitments must cover outstanding settlement collateral')
 	})
 
+	test.each([
+		['zero exit', '0', 0n, undefined],
+		['partial reduction', '2', 2n * 10n ** 18n, undefined],
+		['uncovered reduction', '0', 1n, 'Total commitments must cover outstanding settlement collateral'],
+		['increase', '6', 0n, 'New vault REP backing is unavailable'],
+	] as const)('closed admission permits only safe commitment reductions: %s', async (_name, limit, collateral, error) => {
+		const queueOracleManagerOperation = mock(async () => ({ hash: '0x01' as const }))
+		const dependencies = createSecurityVaultOperationsDependencies({
+			queueOracleManagerOperation,
+			isSecurityPoolVaultAdmissionClosed: mock(async () => true),
+			loadSecurityVaultDetails: mock(async () => createSecurityVaultDetails({ underwritingLimitAttoEth: 5n * 10n ** 18n, totalUnderwritingLimitAttoEth: 5n * 10n ** 18n, settlementCollateralAttoEth: collateral })),
+		})
+		let state: UseSecurityVaultOperationsState | undefined
+		const Harness = createHarness(dependencies, next => {
+			state = next
+		})
+		cleanupRenderedComponent = (await renderIntoDocument(h(Harness, {}))).cleanup
+		await act(async () => await requireHookState(state).adjustBackingFactor(limit))
+		if (error === undefined) {
+			expect(requireHookState(state).securityVaultError).toBeUndefined()
+			expect(queueOracleManagerOperation).toHaveBeenCalledWith(expect.anything(), MANAGER_ADDRESS, 'setVaultUnderwritingLimit', WALLET_ADDRESS, BigInt(limit) * 10n ** 18n, 300n)
+		} else {
+			expect(queueOracleManagerOperation).not.toHaveBeenCalled()
+			expect(requireHookState(state).securityVaultError).toContain(error)
+		}
+	})
+
 	test('preserves the existing on-chain queue result for a target change', async () => {
 		const queuedOperation = { isPendingSlot: true, operation: 'setVaultUnderwritingLimit' as const, operationId: 7n }
 		const dependencies = createSecurityVaultOperationsDependencies({

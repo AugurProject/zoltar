@@ -11,7 +11,7 @@ import { ProgressMeter } from '@zoltar/ui-core-shared/components/ProgressMeter.j
 import { openInterestFeePerYearBigint } from '../lib/retentionRate.js'
 import { calculateMintingCapacityAttoEth, formatStatoblastSecurityMultiplier } from '../../markets/lib/trading.js'
 import { getToneRatioThreshold, getVisualRatio } from '@zoltar/ui-core-shared/lib/visualMetrics.js'
-import { formatCurrencyBalanceWithUnit, formatMultiplier } from '@zoltar/ui-core-shared/lib/formatters.js'
+import { formatCurrencyBalanceWithUnit } from '@zoltar/ui-core-shared/lib/formatters.js'
 import type { MetricGridVariant } from '../../types.js'
 import type { ListedSecurityPool } from '@zoltar/ui-core-shared/types/contracts.js'
 

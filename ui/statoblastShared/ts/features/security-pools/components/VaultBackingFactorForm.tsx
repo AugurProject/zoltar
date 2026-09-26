@@ -1,6 +1,7 @@
 import { parseEthAmountInput } from '@zoltar/ui-core-shared/forms/formInputs.js'
 import { VaultExposureValue } from './VaultExposureValue.js'
 import { OperationModal } from '@zoltar/ui-core-shared/components/OperationModal.js'
+import { InlineHint } from '@zoltar/ui-core-shared/components/InlineHint.js'
 import { ErrorNotice } from '@zoltar/ui-core-shared/components/ErrorNotice.js'
 import type { OperationModalProps } from '@zoltar/ui-core-shared/types/components.js'
 import { useId, useState } from 'preact/hooks'
@@ -17,6 +18,7 @@ import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 export function VaultBackingFactorForm({
 	details,
 	blocker,
+	increaseBlocker,
 	busy,
 	pending,
 	repPerEthPrice,
@@ -31,6 +33,7 @@ export function VaultBackingFactorForm({
 	repPerEthPrice?: bigint | undefined
 	poolSecurityMultiplierBps?: bigint | undefined
 	blocker: string | undefined
+	increaseBlocker?: string | undefined
 	busy: boolean
 	pending: boolean
 	onCertify?: (() => void) | undefined
@@ -42,6 +45,7 @@ export function VaultBackingFactorForm({
 	const currentLimit = details?.underwritingLimitAttoEth
 	const limit = limitInput ?? (currentLimit !== undefined ? formatCurrencyInputBalance(currentLimit, 18) : '0')
 	const descriptionId = useId()
+	const sharedReasonId = useId()
 	let nextLimit: bigint | undefined
 	let limitAttoEth: bigint | undefined
 	let error: string | undefined
@@ -51,11 +55,12 @@ export function VaultBackingFactorForm({
 	} catch (cause) {
 		error = cause instanceof Error ? cause.message : commonCopy.metricUnavailablePlaceholder
 	}
-	const prerequisite = blocker ?? getVaultBackingFactorAdjustmentGuard(details, limitAttoEth, executionRepPerEthPrice, poolSecurityMultiplierBps)
+	const prerequisite = blocker ?? (limitAttoEth !== undefined && currentLimit !== undefined && limitAttoEth > currentLimit ? increaseBlocker : undefined) ?? getVaultBackingFactorAdjustmentGuard(details, limitAttoEth, executionRepPerEthPrice, poolSecurityMultiplierBps)
 	const reason = prerequisite ?? error
-	let certificationBlocker = blocker
+	let certificationBlocker = blocker ?? increaseBlocker
 	if (certificationBlocker === undefined && executionRepPerEthPrice === undefined) certificationBlocker = securityPoolCopy.certificationNeedsPrice
 	if (certificationBlocker === undefined && (details?.underwritingLimitAttoEth ?? 0n) === 0n) certificationBlocker = securityPoolCopy.certificationNeedsLimit
+	const sharedReason = certificationBlocker === reason ? reason : undefined
 	return (
 		<>
 			<label className='field'>
@@ -74,14 +79,17 @@ export function VaultBackingFactorForm({
 					<VaultExposureValue capacity={nextLimit} multiplierBps={minimumBps} repPerEthPrice={repPerEthPrice} />
 				</MetricField>
 			</MetricGrid>
+			{sharedReason === undefined ? undefined : <InlineHint id={sharedReasonId} message={sharedReason} />}
 			<div className='actions'>
 				<TransactionActionButton
 					idleLabel={securityPoolCopy.certifyCoverage}
 					pendingLabel={securityPoolCopy.certifyingCoverage}
 					pending={certificatePending}
+					showDisabledReason={sharedReason === undefined}
+					disabledReasonElementId={sharedReason === undefined ? undefined : sharedReasonId}
 					onClick={() => onCertify?.()}
 					availability={{
-						disabled: busy || onCertify === undefined || blocker !== undefined || executionRepPerEthPrice === undefined || (details?.underwritingLimitAttoEth ?? 0n) === 0n,
+						disabled: busy || onCertify === undefined || certificationBlocker !== undefined,
 						reason: certificationBlocker,
 					}}
 				/>
@@ -89,8 +97,8 @@ export function VaultBackingFactorForm({
 					idleLabel={securityPoolCopy.setVaultUnderwritingLimit}
 					pendingLabel={securityPoolCopy.adjustingVaultBackingFactor}
 					pending={pending}
-					showDisabledReason={prerequisite !== undefined}
-					disabledReasonElementId={descriptionId}
+					showDisabledReason={prerequisite !== undefined && sharedReason === undefined}
+					disabledReasonElementId={sharedReason === undefined ? descriptionId : sharedReasonId}
 					onClick={() => onAdjust(limit)}
 					availability={{ disabled: busy || reason !== undefined, reason }}
 				/>

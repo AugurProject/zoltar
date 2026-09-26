@@ -218,7 +218,7 @@ describe('SecurityPoolsOverviewSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const card = getSecurityPoolCard('Will this resolve?')
-		expect((card.textContent ?? '').replace(/\s+/g, ' ')).toContain('/ ≈ 80.00 ETH')
+		expect((card.textContent ?? '').replace(/\s+/g, ' ')).toContain('/ 80.00 ETH')
 		expect((card.textContent ?? '').replace(/\s+/g, ' ')).not.toContain('/ ≈ 13.33 ETH')
 	})
 
@@ -229,7 +229,7 @@ describe('SecurityPoolsOverviewSection', () => {
 
 		const card = getSecurityPoolCard('Will this resolve?')
 		expect((card.textContent ?? '').replace(/\s+/g, ' ')).toContain('Oracle price unavailable')
-		expect((card.textContent ?? '').replace(/\s+/g, ' ')).toContain('/ ≈ 5.00 ETH')
+		expect((card.textContent ?? '').replace(/\s+/g, ' ')).toContain('/ 5.00 ETH')
 	})
 
 	test('shows exact small ETH values in browse cards instead of approximate zero', async () => {

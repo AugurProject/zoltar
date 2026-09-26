@@ -436,9 +436,9 @@ function useSecurityVaultOperationsWithDependencies<TWriteClient>(
 				if (!isCurrentSelection()) return undefined
 				const guard = getVaultBackingFactorAdjustmentGuard(details, factor)
 				if (guard !== undefined) throw new Error(guard)
-				if (await dependencies.isSecurityPoolVaultAdmissionClosed(securityPoolAddress)) throw new Error(securityPoolCopy.vaultDepositAdmissionClosedDetail)
-				if (!isCurrentSelection()) return undefined
 				if (details === undefined) throw new Error('Refresh vault details.')
+				if (factor > details.underwritingLimitAttoEth && (await dependencies.isSecurityPoolVaultAdmissionClosed(securityPoolAddress))) throw new Error(securityPoolCopy.vaultDepositAdmissionClosedDetail)
+				if (!isCurrentSelection()) return undefined
 				const { managerDetails, writeClient } = await prepareVaultOracleOperation(details, vaultAddress, context)
 				if (!isCurrentSelection()) return undefined
 				const coverageGuard = getVaultBackingFactorAdjustmentGuard(details, factor, managerDetails?.isPriceValid ? managerDetails.lastPrice : undefined, details.statoblastSecurityMultiplierBps)

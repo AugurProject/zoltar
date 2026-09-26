@@ -2133,10 +2133,10 @@ describe('LiquidationModal', () => {
 		const repMovedValue = repMovedLabel.nextElementSibling
 		if (!(repMovedValue instanceof HTMLElement)) throw new Error('Expected Rep Moved value')
 
-		expect(repMovedValue.textContent).toBe('≈ 2.00 REP')
-		expect(getTransactionReviewValue('Nominal REP award (before cap)')).toBe('≈ 21.00 REP')
+		expect(repMovedValue.textContent).toBe('2.00 REP')
+		expect(getTransactionReviewValue('Nominal REP award (before cap)')).toBe('21.00 REP')
 		expect(within(document.body).queryByText('Residual Bad Debt Recorded')).toBeNull()
-		expect(getTransactionReviewValue('Commitment transferred')).toBe('≈ 2.00 ETH')
+		expect(getTransactionReviewValue('Commitment transferred')).toBe('2.00 ETH')
 		const accounting = within(document.body).getByText('Accounting breakdown').closest('details')
 		expect(accounting?.open).toBe(false)
 		expect(getTransactionReviewValue('Target Accrued Fees Retained')).toBe('0.25 ETH')
@@ -2201,9 +2201,10 @@ describe('LiquidationModal', () => {
 		const executeButton = within(document.body).getByRole('button', { name: 'Execute vault liquidation' }) as HTMLButtonElement
 		expect(executeButton.disabled).toBe(true)
 		expect(document.body.textContent?.includes('The target vault would fall below the minimum underwriting commitments after liquidation.')).toBe(false)
+		expect(within(document.body).getByText('The target vault would fall below the minimum commitment after liquidation.')).not.toBeNull()
 		const capacityOwnershipAssumedLabel = Array.from(document.body.querySelectorAll('.transaction-review-row > span, .transaction-review-detail-row > span')).find(element => element.textContent === 'Commitment transferred')
 		if (!(capacityOwnershipAssumedLabel instanceof HTMLElement)) throw new Error('Expected security-bond debt moved label')
-		expect(capacityOwnershipAssumedLabel.nextElementSibling?.textContent).toBe('≈ 99.60 ETH')
+		expect(capacityOwnershipAssumedLabel.nextElementSibling?.textContent).toBe('99.60 ETH')
 	})
 
 	test('uses simulation labels for mock prices and clamps the preview once the entered amount exceeds the executable cap', async () => {
@@ -2281,7 +2282,7 @@ describe('LiquidationModal', () => {
 		if (!(capacityOwnershipAssumedLabel instanceof HTMLElement)) throw new Error('Expected security-bond debt moved label')
 		const capacityOwnershipAssumedValue = capacityOwnershipAssumedLabel.nextElementSibling
 		if (!(capacityOwnershipAssumedValue instanceof HTMLElement)) throw new Error('Expected Underwriting commitments assumed value')
-		expect(capacityOwnershipAssumedValue.textContent).toBe('≈ 2 500.00 ETH')
+		expect(capacityOwnershipAssumedValue.textContent).toBe('2 500.00 ETH')
 
 		await act(() => {
 			fireEvent.input(amountInput, { target: { value: '2500' } })
@@ -2290,7 +2291,7 @@ describe('LiquidationModal', () => {
 		const repMovedValueAfter = repMovedLabel.nextElementSibling
 		if (!(repMovedValueAfter instanceof HTMLElement)) throw new Error('Expected Rep Moved value after input')
 		expect(repMovedValueAfter.textContent).toBe(clampedPreviewText)
-		expect(capacityOwnershipAssumedValue.textContent).toBe('≈ 2 500.00 ETH')
+		expect(capacityOwnershipAssumedValue.textContent).toBe('2 500.00 ETH')
 
 		render(null, container)
 		container.remove()

@@ -80,14 +80,14 @@ export const renderPoolDetailPage = async (deps: StateRiskDeps, poolItem: PoolRe
 				{ key: 'total_capacity_ownership_atto_rep', label: 'Underwriting commitment', unit: 'ETH', className: 'secondary' },
 				{ key: 'total_claimable_vault_fees_atto_eth', label: 'Claimable fees', unit: poolNativeSymbol, className: 'tertiary' },
 			],
-			'Authoritative PoolAccountingCheckpoint results. Collateral and fees are shown in whole ETH; capacity ownership is shown in whole REP.',
+			'Collateral, commitments, and fees are shown in ETH.',
 			{ zeroBaseline: true },
 		),
 		chartCard(
 			'Fee accrual history',
 			history.snapshots,
 			[
-				{ key: 'fee_index', label: 'Fee index', unit: `${poolNativeSymbol}/REP` },
+				{ key: 'fee_index', label: 'Fee index', unit: `${poolNativeSymbol}/committed ETH` },
 				{ key: 'unallocated_accrued_fees_atto_eth', label: 'Unallocated accrued fees', unit: poolNativeSymbol },
 			],
 			'Checkpoint fee accumulator and unallocated fees; balances may fall when fees are claimed.',
@@ -217,7 +217,7 @@ export const renderVaultDetailPage = async (deps: StateRiskDeps, vaultItem: Vaul
 				{ key: 'capacity_ownership_atto_rep', label: 'Underwriting commitment', unit: 'ETH', className: 'secondary' },
 				{ key: 'claimable_fees_atto_eth', label: 'Claimable fees', unit: vaultNativeSymbol, className: 'tertiary' },
 			],
-			'VaultAccountingCheckpoint history. REP backing units are protocol accounting units; capacity ownership and fees are shown in whole REP and ETH.',
+			'Commitments and fees are shown in ETH; REP backing units are protocol accounting units.',
 			{ zeroBaseline: true },
 		),
 	)

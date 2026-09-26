@@ -277,8 +277,42 @@ describe('SecurityVaultSection', () => {
 		expect(submitted).toBe('2')
 	})
 
-	test('blocks a capacity reduction while settlement collateral is committed', async () => {
-		const rendered = await renderIntoDocument(<SecurityVaultSection {...createSecurityVaultSectionProps({ modalFirst: true, securityVaultDetails: createSecurityVaultDetails({ settlementCollateralAttoEth: 2n * 10n ** 18n, disputeStakedAttoRep: 0n }) })} />)
+	test.each(['operational', 'ended'] as const)('closed admission keeps the commitment exit form available: %s', async lifecycleState => {
+		let submitted: string | undefined
+		const props = createSecurityVaultSectionProps({
+			modalFirst: true,
+			poolState: evaluateSecurityPoolState({ lifecycleState, universeHasForked: false, vaultAdmissionClosed: true }),
+			securityVaultDetails: createSecurityVaultDetails({ underwritingLimitAttoEth: 2n * 10n ** 18n, totalUnderwritingLimitAttoEth: 2n * 10n ** 18n, settlementCollateralAttoEth: 0n, disputeStakedAttoRep: 0n }),
+			onSetVaultUnderwritingLimit: limit => {
+				submitted = limit
+			},
+		})
+		cleanupRenderedComponent = (await renderIntoDocument(<SecurityVaultSection {...props} />)).cleanup
+		const page = within(document.body)
+		expectTransactionButtonEnabled(document.body, 'Set commitment limit')
+		expect(page.getByRole('button', { name: 'Set commitment limit' }).getAttribute('aria-describedby')).toBeNull()
+		fireEvent.click(page.getByRole('button', { name: 'Set commitment limit' }))
+		const dialog = page.getByRole('dialog', { name: 'Set commitment limit' })
+		const input = within(dialog).getByLabelText('Commitment limit (ETH)')
+		fireEvent.input(input, { target: { value: '3' } })
+		expectTransactionButtonDisabled(dialog, 'Set commitment limit')
+		const sharedReason = within(dialog).getAllByText(lifecycleState === 'ended' ? 'REP deposits are unavailable because this pool has ended. Available redemption and fee actions remain below.' : 'New vault REP backing is unavailable after this question ends. Fork-continuation child pools remain fundable.')
+		expect(sharedReason).toHaveLength(1)
+		const sharedReasonId = sharedReason[0]?.id
+		expect(sharedReasonId).toBeTruthy()
+		for (const label of ['Confirm backing for minting', 'Set commitment limit']) expect(within(dialog).getByRole('button', { name: label }).getAttribute('aria-describedby')?.split(' ')).toContain(sharedReasonId)
+		fireEvent.input(input, { target: { value: '0' } })
+		expectTransactionButtonEnabled(dialog, 'Set commitment limit')
+		fireEvent.click(within(dialog).getByRole('button', { name: 'Set commitment limit' }))
+		expect(submitted).toBe('0')
+	})
+
+	test('blocks a capacity reduction below collateral even after admission closes', async () => {
+		const rendered = await renderIntoDocument(
+			<SecurityVaultSection
+				{...createSecurityVaultSectionProps({ modalFirst: true, poolState: evaluateSecurityPoolState({ lifecycleState: 'operational', universeHasForked: false, vaultAdmissionClosed: true }), securityVaultDetails: createSecurityVaultDetails({ settlementCollateralAttoEth: 2n * 10n ** 18n, disputeStakedAttoRep: 0n }) })}
+			/>,
+		)
 		cleanupRenderedComponent = rendered.cleanup
 		const page = within(document.body)
 		fireEvent.click(page.getByRole('button', { name: 'Set commitment limit' }))

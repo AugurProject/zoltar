@@ -121,7 +121,7 @@ test('requests a new price straight from the pool oracle row', async () => {
 test('shows known standing commitments independently of a missing price', async () => {
 	await renderLoadedPool({ uiPriceOracle: 'uniswap', repPerEthPrice: undefined })
 	const header = document.body.querySelector('.pool-overview-header')
-	expect(header?.textContent).toContain('/ ≈ 5.00 ETH')
+	expect(header?.textContent).toContain('/ 5.00 ETH')
 	expect(header?.querySelector('.progress-meter-track') !== null).toBe(true)
 })
 
@@ -137,7 +137,7 @@ for (const timestamp of [undefined, 100000n]) {
 				)
 			).cleanup,
 		)
-		expect(document.querySelector('.pool-overview-header')?.textContent).toContain('/ ≈ 5.00 ETH')
+		expect(document.querySelector('.pool-overview-header')?.textContent).toContain('/ 5.00 ETH')
 		expect(document.querySelector('.pool-reference-details')?.textContent).not.toContain('Settlement collateral / standing commitments')
 	})
 }

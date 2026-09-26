@@ -275,9 +275,10 @@ export function SecurityVaultSection({
 		lastAutoLoadKey.current = autoLoadKey
 		void onLoadSecurityVault()
 	}, [autoLoadKey, autoLoadVault, hasLoadedCurrentVault, loadingSecurityVault, normalizedSecurityVaultForm.securityPoolAddress, onLoadSecurityVault, selectedVaultOwner])
-	const adjustmentBlocker = repExitLauncherBlocker ?? vaultLifecycleBlocker ?? (!depositRepToVaultEnabled ? securityPoolCopy.vaultDepositAdmissionClosedDetail : undefined)
+	const adjustmentBlocker = repExitLauncherBlocker ?? (poolState !== undefined && poolState.lifecycleState !== 'operational' && poolState.lifecycleState !== 'ended' ? vaultLifecycleBlocker : undefined)
 	const adjustmentForm = (
 		<VaultBackingFactorForm
+			increaseBlocker={!depositRepToVaultEnabled ? (vaultLifecycleBlocker ?? securityPoolCopy.vaultDepositAdmissionClosedDetail) : undefined}
 			executionRepPerEthPrice={hasValidOraclePrice ? oracleManagerDetails?.lastPrice : undefined}
 			repPerEthPrice={repPerEthPrice}
 			poolSecurityMultiplierBps={selectedPoolStatoblastSecurityMultiplierBps}
