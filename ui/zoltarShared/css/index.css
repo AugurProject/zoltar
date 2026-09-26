@@ -443,7 +443,7 @@
 	width: 1.5rem;
 	height: 1.5rem;
 	border: 1px solid var(--border-strong);
-	border-radius: 999px;
+	border-radius: var(--radius-pill);
 	font-family: var(--font-family-mono);
 	font-size: var(--font-xs);
 }
@@ -510,7 +510,7 @@
 	height: 1.1rem;
 	margin-right: var(--space-2);
 	border: 1px solid var(--border-emphasis);
-	border-radius: 0.2rem;
+	border-radius: var(--radius-compact);
 	color: var(--accent);
 	font-size: var(--font-xs);
 	vertical-align: -0.15rem;
