@@ -1,3 +1,4 @@
+import type { ComponentChildren } from 'preact'
 import * as commonCopy from '../copy/common.js'
 
 import { LoadingText } from '../components/LoadingText.js'
@@ -13,6 +14,8 @@ import { formatScalarDisplayValue } from '../lib/scalarOutcome.js'
 import type { MarketDetails } from '../types/contracts.js'
 
 type QuestionProps = {
+	abbreviateIdentifier?: boolean
+	additionalMetrics?: ComponentChildren
 	className?: string
 	loading?: boolean
 	question: MarketDetails | undefined
@@ -74,11 +77,11 @@ function getQuestionSummaryFields(question: MarketDetails, showEndTime: boolean)
 	return fields
 }
 
-function renderQuestionSummaryField(field: QuestionSummaryField) {
+function renderQuestionSummaryField(field: QuestionSummaryField, abbreviateIdentifier: boolean) {
 	if (field.kind === 'identifier')
 		return (
 			<MetricField key={field.label} label={field.label}>
-				<IdentifierValue value={field.value} />
+				<IdentifierValue value={field.value} abbreviated={abbreviateIdentifier} />
 			</MetricField>
 		)
 	if (field.kind === 'timestamp')
@@ -95,13 +98,14 @@ function renderQuestionSummaryField(field: QuestionSummaryField) {
 	)
 }
 
-export function Question({ className = '', loading = false, question, showTitle = true, showEndTime = true, variant = 'full' }: QuestionProps) {
+export function Question({ abbreviateIdentifier = false, additionalMetrics, className = '', loading = false, question, showTitle = true, showEndTime = true, variant = 'full' }: QuestionProps) {
 	if (loading || question === undefined)
 		return (
 			<div className={`question-summary ${className}`}>
 				<p className='detail'>
 					<LoadingText>{commonCopy.questionDetailsLoadingLabel}</LoadingText>
 				</p>
+				{additionalMetrics === undefined ? undefined : <MetricGrid variant='question'>{additionalMetrics}</MetricGrid>}
 			</div>
 		)
 
@@ -182,7 +186,10 @@ export function Question({ className = '', loading = false, question, showTitle 
 			) : (
 				descriptionNode
 			)}
-			<MetricGrid variant='question'>{summaryFields.map(renderQuestionSummaryField)}</MetricGrid>
+			<MetricGrid variant='question'>
+				{summaryFields.map(field => renderQuestionSummaryField(field, abbreviateIdentifier))}
+				{additionalMetrics}
+			</MetricGrid>
 		</div>
 	)
 }

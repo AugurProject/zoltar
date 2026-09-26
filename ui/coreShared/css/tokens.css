@@ -95,10 +95,7 @@
 	--primary-button-shadow: var(--color-white-08);
 	--disabled-control-bg: rgba(12, 28, 43, 1);
 	--disabled-control-border: rgba(154, 179, 211, 0.22);
-	--disabled-control-text: rgba(177, 196, 216, 1);
-	--disabled-primary-button-bg: color-mix(in srgb, var(--accent) 16%, var(--surface-section-opaque));
-	--disabled-primary-button-border: color-mix(in srgb, var(--accent) 35%, var(--border-default));
-	--disabled-primary-button-text: var(--text-secondary);
+	--disabled-control-text: rgba(138, 156, 178, 1);
 	--touch-target-min: 2.75rem;
 	--scrollbar-thumb: color-mix(in srgb, var(--accent) 18%, transparent);
 	--scrollbar-thumb-hover: color-mix(in srgb, var(--accent) 32%, transparent);

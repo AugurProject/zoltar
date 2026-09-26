@@ -20,6 +20,7 @@ export class NetworkIndexer {
 	stateBoundaryDiscovered = false
 	readonly database: ScannerDatabase
 	readonly providers: readonly IndexerRpcProvider[]
+	readonly providerTraceStartBlocks = new WeakMap<IndexerRpcProvider, bigint>()
 	readonly traceUnsupportedProviders = new WeakSet<IndexerRpcProvider>()
 	readonly verifiedProviders = new WeakSet<IndexerRpcProvider>()
 	readonly providerStateBoundaries = new WeakMap<IndexerRpcProvider, { readonly startBlock: bigint; readonly discovered: boolean }>()
@@ -30,7 +31,6 @@ export class NetworkIndexer {
 	logClient: PublicClient
 	readonly rpcDiagnostics: ReturnType<typeof createRpcDiagnosticContext>
 	indexingStartReported = false
-	lastProgressLogAt: number | undefined
 	progressSample: { block: bigint; sampledAt: number; blocksPerSecond?: number } | undefined
 	lastReportedPhase: 'backfilling' | 'degraded' | 'live' | undefined
 	lastDeploymentScanAt: number | undefined

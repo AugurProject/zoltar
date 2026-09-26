@@ -10,9 +10,11 @@ import { MetricGrid } from './MetricGrid.js'
 import { MetricField } from './MetricField.js'
 import { TransactionActionButton } from './TransactionActionButton.js'
 import { formatCurrencyBalance } from '../lib/formatters.js'
-import { deriveTokenApprovalRequirement, formatTokenApprovalUnavailableMessage, parseTokenApprovalAmountInput, resolveTokenApprovalStatusMessage } from '../transactions/tokenApproval.js'
+import { deriveTokenApprovalRequirement, formatTokenApprovalUnavailableMessage, parseTokenApprovalAmountInput, resolveTokenApprovalStatusMessage, shouldDisplayMaxTokenApprovalAmount } from '../transactions/tokenApproval.js'
 type TokenApprovalControlProps = {
 	compact?: boolean
+	/** Keeps a finished approval in place, disabled, labelled with its result instead of removing the control. */
+	completedLabel?: string | undefined
 	showRequirementNotice?: boolean
 	renderActions?: (approval: { button: ComponentChildren; notice: string | undefined; noticeId: string }) => ComponentChildren
 	actionLabel: string
@@ -59,6 +61,7 @@ function resolveApprovalButtonLabel({
 }
 export function TokenApprovalControl({
 	compact = false,
+	completedLabel,
 	showRequirementNotice = true,
 	renderActions,
 	guardMessageElementId,
@@ -112,12 +115,11 @@ export function TokenApprovalControl({
 		tokenLabel: tokenSymbol,
 		tokenUnits,
 	})
-	const visibleStatusMessage = disabled || hasNonIncreasingCustomApproval || (!showRequirementNotice && parsedAmount.kind === 'default' && guardMessage === undefined) ? undefined : statusMessage
+	const visibleStatusMessage = disabled || completedLabel !== undefined || hasNonIncreasingCustomApproval || (!showRequirementNotice && parsedAmount.kind === 'default' && guardMessage === undefined) ? undefined : statusMessage
 	const allowanceMessage = allowanceError === undefined ? undefined : formatTokenApprovalUnavailableMessage({ actionLabel, reason: allowanceError, tokenLabel: tokenSymbol })
-	const controlsDisabled = pending || disabled
+	const controlsDisabled = pending || disabled || completedLabel !== undefined
 	const canApprove =
-		!pending &&
-		!disabled &&
+		!controlsDisabled &&
 		guardMessage === undefined &&
 		allowanceMessage === undefined &&
 		!allowanceLoading &&
@@ -126,33 +128,43 @@ export function TokenApprovalControl({
 		!hasNonIncreasingCustomApproval &&
 		nextApprovalAmount !== undefined &&
 		(parsedAmount.kind !== 'default' || !requirement.hasSufficientApproval)
-	const buttonLabel = resolveApprovalButtonLabel({
-		guardMessage,
-		isCustomAmount: parsedAmount.kind === 'custom',
-		isMaxAmount: parsedAmount.kind === 'max',
-		nextApprovalAmount,
-		pending,
-		pendingLabel,
-		requirementSatisfied: requirement.hasSufficientApproval,
-		tokenSymbol,
-		tokenUnits,
-	})
+	const buttonLabel =
+		completedLabel ??
+		resolveApprovalButtonLabel({
+			guardMessage,
+			isCustomAmount: parsedAmount.kind === 'custom',
+			isMaxAmount: parsedAmount.kind === 'max',
+			nextApprovalAmount,
+			pending,
+			pendingLabel,
+			requirementSatisfied: requirement.hasSufficientApproval,
+			tokenSymbol,
+			tokenUnits,
+		})
 	const disabledReasonElementId = (() => {
 		if (allowanceMessage !== undefined) return renderActions === undefined ? allowanceMessageId : amountValidationMessageId
 		if (amountValidationMessage !== undefined) return amountValidationMessageId
 		return guardMessageElementId
 	})()
+	// A finished approval keeps its field for context, showing the approved amount instead of hints that ask for more input.
+	let amountPlaceholder: string | undefined = commonCopy.leaveBlankForRequiredTotal
+	let amountValue = draftAmount
+	if (completedLabel !== undefined) {
+		amountPlaceholder = undefined
+		if (approvedAmount !== undefined) amountValue = shouldDisplayMaxTokenApprovalAmount(approvedAmount) ? commonCopy.max : formatCurrencyBalance(approvedAmount, tokenUnits)
+	} else if (compact) amountPlaceholder = commonCopy.requiredTotalPlaceholder
 	const approvalButton = (
 		<TransactionActionButton
+			className={completedLabel === undefined ? '' : 'tx-action-completed'}
 			idleLabel={buttonLabel}
 			inlineHint={allowanceMessage === undefined && amountValidationMessage === undefined && canApprove ? visibleStatusMessage : undefined}
 			pendingLabel={pendingLabel}
 			onClick={() => onApprove(nextApprovalAmount)}
 			pending={pending}
 			tone='secondary'
-			availability={{ disabled: !canApprove, reason: allowanceMessage ?? visibleStatusMessage ?? guardMessage }}
+			availability={{ disabled: !canApprove, reason: completedLabel ?? allowanceMessage ?? visibleStatusMessage ?? guardMessage }}
 			disabledReasonElementId={disabledReasonElementId}
-			showDisabledReason={allowanceMessage === undefined && amountValidationMessage === undefined && (guardMessage === undefined || guardMessageElementId === undefined)}
+			showDisabledReason={completedLabel === undefined && allowanceMessage === undefined && amountValidationMessage === undefined && (guardMessage === undefined || guardMessageElementId === undefined)}
 		/>
 	)
 	return (
@@ -172,10 +184,10 @@ export function TokenApprovalControl({
 					<FormInput
 						aria-describedby={amountValidationMessage === undefined ? undefined : amountValidationMessageId}
 						className='field-inline-input'
-						value={draftAmount}
+						value={amountValue}
 						onInput={event => setDraftAmount(event.currentTarget.value)}
-						placeholder={compact ? commonCopy.requiredTotalPlaceholder : commonCopy.leaveBlankForRequiredTotal}
-						title={commonCopy.leaveBlankForRequiredTotal}
+						placeholder={amountPlaceholder}
+						title={completedLabel === undefined ? commonCopy.leaveBlankForRequiredTotal : undefined}
 						invalid={amountValidationMessage !== undefined}
 						disabled={controlsDisabled}
 					/>
