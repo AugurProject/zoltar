@@ -244,7 +244,7 @@ export function QuestionCreateSection({
 								return <p className='detail'>{marketCopy.questionDetailsUnavailable}</p>
 							}
 
-							return <Question question={selectedQuestionDetails} showTitle={false} />
+							return <Question question={selectedQuestionDetails} showTitle={false} abbreviateIdentifier />
 						})()}
 					</div>
 				</EntityCard>

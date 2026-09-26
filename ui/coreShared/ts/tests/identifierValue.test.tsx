@@ -48,6 +48,17 @@ describe('IdentifierValue', () => {
 		})
 	})
 
+	test('abbreviates long identifiers while preserving the full hover and copy value', async () => {
+		const value = '0x123456789012345678901234567890123456789012345678901234567890abcd'
+		const renderedComponent = await renderIntoDocument(<IdentifierValue value={value} abbreviated />)
+		cleanupRenderedComponent = renderedComponent.cleanup
+		const copyButton = within(document.body).getByRole('button', { name: `Copy identifier ${value}` })
+		expect(copyButton.textContent).not.toBe(value)
+		expect(copyButton.title).toBe(value)
+		await act(() => fireEvent.click(copyButton))
+		await waitFor(() => expect(clipboardWriteText).toHaveBeenCalledWith(value))
+	})
+
 	test('keeps the identifier visible and associates an announced clipboard error', async () => {
 		const value = '0x0000000000000000000000000000000000000000000000000000000000000001'
 		clipboardWriteText.mockImplementation(async () => {

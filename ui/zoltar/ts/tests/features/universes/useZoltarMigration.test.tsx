@@ -188,7 +188,7 @@ describe('useZoltarMigration', () => {
 
 		expect(migrateInternalRepInZoltar.mock.calls[0]?.[3]).toEqual([2n, 1n])
 		expect(requested).toMatchObject([{ rows: [{ label: 'Amount' }, { label: 'Outcomes', value: 'No, Yes' }], submittedTitle: 'Migrating REP' }])
-		expect(presented).toMatchObject([{ rows: [{ label: 'Amount' }, { label: 'Outcomes', value: 'No, Yes' }], title: 'REP Migrated' }])
+		expect(presented).toMatchObject([{ rows: [{ label: 'Amount' }, { label: 'Outcomes', value: 'No, Yes' }], title: 'REP migrated' }])
 		expect(requireHookState(hookState).zoltarMigrationForm).toEqual({ amount: '', outcomeIndexes: [2n, 1n] })
 	})
 
