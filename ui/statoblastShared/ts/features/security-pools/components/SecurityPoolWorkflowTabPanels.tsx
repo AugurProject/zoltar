@@ -8,7 +8,7 @@ import type { ActionAvailability } from '@zoltar/ui-core-shared/types/components
 import type { ForkAuctionSectionProps, SecurityPoolWorkflowRouteContentProps } from '../../types.js'
 import type { SecurityPoolLifecycleState, SecurityPoolStateModel } from '../lib/securityPoolState.js'
 import type { getSelectedPoolOracleMetricValues } from '../lib/securityPoolWorkflow.js'
-import { SecurityPoolPriceOracleSection, SecurityPoolStagedOperationsSection, type RequestPriceReview } from './SecurityPoolOracleSections.js'
+import { createRequestPriceReview, SecurityPoolPriceOracleSection, SecurityPoolStagedOperationsSection, type RequestPriceReview } from './SecurityPoolOracleSections.js'
 
 export function SelectedPoolTradingPanel({
 	calculationPriceConfigured,
@@ -237,12 +237,7 @@ export function SelectedPoolPriceOraclePanel({
 			onLoadManager={onLoadPoolOracleManager}
 			onOpenRequestReview={() => {
 				if (requestPriceTransactionValueAttoEth === undefined) return
-				onOpenRequestReview({
-					requestValueAttoEth: requestPriceTransactionValueAttoEth,
-					managerAddress: loadedSelectedPool.managerAddress,
-					securityPoolAddress: loadedSelectedPool.securityPoolAddress,
-					universeId: loadedSelectedPool.universeId,
-				})
+				onOpenRequestReview(createRequestPriceReview(loadedSelectedPool, requestPriceTransactionValueAttoEth))
 			}}
 			onViewPendingReport={onViewPendingReport}
 			requestGuardMessage={requestPriceOpenGuardMessage ?? requestPriceGuardMessage}

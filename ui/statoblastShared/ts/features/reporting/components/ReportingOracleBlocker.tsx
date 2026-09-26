@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'preact/hooks'
 import * as copy from '../../../copy/reporting.js'
+import * as securityPoolCopy from '../../../copy/securityPool.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import { formatDuration, formatTimestamp } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { WarningSurface } from '@zoltar/ui-core-shared/components/WarningSurface.js'
@@ -65,7 +66,7 @@ export function ReportingOracleBlocker({
 			{blocked ? (
 				<WarningSurface ariaLive='polite' role='status' surface='flat' variant='compact'>
 					<p>{status}</p>
-					{pendingId === 0n ? <TransactionActionButton idleLabel={copy.requestNewPrice} pendingLabel={copy.requestNewPrice} onClick={onRequest} availability={{ disabled: requestReason !== undefined, reason: requestReason }} /> : undefined}
+					{pendingId === 0n ? <TransactionActionButton idleLabel={commonCopy.launchAction(securityPoolCopy.requestNewPrice)} pendingLabel={securityPoolCopy.requestingNewPrice} onClick={onRequest} availability={{ disabled: requestReason !== undefined, reason: requestReason }} /> : undefined}
 					{pendingId > 0n && ready ? (
 						<button
 							className='primary'

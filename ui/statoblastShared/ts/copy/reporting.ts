@@ -104,7 +104,6 @@ export const clearDeposits = (outcome: string) => `Clear ${outcome} deposits (wo
 export const results = 'Results'
 
 export const priceExpired = 'Pool price expired. Reports need a price newer than 5 minutes.'
-export const requestNewPrice = 'Request new price…'
 export const priceRequested = (countdown: string) => `Price requested. Ready to settle in ${countdown}.`
 export const priceReportReady = (id: bigint) => `Price report #${id} is ready.`
 export const settlePriceReport = (id: bigint) => `Settle report #${id}`
