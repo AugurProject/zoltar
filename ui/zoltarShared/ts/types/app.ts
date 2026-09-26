@@ -49,6 +49,7 @@ export type ReportingWithdrawDepositIndexesByOutcome = {
 }
 
 export type ReportingFormState = {
+	contributionFunding?: 'vault' | 'wallet' | undefined
 	reportAmount: string
 	securityPoolAddress: string
 	selectedOutcome: ReportingOutcomeKey | undefined

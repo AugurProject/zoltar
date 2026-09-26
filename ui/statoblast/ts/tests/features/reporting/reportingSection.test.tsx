@@ -725,11 +725,81 @@ describe('ReportingSection', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 		expect(document.body.textContent?.includes('It does not spend wallet REP directly or require a wallet approval.')).toBe(false)
-		expect(document.body.textContent?.includes('Paid from: vault-backed REP (no approval needed)')).toBe(true)
-		expectTransactionButtonDisabled(document.body, reportingButtonLabel('Yes'), "Deposit 3 more REP into your vault's pool-held backing before reporting.")
+		expect(document.body.textContent?.includes('Paid from: pool vault REP (no approval needed)')).toBe(true)
+		expectTransactionButtonDisabled(document.body, reportingButtonLabel('Yes'), 'Only 2 REP is available in your pool vault. Reduce the amount or select Wallet REP.')
 	})
 
-	test('offers wallet REP approval to an active ordinary-game participant without a vault', async () => {
+	test('switches ordinary reporting between wallet REP and pool vault REP', async () => {
+		const rendered = await renderIntoDocument(
+			<ReportingSectionHarness
+				initialProps={{
+					reportingDetails: createReportingDetails({ contributionFunding: 'wallet', viewerWalletRepAllowanceAttoRep: 0n, viewerWalletRepBalanceAttoRep: rep(10n), viewerPoolHeldVaultRepBackingAttoRep: rep(6n), viewerVaultExists: true }),
+					reportingForm: createReportingForm({ reportAmount: '5', selectedOutcome: 'yes' }),
+				}}
+			/>,
+		)
+		cleanupRenderedComponent = rendered.cleanup
+		fireEvent.click(within(document.body).getByRole('button', { name: 'Pool vault REP' }))
+		expect(document.body.textContent).toContain('Paid from: pool vault REP (no approval needed)')
+		expect(document.body.textContent).not.toContain('Fork continuations use')
+		expect(within(document.body).queryByRole('button', { name: /^Approve / })).toBeNull()
+		expectTransactionButtonEnabled(document.body, reportingButtonLabel('Yes'))
+		fireEvent.click(within(document.body).getByRole('button', { name: 'Wallet REP' }))
+		expectTransactionButtonEnabled(document.body, 'Approve 5 REP…')
+		expectTransactionButtonDisabled(document.body, reportingButtonLabel('Yes'), 'Approve REP for this escalation game before reporting.')
+	})
+
+	test('offers wallet funding through the child vault after a fork', async () => {
+		const rendered = await renderIntoDocument(<ReportingSectionHarness initialProps={{ reportingDetails: createReportingDetails({ forkContinuation: true, contributionFunding: 'vault' }), reportingForm: createReportingForm({ contributionFunding: 'wallet', selectedOutcome: 'yes', reportAmount: '5' }) }} />)
+		cleanupRenderedComponent = rendered.cleanup
+		expect(within(document.body).getByRole('button', { name: 'Wallet REP' }).getAttribute('aria-pressed')).toBe('true')
+		expect(document.body.textContent).toContain('Paid from: wallet REP')
+		expect(document.body.textContent).toContain('Your wallet REP first enters your vault in this pool, then funds your report.')
+	})
+
+	test('discloses the child pool minimum and approves the full wallet deposit', async () => {
+		const rendered = await renderIntoDocument(
+			<ReportingSectionHarness
+				initialProps={{
+					reportingDetails: createReportingDetails({
+						forkContinuation: true,
+						contributionFunding: 'wallet',
+						minimumVaultRepDepositAttoRep: rep(10n),
+						walletVaultFunding: { vaultRepBackingUnits: 0n, totalRepBackingUnits: 0n, totalPoolHeldRepAttoRep: 0n },
+						viewerPoolHeldVaultRepBackingAttoRep: 0n,
+						viewerVaultExists: false,
+						viewerWalletRepBalanceAttoRep: rep(20n),
+						viewerWalletRepAllowanceAttoRep: rep(5n),
+					}),
+					reportingForm: createReportingForm({ contributionFunding: 'wallet', selectedOutcome: 'yes', reportAmount: '5' }),
+				}}
+			/>,
+		)
+		cleanupRenderedComponent = rendered.cleanup
+		expect(document.body.textContent).toContain('15 REP deposit for this report. Your vault will hold 10 REP afterward.')
+		expect(
+			within(document.body)
+				.getByRole('button', { name: /Approve 15 REP/ })
+				.hasAttribute('disabled'),
+		).toBe(false)
+	})
+
+	test('keeps the funding selector available when vault reporting is oracle-blocked', async () => {
+		const rendered = await renderIntoDocument(<ReportingSectionHarness initialProps={{ reportActionGuardMessage: 'Price expired' }} />)
+		cleanupRenderedComponent = rendered.cleanup
+		expect(within(document.body).getByRole('button', { name: 'Wallet REP' }).hasAttribute('disabled')).toBe(false)
+	})
+
+	test('offers wallet recovery from an empty selected pool vault', async () => {
+		const rendered = await renderIntoDocument(
+			<ReportingSectionHarness initialProps={{ reportingDetails: createReportingDetails({ contributionFunding: 'wallet', viewerVaultExists: false, viewerPoolHeldVaultRepBackingAttoRep: 0n }), reportingForm: createReportingForm({ contributionFunding: 'vault', selectedOutcome: 'yes', reportAmount: '5' }) }} />,
+		)
+		cleanupRenderedComponent = rendered.cleanup
+		expectTransactionButtonDisabled(document.body, reportingButtonLabel('Yes'), 'No REP is available in your pool vault. Select Wallet REP to report.')
+		expect(document.body.textContent).not.toContain('No pool-held vault REP backing is available for reporting.')
+	})
+
+	test.each(['not-started', 'active'] as const)('offers wallet REP approval to a %s ordinary-game participant without a vault', async status => {
 		let approvalCalls = 0
 		const renderedComponent = await renderIntoDocument(
 			<ReportingSectionHarness
@@ -737,7 +807,7 @@ describe('ReportingSection', () => {
 					onApproveReportingRep: () => {
 						approvalCalls += 1
 					},
-					reportingDetails: createReportingDetails({
+					reportingDetails: (status === 'active' ? createReportingDetails : createNotStartedReportingDetails)({
 						contributionFunding: 'wallet',
 						viewerPoolHeldVaultRepBackingAttoRep: 0n,
 						viewerVaultExists: false,
@@ -752,7 +822,7 @@ describe('ReportingSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		expect(document.body.textContent).toContain('Paid from: wallet REP')
-		expect(document.body.textContent).not.toContain('Paid from: vault-backed REP (no approval needed)')
+		expect(document.body.textContent).not.toContain('Paid from: pool vault REP (no approval needed)')
 		expectTransactionButtonEnabled(document.body, 'Approve 5 REP…')
 		expectTransactionButtonDisabled(document.body, reportingButtonLabel('Yes'), 'Approve REP for this escalation game before reporting.')
 		const reportButton = within(document.body).getByRole('button', { name: /^Report Yes ·/ })

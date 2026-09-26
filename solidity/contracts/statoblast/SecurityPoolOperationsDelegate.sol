@@ -13,9 +13,12 @@ import { AccountingReason } from './interfaces/ISecurityPool.sol';
 import { BinaryOutcomes } from './BinaryOutcomes.sol';
 import { ISecurityPoolForker } from './interfaces/ISecurityPoolForker.sol';
 import { EscalationGame } from './EscalationGame.sol';
+import { EscalationGameFactory } from './factories/EscalationGameFactory.sol';
 import { IShareToken } from './interfaces/IShareToken.sol';
 
 interface ISecurityPoolRepDepositContext {
+	function escalationGameFactory() external view returns (EscalationGameFactory);
+	function initialEscalationGameDepositAttoRep() external view returns (uint256);
 	function attoRepToBackingUnits(uint256 attoRepAmount) external view returns (uint256);
 	function backingUnitsToAttoRep(uint256 backingUnits) external view returns (uint256);
 	function eventEmitter() external view returns (SecurityPoolEventEmitter);
@@ -32,6 +35,7 @@ interface ISecurityPoolRepDepositContext {
 }
 
 interface IZoltarForkState {
+	function getNonDecisionThresholdAttoRep(uint248 universeId) external view returns (uint256);
 	function getForkTime(uint248 universeId) external view returns (uint256);
 }
 
@@ -167,6 +171,27 @@ contract SecurityPoolOperationsDelegate is SecurityPoolSettlementDelegate {
 		uint256 capacity = Math.mulDiv(backing, statoblastSecurityMultiplierBps, factor);
 		if (capacity == 0 || capacity == securityVaults[vault].capacityOwnershipAttoRep) return;
 		_applyVaultTarget(pool, vault, backing, factor);
+	}
+
+	event EscalationGameSet(EscalationGame escalationGame);
+
+	function depositWalletRepToEscalationGame(BinaryOutcomes.BinaryOutcome outcome, uint256 maximumDepositAttoRep) external {
+		ISecurityPoolRepDepositContext pool = ISecurityPoolRepDepositContext(address(this));
+		IZoltarForkState zoltar = IZoltarForkState(pool.zoltar());
+		uint248 universeId = pool.universeId();
+		require(zoltar.getForkTime(universeId) == 0, 'Forked');
+		require(systemState == SystemState.Operational, 'Pool inactive');
+		require(!awaitingForkContinuation, 'Fork await');
+		if (address(escalationGame) == address(0)) {
+			require(block.timestamp > IQuestionEndTime(pool.questionData()).getQuestionEndDate(pool.questionId()), 'Question active');
+			escalationGame = pool.escalationGameFactory().deployEscalationGame(pool.initialEscalationGameDepositAttoRep(), zoltar.getNonDecisionThresholdAttoRep(universeId));
+			emit EscalationGameSet(escalationGame);
+		}
+		require(!escalationGame.forkContinuation(), 'Fork game');
+		(uint256 depositedAttoRep, uint256 resultingCumulativeAttoRep) = escalationGame.previewDepositOnOutcome(outcome, maximumDepositAttoRep);
+		// Wallet funding enters dispute escrow directly and never acquires pool backing or capacity.
+		IERC20(pool.repToken()).safeTransferFrom(msg.sender, address(escalationGame), depositedAttoRep);
+		escalationGame.recordDepositFromSecurityPool(msg.sender, outcome, depositedAttoRep, resultingCumulativeAttoRep);
 	}
 
 	function depositRepToVault(uint256 attoRepAmount, uint256 targetHealthFactorBps) external {

@@ -88,7 +88,7 @@ export const dismiss = 'Dismiss'
 
 export const paidFrom = 'Paid from'
 export const walletRep = 'Wallet REP'
-export const vaultBackedRep = 'Vault-backed REP'
+export const vaultBackedRep = 'Pool vault REP'
 export const completedAction = (title: string) => formatActionTense(title, 'completed')
 export const reportingAction = (outcome: string, amount: string) => `Report ${outcome} · ${amount} REP`
 export const settleReportNumber = (id: string) => `Settle report #${id}`
@@ -107,6 +107,7 @@ export const reviewedActions: Record<string, { title: string; description?: stri
 	approve: { title: 'Approve token spending', description: 'Authorize the listed spending limit; tokens stay in your wallet.' },
 	depositToEscalationGame: { title: 'Report outcome' },
 	depositRepOnOutcome: { title: 'Report outcome' },
+	depositWalletRepToEscalationGame: { title: 'Report outcome' },
 	withdrawFromEscalationGame: { title: 'Settle escalation deposits', description: 'Settle the selected deposits after resolution.' },
 	settle: { title: 'Settle report', description: 'Settle the completed oracle report.' },
 	dispute: { title: 'Dispute report', description: 'Fund the counter-report and swap against the current report.' },
