@@ -264,7 +264,7 @@ void describe('TradingSection', () => {
 		const dialog = within(document.body).getByRole('dialog')
 		const confirm = within(dialog).getByRole('button', { name: 'Mint complete sets' })
 		expect(confirm.hasAttribute('disabled')).toBe(true)
-		expect(dialog.textContent).toContain('Request a new price in price oracle before minting.')
+		expect(dialog.textContent).toContain('Request a new price in Price oracle before minting.')
 	})
 
 	void test('labels the max complete sets metric as redeemable complete sets', async () => {

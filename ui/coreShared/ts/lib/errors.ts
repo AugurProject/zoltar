@@ -167,7 +167,7 @@ function getKnownTransactionErrorDetail(details: string[]) {
 		if (message !== undefined) return message
 	}
 	for (const detail of details) {
-		if (detail.toLowerCase().includes('stale price')) return "The pool's oracle price expired. Request a new price in price oracle, then retry."
+		if (detail.toLowerCase().includes('stale price')) return "The pool's oracle price expired. Request a new price in Price oracle, then retry."
 	}
 	return undefined
 }

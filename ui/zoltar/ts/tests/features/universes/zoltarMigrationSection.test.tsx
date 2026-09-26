@@ -313,7 +313,7 @@ describe('ZoltarMigrationSection', () => {
 
 		expect(document.body.textContent).toContain('Yes')
 		expect(document.body.textContent).toContain('0x2')
-		expect(document.body.textContent).toContain('Child-Universe REP received')
+		expect(document.body.textContent).toContain('Child-universe REP received')
 		expect(document.body.textContent).not.toContain('Technical Details')
 		expect(document.body.textContent?.match(/Selected destinations/g)).toHaveLength(1)
 		expect(document.body.textContent).not.toContain('Balance Changes')

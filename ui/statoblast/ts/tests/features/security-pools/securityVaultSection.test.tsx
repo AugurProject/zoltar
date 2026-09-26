@@ -131,19 +131,19 @@ const terminalOrdinaryGameCases = [
 		universeHasForked: false,
 	},
 	{
-		expectedReason: 'REP-backing deposits and REP withdrawals are unavailable while this pool is in fork migration. Continue in fork & migration. Fee claiming remains available only when this vault has accrued fees.',
+		expectedReason: 'REP-backing deposits and REP withdrawals are unavailable while this pool is in fork migration. Continue in Fork & migration. Fee claiming remains available only when this vault has accrued fees.',
 		lifecycleState: 'poolForked',
 		name: 'pool-forked',
 		universeHasForked: true,
 	},
 	{
-		expectedReason: 'REP-backing deposits and REP withdrawals are unavailable while this pool is in fork migration. Continue in fork & migration. Fee claiming remains available only when this vault has accrued fees.',
+		expectedReason: 'REP-backing deposits and REP withdrawals are unavailable while this pool is in fork migration. Continue in Fork & migration. Fee claiming remains available only when this vault has accrued fees.',
 		lifecycleState: 'forkMigration',
 		name: 'fork-migration',
 		universeHasForked: true,
 	},
 	{
-		expectedReason: 'REP-backing deposits and REP withdrawals are unavailable while this pool is in a truth auction. Continue in fork & migration. Fee claiming remains available only when this vault has accrued fees.',
+		expectedReason: 'REP-backing deposits and REP withdrawals are unavailable while this pool is in a truth auction. Continue in Fork & migration. Fee claiming remains available only when this vault has accrued fees.',
 		lifecycleState: 'forkTruthAuction',
 		name: 'truth-auction',
 		universeHasForked: true,
@@ -780,7 +780,7 @@ describe('SecurityVaultSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		const lifecycleReason = documentQueries.getByText('REP-backing deposits and REP withdrawals are unavailable while this pool is in fork migration. Continue in fork & migration. Fee claiming remains available only when this vault has accrued fees.')
+		const lifecycleReason = documentQueries.getByText('REP-backing deposits and REP withdrawals are unavailable while this pool is in fork migration. Continue in Fork & migration. Fee claiming remains available only when this vault has accrued fees.')
 		for (const actionLabel of ['Deposit REP', 'Withdraw REP']) {
 			const button = documentQueries.getByRole('button', { name: actionLabel })
 			expect(button.getAttribute('aria-describedby')).toBe(lifecycleReason.id)

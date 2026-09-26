@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test'
+import { readFileSync } from 'node:fs'
 import { applyThemePreference, parseThemePreference, readThemePreference, saveThemePreference } from '../lib/themePreference.js'
 
 function createStorage(initial: Record<string, string> = {}) {
@@ -56,6 +57,17 @@ describe('theme preference', () => {
 			},
 		}
 		expect(readThemePreference(blocked)).toBe('system')
+	})
+
+	test('every page applies the stored theme with the same key and values before its stylesheets load', () => {
+		expect(readThemePreference(createStorage({ 'zoltar.theme': 'dark' }))).toBe('dark')
+		for (const page of ['ui/zoltar/index.html', 'ui/statoblast/index.html', 'ui/trading/index.html', 'tooling/ui/index.production.html']) {
+			const html = readFileSync(page, 'utf8').replaceAll('"', "'")
+			const script = html.indexOf("localStorage.getItem('zoltar.theme')")
+			expect({ page, script: script !== -1 }).toEqual({ page, script: true })
+			expect(html).toContain("theme === 'light' || theme === 'dark'")
+			expect(script).toBeLessThan(html.indexOf("rel='stylesheet'"))
+		}
 	})
 
 	test('pins light or dark with data-theme and removes it to follow the operating system', () => {

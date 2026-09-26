@@ -1,4 +1,5 @@
 import * as transactionCopy from '@zoltar/ui-core-shared/copy/transaction.js'
+import { humanizeTransactionAction } from '@zoltar/ui-core-shared/transactions/transactionPresentations.js'
 import { useSignal } from '@preact/signals'
 import { useRef } from 'preact/hooks'
 import { useFormState } from '@zoltar/ui-core-shared/hooks/useFormState.js'
@@ -106,7 +107,7 @@ function useForkAuctionOperationsWithDependencies<TWriteClient>(
 	const getPendingTitle = (actionName: ForkAuctionActionResult['action'], displayTitleOverride?: string) => {
 		if (displayTitleOverride !== undefined) return displayTitleOverride
 		if (actionName === 'claimAuctionProceeds') return 'Settle finalized bid'
-		return actionName.replace(/([A-Z])/g, ' $1').replace(/^./, value => value.toUpperCase())
+		return humanizeTransactionAction(actionName)
 	}
 	const getSuccessTitle = (actionName: ForkAuctionActionResult['action'], displayTitleOverride?: string) => `${getPendingTitle(actionName, displayTitleOverride)} submitted`
 	const getFailureTitle = (actionName: ForkAuctionActionResult['action'], displayTitleOverride?: string) => `${getPendingTitle(actionName, displayTitleOverride)} failed`

@@ -36,7 +36,7 @@ export const splittingRepPending = 'Splitting REP…'
 export const walletRepBalance = 'Wallet REP balance'
 export const walletRepTokens = 'Wallet REP tokens'
 export const selectedDestinations = 'Selected destinations'
-export const childUniverseRepReceived = 'Child-Universe REP received'
+export const childUniverseRepReceived = 'Child-universe REP received'
 export const permanentRepBurn = 'Permanent REP burn'
 
 export const migrationAvailableRep = 'Available to migrate'

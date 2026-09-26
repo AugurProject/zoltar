@@ -132,7 +132,7 @@ describe('GlobalTransactionDialog', () => {
 		expect(failedDialog.querySelector('details')?.open).toBe(false)
 	})
 
-	test.each(['Action canceled in wallet.', "The pool's oracle price expired. Request a new price in price oracle, then retry.", 'Transaction reverted; checking details…'])('shows the failure reason before expanding details: %s', async detail => {
+	test.each(['Action canceled in wallet.', "The pool's oracle price expired. Request a new price in Price oracle, then retry.", 'Transaction reverted; checking details…'])('shows the failure reason before expanding details: %s', async detail => {
 		const rendered = await renderIntoDocument(<GlobalTransactionDialog transaction={{ dismissKey: `visible-failure-${detail}`, title: 'Price request failed', tone: 'error', detail, technicalRows: [{ label: 'Function', value: 'requestPrice' }] }} />)
 		trackRendered(rendered)
 		const panel = within(document.body).getByRole('dialog', { name: 'Transaction status' })

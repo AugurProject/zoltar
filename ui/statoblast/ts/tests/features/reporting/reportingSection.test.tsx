@@ -661,7 +661,7 @@ describe('ReportingSection', () => {
 
 	test('blocks stale-price submission and links to the pool oracle recovery view', async () => {
 		let openOracleCalls = 0
-		const reason = "The pool's oracle price expired. Request a new price in price oracle, then retry."
+		const reason = "The pool's oracle price expired. Request a new price in Price oracle, then retry."
 		const renderedComponent = await renderIntoDocument(
 			h(
 				ReportingSection,
@@ -1220,14 +1220,14 @@ describe('ReportingSection', () => {
 		expect(document.body.textContent?.includes(forkTriggeredReason)).toBe(true)
 		expect(document.body.textContent?.split(forkTriggeredReason)).toHaveLength(2)
 		expect(lifecycleBannerQueries.queryByText('Trigger universe fork')).toBeNull()
-		expect(lifecycleBannerQueries.queryByText('Continue in fork & migration')).toBeNull()
+		expect(lifecycleBannerQueries.queryByText('Continue in Fork & migration')).toBeNull()
 		expectTransactionButtonDisabled(document.body, reportingButtonLabel('Yes'), forkTriggeredReason)
 		const reportButton = documentQueries.getByRole('button', { name: /^Report Yes ·/ })
 		const reportDescription = document.getElementById(reportButton.getAttribute('aria-describedby') ?? '')
 		expect(reportDescription?.textContent).toContain(forkTriggeredReason)
 	})
 
-	test('shows Continue in fork & migration in the lifecycle banner after the fork has already been triggered', async () => {
+	test('shows Continue in Fork & migration in the lifecycle banner after the fork has already been triggered', async () => {
 		const renderedComponent = await renderIntoDocument(
 			h(
 				ReportingSection,
@@ -1245,8 +1245,8 @@ describe('ReportingSection', () => {
 		const lifecycleBanner = document.body.querySelector('.escalation-phase')
 		if (!(lifecycleBanner instanceof HTMLElement)) throw new Error('Expected phase stepper')
 		const lifecycleBannerQueries = within(lifecycleBanner)
-		expect(document.body.textContent?.includes('Escalation reached non-decision and the universe fork has already been triggered for this pool. Continue in fork & migration.')).toBe(true)
-		expect(lifecycleBannerQueries.queryByText('Continue in fork & migration')).toBeNull()
+		expect(document.body.textContent?.includes('Escalation reached non-decision and the universe fork has already been triggered for this pool. Continue in Fork & migration.')).toBe(true)
+		expect(lifecycleBannerQueries.queryByText('Continue in Fork & migration')).toBeNull()
 		expect(lifecycleBannerQueries.queryByText('Trigger universe fork')).toBeNull()
 	})
 
@@ -1738,7 +1738,7 @@ describe('ReportingSection', () => {
 	})
 
 	test('shares one workflow lock reason across reporting and settlement actions', async () => {
-		const sharedLockReason = 'This parent pool is forked. Continue in fork & migration for migration and settlement.'
+		const sharedLockReason = 'This parent pool is forked. Continue in Fork & migration for migration and settlement.'
 		const renderedComponent = await renderIntoDocument(
 			h(
 				ReportingSection,
@@ -1833,7 +1833,7 @@ describe('ReportingSection', () => {
 		const documentQueries = within(document.body)
 		expect(documentQueries.queryByRole('button', { name: 'Trigger universe fork' })).toBeNull()
 		expect(documentQueries.getByRole('button', { name: 'Open fork & migration' })).not.toBeNull()
-		expect(document.body.textContent?.includes('Dispute-staked REP remains in escalation after non-decision. The universe fork has already been triggered for this pool, so continue in fork & migration.')).toBe(true)
+		expect(document.body.textContent?.includes('Dispute-staked REP remains in escalation after non-decision. The universe fork has already been triggered for this pool, so continue in Fork & migration.')).toBe(true)
 	})
 
 	test('shows a Trigger universe fork action when non-decision blocks reporting', async () => {

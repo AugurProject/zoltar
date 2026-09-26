@@ -60,7 +60,7 @@ export const formatFinalizedRefundSettlementResultDetail = (capacityOwnershipLab
 export const formatWinningBidSettlementResultDetail = (capacityOwnershipLabel: CopyTemplateValue) => `Selected truth-auction winning bids were settled. The selected bids received REP backing units plus ${capacityOwnershipLabel}, assigning the remaining capacity ownership.`
 export const formatMixedBidSettlementResultDetail = (capacityOwnershipLabel: CopyTemplateValue) => `Selected truth-auction bids were settled. Winning bids received REP backing units plus ${capacityOwnershipLabel}, assigning the remaining capacity ownership; refund-only rows credited locked ETH for withdrawal.`
 export const childUniverseLinkedToForkPathDetail = 'The selected child universe was deployed and linked to this fork path.'
-export const ownEscalationForkSubmittedDetail = 'This pool submitted its own escalation fork and moved into fork & migration.'
+export const ownEscalationForkSubmittedDetail = 'This pool submitted its own escalation fork and moved into Fork & migration.'
 export const zoltarUniverseForkSubmittedDetail = 'The selected universe fork was submitted on-chain.'
 export const poolReadyForForkMigrationDetail = 'This pool entered fork handling and is ready for migration actions.'
 export const parentEscalationDepositsClaimedDetail = 'Selected winning parent deposits were paid directly in child REP. Their carried proofs are now spent in current and later descendants.'

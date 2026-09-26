@@ -159,7 +159,7 @@ test('leaves the description empty for an unlabeled contract function instead of
 	reviewed.onTransactionPrepared?.({ account, chainName: client.chain.name, functionName: 'depositRepToVault', contractAddress: account, contractLabel: 'Zoltar', args: [1n], data: '0x', value: undefined })
 	const sending = reviewed.sendTransaction({ to: account, data: '0x' })
 	await waitForReview()
-	expect(transactionSteps.value?.steps[0]?.title).toBe('Deposit REP To Vault')
+	expect(transactionSteps.value?.steps[0]?.title).toBe('Deposit REP to vault')
 	expect(transactionSteps.value?.steps[0]?.description).toBeUndefined()
 	confirm()
 	await sending

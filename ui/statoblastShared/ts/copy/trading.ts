@@ -75,5 +75,5 @@ export const availableToMint = 'Available to mint'
 export const forkDetailsUnavailable = 'Fork details unavailable. Refresh pool to retry.'
 export const shareBalancesUnavailable = 'Share balances unavailable. Refresh pool to retry.'
 
-export const staleOraclePrice = 'Request a new price in price oracle before minting.'
+export const staleOraclePrice = 'Request a new price in Price oracle before minting.'
 export const loadingOraclePrice = 'Loading price oracle details.'
