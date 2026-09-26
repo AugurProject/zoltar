@@ -17,7 +17,7 @@ import { StateHint } from '@zoltar/ui-core-shared/components/StateHint.js'
 import { TimestampValue } from '@zoltar/ui-core-shared/components/TimestampValue.js'
 import { TransactionActionButton } from '@zoltar/ui-core-shared/components/TransactionActionButton.js'
 import { normalizeAddress, sameAddress } from '@zoltar/ui-core-shared/lib/address.js'
-import { formatCurrencyInputBalance } from '@zoltar/ui-core-shared/lib/formatters.js'
+import { formatCurrencyInputBalance, formatMultiplierText } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { balanceShortage } from '@zoltar/ui-core-shared/forms/inputs.js'
 import { tryParseBigIntInput } from '@zoltar/ui-core-shared/forms/integerInput.js'
 import { tryParseRepAmountInput } from '@zoltar/ui-core-shared/forms/formInputs.js'
@@ -315,7 +315,7 @@ export function SecurityVaultSection({
 	const depositAmountField = <VaultDepositAmountField disabled={!depositRepToVaultEnabled} onChange={depositAmount => onSecurityVaultFormChange({ depositAmount })} value={normalizedSecurityVaultForm.depositAmount} walletRepBalanceAttoRep={walletRepBalanceAttoRep} />
 	const savedBackingFactor = !!currentSelectedVaultDetails?.targetBackingFactorBps
 	const depositBackingFactorField = <DepositBackingFactorField minimumBps={minimumBps} value={depositTargetHealthFactor} error={targetHealthFactorGuardMessage} disabled={!depositRepToVaultEnabled} onChange={targetHealthFactor => onSecurityVaultFormChange({ targetHealthFactor })} />
-	const savedBackingFactorMetric = <MetricField label={securityPoolCopy.vaultBackingFactor}>{depositTargetHealthFactor}×</MetricField>
+	const savedBackingFactorMetric = <MetricField label={securityPoolCopy.vaultBackingFactor}>{formatMultiplierText(depositTargetHealthFactor)}</MetricField>
 	const depositApprovalControlProps = {
 		approveRepEnabled,
 		canUseLoadedVaultActions,

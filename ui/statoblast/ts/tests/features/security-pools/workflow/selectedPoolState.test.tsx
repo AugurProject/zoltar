@@ -121,8 +121,8 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 		)
 
 		const pageText = (document.body.textContent ?? '').replace(/\s+/g, ' ')
-		expect(pageText).toContain('≈ 10.00 ETH')
-		expect(pageText).not.toContain('≈ 50.00 ETH')
+		expect(pageText).toContain('/ 10.00 ETH')
+		expect(pageText).not.toContain('/ 50.00 ETH')
 	})
 
 	test('derives displayed minting headroom from the configured UI price', async () => {
@@ -139,8 +139,8 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 		})
 
 		const pageText = (document.body.textContent ?? '').replace(/\s+/g, ' ')
-		expect(pageText).toContain('≈ 50.00 ETH')
-		expect(pageText).not.toContain('≈ 10.00 ETH')
+		expect(pageText).toContain('/ 50.00 ETH')
+		expect(pageText).not.toContain('/ 10.00 ETH')
 	})
 
 	test('keeps oracle actions disabled off Sepolia and explains recovery', async () => {

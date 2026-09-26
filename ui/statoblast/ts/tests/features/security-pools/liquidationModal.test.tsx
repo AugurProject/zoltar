@@ -256,12 +256,12 @@ describe('LiquidationModal', () => {
 
 		const review = within(document.body).getByRole('heading', { name: 'Transaction Review' }).closest('section')
 		if (review === null) throw new Error('Expected transaction review')
-		expect(review.textContent).toContain('Buffered Queue Cost≈ 1.20 ETH')
-		expect(review.textContent).toContain('ETH Wrapped to WETH≈ 1.00 ETH')
-		expect(review.textContent).toContain('REP Locked for Initial Report≈ 10.00 REP')
-		expect(review.textContent).toContain('WETH Locked for Initial Report≈ 2.00 WETH')
-		expect(review.textContent).toContain('Total Wallet ETH Required≈ 2.20 ETH')
-		expect(review.textContent).toContain('Resulting Wallet ETH≈ 2.80 ETH')
+		expect(review.textContent).toContain('Buffered Queue Cost1.20 ETH')
+		expect(review.textContent).toContain('ETH Wrapped to WETH1.00 ETH')
+		expect(review.textContent).toContain('REP Locked for Initial Report10.00 REP')
+		expect(review.textContent).toContain('WETH Locked for Initial Report2.00 WETH')
+		expect(review.textContent).toContain('Total Wallet ETH Required2.20 ETH')
+		expect(review.textContent).toContain('Resulting Wallet ETH2.80 ETH')
 		expect(review.textContent).toContain('request funding may require multiple wallet transactions')
 	})
 
@@ -1368,7 +1368,7 @@ describe('LiquidationModal', () => {
 		if (!(repMovedLabel instanceof HTMLElement)) throw new Error('Expected REP backing transferred label')
 		const repMovedValue = repMovedLabel.nextElementSibling
 		if (!(repMovedValue instanceof HTMLElement)) throw new Error('Expected Rep Moved value')
-		expect(repMovedValue.textContent).toBe('≈ 0.00 REP')
+		expect(repMovedValue.textContent).toBe('0.00 REP')
 	})
 
 	test('allows an atomic bonus-priced liquidation', async () => {
@@ -1627,9 +1627,9 @@ describe('LiquidationModal', () => {
 		})
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		expect(getTransactionReviewValue('Gross REP Award (Includes 5%)')).toBe('≈ 52.50 REP')
-		expect(getTransactionReviewValue('REP backing transferred')).toBe('≈ 52.50 REP')
-		expect(getTransactionReviewValue('Target Accrued Fees Retained')).toBe('≈ 7.00 ETH')
+		expect(getTransactionReviewValue('Gross REP Award (Includes 5%)')).toBe('52.50 REP')
+		expect(getTransactionReviewValue('REP backing transferred')).toBe('52.50 REP')
+		expect(getTransactionReviewValue('Target Accrued Fees Retained')).toBe('7.00 ETH')
 	})
 
 	test('does not offer liquidation when live pool-held and dispute REP keep the target healthy', async () => {
@@ -1646,8 +1646,8 @@ describe('LiquidationModal', () => {
 		})
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		expect(getTransactionReviewValue('Gross REP Award (Includes 5%)')).toBe('≈ 0.00 REP')
-		expect(getTransactionReviewValue('REP backing transferred')).toBe('≈ 0.00 REP')
+		expect(getTransactionReviewValue('Gross REP Award (Includes 5%)')).toBe('0.00 REP')
+		expect(getTransactionReviewValue('REP backing transferred')).toBe('0.00 REP')
 	})
 
 	test('uses the shared chain timestamp context for oracle expiry text', async () => {
@@ -1986,7 +1986,7 @@ describe('LiquidationModal', () => {
 		const documentQueries = within(document.body)
 		expect(documentQueries.getByText('Pending')).not.toBeNull()
 		expect(documentQueries.getByText('275760-09-13 00:00:00 UTC')).not.toBeNull()
-		expect(documentQueries.getByText('12345678901234567890.1234× protocol minimum')).not.toBeNull()
+		expect(documentQueries.getByText('12 345 678 901 234 567 890.1234× protocol minimum')).not.toBeNull()
 	})
 
 	test('shows expired approval status from the shared chain timestamp', async () => {
@@ -2128,7 +2128,7 @@ describe('LiquidationModal', () => {
 		expect(debtLabel.closest('details') === null).toBe(true)
 		const accounting = within(document.body).getByText('Accounting breakdown').closest('details')
 		expect(accounting?.open).toBe(false)
-		expect(getTransactionReviewValue('Target Accrued Fees Retained')).toBe('≈ 0.25 ETH')
+		expect(getTransactionReviewValue('Target Accrued Fees Retained')).toBe('0.25 ETH')
 	})
 
 	test('allows execution when the entered amount exceeds the executable cap because execution will clamp it', async () => {

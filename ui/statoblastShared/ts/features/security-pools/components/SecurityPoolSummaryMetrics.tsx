@@ -11,7 +11,7 @@ import { ProgressMeter } from '@zoltar/ui-core-shared/components/ProgressMeter.j
 import { openInterestFeePerYearBigint } from '../lib/retentionRate.js'
 import { calculateMintingCapacityAttoEth, formatStatoblastSecurityMultiplier } from '../../markets/lib/trading.js'
 import { getToneRatioThreshold, getVisualRatio } from '@zoltar/ui-core-shared/lib/visualMetrics.js'
-import { formatCurrencyBalanceWithUnit } from '@zoltar/ui-core-shared/lib/formatters.js'
+import { formatCurrencyBalanceWithUnit, formatMultiplier } from '@zoltar/ui-core-shared/lib/formatters.js'
 import type { MetricGridVariant } from '../../types.js'
 import type { ListedSecurityPool } from '@zoltar/ui-core-shared/types/contracts.js'
 
@@ -29,12 +29,6 @@ type SecurityPoolSummaryMetricsProps = {
 	pendingReportReadyAtTimestamp?: bigint | undefined
 	showTotalBacking?: boolean
 	variant?: 'embedded' | 'hero'
-}
-
-function formatRepPerCapacityBps(value: bigint) {
-	const whole = value / 10_000n
-	const fraction = (value % 10_000n).toString().padStart(4, '0').replace(/0+$/, '')
-	return `${whole.toString()}${fraction === '' ? '' : `.${fraction}`}×`
 }
 
 export function SecurityPoolSummaryMetrics({
@@ -57,7 +51,7 @@ export function SecurityPoolSummaryMetrics({
 		return (
 			<MetricGrid className={className} variant={metricVariant}>
 				{omitHeadlineMetrics ? undefined : <MetricField label={securityPoolCopy.vaultCount}>{pool.vaultCount.toString()}</MetricField>}
-				{omitHeadlineMetrics ? undefined : <MetricField label={statoblastAppCopy.statoblastSecurityMultiplierBps}>{formatStatoblastSecurityMultiplier(pool.statoblastSecurityMultiplierBps)}x</MetricField>}
+				{omitHeadlineMetrics ? undefined : <MetricField label={statoblastAppCopy.statoblastSecurityMultiplierBps}>{formatStatoblastSecurityMultiplier(pool.statoblastSecurityMultiplierBps)}</MetricField>}
 				<MetricField label={commonCopy.initialReportPriorityFee}>{formatCurrencyBalanceWithUnit(pool.initialReportPriorityFeeAttoEthPerGas, commonCopy.eth, 18)}</MetricField>
 				<MetricField label={securityPoolCopy.openInterestFeeYear}>
 					<CurrencyValue value={openInterestFeePerYearBigint(pool.currentRetentionRate)} suffix={commonCopy.percent} />
@@ -67,7 +61,7 @@ export function SecurityPoolSummaryMetrics({
 						<CurrencyValue exactWhenRoundedToZero value={pool.totalPoolHeldAttoRep} suffix={commonCopy.rep} />
 					</MetricField>
 				) : undefined}
-				{resolvedPoolHeldRepPerCapacityBps === undefined ? undefined : <MetricField label={securityPoolCopy.poolHeldRepPerCapacity}>{formatRepPerCapacityBps(resolvedPoolHeldRepPerCapacityBps)}</MetricField>}
+				{resolvedPoolHeldRepPerCapacityBps === undefined ? undefined : <MetricField label={securityPoolCopy.poolHeldRepPerCapacity}>{formatMultiplier(resolvedPoolHeldRepPerCapacityBps, 4)}</MetricField>}
 				{omitHeadlineMetrics || omitCapacity ? undefined : (
 					<MetricField label={poolWorkspaceCopy.capacityLabel} valueClassName='pool-capacity-values'>
 						<CurrencyValue exactWhenRoundedToZero value={pool.settlementCollateralAttoEth} suffix={commonCopy.eth} /> <span>/</span> {mintingCapacityAttoEth === undefined ? commonCopy.unavailable : <CurrencyValue exactWhenRoundedToZero value={mintingCapacityAttoEth} suffix={commonCopy.eth} />}
@@ -86,7 +80,7 @@ export function SecurityPoolSummaryMetrics({
 				</div>
 				<div className='security-pool-ribbon-stat'>
 					<span className='security-pool-ribbon-stat-label'>{statoblastAppCopy.statoblastSecurityMultiplierBps}</span>
-					<strong className='security-pool-ribbon-stat-value'>{formatStatoblastSecurityMultiplier(pool.statoblastSecurityMultiplierBps)}x</strong>
+					<strong className='security-pool-ribbon-stat-value'>{formatStatoblastSecurityMultiplier(pool.statoblastSecurityMultiplierBps)}</strong>
 				</div>
 				<div className='security-pool-ribbon-stat'>
 					<span className='security-pool-ribbon-stat-label'>{securityPoolCopy.annualFee}</span>
@@ -97,7 +91,7 @@ export function SecurityPoolSummaryMetrics({
 				<div className='security-pool-ribbon-stat'>
 					<span className='security-pool-ribbon-stat-label'>{securityPoolCopy.totalPoolHeldAttoRep}</span>
 					<strong className='security-pool-ribbon-stat-value'>
-						<CurrencyValue compactWhenOverflow copyable={false} exactWhenRoundedToZero value={pool.totalPoolHeldAttoRep} suffix={commonCopy.rep} />
+						<CurrencyValue notation='compact' exactWhenRoundedToZero value={pool.totalPoolHeldAttoRep} suffix={commonCopy.rep} />
 					</strong>
 				</div>
 			</div>

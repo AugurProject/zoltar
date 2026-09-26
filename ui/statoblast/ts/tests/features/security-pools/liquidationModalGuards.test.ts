@@ -103,9 +103,9 @@ function findBlockerReason(input: Parameters<typeof getLiquidationBlockers>[0]) 
 
 describe('liquidation modal guards', () => {
 	test('formats health factor basis points with the protocol suffix', () => {
-		expect(formatHealthFactorBps(10_000n)).toBe(`1${liquidationCopy.protocolHealthSuffix}`)
-		expect(formatHealthFactorBps(12_500n)).toBe(`1.25${liquidationCopy.protocolHealthSuffix}`)
-		expect(formatHealthFactorBps(10_001n)).toBe(`1.0001${liquidationCopy.protocolHealthSuffix}`)
+		expect(formatHealthFactorBps(10_000n)).toBe('1× protocol minimum')
+		expect(formatHealthFactorBps(12_500n)).toBe('1.25× protocol minimum')
+		expect(formatHealthFactorBps(10_001n)).toBe('1.0001× protocol minimum')
 	})
 
 	test('derives the approval status from revocation, nonce, and validity window', () => {
