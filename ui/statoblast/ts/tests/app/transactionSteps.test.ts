@@ -105,6 +105,7 @@ test('wallet-only reporting advances to the report after the deposit receipt wit
 	try {
 		expect(sendTransaction).toHaveBeenCalledTimes(1)
 		expect(transactionSteps.value?.steps.map(step => step.phase)).toEqual(['pending', 'upcoming'])
+		expect(transactionSteps.value?.showReviewDialog).toBe(false)
 	} finally {
 		depositReceipt.resolve({ ...receipt, transactionHash: hash })
 		expect(await settled).toBeUndefined()

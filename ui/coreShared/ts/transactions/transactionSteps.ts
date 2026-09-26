@@ -31,6 +31,7 @@ type TransactionStep = TransactionStepDetails & {
 }
 
 type TransactionSteps = {
+	showReviewDialog: boolean
 	reviewSignal: AbortSignal | undefined
 	steps: TransactionStep[]
 	activeIndex: number
@@ -52,7 +53,7 @@ export function cancelTransactionReview(reviewSignal: AbortSignal) {
 	return { trackingSubmitted, steps: owned?.steps }
 }
 
-export function createTransactionStepController(signal = getTransactionReviewSignal()) {
+export function createTransactionStepController(signal = getTransactionReviewSignal(), showReviewDialog = true) {
 	transactionStepOutcome.value = undefined
 	let canceled = false
 	let rejectReview: ((reason: Error) => void) | undefined
@@ -80,6 +81,7 @@ export function createTransactionStepController(signal = getTransactionReviewSig
 	const publish = (confirmStep: (index: number, amount?: bigint) => void = () => undefined) => {
 		if (canceled) return
 		transactionSteps.value = {
+			showReviewDialog,
 			reviewSignal: signal,
 			steps: [...steps],
 			activeIndex,

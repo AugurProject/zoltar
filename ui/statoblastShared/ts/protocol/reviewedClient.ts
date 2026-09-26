@@ -73,7 +73,7 @@ async function describeTransaction(client: WriteClient, preview: TransactionRequ
 }
 
 export function createReviewedClient(client: WriteClient, validate: () => Promise<void> = async () => undefined, signal = getTransactionReviewSignal(), skipAppReview = false): WriteClient {
-	const controller = createTransactionStepController(signal)
+	const controller = createTransactionStepController(signal, !skipAppReview)
 	const environment = createActiveEnvironmentGuard()
 	let preview: TransactionRequestPreview | undefined
 	let plan: readonly TransactionPlanStep[] | undefined
