@@ -1,0 +1,158 @@
+import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
+import { assertNever } from '@zoltar/ui-core-shared/lib/assert.js'
+import { Badge } from '@zoltar/ui-core-shared/components/Badge.js'
+import { CurrencyValue } from '@zoltar/ui-core-shared/components/CurrencyValue.js'
+import { MetricField } from '@zoltar/ui-core-shared/components/MetricField.js'
+import { MetricGrid } from '@zoltar/ui-core-shared/components/MetricGrid.js'
+import { RouteHeader } from '@zoltar/ui-core-shared/components/RouteHeader.js'
+import { SectionBlock } from '@zoltar/ui-core-shared/components/SectionBlock.js'
+import { StateHint } from '@zoltar/ui-core-shared/components/StateHint.js'
+import { TimestampValue } from '@zoltar/ui-core-shared/components/TimestampValue.js'
+import { isActiveAppChain } from '@zoltar/ui-core-shared/wallet/network.js'
+import * as zoltarCopy from '../../../copy/zoltar.js'
+import { deriveZoltarOverviewModel, type ZoltarNextStep, type ZoltarOverviewModel } from '../lib/zoltarViewModels.js'
+import type { ZoltarView } from '../../types.js'
+import { useZoltarWorkspace } from './ZoltarWorkspace.js'
+
+type NextStepPresentation = { actionLabel: string; detail: string }
+
+function getNextStepPresentation(nextStep: ZoltarNextStep): NextStepPresentation {
+	switch (nextStep.kind) {
+		case 'retry-universe':
+			return { actionLabel: commonCopy.retry, detail: zoltarCopy.universeUnavailableDetail }
+		case 'go-to-genesis':
+			return { actionLabel: commonCopy.goToGenesisUniverse, detail: zoltarCopy.goToGenesisDetail }
+		case 'connect-wallet':
+			return { actionLabel: commonCopy.connectWallet, detail: zoltarCopy.connectWalletDetail }
+		case 'switch-network':
+			return { actionLabel: zoltarCopy.switchNetworkAction, detail: zoltarCopy.switchNetworkDetail }
+		case 'migrate-rep':
+			return { actionLabel: zoltarCopy.migrateRep, detail: zoltarCopy.migrateRepDetail }
+		case 'open-child-universe':
+			return { actionLabel: zoltarCopy.browseUniversesAction, detail: zoltarCopy.openChildUniverseDetail }
+		case 'browse-questions':
+			return { actionLabel: zoltarCopy.browseQuestionsAction, detail: zoltarCopy.browseQuestionsDetail }
+		default:
+			return assertNever(nextStep)
+	}
+}
+
+type ZoltarOverviewViewProps = {
+	currentTimestamp?: bigint | undefined
+	isConnectingWallet: boolean
+	loadingRepBalance: boolean
+	model: ZoltarOverviewModel
+	onConnectWallet: () => void
+	onGoToGenesisUniverse: () => void
+	onRetryUniverse: () => void
+	onSwitchNetwork: () => void
+	onViewChange: (view: ZoltarView) => void
+}
+
+function NextStepAction({ isConnectingWallet, needsAttention, nextStep, onConnectWallet, onGoToGenesisUniverse, onRetryUniverse, onSwitchNetwork, onViewChange }: Omit<ZoltarOverviewViewProps, 'loadingRepBalance' | 'model'> & { needsAttention: boolean; nextStep: ZoltarNextStep }) {
+	const presentation = getNextStepPresentation(nextStep)
+	const onClick = () => {
+		if (nextStep.kind === 'go-to-genesis') onGoToGenesisUniverse()
+		else if (nextStep.kind === 'retry-universe') onRetryUniverse()
+		else if (nextStep.kind === 'connect-wallet') onConnectWallet()
+		else if (nextStep.kind === 'switch-network') onSwitchNetwork()
+		else onViewChange(nextStep.view)
+	}
+	return (
+		<div className={`zoltar-next-step ${needsAttention ? 'needs-attention' : ''}`.trim()}>
+			<p className='zoltar-next-step-reason'>{presentation.detail}</p>
+			<button className='primary' type='button' disabled={nextStep.kind === 'connect-wallet' && isConnectingWallet} onClick={onClick}>
+				{presentation.actionLabel}
+			</button>
+		</div>
+	)
+}
+
+function renderRepBalance(model: ZoltarOverviewModel, loadingRepBalance: boolean) {
+	if (model.wallet !== 'connected') return zoltarCopy.connectToSeeRep
+	// A balance that is absent after its read finished could not be read; it must not look like it is still loading.
+	if (model.repBalanceAttoRep === undefined && !loadingRepBalance) return commonCopy.unavailable
+	return <CurrencyValue value={model.repBalanceAttoRep} loading={model.repBalanceAttoRep === undefined} suffix={commonCopy.rep} />
+}
+
+// The amount to migrate depends on the destinations chosen on the Migrate route, so the Overview reports only whether migration is open.
+function renderMigrationStatus(model: ZoltarOverviewModel) {
+	return model.status === 'forked' ? zoltarCopy.migrationNoDeadline : zoltarCopy.migrationAfterFork
+}
+
+/** The Overview route body: the protocol model in three sentences, the user's status, and one next step. */
+function ZoltarOverviewView({ currentTimestamp, loadingRepBalance, model, ...actions }: ZoltarOverviewViewProps) {
+	return (
+		<>
+			<RouteHeader title={zoltarCopy.overview} />
+			<SectionBlock title={zoltarCopy.yourStatus} variant='plain'>
+				{model.status === 'loading' ? (
+					<StateHint presentation={{ key: 'loading', badgeLabel: commonCopy.loading, badgeTone: 'loading', detail: commonCopy.loadingUniverseDetails, detailIsLoading: true }} />
+				) : (
+					<MetricGrid variant='summary'>
+						<MetricField label={commonCopy.universe}>
+							<span className='zoltar-overview-universe'>
+								{model.universeLabel}{' '}
+								{model.status === 'missing' || model.status === 'unavailable' ? (
+									<Badge tone='danger'>{model.status === 'missing' ? commonCopy.notFound : commonCopy.unavailable}</Badge>
+								) : (
+									<Badge tone={model.status === 'forked' ? 'warning' : 'ok'}>{model.status === 'forked' ? commonCopy.forked : commonCopy.operational}</Badge>
+								)}
+							</span>
+						</MetricField>
+						{/* A universe that does not exist or could not be read has no fork, REP, or migration to report. */}
+						{model.status === 'missing' || model.status === 'unavailable' ? undefined : (
+							<>
+								<MetricField label={zoltarCopy.forkStatus}>{model.forkTime === undefined ? zoltarCopy.notForked : <TimestampValue timestamp={model.forkTime} {...(currentTimestamp === undefined ? {} : { currentTimestamp })} />}</MetricField>
+								<MetricField label={zoltarCopy.universeRep}>{renderRepBalance(model, loadingRepBalance)}</MetricField>
+								<MetricField label={zoltarCopy.migrationStatus}>{renderMigrationStatus(model)}</MetricField>
+							</>
+						)}
+					</MetricGrid>
+				)}
+			</SectionBlock>
+			{model.nextStep === undefined ? undefined : (
+				<SectionBlock title={zoltarCopy.nextStep} variant='plain'>
+					<NextStepAction {...actions} needsAttention={model.needsAttention} nextStep={model.nextStep} />
+				</SectionBlock>
+			)}
+			<SectionBlock title={zoltarCopy.howZoltarWorks} variant='plain'>
+				<ol className='zoltar-model-steps'>
+					<li>{zoltarCopy.modelQuestions}</li>
+					<li>{zoltarCopy.modelFork}</li>
+					<li>{zoltarCopy.modelMigrate}</li>
+				</ol>
+			</SectionBlock>
+		</>
+	)
+}
+
+/** Default Zoltar landing: reads the selected universe and wallet from the workspace and derives the overview model. */
+export function ZoltarOverviewRoute() {
+	const { accountState, activeUniverseId, currentTimestamp, isConnectingWallet, onConnectWallet, onGoToGenesisUniverse, onRetryUniverse, onSwitchNetwork, onViewChange, operations, universeError, universeState } = useZoltarWorkspace()
+	const model = deriveZoltarOverviewModel({
+		account: {
+			address: accountState.address,
+			isOnActiveChain: isActiveAppChain(accountState.chainId),
+			preparedMigrationRepAttoRep: operations.zoltarMigrationPreparedRepBalanceAttoRep,
+			repBalanceAttoRep: operations.zoltarForkRepBalanceAttoRep,
+		},
+		activeUniverseId,
+		universe: operations.zoltarUniverse,
+		universeError,
+		universeState,
+	})
+	return (
+		<ZoltarOverviewView
+			currentTimestamp={currentTimestamp}
+			isConnectingWallet={isConnectingWallet}
+			loadingRepBalance={operations.loadingZoltarForkAccess}
+			model={model}
+			onConnectWallet={onConnectWallet}
+			onGoToGenesisUniverse={onGoToGenesisUniverse}
+			onRetryUniverse={onRetryUniverse}
+			onSwitchNetwork={onSwitchNetwork}
+			onViewChange={onViewChange}
+		/>
+	)
+}

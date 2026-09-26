@@ -663,6 +663,11 @@
 		flex-direction: column;
 	}
 
+	/* The desktop row centers items vertically; in a column that would center a short title horizontally. */
+	.route-header-main {
+		align-items: stretch;
+	}
+
 	.route-subtab-nav {
 		justify-content: flex-start;
 		flex-wrap: nowrap;

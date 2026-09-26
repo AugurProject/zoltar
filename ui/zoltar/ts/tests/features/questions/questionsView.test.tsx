@@ -71,7 +71,7 @@ describe('QuestionsView', () => {
 			fireEvent.click(documentQueries.getByRole('button', { name: 'Use for fork' }))
 		})
 		expect(selectedQuestionIds).toEqual([question.questionId])
-		expect(activeViews).toEqual(['universes'])
+		expect(activeViews).toEqual(['fork'])
 		expect(loadPage).toHaveBeenCalledWith(0, 10)
 	})
 

@@ -392,3 +392,42 @@
 		grid-template-columns: minmax(0, 1fr);
 	}
 }
+
+/* Overview next step: one action beside its reason; migration that needs attention carries a warning edge. */
+.zoltar-next-step {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	justify-content: space-between;
+	gap: var(--space-3);
+	padding: var(--space-3) var(--space-4);
+	border: 1px solid var(--border-default);
+	border-left: 3px solid var(--accent);
+	border-radius: var(--radius-record);
+	background: var(--surface-record);
+}
+
+.zoltar-next-step.needs-attention {
+	border-left-color: var(--warning);
+}
+
+.zoltar-next-step-reason {
+	min-width: 0;
+	margin: 0;
+}
+
+.zoltar-overview-universe {
+	display: inline-flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: var(--space-2);
+	overflow-wrap: anywhere;
+}
+
+.zoltar-model-steps {
+	display: grid;
+	gap: var(--space-2);
+	margin: 0;
+	padding-left: 1.25rem;
+	color: var(--text-secondary);
+}

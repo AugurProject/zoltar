@@ -5,7 +5,7 @@ import { CurrencyValue } from '@zoltar/ui-core-shared/components/CurrencyValue.j
 import { OutcomeSelectionList } from '@zoltar/ui-core-shared/components/OutcomeSelectionList.js'
 import { WorkflowSubsection } from '@zoltar/ui-core-shared/components/WorkflowSubsection.js'
 import { TransactionActionButton } from '@zoltar/ui-core-shared/components/TransactionActionButton.js'
-import { UniverseLink } from './UniverseLink.js'
+import { UniverseLink } from '@zoltar/ui-core-shared/components/UniverseLink.js'
 import { formatUniverseIdHex } from '@zoltar/ui-core-shared/lib/universeLabels.js'
 import type { ZoltarChildUniverseSummary } from '@zoltar/ui-core-shared/types/contracts.js'
 

@@ -1,9 +1,7 @@
-import { buildRouteHref, getCurrentRouteHash, getRouteHashSearch } from '@zoltar/ui-core-shared/navigation/routing.js'
-import { readUniverseQueryParam, writeUniverseQueryParam } from '@zoltar/ui-core-shared/navigation/urlParams.js'
-import { getGenesisReputationTokenAddress } from '../../../protocol/activeProtocolAddresses.js'
+import { buildRouteHref, getCurrentRouteHash, getRouteHashSearch } from './routing.js'
+import { readUniverseQueryParam, writeUniverseQueryParam } from './urlParams.js'
 
-export { getGenesisReputationTokenAddress }
-
+/** The current route with only the shared `universe` query parameter changed. */
 export function getUniverseLinkHref(universeId: bigint) {
 	const nextSearch = writeUniverseQueryParam(getRouteHashSearch(), universeId)
 	return buildRouteHref(getCurrentRouteHash(), nextSearch)
