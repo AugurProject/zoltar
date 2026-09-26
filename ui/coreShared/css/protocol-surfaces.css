@@ -1609,19 +1609,6 @@ main:has(.global-transaction-dialog-nonblocking) #app-content {
 	min-width: 0;
 }
 
-.approval-status {
-	display: inline-flex;
-	align-items: center;
-	gap: var(--space-2);
-	min-height: var(--touch-target-min);
-	margin: 0;
-	color: var(--success);
-	font-family: var(--font-family-mono);
-	font-size: var(--font-label);
-	letter-spacing: 0.08em;
-	text-transform: uppercase;
-}
-
 .approval-advanced {
 	grid-column: 1 / -1;
 	min-width: 0;

@@ -1,5 +1,6 @@
 import type { ComponentChildren } from 'preact'
 import * as commonCopy from '../copy/common.js'
+import * as stepsCopy from '../copy/transactionSteps.js'
 import { useEffect, useId, useMemo, useState } from 'preact/hooks'
 import { ErrorNotice } from './ErrorNotice.js'
 import { FormInput } from './FormInput.js'
@@ -105,6 +106,8 @@ export function TokenApprovalControl({
 	const controlsDisabled = pending || disabled || completedLabel !== undefined
 	// A guard (for example a missing amount) means the requirement is not known yet, so it cannot read as approved.
 	const approved = completedLabel === undefined && !pending && !allowanceLoading && allowanceMessage === undefined && guardMessage === undefined && requiredAmount !== undefined && requirement.hasSufficientApproval && parsedAmount.kind === 'default'
+	// An allowance that already covers the requirement reads like a finished review step: the button stays in place, disabled and labelled.
+	const doneLabel = completedLabel ?? (approved ? stepsCopy.formatStepCompleted(stepsCopy.formatTokenApproved(tokenSymbol)) : undefined)
 	const canApprove =
 		!controlsDisabled &&
 		guardMessage === undefined &&
@@ -116,7 +119,7 @@ export function TokenApprovalControl({
 		nextApprovalAmount !== undefined &&
 		(parsedAmount.kind !== 'default' || !requirement.hasSufficientApproval)
 	const buttonLabel =
-		completedLabel ??
+		doneLabel ??
 		resolveApprovalButtonLabel({
 			guardMessage,
 			isMaxAmount: unlimited,
@@ -131,25 +134,21 @@ export function TokenApprovalControl({
 		if (amountValidationMessage !== undefined) return amountValidationMessageId
 		return guardMessageElementId
 	})()
-	const approvalButton = approved ? (
-		<p className='approval-status' role='status'>
-			<span aria-hidden='true'>✓</span> {commonCopy.formatTokenApprovedStatus(tokenSymbol)}
-		</p>
-	) : (
+	const approvalButton = (
 		<TransactionActionButton
-			className={completedLabel === undefined ? '' : 'tx-action-completed'}
+			className={doneLabel === undefined ? '' : 'tx-action-completed'}
 			idleLabel={buttonLabel}
 			inlineHint={allowanceMessage === undefined && amountValidationMessage === undefined && canApprove ? visibleStatusMessage : undefined}
 			pendingLabel={pendingLabel}
 			onClick={() => onApprove(nextApprovalAmount)}
 			pending={pending}
 			tone='secondary'
-			availability={{ disabled: !canApprove, reason: completedLabel ?? allowanceMessage ?? visibleStatusMessage ?? guardMessage }}
+			availability={{ disabled: !canApprove, reason: doneLabel ?? allowanceMessage ?? visibleStatusMessage ?? guardMessage }}
 			disabledReasonElementId={disabledReasonElementId}
-			showDisabledReason={completedLabel === undefined && allowanceMessage === undefined && amountValidationMessage === undefined && (guardMessage === undefined || guardMessageElementId === undefined)}
+			showDisabledReason={doneLabel === undefined && allowanceMessage === undefined && amountValidationMessage === undefined && (guardMessage === undefined || guardMessageElementId === undefined)}
 		/>
 	)
-	const showAdvanced = completedLabel === undefined && requiredAmount !== undefined && requiredAmount > 0n && !approved
+	const showAdvanced = doneLabel === undefined && requiredAmount !== undefined && requiredAmount > 0n
 	const advancedAmountValue = unlimited ? '' : draftAmount
 	let customAmountPlaceholder: string | undefined = compact ? commonCopy.requiredTotalPlaceholder : commonCopy.leaveBlankForRequiredTotal
 	if (unlimited) customAmountPlaceholder = undefined

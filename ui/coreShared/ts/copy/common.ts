@@ -121,7 +121,6 @@ export const formatApproveValue = (tokenLabel: CopyTemplateValue) => `Approve ${
 export const formatApprovingToken = (tokenLabel: CopyTemplateValue) => `Approving ${tokenLabel}…`
 export const formatApproveMaxValue = (tokenLabel: CopyTemplateValue) => `Approve unlimited ${tokenLabel}`
 export const formatApproveTokenAmount = (amountLabel: CopyTemplateValue, tokenSymbol: CopyTemplateValue) => `Approve ${amountLabel}\u00a0${tokenSymbol}`
-export const formatTokenApprovedStatus = (tokenLabel: CopyTemplateValue) => `${tokenLabel} approved`
 export const advancedApproval = 'Advanced'
 export const customApprovalAmount = 'Custom approval amount'
 export const formatUnlimitedApprovalWarning = (tokenLabel: CopyTemplateValue) => `Unlimited approval lets this contract spend all of your ${tokenLabel}, now and later, until you revoke it.`

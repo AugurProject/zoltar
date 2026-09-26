@@ -268,8 +268,10 @@ describe('TokenApprovalControl', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		expect(documentQueries.getByRole('status').textContent).toBe('✓ REP approved')
-		expect(documentQueries.queryByRole('button')).toBeNull()
+		const approved = documentQueries.getByRole('button', { name: 'REP approved ✓' })
+		expect(approved.hasAttribute('disabled')).toBe(true)
+		expect(approved.closest('.tx-action-completed')).not.toBeNull()
+		expect(document.body.querySelector('.approval-status')).toBeNull()
 		expect(documentQueries.queryByText('Advanced')).toBeNull()
 	})
 
