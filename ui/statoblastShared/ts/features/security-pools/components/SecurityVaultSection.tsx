@@ -102,6 +102,7 @@ export function SecurityVaultSection({
 }: SecurityVaultSectionProps) {
 	const currentTimestamp = useChainTimestamp()
 	const [vaultActionModal, setVaultActionModal] = useState<VaultActionModal | undefined>(undefined)
+	const [backingFactorErrorRevealed, setBackingFactorErrorRevealed] = useState(false)
 	const closeVaultActionModal = () => setVaultActionModal(undefined)
 	const refreshVaultActionsDescriptionId = useId()
 	const vaultLifecycleBlockerId = useId()
@@ -197,7 +198,8 @@ export function SecurityVaultSection({
 		walletRepShortfallAttoRep: hasInsufficientRepBalance ? walletRepShortfallAttoRep : undefined,
 	})
 	const targetHealthFactorGuardMessage = hasPositiveDepositAmount ? getTargetHealthFactorGuardMessage(depositTargetHealthFactor, selectedPoolStatoblastSecurityMultiplierBps) : undefined
-	const depositActionGuardMessage = targetHealthFactorGuardMessage === undefined ? (depositGuardMessage ?? (!hasPositiveDepositAmount ? commonCopy.positiveAmountRequired : undefined)) : undefined
+	// Once the ratio field shows its error the action group stays quiet; until then the group carries the reason.
+	const depositActionGuardMessage = targetHealthFactorGuardMessage !== undefined && backingFactorErrorRevealed ? undefined : (targetHealthFactorGuardMessage ?? depositGuardMessage ?? (!hasPositiveDepositAmount ? commonCopy.positiveAmountRequired : undefined))
 	const depositAmountNotice = getVaultDepositAmountNotice({ depositAmount, isDepositBelowMinimum, minimumVaultRepDepositAttoRep, walletRepShortfallAttoRep })
 	const withdrawRepFunding = resolveOracleOperationEthFunding({
 		managerDetails: oracleManagerDetails,
@@ -323,7 +325,17 @@ export function SecurityVaultSection({
 		/>
 	)
 	const savedBackingFactor = !!currentSelectedVaultDetails?.targetBackingFactorBps
-	const depositBackingFactorField = <DepositBackingFactorField minimumBps={minimumBps} value={depositTargetHealthFactor} error={targetHealthFactorGuardMessage} disabled={!depositRepToVaultEnabled} onChange={targetHealthFactor => onSecurityVaultFormChange({ targetHealthFactor })} />
+	const depositBackingFactorField = (
+		<DepositBackingFactorField
+			minimumBps={minimumBps}
+			value={depositTargetHealthFactor}
+			error={targetHealthFactorGuardMessage}
+			errorRevealed={backingFactorErrorRevealed}
+			onErrorRevealedChange={setBackingFactorErrorRevealed}
+			disabled={!depositRepToVaultEnabled}
+			onChange={targetHealthFactor => onSecurityVaultFormChange({ targetHealthFactor })}
+		/>
+	)
 	const savedBackingFactorMetric = <MetricField label={securityPoolCopy.vaultBackingFactor}>{depositTargetHealthFactor}×</MetricField>
 	const depositApprovalControlProps = {
 		approveRepEnabled,

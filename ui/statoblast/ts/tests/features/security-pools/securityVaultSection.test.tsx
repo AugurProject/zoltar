@@ -988,12 +988,16 @@ describe('SecurityVaultSection', () => {
 			// The embedded layout also renders the whole-vault adjustment field with the same label.
 			const factorInputs = scope.getAllByRole('textbox', { name: 'Target backing ratio' })
 			expect(factorInputs.every(input => input.getAttribute('aria-invalid') === null)).toBe(true)
+			// Until the ratio field shows its error, the deposit action explains why it is unavailable.
+			expect(scope.getAllByText('Target backing ratio must be a number with at most four decimal places')).toHaveLength(1)
 			await act(() => {
 				for (const input of factorInputs) input.dispatchEvent(new Event('blur'))
 			})
 			const factorInput = factorInputs.find(input => input.getAttribute('aria-invalid') === 'true')
 			if (factorInput === undefined) throw new Error('Expected the deposit backing factor input to be invalid')
+			expect(scope.getAllByText('Target backing ratio must be a number with at most four decimal places')).toHaveLength(1)
 			const factorError = scope.getByText('Target backing ratio must be a number with at most four decimal places')
+			expect(factorError.classList.contains('field-error')).toBe(true)
 			expect(factorInput.getAttribute('aria-invalid')).toBe('true')
 			expect(factorInput.getAttribute('aria-describedby')?.split(' ')[0]).toBe(factorError.id)
 			renderedComponent.cleanup()

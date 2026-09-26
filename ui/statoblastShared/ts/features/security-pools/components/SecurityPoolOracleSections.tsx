@@ -90,9 +90,10 @@ export function SecurityPoolRequestPriceModal({ canRequest, closeOnSuccessKey, c
 					errorId={manualPriceErrorId}
 					errorRevealed={manualPriceErrorRevealed}
 					hint={securityPoolCopy.manualInitialPriceHint}
-					label={securityPoolCopy.manualRepPerEth}
+					label={securityPoolCopy.manualStartingPrice}
 					onChange={setManualPrice}
 					onErrorRevealedChange={setManualPriceErrorRevealed}
+					unit={commonCopy.repPerEth}
 					value={manualPrice}
 				/>
 			) : undefined}

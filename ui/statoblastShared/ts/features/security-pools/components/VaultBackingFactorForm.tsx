@@ -90,12 +90,30 @@ export function VaultBackingFactorForm({
 	)
 }
 
-export function DepositBackingFactorField({ value, error, disabled, minimumBps, onChange }: { value: string; minimumBps?: bigint | undefined; error: string | undefined; disabled: boolean; onChange: (value: string) => void }) {
+export function DepositBackingFactorField({
+	value,
+	error,
+	errorRevealed,
+	disabled,
+	minimumBps,
+	onChange,
+	onErrorRevealedChange,
+}: {
+	value: string
+	minimumBps?: bigint | undefined
+	error: string | undefined
+	errorRevealed: boolean
+	disabled: boolean
+	onChange: (value: string) => void
+	onErrorRevealedChange: (revealed: boolean) => void
+}) {
 	return (
 		<AmountField
 			decimals={4}
 			disabled={disabled}
 			error={error}
+			errorRevealed={errorRevealed}
+			onErrorRevealedChange={onErrorRevealedChange}
 			hint={securityPoolCopy.formatTargetHealthFactorHint(minimumBps === undefined ? commonCopy.metricUnavailablePlaceholder : `${formatCurrencyInputBalance(minimumBps, 4)}${commonCopy.multiplierUnit}`)}
 			label={securityPoolCopy.targetHealthFactor}
 			onChange={onChange}

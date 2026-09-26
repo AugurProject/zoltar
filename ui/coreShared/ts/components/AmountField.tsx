@@ -49,7 +49,11 @@ export function AmountField({ allowZero = false, balance, balanceLabel = commonC
 		onErrorRevealedChange?.(nextRevealed)
 	}
 	const limits = { allowZero, balance, decimals, maximum, minimum, unit }
-	const validationError = error ?? getAmountInputErrorMessage(validateAmountInput(value, limits), limits)
+	const validation = validateAmountInput(value, limits)
+	const validationError = error ?? getAmountInputErrorMessage(validation, limits)
+	const visibleError = revealed ? validationError : undefined
+	// The exceeds-balance error already states the balance, so the hint would repeat it.
+	const showsBalanceError = visibleError !== undefined && error === undefined && validation.status === 'invalid' && validation.problem === 'exceedsBalance'
 	const fillAmount = (amount: bigint) => {
 		onChange(formatCurrencyInputBalance(amount, decimals))
 		setRevealed(true)
@@ -62,7 +66,9 @@ export function AmountField({ allowZero = false, balance, balanceLabel = commonC
 				{commonCopy.max}
 			</button>
 		)
-	const balanceHint = balance === undefined ? undefined : commonCopy.formatAmountHint(balanceLabel, formatAmountForDisplay(balance, decimals, unit))
+	const balanceHint = balance === undefined || showsBalanceError ? undefined : commonCopy.formatAmountHint(balanceLabel, formatAmountForDisplay(balance, decimals, unit))
+	// A lone symbol such as × reads as a speck at label size, so it renders at body size.
+	const adornment = unit !== undefined && [...unit].length === 1 ? <span className='form-input-adornment-symbol'>{unit}</span> : unit
 	return (
 		<div className='field amount-field'>
 			<label htmlFor={inputId}>
@@ -70,10 +76,10 @@ export function AmountField({ allowZero = false, balance, balanceLabel = commonC
 			</label>
 			<FormInput
 				action={maxButton}
-				adornment={unit}
+				adornment={adornment}
 				autoComplete='off'
 				disabled={disabled}
-				error={revealed ? validationError : undefined}
+				error={visibleError}
 				errorId={errorId}
 				hint={hint ?? balanceHint}
 				id={inputId}

@@ -1590,6 +1590,12 @@ main:has(.global-transaction-dialog-nonblocking) #app-content {
 	white-space: nowrap;
 }
 
+.form-input-adornment .form-input-adornment-symbol {
+	color: var(--text);
+	font-size: var(--font-body);
+	letter-spacing: 0;
+}
+
 .field-inline > .form-input-adorned,
 .field-inline > .form-input {
 	flex: 1 1 auto;

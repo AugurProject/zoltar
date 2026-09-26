@@ -82,6 +82,7 @@ describe('AmountField', () => {
 		expect(input.getAttribute('aria-describedby')?.split(' ')[0]).toBe(error.id)
 		expect(document.body.querySelector('[role="alert"]')).toBeNull()
 		expect(input.closest('.form-input-adorned')?.classList.contains('is-invalid')).toBe(true)
+		expect(renderedComponent.container.querySelector('.field-hint')).toBeNull()
 
 		await typeValue(input, '1')
 		expect(renderedComponent.container.querySelector('.field-error')).toBeNull()

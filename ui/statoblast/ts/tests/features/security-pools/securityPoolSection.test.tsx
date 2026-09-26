@@ -304,7 +304,7 @@ describe('SecurityPoolSection', () => {
 
 		const documentQueries = within(document.body)
 		const statoblastSecurityMultiplierBpsInput = documentQueries.getByRole('textbox', { name: 'Statoblast Security Multiplier' })
-		expect((statoblastSecurityMultiplierBpsInput.getAttribute('aria-describedby') ?? '').split(' ').map(id => document.getElementById(id)?.textContent)).toEqual(['Multiplier target in x, with up to four decimal places; higher values require more REP.', '×'])
+		expect((statoblastSecurityMultiplierBpsInput.getAttribute('aria-describedby') ?? '').split(' ').map(id => document.getElementById(id)?.textContent)).toEqual(['Up to four decimal places; higher values require more REP.', '×'])
 		expect((statoblastSecurityMultiplierBpsInput as HTMLInputElement).inputMode).toBe('decimal')
 		const priorityFeeInput = documentQueries.getByRole('textbox', { name: 'Initial report priority fee' })
 		expect((priorityFeeInput.getAttribute('aria-describedby') ?? '').split(' ').map(id => document.getElementById(id)?.textContent)).toEqual(['Fixed gas-price premium added to Open Oracle report security.', 'ETH'])
