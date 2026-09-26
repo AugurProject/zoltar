@@ -11,7 +11,7 @@ import { ProgressMeter } from '@zoltar/ui-core-shared/components/ProgressMeter.j
 import { openInterestFeePerYearBigint } from '../lib/retentionRate.js'
 import { calculateMintingCapacityAttoEth, formatStatoblastSecurityMultiplier } from '../../markets/lib/trading.js'
 import { getToneRatioThreshold, getVisualRatio } from '@zoltar/ui-core-shared/lib/visualMetrics.js'
-import { formatCurrencyBalanceWithUnit, formatMultiplier } from '@zoltar/ui-core-shared/lib/formatters.js'
+import { formatCurrencyBalanceWithUnit } from '@zoltar/ui-core-shared/lib/formatters.js'
 import type { MetricGridVariant } from '../../types.js'
 import type { ListedSecurityPool } from '@zoltar/ui-core-shared/types/contracts.js'
 
@@ -31,6 +31,12 @@ type SecurityPoolSummaryMetricsProps = {
 	variant?: 'embedded' | 'hero'
 }
 
+function formatRepPerCapacityBps(value: bigint) {
+	const whole = value / 10_000n
+	const fraction = (value % 10_000n).toString().padStart(4, '0').replace(/0+$/, '')
+	return `${whole.toString()}${fraction === '' ? '' : `.${fraction}`} REP/ETH`
+}
+
 export function SecurityPoolSummaryMetrics({
 	calculationPriceConfigured = false,
 	calculationRepPerEthPrice,
@@ -45,8 +51,8 @@ export function SecurityPoolSummaryMetrics({
 	showTotalBacking = false,
 	variant = 'embedded',
 }: SecurityPoolSummaryMetricsProps) {
-	const mintingCapacityAttoEth = calculateMintingCapacityAttoEth(pool.totalCapacityOwnershipAttoRep, calculationPriceConfigured ? calculationRepPerEthPrice : pool.lastOraclePrice, pool.statoblastSecurityMultiplierBps)
-	const resolvedPoolHeldRepPerCapacityBps = pool.totalCapacityOwnershipAttoRep === 0n ? undefined : (pool.totalPoolHeldAttoRep * 10_000n) / pool.totalCapacityOwnershipAttoRep
+	const mintingCapacityAttoEth = calculateMintingCapacityAttoEth(pool.totalUnderwritingLimitAttoEth, calculationPriceConfigured ? calculationRepPerEthPrice : pool.lastOraclePrice, pool.statoblastSecurityMultiplierBps)
+	const resolvedPoolHeldRepPerCapacityBps = pool.totalUnderwritingLimitAttoEth === 0n ? undefined : (pool.totalPoolHeldAttoRep * 10_000n) / pool.totalUnderwritingLimitAttoEth
 	if (variant === 'embedded')
 		return (
 			<MetricGrid className={className} variant={metricVariant}>
@@ -61,7 +67,7 @@ export function SecurityPoolSummaryMetrics({
 						<CurrencyValue exactWhenRoundedToZero value={pool.totalPoolHeldAttoRep} suffix={commonCopy.rep} />
 					</MetricField>
 				) : undefined}
-				{resolvedPoolHeldRepPerCapacityBps === undefined ? undefined : <MetricField label={securityPoolCopy.poolHeldRepPerCapacity}>{formatMultiplier(resolvedPoolHeldRepPerCapacityBps, 4)}</MetricField>}
+				{resolvedPoolHeldRepPerCapacityBps === undefined ? undefined : <MetricField label={securityPoolCopy.poolHeldRepPerCapacity}>{formatRepPerCapacityBps(resolvedPoolHeldRepPerCapacityBps)}</MetricField>}
 				{omitHeadlineMetrics || omitCapacity ? undefined : (
 					<MetricField label={poolWorkspaceCopy.capacityLabel} valueClassName='pool-capacity-values'>
 						<CurrencyValue exactWhenRoundedToZero value={pool.settlementCollateralAttoEth} suffix={commonCopy.eth} /> <span>/</span> {mintingCapacityAttoEth === undefined ? commonCopy.unavailable : <CurrencyValue exactWhenRoundedToZero value={mintingCapacityAttoEth} suffix={commonCopy.eth} />}

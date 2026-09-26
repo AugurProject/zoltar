@@ -15,16 +15,16 @@ type SecurityPoolMintCapacity = {
 	feeIndexRemainder?: bigint
 	lastUpdatedFeeAccumulator?: bigint
 	settlementCollateralAttoEth: bigint
-	feeEligibleCapacityOwnershipAttoRep: bigint
+	feeEligibleUnderwritingLimitAttoEth: bigint
 	mintingCapacityAttoEth: bigint
 	shareTokenSupplyAttoShares: bigint
 	totalPoolHeldAttoRep: bigint
-	totalCapacityOwnershipAttoRep: bigint
+	totalUnderwritingLimitAttoEth: bigint
 	isPriceValid: boolean
 	totalFeesOwedRemainder?: bigint
 }
 export async function loadSecurityPoolMintCapacity(client: Pick<ReadClient, 'getBlock' | 'multicall'>, securityPoolAddress: Address): Promise<SecurityPoolMintCapacity> {
-	const [poolAccountingSnapshot, shareTokenSupplyAttoShares, totalPoolHeldAttoRep, mintingCapacityAttoEth, priceOracleManagerAndOperatorQueuer, currentRetentionRate, feeEndTimestamp] = await readRequiredMulticall(client, [
+	const [poolAccountingSnapshot, shareTokenSupplyAttoShares, totalPoolHeldAttoRep, mintingCapacityAttoEth, priceOracleManagerAndOperatorQueuer, currentRetentionRate, feeEndTimestamp, certifiedLimit, escalationGame] = await readRequiredMulticall(client, [
 		{
 			abi: statoblast_SecurityPool_SecurityPool.abi,
 			functionName: 'getPoolAccountingSnapshot',
@@ -67,6 +67,8 @@ export async function loadSecurityPoolMintCapacity(client: Pick<ReadClient, 'get
 			address: securityPoolAddress,
 			args: [],
 		},
+		{ abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'getCertifiedUnderwritingLimitAttoEth', address: securityPoolAddress, args: [] },
+		{ abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'escalationGame', address: securityPoolAddress, args: [] },
 	])
 	const [priceValidity, currentBlock] = await Promise.all([readRequiredMulticall(client, [{ abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi, functionName: 'isPriceValid', address: priceOracleManagerAndOperatorQueuer, args: [] }]), client.getBlock()])
 	const [isPriceValid] = priceValidity
@@ -77,11 +79,11 @@ export async function loadSecurityPoolMintCapacity(client: Pick<ReadClient, 'get
 		feeIndexRemainder: poolAccountingSnapshot.feeIndexRemainder,
 		lastUpdatedFeeAccumulator: poolAccountingSnapshot.lastUpdatedFeeAccumulator,
 		settlementCollateralAttoEth: poolAccountingSnapshot.settlementCollateralAttoEth,
-		feeEligibleCapacityOwnershipAttoRep: poolAccountingSnapshot.feeEligibleCapacityOwnershipAttoRep,
-		mintingCapacityAttoEth,
+		feeEligibleUnderwritingLimitAttoEth: poolAccountingSnapshot.feeEligibleUnderwritingLimitAttoEth,
+		mintingCapacityAttoEth: certifiedLimit === poolAccountingSnapshot.totalUnderwritingLimitAttoEth && BigInt(escalationGame) === 0n ? mintingCapacityAttoEth : 0n,
 		shareTokenSupplyAttoShares,
 		totalPoolHeldAttoRep,
-		totalCapacityOwnershipAttoRep: poolAccountingSnapshot.totalCapacityOwnershipAttoRep,
+		totalUnderwritingLimitAttoEth: poolAccountingSnapshot.totalUnderwritingLimitAttoEth,
 		isPriceValid,
 		totalFeesOwedRemainder: poolAccountingSnapshot.totalFeesOwedRemainder,
 	}
@@ -185,6 +187,13 @@ export async function migrateSharesFromUniverse<TReceipt extends Pick<Transactio
 	} satisfies TradingActionResult
 }
 export async function createCompleteSetInSecurityPool(client: WriteClient, securityPoolAddress: Address, amount: bigint) {
+	const [certified, total, game] = await Promise.all([
+		client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: securityPoolAddress, functionName: 'getCertifiedUnderwritingLimitAttoEth' }),
+		client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: securityPoolAddress, functionName: 'totalUnderwritingLimitAttoEth' }),
+		client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: securityPoolAddress, functionName: 'escalationGame' }),
+	])
+	if (BigInt(game) !== 0n) throw new Error('Minting closed after escalation starts.')
+	if (certified !== total) throw new Error('Confirm backing for every commitment before minting.')
 	const universeId = await readSecurityPoolUniverseId(client, securityPoolAddress)
 	const callParams = {
 		address: securityPoolAddress,

@@ -17,11 +17,11 @@ import { installTestRouting } from '../testUtils/testRouting.js'
 const SIMULATION_REP_MINT_AMOUNT = 1_000_000n * 10n ** 18n
 
 registerSimulationScenario('security-pool', {
-	description: 'One seeded question, one security pool, and one funded vault with an active capacity ownership. Use it to test pool actions and liquidation paths.',
+	description: 'One seeded question, one security pool, and one funded vault with an active underwriting commitments. Use it to test pool actions and liquidation paths.',
 	label: 'Security pool',
 })
 registerSimulationScenario('securitypoolx2', {
-	description: 'Two security pools sharing a vault with capacity ownership split between them. Use it to test cross-pool liquidation and settlement paths.',
+	description: 'Two security pools sharing a vault with underwriting commitments split between them. Use it to test cross-pool liquidation and settlement paths.',
 	label: 'Security Pool x2',
 })
 registerSimulationScenario('securitypoolx2-auction', {
@@ -121,7 +121,7 @@ describe('SimulationBanner', () => {
 			const documentQueries = within(renderedComponent.container)
 			expect(documentQueries.getByRole('heading', { name: 'Browser Simulation' })).not.toBeNull()
 			expect(documentQueries.queryByText('Simulation Mode')).toBeNull()
-			expect(documentQueries.getByText('One seeded question, one security pool, and one funded vault with an active capacity ownership. Use it to test pool actions and liquidation paths.')).not.toBeNull()
+			expect(documentQueries.getByText('One seeded question, one security pool, and one funded vault with an active underwriting commitments. Use it to test pool actions and liquidation paths.')).not.toBeNull()
 		} finally {
 			await renderedComponent.cleanup()
 			domEnvironment.cleanup()
@@ -272,7 +272,7 @@ describe('SimulationBanner', () => {
 
 		try {
 			const documentQueries = within(renderedComponent.container)
-			expect(documentQueries.getByText('One seeded question, one security pool, and one funded vault with an active capacity ownership. Use it to test pool actions and liquidation paths.')).not.toBeNull()
+			expect(documentQueries.getByText('One seeded question, one security pool, and one funded vault with an active underwriting commitments. Use it to test pool actions and liquidation paths.')).not.toBeNull()
 			expect(documentQueries.getByText('Deploying seeded security pool')).not.toBeNull()
 		} finally {
 			await renderedComponent.cleanup()

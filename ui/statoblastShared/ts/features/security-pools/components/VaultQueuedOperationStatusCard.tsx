@@ -17,9 +17,9 @@ type QueuedVaultOperationView = {
 }
 
 function getQueuedVaultOperation({ oracleManagerDetails, selectedVaultOwner, securityVaultResult }: { oracleManagerDetails: SecurityVaultSectionProps['oracleManagerDetails']; selectedVaultOwner: string; securityVaultResult: SecurityVaultSectionProps['securityVaultResult'] }) {
-	let operation: 'withdrawRep' | 'adjustVaultBackingFactor' | undefined
+	let operation: 'withdrawRep' | 'setVaultUnderwritingLimit' | undefined
 	if (securityVaultResult?.action === 'queueWithdrawRep') operation = 'withdrawRep'
-	if (securityVaultResult?.action === 'adjustVaultBackingFactor') operation = 'adjustVaultBackingFactor'
+	if (securityVaultResult?.action === 'setVaultUnderwritingLimit') operation = 'setVaultUnderwritingLimit'
 	if (operation === undefined) return undefined
 	const queued = securityVaultResult?.queuedOperation
 	const candidates = [...(oracleManagerDetails?.stagedOperations ?? []), ...(oracleManagerDetails?.pendingOperation === undefined ? [] : [oracleManagerDetails.pendingOperation])]
@@ -41,7 +41,7 @@ function getQueuedVaultOperationStatus({
 	queuedVaultOperation: ReturnType<typeof getQueuedVaultOperation>
 	securityVaultResult: SecurityVaultSectionProps['securityVaultResult']
 }) {
-	if (securityVaultResult?.action !== 'queueWithdrawRep' && securityVaultResult?.action !== 'adjustVaultBackingFactor') return undefined
+	if (securityVaultResult?.action !== 'queueWithdrawRep' && securityVaultResult?.action !== 'setVaultUnderwritingLimit') return undefined
 	if (securityVaultResult.queuedOperationState !== undefined) return securityVaultResult.queuedOperationState.status
 	if (securityVaultResult.stagedExecution !== undefined) return securityVaultResult.stagedExecution.success ? 'executed' : 'failed'
 	if (queuedVaultOperation !== undefined && (queuedVaultOperation.isConfirmedActive || currentPoolOracleManagerDetails === undefined)) return queuedVaultOperation.isPendingSlot ? 'queued' : 'manual-queued'
@@ -194,13 +194,13 @@ export function VaultQueuedOperationStatusCards({
 	onViewStagedOperations,
 }: {
 	results: readonly NonNullable<SecurityVaultSectionProps['securityVaultResult']>[]
-	operation: 'withdrawRep' | 'adjustVaultBackingFactor'
+	operation: 'withdrawRep' | 'setVaultUnderwritingLimit'
 	oracleManagerDetails: SecurityVaultSectionProps['oracleManagerDetails']
 	selectedVaultOwner: string
 	loadingSecurityVault: boolean
 	onViewStagedOperations: (() => void) | undefined
 }) {
-	const action = operation === 'withdrawRep' ? 'queueWithdrawRep' : 'adjustVaultBackingFactor'
+	const action = operation === 'withdrawRep' ? 'queueWithdrawRep' : 'setVaultUnderwritingLimit'
 	const copy =
 		operation === 'withdrawRep'
 			? {

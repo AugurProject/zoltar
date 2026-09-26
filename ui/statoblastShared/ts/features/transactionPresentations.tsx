@@ -10,7 +10,7 @@ import { buildIntent, buildPresentation, getPoolUniverseTransactionRows, humaniz
 import type { PoolUniverseTransactionContext } from '@zoltar/ui-core-shared/transactions/transactionPresentations.js'
 import type { TransactionIntent } from '@zoltar/ui-core-shared/types/components.js'
 import type { ForkAuctionActionResult, ReportingActionResult, SecurityPoolCreationResult, SecurityPoolOverviewActionResult, SecurityVaultActionResult, TradingActionResult } from '@zoltar/ui-core-shared/types/contracts.js'
-import { AUCTIONED_CAPACITY_OWNERSHIP_ATTO_REP_LABEL } from './truth-auctions/lib/forkAuction.js'
+import { AUCTIONED_UNDERWRITING_LIMIT_ATTO_ETH_LABEL } from './truth-auctions/lib/forkAuction.js'
 import { formatStatoblastSecurityMultiplier } from './markets/lib/trading.js'
 
 type SecurityPoolCreationTransactionContext = {
@@ -79,7 +79,7 @@ function getSecurityVaultTransactionRows(context: SecurityVaultTransactionContex
 }
 
 function getSecurityVaultActionTitle(actionName: SecurityVaultActionResult['action'], repTokenSymbol = commonCopy.rep) {
-	if (actionName === 'adjustVaultBackingFactor') return securityPoolCopy.adjustVaultBackingFactor
+	if (actionName === 'setVaultUnderwritingLimit') return securityPoolCopy.setVaultUnderwritingLimit
 	if (actionName === 'depositRepToVault') return securityPoolCopy.formatDepositRepToVault(repTokenSymbol)
 	if (actionName === 'queueWithdrawRep') return securityPoolCopy.formatWithdrawRep(repTokenSymbol)
 	if (actionName === 'redeemRepFromVault') return securityPoolCopy.formatRedeemRepFromVault(repTokenSymbol)
@@ -243,12 +243,12 @@ export function createForkAuctionSuccessPresentation(result: ForkAuctionActionRe
 		switch (result.action) {
 			case 'claimAuctionProceeds':
 				if (result.settlementMode === 'refund') {
-					return transactionCopy.formatFinalizedRefundSettlementResultDetail(AUCTIONED_CAPACITY_OWNERSHIP_ATTO_REP_LABEL)
+					return transactionCopy.formatFinalizedRefundSettlementResultDetail(AUCTIONED_UNDERWRITING_LIMIT_ATTO_ETH_LABEL)
 				}
 				if (result.settlementMode === 'claim') {
-					return transactionCopy.formatWinningBidSettlementResultDetail(AUCTIONED_CAPACITY_OWNERSHIP_ATTO_REP_LABEL)
+					return transactionCopy.formatWinningBidSettlementResultDetail(AUCTIONED_UNDERWRITING_LIMIT_ATTO_ETH_LABEL)
 				}
-				return transactionCopy.formatMixedBidSettlementResultDetail(AUCTIONED_CAPACITY_OWNERSHIP_ATTO_REP_LABEL)
+				return transactionCopy.formatMixedBidSettlementResultDetail(AUCTIONED_UNDERWRITING_LIMIT_ATTO_ETH_LABEL)
 			case 'createChildUniverse':
 				return transactionCopy.childUniverseLinkedToForkPathDetail
 			case 'forkWithOwnEscalation':

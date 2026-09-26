@@ -197,7 +197,7 @@ describe('SecurityPoolWorkflowSection: reporting and oracle', () => {
 		expect(document.body.textContent).not.toContain("The pool's oracle price expired.")
 	})
 
-	test('allows reporting with a stale oracle price when the pool has no capacity ownership', async () => {
+	test('allows reporting with a stale oracle price when the pool has no underwriting commitments', async () => {
 		const renderedComponent = await renderIntoDocument(
 			<ChainTimestampContext.Provider value={100n}>
 				<SecurityPoolWorkflowSection
@@ -212,7 +212,7 @@ describe('SecurityPoolWorkflowSection: reporting and oracle', () => {
 						securityPools: [
 							createSelectedPool({
 								marketDetails: createMarketDetails({ endTime: 0n }),
-								totalCapacityOwnershipAttoRep: 0n,
+								totalUnderwritingLimitAttoEth: 0n,
 							}),
 						],
 						selectedPoolView: 'reporting',
@@ -263,7 +263,7 @@ describe('SecurityPoolWorkflowSection: reporting and oracle', () => {
 						securityPools: [
 							createSelectedPool({
 								marketDetails: createMarketDetails({ endTime: 0n }),
-								totalCapacityOwnershipAttoRep: forkContinuation ? 0n : 10n,
+								totalUnderwritingLimitAttoEth: forkContinuation ? 0n : 10n,
 							}),
 						],
 						selectedPoolView: 'reporting',
@@ -422,7 +422,7 @@ describe('SecurityPoolWorkflowSection: reporting and oracle', () => {
 		expect(documentQueries.queryByRole('button', { name: 'Request new price' })).toBeNull()
 	})
 
-	test('shows queued target changes in the existing staged operations table with factor units', async () => {
+	test('shows queued target changes in the existing staged operations table with ETH commitment units', async () => {
 		const rendered = await renderIntoDocument(
 			<SecurityPoolWorkflowSection
 				{...createSecurityPoolWorkflowProps({
@@ -432,7 +432,7 @@ describe('SecurityPoolWorkflowSection: reporting and oracle', () => {
 					selectedPoolView: 'staged-operations',
 					poolOracleManagerDetails: createOracleManagerDetails({
 						managerAddress: zeroAddress,
-						pendingOperation: { amount: 15_000n, operator: zeroAddress, operation: 'adjustVaultBackingFactor', operationId: 7n, targetVault: zeroAddress },
+						pendingOperation: { amount: 2n * 10n ** 18n, operator: zeroAddress, operation: 'setVaultUnderwritingLimit', operationId: 7n, targetVault: zeroAddress },
 						pendingOperationSlotId: 7n,
 						pendingSettlementOperationIds: [7n],
 					}),
@@ -441,9 +441,9 @@ describe('SecurityPoolWorkflowSection: reporting and oracle', () => {
 		)
 		setCleanup(rendered.cleanup)
 		const page = within(document.body)
-		expect(page.getByText('Target backing ratio')).not.toBeNull()
-		expect(page.getByText('Adjust backing ratio')).not.toBeNull()
-		expect(page.getByText('Target backing ratio').parentElement?.querySelector('.decision-amount')?.textContent).toBe('1.5×')
+		expect(page.getByText('Commitment limit (ETH)')).not.toBeNull()
+		expect(page.getByText('Set commitment limit')).not.toBeNull()
+		expect(page.getByText('Commitment limit (ETH)').parentElement?.textContent).toMatch(/2(?:\.0+)?\s*ETH/)
 	})
 
 	test('lists staged operations in the staged operations tab', async () => {
@@ -504,7 +504,7 @@ describe('SecurityPoolWorkflowSection: reporting and oracle', () => {
 	})
 
 	test('labels liquidation amounts by accounting role', async () => {
-		for (const stagedCase of [{ amountLabel: 'Requested liquidation debt', operation: 'liquidation' as const }]) {
+		for (const stagedCase of [{ amountLabel: 'Commitment to transfer', operation: 'liquidation' as const }]) {
 			const renderedComponent = await renderIntoDocument(
 				<SecurityPoolWorkflowSection
 					{...createSecurityPoolWorkflowProps({

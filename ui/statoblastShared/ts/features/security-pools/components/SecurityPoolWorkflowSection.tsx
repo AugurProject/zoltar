@@ -317,7 +317,8 @@ export function SecurityPoolWorkflowSection(props: SecurityPoolWorkflowSectionPr
 		if (getReportingContributionFunding(currentReportingDetails, reporting.reportingForm.contributionFunding) === 'vault' && (currentReportingDetails?.viewerVaultExists === false || currentReportingDetails?.viewerPoolHeldVaultRepBackingAttoRep === 0n)) return undefined
 		if (reportingLockedReason !== undefined) return undefined
 		if (!selectedPoolStateModel.actions.reportOutcome.enabled) return undefined
-		if ((loadedSelectedPool?.totalCapacityOwnershipAttoRep ?? 0n) === 0n && !(currentReportingDetails?.status === 'active' && currentReportingDetails.forkContinuation && getReportingContributionFunding(currentReportingDetails, reporting.reportingForm.contributionFunding) === 'wallet')) return undefined
+		if ((loadedSelectedPool?.totalUnderwritingLimitAttoEth ?? 0n) === 0n && !(currentReportingDetails?.status === 'active' && currentReportingDetails.forkContinuation && getReportingContributionFunding(currentReportingDetails, reporting.reportingForm.contributionFunding) === 'wallet')) return undefined
+
 		if (currentPoolOracleManagerDetails === undefined || currentPoolOraclePriceUsable === true) return undefined
 		return currentPoolOracleManagerDetails.lastSettlementTimestamp > 0n ? securityPoolCopy.reportingOraclePriceExpiredReason : securityPoolCopy.reportingOraclePriceRequiredReason
 	})()

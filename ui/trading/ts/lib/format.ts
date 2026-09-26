@@ -9,8 +9,8 @@ export function formatRoundedUnits(value: bigint, decimals = 18, maximumFraction
 	return formatTrimmedUnits(value < 0n ? -rounded : rounded, decimals, maximumFractionDigits)
 }
 
-export function formatCapacityOwnership(totalAttoRep: bigint, feeEligibleAttoRep: bigint) {
-	return `${formatTrimmedUnits(totalAttoRep)} / ${formatTrimmedUnits(feeEligibleAttoRep)} REP`
+export function formatUnderwritingLimits(totalAttoEth: bigint, feeEligibleAttoEth: bigint) {
+	return `${formatTrimmedUnits(totalAttoEth)} / ${formatTrimmedUnits(feeEligibleAttoEth)} ETH`
 }
 
 export function formatMintingCapacity(mintedAttoEth: bigint, maximumAttoEth: bigint) {

@@ -1,7 +1,7 @@
 export const poolDetails = 'Pool details'
 export const moreTools = 'More tools'
 export const moreActions = 'More actions'
-export const capacityLabel = 'Open interest / estimated capacity'
+export const capacityLabel = 'Settlement collateral / standing commitments'
 export const capacityUnavailable = 'Capacity needs a current price.'
 export const viewReport = 'View report'
 export const forkAvailable = 'Fork & migration available.'

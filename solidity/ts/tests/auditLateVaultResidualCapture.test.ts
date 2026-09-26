@@ -131,7 +131,7 @@ describe('Ordinary escalation vault-deposit freeze', () => {
 		strictEqualTypeSafe(state.gameRep, reportBond)
 		strictEqualTypeSafe(state.poolRep, poolBefore)
 		strictEqualTypeSafe(state.vaultBackingUnits, 0n)
-		strictEqualTypeSafe((await getSecurityVault(client, pool, reporter.account.address)).capacityOwnershipAttoRep, 0n)
+		strictEqualTypeSafe((await getSecurityVault(client, pool, reporter.account.address)).underwritingLimitAttoEth, 0n)
 		strictEqualTypeSafe(state.depositorDisputeStake, reportBond)
 		strictEqualTypeSafe(state.totalDisputeStake, reportBond)
 		strictEqualTypeSafe(state.outcomeDepositCount, 1n)

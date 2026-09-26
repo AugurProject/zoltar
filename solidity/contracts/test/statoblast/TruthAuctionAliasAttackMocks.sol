@@ -88,7 +88,7 @@ contract TruthAuctionAliasAttackParentMock {
 		return configuredCollateral;
 	}
 
-	function totalCapacityOwnershipAttoRep() external pure returns (uint256) {
+	function totalUnderwritingLimitAttoEth() external pure returns (uint256) {
 		return 0;
 	}
 

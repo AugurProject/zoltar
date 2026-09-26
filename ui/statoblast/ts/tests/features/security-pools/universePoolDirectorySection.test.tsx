@@ -32,7 +32,7 @@ function createUniverse(overrides: Partial<ZoltarUniverseSummary> = {}): ZoltarU
 function createSecurityPool(overrides: Partial<ListedSecurityPool> = {}): ListedSecurityPool {
 	return {
 		currentRetentionRate: 10n,
-		feeEligibleCapacityOwnershipAttoRep: 1n,
+		feeEligibleUnderwritingLimitAttoEth: 1n,
 		forkOutcome: 'none',
 		forkOwnSecurityPool: false,
 		hasForkActivity: false,
@@ -67,7 +67,7 @@ function createSecurityPool(overrides: Partial<ListedSecurityPool> = {}): Listed
 		shareTokenSupplyAttoShares: 0n,
 		statoblastSecurityMultiplierBps: 20_000n,
 		systemState: 'operational',
-		totalCapacityOwnershipAttoRep: 2n * 10n ** 18n,
+		totalUnderwritingLimitAttoEth: 2n * 10n ** 18n,
 		totalPoolHeldAttoRep: 3n * 10n ** 18n,
 		truthAuctionAddress: zeroAddress,
 		truthAuctionStartedAt: 0n,
