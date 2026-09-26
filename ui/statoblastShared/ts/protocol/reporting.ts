@@ -137,8 +137,8 @@ async function loadViewerReportingVaultState(client: ReadClient, securityPoolAdd
 	])
 	const [entitlementInitialized, entitlementTotalCurrentRep, materializedByOutcome] = escalationMigrationEntitlementTuple
 	const viewerVaultTuples = requireSecurityVaultTupleArray([viewerVaultTuple], 'viewer security vault tuple')
-	const [viewerRepBackingUnits, viewerCapacityOwnershipAttoRep, viewerClaimableFeesAttoEth, viewerFeeIndex] = viewerVaultTuples[0] ?? []
-	if (typeof viewerRepBackingUnits !== 'bigint' || typeof viewerCapacityOwnershipAttoRep !== 'bigint' || typeof viewerClaimableFeesAttoEth !== 'bigint' || typeof viewerFeeIndex !== 'bigint') throw new Error('Unexpected viewer security vault tuple response')
+	const [viewerRepBackingUnits, viewerUnderwritingLimitAttoEth, viewerClaimableFeesAttoEth, viewerFeeIndex] = viewerVaultTuples[0] ?? []
+	if (typeof viewerRepBackingUnits !== 'bigint' || typeof viewerUnderwritingLimitAttoEth !== 'bigint' || typeof viewerClaimableFeesAttoEth !== 'bigint' || typeof viewerFeeIndex !== 'bigint') throw new Error('Unexpected viewer security vault tuple response')
 	const viewerVaultRepBackingAttoRep =
 		viewerRepBackingUnits === 0n
 			? 0n
@@ -162,7 +162,7 @@ async function loadViewerReportingVaultState(client: ReadClient, securityPoolAdd
 				address: escalationGameAddress,
 				args: [accountAddress],
 			})
-	const viewerVaultExists = viewerRepBackingUnits !== 0n || viewerCapacityOwnershipAttoRep !== 0n || viewerClaimableFeesAttoEth !== 0n || viewerFeeIndex !== 0n || viewerVaultDisputeStakedAttoRep !== 0n
+	const viewerVaultExists = viewerRepBackingUnits !== 0n || viewerUnderwritingLimitAttoEth !== 0n || viewerClaimableFeesAttoEth !== 0n || viewerFeeIndex !== 0n || viewerVaultDisputeStakedAttoRep !== 0n
 	const viewerPoolHeldVaultRepBackingAttoRep = viewerVaultRepBackingAttoRep
 	return {
 		viewerPoolHeldVaultRepBackingAttoRep,

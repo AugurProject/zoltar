@@ -66,7 +66,7 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 		expect(details?.textContent).toContain('Initial Report Priority Fee')
 		expect(details?.textContent).toContain('Question description')
 		expect(details?.querySelectorAll('button[aria-label^="Copy identifier"]')).toHaveLength(1)
-		expect(within(document.body).getByText('Open interest / estimated capacity')).not.toBeNull()
+		expect(within(document.body).getByText('Settlement collateral / standing commitments')).not.toBeNull()
 		const tabList = within(document.body).getByRole('tablist', { name: 'Selected pool views' })
 		expect(tabList.getAttribute('data-orientation')).toBe('horizontal')
 		expect(tabList.getAttribute('data-size')).toBe('compact')
@@ -103,7 +103,7 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 		expectSectionVariant('Price Oracle', 'plain')
 	})
 
-	test('derives displayed minting headroom from the pool oracle rather than the market quote', async () => {
+	test('displays standing commitments independently of the pool oracle and market quote', async () => {
 		setCleanup(
 			(
 				await renderIntoDocument(
@@ -112,7 +112,7 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 							{...createSecurityPoolWorkflowProps({
 								securityPoolAddress: zeroAddress,
 								repPerEthPrice: 10n ** 18n,
-								securityPools: [createSelectedPool({ lastOraclePrice: 5n * 10n ** 18n, lastOracleSettlementTimestamp: 1n, statoblastSecurityMultiplierBps: 20000n, totalCapacityOwnershipAttoRep: 100n * 10n ** 18n })],
+								securityPools: [createSelectedPool({ lastOraclePrice: 5n * 10n ** 18n, lastOracleSettlementTimestamp: 1n, statoblastSecurityMultiplierBps: 20000n, totalUnderwritingLimitAttoEth: 100n * 10n ** 18n })],
 							})}
 						/>
 					</ChainTimestampContext.Provider>,
@@ -121,11 +121,11 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 		)
 
 		const pageText = (document.body.textContent ?? '').replace(/\s+/g, ' ')
-		expect(pageText).toContain('≈ 10.00 ETH')
-		expect(pageText).not.toContain('≈ 50.00 ETH')
+		expect(pageText).toContain('≈ 100.00 ETH')
+		expect(pageText).not.toContain('≈ 10.00 ETH')
 	})
 
-	test('derives displayed minting headroom from the configured UI price', async () => {
+	test('displays standing commitments independently of the configured UI price', async () => {
 		await renderLoadedPool({
 			repPerEthPrice: 1n * 10n ** 18n,
 			uiPriceOracle: 'uniswap',
@@ -133,13 +133,13 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 				createSelectedPool({
 					lastOraclePrice: 5n * 10n ** 18n,
 					statoblastSecurityMultiplierBps: 20_000n,
-					totalCapacityOwnershipAttoRep: 100n * 10n ** 18n,
+					totalUnderwritingLimitAttoEth: 100n * 10n ** 18n,
 				}),
 			],
 		})
 
 		const pageText = (document.body.textContent ?? '').replace(/\s+/g, ' ')
-		expect(pageText).toContain('≈ 50.00 ETH')
+		expect(pageText).toContain('≈ 100.00 ETH')
 		expect(pageText).not.toContain('≈ 10.00 ETH')
 	})
 
@@ -322,7 +322,7 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 		expect(documentQueries.queryByText('Workflow')).toBeNull()
 		expect(documentQueries.getByText('Question description')).not.toBeNull()
 		expect(documentQueries.getByText('Question description')).not.toBeNull()
-		expect(documentQueries.getByText('Open interest / estimated capacity')).not.toBeNull()
+		expect(documentQueries.getByText('Settlement collateral / standing commitments')).not.toBeNull()
 		expect(documentQueries.getByText('Pool-held REP')).not.toBeNull()
 		expect(documentQueries.queryByText('Total Capacity ownership')).toBeNull()
 		expect(documentQueries.getByText('Open Oracle Price')).not.toBeNull()
@@ -396,7 +396,7 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 			securityVault: createSecurityVaultProps({
 				securityVaultDetails: createSecurityVaultDetails({
 					badDebtAttoEth: 2n,
-					capacityOwnershipAttoRep: 0n,
+					underwritingLimitAttoEth: 0n,
 					claimableFeesAttoEth: 0n,
 					disputeStakedAttoRep: 0n,
 					vaultAttoRepBacking: 0n,
@@ -525,7 +525,7 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 						createSelectedPool({
 							statoblastSecurityMultiplierBps: 20_000n,
 							totalPoolHeldAttoRep: 10_000n * 10n ** 18n,
-							totalCapacityOwnershipAttoRep: 2_500n * 10n ** 18n,
+							totalUnderwritingLimitAttoEth: 2_500n * 10n ** 18n,
 						}),
 					],
 				})}
@@ -748,7 +748,7 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 						securityVaultDetails: createSecurityVaultDetails({
 							disputeStakedAttoRep: 0n,
 							vaultAttoRepBacking: 0n,
-							capacityOwnershipAttoRep: 0n,
+							underwritingLimitAttoEth: 0n,
 							securityPoolAddress: selectedPoolAddress,
 							claimableFeesAttoEth: 0n,
 						}),
@@ -887,7 +887,7 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 						securityVaultDetails: createSecurityVaultDetails({
 							disputeStakedAttoRep: 1n,
 							vaultAttoRepBacking: 0n,
-							capacityOwnershipAttoRep: 0n,
+							underwritingLimitAttoEth: 0n,
 							securityPoolAddress: selectedPoolAddress,
 							claimableFeesAttoEth: 0n,
 						}),

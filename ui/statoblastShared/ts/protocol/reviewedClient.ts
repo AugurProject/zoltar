@@ -48,7 +48,7 @@ async function describeTransaction(client: WriteClient, preview: TransactionRequ
 	if (preview.functionName === 'requestPriceIfNeededAndStageOperation') {
 		const operation = preview.args?.[0]
 		if (operation === 1 || operation === 1n) details.title = 'Queue REP withdrawal'
-		if (operation === 2 || operation === 2n) details.title = 'Queue backing adjustment'
+		if (operation === 2 || operation === 2n) details.title = 'Queue commitment limit'
 	}
 	if (preview.functionName !== 'approve' || preview.contractAddress === undefined) return details
 	const [spender, amount] = preview.args ?? []

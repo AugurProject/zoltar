@@ -79,7 +79,7 @@ function getSecurityVaultTransactionRows(context: SecurityVaultTransactionContex
 }
 
 function getSecurityVaultActionTitle(actionName: SecurityVaultActionResult['action'], repTokenSymbol = commonCopy.rep) {
-	if (actionName === 'adjustVaultBackingFactor') return securityPoolCopy.adjustVaultBackingFactor
+	if (actionName === 'setVaultUnderwritingLimit') return securityPoolCopy.setVaultUnderwritingLimit
 	if (actionName === 'depositRepToVault') return securityPoolCopy.formatDepositRepToVault(repTokenSymbol)
 	if (actionName === 'queueWithdrawRep') return securityPoolCopy.formatWithdrawRep(repTokenSymbol)
 	if (actionName === 'redeemRepFromVault') return securityPoolCopy.formatRedeemRepFromVault(repTokenSymbol)

@@ -55,11 +55,11 @@
 					<dt>Traders and liquidity providers</dt>
 					<dd>Mint complete sets, hold or trade outcome shares, redeem claims, and optionally provide Yes/No liquidity.</dd>
 					<dt>Vault owners</dt>
-					<dd>Deposit REP, receive capacity ownership, maintain vault health, earn eligible fees, and may report or migrate.</dd>
+					<dd>Deposit REP, authorize a separate standing ETH underwriting limit, maintain its backing, earn fees, and may report or migrate.</dd>
 					<dt>Reporters</dt>
 					<dd>Place REP-backed positions on Invalid, Yes, or No in the Escalation Game.</dd>
 					<dt>Liquidation receivers and operators</dt>
-					<dd>A receiver vault accepts moved debt, backing, and capacity ownership. An operator submits the operation but receives no automatic protocol payment.</dd>
+					<dd>A receiver vault authorizes a transferred ETH commitment and receives REP backing. An operator submits the operation but receives no automatic protocol payment.</dd>
 					<dt>Truth Auction bidders</dt>
 					<dd>Supply ETH in exchange for child-pool REP-backed accounting positions when a child needs collateral repair.</dd>
 				</dl>
@@ -126,7 +126,7 @@
 					<div class="plot-chart" data-plot-chart="fig-statoblast-fork-state-machine" data-plot-width="960" data-plot-height="906" role="img" aria-label="SecurityPool fork state machine"><span class="plot-chart-fallback">A pool moves from active operation through fork, child deployment, REP and collateral migration, and any auction repair to an operational child.</span></div>
 					<p class="diagram-caption"><span class="figure-label">Fork timeline.</span> The parent halts permanently; each child becomes operational only after migration and any required repair.</p>
 				</figure>
-				<p>A vault's parent backing claim, capacity ownership, and proportional pool collateral are routed into one selected child pool. The same parent vault migration cannot be reused across siblings. Eligible outcome-share balances work differently: users can materialize branch-specific ledger claims in multiple selected child pools. That reproduces claims, not ETH; see <a href="./zoltar.html#non-guarantees">what Zoltar does not guarantee</a>.</p>
+				<p>A vault's parent backing claim, ETH commitment, and proportional pool collateral are routed into one selected child pool. The same parent vault migration cannot be reused across siblings. Eligible outcome-share balances work differently: users can materialize branch-specific ledger claims in multiple selected child pools. That reproduces claims, not ETH; see <a href="./zoltar.html#non-guarantees">what Zoltar does not guarantee</a>.</p>
 				<figure class="diagram" id="fig-statoblast-share-migration">
 					<div class="plot-chart" data-plot-chart="fig-statoblast-share-migration" data-plot-width="900" data-plot-height="468" role="img" aria-label="Share migration materializes persistent branch entitlements"><span class="plot-chart-fallback">The full eligible source balance can materialize in each selected child as a separate branch claim, while the source remains locked. ETH is not copied.</span></div>
 					<p class="diagram-caption"><span class="figure-label">Share migration.</span> Branch-specific token claims may appear in more than one child; settlement collateral follows vault migration and remains finite.</p>
@@ -147,8 +147,8 @@
 					<h2>6. Fees, capacity, and liquidations</h2>
 					<a class="anchor-link" href="#fees-capacity-liquidations" aria-label="Link to Fees, capacity, and liquidations">#</a>
 				</div>
-				<p>Vault deposits create REP-denominated capacity ownership. The current accepted REP/ETH price and pool security multiplier convert aggregate ownership into live ETH minting capacity. Outstanding complete-set collateral accrues time-based fees for fee-eligible capacity owners.</p>
-				<p>A vault must remain healthy against its proportional obligations. Liquidation moves part of an unhealthy target vault's debt, backing, and capacity ownership to an authorized receiver vault. The receiver receives the funded REP award, subject to caps and rounding; the submitting operator receives no automatic reward. See <a href="./fees.html">protocol fees</a> and <a href="./liquidations.html">vault liquidation</a> for the precise accounting.</p>
+				<p>REP deposits do not create commitments. Each owner separately sets an ETH limit X. Total commitments T are maintained incrementally. With tracked settlement collateral L, each vault owes L × X / T rounded upward to the next atomic unit. Minting requires L + deposit ≤ T and on-chain certification that every full limit remains backed. Outstanding complete-set collateral accrues time-based fees for fee-eligible capacity owners.</p>
+				<p>Backing requirements apply to the full standing limit, including when L is zero. Liquidation transfers commitment and backing to an authorized receiver without changing T or unrelated vault weights. An untransferred residual remains visible and blocks mint certification until recovered. The receiver receives the funded REP award, subject to caps and rounding; the submitting operator receives no automatic reward. See <a href="./fees.html">protocol fees</a> and <a href="./liquidations.html">vault liquidation</a> for the precise accounting.</p>
 				<figure class="diagram" id="fig-statoblast-oracle-flow">
 					<div class="plot-chart" data-plot-chart="fig-statoblast-oracle-flow" data-plot-width="940" data-plot-height="1064" role="img" aria-label="OpenOracle price request and guarded-operation flow"><span class="plot-chart-fallback">A cached fresh price may execute a guarded operation immediately. Otherwise an accepted settlement callback refreshes the price and runs a bounded batch; a rejected report terminally consumes its attached batch. Overflow operations remain active for later execution with a fresh price.</span></div>
 					<p class="diagram-caption"><span class="figure-label">Price-guarded operations.</span> The price coordinator supplies a fresh input; the SecurityPool still enforces live safety.</p>

@@ -118,12 +118,11 @@ test('requests a new price straight from the pool oracle row', async () => {
 	expect(opened.length > 0).toBe(true)
 })
 
-test('shows unknown capacity without a progress gauge or implied zero capacity', async () => {
+test('shows known standing commitments independently of a missing price', async () => {
 	await renderLoadedPool({ uiPriceOracle: 'uniswap', repPerEthPrice: undefined })
 	const header = document.body.querySelector('.pool-overview-header')
-	expect(header?.textContent).toContain('/ Unavailable')
-	expect(header?.textContent).toContain('/ Unavailable')
-	expect(header?.querySelector('.progress-meter-track')).toBeNull()
+	expect(header?.textContent).toContain('/ ≈ 5.00 ETH')
+	expect(header?.querySelector('.progress-meter-track') !== null).toBe(true)
 })
 
 for (const timestamp of [undefined, 100000n]) {
@@ -138,8 +137,8 @@ for (const timestamp of [undefined, 100000n]) {
 				)
 			).cleanup,
 		)
-		expect(document.querySelector('.pool-overview-header')?.textContent).toContain('/ Unavailable')
-		expect(document.querySelector('.pool-reference-details')?.textContent).not.toContain('Open interest / estimated capacity')
+		expect(document.querySelector('.pool-overview-header')?.textContent).toContain('/ ≈ 5.00 ETH')
+		expect(document.querySelector('.pool-reference-details')?.textContent).not.toContain('Settlement collateral / standing commitments')
 	})
 }
 test('keeps the pending report reachable while the pool universe differs', async () => {
@@ -161,7 +160,7 @@ test('uses the refreshed manager price for the single capacity summary', async (
 			)
 		).cleanup,
 	)
-	expect(document.querySelector('.pool-overview-header .pool-capacity-limit')?.textContent).toContain('1.25 ETH')
+	expect(document.querySelector('.pool-overview-header .pool-capacity-limit')?.textContent).toContain('5.00 ETH')
 	expect(document.querySelectorAll('.pool-capacity-summary')).toHaveLength(1)
 })
 

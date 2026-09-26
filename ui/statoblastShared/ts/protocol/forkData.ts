@@ -6,7 +6,7 @@ type ForkDataView = {
 	truthAuctionAddress: Address
 	truthAuctionStartedAt: bigint
 	migratedAttoRep: bigint
-	auctionedCapacityOwnershipAttoRep: bigint
+	auctionedUnderwritingLimitAttoEth: bigint
 	escalationElapsedAtFork: bigint
 	escalationStartBondAtForkAttoRep: bigint
 	escalationNonDecisionThresholdAtForkAttoRep: bigint
@@ -22,7 +22,7 @@ export function requireForkDataView(value: unknown): ForkDataView {
 		truthAuctionAddress,
 		truthAuctionStartedAt,
 		migratedAttoRep,
-		auctionedCapacityOwnershipAttoRep,
+		auctionedUnderwritingLimitAttoEth,
 		escalationElapsedAtFork,
 		escalationStartBondAtForkAttoRep,
 		escalationNonDecisionThresholdAtForkAttoRep,
@@ -36,7 +36,7 @@ export function requireForkDataView(value: unknown): ForkDataView {
 		truthAuctionAddress: requireAddressValue(truthAuctionAddress, 'security pool fork data truth auction address'),
 		truthAuctionStartedAt: requireBigintValue(truthAuctionStartedAt, 'security pool fork data truth auction start time'),
 		migratedAttoRep: requireBigintValue(migratedAttoRep, 'security pool fork data migrated REP'),
-		auctionedCapacityOwnershipAttoRep: requireBigintValue(auctionedCapacityOwnershipAttoRep, 'security pool fork data auctioned capacity ownership'),
+		auctionedUnderwritingLimitAttoEth: requireBigintValue(auctionedUnderwritingLimitAttoEth, 'security pool fork data auctioned capacity ownership'),
 		escalationElapsedAtFork: requireBigintValue(escalationElapsedAtFork, 'security pool fork data escalation elapsed at fork'),
 		escalationStartBondAtForkAttoRep: requireBigintValue(escalationStartBondAtForkAttoRep, 'security pool fork data escalation start bond at fork'),
 		escalationNonDecisionThresholdAtForkAttoRep: requireBigintValue(escalationNonDecisionThresholdAtForkAttoRep, 'security pool fork data escalation non-decision threshold at fork'),

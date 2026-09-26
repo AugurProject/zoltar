@@ -97,7 +97,7 @@ export const parentBalancesWalletRequired = 'Connect wallet to inspect your pare
 export const parentVaultBalancesUnavailableDetail = 'Parent-pool vault balances are unavailable for the connected wallet. You can still use the migration actions below if this wallet has parent-pool state to move.'
 export const migratedBalancesForThisOutcome = 'Migrated balances for this outcome:'
 export const selectedOutcomeRepCollateral = 'Selected Outcome REP backing'
-export const selectedOutcomeCapacityOwnershipAttoRep = 'Selected Outcome Capacity ownership'
+export const selectedOutcomeUnderwritingLimitAttoEth = 'Selected Outcome Capacity ownership'
 export const walletDisputeStakedRepEmpty = 'No parent dispute-staked REP remains available for a direct branch claim by the connected wallet.'
 export const startingTruncated = 'Starting…'
 export const formatStartsInValue = (duration: CopyTemplateValue) => `Starts in ${duration}`

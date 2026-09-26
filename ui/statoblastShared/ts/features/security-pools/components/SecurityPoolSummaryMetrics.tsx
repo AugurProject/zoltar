@@ -51,8 +51,8 @@ export function SecurityPoolSummaryMetrics({
 	showTotalBacking = false,
 	variant = 'embedded',
 }: SecurityPoolSummaryMetricsProps) {
-	const mintingCapacityAttoEth = calculateMintingCapacityAttoEth(pool.totalCapacityOwnershipAttoRep, calculationPriceConfigured ? calculationRepPerEthPrice : pool.lastOraclePrice, pool.statoblastSecurityMultiplierBps)
-	const resolvedPoolHeldRepPerCapacityBps = pool.totalCapacityOwnershipAttoRep === 0n ? undefined : (pool.totalPoolHeldAttoRep * 10_000n) / pool.totalCapacityOwnershipAttoRep
+	const mintingCapacityAttoEth = calculateMintingCapacityAttoEth(pool.totalUnderwritingLimitAttoEth, calculationPriceConfigured ? calculationRepPerEthPrice : pool.lastOraclePrice, pool.statoblastSecurityMultiplierBps)
+	const resolvedPoolHeldRepPerCapacityBps = pool.totalUnderwritingLimitAttoEth === 0n ? undefined : (pool.totalPoolHeldAttoRep * 10_000n) / pool.totalUnderwritingLimitAttoEth
 	if (variant === 'embedded')
 		return (
 			<MetricGrid className={className} variant={metricVariant}>

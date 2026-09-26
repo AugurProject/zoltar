@@ -1,5 +1,5 @@
 import * as liquidationCopy from '../../../copy/liquidation.js'
-import { LIQUIDATION_BPS_DENOMINATOR, LIQUIDATION_PRICE_PRECISION, LIQUIDATION_REP_BONUS_BPS, getLiquidationVaultRepBackingToTransfer, getMaximumFundedDebtAttoEth } from '@zoltar/statoblast-shared/statoblast/liquidation'
+import { LIQUIDATION_BPS_DENOMINATOR, LIQUIDATION_PRICE_PRECISION, LIQUIDATION_REP_BONUS_BPS, getLiquidationVaultRepBackingToTransfer } from '@zoltar/statoblast-shared/statoblast/liquidation'
 import { DEFAULT_PROTOCOL_CONFIG } from '@zoltar/core-shared/deployment/protocolConfig'
 import type { SecurityPoolVaultSummary } from '@zoltar/ui-core-shared/types/contracts.js'
 
@@ -7,7 +7,7 @@ const DEFAULT_MINIMUM_SECURITY_BOND_DEBT_ATTO_ETH = DEFAULT_PROTOCOL_CONFIG.mini
 const DEFAULT_MINIMUM_VAULT_REP_DEPOSIT_ATTO_REP = 10n * 10n ** 18n
 
 function getVaultOpenInterestAttoEth(vault: SecurityPoolVaultSummary) {
-	return vault.openInterestAttoEth
+	return vault.underwritingLimitAttoEth
 }
 
 function requireVaultOpenInterestAttoEth(vault: SecurityPoolVaultSummary) {
@@ -21,27 +21,8 @@ function requireVaultBadDebtAttoEth(vault: SecurityPoolVaultSummary) {
 	return vault.badDebtAttoEth
 }
 
-function calculateVaultOpenInterestAttoEth(settlementCollateralAttoEth: bigint, capacityOwnershipAttoRep: bigint, totalCapacityOwnershipAttoRep: bigint) {
-	if (capacityOwnershipAttoRep === 0n || totalCapacityOwnershipAttoRep === 0n) return 0n
-	return (settlementCollateralAttoEth * capacityOwnershipAttoRep + totalCapacityOwnershipAttoRep - 1n) / totalCapacityOwnershipAttoRep
-}
-
-function calculateLiveVaultOpenInterestAfterOwnershipChange({
-	capacityOwnershipAfterAttoRep,
-	totalCapacityOwnershipAttoRep,
-	settlementCollateralAttoEth,
-	vaultBadDebtAttoEth,
-	vaultBadDebtIncreaseAttoEth = 0n,
-}: {
-	capacityOwnershipAfterAttoRep: bigint
-	totalCapacityOwnershipAttoRep: bigint
-	settlementCollateralAttoEth: bigint
-	vaultBadDebtAttoEth: bigint
-	vaultBadDebtIncreaseAttoEth?: bigint | undefined
-}) {
-	const grossOpenInterestAfterAttoEth = calculateVaultOpenInterestAttoEth(settlementCollateralAttoEth, capacityOwnershipAfterAttoRep, totalCapacityOwnershipAttoRep)
-	const resultingBadDebtAttoEth = vaultBadDebtAttoEth + vaultBadDebtIncreaseAttoEth
-	return grossOpenInterestAfterAttoEth > resultingBadDebtAttoEth ? grossOpenInterestAfterAttoEth - resultingBadDebtAttoEth : 0n
+function calculateLiveVaultOpenInterestAfterOwnershipChange({ underwritingLimitAfterAttoEth }: { underwritingLimitAfterAttoEth: bigint; totalUnderwritingLimitAttoEth: bigint; settlementCollateralAttoEth: bigint; vaultBadDebtAttoEth: bigint; vaultBadDebtIncreaseAttoEth?: bigint | undefined }) {
+	return underwritingLimitAfterAttoEth
 }
 
 function mulDivCeil(value: bigint, multiplier: bigint, denominator: bigint) {
@@ -81,61 +62,40 @@ function isVaultLiquidatable(lastPrice: bigint | undefined, openInterestAttoEth:
 	return !isVaultHealthyAtFactor({ disputeStakedAttoRep, healthFactorBps: LIQUIDATION_BPS_DENOMINATOR, openInterestAttoEth, poolHeldVaultRepBackingAttoRep: vaultAttoRepBacking, poolSecurityMultiplierBps: statoblastSecurityMultiplierBps, repPerEthPrice: lastPrice })
 }
 
-function getPartialLiquidationTransfer(debtMovedAttoEth: bigint, targetVaultSummary: SecurityPoolVaultSummary, repPerEthPrice: bigint) {
-	const quotedRep = getLiquidationVaultRepBackingToTransfer(debtMovedAttoEth, repPerEthPrice)
-	const { repBackingUnits, totalRepBackingUnits, totalPoolHeldRepBalanceAttoRep } = targetVaultSummary
+function getPartialLiquidationTransfer(commitmentAttoEth: bigint, target: SecurityPoolVaultSummary, repPerEthPrice: bigint, minimumVaultRepDepositAttoRep: bigint) {
+	const nominalRep = getLiquidationVaultRepBackingToTransfer(commitmentAttoEth, repPerEthPrice)
+	const partial = commitmentAttoEth < target.underwritingLimitAttoEth
+	const { repBackingUnits, totalRepBackingUnits, totalPoolHeldRepBalanceAttoRep } = target
 	if (repBackingUnits === undefined || totalRepBackingUnits === undefined || totalPoolHeldRepBalanceAttoRep === undefined) {
-		if (quotedRep >= targetVaultSummary.vaultAttoRepBacking) return { remainingAttoRep: 0n, vaultAttoRepBackingToTransfer: targetVaultSummary.vaultAttoRepBacking }
-		return { remainingAttoRep: targetVaultSummary.vaultAttoRepBacking - quotedRep, vaultAttoRepBackingToTransfer: quotedRep }
+		const reserve = partial ? minimumVaultRepDepositAttoRep : 0n
+		const available = target.vaultAttoRepBacking > reserve ? target.vaultAttoRepBacking - reserve : 0n
+		const award = nominalRep < available ? nominalRep : available
+		return { remainingAttoRep: target.vaultAttoRepBacking - award, vaultAttoRepBackingToTransfer: award, backingUnitsToTransfer: undefined }
 	}
-	const backingUnitsToTransfer = totalRepBackingUnits === 0n || totalPoolHeldRepBalanceAttoRep === 0n ? quotedRep * LIQUIDATION_PRICE_PRECISION : (quotedRep * totalRepBackingUnits + totalPoolHeldRepBalanceAttoRep - 1n) / totalPoolHeldRepBalanceAttoRep
-	if (backingUnitsToTransfer >= repBackingUnits) return { remainingAttoRep: 0n, vaultAttoRepBackingToTransfer: targetVaultSummary.vaultAttoRepBacking }
-	const remainingBackingUnits = repBackingUnits - backingUnitsToTransfer
+	const noConversion = totalRepBackingUnits === 0n || totalPoolHeldRepBalanceAttoRep === 0n
+	let reserveUnits = 0n
+	if (partial && minimumVaultRepDepositAttoRep > 0n) reserveUnits = noConversion ? repBackingUnits : mulDivCeil(minimumVaultRepDepositAttoRep, totalRepBackingUnits, totalPoolHeldRepBalanceAttoRep)
+	const availableUnits = repBackingUnits > reserveUnits ? repBackingUnits - reserveUnits : 0n
+	const nominalUnits = noConversion ? nominalRep * LIQUIDATION_PRICE_PRECISION : mulDivCeil(nominalRep, totalRepBackingUnits, totalPoolHeldRepBalanceAttoRep)
+	const backingUnitsToTransfer = nominalUnits < availableUnits ? nominalUnits : availableUnits
 	return {
-		remainingAttoRep: totalRepBackingUnits === 0n ? remainingBackingUnits / LIQUIDATION_PRICE_PRECISION : (remainingBackingUnits * totalPoolHeldRepBalanceAttoRep) / totalRepBackingUnits,
-		vaultAttoRepBackingToTransfer: totalRepBackingUnits === 0n ? backingUnitsToTransfer / LIQUIDATION_PRICE_PRECISION : (backingUnitsToTransfer * totalPoolHeldRepBalanceAttoRep) / totalRepBackingUnits,
+		backingUnitsToTransfer,
+		remainingAttoRep: totalRepBackingUnits === 0n ? 0n : ((repBackingUnits - backingUnitsToTransfer) * totalPoolHeldRepBalanceAttoRep) / totalRepBackingUnits,
+		vaultAttoRepBackingToTransfer: totalRepBackingUnits === 0n ? 0n : (backingUnitsToTransfer * totalPoolHeldRepBalanceAttoRep) / totalRepBackingUnits,
 	}
 }
 
-function getAwardableLiquidationRep(targetVaultSummary: SecurityPoolVaultSummary, reserveMinimumRep: boolean, minimumVaultRepDepositAttoRep: bigint) {
-	const { repBackingUnits, totalRepBackingUnits, totalPoolHeldRepBalanceAttoRep } = targetVaultSummary
-	if (repBackingUnits === undefined || totalRepBackingUnits === undefined || totalPoolHeldRepBalanceAttoRep === undefined) {
-		if (!reserveMinimumRep) return targetVaultSummary.vaultAttoRepBacking
-		return targetVaultSummary.vaultAttoRepBacking > minimumVaultRepDepositAttoRep ? targetVaultSummary.vaultAttoRepBacking - minimumVaultRepDepositAttoRep : 0n
+function receiverBackingAfterTransfer(receiver: SecurityPoolVaultSummary | undefined, target: SecurityPoolVaultSummary, transfer: ReturnType<typeof getPartialLiquidationTransfer>) {
+	const receiverUnits = receiver === undefined ? 0n : receiver.repBackingUnits
+	if (receiverUnits !== undefined && transfer.backingUnitsToTransfer !== undefined && target.totalRepBackingUnits !== undefined && target.totalPoolHeldRepBalanceAttoRep !== undefined) {
+		return target.totalRepBackingUnits === 0n ? 0n : ((receiverUnits + transfer.backingUnitsToTransfer) * target.totalPoolHeldRepBalanceAttoRep) / target.totalRepBackingUnits
 	}
-	let reserveBackingUnits = 0n
-	if (reserveMinimumRep) {
-		reserveBackingUnits = totalRepBackingUnits === 0n || totalPoolHeldRepBalanceAttoRep === 0n ? minimumVaultRepDepositAttoRep * LIQUIDATION_PRICE_PRECISION : (minimumVaultRepDepositAttoRep * totalRepBackingUnits + totalPoolHeldRepBalanceAttoRep - 1n) / totalPoolHeldRepBalanceAttoRep
-	}
-	if (reserveBackingUnits >= repBackingUnits) return 0n
-	const awardableBackingUnits = repBackingUnits - reserveBackingUnits
-	return totalRepBackingUnits === 0n ? awardableBackingUnits / LIQUIDATION_PRICE_PRECISION : (awardableBackingUnits * totalPoolHeldRepBalanceAttoRep) / totalRepBackingUnits
+	return (receiver?.vaultAttoRepBacking ?? 0n) + transfer.vaultAttoRepBackingToTransfer
 }
 
-function getFundedLiquidationAmounts(requestedDebtAttoEth: bigint, targetVaultSummary: SecurityPoolVaultSummary, receiverVaultSummary: SecurityPoolVaultSummary | undefined, repPerEthPrice: bigint, minimumVaultRepDepositAttoRep: bigint, settlementCollateralAttoEth: bigint, totalCapacityOwnershipAttoRep: bigint) {
-	const targetCapacityOwnershipAttoRep = targetVaultSummary.capacityOwnershipAttoRep
-	const targetOpenInterestAttoEth = requireVaultOpenInterestAttoEth(targetVaultSummary)
-	const resolveResidualAsBadDebt = requestedDebtAttoEth >= targetOpenInterestAttoEth
-	if (targetOpenInterestAttoEth === 0n) return { badDebtAttoEth: 0n, capacityOwnershipMovedAttoRep: 0n, debtMovedAttoEth: 0n }
-	const awardableAttoRep = getAwardableLiquidationRep(targetVaultSummary, !resolveResidualAsBadDebt, minimumVaultRepDepositAttoRep)
-	const maximumFundedDebtAttoEth = getMaximumFundedDebtAttoEth(awardableAttoRep, repPerEthPrice)
-	const boundedRequestedDebtAttoEth = requestedDebtAttoEth < targetOpenInterestAttoEth ? requestedDebtAttoEth : targetOpenInterestAttoEth
-	const nominalDebtToMoveAttoEth = boundedRequestedDebtAttoEth < maximumFundedDebtAttoEth ? boundedRequestedDebtAttoEth : maximumFundedDebtAttoEth
-	const capacityOwnershipMovedAttoRep = nominalDebtToMoveAttoEth === targetOpenInterestAttoEth ? targetCapacityOwnershipAttoRep : (targetCapacityOwnershipAttoRep * nominalDebtToMoveAttoEth) / targetOpenInterestAttoEth
-	if (capacityOwnershipMovedAttoRep === 0n) return { badDebtAttoEth: 0n, capacityOwnershipMovedAttoRep: 0n, debtMovedAttoEth: 0n }
-	const receiverCapacityOwnershipBeforeAttoRep = receiverVaultSummary?.capacityOwnershipAttoRep ?? 0n
-	const receiverOpenInterestBeforeAttoEth = receiverVaultSummary === undefined ? 0n : requireVaultOpenInterestAttoEth(receiverVaultSummary)
-	const receiverBadDebtAttoEth = receiverVaultSummary === undefined ? 0n : requireVaultBadDebtAttoEth(receiverVaultSummary)
-	const receiverOpenInterestAfterAttoEth = calculateLiveVaultOpenInterestAfterOwnershipChange({
-		capacityOwnershipAfterAttoRep: receiverCapacityOwnershipBeforeAttoRep + capacityOwnershipMovedAttoRep,
-		totalCapacityOwnershipAttoRep,
-		settlementCollateralAttoEth,
-		vaultBadDebtAttoEth: receiverBadDebtAttoEth,
-	})
-	const debtMovedAttoEth = receiverOpenInterestAfterAttoEth >= receiverOpenInterestBeforeAttoEth ? receiverOpenInterestAfterAttoEth - receiverOpenInterestBeforeAttoEth : 0n
-	if (debtMovedAttoEth === 0n || debtMovedAttoEth > nominalDebtToMoveAttoEth) return { badDebtAttoEth: 0n, capacityOwnershipMovedAttoRep: 0n, debtMovedAttoEth: 0n }
-	const badDebtAttoEth = resolveResidualAsBadDebt ? targetOpenInterestAttoEth - debtMovedAttoEth : 0n
-	return { badDebtAttoEth, capacityOwnershipMovedAttoRep, debtMovedAttoEth }
+function getFundedLiquidationAmounts(requestedDebtAttoEth: bigint, targetVaultSummary: SecurityPoolVaultSummary, _receiverVaultSummary: SecurityPoolVaultSummary | undefined, _repPerEthPrice: bigint, _minimumVaultRepDepositAttoRep: bigint, _settlementCollateralAttoEth: bigint, _totalUnderwritingLimitAttoEth: bigint) {
+	const debtMovedAttoEth = requestedDebtAttoEth < targetVaultSummary.underwritingLimitAttoEth ? requestedDebtAttoEth : targetVaultSummary.underwritingLimitAttoEth
+	return { badDebtAttoEth: 0n, underwritingLimitMovedAttoEth: debtMovedAttoEth, debtMovedAttoEth }
 }
 
 export function getLiquidationExecutionFailureDetail(errorMessage: string | undefined) {
@@ -148,11 +108,11 @@ export function getLiquidationExecutionFailureDetail(errorMessage: string | unde
 			return liquidationCopy.callerVaultHealthOrIdentityError
 		case 'Target REP':
 			return liquidationCopy.targetMinimumCollateralError
-		case 'Target debt':
+		case 'Target commitment':
 			return liquidationCopy.targetMinimumDebtError
 		case 'Receiver REP':
 			return liquidationCopy.callerMinimumCollateralError
-		case 'Receiver debt below minimum':
+		case 'Receiver commitment below minimum':
 			return liquidationCopy.callerMinimumCapacityOwnershipError
 		default:
 			return errorMessage
@@ -174,15 +134,15 @@ type LiquidationSimulation = {
 	callerAfter: {
 		disputeStakedAttoRep: bigint
 		vaultAttoRepBacking: bigint
-		capacityOwnershipAttoRep: bigint
+		underwritingLimitAttoEth: bigint
 	}
 	callerBefore: {
 		disputeStakedAttoRep: bigint
 		vaultAttoRepBacking: bigint
-		capacityOwnershipAttoRep: bigint
+		underwritingLimitAttoEth: bigint
 	}
 	debtMovedAttoEth: bigint
-	capacityOwnershipMovedAttoRep: bigint
+	underwritingLimitMovedAttoEth: bigint
 	badDebtAttoEth: bigint
 	grossRepAwardAttoRep: bigint
 	vaultAttoRepBackingToTransfer: bigint
@@ -190,19 +150,19 @@ type LiquidationSimulation = {
 	targetAfter: {
 		disputeStakedAttoRep: bigint
 		vaultAttoRepBacking: bigint
-		capacityOwnershipAttoRep: bigint
+		underwritingLimitAttoEth: bigint
 	}
 	targetBefore: {
 		disputeStakedAttoRep: bigint
 		vaultAttoRepBacking: bigint
-		capacityOwnershipAttoRep: bigint
+		underwritingLimitAttoEth: bigint
 	}
 }
 
 export function simulateLiquidation({
 	callerVaultSummary,
 	requestedDebtAttoEth,
-	totalCapacityOwnershipAttoRep,
+	totalUnderwritingLimitAttoEth,
 	minimumVaultRepDepositAttoRep = DEFAULT_MINIMUM_VAULT_REP_DEPOSIT_ATTO_REP,
 	repPerEthPrice,
 	settlementCollateralAttoEth,
@@ -211,7 +171,7 @@ export function simulateLiquidation({
 }: {
 	callerVaultSummary: SecurityPoolVaultSummary | undefined
 	requestedDebtAttoEth: bigint
-	totalCapacityOwnershipAttoRep: bigint
+	totalUnderwritingLimitAttoEth: bigint
 	minimumVaultRepDepositAttoRep?: bigint | undefined
 	repPerEthPrice: bigint
 	settlementCollateralAttoEth: bigint
@@ -220,10 +180,10 @@ export function simulateLiquidation({
 }): LiquidationSimulation {
 	const callerRepDeposit = callerVaultSummary?.vaultAttoRepBacking ?? 0n
 	const callerDisputeStakedAttoRep = callerVaultSummary?.disputeStakedAttoRep ?? 0n
-	const callerCapacityOwnershipAttoRep = callerVaultSummary?.capacityOwnershipAttoRep ?? 0n
+	const callerUnderwritingLimitAttoEth = callerVaultSummary?.underwritingLimitAttoEth ?? 0n
 	const targetRepDeposit = targetVaultSummary.vaultAttoRepBacking
 	const targetDisputeStakedAttoRep = targetVaultSummary.disputeStakedAttoRep
-	const targetCapacityOwnershipAttoRep = targetVaultSummary.capacityOwnershipAttoRep
+	const targetUnderwritingLimitAttoEth = targetVaultSummary.underwritingLimitAttoEth
 	const targetOpenInterestAttoEth = requireVaultOpenInterestAttoEth(targetVaultSummary)
 	const maxLiquidationDebtAttoEth =
 		getMaxLiquidationAmount({
@@ -231,34 +191,35 @@ export function simulateLiquidation({
 			statoblastSecurityMultiplierBps,
 			targetVaultSummary,
 		}) ?? targetOpenInterestAttoEth
-	const { badDebtAttoEth, capacityOwnershipMovedAttoRep, debtMovedAttoEth } = getFundedLiquidationAmounts(
+	const { badDebtAttoEth, underwritingLimitMovedAttoEth, debtMovedAttoEth } = getFundedLiquidationAmounts(
 		requestedDebtAttoEth < maxLiquidationDebtAttoEth ? requestedDebtAttoEth : maxLiquidationDebtAttoEth,
 		targetVaultSummary,
 		callerVaultSummary,
 		repPerEthPrice,
 		minimumVaultRepDepositAttoRep,
 		settlementCollateralAttoEth,
-		totalCapacityOwnershipAttoRep,
+		totalUnderwritingLimitAttoEth,
 	)
 	const grossRepAwardAttoRep = getLiquidationVaultRepBackingToTransfer(debtMovedAttoEth, repPerEthPrice)
-	const vaultAttoRepBackingToTransfer = getPartialLiquidationTransfer(debtMovedAttoEth, targetVaultSummary, repPerEthPrice).vaultAttoRepBackingToTransfer
-	const targetAfterRepDeposit = targetRepDeposit - vaultAttoRepBackingToTransfer
-	const remainingTargetCapacityOwnershipAttoRep = targetCapacityOwnershipAttoRep - capacityOwnershipMovedAttoRep
-	const callerAfterRepDeposit = callerRepDeposit + vaultAttoRepBackingToTransfer
-	const resultingCallerCapacityOwnershipAttoRep = callerCapacityOwnershipAttoRep + capacityOwnershipMovedAttoRep
+	const transfer = getPartialLiquidationTransfer(debtMovedAttoEth, targetVaultSummary, repPerEthPrice, minimumVaultRepDepositAttoRep)
+	const vaultAttoRepBackingToTransfer = transfer.vaultAttoRepBackingToTransfer
+	const targetAfterRepDeposit = transfer.remainingAttoRep
+	const remainingTargetUnderwritingLimitAttoEth = targetUnderwritingLimitAttoEth - underwritingLimitMovedAttoEth
+	const callerAfterRepDeposit = receiverBackingAfterTransfer(callerVaultSummary, targetVaultSummary, transfer)
+	const resultingCallerUnderwritingLimitAttoEth = callerUnderwritingLimitAttoEth + underwritingLimitMovedAttoEth
 	return {
 		callerAfter: {
 			disputeStakedAttoRep: callerDisputeStakedAttoRep,
 			vaultAttoRepBacking: callerAfterRepDeposit,
-			capacityOwnershipAttoRep: resultingCallerCapacityOwnershipAttoRep,
+			underwritingLimitAttoEth: resultingCallerUnderwritingLimitAttoEth,
 		},
 		callerBefore: {
 			disputeStakedAttoRep: callerDisputeStakedAttoRep,
 			vaultAttoRepBacking: callerRepDeposit,
-			capacityOwnershipAttoRep: callerCapacityOwnershipAttoRep,
+			underwritingLimitAttoEth: callerUnderwritingLimitAttoEth,
 		},
 		badDebtAttoEth,
-		capacityOwnershipMovedAttoRep,
+		underwritingLimitMovedAttoEth,
 		debtMovedAttoEth,
 		grossRepAwardAttoRep,
 		vaultAttoRepBackingToTransfer,
@@ -266,12 +227,12 @@ export function simulateLiquidation({
 		targetAfter: {
 			disputeStakedAttoRep: targetDisputeStakedAttoRep,
 			vaultAttoRepBacking: targetAfterRepDeposit,
-			capacityOwnershipAttoRep: remainingTargetCapacityOwnershipAttoRep,
+			underwritingLimitAttoEth: remainingTargetUnderwritingLimitAttoEth,
 		},
 		targetBefore: {
 			disputeStakedAttoRep: targetDisputeStakedAttoRep,
 			vaultAttoRepBacking: targetRepDeposit,
-			capacityOwnershipAttoRep: targetCapacityOwnershipAttoRep,
+			underwritingLimitAttoEth: targetUnderwritingLimitAttoEth,
 		},
 	}
 }
@@ -279,7 +240,7 @@ export function simulateLiquidation({
 export function getDeterministicLiquidationFailureReason({
 	callerVaultSummary,
 	requestedDebtAttoEth,
-	totalCapacityOwnershipAttoRep,
+	totalUnderwritingLimitAttoEth,
 	maxLiquidationDebtAttoEth,
 	minimumSecurityBondDebtAttoEth = DEFAULT_MINIMUM_SECURITY_BOND_DEBT_ATTO_ETH,
 	minimumVaultRepDepositAttoRep = DEFAULT_MINIMUM_VAULT_REP_DEPOSIT_ATTO_REP,
@@ -290,7 +251,7 @@ export function getDeterministicLiquidationFailureReason({
 }: {
 	callerVaultSummary: SecurityPoolVaultSummary | undefined
 	requestedDebtAttoEth: bigint | undefined
-	totalCapacityOwnershipAttoRep?: bigint | undefined
+	totalUnderwritingLimitAttoEth?: bigint | undefined
 	maxLiquidationDebtAttoEth?: bigint | undefined
 	minimumSecurityBondDebtAttoEth?: bigint | undefined
 	minimumVaultRepDepositAttoRep?: bigint | undefined
@@ -310,36 +271,34 @@ export function getDeterministicLiquidationFailureReason({
 	}
 	const targetMaxLiquidationDebtAttoEth = maxLiquidationDebtAttoEth === undefined || maxLiquidationDebtAttoEth > targetOpenInterestAttoEth ? targetOpenInterestAttoEth : maxLiquidationDebtAttoEth
 	const boundedRequestedDebtAttoEth = requestedDebtAttoEth < targetMaxLiquidationDebtAttoEth ? requestedDebtAttoEth : targetMaxLiquidationDebtAttoEth
-	if (repPerEthPrice === undefined || settlementCollateralAttoEth === undefined || totalCapacityOwnershipAttoRep === undefined) return undefined
-	const { badDebtAttoEth, capacityOwnershipMovedAttoRep, debtMovedAttoEth } = getFundedLiquidationAmounts(boundedRequestedDebtAttoEth, targetVaultSummary, callerVaultSummary, repPerEthPrice, minimumVaultRepDepositAttoRep, settlementCollateralAttoEth, totalCapacityOwnershipAttoRep)
-	if ((debtMovedAttoEth <= 0n || capacityOwnershipMovedAttoRep === 0n) && badDebtAttoEth <= 0n) return liquidationCopy.executableCapacityOwnershipUnavailable
-	const vaultAttoRepBackingToTransfer = getPartialLiquidationTransfer(debtMovedAttoEth, targetVaultSummary, repPerEthPrice).vaultAttoRepBackingToTransfer
-	const remainingTargetCapacityOwnershipAttoRep = targetVaultSummary.capacityOwnershipAttoRep - capacityOwnershipMovedAttoRep
+	if (repPerEthPrice === undefined || settlementCollateralAttoEth === undefined || totalUnderwritingLimitAttoEth === undefined) return undefined
+	const { badDebtAttoEth, underwritingLimitMovedAttoEth, debtMovedAttoEth } = getFundedLiquidationAmounts(boundedRequestedDebtAttoEth, targetVaultSummary, callerVaultSummary, repPerEthPrice, minimumVaultRepDepositAttoRep, settlementCollateralAttoEth, totalUnderwritingLimitAttoEth)
+	if ((debtMovedAttoEth <= 0n || underwritingLimitMovedAttoEth === 0n) && badDebtAttoEth <= 0n) return liquidationCopy.executableCapacityOwnershipUnavailable
+	const transfer = getPartialLiquidationTransfer(debtMovedAttoEth, targetVaultSummary, repPerEthPrice, minimumVaultRepDepositAttoRep)
+	const remainingTargetUnderwritingLimitAttoEth = targetVaultSummary.underwritingLimitAttoEth - underwritingLimitMovedAttoEth
 	const remainingTargetDebtAttoEth = calculateLiveVaultOpenInterestAfterOwnershipChange({
-		capacityOwnershipAfterAttoRep: remainingTargetCapacityOwnershipAttoRep,
-		totalCapacityOwnershipAttoRep,
+		underwritingLimitAfterAttoEth: remainingTargetUnderwritingLimitAttoEth,
+		totalUnderwritingLimitAttoEth,
 		settlementCollateralAttoEth,
 		vaultBadDebtAttoEth: requireVaultBadDebtAttoEth(targetVaultSummary),
 		vaultBadDebtIncreaseAttoEth: badDebtAttoEth,
 	})
-	const targetAfterRepDeposit = vaultAttoRepBackingToTransfer === undefined ? undefined : targetVaultSummary.vaultAttoRepBacking - vaultAttoRepBackingToTransfer
-	const callerAfterRepDeposit = (callerVaultSummary?.vaultAttoRepBacking ?? 0n) + (vaultAttoRepBackingToTransfer ?? 0n)
-	const resultingCallerCapacityOwnershipAttoRep = (callerVaultSummary?.capacityOwnershipAttoRep ?? 0n) + capacityOwnershipMovedAttoRep
+	const callerAfterRepDeposit = receiverBackingAfterTransfer(callerVaultSummary, targetVaultSummary, transfer)
+	const resultingCallerUnderwritingLimitAttoEth = (callerVaultSummary?.underwritingLimitAttoEth ?? 0n) + underwritingLimitMovedAttoEth
 	const callerOpenInterestAttoEth = callerVaultSummary === undefined ? 0n : getVaultOpenInterestAttoEth(callerVaultSummary)
 	if (callerOpenInterestAttoEth === undefined) return 'Receiver vault live open interest is still loading.'
 	const resultingReceiverDebtAttoEth = callerOpenInterestAttoEth + debtMovedAttoEth
-	if (remainingTargetDebtAttoEth !== 0n && targetAfterRepDeposit !== undefined && targetAfterRepDeposit < minimumVaultRepDepositAttoRep) return 'The target vault would fall below the minimum REP backing after liquidation.'
 	if (remainingTargetDebtAttoEth !== 0n && remainingTargetDebtAttoEth < minimumSecurityBondDebtAttoEth) return 'The target vault would fall below the minimum security-bond debt after liquidation.'
 	if (debtMovedAttoEth !== 0n && callerAfterRepDeposit < minimumVaultRepDepositAttoRep) return 'The receiver vault would remain below the minimum REP backing after liquidation.'
 	if (debtMovedAttoEth !== 0n && resultingReceiverDebtAttoEth < minimumSecurityBondDebtAttoEth) return 'The selected receiver would remain below the minimum security-bond debt after liquidation.'
-	if (debtMovedAttoEth !== 0n && resultingCallerCapacityOwnershipAttoRep === 0n) return 'No capacity ownership would move with the liquidation debt.'
+	if (debtMovedAttoEth !== 0n && resultingCallerUnderwritingLimitAttoEth === 0n) return 'No capacity ownership would move with the liquidation debt.'
 	return undefined
 }
 
 export function getLiquidationFailureReason({
 	callerVaultSummary,
 	requestedDebtAttoEth,
-	totalCapacityOwnershipAttoRep,
+	totalUnderwritingLimitAttoEth,
 	minimumReceiverHealthFactorBps = LIQUIDATION_BPS_DENOMINATOR,
 	minimumSecurityBondDebtAttoEth = DEFAULT_MINIMUM_SECURITY_BOND_DEBT_ATTO_ETH,
 	minimumVaultRepDepositAttoRep = DEFAULT_MINIMUM_VAULT_REP_DEPOSIT_ATTO_REP,
@@ -350,7 +309,7 @@ export function getLiquidationFailureReason({
 }: {
 	callerVaultSummary: SecurityPoolVaultSummary | undefined
 	requestedDebtAttoEth: bigint | undefined
-	totalCapacityOwnershipAttoRep: bigint
+	totalUnderwritingLimitAttoEth: bigint
 	minimumReceiverHealthFactorBps?: bigint | undefined
 	minimumSecurityBondDebtAttoEth?: bigint | undefined
 	minimumVaultRepDepositAttoRep?: bigint | undefined
@@ -372,7 +331,7 @@ export function getLiquidationFailureReason({
 	const deterministicFailureReason = getDeterministicLiquidationFailureReason({
 		callerVaultSummary,
 		requestedDebtAttoEth,
-		totalCapacityOwnershipAttoRep,
+		totalUnderwritingLimitAttoEth,
 		maxLiquidationDebtAttoEth: (() => {
 			const computedMaxLiquidationDebtAttoEth = getMaxLiquidationAmount({
 				repPerEthPrice,
@@ -396,7 +355,7 @@ export function getLiquidationFailureReason({
 	const simulation = simulateLiquidation({
 		callerVaultSummary,
 		requestedDebtAttoEth,
-		totalCapacityOwnershipAttoRep,
+		totalUnderwritingLimitAttoEth,
 		minimumVaultRepDepositAttoRep,
 		repPerEthPrice,
 		settlementCollateralAttoEth,

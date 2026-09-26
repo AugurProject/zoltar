@@ -563,7 +563,7 @@ describe('useSecurityPoolsOverview queueLiquidation', () => {
 				hash: '0x03' as const,
 				securityPoolAddress: zeroAddress,
 				stagedExecution: {
-					errorMessage: 'Target debt',
+					errorMessage: 'Target commitment',
 					operation: 'liquidation' as const,
 					operationId: 3n,
 					success: false,
@@ -666,7 +666,7 @@ describe('useSecurityPoolsOverview queueLiquidation', () => {
 			openInterestAttoEth: 3n,
 			disputeStakedAttoRep: 4n,
 			vaultAttoRepBacking: 5n,
-			capacityOwnershipAttoRep: 6n,
+			underwritingLimitAttoEth: 6n,
 			claimableFeesAttoEth: 7n,
 			vaultAddress,
 		}))
@@ -689,6 +689,6 @@ describe('useSecurityPoolsOverview queueLiquidation', () => {
 		expect(loadSecurityPoolVaultSummary).toHaveBeenCalledWith(zeroAddress, SECOND_WALLET_ADDRESS)
 		expect(requireHookState(hookState).liquidationReceiverVaultSummaryResolved).toBe(true)
 		expect(requireHookState(hookState).liquidationReceiverVaultSummary?.vaultAddress).toBe(SECOND_WALLET_ADDRESS)
-		expect(requireHookState(hookState).liquidationReceiverVaultSummary?.capacityOwnershipAttoRep).toBe(6n)
+		expect(requireHookState(hookState).liquidationReceiverVaultSummary?.underwritingLimitAttoEth).toBe(6n)
 	})
 })

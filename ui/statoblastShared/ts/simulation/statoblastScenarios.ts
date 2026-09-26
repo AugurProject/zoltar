@@ -2,7 +2,6 @@ import { getSeededVaultDepositTargetFactorBps } from './seededVaultTarget.js'
 import { zeroAddress, type Address } from '@zoltar/core-shared/evm/ethereum'
 import { DEFAULT_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS } from '@zoltar/statoblast-shared/initialReport/oracleInitialReport'
 import { getStatoblastScenarioProtocol as getScenarioProtocol } from './statoblastScenarioProtocol.js'
-import { assertNever } from '@zoltar/ui-core-shared/lib/assert.js'
 import { createRangeProgressReporter, deploySimulationAppContracts, reportBootstrapProgress, requireQaAccount, type BootstrapProgressHandler, type ProgressRange, type BootstrapScenarioApplyParameters, type TevmLikeClient } from '@zoltar/ui-core-shared/simulation/bootstrap.js'
 import { getTruthAuctionPriceAtTick, getTruthAuctionTickAtPrice } from '../protocol/truthAuctionMath.js'
 import { advanceSimulationTime, getSimulationChainTimestamp } from '@zoltar/ui-core-shared/simulation/clock.js'
@@ -10,33 +9,7 @@ import type { ReadClient, WriteClient } from '@zoltar/ui-core-shared/wallet/chai
 import type { NetworkProfile } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
 import type { ListedSecurityPool, QuestionData } from '@zoltar/ui-core-shared/types/contracts.js'
 
-export type StatoblastScenario = 'security-pool' | 'securitypoolx2' | 'securitypoolx2-auction'
-
-export function getStatoblastScenarioLabel(scenario: StatoblastScenario) {
-	switch (scenario) {
-		case 'security-pool':
-			return 'Security pool'
-		case 'securitypoolx2':
-			return 'Security pool x2'
-		case 'securitypoolx2-auction':
-			return 'Security pool x2 auction'
-		default:
-			return assertNever(scenario)
-	}
-}
-
-export function getStatoblastScenarioDescription(scenario: StatoblastScenario) {
-	switch (scenario) {
-		case 'security-pool':
-			return 'One seeded question, one security pool, and one funded vault with an active capacity ownership. Use it to test pool actions and liquidation paths.'
-		case 'securitypoolx2':
-			return 'Two seeded questions with two security pools and two funded vaults in each pool. Use it to test multi-pool selection and repeated pool actions.'
-		case 'securitypoolx2-auction':
-			return 'Two seeded questions with one own-escalation fork already triggered and one child truth auction seeded with ten bids. Use it to test the fork-auction bidbook and settlement actions.'
-		default:
-			return assertNever(scenario)
-	}
-}
+export { getStatoblastScenarioLabel, getStatoblastScenarioDescription, type StatoblastScenario } from './statoblastScenarioDescriptions.js'
 
 const DAY_IN_SECONDS = 24n * 60n * 60n
 
@@ -59,7 +32,7 @@ const SECURITY_POOL_X2_AUCTION_BID_AMOUNTS = [3n * 10n ** 18n, 4n * 10n ** 18n, 
 type SeededVaultSpec = {
 	accountAddress: Address
 	vaultRepBackingDepositAttoRep: bigint
-	capacityOwnershipAttoRep: bigint
+	underwritingLimitAttoEth: bigint
 }
 
 type SeededSecurityPoolSpec = {
@@ -103,9 +76,7 @@ async function loadRequiredSeededPool(readClient: ReadClient, securityPoolAddres
 async function loadRequiredSecurityVault(readClient: ReadClient, securityPoolAddress: Address, vaultAddress: Address, label: string) {
 	const vaultDetails = await getScenarioProtocol().loadSecurityVaultDetails(readClient, securityPoolAddress, vaultAddress)
 	if (vaultDetails === undefined) throw new Error(`Expected seeded security vault details for ${label}`)
-	const targetBackingFactorBps = vaultDetails.targetBackingFactorBps
-	if (targetBackingFactorBps === undefined || targetBackingFactorBps < STATOBLAST_SECURITY_MULTIPLIER_BPS) throw new Error(`Expected a valid saved vault target for ${label}`)
-	return { ...vaultDetails, targetBackingFactorBps }
+	return vaultDetails
 }
 
 async function createSeededSecurityPool({ createWriteClient, currentTimestamp, deployerAccount, questionTitle }: { createWriteClient: (accountAddress: Address) => WriteClient; currentTimestamp: bigint; deployerAccount: Address; questionTitle: string }) {
@@ -128,22 +99,22 @@ async function validateSeededSecurityPool({ expectedVaults, poolLabel, readClien
 	const seededPool = await loadRequiredSeededPool(readClient, securityPoolAddress, poolLabel)
 	const expectedVaultCount = BigInt(expectedVaults.length)
 	let expectedRepDeposit = 0n
-	let expectedCapacityOwnershipAttoRep = 0n
+	let expectedUnderwritingLimitAttoEth = 0n
 
 	for (const expectedVault of expectedVaults) {
 		expectedRepDeposit += expectedVault.vaultRepBackingDepositAttoRep
-		expectedCapacityOwnershipAttoRep += expectedVault.capacityOwnershipAttoRep
+		expectedUnderwritingLimitAttoEth += expectedVault.underwritingLimitAttoEth
 	}
 
 	if (seededPool.vaultCount !== expectedVaultCount) throw new Error(`Expected ${poolLabel} to have ${expectedVaultCount.toString()} seeded vaults`)
 	if (seededPool.totalPoolHeldAttoRep !== expectedRepDeposit) throw new Error(`Expected ${poolLabel} to have ${expectedRepDeposit.toString()} seeded REP`)
-	if (seededPool.totalCapacityOwnershipAttoRep !== expectedCapacityOwnershipAttoRep) throw new Error(`Expected ${poolLabel} to have ${expectedCapacityOwnershipAttoRep.toString()} seeded capacity ownership`)
+	if (seededPool.totalUnderwritingLimitAttoEth !== expectedUnderwritingLimitAttoEth) throw new Error(`Expected ${poolLabel} to have ${expectedUnderwritingLimitAttoEth.toString()} seeded capacity ownership`)
 
 	for (const expectedVault of expectedVaults) {
 		const vault = seededPool.vaults.find(candidate => candidate.vaultAddress === expectedVault.accountAddress)
 		if (vault === undefined) throw new Error(`Expected ${poolLabel} to include seeded vault ${expectedVault.accountAddress}`)
 		if (vault.vaultAttoRepBacking !== expectedVault.vaultRepBackingDepositAttoRep) throw new Error(`Expected ${poolLabel} vault ${expectedVault.accountAddress} to hold ${expectedVault.vaultRepBackingDepositAttoRep.toString()} seeded REP`)
-		if (vault.capacityOwnershipAttoRep !== expectedVault.capacityOwnershipAttoRep) throw new Error(`Expected ${poolLabel} vault ${expectedVault.accountAddress} to hold ${expectedVault.capacityOwnershipAttoRep.toString()} seeded capacity ownership`)
+		if (vault.underwritingLimitAttoEth !== expectedVault.underwritingLimitAttoEth) throw new Error(`Expected ${poolLabel} vault ${expectedVault.accountAddress} to hold ${expectedVault.underwritingLimitAttoEth.toString()} seeded capacity ownership`)
 	}
 }
 
@@ -289,9 +260,12 @@ async function seedSecurityPool({
 	const seededReport = await getScenarioProtocol().loadOpenOracleReportDetails(readClient, seededOracleReport.openOracleAddress, seededOracleReport.pendingReportId)
 	if (!seededReport.isDistributed) throw new Error(`Expected the seeded oracle report to be settled for ${poolSpec.poolLabel}`)
 
+	for (const vault of poolSpec.vaults) await getScenarioProtocol().setUnderwritingLimit(createWriteClient(vault.accountAddress), poolResult.securityPoolAddress, vault.underwritingLimitAttoEth)
+	for (const vault of poolSpec.vaults) await getScenarioProtocol().certifyVaultCoverage(createWriteClient(primaryVaultAccount), poolResult.securityPoolAddress, vault.accountAddress)
+
 	const primaryVaultAfterSettlement = await loadRequiredSecurityVault(readClient, poolResult.securityPoolAddress, primaryVaultAccount, primaryVaultAccount)
-	if (primaryVaultAfterSettlement.capacityOwnershipAttoRep !== primaryVaultSpec.capacityOwnershipAttoRep) {
-		throw new Error(`Expected seeded capacity ownership ${primaryVaultSpec.capacityOwnershipAttoRep.toString()} for ${primaryVaultAccount}`)
+	if (primaryVaultAfterSettlement.underwritingLimitAttoEth !== primaryVaultSpec.underwritingLimitAttoEth) {
+		throw new Error(`Expected seeded capacity ownership ${primaryVaultSpec.underwritingLimitAttoEth.toString()} for ${primaryVaultAccount}`)
 	}
 
 	for (const index of additionalVaults.keys()) {
@@ -339,7 +313,7 @@ async function seedSecurityPoolScenario({
 				{
 					accountAddress: primaryAccount,
 					vaultRepBackingDepositAttoRep: SECURITY_POOL_REP_DEPOSIT,
-					capacityOwnershipAttoRep: CAPACITY_OWNERSHIP_ATTO_REP,
+					underwritingLimitAttoEth: CAPACITY_OWNERSHIP_ATTO_REP,
 				},
 			],
 		},
@@ -372,12 +346,12 @@ async function seedSecurityPoolX2Scenario({
 		{
 			accountAddress: primaryAccount,
 			vaultRepBackingDepositAttoRep: SECURITY_POOL_X2_PRIMARY_REP_DEPOSIT,
-			capacityOwnershipAttoRep: SECURITY_POOL_X2_PRIMARY_CAPACITY_OWNERSHIP_ATTO_REP,
+			underwritingLimitAttoEth: SECURITY_POOL_X2_PRIMARY_CAPACITY_OWNERSHIP_ATTO_REP,
 		},
 		{
 			accountAddress: secondaryAccount,
 			vaultRepBackingDepositAttoRep: SECURITY_POOL_X2_SECONDARY_REP_DEPOSIT,
-			capacityOwnershipAttoRep: SECURITY_POOL_X2_SECONDARY_CAPACITY_OWNERSHIP_ATTO_REP,
+			underwritingLimitAttoEth: SECURITY_POOL_X2_SECONDARY_CAPACITY_OWNERSHIP_ATTO_REP,
 		},
 	] as const
 	const seededPools = [
@@ -458,9 +432,12 @@ async function seedSecurityPoolX2Scenario({
 		const seededReport = await getScenarioProtocol().loadOpenOracleReportDetails(readClient, preparedPool.openOracleAddress, preparedPool.pendingReportId)
 		if (!seededReport.isDistributed) throw new Error(`Expected the seeded oracle report to be settled for ${preparedPool.poolLabel}`)
 
+		for (const vault of preparedPool.vaults) await getScenarioProtocol().setUnderwritingLimit(createWriteClient(vault.accountAddress), preparedPool.securityPoolAddress, vault.underwritingLimitAttoEth)
+		for (const vault of preparedPool.vaults) await getScenarioProtocol().certifyVaultCoverage(createWriteClient(primaryAccount), preparedPool.securityPoolAddress, vault.accountAddress)
+
 		const primaryVaultAfterSettlement = await loadRequiredSecurityVault(readClient, preparedPool.securityPoolAddress, primaryAccount, primaryAccount)
-		if (primaryVaultAfterSettlement.capacityOwnershipAttoRep !== preparedPool.primaryVault.capacityOwnershipAttoRep) {
-			throw new Error(`Expected seeded capacity ownership ${preparedPool.primaryVault.capacityOwnershipAttoRep.toString()} for ${primaryAccount}`)
+		if (primaryVaultAfterSettlement.underwritingLimitAttoEth !== preparedPool.primaryVault.underwritingLimitAttoEth) {
+			throw new Error(`Expected seeded capacity ownership ${preparedPool.primaryVault.underwritingLimitAttoEth.toString()} for ${primaryAccount}`)
 		}
 	}
 
@@ -520,10 +497,12 @@ async function seedSecurityPoolX2AuctionScenario({
 
 	await reportBootstrapProgress(onProgress, 'Preparing fork-auction seed pool', 0.985)
 	await getScenarioProtocol().approveErc20(writeClient, profile.genesisRepTokenAddress, parentPool.securityPoolAddress, SECURITY_POOL_X2_AUCTION_EXTRA_REP_DEPOSIT, 'approveRep')
-	await getScenarioProtocol().depositRepToVaultToSecurityPool(writeClient, parentPool.securityPoolAddress, SECURITY_POOL_X2_AUCTION_EXTRA_REP_DEPOSIT, (await loadRequiredSecurityVault(readClient, parentPool.securityPoolAddress, primaryAccount, 'primary auction vault')).targetBackingFactorBps)
+	await getScenarioProtocol().depositRepToVaultToSecurityPool(writeClient, parentPool.securityPoolAddress, SECURITY_POOL_X2_AUCTION_EXTRA_REP_DEPOSIT, STATOBLAST_SECURITY_MULTIPLIER_BPS)
 	const secondaryWriteClient = createWriteClient(secondaryAccount)
 	await getScenarioProtocol().approveErc20(secondaryWriteClient, profile.genesisRepTokenAddress, parentPool.securityPoolAddress, SECURITY_POOL_X2_AUCTION_UNMIGRATED_REP_DEPOSIT, 'approveRep')
-	await getScenarioProtocol().depositRepToVaultToSecurityPool(secondaryWriteClient, parentPool.securityPoolAddress, SECURITY_POOL_X2_AUCTION_UNMIGRATED_REP_DEPOSIT, (await loadRequiredSecurityVault(readClient, parentPool.securityPoolAddress, secondaryAccount, 'secondary auction vault')).targetBackingFactorBps)
+	await getScenarioProtocol().depositRepToVaultToSecurityPool(secondaryWriteClient, parentPool.securityPoolAddress, SECURITY_POOL_X2_AUCTION_UNMIGRATED_REP_DEPOSIT, STATOBLAST_SECURITY_MULTIPLIER_BPS)
+	await getScenarioProtocol().certifyVaultCoverage(writeClient, parentPool.securityPoolAddress, primaryAccount)
+	await getScenarioProtocol().certifyVaultCoverage(writeClient, parentPool.securityPoolAddress, secondaryAccount)
 	await getScenarioProtocol().createCompleteSetInSecurityPool(createWriteClient(secondaryAccount), parentPool.securityPoolAddress, 20n * 10n ** 18n)
 
 	const universeSummary = await getScenarioProtocol().loadZoltarUniverseSummary(readClient, parentPool.universeId)

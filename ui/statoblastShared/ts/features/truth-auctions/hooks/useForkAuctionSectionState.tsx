@@ -114,7 +114,7 @@ export function useForkAuctionSectionState(props: ForkAuctionSectionProps) {
 			selectedOutcomeMigrationChildVault={context.selectedOutcomeMigrationChildVault}
 		/>
 	)
-	const hasWalletVaultMigrationBalance = context.connectedWalletVaultSummary !== undefined && (context.connectedWalletVaultSummary.vaultAttoRepBacking > 0n || context.connectedWalletVaultSummary.capacityOwnershipAttoRep > 0n)
+	const hasWalletVaultMigrationBalance = context.connectedWalletVaultSummary !== undefined && (context.connectedWalletVaultSummary.vaultAttoRepBacking > 0n || context.connectedWalletVaultSummary.underwritingLimitAttoEth > 0n)
 	const hasWalletParentEscalationClaimBalance = effectiveDisputeStakedAttoRep !== undefined && effectiveDisputeStakedAttoRep > 0n
 	const migrateVaultBalanceGuardMessage = context.connectedWalletVaultSummary !== undefined && !hasWalletVaultMigrationBalance ? forkAuctionCopy.poolMigrationCapacityEmpty : undefined
 	const claimParentEscalationBalanceGuardMessage = context.connectedWalletVaultSummary !== undefined && !hasWalletParentEscalationClaimBalance ? forkAuctionCopy.walletDisputeStakedRepEmpty : undefined
@@ -265,7 +265,7 @@ export function useForkAuctionSectionState(props: ForkAuctionSectionProps) {
 	const settlementSelectionHasClaims = settlementSelectionState.selectionHasClaims
 	const settlementSelectionHasRefunds = settlementSelectionState.selectionHasRefunds
 	const settlementSelectionEstimate = getTruthAuctionSettlementSelectionEstimate({
-		auctionedCapacityOwnershipAttoRep: context.selectedAuctionContext?.auctionedCapacityOwnershipAttoRep,
+		auctionedUnderwritingLimitAttoEth: context.selectedAuctionContext?.auctionedUnderwritingLimitAttoEth,
 		selectedRows: selectedSettlementBidRows,
 		truthAuction: truthAuctionStatus,
 	})

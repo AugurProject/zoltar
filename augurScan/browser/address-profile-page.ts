@@ -105,7 +105,7 @@ export const renderAddressProfilePage = (deps: AddressProfileDeps, item: RichLis
 		card.append(
 			element('span', 'rich-position-kind', 'Vault'),
 			element('strong', '', position.questionTitle ?? 'Vault position'),
-			element('span', '', `${exactUnit(position.capacityOwnershipAttoRep, 18, 'REP')} capacity · ${exactUnit(position.claimableFeesAttoEth, 18, itemNativeSymbol)} claimable`),
+			element('span', '', `${exactUnit(position.underwritingLimitAttoEth, 18, 'REP')} capacity · ${exactUnit(position.claimableFeesAttoEth, 18, itemNativeSymbol)} claimable`),
 			protocolAddressLink(position.poolAddress, { chainId, className: 'rich-token-address address-link' }),
 		)
 		involvementGrid.append(card)

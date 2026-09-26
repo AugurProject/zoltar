@@ -63,7 +63,7 @@ export function ForkAuctionMigrationBalances({
 		<>
 			{renderWorkflowMetricGrid([
 				{ label: commonCopy.repCollateral, value: <CurrencyValue value={connectedWalletVaultSummary.vaultAttoRepBacking} suffix={commonCopy.rep} /> },
-				{ label: commonCopy.capacityOwnershipAttoRep, value: <CurrencyValue value={connectedWalletVaultSummary.capacityOwnershipAttoRep} suffix={commonCopy.rep} /> },
+				{ label: commonCopy.underwritingLimitAttoEth, value: <CurrencyValue value={connectedWalletVaultSummary.underwritingLimitAttoEth} suffix={commonCopy.rep} /> },
 				{ label: commonCopy.disputeStakedAttoRep, value: <CurrencyValue value={effectiveDisputeStakedAttoRep ?? 0n} suffix={commonCopy.rep} /> },
 			])}
 			<div className='form-grid fork-workflow-outcome-selector'>
@@ -81,7 +81,7 @@ export function ForkAuctionMigrationBalances({
 					<p className='detail'>{forkAuctionCopy.migratedBalancesForThisOutcome}</p>
 					{renderWorkflowMetricGrid([
 						{ label: forkAuctionCopy.selectedOutcomeRepCollateral, value: <CurrencyValue value={selectedOutcomeMigrationChildVault?.vaultAttoRepBacking ?? 0n} suffix={commonCopy.rep} /> },
-						{ label: forkAuctionCopy.selectedOutcomeCapacityOwnershipAttoRep, value: <CurrencyValue value={selectedOutcomeMigrationChildVault?.capacityOwnershipAttoRep ?? 0n} suffix={commonCopy.rep} /> },
+						{ label: forkAuctionCopy.selectedOutcomeUnderwritingLimitAttoEth, value: <CurrencyValue value={selectedOutcomeMigrationChildVault?.underwritingLimitAttoEth ?? 0n} suffix={commonCopy.rep} /> },
 					])}
 				</>
 			)}

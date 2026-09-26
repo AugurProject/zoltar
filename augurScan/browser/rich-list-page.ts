@@ -115,7 +115,7 @@ export const renderRichListPage = (deps: RichListPageDeps) => {
 				element('span', 'rich-position-kind', 'Vault position'),
 				element('strong', '', position.questionTitle ?? 'Vault position'),
 				element('span', '', `REP backing units ${exactUnit(position.repBackingUnits, 18, '')}`),
-				element('span', '', `Capacity ownership ${exactUnit(position.capacityOwnershipAttoRep, 18, 'REP')}`),
+				element('span', '', `Capacity ownership ${exactUnit(position.underwritingLimitAttoEth, 18, 'REP')}`),
 				element('span', '', `Claimable fees ${exactUnit(position.claimableFeesAttoEth, 18, itemNativeSymbol)} · block #${number(position.blockNumber)}`),
 				link,
 			)

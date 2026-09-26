@@ -1,9 +1,10 @@
+import { setUnderwritingLimit } from '../testSupport/simulator/utils/contracts/securityPool'
 import { SystemState } from '../testSupport/simulator/types/statoblastTypes'
 import { QuestionOutcome } from '../testSupport/simulator/types/types'
 import { getSecurityPoolAddresses } from '../testSupport/simulator/utils/contracts/deployStatoblast'
 import { getLastPrice, getQuestionEndDate, OperationType, requestPriceIfNeededAndStageOperation } from '../testSupport/simulator/utils/contracts/statoblast'
 import { forkUniverse, getRepTokenAddress, getZoltarAddress } from '../testSupport/simulator/utils/contracts/zoltar'
-import { createCompleteSet, depositRepToVault, getSecurityVault, getSystemState, redeemRepFromVault } from '../testSupport/simulator/utils/contracts/securityPool'
+import { createCertifiedCompleteSetFixture, depositRepToVault, getSecurityVault, getSystemState, redeemRepFromVault } from '../testSupport/simulator/utils/contracts/securityPool'
 import { createChildUniverse, getQuestionOutcome, initiateSecurityPoolFork, migrateRepToZoltar, migrateVault, startTruthAuction } from '../testSupport/simulator/utils/contracts/securityPoolForker'
 import { approveAndDepositRepToVault, manipulatePriceOracle } from '../testSupport/simulator/utils/contracts/statoblastTestUtils'
 import { approveToken, getChildUniverseId, getERC20Balance } from '../testSupport/simulator/utils/utilities'
@@ -32,15 +33,18 @@ describe('Audit PoC: fixed-outcome child synthetic bad debt', () => {
 		questionId = fixture.questionId
 	})
 
-	test('recycles redeemed REP to erase real capacity and seize an honest migrated vault', async () => {
+	test('blocks REP recycling while commitments remain and preserves resolved-market liquidation closure', async () => {
 		const attacker = createWriteClient(mockWindow, TEST_ADDRESSES[1])
 		const badDebtRecorder = createWriteClient(mockWindow, TEST_ADDRESSES[2])
 		await approveAndDepositRepToVault(attacker, repDeposit, questionId)
 
+		await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer)
+		await setUnderwritingLimit(client, securityPoolAddresses.securityPool, (repDeposit * 4n) / 10n)
+		await setUnderwritingLimit(attacker, securityPoolAddresses.securityPool, (repDeposit * 4n) / 10n)
 		const questionEnd = await getQuestionEndDate(client, questionId)
 		await mockWindow.setTime(questionEnd + 1n)
 		await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, PRICE_PRECISION)
-		await createCompleteSet(client, securityPoolAddresses.securityPool, repDeposit - repDeposit / 10n)
+		await createCertifiedCompleteSetFixture(client, securityPoolAddresses.securityPool, (repDeposit * 7n) / 10n)
 
 		await approveToken(client, addressString(GENESIS_REPUTATION_TOKEN), getZoltarAddress())
 		await forkUniverse(client, genesisUniverse, questionId)
@@ -75,13 +79,14 @@ describe('Audit PoC: fixed-outcome child synthetic bad debt', () => {
 		assert.ok(victimRepBefore * PRICE_PRECISION * 10_000n >= victimOpenInterestBefore * PRICE_PRECISION * statoblastSecurityMultiplierBps, 'the honest migrated vault should be healthy at the inherited price before the attack')
 		const victimRepImmediatelyBeforeAttempt = victimRepBefore
 		const attackerWalletBefore = await getERC20Balance(client, childRep, attacker.account.address)
-		await redeemRepFromVault(attacker, child.securityPool, attacker.account.address)
+		await assert.rejects(redeemRepFromVault(attacker, child.securityPool, attacker.account.address), /Exit commitment before REP redemption/)
+		await assert.rejects(setUnderwritingLimit(attacker, child.securityPool, 0n), /Commitments below collateral/)
 		const recycledRep = (await getERC20Balance(client, childRep, attacker.account.address)) - attackerWalletBefore
-		assert.ok(recycledRep > 0n, 'the attacker should redeem migrated REP while retaining capacity ownership')
+		strictEqualTypeSafe(recycledRep, 0n, 'REP cannot be recycled out of an outstanding commitment')
 
 		const ghostVault = await getSecurityVault(client, child.securityPool, attacker.account.address)
-		strictEqualTypeSafe(ghostVault.repBackingUnits, 0n, 'redemption should empty the attacker REP claim')
-		assert.ok(ghostVault.capacityOwnershipAttoRep > 0n, 'redemption currently leaves unbacked capacity behind')
+		assert.ok(ghostVault.repBackingUnits > 0n, 'rejected redemption preserves the backing claim')
+		assert.ok(ghostVault.underwritingLimitAttoEth > 0n, 'rejected redemption preserves the standing commitment')
 
 		strictEqualTypeSafe(
 			await client.readContract({
@@ -102,7 +107,7 @@ describe('Audit PoC: fixed-outcome child synthetic bad debt', () => {
 		})
 		await assert.rejects(requestPriceIfNeededAndStageOperation(badDebtRecorder, child.priceOracleManagerAndOperatorQueuer, OperationType.Liquidation, attacker.account.address, ghostOpenInterest), /question already resolved/)
 		await approveToken(attacker, childRep, child.securityPool)
-		await assert.rejects(depositRepToVault(attacker, child.securityPool, recycledRep, 1_000_000n))
+		await assert.rejects(depositRepToVault(attacker, child.securityPool, repDeposit, 1_000_000n))
 
 		strictEqualTypeSafe(
 			await client.readContract({

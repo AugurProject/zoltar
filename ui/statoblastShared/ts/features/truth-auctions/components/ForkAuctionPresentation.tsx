@@ -118,14 +118,14 @@ export function renderTruthAuctionCapacityOwnershipNotice(showRefundOnlySettleme
 }
 
 export function renderTruthAuctionSettlementSelectionSummary({
-	estimatedAssignedCapacityOwnershipAttoRep,
+	estimatedAssignedUnderwritingLimitAttoEth,
 	estimatedRefundedAttoEth,
 	estimatedVaultRepBackingAttoRep,
 	selectedClaimCount,
 	selectedRefundCount,
 	selectedRowCount,
 }: {
-	estimatedAssignedCapacityOwnershipAttoRep: bigint | undefined
+	estimatedAssignedUnderwritingLimitAttoEth: bigint | undefined
 	estimatedRefundedAttoEth: bigint
 	estimatedVaultRepBackingAttoRep: bigint | undefined
 	selectedClaimCount: number
@@ -164,7 +164,7 @@ export function renderTruthAuctionSettlementSelectionSummary({
 				{ label: forkAuctionCopy.selectedWinningBids, value: selectedClaimCount.toString() },
 				{ label: forkAuctionCopy.selectedRefundRows, value: selectedRefundCount.toString() },
 				{ label: forkAuctionCopy.estimatedVaultRepBackingAttoRep, value: estimatedVaultRepBackingAttoRep === undefined ? commonCopy.metricUnavailablePlaceholder : <CurrencyValue value={estimatedVaultRepBackingAttoRep} suffix={commonCopy.rep} /> },
-				{ label: forkAuctionCopy.formatEstimatedValue(AUCTIONED_CAPACITY_OWNERSHIP_ATTO_REP_LABEL), value: estimatedAssignedCapacityOwnershipAttoRep === undefined ? commonCopy.metricUnavailablePlaceholder : <CurrencyValue value={estimatedAssignedCapacityOwnershipAttoRep} suffix={commonCopy.rep} /> },
+				{ label: forkAuctionCopy.formatEstimatedValue(AUCTIONED_CAPACITY_OWNERSHIP_ATTO_REP_LABEL), value: estimatedAssignedUnderwritingLimitAttoEth === undefined ? commonCopy.metricUnavailablePlaceholder : <CurrencyValue value={estimatedAssignedUnderwritingLimitAttoEth} suffix={commonCopy.rep} /> },
 				{ label: forkAuctionCopy.estimatedRefundedAttoEth, value: <CurrencyValue value={estimatedRefundedAttoEth} suffix={commonCopy.eth} /> },
 			])}
 			{roundingDescription === undefined ? undefined : <p className='detail'>{roundingDescription}</p>}

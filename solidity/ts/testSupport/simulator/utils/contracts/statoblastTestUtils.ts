@@ -92,22 +92,23 @@ export const setVaultCapacityFixture = async (client: WriteClient, mockWindow: A
 			args: [targetVault],
 		}),
 	)
-	const [vault, totalCapacityOwnershipAttoRep, poolAccounting] = await Promise.all([
+	const [vault, totalUnderwritingLimitAttoEth, poolAccounting, coverageRevision] = await Promise.all([
 		getSecurityVault(client, securityPool, targetVault),
-		client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: securityPool, functionName: 'totalCapacityOwnershipAttoRep', args: [] }),
+		client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: securityPool, functionName: 'totalUnderwritingLimitAttoEth', args: [] }),
 		client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: securityPool, functionName: 'getPoolAccountingSnapshot', args: [] }),
+		client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: securityPool, functionName: 'coverageRevision', args: [] }),
 	])
-	// Synthetic capacity setup, not a protocol operation. Clear the saved target so fee
-	// checkpoints preserve this exact capacity, including values no whole-BPS target can express.
+	// Synthetic commitment setup for accounting boundary tests, not an owner-authorized operation.
+	// Production-path tests must use setUnderwritingLimit instead.
 	const mappingSlot = (slot: bigint) => BigInt(keccak256(encodeAbiParameters([{ type: 'address' }, { type: 'uint256' }], [targetVault, slot])))
 	const storageHex = (value: bigint): `0x${string}` => `0x${value.toString(16).padStart(64, '0')}`
 	await mockWindow.addStateOverrides({
 		[securityPool]: {
 			stateDiff: {
-				[storageHex(1n)]: totalCapacityOwnershipAttoRep - vault.capacityOwnershipAttoRep + amount,
-				[storageHex(12n)]: poolAccounting.feeEligibleCapacityOwnershipAttoRep - vault.capacityOwnershipAttoRep + amount,
+				[storageHex(1n)]: totalUnderwritingLimitAttoEth - vault.underwritingLimitAttoEth + amount,
+				[storageHex(12n)]: poolAccounting.feeEligibleUnderwritingLimitAttoEth - vault.underwritingLimitAttoEth + amount,
 				[storageHex(mappingSlot(16n) + 1n)]: amount,
-				[storageHex(mappingSlot(28n))]: 0n, // SecurityPoolStorage.vaultTargetBackingFactorBps
+				[storageHex(28n)]: coverageRevision + 1n,
 			},
 		},
 	})
@@ -128,4 +129,4 @@ export const manipulatePriceOracle = async (client: WriteClient, mockWindow: Anv
 	await handleOracleReporting(client, mockWindow, priceOracleManagerAndOperatorQueuer, forceRepEthPriceTo)
 }
 
-export const canLiquidate = (lastPrice: bigint, capacityOwnershipAttoRep: bigint, repClaim: bigint, statoblastSecurityMultiplierBps: bigint) => capacityOwnershipAttoRep * lastPrice * statoblastSecurityMultiplierBps > repClaim * PRICE_PRECISION * 10_000n
+export const canLiquidate = (lastPrice: bigint, underwritingLimitAttoEth: bigint, repClaim: bigint, statoblastSecurityMultiplierBps: bigint) => underwritingLimitAttoEth * lastPrice * statoblastSecurityMultiplierBps > repClaim * PRICE_PRECISION * 10_000n

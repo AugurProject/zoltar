@@ -139,9 +139,9 @@ abstract contract SecurityPoolForkerVaultMigrationBase is SecurityPoolForkerBase
 	}
 
 	function _emitVaultMigrationCheckpoint(ISecurityPool parent, ISecurityPool child, address vault, uint256 migratedAttoRep, uint256 settlementCollateralTransferredAttoEthBefore) private {
-		(uint256 parentBackingUnits, uint256 parentCapacityOwnershipAttoRep, , ) = parent.securityVaults(vault);
-		(uint256 childBackingUnits, uint256 childCapacityOwnershipAttoRep, , ) = child.securityVaults(vault);
-		emit VaultMigrationCheckpoint(parent, child, vault, forkDataByPool[child].outcomeIndex, migratedAttoRep, forkDataByPool[child].migratedAttoRep, parentBackingUnits, parentCapacityOwnershipAttoRep, childBackingUnits, childCapacityOwnershipAttoRep, parent.totalRepBackingUnits(), child.totalRepBackingUnits(), parent.totalCapacityOwnershipAttoRep(), child.totalCapacityOwnershipAttoRep(), forkDataByPool[parent].settlementCollateralTransferredAttoEth - settlementCollateralTransferredAttoEthBefore, forkDataByPool[parent].settlementCollateralTransferredAttoEth);
+		(uint256 parentBackingUnits, uint256 parentUnderwritingLimitAttoEth, , ) = parent.securityVaults(vault);
+		(uint256 childBackingUnits, uint256 childUnderwritingLimitAttoEth, , ) = child.securityVaults(vault);
+		emit VaultMigrationCheckpoint(parent, child, vault, forkDataByPool[child].outcomeIndex, migratedAttoRep, forkDataByPool[child].migratedAttoRep, parentBackingUnits, parentUnderwritingLimitAttoEth, childBackingUnits, childUnderwritingLimitAttoEth, parent.totalRepBackingUnits(), child.totalRepBackingUnits(), parent.totalUnderwritingLimitAttoEth(), child.totalUnderwritingLimitAttoEth(), forkDataByPool[parent].settlementCollateralTransferredAttoEth - settlementCollateralTransferredAttoEthBefore, forkDataByPool[parent].settlementCollateralTransferredAttoEth);
 	}
 
 	function _migrateNonEscrowedVaultAccounting(ISecurityPool parent, ISecurityPool child, address vault) internal returns (uint256 migratedAttoRep) {
@@ -155,16 +155,16 @@ abstract contract SecurityPoolForkerVaultMigrationBase is SecurityPoolForkerBase
 		// Checkpoint the parent entitlement in the same routine that clears the
 		// capacity ownership, so future migration entry points cannot strand reserve fees.
 		parent.updateVaultFees(vault);
-		(uint256 parentRepBackingUnits, uint256 parentCapacityOwnershipAttoRep, , uint256 parentVaultFeeIndex) = parent.securityVaults(vault);
+		(uint256 parentRepBackingUnits, uint256 parentUnderwritingLimitAttoEth, , uint256 parentVaultFeeIndex) = parent.securityVaults(vault);
 		(
 			uint256 childCurrentRepBackingUnits,
-			uint256 childCurrentCapacityOwnershipAttoRep,
+			uint256 childCurrentUnderwritingLimitAttoEth,
 			,
 			uint256 childCurrentFeeIndex
 		) = child.securityVaults(vault);
-		forkDataByPool[child].migratedCapacityOwnershipAttoRep += parentCapacityOwnershipAttoRep;
-		uint256 vaultFeeIndex = childCurrentCapacityOwnershipAttoRep > 0 ? childCurrentFeeIndex : 0;
-		if (parentCapacityOwnershipAttoRep > 0) vaultFeeIndex = child.feeIndex();
+		forkDataByPool[child].migratedUnderwritingLimitAttoEth += parentUnderwritingLimitAttoEth;
+		uint256 vaultFeeIndex = childCurrentUnderwritingLimitAttoEth > 0 ? childCurrentFeeIndex : 0;
+		if (parentUnderwritingLimitAttoEth > 0) vaultFeeIndex = child.feeIndex();
 		uint256 parentBackingUnitsDenominator = parent.totalRepBackingUnits();
 		if (parentBackingUnitsDenominator > 0 && parentRepAtForkAttoRep > 0 && parentRepBackingUnits > 0) {
 			SecurityPoolForkerForkData storage childForkData = forkDataByPool[child];
@@ -180,7 +180,7 @@ abstract contract SecurityPoolForkerVaultMigrationBase is SecurityPoolForkerBase
 		}
 		uint256 vaultRepBackingUnits = childCurrentRepBackingUnits + migratedAttoRep;
 
-		(uint256 parentVaultBadDebtAttoEth, , ) = SecurityPoolUtils.configureForkMigratedVault(parent, child, vault, vaultRepBackingUnits, childCurrentCapacityOwnershipAttoRep + parentCapacityOwnershipAttoRep, vaultFeeIndex, parentVaultFeeIndex);
+		(uint256 parentVaultBadDebtAttoEth, , ) = SecurityPoolUtils.configureForkMigratedVault(parent, child, vault, vaultRepBackingUnits, childCurrentUnderwritingLimitAttoEth + parentUnderwritingLimitAttoEth, vaultFeeIndex, parentVaultFeeIndex);
 		migratedBadDebtByPool[child] += parentVaultBadDebtAttoEth;
 		_emitVaultMigrationCheckpoint(parent, child, vault, migratedAttoRep, settlementCollateralTransferredAttoEthBefore);
 	}

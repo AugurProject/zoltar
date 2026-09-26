@@ -42,7 +42,7 @@ function getAssociatedRepStatusLabel({ associatedRepPerCapacityBps, isCurrentlyH
 
 export function VaultMetricGrid({
 	repPerEthPrice,
-	targetBackingFactorBps,
+	openInterestAttoEth,
 	associatedRepPerCapacityBps,
 	badDebtAttoEth,
 	className = '',
@@ -53,7 +53,7 @@ export function VaultMetricGrid({
 	priceValidUntilTimestamp,
 	vaultAttoRepBacking,
 	selectedPoolStatoblastSecurityMultiplierBps,
-	capacityOwnershipAttoRep,
+	underwritingLimitAttoEth,
 }: VaultMetricGridProps) {
 	const associatedRepToneClass = getAssociatedRepToneClass({
 		associatedRepPerCapacityBps,
@@ -73,7 +73,7 @@ export function VaultMetricGrid({
 					<div className='vault-preview-capacity-ownership'>
 						<span>{securityPoolCopy.exposureSupported}</span>
 						<strong>
-							<VaultExposureValue capacity={capacityOwnershipAttoRep} multiplierBps={selectedPoolStatoblastSecurityMultiplierBps} repPerEthPrice={repPerEthPrice} />
+							<VaultExposureValue capacity={underwritingLimitAttoEth} multiplierBps={selectedPoolStatoblastSecurityMultiplierBps} repPerEthPrice={repPerEthPrice} />
 						</strong>
 					</div>
 				</div>
@@ -107,7 +107,7 @@ export function VaultMetricGrid({
 				<div className='vault-detail-hero-primary'>
 					<span>{securityPoolCopy.exposureSupported}</span>
 					<strong>
-						<VaultExposureValue capacity={capacityOwnershipAttoRep} multiplierBps={selectedPoolStatoblastSecurityMultiplierBps} repPerEthPrice={repPerEthPrice} />
+						<VaultExposureValue capacity={underwritingLimitAttoEth} multiplierBps={selectedPoolStatoblastSecurityMultiplierBps} repPerEthPrice={repPerEthPrice} />
 					</strong>
 				</div>
 				<div className='vault-detail-hero-secondary'>
@@ -128,11 +128,10 @@ export function VaultMetricGrid({
 			</div>
 			<details className='vault-backing-details'>
 				<summary>{workspaceCopy.backingDetails}</summary>
-				<MetricField label={commonCopy.capacityOwnershipAttoRep}>
-					<CurrencyValue value={capacityOwnershipAttoRep} suffix={securityPoolCopy.capacityUnits} />
+				<MetricField label={securityPoolCopy.currentProportionalObligation}>
+					<CurrencyValue value={openInterestAttoEth} suffix={commonCopy.eth} />
 				</MetricField>
 				<div className='vault-detail-meta'>
-					{targetBackingFactorBps === undefined || targetBackingFactorBps === 0n ? undefined : <MetricField label={securityPoolCopy.vaultBackingFactor}>{formatRepPerCapacityBps(targetBackingFactorBps)}</MetricField>}
 					{associatedRepPerCapacityBps === undefined ? undefined : (
 						<MetricField label={securityPoolCopy.associatedRepPerCapacity} valueClassName={associatedRepToneClass}>
 							<span className='metric-inline-value'>

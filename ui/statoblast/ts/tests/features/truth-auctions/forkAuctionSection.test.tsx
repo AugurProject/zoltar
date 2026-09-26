@@ -108,7 +108,7 @@ function createActiveReportingDetails(overrides: Partial<ReportingDetails> = {})
 
 function createForkAuctionDetails(overrides: Partial<ForkAuctionDetails> = {}): ForkAuctionDetails {
 	return {
-		auctionedCapacityOwnershipAttoRep: 0n,
+		auctionedUnderwritingLimitAttoEth: 0n,
 		claimingAvailable: false,
 		settlementCollateralAttoEth: 0n,
 		currentTime: 3n,
@@ -135,7 +135,7 @@ function createChildPool(overrides: Partial<ListedSecurityPool> = {}): ListedSec
 	return {
 		settlementCollateralAttoEth: 0n,
 		currentRetentionRate: 10n,
-		feeEligibleCapacityOwnershipAttoRep: 0n,
+		feeEligibleUnderwritingLimitAttoEth: 0n,
 		hasForkActivity: true,
 		forkOutcome: 'yes',
 		forkOwnSecurityPool: false,
@@ -155,7 +155,7 @@ function createChildPool(overrides: Partial<ListedSecurityPool> = {}): ListedSec
 		shareTokenSupplyAttoShares: 0n,
 		systemState: 'operational',
 		totalPoolHeldAttoRep: 0n,
-		totalCapacityOwnershipAttoRep: 0n,
+		totalUnderwritingLimitAttoEth: 0n,
 		truthAuctionAddress: zeroAddress,
 		truthAuctionStartedAt: 1n,
 		universeHasForked: true,
@@ -643,7 +643,7 @@ describe('ForkAuctionSection', () => {
 				{
 					disputeStakedAttoRep: 0n,
 					vaultAttoRepBacking: 0n,
-					capacityOwnershipAttoRep: 0n,
+					underwritingLimitAttoEth: 0n,
 					claimableFeesAttoEth: 0n,
 					vaultAddress: walletAddress,
 				},
@@ -764,7 +764,7 @@ describe('ForkAuctionSection', () => {
 							{
 								disputeStakedAttoRep: 0n,
 								vaultAttoRepBacking: 20n,
-								capacityOwnershipAttoRep: 3n,
+								underwritingLimitAttoEth: 3n,
 								claimableFeesAttoEth: 0n,
 								vaultAddress: walletAddress,
 							},
@@ -1351,7 +1351,7 @@ describe('ForkAuctionSection', () => {
 					currentStageView: 'auction',
 					currentTimestamp: 5n,
 					forkAuctionDetails: createForkAuctionDetails({
-						auctionedCapacityOwnershipAttoRep: 7n,
+						auctionedUnderwritingLimitAttoEth: 7n,
 						currentTime: 5n,
 						parentSecurityPoolAddress: PARENT_POOL_ADDRESS,
 						questionOutcome: 'yes',

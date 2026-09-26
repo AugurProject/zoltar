@@ -40,9 +40,9 @@ function createSecurityVaultDetails(overrides: Partial<SecurityVaultDetails> = {
 		totalRepBackingUnits: 1n,
 		vaultAttoRepBacking: 12n * 10n ** 18n,
 		repToken: zeroAddress,
-		capacityOwnershipAttoRep: 2n * 10n ** 18n,
+		underwritingLimitAttoEth: 2n * 10n ** 18n,
 		securityPoolAddress: zeroAddress,
-		totalCapacityOwnershipAttoRep: 3n * 10n ** 18n,
+		totalUnderwritingLimitAttoEth: 3n * 10n ** 18n,
 		claimableFeesAttoEth: 1n * 10n ** 18n,
 		universeId: 1n,
 		vaultAddress: zeroAddress,
@@ -55,7 +55,7 @@ function createSecurityVaultSectionProps(overrides: Partial<SecurityVaultSection
 		accountState: createAccountState(),
 		loadingSecurityVault: false,
 		onApproveRep: () => undefined,
-		onAdjustVaultBackingFactor: () => undefined,
+		onSetVaultUnderwritingLimit: () => undefined,
 		onDepositRepToVault: () => undefined,
 		onLoadSecurityVault: () => undefined,
 		onRedeemFees: () => undefined,
@@ -168,11 +168,11 @@ describe('SecurityVaultSection', () => {
 	test.each([true, false])('shows queued target operation status in the vault panel (automatic: %s)', async isPendingSlot => {
 		const props = createSecurityVaultSectionProps({
 			onViewStagedOperations: () => undefined,
-			securityVaultResult: { action: 'adjustVaultBackingFactor', hash: '0x01', queuedOperation: { operation: 'adjustVaultBackingFactor', operationId: 42n, isPendingSlot } },
+			securityVaultResult: { action: 'setVaultUnderwritingLimit', hash: '0x01', queuedOperation: { operation: 'setVaultUnderwritingLimit', operationId: 42n, isPendingSlot } },
 		})
 		const rendered = await renderIntoDocument(<SecurityVaultSection {...props} />)
 		try {
-			expect(rendered.container.textContent).toContain('Backing ratio change queued')
+			expect(rendered.container.textContent).toContain('Commitment limit change queued')
 			expect(rendered.container.textContent).toContain('#42')
 			expect(rendered.container.textContent).toContain(isPendingSlot ? 'Executes automatically' : 'manual')
 		} finally {
@@ -185,14 +185,14 @@ describe('SecurityVaultSection', () => {
 			<SecurityVaultSection
 				{...createSecurityVaultSectionProps({
 					oracleManagerDetails: createOracleManagerDetails({ isPriceValid: true, stagedOperations: [], activeStagedOperationCount: 0n }),
-					securityVaultResult: { action: 'adjustVaultBackingFactor', hash: '0x01', queuedOperation: { operation: 'adjustVaultBackingFactor', operationId: 42n, isPendingSlot: true } },
+					securityVaultResult: { action: 'setVaultUnderwritingLimit', hash: '0x01', queuedOperation: { operation: 'setVaultUnderwritingLimit', operationId: 42n, isPendingSlot: true } },
 				})}
 			/>,
 		)
 		cleanupRenderedComponent = rendered.cleanup
-		expect(within(document.body).getByText('Backing ratio change submitted')).toBeDefined()
-		expect(within(document.body).queryByText('Backing ratio change queued')).toBeNull()
-		expect(within(document.body).queryByText('Backing ratio changed')).toBeNull()
+		expect(within(document.body).getByText('Commitment limit change submitted')).toBeDefined()
+		expect(within(document.body).queryByText('Commitment limit change queued')).toBeNull()
+		expect(within(document.body).queryByText('Commitment limit changed')).toBeNull()
 	})
 
 	test.each([undefined, 'missing'] as const)('preserves a manual withdrawal receipt while exact status is unresolved: %s', async status => {
@@ -215,21 +215,21 @@ describe('SecurityVaultSection', () => {
 	})
 
 	test.each([
-		['executed', 'Backing ratio changed'],
-		['failed', 'Backing ratio change failed'],
+		['executed', 'Commitment limit changed'],
+		['failed', 'Commitment limit change failed'],
 		['expired', 'Queued operation expired'],
 		['superseded', 'Target change replaced'],
 	] as const)('renders the reconciled %s state with the original queued receipt', async (status, title) => {
 		const rendered = await renderIntoDocument(
 			<SecurityVaultSection
 				{...createSecurityVaultSectionProps({
-					securityVaultResult: { action: 'adjustVaultBackingFactor', hash: '0x01', queuedOperation: { operation: 'adjustVaultBackingFactor', operationId: 42n, isPendingSlot: true }, queuedOperationState: { status } },
+					securityVaultResult: { action: 'setVaultUnderwritingLimit', hash: '0x01', queuedOperation: { operation: 'setVaultUnderwritingLimit', operationId: 42n, isPendingSlot: true }, queuedOperationState: { status } },
 				})}
 			/>,
 		)
 		cleanupRenderedComponent = rendered.cleanup
 		expect(within(document.body).getByText(title)).toBeDefined()
-		expect(within(document.body).queryByText('Backing ratio change queued')).toBeNull()
+		expect(within(document.body).queryByText('Commitment limit change queued')).toBeNull()
 	})
 
 	test.each(['manual-queued', 'executed'] as const)('shows tracked target %s independently of the latest fee claim', async status => {
@@ -237,12 +237,12 @@ describe('SecurityVaultSection', () => {
 			<SecurityVaultSection
 				{...createSecurityVaultSectionProps({
 					securityVaultResult: { action: 'redeemFees', hash: '0x02' },
-					securityVaultQueuedOperations: [{ action: 'adjustVaultBackingFactor', hash: '0x01', queuedOperation: { operation: 'adjustVaultBackingFactor', operationId: 42n, isPendingSlot: false }, queuedOperationState: { status } }],
+					securityVaultQueuedOperations: [{ action: 'setVaultUnderwritingLimit', hash: '0x01', queuedOperation: { operation: 'setVaultUnderwritingLimit', operationId: 42n, isPendingSlot: false }, queuedOperationState: { status } }],
 				})}
 			/>,
 		)
 		cleanupRenderedComponent = rendered.cleanup
-		expect(within(document.body).getByText(status === 'executed' ? 'Backing ratio changed' : 'Backing ratio change queued')).toBeDefined()
+		expect(within(document.body).getByText(status === 'executed' ? 'Commitment limit changed' : 'Commitment limit change queued')).toBeDefined()
 		if (status === 'manual-queued') expect(within(document.body).getByText('#42')).toBeDefined()
 	})
 
@@ -253,7 +253,7 @@ describe('SecurityVaultSection', () => {
 				{...createSecurityVaultSectionProps({
 					modalFirst: true,
 					securityVaultDetails: createSecurityVaultDetails({ disputeStakedAttoRep: 0n, settlementCollateralAttoEth: 0n }),
-					onAdjustVaultBackingFactor: factor => {
+					onSetVaultUnderwritingLimit: factor => {
 						submitted = factor
 					},
 				})}
@@ -261,36 +261,36 @@ describe('SecurityVaultSection', () => {
 		)
 		cleanupRenderedComponent = rendered.cleanup
 		const page = within(document.body)
-		fireEvent.click(page.getByRole('button', { name: 'Adjust backing ratio' }))
-		const dialog = within(page.getByRole('dialog', { name: 'Adjust backing ratio' }))
-		const input = dialog.getByLabelText('Target backing ratio')
+		fireEvent.click(page.getByRole('button', { name: 'Set commitment limit' }))
+		const dialog = within(page.getByRole('dialog', { name: 'Set commitment limit' }))
+		const input = dialog.getByLabelText('Commitment limit (ETH)')
 		if (!(input instanceof HTMLInputElement)) throw new Error('Expected backing factor input')
 		expect(input.value).toBe('2')
-		fireEvent.input(input, { target: { value: '0.9' } })
-		expect(dialog.getAllByText('Target backing ratio must be at least 2×')).toHaveLength(1)
-		expect(dialog.getByRole('button', { name: 'Adjust backing ratio' }).getAttribute('aria-describedby')).toBe(input.getAttribute('aria-describedby'))
+		fireEvent.input(input, { target: { value: 'invalid' } })
+		expectTransactionButtonDisabled(page.getByRole('dialog'), 'Set commitment limit')
+		expect(dialog.getByRole('button', { name: 'Set commitment limit' }).getAttribute('aria-describedby')).toBe(input.getAttribute('aria-describedby'))
 		fireEvent.input(input, { target: { value: '2' } })
 		expect(dialog.getByText('Exposure after adjustment')).toBeDefined()
 		expect(dialog.getByText('Technical details').closest('details')?.open).toBe(false)
-		expect(page.getByRole('dialog', { name: 'Adjust backing ratio' }).textContent?.replaceAll('\u00a0', ' ')).toMatch(/6(?:\.0+)?\s+REP equivalent/)
-		fireEvent.click(dialog.getByRole('button', { name: 'Adjust backing ratio' }))
+		expect(page.getByRole('dialog', { name: 'Set commitment limit' }).textContent?.replaceAll('\u00a0', ' ')).toMatch(/2(?:\.0+)?\s+ETH/)
+		fireEvent.click(dialog.getByRole('button', { name: 'Set commitment limit' }))
 		expect(submitted).toBe('2')
 	})
 
 	test('blocks a capacity reduction while settlement collateral is committed', async () => {
-		const rendered = await renderIntoDocument(<SecurityVaultSection {...createSecurityVaultSectionProps({ modalFirst: true, securityVaultDetails: createSecurityVaultDetails({ settlementCollateralAttoEth: 1n, disputeStakedAttoRep: 0n }) })} />)
+		const rendered = await renderIntoDocument(<SecurityVaultSection {...createSecurityVaultSectionProps({ modalFirst: true, securityVaultDetails: createSecurityVaultDetails({ settlementCollateralAttoEth: 2n * 10n ** 18n, disputeStakedAttoRep: 0n }) })} />)
 		cleanupRenderedComponent = rendered.cleanup
 		const page = within(document.body)
-		fireEvent.click(page.getByRole('button', { name: 'Adjust backing ratio' }))
-		const dialog = within(page.getByRole('dialog', { name: 'Adjust backing ratio' }))
-		fireEvent.input(dialog.getByLabelText('Target backing ratio'), { target: { value: '100' } })
-		expectTransactionButtonDisabled(page.getByRole('dialog'), 'Adjust backing ratio')
+		fireEvent.click(page.getByRole('button', { name: 'Set commitment limit' }))
+		const dialog = within(page.getByRole('dialog', { name: 'Set commitment limit' }))
+		fireEvent.input(dialog.getByLabelText('Commitment limit (ETH)'), { target: { value: '0' } })
+		expectTransactionButtonDisabled(page.getByRole('dialog'), 'Set commitment limit')
 	})
 
-	test('blocks adjustment while dispute REP is committed', async () => {
+	test('does not disable limit changes solely because dispute REP is committed', async () => {
 		const rendered = await renderIntoDocument(<SecurityVaultSection {...createSecurityVaultSectionProps({ securityVaultDetails: createSecurityVaultDetails({ settlementCollateralAttoEth: 0n, disputeStakedAttoRep: 1n }) })} />)
 		cleanupRenderedComponent = rendered.cleanup
-		expectTransactionButtonDisabled(document.body, 'Adjust backing ratio')
+		expectTransactionButtonEnabled(document.body, 'Set commitment limit')
 	})
 
 	test('rejects an input whose resulting capacity leaves the vault undercollateralized', async () => {
@@ -301,17 +301,17 @@ describe('SecurityVaultSection', () => {
 					oracleManagerDetails: createOracleManagerDetails(),
 					selectedPoolStatoblastSecurityMultiplierBps: 20_000n,
 					repPerEthPrice: 3n * 10n ** 18n,
-					securityVaultDetails: createSecurityVaultDetails({ targetBackingFactorBps: 20_000n, vaultAttoRepBacking: 12n * 10n ** 18n, capacityOwnershipAttoRep: 6n * 10n ** 18n, totalCapacityOwnershipAttoRep: 6n * 10n ** 18n, settlementCollateralAttoEth: 3n * 10n ** 18n, disputeStakedAttoRep: 0n, badDebtAttoEth: 0n }),
+					securityVaultDetails: createSecurityVaultDetails({ targetBackingFactorBps: 20_000n, vaultAttoRepBacking: 12n * 10n ** 18n, underwritingLimitAttoEth: 6n * 10n ** 18n, totalUnderwritingLimitAttoEth: 6n * 10n ** 18n, settlementCollateralAttoEth: 3n * 10n ** 18n, disputeStakedAttoRep: 0n, badDebtAttoEth: 0n }),
 				})}
 			/>,
 		)
 		cleanupRenderedComponent = rendered.cleanup
 		const page = within(document.body)
-		fireEvent.click(page.getByRole('button', { name: 'Adjust backing ratio' }))
-		const dialog = page.getByRole('dialog', { name: 'Adjust backing ratio' })
-		fireEvent.input(within(dialog).getByLabelText('Target backing ratio'), { target: { value: '2' } })
-		expectTransactionButtonDisabled(dialog, 'Adjust backing ratio')
-		expect(within(dialog).getByText('This target would leave the vault undercollateralized.')).not.toBeNull()
+		fireEvent.click(page.getByRole('button', { name: 'Set commitment limit' }))
+		const dialog = page.getByRole('dialog', { name: 'Set commitment limit' })
+		fireEvent.input(within(dialog).getByLabelText('Commitment limit (ETH)'), { target: { value: '7' } })
+		expectTransactionButtonDisabled(dialog, 'Set commitment limit')
+		expect(within(dialog).getByText('Deposit more REP before increasing this commitment limit.')).not.toBeNull()
 	})
 
 	test.each([
@@ -327,25 +327,33 @@ describe('SecurityVaultSection', () => {
 						repPerEthPrice: displayPrice * 10n ** 18n,
 						repPerEthSource: timestamp === 10n ? 'open-oracle' : 'v3',
 						oracleManagerDetails: createOracleManagerDetails({ lastPrice: coordinatorPrice * 10n ** 18n }),
-						securityVaultDetails: createSecurityVaultDetails({ targetBackingFactorBps: 20_000n, vaultAttoRepBacking: 12n * 10n ** 18n, capacityOwnershipAttoRep: 6n * 10n ** 18n, totalCapacityOwnershipAttoRep: 6n * 10n ** 18n, settlementCollateralAttoEth: 3n * 10n ** 18n, disputeStakedAttoRep: 0n, badDebtAttoEth: 0n }),
+						securityVaultDetails: createSecurityVaultDetails({
+							targetBackingFactorBps: 20_000n,
+							vaultAttoRepBacking: 12n * 10n ** 18n,
+							underwritingLimitAttoEth: 1n * 10n ** 18n,
+							totalUnderwritingLimitAttoEth: 10n * 10n ** 18n,
+							settlementCollateralAttoEth: 3n * 10n ** 18n,
+							disputeStakedAttoRep: 0n,
+							badDebtAttoEth: 0n,
+						}),
 					})}
 				/>
 			</ChainTimestampContext.Provider>,
 		)
 		cleanupRenderedComponent = rendered.cleanup
-		fireEvent.click(within(document.body).getByRole('button', { name: 'Adjust backing ratio' }))
-		const dialog = within(document.body).getByRole('dialog', { name: 'Adjust backing ratio' })
-		fireEvent.input(within(dialog).getByLabelText('Target backing ratio'), { target: { value: '2' } })
-		if (blocked) expectTransactionButtonDisabled(dialog, 'Adjust backing ratio')
-		else expectTransactionButtonEnabled(dialog, 'Adjust backing ratio')
+		fireEvent.click(within(document.body).getByRole('button', { name: 'Set commitment limit' }))
+		const dialog = within(document.body).getByRole('dialog', { name: 'Set commitment limit' })
+		fireEvent.input(within(dialog).getByLabelText('Commitment limit (ETH)'), { target: { value: '3' } })
+		if (blocked) expectTransactionButtonDisabled(dialog, 'Set commitment limit')
+		else expectTransactionButtonEnabled(dialog, 'Set commitment limit')
 	})
 
 	test('uses a saved target as read-only context for later deposits', async () => {
 		const rendered = await renderIntoDocument(<SecurityVaultSection {...createSecurityVaultSectionProps({ securityVaultDetails: createSecurityVaultDetails({ targetBackingFactorBps: 20_000n }) })} />)
 		cleanupRenderedComponent = rendered.cleanup
 		const page = within(document.body)
-		expect([...document.querySelectorAll('label')].filter(label => label.textContent?.includes('Target backing ratio') && label.querySelector('input') !== null)).toHaveLength(1)
-		expect(page.getAllByText('Target backing ratio').length).toBeGreaterThan(0)
+		expect([...document.querySelectorAll('label')].filter(label => label.textContent?.includes('Commitment limit') && label.querySelector('input') !== null)).toHaveLength(1)
+		expect(page.getAllByText('Commitment limit').length).toBeGreaterThan(0)
 		expect(document.body.textContent).toContain('2×')
 	})
 
@@ -381,7 +389,7 @@ describe('SecurityVaultSection', () => {
 				repPerEthPrice={undefined}
 				repPerEthSource={undefined}
 				repPerEthSourceUrl={undefined}
-				capacityOwnershipAttoRep={2n * 10n ** 18n}
+				underwritingLimitAttoEth={2n * 10n ** 18n}
 				currentVaultIsHealthy
 				securityVaultDetails={createSecurityVaultDetails()}
 				selectedPoolStatoblastSecurityMultiplierBps={20_000n}
@@ -401,7 +409,7 @@ describe('SecurityVaultSection', () => {
 				repPerEthPrice={undefined}
 				repPerEthSource={undefined}
 				repPerEthSourceUrl={undefined}
-				capacityOwnershipAttoRep={2n * 10n ** 18n}
+				underwritingLimitAttoEth={2n * 10n ** 18n}
 				currentVaultIsHealthy
 				securityVaultDetails={createSecurityVaultDetails({ associatedRepPerCapacityBps: 20_500n })}
 				selectedPoolStatoblastSecurityMultiplierBps={20_000n}
@@ -421,7 +429,7 @@ describe('SecurityVaultSection', () => {
 				repPerEthPrice={undefined}
 				repPerEthSource={undefined}
 				repPerEthSourceUrl={undefined}
-				capacityOwnershipAttoRep={2n * 10n ** 18n}
+				underwritingLimitAttoEth={2n * 10n ** 18n}
 				currentVaultIsHealthy={false}
 				securityVaultDetails={createSecurityVaultDetails()}
 				selectedPoolStatoblastSecurityMultiplierBps={20_000n}
@@ -441,7 +449,7 @@ describe('SecurityVaultSection', () => {
 				repPerEthPrice={undefined}
 				repPerEthSource={undefined}
 				repPerEthSourceUrl={undefined}
-				capacityOwnershipAttoRep={2n * 10n ** 18n}
+				underwritingLimitAttoEth={2n * 10n ** 18n}
 				currentVaultIsHealthy={undefined}
 				securityVaultDetails={createSecurityVaultDetails({ associatedRepPerCapacityBps: 19_000n })}
 				selectedPoolStatoblastSecurityMultiplierBps={20_000n}
@@ -504,7 +512,7 @@ describe('SecurityVaultSection', () => {
 				repPerEthPrice={undefined}
 				repPerEthSource={undefined}
 				repPerEthSourceUrl={undefined}
-				capacityOwnershipAttoRep={2n * 10n ** 18n}
+				underwritingLimitAttoEth={2n * 10n ** 18n}
 				securityVaultDetails={createSecurityVaultDetails({ disputeStakedAttoRep: 3n * 10n ** 18n })}
 				selectedPoolStatoblastSecurityMultiplierBps={20_000n}
 				selectedVaultIsOwnedByAccount
@@ -524,7 +532,7 @@ describe('SecurityVaultSection', () => {
 				repPerEthPrice={undefined}
 				repPerEthSource={undefined}
 				repPerEthSourceUrl={undefined}
-				capacityOwnershipAttoRep={2n * 10n ** 18n}
+				underwritingLimitAttoEth={2n * 10n ** 18n}
 				securityVaultDetails={createSecurityVaultDetails({ disputeStakedAttoRep: 0n })}
 				selectedPoolStatoblastSecurityMultiplierBps={20_000n}
 				selectedVaultIsOwnedByAccount
@@ -544,7 +552,7 @@ describe('SecurityVaultSection', () => {
 				repPerEthPrice={undefined}
 				repPerEthSource={undefined}
 				repPerEthSourceUrl={undefined}
-				capacityOwnershipAttoRep={0n}
+				underwritingLimitAttoEth={0n}
 				securityVaultDetails={createSecurityVaultDetails({ badDebtAttoEth: 2n })}
 				selectedPoolStatoblastSecurityMultiplierBps={20_000n}
 				selectedVaultIsOwnedByAccount
@@ -609,7 +617,7 @@ describe('SecurityVaultSection', () => {
 					securityVaultDetails: createSecurityVaultDetails({
 						disputeStakedAttoRep: 0n,
 						vaultAttoRepBacking: 0n,
-						capacityOwnershipAttoRep: 0n,
+						underwritingLimitAttoEth: 0n,
 						claimableFeesAttoEth: 1n * 10n ** 18n,
 					}),
 				})}
@@ -916,7 +924,7 @@ describe('SecurityVaultSection', () => {
 					securityVaultDetails: createSecurityVaultDetails({
 						disputeStakedAttoRep: 0n,
 						vaultAttoRepBacking: 0n,
-						capacityOwnershipAttoRep: 0n,
+						underwritingLimitAttoEth: 0n,
 						claimableFeesAttoEth: 0n,
 					}),
 					walletRepBalanceAttoRep: 0n,
@@ -939,7 +947,7 @@ describe('SecurityVaultSection', () => {
 					securityVaultDetails: createSecurityVaultDetails({
 						disputeStakedAttoRep: 0n,
 						vaultAttoRepBacking: 0n,
-						capacityOwnershipAttoRep: 0n,
+						underwritingLimitAttoEth: 0n,
 						claimableFeesAttoEth: 0n,
 					}),
 				})}
@@ -958,7 +966,7 @@ describe('SecurityVaultSection', () => {
 		expect(depositDialogQueries.getByText('REP backing')).not.toBeNull()
 	})
 
-	test('associates invalid deposit target factor guidance in embedded and modal deposit layouts', async () => {
+	test('deposits do not require a commitment limit in embedded and modal layouts', async () => {
 		for (const modalFirst of [false, true]) {
 			const renderedComponent = await renderIntoDocument(
 				<SecurityVaultSection
@@ -977,11 +985,8 @@ describe('SecurityVaultSection', () => {
 			const documentQueries = within(document.body)
 			if (modalFirst) fireEvent.click(documentQueries.getByRole('button', { name: 'Deposit REP' }))
 			const scope = modalFirst ? within(documentQueries.getByRole('dialog', { name: 'Deposit REP' })) : documentQueries
-			const factorInput = document.querySelector('input[aria-invalid="true"]')
-			expect(factorInput).not.toBeNull()
-			const factorError = scope.getByText('Target backing ratio must be a number with at most four decimal places')
-			expect(factorInput?.getAttribute('aria-invalid')).toBe('true')
-			expect(factorInput?.getAttribute('aria-describedby')).toBe(factorError.id)
+			if (modalFirst) expect(scope.queryByText('Commitment limit (ETH)')).toBeNull()
+			expect(scope.getByRole('button', { name: 'Deposit REP' }).getAttribute('disabled')).toBeNull()
 			renderedComponent.cleanup()
 		}
 		cleanupRenderedComponent = undefined
@@ -997,7 +1002,7 @@ describe('SecurityVaultSection', () => {
 					securityVaultDetails: createSecurityVaultDetails({
 						disputeStakedAttoRep: 0n,
 						vaultAttoRepBacking: 0n,
-						capacityOwnershipAttoRep: 0n,
+						underwritingLimitAttoEth: 0n,
 						claimableFeesAttoEth: 0n,
 						minimumVaultRepDepositAttoRep: configuredMinimum,
 					}),

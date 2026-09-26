@@ -143,7 +143,7 @@ export function LiveSecurityPoolDetails({
 									<MetricField label={liveCopy.initialReportPriorityFee}>{liveCopy.priorityFeePerGas(formatTrimmedUnits(market.initialReportPriorityFeeAttoEthPerGas, 9))}</MetricField>
 									<MetricField label={liveCopy.registeredVaults}>{market.vaultCount.toString()}</MetricField>
 									<MetricField label={liveCopy.perSecondRetentionMultiplier}>{formatTrimmedUnits(market.currentRetentionRate, 18, 12)}×</MetricField>
-									<MetricField label={liveCopy.totalAndFeeEligibleCapacityOwnership}>{formatCapacityOwnership(market.totalCapacityOwnershipAttoRep, market.feeEligibleCapacityOwnershipAttoRep)}</MetricField>
+									<MetricField label={liveCopy.totalAndFeeEligibleCapacityOwnership}>{formatCapacityOwnership(market.totalUnderwritingLimitAttoEth, market.feeEligibleUnderwritingLimitAttoEth)}</MetricField>
 								</DataGrid>
 							</ReadOnlyDetailAccordion>
 							<BackingDetails market={market} />

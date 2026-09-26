@@ -54,10 +54,10 @@ describe('transaction presentations', () => {
 
 	test('does not describe an immediately executed target change as still queued', () => {
 		const presentation = createSecurityVaultSuccessPresentation({
-			action: 'adjustVaultBackingFactor',
+			action: 'setVaultUnderwritingLimit',
 			hash: transactionHash,
-			queuedOperation: { operation: 'adjustVaultBackingFactor', operationId: 1n, isPendingSlot: false },
-			stagedExecution: { operation: 'adjustVaultBackingFactor', operationId: 1n, success: true, errorMessage: undefined },
+			queuedOperation: { operation: 'setVaultUnderwritingLimit', operationId: 1n, isPendingSlot: false },
+			stagedExecution: { operation: 'setVaultUnderwritingLimit', operationId: 1n, success: true, errorMessage: undefined },
 		})
 		expect(presentation.detail).toBeUndefined()
 	})
