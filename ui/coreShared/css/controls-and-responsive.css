@@ -139,6 +139,11 @@
 	gap: var(--space-2);
 }
 
+/* A dialog form's action row steps aside while its transaction review owns the actions. */
+.tx-action-group[hidden] {
+	display: none;
+}
+
 .tx-action-group > .actions {
 	align-items: flex-start;
 }
@@ -894,6 +899,7 @@
 .header-toolbar-settings {
 	display: flex;
 	align-items: center;
+	gap: var(--space-2);
 }
 
 /* The details toggle only appears when the strip has something to reveal: secondary metrics at the tablet breakpoint or a collapsed simulation strip on phones. */
@@ -944,9 +950,11 @@
 }
 
 @media (max-width: 42rem) {
-	/* The brand keeps one line beside the settings control; it steps down a size instead of wrapping and only wraps on the narrowest phones. */
+	/* The brand steps down a size and wraps rather than running under the activity and settings controls. */
 	.header-toolbar .application-brand {
+		min-width: 0;
 		font-size: 1.125rem;
+		white-space: normal;
 	}
 
 	/* Wallet chip and universe share one toolbar row when they fit, with the universe caption stacked over its value; otherwise the field takes its own row. */

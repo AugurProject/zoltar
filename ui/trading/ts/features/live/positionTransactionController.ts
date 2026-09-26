@@ -1,4 +1,6 @@
 import { withReadTimeout } from '@zoltar/ui-core-shared/lib/promise.js'
+import { createMarketTransactionActivity } from './marketTransactionActivity.js'
+import * as workflowCopy from '../../copy/workflows.js'
 import type { Address, Hash } from '@zoltar/core-shared/evm/ethereum'
 import { waitForSubmittedTransactionReceipt } from '@zoltar/ui-core-shared/transactions/transactionReceipt.js'
 import type { createLatestRequestGuard } from '@zoltar/ui-core-shared/lib/requestGuard.js'
@@ -81,6 +83,7 @@ export function createPositionTransactionController({
 		updatePositionWorkflowLock(true)
 		dispatchWorkflow({ type: 'operation-preparing', context, operation: 'trade' })
 		let broadcastHash: Hash | undefined
+		const activity = createMarketTransactionActivity(selected.pool, workflowCopy.formatTradeActivity(selected.title))
 		let receiptKnown = false
 		let keepLocked = false
 		try {
@@ -105,6 +108,7 @@ export function createPositionTransactionController({
 					return await write()
 				})
 			broadcastHash = quote.kind === 'entry' ? await services.submitFreshEntry(walletClient, configuration, account, quote.value, guardedWrite) : await services.submitFreshExit(walletClient, configuration, account, quote.value, guardedWrite)
+			activity.broadcast(broadcastHash)
 			dispatchWorkflow({ type: 'broadcast', context, operation: 'trade', transactionHash: broadcastHash })
 			const { receipt } = await waitForSubmittedTransactionReceipt(walletClient, broadcastHash, {
 				allowRevertedReceipt: true,
@@ -114,9 +118,11 @@ export function createPositionTransactionController({
 				},
 				onTransactionReplaced: replacementHash => {
 					broadcastHash = replacementHash
+					activity.replaced(replacementHash)
 					dispatchWorkflow({ type: 'replaced', context, replacementHash })
 				},
 			})
+			activity.receipt(receipt.status)
 			if (receipt.status === 'reverted') {
 				dispatchWorkflow({ type: 'reverted', context })
 				return
@@ -125,6 +131,7 @@ export function createPositionTransactionController({
 			dispatchWorkflow({ type: 'confirmed', context })
 			await refresh(configuration, marketPageStart, 'position')
 		} catch (error) {
+			activity.stopped(error, receiptKnown)
 			if (broadcastHash !== undefined && !receiptKnown) {
 				keepLocked = true
 				dispatchWorkflow({ type: 'uncertain', context, reason: broadcastUncertainMessage('Transaction', broadcastHash) })

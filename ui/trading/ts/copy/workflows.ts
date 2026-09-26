@@ -22,6 +22,9 @@ export const simulatingRouterCall = 'Simulating router call…'
 export const authoritativeSimulationReady = 'Fresh authoritative simulation ready'
 export const transactionWorkflowNeedsAttention = 'Transaction workflow needs attention'
 export const tradeTransactionReverted = 'Trade transaction reverted'
+export const formatTradeActivity = (market: string) => `Trade · ${market}`
+export const formatLiquidityActivity = (market: string) => `Liquidity · ${market}`
+export const formatSettlementActivity = (market: string) => `Settlement · ${market}`
 export const transactionProtection = 'Transaction protection'
 export const slippageTolerance = 'Slippage tolerance'
 export const slippageValidation = 'Enter 0% to 5%, with at most two decimal places.'

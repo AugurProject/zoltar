@@ -1,4 +1,5 @@
 import { TimestampValue } from '@zoltar/ui-core-shared/components/TimestampValue.js'
+import { isMarketTransactionPending } from './live/marketTransactionActivity.js'
 import type { RefObject } from 'preact'
 import { useEffect, useRef, useState } from 'preact/hooks'
 import { formatTrimmedUnits } from '@zoltar/ui-core-shared/lib/formatters.js'
@@ -43,7 +44,7 @@ type MarketWorkspaceView = 'trade' | 'liquidity' | 'settlement'
 
 const MARKET_WORKSPACE_PANEL_ID = 'market-workspace-panel'
 
-function MarketFacts({ market, nowSeconds, workflowLocked, headingRef }: { market: LiveMarket; nowSeconds: bigint; workflowLocked: boolean; headingRef: RefObject<HTMLHeadingElement> }) {
+function MarketFacts({ market, nowSeconds, headingRef }: { market: LiveMarket; nowSeconds: bigint; headingRef: RefObject<HTMLHeadingElement> }) {
 	return (
 		<StickyObjectContext
 			variant='embedded-context-strip'
@@ -52,7 +53,7 @@ function MarketFacts({ market, nowSeconds, workflowLocked, headingRef }: { marke
 			titleRef={headingRef}
 			badge={<Badge tone={marketStatusTone(market, nowSeconds)}>{marketStatusLabel(market, nowSeconds)}</Badge>}
 			items={[
-				{ label: liveCopy.securityPoolLabel, value: <SecurityPoolLink value={market.pool} disabled={workflowLocked} /> },
+				{ label: liveCopy.securityPoolLabel, value: <SecurityPoolLink value={market.pool} /> },
 				...(market.loadError === undefined
 					? [
 							{ label: liveCopy.questionEnd, value: <TimestampValue timestamp={market.endTime} relative={false} /> },
@@ -221,19 +222,21 @@ export function LiveTrading({
 		)
 	}
 	const routePresentation = liveWorkflowRoutePresentation(workflowRoute)
+	// Navigation stays free while a transaction is pending; the market it touches keeps its ticket locked until it settles.
+	const ticketLocked = workflowLocked || isMarketTransactionPending(selected?.pool)
 	const marketOpen = selected !== undefined && marketAcceptsNewRisk(selected, nowSeconds)
 	let activeView: MarketWorkspaceView = marketOpen ? 'trade' : closedMarketView
 	if (workflowRoute === 'liquidity') activeView = 'liquidity'
 	const viewTabId = (view: MarketWorkspaceView) => `market-workspace-${view}-tab`
 	const openView = (view: MarketWorkspaceView) => {
-		if (selected === undefined || workflowLocked) return
+		if (selected === undefined) return
 		if (view !== 'liquidity') setClosedMarketView(view === 'settlement' ? 'settlement' : 'trade')
 		window.location.hash = getTradingRouteHref(`#/${view === 'liquidity' ? 'liquidity' : 'market'}/${selected.pool}`)
 	}
 	const viewOptions = [
-		{ value: 'trade' as const, id: viewTabId('trade'), panelId: MARKET_WORKSPACE_PANEL_ID, label: appCopy.trade, disabled: workflowLocked },
-		{ value: 'liquidity' as const, id: viewTabId('liquidity'), panelId: MARKET_WORKSPACE_PANEL_ID, label: appCopy.liquidity, disabled: workflowLocked },
-		...(marketOpen ? [] : [{ value: 'settlement' as const, id: viewTabId('settlement'), panelId: MARKET_WORKSPACE_PANEL_ID, label: appCopy.settlement, disabled: workflowLocked }]),
+		{ value: 'trade' as const, id: viewTabId('trade'), panelId: MARKET_WORKSPACE_PANEL_ID, label: appCopy.trade },
+		{ value: 'liquidity' as const, id: viewTabId('liquidity'), panelId: MARKET_WORKSPACE_PANEL_ID, label: appCopy.liquidity },
+		...(marketOpen ? [] : [{ value: 'settlement' as const, id: viewTabId('settlement'), panelId: MARKET_WORKSPACE_PANEL_ID, label: appCopy.settlement }]),
 	]
 	// The route header names the workflow; the object header below carries the market question, status, and facts, so
 	// neither repeats the other. Focus lands on the object header when the addressed market changes.
@@ -258,7 +261,7 @@ export function LiveTrading({
 					if (creatingMarket && selected.pair !== undefined)
 						return (
 							<SectionBlock variant='plain'>
-								<MarketFacts market={selected} nowSeconds={nowSeconds} workflowLocked={workflowLocked} headingRef={marketHeadingRef} />
+								<MarketFacts market={selected} nowSeconds={nowSeconds} headingRef={marketHeadingRef} />
 								<p className='detail'>
 									{liveCopy.poolAlreadyExists} <a href={getTradingRouteHref(`#/liquidity/${selected.pool}`)}>{appCopy.liquidity}</a>
 								</p>
@@ -267,14 +270,14 @@ export function LiveTrading({
 					if (selected.loadError !== undefined)
 						return (
 							<SectionBlock key={selected.pool} variant='plain'>
-								<MarketFacts market={selected} nowSeconds={nowSeconds} workflowLocked={workflowLocked} headingRef={marketHeadingRef} />
+								<MarketFacts market={selected} nowSeconds={nowSeconds} headingRef={marketHeadingRef} />
 								<ErrorNotice message={liveCopy.securityPoolCouldNotLoad(selected.loadError)} />
 							</SectionBlock>
 						)
 					if (creatingMarket)
 						return (
 							<SectionBlock key={selected.pool} title={appCopy.liquidity}>
-								<MarketFacts market={selected} nowSeconds={nowSeconds} workflowLocked={workflowLocked} headingRef={marketHeadingRef} />
+								<MarketFacts market={selected} nowSeconds={nowSeconds} headingRef={marketHeadingRef} />
 								<LiveLiquidityControls
 									configuration={configuration}
 									market={selected}
@@ -285,7 +288,7 @@ export function LiveTrading({
 									walletClient={walletClient}
 									networkMismatchReason={networkMismatchReason}
 									walletEthAttoEth={walletEthAttoEth}
-									externallyLocked={workflowLocked}
+									externallyLocked={ticketLocked}
 									nowSeconds={nowSeconds}
 									refresh={async () => {
 										await refresh(configuration, marketPage.start, 'liquidity')
@@ -302,7 +305,7 @@ export function LiveTrading({
 						)
 					return (
 						<SectionBlock key={selected.pool} className='market-workspace'>
-							<MarketFacts market={selected} nowSeconds={nowSeconds} workflowLocked={workflowLocked} headingRef={marketHeadingRef} />
+							<MarketFacts market={selected} nowSeconds={nowSeconds} headingRef={marketHeadingRef} />
 							<ViewTabs ariaLabel={appCopy.marketWorkspaceViews} semantics='tabs' size='compact' value={activeView} onChange={openView} options={viewOptions} />
 							<div className='market-workspace-panel' role='tabpanel' id={MARKET_WORKSPACE_PANEL_ID} aria-labelledby={viewTabId(activeView)}>
 								{activeView === 'settlement' ? (
@@ -315,7 +318,7 @@ export function LiveTrading({
 										account={account}
 										walletClient={walletClient}
 										networkMismatchReason={networkMismatchReason}
-										externallyLocked={workflowLocked}
+										externallyLocked={ticketLocked}
 										refresh={() => refresh(configuration, marketPage.start, 'liquidity')}
 										onKnownReceipt={refreshWalletSummaryAfterReceipt}
 										executeWithCurrentWalletContext={executeWithCurrentWalletContext}
@@ -336,7 +339,7 @@ export function LiveTrading({
 										walletClient={walletClient}
 										networkMismatchReason={networkMismatchReason}
 										walletEthAttoEth={walletEthAttoEth}
-										externallyLocked={workflowLocked}
+										externallyLocked={ticketLocked}
 										nowSeconds={nowSeconds}
 										refresh={() => refresh(configuration, marketPage.start, 'liquidity')}
 										onKnownReceipt={refreshWalletSummaryAfterReceipt}
@@ -368,7 +371,7 @@ export function LiveTrading({
 										message={message}
 										receiptWarning={positionReceiptWarning}
 										transactionHash={positionHash}
-										externallyLocked={workflowLocked}
+										externallyLocked={ticketLocked}
 										nowSeconds={nowSeconds}
 										setMode={setMode}
 										setSide={setSide}

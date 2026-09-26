@@ -1,9 +1,9 @@
 import { registerTransactionReviewScope } from '../transactions/transactionReviewScope.js'
 import { transactionSteps } from '../transactions/transactionSteps.js'
-import { TransactionStepsActions, TransactionStepsContent } from './TransactionStepsContent.js'
+import { TransactionStepsContent } from './TransactionStepsContent.js'
 import * as commonCopy from '../copy/common.js'
-import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'preact/hooks'
-import { ReviewActionsSlotContext } from './reviewActionsSlot.js'
+import { useEffect, useId, useLayoutEffect, useRef, useState } from 'preact/hooks'
+import { TransactionReviewActiveContext } from './TransactionActionButton.js'
 import { useModalFocusIsolation } from '../hooks/useModalFocusIsolation.js'
 import type { OperationModalProps } from '../types/components.js'
 import { GlobalTransactionPresentationProvider, useGlobalTransactionPresentation } from './GlobalTransactionPresentationContext.js'
@@ -24,14 +24,12 @@ function getModalTransactionPresentation(transaction: ReturnType<typeof useGloba
 	return { ...compactTransaction, rows: transaction.rows.filter(row => (row.identityKey === undefined || !contextIdentityKeys.has(row.identityKey)) && !contextLabels.has(row.label)) }
 }
 
-export function OperationModal({ children, confirmSingleStepFromForm = false, closeDisabled = false, closeOnSuccessKey, context = [], description, embedTransactionSteps = true, getReturnFocusTarget, isOpen, onClose, title }: OperationModalProps) {
+export function OperationModal({ children, confirmSingleStepFromForm = false, closeDisabled = false, closeOnSuccessKey, context = [], description, embedTransactionSteps = true, getReturnFocusTarget, hostsExternalReview = false, isOpen, onClose, title }: OperationModalProps) {
 	const dialogRef = useRef<HTMLElement | null>(null)
 	const closeButtonRef = useRef<HTMLButtonElement | null>(null)
-	const bodyRef = useRef<HTMLDivElement | null>(null)
-	const [reviewActionsSlot, setReviewActionsSlot] = useState<HTMLElement | null>(null)
 	const [reviewScope, setReviewScope] = useState<AbortController>()
 	useLayoutEffect(() => {
-		if (!isOpen || !embedTransactionSteps) return
+		if (!isOpen || !embedTransactionSteps || hostsExternalReview) return
 		const scope = new AbortController()
 		const unregister = registerTransactionReviewScope(scope.signal)
 		setReviewScope(scope)
@@ -39,33 +37,16 @@ export function OperationModal({ children, confirmSingleStepFromForm = false, cl
 			scope.abort()
 			unregister()
 		}
-	}, [isOpen, embedTransactionSteps])
+	}, [isOpen, embedTransactionSteps, hostsExternalReview])
 	const workflow = transactionSteps.value
-	const ownsWorkflow = reviewScope !== undefined && !reviewScope.signal.aborted && workflow?.reviewSignal === reviewScope.signal
+	// A review started inside this dialog belongs to its scope; the shared review dialog hosts a review started elsewhere.
+	const ownsWorkflow = workflow !== undefined && (hostsExternalReview || (reviewScope?.signal.aborted === false && workflow.reviewSignal === reviewScope.signal))
 	const ownedWorkflow = ownsWorkflow ? workflow : undefined
 	const activeStep = ownedWorkflow?.steps[ownedWorkflow.activeIndex]
 	// A workflow made only of approvals was started by the form's own approve control, which already shows the amount and its pending state.
 	const approvalOnly = ownedWorkflow !== undefined && activeStep !== undefined && ownedWorkflow.steps.every(step => step.spender !== undefined)
 	const singleFormAction = confirmSingleStepFromForm && ownedWorkflow?.steps.length === 1
 	const showSteps = activeStep !== undefined && !approvalOnly && !singleFormAction
-	// Stable handlers keep the form's action group from re-claiming the slot on every render.
-	const reviewActionsSlotHandlers = useMemo(() => ({ claim: (element: HTMLElement) => setReviewActionsSlot(element), release: () => setReviewActionsSlot(null) }), [])
-	// With a claimed action row the rest of the form goes inert around it; without one the whole form does.
-	useLayoutEffect(() => {
-		const body = bodyRef.current
-		if (!showSteps || reviewActionsSlot === null || body === null) return
-		const marked: HTMLElement[] = []
-		for (let node: HTMLElement | null = reviewActionsSlot; node !== null && node !== body; node = node.parentElement) {
-			for (const sibling of Array.from(node.parentElement?.children ?? [])) {
-				if (sibling === node || !(sibling instanceof HTMLElement) || sibling.hasAttribute('inert')) continue
-				sibling.setAttribute('inert', '')
-				marked.push(sibling)
-			}
-		}
-		return () => {
-			for (const element of marked) element.removeAttribute('inert')
-		}
-	}, [showSteps, reviewActionsSlot])
 	useEffect(() => {
 		if (ownedWorkflow === undefined || activeStep === undefined || (!approvalOnly && !singleFormAction) || activeStep.phase !== 'review') return
 		ownedWorkflow.confirmStep(ownedWorkflow.activeIndex)
@@ -78,8 +59,9 @@ export function OperationModal({ children, confirmSingleStepFromForm = false, cl
 		ownedWorkflow.cancel()
 	}, [activeStep, activeTransactionTone, ownedWorkflow])
 	const activeTransaction = useGlobalTransactionPresentation()
-	const pending = ownsWorkflow && workflow.steps.some(step => step.phase === 'pending' && step.error === undefined) && activeTransaction?.tone !== 'error'
-	const cannotClose = closeDisabled || pending
+	// Only an open wallet prompt holds the dialog; a broadcast transaction keeps running and stays in the activity list after it closes.
+	const awaitingWallet = ownsWorkflow && workflow.steps.some(step => step.phase === 'wallet') && activeTransaction?.tone !== 'error'
+	const cannotClose = closeDisabled || awaitingWallet
 	const activeTransactionOperationKey = getTransactionOperationKey(activeTransaction)
 	const modalTransaction = getModalTransactionPresentation(activeTransaction, context)
 	const titleId = useId()
@@ -140,17 +122,6 @@ export function OperationModal({ children, confirmSingleStepFromForm = false, cl
 	const returnToForm = () => {
 		if (ownsWorkflow) workflow.cancel()
 	}
-	const reviewActionsSlotContext = showSteps
-		? {
-				...reviewActionsSlotHandlers,
-				actions: (
-					<GlobalTransactionPresentationProvider transaction={modalTransaction}>
-						<TransactionStepsActions contextKey={titleId} focusOnMount keepActionsVisible onClose={returnToForm} />
-					</GlobalTransactionPresentationProvider>
-				),
-			}
-		: undefined
-
 	return (
 		<div className='modal-backdrop' role='presentation' onClick={requestClose}>
 			<section ref={dialogRef} className='modal-panel operation-modal-panel' role='dialog' tabIndex={-1} aria-busy={cannotClose || undefined} aria-modal='true' aria-labelledby={titleId} aria-describedby={descriptionId} onClick={event => event.stopPropagation()}>
@@ -169,14 +140,15 @@ export function OperationModal({ children, confirmSingleStepFromForm = false, cl
 							{description}
 						</p>
 					)}
-					<div className='operation-modal-body' inert={(showSteps && reviewActionsSlot === null) || undefined} ref={bodyRef}>
-						<ReviewActionsSlotContext.Provider value={reviewActionsSlotContext}>{children}</ReviewActionsSlotContext.Provider>
+					{/* While the review runs the form stays visible for reference but cannot be edited, and its action row steps aside for the review's. */}
+					<div className='operation-modal-body' inert={showSteps || undefined}>
+						<TransactionReviewActiveContext.Provider value={showSteps}>{children}</TransactionReviewActiveContext.Provider>
 					</div>
 					{showSteps ? (
 						<div className='operation-modal-steps'>
 							{/* The dialog already shows its context rows above the form, so the step review only keeps the rows it does not cover. */}
 							<GlobalTransactionPresentationProvider transaction={modalTransaction}>
-								<TransactionStepsContent actions={reviewActionsSlot === null ? 'inline' : 'external'} contextKey={titleId} focusOnMount keepActionsVisible onClose={returnToForm} />
+								<TransactionStepsContent contextKey={titleId} focusOnMount keepActionsVisible onClose={returnToForm} />
 							</GlobalTransactionPresentationProvider>
 						</div>
 					) : undefined}

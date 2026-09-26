@@ -1,4 +1,6 @@
 import { withReadTimeout } from '@zoltar/ui-core-shared/lib/promise.js'
+import * as workflowCopy from '../../copy/workflows.js'
+import { createMarketTransactionActivity } from './marketTransactionActivity.js'
 import type { Address, Hash, WalletClient } from '@zoltar/core-shared/evm/ethereum'
 import { createExclusiveWorkflowGuard, createLatestRequestGuard } from '@zoltar/ui-core-shared/lib/requestGuard.js'
 import { waitForSubmittedTransactionReceipt } from '@zoltar/ui-core-shared/transactions/transactionReceipt.js'
@@ -126,6 +128,7 @@ export function useSettlementWorkflowController({
 		onWorkflowLockChange(true)
 		dispatchWorkflow({ type: 'operation-preparing', context, operation: 'settlement' })
 		let broadcastHash: Hash | undefined
+		const activity = createMarketTransactionActivity(market.pool, workflowCopy.formatSettlementActivity(market.title))
 		let receiptKnown = false
 		let keepLocked = false
 		let signatureRequested = false
@@ -148,7 +151,11 @@ export function useSettlementWorkflowController({
 						return await write()
 					}),
 			)
-			if (!mounted.current) return
+			activity.broadcast(broadcastHash)
+			if (!mounted.current) {
+				activity.handOff()
+				return
+			}
 			if (!signatureRequested) dispatchWorkflow({ type: 'signature-requested', context, operation: 'settlement' })
 			dispatchWorkflow({ type: 'broadcast', context, operation: 'settlement', transactionHash: broadcastHash })
 			const { receipt } = await waitForSubmittedTransactionReceipt(walletClient, broadcastHash, {
@@ -159,9 +166,11 @@ export function useSettlementWorkflowController({
 				},
 				onTransactionReplaced: replacementHash => {
 					broadcastHash = replacementHash
+					activity.replaced(replacementHash)
 					if (mounted.current) dispatchWorkflow({ type: 'replaced', context, replacementHash })
 				},
 			})
+			activity.receipt(receipt.status)
 			if (!mounted.current) return
 			if (receipt.status === 'reverted') {
 				dispatchWorkflow({ type: 'reverted', context })
@@ -175,6 +184,7 @@ export function useSettlementWorkflowController({
 				onMigrationConfirmed()
 			}
 		} catch (caught) {
+			activity.stopped(caught, receiptKnown)
 			if (!mounted.current) return
 			if (broadcastHash !== undefined && !receiptKnown) {
 				keepLocked = true

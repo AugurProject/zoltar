@@ -224,7 +224,7 @@ describe('transaction presentations', () => {
 				value: 0n,
 			})
 			const submitted = markTransactionSubmitted(prepared, transactionHash)
-			const failed = markTransactionFailed(submitted, 'Transaction reverted')
+			const failed = markTransactionFailed(submitted, { kind: 'reverted', message: 'Transaction reverted' })
 
 			for (const state of [requested, prepared, submitted, failed]) {
 				expect(state.active?.rows?.map(row => row.label)).toContain('Pool')
@@ -255,7 +255,7 @@ describe('transaction presentations', () => {
 			value: 0n,
 		})
 		const submitted = markTransactionSubmitted(prepared, transactionHash)
-		const failed = markTransactionFailed(submitted, 'Transaction reverted')
+		const failed = markTransactionFailed(submitted, { kind: 'reverted', message: 'Transaction reverted' })
 		const success = createPoolOracleSuccessPresentation({ action: 'requestPrice', hash: transactionHash }, context)
 
 		for (const presentation of [requested.active, prepared.active, submitted.active, failed.active, success]) {

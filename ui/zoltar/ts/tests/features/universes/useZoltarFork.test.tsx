@@ -164,11 +164,11 @@ describe('useZoltarFork', () => {
 		const ensureZoltarUniverse = mock(async () => createUniverse())
 		const onTransactionRequested = mock(() => undefined)
 		let transactionState = markTransactionRequested(createInitialTransactionTrayState(), { action: 'deploy', source: 'zoltar', submittedTitle: 'Deploying contracts' })
-		const admittedIntent = transactionState.pendingIntent
-		const admittedRequestKey = transactionState.pendingRequestKey
+		const admittedIntent = transactionState.entries[0]?.intent
+		const admittedRequestKey = transactionState.entries[0]?.key
 		const admittedPresentation = transactionState.active
 		const onTransactionFailed = mock((message: string) => {
-			transactionState = markTransactionFailed(transactionState, message)
+			transactionState = markTransactionFailed(transactionState, { kind: 'error', message })
 		})
 		let hookState: UseZoltarForkState | undefined
 		const Harness = function ZoltarForkHarness() {
@@ -203,9 +203,9 @@ describe('useZoltarFork', () => {
 		expect(onTransactionRequested).not.toHaveBeenCalled()
 		expect(ensureZoltarUniverse).not.toHaveBeenCalled()
 		expect(onTransactionFailed).not.toHaveBeenCalled()
-		expect(transactionState.inFlightCount).toBe(1)
-		expect(transactionState.pendingIntent).toBe(admittedIntent)
-		expect(transactionState.pendingRequestKey).toBe(admittedRequestKey)
+		expect(transactionState.entries.length).toBe(1)
+		expect(transactionState.entries[0]?.intent).toBe(admittedIntent)
+		expect(transactionState.entries[0]?.key).toBe(admittedRequestKey)
 		expect(transactionState.active).toBe(admittedPresentation)
 	})
 

@@ -74,8 +74,10 @@ export function useLiveTradingController({
 	const selectedBalances = balanceState === 'ready' ? liveBalancesForMarket(balances, selected) : undefined
 	let selectedBalanceState = balanceState
 	if (balanceState !== 'error' && balances !== undefined && selectedBalances === undefined) selectedBalanceState = account === undefined ? 'disconnected' : 'loading'
+	const workflowMarket = transactionWorkflow.workflowState.kind === 'idle' ? undefined : transactionWorkflow.workflowState.context?.market
+	const otherMarketWorkflow = workflowMarket !== undefined && selected !== undefined && workflowMarket.toLowerCase() !== selected.pool.toLowerCase()
 	const selectedPairInitialized = selected === undefined ? false : livePairInitialized(selected)
-	const { refresh, refreshFromControl, loadMarketPage } = useMarketDiscoveryController({
+	const { refresh, refreshCurrentRoute, refreshFromControl, loadMarketPage } = useMarketDiscoveryController({
 		route,
 		configuration,
 		configurationError,
@@ -174,7 +176,8 @@ export function useLiveTradingController({
 		createGuardedWalletWrite,
 		executeWithCurrentWalletContext,
 		refreshWalletSummaryAfterReceipt,
-		refresh,
+		// A trade can confirm after navigation; its refresh must load the route now on screen, not the one it started on.
+		refresh: refreshCurrentRoute,
 		marketPageStart: marketPage.start,
 	})
 
@@ -222,11 +225,12 @@ export function useLiveTradingController({
 			amount,
 			slippage,
 			transactionValidityMinutes,
-			quote,
-			state,
-			positionHash,
-			message,
-			positionReceiptWarning,
+			// A trade still running on another market stays in the activity list; this market's ticket shows no status of it.
+			quote: otherMarketWorkflow ? undefined : quote,
+			state: otherMarketWorkflow ? 'idle' : state,
+			positionHash: otherMarketWorkflow ? undefined : positionHash,
+			message: otherMarketWorkflow ? undefined : message,
+			positionReceiptWarning: otherMarketWorkflow ? undefined : positionReceiptWarning,
 			...positionActions,
 		},
 		workflow: {

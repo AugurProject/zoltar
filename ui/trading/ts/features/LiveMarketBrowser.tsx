@@ -127,12 +127,12 @@ export function LiveMarketBrowser({
 		)
 	return (
 		<SectionBlock className='market-browser' title={listKind === 'security-pools' ? presentation.title : undefined} description={presentation.description} variant='plain' busy={discoveryState === 'loading'}>
-			<OpenPoolForm disabled={workflowLocked} target={lookupRoute} />
+			<OpenPoolForm disabled={false} target={lookupRoute} />
 			{content}
 			<PaginationControls
 				hasNextPage={marketPage.nextStart !== undefined}
 				hasPreviousPage={marketPage.previousStart !== undefined}
-				loading={discoveryState === 'loading' || workflowLocked}
+				loading={discoveryState === 'loading'}
 				summary={pageMarketCount === 0 ? undefined : liveCopy.poolPageRange(marketPage.start + 1n, marketPage.start + BigInt(pageMarketCount), marketPage.total)}
 				onPreviousPage={() => loadMarketPage(marketPage.previousStart)}
 				onNextPage={() => loadMarketPage(marketPage.nextStart)}

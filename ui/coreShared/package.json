@@ -123,6 +123,10 @@
 			"bun": "./ts/tests/app/appHeaderShell.test.tsx",
 			"default": "./js/tests/app/appHeaderShell.test.js"
 		},
+		"./tests/app/transactionActivityMenu.test.js": {
+			"bun": "./ts/tests/app/transactionActivityMenu.test.tsx",
+			"default": "./js/tests/app/transactionActivityMenu.test.js"
+		},
 		"./tests/app/mainnetDisabledNotice.test.js": {
 			"bun": "./ts/tests/app/mainnetDisabledNotice.test.tsx",
 			"default": "./js/tests/app/mainnetDisabledNotice.test.js"
@@ -286,6 +290,10 @@
 		"./app/components/AppHeaderShell.js": {
 			"bun": "./ts/app/components/AppHeaderShell.tsx",
 			"default": "./js/app/components/AppHeaderShell.js"
+		},
+		"./app/components/TransactionActivityMenu.js": {
+			"bun": "./ts/app/components/TransactionActivityMenu.tsx",
+			"default": "./js/app/components/TransactionActivityMenu.js"
 		},
 		"./app/components/MainnetDisabledNotice.js": {
 			"bun": "./ts/app/components/MainnetDisabledNotice.tsx",

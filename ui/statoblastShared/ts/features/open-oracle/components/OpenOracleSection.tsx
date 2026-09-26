@@ -1,4 +1,6 @@
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
+import { TransactionScopeProvider } from '@zoltar/ui-core-shared/components/TransactionActionButton.js'
+import { createTransactionScope } from '@zoltar/ui-core-shared/transactions/transactionScope.js'
 import * as openOracleCopy from '../../../copy/openOracle.js'
 import { useEffect, useState } from 'preact/hooks'
 import { AddressValue } from '@zoltar/ui-core-shared/components/AddressValue.js'
@@ -551,33 +553,35 @@ export function OpenOracleSection({
 
 			{view === 'selected-report' ? (
 				<div className='workflow-stack route-workflow-stack open-oracle-report-stack'>
-					<OpenOracleReportDetailsCard
-						accountAddress={accountState.address}
-						isConnected={isConnected}
-						isOnActiveAppChain={isOnActiveAppChain}
-						onApproveToken1={onApproveToken1}
-						onApproveToken2={onApproveToken2}
-						onDisputeReport={onDisputeReport}
-						onLoadOracleReport={onLoadOracleReport}
-						onOpenOracleFormChange={onOpenOracleFormChange}
-						onSelectedReportModalChange={changeSelectedReportModal}
-						onSettleReport={onSettleReport}
-						onWithdrawOpenOracleBalance={onWithdrawOpenOracleBalance}
-						openOracleActiveAction={openOracleActiveAction}
-						openOracleActiveWithdrawalBalance={openOracleActiveWithdrawalBalance}
-						openOracleDisputeSubmission={openOracleDisputeSubmission}
-						openOracleForm={openOracleForm}
-						openOracleReportDetails={effectiveOpenOracleReportDetails}
-						openOracleReportLookupState={openOracleReportLookupState}
-						openOracleResult={openOracleResult}
-						openOracleTokenAccessState={openOracleTokenAccessState}
-						openOracleWithdrawableBalances={openOracleWithdrawableBalances}
-						openOracleWithdrawableBalancesError={openOracleWithdrawableBalancesError}
-						openOracleWithdrawableBalancesLoading={openOracleWithdrawableBalancesLoading}
-						openOracleWithdrawalBalanceChecking={openOracleWithdrawalBalanceChecking}
-						openOracleWithdrawalReviewMessage={openOracleWithdrawalReviewMessage}
-						selectedReportModal={selectedReportModal}
-					/>
+					<TransactionScopeProvider scope={createTransactionScope('open-oracle-report', openOracleForm.reportId)}>
+						<OpenOracleReportDetailsCard
+							accountAddress={accountState.address}
+							isConnected={isConnected}
+							isOnActiveAppChain={isOnActiveAppChain}
+							onApproveToken1={onApproveToken1}
+							onApproveToken2={onApproveToken2}
+							onDisputeReport={onDisputeReport}
+							onLoadOracleReport={onLoadOracleReport}
+							onOpenOracleFormChange={onOpenOracleFormChange}
+							onSelectedReportModalChange={changeSelectedReportModal}
+							onSettleReport={onSettleReport}
+							onWithdrawOpenOracleBalance={onWithdrawOpenOracleBalance}
+							openOracleActiveAction={openOracleActiveAction}
+							openOracleActiveWithdrawalBalance={openOracleActiveWithdrawalBalance}
+							openOracleDisputeSubmission={openOracleDisputeSubmission}
+							openOracleForm={openOracleForm}
+							openOracleReportDetails={effectiveOpenOracleReportDetails}
+							openOracleReportLookupState={openOracleReportLookupState}
+							openOracleResult={openOracleResult}
+							openOracleTokenAccessState={openOracleTokenAccessState}
+							openOracleWithdrawableBalances={openOracleWithdrawableBalances}
+							openOracleWithdrawableBalancesError={openOracleWithdrawableBalancesError}
+							openOracleWithdrawableBalancesLoading={openOracleWithdrawableBalancesLoading}
+							openOracleWithdrawalBalanceChecking={openOracleWithdrawalBalanceChecking}
+							openOracleWithdrawalReviewMessage={openOracleWithdrawalReviewMessage}
+							selectedReportModal={selectedReportModal}
+						/>
+					</TransactionScopeProvider>
 				</div>
 			) : undefined}
 

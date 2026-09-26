@@ -7,6 +7,7 @@ import type { SecondaryNavigation } from '../../navigation/appNavigation.js'
 import type { ComponentChildren } from 'preact'
 import { AppSettingsMenu } from './AppSettingsMenu.js'
 import { RouteSubNavigation } from './RouteSubNavigation.js'
+import { TransactionActivityMenu } from './TransactionActivityMenu.js'
 
 type AppHeaderShellProps = {
 	mainElementId?: string
@@ -37,7 +38,12 @@ export function AppHeaderShell({ mainElementId = 'app-content', header, renderHe
 	}
 
 	const simulationBanner = simulationController === undefined ? undefined : <SimulationBanner controller={simulationController} onEnvironmentChanged={onEnvironmentChanged} onRefresh={onRefresh} />
-	const settingsMenu = <AppSettingsMenu onEnvironmentChanged={onEnvironmentChanged} settingsContent={settingsContent} />
+	const settingsMenu = (
+		<>
+			<TransactionActivityMenu />
+			<AppSettingsMenu onEnvironmentChanged={onEnvironmentChanged} settingsContent={settingsContent} />
+		</>
+	)
 	const currentRouteIsPrimaryTab = tabNavigation !== undefined && tabNavigation.tabs.some(tab => tab.route === tabNavigation.route)
 	const secondaryTabs = secondaryNavigation !== undefined && currentRouteIsPrimaryTab ? <RouteSubNavigation ariaLabel={secondaryNavigation.ariaLabel} value={secondaryNavigation.value} onChange={secondaryNavigation.onChange} options={secondaryNavigation.options} /> : undefined
 	const showProtocolGuide = tabNavigation !== undefined && tabNavigation.showProtocolGuide !== false

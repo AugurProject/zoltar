@@ -8,7 +8,7 @@ import { createDeferred } from './testUtils/deferred.js'
 import { transactionErrorMessages } from '../lib/errors.js'
 import type { ChainBackend } from '../wallet/chainBackend.js'
 import { MAINNET_NETWORK_PROFILE } from '../wallet/networkProfile.js'
-import { createInitialTransactionTrayState, markTransactionCanceled, markTransactionFailed, markTransactionFinished, markTransactionRequested } from '../transactions/transactionTray.js'
+import { createInitialTransactionTrayState, getInFlightTransactionCount, markTransactionCanceled, markTransactionFailed, markTransactionFinished, markTransactionRequested } from '../transactions/transactionTray.js'
 import { buildWriteActionConfig, runWriteAction } from '../transactions/writeAction.js'
 import { createFakeBackend, createFakeSimulationProfile } from './testUtils/fakeBackend.js'
 
@@ -175,7 +175,7 @@ describe('runWriteAction', () => {
 				transactionState = markTransactionFinished(transactionState)
 			},
 			onTransactionRequested: () => {
-				if (transactionState.inFlightCount > 0) return false
+				if (getInFlightTransactionCount(transactionState) > 0) return false
 				transactionState = markTransactionRequested(transactionState, { action: 'createMarket', source: 'zoltar', submittedTitle: 'Creating question' })
 				return true
 			},
@@ -208,10 +208,10 @@ describe('runWriteAction', () => {
 
 		expect(secondActionRuns).toBe(0)
 		expect(secondError).toBeUndefined()
-		expect(transactionState.inFlightCount).toBe(1)
+		expect(getInFlightTransactionCount(transactionState)).toBe(1)
 		releaseFirstAction?.()
 		await first
-		expect(transactionState.inFlightCount).toBe(0)
+		expect(getInFlightTransactionCount(transactionState)).toBe(0)
 	})
 
 	test('does not fail an admitted transaction when another action fails wallet validation', async () => {
@@ -230,13 +230,13 @@ describe('runWriteAction', () => {
 			missingWalletMessage: 'Connect wallet',
 			onTransactionFailed: (message: string) => {
 				globalFailureCalls += 1
-				transactionState = markTransactionFailed(transactionState, message)
+				transactionState = markTransactionFailed(transactionState, { kind: 'error', message })
 			},
 			onTransactionFinished: () => {
 				transactionState = markTransactionFinished(transactionState)
 			},
 			onTransactionRequested: () => {
-				if (transactionState.inFlightCount > 0) return false
+				if (getInFlightTransactionCount(transactionState) > 0) return false
 				transactionState = markTransactionRequested(transactionState, { action: 'createMarket', source: 'zoltar', submittedTitle: 'Creating question' })
 				return true
 			},
@@ -254,21 +254,21 @@ describe('runWriteAction', () => {
 			'Failed to create question',
 		)
 		await admittedActionStarted
-		const admittedIntent = transactionState.pendingIntent
-		const admittedRequestKey = transactionState.pendingRequestKey
+		const admittedIntent = transactionState.entries[0]?.intent
+		const admittedRequestKey = transactionState.entries[0]?.key
 		const admittedPresentation = transactionState.active
 
 		installWalletBackend({ accounts: [nextWalletAddress] })
 		await runWriteAction(config, async () => ({ hash: transactionHash }), 'Failed to create question')
 
 		expect(globalFailureCalls).toBe(0)
-		expect(transactionState.inFlightCount).toBe(1)
-		expect(transactionState.pendingIntent).toBe(admittedIntent)
-		expect(transactionState.pendingRequestKey).toBe(admittedRequestKey)
+		expect(getInFlightTransactionCount(transactionState)).toBe(1)
+		expect(transactionState.entries[0]?.intent).toBe(admittedIntent)
+		expect(transactionState.entries[0]?.key).toBe(admittedRequestKey)
 		expect(transactionState.active).toBe(admittedPresentation)
 		releaseAdmittedAction?.()
 		await admittedAction
-		expect(transactionState.inFlightCount).toBe(0)
+		expect(getInFlightTransactionCount(transactionState)).toBe(0)
 	})
 
 	test('fails before requesting a transaction when the active wallet account changed', async () => {
@@ -468,7 +468,7 @@ describe('runWriteAction', () => {
 				onTransactionPrepared: undefined,
 				onTransactionRequested: intent => {
 					transactionState = markTransactionRequested(transactionState, intent)
-					requestedRequiresWalletConfirmation = transactionState.pendingIntent?.requiresWalletConfirmation
+					requestedRequiresWalletConfirmation = transactionState.entries.at(-1)?.intent.requiresWalletConfirmation
 				},
 				refreshState: async () => undefined,
 			},
@@ -487,8 +487,8 @@ describe('runWriteAction', () => {
 		expect(transactionState.active?.tone).toBe('preparing')
 		expect(transactionState.active?.detail).toBe('Submitting in browser simulation. No wallet confirmation is required.')
 		expect(requestedRequiresWalletConfirmation).toBe(false)
-		expect(transactionState.pendingIntent).toBeUndefined()
-		expect(transactionState.inFlightCount).toBe(0)
+		expect(transactionState.entries[0]?.intent).toBeUndefined()
+		expect(getInFlightTransactionCount(transactionState)).toBe(0)
 		expect(errorSignal.value).toBeUndefined()
 	})
 
@@ -526,8 +526,8 @@ describe('runWriteAction', () => {
 
 		expect(writeCanceled).toBe(true)
 		expect(transactionState.active).toBeUndefined()
-		expect(transactionState.pendingIntent).toBeUndefined()
-		expect(transactionState.inFlightCount).toBe(0)
+		expect(transactionState.entries[0]?.intent).toBeUndefined()
+		expect(getInFlightTransactionCount(transactionState)).toBe(0)
 	})
 
 	test('treats a canceled transaction review as a cancellation instead of a failure', async () => {
@@ -545,7 +545,7 @@ describe('runWriteAction', () => {
 				},
 				onTransactionFailed: message => {
 					failureMessage = message
-					transactionState = markTransactionFailed(transactionState, message)
+					transactionState = markTransactionFailed(transactionState, { kind: 'error', message })
 				},
 				onTransactionFinished: () => {
 					transactionState = markTransactionFinished(transactionState)
@@ -576,8 +576,8 @@ describe('runWriteAction', () => {
 		expect(failureMessage).toBeUndefined()
 		expect(inlineErrorMessage).toBeUndefined()
 		expect(transactionState.active).toBeUndefined()
-		expect(transactionState.pendingIntent).toBeUndefined()
-		expect(transactionState.inFlightCount).toBe(0)
+		expect(transactionState.entries[0]?.intent).toBeUndefined()
+		expect(getInFlightTransactionCount(transactionState)).toBe(0)
 	})
 
 	test('keeps an unrelated request abort on the failure path', async () => {
