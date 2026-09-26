@@ -210,7 +210,7 @@ export function useMarketCreation(
 					refreshState: async () => {
 						if (!isCurrentMarketActionScope()) return
 						await refreshWalletStateOnly(refreshState)
-						if (refreshQuestionList) await zoltar.loadZoltarQuestions()
+						if (refreshQuestionList && createdResult !== undefined) await zoltar.loadCreatedZoltarQuestion(createdResult.questionId)
 					},
 					setErrorMessage: message => {
 						marketError.value = { storageKey: submittedMarketActionScopeKey, value: message }

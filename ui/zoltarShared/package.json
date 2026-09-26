@@ -66,6 +66,10 @@
 			"bun": "./ts/features/questions/lib/questionForm.ts",
 			"default": "./js/features/questions/lib/questionForm.js"
 		},
+		"./features/questions/lib/questionTimeZone.js": {
+			"bun": "./ts/features/questions/lib/questionTimeZone.ts",
+			"default": "./js/features/questions/lib/questionTimeZone.js"
+		},
 		"./features/types.js": {
 			"bun": "./ts/features/types.ts",
 			"default": "./js/features/types.js"
@@ -109,6 +113,10 @@
 		"./features/universes/hooks/useZoltarUniverse.js": {
 			"bun": "./ts/features/universes/hooks/useZoltarUniverse.ts",
 			"default": "./js/features/universes/hooks/useZoltarUniverse.js"
+		},
+		"./features/universes/lib/questionRegistry.js": {
+			"bun": "./ts/features/universes/lib/questionRegistry.ts",
+			"default": "./js/features/universes/lib/questionRegistry.js"
 		},
 		"./features/universes/lib/universe.js": {
 			"bun": "./ts/features/universes/lib/universe.ts",
