@@ -93,7 +93,7 @@ function createActionInput(overrides: Partial<PoolActionInput>): PoolActionInput
 
 describe('pool action items', () => {
 	test('puts warnings first, then stage actions, then milestones, and asks to connect when disconnected', () => {
-		expect(derivePoolActionItems(createActionInput({ pendingReportId: 7n, stagedOperationCount: 2n, oracleUnavailable: true })).map(item => item.id)).toEqual(['reviewOracle', 'viewPendingReport', 'reviewStagedOperations', 'depositRep', 'mintShares'])
+		expect(derivePoolActionItems(createActionInput({ stagedOperationCount: 2n })).map(item => item.id)).toEqual(['reviewStagedOperations', 'depositRep', 'mintShares'])
 		expect(derivePoolActionItems(createActionInput({ accountConnected: false })).map(item => item.id)).toEqual(['connectWallet'])
 	})
 

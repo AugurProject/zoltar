@@ -19,11 +19,11 @@ describe('TransactionStatusCard', () => {
 	})
 
 	test('renders title, badge, and detail', async () => {
-		const renderedComponent = await renderIntoDocument(<TransactionStatusCard title='Liquidation Submitted' badge={<Badge tone='warning'>Check State</Badge>} detail='Refresh staged operations.' />)
+		const renderedComponent = await renderIntoDocument(<TransactionStatusCard title='Liquidation submitted' badge={<Badge tone='warning'>Check State</Badge>} detail='Refresh staged operations.' />)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		expect(documentQueries.getByRole('heading', { name: 'Liquidation Submitted' })).not.toBeNull()
+		expect(documentQueries.getByRole('heading', { name: 'Liquidation submitted' })).not.toBeNull()
 		expect(documentQueries.getByText('Check State')).not.toBeNull()
 		expect(documentQueries.getByText('Refresh staged operations.')).not.toBeNull()
 	})
@@ -31,7 +31,7 @@ describe('TransactionStatusCard', () => {
 	test('renders metrics when provided', async () => {
 		const renderedComponent = await renderIntoDocument(
 			<TransactionStatusCard
-				title='REP Withdrawal Queued'
+				title='REP withdrawal queued'
 				badge={<Badge tone='warning'>Queued</Badge>}
 				metrics={
 					<MetricGrid>
@@ -67,7 +67,7 @@ describe('TransactionStatusCard', () => {
 	})
 
 	test('uses a flat surface when composed inside a dialog or workflow card', async () => {
-		const renderedComponent = await renderIntoDocument(<TransactionStatusCard badge={<Badge tone='warning'>Check State</Badge>} surface='flat' title='Liquidation Submitted' detail='Refresh staged operations.' />)
+		const renderedComponent = await renderIntoDocument(<TransactionStatusCard badge={<Badge tone='warning'>Check State</Badge>} surface='flat' title='Liquidation submitted' detail='Refresh staged operations.' />)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		expect(document.body.querySelector('.transaction-status-card.flat')).not.toBeNull()

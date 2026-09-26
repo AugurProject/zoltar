@@ -43,11 +43,9 @@ export const actionLabels = {
 	redeemShares: 'Redeem your shares',
 	reportOrEscalate: 'Report or escalate an outcome',
 	reviewForkMigration: 'Review fork & migration',
-	reviewOracle: 'Oracle price unavailable',
 	reviewStagedOperations: 'Staged operations waiting',
 	submitFirstReport: 'Submit the first report',
 	triggerFork: 'Trigger the universe fork',
-	viewPendingReport: 'Oracle report pending',
 	withdrawEscalation: 'Withdraw escalation stake',
 	withdrawVaultRep: 'Withdraw vault REP',
 } as const

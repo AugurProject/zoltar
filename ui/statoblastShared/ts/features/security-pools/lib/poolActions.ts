@@ -7,8 +7,6 @@ import type { SelectedPoolView } from './securityPoolWorkflow.js'
 
 export type PoolActionId =
 	| 'connectWallet'
-	| 'reviewOracle'
-	| 'viewPendingReport'
 	| 'reviewStagedOperations'
 	| 'depositRep'
 	| 'manageVault'
@@ -34,7 +32,6 @@ export type PoolActionItem = {
 	count?: bigint
 	deadline?: bigint
 	id: PoolActionId
-	reportId?: bigint
 	tab?: SelectedPoolView
 	tone: PoolActionTone
 }
@@ -56,8 +53,6 @@ export type PoolActionInput = {
 	hasForkActivity: boolean
 	migrationEndsAt?: bigint | undefined
 	now: bigint | undefined
-	oracleUnavailable?: boolean
-	pendingReportId?: bigint | undefined
 	poolState: SecurityPoolStateModel | undefined
 	reportingStage?: SecurityPoolReportingStage | undefined
 	shareBalances: TradingShareBalances | undefined
@@ -144,8 +139,6 @@ function getStageItems(input: PoolActionInput): PoolActionItem[] {
 
 function getAttentionItems(input: PoolActionInput): PoolActionItem[] {
 	const items: PoolActionItem[] = []
-	if (input.oracleUnavailable === true) items.push({ id: 'reviewOracle', tab: 'price-oracle', tone: 'attention' })
-	if (input.pendingReportId !== undefined && input.pendingReportId > 0n) items.push({ id: 'viewPendingReport', reportId: input.pendingReportId, tone: 'attention' })
 	if (input.stagedOperationCount !== undefined && input.stagedOperationCount > 0n) items.push({ count: input.stagedOperationCount, id: 'reviewStagedOperations', tab: 'staged-operations', tone: 'attention' })
 	return items
 }

@@ -167,7 +167,8 @@ export function derivePoolViewModel(input: PoolViewModelInput) {
 		if (currentPoolOracleManagerDetails === undefined || currentPoolOraclePriceUsable === true) return undefined
 		return currentPoolOracleManagerDetails.lastSettlementTimestamp > 0n ? securityPoolCopy.reportingOraclePriceExpiredReason : securityPoolCopy.reportingOraclePriceRequiredReason
 	})()
-	const oracleUnavailable = !isPoolQuestionFinalized(currentReportingDetails) && showSelectedPoolWorkflowDetails && (currentPoolOraclePriceUsable === false || currentPoolOracleManagerError !== undefined)
+	// The pool page's price row offers a new request only when the price is unusable and requesting one is allowed in this stage.
+	const needsPrice = !isPoolQuestionFinalized(currentReportingDetails) && showSelectedPoolWorkflowDetails && selectedPoolStateModel.actions.requestPrice.enabled && (currentPoolOraclePriceUsable === false || currentPoolOracleManagerError !== undefined)
 	const accountPoolVault = selectedPool?.vaults.find(vault => sameAddress(vault.vaultAddress, accountState.address))
 	const accountVault = selectedVaultIsOwnedByAccount && hasLoadedCurrentVault ? toAccountVault(selectedVaultDetails) : toAccountVault(accountPoolVault)
 	const truthAuctionStartedAt = currentForkAuctionDetails?.truthAuctionStartedAt ?? selectedPool?.truthAuctionStartedAt ?? 0n
@@ -183,8 +184,6 @@ export function derivePoolViewModel(input: PoolViewModelInput) {
 					hasForkActivity: selectedPoolHasActualForkActivity,
 					migrationEndsAt: currentForkAuctionDetails?.migrationEndsAt,
 					now: currentTimestamp,
-					oracleUnavailable,
-					pendingReportId: currentPoolOracleManagerDetails?.pendingReportId,
 					poolState: selectedPoolStateModel,
 					reportingStage: selectedPoolReportingStage,
 					shareBalances: input.shareBalances,
@@ -192,8 +191,15 @@ export function derivePoolViewModel(input: PoolViewModelInput) {
 					step: lifecycleStep,
 					vault: accountVault,
 				})
-	// A pool from another universe keeps its workspace hidden, so only the pending report stays actionable from here.
-	const actionItems = showSelectedPoolWorkflowDetails ? poolActionItems : poolActionItems.filter(item => item.reportId !== undefined)
+	const actionItems = showSelectedPoolWorkflowDetails ? poolActionItems : []
+	const currentPoolOraclePrice = (currentPoolOracleManagerDetails ?? selectedPoolOracleMetricValues)?.lastPrice
+	const currentPoolOracleSettlementTimestamp = (currentPoolOracleManagerDetails ?? selectedPoolOracleMetricValues)?.lastSettlementTimestamp
+	const requestPriceOpenGuardMessage = requestPriceTransactionValueAttoEth === undefined ? securityPoolCopy.loadOracleBeforePriceReview : requestPriceGuardMessage
+	// A pool from another universe keeps its workspace hidden, but a pending report stays reachable from its price row.
+	const oracleStatus =
+		selectedPool !== undefined && (showSelectedPoolWorkflowDetails || (currentPoolOracleManagerDetails?.pendingReportId ?? 0n) > 0n)
+			? { ...currentPoolOracleManagerDetails, currentTimestamp, lastPrice: currentPoolOraclePrice, lastSettlementTimestamp: currentPoolOracleSettlementTimestamp ?? 0n, requestDisabledReason: requestPriceOpenGuardMessage }
+			: undefined
 
 	return {
 		accountVault,
@@ -205,9 +211,9 @@ export function derivePoolViewModel(input: PoolViewModelInput) {
 		currentForkWorkflowSelectionStage,
 		currentPoolOracleManagerDetails,
 		currentPoolOracleManagerError,
-		currentPoolOraclePrice: (currentPoolOracleManagerDetails ?? selectedPoolOracleMetricValues)?.lastPrice,
+		currentPoolOraclePrice,
 		currentPoolOraclePriceUsable,
-		currentPoolOracleSettlementTimestamp: (currentPoolOracleManagerDetails ?? selectedPoolOracleMetricValues)?.lastSettlementTimestamp,
+		currentPoolOracleSettlementTimestamp,
 		currentReportingDetails,
 		currentTimestamp,
 		effectiveSelectedPool,
@@ -223,15 +229,17 @@ export function derivePoolViewModel(input: PoolViewModelInput) {
 		loadedForkAuctionDetails,
 		loadedReportingDetails,
 		marketDetails,
+		needsPrice,
 		normalizedReportingFormPoolAddress,
 		normalizedSelectedPoolAddress,
+		oracleStatus,
 		pendingSettlementOperationIds: currentPoolOracleManagerDetails?.pendingSettlementOperationIds ?? [],
 		reportingLockedReason,
 		reportingOracleGuardMessage,
 		reportingReady,
 		requestPriceConfirmationGuardMessage: getVaultRequestPriceGuardMessage({ ...requestPriceGuardInput, bufferRequiredEthCost: false, hasLoadedSelectedPool: input.requestPriceReview !== undefined, requiredCostAttoEth: input.requestPriceReview?.requestValueAttoEth }),
 		requestPriceGuardMessage,
-		requestPriceOpenGuardMessage: requestPriceTransactionValueAttoEth === undefined ? securityPoolCopy.loadOracleBeforePriceReview : requestPriceGuardMessage,
+		requestPriceOpenGuardMessage,
 		requestPriceTransactionValueAttoEth,
 		resolvedPendingOperationId,
 		selectedPendingOperationId,

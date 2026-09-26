@@ -6,7 +6,7 @@ import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/rende
 import { fireEvent, within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { SecurityPoolWorkflowSection } from '@zoltar/ui-statoblast-shared/features/security-pools/components/SecurityPoolWorkflowSection.js'
 import type { SelectedPoolView } from '@zoltar/ui-statoblast-shared/features/security-pools/lib/securityPoolWorkflow.js'
-import { createOracleManagerDetails, createSelectedPool, createSecurityPoolWorkflowProps } from './workflow/builders.js'
+import { createAccountState, createOracleManagerDetails, createSelectedPool, createSecurityPoolWorkflowProps } from './workflow/builders.js'
 import { useSecurityPoolWorkflowSectionTestDom } from './workflow/testDom.js'
 import { installStatoblastRouting } from '@zoltar/ui-statoblast-shared/lib/routing.js'
 
@@ -85,9 +85,53 @@ test('surfaces actionable pool exceptions independently of the selected tab', as
 		selectedPoolView: 'vaults',
 	})
 	const page = within(document.body)
-	for (const name of ['Review oracle', 'View report', 'Review operations', 'Open fork & migration']) await act(() => fireEvent.click(page.getByRole('button', { name })))
+	for (const name of ['View report', 'Review operations', 'Open fork & migration']) await act(() => fireEvent.click(page.getByRole('button', { name })))
 	expect(reports).toEqual([7n])
-	expect(views).toEqual(['price-oracle', 'staged-operations', 'fork-workflow'])
+	expect(views).toEqual(['staged-operations', 'fork-workflow'])
+})
+
+test('shows one oracle price row that counts down a pending report instead of an unavailable warning', async () => {
+	await renderLoadedPool({ poolOracleManagerDetails: createOracleManagerDetails({ isPriceValid: false, lastPrice: 0n, lastSettlementTimestamp: 0n, pendingReportId: 7n, pendingReportReadyAtTimestamp: 10n ** 12n }) })
+	const rows = document.body.querySelectorAll('.pool-oracle-status')
+	expect(rows).toHaveLength(1)
+	expect(rows[0]?.textContent).toContain('Open Oracle Price')
+	expect(rows[0]?.textContent).toContain('Available in')
+	expect(document.body.textContent).not.toContain('Oracle price unavailable')
+	expect(within(document.body).queryByRole('button', { name: 'Request new price' })).toBeNull()
+})
+
+test('keeps the pool oracle request visible but disabled with its reason when no wallet is connected', async () => {
+	const opened: unknown[] = []
+	await renderLoadedPool({
+		accountState: createAccountState({ address: undefined }),
+		poolOracleManagerDetails: createOracleManagerDetails({ isPriceValid: false, lastPrice: 10n ** 18n, lastSettlementTimestamp: 1n, pendingReportId: 0n }),
+		RequestPriceModal: ({ review }) => {
+			if (review !== undefined) opened.push(review)
+			return null
+		},
+	})
+	const row = document.body.querySelector('.pool-oracle-status.warning')
+	const button = within(document.body).getByRole('button', { name: 'Request new price' })
+	expect(button.hasAttribute('disabled')).toBe(true)
+	expect(row?.querySelector('.tx-action-feedback')?.textContent).toContain('Connect a wallet')
+	await act(() => fireEvent.click(button))
+	expect(opened).toEqual([])
+})
+
+test('requests a new price straight from the pool oracle row', async () => {
+	const opened: unknown[] = []
+	await renderLoadedPool({
+		accountState: createAccountState({ address: '0x0000000000000000000000000000000000000001', ethBalanceAttoEth: 10n ** 21n }),
+		poolOracleManagerDetails: createOracleManagerDetails({ isPriceValid: false, lastPrice: 10n ** 18n, lastSettlementTimestamp: 1n, pendingReportId: 0n }),
+		RequestPriceModal: ({ review }) => {
+			if (review !== undefined) opened.push(review)
+			return null
+		},
+	})
+	const row = document.body.querySelector('.pool-oracle-status')
+	expect(row?.classList.contains('warning')).toBe(true)
+	await act(() => fireEvent.click(within(document.body).getByRole('button', { name: 'Request new price' })))
+	expect(opened.length > 0).toBe(true)
 })
 
 test('shows the stage and offers only controls that leave the open tab', async () => {
@@ -130,7 +174,7 @@ test('keeps the pending report reachable while the pool universe differs', async
 	await renderLoadedPool({ activeUniverseId: 2n, poolOracleManagerDetails: createOracleManagerDetails({ pendingReportId: 7n }), onViewPendingReport: id => reports.push(id) })
 	await act(() => fireEvent.click(within(document.body).getByRole('button', { name: 'View report' })))
 	expect(reports).toEqual([7n])
-	expect(within(document.body).queryByRole('button', { name: 'Review oracle' })).toBeNull()
+	expect(within(document.body).queryByRole('button', { name: 'Request new price' })).toBeNull()
 })
 
 test('uses the refreshed manager price for the single capacity summary', async () => {

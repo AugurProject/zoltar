@@ -19,10 +19,10 @@ import { buildRouteHref, getRouteHashSearch } from '@zoltar/ui-core-shared/navig
 import { POOLS_ROUTE_HASH } from '../../../lib/statoblastLocation.js'
 import { SecurityPoolObjectHeader, SecurityPoolReferenceDetails } from './SecurityPoolObjectHeader.js'
 import { PoolSelectionControl } from './PoolSelectionControl.js'
-import { PoolWorkspaceNavigation } from './PoolWorkspaceNavigation.js'
+import { PoolOracleStatusRow, PoolWorkspaceNavigation } from './PoolWorkspaceNavigation.js'
 import { PoolActionCard, PoolLifecycleStepper } from './PoolStagePanel.js'
 import * as workspaceCopy from '../../../copy/poolWorkspace.js'
-import { PRICE_ORACLE_HEADING_ID, SecurityPoolRequestPriceModal, type RequestPriceReview } from './SecurityPoolOracleSections.js'
+import { createRequestPriceReview, PRICE_ORACLE_HEADING_ID, SecurityPoolRequestPriceModal, type RequestPriceReview } from './SecurityPoolOracleSections.js'
 import { SecurityPoolUniverseMismatchNotice, SecurityPoolWorkflowEmptyState } from './SecurityPoolWorkflowEmptyState.js'
 import { SelectedPoolForkWorkflowPanel, SelectedPoolPriceOraclePanel, SelectedPoolReportingPanel, SelectedPoolStagedOperationsPanel, SelectedPoolTradingPanel } from './SecurityPoolWorkflowTabPanels.js'
 import { SecurityPoolVaultWorkspace } from './SecurityPoolVaultWorkspace.js'
@@ -176,8 +176,7 @@ export function SecurityPoolWorkflowSection(props: SecurityPoolWorkflowSectionPr
 		view,
 	})
 	const openRequestPriceReview = () => {
-		if (loadedSelectedPool !== undefined && model.requestPriceTransactionValueAttoEth !== undefined)
-			setRequestPriceReview({ requestValueAttoEth: model.requestPriceTransactionValueAttoEth, managerAddress: loadedSelectedPool.managerAddress, securityPoolAddress: loadedSelectedPool.securityPoolAddress, universeId: loadedSelectedPool.universeId })
+		if (loadedSelectedPool !== undefined && model.requestPriceTransactionValueAttoEth !== undefined) setRequestPriceReview(createRequestPriceReview(loadedSelectedPool, model.requestPriceTransactionValueAttoEth))
 	}
 	let emptyWorkflowTitle: string | undefined
 	if (model.selectedPoolLookupState === 'missing') emptyWorkflowTitle = securityPoolCopy.poolNotFound
@@ -220,8 +219,9 @@ export function SecurityPoolWorkflowSection(props: SecurityPoolWorkflowSectionPr
 				</div>
 				{objectHeaderProps === undefined ? undefined : <SecurityPoolObjectHeader {...objectHeaderProps} />}
 				<ErrorNotice message={securityPoolOverviewError} />
+				{model.oracleStatus === undefined ? undefined : <PoolOracleStatusRow needsPrice={model.needsPrice} oracle={{ ...model.oracleStatus, requestPending: poolOracleActiveAction === 'requestPrice' }} onRequestPrice={openRequestPriceReview} onViewReport={onViewPendingReport} />}
 				{showSelectedPoolWorkflowDetails ? <PoolLifecycleStepper step={model.lifecycleStep} /> : undefined}
-				{selectedPool !== undefined ? <PoolActionCard currentTimestamp={currentTimestamp} currentView={view} items={model.actionItems} onChange={onSelectedPoolViewChange} onViewReport={onViewPendingReport} /> : undefined}
+				{showSelectedPoolWorkflowDetails ? <PoolActionCard currentTimestamp={currentTimestamp} currentView={view} items={model.actionItems} onChange={onSelectedPoolViewChange} /> : undefined}
 				{objectHeaderProps === undefined ? undefined : <SecurityPoolReferenceDetails {...objectHeaderProps} />}
 			</div>
 
@@ -366,7 +366,7 @@ export function SecurityPoolWorkflowSection(props: SecurityPoolWorkflowSectionPr
 				confirmationGuardMessage={model.requestPriceConfirmationGuardMessage}
 				getReturnFocusTarget={() => {
 					const panel = document.getElementById(SELECTED_POOL_WORKFLOW_PANEL_ID)
-					return panel?.querySelector<HTMLElement>('.oracle-actions .tx-action-button:not(:disabled)') ?? panel?.querySelector<HTMLElement>('.workflow-metric-grid button.link') ?? document.getElementById(PRICE_ORACLE_HEADING_ID)
+					return panel?.querySelector<HTMLElement>('.oracle-actions .tx-action-button:not(:disabled)') ?? panel?.querySelector<HTMLElement>('.workflow-metric-grid button.link') ?? document.getElementById(PRICE_ORACLE_HEADING_ID) ?? document.querySelector<HTMLElement>('.pool-oracle-status button:not(:disabled)')
 				}}
 				onClose={() => setRequestPriceReview(undefined)}
 				onConfirm={(review, signal) => onRequestPoolPrice(review.managerAddress, review.securityPoolAddress, review.requestValueAttoEth, review.universeId, review.proposedRepPerEthPrice, signal)}

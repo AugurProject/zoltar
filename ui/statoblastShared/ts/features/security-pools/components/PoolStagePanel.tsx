@@ -61,8 +61,8 @@ export function PoolActionRow({ context, control, currentTimestamp, item }: { co
 	)
 }
 
-/** The pool page's "What you can do now" surface: each action row switches to the tab that holds it or opens the pending report. */
-export function PoolActionCard({ currentTimestamp, currentView, items, onChange, onViewReport }: { currentTimestamp: bigint | undefined; currentView: SelectedPoolView; items: readonly PoolActionItem[]; onChange: (view: SelectedPoolView) => void; onViewReport: (reportId: bigint) => void }) {
+/** The pool page's "What you can do now" surface: each action row switches to the tab that holds it. */
+export function PoolActionCard({ currentTimestamp, currentView, items, onChange }: { currentTimestamp: bigint | undefined; currentView: SelectedPoolView; items: readonly PoolActionItem[]; onChange: (view: SelectedPoolView) => void }) {
 	return (
 		<section className='pool-action-card' aria-labelledby='pool-action-card-heading'>
 			<h3 id='pool-action-card-heading'>{copy.whatYouCanDoNow}</h3>
@@ -71,16 +71,10 @@ export function PoolActionCard({ currentTimestamp, currentView, items, onChange,
 			) : (
 				<ul className='pool-action-list'>
 					{items.map(item => {
-						const { reportId, tab } = item
+						const { tab } = item
 						let control: ComponentChildren = undefined
-						if (reportId !== undefined)
-							control = (
-								<button type='button' className='link' onClick={() => onViewReport(reportId)}>
-									{copy.viewReport}
-								</button>
-							)
 						// A row for the open tab needs no control: its work is already on screen below.
-						else if (tab !== undefined && tab !== currentView)
+						if (tab !== undefined && tab !== currentView)
 							control = (
 								<button type='button' className='link' onClick={() => onChange(tab)}>
 									{copy.actionButtonLabels[tab]}
