@@ -886,4 +886,64 @@ describe('useZoltarUniverse', () => {
 		expect(requireHookState(hookState).zoltarQuestionPage).toEqual({ pageIndex: 1, pageSize: 10, questionCount: 12n, questions: [pageOneQuestion, createdQuestion] })
 		expect(requireHookState(hookState).loadingZoltarQuestions).toBe(false)
 	})
+
+	test('reissues a superseded page read even when the created question read fails', async () => {
+		const pageOneQuestion = createQuestion('0x0b')
+		const supersededPage = createDeferred<{ pageIndex: number; pageSize: number; questionCount: bigint; questions: MarketDetails[] }>()
+		const pageRequests: number[] = []
+		const dependencies = createZoltarUniverseDependencies({
+			loadMarketDetails: async () => {
+				throw new Error('created question read failed')
+			},
+			loadZoltarQuestionCount: async () => 12n,
+			loadZoltarQuestionPage: async (_client, pageIndex) => {
+				pageRequests.push(pageIndex)
+				if (pageRequests.length === 1) return await supersededPage.promise
+				return { pageIndex: 1, pageSize: 10, questionCount: 12n, questions: [pageOneQuestion] }
+			},
+		})
+		let hookState: UseZoltarUniverseState | undefined
+		function Harness() {
+			hookState = useZoltarUniverse(
+				{
+					accountAddress: WALLET_ADDRESS,
+					activeUniverseId: 1n,
+					autoLoadInitialData: false,
+					deploymentStatuses: [createZoltarDeploymentStatus()],
+					environmentRefreshKey: 0,
+					onTransactionFinished: () => undefined,
+					onTransactionPresented: () => undefined,
+					onTransactionRequested: () => undefined,
+					onTransactionSubmitted: () => undefined,
+				},
+				dependencies,
+			)
+			return <div />
+		}
+		const renderedComponent = await renderIntoDocument(<Harness />)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		let supersededRequest: Promise<void> | undefined
+		await act(async () => {
+			supersededRequest = requireHookState(hookState).loadZoltarQuestionPage(1, 10)
+			await Promise.resolve()
+		})
+		let failure: unknown
+		await act(async () => {
+			await requireHookState(hookState)
+				.loadCreatedZoltarQuestion('0xc')
+				.catch((error: unknown) => {
+					failure = error
+				})
+		})
+		await act(async () => {
+			supersededPage.resolve({ pageIndex: 1, pageSize: 10, questionCount: 11n, questions: [] })
+			await supersededRequest
+		})
+
+		expect(failure).toBeInstanceOf(Error)
+		expect(pageRequests).toEqual([1, 1])
+		expect(requireHookState(hookState).zoltarQuestionPage).toEqual({ pageIndex: 1, pageSize: 10, questionCount: 12n, questions: [pageOneQuestion] })
+		expect(requireHookState(hookState).loadingZoltarQuestions).toBe(false)
+	})
 })
