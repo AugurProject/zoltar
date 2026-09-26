@@ -386,7 +386,12 @@ export function useZoltarUniverse(
 				loadError = error
 			},
 		})
-		if (loadError !== undefined && isMounted.current && isCurrentQuestionLoad(questionLoadGeneration, questionLoadContext)) throw loadError
+		if (!isMounted.current || !isCurrentQuestionLoad(questionLoadGeneration, questionLoadContext)) return
+		if (loadError !== undefined) throw loadError
+		// A superseded read may have been for a different page than the one loaded; reissue it so that page does not stay blank.
+		const requestedPage = requestedQuestionPage.current
+		const loadedPage = zoltarQuestionPage.value
+		if (requestedPage !== undefined && (loadedPage === undefined || loadedPage.pageIndex !== requestedPage.pageIndex || loadedPage.pageSize !== requestedPage.pageSize)) await loadQuestionsPage(requestedPage.pageIndex, requestedPage.pageSize)
 	}
 
 	const createChildUniverse = async (outcomeIndex: bigint) => {

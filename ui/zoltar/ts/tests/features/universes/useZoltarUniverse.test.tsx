@@ -828,4 +828,62 @@ describe('useZoltarUniverse', () => {
 		expect(requireHookState(hookState).zoltarQuestionPage?.questions).toEqual([existingQuestion, createdQuestion])
 		expect(requireHookState(hookState).zoltarQuestionCount).toBe(2n)
 	})
+
+	test('reissues a superseded read for another page after loading the created question', async () => {
+		const pageZeroQuestion = createQuestion('0x01')
+		const pageOneQuestion = createQuestion('0x0b')
+		const createdQuestion = createQuestion('0x0c')
+		const supersededPage = createDeferred<{ pageIndex: number; pageSize: number; questionCount: bigint; questions: MarketDetails[] }>()
+		const pageRequests: number[] = []
+		const dependencies = createZoltarUniverseDependencies({
+			loadMarketDetails: async () => createdQuestion,
+			loadZoltarQuestionCount: async () => 12n,
+			loadZoltarQuestionPage: async (_client, pageIndex) => {
+				pageRequests.push(pageIndex)
+				if (pageRequests.length === 1) return { pageIndex: 0, pageSize: 10, questionCount: 11n, questions: [pageZeroQuestion] }
+				if (pageRequests.length === 2) return await supersededPage.promise
+				return { pageIndex: 1, pageSize: 10, questionCount: 12n, questions: [pageOneQuestion, createdQuestion] }
+			},
+		})
+		let hookState: UseZoltarUniverseState | undefined
+		function Harness() {
+			hookState = useZoltarUniverse(
+				{
+					accountAddress: WALLET_ADDRESS,
+					activeUniverseId: 1n,
+					autoLoadInitialData: false,
+					deploymentStatuses: [createZoltarDeploymentStatus()],
+					environmentRefreshKey: 0,
+					onTransactionFinished: () => undefined,
+					onTransactionPresented: () => undefined,
+					onTransactionRequested: () => undefined,
+					onTransactionSubmitted: () => undefined,
+				},
+				dependencies,
+			)
+			return <div />
+		}
+		const renderedComponent = await renderIntoDocument(<Harness />)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		await act(async () => {
+			await requireHookState(hookState).loadZoltarQuestionPage(0, 10)
+		})
+		let supersededRequest: Promise<void> | undefined
+		await act(async () => {
+			supersededRequest = requireHookState(hookState).loadZoltarQuestionPage(1, 10)
+			await Promise.resolve()
+		})
+		await act(async () => {
+			await requireHookState(hookState).loadCreatedZoltarQuestion('0xc')
+		})
+		await act(async () => {
+			supersededPage.resolve({ pageIndex: 1, pageSize: 10, questionCount: 11n, questions: [pageOneQuestion] })
+			await supersededRequest
+		})
+
+		expect(pageRequests).toEqual([0, 1, 1])
+		expect(requireHookState(hookState).zoltarQuestionPage).toEqual({ pageIndex: 1, pageSize: 10, questionCount: 12n, questions: [pageOneQuestion, createdQuestion] })
+		expect(requireHookState(hookState).loadingZoltarQuestions).toBe(false)
+	})
 })
