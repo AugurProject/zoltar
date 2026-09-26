@@ -6,7 +6,7 @@ import type { PortfolioBalanceEntry } from '../../features/live/liveTradingTypes
 import type { LiveBalances, LiveMarket } from '../../protocol/live.js'
 
 const SET = 10n ** 36n
-const ETH = 10n ** 18n
+const ATTO_ETH_PER_ETH = 10n ** 18n
 const NOW = 1_000_000n
 const WEEK = 7n * 24n * 60n * 60n
 const pool: Address = `0x${'12'.repeat(20)}`
@@ -31,7 +31,7 @@ const market: LiveMarket = {
 	universeForkTime: 0n,
 	vaultCount: 1n,
 	shareTokenSupplyAttoShares: 100n * SET,
-	settlementCollateralAttoEth: 100n * ETH,
+	settlementCollateralAttoEth: 100n * ATTO_ETH_PER_ETH,
 	currentRetentionRate: 10n ** 18n,
 	totalCapacityOwnershipAttoRep: 1n,
 	feeEligibleCapacityOwnershipAttoRep: 1n,
@@ -63,34 +63,34 @@ function valueOf(marketOverrides: Partial<LiveMarket>, amounts: Amounts) {
 
 describe('portfolio position value', () => {
 	test('values complete sets at their backing and an insured long at its pool exit', () => {
-		expect(valueOf({}, { yes: 2n * SET, no: 2n * SET, invalid: 2n * SET })).toEqual({ kind: 'exit', attoEth: 2n * ETH, pendingResolution: false })
+		expect(valueOf({}, { yes: 2n * SET, no: 2n * SET, invalid: 2n * SET })).toEqual({ kind: 'exit', attoEth: 2n * ATTO_ETH_PER_ETH, pendingResolution: false })
 		const exitSets = maximumInsuredExit({ longOutcome: 'YES', longBalance: (3n * SET) / 2n, invalidBalance: SET, yesReserve: market.yesReserve, noReserve: market.noReserve, feeBps: market.feeBps })
 		expect(exitSets).toBeGreaterThan(0n)
 		expect(exitSets).toBeLessThan(SET)
 		// The INVALID the exit cannot use only pays if INVALID wins, so it is flagged rather than priced.
-		expect(valueOf({}, { yes: (3n * SET) / 2n, invalid: SET })).toEqual({ kind: 'exit', attoEth: exitSets / ETH, pendingResolution: true })
-		expect(valueOf({}, { no: (3n * SET) / 2n, invalid: SET })).toEqual({ kind: 'exit', attoEth: exitSets / ETH, pendingResolution: true })
+		expect(valueOf({}, { yes: (3n * SET) / 2n, invalid: SET })).toEqual({ kind: 'exit', attoEth: exitSets / ATTO_ETH_PER_ETH, pendingResolution: true })
+		expect(valueOf({}, { no: (3n * SET) / 2n, invalid: SET })).toEqual({ kind: 'exit', attoEth: exitSets / ATTO_ETH_PER_ETH, pendingResolution: true })
 		// A bare long share without INVALID insurance cannot be exited through the pool.
 		expect(valueOf({}, { yes: SET })).toEqual({ kind: 'exit', attoEth: 0n, pendingResolution: true })
 		// Rounding leftovers below the displayed precision are not a pending payout.
-		expect(valueOf({}, { yes: SET, no: SET, invalid: SET + 10n ** 30n })).toEqual({ kind: 'exit', attoEth: ETH, pendingResolution: false })
+		expect(valueOf({}, { yes: SET, no: SET, invalid: SET + 10n ** 30n })).toEqual({ kind: 'exit', attoEth: ATTO_ETH_PER_ETH, pendingResolution: false })
 	})
 
 	test('includes LP reserve claims and exits against the reserves left after withdrawal', () => {
 		expect(lpReserveClaims(market, 5n * SET)).toEqual({ yes: 5n * SET, no: 5n * SET })
 		expect(lpReserveClaims({ ...market, lpTotalSupply: 0n }, 5n * SET)).toEqual({ yes: 0n, no: 0n })
-		expect(valueOf({}, { lp: 5n * SET, invalid: 5n * SET })).toEqual({ kind: 'exit', attoEth: 5n * ETH, pendingResolution: false })
+		expect(valueOf({}, { lp: 5n * SET, invalid: 5n * SET })).toEqual({ kind: 'exit', attoEth: 5n * ATTO_ETH_PER_ETH, pendingResolution: false })
 		// Without INVALID the LP claim cannot become complete sets, so it waits for resolution.
 		expect(valueOf({}, { lp: 5n * SET })).toEqual({ kind: 'exit', attoEth: 0n, pendingResolution: true })
 		// Owning every LP token leaves no reserves to exit against, so only the complete sets count.
-		expect(valueOf({}, { lp: 10n * SET, invalid: 12n * SET, yes: 2n * SET })).toEqual({ kind: 'exit', attoEth: 10n * ETH, pendingResolution: true })
+		expect(valueOf({}, { lp: 10n * SET, invalid: 12n * SET, yes: 2n * SET })).toEqual({ kind: 'exit', attoEth: 10n * ATTO_ETH_PER_ETH, pendingResolution: true })
 	})
 
 	test('counts only winning shares, including the LP claim, after resolution', () => {
 		const held = { yes: 3n * SET, no: SET, invalid: 2n * SET, lp: 5n * SET }
-		expect(valueOf({ questionOutcome: 0 }, held)).toEqual({ kind: 'redemption', attoEth: 2n * ETH })
-		expect(valueOf({ questionOutcome: 1 }, held)).toEqual({ kind: 'redemption', attoEth: 8n * ETH })
-		expect(valueOf({ questionOutcome: 2 }, held)).toEqual({ kind: 'redemption', attoEth: 6n * ETH })
+		expect(valueOf({ questionOutcome: 0 }, held)).toEqual({ kind: 'redemption', attoEth: 2n * ATTO_ETH_PER_ETH })
+		expect(valueOf({ questionOutcome: 1 }, held)).toEqual({ kind: 'redemption', attoEth: 8n * ATTO_ETH_PER_ETH })
+		expect(valueOf({ questionOutcome: 2 }, held)).toEqual({ kind: 'redemption', attoEth: 6n * ATTO_ETH_PER_ETH })
 	})
 })
 
@@ -122,7 +122,7 @@ describe('portfolio rows', () => {
 		expect(resolved.state).toBe('resolved')
 		expect(resolved.canSell).toBe(false)
 		expect(resolved.canRedeem).toBe(true)
-		expect(resolved.valuation).toEqual({ kind: 'redemption', attoEth: 4n * ETH })
+		expect(resolved.valuation).toEqual({ kind: 'redemption', attoEth: 4n * ATTO_ETH_PER_ETH })
 		expect(resolved.actionItems.map(item => item.kind)).toEqual(['redeem', 'withdraw-liquidity'])
 		const lost = row(entry({ questionOutcome: 2 }, { yes: 3n * SET, invalid: SET }))
 		expect(lost.valuation).toEqual({ kind: 'redemption', attoEth: 0n })
@@ -135,7 +135,7 @@ describe('portfolio rows', () => {
 		expect(closed.state).toBe('closed')
 		expect(closed.canSell).toBe(false)
 		expect(closed.canRedeem).toBe(true)
-		expect(closed.valuation).toEqual({ kind: 'complete-sets', attoEth: ETH, pendingResolution: false })
+		expect(closed.valuation).toEqual({ kind: 'complete-sets', attoEth: ATTO_ETH_PER_ETH, pendingResolution: false })
 		expect(closed.actionItems.map(item => item.kind)).toEqual(['redeem'])
 	})
 
@@ -145,7 +145,7 @@ describe('portfolio rows', () => {
 		expect(insured.canRedeem).toBe(false)
 		expect(insured.actionItems).toEqual([])
 		const overview = portfolioOverview([entry({ endTime: NOW - 1n }, { yes: (3n * SET) / 2n, no: SET / 2n, invalid: SET })], NOW)
-		expect(overview.totalValueAttoEth).toBe(ETH / 2n)
+		expect(overview.totalValueAttoEth).toBe(ATTO_ETH_PER_ETH / 2n)
 		expect(overview.pendingResolutionCount).toBe(1)
 	})
 
@@ -177,7 +177,7 @@ describe('portfolio overview', () => {
 	test('totals valued positions, counts unvalued ones, and lists dated action items first', () => {
 		const overview = portfolioOverview([entry({ questionOutcome: 1, title: 'Resolved' }, { yes: 2n * SET }), entry({ pool: secondPool, title: 'Closing', endTime: NOW + 60n }, { yes: SET, no: SET, invalid: SET }), entry({ title: 'Forked', universeForkTime: 1n, systemState: 1 }, { yes: SET })], NOW)
 		expect(overview.positionCount).toBe(3)
-		expect(overview.totalValueAttoEth).toBe(3n * ETH)
+		expect(overview.totalValueAttoEth).toBe(3n * ATTO_ETH_PER_ETH)
 		expect(overview.unvaluedCount).toBe(1)
 		expect(overview.pendingResolutionCount).toBe(0)
 		expect(portfolioOverview([entry({}, { lp: SET })], NOW).pendingResolutionCount).toBe(1)
