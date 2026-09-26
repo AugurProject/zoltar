@@ -183,9 +183,9 @@ describe('SecurityPoolWorkflowSection: staged operations', () => {
 
 			const withdrawDialog = documentQueries.getByRole('dialog', { name: 'Withdraw REP' })
 			const dialogQueries = within(withdrawDialog)
-			expect(dialogQueries.getByRole('heading', { name: 'REP Withdrawal Queued' })).not.toBeNull()
+			expect(dialogQueries.getByRole('heading', { name: 'REP withdrawal queued' })).not.toBeNull()
 			expect(dialogQueries.getByText('#7')).not.toBeNull()
-			expect(dialogQueries.getByRole('heading', { name: 'REP Withdrawal Queued' }).closest('.actions')).toBeNull()
+			expect(dialogQueries.getByRole('heading', { name: 'REP withdrawal queued' }).closest('.actions')).toBeNull()
 
 			await act(() => {
 				fireEvent.click(dialogQueries.getByRole('button', { name: 'View in staged operations' }))
@@ -193,7 +193,7 @@ describe('SecurityPoolWorkflowSection: staged operations', () => {
 
 			expect(selectedViews).toEqual(['staged-operations'])
 			expect(dialogQueries.getByRole('heading', { name: 'Withdraw REP' })).not.toBeNull()
-			expect(dialogQueries.getByRole('heading', { name: 'REP Withdrawal Queued' })).not.toBeNull()
+			expect(dialogQueries.getByRole('heading', { name: 'REP withdrawal queued' })).not.toBeNull()
 		})
 
 		test('shows manual execution guidance for overflow queued withdrawals', async () => {
@@ -249,7 +249,7 @@ describe('SecurityPoolWorkflowSection: staged operations', () => {
 
 			const withdrawDialog = documentQueries.getByRole('dialog', { name: 'Withdraw REP' })
 			const dialogQueries = within(withdrawDialog)
-			expect(dialogQueries.getByRole('heading', { name: 'REP Withdrawal Queued' })).not.toBeNull()
+			expect(dialogQueries.getByRole('heading', { name: 'REP withdrawal queued' })).not.toBeNull()
 			expect(dialogQueries.getByText('#11')).not.toBeNull()
 			expect(dialogQueries.getByText('The settlement auto-execute list is full. Execute this staged operation manually with its ID after a valid oracle price is available.')).not.toBeNull()
 		})
@@ -325,7 +325,7 @@ describe('SecurityPoolWorkflowSection: staged operations', () => {
 
 			const withdrawDialog = documentQueries.getByRole('dialog', { name: 'Withdraw REP' })
 			const dialogQueries = within(withdrawDialog)
-			expect(dialogQueries.getByRole('heading', { name: 'REP Withdrawal Executed' })).not.toBeNull()
+			expect(dialogQueries.getByRole('heading', { name: 'REP withdrawal executed' })).not.toBeNull()
 			expect(dialogQueries.queryByRole('button', { name: 'View in staged operations' })).toBeNull()
 			expect(dialogQueries.getByText('A valid oracle price was already available, so the withdrawal executed immediately and no staged operation was created.')).not.toBeNull()
 		})
@@ -377,7 +377,7 @@ describe('SecurityPoolWorkflowSection: staged operations', () => {
 
 			const withdrawDialog = documentQueries.getByRole('dialog', { name: 'Withdraw REP' })
 			const dialogQueries = within(withdrawDialog)
-			expect(dialogQueries.getByRole('heading', { name: 'REP Withdrawal Failed' })).not.toBeNull()
+			expect(dialogQueries.getByRole('heading', { name: 'REP withdrawal failed' })).not.toBeNull()
 			expect(dialogQueries.getByText('Local Capacity ownership broken')).not.toBeNull()
 			expect(dialogQueries.queryByRole('button', { name: 'View in staged operations' })).toBeNull()
 		})
@@ -411,7 +411,7 @@ describe('SecurityPoolWorkflowSection: staged operations', () => {
 
 			const dialog = within(document.body).getByRole('dialog', { name: 'Execute Vault Liquidation' })
 			const dialogQueries = within(dialog)
-			expect(dialogQueries.getByRole('heading', { name: 'Liquidation Executed' })).not.toBeNull()
+			expect(dialogQueries.getByRole('heading', { name: 'Liquidation executed' })).not.toBeNull()
 			expect(dialogQueries.getByText('A valid oracle price was already available, so the liquidation executed immediately and no staged operation was created.')).not.toBeNull()
 		})
 
@@ -450,7 +450,7 @@ describe('SecurityPoolWorkflowSection: staged operations', () => {
 
 			const dialog = within(document.body).getByRole('dialog', { name: 'Execute Vault Liquidation' })
 			const dialogQueries = within(dialog)
-			expect(dialogQueries.getByRole('heading', { name: 'Liquidation Failed' })).not.toBeNull()
+			expect(dialogQueries.getByRole('heading', { name: 'Liquidation failed' })).not.toBeNull()
 			expect(dialogQueries.getByText('Local Capacity ownership broken')).not.toBeNull()
 		})
 	})

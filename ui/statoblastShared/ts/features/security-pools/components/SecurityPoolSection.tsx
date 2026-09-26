@@ -3,6 +3,7 @@ import * as securityPoolCopy from '../../../copy/securityPool.js'
 import * as statoblastAppCopy from '../../../copy/app.js'
 import type { ComponentChildren } from 'preact'
 import { useEffect, useRef, useState } from 'preact/hooks'
+import { MetricField } from '@zoltar/ui-core-shared/components/MetricField.js'
 import { AddressValue } from '@zoltar/ui-core-shared/components/AddressValue.js'
 import { EntityCard } from '@zoltar/ui-core-shared/components/EntityCard.js'
 import { ErrorNotice } from '@zoltar/ui-core-shared/components/ErrorNotice.js'
@@ -257,23 +258,21 @@ export function SecurityPoolSection({
 					}
 				>
 					{securityPoolResult.universeId === activeUniverseId ? undefined : <p className='detail'>{securityPoolCopy.formatBrowsePoolUniverseMismatch(formatUniverseIdHex(securityPoolResult.universeId))}</p>}
-					<Question question={createdQuestionDetails} loading={createdQuestionDetails === undefined} />
-					<ul className='status-list hashes'>
-						<li>
-							<span>{securityPoolCopy.poolAddressLabel}</span>
-							<strong>
-								<AddressValue address={securityPoolResult.securityPoolAddress} />
-							</strong>
-						</li>
-						<li>
-							<span>{statoblastAppCopy.statoblastSecurityMultiplierBps}</span>
-							<strong>{formatStatoblastSecurityMultiplier(securityPoolResult.statoblastSecurityMultiplierBps)}</strong>
-						</li>
-						<li>
-							<span>{securityPoolCopy.initialReportPriorityFeeEthLabel}</span>
-							<strong>{formatCurrencyBalanceWithUnit(securityPoolResult.initialReportPriorityFeeAttoEthPerGas, commonCopy.eth, 18)}</strong>
-						</li>
-					</ul>
+					<Question
+						className='created-pool-summary'
+						question={createdQuestionDetails}
+						loading={createdQuestionDetails === undefined}
+						abbreviateIdentifier
+						additionalMetrics={
+							<>
+								<MetricField label={securityPoolCopy.poolAddressLabel}>
+									<AddressValue address={securityPoolResult.securityPoolAddress} responsiveAbbreviation />
+								</MetricField>
+								<MetricField label={statoblastAppCopy.statoblastSecurityMultiplierBps}>{formatStatoblastSecurityMultiplier(securityPoolResult.statoblastSecurityMultiplierBps)}</MetricField>
+								<MetricField label={securityPoolCopy.initialReportPriorityFeeEthLabel}>{formatCurrencyBalanceWithUnit(securityPoolResult.initialReportPriorityFeeAttoEthPerGas, commonCopy.eth, 18)}</MetricField>
+							</>
+						}
+					/>
 				</EntityCard>
 			</>
 		)
@@ -329,7 +328,7 @@ export function SecurityPoolSection({
 												pending={securityPoolCreating}
 												availability={{ disabled: isCreateDisabled, loading: createDisabledReasonLoading, reason: createDisabledReason }}
 												disabledReasonElementId={visibleFieldErrorId}
-												showDisabledReason={visibleFieldErrorId === undefined}
+												showDisabledReason={!securityPoolCreating && visibleFieldErrorId === undefined}
 											/>
 										</div>
 									)}
@@ -439,6 +438,7 @@ export function SecurityPoolSection({
 												pendingLabel={securityPoolCopy.creatingPool}
 												onClick={() => onCreateSecurityPool(marketResult.questionId)}
 												pending={questionAndPoolCreating || securityPoolCreating}
+												showDisabledReason={!questionAndPoolCreating && !securityPoolCreating}
 												availability={{
 													disabled: questionAndPoolCreating || securityPoolCreating || createDisabledReason !== undefined,
 													loading: questionAndPoolCreating || securityPoolCreating,

@@ -17,12 +17,11 @@ export const settlerReward = 'Settler Reward'
 export const tokenPair = 'Token Pair'
 export const baseToken = 'Base Token'
 export const quoteToken = 'Quote Token'
-export const oracleBalance = 'Oracle Balance'
 export const openOracleGame = 'Standalone Oracle Report'
 export const formatApprovingTokenPendingLabel = (tokenSymbol: string) => `Approving ${tokenSymbol}…`
 export const formatApproveToken = (tokenSymbol: CopyTemplateValue) => `Approve ${tokenSymbol}`
-export const formatTokenApproved = (tokenSymbol: CopyTemplateValue) => `${tokenSymbol} Approved`
-export const formatTokenWithdrawn = (tokenSymbol: CopyTemplateValue) => `${tokenSymbol} Withdrawn`
+export const formatTokenApproved = (tokenSymbol: CopyTemplateValue) => `${tokenSymbol} approved`
+export const formatTokenWithdrawn = (tokenSymbol: CopyTemplateValue) => `${tokenSymbol} withdrawn`
 export const browseReports = 'Browse Reports'
 export const reportDirectory = 'Report Directory'
 export const browseReportsDescription = 'Find a report on the loaded page, review its status, and open it for available actions.'
@@ -38,7 +37,7 @@ export const formatTokenPairSuffix = (token1Symbol: string, token2Symbol: string
 export const formatReportBrowseTitle = (token1Symbol: string, token2Symbol: string, reportId: string) => `${token1Symbol} / ${token2Symbol} · Report #${reportId}`
 export const createAnother = 'Create another'
 export const createReport = 'Create Report'
-export const reportCreated = 'Report Created'
+export const reportCreated = 'Report created'
 export const createStandaloneOracleGame = 'Create standalone Oracle report'
 export const creating = 'Creating…'
 export const reportAtAGlance = 'Report at a glance'
@@ -48,7 +47,7 @@ export const currentReportState = 'Current Report State'
 export const currentReporter = 'Current Reporter'
 export const submittingDispute = 'Submitting dispute…'
 export const disputingTheReport = 'disputing the report'
-export const disputeOccurred = 'Dispute Occurred'
+export const disputeOccurred = 'Dispute occurred'
 export const disputeWalletRequiredReason = 'Connect a wallet before disputing the report.'
 export const settlementWalletRequiredReason = 'Connect a wallet before settling the report.'
 export const economics = 'Economics'
@@ -98,7 +97,7 @@ export function formatSettleCountdown(remaining: bigint, timeType: boolean) {
 }
 export const searchReports = 'Search this page'
 export const settlingReport = 'Settling report…'
-export const settlingReportTitle = 'Settling Report'
+export const settlingReportTitle = 'Settling report'
 export const reportSettled = 'Settled report'
 export const settlerRewardHelpText = 'ETH paid to the settler.'
 export const settlementSummary = 'Settlement Summary'

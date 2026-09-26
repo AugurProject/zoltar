@@ -4,6 +4,7 @@ import { tryParseDecimalInput } from '@zoltar/ui-core-shared/forms/decimal.js'
 import { ReadOnlyDetailAccordion } from '@zoltar/ui-core-shared/components/ReadOnlyDetailAccordion.js'
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import { AddressValue } from '@zoltar/ui-core-shared/components/AddressValue.js'
+import { EthAmount } from '@zoltar/ui-core-shared/components/TransactionFundingSummary.js'
 import { CurrencyValue } from '@zoltar/ui-core-shared/components/CurrencyValue.js'
 import { ErrorNotice } from '@zoltar/ui-core-shared/components/ErrorNotice.js'
 import { FormInput } from '@zoltar/ui-core-shared/components/FormInput.js'
@@ -18,7 +19,7 @@ import { TransactionReview } from '@zoltar/ui-core-shared/components/Transaction
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as statoblastAppCopy from '../../../copy/app.js'
 import * as transactionReviewCopy from '@zoltar/ui-core-shared/copy/transactionReview.js'
-import type { OracleManagerDetails, StagedOracleOperation } from '@zoltar/ui-core-shared/types/contracts.js'
+import type { ListedSecurityPool, OracleManagerDetails, StagedOracleOperation } from '@zoltar/ui-core-shared/types/contracts.js'
 import { OpenOraclePriceValue } from '../../open-oracle/components/OpenOraclePriceValue.js'
 import * as securityPoolCopy from '../../../copy/securityPool.js'
 import { getPendingOperationAmountPresentation, getPendingOperationLabel, getStagedOperationExecutionModeLabel } from './SecurityPoolWorkflowPresentation.js'
@@ -29,6 +30,10 @@ export type RequestPriceReview = {
 	managerAddress: Address
 	securityPoolAddress: Address
 	universeId: bigint
+}
+
+export function createRequestPriceReview(pool: Pick<ListedSecurityPool, 'managerAddress' | 'securityPoolAddress' | 'universeId'>, requestValueAttoEth: bigint): RequestPriceReview {
+	return { requestValueAttoEth, managerAddress: pool.managerAddress, securityPoolAddress: pool.securityPoolAddress, universeId: pool.universeId }
 }
 
 export const PRICE_ORACLE_HEADING_ID = 'selected-pool-price-oracle-heading'
@@ -258,7 +263,7 @@ export function SecurityPoolPriceOracleSection({
 				</MetricField>
 				{managerDetails === undefined ? undefined : (
 					<MetricField label={securityPoolCopy.requestCost}>
-						<CurrencyValue exactWhenRoundedToZero value={managerDetails.requestPriceCostAttoEth} suffix={commonCopy.eth} />
+						<EthAmount value={managerDetails.requestPriceCostAttoEth} />
 					</MetricField>
 				)}
 				{managerDetails?.pendingReportId === undefined || managerDetails.pendingReportId === 0n ? undefined : (
