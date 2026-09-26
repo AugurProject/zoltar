@@ -50,6 +50,8 @@ export type OverviewPanelsProps = {
 	walletBootstrapComplete: boolean
 	universeRepBalanceAttoRep: bigint | undefined
 	isLoadingUniverseRepBalance: boolean
+	/** Interactive universe control, such as the shared universe switcher, shown in place of the plain universe label. */
+	universeControl?: ComponentChildren
 	universeForkTime?: bigint | undefined
 	universeHasForked?: boolean | undefined
 	universePresentation: UserMessagePresentation | undefined
@@ -134,6 +136,7 @@ export function OverviewPanels({
 	onSwitchNetwork,
 	readBackendStatus,
 	repPrices,
+	universeControl,
 	universeForkTime,
 	universeHasForked,
 	universePresentation,
@@ -201,9 +204,7 @@ export function OverviewPanels({
 			controls={
 				<>
 					{walletControl}
-					<ToolbarField label={commonCopy.universe}>
-						<span title={formatUniverseLabel(activeUniverseId)}>{formatUniverseDisplayLabel(activeUniverseId)}</span>
-					</ToolbarField>
+					<ToolbarField label={commonCopy.universe}>{universeControl ?? <span title={formatUniverseLabel(activeUniverseId)}>{formatUniverseDisplayLabel(activeUniverseId)}</span>}</ToolbarField>
 				</>
 			}
 			notices={

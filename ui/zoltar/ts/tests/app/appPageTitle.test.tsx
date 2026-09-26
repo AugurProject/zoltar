@@ -29,7 +29,10 @@ describe('app page titles', () => {
 			{ input: { ...baseInput, route: 'deploy' }, title: 'Deploy Contracts' },
 			{ input: { ...baseInput, route: 'zoltar', activeZoltarView: 'questions' }, title: 'Questions' },
 			{ input: { ...baseInput, route: 'zoltar', activeZoltarView: 'create' }, title: 'Create Question' },
-			{ input: { ...baseInput, route: 'zoltar', activeZoltarView: 'universes' }, title: 'Universe' },
+			{ input: { ...baseInput, route: 'zoltar', activeZoltarView: 'overview' }, title: 'Overview' },
+			{ input: { ...baseInput, route: 'zoltar', activeZoltarView: 'universes' }, title: 'Universes' },
+			{ input: { ...baseInput, route: 'zoltar', activeZoltarView: 'fork' }, title: 'Fork Universe' },
+			{ input: { ...baseInput, route: 'zoltar', activeZoltarView: 'migrate' }, title: 'Migrate REP' },
 			{ input: { ...baseInput, route: 'not-found' }, title: 'Page Not Found' },
 		]
 

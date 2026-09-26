@@ -95,7 +95,7 @@ describe('UniversePoolDirectorySection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		const selectLinks = documentQueries.getAllByRole('link', { name: 'Select' })
+		const selectLinks = documentQueries.getAllByRole('link', { name: 'Open' })
 		expect(selectLinks).toHaveLength(1)
 		expect(selectLinks[0]?.className).toContain('button-link')
 	})

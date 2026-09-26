@@ -261,7 +261,7 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 		expect(documentQueries.queryByRole('dialog', { name: 'Liquidate Vault' })).toBeNull()
 	})
 
-	test('shows only the primary universe-mismatch message with hex universe ids', async () => {
+	test('shows only the primary universe-mismatch message with universe names', async () => {
 		const selectedPoolAddress = zeroAddress
 		const renderedComponent = await renderIntoDocument(
 			<SecurityPoolWorkflowSection
@@ -279,8 +279,8 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 		const documentQueries = within(document.body)
 		expect(document.body.textContent?.includes('This pool belongs to')).toBe(true)
 		expect(document.body.textContent?.includes('Pool actions are locked until the app uses the same universe.')).toBe(true)
-		expect(documentQueries.getByRole('link', { name: '0x1' })).not.toBeNull()
-		expect(document.body.textContent?.includes('0x2')).toBe(true)
+		expect(documentQueries.getByRole('link', { name: 'Universe 0x1' })).not.toBeNull()
+		expect(document.body.textContent?.includes('Universe 0x2')).toBe(true)
 		expect(documentQueries.getByRole('button', { name: 'Switch to pool universe' })).not.toBeNull()
 		expect(documentQueries.getByRole('button', { name: 'Return to current universe' })).not.toBeNull()
 		expect(documentQueries.queryByRole('tablist')).toBeNull()

@@ -1,6 +1,8 @@
 import type { Address, Hash, Hex } from '@zoltar/core-shared/evm/ethereum'
 import type { ReputationTokenMetadata } from './reputation.js'
+import type { UniverseLineageStep } from '../lib/universeLineage.js'
 import type { WriteClient as ClientsWriteClient } from '../wallet/clients.js'
+export type { LiquidationApprovalDetails } from './liquidation.js'
 export type { ReadClient, WriteClient } from '../wallet/clients.js'
 
 type ZoltarDeploymentStepId = 'proxyDeployer' | 'deploymentStatusOracle' | 'reputationToken' | 'multicall3' | 'uniformPriceDualCapBatchAuctionFactory' | 'securityPoolUtils' | 'openOracle' | 'zoltarQuestionData' | 'zoltar' | 'shareTokenFactory' | 'priceOracleManagerAndOperatorQueuerFactory'
@@ -8,26 +10,6 @@ type ZoltarDeploymentStepId = 'proxyDeployer' | 'deploymentStatusOracle' | 'repu
 export type DeploymentStepId = ZoltarDeploymentStepId | 'securityPoolForker' | 'securityPoolOperationsDelegate' | 'escalationGameClaimDelegate' | 'escalationGameFactory' | 'securityPoolFactory'
 export type MarketType = 'binary' | 'categorical' | 'scalar'
 
-export type LiquidationApprovalDetails = {
-	registryAddress: Address
-	params: {
-		securityPool: Address
-		receiverVault: Address
-		operator: Address
-		targetVault: Address
-		maxCumulativeDebtAttoEth: bigint
-		maxDebtPerLiquidationAttoEth: bigint
-		minPostLiquidationHealthFactorBps: bigint
-		validAfter: bigint
-		validUntil: bigint
-		nonce: bigint
-	}
-	availableDebtAttoEth: bigint
-	reservedDebtAttoEth: bigint
-	consumedDebtAttoEth: bigint
-	minimumValidNonce: bigint
-	revoked: boolean
-}
 export type ReportingOutcomeKey = 'invalid' | 'yes' | 'no'
 export type ForkOutcomeKey = ReportingOutcomeKey | 'none'
 export type SecurityPoolSystemState = 'operational' | 'poolForked' | 'forkMigration' | 'forkTruthAuction'
@@ -99,6 +81,8 @@ export type ZoltarUniverseSummary = {
 	forkTime: bigint
 	forkingOutcomeIndex: bigint
 	hasForked: boolean
+	/** Genesis-first ancestry naming this universe by the fork outcomes that created it. */
+	lineage?: readonly UniverseLineageStep[] | undefined
 	parentUniverseId: bigint
 	reputationToken: Address
 	totalTheoreticalSupplyAttoRep: bigint

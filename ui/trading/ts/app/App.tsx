@@ -11,7 +11,8 @@ import { TradingOverviewPanel } from '../components/TradingOverviewPanel.js'
 import { useUrlSearchState } from '@zoltar/ui-core-shared/app/hooks/useUrlSearchState.js'
 import { readStringQueryParam, readUniverseQueryParam, writeUniverseQueryParam } from '@zoltar/ui-core-shared/navigation/urlParams.js'
 import { resolveUniverseSelection, type LiveUniverses, type UniverseDiscoveryScope } from '../lib/universeSelection.js'
-import { formatUniverseDisplayLabel, formatUniverseLabel } from '@zoltar/ui-core-shared/lib/universeLabels.js'
+import { UniverseSwitcher } from '@zoltar/ui-core-shared/components/UniverseSwitcher.js'
+import { useUniverseSummary, type LoadUniverseSummary } from '../features/useUniverseSummary.js'
 import { routeOwnsLiveWallet, walletSummaryAfterRouteChange, walletSummaryForUniverse, type WalletSummaryState } from '../lib/walletSummaryState.js'
 import { TradingDeploymentSetup, type DeploymentWalletState, type TradingDeploymentSetupServices } from '../features/TradingDeploymentSetup.js'
 import type { DeploymentConfiguration } from '../protocol/config.js'
@@ -94,12 +95,15 @@ export function App({
 	initializeEnvironment = initializeTradingActiveEnvironment,
 	liveTradingServices,
 	loadLiveDeployment = resolveLiveDeployment,
+	loadUniverseSummary,
 }: {
 	deploymentSetupServices?: TradingDeploymentSetupServices
 	initializeEnvironment?: () => Promise<unknown>
 	/** Test seam for the live routes' chain reads. */
 	liveTradingServices?: LiveTradingControllerServices
 	loadLiveDeployment?: () => Promise<DeploymentConfiguration>
+	/** Test seam for the header universe switcher's summary read. */
+	loadUniverseSummary?: LoadUniverseSummary
 }) {
 	const [liveDeploymentStatus, setLiveDeploymentStatus] = useState<LiveDeploymentStatus>('loading')
 	const [liveConfiguration, setLiveConfiguration] = useState<DeploymentConfiguration>()
@@ -142,8 +146,9 @@ export function App({
 	const updateLiveUniverses = useCallback((universeIds: readonly bigint[], authoritativeSelection: bigint | undefined, scope: UniverseDiscoveryScope) => setLiveUniverses({ ids: universeIds, selected: authoritativeSelection, forRequest: scope.requestedUniverseId, forPool: scope.addressedPool }), [])
 	const showUniverseField = routeOwnsLiveWallet(route) && liveDeploymentStatus !== 'unavailable'
 	// The header names the universe the routes follow, like the other applications; it is chosen on the universe route and shown once discovery confirms it.
+	const headerUniverse = useUniverseSummary(showUniverseField ? liveConfiguration : undefined, confirmedUniverseId === undefined ? undefined : BigInt(confirmedUniverseId), loadUniverseSummary)
 	let universeValue: ComponentChildren = <LoadingText announce={false}>{appCopy.loadingWithEllipsis}</LoadingText>
-	if (confirmedUniverseId !== undefined) universeValue = <span title={formatUniverseLabel(BigInt(confirmedUniverseId))}>{formatUniverseDisplayLabel(BigInt(confirmedUniverseId))}</span>
+	if (confirmedUniverseId !== undefined) universeValue = <UniverseSwitcher activeUniverseId={BigInt(confirmedUniverseId)} browseHref={getTradingRouteHref('#/universe')} universe={headerUniverse.state.kind === 'ready' ? headerUniverse.state.universe : undefined} />
 	else if (discoveryState === 'error') universeValue = <span>{appCopy.unavailable}</span>
 	const walletSummary = walletSummaryForUniverse(liveWalletSummary, selectedUniverseId)
 	const retryWalletSummary = () => {
