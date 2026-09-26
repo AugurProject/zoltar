@@ -6,6 +6,8 @@ import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import { LivePositionControls } from '../../features/LivePositionControls.js'
 import type { LiveMarket } from '../../protocol/live.js'
+import { DEFAULT_TRADE_SETTINGS } from '../../lib/tradeSettings.js'
+import { positionTicket } from '../support/positionTicket.js'
 
 const pool = `0x${'11'.repeat(20)}` as Address
 const pair = `0x${'22'.repeat(20)}` as Address
@@ -44,33 +46,12 @@ function positionControls(networkMismatchReason: string | undefined) {
 	return (
 		<LivePositionControls
 			market={market}
-			balances={undefined}
-			balanceState='error'
-			balanceError='Balance refresh failed.'
-			walletConnected
-			networkMismatchReason={networkMismatchReason}
-			walletEthAttoEth={undefined}
-			mode='entry'
-			side='YES'
-			amount=''
-			amountError={undefined}
-			slippage='0.5'
-			transactionValidityMinutes='20'
-			quote={undefined}
-			state='idle'
-			message={undefined}
-			receiptWarning={undefined}
-			transactionHash={undefined}
-			externallyLocked={false}
 			nowSeconds={1n}
-			setMode={() => undefined}
-			setSide={() => undefined}
-			setAmount={() => undefined}
-			setSlippage={() => undefined}
-			setTransactionValidityMinutes={() => undefined}
-			simulate={async () => undefined}
-			submit={async () => undefined}
-			retryBalances={async () => undefined}
+			settings={DEFAULT_TRADE_SETTINGS}
+			ticket={positionTicket()}
+			wallet={{ connected: true, networkMismatchReason, actionLabel: networkMismatchReason === undefined ? 'Connect wallet' : 'Switch to Browser Simulation', walletEthAttoEth: undefined, connect: async () => undefined }}
+			holdings={{ balances: undefined, balanceState: 'error', balanceError: 'Balance refresh failed.', retry: async () => undefined }}
+			externallyLocked={false}
 		/>
 	)
 }
@@ -83,7 +64,7 @@ describe('trading balance notices during a network mismatch', () => {
 		const rendered = await renderIntoDocument(positionControls('Switch to Browser Simulation.'))
 		cleanup = rendered.cleanup
 
-		expect(rendered.container.textContent).toContain('Switch to Browser Simulation.')
+		expect(rendered.container.textContent).toContain('Switch to Browser Simulation')
 		expect(rendered.container.textContent).not.toContain('Balance refresh failed.')
 		expect(rendered.container.textContent).not.toContain('Retry balances')
 

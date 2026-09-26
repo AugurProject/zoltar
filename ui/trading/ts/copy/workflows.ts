@@ -1,137 +1,39 @@
-export const tradeSummary = 'Trade summary'
-export const youPay = 'You pay'
-export const youReceive = 'You receive'
-export const youUse = 'You use'
-export const invalidReceived = 'INVALID received'
-export const invalidRequired = 'INVALID required'
-export const tradingFee = 'Trading fee'
 export const transaction = 'Transaction'
-export const liquidityTransaction = 'Liquidity transaction'
-export const simulateLiquidity = 'Simulate liquidity transaction'
-export const simulatingLiquidity = 'Simulating liquidity transaction…'
-export const submitLiquidity = 'Submit liquidity transaction'
-export const submittingLiquidity = 'Submitting liquidity transaction…'
-export const simulateSettlement = 'Simulate authoritative settlement'
-export const simulatingSettlement = 'Simulating authoritative settlement…'
-export const submitSettlement = 'Submit settlement transaction'
-export const submittingSettlement = 'Submitting settlement transaction…'
-export const previewTrade = 'Preview trade'
-export const submittingTrade = 'Submitting trade…'
-export const defaultTransactionAction = 'Transaction'
-export const simulatingRouterCall = 'Simulating router call…'
-export const authoritativeSimulationReady = 'Fresh authoritative simulation ready'
-export const transactionWorkflowNeedsAttention = 'Transaction workflow needs attention'
-export const tradeTransactionReverted = 'Trade transaction reverted'
-export const transactionProtection = 'Transaction protection'
-export const slippageTolerance = 'Slippage tolerance'
-export const slippageValidation = 'Enter 0% to 5%, with at most two decimal places.'
-export const transactionValidFor = 'Transaction valid for'
-export { minutes, outcome } from '@zoltar/ui-core-shared/copy/common.js'
-export const validityValidation = 'Enter a whole number from 1 to 1440 minutes.'
-export const transactionProtectionGuidance = 'Lower slippage allows less adverse movement from the simulated quote. A shorter validity window reduces stale-transaction exposure. Either setting can cause more reverts.'
+export const tradeLabel = 'Trade'
+export const tradeFailed = 'Trade failed'
+export const checkingLatestPrice = 'Checking price…'
+export const confirmInWallet = 'Confirm in wallet…'
+export const waitingForConfirmation = 'Waiting for confirmation…'
+export { outcome } from '@zoltar/ui-core-shared/copy/common.js'
 export const retryBalances = 'Retry balances'
-export const quoteShares = 'Share quantities'
-export const quoteEthValues = 'ETH values'
-export const quoteTiming = 'Timing and protection'
+export const amountPlaceholder = '0.0'
 export const walletYes = 'Wallet YES'
 export const walletNo = 'Wallet NO'
 export const walletInvalid = 'Wallet INVALID'
 const refreshingWalletBalances = 'Refreshing wallet balances…'
 export const balanceRefreshFailed = 'Balance refresh failed.'
-export const livePositionOperation = 'Live position operation'
-export const enter = 'Enter'
-export const exit = 'Exit'
-export { eth, invalid, no, percent, yes } from './outcomes.js'
-export const ethAmount = 'ETH amount'
-export const completeSetValueToRedeem = 'Complete-set value to redeem'
-export const fullTradeBreakdown = 'Full trade breakdown'
-export const simulationBlock = 'Simulation block'
-export const completeSets = 'Complete sets'
-export const oppositeOutcomeSwapped = 'Opposite outcome swapped'
-export const invalidRequiredUppercase = 'INVALID required'
-export const estimatedEthOut = 'Estimated ETH out'
-export const ammFee = 'AMM fee'
-export const minimumEthReceived = 'Minimum ETH received'
-export const deadline = 'Deadline'
-export const conditionalYesBeforeAfter = 'Conditional YES before / after'
-export const conditionalYesPriceImpact = 'Conditional YES price impact'
-export const unavailableMetric = '—'
-export const positiveSign = '+'
-export const percentagePoints = 'percentage points'
-export const amountTooSmall = 'Amount too small to redeem any ETH'
-
-export function enterOutcome(outcome: 'YES' | 'NO') {
-	return `Enter ${outcome}`
-}
-
-export function exitInsuredOutcome(outcome: 'YES' | 'NO') {
-	return `Exit insured ${outcome}`
-}
-
-export function insuredOutcomeExit(outcome: 'YES' | 'NO') {
-	return `Insured ${outcome} exit`
-}
+export { eth, no, yes } from './outcomes.js'
 
 export function walletBalancesUnavailable(reason: string) {
-	return `Wallet balances are unavailable; retry before simulating. ${reason}`
-}
-
-export function maximumInsuredExit(outcome: 'YES' | 'NO', amount: string) {
-	return `Maximum insured ${outcome} exit: ${amount}.`
-}
-
-export function outcomeSwapped(outcome: 'YES' | 'NO') {
-	return `${outcome} swapped`
-}
-
-export function additionalOutcomeReceived(outcome: 'YES' | 'NO') {
-	return `Additional ${outcome} received`
-}
-
-export function totalOutcomeRequired(outcome: 'YES' | 'NO') {
-	return `Total ${outcome} required`
-}
-
-export function totalOutcomeDelivered(outcome: 'YES' | 'NO') {
-	return `Total ${outcome} delivered`
-}
-
-export function minimumOutcomeReceived(outcome: 'YES' | 'NO') {
-	return `Minimum ${outcome} received`
-}
-
-export function maximumOutcomeRequired(outcome: 'YES' | 'NO') {
-	return `Maximum ${outcome} required`
+	return `Wallet balances are unavailable; retry before trading. ${reason}`
 }
 
 export function preparingAction(action: string) {
-	return `Preparing ${action}…`
+	return `${action}: checking the latest price before your wallet opens…`
 }
 
 export function actionPendingInWallet(action: string) {
-	return `${action} pending in wallet…`
+	return `${action}: confirm in your wallet.`
 }
 
 export function actionPendingOnchain(action: string) {
-	return `${action} pending on-chain…`
+	return `${action} sent. Waiting for confirmation…`
 }
 
 export function actionConfirmedOnchain(action: string) {
-	return `${action} confirmed on-chain`
-}
-
-export function migrationSubmission(count: number) {
-	return `Submit migration to ${count.toString()} child ${count === 1 ? 'branch' : 'branches'}`
+	return `${action} confirmed.`
 }
 
 export function revalidatingAfterReceipt(status: string) {
 	return `${status} · ${refreshingWalletBalances}`
-}
-
-export function simulatingTrade(mode: 'entry' | 'exit', side: 'YES' | 'NO') {
-	return `Simulating ${mode === 'entry' ? `Enter ${side}` : `insured ${side} exit`}…`
-}
-
-export function averageOutcomePrice(outcome: 'YES' | 'NO') {
-	return `Average ${outcome} price`
 }

@@ -4,6 +4,8 @@ import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import { LivePositionControls } from '../../features/LivePositionControls.js'
 import type { LiveBalances, LiveMarket } from '../../protocol/live.js'
+import { DEFAULT_TRADE_SETTINGS } from '../../lib/tradeSettings.js'
+import { positionTicket } from '../support/positionTicket.js'
 
 const pool = `0x${'11'.repeat(20)}` as Address
 const pair = `0x${'22'.repeat(20)}` as Address
@@ -53,28 +55,12 @@ describe('trading authorization routing', () => {
 		const rendered = await renderIntoDocument(
 			<LivePositionControls
 				market={market}
-				balances={balances}
-				balanceState='ready'
-				balanceError={undefined}
-				mode='exit'
-				side='YES'
-				amount='1'
-				slippage='0.5'
-				transactionValidityMinutes='20'
-				quote={undefined}
-				state='idle'
-				receiptWarning={undefined}
-				transactionHash={undefined}
-				externallyLocked={false}
 				nowSeconds={1n}
-				setMode={() => undefined}
-				setSide={() => undefined}
-				setAmount={() => undefined}
-				setSlippage={() => undefined}
-				setTransactionValidityMinutes={() => undefined}
-				simulate={async () => undefined}
-				submit={async () => undefined}
-				retryBalances={async () => undefined}
+				settings={DEFAULT_TRADE_SETTINGS}
+				ticket={positionTicket({ mode: 'exit' })}
+				wallet={{ connected: true, networkMismatchReason: undefined, actionLabel: 'Connect wallet', walletEthAttoEth: 10n ** 18n, connect: async () => undefined }}
+				holdings={{ balances, balanceState: 'ready', balanceError: undefined, retry: async () => undefined }}
+				externallyLocked={false}
 			/>,
 		)
 		cleanup = rendered.cleanup
@@ -83,7 +69,8 @@ describe('trading authorization routing', () => {
 
 	test('uses the receive flow without an approval action', async () => {
 		const container = await renderExit()
-		expect(container.textContent).toContain('Preview trade')
+		expect(container.textContent).toContain('Sell YES')
+		expect(container.textContent).not.toContain('Preview trade')
 		expect(container.textContent).not.toContain('Approve router for all outcome tokens')
 	})
 })

@@ -1,24 +1,21 @@
-import { useCallback, useEffect, useReducer, useRef, useState } from 'preact/hooks'
-import { createExclusiveWorkflowGuard } from '@zoltar/ui-core-shared/lib/requestGuard.js'
-import type { Quote } from './liveTradingTypes.js'
+import { useCallback, useRef, useState } from 'preact/hooks'
+import type { Address, WalletClient } from '@zoltar/core-shared/evm/ethereum'
 import * as workflowCopy from '../../copy/workflows.js'
-import { idleTransactionWorkflow, transactionPhase, transactionWorkflowError, transactionWorkflowHash, transactionWorkflowReceiptWarning, transactionWorkflowReducer } from './transactionWorkflow.js'
+import { useQuotedTransaction } from './useQuotedTransaction.js'
 
-export function useTransactionWorkflow(onWorkflowLockChange: (locked: boolean) => void, defaultSlippage: string, defaultValidityMinutes: string) {
-	const [mode, setMode] = useState<'entry' | 'exit'>('entry')
+export type TradeMode = 'entry' | 'exit'
+
+/** Trade-ticket inputs plus the shared quoted-transaction engine; the position and liquidity locks are tracked together so neither can start while the other runs. */
+export function useTransactionWorkflow({ onWorkflowLockChange, account, chainId, market, walletClient }: { onWorkflowLockChange(locked: boolean): void; account: Address | undefined; chainId: number | undefined; market: Address | undefined; walletClient: WalletClient | undefined }) {
+	const [mode, setMode] = useState<TradeMode>('entry')
 	const [side, setSide] = useState<'YES' | 'NO'>('YES')
-	const [amount, setAmount] = useState('0.01')
-	const [slippage, setSlippage] = useState(defaultSlippage)
-	const [transactionValidityMinutes, setTransactionValidityMinutes] = useState(defaultValidityMinutes)
-	const [quote, setQuote] = useState<Quote>()
-	const [workflowState, dispatchWorkflow] = useReducer(transactionWorkflowReducer, idleTransactionWorkflow)
-	const state = transactionPhase(workflowState)
-	const positionHash = transactionWorkflowHash(workflowState)
-	const message = transactionWorkflowError(workflowState, workflowCopy.tradeTransactionReverted)
-	const positionReceiptWarning = transactionWorkflowReceiptWarning(workflowState)
-	const positionWorkflow = useRef(createExclusiveWorkflowGuard()).current
+	// Amount fields start empty: a prefilled value reads like a recommendation.
+	const [amount, setAmount] = useState('')
+	// The impact the user accepted; a later estimate with a higher impact needs a new acknowledgment.
+	const [acknowledgedImpactBps, setAcknowledgedImpactBps] = useState<bigint>()
 	const positionWorkflowLockedRef = useRef(false)
 	const liquidityWorkflowLockedRef = useRef(false)
+	const knownReceiptRef = useRef<() => void>(() => undefined)
 	const [positionWorkflowLocked, setPositionWorkflowLocked] = useState(false)
 	const [liquidityWorkflowLocked, setLiquidityWorkflowLocked] = useState(false)
 	const workflowLocked = positionWorkflowLocked || liquidityWorkflowLocked
@@ -38,14 +35,19 @@ export function useTransactionWorkflow(onWorkflowLockChange: (locked: boolean) =
 		},
 		[onWorkflowLockChange],
 	)
-
-	useEffect(
-		() => () => {
-			if (positionWorkflow.isActive()) positionWorkflow.finish()
-			onWorkflowLockChange(false)
-		},
-		[onWorkflowLockChange, positionWorkflow],
-	)
+	const transaction = useQuotedTransaction({
+		operation: 'trade',
+		label: workflowCopy.tradeLabel,
+		account,
+		chainId,
+		market,
+		walletClient,
+		externallyLocked: liquidityWorkflowLocked,
+		onWorkflowLockChange: updatePositionWorkflowLock,
+		onKnownReceipt: () => knownReceiptRef.current(),
+		failureFallback: workflowCopy.tradeFailed,
+		resetOnIdentityChange: false,
+	})
 
 	return {
 		mode,
@@ -54,23 +56,18 @@ export function useTransactionWorkflow(onWorkflowLockChange: (locked: boolean) =
 		setSide,
 		amount,
 		setAmount,
-		slippage,
-		setSlippage,
-		transactionValidityMinutes,
-		setTransactionValidityMinutes,
-		quote,
-		setQuote,
-		workflowState,
-		dispatchWorkflow,
-		state,
-		positionHash,
-		message,
-		positionReceiptWarning,
-		positionWorkflow,
+		acknowledgedImpactBps,
+		setAcknowledgedImpactBps,
+		transaction,
+		dispatchWorkflow: transaction.dispatchWorkflow,
+		state: transaction.state,
+		positionHash: transaction.transactionHash,
+		message: transaction.error,
+		positionReceiptWarning: transaction.receiptWarning,
 		positionWorkflowLockedRef,
 		liquidityWorkflowLockedRef,
+		knownReceiptRef,
 		workflowLocked,
-		updatePositionWorkflowLock,
 		updateLiquidityWorkflowLock,
 	}
 }

@@ -7,6 +7,9 @@ import { LiveSettlementControls } from '../../features/LiveSettlementControls.js
 import type { DeploymentConfiguration } from '../../protocol/config.js'
 import type { ForkMigrationContext } from '../../protocol/forks.js'
 import type { LiveMarket } from '../../protocol/live.js'
+// Longer than the automatic quote debounce in useQuotedTransaction.
+const QUOTE_SETTLE_MILLISECONDS = 400
+import { DEFAULT_TRADE_SETTINGS } from '../../lib/tradeSettings.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 
 const account = getAddress(`0x${'11'.repeat(20)}`)
@@ -142,6 +145,8 @@ describe('live fork settlement context', () => {
 				balanceError={undefined}
 				account={currentAccount}
 				walletClient={currentWalletClient}
+				wallet={{ actionLabel: 'Connect wallet', connect: async () => undefined }}
+				settings={DEFAULT_TRADE_SETTINGS}
 				externallyLocked={false}
 				refresh={async () => {
 					refreshes++
@@ -168,20 +173,24 @@ describe('live fork settlement context', () => {
 		const target = Array.from(document.querySelectorAll('button')).find(candidate => candidate.textContent?.includes('Red') === true)
 		if (!(target instanceof HTMLButtonElement)) throw new Error('Missing categorical fork target')
 		await act(() => target.click())
-		await act(() => button('Simulate authoritative settlement').click())
+		// Selecting a target quotes automatically; there is no separate simulate step.
+		expect(document.body.textContent).not.toContain('Simulate authoritative settlement')
+		await act(async () => {
+			await Bun.sleep(QUOTE_SETTLE_MILLISECONDS)
+		})
 		await settleEffects()
 		expect(document.body.textContent).toContain('Fork migration simulation ready at block 12')
 
-		await act(() => button('Submit migration to 1 child branch').click())
+		await act(() => button('Migrate to 1 branch').click())
 		await settleEffects()
 		expect(refreshes).toBe(1)
 		expect(contextLoads).toBe(3)
-		expect(document.body.textContent).toContain('Settlement transaction confirmed on-chain')
+		expect(document.body.textContent).toContain('Migrate to 1 branch confirmed.')
 
 		const nextAccount = getAddress(`0x${'aa'.repeat(20)}`)
 		const nextWalletClient = createWalletClient({ account: nextAccount, transport: custom({ request: async () => undefined }) })
 		await act(() => render(settlementView(nextAccount, nextWalletClient, { ...balances, yes: 2n }), rendered.container))
 		await settleEffects()
-		expect(document.body.textContent).not.toContain('Settlement transaction confirmed on-chain')
+		expect(document.body.textContent).not.toContain('confirmed.')
 	})
 })

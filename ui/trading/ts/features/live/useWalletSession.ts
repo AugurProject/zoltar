@@ -85,7 +85,6 @@ export function useWalletSessionController({
 	balanceRequests,
 	portfolioBalanceRequests,
 	walletSummaryRequests,
-	simulationRequests,
 	refresh,
 }: {
 	route: string
@@ -100,7 +99,6 @@ export function useWalletSessionController({
 	balanceRequests: RequestGuard
 	portfolioBalanceRequests: RequestGuard
 	walletSummaryRequests: RequestGuard
-	simulationRequests: RequestGuard
 	refresh(configuration?: DeploymentConfiguration, start?: bigint, owner?: WorkflowOwner): Promise<void>
 }) {
 	const walletContextRevision = useRef(0)
@@ -137,7 +135,6 @@ export function useWalletSessionController({
 			balanceRequests.invalidate()
 			portfolioBalanceRequests.invalidate()
 			walletSummaryRequests.invalidate()
-			simulationRequests.invalidate()
 			session.accountRef.current = undefined
 			session.setWalletEthAttoEth(undefined)
 			session.setWalletRepAttoRep(undefined)
@@ -154,11 +151,10 @@ export function useWalletSessionController({
 			portfolio.setBalanceError('Wallet context changed; reconnect to refresh balances')
 			portfolio.setPortfolioBalanceError('Wallet context changed; reconnect before loading portfolio positions')
 			session.setWalletContextInvalidated(true)
-			transaction.setQuote(undefined)
 			session.setWalletConnectionFeedback({ route, detail })
 			transaction.dispatchWorkflow(transaction.positionWorkflowLockedRef.current ? { type: 'context-invalidated', message: detail } : { type: 'failed', message: detail })
 		},
-		[balanceRequests, connectionRequests, onWalletSummaryChange, portfolioBalanceRequests, route, selectedUniverseId, services, session.walletProvider, simulationRequests, walletSummaryRequests],
+		[balanceRequests, connectionRequests, onWalletSummaryChange, portfolioBalanceRequests, route, selectedUniverseId, services, session.walletProvider, walletSummaryRequests],
 	)
 
 	const executeWithCurrentWalletContext = useCallback(
@@ -277,7 +273,6 @@ export function useWalletSessionController({
 		if (confirmedChainId !== configuration.chainId || confirmedAccount !== connected) throw new Error(eventName === undefined ? 'Wallet account changed while connecting; reconnect to continue' : 'Wallet account changed while refreshing; reconnect to continue')
 		balanceRequests.invalidate()
 		walletSummaryRequests.invalidate()
-		simulationRequests.invalidate()
 		session.accountRef.current = connected
 		session.setWalletEthAttoEth(undefined)
 		session.setWalletRepAttoRep(undefined)
