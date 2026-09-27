@@ -1,4 +1,4 @@
-import type { Address } from '@zoltar/core-shared/evm/ethereum'
+import { getAddress, type Address } from '@zoltar/core-shared/evm/ethereum'
 import type { LiveBalances, LiveMarket } from '../../protocol/live.js'
 import { tradeTicketModel, type TradeTicketInputs } from '../../features/live/tradeTicketModel.js'
 import type { TradeMode } from '../../features/live/useTransactionWorkflow.js'
@@ -63,4 +63,35 @@ export function ticketEstimateFor(market: LiveMarket, mode: TradeMode, amount: s
 	const { estimate } = ticketModelFor(market, mode, amount, balances)
 	if (estimate === undefined) throw new Error(`Expected a ${mode} estimate for ${amount}`)
 	return estimate
+}
+
+export const FIXTURE_NOW = 1_000_000n
+export const FIXTURE_DAY = 24n * 60n * 60n
+
+export function fixtureAddress(byte: string) {
+	return getAddress(`0x${byte.repeat(20)}`)
+}
+
+export function listingMarketFixture(overrides: Partial<LiveMarket> & Pick<LiveMarket, 'pool'>): LiveMarket {
+	return liveMarketFixture({
+		pair: fixtureAddress('ee'),
+		shareToken: fixtureAddress('dd'),
+		universeId: 0n,
+		questionId: 1n,
+		title: 'Will it rain?',
+		description: 'Resolves YES if it rains.',
+		endTime: FIXTURE_NOW + 30n * FIXTURE_DAY,
+		statoblastSecurityMultiplierBps: 10_000n,
+		shareTokenSupplyAttoShares: 0n,
+		settlementCollateralAttoEth: 0n,
+		currentRetentionRate: 0n,
+		totalUnderwritingLimitAttoEth: 0n,
+		feeEligibleUnderwritingLimitAttoEth: 0n,
+		mintingCapacityCeilingAttoEth: 0n,
+		availableMintingCapacityAttoEth: 0n,
+		yesReserve: 10n ** 36n,
+		noReserve: 10n ** 36n,
+		lpTotalSupply: 10n ** 36n,
+		...overrides,
+	})
 }

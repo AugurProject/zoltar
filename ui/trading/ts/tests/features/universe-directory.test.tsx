@@ -180,9 +180,11 @@ describe('universe directory', () => {
 		for (const alert of Array.from(rendered.container.querySelectorAll('[role="alert"]'))) expect(alert.textContent?.match(/Security pool discovery failed/g) ?? []).toHaveLength(1)
 	})
 
-	test('changing the universe does not count as an environment change', () => {
+	test('changing the universe or the ticket side does not count as an environment change', () => {
 		const base = getTradingEnvironmentLocationKey({ hash: '#/market?simulate=1&simScenario=deployed', search: '' })
 		expect(getTradingEnvironmentLocationKey({ hash: '#/market?simulate=1&simScenario=deployed&universe=2', search: '' })).toBe(base)
+		// A market-card outcome button adds a one-shot side to the hash; following it must not reboot the environment.
+		expect(getTradingEnvironmentLocationKey({ hash: '#/market?simulate=1&simScenario=deployed&side=yes', search: '' })).toBe(base)
 		expect(getTradingEnvironmentLocationKey({ hash: '#/market?simulate=1&simScenario=baseline', search: '' })).not.toBe(base)
 	})
 })
