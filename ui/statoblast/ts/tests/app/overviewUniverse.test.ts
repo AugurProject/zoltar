@@ -5,7 +5,7 @@ import { getStatoblastOverviewUniverse } from '../../app/lib/overviewUniverse.js
 const unforkedUniverse = { forkTime: 0n, hasForked: false, totalTheoreticalSupplyAttoRep: 11_000_000n * 10n ** 18n }
 
 describe('Statoblast top bar universe', () => {
-	installDomTestLifecycle({ url: 'http://localhost/#/security-pools?universe=7' })
+	installDomTestLifecycle({ url: 'http://localhost/#/pools/open?universe=7' })
 
 	test('shows the connected account REP balance, not the universe REP supply', () => {
 		const overview = getStatoblastOverviewUniverse({ loadingZoltarForkAccess: false, zoltarForkRepBalanceAttoRep: 12n * 10n ** 18n, zoltarUniverse: unforkedUniverse })
@@ -22,6 +22,6 @@ describe('Statoblast top bar universe', () => {
 		const overview = getStatoblastOverviewUniverse({ loadingZoltarForkAccess: false, zoltarForkRepBalanceAttoRep: undefined, zoltarUniverse: { forkTime: 5n, hasForked: true } })
 		expect(overview.universeHasForked).toBe(true)
 		expect(overview.universeForkTime).toBe(5n)
-		expect(overview.migrateRepHref).toBe('#/security-pools?universe=7&securityPoolsView=universes')
+		expect(overview.migrateRepHref).toBe('#/pools/universes?universe=7')
 	})
 })

@@ -620,6 +620,11 @@
 		flex-direction: column;
 	}
 
+	/* The desktop row centers items vertically; in a column that would center a short title horizontally. */
+	.route-header-main {
+		align-items: stretch;
+	}
+
 	.address-value.copyable,
 	.identifier-value.copyable,
 	.metric-label-refresh,
@@ -1280,12 +1285,14 @@
 	}
 
 	/* The popover spans the viewport under its trigger instead of overflowing the left edge. */
-	.account-menu-popover {
+	.account-menu-popover,
+	.header-toolbar .universe-switcher-popover {
 		position: fixed;
 		top: auto;
 		right: 0.75rem;
 		left: 0.75rem;
 		width: auto;
+		max-width: calc(100vw - 1.5rem);
 		margin-top: 0.5rem;
 	}
 }

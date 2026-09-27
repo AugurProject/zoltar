@@ -85,11 +85,12 @@ export interface QuestionSnapshot {
 }
 
 export interface VaultSnapshot {
+	coverageCertified?: boolean
 	address: Address
 	feeIndex: string
 	repBackingUnits: string
 	repBackingAttoRep: CanonicalUintString
-	capacityOwnershipAttoRep: CanonicalUintString
+	underwritingLimitAttoEth: CanonicalUintString
 	claimableFeesAttoEth: CanonicalUintString
 	openInterestAttoEth: CanonicalUintString
 	badDebtAttoEth: CanonicalUintString
@@ -145,11 +146,10 @@ export interface PoolSnapshot {
 	projectedSettlementCollateralAttoEth: CanonicalUintString
 	shareTokenSupplyAttoShares: CanonicalUintString
 	currentMintingCapacityAttoEth: CanonicalUintString
-	totalCapacityOwnershipAttoRep: CanonicalUintString
+	totalUnderwritingLimitAttoEth: CanonicalUintString
 	statoblastSecurityMultiplierBps: string
-	walletVaultTargetBackingFactorBps: string
 	unassignedRepBackingAttoRep: CanonicalUintString
-	unassignedCapacityOwnershipAttoRep: CanonicalUintString
+	unassignedUnderwritingLimitAttoEth: CanonicalUintString
 	unassignedBadDebtAttoEth: CanonicalUintString
 	totalBadDebtAttoEth: CanonicalUintString
 	feeIndex: string
@@ -226,7 +226,7 @@ export interface StagedOperationSnapshot {
 	liquidationMinimumReceiverHealthFactorBps: string
 	liquidationMinPriceDistanceBps: string
 	snapshotTargetBackingUnits: string
-	snapshotTargetCapacityOwnershipAttoRep: CanonicalUintString
+	snapshotTargetUnderwritingLimitAttoEth: CanonicalUintString
 	snapshotTargetOpenInterestAttoEth: CanonicalUintString
 	snapshotTargetDisputeStakedAttoRep: CanonicalUintString
 	snapshotTotalPoolHeldAttoRep: CanonicalUintString

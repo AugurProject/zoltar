@@ -1,10 +1,11 @@
+import { setUnderwritingLimit } from '../testSupport/simulator/utils/contracts/securityPool'
 import { manipulatePriceOracle } from '../testSupport/simulator/utils/contracts/statoblastTestUtils'
 import { getSecurityPoolAddresses } from '../testSupport/simulator/utils/contracts/deployStatoblast'
 import { getEthRaiseCapAttoEth, participateAuction } from '../testSupport/simulator/utils/contracts/statoblast'
 import { getChildUniverseId } from '../testSupport/simulator/utils/utilities'
 import { finalizeTruthAuction, migrateVault, startTruthAuction } from '../testSupport/simulator/utils/contracts/securityPoolForker'
 import { createWriteClient } from '../testSupport/simulator/utils/clients'
-import { createCompleteSet, depositToEscalationGame, getSystemState } from '../testSupport/simulator/utils/contracts/securityPool'
+import { createCertifiedCompleteSetFixture, createCompleteSet, depositToEscalationGame, getSystemState } from '../testSupport/simulator/utils/contracts/securityPool'
 import { SystemState } from '../testSupport/simulator/types/statoblastTypes'
 import { QuestionOutcome } from '../testSupport/simulator/types/types'
 import { DAY, TEST_ADDRESSES } from '../testSupport/simulator/utils/constants'
@@ -48,11 +49,13 @@ describe('Audit regression: post-escrow complete-set mint fork loss', () => {
 		strictEqualTypeSafe(await getSettlementCollateralAttoEth(client, securityPoolAddresses.securityPool), 0n, 'rejected unbacked minting must not add settlement collateral')
 	})
 
-	test('does not skip collateral repair when bad debt permits all pool-held REP to be escrowed', async () => {
+	test('full-limit escrow checks cannot be bypassed by bad debt, and zero-pool-REP repair remains funded', async () => {
 		const settlementCollateralAttoEth = 1n * 10n ** 18n
+		await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer)
+		await setUnderwritingLimit(client, securityPoolAddresses.securityPool, settlementCollateralAttoEth)
 		await mockWindow.setTime(questionData.endTime + 1n)
 		await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, 10n * PRICE_PRECISION)
-		await createCompleteSet(client, securityPoolAddresses.securityPool, settlementCollateralAttoEth)
+		await createCertifiedCompleteSetFixture(client, securityPoolAddresses.securityPool, settlementCollateralAttoEth)
 
 		// Reconstruct the full-bad-debt accounting boundary so this regression isolates
 		// fork finalization from the independent liquidation setup.
@@ -64,8 +67,13 @@ describe('Audit regression: post-escrow complete-set mint fork loss', () => {
 				},
 			},
 		})
+		await assert.rejects(depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, repDeposit), /Vault backing insufficient/)
+		// Explicitly reconstruct an orphaned commitment to retain the independent
+		// zero-pool-REP repair regression; ordinary escrow cannot reach this state.
+		await mockWindow.addStateOverrides({ [securityPoolAddresses.securityPool]: { stateDiff: { [formatStorageSlot(getMappingStorageSlot(client.account.address, 16n) + 1n)]: 0n, [formatStorageSlot(1n)]: 0n, [formatStorageSlot(12n)]: 0n } } })
 		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, repDeposit)
-		strictEqualTypeSafe(await getTotalPoolHeldAttoRep(client, securityPoolAddresses.securityPool), 0n, 'bad-debt-adjusted zero OI should permit all REP to enter unresolved escrow')
+		await mockWindow.addStateOverrides({ [securityPoolAddresses.securityPool]: { stateDiff: { [formatStorageSlot(1n)]: settlementCollateralAttoEth } } })
+		strictEqualTypeSafe(await getTotalPoolHeldAttoRep(client, securityPoolAddresses.securityPool), 0n, 'the synthetic orphaned position retains collateral repair coverage without pool-held REP')
 
 		await triggerExternalForkForSecurityPool(undefined, 'zero-pool-rep collateral repair source')
 		const parentForkData = await getSecurityPoolForkerForkData(client, securityPoolAddresses.securityPool)

@@ -224,7 +224,7 @@ export const escalationDeposit: OperationDefinition = {
 	buildPlan(snapshot, options) {
 		const candidate = choose(
 			operationalPools(snapshot).flatMap(pool => {
-				if (amount(pool.totalCapacityOwnershipAttoRep) > 0n && safeOraclePriceDeadline(snapshot, pool, options) === undefined) return []
+				if (amount(pool.totalUnderwritingLimitAttoEth) > 0n && safeOraclePriceDeadline(snapshot, pool, options) === undefined) return []
 				const configuredMaximum = optionAmount(options, 'maxRepSpendAttoRep', ONE_TOKEN)
 				const outcomes = [0, 1, 2].filter(outcome => amount(pool.safeEscalationDepositMaximumsAttoRep[outcome] ?? '0') > 0n && amount(pool.safeEscalationDepositMaximumsAttoRep[outcome] ?? '0') <= configuredMaximum)
 				return outcomes.length > 0 ? [{ outcomes, pool }] : []
@@ -236,8 +236,8 @@ export const escalationDeposit: OperationDefinition = {
 		if (outcome === undefined) return undefined
 		const maximum = amount(candidate.pool.safeEscalationDepositMaximumsAttoRep[outcome] ?? '0')
 		if (maximum === 0n) return undefined
-		const oracleDeadline = amount(candidate.pool.totalCapacityOwnershipAttoRep) > 0n ? safeOraclePriceDeadline(snapshot, candidate.pool, options) : undefined
-		if (amount(candidate.pool.totalCapacityOwnershipAttoRep) > 0n && oracleDeadline === undefined) return undefined
+		const oracleDeadline = amount(candidate.pool.totalUnderwritingLimitAttoEth) > 0n ? safeOraclePriceDeadline(snapshot, candidate.pool, options) : undefined
+		if (amount(candidate.pool.totalUnderwritingLimitAttoEth) > 0n && oracleDeadline === undefined) return undefined
 		return planBase({
 			...(oracleDeadline === undefined ? {} : { deadlineTimestamp: oracleDeadline.toString() }),
 			definitionId: escalationDeposit.id,
@@ -268,7 +268,7 @@ export const escalationDeposit: OperationDefinition = {
 	ecosystem: 'statoblast',
 	evaluate(snapshot, options) {
 		const found = operationalPools(snapshot).some(pool => {
-			if (amount(pool.totalCapacityOwnershipAttoRep) > 0n && safeOraclePriceDeadline(snapshot, pool, options) === undefined) return false
+			if (amount(pool.totalUnderwritingLimitAttoEth) > 0n && safeOraclePriceDeadline(snapshot, pool, options) === undefined) return false
 			const configuredMaximum = optionAmount(options, 'maxRepSpendAttoRep', ONE_TOKEN)
 			return [0, 1, 2].some(outcome => {
 				const maximum = amount(pool.safeEscalationDepositMaximumsAttoRep[outcome] ?? '0')

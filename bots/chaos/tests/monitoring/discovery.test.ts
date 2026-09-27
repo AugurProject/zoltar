@@ -418,16 +418,16 @@ function refundBackfillClient(pendingRefundAttoEth: bigint, walletVaultRegistere
 					return {
 						badDebtGeneration: overrides.badDebtGeneration ?? 0n,
 						currentRetentionRate: 10n ** 18n,
-						feeEligibleCapacityOwnershipAttoRep: 0n,
+						feeEligibleUnderwritingLimitAttoEth: 0n,
 						feeIndex: 0n,
 						feeIndexRemainder: 0n,
 						lastUpdatedFeeAccumulator: 0n,
 						settlementCollateralAttoEth: 0n,
-						totalCapacityOwnershipAttoRep: 0n,
+						totalUnderwritingLimitAttoEth: 0n,
 						totalClaimableVaultFeesAttoEth: 0n,
 						totalFeesOwedRemainder: 0n,
 						unallocatedAccruedFeesAttoEth: 0n,
-						uncheckpointedFeeEligibleCapacityOwnershipAttoRep: 0n,
+						uncheckpointedFeeEligibleUnderwritingLimitAttoEth: 0n,
 					}
 				case 'shareTokenSupplyAttoShares':
 				case 'totalRepBackingUnits':
@@ -439,12 +439,14 @@ function refundBackfillClient(pendingRefundAttoEth: bigint, walletVaultRegistere
 				case 'pendingReportId':
 				case 'getTotalPoolHeldAttoRep':
 				case 'getQuestionOutcome':
-				case 'getCurrentMintingCapacityAttoEth':
+				case 'getCertifiedUnderwritingLimitAttoEth':
 				case 'getVaultOpenInterestAttoEth':
 				case 'vaultBadDebtAttoEth':
 				case 'backingUnitsToAttoRep':
 				case 'getActiveStagedOperationCount':
 					return 0n
+				case 'isVaultCoverageCertified':
+					return false
 				case 'isPriceValid':
 					return true
 				case 'getRequestPriceCostAttoEth':
@@ -462,7 +464,7 @@ function refundBackfillClient(pendingRefundAttoEth: bigint, walletVaultRegistere
 					return 1n
 				case 'targetPriceErrorForDispute':
 					return 1_000n
-				case 'vaultTargetBackingFactorBps':
+				case 'getVaultUnderwritingLimitAttoEth':
 					return 0n
 				case 'openOracleSecurityMultiplierBps':
 				case 'escalationHaltMultiplierBps':
@@ -1467,7 +1469,7 @@ describe('anchored ecosystem discovery', () => {
 				{
 					...fixtureVault,
 					address: address(88),
-					capacityOwnershipAttoRep: String(20n),
+					underwritingLimitAttoEth: String(20n),
 					disputeStakedAttoRep: String(0n),
 					openInterestAttoEth: String(100n),
 					repBackingAttoRep: String(10n),
@@ -1503,7 +1505,7 @@ describe('anchored ecosystem discovery', () => {
 									receiverVault: address(87),
 									reservedLiquidationDebtAttoEth: 80n,
 									snapshotTargetBackingUnits: 10n,
-									snapshotTargetCapacityOwnershipAttoRep: 20n,
+									snapshotTargetUnderwritingLimitAttoEth: 20n,
 									targetVault: address(88),
 									validForSeconds: 3_600n,
 								},
@@ -1540,6 +1542,8 @@ describe('anchored ecosystem discovery', () => {
 						return [10n, 20n, 0n, 0n]
 					case 'getVaultOpenInterestAttoEth':
 						return 100n
+					case 'isVaultCoverageCertified':
+						return false
 					case 'vaultBadDebtAttoEth':
 						return 0n
 					case 'backingUnitsToAttoRep':
@@ -1629,7 +1633,7 @@ describe('anchored ecosystem discovery', () => {
 			receiverVault: receiver,
 			reservedLiquidationDebtAttoEth: 0n,
 			snapshotTargetBackingUnits: 10n,
-			snapshotTargetCapacityOwnershipAttoRep: 20n,
+			snapshotTargetUnderwritingLimitAttoEth: 20n,
 			snapshotTargetDisputeStakedAttoRep: 0n,
 			snapshotTargetOpenInterestAttoEth: 0n,
 			snapshotTotalPoolHeldAttoRep: 1_000n,
@@ -1675,7 +1679,7 @@ describe('anchored ecosystem discovery', () => {
 		expect(executable[0]).toMatchObject({ executionExpectedResult: '0x', executionExpectedSuccess: true, operation: operationType })
 		expect(executable).toHaveLength(2)
 		expect(pageRequests).toEqual([[0n, 2n]])
-		expect(simulations[0]).toMatchObject({ account: pool.coordinator, args: [fixture.wallet.address, 100n], functionName: operationType === 1 ? 'withdrawRepFromVault' : 'adjustVaultBackingFactor' })
+		expect(simulations[0]).toMatchObject({ account: pool.coordinator, args: [fixture.wallet.address, 100n], functionName: operationType === 1 ? 'withdrawRepFromVault' : 'setVaultUnderwritingLimit' })
 		simulationFailure = new Error('execution reverted: stale withdrawal')
 		expect((await discoverStagedOperations(client, pool, 555n, 2, []))[0]?.executionExpectedSuccess).toBe(false)
 		simulationFailure = new Error('RPC connection closed')

@@ -310,16 +310,18 @@ describe('Statoblast vault-registration capacity', () => {
 		expect(cleanup?.steps.map(step => step.id)).toEqual(['revoke-direct-rep'])
 	})
 
-	test('deposits use the saved absolute target or the pool minimum for a new vault', () => {
+	test('deposits use the pool backing input independently of standing ETH limits', () => {
 		for (const saved of ['0', '30000']) {
 			const snapshot = snapshotFixture()
 			const pool = requiredPool(snapshot)
 			pool.statoblastSecurityMultiplierBps = '20000'
-			pool.walletVaultTargetBackingFactorBps = saved
+			const vault = pool.vaults[0]
+			if (vault === undefined) throw new Error('Expected vault fixture')
+			vault.underwritingLimitAttoEth = saved
 			const plan = eligibleOperationPlans(snapshot, options).find(plan => plan.definitionId === 'statoblast.vault.deposit-rep')
 			const step = plan?.steps.find(step => step.id === 'deposit-rep')
 			if (step === undefined) throw new Error('Expected deposit plan')
-			expect(decodeFunctionData({ abi: securityPoolAbi, data: step.data }).args?.[1]).toBe(saved === '0' ? 20_000n : 30_000n)
+			expect(decodeFunctionData({ abi: securityPoolAbi, data: step.data }).args?.[1]).toBe(20_000n)
 		}
 	})
 

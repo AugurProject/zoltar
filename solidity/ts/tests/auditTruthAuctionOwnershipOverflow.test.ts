@@ -1,8 +1,10 @@
+import { setUnderwritingLimit } from '../testSupport/simulator/utils/contracts/securityPool'
+import { manipulatePriceOracle } from '../testSupport/simulator/utils/contracts/statoblastTestUtils'
 import { getTotalRepPurchasedAttoRep } from '../testSupport/simulator/utils/contracts/auction'
 import { getSecurityPoolAddresses } from '../testSupport/simulator/utils/contracts/deployStatoblast'
 import { getRepTokenAddress, getZoltarAddress } from '../testSupport/simulator/utils/contracts/zoltar'
 import { createWriteClient } from '../testSupport/simulator/utils/clients'
-import { createCompleteSet, getTotalRepBackingUnits, getSecurityVault, backingUnitsToAttoRep } from '../testSupport/simulator/utils/contracts/securityPool'
+import { createCertifiedCompleteSetFixture, getTotalRepBackingUnits, getSecurityVault, backingUnitsToAttoRep } from '../testSupport/simulator/utils/contracts/securityPool'
 import { claimAuctionProceeds, finalizeTruthAuction, getMigratedAttoRep, migrateVault, startTruthAuction } from '../testSupport/simulator/utils/contracts/securityPoolForker'
 import { approveToken, getChildUniverseId, getERC20Balance } from '../testSupport/simulator/utils/utilities'
 import { approveAndDepositRepToVault, manipulatePriceOracleAndPerformOperation } from '../testSupport/simulator/utils/contracts/statoblastTestUtils'
@@ -53,7 +55,10 @@ describe('Truth-auction ownership overflow regression', () => {
 		await approveAndDepositRepToVault(attacker, minimumVaultRep, questionId)
 		await approveAndDepositRepToVault(passiveVault, passiveRep, questionId)
 		await approveAndDepositRepToVault(secondPassiveVault, passiveRep, questionId)
-		await createCompleteSet(openInterestHolder, securityPoolAddresses.securityPool, 10n * PRICE_PRECISION)
+		await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer)
+		await setUnderwritingLimit(client, securityPoolAddresses.securityPool, 10n * PRICE_PRECISION)
+		await setUnderwritingLimit(attacker, securityPoolAddresses.securityPool, 1n)
+		await createCertifiedCompleteSetFixture(openInterestHolder, securityPoolAddresses.securityPool, 10n * PRICE_PRECISION)
 
 		await triggerExternalForkForSecurityPool(universeForker, 'audit ownership overflow source')
 		await migrateVault(attacker, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
@@ -100,7 +105,7 @@ describe('Truth-auction ownership overflow regression', () => {
 		const operationCounterBefore = await getStagedOperationCounter(client, childPool.priceOracleManagerAndOperatorQueuer)
 		const operationLogStartBlock = (await client.getBlockNumber()) + 1n
 
-		await manipulatePriceOracleAndPerformOperation(auctionWinner, mockWindow, childPool.priceOracleManagerAndOperatorQueuer, OperationType.WithdrawRep, auctionWinner.account.address, minimumVaultRep)
+		await manipulatePriceOracleAndPerformOperation(auctionWinner, mockWindow, childPool.priceOracleManagerAndOperatorQueuer, OperationType.WithdrawRep, auctionWinner.account.address, await backingUnitsToAttoRep(client, childPool.securityPool, winnerVaultBefore.repBackingUnits))
 
 		const operationId = operationCounterBefore + 1n
 		const executionLog = (
@@ -121,7 +126,7 @@ describe('Truth-auction ownership overflow regression', () => {
 		assert.strictEqual(executionLog.args.operationId, operationId, 'the execution event should consume the newly queued operation')
 		assert.strictEqual(executionLog.args.operation, BigInt(OperationType.WithdrawRep), 'the failed staged operation should be the requested REP withdrawal')
 		assert.strictEqual(executionLog.args.success, false, 'the bounded ownership conversion should reject rather than overflow when live open interest commits the winner capacity')
-		assert.strictEqual(executionLog.args.errorMessage, 'Capacity committed', 'the failed withdrawal should expose the live-open-interest invariant')
+		assert.strictEqual(executionLog.args.errorMessage, 'Vault backing insufficient', 'the failed withdrawal should expose the live-open-interest invariant')
 		assert.strictEqual(await getActiveStagedOperationCount(client, childPool.priceOracleManagerAndOperatorQueuer), 0n, 'the rejected withdrawal should be consumed')
 		assert.strictEqual((await getStagedOperation(client, childPool.priceOracleManagerAndOperatorQueuer, operationId))[1], zeroAddress, 'the consumed withdrawal should clear its initiator')
 		assert.strictEqual(await getERC20Balance(client, childRepToken, auctionWinner.account.address), winnerWalletRepBefore, 'the rejected withdrawal should not transfer REP')

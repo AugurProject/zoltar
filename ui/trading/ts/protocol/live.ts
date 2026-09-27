@@ -27,7 +27,7 @@ const router = tradingContracts['contracts/trading/TwoWayConstantProductRouter.s
 async function loadLiveSecurityPoolSettings(client: PublicClient, pool: Address) {
 	const block = await client.getBlock()
 	const blockNumber = block.number
-	const [questionData, zoltar, parent, shareTokenSupplyAttoShares, mintingCapacityCeilingAttoEth, accounting, feeEndTime, systemState, awaitingForkContinuation, vaultCount, forker] = await Promise.all([
+	const [questionData, zoltar, parent, shareTokenSupplyAttoShares, mintingCapacityCeilingAttoEth, accounting, feeEndTime, systemState, awaitingForkContinuation, vaultCount, forker, certifiedLimit, escalationGame] = await Promise.all([
 		client.readContract({ abi: securityPoolAbi, address: pool, blockNumber, functionName: 'questionData' }),
 		client.readContract({ abi: securityPoolAbi, address: pool, blockNumber, functionName: 'zoltar' }),
 		client.readContract({ abi: securityPoolAbi, address: pool, blockNumber, functionName: 'parent' }),
@@ -39,6 +39,8 @@ async function loadLiveSecurityPoolSettings(client: PublicClient, pool: Address)
 		client.readContract({ abi: securityPoolAbi, address: pool, blockNumber, functionName: 'awaitingForkContinuation' }),
 		client.readContract({ abi: securityPoolAbi, address: pool, blockNumber, functionName: 'getVaultCount' }),
 		client.readContract({ abi: securityPoolAbi, address: pool, blockNumber, functionName: 'securityPoolForker' }),
+		client.readContract({ abi: securityPoolAbi, address: pool, blockNumber, functionName: 'getCertifiedUnderwritingLimitAttoEth' }),
+		client.readContract({ abi: securityPoolAbi, address: pool, blockNumber, functionName: 'escalationGame' }),
 	])
 	const checkpoint = (timestamp: bigint) => estimateMintCheckpoint({ ...accounting, currentTimestamp: timestamp, feeEndTimestamp: feeEndTime })
 	const current = checkpoint(block.timestamp)
@@ -52,10 +54,10 @@ async function loadLiveSecurityPoolSettings(client: PublicClient, pool: Address)
 		settlementCollateralAttoEth: current.settlementCollateralAfterFeesAttoEth,
 		valuation: { timestamp: block.timestamp, feeEndTime, projectedCollateralAttoEth: projected.settlementCollateralAfterFeesAttoEth },
 		currentRetentionRate: accounting.currentRetentionRate,
-		totalCapacityOwnershipAttoRep: accounting.totalCapacityOwnershipAttoRep,
-		feeEligibleCapacityOwnershipAttoRep: accounting.feeEligibleCapacityOwnershipAttoRep,
+		totalUnderwritingLimitAttoEth: accounting.totalUnderwritingLimitAttoEth,
+		feeEligibleUnderwritingLimitAttoEth: accounting.feeEligibleUnderwritingLimitAttoEth,
 		mintingCapacityCeilingAttoEth,
-		availableMintingCapacityAttoEth: mintingCapacityCeilingAttoEth > current.settlementCollateralAfterFeesAttoEth ? mintingCapacityCeilingAttoEth - current.settlementCollateralAfterFeesAttoEth : 0n,
+		availableMintingCapacityAttoEth: certifiedLimit === accounting.totalUnderwritingLimitAttoEth && BigInt(escalationGame) === 0n && mintingCapacityCeilingAttoEth > current.settlementCollateralAfterFeesAttoEth ? mintingCapacityCeilingAttoEth - current.settlementCollateralAfterFeesAttoEth : 0n,
 		systemState,
 		awaitingForkContinuation,
 		vaultCount,
@@ -150,8 +152,8 @@ export function unavailableMarket(deployment: SecurityPoolDeployment, error: unk
 		shareTokenSupplyAttoShares: 0n,
 		settlementCollateralAttoEth: 0n,
 		currentRetentionRate: 0n,
-		totalCapacityOwnershipAttoRep: 0n,
-		feeEligibleCapacityOwnershipAttoRep: 0n,
+		totalUnderwritingLimitAttoEth: 0n,
+		feeEligibleUnderwritingLimitAttoEth: 0n,
 		mintingCapacityCeilingAttoEth: 0n,
 		availableMintingCapacityAttoEth: 0n,
 		feeBps: BigInt(feeBps),
@@ -178,7 +180,7 @@ export async function loadLiveMarket(client: PublicClient, configuration: Deploy
 	const shareToken = getAddress(shareTokenAddress)
 	const factoryArtifact = tradingContracts['contracts/trading/TwoWayConstantProductFactory.sol'].TwoWayConstantProductFactory
 	const [poolSettings, pairAddress] = await Promise.all([loadLiveSecurityPoolSettings(client, pool), client.readContract({ abi: factoryArtifact.abi, address: configuration.factory, functionName: 'getPair', args: [pool] })])
-	const { questionData, zoltar, parent, shareTokenSupplyAttoShares, settlementCollateralAttoEth, currentRetentionRate, totalCapacityOwnershipAttoRep, feeEligibleCapacityOwnershipAttoRep, mintingCapacityCeilingAttoEth, availableMintingCapacityAttoEth, systemState, awaitingForkContinuation, vaultCount, forker } =
+	const { questionData, zoltar, parent, shareTokenSupplyAttoShares, settlementCollateralAttoEth, currentRetentionRate, totalUnderwritingLimitAttoEth, feeEligibleUnderwritingLimitAttoEth, mintingCapacityCeilingAttoEth, availableMintingCapacityAttoEth, systemState, awaitingForkContinuation, vaultCount, forker } =
 		poolSettings
 	const [question, questionOutcome, universeForkTime, originUniverseId] = await Promise.all([
 		client.readContract({ abi: questionDataAbi, address: getAddress(questionData), functionName: 'questions', args: [questionId] }),
@@ -226,8 +228,8 @@ export async function loadLiveMarket(client: PublicClient, configuration: Deploy
 		settlementCollateralAttoEth,
 		valuation: poolSettings.valuation,
 		currentRetentionRate,
-		totalCapacityOwnershipAttoRep,
-		feeEligibleCapacityOwnershipAttoRep,
+		totalUnderwritingLimitAttoEth,
+		feeEligibleUnderwritingLimitAttoEth,
 		mintingCapacityCeilingAttoEth,
 		availableMintingCapacityAttoEth,
 		feeBps,

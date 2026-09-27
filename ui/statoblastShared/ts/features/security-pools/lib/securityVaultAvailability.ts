@@ -165,8 +165,8 @@ export function buildVaultReadinessActions({
 			...(claimFeesAvailabilityBlocker === undefined ? {} : { blocker: claimFeesAvailabilityBlocker }),
 		},
 		{
-			actionLabel: securityPoolCopy.adjustVaultBackingFactor,
-			description: securityPoolCopy.adjustVaultBackingFactorDescription,
+			actionLabel: securityPoolCopy.setVaultUnderwritingLimit,
+			description: securityPoolCopy.setVaultUnderwritingLimitDescription,
 			key: 'adjust-backing',
 			...(adjustmentReady ? { onAction: () => onOpenModal('adjust-backing') } : {}),
 			readiness: adjustmentReady ? 'ready' : 'blocked',

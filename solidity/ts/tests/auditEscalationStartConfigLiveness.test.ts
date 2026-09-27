@@ -1,3 +1,4 @@
+import { setUnderwritingLimit } from '../testSupport/simulator/utils/contracts/securityPool'
 import { statoblast_EscalationGame_EscalationGame } from '../types/contractArtifact'
 import { QuestionOutcome } from '../testSupport/simulator/types/types'
 import { manipulatePriceOracle, setVaultCapacityFixture } from '../testSupport/simulator/utils/contracts/statoblastTestUtils'
@@ -9,7 +10,7 @@ import { describe, test } from 'bun:test'
 import { encodeAbiParameters, keccak256, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import { DEFAULT_PROTOCOL_CONFIG } from '@zoltar/core-shared/deployment/protocolConfig'
 import { balanceOfShares } from '../testSupport/simulator/utils/contracts/statoblast'
-import { createCompleteSet, getShareTokenSupplyAttoShares, redeemShares } from '../testSupport/simulator/utils/contracts/securityPool'
+import { createCertifiedCompleteSetFixture, getShareTokenSupplyAttoShares, redeemShares } from '../testSupport/simulator/utils/contracts/securityPool'
 import { statoblast_SecurityPool_SecurityPool, Zoltar_Zoltar } from '../types/contractArtifact'
 import { useStatoblastVaultAccountingFixture } from './statoblast/fixture'
 
@@ -22,7 +23,7 @@ describe('Audit regression: escalation start configuration liveness', () => {
 	test('an existing funded pool remains resolvable when the tracked threshold falls to the configured start bond', async () => {
 		const { client, genesisUniverse, mockWindow, questionData, statoblastSecurityMultiplierBps, securityPoolAddresses } = fixture
 		const openInterestAmount = 1n * 10n ** 18n
-		const capacityOwnershipAttoRep = 25n * 10n ** 18n
+		const underwritingLimitAttoEth = 25n * 10n ** 18n
 		const universeSupplySlot = keccak256(encodeAbiParameters([{ type: 'uint248' }, { type: 'uint256' }], [genesisUniverse, ZOLTAR_UNIVERSE_THEORETICAL_SUPPLIES_SLOT]))
 		const readNonDecisionThreshold = async () =>
 			await client.readContract({
@@ -46,8 +47,8 @@ describe('Audit regression: escalation start configuration liveness', () => {
 		assert.ok(reportBond > 10n ** 18n, 'the supply-based floor must exceed the one-REP minimum in this fixture')
 		assert.ok((await readNonDecisionThreshold()) > reportBond, 'the unmodified production configuration must allow the game to start')
 
-		await setVaultCapacityFixture(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, client.account.address, capacityOwnershipAttoRep, reportedRepEthPrice)
-		await createCompleteSet(client, securityPoolAddresses.securityPool, openInterestAmount)
+		await setVaultCapacityFixture(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, client.account.address, underwritingLimitAttoEth, reportedRepEthPrice)
+		await createCertifiedCompleteSetFixture(client, securityPoolAddresses.securityPool, openInterestAmount)
 
 		const vaultBeforeResolution = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
 		const vaultRepBeforeResolution = await backingUnitsToAttoRep(client, securityPoolAddresses.securityPool, vaultBeforeResolution.repBackingUnits)
@@ -131,6 +132,7 @@ describe('Audit regression: escalation start configuration liveness', () => {
 		await mockWindow.setTime(escalationEndTime + 1n)
 		await withdrawFromEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, [0n])
 		await redeemShares(client, securityPoolAddresses.securityPool)
+		await setUnderwritingLimit(client, securityPoolAddresses.securityPool, 0n)
 		await redeemRepFromVault(client, securityPoolAddresses.securityPool, client.account.address)
 
 		assert.strictEqual(await getShareTokenSupplyAttoShares(client, securityPoolAddresses.securityPool), 0n, 'resolved open interest must be fully redeemable')

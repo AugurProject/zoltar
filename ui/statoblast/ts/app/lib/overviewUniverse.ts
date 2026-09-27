@@ -1,6 +1,4 @@
-import { buildRouteHref, getRouteHashSearch } from '@zoltar/ui-core-shared/navigation/routing.js'
-import { writeSecurityPoolsViewQueryParam } from '@zoltar/ui-core-shared/navigation/urlParams.js'
-import { statoblastRouting } from '@zoltar/ui-statoblast-shared/lib/routing.js'
+import { buildRouteHref, getTopLevelRouteSearch } from '@zoltar/ui-core-shared/navigation/routing.js'
 
 type UniverseAccess = {
 	loadingZoltarForkAccess: boolean
@@ -13,7 +11,7 @@ type UniverseAccess = {
 export function getStatoblastOverviewUniverse({ loadingZoltarForkAccess, zoltarForkRepBalanceAttoRep, zoltarUniverse }: UniverseAccess) {
 	return {
 		isLoadingUniverseRepBalance: loadingZoltarForkAccess,
-		migrateRepHref: buildRouteHref(statoblastRouting.getHash('security-pools'), writeSecurityPoolsViewQueryParam(getRouteHashSearch(), 'universes')),
+		migrateRepHref: buildRouteHref('#/pools/universes', getTopLevelRouteSearch('pools')),
 		universeForkTime: zoltarUniverse?.forkTime,
 		universeHasForked: zoltarUniverse?.hasForked,
 		universeRepBalanceAttoRep: zoltarForkRepBalanceAttoRep,

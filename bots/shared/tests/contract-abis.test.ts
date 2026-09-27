@@ -39,7 +39,7 @@ describe('generated bot contract ABIs', () => {
 			[abis.zoltarAbi, Zoltar_Zoltar.abi],
 			[abis.zoltarQuestionDataAbi, ZoltarQuestionData_ZoltarQuestionData.abi],
 			[abis.securityPoolFactoryAbi, statoblast_factories_SecurityPoolFactory_SecurityPoolFactory.abi],
-			[abis.securityPoolAbi, [...statoblast_SecurityPool_SecurityPool.abi, ...statoblast_SecurityPoolOperationsDelegate_SecurityPoolOperationsDelegate.abi.filter(item => item.type === 'function' && item.name === 'adjustVaultBackingFactor')]],
+			[abis.securityPoolAbi, [...statoblast_SecurityPool_SecurityPool.abi, ...statoblast_SecurityPoolOperationsDelegate_SecurityPoolOperationsDelegate.abi.filter(item => item.type === 'function' && item.name === 'setVaultUnderwritingLimit')]],
 			[abis.liquidationApprovalRegistryAbi, statoblast_LiquidationApprovalRegistry_LiquidationApprovalRegistry.abi],
 			[abis.openOraclePriceCoordinatorAbi, statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi],
 			[abis.securityPoolForkerAbi, statoblast_SecurityPoolForker_SecurityPoolForker.abi],

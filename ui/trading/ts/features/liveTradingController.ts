@@ -1,10 +1,8 @@
 import type { UniverseDiscoveryScope } from '../lib/universeSelection.js'
-import type { Address } from '@zoltar/core-shared/evm/ethereum'
-import { useCallback, useMemo, useRef } from 'preact/hooks'
-import { parseNonNegativeDecimalInput } from '@zoltar/ui-core-shared/forms/decimal.js'
+import { useRef } from 'preact/hooks'
 import type { WalletSummaryState } from '../lib/walletSummaryState.js'
 import { createLatestRequestGuard } from '@zoltar/ui-core-shared/lib/requestGuard.js'
-import { liveBalancesForMarket, marketAcceptsNewRisk, publicErrorMessage, type LiveMarket } from '../protocol/live.js'
+import { liveBalancesForMarket, marketAcceptsNewRisk, publicErrorMessage } from '../protocol/live.js'
 import type { DeploymentConfiguration } from '../protocol/config.js'
 import type { LiveTradingControllerServices } from './live/liveTradingTypes.js'
 import { useQuestionClock } from './live/useLiveTradingState.js'
@@ -16,6 +14,7 @@ import { createPositionTransactionController } from './live/positionTransactionC
 import { useMarketDiscoveryController } from './live/useMarketDiscoveryController.js'
 import { filterMarketsByUniverse, livePairInitialized, liveTradingControllerServices, securityPoolAddressFromRoute } from './liveTradingControllerHelpers.js'
 import { tradingListKindFor } from '../lib/routing.js'
+import type { TradeSettings } from '../lib/tradeSettings.js'
 
 export function useLiveTradingController({
 	route,
@@ -27,8 +26,7 @@ export function useLiveTradingController({
 	onWorkflowLockChange,
 	onWalletSummaryChange,
 	walletSummaryRetryNonce,
-	defaultSlippage,
-	defaultValidityMinutes,
+	settings,
 	refreshIntervalMilliseconds,
 	services = liveTradingControllerServices,
 }: {
@@ -41,8 +39,7 @@ export function useLiveTradingController({
 	onWorkflowLockChange(locked: boolean): void
 	onWalletSummaryChange(summary: WalletSummaryState): void
 	walletSummaryRetryNonce: number
-	defaultSlippage: string
-	defaultValidityMinutes: string
+	settings: TradeSettings
 	refreshIntervalMilliseconds?: number | undefined
 	services?: LiveTradingControllerServices
 }) {
@@ -52,22 +49,19 @@ export function useLiveTradingController({
 	const { account, accountRef, walletClient, walletChainId, walletEthAttoEth, walletContextInvalidated, walletConnectionFeedback } = walletSession
 	const portfolioQueries = usePortfolioQueries()
 	const { balances, setBalances, balanceState, setBalanceState, balanceError, setBalanceError, portfolioEntries, portfolioBalanceState, portfolioBalanceError, setPortfolioRefreshNonce } = portfolioQueries
-	const transactionWorkflow = useTransactionWorkflow(onWorkflowLockChange, defaultSlippage, defaultValidityMinutes)
-	const { mode, side, amount, slippage, transactionValidityMinutes, quote, setQuote, dispatchWorkflow, state, positionHash, message, positionReceiptWarning, positionWorkflowLockedRef, workflowLocked, updateLiquidityWorkflowLock } = transactionWorkflow
 	const portfolioBalanceRequests = useRef(createLatestRequestGuard()).current
 	const discoveryRequests = useRef(createLatestRequestGuard()).current
 	const balanceRequests = useRef(createLatestRequestGuard()).current
 	const walletSummaryRequests = useRef(createLatestRequestGuard()).current
 	const connectionRequests = useRef(createLatestRequestGuard()).current
-	const simulationRequests = useRef(createLatestRequestGuard()).current
-	const transactionRequestRevision = useRef(0)
-	const nextTransactionContext = useCallback((expectedAccount: Address, market: LiveMarket, chainId: number) => ({ account: expectedAccount, market: market.pool, chainId, requestRevision: ++transactionRequestRevision.current }), [])
 
 	const routePool = securityPoolAddressFromRoute(route)
 	const visibleMarkets = routePool === undefined ? filterMarketsByUniverse(markets, selectedUniverseId) : markets.filter(market => market.pool.toLowerCase() === routePool.toLowerCase())
 	const visiblePortfolioEntries = portfolioEntries.filter(entry => entry.market.universeId.toString() === selectedUniverseId)
 	// Only addressed routes work on a market; list routes show candidates until an address is opened.
 	const selected = routePool === undefined ? undefined : visibleMarkets.find(market => market.pool.toLowerCase() === routePool.toLowerCase())
+	const transactionWorkflow = useTransactionWorkflow({ onWorkflowLockChange, account, chainId: configuration?.chainId, market: selected?.pool, walletClient })
+	const { mode, side, amount, acknowledgedImpactBps, dispatchWorkflow, state, positionHash, message, positionReceiptWarning, positionWorkflowLockedRef, workflowLocked, updateLiquidityWorkflowLock } = transactionWorkflow
 	const nowSeconds = useQuestionClock(undefined, configuration, services)
 	const listedMarkets = visibleMarkets.filter(market => (tradingListKindFor(route) === 'security-pools' ? market.pair === undefined && market.loadError === undefined && marketAcceptsNewRisk(market, nowSeconds) : market.pair !== undefined || market.loadError !== undefined))
 	const walletUniverseId = routePool === undefined ? selectedUniverseId : selected?.universeId.toString()
@@ -94,7 +88,6 @@ export function useLiveTradingController({
 		discoveryRequests,
 		balanceRequests,
 		portfolioBalanceRequests,
-		simulationRequests,
 		refreshIntervalMilliseconds,
 	})
 	const { connect, executeWithCurrentWalletContext, createGuardedWalletWrite, refreshWalletSummaryAfterReceipt, walletContextIsCurrent } = useWalletSessionController({
@@ -110,18 +103,11 @@ export function useLiveTradingController({
 		balanceRequests,
 		portfolioBalanceRequests,
 		walletSummaryRequests,
-		simulationRequests,
 		refresh,
 	})
 	usePortfolioRefreshEffects({ route, configuration, account, selected, visibleMarkets, marketRevision: markets, selectedUniverseId: walletUniverseId, walletContextInvalidated, accountRef, queries: portfolioQueries, services, portfolioBalanceRequests, balanceRequests })
 	useWalletSummaryEffects({ route, configuration, configurationError, selectedUniverseId: walletUniverseId, discoveryState, discoveryError, selected: selected ?? visibleMarkets[0], retryNonce: walletSummaryRetryNonce, onWalletSummaryChange, session: walletSession, services, requests: walletSummaryRequests })
-	const parsedAmount = useMemo(() => {
-		try {
-			return { value: parseNonNegativeDecimalInput(amount), error: undefined }
-		} catch (error) {
-			return { value: undefined, error: error instanceof Error ? error.message : 'Invalid amount' }
-		}
-	}, [amount])
+	transactionWorkflow.knownReceiptRef.current = refreshWalletSummaryAfterReceipt
 
 	async function retryBalances() {
 		if (configuration === undefined || selected === undefined) return
@@ -130,8 +116,6 @@ export function useLiveTradingController({
 			return
 		}
 		const request = balanceRequests.begin()
-		simulationRequests.invalidate()
-		setQuote(undefined)
 		if (!positionWorkflowLockedRef.current) dispatchWorkflow({ type: 'reset' })
 		setBalanceState('loading')
 		setBalanceError(undefined)
@@ -166,14 +150,11 @@ export function useLiveTradingController({
 		selected,
 		account,
 		walletClient,
-		parsedAmount,
+		settings,
 		workflow: transactionWorkflow,
 		services,
-		simulationRequests,
-		nextTransactionContext,
 		createGuardedWalletWrite,
 		executeWithCurrentWalletContext,
-		refreshWalletSummaryAfterReceipt,
 		refresh,
 		marketPageStart: marketPage.start,
 	})
@@ -216,13 +197,10 @@ export function useLiveTradingController({
 			loadMarketPage,
 		},
 		position: {
-			parsedAmount,
 			mode,
 			side,
 			amount,
-			slippage,
-			transactionValidityMinutes,
-			quote,
+			acknowledgedImpactBps,
 			state,
 			positionHash,
 			message,

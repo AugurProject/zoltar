@@ -132,7 +132,7 @@ export function useSelectedPoolRefreshEffects({
 		if (selectedPoolManagerAddress === undefined) return
 		if (loadingPoolOracleManager) return
 		const queuedOperationHash = (() => {
-			if (securityVault.securityVaultResult?.action === 'queueWithdrawRep' || securityVault.securityVaultResult?.action === 'adjustVaultBackingFactor') return securityVault.securityVaultResult.hash
+			if (securityVault.securityVaultResult?.action === 'queueWithdrawRep' || securityVault.securityVaultResult?.action === 'setVaultUnderwritingLimit') return securityVault.securityVaultResult.hash
 			if (securityPoolOverviewResult?.action === 'queueLiquidation') return securityPoolOverviewResult.hash
 
 			return undefined
@@ -259,7 +259,7 @@ export function useSelectedPoolRefreshEffects({
 		if (shouldRefreshSelectedPoolReporting) void reporting.onLoadReporting()
 	}, [onRefreshSelectedPoolData, reporting.onLoadReporting, securityVault.securityVaultResult, selectedPool?.securityPoolAddress, shouldRefreshSelectedPoolReporting])
 	useEffect(() => {
-		const queuedOperationHash = securityVault.securityVaultResult?.action === 'queueWithdrawRep' || securityVault.securityVaultResult?.action === 'adjustVaultBackingFactor' ? securityVault.securityVaultResult.hash : undefined
+		const queuedOperationHash = securityVault.securityVaultResult?.action === 'queueWithdrawRep' || securityVault.securityVaultResult?.action === 'setVaultUnderwritingLimit' ? securityVault.securityVaultResult.hash : undefined
 		if (queuedOperationHash === undefined) {
 			lastImmediateQueuedOperationRefreshHash.current = undefined
 			return
@@ -269,7 +269,7 @@ export function useSelectedPoolRefreshEffects({
 		if (lastImmediateQueuedOperationRefreshHash.current === queuedOperationHash) return
 		lastImmediateQueuedOperationRefreshHash.current = queuedOperationHash
 		void onRefreshSelectedPoolData(selectedPool?.securityPoolAddress)
-		if ((securityVault.securityVaultResult?.action === 'queueWithdrawRep' || securityVault.securityVaultResult?.action === 'adjustVaultBackingFactor') && shouldRefreshSelectedPoolReporting) void reporting.onLoadReporting()
+		if ((securityVault.securityVaultResult?.action === 'queueWithdrawRep' || securityVault.securityVaultResult?.action === 'setVaultUnderwritingLimit') && shouldRefreshSelectedPoolReporting) void reporting.onLoadReporting()
 		if (showSelectedPoolWorkflowDetails && view === 'vaults' && hasLoadedCurrentVault) void securityVault.onLoadSecurityVault()
 	}, [
 		currentPoolOracleManagerDetails,

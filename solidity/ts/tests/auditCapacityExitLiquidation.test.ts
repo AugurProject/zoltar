@@ -1,3 +1,5 @@
+import { setUnderwritingLimit } from '../testSupport/simulator/utils/contracts/securityPool'
+import { manipulatePriceOracle } from '../testSupport/simulator/utils/contracts/statoblastTestUtils'
 import { OperationType, requestPriceIfNeededAndStageOperation } from '../testSupport/simulator/utils/contracts/statoblast'
 import { GENESIS_REPUTATION_TOKEN, TEST_ADDRESSES } from '../testSupport/simulator/utils/constants'
 import { depositRepToVault } from '../testSupport/simulator/utils/contracts/securityPool'
@@ -8,7 +10,7 @@ import { addressString } from '../testSupport/simulator/utils/bigint'
 import assert from '../testSupport/simulator/utils/assert'
 import { describe, test } from 'bun:test'
 import { statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator, statoblast_SecurityPool_SecurityPool } from '../types/contractArtifact'
-import { createCompleteSet, getSecurityVault, getSettlementCollateralAttoEth, getShareTokenSupplyAttoShares, redeemCompleteSet } from '../testSupport/simulator/utils/contracts/securityPool'
+import { createCertifiedCompleteSetFixture, getSecurityVault, getSettlementCollateralAttoEth, getShareTokenSupplyAttoShares, redeemCompleteSet } from '../testSupport/simulator/utils/contracts/securityPool'
 import { useStatoblastVaultAccountingFixture } from './statoblast/fixture'
 
 const BPS_DENOMINATOR = 10_000n
@@ -34,17 +36,21 @@ describe('Audit PoC: capacity-exit liquidation', () => {
 		await depositRepToVault(exitVault, securityPool, repDeposit)
 		await depositRepToVault(receiverVault, securityPool, receiverBacking, (receiverBacking * statoblastSecurityMultiplierBps) / 2n)
 
+		await manipulatePriceOracle(client, mockWindow, coordinator)
+		await setUnderwritingLimit(client, securityPool, repDeposit / 2n)
+		await setUnderwritingLimit(exitVault, securityPool, repDeposit / 2n)
+		await setUnderwritingLimit(receiverVault, securityPool, 1n)
 		const victimBefore = await getSecurityVault(client, securityPool, client.account.address)
 		const exitBefore = await getSecurityVault(client, securityPool, exitVault.account.address)
 		const receiverBefore = await getSecurityVault(client, securityPool, receiverVault.account.address)
 		assert.strictEqual(await getVaultRepClaim(client.account.address), repDeposit, 'victim should begin with its full REP deposit')
-		assert.strictEqual(victimBefore.capacityOwnershipAttoRep, repDeposit, 'victim should use the minimum permitted deposit health factor')
-		assert.strictEqual(exitBefore.capacityOwnershipAttoRep, repDeposit, 'exit vault should initially provide half of the live capacity')
-		assert.strictEqual(receiverBefore.capacityOwnershipAttoRep, 2n, 'receiver has the smallest capacity supporting a nonzero attoETH exposure')
+		assert.strictEqual(victimBefore.underwritingLimitAttoEth, repDeposit / 2n, 'victim should use the minimum permitted deposit health factor')
+		assert.strictEqual(exitBefore.underwritingLimitAttoEth, repDeposit / 2n, 'exit vault should initially provide half of the live capacity')
+		assert.strictEqual(receiverBefore.underwritingLimitAttoEth, 1n, 'receiver has the smallest capacity supporting a nonzero attoETH exposure')
 
 		const temporaryOpenInterest = repDeposit + 1n
 		const receiverEthBeforeAttack = await receiverVault.getBalance({ address: receiverVault.account.address })
-		await createCompleteSet(receiverVault, securityPool, temporaryOpenInterest)
+		await createCertifiedCompleteSetFixture(receiverVault, securityPool, temporaryOpenInterest)
 		const mintingCapacity = await client.readContract({
 			abi: statoblast_SecurityPool_SecurityPool.abi,
 			address: securityPool,
@@ -64,9 +70,9 @@ describe('Audit PoC: capacity-exit liquidation', () => {
 		const withdrawalExecution = (await client.getLogs({ address: coordinator, fromBlock: withdrawalLogStartBlock })).map(log => decodeEventLog({ abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi, data: log.data, topics: log.topics })).find(log => log.eventName === 'ExecutedStagedOperation')
 		if (withdrawalExecution === undefined) throw new Error('missing withdrawal execution event')
 		assert.strictEqual(withdrawalExecution.args.success, false, 'capacity exit should fail while its capacity secures live open interest')
-		assert.strictEqual(withdrawalExecution.args.errorMessage, 'Capacity committed', 'capacity exit should expose the live-open-interest invariant')
+		assert.strictEqual(withdrawalExecution.args.errorMessage, 'Vault backing insufficient', 'capacity exit should expose the live-open-interest invariant')
 		assert.strictEqual(await getVaultRepClaim(exitVault.account.address), repDeposit, 'failed capacity exit should retain its REP commitment')
-		assert.strictEqual((await getSecurityVault(client, securityPool, exitVault.account.address)).capacityOwnershipAttoRep, repDeposit, 'failed capacity exit should retain its capacity commitment')
+		assert.strictEqual((await getSecurityVault(client, securityPool, exitVault.account.address)).underwritingLimitAttoEth, repDeposit / 2n, 'failed capacity exit should retain its capacity commitment')
 
 		const victimOpenInterestAfterExit = await client.readContract({
 			abi: statoblast_SecurityPool_SecurityPool.abi,
@@ -78,6 +84,7 @@ describe('Audit PoC: capacity-exit liquidation', () => {
 		assert.strictEqual(victimOpenInterestAfterExit * statoblastSecurityMultiplierBps, repDeposit * BPS_DENOMINATOR, 'victim should remain healthy after the rejected exit')
 
 		const receiverWalletBeforeLiquidation = await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), receiverVault.account.address)
+		await assert.rejects(setUnderwritingLimit(exitVault, securityPool, 0n), /Commitments below collateral/)
 		const liquidationLogStartBlock = (await client.getBlockNumber()) + 1n
 		await requestPriceIfNeededAndStageOperation(receiverVault, coordinator, OperationType.Liquidation, client.account.address, victimOpenInterestAfterExit)
 		const liquidationExecution = (await client.getLogs({ address: coordinator, fromBlock: liquidationLogStartBlock })).map(log => decodeEventLog({ abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi, data: log.data, topics: log.topics })).find(log => log.eventName === 'ExecutedStagedOperation')
@@ -94,10 +101,12 @@ describe('Audit PoC: capacity-exit liquidation', () => {
 		const receiverEthAfterRedemption = await receiverVault.getBalance({ address: receiverVault.account.address })
 		assert.ok(receiverEthAfterRedemption > receiverEthBeforeAttack - temporaryOpenInterest / 100n, 'attacker should recover over 99% of temporary ETH despite normal retention and transaction fees')
 
+		await setUnderwritingLimit(exitVault, securityPool, 0n)
 		await requestPriceIfNeededAndStageOperation(exitVault, coordinator, OperationType.WithdrawRep, exitVault.account.address, repDeposit)
 		assert.strictEqual(await getVaultRepClaim(exitVault.account.address), 0n, 'capacity provider should be able to exit after open interest is removed')
 		assert.strictEqual(await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), exitVault.account.address), exitWalletBeforeSetup + repDeposit, 'capacity provider should recover its full REP principal after open interest is removed')
 
+		await setUnderwritingLimit(receiverVault, securityPool, 0n)
 		await requestPriceIfNeededAndStageOperation(receiverVault, coordinator, OperationType.WithdrawRep, receiverVault.account.address, receiverClaimAfterLiquidation)
 		const receiverWalletAfterAttack = await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), receiverVault.account.address)
 		assert.strictEqual(await getVaultRepClaim(receiverVault.account.address), 0n, 'receiver should be able to exit after open interest is removed')
