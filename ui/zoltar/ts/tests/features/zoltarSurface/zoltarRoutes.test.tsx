@@ -71,7 +71,7 @@ function createOperations(universe: ZoltarUniverseSummary | undefined) {
 		zoltarMigrationChildRepBalancesAttoRep: {},
 		zoltarMigrationChildSplitAmountsAttoRep: {},
 		zoltarMigrationError: undefined,
-		zoltarMigrationForm: { amount: '', outcomeIndexes: '' },
+		zoltarMigrationForm: { amount: '', outcomeIndexes: [] },
 		zoltarMigrationPending: false,
 		zoltarMigrationPreparedRepBalanceAttoRep: 0n,
 		zoltarQuestionLookupError: undefined,
@@ -137,7 +137,7 @@ describe('ZoltarRoutes', () => {
 		fireEvent.click(queries.getByRole('button', { name: 'Migrate REP' }))
 		expect(viewChanges).toEqual(['migrate'])
 		expect(queries.getByText('Yes')).toBeTruthy()
-		expect(queries.queryByRole('button', { name: 'Split REP' })).toBeNull()
+		expect(document.querySelector('.migration-wizard')).toBeNull()
 	})
 
 	test('mounts the fork workflow on the Fork route of an unforked universe', async () => {
@@ -148,9 +148,10 @@ describe('ZoltarRoutes', () => {
 
 	test('mounts the migration workflow on the Migrate route of a forked universe', async () => {
 		const { queries } = await renderRoute('migrate', createUniverse())
-		expect(queries.getByRole('heading', { name: 'Choose destinations' })).toBeTruthy()
+		expect(queries.getByRole('heading', { name: 'Choose outcomes' })).toBeTruthy()
 		expect(queries.getByRole('button', { name: 'Deploy universe' })).toBeTruthy()
-		expect(queries.getByRole('button', { name: 'Split REP' })).toBeTruthy()
+		expect(queries.getByRole('button', { name: 'Continue' }).hasAttribute('disabled')).toBe(true)
+		expect(document.querySelectorAll('.migration-wizard-steps button')).toHaveLength(4)
 	})
 
 	test('redirects a Fork route on a forked universe to migration', async () => {
@@ -163,7 +164,7 @@ describe('ZoltarRoutes', () => {
 	test('explains that migration waits for a fork', async () => {
 		const { queries, viewChanges } = await renderRoute('migrate', createUniverse({ childUniverses: [], hasForked: false }))
 		expect(queries.getByText('No fork yet')).toBeTruthy()
-		expect(queries.queryByRole('button', { name: 'Split REP' })).toBeNull()
+		expect(document.querySelector('.migration-wizard')).toBeNull()
 		fireEvent.click(queries.getByRole('button', { name: 'Browse universes' }))
 		expect(viewChanges).toEqual(['universes'])
 	})

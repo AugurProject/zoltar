@@ -74,10 +74,6 @@
 			"bun": "./ts/features/universes/components/ForkZoltarSection.tsx",
 			"default": "./js/features/universes/components/ForkZoltarSection.js"
 		},
-		"./features/universes/components/MigrationOutcomeUniversesSection.js": {
-			"bun": "./ts/features/universes/components/MigrationOutcomeUniversesSection.tsx",
-			"default": "./js/features/universes/components/MigrationOutcomeUniversesSection.js"
-		},
 		"./features/universes/components/ZoltarMigrationSection.js": {
 			"bun": "./ts/features/universes/components/ZoltarMigrationSection.tsx",
 			"default": "./js/features/universes/components/ZoltarMigrationSection.js"
@@ -189,6 +185,10 @@
 		"./features/zoltarSurface/lib/zoltarViewModels.js": {
 			"bun": "./ts/features/zoltarSurface/lib/zoltarViewModels.ts",
 			"default": "./js/features/zoltarSurface/lib/zoltarViewModels.js"
+		},
+		"./features/universes/lib/migrationWizard.js": {
+			"bun": "./ts/features/universes/lib/migrationWizard.ts",
+			"default": "./js/features/universes/lib/migrationWizard.js"
 		}
 	},
 	"version": "1.0.0"
