@@ -1,6 +1,8 @@
 import { OutcomeHolding } from '../../features/OutcomeHolding.js'
 import { BackingDetails } from '../../features/BackingDetails.js'
-import { renderLiveTradeSummary } from '../../features/LiveTradingTransactionUi.js'
+import { TradeEstimatePanel } from '../../features/TradeEstimatePanel.js'
+import { DEFAULT_TRADE_SETTINGS } from '../../lib/tradeSettings.js'
+import { liveMarketFixture, ticketEstimateFor } from '../support/liveMarketFixture.js'
 import { describe, expect, test } from 'bun:test'
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
@@ -129,14 +131,16 @@ describe('live portfolio scope', () => {
 	})
 
 	test('explains conditional entry payout once without calling it a sale or guaranteed return', async () => {
-		const rendered = await renderIntoDocument(
-			renderLiveTradeSummary({ kind: 'entry', value: { amount: 600_000_000_000_000_000n, market: { ...market, shareTokenSupplyAttoShares: 10n ** 36n, settlementCollateralAttoEth: 984_200_000_000_000_000n }, result: { totalLongShares: 10n ** 36n, invalidInsurance: 6n * 10n ** 35n } } }, 'YES'),
-		)
+		// 1 ETH buys about 2 YES in an even pool; each YES pays 0.9842 ETH at current backing if YES wins.
+		const valued = liveMarketFixture({ settlementCollateralAttoEth: 984_200_000_000_000_000n })
+		const estimate = ticketEstimateFor(valued, 'entry', '0.9842')
+		const rendered = await renderIntoDocument(<TradeEstimatePanel estimate={estimate} market={valued} settings={DEFAULT_TRADE_SETTINGS} impactTier='low' impactAcknowledged={false} disabled={false} onAcknowledgeImpact={() => undefined} />)
 		cleanupRendered = rendered.cleanup
-		expect(rendered.container.textContent).toContain('1 YES')
-		expect(rendered.container.textContent).toContain('0.9842 ETH if YES wins')
+		expect(rendered.container.textContent).toContain('1.987158 YES')
+		expect(rendered.container.textContent).toContain('1.9558 ETH if YES wins')
 		expect(rendered.container.textContent).toContain('0 ETH otherwise')
-		expect(rendered.container.textContent).toContain('Holding fees reduce ETH payouts')
+		expect(rendered.container.textContent?.match(/if YES wins/g)).toHaveLength(1)
+		expect(rendered.container.textContent).not.toContain('sale')
 	})
 
 	test('discloses dated backing and a fee estimate clamped to the fee end', async () => {

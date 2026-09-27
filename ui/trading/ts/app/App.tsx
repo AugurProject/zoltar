@@ -35,6 +35,8 @@ import { hasTradingWalletControls, TradingWalletControls } from '../components/T
 import { initializeTradingActiveEnvironment } from './activeEnvironment.js'
 import { getTradingEnvironmentLocationKey, getTradingRouteHref, tradingRouting, tradingWorkflowRoute, type TradingRoute } from '../lib/routing.js'
 import { withDeploymentTab } from '@zoltar/ui-core-shared/navigation/appNavigation.js'
+import { TradeSettingsPanel } from '../components/TradeSettingsPanel.js'
+import { loadTradeSettings, saveTradeSettings, type TradeSettings } from '../lib/tradeSettings.js'
 
 type ResolvedTradingRoute = TradingRoute | 'not-found'
 
@@ -118,6 +120,11 @@ export function App({
 	const [walletConnectRequestNonce, setWalletConnectRequestNonce] = useState(0)
 	const [deploymentWalletRequestNonce, setDeploymentWalletRequestNonce] = useState(0)
 	const [deploymentWalletState, setDeploymentWalletState] = useState<DeploymentWalletState>({ account: undefined, connecting: false, networkName: undefined, ready: false })
+	const [tradeSettings, setTradeSettings] = useState<TradeSettings>(loadTradeSettings)
+	const updateTradeSettings = useCallback((next: TradeSettings) => {
+		setTradeSettings(next)
+		saveTradeSettings(next)
+	}, [])
 	const environment = useEnvironmentRevision()
 	const activeEnvironmentNonce = environment.revision.value
 	const activeEnvironmentLocationRef = useRef(getTradingEnvironmentLocationKey())
@@ -249,6 +256,7 @@ export function App({
 				onWalletSummaryChange={setLiveWalletSummary}
 				walletSummaryRetryNonce={walletSummaryRetryNonce}
 				walletConnectRequestNonce={walletConnectRequestNonce}
+				tradeSettings={tradeSettings}
 			/>
 		)
 	const simulationController = getActiveSimulationController()
@@ -266,6 +274,7 @@ export function App({
 					simulationController={simulationController}
 					onEnvironmentChanged={refreshActiveEnvironment}
 					onRefresh={async () => window.location.reload()}
+					settingsContent={<TradeSettingsPanel settings={tradeSettings} onChange={updateTradeSettings} />}
 					tabNavigation={{
 						route: displayedRoute,
 						showProtocolGuide: false,

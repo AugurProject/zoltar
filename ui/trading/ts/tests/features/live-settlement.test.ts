@@ -1,6 +1,5 @@
 import { describe, expect, test } from 'bun:test'
 import { createWalletClient, custom, decodeFunctionData, decodeFunctionResult, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
-import { settlementQuoteCanSubmit, settlementQuoteMatchesInputs } from '../../features/live/settlementQuote.js'
 import { simulateSettlement, submitFreshSettlement, type LiveMarket } from '../../protocol/live.js'
 import { receiveBasedExitArguments } from '../../protocol/authorization.js'
 import type { DeploymentConfiguration } from '../../protocol/config.js'
@@ -155,14 +154,7 @@ describe('live settlement contract encoding', () => {
 		const normalizedScalarTargets = [12n, 42n, 99n]
 		await expect(simulateSettlement(client, configuration, market, account, 'migrate-shares', { sourceOutcome: 'YES', targetOutcomeIndexes: [12n, 12n] })).rejects.toThrow('only once')
 		const quote = await simulateSettlement(client, configuration, market, account, 'migrate-shares', { sourceOutcome: 'YES', targetOutcomeIndexes: selectedScalarTargets })
-		const uiQuote = { ...quote, account, walletClient: client, inputRevision: 0 }
 		expect(quote.targetOutcomeIndexes).toEqual(normalizedScalarTargets)
-		expect(settlementQuoteMatchesInputs(uiQuote, 0, market, 'migrate-shares', undefined, 'YES', selectedScalarTargets, account, client)).toBeTrue()
-		expect(settlementQuoteMatchesInputs(uiQuote, 1, market, 'migrate-shares', undefined, 'YES', selectedScalarTargets, account, client)).toBeFalse()
-		expect(settlementQuoteMatchesInputs(uiQuote, 0, market, 'migrate-shares', undefined, 'YES', [12n, 43n, 99n], account, client)).toBeFalse()
-		expect(settlementQuoteCanSubmit('ready', undefined, true)).toBeTrue()
-		expect(settlementQuoteCanSubmit('loading', undefined, true)).toBeFalse()
-		expect(settlementQuoteCanSubmit('error', undefined, true)).toBeFalse()
 		expect(await submitFreshSettlement(client, configuration, account, quote, async write => await write())).toBe(transactionHash)
 		expect(transactionData).toHaveLength(3)
 		for (const data of transactionData) {

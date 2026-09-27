@@ -3,11 +3,6 @@ import type { ForkTarget } from '../protocol/forks.js'
 import type { SettlementOperation, ShareOutcome } from '../protocol/live.js'
 import type { BalanceState } from './live/liveTradingTypes.js'
 
-export function insuredExitLimitMessage(requestedAttoShares: bigint, maximumAttoShares: bigint, invalidBalanceAttoShares: bigint, rate: ShareValueRate) {
-	if (maximumAttoShares === invalidBalanceAttoShares && requestedAttoShares > invalidBalanceAttoShares) return `Your INVALID balance covers only ${formatCollateralEth(invalidBalanceAttoShares, rate, 'down')} of complete sets. Excess YES/NO profit must remain as shares unless you acquire more INVALID.`
-	return `Your current long-share balance and pair liquidity support an insured exit of at most ${formatCollateralEth(maximumAttoShares, rate, 'down')}. Reduce the exit amount; excess directional shares remain in your wallet.`
-}
-
 export function migrationSimulationSummary(blockNumber: bigint, sourceOutcome: ShareOutcome, targetCount: bigint) {
 	return `Fork migration simulation ready at block ${blockNumber.toString()}: the entire selected ${sourceOutcome} balance will be copied into ${targetCount.toString()} selected child ${targetCount === 1n ? 'branch' : 'branches'} and locked in the parent universe.`
 }

@@ -12,6 +12,7 @@ import { liveTradingControllerServices } from '../../features/liveTradingControl
 import * as actualLive from '../../protocol/live.js'
 import type { LiveMarket } from '../../protocol/live.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
+import { quoteEnterPosition } from '@zoltar/trading-shared/trading/positions'
 
 const account = `0x${'11'.repeat(20)}` as Address
 const pool = `0x${'22'.repeat(20)}` as Address
@@ -98,6 +99,7 @@ describe('live workflow safety boundary', () => {
 		const childDiscovery = deferred<undefined>()
 		let childBalanceStarted = deferred<undefined>()
 		const discoveredUniverseIds: Array<bigint | undefined> = []
+		const submittedEntries: Array<{ minimumLongShares: bigint; result: { totalLongShares: bigint } }> = []
 		const balancedPools: Address[] = []
 		const walletSummaries: WalletSummaryState[] = []
 		const recordWalletSummary = (summary: WalletSummaryState) => walletSummaries.push(summary)
@@ -218,26 +220,13 @@ describe('live workflow safety boundary', () => {
 				const multiplier = selectedMarket.pool === secondPool ? 4n : 1n
 				return { scope: actualLive.shareBalanceScope(selectedMarket), invalid: multiplier * 10n ** 36n, yes: multiplier * 10n ** 36n, no: multiplier * 10n ** 36n, lp: multiplier * 10n ** 36n }
 			},
-			simulateEntry: async () => ({
-				blockNumber: 1n,
-				amount: 10n ** 16n,
-				side: 'YES' as const,
-				market,
-				deadline: now + 1_200n,
-				slippageBps: 50n,
-				minimumLongShares: 1n,
-				result: {
-					completeSetShares: 1n,
-					oppositeSharesSwapped: 1n,
-					additionalLongShares: 1n,
-					totalLongShares: 2n,
-					invalidInsurance: 1n,
-					feeAmount: 1n,
-					conditionalYesBpsBefore: 5_000n,
-					conditionalYesBpsAfter: 5_001n,
-				},
-			}),
-			submitFreshEntry: async (_client: unknown, _configuration: unknown, _account: unknown, _quote: unknown, guardedWrite: <T>(write: () => Promise<T>) => Promise<T>) => {
+			// Prices like the router so the pre-signing check agrees with the ticket's local estimate.
+			simulateEntry: async (_client: unknown, _configuration: unknown, quotedMarket: LiveMarket, _account: unknown, side: 'YES' | 'NO', amount: bigint) => {
+				const result = quoteEnterPosition(side, (amount * quotedMarket.shareTokenSupplyAttoShares) / quotedMarket.settlementCollateralAttoEth, quotedMarket)
+				return { blockNumber: 1n, amount, side, market: quotedMarket, deadline: now + 1_200n, slippageBps: 50n, minimumLongShares: 1n, result }
+			},
+			submitFreshEntry: async (_client: unknown, _configuration: unknown, _account: unknown, quote: { minimumLongShares: bigint; result: { totalLongShares: bigint } }, guardedWrite: <T>(write: () => Promise<T>) => Promise<T>) => {
+				submittedEntries.push(quote)
 				if (deferPositionBroadcast) await positionBroadcast.promise
 				return await guardedWrite(async () => {
 					if (deferPositionBroadcast) await positionWalletWrite.promise
@@ -422,56 +411,62 @@ describe('live workflow safety boundary', () => {
 		await settleAsyncWorkflow()
 		await waitForDom(() => document.body.textContent?.includes('1 YES') === true, 'wallet balances for the addressed market')
 
-		await act(async () => button('Enter').click())
-		await act(async () => button('Preview trade').click())
-		await settleAsyncWorkflow()
-		expect(button('Enter YES').classList.contains('tx-action-button')).toBeTrue()
-		expect(document.querySelector('.transaction-review-primary')).not.toBeNull()
+		const amountInput = document.querySelector<HTMLInputElement>('[role="tabpanel"] input[name="amount"]')
+		if (amountInput === null) throw new Error('Amount input is unavailable')
+		const typeAmount = async (value: string) => {
+			await act(() => {
+				amountInput.value = value
+				amountInput.dispatchEvent(new Event('input', { bubbles: true }))
+			})
+			await act(async () => {
+				await Bun.sleep(300)
+			})
+		}
+		await typeAmount('0.01')
+		await waitForDom(() => document.querySelector('.transaction-review-primary') !== null, 'entry estimate')
+		expect(button('Buy YES').classList.contains('tx-action-button')).toBeTrue()
+		expect(hasButton('Preview trade')).toBeFalse()
 		deferPositionBroadcast = true
 		waitForPositionReceipt = true
 		repricePositionReceipt = true
 		positionReceipt = deferred<{ status: 'success' | 'reverted' }>()
 		positionBroadcast = deferred<undefined>()
 		positionWalletWrite = deferred<undefined>()
-		await act(async () => button('Enter YES').click())
+		await act(async () => button('Buy YES').click())
 		await settleAsyncWorkflow()
-		expect(document.body.textContent).toContain('Preparing Enter YES')
+		expect(document.body.textContent).toContain('Buy YES: checking the latest price before your wallet opens')
 		expect(document.querySelector('.transaction-hash')).toBeNull()
 		positionBroadcast.resolve(undefined)
 		await settleAsyncWorkflow()
-		expect(document.body.textContent).toContain('Enter YES pending in wallet')
+		expect(document.body.textContent).toContain('Buy YES: confirm in your wallet.')
 		expect(document.querySelector('.transaction-hash')).toBeNull()
 		positionWalletWrite.resolve(undefined)
 		await settleAsyncWorkflow()
-		expect(document.body.textContent).toContain('Enter YES pending on-chain')
+		expect(document.body.textContent).toContain('Buy YES sent. Waiting for confirmation')
 		expect(document.querySelector('.transaction-hash')?.textContent).toContain(transactionHash)
 		expect(document.querySelector('.transaction-hash-link')).not.toBeNull()
+		// The wallet is held to the minimum the ticket displayed (0.5% below the estimate), not to the simulation's own bound.
+		expect(submittedEntries).toHaveLength(1)
+		expect(submittedEntries[0]?.minimumLongShares).toBe(((submittedEntries[0]?.result.totalLongShares ?? 0n) * 9_950n) / 10_000n)
 		positionReceipt.resolve({ status: 'success' })
 		await settleAsyncWorkflow()
-		expect(document.body.textContent).toContain('Enter YES confirmed on-chain')
+		expect(document.body.textContent).toContain('Buy YES confirmed.')
 		// Confirmation moves focus to the outcome block so the result is announced and reachable.
 		expect(document.activeElement?.classList.contains('transaction-outcome')).toBe(true)
 		// The post-receipt refresh revalidates balances without hiding the ones already on screen.
 		expect(document.body.textContent).not.toContain('Loading balances')
 		expect(document.body.textContent).toContain('1 YES')
 		expect(document.querySelector('.transaction-hash')?.textContent).toContain(replacementTransactionHash)
+		expect(amountInput.value).toBe('')
 		deferPositionBroadcast = false
 		waitForPositionReceipt = false
 		repricePositionReceipt = false
-		const protectionInputs = document.querySelectorAll<HTMLInputElement>('.execution-protection input')
-		if (protectionInputs.length !== 2) throw new Error('Missing position transaction protection fields')
-		await act(() => {
-			const slippageInput = protectionInputs[0]
-			const validityInput = protectionInputs[1]
-			if (slippageInput === undefined || validityInput === undefined) throw new Error('Missing position transaction protection input')
-			slippageInput.value = '0.6'
-			slippageInput.dispatchEvent(new Event('input', { bubbles: true }))
-			validityInput.value = '21'
-			validityInput.dispatchEvent(new Event('input', { bubbles: true }))
-		})
+		// Protection lives in the application settings, not in the form; a new amount starts a new trade.
+		expect(document.querySelector('.execution-protection')).toBeNull()
+		await typeAmount('0.02')
 		expect(document.querySelector('.transaction-hash')).toBeNull()
 
-		await act(async () => button('Exit').click())
+		await act(async () => button('Sell').click())
 		expect(document.querySelector('[role="tabpanel"] .tx-action-button')).not.toBeNull()
 		expect(document.querySelector('[role="tabpanel"] .pool-mechanics')).toBeNull()
 		expect(document.body.textContent).not.toContain('Factory discovery')
@@ -488,7 +483,8 @@ describe('live workflow safety boundary', () => {
 		await waitForDom(() => hasButton('Remove'), 'liquidity controls')
 		await act(async () => button('Remove').click())
 		expect(hasButton('Approve exact LP amount')).toBeFalse()
-		expect(hasButton('Simulate liquidity transaction')).toBeTrue()
+		expect(hasButton('Remove liquidity')).toBeTrue()
+		expect(hasButton('Simulate liquidity transaction')).toBeFalse()
 		// A universe without pools shows the route-level empty state once; the portfolio list does not add a second one.
 		await act(() => render(<LiveTrading route='portfolio' configuration={configuration} configurationError={undefined} selectedUniverseId='3' onWorkflowLockChange={locked => workflowLocks.push(locked)} onWalletSummaryChange={recordWalletSummary} />, rendered.container))
 		await settleAsyncWorkflow()
