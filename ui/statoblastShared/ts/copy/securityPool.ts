@@ -31,6 +31,7 @@ export const loadingVault = 'Loading vault details…'
 export const maxLead = 'Max '
 export const openInterestMinted = 'Open Interest Minted'
 export const openPool = 'Open pool'
+export const invalidPoolAddress = 'Enter a valid pool address.'
 export const formatOpenPoolLabel = (questionTitle: string, securityPoolAddress: string) => `Open pool: ${questionTitle} (${securityPoolAddress})`
 export const priceValidUntil = 'Price Valid Until'
 export const refreshing = 'Refreshing…'

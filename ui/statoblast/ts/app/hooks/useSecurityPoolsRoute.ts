@@ -103,7 +103,7 @@ export function useSecurityPoolsRoute({
 		...walletScopedHookConfig,
 		activeUniverseId,
 		deploymentStatuses,
-		enabled: route === 'security-pools' && canReadOnchainData,
+		enabled: route === 'pools' && canReadOnchainData,
 		newQuestionForm: marketForm,
 		zoltarUniverseHasForked,
 	})
@@ -129,7 +129,7 @@ export function useSecurityPoolsRoute({
 		securityVaultResult,
 		setSecurityVaultForm,
 		withdrawRep,
-	} = useSecurityVaultOperations({ ...walletScopedHookConfig, enabled: route === 'security-pools' && canReadOnchainData, selectedSecurityPoolAddress: securityPoolAddress })
+	} = useSecurityVaultOperations({ ...walletScopedHookConfig, enabled: route === 'pools' && canReadOnchainData, selectedSecurityPoolAddress: securityPoolAddress })
 	const { loadingReportingDetails, loadReporting, onApproveReportingRep, onReportOutcome, reportingActiveAction, reportingDetails, reportingError, reportingForm, reportingResult, setReportingForm, withdrawEscalation } = useReportingOperations({
 		...walletScopedHookConfig,
 		selectedSecurityPoolAddress: securityPoolAddress,
@@ -190,7 +190,7 @@ export function useSecurityPoolsRoute({
 	const { createCompleteSet, loadingTradingDetails, loadingTradingForkUniverse, migrateShares, redeemCompleteSet, redeemShares, setTradingForm, tradingActiveAction, tradingDetails, tradingError, tradingForm, tradingForkUniverse, tradingResult } = useTradingOperations({
 		...walletScopedHookConfig,
 		deploymentStatuses,
-		enabled: route === 'security-pools' && canReadOnchainData && selectedPool !== undefined,
+		enabled: route === 'pools' && canReadOnchainData && selectedPool !== undefined,
 		selectedSecurityPoolAddress: securityPoolAddress,
 	})
 	const {
@@ -244,7 +244,7 @@ export function useSecurityPoolsRoute({
 		return repPerEthSource
 	})()
 	const uiRepPerEthSourceUrl = uiRepPerEthSource === 'open-oracle' ? undefined : repPerEthSourceUrl
-	const securityPoolsViews: readonly SecurityPoolsView[] = ['browse', 'create', 'operate', 'universes']
+	const securityPoolsViews: readonly SecurityPoolsView[] = ['open', 'browse', 'create', 'operate', 'universes']
 	const derivedSecurityPoolsView = resolveFirstMatchingValue<SecurityPoolsView>(
 		[
 			[securityPoolAddress !== '', 'operate'],
