@@ -1,10 +1,13 @@
+import { beforeEach } from 'bun:test'
+import { setUnderwritingLimit } from '../testSupport/simulator/utils/contracts/securityPool'
+import { manipulatePriceOracle } from '../testSupport/simulator/utils/contracts/statoblastTestUtils'
 import { strictEqualTypeSafe } from '../testSupport/simulator/utils/testUtils'
 import { getQuestionEndDate } from '../testSupport/simulator/utils/contracts/statoblast'
 import { getSecurityPoolAddresses } from '../testSupport/simulator/utils/contracts/deployStatoblast'
 import { forkUniverse, getZoltarAddress, getZoltarForkThreshold } from '../testSupport/simulator/utils/contracts/zoltar'
 import { createQuestion, getQuestionId } from '../testSupport/simulator/utils/contracts/zoltarQuestionData'
 import {
-	createCompleteSet,
+	createCertifiedCompleteSetFixture,
 	getAwaitingForkContinuation,
 	getRepToken,
 	getSecurityPoolsEscalationGame,
@@ -31,11 +34,15 @@ import { useStatoblastForkMigrationFixture } from './statoblast/fixture'
 
 describe('Child-pool fee epoch regression', () => {
 	const fixture = useStatoblastForkMigrationFixture()
+	beforeEach(async () => {
+		await manipulatePriceOracle(fixture.client, fixture.mockWindow, fixture.securityPoolAddresses.priceOracleManagerAndOperatorQueuer)
+		await setUnderwritingLimit(fixture.client, fixture.securityPoolAddresses.securityPool, fixture.repDeposit / 4n)
+	})
 	const { setupFinalizedTruthAuctionWithMixedBids, setupOwnForkWithEscrow, statoblastSecurityMultiplierBps, triggerExternalForkForSecurityPool } = fixture
 
 	test('resolved child without a continuation game preserves collateral after activation', async () => {
 		const { client, mockWindow, questionId, securityPoolAddresses } = fixture
-		await createCompleteSet(client, securityPoolAddresses.securityPool, 10n * 10n ** 18n)
+		await createCertifiedCompleteSetFixture(client, securityPoolAddresses.securityPool, 10n * 10n ** 18n)
 		await mockWindow.setTime((await getQuestionEndDate(client, questionId)) + 1n)
 		await approveToken(client, addressString(GENESIS_REPUTATION_TOKEN), getZoltarAddress())
 		await forkUniverse(client, 0n, questionId)
@@ -64,7 +71,7 @@ describe('Child-pool fee epoch regression', () => {
 
 	test('external-fork child without an auction charges mint and redemption during its continuation epoch', async () => {
 		const { client, mockWindow, questionId, securityPoolAddresses } = fixture
-		await createCompleteSet(client, securityPoolAddresses.securityPool, 10n * 10n ** 18n)
+		await createCertifiedCompleteSetFixture(client, securityPoolAddresses.securityPool, 10n * 10n ** 18n)
 		await triggerExternalForkForSecurityPool()
 		await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
 		await createChildUniverse(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
@@ -84,7 +91,7 @@ describe('Child-pool fee epoch regression', () => {
 		await updateSettlementCollateral(client, child.securityPool)
 		strictEqualTypeSafe(await client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: child.securityPool, functionName: 'getFeeEpochEndTime' }), 2n ** 256n - 1n, 'unresolved child horizon must remain open beyond question end')
 		const mintedShares = 2n * 10n ** 18n
-		await createCompleteSet(client, child.securityPool, mintedShares)
+		await createCertifiedCompleteSetFixture(client, child.securityPool, mintedShares)
 		const collateralBefore = await getSettlementCollateralAttoEth(client, child.securityPool)
 		await mockWindow.advanceTime(DAY)
 		await updateSettlementCollateral(client, child.securityPool)
@@ -108,7 +115,7 @@ describe('Child-pool fee epoch regression', () => {
 
 	test('own-question fork resumes unresolved escalation and accrues until the child game resolves', async () => {
 		const { client, mockWindow, questionId, securityPoolAddresses } = fixture
-		await createCompleteSet(client, securityPoolAddresses.securityPool, 10n * 10n ** 18n)
+		await createCertifiedCompleteSetFixture(client, securityPoolAddresses.securityPool, 10n * 10n ** 18n)
 		await setupOwnForkWithEscrow()
 		await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
 		await createChildUniverse(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
@@ -140,7 +147,7 @@ describe('Child-pool fee epoch regression', () => {
 
 	test('child resolution remains the fee cutoff when its universe forks later without an intervening checkpoint', async () => {
 		const { client, mockWindow, questionData, questionId, securityPoolAddresses } = fixture
-		await createCompleteSet(client, securityPoolAddresses.securityPool, 10n * 10n ** 18n)
+		await createCertifiedCompleteSetFixture(client, securityPoolAddresses.securityPool, 10n * 10n ** 18n)
 		await setupOwnForkWithEscrow()
 		await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
 		await createChildUniverse(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)

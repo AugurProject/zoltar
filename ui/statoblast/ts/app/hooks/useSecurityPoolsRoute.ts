@@ -108,6 +108,7 @@ export function useSecurityPoolsRoute({
 		zoltarUniverseHasForked,
 	})
 	const {
+		certifyCoverage,
 		adjustBackingFactor,
 		approveRep,
 		depositRepToVault,
@@ -261,7 +262,7 @@ export function useSecurityPoolsRoute({
 	}
 	useEffect(() => {
 		const securityVaultRepRefreshHash =
-			securityVaultResult?.action === 'adjustVaultBackingFactor' || securityVaultResult?.action === 'depositRepToVault' || securityVaultResult?.action === 'redeemRepFromVault' || (securityVaultResult?.action === 'queueWithdrawRep' && securityVaultResult.stagedExecution?.success === true)
+			securityVaultResult?.action === 'setVaultUnderwritingLimit' || securityVaultResult?.action === 'depositRepToVault' || securityVaultResult?.action === 'redeemRepFromVault' || (securityVaultResult?.action === 'queueWithdrawRep' && securityVaultResult.stagedExecution?.success === true)
 				? securityVaultResult.hash
 				: undefined
 		if (securityVaultRepRefreshHash === undefined) {
@@ -491,7 +492,8 @@ export function useSecurityPoolsRoute({
 				accountState,
 				loadingSecurityVault,
 				onApproveRep: amount => void approveRep(amount),
-				onAdjustVaultBackingFactor: factor => void adjustBackingFactor(factor),
+				onCertifyVaultCoverage: () => void certifyCoverage(),
+				onSetVaultUnderwritingLimit: factor => void adjustBackingFactor(factor),
 				onDepositRepToVault: () => void depositRepToVault(),
 				onLoadSecurityVault: (vaultAddress?: string) => {
 					void loadSecurityVault(vaultAddress)

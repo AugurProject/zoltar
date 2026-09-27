@@ -27,7 +27,7 @@ function createSnapshots() {
 			shareBalances: NO_SHARES,
 		},
 		{ migrationEndsAt: undefined, pool: createSelectedPool({ marketDetails: createMarketDetails({ title: 'Resolved question' }), questionOutcome: 'yes', securityPoolAddress: SHARES_POOL }), shareBalances: { ...NO_SHARES, yesAttoShares: 4n } },
-		{ migrationEndsAt: undefined, pool: createSelectedPool({ securityPoolAddress: OTHER_POOL, vaults: [createSecurityPoolVaultSummary({ capacityOwnershipAttoRep: 0n, claimableFeesAttoEth: 0n, disputeStakedAttoRep: 0n, vaultAttoRepBacking: 0n, vaultAddress: ACCOUNT })] }), shareBalances: NO_SHARES },
+		{ migrationEndsAt: undefined, pool: createSelectedPool({ securityPoolAddress: OTHER_POOL, vaults: [createSecurityPoolVaultSummary({ underwritingLimitAttoEth: 0n, claimableFeesAttoEth: 0n, disputeStakedAttoRep: 0n, vaultAttoRepBacking: 0n, vaultAddress: ACCOUNT })] }), shareBalances: NO_SHARES },
 	]
 }
 

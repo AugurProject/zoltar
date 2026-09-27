@@ -1,3 +1,4 @@
+import { getReportingContributionFunding } from '../../../lib/reportingFunding.js'
 import * as securityPoolCopy from '../../../copy/securityPool.js'
 import { zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import { tryParseBigIntInput } from '@zoltar/ui-core-shared/forms/integerInput.js'
@@ -43,6 +44,7 @@ export type PoolViewModelInput = Pick<
 	manualPendingOperationId: string
 	/** The chain clock; the loaded reporting or fork details supply a time when it is unknown. */
 	now: bigint | undefined
+	reportingContributionFunding?: SecurityPoolWorkflowRouteContentProps['reporting']['reportingForm']['contributionFunding']
 	reportingDetails: ReportingDetails | undefined
 	reportingFormSecurityPoolAddress: string
 	requestPriceReview: RequestPriceReview | undefined
@@ -51,9 +53,9 @@ export type PoolViewModelInput = Pick<
 	shareBalances: TradingShareBalances | undefined
 }
 
-function toAccountVault(vault: Pick<SecurityPoolVaultSummary, 'capacityOwnershipAttoRep' | 'claimableFeesAttoEth' | 'disputeStakedAttoRep' | 'vaultAttoRepBacking'> | undefined): PoolAccountVault | undefined {
+function toAccountVault(vault: Pick<SecurityPoolVaultSummary, 'underwritingLimitAttoEth' | 'claimableFeesAttoEth' | 'disputeStakedAttoRep' | 'vaultAttoRepBacking'> | undefined): PoolAccountVault | undefined {
 	if (vault === undefined) return undefined
-	if (vault.capacityOwnershipAttoRep === 0n && vault.vaultAttoRepBacking === 0n && vault.claimableFeesAttoEth === 0n && vault.disputeStakedAttoRep === 0n) return undefined
+	if (vault.underwritingLimitAttoEth === 0n && vault.vaultAttoRepBacking === 0n && vault.claimableFeesAttoEth === 0n && vault.disputeStakedAttoRep === 0n) return undefined
 	return { claimableFeesAttoEth: vault.claimableFeesAttoEth, disputeStakedAttoRep: vault.disputeStakedAttoRep, repAttoRep: vault.vaultAttoRepBacking }
 }
 
@@ -162,8 +164,10 @@ export function derivePoolViewModel(input: PoolViewModelInput) {
 	const stagedOperations = currentPoolOracleManagerDetails?.stagedOperations ?? (pendingOperation === undefined ? [] : [pendingOperation])
 	const activeStagedOperationCount = currentPoolOracleManagerDetails?.activeStagedOperationCount ?? BigInt(stagedOperations.length)
 	const reportingOracleGuardMessage = (() => {
+		if (getReportingContributionFunding(currentReportingDetails, input.reportingContributionFunding) === 'wallet' && !(currentReportingDetails?.status === 'active' && currentReportingDetails.forkContinuation)) return undefined
+		if (getReportingContributionFunding(currentReportingDetails, input.reportingContributionFunding) === 'vault' && (currentReportingDetails?.viewerVaultExists === false || currentReportingDetails?.viewerPoolHeldVaultRepBackingAttoRep === 0n)) return undefined
 		if (reportingLockedReason !== undefined || !selectedPoolStateModel.actions.reportOutcome.enabled) return undefined
-		if ((effectiveSelectedPool?.totalCapacityOwnershipAttoRep ?? 0n) === 0n) return undefined
+		if ((effectiveSelectedPool?.totalUnderwritingLimitAttoEth ?? 0n) === 0n && !(currentReportingDetails?.status === 'active' && currentReportingDetails.forkContinuation && getReportingContributionFunding(currentReportingDetails, input.reportingContributionFunding) === 'wallet')) return undefined
 		if (currentPoolOracleManagerDetails === undefined || currentPoolOraclePriceUsable === true) return undefined
 		return currentPoolOracleManagerDetails.lastSettlementTimestamp > 0n ? securityPoolCopy.reportingOraclePriceExpiredReason : securityPoolCopy.reportingOraclePriceRequiredReason
 	})()

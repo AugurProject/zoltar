@@ -1,6 +1,8 @@
 import type { Address, Hash, Hex } from '@zoltar/core-shared/evm/ethereum'
 import type { ReputationTokenMetadata } from './reputation.js'
+import type { UniverseLineageStep } from '../lib/universeLineage.js'
 import type { WriteClient as ClientsWriteClient } from '../wallet/clients.js'
+export type { LiquidationApprovalDetails } from './liquidation.js'
 export type { ReadClient, WriteClient } from '../wallet/clients.js'
 
 type ZoltarDeploymentStepId = 'proxyDeployer' | 'deploymentStatusOracle' | 'reputationToken' | 'multicall3' | 'uniformPriceDualCapBatchAuctionFactory' | 'securityPoolUtils' | 'openOracle' | 'zoltarQuestionData' | 'zoltar' | 'shareTokenFactory' | 'priceOracleManagerAndOperatorQueuerFactory'
@@ -8,26 +10,6 @@ type ZoltarDeploymentStepId = 'proxyDeployer' | 'deploymentStatusOracle' | 'repu
 export type DeploymentStepId = ZoltarDeploymentStepId | 'securityPoolForker' | 'securityPoolOperationsDelegate' | 'escalationGameClaimDelegate' | 'escalationGameFactory' | 'securityPoolFactory'
 export type MarketType = 'binary' | 'categorical' | 'scalar'
 
-export type LiquidationApprovalDetails = {
-	registryAddress: Address
-	params: {
-		securityPool: Address
-		receiverVault: Address
-		operator: Address
-		targetVault: Address
-		maxCumulativeDebtAttoEth: bigint
-		maxDebtPerLiquidationAttoEth: bigint
-		minPostLiquidationHealthFactorBps: bigint
-		validAfter: bigint
-		validUntil: bigint
-		nonce: bigint
-	}
-	availableDebtAttoEth: bigint
-	reservedDebtAttoEth: bigint
-	consumedDebtAttoEth: bigint
-	minimumValidNonce: bigint
-	revoked: boolean
-}
 export type ReportingOutcomeKey = 'invalid' | 'yes' | 'no'
 export type ForkOutcomeKey = ReportingOutcomeKey | 'none'
 export type SecurityPoolSystemState = 'operational' | 'poolForked' | 'forkMigration' | 'forkTruthAuction'
@@ -48,7 +30,7 @@ export type ForkAuctionAction =
 	| 'settleForkedEscalation'
 	| 'forkUniverse'
 export type TruthAuctionSettlementMode = 'claim' | 'mixed' | 'refund'
-export type OracleQueueOperation = 'liquidation' | 'withdrawRep' | 'adjustVaultBackingFactor'
+export type OracleQueueOperation = 'liquidation' | 'withdrawRep' | 'setVaultUnderwritingLimit'
 export type StagedOracleOperation = {
 	amount: bigint
 	operator: Address
@@ -99,6 +81,8 @@ export type ZoltarUniverseSummary = {
 	forkTime: bigint
 	forkingOutcomeIndex: bigint
 	hasForked: boolean
+	/** Genesis-first ancestry naming this universe by the fork outcomes that created it. */
+	lineage?: readonly UniverseLineageStep[] | undefined
 	parentUniverseId: bigint
 	reputationToken: Address
 	totalTheoreticalSupplyAttoRep: bigint
@@ -202,9 +186,9 @@ export type SecurityVaultDetails = {
 	vaultAttoRepBacking: bigint
 	repToken: Address
 	repTokenSymbol?: string
-	capacityOwnershipAttoRep: bigint
+	underwritingLimitAttoEth: bigint
 	securityPoolAddress: Address
-	totalCapacityOwnershipAttoRep: bigint
+	totalUnderwritingLimitAttoEth: bigint
 	claimableFeesAttoEth: bigint
 	universeId: bigint
 	vaultAddress: Address
@@ -217,7 +201,7 @@ export type QueuedVaultOperationState = {
 
 export type SecurityVaultActionResult = ActionResult & {
 	queuedOperationState?: QueuedVaultOperationState
-	action: 'adjustVaultBackingFactor' | 'approveRep' | 'depositRepToVault' | 'queueWithdrawRep' | 'redeemFees' | 'redeemRepFromVault' | 'updateVaultFees'
+	action: 'certifyVaultCoverage' | 'setVaultUnderwritingLimit' | 'approveRep' | 'depositRepToVault' | 'queueWithdrawRep' | 'redeemFees' | 'redeemRepFromVault' | 'updateVaultFees'
 	queuedOperation?: StagedOracleQueuedResult
 	stagedExecution?: StagedOracleExecutionResult
 }
@@ -310,6 +294,7 @@ export type OpenOracleReportDetails = OpenOracleReportSummary & {
 }
 
 export type ListedSecurityPool = {
+	certifiedUnderwritingLimitAttoEth?: bigint
 	settlementCollateralAttoEth: bigint
 	currentRetentionRate: bigint
 	feeAccrualState?: {
@@ -318,7 +303,7 @@ export type ListedSecurityPool = {
 		lastUpdatedFeeAccumulator: bigint
 		totalFeesOwedRemainder: bigint
 	}
-	feeEligibleCapacityOwnershipAttoRep: bigint
+	feeEligibleUnderwritingLimitAttoEth: bigint
 	hasForkActivity: boolean
 	hasForkContinuationEscalationGame: boolean
 	initialReportPriorityFeeAttoEthPerGas: bigint
@@ -340,7 +325,7 @@ export type ListedSecurityPool = {
 	shareTokenSupplyAttoShares: bigint
 	systemState: SecurityPoolSystemState
 	totalPoolHeldAttoRep: bigint
-	totalCapacityOwnershipAttoRep: bigint
+	totalUnderwritingLimitAttoEth: bigint
 	truthAuctionAddress: Address
 	truthAuctionStartedAt: bigint
 	universeHasForked: boolean
@@ -369,7 +354,7 @@ export type SecurityPoolVaultSummary = {
 	repBackingUnits?: bigint
 	totalRepBackingUnits?: bigint
 	vaultAttoRepBacking: bigint
-	capacityOwnershipAttoRep: bigint
+	underwritingLimitAttoEth: bigint
 	totalPoolHeldRepBalanceAttoRep?: bigint
 	claimableFeesAttoEth: bigint
 	vaultAddress: Address
@@ -452,6 +437,8 @@ type EscalationMigrationEntitlementStatus = {
 }
 
 type ReportingDetailsBase = {
+	walletVaultFunding?: { vaultRepBackingUnits: bigint; totalRepBackingUnits: bigint; totalPoolHeldRepAttoRep: bigint } | undefined
+	minimumVaultRepDepositAttoRep?: bigint | undefined
 	contributionFunding?: 'vault' | 'wallet' | undefined
 	settlementCollateralAttoEth: bigint
 	currentTime: bigint
@@ -566,7 +553,7 @@ export type TruthAuctionBidderBidPage = {
 }
 
 export type ForkAuctionDetails = {
-	auctionedCapacityOwnershipAttoRep: bigint
+	auctionedUnderwritingLimitAttoEth: bigint
 	claimingAvailable: boolean
 	settlementCollateralAttoEth: bigint
 	currentTime: bigint

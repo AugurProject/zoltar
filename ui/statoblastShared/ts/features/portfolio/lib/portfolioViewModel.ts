@@ -28,7 +28,7 @@ const PORTFOLIO_ACTION_IDS: ReadonlySet<PoolActionId> = new Set(['bidTruthAuctio
 function toAccountVault(pool: ListedSecurityPool, accountAddress: Address): PoolAccountVault | undefined {
 	const vault = pool.vaults.find(candidate => sameAddress(candidate.vaultAddress, accountAddress))
 	if (vault === undefined) return undefined
-	if (vault.capacityOwnershipAttoRep === 0n && vault.vaultAttoRepBacking === 0n && vault.claimableFeesAttoEth === 0n && vault.disputeStakedAttoRep === 0n) return undefined
+	if (vault.underwritingLimitAttoEth === 0n && vault.vaultAttoRepBacking === 0n && vault.claimableFeesAttoEth === 0n && vault.disputeStakedAttoRep === 0n) return undefined
 	return { claimableFeesAttoEth: vault.claimableFeesAttoEth, disputeStakedAttoRep: vault.disputeStakedAttoRep, repAttoRep: vault.vaultAttoRepBacking }
 }
 

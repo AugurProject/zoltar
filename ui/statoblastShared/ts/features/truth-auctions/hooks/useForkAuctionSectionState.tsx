@@ -13,7 +13,7 @@ import { ForkAuctionMigrationBalances } from '../components/ForkAuctionMigration
 import { createForkAuctionActionRenderer, ForkAuctionEndedNotice } from '../components/ForkAuctionActionSections.js'
 import { createActionAvailability } from '@zoltar/ui-core-shared/transactions/actionAvailability.js'
 import { sameAddress } from '@zoltar/ui-core-shared/lib/address.js'
-import { AUCTIONED_CAPACITY_OWNERSHIP_ATTO_REP_LABEL, getTimeRemaining } from '../lib/forkAuction.js'
+import { AUCTIONED_UNDERWRITING_LIMIT_ATTO_ETH_LABEL, getTimeRemaining } from '../lib/forkAuction.js'
 import { buildTruthAuctionDepthPoints, getTruthAuctionBidGuardMessage, getTruthAuctionBidPreview, getTruthAuctionBidPriceValidationMessage, getTruthAuctionOverviewProgress, getTruthAuctionWinningThresholdPrice } from '../lib/truthAuctionBook.js'
 import { buildTruthAuctionBidRows, buildViewerTruthAuctionBidRows, updateTruthAuctionSettlementBidSelection } from '../lib/truthAuctionBidViewModels.js'
 import { getTruthAuctionSettlementAction } from '../lib/truthAuctionSettlementActionState.js'
@@ -114,7 +114,7 @@ export function useForkAuctionSectionState(props: ForkAuctionSectionProps) {
 			selectedOutcomeMigrationChildVault={context.selectedOutcomeMigrationChildVault}
 		/>
 	)
-	const hasWalletVaultMigrationBalance = context.connectedWalletVaultSummary !== undefined && (context.connectedWalletVaultSummary.vaultAttoRepBacking > 0n || context.connectedWalletVaultSummary.capacityOwnershipAttoRep > 0n)
+	const hasWalletVaultMigrationBalance = context.connectedWalletVaultSummary !== undefined && (context.connectedWalletVaultSummary.vaultAttoRepBacking > 0n || context.connectedWalletVaultSummary.underwritingLimitAttoEth > 0n)
 	const hasWalletParentEscalationClaimBalance = effectiveDisputeStakedAttoRep !== undefined && effectiveDisputeStakedAttoRep > 0n
 	const migrateVaultBalanceGuardMessage = context.connectedWalletVaultSummary !== undefined && !hasWalletVaultMigrationBalance ? forkAuctionCopy.poolMigrationCapacityEmpty : undefined
 	const claimParentEscalationBalanceGuardMessage = context.connectedWalletVaultSummary !== undefined && !hasWalletParentEscalationClaimBalance ? forkAuctionCopy.walletDisputeStakedRepEmpty : undefined
@@ -265,7 +265,7 @@ export function useForkAuctionSectionState(props: ForkAuctionSectionProps) {
 	const settlementSelectionHasClaims = settlementSelectionState.selectionHasClaims
 	const settlementSelectionHasRefunds = settlementSelectionState.selectionHasRefunds
 	const settlementSelectionEstimate = getTruthAuctionSettlementSelectionEstimate({
-		auctionedCapacityOwnershipAttoRep: context.selectedAuctionContext?.auctionedCapacityOwnershipAttoRep,
+		auctionedUnderwritingLimitAttoEth: context.selectedAuctionContext?.auctionedUnderwritingLimitAttoEth,
 		selectedRows: selectedSettlementBidRows,
 		truthAuction: truthAuctionStatus,
 	})
@@ -278,12 +278,12 @@ export function useForkAuctionSectionState(props: ForkAuctionSectionProps) {
 	const showRefundOnlySettlementCapacityOwnershipNotice = truthAuctionStatus?.finalized === true && selectedRefundSettlementBidRows.length > 0 && selectedClaimSettlementBidRows.length === 0
 	const settlementActionLabel = forkAuctionCopy.settleSelectedBids
 	const settlementActionDescription = (() => {
-		if (settlementSelectionMode === 'claim') return forkAuctionCopy.formatWinningBidBatchSettlementDetail(AUCTIONED_CAPACITY_OWNERSHIP_ATTO_REP_LABEL)
+		if (settlementSelectionMode === 'claim') return forkAuctionCopy.formatWinningBidBatchSettlementDetail(AUCTIONED_UNDERWRITING_LIMIT_ATTO_ETH_LABEL)
 		if (settlementSelectionMode === 'refund') {
-			if (truthAuctionStatus?.finalized === true) return forkAuctionCopy.formatFinalizedRefundBatchSettlementDetail(AUCTIONED_CAPACITY_OWNERSHIP_ATTO_REP_LABEL)
-			return forkAuctionCopy.formatRefundableBidBatchSettlementDetail(AUCTIONED_CAPACITY_OWNERSHIP_ATTO_REP_LABEL)
+			if (truthAuctionStatus?.finalized === true) return forkAuctionCopy.formatFinalizedRefundBatchSettlementDetail(AUCTIONED_UNDERWRITING_LIMIT_ATTO_ETH_LABEL)
+			return forkAuctionCopy.formatRefundableBidBatchSettlementDetail(AUCTIONED_UNDERWRITING_LIMIT_ATTO_ETH_LABEL)
 		}
-		return forkAuctionCopy.formatMixedBidBatchSettlementDetail(AUCTIONED_CAPACITY_OWNERSHIP_ATTO_REP_LABEL)
+		return forkAuctionCopy.formatMixedBidBatchSettlementDetail(AUCTIONED_UNDERWRITING_LIMIT_ATTO_ETH_LABEL)
 	})()
 	const settlementActionPendingLabel = forkAuctionCopy.submittingSettlementTransactionTruncated
 	const auctionBidRows = buildTruthAuctionBidRows({

@@ -106,6 +106,7 @@ export function SecurityPoolWorkflowSection(props: SecurityPoolWorkflowSectionPr
 		manualPendingOperationId,
 		now: chainCurrentTimestamp,
 		reportingDetails: reporting.reportingDetails,
+		reportingContributionFunding: reporting.reportingForm.contributionFunding,
 		reportingFormSecurityPoolAddress: reporting.reportingForm.securityPoolAddress,
 		requestPriceReview,
 		securityVaultDetails: securityVault.securityVaultDetails,

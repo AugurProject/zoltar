@@ -11,6 +11,7 @@ import { getQuestionTitle, Question } from '@zoltar/ui-core-shared/components/Qu
 import { TimestampValue } from '@zoltar/ui-core-shared/components/TimestampValue.js'
 import { getSecurityPoolLinkHref } from '../lib/securityPoolNavigation.js'
 import { formatUniverseIdHex } from '@zoltar/ui-core-shared/lib/universeLabels.js'
+import { useUniverseName } from '@zoltar/ui-core-shared/components/UniverseNames.js'
 import type { ListedSecurityPool } from '@zoltar/ui-core-shared/types/contracts.js'
 import { getSecurityPoolStatusBadgeLabel, getSecurityPoolStatusBadgeTone } from '../lib/securityPoolLabels.js'
 import type { SecurityPoolLifecycleState } from '../lib/securityPoolState.js'
@@ -35,6 +36,7 @@ export function PoolDirectoryRow({
 	onSelect: ((address: string, universeId: bigint) => void) | undefined
 }) {
 	const title = getQuestionTitle(pool.marketDetails)
+	const poolUniverseName = useUniverseName(pool.universeId)
 	const status = getSecurityPoolStatusBadgeLabel({ hasForkActivity: pool.hasForkActivity, questionOutcome: pool.questionOutcome, lifecycleState })
 	const href = getSecurityPoolLinkHref(pool.securityPoolAddress, '', pool.universeId)
 	const validUntil = getOracleManagerPriceValidUntilTimestamp(pool.lastOracleSettlementTimestamp)
@@ -51,7 +53,7 @@ export function PoolDirectoryRow({
 				<div className='pool-directory-meta'>
 					<AddressValue address={pool.securityPoolAddress} responsiveAbbreviation />
 					<span>
-						{appCopy.statoblastSecurityMultiplierBps}: {formatStatoblastSecurityMultiplier(pool.statoblastSecurityMultiplierBps)}×
+						{appCopy.statoblastSecurityMultiplierBps}: {formatStatoblastSecurityMultiplier(pool.statoblastSecurityMultiplierBps)}
 					</span>
 				</div>
 				<div className='pool-directory-meta'>
@@ -60,7 +62,7 @@ export function PoolDirectoryRow({
 					</span>
 					<span>{copy.vaults(pool.vaultCount)}</span>
 				</div>
-				{pool.universeId === activeUniverseId ? undefined : <p className='detail'>{securityPoolCopy.formatBrowsePoolUniverseMismatch(formatUniverseIdHex(pool.universeId))}</p>}
+				{pool.universeId === activeUniverseId ? undefined : <p className='detail'>{securityPoolCopy.formatBrowsePoolUniverseMismatch(poolUniverseName)}</p>}
 				{oracleExpired || oracleMissing ? <span className='pool-oracle-warning'>{oracleExpired ? copy.poolPriceExpired : copy.poolPriceUnavailable}</span> : undefined}
 			</div>
 			<PoolCapacitySummary capacity={capacity} minted={pool.settlementCollateralAttoEth} />
