@@ -103,6 +103,7 @@ export function LiveTrading({
 	const { account, walletClient, walletEthAttoEth, networkMismatchReason, connect, connectionMessage, refreshWalletSummaryAfterReceipt, executeWithCurrentWalletContext, createGuardedWalletWrite } = wallet
 	const { balanceError, portfolioBalanceState, portfolioBalanceError, visiblePortfolioEntries, selectedBalances, selectedBalanceState, retryBalances, retryPortfolioBalances } = balances
 	const { visibleMarkets, listedMarkets, selected, selectedPairInitialized, routePool, discoveryState, discoveryError, marketPage, nowSeconds, refresh, refreshFromControl, loadMarketPage } = discovery
+	const { setMode, setSide } = position
 	const { workflowLocked, updateLiquidityWorkflowLock } = workflow
 	const workflowRoute = tradingWorkflowRoute(route)
 	const creatingMarket = workflowRoute === 'create-market'

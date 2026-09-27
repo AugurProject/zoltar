@@ -1,5 +1,4 @@
-import { getAddress } from '@zoltar/core-shared/evm/ethereum'
-import type { Address } from '@zoltar/core-shared/evm/ethereum'
+import { getAddress, type Address } from '@zoltar/core-shared/evm/ethereum'
 import type { LiveBalances, LiveMarket } from '../../protocol/live.js'
 import { tradeTicketModel, type TradeTicketInputs } from '../../features/live/tradeTicketModel.js'
 import type { TradeMode } from '../../features/live/useTransactionWorkflow.js'
@@ -74,7 +73,7 @@ export function fixtureAddress(byte: string) {
 }
 
 export function listingMarketFixture(overrides: Partial<LiveMarket> & Pick<LiveMarket, 'pool'>): LiveMarket {
-	return {
+	return liveMarketFixture({
 		pair: fixtureAddress('ee'),
 		shareToken: fixtureAddress('dd'),
 		universeId: 0n,
@@ -83,11 +82,6 @@ export function listingMarketFixture(overrides: Partial<LiveMarket> & Pick<LiveM
 		description: 'Resolves YES if it rains.',
 		endTime: FIXTURE_NOW + 30n * FIXTURE_DAY,
 		statoblastSecurityMultiplierBps: 10_000n,
-		initialReportPriorityFeeAttoEthPerGas: 0n,
-		systemState: 0,
-		awaitingForkContinuation: false,
-		universeForkTime: 0n,
-		vaultCount: 1n,
 		shareTokenSupplyAttoShares: 0n,
 		settlementCollateralAttoEth: 0n,
 		currentRetentionRate: 0n,
@@ -95,12 +89,9 @@ export function listingMarketFixture(overrides: Partial<LiveMarket> & Pick<LiveM
 		feeEligibleUnderwritingLimitAttoEth: 0n,
 		mintingCapacityCeilingAttoEth: 0n,
 		availableMintingCapacityAttoEth: 0n,
-		feeBps: 30n,
-		tradingStatus: 0,
-		questionOutcome: 3,
 		yesReserve: 10n ** 36n,
 		noReserve: 10n ** 36n,
 		lpTotalSupply: 10n ** 36n,
 		...overrides,
-	}
+	})
 }
