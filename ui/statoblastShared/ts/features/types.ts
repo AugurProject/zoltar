@@ -58,7 +58,7 @@ type RepPerEthPriceProps = {
 	repPerEthSourceUrl: string | undefined
 }
 
-export type SecurityPoolsView = 'browse' | 'create' | 'operate' | 'universes'
+export type SecurityPoolsView = 'open' | 'browse' | 'create' | 'operate' | 'universes'
 
 type SecurityPoolRouteContentProps = {
 	accountState: AccountState

@@ -9,7 +9,7 @@ test('shows one primary row with Pools and Open Oracle under Advanced', () => {
 	const tabs = getStatoblastRouteTabs({ route: 'pools', showDeployTab: false })
 	expect(tabs.map(tab => tab.route)).toEqual(['pools', 'open-oracle'])
 	expect(tabs.map(tab => tab.label)).toEqual(['Pools', 'Advanced'])
-	expect(tabs.map(tab => tab.hash)).toEqual(['#/pools', '#/open-oracle'])
+	expect(tabs.map(tab => tab.hash)).toEqual(['#/pools/open', '#/open-oracle'])
 })
 
 test('keeps deployment reachable while needed and while its route is active', () => {
@@ -21,8 +21,8 @@ test('lists pool views as paths without a Manage Pool peer and preserves the uni
 	const setSecurityPoolsView = mock(() => undefined)
 	const navigation = getRouteSecondaryNavigation({ activeOpenOracleView: 'browse', activeSecurityPoolsView: 'browse', route: 'pools', setOpenOracleView: () => undefined, setSecurityPoolsView })
 	if (navigation === undefined) throw new Error('Expected secondary navigation')
-	expect(navigation.options.map(option => option.value)).toEqual(['browse', 'create', 'universes'])
-	expect(navigation.options.map(option => option.href)).toEqual(['#/pools?universe=7', '#/pools/create?universe=7', '#/pools/universes?universe=7'])
+	expect(navigation.options.map(option => option.value)).toEqual(['open', 'browse', 'create', 'universes'])
+	expect(navigation.options.map(option => option.href)).toEqual(['#/pools/open?universe=7', '#/pools?universe=7', '#/pools/create?universe=7', '#/pools/universes?universe=7'])
 	navigation.onChange('create')
 	navigation.onChange('operate')
 	expect(setSecurityPoolsView).toHaveBeenCalledTimes(1)
@@ -59,7 +59,8 @@ test('uses the route and active view to isolate transaction presentation', () =>
 	expect(getRouteSecondaryNavigation({ ...views, route: 'not-found', setOpenOracleView: () => undefined, setSecurityPoolsView: () => undefined })).toBeUndefined()
 })
 
-test('opens Pools by default and rejects the removed portfolio route', () => {
+test('opens the address-based pool entry by default and rejects the removed portfolio route', () => {
 	expect(statoblastRouting.resolve('')).toBe('pools')
+	expect(statoblastRouting.getHash('pools')).toBe('#/pools/open')
 	expect(statoblastRouting.resolve('#/portfolio')).toBe('not-found')
 })

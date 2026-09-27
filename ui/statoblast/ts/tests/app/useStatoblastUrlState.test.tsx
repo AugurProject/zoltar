@@ -58,6 +58,17 @@ describe('useStatoblastUrlState', () => {
 		return () => requireState(hookState)
 	}
 
+	test('keeps the address entry active before the default route hash is installed', async () => {
+		window.history.replaceState({}, '', '/')
+		const state = await renderHarness()
+		expect(state().securityPoolsView).toBe('open')
+		expect(state().securityPoolAddress).toBe('')
+		await act(() => state().setSecurityPoolsView('browse'))
+		expect(window.location.hash).toBe('#/pools')
+		await act(() => state().setSecurityPoolsView('open'))
+		expect(window.location.hash).toBe('#/pools/open')
+	})
+
 	test('loads the initial pool page from the route hash', async () => {
 		const state = await renderHarness()
 		expect(state().activeUniverseId).toBe(1n)

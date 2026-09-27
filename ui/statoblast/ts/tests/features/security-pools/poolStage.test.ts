@@ -16,6 +16,8 @@ const ACCOUNT = getAddress('0x00000000000000000000000000000000000000b2')
 describe('pool locations', () => {
 	test('parses list views, pool pages, and tabs from the hash path', () => {
 		expect(parsePoolsRouteHash('#/pools')).toEqual({ view: 'browse' })
+		expect(parsePoolsRouteHash('#/pools/open')).toEqual({ view: 'open' })
+		expect(parsePoolsRouteHash('#/pools/open/extra')).toBeUndefined()
 		expect(parsePoolsRouteHash('#/pools/create')).toEqual({ view: 'create' })
 		expect(parsePoolsRouteHash('#/pools/universes')).toEqual({ view: 'universes' })
 		expect(parsePoolsRouteHash(`#/pools/${POOL}`)).toEqual({ securityPoolAddress: POOL, tab: '', view: 'operate' })

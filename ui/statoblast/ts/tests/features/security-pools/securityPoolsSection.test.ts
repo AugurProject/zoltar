@@ -357,6 +357,35 @@ void describe('SecurityPoolsSection', () => {
 		},
 	})
 
+	void test('opens a pool by address without reading the registry on the landing page', async () => {
+		const calls: string[] = []
+		const props = createSecurityPoolsSectionProps({
+			activeView: 'open',
+			onLoadUniverseDirectoryPools: () => calls.push('universes'),
+			overview: createOverviewProps({ onLoadSecurityPoolPage: () => calls.push('browse') }),
+			workflow: createWorkflowProps({ onSecurityPoolAddressChange: address => calls.push(address), onRefreshSelectedPoolData: () => calls.push('refresh') }),
+		})
+		const renderedComponent = await renderIntoDocument(h(SecurityPoolsSection, props))
+		cleanupRenderedComponent = renderedComponent.cleanup
+		const page = within(document.body)
+		const input = page.getByRole('textbox', { name: 'Security Pool Address' })
+		expect(calls).toEqual([])
+		const form = input.closest('form')
+		if (form === null) throw new Error('Expected the pool address form')
+		await act(() => fireEvent.input(input, { target: { value: '0x123' } }))
+		await act(() => {
+			form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }))
+		})
+		expect(calls).toEqual([])
+		expect(page.getByText('Enter a valid pool address.')).toBeDefined()
+		const address = '0x1111111111111111111111111111111111111111'
+		await act(() => fireEvent.input(input, { target: { value: address } }))
+		await act(() => {
+			form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }))
+		})
+		expect(calls).toEqual([address])
+	})
+
 	void test('hides the route summary in browse mode without rendering local route tabs', async () => {
 		const renderedComponent = await renderIntoDocument(h(SecurityPoolsSection, createSecurityPoolsSectionProps()))
 		cleanupRenderedComponent = renderedComponent.cleanup

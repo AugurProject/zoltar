@@ -27,7 +27,7 @@ function readStatoblastUrlState(routeHash: string, search: string): StatoblastUr
 		activeUniverseId: readUniverseQueryParam(search) ?? 0n,
 		openOracleView: readOpenOracleViewQueryParam(search) ?? '',
 		openOracleReportId: readOpenOracleReportIdQueryParam(search) ?? '',
-		securityPoolsView: poolsLocation?.view ?? '',
+		securityPoolsView: poolsLocation?.view ?? 'open',
 		selectedPoolView: poolsLocation?.view === 'operate' ? poolsLocation.tab : '',
 		securityPoolAddress: poolsLocation?.view === 'operate' ? poolsLocation.securityPoolAddress : '',
 		securityPoolQuestionId: readSecurityPoolQuestionIdQueryParam(search) ?? '',
@@ -112,7 +112,7 @@ export function useStatoblastUrlState() {
 	const setOpenOracleView = useCallback((view: string | undefined) => updateSearch(search => writeOpenOracleViewQueryParam(search, view)), [updateSearch])
 	const setSecurityPoolsView = useCallback(
 		(view: string | undefined) => {
-			if (view === 'create' || view === 'universes' || view === 'browse') {
+			if (view === 'open' || view === 'create' || view === 'universes' || view === 'browse') {
 				navigatePools({ view })
 				return
 			}

@@ -1,3 +1,4 @@
+import { PoolEntrySection } from './PoolEntrySection.js'
 import { SecurityPoolSection } from './SecurityPoolSection.js'
 import { SecurityPoolWorkflowSection } from './SecurityPoolWorkflowSection.js'
 import { SecurityPoolsOverviewSection } from './SecurityPoolsOverviewSection.js'
@@ -16,6 +17,7 @@ function shouldRefreshSelectedPoolDataOnViewOpen({ currentSecurityPoolAddress, n
 }
 
 function getSecurityPoolsRouteHeader(view: SecurityPoolsView) {
+	if (view === 'open') return { description: undefined, title: securityPoolCopy.openPool }
 	if (view === 'browse') return { description: undefined, title: commonCopy.browsePools }
 	if (view === 'create') return { description: securityPoolCopy.createPoolDescription, title: commonCopy.createPool }
 	if (view === 'universes') return { description: securityPoolCopy.universesDescription, title: commonCopy.universe }
@@ -39,6 +41,7 @@ export function SecurityPoolsSection({ activeView, createPool, loadingUniverseDi
 	return (
 		<div className='route-view-flow'>
 			{view === 'operate' && hasSelectedPool ? undefined : <RouteHeader description={routeHeader.description} eyebrow={statoblastAppCopy.pools} title={routeHeader.title} />}
+			{view === 'open' ? <PoolEntrySection onOpenPool={workflow.onSecurityPoolAddressChange} /> : undefined}
 			{view === 'browse' ? (
 				<SecurityPoolsOverviewSection
 					{...overview}

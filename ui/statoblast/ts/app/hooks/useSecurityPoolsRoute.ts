@@ -244,7 +244,7 @@ export function useSecurityPoolsRoute({
 		return repPerEthSource
 	})()
 	const uiRepPerEthSourceUrl = uiRepPerEthSource === 'open-oracle' ? undefined : repPerEthSourceUrl
-	const securityPoolsViews: readonly SecurityPoolsView[] = ['browse', 'create', 'operate', 'universes']
+	const securityPoolsViews: readonly SecurityPoolsView[] = ['open', 'browse', 'create', 'operate', 'universes']
 	const derivedSecurityPoolsView = resolveFirstMatchingValue<SecurityPoolsView>(
 		[
 			[securityPoolAddress !== '', 'operate'],

@@ -1,5 +1,6 @@
 import * as appCopy from '@zoltar/ui-core-shared/copy/app.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
+import * as securityPoolCopy from '@zoltar/ui-statoblast-shared/copy/securityPool.js'
 import * as statoblastAppCopy from '@zoltar/ui-statoblast-shared/copy/app.js'
 import type { Route } from '@zoltar/ui-statoblast-shared/types/app.js'
 import type { OpenOracleView } from '@zoltar/ui-statoblast-shared/features/oracleTypes.js'
@@ -15,6 +16,7 @@ export type AppPageTitleInput = {
 export function getAppPageTitle({ activeOpenOracleView, activeSecurityPoolsView, route }: AppPageTitleInput) {
 	if (route === 'deploy') return appCopy.deployContracts
 	if (route === 'pools') {
+		if (activeSecurityPoolsView === 'open') return securityPoolCopy.openPool
 		if (activeSecurityPoolsView === 'create') return commonCopy.createSecurityPool
 		if (activeSecurityPoolsView === 'operate') return statoblastAppCopy.poolPageTitle
 		if (activeSecurityPoolsView === 'universes') return commonCopy.universe
