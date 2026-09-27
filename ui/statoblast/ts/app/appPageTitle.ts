@@ -14,7 +14,6 @@ export type AppPageTitleInput = {
 
 export function getAppPageTitle({ activeOpenOracleView, activeSecurityPoolsView, route }: AppPageTitleInput) {
 	if (route === 'deploy') return appCopy.deployContracts
-	if (route === 'portfolio') return statoblastAppCopy.portfolio
 	if (route === 'pools') {
 		if (activeSecurityPoolsView === 'create') return commonCopy.createSecurityPool
 		if (activeSecurityPoolsView === 'operate') return statoblastAppCopy.poolPageTitle

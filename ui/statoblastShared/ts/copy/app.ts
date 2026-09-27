@@ -1,5 +1,4 @@
 export const openOracle = 'Open Oracle'
-export const portfolio = 'Portfolio'
 export const pools = 'Pools'
 export const advanced = 'Advanced'
 export const poolPageTitle = 'Security Pool'

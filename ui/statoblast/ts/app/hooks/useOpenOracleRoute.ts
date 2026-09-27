@@ -19,7 +19,7 @@ export function useOpenOracleRoute({
 	accountState: OpenOracleSectionProps['accountState']
 	activeEnvironmentNonce: number
 	canReadOnchainData: boolean
-	navigate: (route: 'deploy' | 'open-oracle' | 'pools' | 'portfolio') => void
+	navigate: (route: 'deploy' | 'open-oracle' | 'pools') => void
 	openOracleView: string
 	route: string
 	setOpenOracleReport: (reportId: string, historyMode?: 'push' | 'replace') => void

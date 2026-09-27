@@ -42,7 +42,7 @@ function getActionLabel(item: PoolActionItem) {
 }
 
 /** The label, amount, and deadline of one action row; `context` adds a line such as the pool the action belongs to. */
-export function PoolActionRow({ context, control, currentTimestamp, item }: { context?: ComponentChildren; control: ComponentChildren; currentTimestamp: bigint | undefined; item: PoolActionItem }) {
+function PoolActionRow({ context, control, currentTimestamp, item }: { context?: ComponentChildren; control: ComponentChildren; currentTimestamp: bigint | undefined; item: PoolActionItem }) {
 	return (
 		<li className={`pool-action-item ${item.tone}`}>
 			<div className='pool-action-copy'>

@@ -540,18 +540,6 @@
 			"bun": "./ts/lib/statoblastLocation.ts",
 			"default": "./js/lib/statoblastLocation.js"
 		},
-		"./features/portfolio/components/PortfolioSection.js": {
-			"bun": "./ts/features/portfolio/components/PortfolioSection.tsx",
-			"default": "./js/features/portfolio/components/PortfolioSection.js"
-		},
-		"./features/portfolio/hooks/usePortfolio.js": {
-			"bun": "./ts/features/portfolio/hooks/usePortfolio.ts",
-			"default": "./js/features/portfolio/hooks/usePortfolio.js"
-		},
-		"./features/portfolio/lib/portfolioViewModel.js": {
-			"bun": "./ts/features/portfolio/lib/portfolioViewModel.ts",
-			"default": "./js/features/portfolio/lib/portfolioViewModel.js"
-		},
 		"./features/security-pools/components/PoolStagePanel.js": {
 			"bun": "./ts/features/security-pools/components/PoolStagePanel.tsx",
 			"default": "./js/features/security-pools/components/PoolStagePanel.js"

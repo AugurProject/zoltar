@@ -5,7 +5,7 @@ import type { SecurityPoolStateModel } from './securityPoolState.js'
 import type { SecurityPoolReportingStage } from './securityPoolState/types.js'
 import type { SelectedPoolView } from './securityPoolWorkflow.js'
 
-export type PoolActionId =
+type PoolActionId =
 	| 'connectWallet'
 	| 'reviewStagedOperations'
 	| 'depositRep'

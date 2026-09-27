@@ -2,7 +2,6 @@ import { parseRouteHash } from '@zoltar/ui-core-shared/navigation/routing.js'
 import { updateSearchParams } from '@zoltar/ui-core-shared/navigation/urlParams.js'
 import { assertNever } from '@zoltar/ui-core-shared/lib/assert.js'
 
-export const PORTFOLIO_ROUTE_HASH = '#/portfolio'
 export const POOLS_ROUTE_HASH = '#/pools'
 const LEGACY_SECURITY_POOLS_ROUTE_HASH = '#/security-pools'
 const POOLS_PATH_PREFIX = `${POOLS_ROUTE_HASH}/`
@@ -57,7 +56,7 @@ export function buildPoolPageRouteHash(securityPoolAddress: string, tab = '') {
 }
 
 /**
- * Maps the pre-portfolio `#/security-pools?securityPoolsView=…&securityPool=…&selectedPoolView=…` links onto the path routes so
+ * Maps the legacy `#/security-pools?securityPoolsView=…&securityPool=…&selectedPoolView=…` links onto the path routes so
  * bookmarked pool links and the documented simulator entry points keep opening the same pool, tab, or view.
  */
 export function mapLegacyStatoblastHash(hash: string): string | undefined {

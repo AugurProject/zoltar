@@ -1,14 +1,15 @@
 import { expect, mock, test } from 'bun:test'
+import { statoblastRouting } from '@zoltar/ui-statoblast-shared/lib/routing.js'
 import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
 import { getRouteSecondaryNavigation, getStatoblastRouteTabs, getTransactionRouteKey } from '../../app/lib/appNavigation.js'
 
 installDomTestLifecycle({ url: 'http://localhost/#/pools?universe=7' })
 
-test('shows one primary row with Portfolio, Pools, and Open Oracle under Advanced', () => {
+test('shows one primary row with Pools and Open Oracle under Advanced', () => {
 	const tabs = getStatoblastRouteTabs({ route: 'pools', showDeployTab: false })
-	expect(tabs.map(tab => tab.route)).toEqual(['portfolio', 'pools', 'open-oracle'])
-	expect(tabs.map(tab => tab.label)).toEqual(['Portfolio', 'Pools', 'Advanced'])
-	expect(tabs.map(tab => tab.hash)).toEqual(['#/portfolio', '#/pools', '#/open-oracle'])
+	expect(tabs.map(tab => tab.route)).toEqual(['pools', 'open-oracle'])
+	expect(tabs.map(tab => tab.label)).toEqual(['Pools', 'Advanced'])
+	expect(tabs.map(tab => tab.hash)).toEqual(['#/pools', '#/open-oracle'])
 })
 
 test('keeps deployment reachable while needed and while its route is active', () => {
@@ -54,6 +55,11 @@ test('uses the route and active view to isolate transaction presentation', () =>
 	const views = { activeOpenOracleView: 'selected-report', activeSecurityPoolsView: 'operate' } as const
 	expect(getTransactionRouteKey({ ...views, route: 'pools' })).toBe('pools:operate')
 	expect(getTransactionRouteKey({ ...views, route: 'open-oracle' })).toBe('open-oracle:selected-report')
-	expect(getTransactionRouteKey({ ...views, route: 'portfolio' })).toBe('portfolio')
+	expect(getTransactionRouteKey({ ...views, route: 'deploy' })).toBe('deploy')
 	expect(getRouteSecondaryNavigation({ ...views, route: 'not-found', setOpenOracleView: () => undefined, setSecurityPoolsView: () => undefined })).toBeUndefined()
+})
+
+test('opens Pools by default and rejects the removed portfolio route', () => {
+	expect(statoblastRouting.resolve('')).toBe('pools')
+	expect(statoblastRouting.resolve('#/portfolio')).toBe('not-found')
 })

@@ -12,7 +12,7 @@ type Props = {
 	environmentReady: boolean
 	loadOracleReport: (reportId: string) => Promise<void>
 	loadSecurityPools: (securityPoolAddress?: string) => Promise<boolean | void>
-	navigate: (route: 'deploy' | 'open-oracle' | 'pools' | 'portfolio') => void
+	navigate: (route: 'deploy' | 'open-oracle' | 'pools') => void
 	resetSecurityPoolCreation: () => void
 	route: Route
 	securityPoolAddress: string

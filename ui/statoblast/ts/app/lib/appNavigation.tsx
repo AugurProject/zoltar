@@ -28,14 +28,13 @@ function getPoolsViewHref(view: PoolsListView) {
 	return buildRouteHref(buildPoolsRouteHash({ view }), search)
 }
 
-/** One primary row: the account's portfolio, the pool directory, and Open Oracle as an advanced tool; Deploy joins while deployment is incomplete. */
+/** One primary row: the pool directory, and Open Oracle as an advanced tool; Deploy joins while deployment is incomplete. */
 export function getStatoblastRouteTabs({ route, showDeployTab }: { route: string; showDeployTab: boolean }): RouteTabDefinition[] {
 	return withDeploymentTab({
 		deploymentTab: { hash: statoblastRouting.getHash('deploy'), label: commonCopy.deploy, route: 'deploy' },
 		deploymentIncomplete: showDeployTab,
 		route,
 		tabs: [
-			{ hash: statoblastRouting.getHash('portfolio'), label: statoblastAppCopy.portfolio, route: 'portfolio' },
 			{ hash: statoblastRouting.getHash('pools'), label: statoblastAppCopy.pools, route: 'pools' },
 			{ hash: statoblastRouting.getHash('open-oracle'), label: statoblastAppCopy.advanced, route: 'open-oracle' },
 		],
