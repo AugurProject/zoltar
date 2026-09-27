@@ -384,6 +384,9 @@ describe('real ecosystem workflows through the production chaos runtime', () => 
 			const depositedVault = scan.snapshot.pools.find(pool => pool.address.toLowerCase() === current.pool.toLowerCase())?.vaults.find(vault => vault.address.toLowerCase() === context.account.address.toLowerCase())
 			if (depositedVault === undefined) throw new Error('Statoblast deposit did not create a discoverable wallet vault')
 			expect(BigInt(depositedVault.repBackingAttoRep)).toBeGreaterThan(0n)
+			expect(BigInt(depositedVault.underwritingLimitAttoEth)).toBe(0n)
+			await execute('statoblast.vault.set-limit')
+			await execute('statoblast.vault.certify')
 			await execute('statoblast.complete-set.create')
 			const mintedShares = scan.snapshot.wallet.shares.find(shares => shares.universeId === '0')
 			expect(BigInt(mintedShares?.invalid ?? '0')).toBeGreaterThan(0n)
@@ -411,7 +414,7 @@ describe('real ecosystem workflows through the production chaos runtime', () => 
 
 			expect(context.state.pendingTransactions).toEqual([])
 			expect(proxy.rawTransactions).toEqual([])
-			expect(relay.rawTransactions).toHaveLength(12)
+			expect(relay.rawTransactions).toHaveLength(14)
 			expect(relay.rawTransactions.every(rawTransaction => parseTransaction(rawTransaction).type === 'eip1559')).toBeTrue()
 		} finally {
 			relay.dispose()

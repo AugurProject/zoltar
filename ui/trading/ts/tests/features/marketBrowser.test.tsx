@@ -3,7 +3,7 @@ import { act } from 'preact/test-utils'
 import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import { LiveMarketBrowser } from '../../features/LiveMarketBrowser.js'
-import { FIXTURE_DAY, FIXTURE_NOW, fixtureAddress, liveMarketFixture } from '../support/liveMarketFixture.js'
+import { FIXTURE_DAY, FIXTURE_NOW, fixtureAddress, listingMarketFixture as liveMarketFixture } from '../support/liveMarketFixture.js'
 
 const page = { start: 0n, total: 2n, previousStart: undefined, nextStart: undefined }
 

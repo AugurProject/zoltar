@@ -4,6 +4,7 @@ import type { MarketCreationResult, MarketDetails, MarketDetailsPage, MarketType
 import { readRequiredMulticall, writeContractAndWait } from './core.js'
 import { getMarketType, getProtocolPageOffset, getQuestionId, getQuestionIdHex, isStringArray, requireDeployedChildUniverseTupleArray, requireUniverseTupleArray, type UniverseTuple } from './helpers.js'
 import { getDeploymentSteps } from './deployment.js'
+import type { UniverseLineageStep } from '@zoltar/ui-core-shared/lib/universeLineage.js'
 
 const CONTRACT_PAGE_SIZE = 30n
 const ANSWER_OPTION_ABI = [
@@ -192,9 +193,32 @@ export async function loadZoltarQuestionPage(client: ReadClient, pageIndex: numb
 	}
 }
 
+const MAX_LINEAGE_DEPTH = 64
+
+/**
+ * Walks a universe's ancestry to genesis and names each generation by the fork outcome that created it.
+ * A child's `forkingOutcomeIndex` indexes its parent's fork question, which never changes once the parent has forked.
+ */
+async function loadUniverseLineage(client: ReadClient, universeId: bigint, universe: UniverseTuple, zoltarAddress: Address): Promise<UniverseLineageStep[]> {
+	const ancestry: UniverseLineageStep[] = []
+	let currentUniverseId = universeId
+	let currentUniverse = universe
+	while (currentUniverseId !== 0n) {
+		if (ancestry.length >= MAX_LINEAGE_DEPTH) throw new Error('Universe lineage is deeper than supported')
+		const [, , forkingOutcomeIndex, , parentUniverseId] = currentUniverse
+		const parentUniverse: UniverseTuple = await client.readContract({ abi: Zoltar_Zoltar.abi, functionName: 'universes', address: zoltarAddress, args: [parentUniverseId] })
+		const [, parentForkQuestionId] = parentUniverse
+		const outcomeLabel = parentForkQuestionId === 0n ? undefined : await client.readContract({ abi: ANSWER_OPTION_ABI, functionName: 'getAnswerOptionName', address: getDeploymentStepAddress('zoltarQuestionData'), args: [parentForkQuestionId, forkingOutcomeIndex] })
+		ancestry.push({ outcomeLabel, universeId: currentUniverseId })
+		currentUniverseId = parentUniverseId
+		currentUniverse = parentUniverse
+	}
+	return [{ outcomeLabel: undefined, universeId: 0n }, ...ancestry.reverse()]
+}
+
 /**
  * Reads a universe from Zoltar. Callers with their own deployment configuration pass its Zoltar address so the universe reads
- * target that deployment; the fork question and outcome labels still come from the active profile's question data, so the
+ * target that deployment; the fork question, outcome labels, and lineage outcome names still come from the active profile's question data, so the
  * address must belong to the same canonical deployment as the active network profile.
  */
 export async function loadZoltarUniverseSummary(client: ReadClient, universeId: bigint, zoltarAddress: Address = getDeploymentStepAddress('zoltar')): Promise<ZoltarUniverseSummary | undefined> {
@@ -237,6 +261,7 @@ export async function loadZoltarUniverseSummary(client: ReadClient, universeId: 
 	const universeData: UniverseTuple = universe
 	const [storedForkTime, forkQuestionId, forkingOutcomeIndex, , parentUniverseId] = universeData
 	const hasForked = forkTime > 0n || storedForkTime > 0n
+	const lineage = await loadUniverseLineage(client, universeId, universeData, zoltarAddress)
 
 	let childUniverses: ZoltarUniverseSummary['childUniverses'] = []
 	let forkQuestionDetails: MarketDetails | undefined = undefined
@@ -364,6 +389,7 @@ export async function loadZoltarUniverseSummary(client: ReadClient, universeId: 
 		forkTime,
 		forkingOutcomeIndex,
 		hasForked,
+		lineage,
 		parentUniverseId,
 		reputationToken: repToken,
 		...reputationTokenMetadata,

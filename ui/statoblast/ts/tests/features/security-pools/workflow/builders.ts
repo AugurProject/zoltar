@@ -122,9 +122,9 @@ export function createSecurityVaultDetails(overrides: Partial<SecurityVaultDetai
 		totalRepBackingUnits: 1n,
 		vaultAttoRepBacking: 5n * 10n ** 18n,
 		repToken: zeroAddress,
-		capacityOwnershipAttoRep: 2n * 10n ** 18n,
+		underwritingLimitAttoEth: 2n * 10n ** 18n,
 		securityPoolAddress: zeroAddress,
-		totalCapacityOwnershipAttoRep: 3n * 10n ** 18n,
+		totalUnderwritingLimitAttoEth: 3n * 10n ** 18n,
 		claimableFeesAttoEth: 1n * 10n ** 18n,
 		universeId: 1n,
 		vaultAddress: zeroAddress,
@@ -159,7 +159,7 @@ export function createSecurityPoolVaultSummary(overrides: Partial<SecurityPoolVa
 	return {
 		disputeStakedAttoRep: 1n * 10n ** 18n,
 		vaultAttoRepBacking: 5n * 10n ** 18n,
-		capacityOwnershipAttoRep: 2n * 10n ** 18n,
+		underwritingLimitAttoEth: 2n * 10n ** 18n,
 		claimableFeesAttoEth: 1n * 10n ** 18n,
 		vaultAddress: zeroAddress,
 		...overrides,
@@ -212,7 +212,7 @@ export function createForkAuctionProps(overrides: Partial<ForkAuctionRouteConten
 
 export function createForkAuctionDetails(overrides: Partial<ForkAuctionDetails> = {}): ForkAuctionDetails {
 	const forkAuctionDetails: ForkAuctionDetails = {
-		auctionedCapacityOwnershipAttoRep: 0n,
+		auctionedUnderwritingLimitAttoEth: 0n,
 		auctionableAttoRepAtFork: 0n,
 		claimingAvailable: false,
 		settlementCollateralAttoEth: 0n,
@@ -243,7 +243,7 @@ export function createSelectedPool(overrides: Partial<ListedSecurityPool> = {}):
 	const selectedPool: ListedSecurityPool = {
 		settlementCollateralAttoEth: 0n,
 		currentRetentionRate: 10n,
-		feeEligibleCapacityOwnershipAttoRep: 5n * 10n ** 18n,
+		feeEligibleUnderwritingLimitAttoEth: 5n * 10n ** 18n,
 		forkOutcome: 'none',
 		forkOwnSecurityPool: false,
 		hasForkActivity: false,
@@ -263,7 +263,7 @@ export function createSelectedPool(overrides: Partial<ListedSecurityPool> = {}):
 		shareTokenSupplyAttoShares: 0n,
 		systemState: 'operational',
 		totalPoolHeldAttoRep: 0n,
-		totalCapacityOwnershipAttoRep: 5n * 10n ** 18n,
+		totalUnderwritingLimitAttoEth: 5n * 10n ** 18n,
 		truthAuctionAddress: zeroAddress,
 		truthAuctionStartedAt: 0n,
 		universeHasForked: false,

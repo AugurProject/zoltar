@@ -21,7 +21,7 @@ test('fork migration empty states are complete templates', () => {
 })
 
 test('truth-auction settlement copy identifies REP backing-unit credits', () => {
-	const capacityOwnership = 'auctioned capacity ownership'
+	const capacityOwnership = 'auctioned underwriting commitments'
 	const settlementCopy = [
 		forkAuctionCopy.formatWinningClaimCapacityOwnershipHeadline(capacityOwnership),
 		forkAuctionCopy.formatWinningClaimSettlementNotice(capacityOwnership),

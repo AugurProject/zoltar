@@ -71,6 +71,7 @@ const eventDomains: Readonly<Record<string, EventDomainDefinition>> = {
 			'ChildPoolLinked',
 			'ChildRepSplit',
 			'ClaimAuctionProceeds',
+			'UnassignedCommitmentTakenOver',
 			'ClaimForkedEscalationDepositsToWallet',
 			'DisputeStakedRepDrainedAtFork',
 			'ParentRepLocked',

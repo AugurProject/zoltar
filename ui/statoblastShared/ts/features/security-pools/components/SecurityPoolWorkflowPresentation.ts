@@ -27,8 +27,8 @@ export function getPendingOperationLabel(operation: OracleQueueOperation) {
 	switch (operation) {
 		case 'liquidation':
 			return securityPoolCopy.liquidation
-		case 'adjustVaultBackingFactor':
-			return securityPoolCopy.adjustVaultBackingFactor
+		case 'setVaultUnderwritingLimit':
+			return securityPoolCopy.setVaultUnderwritingLimit
 		case 'withdrawRep':
 			return securityPoolCopy.withdrawRep
 		default:
@@ -39,12 +39,12 @@ export function getPendingOperationLabel(operation: OracleQueueOperation) {
 export function getPendingOperationAmountPresentation(operation: OracleQueueOperation) {
 	switch (operation) {
 		case 'liquidation':
-			return { summaryLabel: securityPoolCopy.requestedLiquidationDebt, suffix: commonCopy.eth, decimals: 18 }
+			return { summaryLabel: securityPoolCopy.requestedLiquidationDebt, suffix: commonCopy.eth, units: 18 }
 		case 'withdrawRep':
 			// The action heading and REP amount already identify a withdrawal.
-			return { summaryLabel: undefined, suffix: commonCopy.rep, decimals: 18 }
-		case 'adjustVaultBackingFactor':
-			return { summaryLabel: securityPoolCopy.vaultBackingFactor, suffix: '×', decimals: 4 }
+			return { summaryLabel: undefined, suffix: commonCopy.rep, units: 18 }
+		case 'setVaultUnderwritingLimit':
+			return { summaryLabel: securityPoolCopy.vaultBackingFactor, suffix: commonCopy.eth, units: 18 }
 		default:
 			return assertNever(operation)
 	}

@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import { arrangeMarkets, coarseDuration, marketLiquidityAttoEth, marketOddsPercent, marketYesTenths, type MarketFilter } from '../../lib/marketListing.js'
 import { hashWithoutTicketSide, marketTicketHref, readTicketSideParam } from '../../lib/ticketSide.js'
 import type { LiveMarket } from '../../protocol/live.js'
-import { FIXTURE_DAY, FIXTURE_NOW, fixtureAddress as address, liveMarketFixture as market } from '../support/liveMarketFixture.js'
+import { FIXTURE_DAY, FIXTURE_NOW, fixtureAddress as address, listingMarketFixture as market } from '../support/liveMarketFixture.js'
 
 const NOW = FIXTURE_NOW
 const DAY = FIXTURE_DAY

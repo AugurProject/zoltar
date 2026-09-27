@@ -31,6 +31,7 @@ const RECOVERY_OPERATIONS = [
 	'statoblast.staged.execute-liquidation-excluded',
 	'statoblast.staged.expire',
 	'statoblast.vault.redeem-fees',
+	'statoblast.vault.exit-limit',
 	'statoblast.vault.redeem-rep',
 	'trading.complete-set.redeem',
 	'trading.liquidity.remove',
@@ -56,6 +57,8 @@ const PROHIBITED_OPERATIONS = [
 	'statoblast.pool.deploy',
 	'statoblast.staged.queue',
 	'statoblast.vault.deposit-rep',
+	'statoblast.vault.set-limit',
+	'statoblast.vault.certify',
 	'statoblast.vault.update-fees',
 	'token.rep.approve',
 	'token.shares.approve',
@@ -124,6 +127,7 @@ const RETIREMENT_OPERATION_ORDER = [
 	'statoblast.auction.refund',
 	'statoblast.auction.settle-bids',
 	'statoblast.vault.redeem-fees',
+	'statoblast.vault.exit-limit',
 	'statoblast.vault.redeem-rep',
 	'statoblast.complete-set.redeem',
 	'statoblast.shares.redeem-winning',
@@ -148,7 +152,7 @@ function migrationPlanRecoversWalletClaim(plan: OperationPlan, snapshot: Ecosyst
 	const pool = snapshot.pools.find(candidate => candidate.address.toLowerCase() === poolAddress.toLowerCase())
 	if (pool === undefined) return false
 	const vault = pool.vaults.find(candidate => candidate.address.toLowerCase() === snapshot.wallet.address.toLowerCase())
-	const hasVaultClaim = vault !== undefined && [vault.repBackingUnits, vault.repBackingAttoRep, vault.capacityOwnershipAttoRep, vault.claimableFeesAttoEth, vault.disputeStakedAttoRep].some(value => BigInt(value) > 0n)
+	const hasVaultClaim = vault !== undefined && [vault.repBackingUnits, vault.repBackingAttoRep, vault.underwritingLimitAttoEth, vault.claimableFeesAttoEth, vault.disputeStakedAttoRep].some(value => BigInt(value) > 0n)
 	const shares = snapshot.wallet.shares.find(candidate => candidate.shareToken.toLowerCase() === pool.shareToken.toLowerCase() && candidate.universeId === pool.universeId)
 	return hasVaultClaim || (shares !== undefined && [shares.invalid, shares.yes, shares.no].some(value => BigInt(value) > 0n)) || pool.unresolvedEscalationMigrationReadyOutcomes.length > 0
 }

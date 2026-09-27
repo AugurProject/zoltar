@@ -18,7 +18,7 @@ const getAwaitingForkContinuationAbi = [
 
 type SecurityVault = {
 	repBackingUnits: bigint
-	capacityOwnershipAttoRep: bigint
+	underwritingLimitAttoEth: bigint
 	claimableFeesAttoEth: bigint
 	feeIndex: bigint
 	disputeStakedAttoRep: bigint
@@ -70,69 +70,13 @@ export const depositRepToVault = async (client: WriteClient, securityPoolAddress
 			abi: statoblast_SecurityPool_SecurityPool.abi,
 			functionName: 'depositRepToVault',
 			address: securityPoolAddress,
-			args: [
-				amount,
-				targetHealthFactorBps ??
-					((await client.readContract({ address: securityPoolAddress, abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'vaultTargetBackingFactorBps', args: [client.account.address] })) ||
-						(await client.readContract({ address: securityPoolAddress, abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'statoblastSecurityMultiplierBps' }))),
-			],
+			args: [amount, targetHealthFactorBps ?? (await client.readContract({ address: securityPoolAddress, abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'statoblastSecurityMultiplierBps' }))],
 			gas: HIGH_GAS_SIMULATOR_WRITE_GAS,
 		}),
 	)
 
 export const createCompleteSet = async (client: WriteClient, securityPoolAddress: Address, settlementCollateralAttoEth: bigint, preserveStalePriceForTest = false) => {
-	if (!preserveStalePriceForTest) {
-		const priceOracleManagerAndOperatorQueuer = requireAddress(
-			await client.readContract({
-				abi: statoblast_SecurityPool_SecurityPool.abi,
-				address: securityPoolAddress,
-				functionName: 'priceOracleManagerAndOperatorQueuer',
-				args: [],
-			}),
-			'Price coordinator',
-		)
-		const isPriceValid = requireBoolean(
-			await client.readContract({
-				abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
-				address: priceOracleManagerAndOperatorQueuer,
-				functionName: 'isPriceValid',
-				args: [],
-			}),
-			'Oracle price validity',
-		)
-		if (!isPriceValid) {
-			const mockWindow = getClientAnvilWindow(client)
-			if (mockWindow === undefined) throw new Error('Test complete-set mint requires a fresh oracle price')
-			const currentTimestamp = await mockWindow.getTime()
-			const lastPrice = requireBigInt(
-				await client.readContract({
-					abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
-					address: priceOracleManagerAndOperatorQueuer,
-					functionName: 'lastPrice',
-					args: [],
-				}),
-				'Cached oracle price',
-			)
-			await mockWindow.addStateOverrides({
-				[priceOracleManagerAndOperatorQueuer]: {
-					stateDiff: {
-						[`0x${3n.toString(16).padStart(64, '0')}`]: currentTimestamp,
-						...(lastPrice === 0n ? { [`0x${4n.toString(16).padStart(64, '0')}`]: 10n ** 18n } : {}),
-					},
-				},
-			})
-			const refreshedPriceIsValid = requireBoolean(
-				await client.readContract({
-					abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
-					address: priceOracleManagerAndOperatorQueuer,
-					functionName: 'isPriceValid',
-					args: [],
-				}),
-				'Refreshed oracle price validity',
-			)
-			if (!refreshedPriceIsValid) throw new Error('Test oracle timestamp override did not refresh the cached price')
-		}
-	}
+	if (!preserveStalePriceForTest) await prepareTestMintPrice(client, securityPoolAddress)
 	return await writeContractAndWait(client, () =>
 		client.writeContract({
 			abi: statoblast_SecurityPool_SecurityPool.abi,
@@ -167,11 +111,11 @@ export const redeemCompleteSet = async (client: WriteClient, securityPoolAddress
 		}),
 	)
 
-export const getTotalCapacityOwnershipAttoRep = async (client: ReadClient, securityPoolAddress: Address): Promise<bigint> =>
+export const getTotalUnderwritingLimitAttoEth = async (client: ReadClient, securityPoolAddress: Address): Promise<bigint> =>
 	requireBigInt(
 		await client.readContract({
 			abi: statoblast_SecurityPool_SecurityPool.abi,
-			functionName: 'totalCapacityOwnershipAttoRep',
+			functionName: 'totalUnderwritingLimitAttoEth',
 			address: securityPoolAddress,
 			args: [],
 		}),
@@ -243,7 +187,7 @@ export const getSecurityVault = async (client: ReadClient, securityPoolAddress: 
 		'Security vault',
 	)
 	const repBackingUnits = requireBigInt(securityVaultData[0], 'Security vault REP backing units')
-	const capacityOwnershipAttoRep = requireBigInt(securityVaultData[1], 'Security vault capacity ownership')
+	const underwritingLimitAttoEth = requireBigInt(securityVaultData[1], 'Security vault capacity ownership')
 	const claimableFeesAttoEth = requireBigInt(securityVaultData[2], 'Security vault unpaid ETH fees')
 	const feeIndex = requireBigInt(securityVaultData[3], 'Security vault fee index')
 	const escalationGameAddress = requireAddress(
@@ -267,7 +211,7 @@ export const getSecurityVault = async (client: ReadClient, securityPoolAddress: 
 					}),
 					'Dispute-staked REP by vault',
 				)
-	return { repBackingUnits, capacityOwnershipAttoRep, claimableFeesAttoEth, feeIndex, disputeStakedAttoRep }
+	return { repBackingUnits, underwritingLimitAttoEth, claimableFeesAttoEth, feeIndex, disputeStakedAttoRep }
 }
 
 export const getVaultCount = async (client: ReadClient, securityPoolAddress: Address): Promise<bigint> =>
@@ -428,3 +372,76 @@ export const getTotalPoolHeldAttoRep = async (client: ReadClient, securityPoolAd
 		}),
 		'Total REP balance',
 	)
+
+export const certifyVaultCoverage = async (client: WriteClient, securityPoolAddress: Address, vault: Address) => writeContractAndWait(client, () => client.writeContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: securityPoolAddress, functionName: 'certifyVaultCoverage', args: [vault] }))
+
+async function prepareTestMintPrice(client: WriteClient, securityPoolAddress: Address) {
+	const priceOracleManagerAndOperatorQueuer = requireAddress(
+		await client.readContract({
+			abi: statoblast_SecurityPool_SecurityPool.abi,
+			address: securityPoolAddress,
+			functionName: 'priceOracleManagerAndOperatorQueuer',
+			args: [],
+		}),
+		'Price coordinator',
+	)
+	const isPriceValid = requireBoolean(
+		await client.readContract({
+			abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
+			address: priceOracleManagerAndOperatorQueuer,
+			functionName: 'isPriceValid',
+			args: [],
+		}),
+		'Oracle price validity',
+	)
+	if (!isPriceValid) {
+		const mockWindow = getClientAnvilWindow(client)
+		if (mockWindow === undefined) throw new Error('Test complete-set mint requires a fresh oracle price')
+		const currentTimestamp = await mockWindow.getTime()
+		const lastPrice = requireBigInt(
+			await client.readContract({
+				abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
+				address: priceOracleManagerAndOperatorQueuer,
+				functionName: 'lastPrice',
+				args: [],
+			}),
+			'Cached oracle price',
+		)
+		await mockWindow.addStateOverrides({
+			[priceOracleManagerAndOperatorQueuer]: {
+				stateDiff: {
+					[`0x${3n.toString(16).padStart(64, '0')}`]: currentTimestamp,
+					...(lastPrice === 0n ? { [`0x${4n.toString(16).padStart(64, '0')}`]: 10n ** 18n } : {}),
+				},
+			},
+		})
+		const refreshedPriceIsValid = requireBoolean(
+			await client.readContract({
+				abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
+				address: priceOracleManagerAndOperatorQueuer,
+				functionName: 'isPriceValid',
+				args: [],
+			}),
+			'Refreshed oracle price validity',
+		)
+		if (!refreshedPriceIsValid) throw new Error('Test oracle timestamp override did not refresh the cached price')
+	}
+}
+
+/** Prepare real on-chain certificates for lifecycle tests that are not testing admission itself.
+ * The RPC enumeration is off-chain; every vault is verified by its own contract call.
+ * This helper never creates commitments or bypasses backing checks.
+ */
+export async function createCertifiedCompleteSetFixture(client: WriteClient, securityPoolAddress: Address, settlementCollateralAttoEth: bigint) {
+	await prepareTestMintPrice(client, securityPoolAddress)
+	const count = await client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: securityPoolAddress, functionName: 'getVaultCount' })
+	const vaults = await getVaults(client, securityPoolAddress, 0n, count)
+	for (const vault of vaults) {
+		if ((await getSecurityVault(client, securityPoolAddress, vault)).underwritingLimitAttoEth > 0n) await certifyVaultCoverage(client, securityPoolAddress, vault)
+	}
+	return createCompleteSet(client, securityPoolAddress, settlementCollateralAttoEth, true)
+}
+
+export async function setUnderwritingLimit(client: WriteClient, securityPool: Address, limitAttoEth: bigint) {
+	return await writeContractAndWait(client, () => client.writeContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: securityPool, functionName: 'setUnderwritingLimit', args: [limitAttoEth] }))
+}

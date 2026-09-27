@@ -6,7 +6,7 @@ import { ReadOnlyAddressValue } from '@zoltar/ui-core-shared/components/AddressV
 import { ReadOnlyDetailAccordion } from '@zoltar/ui-core-shared/components/ReadOnlyDetailAccordion.js'
 import { StickyObjectContext } from '@zoltar/ui-core-shared/components/StickyObjectContext.js'
 import { TimestampValue } from '@zoltar/ui-core-shared/components/TimestampValue.js'
-import { formatTrimmedUnits } from '@zoltar/ui-core-shared/lib/formatters.js'
+import { formatScaledPercentage } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { ProbabilityBar } from '../components/ProbabilityBar.js'
 import { SecurityPoolLink } from '../components/SecurityPoolLink.js'
 import { liveCopy } from '../copy/live.js'
@@ -29,7 +29,7 @@ export function MarketFacts({ market, nowSeconds, workflowLocked, headingRef, sh
 			items={[
 				...(showPool ? [{ label: liveCopy.securityPoolLabel, value: <SecurityPoolLink value={market.pool} disabled={workflowLocked} /> }] : []),
 				...(market.loadError === undefined
-					? [{ label: liveCopy.questionEnd, value: <TimestampValue timestamp={market.endTime} relative={false} /> }, ...(liquidity === undefined ? [] : [{ label: marketsCopy.liquidity, value: liquidity }]), { label: liveCopy.ammFee, value: `${formatTrimmedUnits(market.feeBps, 2, 2)}%` }]
+					? [{ label: liveCopy.questionEnd, value: <TimestampValue timestamp={market.endTime} relative={false} /> }, ...(liquidity === undefined ? [] : [{ label: marketsCopy.liquidity, value: liquidity }]), { label: liveCopy.ammFee, value: formatScaledPercentage(market.feeBps, 2) }]
 					: []),
 			]}
 		/>
