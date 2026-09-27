@@ -28,7 +28,7 @@ interface IStoredOpenOracleGame {
 enum OperationType {
 	Liquidation,
 	WithdrawRep,
-	AdjustVaultBackingFactor
+	SetVaultUnderwritingLimit
 }
 
 enum CoordinatorCheckpointReason {
@@ -51,14 +51,14 @@ struct StagedOperation {
 	uint256 queuedAt;
 	uint256 validForSeconds;
 	uint256 snapshotTargetBackingUnits;
-	uint256 snapshotTargetCapacityOwnershipAttoRep;
+	uint256 snapshotTargetUnderwritingLimitAttoEth;
 	bytes32 liquidationApprovalId;
 	uint256 reservedLiquidationDebtAttoEth;
 }
 
 struct HistoricalQueueSnapshot {
 	uint256 targetBackingUnits;
-	uint256 targetCapacityOwnershipAttoRep;
+	uint256 targetUnderwritingLimitAttoEth;
 	uint256 targetOpenInterestAttoEth;
 	uint256 targetDisputeStakedAttoRep;
 	uint256 totalPoolHeldAttoRep;

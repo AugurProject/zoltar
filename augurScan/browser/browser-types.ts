@@ -156,7 +156,7 @@ export interface RichListRecord {
 		poolAddress: string
 		questionTitle: string | null
 		repBackingUnits: string
-		capacityOwnershipAttoRep: SerializedAtomicInteger
+		underwritingLimitAttoEth: SerializedAtomicInteger
 		claimableFeesAttoEth: SerializedAtomicInteger
 		blockNumber: string
 	}>

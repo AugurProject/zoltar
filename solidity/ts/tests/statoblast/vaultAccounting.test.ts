@@ -52,8 +52,8 @@ const vaultDepositTargetHealthFactorRecordedEvent = {
 	inputs: [
 		{ name: 'vault', type: 'address', indexed: true },
 		{ name: 'depositTargetHealthFactorBps', type: 'uint256' },
-		{ name: 'capacityOwnershipAttoRep', type: 'uint256' },
-		{ name: 'resultingTotalCapacityOwnershipAttoRep', type: 'uint256' },
+		{ name: 'underwritingLimitAttoEth', type: 'uint256' },
+		{ name: 'resultingTotalUnderwritingLimitAttoEth', type: 'uint256' },
 	],
 	name: 'VaultDepositTargetHealthFactorRecorded',
 	type: 'event',
@@ -91,6 +91,15 @@ describe('Statoblast: vault accounting', () => {
 			functionName: 'getVaultCapacityBackingFactorsBps',
 			args: [vault],
 		})
+
+	test('REP deposits preserve the owner standing commitment', async () => {
+		const before = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
+		await approveToken(client, addressString(GENESIS_REPUTATION_TOKEN), securityPoolAddresses.securityPool)
+		await depositRepToVault(client, securityPoolAddresses.securityPool, repDeposit)
+		const after = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
+		strictEqualTypeSafe(after.underwritingLimitAttoEth, before.underwritingLimitAttoEth, 'depositing backing must not authorize another commitment')
+		assert.ok(after.repBackingUnits > before.repBackingUnits, 'the deposit must still credit REP ownership')
+	})
 
 	test('can deposit rep and withdraw it', async () => {
 		const startBalance = await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), client.account.address)
@@ -156,11 +165,7 @@ describe('Statoblast: vault accounting', () => {
 			fromBlock: receipt.blockNumber,
 			toBlock: receipt.blockNumber,
 		})
-		const preferenceLog = ensureDefined(
-			preferenceLogs.find(log => log.transactionHash === depositHash),
-			'VaultDepositTargetHealthFactorRecorded log missing from positive deposit transaction',
-		)
-		const preferenceArgs = ensureDefined(preferenceLog.args, 'deposit preference log args missing')
+		strictEqualTypeSafe(preferenceLogs.length, 0, 'backing deposits must not advertise a commitment')
 		const vault = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
 		const totalRepBackingUnits = await getTotalRepBackingUnits(client, securityPoolAddresses.securityPool)
 
@@ -168,9 +173,6 @@ describe('Statoblast: vault accounting', () => {
 		strictEqualTypeSafe(depositArgs.attoRepAmount, depositAmount, 'event should include the deposited REP amount')
 		strictEqualTypeSafe(depositArgs.repBackingUnits, vault.repBackingUnits, 'event should include updated vault backingUnits')
 		strictEqualTypeSafe(depositArgs.totalRepBackingUnits, totalRepBackingUnits, 'event should include updated REP backing units denominator')
-		strictEqualTypeSafe(preferenceArgs.vault, client.account.address, 'preference event should identify the depositing vault')
-		strictEqualTypeSafe(preferenceArgs.depositTargetHealthFactorBps, 20_000n, 'preference event should record the positive deposit instruction')
-		strictEqualTypeSafe(preferenceArgs.capacityOwnershipAttoRep, vault.capacityOwnershipAttoRep, 'preference event should expose resulting vault capacity')
 	})
 
 	test('genesis REP uses the ordinary approval path and rejects signature authorization entry points', async () => {
@@ -195,21 +197,18 @@ describe('Statoblast: vault accounting', () => {
 		)
 	})
 
-	test('rejects an initial deposit whose target rounds capacity to zero', async () => {
+	test('initial and rounding-sized REP deposits leave the underwriting limit at zero', async () => {
 		const receiver = createWriteClient(mockWindow, TEST_ADDRESSES[2])
 		const amount = await client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: securityPoolAddresses.securityPool, functionName: 'minimumVaultRepDepositAttoRep' })
-		await transferRepToAddress(client, receiver.account.address, amount)
+		await transferRepToAddress(client, receiver.account.address, amount + 1n)
 		await approveToken(receiver, addressString(GENESIS_REPUTATION_TOKEN), securityPoolAddresses.securityPool)
 		const before = await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), receiver.account.address)
-		await assert.rejects(depositRepToVault(receiver, securityPoolAddresses.securityPool, amount, MAX_UINT256), /Capacity must be positive/)
-		strictEqualTypeSafe(await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), receiver.account.address), before, 'rejected deposit preserves wallet REP')
-		strictEqualTypeSafe((await getSecurityVault(client, securityPoolAddresses.securityPool, receiver.account.address)).repBackingUnits, 0n, 'rejected deposit leaves no vault backing')
-		const oneUnitTarget = amount * statoblastSecurityMultiplierBps
-		await depositRepToVault(receiver, securityPoolAddresses.securityPool, amount, oneUnitTarget)
-		strictEqualTypeSafe((await getSecurityVault(client, securityPoolAddresses.securityPool, receiver.account.address)).capacityOwnershipAttoRep, 1n, 'one capacity unit is accepted')
-		await transferRepToAddress(client, receiver.account.address, 1n)
-		await depositRepToVault(receiver, securityPoolAddresses.securityPool, 1n, oneUnitTarget)
-		strictEqualTypeSafe((await getSecurityVault(client, securityPoolAddresses.securityPool, receiver.account.address)).capacityOwnershipAttoRep, 1n, 'an existing positive-capacity vault may receive a rounding-sized top-up')
+		await depositRepToVault(receiver, securityPoolAddresses.securityPool, amount, MAX_UINT256)
+		await depositRepToVault(receiver, securityPoolAddresses.securityPool, 1n)
+		strictEqualTypeSafe(await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), receiver.account.address), before - amount - 1n, 'only deposited REP leaves the wallet')
+		const vault = await getSecurityVault(client, securityPoolAddresses.securityPool, receiver.account.address)
+		strictEqualTypeSafe(vault.underwritingLimitAttoEth, 0n, 'deposits are not commitment authorization')
+		strictEqualTypeSafe(await backingUnitsToAttoRep(client, securityPoolAddresses.securityPool, vault.repBackingUnits), amount + 1n, 'all backing remains owned by the depositor')
 	})
 
 	test('same-target vaults are independent of deposit order', async () => {
@@ -224,12 +223,19 @@ describe('Statoblast: vault accounting', () => {
 		await depositRepToVault(vaultA, securityPoolAddresses.securityPool, depositAmount * 2n, 40_000n)
 		await depositRepToVault(vaultB, securityPoolAddresses.securityPool, depositAmount * 2n, 40_000n)
 		await depositRepToVault(vaultB, securityPoolAddresses.securityPool, depositAmount, 40_000n)
+		await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer)
+		for (const vault of [vaultA, vaultB]) {
+			await vault.waitForTransactionReceipt({ hash: await vault.writeContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: securityPoolAddresses.securityPool, functionName: 'setUnderwritingLimit', args: [(depositAmount * 3n) / 2n] }) })
+		}
+		for (const vault of [vaultA, vaultB]) {
+			await client.waitForTransactionReceipt({ hash: await client.writeContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: securityPoolAddresses.securityPool, functionName: 'certifyVaultCoverage', args: [vault.account.address] }) })
+		}
 		await createCompleteSet(client, securityPoolAddresses.securityPool, 1n * 10n ** 18n)
 
 		const vaultAState = await getSecurityVault(client, securityPoolAddresses.securityPool, vaultA.account.address)
 		const vaultBState = await getSecurityVault(client, securityPoolAddresses.securityPool, vaultB.account.address)
 		strictEqualTypeSafe(vaultAState.repBackingUnits, vaultBState.repBackingUnits, 'reversed deposits should produce the same REP backing')
-		strictEqualTypeSafe(vaultAState.capacityOwnershipAttoRep, vaultBState.capacityOwnershipAttoRep, 'reversed deposits should produce the same capacity')
+		strictEqualTypeSafe(vaultAState.underwritingLimitAttoEth, vaultBState.underwritingLimitAttoEth, 'reversed deposits should produce the same capacity')
 		const depositTargetLogs = await client.getLogs({
 			address: securityPoolAddresses.securityPool,
 			event: vaultDepositTargetHealthFactorRecordedEvent,
@@ -244,8 +250,8 @@ describe('Statoblast: vault accounting', () => {
 		strictEqualTypeSafe(vaultAFactors[1], vaultBFactors[1], 'reversed deposits should produce the same pool-held backing factor')
 		strictEqualTypeSafe(vaultAFactors[0], 20_000n, 'associated REP per capacity should derive from aggregate backing and capacity')
 		strictEqualTypeSafe(vaultAFactors[1], 20_000n, 'pool-held REP per capacity should derive from aggregate backing and capacity')
-		strictEqualTypeSafe(vaultATargets.at(-1)?.args?.depositTargetHealthFactorBps, 40_000n, 'vault A history should expose its latest deposit instruction')
-		strictEqualTypeSafe(vaultBTargets.at(-1)?.args?.depositTargetHealthFactorBps, 40_000n, 'vault B history should expose its latest deposit instruction')
+		strictEqualTypeSafe(vaultATargets.length, 0, 'vault A deposits do not change its commitment')
+		strictEqualTypeSafe(vaultBTargets.length, 0, 'vault B deposits do not change its commitment')
 		const vaultAOpenInterestAttoEth = await client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: securityPoolAddresses.securityPool, functionName: 'getVaultOpenInterestAttoEth', args: [vaultA.account.address] })
 		const vaultBOpenInterestAttoEth = await client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: securityPoolAddresses.securityPool, functionName: 'getVaultOpenInterestAttoEth', args: [vaultB.account.address] })
 		strictEqualTypeSafe(vaultAOpenInterestAttoEth, vaultBOpenInterestAttoEth, 'reversed deposits should receive identical open interest')
@@ -273,7 +279,7 @@ describe('Statoblast: vault accounting', () => {
 
 		const vaultAfter = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
 		strictEqualTypeSafe(vaultAfter.repBackingUnits, vaultBefore.repBackingUnits, 'zero deposit must not change backing units')
-		strictEqualTypeSafe(vaultAfter.capacityOwnershipAttoRep, vaultBefore.capacityOwnershipAttoRep, 'zero deposit must not change capacity')
+		strictEqualTypeSafe(vaultAfter.underwritingLimitAttoEth, vaultBefore.underwritingLimitAttoEth, 'zero deposit must not change capacity')
 		strictEqualTypeSafe(vaultAfter.claimableFeesAttoEth, vaultBefore.claimableFeesAttoEth, 'zero deposit must not checkpoint fees')
 		strictEqualTypeSafe(vaultAfter.feeIndex, vaultBefore.feeIndex, 'zero deposit must not change the vault fee index')
 		strictEqualTypeSafe(await getVaultCount(client, securityPoolAddresses.securityPool), vaultCountBefore, 'zero deposit must not register a vault')
@@ -282,7 +288,7 @@ describe('Statoblast: vault accounting', () => {
 		strictEqualTypeSafe(preferenceLogs.length, 0, 'zero deposit must not record a deposit target event')
 	})
 
-	test('non-round deposits preserve the saved vault target', async () => {
+	test('non-round deposits preserve zero commitment and credit all backing', async () => {
 		const vault = createWriteClient(mockWindow, TEST_ADDRESSES[2])
 		const deposits = [
 			{ amount: repDeposit / 9n + 7n, target: 24_691n },
@@ -298,10 +304,11 @@ describe('Statoblast: vault accounting', () => {
 
 		const vaultState = await getSecurityVault(client, securityPoolAddresses.securityPool, vault.account.address)
 		const poolHeldRepAttoRep = await backingUnitsToAttoRep(client, securityPoolAddresses.securityPool, vaultState.repBackingUnits)
-		const expectedCapacityOwnershipAttoRep = (totalDepositAttoRep * statoblastSecurityMultiplierBps) / 24_691n
-		const expectedFactorBps = (poolHeldRepAttoRep * 10_000n) / expectedCapacityOwnershipAttoRep
+		strictEqualTypeSafe(poolHeldRepAttoRep, totalDepositAttoRep, 'non-round deposits preserve REP ownership')
+		const expectedUnderwritingLimitAttoEth = 0n
+		const expectedFactorBps = 0n
 		const factors = await getVaultCapacityBackingFactorsBps(vault.account.address)
-		strictEqualTypeSafe(vaultState.capacityOwnershipAttoRep, expectedCapacityOwnershipAttoRep, 'each deposit should retain the existing downward-rounded capacity formula')
+		strictEqualTypeSafe(vaultState.underwritingLimitAttoEth, expectedUnderwritingLimitAttoEth, 'deposits do not change the commitment')
 		strictEqualTypeSafe(factors[0], expectedFactorBps, 'associated factor should derive from aggregate backing and capacity')
 		strictEqualTypeSafe(factors[1], expectedFactorBps, 'pool-held factor should derive from aggregate backing and capacity')
 	})
@@ -755,6 +762,7 @@ describe('Statoblast: vault accounting', () => {
 	test('depositToEscalationGame burns enough backingUnits after the pool share price appreciates', async () => {
 		const endTime = await getQuestionEndDate(client, questionId)
 		const benefactorClient = createWriteClient(mockWindow, TEST_ADDRESSES[2])
+		await setVaultCapacityFixture(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, client.account.address, repDeposit / 4n)
 		const vaultBeforeDonation = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
 		const vaultRepBackingBeforeDonationAttoRep = await getVaultRepClaim(client.account.address)
 		await mockWindow.setTime(endTime + 10000n)
@@ -799,21 +807,21 @@ describe('Statoblast: vault accounting', () => {
 		const vaultBeforeEscrow = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
 		const backingUnitsToEscrow = (escrowAmount * totalRepBackingUnits + totalRepBeforeEscrow - 1n) / totalRepBeforeEscrow
 		const expectedRepAfterEscrow = ((vaultBeforeEscrow.repBackingUnits - backingUnitsToEscrow) * (totalRepBeforeEscrow - escrowAmount)) / totalRepBackingUnits
-		const targetCapacityOwnershipAttoRep = expectedRepAfterEscrow + 1n
+		const targetUnderwritingLimitAttoEth = expectedRepAfterEscrow / 2n
 
-		await setVaultCapacityFixture(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, client.account.address, targetCapacityOwnershipAttoRep)
+		await setVaultCapacityFixture(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, client.account.address, targetUnderwritingLimitAttoEth)
 		await setVaultCapacityFixture(secondVault, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, secondVault.account.address, 0n)
 		await mockWindow.setTime(endTime + 10000n)
 		await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer)
 
 		assert.ok(vaultBeforeEscrow.repBackingUnits > 0n, 'target vault should already be funded')
-		assert.ok(totalRepBeforeEscrow - escrowAmount >= targetCapacityOwnershipAttoRep, 'the pool-wide bond should still be satisfied after escrow')
-		assert.ok(expectedRepAfterEscrow < targetCapacityOwnershipAttoRep, 'capacity ownership')
+		assert.ok(totalRepBeforeEscrow - escrowAmount >= targetUnderwritingLimitAttoEth, 'the pool-wide bond should still be satisfied after escrow')
+		assert.ok(expectedRepAfterEscrow >= 2n * targetUnderwritingLimitAttoEth, 'full-limit associated backing is funded')
 
 		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, escrowAmount)
 		const vaultAfterEscrow = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
 		assert.ok(vaultAfterEscrow.disputeStakedAttoRep >= escrowAmount, 'the escrowed REP should be accepted when the post-transfer denominator keeps the vault above its bond threshold')
-		assert.ok((await backingUnitsToAttoRep(client, securityPoolAddresses.securityPool, vaultAfterEscrow.repBackingUnits)) >= targetCapacityOwnershipAttoRep, 'the remaining claim should still satisfy the local bond after escrow')
+		assert.ok((await backingUnitsToAttoRep(client, securityPoolAddresses.securityPool, vaultAfterEscrow.repBackingUnits)) >= targetUnderwritingLimitAttoEth, 'the remaining claim should still satisfy the local bond after escrow')
 	})
 
 	test('oracle-staged collateral operations are rejected once escalation resolves', async () => {

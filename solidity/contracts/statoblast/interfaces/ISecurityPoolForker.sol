@@ -6,8 +6,9 @@ import { BinaryOutcomes } from '../BinaryOutcomes.sol';
 import { IUniformPriceDualCapBatchAuction } from './IUniformPriceDualCapBatchAuction.sol';
 
 interface ISecurityPoolForkerEvents {
+	event UnassignedCommitmentTakenOver(ISecurityPool indexed securityPool, address indexed vault, uint256 underwritingLimitAttoEth, uint256 repBackingUnits);
 	event VaultBadDebtMigrated(ISecurityPool indexed parentPool, ISecurityPool indexed childPool, address indexed vault, uint256 migratedBadDebtAttoEth, uint256 resultingParentTotalBadDebtAttoEth, uint256 resultingChildTotalBadDebtAttoEth);
-	event ClaimAuctionProceeds(ISecurityPool indexed securityPool, address indexed vault, uint256 amountAttoRep, uint256 repBackingUnits, uint256 totalRepBackingUnits, uint256 claimedAuctionRepPurchasedAttoRep, uint256 claimedAuctionedCapacityOwnershipAttoRep, uint256 claimedAuctionedBadDebtAttoEth, uint256 auctionedBadDebtAttoEth);
+	event ClaimAuctionProceeds(ISecurityPool indexed securityPool, address indexed vault, uint256 amountAttoRep, uint256 repBackingUnits, uint256 totalRepBackingUnits, uint256 claimedAuctionRepPurchasedAttoRep, uint256 claimedAuctionedUnderwritingLimitAttoEth, uint256 claimedAuctionedBadDebtAttoEth, uint256 auctionedBadDebtAttoEth);
 	/// @notice Immutable fork-time pool and escalation accounting. Collateral uses attoETH, REP fields use
 	/// attoREP, elapsed time uses seconds, and `escalationSnapshotId` commits to the carry state.
 	event SecurityPoolForkSnapshot(ISecurityPool indexed parentPool, address indexed migrationProxy, bool ownFork, bool unresolvedEscalation, uint256 settlementCollateralAtForkAttoEth, uint256 totalPoolHeldRepAtForkAttoRep, uint256 auctionableAttoRepAtFork, uint256 escalationSourceRepAtForkAttoRep, uint256 escalationChildRepAtForkAttoRep, uint256 escalationStartBondAtForkAttoRep, uint256 escalationNonDecisionThresholdAtForkAttoRep, uint256 escalationElapsedAtFork, bytes32 escalationSnapshotId);
@@ -18,7 +19,7 @@ interface ISecurityPoolForkerEvents {
 	/// @notice Final parent/child vault and collateral state after one vault migration. REP fields use attoREP,
 	/// settlement-collateral fields use attoETH, REP attribution fields use REP backing units, and capacity ownerships use
 	/// attoREP. The event is emitted even when `settlementCollateralTransferredAttoEth` is zero.
-	event VaultMigrationCheckpoint(ISecurityPool indexed parentPool, ISecurityPool indexed childPool, address indexed vault, uint256 outcomeIndex, uint256 migratedRepDeltaAttoRep, uint256 resultingChildMigratedRepTotalAttoRep, uint256 resultingParentRepBackingUnits, uint256 resultingParentCapacityOwnershipAttoRep, uint256 resultingChildRepBackingUnits, uint256 resultingChildCapacityOwnershipAttoRep, uint256 resultingParentTotalRepBackingUnits, uint256 resultingChildTotalRepBackingUnits, uint256 resultingParentTotalCapacityOwnershipAttoRep, uint256 resultingChildTotalCapacityOwnershipAttoRep, uint256 settlementCollateralTransferredAttoEth, uint256 cumulativeSettlementCollateralTransferredAttoEth);
+	event VaultMigrationCheckpoint(ISecurityPool indexed parentPool, ISecurityPool indexed childPool, address indexed vault, uint256 outcomeIndex, uint256 migratedRepDeltaAttoRep, uint256 resultingChildMigratedRepTotalAttoRep, uint256 resultingParentRepBackingUnits, uint256 resultingParentUnderwritingLimitAttoEth, uint256 resultingChildRepBackingUnits, uint256 resultingChildUnderwritingLimitAttoEth, uint256 resultingParentTotalRepBackingUnits, uint256 resultingChildTotalRepBackingUnits, uint256 resultingParentTotalUnderwritingLimitAttoEth, uint256 resultingChildTotalUnderwritingLimitAttoEth, uint256 settlementCollateralTransferredAttoEth, uint256 cumulativeSettlementCollateralTransferredAttoEth);
 	/// @notice REP materialized into one child continuation; amounts use child attoREP.
 	event ChildDisputeStakedRepMaterialized(ISecurityPool indexed parentPool, ISecurityPool indexed childPool, address indexed childGame, uint256 outcomeIndex, uint256 attoRepAmount, uint256 resultingDisputeStakedRepBalanceAttoRep);
 	/// @notice Child REP moved into its pool, including the resulting pool token balance.
@@ -26,6 +27,7 @@ interface ISecurityPoolForkerEvents {
 }
 
 interface ISecurityPoolForker is ISecurityPoolForkerEvents {
+	function takeOverUnassignedCommitment(ISecurityPool securityPool, uint256 maximumCommitmentAttoEth) external;
 	/// @notice Pool-owned accounting not yet assigned to a withdrawable vault.
 	/// @dev Fee eligibility can be smaller than total capacity after a zero-purchase auction.
 	function getUnassignedPosition(ISecurityPool securityPool)
@@ -33,7 +35,7 @@ interface ISecurityPoolForker is ISecurityPoolForkerEvents {
 		view
 		returns (
 			uint256 repBackingUnits,
-			uint256 capacityOwnershipAttoRep,
+			uint256 underwritingLimitAttoEth,
 			uint256 badDebtAttoEth,
 			uint256 badDebtGeneration,
 			uint256 feeIndexAtFinalization

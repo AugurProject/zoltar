@@ -54,16 +54,16 @@ contract Erc1271LiquidationReceiverMock is IERC1271 {
 contract CoarseLiquidationRoundingHarness is SecurityPoolOperationsDelegate {
 	function configureBadDebtParticipants(address targetVault, address receiverVault, uint256 targetBadDebtAttoEth, uint256 receiverBadDebtAttoEth) external {
 		settlementCollateralAttoEth = 100;
-		feeEligibleCapacityOwnershipAttoRep = 100;
-		totalCapacityOwnershipAttoRep = 100;
+		feeEligibleUnderwritingLimitAttoEth = 100;
+		totalUnderwritingLimitAttoEth = 100;
 		totalRepBackingUnits = 1_010;
 		statoblastSecurityMultiplierBps = 20_000;
 		minimumSecurityBondDebtAttoEth = 1;
 		minimumVaultRepDepositAttoRep = 1;
 		securityVaults[targetVault].repBackingUnits = 10;
-		securityVaults[targetVault].capacityOwnershipAttoRep = 50;
+		securityVaults[targetVault].underwritingLimitAttoEth = 50;
 		securityVaults[receiverVault].repBackingUnits = 1_000;
-		securityVaults[receiverVault].capacityOwnershipAttoRep = 50;
+		securityVaults[receiverVault].underwritingLimitAttoEth = 50;
 		_setVaultBadDebtAttoEth(targetVault, targetBadDebtAttoEth);
 		_setVaultBadDebtAttoEth(receiverVault, receiverBadDebtAttoEth);
 		totalBadDebtAttoEth = targetBadDebtAttoEth + receiverBadDebtAttoEth;
@@ -76,48 +76,48 @@ contract CoarseLiquidationRoundingHarness is SecurityPoolOperationsDelegate {
 
 	function configure(address targetVault, address receiverVault) external {
 		settlementCollateralAttoEth = 1;
-		feeEligibleCapacityOwnershipAttoRep = 2;
-		totalCapacityOwnershipAttoRep = 2;
+		feeEligibleUnderwritingLimitAttoEth = 2;
+		totalUnderwritingLimitAttoEth = 2;
 		totalRepBackingUnits = 2;
 		statoblastSecurityMultiplierBps = 30_000;
 		securityVaults[targetVault].repBackingUnits = 2;
-		securityVaults[targetVault].capacityOwnershipAttoRep = 1;
-		securityVaults[receiverVault].capacityOwnershipAttoRep = 1;
+		securityVaults[targetVault].underwritingLimitAttoEth = 1;
+		securityVaults[receiverVault].underwritingLimitAttoEth = 1;
 	}
 
 	function configurePositiveResidual(address targetVault, address receiverVault) external {
 		settlementCollateralAttoEth = 4;
-		feeEligibleCapacityOwnershipAttoRep = 3;
-		totalCapacityOwnershipAttoRep = 3;
+		feeEligibleUnderwritingLimitAttoEth = 3;
+		totalUnderwritingLimitAttoEth = 3;
 		totalRepBackingUnits = 13;
 		statoblastSecurityMultiplierBps = 20_000;
 		securityVaults[targetVault].repBackingUnits = 3;
-		securityVaults[targetVault].capacityOwnershipAttoRep = 1;
+		securityVaults[targetVault].underwritingLimitAttoEth = 1;
 		securityVaults[receiverVault].repBackingUnits = 10;
-		securityVaults[receiverVault].capacityOwnershipAttoRep = 1;
+		securityVaults[receiverVault].underwritingLimitAttoEth = 1;
 	}
 
 	function configureLiveLiquidationDistance(address targetVault, address receiverVault) external {
 		settlementCollateralAttoEth = 5;
-		feeEligibleCapacityOwnershipAttoRep = 10;
-		totalCapacityOwnershipAttoRep = 10;
+		feeEligibleUnderwritingLimitAttoEth = 10;
+		totalUnderwritingLimitAttoEth = 10;
 		totalRepBackingUnits = 107;
 		statoblastSecurityMultiplierBps = 20_000;
 		securityVaults[targetVault].repBackingUnits = 7;
-		securityVaults[targetVault].capacityOwnershipAttoRep = 10;
+		securityVaults[targetVault].underwritingLimitAttoEth = 10;
 		securityVaults[receiverVault].repBackingUnits = 100;
 	}
 
 	function configureUnclaimedCapacity(address targetVault, address receiverVault) external {
 		settlementCollateralAttoEth = 8;
-		feeEligibleCapacityOwnershipAttoRep = 2;
-		totalCapacityOwnershipAttoRep = 4;
+		feeEligibleUnderwritingLimitAttoEth = 2;
+		totalUnderwritingLimitAttoEth = 4;
 		totalRepBackingUnits = 107;
 		statoblastSecurityMultiplierBps = 20_000;
 		securityVaults[targetVault].repBackingUnits = 7;
-		securityVaults[targetVault].capacityOwnershipAttoRep = 2;
+		securityVaults[targetVault].underwritingLimitAttoEth = 2;
 		securityVaults[receiverVault].repBackingUnits = 100;
-		securityVaults[receiverVault].capacityOwnershipAttoRep = 1;
+		securityVaults[receiverVault].underwritingLimitAttoEth = 1;
 	}
 
 	function setSettlementCollateralAttoEth(uint256 nextSettlementCollateralAttoEth) external {
@@ -133,15 +133,15 @@ contract CoarseLiquidationRoundingHarness is SecurityPoolOperationsDelegate {
 	}
 
 	function getVaultOpenInterestAttoEth(address vault) external view returns (uint256) {
-		uint256 grossOpenInterestAttoEth = SecurityPoolUtils.calculateVaultOpenInterestAttoEth(settlementCollateralAttoEth, securityVaults[vault].capacityOwnershipAttoRep, totalCapacityOwnershipAttoRep);
+		uint256 grossOpenInterestAttoEth = SecurityPoolUtils.calculateVaultOpenInterestAttoEth(settlementCollateralAttoEth, securityVaults[vault].underwritingLimitAttoEth, totalUnderwritingLimitAttoEth);
 		uint256 vaultBadDebtAttoEth = _getVaultBadDebtAttoEth(vault);
 		return grossOpenInterestAttoEth > vaultBadDebtAttoEth ? grossOpenInterestAttoEth - vaultBadDebtAttoEth : 0;
 	}
 
-	function vaultState(address vault) external view returns (uint256 repBackingUnits, uint256 capacityOwnershipAttoRep, uint256 badDebtAttoEth) {
+	function vaultState(address vault) external view returns (uint256 repBackingUnits, uint256 underwritingLimitAttoEth, uint256 badDebtAttoEth) {
 		return (
 			securityVaults[vault].repBackingUnits,
-			securityVaults[vault].capacityOwnershipAttoRep,
+			securityVaults[vault].underwritingLimitAttoEth,
 			_getVaultBadDebtAttoEth(vault)
 		);
 	}

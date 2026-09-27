@@ -5,7 +5,7 @@ import * as marketCopy from '../../../copy/market.js'
 import { CurrencyValue } from '@zoltar/ui-core-shared/components/CurrencyValue.js'
 import { OutcomeSelectionList } from '@zoltar/ui-core-shared/components/OutcomeSelectionList.js'
 import { TransactionActionButton } from '@zoltar/ui-core-shared/components/TransactionActionButton.js'
-import { UniverseLink } from './UniverseLink.js'
+import { UniverseLink } from '@zoltar/ui-core-shared/components/UniverseLink.js'
 import type { MigrationWizardOutcome } from '../lib/migrationWizard.js'
 
 type MigrationOutcomeUniversesSectionProps = {
