@@ -7,8 +7,3 @@ export function getLiquidationVaultRepBackingToTransfer(debtMovedAttoEth: bigint
 	const denominator = LIQUIDATION_PRICE_PRECISION * LIQUIDATION_BPS_DENOMINATOR
 	return (numerator + denominator - 1n) / denominator
 }
-
-export function getMaximumFundedDebtAttoEth(transferableVaultRepBackingAttoRep: bigint, repPerEthPrice: bigint) {
-	if (transferableVaultRepBackingAttoRep <= 0n || repPerEthPrice <= 0n) return 0n
-	return (transferableVaultRepBackingAttoRep * LIQUIDATION_PRICE_PRECISION * LIQUIDATION_BPS_DENOMINATOR) / (repPerEthPrice * (LIQUIDATION_BPS_DENOMINATOR + LIQUIDATION_REP_BONUS_BPS))
-}

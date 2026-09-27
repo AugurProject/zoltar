@@ -13,11 +13,18 @@ import { FormInput } from '@zoltar/ui-core-shared/components/FormInput.js'
 import { PaginationControls } from '@zoltar/ui-core-shared/components/PaginationControls.js'
 import { Question, getQuestionTitle } from '@zoltar/ui-core-shared/components/Question.js'
 import { SectionBlock } from '@zoltar/ui-core-shared/components/SectionBlock.js'
-import type { MarketRouteContentProps } from '../../types.js'
+import type { MarketDetailsPage } from '@zoltar/ui-core-shared/types/contracts.js'
+import type { ZoltarView } from '../../types.js'
 import { QUESTION_PAGE_SIZE, formatPaginationSummary, getHasNextPaginationPage, getPaginationPageCount, resolvePaginationPageIndex } from '@zoltar/ui-core-shared/lib/pagination.js'
 import { getMarketTypeLabel } from '@zoltar/ui-core-shared/lib/marketType.js'
 
-type QuestionsViewProps = Pick<MarketRouteContentProps, 'loadingZoltarQuestions' | 'onActiveViewChange' | 'onLoadZoltarQuestionPage' | 'onZoltarForkQuestionIdChange' | 'zoltarQuestionPage' | 'zoltarQuestionsError'> & {
+type QuestionsViewProps = {
+	loadingZoltarQuestions: boolean
+	onActiveViewChange: (view: ZoltarView) => void
+	onLoadZoltarQuestionPage: (pageIndex: number, pageSize: number) => Promise<void>
+	onZoltarForkQuestionIdChange: (questionId: string) => void
+	zoltarQuestionPage: MarketDetailsPage | undefined
+	zoltarQuestionsError: string | undefined
 	canFork: boolean
 	hasForked: boolean
 	requestContextKey: number
@@ -101,7 +108,7 @@ export function QuestionsView({ canFork, hasForked, loadingZoltarQuestions, onAc
 										disabled={hasForked}
 										onClick={() => {
 											onZoltarForkQuestionIdChange(question.questionId)
-											onActiveViewChange('universes')
+											onActiveViewChange('fork')
 										}}
 									>
 										{hasForked ? marketCopy.alreadyForked : marketCopy.useForFork}

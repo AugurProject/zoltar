@@ -6,7 +6,7 @@ import { getEthRaiseCapAttoEth } from '../../testSupport/simulator/utils/contrac
 import { getChildUniverseId, getERC20Balance } from '../../testSupport/simulator/utils/utilities'
 import { DAY, GENESIS_REPUTATION_TOKEN, TEST_ADDRESSES } from '../../testSupport/simulator/utils/constants'
 import { createWriteClient } from '../../testSupport/simulator/utils/clients'
-import { createCompleteSet, getSettlementCollateralAttoEth, getSecurityVault, getSystemState, backingUnitsToAttoRep } from '../../testSupport/simulator/utils/contracts/securityPool'
+import { createCertifiedCompleteSetFixture, getSettlementCollateralAttoEth, getSecurityVault, getSystemState, backingUnitsToAttoRep } from '../../testSupport/simulator/utils/contracts/securityPool'
 import { approveAndDepositRepToVault, setVaultCapacityFixture } from '../../testSupport/simulator/utils/contracts/statoblastTestUtils'
 import { addressString } from '../../testSupport/simulator/utils/bigint'
 import { strictEqualTypeSafe } from '../../testSupport/simulator/utils/testUtils'
@@ -49,15 +49,15 @@ describe('Truth-auction REP donation rounding regression', () => {
 			await approveAndDepositRepToVault(vaultClient, repDeposit, questionId)
 		}
 
-		const capacityOwnershipAttoRepPerVault = repDeposit / 2n
+		const underwritingLimitAttoEthPerVault = repDeposit / 2n
 		for (const vaultClient of vaultClients) {
-			await setVaultCapacityFixture(vaultClient, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, vaultClient.account.address, capacityOwnershipAttoRepPerVault)
+			await setVaultCapacityFixture(vaultClient, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, vaultClient.account.address, underwritingLimitAttoEthPerVault)
 		}
 
 		const totalVaultRep = repDeposit * BigInt(vaultClients.length)
-		const totalCapacityOwnershipAttoRep = capacityOwnershipAttoRepPerVault * BigInt(vaultClients.length)
+		const totalUnderwritingLimitAttoEth = underwritingLimitAttoEthPerVault * BigInt(vaultClients.length)
 		const openInterestHolder = createWriteClient(mockWindow, TEST_ADDRESSES[6])
-		await createCompleteSet(openInterestHolder, securityPoolAddresses.securityPool, totalCapacityOwnershipAttoRep / 10n)
+		await createCertifiedCompleteSetFixture(openInterestHolder, securityPoolAddresses.securityPool, totalUnderwritingLimitAttoEth / 10n)
 
 		strictEqualTypeSafe(await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), securityPoolAddresses.securityPool), totalVaultRep, 'test setup should start with exactly six equal vault deposits')
 
@@ -88,7 +88,7 @@ describe('Truth-auction REP donation rounding regression', () => {
 		const honestVault = await getSecurityVault(client, yesSecurityPool.securityPool, vaultClients[0].account.address)
 		const honestRep = await backingUnitsToAttoRep(client, yesSecurityPool.securityPool, honestVault.repBackingUnits)
 		strictEqualTypeSafe(honestRep, repDeposit, 'the migrated vault should retain its full 1,000 REP claim')
-		strictEqualTypeSafe(honestVault.capacityOwnershipAttoRep, capacityOwnershipAttoRepPerVault, 'the migrated vault should retain its capacity ownership')
+		strictEqualTypeSafe(honestVault.underwritingLimitAttoEth, underwritingLimitAttoEthPerVault, 'the migrated vault should retain its capacity ownership')
 
 		await mockWindow.advanceTime(8n * 7n * DAY + DAY)
 		await startTruthAuction(client, yesSecurityPool.securityPool)

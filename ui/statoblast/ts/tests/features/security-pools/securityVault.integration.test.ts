@@ -123,13 +123,13 @@ describe('Security vault integration', () => {
 		expect(updatedVaultDetails.vaultAttoRepBacking).toBe(depositAmount)
 		expect(updatedVaultDetails.settlementCollateralAttoEth).toBe(0n)
 		await manipulatePriceOracle(client, mockWindow, updatedVaultDetails.managerAddress, 10n ** 18n)
-		const adjustment = await queueOracleManagerOperation(uiWriteClient, updatedVaultDetails.managerAddress, 'adjustVaultBackingFactor', walletAddress, 40_000n, 300n)
+		const adjustment = await queueOracleManagerOperation(uiWriteClient, updatedVaultDetails.managerAddress, 'setVaultUnderwritingLimit', walletAddress, depositAmount / 2n, 300n)
 		expect(adjustment.stagedExecution?.success).toBe(true)
 		const adjustedVault = await loadSecurityVaultDetails(uiReadClient, securityPoolAddress, walletAddress)
-		expect(adjustedVault?.capacityOwnershipAttoRep).toBe(depositAmount / 2n)
+		expect(adjustedVault?.underwritingLimitAttoEth).toBe(depositAmount / 2n)
 		expect(adjustedVault?.vaultAttoRepBacking).toBe(depositAmount)
 		expect(adjustedVault?.poolHeldRepPerCapacityBps).toBe(20_000n)
-		expect(adjustedVault?.targetBackingFactorBps).toBe(40_000n)
+		expect(updatedVaultDetails.underwritingLimitAttoEth).toBe(0n)
 	})
 
 	test('matches a replacement target result by operation ID instead of the superseded result', async () => {
@@ -137,13 +137,13 @@ describe('Security vault integration', () => {
 		if (details === undefined) throw new Error('Expected security vault details')
 		await approveErc20(uiWriteClient, details.repToken, securityPoolAddress, depositAmount, 'approveRep')
 		await depositRepToVaultToSecurityPool(uiWriteClient, securityPoolAddress, depositAmount, 20_000n)
-		const first = await queueOracleManagerOperation(uiWriteClient, details.managerAddress, 'adjustVaultBackingFactor', walletAddress, 40_000n, 300n, 10n ** 18n)
-		const replacement = await queueOracleManagerOperation(uiWriteClient, details.managerAddress, 'adjustVaultBackingFactor', walletAddress, 30_000n, 300n, 10n ** 18n)
+		const first = await queueOracleManagerOperation(uiWriteClient, details.managerAddress, 'setVaultUnderwritingLimit', walletAddress, 40_000n, 300n, 10n ** 18n)
+		const replacement = await queueOracleManagerOperation(uiWriteClient, details.managerAddress, 'setVaultUnderwritingLimit', walletAddress, 30_000n, 300n, 10n ** 18n)
 		expect(replacement.queuedOperation?.operationId).not.toBe(first.queuedOperation?.operationId)
 		expect(replacement.queuedOperation?.isPendingSlot).toBe(true)
 		expect(replacement.stagedExecution).toBeUndefined()
 		await handleOracleReporting(client, mockWindow, details.managerAddress, 10n ** 18n)
-		expect((await loadSecurityVaultDetails(uiReadClient, securityPoolAddress, walletAddress))?.targetBackingFactorBps).toBe(30_000n)
+		expect((await loadSecurityVaultDetails(uiReadClient, securityPoolAddress, walletAddress))?.underwritingLimitAttoEth).toBe(30_000n)
 	})
 
 	test.each(['executed', 'failed', 'expired', 'superseded'] as const)('loads later %s from the original queued target receipt', async terminal => {
@@ -151,10 +151,10 @@ describe('Security vault integration', () => {
 		if (details === undefined) throw new Error('Expected security vault details')
 		await approveErc20(uiWriteClient, details.repToken, securityPoolAddress, depositAmount, 'approveRep')
 		await depositRepToVaultToSecurityPool(uiWriteClient, securityPoolAddress, depositAmount, 20_000n)
-		const queued = await queueOracleManagerOperation(uiWriteClient, details.managerAddress, 'adjustVaultBackingFactor', walletAddress, terminal === 'failed' ? 2n ** 256n - 1n : 40_000n, 300n, 10n ** 18n)
-		const original = { ...queued, action: 'adjustVaultBackingFactor' as const }
+		const queued = await queueOracleManagerOperation(uiWriteClient, details.managerAddress, 'setVaultUnderwritingLimit', walletAddress, terminal === 'failed' ? 2n ** 256n - 1n : 40_000n, 300n, 10n ** 18n)
+		const original = { ...queued, action: 'setVaultUnderwritingLimit' as const }
 		expect((await loadQueuedVaultOperationState(uiReadClient, details.managerAddress, original)).status).toBe('queued')
-		if (terminal === 'superseded') await queueOracleManagerOperation(uiWriteClient, details.managerAddress, 'adjustVaultBackingFactor', walletAddress, 30_000n, 300n, 10n ** 18n)
+		if (terminal === 'superseded') await queueOracleManagerOperation(uiWriteClient, details.managerAddress, 'setVaultUnderwritingLimit', walletAddress, 30_000n, 300n, 10n ** 18n)
 		else if (terminal === 'expired') {
 			if (queued.queuedOperation === undefined) throw new Error('Expected queued operation')
 			await mockWindow.advanceTime(DAY)
@@ -176,9 +176,9 @@ describe('Security vault integration', () => {
 		await approveErc20(uiWriteClient, details.repToken, securityPoolAddress, depositAmount, 'approveRep')
 		await depositRepToVaultToSecurityPool(uiWriteClient, securityPoolAddress, depositAmount, 20_000n)
 		for (let index = 0; index < 4; index++) await queueOracleManagerOperation(uiWriteClient, details.managerAddress, 'withdrawRep', walletAddress, 1n, 300n, 10n ** 18n)
-		const queued = await queueOracleManagerOperation(uiWriteClient, details.managerAddress, 'adjustVaultBackingFactor', walletAddress, 40_000n, 300n, 10n ** 18n)
+		const queued = await queueOracleManagerOperation(uiWriteClient, details.managerAddress, 'setVaultUnderwritingLimit', walletAddress, 40_000n, 300n, 10n ** 18n)
 		if (queued.queuedOperation === undefined) throw new Error('Expected queued target')
-		const original = { ...queued, action: 'adjustVaultBackingFactor' as const }
+		const original = { ...queued, action: 'setVaultUnderwritingLimit' as const }
 		for (let index = 0; index < 30; index++) await queueOracleManagerOperation(uiWriteClient, details.managerAddress, 'withdrawRep', walletAddress, 1n, 300n, 10n ** 18n)
 		expect((await loadOracleManagerDetails(uiReadClient, details.managerAddress)).stagedOperations?.some(operation => operation.operationId === queued.queuedOperation?.operationId)).toBe(false)
 		expect((await loadQueuedVaultOperationState(uiReadClient, details.managerAddress, original)).status).toBe('manual-queued')

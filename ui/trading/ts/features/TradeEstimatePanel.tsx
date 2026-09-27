@@ -1,4 +1,4 @@
-import { formatTrimmedUnits } from '@zoltar/ui-core-shared/lib/formatters.js'
+import { formatScaledPercentage, formatTrimmedUnits } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { TransactionReview } from '@zoltar/ui-core-shared/components/TransactionReview.js'
 import { WarningSurface } from '@zoltar/ui-core-shared/components/WarningSurface.js'
 import { ReadOnlyDetailAccordion } from '@zoltar/ui-core-shared/components/ReadOnlyDetailAccordion.js'
@@ -79,7 +79,7 @@ export function TradeEstimatePanel({
 		...(estimate.kind === 'entry'
 			? [
 					{ label: ticketCopy.swapped(opposite), value: formatOutcomeQuantity(estimate.quote.oppositeSharesSwapped, opposite) },
-					{ label: ticketCopy.averagePrice, value: average === undefined ? '—' : `${formatTrimmedUnits(average, 2, 2)}%` },
+					{ label: ticketCopy.averagePrice, value: average === undefined ? '—' : formatScaledPercentage(average, 2) },
 				]
 			: [{ label: ticketCopy.swapped(side), value: formatOutcomeQuantity(estimate.quote.longSharesSwapped, side) }]),
 		{ label: ticketCopy.poolFeePaid, value: formatOutcomeQuantity(estimate.quote.feeAmount, estimate.kind === 'entry' ? opposite : side, 8) },
@@ -93,7 +93,7 @@ export function TradeEstimatePanel({
 					{ label: ticketCopy.minimumReceived, value: estimate.kind === 'entry' ? formatOutcomeQuantity(estimate.minimumLongShares, side, ESTIMATE_DIGITS, 'down') : `${formatTrimmedUnits(estimate.minimumAttoEth, 18, ESTIMATE_DIGITS)} ETH` },
 					{ label: ticketCopy.priceImpact, value: <span className={`trade-impact-value trade-impact-value--${impactTier}`}>{impact}</span> },
 					{ label: estimate.kind === 'entry' ? ticketCopy.invalidInsurance : ticketCopy.invalidUsed, value: formatOutcomeQuantity(estimate.kind === 'entry' ? estimate.quote.invalidInsurance : estimate.quote.invalidRequired, 'INVALID') },
-					{ label: ticketCopy.poolFee, value: `${formatTrimmedUnits(market.feeBps, 2, 2)}%` },
+					{ label: ticketCopy.poolFee, value: formatScaledPercentage(market.feeBps, 2) },
 				]}
 			/>
 			<ImpactNotice tier={impactTier} impactBps={estimate.impactBps} acknowledged={impactAcknowledged} disabled={disabled} onAcknowledge={onAcknowledgeImpact} />

@@ -10,10 +10,10 @@ import { SecurityPoolUtils } from './SecurityPoolUtils.sol';
 abstract contract SecurityPoolForkerAuctionSettlementBase is SecurityPoolForkerBase {
 	constructor(Zoltar _zoltar) SecurityPoolForkerBase(_zoltar) {}
 
-	function _creditAuctionProceeds(ISecurityPool securityPool, address vault, SecurityPoolForkerForkData storage data, uint256 amountAttoRep, uint256 newCapacityOwnershipAttoRep, uint256 badDebtToAssignAttoEth, uint256 totalAttoRepPurchased, uint256 auctionRepBackingUnits) internal {
+	function _creditAuctionProceeds(ISecurityPool securityPool, address vault, SecurityPoolForkerForkData storage data, uint256 amountAttoRep, uint256 newUnderwritingLimitAttoEth, uint256 badDebtToAssignAttoEth, uint256 totalAttoRepPurchased, uint256 auctionRepBackingUnits) internal {
 		if (
 			amountAttoRep == 0 &&
-			newCapacityOwnershipAttoRep == 0 &&
+			newUnderwritingLimitAttoEth == 0 &&
 			badDebtToAssignAttoEth == 0 &&
 			auctionRepBackingUnits == 0
 		) return;
@@ -22,17 +22,17 @@ abstract contract SecurityPoolForkerAuctionSettlementBase is SecurityPoolForkerB
 		require(nextClaimedAuctionRepPurchasedAttoRep <= totalAttoRepPurchased, 'REP');
 		uint256 nextClaimedAuctionRepBackingUnits = data.claimedAuctionRepBackingUnits + auctionRepBackingUnits;
 		require(nextClaimedAuctionRepBackingUnits <= data.auctionRepBackingUnits, 'Backing units');
-		uint256 nextClaimedAuctionedCapacityOwnershipAttoRep =
-			data.claimedAuctionedCapacityOwnershipAttoRep + newCapacityOwnershipAttoRep;
-		require(nextClaimedAuctionedCapacityOwnershipAttoRep <= data.auctionedCapacityOwnershipAttoRep, 'Commitment');
+		uint256 nextClaimedAuctionedUnderwritingLimitAttoEth =
+			data.claimedAuctionedUnderwritingLimitAttoEth + newUnderwritingLimitAttoEth;
+		require(nextClaimedAuctionedUnderwritingLimitAttoEth <= data.auctionedUnderwritingLimitAttoEth, 'Commitment');
 		data.claimedAuctionRepPurchasedAttoRep = nextClaimedAuctionRepPurchasedAttoRep;
-		data.claimedAuctionedCapacityOwnershipAttoRep = nextClaimedAuctionedCapacityOwnershipAttoRep;
+		data.claimedAuctionedUnderwritingLimitAttoEth = nextClaimedAuctionedUnderwritingLimitAttoEth;
 		data.claimedAuctionRepBackingUnits = nextClaimedAuctionRepBackingUnits;
 		uint256 nextClaimedAuctionedBadDebtAttoEth =
 			claimedAuctionedBadDebtByPool[securityPool] + badDebtToAssignAttoEth;
 		require(nextClaimedAuctionedBadDebtAttoEth <= auctionedBadDebtByPool[securityPool], 'Bad debt');
 		claimedAuctionedBadDebtByPool[securityPool] = nextClaimedAuctionedBadDebtAttoEth;
-		uint256 resultingTotalRepBackingUnits = SecurityPoolUtils.creditForkAuctionVault(securityPool, vault, auctionRepBackingUnits, newCapacityOwnershipAttoRep, badDebtToAssignAttoEth, data.auctionBadDebtGeneration, data.auctionFeeIndexAtFinalization);
-		emit ClaimAuctionProceeds(securityPool, vault, amountAttoRep, auctionRepBackingUnits, resultingTotalRepBackingUnits, data.claimedAuctionRepPurchasedAttoRep, data.claimedAuctionedCapacityOwnershipAttoRep, claimedAuctionedBadDebtByPool[securityPool], auctionedBadDebtByPool[securityPool]);
+		uint256 resultingTotalRepBackingUnits = SecurityPoolUtils.creditForkAuctionVault(securityPool, vault, auctionRepBackingUnits, newUnderwritingLimitAttoEth, badDebtToAssignAttoEth, data.auctionBadDebtGeneration, data.auctionFeeIndexAtFinalization);
+		emit ClaimAuctionProceeds(securityPool, vault, amountAttoRep, auctionRepBackingUnits, resultingTotalRepBackingUnits, data.claimedAuctionRepPurchasedAttoRep, data.claimedAuctionedUnderwritingLimitAttoEth, claimedAuctionedBadDebtByPool[securityPool], auctionedBadDebtByPool[securityPool]);
 	}
 }

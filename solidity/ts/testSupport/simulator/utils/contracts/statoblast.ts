@@ -25,7 +25,7 @@ import { requireAddress } from '../utilities'
 export enum OperationType {
 	Liquidation = 0,
 	WithdrawRep = 1,
-	AdjustVaultBackingFactor = 2,
+	SetVaultUnderwritingLimit = 2,
 	PriceRefresh = 3,
 }
 

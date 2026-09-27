@@ -2,7 +2,7 @@ import * as tradingCopy from '../../../copy/trading.js'
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import { getWalletActiveAppChainGuardState } from '@zoltar/ui-core-shared/transactions/actionGuards.js'
 import { assertNever } from '@zoltar/ui-core-shared/lib/assert.js'
-import { formatAdditionalCurrencyBalance, formatCurrencyBalance, formatCurrencyBalanceWithUnit } from '@zoltar/ui-core-shared/lib/formatters.js'
+import { formatAdditionalCurrencyBalance, formatCurrencyBalance, formatCurrencyBalanceWithUnit, formatMultiplier } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { tryParseBigIntListInput } from '@zoltar/ui-core-shared/forms/inputs.js'
 import { tryParseTradingAmountInput } from '@zoltar/ui-core-shared/forms/formInputs.js'
 import { getReportingOutcomeLabel } from '../../reporting/lib/reporting.js'
@@ -11,9 +11,8 @@ import type { DeploymentStatus } from '@zoltar/ui-core-shared/types/contracts.js
 import type { ReportingOutcomeKey, TradingShareBalances, ZoltarUniverseSummary } from '@zoltar/ui-core-shared/types/contracts.js'
 
 const PRICE_PRECISION = 10n ** 18n
-const BPS_DENOMINATOR = 10_000n
 
-export const NO_MINT_CAPACITY_NO_ACTIVE_CAPACITY_OWNERSHIP_MESSAGE = 'No mint capacity. No active capacity ownership.'
+export const NO_MINT_CAPACITY_NO_ACTIVE_CAPACITY_OWNERSHIP_MESSAGE = 'No mint capacity. No active underwriting commitments.'
 export const NEED_MATCHING_COMPLETE_SET_SHARES_MESSAGE = 'Need matching Invalid, Yes, and No shares to redeem complete sets.'
 export const UNDEFINED_COMPLETE_SET_EXCHANGE_RATE_MESSAGE = 'Minting is unavailable because this pool has complete-set shares but no collateral.'
 
@@ -22,11 +21,8 @@ export function hasUndefinedCompleteSetExchangeRate(settlementCollateralAttoEth:
 	return settlementCollateralAttoEth === 0n && shareTokenSupplyAttoShares !== 0n
 }
 
-export function calculateMintingCapacityAttoEth(capacityOwnershipAttoRep: bigint | undefined, repPerEthPrice: bigint | undefined, statoblastSecurityMultiplierBps: bigint | undefined) {
-	if (capacityOwnershipAttoRep === 0n) return 0n
-	if (capacityOwnershipAttoRep === undefined || repPerEthPrice === undefined || statoblastSecurityMultiplierBps === undefined || repPerEthPrice === 0n || statoblastSecurityMultiplierBps === 0n) return undefined
-	const capacityValueAttoEth = (capacityOwnershipAttoRep * PRICE_PRECISION) / repPerEthPrice
-	return (capacityValueAttoEth * BPS_DENOMINATOR) / statoblastSecurityMultiplierBps
+export function calculateMintingCapacityAttoEth(underwritingLimitAttoEth: bigint | undefined, _repPerEthPrice: bigint | undefined, _statoblastSecurityMultiplierBps: bigint | undefined) {
+	return underwritingLimitAttoEth
 }
 
 export function getRemainingMintCapacity(mintingCapacityAttoEth: bigint | undefined, settlementCollateralAttoEth: bigint | undefined, shareTokenSupplyAttoShares?: bigint | undefined) {
@@ -53,7 +49,8 @@ function rpow(value: bigint, exponent: bigint, baseUnit: bigint) {
 export function estimateMintCheckpoint({
 	currentRetentionRate,
 	currentTimestamp,
-	feeEligibleCapacityOwnershipAttoRep,
+	feeEligibleUnderwritingLimitAttoEth,
+	totalUnderwritingLimitAttoEth,
 	feeEndTimestamp,
 	feeIndexRemainder,
 	lastUpdatedFeeAccumulator,
@@ -62,7 +59,8 @@ export function estimateMintCheckpoint({
 }: {
 	currentRetentionRate: bigint | undefined
 	currentTimestamp: bigint | undefined
-	feeEligibleCapacityOwnershipAttoRep: bigint | undefined
+	feeEligibleUnderwritingLimitAttoEth: bigint | undefined
+	totalUnderwritingLimitAttoEth: bigint | undefined
 	feeEndTimestamp: bigint | undefined
 	feeIndexRemainder: bigint | undefined
 	lastUpdatedFeeAccumulator: bigint | undefined
@@ -72,7 +70,8 @@ export function estimateMintCheckpoint({
 	if (
 		currentRetentionRate === undefined ||
 		currentTimestamp === undefined ||
-		feeEligibleCapacityOwnershipAttoRep === undefined ||
+		feeEligibleUnderwritingLimitAttoEth === undefined ||
+		totalUnderwritingLimitAttoEth === undefined ||
 		feeEndTimestamp === undefined ||
 		feeIndexRemainder === undefined ||
 		lastUpdatedFeeAccumulator === undefined ||
@@ -81,12 +80,16 @@ export function estimateMintCheckpoint({
 	)
 		return undefined
 	const checkpointTimestamp = currentTimestamp < feeEndTimestamp ? currentTimestamp : feeEndTimestamp
-	if (lastUpdatedFeeAccumulator >= checkpointTimestamp || feeEligibleCapacityOwnershipAttoRep === 0n) return { estimatedRetentionFeeAttoEth: 0n, settlementCollateralAfterFeesAttoEth: settlementCollateralAttoEth }
+	if (lastUpdatedFeeAccumulator >= checkpointTimestamp || feeEligibleUnderwritingLimitAttoEth === 0n) return { estimatedRetentionFeeAttoEth: 0n, settlementCollateralAfterFeesAttoEth: settlementCollateralAttoEth }
 	const timeDelta = checkpointTimestamp - lastUpdatedFeeAccumulator
-	const retainedCollateralAttoEth = (settlementCollateralAttoEth * rpow(currentRetentionRate, timeDelta, PRICE_PRECISION)) / PRICE_PRECISION
-	const scaledFeeDelta = (settlementCollateralAttoEth - retainedCollateralAttoEth) * PRICE_PRECISION + feeIndexRemainder
-	const feeIndexDelta = scaledFeeDelta / feeEligibleCapacityOwnershipAttoRep
-	const feesOwedDelta = feeIndexDelta * feeEligibleCapacityOwnershipAttoRep + totalFeesOwedRemainder
+	if (totalUnderwritingLimitAttoEth === 0n || feeEligibleUnderwritingLimitAttoEth > totalUnderwritingLimitAttoEth) return undefined
+	const feeBearingCollateral = (settlementCollateralAttoEth * feeEligibleUnderwritingLimitAttoEth) / totalUnderwritingLimitAttoEth
+	const pendingDecay = (feeIndexRemainder + totalFeesOwedRemainder) / PRICE_PRECISION
+	const decayingCollateral = feeBearingCollateral > pendingDecay ? feeBearingCollateral - pendingDecay : 0n
+	const retainedCollateralAttoEth = (decayingCollateral * rpow(currentRetentionRate, timeDelta, PRICE_PRECISION)) / PRICE_PRECISION
+	const scaledFeeDelta = (decayingCollateral - retainedCollateralAttoEth) * PRICE_PRECISION + feeIndexRemainder
+	const feeIndexDelta = scaledFeeDelta / feeEligibleUnderwritingLimitAttoEth
+	const feesOwedDelta = feeIndexDelta * feeEligibleUnderwritingLimitAttoEth + totalFeesOwedRemainder
 	const estimatedRetentionFeeAttoEth = feesOwedDelta / PRICE_PRECISION
 	return {
 		estimatedRetentionFeeAttoEth,
@@ -95,13 +98,11 @@ export function estimateMintCheckpoint({
 }
 
 export function formatStatoblastSecurityMultiplier(statoblastSecurityMultiplierBps: bigint) {
-	const whole = statoblastSecurityMultiplierBps / BPS_DENOMINATOR
-	const fractional = (statoblastSecurityMultiplierBps % BPS_DENOMINATOR).toString().padStart(4, '0').replace(/0+$/, '')
-	return fractional === '' ? whole.toString() : `${whole}.${fractional}`
+	return formatMultiplier(statoblastSecurityMultiplierBps, 4)
 }
 
-export function hasRepBackedPoolWithNoActiveCapacityOwnership(totalPoolHeldAttoRep: bigint | undefined, feeEligibleCapacityOwnershipAttoRep: bigint | undefined) {
-	return (totalPoolHeldAttoRep ?? 0n) > 0n && (feeEligibleCapacityOwnershipAttoRep ?? 0n) === 0n
+export function hasRepBackedPoolWithNoActiveCapacityOwnership(totalPoolHeldAttoRep: bigint | undefined, feeEligibleUnderwritingLimitAttoEth: bigint | undefined) {
+	return (totalPoolHeldAttoRep ?? 0n) > 0n && (feeEligibleUnderwritingLimitAttoEth ?? 0n) === 0n
 }
 
 function getMaxRedeemableCompleteSets(shareBalances: TradingShareBalances | undefined) {

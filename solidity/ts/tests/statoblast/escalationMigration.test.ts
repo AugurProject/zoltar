@@ -1,6 +1,6 @@
 import { statoblast_EscalationGame_EscalationGame, statoblast_SecurityPoolForker_SecurityPoolForker } from '../../types/contractArtifact'
 import {
-	createCompleteSet,
+	createCertifiedCompleteSetFixture,
 	depositRepToVault,
 	depositToEscalationGame,
 	getRepToken,
@@ -292,9 +292,9 @@ describe('Statoblast: escalation migration', () => {
 		const endTime = await getQuestionEndDate(client, questionId)
 		await mockWindow.setTime(endTime + 10000n)
 		await refreshCurrentPrice()
-		const securityPoolCapacityOwnershipAttoRep = reportBond * 2n
-		await setVaultCapacityFixture(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, client.account.address, securityPoolCapacityOwnershipAttoRep)
-		await createCompleteSet(client, securityPoolAddresses.securityPool, 1n * 10n ** 18n)
+		const securityPoolUnderwritingLimitAttoEth = reportBond * 2n
+		await setVaultCapacityFixture(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, client.account.address, securityPoolUnderwritingLimitAttoEth)
+		await createCertifiedCompleteSetFixture(client, securityPoolAddresses.securityPool, 1n * 10n ** 18n)
 
 		const unresolvedDeposit = reportBond
 		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, unresolvedDeposit)
@@ -437,7 +437,7 @@ describe('Statoblast: escalation migration', () => {
 
 	test('own-fork unresolved migration expires without moving the vault', async () => {
 		const endTime = await getQuestionEndDate(client, questionId)
-		const securityPoolCapacityOwnershipAttoRep = reportBond * 2n
+		const securityPoolUnderwritingLimitAttoEth = reportBond * 2n
 		const repToken = await getRepToken(client, securityPoolAddresses.securityPool)
 		const forkThresholdAttoRep = (((await getTotalTheoreticalSupply(client, repToken)) / 20n) * 10_000n) / statoblastSecurityMultiplierBps
 		const vaultBeforeTopUp = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
@@ -447,8 +447,8 @@ describe('Statoblast: escalation migration', () => {
 		}
 		await mockWindow.setTime(endTime + 10000n)
 		await refreshCurrentPrice()
-		await setVaultCapacityFixture(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, client.account.address, securityPoolCapacityOwnershipAttoRep)
-		await createCompleteSet(client, securityPoolAddresses.securityPool, 1n * 10n ** 18n)
+		await setVaultCapacityFixture(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, client.account.address, securityPoolUnderwritingLimitAttoEth)
+		await createCertifiedCompleteSetFixture(client, securityPoolAddresses.securityPool, 1n * 10n ** 18n)
 		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, reportBond)
 
 		await triggerOwnGameFork(client, securityPoolAddresses.securityPool)
@@ -468,9 +468,9 @@ describe('Statoblast: escalation migration', () => {
 		const endTime = await getQuestionEndDate(client, questionId)
 		await mockWindow.setTime(endTime + 10000n)
 		await refreshCurrentPrice()
-		const securityPoolCapacityOwnershipAttoRep = reportBond * 2n
-		await setVaultCapacityFixture(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, client.account.address, securityPoolCapacityOwnershipAttoRep)
-		await createCompleteSet(client, securityPoolAddresses.securityPool, 1n * 10n ** 18n)
+		const securityPoolUnderwritingLimitAttoEth = reportBond * 2n
+		await setVaultCapacityFixture(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, client.account.address, securityPoolUnderwritingLimitAttoEth)
+		await createCertifiedCompleteSetFixture(client, securityPoolAddresses.securityPool, 1n * 10n ** 18n)
 		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, reportBond)
 
 		const attackerClient = createWriteClient(mockWindow, TEST_ADDRESSES[1])
@@ -865,7 +865,7 @@ describe('Statoblast: escalation migration', () => {
 		assert.deepStrictEqual(entitlementAfterYes[2], [false, true, false], 'only the selected yes child should be marked materialized')
 		const parentVaultAfterExport = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
 		strictEqualTypeSafe(parentVaultAfterExport.repBackingUnits, 0n, 'the parent vault should have no remaining REP backing after migration')
-		strictEqualTypeSafe(parentVaultAfterExport.capacityOwnershipAttoRep, 0n, 'the parent vault should have no remaining capacity ownership after migration')
+		strictEqualTypeSafe(parentVaultAfterExport.underwritingLimitAttoEth, 0n, 'the parent vault should have no remaining capacity ownership after migration')
 		strictEqualTypeSafe(parentVaultAfterExport.disputeStakedAttoRep, 0n, 'the exported escalation entitlement should clear the parent vault escrow')
 		const parentVaultCount = await getVaultCount(client, securityPoolAddresses.securityPool)
 		const parentVaults = await getVaults(client, securityPoolAddresses.securityPool, 0n, parentVaultCount)

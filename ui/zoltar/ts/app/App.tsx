@@ -1,8 +1,6 @@
 import * as appCopy from '@zoltar/ui-core-shared/copy/app.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
-import * as marketCopy from '@zoltar/ui-zoltar-shared/copy/market.js'
 import * as zoltarCopy from '@zoltar/ui-zoltar-shared/copy/zoltar.js'
-import { useEffect } from 'preact/hooks'
 import { AppHeaderShell } from '@zoltar/ui-core-shared/app/components/AppHeaderShell.js'
 import { AppPageHeading } from '@zoltar/ui-core-shared/app/components/AppPageHeading.js'
 import { AppStatusNotices } from '@zoltar/ui-core-shared/app/components/AppStatusNotices.js'
@@ -18,23 +16,27 @@ import { initializeActiveEnvironment } from '@zoltar/ui-core-shared/lib/activeEn
 import { formatAppDocumentTitle, getAppPageTitle } from './lib/appPageTitle.js'
 import { onchainStateDependencies } from './onchainStateDependencies.js'
 import { resolveLoadableValueState } from '@zoltar/ui-core-shared/lib/loadState.js'
-import { buildRouteHref, getRouteHashSearch, parseRouteHash } from '@zoltar/ui-core-shared/navigation/routing.js'
-import { writeZoltarViewQueryParam } from '@zoltar/ui-core-shared/navigation/urlParams.js'
+import { parseRouteHash } from '@zoltar/ui-core-shared/navigation/routing.js'
 import { getUniversePresentation } from '@zoltar/ui-core-shared/lib/userCopy.js'
 import { resolveEnumValue } from '@zoltar/ui-core-shared/forms/viewState.js'
 import type { RouteTabDefinition } from '@zoltar/ui-core-shared/types/components.js'
-import type { MarketRouteContentProps, ZoltarView } from '@zoltar/ui-zoltar-shared/features/types.js'
+import type { ZoltarView } from '@zoltar/ui-zoltar-shared/features/types.js'
 import type { Route } from '@zoltar/ui-zoltar-shared/types/app.js'
-import { isUniverseIndependentZoltarView, zoltarRouting } from '@zoltar/ui-zoltar-shared/lib/routing.js'
-import { hasInvalidZoltarView, ZOLTAR_VIEWS } from './lib/routeValidation.js'
+import { zoltarRouting } from '@zoltar/ui-zoltar-shared/lib/routing.js'
+import { ZOLTAR_TAB_VIEWS, ZOLTAR_VIEWS } from '@zoltar/ui-zoltar-shared/features/zoltarSurface/lib/zoltarViewModels.js'
+import { ZoltarWorkspaceProvider, type ZoltarWorkspace } from '@zoltar/ui-zoltar-shared/features/zoltarSurface/components/ZoltarWorkspace.js'
+import { UniverseNamesProvider } from '@zoltar/ui-core-shared/components/UniverseNames.js'
+import { UniverseSwitcher } from '@zoltar/ui-core-shared/components/UniverseSwitcher.js'
+import { hasInvalidZoltarView } from './lib/routeValidation.js'
+import { getZoltarTabLabel, getZoltarTabView, getZoltarViewHref, type ZoltarTabView } from './lib/zoltarNavigation.js'
 import { createSecondaryNavigation, resolveSecondaryNavigation, withDeploymentTab } from '@zoltar/ui-core-shared/navigation/appNavigation.js'
 
 export function App() {
-	const { activeUniverseId, replaceZoltarView, setActiveUniverseId, setZoltarView, zoltarView } = useZoltarUrlState()
+	const { activeUniverseId, setActiveUniverseId, setZoltarView, zoltarView } = useZoltarUrlState()
 	const { navigate, route } = useHashRoute()
 	const resolvedRoute = resolveEnumValue<Route>(route, 'not-found', ['deploy', 'zoltar', 'not-found'])
 	const invalidZoltarView = hasInvalidZoltarView({ resolvedRoute, search: parseRouteHash(window.location.hash).search, zoltarView })
-	const activeZoltarView = resolveEnumValue<ZoltarView>(zoltarView, 'questions', ZOLTAR_VIEWS)
+	const activeZoltarView = resolveEnumValue<ZoltarView>(zoltarView, 'overview', ZOLTAR_VIEWS)
 	const activeRoute = invalidZoltarView ? 'not-found' : resolvedRoute
 	const {
 		accountState,
@@ -64,64 +66,14 @@ export function App() {
 		onchainStateDependencies,
 	})
 	const { transactionState } = transactionTray
-	const {
-		approveZoltarForkRep,
-		createChildUniverse,
-		forkZoltar,
-		hasLoadedZoltarQuestions,
-		loadingZoltarForkAccess,
-		loadZoltarForkAccess,
-		loadingZoltarQuestionCount,
-		loadingZoltarQuestion,
-		loadingZoltarQuestions,
-		loadingZoltarUniverse,
-		loadZoltarQuestionPage,
-		loadZoltarQuestion,
-		loadZoltarQuestions,
-		loadZoltarUniverse,
-		migrateInternalRep,
-		createQuestion,
-		questionCreating,
-		questionError,
-		questionForm,
-		questionResult,
-		resetQuestion,
-		setQuestionForm,
-		setZoltarForkQuestionId,
-		setZoltarMigrationForm,
-		zoltarChildUniverseError,
-		zoltarChildUniversePendingOutcomeIndex,
-		zoltarForkApproval,
-		zoltarForkActiveAction,
-		zoltarForkError,
-		zoltarForkPending,
-		zoltarForkQuestionId,
-		zoltarForkRepBalanceAttoRep,
-		zoltarMigrationChildSplitAmountsAttoRep,
-		zoltarMigrationChildRepBalancesAttoRep,
-		zoltarMigrationActiveAction,
-		zoltarMigrationError,
-		zoltarMigrationForm,
-		zoltarMigrationPending,
-		zoltarMigrationPreparedRepBalanceAttoRep,
-		zoltarQuestionCount,
-		zoltarQuestionLookupError,
-		zoltarQuestionLookupId,
-		zoltarQuestionPage,
-		zoltarQuestions,
-		zoltarQuestionsError,
-		zoltarUniverse,
-		zoltarUniverseError,
-		zoltarUniverseMissing,
-	} = useQuestionCreation({ ...walletScopedHookConfig, activeUniverseId, autoLoadInitialData: walletBootstrapComplete && canReadOnchainData, deploymentStatuses, environmentRefreshKey: activeEnvironmentNonce })
+	const operations = useQuestionCreation({ ...walletScopedHookConfig, activeUniverseId, autoLoadInitialData: walletBootstrapComplete && canReadOnchainData, deploymentStatuses, environmentRefreshKey: activeEnvironmentNonce })
+	const { loadingZoltarForkAccess, loadingZoltarUniverse, loadZoltarUniverse, zoltarForkRepBalanceAttoRep, zoltarUniverse, zoltarUniverseError, zoltarUniverseMissing } = operations
 	const zoltarUniverseState = resolveLoadableValueState({
 		isLoading: loadingZoltarUniverse,
 		isMissing: zoltarUniverseMissing,
 		value: zoltarUniverse,
 	})
 	const showZoltarUniverseWarning = canReadOnchainData && zoltarUniverseState === 'missing'
-	const activeViewRequiresUniverse = !isUniverseIndependentZoltarView(activeZoltarView)
-	const isRouteContentDisabled = routeContentBlocked || (route !== 'deploy' && activeViewRequiresUniverse && showZoltarUniverseWarning)
 	const universePresentation = showZoltarUniverseWarning ? getUniversePresentation(zoltarUniverseState) : undefined
 	const pageTitle = getAppPageTitle({ activeZoltarView, route: activeRoute })
 	useAppRouteEffects({
@@ -129,128 +81,87 @@ export function App() {
 		navigate,
 		route: activeRoute,
 	})
-	useEffect(() => {
-		if (activeRoute !== 'zoltar' || !showZoltarUniverseWarning || !activeViewRequiresUniverse) return
-		replaceZoltarView('questions')
-	}, [activeRoute, activeViewRequiresUniverse, replaceZoltarView, showZoltarUniverseWarning])
-	const zoltarRouteContentProps: MarketRouteContentProps = {
+	const zoltarWorkspace: ZoltarWorkspace = {
 		accountState,
 		activeUniverseId,
-		activeView: activeZoltarView,
+		currentTimestamp,
 		environmentRefreshKey: activeEnvironmentNonce,
-		hasLoadedZoltarQuestions,
-		loadingZoltarForkAccess,
-		loadingZoltarQuestion,
-		loadingZoltarQuestionCount,
-		loadingZoltarQuestions,
-		loadingZoltarUniverse,
-		onActiveViewChange: view => setZoltarView(view),
-		onApproveZoltarForkRep: amount => void approveZoltarForkRep(amount),
-		onCreateChildUniverseForOutcomeIndex: outcomeIndex => void createChildUniverse(outcomeIndex),
-		onCreateQuestion: () => void createQuestion(),
-		onForkZoltar: () => void forkZoltar(),
-		onLoadZoltarQuestion: async questionId => await loadZoltarQuestion(questionId),
-		onLoadZoltarQuestionPage: async (pageIndex, pageSize) => await loadZoltarQuestionPage(pageIndex, pageSize),
-		onLoadZoltarQuestions: async () => await loadZoltarQuestions(),
-		onRetryMigrationBalances: () => void loadZoltarForkAccess(),
-		onMigrateInternalRep: maxPreparationAttoRep => void migrateInternalRep(maxPreparationAttoRep),
-		onQuestionFormChange: update => setQuestionForm(current => ({ ...current, ...update })),
-		onResetQuestion: resetQuestion,
-		onZoltarForkQuestionIdChange: questionId => setZoltarForkQuestionId(questionId),
-		onZoltarMigrationFormChange: update => setZoltarMigrationForm(current => ({ ...current, ...update })),
-		zoltarChildUniverseError,
-		zoltarChildUniversePendingOutcomeIndex,
-		zoltarForkActiveAction,
-		zoltarForkApproval,
-		zoltarForkError,
-		zoltarForkPending,
-		zoltarForkQuestionId,
-		zoltarForkRepBalanceAttoRep,
-		zoltarMigrationActiveAction,
-		zoltarMigrationChildSplitAmountsAttoRep,
-		zoltarMigrationChildRepBalancesAttoRep,
-		zoltarMigrationError,
-		zoltarMigrationForm,
-		zoltarMigrationPending,
-		zoltarMigrationPreparedRepBalanceAttoRep,
-		zoltarQuestionCount,
-		zoltarQuestionLookupError,
-		zoltarQuestionLookupId,
-		zoltarQuestionPage,
-		zoltarQuestions,
-		zoltarQuestionsError,
-		zoltarUniverse,
-		zoltarUniverseState,
-		questionCreating,
-		questionError,
-		questionForm,
-		questionResult,
+		isConnectingWallet: overviewWalletProps.isConnectingWallet,
+		onConnectWallet: overviewWalletProps.onConnect,
+		onGoToGenesisUniverse: () => setActiveUniverseId(0n),
+		onRetryUniverse: () => void loadZoltarUniverse({ clearCurrentState: false }),
+		onSwitchNetwork: overviewWalletProps.onSwitchNetwork,
+		onViewChange: view => setZoltarView(view),
+		operations,
+		universeError: zoltarUniverseError,
+		universeState: zoltarUniverseState,
 	}
 	const deploymentTab: RouteTabDefinition = { hash: zoltarRouting.getHash('deploy'), label: appCopy.deployContracts, route: 'deploy' }
 	const tabNavigationProps = {
-		route,
+		// The not-found page keeps the Zoltar navigation so the user can recover without the browser's back button.
+		route: activeRoute === 'not-found' ? 'zoltar' : route,
 		tabs: withDeploymentTab({ deploymentTab, deploymentIncomplete: showDeployTab, route, tabs: [{ hash: zoltarRouting.getHash('zoltar'), label: commonCopy.zoltar, route: 'zoltar' }] }),
 		onRouteChange: navigate,
-		showProtocolGuide: false,
 	}
-	const zoltarViewNavigation = createSecondaryNavigation<ZoltarView>({
+	const zoltarViewNavigation = createSecondaryNavigation<ZoltarTabView>({
 		ariaLabel: appCopy.zoltarViews,
-		value: activeZoltarView,
+		value: getZoltarTabView(activeZoltarView),
 		onChange: view => setZoltarView(view),
-		options: [
-			{ href: buildRouteHref(zoltarRouting.getHash('zoltar'), writeZoltarViewQueryParam(getRouteHashSearch(), 'questions')), label: marketCopy.browseQuestions, value: 'questions' },
-			{ href: buildRouteHref(zoltarRouting.getHash('zoltar'), writeZoltarViewQueryParam(getRouteHashSearch(), 'create')), label: commonCopy.createQuestion, value: 'create' },
-			{ href: buildRouteHref(zoltarRouting.getHash('zoltar'), writeZoltarViewQueryParam(getRouteHashSearch(), 'universes')), label: commonCopy.universe, value: 'universes' },
-		],
+		options: ZOLTAR_TAB_VIEWS.map(view => ({ href: getZoltarViewHref(view), label: getZoltarTabLabel(view), value: view })),
 	})
-	const secondaryNavigation = resolveSecondaryNavigation({ route: activeRoute, secondaryByRoute: { zoltar: zoltarViewNavigation } })
+	const secondaryNavigation = activeRoute === 'not-found' ? { ...zoltarViewNavigation, value: '' } : resolveSecondaryNavigation({ route: activeRoute, secondaryByRoute: { zoltar: zoltarViewNavigation } })
 	const transactionRouteKey = route === 'zoltar' ? `${route}:${activeZoltarView}` : route
 
 	return (
-		<ProtocolAppFrame
-			currentBlockNumber={currentBlockNumber}
-			currentTimestamp={currentTimestamp}
-			heading={<AppPageHeading formatDocumentTitle={formatAppDocumentTitle} pageTitle={pageTitle} />}
-			notices={
-				<AppStatusNotices
-					errorMessages={errorMessages}
-					loadingZoltarUniverse={loadingZoltarUniverse}
-					onRetryZoltarUniverse={() => void loadZoltarUniverse({ clearCurrentState: false })}
-					readBackendMessage={readBackendMessage}
-					readBackendStatus={readBackendStatus}
-					simulationBootstrapError={environmentBootstrapError}
-					showApplicationDeploymentWarning={applicationDeploymentMissing}
-					zoltarUniverseError={zoltarUniverseError}
-				/>
-			}
-			header={
-				<AppHeaderShell
-					renderOverview={settingsMenu => (
-						<OverviewPanels
-							{...overviewWalletProps}
-							settingsMenu={settingsMenu}
-							applicationTitle={zoltarCopy.applicationTitle}
-							activeUniverseId={activeUniverseId}
-							isLoadingUniverseRepBalance={loadingZoltarForkAccess}
-							onGoToGenesisUniverse={() => setActiveUniverseId(0n)}
-							universeForkTime={zoltarUniverse?.forkTime}
-							universeHasForked={zoltarUniverse?.hasForked}
-							universePresentation={universePresentation}
-							universeRepBalanceAttoRep={zoltarForkRepBalanceAttoRep}
-						/>
-					)}
-					simulationController={simulationController}
-					secondaryNavigation={secondaryNavigation}
-					tabNavigation={tabNavigationProps}
-					onEnvironmentChanged={refreshActiveEnvironment}
-					onRefresh={refreshSimulationView}
-				/>
-			}
-			routeContentDisabled={isRouteContentDisabled}
-			transactionRouteKey={transactionRouteKey}
-			transactionState={transactionState.value}
-		>
-			<AppRouteContent deploy={deployRouteContentProps} zoltar={zoltarRouteContentProps} readBackendMessage={readBackendMessage} route={activeRoute} />
-		</ProtocolAppFrame>
+		<UniverseNamesProvider universe={zoltarUniverse}>
+			<ProtocolAppFrame
+				currentBlockNumber={currentBlockNumber}
+				currentTimestamp={currentTimestamp}
+				heading={<AppPageHeading formatDocumentTitle={formatAppDocumentTitle} pageTitle={pageTitle} />}
+				notices={
+					<AppStatusNotices
+						errorMessages={errorMessages}
+						loadingZoltarUniverse={loadingZoltarUniverse}
+						onRetryZoltarUniverse={() => void loadZoltarUniverse({ clearCurrentState: false })}
+						readBackendMessage={readBackendMessage}
+						readBackendStatus={readBackendStatus}
+						simulationBootstrapError={environmentBootstrapError}
+						showApplicationDeploymentWarning={applicationDeploymentMissing}
+						zoltarUniverseError={zoltarUniverseError}
+					/>
+				}
+				header={
+					<AppHeaderShell
+						renderOverview={settingsMenu => (
+							<OverviewPanels
+								{...overviewWalletProps}
+								settingsMenu={settingsMenu}
+								applicationTitle={zoltarCopy.applicationTitle}
+								activeUniverseId={activeUniverseId}
+								isLoadingUniverseRepBalance={loadingZoltarForkAccess}
+								onGoToGenesisUniverse={() => setActiveUniverseId(0n)}
+								universeForkTime={zoltarUniverse?.forkTime}
+								universeHasForked={zoltarUniverse?.hasForked}
+								universePresentation={universePresentation}
+								universeControl={<UniverseSwitcher activeUniverseId={activeUniverseId} browseHref={getZoltarViewHref('universes')} universe={zoltarUniverse} />}
+								universeRepBalanceAttoRep={zoltarForkRepBalanceAttoRep}
+							/>
+						)}
+						simulationController={simulationController}
+						secondaryNavigation={secondaryNavigation}
+						tabNavigation={tabNavigationProps}
+						onEnvironmentChanged={refreshActiveEnvironment}
+						onRefresh={refreshSimulationView}
+					/>
+				}
+				routeContentDisabled={routeContentBlocked}
+				transactionRouteKey={transactionRouteKey}
+				transactionState={transactionState.value}
+			>
+				<ZoltarWorkspaceProvider workspace={zoltarWorkspace}>
+					<AppRouteContent deploy={deployRouteContentProps} readBackendMessage={readBackendMessage} route={activeRoute} zoltarView={activeZoltarView} />
+				</ZoltarWorkspaceProvider>
+			</ProtocolAppFrame>
+		</UniverseNamesProvider>
 	)
 }

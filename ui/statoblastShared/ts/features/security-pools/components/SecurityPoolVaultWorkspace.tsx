@@ -152,7 +152,7 @@ export function SecurityPoolVaultWorkspace({
 										<summary>{workspaceCopy.moreActions}</summary>
 										<button
 											className='secondary'
-											onClick={() => onOpenLiquidationModal(selectedPool.managerAddress, selectedPool.securityPoolAddress, vault.vaultAddress, vault.capacityOwnershipAttoRep)}
+											onClick={() => onOpenLiquidationModal(selectedPool.managerAddress, selectedPool.securityPoolAddress, vault.vaultAddress, vault.underwritingLimitAttoEth)}
 											disabled={walletAddress === undefined || !isOnActiveAppChain || !liquidationEnabled}
 											title={!isOnActiveAppChain && walletAddress !== undefined ? getWrongNetworkReason() : securityPoolCopy.reviewLiquidation}
 										>
@@ -185,7 +185,7 @@ export function SecurityPoolVaultWorkspace({
 								readiness: blocker === undefined && liquidationEnabled && canUseActions ? 'ready' : 'blocked',
 								...(selectedPool === undefined || selectedVaultDetails === undefined || selectedVaultOwner === '' || !liquidationEnabled || !selectedVaultExistsOnchain || !canUseActions
 									? {}
-									: { onAction: () => onOpenLiquidationModal(selectedPool.managerAddress, selectedPool.securityPoolAddress, selectedVaultDetails.vaultAddress, selectedVaultDetails.capacityOwnershipAttoRep) }),
+									: { onAction: () => onOpenLiquidationModal(selectedPool.managerAddress, selectedPool.securityPoolAddress, selectedVaultDetails.vaultAddress, selectedVaultDetails.underwritingLimitAttoEth) }),
 							}
 						})(),
 					]}
@@ -195,7 +195,7 @@ export function SecurityPoolVaultWorkspace({
 					oracleManagerDetails={currentPoolOracleManagerDetails}
 					poolState={poolState}
 					selectedPoolTotalPoolHeldAttoRep={selectedPool?.totalPoolHeldAttoRep}
-					selectedPoolTotalCapacityOwnershipAttoRep={selectedPool?.totalCapacityOwnershipAttoRep}
+					selectedPoolTotalUnderwritingLimitAttoEth={selectedPool?.totalUnderwritingLimitAttoEth}
 					selectedMarketTitle={selectedPool?.marketDetails.title}
 					showHeader={false}
 					showLookupSection={false}

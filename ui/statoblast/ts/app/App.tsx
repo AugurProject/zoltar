@@ -1,5 +1,7 @@
 import { TransactionStepsModal } from '@zoltar/ui-core-shared/components/TransactionStepsModal.js'
 import { useState } from 'preact/hooks'
+import { UniverseNamesProvider } from '@zoltar/ui-core-shared/components/UniverseNames.js'
+import { UniverseSwitcher } from '@zoltar/ui-core-shared/components/UniverseSwitcher.js'
 import { AppHeaderShell } from '@zoltar/ui-core-shared/app/components/AppHeaderShell.js'
 import { AppPageHeading } from '@zoltar/ui-core-shared/app/components/AppPageHeading.js'
 import { AppStatusNotices } from '@zoltar/ui-core-shared/app/components/AppStatusNotices.js'
@@ -171,6 +173,7 @@ export function App() {
 			repUsdcSource,
 			repUsdcSourceUrl,
 		},
+		universeControl: <UniverseSwitcher activeUniverseId={activeUniverseId} browseHref={buildRouteHref(statoblastRouting.getHash('security-pools'), writeSecurityPoolsViewQueryParam(getRouteHashSearch(), 'universes'))} universe={zoltarUniverse} />,
 		universeForkTime: zoltarUniverse?.forkTime,
 		universeHasForked: zoltarUniverse?.hasForked,
 		universePresentation: undefined,
@@ -220,29 +223,31 @@ export function App() {
 	const transactionRouteKey = getTransactionRouteKey({ activeOpenOracleView, activeSecurityPoolsView, route })
 
 	return (
-		<ProtocolAppFrame
-			activeUniverseId={activeUniverseId}
-			currentBlockNumber={currentBlockNumber}
-			currentTimestamp={currentTimestamp}
-			header={
-				<AppHeaderShell
-					renderOverview={settingsMenu => <OverviewPanels {...overviewProps} applicationTitle={applicationTitle} settingsMenu={settingsMenu} />}
-					simulationController={simulationController}
-					secondaryNavigation={secondaryNavigation}
-					tabNavigation={tabNavigationProps}
-					onEnvironmentChanged={refreshActiveEnvironment}
-					onRefresh={refreshSimulationView}
-					settingsContent={<UiPriceOracleSettings priceOracle={uiPriceOracle} onPriceOracleChange={setUiPriceOracle} />}
-				/>
-			}
-			heading={<AppPageHeading formatDocumentTitle={formatAppDocumentTitle} pageTitle={pageTitle} />}
-			notices={<AppStatusNotices errorMessages={errorMessages} readBackendMessage={readBackendMessage} readBackendStatus={readBackendStatus} simulationBootstrapError={environmentBootstrapError} showApplicationDeploymentWarning={applicationDeploymentMissing} zoltarUniverseError={zoltarUniverseError} />}
-			routeContentDisabled={routeContentBlocked}
-			transactionRouteKey={transactionRouteKey}
-			transactionState={transactionState.value}
-		>
-			<AppRouteContent deploy={deployRouteContentProps} openOracle={openOracleRouteContentProps} readBackendMessage={readBackendMessage} route={activeRoute} securityPools={securityPoolsRouteContentProps} />
-			<TransactionStepsModal contextKey={`${activeEnvironmentNonce}:${walletScopedAccountAddress ?? ''}`} />
-		</ProtocolAppFrame>
+		<UniverseNamesProvider universe={zoltarUniverse}>
+			<ProtocolAppFrame
+				activeUniverseId={activeUniverseId}
+				currentBlockNumber={currentBlockNumber}
+				currentTimestamp={currentTimestamp}
+				header={
+					<AppHeaderShell
+						renderOverview={settingsMenu => <OverviewPanels {...overviewProps} applicationTitle={applicationTitle} settingsMenu={settingsMenu} />}
+						simulationController={simulationController}
+						secondaryNavigation={secondaryNavigation}
+						tabNavigation={tabNavigationProps}
+						onEnvironmentChanged={refreshActiveEnvironment}
+						onRefresh={refreshSimulationView}
+						settingsContent={<UiPriceOracleSettings priceOracle={uiPriceOracle} onPriceOracleChange={setUiPriceOracle} />}
+					/>
+				}
+				heading={<AppPageHeading formatDocumentTitle={formatAppDocumentTitle} pageTitle={pageTitle} />}
+				notices={<AppStatusNotices errorMessages={errorMessages} readBackendMessage={readBackendMessage} readBackendStatus={readBackendStatus} simulationBootstrapError={environmentBootstrapError} showApplicationDeploymentWarning={applicationDeploymentMissing} zoltarUniverseError={zoltarUniverseError} />}
+				routeContentDisabled={routeContentBlocked}
+				transactionRouteKey={transactionRouteKey}
+				transactionState={transactionState.value}
+			>
+				<AppRouteContent deploy={deployRouteContentProps} openOracle={openOracleRouteContentProps} readBackendMessage={readBackendMessage} route={activeRoute} securityPools={securityPoolsRouteContentProps} />
+				<TransactionStepsModal contextKey={`${activeEnvironmentNonce}:${walletScopedAccountAddress ?? ''}`} />
+			</ProtocolAppFrame>
+		</UniverseNamesProvider>
 	)
 }

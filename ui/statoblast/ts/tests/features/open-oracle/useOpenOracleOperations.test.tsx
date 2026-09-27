@@ -27,7 +27,7 @@ type OpenOracleApprovalTestCase = {
 	action: 'approveToken1' | 'approveToken2'
 	allowanceKey: 'token1Approval' | 'token2Approval'
 	changedContributionMessage: string
-	currentCapacityOwnershipAttoRep: bigint
+	currentUnderwritingLimitAttoEth: bigint
 	disputeNewAmount1: string
 	disputeNewAmount2: string
 	disputeTokenToSwap: 'token1' | 'token2'
@@ -42,7 +42,7 @@ const OPEN_ORACLE_APPROVAL_TEST_CASES = [
 		action: 'approveToken1',
 		allowanceKey: 'token1Approval',
 		changedContributionMessage: 'The required base token approval changed',
-		currentCapacityOwnershipAttoRep: 100n,
+		currentUnderwritingLimitAttoEth: 100n,
 		disputeNewAmount1: '101',
 		disputeNewAmount2: '25',
 		disputeTokenToSwap: 'token1',
@@ -55,7 +55,7 @@ const OPEN_ORACLE_APPROVAL_TEST_CASES = [
 		action: 'approveToken2',
 		allowanceKey: 'token2Approval',
 		changedContributionMessage: 'The required quote token approval changed',
-		currentCapacityOwnershipAttoRep: 25n,
+		currentUnderwritingLimitAttoEth: 25n,
 		disputeNewAmount1: '101',
 		disputeNewAmount2: '26',
 		disputeTokenToSwap: 'token2',
@@ -630,7 +630,7 @@ describe('useOpenOracleOperations', () => {
 			await act(async () => {
 				await requireHookState(hookState).loadOracleReport(REPORT_ID.toString())
 			})
-			await waitFor(() => expect(requireHookState(hookState).openOracleTokenAccessState[approvalCase.allowanceKey].value).toBe(approvalCase.currentCapacityOwnershipAttoRep))
+			await waitFor(() => expect(requireHookState(hookState).openOracleTokenAccessState[approvalCase.allowanceKey].value).toBe(approvalCase.currentUnderwritingLimitAttoEth))
 			await act(() => {
 				setOpenOracleApprovalForm(requireHookState(hookState), approvalCase)
 			})
@@ -720,7 +720,7 @@ describe('useOpenOracleOperations', () => {
 			await act(async () => {
 				await requireHookState(hookState).loadOracleReport(REPORT_ID.toString())
 			})
-			await waitFor(() => expect(requireHookState(hookState).openOracleTokenAccessState[approvalCase.allowanceKey].value).toBe(approvalCase.currentCapacityOwnershipAttoRep))
+			await waitFor(() => expect(requireHookState(hookState).openOracleTokenAccessState[approvalCase.allowanceKey].value).toBe(approvalCase.currentUnderwritingLimitAttoEth))
 			await act(() => {
 				setOpenOracleApprovalForm(requireHookState(hookState), approvalCase)
 			})
@@ -735,7 +735,7 @@ describe('useOpenOracleOperations', () => {
 
 		for (const rejectionCase of [
 			{
-				amount: approvalCase.currentCapacityOwnershipAttoRep,
+				amount: approvalCase.currentUnderwritingLimitAttoEth,
 				expectedMessage: `The ${approvalCase.tokenLabel} approval must increase the current allowance`,
 				name: 'non-increasing explicit approval',
 			},
@@ -769,7 +769,7 @@ describe('useOpenOracleOperations', () => {
 				await act(async () => {
 					await requireHookState(hookState).loadOracleReport(REPORT_ID.toString())
 				})
-				await waitFor(() => expect(requireHookState(hookState).openOracleTokenAccessState[approvalCase.allowanceKey].value).toBe(approvalCase.currentCapacityOwnershipAttoRep))
+				await waitFor(() => expect(requireHookState(hookState).openOracleTokenAccessState[approvalCase.allowanceKey].value).toBe(approvalCase.currentUnderwritingLimitAttoEth))
 				await act(() => {
 					setOpenOracleApprovalForm(requireHookState(hookState), approvalCase)
 				})
