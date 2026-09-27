@@ -209,7 +209,8 @@ export function useTradingOperations(
 						const mintCheckpoint = estimateMintCheckpoint({
 							currentRetentionRate: latestMintCapacity.currentRetentionRate,
 							currentTimestamp: latestMintCapacity.currentTimestamp,
-							feeEligibleCapacityOwnershipAttoRep: latestMintCapacity.feeEligibleCapacityOwnershipAttoRep,
+							totalUnderwritingLimitAttoEth: latestMintCapacity.totalUnderwritingLimitAttoEth,
+							feeEligibleUnderwritingLimitAttoEth: latestMintCapacity.feeEligibleUnderwritingLimitAttoEth,
 							feeEndTimestamp: latestMintCapacity.feeEndTimestamp,
 							feeIndexRemainder: latestMintCapacity.feeIndexRemainder,
 							lastUpdatedFeeAccumulator: latestMintCapacity.lastUpdatedFeeAccumulator,

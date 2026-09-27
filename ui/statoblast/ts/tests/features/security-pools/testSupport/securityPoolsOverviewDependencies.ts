@@ -78,7 +78,7 @@ export function createSecurityPoolsOverviewDependencies(overrides: Partial<UseSe
 			openInterestAttoEth: 0n,
 			disputeStakedAttoRep: 0n,
 			vaultAttoRepBacking: 0n,
-			capacityOwnershipAttoRep: 0n,
+			underwritingLimitAttoEth: 0n,
 			claimableFeesAttoEth: 0n,
 			vaultAddress,
 		})),

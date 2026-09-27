@@ -18,7 +18,7 @@ import type { ActionFeedback } from '@zoltar/ui-core-shared/transactions/actionF
 import { createZoltarForkSuccessPresentation, createZoltarForkTransactionIntent, createZoltarForkWarningPresentation } from '../../zoltarTransactionPresentations.js'
 import { parseBigIntInput } from '@zoltar/ui-core-shared/forms/integerInput.js'
 import type { TokenApprovalState } from '@zoltar/ui-core-shared/transactions/tokenApproval.js'
-import { getGenesisReputationTokenAddress } from '../lib/universe.js'
+import { getGenesisReputationTokenAddress } from '../../../protocol/activeProtocolAddresses.js'
 import { useRequestGuard } from '@zoltar/ui-core-shared/lib/requestGuard.js'
 import { refreshWalletStateOnly } from '@zoltar/ui-core-shared/lib/refreshState.js'
 import type { TransactionLifecycleParameters, WriteOperationContext } from '../../../types/app.js'

@@ -50,6 +50,8 @@ export type OverviewPanelsProps = {
 	walletBootstrapComplete: boolean
 	universeRepBalanceAttoRep: bigint | undefined
 	isLoadingUniverseRepBalance: boolean
+	/** Interactive universe control, such as the shared universe switcher, shown in place of the plain universe label. */
+	universeControl?: ComponentChildren
 	universeForkTime?: bigint | undefined
 	universeHasForked?: boolean | undefined
 	universePresentation: UserMessagePresentation | undefined
@@ -102,7 +104,7 @@ function RepPriceGroup({ isLoading, isRefreshing, onRefresh, repPerEthFailure, r
 					</>
 				}
 			>
-				{isRepPricingUnavailable ? repPricingUnavailableLabel : (renderRepPriceFailure(repPerEthPrice === undefined && !isLoading ? repPerEthFailure : undefined) ?? <CurrencyValue value={repPerEthPrice} loading={isLoading && repPerEthPrice === undefined} copyable={false} compactWhenOverflow />)}
+				{isRepPricingUnavailable ? repPricingUnavailableLabel : (renderRepPriceFailure(repPerEthPrice === undefined && !isLoading ? repPerEthFailure : undefined) ?? <CurrencyValue value={repPerEthPrice} loading={isLoading && repPerEthPrice === undefined} notation='compact' />)}
 			</MetricField>
 			<MetricField
 				className='overview-metric-secondary'
@@ -112,7 +114,7 @@ function RepPriceGroup({ isLoading, isRefreshing, onRefresh, repPerEthFailure, r
 					</>
 				}
 			>
-				{isRepPricingUnavailable ? repPricingUnavailableLabel : (renderRepPriceFailure(repUsdcPrice === undefined && !isLoading ? repUsdcFailure : undefined) ?? <CurrencyValue value={repUsdcPrice} loading={isLoading && repUsdcPrice === undefined} suffix={appCopy.usdc} units={6} compactWhenOverflow />)}
+				{isRepPricingUnavailable ? repPricingUnavailableLabel : (renderRepPriceFailure(repUsdcPrice === undefined && !isLoading ? repUsdcFailure : undefined) ?? <CurrencyValue value={repUsdcPrice} loading={isLoading && repUsdcPrice === undefined} suffix={appCopy.usdc} units={6} notation='compact' />)}
 			</MetricField>
 		</HeaderMetricGroup>
 	)
@@ -134,6 +136,7 @@ export function OverviewPanels({
 	onSwitchNetwork,
 	readBackendStatus,
 	repPrices,
+	universeControl,
 	universeForkTime,
 	universeHasForked,
 	universePresentation,
@@ -201,9 +204,7 @@ export function OverviewPanels({
 			controls={
 				<>
 					{walletControl}
-					<ToolbarField label={commonCopy.universe}>
-						<span title={formatUniverseLabel(activeUniverseId)}>{formatUniverseDisplayLabel(activeUniverseId)}</span>
-					</ToolbarField>
+					<ToolbarField label={commonCopy.universe}>{universeControl ?? <span title={formatUniverseLabel(activeUniverseId)}>{formatUniverseDisplayLabel(activeUniverseId)}</span>}</ToolbarField>
 				</>
 			}
 			notices={

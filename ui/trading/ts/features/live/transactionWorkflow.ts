@@ -11,8 +11,6 @@ export type TransactionContext = Readonly<{
 
 export type TransactionWorkflowState = (
 	| Readonly<{ kind: 'idle' }>
-	| Readonly<{ kind: 'simulating'; context: TransactionContext }>
-	| Readonly<{ kind: 'ready-to-submit'; context: TransactionContext }>
 	| Readonly<{ kind: 'preparing'; context: TransactionContext; operation: TransactionOperation }>
 	| Readonly<{ kind: 'awaiting-signature'; context: TransactionContext; operation: TransactionOperation }>
 	| Readonly<{ kind: 'pending'; context: TransactionContext; operation: TransactionOperation; originalHash: Hash; transactionHash: Hash; replacementHashes: readonly Hash[] }>
@@ -27,8 +25,6 @@ export type TransactionWorkflowEvent =
 	| Readonly<{ type: 'reset' }>
 	| Readonly<{ type: 'inputs-invalidated'; preserveConfirmed?: boolean }>
 	| Readonly<{ type: 'context-invalidated'; message: string }>
-	| Readonly<{ type: 'simulation-started'; context: TransactionContext }>
-	| Readonly<{ type: 'simulation-succeeded'; context: TransactionContext }>
 	| Readonly<{ type: 'operation-preparing'; context: TransactionContext; operation: TransactionOperation }>
 	| Readonly<{ type: 'signature-requested'; context: TransactionContext; operation: TransactionOperation }>
 	| Readonly<{ type: 'broadcast'; context: TransactionContext; operation: TransactionOperation; transactionHash: Hash }>
@@ -59,15 +55,6 @@ export function transactionWorkflowReducer(state: TransactionWorkflowState, even
 		return event.preserveConfirmed === true && state.kind === 'confirmed' ? state : idleTransactionWorkflow
 	}
 	if (event.type === 'context-invalidated') return state.kind === 'idle' ? { kind: 'failed', message: event.message } : { ...state, notice: event.message }
-	if (event.type === 'simulation-started') {
-		if (state.kind === 'preparing' || state.kind === 'awaiting-signature' || state.kind === 'pending' || state.kind === 'uncertain') throw new Error('A simulation cannot replace an active or uncertain transaction')
-		return { kind: 'simulating', context: event.context }
-	}
-	if (event.type === 'simulation-succeeded') {
-		requireContext(state, event.context)
-		if (state.kind !== 'simulating') throw new Error('Simulation can only complete while simulating')
-		return { kind: 'ready-to-submit', context: event.context }
-	}
 	if (event.type === 'operation-preparing') {
 		if (state.kind === 'preparing' || state.kind === 'awaiting-signature' || state.kind === 'pending' || state.kind === 'uncertain') throw new Error('An operation cannot replace an active or uncertain transaction')
 		return { kind: 'preparing', context: event.context, operation: event.operation }
@@ -102,14 +89,14 @@ export function transactionWorkflowReducer(state: TransactionWorkflowState, even
 	return { kind: 'failed', ...(event.context === undefined ? {} : { context: event.context }), ...(event.operation === undefined ? {} : { operation: event.operation }), message: event.message }
 }
 
-export type TransactionPhase = 'idle' | 'simulating' | 'ready' | 'preparing' | 'submitting' | 'pending' | 'confirmed' | 'error'
+/** One plain-language phase per state: preparing runs the authoritative simulation, submitting waits for the wallet signature. */
+export type TransactionPhase = 'idle' | 'preparing' | 'submitting' | 'pending' | 'confirmed' | 'error'
 
 export function transactionPhase(state: TransactionWorkflowState): TransactionPhase {
-	if (state.kind === 'ready-to-submit') return 'ready'
 	if (state.kind === 'awaiting-signature') return 'submitting'
 	if (state.kind === 'pending') return 'pending'
 	if (state.kind === 'confirmed') return 'confirmed'
-	if (state.kind === 'simulating' || state.kind === 'preparing' || state.kind === 'idle') return state.kind
+	if (state.kind === 'preparing' || state.kind === 'idle') return state.kind
 	return 'error'
 }
 

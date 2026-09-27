@@ -37,7 +37,7 @@ import type { ReportingRouteContentProps } from './oracleTypes.js'
 export type * from '@zoltar/ui-core-shared/types/components.js'
 
 export type VaultMetricGridProps = {
-	targetBackingFactorBps?: bigint | undefined
+	openInterestAttoEth?: bigint | undefined
 	associatedRepPerCapacityBps?: bigint | undefined
 	badDebtAttoEth?: bigint | undefined
 	className?: string
@@ -48,7 +48,7 @@ export type VaultMetricGridProps = {
 	priceValidUntilTimestamp?: bigint | undefined
 	vaultAttoRepBacking: bigint | undefined
 	selectedPoolStatoblastSecurityMultiplierBps: bigint | undefined
-	capacityOwnershipAttoRep: bigint | undefined
+	underwritingLimitAttoEth: bigint | undefined
 	claimableFeesAttoEth: bigint | undefined
 } & RepPerEthPriceProps
 
@@ -58,7 +58,7 @@ type RepPerEthPriceProps = {
 	repPerEthSourceUrl: string | undefined
 }
 
-export type SecurityPoolsView = 'browse' | 'create' | 'operate' | 'universes'
+export type SecurityPoolsView = 'open' | 'browse' | 'create' | 'operate' | 'universes'
 
 type SecurityPoolRouteContentProps = {
 	accountState: AccountState
@@ -214,7 +214,8 @@ type SecurityVaultRouteContentProps = {
 	accountState: AccountState
 	loadingSecurityVault: boolean
 	onApproveRep: (amount?: bigint) => void
-	onAdjustVaultBackingFactor: (factor: string) => void
+	onCertifyVaultCoverage?: (() => void) | undefined
+	onSetVaultUnderwritingLimit: (factor: string) => void
 	onDepositRepToVault: () => void
 	onLoadSecurityVault: (vaultAddress?: string) => void
 	onRedeemFees: () => void
@@ -247,7 +248,7 @@ export type SecurityVaultSectionProps = SecurityVaultRouteContentProps & {
 	oracleManagerDetails?: OracleManagerDetails | undefined
 	poolState?: SecurityPoolStateModel | undefined
 	selectedPoolTotalPoolHeldAttoRep?: bigint | undefined
-	selectedPoolTotalCapacityOwnershipAttoRep?: bigint | undefined
+	selectedPoolTotalUnderwritingLimitAttoEth?: bigint | undefined
 	selectedMarketTitle?: string | undefined
 	autoLoadVault?: boolean
 	showLookupSection?: boolean

@@ -157,7 +157,7 @@ export const renderOperationsDetail = (deps: OperationsDetailDeps, response: Ope
 			),
 		)
 	}
-	if (route.kind === 'vault') panels.push(operationsPanel('Accounting', [operationRow('Vault accounting history', 'Backing, capacity ownership and accrued fees', undefined, undefined, operationsHref(`/system?tab=vaults&entity=${requiredChainId()}:${route.identity[0]}:${route.identity[1]}`))], ''))
+	if (route.kind === 'vault') panels.push(operationsPanel('Accounting', [operationRow('Vault accounting history', 'REP backing, ETH commitments, and accrued fees', undefined, undefined, operationsHref(`/system?tab=vaults&entity=${requiredChainId()}:${route.identity[0]}:${route.identity[1]}`))], ''))
 	if (route.kind === 'trading') {
 		const tradingSummary = isRecord(data['summary']) ? data['summary'] : {}
 		const twap24h = isRecord(data['twap24h']) ? data['twap24h'] : {}

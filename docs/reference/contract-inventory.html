@@ -60,7 +60,7 @@
 							</tr>
 							<tr>
 								<td><code>EscalationGameDepositDelegate</code>, <code>EscalationGameClaimDelegate</code>, <code>EscalationGameForker</code>, <code>SecurityPoolForkerVaultMigrationDelegate</code>, <code>SecurityPoolSettlementDelegate</code>, and <code>SecurityPoolOperationsDelegate</code></td>
-								<td>Their public methods are delegatecall implementations. The deposit delegate implements <code>recordDeposit</code>, <code>recordForkedEscrowForOutcome</code>, <code>applyTruthAuctionHaircut</code>, funding-gated <code>resumeFromFork</code>, <code>consumeEscrowedRepForOwner</code>, <code>consumeUnresolvedRepForClaimOwners</code>, <code>creditClaimOwners</code>, and <code>creditExternalClaimOwners</code>. The shared claim delegate handles retention checkpoint reads and initialization; it has no ownership or import surface. The forker delegates implement escalation and vault migration. <code>SecurityPoolSettlementDelegate</code> is abstract and contributes complete-set minting validation and funded inherited-collateral installation to the single deployed <code>SecurityPoolOperationsDelegate</code>. That operations delegate implements <code>setVaultCapacity</code>, funded REP-backing-unit, capacity-ownership, receiver-debt, and full-request bad-debt liquidation accounting while isolating fees and claims, plus permissionless continuation resume. A direct call may revert against uninitialized state or may mutate only the helper's isolated storage; it is not a protocol action.</td>
+								<td>Their public methods are delegatecall implementations. The deposit delegate implements <code>recordDeposit</code>, <code>recordForkedEscrowForOutcome</code>, <code>applyTruthAuctionHaircut</code>, funding-gated <code>resumeFromFork</code>, <code>consumeEscrowedRepForOwner</code>, <code>consumeUnresolvedRepForClaimOwners</code>, <code>creditClaimOwners</code>, and <code>creditExternalClaimOwners</code>. The shared claim delegate handles retention checkpoint reads and initialization; it has no ownership or import surface. The forker delegates implement escalation and vault migration. <code>SecurityPoolSettlementDelegate</code> is abstract and contributes complete-set minting validation and funded inherited-collateral installation to the single deployed <code>SecurityPoolOperationsDelegate</code>. That operations delegate implements standing ETH limit changes, full-limit backing certification, and authorized liquidation transfers that conserve total commitments without writing off residual exposure. REP backing and fees are accounted separately. See the <a href="./contracts/securitypool.html">SecurityPool interaction reference</a> for the public entrypoints. A direct call may revert against uninitialized state or may mutate only the helper's isolated storage; it is not a protocol action.</td>
 								<td>Accept resulting state and logs only when the recognized game, pool, or forker executes the matching wrapper through <code>delegatecall</code>. State changes and events then occur in that recognized contract's context. Canonical liquidation enters through <code>SecurityPool.performLiquidation</code>; continuation progress enters through <code>SecurityPool.resumeForkedEscalationGame</code>.</td>
 							</tr>
 							<tr>
@@ -85,7 +85,7 @@
 				</section>
 				<section id="securitypoolutils-read-surface">
 					<h2>SecurityPoolUtils read surface</h2>
-					<p>These external pure previews distinguish REP-denominated capacity ownership from ETH-denominated open interest. REP-per-ETH prices use <code>PRICE_PRECISION</code>, and health factors and security multipliers use basis points. The previews have no lifecycle, caller, freshness, or canonical-pool authority; only a recognized pool or coordinator transaction can apply their result.</p>
+					<p>These external pure previews distinguish standing ETH commitments from current proportional ETH obligations. REP-per-ETH prices use <code>PRICE_PRECISION</code>, and health factors and security multipliers use basis points. The previews have no lifecycle, caller, freshness, or canonical-pool authority; only a recognized pool or coordinator transaction can apply their result.</p>
 					<table>
 						<thead>
 							<tr>
@@ -96,33 +96,33 @@
 						</thead>
 						<tbody>
 							<tr>
-								<td><code>calculateFeeAccrual(settlementCollateralAttoEth, retentionRate, timeDelta, indexRemainder, feeEligibleCapacityOwnershipAttoRep, feesOwedRemainder)</code></td>
+								<td><code>calculateFeeAccrual(settlementCollateralAttoEth, retentionRate, timeDelta, indexRemainder, feeEligibleUnderwritingLimitAttoEth, feesOwedRemainder)</code></td>
 								<td>Applies fixed-point retention over elapsed time to settlement collateral net of the already-counted but uncredited decay <code>(indexRemainder + feesOwedRemainder) / 1e18</code>, carries the global index remainder, and returns whole credited fees plus the next fee remainder. Credited fees therefore never exceed settlement collateral. Canonical callers avoid zero eligible capacity ownership before this division.</td>
 								<td><a href="../explanation/fees.html">Fee accrual</a></td>
 							</tr>
 							<tr>
-								<td><code>calculateVaultFee(capacityOwnershipAttoRep, feeIndexDelta, remainder)</code></td>
+								<td><code>calculateVaultFee(underwritingLimitAttoEth, feeIndexDelta, remainder)</code></td>
 								<td>Floors the vault's whole fee credit and returns the remaining fixed-point numerator for its next checkpoint.</td>
 								<td><a href="../explanation/fees.html">Fee accrual</a></td>
 							</tr>
 							<tr>
-								<td><code>calculateMintingCapacityAttoEth(capacityOwnershipAttoRep, repEthPrice, securityMultiplierBps)</code></td>
-								<td>Converts aggregate REP-denominated ownership into current ETH capacity using the live REP-per-ETH price and pool multiplier. Zero ownership or price returns zero.</td>
+								<td><code>calculateBackingSupportedLimitAttoEth(backingAttoRep, repEthPrice, securityMultiplierBps)</code></td>
+								<td>Computes the maximum fully backed ETH limit supported by pool-held REP with no dispute stake. It inverts both rounded backing checks, including the liquidation reserve. This preview does not change standing limits or authorize minting. A zero price returns zero.</td>
 								<td><a href="../explanation/liquidations.html#capacity-and-health">Dynamic capacity</a></td>
 							</tr>
 							<tr>
-								<td><code>calculateVaultOpenInterestAttoEth(activeOpenInterestAttoEth, vaultCapacityOwnershipAttoRep, totalCapacityOwnershipAttoRep)</code></td>
+								<td><code>calculateVaultOpenInterestAttoEth(activeOpenInterestAttoEth, vaultUnderwritingLimitAttoEth, totalUnderwritingLimitAttoEth)</code></td>
 								<td>Attributes live pool open interest pro rata to capacity ownership, rounding a positive vault share upward. Zero vault or total ownership returns zero.</td>
 								<td><a href="../explanation/liquidations.html#capacity-and-health">Dynamic capacity</a></td>
 							</tr>
 							<tr>
-								<td><code>calculateBundledLiquidationTransfer(targetBackingUnits, targetCapacityOwnershipAttoRep, targetOpenInterestAttoEth, requestedDebtAttoEth, repEthPrice, currentPoolHeldAttoRepBalance, currentTotalRepBackingUnits, minimumRemainingAttoRep)</code></td>
-								<td>Returns zero when the request, target open interest, capacity ownership, or price is zero. Caps a nominal debt quote by target open interest and by the complete 5%-bonus award fundable from target pool-held REP, then rounds proportional capacity ownership downward. Execution derives moved debt separately from the receiver's exact live open-interest increase. Partial requests preserve the configured REP minimum. On a full-target request, bad debt is target open interest minus exact moved debt and can include both an award-unfunded slice and integer-allocation residue.</td>
+								<td><code>calculateBundledLiquidationTransfer(targetBackingUnits, targetUnderwritingLimitAttoEth, targetOpenInterestAttoEth, requestedDebtAttoEth, repEthPrice, currentPoolHeldAttoRepBalance, currentTotalRepBackingUnits, minimumRemainingAttoRep)</code></td>
+								<td>The target exposure arguments are both the full ETH commitment. Transfers the lesser of request and target commitment. The nominal 5% REP award rounds up in REP and backing units, then caps at available target units. Partial transfers reserve the configured minimum REP when available. A full transfer can use all target units. The receiver must independently satisfy full-limit health; no residual commitment is written off.</td>
 								<td><a href="../explanation/liquidations.html#punitive-liquidation">Vault liquidation</a></td>
 							</tr>
 							<tr>
 								<td><code>isVaultHealthy(poolHeldVaultRepBackingAttoRep, disputeStakedAttoRep, openInterestAttoEth, repEthPrice, poolSecurityMultiplierBps)</code></td>
-								<td>Checks the associated-REP and free pool-held REP requirements against live open interest. Both requirements round upward; zero open interest is healthy. <code>isVaultHealthyAtFactor</code> applies an approval-selected factor of at least 10,000 to both branches.</td>
+								<td>Checks the associated-REP and free pool-held REP requirements against the full ETH underwriting limit. Both requirements round upward; a zero limit is healthy. <code>isVaultHealthyAtFactor</code> applies an approval-selected factor of at least 10,000 to both branches.</td>
 								<td><a href="../explanation/liquidations.html#capacity-and-health">Capacity and health</a></td>
 							</tr>
 							<tr>

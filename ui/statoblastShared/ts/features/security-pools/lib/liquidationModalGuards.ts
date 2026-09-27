@@ -3,6 +3,7 @@ import * as liquidationCopy from '../../../copy/liquidation.js'
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import { assertNever } from '@zoltar/ui-core-shared/lib/assert.js'
 import { sameAddress } from '@zoltar/ui-core-shared/lib/address.js'
+import { formatMultiplier } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { isOracleManagerPriceUsable } from './securityVault.js'
 import type { LiquidationApprovalDetails, OracleManagerDetails, SecurityPoolOverviewActionResult } from '@zoltar/ui-core-shared/types/contracts.js'
 
@@ -21,9 +22,7 @@ export type QueuedLiquidationStatus = 'executed' | 'failed' | 'manual-queued' | 
 export type LiquidationBlocker = { loading?: boolean; reason: string | undefined }
 
 export function formatHealthFactorBps(healthFactorBps: bigint) {
-	const whole = healthFactorBps / 10_000n
-	const fractional = (healthFactorBps % 10_000n).toString().padStart(4, '0').replace(/0+$/, '')
-	return `${whole.toString()}${fractional === '' ? '' : `.${fractional}`}${liquidationCopy.protocolHealthSuffix}`
+	return `${formatMultiplier(healthFactorBps, 4)}${liquidationCopy.protocolMinimumTail}`
 }
 
 export function getApprovalStatus(revoked: boolean, nonceInvalidated: boolean, validAfter: bigint, validUntil: bigint, currentTimestamp: bigint | undefined) {

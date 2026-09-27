@@ -1,24 +1,9 @@
 import { liveCopy } from '../copy/live.js'
 import { discoverAddressedMarket, discoverTradingMarketPage, discoverUniverses } from '../protocol/marketDiscovery.js'
 import { getAddress, type Address, type Hash } from '@zoltar/core-shared/evm/ethereum'
-import { tryParseNonNegativeDecimalInput } from '@zoltar/ui-core-shared/forms/decimal.js'
 import type { WalletSummaryState } from '../lib/walletSummaryState.js'
 import { readInjectedChainIdNumber, requestInjectedAccount, switchInjectedChain } from '@zoltar/ui-core-shared/wallet/injectedEthereum.js'
-import {
-	createTradingPublicClient,
-	createTradingWalletClient,
-	discoverAllLiveMarketsInUniverse,
-	discoverLiveUniverseMarketPage,
-	loadLiveBalances,
-	loadWalletHeaderBalances,
-	publicErrorMessage,
-	simulateEntry,
-	simulateExit,
-	submitFreshEntry,
-	submitFreshExit,
-	validateLiveDeployment,
-	type LiveMarket,
-} from '../protocol/live.js'
+import { createTradingPublicClient, createTradingWalletClient, discoverAllLiveMarketsInUniverse, discoverLiveUniverseMarketPage, loadLiveBalances, loadWalletHeaderBalances, simulateEntry, simulateExit, submitFreshEntry, submitFreshExit, validateLiveDeployment, type LiveMarket } from '../protocol/live.js'
 import type { LiveTradingControllerServices, TransactionState } from './live/liveTradingTypes.js'
 export type GuardedWalletWrite = <T>(write: () => Promise<T>) => Promise<T>
 export type WorkflowOwner = 'position' | 'liquidity'
@@ -59,34 +44,12 @@ export function walletSummaryAvailability(configurationAvailable: boolean, confi
 	return { status: 'error' as const, error: 'No security pool is available in the selected universe', errorLabel: 'No security pool in this universe' }
 }
 
-export function parseSlippageBps(value: string) {
-	const parsed = tryParseNonNegativeDecimalInput(value, 2)
-	return parsed !== undefined && parsed >= 0n && parsed <= 500n ? parsed : undefined
-}
-
-export function parseTransactionValidityMinutes(value: string) {
-	if (!/^\d+$/.test(value)) return undefined
-	const parsed = BigInt(value)
-	return parsed >= 1n && parsed <= 1_440n ? parsed : undefined
-}
-
-export function failedSubmissionTransition(caught: unknown, fallback: string) {
-	return { quote: undefined, state: 'error' as const, message: publicErrorMessage(caught, fallback) }
-}
-
 export function broadcastUncertainMessage(label: string, hash: Hash) {
 	return `${label} ${hash} was broadcast, but its receipt could not be confirmed. Do not resubmit. Check this hash in your wallet or configured block explorer, then reload only after its final status is known.`
 }
 
 export function positionControlsWorkflowLocked(state: TransactionState, receiptWarning: string | undefined) {
 	return state === 'preparing' || state === 'submitting' || state === 'pending' || receiptWarning !== undefined
-}
-
-const QUOTE_BASIS_FIELDS = ['pair', 'yesReserve', 'noReserve', 'lpTotalSupply', 'settlementCollateralAttoEth', 'shareTokenSupplyAttoShares', 'tradingStatus', 'systemState', 'questionOutcome', 'universeForkTime', 'awaitingForkContinuation', 'loadError'] as const
-
-/** A simulated quote is only meaningful for the exact market state it priced; any change in that state retires it. */
-export function quoteBasisChanged(quoted: LiveMarket, refreshed: LiveMarket) {
-	return QUOTE_BASIS_FIELDS.some(field => quoted[field] !== refreshed[field])
 }
 
 export function discoveryCommitAllowed(owner: WorkflowOwner | undefined, positionLocked: boolean, liquidityLocked: boolean) {
