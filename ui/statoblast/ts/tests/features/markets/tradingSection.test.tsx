@@ -298,6 +298,22 @@ void describe('TradingSection', () => {
 			expect(calls).toEqual([fixLabel === 'Connect wallet' ? 'connect' : 'switch'])
 		})
 
+	test('keeps the stale-price reason as text in the mint dialog while the wallet is disconnected', async () => {
+		const { walletActions } = createWalletActions()
+		const renderSection = (accountState: AccountState, oraclePriceUsable: boolean) => (
+			<WalletActionsProvider walletActions={walletActions}>
+				<TradingSection {...createTradingSectionProps({ accountState, oraclePriceUsable, tradingForm: createTradingForm({ completeSetAmount: '0.1' }) })} />
+			</WalletActionsProvider>
+		)
+		const rendered = await renderIntoDocument(renderSection(createAccountState(), true))
+		cleanupRenderedComponent = rendered.cleanup
+		fireEvent.click(within(document.body).getByRole('button', { name: 'Mint complete sets' }))
+		await act(() => render(renderSection(createAccountState({ address: undefined }), false), rendered.container))
+		const dialog = within(document.body).getByRole('dialog')
+		expect(within(dialog).queryByRole('button', { name: 'Connect wallet' })).toBeNull()
+		expect(getTransactionButtonState(dialog, 'Mint complete sets').reason).toBe('Request a new price in Price oracle before minting.')
+	})
+
 	void test('labels the max complete sets metric as redeemable complete sets', async () => {
 		const renderedComponent = await renderIntoDocument(<TradingSection {...createTradingSectionProps()} />)
 		cleanupRenderedComponent = renderedComponent.cleanup

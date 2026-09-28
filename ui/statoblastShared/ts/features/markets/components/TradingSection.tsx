@@ -239,10 +239,10 @@ export function TradingSection({
 		if (!actionEnabled) return undefined
 		return guardMessage
 	}
-	// For a selected pool the modal guards check the wallet first, so a blocking wallet is the reason whenever the pool action is enabled.
+	// For a selected pool the trading guards check the wallet first, so a blocking wallet is the reason whenever the pool action is enabled and no reason precedes the guard (the mint dialog checks the oracle price first).
 	const walletBlocker = getActiveAppChainWalletBlocker({ accountAddress: accountState.address, isOnActiveAppChain })
-	const getModalActionAvailability = (actionEnabled: boolean, guardMessage: string | undefined) =>
-		withWalletBlocker({ disabled: !isOnActiveAppChain || !actionEnabled || guardMessage !== undefined, reason: getModalActionReason(actionEnabled, guardMessage) }, !isOnActiveAppChain || (actionEnabled && hasSelectedPool) ? walletBlocker : undefined)
+	const getModalActionAvailability = (actionEnabled: boolean, guardMessage: string | undefined, precedingReason?: string) =>
+		withWalletBlocker({ disabled: !isOnActiveAppChain || !actionEnabled || guardMessage !== undefined, reason: getModalActionReason(actionEnabled, guardMessage) }, !isOnActiveAppChain || (actionEnabled && hasSelectedPool && precedingReason === undefined) ? walletBlocker : undefined)
 	const shareMigrationSelectionDisabled = poolUniverseHasForked !== true
 	const setAllTargetOutcomeIndexes = () => {
 		onTradingFormChange({ targetOutcomeIndexes: getDefaultShareMigrationTargetOutcomeIndexes(tradingForkUniverse) })
@@ -441,7 +441,7 @@ export function TradingSection({
 				/>
 				<p className='detail'>{tradingCopy.retentionFeeEstimateDetail}</p>
 				<div className='actions'>
-					<TransactionActionButton idleLabel={tradingCopy.mintCompleteSetsActionLabel} pendingLabel={tradingCopy.mintingCompleteSets} onClick={onCreateCompleteSet} pending={tradingActiveAction === 'createCompleteSet'} availability={getModalActionAvailability(mintEnabled, mintGuardMessage)} />
+					<TransactionActionButton idleLabel={tradingCopy.mintCompleteSetsActionLabel} pendingLabel={tradingCopy.mintingCompleteSets} onClick={onCreateCompleteSet} pending={tradingActiveAction === 'createCompleteSet'} availability={getModalActionAvailability(mintEnabled, mintGuardMessage, oraclePriceGuardMessage)} />
 				</div>
 			</OperationModal>
 
