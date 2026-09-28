@@ -24,6 +24,7 @@ type Options = {
 	state: RuntimeState
 	gate: SignerOperationGate
 	scan: () => Promise<ManualScan>
+	preflight: (plan: OperationPlan) => Promise<void>
 	execute: (plan: OperationPlan) => Promise<void>
 }
 
@@ -214,6 +215,7 @@ export function createManualOperationController(options: Options) {
 		const definition = CHAOS_OPERATION_CATALOG.find(item => item.id === id)
 		if (definition === undefined || (definition.classification !== 'selectable' && definition.classification !== 'lifecycle-obligation')) return { blockers: ['This catalog entry is not independently executable'], fields: [], candidates: [], coverage: definition === undefined ? [] : operationInputCoverage(definition) }
 		if (!options.gate.acquire('scan')) failure('The bot is completing another operation. Retry shortly')
+		preview = undefined
 		try {
 			const revision = options.configuration.revision
 			const inputs = parseInputs(body['inputs'] ?? {})
@@ -226,6 +228,14 @@ export function createManualOperationController(options: Options) {
 			const plan = candidate === undefined ? result.candidates[0] : result.candidates.find(item => candidateIdentity(item) === candidate)
 			const blockers = [...result.blockers]
 			if (plan === undefined && blockers.length === 0) blockers.push('The selected candidate is no longer available')
+			if (body['action'] === 'preview' && plan !== undefined && blockers.length === 0) {
+				try {
+					await options.preflight(plan)
+				} catch (error) {
+					blockers.push(publicFailureReason(error))
+				}
+				if (revision !== options.configuration.revision) blockers.push('Configuration changed. Preview the operation again')
+			}
 			preview = body['action'] === 'preview' && plan !== undefined && blockers.length === 0 ? { definitionId: id, expiresAt: Date.now() + 60_000, id: crypto.randomUUID(), inputs, plan, revision, seed } : undefined
 			return {
 				blockers,

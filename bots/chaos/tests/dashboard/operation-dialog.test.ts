@@ -33,7 +33,10 @@ function gasLimitFailureReason() {
 test(
 	'catalog groups and manual operation dialog at desktop and mobile widths',
 	async () => {
-		const fixture = manualOperationFixture()
+		let previewBlocked = false
+		const fixture = manualOperationFixture('open-oracle.weth.wrap', async () => {
+			if (previewBlocked) throw new Error(gasLimitFailureReason())
+		})
 		fixture.configuration.settings.strategy.selectableOperationAllowlist = ['open-oracle.weth.wrap', 'zoltar.question.create-binary', 'open-oracle.deposit']
 		fixture.state.evaluations = evaluateOperationCatalog(fixture.scan.snapshot, planningOptions(fixture.configuration.settings, 7))
 		let historyFixture = false
@@ -71,6 +74,23 @@ test(
 								steps: seedLabels.map((label, index) => ({ label, status: seedStepStatus(index, historyCompleted ? 3 : 1), ...(historyCompleted || index < 2 ? { transactionHash: `0x${String(index + 1).repeat(64)}` } : {}) })),
 							},
 							{ id: 'done', label: 'Create REP/WETH pool', status: 'completed', createdAt: '2026-09-17T16:30:00Z', updatedAt: '2026-09-17T16:31:00Z', steps: [{ label: 'Create REP/WETH pool', status: 'confirmed', transactionHash }] },
+							{
+								id: 'stopped',
+								label: 'Create genesis REP/WETH pool',
+								status: 'abandoned',
+								createdAt: '2026-09-17T16:28:00Z',
+								steps: [{ label: 'Create REP/WETH pool', status: 'blocked', failure: 'Create REP/WETH pool estimated gas ceiling exceeds strategy.maximumGasCostEth: estimated maximum 0.116511672026249711 ETH; configured maximum 0.02 ETH. Estimate includes gas and fee safety margins.' }],
+							},
+							{
+								id: 'partial',
+								label: 'Partially executed workflow',
+								status: 'abandoned',
+								createdAt: '2026-09-17T16:27:00Z',
+								steps: [
+									{ label: 'Approve', status: 'confirmed', transactionHash },
+									{ label: 'Seed', status: 'blocked', failure: 'Simulation reverted' },
+								],
+							},
 							{ id: 'failed', label: 'Initialize REP/WETH pool', status: 'failed', createdAt: '2026-09-17T16:29:00Z', updatedAt: '2026-09-17T16:29:10Z', steps: [{ label: 'Initialize REP/WETH pool', status: 'failed' }] },
 						],
 					}
@@ -111,6 +131,7 @@ test(
 							outcome,
 							message: messages[outcome],
 							reason: outcome === 'skipped' ? skipReason : undefined,
+							steps: outcome === 'skipped' ? [{ label: 'Wrap WETH', status: 'blocked' }] : undefined,
 							transactions: ['skipped', 'dry-run'].includes(outcome)
 								? []
 								: [
@@ -235,6 +256,15 @@ test(
 				await evaluate("document.querySelector('.operation-transactions details').open = true")
 				await evaluate("document.querySelector('#operation-dialog').scrollTop = document.querySelector('#operation-dialog').scrollHeight")
 				await capture(`${viewport.label}-preview`)
+				previewBlocked = true
+				await evaluate("document.querySelector('#operation-dialog form').requestSubmit()")
+				await waitFor("document.querySelector('#operation-dialog [role=status]').textContent.includes('estimated gas ceiling exceeds')")
+				expect(await evaluate("document.querySelector('#operation-dialog .operation-actions button:nth-child(2)').disabled")).toBe(true)
+				await evaluate("document.querySelector('#operation-dialog').scrollTop = document.querySelector('#operation-dialog').scrollHeight")
+				await capture(`${viewport.label}-preview-gas-blocked`)
+				previewBlocked = false
+				await evaluate("document.querySelector('#operation-dialog form').requestSubmit()")
+				await waitFor("document.querySelector('#operation-dialog .operation-actions button:nth-child(2)').disabled === false")
 				expect(await evaluate("document.body.scrollWidth <= document.documentElement.clientWidth && document.querySelector('#operation-dialog').scrollWidth <= document.querySelector('#operation-dialog').clientWidth")).toBe(true)
 				holdExecution = true
 				executionStatus = 'pending'
@@ -265,6 +295,10 @@ test(
 					await waitFor("document.querySelector('#operation-dialog .operation-actions button:nth-child(2)').disabled === false")
 					await evaluate("document.querySelector('#operation-dialog .operation-actions button:nth-child(2)').click()")
 					await waitFor(`document.querySelector('#operation-dialog [role=status]').textContent.includes(${JSON.stringify(expectedMessage)})`)
+					if (outcome === 'skipped') {
+						expect(await evaluate("document.querySelector('.operation-receipts').textContent")).toContain('Stopped before signing')
+						expect(await evaluate("document.querySelector('.operation-receipts').textContent")).not.toContain('Recovery required')
+					}
 					if (outcome === 'recovery') {
 						expect(await evaluate("document.querySelectorAll('.operation-receipts .full-identifier').length")).toBe(2)
 						expect(await evaluate("document.querySelectorAll('.operation-receipts a').length")).toBe(1)
@@ -385,7 +419,7 @@ test(
 				historyFixture = true
 				historyCompleted = false
 				await evaluate("window.dispatchEvent(new Event('focus'))")
-				await waitFor("document.querySelectorAll('#workflow-history details').length === 3")
+				await waitFor("document.querySelectorAll('#workflow-history details').length === 5")
 				await evaluate("document.querySelector('#workflow-history details').open = true")
 				await capture(`${viewport.label}-workflows-active`)
 				historyCompleted = true
@@ -394,6 +428,14 @@ test(
 				expect(await evaluate("document.querySelector('#workflow-history details').open")).toBe(true)
 				expect(await evaluate('document.body.scrollWidth <= document.documentElement.clientWidth')).toBe(true)
 				await capture(`${viewport.label}-workflows-completed`)
+				await evaluate("document.querySelectorAll('#workflow-history details')[0].open = false; document.querySelectorAll('#workflow-history details')[3].open = true")
+				expect(await evaluate("document.querySelectorAll('#workflow-history details')[3].textContent")).toContain('Stopped before signing')
+				expect(await evaluate("document.querySelectorAll('#workflow-history details')[3].textContent")).toContain('0.116511672026249711 ETH')
+				expect(await evaluate("document.querySelectorAll('#workflow-history details')[3].textContent")).not.toContain('Recovery required')
+				expect(await evaluate("document.querySelectorAll('#workflow-history details')[4].textContent")).toContain('Recovery required')
+				expect(await evaluate('document.body.scrollWidth <= document.documentElement.clientWidth')).toBe(true)
+				await evaluate("document.querySelectorAll('#workflow-history details')[3].scrollIntoView({block: 'center'})")
+				await capture(`${viewport.label}-workflows-stopped`)
 				historyFixture = false
 				for (const route of ['overview', 'ecosystem', 'recovery', 'settings']) {
 					await session.send('Page.navigate', { url: new URL(`/${route}`, dashboard.url).href })
