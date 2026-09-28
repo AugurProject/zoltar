@@ -5,6 +5,7 @@ import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import { waitFor } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { transactionActivity } from '@zoltar/ui-core-shared/transactions/transactionActivityStore.js'
+import { createDeferred } from '@zoltar/ui-core-shared/tests/testUtils/deferred.js'
 import { quoteEnterPosition } from '@zoltar/trading-shared/trading/positions'
 import { App } from '../../app/App.js'
 import { installTradingRouting } from '../../lib/routing.js'
@@ -52,16 +53,21 @@ describe('per-market trade lock in the application shell', () => {
 
 	test('a trade pending on one market leaves the application free to start a trade on another market', async () => {
 		Reflect.set(window, 'ethereum', { request: async () => undefined, on: () => undefined, removeListener: () => undefined })
-		// Receipts never arrive, so both trades stay pending for the whole test.
-		const walletClient = { waitForTransactionReceipt: async () => await new Promise<never>(() => undefined) }
+		// The first trade confirms when the test says so; the second trade's receipt never arrives.
+		const firstReceipt = createDeferred<{ status: 'success' }>()
+		const walletClient = { waitForTransactionReceipt: async ({ hash }: { hash: Hash }) => await (hash === firstHash ? firstReceipt.promise : new Promise<never>(() => undefined)) }
 		const markets = [firstMarket, secondMarket]
 		const submittedMarkets: Address[] = []
+		const discoveredPools: Address[] = []
 		const discovered = (pool: Address) => ({ start: 0n, count: 1n, total: 1n, previousStart: undefined, nextStart: undefined, markets: markets.filter(market => market.pool === pool), universeIds: [1n], selectedUniverseId: 1n })
 		const services = {
 			...liveTradingControllerServices,
 			createTradingPublicClient: () => ({}),
 			validateLiveDeployment: async () => undefined,
-			discoverAddressedMarket: async (_client: unknown, _configuration: unknown, pool: Address) => discovered(pool),
+			discoverAddressedMarket: async (_client: unknown, _configuration: unknown, pool: Address) => {
+				discoveredPools.push(pool)
+				return discovered(pool)
+			},
 			walletChainId: async () => configuration.chainId,
 			connectWallet: async () => account,
 			createTradingWalletClient: () => walletClient,
@@ -102,5 +108,14 @@ describe('per-market trade lock in the application shell', () => {
 				{ hash: secondHash, scope: [`market:${secondMarket.pool.toLowerCase()}`], status: 'pending' },
 			]),
 		)
+		// The first trade confirms while the second market, with its own trade running, is on screen: the first trade's
+		// refresh waits instead of superseding the second market's reads.
+		const discoveriesBeforeFirstReceipt = discoveredPools.length
+		await act(async () => firstReceipt.resolve({ status: 'success' }))
+		await waitFor(() => expect(transactionActivity.value.entries.find(entry => entry.hash === firstHash)?.status).toBe('confirmed'))
+		await act(async () => await Bun.sleep(20))
+		expect(discoveredPools.length).toBe(discoveriesBeforeFirstReceipt)
+		expect(transactionActivity.value.entries.find(entry => entry.hash === secondHash)?.status).toBe('pending')
+		expect(document.body.textContent).toContain('Second market')
 	})
 })

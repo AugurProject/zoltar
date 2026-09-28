@@ -119,8 +119,8 @@ export function App({
 	// Wallet controls wait for every running transaction. Deployment locks every action; a trade, liquidity, or settlement
 	// transaction locks only its own market, which the live routes enforce themselves.
 	const [deploymentWorkflowLocked, setDeploymentWorkflowLocked] = useState(false)
-	const [marketWorkflowLocked, setMarketWorkflowLocked] = useState(false)
-	const workflowLocked = deploymentWorkflowLocked || marketWorkflowLocked
+	const [liveTradingWorkflowLocked, setLiveTradingWorkflowLocked] = useState(false)
+	const workflowLocked = deploymentWorkflowLocked || liveTradingWorkflowLocked
 	const [deploymentCheckNonce, setDeploymentCheckNonce] = useState(0)
 	// Set when switching to another environment failed, so Retry repeats the switch instead of rechecking the previous environment.
 	const [environmentSwitchFailed, setEnvironmentSwitchFailed] = useState(false)
@@ -155,7 +155,7 @@ export function App({
 		if (universeSelection.replaceUrlUniverseId !== undefined) applyUrlStateUpdate(writeUniverseQueryParam(getOwnedSearch(), universeSelection.replaceUrlUniverseId), 'replace')
 	}, [applyUrlStateUpdate, getOwnedSearch, universeSelection.replaceUrlUniverseId])
 	const updateDeploymentWorkflowLock = useCallback((locked: boolean) => setDeploymentWorkflowLocked(locked), [])
-	const updateMarketWorkflowLock = useCallback((locked: boolean) => setMarketWorkflowLocked(locked), [])
+	const updateLiveTradingWorkflowLock = useCallback((locked: boolean) => setLiveTradingWorkflowLocked(locked), [])
 	const updateLiveUniverses = useCallback((universeIds: readonly bigint[], authoritativeSelection: bigint | undefined, scope: UniverseDiscoveryScope) => setLiveUniverses({ ids: universeIds, selected: authoritativeSelection, forRequest: scope.requestedUniverseId, forPool: scope.addressedPool }), [])
 	const liveDeploymentUsable = liveDeploymentStatus === 'loading' || liveDeploymentStatus === 'verified'
 	const showUniverseField = routeOwnsLiveWallet(route) && liveDeploymentUsable
@@ -270,7 +270,7 @@ export function App({
 				onDiscoveryStateChange={setDiscoveryState}
 				{...(liveTradingServices === undefined ? {} : { controllerServices: liveTradingServices })}
 				onUniversesChange={updateLiveUniverses}
-				onWorkflowLockChange={updateMarketWorkflowLock}
+				onWorkflowLockChange={updateLiveTradingWorkflowLock}
 				onWalletSummaryChange={setLiveWalletSummary}
 				walletSummaryRetryNonce={walletSummaryRetryNonce}
 				walletConnectRequestNonce={walletConnectRequestNonce}

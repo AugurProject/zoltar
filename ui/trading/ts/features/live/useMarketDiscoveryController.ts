@@ -103,6 +103,8 @@ export function useMarketDiscoveryController({
 		const ownerMarketOnScreen = () => options.ownerMarket === undefined || transactionMarketKey(options.ownerMarket) === transactionMarketKey(routePoolRef.current)
 		// A route change always shows its own data; a pending transaction keeps its captured context and stays in the activity list.
 		const commitAllowed = () => options.navigation === true || discoveryCommitAllowed(owner, positionLockOnScreen(), transaction.liquidityWorkflowLockedRef.current, ownerMarketOnScreen())
+		// Such a refresh would only supersede that market's own reads; its trade refreshes the route when it finishes.
+		if (owner === 'position' && !ownerMarketOnScreen() && refreshHeldByWorkflow()) return
 		if (background && (market.discoveryState === 'loading' || (backgroundDiscovery.current !== undefined && discoveryRequests.isCurrent(backgroundDiscovery.current)))) return
 		const request = discoveryRequests.begin()
 		// The scope is fixed when the request begins; a request that lands after the URL or route moved on still answers only its own question.
