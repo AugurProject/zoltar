@@ -179,9 +179,12 @@ export function ZoltarMigrationSection({
 	})()
 	const canMigrate = migrateReason === undefined && isOnActiveAppChain && wizard.steps[3]?.status === 'ready' && !zoltarMigrationPending && wizard.walletRepToBurnAttoRep !== undefined
 	const migrateHint = isOnActiveAppChain ? migrateReason : getWrongNetworkReason()
+	const migrateAvailability = withActiveAppChainWalletBlocker({ disabled: !canMigrate, reason: migrateHint }, { accountAddress, isOnActiveAppChain })
+	// A wallet-blocked migration offers its connect or switch fix under the button instead of repeating the reason in the hint line.
+	const migrateWalletBlocked = migrateAvailability.walletBlocker !== undefined
 	// One reason line beside the forward action. The approval control states its own requirement, so the approve step does not repeat it.
 	const navigationHint = (() => {
-		if (currentStepId === 'review') return migrateHint
+		if (currentStepId === 'review') return migrateWalletBlocked ? undefined : migrateHint
 		if (currentStepSatisfied || (currentStepId === 'approve' && currentStep?.status === 'incomplete')) return undefined
 		return currentStep?.reason
 	})()
@@ -324,9 +327,9 @@ export function ZoltarMigrationSection({
 										pendingLabel={zoltarCopy.migratingRepPending}
 										onClick={() => onMigrateInternalRep(wizard.walletRepToBurnAttoRep ?? 0n)}
 										pending={zoltarMigrationActiveAction === 'split'}
-										availability={withActiveAppChainWalletBlocker({ disabled: !canMigrate, reason: migrateHint }, { accountAddress, isOnActiveAppChain })}
-										disabledReasonElementId={navigationHintId}
-										showDisabledReason={false}
+										availability={migrateAvailability}
+										disabledReasonElementId={migrateWalletBlocked ? undefined : navigationHintId}
+										showDisabledReason={migrateWalletBlocked}
 									/>
 								) : (
 									<button aria-describedby={currentStepSatisfied || navigationHint === undefined ? undefined : navigationHintId} className='primary' type='button' onClick={() => setRequestedStepId(nextStepId)} disabled={zoltarMigrationPending || !currentStepSatisfied}>

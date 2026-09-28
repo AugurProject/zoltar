@@ -208,7 +208,7 @@ describe('wallet action fix', () => {
 		const action = { actionLabel: 'Mint', blocker: 'Connect a wallet before minting complete sets.', key: 'mint', readiness: 'blocked' as const, title: 'Mint complete sets' }
 		const rendered = await renderIntoDocument(
 			<WalletActionsProvider walletActions={walletActions}>
-				<ActionLauncherCard action={action} wallet={{ accountAddress: undefined, isOnActiveAppChain: true }} />
+				<ActionLauncherCard action={action} walletBlocksFirst={{ accountAddress: undefined, isOnActiveAppChain: true }} />
 				<ActionLauncherCard action={{ ...action, blocker: 'Select a pool.', key: 'no-wallet-state', title: 'Without wallet state' }} />
 			</WalletActionsProvider>,
 		)

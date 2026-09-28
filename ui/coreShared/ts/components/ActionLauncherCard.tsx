@@ -10,11 +10,11 @@ type ActionLauncherCardProps = {
 	pending?: boolean
 	pendingLabel?: string
 	tone?: 'primary' | 'secondary'
-	/** Wallet state for launchers whose guards check the wallet before anything else, so a shown blocker offers the connect or switch fix while the wallet blocks. */
-	wallet?: { accountAddress: string | undefined; isOnActiveAppChain: boolean } | undefined
+	/** Wallet state, passed only when the launcher's guards check the wallet before every other blocker, so a shown blocker offers the connect or switch fix while the wallet blocks. */
+	walletBlocksFirst?: { accountAddress: string | undefined; isOnActiveAppChain: boolean } | undefined
 }
 
-export function ActionLauncherCard({ action, children, pending = false, pendingLabel = commonCopy.opening, tone = 'secondary', wallet }: ActionLauncherCardProps) {
+export function ActionLauncherCard({ action, children, pending = false, pendingLabel = commonCopy.opening, tone = 'secondary', walletBlocksFirst }: ActionLauncherCardProps) {
 	if (action.onAction === undefined && action.blocker === undefined && action.readiness !== 'blocked') return undefined
 	const disabled = action.readiness === 'blocked' || action.onAction === undefined || action.blocker !== undefined
 	const showTitle = action.title.trim().toLowerCase() !== action.actionLabel.trim().toLowerCase()
@@ -36,7 +36,7 @@ export function ActionLauncherCard({ action, children, pending = false, pendingL
 					onClick={() => action.onAction?.()}
 					pending={pending}
 					tone={tone}
-					availability={withWalletBlocker({ disabled, reason: action.blocker }, action.walletBlocker ?? (wallet === undefined || action.blocker === undefined ? undefined : getActiveAppChainWalletBlocker(wallet)))}
+					availability={withWalletBlocker({ disabled, reason: action.blocker }, action.walletBlocker ?? (walletBlocksFirst === undefined || action.blocker === undefined ? undefined : getActiveAppChainWalletBlocker(walletBlocksFirst)))}
 					showDisabledReason
 				/>
 			</div>
