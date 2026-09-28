@@ -387,6 +387,9 @@ describe('standalone trading UI model', () => {
 		expect(discoveryCommitAllowed('position', true, false)).toBeTrue()
 		expect(discoveryCommitAllowed('position', true, true)).toBeFalse()
 		expect(discoveryCommitAllowed('liquidity', true, true)).toBeFalse()
+		// A trade's refresh landing on another market whose own trade is running waits like any other refresh.
+		expect(discoveryCommitAllowed('position', true, false, false)).toBeFalse()
+		expect(discoveryCommitAllowed('position', false, false, false)).toBeTrue()
 	})
 
 	test('does not present a created pair as initialized before it has reserves and LP supply', () => {

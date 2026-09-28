@@ -104,7 +104,7 @@ export function LiveTrading({
 	const { balanceError, portfolioBalanceState, portfolioBalanceError, visiblePortfolioEntries, selectedBalances, selectedBalanceState, retryBalances, retryPortfolioBalances } = balances
 	const { visibleMarkets, listedMarkets, selected, selectedPairInitialized, routePool, discoveryState, discoveryError, discoveryFreshness, marketPage, nowSeconds, refresh, refreshFromControl, refreshLocked, loadMarketPage } = discovery
 	const { setMode, setSide } = position
-	const { workflowLocked, updateLiquidityWorkflowLock } = workflow
+	const { workflowLocked, marketWorkflowLocked, updateLiquidityWorkflowLock } = workflow
 	const workflowRoute = tradingWorkflowRoute(route)
 	const creatingMarket = workflowRoute === 'create-market'
 	const [createdMarketTitle, setCreatedMarketTitle] = useState<string>()
@@ -253,8 +253,8 @@ export function LiveTrading({
 		)
 	}
 	const routePresentation = liveWorkflowRoutePresentation(workflowRoute)
-	// Navigation stays free while a transaction is pending; the market it touches keeps its ticket locked until it settles.
-	const ticketLocked = workflowLocked || isMarketTransactionPending(selected?.pool)
+	// Navigation stays free while a transaction is pending; only the market it touches keeps its ticket locked until it settles.
+	const ticketLocked = marketWorkflowLocked || isMarketTransactionPending(selected?.pool)
 	const marketOpen = selected !== undefined && marketAcceptsNewRisk(selected, nowSeconds)
 	let activeView: MarketWorkspaceView = marketOpen ? 'trade' : closedMarketView
 	if (workflowRoute === 'liquidity') activeView = 'liquidity'

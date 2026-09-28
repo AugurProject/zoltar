@@ -116,7 +116,11 @@ export function App({
 	const [liveDeploymentStatus, setLiveDeploymentStatus] = useState<LiveDeploymentStatus>('loading')
 	const [liveConfiguration, setLiveConfiguration] = useState<DeploymentConfiguration>()
 	const [liveConfigurationError, setLiveConfigurationError] = useState<string>()
-	const [workflowLocked, setWorkflowLocked] = useState(false)
+	// Wallet controls wait for every running transaction. Deployment locks every action; a trade, liquidity, or settlement
+	// transaction locks only its own market, which the live routes enforce themselves.
+	const [deploymentWorkflowLocked, setDeploymentWorkflowLocked] = useState(false)
+	const [marketWorkflowLocked, setMarketWorkflowLocked] = useState(false)
+	const workflowLocked = deploymentWorkflowLocked || marketWorkflowLocked
 	const [deploymentCheckNonce, setDeploymentCheckNonce] = useState(0)
 	// Set when switching to another environment failed, so Retry repeats the switch instead of rechecking the previous environment.
 	const [environmentSwitchFailed, setEnvironmentSwitchFailed] = useState(false)
@@ -150,9 +154,8 @@ export function App({
 		// An unknown request is replaced by the universe that discovery chose, so the URL, header, and routes agree.
 		if (universeSelection.replaceUrlUniverseId !== undefined) applyUrlStateUpdate(writeUniverseQueryParam(getOwnedSearch(), universeSelection.replaceUrlUniverseId), 'replace')
 	}, [applyUrlStateUpdate, getOwnedSearch, universeSelection.replaceUrlUniverseId])
-	const updateWorkflowLock = useCallback((locked: boolean) => {
-		setWorkflowLocked(locked)
-	}, [])
+	const updateDeploymentWorkflowLock = useCallback((locked: boolean) => setDeploymentWorkflowLocked(locked), [])
+	const updateMarketWorkflowLock = useCallback((locked: boolean) => setMarketWorkflowLocked(locked), [])
 	const updateLiveUniverses = useCallback((universeIds: readonly bigint[], authoritativeSelection: bigint | undefined, scope: UniverseDiscoveryScope) => setLiveUniverses({ ids: universeIds, selected: authoritativeSelection, forRequest: scope.requestedUniverseId, forPool: scope.addressedPool }), [])
 	const liveDeploymentUsable = liveDeploymentStatus === 'loading' || liveDeploymentStatus === 'verified'
 	const showUniverseField = routeOwnsLiveWallet(route) && liveDeploymentUsable
@@ -247,7 +250,7 @@ export function App({
 		content = (
 			<TradingDeploymentSetup
 				onComplete={completeWalletDeployment}
-				onWorkflowLockChange={updateWorkflowLock}
+				onWorkflowLockChange={updateDeploymentWorkflowLock}
 				onWalletStateChange={updateDeploymentWalletState}
 				walletControlRequestNonce={deploymentWalletRequestNonce}
 				{...(liveConfiguration === undefined ? {} : { currentConfiguration: liveConfiguration })}
@@ -267,7 +270,7 @@ export function App({
 				onDiscoveryStateChange={setDiscoveryState}
 				{...(liveTradingServices === undefined ? {} : { controllerServices: liveTradingServices })}
 				onUniversesChange={updateLiveUniverses}
-				onWorkflowLockChange={updateWorkflowLock}
+				onWorkflowLockChange={updateMarketWorkflowLock}
 				onWalletSummaryChange={setLiveWalletSummary}
 				walletSummaryRetryNonce={walletSummaryRetryNonce}
 				walletConnectRequestNonce={walletConnectRequestNonce}
@@ -280,7 +283,7 @@ export function App({
 	return (
 		<ProtocolAppFrame
 			accountAddress={walletSummary.account}
-			actionsLocked={workflowLocked}
+			actionsLocked={deploymentWorkflowLocked}
 			currentBlockNumber={undefined}
 			currentTimestamp={undefined}
 			heading={<AppPageHeading formatDocumentTitle={appCopy.documentTitle} pageTitle={tradingPageTitle(deploymentSetupActive ? 'deploy' : route)} />}

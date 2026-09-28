@@ -34,7 +34,7 @@ export type TransactionWorkflowEvent =
 	| Readonly<{ type: 'uncertain'; context: TransactionContext; reason: string }>
 	| Readonly<{ type: 'failed'; context?: TransactionContext; operation?: TransactionOperation; message: string }>
 
-export const idleTransactionWorkflow: TransactionWorkflowState = { kind: 'idle' }
+const idleTransactionWorkflow: TransactionWorkflowState = { kind: 'idle' }
 
 function sameTransactionContext(left: TransactionContext, right: TransactionContext) {
 	return left.account === right.account && left.chainId === right.chainId && left.market === right.market && left.requestRevision === right.requestRevision
@@ -48,7 +48,7 @@ function requireContext(state: TransactionWorkflowState, context: TransactionCon
 	if (!contextMatches(state, context)) throw new Error('Stale transaction workflow event')
 }
 
-export function transactionWorkflowReducer(state: TransactionWorkflowState, event: TransactionWorkflowEvent): TransactionWorkflowState {
+function transactionWorkflowReducer(state: TransactionWorkflowState, event: TransactionWorkflowEvent): TransactionWorkflowState {
 	if (event.type === 'reset') return idleTransactionWorkflow
 	if (event.type === 'inputs-invalidated') {
 		if (state.kind === 'preparing' || state.kind === 'awaiting-signature' || state.kind === 'pending' || state.kind === 'uncertain') throw new Error('Inputs cannot invalidate an active or uncertain transaction')
@@ -113,4 +113,32 @@ export function transactionWorkflowError(state: TransactionWorkflowState, revert
 
 export function transactionWorkflowReceiptWarning(state: TransactionWorkflowState) {
 	return state.kind === 'uncertain' ? state.reason : undefined
+}
+
+/** Workflow state per market key, so a transaction on one market never blocks or relabels another market's ticket. */
+export type MarketTransactionWorkflows = Readonly<Record<string, TransactionWorkflowState>>
+
+export type MarketTransactionWorkflowEvent =
+	| Readonly<{ type: 'market'; market: string; event: TransactionWorkflowEvent }>
+	/** Clears every market's finished or failed result; markets whose transaction still holds its lock keep their state. */
+	| Readonly<{ type: 'reset-unlocked'; locked: readonly string[] }>
+	/** The wallet changed: running transactions keep their state with a notice, and the market on screen shows the failure. */
+	| Readonly<{ type: 'wallet-context-invalidated'; message: string; locked: readonly string[]; current: string }>
+
+/** Names a market's workflow slot; without an addressed market the slot is the empty key. */
+export function transactionMarketKey(market: Address | undefined) {
+	return market?.toLowerCase() ?? ''
+}
+
+export function marketTransactionWorkflow(workflows: MarketTransactionWorkflows, market: string) {
+	return workflows[market] ?? idleTransactionWorkflow
+}
+
+export function marketTransactionWorkflowsReducer(workflows: MarketTransactionWorkflows, event: MarketTransactionWorkflowEvent): MarketTransactionWorkflows {
+	if (event.type === 'market') return { ...workflows, [event.market]: transactionWorkflowReducer(marketTransactionWorkflow(workflows, event.market), event.event) }
+	if (event.type === 'reset-unlocked') return Object.fromEntries(Object.entries(workflows).filter(([market]) => event.locked.includes(market)))
+	const next: Record<string, TransactionWorkflowState> = { ...workflows }
+	for (const market of event.locked) next[market] = transactionWorkflowReducer(marketTransactionWorkflow(workflows, market), { type: 'context-invalidated', message: event.message })
+	if (!event.locked.includes(event.current)) next[event.current] = transactionWorkflowReducer(marketTransactionWorkflow(workflows, event.current), { type: 'failed', message: event.message })
+	return next
 }

@@ -52,8 +52,9 @@ export function positionControlsWorkflowLocked(state: TransactionState, receiptW
 	return state === 'preparing' || state === 'submitting' || state === 'pending' || receiptWarning !== undefined
 }
 
-export function discoveryCommitAllowed(owner: WorkflowOwner | undefined, positionLocked: boolean, liquidityLocked: boolean) {
-	if (owner === 'position') return !liquidityLocked
+/** `ownerMarketOnScreen` is false when a trade's own refresh lands on another market's route, whose trade lock still holds. */
+export function discoveryCommitAllowed(owner: WorkflowOwner | undefined, positionLocked: boolean, liquidityLocked: boolean, ownerMarketOnScreen = true) {
+	if (owner === 'position' && ownerMarketOnScreen) return !liquidityLocked
 	if (owner === 'liquidity') return !positionLocked
 	return !positionLocked && !liquidityLocked
 }

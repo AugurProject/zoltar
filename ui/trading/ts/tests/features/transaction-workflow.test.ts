@@ -1,6 +1,23 @@
 import { describe, expect, test } from 'bun:test'
 import type { Address, Hash } from '@zoltar/core-shared/evm/ethereum'
-import { idleTransactionWorkflow, transactionPhase, transactionWorkflowError, transactionWorkflowHash, transactionWorkflowReceiptWarning, transactionWorkflowReducer, type TransactionContext } from '../../features/live/transactionWorkflow.js'
+import {
+	marketTransactionWorkflow,
+	marketTransactionWorkflowsReducer,
+	transactionMarketKey,
+	transactionPhase,
+	transactionWorkflowError,
+	transactionWorkflowHash,
+	transactionWorkflowReceiptWarning,
+	type MarketTransactionWorkflows,
+	type TransactionContext,
+	type TransactionWorkflowEvent,
+	type TransactionWorkflowState,
+} from '../../features/live/transactionWorkflow.js'
+
+// One market's slot of the per-market reducer is the single-transaction state machine.
+const slot = 'market'
+const idleTransactionWorkflow = marketTransactionWorkflow({}, slot)
+const transactionWorkflowReducer = (state: TransactionWorkflowState, event: TransactionWorkflowEvent) => marketTransactionWorkflow(marketTransactionWorkflowsReducer({ [slot]: state }, { type: 'market', market: slot, event }), slot)
 
 const context: TransactionContext = {
 	account: '0x0000000000000000000000000000000000000001' as Address,
@@ -128,5 +145,49 @@ describe('transaction workflow state machine', () => {
 		reverted = transactionWorkflowReducer(reverted, { type: 'reverted', context })
 		expect(transactionWorkflowError(reverted, 'Trade transaction reverted')).toBe('Trade transaction reverted')
 		expect(transactionWorkflowHash(reverted)).toBe(originalHash)
+	})
+})
+
+describe('per-market transaction workflows', () => {
+	const firstMarket = transactionMarketKey(context.market)
+	const secondContext: TransactionContext = { ...context, market: '0x00000000000000000000000000000000000000AB' as Address, requestRevision: 5 }
+	const secondMarket = transactionMarketKey(secondContext.market)
+	const pendingOn = (workflows: MarketTransactionWorkflows, market: string, marketContext: TransactionContext, transactionHash: Hash) => {
+		let next = marketTransactionWorkflowsReducer(workflows, { type: 'market', market, event: { type: 'operation-preparing', context: marketContext, operation: 'trade' } })
+		next = marketTransactionWorkflowsReducer(next, { type: 'market', market, event: { type: 'signature-requested', context: marketContext, operation: 'trade' } })
+		return marketTransactionWorkflowsReducer(next, { type: 'market', market, event: { type: 'broadcast', context: marketContext, operation: 'trade', transactionHash } })
+	}
+
+	test('runs one transaction per market, each settling on its own', () => {
+		expect(secondMarket).toBe('0x00000000000000000000000000000000000000ab')
+		expect(transactionMarketKey(undefined)).toBe('')
+		const both = pendingOn(pendingOn({}, firstMarket, context, originalHash), secondMarket, secondContext, replacementHash)
+		expect(transactionPhase(marketTransactionWorkflow(both, firstMarket))).toBe('pending')
+		expect(transactionWorkflowHash(marketTransactionWorkflow(both, secondMarket))).toBe(replacementHash)
+		const firstConfirmed = marketTransactionWorkflowsReducer(both, { type: 'market', market: firstMarket, event: { type: 'confirmed', context } })
+		expect(transactionPhase(marketTransactionWorkflow(firstConfirmed, firstMarket))).toBe('confirmed')
+		expect(transactionPhase(marketTransactionWorkflow(firstConfirmed, secondMarket))).toBe('pending')
+		const secondReverted = marketTransactionWorkflowsReducer(firstConfirmed, { type: 'market', market: secondMarket, event: { type: 'reverted', context: secondContext } })
+		expect(marketTransactionWorkflow(secondReverted, secondMarket).kind).toBe('reverted')
+		expect(marketTransactionWorkflow(secondReverted, firstMarket).kind).toBe('confirmed')
+		// An event carrying one market's context cannot land on another market's slot.
+		expect(() => marketTransactionWorkflowsReducer(both, { type: 'market', market: secondMarket, event: { type: 'confirmed', context } })).toThrow('Stale transaction workflow event')
+		expect(marketTransactionWorkflow({}, secondMarket)).toBe(idleTransactionWorkflow)
+	})
+
+	test('resets only unlocked markets and keeps running transactions through a wallet change', () => {
+		const firstFailed = marketTransactionWorkflowsReducer({}, { type: 'market', market: firstMarket, event: { type: 'failed', context, operation: 'trade', message: 'Price moved' } })
+		const workflows = pendingOn(firstFailed, secondMarket, secondContext, replacementHash)
+		const reset = marketTransactionWorkflowsReducer(workflows, { type: 'reset-unlocked', locked: [secondMarket] })
+		expect(marketTransactionWorkflow(reset, firstMarket)).toBe(idleTransactionWorkflow)
+		expect(transactionPhase(marketTransactionWorkflow(reset, secondMarket))).toBe('pending')
+		const invalidated = marketTransactionWorkflowsReducer(reset, { type: 'wallet-context-invalidated', message: 'Wallet account changed', locked: [secondMarket], current: firstMarket })
+		expect(transactionWorkflowError(marketTransactionWorkflow(invalidated, firstMarket), 'reverted')).toBe('Wallet account changed')
+		expect(transactionPhase(marketTransactionWorkflow(invalidated, secondMarket))).toBe('pending')
+		expect(marketTransactionWorkflow(invalidated, secondMarket).notice).toBe('Wallet account changed')
+		// The market on screen keeps its running transaction too; it only gains the notice.
+		const onPendingMarket = marketTransactionWorkflowsReducer(reset, { type: 'wallet-context-invalidated', message: 'Wallet network changed', locked: [secondMarket], current: secondMarket })
+		expect(transactionWorkflowHash(marketTransactionWorkflow(onPendingMarket, secondMarket))).toBe(replacementHash)
+		expect(marketTransactionWorkflow(onPendingMarket, firstMarket)).toBe(idleTransactionWorkflow)
 	})
 })

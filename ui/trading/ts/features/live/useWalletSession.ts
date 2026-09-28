@@ -152,7 +152,7 @@ export function useWalletSessionController({
 			portfolio.setPortfolioBalanceError('Wallet context changed; reconnect before loading portfolio positions')
 			session.setWalletContextInvalidated(true)
 			session.setWalletConnectionFeedback({ route, detail })
-			transaction.dispatchWorkflow(transaction.positionWorkflowLockedRef.current ? { type: 'context-invalidated', message: detail } : { type: 'failed', message: detail })
+			transaction.invalidateWalletContext(detail)
 		},
 		[balanceRequests, connectionRequests, onWalletSummaryChange, portfolioBalanceRequests, route, selectedUniverseId, services, session.walletProvider, walletSummaryRequests],
 	)
@@ -290,12 +290,12 @@ export function useWalletSessionController({
 		session.setWalletClient(services.createTradingWalletClient(provider, connected))
 		session.setWalletProvider(provider)
 		session.setWalletConnectionFeedback(undefined)
-		transaction.dispatchWorkflow({ type: 'reset' })
+		transaction.resetUnlocked()
 		await refresh(configuration)
 	}
 
 	async function connect() {
-		if (transaction.positionWorkflowLockedRef.current || transaction.liquidityWorkflowLockedRef.current) return
+		if (transaction.anyWorkflowLocked()) return
 		if (session.accountRef.current !== undefined || session.walletClient !== undefined) invalidateIdentity('Reconnecting wallet…')
 		const request = connectionRequests.begin()
 		const expectedContext = renderContextKey
@@ -337,7 +337,7 @@ export function useWalletSessionController({
 
 	async function refreshAfterEvent(provider: InjectedEthereum, eventName: WalletContextChangeEvent, allowDisconnectedRefresh: boolean) {
 		const label = eventName === 'accountsChanged' ? 'Wallet account changed' : 'Wallet network changed'
-		if ((!allowDisconnectedRefresh && session.accountRef.current === undefined) || transaction.positionWorkflowLockedRef.current || transaction.liquidityWorkflowLockedRef.current) {
+		if ((!allowDisconnectedRefresh && session.accountRef.current === undefined) || transaction.anyWorkflowLocked()) {
 			invalidateIdentity(`${label}. Reconnect before simulating or submitting.`)
 			return
 		}
