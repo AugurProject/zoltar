@@ -1495,7 +1495,7 @@ for (const action of ['depositRepToVault', 'queueWithdrawRep', 'redeemRepFromVau
 		const rendered = await renderIntoDocument(<Harness />)
 		try {
 			await act(() => fireEvent.click(within(document.body).getByRole('button', { name: label })))
-			const dialog = within(document.body).getByRole('dialog', { name: action === 'redeemFees' ? 'Claim Fees' : label })
+			const dialog = within(document.body).getByRole('dialog', { name: action === 'redeemFees' ? 'Claim fees' : label })
 			await act(() => fireEvent.click(within(dialog).getByRole('button', { name: label })))
 			expect(transactionSteps.value?.steps[0]?.phase).toBe('pending')
 			await review
