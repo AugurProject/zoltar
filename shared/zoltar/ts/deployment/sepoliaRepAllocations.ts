@@ -10,8 +10,8 @@ export type SepoliaRepAllocation = {
 const SEPOLIA_REP_HOLDERS = [
 	// vitalik.eth
 	getAddress('0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045'),
-	// private key 0x1
-	getAddress('0x7E5F4552091A69125d5DfCb7b8C2659029395Bdf'),
+	// micah
+	getAddress('0x799D329e5f583419167cD722962485926E338F4a'),
 	// dev
 	getAddress('0xC6cCd3c2d63bc8De8fcF43EdE80D135666b7aceE'),
 	// rabby 1
