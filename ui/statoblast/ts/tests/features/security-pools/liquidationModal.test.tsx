@@ -385,7 +385,7 @@ describe('LiquidationModal', () => {
 		})
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		const dialog = within(document.body).getByRole('dialog', { name: 'Liquidate Vault' })
+		const dialog = within(document.body).getByRole('dialog', { name: 'Liquidate vault' })
 		expect(dialog.querySelector('input')).not.toBeNull()
 		const backdrop = dialog.closest('.modal-backdrop')
 		if (!(backdrop instanceof HTMLElement)) throw new Error('Expected the liquidation modal backdrop')
