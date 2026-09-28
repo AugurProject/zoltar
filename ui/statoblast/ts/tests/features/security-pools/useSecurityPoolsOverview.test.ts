@@ -217,12 +217,12 @@ void describe('useSecurityPoolsOverview helpers', () => {
 			appQueryCache.invalidateAll()
 			await state().refreshBrowseSecurityPoolPage()
 		})
-		expect(state().securityPoolBrowseCount).toBe(2n)
+		expect(state().securityPoolPage?.poolCount).toBe(2n)
 		await act(async () => {
 			olderRead.resolve(firstPage)
 			await pending
 		})
-		expect(state().securityPoolBrowseCount).toBe(2n)
+		expect(state().securityPoolPage?.poolCount).toBe(2n)
 		appQueryCache.clear()
 	})
 

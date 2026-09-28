@@ -3,7 +3,7 @@ import { isMarketTransactionPending } from './live/marketTransactionActivity.js'
 import { parseRouteHash } from '@zoltar/ui-core-shared/navigation/routing.js'
 import { abbreviateAddress } from '@zoltar/ui-core-shared/lib/address.js'
 import type { DeploymentConfiguration } from '../protocol/config.js'
-import { marketAcceptsNewRisk } from '../protocol/live.js'
+import { marketAcceptsNewRisk, type LiveMarket } from '../protocol/live.js'
 import * as appCopy from '../copy/app.js'
 import { getTradingRouteHref, isTradingLookupRoute, tradingWorkflowRoute, type TradingRoute } from '../lib/routing.js'
 import { EmptyState } from '@zoltar/ui-core-shared/components/EmptyState.js'
@@ -36,6 +36,8 @@ import { hashWithoutTicketSide, readTicketSideParam } from '../lib/ticketSide.js
 import { liveCopy } from '../copy/live.js'
 import * as availabilityCopy from '../copy/availability.js'
 import { useFocusOnKeyChange } from './live/useFocusOnKeyChange.js'
+import { useDownloadedEntities, useFavorites, useRememberOpenedEntity } from '@zoltar/ui-core-shared/hooks/useLocalEntities.js'
+import { getRememberableMarket, marketDownloadStore, selectFavoriteMarketUpdates, selectFavoriteMarkets } from '../lib/favoriteMarkets.js'
 
 const ignoreWalletSummaryChange = () => undefined
 
@@ -112,6 +114,19 @@ export function LiveTrading({
 	useEffect(() => setClosedMarketView('settlement'), [routePool])
 	// Moving between addressed markets keeps the same page title, so focus the new market heading here instead of relying on the app heading.
 	const marketHeadingRef = useFocusOnKeyChange<HTMLHeadingElement>(selected?.pool, false)
+	const favoriteMarketIds = useFavorites('trading', 'market')
+	const downloadedMarkets = useDownloadedEntities('trading', 'market', marketDownloadStore)
+	const favoriteMarkets = selectFavoriteMarkets(downloadedMarkets.entries, favoriteMarketIds.entries, selectedUniverseId)
+	// Only the market workflows (trade and liquidity) count as opening a market; pool details and market creation do not.
+	const rememberedMarket = route.startsWith('market/') || route.startsWith('liquidity/') ? getRememberableMarket(selected) : undefined
+	useRememberOpenedEntity('trading', 'market', marketDownloadStore, rememberedMarket?.pool, rememberedMarket)
+	const recordedFavoriteMarkets = useRef(new Map<string, LiveMarket>())
+	const favoriteMarketUpdates = selectFavoriteMarketUpdates(listedMarkets, recordedFavoriteMarkets.current, favoriteMarketIds.entries)
+	useEffect(() => {
+		if (favoriteMarketUpdates.length === 0) return
+		for (const update of favoriteMarketUpdates) recordedFavoriteMarkets.current.set(update.id, update.data)
+		downloadedMarkets.record(favoriteMarketUpdates)
+	})
 	// A market-card outcome button opens the ticket on that side once; the parameter is then dropped from the hash so later navigation does not carry it.
 	const [ticketOpenRequested, setTicketOpenRequested] = useState(false)
 	const positionInputRef = useRef({ setMode, setSide })
@@ -190,6 +205,7 @@ export function LiveTrading({
 				<LiveMarketBrowser
 					lookupRoute={route}
 					markets={listedMarkets}
+					favoriteMarkets={favoriteMarkets}
 					pageMarketCount={visibleMarkets.length}
 					discoveryState={discoveryState}
 					discoveryError={discoveryError}
