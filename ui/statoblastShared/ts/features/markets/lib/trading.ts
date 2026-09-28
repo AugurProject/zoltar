@@ -21,6 +21,11 @@ export function hasUndefinedCompleteSetExchangeRate(settlementCollateralAttoEth:
 	return settlementCollateralAttoEth === 0n && shareTokenSupplyAttoShares !== 0n
 }
 
+/** Use contract-reported backing capacity; unknown capacity or an escalation game keeps minting closed. */
+export function getPoolMintingCapacityAttoEth(pool: { mintingCapacityAttoEth?: bigint | undefined; hasForkContinuationEscalationGame: boolean; ordinaryEscalationGameStarted: boolean }) {
+	return pool.ordinaryEscalationGameStarted || pool.hasForkContinuationEscalationGame ? 0n : (pool.mintingCapacityAttoEth ?? 0n)
+}
+
 export function getRemainingMintCapacity(mintingCapacityAttoEth: bigint | undefined, settlementCollateralAttoEth: bigint | undefined, shareTokenSupplyAttoShares?: bigint | undefined) {
 	if (mintingCapacityAttoEth === undefined || settlementCollateralAttoEth === undefined) return undefined
 	if (hasUndefinedCompleteSetExchangeRate(settlementCollateralAttoEth, shareTokenSupplyAttoShares) === true) return 0n

@@ -65,6 +65,7 @@
 	--warning-soft: rgba(245, 200, 106, 0.12);
 	--warning-border: rgba(245, 200, 106, 0.24);
 	--warning-border-strong: rgba(245, 200, 106, 0.52);
+	--favorite: var(--warning);
 	--danger: rgba(255, 112, 143, 1);
 	--danger-soft: rgba(255, 112, 143, 0.12);
 	--danger-medium: rgba(255, 112, 143, 0.2);

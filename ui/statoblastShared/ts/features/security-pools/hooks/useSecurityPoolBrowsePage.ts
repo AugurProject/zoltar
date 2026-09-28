@@ -20,9 +20,7 @@ type UseSecurityPoolBrowsePageParameters = {
 
 /** The pool registry's browse page: an explicit load that shows the loading state, and an in-place refresh that keeps the page visible. */
 export function useSecurityPoolBrowsePage({ accountAddress, loadSecurityPoolPage, setOverviewError, waitForSecurityPoolReadBackend }: UseSecurityPoolBrowsePageParameters) {
-	const securityPoolBrowseCount = useSignal<bigint | undefined>(undefined)
 	const securityPoolPage = useSignal<SecurityPoolBrowsePage | undefined>(undefined)
-	const hasLoadedSecurityPoolPage = useSignal(false)
 	const securityPoolPageLoad = useLoadController()
 	const nextSecurityPoolPageLoad = useRequestGuard()
 	// Each background request and foreground commit retires older background answers.
@@ -42,8 +40,6 @@ export function useSecurityPoolBrowsePage({ accountAddress, loadSecurityPoolPage
 			onSuccess: page => {
 				commitVersionRef.current += 1
 				securityPoolPageQueries.set(requestKey, page)
-				hasLoadedSecurityPoolPage.value = true
-				securityPoolBrowseCount.value = page.poolCount
 				securityPoolPage.value = { ...page, requestKey }
 			},
 			onError: error => {
@@ -60,7 +56,6 @@ export function useSecurityPoolBrowsePage({ accountAddress, loadSecurityPoolPage
 			const page = await securityPoolPageQueries.fetch(current.requestKey, async () => await loadSecurityPoolPage(current.pageIndex, current.pageSize, accountAddress))
 			if (commitVersionRef.current !== commitVersion || securityPoolPageLoad.isLoading.peek() || securityPoolPage.value?.requestKey !== current.requestKey) return
 			if (isSameQueryData({ ...page, requestKey: current.requestKey }, current)) return
-			securityPoolBrowseCount.value = page.poolCount
 			securityPoolPage.value = { ...page, requestKey: current.requestKey }
 		} catch (error) {
 			// A failed background read keeps the visible page; its age stays visible and the next block retries.
@@ -69,11 +64,9 @@ export function useSecurityPoolBrowsePage({ accountAddress, loadSecurityPoolPage
 	}
 
 	return {
-		hasLoadedSecurityPoolPage: hasLoadedSecurityPoolPage.value,
 		loadBrowseSecurityPoolPage,
 		loadingSecurityPoolPage: securityPoolPageLoad.isLoading.value,
 		refreshBrowseSecurityPoolPage,
-		securityPoolBrowseCount: securityPoolBrowseCount.value,
 		securityPoolPage: securityPoolPage.value,
 		securityPoolPageFreshness: { refreshing: pageQuery?.fetching === true, updatedAt: pageQuery?.updatedAt },
 	}
